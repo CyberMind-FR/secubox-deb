@@ -49,17 +49,57 @@ def test_version_dkms_vient_du_changelog():
     for f in ("leds-is31fl319x.c", "Makefile"):
         assert f"kmod/{f} $(DKMS_SRC)/{f}" in RULES
     premiere = CHANGELOG.splitlines()[0]
-    assert premiere.startswith("secubox-led-heartbeat (2.2.0-1~trixie1) trixie;")
+    assert premiere.startswith("secubox-led-heartbeat (2.2.1-1~trixie1) trixie;")
     # la version amont calculée comme debian/rules le fait
     ver = re.match(r"\S+ \(([^)]+)\)", premiere).group(1)
-    assert re.sub(r"-[^-]*$", "", ver) == "2.2.0"
+    assert re.sub(r"-[^-]*$", "", ver) == "2.2.1"
 
 
-def test_dkms_et_entetes_en_recommends_pas_en_depends():
-    depends = re.search(r"^Depends:(.*?)^\S", CONTROL, re.M | re.S).group(1)
-    recommends = re.search(r"^Recommends:(.*?)^\S", CONTROL, re.M | re.S).group(1)
-    assert "dkms" not in depends and "linux-headers" not in depends
-    assert "dkms" in recommends and "linux-headers-arm64" in recommends
+def champ(nom):
+    m = re.search(rf"^{nom}:(.*?)^\S", CONTROL, re.M | re.S)
+    return m.group(1) if m else ""
+
+
+def test_dkms_et_entetes_en_suggests_seulement():
+    for nom in ("Depends", "Recommends"):
+        assert "dkms" not in champ(nom) and "linux-headers" not in champ(nom), nom
+    assert "dkms" in champ("Suggests") and "linux-headers-arm64" in champ("Suggests")
+
+
+def test_dkms_conf_aarch64_seulement():
+    assert conf("BUILD_EXCLUSIVE_ARCH") == "^aarch64$"
+
+
+def test_copyright_gpl_pour_le_pilote():
+    cp = (PKG / "debian" / "copyright").read_text()
+    bloc = cp.split("Files: kmod/leds-is31fl319x.c", 1)[1]
+    assert "License: GPL-2.0-only" in bloc and "Schaller" in bloc and "Utkin" in bloc
+
+
+def test_license_headers_ne_touche_pas_le_c_gpl():
+    import importlib.util
+    lh = PKG.parents[1] / "scripts" / "license-headers.py"
+    spec = importlib.util.spec_from_file_location("lh", lh)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.detect_existing(SOURCE_C) == "FOREIGN"
+    assert mod.apply(SOURCE_C, ".c") == SOURCE_C
+
+
+def test_write_delay_borne():
+    assert "#define IS31FL319X_WRITE_DELAY_MAX_US\t100000" in SOURCE_C
+    assert "param_set_uint_minmax(val, kp, 0, IS31FL319X_WRITE_DELAY_MAX_US)" in SOURCE_C
+    assert "module_param_cb(write_delay_us, &write_delay_us_ops, &write_delay_us, 0644)" in SOURCE_C
+    assert re.search(r"min_t\(unsigned int, READ_ONCE\(write_delay_us\),\s*IS31FL319X_WRITE_DELAY_MAX_US\)",
+                     SOURCE_C)
+    # pas de débordement de delay + delay / 4 + 1 sur 32 bits
+    assert 100000 + 100000 // 4 + 1 < 2**32
+    assert "module_param(write_delay_us" not in SOURCE_C
+
+
+def test_repli_mutex_par_macro():
+    assert "#ifndef devm_mutex_init" in SOURCE_C
+    assert "LINUX_VERSION_CODE" not in SOURCE_C
 
 
 def test_source_c_reste_gpl_et_porte_les_ajouts():
@@ -67,12 +107,12 @@ def test_source_c_reste_gpl_et_porte_les_ajouts():
     assert "CMSD" not in SOURCE_C
     assert "Nikolaus Schaller" in SOURCE_C
     assert "v6.12.107" in SOURCE_C
-    assert re.search(r"module_param\(write_delay_us, uint", SOURCE_C)
+    assert "module_param_cb(write_delay_us" in SOURCE_C
     assert "write_delay_us = 1000;" in SOURCE_C
     assert "usleep_range" in SOURCE_C
     # toutes les écritures du pilote passent par l'écriture temporisée
     assert "regmap_write(is31->regmap" not in SOURCE_C
-    assert "KERNEL_VERSION(6, 10, 0)" in SOURCE_C and "devm_mutex_init(dev, &is31->lock)" in SOURCE_C
+    assert "devm_mutex_init(dev, &is31->lock)" in SOURCE_C
 
 
 def test_postinst_et_prerm_appellent_le_script_sans_echouer():
@@ -80,6 +120,10 @@ def test_postinst_et_prerm_appellent_le_script_sans_echouer():
     pre = (PKG / "debian" / "prerm").read_text()
     assert '/usr/sbin/secubox-led-dkms install "$DKMS_VER" || true' in post
     assert '/usr/sbin/secubox-led-dkms remove "$DKMS_VER" || true' in pre
+    # retrait seulement à la désinstallation, pas sur upgrade/deconfigure
+    bloc = pre[pre.index('if [ "$1" = remove ]; then'):]
+    assert "secubox-led-dkms remove" in bloc.split("fi\nfi", 1)[0]
+    assert pre.count("secubox-led-dkms remove") == 1
     # l'appel DKMS est après la garde board
     assert post.index("secubox-led-board") < post.index("secubox-led-dkms install")
 
@@ -113,17 +157,21 @@ def racine(tmp_path):
     bin_.mkdir()
     journal = tmp_path / "journal"
     journal.write_text("")
-    (tmp_path / "modprobe.d").mkdir()
+    for d in ("etc", "run", "usrlib", "lib"):
+        (tmp_path / d / "modprobe.d").mkdir(parents=True)
+    (tmp_path / "cmdline").write_text("root=/dev/mmcblk0p2 quiet\n")
     (tmp_path / "i2c-1").mkdir()
     (tmp_path / "modules" / "6.12.107+deb13-arm64" / "build").mkdir(parents=True)
     env = {
         "PATH": f"{bin_}:/usr/bin:/bin",
+        "SECUBOX_TEST": "1",
+        "SECUBOX_MODPROBE_DIRS": " ".join(str(tmp_path / d / "modprobe.d") for d in ("etc", "run", "usrlib", "lib")),
+        "SECUBOX_CMDLINE": str(tmp_path / "cmdline"),
         "SECUBOX_LED_BOARD": outil(bin_, "board", "exit 0"),
         "SECUBOX_DKMS": outil(bin_, "dkms", f'echo "dkms $*" >> {journal}; exit 0'),
         "SECUBOX_MODPROBE": outil(bin_, "modprobe", f'echo "modprobe $*" >> {journal}; exit 0'),
         "SECUBOX_MODINFO": outil(bin_, "modinfo", "exit 1"),
         "SECUBOX_MOKUTIL": str(bin_ / "mokutil-absent"),
-        "SECUBOX_MODPROBE_D": str(tmp_path / "modprobe.d"),
         "SECUBOX_I2C_SYS": str(tmp_path / "i2c-1"),
         "SECUBOX_MODULES_DIR": str(tmp_path / "modules"),
         "SECUBOX_KVER": "6.12.107+deb13-arm64",
@@ -157,7 +205,7 @@ def test_hors_mochabin_rien(racine):
 
 def test_gk2_bus_i2c_neutralise_rien(racine):
     tmp, _, journal, env = racine
-    (tmp / "modprobe.d" / "blacklist-i2c.conf").write_text("blacklist i2c_mv64xxx\n")
+    (tmp / "etc" / "modprobe.d" / "blacklist-i2c.conf").write_text("blacklist i2c_mv64xxx\n")
     r = lance(env, "install", "2.2.0")
     assert r.returncode == 0
     assert journal.read_text() == ""
@@ -184,7 +232,7 @@ def test_sans_dkms_ou_sans_entetes_message_et_zero(racine):
     tmp, _, journal, env = racine
     env["SECUBOX_DKMS"] = str(tmp / "dkms-absent")
     r = lance(env, "install", "2.2.0")
-    assert r.returncode == 0 and "Recommends" in r.stdout
+    assert r.returncode == 0 and "apt-get install dkms linux-headers-arm64" in r.stdout
     env2 = dict(racine[3])
     (tmp / "modules" / "6.12.107+deb13-arm64" / "build").rmdir()
     r = lance(env2, "install", "2.2.0")
@@ -219,8 +267,125 @@ def test_remove_seulement_si_ajoute(racine):
     assert "dkms remove -m secubox-leds -v 2.2.0 --all" in journal.read_text()
 
 
-@pytest.mark.parametrize("args", [[], ["install"], ["install", "2.2.0;rm"], ["purge", "2.2.0"]])
+@pytest.mark.parametrize("args", [[], ["install"], ["install", "2.2.0;rm"], ["purge", "2.2.0"], ["check", "x"]])
 def test_arguments_refuses(racine, args):
     _, _, journal, env = racine
     r = lance(env, *args)
     assert r.returncode == 2 and journal.read_text() == ""
+
+
+# ---------- relecture (correction 1) ----------
+
+@pytest.mark.parametrize("rep,contenu", [
+    ("etc", "install i2c_mv64xxx /bin/false\n"),
+    ("etc", "install i2c_mv64xxx /usr/bin/false\n"),
+    ("etc", "  blacklist   i2c-mv64xxx  \n"),
+    ("etc", "blacklist\ti2c_mv64xxx"),
+    ("run", "blacklist i2c_mv64xxx\n"),
+    ("usrlib", "blacklist i2c_mv64xxx\n"),
+    ("lib", "blacklist i2c-mv64xxx\n"),
+])
+def test_garde_i2c_reconnue(racine, rep, contenu):
+    tmp, _, journal, env = racine
+    (tmp / rep / "modprobe.d" / "x.conf").write_text(contenu)
+    r = lance(env, "install", "2.2.1")
+    assert r.returncode == 0 and journal.read_text() == "" and "inerte" in r.stdout
+
+
+@pytest.mark.parametrize("contenu", [
+    "# blacklist i2c_mv64xxx\n",
+    "  #blacklist i2c_mv64xxx\n",
+    "blacklist i2c_mv64xxx_foo\n",
+    "blacklist i2c_mv64xxxfoo\n",
+    "install i2c_mv64xxx /sbin/modprobe --ignore-install i2c_mv64xxx\n",
+    "options i2c_mv64xxx x=1\n",
+])
+def test_garde_i2c_non_declenchee(racine, contenu):
+    tmp, _, journal, env = racine
+    (tmp / "etc" / "modprobe.d" / "x.conf").write_text(contenu)
+    r = lance(env, "install", "2.2.1")
+    assert r.returncode == 0 and "dkms build" in journal.read_text()
+
+
+def test_garde_i2c_deux_fichiers(racine):
+    tmp, _, journal, env = racine
+    (tmp / "etc" / "modprobe.d" / "a.conf").write_text("blacklist pcspkr\n")
+    (tmp / "etc" / "modprobe.d" / "b.conf").write_text("blacklist i2c_mv64xxx\n")
+    r = lance(env, "install", "2.2.1")
+    assert r.returncode == 0 and journal.read_text() == ""
+
+
+@pytest.mark.parametrize("cmdline,inerte", [
+    ("quiet modprobe.blacklist=pcspkr,i2c_mv64xxx\n", True),
+    ("modprobe.blacklist=i2c-mv64xxx", True),
+    ("modprobe.blacklist=i2c_mv64xxx_foo quiet", False),
+    ("quiet i2c_mv64xxx", False),
+])
+def test_garde_i2c_ligne_de_commande(racine, cmdline, inerte):
+    tmp, _, journal, env = racine
+    (tmp / "cmdline").write_text(cmdline)
+    r = lance(env, "install", "2.2.1")
+    assert r.returncode == 0
+    assert (journal.read_text() == "") is inerte
+
+
+@pytest.mark.parametrize("etape", ["add", "install"])
+def test_echec_add_ou_install_zero_sans_charger(racine, etape):
+    _, bin_, journal, env = racine
+    env["SECUBOX_DKMS"] = outil(bin_, f"dkms-{etape}", f'echo "dkms $*" >> {journal}; [ "$1" = {etape} ] && exit 3; exit 0')
+    r = lance(env, "install", "2.2.1")
+    assert r.returncode == 0
+    assert f"echec de 'dkms {etape}" in r.stdout
+    assert "modprobe" not in journal.read_text()
+
+
+def test_deja_installe_pas_de_reconstruction(racine):
+    _, bin_, journal, env = racine
+    env["SECUBOX_DKMS"] = outil(
+        bin_, "dkms-inst",
+        f'echo "dkms $*" >> {journal}; [ "$1" = status ] && echo "secubox-leds/2.2.1, 6.12.107+deb13-arm64, aarch64: installed"; exit 0')
+    r = lance(env, "install", "2.2.1")
+    assert r.returncode == 0
+    j = journal.read_text()
+    assert "dkms build" not in j and "dkms add" not in j and "dkms install" not in j
+    assert j.splitlines()[-1] == "modprobe leds-is31fl319x"
+
+
+def test_variables_ignorees_sans_secubox_test(racine):
+    _, bin_, journal, env = racine
+    del env["SECUBOX_TEST"]
+    env["SECUBOX_LED_BOARD"] = outil(bin_, "board-ok", "exit 0")
+    env["SECUBOX_KVER"] = "test"
+    r = lance(env, "check")
+    assert r.returncode == 0
+    assert "ignorees" in r.stderr
+    assert journal.read_text() == ""
+
+
+def test_check_avertit_si_puce_sans_module(racine):
+    _, _, journal, env = racine
+    r = lance(env, "check")
+    assert r.returncode == 0 and "AVERTISSEMENT" in r.stderr
+    assert journal.read_text() == ""
+
+
+def test_check_muet_si_module_present_ou_gk2(racine):
+    tmp, bin_, _, env = racine
+    env2 = dict(env, SECUBOX_MODINFO=outil(bin_, "modinfo-dkms", "echo /lib/modules/x/updates/dkms/leds-is31fl319x.ko"))
+    r = lance(env2, "check")
+    assert r.returncode == 0 and r.stdout == "" and r.stderr == ""
+    (tmp / "etc" / "modprobe.d" / "blacklist-i2c.conf").write_text("blacklist i2c_mv64xxx\n")
+    r = lance(env, "check")
+    assert r.returncode == 0 and r.stdout == "" and r.stderr == ""
+
+
+def test_service_appelle_check_sans_echec():
+    unite = (PKG / "systemd" / "secubox-leds.service").read_text()
+    assert "ExecStart=-/usr/sbin/secubox-led-dkms check" in unite
+    assert unite.index("ExecCondition=/usr/sbin/secubox-led-board") < unite.index("secubox-led-dkms check")
+
+
+def test_pas_de_grep_q_sous_pipe():
+    texte = SCRIPT.read_text()
+    assert not re.search(r"status[^\n]*\|\s*grep -q", texte)
+    assert "env | grep" not in texte

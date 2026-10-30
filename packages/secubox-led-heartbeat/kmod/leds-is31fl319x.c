@@ -11,11 +11,12 @@
  * CONFIG_LEDS_IS31FL319X is not set), built by DKMS.
  * Reference: drivers/leds/leds-is31fl319x.c of Linux v6.12.107.
  * Local changes, kept minimal:
- *  - devm_mutex_init() fallback for kernels older than 6.10 (6.6 LTS);
+ *  - devm_mutex_init() fallback when the macro is missing (< 6.10, 6.6 LTS);
  *  - write_delay_us module parameter (default 1000): pause after each I2C
  *    register write. The Armada 7040 mv64xxx controller locked up
  *    ("mv64xxx_i2c_fsm: Ctlr Error") after rapid LED writes on 6.12.85;
- *    1 ms between writes avoided it. 0 restores upstream behaviour.
+ *    1 ms between writes avoided it. Bounded to 0..100000; 0 restores
+ *    upstream behaviour.
  */
 
 #include <linux/err.h>
@@ -28,12 +29,26 @@
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
-#include <linux/version.h>
+#include <linux/minmax.h>
+#include <linux/moduleparam.h>
+
+#define IS31FL319X_WRITE_DELAY_MAX_US	100000
 
 static unsigned int write_delay_us = 1000;
-module_param(write_delay_us, uint, 0644);
+
+static int write_delay_us_set(const char *val, const struct kernel_param *kp)
+{
+	return param_set_uint_minmax(val, kp, 0, IS31FL319X_WRITE_DELAY_MAX_US);
+}
+
+static const struct kernel_param_ops write_delay_us_ops = {
+	.set = write_delay_us_set,
+	.get = param_get_uint,
+};
+
+module_param_cb(write_delay_us, &write_delay_us_ops, &write_delay_us, 0644);
 MODULE_PARM_DESC(write_delay_us,
-		 "Delay in microseconds after each I2C write (mv64xxx workaround, 0 = none, default 1000)");
+		 "Delay in microseconds after each I2C write (mv64xxx workaround, 0..100000, 0 = none, default 1000)");
 
 /* register numbers */
 #define IS31FL319X_SHUTDOWN		0x00
@@ -213,14 +228,20 @@ static int is31fl319x_write(struct regmap *map, unsigned int reg,
 			    unsigned int val)
 {
 	int ret = regmap_write(map, reg, val);
-	unsigned int delay = READ_ONCE(write_delay_us);
+	/* bounded again here: no overflow of delay + delay / 4 + 1 */
+	unsigned int delay = min_t(unsigned int, READ_ONCE(write_delay_us),
+				   IS31FL319X_WRITE_DELAY_MAX_US);
 
 	if (delay)
 		usleep_range(delay, delay + delay / 4 + 1);
 	return ret;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 10, 0)
+/*
+ * devm_mutex_init() is a macro since 6.10 (also when backported to a stable
+ * branch): test the macro, not the version number.
+ */
+#ifndef devm_mutex_init
 static void is31fl319x_mutex_destroy(void *lock)
 {
 	mutex_destroy(lock);

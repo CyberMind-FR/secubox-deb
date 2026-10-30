@@ -1,3 +1,13 @@
+secubox-led-heartbeat (2.2.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3290. dkms et linux-headers-arm64 passent en Suggests : apt les installait par defaut, y compris sur gk2 (disque plein) et rpi400 ; le postinst dit quoi installer.
+  * write_delay_us borne a 0..100000 us (param_set_uint_minmax) et reborne dans l'ecriture ; repli devm_mutex_init teste par la macro (#ifndef), pas par le numero de version ; BUILD_EXCLUSIVE_ARCH aarch64.
+  * prerm : module DKMS retire seulement a la desinstallation ; postinst : pas de reconstruction si deja installe pour ce noyau et cette version.
+  * secubox-led-dkms : variables de test honorees seulement si SECUBOX_TEST=1 et non root ; garde I2C lue dans /etc, /run, /usr/lib, /lib/modprobe.d et modprobe.blacklist= de la ligne de commande, motif ancre, lignes commentees ignorees, install ... (/usr)/bin/false ; plus de grep -q sous pipefail ; sous-commande check appelee par secubox-leds.service (avertissement au demarrage si la puce est la sans module).
+  * debian/copyright : kmod/leds-is31fl319x.c en GPL-2.0-only avec ses auteurs.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 16:00:00 +0100
+
 secubox-led-heartbeat (2.2.0-1~trixie1) trixie; urgency=medium
 
   * Pilote leds-is31fl319x livre par DKMS (ref #3290) : le noyau Debian stock n'active pas CONFIG_LEDS_IS31FL319X. Sources dans /usr/src/secubox-leds-<version>/, add/build/install par secubox-led-dkms depuis le postinst, puis modprobe sans redemarrage. MOCHAbin seulement, et jamais si le bus I2C est neutralise (gk2) ; dkms et linux-headers-arm64 en Recommends ; un echec de build ne fait jamais echouer dpkg ; Secure Boot signale par un message.

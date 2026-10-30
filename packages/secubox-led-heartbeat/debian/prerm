@@ -13,15 +13,18 @@ case "$1" in
         for led in /sys/class/leds/*:led*/brightness; do
             echo 0 > "$led" 2>/dev/null || true
         done
-        # Retire le pilote DKMS de cette version (#3290) ; le postinst de la
-        # nouvelle version le reconstruit. Sans effet s'il n'a jamais ete ajoute.
-        DKMS_VER="$(dpkg-query -W -f='${Version}' secubox-led-heartbeat 2>/dev/null || true)"
-        DKMS_VER="${DKMS_VER#*:}"; DKMS_VER="${DKMS_VER%-*}"
-        if [ -n "$DKMS_VER" ] && [ -x /usr/sbin/secubox-led-dkms ]; then
-            /usr/sbin/secubox-led-dkms remove "$DKMS_VER" || true
-        fi
         ;;
 esac
+
+# Retire le pilote DKMS (#3290) seulement a la desinstallation : une mise a
+# jour garde le module construit ; sans effet s'il n'a jamais ete ajoute.
+if [ "$1" = remove ]; then
+    DKMS_VER="$(dpkg-query -W -f='${Version}' secubox-led-heartbeat 2>/dev/null || true)"
+    DKMS_VER="${DKMS_VER#*:}"; DKMS_VER="${DKMS_VER%-*}"
+    if [ -n "$DKMS_VER" ] && [ -x /usr/sbin/secubox-led-dkms ]; then
+        /usr/sbin/secubox-led-dkms remove "$DKMS_VER" || true
+    fi
+fi
 
 #DEBHELPER#
 
