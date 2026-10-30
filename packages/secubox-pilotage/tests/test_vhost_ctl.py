@@ -495,18 +495,30 @@ def test_verrou_libre_pendant_l_espacement(banc):
 
 EXCL = "var/lib/secubox-pilotage-pages/exclusions-relais.json"
 IP_PAIR = "10.10.0.5"
+IP_GK4 = "10.10.0.4"
+VERROU = "var/lib/secubox-pilotage-pages/verrou-relais.lock"
 
 
 def relais_factice(banc):
-    """secubox-relais-maillage factice : relayer/retirer par les VRAIS haproxyctl (wrapper du banc) et la table des routes."""
+    """secubox-relais-maillage factice : relayer/retirer par les VRAIS haproxyctl (wrapper du banc) et la table des routes ;
+    pair-de lit PAIRS.json. relayer/retirer exigent le verrou commun HÉRITÉ du ctl (SECUBOX_VERROU_FD), comme le vrai."""
+    (banc.r / "PAIRS.json").write_text(json.dumps({"gk5": IP_PAIR, "gk4": IP_GK4}))
+    verrou = banc.r / VERROU
     script(banc.bin / "secubox-relais-maillage", f'''echo "secubox-relais-maillage $*" >> {banc.journal}
 [ -e {banc.r}/ECHEC_RELAIS_$1 ] && exit 1
+if [ "$1" = relayer ] || [ "$1" = retirer ]; then
+  [ -n "$SECUBOX_VERROU_FD" ] && [ "/proc/self/fd/$SECUBOX_VERROU_FD" -ef {verrou} ] || {{ echo SANS_VERROU >> {banc.journal}; exit 1; }}
+fi
 case "$1" in
+  pair-de)
+    python3 -c 'import json,sys; ip=json.load(open(sys.argv[1])).get(sys.argv[2]); print(ip) if ip else sys.exit(1)' {banc.r}/PAIRS.json "$2" ;;
   retirer)
+    [ -e {banc.r}/CORROMPT_REGISTRE ] && echo "{{pas du json" > {banc.r}/var/lib/secubox-pilotage-pages/registre.json
     nom=$({banc.bin}/haproxyctl vhost list | python3 -c 'import json,sys; print(" ".join(v["name"] for v in json.load(sys.stdin)["vhosts"] if v["domain"]==sys.argv[1]))' "$2")
     [ -n "$nom" ] && {banc.bin}/haproxyctl vhost remove "$nom" >/dev/null
     python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d.pop(sys.argv[2],None); json.dump(d,open(p,"w"))' {banc.routes} "$2" ;;
   relayer)
+    if [ "$2" = --sans-sonde ]; then shift; else [ -e {banc.r}/MUET ] && exit 1; fi
     {banc.bin}/haproxyctl vhost add "$2" sbxwaf_inspector true >/dev/null
     python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d[sys.argv[2]]=[sys.argv[3],int(sys.argv[4])]; json.dump(d,open(p,"w"))' {banc.routes} "$2" "$3" "$4" ;;
 esac
@@ -603,3 +615,95 @@ def test_exclusions_fichier_root(relais):
     assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
     st = (banc.r / EXCL).stat()
     assert stat.S_IMODE(st.st_mode) == 0o644 and st.st_uid == os.getuid()
+
+
+# --- R-L5-30 : IP du pair, verrou commun, rétablissement sans sonde, retour arrière par étapes ---------------------------
+
+@pytest.mark.parametrize("cible", [IP_GK4, "127.0.0.1", "203.0.113.9"])
+def test_route_hors_du_pair_de_la_box_non_reprise(banc, cible):
+    relais_factice(banc)
+    relayer_par_le_maillage(banc, ip=cible)      # admin.gk5 vers le pair gk4, vers le maître lui-même ou une IP publique
+    avant = banc.routes.read_text()
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1 and "déjà" in json.loads(r.stdout)["erreur"]
+    assert banc.routes.read_text() == avant and exclusions(banc) == []
+    assert not any(x.startswith("secubox-relais-maillage retirer") for x in banc.appels())
+
+
+def test_pair_inconnu_du_maillage_non_repris(relais):
+    banc = relais
+    (banc.r / "PAIRS.json").write_text(json.dumps({"gk4": IP_GK4}))
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 1
+    assert exclusions(banc) == []
+
+
+def test_basculement_attend_la_passe_du_relais(relais):
+    """Une passe de relais-maillage en cours (verrou commun tenu) : le ctl ne touche à rien avant qu'elle finisse."""
+    banc = relais
+    import fcntl
+    avant_routes, avant_toml = banc.routes.read_text(), banc.toml.read_text()
+    fd = os.open(banc.r / VERROU, os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    try:
+        p = subprocess.Popen([str(CTL), "poser", "gk5"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True, env={"PATH": os.environ["PATH"], "SBX_RACINE": str(banc.r), "SBX_BIN": str(banc.bin),
+                                             "SBX_LIB": str(PKG), "SUDO_USER": "root"})
+        p.stdin.write(PAGES)
+        p.stdin.close()
+        p.stdin = None
+        time.sleep(1.5)
+        assert p.poll() is None, p.communicate()
+        assert banc.routes.read_text() == avant_routes and banc.toml.read_text() == avant_toml
+        assert exclusions(banc) == [] and not any(x.startswith("secubox-relais-maillage retirer") for x in banc.appels())
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    out, err = p.communicate(timeout=120)
+    assert p.returncode == 0, out + err
+    assert "SANS_VERROU" not in banc.appels()
+    assert json.loads(banc.routes.read_text())[DOM] == ["192.168.1.200", 9080]
+
+
+def test_verrou_commun_lien_refuse(relais, tmp_path):
+    banc = relais
+    (tmp_path / "ailleurs.lock").write_text("")
+    (banc.r / VERROU).symlink_to(tmp_path / "ailleurs.lock")
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1 and "verrou" in json.loads(r.stdout)["erreur"]
+    assert exclusions(banc) == []
+
+
+def test_retour_vers_un_pair_muet_retablit_le_nom(relais):
+    banc = relais
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    (banc.r / "MUET").touch()                      # le pair ne répond plus : la sonde de « relayer » le refuserait
+    r = banc.ctl("retirer", "gk5")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.loads(banc.routes.read_text())[DOM] == [IP_PAIR, 9080]
+    assert banc.toml.read_text().count(f'domain = "{DOM}"') == 1
+    assert f"secubox-relais-maillage relayer --sans-sonde {DOM} {IP_PAIR} 9080" in banc.appels()
+
+
+def test_echec_du_retablissement_fait_echouer_retirer(relais):
+    banc = relais
+    assert banc.ctl("poser", "gk5", entree=PAGES).returncode == 0
+    (banc.r / "ECHEC_RELAIS_relayer").touch()
+    r = banc.ctl("retirer", "gk5")
+    assert r.returncode == 1 and json.loads(r.stdout)["ok"] is False
+    a = [x for x in banc.audit() if x["evenement"] == "pilotage_vhost_retirer"]
+    assert a[-1]["resultat"] == "echec"
+    b = [x for x in banc.audit() if x["evenement"] == "pilotage_vhost_basculer"]
+    assert b[-1]["sens"] == "locale" and b[-1]["resultat"] == "echec"
+
+
+def test_retour_arriere_registre_illisible_leve_quand_meme_l_exclusion(relais):
+    """M1 : une étape du retour arrière qui échoue (registre devenu illisible) n'empêche pas les autres ; l'erreur d'origine
+    reste celle rendue."""
+    banc = relais
+    (banc.r / "CORROMPT_REGISTRE").touch()   # le « retirer » du relais réussit mais laisse le registre illisible
+    (banc.r / "ECHEC_T").touch()
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 1
+    assert "nginx" in json.loads(r.stdout)["erreur"]
+    assert exclusions(banc) == []
+    assert json.loads(banc.routes.read_text())[DOM] == [IP_PAIR, 9080]

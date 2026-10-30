@@ -22,6 +22,9 @@ Root, verbes fermés :
                                 (et son minuteur), jamais par le service : celui-ci tourne sans sudo (NoNewPrivileges).
   lister                        vhosts posés. Non audité.
 
+Verrous (R-L5-30) : poser, retirer et synchroniser tiennent D'ABORD le verrou commun avec secubox-relais-maillage
+(/var/lib/secubox-pilotage-pages/verrou-relais.lock, transmis à ses appels), PUIS celui de conf.d nginx.
+
 Nom de box : ^[a-z0-9-]{1,40}$ (sinon code 2, rien touché). Sortie : une ligne JSON. Codes : 0 ; 1 erreur ou refus ; 2 argv,
 entrée ou plan invalides. SBX_RACINE (tests) honorée seulement si l'appelant est le compte effectif ; SBX_BIN et SBX_LIB ne
 valent que sous SBX_RACINE.
@@ -111,6 +114,7 @@ class Ctx:
         # R-L5-26 I1 : registre dans l'arbre root des pages (0755, jamais inscriptible par le compte secubox)
         self.registre_dossier = f"{self.r}/var/lib/secubox-pilotage-pages"
         self.registre = f"{self.registre_dossier}/registre.json"
+        self.verrou_fd = None          # verrou commun avec secubox-relais-maillage, transmis à ses appels
         self.ancien_registre = f"{self.r}/etc/secubox/pilotage-vhosts.json"
         if self.substitue and os.environ.get("SBX_UID_ATTENDU"):
             try:
@@ -141,8 +145,13 @@ class Ctx:
 
     def lancer(self, nom, *args, entree=None, delai=300):
         env = dict(os.environ) if self.substitue else {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
+        fds = ()
+        if nom == "secubox-relais-maillage" and self.verrou_fd is not None:
+            # même description de fichier : relais-maillage reprend le verrou commun déjà tenu ici, sans attendre (R-L5-30 I2)
+            env["SECUBOX_VERROU_FD"], fds = str(self.verrou_fd), (self.verrou_fd,)
         try:
-            return subprocess.run([self.cmd(nom), *args], input=entree, capture_output=True, env=env, timeout=delai)
+            return subprocess.run([self.cmd(nom), *args], input=entree, capture_output=True, env=env, timeout=delai,
+                                  pass_fds=fds)
         except (OSError, subprocess.TimeoutExpired) as e:
             err(f"{nom} : {e.__class__.__name__}")
             return subprocess.CompletedProcess([nom], 127, b"", b"")
@@ -503,7 +512,8 @@ RE_IP_MAILLAGE = re.compile(r"10\.10\.0\.([0-9]{1,3})")
 
 def tenu_par_relais(ctx, dom, box):
     """(ip, port) si `admin.<box>` est EXACTEMENT ce que pose secubox-relais-maillage (vhost HAProxy vers sbxwaf_inspector, route
-    sbxwaf vers l'IP maillée d'un pair wg-mesh 10.10.0.x, aucun server nginx d'ici pour ce nom) ; None sinon (tiers : refus)."""
+    sbxwaf vers l'IP maillée DU PAIR <box> — celle que rend `secubox-relais-maillage pair-de <box>` d'après wg_mesh.json et
+    wg-mesh, R-L5-30 I1 —, aucun server nginx d'ici pour ce nom) ; None sinon (tiers, autre pair, maître, IP publique : refus)."""
     v, route = vhost_info(ctx, dom), lire_route(ctx, dom)
     if v is None or v["backend"] != BACKEND_WAF or not isinstance(route, list) or len(route) != 2:
         return None
@@ -512,6 +522,9 @@ def tenu_par_relais(ctx, dom, box):
     if m is None or not 1 <= int(m.group(1)) <= 254 or isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         return None
     if nginx_etranger(ctx, dom, box):
+        return None
+    p = ctx.lancer("secubox-relais-maillage", "pair-de", box, delai=30)
+    if p.returncode != 0 or p.stdout.decode("utf-8", "replace").strip() != ip:
         return None
     return ip, port
 
@@ -554,11 +567,15 @@ def vers_locale(ctx, box, dom, ip, port, acteur_motif=None):
         nom = vhost_haproxy(ctx, dom)
         if nom is not None and ctx.lancer("haproxyctl", "vhost", "remove", nom).returncode != 0:
             ok = False
-        ecrire_exclusions(ctx, [n for n in lire_exclusions(ctx) if n != dom])
-    except Erreur:
+    except (Erreur, OSError):
         ok = False
-    if ctx.lancer("secubox-relais-maillage", "relayer", dom, ip, str(port)).returncode != 0:
-        ok = False   # l'exclusion est levée : la passe suivante de relais-maillage reprendra le nom
+    try:     # étape à part : une table illisible n'empêche pas de lever l'exclusion
+        ecrire_exclusions(ctx, [n for n in lire_exclusions(ctx) if n != dom])
+    except (Erreur, OSError):
+        ok = False
+    # I3 : rétablissement DIRECT (vhost et route exactement comme avant), sans sonder le pair — un pair muet au retour garde son nom
+    if ctx.lancer("secubox-relais-maillage", "relayer", "--sans-sonde", dom, ip, str(port)).returncode != 0:
+        ok = False
     if ctx.lancer("haproxyctl", "generate", "--allow-shrink").returncode != 0 or ctx.lancer("haproxyctl", "reload").returncode != 0:
         ok = False
     auditer(ctx, "pilotage_vhost_basculer", box=box, domaine=dom, sens="locale", resultat="ok" if ok else "echec",
@@ -684,6 +701,28 @@ def verrou(ctx):
     return fd
 
 
+def verrou_commun(ctx):
+    """R-L5-30 I2 : flock exclusif partagé avec secubox-relais-maillage (fichier root dédié du dossier root du registre et des
+    exclusions, ouvert sans suivre de lien). Tenu pendant TOUT le verbe (poser, retirer, synchroniser) ; transmis aux appels de
+    relais-maillage (même description de fichier : pas d'attente). ORDRE DES VERROUS : celui-ci D'ABORD, celui de conf.d
+    ENSUITE ; relais-maillage ne prend que celui-ci : aucun interblocage."""
+    dfd = _dossier_registre(ctx, creer=True)
+    try:
+        try:
+            fd = os.open("verrou-relais.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, 0o600,
+                         dir_fd=dfd)
+        except OSError:
+            raise Erreur("verrou commun avec relais-maillage non sûr (lien)") from None
+    finally:
+        os.close(dfd)
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != ctx.uid or st.st_nlink != 1:
+        os.close(fd)
+        raise Erreur("verrou commun avec relais-maillage non sûr (propriétaire ou liens)")
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
 def poser(ctx, box, pages):
     dom = V.domaine(box)
     if box in noms_reserves(ctx):
@@ -744,13 +783,24 @@ def poser(ctx, box, pages):
         if reprise is not None:
             # échec à n'importe quelle étape du basculement : retour à l'état « locale » (relais-maillage), marque ôtée
             auditer(ctx, "pilotage_vhost_basculer", box=box, domaine=dom, sens="distante", resultat="echec", motif=str(e))
+            # M1 : chaque étape du retour arrière dans son propre try — l'une qui échoue n'empêche pas les suivantes, et c'est
+            # l'erreur d'origine qui est rendue
             if bascule:
-                vers_locale(ctx, box, dom, *reprise, acteur_motif="retour après échec")
+                try:
+                    vers_locale(ctx, box, dom, *reprise, acteur_motif="retour après échec")
+                except (Erreur, OSError) as e2:
+                    err(f"retour arrière : relais non rétabli ({e2})")
             else:
-                ecrire_exclusions(ctx, [n for n in lire_exclusions(ctx) if n != dom])
-            reg = lire_registre(ctx)
-            reg["domaines"].pop(dom, None)
-            ecrire_registre(ctx, reg)
+                try:
+                    ecrire_exclusions(ctx, [n for n in lire_exclusions(ctx) if n != dom])
+                except (Erreur, OSError) as e2:
+                    err(f"retour arrière : exclusion non levée ({e2})")
+            try:
+                reg = lire_registre(ctx)
+                reg["domaines"].pop(dom, None)
+                ecrire_registre(ctx, reg)
+            except (Erreur, OSError) as e2:
+                err(f"retour arrière : marque non ôtée du registre ({e2})")
         raise
     if reprise is not None:
         auditer(ctx, "pilotage_vhost_basculer", box=box, domaine=dom, sens="distante", resultat="ok",
@@ -782,11 +832,16 @@ def retirer(ctx, box):
     except Erreur as e:
         auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="echec", motif=str(e))
         raise
-    auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="ok")
     avant = entree.get("route_avant")
     if entree.get("repris_de") == "relais-maillage" and isinstance(avant, list) and len(avant) == 2:
-        # distante → locale (R-L5-27) : le nom revient à relais-maillage, tout de suite (sinon à sa passe suivante)
-        vers_locale(ctx, box, dom, str(avant[0]), int(avant[1]))
+        # distante → locale (R-L5-27) : le nom revient à relais-maillage par rétablissement direct ; un échec est propagé
+        # (I3) : le pilotage ne sert plus le nom, et le relais ne l'a pas repris
+        if not vers_locale(ctx, box, dom, str(avant[0]), int(avant[1])):
+            motif = f"retour à relais-maillage en échec : {dom} n'est plus servi (secubox-relais-maillage relayer --sans-sonde " \
+                    f"{dom} {avant[0]} {avant[1]})"
+            auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="echec", motif=motif)
+            return {"ok": False, "box": box, "domaine": dom, "erreur": motif}
+    auditer(ctx, "pilotage_vhost_retirer", box=box, domaine=dom, resultat="ok")
     return {"ok": True, "box": box, "domaine": dom}
 
 
@@ -876,7 +931,14 @@ def main(argv):
             pages = lire_entree_poser()
         if verbe == "synchroniser":
             attendre_passe(ctx)
-        fd = verrou(ctx)
+        fdc = verrou_commun(ctx) if verbe != "lister" else None   # commun d'abord…
+        ctx.verrou_fd = fdc
+        try:
+            fd = verrou(ctx)                                        # … conf.d ensuite
+        except BaseException:
+            if fdc is not None:
+                os.close(fdc)
+            raise
         migrer_registre(ctx)
         try:
             if verbe == "poser":
@@ -889,6 +951,8 @@ def main(argv):
                 res = {"ok": True, "vhosts": [{"box": b, "domaine": V.domaine(b)} for b in poses(ctx)]}
         finally:
             os.close(fd)
+            if fdc is not None:
+                os.close(fdc)
         sortie(res)
         return 0 if res.get("ok") else 1
     except Usage as e:

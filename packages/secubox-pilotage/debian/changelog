@@ -1,3 +1,13 @@
+secubox-pilotage (0.4.4-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 5, correction 4/5 (R-L5-30, ref #3126) : admin.<box> n'est repris au relais que si sa route vise l'IP du
+    pair <box> (secubox-relais-maillage pair-de) ; verrou commun avec relais-maillage tenu pendant tout le basculement
+    (commun d'abord, conf.d ensuite, descripteur transmis) ; retour « locale » par « relayer --sans-sonde » (un pair
+    muet retrouve son nom), échec propagé par retirer (ok: false, audit echec) ; retour arrière de poser par étapes
+    indépendantes, erreur d'origine conservée. Requiert secubox-p2p >= 1.19.5 pour le basculement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 02:10:00 +0100
+
 secubox-pilotage (0.4.3-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 5, correction 3/5 (R-L5-27, ref #3126) : basculement par box locale (secubox-relais-maillage) ⇄ distante

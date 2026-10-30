@@ -301,14 +301,16 @@ HAProxy TLS 1.3 → sbxwaf → nginx.
   Aucun cookie. Session du maître close ou administrateur déchu entre-temps : 401/403. Débit : 10 émissions par administrateur et
   10 échanges par adresse et par minute (429).
 - **Basculement locale ⇄ distante** (R-L5-27) : jamais deux vhosts pour un nom. « Locale » : `secubox-relais-maillage` relaie
-  `admin.<box>` vers le nginx de la box (vhost HAProxy vers sbxwaf_inspector, route sbxwaf vers l'IP maillée 10.10.0.x du pair).
+  `admin.<box>` vers le nginx de la box (vhost HAProxy vers sbxwaf_inspector, route sbxwaf vers l'IP maillée du pair `<box>`, celle que rend `secubox-relais-maillage pair-de <box>` : une route vers un autre pair, le maître ou une IP publique n'est pas reprise).
   « Distante » : le pilotage le sert. Source de vérité : la déclaration `Interface = "distante"` de l'inventaire (plan) + le
   registre root. `poser` d'un nom non marqué mais EXACTEMENT porté par relais-maillage (et par rien d'autre : aucun server nginx
   d'ici) : exclusion écrite d'abord (`/var/lib/secubox-pilotage-pages/exclusions-relais.json`, root 0644, que relais-maillage
   honore pour les seuls noms `admin.<box>.secubox.in`), marque avec `repris_de` et `route_avant`, `secubox-relais-maillage retirer
   <dom>` (vérifié), puis la pose normale ; échec à n'importe quelle étape ⇒ retour « locale » (retrait de ce que le pilotage a
-  posé, exclusion levée, `secubox-relais-maillage relayer <dom> <ip> <port>`, marque ôtée). `retirer` d'un nom repris : retrait
-  du vhost pilotage puis même retour, immédiat (sinon à la passe suivante du relais, l'exclusion étant levée). Audit
+  posé, exclusion levée, `secubox-relais-maillage relayer --sans-sonde <dom> <ip> <port>` — rétablissement direct, même pair muet —,
+  marque ôtée ; chaque étape indépendante, erreur d'origine rendue). `retirer` d'un nom repris : retrait du vhost pilotage puis
+  même retour ; s'il échoue, `retirer` échoue (`ok: false`, audit `resultat=echec`). Verrou commun avec relais-maillage
+  (`verrou-relais.lock`, flock) tenu pendant tout le verbe, avant celui de conf.d ; relais-maillage le tient pendant toute sa passe. Audit
   `pilotage_vhost_basculer` (`sens` distante|locale, `resultat`, `route`). Un nom porté par autre chose (vhost manuel, autre
   module, route vers une autre adresse) reste refusé (C2). Les autres noms de la box (hall, acces, waf…) ne sont jamais touchés.
 - **Contrat pour T7 (panneau « Flotte » du maître, point d'entrée unique)** : box distante ⇒ ouvrir
