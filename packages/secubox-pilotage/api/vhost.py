@@ -123,7 +123,13 @@ def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, di
     # --- connexion : code émis par l'administration du maître ---
 
     @app.get("/boxes/{box}/connexion-vhost")
-    async def connexion_vhost(box: str, retour: Optional[str] = Query(None, max_length=80), jwt: dict = Depends(auth.require_jwt)):
+    async def connexion_vhost(request: Request, box: str, retour: Optional[str] = Query(None, max_length=80),
+                              jwt: dict = Depends(auth.require_jwt)):
+        # Final I1 : la route accepte le cookie du maître ; un navigateur envoie toujours Sec-Fetch-Site, un lien posé par un site
+        # tiers (cross-site, ou un sous-domaine en same-site) n'émet aucun code. Absent : client non navigateur, require_jwt seul.
+        site = request.headers.get("sec-fetch-site")
+        if site is not None and site not in ("same-origin", "none"):
+            raise HTTPException(403, "demande de connexion hors de l'origine du maître")
         if retour is not None and not V.RE_RETOUR.fullmatch(retour):
             raise HTTPException(422, "retour : /<module>/ seulement")
         await box_distante(box)

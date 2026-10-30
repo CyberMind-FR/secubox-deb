@@ -248,6 +248,19 @@ def test_auth_du_maitre_sur_le_vhost(w):
     asyncio.run(cas())
 
 
+@pytest.mark.parametrize("site,attendu", [("cross-site", 403), ("same-site", 403), ("same-origin", 303), ("none", 303),
+                                           (None, 303)])
+def test_emission_du_code_refusee_hors_meme_origine(w, site, attendu):
+    """Final I1 : un site tiers ne fait pas émettre de code avec le cookie du maître (Sec-Fetch-Site) ; absent = client non
+    navigateur, garde require_jwt seule."""
+    async def cas():
+        async with w.client() as c:
+            r = await c.get("/boxes/gk5/connexion-vhost", headers={"Sec-Fetch-Site": site} if site else {})
+        assert r.status_code == attendu, r.text
+        assert ("pilotage_vhost_code" in [e for e, _ in w.lignes]) == (attendu == 303)
+    asyncio.run(cas())
+
+
 def test_code_a_usage_unique_lie_a_la_box_et_borne(w):
     ranger(w.s, GK6, valeurs())
 
