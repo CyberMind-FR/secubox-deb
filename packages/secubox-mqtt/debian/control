@@ -23,7 +23,7 @@ Recommends: secubox-iot-hub
 Replaces: secubox-zigbee (<< 2.7.6~)
 Breaks: secubox-zigbee (<< 2.7.6~)
 Description: SecuBox MQTT — Mosquitto broker (WALL layer)
- Hosts a hardened Mosquitto 2.x broker in a Debian bookworm LXC at
+ Hosts a hardened Mosquitto 2.x broker in a Debian stable LXC at
  10.100.0.110 on br-lxc.
  .
  No anonymous access (allow_anonymous false). Per-service authentication
