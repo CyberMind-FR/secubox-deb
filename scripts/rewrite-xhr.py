@@ -41,8 +41,11 @@ _PREFIXES_ACTION = ("set_", "apply", "ban", "unban", "add_", "remove_", "delete_
 # Actions nommées sans suffixe : noms exacts (un préfixe « start » prendrait « startup_info »).
 # #3126 (R-L5-14) : reboot, sync, toggle, reset, flush, et deux actions nommées comme des lectures,
 # preload_url (le serveur va chercher une URL : SSRF en GET) et sync_zones (réapplique les zones NAC).
+# R-L5-16 : check_updates (apt-get update en root), run_diagnostic_test (exécute une commande), send_test_alert
+# (envoie une alerte), clear_stats (remet à zéro).
 _ACTIONS_EXACTES = frozenset({"restart", "stop", "start", "reload", "reboot", "sync", "toggle", "reset", "flush",
-                              "preload_url", "sync_zones"})
+                              "preload_url", "sync_zones", "check_updates", "run_diagnostic_test", "send_test_alert",
+                              "clear_stats"})
 
 
 def methode_http(nom: str) -> str:

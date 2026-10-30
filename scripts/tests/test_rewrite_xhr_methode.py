@@ -54,3 +54,26 @@ def test_les_pages_portees_suivent_la_regle():
             if nom in rewrite_xhr._ACTIONS_EXACTES and methode != rewrite_xhr.methode_http(nom):
                 ecarts.append((str(js.relative_to(depot)), nom, methode))
     assert not ecarts, ecarts
+
+
+# ── #3126, R-L5-16 : GET qui agissent ──────────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("nom", ["check_updates", "run_diagnostic_test", "send_test_alert", "clear_stats"])
+def test_get_qui_agissent_partent_en_post(nom):
+    assert rewrite_xhr.methode_http(nom) == "POST"
+
+
+@pytest.mark.parametrize("module", ["system", "nac", "ad-guard", "freebox", "cdn"])
+def test_aucune_route_get_ne_porte_un_nom_d_action(module):
+    """La règle de rewrite-xhr appliquée aux routes GET de l'API : un segment littéral nommé comme une action
+    (selon `methode_http`) ne peut pas être servi en GET."""
+    import re
+    depot = Path(__file__).resolve().parents[2]
+    lectures_connues = {"banner"}          # `ban` est un préfixe d'action ; « banner » (bannière) est une lecture
+    ecarts = []
+    for py in (depot / "packages" / f"secubox-{module}" / "api").rglob("*.py"):
+        for chemin in re.findall(r'@\w+\.get\(\s*"([^"]+)"', py.read_text(encoding="utf-8")):
+            for seg in chemin.split("/"):
+                if seg and not seg.startswith("{") and seg not in lectures_connues \
+                        and rewrite_xhr.methode_http(seg.replace("-", "_")) == "POST":
+                    ecarts.append((py.name, chemin, seg))
+    assert not ecarts, ecarts
