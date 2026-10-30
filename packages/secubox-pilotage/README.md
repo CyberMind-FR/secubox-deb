@@ -65,6 +65,12 @@ Refus d'identité du canal (`pilotage_identite_refusee`) : une ligne par adresse
 à chaque tour d'inventaire et à l'éviction d'une adresse de la table bornée (1 024), en ligne de décompte seul `{tus, vidage: tour|eviction}`
 (M7) : aucun décompte n'est perdu.
 
+`GET /boxes` (résumé par box) porte aussi `interface` (L5 tâche 7) : `distante` si l'agent déclare
+`Device.X_SECUBOX_Pilotage.Interface = "distante"` (profil léger de secubox-profiles), `locale` sinon (agent plus ancien,
+valeur absente ou hors liste). Le panneau « Flotte » (secubox-annuaire, `/fleet/`) en tire le lien d'ouverture de la box :
+`distante` ⇒ `/api/v1/pilotage/boxes/<box>/connexion-vhost?retour=/` (émission du code à usage unique, contrat T5) ;
+`locale` ⇒ `https://admin.<box>.secubox.in/`.
+
 ## Actions (L2, tâche 6)
 Toutes les routes portent `require_jwt` (administrateur réel), aucune route d'usager. Une box se désigne comme en L1 (clé ou nom unique).
 

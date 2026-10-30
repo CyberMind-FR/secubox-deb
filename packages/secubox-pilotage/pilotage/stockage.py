@@ -55,8 +55,9 @@ C_SWAP_USED = "Device.DeviceInfo.MemoryStatus.X_SECUBOX_SwapUsed"
 C_CPU = "Device.DeviceInfo.ProcessStatus.CPUUsage"
 C_ECHECS = "Device.X_SECUBOX_Services.FailedNumberOfEntries"
 C_MAINS = "Device.X_SECUBOX_Pilotage.MainsLiees"
+C_INTERFACE = "Device.X_SECUBOX_Pilotage.Interface"  # L5 tâche 7 : « distante » (profil léger) ou « locale »
 TYPE_BOUCLE = "X_SECUBOX_ServiceLoop"
-_RESUME = (C_MEM, C_SWAP_TOTAL, C_SWAP_USED, C_CPU, C_ECHECS, C_MAINS)
+_RESUME = (C_MEM, C_SWAP_TOTAL, C_SWAP_USED, C_CPU, C_ECHECS, C_MAINS, C_INTERFACE)
 
 log = logging.getLogger("pilotage.stockage")
 
@@ -438,6 +439,8 @@ class StockageSqlite:
                 "cpu_pct": round(_nombre(v.get(C_CPU)), 1) if _nombre(v.get(C_CPU)) is not None else None,
                 "services_en_echec": int(echecs) if echecs is not None else None,
                 "boucles_24h": boucles.get(b["cle"], 0),
+                # Panneau Flotte (T7) : « distante » ouvre par l'émission du code, tout le reste par le lien direct.
+                "interface": "distante" if v.get(C_INTERFACE) == "distante" else "locale",
                 "inventaire_le": b["inventaire_le"], "inventaire_partiel": bool(b["inventaire_partiel"]),
             })
         return out
