@@ -21,6 +21,7 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/canal"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/collecte"
+	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/etat"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/lecture"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/modele"
 	"github.com/CyberMind-FR/secubox-deb/secubox-pilotage-agent/internal/notifs"
@@ -46,15 +47,24 @@ func main() {
 
 	m, cpu := construireModele(lanceurSystemctl(cheminSystemctl, delaiSystemctl))
 
+	// L5 tâche 7 : page d'état locale, écrite dès le démarrage et toutes les 60 s, AVANT et SANS le maître.
+	var suivi sync.WaitGroup
+	var maitreVu suiviMaitre
+	suivi.Add(1)
+	go func() {
+		defer suivi.Done()
+		etat.Tourner(ctx, etat.Intervalle, cheminEtat, lecteurEtat(m, &maitreVu, os.Hostname))
+	}()
+
 	maitre, ipSource := attendreMaitre(ctx, os.Getenv("PILOTAGE_MAITRE"), lireInterfaces, reverifMaitre)
 	if ctx.Err() != nil {
+		suivi.Wait()
 		log.Print("arrêt avant connexion")
 		return
 	}
 	log.Printf("agent %s : maître %s, source %s", version, maitre, ipSource)
 
 	ev := make(chan notifs.Evenement, tailleEvents)
-	var suivi sync.WaitGroup
 	suivi.Add(1)
 	go func() {
 		defer suivi.Done()
@@ -87,6 +97,7 @@ func main() {
 		// drapeaux root projetés par le ctl (mains liées, propriétaire, support ouvert), sans sudo (R-L5-21).
 		CheminRelais: cheminRelais,
 		PorteeAdmin:  canal.PorteeLocale(dossierPilotage, 0, time.Now),
+		Joignable:    maitreVu.Noter,
 	}, m, operateurBox(nil))
 	if err := cl.Tourner(ctx, ev); err != nil && ctx.Err() == nil {
 		log.Fatalf("canal : %v", err)

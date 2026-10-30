@@ -283,8 +283,8 @@ def test_l5_agent_joint_le_relais_seulement():
     mains liées dans l'arbre root /etc/secubox-pilotage (même vérification que le relais) ; l'unité démarre après
     la socket du relais ; mémoire relevée pour un échange de 4 Mio (trois copies base64 brèves)."""
     code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
-    run = [ligne.strip() for ligne in code.splitlines() if "/run/secubox" in ligne]
-    assert run == ["/run/secubox/pilotage-relais.sock rw,"], run
+    run = [ligne.strip() for ligne in code.splitlines() if "/run/secubox" in ligne and "/run/secubox/pilotage/" not in ligne]
+    assert run == ["/run/secubox/pilotage-relais.sock rw,"], run  # T7 : la page d'état (/run/secubox/pilotage/), test dédié
     assert "/etc/secubox-pilotage/ r," in code and "/etc/secubox-pilotage/mains-liees r," in code
     # R-L5-21 : drapeaux d'échéance relus à chaque message, sans sudo
     assert "/etc/secubox-pilotage/proprietaire r," in code and "/etc/secubox-pilotage/support-ouvert r," in code
@@ -309,3 +309,20 @@ def test_mesure_rss_alignee_sur_l_unite():
     u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
     (env,) = re.findall(r"^Environment=GOMEMLIMIT=(\S+)$", u, re.M)
     assert f'const GOMEMLIMITUnite = "{env}"' in lire("internal/canal/memoire_test.go")
+
+
+def test_l5_page_etat_seule_ecriture_de_l_agent():
+    """L5 tâche 7 : la page d'état locale est la SEULE écriture de l'agent lui-même : son dossier vient de l'unité
+    (RuntimeDirectory secubox/pilotage, 0755 : nginx la lit), le profil AppArmor n'ouvre que la page et son fichier de
+    travail au nom fixe, rien d'autre sous /run/secubox."""
+    u = sans_commentaires(lire("systemd/secubox-pilotage-agent.service"))
+    assert re.search(r"^RuntimeDirectory=secubox/pilotage$", u, re.M)
+    assert re.search(r"^RuntimeDirectoryMode=0755$", u, re.M)
+    code = sans_commentaires(lire("apparmor/usr.sbin.sbx-pilotage-agent"))
+    ecritures = re.findall(r"^\s*(/run/secubox/pilotage/\S*)\s+(\w+),", code, re.M)
+    assert sorted(ecritures) == [("/run/secubox/pilotage/", "r"), ("/run/secubox/pilotage/.etat.html.tmp", "rw"),
+                                 ("/run/secubox/pilotage/etat.html", "w")]
+    assert "/run/secubox/pilotage/** " not in code and "/run/secubox/** " not in code
+    go = lire("cmd/sbx-pilotage-agent/etat.go")
+    assert 'cheminEtat = "/run/secubox/pilotage/etat.html"' in go
+    assert 'temporaire = ".etat.html.tmp"' in lire("internal/etat/etat.go")

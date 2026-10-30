@@ -1333,3 +1333,40 @@ func TestClientAgirSansAncreRefuse(t *testing.T) {
 		t.Fatalf("Agir avec Ancre : configuration valable, %v", c.errCfg)
 	}
 }
+
+// L5 tâche 7 : Joignable reçoit l'état du maître après chaque tour (page d'état locale) : vrai après un sondage
+// réussi, faux après un échec.
+func TestClientSignaleLeMaitreJoignable(t *testing.T) {
+	var mu sync.Mutex
+	n := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/bonjour") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		mu.Lock()
+		n++
+		k := n
+		mu.Unlock()
+		if k == 1 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+	var vus []bool
+	c := NouveauClient(Config{Maitre: strings.TrimPrefix(srv.URL, "http://"), Attente: time.Second,
+		Joignable: func(ok bool) { vus = append(vus, ok) }}, modeleTest(nil), nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	c.dormir = func(ctx context.Context, d time.Duration) error {
+		if len(vus) >= 2 {
+			cancel()
+		}
+		return ctx.Err()
+	}
+	c.Tourner(ctx, nil)
+	if len(vus) < 2 || !vus[0] || vus[1] {
+		t.Errorf("Joignable = %v, attendu [true false …]", vus)
+	}
+}

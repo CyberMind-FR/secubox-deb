@@ -48,6 +48,10 @@ ReadOnlyPaths=/
 # du paquet ; « - » : absent, ignoré au lieu d'empêcher le démarrage) et le journal d'audit. Les opérations elles-mêmes
 # passent par systemd-run (PID 1), hors de cette unité.
 ReadWritePaths=/var/log/secubox -/var/lib/secubox-pilotagectl
+# L5 tâche 7 : page d'état locale /run/secubox/pilotage/etat.html, lue par nginx (gabarit « etat » du profil léger) :
+# dossier propre à l'unité (vidé à son arrêt ; jamais /run/secubox lui-même, partagé), 0755, page 0644.
+RuntimeDirectory=secubox/pilotage
+RuntimeDirectoryMode=0755
 ProtectHome=yes
 PrivateTmp=yes
 ProtectControlGroups=yes

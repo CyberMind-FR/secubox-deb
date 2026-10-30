@@ -169,3 +169,18 @@ func TestPilotageMainsLieesNonFiablesIgnorees(t *testing.T) {
 		t.Fatal("la source de production doit exiger root:root")
 	}
 }
+
+// L5 tâche 7 : le profil léger « distante » déclare son interface au maître (Device.X_SECUBOX_Pilotage.Interface),
+// qui sert alors admin.<box> lui-même ; tout autre profil (ou aucun) vaut « locale ».
+func TestPilotageInterfaceSelonLeProfil(t *testing.T) {
+	for profil, attendu := range map[string]string{"distante\n": "distante", "minimal": "locale", "": "locale"} {
+		p := pilotageAvecProfil(t, func(c string) {
+			if profil != "" {
+				os.WriteFile(c, []byte(profil), 0o644)
+			}
+		})
+		if p["Device.X_SECUBOX_Pilotage.Interface"] != attendu {
+			t.Errorf("profil %q : Interface = %v, attendu %s", profil, p["Device.X_SECUBOX_Pilotage.Interface"], attendu)
+		}
+	}
+}

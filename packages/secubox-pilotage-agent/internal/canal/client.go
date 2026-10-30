@@ -130,7 +130,10 @@ type Config struct {
 	// PorteeAdmin dit si la box permet la portée admin MAINTENANT (mains libres et box du propriétaire, ou box cliente
 	// pendant un support accepté) ; voir PorteeLocale. nil : jamais admin. La portée du maître ne peut que réduire.
 	PorteeAdmin func(ctx context.Context) bool
-	DelaiHTTP   time.Duration // délai d'un appel au relais (DelaiHTTPDefaut)
+	// Joignable (L5 tâche 7, facultatif) reçoit, après chaque tour, si le maître a répondu (page d'état locale).
+	// Appelée par la seule goroutine de Tourner ; elle ne doit pas bloquer.
+	Joignable func(ok bool)
+	DelaiHTTP time.Duration // délai d'un appel au relais (DelaiHTTPDefaut)
 	// HTTPSimultanes : messages HTTP traités à la fois (HTTPSimultanesDefaut) ; au-delà, 503 tout de suite.
 	HTTPSimultanes int
 	// JournalDebug : journalise aussi chaque lecture HTTP réussie (sinon : écritures et refus seulement, R-L5-21 M5).
@@ -286,6 +289,9 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			if c.cfg.Joignable != nil {
+				c.cfg.Joignable(false) // ancre non vérifiée : le maître n'est pas reconnu
+			}
 			// Chaque échec est audité par le ctl : le recul monte jusqu'à la période (24 lignes par jour au plus).
 			log.Printf("canal : %v (%s), aucun Operate (nouvelle vérification dans %s)", errAncre, c.etatAncre(), reculAncre)
 			if e := c.dormir(ctx, reculAncre); e != nil {
@@ -299,6 +305,9 @@ func (c *Client) Tourner(ctx context.Context, ev <-chan notifs.Evenement) error 
 		reculAncre = c.cfg.ReculMin
 		debut := time.Now()
 		actif, err := c.cycle(ctx, &bonjour)
+		if c.cfg.Joignable != nil && ctx.Err() == nil {
+			c.cfg.Joignable(err == nil)
+		}
 		if err == nil {
 			recul = c.cfg.ReculMin
 			if !actif && time.Since(debut) < planchCycle {

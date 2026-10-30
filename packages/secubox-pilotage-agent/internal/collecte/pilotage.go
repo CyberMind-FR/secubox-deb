@@ -44,7 +44,7 @@ func NouvelleSourcePilotage(racine string, version string) modele.Source {
 func (s *pilotage) Nom() string { return "pilotage" }
 
 func (s *pilotage) Chemins() []string {
-	return []string{racinePilotage + "AgentVersion", racinePilotage + "MainsLiees", racinePilotage + "Profil"}
+	return []string{racinePilotage + "AgentVersion", racinePilotage + "MainsLiees", racinePilotage + "Profil", racinePilotage + "Interface"}
 }
 
 func (s *pilotage) Lire(ctx context.Context) (map[string]any, error) {
@@ -61,6 +61,8 @@ func (s *pilotage) Lire(ctx context.Context) (map[string]any, error) {
 		racinePilotage + "AgentVersion": s.version,
 		racinePilotage + "MainsLiees":   liees,
 		racinePilotage + "Profil":       profil,
+		// L5 tâche 7 : le profil léger « distante » n'a pas d'interface locale ; le maître sert admin.<box> (R-L5-27).
+		racinePilotage + "Interface": interfaceDuProfil(profil),
 	}, nil
 }
 
@@ -82,4 +84,15 @@ func (s *pilotage) mainsLiees() bool {
 		log.Printf("drapeau mains liées ignoré : %s (attendu : fichier régulier root:root, sans droit d'écriture groupe/autres)", refus)
 	}
 	return err == nil
+}
+
+// ProfilDistant : nom du profil léger « interface distante » (secubox-profiles/profiles/distante.toml).
+const ProfilDistant = "distante"
+
+// interfaceDuProfil : « distante » pour le profil léger, « locale » sinon (aucun profil lisible compris).
+func interfaceDuProfil(profil string) string {
+	if profil == ProfilDistant {
+		return "distante"
+	}
+	return "locale"
 }

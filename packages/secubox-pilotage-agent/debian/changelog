@@ -1,3 +1,20 @@
+secubox-pilotage-agent (0.5.0-1~trixie1) trixie; urgency=medium
+
+  * L5 tâche 7 (box légère « distante », ref #3126) :
+    - page d'état locale internal/etat : HTML statique écrit dès le démarrage, SANS attendre le maître, puis toutes
+      les 60 s, dans /run/secubox/pilotage/etat.html (RuntimeDirectory de l'unité, 0755 ; page 0644) : nom de la
+      machine, maître joignable / injoignable / inconnu, mains liées, mémoire disponible et swap, services en échec.
+      Construite champ par champ : jamais d'adresse, de clé, de jeton, de numéro de série ni de nom d'utilisateur ;
+      valeurs échappées ; aucun script ; feuille de style unique autorisée par son empreinte (CSP du gabarit nginx
+      « etat » de secubox-profiles). Écriture atomique : fichier de travail au nom fixe, ouvert sans suivre de lien,
+      synchronisé, renommé ;
+    - canal : rappel Joignable après chaque tour (page d'état) ;
+    - Device.X_SECUBOX_Pilotage.Interface : « distante » sous le profil léger, « locale » sinon (le maître sert alors
+      admin.<box>, R-L5-27) ;
+    - AppArmor : seules écritures /run/secubox/pilotage/.etat.html.tmp et etat.html. Aucune dépendance Go ajoutée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 12:00:00 +0100
+
 secubox-pilotage-agent (0.4.2-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 3, correction 2/5 (R-L5-22, ref #3126) :

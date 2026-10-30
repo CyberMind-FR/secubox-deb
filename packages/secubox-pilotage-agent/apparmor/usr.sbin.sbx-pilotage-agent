@@ -5,7 +5,8 @@
 #
 # Profil AppArmor ENFORCE de sbx-pilotage-agent (#3126 ; L1 lecture, L2 actions par sudo).
 # Posé dans /etc/apparmor.d/usr.sbin.sbx-pilotage-agent, chargé par le postinst.
-# Tout ce qui n'est pas listé est refusé. Aucune écriture de fichier, aucune
+# Tout ce qui n'est pas listé est refusé. Une seule écriture de fichier (L5 tâche 7) : la page d'état locale
+# /run/secubox/pilotage/etat.html, par un fichier de travail au nom fixe renommé ; aucune
 # capacité, aucune écoute : la connexion au maître est sortante seulement.
 # Seul passage privilégié : sudo -> secubox-pilotagectl (sudoers à argv borné, validé par le ctl).
 
@@ -77,6 +78,12 @@
   # vérifié par le relais). Aucune socket de module : le relais seul les appelle, avec son jeton.
   /run/secubox/pilotage-relais.sock rw,
   /var/lib/secubox/profiles/actif r,
+
+  # L5 tâche 7 : page d'état locale (statique, sans secret), régénérée toutes les 60 s. Dossier = RuntimeDirectory de
+  # l'unité ; écriture atomique : fichier de travail ouvert sans suivre de lien, puis renommé sur la page.
+  /run/secubox/pilotage/ r,
+  /run/secubox/pilotage/.etat.html.tmp rw,
+  /run/secubox/pilotage/etat.html w,
 
   # Les secrets restent interdits, quoi qu'une règle large ajoute un jour.
   deny /etc/secubox/secrets/** r,

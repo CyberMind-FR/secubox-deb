@@ -366,6 +366,21 @@ Refus rendus sous la forme du relais : corps > 4 Mio → 413 ; relais absent ou 
 relais → 501. Journal : une ligne par écriture ou refus (méthode, chemin sans requête, acteur, maître, portées
 demandée/retenue, statut) ; une lecture réussie seulement avec `JournalDebug` ; jamais un jeton, un corps ni un en-tête. AppArmor : `/run/secubox/pilotage-relais.sock rw` est la seule socket jointe ; les trois drapeaux en lecture.
 
+## Page d'état locale (L5, tâche 7)
+
+L'agent écrit dès son démarrage, **sans attendre le maître**, puis toutes les 60 s, une page HTML statique
+`/run/secubox/pilotage/etat.html` (dossier `RuntimeDirectory=secubox/pilotage` de l'unité, 0755 ; page 0644) :
+nom de la machine (libellé DNS court), maître `joignable` / `injoignable` / `inconnu` (dernier tour du canal ; ancre
+non vérifiée = injoignable), mains liées, mémoire disponible et swap, noms des unités en échec (32 au plus, noms
+d'unité valides seulement). Rien d'autre : ni adresse, ni clé, ni jeton, ni numéro de série, ni nom d'utilisateur
+(l'état est construit champ par champ, `internal/etat.Depuis`). Aucun script ; la seule feuille de style est autorisée
+par son empreinte (`etat.EmpreinteStyle`, recopiée dans le gabarit nginx `etat` de secubox-profiles). Écriture
+atomique (fichier de travail `.etat.html.tmp` ouvert sans suivre de lien, puis renommé) ; seules écritures permises
+par AppArmor. La page est servie sur le LAN par le gabarit nginx `etat` du profil léger `distante` (secubox-profiles).
+
+`Device.X_SECUBOX_Pilotage.Interface` vaut `distante` quand le profil actif est `distante` (le maître sert alors
+`admin.<box>.secubox.in`, R-L5-27), `locale` sinon.
+
 ## Durcissement
 
 Utilisateur `secubox-pilotage-agent`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité ambiante,
