@@ -204,15 +204,19 @@ def _cmd_apply(args) -> int:
         return 0
     # #3126 L5 tâche 7 : front web réduit du profil léger (page d'état seule, agrégateur en relais pur), ou retour au
     # front web d'origine pour tout autre profil — seulement après un apply complet, jamais en mode épingles.
+    # R-L5-34 : un allègement défait (nginx -t) rend 2 — le marqueur lu par l'agent (Interface = distante) n'est pas posé.
+    front_ok = True
     if report.status == "applied" and not getattr(args, "pins_only", False) and not args.only:
-        _audit_front_web(front_web.appliquer(profile, run=_run), profile)
+        res_front = front_web.appliquer(profile, run=_run)
+        _audit_front_web(res_front, profile)
+        front_ok = bool(res_front.get("ok"))
     if args.json:
         print(json.dumps({"status": report.status, "changed": report.changed,
                           "failed": report.failed, "rolled_back": report.rolled_back}))
     else:
         print(f"apply: {report.status} — changed={report.changed} "
               f"failed={report.failed} rolled_back={report.rolled_back}")
-    return 0 if report.status == "applied" else 2
+    return 0 if report.status == "applied" and front_ok else 2
 
 
 def _ouvrir_sans_lien(chemin: Path) -> int:

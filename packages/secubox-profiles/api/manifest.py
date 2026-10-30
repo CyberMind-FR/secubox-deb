@@ -52,7 +52,9 @@ DEFAULT_WAKE_CLASS = "normal"
 # le parcours mourait à 10/13 et aucun rapport n'était écrit. Un module qui appelle le moteur de profils n'est pas arrêtable par lui.
 # PAS « premier-pas* » (#2315) : ce sont des oneshot déclenchés par un .path ou conditionnés par un marqueur ; un protégé est DÉMARRÉ par l'apply, et un oneshot n'est jamais « actif » :
 # « état non atteint (timeout) » annulait TOUT l'apply (rolled_back). On ne protège que ce qui est un service durable.
-PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles", "vault", "autoload-agent"})
+PROTECTED_IDS = frozenset({"auth", "aggregator", "core", "nginx", "firewall", "profiles", "vault", "autoload-agent",
+                           # R-L5-34 (propriétaire, 2026-10-30) : toute box reste télé-administrable par son maître.
+                           "pilotage-agent"})
 
 # Protégés qu'un profil peut couper quand même, par sa clé `proteges_off` (#3218) — et eux seuls : un profil qui
 # nommerait auth ou l'agrégateur est REFUSÉ au chargement (state.load_profile). « profiles » est l'API du panneau

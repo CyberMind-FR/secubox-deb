@@ -100,7 +100,13 @@ maître ouvre la box par l'émission d'un code à usage unique.
 - **`front_web = "etat"`** (`api/front_web.py`, après un apply complet réussi, audit `profiles_front_web`) : chaque
   entrée de `/etc/nginx/sites-enabled` est mise de côté dans `/var/lib/secubox-profiles/allegement/` (root 0700, jamais
   effacée), le gabarit `nginx/etat.conf` devient le seul site (`sites-available/secubox-etat`), `nginx -t` valide (échec :
-  tout est rendu, rien n'est rechargé). Tout autre profil rend les sites et `aggregator.toml` d'origine.
+  tout est rendu, rien n'est rechargé, **apply rend 2**). Marqueur `allegement/actif` (0644, dossier 0755, sites mis de côté
+  0700) posé seulement après `nginx -t` : c'est lui, pas le nom du profil, qui fait déclarer `Interface = distante` à
+  l'agent (R-L5-34). Tout autre profil rend les sites et `aggregator.toml` d'origine, **sans rien écraser** : un site
+  réapparu ou un `aggregator.toml` modifié entre-temps reste en place, sa sauvegarde est gardée et journalisée
+  (`restes`) ; la sauvegarde n'est effacée que vide.
+- **Agent de pilotage dans tous les profils** (propriétaire, 2026-10-30) : `pilotage-agent` est protégé et listé partout
+  (toute box reste télé-administrable) ; `pilotage-relais` seulement dans `distante`.
 - **`agregateur = "relais"`** : `/etc/secubox/aggregator.toml` sauvegardé puis remplacé par `modules = []` : l'agrégateur
   ne monte plus rien et relaie vers les sockets (un module seulement monté n'est plus joignable, R-L5-7).
 
@@ -108,7 +114,9 @@ maître ouvre la box par l'émission d'un code à usage unique.
 
 Page HTML statique écrite par l'agent de pilotage toutes les 60 s (`/run/secubox/pilotage/etat.html`) : nom, maître
 joignable ou non, mains liées, mémoire, services en échec. Aucun secret ni donnée personnelle (ni adresse, ni clé, ni
-jeton, ni nom d'utilisateur). Gabarit `etat` : port 80, **LAN seulement** (`allow` 127.0.0.1, ::1, 10/8, 172.16/12,
+jeton, ni nom d'utilisateur). Gabarit `etat` : port 80 sur l'**adresse LAN** de la box seulement
+(`/etc/nginx/secubox-etat-ecoute.conf`, posé à l'allègement : première IPv4 privée hors maillage 10.10/16 et Auto-Load
+10.64/16, sinon 127.0.0.1 ; nftables DEFAULT DROP reste la barrière de fond côté WAN), **réseaux locaux seulement** (`allow` 127.0.0.1, ::1, 10/8, 172.16/12,
 192.168/16, fc00::/7, fe80::/10 ; `deny all`), une seule page (`/` → 302 `/etat`, tout le reste 404), GET seulement,
 aucun relais vers une API ; CSP `default-src 'none'` + `style-src` limité à l'empreinte de la feuille de style de la
 page, `frame-ancestors 'none'`, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `no-store`.

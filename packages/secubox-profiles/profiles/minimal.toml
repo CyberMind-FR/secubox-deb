@@ -31,6 +31,8 @@ minuteurs_off = [
 # L'API du panneau /profiles/ (41 Mo) est coupée : `secubox-profilectl` (CLI root) reste le moyen de changer de profil.
 proteges_off = ["profiles"]
 on = [
+  # Pilotage distant (#3126, R-L5-34) : toute box reste télé-administrable par son maître.
+  "pilotage-agent",
   # Socle d'administration : API, connexion, menu (secubox-portal reste INSTALLÉ, il livre login.html ; son API est servie
   # par l'agrégateur, son service propre est arrêté : nginx sert les pages et passe les API).
   "core", "aggregator", "auth", "users", "system", "hardening", "hub",

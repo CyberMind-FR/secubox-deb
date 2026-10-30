@@ -18,6 +18,8 @@ menu_off = ["zkp", "assist", "ksm", "centers", "premier-pas-maitre"]
 # relancerait toutes les 5 min le Streamlit que ce profil arrête (l'apply désactive sans masquer).
 minuteurs_off = ["streamlit-idle"]
 on = [
+  # Pilotage distant (#3126, R-L5-34) : toute box reste télé-administrable par son maître.
+  "pilotage-agent",
   # ── lite (lite.toml), à garder identique ──
   "ad-guard", "admin", "aggregator", "annuaire", "auth", "backup",
   "cdn", "certs", "core", "cs-bridge", "dns",
