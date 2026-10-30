@@ -284,6 +284,46 @@ Côté agent, toute autre sortie, une erreur ou un code non nul vaut `illisible`
     plus) ne sont pas dans l'audit du ctl, seulement dans le journal de l'agent (R-L2-24) ;
   - une coupure en cours n'est pas notifiée si l'agent redémarre entre-temps (l'audit du ctl garde chaque échec).
 
+## Relais local du pilotage délégué (L5) : `sbx-pilotage-relais`
+
+Sur une box légère, les pages d'administration sont servies par le maître ; leurs appels `/api/v1/…` arrivent à
+l'agent par le canal, qui les remet au relais local. Le relais tourne sous son **propre** compte
+`secubox-pilotage-relais`, seul lecteur de la clé privée : un agent compromis ne frappe pas de jeton lui-même.
+
+- **Socket** `/run/secubox/pilotage-relais.sock` (`secubox-pilotage-relais.socket` : 0660, propriétaire
+  `secubox-pilotage-relais`, groupe `secubox-pilotage-agent`) ; le relais exige en plus `SO_PEERCRED` = uid de
+  `secubox-pilotage-agent`, sinon il ferme sans répondre (refus audité).
+- **Entrée** : un objet JSON par connexion
+  `{"methode", "chemin", "entetes", "corps_b64", "acteur", "maitre", "portee", "version_page"}` ;
+  **sortie** `{"statut", "entetes", "corps_b64"}`, puis fermeture. `version_page` est acceptée et ignorée.
+- **Chemin** : `/api/v1/<module>/<reste>[?requête]` ; le module reçoit `/<reste>[?requête]` sur
+  `/run/secubox/<module>.sock` (préfixe retiré, comme nginx `proxy_pass …:/` et l'agrégateur ; `Host: localhost`).
+  Refusés : hors de ce motif, `..`/`.` (même encodés), `%2F`, `%5C`, segment vide, non-ASCII (400) ; socket absente
+  ou qui n'en est pas une (404) ; modules qui ne reconnaissent jamais le porteur délégué (`auth`, `vault`, `portal`,
+  `assist`, `premier-pas`, `users`, `aggregator`, `pilotage*`) (403).
+- **Jeton** (contrat de `secubox_core.auth`, R-L5-9) : EdDSA Ed25519, en-tête `{"alg":"EdDSA","typ":"JWT"}`,
+  `aud` = nom court de l'hôte en minuscules, `sub` = `pilotage:<acteur>@<maître>`, `cible` = module, `iat`/`exp`
+  entiers, `exp - iat` = 30 s, `pilotage = {acteur, maitre, portee}`, rien d'autre. Acteur et maître sont mis en
+  minuscules ASCII puis refusés (400) hors `[a-z0-9._-]{1,64}` / `[a-z0-9-]{1,63}`.
+- **Cible et alias** : la cible est le nom du dossier d'installation `/usr/lib/secubox/<module>/` (ce que voit
+  `module_courant`). Seul écart relevé dans le dépôt : `waker.sock` est servi par `secubox-profiles` → cible
+  `profiles`. Les modules installés ailleurs (`/usr/share/secubox/…`, paquets Python : picobrew, podcaster,
+  voicestudio, voice, zia, eye-remote, soc-*, security-posture) n'ont pas d'identité de module : le vérificateur
+  y refuse le porteur délégué. Un module seulement monté dans l'agrégateur n'a pas de socket : 404 (R-L5-7).
+- **En-têtes** : seuls `Content-Type`, `Accept`, `If-*` passent ; `Authorization`, `Cookie`, `X-SecuBox-*` et le
+  reste sont effacés ; le relais pose `Authorization: Bearer <jeton>` et `X-SecuBox-Pilotage-Relais`. En retour,
+  jamais `Set-Cookie`.
+- **Mains liées** : portée `lecture`, ou drapeau `/etc/secubox/pilotage/mains-liees` présent → toute méthode autre
+  que GET/HEAD est refusée **423** avant tout appel.
+- **Bornes** : corps ≤ 8 Mio dans les deux sens (413), délai 30 s (504), deux appels simultanés.
+- **Audit** : chaque refus, une ligne JSON ajoutée à `/var/log/secubox/audit.log` si le compte peut y écrire
+  (fichier du compte `secubox`, jamais créé par le relais) ; sinon la même ligne au journal du service. Jamais le
+  jeton, le corps, la requête ni les en-têtes.
+- **Clés** (R-L5-13, R-L5-18) : clé privée PEM PKCS#8 `/var/lib/secubox-pilotage-relais/relais.key` (0600, dossier
+  0700, compte du relais), créée par le postinst **sous le compte du relais** (`runuser … sbx-pilotage-relais
+  cle-publique`, qui rend la clé publique par un tube) ; clé publique PEM SPKI `/etc/secubox-pilotage/relais.pub`
+  (root:root 0644, dossier root 0755) posée par root. Le relais refuse de démarrer si elle ne correspond pas.
+
 ## Durcissement
 
 Utilisateur `secubox-pilotage-agent`, `ProtectSystem=strict`, `ReadOnlyPaths=/`, aucune capacité ambiante,

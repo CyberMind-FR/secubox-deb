@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Relais local du pilotage délégué d'une box légère (#3126 L5, tâche 2). Reçoit de l'agent un appel /api/v1/<module>/…,
+# frappe un jeton délégué Ed25519 de 30 s (seul détenteur de la clé privée, R-L5-9/R-L5-18) et appelle
+# /run/secubox/<module>.sock. Démarré par sa socket (secubox-pilotage-relais.socket).
+[Unit]
+Description=SecuBox — relais local du pilotage délégué (#3126)
+Documentation=https://secubox.in
+Requires=secubox-pilotage-relais.socket
+After=secubox-pilotage-relais.socket
+
+[Service]
+Type=simple
+User=secubox-pilotage-relais
+Group=secubox-pilotage-relais
+# Les modules servent /run/secubox/<module>.sock en 0660 groupe secubox (RULES-CODE § 2) : le relais doit s'y
+# connecter. Ce groupe ne lui ouvre aucun fichier : son profil AppArmor ne lit que sa clé, la clé publique, le
+# drapeau des mains liées et le nom d'hôte.
+SupplementaryGroups=secubox
+ExecStart=/usr/sbin/sbx-pilotage-relais
+AppArmorProfile=/usr/sbin/sbx-pilotage-relais
+Restart=on-failure
+RestartSec=5
+# Deux appels à la fois au plus, corps ≤ 8 Mio dans les deux sens : ~40 Mio au pire par appel.
+MemoryMax=64M
+Environment=GOMEMLIMIT=48MiB
+UMask=0077
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+# Refus ajoutés à audit.log quand le compte peut y écrire (fichier du compte secubox, jamais créé par le relais) ;
+# sinon la même ligne part au journal du service. « - » : absent, ignoré. Aucune autre écriture : la clé privée est
+# créée par le postinst (runuser), jamais par le service.
+ReadWritePaths=-/var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+# Sockets Unix seulement (fichiers sous /run/secubox, joignables depuis un espace réseau privé).
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

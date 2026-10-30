@@ -1409,8 +1409,8 @@ def test_renommer_lance_secubox_renommer_borne(banc):
     rc, sortie, _ = banc.run("renommer", "gk6", agent=True)
     assert banc.lancements()[-1].endswith("-- /usr/sbin/secubox-renommer --acteur secubox-pilotage-agent gk6")
     assert banc.run("renommer", "GK6", agent=True)[0] == 2
-    # l'outil vient de secubox-core 1.8.10
-    assert "secubox-core (>= 1.8.10~)" in (CTL.parents[1] / "debian" / "control").read_text()
+    # l'outil vient de secubox-core 1.8.10 (dépendance relevée à 1.8.11 par L5 tâche 2 : vérificateur Ed25519)
+    assert "secubox-core (>= 1.8.11~)" in (CTL.parents[1] / "debian" / "control").read_text()
 
 
 def test_renommer_box_cliente_exige_l_accord(banc):

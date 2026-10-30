@@ -1,3 +1,32 @@
+secubox-pilotage-agent (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * L5 « Box légère », tâche 2 (ref #3126) : relais local `sbx-pilotage-relais`.
+    - Reçoit de l'agent, par /run/secubox/pilotage-relais.sock (socket systemd 0660, propriétaire
+      secubox-pilotage-relais, groupe secubox-pilotage-agent ; SO_PEERCRED = uid de l'agent, sinon fermeture
+      sans réponse, auditée), un appel JSON {methode, chemin, entetes, corps_b64, acteur, maitre, portee,
+      version_page} ; rend {statut, entetes, corps_b64}.
+    - Frappe le jeton délégué attendu par secubox_core.auth (R-L5-9) : EdDSA Ed25519, en-tête fixe sans
+      kid/jku/jwk, aud = nom court de l'hôte (règle de nom_box_locale), sub pilotage:<acteur>@<maître>,
+      cible = module (alias waker → profiles), exp - iat = 30 s, réclamation pilotage {acteur, maitre, portee},
+      rien d'autre. Acteur et maître mis en minuscules ASCII, puis refusés hors motif (400).
+    - Appelle /run/secubox/<module>.sock en retirant le préfixe /api/v1/<module>, comme nginx et l'agrégateur ;
+      chemin hors /api/v1/<module>/, `..`, `%2F`, segment vide, non-ASCII : 400 ; module sans socket : 404 ;
+      modules exclus du porteur délégué (auth, vault, portal, assist, premier-pas, users, aggregator, pilotage*) :
+      403 sans appel. Seuls Content-Type, Accept et If-* passent ; Authorization, Cookie, X-SecuBox-* effacés ;
+      le relais pose Authorization: Bearer et X-SecuBox-Pilotage-Relais. Réponse : jamais Set-Cookie.
+    - Mains liées : portée lecture, ou drapeau /etc/secubox/pilotage/mains-liees présent, → toute méthode autre
+      que GET/HEAD refusée 423 avant tout appel. Corps ≤ 8 Mio dans les deux sens (413), délai 30 s (504).
+    - Refus audités dans /var/log/secubox/audit.log si le compte peut y écrire, sinon au journal du service ;
+      jamais le jeton, le corps, la requête ni les en-têtes.
+    - Clés (R-L5-13, R-L5-18) : compte système dédié secubox-pilotage-relais ; clé privée PKCS#8
+      /var/lib/secubox-pilotage-relais/relais.key 0600, créée par le postinst sous ce compte (runuser,
+      `sbx-pilotage-relais cle-publique`) ; clé publique /etc/secubox-pilotage/relais.pub root:root 0644 posée
+      par root ; concordance vérifiée au démarrage du relais.
+    - Unité durcie (aucune capacité, PrivateNetwork, AF_UNIX seul, MemoryMax 64M), socket systemd, profil
+      AppArmor enforce. Dépend de secubox-core >= 1.8.11 (vérificateur Ed25519).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 30 Oct 2026 16:00:00 +0100
+
 secubox-pilotage-agent (0.2.0-1~trixie1) trixie; urgency=medium
 
   * L2 « Agir », tâche 1 (ref #3126) : ctl root de la box `secubox-pilotagectl` et sa politique.

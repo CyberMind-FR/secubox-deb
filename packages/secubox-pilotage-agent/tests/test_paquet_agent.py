@@ -161,7 +161,7 @@ def test_paquet_coherent():
     c = lire("debian/control")
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.2.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.3.0-1~trixie1) trixie;")
     # ancre-verifier lit `wg show` par chemin absolu (/usr/bin/wg)
     assert "wireguard-tools" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
     pi = lire("debian/postinst")
@@ -243,8 +243,14 @@ def test_postinst_ne_touche_rien_sous_etc_secubox():
     """I1/R36 : /etc/secubox appartient au compte partagé secubox ; un `install -d -m`, `chmod`, `chown` ou `mkdir` de root y suivrait un lien
     posé par ce compte (root rendrait lisible /etc/secubox/secrets). Le postinst ne crée ni ne modifie rien sous /etc/secubox."""
     code = sans_commentaires(lire("debian/postinst"))
-    assert "/etc/secubox" not in code
-    assert not re.search(r"\b(install\s+-d|mkdir|chmod|chown)\b", code)
+    # L5 tâche 2 (R-L5-13, R-L5-18) : les SEULS arbres touchés sont ceux du relais, hors des arbres partagés —
+    # /etc/secubox-pilotage (root:root 0755) et /var/lib/secubox-pilotage-relais (compte du relais, 0700).
+    arbres_du_relais = ("/etc/secubox-pilotage", "/var/lib/secubox-pilotage-relais")
+    for ligne in code.splitlines():
+        assert not re.search(r"/etc/secubox(?!-pilotage\b)", ligne), ligne
+        if re.search(r"\b(install\s+-d|mkdir|chmod|chown|mktemp|mv)\b", ligne):
+            assert any(a in ligne for a in arbres_du_relais) or re.fullmatch(r'\s*(chown root:root|chmod 0644) "\$tmp"', ligne), ligne
+    assert "mkdir" not in code
 
 
 def test_reglages_lus_par_l_agent_jamais_par_systemd():
