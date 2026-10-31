@@ -109,6 +109,30 @@ def _entetes_page(csp: str) -> list:
             '        add_header Cache-Control "no-store" always;']
 
 
+GROUPE_DISTANTE = frozenset({"hub", "hardening", "dns-guard", "ad-guard", "wireguard", "health-doctor"})   # groups/distante.conf
+RE_UNITE_MODULE = re.compile(r"secubox-([a-z0-9][a-z0-9-]{0,62})\.service")
+
+
+def etat_modules(valeurs: dict) -> list:
+    """#3324 : [{module, unite, etat}] depuis Device.X_SECUBOX_Services.{i}.Name/ActiveState de l'inventaire. Les modules du groupe
+    « distante » sont « actif » quand secubox-group@distante l'est (une seule unité les sert)."""
+    unites = {}
+    for k, v in valeurs.items():
+        m = re.fullmatch(r"Device\.X_SECUBOX_Services\.(\d+)\.Name", k)
+        if m and isinstance(v, str):
+            unites[v] = valeurs.get(f"Device.X_SECUBOX_Services.{m.group(1)}.ActiveState")
+    groupe = unites.get("secubox-group@distante.service") == "active"
+    res = {}
+    for u, etat in unites.items():
+        m = RE_UNITE_MODULE.fullmatch(u)
+        if m and not m.group(1).startswith(("pilotage", "group")):
+            res[m.group(1)] = {"module": m.group(1), "unite": u, "etat": "actif" if etat == "active" else "arrete"}
+    for g in GROUPE_DISTANTE:
+        if groupe:
+            res[g] = {"module": g, "unite": "secubox-group@distante.service", "etat": "actif"}
+    return sorted(res.values(), key=lambda x: x["module"])
+
+
 def domaine(box: str) -> str:
     if not isinstance(box, str) or not RE_BOX.fullmatch(box):
         raise ValueError("nom de box invalide")
@@ -283,6 +307,10 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
     ]
     L += _entetes_proxy(box, None)
     L += ["    }", ""]
+    # #3324 : état des modules de la box et « Démarrer » (page /pilotage-connexion/modules.html)
+    L += ["    location ^~ /api/v1/pilotage-vhost/modules {", f"        proxy_pass http://unix:{socket}:/vhost/modules;"]
+    L += _entetes_proxy(box, None)
+    L += ["    }", ""]
     for m in sorted(vus):
         p = vus[m]
         L += [f"    location ^~ /api/v1/{m}/ {{",
@@ -312,9 +340,11 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
         # page d'accueil (index.html à la racine du paquet hub) et pages .html de premier niveau du même paquet (#3302)
         p = accueil[0]
         emp = (p.get("empreintes") or {}).get("", [])
-        if "hub" not in vus:
+        for api in ("hub", "health-doctor"):   # #3324 : la page Santé du hub appelle health-doctor
+            if api in vus:
+                continue
             # l'accueil appelle l'API du hub (dashboard, health-batch, boot_mode…) : relayée vers la box comme celle d'un module
-            L += ["    location ^~ /api/v1/hub/ {", f"        proxy_pass http://unix:{socket}:/relais/{box}/api/v1/hub/;"]
+            L += [f"    location ^~ /api/v1/{api}/ {{", f"        proxy_pass http://unix:{socket}:/relais/{box}/api/v1/{api}/;"]
             L += _entetes_proxy(box, f"{p['paquet']}={p['version']}")
             L += ["    }"]
         L += ["    location = / {", f"        root {racine}/{p['paquet']}/{p['version']};", "        try_files /index.html =404;",

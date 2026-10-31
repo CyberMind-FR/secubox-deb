@@ -2,3 +2,13 @@
 body { font-family: system-ui, sans-serif; background: #0f1419; color: #e6e6e6; margin: 0; }
 main { max-width: 32rem; margin: 15vh auto; padding: 0 1rem; }
 .aide { color: #9aa4ad; font-size: .9rem; }
+
+/* #3324 : liste des modules de la box légère */
+main.large { max-width: 46rem; }
+ul.modules { list-style: none; padding: 0; margin: 1rem 0; }
+ul.modules li { display: flex; align-items: center; gap: .75rem; padding: .5rem .75rem; border-bottom: 1px solid rgba(148, 163, 184, .2); }
+ul.modules li a { flex: 1; color: inherit; }
+.pastille { font-size: .8rem; padding: .1rem .5rem; border-radius: 999px; }
+.pastille.actif { background: rgba(34, 197, 94, .18); color: #4ade80; }
+.pastille.arrete { background: rgba(234, 179, 8, .15); color: #facc15; }
+ul.modules button { cursor: pointer; }

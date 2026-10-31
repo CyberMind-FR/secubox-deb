@@ -1,3 +1,9 @@
+secubox-profiles (0.26.6-1~trixie1) trixie; urgency=medium
+
+  * Groupe distante : health-doctor (API de la page Sante) (ref #3324).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 07:46:25 +0100
+
 secubox-profiles (0.26.5-1~trixie1) trixie; urgency=medium
 
   * Profil distante : secubox-group@distante active et demarre a l allegement

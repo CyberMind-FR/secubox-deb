@@ -82,12 +82,13 @@ def modules_servis(racine: Path, paquet: str, version: str) -> set:
             res.add(n)
     if paquet == "secubox-hub" and res:
         res.add("hub")        # #3302 : l'accueil (racine du paquet hub) appelle /api/v1/hub/…
+        res.add("health-doctor")   # #3324 : la page Santé du hub appelle /api/v1/health-doctor/…
     return res
 
 
 def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, dict], None], *, horloge: Callable[[], float] = time.time,
                          maitre: Optional[str] = None, debit: Optional[V.Debit] = None, racine_pages: Optional[Path] = None,
-                         codes: Optional[V.Codes] = None) -> None:
+                         codes: Optional[V.Codes] = None, agir: Optional[Callable] = None) -> None:
     debit = debit or V.Debit()
     debit_echange = V.Debit(par_minute=ECHANGES_PAR_MINUTE, horloge=horloge)
     codes = codes or V.Codes(horloge=horloge)
@@ -184,6 +185,24 @@ def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, di
         if not auth.est_admin_reel(p):
             raise HTTPException(403, "réservé aux administrateurs du maître")
         return p
+
+    # --- #3324 : état des modules de la box et « Démarrer » (profil léger : seuls quelques modules tournent) ---
+
+    @app.get("/vhost/modules")
+    async def modules_de_la_box(request: Request):
+        box = box_de_l_entete(request)
+        session_vhost(request, box)
+        b, valeurs = await box_distante(box)
+        return {"box": box, "modules": V.etat_modules(valeurs)}
+
+    @app.post("/vhost/modules/{module}/demarrer")
+    async def demarrer_module(request: Request, module: str):
+        box = box_de_l_entete(request)
+        p = session_vhost(request, box)
+        if agir is None or not V.RE_MODULE.fullmatch(module) or module in ("auth", "api") or module.startswith("pilotage"):
+            raise HTTPException(404, "module inconnu")
+        b, _ = await box_distante(box)
+        return await agir(b["cle"], f"secubox-{module}.service", p)
 
     async def lire_corps(request: Request) -> bytes:
         cl = request.headers.get("content-length")

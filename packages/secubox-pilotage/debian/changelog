@@ -1,3 +1,13 @@
+secubox-pilotage (0.6.10-1~trixie1) trixie; urgency=medium
+
+  * vhost d une box legere : GET /api/v1/pilotage-vhost/modules (etat des
+    modules depuis l inventaire, groupe distante compris) et POST
+    .../modules/<m>/demarrer (action service-demarrer, memes gardes et audit
+    que la Flotte) ; page /pilotage-connexion/modules.html ;
+    /api/v1/health-doctor/ relaye pour la page Sante du hub (ref #3324).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 07:46:25 +0100
+
 secubox-pilotage (0.6.9-1~trixie1) trixie; urgency=medium
 
   * vhost : /api/v1/hub/ accepte pour le paquet d accueil (409 « module hors
