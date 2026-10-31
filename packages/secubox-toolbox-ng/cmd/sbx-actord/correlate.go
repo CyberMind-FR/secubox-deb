@@ -126,29 +126,33 @@ func (s *Server) observe(e *envelope.Envelope) (id string, cont, prio int) {
 // correlate : observe + fige une preuve inviolable. Aucune décision appliquée
 // (shadow). Utilisé sur le flux d'ingestion live.
 func (s *Server) correlate(e *envelope.Envelope) {
-	defer s.correlated.Add(1)
-	actorID, cont, prio := s.observe(e)
-	if actorID == "" {
-		return // robot connu : classé à part, sans preuve d'acteur (#2201)
-	}
-
 	// Preuve inviolable : chaque événement lie sa source à un acteur + sa priorité,
 	// horodaté et chaîné (RFC-0013 §7/§14). Best-effort : une preuve manquée ne
 	// bloque jamais l'ingestion.
-	if s.ledger != nil {
-		_, err := s.ledger.Append(evidence.Record{
-			ID:               e.EventID,
-			Timestamp:        e.Timestamp,
-			Sensor:           e.Sensor,
-			Observation:      fmt.Sprintf("%s → %s (%s)", e.Sensor, actorID, similarity.Band(cont)),
-			Weight:           prio,
-			Explanation:      fmt.Sprintf("continuité=%d priorité=%d", cont, prio),
-			AlgorithmVersion: score.AlgoVersion,
-		})
-		if err != nil {
+	if r, ok := s.preuve(e); ok && s.ledger != nil {
+		if _, err := s.ledger.Append(r); err != nil {
 			log.Printf("actord: evidence: %v", err)
 		}
 	}
+}
+
+// preuve observe l'évènement et rend la preuve à figer (false : robot connu,
+// classé à part sans preuve d'acteur, #2201). Le worker les fige par lots (#3320).
+func (s *Server) preuve(e *envelope.Envelope) (evidence.Record, bool) {
+	defer s.correlated.Add(1)
+	actorID, cont, prio := s.observe(e)
+	if actorID == "" {
+		return evidence.Record{}, false
+	}
+	return evidence.Record{
+		ID:               e.EventID,
+		Timestamp:        e.Timestamp,
+		Sensor:           e.Sensor,
+		Observation:      fmt.Sprintf("%s → %s (%s)", e.Sensor, actorID, similarity.Band(cont)),
+		Weight:           prio,
+		Explanation:      fmt.Sprintf("continuité=%d priorité=%d", cont, prio),
+		AlgorithmVersion: score.AlgoVersion,
+	}, true
 }
 
 // knowMaxParNiveau borne les observations de connaissance gardees par niveau

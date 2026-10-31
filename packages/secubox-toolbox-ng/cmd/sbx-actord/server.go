@@ -65,14 +65,58 @@ type Server struct {
 
 // worker draine la file d'ingestion vers le store puis corrèle. C'est la seule
 // voie qui écrit sur bbolt.
+//
+// #3320 : PAR LOTS. Une transaction bbolt synchronisee par evenement, pour le
+// magasin puis pour le ledger, coutait deux fsync par requete vue par le WAF.
+// Le worker prend ce qui attend dans la file (jusqu'a lotMax, ou lotDelai apres
+// le premier evenement), l'ecrit en une transaction, correle chaque evenement
+// dans l'ordre, puis fige leurs preuves en une transaction.
 func (s *Server) worker(ch <-chan *envelope.Envelope) {
-	for e := range ch {
-		if err := s.store.Ingest(e); err != nil {
-			log.Printf("actord: ingest: %v", err)
-			continue
+	for {
+		e, ok := <-ch
+		if !ok {
+			return
 		}
-		s.ingested.Add(1)
-		s.correlate(e)
+		lot := []*envelope.Envelope{e}
+		delai := time.NewTimer(lotDelai)
+	remplir:
+		for len(lot) < lotMax {
+			select {
+			case e, ok := <-ch:
+				if !ok {
+					break remplir
+				}
+				lot = append(lot, e)
+			case <-delai.C:
+				break remplir
+			}
+		}
+		delai.Stop()
+		s.traiterLot(lot)
+	}
+}
+
+const (
+	lotMax   = 256
+	lotDelai = 200 * time.Millisecond
+)
+
+func (s *Server) traiterLot(lot []*envelope.Envelope) {
+	if err := s.store.IngestLot(lot); err != nil {
+		log.Printf("actord: ingest: %v", err)
+		return
+	}
+	s.ingested.Add(uint64(len(lot)))
+	var preuves []evidence.Record
+	for _, e := range lot {
+		if r, ok := s.preuve(e); ok {
+			preuves = append(preuves, r)
+		}
+	}
+	if s.ledger != nil && len(preuves) > 0 {
+		if _, err := s.ledger.AppendLot(preuves); err != nil {
+			log.Printf("actord: evidence: %v", err)
+		}
 	}
 }
 
@@ -242,7 +286,7 @@ func (s *Server) apiMux() *http.ServeMux {
 }
 
 // statsTTL : relire et décoder 24 h d'événements coûte cher sur une box chargée ; jamais sur le chemin d'une requête.
-const statsTTL = 30 * time.Second
+const statsTTL = 60 * time.Second // #3320 : etait 30 s
 
 // statsCache rend le dernier instantané des stats (double tampon, voir tampon.go).
 func (s *Server) statsCache() (store.Stats, error) {

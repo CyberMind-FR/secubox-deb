@@ -84,7 +84,9 @@ type Ledger struct {
 // Open ouvre (ou crée) le ledger bbolt à `path` et garantit l'existence des
 // buckets. Même motif que internal/sentinel/store.go.
 func Open(path string) (*Ledger, error) {
-	db, err := bbolt.Open(path, 0o600, &bbolt.Options{Timeout: 5 * time.Second})
+	// #3320 : memes options que le magasin (pas de reecriture de la liste des
+	// pages libres a chaque commit, allocation en O(1)).
+	db, err := bbolt.Open(path, 0o600, &bbolt.Options{Timeout: 5 * time.Second, NoFreelistSync: true, FreelistType: bbolt.FreelistMapType})
 	if err != nil {
 		return nil, fmt.Errorf("evidence : ouverture ledger %q : %w", path, err)
 	}
@@ -144,8 +146,20 @@ func hashRecord(rec Record) (string, error) {
 // est vide), puis Hash, et l'écrit. Il ne modifie JAMAIS un enregistrement
 // existant. Il retourne l'enregistrement complété.
 func (l *Ledger) Append(rec Record) (Record, error) {
-	var out Record
+	out, err := l.AppendLot([]Record{rec})
+	if err != nil {
+		return Record{}, err
+	}
+	return out[0], nil
+}
+
+// AppendLot fige un lot en UNE transaction (#3320) : le dernier maillon n'est
+// lu et decode qu'une fois par lot, chaque enregistrement s'enchaine au
+// precedent comme par Append. Tout ou rien.
+func (l *Ledger) AppendLot(lot []Record) ([]Record, error) {
+	out := make([]Record, 0, len(lot))
 	err := l.db.Update(func(tx *bbolt.Tx) error {
+		out = out[:0]
 		recs := tx.Bucket(bucketRecords)
 		byID := tx.Bucket(bucketByID)
 
@@ -158,36 +172,37 @@ func (l *Ledger) Append(rec Record) (Record, error) {
 			}
 			prev = lastRec.Hash
 		}
+		for _, rec := range lot {
+			seq, e := recs.NextSequence()
+			if e != nil {
+				return fmt.Errorf("evidence : séquence : %w", e)
+			}
+			rec.Seq = seq
+			rec.PrevHash = prev
+			hash, e := hashRecord(rec)
+			if e != nil {
+				return e
+			}
+			rec.Hash = hash
 
-		seq, e := recs.NextSequence()
-		if e != nil {
-			return fmt.Errorf("evidence : séquence : %w", e)
+			blob, e := json.Marshal(rec)
+			if e != nil {
+				return fmt.Errorf("evidence : sérialisation record : %w", e)
+			}
+			key := seqKey(seq)
+			if e := recs.Put(key, blob); e != nil {
+				return fmt.Errorf("evidence : écriture record : %w", e)
+			}
+			if e := byID.Put([]byte(rec.ID), key); e != nil {
+				return fmt.Errorf("evidence : écriture index id : %w", e)
+			}
+			prev = rec.Hash
+			out = append(out, rec)
 		}
-
-		rec.Seq = seq
-		rec.PrevHash = prev
-		hash, e := hashRecord(rec)
-		if e != nil {
-			return e
-		}
-		rec.Hash = hash
-
-		blob, e := json.Marshal(rec)
-		if e != nil {
-			return fmt.Errorf("evidence : sérialisation record : %w", e)
-		}
-		key := seqKey(seq)
-		if e := recs.Put(key, blob); e != nil {
-			return fmt.Errorf("evidence : écriture record : %w", e)
-		}
-		if e := byID.Put([]byte(rec.ID), key); e != nil {
-			return fmt.Errorf("evidence : écriture index id : %w", e)
-		}
-		out = rec
 		return nil
 	})
 	if err != nil {
-		return Record{}, err
+		return nil, err
 	}
 	return out, nil
 }

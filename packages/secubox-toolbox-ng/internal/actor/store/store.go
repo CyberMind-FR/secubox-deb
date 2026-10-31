@@ -51,7 +51,7 @@ type Stats struct {
 
 // Open ouvre (ou crée) le magasin bbolt à `path`.
 func Open(path string) (*Store, error) {
-	db, err := bbolt.Open(path, 0o600, &bbolt.Options{Timeout: 5 * time.Second})
+	db, err := bbolt.Open(path, 0o600, OptionsBolt())
 	if err != nil {
 		return nil, fmt.Errorf("ouverture store actord : %w", err)
 	}
@@ -79,23 +79,46 @@ func eventKey(ts int64, seq uint64) []byte {
 	return k
 }
 
+// OptionsBolt : options d'ouverture communes (#3320). NoFreelistSync : la liste
+// des pages libres n'est plus reecrite a chaque commit (enorme apres les purges
+// d'une base de plusieurs centaines de Mo) ; elle est reconstruite a
+// l'ouverture. FreelistMapType : allocation en O(1) au lieu d'un tableau trie.
+func OptionsBolt() *bbolt.Options {
+	return &bbolt.Options{Timeout: 5 * time.Second, NoFreelistSync: true, FreelistType: bbolt.FreelistMapType}
+}
+
 // Ingest persiste une enveloppe (supposée déjà validée par l'appelant) et met à
 // jour les compteurs, dans une seule transaction.
 func (s *Store) Ingest(e *envelope.Envelope) error {
-	blob, err := json.Marshal(e)
-	if err != nil {
-		return err
+	return s.IngestLot([]*envelope.Envelope{e})
+}
+
+// IngestLot persiste un lot d'enveloppes en UNE transaction (#3320 : une
+// transaction synchronisee par evenement coutait deux fsync par requete vue par
+// le WAF).
+func (s *Store) IngestLot(lot []*envelope.Envelope) error {
+	blobs := make([][]byte, len(lot))
+	for i, e := range lot {
+		b, err := json.Marshal(e)
+		if err != nil {
+			return err
+		}
+		blobs[i] = b
 	}
 	return s.db.Update(func(tx *bbolt.Tx) error {
 		meta := tx.Bucket(bucketMeta)
-		seq := readU64(meta, keySeq) + 1
+		seq := readU64(meta, keySeq)
+		evs := tx.Bucket(bucketEvents)
+		for i, e := range lot {
+			seq++
+			if err := evs.Put(eventKey(e.Timestamp, seq), blobs[i]); err != nil {
+				return err
+			}
+		}
 		if err := putU64(meta, keySeq, seq); err != nil {
 			return err
 		}
-		if err := putU64(meta, keyTotal, readU64(meta, keyTotal)+1); err != nil {
-			return err
-		}
-		return tx.Bucket(bucketEvents).Put(eventKey(e.Timestamp, seq), blob)
+		return putU64(meta, keyTotal, readU64(meta, keyTotal)+uint64(len(lot)))
 	})
 }
 
@@ -151,24 +174,37 @@ func (s *Store) Recent(n int) ([]envelope.Envelope, error) {
 
 // Prune supprime les événements antérieurs à `before` (rétention configurable,
 // RFC-0013 §15). Retourne le nombre d'événements supprimés.
+//
+// #3320 : par lots de pruneLot cles, une transaction chacun — une heure
+// d'evenements en un seul commit gonflait la liste des pages libres et les pages
+// modifiees, et tenait le verrou d'ecriture tout du long.
 func (s *Store) Prune(before int64) (int, error) {
 	n := 0
 	cutoff := eventKey(before, 0)
-	err := s.db.Update(func(tx *bbolt.Tx) error {
-		c := tx.Bucket(bucketEvents).Cursor()
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			if string(k) >= string(cutoff) {
-				break
+	for {
+		lot := 0
+		err := s.db.Update(func(tx *bbolt.Tx) error {
+			c := tx.Bucket(bucketEvents).Cursor()
+			for k, _ := c.First(); k != nil && lot < pruneLot; k, _ = c.First() {
+				if string(k) >= string(cutoff) {
+					break
+				}
+				if err := c.Delete(); err != nil {
+					return err
+				}
+				lot++
 			}
-			if err := c.Delete(); err != nil {
-				return err
-			}
-			n++
+			return nil
+		})
+		n += lot
+		if err != nil || lot < pruneLot {
+			return n, err
 		}
-		return nil
-	})
-	return n, err
+	}
 }
+
+// pruneLot : cles supprimees par transaction de purge.
+const pruneLot = 5000
 
 func readU64(b *bbolt.Bucket, key []byte) uint64 {
 	v := b.Get(key)
