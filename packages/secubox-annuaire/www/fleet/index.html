@@ -530,14 +530,16 @@
                 body.append(tr);
             });
         }
+        let pbOpsEnCours = false;   // #3308 : une relecture à la fois
         async function pbOperations() {
             const b = pbBoite; if (!b) return;
+            pbOpsEnCours = true;
             try {
                 const r = await pbFetch('/api/v1/pilotage/operations?limite=50&nom=' + encodeURIComponent(pbId(b)));
                 if (pbBoite !== b) return;
                 if (!r.ok) { pbRendreOps([], 'HTTP ' + r.status); return; }
                 const d = await r.json(); pbRendreOps(Array.isArray(d) ? d : [], null);
-            } catch (e) { if (pbBoite === b) pbRendreOps([], DEMO ? 'démonstration' : 'réseau'); }
+            } catch (e) { if (pbBoite === b) pbRendreOps([], DEMO ? 'démonstration' : 'réseau'); } finally { pbOpsEnCours = false; }
         }
         function pbOperationsBientot() { clearTimeout(pbOpsTimer); pbOpsTimer = setTimeout(pbOperations, 600); }
 
@@ -742,8 +744,8 @@
         $('pb-sup-demander').addEventListener('click', pbSupportDemander);
         $('pb-sup-fermer').addEventListener('click', pbSupportFermer);
         window.addEventListener('pagehide', pbFermerFlux);
-        setInterval(() => { if (pbBoite) pbMaj(); }, 15000);
-        setInterval(() => { if (pbBoite && document.visibilityState !== 'hidden') pbOperations(); }, 10000);   // #3308 : journal relu même si la vue en direct est coupée      // fin d'une session de support annoncée : le catalogue disparaît sans attendre
+        setInterval(() => { if (pbBoite) pbMaj(); }, 15000);      // fin d'une session de support annoncée : le catalogue disparaît sans attendre
+        setInterval(() => { if (pbBoite && !pbOpsEnCours && document.visibilityState !== 'hidden') pbOperations(); }, 10000);   // #3308 : journal relu même si la vue en direct est coupée
         // ===== fin pilotage-box =====
 
         async function loadFleet() {
