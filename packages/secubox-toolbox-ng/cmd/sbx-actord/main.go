@@ -102,10 +102,10 @@ func main() {
 	}
 
 	if *propsPath != "" {
-		go srv.publierPropositions(*propsPath, time.Minute)
+		go srv.publierPropositions(*propsPath, publicationPas)
 	}
 	if *mesPath != "" {
-		go srv.publierMesures(*mesPath, 30*time.Second)
+		go srv.publierMesures(*mesPath, publicationPas)
 	}
 
 	if !*readOnly {
@@ -139,12 +139,21 @@ func main() {
 	log.Printf("actord: arrêt")
 }
 
-// pruneLoop applique la rétention toutes les heures.
+// publicationPas : mesures et propositions recalculees toutes les 90 s (#3320,
+// etaient 30 s et 60 s). Reste sous la fraicheur exigee par sbxwaf (3 min pour
+// les mesures, 10 min pour les propositions).
+const publicationPas = 90 * time.Second
+
+// pruneLoop applique la rétention toutes les heures, au graphe en mémoire (#3320)
+// comme à la base.
 func (s *Server) pruneLoop(retention time.Duration) {
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
 	for range t.C {
 		before := time.Now().Add(-retention).Unix()
+		if n := s.purgerMemoire(before); n > 0 {
+			log.Printf("actord: graphe — %d acteur(s) non vus depuis la retention retire(s)", n)
+		}
 		if n, err := s.store.Prune(before); err != nil {
 			log.Printf("actord: prune: %v", err)
 		} else if n > 0 {

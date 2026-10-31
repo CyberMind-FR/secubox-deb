@@ -151,6 +151,27 @@ func (s *Server) correlate(e *envelope.Envelope) {
 	}
 }
 
+// knowMaxParNiveau borne les observations de connaissance gardees par niveau
+// (#3320 : une liste qui ne faisait que grossir, recalculee a chaque evenement).
+// Le score sature : au-dela de quelques dizaines d'observations du meme niveau,
+// la fraction de la bande ne bouge plus d'un point.
+const knowMaxParNiveau = 64
+
+var niveauxConnaissance = map[string]int{
+	"k0": knowledge.K0Generic, "k1": knowledge.K1Public, "k2": knowledge.K2Contextual,
+	"k3": knowledge.K3Historical, "k4": knowledge.K4Sentinel, "canary": knowledge.K4Sentinel,
+}
+
+func (acc *actorSignals) parNiveau(l int) int {
+	n := 0
+	for _, o := range acc.know {
+		if o.Level == l {
+			n++
+		}
+	}
+	return n
+}
+
 // mergeTags fusionne les behavior_tags d'un événement dans les signaux accumulés
 // de l'acteur. Convention de tags (émise par les capteurs une fois instrumentés) :
 // connaissance k0..k4 / canary / public-leak ; automation & ciblage : jetons
@@ -173,6 +194,9 @@ func mergeTags(acc *actorSignals, e *envelope.Envelope) {
 		}
 	}
 	for _, t := range e.BehaviorTags {
+		if lvl, ok := niveauxConnaissance[t]; ok && acc.parNiveau(lvl) >= knowMaxParNiveau {
+			continue // #3320 : borne par niveau (le score sature bien avant)
+		}
 		switch t {
 		case "k0":
 			acc.know = append(acc.know, knowledge.Observation{Level: knowledge.K0Generic, Detail: "signal générique", EvidenceID: e.EventID, PubliclyExposed: publicLeak})
@@ -220,8 +244,12 @@ func mergeTags(acc *actorSignals, e *envelope.Envelope) {
 // qu'une fois les deux profils suffisamment nourris. La verifier a chaque
 // observation couterait un balayage complet pour un resultat qui ne change
 // qu'au bout de plusieurs minutes.
+// consolidationPas : 10 min (#3320, etait 2 min) — une fusion ne devient
+// possible qu'une fois deux profils nourris, et la passe est incrementale.
+const consolidationPas = 10 * time.Minute
+
 func (s *Server) consolidationLoop() {
-	t := time.NewTicker(2 * time.Minute)
+	t := time.NewTicker(consolidationPas)
 	defer t.Stop()
 	for range t.C {
 		s.mu.Lock()
@@ -236,4 +264,16 @@ func (s *Server) consolidationLoop() {
 			log.Printf("actord: consolidation — %d acteur(s) fusionne(s), %d restants", n, restants)
 		}
 	}
+}
+
+// purgerMemoire retire du graphe les acteurs non vus depuis `avant` et oublie
+// leurs signaux accumules (#3320). Rend le nombre d'acteurs retires.
+func (s *Server) purgerMemoire(avant int64) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := s.graph.Purger(avant)
+	for _, id := range ids {
+		delete(s.accum, id)
+	}
+	return len(ids)
 }
