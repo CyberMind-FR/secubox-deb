@@ -460,9 +460,13 @@ def test_trousseau_du_maitre_choisi_quand_le_defaut_n_est_pas_une_cle(banc):
     k = banc.r / "etc/apt/keyrings/secubox-apt.gpg"
     k.parent.mkdir(parents=True)
     k.write_bytes(banc.cles["bonne"][1])
+    k.chmod(0o644)
     banc.publier("secubox-dns", "1.2.0-1~trixie1", faire_deb(pages_normales()))
     r = banc.ctl("extraire", "secubox-dns", "1.2.0-1~trixie1")
     assert r.returncode == 0, r.stdout + r.stderr
+    k.chmod(0o664)                            # écriture du groupe : le candidat n'est plus de confiance, repli sur le défaut
+    banc.publier("secubox-dns", "1.3.0-1~trixie1", faire_deb(pages_normales()))
+    assert banc.ctl("extraire", "secubox-dns", "1.3.0-1~trixie1").returncode == 1
 
 
 def test_packages_modifie_apres_signature_refuse(banc):
