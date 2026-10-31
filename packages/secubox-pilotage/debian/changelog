@@ -1,3 +1,12 @@
+secubox-pilotage (0.6.12-1~trixie1) trixie; urgency=medium
+
+  * vhost : waf/stats et hub/auth_mode repondus sur place (plus d erreurs en
+    boucle de la barre d etat) ; modules exclus du pilotage (users, vault,
+    portal, assist, premier-pas) : page « reserve a l administration locale »
+    et API en 403 sur place (ref #3324).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 08:21:37 +0100
+
 secubox-pilotage (0.6.11-1~trixie1) trixie; urgency=medium
 
   * vhost : /login.html renvoie vers la connexion du maitre (nouveau code,

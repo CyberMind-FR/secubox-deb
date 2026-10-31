@@ -1592,6 +1592,7 @@
         try {
             await buildSidebar();
             retryCount = 0;
+            essaisSecours = 0;   // #3324
             console.log('[Sidebar] Reinject successful');
         } catch (e) {
             console.error('[Sidebar] Reinject failed:', e);
@@ -1602,27 +1603,65 @@
         }
     }
 
-    // Minimal fallback sidebar when everything fails
+    // Menu de secours (#3324) : seule l'API du MENU fait passer ici (un appel de barre d'état en échec, waf/stats ou
+    // led_status, ne bascule jamais le menu). La cause réelle est dite en français, style Aurora, et le menu réessaie
+    // seul (30 s, puis 60 s) au lieu d'un bouton « Retry ».
+    var dernierStatutMenu = 0;
+    var essaisSecours = 0;
+    var minuterieSecours = null;
+
+    function causeHorsLigne(statut) {
+        if (statut === 401) return { titre: 'Session expirée', texte: 'Reconnectez-vous pour retrouver le menu.',
+                                     lien: '/login.html', lib: 'Se reconnecter', ton: 'var(--sbx-orange,#f59e0b)' };
+        if (statut === 403 || statut === 409) return { titre: "Réservé à l'administration locale",
+                                     texte: "Cette partie ne s'administre que sur la box elle-même.", ton: 'var(--sbx-cyan,#22d3ee)' };
+        if (statut === 404 || statut === 502 || statut === 503) return { titre: 'Module arrêté',
+                                     texte: "Le service du menu ne répond pas : il est peut-être arrêté (profil léger).",
+                                     modules: true, ton: 'var(--sbx-orange,#f59e0b)' };
+        return { titre: 'Box injoignable', texte: 'La box ne répond pas pour le moment.', ton: 'var(--sbx-rouge,#f87171)' };
+    }
+
     function showFallbackSidebar() {
         var sidebar = document.getElementById('sidebar');
         if (!sidebar) return;
+        var c = causeHorsLigne(dernierStatutMenu);
+        var delai = essaisSecours === 0 ? 30000 : 60000;
+        var lien = c.lien ? '<a href="' + c.lien + '" class="nav-item" style="margin-top:.5rem;justify-content:center;' +
+            'border:1px solid ' + c.ton + ';border-radius:10px">' + c.lib + '</a>' : '';
+        var modules = c.modules ? '<a href="/pilotage-connexion/modules.html" class="nav-item sbx-lien-modules" hidden ' +
+            'style="margin-top:.5rem;justify-content:center;border:1px solid rgba(255,255,255,.18);border-radius:10px">' +
+            'Voir et démarrer les modules</a>' : '';
 
         sidebar.innerHTML = '<div class="sidebar-header">' +
             '<a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span>' +
-            '<span class="logo-version">⚠️ ' + VERSION + '</span></div></a></div>' +
+            '<span class="logo-version">' + VERSION + '</span></div></a></div>' +
             '<div class="sidebar-nav">' +
-            '<div class="nav-section"><div class="nav-section-title"><span>⚠️ OFFLINE MODE</span></div>' +
-            '<div class="nav-items">' +
-            '<a href="/" class="nav-item"><span class="icon">🏠</span><span>Dashboard</span></a>' +
-            '<a href="' + versAdmin('/system/') + '" class="nav-item"><span class="icon">⚙️</span><span>System</span></a>' +
+            '<div class="nav-section"><div class="nav-items">' +
+            '<a href="/" class="nav-item"><span class="icon">🏠</span><span>Accueil</span></a>' +
+            '<a href="' + versAdmin('/system/') + '" class="nav-item"><span class="icon">⚙️</span><span>Système</span></a>' +
             '<a href="' + versAdmin('/soc/') + '" class="nav-item"><span class="icon">🛡️</span><span>SOC</span></a>' +
             '</div></div></div>' +
-            '<div class="sidebar-footer">' +
-            '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">API unavailable - showing cached links</div>' +
-            '<button onclick="SecuBoxSidebar.forceReinject()" style="width:100%;padding:0.5rem;background:#4466ff;color:#fff;border:none;border-radius:4px;cursor:pointer;">🔄 Retry</button>' +
-            '</div>';
+            '<div class="sidebar-footer"><div style="margin:.5rem;padding:.75rem;border-radius:12px;' +
+            'background:rgba(15,23,42,.55);backdrop-filter:blur(8px);border:1px solid ' + c.ton + '">' +
+            '<div style="font-weight:600;color:' + c.ton + ';font-size:.85rem">' + c.titre + '</div>' +
+            '<div style="color:rgba(226,232,240,.8);font-size:.75rem;margin-top:.25rem">' + c.texte + '</div>' +
+            lien + modules +
+            '<div style="color:rgba(148,163,184,.8);font-size:.7rem;margin-top:.5rem">Nouvel essai automatique dans ' +
+            (delai / 1000) + ' s</div></div></div>';
 
-        console.log('[Sidebar] Fallback mode activated');
+        if (c.modules) {
+            // lien seulement sur une box légère pilotée (admin.<box> servi par le maître) : la page y existe
+            fetch('/pilotage-connexion/modules.html', { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+                var a = sidebar.querySelector('.sbx-lien-modules');
+                if (r.ok && a) a.hidden = false;
+            }).catch(function () {});
+        }
+        if (minuterieSecours) clearTimeout(minuterieSecours);
+        minuterieSecours = setTimeout(function () {
+            essaisSecours++;
+            SecuBoxSidebar.forceReinject();
+        }, delai);
+        console.log('[Sidebar] Fallback mode activated (' + c.titre + ')');
     }
 
     // ============================================
@@ -2481,6 +2520,7 @@
                 window.location.href = '/login.html';
                 return;
             } else {
+                dernierStatutMenu = result.status || 0;   // #3324 : la cause affichée par le mode hors ligne
                 console.warn('[Sidebar] Menu API error:', result.error);
                 throw new Error('Menu API: ' + (result.error || 'No data'));
             }

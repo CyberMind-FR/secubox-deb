@@ -414,3 +414,9 @@ l'inventaire (`Device.X_SECUBOX_Services`) ; les modules du groupe `distante` so
 `POST /api/v1/pilotage-vhost/modules/<module>/demarrer` émet l'action `service-demarrer` (`secubox-<module>.service`) avec les
 mêmes gardes et le même audit que la Flotte (administrateur réel ; `auth`, `pilotage*` refusés). Page :
 `/pilotage-connexion/modules.html`. La page Santé du hub appelle `/api/v1/health-doctor/`, relayé avec l'accueil.
+
+Réponses sur place, sans relais (#3324) : `GET /api/v1/waf/stats` (si aucun module `waf` n'est servi) → `{"disponible": false}` ;
+`GET /api/v1/hub/auth_mode` → `{"mode": "pilotage", "disponible": false}`. Modules exclus du pilotage qui livrent des pages
+(`users`, `vault`, `portal`, `assist`, `premier-pas`) : `/<m>/` sert `/pilotage-connexion/reserve.html` (« réservé à
+l'administration locale ») et `/api/v1/<m>/` répond 403 `{"detail": "réservé à l’administration locale", "reserve": true}`.
+`/login.html` renvoie vers la connexion du maître.

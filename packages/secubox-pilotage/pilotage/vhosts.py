@@ -100,6 +100,22 @@ def csp_module(box: str, chemins: Iterable[str], empreintes: Iterable[str]) -> s
             "font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 
 
+# Modules exclus du pilotage (MODULES_EXCLUS_PILOTAGE de secubox_core, modulesExclus du relais) qui livrent des pages
+RESERVES = frozenset({"users", "vault", "portal", "assist", "premier-pas"})
+RESERVE_JSON = '{"detail":"réservé à l’administration locale","reserve":true}'
+
+
+def _json_sur_place(statut: int, corps: str) -> list:
+    """Réponse JSON fixe, sans relais : en-têtes de sécurité de l'API (CSP_API, nosniff, no-store)."""
+    if "'" in corps or "\\" in corps:
+        raise ValueError("corps JSON fixe : ni apostrophe droite ni antislash")
+    return ["        default_type application/json;",
+            f'        add_header Content-Security-Policy "{CSP_API}" always;',
+            '        add_header X-Content-Type-Options "nosniff" always;',
+            '        add_header Cache-Control "no-store" always;',
+            f"        return {statut} '{corps}';"]
+
+
 def _entetes_page(csp: str) -> list:
     """add_header dans une location annule l'héritage du server : tout le jeu est reposé."""
     return [f'        add_header Content-Security-Policy "{csp}" always;',
@@ -256,12 +272,16 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
     dom = domaine(box)
     vus: dict = {}
     partages: dict = {}
+    reserves: set = set()
     for p in pages:
         if not (RE_PAQUET.fullmatch(p["paquet"]) and RE_VERSION.fullmatch(p["version"])):
             raise ValueError("paquet ou version invalide")
         for m in p["modules"]:
             if not RE_MODULE.fullmatch(m) or m in ("api", "auth"):
                 raise ValueError(f"module invalide : {m}")
+            if m in RESERVES:
+                reserves.add(m)
+                continue
             if m in PARTAGES:
                 partages.setdefault(m, []).append(p)
                 continue
@@ -351,6 +371,15 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
               *_entetes_page(csp_module(box, ["/"], emp)), "    }",
               "    location ~ \"^/[a-z0-9][a-z0-9_-]{0,63}\\.html$\" {", f"        root {racine}/{p['paquet']}/{p['version']};",
               "        try_files $uri =404;", *_entetes_page(csp_module(box, ["/"], emp)), "    }"]
+    for m in sorted(reserves):
+        # #3324 : modules exclus du pilotage (comptes, coffre, portail…) : page « réservé », API refusée sur place
+        L += [f"    location ^~ /api/v1/{m}/ {{", *_json_sur_place(403, RESERVE_JSON), "    }",
+              f"    location ^~ /{m}/ {{", f"        alias {RACINE_CONNEXION};", "        try_files /reserve.html =404;",
+              *_entetes_page(csp_module(box, ["/pilotage-connexion/"], [])), "    }"]
+    # #3324 : appels de la barre d'état sans objet sur une box légère, répondus sur place (jamais d'erreur en boucle)
+    if "waf" not in vus:
+        L += ["    location = /api/v1/waf/stats {", *_json_sur_place(200, '{"disponible":false}'), "    }"]
+    L += ["    location = /api/v1/hub/auth_mode {", *_json_sur_place(200, '{"mode":"pilotage","disponible":false}'), "    }"]
     if maitre and RE_BOX.fullmatch(maitre):
         # #3324 : les pages envoient vers /login.html quand une session manque ; ici, aucune saisie d'identifiants : on
         # repasse par le maître, qui émet un nouveau code (sa session et sa 2FA) puis revient sur cette box.

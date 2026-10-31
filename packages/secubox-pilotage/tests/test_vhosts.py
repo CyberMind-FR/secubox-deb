@@ -248,12 +248,12 @@ def test_scripts_integres_permis_par_empreinte_et_accueil():
 
 
 def test_module_en_double_le_paquet_proprietaire_l_emporte():
-    """#3302 (banc gk4) : `portal` livré par secubox-hub et secubox-portal : secubox-portal sert /portal/, dans les deux ordres."""
+    """#3302 (banc gk4) : `soc` livré par secubox-hub et secubox-soc : secubox-soc sert /soc/ (portal, réservé, est couvert ailleurs), dans les deux ordres."""
     for ordre in (1, -1):
-        pages = [{"paquet": "secubox-hub", "version": "1", "modules": ["portal"]},
-                 {"paquet": "secubox-portal", "version": "2", "modules": ["portal"]}][::ordre]
+        pages = [{"paquet": "secubox-hub", "version": "1", "modules": ["soc"]},
+                 {"paquet": "secubox-soc", "version": "2", "modules": ["soc"]}][::ordre]
         conf = V.rendre_nginx("gk5", pages)
-        assert "/secubox-portal/2/portal/;" in conf and "/secubox-hub/1/portal/" not in conf
+        assert "/secubox-soc/2/soc/;" in conf and "/secubox-hub/1/soc/" not in conf
 
 
 def test_login_html_renvoie_vers_le_maitre():
@@ -262,6 +262,31 @@ def test_login_html_renvoie_vers_le_maitre():
     assert "location = /login.html {" in conf
     assert "return 302 https://admin.gk2.secubox.in/api/v1/pilotage/boxes/gk4/connexion-vhost;" in conf
     assert "/login.html" not in V.rendre_nginx("gk4", [{"paquet": "secubox-a", "version": "1", "modules": ["x"]}])
+
+
+def test_barre_d_etat_sans_relais_sur_box_legere():
+    """#3324 : waf/stats (sans module waf servi) et hub/auth_mode répondent sur place, jamais relayés."""
+    conf = V.rendre_nginx("gk4", [{"paquet": "secubox-a", "version": "1", "modules": ["x"]}])
+    b = conf[conf.index("location = /api/v1/waf/stats {"):]
+    b = b[:b.index("\n    }")]
+    assert '"disponible":false' in b.replace(" ", "") and "application/json" in b and "proxy_pass" not in b
+    b = conf[conf.index("location = /api/v1/hub/auth_mode {"):]
+    b = b[:b.index("\n    }")]
+    assert '"mode":"pilotage"' in b.replace(" ", "") and "proxy_pass" not in b
+    avec_waf = V.rendre_nginx("gk4", [{"paquet": "secubox-waf", "version": "1", "modules": ["waf"]}])
+    assert "location = /api/v1/waf/stats {" not in avec_waf
+
+
+def test_modules_reserves_a_l_administration_locale():
+    """#3324 : users (et les autres exclus du pilotage) : page « réservé », API en 403 sur place, sans relais."""
+    conf = V.rendre_nginx("gk4", [{"paquet": "secubox-users", "version": "1", "modules": ["users"]},
+                                  {"paquet": "secubox-a", "version": "1", "modules": ["x"]}])
+    b = conf[conf.index("location ^~ /users/ {"):]
+    b = b[:b.index("\n    }")]
+    assert "reserve.html" in b and "secubox-users/1/users" not in b
+    b = conf[conf.index("location ^~ /api/v1/users/ {"):]
+    b = b[:b.index("\n    }")]
+    assert "return 403" in b and '"reserve":true' in b.replace(" ", "") and "proxy_pass" not in b
 
 
 def test_pages_declarees_sans_deviner():
