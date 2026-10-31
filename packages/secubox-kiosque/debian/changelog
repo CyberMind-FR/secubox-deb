@@ -1,3 +1,12 @@
+secubox-kiosque (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Pastilles : « le maitre » puis chaque box du maillage ; une box choisie
+    affiche ses donnees lues dans l inventaire du pilotage (memoire, charge,
+    duree de marche, services en echec, interface, mains liees, agent),
+    jamais celles du maitre ; carte Pilotage (ref #3330).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 09:53:15 +0100
+
 secubox-kiosque (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Première version du kiosque distant en PWA (ref #3330) : servi par le
