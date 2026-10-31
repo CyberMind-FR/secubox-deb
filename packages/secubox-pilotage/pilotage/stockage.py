@@ -494,6 +494,16 @@ class StockageSqlite:
                     cx.execute(f"DELETE FROM {table} WHERE cle=?", (o["cle"],))
         return Oubli(oubliees)
 
+    def oublier_boite(self, cle: str) -> bool:
+        """#3335 : « Oublier ce nœud », demandé par l'administrateur : la box, son inventaire, ses événements et son relevé
+        partent (comme M12) ; le journal des opérations et des supports reste (historique borné). Rend True si elle existait."""
+        with self._tx() as cx:
+            if cx.execute("SELECT 1 FROM boites WHERE cle=?", (cle,)).fetchone() is None:
+                return False
+            for table in ("inventaire", "evenements", "releves", "boites"):
+                cx.execute(f"DELETE FROM {table} WHERE cle=?", (cle,))
+        return True
+
     # --- relevé de performance à la demande ---
 
     def releve_enregistrer(self, cle: str, duree_s: int, statut: str, sortie) -> None:

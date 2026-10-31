@@ -1,3 +1,18 @@
+secubox-p2p (1.20.3-1~trixie1) trixie; urgency=medium
+
+  * POST /master-link/oublier (require_jwt, confirmation par le nom, force
+    pour un noeud en ligne, audit) : retire un noeud obsolete du registre des
+    pairs (donc de pairs-enroles.json) et de wg_mesh.json (sbx-mesh-up retire
+    le pair de wg-mesh) (ref #3335).
+  * Relecture : ecritures atomiques (fsync, os.replace) de peers.json et
+    wg_mesh.json sous un verrou .etat.lock commun (save_json, jonction,
+    secubox-maillage-pairs) ; etat illisible -> 503, jamais reecrit ; pair
+    designe par sa cle publique, nom ambigu -> 409 ; mesure des poignees
+    absente -> force exige ; pair maitre (role, cle de l ancre) refuse ;
+    route synchrone (ref #3335).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:14:57 +0100
+
 secubox-p2p (1.20.2-1~trixie1) trixie; urgency=medium
 
   * Projection des pairs enrôlés pour le pilotage (ref #3126) : à chaque écriture de peers.json,

@@ -10,7 +10,7 @@ Manages peer discovery, mesh networking, service federation, and master-link enr
 """
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import functools
 import logging
@@ -21,6 +21,7 @@ import json
 import os
 import re
 import socket
+import time
 import hashlib
 import secrets
 from pathlib import Path
@@ -39,7 +40,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre, pairs_directs, pairs_enroles
+from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre, pairs_directs, pairs_enroles, oubli
 from secubox_core.auth import require_lecture, SESSION_COOKIE, _bearer
 from secubox_core.crypto.empreinte import ident
 
@@ -136,8 +137,13 @@ def load_json(path: Path, default: Any = None) -> Any:
 
 def save_json(path: Path, data: Any):
     init_dirs()
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
+    if Path(path) in (PEERS_FILE, WG_MESH_CONFIG):
+        # #3335 (relecture #3341) : mêmes fichiers que « Oublier ce nœud » : écriture atomique sous son verrou
+        with oubli.verrou(P2P_DIR):
+            oubli.ecrire_atomique(path, data, 0o600 if Path(path) == WG_MESH_CONFIG else 0o644)
+    else:
+        with open(path, 'w') as f:
+            json.dump(data, f, indent=2)
     if Path(path) == PEERS_FILE:
         # #3126 : chaque écriture du registre republie la projection du pilotage ; un échec ne bloque jamais le registre.
         try:
@@ -2456,6 +2462,50 @@ def _add_approved_peer(join_request: Dict):
     save_json(PEERS_FILE, {"peers": peers})
 
 
+class OublierRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    nom: str = Field(..., min_length=1, max_length=63)
+    confirmation: str = Field(..., min_length=1, max_length=63)
+    public_key: Optional[str] = Field(None, max_length=44)
+    fingerprint: Optional[str] = Field(None, max_length=64)
+    force: bool = False
+
+
+@app.post("/master-link/oublier")
+def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
+    """« Oublier ce nœud » (#3335) : retire un nœud obsolète du registre des pairs et de wg-mesh (sbx-mesh-up, root,
+    applique le retrait au changement de wg_mesh.json). Confirmation : le nom retapé ; désignation par la clé publique
+    (la Flotte la transmet) ; nœud en ligne ou mesure absente : `force`. Lecture, calcul et écritures atomiques sous le
+    verrou des écrivains de peers.json et wg_mesh.json ; un état illisible n'est jamais réécrit (503)."""
+    if req.confirmation != req.nom:
+        raise HTTPException(status_code=400, detail="confirmation : retapez exactement le nom du nœud")
+    local = socket.gethostname().split(".")[0].lower()
+    a = ancre.lire()
+    cle_maitre = a.get("cle_publique") if isinstance(a, dict) else None
+    init_dirs()
+    try:
+        with oubli.verrou(P2P_DIR):
+            peers_doc = oubli.lire_strict(PEERS_FILE, {"peers": []})
+            wg_state = oubli.lire_strict(WG_MESH_CONFIG, {"peers": []})
+            peers, wg, retires = oubli.oublier(peers_doc, wg_state, req.nom, handshakes=mesh.load_handshakes(),
+                                               now=time.time(), local=local, force=req.force, cle=req.public_key,
+                                               empreinte=req.fingerprint, cle_maitre=cle_maitre)
+            oubli.ecrire_atomique(WG_MESH_CONFIG, wg, 0o600)   # secubox-p2p-mesh.path → sbx-mesh-up retire le pair
+            oubli.ecrire_atomique(PEERS_FILE, peers, 0o644)
+    except oubli.EtatIllisible as e:
+        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=str(user.get("sub", "?")))
+        raise HTTPException(status_code=503, detail="état du maillage illisible : rien n'est modifié") from None
+    except oubli.Refus as e:
+        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=str(user.get("sub", "?")))
+        raise HTTPException(status_code=409, detail=str(e)) from None
+    try:
+        pairs_enroles.publier(peers, PAIRS_ENROLES_DIR)
+    except (pairs_enroles.ProjectionErreur, OSError) as e:
+        log.warning("projection des pairs enrôlés non publiée : %s", e)
+    _audit_jonction("p2p_noeud_oublie", noeud=req.nom, force=req.force, acteur=str(user.get("sub", "?")), **retires)
+    return {"status": "ok", "oublie": req.nom, "retires": retires}
+
+
 @app.post("/master-link/approve")
 async def ml_approve(req: ApproveRequest, user: dict = Depends(require_jwt)):
     """Approve, reject, or promote a peer (auth required)."""
@@ -2705,11 +2755,8 @@ def _wg_cles():
 def _ecrire_etat_wg(etat: Dict) -> None:
     """Ecriture atomique en 0600 : l'unite .path (root) applique le changement."""
     init_dirs()
-    tmp = WG_MESH_CONFIG.with_suffix(".json.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        json.dump(etat, f, indent=2)
-    os.replace(tmp, WG_MESH_CONFIG)
+    with oubli.verrou(P2P_DIR):            # #3335 : verrou commun des écrivains de wg_mesh.json
+        oubli.ecrire_atomique(WG_MESH_CONFIG, etat, 0o600)
 
 
 async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:

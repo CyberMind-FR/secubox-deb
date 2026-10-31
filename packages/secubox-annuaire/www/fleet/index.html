@@ -136,7 +136,7 @@
             <div class="tw"><table class="matrix"><thead><tr><th>Nœud</th><th>CPU</th><th>Mém.</th><th>Disque</th><th>Charge</th><th>En marche</th><th>Compteurs</th><th>Modules à l’arrêt</th><th>Vu</th></tr></thead><tbody id="fleet-body"></tbody></table></div>
         </div>
         <div class="pan" id="p2p-pan" hidden><h3>Pairs p2p <i><span id="p2p-n">0</span> sur wg-mesh, statut mesuré par poignée de main</i></h3>
-            <div class="tw"><table class="matrix"><thead><tr><th>Pair</th><th>Adresse</th><th>Statut</th><th>Dernier vu</th></tr></thead><tbody id="p2p-body"></tbody></table></div>
+            <div class="tw"><table class="matrix"><thead><tr><th>Pair</th><th>Adresse</th><th>Statut</th><th>Dernier vu</th><th></th></tr></thead><tbody id="p2p-body"></tbody></table></div>
         </div>
         <div class="pan" id="al-pan" hidden><h3>Box Auto-Load <i><span id="al-n">0</span> enrôlée(s), tunnel wg-autoload, sans annuaire</i></h3>
             <div class="tw"><table class="matrix"><thead><tr><th>Client</th><th>Profil</th><th>Statut</th><th>Progression</th><th>Étape</th><th>Dernière activité</th></tr></thead><tbody id="al-body"></tbody></table></div>
@@ -296,8 +296,14 @@
             liste.forEach(p => {
                 const tr = el('tr', 'node-row'), st = el('td'), dot = el('span', 'dot ' + (p.status === 'online' ? 'ok' : 'stale'));
                 st.append(dot, el('span', null, ' ' + (p.status || '—')));
+                const act = el('td');
+                if (p.name && /^[a-z0-9][a-z0-9-]{0,62}$/.test(p.name)) {
+                    const bt = el('button', 'btn sm danger', 'Oublier'); bt.type = 'button';
+                    bt.addEventListener('click', () => oublierNoeud(p.name, act, p.public_key));
+                    act.append(bt);
+                }
                 tr.append(el('td', 'hostname-col', p.name || p.id || '—'), el('td', null, p.address || '—'), st,
-                    el('td', null, p.last_seen ? ago(new Date(Number(p.last_seen) * 1000).toISOString()) : 'jamais'));
+                    el('td', null, p.last_seen ? ago(new Date(Number(p.last_seen) * 1000).toISOString()) : 'jamais'), act);
                 body.append(tr);
             });
             hauteur();
@@ -746,6 +752,31 @@
         window.addEventListener('pagehide', pbFermerFlux);
         setInterval(() => { if (pbBoite) pbMaj(); }, 15000);      // fin d'une session de support annoncée : le catalogue disparaît sans attendre
         setInterval(() => { if (pbBoite && !pbOpsEnCours && document.visibilityState !== 'hidden') pbOperations(); }, 10000);   // #3308 : journal relu même si la vue en direct est coupée
+        // #3335 : « Oublier ce nœud » — nœud obsolète (réinstallé, retiré) : le registre des pairs et wg-mesh (secubox-p2p), puis la
+        // Flotte du pilotage (boites, inventaire). Confirmation dans la ligne : le nom retapé ; un nœud encore actif exige « forcer ».
+        function oublierNoeud(nom, td, cle) {
+            if (DEMO) return;
+            clear(td);
+            const saisie = el('input'); saisie.type = 'text'; saisie.placeholder = nom; saisie.setAttribute('aria-label', 'Retapez ' + nom + ' pour confirmer');
+            const lab = el('label', 'pb-forcer'), forcer = el('input'); forcer.type = 'checkbox'; lab.append(forcer, el('span', null, ' forcer (nœud actif)'));
+            const ok = el('button', 'btn sm danger', 'Oublier ' + nom), non = el('button', 'btn sm', 'Annuler'), msg = el('span', 'pb-detail');
+            ok.type = non.type = 'button';
+            non.addEventListener('click', () => chargerP2p());
+            ok.addEventListener('click', async () => {
+                if (saisie.value !== nom) { msg.textContent = 'Retapez exactement « ' + nom + ' ».'; return; }
+                ok.disabled = true; msg.textContent = 'Oubli en cours…';
+                const corps = (extra) => JSON.stringify(Object.assign({ confirmation: nom }, extra, forcer.checked ? { force: true } : {}));
+                try {
+                    const r = await pbFetch('/api/v1/p2p/master-link/oublier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps(Object.assign({ nom: nom }, cle ? { public_key: cle } : {})) });
+                    if (!r.ok) { msg.textContent = await pbErreur(r); ok.disabled = false; return; }
+                    const rp = await pbFetch('/api/v1/pilotage/boxes/' + encodeURIComponent(nom) + '/oublier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps({}) });
+                    if (!rp.ok && rp.status !== 404) { msg.textContent = 'Maillage oublié ; Flotte : ' + await pbErreur(rp); ok.disabled = false; return; }
+                    chargerP2p(); chargerPilotage(); loadFleet();
+                } catch (e) { msg.textContent = 'Oubli impossible : ' + e.message; ok.disabled = false; }
+            });
+            td.append(saisie, lab, ok, non, msg);
+            saisie.focus();
+        }
         // ===== fin pilotage-box =====
 
         async function loadFleet() {

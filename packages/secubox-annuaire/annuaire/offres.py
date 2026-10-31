@@ -102,6 +102,15 @@ def cartes_du_hall(html: str) -> List[Dict[str, Any]]:
     return out
 
 
+def domaines_servis(haproxy_toml: Path = HAPROXY_TOML) -> set:
+    """#3335 : les hôtes que CE nœud sert (lignes `domain = "…"` de haproxy.toml) ; illisible → ensemble vide."""
+    try:
+        texte = haproxy_toml.read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return {m.group(1).lower() for m in re.finditer(r'^\s*domain\s*=\s*"([a-z0-9.-]+)"', texte, flags=re.M)}
+
+
 def depot_apt(haproxy_toml: Path = HAPROXY_TOML, marqueur: Path = REPO_MARQUEUR) -> List[Dict[str, Any]]:
     """Le dépôt apt de la box : module `secubox-repo` installé ET un vhost `apt.<domaine>` déclaré."""
     if not marqueur.exists():
@@ -184,7 +193,11 @@ def collecter_faits(*, tor_dir: Path = TOR_HIDDEN, hall_index: Path = HALL_INDEX
         html = hall_index.read_text(encoding="utf-8")
     except OSError:
         html = ""
-    faits = onions(tor_dir) + cartes_du_hall(html) + depot_apt(haproxy_toml, repo_marqueur) \
+    # #3335 : la curation du Hall est la même sur chaque nœud (URL du domaine où elle a été écrite) : une carte n'est une
+    # offre de CE nœud que si son hôte est un vhost qu'il déclare — sinon gk1/gk3/gk4 republiaient les apps de gk2
+    servis = domaines_servis(haproxy_toml)
+    apps = [o for o in cartes_du_hall(html) if o["endpoint"].split("/")[2] in servis]
+    faits = onions(tor_dir) + apps + depot_apt(haproxy_toml, repo_marqueur) \
         + services_des_noms(lire_noms_webos(webos_sock))
     return sorted(faits, key=lambda f: (f["kind"], f["endpoint"]))
 

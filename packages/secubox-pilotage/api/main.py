@@ -44,7 +44,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
@@ -61,6 +61,8 @@ from pilotage.inventaire import Inventaire, box_de_ligne
 from pilotage.operations import (CATALOGUE, COMMANDE_SUPPORT_FERMER, COMMANDE_SUPPORT_OUVRIR, RE_IDENT, Suivi, arguments,
                                  corps_operate)
 from pilotage.stockage import HORS_LIGNE_S, SUPPORT_DUREE_MAX_MIN, StockageSqlite
+
+OUBLI_EN_LIGNE_S = 600     # #3335 : une box vue depuis moins de 10 min ne s'oublie qu'avec `force`
 
 DELAI_LECTURE_S = 15.0
 DELAI_ACTION_S = 90.0          # OPERATE_RESP d'une action : plus que l'agent n'attend le ctl (60 s, delaiCtl), moins que la file (120 s)
@@ -167,6 +169,21 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
     @app.get("/boxes", dependencies=garde)
     async def boxes():
         return await asyncio.to_thread(stockage.resumes)
+
+    @app.post("/boxes/{ident}/oublier", dependencies=garde)
+    async def oublier_box(ident: str, corps: dict = Body(...)):
+        """#3335 : « Oublier ce nœud » — retire une box obsolète de la Flotte. Confirmation : le nom retapé ; une box vue
+        depuis moins de 10 min exige `force`. Audité (`pilotage_box_oubliee`). Le registre p2p et wg-mesh sont oubliés
+        par secubox-p2p (`POST /api/v1/p2p/master-link/oublier`), appelé par la page de la Flotte."""
+        b = await trouver(ident)
+        if not isinstance(corps, dict) or corps.get("confirmation") != b["nom"]:
+            raise HTTPException(400, "confirmation : retapez exactement le nom de la box")
+        force = corps.get("force") is True
+        if not force and horloge() - b["vu_le"] < OUBLI_EN_LIGNE_S:
+            raise HTTPException(409, "box vue il y a moins de 10 min : confirmer l'oubli d'une box active (force)")
+        await asyncio.to_thread(audit, "pilotage_box_oubliee", {"box": b["nom"], "cle": b["cle"], "force": force})
+        await asyncio.to_thread(stockage.oublier_boite, b["cle"])
+        return {"oublie": b["cle"]}
 
     @app.get("/boxes/{ident}", dependencies=garde)
     async def une_box(ident: str):

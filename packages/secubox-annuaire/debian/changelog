@@ -1,3 +1,13 @@
+secubox-annuaire (0.16.7-1~trixie1) trixie; urgency=medium
+
+  * Offres du Hall : une carte n est offerte que si son hote est un vhost
+    declare par CE noeud (haproxy.toml) ; fin des doublons des apps de gk2
+    republiees par gk1/gk3/gk4 (Visio -> visio.gk1) (ref #3335).
+  * Flotte : bouton « Oublier » par pair (nom retape, forcer pour un noeud
+    actif) -> secubox-p2p puis secubox-pilotage (ref #3335).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:14:57 +0100
+
 secubox-annuaire (0.16.6-1~trixie1) trixie; urgency=medium
 
   * Flotte : vue en direct sans 429 après rechargements (le flux le plus

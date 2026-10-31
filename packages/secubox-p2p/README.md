@@ -268,3 +268,7 @@ jamais l'écriture du registre.
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+## Oublier un nœud (#3335)
+
+`POST /api/v1/p2p/master-link/oublier` (`require_jwt`) `{"nom", "confirmation" (= nom), "public_key"?, "fingerprint"?, "force"?}` : retire un nœud obsolète du registre des pairs (`peers.json`, donc `pairs-enroles.json`) et de `wg_mesh.json` ; `sbx-mesh-up` (root, sur changement du fichier) retire le pair de wg-mesh. Refus (409, audité `p2p_noeud_oubli_refuse`) : nom invalide, nœud local, `master`, nom inconnu, nœud en ligne (poignée de main < 180 s) sans `force`. Succès audité `p2p_noeud_oublie`. Pair désigné par sa clé publique (la Flotte la transmet) ; plusieurs pairs du même nom sans clé : 409. Mesure des poignées absente : `force` exigé. Le pair maître (rôle `master` ou clé de l'ancre) n'est jamais oublié. Écritures atomiques sous le verrou `.etat.lock` du dossier du maillage, commun aux écrivains de `peers.json` et `wg_mesh.json` ; un état présent mais illisible n'est jamais réécrit (503).
