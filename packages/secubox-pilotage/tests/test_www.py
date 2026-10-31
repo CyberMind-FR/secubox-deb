@@ -453,6 +453,22 @@ def test_signature_d_une_autre_cle_refusee(banc):
     assert banc.residus("secubox-dns") == []
 
 
+def test_trousseau_du_maitre_choisi_quand_le_defaut_n_est_pas_une_cle(banc):
+    """#3302 (banc gk2) : /usr/share/keyrings/secubox.gpg n'y est qu'un reste de 32 octets ; la clé du dépôt est celle d'apt
+    (/etc/apt/keyrings/secubox-apt.gpg). Sans `trousseau` configuré, le premier trousseau candidat qui contient une clé est pris."""
+    (banc.r / "usr/share/keyrings/secubox.gpg").write_bytes(b"\x00" * 32)
+    k = banc.r / "etc/apt/keyrings/secubox-apt.gpg"
+    k.parent.mkdir(parents=True)
+    k.write_bytes(banc.cles["bonne"][1])
+    k.chmod(0o644)
+    banc.publier("secubox-dns", "1.2.0-1~trixie1", faire_deb(pages_normales()))
+    r = banc.ctl("extraire", "secubox-dns", "1.2.0-1~trixie1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    k.chmod(0o664)                            # écriture du groupe : le candidat n'est plus de confiance, repli sur le défaut
+    banc.publier("secubox-dns", "1.3.0-1~trixie1", faire_deb(pages_normales()))
+    assert banc.ctl("extraire", "secubox-dns", "1.3.0-1~trixie1").returncode == 1
+
+
 def test_packages_modifie_apres_signature_refuse(banc):
     deb = faire_deb(pages_normales())
     banc.publier("secubox-dns", "1.0", deb)

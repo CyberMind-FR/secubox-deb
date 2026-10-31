@@ -467,6 +467,16 @@ def test_server_name_joker_ou_regex_etranger(banc, server_name):
     assert r.returncode == 1 and not banc.conf().exists(), server_name
 
 
+@pytest.mark.parametrize("server_name", ["admin.*", "*.secubox.in", "~^[0-9]{1,3}(\\.[0-9]{1,3}){3}$"])
+def test_joker_generique_du_maitre_n_empeche_pas_la_pose(banc, server_name):
+    """#3302 (banc gk4) : le vhost d'administration du maître déclare `admin.*` ; un joker qui ne nomme pas la box perd toujours
+    devant le nom exact posé par le pilotage (priorité nginx) et ne doit pas faire refuser la reprise."""
+    (banc.r / "etc/nginx/sites-enabled").mkdir(parents=True, exist_ok=True)
+    (banc.r / "etc/nginx/sites-enabled/secubox").write_text(f"server {{ listen 9080; server_name localhost {server_name}; }}\n")
+    r = banc.ctl("poser", "gk5", entree=PAGES)
+    assert r.returncode == 0, r.stdout
+
+
 def test_nom_public_du_maitre_lu_dans_la_configuration(banc):
     (banc.r / "etc/secubox/secubox.conf").write_text('[global]\ndomain = "gk5.secubox.in"\n')
     r = banc.ctl("poser", "gk5", entree=PAGES, env={"SBX_NOM_MAITRE": "autrehote"})

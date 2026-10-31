@@ -620,6 +620,13 @@ def nom_couvert(dom, nom):
     return dom == nom
 
 
+def nomme_la_box(nom, box):
+    """#3302 (banc gk4) : un joker ou une regex ne compte comme étranger que s'il nomme la box (label `<box>`). Un joker générique
+    (`admin.*` du vhost d'administration du maître, `*.secubox.in`) perd toujours devant le nom exact que pose le pilotage
+    (priorité nginx : nom exact d'abord) ; il ne sert pas `admin.<box>` et ne doit pas faire refuser la reprise."""
+    return re.search(r"(^|[^a-z0-9-])" + re.escape(box) + r"($|[^a-z0-9-])", nom, re.I) is not None
+
+
 def nginx_etranger(ctx, dom, box):
     """Un server nginx HORS pilotage couvre-t-il déjà ce nom ? (conf.d et sites-enabled, sans suivre de lien)"""
     for d in (ctx.confd, f"{ctx.r}/etc/nginx/sites-enabled"):
@@ -641,7 +648,8 @@ def nginx_etranger(ctx, dom, box):
             finally:
                 os.close(fd)
             for m in re.finditer(r"server_name\s+([^;]*);", texte):
-                if any(nom_couvert(dom, x.strip('"\'')) for x in m.group(1).split()):
+                if any(nom_couvert(dom, x) and (x == dom or nomme_la_box(x, box))
+                       for x in (y.strip('"\'') for y in m.group(1).split())):
                     return True
     return False
 

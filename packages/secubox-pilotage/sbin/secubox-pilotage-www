@@ -56,6 +56,21 @@ PREFIXE = "usr/share/secubox/www/"
 GARDE = 7 * 24 * 3600
 ENTREE_MAX = 1 << 20
 DECOMPRESSE_MAX = 4 << 30          # toute l'archive : borne contre une bombe de décompression
+TROUSSEAUX_CANDIDATS = ("/etc/apt/keyrings/secubox-apt.gpg", "/usr/share/keyrings/secubox-archive-keyring.gpg",
+                        "/usr/share/keyrings/secubox.gpg")
+
+
+def _est_un_trousseau(chemin):
+    """Fichier ordinaire (sans suivre de lien) d'au moins 128 octets, à root et sans écriture groupe/autres (hors banc de test) :
+    une clé publique OpenPGP exportée, pas un reste ni un fichier qu'un tiers aurait pu remplacer."""
+    try:
+        st = os.lstat(chemin)
+    except OSError:
+        return False
+    proprio = os.geteuid() if os.environ.get("SBX_RACINE") else 0
+    return stat.S_ISREG(st.st_mode) and st.st_size >= 128 and st.st_uid == proprio and not st.st_mode & 0o022
+
+
 DEFAUTS = {"depot_apt": "/data/apt", "trousseau": "/usr/share/keyrings/secubox.gpg", "suite": "trixie", "taille_max_mio": 64, "fichiers_max": 20000, "deb_max_mio": 512}
 BORNES = {"taille_max_mio": (1, 4096), "fichiers_max": (1, 1_000_000), "deb_max_mio": (1, 8192)}
 
@@ -130,7 +145,13 @@ class Ctx:
         depot = self.conf["depot_apt"]
         self.depot = f"{self.r}{depot}" if self.substitue and depot == DEFAUTS["depot_apt"] else depot
         k = self.conf["trousseau"]
-        self.trousseau = f"{self.r}{k}" if self.substitue and k == DEFAUTS["trousseau"] else k
+        if k == DEFAUTS["trousseau"]:
+            # #3302 (banc gk2) : sans `trousseau` configuré, le premier candidat qui contient une clé (sur le maître, la clé d'apt ;
+            # sur une box, celle du paquet ; un reste de quelques octets n'en est pas une). Aucun : le défaut (repli annoncé).
+            k = next((c for c in TROUSSEAUX_CANDIDATS if _est_un_trousseau(f"{self.r}{c}")), k)
+            self.trousseau = f"{self.r}{k}"
+        else:
+            self.trousseau = k
         self.uid = 0 if not self.substitue else os.geteuid()
         self.decompresse_max = DECOMPRESSE_MAX
         try:
