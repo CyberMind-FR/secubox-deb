@@ -37,9 +37,7 @@
 
 hors-arbre:
   - secubox-autoload-agent    # côté box cliente, posé par le provisionnement (#2182)
-  - secubox-pilotage          # maître du pilotage distant, installé à la demande (#3126)
   - secubox-pilotage-agent    # agent du pilotage distant, installé à la demande (#3126)
-  - secubox-kiosque           # webapp kiosque distant (PWA), servie par le maître, installée à la demande (#3330)
   - secubox-soc-gateway       # décommissionné (console de flotte jamais déployée)
   - gabriel-mood              # transitionnel → sbxos-audio-mood (#1587)
   - secubox-full              # anciens métapaquets d'image, conservés tels quels
@@ -88,9 +86,19 @@ recommande:
   - secubox-fonction-supervision
 suggere:
   - secubox-fonction-mesh
+  - secubox-fonction-maitre     # maître du parc : jamais posé sans le demander (#3337)
 
 
 # ═══ FONCTIONS ═════════════════════════════════════════════════════════════
+
+meta: secubox-fonction-maitre
+niveau: fonction
+label: Maître du parc
+description: "Gérer un parc de box : pilotage distant, interfaces déportées, abonnements, Flotte, kiosque."
+requiert:
+  - secubox-service-pilotage
+  - secubox-service-mesh
+  - secubox-service-administration
 
 meta: secubox-fonction-socle
 niveau: fonction
@@ -552,4 +560,13 @@ recommande:
   - secubox-netboot
 suggere:
   - secubox-vm
-  - secubox-autoload           # infrastructure seulement (admin.gk2.secubox.in) : suggéré, jamais installé sans le demander (#2182)
+
+meta: secubox-service-pilotage
+niveau: service
+label: Pilotage du parc
+description: "Contrôleur du pilotage distant, vhosts admin.<box>, abonnements et droits du maillage, webapp kiosque."
+requiert:
+  - secubox-pilotage
+  - secubox-autoload           # jetons, abonnements par box, droits du maillage (#2182, #3303, #3305)
+recommande:
+  - secubox-kiosque            # webapp kiosque distant (PWA) servie par le maître (#3330)

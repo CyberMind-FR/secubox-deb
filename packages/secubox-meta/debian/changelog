@@ -1,3 +1,14 @@
+secubox-meta (0.1.50-1~trixie1) trixie; urgency=medium
+
+  * Nouveau métapaquet secubox-fonction-maitre « Maître du parc » (ref #3337) :
+    requiert secubox-service-pilotage (nouveau : secubox-pilotage, secubox-autoload ;
+    recommande secubox-kiosque), secubox-service-mesh (annuaire, p2p) et
+    secubox-service-administration (profils, appstore, dépôt recommandé).
+    Suggéré par secubox : jamais posé sans le demander. secubox-pilotage et
+    secubox-kiosque quittent le hors-arbre ; secubox-autoload quitte la provision.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:17:56 +0100
+
 secubox-meta (0.1.49-1~trixie1) trixie; urgency=medium
 
   * secubox-ad-guard recommandé par secubox-service-detection : la carte Guardian du Hall est posée par sbxos (ref #3313).
