@@ -65,6 +65,10 @@ case "$action" in
         if [ -z "$cand" ] || [ "$cand" = "(none)" ] || [ "$cand" = "(aucun)" ]; then
             echo "appstorectl: $module absent des depots" >&2; exit 4
         fi
+        # #3338 : la formule de la box (même règle que l'API, fail-closed) : la frontière root refuse aussi
+        if ! motif="$(/usr/bin/python3 -I /usr/lib/secubox/appstore/api/abonnement.py "$module" 2>&1)"; then
+            echo "appstorectl: $module refuse : $motif" >&2; exit 3
+        fi
         mkdir -p "$(dirname "$VERROU")"
         exec 9>"$VERROU"
         flock -w 300 9 || { echo "appstorectl: une autre operation est en cours" >&2; exit 5; }

@@ -29,34 +29,12 @@ from pydantic import BaseModel, Field
 
 CATALOG_FILE = Path(os.environ.get(
     "APPSTORE_CATALOG", "/usr/share/secubox/appstore/catalog.json"))
-# #3338 : l'abonnement de la box (formule, profil, statut, formules connues), posé par root (provisionnement Auto-Load).
-# ABSENT = box sans abonnement (maître, atelier) : tout est permis. PRÉSENT mais illisible : rien n'est permis.
-ABONNEMENT_FILE = Path(os.environ.get("APPSTORE_ABONNEMENT", "/etc/secubox/abonnement.json"))
-
-
-def droit_installation(name: str):
-    """(permis, formule_requise, motif) pour installer `name` sous l'abonnement de la box."""
-    try:
-        brut = ABONNEMENT_FILE.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return True, None, None
-    except OSError:
-        return False, None, "abonnement illisible"
-    try:
-        ab = json.loads(brut)
-        if not isinstance(ab, dict):
-            raise ValueError
-    except ValueError:
-        return False, None, "abonnement illisible"
-    if ab.get("statut") != "actif":
-        return False, None, f"abonnement {ab.get('statut') or 'inconnu'} : aucune installation"
-    modules = {pr["name"]: set(pr["modules"]) for pr in _profils()}
-    if name in modules.get(str(ab.get("profil") or ""), set()):
-        return True, None, None
-    for f in ab.get("formules") or []:
-        if isinstance(f, dict) and name in modules.get(str(f.get("profil") or ""), set()):
-            return False, str(f.get("nom") or f.get("profil")), f"Disponible avec la formule {f.get('nom') or f.get('profil')}"
-    return False, None, "hors de la formule de cette box"
+# #3338 : droit d'installer sous l'abonnement de la box — règle unique dans api/abonnement.py (aussi appelée par
+# secubox-appstorectl, la frontière root). Fail-closed : sans abonnement, rien, sauf le marqueur abonnement-libre.
+try:
+    from .abonnement import droit as droit_installation
+except ImportError:                  # api/ sur sys.path (tests, outils)
+    from abonnement import droit as droit_installation
 
 
 TIER_RANK = {"all": 0, "lite": 1, "standard": 2, "pro": 3}
