@@ -256,6 +256,14 @@ def test_module_en_double_le_paquet_proprietaire_l_emporte():
         assert "/secubox-portal/2/portal/;" in conf and "/secubox-hub/1/portal/" not in conf
 
 
+def test_login_html_renvoie_vers_le_maitre():
+    """#3324 : /login.html (page demandée par les pages quand la session manque) renvoie vers la connexion du maître."""
+    conf = V.rendre_nginx("gk4", [{"paquet": "secubox-a", "version": "1", "modules": ["x"]}], maitre="gk2")
+    assert "location = /login.html {" in conf
+    assert "return 302 https://admin.gk2.secubox.in/api/v1/pilotage/boxes/gk4/connexion-vhost;" in conf
+    assert "/login.html" not in V.rendre_nginx("gk4", [{"paquet": "secubox-a", "version": "1", "modules": ["x"]}])
+
+
 def test_pages_declarees_sans_deviner():
     v = valeurs(paquets=(("secubox-a", "1.0"), ("secubox-a", "2.0"), ("pas-secubox", "1.0"), ("secubox-b", "bad version")))
     assert V.pages_declarees(v) == {}

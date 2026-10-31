@@ -841,7 +841,7 @@ def poser(ctx, box, pages):
                 composees.append({"paquet": paquet, "version": version, "modules": mods, "empreintes": emp,
                                   "accueil": accueil})
         try:
-            texte = V.rendre_nginx(box, composees).encode("utf-8")
+            texte = V.rendre_nginx(box, composees, maitre=ctx.nom_public or ctx.nom_maitre).encode("utf-8")
         except ValueError as e:
             raise Erreur(f"pages refusées : {e}") from None
         change = nginx_echanger(ctx, conf_de(ctx, box), texte)
