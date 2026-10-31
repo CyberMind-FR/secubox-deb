@@ -75,22 +75,57 @@
     if (!h || !h.length) { s.appendChild(sv('text', { x: '450', y: '120', fill: '#94a3b8', 'text-anchor': 'middle' })).textContent = 'Historique indisponible.'; return; }
     var som = function (k) { return h.every(function (x) { return x[k] == null; }) ? null : h.reduce(function (a, x) { return a + (x[k] || 0); }, 0); };
     texte('c-visites', fmt(som('visites'))); texte('c-attaques', fmt(som('attaques'))); texte('c-bans', fmt(som('bans')));
-    var max = Math.max.apply(null, h.map(function (x) { return (x.visites || 0) + (x.attaques || 0) + (x.bans || 0); }).concat([1]));
+    // #3351 : visites + attaques empilées sur l'échelle principale ; les bans (cent fois moins nombreux) ont leur propre
+    // bande et leur propre échelle, sinon ils sont invisibles
+    var max = Math.max.apply(null, h.map(function (x) { return (x.visites || 0) + (x.attaques || 0); }).concat([1]));
+    var maxB = Math.max.apply(null, h.map(function (x) { return x.bans || 0; }).concat([1]));
     var larg = 850 / h.length, cum = 0, totA = som('attaques') || 1, pts = [];
     h.forEach(function (x, i) {
       var X = 40 + i * larg, y = 200, g = sv('g', {}), t = sv('title', {});
-      [['visites', '#22d3ee'], ['attaques', '#f87171'], ['bans', '#fbbf24']].forEach(function (k) {
+      [['visites', '#22d3ee'], ['attaques', '#f87171']].forEach(function (k) {
         var hh = 180 * (x[k[0]] || 0) / max; y -= hh;
         g.appendChild(sv('rect', { x: X.toFixed(1), y: y.toFixed(1), width: Math.max(1, larg - 2).toFixed(1), height: hh.toFixed(1), fill: k[1] }));
       });
+      var hb = 70 * (x.bans || 0) / maxB;
+      g.appendChild(sv('rect', { x: X.toFixed(1), y: (300 - hb).toFixed(1), width: Math.max(1, larg - 2).toFixed(1), height: hb.toFixed(1), fill: '#fbbf24' }));
       t.textContent = x.jour + ' — visites ' + fmt(x.visites) + ', attaques ' + fmt(x.attaques) + ', bans ' + fmt(x.bans);
       g.appendChild(t); s.appendChild(g);
       cum += x.attaques || 0; pts.push((X + larg / 2).toFixed(1) + ',' + (200 - 180 * cum / totA).toFixed(1));
     });
     s.appendChild(sv('polyline', { points: pts.join(' '), fill: 'none', stroke: '#e6edf7', 'stroke-width': '2', 'stroke-dasharray': '5 4' }));
     s.appendChild(sv('line', { x1: '40', y1: '200', x2: '890', y2: '200', stroke: 'rgba(148,163,184,.5)' }));
-    var a = sv('text', { x: '40', y: '222', fill: '#94a3b8', 'font-size': '12' }); a.textContent = h[0].jour; s.appendChild(a);
-    var b = sv('text', { x: '890', y: '222', fill: '#94a3b8', 'font-size': '12', 'text-anchor': 'end' }); b.textContent = h[h.length - 1].jour; s.appendChild(b);
+    s.appendChild(sv('line', { x1: '40', y1: '300', x2: '890', y2: '300', stroke: 'rgba(148,163,184,.5)' }));
+    s.appendChild(sv('line', { x1: '40', y1: '230', x2: '890', y2: '230', stroke: 'rgba(251,191,36,.25)', 'stroke-dasharray': '3 4' }));
+    var lb = sv('text', { x: '44', y: '226', fill: '#fbbf24', 'font-size': '12' }); lb.textContent = 'bans posés par jour (échelle propre, max ' + fmt(maxB) + ')'; s.appendChild(lb);
+    var a = sv('text', { x: '40', y: '320', fill: '#94a3b8', 'font-size': '12' }); a.textContent = h[0].jour; s.appendChild(a);
+    var b = sv('text', { x: '890', y: '320', fill: '#94a3b8', 'font-size': '12', 'text-anchor': 'end' }); b.textContent = h[h.length - 1].jour; s.appendChild(b);
+  }
+
+  // #3351 : camembert (anneau) des attaques par pays : 7 premiers pays + « autres »
+  var COUL_PAYS = ['#f87171', '#fb923c', '#fbbf24', '#a78bfa', '#f472b6', '#22d3ee', '#34d399', '#64748b'];
+  function camembert(pays) {
+    var s = $('camembert'), lg = $('camembert-legende'); vider(s); vider(lg);
+    var l = (pays || []).filter(function (p) { return p && /^[A-Z]{2}$/.test(String(p.code)) && p.n > 0; })
+      .sort(function (a, b) { return b.n - a.n; });
+    if (!l.length) { lg.appendChild(el('p', 'vide', 'Pays des attaques indisponibles.')); return; }
+    var parts = l.slice(0, 7).map(function (p) { return { nom: p.code, n: p.n }; });
+    var reste = l.slice(7).reduce(function (a, p) { return a + p.n; }, 0);
+    if (reste > 0) parts.push({ nom: 'autres', n: reste });
+    var tot = parts.reduce(function (a, p) { return a + p.n; }, 0), ang = -Math.PI / 2;
+    parts.forEach(function (p, i) {
+      var f = p.n / tot, a2 = ang + f * 2 * Math.PI, gros = f > 0.5 ? 1 : 0;
+      var x1 = 100 + 90 * Math.cos(ang), y1 = 100 + 90 * Math.sin(ang), x2 = 100 + 90 * Math.cos(a2), y2 = 100 + 90 * Math.sin(a2);
+      var d = f >= 0.9999 ? 'M100,10 A90,90 0 1,1 99.99,10 Z'
+        : 'M100,100 L' + x1.toFixed(2) + ',' + y1.toFixed(2) + ' A90,90 0 ' + gros + ',1 ' + x2.toFixed(2) + ',' + y2.toFixed(2) + ' Z';
+      var path = sv('path', { d: d, fill: COUL_PAYS[i % COUL_PAYS.length], stroke: '#070d1c', 'stroke-width': '1.5' });
+      var t = sv('title', {}); t.textContent = p.nom + ' : ' + fmt(p.n) + ' (' + Math.round(f * 100) + ' %)'; path.appendChild(t); s.appendChild(path);
+      var ligne = el('div', 'ligne-camembert', null), pastille = el('span', 'pastille-camembert', null);
+      pastille.style.background = COUL_PAYS[i % COUL_PAYS.length];
+      ligne.appendChild(pastille); ligne.appendChild(el('span', null, p.nom + ' · ' + Math.round(f * 100) + ' % · ' + fmt(p.n)));
+      lg.appendChild(ligne); ang = a2;
+    });
+    s.appendChild(sv('circle', { cx: '100', cy: '100', r: '48', fill: '#0b1426' }));
+    var c = sv('text', { x: '100', y: '106', fill: '#e6edf7', 'font-size': '18', 'text-anchor': 'middle' }); c.textContent = fmt(tot); s.appendChild(c);
   }
 
   function barres(id, liste, cle, couleurs, suffixe, vide) {
@@ -135,6 +170,7 @@
     noeuds(e.noeuds); waf(e.waf_heure);
     var c = e.cartes || {};
     monde('monde-att', 'monde-att-note', c.attaques, '#ff4d5e', 'aucune attaque géolocalisée');
+    camembert(c.attaques);
     monde('monde-vis', 'monde-vis-note', c.visiteurs, '#29b6f6', 'aucune visite géolocalisée');
     histo(e.histo, e.production);
     barres('menaces', e.menaces, 'n', ['#f87171', '#fb923c', '#fbbf24', '#a78bfa', '#f472b6', '#22d3ee'], 'n', 'Journal du WAF indisponible.');

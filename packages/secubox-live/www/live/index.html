@@ -54,12 +54,15 @@
       <div><span class="lib">Bans cumulés</span><b id="c-bans" class="ambre">—</b></div>
       <div><span class="lib">Jours en production</span><b id="c-jours">—</b></div>
     </div>
-    <svg id="histo" viewBox="0 0 900 240" role="img" aria-label="Visites, attaques et bans par jour, avec le cumul des attaques"></svg>
-    <p class="legende"><span class="cyan">■</span> visites <span class="rouge">■</span> attaques <span class="ambre">■</span> bans <span>┅</span> cumul des attaques · survol : détail du jour</p>
+    <svg id="histo" viewBox="0 0 900 330" role="img" aria-label="Visites, attaques et bans par jour, avec le cumul des attaques"></svg>
+    <p class="legende"><span class="cyan">■</span> visites <span class="rouge">■</span> attaques <span class="ambre">■</span> bans (bande du bas, échelle propre) <span>┅</span> cumul des attaques · survol : détail du jour</p>
   </section>
 
   <div class="rangee">
     <section class="carte"><div class="titre"><h2>Types de menaces</h2><span class="faible">24 h</span></div><div id="menaces"></div></section>
+    <section class="carte"><div class="titre"><h2>Menaces par pays</h2><span class="faible">attaques bloquées, pays déduit de l'adresse</span></div>
+      <div class="camembert"><svg id="camembert" viewBox="0 0 200 200" role="img" aria-label="Répartition des attaques par pays d'origine"></svg><div id="camembert-legende"></div></div>
+    </section>
   </div>
 
   <div class="rangee">

@@ -52,6 +52,16 @@ if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ] \
   haproxyctl generate >/dev/null 2>&1 || true
   systemctl reload haproxy >/dev/null 2>&1 || true
 fi
+# Certificat (#3351) : même circuit que le pilotage (certbot webroot puis haproxyctl cert sync) ; `haproxyctl cert add`
+# dépend d'acme.sh, absent des box. Échec : page servie avec le certificat par défaut, signalé.
+if [ ! -s "/data/haproxy/certs/$DOMAINE.pem" ] && command -v certbot >/dev/null 2>&1; then
+  if certbot certonly --webroot -w /usr/share/secubox/www -d "$DOMAINE" --non-interactive --agree-tos \
+       --keep-until-expiring --register-unsafely-without-email >/dev/null 2>&1; then
+    haproxyctl cert sync >/dev/null 2>&1 || echo "secubox-live : certificat émis mais haproxyctl cert sync a échoué" >&2
+  else
+    echo "secubox-live : certificat de $DOMAINE non émis (DNS public vers ce maître ?) : certificat par défaut servi" >&2
+  fi
+fi
 install -d -m 0755 /var/lib/secubox-live
 printf '%s\n' "$DOMAINE" > "$EXPOSE"
 logger -t secubox-live "vhost public $DOMAINE exposé (nginx, route sbxwaf, HAProxy)"
