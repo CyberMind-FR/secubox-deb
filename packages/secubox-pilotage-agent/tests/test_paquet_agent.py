@@ -59,7 +59,9 @@ def test_unite_permet_sudo_vers_le_ctl_seulement():
     assert set(cap) == {"CAP_SETUID", "CAP_SETGID", "CAP_AUDIT_WRITE", "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH",
                         "CAP_CHOWN", "CAP_NET_ADMIN"}
     rw = re.search(r"^ReadWritePaths=(.*)$", u, re.M).group(1).split()
-    assert set(rw) == {"/var/log/secubox", "-/var/lib/secubox-pilotagectl"}
+    # #3302 (banc gk4) : le ctl, lancé par sudo DEPUIS l'agent (même espace de montage), reprojette les drapeaux de portée
+    # dans /etc/secubox-pilotage après chaque verbe ; en lecture seule, « propriétaire » expirait au bout de 2 h (403)
+    assert set(rw) == {"/var/log/secubox", "-/var/lib/secubox-pilotagectl", "-/etc/secubox-pilotage"}
     brut = lire("systemd/secubox-pilotage-agent.service")
     assert "seulement pour sudo" in brut and "secubox-pilotagectl" in brut
 
@@ -161,7 +163,7 @@ def test_paquet_coherent():
     c = lire("debian/control")
     assert "Architecture: any" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.6.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.6.1-1~trixie1) trixie;")
     # ancre-verifier lit `wg show` par chemin absolu (/usr/bin/wg)
     assert "wireguard-tools" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
     pi = lire("debian/postinst")

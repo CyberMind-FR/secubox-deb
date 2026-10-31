@@ -233,7 +233,9 @@ def ajouter_routes_vhost(app: FastAPI, stockage, files, audit: Callable[[str, di
             raise HTTPException(403, "box cliente : session de support ouverte requise")
         paquet, _, version = request.headers.get(V.ENTETE_VERSION, "").partition("=")
         declaree = V.pages_declarees(valeurs).get(paquet)
-        if not version or declaree != version:
+        if not version or (declaree != version and (declaree is None or (racine_pages / paquet / declaree).is_dir())):
+            # #3302 : une page servie depuis une version de repli (la version déclarée n'a pas pu être extraite) reste
+            # valable ; elle n'est périmée que si les pages de la version déclarée existent
             raise HTTPException(409, "la box a changé de version : rechargez la page")
         module = reste.split("/", 1)[0]
         if module not in await asyncio.to_thread(modules_servis, racine_pages, paquet, version):

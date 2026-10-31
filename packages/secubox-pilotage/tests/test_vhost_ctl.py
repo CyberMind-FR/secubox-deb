@@ -172,11 +172,20 @@ def test_poser_idempotent(banc):
 
 
 def test_version_non_extraite_ignoree(banc):
-    p = json.dumps({"pages": [{"paquet": "secubox-system", "version": "1.4.0"}, {"paquet": "secubox-dns", "version": "9.9"}]})
+    p = json.dumps({"pages": [{"paquet": "secubox-system", "version": "1.4.0"}, {"paquet": "secubox-inconnu", "version": "9.9"}]})
     r = banc.ctl("poser", "gk5", entree=p)
     assert r.returncode == 0
-    assert json.loads(r.stdout)["absentes"] == ["secubox-dns=9.9"]
-    assert "/dns/" not in banc.conf().read_text()
+    # #3302 : secubox-inconnu n'a aucune version extraite : absent ; une version déclarée absente d'un paquet qui a d'autres
+    # versions extraites prend la plus récente d'entre elles (test suivant)
+    assert json.loads(r.stdout)["absentes"] == ["secubox-inconnu=9.9"]
+
+
+def test_version_absente_repli_sur_la_derniere_extraite(banc):
+    p = json.dumps({"pages": [{"paquet": "secubox-system", "version": "9.9.9"}]})
+    r = banc.ctl("poser", "gk5", entree=p)
+    assert r.returncode == 0, r.stdout
+    assert json.loads(r.stdout)["absentes"] == []
+    assert "/secubox-system/1.4.0/" in banc.conf().read_text()
 
 
 @pytest.mark.parametrize("box", ["GK5", "gk5.evil", "a" * 41, "../x", "", "gk5;rm", "-gk5"])
