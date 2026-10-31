@@ -202,6 +202,23 @@ def test_module_en_double_ou_invalide_refuse():
             V.rendre_nginx("gk5", [{"paquet": "secubox-a", "version": "1", "modules": [m]}])
 
 
+def test_ressources_partagees_composees_entre_paquets():
+    """#3302 (banc gk4) : `luci-static` est livré en parties par plusieurs paquets (auth, dpi, netmodes, qos, wireguard). Il est
+    composé (try_files en chaîne, ordre des paquets), sans route d'API ; tout autre module en double reste refusé."""
+    conf = V.rendre_nginx("gk5", [{"paquet": "secubox-qos", "version": "1.6.1-1~trixie1", "modules": ["qos", "luci-static"]},
+                                  {"paquet": "secubox-auth", "version": "1.8.10-1~trixie1", "modules": ["luci-static"]}])
+    assert "location ^~ /luci-static/ {" in conf and "/api/v1/luci-static/" not in conf
+    i_auth = conf.index("secubox-auth/1.8.10-1~trixie1;")
+    i_qos = conf.index("secubox-qos/1.6.1-1~trixie1;")
+    assert i_auth < i_qos                                   # ordre déterministe : nom du paquet
+    assert "try_files $uri @luci-static-1;" in conf and "location @luci-static-1 {" in conf
+    assert conf.rstrip().endswith("}") and "try_files $uri =404;" in conf
+    assert conf.count("location ~ /\\. { return 404; }") >= 3   # garde des fichiers en point dans la location de tête
+    with pytest.raises(ValueError):
+        V.rendre_nginx("gk5", [{"paquet": "secubox-a", "version": "1", "modules": ["qos"]},
+                               {"paquet": "secubox-b", "version": "1", "modules": ["qos"]}])
+
+
 def test_pages_declarees_sans_deviner():
     v = valeurs(paquets=(("secubox-a", "1.0"), ("secubox-a", "2.0"), ("pas-secubox", "1.0"), ("secubox-b", "bad version")))
     assert V.pages_declarees(v) == {}
