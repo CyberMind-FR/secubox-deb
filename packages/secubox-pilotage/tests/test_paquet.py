@@ -142,7 +142,7 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.6.2-1~trixie1) trixie;")
+    assert ch.startswith("secubox-pilotage (0.6.3-1~trixie1) trixie;")
     assert "Recommends: apparmor, secubox-p2p (>= 1.20.2~)" in c          # banc gk2 : projection p2p-public des pairs enrôlés
     depends = re.search(r"^Depends:(.*)$", c, re.M).group(1)
     assert "sudo" not in depends                                          # Final : plus aucune règle sudoers
@@ -383,7 +383,8 @@ def test_unite_vhost_root_bornee_et_exception_ecrite():
     fichiers et dossiers réellement écrits (jamais tout /etc/secubox)."""
     u = lire("systemd/secubox-pilotage-vhost.service")
     caps = re.search(r"^CapabilityBoundingSet=(.*)$", u, re.M).group(1).split()
-    assert sorted(caps) == ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH", "CAP_FOWNER"]
+    # CAP_NET_ADMIN (#3302, banc gk4) : `secubox-relais-maillage pair-de` lit `wg show wg-mesh` pour vérifier la reprise d'admin.<box>
+    assert sorted(caps) == ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_DAC_READ_SEARCH", "CAP_FOWNER", "CAP_NET_ADMIN"]
     assert re.search(r"^AmbientCapabilities=$", u, re.M)
     rw = [d.lstrip("-") for li in u.splitlines() if li.startswith("ReadWritePaths=") for d in li.split("=", 1)[1].split()]
     assert "/etc/secubox" not in rw and "/etc" not in rw

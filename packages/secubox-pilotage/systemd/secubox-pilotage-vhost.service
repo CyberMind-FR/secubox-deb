@@ -32,7 +32,9 @@ ReadWritePaths=-/usr/share/secubox/www/.well-known
 # (lecture des arbres 0700/0750 : certificats, live/ de certbot), CAP_CHOWN (pem servis en haproxy:secubox, audit.log créé au
 # compte secubox), CAP_FOWNER (chmod/remplacement de fichiers dont root n'est pas propriétaire). Le rechargement de HAProxy et
 # de nginx passe par systemctl (D-Bus), `nginx -t` par systemd-run (PID 1) : ni CAP_KILL ni CAP_NET_BIND_SERVICE.
-CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER
+# CAP_NET_ADMIN (#3302, banc gk4) : `secubox-relais-maillage pair-de` lit `wg show wg-mesh` (netlink) pour vérifier que
+# admin.<box> est bien relayé vers CE pair avant de le reprendre ; sans elle, toute reprise était refusée (502).
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER CAP_NET_ADMIN
 AmbientCapabilities=
 ProtectHome=yes
 PrivateTmp=yes
