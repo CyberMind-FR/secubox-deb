@@ -170,16 +170,24 @@ def _q(s: str) -> str:
     return f'"{s}"'
 
 
+# Ressources statiques que plusieurs paquets livrent chacun en partie (jamais une page de module : pas d'API relayée).
+PARTAGES = frozenset({"luci-static"})
+
+
 def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str = SOCKET) -> str:
     """`pages` : [{"paquet", "version", "modules": [module…]}]. Un module servi par deux paquets est refusé (ValueError)."""
     dom = domaine(box)
     vus: dict = {}
+    partages: dict = {}
     for p in pages:
         if not (RE_PAQUET.fullmatch(p["paquet"]) and RE_VERSION.fullmatch(p["version"])):
             raise ValueError("paquet ou version invalide")
         for m in p["modules"]:
             if not RE_MODULE.fullmatch(m) or m in ("api", "auth"):
                 raise ValueError(f"module invalide : {m}")
+            if m in PARTAGES:
+                partages.setdefault(m, []).append(p)
+                continue
             if m in vus:
                 raise ValueError(f"module servi par deux paquets : {m}")
             vus[m] = p
@@ -196,7 +204,7 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
         # tout lien absolu ou contenant « .. »
         "    disable_symlinks if_not_owner from=$document_root;",
         "    autoindex off;",
-        f"    add_header Content-Security-Policy \"{csp_pages(box, vus)}\" always;",
+        f"    add_header Content-Security-Policy \"{csp_pages(box, [*vus, *partages])}\" always;",
         "    add_header X-Content-Type-Options \"nosniff\" always;",
         "    add_header X-Frame-Options \"DENY\" always;",
         "    add_header Referrer-Policy \"no-referrer\" always;",
@@ -228,6 +236,17 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
               # « ^~ » coupe la recherche des regex du serveur : la garde des fichiers en point est répétée ici
               "        location ~ /\\. { return 404; }",
               "    }"]
+    for m in sorted(partages):
+        # ressources statiques livrées en parties par plusieurs paquets (#3302) : composées par try_files en chaîne, dans
+        # l'ordre des noms de paquets ; aucune route d'API. `root` (et non `alias`) : l'URI /<m>/… est le chemin sous la version.
+        chaine = sorted(partages[m], key=lambda p: (p["paquet"], p["version"]))
+        for i, p in enumerate(chaine):
+            suite = f"@{m}-{i + 1}" if i + 1 < len(chaine) else "=404"
+            tete = f"    location ^~ /{m}/ {{" if i == 0 else f"    location @{m}-{i} {{"
+            L += [tete, f"        root {racine}/{p['paquet']}/{p['version']};", f"        try_files $uri {suite};"]
+            if i == 0:
+                L += ["        location ~ /\\. { return 404; }"]
+            L += ["    }"]
     L += ["", "    location ^~ /api/ { return 404; }",
           "    location / { return 404; }",
           "}", ""]
