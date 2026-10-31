@@ -3,32 +3,10 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 #
-# Profils AppArmor ENFORCE de secubox-live (#3351) : l'API publique (lit un seul fichier) et le collecteur (lit les
-# sources du maître, écrit son cache, https vers GitHub). Tout ce qui n'est pas listé est refusé ; les secrets jamais.
+# Profil AppArmor ENFORCE du collecteur de secubox-live (#3351) : lit les sources du maître, écrit son cache, https
+# vers GitHub. La page et etat.json sont servis en statique par nginx. Tout ce qui n'est pas listé est refusé ; les secrets jamais.
 
 #include <tunables/global>
-
-/usr/sbin/secubox-live-api {
-  #include <abstractions/base>
-  #include <abstractions/python>
-
-  /usr/sbin/secubox-live-api r,
-  /usr/bin/python3* rix,
-  /usr/lib/secubox/live/ r,
-  /usr/lib/secubox/live/** r,
-  /usr/lib/python3/dist-packages/** r,
-  /usr/lib/python3.*/** r,
-  deny /etc/secubox/secrets/** r,
-
-  /var/cache/secubox/live/ r,
-  /var/cache/secubox/live/etat.json r,
-  /run/secubox/ r,
-  /run/secubox/live.sock rwk,
-  /run/secubox/live.sock.lock rwk,
-
-  network unix stream,
-  /proc/sys/net/core/somaxconn r,
-}
 
 /usr/sbin/secubox-live-collecte {
   #include <abstractions/base>
@@ -50,13 +28,14 @@
   /etc/secubox/live.toml r,
   /etc/secubox/haproxy.toml r,
   /var/lib/secubox/pilotage/ r,
-  /var/lib/secubox/pilotage/pilotage.db r,
-  /var/lib/secubox/pilotage/pilotage.db-wal r,
+  # Lecture seule en WAL : SQLite ouvre aussi -wal et -shm (verrous partagés).
+  /var/lib/secubox/pilotage/pilotage.db rk,
+  /var/lib/secubox/pilotage/pilotage.db-wal rk,
+  /var/lib/secubox/pilotage/pilotage.db-shm rwk,
   /var/log/secubox/waf/ r,
   /var/log/secubox/waf/waf-threats.log* r,
   /var/cache/secubox/metrics/vhost_stats.json r,
   /var/cache/secubox/waf/nft-etat.json r,
-  /var/cache/secubox/dpi/resume-rapport.json r,
   /var/lib/secubox/geoip/*.mmdb r,
   /usr/share/GeoIP/*.mmdb r,
   /var/lib/GeoIP/*.mmdb r,

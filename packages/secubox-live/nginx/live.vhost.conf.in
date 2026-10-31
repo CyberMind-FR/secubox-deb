@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# @DOMAINE@ — page PUBLIQUE de l'état du réseau (#3351). Rendu par secubox-live-exposer depuis le domaine de
+# /etc/secubox/live.toml (nom EXACT, jamais un joker). Exposé par HAProxy -> sbxwaf -> nginx 127.0.0.1:9080.
+# Tout est statique : la page, ses fichiers et etat.json (écrit une fois par minute par le collecteur, sans adresse),
+# servi avec un cache court ; aucune API, aucun processus par requête, rien à saturer.
+
+server {
+    include snippets/secubox-errorpages.conf;
+    listen 127.0.0.1:9080;
+    server_name @DOMAINE@;
+
+    if ($http_x_forwarded_proto = "http") { return 301 https://$host$request_uri; }
+
+    root /usr/share/secubox/www/live;
+
+    add_header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    location = /             { limit_except GET HEAD { deny all; } try_files /index.html =404; }
+    location = /index.html   { limit_except GET HEAD { deny all; } try_files /index.html =404; }
+    location = /live.css     { limit_except GET HEAD { deny all; } try_files /live.css =404; }
+    location = /live.js      { limit_except GET HEAD { deny all; } try_files /live.js =404; }
+    location = /carte.js     { limit_except GET HEAD { deny all; } try_files /carte.js =404; }
+
+    location = /etat.json {
+        limit_except GET HEAD { deny all; }
+        alias /var/cache/secubox/live/etat.json;
+        default_type application/json;
+        expires 15s;
+        add_header Cache-Control "public, max-age=15" always;
+        # add_header dans une location remplace ceux du server : le jeu est reposé.
+        add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "no-referrer" always;
+    }
+
+    location / { return 404; }
+}

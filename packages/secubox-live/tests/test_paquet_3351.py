@@ -2,8 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""secubox-live (#3351) : page publique, API en lecture seule, unités durcies, exposition seulement sur domaine configuré."""
-import json
+"""secubox-live (#3351) : page publique servie en statique, unités durcies, exposition seulement sur domaine configuré."""
 import re
 import subprocess
 import sys
@@ -35,49 +34,52 @@ def test_page_sans_innerhtml_ni_script_integre():
     assert "style=" not in html
 
 
-def test_csp_stricte_et_seule_route_d_api():
-    conf = lire("nginx/live.vhost.conf")
+def test_vhost_statique_local_nom_exact_hsts():
+    conf = lire("nginx/live.vhost.conf.in")
     csp = re.search(r'Content-Security-Policy "([^"]*)"', conf).group(1)
     assert "unsafe-inline" not in csp and "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
-    assert re.findall(r"location = /api/v1/live/([a-z]+)", conf) == ["etat"]
-    assert "limit_except GET" in conf and 'proxy_set_header Cookie ""' in conf
-    assert "location / { return 404; }" in conf
+    assert "listen 127.0.0.1:9080;" in conf and "server_name @DOMAINE@;" in conf and "live.*" not in conf
+    assert conf.count("Strict-Transport-Security") == 2                      # reposé dans la location etat.json
+    assert "alias /var/cache/secubox/live/etat.json;" in conf and "expires 15s;" in conf
+    assert "proxy_pass" not in conf and "/api/" not in conf                  # aucune API par requête
+    assert "limit_except GET HEAD" in conf and "location / { return 404; }" in conf
 
 
-def test_unites_durcies_compte_dedie():
-    for u in ("systemd/secubox-live.service", "systemd/secubox-live-collecte.service"):
-        s = lire(u)
-        assert "User=secubox-live" in s and "NoNewPrivileges=true" in s and "ProtectSystem=strict" in s
-        assert "CapabilityBoundingSet=\n" in s
-    assert "RestrictAddressFamilies=AF_UNIX\n" in lire("systemd/secubox-live.service")
+def test_unites_durcies_compte_dedie_sans_groupe_secubox():
+    s = lire("systemd/secubox-live-collecte.service")
+    assert "User=secubox-live" in s and "NoNewPrivileges=true" in s and "ProtectSystem=strict" in s
+    assert "CapabilityBoundingSet=\n" in s
+    assert re.search(r"^SupplementaryGroups=secubox-pilotage$", s, re.M)
+    assert not (ICI / "systemd/secubox-live.service").exists() and not (ICI / "api").exists()
     ap = lire("apparmor/secubox-live")
-    assert "deny /etc/secubox/secrets/** r" in ap and "/usr/sbin/secubox-live-api {" in ap and "/usr/sbin/secubox-live-collecte {" in ap
+    assert "deny /etc/secubox/secrets/** r" in ap and "secubox-live-api" not in ap
+    assert "pilotage.db-shm" in ap and "pilotage.db-wal" in ap and "dpi" not in ap
+    post = lire("debian/postinst")
+    assert "setfacl -m u:secubox-live:rx" in post and "secubox-live.service" not in post
 
 
-def test_exposition_seulement_avec_un_domaine(tmp_path):
+def test_exposition_seulement_avec_un_domaine_et_sous_garde():
     s = lire("sbin/secubox-live-exposer")
     conf = lire("conf/live.toml")
-    assert re.search(r'^domaine = ""$', conf, re.M)          # rien d'exposé par défaut
-    assert "nginx -t" in s and s.index("nginx -t") < s.index("secubox-waf-route") < s.index("haproxyctl vhost add")
-    assert "live.*.*" in s
+    assert re.search(r'^domaine = ""$', conf, re.M) and re.search(r"^noeuds_publics = \[\]$", conf, re.M)
+    assert s.index("/sys/kernel/security/apparmor/profiles") < s.index("NT=$(nginx -t") < s.index("! secubox-waf-route") < s.index("haproxyctl vhost add")
+    garde = s[s.index("! secubox-waf-route"):s.index("haproxyctl vhost add")]
+    assert "retirer" in garde and "exit 1" in garde                             # route WAF en échec : rien d'exposé
+    assert "(enforce)" in s and "@DOMAINE@" in s
 
 
-def test_api_lit_le_fichier_et_rend_503_sans(tmp_path, monkeypatch):
-    from fastapi.testclient import TestClient
-    import api.main as M
-    monkeypatch.setattr(M, "ETAT", tmp_path / "etat.json")
-    M._cache.update(mtime=None, doc=None)
-    cli = TestClient(M.app)
-    assert cli.get("/etat").status_code == 503
-    (tmp_path / "etat.json").write_text(json.dumps({"version": 1, "genere_le": 1}))
-    r = cli.get("/etat")
-    assert r.status_code == 200 and r.json()["version"] == 1
-    assert cli.post("/etat").status_code == 405
+def test_exposer_refuse_un_domaine_douteux(tmp_path):
+    s = lire("sbin/secubox-live-exposer")
+    motif = re.search(r"grep -Eqx '([^']+)'", s).group(1)
+    for bon in ("live.secubox.in", "live.gk2.secubox.in"):
+        assert subprocess.run(["grep", "-Eqx", motif], input=bon, text=True).returncode == 0, bon
+    for mauvais in ("secubox.in", "live.in", "live.a;b.in", "x.live.secubox.in"):
+        assert subprocess.run(["grep", "-Eqx", motif], input=mauvais, text=True).returncode != 0, mauvais
 
 
 def test_spdx_et_versions():
     for p in ICI.rglob("*"):
-        if p.is_file() and p.suffix in (".py", ".js", ".css", ".conf", ".toml", ".service", ".timer") and "__pycache__" not in p.parts:
+        if p.is_file() and p.suffix in (".py", ".js", ".css", ".conf", ".in", ".toml", ".service", ".timer") and "__pycache__" not in p.parts:
             assert "SPDX-License-Identifier" in p.read_text()[:400], p
     assert lire("debian/changelog").startswith("secubox-live (0.1.0-1~trixie1) trixie;")
     assert lire("debian/compat").strip() == "13" and "Standards-Version: 4.6.2" in lire("debian/control")

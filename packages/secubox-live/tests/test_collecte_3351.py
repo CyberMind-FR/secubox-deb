@@ -68,11 +68,13 @@ def _vhosts(tmp: Path) -> Path:
 
 def _sources(tmp: Path) -> C.Sources:
     conf = tmp / "live.toml"
-    conf.write_text('mise_en_production = "2026-03-01"\n[roles]\ngk2 = "maître"\ngk4 = "banc"\n'
+    conf.write_text('mise_en_production = "2026-03-01"\nnoeuds_publics = ["gk2", "gk4", "gk5"]\n'
+                    '[roles]\ngk2 = "maître"\ngk4 = "banc"\n'
                     '[[feuille_de_route]]\nnom = "Alpha 20"\netat = "bientôt"\n')
     return C.Sources(pilotage_db=_pilotage(tmp), menaces=[_menaces(tmp)], vhost_stats=_vhosts(tmp),
-                     nft_etat=tmp / "absent.json", dpi=tmp / "absent-dpi.json", haproxy_toml=tmp / "absent.toml",
-                     configuration=conf, github_cache=tmp / "github.json", geoip=[], local_nom="gk2")
+                     nft_etat=tmp / "absent.json", haproxy_toml=tmp / "absent.toml",
+                     configuration=conf, github_cache=tmp / "github.json", geoip=[], local_nom="gk2",
+                     etat_menaces=tmp / "menaces-etat.json")
 
 
 def test_noeuds_issus_du_pilotage_sans_adresse(tmp_path):
@@ -80,6 +82,7 @@ def test_noeuds_issus_du_pilotage_sans_adresse(tmp_path):
     noms = {n["nom"]: n for n in etat["noeuds"]}
     assert noms["gk4"]["etat"] == "interface distante" and noms["gk4"]["materiel"] == "Raspberry Pi 400 Rev 1.0"
     assert noms["gk4"]["memoire"] == 50 and noms["gk4"]["cpu"] == 7 and noms["gk4"]["role"] == "banc"
+    assert noms["gk4"]["marche"] == "en marche depuis 1 jour" and "uptime_s" not in noms["gk4"]
     assert noms["gk5"]["etat"] == "hors ligne"
     assert "gk2" in noms                                     # le maître lui-même, relevé localement
     assert etat["tuiles"]["noeuds_en_ligne"] == 2 and etat["tuiles"]["noeuds_total"] == 3
@@ -121,21 +124,33 @@ def test_historique_et_dates_reelles(tmp_path):
 
 def test_source_absente_reste_nulle(tmp_path):
     etat = C.collecter(_sources(tmp_path), maintenant=MAINTENANT, reseau=False)
-    assert etat["dpi"] is None and etat["tuiles"]["bans_actifs"] is None and etat["tuiles"]["sites_publies"] is None
+    assert "dpi" not in etat and etat["tuiles"]["bans_actifs"] is None and etat["tuiles"]["sites_publies"] is None
     assert etat["tuiles"]["disponibilite_30j"] is None and etat["dev"] is None
     assert etat["cartes"]["attaques"] is None                 # pas de base GeoIP : jamais de pays inventé
-
-
-def test_dpi_garde_seulement_les_usages(tmp_path):
-    s = _sources(tmp_path)
-    s.dpi.write_text(json.dumps({"usages": [{"nom": "Web", "octets": 10, "pct": 60.0}, {"nom": "Vidéo", "pct": 40.0}],
-                                 "appareils": [{"nom": "tel-de-marie", "octets": 5}]}))
-    etat = C.collecter(s, maintenant=MAINTENANT, reseau=False)
-    assert etat["dpi"] == [{"nom": "Web", "pct": 60.0}, {"nom": "Vidéo", "pct": 40.0}]
-    assert "marie" not in json.dumps(etat)
 
 
 def test_ecriture_atomique(tmp_path):
     cible = tmp_path / "live" / "etat.json"
     C.ecrire(cible, {"version": 1})
     assert json.loads(cible.read_text()) == {"version": 1} and oct(cible.stat().st_mode & 0o777) == "0o644"
+
+
+def test_seuls_les_noeuds_publics_sont_publies(tmp_path):
+    s = _sources(tmp_path)
+    s.configuration.write_text('noeuds_publics = ["gk4"]\n')
+    etat = C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    assert [n["nom"] for n in etat["noeuds"]] == ["gk4"] and etat["tuiles"]["noeuds_total"] == 1
+    s.configuration.write_text("")
+    etat = C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    assert etat["noeuds"] == [] and "gk5" not in json.dumps(etat)          # liste vide : aucun nœud publié
+
+
+def test_marche_par_classe_jamais_l_uptime_exact():
+    assert C.marche(3600) == "redémarré il y a moins de 24 h"
+    assert C.marche(93600) == "en marche depuis 1 jour"
+    assert C.marche(20 * 86400) == "en marche depuis 3 semaines"
+    assert C.marche(None) is None
+
+
+def test_aucun_dpi_publie(tmp_path):
+    assert C.CHAMPS[""].isdisjoint({"dpi", "usages", "appareils"})

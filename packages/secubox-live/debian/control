@@ -9,11 +9,11 @@ Rules-Requires-Root: no
 
 Package: secubox-live
 Architecture: all
-Depends: ${misc:Depends}, python3 (>= 3.11), python3-fastapi, python3-uvicorn, nginx, secubox-core, adduser
+Depends: ${misc:Depends}, python3 (>= 3.11), nginx, secubox-core, secubox-pilotage, adduser, acl
 Recommends: python3-geoip2
 Description: SecuBox — page publique de l'état du réseau (live.secubox.in)
  Page publique en direct du réseau SecuBox : nœuds du maillage (nom, matériel,
- état, charge), WAF de la dernière heure, types de menaces, usages DPI, cartes
+ état, charge), WAF de la dernière heure, types de menaces, cartes
  du monde des attaques et des visites par pays, historique quotidien depuis la
  mise en production, état du développement (GitHub). Un collecteur agrège des
  sources existantes du maître ; aucune adresse, aucun compte, aucun secret

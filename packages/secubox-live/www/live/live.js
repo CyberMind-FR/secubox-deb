@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: LicenseRef-CMSD-1.0 · Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-   live.secubox.in (#3351) : lit /api/v1/live/etat toutes les 20 s et construit la page par textContent / createElement
+   live.secubox.in (#3351) : lit /etat.json toutes les 20 s et construit la page par textContent / createElement
    (jamais de HTML construit à partir des données). Une donnée absente (null) affiche « — » ou « indisponible », jamais une valeur inventée. */
 (function () {
   'use strict';
@@ -11,7 +11,6 @@
   function vider(n) { while (n.firstChild) n.removeChild(n.firstChild); }
   function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR'); }
   function texte(id, v) { $(id).textContent = v == null ? '—' : v; }
-  function duree(s) { if (s == null) return '—'; var j = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600); return (j ? j + ' j ' : '') + h + ' h'; }
 
   function jauge(v, couleur) {
     var d = el('div', 'jauge'), i = el('i'), s = el('span');
@@ -27,7 +26,7 @@
       tdE.appendChild(p);
       var c = el('td'); c.appendChild(jauge(n.cpu, '#22d3ee'));
       var m = el('td'); m.appendChild(jauge(n.memoire, '#a78bfa'));
-      [el('td', 'mono', n.nom), el('td', null, n.role || '—'), el('td', null, n.materiel || '—'), tdE, c, m, el('td', 'mono', duree(n.uptime_s))]
+      [el('td', 'mono', n.nom), el('td', null, n.role || '—'), el('td', null, n.materiel || '—'), tdE, c, m, el('td', null, n.marche || '—')]
         .forEach(function (x) { tr.appendChild(x); });
       tb.appendChild(tr);
     });
@@ -139,12 +138,11 @@
     monde('monde-vis', 'monde-vis-note', c.visiteurs, '#29b6f6', 'aucune visite géolocalisée');
     histo(e.histo, e.production);
     barres('menaces', e.menaces, 'n', ['#f87171', '#fb923c', '#fbbf24', '#a78bfa', '#f472b6', '#22d3ee'], 'n', 'Journal du WAF indisponible.');
-    barres('dpi', e.dpi, 'pct', ['#22d3ee', '#a78bfa', '#34d399', '#67e8f9', '#fbbf24', '#94a3b8'], '%', 'DPI indisponible.');
     dev(e.dev); route(e.feuille_de_route);
   }
 
   function charger() {
-    fetch('/api/v1/live/etat', { cache: 'no-store', credentials: 'omit' })
+    fetch('/etat.json', { cache: 'no-store', credentials: 'omit' })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(rendre)
       .catch(function () { $('global').className = 'global'; texte('global-texte', 'Données momentanément indisponibles'); });

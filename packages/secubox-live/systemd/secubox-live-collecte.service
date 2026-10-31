@@ -10,8 +10,8 @@ After=network-online.target
 Type=oneshot
 User=secubox-live
 Group=secubox-live
-# Lecture des sources du maître : base du pilotage (groupe secubox-pilotage, 0640), caches et journaux (groupe secubox).
-SupplementaryGroups=secubox secubox-pilotage
+# Base du pilotage : groupe secubox-pilotage (0640). Journal du WAF et caches : ACL ciblées posées par le postinst.
+SupplementaryGroups=secubox-pilotage
 ExecStart=/usr/sbin/secubox-live-collecte
 UMask=0022
 NoNewPrivileges=true

@@ -5,10 +5,10 @@
 """SecuBox-Deb :: live :: collecteur de l'état public du réseau (live.secubox.in, #3351).
 
 Agrège des sources EXISTANTES du maître, en lecture seule, et écrit /var/cache/secubox/live/etat.json (0644) :
-- nœuds : la base du pilotage (`pilotage.db`, ouverte en lecture seule « immutable ») + le maître relevé localement ;
+- nœuds : la base du pilotage (`pilotage.db`, ouverte en lecture seule) + le maître relevé localement ;
 - menaces : le journal de sbxwaf (waf-threats.log), par catégorie, par minute et par jour ;
 - visites : le cache de secubox-metrics (vhost_stats.json), par jour et par pays ;
-- bans actifs : l'état publié par sbxwaf (nft-etat.json) ; DPI : le résumé de secubox-dpi (usages seulement) ;
+- bans actifs : l'état publié par sbxwaf (nft-etat.json) ; aucun DPI (décision du propriétaire) ;
 - développement : l'API publique de GitHub, sans jeton, gardée en cache 10 min.
 
 RÈGLES (page publique) : aucune adresse IP ni privée, aucun nom de compte ni d'appareil, aucun secret. Les pays sont
@@ -49,13 +49,13 @@ class Sources:
                                                    Path("/var/log/secubox/waf/waf-threats.log.1")])
     vhost_stats: Path = Path("/var/cache/secubox/metrics/vhost_stats.json")
     nft_etat: Path = Path("/var/cache/secubox/waf/nft-etat.json")
-    dpi: Path = Path("/var/cache/secubox/dpi/resume-rapport.json")
     haproxy_toml: Path = Path("/etc/secubox/haproxy.toml")
     configuration: Path = Path("/etc/secubox/live.toml")
     github_cache: Path = Path("/var/cache/secubox/live/github.json")
     geoip: list = field(default_factory=lambda: [Path("/var/lib/secubox/geoip/GeoLite2-Country.mmdb"),
                                                  Path("/usr/share/GeoIP/GeoLite2-Country.mmdb"),
                                                  Path("/var/lib/GeoIP/GeoLite2-Country.mmdb")])
+    etat_menaces: Path = Path("/var/cache/secubox/live/menaces-etat.json")
     local_nom: Optional[str] = None
 
 
@@ -121,6 +121,19 @@ def _conf(p: Path) -> dict:
 
 # ---------------------------------------------------------------------------------------------------------------- nœuds
 
+def marche(secondes) -> Optional[str]:
+    """Classe de durée de marche, jamais la valeur exacte (#3351, relecture : l'uptime exact date les redémarrages)."""
+    if not isinstance(secondes, (int, float)) or isinstance(secondes, bool) or secondes < 0:
+        return None
+    if secondes < 86400:
+        return "redémarré il y a moins de 24 h"
+    if secondes < 7 * 86400:
+        j = int(secondes // 86400)
+        return f"en marche depuis {j} jour" + ("s" if j > 1 else "")
+    sem = round(secondes / (7 * 86400))
+    return f"en marche depuis {sem} semaine" + ("s" if sem > 1 else "")
+
+
 def _maitre_local(nom: str) -> dict:
     """Le maître ne passe pas par le pilotage : relevé local (/proc), sans adresse."""
     n = {"nom": nom, "materiel": None, "etat": "en ligne", "cpu": None, "memoire": None, "uptime_s": None}
@@ -151,7 +164,7 @@ def noeuds(src: Sources, maintenant: float, roles: dict, materiels: dict) -> Opt
     if src.local_nom:
         res.append(_maitre_local(src.local_nom))
     try:
-        cx = sqlite3.connect(f"file:{src.pilotage_db}?mode=ro&immutable=1", uri=True)
+        cx = sqlite3.connect(f"file:{src.pilotage_db}?mode=ro", uri=True, timeout=5)
     except sqlite3.Error:
         cx = None
     if cx is not None:
@@ -181,6 +194,7 @@ def noeuds(src: Sources, maintenant: float, roles: dict, materiels: dict) -> Opt
     for n in res:
         n["role"] = roles.get(n["nom"], "")
         n["materiel"] = materiels.get(n["nom"], n["materiel"])
+        n["marche"] = marche(n.pop("uptime_s", None))
     return res
 
 
@@ -197,53 +211,94 @@ def _lecteur_geoip(chemins):
     return None
 
 
-def menaces(src: Sources, maintenant: float):
-    """(par catégorie, par minute sur 1 h, par jour, pays d'attaque, total 24 h, bloquées 24 h) — None si aucun journal."""
-    lus = False
-    cats, pays, jours, bans_j = Counter(), Counter(), Counter(), Counter()
-    minutes = [0] * 60
-    total24 = bloq24 = 0
-    geo = _lecteur_geoip(src.geoip)
-    for p in src.menaces:
+def _lignes_nouvelles(chemins, etat: dict):
+    """Lignes ajoutées depuis le dernier passage (position + inode par fichier) ; après une rotation, la fin de l'ancien
+    fichier (devenu `.1`) est lue d'abord, puis le nouveau depuis le début. Rend (lignes, au_moins_un_fichier_lu)."""
+    pos = etat.setdefault("positions", {})
+    lignes, lu = [], False
+    inodes = {}
+    for p in chemins:
         try:
-            f = open(p, encoding="utf-8", errors="replace")
+            inodes[str(p)] = os.stat(p).st_ino
+        except OSError:
+            pass
+    for p in reversed(list(chemins)):                 # .1 (ancien) d'abord, puis le courant
+        try:
+            st = os.stat(p)
         except OSError:
             continue
-        lus = True
-        with f:
-            for ligne in f:
-                try:
-                    e = json.loads(ligne)
-                except ValueError:
-                    continue
-                ts = _horodatage(e.get("timestamp"))
-                if ts is None:
-                    continue
-                action = str(e.get("action") or "").lower()
-                bloque = action in ACTIONS_BLOQUANTES
-                jours[_jour(ts)] += 1
-                if action in ("ban", "banned"):
-                    bans_j[_jour(ts)] += 1
-                if maintenant - ts <= 86400:
-                    total24 += 1
-                    bloq24 += bloque
-                    cats[str(e.get("category") or "autre").split(":")[0][:40]] += 1
-                    if geo is not None:
-                        try:
-                            cc = geo.country(str(e.get("client_ip"))).country.iso_code
-                            if cc:
-                                pays[cc] += 1
-                        except Exception:  # noqa: BLE001 — adresse privée ou inconnue : pas de pays
-                            pass
-                if bloque and 0 <= maintenant - ts < 3600:
-                    minutes[59 - int((maintenant - ts) // 60)] += 1
-    if not lus:
+        lu = True
+        cle = str(st.st_ino)
+        debut = pos.get(cle, 0)
+        if debut > st.st_size:
+            debut = 0
+        if p != chemins[0] and cle not in pos:
+            continue                                  # un .1 jamais suivi : déjà compté avant cette version ou trop ancien
+        with open(p, "rb") as f:
+            f.seek(debut)
+            for brut in f:
+                lignes.append(brut.decode("utf-8", "replace"))
+            pos[cle] = f.tell()
+    etat["positions"] = {k: v for k, v in pos.items() if k in map(str, inodes.values())}
+    return lignes, lu
+
+
+def menaces(src: Sources, maintenant: float):
+    """Compteurs persistants (par jour et par heure) mis à jour par incréments du journal de sbxwaf ; None si aucun journal."""
+    etat = _json(src.etat_menaces)
+    if not isinstance(etat, dict) or etat.get("version") != 1:
+        etat = {"version": 1, "jours": {}, "heures": {}, "minutes": {}}
+    lignes, lu = _lignes_nouvelles(list(src.menaces), etat)
+    if not lu:
         return None
+    geo = _lecteur_geoip(src.geoip)
+    for ligne in lignes:
+        try:
+            e = json.loads(ligne)
+        except ValueError:
+            continue
+        if not isinstance(e, dict):
+            continue
+        ts = _horodatage(e.get("timestamp"))
+        if ts is None:
+            continue
+        action = str(e.get("action") or "").lower()
+        bloque = action in ACTIONS_BLOQUANTES
+        j = etat["jours"].setdefault(_jour(ts), {"total": 0, "bloq": 0, "bans": 0})
+        j["total"] += 1
+        j["bloq"] += bloque
+        j["bans"] += action in ("ban", "banned")
+        h = etat["heures"].setdefault(str(int(ts // 3600)), {"total": 0, "bloq": 0, "cats": {}, "pays": {}})
+        h["total"] += 1
+        h["bloq"] += bloque
+        cat = str(e.get("category") or "autre").split(":")[0][:40]
+        h["cats"][cat] = h["cats"].get(cat, 0) + 1
+        if geo is not None:
+            try:
+                cc = geo.country(str(e.get("client_ip"))).country.iso_code
+            except Exception:  # noqa: BLE001 — adresse privée ou inconnue : pas de pays
+                cc = None
+            if cc and re.fullmatch(r"[A-Z]{2}", cc):
+                h["pays"][cc] = h["pays"].get(cc, 0) + 1
+        if bloque:
+            m = str(int(ts // 60))
+            etat["minutes"][m] = etat["minutes"].get(m, 0) + 1
+    # fenêtres glissantes : 25 h d'heures, 61 min de minutes ; les jours restent (historique)
+    etat["heures"] = {k: v for k, v in etat["heures"].items() if int(k) > maintenant // 3600 - 25}
+    etat["minutes"] = {k: v for k, v in etat["minutes"].items() if int(k) > maintenant // 60 - 61}
+    ecrire(src.etat_menaces, etat, mode=0o600)
+    h24 = [v for k, v in etat["heures"].items() if int(k) * 3600 > maintenant - 86400]
+    cats, pays = Counter(), Counter()
+    for v in h24:
+        cats.update(v["cats"])
+        pays.update(v["pays"])
+    m0 = int(maintenant // 60)
     return {"categories": [{"categorie": c, "n": n} for c, n in cats.most_common(8)],
-            "minutes": [{"rang": i, "bloquees": n} for i, n in enumerate(minutes)],
-            "jours": jours, "bans_jours": bans_j,
+            "minutes": [{"rang": i, "bloquees": etat["minutes"].get(str(m0 - 59 + i), 0)} for i in range(60)],
+            "jours": {k: v["total"] for k, v in etat["jours"].items()},
+            "bans_jours": {k: v["bans"] for k, v in etat["jours"].items()},
             "pays": [{"code": c, "n": n} for c, n in pays.most_common(30)] if geo is not None else None,
-            "total24": total24, "bloq24": bloq24}
+            "total24": sum(v["total"] for v in h24), "bloq24": sum(v["bloq"] for v in h24)}
 
 
 # ---------------------------------------------------------------------------------------------------------------- visites
@@ -279,15 +334,6 @@ def bans_actifs(src: Sources) -> Optional[int]:
             if isinstance(v, list):
                 return len(v)
     return None
-
-
-def dpi(src: Sources) -> Optional[list]:
-    d = _json(src.dpi)
-    us = d.get("usages") if isinstance(d, dict) else None
-    if not isinstance(us, list):
-        return None
-    return [{"nom": str(u.get("nom"))[:40], "pct": u.get("pct")} for u in us
-            if isinstance(u, dict) and u.get("nom") and isinstance(u.get("pct"), (int, float))][:8] or None
 
 
 def sites_publies(src: Sources) -> Optional[int]:
@@ -346,14 +392,55 @@ def developpement(src: Sources, maintenant: float, reseau: bool) -> Optional[dic
 
 # ---------------------------------------------------------------------------------------------------------------- assemblage
 
+def _sur(fn, *a):
+    """Une source qui casse (format inattendu) donne None, jamais une collecte perdue."""
+    try:
+        return fn(*a)
+    except (TypeError, ValueError, KeyError, AttributeError, OSError, sqlite3.Error):
+        return None
+
+
+# Liste blanche des champs publiés (relecture #3351) : tout autre champ est retiré avant l'écriture.
+CHAMPS = {
+    "": {"version", "genere_le", "production", "etat_global", "tuiles", "noeuds", "waf_heure", "menaces", "cartes",
+         "histo", "dev", "feuille_de_route"},
+    "production": {"depuis", "historique_depuis"},
+    "tuiles": {"noeuds_en_ligne", "noeuds_total", "requetes_24h", "menaces_24h", "bloquees_24h", "bans_actifs",
+               "disponibilite_30j", "sites_publies"},
+    "noeuds": {"nom", "role", "materiel", "etat", "cpu", "memoire", "marche"},
+    "waf_heure": {"rang", "bloquees"},
+    "menaces": {"categorie", "n"},
+    "cartes": {"attaques", "visiteurs"},
+    "cartes.*": {"code", "n"},
+    "histo": {"jour", "visites", "attaques", "bans"},
+    "dev": {"fusions_7j", "issues_ouvertes", "ci_master", "dernieres"},
+    "dev.dernieres": {"num", "titre", "le"},
+    "feuille_de_route": {"nom", "etat"},
+}
+
+
+def filtrer(obj, chemin: str = ""):
+    garde = CHAMPS.get(chemin)
+    if isinstance(obj, dict):
+        return {k: filtrer(v, (f"{chemin}.{k}" if chemin else k) if f"{chemin}.{k}" in CHAMPS or (not chemin and k in CHAMPS)
+                           else ("cartes.*" if chemin == "cartes" else chemin))
+                for k, v in obj.items() if garde is None or k in garde}
+    if isinstance(obj, list):
+        return [filtrer(v, chemin) for v in obj]
+    return obj
+
+
 def collecter(src: Sources, maintenant: Optional[float] = None, reseau: bool = True) -> dict:
     maintenant = time.time() if maintenant is None else maintenant
     conf = _conf(src.configuration)
     roles = {str(k): str(v) for k, v in (conf.get("roles") or {}).items()}
     materiels = {str(k): str(v) for k, v in (conf.get("materiels") or {}).items()}
-    nd = noeuds(src, maintenant, roles, materiels)
-    mn = menaces(src, maintenant)
-    vs = visites(src)
+    publics = [str(n) for n in conf.get("noeuds_publics") or [] if isinstance(n, str)]
+    nd = _sur(noeuds, src, maintenant, roles, materiels)
+    if nd is not None:
+        nd = [n for n in nd if n["nom"] in publics]              # liste blanche : jamais une box non nommée
+    mn = _sur(menaces, src, maintenant)
+    vs = _sur(visites, src)
     jours = sorted(set((vs or {}).get("jours", {})) | set((mn or {}).get("jours", {})))
     histo = [{"jour": j, "visites": (vs or {}).get("jours", {}).get(j, 0) if vs else None,
               "attaques": (mn or {}).get("jours", {}).get(j, 0) if mn else None,
@@ -368,32 +455,32 @@ def collecter(src: Sources, maintenant: Optional[float] = None, reseau: bool = T
         "tuiles": {"noeuds_en_ligne": en_ligne if nd is not None else None, "noeuds_total": len(nd) if nd else None,
                    "requetes_24h": (vs or {}).get("requetes", {}).get(aujourd) if vs else None,
                    "menaces_24h": mn["total24"] if mn else None, "bloquees_24h": mn["bloq24"] if mn else None,
-                   "bans_actifs": bans_actifs(src), "disponibilite_30j": None, "sites_publies": sites_publies(src)},
+                   "bans_actifs": _sur(bans_actifs, src), "disponibilite_30j": None,
+                   "sites_publies": _sur(sites_publies, src)},
         "noeuds": nd,
         "waf_heure": mn["minutes"] if mn else None,
         "menaces": mn["categories"] if mn else None,
         "cartes": {"attaques": mn["pays"] if mn else None, "visiteurs": vs["pays"] if vs else None},
-        "dpi": dpi(src),
         "histo": histo or None,
-        "dev": developpement(src, maintenant, reseau),
+        "dev": _sur(developpement, src, maintenant, reseau),
         "feuille_de_route": [{"nom": str(f.get("nom"))[:60], "etat": str(f.get("etat"))[:30]}
                              for f in (conf.get("feuille_de_route") or []) if isinstance(f, dict)] or None,
     }
-    return nettoyer(etat)
+    return nettoyer(filtrer(etat))
 
 
-def ecrire(cible: Path, donnees) -> None:
-    """Écriture atomique (temporaire, fsync, renommage), 0644 : le fichier est public."""
+def ecrire(cible: Path, donnees, mode: int = 0o644) -> None:
+    """Écriture atomique (temporaire, fsync, renommage) ; 0644 pour l'état public, 0600 pour l'état interne."""
     cible = Path(cible)
     cible.parent.mkdir(parents=True, exist_ok=True)
     tmp = cible.with_name(f".{cible.name}.{os.getpid()}.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(donnees, f, ensure_ascii=False, separators=(",", ":"))
             f.flush()
             os.fsync(f.fileno())
-        os.chmod(tmp, 0o644)
+        os.chmod(tmp, mode)
         os.replace(tmp, cible)
     except BaseException:
         tmp.unlink(missing_ok=True)
