@@ -1,3 +1,9 @@
+secubox-metablogizer (1.11.4-1~trixie1) trixie; urgency=medium
+
+  * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:27:40 +0100
+
 secubox-metablogizer (1.11.3-1~trixie1) trixie; urgency=high
 
   * Sécurité : l'onion d'un site (metablogizerctl tor expose) vise le frontal HAProxy onion-in (127.0.0.1:9180,

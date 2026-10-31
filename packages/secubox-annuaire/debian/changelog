@@ -1,3 +1,9 @@
+secubox-annuaire (0.17.2-1~trixie1) trixie; urgency=medium
+
+  * Charge de gk2 : la voie rapide (20 s) ne décode plus tout le journal : filtre par opération dans SQLite (ref #3355).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:27:40 +0100
+
 secubox-annuaire (0.17.1-1~trixie1) trixie; urgency=medium
 
   * Projection publique d Auto-Load (pairs, droits du maillage) dans

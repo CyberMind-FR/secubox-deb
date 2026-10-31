@@ -1,5 +1,9 @@
 secubox-live (0.1.4-1~trixie1) trixie; urgency=medium
 
+  * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:27:40 +0100
+
   * Visites : totaux par jour (visites, requetes, pays) persistes dans
     visites-etat.json, bornes a 400 jours ; l historique depasse les 30 jours
     glissants de vhost_stats.json, jours non mesures a null.

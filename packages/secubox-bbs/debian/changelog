@@ -1,3 +1,9 @@
+secubox-bbs (0.37.14-1~trixie1) trixie; urgency=medium
+
+  * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:27:40 +0100
+
 secubox-bbs (0.37.13-1~trixie1) trixie; urgency=medium
 
   * Vhost membre livré sans les noms de gk2 (ref #3117) : server_name « bbs.* » (bbs.gk2.secubox.in reste
