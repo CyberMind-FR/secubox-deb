@@ -66,7 +66,9 @@ def test_collecte_et_fichier_de_faits(tmp_path):
     tor = tmp_path / "hs"
     (tor / "webui").mkdir(parents=True)
     (tor / "webui" / "hostname").write_text("3kdlpa3gegxallkk3qbm4vim5higxw4luammi6kubc2ew6mfsc2fayad.onion\n")
-    faits = offres.collecter_faits(tor_dir=tor, hall_index=hall, haproxy_toml=tmp_path / "absent.toml", repo_marqueur=tmp_path / "absent")
+    toml = tmp_path / "haproxy.toml"
+    toml.write_text('[vhosts.radio]\ndomain = "radio.gk2.secubox.in"\n[vhosts.pod]\ndomain = "podcaster.gk2.secubox.in"\n')
+    faits = offres.collecter_faits(tor_dir=tor, hall_index=hall, haproxy_toml=toml, repo_marqueur=tmp_path / "absent")
     assert [f["kind"] for f in faits] == ["app", "app", "onion"]        # ordre stable : genre puis endpoint
     chemin = tmp_path / "faits.json"
     offres.ecrire_faits(faits, chemin)
@@ -110,3 +112,22 @@ def test_le_ctl_et_l_unite_portent_les_verbes():
     rules = (pkg / "debian" / "rules").read_text(encoding="utf-8")
     assert "secubox-annuaire-offres.service" in rules and "secubox-annuaire-offres.timer" in rules
     assert json.loads("{}") == {}
+
+
+def test_une_carte_du_hall_n_est_offerte_que_si_le_noeud_la_sert(tmp_path):
+    """#3335 : le Hall livre la même curation (URL en gk2) sur chaque nœud ; gk1/gk3/gk4 publiaient les apps de gk2. Une
+    carte n'est offerte que si SON hôte est un vhost déclaré par ce nœud (haproxy.toml) ; sans déclaration lisible, aucune."""
+    hall = tmp_path / "index.html"
+    hall.write_text(HALL)
+    toml = tmp_path / "haproxy.toml"
+    toml.write_text('[vhosts.visio]\ndomain = "visio.gk1.secubox.in"\n[vhosts.radio]\ndomain = "radio.gk1.secubox.in"\n')
+    faits = offres.collecter_faits(tor_dir=tmp_path / "hs", hall_index=hall, haproxy_toml=toml,
+                                   repo_marqueur=tmp_path / "absent")
+    assert [f for f in faits if f["kind"] == "app"] == []                 # cartes en gk2 : pas servies par ce nœud
+    toml.write_text('[vhosts.radio]\ndomain = "radio.gk2.secubox.in"\n')
+    apps = [f["endpoint"] for f in offres.collecter_faits(tor_dir=tmp_path / "hs", hall_index=hall, haproxy_toml=toml,
+                                                          repo_marqueur=tmp_path / "absent") if f["kind"] == "app"]
+    assert apps == ["https://radio.gk2.secubox.in/"]
+    absents = offres.collecter_faits(tor_dir=tmp_path / "hs", hall_index=hall, haproxy_toml=tmp_path / "absent.toml",
+                                     repo_marqueur=tmp_path / "absent")
+    assert [f for f in absents if f["kind"] == "app"] == []

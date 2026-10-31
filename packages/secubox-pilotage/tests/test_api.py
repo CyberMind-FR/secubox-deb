@@ -299,3 +299,24 @@ async def test_chaque_tour_d_inventaire_vide_les_refus_tus_du_canal_m7(tmp_path)
     assert [ch.get("tus") for ev, ch in lignes if ev == "pilotage_identite_refusee"] == [None]
     await inv.tour()
     assert ("pilotage_identite_refusee", {"adresse": "10.10.0.250", "tus": 2, "vidage": "tour"}) in lignes
+
+
+def test_oublier_une_box_obsolete_3335(m):
+    """#3335 : « Oublier ce nœud » retire la box de la Flotte (boites, inventaire, événements, relevé) ; confirmation par
+    le nom ; une box en ligne exige `force` ; audit."""
+    m.s.vu(GK5, {})
+    m.s.inventaire_enregistrer(GK5, releve_gk5(mains=False))
+    c = TestClient(m.app)
+    assert c.post("/boxes/gk5/oublier", json={"confirmation": "gk4"}).status_code == 400
+    assert c.post("/boxes/gk5/oublier", json={"confirmation": "gk5"}).status_code == 409           # en ligne
+    m.h.avance(11 * 60)
+    r = c.post("/boxes/gk5/oublier", json={"confirmation": "gk5"})
+    assert r.status_code == 200 and r.json()["oublie"] == "maillage:gk5"
+    assert c.get("/boxes").json() == [] and c.get("/boxes/gk5").status_code == 404
+    assert any(e == "pilotage_box_oubliee" and ch["box"] == "gk5" for e, ch in m.lignes)
+
+
+def test_oublier_force_une_box_en_ligne_3335(m):
+    m.s.vu(GK5, {})
+    r = TestClient(m.app).post("/boxes/gk5/oublier", json={"confirmation": "gk5", "force": True})
+    assert r.status_code == 200 and TestClient(m.app).get("/boxes").json() == []

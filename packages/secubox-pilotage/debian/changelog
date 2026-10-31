@@ -1,3 +1,11 @@
+secubox-pilotage (0.6.14-1~trixie1) trixie; urgency=medium
+
+  * POST /boxes/{x}/oublier (administrateur reel, confirmation par le nom,
+    force si vue < 10 min, audit pilotage_box_oubliee) : retire une box
+    obsolete de la Flotte (ref #3335).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:14:57 +0100
+
 secubox-pilotage (0.6.13-1~trixie1) trixie; urgency=medium
 
   * vhost : version declaree absente du depot -> pages de la plus recente

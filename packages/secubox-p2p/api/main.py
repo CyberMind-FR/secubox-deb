@@ -10,7 +10,7 @@ Manages peer discovery, mesh networking, service federation, and master-link enr
 """
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import functools
 import logging
@@ -21,6 +21,7 @@ import json
 import os
 import re
 import socket
+import time
 import hashlib
 import secrets
 from pathlib import Path
@@ -39,7 +40,7 @@ except ImportError:
     async def require_jwt():
         return {"sub": "admin"}
 
-from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre, pairs_directs, pairs_enroles
+from . import mesh, registry, annuaire_client, dht, federation, masterlink, automesh, jetons, ancre, pairs_directs, pairs_enroles, oubli
 from secubox_core.auth import require_lecture, SESSION_COOKIE, _bearer
 from secubox_core.crypto.empreinte import ident
 
@@ -2454,6 +2455,33 @@ def _add_approved_peer(join_request: Dict):
     }
     peers.append(peer)
     save_json(PEERS_FILE, {"peers": peers})
+
+
+class OublierRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    nom: str = Field(..., min_length=1, max_length=63)
+    confirmation: str = Field(..., min_length=1, max_length=63)
+    force: bool = False
+
+
+@app.post("/master-link/oublier")
+async def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
+    """« Oublier ce nœud » (#3335) : retire un nœud obsolète du registre des pairs et de wg-mesh (sbx-mesh-up, root,
+    applique le retrait au changement de wg_mesh.json). Confirmation : le nom retapé. Nœud en ligne : `force` exigé."""
+    if req.confirmation != req.nom:
+        raise HTTPException(status_code=400, detail="confirmation : retapez exactement le nom du nœud")
+    local = socket.gethostname().split(".")[0].lower()
+    try:
+        peers, wg, retires = oubli.oublier(load_json(PEERS_FILE, {"peers": []}), get_wg_mesh_config(), req.nom,
+                                           handshakes=mesh.load_handshakes(), now=time.time(), local=local,
+                                           force=req.force)
+    except oubli.Refus as e:
+        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=str(user.get("sub", "?")))
+        raise HTTPException(status_code=409, detail=str(e)) from None
+    save_json(PEERS_FILE, peers)          # republie aussi pairs-enroles.json
+    save_json(WG_MESH_CONFIG, wg)         # secubox-p2p-mesh.path → sbx-mesh-up retire le pair de wg-mesh
+    _audit_jonction("p2p_noeud_oublie", noeud=req.nom, force=req.force, acteur=str(user.get("sub", "?")), **retires)
+    return {"status": "ok", "oublie": req.nom, "retires": retires}
 
 
 @app.post("/master-link/approve")
