@@ -429,6 +429,8 @@
                 const k = el('div', 'carte'); const st = m.state || 'available', [cl, lib] = LIB_ETAT[st] || ['', String(st).toUpperCase()];
                 k.appendChild(el('div', 'nom', (ICONES[m.category] || ICONES.misc) + ' ' + court(m.name)));
                 k.appendChild(el('div', 'desc', m.description || ''));
+                // #3338 : sans texte de paquet (debian/control), la fiche de la boutique reste vide : signalé ici seulement
+                if (!m.detail) k.appendChild(el('div', 'desc', '[À COMPLÉTER] fiche boutique : décrire ce module dans debian/control'));
                 const p = el('div', 'pills'); p.appendChild(pastille('cy', tiret(m.category))); p.appendChild(pastille('jn', tiret(m.tier), 'Niveau minimal de la box')); p.appendChild(pastille(cl, lib));
                 if (m.version) p.appendChild(pastille('', 'v' + m.version)); k.appendChild(p);
                 const a = el('div', 'acts'); actionsDe(m, a); k.appendChild(a); g.appendChild(k);

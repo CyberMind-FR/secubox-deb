@@ -421,3 +421,7 @@ Réponses sur place, sans relais (#3324) : `GET /api/v1/waf/stats` (si aucun mod
 (`users`, `vault`, `portal`, `assist`, `premier-pas`) : `/<m>/` sert `/pilotage-connexion/reserve.html` (« réservé à
 l'administration locale ») et `/api/v1/<m>/` répond 403 `{"detail": "réservé à l’administration locale", "reserve": true}`.
 `/login.html` renvoie vers la connexion du maître.
+
+## Installer une app (#3338)
+
+`installer <secubox-…>` (agent : `Device.X_SECUBOX_Packages.Installer() {paquet}` ; maître : action `installer`, confirmation forte) : `apt-get install --no-remove --no-install-recommends` sans délai dans une unité transitoire ; seulement une app publiée du catalogue de la boutique (jamais fonction/service, pilotage, exposure, assist, socle ou module protégé) dont la version candidate vient du dépôt SecuBox (`apt-cache policy`) ; formule de l'abonnement (fail-closed, sauf marqueur `/etc/secubox/abonnement-libre`), opération longue exclusive, accord du détenteur lié au paquet pour une box cliente, refus sous mains liées, audit (`nom` = paquet).

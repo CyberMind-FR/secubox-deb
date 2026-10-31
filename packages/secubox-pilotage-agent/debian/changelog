@@ -1,3 +1,19 @@
+secubox-pilotage-agent (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * Verbe installer <secubox-…> : apt-get install --no-remove sans délai,
+    paquet du dépôt, formule de l'abonnement de la box, opération longue
+    exclusive, accord du détenteur (lié au paquet), refus sous mains liées,
+    audit (ref #3338).
+  * Relecture : liste blanche (apps publiées du catalogue de la boutique ;
+    jamais fonction/service, pilotage, exposure, assist, socle, protégé),
+    fail-closed sans abonnement sauf marqueur /etc/secubox/abonnement-libre,
+    --no-install-recommends, candidat venant du dépôt SecuBox ; « libre » sur
+    signal positif (fonction-maitre, drapeau proprietaire, marqueur opérateur) ;
+    toutes les origines du candidat SecuBox (apt.secubox.in, file:/var/www/
+    apt.secubox.in, file:/data/apt).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:20:32 +0100
+
 secubox-pilotage-agent (0.6.1-1~trixie1) trixie; urgency=medium
 
   * Unite : /etc/secubox-pilotage en ecriture pour le ctl lance par sudo

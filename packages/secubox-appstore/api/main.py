@@ -29,6 +29,14 @@ from pydantic import BaseModel, Field
 
 CATALOG_FILE = Path(os.environ.get(
     "APPSTORE_CATALOG", "/usr/share/secubox/appstore/catalog.json"))
+# #3338 : droit d'installer sous l'abonnement de la box — règle unique dans api/abonnement.py (aussi appelée par
+# secubox-appstorectl, la frontière root). Fail-closed : sans abonnement, rien, sauf le marqueur abonnement-libre.
+try:
+    from .abonnement import droit as droit_installation
+except ImportError:                  # api/ sur sys.path (tests, outils)
+    from abonnement import droit as droit_installation
+
+
 TIER_RANK = {"all": 0, "lite": 1, "standard": 2, "pro": 3}
 _STATE_TTL = 30.0
 _state_cache = {"ts": 0.0, "data": {}}
@@ -183,6 +191,10 @@ async def catalog(category: Optional[str] = None, tier: Optional[str] = None,
             profils_par_module.setdefault(mod, []).append(pr["name"])
     for m in items:
         m["profils"] = profils_par_module.get(m["name"], [])
+        if not m.get("installed"):
+            permis, requise, _motif = droit_installation(m["name"])
+            m["hors_formule"] = not permis
+            m["formule_requise"] = requise
     if category:
         items = [m for m in items if m["category"] == category]
     if tier:
@@ -677,6 +689,10 @@ async def module_action(name: str, verb: str, confirmer: str | None = None):
             name = alt
     else:
         name = _resolve(name, compute_state())
+    if verb == "install":
+        permis, _requise, motif = droit_installation(name)
+        if not permis:
+            raise HTTPException(status_code=403, detail=motif)
     if verb in ACTIONS_CONFIRMEES and confirmer != name:
         raise HTTPException(status_code=428,
                             detail=f"confirmation requise : renvoyez ?confirmer={name}")
