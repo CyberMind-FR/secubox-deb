@@ -37,6 +37,7 @@ contourne.
 from __future__ import annotations
 
 import html
+import functools
 import re
 import base64
 from dataclasses import dataclass, field
@@ -172,7 +173,16 @@ _LABELS_PISTEURS = frozenset({
 
 
 def est_pisteur(hote: str) -> bool:
-    h = (hote or "").lower()
+    return _est_pisteur((hote or "").lower())
+
+
+est_pisteur.cache_info = lambda: _est_pisteur.cache_info()   # noqa: E731 — observabilité (#3355)
+
+
+# #3355 : appelé pour CHAQUE URL d'une page (2 fois), il parcourait 113 hôtes et 31 motifs : ~70 % du coût d'une
+# réécriture HTML sur gk2. Les hôtes d'une navigation se répètent : un cache borné (listes figées) suffit.
+@functools.lru_cache(maxsize=8192)
+def _est_pisteur(h: str) -> bool:
     if any(h == p or h.endswith("." + p) for p in PISTEURS):
         return True
     labels = h.split(".")
@@ -240,6 +250,12 @@ _RE_SW = re.compile(r'serviceWorker\s*\.\s*register\s*\(\s*["\']([^"\']+)', re.I
 _RE_WORKER = re.compile(r'\bnew\s+(?:Shared)?Worker\s*\(\s*["\']([^"\']+)', re.IGNORECASE)
 
 
+@functools.lru_cache(maxsize=16384)
+def _decompose(base: str, u: str):
+    """#3355 : urljoin + urlsplit, ~45 % du reste d'une réécriture ; une page répète ses URL (srcset, liens) : cache borné."""
+    return urlsplit(urljoin(base, u))
+
+
 def _map_url(u: str, base: str, sur_hote) -> tuple[str, bool]:
     """Réécrit UNE URL vers l'origine proxy. Rend (url, a_change).
 
@@ -249,8 +265,7 @@ def _map_url(u: str, base: str, sur_hote) -> tuple[str, bool]:
     u = u.strip()
     if not u or u.startswith(("#", "data:", "blob:", "javascript:", "mailto:", "tel:", "about:")):
         return u, False
-    absolu = urljoin(base, u)
-    p = urlsplit(absolu)
+    p = _decompose(base, u)
     if p.scheme not in ("http", "https", ""):
         return u, False
     if not p.hostname:

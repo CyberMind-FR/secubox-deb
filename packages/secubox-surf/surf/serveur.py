@@ -482,7 +482,7 @@ async def app(scope, receive, send):
                 if relais.est_pisteur(h):
                     return None
                 return relais.origine_de(h)
-            corps = relais.fige(dom, base, sur_hote_fige, medias_vus).encode()
+            corps = (await asyncio.to_thread(relais.fige, dom, base, sur_hote_fige, medias_vus)).encode()
             # NO-STORE (#1235) : sinon le navigateur garde une version (parfois la
             # legere d'avant) et ne re-fetche pas la carbone. On veut toujours du
             # frais pour un site lourd.
@@ -536,11 +536,13 @@ async def app(scope, receive, send):
     try:
         # ON APPREND CE QUE L'AMONT POSE, avant de le reecrire pour le navigateur.
         try:
-            jarre.apprend(cible, r.headers.get_list("set-cookie"))
+            set_cookies = r.headers.get_list("set-cookie")
         except AttributeError:
             sc = r.headers.get("set-cookie")
-            if sc:
-                jarre.apprend(cible, [sc])
+            set_cookies = [sc] if sc else []
+        if set_cookies:
+            # #3355 : verrou threading + écriture disque : hors de la boucle asyncio
+            await asyncio.to_thread(jarre.apprend, cible, set_cookies)
 
         entetes_out = relais.reecris_entetes(dict(r.headers), base, rap, sur_hote,
                                              origine_req=entetes_in.get("origin", ""))
@@ -571,12 +573,14 @@ async def app(scope, receive, send):
             return
 
         await r.aread()
+        # #3355 : la réécriture est du CPU pur (regex sur tout le corps) : hors de la boucle asyncio, sinon une grosse page
+        # bloque toutes les autres requêtes du relais pendant des centaines de ms.
         if "text/html" in ct and _figer_leger:
             # REPLI FIGÉ (#1235) : le rendu carbone a echoue, mais c'est un site
             # lourd : on FIGE la voie legere (scripts retires) pour ne pas rejouer le
             # ballet first-id. r.text est le HTML BRUT amont -> sur_hote normal
             # (raw -> surf), pas de double-reecriture.
-            corps = relais.fige(r.text, base, sur_hote).encode()
+            corps = (await asyncio.to_thread(relais.fige, r.text, base, sur_hote)).encode()
             # ON DIT LAQUELLE DES DEUX ON SERT. Les deux voies rendent du HTML figé
             # d'apparence voisine ; sans cet en-tête, diagnostiquer « pourquoi cette
             # page n'a pas sa copie carbone » demande de deviner.
@@ -590,18 +594,18 @@ async def app(scope, receive, send):
             etat_js = _json.dumps(jarre.etat_pour(cible), ensure_ascii=False)
             etat_js = (etat_js.replace("<", "\\u003c").replace(">", "\\u003e")
                               .replace("&", "\\u0026"))
-            corps = relais.reecris_html(r.text, base, rap, sur_hote,
-                                        etat_js=etat_js).encode()
+            corps = (await asyncio.to_thread(relais.reecris_html, r.text, base, rap, sur_hote,
+                                             etat_js=etat_js)).encode()
         elif _est_manifeste(ct, chemin):
             # LE FLUX AUSSI PASSE PAR LA BOX. Un manifeste laissé tel quel cite ses
             # pistes en direct : la page viendrait de la box, la vidéo du CDN — et
             # c'est la vidéo qui pèse et qui trace. Cf. relais.reecris_manifeste.
             try:
-                corps = relais.reecris_manifeste(r.text, base, sur_hote).encode()
+                corps = (await asyncio.to_thread(relais.reecris_manifeste, r.text, base, sur_hote)).encode()
             except Exception:  # noqa: BLE001 — un manifeste illisible passe tel quel
                 corps = r.content
         elif "css" in ct:
-            corps = relais.reecris_css(r.text, base, rap, sur_hote).encode()
+            corps = (await asyncio.to_thread(relais.reecris_css, r.text, base, rap, sur_hote)).encode()
         else:
             # "javascript" in ct or "ecmascript" in ct — seule autre branche
             # réécrite, cf. `est_recrit` plus haut.
@@ -613,7 +617,7 @@ async def app(scope, receive, send):
             # eux seuls, par leur origine surf — le relais capte alors la redirection
             # et renvoie a la page de retour.
             try:
-                corps = relais.reecris_portails(r.text).encode()
+                corps = (await asyncio.to_thread(relais.reecris_portails, r.text)).encode()
             except Exception:  # noqa: BLE001 — un JS binaire/exotique reste tel quel
                 corps = r.content
     finally:
