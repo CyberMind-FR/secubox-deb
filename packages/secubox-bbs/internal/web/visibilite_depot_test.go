@@ -68,7 +68,7 @@ func TestDepotPasserelleRefuseAuJetonMembre(t *testing.T) {
 		jetonPour("bob"),   // session d'un membre non convie
 		jetonPour("alice"), // session d'une conviee : ce n'est pas une passerelle non plus
 		jetonHS256("le-secret-partage", "admin", time.Hour), // session sans emetteur
-		jetonService("le-secret-partage", "secubox-radio"),  // module qui n'est pas une passerelle
+		jetonService("le-secret-partage", "secubox-ytsas"),  // module qui n'est pas une passerelle (la radio l'est devenue, #3035)
 	} {
 		for _, salon := range []string{"bureau", "place", "salon-absent"} {
 			w := api(b.srv, "POST", "/api/v1/bbs/threads", jeton, corpsDepot(salon))

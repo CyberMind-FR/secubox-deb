@@ -39,7 +39,8 @@ def test_profil_apparmor_refuse_les_secrets():
 def test_menu_exact():
     assert json.loads(MENU.read_text()) == {
         "id": "meet", "domain": "visio.gk2.secubox.in", "name": "Visio (Meet)", "icon": "🎥", "path": "/meet/",
-        "category": "communication", "order": 625, "description": "Visioconférence La Suite Meet", "theme": "correspondance"}
+        # #3313 : « communication » hors des six catégories de la charte (test_menu_categories du hub) : mesh, comme jitsi
+        "category": "mesh", "order": 625, "description": "Visioconférence La Suite Meet", "theme": "correspondance"}
 
 
 playwright = pytest.importorskip("playwright.sync_api")

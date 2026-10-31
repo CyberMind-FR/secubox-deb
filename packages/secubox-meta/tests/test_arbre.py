@@ -60,10 +60,12 @@ def test_refus():
     # module neuf oublié
     d2 = dict(depot); d2["secubox-neuf"] = dict(depot["secubox-mail"], transitionnel=False)
     assert any("secubox-neuf" in e for e in gm.valide(noeuds, hors, d2))
-    # transitionnel rangé
+    # transitionnel rangé (#3313 : secubox-webmail, l'exemple d'origine, a été retiré avec les transitoires de #2050 ;
+    # on prend un paquet transitionnel encore au dépôt)
+    trans = next(k for k, v in sorted(depot.items()) if v["transitionnel"])
     n4 = copy.deepcopy(noeuds)
-    next(n for n in n4 if n["meta"] == "secubox-service-mail")["recommande"].append("secubox-webmail")
-    assert any("transitionnel" in e for e in gm.valide(n4, [h for h in hors if h != "secubox-webmail"], depot))
+    next(n for n in n4 if n["meta"] == "secubox-service-mail")["recommande"].append(trans)
+    assert any("transitionnel" in e for e in gm.valide(n4, [h for h in hors if h != trans], depot))
 
 
 # ── LE HALL ENTIER (#1577) ─────────────────────────────────────────────────

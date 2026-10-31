@@ -115,10 +115,6 @@
    "espace": "services",
    "objet": "SERVICE"
   },
-  "c3box": {
-   "espace": "surveillance",
-   "objet": "BOX"
-  },
   "cdn": {
    "espace": "services",
    "objet": "SERVICE"
@@ -271,9 +267,17 @@
    "espace": "services",
    "objet": "SERVICE"
   },
+  "media-smb": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
   "mediaflow": {
    "espace": "surveillance",
    "objet": "DEVICE"
+  },
+  "meet": {
+   "espace": "services",
+   "objet": "SERVICE"
   },
   "mesh": {
    "espace": "systeme",
@@ -302,10 +306,6 @@
   "metrics": {
    "espace": "surveillance",
    "objet": "BOX"
-  },
-  "mirror": {
-   "espace": "services",
-   "objet": "SERVICE"
   },
   "modem": {
    "espace": "systeme",
@@ -379,13 +379,13 @@
    "espace": "services",
    "objet": "SERVICE"
   },
-  "pseudo-routeur": {
-   "espace": "systeme",
-   "objet": "BOX"
-  },
   "proxypac": {
    "espace": "protection",
    "objet": null
+  },
+  "pseudo-routeur": {
+   "espace": "systeme",
+   "objet": "BOX"
   },
   "publish": {
    "espace": "services",
@@ -414,10 +414,6 @@
   "rlevel": {
    "espace": "protection",
    "objet": "DEVICE"
-  },
-  "routes": {
-   "espace": "systeme",
-   "objet": "BOX"
   },
   "saas-relay": {
    "espace": "services",

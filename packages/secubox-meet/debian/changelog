@@ -1,3 +1,9 @@
+secubox-meet (0.2.2-1~trixie1) trixie; urgency=medium
+
+  * Entrée de menu dans la catégorie mesh de la charte (communication hors charte) (ref #3313).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:05:34 +0100
+
 secubox-meet (0.2.1-1~trixie1) trixie; urgency=medium
 
   * Corrige les 500 de /connexions et /stats (ref #3182) : SQLite verrouille même en lecture, le
