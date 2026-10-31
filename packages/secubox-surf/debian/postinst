@@ -3,7 +3,13 @@ set -e
 if [ "$1" = "configure" ]; then
     # Etat du bocal / jarres : StateDirectory du service cree /var/lib/secubox/surf,
     # mais on l'assure aussi ici pour un premier demarrage propre.
-    install -d -m 0750 /var/lib/secubox/surf || true
+    # #3355 : plus root. Compte système dédié, membre de `secubox` (le groupe de la socket que nginx joint).
+    getent group secubox >/dev/null || groupadd --system secubox
+    getent passwd secubox-surf >/dev/null || useradd --system --gid secubox --home-dir /var/lib/secubox/surf \
+        --no-create-home --shell /usr/sbin/nologin secubox-surf
+    install -d -m 0750 -o secubox-surf -g secubox /var/lib/secubox/surf || true
+    # Etat déjà posé par l'ancien service root (jarre, rendus, moisson) : rendu au compte, sans suivre de lien.
+    find /var/lib/secubox/surf -xdev ! -type l -user root -exec chown -h secubox-surf:secubox {} + 2>/dev/null || true
 
     # VHOST NGINX : le relais ecoute les origines surf-*.<domaine>. On active
     # le site (symlink) et on recharge nginx seulement si la conf valide.

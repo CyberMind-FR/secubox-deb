@@ -1,3 +1,17 @@
+secubox-surf (1.0.37-1~trixie1) trixie; urgency=medium
+
+  * Charge de gk2 (~60 % d un coeur en continu) (ref #3355) :
+    - est_pisteur et urljoin+urlsplit mis en cache (bornes) : reecriture
+      d une page de 840 Ko de 627 ms a 172 ms (x3,6) ;
+    - reecritures (html, css, manifeste, portails, fige) et jarre hors de
+      la boucle asyncio (asyncio.to_thread) ;
+    - jarre : au plus une ecriture du bocal par 5 s, ecriture differee ;
+    - unite en basse priorite (Nice=10, CPUWeight=20, IOWeight=20,
+      CPUQuota=50%) ;
+    - plus root : compte dedie secubox-surf (groupe secubox), etat repris.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 13:58:26 +0100
+
 secubox-surf (1.0.36-1~trixie1) trixie; urgency=medium
 
   * Vhost du relais livré sans le nom de gk2 (ref #3117) : server_name « ~^surf-[^.]+\..+$ » (un label

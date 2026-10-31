@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from http.cookies import SimpleCookie
 from pathlib import Path
 
@@ -96,7 +97,7 @@ def _assure():
     _charge = True
 
 
-def _sauve():
+def _ecrit_bocal():
     try:
         CHEMIN.parent.mkdir(parents=True, exist_ok=True)
         tmp = CHEMIN.with_suffix(".tmp")
@@ -104,6 +105,38 @@ def _sauve():
         tmp.replace(CHEMIN)
     except OSError:
         pass
+
+
+# #3355 : les sites changent leurs identifiants à presque chaque réponse ; réécrire tout le bocal à chaque fois coûtait
+# sur gk2. Au plus une écriture par FENETRE_S ; un changement dans la fenêtre part par une écriture différée (rien perdu).
+FENETRE_S = 5.0
+_derniere = 0.0
+_differe = None
+
+
+def _sauve():
+    """Appelée sous _verrou."""
+    global _derniere, _differe
+    maintenant = time.monotonic()
+    if maintenant - _derniere >= FENETRE_S and _differe is None:
+        _derniere = maintenant
+        _ecrit_bocal()
+        return
+    if _differe is None:
+        _differe = threading.Timer(max(0.0, FENETRE_S - (maintenant - _derniere)), vide_en_attente)
+        _differe.daemon = True
+        _differe.start()
+
+
+def vide_en_attente():
+    """Écrit tout de suite un changement en attente (minuterie, arrêt, tests)."""
+    global _derniere, _differe
+    with _verrou:
+        t, _differe = _differe, None
+        if t is not None:
+            t.cancel()
+            _derniere = time.monotonic()
+            _ecrit_bocal()
 
 
 def _sauve_etat():

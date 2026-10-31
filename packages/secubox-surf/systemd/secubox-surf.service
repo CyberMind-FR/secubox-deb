@@ -11,6 +11,9 @@ Type=exec
 WorkingDirectory=/usr/lib/secubox/surf
 # Socket Unix, jamais un port TCP (#2050). /run/secubox est PARTAGÉ et collant (1777) : on n'y délie que ce qu'on possède ; « + » = en root malgré
 # un éventuel User=. uvicorn crée la socket en 0666 après le bind : le chmod 660 est INDISPENSABLE.
+# #3355 : compte dédié, jamais root (relais de confort exposé à du contenu hostile du web) : rien ne l'exige —
+# `ip -j addr` est non privilégié, Chromium tourne en --no-sandbox, tout s'écrit dans StateDirectory.
+User=secubox-surf
 Group=secubox
 ExecStartPre=+/bin/rm -f /run/secubox/surf.sock
 ExecStart=/usr/local/bin/uvicorn surf.serveur:app --uds /run/secubox/surf.sock
@@ -21,6 +24,12 @@ RestartSec=3
 # POC : durci a minima, mais isole. Il ne lit rien de la box, il relaie
 # l'externe — d'ou pas d'acces au systeme de fichiers en ecriture.
 NoNewPrivileges=true
+# #3355 : relais de confort (POC) : il cède toujours le processeur et le disque aux services de la box (WAF, pilotage).
+# Mesuré sur gk2 : ~60 % d'un cœur en continu, 5 fois le service suivant.
+Nice=10
+CPUWeight=20
+IOWeight=20
+CPUQuota=50%
 ProtectSystem=strict
 ReadWritePaths=/var/lib/secubox/surf /run/secubox
 StateDirectory=secubox/surf
