@@ -834,6 +834,20 @@ def test_cle_refusee_avertie_une_fois_par_empreinte(tmp_path):
     assert len(cle) == 1, vu
 
 
+def test_module_courant_paquet_python_secubox(monkeypatch):
+    """#3324 (banc gk4) : security-posture est installé en paquet Python (dist-packages/secubox_security_posture/) :
+    sa route appartient au module `security-posture` ; un paquet Python qui n'est pas `secubox_…` n'appartient à rien."""
+    ns = {}
+    for chemin, attendu in (("/usr/lib/python3/dist-packages/secubox_security_posture/api/main.py", "security-posture"),
+                            ("/usr/lib/python3/dist-packages/requests/api.py", ""),
+                            ("/usr/lib/python3/dist-packages/secubox_core/auth.py", "")):
+        exec(compile("def route():\n    return 1\n", chemin, "exec"), ns)
+        req = requete(module="x")
+        req.scope["endpoint"] = ns["route"]
+        auth._cache_modules.clear()
+        assert auth.module_courant(req) == attendu, chemin
+
+
 def test_module_courant_en_cache(monkeypatch):
     appels = []
     vrai = os.path.realpath
