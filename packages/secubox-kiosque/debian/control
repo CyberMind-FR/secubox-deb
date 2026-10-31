@@ -1,0 +1,18 @@
+Source: secubox-kiosque
+Section: admin
+Priority: optional
+Maintainer: Gérald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper (>= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-kiosque
+Architecture: all
+Depends: ${misc:Depends}, nginx, secubox-pilotage (>= 0.6.0~)
+Description: SecuBox — kiosque distant (webapp installable, PWA)
+ Webapp tactile servie par le maître sous /kiosque/ : état des box du
+ maillage, sécurité, réseau, médias, et ouverture de l'administration complète
+ d'une box. Lecture seule, API existantes du maître, session de l'administrateur.
+ Installable sur téléphone (PWA) ; l'écran LCD et les applis de bureau
+ reprendront la même webapp.

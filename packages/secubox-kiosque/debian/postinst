@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+case "$1" in
+    configure)
+        # la location /kiosque/ (secubox-routes.d) n'est prise qu'après un rechargement ; jamais sur une configuration refusée
+        if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+            systemctl reload nginx 2>/dev/null || true
+        else
+            echo "secubox-kiosque: nginx -t refuse la configuration, nginx non recharge" >&2
+        fi
+        ;;
+esac
+#DEBHELPER#
+exit 0
