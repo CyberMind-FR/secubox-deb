@@ -62,8 +62,10 @@ seules les catégories grand public (médias, courrier, communication, publicati
 - **Fiches** : texte éditorial de `boutique-fiches.json`, sinon `resume`/`detail` tirés de `debian/control` par
   `scripts/gen-appstore-catalog.py` ; rien d'inventé. Sans texte : « [À COMPLÉTER] » dans l'administration seulement.
 - **Formule** : `/etc/secubox/abonnement.json` (root ; `{"formule","profil","statut","formules":[{"nom","profil"}]}`).
-  Absent : tout est permis (maître, atelier). Présent : seule une app du profil de la formule s'installe (refus 403 du
-  serveur, carte « Formule X ») ; inactif ou illisible : rien. **Producteur à écrire** (provisionnement Auto-Load).
+  **Fail-closed** : absent, rien ne s'installe, sauf le marqueur root `/etc/secubox/abonnement-libre` (maître, atelier).
+  Présent : seule une app du profil de la formule (`/etc/secubox/profiles/<profil>.toml`, clé = nom de fichier)
+  s'installe (refus 403 du serveur ET de `secubox-appstorectl`, même règle `api/abonnement.py`) ; inactif ou illisible :
+  rien. **Producteurs à écrire** : `abonnement.json` (provisionnement Auto-Load) et `abonnement-libre` (maître/atelier).
 - **Boutique fédérée** (sur le maître) : « Installer sur une autre box du parc » appelle
   `POST /api/v1/pilotage/boxes/<box>/actions/installer` (confirmation forte : le nom retapé). La box décide :
   dépôt, formule, mains liées, accord du détenteur (secubox-pilotage-agent, verbe `installer`).

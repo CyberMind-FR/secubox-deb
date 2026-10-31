@@ -4,6 +4,10 @@ secubox-pilotage-agent (0.7.0-1~trixie1) trixie; urgency=medium
     paquet du dépôt, formule de l'abonnement de la box, opération longue
     exclusive, accord du détenteur (lié au paquet), refus sous mains liées,
     audit (ref #3338).
+  * Relecture : liste blanche (apps publiées du catalogue de la boutique ;
+    jamais fonction/service, pilotage, exposure, assist, socle, protégé),
+    fail-closed sans abonnement sauf marqueur /etc/secubox/abonnement-libre,
+    --no-install-recommends, candidat venant du dépôt SecuBox.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:20:32 +0100
 

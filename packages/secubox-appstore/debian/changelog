@@ -5,6 +5,9 @@ secubox-appstore (0.11.0-1~trixie1) trixie; urgency=medium
     debian/control ([À COMPLÉTER] en administration seulement) ; formule de la
     box respectée (/etc/secubox/abonnement.json, refus serveur) ; installation
     sur une autre box du parc depuis la boutique du maître.
+  * Relecture : abonnement fail-closed (marqueur /etc/secubox/abonnement-libre
+    pour le maître et l'atelier), règle unique api/abonnement.py (profil =
+    nom de fichier), appliquée aussi par secubox-appstorectl.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:20:32 +0100
 
