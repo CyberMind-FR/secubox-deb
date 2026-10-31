@@ -190,10 +190,11 @@ async def autorise(request: Request):
         if q.get("prompt") == "none":
             return RedirectResponse(_avec_params(redirect_uri, {"error": "login_required", "state": state}), 302)
         if not session_ouverte(request):
-            # Pas de session : la connexion du Hall, avec retour sur cette même demande (#3155). `redirect` est un chemin
-            # absolu de même origine : la page de connexion refuse tout le reste (pas de redirection ouverte).
+            # Pas de session : la connexion des personnes du Hall (/i/acces/), avec retour sur cette même demande (#3155,
+            # #3326 : /login.html est, sur le vhost du Hall, l'application elle-même — le retour s'y perdait). `retour` est
+            # un chemin /oidc/authorize de même origine : la page d'accès refuse tout le reste (pas de redirection ouverte).
             retour = "/oidc/authorize?" + str(request.url.query)
-            return RedirectResponse("/login.html?" + urlencode({"redirect": retour}, quote_via=quote), 302)
+            return RedirectResponse("/i/acces/?" + urlencode({"retour": retour}, quote_via=quote), 302)
         # Connecté mais sans personne rattachée (compte système, appareil non rattaché) : renvoyer vers la connexion
         # tournerait en rond. On l'explique.
         nom = html.escape(str(c.get("name") or client_id))

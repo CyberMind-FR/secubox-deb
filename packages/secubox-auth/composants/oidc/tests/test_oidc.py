@@ -138,8 +138,9 @@ def test_sans_session_pas_de_code_et_renvoi_vers_la_connexion(cli):
     r = _autorise(cli)
     assert r.status_code == 302
     loc = urlsplit(r.headers["location"])
-    assert loc.scheme == "" and loc.netloc == "" and loc.path == "/login.html"      # même origine, jamais un autre hôte
-    retour = parse_qs(loc.query)["redirect"][0]
+    # #3326 : la connexion des PERSONNES du Hall (/i/acces/), pas /login.html (sur le vhost du Hall, c'est l'application)
+    assert loc.scheme == "" and loc.netloc == "" and loc.path == "/i/acces/"        # même origine, jamais un autre hôte
+    retour = parse_qs(loc.query)["retour"][0]
     rq = urlsplit(retour)
     assert rq.path == "/oidc/authorize" and rq.netloc == ""                           # chemin absolu à barre unique
     q = parse_qs(rq.query)
@@ -150,7 +151,7 @@ def test_sans_session_pas_de_code_et_renvoi_vers_la_connexion(cli):
 
 
 def test_session_sans_personne_pas_de_boucle_de_connexion(cli):
-    # connecté (compte système, appareil non rattaché) mais sans personne : page explicative, pas de renvoi vers /login.html
+    # connecté (compte système, appareil non rattaché) mais sans personne : page explicative, pas de renvoi vers la connexion
     cli.etat["ident"] = None
     cli.etat["session"] = True
     r = _autorise(cli)
@@ -163,7 +164,7 @@ def test_retour_de_connexion_sans_ouverture_de_redirection(cli):
     cli.etat["session"] = False
     r = _autorise(cli, state="x\r\nLocation: https://evil.test")
     loc = r.headers["location"]
-    assert "\r" not in loc and "\n" not in loc and loc.startswith("/login.html?redirect=%2Foidc%2Fauthorize%3F")
+    assert "\r" not in loc and "\n" not in loc and loc.startswith("/i/acces/?retour=%2Foidc%2Fauthorize%3F")
 
 
 def test_pkce(cli):

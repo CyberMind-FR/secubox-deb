@@ -309,10 +309,19 @@ let SAISIE = false;    // champ en cours de saisie dans « vue » : l'actualisat
 // Le repli reste relatif parce qu'il est juste sur admin.gk2, là où SBX OS
 // est réellement servi ; ailleurs, seule la valeur du serveur vaut.
 let DESTINATION = '/sbxos/';
+// #3326 : revenir à une demande OpenID Connect (visio…) après la connexion. Liste fermée : un chemin /oidc/authorize?
+// de même origine, à barre unique, sans caractère de contrôle (pas de redirection ouverte).
+const RETOUR_OIDC = (() => {
+  try {
+    const r = new URLSearchParams(location.search).get('retour') || '';
+    return (/^\/oidc\/authorize\?/.test(r) && !/[\u0000-\u001f\u007f\\]/.test(r)) ? r : '';
+  } catch (e) { return ''; }
+})();
+if (RETOUR_OIDC) DESTINATION = RETOUR_OIDC;
 const _destinationPrete = (DEMO ? Promise.reject(new Error('démonstration')) : fetch(API + '/invitation/url', { credentials: 'same-origin' }))
   .then(r => (r.ok && (r.headers.get('content-type') || '').indexOf('json') >= 0)
     ? r.json() : null)
-  .then(j => { if (j && j.sbxos) DESTINATION = j.sbxos; })
+  .then(j => { if (j && j.sbxos && !RETOUR_OIDC) DESTINATION = j.sbxos; })
   .catch(() => { /* on gardera le repli */ });
 
 const $ = (id) => document.getElementById(id);
