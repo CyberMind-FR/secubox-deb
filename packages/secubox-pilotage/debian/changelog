@@ -1,3 +1,10 @@
+secubox-pilotage (0.6.8-1~trixie1) trixie; urgency=medium
+
+  * vhost : API du hub relayee quand l accueil est servi (dashboard,
+    health-batch, boot_mode en 404 sur admin.gk4) (ref #3302).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 07:01:37 +0100
+
 secubox-pilotage (0.6.7-1~trixie1) trixie; urgency=medium
 
   * vhost : module en double servi par secubox-<module> (portal) ; shared

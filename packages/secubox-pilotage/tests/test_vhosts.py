@@ -239,6 +239,7 @@ def test_scripts_integres_permis_par_empreinte_et_accueil():
     conf = V.rendre_nginx("gk5", [{"paquet": "secubox-hub", "version": "1.0", "modules": ["soc"], "accueil": True,
                                    "empreintes": {"soc": e, "": e}}])
     assert "location = / {" in conf and "try_files /index.html =404;" in conf
+    assert "location ^~ /api/v1/hub/ {" in conf and "/relais/gk5/api/v1/hub/;" in conf
     bloc = conf[conf.index("location ^~ /soc/ {"):]
     bloc = bloc[:bloc.index("\n    }")]
     assert e[0] in bloc and "script-src" in bloc and "'unsafe-inline'" not in bloc.split("style-src")[0]
