@@ -42,6 +42,14 @@ Configuration file: `/etc/secubox/mail.toml`
 - `GET /api/v1/mail/status` - Module status
 - `GET /api/v1/mail/health` - Health check
 
+## Membres d'un alias (#3347)
+
+Une ligne de la carte `/data/volumes/mail/config/virtual` porte un alias et ses destinataires (`contact@secubox.in gk2@secubox.in, cedre83@secubox.in`).
+
+- `mailctl alias membre-add <alias> <adresse>` / `mailctl alias membre-del <alias> <adresse>` : adresse validée (une seule, sans virgule ni espace), pas de doublon, jamais le dernier membre (supprimer l'alias à la place) ; fichier réécrit d'un bloc puis carte recompilée (`alias_recompile`), entrée `alias_membre_ajoute` / `alias_membre_retire` dans `/var/log/secubox/audit.log`.
+- API (`require_jwt`) : `POST /alias/{alias}/membres` `{"cible": "…"}`, `DELETE /alias/{alias}/membres/{cible}` ; 422 adresse invalide, 409 refus (doublon, absent, dernier membre, alias inconnu). `GET /aliases` rend `membres` (toutes les cibles) ; `target` garde la liste jointe.
+- Page Mail › Alias : chaque membre avec « Retirer » (absent pour le dernier) et un champ « Ajouter un membre ».
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
