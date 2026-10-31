@@ -181,8 +181,12 @@ CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "installer", "service
 # retour (jamais un apply sans profil : il éteindrait tout sauf le socle).
 SENS_INTERFACE = ("locale", "distante", "confirmer")
 PROFIL_LEGER = "distante"
+INSTANTANE = "instantane"   # #3349 : profil de retour PHOTOGRAPHIÉ quand aucun profil connu n'existe (sentinelle)
+RE_INSTANTANE = re.compile(r"instantane-([0-9a-f]{16})")    # profil photographié, lié à SA bascule (job)
+DELAI_RELEVE = 60                                        # s, relevé des modules (secubox-profilectl status)
+RE_MODULE_INSTANTANE = re.compile(r"[a-z0-9][a-z0-9@._-]{0,63}")
 RE_PROFIL = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}")           # _NOM_PROFIL de secubox-profilectl
-DELAI_INTERFACE = 1800                                   # s, durée maximale de l'unité transitoire d'une bascule
+DELAI_INTERFACE = 2 * 900 + 60 + 120                     # s, unité d'une bascule : relevé + apply + retour + marge (#3349)
 DELAI_APPLY = 900                                        # s, un apply de profil (le retour garde la fin de l'unité)
 GARDE_DEFAUT, GARDE_MIN, GARDE_MAX = 600, 120, 3600      # s, homme mort (delai_garde_s de interface.toml)
 PREFIXE_GARDE = "secubox-pilotage-garde-"
@@ -1701,6 +1705,10 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
         if p["sens"] == "locale" and not distante_en_place(ctx, etat_if):
             return refus("aucune interface distante en place")
         p["precedent"] = profil_de_retour(ctx, etat_if)
+        if p["precedent"] is None and p["sens"] == PROFIL_LEGER:
+            # #3349 : aucun profil de retour connu (box jamais passée par un apply : gk1, gk3) : l'unité transitoire
+            # photographiera l'état réel des modules avant la garde et l'apply, et le retour le rendra à l'identique
+            p["precedent"] = INSTANTANE
         if p["precedent"] is None:
             return refus("profil de retour inconnu")
     if unite is not None:
@@ -1936,6 +1944,8 @@ def profil_connu(ctx, nom):
     """Un profil de retour sûr : nom du motif de secubox-profilectl, autre que le profil léger, fichier présent."""
     if not isinstance(nom, str) or not RE_PROFIL.fullmatch(nom) or nom == PROFIL_LEGER:
         return False
+    if nom.startswith(INSTANTANE):
+        return copie_instantane(ctx, nom) is not None   # #3349 : seule la copie root fait foi
     try:
         st = os.stat(f"{ctx.profils}/{nom}.toml", follow_symlinks=False)
     except OSError:
@@ -1956,26 +1966,137 @@ def profil_actif(ctx):
 def profil_de_retour(ctx, etat_if):
     """Profil rendu par un retour en locale : celui mémorisé à la bascule, sinon le profil actif (s'il n'est pas le
     profil léger), sinon `profil_retour` de interface.toml ; None si aucun n'est sûr (jamais d'apply sans profil)."""
-    for nom in (etat_if.get("precedent"), profil_actif(ctx), conf_interface(ctx).get("profil_retour")):
+    for i, nom in enumerate((etat_if.get("precedent"), profil_actif(ctx), conf_interface(ctx).get("profil_retour"))):
+        if i > 0 and isinstance(nom, str) and nom.startswith(INSTANTANE):
+            continue                                   # #3349 : un actif « instantane* » ne vaut pas retour : nouveau relevé
         if profil_connu(ctx, nom):
             return nom
     return None
 
 
+def prendre_instantane(ctx, job):
+    """#3349 : l'état réel des modules (`secubox-profilectl status --json`, ceux qui sont allumés) devient le profil
+    « instantane » : copie root 0600 dans l'état du ctl (instantane-<job>.toml) et profil 0644 que profilectl applique au
+    retour. Vrai si les deux sont écrits ; un relevé illisible ou vide n'écrit rien (jamais un retour qui couperait tout)."""
+    try:
+        r = subprocess.run([ctx.profilectl, "status", "--json"], env=ctx.env, stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=DELAI_RELEVE)
+        mods = json.loads(r.stdout).get("modules") if r.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+        mods = None
+    if not isinstance(mods, list):
+        err("instantané : relevé des modules illisible")
+        return False
+    # allumé OU activé (un module endormi par le sleeper, activé mais inactif, n'est pas désactivé au retour)
+    ids = sorted({m["id"] for m in mods if isinstance(m, dict) and isinstance(m.get("id"), str)
+                  and RE_MODULE_INSTANTANE.fullmatch(m["id"])
+                  and any(m.get(k) is True for k in ("on", "enabled", "active", "lxc_running"))})
+    if not ids:
+        err("instantané : aucun module allumé relevé")
+        return False
+    nom = f"{INSTANTANE}-{job}"
+    texte = (f'# Instantané de l\'état réel avant la bascule {job} (#3349) — écrit par secubox-pilotagectl, ne pas éditer.\n'
+             f'name = "{nom}"\nlabel = "Instantané avant bascule {job}"\n'
+             "on = [\n" + "".join(f'  "{i}",\n' for i in ids) + "]\n").encode("utf-8")
+    try:
+        fd = ouvrir_etat(ctx, creer=False)
+        if fd is None:
+            return False
+        try:
+            ecrire(fd, f"{nom}.toml", texte)
+        finally:
+            os.close(fd)
+        poser_profil(ctx, nom, texte)
+    except OSError as e:
+        err(f"instantané non écrit ({e.__class__.__name__})")
+        return False
+    auditer(ctx, "interface_instantane", job=job, modules=len(ids))
+    return nom
+
+
+def copie_instantane(ctx, nom):
+    """Texte de la copie root 0600 `instantane-<job>.toml` de l'état du ctl (#3349), ou None."""
+    m = RE_INSTANTANE.fullmatch(nom or "")
+    if m is None:
+        return None
+    fd = ouvrir_etat(ctx, creer=False)
+    if fd is None:
+        return None
+    try:
+        f = os.open(f"{nom}.toml", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    try:
+        st = os.fstat(f)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > 65536:
+            return None
+        return os.read(f, 65536)
+    finally:
+        os.close(f)
+
+
+def poser_profil(ctx, nom, texte):
+    """Profil 0644 root dans /etc/secubox/profiles, écrit de façon atomique sans suivre de lien."""
+    dfd = ouvrir_chemin(ctx, "etc/secubox/profiles")
+    try:
+        ecrire(dfd, f"{nom}.toml", texte, 0o644, None if ctx.substitue else (0, 0))
+    finally:
+        os.close(dfd)
+
+
+def retirer_profil(ctx, nom):
+    try:
+        dfd = ouvrir_chemin(ctx, "etc/secubox/profiles")
+    except OSError:
+        return
+    try:
+        retirer(dfd, f"{nom}.toml")
+    finally:
+        os.close(dfd)
+
+
 def appliquer_profil(ctx, nom):
-    """`secubox-profilectl apply --profile <nom> --yes --json` ; vrai si l'apply (et son front web) a réussi. Borné à
+    """#3349 : un profil photographié est d'abord RÉÉCRIT depuis la copie root (le dossier profiles est au compte secubox :
+    jamais d'apply d'un fichier qu'il aurait pu changer) ; sans copie, pas d'apply. Après succès, il est retiré.
+`secubox-profilectl apply --profile <nom> --yes --json` ; vrai si l'apply (et son front web) a réussi. Borné à
     DELAI_APPLY : deux applies (bascule puis retour) tiennent dans l'unité (RuntimeMaxSec)."""
+    photo = nom.startswith(INSTANTANE)
+    if photo:
+        texte = copie_instantane(ctx, nom)
+        if texte is None:
+            err("profil photographié sans copie root : pas d'apply")
+            return False
+        try:
+            poser_profil(ctx, nom, texte)
+        except OSError as e:
+            err(f"profil photographié non réécrit ({e.__class__.__name__})")
+            return False
     try:
         r = subprocess.run([ctx.profilectl, "apply", "--profile", nom, "--yes", "--json"], env=ctx.env,
                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=DELAI_APPLY)
     except (OSError, subprocess.TimeoutExpired):
         return False
+    if r.returncode == 0 and photo:
+        retirer_profil(ctx, nom)
     return r.returncode == 0
 
 
 def ecrire_profil_actif(ctx, nom):
-    """`active` repointé sur le profil réellement appliqué (lu par le postinst via `coupe`, et par le hub), par
+    """#3349 : après le retour à un instantané, `active` est retiré (la box n'avait aucun profil actif).
+`active` repointé sur le profil réellement appliqué (lu par le postinst via `coupe`, et par le hub), par
     descripteur, sans suivre de lien. Échec journalisé, jamais propagé : le profil, lui, est appliqué."""
+    if isinstance(nom, str) and nom.startswith(INSTANTANE):
+        try:
+            dfd = ouvrir_chemin(ctx, "etc/secubox/profiles")
+            try:
+                retirer(dfd, "active")
+            finally:
+                os.close(dfd)
+        except OSError as e:
+            err(f"profil actif non retiré ({e.__class__.__name__})")
+        return
     try:
         dfd = ouvrir_chemin(ctx, "etc/secubox/profiles")
         try:
@@ -2087,6 +2208,14 @@ def basculer_interface(ctx, job):
         auditer(ctx, "interface_echec", job=job, refus="bascule introuvable")
         raise Erreur("bascule introuvable")
     precedent = etat.get("precedent")
+    if etat["sens"] == PROFIL_LEGER and precedent == INSTANTANE:
+        nom = prendre_instantane(ctx, job)
+        if not nom:
+            maj_interface(ctx, job, etat="echec", fin=int(time.time()))
+            auditer(ctx, "interface_echec", job=job, refus="instantané impossible")
+            raise Erreur("instantané de l'état impossible : bascule abandonnée")
+        precedent = nom
+        maj_interface(ctx, job, precedent=nom)
     if not profil_connu(ctx, precedent):
         maj_interface(ctx, job, etat="echec")
         auditer(ctx, "interface_echec", job=job, refus="profil de retour inconnu")

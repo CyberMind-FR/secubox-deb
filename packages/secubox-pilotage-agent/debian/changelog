@@ -1,3 +1,16 @@
+secubox-pilotage-agent (0.8.0-1~trixie1) trixie; urgency=medium
+
+  * Bascule d interface : sans profil de retour connu, instantane de l etat
+    reel (modules allumes selon secubox-profilectl status) pris avant la garde
+    et l apply du profil leger, rendu a l identique par le retour, l homme mort
+    et la reprise au demarrage ; un profil connu reste prioritaire (ref #3349).
+  * Instantane lie a sa bascule (instantane-<job>), modules allumes OU
+    actives, profil reecrit depuis la copie root avant chaque apply de retour
+    (refus sans copie), retire apres un retour reussi avec `active` ; actif
+    instantane* = nouveau releve ; RuntimeMaxSec 1980 (ref #3349).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 11:55:14 +0100
+
 secubox-pilotage-agent (0.7.0-1~trixie1) trixie; urgency=medium
 
   * Verbe installer <secubox-…> : apt-get install --no-remove sans délai,
