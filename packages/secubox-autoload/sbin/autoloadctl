@@ -16,6 +16,10 @@
                                            (même si WireGuard échoue : le code de retour dit alors l'échec du tunnel) ; --sans-reactiver
                                            (minuterie, révocations, abonnement) ne relance pas un wg-autoload dont l'unité est désactivée
   autoloadctl exporter-pairs               publie /var/lib/secubox/autoload-public/pairs-publics.json (root, 0644, sans secret) pour le pilotage (#3126)
+                                           et droits-maillage.json (droits des pairs du maillage, lus par l'annuaire, #3305)
+  autoloadctl maillage --nom <pair> --formule <f> [--empreinte sbx-…] [--statut …] [--mois N] [--motif …]
+                                           abonnement d'un pair du maillage (#3305), droits republiés aussitôt
+  autoloadctl maillage-atelier [--pairs …]  inscrit en formule atelier les pairs enrôlés sans abonnement (postinst du maître)
 
 tunnel-sync et exporter-pairs passent un par un (flock sur /run/secubox-autoload/autoload-sync.lock, dossier à root seul) : un passage qui a lu les pairs avant une
 révocation ne repose jamais le pair révoqué après la synchronisation de la révocation (#3126).
@@ -60,6 +64,44 @@ class _PairsVides:
         return []
 
 
+def _maillage(a, db: Path, verrou: Path) -> int:
+    """maillage / maillage-atelier (#3305) : l'écriture dans la base se fait SOUS L'UTILISATEUR DU SERVICE (processus fils), puis la
+    projection publique est republiée tout de suite par le parent (root : seul il peut écrire autoload-public)."""
+    def ecrire() -> int:
+        _abaisser_privileges()
+        reg = J.Registre(db, Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))
+        try:
+            if a.cmd == "maillage":
+                reg.fixer_maillage(a.nom, a.formule, empreinte=a.empreinte, statut=a.statut, mois=a.mois, motif=a.motif)
+                print(f"pair {a.nom} : formule {a.formule}, {a.statut}")
+            else:
+                print(f"{reg.inscrire_atelier(Path(a.pairs))} pair(s) inscrit(s) en formule atelier")
+        except ValueError as err:
+            print(f"refusé : {err}", file=sys.stderr)
+            return 2
+        return 0
+    if os.geteuid() == 0:
+        pid = os.fork()
+        if pid == 0:
+            rc = 1
+            try:
+                rc = ecrire()
+            finally:
+                os._exit(rc)                                    # le fils ne revient jamais dans le code du parent
+        rc = os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1])
+    else:
+        rc = ecrire()
+    if rc != 0:
+        return rc
+    with T.verrou_sync(verrou):
+        try:
+            chemin, n = P.exporter_droits(db, P.dossier_public(db))
+            print(f"{n} pair(s) du maillage publié(s) dans {chemin}")
+        except (P.ProjectionErreur, OSError, ValueError) as err:
+            print(f"exporter-droits : {err} (republication au prochain tunnel-sync)", file=sys.stderr)
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="autoloadctl", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -91,10 +133,21 @@ def main(argv=None):
     ts = sub.add_parser("tunnel-sync")
     ts.add_argument("--sans-reactiver", action="store_true", help="publication (minuterie, révocations, abonnement) : ne réactive pas une interface dont l'unité est désactivée")
     sub.add_parser("exporter-pairs")
+    ma = sub.add_parser("maillage")
+    ma.add_argument("--nom", required=True)
+    ma.add_argument("--formule", required=True)
+    ma.add_argument("--empreinte")
+    ma.add_argument("--statut", default="actif")
+    ma.add_argument("--mois", type=int)
+    ma.add_argument("--motif")
+    mat = sub.add_parser("maillage-atelier")
+    mat.add_argument("--pairs", default="/var/lib/secubox/p2p-public/pairs-enroles.json")
     a = ap.parse_args(argv)
 
     db = Path(os.environ.get("SECUBOX_AUTOLOAD_DB", J.DB_DEFAUT))
     verrou = Path(os.environ.get("SECUBOX_AUTOLOAD_VERROU", T.VERROU_DEFAUT))
+    if a.cmd in ("maillage", "maillage-atelier"):
+        return _maillage(a, db, verrou)
     if a.cmd not in ("tunnel-init", "tunnel-sync", "exporter-pairs"):
         _abaisser_privileges()
         reg = J.Registre(db, Path(os.environ.get("SECUBOX_AUTOLOAD_AUDIT", J.AUDIT_DEFAUT)))
@@ -152,6 +205,10 @@ def main(argv=None):
                     P.exporter(db, P.dossier_public(db))
                 except (P.ProjectionErreur, OSError, ValueError) as err:
                     print(f"exporter-pairs : {err}", file=sys.stderr)
+                try:
+                    P.exporter_droits(db, P.dossier_public(db))
+                except (P.ProjectionErreur, OSError, ValueError) as err:                            # l'ancien fichier reste : jamais de politique vide
+                    print(f"exporter-droits : {err}", file=sys.stderr)
                 if echec is not None:
                     raise echec if isinstance(echec, T.TunnelErreur) else T.TunnelErreur(f"{type(echec).__name__} : {str(echec)[:200]}")
         elif a.cmd == "exporter-pairs":
@@ -162,6 +219,11 @@ def main(argv=None):
                 except (P.ProjectionErreur, OSError, ValueError) as err:
                     print(f"exporter-pairs : {err}", file=sys.stderr)
                     return 1
+                try:                                                                                # base pas encore créée : rien à publier, l'ancien fichier reste
+                    chemin, n = P.exporter_droits(db, P.dossier_public(db))
+                    print(f"{n} pair(s) du maillage publié(s) dans {chemin}")
+                except (P.ProjectionErreur, OSError, ValueError) as err:
+                    print(f"exporter-droits : {err}", file=sys.stderr)
         elif a.cmd == "abonnement":
             print(f"{reg.fixer_abonnement(a.client, a.statut)} jeton(s) du client (projection du pilotage : au prochain tunnel-sync, au plus tard dans l'heure)")
     except T.TunnelErreur as err:

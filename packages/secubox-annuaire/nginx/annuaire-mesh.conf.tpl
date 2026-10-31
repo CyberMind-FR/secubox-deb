@@ -57,6 +57,16 @@ server {
         proxy_intercept_errors on;
     }
 
+    # Droits de l'appelant (#3305) : services du maillage que son abonnement inclut (le maître seul a une politique).
+    location = /api/v1/annuaire/droits/self {
+        limit_except GET { deny all; }
+        rewrite ^/api/v1/annuaire/(.*)$ /$1 break;
+        proxy_pass http://unix:/run/secubox/annuaire.sock;
+        include /etc/nginx/snippets/secubox-proxy.conf;
+        proxy_set_header X-SecuBox-Maillage 1;
+        proxy_intercept_errors on;
+    }
+
     # This node's own signed MetricSnapshot for fleet-wide dashboards (Task 5,
     # feat/fleet-metrics): mirrors /log/export verbatim — public, no-JWT,
     # self-certifying — the exact path _fetch_fleet_peer() pulls from peers.

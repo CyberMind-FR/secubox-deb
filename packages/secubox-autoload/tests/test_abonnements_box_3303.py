@@ -66,7 +66,8 @@ def m(tmp_path):
 def test_formule_creee_puis_listee(m):
     r = m.c.post("/formules", json={"nom": "sans-ecran", "libelle": "Sans écran", "profil": "distante", "mois": 12})
     assert r.status_code == 200
-    assert m.c.get("/formules").json() == [{"nom": "sans-ecran", "libelle": "Sans écran", "profil": "distante", "mois": 12}]
+    assert [f for f in m.c.get("/formules").json() if f["nom"] != "atelier"] == [  # « atelier » : formule interne semée (#3305)
+        {"nom": "sans-ecran", "libelle": "Sans écran", "profil": "distante", "mois": 12, "services": []}]
 
 
 @pytest.mark.parametrize("profil", ["light", "standard", "custom", "../x", ""])
@@ -77,7 +78,7 @@ def test_formule_refuse_un_profil_inexistant(m, profil):
 def test_formule_mise_a_jour_sans_doublon(m):
     m.c.post("/formules", json={"nom": "leger", "libelle": "Léger", "profil": "lite", "mois": 12})
     m.c.post("/formules", json={"nom": "leger", "libelle": "Léger", "profil": "lite", "mois": 24})
-    assert [f["mois"] for f in m.c.get("/formules").json()] == [24]
+    assert [f["mois"] for f in m.c.get("/formules").json() if f["nom"] != "atelier"] == [24]
 
 
 # ── migration : chaque box hérite de l'abonnement de son client ──────────────────────────────────────────

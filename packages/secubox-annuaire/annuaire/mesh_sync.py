@@ -42,7 +42,7 @@ def read_mesh_peers(path: str = DEFAULT_PEERS_PATH) -> List[Dict[str, str]]:
     for p in data.get("peers", []):
         ip = p.get("mesh_ip") or (p.get("allowed_ips", "").split("/")[0] or "")
         if ip:
-            peers.append({"mesh_ip": ip, "name": p.get("name", "")})
+            peers.append({"mesh_ip": ip, "name": p.get("name", ""), "public_key": p.get("public_key", "")})
     return peers
 
 
@@ -173,3 +173,44 @@ def sync_once(
         totals["skipped"] += res["skipped"]
         totals["rejected"] += res["rejected"]
     return totals
+
+
+def http_json(url: str, timeout: int = 5) -> Dict[str, Any]:
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (mesh-local)
+        data = json.loads(resp.read(65536))
+    return data if isinstance(data, dict) else {}
+
+
+ANCRE_DEFAUT = "/etc/secubox/p2p/ancre-maitre.json"           # ancre du maître (secubox-p2p, #3100), épinglée à la jonction
+
+
+def relever_droits(peers: List[Dict[str, str]], fetch: Callable[[str], Dict[str, Any]] = http_json, chemin: Any = None,
+                   port: int = DEFAULT_MESH_PORT, ancre: Any = ANCRE_DEFAUT) -> bool:
+    """#3305 : demande au SEUL maître désigné (pair du maillage dont le nom est celui de l'ancre du maître) les droits de cette box
+    (`droits/self`). Sans ancre ou sans pair de ce nom : personne n'est interrogé (un autre pair ne peut pas octroyer ni retirer).
+    Vrai si le maître a répondu avec une politique. Jamais d'exception."""
+    import hashlib  # noqa: PLC0415
+    from . import droits as D  # noqa: PLC0415
+    try:
+        a = json.loads(Path(ancre).read_text())
+        nom, cle, emp = a.get("nom"), a.get("cle_publique"), a.get("empreinte")
+    except (OSError, ValueError, AttributeError):
+        return False
+    if not (nom and isinstance(cle, str) and cle and emp == hashlib.sha256(cle.encode("utf-8")).hexdigest()[:16]):
+        return False                                             # ancre incohérente : personne n'est le maître
+    # Nom ET clé WireGuard du maître épinglée par l'ancre (empreinte = sha256 de cette clé) : un homonyme ne passe pas.
+    ips = [p.get("mesh_ip") for p in peers if p.get("name") == nom and p.get("public_key") == cle and p.get("mesh_ip")]
+    if len(ips) != 1:                                            # absent ou ambigu
+        return False
+    try:
+        rep = fetch(f"http://{ips[0]}:{port}/api/v1/annuaire/droits/self")
+    except Exception:  # noqa: BLE001 — maître injoignable ou ancien (404) : le dernier droit connu reste
+        return False
+    if isinstance(rep, dict) and rep.get("politique") is True:
+        try:
+            D.noter_droits_self(rep, chemin or D.SELF_DEFAUT)
+        except OSError:
+            return False
+        return True
+    return False

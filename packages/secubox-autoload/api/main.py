@@ -29,7 +29,7 @@ import json
 import re
 import time
 from pathlib import Path
-from typing import Callable, Dict, Literal, Optional
+from typing import Callable, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -111,6 +111,16 @@ class FormuleIn(BaseModel):
     libelle: str = Field(max_length=60)
     profil: str = Field(max_length=40)
     mois: int = Field(ge=1, le=120)
+    services: List[str] = Field(default_factory=list, max_length=8)
+
+
+class MaillageIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    formule: str = Field(max_length=30)
+    empreinte: Optional[str] = Field(default=None, max_length=20)
+    statut: Literal["actif", "suspendu", "revoque"] = "actif"
+    mois: Optional[int] = Field(default=None, ge=1, le=120)
+    motif: Optional[str] = Field(default=None, max_length=200)
 
 
 class ProlongerIn(BaseModel):
@@ -362,10 +372,23 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
     @r.post("/formules", dependencies=[Depends(require_jwt)])
     def fixer_formule(corps: FormuleIn):
         try:
-            reg.fixer_formule(corps.nom, corps.libelle, corps.profil, corps.mois)
+            reg.fixer_formule(corps.nom, corps.libelle, corps.profil, corps.mois, services=corps.services)
         except ValueError as err:
             raise HTTPException(422, str(err)) from None
-        return {"ok": True}
+        return {"ok": True, "tunnel_applique": publier()}                                    # les droits du maillage suivent la formule (#3305)
+
+    # ── droits du maillage (#3305) ───────────────────────────────────────────────────────────────────────────
+    @r.get("/maillage", dependencies=[Depends(require_jwt)])
+    def maillage():
+        return reg.droits_maillage()
+
+    @r.post("/maillage/{nom}", dependencies=[Depends(require_jwt)])
+    def fixer_maillage(nom: str, corps: MaillageIn):
+        try:
+            reg.fixer_maillage(nom, corps.formule, empreinte=corps.empreinte, statut=corps.statut, mois=corps.mois, motif=corps.motif)
+        except ValueError as err:
+            raise HTTPException(422, str(err)) from None
+        return {"ok": True, "tunnel_applique": publier()}
 
     @r.get("/abonnements", dependencies=[Depends(require_jwt)])
     def abonnements():
