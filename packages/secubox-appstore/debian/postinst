@@ -7,6 +7,9 @@ case "$1" in
         rm -f /var/cache/secubox/menu.json 2>/dev/null || true
         # validate the sudoers drop-in (never leave a broken one)
         visudo -cf /etc/sudoers.d/secubox-appstore >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-appstore
+        # #3338 : abonnement fail-closed ; le maître et les box d'atelier (ni Auto-Load ni abonnement.json) reçoivent
+        # le marqueur abonnement-libre. Jamais posé sous abonnement, jamais retiré ici.
+        /usr/bin/python3 -I /usr/lib/secubox/appstore/api/abonnement.py --poser-libre || true
         systemctl daemon-reload 2>/dev/null || true
         systemctl enable --now secubox-appstore.service 2>/dev/null || true
         systemctl try-restart secubox-appstore.service 2>/dev/null || true

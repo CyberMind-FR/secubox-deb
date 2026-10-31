@@ -8,6 +8,8 @@ secubox-appstore (0.11.0-1~trixie1) trixie; urgency=medium
   * Relecture : abonnement fail-closed (marqueur /etc/secubox/abonnement-libre
     pour le maître et l'atelier), règle unique api/abonnement.py (profil =
     nom de fichier), appliquée aussi par secubox-appstorectl.
+  * Postinst : marqueur abonnement-libre posé sur le maître et les box d'atelier
+    (ni secubox-autoload-agent ni abonnement.json), jamais retiré.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:20:32 +0100
 

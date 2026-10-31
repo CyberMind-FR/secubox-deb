@@ -65,7 +65,12 @@ seules les catégories grand public (médias, courrier, communication, publicati
   **Fail-closed** : absent, rien ne s'installe, sauf le marqueur root `/etc/secubox/abonnement-libre` (maître, atelier).
   Présent : seule une app du profil de la formule (`/etc/secubox/profiles/<profil>.toml`, clé = nom de fichier)
   s'installe (refus 403 du serveur ET de `secubox-appstorectl`, même règle `api/abonnement.py`) ; inactif ou illisible :
-  rien. **Producteurs à écrire** : `abonnement.json` (provisionnement Auto-Load) et `abonnement-libre` (maître/atelier).
+  rien.
+- **Producteurs** : `abonnement-libre` est posé par le postinst (`abonnement.py --poser-libre` : seulement si la box
+  n'a ni `secubox-autoload-agent` ni `abonnement.json`, donc maître et box d'atelier ; jamais retiré ici).
+  **Suite à faire** dans `secubox-autoload-agent` : à l'enrôlement (`moteur.py`, étape d'enrôlement), retirer
+  `abonnement-libre` et poser `abonnement.json` ; la réponse du hub porte aujourd'hui `client` et `profil` mais ni
+  formule, ni statut, ni échéance : il faut les y ajouter (secubox-autoload) et suivre leurs changements (suspension).
 - **Boutique fédérée** (sur le maître) : « Installer sur une autre box du parc » appelle
   `POST /api/v1/pilotage/boxes/<box>/actions/installer` (confirmation forte : le nom retapé). La box décide :
   dépôt, formule, mains liées, accord du détenteur (secubox-pilotage-agent, verbe `installer`).

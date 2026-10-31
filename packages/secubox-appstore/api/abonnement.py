@@ -77,7 +77,38 @@ def droit(name: str, r: str = None):
     return False, None, "hors de la formule de cette box"
 
 
+def poser_libre(r: str = None) -> str:
+    """Producteur du marqueur (postinst) : posé sur le maître et les box d'atelier du propriétaire, c'est-à-dire quand la
+    box N'EST PAS une box cliente provisionnée par Auto-Load (ni secubox-autoload-agent, ni abonnement.json). Jamais
+    posé si abonnement.json existe ; jamais retiré (le provisionnement Auto-Load s'en charge). Par descripteur du
+    dossier, sans suivre de lien, root 0644."""
+    r = _racine() if r is None else r
+    if os.path.lexists(f"{r}/etc/secubox/abonnement.json"):
+        return "box sous abonnement : marqueur non posé"
+    if os.path.exists(f"{r}/var/lib/dpkg/info/secubox-autoload-agent.list"):
+        return "box cliente Auto-Load : marqueur non posé"
+    try:
+        d = os.open(f"{r}/etc/secubox", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        return "/etc/secubox absent : marqueur non posé"
+    try:
+        try:
+            st = os.stat("abonnement-libre", dir_fd=d, follow_symlinks=False)
+            return "marqueur déjà présent" if stat.S_ISREG(st.st_mode) else "abonnement-libre n'est pas un fichier : laissé"
+        except FileNotFoundError:
+            pass
+        fd = os.open("abonnement-libre", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=d)
+        os.fchmod(fd, 0o644)
+        os.close(fd)
+        return "marqueur abonnement-libre posé (maître ou atelier)"
+    finally:
+        os.close(d)
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--poser-libre"]:
+        print(poser_libre())
+        sys.exit(0)
     if len(sys.argv) != 2:
         print("usage : abonnement.py <module>", file=sys.stderr)
         sys.exit(2)

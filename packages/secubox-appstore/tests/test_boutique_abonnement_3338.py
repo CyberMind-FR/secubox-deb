@@ -104,3 +104,45 @@ def test_appstorectl_applique_la_meme_regle(tmp_path):
     (tmp_path / "etc/secubox/abonnement-libre").write_text("")
     r = subprocess.run([sys.executable, "-I", str(script), "secubox-dns"], env=env, capture_output=True, text=True)
     assert r.returncode == 0
+
+
+# ── Producteur du marqueur abonnement-libre (postinst) ───────────────────────────────────────────────────────────
+
+def _poser(r):
+    script = PKG / "api/abonnement.py"
+    env = {"APPSTORE_RACINE": str(r), "PATH": "/usr/bin:/bin"}
+    return subprocess.run([sys.executable, "-I", str(script), "--poser-libre"], env=env, capture_output=True, text=True)
+
+
+def test_libre_pose_sur_le_maitre_et_l_atelier(tmp_path):
+    (tmp_path / "etc/secubox").mkdir(parents=True)
+    r = _poser(tmp_path)
+    m = tmp_path / "etc/secubox/abonnement-libre"
+    assert r.returncode == 0 and m.is_file() and not m.is_symlink() and (m.stat().st_mode & 0o777) == 0o644
+    assert _poser(tmp_path).returncode == 0 and m.is_file()          # idempotent
+
+
+def test_libre_jamais_sur_une_box_cliente(tmp_path):
+    (tmp_path / "etc/secubox").mkdir(parents=True)
+    (tmp_path / "etc/secubox/abonnement.json").write_text("{}")
+    assert _poser(tmp_path).returncode == 0
+    assert not (tmp_path / "etc/secubox/abonnement-libre").exists()
+    t2 = tmp_path / "b"
+    (t2 / "etc/secubox").mkdir(parents=True)
+    (t2 / "var/lib/dpkg/info").mkdir(parents=True)
+    (t2 / "var/lib/dpkg/info/secubox-autoload-agent.list").write_text("")
+    assert _poser(t2).returncode == 0
+    assert not (t2 / "etc/secubox/abonnement-libre").exists()
+
+
+def test_libre_ne_suit_pas_un_lien(tmp_path):
+    (tmp_path / "etc/secubox").mkdir(parents=True)
+    cible = tmp_path / "ailleurs"
+    (tmp_path / "etc/secubox/abonnement-libre").symlink_to(cible)
+    _poser(tmp_path)
+    assert not cible.exists()
+
+
+def test_postinst_appelle_le_producteur():
+    post = (PKG / "debian/postinst").read_text()
+    assert "abonnement.py --poser-libre" in post and "rm -f /etc/secubox/abonnement-libre" not in post
