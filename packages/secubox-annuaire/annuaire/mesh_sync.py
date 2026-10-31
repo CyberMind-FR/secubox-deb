@@ -173,3 +173,32 @@ def sync_once(
         totals["skipped"] += res["skipped"]
         totals["rejected"] += res["rejected"]
     return totals
+
+
+def http_json(url: str, timeout: int = 5) -> Dict[str, Any]:
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (mesh-local)
+        data = json.loads(resp.read(65536))
+    return data if isinstance(data, dict) else {}
+
+
+def relever_droits(peers: List[Dict[str, str]], fetch: Callable[[str], Dict[str, Any]] = http_json, chemin: Any = None,
+                   port: int = DEFAULT_MESH_PORT) -> bool:
+    """#3305 : demande à chaque pair les droits de CETTE box (`droits/self`) ; la première réponse d'un pair qui a une politique (le maître)
+    est gardée. Vrai si une politique a répondu. Jamais d'exception."""
+    from . import droits as D  # noqa: PLC0415
+    for peer in peers:
+        ip = peer.get("mesh_ip")
+        if not ip:
+            continue
+        try:
+            rep = fetch(f"http://{ip}:{port}/api/v1/annuaire/droits/self")
+        except Exception:  # noqa: BLE001 — pair injoignable ou ancien (404) : le suivant
+            continue
+        if isinstance(rep, dict) and rep.get("politique") is True:
+            try:
+                D.noter_droits_self(rep, chemin or D.SELF_DEFAUT)
+            except OSError:
+                return False
+            return True
+    return False

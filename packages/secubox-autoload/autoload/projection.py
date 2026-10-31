@@ -26,9 +26,10 @@ import stat
 import time
 from pathlib import Path
 
-from .jetons import etat_abonnement
+from .jetons import etat_abonnement, lire_droits_cx
 
 NOM = "pairs-publics.json"
+NOM_DROITS = "droits-maillage.json"                  # #3305 : droits du maillage par pair, lus par l'annuaire du maître
 DOSSIER_PUBLIC = "autoload-public"
 VERSION = 1
 DELAI_S = 15
@@ -128,11 +129,11 @@ def _ouvrir_public(dossier: Path) -> int:
         os.close(racine)
 
 
-def ecrire(dossier: Path, projection: dict) -> Path:
-    """Pose `pairs-publics.json` (0644) dans `dossier` par renommage atomique, tout par descripteur de dossier."""
+def ecrire(dossier: Path, projection: dict, nom: str = NOM) -> Path:
+    """Pose `nom` (`pairs-publics.json` par défaut, 0644) dans `dossier` par renommage atomique, tout par descripteur de dossier."""
     donnees = (json.dumps(projection, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
     dfd = _ouvrir_public(Path(dossier))
-    tmp = f".{NOM}.{os.getpid()}.{secrets.token_hex(4)}.tmp"
+    tmp = f".{nom}.{os.getpid()}.{secrets.token_hex(4)}.tmp"
     try:
         try:
             fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
@@ -141,10 +142,10 @@ def ecrire(dossier: Path, projection: dict) -> Path:
                 f.write(donnees)
                 f.flush()
                 os.fsync(f.fileno())
-            os.replace(tmp, NOM, src_dir_fd=dfd, dst_dir_fd=dfd)
+            os.replace(tmp, nom, src_dir_fd=dfd, dst_dir_fd=dfd)
             os.fsync(dfd)
         except OSError as e:
-            raise ProjectionErreur(f"écriture de {NOM} impossible ({e.strerror})") from e
+            raise ProjectionErreur(f"écriture de {nom} impossible ({e.strerror})") from e
         finally:
             try:
                 os.unlink(tmp, dir_fd=dfd)                 # no-op si le renommage a réussi
@@ -152,10 +153,30 @@ def ecrire(dossier: Path, projection: dict) -> Path:
                 pass
     finally:
         os.close(dfd)
-    return Path(dossier) / NOM
+    return Path(dossier) / nom
 
 
 def exporter(db: Path, dossier: Path):
     """(chemin du fichier, nombre de pairs publiés) : une seule lecture de la base."""
     pairs = lire_pairs(db)
     return ecrire(dossier, {"version": VERSION, "pairs": pairs}), len(pairs)
+
+
+def lire_droits(db: Path, maintenant: float = None) -> dict:
+    """Droits du maillage (#3305), lecture seule. Base absente ou illisible : ProjectionErreur — on ne publie JAMAIS une politique vide
+    par erreur (elle couperait tout le parc une fois la grâce passée)."""
+    db = Path(db)
+    if not db.exists():
+        raise ProjectionErreur("base absente")
+    try:
+        cx = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=DELAI_S, isolation_level=None)
+        cx.row_factory = sqlite3.Row
+        return lire_droits_cx(cx, time.time() if maintenant is None else maintenant)
+    except sqlite3.Error as e:
+        raise ProjectionErreur(f"base illisible ({e})") from e
+
+
+def exporter_droits(db: Path, dossier: Path):
+    """(chemin de `droits-maillage.json`, nombre de pairs) : projection publique root 0644, sans secret."""
+    d = lire_droits(db)
+    return ecrire(dossier, {"version": VERSION, **d}, NOM_DROITS), len(d["pairs"])

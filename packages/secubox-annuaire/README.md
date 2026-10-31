@@ -5,7 +5,7 @@ SecuBox Annuaire-Miroir — federated self-certifying trust substrate.
 
 The Annuaire-Miroir is the trust directory for SecuBox-DEB, providing a BLAKE2b-chained, CONIKS-style append-only audit journal with four protocols: AUTO-ADD (provisional discovery), INVITE (capability-based membership), PROPOSAL (anti-plutocratic governance), and EMANCIPATE (staged anchor removal). All objects are Ed25519-signed, RFC 3339-timestamped, and access-gated by the can() resolver. Served on /run/secubox/annuaire.sock, JWT-gated.
 
-Paquet Debian : version `0.10.13-1~bookworm1`, architecture `all`.
+Paquet Debian : version `0.17.0-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -111,3 +111,20 @@ Pour en admettre d'autres, lister un domaine par ligne (`#` = commentaire) dans
 
 - Une carte du Hall (`FEATURED`) n'est publiée comme offre `app` que si son hôte est un vhost déclaré par CE nœud (`domain = "…"` de `/etc/secubox/haproxy.toml`) : la curation est la même sur chaque nœud, seul celui qui sert le domaine l'offre ; sans `haproxy.toml` lisible, aucune offre `app`. Les offres `sync` disparues sont révoquées à la synchronisation suivante.
 - Flotte, tableau des pairs : bouton « Oublier » (nom retapé, « forcer » pour un nœud actif) → `secubox-p2p` puis `secubox-pilotage`.
+
+## Droits du maillage (#3305)
+
+Le maître (qui héberge Auto-Load) ne rend un service du maillage à un pair que si son abonnement l'inclut
+(`annuaire/droits.py`, projection `autoload-public/droits-maillage.json` de secubox-autoload ; pair désigné par l'adresse
+source de l'écouteur wg-mesh, nom et empreinte lus dans `p2p-public/pairs-enroles.json`).
+
+- `GET /services` (pair du maillage) : 403 sans `annuaire-offres`, refus écrit dans `/var/log/secubox/audit.log`
+  (`droit_maillage_refus`, pair, service, raison).
+- `GET /log/export` (pair du maillage) : opérations `ban_*` retirées sans `bans-waf`, `service_*` sans `annuaire-offres` ;
+  le socle (identités, nœuds, configs, assistance) n'est jamais coupé.
+- `GET /droits/self` (écouteur :8799 seulement, sinon `require_lecture`) : `{"politique": bool, "services": [...]}` de l'appelant.
+- Sans projection (box qui n'est pas le maître) : aucune politique, tout est rendu. Projection illisible : fermé.
+  Pair sans abonnement : rendu jusqu'à la fin de la grâce (5 jours), puis refusé. Empreinte posée et différente : refus.
+- Côté box : la synchronisation complète relève `droits/self` et garde la réponse du premier pair qui a une politique
+  (`/var/lib/secubox/annuaire/droits-self.json`) ; `annuairectl bans-apply` n'applique l'union fédérée que si `bans-waf` est
+  accordé par une réponse de moins de 48 h — sinon les seules bans publiées par la box. Jamais de réponse : comme avant.

@@ -399,9 +399,15 @@ def cmd_bans(args) -> int:
 
 
 def cmd_bans_apply(args) -> int:
+    from annuaire.droits import bans_a_appliquer  # noqa: PLC0415
     from annuaire.threatmesh import apply_bans  # noqa: PLC0415
-    from annuaire.verbs import banned_ips  # noqa: PLC0415
-    print(json.dumps(apply_bans(banned_ips(_journal())), indent=2))
+    from annuaire.verbs import _get_bans  # noqa: PLC0415
+    moi = None
+    if os.path.exists(KEY_PATH):
+        from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+        moi = did_from_pubkey(public_from_private(_load_priv()))
+    # #3305 : sans le droit « bans-waf » (abonnement), seules les bans de cette box s'appliquent
+    print(json.dumps(apply_bans(bans_a_appliquer(_get_bans(_journal()), moi)), indent=2))
     return 0
 
 

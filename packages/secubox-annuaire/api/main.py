@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import json
 import time
+from datetime import datetime, timezone
 import urllib.error
 import urllib.request
 import logging
@@ -469,10 +471,50 @@ class PullServicesRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@app.get("/services", dependencies=[Depends(lecture_ou_pair)])
-async def list_services():
+AUDIT_DROITS = Path("/var/log/secubox/audit.log")
+
+
+def _ip_pair(request: Request) -> str:
+    """Adresse source vue par l'écouteur wg-mesh (secubox-proxy.conf pose X-Real-IP = $remote_addr)."""
+    return request.headers.get("X-Real-IP", "").strip()[:45]
+
+
+def _auditer_refus(ip: str, service: str, raison: str) -> None:
+    """Refus d'un service du maillage (#3305) dans le journal d'audit (ajout seul) ; un échec d'écriture ne rend pas le service."""
+    ligne = json.dumps({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "module": "annuaire",
+                        "action": "droit_maillage_refus", "pair": ip, "service": service, "raison": raison}, ensure_ascii=False)
+    try:
+        with open(AUDIT_DROITS, "a", encoding="utf-8") as f:
+            f.write(ligne + "\n")
+    except OSError:
+        pass
+
+
+def exiger_droit(request: Request, ident: Dict[str, Any], service: str) -> None:
+    """Pair du maillage (marque posée par l'écouteur :8799) : 403 si son abonnement n'inclut pas `service` (#3305).
+    Un administrateur (jeton) n'est jamais concerné."""
+    if not ident.get("pair_maillage"):
+        return
+    from annuaire import droits as D  # noqa: PLC0415
+    ip = _ip_pair(request)
+    ok, raison = D.decider(ip, service, D.DROITS_DEFAUT, D.PAIRS_DEFAUT)
+    if not ok:
+        _auditer_refus(ip, service, raison)
+        raise HTTPException(403, f"service du maillage non inclus dans l'abonnement ({raison})")
+
+
+@app.get("/droits/self", dependencies=[Depends(lecture_ou_pair)])
+async def droits_self(request: Request):
+    """Droits du pair appelant (#3305), lus par la box pour couper ses synchros quand son abonnement ne les inclut plus."""
+    from annuaire import droits as D  # noqa: PLC0415
+    return D.droits_de(_ip_pair(request), D.DROITS_DEFAUT, D.PAIRS_DEFAUT)
+
+
+@app.get("/services")
+async def list_services(request: Request, ident: Dict[str, Any] = Depends(lecture_ou_pair)):
     """List all non-revoked service offers (public)."""
     from annuaire.verbs import _get_offers  # noqa: PLC0415
+    exiger_droit(request, ident, "annuaire-offres")
     j = get_journal()
     return {"services": _get_offers(j)}
 
@@ -737,8 +779,8 @@ async def list_bans():
     return {"banned_ips": banned_ips(j), "bans": _get_bans(j)}
 
 
-@app.get("/log/export", dependencies=[Depends(lecture_ou_pair)])
-async def export_log(ops: Optional[str] = None):
+@app.get("/log/export")
+async def export_log(request: Request, ops: Optional[str] = None, ident: Dict[str, Any] = Depends(lecture_ou_pair)):
     """Export the full signed log for a peer to pull (public).
 
     Distinct from GET /log (a truncated recent view): this returns every entry
@@ -749,7 +791,12 @@ async def export_log(ops: Optional[str] = None):
     # export long gelait TOUTES les routes de l'annuaire.
     # ?ops=assist_ (#2540) : la voie rapide ne tire que l'assistance (quelques Ko) au lieu du journal entier (3 Mo).
     prefixes = tuple(x for x in (ops or "").split(",") if x.strip()) or None
-    return {"entries": await asyncio.to_thread(export_entries, get_journal(), prefixes)}
+    entrees = await asyncio.to_thread(export_entries, get_journal(), prefixes)
+    if ident.get("pair_maillage"):                               # #3305 : bans et offres seulement si l'abonnement du pair les inclut
+        from annuaire import droits as D  # noqa: PLC0415
+        exclues = D.operations_exclues(_ip_pair(request), D.DROITS_DEFAUT, D.PAIRS_DEFAUT)
+        entrees = D.filtrer(entrees, exclues)
+    return {"entries": entrees}
 
 
 @app.post("/node/publish", dependencies=[Depends(_require_jwt)])
@@ -1389,6 +1436,8 @@ def _cycle_sync(peers_path: str, ops: Optional[str] = None):
                                           reseau=mesh_sync.reseau_maillage(peers_path))
         sync_once = mesh_sync.sync_once
         res = sync_once(get_journal(), peers, ops=ops) if ops else sync_once(get_journal(), peers)
+        if not ops:                                                  # #3305 : droits de cette box, relevés au passage complet
+            mesh_sync.relever_droits(peers)
     except Exception as e:  # noqa: BLE001 — la boucle ne meurt pas, mais elle le dit
         _sync_log.warning("synchronisation (%s) échouée : %s", voie, e)
         return None

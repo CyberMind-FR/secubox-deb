@@ -40,6 +40,10 @@ DUREE_MAX_S = 365 * 86400
 ABONNEMENTS = ("actif", "suspendu", "revoque")
 PROFILS = ("minimal", "lite", "isp", "full", "secure-gateway", "media-lab", "distante")      # profils réels de secubox-profiles (#3258) ; jamais light/standard
 MOTIF_MIN = 3
+# Services du maillage qu'une formule peut inclure (#3305) ; liste FERMÉE, dans l'ordre de publication.
+SERVICES_MAILLAGE = ("annuaire-offres", "bans-waf", "openpgp", "macro")
+FORMULE_ATELIER = "atelier"                  # formule interne du propriétaire (gk2, box de l'atelier) : tous les services
+GRACE_S = 5 * 86400                          # pair du maillage sans abonnement : services rendus 5 jours après la première migration
 MOTIF_CLIENT = "abonnement du client"        # marque d'une box suspendue/révoquée par la route client, que la même route peut lever
 
 _NOM = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
@@ -48,6 +52,8 @@ PREFIXE = "gk2_"                                                            # re
 _VALEUR = re.compile(r"^gk2_[0-9a-f]{32}$")
 _ETAPE = re.compile(r"^[a-z0-9_-]{1,40}$")
 _FORMULE = re.compile(r"^[a-z0-9_-]{1,30}$")
+_PAIR = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}$")                          # nom de pair du maillage (pairs-enroles.json de secubox-p2p)
+_EMPREINTE_PAIR = re.compile(r"^sbx?-[0-9a-f]{12}$")
 PRERAPPORT_MAX = 64 * 1024
 _CLE_WG = re.compile(r"^[A-Za-z0-9+/]{43}=$")
 
@@ -74,6 +80,11 @@ CREATE TABLE IF NOT EXISTS abonnements_box (
 CREATE TABLE IF NOT EXISTS formules (
   nom TEXT PRIMARY KEY, libelle TEXT NOT NULL, profil TEXT NOT NULL, mois INTEGER NOT NULL CHECK (mois BETWEEN 1 AND 120)
 );
+CREATE TABLE IF NOT EXISTS abonnements_maillage (
+  nom TEXT PRIMARY KEY, empreinte TEXT, formule TEXT NOT NULL, statut TEXT NOT NULL CHECK (statut IN ('actif','suspendu','revoque')),
+  expire_le INTEGER, motif TEXT, maj_le INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS progression (
   cle_pub TEXT PRIMARY KEY, etape TEXT NOT NULL, faites INTEGER NOT NULL, total INTEGER NOT NULL, termine INTEGER NOT NULL DEFAULT 0, maj_le INTEGER NOT NULL
 );
@@ -143,6 +154,35 @@ def _nom(champ: str, valeur: Optional[str], facultatif: bool = False) -> Optiona
     return valeur
 
 
+def valider_services(services) -> List[str]:
+    """Liste fermée, dédoublonnée, dans l'ordre de SERVICES_MAILLAGE."""
+    if not isinstance(services, (list, tuple)) or any(s not in SERVICES_MAILLAGE for s in services):
+        raise ValueError("services : " + ", ".join(SERVICES_MAILLAGE))
+    return [s for s in SERVICES_MAILLAGE if s in services]
+
+
+def _services(brut) -> List[str]:
+    try:
+        return valider_services(json.loads(brut or "[]"))
+    except (ValueError, TypeError):
+        return []                                                               # valeur abîmée : aucun service (jamais tous)
+
+
+def lire_droits_cx(cx: sqlite3.Connection, maintenant: float) -> dict:
+    """Droits du maillage : un pair actif et non échu reçoit les services de sa formule ; sinon aucun. Ferme la connexion."""
+    try:
+        r = cx.execute("SELECT valeur FROM meta WHERE cle='grace_debut'").fetchone()
+        pairs = []
+        for p in cx.execute("SELECT m.nom, m.empreinte, m.formule, m.statut, m.expire_le, f.services FROM abonnements_maillage m "
+                            "LEFT JOIN formules f ON f.nom=m.formule ORDER BY m.nom"):
+            statut = etat_abonnement(p["statut"], p["expire_le"], maintenant)
+            pairs.append({"nom": p["nom"], "empreinte": p["empreinte"], "formule": p["formule"], "statut": statut, "expire_le": p["expire_le"],
+                          "services": _services(p["services"]) if statut == "actif" else []})
+        return {"grace_jusqu_a": int(r["valeur"]) + GRACE_S if r else None, "services": list(SERVICES_MAILLAGE), "pairs": pairs}
+    finally:
+        cx.close()
+
+
 def etat_abonnement(abonnement: str, expire_le: Optional[int], maintenant: float) -> str:
     """L'état d'abonnement CALCULÉ : un abonnement `actif` dont l'échéance est passée est `echu` (actif | suspendu | revoque | echu)."""
     if abonnement == "actif" and expire_le is not None and expire_le <= maintenant:
@@ -166,6 +206,11 @@ class Registre:
                 if col not in colonnes:
                     cx.execute(f"ALTER TABLE clients ADD COLUMN {col} {typ}")
             self._heriter(cx)
+            if "services" not in {r["name"] for r in cx.execute("PRAGMA table_info(formules)")}:              # #3305
+                cx.execute("ALTER TABLE formules ADD COLUMN services TEXT NOT NULL DEFAULT '[]'")
+            cx.execute("INSERT OR IGNORE INTO formules (nom, libelle, profil, mois, services) VALUES (?,?,?,?,?)",
+                       (FORMULE_ATELIER, "Atelier (interne)", "full", 120, json.dumps(list(SERVICES_MAILLAGE))))
+            cx.execute("INSERT OR IGNORE INTO meta (cle, valeur) VALUES ('grace_debut', ?)", (str(self._maintenant()),))
 
     def _heriter(self, cx: sqlite3.Connection, client: Optional[str] = None) -> None:
         """Migration #3303, idempotente : toute box (jeton) sans ligne propre reçoit l'abonnement ACTUEL de son client (actif par défaut).
@@ -371,9 +416,9 @@ class Registre:
     # ── abonnement par box et formules (#3303) ───────────────────────────────────────────────────────────────
     def formules(self) -> List[dict]:
         with self._cx() as cx:
-            return [dict(r) for r in cx.execute("SELECT nom, libelle, profil, mois FROM formules ORDER BY nom")]
+            return [dict(r, services=_services(r["services"])) for r in cx.execute("SELECT nom, libelle, profil, mois, services FROM formules ORDER BY nom")]
 
-    def fixer_formule(self, nom: str, libelle: str, profil: str, mois: int) -> None:
+    def fixer_formule(self, nom: str, libelle: str, profil: str, mois: int, services: Optional[List[str]] = None) -> None:
         if not isinstance(nom, str) or not _FORMULE.match(nom):
             raise ValueError("formule : minuscules, chiffres, _ et -, 30 au plus")
         if not isinstance(libelle, str) or not libelle.strip() or len(libelle) > 60 or any(ord(c) < 32 for c in libelle):
@@ -382,10 +427,41 @@ class Registre:
             raise ValueError("profil : " + ", ".join(PROFILS))
         if isinstance(mois, bool) or not isinstance(mois, int) or not 1 <= mois <= 120:
             raise ValueError("durée : de 1 à 120 mois")
+        services = valider_services(services or [])
         with self._cx() as cx:
-            cx.execute("INSERT INTO formules (nom, libelle, profil, mois) VALUES (?,?,?,?) ON CONFLICT(nom) DO UPDATE SET "
-                       "libelle=excluded.libelle, profil=excluded.profil, mois=excluded.mois", (nom, libelle.strip(), profil, mois))
-        self._audit("formule", f"nom={nom} profil={profil} mois={mois}")
+            cx.execute("INSERT INTO formules (nom, libelle, profil, mois, services) VALUES (?,?,?,?,?) ON CONFLICT(nom) DO UPDATE SET "
+                       "libelle=excluded.libelle, profil=excluded.profil, mois=excluded.mois, services=excluded.services",
+                       (nom, libelle.strip(), profil, mois, json.dumps(services)))
+        self._audit("formule", f"nom={nom} profil={profil} mois={mois} services={','.join(services) or '-'}")
+
+    # ── droits du maillage (#3305) ───────────────────────────────────────────────────────────────────────────
+    def fixer_maillage(self, nom: str, formule: str, empreinte: Optional[str] = None, statut: str = "actif",
+                       mois: Optional[int] = None, motif: Optional[str] = None) -> None:
+        """Abonnement d'un pair du maillage (nom de pairs-enroles.json, empreinte facultative mais vérifiée par le fournisseur si posée)."""
+        if not isinstance(nom, str) or not _PAIR.match(nom):
+            raise ValueError("nom de pair : minuscules, chiffres et -, 31 au plus")
+        if empreinte is not None and (not isinstance(empreinte, str) or not _EMPREINTE_PAIR.match(empreinte)):
+            raise ValueError("empreinte : sbx-<12 hex>")
+        if statut not in ABONNEMENTS:
+            raise ValueError("statut : " + ", ".join(ABONNEMENTS))
+        if mois is not None and (isinstance(mois, bool) or not isinstance(mois, int) or not 1 <= mois <= 120):
+            raise ValueError("durée : de 1 à 120 mois")
+        motif = self._motif(motif) if statut != "actif" or motif else None
+        expire = ajouter_mois(self._maintenant(), mois) if mois else None
+        with self._cx() as cx:
+            cx.execute("BEGIN IMMEDIATE")
+            if cx.execute("SELECT 1 FROM formules WHERE nom=?", (formule if isinstance(formule, str) else "",)).fetchone() is None:
+                cx.execute("ROLLBACK")
+                raise ValueError("formule inconnue")
+            cx.execute("INSERT INTO abonnements_maillage (nom, empreinte, formule, statut, expire_le, motif, maj_le) VALUES (?,?,?,?,?,?,?) "
+                       "ON CONFLICT(nom) DO UPDATE SET empreinte=excluded.empreinte, formule=excluded.formule, statut=excluded.statut, "
+                       "expire_le=excluded.expire_le, motif=excluded.motif, maj_le=excluded.maj_le",
+                       (nom, empreinte, formule, statut, expire, motif, self._maintenant()))
+            cx.execute("COMMIT")
+        self._audit("maillage", f"pair={nom} formule={formule} statut={statut} expire={expire or '-'}" + (f" motif={motif}" if motif else ""))
+
+    def droits_maillage(self) -> dict:
+        return lire_droits_cx(self._cx(), self._maintenant())
 
     def _box(self, cx: sqlite3.Connection, ident: int):
         r = cx.execute("SELECT j.id, j.client, j.serie, j.etat, j.cle_pub, b.statut, b.formule, b.expire_le FROM jetons j "

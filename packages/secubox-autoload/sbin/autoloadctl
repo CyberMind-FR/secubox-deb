@@ -16,6 +16,9 @@
                                            (même si WireGuard échoue : le code de retour dit alors l'échec du tunnel) ; --sans-reactiver
                                            (minuterie, révocations, abonnement) ne relance pas un wg-autoload dont l'unité est désactivée
   autoloadctl exporter-pairs               publie /var/lib/secubox/autoload-public/pairs-publics.json (root, 0644, sans secret) pour le pilotage (#3126)
+                                           et droits-maillage.json (droits des pairs du maillage, lus par l'annuaire, #3305)
+  autoloadctl maillage --nom <pair> --formule <f> [--empreinte sbx-…] [--statut …] [--mois N] [--motif …]
+                                           abonnement d'un pair du maillage (#3305) ; gk2 et l'atelier : --formule atelier
 
 tunnel-sync et exporter-pairs passent un par un (flock sur /run/secubox-autoload/autoload-sync.lock, dossier à root seul) : un passage qui a lu les pairs avant une
 révocation ne repose jamais le pair révoqué après la synchronisation de la révocation (#3126).
@@ -91,6 +94,13 @@ def main(argv=None):
     ts = sub.add_parser("tunnel-sync")
     ts.add_argument("--sans-reactiver", action="store_true", help="publication (minuterie, révocations, abonnement) : ne réactive pas une interface dont l'unité est désactivée")
     sub.add_parser("exporter-pairs")
+    ma = sub.add_parser("maillage")
+    ma.add_argument("--nom", required=True)
+    ma.add_argument("--formule", required=True)
+    ma.add_argument("--empreinte")
+    ma.add_argument("--statut", default="actif")
+    ma.add_argument("--mois", type=int)
+    ma.add_argument("--motif")
     a = ap.parse_args(argv)
 
     db = Path(os.environ.get("SECUBOX_AUTOLOAD_DB", J.DB_DEFAUT))
@@ -152,6 +162,10 @@ def main(argv=None):
                     P.exporter(db, P.dossier_public(db))
                 except (P.ProjectionErreur, OSError, ValueError) as err:
                     print(f"exporter-pairs : {err}", file=sys.stderr)
+                try:
+                    P.exporter_droits(db, P.dossier_public(db))
+                except (P.ProjectionErreur, OSError, ValueError) as err:                            # l'ancien fichier reste : jamais de politique vide
+                    print(f"exporter-droits : {err}", file=sys.stderr)
                 if echec is not None:
                     raise echec if isinstance(echec, T.TunnelErreur) else T.TunnelErreur(f"{type(echec).__name__} : {str(echec)[:200]}")
         elif a.cmd == "exporter-pairs":
@@ -162,6 +176,14 @@ def main(argv=None):
                 except (P.ProjectionErreur, OSError, ValueError) as err:
                     print(f"exporter-pairs : {err}", file=sys.stderr)
                     return 1
+                try:                                                                                # base pas encore créée : rien à publier, l'ancien fichier reste
+                    chemin, n = P.exporter_droits(db, P.dossier_public(db))
+                    print(f"{n} pair(s) du maillage publié(s) dans {chemin}")
+                except (P.ProjectionErreur, OSError, ValueError) as err:
+                    print(f"exporter-droits : {err}", file=sys.stderr)
+        elif a.cmd == "maillage":
+            reg.fixer_maillage(a.nom, a.formule, empreinte=a.empreinte, statut=a.statut, mois=a.mois, motif=a.motif)
+            print(f"pair {a.nom} : formule {a.formule}, {a.statut} (droits publiés au prochain tunnel-sync, au plus tard dans l'heure)")
         elif a.cmd == "abonnement":
             print(f"{reg.fixer_abonnement(a.client, a.statut)} jeton(s) du client (projection du pilotage : au prochain tunnel-sync, au plus tard dans l'heure)")
     except T.TunnelErreur as err:
