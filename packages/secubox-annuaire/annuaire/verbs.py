@@ -1781,7 +1781,7 @@ def _get_nodes(journal: Journal) -> List[Dict]:
     """Return the latest self-authored NodeRecord payload per did."""
     nodes: Dict[str, Dict] = {}
     heights: Dict[str, int] = {}
-    for entry in journal.iter_entries():
+    for entry in journal.iter_entries((Op.NODE_PUBLISH.value,)):
         if entry.op == Op.NODE_PUBLISH and entry.payload_type == "NodeRecord":
             d = entry.payload.get("did")
             if d and entry.author == d and entry.height > heights.get(d, -1):
@@ -2044,7 +2044,7 @@ def export_entries(journal: Journal, ops: Optional[Tuple[str, ...]] = None) -> L
     # change pas le temps d'une lecture.
     cles: Dict[str, Optional[str]] = {}
     out: List[Dict[str, Any]] = []
-    for entry in journal.iter_entries():
+    for entry in journal.iter_entries(tuple(ops) if ops else None):
         nom_op = entry.op.value if hasattr(entry.op, "value") else entry.op
         if ops and not str(nom_op).startswith(tuple(ops)):
             continue
@@ -2062,7 +2062,7 @@ def export_entries(journal: Journal, ops: Optional[Tuple[str, ...]] = None) -> L
 
 
 def _seen_author_sig(journal: Journal) -> set:
-    return {(e.author, e.sig) for e in journal.iter_entries()}
+    return journal.author_sigs()
 
 
 def import_entries(journal: Journal, entries: List[Dict[str, Any]]) -> Dict[str, int]:
