@@ -181,6 +181,8 @@ CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "installer", "service
 # retour (jamais un apply sans profil : il éteindrait tout sauf le socle).
 SENS_INTERFACE = ("locale", "distante", "confirmer")
 PROFIL_LEGER = "distante"
+INSTANTANE = "instantane"   # #3349 : profil de retour PHOTOGRAPHIÉ quand aucun profil connu n'existe
+RE_MODULE_INSTANTANE = re.compile(r"[a-z0-9][a-z0-9@._-]{0,63}")
 RE_PROFIL = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}")           # _NOM_PROFIL de secubox-profilectl
 DELAI_INTERFACE = 1800                                   # s, durée maximale de l'unité transitoire d'une bascule
 DELAI_APPLY = 900                                        # s, un apply de profil (le retour garde la fin de l'unité)
@@ -1701,6 +1703,10 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
         if p["sens"] == "locale" and not distante_en_place(ctx, etat_if):
             return refus("aucune interface distante en place")
         p["precedent"] = profil_de_retour(ctx, etat_if)
+        if p["precedent"] is None and p["sens"] == PROFIL_LEGER:
+            # #3349 : aucun profil de retour connu (box jamais passée par un apply : gk1, gk3) : l'unité transitoire
+            # photographiera l'état réel des modules avant la garde et l'apply, et le retour le rendra à l'identique
+            p["precedent"] = INSTANTANE
         if p["precedent"] is None:
             return refus("profil de retour inconnu")
     if unite is not None:
@@ -1962,6 +1968,47 @@ def profil_de_retour(ctx, etat_if):
     return None
 
 
+def prendre_instantane(ctx, job):
+    """#3349 : l'état réel des modules (`secubox-profilectl status --json`, ceux qui sont allumés) devient le profil
+    « instantane » : copie root 0600 dans l'état du ctl (instantane-<job>.toml) et profil 0644 que profilectl applique au
+    retour. Vrai si les deux sont écrits ; un relevé illisible ou vide n'écrit rien (jamais un retour qui couperait tout)."""
+    try:
+        r = subprocess.run([ctx.profilectl, "status", "--json"], env=ctx.env, stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=120)
+        mods = json.loads(r.stdout).get("modules") if r.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+        mods = None
+    if not isinstance(mods, list):
+        err("instantané : relevé des modules illisible")
+        return False
+    ids = sorted({m["id"] for m in mods if isinstance(m, dict) and m.get("on") is True and isinstance(m.get("id"), str)
+                  and RE_MODULE_INSTANTANE.fullmatch(m["id"])})
+    if not ids:
+        err("instantané : aucun module allumé relevé")
+        return False
+    texte = (f'# Instantané de l\'état réel avant la bascule {job} (#3349) — écrit par secubox-pilotagectl, ne pas éditer.\n'
+             f'name = "{INSTANTANE}"\nlabel = "Instantané avant bascule {job}"\n'
+             "on = [\n" + "".join(f'  "{i}",\n' for i in ids) + "]\n").encode("utf-8")
+    try:
+        fd = ouvrir_etat(ctx, creer=False)
+        if fd is None:
+            return False
+        try:
+            ecrire(fd, f"instantane-{job}.toml", texte)
+        finally:
+            os.close(fd)
+        dfd = ouvrir_chemin(ctx, "etc/secubox/profiles")
+        try:
+            ecrire(dfd, f"{INSTANTANE}.toml", texte, 0o644, None if ctx.substitue else (0, 0))
+        finally:
+            os.close(dfd)
+    except OSError as e:
+        err(f"instantané non écrit ({e.__class__.__name__})")
+        return False
+    auditer(ctx, "interface_instantane", job=job, modules=len(ids))
+    return True
+
+
 def appliquer_profil(ctx, nom):
     """`secubox-profilectl apply --profile <nom> --yes --json` ; vrai si l'apply (et son front web) a réussi. Borné à
     DELAI_APPLY : deux applies (bascule puis retour) tiennent dans l'unité (RuntimeMaxSec)."""
@@ -2087,6 +2134,10 @@ def basculer_interface(ctx, job):
         auditer(ctx, "interface_echec", job=job, refus="bascule introuvable")
         raise Erreur("bascule introuvable")
     precedent = etat.get("precedent")
+    if etat["sens"] == PROFIL_LEGER and precedent == INSTANTANE and not prendre_instantane(ctx, job):
+        maj_interface(ctx, job, etat="echec", fin=int(time.time()))
+        auditer(ctx, "interface_echec", job=job, refus="instantané impossible")
+        raise Erreur("instantané de l'état impossible : bascule abandonnée")
     if not profil_connu(ctx, precedent):
         maj_interface(ctx, job, etat="echec")
         auditer(ctx, "interface_echec", job=job, refus="profil de retour inconnu")

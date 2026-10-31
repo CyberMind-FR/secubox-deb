@@ -15,6 +15,13 @@ from test_pilotagectl import Banc
 FAUX_PROFILECTL = """#!/bin/sh
 # faux secubox-profilectl : note l'argv ; échoue (rc 2) si le profil demandé est dans $FAUX_PROFILECTL_ECHEC
 printf '%s\\n' "$*" >> "$FAUX_PROFILECTL_APPELS"
+if [ "$1" = status ]; then
+  [ -n "$FAUX_PROFILECTL_STATUS_ECHEC" ] && exit 3
+  if [ -n "$FAUX_PROFILECTL_STATUS" ]; then printf '%s\\n' "$FAUX_PROFILECTL_STATUS"; else
+    echo '{"modules": [{"id": "hub", "on": true}, {"id": "visio", "on": true}, {"id": "group@distante", "on": false}, {"id": "auth", "on": true}]}'
+  fi
+  exit 0
+fi
 profil=""
 prec=""
 for a in "$@"; do [ "$prec" = --profile ] && profil="$a"; prec="$a"; done
@@ -227,11 +234,61 @@ def test_distante_refusee_pendant_une_attente(bi):
     assert rc == 0 and sortie["refus"] == "bascule en attente de confirmation"
 
 
-def test_sans_profil_de_retour_rien_n_est_lance(tmp_path):
+def test_sans_profil_de_retour_un_instantane_est_pris(tmp_path):
+    """#3349 : sans profil de retour connu, la bascule photographie l'état réel (modules allumés selon secubox-profilectl
+    status) en un profil « instantane » (copie root 0600 dans l'état du ctl, profil 0644 lu par profilectl) AVANT la garde
+    et l'apply du profil léger ; le retour l'applique à l'identique."""
     bi = BancInterface(tmp_path, actif=None)
+    rc, sortie, p = bi.run("interface", "distante", agent=True)
+    assert rc == 0 and sortie["ok"] is True, (sortie, p.stderr)
+    assert bi.etat_interface()["precedent"] == "instantane"
+    assert bi.profilectl() == []                     # rien avant l'unité transitoire
+    rc, fin, p = bi.run("_interface", sortie["job"])
+    assert rc == 0 and fin["ok"] is True, (fin, p.stderr)
+    assert bi.profilectl() == ["status --json", "apply --profile distante --yes --json"]
+    prof = bi.r / "etc/secubox/profiles/instantane.toml"
+    texte = prof.read_text()
+    assert 'name = "instantane"' in texte and '"hub"' in texte and '"visio"' in texte and '"auth"' in texte
+    assert "group@distante" not in texte
+    copie = bi.r / f"var/lib/secubox-pilotagectl/instantane-{sortie['job']}.toml"
+    assert copie.read_text() == texte and (copie.stat().st_mode & 0o777) == 0o600
+    assert any(e["evenement"] == "interface_instantane" for e in bi.audit())
+
+
+def test_homme_mort_rend_l_instantane(tmp_path):
+    bi = BancInterface(tmp_path, actif=None)
+    job = bi.basculer_distante()
+    rc, _, p = bi.run("_interface-garde", job)
+    assert rc == 0, p.stderr
+    assert bi.profilectl()[-1] == "apply --profile instantane --yes --json"
+    assert bi.etat_interface()["etat"] == "retour"
+
+
+def test_instantane_illisible_pas_de_bascule(tmp_path):
+    bi = BancInterface(tmp_path, actif=None)
+    bi.env["FAUX_PROFILECTL_STATUS_ECHEC"] = "1"
     rc, sortie, _ = bi.run("interface", "distante", agent=True)
-    assert rc == 0 and sortie == {"ok": False, "refus": "profil de retour inconnu"}
-    assert bi.lancements() == []
+    assert rc == 0 and sortie["ok"] is True
+    rc, _, _ = bi.run("_interface", sortie["job"])
+    assert rc == 1 and "apply --profile distante --yes --json" not in bi.profilectl()
+    assert bi.etat_interface()["etat"] == "echec"
+    assert not any("secubox-pilotage-garde-" in x for x in bi.lancements())
+
+
+def test_instantane_vide_refuse(tmp_path):
+    bi = BancInterface(tmp_path, actif=None)
+    bi.env["FAUX_PROFILECTL_STATUS"] = '{"modules": [{"id": "x", "on": false}, {"id": "../evil", "on": true}]}'
+    rc, sortie, _ = bi.run("interface", "distante", agent=True)
+    rc, _, _ = bi.run("_interface", sortie["job"])
+    assert rc == 1 and bi.etat_interface()["etat"] == "echec"
+    assert not (bi.r / "etc/secubox/profiles/instantane.toml").exists()
+
+
+def test_profil_connu_reste_prioritaire_sur_l_instantane(bi):
+    rc, sortie, _ = bi.run("interface", "distante", agent=True)
+    assert bi.etat_interface()["precedent"] == "minimal"
+    bi.run("_interface", sortie["job"])
+    assert "status --json" not in bi.profilectl()
 
 
 def test_profil_de_retour_configure(tmp_path):
@@ -245,10 +302,10 @@ def test_profil_de_retour_configure(tmp_path):
     assert rc == 0 and sortie["ok"] is True and bi.etat_interface()["precedent"] == "full"
 
 
-def test_profil_de_retour_inexistant_refuse(tmp_path):
+def test_profil_de_retour_inexistant_donne_un_instantane(tmp_path):
     bi = BancInterface(tmp_path, actif="inconnu")
     rc, sortie, _ = bi.run("interface", "distante", agent=True)
-    assert sortie == {"ok": False, "refus": "profil de retour inconnu"}
+    assert sortie["ok"] is True and bi.etat_interface()["precedent"] == "instantane"
 
 
 def test_mains_liees_refusent(bi):
