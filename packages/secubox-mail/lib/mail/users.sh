@@ -320,6 +320,89 @@ alias_del() {
     echo "Alias deleted: $alias"
 }
 
+# ============================================================================
+# Membres d'un alias (#3347)
+# ============================================================================
+# Une ligne de la carte = « alias cible1, cible2 » (virtual(5) de postfix). Les
+# membres s'ajoutent et se retirent un a un ; le fichier est reecrit d'un bloc
+# (fichier temporaire du meme dossier puis mv), jamais modifie en place.
+
+_ALIAS_ADR_RE='^[A-Za-z0-9._%+][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?)+$'
+
+_alias_adresse_valide() {
+    # Une seule adresse, sans espace, virgule, saut de ligne ni tiret initial.
+    [ "$(printf '%s' "$1" | wc -l)" -eq 0 ] || return 1
+    printf '%s' "$1" | grep -Eq "$_ALIAS_ADR_RE"
+}
+
+_alias_audit() {
+    local action="$1" alias="$2" membre="$3"
+    local journal="${SECUBOX_AUDIT_LOG:-/var/log/secubox/audit.log}"
+    printf '{"ts":"%s","module":"mail","action":"%s","alias":"%s","membre":"%s","acteur":"%s"}\n' \
+        "$(date -u +%FT%TZ)" "$action" "$alias" "$membre" "${SUDO_USER:-$(id -un)}" >> "$journal" 2>/dev/null || true
+}
+
+# _alias_reecrire <alias> <ajouter|retirer> <membre> : reecrit la ligne de l'alias.
+_alias_reecrire() {
+    local alias="$1" op="$2" membre="$3" f="$CONFIG_PATH/virtual" tmp rc
+    [ -f "$f" ] || { echo "Alias inconnu : $alias" >&2; return 1; }
+    tmp=$(mktemp "$CONFIG_PATH/.virtual.XXXXXX") || return 1
+    awk -v a="$alias" -v op="$op" -v m="$membre" '
+        BEGIN { trouve = 0; err = 0 }
+        $1 == a && !trouve {
+            trouve = 1
+            ligne = $0; sub(/^[^ \t]+[ \t]+/, "", ligne)
+            n = split(ligne, c, /[ \t]*,[ \t]*/)
+            k = 0; deja = 0
+            for (i = 1; i <= n; i++) { gsub(/^[ \t]+|[ \t]+$/, "", c[i]); if (c[i] == "") continue
+                if (c[i] == m) { deja = 1; if (op == "retirer") continue }
+                k++; r[k] = c[i] }
+            if (op == "ajouter") { if (deja) { err = 3 } else { k++; r[k] = m } }
+            if (op == "retirer") { if (!deja) { err = 4 } else if (k == 0) { err = 5 } }
+            if (err) { print; next }
+            out = a " " r[1]; for (i = 2; i <= k; i++) out = out ", " r[i]
+            print out; next
+        }
+        { print }
+        END { if (!trouve) exit 2; exit err }
+    ' "$f" > "$tmp"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        rm -f "$tmp"
+        case "$rc" in
+            2) echo "Alias inconnu : $alias" >&2 ;;
+            3) echo "Déjà membre de $alias : $membre" >&2 ;;
+            4) echo "Pas membre de $alias : $membre" >&2 ;;
+            5) echo "Refus : $membre est le dernier membre de $alias (supprimer l'alias à la place)" >&2 ;;
+        esac
+        return 1
+    fi
+    chmod --reference="$f" "$tmp" 2>/dev/null || true
+    chown --reference="$f" "$tmp" 2>/dev/null || true
+    sync "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$f"
+}
+
+alias_membre_add() {
+    local alias="$1" membre="$2"
+    _alias_adresse_valide "$alias" || { echo "Alias invalide" >&2; return 1; }
+    _alias_adresse_valide "$membre" || { echo "Adresse invalide : $membre" >&2; return 1; }
+    _alias_reecrire "$alias" ajouter "$membre" || return 1
+    alias_recompile "$alias"
+    _alias_audit alias_membre_ajoute "$alias" "$membre"
+    echo "Membre ajouté : $alias -> $membre"
+}
+
+alias_membre_del() {
+    local alias="$1" membre="$2"
+    _alias_adresse_valide "$alias" || { echo "Alias invalide" >&2; return 1; }
+    _alias_adresse_valide "$membre" || { echo "Adresse invalide : $membre" >&2; return 1; }
+    _alias_reecrire "$alias" retirer "$membre" || return 1
+    alias_recompile "$alias"
+    _alias_audit alias_membre_retire "$alias" "$membre"
+    echo "Membre retiré : $alias -> $membre"
+}
+
 alias_list() {
     echo "Email Aliases:"
     echo "=============="

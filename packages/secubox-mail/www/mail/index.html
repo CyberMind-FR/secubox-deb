@@ -191,7 +191,7 @@
                     <label>Destination<input name="target" type="email" placeholder="alice@exemple.test" required autocomplete="off"></label>
                     <div class="bout"><button class="btn prim" type="submit">Créer</button><button class="btn" type="button" data-ferme="fAlias">Annuler</button></div>
                 </form>
-                <div class="tab"><table><thead><tr><th>Alias</th><th>Destination</th><th>Actions</th></tr></thead><tbody id="bAlias"></tbody></table></div></div>
+                <div class="tab"><table><thead><tr><th>Alias</th><th>Membres</th><th>Actions</th></tr></thead><tbody id="bAlias"></tbody></table></div></div>
         </section>
 
         <section id="t-externe" role="tabpanel" aria-labelledby="o-externe" hidden>
@@ -597,7 +597,23 @@
             if (ALIAS === null) { vide(tb, 3, '—'); return; }
             if (!ALIAS.length) { vide(tb, 3, 'Aucun alias'); return; }
             ALIAS.forEach(a => {
-                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(a.alias))); tr.appendChild(el('td', 'mono', tiret(a.target)));
+                // #3347 : chaque membre avec « Retirer » (jamais le dernier), et « Ajouter un membre » en ligne
+                const membres = Array.isArray(a.membres) && a.membres.length ? a.membres : (a.target ? String(a.target).split(/\s*,\s*/) : []);
+                const tr = el('tr'); tr.appendChild(el('td', 'mono', tiret(a.alias)));
+                const tdm = el('td', 'mono'); const liste = el('div', 'grp');
+                membres.forEach(m => {
+                    const ligne = el('div', 'grp'); ligne.appendChild(el('span', 'mono', m));
+                    if (membres.length > 1) ligne.appendChild(btn('Retirer', 'danger', () => demander('Retirer ' + m + ' de l’alias ' + a.alias + ' ?',
+                        () => agir('Retrait de ' + m + ' de ' + a.alias, 'DELETE', '/alias/' + encodeURIComponent(a.alias) + '/membres/' + encodeURIComponent(m)))));
+                    liste.appendChild(ligne);
+                });
+                const ajout = el('form', 'grp'); const champ = el('input'); champ.type = 'email'; champ.required = true;
+                champ.placeholder = 'nouveau@exemple.test'; champ.setAttribute('aria-label', 'Adresse à ajouter à ' + a.alias);
+                const ok = el('button', 'btn sm prim', 'Ajouter un membre'); ok.type = 'submit';
+                ajout.appendChild(champ); ajout.appendChild(ok);
+                ajout.addEventListener('submit', ev => { ev.preventDefault(); const v = champ.value.trim(); if (!v) return;
+                    agir('Ajout de ' + v + ' à ' + a.alias, 'POST', '/alias/' + encodeURIComponent(a.alias) + '/membres', { cible: v }); });
+                tdm.appendChild(liste); tdm.appendChild(ajout); tr.appendChild(tdm);
                 const td = el('td', 'act'); const g = el('div', 'grp');
                 g.appendChild(btn('Supprimer', 'danger', () => demander('Supprimer l’alias ' + a.alias + ' ?', () => agir('Suppression de l’alias ' + a.alias, 'DELETE', '/alias/' + encodeURIComponent(a.alias)))));
                 td.appendChild(g); tr.appendChild(td); tb.appendChild(tr);

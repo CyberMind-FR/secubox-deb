@@ -1,3 +1,14 @@
+secubox-mail (2.16.8-1~trixie1) trixie; urgency=medium
+
+  * Alias : membres geres un a un (ref #3347). mailctl alias membre-add /
+    membre-del (adresse validee, pas de doublon, jamais le dernier membre,
+    fichier reecrit d un bloc, recompilation, audit) ; routes
+    POST /alias/{alias}/membres et DELETE /alias/{alias}/membres/{cible}
+    (require_jwt) ; /aliases rend tous les membres ; page : membres avec
+    Retirer et Ajouter un membre.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 11:37:10 +0100
+
 secubox-mail (2.16.7-1~trixie1) trixie; urgency=medium
 
   * Minuteries autocrypt-sync et imap-sync (ref #3185) : un conteneur mail jamais provisionné les fait

@@ -1152,6 +1152,12 @@ cmd_alias() {
         list)
             alias_list
             ;;
+        membre-add)
+            alias_membre_add "$@" && cmd_sync
+            ;;
+        membre-del)
+            alias_membre_del "$@" && cmd_sync
+            ;;
         repair)
             # POUR LES BOARDS DEJA INSTALLEES (#1025). Le correctif du code ne
             # rebranche pas un main.cf ecrit avant lui : sans ce verbe, il
@@ -1165,6 +1171,8 @@ cmd_alias() {
             echo "  alias add <alias> <target>  Add email alias"
             echo "  alias del <alias>           Delete email alias"
             echo "  alias list                  List aliases"
+            echo "  alias membre-add <alias> <adresse>  Ajouter un membre à un alias (#3347)"
+            echo "  alias membre-del <alias> <adresse>  Retirer un membre (jamais le dernier)"
             echo "  alias repair                Rebrancher et recompiler la carte d\x27alias"
             ;;
     esac
@@ -1726,6 +1734,8 @@ Aliases:
   alias add <a> <t>    Add email alias
   alias del <alias>    Delete alias
   alias list           List aliases
+  alias membre-add <a> <m>  Ajouter un membre à un alias
+  alias membre-del <a> <m>  Retirer un membre d'un alias
 
 Backup:
   backup                Create backup (vmail + config + dovecot.conf)

@@ -12,6 +12,7 @@ Three-fold perspective:
 
 SecuBox is an appliance and network model - distributed peer applications.
 """
+import asyncio
 import subprocess
 import os
 import re
@@ -653,18 +654,59 @@ async def change_password(req: UserPassword):
     return {"success": True, "message": "Password changed"}
 
 
+def membres_alias(ligne: str):
+    """#3347 : « alias cible1, cible2 » (virtual(5)) → (alias, [cibles])."""
+    tete, _, reste = ligne.strip().partition(" ")
+    membres = [m.strip() for m in re.split(r"[,\s]+", reste) if m.strip()]
+    return tete, membres
+
+
 @app.get("/aliases", dependencies=[Depends(require_jwt)])
 async def list_aliases():
-    """List email aliases"""
+    """List email aliases (membres : toutes les cibles, #3347 ; target = la première, compatibilité)."""
     aliases = []
     virtual_file = DATA_PATH / "config" / "virtual"
     if virtual_file.exists():
         for line in virtual_file.read_text().splitlines():
-            if line.strip():
-                parts = line.split()
-                if len(parts) >= 2:
-                    aliases.append({"alias": parts[0], "target": parts[1]})
+            if line.strip() and not line.lstrip().startswith("#"):
+                alias, membres = membres_alias(line)
+                if membres:
+                    aliases.append({"alias": alias, "target": ", ".join(membres), "membres": membres})
     return {"aliases": aliases, "count": len(aliases)}
+
+
+class MembreAlias(BaseModel):
+    cible: str
+
+
+_RE_ADRESSE = re.compile(r"[A-Za-z0-9._%+][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?"
+                         r"(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?)+")
+
+
+def _adresse_ou_422(v: str) -> str:
+    if not isinstance(v, str) or not _RE_ADRESSE.fullmatch(v):
+        raise HTTPException(422, "adresse invalide")
+    return v
+
+
+@app.post("/alias/{alias_email}/membres", dependencies=[Depends(require_jwt)])
+async def ajouter_membre_alias(alias_email: str, corps: MembreAlias):
+    """#3347 : ajoute un destinataire à un alias (mailctl : validation, pas de doublon, audit, recompilation)."""
+    a, c = _adresse_ou_422(alias_email), _adresse_ou_422(corps.cible)
+    ok, out, err = await asyncio.to_thread(run_cmd, ["/usr/sbin/mailctl", "alias", "membre-add", a, c])
+    if ok:
+        return {"success": True, "message": out}
+    raise HTTPException(409, err or out or "refusé")
+
+
+@app.delete("/alias/{alias_email}/membres/{cible}", dependencies=[Depends(require_jwt)])
+async def retirer_membre_alias(alias_email: str, cible: str):
+    """#3347 : retire un destinataire (jamais le dernier : supprimer l'alias à la place)."""
+    a, c = _adresse_ou_422(alias_email), _adresse_ou_422(cible)
+    ok, out, err = await asyncio.to_thread(run_cmd, ["/usr/sbin/mailctl", "alias", "membre-del", a, c])
+    if ok:
+        return {"success": True, "message": out}
+    raise HTTPException(409, err or out or "refusé")
 
 
 @app.post("/alias", dependencies=[Depends(require_jwt)])
