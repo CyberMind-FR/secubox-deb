@@ -299,7 +299,7 @@
                 const act = el('td');
                 if (p.name && /^[a-z0-9][a-z0-9-]{0,62}$/.test(p.name)) {
                     const bt = el('button', 'btn sm danger', 'Oublier'); bt.type = 'button';
-                    bt.addEventListener('click', () => oublierNoeud(p.name, act));
+                    bt.addEventListener('click', () => oublierNoeud(p.name, act, p.public_key));
                     act.append(bt);
                 }
                 tr.append(el('td', 'hostname-col', p.name || p.id || '—'), el('td', null, p.address || '—'), st,
@@ -754,7 +754,7 @@
         setInterval(() => { if (pbBoite && !pbOpsEnCours && document.visibilityState !== 'hidden') pbOperations(); }, 10000);   // #3308 : journal relu même si la vue en direct est coupée
         // #3335 : « Oublier ce nœud » — nœud obsolète (réinstallé, retiré) : le registre des pairs et wg-mesh (secubox-p2p), puis la
         // Flotte du pilotage (boites, inventaire). Confirmation dans la ligne : le nom retapé ; un nœud encore actif exige « forcer ».
-        function oublierNoeud(nom, td) {
+        function oublierNoeud(nom, td, cle) {
             if (DEMO) return;
             clear(td);
             const saisie = el('input'); saisie.type = 'text'; saisie.placeholder = nom; saisie.setAttribute('aria-label', 'Retapez ' + nom + ' pour confirmer');
@@ -767,7 +767,7 @@
                 ok.disabled = true; msg.textContent = 'Oubli en cours…';
                 const corps = (extra) => JSON.stringify(Object.assign({ confirmation: nom }, extra, forcer.checked ? { force: true } : {}));
                 try {
-                    const r = await pbFetch('/api/v1/p2p/master-link/oublier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps({ nom: nom }) });
+                    const r = await pbFetch('/api/v1/p2p/master-link/oublier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps(Object.assign({ nom: nom }, cle ? { public_key: cle } : {})) });
                     if (!r.ok) { msg.textContent = await pbErreur(r); ok.disabled = false; return; }
                     const rp = await pbFetch('/api/v1/pilotage/boxes/' + encodeURIComponent(nom) + '/oublier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps({}) });
                     if (!rp.ok && rp.status !== 404) { msg.textContent = 'Maillage oublié ; Flotte : ' + await pbErreur(rp); ok.disabled = false; return; }

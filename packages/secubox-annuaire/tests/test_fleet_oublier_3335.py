@@ -14,7 +14,7 @@ def test_bouton_oublier_et_routes():
     assert "/api/v1/p2p/master-link/oublier" in bloc and "/oublier'" in bloc and "/api/v1/pilotage/boxes/" in bloc
     assert "saisie.value !== nom" in bloc                                 # nom retapé, sinon rien n'est envoyé
     assert "forcer.checked" in bloc and "force: true" in bloc            # nœud encore en ligne : « forcer » coché
-    assert "oublierNoeud(p.name, act)" in PAGE and "<th>Dernier vu</th><th></th>" in PAGE
+    assert "oublierNoeud(p.name, act, p.public_key)" in PAGE and "public_key: cle" in bloc and "<th>Dernier vu</th><th></th>" in PAGE
 
 
 def test_le_bouton_n_est_pose_que_pour_un_nom_valide():

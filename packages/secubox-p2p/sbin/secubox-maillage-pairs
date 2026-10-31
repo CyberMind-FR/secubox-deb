@@ -26,6 +26,7 @@ ni promotion, ni retrait ; seules les rétrogradations (poignées locales) s'app
 Surcharges réservées aux tests (jamais posées en production) : SBX_PAIRS_ETAT, SBX_PAIRS_POIGNEES, SBX_PAIRS_ANCRE,
 SBX_PAIRS_MAITRE_URL (URL de base remplaçant http://<mesh_ip>:7331), SBX_PAIRS_CONFIG,
 SBX_PAIRS_AUDIT, SBX_P2P_LIB."""
+import fcntl
 import ipaddress
 import json
 import os
@@ -216,8 +217,23 @@ def _ecrire_et_auditer(chemin, etat, nouvel, modele):
 
 
 def synchroniser(maintenant=None):
-    """Code de sortie : 0 (rien à faire ou fait), 1 (écriture refusée : rien n'est à moitié écrit)."""
+    """Code de sortie : 0 (rien à faire ou fait), 1 (écriture refusée : rien n'est à moitié écrit).
+    Lecture-calcul-écriture sous le verrou `.etat.lock` du dossier, commun aux écrivains de wg_mesh.json (#3335)."""
     chemin = _chemin("SBX_PAIRS_ETAT", ETAT)
+    try:
+        fd = os.open(os.path.join(os.path.dirname(chemin) or ".", ".etat.lock"),
+                     os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+    except OSError:
+        log("verrou de l'état du maillage indisponible : rien à faire")
+        return 0
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        return _synchroniser(chemin, maintenant)
+    finally:
+        os.close(fd)
+
+
+def _synchroniser(chemin, maintenant=None):
     etat, modele = _etat_lu(chemin)
     if etat is None:
         log("état du maillage absent ou illisible : rien à faire")
