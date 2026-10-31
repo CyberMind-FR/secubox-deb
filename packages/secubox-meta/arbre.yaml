@@ -39,6 +39,7 @@ hors-arbre:
   - secubox-autoload-agent    # côté box cliente, posé par le provisionnement (#2182)
   - secubox-pilotage          # maître du pilotage distant, installé à la demande (#3126)
   - secubox-pilotage-agent    # agent du pilotage distant, installé à la demande (#3126)
+  - secubox-kiosque           # webapp kiosque distant (PWA), servie par le maître, installée à la demande (#3330)
   - secubox-soc-gateway       # décommissionné (console de flotte jamais déployée)
   - gabriel-mood              # transitionnel → sbxos-audio-mood (#1587)
   - secubox-full              # anciens métapaquets d'image, conservés tels quels
