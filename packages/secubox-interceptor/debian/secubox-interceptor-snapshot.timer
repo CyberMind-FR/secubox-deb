@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 [Unit]
-Description=SecuBox Interceptor — instantané du Toolbox toutes les 2 minutes (#2447)
+Description=SecuBox Interceptor — instantané du Toolbox toutes les 5 minutes (#2447, #3355)
 
 [Timer]
 # #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
-RandomizedDelaySec=30s
+RandomizedDelaySec=75s
 FixedRandomDelay=true
 OnBootSec=1min
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=1min
-OnUnitActiveSec=2min
+OnUnitActiveSec=5min
 AccuracySec=30s
 
 [Install]
