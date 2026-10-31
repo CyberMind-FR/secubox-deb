@@ -62,15 +62,15 @@ seules les catégories grand public (médias, courrier, communication, publicati
 - **Fiches** : texte éditorial de `boutique-fiches.json`, sinon `resume`/`detail` tirés de `debian/control` par
   `scripts/gen-appstore-catalog.py` ; rien d'inventé. Sans texte : « [À COMPLÉTER] » dans l'administration seulement.
 - **Formule** : `/etc/secubox/abonnement.json` (root ; `{"formule","profil","statut","formules":[{"nom","profil"}]}`).
-  **Fail-closed** : absent, rien ne s'installe, sauf le marqueur root `/etc/secubox/abonnement-libre` (maître, atelier).
-  Présent : seule une app du profil de la formule (`/etc/secubox/profiles/<profil>.toml`, clé = nom de fichier)
-  s'installe (refus 403 du serveur ET de `secubox-appstorectl`, même règle `api/abonnement.py`) ; inactif ou illisible :
-  rien.
-- **Producteurs** : `abonnement-libre` est posé par le postinst (`abonnement.py --poser-libre` : seulement si la box
-  n'a ni `secubox-autoload-agent` ni `abonnement.json`, donc maître et box d'atelier ; jamais retiré ici).
-  **Suite à faire** dans `secubox-autoload-agent` : à l'enrôlement (`moteur.py`, étape d'enrôlement), retirer
-  `abonnement-libre` et poser `abonnement.json` ; la réponse du hub porte aujourd'hui `client` et `profil` mais ni
-  formule, ni statut, ni échéance : il faut les y ajouter (secubox-autoload) et suivre leurs changements (suspension).
+  **Fail-closed** : sans `abonnement.json`, rien ne s'installe, sauf signal POSITIF : (a) `secubox-fonction-maitre`
+  installé (maître du parc), (b) drapeau de pilotage `/etc/secubox-pilotage/proprietaire` valide (root, échéance
+  future : box du propriétaire, canal wg-mesh ; une box cliente ne l'a jamais), (c) marqueur
+  `/etc/secubox/abonnement-libre` posé explicitement par l'opérateur (aucun paquet ne le pose). Présent : seule une app
+  du profil de la formule (`/etc/secubox/profiles/<profil>.toml`, clé = nom de fichier) s'installe (refus 403 du serveur
+  ET de `secubox-appstorectl`, même règle `api/abonnement.py`) ; inactif ou illisible : rien.
+  **Suite à faire** dans `secubox-autoload-agent` : à l'enrôlement (`moteur.py`), poser `abonnement.json` ; la réponse
+  du hub porte `client` et `profil` mais ni formule, ni statut, ni échéance : à ajouter (secubox-autoload), avec le
+  suivi des suspensions.
 - **Boutique fédérée** (sur le maître) : « Installer sur une autre box du parc » appelle
   `POST /api/v1/pilotage/boxes/<box>/actions/installer` (confirmation forte : le nom retapé). La box décide :
   dépôt, formule, mains liées, accord du détenteur (secubox-pilotage-agent, verbe `installer`).

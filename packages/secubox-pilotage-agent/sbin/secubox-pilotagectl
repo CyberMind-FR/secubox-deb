@@ -1096,16 +1096,43 @@ def refus_paquet(ctx, paquet):
     return None if m.get("category") in CAT_BOUTIQUE else "pas une app de la boutique"
 
 
+def _fichier_root(ctx, chemin):
+    """Petit fichier ordinaire, sans lien, à root (sauf racine de test), sans écriture groupe/autres ; None sinon."""
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o022 or (st.st_uid != 0 and not ctx.substitue):
+            return None
+        return os.read(fd, 64)
+    finally:
+        os.close(fd)
+
+
+def box_libre(ctx):
+    """#3343 : « libre » seulement sur signal POSITIF (même règle que l'appstore, api/abonnement.py) : (a) maître du parc
+    (secubox-fonction-maitre installé), (b) box du propriétaire (drapeau /etc/secubox-pilotage/proprietaire valide :
+    canal wg-mesh vérifié, une box cliente ne l'a jamais), (c) marqueur /etc/secubox/abonnement-libre de l'opérateur."""
+    if os.path.isfile(f"{ctx.r}/var/lib/dpkg/info/secubox-fonction-maitre.list"):
+        return True
+    brut = _fichier_root(ctx, f"{ctx.r}/etc/secubox-pilotage/proprietaire")
+    if brut is not None:
+        try:
+            if int(brut.decode("ascii").strip()) > time.time():
+                return True
+        except (UnicodeDecodeError, ValueError):
+            pass
+    return _fichier_root(ctx, f"{ctx.r}/etc/secubox/abonnement-libre") is not None
+
+
 def refus_abonnement(ctx, paquet):
     """#3338 : sous l'abonnement de la box (/etc/secubox/abonnement.json, posé par root), seul un paquet du profil de sa
-    formule (profil = NOM DE SON FICHIER) s'installe. FAIL-CLOSED : absent, rien, sauf le marqueur root
-    /etc/secubox/abonnement-libre (maître, atelier). Illisible ou inactif : rien. Même règle que l'appstore."""
-    try:
-        st = os.lstat(f"{ctx.r}/etc/secubox/abonnement-libre")
-        if stat.S_ISREG(st.st_mode) and (st.st_uid == 0 or ctx.substitue):
-            return None                     # box du maître ou de l'atelier : marqueur root explicite
-    except OSError:
-        pass
+    formule (profil = NOM DE SON FICHIER) s'installe. FAIL-CLOSED : absent, rien, sauf signal positif (box_libre).
+    Illisible ou inactif : rien. Même règle que l'appstore."""
+    if box_libre(ctx):
+        return None
     try:
         with open(f"{ctx.r}/etc/secubox/abonnement.json", "rb") as f:
             ab = json.loads(f.read(TAILLE_MAX))
@@ -1129,7 +1156,8 @@ def refus_abonnement(ctx, paquet):
     return None if paquet.removeprefix("secubox-") in ids else "hors de la formule de la box"
 
 
-RE_ORIGINE_SBX = re.compile(r"(https?://apt\.secubox\.in(/\S*)?|file:/\S+)")
+# #3343 : dépôt SecuBox seulement — apt.secubox.in, ou le dépôt local du maître (file:/var/www/apt.secubox.in…, file:/data/apt…)
+RE_ORIGINE_SBX = re.compile(r"(https?://apt\.secubox\.in|file:/var/www/apt\.secubox\.in|file:/data/apt)(/\S*)?")
 
 
 def paquet_au_depot(ctx, paquet):
@@ -1146,7 +1174,7 @@ def paquet_au_depot(ctx, paquet):
     cand = next((li.split(":", 1)[1].strip() for li in lignes if li.strip().startswith("Candidate:")), "")
     if not cand or cand == "(none)":
         return False
-    dans = False
+    dans, origines = False, []
     for li in lignes:
         champs = li.split()
         if not champs:
@@ -1156,9 +1184,12 @@ def paquet_au_depot(ctx, paquet):
         if len(champs) == 2 and champs[1].isdigit() and not champs[0].isdigit():
             dans = champs[0] == cand            # ligne de version de la table
             continue
-        if dans and len(champs) >= 2 and champs[0].isdigit() and RE_ORIGINE_SBX.fullmatch(champs[1]):
-            return True
-    return False
+        if dans and len(champs) >= 2 and champs[0].isdigit():
+            origines.append(champs[1])
+    # TOUTES les origines de la version candidate sont SecuBox (#3343) ; « /var/lib/dpkg/status » (déjà installée)
+    # n'est pas une origine de téléchargement
+    origines = [o for o in origines if o != "/var/lib/dpkg/status"]
+    return bool(origines) and all(RE_ORIGINE_SBX.fullmatch(o) for o in origines)
 
 
 def lancer(ctx, verbe, p, job):

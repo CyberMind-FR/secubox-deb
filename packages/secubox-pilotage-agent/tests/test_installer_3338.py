@@ -21,6 +21,7 @@ FAUX_APT_CACHE = """#!/bin/sh
 p="$2"
 if grep -qx "$p" "$FAUX_APT_DEPOT" 2>/dev/null; then
   printf '%s:\\n  Installed: (none)\\n  Candidate: 1.0-1~trixie1\\n  Version table:\\n     1.0-1~trixie1 500\\n        500 %s trixie/main arm64 Packages\\n' "$p" "$FAUX_APT_ORIGINE"
+  [ -z "$FAUX_APT_ORIGINE2" ] || printf '        500 %s trixie/main arm64 Packages\\n' "$FAUX_APT_ORIGINE2"
 else
   printf '%s:\\n  Installed: (none)\\n  Candidate: (none)\\n' "$p"
 fi
@@ -53,6 +54,7 @@ def banc(tmp_path):
     fi.write_text(json.dumps(FICHES))
     (b.r / "etc/secubox").mkdir(parents=True, exist_ok=True)
     (b.r / "etc/secubox/abonnement-libre").write_text("")
+    (b.r / "etc/secubox/abonnement-libre").chmod(0o644)
     return b
 
 
@@ -115,6 +117,7 @@ def test_absent_du_depot_refuse(banc):
 
 
 @pytest.mark.parametrize("origine,ok", [("https://apt.secubox.in", True), ("file:/var/www/apt.secubox.in", True),
+                                        ("file:/data/apt", True), ("file:/tmp/apt", False), ("file:/", False),
                                         ("http://deb.debian.org/debian", False), ("https://evil.example/apt.secubox.in.x", False)])
 def test_origine_du_candidat(banc, origine, ok):
     banc.env["FAUX_APT_ORIGINE"] = origine
@@ -148,25 +151,65 @@ def test_box_cliente_accord_lie_au_paquet(banc):
     assert banc.lancements()[-1].endswith("secubox-jellyfin")
 
 
+def test_toutes_les_origines_du_candidat_doivent_etre_secubox(banc):
+    banc.env["FAUX_APT_ORIGINE2"] = "http://deb.debian.org/debian"
+    _, s, _ = banc.run("installer", "secubox-jellyfin", agent=True)
+    assert s == {"ok": False, "refus": "paquet absent du dépôt SecuBox"}
+    banc.env["FAUX_APT_ORIGINE2"] = "file:/data/apt"
+    _, s, _ = banc.run("installer", "secubox-jellyfin", agent=True)
+    assert s["ok"] is True, s
+
+
+def _sans_libre(banc):
+    (banc.r / "etc/secubox/abonnement-libre").unlink()
+
+
+def test_libre_maitre_du_parc(banc):
+    _sans_libre(banc)
+    (banc.r / "var/lib/dpkg/info").mkdir(parents=True, exist_ok=True)
+    (banc.r / "var/lib/dpkg/info/secubox-fonction-maitre.list").write_text("")
+    _, s, _ = banc.run("installer", "secubox-jellyfin", agent=True)
+    assert s["ok"] is True, s
+
+
+def test_libre_box_du_proprietaire(banc):
+    import time
+    _sans_libre(banc)
+    d = banc.r / "etc/secubox-pilotage"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / "proprietaire"
+    f.write_text(f"{int(time.time()) - 5}\n")
+    f.chmod(0o644)
+    _, s, _ = banc.run("installer", "secubox-jellyfin", agent=True)
+    assert s == {"ok": False, "refus": "aucun abonnement sur cette box"}     # échu : pas un signal
+    f.write_text(f"{int(time.time()) + 3600}\n")
+    _, s, _ = banc.run("installer", "secubox-jellyfin", agent=True)
+    assert s["ok"] is True, s
+
+
 def test_formule_de_la_box_fail_closed(banc):
-    """Sous abonnement, seul un paquet du profil (nom de fichier) de la formule s'installe ; sans abonnement ni marqueur
+    """Box cliente, demandes locales (sans accord du détenteur à recueillir).
+    Sous abonnement, seul un paquet du profil (nom de fichier) de la formule s'installe ; sans abonnement ni marqueur
     abonnement-libre : rien ; abonnement inactif ou illisible : rien."""
     (banc.r / "etc/secubox/abonnement-libre").unlink()
-    _, s, _ = banc.run("installer", "secubox-radio", agent=True)
+    banc.cliente()                       # box cliente (canal wg-autoload) : jamais le drapeau « proprietaire »
+    banc.run("etat", agent=True)         # reprojection : le drapeau de la box du propriétaire tombe
+    assert not (banc.r / "etc/secubox-pilotage/proprietaire").exists()
+    _, s, _ = banc.run("installer", "secubox-radio")
     assert s == {"ok": False, "refus": "aucun abonnement sur cette box"}
     prof = banc.r / "etc/secubox/profiles"
     prof.mkdir(parents=True, exist_ok=True)
     (prof / "lite.toml").write_text('name = "autre-nom"\non = ["radio"]\n')
     ab = banc.r / "etc/secubox/abonnement.json"
     ab.write_text(json.dumps({"formule": "Léger", "profil": "lite", "statut": "actif"}))
-    _, s, _ = banc.run("installer", "secubox-jellyfin", agent=True)
+    _, s, _ = banc.run("installer", "secubox-jellyfin")
     assert s == {"ok": False, "refus": "hors de la formule de la box"}
-    _, s, _ = banc.run("installer", "secubox-radio", agent=True)
+    _, s, _ = banc.run("installer", "secubox-radio")
     assert s["ok"] is True
     banc.actifs.write_text("")
     ab.write_text(json.dumps({"formule": "Léger", "profil": "lite", "statut": "suspendu"}))
-    _, s, _ = banc.run("installer", "secubox-radio", agent=True)
+    _, s, _ = banc.run("installer", "secubox-radio")
     assert s == {"ok": False, "refus": "abonnement inactif"}
     ab.write_text("{illisible")
-    _, s, _ = banc.run("installer", "secubox-radio", agent=True)
+    _, s, _ = banc.run("installer", "secubox-radio")
     assert s == {"ok": False, "refus": "abonnement illisible"}

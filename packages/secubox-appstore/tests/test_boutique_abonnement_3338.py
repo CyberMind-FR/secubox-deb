@@ -62,6 +62,7 @@ def test_sans_abonnement_rien_ne_s_installe(api):
 
 def test_marqueur_libre_maitre_ou_atelier(api):
     (api.racine / "etc/secubox/abonnement-libre").write_text("")
+    (api.racine / "etc/secubox/abonnement-libre").chmod(0o644)
     c = TestClient(api.app)
     assert not {x["name"]: x for x in c.get("/catalog").json()["modules"]}["secubox-jellyfin"]["hors_formule"]
     assert c.post("/module/secubox-jellyfin/action/install").status_code == 202
@@ -102,47 +103,61 @@ def test_appstorectl_applique_la_meme_regle(tmp_path):
     assert r.returncode == 3 and "abonnement" in r.stderr
     (tmp_path / "etc/secubox").mkdir(parents=True)
     (tmp_path / "etc/secubox/abonnement-libre").write_text("")
+    (tmp_path / "etc/secubox/abonnement-libre").chmod(0o644)
     r = subprocess.run([sys.executable, "-I", str(script), "secubox-dns"], env=env, capture_output=True, text=True)
     assert r.returncode == 0
 
 
-# ── Producteur du marqueur abonnement-libre (postinst) ───────────────────────────────────────────────────────────
+# ── « Libre » sur signal POSITIF seulement (re-relecture #3343) ─────────────────────────────────────────────────
 
-def _poser(r):
-    script = PKG / "api/abonnement.py"
-    env = {"APPSTORE_RACINE": str(r), "PATH": "/usr/bin:/bin"}
-    return subprocess.run([sys.executable, "-I", str(script), "--poser-libre"], env=env, capture_output=True, text=True)
+def _droit(r, nom="secubox-jellyfin"):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("abonnement_t", PKG / "api/abonnement.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.droit(nom, str(r))
 
 
-def test_libre_pose_sur_le_maitre_et_l_atelier(tmp_path):
+def test_absence_n_est_jamais_libre(tmp_path):
     (tmp_path / "etc/secubox").mkdir(parents=True)
-    r = _poser(tmp_path)
-    m = tmp_path / "etc/secubox/abonnement-libre"
-    assert r.returncode == 0 and m.is_file() and not m.is_symlink() and (m.stat().st_mode & 0o777) == 0o644
-    assert _poser(tmp_path).returncode == 0 and m.is_file()          # idempotent
+    assert _droit(tmp_path)[0] is False
 
 
-def test_libre_jamais_sur_une_box_cliente(tmp_path):
+def test_libre_maitre_du_parc(tmp_path):
+    (tmp_path / "var/lib/dpkg/info").mkdir(parents=True)
+    (tmp_path / "var/lib/dpkg/info/secubox-fonction-maitre.list").write_text("")
+    assert _droit(tmp_path)[0] is True
+
+
+def test_libre_box_du_proprietaire_drapeau_valide(tmp_path):
+    import time
+    d = tmp_path / "etc/secubox-pilotage"
+    d.mkdir(parents=True)
+    f = d / "proprietaire"
+    f.write_text(f"{int(time.time()) + 3600}\n")
+    f.chmod(0o644)
+    assert _droit(tmp_path)[0] is True
+    f.write_text(f"{int(time.time()) - 10}\n")                 # échu
+    assert _droit(tmp_path)[0] is False
+    f.write_text("pas un nombre\n")
+    assert _droit(tmp_path)[0] is False
+    f.write_text(f"{int(time.time()) + 3600}\n")
+    f.chmod(0o666)                                             # inscriptible par d'autres
+    assert _droit(tmp_path)[0] is False
+
+
+def test_libre_marqueur_operateur(tmp_path):
     (tmp_path / "etc/secubox").mkdir(parents=True)
-    (tmp_path / "etc/secubox/abonnement.json").write_text("{}")
-    assert _poser(tmp_path).returncode == 0
-    assert not (tmp_path / "etc/secubox/abonnement-libre").exists()
-    t2 = tmp_path / "b"
-    (t2 / "etc/secubox").mkdir(parents=True)
-    (t2 / "var/lib/dpkg/info").mkdir(parents=True)
-    (t2 / "var/lib/dpkg/info/secubox-autoload-agent.list").write_text("")
-    assert _poser(t2).returncode == 0
-    assert not (t2 / "etc/secubox/abonnement-libre").exists()
+    (tmp_path / "etc/secubox/abonnement-libre").write_text("")
+    (tmp_path / "etc/secubox/abonnement-libre").chmod(0o644)
+    assert _droit(tmp_path)[0] is True
 
 
-def test_libre_ne_suit_pas_un_lien(tmp_path):
-    (tmp_path / "etc/secubox").mkdir(parents=True)
-    cible = tmp_path / "ailleurs"
-    (tmp_path / "etc/secubox/abonnement-libre").symlink_to(cible)
-    _poser(tmp_path)
-    assert not cible.exists()
-
-
-def test_postinst_appelle_le_producteur():
+def test_postinst_ne_pose_plus_le_marqueur():
     post = (PKG / "debian/postinst").read_text()
-    assert "abonnement.py --poser-libre" in post and "rm -f /etc/secubox/abonnement-libre" not in post
+    assert "--poser-libre" not in post and "abonnement-libre" not in post
+
+
+def test_appstorectl_ignore_la_racine_de_test():
+    ctl = (PKG / "sbin/secubox-appstorectl").read_text()
+    assert "unset APPSTORE_RACINE" in ctl.split("set -euo pipefail", 1)[1][:400]

@@ -5,8 +5,9 @@
 """#3338 — droit d'installer une app sous l'abonnement de la box. RÈGLE UNIQUE, lue par l'API (catalogue, refus 403) et
 par secubox-appstorectl (root, frontière réelle) ; le ctl du pilotage applique la même règle de son côté.
 
-FAIL-CLOSED. Sans /etc/secubox/abonnement.json, rien ne s'installe, SAUF si le marqueur root
-/etc/secubox/abonnement-libre existe (box du maître ou de l'atelier, posé par le provisionnement ou par le maître).
+FAIL-CLOSED. Sans /etc/secubox/abonnement.json, rien ne s'installe, SAUF signal POSITIF (voir _libre) : maître du
+parc (secubox-fonction-maitre), box du propriétaire (drapeau de pilotage « proprietaire » valide), ou marqueur
+/etc/secubox/abonnement-libre posé par l'opérateur.
 Présent mais illisible, ou statut ≠ actif : rien. Sinon, seule une app du PROFIL de la formule s'installe ; le profil
 est désigné par le NOM DE SON FICHIER (/etc/secubox/profiles/<profil>.toml), clé unique partout.
 
@@ -16,6 +17,7 @@ import os
 import re
 import stat
 import sys
+import time
 import tomllib
 
 RE_PROFIL = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}")
@@ -26,12 +28,37 @@ def _racine() -> str:
     return os.environ.get("APPSTORE_RACINE", "").rstrip("/")
 
 
-def _libre(r: str) -> bool:
+def _fichier_root(chemin: str, r: str):
+    """Contenu d'un petit fichier ordinaire, sans lien, à root (sauf racine de test) et sans écriture groupe/autres."""
     try:
-        st = os.lstat(f"{r}/etc/secubox/abonnement-libre")
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
-        return False
-    return stat.S_ISREG(st.st_mode) and (st.st_uid == 0 or bool(r))
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o022 or (st.st_uid != 0 and not r):
+            return None
+        return os.read(fd, 64)
+    finally:
+        os.close(fd)
+
+
+def _libre(r: str) -> bool:
+    """« Libre » seulement sur signal POSITIF (jamais déduit d'une absence) :
+    (a) secubox-fonction-maitre installé — le maître du parc ;
+    (b) drapeau de pilotage /etc/secubox-pilotage/proprietaire valide (root, échéance epoch future) — box du
+        propriétaire, canal wg-mesh vérifié ; une box cliente (wg-autoload) ne l'a jamais ;
+    (c) marqueur /etc/secubox/abonnement-libre posé explicitement par l'opérateur."""
+    if os.path.isfile(f"{r}/var/lib/dpkg/info/secubox-fonction-maitre.list"):
+        return True
+    brut = _fichier_root(f"{r}/etc/secubox-pilotage/proprietaire", r)
+    if brut is not None:
+        try:
+            if int(brut.decode("ascii").strip()) > time.time():
+                return True
+        except (UnicodeDecodeError, ValueError):
+            pass
+    return _fichier_root(f"{r}/etc/secubox/abonnement-libre", r) is not None
 
 
 def modules_du_profil(profil: str, r: str = None):
@@ -77,38 +104,7 @@ def droit(name: str, r: str = None):
     return False, None, "hors de la formule de cette box"
 
 
-def poser_libre(r: str = None) -> str:
-    """Producteur du marqueur (postinst) : posé sur le maître et les box d'atelier du propriétaire, c'est-à-dire quand la
-    box N'EST PAS une box cliente provisionnée par Auto-Load (ni secubox-autoload-agent, ni abonnement.json). Jamais
-    posé si abonnement.json existe ; jamais retiré (le provisionnement Auto-Load s'en charge). Par descripteur du
-    dossier, sans suivre de lien, root 0644."""
-    r = _racine() if r is None else r
-    if os.path.lexists(f"{r}/etc/secubox/abonnement.json"):
-        return "box sous abonnement : marqueur non posé"
-    if os.path.exists(f"{r}/var/lib/dpkg/info/secubox-autoload-agent.list"):
-        return "box cliente Auto-Load : marqueur non posé"
-    try:
-        d = os.open(f"{r}/etc/secubox", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    except OSError:
-        return "/etc/secubox absent : marqueur non posé"
-    try:
-        try:
-            st = os.stat("abonnement-libre", dir_fd=d, follow_symlinks=False)
-            return "marqueur déjà présent" if stat.S_ISREG(st.st_mode) else "abonnement-libre n'est pas un fichier : laissé"
-        except FileNotFoundError:
-            pass
-        fd = os.open("abonnement-libre", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=d)
-        os.fchmod(fd, 0o644)
-        os.close(fd)
-        return "marqueur abonnement-libre posé (maître ou atelier)"
-    finally:
-        os.close(d)
-
-
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--poser-libre"]:
-        print(poser_libre())
-        sys.exit(0)
     if len(sys.argv) != 2:
         print("usage : abonnement.py <module>", file=sys.stderr)
         sys.exit(2)

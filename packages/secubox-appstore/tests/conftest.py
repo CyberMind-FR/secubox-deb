@@ -12,4 +12,5 @@ def _box_libre(monkeypatch, tmp_path_factory):
     r = tmp_path_factory.mktemp("box-libre")
     (r / "etc/secubox").mkdir(parents=True)
     (r / "etc/secubox/abonnement-libre").write_text("")
+    (r / "etc/secubox/abonnement-libre").chmod(0o644)
     monkeypatch.setenv("APPSTORE_RACINE", str(r))
