@@ -624,7 +624,7 @@ def nomme_la_box(nom, box):
     """#3302 (banc gk4) : un joker ou une regex ne compte comme étranger que s'il nomme la box (label `<box>`). Un joker générique
     (`admin.*` du vhost d'administration du maître, `*.secubox.in`) perd toujours devant le nom exact que pose le pilotage
     (priorité nginx : nom exact d'abord) ; il ne sert pas `admin.<box>` et ne doit pas faire refuser la reprise."""
-    return re.search(r"(^|[^a-z0-9-])" + re.escape(box) + r"($|[^a-z0-9-])", nom) is not None
+    return re.search(r"(^|[^a-z0-9-])" + re.escape(box) + r"($|[^a-z0-9-])", nom, re.I) is not None
 
 
 def nginx_etranger(ctx, dom, box):
