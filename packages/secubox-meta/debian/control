@@ -33,9 +33,22 @@ Depends: ${misc:Depends},
          secubox-fonction-reseau,
          secubox-fonction-bouclier
 Recommends: secubox-fonction-supervision
-Suggests: secubox-fonction-mesh
+Suggests: secubox-fonction-mesh,
+         secubox-fonction-maitre
 Description: SecuBox — racine « SecuBox »
  La box : socle, réseau d'opérateur et bouclier, sans interface grand public.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-fonction-maitre
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-service-pilotage,
+         secubox-service-mesh,
+         secubox-service-administration
+Description: SecuBox — fonction « Maître du parc »
+ Gérer un parc de box : pilotage distant, interfaces déportées, abonnements, Flotte, kiosque.
  .
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.
@@ -579,10 +592,21 @@ Package: secubox-service-provision
 Architecture: all
 Depends: ${misc:Depends}
 Recommends: secubox-netboot
-Suggests: secubox-vm,
-         secubox-autoload
+Suggests: secubox-vm
 Description: SecuBox — service « Provision »
  Clonage, amorçage réseau, déploiement, anneaux de release, VM.
+ .
+ Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
+ Recommends = installé par défaut mais retirable, Suggests = optionnel.
+
+Package: secubox-service-pilotage
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-pilotage,
+         secubox-autoload
+Recommends: secubox-kiosque
+Description: SecuBox — service « Pilotage du parc »
+ Contrôleur du pilotage distant, vhosts admin.<box>, abonnements et droits du maillage, webapp kiosque.
  .
  Métapaquet généré depuis l'arbre de secubox-meta : Depends = requis,
  Recommends = installé par défaut mais retirable, Suggests = optionnel.
