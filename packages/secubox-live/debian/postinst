@@ -1,0 +1,32 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+  configure)
+    # --- Compte de service dédié (jamais root) ---
+    if ! getent passwd secubox-live >/dev/null; then
+      adduser --system --group --no-create-home --home /var/cache/secubox/live --shell /usr/sbin/nologin secubox-live >/dev/null
+    fi
+    install -d -m 0755 -o secubox-live -g secubox-live /var/cache/secubox/live
+    # Lecture du collecteur par ACL CIBLÉES (jamais le groupe secubox entier), reposées aussi avant chaque collecte.
+    /usr/sbin/secubox-live-acl || true
+
+    # --- Confinement AppArmor (enforce) ---
+    if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+      apparmor_parser -r /etc/apparmor.d/secubox-live >/dev/null 2>&1 \
+        || echo "secubox-live : profil AppArmor non chargé : la page ne sera pas exposée" >&2
+    fi
+
+    systemctl daemon-reload || true
+    systemctl enable --now secubox-live-collecte.timer >/dev/null 2>&1 || true
+    systemctl start secubox-live-collecte.service >/dev/null 2>&1 || true
+
+    # --- Exposition publique : seulement si /etc/secubox/live.toml nomme un domaine ---
+    /usr/sbin/secubox-live-exposer || echo "secubox-live : exposition non faite" >&2
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

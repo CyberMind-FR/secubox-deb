@@ -1,0 +1,12 @@
+secubox-live (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Première version (ref #3351) : page publique live.<domaine> (Aurora, CSP
+    stricte, cartes du monde de la prod), collecteur toutes les minutes
+    (pilotage, journal sbxwaf, métriques des vhosts, nft, GitHub en
+    cache 10 min, journal du WAF lu par incréments), etat.json servi en
+    statique par nginx (127.0.0.1, nom exact, HSTS, cache 15 s), compte
+    dédié, ACL ciblées, AppArmor enforce. Nœuds publiés en liste blanche
+    (noeuds_publics), durée de marche par classe, pas de DPI. Aucune adresse publiée (liste blanche des champs et
+    garde finale testées).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 13:00:00 +0100

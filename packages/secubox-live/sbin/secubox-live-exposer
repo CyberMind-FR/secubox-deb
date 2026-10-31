@@ -1,0 +1,58 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Expose live.<domaine> (#3351) SEULEMENT si /etc/secubox/live.toml nomme un domaine (vide par défaut : rien n'est exposé).
+# Ordre : profil AppArmor du collecteur chargé, vhost nginx au nom EXACT validé par `nginx -t`, route sbxwaf, puis
+# HAProxy. Une étape en échec arrête tout et retire ce qui a été posé (jamais un vhost sans WAF, cf. #3150).
+set -euo pipefail
+CONF=/etc/secubox/live.toml
+MODELE=/usr/share/secubox/live/live.vhost.conf.in
+SITE=/etc/nginx/sites-available/live.conf
+LIEN=/etc/nginx/sites-enabled/live.conf
+# Domaine exposé, retenu en root pour que la purge retire SA route et SON vhost (jamais lu depuis le cache du collecteur).
+EXPOSE=/var/lib/secubox-live/domaine
+DOMAINE=$(sed -n 's/^domaine[[:space:]]*=[[:space:]]*"\([a-z0-9.-]*\)"[[:space:]]*$/\1/p' "$CONF" 2>/dev/null | head -1)
+if [ -z "$DOMAINE" ]; then
+  echo "secubox-live : aucun domaine dans $CONF, rien d'exposé"
+  exit 0
+fi
+if ! printf '%s' "$DOMAINE" | grep -Eqx 'live(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?){2,}'; then
+  echo "secubox-live : domaine refusé (attendu live.<domaine>) : $DOMAINE" >&2
+  exit 2
+fi
+# Pas d'AppArmor, ou profil absent ou en complain : pas d'exposition.
+if ! grep -q '^/usr/sbin/secubox-live-collecte (enforce)' /sys/kernel/security/apparmor/profiles 2>/dev/null; then
+  echo "secubox-live : AppArmor absent ou profil du collecteur non chargé en enforce : exposition refusée" >&2
+  exit 1
+fi
+retirer() { rm -f "$LIEN"; nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true; }
+TMP=$(mktemp /etc/nginx/sites-available/.live.XXXXXX)
+trap 'rm -f "$TMP"' EXIT
+sed "s/@DOMAINE@/$DOMAINE/g" "$MODELE" > "$TMP"
+chmod 0644 "$TMP"
+mv "$TMP" "$SITE"
+ln -sf ../sites-available/live.conf "$LIEN"
+if ! NT=$(nginx -t 2>&1); then
+  retirer
+  echo "secubox-live : nginx -t a échoué, vhost NON activé : $NT" >&2
+  exit 1
+fi
+systemctl reload nginx >/dev/null 2>&1 || true
+if ! command -v secubox-waf-route >/dev/null 2>&1 || ! secubox-waf-route "$DOMAINE" 9080; then
+  retirer
+  echo "secubox-live : route sbxwaf non posée : exposition annulée" >&2
+  exit 1
+fi
+if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ] \
+   && ! grep -Eq "^\[vhosts\.\"?${DOMAINE//./\\.}\"?\]" /etc/secubox/haproxy.toml; then
+  if ! HA=$(haproxyctl vhost add "$DOMAINE" sbxwaf_inspector true 2>&1); then
+    echo "secubox-live : haproxyctl vhost add $DOMAINE a échoué (nginx et route sbxwaf posés, page NON exposée) : $HA" >&2
+    exit 1
+  fi
+  haproxyctl generate >/dev/null 2>&1 || true
+  systemctl reload haproxy >/dev/null 2>&1 || true
+fi
+install -d -m 0755 /var/lib/secubox-live
+printf '%s\n' "$DOMAINE" > "$EXPOSE"
+logger -t secubox-live "vhost public $DOMAINE exposé (nginx, route sbxwaf, HAProxy)"
+echo "secubox-live : $DOMAINE exposé"

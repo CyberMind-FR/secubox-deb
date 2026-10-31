@@ -1,0 +1,84 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 · Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>État du réseau secubox.in</title>
+<meta name="description" content="État en direct du réseau SecuBox : nœuds, WAF, menaces, trafic et développement.">
+<link rel="stylesheet" href="/live.css">
+</head>
+<body>
+<main class="page">
+  <header class="tete">
+    <div class="marque">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>
+      <div><h1>SECUBOX · ÉTAT DU RÉSEAU</h1><p class="sous">live.secubox.in — mesures agrégées des nœuds du maillage, en direct</p></div>
+    </div>
+    <div class="global" id="global"><span class="pt" id="global-pt"></span><span id="global-texte">Chargement…</span><span class="faible" id="global-age"></span></div>
+  </header>
+
+  <section class="tuiles" aria-label="Indicateurs">
+    <div class="tuile"><span class="lib">Nœuds en ligne</span><b id="t-noeuds">—</b><span class="faible">maillage gondwana</span></div>
+    <div class="tuile"><span class="lib">Requêtes servies (jour)</span><b id="t-requetes">—</b><span class="faible">par le WAF sbxwaf</span></div>
+    <div class="tuile"><span class="lib">Menaces (24 h)</span><b id="t-menaces" class="ambre">—</b><span class="faible" id="t-bloquees">—</span></div>
+    <div class="tuile"><span class="lib">Bans actifs</span><b id="t-bans">—</b><span class="faible">adresses bloquées</span></div>
+    <div class="tuile"><span class="lib">Sites publiés</span><b id="t-sites">—</b><span class="faible">derrière le WAF</span></div>
+  </section>
+
+  <div class="rangee">
+    <section class="carte large">
+      <div class="titre"><h2>Nœuds du maillage</h2><span class="faible">relevés du pilotage</span></div>
+      <div class="defile"><table><thead><tr><th>Nœud</th><th>Rôle</th><th>Matériel</th><th>État</th><th>CPU</th><th>Mémoire</th><th>En marche</th></tr></thead><tbody id="noeuds"></tbody></table></div>
+    </section>
+    <section class="carte etroite">
+      <div class="titre"><h2>WAF, dernière heure</h2><span class="faible">requêtes bloquées par minute</span></div>
+      <svg id="waf" viewBox="0 0 300 110" role="img" aria-label="Requêtes bloquées par minute sur la dernière heure"></svg>
+      <p class="faible" id="waf-note"></p>
+    </section>
+  </div>
+
+  <section class="carte">
+    <div class="titre"><h2>Visites et attaques en temps réel</h2><span class="faible">pays déduit de l’adresse · aucune adresse publiée</span></div>
+    <div class="cartes">
+      <div class="monde"><span class="lib">Origine des attaques</span><svg id="monde-att" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des attaques"></svg><p class="faible" id="monde-att-note"></p></div>
+      <div class="monde"><span class="lib">Origine des visiteurs</span><svg id="monde-vis" viewBox="0 0 120 60" role="img" aria-label="Carte des pays d'origine des visiteurs"></svg><p class="faible" id="monde-vis-note"></p></div>
+    </div>
+  </section>
+
+  <section class="carte">
+    <div class="titre"><h2>Depuis la mise en production</h2><span class="faible" id="prod"></span></div>
+    <div class="tuiles petites">
+      <div><span class="lib">Visites cumulées</span><b id="c-visites" class="cyan">—</b></div>
+      <div><span class="lib">Attaques cumulées</span><b id="c-attaques" class="rouge">—</b></div>
+      <div><span class="lib">Bans cumulés</span><b id="c-bans" class="ambre">—</b></div>
+      <div><span class="lib">Jours en production</span><b id="c-jours">—</b></div>
+    </div>
+    <svg id="histo" viewBox="0 0 900 240" role="img" aria-label="Visites, attaques et bans par jour, avec le cumul des attaques"></svg>
+    <p class="legende"><span class="cyan">■</span> visites <span class="rouge">■</span> attaques <span class="ambre">■</span> bans <span>┅</span> cumul des attaques · survol : détail du jour</p>
+  </section>
+
+  <div class="rangee">
+    <section class="carte"><div class="titre"><h2>Types de menaces</h2><span class="faible">24 h</span></div><div id="menaces"></div></section>
+  </div>
+
+  <div class="rangee">
+    <section class="carte large">
+      <div class="titre"><h2>Développement</h2><a href="https://github.com/CyberMind-FR/secubox-deb" rel="noopener">dépôt GitHub →</a></div>
+      <div class="tuiles petites">
+        <div><span class="lib">PR fusionnées (7 j)</span><b id="d-fusions">—</b></div>
+        <div><span class="lib">Issues ouvertes</span><b id="d-issues">—</b></div>
+        <div><span class="lib">CI de master</span><b id="d-ci">—</b></div>
+      </div>
+      <div id="d-dernieres"></div>
+    </section>
+    <section class="carte etroite"><div class="titre"><h2>Feuille de route</h2></div><div id="route"></div>
+      <p class="faible">Aucune donnée personnelle ni adresse n'est publiée : seulement des mesures agrégées.</p></section>
+  </div>
+
+  <footer class="pied"><span>SecuBox — passerelle de sécurité auto-hébergée</span><a href="https://secubox.in">secubox.in</a></footer>
+</main>
+<script src="/carte.js"></script>
+<script src="/live.js"></script>
+</body>
+</html>

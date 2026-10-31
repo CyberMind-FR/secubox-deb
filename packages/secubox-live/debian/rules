@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+P = debian/secubox-live
+
+%:
+	dh $@
+
+override_dh_auto_build:
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d $(P)/usr/sbin $(P)/usr/lib/secubox/live/live $(P)/usr/share/secubox/www/live \
+	  $(P)/etc/secubox $(P)/usr/share/secubox/live $(P)/lib/systemd/system $(P)/etc/apparmor.d
+	install -m 755 sbin/secubox-live-acl sbin/secubox-live-collecte sbin/secubox-live-exposer $(P)/usr/sbin/
+	install -m 644 live/*.py $(P)/usr/lib/secubox/live/live/
+	install -m 644 www/live/* $(P)/usr/share/secubox/www/live/
+	install -m 644 conf/live.toml $(P)/etc/secubox/live.toml
+	install -m 644 nginx/live.vhost.conf.in $(P)/usr/share/secubox/live/live.vhost.conf.in
+	install -m 644 systemd/* $(P)/lib/systemd/system/
+	install -m 644 apparmor/secubox-live $(P)/etc/apparmor.d/secubox-live
+
+override_dh_installsystemd:
+	# Activation faite par le postinst (compte de service et dossier d'état d'abord).
+	dh_installsystemd --no-enable --no-start

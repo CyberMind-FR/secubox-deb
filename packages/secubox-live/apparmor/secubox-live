@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE du collecteur de secubox-live (#3351) : lit les sources du maître, écrit son cache, https
+# vers GitHub. La page et etat.json sont servis en statique par nginx. Tout ce qui n'est pas listé est refusé ; les secrets jamais.
+
+#include <tunables/global>
+
+/usr/sbin/secubox-live-collecte {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/ssl_certs>
+  #include <abstractions/openssl>
+
+  /usr/sbin/secubox-live-collecte r,
+  /usr/bin/python3* rix,
+  /usr/bin/stat rix,
+  /usr/lib/secubox/live/ r,
+  /usr/lib/secubox/live/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  deny /etc/secubox/secrets/** r,
+
+  /etc/secubox/ r,
+  /etc/secubox/live.toml r,
+  /etc/secubox/haproxy.toml r,
+  /var/lib/secubox/pilotage/ r,
+  /var/lib/secubox/pilotage/pilotage.db rk,
+  /var/lib/secubox/pilotage/pilotage.db-wal rk,
+  # -shm en lecture : en mode=ro, SQLite se rabat sur un index WAL partagé en lecture seule.
+  /var/lib/secubox/pilotage/pilotage.db-shm rk,
+  /var/log/secubox/waf/ r,
+  /var/log/secubox/waf/waf-threats.log* r,
+  /var/cache/secubox/metrics/vhost_stats.json r,
+  /var/cache/secubox/waf/nft-etat.json r,
+  /var/lib/secubox/geoip/*.mmdb r,
+  /usr/share/GeoIP/*.mmdb r,
+  /var/lib/GeoIP/*.mmdb r,
+  /proc/device-tree/model r,
+  /sys/firmware/devicetree/base/model r,
+  @{PROC}/cpuinfo r,
+  @{PROC}/meminfo r,
+  @{PROC}/uptime r,
+  @{PROC}/loadavg r,
+
+  /var/cache/secubox/live/ rw,
+  /var/cache/secubox/live/** rw,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network unix stream,
+}

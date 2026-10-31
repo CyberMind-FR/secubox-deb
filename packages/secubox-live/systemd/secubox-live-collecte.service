@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Live — collecte de l'état public du réseau (#3351)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=secubox-live
+Group=secubox-live
+# Base du pilotage : groupe secubox-pilotage (0640). Journal du WAF et caches : ACL ciblées reposées en root avant chaque
+# collecte (liste figée de secubox-live-acl, '+' : hors bac à sable, la collecte elle-même reste confinée).
+SupplementaryGroups=secubox-pilotage
+ExecStartPre=+/usr/sbin/secubox-live-acl
+ExecStart=/usr/sbin/secubox-live-collecte
+UMask=0022
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+# https sortant vers api.github.com seulement (cache 10 min) ; rien d'autre n'est contacté.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/cache/secubox/live
+TimeoutStartSec=120
+MemoryMax=192M
+Nice=10

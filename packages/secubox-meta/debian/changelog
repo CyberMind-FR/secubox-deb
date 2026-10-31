@@ -1,3 +1,10 @@
+secubox-meta (0.1.51-1~trixie1) trixie; urgency=medium
+
+  * secubox-service-pilotage recommande secubox-live, la page publique de
+    l etat du reseau (ref #3351).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 13:26:48 +0100
+
 secubox-meta (0.1.50-1~trixie1) trixie; urgency=medium
 
   * Nouveau métapaquet secubox-fonction-maitre « Maître du parc » (ref #3337) :
