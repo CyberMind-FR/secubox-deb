@@ -39,11 +39,13 @@ if [ "$1" = "configure" ]; then
 
     # Projection publique des pairs (#3126) : root la publie ici, HORS du bac à sable du service. Son dossier doit exister avant le démarrage
     # pour que ReadWritePaths le monte en écriture : sans lui, tunnel-sync lancé par le service (minuterie, révocations) n'exporte rien.
-    # #3305 : sur le maître, les pairs enrôlés aujourd'hui sont les box de l'atelier (décision du propriétaire) ; idempotent, audité
+    /usr/sbin/autoloadctl exporter-pairs >/dev/null 2>&1 || echo "secubox-autoload : projection publique des pairs non exportée" >&2
+
+    # #3305 : sur le maître, les pairs enrôlés à la PREMIÈRE installation sont les box de l'atelier (décision du propriétaire) ;
+    # une seule fois (marque en base), audité ; republie les droits.
     if [ -r /var/lib/secubox/p2p-public/pairs-enroles.json ]; then
         /usr/sbin/autoloadctl maillage-atelier >/dev/null 2>&1 || echo "secubox-autoload : inscription de l'atelier non faite" >&2
     fi
-    /usr/sbin/autoloadctl exporter-pairs >/dev/null 2>&1 || echo "secubox-autoload : projection publique des pairs non exportée" >&2
 
     systemctl daemon-reload >/dev/null 2>&1 || true
     if [ -f /var/lib/secubox/autoload/hub.pub ]; then

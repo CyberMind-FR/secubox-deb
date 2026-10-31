@@ -152,6 +152,23 @@ def _auditer(audit: Path, action: str, detail: str) -> None:
         pass
 
 
+def _auditer_peremption(chemin: Path, audit: Path, now: float, verifie: int) -> None:
+    """Une ligne d'audit par jour au plus tant que le droit reste périmé (marque `.<nom>.perime` à côté du relevé)."""
+    marque = chemin.with_name(f".{chemin.name}.perime")
+    try:
+        if now - marque.stat().st_mtime < 86400:
+            return
+    except OSError:
+        pass
+    _auditer(audit, "droits_self_perimes", f"dernier droit du maître relevé il y a {int((now - verifie) // 3600)} h, conservé")
+    try:
+        fd = os.open(marque, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644)
+        os.close(fd)
+        os.utime(marque, (now, now))
+    except OSError:
+        pass
+
+
 def bans_a_appliquer(bans: List[Dict[str, Any]], moi: Optional[str], chemin: Path = SELF_DEFAUT,
                      maintenant: Optional[float] = None, audit: Path = AUDIT_DEFAUT) -> List[str]:
     """Union fédérée si le dernier droit connu inclut `bans-waf` (ou si aucune politique n'a jamais répondu) ; sinon les seules bans
@@ -168,7 +185,7 @@ def bans_a_appliquer(bans: List[Dict[str, Any]], moi: Optional[str], chemin: Pat
     if not isinstance(verifie, int):
         return sorted({b["ip"] for b in bans if moi and b.get("publisher") == moi})
     if now - verifie > VALIDITE_SELF_S:
-        _auditer(Path(audit), "droits_self_perimes", f"dernier droit du maître relevé il y a {int((now - verifie) // 3600)} h, conservé")
+        _auditer_peremption(Path(chemin), Path(audit), now, verifie)
     if "bans-waf" in (doc.get("services") or []):
         return tout
     return sorted({b["ip"] for b in bans if moi and b.get("publisher") == moi})

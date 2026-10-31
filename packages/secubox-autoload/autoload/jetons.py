@@ -463,7 +463,8 @@ class Registre:
     def inscrire_atelier(self, pairs_enroles: Path) -> int:
         """Décision du propriétaire (#3305) : sur le maître, les pairs ACTUELLEMENT enrôlés (p2p-public/pairs-enroles.json) sont les box
         de l'atelier. Chaque pair sans ligne reçoit la formule « atelier » (avec son empreinte) ; une ligne existante n'est jamais touchée.
-        Fichier absent ou abîmé : rien. Rend le nombre d'inscrits, audité."""
+        UNE SEULE FOIS (marque meta.atelier_inscrit, même transaction) ; fichier absent ou abîmé : rien, marque non posée.
+        Rend le nombre d'inscrits, audité."""
         try:
             with open(pairs_enroles, "rb") as f:
                 doc = json.loads(f.read(1024 * 1024))
@@ -473,6 +474,9 @@ class Registre:
         noms = []
         with self._cx() as cx:
             cx.execute("BEGIN IMMEDIATE")
+            if cx.execute("SELECT 1 FROM meta WHERE cle='atelier_inscrit'").fetchone():          # une seule fois : un pair enrôlé plus
+                cx.execute("ROLLBACK")                                                            # tard est un client, pas l'atelier
+                return 0
             for p in pairs if isinstance(pairs, list) else []:
                 nom = p.get("name") if isinstance(p, dict) else None
                 emp = p.get("fingerprint") if isinstance(p, dict) else None
@@ -482,6 +486,7 @@ class Registre:
                 if cx.execute("INSERT OR IGNORE INTO abonnements_maillage (nom, empreinte, formule, statut, maj_le) VALUES (?,?,?,'actif',?)",
                               (nom, emp, FORMULE_ATELIER, self._maintenant())).rowcount:
                     noms.append(nom)
+            cx.execute("INSERT INTO meta (cle, valeur) VALUES ('atelier_inscrit', ?)", (str(self._maintenant()),))
             cx.execute("COMMIT")
         if noms:
             self._audit("maillage-atelier", "pairs=" + ",".join(noms))

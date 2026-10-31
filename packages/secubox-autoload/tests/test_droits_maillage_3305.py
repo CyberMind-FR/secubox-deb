@@ -170,11 +170,14 @@ def test_inscription_atelier_des_pairs_enroles(reg, tmp_path):
     assert p["gk1"]["formule"] == "atelier" and p["gk5"]["empreinte"] == "sbx-000000000001"
     assert p["lgm-ebin"]["formule"] == "passerelle"
     assert reg.inscrire_atelier(_pairs_enroles(tmp_path, ["gk1", "gk5"])) == 0         # idempotente
+    assert reg.inscrire_atelier(_pairs_enroles(tmp_path, ["client-tard"])) == 0          # une seule fois : un pair enrôlé plus tard n'est pas l'atelier
+    assert "client-tard" not in {x["nom"] for x in reg.droits_maillage()["pairs"]}
     assert "maillage-atelier" in (tmp_path / "audit.log").read_text()
 
 
 def test_inscription_atelier_fichier_absent_ou_abime(reg, tmp_path):
     assert reg.inscrire_atelier(tmp_path / "absent.json") == 0
+    assert reg.inscrire_atelier(_pairs_enroles(tmp_path, ["gk1"])) == 1                  # fichier illisible : la marque n'est pas posée
     (tmp_path / "x.json").write_text("{abime")
     assert reg.inscrire_atelier(tmp_path / "x.json") == 0
     f = tmp_path / "y.json"
@@ -197,3 +200,23 @@ def test_postinst_inscrit_l_atelier():
     from pathlib import Path
     post = (Path(__file__).resolve().parents[1] / "debian" / "postinst").read_text()
     assert "autoloadctl maillage-atelier" in post
+
+
+def test_postinst_atelier_apres_exporter_pairs():
+    from pathlib import Path
+    post = (Path(__file__).resolve().parents[1] / "debian" / "postinst").read_text()
+    assert post.index("autoloadctl exporter-pairs") < post.index("autoloadctl maillage-atelier")
+    assert "# Projection publique des pairs (#3126)" in post.split("autoloadctl exporter-pairs")[0].rsplit("\n\n", 1)[-1]
+
+
+def test_ctl_maillage_fils_sort_toujours(monkeypatch, tmp_path):
+    ctl = _ctl()
+    sorties = []
+    monkeypatch.setattr(ctl.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(ctl.os, "fork", lambda: 0)
+    monkeypatch.setattr(ctl.os, "_exit", lambda rc: sorties.append(rc) or (_ for _ in ()).throw(SystemExit(rc)))
+    monkeypatch.setattr(ctl, "_abaisser_privileges", lambda: (_ for _ in ()).throw(RuntimeError("boum")))
+    a = type("A", (), {"cmd": "maillage-atelier", "pairs": str(tmp_path / "x.json")})()
+    with pytest.raises(SystemExit):
+        ctl._maillage(a, tmp_path / "j.db", tmp_path / "v.lock")
+    assert sorties == [1]                                                               # le fils ne revient jamais dans le code du parent

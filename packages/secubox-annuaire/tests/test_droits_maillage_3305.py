@@ -177,12 +177,17 @@ def test_route_droits_self(api, monkeypatch):
     assert tc.get("/droits/self").status_code == 401                              # hors écouteur du maillage : gardé
 
 
-PAIRS_MAILLAGE = [{"mesh_ip": "10.10.0.9", "name": "gk4"}, {"mesh_ip": "10.10.0.7", "name": "lgm-ebin"}, {"mesh_ip": "10.10.0.1", "name": "gk2"}]
+CLE_GK2 = "M" * 43 + "="
+PAIRS_MAILLAGE = [{"mesh_ip": "10.10.0.9", "name": "gk4", "public_key": "K" * 43 + "="},
+                  {"mesh_ip": "10.10.0.7", "name": "lgm-ebin", "public_key": "L" * 43 + "="},
+                  {"mesh_ip": "10.10.0.1", "name": "gk2", "public_key": CLE_GK2}]
 
 
-def _ancre(tmp_path, nom="gk2"):
+def _ancre(tmp_path, nom="gk2", cle=CLE_GK2):
+    import hashlib
     a = tmp_path / "ancre-maitre.json"
-    a.write_text(json.dumps({"cle_publique": "x", "adresse": "192.168.1.200", "nom": nom, "empreinte": "0" * 16}))
+    a.write_text(json.dumps({"cle_publique": cle, "adresse": "192.168.1.200", "nom": nom,
+                             "empreinte": hashlib.sha256(cle.encode()).hexdigest()[:16]}))
     return a
 
 
@@ -241,3 +246,30 @@ def test_ecouteur_maillage_sert_droits_self():
     tpl = (Path(__file__).resolve().parents[1] / "nginx" / "annuaire-mesh.conf.tpl").read_text()
     bloc = tpl.split("location = /api/v1/annuaire/droits/self {", 1)[1].split("\n    }", 1)[0]
     assert "limit_except GET { deny all; }" in bloc and "X-SecuBox-Maillage 1" in bloc
+
+
+def test_relever_droits_refuse_un_homonyme_sans_la_cle_de_l_ancre(tmp_path):
+    from annuaire import mesh_sync
+    vus = []
+    pairs = [{"mesh_ip": "10.10.0.66", "name": "gk2", "public_key": "Z" * 43 + "="}]         # même nom, autre clé
+    assert mesh_sync.relever_droits(pairs, lambda u: vus.append(u) or {"politique": True, "services": []},
+                                    tmp_path / "d.json", ancre=_ancre(tmp_path)) is False
+    assert vus == []
+
+
+def test_read_mesh_peers_garde_la_cle(tmp_path):
+    from annuaire import mesh_sync
+    f = tmp_path / "wg_mesh.json"
+    f.write_text(json.dumps({"peers": [{"name": "gk2", "mesh_ip": "10.10.0.1", "public_key": CLE_GK2}]}))
+    assert mesh_sync.read_mesh_peers(str(f))[0]["public_key"] == CLE_GK2
+
+
+def test_peremption_auditee_une_fois_par_jour(tmp_path):
+    cache, audit = tmp_path / "droits-self.json", tmp_path / "audit.log"
+    D.noter_droits_self({"politique": True, "services": TOUS}, cache, maintenant=T0)
+    bans = [{"ip": "1.1.1.1", "publisher": "x"}]
+    for h in (49, 50, 60):
+        D.bans_a_appliquer(bans, "x", cache, maintenant=T0 + h * 3600, audit=audit)
+    assert audit.read_text().count("droits_self_perimes") == 1
+    D.bans_a_appliquer(bans, "x", cache, maintenant=T0 + 74 * 3600, audit=audit)
+    assert audit.read_text().count("droits_self_perimes") == 2

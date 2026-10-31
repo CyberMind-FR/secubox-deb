@@ -83,7 +83,11 @@ def _maillage(a, db: Path, verrou: Path) -> int:
     if os.geteuid() == 0:
         pid = os.fork()
         if pid == 0:
-            os._exit(ecrire())
+            rc = 1
+            try:
+                rc = ecrire()
+            finally:
+                os._exit(rc)                                    # le fils ne revient jamais dans le code du parent
         rc = os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1])
     else:
         rc = ecrire()
