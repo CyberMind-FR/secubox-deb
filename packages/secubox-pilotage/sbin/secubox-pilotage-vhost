@@ -326,6 +326,26 @@ def empreintes_de(ctx, paquet, version, mods):
     return emp, accueil
 
 
+def version_extraite_repli(ctx, paquet):
+    """#3302 : la plus récente version du paquet déjà extraite (dossiers sous www/<paquet>/, tri des versions Debian),
+    ou None. Lecture seule de l'arbre root des pages."""
+    import functools
+    d = os.path.join(ctx.pages_base, "secubox-pilotage-pages", "www", paquet)
+    try:
+        vs = [v for v in os.listdir(d) if V.RE_VERSION.fullmatch(v) and not v.startswith(".")]
+    except OSError:
+        return None
+    if not vs:
+        return None
+    try:
+        import apt_pkg
+        apt_pkg.init_system()
+        cle = functools.cmp_to_key(apt_pkg.version_compare)
+    except ImportError:
+        cle = None
+    return max(vs, key=cle) if cle else max(vs)
+
+
 def modules_de(ctx, paquet, version):
     """Modules (dossiers de premier niveau) de www/<paquet>/<version>/, par descripteur et sans lien ; None si non extraite."""
     try:
@@ -834,6 +854,12 @@ def poser(ctx, box, pages):
         composees, absentes = [], []
         for paquet, version in pages:
             mods = modules_de(ctx, paquet, version)
+            if mods is None:
+                # #3302 : version absente du dépôt (la box a une version de retard ou d'avance) : on garde les pages
+                # déjà extraites de la plus récente version du paquet, plutôt que de faire disparaître le module
+                repli = version_extraite_repli(ctx, paquet)
+                if repli is not None:
+                    version, mods = repli, modules_de(ctx, paquet, repli)
             if mods is None:
                 absentes.append(f"{paquet}={version}")
             elif mods or paquet == PAQUET_ACCUEIL:
