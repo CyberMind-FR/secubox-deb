@@ -61,6 +61,7 @@ class Sources:
                                                  Path("/usr/share/GeoIP/GeoLite2-Country.mmdb"),
                                                  Path("/var/lib/GeoIP/GeoLite2-Country.mmdb")])
     etat_menaces: Path = Path("/var/cache/secubox/live/menaces-etat.json")
+    etat_visites: Path = Path("/var/cache/secubox/live/visites-etat.json")
     local_nom: Optional[str] = None
 
 
@@ -441,7 +442,26 @@ def visites(src: Sources):
                 for cc, n in (s.get("pays") or {}).items():
                     if re.fullmatch(r"[A-Z]{2}", str(cc)):
                         pays[cc] += int(n or 0)
-    return {"jours": par_jour, "requetes": req, "pays": [{"code": c, "n": n} for c, n in pays.most_common(30)]}
+    # vhost_stats.json ne garde que 30 jours glissants : les totaux par jour (visites, requêtes, pays) sont persistés
+    # ici, bornés à JOURS_MAX, pour que l'historique s'allonge. Un jour encore présent dans la source prend le maximum
+    # (le jour courant grossit) ; un jour sorti de la source garde sa dernière valeur.
+    etat = _json(src.etat_visites)
+    if not isinstance(etat, dict) or etat.get("version") != 1:
+        etat = {"version": 1, "jours": {}}
+    for jour, vh in d["jours"].items():
+        if not isinstance(vh, dict) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(jour)):
+            continue
+        pj = Counter()
+        for s in vh.values():
+            if isinstance(s, dict):
+                pj.update({cc: int(n or 0) for cc, n in (s.get("pays") or {}).items() if re.fullmatch(r"[A-Z]{2}", str(cc))})
+        ancien = etat["jours"].get(jour) or {}
+        if par_jour[jour] >= int(ancien.get("visites") or 0):
+            etat["jours"][jour] = {"visites": par_jour[jour], "requetes": req.get(jour, 0), "pays": dict(pj)}
+    etat["jours"] = _borner(etat["jours"])
+    ecrire(src.etat_visites, etat, mode=0o600)
+    return {"jours": {k: v["visites"] for k, v in etat["jours"].items()}, "requetes": req,
+            "pays": [{"code": c, "n": n} for c, n in pays.most_common(30)]}
 
 
 # ---------------------------------------------------------------------------------------------------------------- divers

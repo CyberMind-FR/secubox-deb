@@ -28,7 +28,7 @@ l'écriture (test `test_jamais_d_adresse_ni_de_secret_dans_l_etat`). Une source 
 | menaces, WAF dernière heure, attaques par jour | `/var/log/secubox/waf/waf-threats.log`, `.1` (incréments : position + inode) et, au rattrapage, les rotations `.N.gz` (lecture en flux) | `null` |
 | bans par jour, bans actifs | `/var/lib/secubox/waf/bans.jsonl` (journal ban/unban de sbxwaf, append-only, celui qu'il relit au démarrage ; incréments) | `null` |
 | pays des attaques | GeoLite2-Country (`python3-geoip2`) | `null` |
-| visites par jour et par pays, requêtes du jour | `/var/cache/secubox/metrics/vhost_stats.json` (secubox-metrics) | `null` |
+| visites par jour et par pays, requêtes du jour | `/var/cache/secubox/metrics/vhost_stats.json` (secubox-metrics, 30 jours glissants), totaux par jour persistés dans `/var/cache/secubox/live/visites-etat.json` (0600, 400 jours) | `null` |
 | sites publiés | `/etc/secubox/haproxy.toml` (vhosts actifs) | `null` |
 | développement | API publique GitHub, sans jeton, cache 10 min (`/var/cache/secubox/live/github.json`) | dernier relevé, sinon `null` |
 | disponibilité 30 j | aucune source à ce jour | toujours `null` |
@@ -53,6 +53,13 @@ compte). Un jour antérieur à la première mesure d'une source vaut `null` (« 
 pas à minuit). Le journal d'audit de sbxwaf (`/var/log/secubox/waf/audit.log`) ne porte que les réévaluations, pas
 les bans : la source des bans est `bans.jsonl`. L'état n'en garde qu'une empreinte tronquée par adresse, le temps
 du ban.
+
+## Page
+
+Après les tuiles, la section « Comprendre ces chiffres » (`<details>`, ouverte au premier affichage, choix du visiteur
+retenu dans son navigateur) explique requêtes, menaces, bloquées, bans (1 h, 4 h, 24 h, 7 jours, levés à l'échéance),
+bans actifs, l'écart entre ces chiffres, les pics, la vie privée et les jours gris. Chaque tuile et chaque légende de
+l'historique porte une infobulle (`title`). Texte statique dans `index.html`, aucun `innerHTML`.
 
 ## ACL de lecture
 
