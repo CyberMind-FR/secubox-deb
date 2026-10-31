@@ -234,37 +234,35 @@ async def test_flux_battement_puis_liberation_si_l_ecriture_echoue(tmp_path, mon
 
 @pytest.mark.asyncio
 async def test_flux_limite_par_admin(m):
+    """#3308 : un 5e flux du même login est servi (200) et le plus ancien est clos, sans jamais dépasser 4 ; les autres logins
+    ne sont pas touchés."""
     flux = []
     for _ in range(4):
         flux.append(m.ouvrir(sub="alice"))
         await flux[-1].evenements(1)
     assert m.diffusion.compte("alice") == 4
-    cinq = m.ouvrir(sub="alice")
-    await asyncio.wait_for(cinq.demarre.wait(), 3)
-    assert cinq.statut == 429
-    await cinq.fermer()
-    assert m.diffusion.compte("alice") == 4
-    # la limite se compte par login
     autre = m.ouvrir(sub="bob")
     await autre.evenements(1)
-    assert autre.statut == 200 and m.diffusion.compte("bob") == 1
-    # un flux fermé libère une place
-    await flux.pop().fermer()
-    de_nouveau = m.ouvrir(sub="alice")
-    await de_nouveau.evenements(1)
-    assert de_nouveau.statut == 200 and m.diffusion.compte("alice") == 4
-    for x in flux + [autre, de_nouveau]:
+    cinq = m.ouvrir(sub="alice")
+    await cinq.evenements(1)
+    assert cinq.statut == 200
+    assert m.diffusion.compte("alice") == 4 and m.diffusion.compte("bob") == 1
+    for x in flux + [autre, cinq]:
         await x.fermer()
     assert m.diffusion.total() == 0
 
 
 def test_limite_diffusion_unitaire():
+    """#3308 : au plafond par login, le flux le plus ancien du login est clos (flux fantôme d'une page rechargée derrière les
+    relais) au lieu d'un 429 ; le compte reste au plafond et les flux des autres logins ne sont jamais touchés."""
     d = Diffusion()
+    autre = d.abonner("b", "k")
     abonnes = [d.abonner("a", "k") for _ in range(4)]
-    with pytest.raises(LimiteAtteinte):
-        d.abonner("a", "k")
-    d.liberer(abonnes[0])
-    d.abonner("a", "k")
+    nouveau = d.abonner("a", "k")
+    assert d.compte("a") == 4 and d.compte("b") == 1
+    assert abonnes[0]._ferme and not any(x._ferme for x in abonnes[1:]) and not nouveau._ferme and not autre._ferme
+    d.liberer(abonnes[0])                     # le finally du flux évincé : idempotent, ne décompte pas deux fois
+    assert d.compte("a") == 4
 
 
 @pytest.mark.asyncio

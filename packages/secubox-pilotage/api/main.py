@@ -28,7 +28,7 @@ L2 « Agir » (tâche 6) :
   DELETE /boxes/{x}/support/{id}    fermeture (effective sur le maître tout de suite, puis envoyée à la box) ; audit pilotage_support_fermeture
 L2 « Agir » (tâche 7) :
   GET    /boxes/{x}/flux            temps réel (text/event-stream) : événements notify | operation | etat, battement toutes les 15 s ;
-                                    4 flux au plus par administrateur (429) ; box cliente : seulement pendant une session de support
+                                    4 flux au plus par administrateur (le plus ancien est clos, #3308) ; box cliente : seulement pendant une session de support
                                     ouverte et non échue (403 sinon, flux clos à son terme), box du propriétaire : toujours (R-L2-31)
 """
 from __future__ import annotations
@@ -397,7 +397,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
     async def flux(ident: str, jwt: dict = Depends(require_jwt)):
         """Temps réel (tâche 7). R-L2-31 : la vue en direct d'une box CLIENTE n'est servie que pendant une session de support ouverte et non
         échue (403 sinon) ; le flux est re-vérifié à chaque battement et clos à la fin de la session. Une box du propriétaire (maillage) est
-        toujours servie à l'administrateur. Un flux se compte par login (4 au plus, 429), libéré à la fin du flux quelle qu'en soit la cause."""
+        toujours servie à l'administrateur. Un flux se compte par login (4 au plus : le plus ancien est clos, #3308 ; 429 au plafond global), libéré à la fin du flux quelle qu'en soit la cause."""
         b = await trouver(ident)
         cliente = b["reseau"] != "maillage"
         session = await asyncio.to_thread(stockage.support_ouvert, b["cle"]) if cliente else None
@@ -406,7 +406,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         try:
             ab = diffusion.abonner(acteur_de(jwt), b["cle"])
         except LimiteAtteinte:
-            raise HTTPException(429, "trop de flux ouverts pour cet administrateur") from None
+            raise HTTPException(429, "trop de flux ouverts") from None
 
         fin_support = session["fin"] if session else None
         exp = jwt.get("exp") if isinstance(jwt.get("exp"), (int, float)) and not isinstance(jwt.get("exp"), bool) else None

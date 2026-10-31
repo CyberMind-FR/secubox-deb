@@ -742,7 +742,8 @@
         $('pb-sup-demander').addEventListener('click', pbSupportDemander);
         $('pb-sup-fermer').addEventListener('click', pbSupportFermer);
         window.addEventListener('pagehide', pbFermerFlux);
-        setInterval(() => { if (pbBoite) pbMaj(); }, 15000);      // fin d'une session de support annoncée : le catalogue disparaît sans attendre
+        setInterval(() => { if (pbBoite) pbMaj(); }, 15000);
+        setInterval(() => { if (pbBoite && document.visibilityState !== 'hidden') pbOperations(); }, 10000);   // #3308 : journal relu même si la vue en direct est coupée      // fin d'une session de support annoncée : le catalogue disparaît sans attendre
         // ===== fin pilotage-box =====
 
         async function loadFleet() {

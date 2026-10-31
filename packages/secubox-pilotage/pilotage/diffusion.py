@@ -7,7 +7,9 @@
 Tout vit dans la boucle asyncio du service (les deux applications partagent le processus) : `publier` est synchrone, ne bloque jamais et
 ne lève jamais. Chaque abonné a sa file, BORNÉE ; si la page lit moins vite que les événements arrivent, les plus vieux sont abandonnés
 (et comptés : la page reçoit alors `etat {perte: n}` et se resynchronise par GET /operations). Un abonnement se compte par login
-d'administrateur (4 au plus) et se libère à la fin du flux, quelle qu'en soit la cause (idempotent).
+d'administrateur (4 au plus) et se libère à la fin du flux, quelle qu'en soit la cause (idempotent). Au plafond du login, le plus ancien
+de ses flux est clos (#3308 : une page rechargée laisse un flux fantôme que les relais HAProxy → sbxwaf → nginx ne coupent qu'au prochain
+échec d'écriture) ; seul le plafond global rend LimiteAtteinte.
 
 Événements (noms fermés) : `notify` (toute notification de la box, forme épurée du canal), `operation` (progression, fin, demande d'action),
 `etat` (mains liées, consentement, support, connexion du flux, perte). Aucun secret : seules passent les clés déjà épurées par le canal."""
@@ -31,7 +33,7 @@ FIN = object()   # rendu par Abonnement.suivant quand le service s'arrête
 
 
 class LimiteAtteinte(Exception):
-    """Le login a déjà `PLAFOND_PAR_LOGIN` flux ouverts, ou le service en sert déjà `PLAFOND_GLOBAL`."""
+    """Le service sert déjà `PLAFOND_GLOBAL` flux."""
 
 
 def formater(nom: str, data: dict) -> str:
@@ -89,14 +91,18 @@ class Abonnement:
 class Diffusion:
     def __init__(self, plafond_par_login: int = PLAFOND_PAR_LOGIN, file_max: int = FILE_MAX, plafond_global: int = PLAFOND_GLOBAL) -> None:
         self.plafond, self.file_max, self.plafond_global = plafond_par_login, file_max, plafond_global
-        self._abonnes: set = set()
+        self._abonnes: dict = {}     # dict : ordre d'abonnement conservé (éviction du plus ancien d'un login)
         self._par_login: dict = {}
 
     def abonner(self, login: str, cle: str) -> Abonnement:
-        if self._par_login.get(login, 0) >= self.plafond or len(self._abonnes) >= self.plafond_global:
+        if self._par_login.get(login, 0) >= self.plafond:
+            plus_ancien = next(a for a in self._abonnes if a.login == login)
+            log.info("flux le plus ancien de %s clos (plafond par login)", login)
+            self.liberer(plus_ancien)
+        if len(self._abonnes) >= self.plafond_global:
             raise LimiteAtteinte(login)
         ab = Abonnement(login, cle, self.file_max)
-        self._abonnes.add(ab)
+        self._abonnes[ab] = None
         self._par_login[login] = self._par_login.get(login, 0) + 1
         return ab
 
@@ -104,7 +110,7 @@ class Diffusion:
         """Idempotent."""
         if ab not in self._abonnes:
             return
-        self._abonnes.discard(ab)
+        del self._abonnes[ab]
         n = self._par_login.get(ab.login, 1) - 1
         if n > 0:
             self._par_login[ab.login] = n

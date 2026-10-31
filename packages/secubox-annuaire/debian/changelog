@@ -1,3 +1,11 @@
+secubox-annuaire (0.16.6-1~trixie1) trixie; urgency=medium
+
+  * Flotte : vue en direct sans 429 après rechargements (le flux le plus
+    ancien du login est clos) ; journal des opérations relu toutes les 10 s
+    (ref #3308).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 05:12:29 +0100
+
 secubox-annuaire (0.16.5-1~trixie1) trixie; urgency=medium
 
   * Flotte, page de la box (ref #3302) : « Passer en interface distante » ou « Revenir à l’interface locale », selon
