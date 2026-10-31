@@ -27,8 +27,10 @@ from pathlib import Path
 from secubox_core.auth import require_lecture
 try:
     from . import netstats          # uvicorn `api.main:app` / aggregator import
+    from .apercu import construire_apercu   # #3302 : importé au chargement (dans secubox-groupd, un import tardif relatif échoue)
 except ImportError:                 # standalone with api/ on sys.path (collector)
     import netstats  # #758 — shared collector/reader module
+    from apercu import construire_apercu
 
 app = FastAPI(title="secubox-hub", version="1.7.0", root_path="/api/v1/hub")
 
@@ -1101,7 +1103,6 @@ async def save_widgets(req: WidgetRequest, user=Depends(require_jwt)):
 @router.get("/apercu", dependencies=[Depends(require_lecture)])
 async def apercu():
     """Vue d'ensemble (#2212) : caches en mémoire seulement, jamais d'apt ni de systemctl sur le chemin de la requête."""
-    from .apercu import construire_apercu
     menu = _menu_cache or _cache.get("menu") or {}
     notifs = []
     nf = Path("/var/lib/secubox/notifications.json")
