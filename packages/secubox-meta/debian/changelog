@@ -1,3 +1,9 @@
+secubox-meta (0.1.49-1~trixie1) trixie; urgency=medium
+
+  * secubox-ad-guard recommandé par secubox-service-detection : la carte Guardian du Hall est posée par sbxos (ref #3313).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:05:34 +0100
+
 secubox-meta (0.1.48-1~trixie1) trixie; urgency=medium
 
   * secubox-meet (La Suite Meet, ref #3154) placé dans l'arbre : suggéré par secubox-service-visio, jamais recommandé

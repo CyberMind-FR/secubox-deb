@@ -362,9 +362,9 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-security-posture,
          secubox-threats
-Recommends: secubox-threatmesh
-Suggests: secubox-ad-guard,
-         secubox-cookies,
+Recommends: secubox-threatmesh,
+         secubox-ad-guard
+Suggests: secubox-cookies,
          secubox-toolbox
 Description: SecuBox — service « Détection »
  Posture de sécurité, menaces, CVE, renseignement partagé.

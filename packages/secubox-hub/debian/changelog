@@ -1,3 +1,9 @@
+secubox-hub (1.12.33-1~trixie1) trixie; urgency=medium
+
+  * espaces.json : meet et media-smb classés, lignes périmées c3box, mirror et routes retirées (ref #3313).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:05:34 +0100
+
 secubox-hub (1.12.32-1~trixie1) trixie; urgency=medium
 
   * Menu : mode hors ligne en francais et en Aurora, cause reelle (session

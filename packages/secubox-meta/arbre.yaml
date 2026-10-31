@@ -372,8 +372,8 @@ requiert:
   - secubox-threats
 recommande:
   - secubox-threatmesh
+  - secubox-ad-guard          # carte Guardian du Hall (#2288) : sbxos doit la poser (#3313)
 suggere:
-  - secubox-ad-guard
   - secubox-cookies
   - secubox-toolbox
 
