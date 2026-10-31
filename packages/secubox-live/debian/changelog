@@ -1,3 +1,12 @@
+secubox-live (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * Histogramme : bans dans leur propre bande, a leur propre echelle.
+  * Camembert des attaques par pays (7 premiers + autres).
+  * Exposeur : certificat par certbot webroot + haproxyctl cert sync
+    (haproxyctl cert add depend d acme.sh, absent des box) (ref #3351).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 13:52:00 +0100
+
 secubox-live (0.1.1-1~trixie1) trixie; urgency=medium
 
   * vhost : listen 9080 comme les autres vhosts derriere sbxwaf (qui joint

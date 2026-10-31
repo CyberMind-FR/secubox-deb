@@ -50,3 +50,10 @@ svg circle.ping{fill:none;stroke-width:.35;transform-box:fill-box;transform-orig
 #histo,#waf{width:100%;height:auto}
 .vide{color:var(--faible);font-size:14px}
 .pied{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-size:13px;color:var(--faible);border-top:1px solid rgba(148,163,184,.15);padding-top:16px}
+
+/* #3351 : camembert des menaces par pays */
+.camembert{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+.camembert svg{width:200px;height:200px;flex:0 0 200px}
+#camembert-legende{display:flex;flex-direction:column;gap:6px;font-size:14px;flex:1 1 160px}
+.ligne-camembert{display:flex;align-items:center;gap:8px}
+.pastille-camembert{width:12px;height:12px;border-radius:3px;display:inline-block}
