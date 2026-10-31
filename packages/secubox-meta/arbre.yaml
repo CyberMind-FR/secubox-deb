@@ -570,3 +570,4 @@ requiert:
   - secubox-autoload           # jetons, abonnements par box, droits du maillage (#2182, #3303, #3305)
 recommande:
   - secubox-kiosque            # webapp kiosque distant (PWA) servie par le maître (#3330)
+  - secubox-live               # page publique de l'état du réseau live.<domaine> (#3351)

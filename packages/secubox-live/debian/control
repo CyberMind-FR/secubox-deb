@@ -1,0 +1,20 @@
+Source: secubox-live
+Section: admin
+Priority: optional
+Maintainer: Gérald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper (>= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-live
+Architecture: all
+Depends: ${misc:Depends}, python3 (>= 3.11), python3-fastapi, python3-uvicorn, nginx, secubox-core, adduser
+Recommends: python3-geoip2
+Description: SecuBox — page publique de l'état du réseau (live.secubox.in)
+ Page publique en direct du réseau SecuBox : nœuds du maillage (nom, matériel,
+ état, charge), WAF de la dernière heure, types de menaces, usages DPI, cartes
+ du monde des attaques et des visites par pays, historique quotidien depuis la
+ mise en production, état du développement (GitHub). Un collecteur agrège des
+ sources existantes du maître ; aucune adresse, aucun compte, aucun secret
+ n'est publié. Rien n'est exposé tant qu'un domaine n'est pas configuré.

@@ -604,7 +604,8 @@ Architecture: all
 Depends: ${misc:Depends},
          secubox-pilotage,
          secubox-autoload
-Recommends: secubox-kiosque
+Recommends: secubox-kiosque,
+         secubox-live
 Description: SecuBox — service « Pilotage du parc »
  Contrôleur du pilotage distant, vhosts admin.<box>, abonnements et droits du maillage, webapp kiosque.
  .

@@ -1,0 +1,29 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Expose live.<domaine> (#3351) SEULEMENT si /etc/secubox/live.toml nomme un domaine (vide par défaut : rien n'est exposé).
+# La route sbxwaf et le vhost HAProxy ne sont posés qu'après un `nginx -t` réussi (sinon 421 contre 502, cf. #3150).
+set -eu
+CONF=/etc/secubox/live.toml
+DOMAINE=$(sed -n 's/^domaine[[:space:]]*=[[:space:]]*"\([a-z0-9.-]*\)"[[:space:]]*$/\1/p' "$CONF" 2>/dev/null | head -1)
+case "$DOMAINE" in
+  live.*.*) ;;
+  "") echo "secubox-live : aucun domaine dans $CONF, rien d'exposé"; exit 0 ;;
+  *) echo "secubox-live : domaine refusé (attendu live.<domaine>) : $DOMAINE" >&2; exit 2 ;;
+esac
+ln -sf ../sites-available/live.conf /etc/nginx/sites-enabled/live.conf
+if ! NT=$(nginx -t 2>&1); then
+  rm -f /etc/nginx/sites-enabled/live.conf
+  echo "secubox-live : nginx -t a échoué, vhost NON activé : $NT" >&2
+  exit 1
+fi
+systemctl reload nginx >/dev/null 2>&1 || true
+command -v secubox-waf-route >/dev/null 2>&1 && { secubox-waf-route "$DOMAINE" 9080 || true; }
+if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ] \
+   && ! grep -q "\"$DOMAINE\"" /etc/secubox/haproxy.toml 2>/dev/null; then
+  haproxyctl vhost add "$DOMAINE" sbxwaf_inspector true >/dev/null 2>&1 || true
+  haproxyctl generate >/dev/null 2>&1 || true
+  systemctl reload haproxy >/dev/null 2>&1 || true
+fi
+logger -t secubox-live "vhost public $DOMAINE exposé (nginx, route sbxwaf, HAProxy)"
+echo "secubox-live : $DOMAINE exposé"

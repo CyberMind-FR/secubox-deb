@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# secubox-live (#3351) — page publique de l'état du réseau.
+# Domaine public : VIDE par défaut, rien n'est exposé. Sur le maître : domaine = "live.secubox.in", puis
+# `sudo secubox-live-exposer` (nginx, route sbxwaf, HAProxy).
+domaine = ""
+
+# Date de mise en production du maître (AAAA-MM-JJ). Vide : naissance de /etc/secubox (installation initiale).
+# mise_en_production = "2026-03-01"
+
+# Rôle affiché par nœud (nom = rôle). Le matériel vient de l'inventaire du pilotage ; [materiels] le remplace au besoin.
+[roles]
+# gk2 = "maître"
+
+[materiels]
+# gk3 = "x86"
+
+# Feuille de route affichée telle quelle.
+# [[feuille_de_route]]
+# nom = "Alpha 20"
+# etat = "bientôt"
