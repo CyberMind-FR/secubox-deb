@@ -56,7 +56,7 @@ def test_paquet_debian():
     c = lire("debian/control")
     assert "Package: secubox-kiosque" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-kiosque (0.1.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-kiosque (0.2.0-1~trixie1) trixie;")
     r = lire("debian/rules")
     assert "/usr/share/secubox/www/kiosque" in r and "/etc/nginx/secubox-routes.d/kiosque.conf" in r
 
@@ -71,3 +71,36 @@ def test_spdx_partout():
 def test_js_syntaxe():
     for f in ("kiosque.js", "sw.js"):
         assert subprocess.run(["node", "--check", str(WWW / f)], capture_output=True).returncode == 0, f
+
+
+def _donnees_box(inv):
+    """Exécute la fonction pure donneesBox de kiosque.js sous node (sans DOM)."""
+    harnais = (
+        "const vm=require('vm');const fs=require('fs');"
+        "const ctx={document:{addEventListener(){}},localStorage:{getItem(){return ''}},console};vm.createContext(ctx);"
+        f"vm.runInContext(fs.readFileSync({json.dumps(str(WWW / 'kiosque.js'))},'utf8'),ctx);"
+        "process.stdout.write(JSON.stringify(vm.runInContext('donneesBox('+process.argv[1]+')',ctx)));"
+    )
+    r = subprocess.run(["node", "-e", harnais, json.dumps(inv)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_donnees_d_une_box_lues_dans_l_inventaire_du_pilotage():
+    """0.2.0 : la pastille d'une box du maillage affiche SES données (inventaire du pilotage), jamais celles du maître."""
+    d = _donnees_box({"en_ligne": True, "agent_version": "0.6.1", "inventaire": {
+        "Device.DeviceInfo.MemoryStatus.Total": 3881000, "Device.DeviceInfo.MemoryStatus.Free": 2391000,
+        "Device.DeviceInfo.UpTime": 90061, "Device.DeviceInfo.ProcessStatus.CPUUsage": 12,
+        "Device.X_SECUBOX_Services.FailedNumberOfEntries": 0, "Device.X_SECUBOX_Pilotage.Interface": "distante",
+        "Device.X_SECUBOX_Pilotage.MainsLiees": False}})
+    assert d["etat"] == "en ligne" and d["etatDetail"] == "aucun service en échec"
+    assert d["memoire"] == "38 %" and d["memoireDetail"] == "2335 Mo disponibles"
+    assert d["charge"] == "12 %" and d["uptime"] == "1 j 1 h"
+    assert d["interface"] == "distante" and d["mainsLiees"] == "non" and d["agent"] == "0.6.1"
+
+
+def test_donnees_absentes_restent_des_tirets():
+    d = _donnees_box({"en_ligne": False, "inventaire": {"Device.X_SECUBOX_Services.FailedNumberOfEntries": "3"}})
+    assert d["etat"] == "hors ligne" and d["etatDetail"] == "3 service(s) en échec"
+    for k in ("memoire", "charge", "uptime", "interface", "mainsLiees", "agent"):
+        assert d[k] is None, k
