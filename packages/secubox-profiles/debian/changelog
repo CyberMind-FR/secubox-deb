@@ -1,3 +1,12 @@
+secubox-profiles (0.26.3-1~trixie1) trixie; urgency=medium
+
+  * Profil distante : /var/lib/secubox-profiles passe en 0711 (traversable,
+    non listable) ; en 0700 root, l agent de pilotage ne voyait jamais le
+    marqueur allegement/actif et declarait « locale » : le maitre ne
+    reprenait pas admin.<box> (502 au banc gk4) (ref #3302).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 05:29:41 +0100
+
 secubox-profiles (0.26.2-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 7, correction 2/5 (R-L5-34, ref #3126) : page d'état sur `listen 80;` (aucune adresse figée : nginx
