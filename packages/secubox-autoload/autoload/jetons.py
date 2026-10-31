@@ -40,6 +40,7 @@ DUREE_MAX_S = 365 * 86400
 ABONNEMENTS = ("actif", "suspendu", "revoque")
 PROFILS = ("minimal", "lite", "isp", "full", "secure-gateway", "media-lab", "distante")      # profils réels de secubox-profiles (#3258) ; jamais light/standard
 MOTIF_MIN = 3
+MOTIF_CLIENT = "abonnement du client"        # marque d'une box suspendue/révoquée par la route client, que la même route peut lever
 
 _NOM = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
 _SERIE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{3,63}$")
@@ -319,11 +320,15 @@ class Registre:
         """Révoque un jeton (réclamé ou non). Rend la clé publique à retirer du tunnel (#2189), ou None."""
         motif = str(motif)[:200]
         with self._cx() as cx:
-            r = cx.execute("SELECT cle_pub FROM jetons WHERE id=?", (ident,)).fetchone()
-            if r is None:
-                raise ValueError("jeton inconnu")
-            cx.execute("UPDATE jetons SET etat='revoque', revoque_le=?, motif=? WHERE id=?", (self._maintenant(), motif, ident))
+            cle = self._revoquer_jeton(cx, ident, motif)
         self._audit("jeton-revoque", f"id={ident} motif={motif}")
+        return cle
+
+    def _revoquer_jeton(self, cx: sqlite3.Connection, ident: int, motif: str) -> Optional[str]:
+        r = cx.execute("SELECT cle_pub FROM jetons WHERE id=?", (ident,)).fetchone()
+        if r is None:
+            raise ValueError("jeton inconnu")
+        cx.execute("UPDATE jetons SET etat='revoque', revoque_le=?, motif=? WHERE id=?", (self._maintenant(), motif, ident))
         return r["cle_pub"]
 
     def revoquer_lot_cles(self, lot: str, motif: str) -> List[str]:
@@ -354,10 +359,13 @@ class Registre:
             cx.execute("INSERT INTO clients (client, abonnement, formule, expire_le) VALUES (?,?,?,?) ON CONFLICT(client) DO UPDATE SET "
                        "abonnement=excluded.abonnement, formule=excluded.formule, expire_le=excluded.expire_le", (client, statut, formule, expire_le))
             self._heriter(cx, client)
-            cx.execute("UPDATE abonnements_box SET statut=?, formule=?, expire_le=?, maj_le=? WHERE statut!='revoque' "      # toutes ses box (#3303)
-                       "AND jeton_id IN (SELECT id FROM jetons WHERE client=?)", (statut, formule, expire_le, self._maintenant(), client))
+            # Ses box (#3303) : une box suspendue ou révoquée INDIVIDUELLEMENT n'est jamais touchée ; une box suspendue PAR le client
+            # (motif MOTIF_CLIENT) suit le client.
+            box = cx.execute("UPDATE abonnements_box SET statut=?, formule=?, expire_le=?, motif=?, maj_le=? "
+                             "WHERE (statut='actif' OR (statut='suspendu' AND motif=?)) AND jeton_id IN (SELECT id FROM jetons WHERE client=?)",
+                             (statut, formule, expire_le, MOTIF_CLIENT if statut != "actif" else None, self._maintenant(), MOTIF_CLIENT, client)).rowcount
             n = cx.execute("SELECT COUNT(*) FROM jetons WHERE client=?", (client,)).fetchone()[0]
-        self._audit("abonnement", f"client={client} statut={statut} formule={formule or '-'} expire={expire_le or '-'}")
+        self._audit("abonnement", f"client={client} statut={statut} formule={formule or '-'} expire={expire_le or '-'} box={box}")
         return n
 
     # ── abonnement par box et formules (#3303) ───────────────────────────────────────────────────────────────
@@ -394,13 +402,16 @@ class Registre:
         """Ce que l'administrateur retape pour révoquer : le numéro de série, sinon l'identifiant du jeton."""
         return r["serie"] or str(r["id"])
 
-    def _fixer_box(self, ident: int, action: str, motif: Optional[str] = None, **champs) -> dict:
+    def _fixer_box(self, ident: int, action: str, motif: Optional[str] = None, verifier=None, **champs) -> dict:
+        """Tout dans un BEGIN IMMEDIATE : lecture, `verifier(cx, ligne)` (formule, jeton…), écriture."""
         with self._cx() as cx:
             cx.execute("BEGIN IMMEDIATE")
             try:
                 r = self._box(cx, ident)
                 if r["statut"] == "revoque":
                     raise PermissionError("box révoquée : un nouvel enrôlement exige un nouveau jeton")
+                if verifier is not None:
+                    verifier(cx, r)
                 champs = {k: (v(r) if callable(v) else v) for k, v in champs.items()}
                 poses = ", ".join(f"{k}=?" for k in champs)
                 cx.execute(f"UPDATE abonnements_box SET {poses}, motif=?, maj_le=? WHERE jeton_id=?",
@@ -431,43 +442,45 @@ class Registre:
         return self._fixer_box(ident, "prolonger", expire_le=depart)["expire_le"]
 
     def changer_formule_box(self, ident: int, formule: str) -> None:
-        with self._cx() as cx:
+        def existe(cx, _r):
             if cx.execute("SELECT 1 FROM formules WHERE nom=?", (formule if isinstance(formule, str) else "",)).fetchone() is None:
                 raise ValueError("formule inconnue")
-        self._fixer_box(ident, "formule", formule=formule)
+        self._fixer_box(ident, "formule", verifier=existe, formule=formule)
 
     def suspendre_box(self, ident: int, motif: str) -> None:
         self._fixer_box(ident, "suspendre", self._motif(motif), statut="suspendu")
 
     def reprendre_box(self, ident: int, motif: Optional[str] = None) -> None:
-        self._fixer_box(ident, "reprendre", (motif or "").strip()[:200] or None, statut="actif")
+        self._fixer_box(ident, "reprendre", self._motif(motif) if motif and motif.strip() else None, statut="actif")
 
     def revoquer_box(self, ident: int, motif: str, confirmation: str) -> Optional[str]:
         """Révoque l'abonnement de CETTE box et son seul jeton. Rend la clé publique à retirer du tunnel."""
         motif = self._motif(motif)
-        with self._cx() as cx:
-            r = self._box(cx, ident)
-        if confirmation != self.libelle_box(r):
-            raise ValueError("confirmation : retapez le nom de la box")
-        if r["statut"] != "revoque":
-            self._fixer_box(ident, "revoquer", motif, statut="revoque")
-        return self.revoquer(ident, motif)
+        cle = []
+
+        def confirmer_et_revoquer_le_jeton(cx, r):
+            if confirmation != self.libelle_box(r):
+                raise ValueError("confirmation : retapez le nom de la box")
+            cle.append(self._revoquer_jeton(cx, ident, motif))          # même transaction que le statut de la box
+        self._fixer_box(ident, "revoquer", motif, verifier=confirmer_et_revoquer_le_jeton, statut="revoque")
+        self._audit("jeton-revoque", f"id={ident} motif={motif}")
+        return cle[0]
 
     def abonnements(self, profils_appliques: Optional[dict] = None) -> List[dict]:
         """Une ligne par box : formule, échéance, jours restants, statut CALCULÉ, profil commandé (jeton), profil de la formule, profil appliqué
         (relevé du pilotage par adresse tunnel ; None = inconnu) et écart."""
         profils_appliques = profils_appliques or {}
         now = self._maintenant()
-        with self._cx() as cx:
-            self._heriter(cx)
-            lignes = cx.execute(
-                "SELECT j.id, j.client, j.serie, j.lot, j.profil, j.etat, b.statut, b.formule, b.expire_le, b.motif, f.profil AS profil_formule, "
-                "f.libelle AS formule_libelle, (SELECT p.adresse FROM pairs p WHERE p.cle_pub=j.cle_pub AND p.retire_le IS NULL) AS adresse "
-                "FROM jetons j JOIN abonnements_box b ON b.jeton_id=j.id LEFT JOIN formules f ON f.nom=b.formule ORDER BY j.client, j.id"
-            ).fetchall() if self._table(cx, "pairs") else cx.execute(
-                "SELECT j.id, j.client, j.serie, j.lot, j.profil, j.etat, b.statut, b.formule, b.expire_le, b.motif, f.profil AS profil_formule, "
-                "f.libelle AS formule_libelle, NULL AS adresse "
-                "FROM jetons j JOIN abonnements_box b ON b.jeton_id=j.id LEFT JOIN formules f ON f.nom=b.formule ORDER BY j.client, j.id").fetchall()
+        sel = ("SELECT j.id, j.client, j.serie, j.lot, j.profil, j.etat, "
+               "CASE WHEN b.statut IS NULL THEN (CASE WHEN j.etat='revoque' THEN 'revoque' ELSE COALESCE(c.abonnement,'actif') END) ELSE b.statut END AS statut, "
+               "CASE WHEN b.statut IS NULL THEN c.formule ELSE b.formule END AS formule, "
+               "CASE WHEN b.statut IS NULL THEN c.expire_le ELSE b.expire_le END AS expire_le, b.motif AS motif, "
+               "f.profil AS profil_formule, f.libelle AS formule_libelle, {adresse} AS adresse "
+               "FROM jetons j LEFT JOIN abonnements_box b ON b.jeton_id=j.id LEFT JOIN clients c ON c.client=j.client "
+               "LEFT JOIN formules f ON f.nom=(CASE WHEN b.statut IS NULL THEN c.formule ELSE b.formule END) ORDER BY j.client, j.id")
+        with self._cx() as cx:                                                          # lecture seule : la migration se fait à l'init et à l'émission
+            adresse = ("(SELECT p.adresse FROM pairs p WHERE p.cle_pub=j.cle_pub AND p.retire_le IS NULL)" if self._table(cx, "pairs") else "NULL")
+            lignes = cx.execute(sel.format(adresse=adresse)).fetchall()
         sortie = []
         for r in lignes:
             applique = profils_appliques.get(r["adresse"]) if r["adresse"] else None

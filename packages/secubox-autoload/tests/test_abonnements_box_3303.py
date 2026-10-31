@@ -239,3 +239,62 @@ def test_routes_gardees(tmp_path, meth, chemin, corps):
     c = TestClient(app)
     r = c.get(chemin) if meth == "get" else c.post(chemin, json=corps)
     assert r.status_code in (401, 403)
+
+
+# ── relecture indépendante de #3304 ──────────────────────────────────────────────────────────────────────
+def test_reprendre_refuse_un_motif_avec_caracteres_de_controle(m):
+    i = m.box()
+    m.c.post(f"/boxes/{i}/abonnement/suspendre", json={"motif": "impayé"})
+    assert m.c.post(f"/boxes/{i}/abonnement/reprendre", json={"motif": "ok\nfaux=1"}).status_code == 422
+    assert m.ligne(i)["statut"] == "suspendu"
+
+
+def test_lecture_des_abonnements_n_ecrit_rien(m):
+    i = m.box()
+    with sqlite3.connect(m.tmp / "j.db") as cx:
+        cx.execute("DELETE FROM abonnements_box")
+    m.c.post("/clients/atelier-nord/abonnement", json={"statut": "actif", "mois": 2, "formule": "leger"})
+    with sqlite3.connect(m.tmp / "j.db") as cx:
+        cx.execute("DELETE FROM abonnements_box")
+        avant = cx.total_changes
+    x = m.ligne(i)
+    assert x["formule"] == "leger" and x["statut"] == "actif"                     # repli sur le client
+    with sqlite3.connect(m.tmp / "j.db") as cx:
+        assert cx.execute("SELECT COUNT(*) FROM abonnements_box").fetchone()[0] == 0
+    assert avant >= 0
+
+
+def test_route_client_ne_reactive_pas_une_box_suspendue_seule(m):
+    a, b = m.box(cle=CLE_A), m.box(cle=CLE_B)
+    m.c.post(f"/boxes/{a}/abonnement/suspendre", json={"motif": "impayé"})
+    m.c.post("/clients/atelier-nord/abonnement", json={"statut": "actif", "mois": 12})
+    assert (m.ligne(a)["statut"], m.ligne(b)["statut"]) == ("suspendu", "actif")
+    m.c.post("/clients/atelier-nord/abonnement", json={"statut": "suspendu"})
+    m.c.post("/clients/atelier-nord/abonnement", json={"statut": "actif"})
+    assert (m.ligne(a)["statut"], m.ligne(b)["statut"]) == ("suspendu", "actif")   # b suspendue PAR le client, reprise par le client
+    assert any(x["action"] == "abonnement" and "box=" in x["detail"] for x in m.audits())
+
+
+def test_revoquer_box_atomique(m, monkeypatch):
+    i = m.box()
+
+    def panne(*_a, **_k):
+        raise sqlite3.OperationalError("disque plein")
+    monkeypatch.setattr(m.reg, "_audit", lambda *a, **k: None)
+    monkeypatch.setattr(J.Registre, "_revoquer_jeton", panne)
+    with pytest.raises(sqlite3.OperationalError):
+        m.reg.revoquer_box(i, "fin de contrat", str(i))
+    monkeypatch.undo()
+    assert m.ligne(i)["statut"] == "actif" and {j["id"]: j["etat"] for j in m.reg.lister()}[i] == "reclame"
+
+
+def test_formule_retiree_entre_temps_refusee(m, monkeypatch):
+    m.c.post("/formules", json={"nom": "leger", "libelle": "Léger", "profil": "lite", "mois": 12})
+    i = m.box()
+    reel = J.Registre._box
+
+    def box_puis_retrait(self, cx, ident):
+        cx.execute("DELETE FROM formules WHERE nom='leger'")
+        return reel(self, cx, ident)
+    monkeypatch.setattr(J.Registre, "_box", box_puis_retrait)
+    assert m.c.post(f"/boxes/{i}/abonnement/formule", json={"formule": "leger"}).status_code == 422
