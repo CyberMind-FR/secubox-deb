@@ -255,6 +255,17 @@ def test_marqueur_pose_seulement_apres_succes_et_lisible_par_l_agent(tmp_path):
     assert ((etat / "sites-enabled").stat().st_mode & 0o777) == 0o700
 
 
+def test_groupes_du_profil_leger_demarres_et_arretes_au_retour(tmp_path):
+    """#3302 (banc gk4) : `group@distante` n'a qu'un manifeste gabarit (group@.toml) : le plan l'ignorait, le groupe (hub,
+    hardening, dns-guard…) ne démarrait jamais. L'allègement l'active et le démarre ; le retour l'arrête et le désactive."""
+    r, appels, run = _box(tmp_path)
+    front_web.appliquer(DISTANTE, racine=r, gabarit=RACINE / "nginx" / "etat.conf", run=run)
+    assert ["systemctl", "enable", "--now", "secubox-group@distante.service"] in appels
+    appels.clear()
+    front_web.appliquer(MINIMAL, racine=r, gabarit=RACINE / "nginx" / "etat.conf", run=run)
+    assert ["systemctl", "disable", "--now", "secubox-group@distante.service"] in appels
+
+
 def test_retour_garde_un_site_reapparu_et_la_sauvegarde(tmp_path, caplog):
     """I2 : un site mis de côté dont le nom réapparaît (paquet réinstallé) n'est pas écrasé ; la sauvegarde reste."""
     r, _, run = _box(tmp_path)

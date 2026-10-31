@@ -158,6 +158,9 @@ def _rendre(c: dict) -> list:
     return restes
 
 
+GROUPES_LEGERS = ("group@distante",)   # groupes d'interpréteur propres au profil léger (#3302)
+
+
 def appliquer(profile, *, racine: Path = Path("/"), gabarit: Path = GABARIT, run: Run) -> dict:
     c = _chemins(Path(racine))
     leger = getattr(profile, "front_web", None) == "etat"
@@ -165,6 +168,8 @@ def appliquer(profile, *, racine: Path = Path("/"), gabarit: Path = GABARIT, run
         if not (c["etat"] / "actif").exists() and not (c["se"] / SITE).is_symlink():
             return {"ok": True, "action": "rien"}
         restes = _rendre(c)
+        for u in GROUPES_LEGERS:   # #3302 : les groupes du profil léger s'arrêtent avec lui
+            run(["systemctl", "disable", "--now", f"secubox-{u}.service"])
         rc, sortie = run(["nginx", "-t"])
         run(["systemctl", "reload-or-restart", "nginx.service"])
         run(["systemctl", "try-restart", "secubox-aggregator.service"])
@@ -215,4 +220,7 @@ def appliquer(profile, *, racine: Path = Path("/"), gabarit: Path = GABARIT, run
     run(["systemctl", "reload-or-restart", "nginx.service"])
     if relais:
         run(["systemctl", "try-restart", "secubox-aggregator.service"])
+    # #3302 (banc gk4) : un groupe du profil (`group@distante`) n'a qu'un manifeste gabarit : le plan ne le démarre pas
+    for u in sorted(m for m in getattr(profile, "on", ()) if m in GROUPES_LEGERS):
+        run(["systemctl", "enable", "--now", f"secubox-{u}.service"])
     return {"ok": True, "action": "alleger", "deja": deja}
