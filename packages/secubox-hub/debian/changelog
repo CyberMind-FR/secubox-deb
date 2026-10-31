@@ -1,3 +1,12 @@
+secubox-hub (1.12.32-1~trixie1) trixie; urgency=medium
+
+  * Menu : mode hors ligne en francais et en Aurora, cause reelle (session
+    expiree, reserve, module arrete, box injoignable), nouvel essai
+    automatique 30 s puis 60 s, lien vers les modules d une box legere
+    (ref #3324).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 08:21:37 +0100
+
 secubox-hub (1.12.31-1~trixie1) trixie; urgency=medium
 
   * Hub : apercu importé au chargement (500 dans secubox-groupd, import tardif relatif) (banc gk4) (ref #3302).
