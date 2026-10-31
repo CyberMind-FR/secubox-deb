@@ -25,10 +25,10 @@ l'écriture (test `test_jamais_d_adresse_ni_de_secret_dans_l_etat`). Une source 
 | Section | Source | Sans elle |
 |---|---|---|
 | nœuds | `/var/lib/secubox/pilotage/pilotage.db` (`mode=ro`, groupe `secubox-pilotage`) + le maître via `/proc` | `null` |
-| menaces, WAF dernière heure, attaques par jour, bans par jour | `/var/log/secubox/waf/waf-threats.log*` (lignes JSON de sbxwaf, lues par incréments : position + inode) | `null` |
+| menaces, WAF dernière heure, attaques par jour | `/var/log/secubox/waf/waf-threats.log`, `.1` (incréments : position + inode) et, au rattrapage, les rotations `.N.gz` (lecture en flux) | `null` |
+| bans par jour, bans actifs | `/var/lib/secubox/waf/bans.jsonl` (journal ban/unban de sbxwaf, append-only, celui qu'il relit au démarrage ; incréments) | `null` |
 | pays des attaques | GeoLite2-Country (`python3-geoip2`) | `null` |
 | visites par jour et par pays, requêtes du jour | `/var/cache/secubox/metrics/vhost_stats.json` (secubox-metrics) | `null` |
-| bans actifs | `/var/cache/secubox/waf/nft-etat.json` | `null` |
 | sites publiés | `/etc/secubox/haproxy.toml` (vhosts actifs) | `null` |
 | développement | API publique GitHub, sans jeton, cache 10 min (`/var/cache/secubox/live/github.json`) | dernier relevé, sinon `null` |
 | disponibilité 30 j | aucune source à ce jour | toujours `null` |
@@ -43,6 +43,17 @@ l'écriture (test `test_jamais_d_adresse_ni_de_secret_dans_l_etat`). Une source 
   `server_name` exact, HSTS, CSP stricte ; la page et `/etat.json` servis en **statique** (cache 15 s), aucune
   API, GET/HEAD seulement, tout le reste en 404.
 
+## Historique
+
+Totaux par jour persistés dans `/var/cache/secubox/live/menaces-etat.json` (0600, 400 jours au plus) : une rotation ne
+les efface jamais. **Rattrapage** : au premier passage, ou si un journal présent commence avant le premier jour mesuré,
+toutes les rotations sont relues ; chaque jour garde le maximum de l'ancien total et du recompte (pas de double
+compte). Un jour antérieur à la première mesure d'une source vaut `null` (« non mesuré », grisé sur la page), jamais
+0 ; le cumul démarre au premier jour mesuré. Le premier jour mesuré peut être partiel (la rotation quotidienne ne tombe
+pas à minuit). Le journal d'audit de sbxwaf (`/var/log/secubox/waf/audit.log`) ne porte que les réévaluations, pas
+les bans : la source des bans est `bans.jsonl`. L'état n'en garde qu'une empreinte tronquée par adresse, le temps
+du ban.
+
 ## ACL de lecture
 
 `secubox-live-acl` (root, liste de chemins figée, aucun argument) pose `u:secubox-live:r` sur les sources et
@@ -52,8 +63,8 @@ Mode d'écriture des producteurs, vérifié dans leur source :
 | Fichier | Producteur | Écriture | Lecture par secubox-live |
 |---|---|---|---|
 | `vhost_stats.json` | secubox-metrics | `.tmp` puis `os.replace`, mode selon l'umask (0644) | ACL par défaut du dossier, héritée |
-| `nft-etat.json` | sbxwaf | `.tmp` 0640 puis `rename` | ACL par défaut héritée, masque r : effective |
-| `waf-threats.log*` | sbxwaf | append, rotation | ACL par défaut + reposée à chaque collecte |
+| `bans.jsonl` | sbxwaf | append-only 0640, jamais tourné | ACL de fichier + ACL par défaut du dossier |
+| `waf-threats.log*` | sbxwaf | append, rotation quotidienne, `.N.gz` (7) | ACL par défaut + reposée à chaque collecte |
 | `haproxy.toml` | haproxyctl | réécrit en place | ACL de fichier reposée à chaque collecte |
 
 ## Exposition

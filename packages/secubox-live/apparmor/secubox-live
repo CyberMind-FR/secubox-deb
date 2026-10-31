@@ -35,7 +35,7 @@
   /var/log/secubox/waf/ r,
   /var/log/secubox/waf/waf-threats.log* r,
   /var/cache/secubox/metrics/vhost_stats.json r,
-  /var/cache/secubox/waf/nft-etat.json r,
+  /var/lib/secubox/waf/bans.jsonl r,
   /var/lib/secubox/geoip/*.mmdb r,
   /usr/share/GeoIP/*.mmdb r,
   /var/lib/GeoIP/*.mmdb r,

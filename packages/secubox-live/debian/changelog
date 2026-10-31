@@ -1,3 +1,17 @@
+secubox-live (0.1.3-1~trixie1) trixie; urgency=medium
+
+  * Menaces : rattrapage des rotations waf-threats.log.N.gz (lecture en flux)
+    au premier passage ou quand un journal present precede le premier jour
+    mesure ; totaux par jour persistes (400 jours), jamais effaces a la
+    rotation.
+  * Bans par jour et bans actifs depuis le journal de bans de sbxwaf
+    (/var/lib/secubox/waf/bans.jsonl, ban/unban append-only) ; nft-etat.json
+    ne porte aucun compte de bans et n est plus lu.
+  * Jours avant la premiere mesure d une source : null (non mesure), jamais 0 ;
+    la page les grise et le cumul demarre au premier jour mesure (ref #3351).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 16:00:00 +0100
+
 secubox-live (0.1.2-1~trixie1) trixie; urgency=medium
 
   * Histogramme : bans dans leur propre bande, a leur propre echelle.
