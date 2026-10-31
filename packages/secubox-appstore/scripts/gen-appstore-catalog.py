@@ -81,6 +81,30 @@ def arbre_meta():
     return gm.resolu(noeuds, hors, depot)
 
 
+def description_paquet(control):
+    """#3338 : (résumé, détail) tirés de la Description de debian/control — la boutique ne montre que ce que le paquet
+    dit de lui-même. Résumé = première ligne sans le préfixe « SecuBox — » ; détail = premier paragraphe long."""
+    try:
+        lignes = open(control, encoding="utf-8", errors="replace").read().splitlines()
+    except OSError:
+        return "", ""
+    for i, li in enumerate(lignes):
+        if li.startswith("Description:"):
+            resume = re.sub(r"^SecuBox\s*[—-]\s*", "", li.split(":", 1)[1].strip())
+            para = []
+            for suite in lignes[i + 1:]:
+                if not suite.startswith(" "):
+                    break
+                t = suite.strip()
+                if t == ".":
+                    if para:
+                        break
+                    continue
+                para.append(t)
+            return resume, " ".join(para)
+    return "", ""
+
+
 def main(out):
     base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     catalog = []
@@ -91,7 +115,10 @@ def main(out):
         m = parse_manifest(path)
         if not m.get("name"):
             continue
+        resume, detail = description_paquet(os.path.join(os.path.dirname(path), "control"))
         catalog.append({
+            "resume": resume,
+            "detail": detail,
             "name": m["name"],
             "category": m.get("category", "misc"),
             "tier": m.get("tier", "lite"),

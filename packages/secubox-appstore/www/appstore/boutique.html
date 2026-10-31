@@ -163,7 +163,9 @@ function habiller(m){
   const f=FICHES[m.name]||{};
   const brut=String(m.description||'').replace(/^SecuBox\s*[—-]\s*/,'');
   const nom=f.nom||court(m.name).replace(/-/g,' ').replace(/^./,c=>c.toUpperCase());
-  return{id:m.name,n:nom,d:f.resume||brut,l:f.detail||brut,c:f.categorie||CAT_FR[m.category]||'Divers',
+  // #3338 : fiche éditoriale, sinon le texte du paquet (debian/control, porté par le catalogue) ; jamais inventé
+  const res=f.resume||m.resume||brut,det=f.detail||m.detail||res;
+  return{id:m.name,n:nom,d:res,l:det,c:f.categorie||CAT_FR[m.category]||'Divers',
     h:teinte(m.name),v:m.version,inst:!!m.installed,run:!!m.running,ordre:f.ordre||999,vedette:!!f.vedette,
     visible:!f.cacher&&(!!FICHES[m.name]||CAT_VISIBLES.has(m.category))&&m.installable!==false&&!m.tier_locked,fiche:!!FICHES[m.name]}}
 function teinte(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h}

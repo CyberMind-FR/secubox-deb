@@ -72,3 +72,41 @@ def test_echec_du_job_rend_le_bouton_et_dit_pourquoi(navigateur):
     p.wait_for_selector(".toast.on:has-text('apt : paquet introuvable')", timeout=5000)
     assert p.locator(".app", has_text="PeerTube").locator("button.get").inner_text() == "Obtenir"
     ctx.close()
+
+
+# ── Volet 2 : fiches réelles, tirées des paquets ─────────────────────────────────────────────────────────────────
+
+def test_catalogue_porte_le_texte_du_paquet(tmp_path):
+    """Le catalogue reprend la description de debian/control (résumé = première ligne sans « SecuBox — », détail =
+    paragraphe long) : la boutique n'invente rien."""
+    import importlib.util
+    import pathlib
+    spec = importlib.util.spec_from_file_location(
+        "gen", pathlib.Path(__file__).resolve().parents[1] / "scripts" / "gen-appstore-catalog.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    r, d = gen.description_paquet(pathlib.Path(__file__).resolve().parents[2] / "secubox-radio" / "debian" / "control")
+    assert r and not r.startswith("SecuBox") and "radio" in r.lower()
+    assert d and "playlist" in d.lower() and "\n" not in d.split(". ")[0]
+    assert gen.description_paquet(tmp_path / "absent") == ("", "")
+
+
+def test_sans_fiche_la_boutique_prend_le_texte_du_paquet(navigateur):
+    cat = {"modules": [dict(mod("secubox-radioz", "media"), resume="Radio partagée", detail="Une playlist commune.")]}
+
+    def donnees(u):
+        return cat if u.endswith("/catalog") else None
+    ctx, p, erreurs, _ = ouvre(navigateur, donnees=donnees)
+    p.click("[role=tab]:text-is(\"Apps\")")
+    ligne = p.locator(".app", has_text="Radioz")
+    assert "Radio partagée" in ligne.inner_text()
+    assert "[À COMPLÉTER]" not in p.content()
+    assert not erreurs
+    ctx.close()
+
+
+def test_a_completer_seulement_en_administration():
+    import pathlib
+    www = pathlib.Path(__file__).resolve().parents[1] / "www" / "appstore"
+    assert "[À COMPLÉTER]" in (www / "index.html").read_text(encoding="utf-8")
+    assert "[À COMPLÉTER]" not in (www / "boutique.html").read_text(encoding="utf-8")
