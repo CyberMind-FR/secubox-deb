@@ -349,6 +349,7 @@ DOSSIER_SOCKETS = "/run/secubox"
 #: Racine d'installation des modules : une route servie depuis
 #: `/usr/lib/secubox/<module>/…` appartient au module `<module>`.
 RACINE_MODULES = "/usr/lib/secubox"
+RACINE_PAQUETS_PY = "/usr/lib/python3/dist-packages"   # modules installés en paquet secubox_<m> (#3324)
 #: Journal d'audit central (ajout seul) : chaque REFUS d'un porteur délégué.
 AUDIT_PILOTAGE = "/var/log/secubox/audit.log"
 #: Modules qui ne reconnaissent JAMAIS le porteur délégué : comptes, sessions,
@@ -448,8 +449,16 @@ def module_courant(request) -> str:
     if cle in _cache_modules:   # M3 : deux realpath par requête, sinon
         return _cache_modules[cle]
     racine = os.path.realpath(RACINE_MODULES)
-    relatif = os.path.relpath(os.path.realpath(fichier), racine)
+    reel = os.path.realpath(fichier)
+    relatif = os.path.relpath(reel, racine)
     nom = "" if relatif.startswith("..") or os.path.isabs(relatif) else relatif.split(os.sep)[0]
+    if not nom:
+        # #3324 : module installé en paquet Python par dpkg (dist-packages/secubox_<m>/, ex. security-posture) ;
+        # secubox_core lui-même n'est pas un module (ses routes n'appartiennent à personne)
+        rel_py = os.path.relpath(reel, os.path.realpath(RACINE_PAQUETS_PY))
+        tete = "" if rel_py.startswith("..") or os.path.isabs(rel_py) else rel_py.split(os.sep)[0]
+        if tete.startswith("secubox_") and tete != "secubox_core":
+            nom = tete[len("secubox_"):].replace("_", "-")
     nom = nom if _RE_MODULE.fullmatch(nom) else ""
     if len(_cache_modules) > 4096:
         _cache_modules.clear()
