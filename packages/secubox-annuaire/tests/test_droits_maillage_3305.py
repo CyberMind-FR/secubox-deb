@@ -11,7 +11,7 @@ from annuaire import droits as D
 
 T0 = 1_800_000_000
 JOUR = 86400
-TOUS = ["annuaire-offres", "bans-waf", "openpgp", "macro"]
+TOUS = ["annuaire-offres", "bans-waf"]
 
 
 @pytest.fixture
@@ -77,6 +77,8 @@ def test_politique_illisible_fermee(fichiers):
 def test_service_hors_liste_leve(fichiers):
     with pytest.raises(ValueError):
         _dec(fichiers, "10.10.0.10", "tout")
+    with pytest.raises(ValueError):
+        _dec(fichiers, "10.10.0.10", "openpgp")                                  # pas encore câblé
 
 
 def test_droits_self(fichiers):
@@ -109,7 +111,10 @@ def test_bans_locaux_seulement_sans_droit(tmp_path):
     assert D.bans_a_appliquer(bans, moi, cache, maintenant=T0 + 3600) == ["1.1.1.1"]
     D.noter_droits_self({"politique": True, "services": TOUS}, cache, maintenant=T0)
     assert D.bans_a_appliquer(bans, moi, cache, maintenant=T0 + 3600) == ["1.1.1.1", "2.2.2.2"]
-    assert D.bans_a_appliquer(bans, moi, cache, maintenant=T0 + 49 * 3600) == ["1.1.1.1"]  # réponse trop vieille : fermé
+    # réponse trop vieille : le dernier droit connu reste (I2), audité
+    audit = tmp_path / "audit.log"
+    assert D.bans_a_appliquer(bans, moi, cache, maintenant=T0 + 49 * 3600, audit=audit) == ["1.1.1.1", "2.2.2.2"]
+    assert "droits_self_perimes" in audit.read_text()
 
 
 @pytest.fixture
@@ -172,29 +177,63 @@ def test_route_droits_self(api, monkeypatch):
     assert tc.get("/droits/self").status_code == 401                              # hors écouteur du maillage : gardé
 
 
-def test_relever_droits_garde_la_premiere_politique(tmp_path):
+PAIRS_MAILLAGE = [{"mesh_ip": "10.10.0.9", "name": "gk4"}, {"mesh_ip": "10.10.0.7", "name": "lgm-ebin"}, {"mesh_ip": "10.10.0.1", "name": "gk2"}]
+
+
+def _ancre(tmp_path, nom="gk2"):
+    a = tmp_path / "ancre-maitre.json"
+    a.write_text(json.dumps({"cle_publique": "x", "adresse": "192.168.1.200", "nom": nom, "empreinte": "0" * 16}))
+    return a
+
+
+def test_relever_droits_seulement_du_maitre_de_l_ancre(tmp_path):
     from annuaire import mesh_sync
     cache = tmp_path / "droits-self.json"
-    reponses = {"10.10.0.1": {"politique": True, "services": ["annuaire-offres"]}, "10.10.0.7": {"politique": False, "services": TOUS}}
     vus = []
 
     def lire(url):
         vus.append(url)
-        ip = url.split("//")[1].split(":")[0]
-        if ip not in reponses:
-            raise OSError("injoignable")
-        return reponses[ip]
-    pairs = [{"mesh_ip": "10.10.0.9"}, {"mesh_ip": "10.10.0.7"}, {"mesh_ip": "10.10.0.1"}]
-    assert mesh_sync.relever_droits(pairs, lire, cache) is True
+        return {"politique": True, "services": ["annuaire-offres"]}             # un pair quelconque qui prétend avoir une politique
+    assert mesh_sync.relever_droits(PAIRS_MAILLAGE, lire, cache, ancre=_ancre(tmp_path)) is True
+    assert vus == ["http://10.10.0.1:8799/api/v1/annuaire/droits/self"]
     assert json.loads(cache.read_text())["services"] == ["annuaire-offres"]
-    assert all(u.endswith("/api/v1/annuaire/droits/self") for u in vus)
 
 
-def test_relever_droits_sans_politique_ne_note_rien(tmp_path):
+def test_relever_droits_sans_ancre_ne_demande_a_personne(tmp_path):
     from annuaire import mesh_sync
     cache = tmp_path / "droits-self.json"
-    assert mesh_sync.relever_droits([{"mesh_ip": "10.10.0.7"}], lambda u: {"politique": False, "services": TOUS}, cache) is False
+    vus = []
+    assert mesh_sync.relever_droits(PAIRS_MAILLAGE, lambda u: vus.append(u) or {"politique": True, "services": []}, cache,
+                                    ancre=tmp_path / "absente.json") is False
+    assert vus == [] and not cache.exists()
+
+
+def test_relever_droits_maitre_sans_politique_ne_note_rien(tmp_path):
+    from annuaire import mesh_sync
+    cache = tmp_path / "droits-self.json"
+    assert mesh_sync.relever_droits(PAIRS_MAILLAGE, lambda u: {"politique": False, "services": TOUS}, cache,
+                                    ancre=_ancre(tmp_path)) is False
     assert not cache.exists()
+
+
+def test_noter_droits_self_ne_suit_pas_un_lien(tmp_path):
+    cible = tmp_path / "cible"
+    cible.write_text("intact")
+    lien = tmp_path / "droits-self.json"
+    lien.symlink_to(cible)
+    D.noter_droits_self({"politique": True, "services": ["bans-waf"]}, lien, maintenant=T0)
+    assert cible.read_text() == "intact" and not lien.is_symlink()
+    assert json.loads(lien.read_text())["services"] == ["bans-waf"]
+    assert oct(lien.stat().st_mode & 0o777) == "0o644"
+
+
+def test_fail_closed_si_autoload_installe_sans_projection(fichiers, tmp_path):
+    droits, pairs, _ = fichiers
+    marque = tmp_path / "autoload"
+    marque.mkdir()
+    assert D.decider("10.10.0.10", "bans-waf", droits, pairs, maintenant=T0, autoload_dir=marque) == (False, "politique absente")
+    assert D.droits_de("10.10.0.10", droits, pairs, maintenant=T0, autoload_dir=marque) == {"politique": True, "services": []}
+    assert D.decider("10.10.0.10", "bans-waf", droits, pairs, maintenant=T0, autoload_dir=tmp_path / "non")[0]
 
 
 def test_ecouteur_maillage_sert_droits_self():

@@ -1,10 +1,12 @@
 secubox-autoload (0.9.0-1~trixie1) trixie; urgency=medium
 
-  * Droits du maillage (ref #3305) : les formules portent la liste fermée des services du maillage (annuaire-offres, bans-waf,
-    openpgp, macro) ; formule interne « atelier » semée (tous services) ; abonnement des pairs du maillage (nom, empreinte,
+  * Droits du maillage (ref #3305) : les formules portent la liste fermée des services du maillage (annuaire-offres,
+    bans-waf) ; formule interne « atelier » semée (tous services) ; abonnement des pairs du maillage (nom, empreinte,
     formule, statut, échéance ; suspension et révocation avec motif, audit) par `autoloadctl maillage` et `POST /maillage/<pair>` ;
     grâce de 5 jours mémorisée à la première migration ; projection publique root `autoload-public/droits-maillage.json`,
     publiée avec `pairs-publics.json` (jamais vide par erreur : base illisible, l'ancien fichier reste).
+  * Relecture : services réduits à annuaire-offres et bans-waf (openpgp et macro non câblés) ; `autoloadctl maillage-atelier`
+    (postinst du maître) inscrit les pairs enrôlés en formule atelier ; `autoloadctl maillage` republie aussitôt les droits.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 04:56:42 +0100
 

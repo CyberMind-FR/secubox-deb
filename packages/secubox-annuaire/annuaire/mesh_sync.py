@@ -182,23 +182,30 @@ def http_json(url: str, timeout: int = 5) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+ANCRE_DEFAUT = "/etc/secubox/p2p/ancre-maitre.json"           # ancre du maître (secubox-p2p, #3100), épinglée à la jonction
+
+
 def relever_droits(peers: List[Dict[str, str]], fetch: Callable[[str], Dict[str, Any]] = http_json, chemin: Any = None,
-                   port: int = DEFAULT_MESH_PORT) -> bool:
-    """#3305 : demande à chaque pair les droits de CETTE box (`droits/self`) ; la première réponse d'un pair qui a une politique (le maître)
-    est gardée. Vrai si une politique a répondu. Jamais d'exception."""
+                   port: int = DEFAULT_MESH_PORT, ancre: Any = ANCRE_DEFAUT) -> bool:
+    """#3305 : demande au SEUL maître désigné (pair du maillage dont le nom est celui de l'ancre du maître) les droits de cette box
+    (`droits/self`). Sans ancre ou sans pair de ce nom : personne n'est interrogé (un autre pair ne peut pas octroyer ni retirer).
+    Vrai si le maître a répondu avec une politique. Jamais d'exception."""
     from . import droits as D  # noqa: PLC0415
-    for peer in peers:
-        ip = peer.get("mesh_ip")
-        if not ip:
-            continue
+    try:
+        nom = json.loads(Path(ancre).read_text()).get("nom")
+    except (OSError, ValueError, AttributeError):
+        return False
+    ips = [p.get("mesh_ip") for p in peers if nom and p.get("name") == nom and p.get("mesh_ip")]
+    if len(ips) != 1:                                            # absent ou ambigu
+        return False
+    try:
+        rep = fetch(f"http://{ips[0]}:{port}/api/v1/annuaire/droits/self")
+    except Exception:  # noqa: BLE001 — maître injoignable ou ancien (404) : le dernier droit connu reste
+        return False
+    if isinstance(rep, dict) and rep.get("politique") is True:
         try:
-            rep = fetch(f"http://{ip}:{port}/api/v1/annuaire/droits/self")
-        except Exception:  # noqa: BLE001 — pair injoignable ou ancien (404) : le suivant
-            continue
-        if isinstance(rep, dict) and rep.get("politique") is True:
-            try:
-                D.noter_droits_self(rep, chemin or D.SELF_DEFAUT)
-            except OSError:
-                return False
-            return True
+            D.noter_droits_self(rep, chemin or D.SELF_DEFAUT)
+        except OSError:
+            return False
+        return True
     return False

@@ -41,7 +41,7 @@ ABONNEMENTS = ("actif", "suspendu", "revoque")
 PROFILS = ("minimal", "lite", "isp", "full", "secure-gateway", "media-lab", "distante")      # profils réels de secubox-profiles (#3258) ; jamais light/standard
 MOTIF_MIN = 3
 # Services du maillage qu'une formule peut inclure (#3305) ; liste FERMÉE, dans l'ordre de publication.
-SERVICES_MAILLAGE = ("annuaire-offres", "bans-waf", "openpgp", "macro")
+SERVICES_MAILLAGE = ("annuaire-offres", "bans-waf")      # openpgp et macro : à ajouter quand leur fournisseur sera câblé
 FORMULE_ATELIER = "atelier"                  # formule interne du propriétaire (gk2, box de l'atelier) : tous les services
 GRACE_S = 5 * 86400                          # pair du maillage sans abonnement : services rendus 5 jours après la première migration
 MOTIF_CLIENT = "abonnement du client"        # marque d'une box suspendue/révoquée par la route client, que la même route peut lever
@@ -459,6 +459,33 @@ class Registre:
                        (nom, empreinte, formule, statut, expire, motif, self._maintenant()))
             cx.execute("COMMIT")
         self._audit("maillage", f"pair={nom} formule={formule} statut={statut} expire={expire or '-'}" + (f" motif={motif}" if motif else ""))
+
+    def inscrire_atelier(self, pairs_enroles: Path) -> int:
+        """Décision du propriétaire (#3305) : sur le maître, les pairs ACTUELLEMENT enrôlés (p2p-public/pairs-enroles.json) sont les box
+        de l'atelier. Chaque pair sans ligne reçoit la formule « atelier » (avec son empreinte) ; une ligne existante n'est jamais touchée.
+        Fichier absent ou abîmé : rien. Rend le nombre d'inscrits, audité."""
+        try:
+            with open(pairs_enroles, "rb") as f:
+                doc = json.loads(f.read(1024 * 1024))
+            pairs = doc.get("pairs", []) if isinstance(doc, dict) else []
+        except (OSError, ValueError):
+            return 0
+        noms = []
+        with self._cx() as cx:
+            cx.execute("BEGIN IMMEDIATE")
+            for p in pairs if isinstance(pairs, list) else []:
+                nom = p.get("name") if isinstance(p, dict) else None
+                emp = p.get("fingerprint") if isinstance(p, dict) else None
+                if not isinstance(nom, str) or not _PAIR.match(nom):
+                    continue
+                emp = emp if isinstance(emp, str) and _EMPREINTE_PAIR.match(emp) else None
+                if cx.execute("INSERT OR IGNORE INTO abonnements_maillage (nom, empreinte, formule, statut, maj_le) VALUES (?,?,?,'actif',?)",
+                              (nom, emp, FORMULE_ATELIER, self._maintenant())).rowcount:
+                    noms.append(nom)
+            cx.execute("COMMIT")
+        if noms:
+            self._audit("maillage-atelier", "pairs=" + ",".join(noms))
+        return len(noms)
 
     def droits_maillage(self) -> dict:
         return lire_droits_cx(self._cx(), self._maintenant())

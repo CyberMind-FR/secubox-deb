@@ -124,13 +124,18 @@ Données : `/var/lib/secubox/autoload/jetons.db` (0600, dossier 0750). Variables
 
 Un service du maillage n'est rendu à une box que si son abonnement est **actif** et que sa **formule l'inclut**.
 
-- **Services** (liste fermée, `SERVICES_MAILLAGE`) : `annuaire-offres`, `bans-waf`, `openpgp`, `macro`. Une formule porte
+- **Services** (liste fermée, `SERVICES_MAILLAGE`) : `annuaire-offres`, `bans-waf` (openpgp et macro viendront quand leur
+  fournisseur sera câblé). Une formule porte
   `services` (`POST /formules`, champ facultatif, vide par défaut).
 - **Formule `atelier`** semée à la première migration (profil `full`, 120 mois, tous services), jamais écrasée ensuite : gk2 et
   les box de l'atelier.
 - **Pairs du maillage** (nom de `p2p-public/pairs-enroles.json`, empreinte facultative vérifiée par le fournisseur si posée) :
   `autoloadctl maillage --nom gk5 --formule atelier [--empreinte sbx-…] [--statut suspendu --motif …] [--mois N]`, ou
-  `POST /maillage/<pair>` (`require_jwt`) ; lecture `GET /maillage`. Suspension et révocation : motif obligatoire ; audit `maillage`.
+  `POST /maillage/<pair>` (`require_jwt`) ; lecture `GET /maillage`. La CLI écrit sous l'utilisateur du service puis republie
+  aussitôt la projection (root).
+- **Atelier inscrit d'office** : le postinst du maître lance `autoloadctl maillage-atelier`, qui inscrit en formule `atelier`
+  (avec leur empreinte) les pairs enrôlés de `p2p-public/pairs-enroles.json` sans abonnement ; idempotent, audité
+  (`maillage-atelier`) ; une ligne existante n'est jamais touchée. Suspension et révocation : motif obligatoire ; audit `maillage`.
 - **Grâce** : un pair sans ligne garde ses services 5 jours après la première migration (`meta.grace_debut`), puis plus rien.
 - **Projection** `/var/lib/secubox/autoload-public/droits-maillage.json` (root 0644, sans secret, écrite avec `pairs-publics.json`
   par `tunnel-sync`/`exporter-pairs`) :

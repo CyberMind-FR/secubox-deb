@@ -5,6 +5,8 @@ secubox-annuaire (0.17.0-1~trixie1) trixie; urgency=medium
     audités ; grâce de 5 jours pour un pair sans abonnement ; nouvelle route GET /droits/self sur l'écouteur :8799.
   * Côté box : relevé des droits au passage complet de synchronisation ; bans-apply n'applique l'union fédérée qu'avec
     « bans-waf » (réponse de moins de 48 h), sinon les seules bans de la box.
+  * Relecture : droits relevés auprès du seul maître de l'ancre ; dernier droit connu gardé au-delà de 48 h (audité) ;
+    Auto-Load installé sans projection = fermé ; écriture atomique sans suivre de lien ; lectures hors de la boucle d'événements.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 04:57:04 +0100
 

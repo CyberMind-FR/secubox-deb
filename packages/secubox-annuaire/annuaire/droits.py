@@ -22,14 +22,17 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-SERVICES = ("annuaire-offres", "bans-waf", "openpgp", "macro")
+SERVICES = ("annuaire-offres", "bans-waf")              # openpgp et macro : à ajouter quand leur fournisseur sera câblé
 DROITS_DEFAUT = Path("/var/lib/secubox/autoload-public/droits-maillage.json")
 PAIRS_DEFAUT = Path("/var/lib/secubox/p2p-public/pairs-enroles.json")
 SELF_DEFAUT = Path("/var/lib/secubox/annuaire/droits-self.json")
+AUTOLOAD_DIR = Path("/var/lib/secubox/autoload")         # présent : cette box héberge Auto-Load, donc DOIT avoir une projection (fail-closed)
+AUDIT_DEFAUT = Path("/var/log/secubox/audit.log")
 VALIDITE_SELF_S = 48 * 3600
 MAX_OCTETS = 1024 * 1024
 # Opérations du journal portées par chaque service (réplication /log/export) ; le reste (nœuds, configs, identités, assistance) est le socle.
@@ -55,11 +58,14 @@ def _pair(ip: str, pairs_chemin: Path) -> Optional[Dict[str, str]]:
     return None
 
 
-def _services_du(ip: str, droits_chemin: Path, pairs_chemin: Path, maintenant: float) -> Tuple[Optional[List[str]], str]:
-    """(services rendus, raison) ; (None, "sans-politique") si cette box n'a pas de projection."""
+def _services_du(ip: str, droits_chemin: Path, pairs_chemin: Path, maintenant: float,
+                 autoload_dir: Path = AUTOLOAD_DIR) -> Tuple[Optional[List[str]], str]:
+    """(services rendus, raison) ; (None, "sans-politique") si cette box n'a pas de projection et n'héberge pas Auto-Load."""
     try:
         doc = _lire_json(droits_chemin)
     except FileNotFoundError:
+        if Path(autoload_dir).is_dir():
+            return [], "politique absente"
         return None, "sans-politique"
     except (OSError, ValueError):
         return [], "politique illisible"
@@ -83,10 +89,11 @@ def _services_du(ip: str, droits_chemin: Path, pairs_chemin: Path, maintenant: f
 
 
 def decider(ip: str, service: str, droits_chemin: Path = DROITS_DEFAUT, pairs_chemin: Path = PAIRS_DEFAUT,
-            maintenant: Optional[float] = None) -> Tuple[bool, str]:
+            maintenant: Optional[float] = None, autoload_dir: Path = AUTOLOAD_DIR) -> Tuple[bool, str]:
     if service not in SERVICES:
         raise ValueError(f"service inconnu : {service}")
-    services, raison = _services_du(ip, Path(droits_chemin), Path(pairs_chemin), time.time() if maintenant is None else maintenant)
+    services, raison = _services_du(ip, Path(droits_chemin), Path(pairs_chemin), time.time() if maintenant is None else maintenant,
+                                    autoload_dir)
     if services is None:
         return True, raison
     if service in services:
@@ -94,15 +101,17 @@ def decider(ip: str, service: str, droits_chemin: Path = DROITS_DEFAUT, pairs_ch
     return False, ("service non inclus" if raison == "abonnement" else raison)
 
 
-def droits_de(ip: str, droits_chemin: Path = DROITS_DEFAUT, pairs_chemin: Path = PAIRS_DEFAUT, maintenant: Optional[float] = None) -> Dict:
-    """Réponse de `droits/self` : `politique` faux si cette box n'en a pas (le client cherche alors un autre pair)."""
-    services, _ = _services_du(ip, Path(droits_chemin), Path(pairs_chemin), time.time() if maintenant is None else maintenant)
+def droits_de(ip: str, droits_chemin: Path = DROITS_DEFAUT, pairs_chemin: Path = PAIRS_DEFAUT, maintenant: Optional[float] = None,
+              autoload_dir: Path = AUTOLOAD_DIR) -> Dict:
+    """Réponse de `droits/self` : `politique` faux si cette box n'en a pas."""
+    services, _ = _services_du(ip, Path(droits_chemin), Path(pairs_chemin), time.time() if maintenant is None else maintenant,
+                               autoload_dir)
     return {"politique": False, "services": list(SERVICES)} if services is None else {"politique": True, "services": services}
 
 
 def operations_exclues(ip: str, droits_chemin: Path = DROITS_DEFAUT, pairs_chemin: Path = PAIRS_DEFAUT,
-                       maintenant: Optional[float] = None) -> Tuple[str, ...]:
-    services = droits_de(ip, droits_chemin, pairs_chemin, maintenant)["services"]
+                       maintenant: Optional[float] = None, autoload_dir: Path = AUTOLOAD_DIR) -> Tuple[str, ...]:
+    services = droits_de(ip, droits_chemin, pairs_chemin, maintenant, autoload_dir)["services"]
     return tuple(op for svc, op in OPERATIONS.items() if svc not in services)
 
 
@@ -111,21 +120,42 @@ def filtrer(entrees: Iterable[Dict[str, Any]], exclues: Tuple[str, ...]) -> List
 
 
 def noter_droits_self(reponse: Dict, chemin: Path = SELF_DEFAUT, maintenant: Optional[float] = None) -> None:
-    """Garde la réponse d'un pair qui a une politique (écriture atomique, 0644)."""
+    """Garde la réponse du maître (0644) : fichier temporaire O_EXCL|O_NOFOLLOW à suffixe aléatoire, fsync, renommage atomique
+    (un lien à la place du fichier est remplacé, jamais suivi)."""
     if not isinstance(reponse, dict) or reponse.get("politique") is not True:
         return
     services = [s for s in SERVICES if s in (reponse.get("services") or [])]
     chemin = Path(chemin)
-    tmp = chemin.with_name(f".{chemin.name}.{os.getpid()}.tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"services": services, "verifie_le": int(time.time() if maintenant is None else maintenant)}, f)
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, chemin)
+    donnees = json.dumps({"services": services, "verifie_le": int(time.time() if maintenant is None else maintenant)}).encode()
+    tmp = chemin.with_name(f".{chemin.name}.{os.getpid()}.{secrets.token_hex(4)}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            os.fchmod(f.fileno(), 0o644)
+            f.write(donnees)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, chemin)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def _auditer(audit: Path, action: str, detail: str) -> None:
+    try:
+        with open(audit, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "annuaire", "action": action,
+                                "detail": detail[:300]}, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
 
 
 def bans_a_appliquer(bans: List[Dict[str, Any]], moi: Optional[str], chemin: Path = SELF_DEFAUT,
-                     maintenant: Optional[float] = None) -> List[str]:
-    """Union fédérée si `bans-waf` est accordé (ou si aucune politique n'a jamais répondu) ; sinon les seules bans de la box."""
+                     maintenant: Optional[float] = None, audit: Path = AUDIT_DEFAUT) -> List[str]:
+    """Union fédérée si le dernier droit connu inclut `bans-waf` (ou si aucune politique n'a jamais répondu) ; sinon les seules bans
+    de la box. Une réponse de plus de 48 h reste valable (maître injoignable : on ne réduit pas la protection), mais c'est audité."""
     now = time.time() if maintenant is None else maintenant
     tout = sorted({b["ip"] for b in bans})
     try:
@@ -135,6 +165,10 @@ def bans_a_appliquer(bans: List[Dict[str, Any]], moi: Optional[str], chemin: Pat
     except (OSError, ValueError):
         doc = {}
     verifie = doc.get("verifie_le") if isinstance(doc, dict) else None
-    if isinstance(verifie, int) and now - verifie <= VALIDITE_SELF_S and "bans-waf" in (doc.get("services") or []):
+    if not isinstance(verifie, int):
+        return sorted({b["ip"] for b in bans if moi and b.get("publisher") == moi})
+    if now - verifie > VALIDITE_SELF_S:
+        _auditer(Path(audit), "droits_self_perimes", f"dernier droit du maître relevé il y a {int((now - verifie) // 3600)} h, conservé")
+    if "bans-waf" in (doc.get("services") or []):
         return tout
     return sorted({b["ip"] for b in bans if moi and b.get("publisher") == moi})

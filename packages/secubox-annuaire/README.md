@@ -123,8 +123,11 @@ source de l'écouteur wg-mesh, nom et empreinte lus dans `p2p-public/pairs-enrol
 - `GET /log/export` (pair du maillage) : opérations `ban_*` retirées sans `bans-waf`, `service_*` sans `annuaire-offres` ;
   le socle (identités, nœuds, configs, assistance) n'est jamais coupé.
 - `GET /droits/self` (écouteur :8799 seulement, sinon `require_lecture`) : `{"politique": bool, "services": [...]}` de l'appelant.
-- Sans projection (box qui n'est pas le maître) : aucune politique, tout est rendu. Projection illisible : fermé.
+- Sans projection et sans Auto-Load (box qui n'est pas le maître) : aucune politique, tout est rendu. Auto-Load installé
+  (`/var/lib/secubox/autoload`) mais projection absente, ou projection illisible : fermé (refus audités).
   Pair sans abonnement : rendu jusqu'à la fin de la grâce (5 jours), puis refusé. Empreinte posée et différente : refus.
-- Côté box : la synchronisation complète relève `droits/self` et garde la réponse du premier pair qui a une politique
-  (`/var/lib/secubox/annuaire/droits-self.json`) ; `annuairectl bans-apply` n'applique l'union fédérée que si `bans-waf` est
-  accordé par une réponse de moins de 48 h — sinon les seules bans publiées par la box. Jamais de réponse : comme avant.
+- Côté box : la synchronisation complète relève `droits/self` auprès du SEUL maître désigné (pair du maillage portant le nom
+  de l'ancre `/etc/secubox/p2p/ancre-maitre.json` ; sans ancre, personne n'est interrogé) et garde sa réponse
+  (`/var/lib/secubox/annuaire/droits-self.json`, écriture atomique sans suivre de lien) ; `annuairectl bans-apply` n'applique
+  l'union fédérée que si le dernier droit connu inclut `bans-waf`, sinon les seules bans publiées par la box. Une réponse de
+  plus de 48 h reste valable (audit `droits_self_perimes`). Jamais de réponse : comme avant.

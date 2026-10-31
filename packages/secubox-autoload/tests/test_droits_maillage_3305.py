@@ -40,7 +40,7 @@ def reg(tmp_path, h):
 def test_formule_atelier_semee_avec_tous_les_services(reg):
     f = {x["nom"]: x for x in reg.formules()}
     assert f["atelier"]["services"] == list(J.SERVICES_MAILLAGE)
-    assert set(J.SERVICES_MAILLAGE) == {"annuaire-offres", "bans-waf", "openpgp", "macro"}
+    assert J.SERVICES_MAILLAGE == ("annuaire-offres", "bans-waf")        # openpgp et macro : pas encore câblés
 
 
 def test_formule_atelier_jamais_ecrasee_au_redemarrage(tmp_path, h, reg):
@@ -150,6 +150,50 @@ def test_ctl_maillage_puis_export_publie_les_droits(tmp_path, monkeypatch):
     ctl = _ctl()
     assert ctl.main(["maillage", "--nom", "gk5", "--formule", "atelier", "--empreinte", "sbx-f0ad4e08ab71"]) == 0
     assert ctl.main(["maillage", "--nom", "gk4", "--formule", "nulle"]) == 2
-    assert ctl.main(["exporter-pairs"]) == 0
-    doc = json.loads((tmp_path / "autoload-public" / "droits-maillage.json").read_text())
+    doc = json.loads((tmp_path / "autoload-public" / "droits-maillage.json").read_text())        # republié par « maillage » lui-même
     assert [p["nom"] for p in doc["pairs"]] == ["gk5"]
+
+
+def _pairs_enroles(tmp_path, noms):
+    f = tmp_path / "pairs-enroles.json"
+    f.write_text(json.dumps({"version": 1, "pairs": [{"name": n, "mesh_ip": f"10.10.0.{i + 2}", "fingerprint": f"sbx-{i:012x}"}
+                                                     for i, n in enumerate(noms)]}))
+    return f
+
+
+def test_inscription_atelier_des_pairs_enroles(reg, tmp_path):
+    reg.fixer_formule("passerelle", "Passerelle", "secure-gateway", 12, services=["bans-waf"])
+    reg.fixer_maillage("lgm-ebin", "passerelle")                                   # déjà abonné : jamais touché
+    n = reg.inscrire_atelier(_pairs_enroles(tmp_path, ["gk1", "gk5", "lgm-ebin"]))
+    assert n == 2
+    p = {x["nom"]: x for x in reg.droits_maillage()["pairs"]}
+    assert p["gk1"]["formule"] == "atelier" and p["gk5"]["empreinte"] == "sbx-000000000001"
+    assert p["lgm-ebin"]["formule"] == "passerelle"
+    assert reg.inscrire_atelier(_pairs_enroles(tmp_path, ["gk1", "gk5"])) == 0         # idempotente
+    assert "maillage-atelier" in (tmp_path / "audit.log").read_text()
+
+
+def test_inscription_atelier_fichier_absent_ou_abime(reg, tmp_path):
+    assert reg.inscrire_atelier(tmp_path / "absent.json") == 0
+    (tmp_path / "x.json").write_text("{abime")
+    assert reg.inscrire_atelier(tmp_path / "x.json") == 0
+    f = tmp_path / "y.json"
+    f.write_text(json.dumps({"pairs": [{"name": "GK;rm", "fingerprint": "zz"}]}))
+    assert reg.inscrire_atelier(f) == 0
+
+
+def test_ctl_maillage_atelier(tmp_path, monkeypatch):
+    var = tmp_path / "var"
+    var.mkdir(mode=0o750)
+    monkeypatch.setenv("SECUBOX_AUTOLOAD_DB", str(var / "jetons.db"))
+    monkeypatch.setenv("SECUBOX_AUTOLOAD_AUDIT", str(tmp_path / "audit.log"))
+    f = _pairs_enroles(tmp_path, ["gk4", "gk6"])
+    assert _ctl().main(["maillage-atelier", "--pairs", str(f)]) == 0
+    doc = json.loads((tmp_path / "autoload-public" / "droits-maillage.json").read_text())
+    assert [p["nom"] for p in doc["pairs"]] == ["gk4", "gk6"]
+
+
+def test_postinst_inscrit_l_atelier():
+    from pathlib import Path
+    post = (Path(__file__).resolve().parents[1] / "debian" / "postinst").read_text()
+    assert "autoloadctl maillage-atelier" in post

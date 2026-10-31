@@ -490,14 +490,14 @@ def _auditer_refus(ip: str, service: str, raison: str) -> None:
         pass
 
 
-def exiger_droit(request: Request, ident: Dict[str, Any], service: str) -> None:
+async def exiger_droit(request: Request, ident: Dict[str, Any], service: str) -> None:
     """Pair du maillage (marque posée par l'écouteur :8799) : 403 si son abonnement n'inclut pas `service` (#3305).
     Un administrateur (jeton) n'est jamais concerné."""
     if not ident.get("pair_maillage"):
         return
     from annuaire import droits as D  # noqa: PLC0415
     ip = _ip_pair(request)
-    ok, raison = D.decider(ip, service, D.DROITS_DEFAUT, D.PAIRS_DEFAUT)
+    ok, raison = await asyncio.to_thread(D.decider, ip, service, D.DROITS_DEFAUT, D.PAIRS_DEFAUT)
     if not ok:
         _auditer_refus(ip, service, raison)
         raise HTTPException(403, f"service du maillage non inclus dans l'abonnement ({raison})")
@@ -507,14 +507,14 @@ def exiger_droit(request: Request, ident: Dict[str, Any], service: str) -> None:
 async def droits_self(request: Request):
     """Droits du pair appelant (#3305), lus par la box pour couper ses synchros quand son abonnement ne les inclut plus."""
     from annuaire import droits as D  # noqa: PLC0415
-    return D.droits_de(_ip_pair(request), D.DROITS_DEFAUT, D.PAIRS_DEFAUT)
+    return await asyncio.to_thread(D.droits_de, _ip_pair(request), D.DROITS_DEFAUT, D.PAIRS_DEFAUT)
 
 
 @app.get("/services")
 async def list_services(request: Request, ident: Dict[str, Any] = Depends(lecture_ou_pair)):
     """List all non-revoked service offers (public)."""
     from annuaire.verbs import _get_offers  # noqa: PLC0415
-    exiger_droit(request, ident, "annuaire-offres")
+    await exiger_droit(request, ident, "annuaire-offres")
     j = get_journal()
     return {"services": _get_offers(j)}
 
@@ -794,7 +794,7 @@ async def export_log(request: Request, ops: Optional[str] = None, ident: Dict[st
     entrees = await asyncio.to_thread(export_entries, get_journal(), prefixes)
     if ident.get("pair_maillage"):                               # #3305 : bans et offres seulement si l'abonnement du pair les inclut
         from annuaire import droits as D  # noqa: PLC0415
-        exclues = D.operations_exclues(_ip_pair(request), D.DROITS_DEFAUT, D.PAIRS_DEFAUT)
+        exclues = await asyncio.to_thread(D.operations_exclues, _ip_pair(request), D.DROITS_DEFAUT, D.PAIRS_DEFAUT)
         entrees = D.filtrer(entrees, exclues)
     return {"entries": entrees}
 
