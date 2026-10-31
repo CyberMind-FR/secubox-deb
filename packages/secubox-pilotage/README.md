@@ -406,3 +406,11 @@ Contrat maître → agent (N5/M14), `tests/test_contrat_maitre.py`, dans les deu
 
 Régénération après un changement voulu : `SECUBOX_CONTRAT_MAJ=1 python3 -m pytest tests/test_contrat_maitre.py -k figees`, puis
 `SECUBOX_CONTRAT_MAJ=1 go test ./cmd/sbx-pilotage-agent -run TestContratRequetesDuMaitre` dans l'agent, puis les deux suites.
+
+### Modules d'une box légère (#3324)
+
+Sur `admin.<box>`, `GET /api/v1/pilotage-vhost/modules` (session du vhost) rend l'état des modules de la box, lu dans
+l'inventaire (`Device.X_SECUBOX_Services`) ; les modules du groupe `distante` sont actifs avec `secubox-group@distante`.
+`POST /api/v1/pilotage-vhost/modules/<module>/demarrer` émet l'action `service-demarrer` (`secubox-<module>.service`) avec les
+mêmes gardes et le même audit que la Flotte (administrateur réel ; `auth`, `pilotage*` refusés). Page :
+`/pilotage-connexion/modules.html`. La page Santé du hub appelle `/api/v1/health-doctor/`, relayé avec l'accueil.

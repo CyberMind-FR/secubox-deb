@@ -288,6 +288,10 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
 
     @app.post("/boxes/{ident}/actions/{action}")
     async def agir(ident: str, action: str, corps: ActionIn = ActionIn(), jwt: dict = Depends(require_jwt)):
+        return await executer_action(ident, action, corps, jwt)
+
+    async def executer_action(ident: str, action: str, corps: "ActionIn", jwt: dict) -> dict:
+        """Corps de POST /boxes/{x}/actions/{action}, partagé avec le vhost d'une box légère (#3324 : « Démarrer »)."""
         a = CATALOGUE.get(action)
         if a is None:
             raise HTTPException(404, "action inconnue")
@@ -470,7 +474,8 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         return await asyncio.to_thread(stockage.evenements, cle, depuis, limite)
 
     # --- L5 tâche 5 : vhost admin.<box> d'une box légère ---
-    ajouter_routes_vhost(app, stockage, files, audit, horloge=horloge, maitre=maitre, debit=debit, racine_pages=racine_pages)
+    ajouter_routes_vhost(app, stockage, files, audit, horloge=horloge, maitre=maitre, debit=debit, racine_pages=racine_pages,
+                         agir=lambda box, unite, p: executer_action(box, "service-demarrer", ActionIn(args={"unite": unite}), p))
     if plan_vhosts is not None:
         def ecrire_plan() -> None:
             boites = [(b["nom"], stockage.inventaire(b["cle"])["valeurs"]) for b in stockage.boites()]

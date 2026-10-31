@@ -240,6 +240,7 @@ def test_scripts_integres_permis_par_empreinte_et_accueil():
                                    "empreintes": {"soc": e, "": e}}])
     assert "location = / {" in conf and "try_files /index.html =404;" in conf
     assert "location ^~ /api/v1/hub/ {" in conf and "/relais/gk5/api/v1/hub/;" in conf
+    assert "location ^~ /api/v1/health-doctor/ {" in conf and "/relais/gk5/api/v1/health-doctor/;" in conf
     bloc = conf[conf.index("location ^~ /soc/ {"):]
     bloc = bloc[:bloc.index("\n    }")]
     assert e[0] in bloc and "script-src" in bloc and "'unsafe-inline'" not in bloc.split("script-src ")[1].split(";")[0]
@@ -650,3 +651,32 @@ def test_emission_du_code_par_la_seule_session_cookie(w):
     r, sans = asyncio.run(cas())
     assert r.status_code == 303 and "#code=" in r.headers["location"]
     assert sans.status_code == 401
+
+
+def test_etat_modules_depuis_l_inventaire_et_groupe_distante():
+    """#3324 : modules actifs/arrêtés lus de Device.X_SECUBOX_Services ; ceux du groupe « distante » sont actifs avec lui."""
+    v = {"Device.X_SECUBOX_Services.1.Name": "secubox-waf.service", "Device.X_SECUBOX_Services.1.ActiveState": "inactive",
+         "Device.X_SECUBOX_Services.2.Name": "secubox-system.service", "Device.X_SECUBOX_Services.2.ActiveState": "active",
+         "Device.X_SECUBOX_Services.3.Name": "secubox-group@distante.service", "Device.X_SECUBOX_Services.3.ActiveState": "active",
+         "Device.X_SECUBOX_Services.4.Name": "secubox-pilotage-agent.service", "Device.X_SECUBOX_Services.4.ActiveState": "active"}
+    e = {m["module"]: m["etat"] for m in V.etat_modules(v)}
+    assert e["waf"] == "arrete" and e["system"] == "actif" and e["hub"] == "actif" and e["health-doctor"] == "actif"
+    assert not any(k.startswith(("pilotage", "group")) for k in e)
+    v["Device.X_SECUBOX_Services.3.ActiveState"] = "inactive"
+    assert "hub" not in {m["module"] for m in V.etat_modules(v)}
+    conf = V.rendre_nginx("gk5", [{"paquet": "secubox-system", "version": "1.0", "modules": ["system"]}])
+    assert "location ^~ /api/v1/pilotage-vhost/modules {" in conf and ":/vhost/modules;" in conf
+
+
+def test_modules_et_demarrer_sur_le_vhost(w):
+    """#3324 : GET /vhost/modules exige la session du vhost ; POST …/demarrer refuse un module exclu ou invalide (404)."""
+    async def cas():
+        async with w.client() as c:
+            r = await c.get("/vhost/modules", headers={V.ENTETE_BOX: "gk5"})
+            assert r.status_code == 401
+            r = await c.get("/vhost/modules", headers=entetes_vhost(jeton=w.jeton_vhost()))
+            assert r.status_code == 200 and r.json()["box"] == "gk5" and isinstance(r.json()["modules"], list)
+            for m in ("auth", "pilotage-agent", "a.b"):
+                r = await c.post(f"/vhost/modules/{m}/demarrer", headers=entetes_vhost(jeton=w.jeton_vhost()))
+                assert r.status_code == 404, m
+    asyncio.run(cas())
