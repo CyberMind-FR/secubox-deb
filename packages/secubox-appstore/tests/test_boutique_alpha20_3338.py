@@ -4,6 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#3338 — Boutique pour l'Alpha 20 : installation de bout en bout (Ouvrir mène à l'app réelle, suivi qui ne reste
 jamais bloqué, erreurs en français)."""
+# ruff: noqa: F811 — la fixture `navigateur` est importée de test_boutique_3148 (paramètre homonyme des tests)
 import pytest
 
 from test_boutique_3148 import FICHES, mod, ouvre, playwright  # noqa: F401 — simulateur partagé
