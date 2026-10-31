@@ -75,7 +75,7 @@ def _sources(tmp: Path) -> C.Sources:
     return C.Sources(pilotage_db=_pilotage(tmp), menaces=[_menaces(tmp)], vhost_stats=_vhosts(tmp),
                      bans=tmp / "absent-bans.jsonl", haproxy_toml=tmp / "absent.toml",
                      configuration=conf, github_cache=tmp / "github.json", geoip=[], local_nom="gk2",
-                     etat_menaces=tmp / "menaces-etat.json")
+                     etat_menaces=tmp / "menaces-etat.json", etat_visites=tmp / "visites-etat.json")
 
 
 def test_noeuds_issus_du_pilotage_sans_adresse(tmp_path):
@@ -274,3 +274,29 @@ def test_bans_par_jour_et_actifs_depuis_le_journal_de_bans(tmp_path):
 def test_sans_journal_de_bans_rien_n_est_invente(tmp_path):
     etat = C.collecter(_sources(tmp_path), maintenant=MAINTENANT, reseau=False)
     assert etat["tuiles"]["bans_actifs"] is None and all(x["bans"] is None for x in etat["histo"])
+
+
+def test_visites_persistees_au_dela_des_30_jours_de_la_source(tmp_path):
+    s = _sources(tmp_path)
+    C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    d = json.loads(s.vhost_stats.read_text())
+    del d["jours"]["2026-10-30"]                                   # sorti de la fenêtre glissante de secubox-metrics
+    d["jours"]["2026-10-31"]["hall.gk2.secubox.in"]["visites"] = 20
+    s.vhost_stats.write_text(json.dumps(d))
+    h = {x["jour"]: x for x in C.collecter(s, maintenant=MAINTENANT + 60, reseau=False)["histo"]}
+    assert h["2026-10-30"]["visites"] == 40 and h["2026-10-31"]["visites"] == 20
+    e = json.loads(s.etat_visites.read_text())
+    assert e["jours"]["2026-10-30"]["pays"] == {"FR": 30, "DE": 5} and "198.51.100" not in s.etat_visites.read_text()
+    assert oct(s.etat_visites.stat().st_mode & 0o777) == "0o600"
+
+
+def test_visites_bornees_et_nulles_avant_la_premiere_mesure(tmp_path):
+    s = _sources(tmp_path)
+    s.etat_visites.write_text(json.dumps({"version": 1, "jours": {"%d-%02d-%02d" % (a, m, j): {"visites": 1}
+                                          for a in (2024, 2025) for m in range(1, 13) for j in range(1, 29)}}))
+    C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    assert len(json.loads(s.etat_visites.read_text())["jours"]) == C.JOURS_MAX
+    s2 = _sources(tmp_path / "b") if (tmp_path / "b").mkdir() is None else None
+    s2.menaces[0].write_text(_ligne(MAINTENANT - 5 * 86400))   # attaque avant la première visite mesurée
+    h = {x["jour"]: x for x in C.collecter(s2, maintenant=MAINTENANT, reseau=False)["histo"]}
+    assert h["2026-10-26"]["visites"] is None

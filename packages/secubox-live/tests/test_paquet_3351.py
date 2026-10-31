@@ -82,7 +82,7 @@ def test_spdx_et_versions():
     for p in ICI.rglob("*"):
         if p.is_file() and p.suffix in (".py", ".js", ".css", ".conf", ".in", ".toml", ".service", ".timer") and "__pycache__" not in p.parts:
             assert "SPDX-License-Identifier" in p.read_text()[:400], p
-    assert lire("debian/changelog").startswith("secubox-live (0.1.3-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-live (0.1.4-1~trixie1) trixie;")
     assert lire("debian/compat").strip() == "13" and "Standards-Version: 4.6.2" in lire("debian/control")
     for sh in ("debian/postinst", "debian/prerm", "debian/postrm", "sbin/secubox-live-exposer"):
         assert subprocess.run(["sh", "-n", str(ICI / sh)]).returncode == 0, sh
@@ -132,3 +132,20 @@ def test_sources_des_bans_et_rotations_ouvertes_en_lecture():
     assert "bans.jsonl w" not in ap and "/var/lib/secubox/waf/** " not in ap
     acl = lire("sbin/secubox-live-acl")
     assert "/var/lib/secubox/waf/bans.jsonl" in acl and "waf-threats.log.*.gz" in acl
+
+
+def test_section_comprendre_et_infobulles():
+    html = lire("www/live/index.html")
+    sec = re.search(r'<details class="carte comprendre" id="comprendre" open>(.*?)</details>', html, re.S)
+    assert sec and "Comprendre ces chiffres" in sec.group(1)
+    for terme in ("Requêtes", "Menaces", "Bloquées", "Bans", "Bans actifs", "Pourquoi ces chiffres diffèrent",
+                  "Vie privée", "Historique"):
+        assert "<dt>" + terme + "</dt>" in sec.group(1), terme
+    assert "4 h (le cas le plus courant)" in sec.group(1) and "levé automatiquement" in sec.group(1)
+    assert html.index('id="comprendre"') < html.index('class="rangee"') and html.index('class="tuiles"') < html.index('id="comprendre"')
+    tuiles = re.findall(r'<div class="tuile"( title="[^"]+")?>', html)
+    assert len(tuiles) == 5 and all(tuiles), "une tuile sans infobulle"
+    legende = re.search(r'<p class="legende">(.*?)</p>', html, re.S).group(1)
+    assert legende.count("title=") >= 5 and "non mesuré" in legende
+    js = lire("www/live/live.js")
+    assert "innerHTML" not in js and "outerHTML" not in js and "insertAdjacentHTML" not in js

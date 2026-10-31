@@ -192,5 +192,15 @@
       .catch(function () { $('global').className = 'global'; texte('global-texte', 'Données momentanément indisponibles'); });
   }
   charger();
+  // « Comprendre ces chiffres » : ouvert au premier affichage, puis l'état choisi par le visiteur est retenu (ce
+  // navigateur seulement ; sans stockage, la section reste ouverte).
+  (function () {
+    var d = $('comprendre');
+    if (!d) return;
+    try { if (localStorage.getItem('live-comprendre') === 'ferme') d.removeAttribute('open'); } catch (e) { /* stockage indisponible */ }
+    d.addEventListener('toggle', function () {
+      try { localStorage.setItem('live-comprendre', d.open ? 'ouvert' : 'ferme'); } catch (e) { /* stockage indisponible */ }
+    });
+  })();
   setInterval(function () { if (document.visibilityState !== 'hidden') charger(); }, 20000);
 })();
