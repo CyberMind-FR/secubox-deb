@@ -203,7 +203,7 @@ def _q(s: str) -> str:
 
 
 # Ressources statiques que plusieurs paquets livrent chacun en partie (jamais une page de module : pas d'API relayée).
-PARTAGES = frozenset({"luci-static"})
+PARTAGES = frozenset({"luci-static", "shared"})   # shared : sidebar.js et ressources communes (secubox-hub d'abord)
 
 
 CSP_MORCEAU = 2000   # nginx refuse un paramètre de plus de 4 Ko (« too long parameter ») : la CSP est découpée en variables
@@ -239,7 +239,13 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
                 partages.setdefault(m, []).append(p)
                 continue
             if m in vus:
-                raise ValueError(f"module servi par deux paquets : {m}")
+                # #3302 (banc gk4) : `portal` est livré par secubox-hub ET secubox-portal ; le paquet propriétaire
+                # (secubox-<module>) l'emporte, sinon refus
+                proprio = f"secubox-{m}"
+                if vus[m]["paquet"] == proprio:
+                    continue
+                if p["paquet"] != proprio:
+                    raise ValueError(f"module servi par deux paquets : {m}")
             vus[m] = p
     L = [
         "# Généré par secubox-pilotage-vhost (#3126, L5 tâche 5) — ne pas éditer : réécrit à chaque synchronisation.",
@@ -290,7 +296,7 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
     for m in sorted(partages):
         # ressources statiques livrées en parties par plusieurs paquets (#3302) : composées par try_files en chaîne, dans
         # l'ordre des noms de paquets ; aucune route d'API. `root` (et non `alias`) : l'URI /<m>/… est le chemin sous la version.
-        chaine = sorted(partages[m], key=lambda p: (p["paquet"], p["version"]))
+        chaine = sorted(partages[m], key=lambda p: (p["paquet"] != "secubox-hub", p["paquet"], p["version"]))
         for i, p in enumerate(chaine):
             suite = f"@{m}-{i + 1}" if i + 1 < len(chaine) else "=404"
             tete = f"    location ^~ /{m}/ {{" if i == 0 else f"    location @{m}-{i} {{"
@@ -305,7 +311,7 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
         emp = (p.get("empreintes") or {}).get("", [])
         L += ["    location = / {", f"        root {racine}/{p['paquet']}/{p['version']};", "        try_files /index.html =404;",
               *_entetes_page(csp_module(box, ["/"], emp)), "    }",
-              "    location ~ ^/[a-z0-9][a-z0-9_-]{0,63}\\.html$ {", f"        root {racine}/{p['paquet']}/{p['version']};",
+              "    location ~ \"^/[a-z0-9][a-z0-9_-]{0,63}\\.html$\" {", f"        root {racine}/{p['paquet']}/{p['version']};",
               "        try_files $uri =404;", *_entetes_page(csp_module(box, ["/"], emp)), "    }"]
     L += ["", "    location ^~ /api/ { return 404; }",
           "    location / { return 404; }",

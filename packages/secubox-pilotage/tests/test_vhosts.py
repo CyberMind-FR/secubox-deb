@@ -245,6 +245,15 @@ def test_scripts_integres_permis_par_empreinte_et_accueil():
     assert "/api/" not in bloc.split("style-src")[0]
 
 
+def test_module_en_double_le_paquet_proprietaire_l_emporte():
+    """#3302 (banc gk4) : `portal` livré par secubox-hub et secubox-portal : secubox-portal sert /portal/, dans les deux ordres."""
+    for ordre in (1, -1):
+        pages = [{"paquet": "secubox-hub", "version": "1", "modules": ["portal"]},
+                 {"paquet": "secubox-portal", "version": "2", "modules": ["portal"]}][::ordre]
+        conf = V.rendre_nginx("gk5", pages)
+        assert "/secubox-portal/2/portal/;" in conf and "/secubox-hub/1/portal/" not in conf
+
+
 def test_pages_declarees_sans_deviner():
     v = valeurs(paquets=(("secubox-a", "1.0"), ("secubox-a", "2.0"), ("pas-secubox", "1.0"), ("secubox-b", "bad version")))
     assert V.pages_declarees(v) == {}
