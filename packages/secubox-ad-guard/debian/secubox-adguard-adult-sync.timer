@@ -13,6 +13,9 @@ Description=SecuBox adult-content sinkhole refresh, toutes les 10 min (#2983, co
 # réactif pour une rotation IPv6, pour une fraction de la charge.
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=150s
+FixedRandomDelay=true
 OnBootSec=2min
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se
 # redéclenche pas après une réactivation.

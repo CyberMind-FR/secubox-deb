@@ -2,6 +2,9 @@
 Description=Probe + auto-heal secubox-aggregator every 2 min
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=10s
+FixedRandomDelay=true
 OnBootSec=2min
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=2min

@@ -1,3 +1,9 @@
+secubox-webfilter (0.5.4-1~trixie1) trixie; urgency=medium
+
+  * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 14:27:40 +0100
+
 secubox-webfilter (0.5.3-1~trixie1) trixie; urgency=medium
 
   * Adresses rémanentes (#3005) : un appareil assigné garde dans la carte appliquée les adresses où on l'a vu pendant

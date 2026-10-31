@@ -5,6 +5,10 @@ Description=Publish wg-mesh handshakes every 20 s (liveness for /status, /peers)
 # vivacité d'un pair (180 s). Plus fréquent n'apprendrait rien — WireGuard ne
 # renégocie qu'environ toutes les deux minutes.
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=2s
+FixedRandomDelay=true
+AccuracySec=2s
 OnBootSec=30s
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=30s

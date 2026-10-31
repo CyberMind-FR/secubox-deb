@@ -449,6 +449,6 @@ def test_l_unite_est_confinee_et_ne_parle_qu_aux_reseaux_prives():
 
 def test_la_minuterie_existe_mais_n_est_pas_activee_par_le_paquet():
     """Seule la box maître l'active : une box ordinaire ne doit pas sonder son voisinage toutes les 2 minutes."""
-    assert "OnUnitActiveSec=2min" in (PKG / "systemd" / "secubox-premier-pas-decouverte.timer").read_text()
+    assert "OnUnitActiveSec=5min" in (PKG / "systemd" / "secubox-premier-pas-decouverte.timer").read_text()
     assert "decouverte" not in (PKG / "debian" / "postinst").read_text(), "le postinst n'active pas la minuterie"
     assert "systemd/*.timer" in (PKG / "debian" / "rules").read_text()

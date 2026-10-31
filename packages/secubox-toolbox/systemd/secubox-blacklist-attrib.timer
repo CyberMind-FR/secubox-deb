@@ -1,14 +1,17 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
-# Phase 13.C (#524) — per-device attribution every 2 min.
+# Phase 13.C (#524) — per-device attribution every 5 min (#3355).
 [Unit]
-Description=SecuBox blacklist attribution timer (every 2 min)
+Description=SecuBox blacklist attribution timer (every 5 min, #3355)
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=75s
+FixedRandomDelay=true
 OnBootSec=120s
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=120s
-OnUnitActiveSec=2min
-AccuracySec=20s
+OnUnitActiveSec=5min
+AccuracySec=30s
 Persistent=true
 
 [Install]

@@ -3,6 +3,9 @@ Description=Run secubox-streamlit-idle.service every 5 minutes
 After=secubox-streamlit.service
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=75s
+FixedRandomDelay=true
 OnBootSec=5min
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=5min

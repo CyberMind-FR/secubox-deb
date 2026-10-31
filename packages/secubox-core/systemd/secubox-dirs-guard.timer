@@ -1,6 +1,9 @@
 [Unit]
 Description=Re-assert SecuBox shared-dir perms every minute
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=6s
+FixedRandomDelay=true
 OnCalendar=*:0/1
 AccuracySec=10s
 Persistent=true

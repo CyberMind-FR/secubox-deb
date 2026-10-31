@@ -3,6 +3,10 @@ Description=SecuBox UI Health Check Timer
 Documentation=https://secubox.in/docs/ui-manager
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=3s
+FixedRandomDelay=true
+AccuracySec=3s
 OnBootSec=30
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=30

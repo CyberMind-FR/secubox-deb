@@ -2,6 +2,10 @@
 Description=SecuBox torrent conserve — drain the PeerTube upload queue
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=15s
+FixedRandomDelay=true
+AccuracySec=6s
 OnBootSec=90
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=90

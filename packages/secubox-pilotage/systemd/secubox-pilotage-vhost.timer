@@ -8,6 +8,9 @@
 Description=SecuBox Pilotage — reprise périodique des vhosts des box légères (#3126)
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=10s
+FixedRandomDelay=true
 OnBootSec=5min
 OnUnitInactiveSec=1h
 AccuracySec=1min

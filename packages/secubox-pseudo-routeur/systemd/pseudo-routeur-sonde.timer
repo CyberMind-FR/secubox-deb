@@ -14,6 +14,10 @@
 Description=SecuBox Pseudo-routeur — sonde de secours, toutes les 60 s (#2940)
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=15s
+FixedRandomDelay=true
+AccuracySec=6s
 OnActiveSec=60s
 OnUnitActiveSec=60s
 

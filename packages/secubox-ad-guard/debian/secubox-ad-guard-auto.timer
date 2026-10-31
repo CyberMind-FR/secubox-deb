@@ -6,6 +6,9 @@
 Description=SecuBox Ad Guard — mode auto du POC DNS AdBlock TV, chaque minute (#1954)
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=15s
+FixedRandomDelay=true
 OnBootSec=2min
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=2min

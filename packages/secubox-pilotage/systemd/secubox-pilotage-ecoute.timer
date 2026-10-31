@@ -9,6 +9,9 @@
 Description=SecuBox Pilotage — reprise périodique des écouteurs de tunnel (#3126)
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=10s
+FixedRandomDelay=true
 OnBootSec=2min
 OnUnitInactiveSec=5min
 AccuracySec=30s

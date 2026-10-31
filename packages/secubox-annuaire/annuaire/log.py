@@ -26,7 +26,7 @@ import json
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Tuple
 
 from .model import GENESIS_HASH, LogEntry, Op, compute_entry_hash, now_rfc3339
 from .crypto import canonical_bytes, verify
@@ -322,15 +322,29 @@ class Journal:
         finally:
             con.close()
 
-    def iter_entries(self) -> Iterator[LogEntry]:
-        """Iterate all entries in height order (oldest first)."""
+    def author_sigs(self) -> set:
+        """Couples (auteur, signature) déjà présents, sans décoder les charges utiles (#3355)."""
         con = self._connect()
         try:
-            for row in con.execute(
-                "SELECT height, op, prev_hash, payload_type, payload, "
-                "author, sig, entry_hash, created_at "
-                "FROM log ORDER BY height"
-            ):
+            return {(a, g) for a, g in con.execute("SELECT author, sig FROM log")}
+        finally:
+            con.close()
+
+    def iter_entries(self, ops: Optional[Tuple[str, ...]] = None) -> Iterator[LogEntry]:
+        """Iterate all entries in height order (oldest first).
+
+        `ops` (#3355) : ne garder que les opérations dont le nom commence par l'un de ces préfixes, filtrées par SQLite AVANT le décodage
+        JSON. La voie rapide (20 s) décodait les 5 000 entrées du journal pour en garder une cinquantaine."""
+        sql = ("SELECT height, op, prev_hash, payload_type, payload, "
+               "author, sig, entry_hash, created_at FROM log")
+        params: list = []
+        if ops:
+            sql += " WHERE " + " OR ".join("substr(op, 1, ?) = ?" for _ in ops)
+            for o in ops:
+                params += [len(o), o]
+        con = self._connect()
+        try:
+            for row in con.execute(sql + " ORDER BY height", params):
                 height, op, prev_hash, payload_type, payload_text, author, sig, entry_hash, created_at = row
                 yield LogEntry(
                     height=height,
