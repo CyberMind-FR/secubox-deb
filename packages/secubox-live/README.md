@@ -39,7 +39,7 @@ l'écriture (test `test_jamais_d_adresse_ni_de_secret_dans_l_etat`). Une source 
 - `secubox-live-collecte.timer` (toutes les minutes) → `secubox-live-collecte` (compte `secubox-live`, groupe
   `secubox-pilotage` seulement, AppArmor enforce ; `pilotage.db-shm` en lecture seule suffit en `mode=ro`) → `/var/cache/secubox/live/etat.json` (0644, écriture atomique). Une source en erreur donne
   `null` sans arrêter les autres.
-- nginx, rendu par l'exposeur depuis `/usr/share/secubox/live/live.vhost.conf.in` : `listen 127.0.0.1:9080`,
+- nginx, rendu par l'exposeur depuis `/usr/share/secubox/live/live.vhost.conf.in` : `listen 9080` (comme boutique et hall : sbxwaf joint l adresse hôte ; 9080 fermé par nftables côté WAN/LAN),
   `server_name` exact, HSTS, CSP stricte ; la page et `/etat.json` servis en **statique** (cache 15 s), aucune
   API, GET/HEAD seulement, tout le reste en 404.
 

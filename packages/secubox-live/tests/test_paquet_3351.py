@@ -39,7 +39,7 @@ def test_vhost_statique_local_nom_exact_hsts():
     conf = lire("nginx/live.vhost.conf.in")
     csp = re.search(r'Content-Security-Policy "([^"]*)"', conf).group(1)
     assert "unsafe-inline" not in csp and "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
-    assert "listen 127.0.0.1:9080;" in conf and "server_name @DOMAINE@;" in conf and "live.*" not in conf
+    assert "listen 9080;" in conf and "server_name @DOMAINE@;" in conf and "live.*" not in conf
     assert conf.count("Strict-Transport-Security") == 2                      # reposé dans la location etat.json
     assert "alias /var/cache/secubox/live/etat.json;" in conf and "expires 15s;" in conf
     assert "proxy_pass" not in conf and "/api/" not in conf                  # aucune API par requête

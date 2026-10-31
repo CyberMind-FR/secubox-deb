@@ -4,13 +4,13 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 # @DOMAINE@ — page PUBLIQUE de l'état du réseau (#3351). Rendu par secubox-live-exposer depuis le domaine de
-# /etc/secubox/live.toml (nom EXACT, jamais un joker). Exposé par HAProxy -> sbxwaf -> nginx 127.0.0.1:9080.
+# /etc/secubox/live.toml (nom EXACT, jamais un joker). Exposé par HAProxy -> sbxwaf -> nginx :9080 (fermé côté WAN/LAN par nftables).
 # Tout est statique : la page, ses fichiers et etat.json (écrit une fois par minute par le collecteur, sans adresse),
 # servi avec un cache court ; aucune API, aucun processus par requête, rien à saturer.
 
 server {
     include snippets/secubox-errorpages.conf;
-    listen 127.0.0.1:9080;
+    listen 9080;   # convention des vhosts derrière sbxwaf (boutique, hall) : 9080 fermé par nftables côté WAN et LAN
     server_name @DOMAINE@;
 
     if ($http_x_forwarded_proto = "http") { return 301 https://$host$request_uri; }
