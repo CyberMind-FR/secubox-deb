@@ -251,7 +251,7 @@ def _csp_nginx(csp: str) -> list:
     return L + ['    add_header Content-Security-Policy "' + "".join(f"$sbx_csp_{i}" for i in range(len(morceaux))) + '" always;']
 
 
-def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str = SOCKET) -> str:
+def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str = SOCKET, maitre: str = "") -> str:
     """`pages` : [{"paquet", "version", "modules": [module…]}]. Un module servi par deux paquets est refusé (ValueError)."""
     dom = domaine(box)
     vus: dict = {}
@@ -351,6 +351,11 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
               *_entetes_page(csp_module(box, ["/"], emp)), "    }",
               "    location ~ \"^/[a-z0-9][a-z0-9_-]{0,63}\\.html$\" {", f"        root {racine}/{p['paquet']}/{p['version']};",
               "        try_files $uri =404;", *_entetes_page(csp_module(box, ["/"], emp)), "    }"]
+    if maitre and RE_BOX.fullmatch(maitre):
+        # #3324 : les pages envoient vers /login.html quand une session manque ; ici, aucune saisie d'identifiants : on
+        # repasse par le maître, qui émet un nouveau code (sa session et sa 2FA) puis revient sur cette box.
+        L += ["    location = /login.html {",
+              f"        return 302 https://{domaine(maitre)}/api/v1/pilotage/boxes/{box}/connexion-vhost;", "    }"]
     L += ["", "    location ^~ /api/ { return 404; }",
           "    location / { return 404; }",
           "}", ""]
