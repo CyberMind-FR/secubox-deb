@@ -231,6 +231,20 @@ def test_csp_longue_decoupee_en_variables():
     assert reconstruite == V.csp_pages("gk5", mods)
 
 
+def test_scripts_integres_permis_par_empreinte_et_accueil():
+    """#3302 (banc gk4) : les pages portées ont des scripts intégrés ; seuls ceux dont l'empreinte est calculée passent (jamais
+    'unsafe-inline' pour les scripts). L'accueil (index.html du hub) est servi à la racine."""
+    e = V.empreintes_scripts('<script>alert(1)</script><script src="/shared/x.js"></script>')
+    assert e == ["'sha256-bhHHL3z2vDgxUt0W3dWQOrprscmda2Y5pLsLg4GF+pI='"]
+    conf = V.rendre_nginx("gk5", [{"paquet": "secubox-hub", "version": "1.0", "modules": ["soc"], "accueil": True,
+                                   "empreintes": {"soc": e, "": e}}])
+    assert "location = / {" in conf and "try_files /index.html =404;" in conf
+    bloc = conf[conf.index("location ^~ /soc/ {"):]
+    bloc = bloc[:bloc.index("\n    }")]
+    assert e[0] in bloc and "script-src" in bloc and "'unsafe-inline'" not in bloc.split("style-src")[0]
+    assert "/api/" not in bloc.split("style-src")[0]
+
+
 def test_pages_declarees_sans_deviner():
     v = valeurs(paquets=(("secubox-a", "1.0"), ("secubox-a", "2.0"), ("pas-secubox", "1.0"), ("secubox-b", "bad version")))
     assert V.pages_declarees(v) == {}

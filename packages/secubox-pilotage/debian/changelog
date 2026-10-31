@@ -1,3 +1,11 @@
+secubox-pilotage (0.6.6-1~trixie1) trixie; urgency=medium
+
+  * vhost : CSP par page, scripts integres permis par empreinte calculee a
+    l extraction ; accueil (index.html du hub) servi a la racine ; la page
+    de connexion mene a l accueil (banc gk4) (ref #3302).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 06:48:17 +0100
+
 secubox-pilotage (0.6.5-1~trixie1) trixie; urgency=medium
 
   * vhost : CSP de plus de 2 Ko decoupee en variables nginx (58 modules sur
