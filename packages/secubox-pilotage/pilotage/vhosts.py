@@ -74,6 +74,38 @@ def csp_pages(box: str, modules: Iterable[str]) -> str:
             "manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
 
+RE_EMPREINTE = re.compile(r"'sha256-[A-Za-z0-9+/]{43}='")
+RE_SCRIPT_INTEGRE = re.compile(r"<script(?![^>]*\bsrc\s*=)[^>]*>(.*?)</script\s*>", re.S | re.I)
+
+
+def empreintes_scripts(html: str) -> list:
+    """#3302 : empreintes CSP des scripts intégrés (sans `src`) d'une page, telles que le navigateur les calcule (contenu exact)."""
+    import base64
+    import hashlib
+    return sorted({"'sha256-" + base64.b64encode(hashlib.sha256(c.encode("utf-8")).digest()).decode() + "'"
+                   for c in RE_SCRIPT_INTEGRE.findall(html)})
+
+
+def csp_module(box: str, chemins: Iterable[str], empreintes: Iterable[str]) -> str:
+    """#3302 (banc gk4) : CSP d'UNE page : scripts de son chemin, de /shared/ et de /luci-static/, plus les seuls scripts intégrés
+    dont l'empreinte a été calculée à l'extraction (jamais 'unsafe-inline' pour les scripts, jamais /api/) ; styles intégrés
+    permis (attributs style= des pages portées)."""
+    base = f"https://{domaine(box)}"
+    emp = sorted(e for e in empreintes if RE_EMPREINTE.fullmatch(e))
+    srcs = " ".join(f"{base}{c}" for c in [*chemins, "/shared/", "/luci-static/"])
+    return (f"default-src 'none'; script-src {' '.join([srcs, *emp])}; style-src {srcs} 'unsafe-inline'; img-src 'self' data:; "
+            "font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+
+
+def _entetes_page(csp: str) -> list:
+    """add_header dans une location annule l'héritage du server : tout le jeu est reposé."""
+    return [f'        add_header Content-Security-Policy "{csp}" always;',
+            '        add_header X-Content-Type-Options "nosniff" always;',
+            '        add_header X-Frame-Options "DENY" always;',
+            '        add_header Referrer-Policy "no-referrer" always;',
+            '        add_header Cache-Control "no-store" always;']
+
+
 def domaine(box: str) -> str:
     if not isinstance(box, str) or not RE_BOX.fullmatch(box):
         raise ValueError("nom de box invalide")
@@ -251,6 +283,7 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
               f"    location ^~ /{m}/ {{",
               f"        alias {racine}/{p['paquet']}/{p['version']}/{m}/;",
               "        index index.html;",
+              *_entetes_page(csp_module(box, [f"/{m}/"], (p.get("empreintes") or {}).get(m, []))),
               # « ^~ » coupe la recherche des regex du serveur : la garde des fichiers en point est répétée ici
               "        location ~ /\\. { return 404; }",
               "    }"]
@@ -265,6 +298,15 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
             if i == 0:
                 L += ["        location ~ /\\. { return 404; }"]
             L += ["    }"]
+    accueil = [p for p in pages if p.get("accueil")]
+    if accueil:
+        # page d'accueil (index.html à la racine du paquet hub) et pages .html de premier niveau du même paquet (#3302)
+        p = accueil[0]
+        emp = (p.get("empreintes") or {}).get("", [])
+        L += ["    location = / {", f"        root {racine}/{p['paquet']}/{p['version']};", "        try_files /index.html =404;",
+              *_entetes_page(csp_module(box, ["/"], emp)), "    }",
+              "    location ~ ^/[a-z0-9][a-z0-9_-]{0,63}\\.html$ {", f"        root {racine}/{p['paquet']}/{p['version']};",
+              "        try_files $uri =404;", *_entetes_page(csp_module(box, ["/"], emp)), "    }"]
     L += ["", "    location ^~ /api/ { return 404; }",
           "    location / { return 404; }",
           "}", ""]

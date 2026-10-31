@@ -20,7 +20,7 @@
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (j) {
       try { localStorage.setItem("sbx_token", j.access_token); } catch (e) { /* stockage refusé */ }
-      if (retour) { location.replace(retour); } else { etat.textContent = "Connecté."; }
+      location.replace(retour || "/");   // #3302 : sans destination, l'accueil de l'administration
     })
     .catch(function () { etat.textContent = "Code refusé ou expiré : recommencez depuis le pilotage du maître."; });
 })();

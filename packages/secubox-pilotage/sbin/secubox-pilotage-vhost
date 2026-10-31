@@ -281,6 +281,51 @@ def ouvrir_root(dir_fd, nom, ctx):
     return fd
 
 
+PAQUET_ACCUEIL = "secubox-hub"   # sa racine porte index.html, la page d'accueil de l'administration (#3302)
+PAGE_MAX = 2 << 20
+
+
+def empreintes_de(ctx, paquet, version, mods):
+    """#3302 : empreintes CSP des scripts intégrés des pages .html de chaque module (clé "" : pages de premier niveau du paquet
+    d'accueil) ; (empreintes, accueil). Arbre root vérifié par modules_de ; fichiers ordinaires seulement, sans suivre de lien."""
+    base = os.path.join(ctx.pages_base, "secubox-pilotage-pages", "www", paquet, version)
+    emp, accueil = {}, False
+
+    def pages(dossier, recursif):
+        for racine, dirs, fichiers in os.walk(dossier, followlinks=False):
+            for f in fichiers:
+                if f.endswith(".html"):
+                    yield os.path.join(racine, f)
+            if not recursif:
+                break
+
+    def lire(chemin):
+        try:
+            fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except OSError:
+            return ""
+        try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode) or st.st_size > PAGE_MAX:
+                return ""
+            return os.read(fd, PAGE_MAX).decode("utf-8", "replace")
+        finally:
+            os.close(fd)
+
+    for m in mods:
+        e = set()
+        for c in pages(os.path.join(base, m), True):
+            e.update(V.empreintes_scripts(lire(c)))
+        emp[m] = sorted(e)
+    if paquet == PAQUET_ACCUEIL:
+        e = set()
+        for c in pages(base, False):
+            e.update(V.empreintes_scripts(lire(c)))
+            accueil = accueil or c.endswith("/index.html")
+        emp[""] = sorted(e)
+    return emp, accueil
+
+
 def modules_de(ctx, paquet, version):
     """Modules (dossiers de premier niveau) de www/<paquet>/<version>/, par descripteur et sans lien ; None si non extraite."""
     try:
@@ -791,8 +836,10 @@ def poser(ctx, box, pages):
             mods = modules_de(ctx, paquet, version)
             if mods is None:
                 absentes.append(f"{paquet}={version}")
-            elif mods:
-                composees.append({"paquet": paquet, "version": version, "modules": mods})
+            elif mods or paquet == PAQUET_ACCUEIL:
+                emp, accueil = empreintes_de(ctx, paquet, version, mods)
+                composees.append({"paquet": paquet, "version": version, "modules": mods, "empreintes": emp,
+                                  "accueil": accueil})
         try:
             texte = V.rendre_nginx(box, composees).encode("utf-8")
         except ValueError as e:
