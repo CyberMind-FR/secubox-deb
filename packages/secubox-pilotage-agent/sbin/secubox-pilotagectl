@@ -1821,14 +1821,19 @@ def ecrire_profil_actif(ctx, nom):
 SUFFIXES_GARDE = ("", "-c", "-r")      # avant l'apply, après l'apply (confirmation), réarmée au démarrage
 
 
+def arreter_garde(ctx, job, suffixe):
+    """Arrête UNE garde (minuterie transitoire) ; un échec est journalisé : la garde ne retrouvera plus son état."""
+    try:
+        subprocess.run([ctx.systemctl, "stop", f"{PREFIXE_GARDE}{job}{suffixe}.timer"], env=ctx.env,
+                       stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        err("garde non désarmée : elle ne trouvera plus son état d'attente")
+
+
 def desarmer_garde(ctx, job):
     if isinstance(job, str) and RE_ID.fullmatch(job):
         for suffixe in SUFFIXES_GARDE:
-            try:
-                subprocess.run([ctx.systemctl, "stop", f"{PREFIXE_GARDE}{job}{suffixe}.timer"], env=ctx.env,
-                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
-            except (OSError, subprocess.TimeoutExpired):
-                err("garde non désarmée : elle ne trouvera plus son état d'attente")
+            arreter_garde(ctx, job, suffixe)
 
 
 def armer_garde(ctx, job, delai, suffixe=""):
@@ -1914,13 +1919,25 @@ def basculer_interface(ctx, job):
     if etat["sens"] == "locale":
         # Garde de CE retour armée avant l'apply : un retour coupé (RuntimeMaxSec, coupure) est repris par elle, ou par
         # la reprise au démarrage (en_cours + locale). Le retour part même sans garde : c'est le sens sûr.
-        if not armer_garde(ctx, job, DELAI_APPLY + delai_garde(ctx)):
+        debut = int(time.time())
+        arme_avant = armer_garde(ctx, job, DELAI_APPLY + delai_garde(ctx))
+        if not arme_avant:
             err("garde du retour non armée : la reprise au démarrage reste le filet")
         if not appliquer_profil(ctx, precedent):
             # I2 : l'ancienne garde reste armée (elle ne voit plus son job) ; une garde de CE job réessaiera le retour.
-            maj_interface(ctx, job, etat="a_reprendre", echeance=int(time.time()) + delai_garde(ctx))
-            arme = armer_garde(ctx, job, delai_garde(ctx))
-            auditer(ctx, "interface_echec", job=job, sens="locale", profil=precedent, garde="armee" if arme else "non_armee")
+            # Le nom de base est déjà pris par la garde d'avant l'apply : réarmée sous « -c » (délai seul), puis la
+            # première arrêtée, comme dans le sens distant. Sans « -c », la première reste (échéance d'origine).
+            delai = delai_garde(ctx)
+            arme = armer_garde(ctx, job, delai, "-c")
+            if arme:
+                echeance = int(time.time()) + delai
+                if arme_avant:
+                    arreter_garde(ctx, job, "")
+            else:
+                echeance = debut + DELAI_APPLY + delai if arme_avant else int(time.time()) + delai
+            maj_interface(ctx, job, etat="a_reprendre", echeance=echeance)
+            auditer(ctx, "interface_echec", job=job, sens="locale", profil=precedent,
+                    garde="armee" if arme else ("premiere" if arme_avant else "non_armee"))
             raise Erreur("retour en locale en échec")
         desarmer_garde(ctx, etat.get("ancien"))
         desarmer_garde(ctx, job)
@@ -1945,11 +1962,7 @@ def basculer_interface(ctx, job):
         echeance = debut + DELAI_APPLY + delai
         if armer_garde(ctx, job, delai, "-c"):
             echeance = fin_apply + delai
-            try:
-                subprocess.run([ctx.systemctl, "stop", f"{PREFIXE_GARDE}{job}.timer"], env=ctx.env,
-                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
-            except (OSError, subprocess.TimeoutExpired):
-                err("première garde non désarmée : sans effet (elle ne trouvera plus « a_confirmer » après confirmation)")
+            arreter_garde(ctx, job, "")
         if maj_interface(ctx, job, si=("en_cours",), etat="a_confirmer", bascule=fin_apply, echeance=echeance) is None:
             raise Erreur("bascule reprise par la garde")
         auditer(ctx, "interface_basculee", job=job, profil=PROFIL_LEGER, delai=delai)

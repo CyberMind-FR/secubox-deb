@@ -425,3 +425,18 @@ def test_unite_de_reprise_ordonnee_et_durcie():
     u = (Path(__file__).resolve().parents[1] / "systemd" / "secubox-pilotage-interface-reprise.service").read_text()
     assert "After=local-fs.target network-online.target nginx.service" in u and "Wants=network-online.target" in u
     assert "NoNewPrivileges=yes" in u and "PrivateTmp=yes" in u
+
+
+def test_retour_en_echec_rearme_sous_un_autre_nom(bi):
+    """La garde du retour (armée avant l'apply) porte déjà le nom de base : le réarmement d'a_reprendre prend « -c » puis
+    arrête la première ; jamais « non_armee » à tort, échéance = délai seul."""
+    bi.basculer_distante()
+    rc, sortie, _ = bi.run("interface", "locale", agent=True)
+    job = sortie["job"]
+    bi.env.update(FAUX_PROFILECTL_ECHEC="minimal", FAUX_RUN_UNIQUE="1")
+    rc, _, _ = bi.run("_interface", job)
+    assert rc == 1 and bi.etat_interface()["etat"] == "a_reprendre"
+    assert [e.get("garde") for e in bi.evenements("interface_echec")][-1] == "armee"
+    c = [x for x in bi.lancements() if f"--unit=secubox-pilotage-garde-{job}-c " in x + " "]
+    assert c and "--on-active=600" in c[-1]
+    assert f"stop secubox-pilotage-garde-{job}.timer" in bi.lancements()
