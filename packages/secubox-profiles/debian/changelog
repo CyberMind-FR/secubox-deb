@@ -3,6 +3,9 @@ secubox-profiles (0.26.7-1~trixie1) trixie; urgency=medium
   * Panneau : un profil instantane* (photographie de la bascule d interface
     du pilotage) n est ni choisi ni applique depuis le panneau (409)
     (ref #3349).
+  * status --json : `enabled`, `active` et `lxc_running` par module (la
+    bascule d interface photographie les modules actives OU actifs)
+    (ref #3349).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 12:01:26 +0100
 

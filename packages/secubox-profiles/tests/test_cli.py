@@ -41,6 +41,19 @@ def test_status_json_lists_modules(root, capsys, monkeypatch):
     assert out["modules"][0]["category"] == "media"
 
 
+def test_status_json_expose_enabled_active_et_lxc(root, capsys, monkeypatch):
+    """#3349 : la bascule d'interface du pilotage photographie les modules activés OU actifs ; `on` (activé ET actif) ne
+    suffit pas : un module endormi par le sleeper (activé, inactif) doit apparaître avec enabled=true, active=false."""
+    monkeypatch.setattr("api.cli._observe_all",
+                        lambda ms, routes: {"lyrion": __import__(
+                            "api.observe", fromlist=["Actual"]).Actual(
+                                enabled=True, active=False)})
+    rc = main(["--root", str(root), "status", "--json"])
+    m = json.loads(capsys.readouterr().out)["modules"][0]
+    assert rc == 0
+    assert (m["on"], m["enabled"], m["active"], m["lxc_running"]) == (False, True, False, None)
+
+
 def test_diff_reports_no_change_when_converged(root, capsys, monkeypatch):
     monkeypatch.setattr("api.cli._observe_all",
                         lambda ms, routes: {"lyrion": __import__(

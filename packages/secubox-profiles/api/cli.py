@@ -90,6 +90,8 @@ def _cmd_status(args) -> int:
             "id": mid, "category": m.category, "runtime": m.runtime,
             "exposure": m.exposure, "priority": m.priority,
             "protected": m.protected, "on": is_on(a), "rss_kb": a.rss_kb,
+            # #3349 : état brut, pour qui photographie les modules activés OU actifs (bascule d'interface du pilotage)
+            "enabled": a.enabled, "active": a.active, "lxc_running": a.lxc_running,
         })
     if args.json:
         print(json.dumps({"modules": rows}, ensure_ascii=False))
