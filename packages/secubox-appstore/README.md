@@ -54,3 +54,16 @@ sur les mêmes routes que la page d'administration. `www/appstore/boutique-fiche
 une catégorie et un détail grand public (`"cacher": true` le masque) ; sans fiche, la page affiche le nom du paquet, et
 seules les catégories grand public (médias, courrier, communication, publication, IA, objets, outils) sont proposées.
 `?demo=1` affiche des données d'exemple sans aucun appel d'écriture.
+
+## Boutique Alpha 20 (#3338)
+
+- **Ouvrir** mène à l'app réelle : son vhost (`"ouvrir": "vhost"` dans `boutique-fiches.json`) sinon
+  `admin.<domaine>/<app>/`, sur le domaine de la boutique.
+- **Fiches** : texte éditorial de `boutique-fiches.json`, sinon `resume`/`detail` tirés de `debian/control` par
+  `scripts/gen-appstore-catalog.py` ; rien d'inventé. Sans texte : « [À COMPLÉTER] » dans l'administration seulement.
+- **Formule** : `/etc/secubox/abonnement.json` (root ; `{"formule","profil","statut","formules":[{"nom","profil"}]}`).
+  Absent : tout est permis (maître, atelier). Présent : seule une app du profil de la formule s'installe (refus 403 du
+  serveur, carte « Formule X ») ; inactif ou illisible : rien. **Producteur à écrire** (provisionnement Auto-Load).
+- **Boutique fédérée** (sur le maître) : « Installer sur une autre box du parc » appelle
+  `POST /api/v1/pilotage/boxes/<box>/actions/installer` (confirmation forte : le nom retapé). La box décide :
+  dépôt, formule, mains liées, accord du détenteur (secubox-pilotage-agent, verbe `installer`).

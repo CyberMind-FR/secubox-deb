@@ -1,3 +1,13 @@
+secubox-appstore (0.11.0-1~trixie1) trixie; urgency=medium
+
+  * Boutique Alpha 20 (ref #3338) : Ouvrir mène à l'app réelle (vhost ou
+    administration), suivi tolérant, erreurs en français ; fiches tirées de
+    debian/control ([À COMPLÉTER] en administration seulement) ; formule de la
+    box respectée (/etc/secubox/abonnement.json, refus serveur) ; installation
+    sur une autre box du parc depuis la boutique du maître.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:20:32 +0100
+
 secubox-appstore (0.10.3-1~trixie1) trixie; urgency=medium
 
   * Boutique (ref #3154) : pendant le suivi d'une installation (relecture toutes les 2,5 s), la fiche ouverte

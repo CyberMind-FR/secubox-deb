@@ -1,3 +1,12 @@
+secubox-pilotage-agent (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * Verbe installer <secubox-…> : apt-get install --no-remove sans délai,
+    paquet du dépôt, formule de l'abonnement de la box, opération longue
+    exclusive, accord du détenteur (lié au paquet), refus sous mains liées,
+    audit (ref #3338).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 10:20:32 +0100
+
 secubox-pilotage-agent (0.6.1-1~trixie1) trixie; urgency=medium
 
   * Unite : /etc/secubox-pilotage en ecriture pour le ctl lance par sudo

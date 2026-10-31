@@ -422,3 +422,7 @@ OperationDone rattrapée au démarrage par `fins-recentes` (I4), HandsTied, Cons
 (`TestContratRequeteAltereeEchoue`, et `test_une_…_alteree_echoue` côté maître). Régénération : d'abord le maître
 (`SECUBOX_CONTRAT_MAJ=1 python3 -m pytest tests/test_contrat_maitre.py -k figees`), puis
 `SECUBOX_CONTRAT_MAJ=1 go test ./cmd/sbx-pilotage-agent -run TestContratRequetesDuMaitre`, puis les deux suites.
+
+## Installer une app (#3338)
+
+`installer <secubox-…>` (agent : `Device.X_SECUBOX_Packages.Installer() {paquet}` ; maître : action `installer`, confirmation forte) : `apt-get install --no-remove` sans délai dans une unité transitoire, paquet connu des sources apt, profil de la formule si `/etc/secubox/abonnement.json` existe, opération longue exclusive, accord du détenteur lié au paquet pour une box cliente, refus sous mains liées, audit (`nom` = paquet).
