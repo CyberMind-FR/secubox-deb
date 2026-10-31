@@ -21,7 +21,7 @@ import (
 // /proposals et /evidence — la vue réduite et l'arbre relayé répondent comme une route inexistante.
 
 const (
-	evenementsTTL   = 80 * time.Second // #3320 : aligne sur la publication des mesures (90 s), qui le relit
+	evenementsTTL   = 25 * time.Second // #3321 : sous la publication des mesures (30 s), qui le relit
 	evenementsRelus = 20000
 	limiteParDefaut = 200
 	limiteMax       = 1000

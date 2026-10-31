@@ -87,6 +87,10 @@ func effectiveLevel(o Observation) int {
 	return l
 }
 
+// EffectiveLevel expose effectiveLevel (#3321 : le plafond des observations
+// d'actord compte par niveau effectif, comme le score).
+func EffectiveLevel(o Observation) int { return effectiveLevel(o) }
+
 // Score calcule le KnowledgeScore d'un ensemble d'observations. Le résultat est
 // explicable : chaque Observation devient une score.Contribution traçable à sa
 // preuve, et la somme des poids retombe dans la bande du niveau le plus élevé

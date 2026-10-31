@@ -57,7 +57,9 @@ type Server struct {
 	radarT tampon[[]radarActeur]       // synthèse du Radar des acteurs (radar.go)
 	evT    tampon[[]envelope.Envelope] // derniers événements, pour les routes d'analyse (analyse.go)
 
-	ingested   atomic.Uint64 // enveloppes persistées
+	ingested atomic.Uint64 // enveloppes persistées
+	// ecrireLot : ecriture d'un lot (nil = store.IngestLot) ; remplacable en test.
+	ecrireLot  func([]*envelope.Envelope) error
 	correlated atomic.Uint64 // enveloppes passées par le pipeline de corrélation
 	dropped    atomic.Uint64 // rejetées faute de place (backpressure, jamais bloquant)
 	invalid    atomic.Uint64 // rejetées par Validate (événements forgés/malformés)
@@ -102,8 +104,22 @@ const (
 )
 
 func (s *Server) traiterLot(lot []*envelope.Envelope) {
-	if err := s.store.IngestLot(lot); err != nil {
-		log.Printf("actord: ingest: %v", err)
+	ecrire := s.ecrireLot
+	if ecrire == nil {
+		ecrire = s.store.IngestLot
+	}
+	if err := ecrire(lot); err != nil {
+		// #3321 : un lot refuse est rejoue evenement par evenement — un seul
+		// evenement fautif ne fait pas perdre les autres.
+		log.Printf("actord: ingest (lot de %d, rejoue un par un) : %v", len(lot), err)
+		for _, e := range lot {
+			if err := s.store.Ingest(e); err != nil {
+				log.Printf("actord: ingest: %v", err)
+				continue
+			}
+			s.ingested.Add(1)
+			s.correlate(e)
+		}
 		return
 	}
 	s.ingested.Add(uint64(len(lot)))
@@ -115,7 +131,12 @@ func (s *Server) traiterLot(lot []*envelope.Envelope) {
 	}
 	if s.ledger != nil && len(preuves) > 0 {
 		if _, err := s.ledger.AppendLot(preuves); err != nil {
-			log.Printf("actord: evidence: %v", err)
+			log.Printf("actord: evidence (lot de %d, rejoue un par un) : %v", len(preuves), err)
+			for _, r := range preuves {
+				if _, err := s.ledger.Append(r); err != nil {
+					log.Printf("actord: evidence: %v", err)
+				}
+			}
 		}
 	}
 }

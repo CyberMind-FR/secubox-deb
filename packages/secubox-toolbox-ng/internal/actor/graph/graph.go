@@ -501,14 +501,16 @@ func (g *Graph) Consolider(inexistants map[string]bool) int {
 	// inexistants communs : les candidats sont donc dans l'index (`ip:`, `tgt:`),
 	// et seule une paire dont un acteur a change depuis la passe precedente peut
 	// avoir change d'avis — ou un hote devenu inexistant depuis.
+	vus := make(map[string]bool, len(inexistants))
 	for h := range inexistants {
+		vus[h] = true
 		if !g.inexVus[h] {
-			g.inexVus[h] = true
 			for id := range g.idx["tgt:"+h] {
 				g.modifies[id] = true
 			}
 		}
 	}
+	g.inexVus = vus // #3321 : suit l'ensemble courant (un hote retire puis remis redevient nouveau)
 	fusions := 0
 	for len(g.modifies) > 0 {
 		ids := make([]string, 0, len(g.modifies))

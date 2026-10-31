@@ -85,3 +85,14 @@ func TestConsolider_NouvelInexistantRevisiteLesActeursConcernes(t *testing.T) {
 		t.Fatalf("les hotes devenus inexistants doivent reunir les deux acteurs (%d)", n)
 	}
 }
+
+// Relecture #3321 : inexVus suit l'ensemble courant ; un hote retire puis remis
+// redevient « nouveau » et fait revisiter les acteurs qui l'ont vise.
+func TestConsolider_InexVusSuitLEnsembleCourant(t *testing.T) {
+	g := New(DefaultThreshold)
+	g.Consolider(map[string]bool{"a.x": true})
+	g.Consolider(map[string]bool{})
+	if g.inexVus["a.x"] {
+		t.Fatal("un hote qui n'est plus inexistant doit sortir de inexVus")
+	}
+}

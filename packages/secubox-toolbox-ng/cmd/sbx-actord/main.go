@@ -49,7 +49,7 @@ func main() {
 				"mémoire n'ont pas les mêmes contraintes. Le rejeu est linéaire "+
 				"(~220 µs/événement sur la cible) et l'API reste fermée pendant")
 		queue      = flag.Int("queue", 4096, "profondeur de la file d'ingestion (backpressure)")
-		workers    = flag.Int("workers", 2, "nombre de workers d'écriture")
+		workers    = flag.Int("workers", 1, "nombre de workers d'écriture (#3321 : 1 par défaut, bbolt n'admet qu'un écrivain)")
 		mesPath    = flag.String("mesures", "", "fichier où publier les mesures de l'échelle de réponse (délai, défi, tarpit, ban, quarantaine) ; vide = désactivé")
 		propsPath  = flag.String("propositions", "", "fichier où publier les propositions de blocage (acteurs en DENY/QUARANTINE) ; vide = désactivé")
 		replayPath = flag.String("replay", "", "rejoue un journal NDJSON d'enveloppes (calibration RFC-0013 §13) puis quitte")
@@ -105,7 +105,7 @@ func main() {
 		go srv.publierPropositions(*propsPath, publicationPas)
 	}
 	if *mesPath != "" {
-		go srv.publierMesures(*mesPath, publicationPas)
+		go srv.publierMesures(*mesPath, mesuresPas)
 	}
 
 	if !*readOnly {
@@ -139,10 +139,13 @@ func main() {
 	log.Printf("actord: arrêt")
 }
 
-// publicationPas : mesures et propositions recalculees toutes les 90 s (#3320,
-// etaient 30 s et 60 s). Reste sous la fraicheur exigee par sbxwaf (3 min pour
-// les mesures, 10 min pour les propositions).
-const publicationPas = 90 * time.Second
+// publicationPas : propositions recalculees toutes les 90 s (#3320, etait 60 s ;
+// fraicheur exigee par sbxwaf : 10 min). mesuresPas reste a 30 s (#3321 : les
+// mesures pilotent l'echelle de reponse, leur latence compte).
+const (
+	publicationPas = 90 * time.Second
+	mesuresPas     = 30 * time.Second
+)
 
 // pruneLoop applique la rétention toutes les heures, au graphe en mémoire (#3320)
 // comme à la base.

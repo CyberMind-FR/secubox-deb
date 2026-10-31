@@ -196,9 +196,12 @@ func (s *Store) Prune(before int64) (int, error) {
 			}
 			return nil
 		})
+		if err != nil {
+			return n, err // #3321 : le lot annule n'est pas compte
+		}
 		n += lot
-		if err != nil || lot < pruneLot {
-			return n, err
+		if lot < pruneLot {
+			return n, nil
 		}
 	}
 }

@@ -169,7 +169,7 @@ var niveauxConnaissance = map[string]int{
 func (acc *actorSignals) parNiveau(l int) int {
 	n := 0
 	for _, o := range acc.know {
-		if o.Level == l {
+		if knowledge.EffectiveLevel(o) == l {
 			n++
 		}
 	}
@@ -198,8 +198,14 @@ func mergeTags(acc *actorSignals, e *envelope.Envelope) {
 		}
 	}
 	for _, t := range e.BehaviorTags {
-		if lvl, ok := niveauxConnaissance[t]; ok && acc.parNiveau(lvl) >= knowMaxParNiveau {
-			continue // #3320 : borne par niveau (le score sature bien avant)
+		if lvl, ok := niveauxConnaissance[t]; ok {
+			// #3320 : borne par niveau EFFECTIF (#3321 : une info exposee est
+			// ramenee a K1 ; compter par niveau brut laissait 64 k3 publiques
+			// masquer une vraie k3). k4/canari ne sont jamais retrogrades.
+			eff := knowledge.EffectiveLevel(knowledge.Observation{Level: lvl, PubliclyExposed: publicLeak && t != "k4" && t != "canary"})
+			if acc.parNiveau(eff) >= knowMaxParNiveau {
+				continue
+			}
 		}
 		switch t {
 		case "k0":

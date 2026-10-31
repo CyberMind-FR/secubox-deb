@@ -6,6 +6,7 @@
 package main
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -71,5 +72,37 @@ func TestWorkerParLots(t *testing.T) {
 	}
 	if evs, _ := s.store.Recent(1000); len(evs) != 600 {
 		t.Fatalf("magasin = %d", len(evs))
+	}
+}
+
+// Relecture #3321 : le plafond compte par niveau EFFECTIF. Des k3 exposes
+// publiquement (ramenes a K1) ne doivent pas masquer de vraies k3.
+func TestPlafondParNiveauEffectif(t *testing.T) {
+	acc := &actorSignals{windows: map[int64]bool{}, days: map[string]bool{}}
+	for i := 0; i < knowMaxParNiveau; i++ {
+		mergeTags(acc, &envelope.Envelope{EventID: "e", Timestamp: 1, BehaviorTags: []string{"k3", "public-leak"}})
+	}
+	mergeTags(acc, &envelope.Envelope{EventID: "vrai", Timestamp: 2, BehaviorTags: []string{"k3"}})
+	if acc.know[len(acc.know)-1].EvidenceID != "vrai" {
+		t.Fatal("une vraie k3 a ete ecartee par des k3 publiques (comptees comme K1)")
+	}
+}
+
+// Relecture #3321 : un lot qui echoue a l'ecriture est rejoue evenement par
+// evenement : rien n'est perdu pour un seul evenement fautif.
+func TestTraiterLot_RejoueUnitaireSurErreur(t *testing.T) {
+	s := serveur(t)
+	s.ecrireLot = func(lot []*envelope.Envelope) error { return errors.New("lot refuse") }
+	a := &envelope.Envelope{EventID: envelope.NewEventID(), SrcIP: "1.1.1.1", Sensor: "sbxwaf", Timestamp: 10}
+	b := &envelope.Envelope{EventID: envelope.NewEventID(), SrcIP: "2.2.2.2", Sensor: "sbxwaf", Timestamp: 11}
+	s.traiterLot([]*envelope.Envelope{a, b})
+	if s.ingested.Load() != 2 || s.correlated.Load() != 2 {
+		t.Fatalf("ingested=%d correlated=%d", s.ingested.Load(), s.correlated.Load())
+	}
+	if evs, _ := s.store.Recent(10); len(evs) != 2 {
+		t.Fatalf("magasin = %d", len(evs))
+	}
+	if n, _ := s.ledger.Count(); n != 2 {
+		t.Fatalf("ledger = %d", n)
 	}
 }
