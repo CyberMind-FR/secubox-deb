@@ -69,6 +69,7 @@ from secubox_core.auth import require_lecture
 
 DEFAULT_ROOT = Path("/etc/secubox")
 _NOM_PROFIL = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}")          # même motif que le hub (menu_off du profil actif)
+PROFIL_RESERVE = "instantane"   # #3349 : profil photographié par secubox-pilotagectl, jamais choisi au panneau
 
 
 def _root() -> Path:
@@ -650,6 +651,8 @@ def create_app() -> FastAPI:
     async def set_active(body: ActiveUpdate, _claims=Depends(require_jwt)):
         root = _root()
         _mod, prof_dir, _pins, active_file = _cli._paths(root)
+        if body.name.startswith(PROFIL_RESERVE):
+            raise HTTPException(status_code=409, detail="profil réservé à la bascule d'interface du pilotage")
         async with _apply_lock:
             if not (Path(prof_dir) / f"{body.name}.toml").exists():
                 raise HTTPException(status_code=404, detail=f"profil inconnu: {body.name}")
@@ -666,6 +669,8 @@ def create_app() -> FastAPI:
         root = _root()
         _mod, prof_dir, _pins, active_file = _cli._paths(root)
         active_path = Path(active_file)
+        if body.profile.startswith(PROFIL_RESERVE):
+            raise HTTPException(status_code=409, detail="profil réservé à la bascule d'interface du pilotage")
         async with _apply_lock:
             prof_path = Path(prof_dir) / f"{body.profile}.toml"
             if not _NOM_PROFIL.fullmatch(body.profile) or not prof_path.exists():

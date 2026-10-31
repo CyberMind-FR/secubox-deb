@@ -18,13 +18,14 @@ printf '%s\\n' "$*" >> "$FAUX_PROFILECTL_APPELS"
 if [ "$1" = status ]; then
   [ -n "$FAUX_PROFILECTL_STATUS_ECHEC" ] && exit 3
   if [ -n "$FAUX_PROFILECTL_STATUS" ]; then printf '%s\\n' "$FAUX_PROFILECTL_STATUS"; else
-    echo '{"modules": [{"id": "hub", "on": true}, {"id": "visio", "on": true}, {"id": "group@distante", "on": false}, {"id": "auth", "on": true}]}'
+    echo '{"modules": [{"id": "hub", "on": true}, {"id": "visio", "on": true}, {"id": "group@distante", "on": false, "enabled": false, "active": false}, {"id": "auth", "on": true}, {"id": "jellyfin", "on": false, "enabled": true, "active": false}]}'
   fi
   exit 0
 fi
 profil=""
 prec=""
 for a in "$@"; do [ "$prec" = --profile ] && profil="$a"; prec="$a"; done
+[ -n "$FAUX_PROFILECTL_COPIE" ] && [ -n "$profil" ] && cat "$FAUX_PROFILES/$profil.toml" > "$FAUX_PROFILECTL_COPIE" 2>/dev/null
 case " $FAUX_PROFILECTL_ECHEC " in *" $profil "*) echo '{"status": "rolled_back"}'; exit 2 ;; esac
 echo '{"status": "applied"}'
 exit 0
@@ -39,6 +40,7 @@ class BancInterface(Banc):
         faux.chmod(0o755)
         self.appels_profilectl = tmp_path / "profilectl"
         self.env["FAUX_PROFILECTL_APPELS"] = str(self.appels_profilectl)
+        self.env["FAUX_PROFILES"] = str(self.r / "etc/secubox/profiles")
         prof = self.r / "etc/secubox/profiles"
         prof.mkdir(parents=True)
         for nom in ("minimal", "distante", "full"):
@@ -104,7 +106,7 @@ def test_distante_memorise_le_retour_et_lance_une_unite_bornee(bi):
     assert rc == 0 and sortie["ok"] is True and len(sortie["job"]) == 16, p.stderr
     job = sortie["job"]
     lance = bi.lancements()[-1]
-    assert f"--unit=secubox-pilotage-op-{job}" in lance and "--property=RuntimeMaxSec=1800" in lance
+    assert f"--unit=secubox-pilotage-op-{job}" in lance and "--property=RuntimeMaxSec=1980" in lance   # #3349 : relevé + apply + retour + marge
     assert lance.endswith(f"-- /usr/sbin/secubox-pilotagectl _interface {job}")
     e = bi.etat_interface()
     assert (e["job"], e["sens"], e["precedent"], e["etat"]) == (job, "distante", "minimal", "en_cours")
@@ -243,12 +245,15 @@ def test_sans_profil_de_retour_un_instantane_est_pris(tmp_path):
     assert rc == 0 and sortie["ok"] is True, (sortie, p.stderr)
     assert bi.etat_interface()["precedent"] == "instantane"
     assert bi.profilectl() == []                     # rien avant l'unité transitoire
-    rc, fin, p = bi.run("_interface", sortie["job"])
+    job = sortie["job"]
+    rc, fin, p = bi.run("_interface", job)
     assert rc == 0 and fin["ok"] is True, (fin, p.stderr)
     assert bi.profilectl() == ["status --json", "apply --profile distante --yes --json"]
-    prof = bi.r / "etc/secubox/profiles/instantane.toml"
+    assert bi.etat_interface()["precedent"] == f"instantane-{job}"      # lié à CETTE bascule
+    prof = bi.r / f"etc/secubox/profiles/instantane-{job}.toml"
     texte = prof.read_text()
-    assert 'name = "instantane"' in texte and '"hub"' in texte and '"visio"' in texte and '"auth"' in texte
+    assert f'name = "instantane-{job}"' in texte and '"hub"' in texte and '"visio"' in texte and '"auth"' in texte
+    assert '"jellyfin"' in texte                     # activé mais endormi : gardé (jamais désactivé au retour)
     assert "group@distante" not in texte
     copie = bi.r / f"var/lib/secubox-pilotagectl/instantane-{sortie['job']}.toml"
     assert copie.read_text() == texte and (copie.stat().st_mode & 0o777) == 0o600
@@ -260,8 +265,41 @@ def test_homme_mort_rend_l_instantane(tmp_path):
     job = bi.basculer_distante()
     rc, _, p = bi.run("_interface-garde", job)
     assert rc == 0, p.stderr
-    assert bi.profilectl()[-1] == "apply --profile instantane --yes --json"
+    assert bi.profilectl()[-1] == f"apply --profile instantane-{job} --yes --json"
     assert bi.etat_interface()["etat"] == "retour"
+    # retour réussi : le profil photographié est retiré, et `active` rendu à son absence d'origine
+    assert not (bi.r / f"etc/secubox/profiles/instantane-{job}.toml").exists()
+    assert not (bi.r / "etc/secubox/profiles/active").exists()
+
+
+def test_retour_reecrit_le_profil_depuis_la_copie_root(tmp_path):
+    """Le dossier profiles est au compte secubox : avant chaque apply de retour, le profil est réécrit depuis la copie
+    root 0600 ; une altération entre-temps est écrasée."""
+    bi = BancInterface(tmp_path, actif=None)
+    job = bi.basculer_distante()
+    prof = bi.r / f"etc/secubox/profiles/instantane-{job}.toml"
+    prof.write_text(f'name = "instantane-{job}"\non = []\n')            # altéré : couperait tout
+    seen = bi.r / "vu.txt"
+    bi.env["FAUX_PROFILECTL_COPIE"] = str(seen)
+    rc, _, p = bi.run("_interface-garde", job)
+    assert rc == 0, p.stderr
+    assert '"hub"' in seen.read_text()
+
+
+def test_retour_refuse_sans_la_copie_root(tmp_path):
+    bi = BancInterface(tmp_path, actif=None)
+    job = bi.basculer_distante()
+    (bi.r / f"var/lib/secubox-pilotagectl/instantane-{job}.toml").unlink()
+    n = len(bi.profilectl())
+    bi.run("_interface-garde", job)
+    assert len(bi.profilectl()) == n                 # aucun apply sans la copie root
+
+
+def test_actif_instantane_refait_un_releve(tmp_path):
+    bi = BancInterface(tmp_path, actif="instantane-0123456789abcdef")
+    (bi.r / "etc/secubox/profiles/instantane-0123456789abcdef.toml").write_text('name = "instantane-0123456789abcdef"\n')
+    rc, sortie, _ = bi.run("interface", "distante", agent=True)
+    assert sortie["ok"] is True and bi.etat_interface()["precedent"] == "instantane"
 
 
 def test_instantane_illisible_pas_de_bascule(tmp_path):
@@ -281,7 +319,7 @@ def test_instantane_vide_refuse(tmp_path):
     rc, sortie, _ = bi.run("interface", "distante", agent=True)
     rc, _, _ = bi.run("_interface", sortie["job"])
     assert rc == 1 and bi.etat_interface()["etat"] == "echec"
-    assert not (bi.r / "etc/secubox/profiles/instantane.toml").exists()
+    assert not list((bi.r / "etc/secubox/profiles").glob("instantane*.toml"))
 
 
 def test_profil_connu_reste_prioritaire_sur_l_instantane(bi):

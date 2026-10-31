@@ -428,6 +428,16 @@ def test_set_active_unknown_profile_404(client, root):
     assert r.status_code == 404
 
 
+def test_profil_instantane_reserve_au_pilotage(client, root):
+    """#3349 : `instantane*` est le profil photographié par la bascule d'interface (secubox-pilotagectl) : ni choisi ni
+    appliqué depuis le panneau."""
+    (root / "profiles" / "instantane-0123456789abcdef.toml").write_text('name="instantane-0123456789abcdef"\non=["core"]\n')
+    r = client.post("/api/v1/profiles/active", json={"name": "instantane-0123456789abcdef"})
+    assert r.status_code == 409
+    r = client.post("/api/v1/profiles/apply", json={"profile": "instantane-0123456789abcdef"})
+    assert r.status_code == 409
+
+
 def test_set_active_writes_file(client, root):
     (root / "profiles" / "lite.toml").write_text('name="lite"\non=["core"]\n')
     r = client.post("/api/v1/profiles/active", json={"name": "lite"})
