@@ -12,7 +12,7 @@ override_dh_auto_test:
 override_dh_auto_install:
 	install -d $(P)/usr/sbin $(P)/usr/lib/secubox/live/live $(P)/usr/share/secubox/www/live \
 	  $(P)/etc/secubox $(P)/usr/share/secubox/live $(P)/lib/systemd/system $(P)/etc/apparmor.d
-	install -m 755 sbin/secubox-live-collecte sbin/secubox-live-exposer $(P)/usr/sbin/
+	install -m 755 sbin/secubox-live-acl sbin/secubox-live-collecte sbin/secubox-live-exposer $(P)/usr/sbin/
 	install -m 644 live/*.py $(P)/usr/lib/secubox/live/live/
 	install -m 644 www/live/* $(P)/usr/share/secubox/www/live/
 	install -m 644 conf/live.toml $(P)/etc/secubox/live.toml

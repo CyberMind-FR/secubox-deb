@@ -37,12 +37,24 @@ l'écriture (test `test_jamais_d_adresse_ni_de_secret_dans_l_etat`). Une source 
 ## Fonctionnement
 
 - `secubox-live-collecte.timer` (toutes les minutes) → `secubox-live-collecte` (compte `secubox-live`, groupe
-  `secubox-pilotage` seulement, ACL de lecture ciblées posées par le postinst sur le journal du WAF et les caches,
-  AppArmor enforce) → `/var/cache/secubox/live/etat.json` (0644, écriture atomique). Une source en erreur donne
+  `secubox-pilotage` seulement, AppArmor enforce ; `pilotage.db-shm` en lecture seule suffit en `mode=ro`) → `/var/cache/secubox/live/etat.json` (0644, écriture atomique). Une source en erreur donne
   `null` sans arrêter les autres.
 - nginx, rendu par l'exposeur depuis `/usr/share/secubox/live/live.vhost.conf.in` : `listen 127.0.0.1:9080`,
   `server_name` exact, HSTS, CSP stricte ; la page et `/etat.json` servis en **statique** (cache 15 s), aucune
   API, GET/HEAD seulement, tout le reste en 404.
+
+## ACL de lecture
+
+`secubox-live-acl` (root, liste de chemins figée, aucun argument) pose `u:secubox-live:r` sur les sources et
+l'ACL par défaut de leurs dossiers ; il tourne au configure et avant **chaque** collecte (`ExecStartPre=+`).
+Mode d'écriture des producteurs, vérifié dans leur source :
+
+| Fichier | Producteur | Écriture | Lecture par secubox-live |
+|---|---|---|---|
+| `vhost_stats.json` | secubox-metrics | `.tmp` puis `os.replace`, mode selon l'umask (0644) | ACL par défaut du dossier, héritée |
+| `nft-etat.json` | sbxwaf | `.tmp` 0640 puis `rename` | ACL par défaut héritée, masque r : effective |
+| `waf-threats.log*` | sbxwaf | append, rotation | ACL par défaut + reposée à chaque collecte |
+| `haproxy.toml` | haproxyctl | réécrit en place | ACL de fichier reposée à chaque collecte |
 
 ## Exposition
 
@@ -53,7 +65,10 @@ Rien n'est exposé par défaut (`domaine = ""`). Sur le maître :
 domaine = "live.secubox.in"
 mise_en_production = "AAAA-MM-JJ"   # facultatif
 noeuds_publics = ["gk2", "gk4"]  # liste blanche
-sudo secubox-live-exposer           # AppArmor chargé ?, nginx -t, route sbxwaf (échec = tout retiré), vhost HAProxy
+sudo secubox-live-exposer           # AppArmor obligatoire, nginx -t, route sbxwaf (échec = tout retiré), vhost HAProxy
 ```
 
 `[roles]` et `[materiels]` (nom = valeur) complètent l'inventaire ; `[[feuille_de_route]]` (nom, etat) s'affiche tel quel.
+
+La purge (`apt purge secubox-live`) retire la route sbxwaf (seulement si elle pointe encore vers le port 9080) et le
+vhost HAProxy du domaine retenu par l'exposeur dans `/var/lib/secubox-live/domaine`.

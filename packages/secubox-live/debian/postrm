@@ -7,6 +7,33 @@ case "$1" in
     if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then systemctl reload nginx >/dev/null 2>&1 || true; fi
     ;;
 esac
-if [ "$1" = purge ]; then rm -rf /var/cache/secubox/live; fi
+if [ "$1" = purge ]; then
+  # Retrait de la route sbxwaf et du vhost HAProxy posés par secubox-live-exposer, pour le seul domaine retenu par lui,
+  # et la route seulement si elle pointe encore vers 127.0.0.1:9080.
+  D=$(sed -n '1p' /var/lib/secubox-live/domaine 2>/dev/null || true)
+  if [ -n "$D" ] && printf '%s' "$D" | grep -Eqx 'live(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?){2,}'; then
+    T=/etc/secubox/waf/haproxy-routes.json
+    if [ -f "$T" ] && command -v python3 >/dev/null 2>&1; then
+      python3 - "$T" "$D" <<'PYEOF' || echo "secubox-live : route sbxwaf de $D non retirée" >&2
+import json, os, sys, tempfile
+t, d = sys.argv[1], sys.argv[2]
+with open(t) as fh:
+    table = json.load(fh)
+if isinstance(table, dict) and isinstance(table.get(d), list) and table[d][1:] == [9080]:
+    del table[d]
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(t), prefix=".routes-", suffix=".json")
+    with os.fdopen(fd, "w") as fh:
+        json.dump(table, fh, indent=2, sort_keys=True)
+    os.chmod(tmp, os.stat(t).st_mode & 0o777)
+    os.replace(tmp, t)
+PYEOF
+    fi
+    if command -v haproxyctl >/dev/null 2>&1 && grep -Eq "^\[vhosts\.\"?$(printf '%s' "$D" | sed 's/\./\\./g')\"?\]" /etc/secubox/haproxy.toml 2>/dev/null; then
+      haproxyctl vhost remove "$D" >/dev/null 2>&1 && systemctl reload haproxy >/dev/null 2>&1 \
+        || echo "secubox-live : vhost HAProxy $D non retiré" >&2
+    fi
+  fi
+  rm -rf /var/cache/secubox/live /var/lib/secubox-live
+fi
 #DEBHELPER#
 exit 0

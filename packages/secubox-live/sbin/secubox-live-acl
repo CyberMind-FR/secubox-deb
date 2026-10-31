@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# ACL de LECTURE du compte secubox-live sur les seules sources du collecteur (#3351). Lancé en root par le postinst et
+# avant chaque collecte (ExecStartPre=+) : un producteur qui recrée un dossier ou un journal (logrotate) ne coupe pas la
+# page. Liste FIGÉE : aucun argument, aucun chemin venu de la configuration.
+# Producteurs (écriture atomique, nouveau fichier puis rename, dans le même dossier : l'ACL par défaut du dossier
+# s'applique) : vhost_stats.json (secubox-metrics, 0644 selon l'umask), nft-etat.json (sbxwaf, 0640 : masque r, l'entrée
+# u:secubox-live:r reste effective), waf-threats.log (sbxwaf, 0666 puis rotation). haproxy.toml : fichier simple.
+set -eu
+command -v setfacl >/dev/null 2>&1 || exit 0
+for d in /var/log/secubox /var/cache/secubox; do
+  [ -d "$d" ] && setfacl -m u:secubox-live:x "$d" 2>/dev/null || true
+done
+for d in /var/log/secubox/waf /var/cache/secubox/metrics /var/cache/secubox/waf; do
+  [ -d "$d" ] || continue
+  setfacl -m u:secubox-live:rx "$d" 2>/dev/null || true
+  setfacl -d -m u:secubox-live:r "$d" 2>/dev/null || true
+done
+for f in /var/log/secubox/waf/waf-threats.log /var/log/secubox/waf/waf-threats.log.1 \
+         /var/cache/secubox/metrics/vhost_stats.json /var/cache/secubox/waf/nft-etat.json /etc/secubox/haproxy.toml; do
+  [ -f "$f" ] && [ ! -L "$f" ] && setfacl -m u:secubox-live:r "$f" 2>/dev/null || true
+done
+exit 0

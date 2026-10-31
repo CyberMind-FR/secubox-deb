@@ -10,8 +10,10 @@ After=network-online.target
 Type=oneshot
 User=secubox-live
 Group=secubox-live
-# Base du pilotage : groupe secubox-pilotage (0640). Journal du WAF et caches : ACL ciblées posées par le postinst.
+# Base du pilotage : groupe secubox-pilotage (0640). Journal du WAF et caches : ACL ciblées reposées en root avant chaque
+# collecte (liste figée de secubox-live-acl, '+' : hors bac à sable, la collecte elle-même reste confinée).
 SupplementaryGroups=secubox-pilotage
+ExecStartPre=+/usr/sbin/secubox-live-acl
 ExecStart=/usr/sbin/secubox-live-collecte
 UMask=0022
 NoNewPrivileges=true

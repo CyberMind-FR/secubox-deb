@@ -28,10 +28,10 @@
   /etc/secubox/live.toml r,
   /etc/secubox/haproxy.toml r,
   /var/lib/secubox/pilotage/ r,
-  # Lecture seule en WAL : SQLite ouvre aussi -wal et -shm (verrous partagés).
   /var/lib/secubox/pilotage/pilotage.db rk,
   /var/lib/secubox/pilotage/pilotage.db-wal rk,
-  /var/lib/secubox/pilotage/pilotage.db-shm rwk,
+  # -shm en lecture : en mode=ro, SQLite se rabat sur un index WAL partagé en lecture seule.
+  /var/lib/secubox/pilotage/pilotage.db-shm rk,
   /var/log/secubox/waf/ r,
   /var/log/secubox/waf/waf-threats.log* r,
   /var/cache/secubox/metrics/vhost_stats.json r,

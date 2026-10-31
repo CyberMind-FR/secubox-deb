@@ -10,20 +10,8 @@ case "$1" in
       adduser --system --group --no-create-home --home /var/cache/secubox/live --shell /usr/sbin/nologin secubox-live >/dev/null
     fi
     install -d -m 0755 -o secubox-live -g secubox-live /var/cache/secubox/live
-    # Lecture du collecteur par ACL CIBLÉES (jamais le groupe secubox entier) : héritées par les fichiers recréés.
-    if command -v setfacl >/dev/null 2>&1; then
-      for d in /var/log/secubox/waf /var/cache/secubox/metrics /var/cache/secubox/waf; do
-        [ -d "$d" ] || continue
-        setfacl -m u:secubox-live:rx "$d" 2>/dev/null || true
-        setfacl -d -m u:secubox-live:r "$d" 2>/dev/null || true
-      done
-      for f in /var/log/secubox/waf/waf-threats.log /var/log/secubox/waf/waf-threats.log.1 \
-               /var/cache/secubox/metrics/vhost_stats.json /var/cache/secubox/waf/nft-etat.json \
-               /etc/secubox/haproxy.toml; do
-        [ -f "$f" ] && setfacl -m u:secubox-live:r "$f" 2>/dev/null || true
-      done
-      for d in /var/log/secubox /var/cache/secubox; do setfacl -m u:secubox-live:x "$d" 2>/dev/null || true; done
-    fi
+    # Lecture du collecteur par ACL CIBLÉES (jamais le groupe secubox entier), reposées aussi avant chaque collecte.
+    /usr/sbin/secubox-live-acl || true
 
     # --- Confinement AppArmor (enforce) ---
     if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then

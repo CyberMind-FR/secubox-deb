@@ -154,3 +154,24 @@ def test_marche_par_classe_jamais_l_uptime_exact():
 
 def test_aucun_dpi_publie(tmp_path):
     assert C.CHAMPS[""].isdisjoint({"dpi", "usages", "appareils"})
+
+
+def test_pilotage_lisible_avec_shm_en_lecture_seule(tmp_path):
+    # Le profil AppArmor n'accorde que rk sur -shm : mode=ro doit suffire, même -shm non inscriptible.
+    db = tmp_path / "p.db"
+    w = sqlite3.connect(db)
+    w.execute("PRAGMA journal_mode=WAL")
+    w.execute("CREATE TABLE t (x)")
+    w.execute("INSERT INTO t VALUES (1)")
+    w.commit()
+    shm = Path(str(db) + "-shm")
+    assert shm.exists()
+    shm.chmod(0o444)
+    Path(str(db) + "-wal").chmod(0o444)
+    try:
+        r = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+        assert r.execute("SELECT x FROM t").fetchall() == [(1,)]
+        r.close()
+    finally:
+        shm.chmod(0o644)
+        w.close()

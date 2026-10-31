@@ -3,6 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """secubox-live (#3351) : page publique servie en statique, unités durcies, exposition seulement sur domaine configuré."""
+import json
 import re
 import subprocess
 import sys
@@ -55,7 +56,7 @@ def test_unites_durcies_compte_dedie_sans_groupe_secubox():
     assert "deny /etc/secubox/secrets/** r" in ap and "secubox-live-api" not in ap
     assert "pilotage.db-shm" in ap and "pilotage.db-wal" in ap and "dpi" not in ap
     post = lire("debian/postinst")
-    assert "setfacl -m u:secubox-live:rx" in post and "secubox-live.service" not in post
+    assert "/usr/sbin/secubox-live-acl" in post and "secubox-live.service" not in post
 
 
 def test_exposition_seulement_avec_un_domaine_et_sous_garde():
@@ -85,3 +86,41 @@ def test_spdx_et_versions():
     assert lire("debian/compat").strip() == "13" and "Standards-Version: 4.6.2" in lire("debian/control")
     for sh in ("debian/postinst", "debian/prerm", "debian/postrm", "sbin/secubox-live-exposer"):
         assert subprocess.run(["sh", "-n", str(ICI / sh)]).returncode == 0, sh
+
+
+def test_exposer_sans_apparmor_refuse_et_bash_strict():
+    s = lire("sbin/secubox-live-exposer")
+    assert s.startswith("#!/bin/bash\n") and "set -euo pipefail" in s and "mktemp" in s and ".tmp\"" not in s
+    assert "[ -d /sys/kernel/security/apparmor ] &&" not in s          # AppArmor absent : refus, pas d'exception
+    ha = s[s.index("haproxyctl vhost add"):]
+    assert "a échoué" in ha[:400] and "exit 1" in ha[:400]
+    assert subprocess.run(["bash", "-n", str(ICI / "sbin/secubox-live-exposer")]).returncode == 0
+
+
+def test_acl_reposees_a_chaque_collecte_liste_figee():
+    u = lire("systemd/secubox-live-collecte.service")
+    assert re.search(r"^ExecStartPre=\+/usr/sbin/secubox-live-acl$", u, re.M)
+    acl = lire("sbin/secubox-live-acl")
+    assert "$1" not in acl and "$@" not in acl and "live.toml" not in acl      # aucun chemin venu de l'extérieur
+    assert "u:secubox-live:rx" in acl and "u:secubox-live:w" not in acl and ":rw" not in acl
+    assert "/usr/sbin/secubox-live-acl" in lire("debian/postinst")
+    assert "sbin/secubox-live-acl" in lire("debian/rules")
+
+
+def test_apparmor_shm_en_lecture():
+    ap = lire("apparmor/secubox-live")
+    assert "pilotage.db-shm rk," in ap and "pilotage.db-shm rw" not in ap
+
+
+def test_purge_retire_la_route_du_seul_domaine_live(tmp_path):
+    post = lire("debian/postrm")
+    debut = post.index("\n", post.index("<<'PYEOF'")) + 1
+    py = post[debut:post.index("PYEOF\n    fi")]
+    t = tmp_path / "routes.json"
+    t.write_text(json.dumps({"live.secubox.in": ["127.0.0.1", 9080], "autre.secubox.in": ["127.0.0.1", 9080],
+                             "live2.secubox.in": ["127.0.0.1", 8080]}))
+    for d in ("live.secubox.in", "live2.secubox.in"):
+        assert subprocess.run([sys.executable, "-c", py, str(t), d]).returncode == 0
+    assert set(json.loads(t.read_text())) == {"autre.secubox.in", "live2.secubox.in"}   # port 8080 : pas la nôtre
+    assert "haproxyctl vhost remove" in post and "/var/lib/secubox-live" in post
+    assert "/var/lib/secubox-live/domaine" in lire("sbin/secubox-live-exposer")
