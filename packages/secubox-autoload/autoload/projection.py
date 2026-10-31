@@ -11,7 +11,7 @@ profil, abonnement (celui de la BOX depuis #3303, sinon celui du client). Ce fic
 il ne contient AUCUN secret — ni clé publique WireGuard, ni empreinte, ni valeur de jeton.
 
 Pairs retenus : ceux de la table `pairs` NON retirés (`retire_le IS NULL`) dont la clé est liée à un jeton RÉCLAMÉ (`jetons.etat = 'reclame'`).
-Le fichier vit dans `/var/lib/secubox/autoload-public/` (root:root 0755, créé par autoloadctl s'il manque) : le service autoload (qui possède
+Le fichier vit dans `/var/lib/secubox-autoload-public/` (root:root 0755, créé par autoloadctl s'il manque) : le service autoload (qui possède
 `/var/lib/secubox/autoload/`, 0750, avec la base) n'a aucune prise dessus. L'écriture est faite PAR DESCRIPTEUR : la racine puis le dossier sont ouverts
 sans suivre de lien et vérifiés (propriétaire root, aucun droit d'écriture groupe/autres), le fichier temporaire y est créé en `O_EXCL|O_NOFOLLOW`,
 puis posé par renommage atomique (un `pairs-publics.json` qui serait un lien est remplacé, jamais suivi). Pas de systemd-tmpfiles (« unsafe path transition »).
@@ -31,6 +31,7 @@ from .jetons import etat_abonnement, lire_droits_cx
 NOM = "pairs-publics.json"
 NOM_DROITS = "droits-maillage.json"                  # #3305 : droits du maillage par pair, lus par l'annuaire du maître
 DOSSIER_PUBLIC = "autoload-public"
+DOSSIER_PUBLIC_RACINE = Path("/var/lib/secubox-autoload-public")   # #3345 : hors de /var/lib/secubox (compte secubox)
 VERSION = 1
 DELAI_S = 15
 
@@ -55,8 +56,12 @@ class ProjectionErreur(Exception):
 
 
 def dossier_public(db: Path) -> Path:
-    """`/var/lib/secubox/autoload-public`, frère du dossier de la base (`/var/lib/secubox/autoload`)."""
-    return Path(db).parent.parent / DOSSIER_PUBLIC
+    """`/var/lib/secubox-autoload-public`, à côté de `/var/lib/secubox` (base : `/var/lib/secubox/autoload/…`). #3345 :
+    `/var/lib/secubox` appartient au compte secubox ; un dossier à root y serait remplaçable, l'export le refusait."""
+    base = Path(db).parent.parent
+    if base == Path("/var/lib/secubox"):
+        return DOSSIER_PUBLIC_RACINE
+    return base / DOSSIER_PUBLIC          # banc de test : frère du dossier de la base
 
 
 def lire_pairs(db: Path, maintenant: float = None) -> list:

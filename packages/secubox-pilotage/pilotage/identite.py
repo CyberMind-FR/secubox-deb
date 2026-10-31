@@ -34,7 +34,7 @@ NOM_MAX = 64
 ABONNEMENTS = ("actif", "suspendu", "echu", "revoque")
 
 PEERS_DEFAUT = Path("/var/lib/secubox/p2p-public/pairs-enroles.json")
-PAIRS_AUTOLOAD_DEFAUT = Path("/var/lib/secubox/autoload-public/pairs-publics.json")
+PAIRS_AUTOLOAD_DEFAUT = Path("/var/lib/secubox-autoload-public/pairs-publics.json")   # #3345
 
 log = logging.getLogger("pilotage.identite")
 _cache: dict = {}  # chemin -> (signature, {adresse: Box})

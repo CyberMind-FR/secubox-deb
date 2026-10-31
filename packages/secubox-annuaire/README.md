@@ -115,7 +115,7 @@ Pour en admettre d'autres, lister un domaine par ligne (`#` = commentaire) dans
 ## Droits du maillage (#3305)
 
 Le maître (qui héberge Auto-Load) ne rend un service du maillage à un pair que si son abonnement l'inclut
-(`annuaire/droits.py`, projection `autoload-public/droits-maillage.json` de secubox-autoload ; pair désigné par l'adresse
+(`annuaire/droits.py`, projection `/var/lib/secubox-autoload-public/droits-maillage.json` de secubox-autoload ; pair désigné par l'adresse
 source de l'écouteur wg-mesh, nom et empreinte lus dans `p2p-public/pairs-enroles.json`).
 
 - `GET /services` (pair du maillage) : 403 sans `annuaire-offres`, refus écrit dans `/var/log/secubox/audit.log`

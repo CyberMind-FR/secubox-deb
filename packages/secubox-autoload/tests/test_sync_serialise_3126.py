@@ -282,7 +282,7 @@ def test_l_export_lance_par_le_service_peut_ecrire():
     publiait). Le dossier doit exister avant le démarrage du service pour être monté en écriture : le postinst l'exporte d'abord."""
     unite = (ICI / "systemd" / "secubox-autoload.service").read_text().splitlines()
     chemins = [c for x in unite if x.startswith("ReadWritePaths=") for c in x.split("=", 1)[1].split()]
-    assert "-/var/lib/secubox/autoload-public" in chemins
+    assert "-/var/lib/secubox-autoload-public" in chemins
     assert {"/run/secubox-autoload", "/etc/wireguard"} <= {c.lstrip("-") for c in chemins}   # le verrou et la configuration du tunnel
     post = (ICI / "debian" / "postinst").read_text()
     assert "/usr/sbin/autoloadctl exporter-pairs" in post

@@ -10,7 +10,7 @@ Description=SecuBox Pilotage — surveille l'apparition des tunnels (#3126)
 
 [Path]
 PathChanged=/var/lib/secubox/p2p/wg_mesh.json
-PathChanged=/var/lib/secubox/autoload-public/pairs-publics.json
+PathChanged=/var/lib/secubox-autoload-public/pairs-publics.json
 Unit=secubox-pilotage-ecoute.service
 
 [Install]

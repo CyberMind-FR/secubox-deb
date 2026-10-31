@@ -100,7 +100,7 @@ Chaque émission, réclamation, refus (avec la raison), révocation et changemen
     autoloadctl tunnel-sync --sans-reactiver   # idem, sans relancer un wg-autoload dont l'unité est désactivée (minuterie, révocations, abonnement)
     autoloadctl exporter-pairs   # (re)publie pairs-publics.json (code non nul en cas d'échec)
 
-**Projection publique des pairs (#3126).** `exporter-pairs` écrit `/var/lib/secubox/autoload-public/pairs-publics.json` (root, 0644, renommage atomique par descripteur ; dossier root:root 0755 créé par `autoloadctl` s'il manque, refusé s'il est un lien, n'appartient pas à root ou est inscriptible par le groupe ou les autres ; hors du dossier 0750 du service, qui n'y a aucune prise) pour que le maître de pilotage sache à quel client appartient l'adresse d'une box :
+**Projection publique des pairs (#3126).** `exporter-pairs` écrit `/var/lib/secubox-autoload-public/pairs-publics.json` (root, 0644, renommage atomique par descripteur ; dossier root:root 0755 créé par `autoloadctl` s'il manque, refusé s'il est un lien, n'appartient pas à root ou est inscriptible par le groupe ou les autres ; hors du dossier 0750 du service, qui n'y a aucune prise) pour que le maître de pilotage sache à quel client appartient l'adresse d'une box :
 
     {"version": 1, "pairs": [{"adresse": "10.64.0.9", "client": "lgm", "lot": null, "serie": null, "profil": "lite", "abonnement": "actif"}]}
 
@@ -137,7 +137,7 @@ Un service du maillage n'est rendu à une box que si son abonnement est **actif*
   (avec leur empreinte) les pairs enrôlés de `p2p-public/pairs-enroles.json` sans abonnement ; idempotent, audité
   (`maillage-atelier`) ; une ligne existante n'est jamais touchée. Suspension et révocation : motif obligatoire ; audit `maillage`.
 - **Grâce** : un pair sans ligne garde ses services 5 jours après la première migration (`meta.grace_debut`), puis plus rien.
-- **Projection** `/var/lib/secubox/autoload-public/droits-maillage.json` (root 0644, sans secret, écrite avec `pairs-publics.json`
+- **Projection** `/var/lib/secubox-autoload-public/droits-maillage.json` (root 0644, sans secret, écrite avec `pairs-publics.json`
   par `tunnel-sync`/`exporter-pairs`) :
   `{"version": 1, "grace_jusqu_a": <epoch>, "services": [...], "pairs": [{"nom", "empreinte", "formule", "statut", "expire_le", "services"}]}`
   (`statut` calculé, `echu` après l'échéance ; `services` vide si le pair n'est pas actif). Base illisible : le fichier n'est pas réécrit.
