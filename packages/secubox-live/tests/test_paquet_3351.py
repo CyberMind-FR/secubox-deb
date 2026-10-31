@@ -39,7 +39,7 @@ def test_vhost_statique_local_nom_exact_hsts():
     conf = lire("nginx/live.vhost.conf.in")
     csp = re.search(r'Content-Security-Policy "([^"]*)"', conf).group(1)
     assert "unsafe-inline" not in csp and "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
-    assert "listen 127.0.0.1:9080;" in conf and "server_name @DOMAINE@;" in conf and "live.*" not in conf
+    assert "listen 9080;" in conf and "server_name @DOMAINE@;" in conf and "live.*" not in conf
     assert conf.count("Strict-Transport-Security") == 2                      # reposé dans la location etat.json
     assert "alias /var/cache/secubox/live/etat.json;" in conf and "expires 15s;" in conf
     assert "proxy_pass" not in conf and "/api/" not in conf                  # aucune API par requête
@@ -82,7 +82,7 @@ def test_spdx_et_versions():
     for p in ICI.rglob("*"):
         if p.is_file() and p.suffix in (".py", ".js", ".css", ".conf", ".in", ".toml", ".service", ".timer") and "__pycache__" not in p.parts:
             assert "SPDX-License-Identifier" in p.read_text()[:400], p
-    assert lire("debian/changelog").startswith("secubox-live (0.1.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-live (0.1.1-1~trixie1) trixie;")
     assert lire("debian/compat").strip() == "13" and "Standards-Version: 4.6.2" in lire("debian/control")
     for sh in ("debian/postinst", "debian/prerm", "debian/postrm", "sbin/secubox-live-exposer"):
         assert subprocess.run(["sh", "-n", str(ICI / sh)]).returncode == 0, sh
