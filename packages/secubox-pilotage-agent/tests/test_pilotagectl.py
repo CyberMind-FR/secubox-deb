@@ -23,6 +23,10 @@ DELAI = 60
 FAUX_SYSTEMD_RUN = """#!/bin/sh
 # faux systemd-run : note l'argv (une ligne), puis « démarre » l'unité nommée par --unit= (échoue si $FAUX_RUN_ECHEC)
 [ -z "$FAUX_RUN_ECHEC" ] || exit 1
+# $FAUX_RUN_UNIQUE : comme le vrai, refuse une unité dont le nom est déjà chargé (#3302)
+if [ -n "$FAUX_RUN_UNIQUE" ]; then
+  for a in "$@"; do case "$a" in --unit=*) grep -q "^${a#--unit=}\." "$FAUX_ACTIFS" 2>/dev/null && exit 1 ;; esac; done
+fi
 printf '%s\\n' "$*" >> "$FAUX_LANCES"
 # $FAUX_CASSE : ce fichier d'état devient un dossier non vide pendant le lancement (l'écriture qui suit échoue,
 # comme sur un disque plein)

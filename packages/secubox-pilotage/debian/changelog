@@ -1,3 +1,12 @@
+secubox-pilotage (0.6.0-1~trixie1) trixie; urgency=medium
+
+  * Bascule d'interface depuis la Flotte (ref #3302) : actions interface-distante et interface-locale du catalogue
+    (confirmation forte) ; après la fin RÉUSSIE d'une bascule vers « distante », le maître envoie
+    Device.X_SECUBOX_Pilotage.Interface.Confirmer() {job} une seule fois (audit pilotage_interface_confirmation : envoyee,
+    puis accepte|refuse|sans_reponse) ; sans cette confirmation la box revient seule en locale.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 04:15:00 +0100
+
 secubox-pilotage (0.5.4-1~trixie1) trixie; urgency=medium
 
   * Banc gk2 (ref #3126) : l'identité du maillage vient de la projection publique

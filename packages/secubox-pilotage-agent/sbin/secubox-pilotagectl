@@ -152,10 +152,11 @@ PREFIXE_OP = "secubox-pilotage-op-"
 CTL = "/usr/sbin/secubox-pilotagectl"
 SERVICE = {"demarrer": "start", "arreter": "stop", "redemarrer": "restart"}
 ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
-           "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer", "maillage-rejoindre")
+           "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer", "maillage-rejoindre",
+           "interface-locale", "interface-distante", "interface-confirmer")
 VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", "support", "consentement",
           "mains-liees", "ancre-verifier", "politique", "etat", "etat-operation", "fins-recentes", "_fin",
-          "maillage-rejoindre", "_rejoindre")
+          "maillage-rejoindre", "_rejoindre", "interface", "_interface", "_interface-garde", "_interface-reprise")
 RENOMMER = "/usr/sbin/secubox-renommer"
 DELAI_RENOMMER = 120                                     # s, durée maximale de l'unité transitoire du renommage
 DELAI_REJOINDRE = 300                                    # s ; secubox-automesh.service est borné à 240 s
@@ -171,7 +172,17 @@ ETATS_SUPPORT = frozenset({"en_attente", "ouvert", "refuse", "ferme", "annule", 
 DUREE_SUPPORT = 30                                       # minutes, défaut d'une session de support
 DUREE_SUPPORT_MAX = 240
 CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
-                                  "renommer", "renouveler-secrets"})
+                                  "renommer", "renouveler-secrets", "interface-locale", "interface-distante"})
+# #3302 : bascule d'interface locale ⇄ distante (profil léger « distante » de secubox-profiles). Une bascule vers
+# « distante » n'est acquise qu'à la confirmation du maître ; sans elle, la minuterie « homme mort » rend le profil de
+# retour (jamais un apply sans profil : il éteindrait tout sauf le socle).
+SENS_INTERFACE = ("locale", "distante", "confirmer")
+PROFIL_LEGER = "distante"
+RE_PROFIL = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}")           # _NOM_PROFIL de secubox-profilectl
+DELAI_INTERFACE = 1800                                   # s, durée maximale de l'unité transitoire d'une bascule
+DELAI_APPLY = 900                                        # s, un apply de profil (le retour garde la fin de l'unité)
+GARDE_DEFAUT, GARDE_MIN, GARDE_MAX = 600, 120, 3600      # s, homme mort (delai_garde_s de interface.toml)
+PREFIXE_GARDE = "secubox-pilotage-garde-"
 # R-L2-46 : `service` ne pilote qu'un service DURABLE. Une unité ponctuelle (oneshot : secubox-systeme-redemarrer,
 # secubox-majauto, secubox-firstboot…) est une action root à part entière ; la démarrer contournerait l'accord du
 # détenteur, la confirmation forte du maître et « une opération longue à la fois ». Une minuterie (sans Type) l'arme.
@@ -179,7 +190,7 @@ PONCTUELLE = "unité ponctuelle : passez par l'action dédiée"
 DELAI_SYSTEMD = 20                                       # s, lecture de la description d'une unité
 # Opérations exclusives, enregistrées dans operation.json : un reboot pendant apt laisserait dpkg à moitié configuré,
 # et rien de long ne démarre pendant les 5 s qui précèdent un reboot.
-EXCLUSIVES = frozenset({"maj-paquets", "renouveler-secrets", "reboot"})
+EXCLUSIVES = frozenset({"maj-paquets", "renouveler-secrets", "reboot", "interface"})
 ACTIFS = frozenset({"active", "activating", "deactivating", "reloading", "refreshing"})
 VALIDITE = 24 * 3600
 VALIDITE_ANCRE = 2 * 3600                                # canal vérifié : l'agent revérifie toutes les heures
@@ -244,11 +255,13 @@ class Ctx:
             self.systemd_run = shutil.which("systemd-run") or "systemd-run"
             self.systemctl = shutil.which("systemctl") or "systemctl"
             self.wg = shutil.which("wg") or "wg"
+            self.profilectl = shutil.which("secubox-profilectl") or "secubox-profilectl"
             self.env = dict(os.environ)
         else:
             # Vraie box : l'environnement ne choisit jamais une commande lancée en root.
             self.systemd_run, self.systemctl = "/usr/bin/systemd-run", "/usr/bin/systemctl"
             self.wg = "/usr/bin/wg"
+            self.profilectl = "/usr/sbin/secubox-profilectl"
             self.env = {"PATH": PATH_SUR, "LC_ALL": "C"}
         sudo_user = os.environ.get("SUDO_USER", "")
         try:
@@ -274,6 +287,8 @@ class Ctx:
         self.net = f"{self.r}/sys/class/net"
         self.ancre = f"{self.r}/etc/secubox/p2p/ancre-maitre.json"
         self.conf_autoload = f"{self.r}/etc/wireguard/wg-autoload.conf"
+        self.profils = f"{self.r}/etc/secubox/profiles"
+        self.conf_interface = f"{self.r}/etc/secubox-pilotage/interface.toml"
 
 
 # --- Audit -------------------------------------------------------------------------------------------------------
@@ -374,12 +389,15 @@ def lire_json(fd, nom, defaut):
         raise Erreur("état non fiable") from None
 
 
-def ecrire(fd, nom, donnees, mode=0o600):
-    """Écriture atomique dans le dossier ouvert : temporaire exclusif, fsync, renommage, fsync du dossier."""
+def ecrire(fd, nom, donnees, mode=0o600, proprietaire=None):
+    """Écriture atomique dans le dossier ouvert : temporaire exclusif, fsync, renommage, fsync du dossier. `proprietaire`
+    (uid, gid) : posé sur le temporaire AVANT le renommage, jamais de fenêtre avec un autre propriétaire."""
     tmp = f".{nom}.{secrets.token_hex(4)}"
     f = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=fd)
     try:
         try:
+            if proprietaire is not None:
+                os.fchown(f, *proprietaire)
             os.fchmod(f, mode)
             os.write(f, donnees)
             os.fsync(f)
@@ -864,10 +882,23 @@ def analyser(argv):
         if a:
             raise ArgvInvalide                      # le code n'est JAMAIS dans l'argv (R-L2-2)
         return verbe, {}
-    if verbe == "_rejoindre":
+    if verbe in ("_rejoindre", "_interface", "_interface-garde"):
         if len(a) != 1 or not RE_ID.fullmatch(a[0]):
             raise ArgvInvalide
         return verbe, {"job": a[0]}
+    if verbe == "interface":
+        # « confirmer » porte le job de la bascule confirmée (I1) ; locale et distante, rien de plus.
+        if not a or a[0] not in SENS_INTERFACE or len(a) != (2 if a[0] == "confirmer" else 1):
+            raise ArgvInvalide
+        if a[0] == "confirmer":
+            if not RE_ID.fullmatch(a[1]):
+                raise ArgvInvalide
+            return verbe, {"sens": a[0], "job_confirme": a[1]}
+        return verbe, {"sens": a[0]}
+    if verbe == "_interface-reprise":
+        if a:
+            raise ArgvInvalide
+        return verbe, {}
     if verbe == "support":
         if len(a) not in (2, 3) or a[0] not in OPS_SUPPORT or not RE_SUPPORT.fullmatch(a[1]):
             raise ArgvInvalide
@@ -905,6 +936,8 @@ def action_de(verbe, p):
         return f"service-{p['op']}"
     if verbe == "support":
         return f"support-{p['op']}"
+    if verbe == "interface":
+        return f"interface-{p['sens']}"
     return verbe if verbe in ACTIONS else None
 
 
@@ -985,6 +1018,9 @@ def commande(ctx, verbe, p):
         return ([f"--property=RuntimeMaxSec={DELAI_RENOMMER}", *BAC_RENOMMER], [RENOMMER, *acteur, p["nom"]])
     if verbe == "maillage-rejoindre":
         return [f"--property=RuntimeMaxSec={DELAI_REJOINDRE}"], [CTL, "_rejoindre", p["job"]]
+    if verbe == "interface":
+        # Hors de l'espace de montage de l'agent : l'apply pilote systemd, nginx et /etc (PID 1, root). Borné.
+        return [f"--property=RuntimeMaxSec={DELAI_INTERFACE}"], [CTL, "_interface", p["job"]]
     raise Erreur("verbe sans commande")
 
 
@@ -1056,6 +1092,15 @@ def executer(ctx, verbe, p):
 
     if verbe == "_rejoindre":
         return rejoindre(ctx, p["job"])
+
+    if verbe == "_interface":
+        return basculer_interface(ctx, p["job"])
+
+    if verbe == "_interface-garde":
+        return garde_interface(ctx, p["job"])
+
+    if verbe == "_interface-reprise":
+        return reprendre_interface(ctx)
 
     if verbe == "etat-operation":
         return etat_operation(ctx, p["job"])
@@ -1472,6 +1517,18 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
         if code is None:
             return refus("code invalide")
         p["code"] = code
+    etat_if = None
+    if verbe == "interface":
+        etat_if = lire_interface(fd)
+        if p["sens"] == "confirmer":
+            return confirmer_interface(ctx, fd, etat_if, p["job_confirme"], refus)
+        if p["sens"] == PROFIL_LEGER and etat_if.get("etat") == "a_confirmer":
+            return refus("bascule en attente de confirmation")
+        if p["sens"] == "locale" and not distante_en_place(ctx, etat_if):
+            return refus("aucune interface distante en place")
+        p["precedent"] = profil_de_retour(ctx, etat_if)
+        if p["precedent"] is None:
+            return refus("profil de retour inconnu")
     if unite is not None:
         protegees = unites_protegees(ctx)
         motif = refus_unite(unite, protegees)
@@ -1519,12 +1576,22 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
             return refus("consentement requis", consentement=attente["id"])
     fins = charger_fins(fd)                         # lu AVANT le lancement : un état illisible ne lance rien
     job = secrets.token_hex(8)
+    if verbe == "interface":
+        # Écrit AVANT le lancement (comme le code de maillage-rejoindre) : l'unité n'agit que pour CE job. L'ancienne
+        # bascule (garde armée ou confirmée) est remplacée : sa garde ne voit plus « a_confirmer ».
+        p["job"] = job
+        nouvel = {"job": job, "sens": p["sens"], "precedent": p["precedent"], "etat": "en_cours", "demande": maintenant}
+        if RE_ID.fullmatch(str(etat_if.get("job", ""))):
+            nouvel["ancien"] = etat_if["job"]
+        ecrire_json(fd, "interface.json", nouvel)
     if verbe == "maillage-rejoindre":
         # Le code attend dans l'état root 0600 ; seule l'unité transitoire (_rejoindre <job>) le reprend.
         p["job"] = job
         ecrire(fd, f"rejoindre-{job}.code", p.pop("code").encode("ascii"))
     if not lancer(ctx, verbe, p, job):
         retirer(fd, f"rejoindre-{job}.code")
+        if verbe == "interface":
+            ecrire_apres(fd, "interface.json", etat_if)     # rien n'est parti : l'état d'avant reste vrai
         auditer(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="echec")
         raise Erreur("lancement impossible")
     # R-L2-29 : l'opération est partie ; une écriture d'état manquée désormais est journalisée, jamais propagée
@@ -1541,6 +1608,7 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
                           nom=nom, job=job)
     if verbe in EXCLUSIVES:
         ecrire_apres(fd, "operation.json", {"job": job, "verbe": verbe, "debut": maintenant})
+
     fins.append({"job": job, "verbe": verbe, "resultat": "lance", "quand": maintenant})
     ecrire_fins(fd, fins)                           # M2 : après le lancement, un échec d'écriture ne change pas la réponse
     auditer_apres(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="lance")
@@ -1652,6 +1720,326 @@ def rejoindre(ctx, job):
     if not ok:
         raise Erreur("jonction en échec (voir secubox-automesh.service)")
     return {"ok": True, "job": job}
+
+
+# --- Interface locale ⇄ distante (#3302) --------------------------------------------------------------------------
+
+def lire_interface(fd):
+    """État de la dernière bascule (interface.json, état root), {} s'il n'y en a pas. Forme inattendue → Erreur."""
+    etat = lire_json(fd, "interface.json", {})
+    if not isinstance(etat, dict):
+        raise Erreur("état non fiable")
+    return etat
+
+
+def proprietaires_config(ctx):
+    """Comptes admis pour un fichier de configuration lu par le ctl : root (et le compte des tests sous SBX_RACINE)."""
+    return {0, os.geteuid()} if ctx.substitue else {0}
+
+
+def conf_interface(ctx):
+    """/etc/secubox-pilotage/interface.toml (root, non inscriptible par d'autres) ; absent, illisible ou invalide : {}."""
+    texte = lire_borne(ctx.conf_interface, proprietaires_config(ctx))
+    if not isinstance(texte, str):
+        return {}
+    try:
+        conf = tomllib.loads(texte)
+    except tomllib.TOMLDecodeError:
+        err("interface.toml invalide : valeurs par défaut")
+        return {}
+    return conf if isinstance(conf, dict) else {}
+
+
+def delai_garde(ctx):
+    v = conf_interface(ctx).get("delai_garde_s")
+    if isinstance(v, int) and not isinstance(v, bool) and GARDE_MIN <= v <= GARDE_MAX:
+        return v
+    return GARDE_DEFAUT
+
+
+def profil_connu(ctx, nom):
+    """Un profil de retour sûr : nom du motif de secubox-profilectl, autre que le profil léger, fichier présent."""
+    if not isinstance(nom, str) or not RE_PROFIL.fullmatch(nom) or nom == PROFIL_LEGER:
+        return False
+    try:
+        st = os.stat(f"{ctx.profils}/{nom}.toml", follow_symlinks=False)
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode)
+
+
+def profil_actif(ctx):
+    """Nom lu dans /etc/secubox/profiles/active (compte secubox ou root), sans suivre de lien ; None sinon."""
+    try:
+        uid_secubox = pwd.getpwnam("secubox").pw_uid
+    except KeyError:
+        uid_secubox = 0
+    texte = lire_borne(f"{ctx.profils}/active", proprietaires_config(ctx) | {uid_secubox})
+    return texte.strip() if isinstance(texte, str) else None
+
+
+def profil_de_retour(ctx, etat_if):
+    """Profil rendu par un retour en locale : celui mémorisé à la bascule, sinon le profil actif (s'il n'est pas le
+    profil léger), sinon `profil_retour` de interface.toml ; None si aucun n'est sûr (jamais d'apply sans profil)."""
+    for nom in (etat_if.get("precedent"), profil_actif(ctx), conf_interface(ctx).get("profil_retour")):
+        if profil_connu(ctx, nom):
+            return nom
+    return None
+
+
+def appliquer_profil(ctx, nom):
+    """`secubox-profilectl apply --profile <nom> --yes --json` ; vrai si l'apply (et son front web) a réussi. Borné à
+    DELAI_APPLY : deux applies (bascule puis retour) tiennent dans l'unité (RuntimeMaxSec)."""
+    try:
+        r = subprocess.run([ctx.profilectl, "apply", "--profile", nom, "--yes", "--json"], env=ctx.env,
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=DELAI_APPLY)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return r.returncode == 0
+
+
+def ecrire_profil_actif(ctx, nom):
+    """`active` repointé sur le profil réellement appliqué (lu par le postinst via `coupe`, et par le hub), par
+    descripteur, sans suivre de lien. Échec journalisé, jamais propagé : le profil, lui, est appliqué."""
+    try:
+        dfd = ouvrir_chemin(ctx, "etc/secubox/profiles")
+        try:
+            # M1 : propriétaire et mode d'origine gardés (0600 secubox du panneau) ; absent : ceux du dossier, 0644.
+            try:
+                st = os.stat("active", dir_fd=dfd, follow_symlinks=False)
+                mode, uid, gid = stat.S_IMODE(st.st_mode) & 0o644, st.st_uid, st.st_gid
+            except FileNotFoundError:
+                std = os.fstat(dfd)
+                mode, uid, gid = 0o644, std.st_uid, std.st_gid
+            ecrire(dfd, "active", (nom + "\n").encode("ascii"), mode, None if ctx.substitue else (uid, gid))
+        finally:
+            os.close(dfd)
+    except OSError as e:
+        err(f"profil actif non réécrit ({e.__class__.__name__})")
+
+
+SUFFIXES_GARDE = ("", "-c", "-r")      # avant l'apply, après l'apply (confirmation), réarmée au démarrage
+
+
+def arreter_garde(ctx, job, suffixe):
+    """Arrête UNE garde (minuterie transitoire) ; un échec est journalisé : la garde ne retrouvera plus son état."""
+    try:
+        subprocess.run([ctx.systemctl, "stop", f"{PREFIXE_GARDE}{job}{suffixe}.timer"], env=ctx.env,
+                       stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        err("garde non désarmée : elle ne trouvera plus son état d'attente")
+
+
+def desarmer_garde(ctx, job):
+    if isinstance(job, str) and RE_ID.fullmatch(job):
+        for suffixe in SUFFIXES_GARDE:
+            arreter_garde(ctx, job, suffixe)
+
+
+def armer_garde(ctx, job, delai, suffixe=""):
+    argv = [ctx.systemd_run, "--collect", "--quiet", "--no-ask-password", f"--on-active={max(1, int(delai))}",
+            f"--unit={PREFIXE_GARDE}{job}{suffixe}", f"--description=SecuBox pilotage : garde de bascule ({job})",
+            "--", CTL, "_interface-garde", job]
+    try:
+        r = subprocess.run(argv, env=ctx.env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return r.returncode == 0
+
+
+def maj_interface(ctx, job, si=None, **champs):
+    """Met à jour interface.json si elle décrit encore `job` (et, avec `si`, si son état en fait partie) ; rend l'état
+    écrit, ou None (autre bascule, ou la garde a repris la main entre-temps)."""
+    fd = ouvrir_etat(ctx, creer=False)
+    if fd is None:
+        raise Erreur("état non fiable")
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        etat = lire_interface(fd)
+        if etat.get("job") != job or (si is not None and etat.get("etat") not in si):
+            return None
+        etat.update(champs)
+        ecrire_json(fd, "interface.json", etat)
+        return etat
+    finally:
+        os.close(fd)
+
+
+def distante_en_place(ctx, etat_if):
+    """M2 : un retour en locale n'a de sens que si une bascule vers « distante » est en place (en attente, confirmée, ou
+    retour à reprendre), ou si la box a été allégée à la main (marqueur root de secubox-profiles)."""
+    if etat_if.get("sens") == PROFIL_LEGER and etat_if.get("etat") in ("a_confirmer", "confirme"):
+        return True
+    if etat_if.get("sens") == "locale" and etat_if.get("etat") == "a_reprendre":
+        return True
+    try:
+        st = os.stat(f"{ctx.r}/var/lib/secubox-profiles/allegement/actif", follow_symlinks=False)
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode) and st.st_uid in proprietaires_config(ctx)
+
+
+def confirmer_interface(ctx, fd, etat_if, job, refus):
+    """Demande du maître après une bascule vers « distante » réussie : le canal a survécu, la garde est désarmée. Le
+    job confirmé doit être celui de la bascule en attente (I1) : une confirmation tardive d'une autre est refusée."""
+    if etat_if.get("etat") != "a_confirmer" or not RE_ID.fullmatch(str(etat_if.get("job", ""))):
+        return refus("rien à confirmer")
+    if etat_if["job"] != job:
+        return refus("confirmation d'une autre bascule")
+    etat_if.update(etat="confirme", confirme=int(time.time()))
+    ecrire_json(fd, "interface.json", etat_if)
+    desarmer_garde(ctx, etat_if["job"])
+    auditer(ctx, "interface_confirmee", job=etat_if["job"])
+    return {"ok": True, "confirme": True}
+
+
+def basculer_interface(ctx, job):
+    """Unité transitoire d'une bascule (PID 1, root). Vers « distante » : apply du profil léger puis garde armée ; échec
+    ⇒ profil de retour rendu tout de suite. Vers « locale » : garde de l'ancienne bascule désarmée, profil de retour
+    appliqué. Échec → Erreur : l'unité finit en échec (audité par _fin, vu par le maître)."""
+    if ctx.origine == "maitre":
+        auditer(ctx, "pilotage_refus", verbe="_interface", job=job, refus="local seulement")
+        return {"ok": False, "refus": "local seulement"}
+    fd = ouvrir_etat(ctx, creer=False)
+    if fd is None:
+        raise Erreur("bascule introuvable")
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH)
+        etat = lire_interface(fd)
+    finally:
+        os.close(fd)
+    if etat.get("job") != job or etat.get("etat") != "en_cours" or etat.get("sens") not in ("locale", PROFIL_LEGER):
+        auditer(ctx, "interface_echec", job=job, refus="bascule introuvable")
+        raise Erreur("bascule introuvable")
+    precedent = etat.get("precedent")
+    if not profil_connu(ctx, precedent):
+        maj_interface(ctx, job, etat="echec")
+        auditer(ctx, "interface_echec", job=job, refus="profil de retour inconnu")
+        raise Erreur("profil de retour inconnu")
+    if etat["sens"] == "locale":
+        # Garde de CE retour armée avant l'apply : un retour coupé (RuntimeMaxSec, coupure) est repris par elle, ou par
+        # la reprise au démarrage (en_cours + locale). Le retour part même sans garde : c'est le sens sûr.
+        debut = int(time.time())
+        arme_avant = armer_garde(ctx, job, DELAI_APPLY + delai_garde(ctx))
+        if not arme_avant:
+            err("garde du retour non armée : la reprise au démarrage reste le filet")
+        if not appliquer_profil(ctx, precedent):
+            # I2 : l'ancienne garde reste armée (elle ne voit plus son job) ; une garde de CE job réessaiera le retour.
+            # Le nom de base est déjà pris par la garde d'avant l'apply : réarmée sous « -c » (délai seul), puis la
+            # première arrêtée, comme dans le sens distant. Sans « -c », la première reste (échéance d'origine).
+            delai = delai_garde(ctx)
+            arme = armer_garde(ctx, job, delai, "-c")
+            if arme:
+                echeance = int(time.time()) + delai
+                if arme_avant:
+                    arreter_garde(ctx, job, "")
+            else:
+                echeance = debut + DELAI_APPLY + delai if arme_avant else int(time.time()) + delai
+            maj_interface(ctx, job, etat="a_reprendre", echeance=echeance)
+            auditer(ctx, "interface_echec", job=job, sens="locale", profil=precedent,
+                    garde="armee" if arme else ("premiere" if arme_avant else "non_armee"))
+            raise Erreur("retour en locale en échec")
+        desarmer_garde(ctx, etat.get("ancien"))
+        desarmer_garde(ctx, job)
+        ecrire_profil_actif(ctx, precedent)
+        maj_interface(ctx, job, etat="locale", fin=int(time.time()))
+        auditer(ctx, "interface_retour", job=job, cause="demande", profil=precedent)
+        return {"ok": True, "job": job, "interface": "locale"}
+    # Homme mort armé AVANT l'apply : une unité tuée en plein apply (RuntimeMaxSec, coupure) est rattrapée aussi. Son
+    # échéance couvre l'apply (DELAI_APPLY) puis le délai de confirmation ; la garde agit sur « en_cours » comme sur
+    # « a_confirmer ». Sans garde, on ne bascule pas.
+    delai = delai_garde(ctx)
+    debut = int(time.time())
+    if not armer_garde(ctx, job, DELAI_APPLY + delai):
+        maj_interface(ctx, job, si=("en_cours",), etat="echec", fin=debut)
+        auditer(ctx, "interface_echec", job=job, refus="garde non armée")
+        raise Erreur("garde non armée : bascule abandonnée")
+    if appliquer_profil(ctx, PROFIL_LEGER):
+        ecrire_profil_actif(ctx, PROFIL_LEGER)
+        fin_apply = int(time.time())
+        # Échéance ramenée à la fin de l'apply + délai : garde « -c » armée d'abord, la première désarmée ensuite (jamais
+        # sans garde). Si l'armement échoue, la première reste : retour au plus tard à début + 900 s + délai.
+        echeance = debut + DELAI_APPLY + delai
+        if armer_garde(ctx, job, delai, "-c"):
+            echeance = fin_apply + delai
+            arreter_garde(ctx, job, "")
+        if maj_interface(ctx, job, si=("en_cours",), etat="a_confirmer", bascule=fin_apply, echeance=echeance) is None:
+            raise Erreur("bascule reprise par la garde")
+        auditer(ctx, "interface_basculee", job=job, profil=PROFIL_LEGER, delai=delai)
+        return {"ok": True, "job": job, "interface": PROFIL_LEGER}
+    cause = "apply"
+    desarmer_garde(ctx, job)
+    if maj_interface(ctx, job, si=("en_cours",), etat="en_retour") is None:
+        raise Erreur("bascule reprise par la garde")
+    ok = appliquer_profil(ctx, precedent)
+    maj_interface(ctx, job, etat="echec", fin=int(time.time()))
+    auditer(ctx, "interface_retour", job=job, cause=cause, profil=precedent, resultat="succes" if ok else "echec")
+    raise Erreur("bascule en échec : profil de retour " + ("rendu" if ok else "NON rendu"))
+
+
+def reprendre_interface(ctx):
+    """B1 (unité secubox-pilotage-interface-reprise, au démarrage) : les gardes transitoires ne survivent pas au
+    redémarrage. Bascule vers « distante » inachevée (en_cours) ou échue : retour immédiat ; en attente de confirmation
+    ou retour à reprendre, échéance à venir : garde réarmée pour le temps restant."""
+    if ctx.origine == "maitre":
+        auditer(ctx, "pilotage_refus", verbe="_interface-reprise", refus="local seulement")
+        return {"ok": False, "refus": "local seulement"}
+    fd = ouvrir_etat(ctx, creer=False)
+    if fd is None:
+        return {"ok": True, "retour": False, "rearmee": False}
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH)
+        etat = lire_interface(fd)
+    finally:
+        os.close(fd)
+    job, e = etat.get("job"), etat.get("etat")
+    if not isinstance(job, str) or not RE_ID.fullmatch(job):
+        return {"ok": True, "retour": False, "rearmee": False}
+    inachevee = e == "en_cours"                     # bascule OU retour coupé : le retour est (re)fait
+    if not inachevee and e not in ("a_confirmer", "a_reprendre"):
+        return {"ok": True, "retour": False, "rearmee": False}
+    echeance = etat.get("echeance")
+    restant = echeance - int(time.time()) if isinstance(echeance, int) and not isinstance(echeance, bool) else 0
+    if inachevee or restant <= 0:
+        auditer(ctx, "interface_reprise", job=job, action="retour")
+        r = garde_interface(ctx, job)
+        return {"ok": True, "retour": bool(r.get("retour")), "rearmee": False}
+    arme = armer_garde(ctx, job, restant, "-r")
+    auditer(ctx, "interface_reprise", job=job, action="garde_rearmee" if arme else "garde_non_rearmee", restant=restant)
+    if not arme:
+        raise Erreur("garde non réarmée")
+    return {"ok": True, "retour": False, "rearmee": True}
+
+
+def garde_interface(ctx, job):
+    """Homme mort : si la bascule `job` attend toujours la confirmation du maître, n'a jamais fini (unité tuée en plein
+    apply, vers « distante » comme au retour) ou doit être reprise (a_reprendre), le profil de retour est rendu."""
+    if ctx.origine == "maitre":
+        auditer(ctx, "pilotage_refus", verbe="_interface-garde", job=job, refus="local seulement")
+        return {"ok": False, "refus": "local seulement"}
+    fd = ouvrir_etat(ctx, creer=False)
+    if fd is None:
+        return {"ok": True, "retour": False}
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        etat = lire_interface(fd)
+        attente = etat.get("etat") in ("a_confirmer", "a_reprendre", "en_cours")
+        if etat.get("job") != job or not attente:
+            return {"ok": True, "retour": False}
+        etat["etat"] = "en_retour"                     # une confirmation tardive ne s'y substitue plus
+        ecrire_json(fd, "interface.json", etat)
+    finally:
+        os.close(fd)
+    precedent = etat.get("precedent")
+    ok = profil_connu(ctx, precedent) and appliquer_profil(ctx, precedent)
+    if ok:
+        ecrire_profil_actif(ctx, precedent)
+    maj_interface(ctx, job, etat="retour" if ok else "echec", fin=int(time.time()))
+    auditer(ctx, "interface_retour", job=job, cause="homme-mort", profil=precedent,
+            resultat="succes" if ok else "echec")
+    if not ok:
+        raise Erreur("retour automatique en échec")
+    return {"ok": True, "retour": True}
 
 
 def main(argv):

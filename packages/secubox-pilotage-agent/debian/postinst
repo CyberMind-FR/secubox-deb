@@ -69,6 +69,8 @@ case "$1" in
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
       systemctl enable --now secubox-pilotage-agent.service || true
+      # #3302 : passe de démarrage seulement (pas de --now : elle ne doit pas rejouer un retour pendant une mise à jour).
+      systemctl enable secubox-pilotage-interface-reprise.service || true
       # Minor 9 : sans clé publique posée, aucun module ne reconnaîtrait le jeton : la socket n'est pas ouverte
       # (configuration réussie quand même, code 0 : le reste du paquet fonctionne ; relancer dpkg-reconfigure).
       if [ "$relais_pret" = 1 ]; then

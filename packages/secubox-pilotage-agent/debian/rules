@@ -57,9 +57,12 @@ override_dh_auto_install:
 	install -D -m 0755 sbin/secubox-pilotage-relais-acl $(P)/usr/sbin/secubox-pilotage-relais-acl
 	install -D -m 0644 systemd/secubox-pilotage-relais.service $(P)/lib/systemd/system/secubox-pilotage-relais.service
 	install -D -m 0644 systemd/secubox-pilotage-relais.socket $(P)/lib/systemd/system/secubox-pilotage-relais.socket
+	# #3302 : reprise de l'homme mort d'une bascule d'interface au démarrage.
+	install -D -m 0644 systemd/secubox-pilotage-interface-reprise.service $(P)/lib/systemd/system/secubox-pilotage-interface-reprise.service
 	install -D -m 0644 apparmor/usr.sbin.sbx-pilotage-relais $(P)/etc/apparmor.d/usr.sbin.sbx-pilotage-relais
 
 # Activation faite par le postinst (profil AppArmor chargé avant le démarrage).
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-pilotage-agent --no-enable --no-start
 	dh_installsystemd --name=secubox-pilotage-relais --no-enable --no-start
+	dh_installsystemd --name=secubox-pilotage-interface-reprise --no-enable --no-start
