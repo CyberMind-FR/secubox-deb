@@ -110,3 +110,23 @@ def test_a_completer_seulement_en_administration():
     www = pathlib.Path(__file__).resolve().parents[1] / "www" / "appstore"
     assert "[À COMPLÉTER]" in (www / "index.html").read_text(encoding="utf-8")
     assert "[À COMPLÉTER]" not in (www / "boutique.html").read_text(encoding="utf-8")
+
+
+# ── Volet 3 : formule de la box ──────────────────────────────────────────────────────────────────────────────────
+
+def test_app_hors_formule_sans_obtenir(navigateur):
+    cat = {"modules": [dict(mod("secubox-peertube", "misc"), hors_formule=True, formule_requise="Médias"),
+                       mod("secubox-radio", "media")]}
+
+    def donnees(u):
+        return cat if u.endswith("/catalog") else None
+    ctx, p, erreurs, appels = ouvre(navigateur, donnees=donnees)
+    p.click("[role=tab]:text-is(\"Apps\")")
+    b = p.locator(".app", has_text="PeerTube").locator("button.get")
+    assert b.inner_text() == "Formule Médias" and b.is_disabled()
+    p.locator(".app", has_text="PeerTube").click()
+    p.wait_for_selector("dialog[open]:has-text('Disponible avec la formule Médias')")
+    assert not [a for a in appels if a[0] == "POST"]
+    assert p.locator(".app", has_text="Radio").locator("button.get").inner_text() == "Obtenir"
+    assert not erreurs
+    ctx.close()

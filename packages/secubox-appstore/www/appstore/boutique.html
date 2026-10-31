@@ -167,6 +167,7 @@ function habiller(m){
   const res=f.resume||m.resume||brut,det=f.detail||m.detail||res;
   return{id:m.name,n:nom,d:res,l:det,c:f.categorie||CAT_FR[m.category]||'Divers',
     h:teinte(m.name),v:m.version,inst:!!m.installed,run:!!m.running,ordre:f.ordre||999,vedette:!!f.vedette,
+    hors:!m.installed&&!!m.hors_formule,formule:String(m.formule_requise||''),
     visible:!f.cacher&&(!!FICHES[m.name]||CAT_VISIBLES.has(m.category))&&m.installable!==false&&!m.tier_locked,fiche:!!FICHES[m.name]}}
 function teinte(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h}
 const tri=(a,b)=>a.ordre-b.ordre||a.n.localeCompare(b.n,'fr');
@@ -195,6 +196,7 @@ function bouton(a,cls){
   if(a.besoin){b.textContent=a.inst?'Ouvrir':'Choisir';if(a.inst)b.classList.add('open');
     b.addEventListener('click',ev=>{ev.stopPropagation();ouvrir(a.id)});return b}
   if(a.bientot){b.textContent='Bientôt';b.classList.add('bientot');b.disabled=true;return b}
+  if(a.hors){b.textContent=a.formule?'Formule '+a.formule:'Hors formule';b.classList.add('bientot');b.disabled=true;return b}   // #3338 : le serveur refuse aussi
   if(BUSY[a.id]){b.textContent=BUSY[a.id]==='remove'?'Retrait…':'Installation…';b.classList.add('busy');b.disabled=true}
   else if(a.inst){b.textContent='Ouvrir';b.classList.add('open')}
   else b.textContent='Obtenir';
@@ -316,7 +318,7 @@ function garnir(a,d){
     d.appendChild(s);return}
   const f=el('div','facts');[[a.c,'Catégorie'],[a.v||'—','Version'],[a.inst?(a.run?'En marche':'Installée'):'Disponible','État']].forEach(x=>{const q=el('div');q.appendChild(el('b',null,x[0]));q.appendChild(el('span',null,x[1]));f.appendChild(q)});s.appendChild(f);
   s.appendChild(el('p',null,a.l));
-  s.appendChild(el('div','note',a.inst?'Installée sur cette box.':'L’installation est réservée à l’administrateur de la box. Vos données restent chez vous.'));
+  s.appendChild(el('div','note',a.inst?'Installée sur cette box.':a.hors?(a.formule?'Disponible avec la formule '+a.formule+'.':'Hors de la formule de cette box.'):'L’installation est réservée à l’administrateur de la box. Vos données restent chez vous.'));
   d.appendChild(s)}
 function ouvrir(id){if(!app(id))return;OUVERTE=id;remplir(id);const d=$('dlg');if(!d.open)d.showModal()}
 $('dlg').addEventListener('close',()=>{OUVERTE=null});

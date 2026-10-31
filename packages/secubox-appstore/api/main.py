@@ -29,6 +29,36 @@ from pydantic import BaseModel, Field
 
 CATALOG_FILE = Path(os.environ.get(
     "APPSTORE_CATALOG", "/usr/share/secubox/appstore/catalog.json"))
+# #3338 : l'abonnement de la box (formule, profil, statut, formules connues), posé par root (provisionnement Auto-Load).
+# ABSENT = box sans abonnement (maître, atelier) : tout est permis. PRÉSENT mais illisible : rien n'est permis.
+ABONNEMENT_FILE = Path(os.environ.get("APPSTORE_ABONNEMENT", "/etc/secubox/abonnement.json"))
+
+
+def droit_installation(name: str):
+    """(permis, formule_requise, motif) pour installer `name` sous l'abonnement de la box."""
+    try:
+        brut = ABONNEMENT_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return True, None, None
+    except OSError:
+        return False, None, "abonnement illisible"
+    try:
+        ab = json.loads(brut)
+        if not isinstance(ab, dict):
+            raise ValueError
+    except ValueError:
+        return False, None, "abonnement illisible"
+    if ab.get("statut") != "actif":
+        return False, None, f"abonnement {ab.get('statut') or 'inconnu'} : aucune installation"
+    modules = {pr["name"]: set(pr["modules"]) for pr in _profils()}
+    if name in modules.get(str(ab.get("profil") or ""), set()):
+        return True, None, None
+    for f in ab.get("formules") or []:
+        if isinstance(f, dict) and name in modules.get(str(f.get("profil") or ""), set()):
+            return False, str(f.get("nom") or f.get("profil")), f"Disponible avec la formule {f.get('nom') or f.get('profil')}"
+    return False, None, "hors de la formule de cette box"
+
+
 TIER_RANK = {"all": 0, "lite": 1, "standard": 2, "pro": 3}
 _STATE_TTL = 30.0
 _state_cache = {"ts": 0.0, "data": {}}
@@ -183,6 +213,10 @@ async def catalog(category: Optional[str] = None, tier: Optional[str] = None,
             profils_par_module.setdefault(mod, []).append(pr["name"])
     for m in items:
         m["profils"] = profils_par_module.get(m["name"], [])
+        if not m.get("installed"):
+            permis, requise, _motif = droit_installation(m["name"])
+            m["hors_formule"] = not permis
+            m["formule_requise"] = requise
     if category:
         items = [m for m in items if m["category"] == category]
     if tier:
@@ -677,6 +711,10 @@ async def module_action(name: str, verb: str, confirmer: str | None = None):
             name = alt
     else:
         name = _resolve(name, compute_state())
+    if verb == "install":
+        permis, _requise, motif = droit_installation(name)
+        if not permis:
+            raise HTTPException(status_code=403, detail=motif)
     if verb in ACTIONS_CONFIRMEES and confirmer != name:
         raise HTTPException(status_code=428,
                             detail=f"confirmation requise : renvoyez ?confirmer={name}")
