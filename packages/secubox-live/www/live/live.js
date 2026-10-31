@@ -82,17 +82,25 @@
     var larg = 850 / h.length, cum = 0, totA = som('attaques') || 1, pts = [];
     h.forEach(function (x, i) {
       var X = 40 + i * larg, y = 200, g = sv('g', {}), t = sv('title', {});
+      // #3351 : un jour non mesuré (null : avant le plus ancien journal conservé) est une hachure grise, jamais une barre à 0.
+      var nm = function (y0, hauteur) { g.appendChild(sv('rect', { x: X.toFixed(1), y: (y0 - hauteur).toFixed(1), width: Math.max(1, larg - 2).toFixed(1), height: String(hauteur), fill: 'rgba(148,163,184,.18)' })); };
+      if (x.visites == null && x.attaques == null) nm(200, 6);
       [['visites', '#22d3ee'], ['attaques', '#f87171']].forEach(function (k) {
         var hh = 180 * (x[k[0]] || 0) / max; y -= hh;
         g.appendChild(sv('rect', { x: X.toFixed(1), y: y.toFixed(1), width: Math.max(1, larg - 2).toFixed(1), height: hh.toFixed(1), fill: k[1] }));
       });
-      var hb = 70 * (x.bans || 0) / maxB;
-      g.appendChild(sv('rect', { x: X.toFixed(1), y: (300 - hb).toFixed(1), width: Math.max(1, larg - 2).toFixed(1), height: hb.toFixed(1), fill: '#fbbf24' }));
-      t.textContent = x.jour + ' — visites ' + fmt(x.visites) + ', attaques ' + fmt(x.attaques) + ', bans ' + fmt(x.bans);
+      if (x.bans == null) nm(300, 4);
+      else {
+        var hb = 70 * x.bans / maxB;
+        g.appendChild(sv('rect', { x: X.toFixed(1), y: (300 - hb).toFixed(1), width: Math.max(1, larg - 2).toFixed(1), height: hb.toFixed(1), fill: '#fbbf24' }));
+      }
+      var nmT = function (v) { return v == null ? 'non mesuré' : fmt(v); };
+      t.textContent = x.jour + ' — visites ' + nmT(x.visites) + ', attaques ' + nmT(x.attaques) + ', bans ' + nmT(x.bans);
       g.appendChild(t); s.appendChild(g);
-      cum += x.attaques || 0; pts.push((X + larg / 2).toFixed(1) + ',' + (200 - 180 * cum / totA).toFixed(1));
+      // le cumul démarre au premier jour mesuré
+      if (x.attaques != null) { cum += x.attaques; pts.push((X + larg / 2).toFixed(1) + ',' + (200 - 180 * cum / totA).toFixed(1)); }
     });
-    s.appendChild(sv('polyline', { points: pts.join(' '), fill: 'none', stroke: '#e6edf7', 'stroke-width': '2', 'stroke-dasharray': '5 4' }));
+    if (pts.length) s.appendChild(sv('polyline', { points: pts.join(' '), fill: 'none', stroke: '#e6edf7', 'stroke-width': '2', 'stroke-dasharray': '5 4' }));
     s.appendChild(sv('line', { x1: '40', y1: '200', x2: '890', y2: '200', stroke: 'rgba(148,163,184,.5)' }));
     s.appendChild(sv('line', { x1: '40', y1: '300', x2: '890', y2: '300', stroke: 'rgba(148,163,184,.5)' }));
     s.appendChild(sv('line', { x1: '40', y1: '230', x2: '890', y2: '230', stroke: 'rgba(251,191,36,.25)', 'stroke-dasharray': '3 4' }));

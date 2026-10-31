@@ -3,6 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """secubox-live (#3351) : le collecteur agrège des sources existantes sans jamais publier d'adresse, de compte ni de secret."""
+import gzip
 import json
 import re
 import sqlite3
@@ -72,7 +73,7 @@ def _sources(tmp: Path) -> C.Sources:
                     '[roles]\ngk2 = "maître"\ngk4 = "banc"\n'
                     '[[feuille_de_route]]\nnom = "Alpha 20"\netat = "bientôt"\n')
     return C.Sources(pilotage_db=_pilotage(tmp), menaces=[_menaces(tmp)], vhost_stats=_vhosts(tmp),
-                     nft_etat=tmp / "absent.json", haproxy_toml=tmp / "absent.toml",
+                     bans=tmp / "absent-bans.jsonl", haproxy_toml=tmp / "absent.toml",
                      configuration=conf, github_cache=tmp / "github.json", geoip=[], local_nom="gk2",
                      etat_menaces=tmp / "menaces-etat.json")
 
@@ -175,3 +176,101 @@ def test_pilotage_lisible_avec_shm_en_lecture_seule(tmp_path):
     finally:
         shm.chmod(0o644)
         w.close()
+
+
+def _ligne(ts, cat="sqli", action="block", ip="203.0.113.7"):
+    return json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(ts)), "client_ip": ip,
+                       "category": cat, "action": action}) + "\n"
+
+
+def _rotations(tmp: Path) -> C.Sources:
+    """Journal tourné comme logrotate (delaycompress) : .3.gz (J-3), .2.gz (J-2), .1 en clair (J-1), courant (J)."""
+    s = _sources(tmp)
+    log = tmp / "waf-threats.log"
+    j = 86400
+    with gzip.open(tmp / "waf-threats.log.3.gz", "wt") as f:
+        f.write(_ligne(MAINTENANT - 3 * j) * 4)
+    with gzip.open(tmp / "waf-threats.log.2.gz", "wt") as f:
+        f.write(_ligne(MAINTENANT - 2 * j) * 3)
+    (tmp / "waf-threats.log.1").write_text(_ligne(MAINTENANT - j) * 2)
+    log.write_text(_ligne(MAINTENANT - 60))
+    s.menaces = [log, tmp / "waf-threats.log.1"]
+    s.configuration.write_text("")
+    return s
+
+
+def test_rattrapage_des_rotations_gz_au_premier_passage(tmp_path):
+    s = _rotations(tmp_path)
+    etat = C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    att = {h["jour"]: h["attaques"] for h in etat["histo"]}
+    assert att == {"2026-10-28": 4, "2026-10-29": 3, "2026-10-30": 2, "2026-10-31": 1}
+    # second passage : rien de recompté
+    etat = C.collecter(s, maintenant=MAINTENANT + 60, reseau=False)
+    assert {h["jour"]: h["attaques"] for h in etat["histo"]} == att
+
+
+def test_rattrapage_si_l_etat_ne_couvre_pas_les_journaux(tmp_path):
+    s = _rotations(tmp_path)
+    # état d'une version précédente : ne connaît que le courant, depuis le 31
+    log = s.menaces[0]
+    s.etat_menaces.write_text(json.dumps({"version": 1, "jours": {"2026-10-31": {"total": 1, "bloq": 1, "bans": 0}},
+                                          "heures": {}, "minutes": {},
+                                          "positions": {str(log.stat().st_ino): log.stat().st_size}}))
+    etat = C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    assert {h["jour"]: h["attaques"] for h in etat["histo"]}["2026-10-28"] == 4
+    assert {h["jour"]: h["attaques"] for h in etat["histo"]}["2026-10-31"] == 1          # pas de double compte
+
+
+def test_jours_conserves_apres_rotation_et_bornes(tmp_path):
+    s = _rotations(tmp_path)
+    C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    for gz in tmp_path.glob("*.gz"):
+        gz.unlink()                                                                         # sortis de la rotation
+    etat = C.collecter(s, maintenant=MAINTENANT + 60, reseau=False)
+    assert {h["jour"]: h["attaques"] for h in etat["histo"]}["2026-10-28"] == 4
+    vieux = json.loads(s.etat_menaces.read_text())
+    vieux["jours"].update({"%d-%02d-%02d" % (a, m, d): {"total": 1} for a in (2024, 2025) for m in range(1, 13) for d in range(1, 29)})
+    s.etat_menaces.write_text(json.dumps(vieux))
+    C.collecter(s, maintenant=MAINTENANT + 120, reseau=False)
+    assert len(json.loads(s.etat_menaces.read_text())["jours"]) == C.JOURS_MAX
+
+
+def test_jours_non_mesures_sont_nuls_jamais_zero(tmp_path):
+    s = _sources(tmp_path)                       # visites depuis le 30, menaces seulement le 31
+    etat = C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    h = {x["jour"]: x for x in etat["histo"]}
+    assert h["2026-10-30"]["visites"] == 40 and h["2026-10-30"]["attaques"] is None
+    assert h["2026-10-31"]["attaques"] == 5 and h["2026-10-30"]["bans"] is None
+
+
+def _bans(tmp: Path, lignes) -> Path:
+    f = tmp / "bans.jsonl"
+    f.write_text("".join(json.dumps(x) + "\n" for x in lignes))
+    return f
+
+
+def test_bans_par_jour_et_actifs_depuis_le_journal_de_bans(tmp_path):
+    s = _sources(tmp_path)
+    j = 86400
+    s.bans = _bans(tmp_path, [
+        {"ip": "203.0.113.1", "cat": "leurre", "at": MAINTENANT - 2 * j, "exp": MAINTENANT - j, "action": "ban"},   # échu
+        {"ip": "203.0.113.2", "cat": "sqli", "at": MAINTENANT - 2 * j, "exp": 0, "action": "ban"},                  # actif
+        {"ip": "203.0.113.3", "cat": "sqli", "at": MAINTENANT - 600, "exp": MAINTENANT + j, "action": "ban"},       # actif
+        {"ip": "203.0.113.4", "cat": "sqli", "at": MAINTENANT - 500, "exp": 0, "action": "ban"},
+        {"ip": "203.0.113.4", "cat": "", "at": MAINTENANT - 400, "exp": 0, "action": "unban"},                     # levé
+    ])
+    etat = C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    assert etat["tuiles"]["bans_actifs"] == 2
+    h = {x["jour"]: x["bans"] for x in etat["histo"]}
+    assert h["2026-10-29"] == 2 and h["2026-10-30"] == 0 and h["2026-10-31"] == 2
+    assert "203.0.113" not in json.dumps(etat) and "203.0.113" not in s.etat_menaces.read_text()
+    # incrémental : un unban ajouté plus tard
+    with s.bans.open("a") as f:
+        f.write(json.dumps({"ip": "203.0.113.3", "at": MAINTENANT + 30, "exp": 0, "action": "unban"}) + "\n")
+    etat = C.collecter(s, maintenant=MAINTENANT + 60, reseau=False)
+    assert etat["tuiles"]["bans_actifs"] == 1 and {x["jour"]: x["bans"] for x in etat["histo"]}["2026-10-31"] == 2
+
+
+def test_sans_journal_de_bans_rien_n_est_invente(tmp_path):
+    etat = C.collecter(_sources(tmp_path), maintenant=MAINTENANT, reseau=False)
+    assert etat["tuiles"]["bans_actifs"] is None and all(x["bans"] is None for x in etat["histo"])

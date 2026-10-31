@@ -82,7 +82,7 @@ def test_spdx_et_versions():
     for p in ICI.rglob("*"):
         if p.is_file() and p.suffix in (".py", ".js", ".css", ".conf", ".in", ".toml", ".service", ".timer") and "__pycache__" not in p.parts:
             assert "SPDX-License-Identifier" in p.read_text()[:400], p
-    assert lire("debian/changelog").startswith("secubox-live (0.1.2-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-live (0.1.3-1~trixie1) trixie;")
     assert lire("debian/compat").strip() == "13" and "Standards-Version: 4.6.2" in lire("debian/control")
     for sh in ("debian/postinst", "debian/prerm", "debian/postrm", "sbin/secubox-live-exposer"):
         assert subprocess.run(["sh", "-n", str(ICI / sh)]).returncode == 0, sh
@@ -124,3 +124,11 @@ def test_purge_retire_la_route_du_seul_domaine_live(tmp_path):
     assert set(json.loads(t.read_text())) == {"autre.secubox.in", "live2.secubox.in"}   # port 8080 : pas la nôtre
     assert "haproxyctl vhost remove" in post and "/var/lib/secubox-live" in post
     assert "/var/lib/secubox-live/domaine" in lire("sbin/secubox-live-exposer")
+
+
+def test_sources_des_bans_et_rotations_ouvertes_en_lecture():
+    ap = lire("apparmor/secubox-live")
+    assert "/var/lib/secubox/waf/bans.jsonl r," in ap and "/var/log/secubox/waf/waf-threats.log* r," in ap
+    assert "bans.jsonl w" not in ap and "/var/lib/secubox/waf/** " not in ap
+    acl = lire("sbin/secubox-live-acl")
+    assert "/var/lib/secubox/waf/bans.jsonl" in acl and "waf-threats.log.*.gz" in acl
