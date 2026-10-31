@@ -1,3 +1,16 @@
+secubox-waf-ng (1.33.0-1~trixie1) trixie; urgency=medium
+
+  * sbx-actord : graphe purge a la retention, consolidation incrementale par
+    l index (10 min), propositions a 90 s (fichier reecrit si change),
+    mesures a 30 s (cache d evenements 25 s), ingestion et ledger par lots (une transaction), purge par lots
+    de 5 000, options bbolt NoFreelistSync + FreelistMapType, stats en cache
+    60 s ; --workers 1 par defaut ; un lot refuse est rejoue un
+    par un ; plafond des observations par niveau effectif ; unite :
+    --workers 1, GOMEMLIMIT=180MiB GOGC=50, MemoryHigh=200M
+    (ref #3320).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 07:33:06 +0100
+
 secubox-waf-ng (1.32.1-1~trixie1) trixie; urgency=medium
 
   * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte

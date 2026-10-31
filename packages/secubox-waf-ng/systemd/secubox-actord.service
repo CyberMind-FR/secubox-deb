@@ -37,7 +37,10 @@ ExecStart=/usr/sbin/sbx-actord --shadow \
   --ingest-socket /run/secubox/actord.sock \
   --api-socket /run/secubox/actor.sock \
   --propositions /run/secubox/actord-propositions.json \
-  --mesures /run/secubox/actord-mesures.json
+  --mesures /run/secubox/actord-mesures.json \
+  --workers 1
+# --workers 1 (#3320) : bbolt n'admet qu'un ecrivain ; un second worker ne
+# faisait qu'attendre le verrou. Le worker unique ecrit par lots.
 # INGESTION : la socket /run/secubox/actord.sock doit appartenir au groupe
 # `actord-ingest` pour que sbxwaf puisse y ecrire. Le durcissement de cette
 # unite (CapabilityBoundingSet= vide) interdit tout chgrp ici, meme en root :
@@ -76,6 +79,11 @@ SystemCallErrorNumber=EPERM
 # Le socket partagé /run/secubox est écrit hors StateDirectory.
 ReadWritePaths=/run/secubox
 # Plafond mémoire : borne la carte des acteurs en mémoire.
+# #3320 : le ramasse-miettes de Go se declenche avant le plafond (GOMEMLIMIT)
+# au lieu de laisser le noyau reprendre la memoire sous pression ; MemoryHigh
+# ralentit le service avant MemoryMax.
+Environment=GOMEMLIMIT=180MiB GOGC=50
+MemoryHigh=200M
 MemoryMax=256M
 TasksMax=64
 

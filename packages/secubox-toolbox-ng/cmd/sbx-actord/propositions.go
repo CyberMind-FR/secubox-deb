@@ -6,6 +6,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -88,13 +89,41 @@ func (s *Server) propositions() []Proposition {
 }
 
 // publierPropositions réécrit le fichier à intervalle régulier (vide quand rien n'atteint DENY : le consommateur ne voit alors rien à faire).
+// #3320 : le fichier n'est reecrit que si les propositions changent, ou pour
+// rester frais (sbxwaf ignore un fichier de plus de 10 min).
 func (s *Server) publierPropositions(chemin string, pas time.Duration) {
+	var e etatEcriture
 	for {
-		if err := ecrirePropositions(chemin, s.propositions(), s.shadow, time.Now()); err != nil {
-			log.Printf("actord: propositions: %v", err)
+		p := s.propositions()
+		corps, _ := json.Marshal(p)
+		if now := time.Now(); e.doitEcrire(corps, now, propositionsRafraichir) {
+			if err := ecrirePropositions(chemin, p, s.shadow, now); err != nil {
+				log.Printf("actord: propositions: %v", err)
+				e = etatEcriture{} // retente au prochain tour
+			}
 		}
 		time.Sleep(pas)
 	}
+}
+
+// propositionsRafraichir : la moitie de la fraicheur exigee par sbxwaf (10 min).
+const propositionsRafraichir = 5 * time.Minute
+
+// etatEcriture retient le dernier contenu ecrit (empreinte) et sa date.
+type etatEcriture struct {
+	empreinte [32]byte
+	le        time.Time
+}
+
+// doitEcrire dit s'il faut reecrire : premier passage, contenu change, ou
+// contenu identique mais plus vieux que maxAge. Met a jour l'etat si oui.
+func (e *etatEcriture) doitEcrire(corps []byte, now time.Time, maxAge time.Duration) bool {
+	h := sha256.Sum256(corps)
+	if !e.le.IsZero() && h == e.empreinte && now.Sub(e.le) < maxAge {
+		return false
+	}
+	e.empreinte, e.le = h, now
+	return true
 }
 
 func (s *Server) handlePropositions(w http.ResponseWriter, _ *http.Request) {

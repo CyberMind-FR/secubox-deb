@@ -57,7 +57,9 @@ type Server struct {
 	radarT tampon[[]radarActeur]       // synthèse du Radar des acteurs (radar.go)
 	evT    tampon[[]envelope.Envelope] // derniers événements, pour les routes d'analyse (analyse.go)
 
-	ingested   atomic.Uint64 // enveloppes persistées
+	ingested atomic.Uint64 // enveloppes persistées
+	// ecrireLot : ecriture d'un lot (nil = store.IngestLot) ; remplacable en test.
+	ecrireLot  func([]*envelope.Envelope) error
 	correlated atomic.Uint64 // enveloppes passées par le pipeline de corrélation
 	dropped    atomic.Uint64 // rejetées faute de place (backpressure, jamais bloquant)
 	invalid    atomic.Uint64 // rejetées par Validate (événements forgés/malformés)
@@ -65,14 +67,77 @@ type Server struct {
 
 // worker draine la file d'ingestion vers le store puis corrèle. C'est la seule
 // voie qui écrit sur bbolt.
+//
+// #3320 : PAR LOTS. Une transaction bbolt synchronisee par evenement, pour le
+// magasin puis pour le ledger, coutait deux fsync par requete vue par le WAF.
+// Le worker prend ce qui attend dans la file (jusqu'a lotMax, ou lotDelai apres
+// le premier evenement), l'ecrit en une transaction, correle chaque evenement
+// dans l'ordre, puis fige leurs preuves en une transaction.
 func (s *Server) worker(ch <-chan *envelope.Envelope) {
-	for e := range ch {
-		if err := s.store.Ingest(e); err != nil {
-			log.Printf("actord: ingest: %v", err)
-			continue
+	for {
+		e, ok := <-ch
+		if !ok {
+			return
 		}
-		s.ingested.Add(1)
-		s.correlate(e)
+		lot := []*envelope.Envelope{e}
+		delai := time.NewTimer(lotDelai)
+	remplir:
+		for len(lot) < lotMax {
+			select {
+			case e, ok := <-ch:
+				if !ok {
+					break remplir
+				}
+				lot = append(lot, e)
+			case <-delai.C:
+				break remplir
+			}
+		}
+		delai.Stop()
+		s.traiterLot(lot)
+	}
+}
+
+const (
+	lotMax   = 256
+	lotDelai = 200 * time.Millisecond
+)
+
+func (s *Server) traiterLot(lot []*envelope.Envelope) {
+	ecrire := s.ecrireLot
+	if ecrire == nil {
+		ecrire = s.store.IngestLot
+	}
+	if err := ecrire(lot); err != nil {
+		// #3321 : un lot refuse est rejoue evenement par evenement — un seul
+		// evenement fautif ne fait pas perdre les autres.
+		log.Printf("actord: ingest (lot de %d, rejoue un par un) : %v", len(lot), err)
+		for _, e := range lot {
+			if err := s.store.Ingest(e); err != nil {
+				log.Printf("actord: ingest: %v", err)
+				continue
+			}
+			s.ingested.Add(1)
+			s.correlate(e)
+		}
+		return
+	}
+	s.ingested.Add(uint64(len(lot)))
+	var preuves []evidence.Record
+	for _, e := range lot {
+		if r, ok := s.preuve(e); ok {
+			preuves = append(preuves, r)
+		}
+	}
+	if s.ledger != nil && len(preuves) > 0 {
+		if _, err := s.ledger.AppendLot(preuves); err != nil {
+			log.Printf("actord: evidence (lot de %d, rejoue un par un) : %v", len(preuves), err)
+			for _, r := range preuves {
+				if _, err := s.ledger.Append(r); err != nil {
+					log.Printf("actord: evidence: %v", err)
+				}
+			}
+		}
 	}
 }
 
@@ -242,7 +307,7 @@ func (s *Server) apiMux() *http.ServeMux {
 }
 
 // statsTTL : relire et décoder 24 h d'événements coûte cher sur une box chargée ; jamais sur le chemin d'une requête.
-const statsTTL = 30 * time.Second
+const statsTTL = 60 * time.Second // #3320 : etait 30 s
 
 // statsCache rend le dernier instantané des stats (double tampon, voir tampon.go).
 func (s *Server) statsCache() (store.Stats, error) {

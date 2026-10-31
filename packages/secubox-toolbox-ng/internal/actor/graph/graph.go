@@ -63,6 +63,9 @@ type Actor struct {
 	asns    map[string]bool
 	ctys    map[string]bool
 	tgts    map[string]bool
+	// keys : cles d'index menant a cet acteur (#3320) — la fusion et la purge
+	// les deplacent ou les retirent sans parcourir tout l'index.
+	keys map[string]bool
 }
 
 // Obs est une observation à corréler (dérivée d'une enveloppe par l'appelant).
@@ -116,6 +119,12 @@ type Graph struct {
 	// restreindre aux candidats indexes n'approxime donc rien — c'est le meme
 	// resultat, sans le balayage.
 	idx map[string]map[string]bool // "axe:valeur" -> ensemble d'ID d'acteurs
+	// modifies : acteurs crees, nourris ou fusionnes depuis la derniere
+	// consolidation (#3320). Une paire d'acteurs inchanges a deja ete examinee.
+	modifies map[string]bool
+	// inexVus : hotes inexistants deja connus a la passe precedente ; un nouveau
+	// fait revisiter les acteurs qui l'ont vise.
+	inexVus map[string]bool
 }
 
 // New crée un graphe. threshold<=0 => DefaultThreshold.
@@ -124,7 +133,7 @@ func New(threshold int) *Graph {
 		threshold = DefaultThreshold
 	}
 	return &Graph{threshold: threshold, actors: map[string]*Actor{},
-		idx: map[string]map[string]bool{}}
+		idx: map[string]map[string]bool{}, modifies: map[string]bool{}, inexVus: map[string]bool{}}
 }
 
 // Observe rattache une observation à l'acteur le plus similaire (si la continuité
@@ -192,11 +201,9 @@ func (g *Graph) Observe(o Obs) *Actor {
 	// La cible entre dans l'index : sans elle, deux reciteurs du meme
 	// dictionnaire ne seraient jamais candidats l'un pour l'autre.
 	if o.Target != "" {
-		if g.idx["tgt:"+o.Target] == nil {
-			g.idx["tgt:"+o.Target] = map[string]bool{}
-		}
-		g.idx["tgt:"+o.Target][best.ID] = true
+		g.ajouterCle("tgt:"+o.Target, best)
 	}
+	g.modifies[best.ID] = true
 	return best
 }
 
@@ -237,11 +244,48 @@ func cles(sig similarity.Signature) []string {
 // revient.
 func (g *Graph) indexer(a *Actor, sig similarity.Signature) {
 	for _, k := range cles(sig) {
-		if g.idx[k] == nil {
-			g.idx[k] = map[string]bool{}
-		}
-		g.idx[k][a.ID] = true
+		g.ajouterCle(k, a)
 	}
+}
+
+func (g *Graph) ajouterCle(k string, a *Actor) {
+	if g.idx[k] == nil {
+		g.idx[k] = map[string]bool{}
+	}
+	g.idx[k][a.ID] = true
+	a.keys[k] = true
+}
+
+// retirerCle ote l'acteur de la cle et supprime l'ensemble devenu vide.
+func (g *Graph) retirerCle(k, id string) {
+	if ens := g.idx[k]; ens != nil {
+		delete(ens, id)
+		if len(ens) == 0 {
+			delete(g.idx, k)
+		}
+	}
+}
+
+// Purger retire du graphe les acteurs non vus depuis `avant` (horodatage Unix),
+// avec leurs cles d'index (#3320 : seule la base etait purgee, le graphe
+// grossissait jusqu'au plafond memoire). Rend les ID retires, tries, pour que
+// l'appelant oublie aussi leurs signaux accumules. Un acteur qui revient apres
+// sa purge renait sous un nouvel ID : la retention du graphe est celle des
+// evenements, comme au redemarrage.
+func (g *Graph) Purger(avant int64) []string {
+	var out []string
+	for id, a := range g.actors {
+		if a.LastSeen < avant {
+			for k := range a.keys {
+				g.retirerCle(k, id)
+			}
+			delete(g.actors, id)
+			delete(g.modifies, id)
+			out = append(out, id)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // candidats rend, triee, la liste des acteurs partageant au moins une valeur
@@ -288,7 +332,7 @@ func (g *Graph) newActor(o Obs) *Actor {
 		sig:     o.Sig,
 		concord: map[string]bool{},
 		ips:     map[string]bool{}, asns: map[string]bool{},
-		ctys: map[string]bool{}, tgts: map[string]bool{},
+		ctys: map[string]bool{}, tgts: map[string]bool{}, keys: map[string]bool{},
 		FirstSeen: o.Timestamp, LastSeen: o.Timestamp,
 	}
 	g.actors[a.ID] = a
@@ -452,25 +496,69 @@ func (g *Graph) fusionnables(a, b *Actor, inexistants map[string]bool) (bool, st
 // nombre de fusions. `inexistants` est l'ensemble des hotes qu'aucune route ne
 // sert — l'appelant le connait, le graphe non.
 func (g *Graph) Consolider(inexistants map[string]bool) int {
-	ids := make([]string, 0, len(g.actors))
-	for id := range g.actors {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids) // deterministe : le plus ancien absorbe, jamais l'inverse
-	fusions := 0
-	for i := 0; i < len(ids); i++ {
-		a := g.actors[ids[i]]
-		if a == nil {
-			continue
+	// #3320 : plus de comparaison de toutes les paires (O(n²) sous verrou toutes
+	// les deux minutes). Une fusion exige une adresse commune ou deux hotes
+	// inexistants communs : les candidats sont donc dans l'index (`ip:`, `tgt:`),
+	// et seule une paire dont un acteur a change depuis la passe precedente peut
+	// avoir change d'avis — ou un hote devenu inexistant depuis.
+	vus := make(map[string]bool, len(inexistants))
+	for h := range inexistants {
+		vus[h] = true
+		if !g.inexVus[h] {
+			for id := range g.idx["tgt:"+h] {
+				g.modifies[id] = true
+			}
 		}
-		for j := i + 1; j < len(ids); j++ {
-			b := g.actors[ids[j]]
-			if b == nil {
+	}
+	g.inexVus = vus // #3321 : suit l'ensemble courant (un hote retire puis remis redevient nouveau)
+	fusions := 0
+	for len(g.modifies) > 0 {
+		ids := make([]string, 0, len(g.modifies))
+		for id := range g.modifies {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids) // deterministe
+		g.modifies = map[string]bool{}
+		for _, id := range ids {
+			a := g.actors[id]
+			if a == nil {
 				continue
 			}
-			if ok, raison := g.fusionnables(a, b, inexistants); ok {
-				g.absorberActeur(a, b, raison)
-				fusions++
+			cand := map[string]bool{}
+			for ip := range a.ips {
+				for c := range g.idx["ip:"+ip] {
+					cand[c] = true
+				}
+			}
+			for t := range a.tgts {
+				if inexistants[t] {
+					for c := range g.idx["tgt:"+t] {
+						cand[c] = true
+					}
+				}
+			}
+			delete(cand, id)
+			cs := make([]string, 0, len(cand))
+			for c := range cand {
+				cs = append(cs, c)
+			}
+			sort.Strings(cs)
+			for _, c := range cs {
+				x, y := g.actors[id], g.actors[c]
+				if x == nil {
+					break // absorbe par un plus ancien
+				}
+				if y == nil {
+					continue
+				}
+				if y.ID < x.ID { // le plus ancien absorbe, jamais l'inverse
+					x, y = y, x
+				}
+				if ok, raison := g.fusionnables(x, y, inexistants); ok {
+					g.absorberActeur(x, y, raison)
+					g.modifies[x.ID] = true // ses nouvelles cles peuvent appeler d'autres fusions
+					fusions++
+				}
 			}
 		}
 	}
@@ -507,13 +595,16 @@ func (g *Graph) absorberActeur(a, b *Actor, raison string) {
 		a.concord[k] = true
 	}
 	a.concord[raison] = true
-	// L'index doit suivre : toute cle qui menait a b mene desormais a a.
-	for _, ens := range g.idx {
-		if ens[b.ID] {
+	// L'index doit suivre : toute cle qui menait a b mene desormais a a (par les
+	// cles de b, sans parcourir tout l'index — #3320).
+	for k := range b.keys {
+		if ens := g.idx[k]; ens != nil {
 			delete(ens, b.ID)
 			ens[a.ID] = true
 		}
+		a.keys[k] = true
 	}
 	delete(g.actors, b.ID)
+	delete(g.modifies, b.ID)
 	g.materialize(a)
 }
