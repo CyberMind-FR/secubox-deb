@@ -34,7 +34,7 @@ CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_NET_ADMIN CAP_AUDIT_WRITE CAP_DA
 # L'assistant root (sudo) hérite de CET espace de montage : il écrit la configuration du tunnel (/etc/wireguard), son verrou (/run/secubox-autoload,
 # root 0700, tmpfiles.d du paquet) et la projection publique des pairs (#3126). Ces deux dossiers sont créés par le postinst avant le démarrage ;
 # « - » : absent, un dossier est ignoré au lieu d'empêcher le service de démarrer (l'écriture échoue alors jusqu'au prochain démarrage).
-ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload /run/secubox /etc/wireguard -/run/secubox-autoload -/var/lib/secubox/autoload-public
+ReadWritePaths=/var/lib/secubox/autoload /var/log/secubox/autoload /run/secubox /etc/wireguard -/run/secubox-autoload -/var/lib/secubox-autoload-public
 
 [Install]
 WantedBy=multi-user.target

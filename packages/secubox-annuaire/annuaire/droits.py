@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 SERVICES = ("annuaire-offres", "bans-waf")              # openpgp et macro : à ajouter quand leur fournisseur sera câblé
-DROITS_DEFAUT = Path("/var/lib/secubox/autoload-public/droits-maillage.json")
+DROITS_DEFAUT = Path("/var/lib/secubox-autoload-public/droits-maillage.json")   # #3345
 PAIRS_DEFAUT = Path("/var/lib/secubox/p2p-public/pairs-enroles.json")
 SELF_DEFAUT = Path("/var/lib/secubox/annuaire/droits-self.json")
 AUTOLOAD_DIR = Path("/var/lib/secubox/autoload")         # présent : cette box héberge Auto-Load, donc DOIT avoir une projection (fail-closed)

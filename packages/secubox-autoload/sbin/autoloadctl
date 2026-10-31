@@ -15,7 +15,7 @@
                                            régénère wg-autoload.conf depuis les pairs actifs et l'applique (wg syncconf), puis exporte-pairs
                                            (même si WireGuard échoue : le code de retour dit alors l'échec du tunnel) ; --sans-reactiver
                                            (minuterie, révocations, abonnement) ne relance pas un wg-autoload dont l'unité est désactivée
-  autoloadctl exporter-pairs               publie /var/lib/secubox/autoload-public/pairs-publics.json (root, 0644, sans secret) pour le pilotage (#3126)
+  autoloadctl exporter-pairs               publie /var/lib/secubox-autoload-public/pairs-publics.json (root, 0644, sans secret) pour le pilotage (#3126)
                                            et droits-maillage.json (droits des pairs du maillage, lus par l'annuaire, #3305)
   autoloadctl maillage --nom <pair> --formule <f> [--empreinte sbx-…] [--statut …] [--mois N] [--motif …]
                                            abonnement d'un pair du maillage (#3305), droits republiés aussitôt

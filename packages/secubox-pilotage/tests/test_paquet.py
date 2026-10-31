@@ -84,7 +84,7 @@ def test_ecoute_et_declencheurs():
     assert "Type=oneshot" in s and "ExecStart=/usr/sbin/secubox-pilotage-ecoute" in s
     chemin = lire("systemd/secubox-pilotage-ecoute.path")
     assert "PathChanged=/var/lib/secubox/p2p/wg_mesh.json" in chemin and "Unit=secubox-pilotage-ecoute.service" in chemin
-    assert "PathChanged=/var/lib/secubox/autoload-public/pairs-publics.json" in chemin
+    assert "PathChanged=/var/lib/secubox-autoload-public/pairs-publics.json" in chemin
     assert "OnUnitInactiveSec=" in lire("systemd/secubox-pilotage-ecoute.timer")
 
 
@@ -142,7 +142,7 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.6.15-1~trixie1) trixie;")
+    assert ch.startswith("secubox-pilotage (0.6.16-1~trixie1) trixie;")
     assert "Recommends: apparmor, secubox-p2p (>= 1.20.2~)" in c          # banc gk2 : projection p2p-public des pairs enrôlés
     depends = re.search(r"^Depends:(.*)$", c, re.M).group(1)
     assert "sudo" not in depends                                          # Final : plus aucune règle sudoers

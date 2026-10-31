@@ -1,3 +1,11 @@
+secubox-autoload (0.9.1-1~trixie1) trixie; urgency=medium
+
+  * Projection publique d Auto-Load (pairs, droits du maillage) dans
+    /var/lib/secubox-autoload-public (root) : /var/lib/secubox appartient au
+    compte secubox, l export la refusait et elle n existait pas (ref #3345).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 11:28:25 +0100
+
 secubox-autoload (0.9.0-1~trixie1) trixie; urgency=medium
 
   * Droits du maillage (ref #3305) : les formules portent la liste fermée des services du maillage (annuaire-offres,
