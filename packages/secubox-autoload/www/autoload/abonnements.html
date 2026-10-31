@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Abonnements & profils (#3303, décision 4 de #3258) : un abonnement PAR BOX (formule, échéance, statut), le client ne fait que regrouper.
+  Aucune facturation, aucun prix. Profil Aurora, page autonome. ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Abonnements &amp; profils</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.sm{padding:3px 9px;font-size:.72rem} .btn.danger{border-color:var(--rouge);color:var(--rouge)} .btn.danger:hover{background:rgba(255,77,94,.14)}
+        .btn.bon{border-color:var(--vert);color:var(--vert)} .btn.bon:hover{background:rgba(46,204,113,.14)}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)} .tuile.vi .v{color:var(--violet)} .tuile.bl .v{color:var(--bleu)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+        .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+        .onglets button:hover{border-color:var(--cyan);color:var(--texte)} .onglets button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .pan h3 .btn{margin-left:auto}
+        .pan+.pan{margin-top:10px}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td.act{white-space:nowrap}
+        td.act .grp{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+        td small{display:block;color:var(--faible);font-size:.68rem}
+        .nom{color:var(--cyan);overflow-wrap:anywhere}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)} .pill.bl{border-color:var(--bleu);color:var(--bleu);background:rgba(59,130,246,.12)}
+        .barre{height:6px;background:rgba(159,179,214,.16);border-radius:999px;overflow:hidden;min-width:80px}
+        .barre i{display:block;height:100%;background:var(--cyan)} .barre i.ok{background:var(--vert)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.8rem;display:grid;gap:8px}
+        .conf .grp{display:flex;gap:6px;flex-wrap:wrap}
+        .jeton{border:1px solid var(--cyan);background:rgba(41,182,246,.08);border-radius:10px;padding:10px 12px;display:grid;gap:8px}
+        .jeton .val{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;overflow-wrap:anywhere;background:rgba(8,18,38,.8);border:1px solid var(--trait2);border-radius:8px;padding:8px 10px;user-select:all}
+        .jeton .grp{display:flex;gap:6px;flex-wrap:wrap}
+        .jeton p{margin:0;font-size:.76rem;color:var(--orange)}
+        form.saisie{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));align-items:end;margin:0 0 10px;padding:10px;border:1px solid var(--trait2);border-radius:10px;background:rgba(8,18,38,.6)}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0}
+        form.saisie input,form.saisie select{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0;width:100%}
+        form.saisie input:focus,form.saisie select:focus{outline:none;border-color:var(--cyan)}
+        ul.liste{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:3px 14px;font-size:.78rem;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+        ul.liste li{overflow-wrap:anywhere}
+        .detail p{margin:3px 0;font-size:.8rem;color:var(--doux);overflow-wrap:anywhere}
+        .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
+        .toast.show{opacity:1;transform:translate(-50%,0)}
+        .ecart{display:block;color:var(--orange);font-size:.7rem;margin-top:3px}
+        .filtres{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+        .filtres button{font:inherit;font-size:.72rem;padding:4px 10px;border-radius:999px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer}
+        .filtres button[aria-pressed=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:1000px){.grille{grid-template-columns:minmax(0,1fr) 300px}}
+        ul.f{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+        ul.f li{display:flex;justify-content:space-between;gap:8px;border-top:1px solid rgba(86,150,255,.12);padding-top:6px;font-size:.8rem}
+        form.saisie.etroit{grid-template-columns:1fr}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+                <div><h1>Abonnements &amp; profils</h1><small>Auto-Load · une formule, une échéance, un statut par box</small></div>
+            </div>
+            <div class="droite"><a class="btn" href="./">← Atelier Auto-Load</a><span id="maj">—</span><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — actions inertes</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile ok" title="Box dont l’abonnement est actif et non échu"><span class="l">Actives</span><span class="v" id="tActif">—</span><span class="s" id="tTotal">—</span></div>
+            <div class="tuile att" title="Actives dont l’échéance tombe dans les 30 jours"><span class="l">Échéance &lt; 30 j</span><span class="v" id="tProche">—</span><span class="s">à prolonger</span></div>
+            <div class="tuile att" title="Échéance passée : enrôlement refusé, pilotage informé"><span class="l">Échues</span><span class="v" id="tEchu">—</span><span class="s">état calculé</span></div>
+            <div class="tuile hors" title="Suspendues par l’administrateur"><span class="l">Suspendues</span><span class="v" id="tSusp">—</span><span class="s">tunnel coupé</span></div>
+            <div class="tuile hors" title="Révoquées : un nouveau jeton est requis"><span class="l">Révoquées</span><span class="v" id="tRev">—</span><span class="s">définitif</span></div>
+            <div class="tuile att" title="Profil appliqué différent du profil de la formule (relevé du pilotage)"><span class="l">Écarts de profil</span><span class="v" id="tEcart">—</span><span class="s">relevé du pilotage</span></div>
+        </section>
+
+        <div class="conf" id="conf" role="alertdialog" aria-live="assertive" hidden>
+            <strong id="confTitre"></strong><span id="confTexte"></span>
+            <form class="saisie etroit" id="confForm" onsubmit="return false"></form>
+            <div class="grp"><button class="btn danger" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
+        </div>
+        <div class="retour" id="retour" hidden></div>
+
+        <div class="grille">
+            <div class="pan"><h3>Box et abonnements <i id="compte"></i></h3>
+                <div class="filtres" id="filtres"></div>
+                <div class="tab"><table><thead><tr><th>Client · box</th><th>Formule</th><th>Échéance</th><th>Statut</th><th>Profil</th><th>Actions</th></tr></thead><tbody id="lignes"></tbody></table></div>
+            </div>
+            <div class="pan"><h3>Formules <i>nom → profil, durée</i></h3>
+                <ul class="f" id="formules"></ul>
+                <form class="saisie etroit" id="fForm" style="margin-top:10px">
+                    <label>Nom (minuscules) <input id="fNom" required maxlength="30" pattern="[a-z0-9_-]{1,30}"></label>
+                    <label>Libellé <input id="fLib" required maxlength="60"></label>
+                    <label>Profil <select id="fProfil"></select></label>
+                    <label>Durée (mois) <input id="fMois" type="number" min="1" max="120" value="12" required></label>
+                    <button class="btn prim" type="submit">Enregistrer la formule</button>
+                </form>
+                <p class="note">Changer le profil d’une formule ne touche aucune box : l’écart est signalé, l’application reste une action explicite.</p>
+            </div>
+        </div>
+    </div></div></main>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/autoload';
+        const PROFILS = ['minimal', 'lite', 'isp', 'full', 'secure-gateway', 'media-lab', 'distante'];
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        let LIGNES = [], FORMULES = [], FILTRE = 'tous', SESSION_OK = true, CONFIRM = null;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({ Accept: 'application/json' }, extra || {}); const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function lire(chemin) {
+            const r = await fetch(API + chemin, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+            if (!r.ok) { const e = new Error('HTTP ' + r.status); e.statut = r.status; throw e; }
+            return r.json();
+        }
+        async function ecrire(chemin, corps) {
+            if (DEMO) return { ok: false, demo: true };
+            try {
+                const r = await fetch(API + chemin, { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify(corps) });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        function detailErr(res) { return res.demo ? 'Démonstration : action inerte.' : (res.data && typeof res.data.detail === 'string') ? res.data.detail : (res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable'); }
+        function retour(ok, msg) { const r = $('retour'); r.hidden = false; r.className = 'retour ' + (ok ? 'ok' : 'ko'); r.textContent = msg; }
+        function jour(ts) { if (!ts) return '—'; const d = new Date(Number(ts) * 1000); return isNaN(d) ? '—' : d.toLocaleDateString('fr-FR'); }
+        function pill(cls, txt) { return el('span', 'pill ' + cls, txt); }
+
+        function demoData() {
+            const n = Math.floor(Date.now() / 1000), j = 86400;
+            FORMULES = [{ nom: 'sans-ecran', libelle: 'Sans écran', profil: 'distante', mois: 12 }, { nom: 'leger', libelle: 'Léger', profil: 'lite', mois: 12 },
+                        { nom: 'passerelle', libelle: 'Passerelle', profil: 'secure-gateway', mois: 12 }, { nom: 'fai-local', libelle: 'FAI local', profil: 'isp', mois: 24 }];
+            LIGNES = [
+                { id: 1, box: 'SN-GK5', client: 'atelier-nord', formule: 'sans-ecran', formule_libelle: 'Sans écran', expire_le: n + 318 * j, jours_restants: 318, statut: 'actif', profil_formule: 'distante', profil_commande: 'distante', profil_applique: 'lite', ecart: true },
+                { id: 2, box: 'atelier-salle', client: 'atelier-nord', formule: 'leger', formule_libelle: 'Léger', expire_le: n + 20 * j, jours_restants: 20, statut: 'actif', profil_formule: 'lite', profil_commande: 'lite', profil_applique: 'lite', ecart: false },
+                { id: 3, box: 'kerne-pop2', client: 'fai-kerne', formule: 'fai-local', formule_libelle: 'FAI local', expire_le: n + 480 * j, jours_restants: 480, statut: 'suspendu', motif: 'impayé', profil_formule: 'isp', profil_commande: 'isp', profil_applique: null, ecart: false },
+                { id: 4, box: '4', client: 'ancien-client', formule: null, formule_libelle: null, expire_le: n - 90 * j, jours_restants: -90, statut: 'revoque', profil_formule: null, profil_commande: 'lite', profil_applique: null, ecart: false }];
+        }
+
+        async function charger() {
+            if (DEMO) { demoData(); rendre(); return; }
+            const rs = await Promise.allSettled([lire('/abonnements'), lire('/formules')]);
+            const refus = rs.some(r => r.status === 'rejected' && (r.reason.statut === 401 || r.reason.statut === 403));
+            SESSION_OK = !refus;
+            if (rs[0].status === 'fulfilled' && Array.isArray(rs[0].value)) LIGNES = rs[0].value;
+            if (rs[1].status === 'fulfilled' && Array.isArray(rs[1].value)) FORMULES = rs[1].value;
+            const panne = rs.every(r => r.status === 'rejected') && SESSION_OK;
+            $('erreur').hidden = !panne; if (panne) $('erreur').textContent = 'Lecture impossible : service indisponible.';
+            $('maj').textContent = 'Mis à jour ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            rendre();
+        }
+
+        function statutVu(x) {
+            if (x.statut === 'actif' && x.jours_restants !== null && x.jours_restants <= 30) return ['expire dans ' + x.jours_restants + ' j', 'att'];
+            return { actif: ['actif', 'ok'], echu: ['échu', 'att'], suspendu: ['suspendu', 'att'], revoque: ['révoqué', 'hors'] }[x.statut] || [tiret(x.statut), ''];
+        }
+        const FILTRES = [['tous', 'Toutes', () => true], ['actif', 'Actives', x => x.statut === 'actif'], ['proche', 'Échéance proche', x => x.statut === 'actif' && x.jours_restants !== null && x.jours_restants <= 30],
+                         ['echu', 'Échues', x => x.statut === 'echu'], ['suspendu', 'Suspendues', x => x.statut === 'suspendu'], ['revoque', 'Révoquées', x => x.statut === 'revoque'], ['ecart', 'Écart de profil', x => x.ecart]];
+
+        function bouton(txt, cls, fn, desactive, titre) { const b = el('button', 'btn sm ' + (cls || ''), txt); b.type = 'button'; if (desactive) { b.disabled = true; } else b.addEventListener('click', fn); if (titre) b.title = titre; return b; }
+
+        function rendre() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK;
+            const compte = f => LIGNES.filter(f).length;
+            $('tActif').textContent = compte(x => x.statut === 'actif'); $('tTotal').textContent = 'sur ' + LIGNES.length + ' box';
+            $('tProche').textContent = compte(FILTRES[2][2]); $('tEchu').textContent = compte(FILTRES[3][2]);
+            $('tSusp').textContent = compte(FILTRES[4][2]); $('tRev').textContent = compte(FILTRES[5][2]); $('tEcart').textContent = compte(x => x.ecart);
+            $('compte').textContent = new Set(LIGNES.map(x => x.client)).size + ' clients · ' + LIGNES.length + ' box';
+            const fz = $('filtres'); fz.textContent = '';
+            FILTRES.forEach(([k, t]) => { const b = el('button', null, t); b.type = 'button'; b.setAttribute('aria-pressed', String(FILTRE === k)); b.addEventListener('click', () => { FILTRE = k; rendre(); }); fz.appendChild(b); });
+            const tb = $('lignes'); tb.textContent = '';
+            const vues = LIGNES.filter(FILTRES.find(f => f[0] === FILTRE)[2]);
+            if (!vues.length) { const tr = el('tr'), td = el('td', 'vide', 'Aucune box.'); td.colSpan = 6; tr.appendChild(td); tb.appendChild(tr); }
+            vues.forEach(x => {
+                const tr = el('tr');
+                const c1 = el('td'); c1.appendChild(el('b', 'nom', tiret(x.client))); c1.appendChild(el('small', null, tiret(x.box))); tr.appendChild(c1);
+                const c2 = el('td', null, x.formule_libelle || tiret(x.formule)); if (x.formule && !x.profil_formule) c2.appendChild(el('small', null, 'hors catalogue')); tr.appendChild(c2);
+                const c3 = el('td', null, jour(x.expire_le)); if (x.jours_restants !== null && x.jours_restants !== undefined) c3.appendChild(el('small', null, x.jours_restants < 0 ? 'il y a ' + (-x.jours_restants) + ' j' : 'dans ' + x.jours_restants + ' j')); tr.appendChild(c3);
+                const [st, cl] = statutVu(x); const c4 = el('td'); c4.appendChild(pill(cl, st)); if (x.motif) c4.appendChild(el('small', null, x.motif)); tr.appendChild(c4);
+                const c5 = el('td'); c5.appendChild(pill('', x.profil_applique || 'inconnu'));
+                if (x.ecart) c5.appendChild(el('span', 'ecart', '⚠ appliqué : ' + x.profil_applique + ' · formule : ' + (x.profil_formule || x.profil_commande)));
+                tr.appendChild(c5);
+                const c6 = el('td', 'act'), g = el('div', 'grp');
+                if (x.statut === 'revoque') g.appendChild(el('small', null, 'nouveau jeton requis'));
+                else {
+                    g.appendChild(bouton('Prolonger', '', () => prolonger(x)));
+                    g.appendChild(bouton('Formule', '', () => formule(x)));
+                    g.appendChild(x.statut === 'suspendu' ? bouton('Reprendre', 'bon', () => reprendre(x)) : bouton('Suspendre', '', () => suspendre(x)));
+                    g.appendChild(bouton('Révoquer', 'danger', () => revoquer(x)));
+                    if (x.ecart) g.appendChild(bouton('Appliquer ' + (x.profil_formule || x.profil_commande), '', null, true, 'à venir (#3302) : bascule de profil par le pilotage'));
+                }
+                c6.appendChild(g); tr.appendChild(c6); tb.appendChild(tr);
+            });
+            const ul = $('formules'); ul.textContent = '';
+            if (!FORMULES.length) ul.appendChild(el('li', 'vide', 'Aucune formule : créez-en une ci-dessous.'));
+            FORMULES.forEach(f => { const li = el('li'), a = el('span'), b = el('span'); a.appendChild(el('b', null, f.libelle)); a.appendChild(el('small', null, f.nom)); b.appendChild(pill('cy', f.profil)); b.appendChild(el('small', null, f.mois + ' mois')); li.appendChild(a); li.appendChild(b); ul.appendChild(li); });
+        }
+
+        function champ(lib, entree) { const l = el('label', null, lib); l.appendChild(entree); return l; }
+        function demander(titre, texte, champs, faire) {
+            CONFIRM = { faire }; $('confTitre').textContent = titre; $('confTexte').textContent = texte;
+            const f = $('confForm'); f.textContent = ''; (champs || []).forEach(c => f.appendChild(c)); f.hidden = !(champs && champs.length);
+            $('conf').hidden = false; $('confNon').focus();
+        }
+        function ferme() { CONFIRM = null; $('conf').hidden = true; }
+        async function agir(chemin, corps, ok) {
+            const res = await ecrire(chemin, corps);
+            retour(res.ok, res.ok ? ok + (res.data && res.data.tunnel_applique === false ? ' (pilotage informé au prochain passage)' : '') : detailErr(res));
+            if (res.statut === 401 || res.statut === 403) SESSION_OK = false;
+            if (res.ok) await charger(); else rendre();
+        }
+        function prolonger(x) {
+            const s = el('select'); [1, 3, 6, 12, 24].forEach(m => { const o = el('option', null, m + ' mois'); o.value = m; if (m === 12) o.selected = true; s.appendChild(o); });
+            demander('Prolonger — ' + x.box, 'La nouvelle échéance part de l’échéance actuelle (ou d’aujourd’hui si elle est passée).', [champ('Durée', s)],
+                () => agir('/boxes/' + x.id + '/abonnement/prolonger', { mois: Number(s.value) }, 'Abonnement prolongé.'));
+        }
+        function formule(x) {
+            const s = el('select'); FORMULES.forEach(f => { const o = el('option', null, f.libelle + ' (' + f.profil + ')'); o.value = f.nom; if (f.nom === x.formule) o.selected = true; s.appendChild(o); });
+            demander('Changer de formule — ' + x.box, 'Le profil de la box n’est pas modifié ; un écart sera signalé si le profil diffère.', [champ('Formule', s)],
+                () => agir('/boxes/' + x.id + '/abonnement/formule', { formule: s.value }, 'Formule changée.'));
+        }
+        function suspendre(x) {
+            const m = el('input'); m.required = true; m.maxLength = 200;
+            demander('Suspendre — ' + x.box, 'Cette box seule : elle garde sa configuration, son tunnel Auto-Load est coupé et le maître est informé. Les autres box du client ne changent pas. Réversible.',
+                [champ('Motif (journal d’audit)', m)], () => agir('/boxes/' + x.id + '/abonnement/suspendre', { motif: m.value }, 'Box suspendue.'));
+        }
+        function reprendre(x) {
+            demander('Reprendre — ' + x.box, 'L’abonnement de cette box redevient actif ; le tunnel est republié.', [], () => agir('/boxes/' + x.id + '/abonnement/reprendre', {}, 'Box reprise.'));
+        }
+        function revoquer(x) {
+            const m = el('input'), c = el('input'); m.required = c.required = true; m.maxLength = 200; c.maxLength = 64;
+            demander('Révoquer — ' + x.box, 'Irréversible, pour cette box seule : son jeton est révoqué et elle quitte le maillage Auto-Load ; les autres box du client ne changent pas.',
+                [champ('Motif (obligatoire)', m), champ('Tapez « ' + x.box + ' » pour confirmer', c)],
+                () => agir('/boxes/' + x.id + '/abonnement/revoquer', { motif: m.value, confirmation: c.value }, 'Box révoquée.'));
+        }
+
+        $('confOui').addEventListener('click', async () => { const c = CONFIRM; ferme(); if (c) await c.faire(); });
+        $('confNon').addEventListener('click', ferme);
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && CONFIRM) ferme(); });
+        $('rafraichir').addEventListener('click', charger);
+        PROFILS.forEach(p => { const o = el('option', null, p); o.value = p; $('fProfil').appendChild(o); });
+        $('fForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            await agir('/formules', { nom: $('fNom').value.trim(), libelle: $('fLib').value.trim(), profil: $('fProfil').value, mois: Number($('fMois').value) }, 'Formule enregistrée.');
+        });
+        charger();
+        setInterval(() => { if (!CONFIRM && !document.hidden) charger(); }, 60000);
+    </script>
+</body>
+</html>

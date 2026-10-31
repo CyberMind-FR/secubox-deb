@@ -37,6 +37,8 @@
   # Données du module : base des jetons, clé publique du hub, demande et accusé de synchronisation.
   /var/lib/secubox/autoload/ r,
   /var/lib/secubox/autoload/** rwk,
+  # #3303 : relevé facultatif des profils appliqués, publié par le pilotage (lecture seule)
+  /var/lib/secubox/pilotage-public/profils-appliques.json r,
   /var/log/secubox/autoload/ r,
   /var/log/secubox/autoload/audit.log w,
 

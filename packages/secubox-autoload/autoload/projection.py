@@ -7,7 +7,7 @@
 SecuBox-Deb :: autoload :: projection PUBLIQUE des pairs (#3126, pilotage L1 « Voir »)
 
 Le maître de pilotage a besoin de savoir à quel client appartient une box qui se connecte par `wg-autoload` : adresse tunnel → client, lot, série,
-profil, abonnement. Ce fichier est écrit par root (autoloadctl exporter-pairs, appelé à la fin de tunnel-sync), lisible de tous (0644) :
+profil, abonnement (celui de la BOX depuis #3303, sinon celui du client). Ce fichier est écrit par root (autoloadctl exporter-pairs, appelé à la fin de tunnel-sync), lisible de tous (0644) :
 il ne contient AUCUN secret — ni clé publique WireGuard, ni empreinte, ni valeur de jeton.
 
 Pairs retenus : ceux de la table `pairs` NON retirés (`retire_le IS NULL`) dont la clé est liée à un jeton RÉCLAMÉ (`jetons.etat = 'reclame'`).
@@ -35,6 +35,14 @@ DELAI_S = 15
 
 _REQUETE = (
     "SELECT p.adresse AS adresse, j.client AS client, j.lot AS lot, j.serie AS serie, j.profil AS profil, "
+    "COALESCE(b.statut, c.abonnement, 'actif') AS abonnement, CASE WHEN b.statut IS NULL THEN c.expire_le ELSE b.expire_le END AS abonnement_expire_le "
+    "FROM pairs p JOIN jetons j ON j.cle_pub = p.cle_pub AND j.etat = 'reclame' LEFT JOIN clients c ON c.client = j.client "
+    "LEFT JOIN abonnements_box b ON b.jeton_id = j.id "
+    "WHERE p.retire_le IS NULL ORDER BY p.adresse"
+)
+
+_REQUETE_AVANT_3303 = (
+    "SELECT p.adresse AS adresse, j.client AS client, j.lot AS lot, j.serie AS serie, j.profil AS profil, "
     "COALESCE(c.abonnement, 'actif') AS abonnement, c.expire_le AS abonnement_expire_le "
     "FROM pairs p JOIN jetons j ON j.cle_pub = p.cle_pub AND j.etat = 'reclame' LEFT JOIN clients c ON c.client = j.client "
     "WHERE p.retire_le IS NULL ORDER BY p.adresse"
@@ -61,8 +69,14 @@ def lire_pairs(db: Path, maintenant: float = None) -> list:
     try:
         cx = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=DELAI_S, isolation_level=None)
         cx.row_factory = sqlite3.Row
+        try:
+            lignes = cx.execute(_REQUETE).fetchall()
+        except sqlite3.OperationalError as e:
+            if "abonnements_box" not in str(e):
+                raise
+            lignes = cx.execute(_REQUETE_AVANT_3303).fetchall()      # base pas encore migrée par le service : abonnement du client, comme avant
         return [{"adresse": r["adresse"], "client": r["client"], "lot": r["lot"], "serie": r["serie"], "profil": r["profil"],
-                 "abonnement": etat_abonnement(r["abonnement"], r["abonnement_expire_le"], now)} for r in cx.execute(_REQUETE)]
+                 "abonnement": etat_abonnement(r["abonnement"], r["abonnement_expire_le"], now)} for r in lignes]
     except sqlite3.OperationalError as e:
         if "no such table" in str(e):                     # base présente mais tables pas encore créées par le service : rien à publier
             return []
