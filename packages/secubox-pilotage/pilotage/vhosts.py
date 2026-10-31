@@ -309,6 +309,11 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
         # page d'accueil (index.html à la racine du paquet hub) et pages .html de premier niveau du même paquet (#3302)
         p = accueil[0]
         emp = (p.get("empreintes") or {}).get("", [])
+        if "hub" not in vus:
+            # l'accueil appelle l'API du hub (dashboard, health-batch, boot_mode…) : relayée vers la box comme celle d'un module
+            L += ["    location ^~ /api/v1/hub/ {", f"        proxy_pass http://unix:{socket}:/relais/{box}/api/v1/hub/;"]
+            L += _entetes_proxy(box, f"{p['paquet']}={p['version']}")
+            L += ["    }"]
         L += ["    location = / {", f"        root {racine}/{p['paquet']}/{p['version']};", "        try_files /index.html =404;",
               *_entetes_page(csp_module(box, ["/"], emp)), "    }",
               "    location ~ \"^/[a-z0-9][a-z0-9_-]{0,63}\\.html$\" {", f"        root {racine}/{p['paquet']}/{p['version']};",
