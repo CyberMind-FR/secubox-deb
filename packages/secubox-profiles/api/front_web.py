@@ -174,9 +174,13 @@ def appliquer(profile, *, racine: Path = Path("/"), gabarit: Path = GABARIT, run
     relais = getattr(profile, "agregateur", None) == "relais"
     if deja:
         os.chmod(c["etat"], 0o755)   # montée 0.26.0 (dossier 0700) : l'agent doit pouvoir lire le marqueur
+        os.chmod(c["etat"].parent, 0o711)
     if not deja:
         # Dossier 0755 : l'agent de pilotage y lit le marqueur `actif` ; les sites mis de côté restent en 0700.
+        # Parent 0711 (#3302, banc gk4) : traversable sans être listable ; en 0700 root, l'agent (compte dédié) ne voyait jamais
+        # le marqueur et déclarait « locale » : le maître ne reprenait pas admin.<box> (502).
         (c["etat"] / "sites-enabled").mkdir(parents=True, exist_ok=True)
+        os.chmod(c["etat"].parent, 0o711)
         os.chmod(c["etat"], 0o755)
         os.chmod(c["etat"] / "sites-enabled", 0o700)
         for p in sorted(c["se"].iterdir()) if c["se"].is_dir() else []:

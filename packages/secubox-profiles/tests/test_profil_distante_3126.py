@@ -249,6 +249,8 @@ def test_marqueur_pose_seulement_apres_succes_et_lisible_par_l_agent(tmp_path):
     front_web.appliquer(DISTANTE, racine=r2, gabarit=RACINE / "nginx" / "etat.conf", run=run2)
     etat = r2 / front_web.ETAT_REL
     assert (etat / "actif").exists() and (etat.stat().st_mode & 0o777) == 0o755
+    # #3302 (banc gk4) : le parent (0700 root) doit être traversable, sinon l'agent (compte dédié) ne voit jamais le marqueur
+    assert (etat.parent.stat().st_mode & 0o777) == 0o711
     assert ((etat / "actif").stat().st_mode & 0o777) == 0o644
     assert ((etat / "sites-enabled").stat().st_mode & 0o777) == 0o700
 
@@ -323,6 +325,7 @@ def test_deja_remet_les_modes_et_echec_nginx_ote_le_marqueur(tmp_path):
     etat.chmod(0o700)
     front_web.appliquer(DISTANTE, racine=r, gabarit=RACINE / "nginx" / "etat.conf", run=run)
     assert (etat.stat().st_mode & 0o777) == 0o755
+    assert (etat.parent.stat().st_mode & 0o777) == 0o711
     _, _, ko = _box(tmp_path / "x", nginx_ok=False)
     res = front_web.appliquer(DISTANTE, racine=r, gabarit=RACINE / "nginx" / "etat.conf", run=ko)
     assert not res["ok"] and not (etat / "actif").exists()
