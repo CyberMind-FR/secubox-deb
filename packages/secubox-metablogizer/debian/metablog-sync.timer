@@ -4,6 +4,9 @@
 Description=SecuBox — cadence de synchronisation des sites metablog
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=75s
+FixedRandomDelay=true
 # Au démarrage, une fois la board posée : c'est le moment où un site peut
 # avoir pris du retard pendant l'arrêt.
 OnBootSec=10min

@@ -6,6 +6,9 @@
 Description=SecuBox Live — collecte toutes les minutes (#3351)
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=15s
+FixedRandomDelay=true
 OnBootSec=1min
 OnUnitActiveSec=1min
 AccuracySec=10s

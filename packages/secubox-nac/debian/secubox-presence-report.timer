@@ -3,6 +3,9 @@ Description=SecuBox NAC cross-plane presence report timer (daily, #820)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/820
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=30min
+FixedRandomDelay=true
 OnCalendar=daily
 Persistent=true
 AccuracySec=5min

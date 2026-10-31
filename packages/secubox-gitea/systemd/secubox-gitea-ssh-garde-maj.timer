@@ -3,6 +3,10 @@
 Description=SecuBox gitea — garde du SSH 2222, mise à jour périodique
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=150s
+FixedRandomDelay=true
+AccuracySec=30s
 OnBootSec=3min
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=3min

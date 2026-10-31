@@ -4,6 +4,10 @@
 Description=SecuBox Médias externes — drainage périodique de la file
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=15s
+FixedRandomDelay=true
+AccuracySec=6s
 # Court intervalle : un transfert demandé depuis le panneau doit démarrer vite.
 # Le drainage est un no-op quand la file est vide.
 OnBootSec=2min

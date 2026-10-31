@@ -5,6 +5,9 @@ Description=SecuBox blacklist sync timer (every 5 min + boot)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/521
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=75s
+FixedRandomDelay=true
 # Run shortly after boot, then every 5 minutes. The element timeout
 # (2h) is well above the period so active entries never lapse.
 OnBootSec=90s

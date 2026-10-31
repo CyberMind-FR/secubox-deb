@@ -2,6 +2,9 @@
 Description=SecuBox Lyrion LMS watchdog — periodic check
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=10s
+FixedRandomDelay=true
 OnBootSec=120
 # #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redeclenche pas apres une reactivation.
 OnActiveSec=120

@@ -6,6 +6,9 @@
 Description=SecuBox — redemarrage de prudence de secubox-metrics toutes les 6 h (#3295)
 
 [Timer]
+# #3355 : décalage aléatoire stable par box (FixedRandomDelay), pour que les minuteries ne partent pas toutes ensemble
+RandomizedDelaySec=5min
+FixedRandomDelay=true
 OnBootSec=6h
 OnActiveSec=6h
 OnUnitActiveSec=6h
