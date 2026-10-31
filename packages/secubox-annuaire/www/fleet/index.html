@@ -369,7 +369,11 @@
             { id: 'service-redemarrer', lib: 'Redémarrer un service', arg: 'unite' },
             { id: 'service-arreter', lib: 'Arrêter un service', arg: 'unite', forte: true },
             { id: 'renommer', lib: 'Renommer la box', arg: 'nom', forte: true },
-            { id: 'renouveler', lib: 'Renouveler les secrets', forte: true }];
+            { id: 'renouveler', lib: 'Renouveler les secrets', forte: true },
+            // #3302 : bascule d'interface. Vers « distante », la box attend la confirmation du maître (automatique) ; sans elle,
+            // elle revient seule en locale. Seul le sens utile est proposé.
+            { id: 'interface-distante', lib: 'Passer en interface distante (webui servie par le maître)', forte: true, si: 'locale' },
+            { id: 'interface-locale', lib: 'Revenir à l’interface locale', forte: true, si: 'distante' }];
         const PB_RE = { unite: /^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service|timer)$/, nom: /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/ };
         const PB_ACTIF = ['demande', 'en_attente', 'ouvert'];
         const PB_LIVE_MAX = 100, PB_TAMPON_MAX = 1 << 20;
@@ -423,6 +427,7 @@
             return { ok, visible, raison, support: sup ? sup.id : null };
         }
 
+        function pbInterface(b) { return b && b.interface === 'distante' ? 'distante' : 'locale'; }
         function pbArgValide(sorte, v) { return PB_RE[sorte].test(String(v)) && String(v) !== 'secubox-pilotage-agent.service'; }
 
         function pbLigneAction(a, d) {
@@ -450,14 +455,15 @@
         function pbRendreActions(d) {
             const zone = $('pb-actions'); clear(zone);
             if (!d.visible) { zone.append(el('div', 'pb-vide', 'Aucune action proposée.')); return; }
-            PB_ACTIONS.forEach(a => zone.append(pbLigneAction(a, d)));
+            const b = pbBoite;
+            PB_ACTIONS.filter(a => !a.si || a.si === pbInterface(b)).forEach(a => zone.append(pbLigneAction(a, d)));
         }
 
         // rendu complet seulement si la signature change : une saisie en cours n'est jamais effacée par un rafraîchissement
         function pbMaj(force) {
             const b = pbBoite; if (!b) return;
             const d = pbDroits(), att = pbSessionActive();
-            const sig = [pbId(b), b.nom, b.en_ligne, b.mains_liees, d.visible, d.ok, d.support, att ? att.id + att.etat : ''].join('|');
+            const sig = [pbId(b), b.nom, b.en_ligne, b.mains_liees, b.interface, d.visible, d.ok, d.support, att ? att.id + att.etat : ''].join('|');
             $('pb-titre').textContent = b.nom || b.cle || '—';
             $('pb-sous').textContent = pilReseau(b) + ' · ' + (b.en_ligne === true ? 'en ligne' : 'vu ' + pilVu(b.vu_le)) + ' · mains liées : ' + (b.mains_liees === true ? 'oui' : b.mains_liees === false ? 'non' : 'inconnu');
             $('pb-etat').textContent = (pbNote ? pbNote + ' ' : '') + d.raison;

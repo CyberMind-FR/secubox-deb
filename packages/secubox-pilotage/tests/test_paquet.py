@@ -142,7 +142,7 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.5.4-1~trixie1) trixie;")
+    assert ch.startswith("secubox-pilotage (0.6.0-1~trixie1) trixie;")
     assert "Recommends: apparmor, secubox-p2p (>= 1.20.2~)" in c          # banc gk2 : projection p2p-public des pairs enrôlés
     depends = re.search(r"^Depends:(.*)$", c, re.M).group(1)
     assert "sudo" not in depends                                          # Final : plus aucune règle sudoers
@@ -151,8 +151,12 @@ def test_controle_debian():
 @pytest.mark.parametrize("paquet", ["secubox-pilotage", "secubox-pilotage-agent", "secubox-p2p", "secubox-profiles",
                                     "secubox-annuaire"])
 def test_changelogs_jamais_dates_dans_le_futur(paquet):
-    """Final : les entrées de la branche L5 portent la date réelle (30 octobre 2026), jamais le lendemain."""
-    assert "31 Oct 2026" not in lire(f"packages/{paquet}/debian/changelog", DEPOT)
+    """Final : une entrée porte la date réelle de sa livraison, jamais une date à venir (#3302 : généralisé, la règle d'origine
+    visait le seul lendemain de la branche L5)."""
+    from email.utils import parsedate_to_datetime
+    from datetime import datetime, timezone
+    dates = [parsedate_to_datetime(m) for m in re.findall(r"^ -- .*?>  (.+)$", lire(f"packages/{paquet}/debian/changelog", DEPOT), re.M)]
+    assert dates and all(d <= datetime.now(timezone.utc) for d in dates)
 
 
 def test_postinst_et_prerm():

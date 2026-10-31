@@ -53,11 +53,16 @@ CATALOGUE = {
     "service-redemarrer": Action("Device.X_SECUBOX_Services.Agir()", ("unite",), fixes=(("action", "redemarrer"),)),
     "renommer": Action("Device.X_SECUBOX_Nom.Renommer()", ("nom",), forte=True),
     "renouveler": Action("Device.X_SECUBOX_Secrets.Renouveler()", forte=True),
+    # #3302 : bascule d'interface (profil léger « distante » de la box, ou retour au profil d'avant)
+    "interface-distante": Action("Device.X_SECUBOX_Pilotage.Interface.Basculer()", forte=True, fixes=(("sens", "distante"),)),
+    "interface-locale": Action("Device.X_SECUBOX_Pilotage.Interface.Basculer()", forte=True, fixes=(("sens", "locale"),)),
 }
 _MOTIFS = {"unite": RE_UNITE, "nom": RE_NOM}
 
 COMMANDE_SUPPORT_OUVRIR = "Device.X_SECUBOX_Support.Ouvrir()"
 COMMANDE_SUPPORT_FERMER = "Device.X_SECUBOX_Support.Fermer()"
+COMMANDE_CONFIRMER = "Device.X_SECUBOX_Pilotage.Interface.Confirmer()"
+DELAI_CONFIRMER_S = 120.0
 
 
 def arguments(action: Action, args: dict) -> Optional[dict]:
@@ -88,6 +93,7 @@ class Suivi:
         self.stockage, self.files, self.audit = stockage, files, audit
         self.emettre = emettre
         self.delai_rejoindre_s = delai_rejoindre_s
+        self.delai_confirmer_s = DELAI_CONFIRMER_S
         self.horloge = horloge
         self.taches: set = set()
         self._orphelines: dict = {}   # Box.cle -> [instant de la dernière ligne, fins tues depuis] ; borné
@@ -123,12 +129,19 @@ class Suivi:
                     "précédente", box.cle, tues)
 
     async def suite(self, box: Box, op: dict) -> None:
-        """Suite d'une opération terminée, une seule fois (réclamée en base) : Rejoindre après un renommage réussi."""
-        if op.get("etat") != "termine" or nouveau_nom(box, op, {"rc": op.get("rc")}) is None:
+        """Suite d'une opération terminée, une seule fois (réclamée en base) : Rejoindre après un renommage réussi ; confirmation
+        après une bascule vers l'interface distante réussie (#3302)."""
+        if op.get("etat") != "termine":
+            return
+        if nouveau_nom(box, op, {"rc": op.get("rc")}) is not None:
+            suite = self._rejoindre
+        elif op.get("action") == "interface-distante" and op.get("rc") == 0 and not isinstance(op.get("rc"), bool):
+            suite = self._confirmer
+        else:
             return
         if not await asyncio.to_thread(self.stockage.operation_reclamer_suite, op["id"]):
             return
-        t = asyncio.create_task(self._rejoindre(box, op))
+        t = asyncio.create_task(suite(box, op))
         self.taches.add(t)
         t.add_done_callback(self.taches.discard)
 
@@ -162,6 +175,30 @@ class Suivi:
         if raison:
             champs["raison"] = "".join(c for c in str(raison)[:200] if c.isprintable())
         await self._auditer("pilotage_rejoindre_resultat", champs)
+
+    async def _confirmer(self, box: Box, op: dict) -> None:
+        """#3302 : la box a basculé vers « distante » et attend la preuve que le maître la joint encore ; sans elle, son homme mort
+        rend l'interface locale. La fin vient de remonter par le canal : la confirmation y redescend."""
+        champs = {"box": box.nom, "cle": box.cle, "job": op.get("job")}
+        try:
+            futur = self.files.deposer(box.cle, {"type": "OPERATE", "body": {"command": COMMANDE_CONFIRMER, "args": {}}})
+        except Exception as e:  # noqa: BLE001 — file pleine : l'homme mort de la box rendra l'interface locale
+            await self._auditer("pilotage_interface_confirmation", {**champs, "etat": "non_envoyee", "raison": e.__class__.__name__})
+            return
+        await self._auditer("pilotage_interface_confirmation", {**champs, "etat": "envoyee"})
+        try:
+            rep = await asyncio.wait_for(futur, self.delai_confirmer_s)
+        except asyncio.TimeoutError:
+            etat, raison = "sans_reponse", ""
+        else:
+            corps = rep.get("body") if isinstance(rep.get("body"), dict) else {}
+            if rep.get("type") == "OPERATE_RESP" and corps.get("etat") in ("accepte", "consentement", "refuse"):
+                etat, raison = corps["etat"], corps.get("raison")
+            else:
+                etat, raison = "refuse", corps.get("err")
+        if raison:
+            champs["raison"] = "".join(c for c in str(raison)[:200] if c.isprintable())
+        await self._auditer("pilotage_interface_confirmation", {**champs, "etat": etat})
 
     async def attendre(self) -> None:
         """Attend la fin des suites en cours (tests, arrêt propre)."""

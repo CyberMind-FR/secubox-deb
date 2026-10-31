@@ -1,3 +1,17 @@
+secubox-pilotage-agent (0.6.0-1~trixie1) trixie; urgency=medium
+
+  * Bascule d'interface locale ⇄ distante pilotée par le maître (ref #3302) : verbe du ctl
+    `interface <locale|distante|confirmer>` (actions de politique interface-locale, interface-distante — accord du
+    détenteur sur une box cliente —, interface-confirmer ; opération exclusive ; refus sous mains liées), unités
+    internes `_interface <job>` (secubox-profilectl apply, profil actif repointé) et `_interface-garde <job>` (homme
+    mort armé avant l'apply : sans confirmation du maître sous 900 s + delai_garde_s, 600 s par défaut, ou si
+    l'unité meurt en plein apply, le profil de retour est rendu). Profil de
+    retour : celui d'avant la bascule, sinon /etc/secubox/profiles/active, sinon profil_retour de
+    /etc/secubox-pilotage/interface.toml ; aucun : refus (jamais d'apply sans profil). Agent : commandes
+    Device.X_SECUBOX_Pilotage.Interface.Basculer() {sens} et .Confirmer(). Recommends secubox-profiles.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 04:15:00 +0100
+
 secubox-pilotage-agent (0.5.1-1~trixie1) trixie; urgency=medium
 
   * L5 tâche 7, correction 1/5 (R-L5-34, ref #3126) : Interface = « distante » seulement si le marqueur root

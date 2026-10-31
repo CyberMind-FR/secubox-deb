@@ -100,6 +100,13 @@ func TestOperateInconnuRefuse(t *testing.T) {
 		{"Device.X_SECUBOX_Support.Ouvrir()", map[string]any{"duree_min": 30.0}},
 		{"Device.X_SECUBOX_Support.Fermer()", map[string]any{"id": "s1", "duree_min": 30.0}},
 		{"Device.X_SECUBOX_Support.Fermer()", map[string]any{"id": ""}},
+		// #3302 : sens de la bascule d'interface, liste fermée
+		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", nil},
+		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": "confirmer"}},
+		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": "Distante"}},
+		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": 1.0}},
+		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": "locale", "profil": "full"}},
+		{"Device.X_SECUBOX_Pilotage.Interface.Confirmer()", map[string]any{"job": "0123456789abcdef"}},
 	}
 	for _, c := range cas {
 		r := e.Operer(ctx, c.cmd, c.args, "gk2admin")
@@ -147,6 +154,12 @@ func TestTraductionVersLeCtl(t *testing.T) {
 			"-n /usr/sbin/secubox-pilotagectl support ouvrir s-01 30"},
 		{"Device.X_SECUBOX_Support.Fermer()", map[string]any{"id": "s-01"}, strings.Repeat("a", 65),
 			"-n /usr/sbin/secubox-pilotagectl support fermer s-01"},
+		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": "distante"}, "gk2admin",
+			"-n /usr/sbin/secubox-pilotagectl --acteur gk2admin interface distante"},
+		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": "locale"}, "",
+			"-n /usr/sbin/secubox-pilotagectl interface locale"},
+		{"Device.X_SECUBOX_Pilotage.Interface.Confirmer()", nil, "gk2admin",
+			"-n /usr/sbin/secubox-pilotagectl --acteur gk2admin interface confirmer"},
 	}
 	for _, c := range cas {
 		r := e.Operer(ctx, c.cmd, c.args, c.acteur)

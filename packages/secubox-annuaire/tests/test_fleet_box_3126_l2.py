@@ -181,7 +181,7 @@ def test_mains_liees_boutons_desactives_releve_reste():
     f = Faux([box(mains=True)])
     (bts, releve, texte), erreurs, natifs = ouvrir(f, lambda pg: (boutons(pg), pg.is_enabled("#pb-releve"), pg.inner_text("#pb-etat")))
     assert erreurs == [] and natifs == []
-    assert len(bts) == 7 and all(d for _, d in bts) and releve and "mains liées" in texte.lower()
+    assert len(bts) == 8 and all(d for _, d in bts) and releve and "mains liées" in texte.lower()  # 7 + la bascule d’interface utile (#3302)
 
 
 def test_mains_liees_inconnues_par_prudence_desactive():
@@ -312,7 +312,7 @@ def test_box_cliente_support_ouvert_catalogue_complet_avec_session_et_flux():
         pg.wait_for_timeout(400)
         return bts, pg.inner_text("#pb-msg"), pg.locator("#pb-actions input.pb-conf").count(), pg.is_visible("#pb-sup-fermer")
     (bts, msg, confs, fermer), erreurs, _ = ouvrir(f, sc)
-    assert erreurs == [] and len(bts) == 7 and confs == 0 and fermer
+    assert erreurs == [] and len(bts) == 8 and confs == 0 and fermer
     assert f.nb_flux >= 1
     url, corps = f.posts[-1]
     assert url.endswith("/actions/reboot") and corps["support"] == "s1" and corps.get("confirmation") in (None,)

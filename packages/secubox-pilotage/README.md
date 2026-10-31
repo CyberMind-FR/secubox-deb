@@ -120,6 +120,7 @@ Catalogue fermé (`pilotage/operations.py`) :
 | `service-arreter` | `Device.X_SECUBOX_Services.Agir()` | `unite` | oui |
 | `renommer` | `Device.X_SECUBOX_Nom.Renommer()` | `nom` (libellé DNS) ; nom déjà porté par une box connue, un pair enrôlé de la projection `p2p-public/pairs-enroles.json` ou le maître : 409 | oui |
 | `renouveler` | `Device.X_SECUBOX_Secrets.Renouveler()` | aucun | oui |
+| `interface-distante`, `interface-locale` | `Device.X_SECUBOX_Pilotage.Interface.Basculer()` | aucun (`sens` posé par le maître) — #3302 | oui |
 
 - **Confirmation forte** (box du propriétaire, réseau `maillage`) : `confirmation` doit être **exactement** le nom de la box, sinon 400,
   rien n'est audité ni envoyé. Sur une box cliente, l'accord du détenteur, donné sur la box, en tient lieu (la réponse est
@@ -171,6 +172,16 @@ Les fins ont leur propre fenêtre dans le plafond de 60 notifications par minute
    audit. Une fin réelle qui arrive ensuite l'emporte encore (`termine`).
 Les autres notifications de L2 (`X_SECUBOX_HandsTied`, `X_SECUBOX_Consent`, `X_SECUBOX_Support`) vont dans `GET /evenements`
 (colonnes `ident`, `etat`), dédoublonnées par `(type, id, état)`.
+
+## Bascule d'interface locale ⇄ distante (#3302)
+
+Depuis la Flotte, `interface-distante` fait appliquer à la box son profil léger `distante` (webui retirée, servie par le maître
+sur `admin.<box>`), `interface-locale` lui rend le profil d'avant. La box ne garde « distante » qu'à la **confirmation du
+maître** : après le `X_SECUBOX_OperationDone` réussi (`rc` 0) d'`interface-distante`, `Suivi` envoie une fois
+`OPERATE Device.X_SECUBOX_Pilotage.Interface.Confirmer()` (audit `pilotage_interface_confirmation` : `envoyee`, puis
+`accepte`, `refuse` avec la raison, ou `sans_reponse` au bout de 120 s). Sans confirmation sous `delai_garde_s` (600 s par
+défaut, `/etc/secubox-pilotage/interface.toml` de la box), l'homme mort de la box rend l'interface locale ; la reprise du nom
+`admin.<box>` suit ensuite l'interface déclarée par l'inventaire (basculement de `secubox-pilotage-vhost`, inchangé).
 
 ## Retour au maillage après un renommage (L2, tâches 5 et 6)
 `pilotage/renommage.py` : après le `X_SECUBOX_OperationDone` **réussi** (`rc` 0) d'un `Renommer` sur une box du maillage,

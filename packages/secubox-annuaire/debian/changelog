@@ -1,3 +1,10 @@
+secubox-annuaire (0.16.5-1~trixie1) trixie; urgency=medium
+
+  * Flotte, page de la box (ref #3302) : « Passer en interface distante » ou « Revenir à l’interface locale », selon
+    l'interface déclarée, avec confirmation forte ; suivi par le journal des opérations.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 04:15:00 +0100
+
 secubox-annuaire (0.16.4-1~trixie1) trixie; urgency=medium
 
   * Page Flotte, panneau Pilotage (#3126 L5 tâche 7, R-L5-27) : point d'entrée unique vers l'interface de chaque box.

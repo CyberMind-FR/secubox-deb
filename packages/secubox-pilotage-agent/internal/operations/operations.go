@@ -47,6 +47,9 @@ const (
 	CmdSupportOuvrir = "Device.X_SECUBOX_Support.Ouvrir()"
 	CmdSupportFermer = "Device.X_SECUBOX_Support.Fermer()"
 	CmdRejoindre     = "Device.X_SECUBOX_Maillage.Rejoindre()"
+	// #3302 : bascule d'interface locale ⇄ distante (profil léger), puis confirmation du maître (homme mort désarmé)
+	CmdInterface          = "Device.X_SECUBOX_Pilotage.Interface.Basculer()"
+	CmdInterfaceConfirmer = "Device.X_SECUBOX_Pilotage.Interface.Confirmer()"
 )
 
 // RaisonAncre est le refus du ctl quand aucune ancre n'est vérifiée de son côté (R-L2-21) : le canal force alors
@@ -300,6 +303,20 @@ func Traduire(cmd string, args map[string]any) ([]string, error) {
 			return nil, err
 		}
 		return []string{"renommer", nom}, nil
+	case CmdInterface:
+		if err := cles([]string{"sens"}); err != nil {
+			return nil, err
+		}
+		sens, _ := args["sens"].(string)
+		if sens != "locale" && sens != "distante" {
+			return nil, fmt.Errorf("argument invalide : sens (locale ou distante)")
+		}
+		return []string{"interface", sens}, nil
+	case CmdInterfaceConfirmer:
+		if err := cles(nil); err != nil {
+			return nil, err
+		}
+		return []string{"interface", "confirmer"}, nil
 	case CmdRejoindre:
 		if err := cles([]string{"code"}); err != nil {
 			return nil, err
