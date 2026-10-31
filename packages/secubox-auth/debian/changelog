@@ -1,3 +1,12 @@
+secubox-auth (1.8.11-1~trixie1) trixie; urgency=medium
+
+  * OIDC : sans session, renvoi vers la connexion des personnes du Hall
+    (/i/acces/?retour=) au lieu de /login.html, qui sur le vhost du Hall est
+    l application (le retour se perdait, visio.gk1) ; la page d acces honore
+    ce retour (liste fermee /oidc/authorize?) (ref #3326).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 07:57:50 +0100
+
 secubox-auth (1.8.10-1~trixie1) trixie; urgency=medium
 
   * SBX OS, collecte des activités (ref #3185) : une base du BBS vide ou sans ses tables équivaut à
