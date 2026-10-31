@@ -9,6 +9,11 @@ case "$1" in
         getent passwd secubox >/dev/null || useradd --system --gid secubox \
             --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
 
+        # #3302 : box déjà allégée (profil distante) avant 0.26.3 : le dossier d'état doit être traversable par l'agent de pilotage.
+        if [ -d /var/lib/secubox-profiles ] && [ ! -L /var/lib/secubox-profiles ] && [ -f /var/lib/secubox-profiles/allegement/actif ]; then
+            chmod 0711 /var/lib/secubox-profiles
+        fi
+
         # /etc et /var/log sont à root : leurs enfants directs ne peuvent pas être remplacés par un lien du compte secubox.
         install -d -o secubox -g secubox -m 755 /etc/secubox
 
