@@ -1020,7 +1020,7 @@ def commande(ctx, verbe, p):
     if verbe == "installer":
         # Installation seulement : --no-remove arrête apt plutôt que de retirer un paquet au passage. Jamais de délai.
         return (["--setenv=DEBIAN_FRONTEND=noninteractive"],
-                ["/bin/sh", "-c", "/usr/bin/apt-get update && /usr/bin/apt-get -y --no-remove "
+                ["/bin/sh", "-c", "/usr/bin/apt-get update && /usr/bin/apt-get -y --no-remove --no-install-recommends "
                                   "-o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef install "
                                   + p["nom"]])
     if verbe == "renouveler-secrets":
@@ -1040,14 +1040,77 @@ def commande(ctx, verbe, p):
     raise Erreur("verbe sans commande")
 
 
+CAT_BOUTIQUE = frozenset({"media", "email", "communication", "publishing", "ai", "iot", "apps"})   # boutique.html
+RESERVES = ("secubox-fonction-", "secubox-service-", "secubox-pilotage")
+RESERVES_NOMS = frozenset({"exposure", "assist"})
+
+
+def modules_proteges(ctx):
+    """Identifiants protégés : le socle et les manifestes modules.d `protected = true`."""
+    ids = set(SOCLE)
+    try:
+        noms = sorted(n for n in os.listdir(ctx.modules) if n.endswith(".toml"))
+    except OSError:
+        return ids
+    for nom in noms:
+        try:
+            f = os.open(f"{ctx.modules}/{nom}", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                if not stat.S_ISREG(os.fstat(f).st_mode):
+                    continue
+                d = tomllib.loads(os.read(f, TAILLE_MAX).decode("utf-8"))
+            finally:
+                os.close(f)
+        except (OSError, ValueError):
+            continue
+        if d.get("protected") is True:
+            ids.add(str(d.get("id") or nom[:-5]))
+    return ids
+
+
+def refus_paquet(ctx, paquet):
+    """#3338 : seule une app PUBLIÉE de la boutique s'installe à distance (catalogue de l'appstore : fiche non cachée, ou
+    catégorie grand public) ; jamais un paquet fonction/service, le pilotage, l'exposition, l'assistance, le socle ou un
+    module protégé. Catalogue absent ou illisible : refus."""
+    ident = paquet.removeprefix("secubox-")
+    if paquet.startswith(RESERVES) or ident in RESERVES_NOMS or ident in modules_proteges(ctx):
+        return "paquet réservé"
+    try:
+        with open(f"{ctx.r}/usr/share/secubox/appstore/catalog.json", "rb") as f:
+            cat = json.loads(f.read(8 * TAILLE_MAX))
+        mods = {m.get("name"): m for m in cat.get("modules", []) if isinstance(m, dict)}
+    except (OSError, ValueError, AttributeError):
+        return "pas une app de la boutique"
+    try:
+        with open(f"{ctx.r}/usr/share/secubox/www/appstore/boutique-fiches.json", "rb") as f:
+            fiches = json.loads(f.read(TAILLE_MAX))
+        if not isinstance(fiches, dict):
+            fiches = {}
+    except (OSError, ValueError):
+        fiches = {}
+    m, fiche = mods.get(paquet), fiches.get(paquet)
+    if m is None or m.get("category") == "system":
+        return "pas une app de la boutique"
+    if isinstance(fiche, dict):
+        return "pas une app de la boutique" if fiche.get("cacher") else None
+    return None if m.get("category") in CAT_BOUTIQUE else "pas une app de la boutique"
+
+
 def refus_abonnement(ctx, paquet):
     """#3338 : sous l'abonnement de la box (/etc/secubox/abonnement.json, posé par root), seul un paquet du profil de sa
-    formule s'installe. Absent : box sans abonnement (maître, atelier), tout est permis. Illisible : rien."""
+    formule (profil = NOM DE SON FICHIER) s'installe. FAIL-CLOSED : absent, rien, sauf le marqueur root
+    /etc/secubox/abonnement-libre (maître, atelier). Illisible ou inactif : rien. Même règle que l'appstore."""
+    try:
+        st = os.lstat(f"{ctx.r}/etc/secubox/abonnement-libre")
+        if stat.S_ISREG(st.st_mode) and (st.st_uid == 0 or ctx.substitue):
+            return None                     # box du maître ou de l'atelier : marqueur root explicite
+    except OSError:
+        pass
     try:
         with open(f"{ctx.r}/etc/secubox/abonnement.json", "rb") as f:
             ab = json.loads(f.read(TAILLE_MAX))
     except FileNotFoundError:
-        return None
+        return "aucun abonnement sur cette box"
     except (OSError, ValueError):
         return "abonnement illisible"
     if not isinstance(ab, dict):
@@ -1066,14 +1129,36 @@ def refus_abonnement(ctx, paquet):
     return None if paquet.removeprefix("secubox-") in ids else "hors de la formule de la box"
 
 
+RE_ORIGINE_SBX = re.compile(r"(https?://apt\.secubox\.in(/\S*)?|file:/\S+)")
+
+
 def paquet_au_depot(ctx, paquet):
-    """#3338 : le paquet est connu des sources apt de la box (son dépôt signé) ; RE_PAQUET déjà vérifié par analyser."""
+    """#3338 : la version CANDIDATE vient du dépôt SecuBox (apt.secubox.in, ou dépôt local file: du maître) d'après
+    `apt-cache policy` (LC_ALL=C) ; RE_PAQUET déjà vérifié par analyser. Lecture seule d'APT (délai borné : pas apt)."""
     try:
-        r = subprocess.run([ctx.aptcache, "show", paquet], env=ctx.env, stdin=subprocess.DEVNULL,
+        r = subprocess.run([ctx.aptcache, "policy", paquet], env={**ctx.env, "LC_ALL": "C"}, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired):
         return False
-    return r.returncode == 0
+    if r.returncode != 0:
+        return False
+    lignes = r.stdout.splitlines()
+    cand = next((li.split(":", 1)[1].strip() for li in lignes if li.strip().startswith("Candidate:")), "")
+    if not cand or cand == "(none)":
+        return False
+    dans = False
+    for li in lignes:
+        champs = li.split()
+        if not champs:
+            continue
+        if champs[0] == "***":
+            champs = champs[1:]
+        if len(champs) == 2 and champs[1].isdigit() and not champs[0].isdigit():
+            dans = champs[0] == cand            # ligne de version de la table
+            continue
+        if dans and len(champs) >= 2 and champs[0].isdigit() and RE_ORIGINE_SBX.fullmatch(champs[1]):
+            return True
+    return False
 
 
 def lancer(ctx, verbe, p, job):
@@ -1564,11 +1649,11 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
         if not autorise:
             return refus(raison)                     # maillage-rejoindre sur une box cliente
     if verbe == "installer":
-        motif = refus_abonnement(ctx, p["nom"])
+        motif = refus_paquet(ctx, p["nom"]) or refus_abonnement(ctx, p["nom"])
         if motif is not None:
             return refus(motif)
         if not paquet_au_depot(ctx, p["nom"]):
-            return refus("paquet absent du dépôt")
+            return refus("paquet absent du dépôt SecuBox")
     if verbe == "maillage-rejoindre":
         # R-L2-2 : lu après l'ancre, les mains liées et la politique ; jamais recopié (audit, journal, sortie).
         code = lire_code()

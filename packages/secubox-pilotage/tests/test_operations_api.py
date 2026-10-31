@@ -465,7 +465,9 @@ def test_installer_valide_le_paquet(m):
     assert a.commande == "Device.X_SECUBOX_Packages.Installer()" and a.forte
     assert arguments(a, {"paquet": "secubox-jellyfin"}) == {"paquet": "secubox-jellyfin"}
     for mauvais in ({}, {"paquet": "nginx"}, {"paquet": "secubox-Jelly"}, {"paquet": "secubox-a;reboot"},
-                    {"paquet": "secubox-" + "a" * 49}, {"paquet": "secubox-x", "version": "1"}):
+                    {"paquet": "secubox-" + "a" * 49}, {"paquet": "secubox-x", "version": "1"},
+                    # #3338 point 7 : motif appliqué en fullmatch (ni préfixe, ni suffixe, ni saut de ligne)
+                    {"paquet": "secubox-jellyfin\n"}, {"paquet": "xsecubox-jellyfin"}, {"paquet": "secubox-jellyfin x"}):
         assert arguments(a, mauvais) is None, mauvais
     c = TestClient(m.app)
     assert c.post("/boxes/gk5/actions/installer", json={"args": {"paquet": "nginx"}, "confirmation": "gk5"}).status_code == 422
