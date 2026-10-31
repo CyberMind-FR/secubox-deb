@@ -377,3 +377,51 @@ def test_unite_de_reprise_livree():
     assert "WantedBy=multi-user.target" in u
     assert "secubox-pilotage-interface-reprise.service" in (pkg / "debian" / "rules").read_text()
     assert "enable secubox-pilotage-interface-reprise.service" in (pkg / "debian" / "postinst").read_text()
+
+
+def test_retour_en_locale_coupe_rattrape(bi):
+    """Retour en locale interrompu (redémarrage, RuntimeMaxSec) : une garde de CE job est armée avant l'apply, et la
+    reprise au démarrage reprend le retour."""
+    bi.basculer_distante()
+    rc, sortie, _ = bi.run("interface", "locale", agent=True)
+    job = sortie["job"]
+    # l'unité de retour démarre, arme sa garde, puis meurt avant la fin de l'apply : simulé par un apply qui « pend »
+    bi.env["FAUX_PROFILECTL_ECHEC"] = "minimal"
+    bi.run("_interface", job)
+    assert any(f"--unit=secubox-pilotage-garde-{job} " in x + " " for x in bi.lancements())
+    # état laissé « en_cours » (unité tuée) : la reprise refait le retour
+    f = bi.r / "var/lib/secubox-pilotagectl/interface.json"
+    e = json.loads(f.read_text())
+    e["etat"] = "en_cours"
+    f.write_text(json.dumps(e))
+    bi.env.pop("FAUX_PROFILECTL_ECHEC")
+    rc, r, p = bi.run("_interface-reprise")
+    assert rc == 0 and r["retour"] is True, p.stderr
+    assert bi.actif() == "minimal" and bi.etat_interface()["etat"] == "retour"
+
+
+def test_garde_de_retour_reprend_un_retour_inacheve(bi):
+    bi.basculer_distante()
+    rc, sortie, _ = bi.run("interface", "locale", agent=True)
+    rc, r, _ = bi.run("_interface-garde", sortie["job"])       # unité de retour jamais finie
+    assert rc == 0 and r["retour"] is True and bi.actif() == "minimal"
+
+
+def test_a_reprendre_sans_garde_repris_au_demarrage(bi):
+    """Échec du retour ET de l'armement de sa garde : l'état reste « a_reprendre », la reprise au démarrage la réarme."""
+    bi.basculer_distante()
+    rc, sortie, _ = bi.run("interface", "locale", agent=True)
+    bi.env.update(FAUX_PROFILECTL_ECHEC="minimal", FAUX_RUN_ECHEC="1")
+    rc, _, _ = bi.run("_interface", sortie["job"])
+    assert rc == 1 and bi.etat_interface()["etat"] == "a_reprendre"
+    assert [e.get("garde") for e in bi.evenements("interface_echec")][-1] == "non_armee"
+    bi.env.pop("FAUX_RUN_ECHEC")
+    rc, r, p = bi.run("_interface-reprise")
+    assert rc == 0 and r["rearmee"] is True, p.stderr
+
+
+def test_unite_de_reprise_ordonnee_et_durcie():
+    from pathlib import Path
+    u = (Path(__file__).resolve().parents[1] / "systemd" / "secubox-pilotage-interface-reprise.service").read_text()
+    assert "After=local-fs.target network-online.target nginx.service" in u and "Wants=network-online.target" in u
+    assert "NoNewPrivileges=yes" in u and "PrivateTmp=yes" in u

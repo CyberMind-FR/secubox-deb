@@ -389,12 +389,15 @@ def lire_json(fd, nom, defaut):
         raise Erreur("état non fiable") from None
 
 
-def ecrire(fd, nom, donnees, mode=0o600):
-    """Écriture atomique dans le dossier ouvert : temporaire exclusif, fsync, renommage, fsync du dossier."""
+def ecrire(fd, nom, donnees, mode=0o600, proprietaire=None):
+    """Écriture atomique dans le dossier ouvert : temporaire exclusif, fsync, renommage, fsync du dossier. `proprietaire`
+    (uid, gid) : posé sur le temporaire AVANT le renommage, jamais de fenêtre avec un autre propriétaire."""
     tmp = f".{nom}.{secrets.token_hex(4)}"
     f = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=fd)
     try:
         try:
+            if proprietaire is not None:
+                os.fchown(f, *proprietaire)
             os.fchmod(f, mode)
             os.write(f, donnees)
             os.fsync(f)
@@ -1808,9 +1811,7 @@ def ecrire_profil_actif(ctx, nom):
             except FileNotFoundError:
                 std = os.fstat(dfd)
                 mode, uid, gid = 0o644, std.st_uid, std.st_gid
-            ecrire(dfd, "active", (nom + "\n").encode("ascii"), mode)
-            if not ctx.substitue:
-                os.chown("active", uid, gid, dir_fd=dfd, follow_symlinks=False)
+            ecrire(dfd, "active", (nom + "\n").encode("ascii"), mode, None if ctx.substitue else (uid, gid))
         finally:
             os.close(dfd)
     except OSError as e:
@@ -1911,6 +1912,10 @@ def basculer_interface(ctx, job):
         auditer(ctx, "interface_echec", job=job, refus="profil de retour inconnu")
         raise Erreur("profil de retour inconnu")
     if etat["sens"] == "locale":
+        # Garde de CE retour armée avant l'apply : un retour coupé (RuntimeMaxSec, coupure) est repris par elle, ou par
+        # la reprise au démarrage (en_cours + locale). Le retour part même sans garde : c'est le sens sûr.
+        if not armer_garde(ctx, job, DELAI_APPLY + delai_garde(ctx)):
+            err("garde du retour non armée : la reprise au démarrage reste le filet")
         if not appliquer_profil(ctx, precedent):
             # I2 : l'ancienne garde reste armée (elle ne voit plus son job) ; une garde de CE job réessaiera le retour.
             maj_interface(ctx, job, etat="a_reprendre", echeance=int(time.time()) + delai_garde(ctx))
@@ -1918,6 +1923,7 @@ def basculer_interface(ctx, job):
             auditer(ctx, "interface_echec", job=job, sens="locale", profil=precedent, garde="armee" if arme else "non_armee")
             raise Erreur("retour en locale en échec")
         desarmer_garde(ctx, etat.get("ancien"))
+        desarmer_garde(ctx, job)
         ecrire_profil_actif(ctx, precedent)
         maj_interface(ctx, job, etat="locale", fin=int(time.time()))
         auditer(ctx, "interface_retour", job=job, cause="demande", profil=precedent)
@@ -1976,7 +1982,7 @@ def reprendre_interface(ctx):
     job, e = etat.get("job"), etat.get("etat")
     if not isinstance(job, str) or not RE_ID.fullmatch(job):
         return {"ok": True, "retour": False, "rearmee": False}
-    inachevee = e == "en_cours" and etat.get("sens") == PROFIL_LEGER
+    inachevee = e == "en_cours"                     # bascule OU retour coupé : le retour est (re)fait
     if not inachevee and e not in ("a_confirmer", "a_reprendre"):
         return {"ok": True, "retour": False, "rearmee": False}
     echeance = etat.get("echeance")
@@ -1993,8 +1999,8 @@ def reprendre_interface(ctx):
 
 
 def garde_interface(ctx, job):
-    """Homme mort : si la bascule `job` vers « distante » attend toujours la confirmation du maître, ou n'a jamais fini
-    (unité tuée en plein apply), le profil de retour est rendu."""
+    """Homme mort : si la bascule `job` attend toujours la confirmation du maître, n'a jamais fini (unité tuée en plein
+    apply, vers « distante » comme au retour) ou doit être reprise (a_reprendre), le profil de retour est rendu."""
     if ctx.origine == "maitre":
         auditer(ctx, "pilotage_refus", verbe="_interface-garde", job=job, refus="local seulement")
         return {"ok": False, "refus": "local seulement"}
@@ -2004,8 +2010,7 @@ def garde_interface(ctx, job):
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         etat = lire_interface(fd)
-        attente = (etat.get("etat") == "a_confirmer" or etat.get("etat") == "a_reprendre"
-                   or (etat.get("etat") == "en_cours" and etat.get("sens") == PROFIL_LEGER))
+        attente = etat.get("etat") in ("a_confirmer", "a_reprendre", "en_cours")
         if etat.get("job") != job or not attente:
             return {"ok": True, "retour": False}
         etat["etat"] = "en_retour"                     # une confirmation tardive ne s'y substitue plus

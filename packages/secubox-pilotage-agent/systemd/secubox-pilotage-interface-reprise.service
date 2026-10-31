@@ -7,13 +7,19 @@ Description=SecuBox — reprise de l'homme mort d'une bascule d'interface au dé
 Documentation=https://secubox.in
 # Les gardes de bascule sont des minuteries transitoires (systemd-run --on-active) : perdues au redémarrage. Cette passe
 # rend le profil de retour si l'échéance est passée (ou la bascule inachevée), sinon réarme la garde pour le temps restant.
-After=local-fs.target
+# Après nginx et le réseau : un retour rend les sites d'administration (nginx -t, rechargement) et l'agrégateur.
+After=local-fs.target network-online.target nginx.service
+Wants=network-online.target
 ConditionPathExists=/var/lib/secubox-pilotagectl/interface.json
 
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/secubox-pilotagectl _interface-reprise
 UMask=0027
+# Durcissement compatible avec `secubox-profilectl apply` (root : systemctl, nginx, /etc, /var/lib, LXC) : pas de
+# ProtectSystem ni de restriction de capacités, qui casseraient l'apply ; aucun setuid n'est nécessaire.
+NoNewPrivileges=yes
+PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
