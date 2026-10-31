@@ -242,7 +242,7 @@ def test_scripts_integres_permis_par_empreinte_et_accueil():
     assert "location ^~ /api/v1/hub/ {" in conf and "/relais/gk5/api/v1/hub/;" in conf
     bloc = conf[conf.index("location ^~ /soc/ {"):]
     bloc = bloc[:bloc.index("\n    }")]
-    assert e[0] in bloc and "script-src" in bloc and "'unsafe-inline'" not in bloc.split("style-src")[0]
+    assert e[0] in bloc and "script-src" in bloc and "'unsafe-inline'" not in bloc.split("script-src ")[1].split(";")[0]
     assert "/api/" not in bloc.split("style-src")[0]
 
 
