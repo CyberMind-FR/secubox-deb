@@ -143,7 +143,7 @@ const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=nu
 const court=n=>String(n||'').replace(/^secubox-/,'');
 const CAT_FR={media:'Médias',email:'Communication',communication:'Communication',publishing:'Publication',ai:'Intelligence',iot:'Objets',network:'Réseau',security:'Protection',system:'Système',monitoring:'Suivi',dashboard:'Tableaux',mesh:'Maillage',analysis:'Analyse',apps:'Outils',misc:'Divers',wall:'Affichage',mind:'Intelligence'};
 const CAT_VISIBLES=new Set(['media','email','communication','publishing','ai','iot','apps']);   // sans fiche, seules ces catégories sont proposées
-let FICHES={},BESOINS={},MODS=[],GROUPES=[],SESSION_OK=true,BUSY={},SUIVI=false;
+let FICHES={},BESOINS={},MODS=[],GROUPES=[],SESSION_OK=true,BUSY={},SUIVI=false,ABSENT={};
 const etat={onglet:'auj',cat:'Tout',q:''};
 const SONDE_MS=Number(Q.get('sonde'))||2500;
 
@@ -198,13 +198,22 @@ function bouton(a,cls){
   else b.textContent='Obtenir';
   b.addEventListener('click',ev=>{ev.stopPropagation();agir(a)});return b}
 
+/* #3338 : l'adresse réelle de l'app. Son vhost (fiche « ouvrir: vhost ») sinon son administration, sur le domaine de la
+   boutique : boutique.<domaine> ou admin.<domaine> → <app>.<domaine> / admin.<domaine>/<app>/. */
+function urlApp(a,hote,proto){
+  const h=String(hote||location.hostname),pr=String(proto||location.protocol)+'//',dom=/^(boutique|admin)\./.test(h)?h.replace(/^[^.]+\./,''):h;
+  const f=FICHES[a.id]||{},c=court(a.id);
+  return f.ouvrir==='vhost'?pr+c+'.'+dom+'/':pr+'admin.'+dom+'/'+c+'/'}
+const ERREURS={409:'Une autre installation est en cours : attendez qu’elle finisse.',404:'Cette app n’est plus proposée par le dépôt.',
+  428:'Confirmation requise.',507:'Espace disque insuffisant sur la box.'};
 async function agir(a){
-  if(a.inst){if(DEMO){toast('Ouverture de '+a.n+' (démonstration)');return}location.assign('/'+court(a.id)+'/');return}
+  if(a.inst){if(DEMO){toast('Ouverture de '+a.n+' (démonstration)');return}location.assign(urlApp(a));return}
   const r=await ecrire('POST','/module/'+encodeURIComponent(a.id)+'/action/install');
   if(r.demo){BUSY[a.id]='install';rendre();setTimeout(()=>{delete BUSY[a.id];const m=MODS.filter(x=>x.name===a.id)[0];if(m)m.installed=true;rendre();toast(a.n+' est installée (démonstration)')},1800);return}
   if(r.ok&&r.statut===202){BUSY[a.id]='install';rendre();suivre();return}
   if(r.ok){toast(a.n+' est installée');await charger();return}
   if(r.statut===401||r.statut===403)toast('Réservé à l’administrateur : connectez-vous pour installer.');
+  else if(ERREURS[r.statut])toast(a.n+' : '+ERREURS[r.statut]);
   else toast('Installation impossible'+(r.data&&r.data.detail?' : '+r.data.detail:'.'));
   rendre()}
 async function suivre(){
@@ -212,7 +221,9 @@ async function suivre(){
   try{while(Object.keys(BUSY).length){
     await new Promise(f=>setTimeout(f,SONDE_MS));
     let jobs;try{jobs=(await lire('/jobs')).jobs||{};echecs=0}catch(e){if(++echecs>=20){BUSY={};toast('Suivi interrompu : rechargez la page.');rendre();return}continue}
-    for(const nom of Object.keys(BUSY)){const t=jobs[nom];if(t&&t.etat==='en-cours')continue;delete BUSY[nom];
+    for(const nom of Object.keys(BUSY)){const t=jobs[nom];if(t&&t.etat==='en-cours')continue;
+      if(!t&&(ABSENT[nom]=(ABSENT[nom]||0)+1)<4)continue;   // #3338 : juste après le 202, /jobs peut ne pas encore la lister
+      delete ABSENT[nom];delete BUSY[nom];
       const a=habiller({name:nom});
       toast(!t?a.n+' : suivi perdu, vérifiez l’état.':t.etat==='ok'?a.n+' est installée.':a.n+' : '+(t.message||'installation impossible'))}
     await charger()}}

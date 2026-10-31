@@ -5,7 +5,8 @@
   "categorie": "Médias",
   "detail": "Regardez vos films, séries et photos depuis n'importe quel écran de la maison, sans abonnement ni publicité.",
   "ordre": 1,
-  "vedette": true
+  "vedette": true,
+  "ouvrir": "vhost"
  },
  "secubox-peertube": {
   "nom": "PeerTube",
@@ -13,42 +14,48 @@
   "categorie": "Médias",
   "detail": "Publiez et partagez vos vidéos sur votre propre serveur, avec un lien que vous seul contrôlez.",
   "ordre": 2,
-  "vedette": true
+  "vedette": true,
+  "ouvrir": "vhost"
  },
  "secubox-lyrion": {
   "nom": "Musique",
   "resume": "La musique dans toutes les pièces",
   "categorie": "Médias",
   "detail": "Diffusez votre bibliothèque musicale sur des enceintes synchronisées.",
-  "ordre": 3
+  "ordre": 3,
+  "ouvrir": "vhost"
  },
  "secubox-photoprism": {
   "nom": "Photos",
   "resume": "Vos souvenirs, classés",
   "categorie": "Médias",
   "detail": "Retrouvez vos photos par lieu, personne ou date, sans les confier à un service en ligne.",
-  "ordre": 4
+  "ordre": 4,
+  "ouvrir": "vhost"
  },
  "secubox-podcaster": {
   "nom": "Podcasts",
   "resume": "Publiez votre émission",
   "categorie": "Médias",
   "detail": "Enregistrez, hébergez et diffusez votre podcast sur toutes les applications d'écoute.",
-  "ordre": 5
+  "ordre": 5,
+  "ouvrir": "vhost"
  },
  "secubox-radio": {
   "nom": "Radio",
   "resume": "Votre radio en ligne",
   "categorie": "Médias",
   "detail": "Écoutez et programmez vos flux radio depuis la box.",
-  "ordre": 6
+  "ordre": 6,
+  "ouvrir": "vhost"
  },
  "secubox-nextcloud": {
   "nom": "Nextcloud",
   "resume": "Fichiers, agenda et contacts",
   "categorie": "Cloud",
   "detail": "Synchronisez vos fichiers, votre agenda et vos contacts entre téléphone et ordinateur, sur votre box.",
-  "ordre": 7
+  "ordre": 7,
+  "ouvrir": "vhost"
  },
  "secubox-mail": {
   "nom": "Courrier",
@@ -83,7 +90,8 @@
   "resume": "Discussions du maillage",
   "categorie": "Communication",
   "detail": "Un forum partagé entre toutes les box de votre cercle, sans compte chez un tiers.",
-  "ordre": 11
+  "ordre": 11,
+  "ouvrir": "vhost"
  },
  "secubox-webfilter": {
   "nom": "Contrôle parental",
@@ -118,28 +126,32 @@
   "resume": "Votre code chez vous",
   "categorie": "Outils",
   "detail": "Hébergez vos projets et suivez les tickets sur votre propre forge.",
-  "ordre": 16
+  "ordre": 16,
+  "ouvrir": "vhost"
  },
  "secubox-metablogizer": {
   "nom": "Métablog",
   "resume": "Un site en quelques clics",
   "categorie": "Publication",
   "detail": "Publiez un blog ou un site vitrine sur votre domaine.",
-  "ordre": 17
+  "ordre": 17,
+  "ouvrir": "vhost"
  },
  "secubox-metanews": {
   "nom": "Actualités",
   "resume": "Vos sources, un seul fil",
   "categorie": "Publication",
   "detail": "Suivez vos sites et flux préférés dans un fil unique.",
-  "ordre": 18
+  "ordre": 18,
+  "ouvrir": "vhost"
  },
  "secubox-billets": {
   "nom": "Billets",
   "resume": "Écrivez et partagez",
   "categorie": "Publication",
   "detail": "Rédigez des billets, vivants ou éphémères, et partagez-les avec votre cercle.",
-  "ordre": 19
+  "ordre": 19,
+  "ouvrir": "vhost"
  },
  "secubox-zia": {
   "nom": "Assistant ZIA",
