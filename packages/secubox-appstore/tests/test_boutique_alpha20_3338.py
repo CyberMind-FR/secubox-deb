@@ -130,3 +130,37 @@ def test_app_hors_formule_sans_obtenir(navigateur):
     assert p.locator(".app", has_text="Radio").locator("button.get").inner_text() == "Obtenir"
     assert not erreurs
     ctx.close()
+
+
+# ── Volet 4 : boutique fédérée (sur le maître) ───────────────────────────────────────────────────────────────────
+
+def test_installer_sur_une_autre_box_du_parc(navigateur):
+    def donnees(u):
+        if u == "/api/v1/pilotage/boxes":
+            return [{"nom": "gk5", "cle": "maillage:gk5", "en_ligne": True},
+                    {"nom": "gk6", "cle": "maillage:gk6", "en_ligne": False}]
+        return None
+    ctx, p, erreurs, appels = ouvre(navigateur, donnees=donnees, install=(200, {"etat": "accepte", "job": "j1"}))
+    p.click("[role=tab]:text-is(\"Apps\")")
+    p.locator(".app", has_text="PeerTube").click()
+    p.wait_for_selector("dialog[open] .parc")
+    options = p.eval_on_selector_all("dialog[open] .parc select option", "e=>e.map(x=>x.value)")
+    assert options == ["maillage:gk5"]                               # hors ligne : non proposée
+    p.click("dialog[open] .parc button")
+    assert not [a for a in appels if a[1].endswith("/actions/installer")]   # sans le nom retapé : rien n'est envoyé
+    p.fill("dialog[open] .parc input", "gk5")
+    p.click("dialog[open] .parc button")
+    p.wait_for_selector(".toast.on:has-text('gk5')")
+    assert ("POST", "/api/v1/pilotage/boxes/maillage%3Agk5/actions/installer") in appels
+    assert not erreurs
+    ctx.close()
+
+
+def test_sans_pilotage_pas_de_parc(navigateur):
+    ctx, p, erreurs, _ = ouvre(navigateur)
+    p.click("[role=tab]:text-is(\"Apps\")")
+    p.locator(".app", has_text="PeerTube").click()
+    p.wait_for_selector("dialog[open]")
+    assert p.locator("dialog[open] .parc").count() == 0
+    assert not erreurs
+    ctx.close()

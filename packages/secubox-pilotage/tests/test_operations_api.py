@@ -455,3 +455,19 @@ def test_le_maitre_attend_l_agent_plus_longtemps_que_l_agent_n_attend_le_ctl():
     assert agent_s == 60
     assert api_main.DELAI_ACTION_S == 90.0
     assert agent_s < api_main.DELAI_ACTION_S < EXPIRATION_REPONSE_S
+
+
+# ── #3338 : installer une app de la boutique sur une box du parc ─────────────────────────────────────────────────────
+
+def test_installer_valide_le_paquet(m):
+    from pilotage.operations import CATALOGUE, arguments
+    a = CATALOGUE["installer"]
+    assert a.commande == "Device.X_SECUBOX_Packages.Installer()" and a.forte
+    assert arguments(a, {"paquet": "secubox-jellyfin"}) == {"paquet": "secubox-jellyfin"}
+    for mauvais in ({}, {"paquet": "nginx"}, {"paquet": "secubox-Jelly"}, {"paquet": "secubox-a;reboot"},
+                    {"paquet": "secubox-" + "a" * 49}, {"paquet": "secubox-x", "version": "1"}):
+        assert arguments(a, mauvais) is None, mauvais
+    c = TestClient(m.app)
+    assert c.post("/boxes/gk5/actions/installer", json={"args": {"paquet": "nginx"}, "confirmation": "gk5"}).status_code == 422
+    assert c.post("/boxes/gk5/actions/installer", json={"args": {"paquet": "secubox-jellyfin"}}).status_code == 400
+    assert m.lignes == [] and m.f.en_attente(GK5.cle) == 0

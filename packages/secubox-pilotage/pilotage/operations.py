@@ -48,6 +48,8 @@ class Action:
 CATALOGUE = {
     "reboot": Action("Device.Reboot()", forte=True),
     "maj-paquets": Action("Device.X_SECUBOX_Packages.MettreAJour()"),
+    # #3338 : une app de la boutique du maître installée sur une box du parc (installation seulement, côté box)
+    "installer": Action("Device.X_SECUBOX_Packages.Installer()", ("paquet",), forte=True),
     "service-demarrer": Action("Device.X_SECUBOX_Services.Agir()", ("unite",), fixes=(("action", "demarrer"),)),
     "service-arreter": Action("Device.X_SECUBOX_Services.Agir()", ("unite",), forte=True, fixes=(("action", "arreter"),)),
     "service-redemarrer": Action("Device.X_SECUBOX_Services.Agir()", ("unite",), fixes=(("action", "redemarrer"),)),
@@ -57,7 +59,8 @@ CATALOGUE = {
     "interface-distante": Action("Device.X_SECUBOX_Pilotage.Interface.Basculer()", forte=True, fixes=(("sens", "distante"),)),
     "interface-locale": Action("Device.X_SECUBOX_Pilotage.Interface.Basculer()", forte=True, fixes=(("sens", "locale"),)),
 }
-_MOTIFS = {"unite": RE_UNITE, "nom": RE_NOM}
+RE_PAQUET = re.compile(r"secubox-[a-z0-9][a-z0-9-]{0,47}")                          # motif de l'agent et du ctl (#3338)
+_MOTIFS = {"unite": RE_UNITE, "nom": RE_NOM, "paquet": RE_PAQUET}
 
 COMMANDE_SUPPORT_OUVRIR = "Device.X_SECUBOX_Support.Ouvrir()"
 COMMANDE_SUPPORT_FERMER = "Device.X_SECUBOX_Support.Fermer()"

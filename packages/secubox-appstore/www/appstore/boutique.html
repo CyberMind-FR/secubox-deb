@@ -143,7 +143,7 @@ const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=nu
 const court=n=>String(n||'').replace(/^secubox-/,'');
 const CAT_FR={media:'Médias',email:'Communication',communication:'Communication',publishing:'Publication',ai:'Intelligence',iot:'Objets',network:'Réseau',security:'Protection',system:'Système',monitoring:'Suivi',dashboard:'Tableaux',mesh:'Maillage',analysis:'Analyse',apps:'Outils',misc:'Divers',wall:'Affichage',mind:'Intelligence'};
 const CAT_VISIBLES=new Set(['media','email','communication','publishing','ai','iot','apps']);   // sans fiche, seules ces catégories sont proposées
-let FICHES={},BESOINS={},MODS=[],GROUPES=[],SESSION_OK=true,BUSY={},SUIVI=false,ABSENT={};
+let FICHES={},BESOINS={},MODS=[],GROUPES=[],SESSION_OK=true,BUSY={},SUIVI=false,ABSENT={},PARC=[];
 const etat={onglet:'auj',cat:'Tout',q:''};
 const SONDE_MS=Number(Q.get('sonde'))||2500;
 
@@ -318,8 +318,32 @@ function garnir(a,d){
     d.appendChild(s);return}
   const f=el('div','facts');[[a.c,'Catégorie'],[a.v||'—','Version'],[a.inst?(a.run?'En marche':'Installée'):'Disponible','État']].forEach(x=>{const q=el('div');q.appendChild(el('b',null,x[0]));q.appendChild(el('span',null,x[1]));f.appendChild(q)});s.appendChild(f);
   s.appendChild(el('p',null,a.l));
+  if(PARC.length)s.appendChild(parc(a));
   s.appendChild(el('div','note',a.inst?'Installée sur cette box.':a.hors?(a.formule?'Disponible avec la formule '+a.formule+'.':'Hors de la formule de cette box.'):'L’installation est réservée à l’administrateur de la box. Vos données restent chez vous.'));
   d.appendChild(s)}
+/* #3338 volet 4 : sur le maître, installer l'app sur une autre box du parc, par le pilotage (confirmation forte : le
+   nom de la box retapé ; la box vérifie sa formule, son dépôt, les mains liées et l'accord de son détenteur). */
+function parc(a){
+  const w=el('div','parc');w.appendChild(el('h4',null,'Installer sur une autre box du parc'));
+  const sel=el('select');sel.setAttribute('aria-label','Box du parc');
+  PARC.forEach(b=>{const o=el('option',null,b.nom);o.value=b.cle;sel.appendChild(o)});
+  const lab=el('label',null,'Retapez le nom de la box pour confirmer');const inp=el('input');inp.type='text';inp.autocomplete='off';lab.appendChild(inp);
+  const bt=el('button','get','Installer sur la box');bt.type='button';
+  bt.addEventListener('click',async()=>{
+    const b=PARC.filter(x=>x.cle===sel.value)[0];if(!b)return;
+    if(inp.value.trim()!==b.nom){toast('Retapez exactement « '+b.nom+' » pour confirmer.');inp.focus();return}
+    bt.disabled=true;
+    try{const r=await fetch('/api/v1/pilotage/boxes/'+encodeURIComponent(b.cle)+'/actions/installer',{method:'POST',credentials:'same-origin',
+        headers:entetes({'Content-Type':'application/json'}),body:JSON.stringify({args:{paquet:a.id},confirmation:b.nom})});
+      let d=null;try{d=await r.json()}catch(e){/* corps vide */}
+      const etat=d&&(d.etat||(d.detail&&d.detail.etat));
+      toast(!r.ok?a.n+' sur '+b.nom+' : '+((d&&typeof d.detail==='string')?d.detail:'refusé ('+r.status+')')
+        :etat==='consentement'?a.n+' sur '+b.nom+' : en attente de l’accord du détenteur.'
+        :etat==='refuse'?a.n+' sur '+b.nom+' : refusé par la box'+(d.raison?' ('+d.raison+')':'')+'.'
+        :a.n+' : installation lancée sur '+b.nom+' (suivi dans la Flotte).')}
+    catch(e){toast('Pilotage injoignable.')}
+    finally{bt.disabled=false}});
+  w.appendChild(sel);w.appendChild(lab);w.appendChild(bt);return w}
 function ouvrir(id){if(!app(id))return;OUVERTE=id;remplir(id);const d=$('dlg');if(!d.open)d.showModal()}
 $('dlg').addEventListener('close',()=>{OUVERTE=null});
 $('dlg').addEventListener('click',function(e){if(e.target===this)this.close()});
@@ -341,6 +365,8 @@ async function charger(){
   const g=val(1);if(g&&Array.isArray(g.groupes))GROUPES=g.groupes;
   const f=val(3);if(f&&typeof f==='object')FICHES=f;
   const bs=val(4);BESOINS=bs&&typeof bs==='object'?bs:{};
+  try{const bx=await lire('/boxes','/api/v1/pilotage');PARC=(Array.isArray(bx)?bx:[]).filter(b=>b&&b.en_ligne&&typeof b.cle==='string'&&typeof b.nom==='string')}
+  catch(e){PARC=[]}   // pas un maître (ou pas de pilotage) : pas d'installation à distance
   const jb=val(2);if(jb&&jb.jobs)Object.keys(jb.jobs).forEach(n=>{if(jb.jobs[n].etat==='en-cours')BUSY[n]=jb.jobs[n].verbe});
   const rien=e.slice(0,2).every(x=>x.status==='rejected')&&SESSION_OK;
   $('erreur').hidden=!rien;if(rien)$('erreur').textContent='Impossible de lire l’App Store (service arrêté ou injoignable).';

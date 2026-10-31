@@ -41,6 +41,7 @@ import (
 const (
 	CmdReboot        = "Device.Reboot()"
 	CmdMettreAJour   = "Device.X_SECUBOX_Packages.MettreAJour()"
+	CmdInstaller     = "Device.X_SECUBOX_Packages.Installer()" // #3338 : une app de la boutique du maître
 	CmdServices      = "Device.X_SECUBOX_Services.Agir()"
 	CmdRenommer      = "Device.X_SECUBOX_Nom.Renommer()"
 	CmdRenouveler    = "Device.X_SECUBOX_Secrets.Renouveler()"
@@ -75,6 +76,7 @@ const (
 var (
 	reUnite   = regexp.MustCompile(`^secubox-[a-z0-9][a-z0-9@.-]{0,62}\.(service|timer)$`)
 	reNom     = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+	rePaquet  = regexp.MustCompile(`^secubox-[a-z0-9][a-z0-9-]{0,47}$`)
 	reSupport = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 	reJob     = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	reActeur  = regexp.MustCompile(`^[a-z_][a-z0-9_.-]{0,63}$`) // même motif que le ctl (R-L2-14)
@@ -280,6 +282,15 @@ func Traduire(cmd string, args map[string]any) ([]string, error) {
 		return sansArgument("maj-paquets")
 	case CmdRenouveler:
 		return sansArgument("renouveler-secrets")
+	case CmdInstaller:
+		if err := cles([]string{"paquet"}); err != nil {
+			return nil, err
+		}
+		paquet, err := chaine("paquet", rePaquet)
+		if err != nil {
+			return nil, err
+		}
+		return []string{"installer", paquet}, nil
 	case CmdServices:
 		if err := cles([]string{"unite", "action"}); err != nil {
 			return nil, err

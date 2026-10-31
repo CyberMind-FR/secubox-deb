@@ -17,6 +17,7 @@ Usage : secubox-pilotagectl [--acteur <login>] <verbe> …
 Verbes (liste fermée) :
   reboot                                   redémarrage (différé de 5 s : la réponse au maître part d'abord)
   maj-paquets                              apt-get update + upgrade (jamais dist-upgrade ni autoremove), opération longue
+  installer <secubox-…>                    apt-get install --no-remove d'un paquet du dépôt (#3338), opération longue
   service <demarrer|arreter|redemarrer> <unité>
                                            unité ^secubox-[a-z0-9][a-z0-9@.-]{0,62}\\.(service|timer)$, jamais celle de
                                            l'agent, ni une unité du ctl (secubox-pilotage-op-*), ni une unité
@@ -151,13 +152,15 @@ MAILLAGES = {"wg-mesh": ipaddress.ip_address("10.10.0.1"), "wg-autoload": ipaddr
 PREFIXE_OP = "secubox-pilotage-op-"
 CTL = "/usr/sbin/secubox-pilotagectl"
 SERVICE = {"demarrer": "start", "arreter": "stop", "redemarrer": "restart"}
-ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
+ACTIONS = ("releve", "reboot", "maj-paquets", "installer", "service-demarrer", "service-arreter", "service-redemarrer",
            "renommer", "renouveler-secrets", "support-ouvrir", "support-fermer", "maillage-rejoindre",
            "interface-locale", "interface-distante", "interface-confirmer")
-VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", "support", "consentement",
+VERBES = ("reboot", "maj-paquets", "installer", "service", "renommer", "renouveler-secrets", "support", "consentement",
           "mains-liees", "ancre-verifier", "politique", "etat", "etat-operation", "fins-recentes", "_fin",
           "maillage-rejoindre", "_rejoindre", "interface", "_interface", "_interface-garde", "_interface-reprise")
 RENOMMER = "/usr/sbin/secubox-renommer"
+# #3338 : installation d'une app depuis la boutique du maître. Un paquet SecuBox, rien d'autre ; installation seulement.
+RE_PAQUET = re.compile(r"secubox-[a-z0-9][a-z0-9-]{0,47}")
 DELAI_RENOMMER = 120                                     # s, durée maximale de l'unité transitoire du renommage
 DELAI_REJOINDRE = 300                                    # s ; secubox-automesh.service est borné à 240 s
 # Bac à sable du renommage (même que secubox-systeme-renommer@.service) : /etc, /run (verrou), /var/log/secubox (audit).
@@ -171,7 +174,7 @@ OPS_SUPPORT = ("ouvrir", "fermer", "accepter", "refuser")
 ETATS_SUPPORT = frozenset({"en_attente", "ouvert", "refuse", "ferme", "annule", "expire"})
 DUREE_SUPPORT = 30                                       # minutes, défaut d'une session de support
 DUREE_SUPPORT_MAX = 240
-CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "service-demarrer", "service-arreter", "service-redemarrer",
+CONSENTEMENT_CLIENTE = frozenset({"reboot", "maj-paquets", "installer", "service-demarrer", "service-arreter", "service-redemarrer",
                                   "renommer", "renouveler-secrets", "interface-locale", "interface-distante"})
 # #3302 : bascule d'interface locale ⇄ distante (profil léger « distante » de secubox-profiles). Une bascule vers
 # « distante » n'est acquise qu'à la confirmation du maître ; sans elle, la minuterie « homme mort » rend le profil de
@@ -190,7 +193,7 @@ PONCTUELLE = "unité ponctuelle : passez par l'action dédiée"
 DELAI_SYSTEMD = 20                                       # s, lecture de la description d'une unité
 # Opérations exclusives, enregistrées dans operation.json : un reboot pendant apt laisserait dpkg à moitié configuré,
 # et rien de long ne démarre pendant les 5 s qui précèdent un reboot.
-EXCLUSIVES = frozenset({"maj-paquets", "renouveler-secrets", "reboot", "interface"})
+EXCLUSIVES = frozenset({"maj-paquets", "installer", "renouveler-secrets", "reboot", "interface"})
 ACTIFS = frozenset({"active", "activating", "deactivating", "reloading", "refreshing"})
 VALIDITE = 24 * 3600
 VALIDITE_ANCRE = 2 * 3600                                # canal vérifié : l'agent revérifie toutes les heures
@@ -256,12 +259,14 @@ class Ctx:
             self.systemctl = shutil.which("systemctl") or "systemctl"
             self.wg = shutil.which("wg") or "wg"
             self.profilectl = shutil.which("secubox-profilectl") or "secubox-profilectl"
+            self.aptcache = shutil.which("apt-cache") or "apt-cache"
             self.env = dict(os.environ)
         else:
             # Vraie box : l'environnement ne choisit jamais une commande lancée en root.
             self.systemd_run, self.systemctl = "/usr/bin/systemd-run", "/usr/bin/systemctl"
             self.wg = "/usr/bin/wg"
             self.profilectl = "/usr/sbin/secubox-profilectl"
+            self.aptcache = "/usr/bin/apt-cache"
             self.env = {"PATH": PATH_SUR, "LC_ALL": "C"}
         sudo_user = os.environ.get("SUDO_USER", "")
         try:
@@ -878,6 +883,11 @@ def analyser(argv):
         if len(a) != 1 or not RE_NOM.fullmatch(a[0]):
             raise ArgvInvalide
         return verbe, {"nom": a[0]}
+    if verbe == "installer":
+        # le paquet est porté par « nom » : l'accord du détenteur d'une box cliente vaut pour CE paquet (clé de l'accord)
+        if len(a) != 1 or not RE_PAQUET.fullmatch(a[0]):
+            raise ArgvInvalide
+        return verbe, {"nom": a[0]}
     if verbe == "maillage-rejoindre":
         if a:
             raise ArgvInvalide                      # le code n'est JAMAIS dans l'argv (R-L2-2)
@@ -1007,6 +1017,12 @@ def commande(ctx, verbe, p):
         return (["--setenv=DEBIAN_FRONTEND=noninteractive"],
                 ["/bin/sh", "-c", "/usr/bin/apt-get update && /usr/bin/apt-get -y -o Dpkg::Options::=--force-confold "
                                   "-o Dpkg::Options::=--force-confdef upgrade"])
+    if verbe == "installer":
+        # Installation seulement : --no-remove arrête apt plutôt que de retirer un paquet au passage. Jamais de délai.
+        return (["--setenv=DEBIAN_FRONTEND=noninteractive"],
+                ["/bin/sh", "-c", "/usr/bin/apt-get update && /usr/bin/apt-get -y --no-remove "
+                                  "-o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef install "
+                                  + p["nom"]])
     if verbe == "renouveler-secrets":
         return [f"--setenv=SUDO_USER={ctx.acteur}"], ["/usr/sbin/secubox-renouvelle-secrets", "--tout", "--oui"]
     if verbe == "service":
@@ -1022,6 +1038,42 @@ def commande(ctx, verbe, p):
         # Hors de l'espace de montage de l'agent : l'apply pilote systemd, nginx et /etc (PID 1, root). Borné.
         return [f"--property=RuntimeMaxSec={DELAI_INTERFACE}"], [CTL, "_interface", p["job"]]
     raise Erreur("verbe sans commande")
+
+
+def refus_abonnement(ctx, paquet):
+    """#3338 : sous l'abonnement de la box (/etc/secubox/abonnement.json, posé par root), seul un paquet du profil de sa
+    formule s'installe. Absent : box sans abonnement (maître, atelier), tout est permis. Illisible : rien."""
+    try:
+        with open(f"{ctx.r}/etc/secubox/abonnement.json", "rb") as f:
+            ab = json.loads(f.read(TAILLE_MAX))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        return "abonnement illisible"
+    if not isinstance(ab, dict):
+        return "abonnement illisible"
+    if ab.get("statut") != "actif":
+        return "abonnement inactif"
+    profil = str(ab.get("profil") or "")
+    if not RE_PROFIL.fullmatch(profil):
+        return "abonnement illisible"
+    try:
+        with open(f"{ctx.r}/etc/secubox/profiles/{profil}.toml", "rb") as f:
+            on = tomllib.load(f).get("on") or []
+    except (OSError, tomllib.TOMLDecodeError):
+        return "hors de la formule de la box"
+    ids = {str(m).removeprefix("secubox-") for m in on if isinstance(m, str)}
+    return None if paquet.removeprefix("secubox-") in ids else "hors de la formule de la box"
+
+
+def paquet_au_depot(ctx, paquet):
+    """#3338 : le paquet est connu des sources apt de la box (son dépôt signé) ; RE_PAQUET déjà vérifié par analyser."""
+    try:
+        r = subprocess.run([ctx.aptcache, "show", paquet], env=ctx.env, stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return r.returncode == 0
 
 
 def lancer(ctx, verbe, p, job):
@@ -1118,7 +1170,7 @@ def executer(ctx, verbe, p):
     unite = p.get("unite")
     op = p["op"] if verbe == "support" else None
     auditer(ctx, "pilotage_demande", verbe=verbe, action=action, unite=unite, op=op,
-            support=p["id"] if verbe == "support" else None)
+            support=p["id"] if verbe == "support" else None, nom=p["nom"] if verbe == "installer" else None)
     try:
         return traiter(ctx, verbe, p, action, unite)
     except Erreur as e:
@@ -1511,6 +1563,12 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
         autorise, _, raison = politique(action, False, du_proprietaire)
         if not autorise:
             return refus(raison)                     # maillage-rejoindre sur une box cliente
+    if verbe == "installer":
+        motif = refus_abonnement(ctx, p["nom"])
+        if motif is not None:
+            return refus(motif)
+        if not paquet_au_depot(ctx, p["nom"]):
+            return refus("paquet absent du dépôt")
     if verbe == "maillage-rejoindre":
         # R-L2-2 : lu après l'ancre, les mains liées et la politique ; jamais recopié (audit, journal, sortie).
         code = lire_code()
@@ -1611,7 +1669,8 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
 
     fins.append({"job": job, "verbe": verbe, "resultat": "lance", "quand": maintenant})
     ecrire_fins(fd, fins)                           # M2 : après le lancement, un échec d'écriture ne change pas la réponse
-    auditer_apres(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="lance")
+    auditer_apres(ctx, "pilotage_resultat", verbe=verbe, action=action, unite=unite, job=job, resultat="lance",
+                  nom=p["nom"] if verbe == "installer" else None)
     return {"ok": True, "job": job}
 
 
