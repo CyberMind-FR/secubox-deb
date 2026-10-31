@@ -82,7 +82,7 @@ def test_spdx_et_versions():
     for p in ICI.rglob("*"):
         if p.is_file() and p.suffix in (".py", ".js", ".css", ".conf", ".in", ".toml", ".service", ".timer") and "__pycache__" not in p.parts:
             assert "SPDX-License-Identifier" in p.read_text()[:400], p
-    assert lire("debian/changelog").startswith("secubox-live (0.1.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-live (0.1.1-1~trixie1) trixie;")
     assert lire("debian/compat").strip() == "13" and "Standards-Version: 4.6.2" in lire("debian/control")
     for sh in ("debian/postinst", "debian/prerm", "debian/postrm", "sbin/secubox-live-exposer"):
         assert subprocess.run(["sh", "-n", str(ICI / sh)]).returncode == 0, sh
