@@ -219,6 +219,18 @@ def test_ressources_partagees_composees_entre_paquets():
                                {"paquet": "secubox-b", "version": "1", "modules": ["qos"]}])
 
 
+def test_csp_longue_decoupee_en_variables():
+    """#3302 (banc gk4) : 58 modules donnent une CSP de plus de 4 Ko, paramètre que nginx refuse (« too long parameter »).
+    Chaque morceau tient sous la limite ; la valeur reconstituée est la même politique."""
+    mods = [f"module{i:02d}" for i in range(80)]
+    conf = V.rendre_nginx("gk5", [{"paquet": "secubox-a", "version": "1.0-1~trixie1", "modules": mods}])
+    assert all(len(li) < 3000 for li in conf.splitlines())
+    sets = dict(re.findall(r'set \$(sbx_csp_\d+) "([^"]*)";', conf))
+    entete = re.search(r'add_header Content-Security-Policy "([^"]*)" always;', conf).group(1)
+    reconstruite = re.sub(r"\$(sbx_csp_\d+)", lambda m: sets[m.group(1)], entete)
+    assert reconstruite == V.csp_pages("gk5", mods)
+
+
 def test_pages_declarees_sans_deviner():
     v = valeurs(paquets=(("secubox-a", "1.0"), ("secubox-a", "2.0"), ("pas-secubox", "1.0"), ("secubox-b", "bad version")))
     assert V.pages_declarees(v) == {}

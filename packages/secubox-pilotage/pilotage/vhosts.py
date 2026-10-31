@@ -174,6 +174,24 @@ def _q(s: str) -> str:
 PARTAGES = frozenset({"luci-static"})
 
 
+CSP_MORCEAU = 2000   # nginx refuse un paramètre de plus de 4 Ko (« too long parameter ») : la CSP est découpée en variables
+
+
+def _csp_nginx(csp: str) -> list:
+    """`set $sbx_csp_N "…";` (morceaux coupés sur une espace) puis `add_header` qui les réassemble : même politique (#3302)."""
+    if len(csp) <= CSP_MORCEAU:
+        return [f'    add_header Content-Security-Policy "{csp}" always;']
+    morceaux, reste = [], csp
+    while len(reste) > CSP_MORCEAU:
+        i = reste.rfind(" ", 0, CSP_MORCEAU)
+        i = CSP_MORCEAU if i <= 0 else i
+        morceaux.append(reste[:i])
+        reste = reste[i:]
+    morceaux.append(reste)
+    L = [f'    set $sbx_csp_{i} "{m}";' for i, m in enumerate(morceaux)]
+    return L + ['    add_header Content-Security-Policy "' + "".join(f"$sbx_csp_{i}" for i in range(len(morceaux))) + '" always;']
+
+
 def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str = SOCKET) -> str:
     """`pages` : [{"paquet", "version", "modules": [module…]}]. Un module servi par deux paquets est refusé (ValueError)."""
     dom = domaine(box)
@@ -204,7 +222,7 @@ def rendre_nginx(box: str, pages: list, racine: str = RACINE_PAGES, socket: str 
         # tout lien absolu ou contenant « .. »
         "    disable_symlinks if_not_owner from=$document_root;",
         "    autoindex off;",
-        f"    add_header Content-Security-Policy \"{csp_pages(box, [*vus, *partages])}\" always;",
+        *_csp_nginx(csp_pages(box, [*vus, *partages])),
         "    add_header X-Content-Type-Options \"nosniff\" always;",
         "    add_header X-Frame-Options \"DENY\" always;",
         "    add_header Referrer-Policy \"no-referrer\" always;",
