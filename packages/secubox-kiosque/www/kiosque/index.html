@@ -1,0 +1,92 @@
+<!doctype html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+  Kiosque distant (#3330) : webapp installable servie par le maître. Aucun script ni style intégré (CSP stricte).
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070d1c">
+<meta name="robots" content="noindex">
+<title>SecuBox Kiosque</title>
+<link rel="manifest" href="/kiosque/manifest.webmanifest">
+<link rel="icon" href="/kiosque/icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/kiosque/icone.svg">
+<link rel="stylesheet" href="/kiosque/kiosque.css">
+<script src="/kiosque/kiosque.js" defer></script>
+</head>
+<body>
+<header class="entete">
+  <div class="marque"><span class="logo" aria-hidden="true"></span><span>SecuBox</span></div>
+  <div id="boxes" class="pastilles" role="tablist" aria-label="Box"></div>
+  <div id="liaison" class="liaison">connexion…</div>
+</header>
+
+<main id="ecrans">
+  <section id="ecran-accueil" class="ecran actif" aria-labelledby="t-accueil">
+    <h1 id="t-accueil" class="titre">Accueil</h1>
+    <div class="grille">
+      <div class="carte"><span class="libelle">État</span><strong id="a-etat" class="valeur">—</strong><span id="a-etat-detail" class="detail"></span></div>
+      <div class="carte"><span class="libelle">Mémoire</span><strong id="a-memoire" class="valeur">—</strong><span id="a-memoire-detail" class="detail"></span></div>
+      <div class="carte"><span class="libelle">Charge</span><strong id="a-charge" class="valeur">—</strong><span id="a-charge-detail" class="detail"></span></div>
+      <div class="carte"><span class="libelle">En marche depuis</span><strong id="a-uptime" class="valeur">—</strong></div>
+    </div>
+  </section>
+
+  <section id="ecran-securite" class="ecran" aria-labelledby="t-securite">
+    <h1 id="t-securite" class="titre">Sécurité</h1>
+    <div class="grille">
+      <div class="carte"><span class="libelle">Requêtes bloquées</span><strong id="s-bloques" class="valeur">—</strong><span id="s-detail" class="detail"></span></div>
+      <div class="carte bientot"><span class="libelle">Bans récents</span><span class="detail">Bientôt : liste des bans et alertes.</span></div>
+      <div class="carte bientot"><span class="libelle">Protection renforcée</span><span class="detail">Bientôt : action depuis le kiosque.</span></div>
+    </div>
+  </section>
+
+  <section id="ecran-reseau" class="ecran" aria-labelledby="t-reseau">
+    <h1 id="t-reseau" class="titre">Réseau</h1>
+    <div class="grille">
+      <div class="carte"><span class="libelle">Sortie Internet</span><strong id="r-wan" class="valeur">—</strong></div>
+      <div class="carte"><span class="libelle">Adresse LAN</span><strong id="r-lan" class="valeur">—</strong></div>
+      <div class="carte"><span class="libelle">Mode réseau</span><strong id="r-mode" class="valeur">—</strong></div>
+      <div class="carte bientot"><span class="libelle">Appareils et débit</span><span class="detail">Bientôt : appareils connectés et débit en direct.</span></div>
+    </div>
+  </section>
+
+  <section id="ecran-medias" class="ecran" aria-labelledby="t-medias">
+    <h1 id="t-medias" class="titre">Médias</h1>
+    <div class="carte large">
+      <span class="libelle">Radio — en cours</span>
+      <strong id="m-titre" class="valeur petite">—</strong>
+      <span id="m-detail" class="detail"></span>
+    </div>
+    <div class="carte bientot large"><span class="libelle">Lecteur Lyrion</span><span class="detail">Bientôt : lecture, pause, volume.</span></div>
+  </section>
+
+  <section id="ecran-box" class="ecran" aria-labelledby="t-box">
+    <h1 id="t-box" class="titre">Box du maillage</h1>
+    <ul id="liste-boxes" class="liste"></ul>
+  </section>
+
+  <p id="message" class="message" role="status"></p>
+</main>
+
+<nav class="onglets" aria-label="Écrans">
+  <button type="button" data-ecran="accueil" class="onglet actif">Accueil</button>
+  <button type="button" data-ecran="securite" class="onglet">Sécurité</button>
+  <button type="button" data-ecran="reseau" class="onglet">Réseau</button>
+  <button type="button" data-ecran="medias" class="onglet">Médias</button>
+  <button type="button" data-ecran="box" class="onglet">Box</button>
+</nav>
+
+<div id="veille" class="veille" hidden>
+  <div id="v-heure" class="heure">--:--</div>
+  <div id="v-date" class="vdate"></div>
+  <div id="v-etat" class="vetat"></div>
+  <span class="detail">Toucher pour reprendre</span>
+</div>
+</body>
+</html>

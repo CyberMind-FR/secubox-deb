@@ -1,0 +1,15 @@
+{
+  "name": "SecuBox Kiosque",
+  "short_name": "Kiosque",
+  "description": "Kiosque distant SecuBox : état des box, sécurité, réseau, médias.",
+  "lang": "fr",
+  "start_url": "/kiosque/",
+  "scope": "/kiosque/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070d1c",
+  "theme_color": "#070d1c",
+  "icons": [
+    {"src": "/kiosque/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}

@@ -1,0 +1,8 @@
+secubox-kiosque (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Première version du kiosque distant en PWA (ref #3330) : servi par le
+    maître sous /kiosque/, onglets Accueil, Sécurité, Réseau, Médias, Box,
+    veille ; données des API existantes en lecture ; ouverture de
+    l'administration complète d'une box.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 09:34:35 +0100
