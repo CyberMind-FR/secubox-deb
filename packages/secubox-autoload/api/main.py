@@ -25,7 +25,10 @@ ou révocation le relance (R37), et une minuterie horaire du service le relance 
 from __future__ import annotations
 
 import ipaddress
+import json
+import re
 import time
+from pathlib import Path
 from typing import Callable, Dict, Literal, Optional
 
 from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Request
@@ -102,6 +105,60 @@ class AbonnementIn(BaseModel):
     formule: Optional[str] = Field(default=None, max_length=30)
 
 
+class FormuleIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nom: str = Field(max_length=30)
+    libelle: str = Field(max_length=60)
+    profil: str = Field(max_length=40)
+    mois: int = Field(ge=1, le=120)
+
+
+class ProlongerIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mois: int = Field(ge=1, le=120)
+
+
+class ChangerFormuleIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    formule: str = Field(max_length=30)
+
+
+class RepriseIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    motif: Optional[str] = Field(default=None, max_length=200)
+
+
+class RevocationBoxIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    motif: str = Field(max_length=200)
+    confirmation: str = Field(max_length=64)
+
+
+PROFILS_APPLIQUES = Path("/var/lib/secubox/pilotage-public/profils-appliques.json")
+PROFILS_APPLIQUES_MAX = 256 * 1024
+_ADRESSE = re.compile(r"^10\.64\.\d{1,3}\.\d{1,3}$")
+
+
+def lire_profils_appliques(chemin: Path) -> Dict[str, str]:
+    """Relevé facultatif du pilotage (#3303) : `{"version": 1, "boxes": [{"adresse": "10.64.x.y", "profil": "<profil réel>"}]}`.
+    Absent, illisible, trop gros ou mal formé → {} (profil appliqué inconnu, jamais un écart inventé). Toute entrée hors forme est ignorée."""
+    try:
+        with open(chemin, "rb") as f:
+            brut = f.read(PROFILS_APPLIQUES_MAX + 1)
+        if len(brut) > PROFILS_APPLIQUES_MAX:
+            return {}
+        donnees = json.loads(brut)
+    except (OSError, ValueError):
+        return {}
+    sortie: Dict[str, str] = {}
+    if not isinstance(donnees, dict) or donnees.get("version") != 1 or not isinstance(donnees.get("boxes"), list):
+        return {}
+    for b in donnees["boxes"]:
+        if isinstance(b, dict) and isinstance(b.get("adresse"), str) and _ADRESSE.match(b["adresse"]) and b.get("profil") in J.PROFILS:
+            sortie[b["adresse"]] = b["profil"]
+    return sortie
+
+
 class ContactIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     email: Optional[str] = Field(default=None, max_length=254)
@@ -171,7 +228,7 @@ def _routes_box(r: APIRouter, reg: J.Registre, garde_tunnel, courrier: Optional[
 
 def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Callable[[], None], horloge: Callable[[], float] = time.time,
               portee: Literal["public", "tunnel"] = "public", courrier: Optional[Callable[[Dict, str], None]] = None,
-              publier_tunnel: Optional[Callable[[], None]] = None) -> FastAPI:
+              publier_tunnel: Optional[Callable[[], None]] = None, profils_appliques: Path = PROFILS_APPLIQUES) -> FastAPI:
     app = FastAPI(title="secubox-autoload", docs_url=None, redoc_url=None, openapi_url=None)
     r = APIRouter(prefix=PREFIXE)
     limiteur = Limiteur(horloge)
@@ -296,6 +353,61 @@ def creer_app(reg: J.Registre, pairs: T.Pairs, cle_hub_pub: str, appliquer: Call
         except ValueError as err:
             raise HTTPException(422, str(err)) from None
         return {"jetons": n, "expire_le": expire, "tunnel_applique": publier()}                # suspendu/revoque/echu atteint le maître (R37)
+
+    # ── abonnements par box et formules (#3303) ──────────────────────────────────────────────────────────────
+    @r.get("/formules", dependencies=[Depends(require_jwt)])
+    def formules():
+        return reg.formules()
+
+    @r.post("/formules", dependencies=[Depends(require_jwt)])
+    def fixer_formule(corps: FormuleIn):
+        try:
+            reg.fixer_formule(corps.nom, corps.libelle, corps.profil, corps.mois)
+        except ValueError as err:
+            raise HTTPException(422, str(err)) from None
+        return {"ok": True}
+
+    @r.get("/abonnements", dependencies=[Depends(require_jwt)])
+    def abonnements():
+        return [{k: v for k, v in x.items() if k != "adresse"} for x in reg.abonnements(lire_profils_appliques(profils_appliques))]
+
+    def sur_box(faire):
+        try:
+            res = faire()
+        except LookupError:
+            raise HTTPException(404, "box inconnue") from None
+        except PermissionError as err:
+            raise HTTPException(409, str(err)) from None
+        except ValueError as err:
+            raise HTTPException(422, str(err)) from None
+        return res
+
+    @r.post("/boxes/{ident}/abonnement/prolonger", dependencies=[Depends(require_jwt)])
+    def prolonger(ident: int, corps: ProlongerIn):
+        expire = sur_box(lambda: reg.prolonger_box(ident, corps.mois))
+        return {"expire_le": expire, "tunnel_applique": publier()}
+
+    @r.post("/boxes/{ident}/abonnement/formule", dependencies=[Depends(require_jwt)])
+    def changer_formule(ident: int, corps: ChangerFormuleIn):
+        sur_box(lambda: reg.changer_formule_box(ident, corps.formule))
+        return {"ok": True, "tunnel_applique": publier()}
+
+    @r.post("/boxes/{ident}/abonnement/suspendre", dependencies=[Depends(require_jwt)])
+    def suspendre(ident: int, corps: MotifIn):
+        sur_box(lambda: reg.suspendre_box(ident, corps.motif))
+        return {"ok": True, "tunnel_applique": publier()}
+
+    @r.post("/boxes/{ident}/abonnement/reprendre", dependencies=[Depends(require_jwt)])
+    def reprendre(ident: int, corps: RepriseIn):
+        sur_box(lambda: reg.reprendre_box(ident, corps.motif))
+        return {"ok": True, "tunnel_applique": publier()}
+
+    @r.post("/boxes/{ident}/abonnement/revoquer", dependencies=[Depends(require_jwt)])
+    def revoquer_box(ident: int, corps: RevocationBoxIn):
+        cle = sur_box(lambda: reg.revoquer_box(ident, corps.motif, corps.confirmation))
+        if cle:
+            pairs.retirer(cle)
+        return {"revoque": True, "tunnel_applique": publier()}
 
     @r.get("/rapports", dependencies=[Depends(require_jwt)])
     def rapports():

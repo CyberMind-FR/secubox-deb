@@ -56,6 +56,34 @@ Le service n'est pas root, et aucune nouvelle unité root n'existe : il applique
 
 Pare-feu : `udp/51830` en entrée et `tcp/8470` depuis `wg-autoload` seulement (`/etc/nftables.d/zz-secubox-autoload.nft`). La **redirection udp/51830 de la Freebox vers gk2** est à faire à la main. Journal d'audit : `/var/log/secubox/autoload/audit.log`.
 
+## Abonnements & profils (0.8.0, #3303)
+
+Page `www/autoload/abonnements.html` (lien depuis l'atelier). L'abonnement est porté **par box** (un jeton = une box) : formule, échéance,
+statut (`actif`, `suspendu`, `revoque`, état calculé `echu`). Le client ne fait que regrouper. Aucune facturation, aucun prix.
+
+- **Migration** (au démarrage du service, idempotente) : table `abonnements_box` ; toute box sans ligne hérite de l'abonnement **actuel**
+  de son client ; une ligne existante n'est jamais touchée. Une box émise ou réclamée par série plus tard hérite de même.
+- **Compatibilité** : `POST /clients/{client}/abonnement` fixe le client **et toutes ses box non révoquées**.
+- **Formules** : table `formules` (nom → libellé, profil réel parmi `minimal, lite, isp, full, secure-gateway, media-lab, distante`,
+  durée 1-120 mois). Changer le profil d'une formule ne touche aucune box : l'écart est signalé.
+- **Profil appliqué** : lu dans `/var/lib/secubox/pilotage-public/profils-appliques.json`
+  (`{"version": 1, "boxes": [{"adresse": "10.64.x.y", "profil": "<profil réel>"}]}`, 256 Kio au plus, publié par le pilotage) par l'adresse
+  tunnel de la box. Absent ou mal formé : `profil_applique = null` (« inconnu »), jamais un écart inventé. « Appliquer le profil » est
+  désactivé dans la page jusqu'à la bascule de profil du pilotage (#3302).
+- **Projection du pilotage** : `abonnement` y est désormais celui de la **box** (celui du client si la base n'est pas encore migrée).
+
+| Route | Garde | Rôle |
+|---|---|---|
+| `GET /abonnements` | `require_jwt` | une ligne par box : `id, box, client, serie, lot, jeton, formule, formule_libelle, expire_le, jours_restants, statut, motif, profil_commande, profil_formule, profil_applique, ecart` |
+| `GET /formules` · `POST /formules` | `require_jwt` | catalogue ; `{nom, libelle, profil, mois}` (création ou mise à jour) |
+| `POST /boxes/{id}/abonnement/prolonger` | `require_jwt` | `{mois}` : depuis l'échéance en cours, ou d'aujourd'hui si elle est passée ; 409 si révoquée |
+| `POST /boxes/{id}/abonnement/formule` | `require_jwt` | `{formule}` du catalogue (422 sinon) |
+| `POST /boxes/{id}/abonnement/suspendre` | `require_jwt` | `{motif}` obligatoire (3 à 200 caractères) |
+| `POST /boxes/{id}/abonnement/reprendre` | `require_jwt` | `{motif?}` |
+| `POST /boxes/{id}/abonnement/revoquer` | `require_jwt` | `{motif, confirmation}` : la confirmation est le nom de la box (série, sinon id) ; révoque son **seul** jeton et retire son pair |
+
+Chaque action est auditée (`abonnement-box`, `formule`) et relance `tunnel-sync --sans-reactiver` (projection du pilotage à jour).
+
 ## Audit
 
 Chaque émission, réclamation, refus (avec la raison), révocation et changement d'abonnement est ajouté à `/var/log/secubox/autoload/audit.log` (JSON, module `autoload`, logrotate hebdomadaire sur 52 semaines). **Jamais la valeur d'un jeton.**

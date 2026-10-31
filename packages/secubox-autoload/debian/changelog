@@ -1,3 +1,13 @@
+secubox-autoload (0.8.0-1~trixie1) trixie; urgency=medium
+
+  * Abonnements & profils (ref #3303, décision 4 de #3258) : abonnement par box (formule, échéance, statut), migration
+    idempotente (chaque box hérite de l'abonnement de son client), catalogue des formules (nom → profil réel, durée),
+    prolongation depuis l'échéance en cours, suspension et révocation d'une seule box avec motif audité, vue par box
+    avec jours restants et écart de profil (relevé facultatif du pilotage), projection du pilotage par box, page
+    www/autoload/abonnements.html. Aucun prix.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 12:00:00 +0100
+
 secubox-autoload (0.7.5-1~trixie1) trixie; urgency=medium
 
   * Reprise des reports de L1 pour L2 « Agir » (ref #3126, tâche 0) : la projection publique des pairs suit toujours
