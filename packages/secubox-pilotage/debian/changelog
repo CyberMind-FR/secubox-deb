@@ -1,3 +1,11 @@
+secubox-pilotage (0.6.9-1~trixie1) trixie; urgency=medium
+
+  * vhost : /api/v1/hub/ accepte pour le paquet d accueil (409 « module hors
+    du paquet ») ; script-src-attr unsafe-inline pour les onclick de
+    sidebar.js (elements script toujours par empreinte) (ref #3302).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 07:12:35 +0100
+
 secubox-pilotage (0.6.8-1~trixie1) trixie; urgency=medium
 
   * vhost : API du hub relayee quand l accueil est servi (dashboard,

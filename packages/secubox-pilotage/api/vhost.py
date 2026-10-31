@@ -80,6 +80,8 @@ def modules_servis(racine: Path, paquet: str, version: str) -> set:
             continue
         if stat.S_ISDIR(st.st_mode) and V.RE_MODULE.fullmatch(n):
             res.add(n)
+    if paquet == "secubox-hub" and res:
+        res.add("hub")        # #3302 : l'accueil (racine du paquet hub) appelle /api/v1/hub/…
     return res
 
 

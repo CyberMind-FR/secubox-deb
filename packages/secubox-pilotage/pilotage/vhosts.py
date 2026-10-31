@@ -93,7 +93,10 @@ def csp_module(box: str, chemins: Iterable[str], empreintes: Iterable[str]) -> s
     base = f"https://{domaine(box)}"
     emp = sorted(e for e in empreintes if RE_EMPREINTE.fullmatch(e))
     srcs = " ".join(f"{base}{c}" for c in [*chemins, "/shared/", "/luci-static/"])
-    return (f"default-src 'none'; script-src {' '.join([srcs, *emp])}; style-src {srcs} 'unsafe-inline'; img-src 'self' data:; "
+    # script-src-attr : sidebar.js fabrique ses boutons avec des onclick (impossibles à prévoir par empreinte) ; les ÉLÉMENTS <script>
+    # restent limités aux chemins et aux empreintes (#3302)
+    return (f"default-src 'none'; script-src {' '.join([srcs, *emp])}; script-src-attr 'unsafe-inline'; "
+            f"style-src {srcs} 'unsafe-inline'; img-src 'self' data:; "
             "font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 
 
