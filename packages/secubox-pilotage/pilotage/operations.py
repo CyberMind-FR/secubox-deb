@@ -181,7 +181,8 @@ class Suivi:
         rend l'interface locale. La fin vient de remonter par le canal : la confirmation y redescend."""
         champs = {"box": box.nom, "cle": box.cle, "job": op.get("job")}
         try:
-            futur = self.files.deposer(box.cle, {"type": "OPERATE", "body": {"command": COMMANDE_CONFIRMER, "args": {}}})
+            # I1 : le job de la bascule confirmée ; la box refuse la confirmation d'une autre bascule
+            futur = self.files.deposer(box.cle, {"type": "OPERATE", "body": {"command": COMMANDE_CONFIRMER, "args": {"job": op.get("job")}}})
         except Exception as e:  # noqa: BLE001 — file pleine : l'homme mort de la box rendra l'interface locale
             await self._auditer("pilotage_interface_confirmation", {**champs, "etat": "non_envoyee", "raison": e.__class__.__name__})
             return

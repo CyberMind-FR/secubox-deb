@@ -178,7 +178,7 @@ Les autres notifications de L2 (`X_SECUBOX_HandsTied`, `X_SECUBOX_Consent`, `X_S
 Depuis la Flotte, `interface-distante` fait appliquer à la box son profil léger `distante` (webui retirée, servie par le maître
 sur `admin.<box>`), `interface-locale` lui rend le profil d'avant. La box ne garde « distante » qu'à la **confirmation du
 maître** : après le `X_SECUBOX_OperationDone` réussi (`rc` 0) d'`interface-distante`, `Suivi` envoie une fois
-`OPERATE Device.X_SECUBOX_Pilotage.Interface.Confirmer()` (audit `pilotage_interface_confirmation` : `envoyee`, puis
+`OPERATE Device.X_SECUBOX_Pilotage.Interface.Confirmer() {"job"}` (le job de la bascule ; audit `pilotage_interface_confirmation` : `envoyee`, puis
 `accepte`, `refuse` avec la raison, ou `sans_reponse` au bout de 120 s). Sans confirmation sous `delai_garde_s` (600 s par
 défaut, `/etc/secubox-pilotage/interface.toml` de la box), l'homme mort de la box rend l'interface locale ; la reprise du nom
 `admin.<box>` suit ensuite l'interface déclarée par l'inventaire (basculement de `secubox-pilotage-vhost`, inchangé).

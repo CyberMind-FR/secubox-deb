@@ -106,7 +106,9 @@ func TestOperateInconnuRefuse(t *testing.T) {
 		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": "Distante"}},
 		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": 1.0}},
 		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": "locale", "profil": "full"}},
-		{"Device.X_SECUBOX_Pilotage.Interface.Confirmer()", map[string]any{"job": "0123456789abcdef"}},
+		{"Device.X_SECUBOX_Pilotage.Interface.Confirmer()", nil},
+		{"Device.X_SECUBOX_Pilotage.Interface.Confirmer()", map[string]any{"job": "../x"}},
+		{"Device.X_SECUBOX_Pilotage.Interface.Confirmer()", map[string]any{"job": "0123456789abcdef", "x": 1.0}},
 	}
 	for _, c := range cas {
 		r := e.Operer(ctx, c.cmd, c.args, "gk2admin")
@@ -158,8 +160,8 @@ func TestTraductionVersLeCtl(t *testing.T) {
 			"-n /usr/sbin/secubox-pilotagectl --acteur gk2admin interface distante"},
 		{"Device.X_SECUBOX_Pilotage.Interface.Basculer()", map[string]any{"sens": "locale"}, "",
 			"-n /usr/sbin/secubox-pilotagectl interface locale"},
-		{"Device.X_SECUBOX_Pilotage.Interface.Confirmer()", nil, "gk2admin",
-			"-n /usr/sbin/secubox-pilotagectl --acteur gk2admin interface confirmer"},
+		{"Device.X_SECUBOX_Pilotage.Interface.Confirmer()", map[string]any{"job": "0123456789abcdef"}, "gk2admin",
+			"-n /usr/sbin/secubox-pilotagectl --acteur gk2admin interface confirmer 0123456789abcdef"},
 	}
 	for _, c := range cas {
 		r := e.Operer(ctx, c.cmd, c.args, c.acteur)

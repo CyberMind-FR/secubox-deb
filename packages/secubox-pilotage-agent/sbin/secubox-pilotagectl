@@ -156,7 +156,7 @@ ACTIONS = ("releve", "reboot", "maj-paquets", "service-demarrer", "service-arret
            "interface-locale", "interface-distante", "interface-confirmer")
 VERBES = ("reboot", "maj-paquets", "service", "renommer", "renouveler-secrets", "support", "consentement",
           "mains-liees", "ancre-verifier", "politique", "etat", "etat-operation", "fins-recentes", "_fin",
-          "maillage-rejoindre", "_rejoindre", "interface", "_interface", "_interface-garde")
+          "maillage-rejoindre", "_rejoindre", "interface", "_interface", "_interface-garde", "_interface-reprise")
 RENOMMER = "/usr/sbin/secubox-renommer"
 DELAI_RENOMMER = 120                                     # s, durée maximale de l'unité transitoire du renommage
 DELAI_REJOINDRE = 300                                    # s ; secubox-automesh.service est borné à 240 s
@@ -884,9 +884,18 @@ def analyser(argv):
             raise ArgvInvalide
         return verbe, {"job": a[0]}
     if verbe == "interface":
-        if len(a) != 1 or a[0] not in SENS_INTERFACE:
+        # « confirmer » porte le job de la bascule confirmée (I1) ; locale et distante, rien de plus.
+        if not a or a[0] not in SENS_INTERFACE or len(a) != (2 if a[0] == "confirmer" else 1):
             raise ArgvInvalide
+        if a[0] == "confirmer":
+            if not RE_ID.fullmatch(a[1]):
+                raise ArgvInvalide
+            return verbe, {"sens": a[0], "job_confirme": a[1]}
         return verbe, {"sens": a[0]}
+    if verbe == "_interface-reprise":
+        if a:
+            raise ArgvInvalide
+        return verbe, {}
     if verbe == "support":
         if len(a) not in (2, 3) or a[0] not in OPS_SUPPORT or not RE_SUPPORT.fullmatch(a[1]):
             raise ArgvInvalide
@@ -1086,6 +1095,9 @@ def executer(ctx, verbe, p):
 
     if verbe == "_interface-garde":
         return garde_interface(ctx, p["job"])
+
+    if verbe == "_interface-reprise":
+        return reprendre_interface(ctx)
 
     if verbe == "etat-operation":
         return etat_operation(ctx, p["job"])
@@ -1506,9 +1518,11 @@ def agir(ctx, fd, verbe, p, action, unite, maintenant, refus):
     if verbe == "interface":
         etat_if = lire_interface(fd)
         if p["sens"] == "confirmer":
-            return confirmer_interface(ctx, fd, etat_if, refus)
+            return confirmer_interface(ctx, fd, etat_if, p["job_confirme"], refus)
         if p["sens"] == PROFIL_LEGER and etat_if.get("etat") == "a_confirmer":
             return refus("bascule en attente de confirmation")
+        if p["sens"] == "locale" and not distante_en_place(ctx, etat_if):
+            return refus("aucune interface distante en place")
         p["precedent"] = profil_de_retour(ctx, etat_if)
         if p["precedent"] is None:
             return refus("profil de retour inconnu")
@@ -1787,25 +1801,38 @@ def ecrire_profil_actif(ctx, nom):
     try:
         dfd = ouvrir_chemin(ctx, "etc/secubox/profiles")
         try:
-            ecrire(dfd, "active", (nom + "\n").encode("ascii"), 0o644)
+            # M1 : propriétaire et mode d'origine gardés (0600 secubox du panneau) ; absent : ceux du dossier, 0644.
+            try:
+                st = os.stat("active", dir_fd=dfd, follow_symlinks=False)
+                mode, uid, gid = stat.S_IMODE(st.st_mode) & 0o644, st.st_uid, st.st_gid
+            except FileNotFoundError:
+                std = os.fstat(dfd)
+                mode, uid, gid = 0o644, std.st_uid, std.st_gid
+            ecrire(dfd, "active", (nom + "\n").encode("ascii"), mode)
+            if not ctx.substitue:
+                os.chown("active", uid, gid, dir_fd=dfd, follow_symlinks=False)
         finally:
             os.close(dfd)
     except OSError as e:
         err(f"profil actif non réécrit ({e.__class__.__name__})")
 
 
+SUFFIXES_GARDE = ("", "-c", "-r")      # avant l'apply, après l'apply (confirmation), réarmée au démarrage
+
+
 def desarmer_garde(ctx, job):
     if isinstance(job, str) and RE_ID.fullmatch(job):
-        try:
-            subprocess.run([ctx.systemctl, "stop", f"{PREFIXE_GARDE}{job}.timer"], env=ctx.env,
-                           stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
-        except (OSError, subprocess.TimeoutExpired):
-            err("garde non désarmée : elle ne trouvera plus « a_confirmer »")
+        for suffixe in SUFFIXES_GARDE:
+            try:
+                subprocess.run([ctx.systemctl, "stop", f"{PREFIXE_GARDE}{job}{suffixe}.timer"], env=ctx.env,
+                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+            except (OSError, subprocess.TimeoutExpired):
+                err("garde non désarmée : elle ne trouvera plus son état d'attente")
 
 
-def armer_garde(ctx, job, delai):
-    argv = [ctx.systemd_run, "--collect", "--quiet", "--no-ask-password", f"--on-active={delai}",
-            f"--unit={PREFIXE_GARDE}{job}", f"--description=SecuBox pilotage : garde de bascule ({job})",
+def armer_garde(ctx, job, delai, suffixe=""):
+    argv = [ctx.systemd_run, "--collect", "--quiet", "--no-ask-password", f"--on-active={max(1, int(delai))}",
+            f"--unit={PREFIXE_GARDE}{job}{suffixe}", f"--description=SecuBox pilotage : garde de bascule ({job})",
             "--", CTL, "_interface-garde", job]
     try:
         r = subprocess.run(argv, env=ctx.env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
@@ -1832,10 +1859,27 @@ def maj_interface(ctx, job, si=None, **champs):
         os.close(fd)
 
 
-def confirmer_interface(ctx, fd, etat_if, refus):
-    """Demande du maître après une bascule vers « distante » réussie : le canal a survécu, la garde est désarmée."""
+def distante_en_place(ctx, etat_if):
+    """M2 : un retour en locale n'a de sens que si une bascule vers « distante » est en place (en attente, confirmée, ou
+    retour à reprendre), ou si la box a été allégée à la main (marqueur root de secubox-profiles)."""
+    if etat_if.get("sens") == PROFIL_LEGER and etat_if.get("etat") in ("a_confirmer", "confirme"):
+        return True
+    if etat_if.get("sens") == "locale" and etat_if.get("etat") == "a_reprendre":
+        return True
+    try:
+        st = os.stat(f"{ctx.r}/var/lib/secubox-profiles/allegement/actif", follow_symlinks=False)
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode) and st.st_uid in proprietaires_config(ctx)
+
+
+def confirmer_interface(ctx, fd, etat_if, job, refus):
+    """Demande du maître après une bascule vers « distante » réussie : le canal a survécu, la garde est désarmée. Le
+    job confirmé doit être celui de la bascule en attente (I1) : une confirmation tardive d'une autre est refusée."""
     if etat_if.get("etat") != "a_confirmer" or not RE_ID.fullmatch(str(etat_if.get("job", ""))):
         return refus("rien à confirmer")
+    if etat_if["job"] != job:
+        return refus("confirmation d'une autre bascule")
     etat_if.update(etat="confirme", confirme=int(time.time()))
     ecrire_json(fd, "interface.json", etat_if)
     desarmer_garde(ctx, etat_if["job"])
@@ -1867,11 +1911,13 @@ def basculer_interface(ctx, job):
         auditer(ctx, "interface_echec", job=job, refus="profil de retour inconnu")
         raise Erreur("profil de retour inconnu")
     if etat["sens"] == "locale":
-        desarmer_garde(ctx, etat.get("ancien"))
         if not appliquer_profil(ctx, precedent):
-            maj_interface(ctx, job, etat="echec")
-            auditer(ctx, "interface_echec", job=job, sens="locale", profil=precedent)
+            # I2 : l'ancienne garde reste armée (elle ne voit plus son job) ; une garde de CE job réessaiera le retour.
+            maj_interface(ctx, job, etat="a_reprendre", echeance=int(time.time()) + delai_garde(ctx))
+            arme = armer_garde(ctx, job, delai_garde(ctx))
+            auditer(ctx, "interface_echec", job=job, sens="locale", profil=precedent, garde="armee" if arme else "non_armee")
             raise Erreur("retour en locale en échec")
+        desarmer_garde(ctx, etat.get("ancien"))
         ecrire_profil_actif(ctx, precedent)
         maj_interface(ctx, job, etat="locale", fin=int(time.time()))
         auditer(ctx, "interface_retour", job=job, cause="demande", profil=precedent)
@@ -1887,8 +1933,18 @@ def basculer_interface(ctx, job):
         raise Erreur("garde non armée : bascule abandonnée")
     if appliquer_profil(ctx, PROFIL_LEGER):
         ecrire_profil_actif(ctx, PROFIL_LEGER)
-        if maj_interface(ctx, job, si=("en_cours",), etat="a_confirmer", bascule=int(time.time()),
-                         echeance=debut + DELAI_APPLY + delai) is None:
+        fin_apply = int(time.time())
+        # Échéance ramenée à la fin de l'apply + délai : garde « -c » armée d'abord, la première désarmée ensuite (jamais
+        # sans garde). Si l'armement échoue, la première reste : retour au plus tard à début + 900 s + délai.
+        echeance = debut + DELAI_APPLY + delai
+        if armer_garde(ctx, job, delai, "-c"):
+            echeance = fin_apply + delai
+            try:
+                subprocess.run([ctx.systemctl, "stop", f"{PREFIXE_GARDE}{job}.timer"], env=ctx.env,
+                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+            except (OSError, subprocess.TimeoutExpired):
+                err("première garde non désarmée : sans effet (elle ne trouvera plus « a_confirmer » après confirmation)")
+        if maj_interface(ctx, job, si=("en_cours",), etat="a_confirmer", bascule=fin_apply, echeance=echeance) is None:
             raise Erreur("bascule reprise par la garde")
         auditer(ctx, "interface_basculee", job=job, profil=PROFIL_LEGER, delai=delai)
         return {"ok": True, "job": job, "interface": PROFIL_LEGER}
@@ -1900,6 +1956,40 @@ def basculer_interface(ctx, job):
     maj_interface(ctx, job, etat="echec", fin=int(time.time()))
     auditer(ctx, "interface_retour", job=job, cause=cause, profil=precedent, resultat="succes" if ok else "echec")
     raise Erreur("bascule en échec : profil de retour " + ("rendu" if ok else "NON rendu"))
+
+
+def reprendre_interface(ctx):
+    """B1 (unité secubox-pilotage-interface-reprise, au démarrage) : les gardes transitoires ne survivent pas au
+    redémarrage. Bascule vers « distante » inachevée (en_cours) ou échue : retour immédiat ; en attente de confirmation
+    ou retour à reprendre, échéance à venir : garde réarmée pour le temps restant."""
+    if ctx.origine == "maitre":
+        auditer(ctx, "pilotage_refus", verbe="_interface-reprise", refus="local seulement")
+        return {"ok": False, "refus": "local seulement"}
+    fd = ouvrir_etat(ctx, creer=False)
+    if fd is None:
+        return {"ok": True, "retour": False, "rearmee": False}
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH)
+        etat = lire_interface(fd)
+    finally:
+        os.close(fd)
+    job, e = etat.get("job"), etat.get("etat")
+    if not isinstance(job, str) or not RE_ID.fullmatch(job):
+        return {"ok": True, "retour": False, "rearmee": False}
+    inachevee = e == "en_cours" and etat.get("sens") == PROFIL_LEGER
+    if not inachevee and e not in ("a_confirmer", "a_reprendre"):
+        return {"ok": True, "retour": False, "rearmee": False}
+    echeance = etat.get("echeance")
+    restant = echeance - int(time.time()) if isinstance(echeance, int) and not isinstance(echeance, bool) else 0
+    if inachevee or restant <= 0:
+        auditer(ctx, "interface_reprise", job=job, action="retour")
+        r = garde_interface(ctx, job)
+        return {"ok": True, "retour": bool(r.get("retour")), "rearmee": False}
+    arme = armer_garde(ctx, job, restant, "-r")
+    auditer(ctx, "interface_reprise", job=job, action="garde_rearmee" if arme else "garde_non_rearmee", restant=restant)
+    if not arme:
+        raise Erreur("garde non réarmée")
+    return {"ok": True, "retour": False, "rearmee": True}
 
 
 def garde_interface(ctx, job):
@@ -1914,7 +2004,8 @@ def garde_interface(ctx, job):
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         etat = lire_interface(fd)
-        attente = etat.get("etat") == "a_confirmer" or (etat.get("etat") == "en_cours" and etat.get("sens") == PROFIL_LEGER)
+        attente = (etat.get("etat") == "a_confirmer" or etat.get("etat") == "a_reprendre"
+                   or (etat.get("etat") == "en_cours" and etat.get("sens") == PROFIL_LEGER))
         if etat.get("job") != job or not attente:
             return {"ok": True, "retour": False}
         etat["etat"] = "en_retour"                     # une confirmation tardive ne s'y substitue plus

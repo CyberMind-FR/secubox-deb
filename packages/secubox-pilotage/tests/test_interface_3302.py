@@ -50,7 +50,7 @@ async def test_bascule_distante_reussie_confirmee_par_le_maitre(m):
         rq = await m.repondre(GK5, {"etat": "accepte", "job": "", "raison": ""})
         await fin(m, GK5, "j1")                                    # renotification : une seule confirmation
         await m.suivi.attendre()
-    assert rq["body"]["command"] == CONFIRMER and rq["body"]["args"] == {}
+    assert rq["body"]["command"] == CONFIRMER and rq["body"]["args"] == {"job": "j1"}   # I1 : la bascule confirmée
     assert m.f.en_attente(GK5.cle) == 0
     evs = [(e, ch.get("etat")) for e, ch in m.lignes if e.startswith("pilotage_interface")]
     assert evs == [("pilotage_interface_confirmation", "envoyee"), ("pilotage_interface_confirmation", "accepte")]

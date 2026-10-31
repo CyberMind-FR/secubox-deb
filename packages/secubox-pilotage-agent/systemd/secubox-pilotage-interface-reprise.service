@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — reprise de l'homme mort d'une bascule d'interface au démarrage (#3302)
+Documentation=https://secubox.in
+# Les gardes de bascule sont des minuteries transitoires (systemd-run --on-active) : perdues au redémarrage. Cette passe
+# rend le profil de retour si l'échéance est passée (ou la bascule inachevée), sinon réarme la garde pour le temps restant.
+After=local-fs.target
+ConditionPathExists=/var/lib/secubox-pilotagectl/interface.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-pilotagectl _interface-reprise
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

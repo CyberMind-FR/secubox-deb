@@ -40,6 +40,16 @@ class BancInterface(Banc):
             (prof / "active").write_text(actif + "\n")
             (prof / "active").chmod(0o600)              # comme l'écriture atomique du panneau (mkstemp)
 
+    def allegee(self):
+        """Marqueur de secubox-profiles : la box est réellement en profil léger (posé après nginx -t)."""
+        m = self.r / "var/lib/secubox-profiles/allegement/actif"
+        m.parent.mkdir(parents=True, exist_ok=True)
+        m.write_text("")
+
+    def garde_c(self):
+        """Ligne de lancement de la garde réarmée à la fin de l'apply (« -c »)."""
+        return [x for x in self.lancements() if "secubox-pilotage-garde-" in x and "-c " in x][-1]
+
     def profilectl(self):
         return self.appels_profilectl.read_text().splitlines() if self.appels_profilectl.exists() else []
 
@@ -74,7 +84,8 @@ def bi(tmp_path):
 
 
 def test_argv_invalide(bi):
-    for argv in (["interface"], ["interface", "ailleurs"], ["interface", "distante", "en-trop"],
+    for argv in (["interface"], ["interface", "ailleurs"], ["interface", "distante", "en-trop"], ["interface", "confirmer"],
+                 ["interface", "confirmer", "../x"], ["interface", "locale", "0123456789abcdef"], ["_interface-reprise", "x"],
                  ["interface", "Distante"], ["_interface"], ["_interface", "../x"], ["_interface-garde", "zz"],
                  ["politique", "interface"]):
         assert bi.run(*argv, agent=True)[0] == 2, argv
@@ -101,9 +112,12 @@ def test_unite_distante_applique_puis_arme_l_homme_mort(bi):
     assert bi.actif() == "distante"
     e = bi.etat_interface()
     assert e["etat"] == "a_confirmer" and e["echeance"] >= e["bascule"]
-    garde = bi.lancements()[-1]
-    # armée AVANT l'apply : l'échéance couvre l'apply (900 s) puis le délai de confirmation (600 s par défaut)
-    assert "--on-active=1500" in garde and f"--unit=secubox-pilotage-garde-{job}" in garde
+    garde = bi.garde_c()
+    assert f"stop secubox-pilotage-garde-{job}.timer" in bi.lancements()        # la première, après la seconde
+    # armée AVANT l'apply (900 s d'apply + délai), puis RÉARMÉE à la fin de l'apply pour le seul délai de confirmation
+    premiere = [x for x in bi.lancements() if "--on-active=1500" in x]
+    assert premiere and f"--unit=secubox-pilotage-garde-{job} " in premiere[0] + " "
+    assert "--on-active=600" in garde and f"--unit=secubox-pilotage-garde-{job}-c" in garde
     assert garde.endswith(f"-- /usr/sbin/secubox-pilotagectl _interface-garde {job}")
     assert [x["evenement"] for x in bi.evenements()] == ["interface_basculee"]
 
@@ -114,7 +128,7 @@ def test_delai_de_garde_configurable_et_borne(bi):
     conf.write_text("delai_garde_s = 300\n")
     conf.chmod(0o644)
     bi.basculer_distante()
-    assert "--on-active=1200" in bi.lancements()[-1]
+    assert "--on-active=300" in bi.garde_c()
 
 
 def test_delai_hors_bornes_rend_le_defaut(tmp_path):
@@ -124,7 +138,7 @@ def test_delai_hors_bornes_rend_le_defaut(tmp_path):
     conf.write_text("delai_garde_s = 5\n")
     conf.chmod(0o644)
     bi.basculer_distante()
-    assert "--on-active=1500" in bi.lancements()[-1]
+    assert "--on-active=600" in bi.garde_c()
 
 
 def test_echec_d_apply_rend_le_profil_precedent(bi):
@@ -141,13 +155,13 @@ def test_echec_d_apply_rend_le_profil_precedent(bi):
 
 def test_confirmation_du_maitre_arrete_la_garde(bi):
     job = bi.basculer_distante()
-    rc, sortie, _ = bi.run("interface", "confirmer", agent=True)
+    rc, sortie, _ = bi.run("interface", "confirmer", job, agent=True)
     assert rc == 0 and sortie == {"ok": True, "confirme": True}
     assert bi.etat_interface()["etat"] == "confirme"
     assert f"stop secubox-pilotage-garde-{job}.timer" in bi.lancements()
     assert bi.evenements("interface_confirmee")
     # rien à confirmer ensuite : refus propre, pas d'erreur
-    rc, sortie, _ = bi.run("interface", "confirmer", agent=True)
+    rc, sortie, _ = bi.run("interface", "confirmer", job, agent=True)
     assert rc == 0 and sortie == {"ok": False, "refus": "rien à confirmer"}
     # la garde, si elle part quand même, ne défait rien
     rc, _, _ = bi.run("_interface-garde", job)
@@ -186,7 +200,7 @@ def test_garde_d_un_autre_job_ne_fait_rien(bi):
 
 def test_retour_en_locale_demande_par_le_maitre(bi):
     ancien = bi.basculer_distante()
-    bi.run("interface", "confirmer", agent=True)
+    bi.run("interface", "confirmer", ancien, agent=True)
     rc, sortie, _ = bi.run("interface", "locale", agent=True)
     assert rc == 0 and sortie["ok"] is True
     e = bi.etat_interface()
@@ -222,6 +236,7 @@ def test_sans_profil_de_retour_rien_n_est_lance(tmp_path):
 
 def test_profil_de_retour_configure(tmp_path):
     bi = BancInterface(tmp_path, actif="distante")    # box déjà allégée à la main : `active` ne dit rien du retour
+    bi.allegee()
     conf = bi.r / "etc/secubox-pilotage/interface.toml"
     conf.parent.mkdir(parents=True, exist_ok=True)
     conf.write_text('profil_retour = "full"\n')
@@ -238,9 +253,9 @@ def test_profil_de_retour_inexistant_refuse(tmp_path):
 
 def test_mains_liees_refusent(bi):
     bi.run("mains-liees", "on")
-    for sens in ("distante", "locale", "confirmer"):
-        rc, sortie, _ = bi.run("interface", sens, agent=True)
-        assert rc == 0 and sortie["refus"] == "mains liées", sens
+    for argv in (["distante"], ["locale"], ["confirmer", "0123456789abcdef"]):
+        rc, sortie, _ = bi.run("interface", *argv, agent=True)
+        assert rc == 0 and sortie["refus"] == "mains liées", argv
     assert bi.lancements() == []
 
 
@@ -272,3 +287,93 @@ def test_politique_connait_les_actions(bi):
     for action in ("interface-distante", "interface-locale", "interface-confirmer"):
         rc, sortie, _ = bi.run("politique", action, agent=True)
         assert rc == 0 and sortie["autorise"] is True, action
+
+
+def test_confirmation_d_une_autre_bascule_refusee_et_auditee(bi):
+    """I1 : la confirmation porte le job ; une confirmation tardive d'une ancienne bascule ne désarme pas la courante."""
+    bi.basculer_distante()
+    rc, sortie, _ = bi.run("interface", "confirmer", "0123456789abcdef", agent=True)
+    assert rc == 0 and sortie == {"ok": False, "refus": "confirmation d'une autre bascule"}
+    assert bi.etat_interface()["etat"] == "a_confirmer"
+    assert any(e.get("refus") == "confirmation d'une autre bascule" for e in bi.audit() if e["evenement"] == "pilotage_refus")
+
+
+def test_retour_en_locale_en_echec_garde_reprise(bi):
+    """I2 : l'ancienne garde n'est désarmée qu'après un retour réussi ; en échec, une garde est réarmée pour réessayer."""
+    ancien = bi.basculer_distante()
+    rc, sortie, _ = bi.run("interface", "locale", agent=True)
+    bi.env["FAUX_PROFILECTL_ECHEC"] = "minimal"
+    rc, fin, _ = bi.run("_interface", sortie["job"])
+    assert rc == 1
+    assert f"stop secubox-pilotage-garde-{ancien}-c.timer" not in bi.lancements()
+    assert bi.etat_interface()["etat"] == "a_reprendre"
+    assert any(f"--unit=secubox-pilotage-garde-{sortie['job']}" in x for x in bi.lancements())
+    assert bi.evenements("interface_echec")
+    bi.env.pop("FAUX_PROFILECTL_ECHEC")
+    rc, r, _ = bi.run("_interface-garde", sortie["job"])
+    assert rc == 0 and r["retour"] is True and bi.etat_interface()["etat"] == "retour" and bi.actif() == "minimal"
+
+
+def test_locale_refusee_sans_bascule_distante(bi):
+    """M2 : rien à défaire (aucune bascule, ou déjà revenue) : refus, rien n'est lancé."""
+    rc, sortie, _ = bi.run("interface", "locale", agent=True)
+    assert sortie == {"ok": False, "refus": "aucune interface distante en place"}
+    job = bi.basculer_distante()
+    bi.run("_interface-garde", job)                  # retour automatique : etat « retour »
+    rc, sortie, _ = bi.run("interface", "locale", agent=True)
+    assert sortie == {"ok": False, "refus": "aucune interface distante en place"}
+
+
+def test_actif_garde_proprietaire_et_mode(bi):
+    """M1 : `active` réécrit avec le mode d'origine (0600 du panneau), jamais élargi."""
+    bi.basculer_distante()
+    import stat as st_
+    assert st_.S_IMODE((bi.r / "etc/secubox/profiles/active").stat().st_mode) == 0o600
+
+
+def test_reprise_au_demarrage_echeance_passee(bi):
+    """B1 : la garde transitoire ne survit pas au redémarrage ; la reprise rend le profil si l'échéance est passée."""
+    job = bi.basculer_distante()
+    f = bi.r / "var/lib/secubox-pilotagectl/interface.json"
+    e = json.loads(f.read_text())
+    e["echeance"] = 1
+    f.write_text(json.dumps(e))
+    rc, r, p = bi.run("_interface-reprise")
+    assert rc == 0 and r["retour"] is True, p.stderr
+    assert bi.actif() == "minimal" and bi.etat_interface()["etat"] == "retour"
+    assert job
+
+
+def test_reprise_au_demarrage_rearme_le_temps_restant(bi):
+    job = bi.basculer_distante()
+    e = bi.etat_interface()
+    import time
+    restant = e["echeance"] - int(time.time())
+    rc, r, p = bi.run("_interface-reprise")
+    assert rc == 0 and r == {"ok": True, "retour": False, "rearmee": True}, p.stderr
+    dernier = bi.lancements()[-1]
+    s = int(dernier.split("--on-active=")[1].split()[0])
+    assert restant - 5 <= s <= restant and f"secubox-pilotage-garde-{job}-r" in dernier
+    assert len(bi.profilectl()) == 1
+
+
+def test_reprise_bascule_inachevee_au_demarrage(bi):
+    """Coupure en plein apply : etat « en_cours » au démarrage ⇒ retour immédiat."""
+    rc, sortie, _ = bi.run("interface", "distante", agent=True)
+    rc, r, _ = bi.run("_interface-reprise")
+    assert rc == 0 and r["retour"] is True and bi.etat_interface()["etat"] == "retour"
+
+
+def test_reprise_sans_rien_a_faire(bi):
+    assert bi.run("_interface-reprise")[1] == {"ok": True, "retour": False, "rearmee": False}
+    assert bi.run("_interface-reprise", agent=True)[1] == {"ok": False, "refus": "local seulement"}
+
+
+def test_unite_de_reprise_livree():
+    from pathlib import Path
+    pkg = Path(__file__).resolve().parents[1]
+    u = (pkg / "systemd" / "secubox-pilotage-interface-reprise.service").read_text()
+    assert "Type=oneshot" in u and "ExecStart=/usr/sbin/secubox-pilotagectl _interface-reprise" in u
+    assert "WantedBy=multi-user.target" in u
+    assert "secubox-pilotage-interface-reprise.service" in (pkg / "debian" / "rules").read_text()
+    assert "enable secubox-pilotage-interface-reprise.service" in (pkg / "debian" / "postinst").read_text()

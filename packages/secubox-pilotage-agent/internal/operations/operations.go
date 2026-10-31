@@ -313,10 +313,15 @@ func Traduire(cmd string, args map[string]any) ([]string, error) {
 		}
 		return []string{"interface", sens}, nil
 	case CmdInterfaceConfirmer:
-		if err := cles(nil); err != nil {
+		// I1 : la confirmation porte le job de la bascule confirmée ; le ctl refuse celle d'une autre bascule.
+		if err := cles([]string{"job"}); err != nil {
 			return nil, err
 		}
-		return []string{"interface", "confirmer"}, nil
+		job, err := chaine("job", reJob)
+		if err != nil {
+			return nil, err
+		}
+		return []string{"interface", "confirmer", job}, nil
 	case CmdRejoindre:
 		if err := cles([]string{"code"}); err != nil {
 			return nil, err

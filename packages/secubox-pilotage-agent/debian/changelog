@@ -8,7 +8,10 @@ secubox-pilotage-agent (0.6.0-1~trixie1) trixie; urgency=medium
     l'unité meurt en plein apply, le profil de retour est rendu). Profil de
     retour : celui d'avant la bascule, sinon /etc/secubox/profiles/active, sinon profil_retour de
     /etc/secubox-pilotage/interface.toml ; aucun : refus (jamais d'apply sans profil). Agent : commandes
-    Device.X_SECUBOX_Pilotage.Interface.Basculer() {sens} et .Confirmer(). Recommends secubox-profiles.
+    Device.X_SECUBOX_Pilotage.Interface.Basculer() {sens} et .Confirmer() {job}. Relecture : confirmation liée au
+    job, reprise au démarrage (secubox-pilotage-interface-reprise.service), garde désarmée seulement après un retour
+    réussi, `active` gardant propriétaire et mode, `locale` refusée sans distante en place, échéance = fin d'apply +
+    délai. Recommends secubox-profiles.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 31 Oct 2026 04:15:00 +0100
 
