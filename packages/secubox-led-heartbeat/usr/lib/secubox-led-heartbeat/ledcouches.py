@@ -59,7 +59,15 @@ PALETTE = {
     "blanc_chaud": (255, 150, 60), "blanc": (255, 255, 255),
 }
 INCONNU = (40, 40, 80)          # gris-bleu faible : état inconnu
-PALETTE_NIVEAU = ["vert", "jaune", "orange", "rouge"]
+PALETTE_NIVEAU = ["vert", "jaune", "orange", "rouge", "rouge"]
+NIVEAU_MAX = 4                  # 4 = critique (absolu seulement, ref #3361)
+# Clé encore en apprentissage dans flux.json : ni un niveau ni « inconnu ».
+# Valeur sentinelle (pas un entier) : jamais comptée comme un niveau.
+APPRENTI = "apprentissage"
+COULEUR_APPRENTI = "violet"
+DUREE_PLAFOND = 24.0            # rotation adaptative : plafond de l'allongement (s)
+RAPPEL_ALERTE = 30.0            # couches en alerte : chacune revient au plus tard en 30 s
+CHEMIN_FLUX = "/run/secubox-leds/flux.json"
 
 DEFAUT_DEBIT = 20
 DEFAUT_LUMINOSITE = 0.6
@@ -75,6 +83,7 @@ CODE_REPRISE = 75               # sortie après erreurs I2C : OnFailure=secubox-
 # (secubox-metrics et le SOC tournent sous « secubox » ; comptes dédiés à venir).
 PROPRIETAIRES_DEFAUT = ["root", "secubox", "secubox-metrics", "secubox-soc"]
 CLES_HORODATAGE = ("timestamp_epoch", "last_updated", "updated_at", "maj")
+CLES_HORODATAGE_FLUX = ("genere_le",)
 ERREURS_SOURCE = (OSError, ValueError, TypeError, KeyError, IndexError, ZeroDivisionError,
                   RecursionError, OverflowError, AttributeError, MemoryError)
 DEFAUT_PERIODE = {"fixe": 1.0, "respiration": 6.0, "pulsation": 3.0, "eclats": 3.0}
@@ -89,7 +98,7 @@ SOURCES_DEFAUT = {
     # Même cache : connexions HTTPS établies (instantané, pas de journal relu).
     "visites": {"type": "jauge_json", "chemin": "/var/cache/secubox/metrics-cache.json",
                 "cle": "connections.https", "seuils": [1, 20, 100], "fraicheur_max": 300},
-    # Alertes du SOC non acquittées ; une critique non vue = niveau 3. Le SOC
+    # Alertes du SOC non acquittées ; une critique non vue = niveau 4. Le SOC
     # n'écrit ce fichier qu'au changement : fraîcheur d'un jour, et SOC arrêté
     # (socket absente) = inconnu.
     "alertes": {"type": "alertes_json", "chemin": "/var/lib/secubox/soc/alerts.json",
@@ -139,7 +148,9 @@ class Source:
             v = self._lire(maintenant)
         except ERREURS_SOURCE:
             return None
-        return v if isinstance(v, int) else None
+        if v is APPRENTI:
+            return v
+        return v if isinstance(v, int) and not isinstance(v, bool) else None
 
     def _lire(self, maintenant):  # pragma: no cover - abstrait
         raise NotImplementedError
@@ -153,7 +164,7 @@ class Source:
                 pass
         return uids
 
-    def _json(self):
+    def _json(self, cles_horodatage=CLES_HORODATAGE):
         """Lecture sûre d'un fichier d'état écrit par un autre compte : sans
         suivre de lien, sans bloquer (FIFO), fichier régulier, propriétaire
         attendu, non inscriptible par tous, au plus TAILLE_MAX_JSON octets."""
@@ -174,7 +185,7 @@ class Source:
         if self.fraicheur_max:
             quand = st.st_mtime
             if isinstance(d, dict):
-                for k in CLES_HORODATAGE:
+                for k in cles_horodatage:
                     v = d.get(k)
                     if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
                         quand = v
@@ -276,7 +287,8 @@ class SourceCompteurJson(Source):
 
 
 class SourceAlertes(Source):
-    """Alertes non acquittées (liste JSON) ; une critique non vue = niveau 3."""
+    """Alertes non acquittées (liste JSON) ; une critique non vue = niveau 4
+    (critique, fait absolu, ref #3361)."""
 
     def _lire(self, maintenant):
         d = self._json()
@@ -288,15 +300,46 @@ class SourceAlertes(Source):
             return None
         ouvertes = [a for a in d if isinstance(a, dict) and not a.get("acknowledged")]
         if any(a.get("severity") == "critical" for a in ouvertes):
-            return 3
+            return NIVEAU_MAX
         return niveau(len(ouvertes), self.seuils)
+
+
+class SourceFlux(Source):
+    """Niveau 0..4 relatif publié par le collecteur secubox-led-flux dans
+    /run/secubox-leds/flux.json (ref #3361). Clé absente, invalide ou hors 0..4 =
+    inconnu ; clé encore en apprentissage = APPRENTI (violet), sauf un 4 (critique
+    absolu) qui prime."""
+
+    def __init__(self, nom, opts):
+        opts = {"chemin": CHEMIN_FLUX, "proprietaires": ["secubox-leds"],
+                "fraicheur_max": 60, **opts}
+        super().__init__(nom, opts)
+
+    def _lire(self, maintenant):
+        d = self._json(CLES_HORODATAGE_FLUX)
+        if not isinstance(d, dict) or not isinstance(d.get("niveaux"), dict):
+            return None
+        v = d["niveaux"].get(self.cle)
+        if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= NIVEAU_MAX:
+            return None
+        if v == NIVEAU_MAX:
+            return v
+        appr = d.get("apprentissage")
+        if isinstance(appr, list) and self.cle in appr:
+            return APPRENTI
+        return v
 
 
 TYPES_SOURCE = {
     "cpu": SourceCpu, "iowait": SourceIowait, "memoire": SourceMemoire,
     "jauge_json": SourceJaugeJson, "compteur_json": SourceCompteurJson,
-    "alertes_json": SourceAlertes,
+    "alertes_json": SourceAlertes, "flux": SourceFlux,
 }
+
+
+def _entier(n) -> int:
+    """Niveau utilisable en calcul : 0 pour inconnu ou apprentissage."""
+    return n if isinstance(n, int) and not isinstance(n, bool) else 0
 
 
 # ---------------------------------------------------------------- rythmes
@@ -323,6 +366,7 @@ def multiplicateur(rythme: str, t: float, n: int, periode: float) -> float:
 
 
 def periode_effective(rythme: str, n, periode: float) -> float:
+    n = _entier(n)
     if rythme == "pulsation" and n:
         return periode / n
     return periode
@@ -353,10 +397,12 @@ class Couche:
         self.forme = _choix(d.get("forme", "par_led"), FORMES, "par_led", self.nom, "forme")
         self.rythme = _choix(d.get("rythme", "fixe"), RYTHMES, "fixe", self.nom, "rythme")
         pal = d.get("palette", PALETTE_NIVEAU)
-        if (not isinstance(pal, list) or len(pal) != 4
+        if (not isinstance(pal, list) or len(pal) not in (4, 5)
                 or not all(isinstance(c, str) and c in cfg.palette for c in pal)):
             log.warning("couche %s : palette invalide %r -> %s", self.nom, pal, PALETTE_NIVEAU)
             pal = list(PALETTE_NIVEAU)
+        if len(pal) == 4:                           # configs d'avant le niveau 4
+            pal = list(pal) + ["rouge"]
         self.palette = pal
         self.duree = _nombre(d.get("duree", DEFAUT_DUREE), 1, 600, DEFAUT_DUREE,
                              f"couche {self.nom} : duree")
@@ -369,11 +415,16 @@ class Couche:
             leds = None
         self.leds = [i - 1 for i in leds] if leds else None
 
-    def teinte(self, n, t: float):
+    def teinte(self, n, t: float, rythme=None):
         if n is None:
             return self.cfg.inconnu
-        base = self.cfg.couleur(self.palette[max(0, min(3, n))])
-        m = multiplicateur(self.rythme, t, n, self.periode)
+        if n is APPRENTI:
+            base = self.cfg.couleur(COULEUR_APPRENTI)
+            m = multiplicateur("respiration", t, 0, DEFAUT_PERIODE["respiration"])
+            return tuple(int(round(c * m)) for c in base)
+        n = max(0, min(NIVEAU_MAX, _entier(n)))
+        base = self.cfg.couleur(self.palette[n])
+        m = multiplicateur(rythme or self.rythme, t, n, self.periode)
         return tuple(int(round(c * m)) for c in base)
 
     def _leds_forme(self):
@@ -381,32 +432,35 @@ class Couche:
             return self.leds
         return {"mono": [0], "double": [0, 1]}.get(self.forme, [0, 1, 2])
 
-    def image(self, t: float, niveaux: list):
+    def image(self, t: float, niveaux: list, rythme=None):
+        rythme = rythme or self.rythme
         img = [OFF] * NB_LEDS
         if self.forme == "par_led":
             for i in range(min(NB_LEDS, len(niveaux))):
-                img[i] = self.teinte(niveaux[i], t)
+                img[i] = self.teinte(niveaux[i], t, rythme)
             return img
         n = niveaux[0] if niveaux else None
         if self.forme == "jauge":
             if n is None:
                 img[0] = self.cfg.inconnu
+            elif n is APPRENTI:
+                img[0] = self.teinte(n, t)
             elif n == 0:
-                img[0] = tuple(int(round(c * 0.25)) for c in self.teinte(0, t))
+                img[0] = tuple(int(round(c * 0.25)) for c in self.teinte(0, t, rythme))
             else:
                 for i in range(min(n, NB_LEDS)):
-                    img[i] = self.teinte(n, t)
+                    img[i] = self.teinte(n, t, rythme)
         elif self.forme == "etale":
-            dephasage = periode_effective(self.rythme, n, self.periode) / NB_LEDS
+            dephasage = periode_effective(rythme, n, self.periode) / NB_LEDS
             for i in range(NB_LEDS):
-                img[i] = self.teinte(n, t - i * dephasage)
+                img[i] = self.teinte(n, t - i * dephasage, rythme)
         elif self.forme == "rotatif":
-            pas = 0.8 / (1 + (n or 0))
+            pas = 0.8 / (1 + _entier(n))
             pos = [0, 1, 2, 1][int(t / pas) % 4]
-            img[pos] = self.teinte(n, t)
+            img[pos] = self.teinte(n, t, rythme)
         else:                                       # mono / double / triple
             for i in self._leds_forme():
-                img[i] = self.teinte(n, t)
+                img[i] = self.teinte(n, t, rythme)
         return img
 
 
@@ -535,7 +589,9 @@ def charger_config(chemin, exiger_root=False) -> Config:
         if not isinstance(typ, str) or typ not in TYPES_SOURCE:
             log.warning("sources.%s : type %r inconnu, ignorée", nom, typ)
             continue
-        if not _seuils_valides(opts.get("seuils")):
+        if typ == "flux":                           # niveau déjà calculé : pas de seuils
+            opts.setdefault("seuils", [1, 2, 3])
+        elif not _seuils_valides(opts.get("seuils")):
             defaut = SOURCES_DEFAUT.get(nom, {}).get("seuils", [1, 2, 3])
             log.warning("sources.%s : seuils %r invalides -> %s", nom, opts.get("seuils"), defaut)
             opts["seuils"] = defaut
@@ -565,7 +621,13 @@ def charger_config(chemin, exiger_root=False) -> Config:
 
 class Ordonnanceur:
     """Enchaîne les couches ; les couches mono consécutives forment un groupe
-    rotatif (fenêtre de trois qui glisse d'une couche à chaque pas)."""
+    rotatif (fenêtre de trois qui glisse d'une couche à chaque pas).
+
+    ref #3361 : la durée d'une entrée s'allonge avec le plus haut niveau 0..3 de
+    ses sources (duree × (1 + n), sans dépasser 24 s ni raccourcir une durée
+    configurée plus longue) ; une couche dont une source est au niveau 4 passe
+    seule à l'écran, en éclats, jusqu'au retour sous 4 (plusieurs : alternance,
+    chacune revient au plus tard toutes les 30 s)."""
 
     def __init__(self, couches: list, cfg: Config):
         self.cfg = cfg
@@ -581,47 +643,132 @@ class Ordonnanceur:
             self.entrees.append([c])
         if groupe:
             self.entrees.append(groupe)
+        self._etat = None                           # (rang, début) de l'entrée affichée
+        self._ordre = [c for e in self.entrees for c in e]
+        self._alerte = None                         # (couche, début) du créneau d'alerte
+        self._reprise = None                        # rang normal à reprendre après l'alerte
 
-    def _duree(self, entree):
+    @staticmethod
+    def _niveau_max(entree, niveaux) -> int:
+        """Plus haut niveau 0..3 des sources : ni inconnu, ni apprentissage, ni 4."""
+        vus = [n for c in entree for s in c.sources
+               for n in [niveaux.get(s)]
+               if isinstance(n, int) and not isinstance(n, bool) and 0 <= n < NIVEAU_MAX]
+        return max(vus, default=0)
+
+    def duree_entree(self, rang: int, niveaux=None) -> float:
+        entree = self.entrees[rang]
         if len(entree) > 1:
-            pas = entree[0].duree
-            return self.cfg.repere_duree + pas * (len(entree) if len(entree) > 3 else 1)
-        return self.cfg.repere_duree + entree[0].duree
+            base = entree[0].duree * (len(entree) if len(entree) > 3 else 1)
+        else:
+            base = entree[0].duree
+        n = self._niveau_max(entree, niveaux or {})
+        return self.cfg.repere_duree + min(base * (1 + n), max(base, DUREE_PLAFOND))
 
-    def _situer(self, t: float):
-        cycle = sum(self._duree(e) for e in self.entrees)
-        x = t % cycle if cycle > 0 else 0
-        for rang, e in enumerate(self.entrees):
-            d = self._duree(e)
-            if x < d:
-                return rang, e, x
-            x -= d
-        return 0, self.entrees[0], 0.0             # pragma: no cover
+    def alertes(self, niveaux=None):
+        """(rang, couche) des couches dont une source est au niveau 4."""
+        niveaux = niveaux or {}
+        return [(rang, c) for rang, e in enumerate(self.entrees) for c in e
+                if any(n == NIVEAU_MAX and not isinstance(n, bool)
+                       for n in (niveaux.get(s) for s in c.sources))]
 
-    def position(self, t: float):
-        _, e, x = self._situer(t)
+    def _creneau(self, c, nb) -> float:
+        r = self.cfg.repere_duree
+        return max(r + 2.0, min(r + c.duree, RAPPEL_ALERTE / nb))
+
+    def _suivante(self, c, couches):
+        """Couche en alerte qui suit `c` dans l'ordre des couches (avec bouclage)."""
+        place = {id(x): k for k, x in enumerate(self._ordre)}
+        apres = [x for x in couches if place[id(x)] > place[id(c)]]
+        return (apres or couches)[0]
+
+    def _situer_alerte(self, t, alertes):
+        """Mode alerte à état : entrée au repère de la première couche en alerte ;
+        ensemble modifié = créneau en cours terminé s'il est encore en alerte,
+        sinon passage immédiat à la suivante, à son repère."""
+        couches = [c for _, c in alertes]
+        rangs = {id(c): r for r, c in alertes}
+        nb = len(couches)
+        if self._alerte is None or t < self._alerte[1]:
+            if self._alerte is None and self._etat is not None:
+                self._reprise = self._etat[0]
+            self._etat = None
+            self._alerte = (couches[0], t)
+        c, debut = self._alerte
+        if not any(x is c for x in couches):
+            c, debut = self._suivante(c, couches), t
+        pas = 0
+        while t - debut >= self._creneau(c, nb):
+            debut += self._creneau(c, nb)
+            c = self._suivante(c, couches)
+            pas += 1
+            if pas > 4 * nb:                        # saut d'horloge : on repart ici
+                debut = t
+                break
+        self._alerte = (c, debut)
+        return rangs[id(c)], [c], t - debut
+
+    def _situer(self, t: float, niveaux=None):
+        niveaux = niveaux or {}
+        alertes = self.alertes(niveaux)
+        if alertes:
+            return self._situer_alerte(t, alertes) + (True,)
+        durees = [self.duree_entree(r, niveaux) for r in range(len(self.entrees))]
+        cycle = sum(durees)
+        if self._alerte is not None:                # sortie d'alerte : l'entrée d'avant, au début
+            self._alerte = None
+            if self._reprise is not None:
+                self._etat = (self._reprise, t)
+            self._reprise = None
+        if self._etat is None or t < self._etat[1] or t - self._etat[1] > 4 * cycle:
+            x = t % cycle if cycle > 0 else 0
+            for rang, d in enumerate(durees):
+                if x < d:
+                    break
+                x -= d
+            else:                                   # pragma: no cover
+                rang, x = 0, 0.0
+            self._etat = (rang, t - x)
+        rang, debut = self._etat
+        # Avance entrée par entrée : un changement de niveau allonge ou raccourcit
+        # l'entrée en cours sans sauter ailleurs dans le cycle.
+        while t - debut >= durees[rang]:
+            debut += durees[rang]
+            rang = (rang + 1) % len(self.entrees)
+        self._etat = (rang, debut)
+        return rang, self.entrees[rang], t - debut, False
+
+    def position(self, t: float, niveaux=None):
+        _, e, x, _ = self._situer(t, niveaux)
         return e[0].nom, x < self.cfg.repere_duree
 
-    def fenetre_mono(self, t: float):
-        _, e, x = self._situer(t)
+    def _fenetre(self, rang, e, x, niveaux):
         if len(e) <= 3:
             return list(e)
-        k = int(max(0.0, x - self.cfg.repere_duree) / e[0].duree)
+        pas = (self.duree_entree(rang, niveaux) - self.cfg.repere_duree) / len(e)
+        k = int(max(0.0, x - self.cfg.repere_duree) / pas)
         return [e[(k + j) % len(e)] for j in range(3)]
 
+    def fenetre_mono(self, t: float, niveaux=None):
+        rang, e, x, _ = self._situer(t, niveaux)
+        return self._fenetre(rang, e, x, niveaux)
+
     def image(self, t: float, niveaux: dict):
-        rang, e, x = self._situer(t)
+        rang, e, x, alerte = self._situer(t, niveaux)
         if x < self.cfg.repere_duree:
             n = eclats_repere(rang)
             k = int(x / 0.3)
             allume = k < n and (x - k * 0.3) < 0.15
             return [OFF, self.cfg.couleur("blanc") if allume else OFF, OFF]
         tl = x - self.cfg.repere_duree
+        if alerte:
+            c = e[0]
+            return c.image(tl, [niveaux.get(s) for s in c.sources], rythme="eclats")
         if len(e) == 1 and not (e[0].forme == "mono" and not e[0].leds):
             c = e[0]
             return c.image(tl, [niveaux.get(s) for s in c.sources])
         img = [OFF] * NB_LEDS
-        for j, c in enumerate(self.fenetre_mono(t)):
+        for j, c in enumerate(self._fenetre(rang, e, x, niveaux)):
             img[j] = c.teinte(niveaux.get(c.sources[0]), tl)
         return img
 
@@ -875,7 +1022,7 @@ def main(argv=None):
     d = sub.add_parser("demo", help="montre une forme, une couche ou toutes")
     d.add_argument("cible", help=f"{' | '.join(FORMES)} | <nom de couche> | toutes")
     d.add_argument("--duree", type=float, default=20.0)
-    d.add_argument("--niveau", type=int, choices=[0, 1, 2, 3])
+    d.add_argument("--niveau", type=int, choices=[0, 1, 2, 3, 4])
     d.add_argument("--rythme", choices=RYTHMES)
     d.add_argument("--simule", action="store_true", help="sans matériel : écritures sur stdout")
     sub.add_parser("verifier", help="valide leds.toml et affiche les niveaux courants")

@@ -23,3 +23,17 @@ def _proprietaire_de_test(monkeypatch):
     monkeypatch.setattr(ledcouches, "PROPRIETAIRES_DEFAUT",
                         list(ledcouches.__dict__.get("PROPRIETAIRES_DEFAUT", [])) + [moi],
                         raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _proprietaire_releves(monkeypatch):
+    """releves.py vérifie le propriétaire de chaque source (#3361) : le compte de test s'y ajoute."""
+    try:
+        import releves
+    except ImportError:
+        return
+    moi = pwd.getpwuid(os.getuid()).pw_name
+    monkeypatch.setattr(releves, "PROPRIETAIRES",
+                        {k: tuple(v) + (moi,) for k, v in releves.__dict__.get("PROPRIETAIRES", {}).items()},
+                        raising=False)
+    monkeypatch.setattr(releves, "_ADGUARD_SIGNALE", False, raising=False)

@@ -1,3 +1,19 @@
+secubox-led-heartbeat (2.4.0-1~trixie1) trixie; urgency=medium
+
+  * LED de supervision du MOCHAbin : 8 séquences par défaut (système, réseau, firewall, WAF, actor, AdGuard, services, SOC), 8 s chacune, palette vert/cyan/jaune/orange/rouge (violet réservé à l'apprentissage) (ref #3361).
+  * Nouveau collecteur secubox-led-flux (compte secubox-leds, Nice 19, AppArmor enforce, aucune capacité, AF_UNIX seul) : publie /run/secubox-leds/flux.json toutes les 10 s.
+  * Nouvelle unité secubox-led-nft (root, seule capacité CAP_NET_ADMIN, AppArmor enforce) : nft -j list counters toutes les 10 s dans son propre dossier /run/secubox-led-nft/nft.json (écriture mktemp puis mv), lu par le collecteur (fraîcheur 60 s).
+  * Sources du collecteur lues seulement si leur propriétaire est root ou le producteur déclaré (secubox-actord, secubox) ; base ad-guard ouverte en mode=ro (délai 1 s), indisponibilité signalée une fois, message réarmé au retour.
+  * Planchers par défaut relevés : 15/min pour fw.bloques, waf.blocages, adguard.requetes ; 2,5 pour actor.* et services.degrades ; 60/min pour fw.paquets_*.
+  * Seuils relatifs évolutifs : niveau 0..3 contre une référence propre à la box (168 tranches horaires, EWMA 7 j, tendance 1 h, apprentissage 24 h) ; planchers de dispersion lus dans [flux.planchers] de leds.toml (valeur invalide : défaut + message).
+  * Niveau critique (4, rouge) absolu seulement : services arrêtés, événements Actor critiques.
+  * Rotation adaptative : durée x (1 + niveau max), plafond 24 s.
+  * Priorité alerte : une séquence au niveau 4 passe seule à l'écran, rappel toutes les 30 s si plusieurs.
+  * Dépendances : nftables, python3. leds.toml reste un conffile : une configuration locale modifiée est conservée à la mise à jour (dpkg demande ; en non interactif (confold), la version locale est conservée et doit être fusionnée à la main).
+  * Tests de version alignés sur 2.4.0.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 06:46:46 +0100
+
 secubox-led-heartbeat (2.3.4-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

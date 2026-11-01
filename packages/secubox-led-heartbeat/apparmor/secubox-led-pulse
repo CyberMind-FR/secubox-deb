@@ -51,6 +51,8 @@ profile secubox-led-pulse /usr/sbin/secubox-led-pulse {
   /var/cache/secubox/metrics-cache.json r,
   /var/lib/secubox/soc/alerts.json r,
   /run/secubox/soc.sock r,
+  # Niveaux relatifs publiés par le collecteur secubox-led-flux (#3361).
+  /run/secubox-leds/flux.json r,
 
   # Canaux de la puce : /sys/class/leds/<couleur>:led<n> pointe vers /sys/devices/.../leds/.
   /sys/class/leds/ r,

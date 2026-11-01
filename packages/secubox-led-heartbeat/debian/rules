@@ -25,6 +25,26 @@ override_dh_auto_install:
 		debian/secubox-led-heartbeat/etc/apparmor.d/secubox-led-pulse
 	install -D -m 644 usr/lib/secubox-led-heartbeat/ledcouches.py \
 		debian/secubox-led-heartbeat/usr/lib/secubox-led-heartbeat/ledcouches.py
+	# Collecteur de la LED de supervision (#3361)
+	install -D -m 644 usr/lib/secubox-led-heartbeat/reference.py \
+		debian/secubox-led-heartbeat/usr/lib/secubox-led-heartbeat/reference.py
+	install -D -m 644 usr/lib/secubox-led-heartbeat/releves.py \
+		debian/secubox-led-heartbeat/usr/lib/secubox-led-heartbeat/releves.py
+	install -D -m 644 usr/lib/secubox-led-heartbeat/flux.py \
+		debian/secubox-led-heartbeat/usr/lib/secubox-led-heartbeat/flux.py
+	install -D -m 755 usr/sbin/secubox-led-flux \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led-flux
+	install -D -m 644 systemd/secubox-led-flux.service \
+		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-flux.service
+	install -D -m 644 apparmor/secubox-led-flux \
+		debian/secubox-led-heartbeat/etc/apparmor.d/secubox-led-flux
+	# Releve root des compteurs nftables : le collecteur n'a aucune capacite (#3361)
+	install -D -m 755 usr/sbin/secubox-led-nft \
+		debian/secubox-led-heartbeat/usr/sbin/secubox-led-nft
+	install -D -m 644 systemd/secubox-led-nft.service \
+		debian/secubox-led-heartbeat/usr/lib/systemd/system/secubox-led-nft.service
+	install -D -m 644 apparmor/secubox-led-nft \
+		debian/secubox-led-heartbeat/etc/apparmor.d/secubox-led-nft
 	install -D -m 755 usr/sbin/secubox-led-trigger \
 		debian/secubox-led-heartbeat/usr/sbin/secubox-led-trigger
 	install -D -m 755 usr/sbin/secubox-led-dkms \
@@ -77,3 +97,5 @@ override_dh_installsystemd:
 	dh_installsystemd --name=secubox-led-pulse --no-enable
 	dh_installsystemd --name=secubox-led-trigger --no-enable
 	dh_installsystemd --name=secubox-led-heartbeat --no-enable
+	dh_installsystemd --name=secubox-led-flux --no-enable --no-start
+	dh_installsystemd --name=secubox-led-nft --no-enable --no-start

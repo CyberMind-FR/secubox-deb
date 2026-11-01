@@ -1,0 +1,34 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: secubox-led-nft (#3361)
+#
+# Toutes les 10 s : `nft -j list counters` (délai 5 s, sortie bornée à 1 Mio),
+# publié atomiquement dans /run/secubox-led-nft/nft.json (0644), lu par le collecteur
+# secubox-led-flux qui n'a ainsi aucune capacité. Le dossier est le RuntimeDirectory
+# propre à cette unité (0755 root) : aucun autre compte n'y écrit.
+# Échec ou délai : on ne publie rien, le fichier vieillit et le collecteur l'ignore
+# au-delà de 60 s (pas de faux zéro). Le temporaire raté sert au tour suivant.
+# Exécutables (profil AppArmor secubox-led-nft) : sh, mktemp, timeout, nft, head,
+# chmod, mv, sleep.
+set -u
+readonly SORTIE=/run/secubox-led-nft/nft.json
+
+trap 'exit 0' TERM INT
+
+tmp=""
+while :; do
+    if [ -z "$tmp" ]; then
+        tmp="$(mktemp /run/secubox-led-nft/nft.json.XXXXXX)" || tmp=""
+    fi
+    if [ -n "$tmp" ] \
+       && timeout 5 /usr/sbin/nft -j list counters 2>/dev/null | head -c 1048576 > "$tmp" \
+       && [ -s "$tmp" ] && chmod 0644 "$tmp" && mv -f "$tmp" "$SORTIE"; then
+        tmp=""
+    fi
+    sleep 10 &
+    wait $!
+done

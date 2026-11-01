@@ -85,7 +85,7 @@ turquoise = [0, 255, 90]
 blanc_chaud = [255, 150, 60]
 blanc = [255, 255, 255]
 
-# Sources : niveau 0..3 par seuils croissants [n1, n2, n3].
+# Sources : niveau 0..3 par seuils croissants [n1, n2, n3] (cpu, memoire, es, alertes).
 # Absente, illisible ou plus vieille que fraicheur_max (s) => « inconnu ».
 [sources.cpu]
 type = "cpu"                 # occupation CPU, /proc/stat (%)
@@ -99,28 +99,109 @@ seuils = [60, 80, 92]
 type = "iowait"              # attente d'E/S, /proc/stat (%)
 seuils = [5, 15, 30]
 
-[sources.attaques]
-type = "compteur_json"       # blocages WAF par minute (cache secubox-metrics)
-chemin = "/var/cache/secubox/metrics-cache.json"
-cle = "waf.waf_blocked"
-seuils = [1, 10, 60]
-fraicheur_max = 300
-
-[sources.visites]
-type = "jauge_json"          # connexions HTTPS établies (cache secubox-metrics)
-chemin = "/var/cache/secubox/metrics-cache.json"
-cle = "connections.https"
-seuils = [1, 20, 100]
-fraicheur_max = 300
-
 [sources.alertes]
-type = "alertes_json"        # alertes SOC non acquittées ; critique => niveau 3
+type = "alertes_json"        # alertes SOC non acquittées ; critique => niveau 4
 chemin = "/var/lib/secubox/soc/alerts.json"
 seuils = [1, 3, 10]
 
-# Couches, affichées dans l'ordre, sans limite de nombre.
+# Sources « flux » : niveau 0..4 relatif publié par le collecteur secubox-led-flux dans
+# /run/secubox-leds/flux.json (ref #3361). 0 normal, 1 activité, 2 attention, 3 dégradation,
+# 4 critique (absolu seulement) ; violet = apprentissage de la référence (24 h).
+
+[sources.flux_reseau_octets_in]
+type = "flux"
+cle = "reseau.octets_in"
+
+[sources.flux_reseau_octets_out]
+type = "flux"
+cle = "reseau.octets_out"
+
+[sources.flux_reseau_connexions]
+type = "flux"
+cle = "reseau.connexions"
+
+[sources.flux_firewall_paquets_in]
+type = "flux"
+cle = "fw.paquets_in"
+
+[sources.flux_firewall_paquets_out]
+type = "flux"
+cle = "fw.paquets_out"
+
+[sources.flux_firewall_bloques]
+type = "flux"
+cle = "fw.bloques"
+
+[sources.flux_waf_requetes]
+type = "flux"
+cle = "waf.requetes"
+
+[sources.flux_waf_blocages]
+type = "flux"
+cle = "waf.blocages"
+
+[sources.flux_waf_attaques]
+type = "flux"
+cle = "waf.attaques"
+
+[sources.flux_actor_evenements]
+type = "flux"
+cle = "actor.evenements"
+
+[sources.flux_actor_suspects]
+type = "flux"
+cle = "actor.suspects"
+
+[sources.flux_actor_critiques]
+type = "flux"
+cle = "actor.critiques"
+
+[sources.flux_adguard_requetes]
+type = "flux"
+cle = "adguard.requetes"
+
+[sources.flux_adguard_trackers]
+type = "flux"
+cle = "adguard.trackers"
+
+[sources.flux_adguard_appareils]
+type = "flux"
+cle = "adguard.appareils"
+
+[sources.flux_services_actifs]
+type = "flux"
+cle = "services.actifs"
+
+[sources.flux_services_degrades]
+type = "flux"
+cle = "services.degrades"
+
+[sources.flux_services_arretes]
+type = "flux"
+cle = "services.arretes"
+
+# Planchers de dispersion du collecteur (secubox-led-flux, lus au démarrage) : en dessous,
+# les variations ne comptent pas (une box très calme ne passe pas en « attention » pour
+# 1 ou 2 événements). Octets/min pour reseau, paquets ou événements/min ailleurs.
+# Valeur non numérique ou <= 0 : défaut, avec un message dans le journal.
+[flux.planchers]
+"reseau.octets_in" = 50000.0
+"reseau.octets_out" = 50000.0
+"fw.paquets_in" = 60.0
+"fw.paquets_out" = 60.0
+"fw.bloques" = 15.0
+"waf.blocages" = 15.0
+"adguard.requetes" = 15.0
+"actor.evenements" = 2.5
+"actor.suspects" = 2.5
+"actor.critiques" = 2.5
+"services.degrades" = 2.5
+
+# Couches, affichées dans l'ordre, sans limite de nombre. Huit séquences par défaut,
+# ~8 s chacune (rotation adaptative : duree x (1 + niveau max), plafond 24 s ; une
+# séquence au niveau 4 passe seule à l'écran).
 # forme : par_led | jauge | mono | double | triple | etale | rotatif
-# rythme : fixe | respiration | pulsation | eclats ; palette : 4 couleurs, niveau 0..3
+# rythme : fixe | respiration | pulsation | eclats ; palette : 5 couleurs, niveau 0..4
 # Des couches « mono » consécutives tournent par fenêtre de trois LEDs.
 [[couche]]
 nom = "systeme"
@@ -131,9 +212,58 @@ rythme = "respiration"
 duree = 8
 
 [[couche]]
-nom = "trafic"
-sources = ["attaques", "visites", "alertes"]
+nom = "reseau"
+sources = ["flux_reseau_octets_in", "flux_reseau_octets_out", "flux_reseau_connexions"]
 forme = "par_led"
-palette = ["cyan", "bleu", "violet", "rose"]
-rythme = "pulsation"
+palette = ["vert", "cyan", "jaune", "orange", "rouge"]
+rythme = "respiration"
+duree = 8
+
+[[couche]]
+nom = "firewall"
+sources = ["flux_firewall_paquets_in", "flux_firewall_paquets_out", "flux_firewall_bloques"]
+forme = "par_led"
+palette = ["vert", "cyan", "jaune", "orange", "rouge"]
+rythme = "respiration"
+duree = 8
+
+[[couche]]
+nom = "waf"
+sources = ["flux_waf_requetes", "flux_waf_blocages", "flux_waf_attaques"]
+forme = "par_led"
+palette = ["vert", "cyan", "jaune", "orange", "rouge"]
+rythme = "respiration"
+duree = 8
+
+[[couche]]
+nom = "actor"
+sources = ["flux_actor_evenements", "flux_actor_suspects", "flux_actor_critiques"]
+forme = "par_led"
+palette = ["vert", "cyan", "jaune", "orange", "rouge"]
+rythme = "respiration"
+duree = 8
+
+[[couche]]
+nom = "adguard"
+sources = ["flux_adguard_requetes", "flux_adguard_trackers", "flux_adguard_appareils"]
+forme = "par_led"
+palette = ["vert", "cyan", "jaune", "orange", "rouge"]
+rythme = "respiration"
+duree = 8
+
+[[couche]]
+nom = "services"
+sources = ["flux_services_actifs", "flux_services_degrades", "flux_services_arretes"]
+forme = "par_led"
+palette = ["vert", "cyan", "jaune", "orange", "rouge"]
+rythme = "respiration"
+duree = 8
+
+# SOC : une seule mesure (alertes non acquittées) portée par les trois LED (forme triple).
+[[couche]]
+nom = "soc"
+sources = ["alertes"]
+forme = "triple"
+palette = ["vert", "cyan", "jaune", "orange", "rouge"]
+rythme = "respiration"
 duree = 8

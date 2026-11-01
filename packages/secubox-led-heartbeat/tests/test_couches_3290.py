@@ -109,7 +109,7 @@ def test_source_alertes(tmp_path):
                                        "vivant": ""})
     assert src.lire(0) == 1
     p.write_text(json.dumps([{"severity": "critical"}]))
-    assert src.lire(1) == 3                     # critique non vue : niveau max
+    assert src.lire(1) == 4                     # critique non vue : niveau max (4, #3361)
     p.write_text("[]")
     assert src.lire(2) == 0
 
@@ -332,11 +332,10 @@ def test_image_rotation_mono_place_chaque_couche_sur_sa_led():
 def test_toml_livre_valide_sans_avertissement(caplog):
     caplog.set_level(logging.WARNING)
     cfg = lc.charger_config(LEDS_TOML)
-    assert [c.nom for c in cfg.couches] == ["systeme", "trafic"]
+    assert [c.nom for c in cfg.couches] == ["systeme", "reseau", "firewall", "waf", "actor",
+                                            "adguard", "services", "soc"]
     assert cfg.couches[0].sources == ["cpu", "memoire", "es"]
-    assert cfg.couches[1].sources == ["attaques", "visites", "alertes"]
     assert cfg.couches[0].rythme == "respiration"
-    assert cfg.couches[1].rythme == "pulsation"
     assert cfg.debit_max == 20
     assert not [r for r in caplog.records if r.name == "secubox-led"]
 
@@ -418,4 +417,4 @@ def test_paquet_coherent():
     assert "disable --now" in post and "secubox-healthbump.timer" in post
     reset = (PKG / "usr" / "sbin" / "secubox-led-reset").read_text()
     assert "systemctl start secubox-healthbump.timer" not in reset
-    assert "2.3.3-1~trixie1" in (PKG / "debian" / "changelog").read_text().splitlines()[0]
+    assert "2.4.0-1~trixie1" in (PKG / "debian" / "changelog").read_text().splitlines()[0]

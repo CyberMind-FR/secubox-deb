@@ -9,7 +9,7 @@ Displays system health, security status, and resource usage via the IS31FL3199 I
 
 Depuis 2.3.0, l'affichage est un moteur en couches (`secubox-led-pulse`), voir plus bas.
 
-Paquet Debian : version `2.3.3-1~trixie1`, architecture `all`.
+Paquet Debian : version `2.4.0-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -96,9 +96,76 @@ lecture sans les couleurs. **Inconnu** (source absente, illisible ou périmée) 
 fixe, jamais vert. Avant chaque couche, un **repère** : N éclats blancs sur la LED 2 (N = rang
 de la couche, 3 au plus), LEDs 1 et 3 éteintes.
 
-Défaut livré : couche `systeme` (CPU, mémoire, E/S ; vert → jaune → orange → rouge ;
-respiration ; 8 s) puis couche `trafic` (attaques, visites, alertes ; cyan → bleu → violet →
-rose ; pulsations ; 8 s).
+Niveau 4 « critique » (#3361) : une alerte SOC critique non acquittée s'affiche en rouge, et sa couche
+passe seule à l'écran en éclats jusqu'au retour sous 4, y compris avec une palette personnalisée de
+4 entrées (le rouge y est ajouté en 5ᵉ).
+
+Défaut livré (2.4.0, #3361) : **8 séquences** de 8 s, dans l'ordre `systeme` (CPU, mémoire, E/S ;
+vert → jaune → orange → rouge), `reseau` (octets entrants, sortants, connexions), `firewall` (paquets
+entrants, sortants, bloqués), `waf` (requêtes, blocages, attaques), `actor` (événements, suspects,
+critiques), `adguard` (requêtes, trackers, appareils), `services` (actifs, dégradés, arrêtés), `soc`
+(alertes non acquittées, une mesure sur les 3 LED en forme `triple`). Les six couches `flux`
+sont des `par_led` ; toutes les nouvelles couches respirent, palette vert / cyan / jaune / orange / rouge (niveaux
+0 à 4) ; le violet est réservé à l'apprentissage.
+
+### Collecteur et seuils relatifs
+
+`secubox-led-flux` (compte `secubox-leds`, `Nice=19`, AppArmor enforce, **aucune capacité**, sockets
+`AF_UNIX` seules) relève les mesures toutes les 10 s et publie `/run/secubox-leds/flux.json`. Les
+compteurs nftables `sbx_drop_*` lui viennent de **`secubox-led-nft`**, une petite unité root dont la
+seule capacité est `CAP_NET_ADMIN` (profil AppArmor `secubox-led-nft` : `nft`, `sh`, `timeout`,
+`mktemp`, `head`, `chmod`, `mv`, `sleep` ; écriture limitée à `nft.json*`) : toutes les 10 s,
+`nft -j list counters` (délai 5 s, sortie bornée à 1 Mio) est écrit dans un temporaire `mktemp` puis
+renommé atomiquement en `/run/secubox-led-nft/nft.json` (0644). Ce dossier est le `RuntimeDirectory`
+propre à `secubox-led-nft` (0755 root:root), indépendant de `/run/secubox-leds` du collecteur : un
+redémarrage de l'un ne casse pas l'autre.
+
+Les sources `flux` de `leds.toml` (`cle = "reseau.octets_in"`, …) en
+lisent le niveau. Les seuils sont **relatifs et évolutifs** : chaque mesure est comparée à une
+référence propre à la box (168 tranches horaires de la semaine, moyenne exponentielle à demi-vie de
+7 jours, tendance d'1 heure, apprentissage de 24 h en violet) : écart réduit < 1 normal (vert), < 2
+activité (cyan), < 3 attention (jaune), au-delà dégradation (orange). Le niveau 4 (rouge) est
+**absolu** (service arrêté, événement Actor critique). Le dénominateur ne descend jamais sous un
+plancher : `[flux.planchers]` de `leds.toml` (lu au démarrage du collecteur ; valeur non numérique ou
+≤ 0 : défaut et message dans le journal). Rotation adaptative : durée × (1 + niveau max), plafond
+24 s ; une séquence au niveau 4 passe seule à l'écran. Avec plusieurs couches en alerte, chacune
+reçoit un créneau de `min(repère + durée, 30 s / nombre)`, jamais moins que **repère + 2 s** : le
+rappel de chaque couche tient en 30 s jusqu'à huit alertes ; **au-delà de 8 alertes**, il dépasse
+30 s (créneau minimal × nombre de couches).
+`leds.toml` est un conffile : une configuration locale est conservée à la mise à jour.
+
+#### Sources du collecteur (clés `flux`)
+
+Chaque source n'est lue que si le fichier est régulier, non inscriptible par tous et appartient
+à root ou au compte producteur déclaré (`/run/secubox` est en 1777 : un faux relevé déposé par un
+autre compte est ignoré, clé absente).
+
+| Clés | Origine | Propriétaire accepté |
+|---|---|---|
+| `reseau.octets_*`, `fw.paquets_*` | `/proc/net/dev` (interface WAN) | root |
+| `reseau.connexions` | `/proc/sys/net/netfilter/nf_conntrack_count` | root |
+| `fw.bloques` | `/run/secubox-led-nft/nft.json` (compteurs `sbx_drop_*`, moins de 60 s) | root (`secubox-led-nft`) |
+| `waf.*` | `/var/cache/secubox/metrics-cache.json` | `secubox` |
+| `actor.*` | `/run/secubox/actord-mesures.json` | `secubox-actord` |
+| `adguard.*` | `/var/lib/secubox/ad-guard/ad-guard.db` (SQLite `mode=ro`, délai 1 s) | `secubox` |
+| `services.*` | `/var/cache/secubox/health-doctor.json` | `secubox` |
+
+Base ad-guard indisponible : un seul message dans le journal (réarmé quand elle revient), clés
+`adguard.*` absentes.
+
+#### Planchers par défaut (`[flux.planchers]`)
+
+Les compteurs cumulés sont convertis en débit par minute : relevés toutes les 10 s, chaque écart y
+compte 6 fois. Les planchers sont choisis pour qu'une box calme ne passe pas au jaune pour
+2 événements (12/min), alors que 20 événements (120/min) alertent.
+
+| Clé | Plancher | Unité |
+|---|---|---|
+| `reseau.octets_in`, `reseau.octets_out` | 50000 | octets/min |
+| `fw.paquets_in`, `fw.paquets_out` | 60 | paquets/min |
+| `fw.bloques`, `waf.blocages`, `adguard.requetes` | 15 | événements/min |
+| `actor.evenements`, `actor.suspects`, `actor.critiques`, `services.degrades` | 2,5 | nombre |
+| autres jauges | 1 | nombre |
 
 ### Sources (locales, lecture seule, sans réseau ni secret)
 
@@ -107,9 +174,9 @@ rose ; pulsations ; 8 s).
 | `cpu` | `cpu` | `/proc/stat` (delta, hors idle et iowait) | 50 / 75 / 90 % |
 | `memoire` | `memoire` | `/proc/meminfo` (100 − MemAvailable/MemTotal) | 60 / 80 / 92 % |
 | `es` | `iowait` | `/proc/stat` (part iowait) | 5 / 15 / 30 % |
-| `attaques` | `compteur_json` | `/var/cache/secubox/metrics-cache.json`, `waf.waf_blocked` (débit par minute) | 1 / 10 / 60 par min |
-| `visites` | `jauge_json` | même cache, `connections.https` (connexions établies) | 1 / 20 / 100 |
-| `alertes` | `alertes_json` | `/var/lib/secubox/soc/alerts.json` (non acquittées ; une critique = 3) | 1 / 3 / 10 |
+| `attaques` | `compteur_json` | `/var/cache/secubox/metrics-cache.json`, `waf.waf_blocked` (débit par minute), plus utilisée par défaut | 1 / 10 / 60 par min |
+| `visites` | `jauge_json` | même cache, `connections.https` (connexions établies), plus utilisée par défaut | 1 / 20 / 100 |
+| `alertes` | `alertes_json` | `/var/lib/secubox/soc/alerts.json` (non acquittées ; une critique = 4) | 1 / 3 / 10 |
 
 Le cache `metrics-cache.json` est rafraîchi par `secubox-metrics` (30 s) ; au-delà de
 `fraicheur_max` (300 s) la source passe à « inconnu » (horodatage interne `timestamp_epoch`
@@ -154,7 +221,7 @@ Unité sans capacité, profil AppArmor enforce ; exception root écrite dans `RU
 secubox-led verifier                         # valide leds.toml, affiche les niveaux courants
 secubox-led demo <forme> [--duree 20]        # niveaux 0, 1, 2, 3 puis inconnu, chacun duree/5
 secubox-led demo triple --niveau 2 --rythme respiration
-secubox-led demo systeme|trafic|toutes       # couches réelles de leds.toml
+secubox-led demo systeme|reseau|firewall|waf|actor|adguard|services|soc|toutes       # couches réelles de leds.toml
 secubox-led-pulse demo rotatif --simule      # sans matériel : écritures sur la sortie
 ```
 
