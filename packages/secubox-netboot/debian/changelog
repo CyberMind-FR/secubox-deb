@@ -1,3 +1,11 @@
+secubox-netboot (0.8.4-1~trixie1) trixie; urgency=medium
+
+  * MOCHAbin : le bootcmd touche le port WAN par un ping local (169.254.10.2) au lieu
+    de dhcp. Sans câble, dhcp enchaînait ~129 BOOTP et bloquait le démarrage hors
+    réseau ; validé au banc gk6 le 2026-11-01 (ref #3271).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 08:59:50 +0100
+
 secubox-netboot (0.8.3-1~trixie1) trixie; urgency=medium
 
   * Netboot MOCHAbin depuis le U-Boot d'usine Marvell (ref #3271) : il n'a pas de scriptaddr (env relevé :

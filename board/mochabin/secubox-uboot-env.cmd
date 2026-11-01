@@ -35,7 +35,7 @@ setenv ramdisk_addr_r 0x0c100000
 setenv ethact mvpp2-2
 setenv autoload no
 setenv bootcmd_netboot 'setenv ethact mvpp2-2; setenv autoload no; dhcp; tftpboot ${loadaddr} mochabin-live/boot.scr; source ${loadaddr}'
-setenv bootcmd 'setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}'
+setenv bootcmd 'setenv ethact mvpp2-2; setenv ipaddr 169.254.10.1; setenv netmask 255.255.0.0; ping 169.254.10.2; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}'
 saveenv
 
 echo "Pose : adresses, ethact mvpp2-2, autoload no, bootcmd (mmc 0), bootcmd_netboot."
