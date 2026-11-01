@@ -125,6 +125,7 @@ def test_candidats_en_attente_de_validation(client):
     r = R.Regles()
     r.proposer("tv-salon", "pub.example.com", 70, "faible", int(time.time()), motif="repli publicitaire : apparu 2 s après X")
     R.ecrire(r, client.dossier)
+    client.post("/adblock-tv/protection/assistant/guide", json={"mac": MAC, "actif": True})      # m5 : appareils guidés seulement
     c = client.get("/adblock-tv/protection/direct").json()["candidats"]
     assert c == [{"mac": MAC, "appareil": "TV salon", "domaine": "pub.example.com", "confiance": 70,
                   "raison": "repli publicitaire : apparu 2 s après X", "categorie": c[0]["categorie"], "action": None}]

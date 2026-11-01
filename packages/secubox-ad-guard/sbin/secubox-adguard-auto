@@ -107,7 +107,7 @@ def appliquer_assistant(etat: dict, now: int) -> bool:
     except dnstv_assistant.ErreurAssistant as e:
         print(f"file de l'assistant illisible, rien n'est appliqué : {e}", file=sys.stderr)
         return False
-    if not any(x["etat"] == "en-attente" for x in c["file"]):
+    if not any(x["etat"] == "en-attente" for x in c["file"]) and not c.get("vus"):
         avant = len(c["file"])
         dnstv_assistant.purger(c, now)
         if len(c["file"]) != avant:
@@ -120,7 +120,7 @@ def appliquer_assistant(etat: dict, now: int) -> bool:
         regles = dnstv_regles.charger()
         ex = dnstv_protection.charger_exceptions()
         pauses = dnstv_protection.charger_pauses()
-        taxo = dnstv_taxonomie.Taxonomie.depuis_dossier(manuelles=dnstv_taxonomie.charger_manuelles(), regles=regles)
+        taxo = dnstv_assistant.taxonomie(regles=regles)        # I1 : la même fonction que l'API
     except (dnstv_regles.ErreurRegle, dnstv_protection.ErreurProtection, dnstv_taxonomie.ErreurTaxonomie, OSError) as e:
         print(f"assistant : lecture impossible, actions laissées en attente : {e}", file=sys.stderr)
         return False
@@ -139,14 +139,14 @@ def appliquer_assistant(etat: dict, now: int) -> bool:
         dnstv_journal.ajouter(dnstv_journal.depuis_regles(avant_regles, regles.liste(), etat)
                               + [dnstv_journal.entree(now, x["appareil"], x["mac"], x["domaine"], "", "exception", "admin",
                                                       f"assistant : {x['choix']}")
-                                 for x in c["file"] if x["etat"] == "applique" and x["applique"] == now and x["choix"] != "plus-tard"])
+                                 for x in c["file"] if x["id"] in res["appliquees"] and x["choix"] != "plus-tard"])   # m2 : jamais en double
     except (OSError, ValueError) as e:
         print(f"journal des décisions non écrit (assistant) : {type(e).__name__}", file=sys.stderr)
     if res["marques"]:
         try:
             mag = dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db")
-            for ident, marque in res["marques"]:
-                mag.marquer_id(ident, marque)
+            for ident, marque, mac, domaine in res["marques"]:
+                mag.marquer_id(ident, marque, mac, domaine)
         except Exception as e:                               # noqa: BLE001 — l'état affiché des découvertes n'arrête jamais le moteur
             print(f"découvertes non marquées : {type(e).__name__}", file=sys.stderr)
     return bool(res["dns"])

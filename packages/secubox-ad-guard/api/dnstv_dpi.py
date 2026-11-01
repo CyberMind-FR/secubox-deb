@@ -446,12 +446,17 @@ class MagasinDPI:
         with self._cx() as cx:
             cx.execute("UPDATE decouvertes SET etat=? WHERE mac=? AND domaine=? AND type='repli' AND etat='nouvelle'", (etat, mac, domaine))
 
-    def marquer_id(self, ident: int, etat: str) -> None:
-        """Lot 5b : état posé par l'assistant (consommé par le moteur) sur UNE découverte."""
+    def marquer_id(self, ident: int, etat: str, mac: str, domaine: Optional[str] = None) -> None:
+        """Lot 5b : état posé par l'assistant (consommé par le moteur) sur UNE découverte, seulement si elle est bien celle de cet appareil
+        (et de ce domaine quand il est donné) : un identifiant périmé ou forgé ne marque jamais une autre ligne."""
         if etat not in ETATS_ASSISTANT:
             raise ValueError("état de découverte inconnu")
+        w, a = "id=? AND mac=?", [etat, int(ident), mac]
+        if domaine is not None:
+            w += " AND domaine=?"
+            a.append(domaine)
         with self._cx() as cx:
-            cx.execute("UPDATE decouvertes SET etat=? WHERE id=?", (etat, int(ident)))
+            cx.execute(f"UPDATE decouvertes SET etat=? WHERE {w}", a)
 
     def decouvertes(self, depuis_id: int = 0, type_: Optional[str] = None, mac: Optional[str] = None, limite: int = 100,
                     recentes: bool = False, etat: Optional[str] = None) -> List[dict]:

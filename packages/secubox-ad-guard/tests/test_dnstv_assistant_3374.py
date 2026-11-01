@@ -86,7 +86,7 @@ def test_ecriture_atomique_relue_et_revalidee(tmp_path):
 
 
 def test_absent_vaut_vide(tmp_path):
-    assert A.charger(tmp_path) == {"version": 1, "guides": [], "file": []}
+    assert A.charger(tmp_path) == {"version": 1, "guides": [], "file": [], "vus": []}
 
 
 # ── consommation par le moteur ─────────────────────────────────────────────────────────────────────────
@@ -103,7 +103,8 @@ def test_consommer_applique_exception_du_lot_3_comme_decision_manuelle():
     assert regles["video.example.org"]["etat"] == "rejete" and "video.example.org" in e["autorisations"]["tv-salon"]
     assert "plus.example.org" not in regles
     assert [x["etat"] for x in c["file"]] == ["applique"] * 3 and all(x["applique"] == T0 + 60 for x in c["file"])
-    assert sorted(res["marques"]) == [(7, "confirmee"), (8, "legitime"), (9, "plus-tard")]
+    assert sorted(res["marques"]) == [(7, "confirmee", MAC, "relais-pub.example.net"), (8, "legitime", MAC, "video.example.org"),
+                                      (9, "plus-tard", MAC, "plus.example.org")]
     assert res["dns"] is True and {(x["domaine"], x["type"]) for x in res["exceptions"]} == {
         ("relais-pub.example.net", "bloquer"), ("video.example.org", "autoriser")}
 
@@ -131,10 +132,10 @@ def test_marquer_une_decouverte_par_identifiant(tmp_path):
     m = D.MagasinDPI(tmp_path / "d.db")
     m.ajouter_decouvertes(MAC, [{"type": "repli", "domaine": "x.example.com", "ts": T0, "refus_ts": T0 - 3, "confiance": 70}])
     i = m.decouvertes()[0]["id"]
-    m.marquer_id(i, "confirmee")
+    m.marquer_id(i, "confirmee", MAC, "x.example.com")
     assert m.decouvertes()[0]["etat"] == "confirmee"
     with pytest.raises(ValueError):
-        m.marquer_id(i, "n'importe")
+        m.marquer_id(i, "n'importe", MAC)
 
 
 # ── apprentissage guidé ────────────────────────────────────────────────────────────────────────────────

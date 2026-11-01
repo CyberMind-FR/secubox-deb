@@ -32,6 +32,7 @@ router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv-assistant"])
 MAC_MOTIF = r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
 TYPES_ACTIONNABLES = ("repli", "repli-protege", "secours")      # découvertes qui portent un NOM de domaine
 CANDIDATS_MAX = 50
+ETATS_FENETRE = 200                                              # m3 : états relus pour les découvertes déjà affichées (les plus récentes)
 
 
 class ChoixIn(BaseModel):
@@ -46,6 +47,12 @@ class ChoixIn(BaseModel):
 class AnnulerIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str = Field(pattern=r"^[0-9a-f]{16}$")
+
+
+class VuIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mac: str = Field(pattern=MAC_MOTIF)
+    decouverte: int = Field(ge=1)
 
 
 class GuideIn(BaseModel):
@@ -80,6 +87,14 @@ def _audit(acteur: str, geste: str, nom: str, domaine: Optional[str], type_: str
                                                    "domaine": domaine, "type": type_, "force": bool(force)}))
 
 
+def _taxonomie():
+    """I1 : la taxonomie du moteur (corrections manuelles et règles comprises), en cache tant qu'aucun fichier source ne change (m4)."""
+    try:
+        return dnstv_assistant.taxonomie()
+    except (dnstv_taxonomie.ErreurTaxonomie, dnstv_regles.ErreurRegle, OSError, ValueError) as e:
+        raise HTTPException(503, f"taxonomie indisponible ({type(e).__name__}) : réessayer") from None
+
+
 def _action(x: Optional[dict]) -> Optional[dict]:
     return None if x is None else {k: x[k] for k in ("id", "choix", "etat", "applique", "raison", "force")}
 
@@ -97,10 +112,13 @@ def direct(depuis: int = Query(0, ge=0), limite: int = Query(50, ge=1, le=200), 
     par_couple: dict = {}
     for x in reversed(file):                                         # la plus récente gagne
         par_couple[(x["mac"], x["domaine"])] = x
-    taxo = dnstv_taxonomie.Taxonomie.depuis_dossier()
+    taxo = _taxonomie()
     mag = dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db", lecture_seule=True)
     out = []
-    for d in mag.decouvertes(depuis, None, None, limite):
+    # B1 : à l'ouverture (depuis=0), les `limite` PLUS RÉCENTES, remises dans l'ordre ; ensuite le curseur croissant, sans perte.
+    lues = list(reversed(mag.decouvertes(0, None, None, limite, recentes=True))) if depuis == 0 else mag.decouvertes(depuis, None, None, limite)
+    vus = {v["id"] for v in c.get("vus", [])}
+    for d in lues:
         nom_valide = dnstv.valider_domaine(d["domaine"]) == d["domaine"]
         cl = taxo.classer(d["domaine"]) if nom_valide else None
         out.append({"id": d["id"], "ts": d["ts"], "type": d["type"], "mac": d["mac"], "appareil": noms.get(d["mac"], "appareil inconnu"),
@@ -108,19 +126,22 @@ def direct(depuis: int = Query(0, ge=0), limite: int = Query(50, ge=1, le=200), 
                     "protegee": bool(cl and cl["protegee"]), "confiance": d["confiance"], "raison": d["raison"],
                     "etat": "ecartee-protegee" if d["type"] == "repli-protege" else d["etat"],
                     "actionnable": nom_valide and d["type"] in TYPES_ACTIONNABLES and d["mac"] in noms,
+                    "vu_possible": not nom_valide and d["mac"] in noms and d["etat"] == "nouvelle", "vu": d["id"] in vus,
                     "action": _action(par_couple.get((d["mac"], d["domaine"])))})
     try:
         regles = dnstv_regles.charger().liste()
     except dnstv_regles.ErreurRegle:
         regles = []
     candidats = []
-    for r in sorted((r for r in regles if r["etat"] == "candidat" and r.get("origine") == "auto" and r["appareil"] in slugs),
+    guidees = dnstv_assistant.slugs_guides(c, etat)                   # m5 : seuls ces appareils ATTENDENT une validation
+    for r in sorted((r for r in regles if r["etat"] == "candidat" and r.get("origine") == "auto" and r["appareil"] in guidees),
                     key=lambda r: r["cree"], reverse=True)[:CANDIDATS_MAX]:
         cl = slugs[r["appareil"]]
         candidats.append({"mac": cl["mac"], "appareil": cl["nom"], "domaine": r["domaine"], "confiance": r["score"], "raison": r["motif"],
                           "categorie": taxo.classer(r["domaine"])["categorie"], "action": _action(par_couple.get((cl["mac"], r["domaine"])))})
     guides = set(c["guides"])
-    return {"decouvertes": out, "dernier_id": max((d["id"] for d in out), default=depuis), "file": file, "candidats": candidats,
+    etats = {str(d["id"]): d["etat"] for d in mag.decouvertes(0, None, None, ETATS_FENETRE, recentes=True) if d["etat"] != "nouvelle"}
+    return {"decouvertes": out, "dernier_id": max([d["id"] for d in out] + [depuis]), "file": file, "candidats": candidats, "etats": etats,
             "appareils": [{"mac": m, "nom": n, "guide": m in guides} for m, n in sorted(noms.items(), key=lambda kv: kv[1])],
             "genere": int(time.time())}
 
@@ -133,10 +154,7 @@ def choix(corps: ChoixIn, jeton=Depends(require_jwt)):
     if not d or d != corps.domaine:
         raise HTTPException(422, "nom de domaine invalide")
     if corps.choix == "bloquer" and not corps.force:
-        try:
-            c = dnstv_taxonomie.Taxonomie.depuis_dossier().classer(d)
-        except (OSError, ValueError) as e:
-            raise HTTPException(503, f"taxonomie indisponible ({type(e).__name__}) : blocage refusé, réessayer") from None
+        c = _taxonomie().classer(d)
         if c["protegee"] and c["categorie"] != "INCONNU":
             raise HTTPException(409, f"catégorie {c['categorie']} protégée (lecture des vidéos, DRM…) : confirmer le blocage (force)")
     with _r._verrou():
@@ -150,11 +168,42 @@ def choix(corps: ChoixIn, jeton=Depends(require_jwt)):
         except dnstv_assistant.ErreurAssistant as e:
             raise HTTPException(422, str(e)) from None
         _audit(acteur, "assistant", nom, d, corps.choix, corps.force)
-        try:
-            dnstv_assistant.ecrire(c)
-        except (OSError, dnstv_assistant.ErreurAssistant) as e:
-            raise HTTPException(503, f"file non écrite ({type(e).__name__})") from None
+        _ecrire_ou_annuler(c, acteur, nom, d, corps.choix)
     return x
+
+
+def _ecrire_ou_annuler(c: dict, acteur: str, nom: str, domaine: Optional[str], type_: str) -> None:
+    """Écrit la file ; si l'écriture échoue après l'audit d'intention, audit.log reçoit une entrée `annule` (au mieux), puis 503."""
+    try:
+        dnstv_assistant.ecrire(c)
+    except (OSError, dnstv_assistant.ErreurAssistant) as e:
+        try:
+            _r._ctl_entree("audit-protection", json.dumps({"acteur": acteur, "origine": "admin", "geste": "annule", "cibles": [nom],
+                                                           "minutes": None, "domaine": domaine,
+                                                           "type": type_ if type_ in ("bloquer",) else None, "force": False}))
+        except HTTPException:
+            pass
+        raise HTTPException(503, f"file non écrite ({type(e).__name__}) : rien n'est changé") from None
+
+
+@router.post("/protection/assistant/vu")
+def vu(corps: VuIn, jeton=Depends(require_jwt)):
+    """I2 : découverte SANS nom de domaine (adresse:port) vue par l'administrateur, « vu / plus tard ». Aucun effet DNS ; le moteur la
+    marque à son passage. Bloquer ou déclarer légitime une adresse : reporté (demande un mécanisme nftables, autre lot)."""
+    with _r._verrou():
+        nom = _nom(_etat(), corps.mac)
+        c = _charger()
+        try:
+            change = dnstv_assistant.marquer_vu(c, corps.mac, corps.decouverte)
+        except dnstv_assistant.ErreurPlafond as e:
+            raise HTTPException(409, str(e)) from None
+        except dnstv_assistant.ErreurAssistant as e:
+            raise HTTPException(422, str(e)) from None
+        if change:
+            acteur = _r._acteur(jeton)
+            _audit(acteur, "assistant", nom, None, "vu")
+            _ecrire_ou_annuler(c, acteur, nom, None, "vu")
+    return {"decouverte": corps.decouverte, "vu": True}
 
 
 @router.post("/protection/assistant/annuler")

@@ -434,6 +434,7 @@ def audit_classification(entree: str) -> int:
 GESTES_PROTECTION = ("pause", "observe", "reprise", "exception", "annule",      # annule : retour arrière après un échec
                      "assistant", "assistant-annule", "guide")                    # lot 5b : file de l'assistant, apprentissage guidé
 TYPES_ASSISTANT = ("bloquer", "legitime", "plus-tard")
+TYPE_VU = "vu"                                                           # passe 2 : découverte sans domaine (adresse:port) vue
 TYPES_GUIDE = ("active", "desactive")
 ORIGINES_PROTECTION = ("usager", "admin", "auto")
 TYPES_EXCEPTION = ("autoriser", "bloquer", "autoriser-retire", "bloquer-retire")
@@ -456,6 +457,8 @@ def _enregistrement_protection(r) -> bool:
     if r["geste"] == "exception":
         return (isinstance(r["domaine"], str) and dnstv.valider_domaine(r["domaine"]) == r["domaine"] and r["type"] in TYPES_EXCEPTION
                 and m is None)
+    if r["geste"] == "assistant" and r["type"] == TYPE_VU:                # passe 2 : « vu / plus tard » d'une découverte SANS domaine
+        return r["domaine"] is None and m is None
     if r["geste"] in ("assistant", "assistant-annule"):                  # lot 5b : un choix (ou son annulation) pour UN domaine
         return (isinstance(r["domaine"], str) and dnstv.valider_domaine(r["domaine"]) == r["domaine"] and r["type"] in TYPES_ASSISTANT
                 and m is None)
