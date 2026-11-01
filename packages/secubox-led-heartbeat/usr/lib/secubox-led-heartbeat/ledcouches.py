@@ -642,6 +642,9 @@ class Ordonnanceur:
         if groupe:
             self.entrees.append(groupe)
         self._etat = None                           # (rang, début) de l'entrée affichée
+        self._ordre = [c for e in self.entrees for c in e]
+        self._alerte = None                         # (couche, début) du créneau d'alerte
+        self._reprise = None                        # rang normal à reprendre après l'alerte
 
     @staticmethod
     def _niveau_max(entree, niveaux) -> int:
@@ -664,28 +667,57 @@ class Ordonnanceur:
         """(rang, couche) des couches dont une source est au niveau 4."""
         niveaux = niveaux or {}
         return [(rang, c) for rang, e in enumerate(self.entrees) for c in e
-                if any(niveaux.get(s) == NIVEAU_MAX and not isinstance(niveaux.get(s), bool)
-                       for s in c.sources)]
+                if any(n == NIVEAU_MAX and not isinstance(n, bool)
+                       for n in (niveaux.get(s) for s in c.sources))]
+
+    def _creneau(self, c, nb) -> float:
+        r = self.cfg.repere_duree
+        return max(r + 2.0, min(r + c.duree, RAPPEL_ALERTE / nb))
+
+    def _suivante(self, c, couches):
+        """Couche en alerte qui suit `c` dans l'ordre des couches (avec bouclage)."""
+        place = {id(x): k for k, x in enumerate(self._ordre)}
+        apres = [x for x in couches if place[id(x)] > place[id(c)]]
+        return (apres or couches)[0]
 
     def _situer_alerte(self, t, alertes):
-        creneau = min(self.cfg.repere_duree + max(c.duree for _, c in alertes),
-                      RAPPEL_ALERTE / len(alertes))
-        creneaux = [min(self.cfg.repere_duree + c.duree, creneau) for _, c in alertes]
-        x = t % sum(creneaux)
-        for (rang, c), d in zip(alertes, creneaux):
-            if x < d:
-                return rang, [c], x
-            x -= d
-        return alertes[0][0], [alertes[0][1]], 0.0  # pragma: no cover
+        """Mode alerte à état : entrée au repère de la première couche en alerte ;
+        ensemble modifié = créneau en cours terminé s'il est encore en alerte,
+        sinon passage immédiat à la suivante, à son repère."""
+        couches = [c for _, c in alertes]
+        rangs = {id(c): r for r, c in alertes}
+        nb = len(couches)
+        if self._alerte is None or t < self._alerte[1]:
+            if self._alerte is None and self._etat is not None:
+                self._reprise = self._etat[0]
+            self._etat = None
+            self._alerte = (couches[0], t)
+        c, debut = self._alerte
+        if not any(x is c for x in couches):
+            c, debut = self._suivante(c, couches), t
+        pas = 0
+        while t - debut >= self._creneau(c, nb):
+            debut += self._creneau(c, nb)
+            c = self._suivante(c, couches)
+            pas += 1
+            if pas > 4 * nb:                        # saut d'horloge : on repart ici
+                debut = t
+                break
+        self._alerte = (c, debut)
+        return rangs[id(c)], [c], t - debut
 
     def _situer(self, t: float, niveaux=None):
         niveaux = niveaux or {}
         alertes = self.alertes(niveaux)
         if alertes:
-            self._etat = None                       # le cycle normal reprendra au retour
             return self._situer_alerte(t, alertes) + (True,)
         durees = [self.duree_entree(r, niveaux) for r in range(len(self.entrees))]
         cycle = sum(durees)
+        if self._alerte is not None:                # sortie d'alerte : l'entrée d'avant, au début
+            self._alerte = None
+            if self._reprise is not None:
+                self._etat = (self._reprise, t)
+            self._reprise = None
         if self._etat is None or t < self._etat[1] or t - self._etat[1] > 4 * cycle:
             x = t % cycle if cycle > 0 else 0
             for rang, d in enumerate(durees):

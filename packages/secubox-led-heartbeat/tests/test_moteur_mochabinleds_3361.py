@@ -222,10 +222,75 @@ def test_deux_alertes_alternent_30s():
 def test_couches_existantes_inchangees():
     cfg = lc.charger_config(None)
     o = lc.Ordonnanceur(cfg.couches, cfg)
-    cycle = sum(c.duree + cfg.repere_duree for c in cfg.couches)
-    for k in range(0, int(cycle * 20)):
-        t = k / 20
-        assert o.position(t) == o.position(t, {})
+    durees = [c.duree + cfg.repere_duree for c in cfg.couches]
+    cycle = sum(durees)
+
+    def sans_etat(t):                           # calcul d'avant #3361 : t % cycle
+        x = t % cycle
+        for c, d in zip(cfg.couches, durees):
+            if x < d:
+                return c.nom, x < cfg.repere_duree
+            x -= d
+    ecarts = [k for k in range(0, int(2 * cycle * 20))
+              if o.position(k / 20, {}) != sans_etat(k / 20)]
+    assert ecarts == []
     c, _ = couche("c", ["a", "b", "d"], palette=["vert", "jaune", "orange", "rouge"])
     assert c.image(0.0, [0, 2, 3]) == [cfg.couleur("vert"), cfg.couleur("orange"),
                                        cfg.couleur("rouge")]
+
+
+# ---------- continuité du mode alerte ----------
+
+def _trois():
+    a, _ = couche("a", ["sa"], duree=8)
+    b, _ = couche("b", ["sb"], duree=8)
+    c, _ = couche("c", ["sc"], duree=8)
+    return _ordo(a, b, c)
+
+
+def test_entree_alerte_commence_au_repere():
+    o, cfg = _trois()
+    calme = {"sa": 0, "sb": 0, "sc": 0}
+    for k in range(0, 50):
+        o.image(k / 10, calme)                  # au milieu de « a »
+    alerte = {"sa": 0, "sb": 0, "sc": 4}
+    assert o.position(5.0, alerte) == ("c", True)
+    assert o.position(5.0 + cfg.repere_duree + 0.1, alerte) == ("c", False)
+
+
+def test_ensemble_change_termine_le_creneau():
+    o, cfg = _trois()
+    r = cfg.repere_duree
+    deux = {"sa": 4, "sb": 0, "sc": 4}
+    assert o.position(0.0, deux)[0] == "a"
+    assert o.position(r + 3, deux) == ("a", False)
+    trois = {"sa": 4, "sb": 4, "sc": 4}          # b rejoint : a finit son créneau
+    assert o.position(r + 5, trois) == ("a", False)
+    assert o.position(r + 8.1, trois) == ("b", True)   # puis b, dans l'ordre
+    # b retirée en plein créneau : passage immédiat à la suivante, au repère
+    sans_b = {"sa": 4, "sb": 0, "sc": 4}
+    assert o.position(r + 8.5, sans_b) == ("c", True)
+    assert o.position(r + 8.5 + r + 0.1, sans_b) == ("c", False)
+
+
+def test_sortie_alerte_reprend_l_entree_au_debut():
+    o, cfg = _trois()
+    r = cfg.repere_duree
+    calme = {"sa": 0, "sb": 0, "sc": 0}
+    for k in range(0, int((r + 8 + 3) * 10)):
+        o.image(k / 10, calme)                  # au milieu de « b »
+    assert o.position(r + 8 + 3, calme)[0] == "b"
+    o.position(20.0, {"sa": 0, "sb": 0, "sc": 4})
+    o.position(25.0, {"sa": 0, "sb": 0, "sc": 4})
+    assert o.position(26.0, calme) == ("b", True)        # « b » reprise à son début
+    assert o.position(26.0 + r + 7.5, calme) == ("b", False)
+    assert o.position(26.0 + r + 8.1, calme) == ("c", True)
+
+
+def test_creneau_alerte_minimum():
+    many = [couche(f"m{i}", [f"s{i}"], duree=8)[0] for i in range(20)]
+    o, cfg = _ordo(*many)
+    niv = {f"s{i}": 4 for i in range(20)}
+    assert o.position(0.0, niv)[0] == "m0"
+    assert o.position(cfg.repere_duree + 1.9, niv)[0] == "m0"
+    assert o.position(cfg.repere_duree + 2.05, niv)[0] == "m1"

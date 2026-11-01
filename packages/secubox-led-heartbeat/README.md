@@ -96,6 +96,10 @@ lecture sans les couleurs. **Inconnu** (source absente, illisible ou périmée) 
 fixe, jamais vert. Avant chaque couche, un **repère** : N éclats blancs sur la LED 2 (N = rang
 de la couche, 3 au plus), LEDs 1 et 3 éteintes.
 
+Niveau 4 « critique » (#3361) : une alerte SOC critique non acquittée s'affiche en rouge, et sa couche
+passe seule à l'écran en éclats jusqu'au retour sous 4, y compris avec une palette personnalisée de
+4 entrées (le rouge y est ajouté en 5ᵉ).
+
 Défaut livré : couche `systeme` (CPU, mémoire, E/S ; vert → jaune → orange → rouge ;
 respiration ; 8 s) puis couche `trafic` (attaques, visites, alertes ; cyan → bleu → violet →
 rose ; pulsations ; 8 s).
@@ -109,7 +113,7 @@ rose ; pulsations ; 8 s).
 | `es` | `iowait` | `/proc/stat` (part iowait) | 5 / 15 / 30 % |
 | `attaques` | `compteur_json` | `/var/cache/secubox/metrics-cache.json`, `waf.waf_blocked` (débit par minute) | 1 / 10 / 60 par min |
 | `visites` | `jauge_json` | même cache, `connections.https` (connexions établies) | 1 / 20 / 100 |
-| `alertes` | `alertes_json` | `/var/lib/secubox/soc/alerts.json` (non acquittées ; une critique = 3) | 1 / 3 / 10 |
+| `alertes` | `alertes_json` | `/var/lib/secubox/soc/alerts.json` (non acquittées ; une critique = 4) | 1 / 3 / 10 |
 
 Le cache `metrics-cache.json` est rafraîchi par `secubox-metrics` (30 s) ; au-delà de
 `fraicheur_max` (300 s) la source passe à « inconnu » (horodatage interne `timestamp_epoch`
