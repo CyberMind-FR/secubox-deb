@@ -160,12 +160,17 @@ def test_compteurs_nft_somme_sbx_drop():
 
 @pytest.mark.parametrize("sortie", ["", "pas du json", "[]", "{}", '{"nftables": 3}',
                                     '{"nftables": [{"counter": {"name": "sbx_drop_x", "packets": "a"}}, 5, null]}'])
-def test_compteurs_nft_invalide_zero(sortie):
-    assert releves.compteurs_nft(sortie) == 0.0
+def test_compteurs_nft_invalide_none(sortie):
+    assert releves.compteurs_nft(sortie) is None
 
 
 def test_compteurs_nft_non_texte():
-    assert releves.compteurs_nft(None) == 0.0
+    assert releves.compteurs_nft(None) is None
+
+
+def test_compteurs_nft_sans_sbx_drop_zero():
+    sortie = json.dumps({"nftables": [{"counter": {"name": "autre", "packets": 3}}]})
+    assert releves.compteurs_nft(sortie) == 0.0
 
 
 def test_fifo_cle_absente_sans_blocage(racine):

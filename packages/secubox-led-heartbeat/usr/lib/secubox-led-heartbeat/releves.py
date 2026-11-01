@@ -202,21 +202,27 @@ def releves(racine: Path = Path("/"), wan: str = "eth2") -> dict[str, float]:
     return out
 
 
-def compteurs_nft(sortie_json: str) -> float:
+def compteurs_nft(sortie_json: str) -> float | None:
     """Somme des paquets des compteurs nftables dont le nom commence par `sbx_drop_`.
 
-    Prend la sortie de `nft -j list counters`. Toute entrée invalide donne 0.0.
+    Prend la sortie de `nft -j list counters`. Sortie illisible ou sans aucune entrée
+    « counter » exploitable (nom texte, paquets numériques) : None, jamais 0.0 — un
+    zéro ferait un faux pic au relevé valide suivant.
     """
     try:
         d = json.loads(sortie_json)
         total = 0.0
+        exploitables = 0
         for e in d["nftables"]:
             c = e.get("counter") if isinstance(e, dict) else None
             if not isinstance(c, dict):
                 continue
             nom, paquets = c.get("name"), _nombre(c.get("packets"))
-            if isinstance(nom, str) and nom.startswith(PREFIXE_NFT) and paquets is not None:
+            if not isinstance(nom, str) or paquets is None:
+                continue
+            exploitables += 1
+            if nom.startswith(PREFIXE_NFT):
                 total += float(paquets)
-        return total
+        return total if exploitables else None
     except (TypeError, ValueError, KeyError, RecursionError):
-        return 0.0
+        return None

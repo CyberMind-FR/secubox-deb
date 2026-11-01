@@ -119,6 +119,8 @@ case "$1" in
             apparmor_parser -r /etc/apparmor.d/secubox-led-flux \
               || echo "secubox-led-heartbeat : profil AppArmor non charge (apparmor_parser -r /etc/apparmor.d/secubox-led-flux)" >&2
         fi
+        # SupplementaryGroups=actord-ingest : sans actord le groupe manque et l'unite echoue.
+        getent group actord-ingest >/dev/null || addgroup --system actord-ingest
         systemctl enable --now secubox-led-flux.service || true
         systemctl enable secubox-led-pulse.service 2>/dev/null || true
         if [ -e /sys/class/leds/red:led1/brightness ]; then

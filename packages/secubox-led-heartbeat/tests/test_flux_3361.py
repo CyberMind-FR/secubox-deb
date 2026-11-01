@@ -121,9 +121,30 @@ def test_flux_json(tmp_path):
     c.passage(T0 + 20)
     d = json.loads((tmp_path / "run" / "flux.json").read_text())
     assert d["genere_le"] == T0 + 20
-    assert d["apprentissage"] is True
+    assert d["apprentissage"] == sorted(d["apprentissage"])
+    assert "reseau.connexions" in d["apprentissage"]
     assert d["niveaux"]["reseau.connexions"] == 0
     assert "fw.bloques" in d["niveaux"]
+
+
+def test_apprentissage_par_cle(tmp_path):
+    (tmp_path / "run").mkdir()
+    (tmp_path / "lib").mkdir()
+    valeurs = {"reseau.connexions": 5.0}
+    c = flux.Collecteur(chemin_flux=tmp_path / "run" / "flux.json",
+                        chemin_ref=tmp_path / "lib" / "reference.json",
+                        lire=lambda: dict(valeurs), nft=lambda: None)
+    c.demarrer(T0)
+    c.passage(T0 + 10)
+    t = T0 + 90000  # > 24 h, sans saut > 6 h : on rejoue toutes les heures
+    for h in range(1, 26):
+        c.passage(T0 + 10 + 3600 * h)
+    valeurs["adguard.trackers"] = 2.0  # source apparue tard
+    c.passage(t + 100)
+    d = json.loads((tmp_path / "run" / "flux.json").read_text())
+    assert d["apprentissage"] == ["adguard.trackers"]
+    assert "fw.bloques" not in d["niveaux"]
+    assert d["niveaux"]["reseau.connexions"] == 0
 
 
 def test_reference_corrompue_demarre_vide(tmp_path):
@@ -133,6 +154,62 @@ def test_reference_corrompue_demarre_vide(tmp_path):
     c = _collecteur(tmp_path)
     c.demarrer(T0)
     assert c.ref.vers_dict()["cles"] == {}
+
+
+def _sortie_nft(paquets):
+    return json.dumps({"nftables": [{"counter": {"name": "sbx_drop_input", "packets": paquets}}]})
+
+
+def test_nft_invalide_sans_faux_pic(tmp_path, monkeypatch):
+    """Valide, puis invalide, puis valide : la sortie illisible ne vaut pas 0 (faux pic)."""
+    (tmp_path / "run").mkdir()
+    (tmp_path / "lib").mkdir()
+    # un relevé par heure (sorti de l'apprentissage après 24 h), 60 blocages par heure
+    sorties = iter([_sortie_nft(100000 + 60 * i) for i in range(40)] + ["pas du json"]
+                   + [_sortie_nft(100000 + 60 * i) for i in range(41, 51)])
+    monkeypatch.setattr(flux.subprocess, "run", lambda *a, **k: _R(0, next(sorties)))
+    c = flux.Collecteur(chemin_flux=tmp_path / "run" / "flux.json",
+                        chemin_ref=tmp_path / "lib" / "reference.json",
+                        lire=dict, nft=flux.lire_nft)
+    c.demarrer(T0)
+    for i in range(1, 52):
+        c.passage(T0 + 3600 * i)
+        n = json.loads((tmp_path / "run" / "flux.json").read_text())["niveaux"]
+        assert (n.get("fw.bloques") or 0) < 2
+
+
+class _R:
+    def __init__(self, rc, out):
+        self.returncode, self.stdout = rc, out
+
+
+def test_lire_nft_code_retour(monkeypatch):
+    monkeypatch.setattr(flux.subprocess, "run", lambda *a, **k: _R(1, '{"nftables": []}'))
+    assert flux.lire_nft() is None
+
+
+def test_lire_nft_delai(monkeypatch):
+    def lent(*a, **k):
+        raise flux.subprocess.TimeoutExpired(cmd="nft", timeout=5)
+    monkeypatch.setattr(flux.subprocess, "run", lent)
+    assert flux.lire_nft() is None
+
+
+def test_lire_nft_trop_gros(monkeypatch):
+    monkeypatch.setattr(flux.subprocess, "run", lambda *a, **k: _R(0, " " * (1024 * 1024 + 1)))
+    assert flux.lire_nft() is None
+
+
+def test_lire_nft_invalide(monkeypatch):
+    monkeypatch.setattr(flux.subprocess, "run", lambda *a, **k: _R(0, "pas du json"))
+    assert flux.lire_nft() is None
+
+
+def test_reference_illisible_message(tmp_path, capsys):
+    p = tmp_path / "reference.json"
+    p.write_text("{tronq")
+    assert flux.charger_reference(p).vers_dict()["cles"] == {}
+    assert "référence illisible, réapprentissage" in capsys.readouterr().err
 
 
 def test_nft_absent_ou_lent(monkeypatch):
@@ -186,4 +263,6 @@ def test_postinst_compte_et_activation():
     garde = p.index("/usr/sbin/secubox-led-board; then")
     assert p.index("adduser --system --group --no-create-home --home /nonexistent") > garde
     assert "systemctl enable --now secubox-led-flux.service || true" in p
+    g = p.index("getent group actord-ingest >/dev/null || addgroup --system actord-ingest")
+    assert garde < g < p.index("systemctl enable --now secubox-led-flux.service")
     assert "secubox-led-flux.service" in (PAQUET / "debian" / "prerm").read_text()

@@ -6,7 +6,10 @@
 
 Toutes les 10 s : relevés bruts (releves.py + compteurs nftables sbx_drop_*), conversion
 des compteurs cumulés en débit par minute, niveau 0..4 de chaque mesure contre la
-référence propre à la box, puis publication atomique de /run/secubox-leds/flux.json.
+référence propre à la box, puis publication atomique de /run/secubox-leds/flux.json :
+  {"genere_le": <epoch>, "niveaux": {"<cle>": 0..4|null},
+   "apprentissage": [<clés encore en apprentissage, triées>]}
+Une source apparue tard n'apprend que pour elle : le moteur colore clé par clé.
 Le niveau est évalué AVANT l'observation du même relevé (contrat de Reference).
 La référence est sauvée au démarrage, toutes les 15 min et à l'arrêt (SIGTERM).
 """
@@ -28,6 +31,7 @@ NFT = "/usr/sbin/nft"
 CHEMIN_FLUX = Path("/run/secubox-leds/flux.json")
 CHEMIN_REF = Path("/var/lib/secubox-leds/reference.json")
 LIMITE_REF = 16 * 1024 * 1024
+LIMITE_NFT = 1024 * 1024  # sortie de nft au-delà : relevé ignoré
 
 # Compteurs cumulés : convertis en débit par minute avant niveau et observation.
 CUMULES = frozenset({"reseau.octets_in", "reseau.octets_out", "fw.paquets_in", "fw.paquets_out",
@@ -104,13 +108,14 @@ def ecrire_atomique(chemin, donnees, mode):
 
 
 def lire_nft():
-    """Somme des compteurs nftables sbx_drop_* ; None si nft échoue ou dépasse 5 s."""
+    """Somme des compteurs nftables sbx_drop_* ; None si nft échoue, dépasse 5 s,
+    renvoie plus de 1 Mio ou une sortie inexploitable (fw.bloques absent du relevé)."""
     try:
         r = subprocess.run([NFT, "-j", "list", "counters"], capture_output=True, text=True,
                            timeout=DELAI_NFT_S, check=False, env={"PATH": "/usr/sbin:/usr/bin"})
     except (OSError, subprocess.SubprocessError):
         return None
-    if r.returncode != 0:
+    if r.returncode != 0 or len(r.stdout) > LIMITE_NFT:
         return None
     return _releves.compteurs_nft(r.stdout)
 
@@ -121,10 +126,17 @@ def charger_reference(chemin):
         with open(chemin, "rb") as f:
             brut = f.read(LIMITE_REF + 1)
         if len(brut) > LIMITE_REF:
-            return Reference()
-        return Reference.depuis_dict(json.loads(brut))
-    except (OSError, ValueError, RecursionError):
+            raise ValueError("trop gros")
+        d = json.loads(brut)
+    except FileNotFoundError:
         return Reference()
+    except (OSError, ValueError, RecursionError) as e:
+        print(f"secubox-led-flux : référence illisible, réapprentissage ({e})", file=sys.stderr)
+        return Reference()
+    ref = Reference.depuis_dict(d)
+    if d and not ref.vers_dict()["cles"]:
+        print("secubox-led-flux : référence illisible, réapprentissage", file=sys.stderr)
+    return ref
 
 
 class Collecteur:
@@ -158,7 +170,7 @@ class Collecteur:
         if bloques is not None:
             valeurs["fw.bloques"] = float(bloques)
         niveaux = pas_de_collecte(self.ref, self.prec, valeurs, t, self.planchers)
-        apprentissage = any(self.ref.en_apprentissage(c, t) for c in valeurs)
+        apprentissage = sorted(c for c in valeurs if self.ref.en_apprentissage(c, t))
         try:
             ecrire_atomique(self.chemin_flux, {"genere_le": t, "niveaux": niveaux,
                                                "apprentissage": apprentissage}, 0o644)
