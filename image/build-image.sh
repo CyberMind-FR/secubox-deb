@@ -1941,6 +1941,11 @@ EXTLINUX
 
   # Créer boot.scr pour U-Boot (alternative à extlinux)
   # Utiliser le boot.cmd spécifique au board s'il existe
+  # Fichiers système propres au board (hooks noyau/initramfs, fw_env.config…), #3271
+  if [[ -d "${SCRIPT_DIR}/../board/${BOARD}/etc" ]]; then
+    cp -a "${SCRIPT_DIR}/../board/${BOARD}/etc/." "${MNT}/etc/"
+    log "Fichiers etc/ du board ${BOARD} copiés"
+  fi
   BOARD_BOOTCMD="${SCRIPT_DIR}/../board/${BOARD}/boot.cmd"
   if [[ -f "$BOARD_BOOTCMD" ]]; then
     log "Utilisation du boot.cmd spécifique au board ${BOARD}"
