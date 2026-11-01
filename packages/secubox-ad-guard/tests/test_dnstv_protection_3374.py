@@ -240,8 +240,10 @@ def test_usager_pause_d_une_tv(usager, monde):
     assert any(x["origine"] == "usager" and x["action"] == "pause" for x in J.lire(monde["etat"], 0))
 
 
-def test_usager_toutes_en_observe(usager):
-    r = usager.post("/adblock-tv/protection/usager/debloquer", json={"tv": "toutes", "geste": "observe"})
+def test_usager_toutes_en_pause_jamais_en_observe(usager):
+    """Passe 2 (S3) : l'usager met toutes les TV en pause ; le retour en observation sans échéance lui est refusé."""
+    assert usager.post("/adblock-tv/protection/usager/debloquer", json={"tv": "toutes", "geste": "observe"}).status_code == 422
+    r = usager.post("/adblock-tv/protection/usager/debloquer", json={"tv": "toutes", "geste": "pause", "minutes": 240})
     assert r.status_code == 200 and "toutes les TV" in r.json()["message"]
     assert [c["mode"] for c in dnstv.lire_etat()[0]["clients"]] == ["observe", "observe", "off"]
 

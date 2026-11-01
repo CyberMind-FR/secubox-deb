@@ -124,9 +124,9 @@ def _corps(*args):
 
 def test_corps_de_deblocage_borne():
     assert _corps("tv-salon", "pause", 60) == {"tv": "tv-salon", "geste": "pause", "minutes": 60}
-    assert _corps("toutes", "observe", None) == {"tv": "toutes", "geste": "observe"}
-    for args in (("tv-salon", "pause", 30), ("tv-salon", "proteger", 60), ("", "observe", None), ("x" * 41, "observe", None),
-                 ("TV salon", "observe", None)):
+    assert _corps("toutes", "pause", 1440) == {"tv": "toutes", "geste": "pause", "minutes": 1440}
+    for args in (("tv-salon", "pause", 30), ("tv-salon", "pause", 2880), ("tv-salon", "proteger", 60), ("toutes", "observe", None),
+                 ("", "pause", 15), ("x" * 41, "pause", 15), ("TV salon", "pause", 15)):
         assert _corps(*args) is None, args
 
 
@@ -134,8 +134,9 @@ def test_carte_debloque_dans_l_ecran_securite():
     html = (WWW / "index.html").read_text(encoding="utf-8")
     sec = html[html.index('id="ecran-securite"'):html.index('id="ecran-reseau"')]
     assert "Ça ne marche plus ? Je débloque" in sec and 'id="k-tv"' in sec and 'id="k-retour"' in sec
-    for m in ("15", "60", "240"):
+    for m in ("15", "60", "240", "1440"):
         assert f'data-minutes="{m}"' in sec
+    assert 'id="k-observe"' not in sec                                     # l'usager ne repasse jamais une TV en observation sans échéance
     assert "bloque les pubs que la TV va chercher, pas celles qu'un service insère dans sa propre vidéo" in sec
     js = (WWW / "kiosque.js").read_text(encoding="utf-8")
     assert "$('k-retour').textContent" in js and "TV_API + '/tv'" in js

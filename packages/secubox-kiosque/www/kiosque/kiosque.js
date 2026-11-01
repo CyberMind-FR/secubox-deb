@@ -189,17 +189,15 @@ async function chargerBox(nom) {
   $('liaison').textContent = nom + ' via le maître · ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
-// ---- « Ça ne marche plus ? Je débloque » (#3374) : route d'usager BORNÉE (pause minutée ou observation, jamais de durcissement) ----
+// ---- « Ça ne marche plus ? Je débloque » (#3374) : route d'usager BORNÉE (pause de 24 h au plus, jamais de durcissement) ----
 const TV_API = '/api/v1/ad-guard/adblock-tv/protection/usager';
-const DUREES = [15, 60, 240];
+const DUREES = [15, 60, 240, 1440];          // 24 h au plus : l'usager ne fait qu'une pause (#3374)
 const ID_TV = /^(toutes|[a-z0-9-]{1,40})$/;
 
 // Fonction pure (testée sous node) : le corps de la demande, ou null si le geste sort des bornes.
 function corpsDeblocage(tv, geste, minutes) {
   if (typeof tv !== 'string' || !ID_TV.test(tv)) return null;
-  if (geste === 'pause') return DUREES.includes(minutes) ? { tv, geste, minutes } : null;
-  if (geste === 'observe') return { tv, geste };
-  return null;
+  return geste === 'pause' && DUREES.includes(minutes) ? { tv, geste, minutes } : null;
 }
 
 async function chargerTv() {
@@ -271,8 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
   for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, reveil, { passive: true });
   setInterval(horloge, 10000);
   for (const b of document.querySelectorAll('#debloque [data-minutes]')) b.addEventListener('click', () => debloquer('pause', Number(b.dataset.minutes)));
-  const obs = $('k-observe');
-  if (obs) obs.addEventListener('click', () => debloquer('observe', null));
   chargerTv();
   reveil();
   rafraichir();

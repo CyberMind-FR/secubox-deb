@@ -243,7 +243,7 @@ def tout_en_observe(corps: AppareilIn, jeton=Depends(require_jwt)):
 def pause(corps: PauseIn, jeton=Depends(require_jwt)):
     """Pause minutée (15, 60 ou 240 min) : les appareils protégés passent en OBSERVE, reprise automatique à l'échéance."""
     if corps.minutes not in dnstv_protection.DUREES_MIN:
-        raise HTTPException(422, "durée de pause : 15, 60 ou 240 minutes")
+        raise HTTPException(422, "durée de pause : 15 min, 1 h, 4 h ou 24 h")
     maintenant = int(time.time())
     touches, app, _ = _geste(lambda e, p: dnstv_protection.mettre_en_pause(e, p, _cible(corps.appareil), corps.minutes, maintenant, "admin"),
                              "pause", "admin", dnstv_protection.duree_lisible(corps.minutes), _r._acteur(jeton), corps.minutes)
@@ -360,7 +360,7 @@ def diagnostic(lecteur=Depends(_r.require_lecture_nominative)):
 # ── route LAMBDA « Ça ne marche plus ? Je débloque » ─────────────────────────────────────────────────
 # Garde `require_personne` (AGENTS.md : garde d'usager posée EXPLICITEMENT) : une personne admise (profil user ou plus). Refusés :
 # le tableau de bord anonyme (aucune session), l'invité, la session plafonnée, le jeton à portée et le porteur délégué du pilotage.
-# Bornée : deux gestes qui RELÂCHENT la protection (pause minutée, retour en observation), jamais de durcissement, de liste de
+# Bornée : un seul geste, une PAUSE de 24 h au plus avec reprise automatique (décision du propriétaire), jamais de durcissement, de liste de
 # domaines ni d'historique ; la liste des TV ne donne que leur NOM. Débit limité.
 
 DEBIT_FENETRE_S = 600
@@ -370,8 +370,9 @@ _DEBIT: dict = {}
 _DEBIT_VERROU = threading.Lock()
 
 
-def _debit(sub: str, maintenant: float) -> None:
-    """5 gestes par porteur et 20 pour la box sur 10 minutes ; 429 au-delà."""
+def _debit(sub: str, maintenant: float, compter: bool = True) -> None:
+    """5 gestes par porteur et 20 pour la box sur 10 minutes ; 429 au-delà. `compter=False` vérifie seulement : un geste refusé
+    (404, 409, 422) n'est pas décompté, seul un geste appliqué l'est."""
     with _DEBIT_VERROU:
         for cle, plafond in ((sub, DEBIT_PAR_PORTEUR), ("*", DEBIT_BOX)):
             q = _DEBIT.setdefault(cle, collections.deque())
@@ -379,6 +380,8 @@ def _debit(sub: str, maintenant: float) -> None:
                 q.popleft()
             if len(q) >= plafond:
                 raise HTTPException(429, "trop de demandes : réessayer dans quelques minutes")
+        if not compter:
+            return
         for cle in (sub, "*"):
             _DEBIT[cle].append(maintenant)
         if len(_DEBIT) > 1000:                                          # mémoire bornée
@@ -389,8 +392,8 @@ def _debit(sub: str, maintenant: float) -> None:
 class UsagerIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tv: str = Field(min_length=1, max_length=40)                       # identifiant d'une TV (liste minimale) ou « toutes »
-    geste: Literal["pause", "observe"]
-    minutes: Optional[int] = None
+    geste: Literal["pause"]                                           # S3 (décision du propriétaire) : l'usager ne fait qu'une PAUSE
+    minutes: int                                                      # 15, 60, 240 ou 1440 (24 h au plus), reprise automatique
 
 
 def _tv_du_perimetre(etat: dict) -> dict:
@@ -417,12 +420,13 @@ def usager_tv(personne=Depends(require_personne)):
 
 @router.post("/protection/usager/debloquer")
 def usager_debloquer(corps: UsagerIn, personne=Depends(require_personne)):
-    """« Ça ne marche plus ? Je débloque » : pause minutée ou retour en observation d'UNE TV ou de toutes. Journalisé (origine usager),
-    appliqué et audité par le contrôleur root."""
-    if corps.geste == "pause" and corps.minutes not in dnstv_protection.DUREES_MIN:
-        raise HTTPException(422, "durée de pause : 15, 60 ou 240 minutes")
-    if corps.geste == "observe" and corps.minutes is not None:
-        raise HTTPException(422, "pas de durée pour un retour en observation")
+    """« Ça ne marche plus ? Je débloque » : PAUSE minutée (24 h au plus, reprise automatique) d'UNE TV ou de toutes. Le retour en
+    observation sans échéance reste réservé à l'administrateur. Audité (audit-protection), journalisé (origine usager), appliqué."""
+    if corps.minutes not in dnstv_protection.DUREES_MIN:
+        raise HTTPException(422, "durée de pause : 15 min, 1 h, 4 h ou 24 h")
+    sub = str(personne.get("sub") or "") if isinstance(personne, dict) else ""
+    if not sub:
+        raise HTTPException(403, "session sans identité : geste refusé")
     etat, erreur = dnstv.lire_etat()
     if erreur:
         raise HTTPException(409, "état illisible")
@@ -433,19 +437,13 @@ def usager_debloquer(corps: UsagerIn, personne=Depends(require_personne)):
         noms, libelle = [perimetre[corps.tv]], perimetre[corps.tv]
     else:
         raise HTTPException(404, "TV inconnue")
-    sub = str((personne or {}).get("sub") or "?") if isinstance(personne, dict) else "?"
-    _debit(sub, time.monotonic())
+    _debit(sub, time.monotonic(), compter=False)
     acteur = _r._acteur(personne)
-    if corps.geste == "pause":
-        maintenant = int(time.time())
-        _geste(lambda e, p: dnstv_protection.mettre_en_pause(e, p, noms, corps.minutes, maintenant, "usager"), "pause", "usager",
-               f"{dnstv_protection.duree_lisible(corps.minutes)} par {acteur}", acteur, corps.minutes)
-        message = f"protection en pause pour {libelle} pendant {dnstv_protection.duree_lisible(corps.minutes)}"
-        jusqu_a = maintenant + corps.minutes * 60
-    else:
-        _geste(lambda e, p: dnstv_protection.passer_en_observe(e, p, noms), "observe", "usager", f"retour en observation par {acteur}", acteur)
-        message = f"{libelle} : protection retirée, la TV est seulement observée" if corps.tv != "toutes" \
-            else "toutes les TV : protection retirée, elles sont seulement observées"
-        jusqu_a = None
-    logger.info("déblocage usager (%s) : %s %s", acteur, corps.geste, corps.tv)
+    maintenant = int(time.time())
+    _geste(lambda e, p: dnstv_protection.mettre_en_pause(e, p, noms, corps.minutes, maintenant, "usager"), "pause", "usager",
+           f"{dnstv_protection.duree_lisible(corps.minutes)} par {acteur}", acteur, corps.minutes)
+    _debit(sub, time.monotonic())                                     # décompté seulement une fois le geste appliqué
+    message = f"protection en pause pour {libelle} pendant {dnstv_protection.duree_lisible(corps.minutes)}"
+    jusqu_a = maintenant + corps.minutes * 60
+    logger.info("déblocage usager (%s) : pause %s min %s", acteur, corps.minutes, corps.tv)
     return {"message": message, "jusqu_a": jusqu_a, "rappel": dnstv_protection.MESSAGE_HONNETE}

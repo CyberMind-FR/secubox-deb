@@ -28,7 +28,7 @@ except ImportError:                                   # lancé hors paquet
 
 FICHIER_PAUSES = "pauses.json"
 FICHIER_EXCEPTIONS = "exceptions.json"
-DUREES_MIN = (15, 60, 240)
+DUREES_MIN = (15, 60, 240, 1440)                     # 24 h au plus (décision du propriétaire, #3374)
 MODES_PROTEGES = ("auto", "block")                    # ce qu'une pause ou un retour en OBSERVE relâche
 TYPES = ("autoriser", "bloquer")
 ORIGINES = ("admin", "usager", "auto")
@@ -64,7 +64,7 @@ def mettre_en_pause(etat: dict, pauses: list, noms: Optional[Iterable[str]], min
     """Passe en `observe` les adresses protégées (auto, block) des appareils choisis (tous si `noms` est None) jusqu'à l'échéance.
     Un appareil déjà en pause voit son échéance reportée ; ses modes d'avant sont conservés. Rend les noms touchés."""
     if minutes not in DUREES_MIN:
-        raise ErreurProtection("durée de pause : 15, 60 ou 240 minutes")
+        raise ErreurProtection("durée de pause : 15 min, 1 h, 4 h ou 24 h")
     if origine not in ORIGINES:
         raise ErreurProtection("origine inconnue")
     fin = int(maintenant) + minutes * 60

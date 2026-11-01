@@ -15,7 +15,7 @@
   `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, adresses de documentation, aucune écriture.
 -->
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JIODXi9umGdt1/I7OHKNklaftmneHfe5ZyQ+I4ffg2c='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-iv+SN18mrkKX2Gu4kjgJgJCr4S94V37cuP+tkj1taJs='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -136,9 +136,9 @@
           <button type="button" data-minutes="15">Pause 15 min</button>
           <button type="button" data-minutes="60">Pause 1 h</button>
           <button type="button" data-minutes="240">Pause 4 h</button>
-          <button type="button" id="debloque-observe" class="danger">Repasser en observation</button>
+          <button type="button" data-minutes="1440">Pause 24 h</button>
         </div>
-        <p class="note">La pause reprend toute seule à l'échéance. Aucun réglage ne peut être durci d'ici.</p>
+        <p class="note">La pause reprend toute seule à l'échéance (24 h au plus). Aucun réglage ne peut être durci d'ici ; le retour en OBSERVE sans échéance se fait dans l'onglet Protection.</p>
       </div>
       <div class="bandeau ok" id="debloque-retour" role="status" aria-live="polite" hidden></div>
     </div>
@@ -378,7 +378,6 @@
   }
   Array.prototype.forEach.call(document.querySelectorAll('#debloque-panneau [data-minutes]'),function(b){
     b.addEventListener('click',function(){debloquer({tv:el('debloque-tv').value,geste:'pause',minutes:Number(b.getAttribute('data-minutes'))});});});
-  el('debloque-observe').addEventListener('click',function(){debloquer({tv:el('debloque-tv').value,geste:'observe'});});
 
   // ── équipements ──
   function v4(ip){return ip.indexOf(':')<0;}
@@ -548,7 +547,7 @@
       var tc=h('td'),s=h('select',{'aria-label':'Mode de '+a.nom});['observe','block','auto'].forEach(function(m){var o=h('option',{value:m},MODES[m]);if(m===a.mode)o.selected=true;s.appendChild(o);});
       var ok=h('button',{type:'button',class:'petit'},'Appliquer');ok.addEventListener('click',function(){changerMode(a,s.value);});tc.appendChild(s);tc.appendChild(document.createTextNode(' '));tc.appendChild(ok);tr.appendChild(tc);
       var tg=h('td'),act=h('div',{class:'actions'});
-      [[15,'15 min'],[60,'1 h'],[240,'4 h']].forEach(function(d){var b=h('button',{type:'button',class:'petit'},'Pause '+d[1]);b.addEventListener('click',function(){geste('/protection/pause',{appareil:a.nom,minutes:d[0]},'Pause '+d[1]).catch(function(){});});act.appendChild(b);});
+      [[15,'15 min'],[60,'1 h'],[240,'4 h'],[1440,'24 h']].forEach(function(d){var b=h('button',{type:'button',class:'petit'},'Pause '+d[1]);b.addEventListener('click',function(){geste('/protection/pause',{appareil:a.nom,minutes:d[0]},'Pause '+d[1]).catch(function(){});});act.appendChild(b);});
       if(p){var r=h('button',{type:'button',class:'petit'},'Reprendre');r.addEventListener('click',function(){geste('/protection/reprendre',{appareil:a.nom},'Protection reprise').catch(function(){});});act.appendChild(r);}
       var o2=h('button',{type:'button',class:'petit danger'},'OBSERVE');o2.addEventListener('click',function(){geste('/protection/observe',{appareil:a.nom},'Retour en OBSERVE').catch(function(){});});act.appendChild(o2);
       tg.appendChild(act);tr.appendChild(tg);tb.appendChild(tr);});
