@@ -63,7 +63,7 @@ def test_reference_classe_les_domaines_mesures_sur_gk2():
     assert categorie_ref("metaproxy.francetvpub.fr") == "PUBLICITE"
     assert categorie_ref("audiences.free.fr") == "TRACKING"
     assert categorie_ref("stats.oqee.net") == "TRACKING"
-    assert categorie_ref("imasdk.googleapis.com") == "PUBLICITE"
+    assert categorie_ref("imasdk.googleapis.com") == "STREAMING"            # #2146 : protégé (B2)
     assert categorie_ref("m.media-amazon.com") == "CDN"
 
 
@@ -82,7 +82,8 @@ def test_aucun_domaine_protege_ne_devient_repli_bloquable():
     assert dec["license.oqee.net"]["type"] == "repli-protege"          # DRM
     assert dec["m.media-amazon.com"]["type"] == "repli-protege"        # CDN
     assert all(d["type"] == "repli" for k, d in dec.items() if k in (
-        "metaproxy.francetvpub.fr", "audiences.free.fr", "stats.oqee.net", "imasdk.googleapis.com"))
+        "metaproxy.francetvpub.fr", "audiences.free.fr", "stats.oqee.net"))
+    assert dec["imasdk.googleapis.com"]["type"] == "repli-protege"
     assert not D.candidats_repli(list(dec.values()))  or all(
         c["categorie"] not in T.PROTEGEES for c in D.candidats_repli(list(dec.values())))
 
