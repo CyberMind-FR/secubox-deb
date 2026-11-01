@@ -12,6 +12,7 @@ catégorie bloquable ; la garde du lot 2 (`dnstv_taxonomie.refus_auto`) reste se
 from __future__ import annotations
 
 import ipaddress
+import bisect
 import contextlib
 import json
 import os
@@ -84,18 +85,26 @@ def correler(evts: List[dict], categorie: Callable[[str], str], fenetre: int = F
     Un domaine protégé (hors INCONNU) est `repli-protege` : jamais candidat, seulement expliqué."""
     e = sorted(({"ts": int(x["ts"]), "domaine": dnstv.domaine_reel(str(x["domaine"]).lower().rstrip(".")), "decision": x.get("decision", "")}
                 for x in evts if x.get("domaine")), key=lambda x: x["ts"])
+    cats: Dict[str, str] = {}
+
+    def cat(d: str) -> str:
+        if d not in cats:
+            cats[d] = categorie(d)
+        return cats[d]
     coupures: List[Tuple[int, str]] = []
     for x in e:
-        if x["decision"] == "BLOCKED" and categorie(x["domaine"]) in PUB:
+        if x["decision"] == "BLOCKED" and cat(x["domaine"]) in PUB:
             if not coupures or x["ts"] - coupures[-1][0] > ECART_COUPURE_S:
                 coupures.append((x["ts"], x["domaine"]))
     refuses = {x["domaine"] for x in e if x["decision"] == "BLOCKED"}
+    horo = [x["ts"] for x in e]
     trouves: Dict[str, dict] = {}
-    for t0, refus in coupures:
-        avant = {x["domaine"] for x in e if t0 - AVANT_S <= x["ts"] <= t0 and x["decision"] != "BLOCKED"}
+    for t0, refus in coupures:                         # I3 : fenêtre [t0 - 10 min, t0 + 30 s] par bissection, jamais toute la liste
+        a, b, c = bisect.bisect_left(horo, t0 - AVANT_S), bisect.bisect_right(horo, t0), bisect.bisect_right(horo, t0 + fenetre)
+        avant = {x["domaine"] for x in e[a:b] if x["decision"] != "BLOCKED"}
         vus: Set[str] = set()
-        for x in e:
-            if not (t0 < x["ts"] <= t0 + fenetre) or x["decision"] == "BLOCKED":
+        for x in e[b:c]:
+            if x["decision"] == "BLOCKED":
                 continue
             d = x["domaine"]
             if d in avant or d in vus or d in refuses:
@@ -104,10 +113,10 @@ def correler(evts: List[dict], categorie: Callable[[str], str], fenetre: int = F
             if d in trouves:
                 trouves[d]["coupures"] += 1
                 continue
-            cat = categorie(d)
-            protege = cat in dnstv_taxonomie.PROTEGEES and cat != "INCONNU"
+            cd = cat(d)
+            protege = cd in dnstv_taxonomie.PROTEGEES and cd != "INCONNU"
             delai = x["ts"] - t0
-            trouves[d] = {"type": "repli-protege" if protege else "repli", "domaine": d, "categorie": cat, "refus_domaine": refus,
+            trouves[d] = {"type": "repli-protege" if protege else "repli", "domaine": d, "categorie": cd, "refus_domaine": refus,
                           "refus_ts": t0, "ts": x["ts"], "delai_s": delai, "coupures": 1, "raison": _raison(delai, refus)}
     for d in trouves.values():
         d["confiance"] = 40 + (30 if d["categorie"] in PUB else 0) + (20 if d["coupures"] >= 2 else 0)
@@ -293,6 +302,7 @@ CREATE TABLE IF NOT EXISTS decouvertes (id INTEGER PRIMARY KEY AUTOINCREMENT, ts
     delai_s INTEGER NOT NULL DEFAULT 0, coupures INTEGER NOT NULL DEFAULT 1, etat TEXT NOT NULL DEFAULT 'nouvelle',
     UNIQUE (mac, type, domaine, refus_ts));
 CREATE TABLE IF NOT EXISTS voisins (adresse TEXT PRIMARY KEY, mac TEXT NOT NULL, vu INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
 """
 
 
@@ -440,7 +450,18 @@ class MagasinDPI:
                                 [*a, max(1, min(int(limite), 500))]).fetchall()
         return [dict(zip(cols, row)) for row in lignes]
 
+    def curseur(self, mac: str) -> int:
+        with self._cx() as cx:
+            r = cx.execute("SELECT valeur FROM meta WHERE cle=?", ("curseur:" + mac,)).fetchone()
+        return int(r[0]) if r else 0
+
+    def poser_curseur(self, mac: str, ts: int) -> None:
+        with self._cx() as cx:
+            cx.execute("INSERT OR REPLACE INTO meta VALUES (?,?)", ("curseur:" + mac, str(int(ts))))
+
     def charger_voisins(self) -> Dict[str, Tuple[str, int]]:
+        if not self._lisible():
+            return {}
         with self._cx() as cx:
             return {a: (m, v) for a, m, v in cx.execute("SELECT adresse, mac, vu FROM voisins")}
 
@@ -548,9 +569,15 @@ def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str
                                                                  "dns-chiffre": "DNS chiffré (DoH/DoT) : la box ne voit pas ces requêtes",
                                                                  "contournement": "DNS envoyé à un autre résolveur que la box"}[x["type"]]}
                                     for x in cs])
-        evts = mag_dns.evenements(sorted(adr.get(m, ())), maintenant - 3600)
-        dec = correler(evts, categorie)
+        # I3 : incrémental — on ne relit que depuis la dernière coupure close (curseur par MAC), et une coupure n'est traitée qu'une fois
+        # sa fenêtre de 30 s écoulée.
+        curseur = mag.curseur(m)
+        evts = mag_dns.evenements(sorted(adr.get(m, ())), max(maintenant - 3600, curseur - AVANT_S) if curseur else maintenant - 3600)
+        dec = [d for d in correler(evts, categorie) if curseur < d["refus_ts"] <= maintenant - FENETRE_REPLI_S]
         mag.ajouter_decouvertes(m, dec)
+        closes = [x for x in evts if x.get("decision") == "BLOCKED" and int(x["ts"]) <= maintenant - FENETRE_REPLI_S]
+        if closes:
+            mag.poser_curseur(m, max(curseur, max(int(x["ts"]) for x in closes)))
         refus = {d["refus_ts"] for d in dec}
         if refus and fl:
             mag.ajouter_decouvertes(m, [dict(s, domaine=s["hote"], ts=maintenant, confiance=60, refus_ts=s["refus_ts"][0])

@@ -149,6 +149,33 @@ def rafraichir_dpi(now: int, voisins=None, executer=None) -> None:
         print(f"passage DPI : {type(e).__name__}: {e}", file=sys.stderr)
 
 
+def replis_du_passage(etat: dict):
+    """I3 : découvertes `repli` nouvelles rangées par le passage DPI, par appareil (slug) ; jamais recalculées ici."""
+    try:
+        mag = dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db", lecture_seule=True)
+        slugs = {c["mac"]: dnstv._slug(c["nom"]) for c in etat["clients"] if c.get("mac")}
+        out, vus = {}, []
+        for d in mag.decouvertes(type_="repli", limite=500):
+            if d["etat"] == "nouvelle" and d["mac"] in slugs:
+                out.setdefault(slugs[d["mac"]], []).append(d)
+                vus.append((d["mac"], d["domaine"]))
+        return out, vus
+    except Exception as e:                                   # noqa: BLE001 — jamais de panne du moteur par le DPI
+        print(f"replis illisibles : {type(e).__name__}", file=sys.stderr)
+        return {}, []
+
+
+def marquer_replis(vus: list) -> None:
+    if not vus:
+        return
+    try:
+        mag = dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db")
+        for mac, domaine in vus:
+            mag.marquer(mac, domaine, "candidat")
+    except Exception as e:                                   # noqa: BLE001
+        print(f"replis non marqués : {type(e).__name__}", file=sys.stderr)
+
+
 def suspendre_forcage(changements: list, etat: dict, now: int) -> bool:
     """Lecture cassée (contenu habituel plus demandé) sur un appareil forcé : forçage du DNS suspendu 24 h (lot 4). Rend vrai si écrit."""
     macs = dnstv_contournement.a_suspendre(changements, etat)
@@ -238,7 +265,9 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
                 except dnstv_regles.ErreurRegle as e:
                     print(f"ajout automatique impossible : {e}", file=sys.stderr)     # plafond de règles : l'expiration et les signaux ci-dessous continuent
             # 2. règles : candidats, essais, signaux, agrégation
-            res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now, taxo=taxo)
+            replis, a_marquer = replis_du_passage(etat)
+            res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now, taxo=taxo, replis=replis)
+            marquer_replis(a_marquer)
             if res["changements"]:
                 dnstv_regles.ecrire(regles)
                 try:

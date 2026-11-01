@@ -91,7 +91,7 @@ def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note
         note(regles.transiter(r["id"], "confirme", "auto", "essai sans régression", maintenant), "essai", "confirme", "essai sans régression")
 
 
-def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None) -> dict:
+def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=None) -> dict:
     """Un passage du moteur. `taxo` (#3374) : taxonomie complète (corrections manuelles comprises) ; à défaut, celle des listes du paquet
     avec le classeur `classer`. Garde : un domaine de catégorie protégée n'entre jamais SEUL en essai ni en confirmation."""
     changements, applique, candidats = [], False, 0
@@ -135,7 +135,8 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None) -> dict
                 note(r, "candidat", "essai", "essai automatique")
         # Lot 4 (#3374, arbitrage 3) : anti faux repli — un domaine PUB apparu juste après un refus publicitaire est proposé puis mis à
         # l'essai ; garde inchangée (catégorie protégée jamais en essai), retrait par rafale de refus ou contenu disparu ci-dessous.
-        for c in dnstv_dpi.candidats_repli(dnstv_dpi.correler(evts, lambda d: taxo.classer(d)["categorie"])):
+        # I3 : la corrélation est faite UNE fois, incrémentale, par le passage DPI ; le moteur reçoit ses découvertes (`replis`).
+        for c in dnstv_dpi.candidats_repli((replis or {}).get(appareil, [])):
             if c["domaine"] in exclus:
                 continue
             try:

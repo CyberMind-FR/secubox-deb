@@ -142,7 +142,11 @@ def decouvertes(depuis: int = Query(0, ge=0), type: Optional[TypeDecouverte] = N
 def coupures(mac: str = Query(..., pattern=MAC_MOTIF), fenetre: Literal["1h", "24h"] = "1h", _=Depends(require_jwt)):
     """Frise : chaque refus publicitaire et ce qui apparaît dans les 30 s (DNS), SSAI marqué."""
     etat = _etat_tv()
-    adresses = sorted({c["ip"] for c in etat.get("clients", []) if c.get("mac") == mac})
+    adresses = {c["ip"] for c in etat.get("clients", []) if c.get("mac") == mac}
+    if adresses:                                     # m3 : toutes les adresses de la MAC (mémoire de 24 h du moteur), IPv6 comprises
+        maintenant = int(time.time())
+        adresses |= {a for a, (m, vu) in _magasin().charger_voisins().items() if m == mac and maintenant - vu <= dnstv_dpi.MEMOIRE_VOISINS_S}
+    adresses = sorted(adresses)
     if not adresses:
         raise HTTPException(404, "appareil inconnu")
     taxo = dnstv_taxonomie.Taxonomie.depuis_dossier()
