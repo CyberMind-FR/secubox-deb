@@ -106,7 +106,13 @@ def verifier_manifeste(dossier: Path) -> List[str]:
             continue
         if attendu.get(nom) != sha256_fichier(f):
             problemes.append(f"{nom}: empreinte différente du manifeste (modifiée sans mise à jour du manifeste)")
-        if nom not in ("services.txt", "reference-tv.txt"):             # plusieurs colonnes : validation propre (dnstv_taxonomie pour la référence)
+        if nom == "reference-tv.txt":                                    # deux colonnes : rejets rendus par dnstv_taxonomie (#3374)
+            try:
+                from . import dnstv_taxonomie
+            except ImportError:
+                from api import dnstv_taxonomie
+            problemes += [f"ligne invalide {m}" for m in dnstv_taxonomie.charger_reference_detail(f)[1]]
+        elif nom != "services.txt":             # plusieurs colonnes : validation propre (dnstv_taxonomie pour la référence)
             _, mauvaises, _ = lire_liste(f)
             problemes += [f"ligne invalide {m}" for m in mauvaises]
     return problemes

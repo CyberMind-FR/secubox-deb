@@ -381,8 +381,42 @@ def etat_courant() -> int:
     return 0
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump"):
+# Correction de catégorie (#3374) : l'API (compte secubox) ne peut pas écrire audit.log ; elle passe ici UN enregistrement sur l'entrée
+# standard, revalidé champ par champ. Rien d'autre n'est écrit, rien n'est exécuté.
+AUDIT_ENTREE_MAX = 4096
+ACTEUR_RE = re.compile(r"^[A-Za-z0-9_.@-]{1,64}$")
+MAC_TRONQUEE_RE = re.compile(r"^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:…:[0-9a-f]{2}$")
+CATEGORIES_TV = ("PUBLICITE", "TRACKING", "TELEMETRIE", "STREAMING", "CDN", "DRM", "AUTHENTIFICATION", "MISE_A_JOUR",
+                 "SERVICES_CONSTRUCTEUR", "INCONNU")      # = dnstv_taxonomie.CATEGORIES (le contrôleur root n'importe que dnstv)
+
+
+def audit_classification(entree: str) -> int:
+    try:
+        r = json.loads(entree[:AUDIT_ENTREE_MAX + 1]) if len(entree) <= AUDIT_ENTREE_MAX else None
+    except ValueError:
+        r = None
+    ok = (isinstance(r, dict) and set(r) == {"acteur", "domaine", "mac", "ancienne", "nouvelle"}
+          and isinstance(r["acteur"], str) and ACTEUR_RE.match(r["acteur"])
+          and isinstance(r["domaine"], str) and dnstv.valider_domaine(r["domaine"]) == r["domaine"]
+          and isinstance(r["mac"], str) and (r["mac"] == "maison" or MAC_TRONQUEE_RE.match(r["mac"]))
+          and all(r[k] is None or r[k] in CATEGORIES_TV for k in ("ancienne", "nouvelle")))
+    if not ok:
+        print("enregistrement d'audit refusé", file=sys.stderr)
+        return 2
+    ligne = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "ad-guard-tv", "action": "classification", **r}
+    try:
+        AUDIT.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(AUDIT, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        with os.fdopen(fd, "a", encoding="utf-8") as h:
+            h.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+    except OSError as e:
+        print(f"audit.log non écrit ({type(e).__name__})", file=sys.stderr)
+        return 1                                                        # l'API refuse alors la correction : jamais de décision non tracée
+    return 0
+
+
+def main(argv: list[str], entree: str | None = None) -> int:
+    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump", "audit-classification"):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
@@ -390,6 +424,8 @@ def main(argv: list[str]) -> int:
         return 3
     if argv[1] == "status":
         return etat_courant()
+    if argv[1] == "audit-classification":
+        return audit_classification(sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree)
     if argv[1] == "cache-dump":
         return cache_dump()                                              # lecture seule : ni verrou, ni écriture
     with verrou_controleur():

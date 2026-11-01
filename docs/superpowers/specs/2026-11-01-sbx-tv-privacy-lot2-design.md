@@ -110,3 +110,16 @@ services, profil, corrections manuelles).
 ## Version
 
 `secubox-ad-guard` 1.18.0-1~trixie1.
+
+## Correctifs de revue (arbitrages du contrôleur)
+
+- `systeme`, `connectivite` → INCONNU (protégés) ; `quanteec.com` → INCONNU (référence) ; domaine non classé : source `aucune`.
+- Exception admin : un domaine confirmé par l'administrateur sur un appareil lève la garde sur tous les chemins et tous les
+  appareils ; une confirmation automatique ne la lève jamais. Ensemble calculé une fois par passage (`confirmes_par_admin`).
+- Fermé en cas d'échec : corrections illisibles = ni ajout automatique ni profil, ni essai ni confirmation automatiques.
+- Audit : `POST /classification` passe un enregistrement JSON (acteur, domaine, MAC tronquée, ancienne, nouvelle) sur l'entrée
+  standard de `sudo secubox-adguard-tv audit-classification` (verbe exact du sudoers) ; root le revalide et l'ajoute à
+  `audit.log` ; un échec refuse la correction.
+- Portée : TLD seul, suffixes publics et parent d'une entrée protégée de la référence (vers une catégorie bloquable) refusés.
+- Cache : le moteur AUTO écrit `classification-cache.json` (0640, au plus toutes les 5 min) ; `GET /classification`
+  (lecteur : MAC tronquée, jour) et `GET /classification/detail` (`require_jwt`) le lisent sans calcul.

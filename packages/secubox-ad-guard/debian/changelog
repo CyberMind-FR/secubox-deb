@@ -8,6 +8,13 @@ secubox-ad-guard (1.18.0-1~trixie1) trixie; urgency=medium
     garde : les catégories protégées ne sont jamais mises en essai ni confirmées par le moteur
     AUTO ; GET /adblock-tv/classification (require_lecture), POST /adblock-tv/classification
     (require_jwt, correction manuelle) (ref #3374).
+  * Correctifs de revue : garde fermée en cas d'échec (corrections illisibles = ni
+    ajout ni profil ni essai ni confirmation automatiques), systeme/connectivite et
+    quanteec.com protégés (INCONNU), source « aucune », corrections auditées dans
+    audit.log via le verbe borné « audit-classification » du contrôleur root (refus si
+    l'audit échoue), corrections trop larges refusées, classification.json et cache
+    en 0640, GET /classification servi depuis un cache du moteur auto (MAC tronquée,
+    jour), détail complet en /classification/detail (require_jwt) (ref #3374).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 09:30:44 +0100
 

@@ -97,9 +97,10 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None) -> dict
     changements, applique, candidats = [], False, 0
     taxo = taxo or dnstv_taxonomie.Taxonomie.depuis_dossier(classer=classer, regles=regles)
     macs = dnstv_taxonomie.macs_par_appareil(etat)
+    admin = dnstv_taxonomie.confirmes_par_admin(regles)       # une fois par passage : le moteur ne confirme jamais au nom de l'administrateur
 
     def refus(appareil: str, domaine: str):
-        return dnstv_taxonomie.refus_auto(taxo, domaine, macs.get(appareil, ()), regles)
+        return dnstv_taxonomie.refus_auto(taxo, domaine, macs.get(appareil, ()), admin)
     def note(r, de, vers, motif):
         nonlocal applique
         changements.append({"appareil": r["appareil"], "domaine": r["domaine"], "de": de, "vers": vers, "motif": motif})

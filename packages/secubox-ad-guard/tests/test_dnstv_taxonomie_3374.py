@@ -75,7 +75,7 @@ def test_classer_par_source_et_confiance():
     c2 = t.classer("c.2mdn.net")
     assert (c2["categorie"], c2["source"]) == ("PUBLICITE", "profil")
     inc = t.classer("rien.example.org")
-    assert (inc["categorie"], inc["source"], inc["confiance"]) == ("INCONNU", "liste", 0)
+    assert (inc["categorie"], inc["source"], inc["confiance"]) == ("INCONNU", "aucune", 0)
     assert t.classer("pas un domaine")["categorie"] == "INCONNU"
 
 
@@ -218,8 +218,9 @@ def test_refus_auto_admet_la_decision_explicite_de_l_administrateur():
         rid = r.proposer(app, "ads.cdn-pub.example", 50, "faible", 1, origine="admin")["id"]
         r.transiter(rid, "essai", "admin", "", 2)
         r.transiter(rid, "confirme", "admin", "", 3)
-    assert T.refus_auto(taxo(), "ads.cdn-pub.example", regles=r) is None
-    assert T.refus_auto(taxo(), "ads.autre.example", regles=r) is not None
+    admin = T.confirmes_par_admin(r)
+    assert T.refus_auto(taxo(), "ads.cdn-pub.example", confirmes_admin=admin) is None
+    assert T.refus_auto(taxo(), "ads.autre.example", confirmes_admin=admin) is not None
 
 
 # ── observation et routes ────────────────────────────────────────────────────────────────────────────
@@ -243,25 +244,29 @@ def test_route_classification_filtrable(api, monde):
     mag = dnstv.Magasin(monde["etat"] / "dnstv.db")
     mag.ajouter([(evt(t - 50, "k7.ftven.fr"), ""), (evt(t - 10, "ad.doubleclick.net", "BLOCKED"), "advertising"),
                  (dnstv.Evenement(t - 5, "192.168.1.200", "autre.example.org", "A", "NOERROR", "ALLOWED"), "")])
-    j = api.get("/adblock-tv/classification").json()
+    etat, _ = dnstv.lire_etat(monde["etat"])
+    T.ecrire_cache(T.construire_classification(etat, taxo(), mag.observations(dnstv._jour(t - 86400)), []), t, monde["etat"])
+    j = api.get("/adblock-tv/classification/detail").json()
     assert j["categories"] == list(T.CATEGORIES) and set(j["protegees"]) == set(T.PROTEGEES)
     lignes = {(x["domaine"], x["mac"]): x for x in j["domaines"]}
     k7 = lignes[("k7.ftven.fr", MAC)]
     assert {"categorie", "source", "confiance", "derniere_observation", "protegee"} <= set(k7)
     assert k7["categorie"] == "STREAMING" and k7["derniere_observation"] == t - 50
-    seul = api.get(f"/adblock-tv/classification?mac={MAC}&categorie=PUBLICITE").json()["domaines"]
+    seul = api.get(f"/adblock-tv/classification/detail?mac={MAC}&categorie=PUBLICITE").json()["domaines"]
     assert [x["domaine"] for x in seul] == ["ad.doubleclick.net"]
     assert api.get("/adblock-tv/classification?categorie=TOASTER").status_code == 422
     assert api.get("/adblock-tv/classification?mac=zz").status_code == 422
 
 
-def test_route_correction_manuelle(api, monde):
+def test_route_correction_manuelle(api, monde, monkeypatch):
+    from api import dnstv_routes as rt
+    audits = []
+    monkeypatch.setattr(rt, "_ctl_entree", lambda action, entree: audits.append((action, json.loads(entree))))
     _etat_v2(monde)
     r = api.post("/adblock-tv/classification", json={"domaine": "Ads.Exemple.NET", "categorie": "PUBLICITE", "mac": MAC})
     assert r.status_code == 200 and r.json()["categorie"] == "PUBLICITE" and r.json()["source"] == "manuelle"
     assert T.charger_manuelles(monde["etat"])[(MAC, "ads.exemple.net")]["categorie"] == "PUBLICITE"
-    lignes = api.get("/adblock-tv/classification?categorie=PUBLICITE").json()["domaines"]
-    assert any(x["domaine"] == "ads.exemple.net" and x["source"] == "manuelle" for x in lignes)
+    assert audits[0][0] == "audit-classification" and audits[0][1]["nouvelle"] == "PUBLICITE"
     assert api.post("/adblock-tv/classification", json={"domaine": "ads.exemple.net", "categorie": None, "mac": MAC}).status_code == 200
     assert T.charger_manuelles(monde["etat"]) == {}
     for corps in ({"domaine": "x;rm -rf", "categorie": "CDN"}, {"domaine": "a.example.com", "categorie": "TOASTER"},

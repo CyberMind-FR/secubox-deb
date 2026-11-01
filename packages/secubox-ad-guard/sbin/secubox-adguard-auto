@@ -34,6 +34,21 @@ def services() -> dnstv.ClasseurServices:
     return dnstv.ClasseurServices(dnstv.charger_services(f) if f.is_file() else [])
 
 
+CACHE_CLASSIFICATION_S = 300
+
+
+def ecrire_cache_classification(etat, taxo, magasin, regles, maintenant) -> None:
+    """Cache de GET /adblock-tv/classification (#3374) : recalculé au plus toutes les 5 min ; un échec ne fait jamais échouer le moteur."""
+    try:
+        c = dnstv_taxonomie.lire_cache()
+        if c and 0 <= maintenant - int(c.get("genere", 0)) < CACHE_CLASSIFICATION_S:
+            return
+        obs = magasin.observations(dnstv._jour(maintenant - 30 * 86400))
+        dnstv_taxonomie.ecrire_cache(dnstv_taxonomie.construire_classification(etat, taxo, obs, regles.liste()), maintenant)
+    except Exception as e:                                       # noqa: BLE001
+        print(f"cache de classification non écrit : {type(e).__name__}", file=sys.stderr)
+
+
 def voisins_du_lan() -> dict:
     """Voisins de l'interface du LAN SEULEMENT (ni br-lxc ni wg*) ; interface inconnue : rien (jamais d'ajout à l'aveugle)."""
     itf = dnstv.interface_lan()
@@ -97,14 +112,16 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             reglage = dnstv_auto.reglage_depuis(etat)
             regles = dnstv_regles.charger()
             # #3374 : taxonomie unique (référence TV, listes, services, profil, corrections manuelles) ; la garde du moteur s'y appuie.
+            # Fermé en cas d'échec : corrections illisibles = ni ajout automatique (ni profil posé), ni essai, ni confirmation automatiques.
+            corrections_lisibles = True
             try:
                 manuelles = dnstv_taxonomie.charger_manuelles()
             except dnstv_taxonomie.ErreurTaxonomie as e:
-                manuelles = {}
-                reglage.auto_essai = reglage.confirmation_auto = False   # corrections illisibles : aucun blocage automatique nouveau ce passage
-                print(f"corrections de classification illisibles, essai et confirmation automatiques suspendus : {e}", file=sys.stderr)
+                manuelles, corrections_lisibles = {}, False
+                reglage.auto_essai = reglage.confirmation_auto = False
+                print(f"corrections de classification illisibles, ajout, essai et confirmation automatiques suspendus : {e}", file=sys.stderr)
             taxo = dnstv_taxonomie.Taxonomie.depuis_dossier(classer=cl.table, manuelles=manuelles, regles=regles)
-            if etat.get("ajout_auto"):
+            if etat.get("ajout_auto") and corrections_lisibles:
                 # 1. détection (compteurs des 2 derniers jours, regroupés par MAC) puis ajout automatique, garde-fous compris
                 try:
                     vois = (voisins or voisins_du_lan)()
@@ -129,6 +146,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
                 dnstv_regles.ecrire(regles)
             if res["agrege"] != dnstv_profil.charger_agrege():
                 dnstv_profil.ecrire_agrege(res["agrege"])
+            ecrire_cache_classification(etat, taxo, magasin, regles, now)
     except dnstv_regles.ErreurRegle as e:
         print(f"règles illisibles, rien n'est changé : {e}", file=sys.stderr)
         return 1

@@ -65,9 +65,10 @@ def equiper(regles, appareil: str, profil: List[Tuple[str, str]], maintenant: in
     except ImportError:
         from api import dnstv_taxonomie
     taxo = taxo or dnstv_taxonomie.Taxonomie.depuis_dossier(regles=regles)
+    admin = dnstv_taxonomie.confirmes_par_admin(regles)                  # une fois pour tout le profil
     n = 0
     for domaine, motif in profil:
-        if dnstv_taxonomie.refus_auto(taxo, domaine, macs, regles):
+        if dnstv_taxonomie.refus_auto(taxo, domaine, macs, admin):
             continue
         r = regles.proposer(appareil, domaine, 100, "faible", maintenant, origine="auto", motif=motif)
         if r is None:

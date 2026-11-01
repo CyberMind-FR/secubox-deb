@@ -8,7 +8,7 @@
 # Catégories : PUBLICITE TRACKING TELEMETRIE STREAMING CDN DRM AUTHENTIFICATION MISE_A_JOUR SERVICES_CONSTRUCTEUR INCONNU.
 # Aucun domaine sans source. DRM (Widevine, PlayReady, FairPlay) et AUTHENTIFICATION : aucune entrée, faute de source dans le dépôt
 # ou de mesure au banc ; ces domaines restent INCONNU, donc protégés du moteur AUTO.
-# version: 2026.11.01-1
+# version: 2026.11.01-2
 cloudreplay.ftven.fr                       STREAMING    # docs/poc-dns-adblock-tv-results.md §8 : nécessaire à la lecture (France TV)
 k7.ftven.fr                                STREAMING    # docs/poc-dns-adblock-tv-results.md §8 : nécessaire à la lecture (France TV)
 hdfauth.ftven.fr                           STREAMING    # docs/poc-dns-adblock-tv-results.md §8 : nécessaire à la lecture (France TV)
@@ -19,7 +19,8 @@ assets.webservices.francetelevisions.fr    STREAMING    # docs/poc-dns-adblock-t
 windowsupdate.com                          MISE_A_JOUR  # secubox-nac/api/osdetect.py:101 (DNS_SUFFIXES) : Windows Update
 deb.debian.org                             MISE_A_JOUR  # secubox-nac/api/osdetect.py:102 (DNS_SUFFIXES) : dépôt de paquets Debian
 archive.ubuntu.com                         MISE_A_JOUR  # secubox-nac/api/osdetect.py:102 (DNS_SUFFIXES) : dépôt de paquets Ubuntu
-samsungotn.net                             MISE_A_JOUR  # secubox-nac/api/osdetect.py:101 et dnstv_appareils.py:252 : témoin Tizen ; OTN = mise à jour du micrologiciel Samsung
+samsungotn.net                             MISE_A_JOUR  # secubox-nac/api/osdetect.py:101 et dnstv_appareils.py:252 : témoin Tizen ; « mise à jour » est une déduction (OTN), non mesurée
 cloudfront.net                             CDN          # api/dnstv_detect.py LISTE_NOIRE : CDN générique, jamais proposé
 akamaized.net                              CDN          # api/dnstv_detect.py LISTE_NOIRE : CDN générique, jamais proposé
 akamaiedge.net                             CDN          # api/dnstv_detect.py LISTE_NOIRE : CDN générique, jamais proposé
+quanteec.com                               INCONNU      # lists/services.txt (qualite_video) : diffusion vidéo, rôle non mesuré — arbitrage #3374, protégé

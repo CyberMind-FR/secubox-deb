@@ -37,13 +37,23 @@ CORRESPONDANCE = {
     "custom": "PUBLICITE",                            # liste de l'exploitant, faite pour bloquer
     "contenu": "STREAMING", "publicite": "PUBLICITE", "mesure_audience": "TRACKING", "analytique": "TRACKING",
     "qualite_video": "TELEMETRIE",                    # NPAW, Quanteec : mesure de qualité de lecture
-    "cdn": "CDN", "connectivite": "SERVICES_CONSTRUCTEUR", "systeme": "SERVICES_CONSTRUCTEUR", "inconnu": "INCONNU",
+    "cdn": "CDN", "inconnu": "INCONNU",
+    # Arbitrage #3374 : une box Free, un miwifi, accounts.google.com ne sont JAMAIS bloqués seuls. SERVICES_CONSTRUCTEUR n'est alimentée
+    # que par des sources explicites (référence, correction manuelle), jamais par ces deux types génériques.
+    "connectivite": "INCONNU", "systeme": "INCONNU",
     "analytics": "TRACKING",
     "malware": "INCONNU", "cryptominer": "INCONNU",   # hors périmètre vie privée : jamais une raison de blocage AUTO ici
 }
 
 CONFIANCE = {"manuelle": 100, "reference": 90, "liste": 80, "services": 70, "profil": 70}
 FICHIER = "classification.json"
+FICHIER_CACHE = "classification-cache.json"
+MODE_FICHIER = 0o640
+SOURCE_AUCUNE = "aucune"                              # rien ne classe le domaine (hors SOURCES : ce n'est pas une source)
+# Suffixes publics : une correction posée là couvrirait des milliers de domaines. Les SUFFIXES_2 du détecteur d'anomalies + suffixes français.
+SUFFIXES_PUBLICS = frozenset({"co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "co.kr", "co.za",
+                              "com.br", "com.mx", "com.ar", "com.tr", "com.cn", "com.hk", "com.sg", "com.tw", "co.in", "co.id", "com.pl",
+                              "com.ua", "com.fr", "asso.fr", "gouv.fr", "nom.fr", "tm.fr", "presse.fr"})
 FICHIER_REFERENCE = "reference-tv.txt"
 MANUELLES_MAX = 2000
 LECTURE_MAX = 1024 * 1024
@@ -89,14 +99,23 @@ def _suffixes(domaine: str) -> List[str]:
 
 # ── référence TV ─────────────────────────────────────────────────────────────────────────────────────
 
-def charger_reference(chemin: Path) -> List[Tuple[str, str]]:
-    """Lignes `suffixe CATEGORIE  # source` ; une ligne mal formée est ignorée (le manifeste et les tests veillent au fichier livré)."""
-    out = []
-    for ligne in chemin.read_text(encoding="utf-8").splitlines():
+def charger_reference_detail(chemin: Path) -> Tuple[List[Tuple[str, str]], List[str]]:
+    """(entrées valides, lignes rejetées) de `suffixe CATEGORIE  # source`. Les rejets remontent dans `dnstv.verifier_manifeste`."""
+    out, rejets = [], []
+    for n, ligne in enumerate(chemin.read_text(encoding="utf-8").splitlines(), 1):
         brut = ligne.split("#", 1)[0].split()
+        if not brut:
+            continue
         if len(brut) == 2 and brut[1] in CATEGORIES and dnstv.valider_domaine(brut[0]) == brut[0]:
             out.append((brut[0], brut[1]))
-    return out
+        else:
+            rejets.append(f"{chemin.name}:{n}: {' '.join(brut)[:60]}")
+    return out, rejets
+
+
+def charger_reference(chemin: Path) -> List[Tuple[str, str]]:
+    """Entrées valides de la référence ; les lignes mal formées sont écartées (et signalées par le manifeste)."""
+    return charger_reference_detail(chemin)[0]
 
 
 # ── corrections manuelles ────────────────────────────────────────────────────────────────────────────
@@ -112,8 +131,26 @@ def _valider_manuelle(e) -> dict:
     return {"domaine": _domaine(e.get("domaine")), "mac": _mac(e.get("mac", "")), "categorie": cat, "maj": maj}
 
 
-def corriger(manuelles: Manuelles, domaine: str, mac: Optional[str], categorie: Optional[str], maintenant: int) -> Manuelles:
-    """Pose (ou retire si `categorie` est None) la correction manuelle d'un domaine, pour une MAC ou pour toute la maison. Pur."""
+def verifier_portee(domaine: str, categorie: Optional[str], reference: Iterable[Tuple[str, str]] = ()) -> None:
+    """Refuse une correction trop large : TLD seul, suffixe public (co.uk, com.fr…), ou domaine parent qui rendrait bloquable une
+    entrée protégée de la référence TV (ftven.fr -> PUBLICITE couvrirait k7.ftven.fr, nécessaire à la lecture)."""
+    if isinstance(domaine, str) and "." not in domaine.strip(".") and domaine.strip():
+        raise ErreurTaxonomie("correction trop large : un domaine de premier niveau seul est un suffixe public")
+    d = domaine.strip().lower().rstrip(".") if isinstance(domaine, str) else ""
+    if d in SUFFIXES_PUBLICS:
+        raise ErreurTaxonomie(f"correction trop large : {d} est un suffixe public")
+    if categorie is not None and blocage_auto_permis(categorie):
+        couvertes = sorted(r for r, c in reference if c in PROTEGEES and (r == d or r.endswith("." + d)) and r != d)
+        if couvertes:
+            raise ErreurTaxonomie(f"correction trop large : {d} couvre {couvertes[0]} (catégorie protégée de la référence) ; "
+                                  "corriger le sous-domaine visé")
+
+
+def corriger(manuelles: Manuelles, domaine: str, mac: Optional[str], categorie: Optional[str], maintenant: int,
+             reference: Iterable[Tuple[str, str]] = ()) -> Manuelles:
+    """Pose (ou retire si `categorie` est None) la correction manuelle d'un domaine, pour une MAC ou pour toute la maison. Pur.
+    `reference` : entrées de la référence TV, pour refuser une correction qui en couvrirait une protégée (voir `verifier_portee`)."""
+    verifier_portee(domaine, categorie, reference)
     d = _domaine(domaine.lower() if isinstance(domaine, str) else domaine)
     m = _mac(mac)
     out = dict(manuelles)
@@ -161,7 +198,7 @@ def ecrire_manuelles(manuelles: Manuelles, dossier: Optional[Path] = None) -> No
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as h:
             json.dump({"version": 1, "manuelles": lignes}, h, indent=2, ensure_ascii=False)
-        os.chmod(tmp, 0o644)
+        os.chmod(tmp, MODE_FICHIER)
         os.replace(tmp, d / FICHIER)
     except BaseException:
         with contextlib.suppress(OSError):
@@ -211,7 +248,7 @@ class Taxonomie:
     def classer(self, domaine: str, macs: Iterable[str] = ()) -> dict:
         d = dnstv.valider_domaine(domaine) if isinstance(domaine, str) else None
         if not d:
-            return self._resultat(str(domaine)[:253], "INCONNU", "liste", 0)
+            return self._resultat(str(domaine)[:253], "INCONNU", SOURCE_AUCUNE, 0)
         suff = _suffixes(d)
         for m in [x for x in macs if x] + [""]:
             for s in suff:
@@ -233,26 +270,31 @@ class Taxonomie:
             return self._resultat(d, "PUBLICITE", "profil", CONFIANCE["profil"])     # graine validée sur deux TV réelles (#1943/#1954)
         if d in self.appris:
             return self._resultat(d, "INCONNU", "apprentissage", self.appris[d])  # l'apprentissage ne se justifie jamais lui-même
-        return self._resultat(d, "INCONNU", "liste", 0)
+        return self._resultat(d, "INCONNU", SOURCE_AUCUNE, 0)
 
 
-def _confirme_par_admin(regles, domaine: str) -> bool:
-    for r in regles.liste():
+def confirmes_par_admin(regles) -> set:
+    """Domaines dont la DERNIÈRE transition est une confirmation de l'administrateur, sur au moins un appareil. Calculé une fois par passage."""
+    out = set()
+    for r in (regles.liste() if regles is not None else []):
         h = (r.get("historique") or [{}])[-1]
-        if r["domaine"] == domaine and r["etat"] == "confirme" and h.get("vers") == "confirme" and h.get("origine") == "admin":
-            return True
-    return False
+        if r["etat"] == "confirme" and h.get("vers") == "confirme" and h.get("origine") == "admin":
+            out.add(r["domaine"])
+    return out
 
 
-def refus_auto(taxo: Taxonomie, domaine: str, macs: Iterable[str] = (), regles=None) -> Optional[str]:
+def refus_auto(taxo: Taxonomie, domaine: str, macs: Iterable[str] = (), confirmes_admin: Iterable[str] = frozenset()) -> Optional[str]:
     """Motif du refus si le moteur AUTO ne peut PAS bloquer seul ce domaine ; None s'il le peut.
 
-    Une confirmation explicite de l'administrateur sur un autre appareil est une décision manuelle : elle lève la garde (profil agrégé).
+    Exception (arbitrée) : un domaine CONFIRMÉ PAR L'ADMINISTRATEUR sur au moins un appareil (`confirmes_admin`, voir
+    `confirmes_par_admin`) n'est plus protégé, et ce sur TOUS les chemins automatiques et pour TOUS les appareils : essai automatique
+    d'un candidat détecté, essai automatique d'un candidat agrégé, confirmation automatique d'un essai échu, profil posé à l'ajout
+    automatique d'un appareil. Une confirmation par le moteur lui-même (origine `auto`) ne lève jamais la garde.
     """
     c = taxo.classer(domaine, macs)
     if blocage_auto_permis(c["categorie"]):
         return None
-    if regles is not None and _confirme_par_admin(regles, c["domaine"]):
+    if c["domaine"] in confirmes_admin:
         return None
     return f"catégorie {c['categorie']} protégée : décision manuelle requise"
 
@@ -266,3 +308,80 @@ def macs_par_appareil(etat: dict) -> Dict[str, List[str]]:
             if c["mac"] not in lst:
                 lst.append(c["mac"])
     return out
+
+
+# ── classification par appareil et cache (calculé par le moteur AUTO, lu par l'API) ────────────────────────────────────
+
+def construire_classification(etat: dict, taxo: Taxonomie, observations: Dict[str, Dict[str, dict]], regles: List[dict]) -> List[dict]:
+    """Une ligne par (domaine, appareil) : domaines observés (`Magasin.observations`), domaines des règles et corrections manuelles,
+    même non observés. Appareil = MAC si connue, sinon l'adresse. Pur."""
+    mac_de_ip = {c["ip"]: c.get("mac") for c in etat.get("clients", [])}
+    macs_slug = macs_par_appareil(etat)
+    lignes: Dict[Tuple[str, str], dict] = {}
+
+    def ajouter(domaine: str, mac: Optional[str], ip: Optional[str] = None, obs: Optional[dict] = None) -> None:
+        cle = (domaine, mac or f"ip:{ip or ''}")
+        e = lignes.get(cle)
+        if e is None:
+            e = lignes[cle] = dict(taxo.classer(domaine, [mac] if mac else []), mac=mac, ips=[], requetes=0, bloquees=0,
+                                   derniere_observation=None, precision=None)
+        if ip and ip not in e["ips"]:
+            e["ips"].append(ip)
+        if obs:
+            e["requetes"] += obs["requetes"]
+            e["bloquees"] += obs["bloquees"]
+            if obs["derniere"] and (e["derniere_observation"] is None or obs["derniere"] > e["derniere_observation"]):
+                e["derniere_observation"], e["precision"] = obs["derniere"], obs["precision"]
+
+    for ip, doms in observations.items():
+        for d, o in doms.items():
+            if dnstv.valider_domaine(d) == d:
+                ajouter(d, mac_de_ip.get(ip), ip, o)
+    deja = {(d, e["mac"]) for (d, _), e in lignes.items()}
+    domaines_vus = {d for d, _ in deja}
+    for r in regles:                                                      # domaines appris ou décidés, même non observés récemment
+        for mac in macs_slug.get(r["appareil"], [None]):
+            if (r["domaine"], mac) not in deja:
+                ajouter(r["domaine"], mac)
+                deja.add((r["domaine"], mac))
+                domaines_vus.add(r["domaine"])
+    for (mac, d) in taxo.manuelles:                                       # corrections manuelles, même non observées
+        propre_a_un_appareil = bool(mac)
+        if propre_a_un_appareil and (d, mac) not in deja:
+            ajouter(d, mac)
+        elif not propre_a_un_appareil and d not in domaines_vus:          # correction pour la maison : une ligne si aucun appareil ne l'a
+            ajouter(d, None)
+    return sorted(lignes.values(), key=lambda e: (-(e["derniere_observation"] or 0), e["domaine"], e["mac"] or ""))
+
+
+def ecrire_cache(lignes: List[dict], maintenant: int, dossier: Optional[Path] = None) -> None:
+    """Cache de la classification (#3374, PERF-CACHE) : écriture atomique, 0640 (données personnelles : MAC, adresses)."""
+    d = dossier or dnstv.DOSSIER_ETAT
+    d.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".classification-cache.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            json.dump({"version": 1, "genere": int(maintenant), "domaines": lignes}, h, ensure_ascii=False)
+        os.chmod(tmp, MODE_FICHIER)
+        os.replace(tmp, d / FICHIER_CACHE)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def lire_cache(dossier: Optional[Path] = None) -> Optional[dict]:
+    """Cache ou None (absent, lien symbolique, illisible) : l'API ne recalcule jamais de façon synchrone."""
+    f = (dossier or dnstv.DOSSIER_ETAT) / FICHIER_CACHE
+    try:
+        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return None
+    try:
+        with os.fdopen(fd, "r", encoding="utf-8") as h:
+            brut = json.loads(h.read(16 * 1024 * 1024))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(brut, dict) or brut.get("version") != 1 or not isinstance(brut.get("domaines"), list):
+        return None
+    return brut
