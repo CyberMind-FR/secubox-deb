@@ -734,12 +734,30 @@ def contournement_retirer() -> None:
         audit("contournement", "forçage retiré")
 
 
+def _publier_resultat(resultat: str) -> None:
+    """Dernier résultat du forçage, lu par l'API (page). Écrit par root dans le dossier de `secubox` : nom aléatoire (mkstemp, O_EXCL)
+    puis os.replace — jamais à travers un lien. Au mieux : n'empêche jamais l'application."""
+    from api import dnstv_contournement as C
+    if resultat == "inchange":
+        return
+    try:
+        fd, tmp = tempfile.mkstemp(dir=dnstv.DOSSIER_ETAT, prefix=".contournement-resultat.")
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            os.fchmod(h.fileno(), 0o644)
+            h.write(json.dumps({"resultat": resultat, "ts": int(time.time())}))
+        os.replace(tmp, dnstv.DOSSIER_ETAT / C.FICHIER_RESULTAT)
+    except OSError as e:
+        audit("contournement-resultat-non-publie", type(e).__name__)
+
+
 def _contournement_au_mieux(etat: dict) -> str:
     try:
-        return contournement_appliquer(etat)
+        r = contournement_appliquer(etat)
     except Exception as e:                                               # noqa: BLE001 — le DNS reste appliqué quoi qu'il arrive
         audit("contournement-refuse", f"{type(e).__name__}"[:120])
-        return "refuse"
+        r = "refuse"
+    _publier_resultat(r)
+    return r
 
 
 def main(argv: list[str], entree: str | None = None) -> int:

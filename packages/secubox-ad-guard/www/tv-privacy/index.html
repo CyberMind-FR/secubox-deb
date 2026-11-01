@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-CMzgOyvFpyurJexEgBPYQDM03tRXTJ0K23GX6wJLSYE='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-MkdcC0+xQv5DVUo7tMeXpGj9dRYgONPC7oYZS42HZSc='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -681,7 +681,7 @@
     if(garde)sel.value=garde;
     var a=((e&&e.appareils)||[]).filter(function(x){return x.mac===sel.value;})[0];
     var c=el('ap-couverture');c.textContent=a?(a.couverture==='dns+dpi'?'DNS + DPI':'DNS seulement'):'—';c.className='pastille '+(a&&a.couverture==='dns+dpi'?'vert':'gris');
-    var f=a&&a.forcage;el('ap-forcage').textContent=f?(f.suspendu?'Forçage DNS suspendu 24 h (lecture cassée).':f.pose?'Forçage DNS : '+f.note+'.':'Forçage DNS : non posé (appareil en OBSERVE ou sans MAC).'):'';
+    var f=a&&a.forcage;el('ap-forcage').textContent=f?(f.refuse?'Forçage DNS refusé par nftables : la version précédente est gardée (voir audit.log).':f.suspendu?'Forçage DNS suspendu 24 h (lecture cassée).':f.pose?'Forçage DNS : '+f.note+'.':'Forçage DNS : non posé (appareil en OBSERVE ou sans MAC).'):'';
     return a;
   }
   function rendreApplications(r){
@@ -703,7 +703,7 @@
   }
   function rendreDecouvertes(r){
     var tb=el('ap-decouvertes');vider(tb);var TYPES={'repli':'repli publicitaire','repli-protege':'repli (protégé)','secours':'spot de secours','sans-dns':'adresse en dur','dns-chiffre':'DNS chiffré','contournement':'contourne la box'};
-    ((r&&r.decouvertes)||[]).slice(-50).reverse().forEach(function(x){var tr=h('tr');tr.appendChild(h('td',null,quand(x.ts)));tr.appendChild(h('td',null,TYPES[x.type]||x.type));
+    ((r&&r.decouvertes)||[]).forEach(function(x){var tr=h('tr');tr.appendChild(h('td',null,quand(x.ts)));tr.appendChild(h('td',null,TYPES[x.type]||x.type));
       tr.appendChild(h('td',{class:'mono coupe'},x.domaine));tr.appendChild(h('td',{class:'num'},fmt(x.confiance)));tr.appendChild(h('td',null,x.raison||''));tb.appendChild(tr);});
     if(!tb.firstChild)vide(tb,5,'Aucune découverte.');
   }
@@ -711,7 +711,7 @@
     source('/protection/dpi/etat').then(function(e){var a=rendreEtatDpi(e);if(!a){rendreApplications(null);rendreFrise(null);rendreDecouvertes(null);hauteur();return;}
       var m=encodeURIComponent(a.mac),f=el('ap-fenetre').value;
       return Promise.all([source('/protection/dpi/applications?mac='+m+'&fenetre='+f),source('/protection/dpi/coupures?mac='+m+'&fenetre='+(f==='1h'?'1h':'24h')),
-        source('/protection/dpi/decouvertes?mac='+m+'&limite=500')]).then(function(r){rendreApplications(r[0]);rendreFrise(r[1]);rendreDecouvertes(r[2]);hauteur();});
+        source('/protection/dpi/decouvertes?recentes=1&mac='+m+'&limite=50')]).then(function(r){rendreApplications(r[0]);rendreFrise(r[1]);rendreDecouvertes(r[2]);hauteur();});
     }).catch(echec);
   }
   el('ap-mac').addEventListener('change',chargerApplications);

@@ -343,3 +343,8 @@ def test_arret_du_dpi_annonce_pour_toute_la_box():
 
 def test_signal_de_charge_sans_arret_affiche():
     assert "e.charge_signal" in CODE
+
+
+def test_decouvertes_recentes_et_forcage_refuse_affiches():
+    assert "/protection/dpi/decouvertes?recentes=1" in CODE
+    assert "Forçage DNS refusé par nftables" in CODE

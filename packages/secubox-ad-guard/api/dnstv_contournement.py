@@ -27,6 +27,8 @@ TABLE = "secubox_adguard_contournement"
 MODES_FORCES = ("block", "auto")
 DUREE_SUSPENSION_S = 86400
 FICHIER_SUSPENSIONS = "contournement-suspendu.json"
+FICHIER_RESULTAT = "contournement-resultat.json"           # dernier résultat publié par root pour la page
+RESULTATS_REFUS = ("refuse", "retour", "invalide")
 
 
 def forces(etat: dict, suspendus: Iterable[str] = ()) -> List[str]:

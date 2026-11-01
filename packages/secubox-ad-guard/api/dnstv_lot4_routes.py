@@ -86,14 +86,19 @@ def etat_dpi(lecteur=Depends(_r.require_lecture_nominative)):
         return {"disponible": False, "raison": "absent", "appareils": []}
     age = int(time.time()) - int(e.get("genere", 0))
     admin = _admin(lecteur)
-    forces, susp = set(), set()
+    forces, susp, refuse = set(), set(), False
     if admin:
         susp = _suspendus()
         forces = set(dnstv_contournement.forces(_etat_tv(), susp))
+        try:
+            res = json.loads((dnstv.DOSSIER_ETAT / dnstv_contournement.FICHIER_RESULTAT).read_text(encoding="utf-8"))
+            refuse = isinstance(res, dict) and res.get("resultat") in dnstv_contournement.RESULTATS_REFUS
+        except (OSError, ValueError):
+            refuse = False
     appareils = []
     for a in e.get("appareils", []):
         if admin:
-            appareils.append(dict(a, forcage={"pose": a["mac"] in forces, "suspendu": a["mac"] in susp, "note": NOTE_FORCAGE}))
+            appareils.append(dict(a, forcage={"pose": a["mac"] in forces, "suspendu": a["mac"] in susp, "refuse": refuse, "note": NOTE_FORCAGE}))
         else:
             appareils.append({"nom": a.get("nom"), "couverture": a.get("couverture")})
     return {"disponible": age <= 600, "raison": None if age <= 600 else "perime", "age_s": age, "sources": e.get("sources", {}),
@@ -125,18 +130,19 @@ def flux(mac: str = Query(..., pattern=MAC_MOTIF), appli: Optional[str] = Query(
 
 @router.get("/protection/dpi/decouvertes")
 def decouvertes(depuis: int = Query(0, ge=0), type: Optional[TypeDecouverte] = None,  # noqa: A002 — nom d'API stable (lot 5b)
-                mac: Optional[str] = Query(None, pattern=MAC_MOTIF), limite: int = Query(100, ge=1, le=500), _=Depends(require_jwt)):
+                mac: Optional[str] = Query(None, pattern=MAC_MOTIF), limite: int = Query(100, ge=1, le=500), recentes: bool = False,
+                _=Depends(require_jwt)):
     """Interface du lot 5b : identifiant croissant, champs stables, `etat` ∈ nouvelle | candidat | ecartee-protegee."""
     noms = {c.get("mac"): c["nom"] for c in _etat_tv().get("clients", []) if c.get("mac")}
     motifs = _motifs()
     out = []
-    for d in _magasin().decouvertes(depuis, type, mac, limite):
+    for d in _magasin().decouvertes(depuis, type, mac, limite, recentes=recentes):     # recentes=1 : les plus récentes d'abord (page)
         d["appareil"] = noms.get(d["mac"], "")
         d["ssai"] = dnstv_dpi.est_ssai(d["domaine"], motifs)
         if d["type"] == "repli-protege":
             d["etat"] = "ecartee-protegee"
         out.append(d)
-    return {"decouvertes": out, "dernier_id": out[-1]["id"] if out else depuis}
+    return {"decouvertes": out, "dernier_id": max((d["id"] for d in out), default=depuis)}
 
 
 @router.get("/protection/dpi/coupures")

@@ -129,3 +129,13 @@ def test_echec_du_retrait_de_table_audite(nft):
     (nft["tmp"] / "nft-refuse").touch()
     ctl(nft, "disable")
     assert "contournement-retrait-echec" in (nft["tmp"] / "audit.log").read_text()
+
+
+def test_resultat_du_forcage_publie_pour_la_page(nft):
+    dnstv.ecrire_etat(etat(), nft["etat"])
+    ctl(nft, "apply")
+    (nft["tmp"] / "nft-refuse-nouveau").touch()
+    dnstv.ecrire_etat(etat("auto", "observe"), nft["etat"])
+    ctl(nft, "apply")
+    r = json.loads((nft["etat"] / C.FICHIER_RESULTAT).read_text())
+    assert r["resultat"] == "refuse" and isinstance(r["ts"], int)

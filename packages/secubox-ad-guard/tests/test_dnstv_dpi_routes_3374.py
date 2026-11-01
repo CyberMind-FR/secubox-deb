@@ -4,6 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """Lot 4 (#3374) : routes /adblock-tv/protection/dpi/* — données par appareil réservées à l'administrateur réel, paramètres fermés,
 source absente honnête, frise des coupures avec SSAI."""
+import json
 import time
 
 import pytest
@@ -103,3 +104,17 @@ def test_reprise_ouverte_au_relais_du_pilotage():
     from pathlib import Path
     t = (Path(__file__).resolve().parents[1] / "pilotage" / "routes-ouvertes.d" / "ad-guard.toml").read_text()
     assert "^/adblock-tv/protection/dpi/reprendre$" in t
+
+
+def test_decouvertes_recentes_d_abord(client, tmp_path):
+    mag = D.MagasinDPI(tmp_path / "dpi-appareils.db")
+    mag.ajouter_decouvertes(MAC, [{"type": "sans-dns", "domaine": "151.101.1.9:443", "ts": 1, "confiance": 80, "raison": "x"}])
+    d = client.get("/adblock-tv/protection/dpi/decouvertes?recentes=1").json()["decouvertes"]
+    assert d[0]["domaine"] == "151.101.1.9:443"
+
+
+def test_forcage_refuse_visible(client, tmp_path):
+    from api import dnstv_contournement as C
+    (tmp_path / C.FICHIER_RESULTAT).write_text(json.dumps({"resultat": "refuse", "ts": 5}))
+    a = client.get("/adblock-tv/protection/dpi/etat").json()["appareils"][0]
+    assert a["forcage"]["refuse"] is True

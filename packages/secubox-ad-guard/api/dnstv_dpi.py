@@ -433,7 +433,8 @@ class MagasinDPI:
         with self._cx() as cx:
             cx.execute("UPDATE decouvertes SET etat=? WHERE mac=? AND domaine=? AND type='repli' AND etat='nouvelle'", (etat, mac, domaine))
 
-    def decouvertes(self, depuis_id: int = 0, type_: Optional[str] = None, mac: Optional[str] = None, limite: int = 100) -> List[dict]:
+    def decouvertes(self, depuis_id: int = 0, type_: Optional[str] = None, mac: Optional[str] = None, limite: int = 100,
+                    recentes: bool = False) -> List[dict]:
         if not self._lisible():
             return []
         w, a = ["id>?"], [int(depuis_id)]
@@ -446,7 +447,7 @@ class MagasinDPI:
         cols = ("id", "ts", "mac", "type", "domaine", "categorie", "appli", "confiance", "raison", "refus_domaine", "refus_ts", "delai_s",
                 "coupures", "etat")
         with self._cx() as cx:
-            lignes = cx.execute(f"SELECT {', '.join(cols)} FROM decouvertes WHERE {' AND '.join(w)} ORDER BY id LIMIT ?",
+            lignes = cx.execute(f"SELECT {', '.join(cols)} FROM decouvertes WHERE {' AND '.join(w)} ORDER BY id {'DESC' if recentes else ''} LIMIT ?",
                                 [*a, max(1, min(int(limite), 500))]).fetchall()
         return [dict(zip(cols, row)) for row in lignes]
 
