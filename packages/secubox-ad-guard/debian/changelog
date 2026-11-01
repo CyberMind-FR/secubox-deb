@@ -1,3 +1,22 @@
+secubox-ad-guard (1.23.0-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy lot 6 « nettoyage » (ref #3374) : on retire ce qui est mort ou faux, sans fusion ni refonte.
+  * RETIRÉ : route POST /detect (jamais appelée dans le dépôt, seule source de la table SQLite devices), méthodes record_detection,
+    get_device_stats, get_stats_by_device_type, et le classeur classify_device par sous-chaînes (« samsung », « lg » prenaient un
+    téléphone pour une TV, contraire à osdetect).
+  * /devices, /devices/{mac} et /stats/by-device-type lisent l'inventaire réel : appareils TV Privacy par MAC, type tiré des profils du
+    lot 1 (preuves du NAC), compteurs DNS de dnstv ; un compteur illisible vaut null, jamais 0. La page « Appareils » explique un
+    inventaire vide au lieu de rester muette.
+  * Table devices de ad-guard.db : conservée sur les box installées, aucune migration destructive ; elle n'est simplement plus alimentée.
+  * /learn/thresholds : modèle Pydantic strict (extra="forbid", entiers bornés, au moins une clé, 422 sinon), écriture atomique de
+    filters.json (temporaire voisin, fsync, rename) ; 409 si le fichier existant est illisible.
+  * Docstring de main.py corrigée : pas d'intégration nDPId ; DPI par appareil = sbxdpi (lot 4).
+  * Lot 5b, remarques closes : marquer_id sans domaine ne change qu'une découverte « nouvelle » ; l'audit « annule » transmet le type
+    (bloquer, legitime, plus-tard, vu), accepté par la revalidation root.
+  * README : section « Listes blanches » (laquelle sert à quoi, laquelle prime).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 23:00:00 +0100
+
 secubox-ad-guard (1.22.0-1~trixie1) trixie; urgency=medium
 
   * SBX TV Privacy lot 5b — assistant de détection en direct (ref #3374). Conception : docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot5b-design.md.

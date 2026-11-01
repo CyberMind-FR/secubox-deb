@@ -40,6 +40,18 @@ Configuration file: `/etc/secubox/ad-guard.toml`
 
 - `GET /api/v1/ad-guard/status` - Module status
 - `GET /api/v1/ad-guard/health` - Health check
+- `GET /api/v1/ad-guard/devices`, `GET /devices/{mac}`, `GET /stats/by-device-type` (`require_jwt`) - inventaire **réel** depuis 1.23.0
+  (lot 6, #3374) : appareils déclarés de TV Privacy regroupés par MAC, type tiré des profils du lot 1 (preuves du NAC), compteurs DNS de
+  dnstv. Réponse `/devices` : `{devices, count, source: "dnstv", lisible, note}` ; un compteur illisible vaut `null`, jamais 0.
+- `POST /api/v1/ad-guard/learn/thresholds` (`require_jwt`) - corps strict (`extra="forbid"`, entiers bornés, au moins une clé ; 422 sinon),
+  écriture atomique de `/etc/secubox/toolbox/filters.json` ; 409 si le fichier existant est illisible (rien n'est écrit).
+
+### Retiré en 1.23.0 (lot 6 « nettoyage », #3374)
+
+- `POST /detect` : jamais appelé dans le dépôt ; c'était le seul à alimenter la table SQLite `devices`.
+- Le classeur `classify_device` (sous-chaînes « samsung », « lg »… qui prenaient un téléphone pour une TV) et ses empreintes.
+- Les lectures de la table `devices` pour l'inventaire. La table reste dans `ad-guard.db` des box déjà installées : **aucune migration
+  destructive**, elle n'est simplement plus alimentée (les compteurs de `/stats/db` la listent encore, à 0 ligne sur une box neuve).
 
 ## License
 
@@ -317,3 +329,26 @@ Une adresse suspecte n'entre pas dans la référence : elle est re-signalée (6 
 déclare les seules écritures que le porteur délégué du pilotage (portée `admin`) peut faire sur ce module : celles
 qu'appellent ses pages. Toute autre écriture déléguée est refusée par `secubox_core.auth` (403) ; les lectures
 restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
+
+
+## Listes blanches
+
+Six listes coexistent ; **aucune n'est fusionnée** (lot 6, #3374 : état des lieux, base d'un futur lot). Le DNS de la box est compilé par
+`secubox-dns-listes` (#3205) à partir des sources déposées par chaque module ; dans Unbound, **la zone la plus précise prime**, et une
+`access-control-view` ou un `local-zone-override` par client prime sur la zone globale pour ce client.
+
+| Liste | Fichier | Portée | Effet réel |
+|---|---|---|---|
+| ad-guard `whitelist` (API `/whitelist`) | table `whitelist` de `ad-guard.db` (+ `whitelist.json`) | domaine, tous les clients | **décision de l'API seulement** (`/check`, `is_ad_domain`) ; n'est pas compilée dans Unbound |
+| dns-guard `whitelist` | `/var/lib/secubox/dns-guard/whitelist.txt` | domaine | **détection** seulement : jamais signalé DGA/tunnel par dns-guard ; aucun effet de blocage |
+| sinkhole `whitelist` (dns-guard `/sinkhole/whitelist`) | `/var/lib/secubox/filterlists/whitelist-domains.txt` | domaine, tous les clients | retiré des listes du puits à la compilation suivante (`/sinkhole/sync`) |
+| domaines exemptés d'adblock (#1819) | `/var/lib/secubox/ad-guard/domain-allowlist.txt` | domaine, tous les clients | `always_transparent` : **prime sur un parent bloqué** (le plus précis l'emporte) |
+| `ip-allowlist` (dns-guard `/sinkhole/ip-allowlist`) | `/var/lib/secubox/ad-guard/ip-allowlist.txt` | **client** (IP) | vue Unbound `sbx-allow` sans zone de puits adblock : ce client échappe au filtrage pub/pistage |
+| `adult-exempt-ip` / `adult-exempt-mac` | `/var/lib/secubox/ad-guard/adult-exempt-{ip,mac}.txt` | **client** × domaines adultes | `local-zone-override` par client (#2969) : seuls les domaines adultes lui sont ouverts, pubs/pistage restent filtrés |
+| exceptions dnstv `autoriser` (TV Privacy) | `dnstv/exceptions.json` (+ autorisations au puits) | **appareil (MAC) × domaine** | règle par appareil : prime pour cet appareil, jamais reproposée par le moteur |
+
+Ordre de primauté pour UN client et UN domaine, du plus fort au plus faible : exception dnstv par appareil et `adult-exempt` (par client) →
+`ip-allowlist` (client entier, adblock) → domaine exempté (`domain-allowlist`, `always_transparent`) → whitelist du puits (retirée à la
+compilation) → listes de blocage. La whitelist d'ad-guard et celle de dns-guard ne changent **aucune** réponse DNS : la première ne règle que
+la réponse de l'API, la seconde la détection. Rappel #3224 : une zone de liste présente dans une vue TV reste bloquée pour tous.
+
