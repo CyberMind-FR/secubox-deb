@@ -19,12 +19,14 @@ une clé WireGuard valide, ABSENTE de wg_mesh.json et différente de celle de l'
 dans le réseau du maillage et tenue par aucun pair restant ; le nom doit être valide et porté par aucun pair restant
 (wg_mesh.json, peers.json). Les états sont lus sans suivre de lien, fichiers ordinaires de root ou de `secubox`.
 Recoupement avec une source que le compte `secubox` n'écrit pas : l'interface du noyau. Une clé dont la poignée de main
-(`wg show wg-mesh latest-handshakes`) a moins de 180 s est refusée, sauf `--force` (transmis par la route quand
-l'administrateur force, audité). État illisible, argument refusé ou rien à faire : code 2, aucune action.
+(`wg show wg-mesh latest-handshakes`) a moins de 180 s est refusée, sauf `--force`, audité. GARDE FERMÉE : si la mesure
+échoue, l'oubli est refusé (sauf `--force`) ; seule une interface dont `ip link show wg-mesh` dit qu'elle n'existe pas
+vaut « aucun pair vivant ». `--force` est accepté de TOUT appelant du compte secubox (sudoers) : seule la route
+p2p ne le transmet que sur décision de l'administrateur (risque résiduel du compte partagé, voir le README). État illisible, argument refusé ou rien à faire : code 2, aucune action.
 Audit : une ligne par étape, avec l'acteur ; un audit non écrit est dit sur stderr et dans la sortie (`audit_ok`).
 
 Surcharges réservées aux essais, honorées HORS root seulement : SBX_OUBLI_WG_ETAT, SBX_OUBLI_PEERS, SBX_OUBLI_ANCRE,
-SBX_OUBLI_AUDIT, SBX_OUBLI_WG_BIN, SBX_OUBLI_RELAIS, SBX_OUBLI_NOMS, SBX_OUBLI_NOMS_CONF, SBX_OUBLI_AUTOLOADCTL."""
+SBX_OUBLI_AUDIT, SBX_OUBLI_WG_BIN, SBX_OUBLI_IP_BIN, SBX_OUBLI_RELAIS, SBX_OUBLI_NOMS, SBX_OUBLI_NOMS_CONF, SBX_OUBLI_AUTOLOADCTL."""
 import argparse
 import ipaddress
 import json
@@ -50,6 +52,7 @@ DEFAUTS = {
     "SBX_OUBLI_ANCRE": "/etc/secubox/p2p/ancre-maitre.json",
     "SBX_OUBLI_AUDIT": "/var/log/secubox/audit.log",
     "SBX_OUBLI_WG_BIN": "/usr/bin/wg",
+    "SBX_OUBLI_IP_BIN": "/usr/bin/ip",
     "SBX_OUBLI_RELAIS": "/usr/sbin/secubox-relais-maillage",
     "SBX_OUBLI_NOMS": "/usr/sbin/secubox-annuaire-noms",
     "SBX_OUBLI_NOMS_CONF": "/etc/unbound/unbound.conf.d/60-secubox-noms.conf",
@@ -100,9 +103,36 @@ def audit(etape: str, ok: bool, detail: str) -> None:
         print(f"secubox-oubli-pair : audit non écrit ({e.strerror}) : {etape}", file=sys.stderr)
 
 
-def lancer(argv, timeout: int = 120):
+def executer(argv, timeout: int = 120):
+    """(code, stdout, stderr) SÉPARÉS : une sortie d'erreur n'est jamais lue comme une mesure."""
     r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
-    return r.returncode, (r.stderr or r.stdout or "").strip()
+    return r.returncode, r.stdout or "", r.stderr or ""
+
+
+def lancer(argv, timeout: int = 120):
+    """(code, message) pour le rapport : stderr, sinon stdout."""
+    rc, out, err = executer(argv, timeout)
+    return rc, (err or out).strip()
+
+
+class MesureIndisponible(Exception):
+    """L'interface n'a pas pu être lue, et son absence n'est pas établie."""
+
+
+def interface_absente() -> bool:
+    """Absence ÉTABLIE de wg-mesh : `ip link show wg-mesh` répond explicitement qu'elle n'existe pas."""
+    rc, _, err = executer([chemin("SBX_OUBLI_IP_BIN"), "link", "show", IFACE], timeout=10)
+    return rc != 0 and "does not exist" in err
+
+
+def lire_interface(*quoi) -> str:
+    """stdout de `wg show wg-mesh <quoi>` ; interface absente (vérifiée) → "" ; toute autre erreur → MesureIndisponible."""
+    rc, out, err = executer([chemin("SBX_OUBLI_WG_BIN"), "show", IFACE, *quoi], timeout=20)
+    if rc == 0:
+        return out
+    if interface_absente():
+        return ""
+    raise MesureIndisponible(err.strip()[:120] or f"code {rc}")
 
 
 def refuser(motif: str) -> int:
@@ -158,7 +188,12 @@ def gardes(a):
         noms = {p.get("name") for p in pairs} | {p.get("name") for p in registre.get("peers") or [] if isinstance(p, dict)}
         if a.nom in noms:
             return "nom encore porté par un pair", None
-    recentes = poignees_recentes(a.cle)
+    try:
+        recentes = poignees_recentes(a.cle)
+    except MesureIndisponible as e:
+        if not a.force:
+            return f"mesure des poignées de main impossible ({e}) : --force exigé", None
+        recentes = []
     if recentes and not a.force:
         return f"poignée de main WireGuard de moins de {POIGNEE_RECENTE_S} s ({', '.join(recentes)}) : --force exigé", None
     return None, None
@@ -168,9 +203,7 @@ def poignees_recentes(cles) -> list:
     """Clés de `cles` dont l'interface (noyau, hors de portée du compte secubox) a vu une poignée de main récente."""
     if not cles:
         return []
-    rc, sortie = lancer([chemin("SBX_OUBLI_WG_BIN"), "show", IFACE, "latest-handshakes"], timeout=20)
-    if rc != 0:
-        return []                                  # interface absente : aucun pair n'y vit
+    sortie = lire_interface("latest-handshakes")     # "" : interface absente (vérifiée), aucun pair n'y vit
     maintenant, out = time.time(), []
     for ligne in sortie.splitlines():
         champs = ligne.split()
@@ -185,8 +218,11 @@ def etape_wg(cles) -> dict:
     if not cles:
         return {"ok": True, "detail": "aucune clé"}
     wg = chemin("SBX_OUBLI_WG_BIN")
-    rc, sortie = lancer([wg, "show", IFACE, "peers"], timeout=20)
-    if rc != 0:
+    try:
+        sortie = lire_interface("peers")
+    except MesureIndisponible as e:
+        return {"ok": False, "detail": f"interface illisible : {e}"}
+    if not sortie and interface_absente():
         return {"ok": True, "detail": "interface wg-mesh absente"}
     vues = set(sortie.split())
     faits, echecs = [], []
@@ -195,8 +231,11 @@ def etape_wg(cles) -> dict:
             continue
         rc, err = lancer([wg, "set", IFACE, "peer", c, "remove"], timeout=20)
         (faits if rc == 0 else echecs).append(c[:8] + ("" if rc == 0 else f" ({err[:80]})"))
-    rc, sortie = lancer([wg, "show", IFACE, "peers"], timeout=20)
-    restent = [c[:8] for c in cles if rc == 0 and c in set(sortie.split())]
+    try:
+        apres = set(lire_interface("peers").split())
+    except MesureIndisponible as e:
+        return {"ok": False, "detail": f"retrait non vérifié : {e}"}
+    restent = [c[:8] for c in cles if c in apres]
     if echecs or restent:
         return {"ok": False, "detail": f"encore sur wg-mesh : {', '.join(restent or echecs)}"}
     return {"ok": True, "detail": f"{len(faits)} pair(s) retiré(s) de l'interface"}

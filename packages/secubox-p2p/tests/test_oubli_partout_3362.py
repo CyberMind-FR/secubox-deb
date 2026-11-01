@@ -466,3 +466,142 @@ def test_relais_greps_litteraux_et_retrait_journalise():
     assert texte.index("pair_du_maillage_exact() {") < i
     j = texte.index("pair_du_maillage_exact() {")
     assert "grep -qE" not in texte[j:texte.index("\n}\n", j)]
+
+
+# ── passe 2 (#3362) : lecture-modification-écriture des jonctions en UNE section critique ────────────────────────────
+
+def _jeton(c="a"):
+    return c * 64
+
+
+def _ml(tmp):
+    return tmp / "p2p" / "master-link"
+
+
+def _concurrent(tmp, action, pendant):
+    """`pendant` (un « oubli ») tient le verrou ; `action` part pendant ce temps. Sans section critique unique, l'action lit
+    l'état d'avant et le réécrit après : ce que l'oubli a retiré revient."""
+    tient, relache = threading.Event(), threading.Event()
+
+    def oubli_concurrent():
+        with oubli.verrou(tmp / "p2p"):
+            tient.set()
+            relache.wait(5)
+            pendant()
+    t = threading.Thread(target=oubli_concurrent)
+    t.start()
+    tient.wait(5)
+    res = {}
+    a = threading.Thread(target=lambda: res.update(r=action()))
+    a.start()
+    time.sleep(0.2)
+    relache.set()
+    t.join(5)
+    a.join(10)
+    return res["r"]
+
+
+def test_validation_concurrente_d_un_oubli_ne_reactive_pas_le_jeton(maitre, monkeypatch):
+    tmp, _ = maitre
+    f = _ml(tmp) / "tokens.json"
+    h = main.hash_token(_jeton())
+    f.write_text(json.dumps([{"hash": h, "status": "active", "expires_ts": time.time() + 3600, "auto_approve": True}]))
+    monkeypatch.setattr(main, "_provision", lambda *a, **k: None)
+
+    def revoquer():
+        d = json.loads(f.read_text())
+        d[0]["status"] = "revoked"
+        oubli.ecrire_atomique(f, d, 0o600)
+    r = _concurrent(tmp, lambda: TestClient(main.app).post("/master-link/join", json={
+        "token": _jeton(), "fingerprint": "sb-neuf", "hostname": "neuf"}), revoquer)
+    assert r.status_code == 403
+    assert json.loads(f.read_text())[0]["status"] == "revoked"
+    assert "sb-neuf" not in (_ml(tmp) / "requests.json").read_text()
+
+
+def test_approbation_concurrente_d_un_oubli_ne_ramene_pas_le_pair(maitre, monkeypatch):
+    tmp, _ = maitre
+    f = _ml(tmp) / "requests.json"
+    f.write_text(json.dumps([{"fingerprint": "sb-x", "hostname": "x", "status": "pending", "mesh_ip": "10.10.0.30"}]))
+    monkeypatch.setattr(main, "_provision", lambda *a, **k: None)
+
+    def oublier_la_demande():
+        oubli.ecrire_atomique(f, [], 0o600)
+    r = _concurrent(tmp, lambda: TestClient(main.app).post("/master-link/approve", json={"fingerprint": "sb-x", "action": "approve"}),
+                    oublier_la_demande)
+    assert r.status_code == 404
+    assert json.loads(f.read_text()) == []
+    assert "sb-x" not in (tmp / "p2p" / "peers.json").read_text()
+
+
+@pytest.mark.parametrize("appel", [
+    lambda c: c.post("/master-link/join", json={"token": _jeton(), "fingerprint": "sb-n", "hostname": "n"}),
+    lambda c: c.post("/master-link/token/cleanup"),
+    lambda c: c.post("/master-link/token/revoke", params={"token": _jeton()}),
+])
+def test_jetons_corrompus_503_et_intacts_partout(maitre, appel):
+    tmp, _ = maitre
+    f = _ml(tmp) / "tokens.json"
+    f.write_text("{coupé")
+    assert appel(TestClient(main.app)).status_code == 503
+    assert f.read_text() == "{coupé"
+
+
+def test_demandes_corrompues_503_et_intactes(maitre):
+    tmp, _ = maitre
+    f = _ml(tmp) / "requests.json"
+    f.write_text("[coupé")
+    assert TestClient(main.app).post("/master-link/approve", json={"fingerprint": "sb-x", "action": "approve"}).status_code == 503
+    assert f.read_text() == "[coupé"
+
+
+def test_verrou_reentrant_dans_le_meme_fil(tmp_path):
+    with oubli.verrou(tmp_path):
+        assert oubli.tenu(tmp_path)
+        with oubli.verrou(tmp_path):                  # save_json sous la section critique : pas d'auto-blocage
+            pass
+        assert oubli.tenu(tmp_path)
+    assert not oubli.tenu(tmp_path)
+
+
+def test_garde_wg_fermee_si_la_mesure_echoue(banc):
+    tmp, env, log = banc
+    env["SBX_OUBLI_WG_BIN"] = str(_bin(tmp, "wg-ko", 'echo "permission refusée" >&2; exit 1'))
+    env["SBX_OUBLI_IP_BIN"] = str(_bin(tmp, "ip-ok", 'echo "5: wg-mesh: <POINTOPOINT>"; exit 0'))
+    r = _helper(env, "--cle", K_LGM)
+    assert r.returncode == 2 and "mesure" in r.stdout
+    assert _helper(env, "--cle", K_LGM, "--force").returncode == 0
+    env["SBX_OUBLI_IP_BIN"] = str(_bin(tmp, "ip-absent", 'echo \'Device "wg-mesh" does not exist.\' >&2; exit 1'))
+    assert _helper(env, "--cle", K_LGM).returncode == 0          # interface absente, vérifiée : aucun pair n'y vit
+    env["SBX_OUBLI_IP_BIN"] = str(_bin(tmp, "ip-ko", 'echo "RTNETLINK: autre" >&2; exit 2'))
+    assert _helper(env, "--cle", K_LGM).returncode == 2
+
+
+def test_documentation_force_et_pux():
+    readme = (ICI / "README.md").read_text()
+    assert "tout appelant du compte" in readme and "hors confinement" in readme
+    prof = (ICI / "apparmor" / "usr.sbin.secubox-oubli-pair").read_text()
+    assert "hors confinement" in prof
+    assert "tout appelant du compte" in (ICI / "debian" / "changelog").read_text().split("\n -- ")[0]
+
+
+def test_operations_terminees_seules_purgees_et_etat_passe_en_argument():
+    src = (ICI / "api" / "main.py").read_text()
+    i = src.index("def _finir_oubli(")
+    corps = src[i:src.index("\ndef ", i + 10)]
+    assert "OPERATIONS_OUBLI[op]" not in corps.split("_operation_maj")[0]
+    j = src.index('@app.post("/master-link/oublier"')
+    assert '"termine"' in src[j:j + 6000].split("OPERATIONS_OUBLI[op] = ")[0]
+
+
+def test_jetons_chown_avant_remplacement():
+    src = (ICI / "api" / "jetons.py").read_text()
+    i = src.index("def ecrire(")
+    corps = src[i:src.index("\ndef ", i + 5)]
+    assert "fchown" in corps and corps.index("fchown") < corps.index("os.replace")
+
+
+def test_postinst_echec_apparmor_audite():
+    post = (ICI / "debian" / "postinst").read_text()
+    i = post.index("usr.sbin.secubox-oubli-pair")
+    assert "audit.log" in post[i:i + 900]

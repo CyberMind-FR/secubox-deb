@@ -22,6 +22,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -41,16 +42,45 @@ class EtatIllisible(Exception):
     """Un état présent mais illisible : jamais réécrit."""
 
 
+_TENUS = threading.local()
+
+
+def _cle(dossier) -> str:
+    return os.path.realpath(str(dossier))
+
+
+def tenu(dossier) -> bool:
+    """Ce fil tient-il déjà le verrou de `dossier` ?"""
+    return getattr(_TENUS, "profondeurs", {}).get(_cle(dossier), 0) > 0
+
+
 @contextlib.contextmanager
 def verrou(dossier):
-    """Verrou exclusif `<dossier>/.etat.lock` (flock) des écrivains de peers.json et wg_mesh.json."""
+    """Verrou exclusif `<dossier>/.etat.lock` (flock) des écrivains de peers.json, wg_mesh.json, requests.json et tokens.json.
+
+    RÉENTRANT DANS UN MÊME FIL (#3362, passe 2) : une section critique de lecture-modification-écriture (jonction,
+    approbation, oubli) appelle des écrivains (save_json) qui, sous elle, écrivent « déjà sous verrou » au lieu de reprendre
+    un flock sur un second descripteur, ce qui bloquerait le fil contre lui-même. Entre fils ou processus : exclusif."""
+    cle = _cle(dossier)
+    prof = _TENUS.__dict__.setdefault("profondeurs", {})
+    if prof.get(cle, 0) > 0:
+        prof[cle] += 1
+        try:
+            yield
+        finally:
+            prof[cle] -= 1
+        return
     fd = os.open(os.path.join(str(dossier), VERROU), os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
     try:
         if os.geteuid() == 0:            # #3362 : créé par root (sbx-mesh-invite), il resterait fermé au service
             st = os.stat(str(dossier))
             os.fchown(fd, st.st_uid, st.st_gid)
         fcntl.flock(fd, fcntl.LOCK_EX)
-        yield
+        prof[cle] = 1
+        try:
+            yield
+        finally:
+            prof[cle] = 0
     finally:
         os.close(fd)
 

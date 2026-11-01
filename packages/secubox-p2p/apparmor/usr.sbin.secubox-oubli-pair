@@ -6,8 +6,11 @@
 # Profil AppArmor ENFORCE de secubox-oubli-pair (#3362), attaché au chemin de la commande (lancée par sudo depuis
 # secubox-p2p). Il LIT les états du maillage (wg_mesh.json, peers.json, ancre, conf des noms Unbound), n'ÉCRIT que l'audit,
 # et n'exécute que : wg (dans ce profil : le code n'appelle que `show wg-mesh …` et `set wg-mesh peer <clé> remove`,
-# AppArmor ne borne pas les arguments), et trois commandes du dépôt qui tournent sous LEUR profil s'il existe (Px), sinon
-# hors profil (Pux) : secubox-relais-maillage (HAProxy, nft, sbxwaf), secubox-annuaire-noms (Unbound), autoloadctl.
+# AppArmor ne borne pas les arguments), ip (lecture : `link show wg-mesh`), et trois commandes du dépôt.
+#
+# EXCEPTION ASSUMÉE (#3362) : secubox-relais-maillage (HAProxy, nft, certbot, sbxwaf), secubox-annuaire-noms (Unbound,
+# Avahi) et autoloadctl n'ont PAS de profil propre ; en Pux, elles tournent HORS CONFINEMENT (Px sans profil refuserait
+# l'exécution et casserait l'oubli). Leurs profils sont un travail à venir ; dès qu'ils existent, Pux les applique.
 # Aucun shell, aucun secret.
 
 #include <tunables/global>
@@ -31,6 +34,8 @@ profile secubox-oubli-pair /usr/sbin/secubox-oubli-pair flags=(enforce) {
   /var/log/secubox/audit.log w,
 
   /usr/bin/wg ix,
+  /usr/bin/ip ix,
+  # Pux : hors confinement tant que ces commandes n'ont pas de profil (voir l'exception ci-dessus)
   /usr/sbin/secubox-relais-maillage Pux,
   /usr/sbin/secubox-annuaire-noms Pux,
   /usr/sbin/autoloadctl Pux,

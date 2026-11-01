@@ -25,3 +25,9 @@ def test_bouton_oublier_et_routes():
 
 def test_le_bouton_n_est_pose_que_pour_un_nom_valide():
     assert "/^[a-z0-9][a-z0-9-]{0,62}$/.test(p.name)" in PAGE
+
+
+def test_bouton_reactive_si_le_suivi_echoue():
+    """#3362 passe 2 : un suivi en échec ne laisse pas le bouton désactivé."""
+    i = PAGE.index("Suivi de l\\'oubli impossible")
+    assert "ok.disabled = false" in PAGE[i:i + 120]

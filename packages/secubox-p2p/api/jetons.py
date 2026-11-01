@@ -50,6 +50,14 @@ def ecrire(jetons: List[Dict], chemin: Optional[str] = None) -> None:
     fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".tokens-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
+            if os.geteuid() == 0:             # #3362 : lancé en root (sbx-mesh-invite), rendu au service AVANT le remplacement
+                try:
+                    import pwd                # noqa: PLC0415
+                    u = pwd.getpwnam("secubox")
+                    os.fchown(f.fileno(), u.pw_uid, u.pw_gid)
+                except KeyError:
+                    pass
+            os.fchmod(f.fileno(), 0o600)
             json.dump(jetons, f, indent=2)
             f.flush()
             os.fsync(f.fileno())

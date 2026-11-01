@@ -142,9 +142,12 @@ def save_json(path: Path, data: Any):
     init_dirs()
     if Path(path) in (PEERS_FILE, WG_MESH_CONFIG, ML_REQUESTS_FILE, ML_TOKENS_FILE):
         # #3335 (relecture #3341), #3362 : mêmes fichiers que « Oublier ce nœud » (jonctions comprises) : écriture atomique
-        # sous son verrou
-        with oubli.verrou(P2P_DIR):
-            oubli.ecrire_atomique(path, data, 0o644 if Path(path) == PEERS_FILE else 0o600)
+        # sous son verrou. Déjà dans une section critique de ce fil : variante « déjà sous verrou », sans reprendre le flock.
+        if oubli.tenu(P2P_DIR):
+            _ecrire_sous_verrou(path, data)
+        else:
+            with oubli.verrou(P2P_DIR):
+                _ecrire_sous_verrou(path, data)
     else:
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
@@ -154,6 +157,20 @@ def save_json(path: Path, data: Any):
             pairs_enroles.publier(data, PAIRS_ENROLES_DIR)
         except (pairs_enroles.ProjectionErreur, OSError) as e:
             log.warning("projection des pairs enrôlés non publiée : %s", e)
+
+
+def _ecrire_sous_verrou(path: Path, data: Any) -> None:
+    """Écriture atomique d'un fichier d'état du maillage ; l'appelant TIENT `oubli.verrou(P2P_DIR)` (#3362)."""
+    oubli.ecrire_atomique(path, data, 0o644 if Path(path) == PEERS_FILE else 0o600)
+
+
+def _ml_lire(path: Path) -> List[Dict]:
+    """#3362 (passe 2) : demandes ou jetons, lus STRICTEMENT dans une section critique ; illisibles → 503, rien n'est
+    réécrit (load_json rendait [] et le fichier était remplacé par une liste vide)."""
+    try:
+        return oubli.lire_strict_liste(path)
+    except oubli.EtatIllisible:
+        raise HTTPException(status_code=503, detail="jonctions du maillage illisibles : rien n'est modifié") from None
 
 
 def get_node_id() -> str:
@@ -324,8 +341,11 @@ def save_ml_config(config: Dict):
 
 
 def get_ml_tokens() -> List[Dict]:
-    """Get all master-link tokens."""
+    """Get all master-link tokens. Dans une section critique (#3362) : lecture STRICTE (503 si illisible) ; hors section
+    (lectures seules) : tolérante."""
     ml_init()
+    if oubli.tenu(P2P_DIR):
+        return _ml_lire(ML_TOKENS_FILE)
     return load_json(ML_TOKENS_FILE, [])
 
 
@@ -336,8 +356,11 @@ def save_ml_tokens(tokens: List[Dict]):
 
 
 def get_ml_requests() -> List[Dict]:
-    """Get all join requests."""
+    """Get all join requests. Dans une section critique (#3362) : lecture STRICTE (503 si illisible) ; hors section
+    (lectures seules) : tolérante."""
     ml_init()
+    if oubli.tenu(P2P_DIR):
+        return _ml_lire(ML_REQUESTS_FILE)
     return load_json(ML_REQUESTS_FILE, [])
 
 
@@ -392,7 +415,12 @@ def ml_token_validate(token: str) -> Dict:
         return {"valid": False, "error": "missing_token"}
 
     token_hash = hash_token(token)
-    tokens = get_ml_tokens()
+    init_dirs()
+    with oubli.verrou(P2P_DIR):                  # #3362 : lire, marquer « expiré », écrire : une section critique
+        return _ml_token_validate(get_ml_tokens(), token_hash)
+
+
+def _ml_token_validate(tokens: List[Dict], token_hash: str) -> Dict:
     now = datetime.utcnow()
 
     for t in tokens:
@@ -426,8 +454,15 @@ def ml_token_validate(token: str) -> Dict:
 
 
 def ml_token_mark_used(token_hash: str, peer_fp: str):
-    """Mark a token as used."""
-    tokens = get_ml_tokens()
+    """Mark a token as used (section critique, #3362)."""
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        tokens = get_ml_tokens()
+        _marquer_utilise(tokens, token_hash, peer_fp)
+        save_ml_tokens(tokens)
+
+
+def _marquer_utilise(tokens: List[Dict], token_hash: str, peer_fp: str) -> None:
     for t in tokens:
         if t.get("hash") == token_hash:
             t["status"] = "used"
@@ -435,12 +470,16 @@ def ml_token_mark_used(token_hash: str, peer_fp: str):
             t["used_by"] = peer_fp
             t["used_at"] = datetime.utcnow().isoformat()
             break
-    save_ml_tokens(tokens)
 
 
 def ml_cleanup_tokens():
-    """Remove expired tokens."""
-    tokens = get_ml_tokens()
+    """Remove expired tokens (section critique, lecture stricte : #3362)."""
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        return _ml_cleanup_tokens(get_ml_tokens())
+
+
+def _ml_cleanup_tokens(tokens: List[Dict]) -> Dict:
     now = datetime.utcnow().timestamp()
     cleaned = 0
 
@@ -2100,13 +2139,14 @@ async def ml_validate_token(token: str):
 async def ml_revoke_token(token: str, user: dict = Depends(require_jwt)):
     """Revoke a token."""
     token_hash = hash_token(token)
-    tokens = get_ml_tokens()
-
-    for t in tokens:
-        if t.get("hash") == token_hash:
-            t["status"] = "revoked"
-            save_ml_tokens(tokens)
-            return {"status": "ok", "revoked": token_hash}
+    init_dirs()
+    with oubli.verrou(P2P_DIR):                  # #3362 : section critique, lecture stricte
+        tokens = get_ml_tokens()
+        for t in tokens:
+            if t.get("hash") == token_hash:
+                t["status"] = "revoked"
+                save_ml_tokens(tokens)
+                return {"status": "ok", "revoked": token_hash}
 
     raise HTTPException(status_code=404, detail="Token not found")
 
@@ -2125,7 +2165,16 @@ async def ml_cleanup_local(user: dict = Depends(require_jwt)):
 
 @app.post("/master-link/join")
 def ml_join(req: JoinRequest, request: Request):
-    """Handle join request from new node (token validated)."""
+    """Handle join request from new node (token validated).
+
+    #3362 (passe 2) : validation du jeton, lecture des demandes, inscription et écritures dans UNE section critique
+    (`oubli.verrou`) : une jonction qui a lu avant un oubli concurrent ne réécrit plus sa copie périmée."""
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        return _ml_join(req, request)
+
+
+def _ml_join(req: JoinRequest, request: Request):
     # Validate token
     validation = ml_token_validate(req.token)
     if not validation.get("valid"):
@@ -2539,9 +2588,10 @@ def _operation_maj(op: str, **champs) -> None:
         OPERATIONS_OUBLI[op].update(champs)
 
 
-def _finir_oubli(op: str, nom: str, retires: Dict, force: bool, acteur: str) -> None:
-    """Fin de l'oubli (tâche de fond) : étapes root, puis Flotte du pilotage ; chaque échec journalisé et audité."""
-    etapes = dict(OPERATIONS_OUBLI[op]["etapes"])
+def _finir_oubli(op: str, nom: str, retires: Dict, force: bool, acteur: str, etapes_initiales: Dict) -> None:
+    """Fin de l'oubli (tâche de fond) : étapes root, puis Flotte du pilotage ; chaque échec journalisé et audité.
+    L'état initial arrive en argument : le dict partagé n'est jamais relu hors de son verrou."""
+    etapes = {k: dict(v) for k, v in etapes_initiales.items()}
     try:
         nom_libre = bool(retires.get("nom_libre"))
         nom_root = nom if nom_libre and RE_NOM_PAIR_31.fullmatch(nom) else None
@@ -2624,12 +2674,14 @@ def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
         etapes["projection"] = {"ok": False, "detail": str(e)[:300]}
     op = secrets.token_hex(16)
     with _operations_verrou:
-        while len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX:
-            OPERATIONS_OUBLI.pop(next(iter(OPERATIONS_OUBLI)))
+        # seules les opérations TERMINÉES sont purgées (une opération en cours reste suivable)
+        terminees = [k for k, v in OPERATIONS_OUBLI.items() if v.get("etat") == "termine"]
+        while len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX and terminees:
+            OPERATIONS_OUBLI.pop(terminees.pop(0))
         OPERATIONS_OUBLI[op] = {"operation": op, "oublie": req.nom, "etat": "en_cours", "status": "en_cours",
                                 "retires": {"registre": retires["registre"], "wg": retires["wg"], **n_jonctions},
-                                "etapes": etapes, "restes": [], "debut": time.time()}
-    _lancer_operation(lambda: _finir_oubli(op, req.nom, retires, req.force, acteur))
+                                "etapes": {k: dict(v) for k, v in etapes.items()}, "restes": [], "debut": time.time()}
+    _lancer_operation(lambda: _finir_oubli(op, req.nom, retires, req.force, acteur, etapes))
     return {"operation": op, "etat": "en_cours", "oublie": req.nom, "suivi": f"/api/v1/p2p/master-link/oublier/{op}"}
 
 
@@ -2647,7 +2699,16 @@ def ml_oublier_suivi(operation: str, user: dict = Depends(require_jwt)):
 
 @app.post("/master-link/approve")
 async def ml_approve(req: ApproveRequest, user: dict = Depends(require_jwt)):
-    """Approve, reject, or promote a peer (auth required)."""
+    """Approve, reject, or promote a peer (auth required).
+
+    #3362 (passe 2) : lecture, décision et écritures dans UNE section critique : une approbation concurrente d'un oubli ne
+    ramène pas le pair oublié."""
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        return _ml_approve(req)
+
+
+def _ml_approve(req: ApproveRequest):
     requests = get_ml_requests()
     config = get_ml_config()
     now = datetime.utcnow()

@@ -776,7 +776,7 @@
                     let d = null;
                     for (let i = 0; i < 300; i++) {
                         const rs = await pbFetch('/api/v1/p2p/master-link/oublier/' + encodeURIComponent(op));
-                        if (!rs.ok) { msg.textContent = 'Suivi de l\'oubli impossible : ' + await pbErreur(rs); return; }
+                        if (!rs.ok) { msg.textContent = 'Suivi de l\'oubli impossible : ' + await pbErreur(rs); ok.disabled = false; return; }
                         d = await rs.json();
                         if (d.etat === 'termine') break;
                         msg.textContent = 'Oubli en cours… (' + Object.keys(d.etapes || {}).length + ' étape(s) faite(s))';

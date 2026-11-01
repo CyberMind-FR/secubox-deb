@@ -13,9 +13,17 @@ secubox-p2p (1.21.0-1~trixie1) trixie; urgency=medium
     illisibles), reecrits seulement si une entree du pair part, tous leurs
     ecrivains atomiques sous le meme verrou ; oubli asynchrone (202 + GET
     de l operation) ; secubox-oubli-pair refuse une poignee de main de moins
-    de 180 s sauf --force audite, --acteur, lecture O_NOFOLLOW, profil
-    AppArmor enforce charge par le postinst ; relais : comparaison litterale
-    des adresses, retraits journalises (ref #3362).
+    de 180 s sauf --force (accepte par l assistant de tout appelant du compte
+    secubox ; seule la route ne le transmet que sur decision de
+    l administrateur), audite ; --acteur, lecture O_NOFOLLOW, profil
+    AppArmor enforce charge par le postinst (relais-maillage, annuaire-noms
+    et autoloadctl hors confinement faute de profil) ; relais : comparaison
+    litterale des adresses, retraits journalises (ref #3362).
+  * Passe 2 : toute lecture-modification-ecriture de requests.json et
+    tokens.json (validation, marquage, nettoyage, revocation, jonction,
+    approbation) en une section critique, lecture stricte (503) ; garde wg
+    fermee si la mesure echoue (sauf interface absente verifiee) ; jetons
+    rendus au service avant remplacement (ref #3362).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 10:10:28 +0100
 
