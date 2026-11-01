@@ -9,8 +9,10 @@ dans Unbound : elle écrit l'état (fichier JSON validé) puis demande au contr�
 """
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
+import logging
 import os
 import re
 import subprocess
@@ -24,11 +26,12 @@ from pydantic import BaseModel, Field
 from secubox_core.auth import require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
+    from . import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
+    from api import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
+logger = logging.getLogger("secubox.ad-guard.adblock-tv")
 CTL = os.environ.get("SECUBOX_ADGUARD_TV_CTL", "/usr/sbin/secubox-adguard-tv")
 CUSTOM_MAX = 2000
 SONDE_ZONE = "sbx-dnspath.invalid"          # `.invalid` : jamais résolu hors de la box ; seule sa ligne de journal nous importe
@@ -94,10 +97,12 @@ def _refuse(e: dnstv.ErreurTV):
 
 @router.get("/status", dependencies=[Depends(require_lecture)])
 async def statut():
+    await asyncio.to_thread(_migrer)
     etat, erreur = dnstv.lire_etat()
     table = _table()
     stats = _magasin().statistiques()
-    return {"actif": etat["actif"], "clients": etat["clients"], "erreur": erreur, "dropin_present": dnstv.CONF_UNBOUND.is_file(),
+    vue = await asyncio.to_thread(_vue_appareils, etat)
+    return {"actif": etat["actif"], "clients": _clients_enrichis(etat["clients"], vue), "appareils": vue, "erreur": erreur, "dropin_present": dnstv.CONF_UNBOUND.is_file(),
             "listes": {"domaines": len(table), "problemes": dnstv.verifier_manifeste(dnstv.DOSSIER_LISTES),
                        "par_categorie": {c: sum(1 for v in table.values() if v == c) for c in dnstv.CATEGORIES}},
             "compteurs": {"requetes": stats["requetes"], "domaines_uniques": stats["domaines_uniques"],
@@ -645,6 +650,7 @@ def _clients_du_nom(etat: dict, nom: str) -> list:
 
 @router.get("/auto/detection", dependencies=[Depends(require_lecture)])
 def detection():
+    _migrer()
     etat = _etat()
     par: dict = {}
     for c in etat["clients"]:
@@ -653,6 +659,9 @@ def detection():
         a["adresses"].append(c["ip"])
     for a in par.values():
         a["autorisations"] = etat.get("autorisations", {}).get(dnstv_regles.slug(a["nom"]), [])
+    vue = _vue_appareils(etat)
+    for a in par.values():
+        a.update(_champs_profil(_appareil_de(vue, a["mac"], a["nom"])))
     suivi = dnstv_ajout.charger_suivi()
     reglage = dnstv_auto.reglage_depuis(etat)
     return {"ajout_auto": etat["ajout_auto"], "mode_defaut": etat["mode_defaut"], "ignores": etat["ignores"],
@@ -897,3 +906,77 @@ def suspect_legitime(corps: SuspectIn):
         tmp.write_text(json.dumps(liste), encoding="utf-8")
         os.replace(tmp, _ignores_path())
     return {"domaine": d, "ignores": len(liste)}
+
+
+# ── SBX TV PRIVACY lot 1 (#3374) : appareils par MAC, profils d'équipement ───────────────────────────────────────────────
+
+def _migrer() -> None:
+    """Migration v1 -> v2 de l'état au chargement, sous le verrou commun ; idempotente, une erreur ne bloque jamais la lecture."""
+    try:
+        with dnstv_regles.verrou():
+            dnstv_appareils.migrer_fichier()
+    except (OSError, dnstv.ErreurTV) as e:
+        logger.warning("migration #3374 non faite : %s", e)
+
+
+def _domaines_observes(ip: str) -> List[str]:
+    """Domaines vus pour une adresse depuis 3 jours (profil par observation quand le NAC ne conclut pas)."""
+    try:
+        return [e["domaine"] for e in _magasin().evenements_recents(ip, int(time.time()) - 3 * 86400)]
+    except Exception as e:                                   # noqa: BLE001 — base absente ou verrouillée : pas d'observation, jamais d'erreur 500
+        logger.info("observation DNS indisponible pour le profil : %s", type(e).__name__)
+        return []
+
+
+def _vue_appareils(etat: dict) -> List[dict]:
+    return dnstv_appareils.vue_appareils(etat, dnstv_appareils.lire_inventaire_nac(), _voisins(), _domaines_observes)
+
+
+def _champs_profil(a: Optional[dict]) -> dict:
+    if not a:
+        return {"profil": "INCONNU", "profil_source": "nac", "profil_confiance": 0}
+    return {"profil": a["profil"], "profil_source": a["profil_source"], "profil_confiance": a["profil_confiance"], "ips": a["ips"]}
+
+
+def _appareil_de(vue: List[dict], mac: Optional[str], nom: str) -> Optional[dict]:
+    for a in vue:
+        if (mac and a["mac"] == mac) or (not mac and a["mac"] is None and a["nom"] == nom):
+            return a
+    return None
+
+
+def _clients_enrichis(clients: List[dict], vue: List[dict]) -> List[dict]:
+    """Les entrées par adresse d'origine, inchangées, avec en plus le profil et les adresses de leur appareil."""
+    return [dict(c, **_champs_profil(_appareil_de(vue, c.get("mac"), c["nom"]))) for c in clients]
+
+
+class ProfilIn(BaseModel):
+    type: Optional[str] = Field(default=None, max_length=20)        # None : efface la correction manuelle
+
+
+@router.get("/appareils", dependencies=[Depends(require_lecture)])
+def appareils_par_mac():
+    """Appareils par MAC : adresses, mode, profil d'équipement, source et confiance."""
+    _migrer()
+    nac = dnstv_appareils.lire_inventaire_nac()
+    vue = dnstv_appareils.vue_appareils(_etat(), nac, _voisins(), _domaines_observes)
+    return {"appareils": vue, "nac": bool(nac), "profils": list(dnstv.PROFILS)}
+
+
+@router.post("/appareils/{mac}/profil", dependencies=[Depends(require_jwt)])
+def profil_corriger(mac: str, corps: ProfilIn):
+    """Correction manuelle du profil d'un appareil (elle prime toujours) ; `type: null` la retire. Aucun effet DNS au lot 1 : pas de contrôleur."""
+    if not dnstv.MAC_RE.match(mac or ""):
+        raise HTTPException(404, "appareil inconnu")
+    _migrer()
+    with _verrou():
+        try:
+            etat = dnstv_appareils.corriger_profil(_etat(), mac, corps.type, int(time.time()))
+            dnstv.ecrire_etat(etat)
+        except dnstv_appareils.AppareilInconnu as e:
+            raise HTTPException(404, str(e)) from e
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+    logger.info("profil d'appareil %s corrigé : %s", mac, corps.type)
+    a = _appareil_de(_vue_appareils(etat), mac, "")
+    return dict(a or {}, mac=mac)

@@ -191,6 +191,51 @@ def _valider_autorisations(brut) -> Dict[str, List[str]]:
     return out
 
 
+SCHEMA_ETAT = 2                     # #3374 : `appareils` indexés par MAC à côté de `clients` (une entrée par adresse) ; sans `schema` = v1
+PROFILS = ("FREEBOX_PLAYER", "ANDROID_TV", "GOOGLE_TV", "SAMSUNG_TIZEN", "LG_WEBOS", "APPLE_TV", "GENERIC_SMART_TV", "INCONNU")
+SOURCES_PROFIL = ("nac", "manuel", "observation")
+APPAREILS_MAX = 64
+
+
+def _valider_profil(brut) -> dict:
+    """Profil d'équipement stocké (correction manuelle) : type et source en liste fermée, confiance entière 0-100, date facultative."""
+    if not isinstance(brut, dict) or set(brut) - {"type", "source", "confiance", "maj"}:
+        raise ErreurTV("appareils : profil invalide")
+    if brut.get("type") not in PROFILS:
+        raise ErreurTV("appareils : type de profil inconnu")
+    if brut.get("source") not in SOURCES_PROFIL:
+        raise ErreurTV("appareils : source de profil inconnue (nac, manuel, observation)")
+    conf, maj = brut.get("confiance"), brut.get("maj", 0)
+    if not isinstance(conf, int) or isinstance(conf, bool) or not 0 <= conf <= 100:
+        raise ErreurTV("appareils : confiance entière de 0 à 100 attendue")
+    if not isinstance(maj, int) or isinstance(maj, bool) or maj < 0:
+        raise ErreurTV("appareils : date de profil invalide")
+    out = {"type": brut["type"], "source": brut["source"], "confiance": conf}
+    if maj:
+        out["maj"] = maj
+    return out
+
+
+def _valider_appareils(brut) -> Dict[str, dict]:
+    """Appareils par MAC (#3374) : clé MAC canonique, nom sûr, profil facultatif. Le contrôleur root les relit sans s'en servir pour Unbound."""
+    if not isinstance(brut, dict) or len(brut) > APPAREILS_MAX:
+        raise ErreurTV(f"appareils : table de {APPAREILS_MAX} MAC au plus attendue")
+    out: Dict[str, dict] = {}
+    for mac, a in brut.items():
+        if not isinstance(mac, str) or not MAC_RE.match(mac) or mac == "00:00:00:00:00:00":
+            raise ErreurTV("appareils : adresse MAC invalide (minuscules, a:b:c:d:e:f)")
+        if not isinstance(a, dict) or set(a) - {"nom", "profil"}:
+            raise ErreurTV("appareils : entrée invalide")
+        nom = a.get("nom")
+        if not isinstance(nom, str) or not NOM_RE.match(nom):
+            raise ErreurTV("appareils : nom d'appareil invalide")
+        entree = {"nom": nom}
+        if "profil" in a:
+            entree["profil"] = _valider_profil(a["profil"])
+        out[mac] = entree
+    return out
+
+
 def valider_etat(brut) -> dict:
     """État du POC validé en profondeur. Le contrôleur root ne se fie à RIEN d'autre que ce qui passe ici."""
     if not isinstance(brut, dict):
@@ -276,6 +321,12 @@ def valider_etat(brut) -> dict:
     aut = _valider_autorisations(brut.get("autorisations", {}))
     if aut:                                                       # écrit seulement s'il y en a : les anciens états gardent exactement leur format
         etat_valide["autorisations"] = aut
+    if "schema" in brut:                                          # #3374 : v2 ; un état v1 garde exactement son format
+        if brut["schema"] != SCHEMA_ETAT or isinstance(brut["schema"], bool):
+            raise ErreurTV("version de schéma d'état inconnue")
+        etat_valide["schema"] = SCHEMA_ETAT
+    if "appareils" in brut:
+        etat_valide["appareils"] = _valider_appareils(brut["appareils"])
     return etat_valide
 
 
