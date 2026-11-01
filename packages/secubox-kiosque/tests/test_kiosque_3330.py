@@ -29,11 +29,13 @@ def test_aucun_script_ni_style_integre():
     assert 'href="/kiosque/manifest.webmanifest"' in html and 'src="/kiosque/kiosque.js"' in html
 
 
-def test_js_sans_innerhtml_ni_ecriture():
+def test_js_sans_innerhtml_ni_ecriture_hors_deblocage():
     js = (WWW / "kiosque.js").read_text(encoding="utf-8")
     assert "innerHTML" not in js and "eval(" not in js
-    # MVP en lecture seule : aucune requête autre que GET (fetch sans method)
-    assert "method:" not in js and "'POST'" not in js and '"POST"' not in js
+    # Lecture seule, sauf UNE écriture (#3374) : le geste borné « Je débloque » vers la route d'usager dédiée
+    assert js.count("method:") == 1 and js.count("'POST'") == 1 and '"POST"' not in js
+    assert "const TV_API = '/api/v1/ad-guard/adblock-tv/protection/usager';" in js
+    assert "fetch(TV_API + '/debloquer', { method: 'POST'" in js
 
 
 def test_service_worker_ne_cache_jamais_l_api():
@@ -56,7 +58,7 @@ def test_paquet_debian():
     c = lire("debian/control")
     assert "Package: secubox-kiosque" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
-    assert lire("debian/changelog").startswith("secubox-kiosque (0.2.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-kiosque (0.3.0-1~trixie1) trixie;")
     r = lire("debian/rules")
     assert "/usr/share/secubox/www/kiosque" in r and "/etc/nginx/secubox-routes.d/kiosque.conf" in r
 
@@ -104,3 +106,36 @@ def test_donnees_absentes_restent_des_tirets():
     assert d["etat"] == "hors ligne" and d["etatDetail"] == "3 service(s) en échec"
     for k in ("memoire", "charge", "uptime", "interface", "mainsLiees", "agent"):
         assert d[k] is None, k
+
+
+# ── « Ça ne marche plus ? Je débloque » (#3374, lot 3 SBX TV Privacy) ─────────────────────────────────
+
+def _corps(*args):
+    harnais = (
+        "const vm=require('vm');const fs=require('fs');"
+        "const ctx={document:{addEventListener(){}},localStorage:{getItem(){return ''}},console};vm.createContext(ctx);"
+        f"vm.runInContext(fs.readFileSync({json.dumps(str(WWW / 'kiosque.js'))},'utf8'),ctx);"
+        "process.stdout.write(JSON.stringify(vm.runInContext('corpsDeblocage.apply(null,'+process.argv[1]+')',ctx)??null));"
+    )
+    r = subprocess.run(["node", "-e", harnais, json.dumps(list(args))], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+def test_corps_de_deblocage_borne():
+    assert _corps("tv-salon", "pause", 60) == {"tv": "tv-salon", "geste": "pause", "minutes": 60}
+    assert _corps("toutes", "observe", None) == {"tv": "toutes", "geste": "observe"}
+    for args in (("tv-salon", "pause", 30), ("tv-salon", "proteger", 60), ("", "observe", None), ("x" * 41, "observe", None),
+                 ("TV salon", "observe", None)):
+        assert _corps(*args) is None, args
+
+
+def test_carte_debloque_dans_l_ecran_securite():
+    html = (WWW / "index.html").read_text(encoding="utf-8")
+    sec = html[html.index('id="ecran-securite"'):html.index('id="ecran-reseau"')]
+    assert "Ça ne marche plus ? Je débloque" in sec and 'id="k-tv"' in sec and 'id="k-retour"' in sec
+    for m in ("15", "60", "240"):
+        assert f'data-minutes="{m}"' in sec
+    assert "bloque les pubs que la TV va chercher, pas celles qu'un service insère dans sa propre vidéo" in sec
+    js = (WWW / "kiosque.js").read_text(encoding="utf-8")
+    assert "$('k-retour').textContent" in js and "TV_API + '/tv'" in js

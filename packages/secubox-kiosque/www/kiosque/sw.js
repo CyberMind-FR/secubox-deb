@@ -5,7 +5,7 @@
 // Service worker du kiosque (#3330) : met en cache les SEULS fichiers statiques de /kiosque/ (hors ligne, installation).
 // Jamais une réponse d'API : /api/ passe toujours par le réseau, n'est ni lue ni écrite dans le cache.
 'use strict';
-const CACHE = 'kiosque-0.1.0';
+const CACHE = 'kiosque-0.3.0';
 const STATIQUES = ['/kiosque/', '/kiosque/index.html', '/kiosque/kiosque.css', '/kiosque/kiosque.js',
   '/kiosque/manifest.webmanifest', '/kiosque/icone.svg'];
 

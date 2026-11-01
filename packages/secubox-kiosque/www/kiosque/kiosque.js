@@ -3,7 +3,7 @@
 // Source-Disclosed License — All rights reserved except as expressly granted.
 // See LICENCE-CMSD-1.0.md for terms.
 // Kiosque distant (#3330) : lecture seule, API EXISTANTES du maître (même origine), session de
-// l'administrateur (jeton sbx_token). Jamais de données inventées : une valeur absente reste « — ». Tout le texte passe par
+// l'utilisateur (jeton sbx_token). Une seule écriture (#3374) : « Ça ne marche plus ? Je débloque », route d'usager bornée. Jamais de données inventées : une valeur absente reste « — ». Tout le texte passe par
 // textContent (jamais de HTML injecté). Appairage par QR : version suivante.
 'use strict';
 
@@ -189,6 +189,58 @@ async function chargerBox(nom) {
   $('liaison').textContent = nom + ' via le maître · ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
+// ---- « Ça ne marche plus ? Je débloque » (#3374) : route d'usager BORNÉE (pause minutée ou observation, jamais de durcissement) ----
+const TV_API = '/api/v1/ad-guard/adblock-tv/protection/usager';
+const DUREES = [15, 60, 240];
+const ID_TV = /^(toutes|[a-z0-9-]{1,40})$/;
+
+// Fonction pure (testée sous node) : le corps de la demande, ou null si le geste sort des bornes.
+function corpsDeblocage(tv, geste, minutes) {
+  if (typeof tv !== 'string' || !ID_TV.test(tv)) return null;
+  if (geste === 'pause') return DUREES.includes(minutes) ? { tv, geste, minutes } : null;
+  if (geste === 'observe') return { tv, geste };
+  return null;
+}
+
+async function chargerTv() {
+  const d = await api(TV_API + '/tv');
+  const s = $('k-tv');
+  if (!d || !Array.isArray(d.tv) || !s) return;
+  const v = s.value;
+  while (s.options.length > 1) s.remove(1);
+  for (const t of d.tv) {
+    if (!t || typeof t.id !== 'string' || typeof t.nom !== 'string') continue;
+    const o = document.createElement('option');
+    o.value = t.id;
+    o.textContent = t.nom + (t.pause_jusqu_a ? ' (en pause)' : '');
+    s.append(o);
+  }
+  s.value = [...s.options].some((o) => o.value === v) ? v : 'toutes';
+}
+
+async function debloquer(geste, minutes) {
+  const corps = corpsDeblocage($('k-tv').value, geste, minutes);
+  const retour = $('k-retour');
+  if (!corps) { retour.textContent = 'geste refusé'; return; }
+  const t = jeton();
+  if (!t) { versConnexion(); return; }
+  const boutons = document.querySelectorAll('#debloque button');
+  for (const b of boutons) b.disabled = true;
+  try {
+    const r = await fetch(TV_API + '/debloquer', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
+      credentials: 'same-origin', cache: 'no-store', body: JSON.stringify(corps) });
+    if (r.status === 401) { versConnexion(); return; }
+    const j = await r.json().catch(() => ({}));
+    $('k-retour').textContent = r.ok ? (j.message || 'fait') : (r.status === 429 ? 'trop de demandes, réessayer dans quelques minutes'
+      : 'refusé : ' + (typeof j.detail === 'string' ? j.detail : 'HTTP ' + r.status));
+    if (r.ok) chargerTv();
+  } catch (e) {
+    $('k-retour').textContent = 'box injoignable';
+  } finally {
+    for (const b of boutons) b.disabled = false;
+  }
+}
+
 // ---- onglets, veille, rafraîchissement ----
 function montrer(ecran) {
   for (const s of document.querySelectorAll('.ecran')) s.classList.toggle('actif', s.id === 'ecran-' + ecran);
@@ -218,6 +270,10 @@ document.addEventListener('DOMContentLoaded', () => {
   $('veille').addEventListener('click', reveil);
   for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, reveil, { passive: true });
   setInterval(horloge, 10000);
+  for (const b of document.querySelectorAll('#debloque [data-minutes]')) b.addEventListener('click', () => debloquer('pause', Number(b.dataset.minutes)));
+  const obs = $('k-observe');
+  if (obs) obs.addEventListener('click', () => debloquer('observe', null));
+  chargerTv();
   reveil();
   rafraichir();
   setInterval(rafraichir, RAFRAICHIR_MS);
