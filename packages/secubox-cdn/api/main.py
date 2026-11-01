@@ -193,19 +193,24 @@ async def preload_url(request: Request, user=Depends(require_jwt)):
     except ValueError:
         corps = None
     url = corps.get("url") if isinstance(corps, dict) else corps
-    ok, raison = cible.verifier(url)  # #3284 : hôtes publics seulement (pas de LAN, bouclage, lien local)
-    if not ok:
-        raise HTTPException(status_code=400, detail=raison)
+    try:  # #3284 : résolution hors de la boucle, cible publique épinglée (pas de rebinding)
+        c = await asyncio.wait_for(asyncio.to_thread(cible.cible, url), timeout=10)
+    except (cible.CibleRefusee, asyncio.TimeoutError) as e:
+        log.warning("audit preload_url refusé : %s par %s (%s)", str(url)[:200], (user or {}).get("sub"),
+                    getattr(e, "raison", "résolution trop lente"))
+        raise HTTPException(status_code=400, detail=cible.MESSAGE_REFUS)
     try:
         lu = 0
-        async with httpx.AsyncClient(timeout=30, follow_redirects=False) as c:
-            async with c.stream("GET", url) as r:
-                async for morceau in r.aiter_bytes():
-                    lu += len(morceau)
-                    if lu > TAILLE_MAX_PRECHARGE:
-                        return {"success": False, "error": "réponse trop volumineuse"}
-                return {"success": True, "status_code": r.status_code, "size": lu}
-    except httpx.HTTPError as e:
+        async with asyncio.timeout(60):
+            async with httpx.AsyncClient(timeout=30, follow_redirects=False, trust_env=False) as cl:
+                async with cl.stream("GET", c.url_epinglee, headers={"Host": c.hote},
+                                     extensions={"sni_hostname": c.hote}) as r:
+                    async for morceau in r.aiter_bytes():
+                        lu += len(morceau)
+                        if lu > TAILLE_MAX_PRECHARGE:
+                            return {"success": False, "error": "réponse trop volumineuse"}
+                    return {"success": True, "status_code": r.status_code, "size": lu}
+    except (httpx.HTTPError, httpx.InvalidURL, TimeoutError) as e:
         return {"success": False, "error": type(e).__name__}
 
 

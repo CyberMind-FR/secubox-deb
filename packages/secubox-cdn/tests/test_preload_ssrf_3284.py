@@ -56,6 +56,46 @@ def test_nom_introuvable_refuse(monkeypatch):
 def test_route_utilise_la_verification_et_borne_la_reponse():
     src = (PKG / "api" / "main.py").read_text()
     corps = src[src.index('@router.post("/preload_url")'):src.index('@router.get("/list_rules")')]
-    assert "cible.verifier(" in corps
+    assert "cible.cible" in corps   # cible validée et épinglée (#3284)
     assert "follow_redirects=False" in corps
     assert "TAILLE_MAX_PRECHARGE" in corps and "aiter_bytes" in corps
+
+
+@pytest.mark.parametrize("ip", ["64:ff9b::7f00:1", "::ffff:127.0.0.1", "2002:7f00:1::1"])
+def test_ipv6_encapsulant_une_ipv4_privee_refusee(monkeypatch, ip):
+    _resolution(monkeypatch, [ip])
+    assert cible.verifier("https://exemple.test/")[0] is False
+
+
+def test_port_zero_refuse(monkeypatch):
+    _resolution(monkeypatch, ["93.184.216.34"])
+    assert cible.verifier("http://exemple.test:0/")[0] is False
+
+
+def test_message_generique(monkeypatch):
+    _resolution(monkeypatch, None)
+    introuvable = cible.verifier("https://a.test/")[1]
+    _resolution(monkeypatch, ["10.0.0.1"])
+    privee = cible.verifier("https://a.test/")[1]
+    assert introuvable == privee == cible.MESSAGE_REFUS
+
+
+def test_cible_epinglee(monkeypatch):
+    """La connexion se fait sur l'IP validée (pas de seconde résolution : rebinding)."""
+    _resolution(monkeypatch, ["93.184.216.34"])
+    c = cible.cible("https://exemple.test/a.js?x=1")
+    assert c.ip == "93.184.216.34" and c.hote == "exemple.test"
+    assert c.url_epinglee == "https://93.184.216.34:443/a.js?x=1"
+    _resolution(monkeypatch, ["2606:2800::1"])
+    assert cible.cible("http://exemple.test/").url_epinglee == "http://[2606:2800::1]:80/"
+
+
+def test_route_durcie():
+    src = (PKG / "api" / "main.py").read_text()
+    corps = src[src.index('@router.post("/preload_url")'):src.index('@router.get("/list_rules")')]
+    assert "asyncio.to_thread(cible.cible" in corps
+    assert "asyncio.timeout(" in corps
+    assert "trust_env=False" in corps
+    assert "sni_hostname" in corps and "url_epinglee" in corps
+    assert "httpx.InvalidURL" in corps
+    assert "audit" in corps
