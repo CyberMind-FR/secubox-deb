@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-01 (soir) — SBX TV Privacy lots 4 et 5b déployés gk2
+
+- ref #3374 : ad-guard 1.21.0 (PR #3389, lot 4 : DPI par appareil, corrélation de repli, replis candidats AUTO en essai,
+  DNS forcé nftables pour PROTECT/AUTO, base DPI plafonnée), toolbox-ng 0.14.0 (sbxdpi par appareil), ndpid-engine 1.7.4
+  (CPUQuota 40 %, Nice 10, capture complète conservée) ; puis 1.22.0 (PR #3392, lot 5b : onglet « En direct », assistant
+  confirmer / légitime / plus tard, file d'actions différées auditée, apprentissage guidé par appareil désactivé par défaut).
+  annuaire 0.17.4 (PR #3390). Mode LAN étudié (pseudo-routeur #2940 risqué : passerelle de tout le LAN, IPv4 seule) :
+  essai sur TV banc à faire avec le propriétaire. Instabilité test_dnssensor_2240 → #3391.
+
 ## 2026-11-01 — SBX TV Privacy lots 1 à 3 déployés ; oublier un nœud l'oublie partout
 
 - ref #3374 : ad-guard 1.17.0 → 1.20.1, kiosque 0.3.0, hub 1.12.36 (PR #3380, #3383, #3384, #3385, #3386), déployés gk2,
