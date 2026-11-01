@@ -44,7 +44,9 @@ Configuration file: `/etc/secubox/ad-guard.toml`
   (lot 6, #3374) : appareils déclarés de TV Privacy regroupés par MAC, type tiré des profils du lot 1 (preuves du NAC), compteurs DNS de
   dnstv. Réponse `/devices` : `{devices, count, source: "dnstv", lisible, note}` ; un compteur illisible vaut `null`, jamais 0.
 - `POST /api/v1/ad-guard/learn/thresholds` (`require_jwt`) - corps strict (`extra="forbid"`, entiers bornés, au moins une clé ; 422 sinon),
-  écriture atomique de `/etc/secubox/toolbox/filters.json` ; 409 si le fichier existant est illisible (rien n'est écrit).
+  écriture EN PLACE de `/etc/secubox/toolbox/filters.json` (fichier existant ouvert `O_WRONLY|O_NOFOLLOW`, tronqué, écrit, fsync :
+  propriétaire `secubox-toolbox`, droits et inode inchangés, le dossier root 755 n'a pas à être inscriptible) ; 409 si le fichier est absent,
+  un lien, ou illisible (rien n'est écrit).
 
 ### Retiré en 1.23.0 (lot 6 « nettoyage », #3374)
 
@@ -333,22 +335,28 @@ restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
 
 ## Listes blanches
 
-Six listes coexistent ; **aucune n'est fusionnée** (lot 6, #3374 : état des lieux, base d'un futur lot). Le DNS de la box est compilé par
-`secubox-dns-listes` (#3205) à partir des sources déposées par chaque module ; dans Unbound, **la zone la plus précise prime**, et une
-`access-control-view` ou un `local-zone-override` par client prime sur la zone globale pour ce client.
+Sept listes coexistent ; **aucune n'est fusionnée** (lot 6, #3374 : état des lieux, base d'un futur lot). Chaque ligne ci-dessous a été
+vérifiée dans le code (fichier cité) ; rien n'a été mesuré sur une box.
 
-| Liste | Fichier | Portée | Effet réel |
+| Liste | Fichier | Portée | Effet réel (code) |
 |---|---|---|---|
-| ad-guard `whitelist` (API `/whitelist`) | table `whitelist` de `ad-guard.db` (+ `whitelist.json`) | domaine, tous les clients | **décision de l'API seulement** (`/check`, `is_ad_domain`) ; n'est pas compilée dans Unbound |
-| dns-guard `whitelist` | `/var/lib/secubox/dns-guard/whitelist.txt` | domaine | **détection** seulement : jamais signalé DGA/tunnel par dns-guard ; aucun effet de blocage |
-| sinkhole `whitelist` (dns-guard `/sinkhole/whitelist`) | `/var/lib/secubox/filterlists/whitelist-domains.txt` | domaine, tous les clients | retiré des listes du puits à la compilation suivante (`/sinkhole/sync`) |
-| domaines exemptés d'adblock (#1819) | `/var/lib/secubox/ad-guard/domain-allowlist.txt` | domaine, tous les clients | `always_transparent` : **prime sur un parent bloqué** (le plus précis l'emporte) |
-| `ip-allowlist` (dns-guard `/sinkhole/ip-allowlist`) | `/var/lib/secubox/ad-guard/ip-allowlist.txt` | **client** (IP) | vue Unbound `sbx-allow` sans zone de puits adblock : ce client échappe au filtrage pub/pistage |
-| `adult-exempt-ip` / `adult-exempt-mac` | `/var/lib/secubox/ad-guard/adult-exempt-{ip,mac}.txt` | **client** × domaines adultes | `local-zone-override` par client (#2969) : seuls les domaines adultes lui sont ouverts, pubs/pistage restent filtrés |
-| exceptions dnstv `autoriser` (TV Privacy) | `dnstv/exceptions.json` (+ autorisations au puits) | **appareil (MAC) × domaine** | règle par appareil : prime pour cet appareil, jamais reproposée par le moteur |
+| ad-guard `whitelist` (API `/whitelist`) | table `whitelist` de `ad-guard.db` | domaine | **décision de l'API seulement** (`is_whitelisted` / `is_ad_domain`, réponse de `/check`) ; aucun fichier DNS n'en est tiré (`api/main.py`) |
+| dns-guard `whitelist` | `/var/lib/secubox/dns-guard/whitelist.txt` | domaine (et ses sous-domaines) | **détection** seulement : `is_whitelisted` de dns-guard ; aucun effet de blocage (`secubox-dns-guard/api/main.py`) |
+| whitelist du puits (dns-guard `/sinkhole/whitelist`) | `/var/lib/secubox/filterlists/whitelist-domains.txt` | domaine | lue à la compilation des listes (`_load_whitelist`, `common/secubox_filterlists`) ; prise en compte au `/sinkhole/sync` suivant |
+| domaines exemptés d'adblock (#1819) | `/var/lib/secubox/ad-guard/domain-allowlist.txt` | domaine | rendu en `local-zone … always_transparent`, non rendu en `always_nxdomain` : reste résolu même sous un parent bloqué (`sbin/secubox-adblock-sync`) |
+| `ip-allowlist` (dns-guard `/sinkhole/ip-allowlist`) | `/var/lib/secubox/ad-guard/ip-allowlist.txt` | client (IP) | **aucun effet aujourd'hui** : `secubox-adblock-sync` attache ces IP à la vue `sbx-allow`, mais cette vue est VIDE et déclarée `view-first: yes` ; la résolution retombe sur les zones globales, qui s'appliquent donc quand même à ces clients |
+| `adult-exempt-ip` / `adult-exempt-mac` | `/var/lib/secubox/ad-guard/adult-exempt-{ip,mac}.txt` | client × domaines adultes | rendu par `secubox-adguard-adult-sync` en `local-zone-override "<domaine>." <ip> always_transparent`, une entrée par domaine adulte (#2969/#2979) ; pubs et pistage restent filtrés pour ce client |
+| exceptions dnstv `autoriser` (TV Privacy) | `dnstv/exceptions.json` | appareil (MAC) × domaine | rejette la règle du couple (jamais reproposée) et, si l'appareil voit le puits global, pose l'autorisation au puits (#1965) (`api/dnstv_protection.py`) |
 
-Ordre de primauté pour UN client et UN domaine, du plus fort au plus faible : exception dnstv par appareil et `adult-exempt` (par client) →
-`ip-allowlist` (client entier, adblock) → domaine exempté (`domain-allowlist`, `always_transparent`) → whitelist du puits (retirée à la
-compilation) → listes de blocage. La whitelist d'ad-guard et celle de dns-guard ne changent **aucune** réponse DNS : la première ne règle que
-la réponse de l'API, la seconde la détection. Rappel #3224 : une zone de liste présente dans une vue TV reste bloquée pour tous.
+Ordre de primauté — **seulement ce que le code établit** :
 
+- un domaine exempté (`domain-allowlist`, `always_transparent`) prime sur un parent bloqué par adblock : la zone la plus précise l'emporte ;
+- un domaine de la whitelist du puits n'entre pas dans les listes compilées ;
+- `adult-exempt` ne vaut que pour le client désigné et les seuls domaines adultes ;
+- une exception dnstv `autoriser` ne vaut que pour son appareil et son domaine.
+
+La whitelist d'ad-guard et celle de dns-guard ne changent aucune réponse DNS. `ip-allowlist` n'en change aucune non plus tant que la vue
+`sbx-allow` reste vide en `view-first` : un client y figurant n'échappe à rien. Une `access-control-view` ne prime pas d'elle-même sur les
+zones globales : avec `view-first: yes`, ce qu'elle ne définit pas retombe sur elles. Rappel #3224 : une zone de liste présente dans une vue
+TV reste bloquée pour tous. Les primautés entre listes de familles différentes (par exemple adult-exempt contre adblock dans la compilation
+`secubox-dns-listes`, #3205) ne sont pas établies ici.

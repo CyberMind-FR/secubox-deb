@@ -7,6 +7,7 @@
 écrit atomiquement, docstring juste, remarques du lot 5b (marquage sans domaine, type transmis à `annule`), section « Listes blanches »."""
 import importlib.machinery
 import importlib.util
+import os
 import json
 import time
 from pathlib import Path
@@ -189,3 +190,68 @@ def test_readme_dit_quelle_liste_blanche_sert_a_quoi_et_laquelle_prime():
     sec = t[t.index("## Listes blanches"):]
     for nom in ("dns-guard", "sinkhole", "adult-exempt", "ip-allowlist", "exceptions", "prime"):
         assert nom in sec, nom
+
+
+# ── passe 2 ──
+def test_seuils_ecrits_en_place_dossier_non_inscriptible(monde):
+    import os
+    d = monde / "toolbox"
+    d.mkdir()
+    f = d / "filters.json"
+    f.write_text('{"autolearn": true, "tor": {"actif": true}}')
+    os.chmod(f, 0o664)
+    st0 = f.stat()
+    os.chmod(d, 0o555)                                                         # comme /etc/secubox/toolbox (root, 755) vu de l'API
+    try:
+        m._FILTERS_F = m._P(f)
+        r = TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4})
+        assert r.status_code == 200, r.text
+        st1 = f.stat()
+        assert (st1.st_ino, st1.st_uid, st1.st_gid, st1.st_mode) == (st0.st_ino, st0.st_uid, st0.st_gid, st0.st_mode)
+        assert json.loads(f.read_text()) == {"autolearn": True, "tor": {"actif": True}, "autolearn_min_sites": 4}
+    finally:
+        os.chmod(d, 0o755)
+
+
+def test_seuils_jamais_de_creation_ni_de_lien(monde):
+    import os
+    f = monde / "filters.json"
+    assert not f.exists()
+    assert TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4}).status_code == 409   # absent : jamais recréé par secubox
+    assert not f.exists()
+    cible = monde / "ailleurs.json"
+    cible.write_text("{}")
+    os.symlink(cible, f)
+    assert TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4}).status_code == 409
+    assert cible.read_text() == "{}"
+
+
+def test_seuils_fichier_illisible_409(monde):
+    f = monde / "filters.json"
+    f.write_text("{pas du json")
+    assert TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4}).status_code == 409
+    assert f.read_text() == "{pas du json"
+
+
+def test_root_refuse_annule_vu_avec_domaine():
+    r = {"acteur": "admin", "origine": "admin", "geste": "annule", "cibles": ["TV salon"], "minutes": None, "domaine": "x.example.com",
+         "type": "vu", "force": False}
+    assert not _ctl()._enregistrement_protection(r)
+
+
+def test_inventaire_migre_comme_appareils(monde, monkeypatch):
+    from api import dnstv_routes as r
+    appels = []
+    monkeypatch.setattr(r, "_migrer", lambda: appels.append(1))
+    TestClient(m.app).get("/devices")
+    assert appels == [1]
+
+
+def test_readme_ip_allowlist_sans_effet_et_sans_primaute_de_vue():
+    t = (ICI / "README.md").read_text(encoding="utf-8")
+    sec = t[t.index("## Listes blanches"):]
+    ligne = [x for x in sec.splitlines() if x.startswith("| `ip-allowlist`")][0]
+    assert "aucun effet" in ligne and "view-first" in ligne
+    primaute = sec[sec.index("Ordre de primauté"):].split("\n\n")[1]
+    assert primaute.startswith("- ") and "ip-allowlist" not in primaute
+    assert "access-control-view` ou un `local-zone-override` par client prime" not in sec

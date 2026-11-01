@@ -25,6 +25,7 @@ import json
 import time
 import logging
 import sqlite3
+import stat
 import subprocess
 import asyncio
 import threading
@@ -1045,6 +1046,7 @@ def _inventaire_reel() -> Dict[str, Any]:
         from . import dnstv_routes as _tvr
     except ImportError:                                  # lancé hors paquet
         from api import dnstv_routes as _tvr
+    _tvr._migrer()                                       # comme /adblock-tv/appareils : état v1 migré par MAC avant lecture
     etat, erreur = dnstv.lire_etat()
     if erreur or not etat:
         return {"devices": [], "count": 0, "source": "dnstv", "lisible": False,
@@ -1324,47 +1326,44 @@ class SeuilsApprentissage(BaseModel):
     autolearn_ti_min_weight: Optional[StrictInt] = Field(None, ge=0, le=100)
 
 
-def _ecrire_filters_atomique(cfg: dict) -> None:
-    """Écrit filters.json par fichier temporaire voisin + fsync + rename : jamais un fichier à moitié écrit pour l'autolearn."""
-    import tempfile
-    d = _FILTERS_F.parent
-    fd, tmp = tempfile.mkstemp(prefix=".filters.", suffix=".tmp", dir=str(d))
+def _ecrire_filters_en_place(cfg: dict) -> None:
+    """Écrit filters.json EN PLACE (passe 2 du lot 6, #3374) : le dossier /etc/secubox/toolbox appartient à root (755), le fichier à
+    secubox-toolbox (664). Un temporaire + rename y échouerait (EACCES) et donnerait le fichier à secubox, cassant l'interrupteur Tor et
+    les réglages mitm du portail toolbox (#683). On ouvre le fichier EXISTANT sans le créer ni suivre de lien, on tronque, on écrit, fsync ;
+    propriétaire, droits et inode ne changent jamais."""
+    donnees = _json.dumps(cfg, indent=2).encode("utf-8")
+    fd = os.open(_FILTERS_F, os.O_WRONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as h:
-            h.write(_json.dumps(cfg, indent=2))
-            h.flush()
-            os.fsync(h.fileno())
-        try:
-            os.chmod(tmp, _FILTERS_F.stat().st_mode & 0o777)
-        except OSError:
-            os.chmod(tmp, 0o644)
-        os.replace(tmp, _FILTERS_F)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("filters.json n'est pas un fichier ordinaire")
+        os.ftruncate(fd, 0)
+        vue = memoryview(donnees)
+        while vue:
+            n = os.write(fd, vue)
+            vue = vue[n:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 @app.post("/learn/thresholds", dependencies=[Depends(require_jwt)])
 async def learn_set_thresholds(body: SeuilsApprentissage):
-    """Tune autolearn aggressiveness (persisted to filters.json, next cycle). Corps validé (422 sinon), écriture atomique."""
+    """Tune autolearn aggressiveness (persisted to filters.json, next cycle). Corps validé (422 sinon), écriture en place."""
     changed = body.model_dump(exclude_none=True)
     if not changed:
         raise HTTPException(status_code=422, detail="aucun seuil donné")
-    cfg: dict = {}
-    if _FILTERS_F.exists():
-        try:
-            brut = _json.loads(_FILTERS_F.read_text())
-        except (OSError, ValueError) as e:
-            raise HTTPException(status_code=409, detail=f"filters.json illisible ({type(e).__name__}) : rien n'est écrit") from None
-        if not isinstance(brut, dict):
-            raise HTTPException(status_code=409, detail="filters.json n'est pas un objet : rien n'est écrit")
-        cfg = brut
+    if _FILTERS_F.is_symlink() or not _FILTERS_F.is_file():
+        raise HTTPException(status_code=409, detail="filters.json absent ou n'est pas un fichier ordinaire (créé par le paquet toolbox) : rien n'est écrit")
+    try:
+        brut = _json.loads(_FILTERS_F.read_text())
+    except (OSError, ValueError) as e:
+        raise HTTPException(status_code=409, detail=f"filters.json illisible ({type(e).__name__}) : rien n'est écrit") from None
+    if not isinstance(brut, dict):
+        raise HTTPException(status_code=409, detail="filters.json n'est pas un objet : rien n'est écrit")
+    cfg = brut
     cfg.update(changed)
     try:
-        _ecrire_filters_atomique(cfg)
+        _ecrire_filters_en_place(cfg)
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"write filters.json: {type(e).__name__}") from None
     return {"status": "ok", "changed": changed, "note": "applies next cycle"}
