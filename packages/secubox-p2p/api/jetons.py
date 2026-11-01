@@ -13,7 +13,6 @@ import hashlib
 import json
 import os
 import secrets
-import tempfile
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
@@ -44,31 +43,38 @@ def lire(chemin: Optional[str] = None) -> List[Dict]:
 
 
 def ecrire(jetons: List[Dict], chemin: Optional[str] = None) -> None:
-    """Écriture atomique (0600) ; le propriétaire reste à la charge de l'appelant."""
+    """Écriture atomique (0600) PAR DESCRIPTEUR DE DOSSIER (#3362) : le dossier est ouvert sans suivre de lien
+    (O_DIRECTORY | O_NOFOLLOW), le temporaire y est créé, rendu au service (lancé en root) puis remplacé avec
+    src_dir_fd/dst_dir_fd : aucun nom n'est résolu deux fois."""
     chemin = str(chemin or chemin_jetons())
-    dossier = os.path.dirname(chemin) or "."
+    dossier, nom = os.path.dirname(chemin) or ".", os.path.basename(chemin)
     os.makedirs(dossier, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".tokens-")
+    dfd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            if os.geteuid() == 0:             # #3362 : lancé en root (sbx-mesh-invite), rendu au service AVANT le remplacement
-                try:
-                    import pwd                # noqa: PLC0415
-                    u = pwd.getpwnam("secubox")
-                    os.fchown(f.fileno(), u.pw_uid, u.pw_gid)
-                except KeyError:
-                    pass
-            os.fchmod(f.fileno(), 0o600)
-            json.dump(jetons, f, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, chemin)
-    except BaseException:
+        tmp = f".tokens-{secrets.token_hex(8)}"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dfd)
         try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                if os.geteuid() == 0:         # lancé en root (sbx-mesh-invite) : rendu au service AVANT le remplacement
+                    try:
+                        import pwd            # noqa: PLC0415
+                        u = pwd.getpwnam("secubox")
+                        os.fchown(f.fileno(), u.pw_uid, u.pw_gid)
+                    except KeyError:
+                        pass
+                os.fchmod(f.fileno(), 0o600)
+                json.dump(jetons, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, nom, src_dir_fd=dfd, dst_dir_fd=dfd)
+        except BaseException:
+            try:
+                os.unlink(tmp, dir_fd=dfd)
+            except OSError:
+                pass
+            raise
+    finally:
+        os.close(dfd)
 
 
 def _rendre_le_dossier(dossier: str) -> None:

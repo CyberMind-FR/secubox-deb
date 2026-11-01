@@ -735,7 +735,7 @@ def _async_qui_verrouillent():
     import ast
     arbre = ast.parse((ICI / "api" / "main.py").read_text())
     defs = {n.name: n for n in arbre.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
-    interdits = {"save_json", "verrou", "generer"}
+    interdits = {"save_json", "verrou", "generer", "ecrire_atomique", "publier", "_ecrire_sous_verrou", "maj_json"}
 
     def appels(f):
         out = set()
@@ -747,15 +747,30 @@ def _async_qui_verrouillent():
 
     memo = {}
 
-    def atteint(nom, pile=()):
+    def parcours(nom, pile):
+        """(atteint, a_croise_un_cycle). Un résultat n'est mémorisé que s'il ne dépend d'aucun cycle en cours."""
         if nom in interdits:
-            return True
+            return True, False
         f = defs.get(nom)
-        if f is None or isinstance(f, ast.AsyncFunctionDef) or nom in pile:
-            return False
-        if nom not in memo:
-            memo[nom] = any(atteint(x, pile + (nom,)) for x in appels(f))
-        return memo[nom]
+        if f is None or isinstance(f, ast.AsyncFunctionDef):
+            return False, False
+        if nom in pile:
+            return False, True
+        if nom in memo:
+            return memo[nom], False
+        cycle = False
+        for x in appels(f):
+            a, c = parcours(x, pile | {nom})
+            cycle = cycle or c
+            if a:
+                memo[nom] = True
+                return True, False
+        if not cycle:
+            memo[nom] = False
+        return False, cycle
+
+    def atteint(nom):
+        return parcours(nom, frozenset())[0]
     return sorted(n for n, f in defs.items() if isinstance(f, ast.AsyncFunctionDef)
                   and any(atteint(x) for x in appels(f)))
 
@@ -782,3 +797,125 @@ def test_invite_master_link_en_lien_message_clair(tmp_path):
     r = subprocess.run([sys.executable, str(script), "--code", "--json", "--adresse", "192.168.1.1"],
                        env=env, capture_output=True, text=True, timeout=30)
     assert r.returncode == 1 and "Traceback" not in r.stderr and "lien" in r.stderr
+
+
+# ── passe 5 (#3362) : lecture-modification-écriture du registre sous UN verrou ───────────────────────────────────────
+
+def _crochet_lecture(monkeypatch, quand):
+    """Après chaque lecture TOLÉRANTE de peers.json (ancien chemin), `quand()` s'exécute avant que l'appelant écrive."""
+    reel = main.load_json
+
+    def load_json(path, default=None):
+        d = reel(path, default)
+        if Path(path) == main.PEERS_FILE:
+            quand()
+        return d
+    monkeypatch.setattr(main, "load_json", load_json)
+
+
+def test_deux_ajouts_concurrents_aucune_mise_a_jour_perdue(maitre, monkeypatch):
+    tmp, _ = maitre
+    _crochet_lecture(monkeypatch, lambda: time.sleep(0.3))
+    corps = [{"address": f"192.168.1.{i}", "fingerprint": f"fp{i}", "action": "approve"} for i in (51, 52)]
+    fils = [threading.Thread(target=lambda c=c: TestClient(main.app).post("/peers", json=c)) for c in corps]
+    for f in fils:
+        f.start()
+    for f in fils:
+        f.join(10)
+    adresses = {p.get("address") for p in json.loads((tmp / "p2p" / "peers.json").read_text())["peers"]}
+    assert {"192.168.1.51", "192.168.1.52"} <= adresses
+
+
+def _oubli_pendant(tmp, monkeypatch):
+    """Un oubli de lgm-ebin lancé PENDANT la fenêtre lecture → écriture de l'appelant."""
+    fini = threading.Event()
+
+    def oublier():
+        TestClient(main.app).post("/master-link/oublier", json={"nom": "lgm-ebin", "confirmation": "lgm-ebin"})
+        fini.set()
+
+    def quand():
+        if not getattr(quand, "fait", False):
+            quand.fait = True
+            threading.Thread(target=oublier, daemon=True).start()
+            fini.wait(1.0)                       # ancien chemin : l'oubli passe pendant la fenêtre
+    _crochet_lecture(monkeypatch, quand)
+    fini.quand = quand
+    fini.oublier = oublier
+    return fini
+
+
+@pytest.mark.parametrize("appel", ["add_peer", "discover", "probe"])
+def test_ecriture_qui_chevauche_un_oubli_ne_ramene_pas_le_pair(maitre, monkeypatch, appel):
+    tmp, _ = maitre
+    f = tmp / "p2p" / "peers.json"
+    d = json.loads(f.read_text())
+    d["peers"][1]["address"] = "192.168.1.40"                 # gk4 sondable
+    f.write_text(json.dumps(d))
+    fini = _oubli_pendant(tmp, monkeypatch)
+
+    async def decouverte(method, timeout):
+        return {"discovered": [{"id": "sb-nouveau", "name": "nouveau", "address": "192.168.1.77"},
+                               {"id": "a", "name": "lgm-ebin", "address": "192.168.1.70"}], "count": 2}   # l'oublié, revu
+    monkeypatch.setattr(main, "discover_peers", decouverte)
+
+    async def sans_reseau(*a, **k):
+        raise OSError("pas de réseau dans l'essai")
+    monkeypatch.setattr(main.asyncio, "create_subprocess_exec", sans_reseau)
+    c = TestClient(main.app)
+    if appel == "add_peer":
+        r = c.post("/peers", json={"address": "192.168.1.77", "fingerprint": "fp", "action": "approve"})
+    elif appel == "discover":
+        r = c.post("/discover", json={"method": "all", "timeout": 1})
+    else:
+        r = c.post("/peers/b/probe")                     # sonde gk4 (id « b »)
+    assert r.status_code == 200, r.text
+    if not getattr(fini.quand, "fait", False):      # chemin corrigé : aucune lecture tolérante, l'oubli passe après
+        fini.oublier()
+    fini.wait(5)
+    for _ in range(100):
+        if "en_cours" not in json.dumps(main.OPERATIONS_OUBLI):
+            break
+        time.sleep(0.02)
+    noms = [p.get("name") for p in json.loads((tmp / "p2p" / "peers.json").read_text())["peers"]]
+    assert "lgm-ebin" not in noms
+    if appel in ("add_peer", "discover"):
+        assert "192.168.1.77" in (tmp / "p2p" / "peers.json").read_text()      # l'ajout lui-même n'est pas perdu
+
+
+def test_jetons_ecrits_par_descripteur_de_dossier(tmp_path):
+    from api import jetons as J
+    src = (ICI / "api" / "jetons.py").read_text()
+    i = src.index("def ecrire(")
+    corps = src[i:src.index("\ndef ", i + 5)]
+    assert "O_DIRECTORY" in corps and "O_NOFOLLOW" in corps and "dir_fd" in corps and "src_dir_fd" in corps
+    ml = tmp_path / "ml"
+    ml.mkdir()
+    J.ecrire([{"hash": "x"}], str(ml / "tokens.json"))
+    assert json.loads((ml / "tokens.json").read_text()) == [{"hash": "x"}]
+    assert (ml / "tokens.json").stat().st_mode & 0o777 == 0o600 and [p.name for p in ml.iterdir()] == ["tokens.json"]
+    (tmp_path / "lien").symlink_to(ml)
+    with pytest.raises(OSError):
+        J.ecrire([], str(tmp_path / "lien" / "tokens.json"))
+
+
+def test_repere_porte_le_ctime():
+    src = (ICI / "sbin" / "secubox-maillage-pairs").read_text()
+    i = src.index("def _repere(")
+    assert "st_ctime_ns" in src[i:i + 400]
+
+
+def test_429_place_rendue_seulement_avant_toute_ecriture(maitre, monkeypatch):
+    tmp, _ = maitre
+    main.OPERATIONS_OUBLI.clear()
+
+    def boum(*a, **k):
+        raise RuntimeError("après écriture")
+    monkeypatch.setattr(main.pairs_enroles, "publier", boum)          # échec APRÈS l'écriture de l'état
+    with pytest.raises(RuntimeError):
+        TestClient(main.app).post("/master-link/oublier", json={"nom": "lgm-ebin", "confirmation": "lgm-ebin"})
+    ops = list(main.OPERATIONS_OUBLI.values())
+    assert len(ops) == 1 and ops[0]["etat"] == "termine" and ops[0]["restes"]
+    main.OPERATIONS_OUBLI.clear()
+    r = TestClient(main.app).post("/master-link/oublier", json={"nom": "inconnu", "confirmation": "inconnu"})
+    assert r.status_code == 409 and main.OPERATIONS_OUBLI == {}      # refus avant écriture : place rendue

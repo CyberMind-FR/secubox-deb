@@ -153,6 +153,32 @@ def ecrire_atomique(chemin, doc, mode: int = 0o600) -> None:
         raise
 
 
+def maj_json(chemin, fn, *, dossier=None, defaut=None, mode: int = 0o600):
+    """#3362 (passe 5) : lecture-modification-écriture ATOMIQUE d'un état du maillage. Sous `verrou(dossier)` (réentrant ;
+    par défaut le dossier du fichier) : lecture STRICTE (`lire_strict`, ou `lire_strict_liste` si `defaut` est une liste),
+    `fn(document)` qui le modifie EN PLACE, puis `ecrire_atomique`. Rend le résultat de `fn`. Une exception de `fn` (refus)
+    annule l'écriture ; `fn` rend `SANS_ECRITURE` pour ne rien réécrire."""
+    dossier = dossier if dossier is not None else os.path.dirname(str(chemin)) or "."
+    with verrou(dossier):
+        if isinstance(defaut, list):
+            doc = lire_strict_liste(chemin)
+        else:
+            doc = lire_strict(chemin, defaut if defaut is not None else {})
+        res = fn(doc)
+        if res is SANS_ECRITURE:
+            return None
+        ecrire_atomique(chemin, doc, mode)
+        return res
+
+
+class _SansEcriture:
+    def __repr__(self):
+        return "SANS_ECRITURE"
+
+
+SANS_ECRITURE = _SansEcriture()
+
+
 def oublier(peers_doc, wg_state, nom: str, *, handshakes: Optional[dict], now: float, local: str,
             force: bool = False, cle: Optional[str] = None, empreinte: Optional[str] = None,
             cle_maitre: Optional[str] = None):

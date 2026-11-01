@@ -243,12 +243,13 @@ def synchroniser(maintenant=None):
 
 
 def _repere(chemin):
-    """(inode, mtime_ns, taille) du fichier d'état, sans suivre de lien ; None s'il manque."""
+    """(inode, mtime_ns, ctime_ns, taille) du fichier d'état, sans suivre de lien ; None s'il manque. Le ctime change
+    aussi quand un écrivain restaure le mtime."""
     try:
         st = os.lstat(chemin)
     except OSError:
         return None
-    return (st.st_ino, st.st_mtime_ns, st.st_size)
+    return (st.st_ino, st.st_mtime_ns, st.st_ctime_ns, st.st_size)
 
 
 def _maitre_valide(etat):
