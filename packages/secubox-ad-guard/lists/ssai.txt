@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Domaines de CONTENU connus pour insérer eux-mêmes des publicités dans la vidéo (SSAI). Ils ne sont JAMAIS bloqués : la box le dit
+# seulement (badge « publicités insérées dans la vidéo »). Un motif par ligne ; `*` remplace une seule étiquette, partiellement.
+# version: 2026.11.01-1
+replay-*.oqee.net        # mesure gk2 2026-11-01 (issue #3374) : la pub restante de la 3e coupure vient du flux OQEE (replay-03.oqee.net)
