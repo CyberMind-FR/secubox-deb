@@ -21,7 +21,7 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from secubox_core.auth import require_jwt, require_lecture
 
@@ -911,31 +911,42 @@ def suspect_legitime(corps: SuspectIn):
 # ── SBX TV PRIVACY lot 1 (#3374) : appareils par MAC, profils d'équipement ───────────────────────────────────────────────
 
 def _migrer() -> None:
-    """Migration v1 -> v2 de l'état au chargement, sous le verrou commun ; idempotente, une erreur ne bloque jamais la lecture."""
+    """Migration v1 -> v2 au chargement : sans verrou si l'état est déjà v2, verrou NON bloquant sinon (occupé : au prochain passage)."""
     try:
-        with dnstv_regles.verrou():
-            dnstv_appareils.migrer_fichier()
+        dnstv_appareils.migrer_si_v1()
     except (OSError, dnstv.ErreurTV) as e:
         logger.warning("migration #3374 non faite : %s", e)
 
 
-def _domaines_observes(ip: str) -> List[str]:
-    """Domaines vus pour une adresse depuis 3 jours (profil par observation quand le NAC ne conclut pas)."""
+OBSERVATION_CACHE_S = 120
+
+
+def _observation(ips: List[str]) -> dict:
+    """ip -> domaines témoins (Samsung, LG) sur 3 jours : UNE requête pour toutes les adresses, mise en cache 120 s (comme `_voisins`)."""
+    cle = tuple(sorted(set(ips)))
+    t, c, v = _CACHE.get("observation", (0.0, None, {}))
+    if c == cle and time.time() - t < OBSERVATION_CACHE_S:
+        return v
     try:
-        return [e["domaine"] for e in _magasin().evenements_recents(ip, int(time.time()) - 3 * 86400)]
+        v = dnstv_appareils.domaines_temoins(_magasin(), list(cle))
     except Exception as e:                                   # noqa: BLE001 — base absente ou verrouillée : pas d'observation, jamais d'erreur 500
         logger.info("observation DNS indisponible pour le profil : %s", type(e).__name__)
-        return []
+        v = {}
+    _CACHE["observation"] = (time.time(), cle, v)
+    return v
 
 
-def _vue_appareils(etat: dict) -> List[dict]:
-    return dnstv_appareils.vue_appareils(etat, dnstv_appareils.lire_inventaire_nac(), _voisins(), _domaines_observes)
+def _vue_appareils(etat: dict, nac: Optional[dict] = None) -> List[dict]:
+    nac = dnstv_appareils.lire_inventaire_nac() if nac is None else nac
+    ips = [c["ip"] for c in etat["clients"]]
+    return dnstv_appareils.vue_appareils(etat, nac, _voisins(), _observation(ips))
 
 
 def _champs_profil(a: Optional[dict]) -> dict:
     if not a:
-        return {"profil": "INCONNU", "profil_source": "nac", "profil_confiance": 0}
-    return {"profil": a["profil"], "profil_source": a["profil_source"], "profil_confiance": a["profil_confiance"], "ips": a["ips"]}
+        return {"profil": "INCONNU", "profil_source": "aucune", "profil_confiance": 0, "ips": [], "modes_divergents": False}
+    return {"profil": a["profil"], "profil_source": a["profil_source"], "profil_confiance": a["profil_confiance"], "ips": a["ips"],
+            "modes_divergents": a["modes_divergents"]}
 
 
 def _appareil_de(vue: List[dict], mac: Optional[str], nom: str) -> Optional[dict]:
@@ -951,6 +962,7 @@ def _clients_enrichis(clients: List[dict], vue: List[dict]) -> List[dict]:
 
 
 class ProfilIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     type: Optional[str] = Field(default=None, max_length=20)        # None : efface la correction manuelle
 
 
@@ -959,24 +971,29 @@ def appareils_par_mac():
     """Appareils par MAC : adresses, mode, profil d'équipement, source et confiance."""
     _migrer()
     nac = dnstv_appareils.lire_inventaire_nac()
-    vue = dnstv_appareils.vue_appareils(_etat(), nac, _voisins(), _domaines_observes)
+    vue = _vue_appareils(_etat(), nac)
     return {"appareils": vue, "nac": bool(nac), "profils": list(dnstv.PROFILS)}
 
 
 @router.post("/appareils/{mac}/profil", dependencies=[Depends(require_jwt)])
 def profil_corriger(mac: str, corps: ProfilIn):
     """Correction manuelle du profil d'un appareil (elle prime toujours) ; `type: null` la retire. Aucun effet DNS au lot 1 : pas de contrôleur."""
-    if not dnstv.MAC_RE.match(mac or ""):
+    mac = (mac or "").strip().lower()
+    if not dnstv.MAC_RE.match(mac):
         raise HTTPException(404, "appareil inconnu")
     _migrer()
     with _verrou():
+        etat = _etat()
+        if etat.get("schema") != dnstv.SCHEMA_ETAT:
+            raise HTTPException(409, "état encore en schéma 1 : migration en attente, réessayer dans une minute")
         try:
-            etat = dnstv_appareils.corriger_profil(_etat(), mac, corps.type, int(time.time()))
+            etat = dnstv_appareils.corriger_profil(etat, mac, corps.type, int(time.time()))
             dnstv.ecrire_etat(etat)
         except dnstv_appareils.AppareilInconnu as e:
             raise HTTPException(404, str(e)) from e
         except dnstv.ErreurTV as e:
             _refuse(e)
-    logger.info("profil d'appareil %s corrigé : %s", mac, corps.type)
+    # Pas d'utilitaire d'audit commun dans ad-guard (seul le contrôleur root écrit audit.log) : journal applicatif ; audit prévu au lot 3.
+    logger.info("profil d'appareil %s corrigé : %s", dnstv_appareils.mac_courte(mac), corps.type)
     a = _appareil_de(_vue_appareils(etat), mac, "")
     return dict(a or {}, mac=mac)

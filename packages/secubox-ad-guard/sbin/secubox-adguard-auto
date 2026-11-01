@@ -83,19 +83,17 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
                 return 1
             if not etat["actif"] or (not dnstv_auto.appareils(etat) and not etat.get("ajout_auto")):
                 return 0
-            # #3374 : état v1 -> v2 (par MAC), une seule fois, sans rien perdre ; seulement quand le moteur travaille (inactif = il n'écrit rien)
+            # #3374 : état v1 -> v2 (par MAC), une seule fois, sans rien perdre ni changer un mode ; seulement quand le moteur travaille (inactif = il n'écrit rien)
             try:
                 migration = dnstv_appareils.migrer_fichier()
             except (OSError, dnstv.ErreurTV) as e:
                 migration = None
                 print(f"migration #3374 non faite : {e}", file=sys.stderr)
-            if migration:
+            if migration:                                     # n'ajoute que schema et appareils : aucun effet DNS, rien à appliquer
                 etat, erreur = dnstv.lire_etat()
                 if erreur:
                     print(erreur, file=sys.stderr)
                     return 1
-                if migration["modes_changes"]:
-                    etat_modifie = True                       # modes alignés par MAC : le DNS doit suivre
             reglage = dnstv_auto.reglage_depuis(etat)
             regles = dnstv_regles.charger()
             if etat.get("ajout_auto"):

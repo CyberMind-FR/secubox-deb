@@ -72,40 +72,35 @@ def test_valider_etat_refuse_un_schema_inconnu():
 
 
 # ── migration ─────────────────────────────────────────────────────────────────────────────────────────
-def test_migrer_regroupe_par_mac_et_garde_le_mode_le_plus_frequent():
+def test_migrer_regroupe_par_mac_sans_toucher_aux_modes():
     v2, rapport = A.migrer(etat_v1(), 1000)
     assert v2["schema"] == 2
     assert set(v2["appareils"]) == {MAC_TV, MAC_FB, MAC_CAST}
-    modes = {c["ip"]: c["mode"] for c in v2["clients"]}
-    assert modes["2a01:e0a::96"] == "auto"                          # 2 auto contre 1 observe
-    assert modes["192.168.1.60"] == modes["2a01:e0a::60"] == "block"  # égalité : l'entrée la plus récente (ajoute=500)
-    assert modes["192.168.1.80"] == "observe"                       # sans MAC : intouché
-    assert v2["appareils"][MAC_TV]["nom"] == "TV banc" and "profil" not in v2["appareils"][MAC_TV]
-    assert rapport["modes_changes"] == 2 and rapport["appareils"] == 3
-    assert len(v2["clients"]) == 7                                  # aucune adresse perdue
+    assert v2["clients"] == dnstv.valider_etat(etat_v1())["clients"]   # modes, noms, adresses : identiques
+    assert rapport["appareils"] == 3 and rapport["modes_divergents"] == 2
+    assert "modes_changes" not in rapport
 
 
-def test_migrer_egalite_sans_date_prend_la_derniere_entree():
-    e = {"actif": True, "clients": [{"ip": "192.168.1.1", "nom": "A", "mode": "observe", "mac": MAC_TV},
-                                    {"ip": "192.168.1.2", "nom": "A", "mode": "block", "mac": MAC_TV}]}
-    v2, _ = A.migrer(e, 1)
-    assert {c["mode"] for c in v2["clients"]} == {"block"}
-
-
-def test_migrer_garde_les_modes_si_la_fusion_serait_refusee():
-    # Deux noms, réglage puits divergent : tout passer en auto violerait « même puits par nom » ⇒ modes d'origine gardés.
-    e = {"actif": True, "clients": [{"ip": "192.168.1.1", "nom": "A", "mode": "auto", "mac": MAC_TV, "puits": False},
-                                    {"ip": "192.168.1.2", "nom": "A", "mode": "observe", "mac": MAC_TV},
-                                    {"ip": "192.168.1.3", "nom": "A", "mode": "auto", "mac": MAC_TV, "puits": False}]}
+def test_le_filtrage_effectif_ne_change_pas():
+    """Décision du contrôleur : la migration n'a AUCUN effet DNS. État mixte block/auto/observe, même MAC : même mode par IP avant et après."""
+    e = {"actif": True, "clients": [{"ip": "192.168.1.1", "nom": "A", "mode": "block", "mac": MAC_TV, "ajoute": 1},
+                                    {"ip": "192.168.1.2", "nom": "A", "mode": "auto", "mac": MAC_TV, "ajoute": 2},
+                                    {"ip": "192.168.1.3", "nom": "A2", "mode": "auto", "mac": MAC_TV, "ajoute": 3, "puits": False},
+                                    {"ip": "192.168.1.4", "nom": "B", "mode": "observe", "mac": MAC_TV, "ajoute": 4},
+                                    {"ip": "192.168.1.5", "nom": "C", "mode": "observe", "mac": MAC_FB}]}
+    avant = {c["ip"]: (c["mode"], c.get("puits", True), c["nom"]) for c in e["clients"]}
     v2, rapport = A.migrer(e, 1)
-    assert [c["mode"] for c in v2["clients"]] == ["auto", "observe", "auto"] and rapport["modes_changes"] == 0
-    assert rapport["fusion_refusee"] and v2["schema"] == 2
+    assert {c["ip"]: (c["mode"], c.get("puits", True), c["nom"]) for c in v2["clients"]} == avant
+    assert rapport["modes_divergents"] == 1
+    tv = {a["mac"]: a for a in A.vue_appareils(v2, {}, {})}[MAC_TV]
+    assert tv["mode"] == "block" and tv["modes_divergents"] is True                     # le plus strict, signalé
+    assert {a["mac"]: a for a in A.vue_appareils(v2, {}, {})}[MAC_FB]["modes_divergents"] is False
 
 
 def test_migrer_est_idempotente():
     v2, _ = A.migrer(etat_v1(), 1000)
     v2b, rapport = A.migrer(v2, 2000)
-    assert v2b == v2 and rapport["modes_changes"] == 0
+    assert v2b == v2 and rapport["modes_divergents"] == 0
 
 
 def test_migrer_fichier_sauvegarde_une_seule_fois(tmp_path):
@@ -121,6 +116,15 @@ def test_migrer_fichier_sauvegarde_une_seule_fois(tmp_path):
     (tmp_path / "etat.json").write_text(json.dumps({"actif": False, "clients": []}))
     A.migrer_fichier(tmp_path)
     assert sauvegarde.read_text() == brut
+    assert not [f for f in tmp_path.iterdir() if f.name.startswith(".avant-3374")]      # aucun brouillon laissé
+
+
+def test_sauvegarde_deja_presente_conservee_et_journalisee(tmp_path, caplog):
+    (tmp_path / "etat.json").write_text(json.dumps(etat_v1()))
+    (tmp_path / "etat.json.avant-3374").write_text("ancienne")
+    with caplog.at_level("INFO"):
+        assert A.migrer_fichier(tmp_path)
+    assert (tmp_path / "etat.json.avant-3374").read_text() == "ancienne" and "conservée" in caplog.text
 
 
 def test_migrer_fichier_absent_ou_invalide_ne_fait_rien(tmp_path):
@@ -135,7 +139,7 @@ def test_le_controleur_root_accepte_l_etat_migre(monde):
     A.migrer_fichier(monde["etat"])
     assert ctl(monde, "apply") == 0
     conf = monde["conf"].read_text()
-    assert "2a01:e0a::60/128 sbx-tv-block" in conf and "192.168.1.60/32 sbx-tv-block" in conf
+    assert "2a01:e0a::60/128 sbx-tv-block" in conf and "192.168.1.60/32 sbx-tv-observe" in conf      # modes d'origine
 
 
 def test_ecrire_etat_ne_perd_pas_les_appareils(monde):
@@ -180,6 +184,23 @@ def test_lire_inventaire_nac_refuse_lien_trop_gros_ou_inscriptible(tmp_path):
     os.chmod(db, 0o640)
     assert A.lire_inventaire_nac(db, taille_max=10) == {}
     assert A.lire_inventaire_nac(tmp_path / "absent.db") == {}
+    wal = tmp_path / "devices.db-wal"
+    wal.write_bytes(b"x" * 100)
+    os.chmod(wal, 0o646)
+    assert A.lire_inventaire_nac(db) == {}                                   # -wal inscriptible par « autres »
+    os.chmod(wal, 0o640)
+    assert A.lire_inventaire_nac(db, taille_max=50) == {}                    # -wal au-delà du plafond
+    wal.unlink()
+    (tmp_path / "vrai-wal").write_bytes(b"")
+    wal.symlink_to(tmp_path / "vrai-wal")
+    assert A.lire_inventaire_nac(db) == {}                                   # -wal en lien
+    wal.unlink()
+    assert A.lire_inventaire_nac(db) != {}
+    os.chmod(tmp_path, 0o757)
+    try:
+        assert A.lire_inventaire_nac(db) == {}                               # dossier parent inscriptible par « autres »
+    finally:
+        os.chmod(tmp_path, 0o755)
     (tmp_path / "corrompue.db").write_bytes(b"ceci n'est pas sqlite" * 10)
     assert A.lire_inventaire_nac(tmp_path / "corrompue.db") == {}
 
@@ -189,7 +210,8 @@ def test_lire_inventaire_nac_refuse_lien_trop_gros_ou_inscriptible(tmp_path):
     ({"os": "Tizen (Samsung)", "os_source": "dns:samsungads.com", "device_subtype": "télévision"}, "SAMSUNG_TIZEN", 80),
     ({"os": "webOS (LG)", "os_source": "hostname:lgwebostv"}, "LG_WEBOS", 60),
     ({"hostname": "Freebox-Player-Pop", "oui_vendor": "Freebox SAS", "device_subtype": "décodeur"}, "FREEBOX_PLAYER", 70),
-    ({"oui_vendor": "Freebox SAS"}, "FREEBOX_PLAYER", 50),
+    ({"oui_vendor": "Freebox SAS"}, "FREEBOX_PLAYER", 30),
+    ({"hostname": "player-123"}, "FREEBOX_PLAYER", 40),
     ({"hostname": "Apple-TV", "device_subtype": "streaming"}, "APPLE_TV", 60),
     ({"oui_vendor": "Apple, Inc.", "device_subtype": "récepteur multimédia"}, "APPLE_TV", 55),
     ({"os": "Google Cast", "os_source": "hostname:chromecast-ultra", "device_subtype": "streaming"}, "GOOGLE_TV", 60),
@@ -201,9 +223,24 @@ def test_lire_inventaire_nac_refuse_lien_trop_gros_ou_inscriptible(tmp_path):
 ])
 def test_profil_depuis_nac(ligne, attendu, conf_min):
     p = A.profil_depuis_nac(dict(ligne, mac=MAC_TV))
-    assert p["type"] == attendu and p["source"] == "nac" and p["confiance"] >= conf_min and 0 <= p["confiance"] <= 100
+    assert p["type"] == attendu and p["confiance"] >= conf_min and 0 <= p["confiance"] <= 100
+    assert p["source"] == ("aucune" if attendu == "INCONNU" else "nac")
     if attendu != "INCONNU":
         assert p["preuves"]
+
+
+@pytest.mark.parametrize("ligne, plafond", [
+    ({"oui_vendor": "Freebox SAS"}, 30),                     # un Server ou un répéteur porte aussi ce préfixe
+    ({"hostname": "player-123"}, 40),
+])
+def test_preuves_faibles_confiance_basse(ligne, plafond):
+    assert A.profil_depuis_nac(dict(ligne, mac=MAC_TV))["confiance"] <= plafond
+
+
+def test_preuves_filtrees():
+    p = A.profil_depuis_nac({"mac": MAC_TV, "hostname": "Freebox-Player<script>alert(1)</script>" + "x" * 200, "oui_vendor": "Freebox\n SAS;rm"})
+    for preuve in p["preuves"]:
+        assert all(ch.isalnum() or ch in " ._:-" for ch in preuve) and len(preuve) <= 80
 
 
 def test_mac_aleatoire_jamais_typee_par_son_oui():
@@ -213,6 +250,8 @@ def test_mac_aleatoire_jamais_typee_par_son_oui():
 
 def test_profil_par_observation():
     assert A.profil_par_observation(["api.samsungcloudsolution.com", "x.example"])["type"] == "SAMSUNG_TIZEN"
+    assert A.profil_par_observation(["api.samsungcloudsolution.com"])["confiance"] <= 40     # vu aussi sur les téléphones
+    assert A.profil_par_observation(["x.samsungads.com"])["confiance"] >= 70
     p = A.profil_par_observation(["snu.lgtvsdp.com"])
     assert p["type"] == "LG_WEBOS" and p["source"] == "observation"
     assert A.profil_par_observation(["evilsamsungads.com.example", "google.com"]) is None
@@ -227,8 +266,16 @@ def test_vue_appareils_rattache_les_ip_et_prend_le_profil_nac():
     tv = vue[MAC_TV]
     assert tv["ips"] == sorted(["192.168.1.95", "2a01:e0a::95", "2a01:e0a::96", "fe80::95"])
     assert tv["profil"] == "ANDROID_TV" and tv["profil_source"] == "nac" and tv["nac"] is True and tv["mode"] == "auto"
-    assert vue[MAC_CAST]["profil"] == "INCONNU" and vue[MAC_CAST]["nac"] is False
+    assert vue[MAC_CAST]["profil"] == "INCONNU" and vue[MAC_CAST]["nac"] is False and vue[MAC_CAST]["profil_source"] == "aucune"
     assert vue[None]["nom"] == "Sans MAC" and vue[None]["ips"] == ["192.168.1.80"]
+
+
+def test_le_nom_affiche_suit_un_renommage_de_clients():
+    v2, _ = A.migrer(etat_v1(), 1)
+    for c in v2["clients"]:
+        if c.get("mac") == MAC_TV:
+            c["nom"] = "Salon"
+    assert {a["mac"]: a for a in A.vue_appareils(v2, {}, {})}[MAC_TV]["nom"] == "Salon"
 
 
 def test_vue_appareils_sans_nac_utilise_l_observation():
@@ -264,7 +311,7 @@ def test_routes_migrent_au_chargement_et_ajoutent_des_champs(api, monde, sans_na
     s = api.get("/adblock-tv/status").json()
     assert (monde["etat"] / "etat.json.avant-3374").exists()
     c = next(x for x in s["clients"] if x["ip"] == "192.168.1.95")
-    assert {"ip", "nom", "mode", "mac"} <= set(c) and c["profil"] == "INCONNU" and c["profil_source"] == "nac" and "2a01:e0a::96" in c["ips"]
+    assert {"ip", "nom", "mode", "mac"} <= set(c) and c["profil"] == "INCONNU" and c["profil_source"] == "aucune" and "2a01:e0a::96" in c["ips"]
     assert {a["mac"] for a in s["appareils"]} >= {MAC_TV, MAC_FB, MAC_CAST}
     d = api.get("/adblock-tv/auto/detection").json()
     tv = next(a for a in d["appareils"] if a["nom"] == "TV banc")
@@ -280,7 +327,51 @@ def test_route_appareils_et_correction(api, monde, sans_nac):
     assert api.post(f"/adblock-tv/appareils/{MAC_TV}/profil", json={"type": None}).json()["profil_source"] != "manuel"
     assert api.post(f"/adblock-tv/appareils/{MAC_TV}/profil", json={"type": "TOASTER"}).status_code == 422
     assert api.post("/adblock-tv/appareils/AA:BB/profil", json={"type": "LG_WEBOS"}).status_code == 404
+    assert api.post(f"/adblock-tv/appareils/{MAC_TV.upper()}/profil", json={"type": "LG_WEBOS"}).json()["profil"] == "LG_WEBOS"   # normalisée
+    assert api.post(f"/adblock-tv/appareils/{MAC_TV}/profil", json={"type": "LG_WEBOS", "role": "admin"}).status_code == 422     # extra=forbid
     assert api.post("/adblock-tv/appareils/aa:bb:cc:99:99:99/profil", json={"type": "LG_WEBOS"}).status_code == 404
+
+
+def test_correction_refusee_tant_que_l_etat_est_v1(api, monde, sans_nac, monkeypatch):
+    dnstv.ecrire_etat(etat_v1(), monde["etat"])
+    from api import dnstv_routes as r
+    monkeypatch.setattr(r, "_migrer", lambda: None)                         # migration différée (verrou occupé)
+    assert api.post(f"/adblock-tv/appareils/{MAC_TV}/profil", json={"type": "LG_WEBOS"}).status_code == 409
+
+
+def test_lecture_v2_ne_prend_pas_le_verrou(api, monde, sans_nac, monkeypatch):
+    v2, _ = A.migrer(etat_v1(), 1)
+    dnstv.ecrire_etat(v2, monde["etat"])
+    from api import dnstv_regles
+    def interdit(*a, **k):
+        raise AssertionError("verrou pris en lecture")
+    monkeypatch.setattr(dnstv_regles, "verrou", interdit)
+    assert api.get("/adblock-tv/status").status_code == 200 and api.get("/adblock-tv/appareils").status_code == 200
+
+
+def test_migration_ignoree_si_le_verrou_est_occupe(monde):
+    from api import dnstv_regles
+    dnstv.ecrire_etat(etat_v1(), monde["etat"])
+    with dnstv_regles.verrou(monde["etat"]):
+        assert A.migrer_si_v1(monde["etat"]) is None                       # non bloquant : ignorée cette fois
+    assert "schema" not in json.loads((monde["etat"] / "etat.json").read_text())
+    assert A.migrer_si_v1(monde["etat"])["appareils"] == 3
+
+
+def test_observation_une_seule_requete_et_cache(monde, monkeypatch):
+    import time as _t
+    from api import dnstv_routes as r
+    mag = dnstv.Magasin(monde["etat"] / "dnstv.db")
+    mag.ajouter([(dnstv.Evenement(int(_t.time()), "192.168.1.60", "x.samsungads.com", "A", "NOERROR", "ALLOWED"), ""),
+                 (dnstv.Evenement(int(_t.time()), "192.168.1.61", "www.example.com", "A", "NOERROR", "ALLOWED"), "")])
+    r._CACHE.pop("observation", None)
+    requetes = []
+    vrai = A.domaines_temoins
+    monkeypatch.setattr(A, "domaines_temoins", lambda *a, **k: requetes.append(1) or vrai(*a, **k))
+    t = r._observation(["192.168.1.60", "192.168.1.61"])
+    assert t == {"192.168.1.60": ["x.samsungads.com"]} and len(requetes) == 1
+    r._observation(["192.168.1.60", "192.168.1.61"])
+    assert len(requetes) == 1                                                 # servi par le cache
 
 
 def test_gardes_des_nouvelles_routes():
@@ -295,7 +386,7 @@ def test_gardes_des_nouvelles_routes():
 
 
 # ── moteur auto : la migration se fait sous son verrou, sans visite de la page ─────────────────────────
-def test_le_moteur_auto_migre_et_demande_l_application(monkeypatch, tmp_path):
+def test_le_moteur_auto_migre_sans_toucher_aux_modes(monkeypatch, tmp_path):
     from test_dnstv_ajout_moteur import charger_script, lancer
     from test_dnstv_auto_moteur import Rep
     etat = {"actif": True, "clients": [{"ip": "192.168.1.95", "nom": "TV banc", "mode": "auto", "mac": MAC_TV, "ajoute": 10},
@@ -305,5 +396,5 @@ def test_le_moteur_auto_migre_et_demande_l_application(monkeypatch, tmp_path):
     appels = []
     assert lancer(mod, lambda: appels.append(1) or Rep(), 1_800_000_000) == 0
     e, err = dnstv.lire_etat(tmp_path)
-    assert err is None and e["schema"] == 2 and {c["mode"] for c in e["clients"]} == {"auto"} and appels
+    assert err is None and e["schema"] == 2 and [c["mode"] for c in e["clients"]] == ["auto", "auto", "observe"]
     assert (tmp_path / "etat.json.avant-3374").exists()
