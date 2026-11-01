@@ -1,3 +1,11 @@
+secubox-profiles (0.26.9-1~trixie1) trixie; urgency=medium
+
+  * Politique de cycle de vie : famille LED du MOCHAbin (leds, led-pulse, led-flux,
+    led-nft, led-heartbeat, led-trigger, led-health-bumper) en always-on. Le sleeper
+    arrêtait led-pulse en idle-sleep et éteignait les LED (closes #3366).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 07:44:37 +0100
+
 secubox-profiles (0.26.8-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

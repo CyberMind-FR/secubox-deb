@@ -44,6 +44,16 @@
 # déploiements GitHub muet avec lui. Critère de tri : route nginx propre
 # + appelée par une page de /usr/share/secubox/www = always-on.
 "metablogizer"               = "always-on"
+# LED du MOCHAbin (#3366) : affichage permanent, jamais endormi par le sleeper
+# (gk2 2026-11-01 : led-pulse arrêté en idle-sleep, LED éteintes). Hors MOCHAbin,
+# la garde secubox-led-board rend ces unités inertes.
+"leds"                       = "always-on"
+"led-pulse"                  = "always-on"
+"led-flux"                   = "always-on"
+"led-nft"                    = "always-on"
+"led-heartbeat"              = "always-on"
+"led-trigger"                = "always-on"
+"led-health-bumper"          = "always-on"
 # Capteur de SECURITE : un service qui surveille ne doit jamais dormir,
 # et sa route passe par son propre socket (l'agregateur ne declenche pas
 # son demarrage, cf. secubox-sentinelle-gsm/nginx/sentinelle-gsm.conf).
@@ -107,11 +117,6 @@ eye-network_at_              = "eager"
 "jellyfin"                   = "on-demand"
 "jitsi"                      = "on-demand"
 "ksm"                        = "on-demand"
-"led-health-bumper"          = "on-demand"
-"led-heartbeat"              = "on-demand"
-"led-pulse"                  = "on-demand"
-"led-trigger"                = "on-demand"
-"leds"                       = "on-demand"
 "localai"                    = "on-demand"
 "localrecall"                = "on-demand"
 "lyrion"                     = "on-demand"
