@@ -82,6 +82,12 @@ try:
 except ImportError:                                  # lancé hors paquet
     from api.dnstv_lot3_routes import router as _tv_lot3_router
 app.include_router(_tv_lot3_router)
+# lot 4 SBX TV PRIVACY (#3374) : DPI par appareil, même préfixe /adblock-tv
+try:
+    from .dnstv_lot4_routes import router as _tv_lot4_router
+except ImportError:                                  # lancé hors paquet
+    from api.dnstv_lot4_routes import router as _tv_lot4_router
+app.include_router(_tv_lot4_router)
 
 
 class DeviceType(str, Enum):

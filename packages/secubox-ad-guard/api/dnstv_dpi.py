@@ -601,3 +601,15 @@ def reprendre_manuellement(executer: Callable[[str], object]) -> dict:
     e["charge"] = {"haute_depuis": None, "pause": None}
     _ecrire_etat_dpi(e)
     return {"ok": getattr(r, "returncode", 1) == 0}
+
+
+def frise(evts: List[dict], categorie: Callable[[str], str], motifs_ssai: Iterable[re.Pattern] = (),
+          fenetre: int = FENETRE_REPLI_S) -> List[dict]:
+    """Par coupure : le refus à 0 s puis ce qui apparaît dans la fenêtre (domaines nouveaux, typés repli / repli-protege, SSAI)."""
+    motifs = list(motifs_ssai)
+    out: Dict[int, dict] = {}
+    for d in correler(evts, categorie, fenetre):
+        c = out.setdefault(d["refus_ts"], {"refus_ts": d["refus_ts"], "refus_domaine": d["refus_domaine"], "apparitions": []})
+        c["apparitions"].append({"delai_s": d["delai_s"], "domaine": d["domaine"], "categorie": d["categorie"], "type": d["type"],
+                                 "ssai": est_ssai(d["domaine"], motifs)})
+    return [out[k] for k in sorted(out, reverse=True)]

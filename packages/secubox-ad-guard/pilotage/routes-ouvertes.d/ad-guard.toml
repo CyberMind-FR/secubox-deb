@@ -27,6 +27,8 @@ chemins = [
     # `/adblock-tv/protection/usager/debloquer` n'est PAS ouverte : le kiosque appelle l'API locale du maître avec la session
     # de l'usager (et `require_personne` refuse de toute façon le porteur délégué).
     "^/adblock-tv/protection/(observe|pause|reprendre|exceptions)$",
+    # Lot 4 (#3374) : reprise manuelle de nDPId après une pause de charge.
+    "^/adblock-tv/protection/dpi/reprendre$",
 ]
 
 [[routes]]
