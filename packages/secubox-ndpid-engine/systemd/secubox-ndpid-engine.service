@@ -10,6 +10,10 @@ Requires=secubox-ndpisrvd.service
 [Service]
 Type=simple
 EnvironmentFile=-/etc/secubox/ndpid-engine.env
+# SBX TV Privacy lot 4 (#3374) : filtre de capture par MAC posé par root via ad-guard (FILTRE_BPF), et garde CPU (gk2 chargé).
+EnvironmentFile=-/etc/secubox/ndpid-engine.d/tv-privacy.env
+CPUQuota=25%
+Nice=10
 # LA CAPTURE EXIGE CAP_NET_RAW ; ABANDONNER SES PRIVILÈGES EXIGE CAP_SETUID.
 #
 # Le premier périmètre ne gardait que NET_RAW et NET_ADMIN — et le démon

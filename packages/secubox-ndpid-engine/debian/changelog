@@ -1,3 +1,9 @@
+secubox-ndpid-engine (1.7.4-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy lot 4 (ref #3374) : filtre de capture par MAC (FILTRE_BPF, lu dans /etc/secubox/ndpid-engine.d/tv-privacy.env, ecrit par root via secubox-adguard-tv dpi-cibles), passe a nDPId par -B ; seule la forme « ether host <mac> [or ether host <mac>]... » est acceptee, toute autre valeur est ignoree et signalee. Garde CPU de l'unite : CPUQuota=25 %, Nice=10. 3 tests.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 18:00:00 +0100
+
 secubox-ndpid-engine (1.7.3-1~trixie1) trixie; urgency=medium
 
   * nDPIsrvd ne boucle plus sur une box sans toolbox (#3240). L'unite passait -G secubox-ndpi:secubox-toolbox ; sans le paquet toolbox (profil minimal, ESPRESSObin v7) le groupe n'existe pas, nDPIsrvd sortait en 1 (Could not chmod/chown ... No such file or directory), Restart=on-failure le relancait toutes les 3 s et le moteur (Requires=) tombait avec lui. Nouveau lanceur secubox-ndpisrvd-run : le groupe lecteur s'il existe, sinon (absent ou vide) le groupe du producteur, le socket distributeur reste ferme a tout autre compte. 5 tests.
