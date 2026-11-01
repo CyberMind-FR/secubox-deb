@@ -156,7 +156,8 @@ def test_metriques(cache):
     assert m["par_categorie"]["PUBLICITE"] == {"domaines": 2, "requetes": 150}
     assert m["top_domaines"][0]["cle"] == "k7.ftven.fr" and len(m["top_domaines"]) <= 5
     assert m["top_appareils"][0]["cle"] == MAC1 and len(m["top_appareils"]) <= 5
-    assert an(cache, fenetre="1h")["metriques"]["nouveaux"] == 1                          # pubads vu pour la première fois il y a 200 s
+    assert an(cache, fenetre="7j")["metriques"]["nouveaux"] == 1                          # pubads vu pour la première fois il y a 200 s
+    assert an(cache, fenetre="1h")["metriques"]["nouveaux"] is None                     # passe 2 (I3) : non calculé sous un jour
 
 
 # ── pagination et bornes ─────────────────────────────────────────────────────────────────────────────

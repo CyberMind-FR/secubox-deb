@@ -15,7 +15,7 @@
   `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, adresses de documentation, aucune écriture.
 -->
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Z6EVK4xxCvdfIotKV6dwsH7O+Mb14Xplgz/oBY19L5Q='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-OaBVOydUgV/w8PSF7obRdaPw4AVQJ9Z8c7tDdNU3Qfc='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -506,7 +506,7 @@
     etat.admin=!!an.admin;el('f-export').hidden=!etat.admin;
     el('an-note').textContent=an.cache?(an.genere?'cache du '+quand(an.genere):''):'classification pas encore calculée';
     var m=an.metriques||{};
-    el('m-domaines').textContent=fmt(m.domaines);el('m-nouveaux').textContent=fmt(m.nouveaux)+' nouveau'+(m.nouveaux>1?'x':'')+' sur la fenêtre';
+    el('m-domaines').textContent=fmt(m.domaines);el('m-nouveaux').textContent=m.nouveaux==null?'nouveaux : fenêtre de 7 j ou 30 j':fmt(m.nouveaux)+' nouveau'+(m.nouveaux>1?'x':'')+' sur la fenêtre';
     el('m-requetes').textContent=fmt(m.requetes);el('m-part').textContent=pct(m.part_bloquee);el('m-bloquees').textContent=fmt(m.bloquees)+' bloquées';el('m-lignes').textContent=fmt(an.total);
     tops(el('m-top-domaines'),m.top_domaines,false);tops(el('m-top-appareils'),m.top_appareils,true);barres(el('m-categories'),m.par_categorie,an.protegees);
     var ta=el('agregats');vider(ta);etat.agreger=an.agreger;el('ag-note').textContent=an.agreger==='aucun'?'':'par '+an.agreger;

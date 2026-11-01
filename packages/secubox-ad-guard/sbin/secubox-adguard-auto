@@ -124,6 +124,7 @@ def rafraichir_feed(now: int, voisins=None, locales=None, passerelles=None) -> b
 
 def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None) -> int:
     now = maintenant or int(time.time())
+    dnstv_analyse.menage(maintenant=now)                      # lot 3 : ancien JSON de 16 Mo et temporaires orphelins, même moteur inactif
     try:
         rafraichir_feed(now, voisins, locales, passerelles)               # avant toute sortie anticipée : utile même sans appareil en mode auto
     except Exception as e:                                           # noqa: BLE001 — ceinture et bretelles : jamais de panne du moteur par le fichier d'échange

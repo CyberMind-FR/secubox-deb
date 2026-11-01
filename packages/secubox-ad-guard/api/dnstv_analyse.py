@@ -32,6 +32,8 @@ FICHIER = "classification-cache.db"
 ANCIEN_JSON = "classification-cache.json"
 MODE_FICHIER = 0o640
 FENETRES = {"1h": 3600, "24h": 86400, "7j": 7 * 86400, "30j": 30 * 86400}
+FENETRES_SOUS_UN_JOUR = ("1h", "24h")                 # « nouveaux » n'y est pas calculé : la première vue est au jour UTC (I3)
+TEMPORAIRE_AGE_S = 600
 DECISIONS = ("bloque", "autorise", "candidat", "protege")
 AGREGATS = ("domaine", "racine", "categorie", "appareil", "aucun")
 LIMITE_MAX = 200
@@ -108,6 +110,24 @@ def ecrire_cache(lignes: List[dict], maintenant: int, dossier: Optional[Path] = 
         (d / ANCIEN_JSON).unlink()
 
 
+def menage(dossier: Optional[Path] = None, maintenant: Optional[float] = None) -> None:
+    """Supprime l'ancien cache JSON (jusqu'à 16 Mo) et les fichiers temporaires SQLite orphelins de plus de 10 min (un moteur tué
+    pendant l'écriture). Appelé par le moteur à CHAQUE passage, même inactif. Aucune erreur ne remonte."""
+    import time as _t
+    d = dossier or dnstv.DOSSIER_ETAT
+    limite = (maintenant if maintenant is not None else _t.time()) - TEMPORAIRE_AGE_S
+    with contextlib.suppress(OSError):
+        (d / ANCIEN_JSON).unlink()
+    try:
+        candidats = list(d.glob(".classification-cache.*"))
+    except OSError:
+        return
+    for f in candidats:
+        with contextlib.suppress(OSError):
+            if not f.is_symlink() and f.is_file() and f.stat().st_mtime < limite:
+                f.unlink()
+
+
 # ── lecture (API) ────────────────────────────────────────────────────────────────────────────────────
 
 @contextlib.contextmanager
@@ -154,7 +174,12 @@ def toutes(dossier: Optional[Path] = None) -> Optional[dict]:
     if g is None:
         return None
     with _ouvrir(dossier) as cx:
-        lignes = [_ligne(r) for r in cx.execute(f"SELECT {COLONNES} FROM lignes ORDER BY derniere DESC, domaine, mac")]
+        if cx is None:
+            return None
+        try:
+            lignes = [_ligne(r) for r in cx.execute(f"SELECT {COLONNES} FROM lignes ORDER BY derniere DESC, domaine, mac")]
+        except sqlite3.Error:
+            return None
     return {"version": 1, "genere": g, "domaines": lignes}
 
 
@@ -253,19 +278,27 @@ def analyser(dossier: Optional[Path] = None, fenetre: str = "30j", macs=(), cate
     vide = {"cache": False, "genere": None, "total": 0, "decalage": decalage, "limite": limite, "lignes": [], "agregats": [],
             "agreger": agreger, "fenetre": fenetre,
             "metriques": {"domaines": 0, "requetes": 0, "bloquees": 0, "part_bloquee": 0.0, "par_categorie": {}, "top_domaines": [],
-                          "top_appareils": [], "nouveaux": 0}}
+                          "top_appareils": [], "nouveaux": None if fenetre in FENETRES_SOUS_UN_JOUR else 0}}
     g = genere(dossier)
     if g is None:
         return vide
+    try:
+        return _analyser(dossier, g, where, a, fenetre, agreger, decalage, limite, maintenant) or vide
+    except sqlite3.Error:
+        return vide                                               # cache corrompu ou d'un autre schéma : comme absent, jamais une 500
+
+
+def _analyser(dossier, g, where, a, fenetre, agreger, decalage, limite, maintenant) -> Optional[dict]:
     with _ouvrir(dossier) as cx:
         if cx is None:
-            return vide
+            return None
         total, dn, req, bloq = cx.execute(f"SELECT COUNT(*), COUNT(DISTINCT domaine), COALESCE(SUM(requetes),0), COALESCE(SUM(bloquees),0) "
                                           f"FROM lignes WHERE {where}", a).fetchone()
         par_cat = {c: {"domaines": n, "requetes": r or 0} for c, n, r in cx.execute(
             f"SELECT categorie, COUNT(DISTINCT domaine), SUM(requetes) FROM lignes WHERE {where} GROUP BY categorie", a)}
-        nouveaux = cx.execute(f"SELECT COUNT(DISTINCT domaine) FROM lignes WHERE {where} AND premiere >= ?",
-                              a + [int(maintenant) - FENETRES[fenetre]]).fetchone()[0]
+        # I3 : la première vue est au JOUR (UTC) ; sous un jour, « nouveau » serait faux : non calculé (None).
+        nouveaux = None if fenetre in FENETRES_SOUS_UN_JOUR else cx.execute(
+            f"SELECT COUNT(DISTINCT domaine) FROM lignes WHERE {where} AND premiere >= ?", a + [int(maintenant) - FENETRES[fenetre]]).fetchone()[0]
         metriques = {"domaines": dn, "requetes": req, "bloquees": bloq, "part_bloquee": round(bloq / req, 4) if req else 0.0,
                      "par_categorie": par_cat, "top_domaines": _groupes(cx, "domaine", where, a, 5),
                      "top_appareils": _groupes(cx, "appareil", where, a, 5), "nouveaux": nouveaux}
@@ -283,9 +316,12 @@ def selection(dossier: Optional[Path] = None, limite: int = EXPORT_MAX, maintena
     with _ouvrir(dossier) as cx:
         if cx is None or g is None:
             return [], 0, None
-        total = cx.execute(f"SELECT COUNT(*) FROM lignes WHERE {where}", a).fetchone()[0]
-        lignes = [_ligne(r) for r in cx.execute(f"SELECT {COLONNES} FROM lignes WHERE {where} ORDER BY derniere DESC, domaine, mac LIMIT ?",
-                                                 a + [max(1, min(int(limite), EXPORT_MAX))])]
+        try:
+            total = cx.execute(f"SELECT COUNT(*) FROM lignes WHERE {where}", a).fetchone()[0]
+            lignes = [_ligne(r) for r in cx.execute(f"SELECT {COLONNES} FROM lignes WHERE {where} ORDER BY derniere DESC, domaine, mac LIMIT ?",
+                                                     a + [max(1, min(int(limite), EXPORT_MAX))])]
+        except sqlite3.Error:
+            return [], 0, None
     return lignes, total, g
 
 
