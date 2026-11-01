@@ -77,7 +77,7 @@ La libndpi livrée (4.2) n'émet ni `ja3` ni `ja4` dans ses événements. sbxdpi
 ## Agrégat par appareil — SBX TV Privacy lot 4 (#3374)
 
 Exception documentée à la règle « sans PII » : les seules adresses listées dans `DPI_TARGETS_FILE`
-(`/run/secubox/sbxdpi-cibles.json`, écrit par root via `secubox-adguard-tv dpi-cibles` pour les appareils du périmètre TV Privacy)
+(`/run/secubox/sbxdpi-cibles/cibles.json`, écrit par root via `secubox-adguard-tv dpi-cibles` pour les appareils du périmètre TV Privacy)
 sont comptées par adresse dans `DPI_DEVICES_OUT` (`/run/secubox/sbxdpi/appareils.json`, 0640, groupe `secubox`) : application nDPI,
 catégorie, nom d'hôte, port, adresse distante seulement sans nom, flux, octets, à la minute, fenêtre de 10 minutes, 20 000 clés et
 2 000 par adresse au plus. Sans cibles, rien n'est compté ni écrit. Ad-guard rattache chaque adresse à sa MAC.

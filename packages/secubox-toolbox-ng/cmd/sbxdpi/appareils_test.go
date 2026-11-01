@@ -28,6 +28,7 @@ func cibles(t *testing.T, dir string, adresses ...string) string {
 func TestAppareilsSeulementLesCibles(t *testing.T) {
 	dir := t.TempDir()
 	s := newSuiviAppareils(cibles(t, dir, "192.168.1.50", "2a01:e0a::1"), filepath.Join(dir, "out", "appareils.json"))
+	s.proprietaire = uint32(os.Getuid())
 	s.recharger()
 	e := ev("TLS.Google", "Advertisement", "pagead2.googlesyndication.com", "192.168.1.50", "142.250.1.1", 0)
 	e.DstPort, e.L4Proto, e.FlowEventName = 443, "tcp", "detected"
@@ -73,6 +74,7 @@ func TestAppareilsSansCiblesNeCompteRienEtNEcritRien(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "appareils.json")
 	s := newSuiviAppareils(filepath.Join(dir, "absent.json"), out)
+	s.proprietaire = uint32(os.Getuid())
 	s.recharger()
 	e := ev("TLS", "Web", "x.example", "192.168.1.50", "1.1.1.1", 0)
 	s.observe(e, 1)
@@ -87,6 +89,7 @@ func TestAppareilsSansCiblesNeCompteRienEtNEcritRien(t *testing.T) {
 func TestAppareilsBornesEtFenetre(t *testing.T) {
 	dir := t.TempDir()
 	s := newSuiviAppareils(cibles(t, dir, "192.168.1.50"), filepath.Join(dir, "a.json"))
+	s.proprietaire = uint32(os.Getuid())
 	s.recharger()
 	for i := 0; i < maxClesParAdresse+50; i++ {
 		e := ev("TLS", "Web", "", "192.168.1.50", "151.101."+itoa(i/250)+"."+itoa(i%250), 0)
@@ -107,4 +110,55 @@ func TestAppareilsBornesEtFenetre(t *testing.T) {
 
 func itoa(i int) string {
 	return string(rune('0'+i/100%10)) + string(rune('0'+i/10%10)) + string(rune('0'+i%10))
+}
+
+// Passe 2 (#3374) : S2 propriétaire root exigé, taille vérifiée avant lecture, m7 purge au rechargement.
+
+func TestCiblesRefuseesSiPasRoot(t *testing.T) {
+	dir := t.TempDir()
+	s := newSuiviAppareils(cibles(t, dir, "192.168.1.50"), filepath.Join(dir, "a.json"))
+	s.proprietaire = uint32(os.Getuid()) + 1 // le fichier n'appartient pas au propriétaire attendu
+	s.recharger()
+	if len(s.cibles) != 0 {
+		t.Fatal("un fichier de cibles qui n'appartient pas à root doit être refusé")
+	}
+}
+
+func TestCiblesTropGrossesRefuseesSansLecture(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "cibles.json")
+	if err := os.WriteFile(p, make([]byte, 2<<20), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := newSuiviAppareils(p, filepath.Join(dir, "a.json"))
+	s.proprietaire = uint32(os.Getuid())
+	if s.lirePlafonne(p) != nil {
+		t.Fatal("un fichier de plus de 1 Mio ne doit pas être lu")
+	}
+}
+
+func TestRetraitDeCiblePurgeSesCles(t *testing.T) {
+	dir := t.TempDir()
+	p := cibles(t, dir, "192.168.1.50", "192.168.1.51")
+	s := newSuiviAppareils(p, filepath.Join(dir, "a.json"))
+	s.proprietaire = uint32(os.Getuid())
+	s.recharger()
+	for _, ip := range []string{"192.168.1.50", "192.168.1.51"} {
+		e := ev("TLS", "Web", "x.example", ip, "1.1.1.1", 0)
+		e.L4Proto = "tcp"
+		s.observe(e, 1000)
+	}
+	_ = os.Remove(p)
+	s.recharger() // fichier disparu : plus de cibles, clés purgées, mtime oublié
+	if len(s.cles) != 0 || !s.mtime.IsZero() {
+		t.Fatal("cibles disparues : les clés doivent partir et le mtime être oublié")
+	}
+	cibles(t, dir, "192.168.1.50")
+	s.recharger()
+	e := ev("TLS", "Web", "x.example", "192.168.1.51", "1.1.1.1", 0)
+	e.L4Proto = "tcp"
+	s.observe(e, 1001)
+	if len(s.cles) != 0 {
+		t.Fatal("adresse retirée : plus comptée")
+	}
 }

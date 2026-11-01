@@ -140,7 +140,7 @@ func defaultConfig() Config {
 		ActorSock:       os.Getenv("DPI_ACTOR_SOCK"), // vide par défaut : le capteur n'est armé que si le socket d'actord est déclaré
 		ActorRisques:    os.Getenv("DPI_ACTOR_RISQUES"),
 		ActorSeuil:      envIntDefault("DPI_ACTOR_SEUIL", 0),
-		TargetsFile:     getenvDefault("DPI_TARGETS_FILE", "/run/secubox/sbxdpi-cibles.json"),
+		TargetsFile:     getenvDefault("DPI_TARGETS_FILE", "/run/secubox/sbxdpi-cibles/cibles.json"),
 		DevicesOut:      getenvDefault("DPI_DEVICES_OUT", "/run/secubox/sbxdpi/appareils.json"),
 	}
 }

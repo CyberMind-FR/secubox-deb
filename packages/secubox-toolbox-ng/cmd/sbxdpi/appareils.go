@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -56,6 +57,8 @@ type suiviAppareils struct {
 	parAdr    map[string]int
 	aEcrire   bool
 	dejaEcrit bool
+	// proprietaire : UID exigé du fichier de cibles (S2 : root, qui seul l'écrit dans /run/secubox/sbxdpi-cibles/).
+	proprietaire uint32
 }
 
 func newSuiviAppareils(ciblesF, sortie string) *suiviAppareils {
@@ -63,21 +66,37 @@ func newSuiviAppareils(ciblesF, sortie string) *suiviAppareils {
 		parAdr: map[string]int{}}
 }
 
-// recharger relit le fichier de cibles s'il a changé (mtime). Fichier absent ou
-// invalide : aucune cible (rien n'est compté par appareil).
+// lirePlafonne lit le fichier de cibles s'il est régulier, appartient au
+// propriétaire attendu (root) et fait au plus 1 Mio — taille vérifiée AVANT lecture.
+func (s *suiviAppareils) lirePlafonne(p string) []byte {
+	st, err := os.Lstat(p)
+	if err != nil || !st.Mode().IsRegular() || st.Size() > 1<<20 {
+		return nil
+	}
+	if sys, ok := st.Sys().(*syscall.Stat_t); !ok || sys.Uid != s.proprietaire {
+		log.Printf("sbxdpi: cibles %s refusées (propriétaire inattendu)", p)
+		return nil
+	}
+	b, err := os.ReadFile(p)
+	if err != nil || len(b) > 1<<20 {
+		return nil
+	}
+	return b
+}
+
+// recharger relit le fichier de cibles s'il a changé (mtime). Fichier absent,
+// refusé ou invalide : aucune cible ; les clés des adresses retirées sont
+// purgées aussitôt (m7).
 func (s *suiviAppareils) recharger() {
 	st, err := os.Stat(s.ciblesF)
 	if err != nil {
 		s.mu.Lock()
-		s.cibles = map[string]bool{}
+		s.cibles, s.mtime = map[string]bool{}, time.Time{}
+		s.purgerHorsCibles()
 		s.mu.Unlock()
 		return
 	}
 	if st.ModTime().Equal(s.mtime) {
-		return
-	}
-	b, err := os.ReadFile(s.ciblesF)
-	if err != nil || len(b) > 1<<20 {
 		return
 	}
 	var c struct {
@@ -87,7 +106,7 @@ func (s *suiviAppareils) recharger() {
 		} `json:"appareils"`
 	}
 	nouv := map[string]bool{}
-	if json.Unmarshal(b, &c) == nil && c.Version == 1 {
+	if b := s.lirePlafonne(s.ciblesF); b != nil && json.Unmarshal(b, &c) == nil && c.Version == 1 {
 		for _, a := range c.Appareils {
 			for _, ip := range a.Adresses {
 				if p := net.ParseIP(ip); p != nil && len(nouv) < maxCibles {
@@ -98,7 +117,19 @@ func (s *suiviAppareils) recharger() {
 	}
 	s.mu.Lock()
 	s.cibles, s.mtime = nouv, st.ModTime()
+	s.purgerHorsCibles()
 	s.mu.Unlock()
+}
+
+// purgerHorsCibles retire les clés des adresses qui ne sont plus des cibles (mu tenu).
+func (s *suiviAppareils) purgerHorsCibles() {
+	for k := range s.cles {
+		if !s.cibles[k.local] {
+			delete(s.cles, k)
+			s.parAdr[k.local]--
+			s.aEcrire = true
+		}
+	}
 }
 
 // observe compte un événement de flux dont la source OU la destination est une

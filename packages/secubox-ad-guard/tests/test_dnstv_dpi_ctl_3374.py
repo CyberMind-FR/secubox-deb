@@ -28,7 +28,7 @@ def dpi(monde, monkeypatch):  # noqa: F811
                      "*) echo '[]';; esac\n")
     ipcmd.chmod(0o755)
     for k, v in {"SECUBOX_ADGUARD_TV_CONNTRACK": ct, "SECUBOX_ADGUARD_TV_SYSTEMCTL": sysctl, "SECUBOX_ADGUARD_TV_IP": ipcmd,
-                 "SECUBOX_ADGUARD_TV_CIBLES": t / "run" / "sbxdpi-cibles.json"}.items():
+                 "SECUBOX_ADGUARD_TV_CIBLES": t / "run" / "sbxdpi-cibles" / "cibles.json"}.items():
         monkeypatch.setenv(k, str(v))
     dnstv.ecrire_etat({"actif": True, "clients": [{"ip": "192.168.1.50", "nom": "TV salon", "mode": "auto", "mac": MAC},
                                                   {"ip": "192.168.1.60", "nom": "Hors", "mode": "off", "mac": "aa:bb:cc:00:00:09"}]},
@@ -52,8 +52,10 @@ def test_conntrack_absent_rend_vide(dpi, capsys):
 
 def test_dpi_cibles_ecrit_les_cibles_de_sbxdpi_sans_filtre_de_capture(dpi):
     assert ctl(dpi, "dpi-cibles") == 0
-    c = json.loads((dpi["tmp"] / "run" / "sbxdpi-cibles.json").read_text())
+    f = dpi["tmp"] / "run" / "sbxdpi-cibles" / "cibles.json"
+    c = json.loads(f.read_text())
     assert c["appareils"] == [{"mac": MAC, "adresses": ["192.168.1.50", "2a01:e0a::1"]}]
+    assert f.stat().st_mode & 0o777 == 0o640 and f.parent.stat().st_mode & 0o777 == 0o750          # S2
     assert (not dpi["journal"].exists() or "restart" not in dpi["journal"].read_text()) and not (dpi["tmp"] / "ndpid-engine.d").exists()
     assert ctl(dpi, "dpi-cibles") == 0
     assert (dpi["tmp"] / "audit.log").read_text().count("dpi-cibles") == 1          # inchangé : pas de nouvelle entrée
@@ -108,3 +110,15 @@ def test_audit_de_l_arret_porte_le_code_reel(dpi, monkeypatch):
     (t / "systemctl").write_text(f"#!/bin/sh\necho \"systemctl $*\" >> {dpi['journal']}\nexit 5\n")
     assert ctl(dpi, "ndpid-arreter") == 1
     assert "rc=5" in (t / "audit.log").read_text()
+
+
+def test_m1_la_memoire_de_24_h_alimente_les_cibles(dpi):
+    import time as _t
+    from api import dnstv_dpi as D
+    m = D.MagasinDPI(dpi["etat"] / "dpi-appareils.db")
+    now = int(_t.time())
+    m.ecrire_voisins({"2a01:e0a::99": (MAC, now - 3600), "2a01:e0a::98": (MAC, now - 2 * 86400),
+                      "192.168.1.200": ("aa:bb:cc:00:00:77", now)})                     # MAC hors périmètre : ignorée
+    assert ctl(dpi, "dpi-cibles") == 0
+    c = json.loads((dpi["tmp"] / "run" / "sbxdpi-cibles" / "cibles.json").read_text())
+    assert c["appareils"][0]["adresses"] == ["192.168.1.50", "2a01:e0a::1", "2a01:e0a::99"]

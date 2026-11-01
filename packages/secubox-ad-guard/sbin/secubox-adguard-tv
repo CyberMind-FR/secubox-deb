@@ -483,7 +483,7 @@ def audit_protection(entree: str) -> int:
 CONNTRACK = os.environ.get("SECUBOX_ADGUARD_TV_CONNTRACK", "/proc/net/nf_conntrack")
 SYSTEMCTL = os.environ.get("SECUBOX_ADGUARD_TV_SYSTEMCTL", "systemctl")
 IP_CMD = os.environ.get("SECUBOX_ADGUARD_TV_IP", "ip")
-CIBLES = Path(os.environ.get("SECUBOX_ADGUARD_TV_CIBLES", "/run/secubox/sbxdpi-cibles.json"))
+CIBLES = Path(os.environ.get("SECUBOX_ADGUARD_TV_CIBLES", "/run/secubox/sbxdpi-cibles/cibles.json"))   # S2 : dossier de root
 UNITE_NDPID = "secubox-ndpid-engine.service"
 CONNTRACK_MAX = 64 * 1024 * 1024
 
@@ -538,12 +538,53 @@ def _ecrire_root(chemin: Path, contenu: str, mode: int) -> bool:
     return True
 
 
+def _dossier_cibles() -> Path:
+    """S2 : `/run/secubox/sbxdpi-cibles/` 0750 root:secubox-toolbox, créé et tenu par root seul (sbxdpi le lit, ne l'écrit jamais)."""
+    import grp
+    d = CIBLES.parent
+    d.mkdir(mode=0o750, parents=True, exist_ok=True)
+    st = os.lstat(d)
+    if not stat.S_ISDIR(st.st_mode) or (os.geteuid() == 0 and st.st_uid != 0):
+        raise SystemExit("dossier des cibles refusé (lien ou propriétaire inattendu)")
+    if os.geteuid() == 0:
+        with contextlib.suppress(KeyError, OSError):
+            os.chown(d, 0, grp.getgrnam("secubox-toolbox").gr_gid)
+    os.chmod(d, 0o750)
+    return d
+
+
+def _memoire_root(maintenant: int) -> dict:
+    """m1 : mémoire adresse -> MAC de moins de 24 h (base du moteur, lue en lecture seule). Root ne la croit pas : adresses revalidées,
+    et seules les MAC du périmètre (état revalidé) comptent, au filtre de `cibles`."""
+    from api import dnstv_dpi
+    f = dnstv.DOSSIER_ETAT / "dpi-appareils.db"
+    if not f.is_file() or f.is_symlink():
+        return {}
+    try:
+        mem = dnstv_dpi.MagasinDPI(f, lecture_seule=True).charger_voisins()
+    except Exception:                                                    # noqa: BLE001 — base absente ou verrouillée : la table de voisinage suffit
+        return {}
+    out = {}
+    for a, (m, vu) in list(mem.items())[:5000]:
+        ip = dnstv_dpi._ip(a)
+        if ip and isinstance(m, str) and dnstv.MAC_RE.match(m) and 0 <= maintenant - int(vu) <= dnstv_dpi.MEMOIRE_VOISINS_S:
+            out[ip] = m
+    return out
+
+
 def dpi_cibles() -> int:
     from api import dnstv_dpi
+    import grp
     etat, vois = _perimetre_root()
-    c = dnstv_dpi.cibles(etat, vois)
+    connus = _memoire_root(int(time.time()))
+    connus.update(vois)
+    c = dnstv_dpi.cibles(etat, connus)
     macs = [a["mac"] for a in c["appareils"] if dnstv.MAC_RE.match(a["mac"])]
-    if _ecrire_root(CIBLES, json.dumps(c, sort_keys=True), 0o644):          # lu par sbxdpi ; AUCUN filtre de capture (Hall, /ndpid/)
+    _dossier_cibles()
+    if _ecrire_root(CIBLES, json.dumps(c, sort_keys=True), 0o640):          # lu par sbxdpi ; AUCUN filtre de capture (Hall, /ndpid/)
+        if os.geteuid() == 0:
+            with contextlib.suppress(KeyError, OSError):
+                os.chown(CIBLES, 0, grp.getgrnam("secubox-toolbox").gr_gid)
         audit("dpi-cibles", f"appareils={len(macs)} cibles de sbxdpi mises à jour")
     print(json.dumps({"ok": True, "appareils": len(macs)}))
     return 0
