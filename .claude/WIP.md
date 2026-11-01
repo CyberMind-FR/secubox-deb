@@ -6,7 +6,7 @@
 -->
 
 # WIP — chantier en cours + Next Up
-*Mis à jour : 2026-10-30 (pilotage L2 fusionné #3278, non déployé ; WAF #3257 #3273 déployés ; conteneurs trixie #3274).* Moins de 200 lignes, par construction : l'historique du
+*Mis à jour : 2026-11-01 (SBX TV Privacy lot 3 + #3362 déployés gk2 ; pilotage L2 fusionné #3278, non déployé ; WAF #3257 #3273 déployés ; conteneurs trixie #3274).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
@@ -57,7 +57,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - **Fait (webos 1.19.20, ephemeride 0.1.1, ipv6guard 0.2.2 ; 2026-10-22)** : fiches `registre.d` des modules API seule.
 - **Fait (webos 1.19.21, streamlit 1.6.2 ; 2026-10-22)** : rubrique « Applications » (vignettes Streamlit sous session).
 - ✅ mochabinleds déployé gk2/gk1/gk6 (closes #3361, voir HISTORY 2026-11-01).
-- ⬜ **Next Up** : page Planification (secubox-system, lecture seule : minuteries, cron gitea, envois de mails) + secubox-gitea-nuit (miroirs + gc à 3 h) ; gk6 profil léger ; #3364 ; #3362.
+- ⬜ **Next Up** : page Planification (secubox-system, lecture seule : minuteries, cron gitea, envois de mails) + secubox-gitea-nuit (miroirs + gc à 3 h) ; gk6 profil léger ; #3364.
 - ⬜ **Next Up** : phase 4, reste — **GO du propriétaire** sur la fusion des flux (retirer ou masquer les cartes MetaNews / Flux
   YouTube / Billets de l'accueil v2 — ne se fait pas sur un « next ») ; à trancher : reprise du relevé système dans les courbes
   de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
@@ -175,6 +175,12 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
+00000000000. **Avant l'Alpha 20 (arbitrage du propriétaire, 2026-11-01) : finir SBX TV Privacy #3374**, lots 5 → 4 (DPI par
+  appareil, contournements, anti faux repli ; rend visibles les pubs servies par le flux) → 5b (assistant en direct) → 6 → 7
+  (Freebox, 2 Android TV, Apple TV). Test en cours sur la TV du propriétaire (MAC 38:07:16:93:4e:95) : bloquer
+  `audiences.free.fr`, `stats.oqee.net`, `metaproxy.francetvpub.fr`, puis classer selon la lecture. #3362 : oublier
+  lgm-ebin et secubox-vm-x64 par la Flotte, retirer l'ancienne clé gk1, puis `closes #3362`. Reportés notés dans la
+  conception lot 3 (débit non atomique, `.home` ancien, M2, M7) ; pierre tombale p2p à ouvrir en issue.
 0000000000. **WAF et vulnérabilités (2026-10-29)** : #3257 et #3273 déployés sur gk2 en mode detect (waf-ng 1.32.0) —
   étalonner les seuils provisoires sur le trafic réel, construire l'amd64, observer C1/HTTP/2. **Conteneurs trixie (#3274,
   PR #3275)** : roundcube fait ; `mail` revenu à bookworm (snap1) — préparer à froid la configuration Dovecot 2.4 sur `snap2`,

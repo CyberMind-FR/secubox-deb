@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-01 — SBX TV Privacy lots 1 à 3 déployés ; oublier un nœud l'oublie partout
+
+- ref #3374 : ad-guard 1.17.0 → 1.20.1, kiosque 0.3.0, hub 1.12.36 (PR #3380, #3383, #3384, #3385, #3386), déployés gk2,
+  agrégateur redémarré. Appareils par MAC, taxonomie à 10 catégories (protégées jamais bloquées par AUTO), données par
+  appareil réservées à l'admin réel ; modes OBSERVE/PROTECT/AUTO (AUTO par défaut à la seule première installation),
+  exceptions unifiées, journal + audit-protection, pause, « Ça ne marche plus ? Je débloque » (pause ≤ 24 h, webapp et
+  admin), analyseur SQLite (corrige la troncature à 16 Mio du cache), événements agrégés par 10, page Aurora + coque du menu.
+  Constat sur film : régies Google bloquées ; restent les pubs servies par le flux (oqee) et `metaproxy.francetvpub.fr`,
+  `audiences.free.fr`, `stats.oqee.net` (INCONNU, jamais bloqués par AUTO) → test par TV puis lot 4 (DPI).
+- ref #3362 : p2p 1.21.0, autoload 0.9.2, annuaire 0.17.3 (PR #3387, six passes de relecture sécurité), déployés gk2.
+  Oubli = registre + wg + projection + relais + autoload + Flotte ; lecture-modif-écriture sous verrou (`maj_json`), API
+  sans verrou dans la boucle asyncio, route publique en 503. Reste : oubli des 3 pairs morts par la Flotte, puis closes.
+
 ## 2026-11-01 — CI au vert et démarrage des MOCHAbin sur le noyau Debian courant
 
 - closes #3313 (PR #3372) : pilotage 0.6.18, profil AppArmor sur /var/lib/secubox-autoload-public (lecture refusée en
