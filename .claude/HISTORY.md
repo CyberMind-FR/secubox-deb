@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-01 — Ménage avant l'Alpha 20 : issues livrées et déployées fermées
+
+Vérifié par version installée sur gk2 = version de master (2026-11-01) :
+- closes #3366 (profiles 0.26.10 : LED always-on + migration des manifestes, gk1/gk2/gk6)
+- closes #3290 (LED IS31FL3199 : pilote DKMS + code d'état mochabinleds, gk1/gk2/gk6)
+- closes #3305 et closes #3303 (abonnements par box, droits du maillage : autoload 0.9.1, annuaire 0.17.2)
+- closes #3345 (projection publique autoload hors /var/lib/secubox) ; closes #3335 (catalogue dédoublonné, annuaire 0.17.2)
+- closes #3338 (boutique Alpha 20 : appstore 0.11.0) ; closes #3347 (membres d'alias mail : mail 2.16.8)
+- closes #3351 (live.secubox.in : live 0.1.5) ; closes #3302 (bascule d'interface depuis la Flotte : pilotage 0.6.16)
+- closes #3349 (retour par instantané : profiles + agent 0.8.0 sur les box pilotées)
+Restent ouvertes : #3337 (secubox-fonction-maitre non installé sur gk2, décision dépôt apt en attente).
+
 ## 2026-11-01 — mochabinleds : LED de supervision à 8 séquences, seuils relatifs évolutifs, déployé gk2 + gk1 + gk6 (closes #3361)
 
 - secubox-led-heartbeat 2.4.0 (PR #3363) puis 2.4.1 (PR #3365, lecture /proc/sys par blocs : ENOMEM sur 4 Mio).
