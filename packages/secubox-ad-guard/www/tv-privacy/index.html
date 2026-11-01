@@ -14,8 +14,9 @@
   Tout texte venu du réseau (noms d'hôtes, domaines) est posé par textContent, jamais interprété comme du HTML.
   `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, adresses de documentation, aucune écriture.
 -->
+<html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-4bvKZxp78k+odReMMHCSjJqqZ8ygyDfoXdBWbsV5sNg='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dz0+FaC1L46UKFUgWrPCWAEHPH9hK6fajXmxAP8JzU4='; style-src 'self' 'sha256-EJ7j/16K/VnqIL/crte6LqN2JPb1s+00MHIdpM1UK94='; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -35,7 +36,11 @@
     box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
   .app>*,.grille>*{min-width:0}
   .tete{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+  .tete .marque{display:flex;align-items:center;gap:8px;min-width:0}
   .tete .marque b{display:block;font-size:1.3rem;font-weight:800}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .actif.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
   .tete .marque small{color:var(--cyan);font-size:.72rem}
   .droite{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--faible);font-size:.74rem;flex-wrap:wrap}
   button,select,input{font:inherit;color:var(--texte);background:rgba(41,182,246,.10);border:1px solid var(--trait2);border-radius:9px;padding:7px 12px;min-height:36px}
@@ -71,7 +76,7 @@
   .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ligne .v{text-align:right;font-variant-numeric:tabular-nums;color:var(--doux)}
   .barre{height:6px;border-radius:99px;background:rgba(159,179,214,.16);overflow:hidden}
-  .barre i{display:block;height:100%;background:var(--cyan)}
+  .barre i{display:block;height:100%;background:var(--bleu)}
   .barre i.prot{background:var(--vert)}
   .vide{color:var(--faible);font-size:.8rem;padding:6px 0}
   .tab{overflow-x:auto}
@@ -105,15 +110,61 @@
   .lien{color:inherit}
   .espace{margin-top:10px}
   .suite{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  /* Coque partagée (#2733) : sidebar.js pose ces règles dans un <style> EN LIGNE que la CSP par hachage refuse ; on en reprend ici l'essentiel
+     (repris de injectStyles(), sans rien inventer) : bloc d'état et LED de l'ancienne barre masqués, bouton ☰ et voile du mobile, contenu Aurora. */
+  .header-leds-metrics,.smart-strip{display:none!important}
+  .status-led{font-size:.9em;margin-left:auto}
+  .nav-item{display:flex;align-items:center;gap:.5rem}
+  .nav-item.offline{opacity:0;height:0;padding:0;margin:0;overflow:hidden}
+  .sidebar-toggle{display:none;position:fixed;top:.75rem;left:.75rem;z-index:1002;background:#0b1830;border:1px solid var(--trait2);color:var(--texte);width:40px;height:40px;font-size:1.4rem;cursor:pointer;align-items:center;justify-content:center;border-radius:8px;padding:0;min-height:0}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999}
+  .sidebar-overlay.active{display:block}
+  .mobile-mode .sidebar{transform:translateX(-100%);transition:transform .3s ease;z-index:1000}
+  .mobile-mode .sidebar.open{transform:translateX(0)}
+  html.sbx-aurora body.hybrid-skin main.principal{margin-left:220px!important;padding:48px 12px 12px!important;min-height:0}
+  html.sbx-aurora body.mobile-mode main.principal{margin-left:0!important;padding:56px 0 0!important}
+  #sidebar .nav-mode-link{color:inherit;text-decoration:none}
+  @media (max-width:768px){.sidebar:not(.open){transform:translateX(-100%)}html.sbx-aurora body.hybrid-skin main.principal{margin-left:0!important;padding:56px 0 0!important}}
+  /* Skin partagé hybrid-skin.css (injecté par sidebar.js) : il vide les fonds de tout <main> et repeint boutons, champs et tableaux en !important.
+     Réponse à spécificité supérieure (AURORA-REFERENCE §10). Les dégradés (background-image) ne sont pas touchés par ce skin. */
+  html.sbx-aurora body.hybrid-skin .principal .app .pan{background-color:rgba(10,22,46,.6)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .barre{background-color:rgba(159,179,214,.16)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .barre i{background-color:var(--bleu)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .barre i.prot{background-color:var(--vert)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app button{background-color:rgba(41,182,246,.10)!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:9px!important;backdrop-filter:none;box-shadow:none}
+  html.sbx-aurora body.hybrid-skin .principal .app button:hover{background-color:rgba(41,182,246,.2)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .onglets [role=tab]{background-color:transparent!important;border-color:transparent!important;color:var(--doux)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .onglets [role=tab][aria-selected=true]{background-color:rgba(41,182,246,.14)!important;border-color:var(--trait2)!important;color:var(--texte)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app button.fort{background-color:rgba(46,204,113,.12)!important;border-color:var(--vert)!important;color:#a8f0c6!important}
+  html.sbx-aurora body.hybrid-skin .principal .app button.danger{background-color:rgba(255,159,28,.10)!important;border-color:var(--orange)!important;color:var(--orange)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app :is(select,input){background-color:#0b1830!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:9px!important}
+  html.sbx-aurora body.hybrid-skin .principal .app th{background-color:transparent!important;color:var(--faible)!important;border-bottom:0!important}
+  html.sbx-aurora body.hybrid-skin .principal .app td{color:var(--texte)!important!important;border-bottom:0!important}
+  html.sbx-aurora body.hybrid-skin .principal .app tr:hover td{background-color:rgba(41,182,246,.07)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app tr.sous td{background-color:rgba(6,13,27,.6)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .demo{background-color:rgba(255,159,28,.10)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .info{background-color:rgba(41,182,246,.10)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .erreur{background-color:rgba(255,77,94,.10)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .ok{background-color:rgba(46,204,113,.10)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .honnete{background-color:rgba(10,22,46,.5)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .debloque{background-color:rgba(46,204,113,.06)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .confirm{background-color:rgba(255,159,28,.06)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .pastille{background-color:rgba(41,182,246,.12)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .pastille.vert,html.sbx-aurora body.hybrid-skin .principal .app .actif{background-color:rgba(46,204,113,.12)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .pastille.orange,html.sbx-aurora body.hybrid-skin .principal .app .actif.demo{background-color:rgba(255,159,28,.12)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .pastille.rouge,html.sbx-aurora body.hybrid-skin .principal .app .actif.hors{background-color:rgba(255,77,94,.12)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .pastille.gris{background-color:rgba(159,179,214,.10)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .puce{background-color:rgba(41,182,246,.08)!important}
   @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}.grille{grid-template-columns:1fr 1fr}}
 </style>
 <body>
 <nav class="sidebar" id="sidebar" aria-label="Menu de l'administration"></nav>
 <main class="principal"><div class="cadre"><div class="app">
-  <header class="tete">
-    <div class="marque"><b>SBX TV Privacy</b><small>Ce que les téléviseurs demandent au DNS de la box</small></div>
-    <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">Rafraîchir</button></div>
-  </header>
+  <div class="tete">
+    <div class="marque"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2" fill="rgba(41,182,246,.14)"/><path d="M8 21h8M12 17v4M9.5 11l1.8 1.8 3.4-3.6"/></svg><span><b>SBX TV Privacy</b><small>Ce que les téléviseurs demandent au DNS de la box</small></span></div>
+    <span class="actif" id="actif" title="État de la lecture des routes d'ad-guard">…</span>
+    <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
   <div class="bandeau demo" id="demo" hidden>Démonstration : données fictives (adresses de documentation), aucune écriture.</div>
   <div class="bandeau info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" class="lien">Se connecter</a></div>
   <div class="bandeau" id="message" role="status" aria-live="polite" hidden></div>
@@ -604,7 +655,9 @@
       hauteur();}).catch(echec);
   }
 
+  function actif(t,c){var a=el('actif');a.textContent=t;a.className='actif'+(c?' '+c:'');}
   function echec(e){
+    actif(e&&e.session?'SESSION REQUISE':'HORS LIGNE','hors');
     if(e&&e.session){el('session').hidden=false;rendreGenerale(null,null);rendreEquipements(null);rendreEvenements(null);}
     else message('Lecture impossible : '+(e&&e.message||'erreur'),'erreur');
     hauteur();
@@ -613,7 +666,7 @@
     if(DEMO)el('demo').hidden=false;
     Promise.all([source('/appareils'),source('/protection/analyse?fenetre=30j&agreger=categorie&limite=1').catch(function(e){if(e.session)throw e;return null;})])
       .then(function(r){etat.appareils=r[0].appareils||[];etat.profils=r[0].profils||[];if(r[1]){etat.admin=!!r[1].admin;etat.categories=r[1].categories||[];etat.protegees=r[1].protegees||[];etat.sources=r[1].sources||[];remplirFiltres(r[1]);}
-        el('session').hidden=true;rendreGenerale(r[0],r[1]);rendreEquipements(r[0]);chargerEvenements();
+        el('session').hidden=true;actif(DEMO?'DÉMONSTRATION':'EN LIGNE',DEMO?'demo':'');rendreGenerale(r[0],r[1]);rendreEquipements(r[0]);chargerEvenements();
         el('heure').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});hauteur();}).catch(echec);
   }
   el('rafraichir').addEventListener('click',function(){message('');charger();});
