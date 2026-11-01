@@ -3,6 +3,18 @@ set -e
 
 case "$1" in
     configure)
+        # --- migration LED always-on (#3366) : un manifeste existant fait autorité
+        # (scan n'écrase pas sans --force) ; les LED du MOCHAbin restent permanentes.
+        # Seuls les manifestes led* encore on-demand changent ; un autre choix explicite reste.
+        MODULES_D="${MODULES_D:-/etc/secubox/modules.d}"
+        for f in "$MODULES_D"/led*.toml; do
+            [ -f "$f" ] && [ ! -L "$f" ] || continue
+            if grep -qx 'lifecycle = "on-demand"' "$f"; then
+                sed -i 's/^lifecycle = "on-demand"$/lifecycle = "always-on"/' "$f"
+                echo "secubox-profiles : $(basename "$f") passe en always-on (#3366)"
+            fi
+        done
+        # --- fin migration LED
         # Create secubox system user/group if missing (idempotent, matches
         # sibling packages — see secubox-users/debian/postinst).
         getent group secubox >/dev/null || groupadd --system secubox

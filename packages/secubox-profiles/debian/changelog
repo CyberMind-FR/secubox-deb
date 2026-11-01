@@ -1,3 +1,11 @@
+secubox-profiles (0.26.10-1~trixie1) trixie; urgency=medium
+
+  * postinst : migre les manifestes LED existants (/etc/secubox/modules.d/led*.toml)
+    encore on-demand en always-on ; scan ne les réécrit pas sans --force, donc la
+    politique 0.26.9 restait sans effet sur les box déjà installées (closes #3366).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 07:49:10 +0100
+
 secubox-profiles (0.26.9-1~trixie1) trixie; urgency=medium
 
   * Politique de cycle de vie : famille LED du MOCHAbin (leds, led-pulse, led-flux,
