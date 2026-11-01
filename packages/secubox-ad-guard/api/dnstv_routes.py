@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """SecuBox-Deb :: ad-guard :: routes `/adblock-tv/*` du POC « DNS AdBlock TV » (#1943).
 
-Lecture : `require_lecture`. Toute action (modes, appareils, liste personnalisée) : `require_jwt` (administrateur). L'API n'écrit JAMAIS
+Lecture : `require_lecture` pour l'agrégé ; `require_lecture_nominative` (jamais le tableau de bord anonyme) pour toute donnée par appareil (#3374). Toute action (modes, appareils, liste personnalisée) : `require_jwt` (administrateur). L'API n'écrit JAMAIS
 dans Unbound : elle écrit l'état (fichier JSON validé) puis demande au contrôleur root `secubox-adguard-tv apply` — qui relit et revalide.
 """
 from __future__ import annotations
@@ -91,18 +91,29 @@ class DomaineIn(BaseModel):
     domaine: str = Field(min_length=3, max_length=253)
 
 
+async def require_lecture_nominative(lecteur=Depends(require_lecture)):
+    """Lecture d'une donnée PERSONNELLE par appareil (MAC, adresses, domaines visités) : une vraie session, jamais le lecteur
+    anonyme du mode tableau de bord (#3374). Sur gk2 le « LAN » nginx inclut le réseau de la box opérateur : `require_lecture`
+    seul y servait l'historique DNS de chaque appareil sans authentification."""
+    if not isinstance(lecteur, dict) or lecteur.get("tableau_de_bord") or not lecteur.get("sub"):
+        raise HTTPException(403, "donnée personnelle par appareil : session requise (le mode tableau de bord ne la sert pas)")
+    return lecteur
+
+
 def _refuse(e: dnstv.ErreurTV):
     raise HTTPException(422, str(e))
 
 
-@router.get("/status", dependencies=[Depends(require_lecture)])
-async def statut():
+@router.get("/status")
+async def statut(lecteur=Depends(require_lecture)):
     await asyncio.to_thread(_migrer)
     etat, erreur = dnstv.lire_etat()
     table = _table()
     stats = _magasin().statistiques()
-    vue = await asyncio.to_thread(_vue_appareils, etat)
-    return {"actif": etat["actif"], "clients": _clients_enrichis(etat["clients"], vue), "appareils": vue, "erreur": erreur, "dropin_present": dnstv.CONF_UNBOUND.is_file(),
+    anonyme = not isinstance(lecteur, dict) or bool(lecteur.get("tableau_de_bord")) or not lecteur.get("sub")
+    vue = [] if anonyme else await asyncio.to_thread(_vue_appareils, etat)
+    clients = [] if anonyme else _clients_enrichis(etat["clients"], vue)       # tableau de bord : les compteurs, aucune MAC ni adresse
+    return {"actif": etat["actif"], "clients": clients, "appareils": vue, "erreur": erreur, "dropin_present": dnstv.CONF_UNBOUND.is_file(),
             "listes": {"domaines": len(table), "problemes": dnstv.verifier_manifeste(dnstv.DOSSIER_LISTES),
                        "par_categorie": {c: sum(1 for v in table.values() if v == c) for c in dnstv.CATEGORIES}},
             "compteurs": {"requetes": stats["requetes"], "domaines_uniques": stats["domaines_uniques"],
@@ -174,7 +185,7 @@ def changer_mode(m: ModeIn):
         return {"etat": etat, "application": _ctl("apply")}
 
 
-@router.get("/stats", dependencies=[Depends(require_lecture)])
+@router.get("/stats", dependencies=[Depends(require_lecture_nominative)])
 async def statistiques(client: Optional[str] = None, jours: int = 7, limite: int = 20):
     if client:
         try:
@@ -190,7 +201,7 @@ async def statistiques(client: Optional[str] = None, jours: int = 7, limite: int
             "formulation": "réduction des domaines publicitaires/tracking résolus par DNS (ce n'est pas une suppression de publicités)"}
 
 
-@router.get("/export", dependencies=[Depends(require_lecture)])
+@router.get("/export", dependencies=[Depends(require_lecture_nominative)])
 async def exporter(client: Optional[str] = None, jours: int = 2):
     """Relevé complet des compteurs d'un appareil (domaine, catégorie, décision, hits) : sert à comparer deux instants (phases A/B/C)."""
     if client:
@@ -202,7 +213,7 @@ async def exporter(client: Optional[str] = None, jours: int = 2):
     return {"client": client, "releve": int(time.time()), "lignes": _magasin().lignes(client, depuis)}
 
 
-@router.get("/clients/vus", dependencies=[Depends(require_lecture)])
+@router.get("/clients/vus", dependencies=[Depends(require_lecture_nominative)])
 async def clients_vus():
     return {"clients": _magasin().par_client()}
 
@@ -251,7 +262,7 @@ async def sonde():
             "consigne": "interrogez ce nom depuis l'appareil (ex. dns-tv-test.py <nom> --serveur <IP de la box>), puis appelez /path-test"}
 
 
-@router.get("/path-test", dependencies=[Depends(require_lecture)])
+@router.get("/path-test", dependencies=[Depends(require_lecture_nominative)])
 async def path_test(nom: Optional[str] = None, ip: Optional[str] = None, secondes: int = 300):
     """client → DNS demandé → SecuBox reçue ? → domaine → décision → amont."""
     if nom is None and ip is None:
@@ -274,7 +285,7 @@ async def path_test(nom: Optional[str] = None, ip: Optional[str] = None, seconde
             "mode_du_client": next((c["mode"] for c in etat["clients"] if ip and c["ip"] == dnstv._ip(ip)), None)}
 
 
-@router.get("/bypass", dependencies=[Depends(require_lecture)])
+@router.get("/bypass", dependencies=[Depends(require_lecture_nominative)])
 async def contournement(minutes: int = 60):
     """Appareils visibles sur le réseau (ARP/NDP) mais SILENCIEUX côté DNS de la box : candidats au contournement. Sans aucune inspection
     de trafic : on compare deux listes. Limite honnête : la box ne voit pas un DNS externe qui ne passe pas par elle."""
@@ -419,7 +430,7 @@ async def gardien():
     return r
 
 
-@router.get("/sources", dependencies=[Depends(require_lecture)])
+@router.get("/sources", dependencies=[Depends(require_lecture_nominative)])
 async def sources(heures: int = 24):
     """Une ligne par APPAREIL : requêtes, blocages, taux, domaines uniques, répartition par type de service."""
     depuis = int(time.time()) - max(1, min(heures, 48)) * 3600
@@ -442,7 +453,7 @@ async def sources(heures: int = 24):
             "limite": "le DNS montre les NOMS demandés, pas les volumes ni le contenu ; un appareil qui n'interroge pas cette box n'apparaît pas"}
 
 
-@router.get("/live", dependencies=[Depends(require_lecture)])
+@router.get("/live", dependencies=[Depends(require_lecture_nominative)])
 async def en_direct(source: Optional[str] = None, secondes: int = 120, limite: int = 60):
     """Les dernières requêtes (flux en cours), la plus récente d'abord, avec le service et le type de chaque nom."""
     depuis = int(time.time()) - max(5, min(secondes, 3600))
@@ -454,13 +465,13 @@ async def en_direct(source: Optional[str] = None, secondes: int = 120, limite: i
     return {"maintenant": int(time.time()), "source": source, "evenements": lignes}
 
 
-@router.get("/serie", dependencies=[Depends(require_lecture)])
+@router.get("/serie", dependencies=[Depends(require_lecture_nominative)])
 async def serie(source: Optional[str] = None, heures: int = 6, pas: int = 300):
     depuis = int(time.time()) - max(1, min(heures, 48)) * 3600
     return {"pas_s": pas, "points": _magasin().serie(_ips_de(source), depuis, pas)}
 
 
-@router.get("/flux", dependencies=[Depends(require_lecture)])
+@router.get("/flux", dependencies=[Depends(require_lecture_nominative)])
 async def flux(source: Optional[str] = None, heures: int = 6):
     """L'« équivalent DPI » : par nom de domaine, avec service, type et décisions ; plus la synthèse par service."""
     depuis = int(time.time()) - max(1, min(heures, 48)) * 3600
@@ -517,7 +528,7 @@ def _regles() -> "dnstv_regles.Regles":
         raise HTTPException(409, str(e)) from e
 
 
-@router.get("/auto/regles", dependencies=[Depends(require_lecture)])
+@router.get("/auto/regles", dependencies=[Depends(require_lecture_nominative)])
 def regles_liste(etat: Optional[str] = None, appareil: Optional[str] = None):
     toutes = _regles().liste()
     compteurs: dict = {}
@@ -574,7 +585,7 @@ def ca_ne_marche_plus(appareil: str):
         return {"retirees": len(touches), "application": _appliquer_ou_annuler(ancien)}
 
 
-@router.get("/auto/reglage", dependencies=[Depends(require_lecture)])
+@router.get("/auto/reglage", dependencies=[Depends(require_lecture_nominative)])
 def auto_reglage():
     etat = _etat()
     r = dnstv_auto.reglage_depuis(etat)
@@ -648,7 +659,7 @@ def _clients_du_nom(etat: dict, nom: str) -> list:
     return cs
 
 
-@router.get("/auto/detection", dependencies=[Depends(require_lecture)])
+@router.get("/auto/detection", dependencies=[Depends(require_lecture_nominative)])
 def detection():
     _migrer()
     etat = _etat()
@@ -799,7 +810,7 @@ def autoriser_domaine(nom: str, corps: AutoriserIn):
         return {"nom": nom, "autorisations": sorted(liste), "application": application}
 
 
-@router.get("/auto/appareils/{nom}/refus", dependencies=[Depends(require_lecture)])
+@router.get("/auto/appareils/{nom}/refus", dependencies=[Depends(require_lecture_nominative)])
 def refus_appareil(nom: str, minutes: int = 60):
     """Les noms REFUSÉS à cet appareil récemment (puits ou règle) : de quoi repérer ce qu'il faut autoriser quand un service ne démarre plus."""
     if not 1 <= minutes <= 1440:
@@ -840,7 +851,7 @@ def _ignores() -> set:
         return set()
 
 
-@router.get("/simple", dependencies=[Depends(require_lecture)])
+@router.get("/simple", dependencies=[Depends(require_lecture_nominative)])
 def simple():
     """Tout ce que la page simplifiée affiche, en un appel."""
     etat = _etat()
@@ -881,7 +892,7 @@ def basculer_protection(nom: str, corps: ProtectionIn):
         return {"nom": nom, "protege": corps.actif, "verifie": ecart is None, "ecart": ecart, "application": application}
 
 
-@router.get("/simple/suspects", dependencies=[Depends(require_lecture)])
+@router.get("/simple/suspects", dependencies=[Depends(require_lecture_nominative)])
 def suspects_pub(minutes: int = 60):
     """Noms encore servis qui ressemblent à de la pub (motif lisible), hors ceux déjà bloqués ou jugés légitimes."""
     if not 1 <= minutes <= 1440:
@@ -966,7 +977,7 @@ class ProfilIn(BaseModel):
     type: Optional[str] = Field(default=None, max_length=20)        # None : efface la correction manuelle
 
 
-@router.get("/appareils", dependencies=[Depends(require_lecture)])
+@router.get("/appareils", dependencies=[Depends(require_lecture_nominative)])
 def appareils_par_mac():
     """Appareils par MAC : adresses, mode, profil d'équipement, source et confiance."""
     _migrer()
@@ -1056,7 +1067,7 @@ def _pour_lecteur(e: dict) -> dict:
     return d
 
 
-@router.get("/classification", dependencies=[Depends(require_lecture)])
+@router.get("/classification", dependencies=[Depends(require_lecture_nominative)])
 def classification(mac: Optional[str] = None, categorie: Optional[str] = None, limite: int = 500):
     """Domaines classés par appareil (catégorie unique, source, confiance, dernière observation au jour, MAC tronquée), lus dans le
     cache que le moteur AUTO rafraîchit. Cache absent : réponse vide, `cache: false`. Le détail complet : `/classification/detail`."""

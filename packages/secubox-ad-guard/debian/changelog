@@ -1,3 +1,15 @@
+secubox-ad-guard (1.19.0-1~trixie1) trixie; urgency=medium
+
+  * Sécurité : les routes /adblock-tv qui renvoient une donnée personnelle par
+    appareil (MAC, adresses, domaines visités : appareils, classification,
+    stats, export, clients/vus, path-test, bypass, sources, live, serie, flux,
+    auto/regles, auto/reglage, auto/detection, auto/appareils/{nom}/refus,
+    simple, simple/suspects) exigent une vraie session (require_lecture_nominative) :
+    le lecteur anonyme du mode tableau de bord reçoit 403. /status lui rend les
+    compteurs sans clients ni appareils (ref #3374).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 10:02:18 +0100
+
 secubox-ad-guard (1.18.0-1~trixie1) trixie; urgency=medium
 
   * SBX TV PRIVACY, lot 2 « taxonomie unique » : dix catégories (PUBLICITE, TRACKING,

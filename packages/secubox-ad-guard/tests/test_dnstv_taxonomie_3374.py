@@ -278,7 +278,7 @@ def test_gardes_des_routes_de_classification():
     from secubox_core import auth
     from api import dnstv_routes as r
     gardes = {(x.path, tuple(sorted(x.methods))): {d.call for d in x.dependant.dependencies} for x in r.router.routes if x.path.endswith("/classification")}
-    assert auth.require_lecture in gardes[("/adblock-tv/classification", ("GET",))]
+    assert r.require_lecture_nominative in gardes[("/adblock-tv/classification", ("GET",))]
     assert auth.require_jwt in gardes[("/adblock-tv/classification", ("POST",))]
 
 
