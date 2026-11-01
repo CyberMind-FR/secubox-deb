@@ -133,3 +133,23 @@ def test_donnees_affichees_comme_texte_et_correction_confirmee():
 def test_sans_session_la_page_le_dit():
     (texte, *_), erreurs, posts = _page(lambda pg: (pg.inner_text("body"),), statut=403)
     assert "session requise" in texte and not erreurs and not posts
+
+
+def _hash(contenu):
+    import base64
+    import hashlib
+    return "'sha256-" + base64.b64encode(hashlib.sha256(contenu.encode("utf-8")).digest()).decode() + "'"
+
+
+def test_csp_stricte_par_hash_a_jour():
+    m = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', SRC)
+    assert m, "CSP absente"
+    csp = {d.split()[0]: d.split()[1:] for d in (x.strip() for x in m.group(1).split(";")) if d}
+    assert csp["default-src"] == ["'self'"]
+    styles = re.findall(r"<style>(.*?)</style>", SRC, flags=re.S)
+    scripts = re.findall(r"<script>(.*?)</script>", SRC, flags=re.S)
+    assert len(styles) == 1 and len(scripts) == 1
+    assert csp["script-src"] == [_hash(scripts[0])], "script modifié sans mise à jour de la CSP"
+    assert csp["style-src"] == [_hash(styles[0])], "style modifié sans mise à jour de la CSP"
+    assert "unsafe-eval" not in m.group(1) and "unsafe-inline" not in m.group(1) and "http" not in m.group(1)
+    assert ' style="' not in SRC and "<script " not in SRC                    # aucun style ni script hors des blocs hachés

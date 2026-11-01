@@ -14,6 +14,7 @@
   `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, adresses de documentation, aucune écriture.
 -->
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-BnjLOd11tpiowH34KK8XsZaMvoX9PzNwtpmf5uFvZJw='; style-src 'sha256-yAe2uL+8rXil4p36hq6QB0Zvuw/cQnqE/JV8Qf5xu1s='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <style>
@@ -81,6 +82,9 @@
   .confirm{margin-top:6px;display:grid;gap:6px;padding:8px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.06)}
   .confirm .actions{display:flex;flex-wrap:wrap;gap:6px}
   .note{color:var(--faible);font-size:.72rem}
+  .lien{color:inherit}
+  .espace{margin-top:10px}
+  .suite{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}.grille{grid-template-columns:1fr 1fr}}
 </style>
 <body>
@@ -90,7 +94,7 @@
     <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">Rafraîchir</button></div>
   </header>
   <div class="bandeau demo" id="demo" hidden>Démonstration : données fictives (adresses de documentation), aucune écriture.</div>
-  <div class="bandeau info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:inherit">Se connecter</a></div>
+  <div class="bandeau info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" class="lien">Se connecter</a></div>
   <div class="bandeau" id="message" role="status" aria-live="polite" hidden></div>
 
   <nav class="onglets" role="tablist" aria-label="Vues SBX TV Privacy">
@@ -106,7 +110,7 @@
       <div class="tuile" title="Domaines distincts classés par le moteur AUTO (cache)."><div class="et">Domaines classés</div><div class="val" id="n-domaines">—</div><div class="sous" id="n-domaines-sous"></div></div>
       <div class="tuile" title="Domaines dont la catégorie est protégée : jamais bloqués automatiquement."><div class="et">Domaines protégés</div><div class="val" id="n-dprot">—</div><div class="sous">catégories protégées</div></div>
     </div>
-    <div class="grille" style="margin-top:10px">
+    <div class="grille espace">
       <div class="pan"><h2>Domaines par catégorie <small id="cat-note"></small></h2><div id="categories"><div class="vide">—</div></div></div>
       <div class="pan"><h2>Événements récents <small>dernière heure</small></h2><div class="tab"><table><thead><tr><th>Heure</th><th>Adresse</th><th>Domaine</th><th>Décision</th></tr></thead><tbody id="evenements"></tbody></table></div></div>
     </div>
@@ -126,7 +130,7 @@
         <button type="button" id="f-appliquer">Filtrer</button>
       </div>
       <div class="tab"><table><thead><tr><th>Domaine</th><th>Appareil</th><th>Catégorie</th><th>Source</th><th class="num">Confiance</th><th class="num">Requêtes</th><th>Dernière observation</th><th>Action</th></tr></thead><tbody id="domaines"></tbody></table></div>
-      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" id="plus" hidden>Afficher plus</button><span class="note" id="pagination"></span></div>
+      <div class="suite"><button type="button" id="plus" hidden>Afficher plus</button><span class="note" id="pagination"></span></div>
     </div>
   </section>
   <p class="note">La box ne voit que les noms demandés à son DNS : un appareil qui utilise un autre résolveur (DoH, DNS de la box opérateur) n'apparaît pas.</p>

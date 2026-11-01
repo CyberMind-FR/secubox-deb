@@ -14,8 +14,15 @@ PERSONNELLES = [
     "/adblock-tv/appareils", "/adblock-tv/classification", "/adblock-tv/stats", "/adblock-tv/export", "/adblock-tv/clients/vus",
     "/adblock-tv/path-test?ip=192.168.1.50", "/adblock-tv/bypass", "/adblock-tv/sources", "/adblock-tv/live", "/adblock-tv/flux",
     "/adblock-tv/serie", "/adblock-tv/auto/regles", "/adblock-tv/auto/reglage", "/adblock-tv/auto/detection",
-    "/adblock-tv/auto/appareils/TV/refus", "/adblock-tv/simple", "/adblock-tv/simple/suspects",
+    "/adblock-tv/auto/appareils/TV/refus", "/adblock-tv/simple", "/adblock-tv/simple/suspects", "/adblock-tv/gardien", "/adblock-tv/dns-box",
 ]
+
+
+@pytest.fixture(autouse=True)
+def admins(monkeypatch):
+    """Seul « admin » est un administrateur réel ; « usager » a un jeton valide sans l'être."""
+    from api import dnstv_routes as r
+    monkeypatch.setattr(r, "est_admin_reel", lambda p: isinstance(p, dict) and p.get("sub") == "admin")
 
 
 def _client(monde, lecteur):
@@ -46,6 +53,29 @@ def test_le_statut_reste_servi_au_tableau_de_bord_sans_appareils(monde):
     assert r.status_code == 200
     j = r.json()
     assert j["clients"] == [] and j["appareils"] == [] and "compteurs" in j and "listes" in j
+    assert isinstance(j["erreur"], bool)                                     # jamais le texte de l'erreur
+
+
+def test_le_statut_d_un_usager_est_caviarde(monde):
+    j = _client(monde, {"sub": "usager"}).get("/adblock-tv/status").json()
+    assert j["clients"] == [] and j["appareils"] == [] and isinstance(j["erreur"], bool)
+
+
+@pytest.mark.parametrize("chemin", PERSONNELLES)
+def test_un_usager_non_administrateur_est_refuse(monde, chemin):
+    r = _client(monde, {"sub": "usager"}).get(chemin)
+    assert r.status_code == 403, (chemin, r.status_code)
+
+
+def test_le_pilotage_en_lecture_est_servi_en_get(monde, monkeypatch):
+    from secubox_core import auth
+    monkeypatch.setattr(auth, "_forme_pilotage", lambda p: {"portee": "lecture"})
+    pilote = auth._PayloadPilotage({"sub": "pilotage:maitre", "pilotage": {"portee": "lecture"}})
+    api = _client(monde, pilote)
+    assert api.get("/adblock-tv/appareils").status_code == 200
+    assert api.get("/adblock-tv/classification").status_code == 200
+    copie = _client(monde, dict(pilote))                                     # une copie n'est pas le porteur rendu par la garde
+    assert copie.get("/adblock-tv/appareils").status_code == 403
 
 
 @pytest.mark.parametrize("chemin", ["/adblock-tv/limites", "/adblock-tv/custom", "/adblock-tv/auto/profil"])

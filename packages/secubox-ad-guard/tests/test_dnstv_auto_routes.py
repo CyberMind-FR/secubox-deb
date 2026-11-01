@@ -104,7 +104,7 @@ def test_les_gardes_d_acces(monde, regles, monkeypatch):
     app.include_router(r.router)
     app.dependency_overrides[auth.require_lecture] = lambda: {"sub": "lecteur"}          # lecture seule : l'écriture reste refusée
     c = TestClient(app)
-    assert c.get("/adblock-tv/auto/regles").status_code == 200
+    assert c.get("/adblock-tv/auto/regles").status_code == 403          # par appareil : administrateur seulement (#3374)
     assert c.post(f"/adblock-tv/auto/regles/{regles['cand']}/essayer").status_code in (401, 403)
     assert c.post("/adblock-tv/auto/appareils/tv-banc/ca-ne-marche-plus").status_code in (401, 403)
 

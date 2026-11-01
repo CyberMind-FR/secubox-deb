@@ -218,4 +218,4 @@ def test_routes_synchrones_et_gardees(donnees):
     app.dependency_overrides[auth.require_lecture] = lambda: {"sub": "lecteur"}
     c = TestClient(app)
     assert c.post("/adblock-tv/auto/appareils/TV banc/autoriser", json={"domaine": BITMOVIN}).status_code in (401, 403)
-    assert c.get("/adblock-tv/auto/appareils/TV banc/refus").status_code == 200
+    assert c.get("/adblock-tv/auto/appareils/TV banc/refus").status_code == 403   # par appareil : administrateur seulement (#3374)

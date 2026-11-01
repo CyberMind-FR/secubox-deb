@@ -152,7 +152,7 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 
 | Route | Garde | Rôle |
 |---|---|---|
-| `GET /adblock-tv/gardien` | `require_lecture` | Guardian (#2287) : appareils connectés (NAC), DNS du jour, menaces 24 h (actord, `null` si indisponible), courbe 7 jours, types, catégories, appareils principaux ; cache 60 s. Page : `/guardian/` (`?embed=1` cardlet, `?demo=1` démonstration annoncée) |
+| `GET /adblock-tv/gardien` | `require_lecture_nominative` | Guardian (#2287) : appareils connectés (NAC), DNS du jour, menaces 24 h (actord, `null` si indisponible), courbe 7 jours, types, catégories, appareils principaux ; cache 60 s. Page : `/guardian/` (`?embed=1` cardlet, `?demo=1` démonstration annoncée) |
 | `GET /adblock-tv/simple` | `require_lecture` | cartes par appareil (adresses regroupées), protégés, blocages 24 h |
 | `POST /adblock-tv/simple/appareils/{nom}/protection` | `require_jwt` | `{"actif": bool}` ; applique puis relit le drop-in Unbound ; réponse `verifie` / `ecart` |
 | `GET /adblock-tv/simple/suspects?minutes=60` | `require_lecture` | noms servis qui ressemblent à une pub (mot entier dans un libellé), hors bloqués et jugés légitimes |
@@ -176,14 +176,16 @@ Catégories : `PUBLICITE`, `TRACKING`, `TELEMETRIE`, `STREAMING`, `CDN`, `DRM`, 
 
 ### Données personnelles et mode tableau de bord (1.19.0, #3374)
 
-Garde `require_lecture_nominative` (`api/dnstv_routes.py`) : `require_lecture` puis **403** si le lecteur est le porteur anonyme
-du mode tableau de bord (`[tableau_de_bord] actif`, LAN nginx sans jeton). Sur gk2 ce « LAN » inclut le réseau de la box
-opérateur. Elle garde toute route qui renvoie une MAC, une adresse ou des domaines par appareil : `/appareils`,
-`/classification`, `/stats`, `/export`, `/clients/vus`, `/path-test`, `/bypass`, `/sources`, `/live`, `/serie`, `/flux`,
-`/auto/regles`, `/auto/reglage`, `/auto/detection`, `/auto/appareils/{nom}/refus`, `/simple`, `/simple/suspects`.
-`GET /adblock-tv/status` reste en `require_lecture` mais rend au tableau de bord `clients: []` et `appareils: []` (compteurs et
-listes seulement). Restent servis au tableau de bord, sans donnée par appareil : `/gardien` (noms des appareils principaux et
-compteurs), `/limites`, `/custom`, `/auto/profil`, `/dns-box`.
+Garde `require_lecture_nominative` (`api/dnstv_routes.py`) : `require_lecture`, puis **403** sauf pour un administrateur réel
+(`est_admin_reel`) ou le porteur délégué du pilotage rendu par la garde (déjà borné à GET/HEAD par `secubox_core.auth`).
+Refusés : le porteur anonyme du mode tableau de bord (`[tableau_de_bord] actif`, LAN nginx sans jeton ; sur gk2 ce « LAN »
+inclut le réseau de la box opérateur) et tout jeton d'usager. Elle garde toute route qui renvoie une MAC, une adresse, un nom
+d'appareil, des domaines ou des compteurs par appareil, ou la topologie de la box : `/appareils`, `/classification`, `/stats`,
+`/export`, `/clients/vus`, `/path-test`, `/bypass`, `/sources`, `/live`, `/serie`, `/flux`, `/auto/regles`, `/auto/reglage`,
+`/auto/detection`, `/auto/appareils/{nom}/refus`, `/simple`, `/simple/suspects`, `/gardien`, `/dns-box`.
+`GET /adblock-tv/status` reste en `require_lecture` ; à tout autre lecteur qu'un administrateur, il rend `clients: []`,
+`appareils: []` et `erreur` en booléen (sans texte). Restent servis au tableau de bord, sans donnée par appareil : `/limites`,
+`/custom`, `/auto/profil`. La page `/guardian/` demande donc désormais une session d'administrateur.
 
 ### Page SBX TV Privacy (1.19.0, #3374)
 
@@ -194,7 +196,7 @@ dernière heure via `/live`), **Équipements** (`GET /adblock-tv/appareils` ; IP
 signalé ; « Corriger le profil » → `POST /adblock-tv/appareils/{mac}/profil` après confirmation dans la page), **Analyseur**
 (`GET /adblock-tv/classification/detail`, repli sur `/classification` sans droits d'administrateur ; filtres appareil et
 catégorie ; « Afficher plus » augmente `limite` par 100 jusqu'à 1000, la route n'a pas de décalage ; « Corriger » →
-`POST /adblock-tv/classification` après confirmation). Session requise ; toute donnée reçue est posée par `textContent`.
+`POST /adblock-tv/classification` après confirmation). Session d'administrateur requise ; toute donnée reçue est posée par `textContent` ; CSP stricte en `<meta>` (`default-src 'self'`, script et style en ligne autorisés par leur sha256, vérifiés par `tests/test_page_tv_privacy_3374.py`).
 
 ## Capteur DNS d'Actor Intelligence (#2240)
 
