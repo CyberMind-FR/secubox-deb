@@ -99,3 +99,14 @@ def test_route_durcie():
     assert "sni_hostname" in corps and "url_epinglee" in corps
     assert "httpx.InvalidURL" in corps
     assert "audit" in corps
+
+
+def test_entete_host_garde_le_port(monkeypatch):
+    _resolution(monkeypatch, ["93.184.216.34"])
+    assert cible.cible("https://exemple.test/").entete_host == "exemple.test"
+    assert cible.cible("http://exemple.test:8080/").entete_host == "exemple.test:8080"
+
+
+def test_url_journalisee_sans_saut_de_ligne():
+    src = (PKG / "api" / "main.py").read_text()
+    assert "ascii(url)[:200]" in src

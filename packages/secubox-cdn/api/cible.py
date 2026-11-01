@@ -38,6 +38,7 @@ class Cible:
     hote: str
     ip: str
     url_epinglee: str
+    entete_host: str
 
 
 def _publique(ip) -> bool:
@@ -86,8 +87,11 @@ def cible(url) -> Cible:
     chemin = parts.path or "/"
     if parts.query:
         chemin += "?" + parts.query
+    nom = f"[{parts.hostname}]" if ":" in parts.hostname else parts.hostname
+    defaut = 443 if parts.scheme == "https" else 80
     return Cible(url=url, hote=parts.hostname, ip=str(ip),
-                 url_epinglee=f"{parts.scheme}://{hote_ip}:{port}{chemin}")
+                 url_epinglee=f"{parts.scheme}://{hote_ip}:{port}{chemin}",
+                 entete_host=nom if port == defaut else f"{nom}:{port}")
 
 
 def verifier(url) -> tuple:

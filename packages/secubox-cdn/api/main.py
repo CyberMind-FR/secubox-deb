@@ -196,14 +196,14 @@ async def preload_url(request: Request, user=Depends(require_jwt)):
     try:  # #3284 : résolution hors de la boucle, cible publique épinglée (pas de rebinding)
         c = await asyncio.wait_for(asyncio.to_thread(cible.cible, url), timeout=10)
     except (cible.CibleRefusee, asyncio.TimeoutError) as e:
-        log.warning("audit preload_url refusé : %s par %s (%s)", str(url)[:200], (user or {}).get("sub"),
+        log.warning("audit preload_url refusé : %s par %s (%s)", ascii(url)[:200], (user or {}).get("sub"),
                     getattr(e, "raison", "résolution trop lente"))
         raise HTTPException(status_code=400, detail=cible.MESSAGE_REFUS)
     try:
         lu = 0
         async with asyncio.timeout(60):
             async with httpx.AsyncClient(timeout=30, follow_redirects=False, trust_env=False) as cl:
-                async with cl.stream("GET", c.url_epinglee, headers={"Host": c.hote},
+                async with cl.stream("GET", c.url_epinglee, headers={"Host": c.entete_host},
                                      extensions={"sni_hostname": c.hote}) as r:
                     async for morceau in r.aiter_bytes():
                         lu += len(morceau)
