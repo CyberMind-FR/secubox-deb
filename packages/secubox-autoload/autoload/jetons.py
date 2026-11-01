@@ -460,6 +460,19 @@ class Registre:
             cx.execute("COMMIT")
         self._audit("maillage", f"pair={nom} formule={formule} statut={statut} expire={expire or '-'}" + (f" motif={motif}" if motif else ""))
 
+    def oublier_maillage(self, nom: str) -> bool:
+        """#3362 : le pair oublié du maillage (secubox-p2p, « Oublier ce nœud ») perd sa ligne d'abonnement, et elle seule.
+        Rend True si une ligne est partie ; audité. Nom invalide : ValueError."""
+        if not isinstance(nom, str) or not _PAIR.match(nom):
+            raise ValueError("nom de pair : minuscules, chiffres et -, 31 au plus")
+        with self._cx() as cx:
+            cx.execute("BEGIN IMMEDIATE")
+            n = cx.execute("DELETE FROM abonnements_maillage WHERE nom=?", (nom,)).rowcount
+            cx.execute("COMMIT")
+        if n:
+            self._audit("maillage-oubli", f"pair={nom}")
+        return bool(n)
+
     def inscrire_atelier(self, pairs_enroles: Path) -> int:
         """Décision du propriétaire (#3305) : sur le maître, les pairs ACTUELLEMENT enrôlés (p2p-public/pairs-enroles.json) sont les box
         de l'atelier. Chaque pair sans ligne reçoit la formule « atelier » (avec son empreinte) ; une ligne existante n'est jamais touchée.

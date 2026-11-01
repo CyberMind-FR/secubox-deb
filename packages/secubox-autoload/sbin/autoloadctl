@@ -20,6 +20,8 @@
   autoloadctl maillage --nom <pair> --formule <f> [--empreinte sbx-…] [--statut …] [--mois N] [--motif …]
                                            abonnement d'un pair du maillage (#3305), droits republiés aussitôt
   autoloadctl maillage-atelier [--pairs …]  inscrit en formule atelier les pairs enrôlés sans abonnement (postinst du maître)
+  autoloadctl maillage-oublier --nom <pair>  retire l'abonnement d'un pair oublié du maillage (#3362, appelé par secubox-oubli-pair),
+                                           droits republiés aussitôt ; pair absent : succès sans effet
 
 tunnel-sync et exporter-pairs passent un par un (flock sur /run/secubox-autoload/autoload-sync.lock, dossier à root seul) : un passage qui a lu les pairs avant une
 révocation ne repose jamais le pair révoqué après la synchronisation de la révocation (#3126).
@@ -74,6 +76,8 @@ def _maillage(a, db: Path, verrou: Path) -> int:
             if a.cmd == "maillage":
                 reg.fixer_maillage(a.nom, a.formule, empreinte=a.empreinte, statut=a.statut, mois=a.mois, motif=a.motif)
                 print(f"pair {a.nom} : formule {a.formule}, {a.statut}")
+            elif a.cmd == "maillage-oublier":
+                print(f"pair {a.nom} : " + ("abonnement retiré" if reg.oublier_maillage(a.nom) else "aucun abonnement"))
             else:
                 print(f"{reg.inscrire_atelier(Path(a.pairs))} pair(s) inscrit(s) en formule atelier")
         except ValueError as err:
@@ -140,13 +144,15 @@ def main(argv=None):
     ma.add_argument("--statut", default="actif")
     ma.add_argument("--mois", type=int)
     ma.add_argument("--motif")
+    mo = sub.add_parser("maillage-oublier")
+    mo.add_argument("--nom", required=True)
     mat = sub.add_parser("maillage-atelier")
     mat.add_argument("--pairs", default="/var/lib/secubox/p2p-public/pairs-enroles.json")
     a = ap.parse_args(argv)
 
     db = Path(os.environ.get("SECUBOX_AUTOLOAD_DB", J.DB_DEFAUT))
     verrou = Path(os.environ.get("SECUBOX_AUTOLOAD_VERROU", T.VERROU_DEFAUT))
-    if a.cmd in ("maillage", "maillage-atelier"):
+    if a.cmd in ("maillage", "maillage-oublier", "maillage-atelier"):
         return _maillage(a, db, verrou)
     if a.cmd not in ("tunnel-init", "tunnel-sync", "exporter-pairs"):
         _abaisser_privileges()

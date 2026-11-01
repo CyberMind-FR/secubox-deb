@@ -136,6 +136,8 @@ Un service du maillage n'est rendu à une box que si son abonnement est **actif*
 - **Atelier inscrit d'office** : le postinst du maître lance `autoloadctl maillage-atelier`, qui inscrit en formule `atelier`
   (avec leur empreinte) les pairs enrôlés de `p2p-public/pairs-enroles.json` sans abonnement ; idempotent, audité
   (`maillage-atelier`) ; une ligne existante n'est jamais touchée. Suspension et révocation : motif obligatoire ; audit `maillage`.
+- **Pair oublié** (#3362) : `autoloadctl maillage-oublier --nom <pair>` retire sa seule ligne d'abonnement (audit `maillage-oubli`)
+  et republie `droits-maillage.json` ; appelé par `secubox-oubli-pair` (secubox-p2p) lors de « Oublier ce nœud ».
 - **Grâce** : un pair sans ligne garde ses services 5 jours après la première migration (`meta.grace_debut`), puis plus rien.
 - **Projection** `/var/lib/secubox-autoload-public/droits-maillage.json` (root 0644, sans secret, écrite avec `pairs-publics.json`
   par `tunnel-sync`/`exporter-pairs`) :
