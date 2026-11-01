@@ -22,6 +22,9 @@ from pathlib import Path
 from typing import List, Optional, Dict
 from datetime import datetime
 from secubox_core.crypto.empreinte import empreinte
+from . import cible
+
+TAILLE_MAX_PRECHARGE = 50 * 1024 * 1024   # #3284 : lecture bornée
 
 app = FastAPI(title="secubox-cdn", version="1.1.0", root_path="/api/v1/cdn")
 
@@ -190,14 +193,20 @@ async def preload_url(request: Request, user=Depends(require_jwt)):
     except ValueError:
         corps = None
     url = corps.get("url") if isinstance(corps, dict) else corps
-    if not isinstance(url, str) or not url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="url http(s) attendue")
+    ok, raison = cible.verifier(url)  # #3284 : hôtes publics seulement (pas de LAN, bouclage, lien local)
+    if not ok:
+        raise HTTPException(status_code=400, detail=raison)
     try:
-        async with httpx.AsyncClient(timeout=30) as c:
-            r = await c.get(url)
-            return {"success": True, "status_code": r.status_code, "size": len(r.content)}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+        lu = 0
+        async with httpx.AsyncClient(timeout=30, follow_redirects=False) as c:
+            async with c.stream("GET", url) as r:
+                async for morceau in r.aiter_bytes():
+                    lu += len(morceau)
+                    if lu > TAILLE_MAX_PRECHARGE:
+                        return {"success": False, "error": "réponse trop volumineuse"}
+                return {"success": True, "status_code": r.status_code, "size": lu}
+    except httpx.HTTPError as e:
+        return {"success": False, "error": type(e).__name__}
 
 
 @router.get("/list_rules")
