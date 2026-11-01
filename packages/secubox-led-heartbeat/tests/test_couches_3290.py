@@ -109,7 +109,7 @@ def test_source_alertes(tmp_path):
                                        "vivant": ""})
     assert src.lire(0) == 1
     p.write_text(json.dumps([{"severity": "critical"}]))
-    assert src.lire(1) == 3                     # critique non vue : niveau max
+    assert src.lire(1) == 4                     # critique non vue : niveau max (4, #3361)
     p.write_text("[]")
     assert src.lire(2) == 0
 
