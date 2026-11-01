@@ -19,7 +19,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
+from api import dnstv, dnstv_analyse, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
 
@@ -40,11 +40,12 @@ CACHE_CLASSIFICATION_S = 300
 def ecrire_cache_classification(etat, taxo, magasin, regles, maintenant) -> None:
     """Cache de GET /adblock-tv/classification (#3374) : recalculé au plus toutes les 5 min ; un échec ne fait jamais échouer le moteur."""
     try:
-        c = dnstv_taxonomie.lire_cache()
-        if c and 0 <= maintenant - int(c.get("genere", 0)) < CACHE_CLASSIFICATION_S:
+        g = dnstv_analyse.genere()                                # lot 3 : l'horodatage seul, sans relire le cache
+        if g is not None and 0 <= maintenant - g < CACHE_CLASSIFICATION_S:
             return
         obs = magasin.observations(dnstv._jour(maintenant - 30 * 86400))
-        dnstv_taxonomie.ecrire_cache(dnstv_taxonomie.construire_classification(etat, taxo, obs, regles.liste()), maintenant)
+        dnstv_analyse.ecrire_cache(dnstv_taxonomie.construire_classification(etat, taxo, obs, regles.liste()), maintenant,
+                                   etat=etat, regles=regles.liste())
     except Exception as e:                                       # noqa: BLE001
         print(f"cache de classification non écrit : {type(e).__name__}", file=sys.stderr)
 

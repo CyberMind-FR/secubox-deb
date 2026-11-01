@@ -27,9 +27,9 @@ from secubox_core import auth as _auth
 from secubox_core.auth import est_admin_reel, require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from . import dnstv, dnstv_analyse, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from api import dnstv, dnstv_analyse, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 logger = logging.getLogger("secubox.ad-guard.adblock-tv")
@@ -1067,16 +1067,16 @@ def _filtre_mac(mac: Optional[str]) -> Optional[str]:
 
 
 def _classification_filtree(mac: Optional[str], categorie: Optional[str], limite: int) -> tuple:
-    """(lignes filtrées, total, cache lu ?) depuis le cache écrit par le moteur AUTO ; aucun calcul lourd dans la requête."""
+    """(lignes filtrées, total, horodatage du cache) depuis le cache SQLite écrit par le moteur AUTO (lot 3) : requête bornée,
+    jamais le jeu complet relu à chaque appel."""
     m_filtre = _filtre_mac(mac)
     if categorie is not None and categorie not in dnstv_taxonomie.CATEGORIES:
         raise HTTPException(422, "catégorie inconnue")
-    cache = dnstv_taxonomie.lire_cache()
-    if cache is None:
-        return [], 0, None
-    out = [e for e in cache["domaines"] if isinstance(e, dict)
-           and (m_filtre is None or e.get("mac") == m_filtre) and (categorie is None or e.get("categorie") == categorie)]
-    return out[:max(1, min(int(limite), CLASSIFICATION_MAX))], len(out), cache.get("genere")
+    lignes, total, genere = dnstv_analyse.selection(limite=max(1, min(int(limite), CLASSIFICATION_MAX)), maintenant=int(time.time()),
+                                                    macs=[m_filtre] if m_filtre else [], categories=[categorie] if categorie else [])
+    for e in lignes:
+        e.pop("nom", None), e.pop("premiere_observation", None), e.pop("regle", None)
+    return lignes, total, genere
 
 
 def _reponse(lignes: list, total: int, genere) -> dict:
@@ -1144,3 +1144,11 @@ def classification_corriger(corps: ClassificationIn, jeton=Depends(require_jwt))
         dnstv_taxonomie.ecrire_manuelles(apres)
     logger.info("classification corrigée : %s (%s) %s -> %s", domaine, dnstv_appareils.mac_courte(m) if m else "maison", ancienne, corps.categorie)
     return dict(_taxonomie(apres).classer(domaine, [m] if m else []), mac=m)
+
+
+# ── lot 3 SBX TV PRIVACY (#3374) : protection, analyseur, route lambda — routeur séparé, inclus ici (même préfixe) ────────────
+try:
+    from . import dnstv_lot3_routes as _lot3
+except ImportError:                                  # lancé hors paquet
+    from api import dnstv_lot3_routes as _lot3
+router.include_router(_lot3.router)

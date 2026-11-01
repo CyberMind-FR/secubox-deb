@@ -700,11 +700,13 @@ class Magasin:
             a += list(clients)
         out: Dict[str, Dict[str, dict]] = {}
         with self._cx() as cx:
-            for client, domaine, n, b, j in cx.execute(
-                    "SELECT client, domaine, SUM(hits), SUM(CASE WHEN decision='BLOCKED' THEN hits ELSE 0 END), MAX(jour) FROM dnstv_counts "
+            for client, domaine, n, b, j, j0 in cx.execute(
+                    "SELECT client, domaine, SUM(hits), SUM(CASE WHEN decision='BLOCKED' THEN hits ELSE 0 END), MAX(jour), MIN(jour) FROM dnstv_counts "
                     f"WHERE {' AND '.join(w)} GROUP BY client, domaine", a):
                 debut = calendar.timegm(time.strptime(j, "%Y-%m-%d")) if j else 0      # _jour() est en UTC
-                out.setdefault(client, {})[domaine] = {"requetes": int(n), "bloquees": int(b), "derniere": debut, "precision": "jour"}
+                premiere = calendar.timegm(time.strptime(j0, "%Y-%m-%d")) if j0 else 0  # lot 3 : « nouveau » sur une fenêtre
+                out.setdefault(client, {})[domaine] = {"requetes": int(n), "bloquees": int(b), "derniere": debut, "precision": "jour",
+                                                       "premiere": premiere}
             wr = ["1=1"] if clients is None else ["client IN (%s)" % ",".join("?" * len(clients))]
             for client, domaine, t in cx.execute(f"SELECT client, domaine, MAX(ts) FROM dnstv_recents WHERE {wr[0]} GROUP BY client, domaine",
                                                  list(clients or [])):
