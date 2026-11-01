@@ -4,7 +4,7 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 -->
-# Locabine — plan d'implémentation
+# mochabinleds — plan d'implémentation
 
 > **Pour les agents :** sous-skill requis : superpowers:subagent-driven-development (recommandé) ou
 > superpowers:executing-plans. Étapes en cases à cocher (`- [ ]`).
@@ -19,7 +19,7 @@ par un nouveau type de source `flux` ; il garde `PrivateNetwork=yes` et aucune c
 
 **Pile :** Python 3.13 (stdlib seule : json, sqlite3, math, os), systemd, AppArmor, pytest.
 
-**Spec :** `docs/superpowers/specs/2026-11-01-locabine-leds-design.md`
+**Spec :** `docs/superpowers/specs/2026-11-01-mochabinleds-design.md`
 
 ## Contraintes globales
 
@@ -151,7 +151,7 @@ Une source illisible → clé absente (jamais d'exception).
 **Fichiers :**
 - Modifier : `usr/lib/secubox-led-heartbeat/ledcouches.py`, `apparmor/secubox-led-pulse`
   (`/run/secubox-leds/flux.json r,`)
-- Test : `tests/test_moteur_locabine_3361.py`
+- Test : `tests/test_moteur_mochabinleds_3361.py`
 
 **Interfaces :**
 - `SourceFlux(Source)` : type `"flux"`, lit `niveaux[cle]` de `flux.json`, propriétaire attendu
@@ -174,12 +174,12 @@ Une source illisible → clé absente (jamais d'exception).
 - Modifier : `etc/secubox/leds.toml` (8 couches `par_led` : systeme, reseau, firewall, waf, actor,
   adguard, services, soc ; `duree = 8` ; sources `flux` ; planchers par clé dans `[flux.planchers]`),
   `debian/changelog` (2.4.0-1~trixie1), `README.md`, `debian/control` (Depends: `nftables`, `python3`)
-- Test : `tests/test_config_locabine_3361.py`
+- Test : `tests/test_config_mochabinleds_3361.py`
 
 - [ ] **Étape 1 :** tests : la config livrée se charge sans avertissement ; 8 couches dans l'ordre de la
   planche ; chaque source `flux` référence une clé produite par la tâche 2.
 - [ ] **Étapes 2-4 :** rouge, implémentation, vert + `dpkg-buildpackage` OK.
-- [ ] **Étape 5 :** commit `feat(led-heartbeat): 8 séquences Locabine par défaut, 2.4.0 (ref #3361)`.
+- [ ] **Étape 5 :** commit `feat(led-heartbeat): 8 séquences mochabinleds par défaut, 2.4.0 (ref #3361)`.
 
 ### Tâche 6 : banc et mesure (hors code)
 

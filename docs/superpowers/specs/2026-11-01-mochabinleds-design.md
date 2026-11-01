@@ -4,10 +4,10 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 -->
-# Locabine — indicateur lumineux de supervision (conception)
+# mochabinleds — indicateur lumineux de supervision (conception)
 
 Date : 2026-11-01. Paquet : `secubox-led-heartbeat` (moteur `secubox-led-pulse`, #3290).
-Référence visuelle : la planche « Locabine » du propriétaire (3 LED RGB, 8 séquences rotatives).
+Référence visuelle : la planche « mochabinleds » du propriétaire (3 LED RGB, 8 séquences rotatives).
 
 ## 1. Intention
 
