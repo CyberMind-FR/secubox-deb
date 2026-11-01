@@ -17,6 +17,7 @@ import json
 import os
 import re
 import sqlite3
+import time
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 
@@ -276,13 +277,15 @@ RETENTION_FLUX_S = 7 * 86400
 RETENTION_DECOUVERTES_S = 30 * 86400
 MAX_DECOUVERTES = 5000
 PEREMPTION_SBXDPI_S = 120
+MAX_OCTETS = 20 * 1024 * 1024                         # B1 : plafond du fichier ; au-delà, les plus anciennes minutes partent
 TYPES_DECOUVERTE = ("repli", "repli-protege", "secours", "sans-dns", "dns-chiffre", "contournement")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS flux (mac TEXT NOT NULL, minute INTEGER NOT NULL, appli TEXT NOT NULL, categorie_ndpi TEXT NOT NULL DEFAULT '',
     hote TEXT NOT NULL DEFAULT '', port INTEGER NOT NULL DEFAULT 0, distant TEXT NOT NULL DEFAULT '', flux INTEGER NOT NULL DEFAULT 0,
     octets INTEGER NOT NULL DEFAULT 0, sans_dns INTEGER NOT NULL DEFAULT 0, dns_chiffre INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (mac, minute, appli, hote, port, distant));
+    local TEXT NOT NULL DEFAULT '', proto TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (mac, minute, local, proto, appli, hote, port, distant));
 CREATE INDEX IF NOT EXISTS flux_mac ON flux(mac, minute);
 CREATE TABLE IF NOT EXISTS decouvertes (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, mac TEXT NOT NULL, type TEXT NOT NULL,
     domaine TEXT NOT NULL, categorie TEXT NOT NULL DEFAULT '', appli TEXT NOT NULL DEFAULT '', confiance INTEGER NOT NULL DEFAULT 0,
@@ -294,53 +297,80 @@ CREATE TABLE IF NOT EXISTS voisins (adresse TEXT PRIMARY KEY, mac TEXT NOT NULL,
 
 
 class MagasinDPI:
-    """SQLite du lot 4 : flux par appareil à la minute (7 j), découvertes (30 j, 5 000 au plus), mémoire adresse -> MAC (24 h).
-    Écrit par le seul moteur ; l'API lit. Base corrompue : mise de côté (`.corrompue`) et recréée vide."""
+    """SQLite du lot 4 : flux par appareil à la minute (7 j), découvertes (30 j, 5 000 au plus), mémoire adresse -> MAC (24 h), et
+    20 Mio au plus (`auto_vacuum=INCREMENTAL`). Le MOTEUR crée, migre et écrit ; l'API ouvre en lecture seule (`mode=ro`), sans
+    vérification ni écriture. Seule une vraie corruption (`DatabaseError` hors `OperationalError`, ou `quick_check` en échec) met la base
+    de côté ; un verrou (`OperationalError`) est réessayé puis remonté, jamais pris pour une corruption."""
 
-    def __init__(self, chemin):
+    def __init__(self, chemin, lecture_seule: bool = False, verifier: bool = False):
         self.chemin = Path(chemin)
+        self.lecture_seule = lecture_seule
         self.corrompue_recreee = False
+        if lecture_seule:
+            return
         try:
-            with self._cx() as cx:
-                if cx.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-                    raise sqlite3.DatabaseError("quick_check")
-                cx.executescript(SCHEMA)
+            self._initialiser(verifier)
+        except sqlite3.OperationalError:
+            raise
         except sqlite3.DatabaseError:
             with contextlib.suppress(OSError):
                 os.replace(self.chemin, self.chemin.with_name(self.chemin.name + ".corrompue"))
             self.corrompue_recreee = True
-            with self._cx() as cx:
-                cx.executescript(SCHEMA)
+            self._initialiser(False)
         with contextlib.suppress(OSError):
             os.chmod(self.chemin, 0o640)
 
+    def _initialiser(self, verifier: bool) -> None:
+        for essai in range(3):
+            try:
+                with self._cx() as cx:
+                    if verifier and cx.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                        raise sqlite3.DatabaseError("quick_check")
+                    if cx.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == 0:
+                        cx.execute("PRAGMA auto_vacuum=INCREMENTAL")         # avant toute table : effectif sur une base neuve
+                    cx.executescript(SCHEMA)
+                return
+            except sqlite3.OperationalError:
+                if essai == 2:
+                    raise
+                time.sleep(0.5)
+
     @contextlib.contextmanager
     def _cx(self):
-        cx = sqlite3.connect(str(self.chemin), timeout=10)
+        if self.lecture_seule:
+            cx = sqlite3.connect(f"file:{self.chemin}?mode=ro", uri=True, timeout=10)
+        else:
+            cx = sqlite3.connect(str(self.chemin), timeout=10)
         try:
             with cx:
                 yield cx
         finally:
             cx.close()
 
+    def _lisible(self) -> bool:
+        return not self.lecture_seule or self.chemin.is_file()
+
     def ingerer(self, lignes: Iterable[dict]) -> int:
-        """Une ligne par (mac, minute, appli, hôte, port, distant) ; la valeur la plus récente d'une même minute REMPLACE (compteurs cumulés)."""
-        n = 0
+        """Une ligne par (mac, minute, adresse locale, protocole, appli, hôte, port, distant) ; la valeur la plus récente d'une même minute
+        REMPLACE (compteurs cumulés)."""
+        rangs = [(x["mac"], int(x["minute"]), x["appli"], x.get("categorie_ndpi", ""), x.get("hote", ""), int(x.get("port", 0)),
+                  x.get("distant", ""), int(x.get("flux", 0)), int(x.get("octets", 0)), int(bool(x.get("sans_dns"))),
+                  int(bool(x.get("dns_chiffre"))), x.get("local", ""), x.get("proto", "")) for x in lignes]
         with self._cx() as cx:
-            for x in lignes:
-                cx.execute("INSERT OR REPLACE INTO flux VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                           (x["mac"], int(x["minute"]), x["appli"], x.get("categorie_ndpi", ""), x.get("hote", ""), int(x.get("port", 0)),
-                            x.get("distant", ""), int(x.get("flux", 0)), int(x.get("octets", 0)), int(bool(x.get("sans_dns"))),
-                            int(bool(x.get("dns_chiffre")))))
-                n += 1
-        return n
+            cx.executemany("INSERT OR REPLACE INTO flux (mac, minute, appli, categorie_ndpi, hote, port, distant, flux, octets, sans_dns, "
+                           "dns_chiffre, local, proto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", rangs)
+        return len(rangs)
 
     def dernier_flux(self, mac: str) -> Optional[int]:
+        if not self._lisible():
+            return None
         with self._cx() as cx:
             v = cx.execute("SELECT MAX(minute) FROM flux WHERE mac=?", (mac,)).fetchone()[0]
         return None if v is None else int(v) * 60
 
     def applications(self, mac: str, depuis: int, limite: int = 50) -> List[dict]:
+        if not self._lisible():
+            return []
         with self._cx() as cx:
             lignes = cx.execute(
                 "SELECT appli, MAX(categorie_ndpi), SUM(flux), SUM(octets), MIN(minute), MAX(minute), MAX(sans_dns), MAX(dns_chiffre) "
@@ -355,6 +385,8 @@ class MagasinDPI:
         return out
 
     def lignes_flux(self, mac: str, depuis: int, appli: Optional[str] = None, decalage: int = 0, limite: int = 50) -> Tuple[int, List[dict]]:
+        if not self._lisible():
+            return 0, []
         w, a = ["mac=?", "minute>=?"], [mac, int(depuis) // 60]
         if appli:
             w.append("appli=?")
@@ -392,6 +424,8 @@ class MagasinDPI:
             cx.execute("UPDATE decouvertes SET etat=? WHERE mac=? AND domaine=? AND type='repli' AND etat='nouvelle'", (etat, mac, domaine))
 
     def decouvertes(self, depuis_id: int = 0, type_: Optional[str] = None, mac: Optional[str] = None, limite: int = 100) -> List[dict]:
+        if not self._lisible():
+            return []
         w, a = ["id>?"], [int(depuis_id)]
         if type_:
             w.append("type=?")
@@ -415,11 +449,36 @@ class MagasinDPI:
             cx.execute("DELETE FROM voisins")
             cx.executemany("INSERT INTO voisins VALUES (?,?,?)", [(a, m, v) for a, (m, v) in list(memoire.items())[:5000]])
 
-    def menage(self, maintenant: int) -> None:
+    def taille(self) -> int:
+        with self._cx() as cx:
+            return int(cx.execute("PRAGMA page_count").fetchone()[0]) * int(cx.execute("PRAGMA page_size").fetchone()[0])
+
+    def menage(self, maintenant: int, max_octets: Optional[int] = None) -> None:
+        """Rétention par âge, puis plafond en octets : tant que la base dépasse, un dixième des plus anciennes lignes de flux part, puis
+        `incremental_vacuum` rend les pages au système."""
+        plafond = max_octets or MAX_OCTETS
         with self._cx() as cx:
             cx.execute("DELETE FROM flux WHERE minute < ?", ((maintenant - RETENTION_FLUX_S) // 60,))
             cx.execute("DELETE FROM decouvertes WHERE ts < ?", (maintenant - RETENTION_DECOUVERTES_S,))
             cx.execute("DELETE FROM decouvertes WHERE id <= (SELECT COALESCE(MAX(id), 0) FROM decouvertes) - ?", (MAX_DECOUVERTES,))
+        self._vider()
+        for _ in range(40):
+            if self.taille() <= plafond:
+                break
+            with self._cx() as cx:
+                n = cx.execute("SELECT COUNT(*) FROM flux").fetchone()[0]
+                if not n:
+                    break
+                cx.execute("DELETE FROM flux WHERE rowid IN (SELECT rowid FROM flux ORDER BY minute LIMIT ?)", (n // 10 + 1,))
+            self._vider()
+
+    def _vider(self) -> None:
+        cx = sqlite3.connect(str(self.chemin), timeout=10)
+        try:
+            cx.execute("PRAGMA incremental_vacuum").fetchall()        # une page par pas : il faut tout consommer
+            cx.commit()
+        finally:
+            cx.close()
 
 
 # ── un passage du moteur ────────────────────────────────────────────────────────────────────────────────────
@@ -481,7 +540,7 @@ def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str
         signales = {(x["distant"], x["port"]): x["type"] for x in cs}
         for f in fl:
             t = signales.get((f["distant"], f["port"]))
-            lignes.append({"mac": m, "minute": f["minute"], "appli": f["appli"] or f["proto"].upper(), "categorie_ndpi": f.get("categorie", ""),
+            lignes.append({"mac": m, "minute": f["minute"], "local": f["local"], "proto": f["proto"], "appli": f["appli"] or f["proto"].upper(), "categorie_ndpi": f.get("categorie", ""),
                            "hote": f["hote"], "port": f["port"], "distant": "" if f["hote"] else f["distant"], "flux": f["flux"],
                            "octets": f["octets"], "sans_dns": t == "sans-dns", "dns_chiffre": t == "dns-chiffre"})
         mag.ajouter_decouvertes(m, [{"type": x["type"], "domaine": f"{x['distant']}:{x['port']}", "appli": x["appli"], "ts": maintenant,
@@ -574,7 +633,7 @@ def moteur(maintenant: int, executer: Callable[[str], object], voisins: Dict[str
                 sbx = h.read(SBXDPI_MAX)
     except OSError:
         sbx = None
-    mag = MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db")
+    mag = MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db", verifier=maintenant // 60 % 60 == 0)   # quick_check une fois par heure
     taxo = dnstv_taxonomie.Taxonomie.depuis_dossier()
     doh = charger_resolveurs(dnstv.DOSSIER_LISTES / "resolveurs-doh.txt")
     res = passage(etat, dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db"), mag, lambda d: taxo.classer(d)["categorie"], maintenant, voisins,

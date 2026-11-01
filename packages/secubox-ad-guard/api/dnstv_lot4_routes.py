@@ -41,7 +41,7 @@ def _admin(lecteur) -> bool:
 
 
 def _magasin() -> dnstv_dpi.MagasinDPI:
-    return dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db")
+    return dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db", lecture_seule=True)     # I1 : l'API ne crée ni n'écrit
 
 
 def _motifs():
