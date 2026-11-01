@@ -329,6 +329,7 @@ def evenements_agreges(magasin: "dnstv.Magasin", heures: int, maintenant: int, n
         lignes = g.pop("_l")
         g["decision"] = dec.most_common(1)[0][0]
         g["bloquees"] = dec.get("BLOCKED", 0)
+        g["erreurs"] = dec.get("UPSTREAM_ERROR", 0)
         g["nouveau"] = cle not in deja
         if detail:
             g["lignes"] = sorted(lignes, key=lambda x: -x["ts"])[:100]

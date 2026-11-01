@@ -11,24 +11,30 @@ Ce routeur est inclus dans celui de `dnstv_routes` (préfixe `/adblock-tv`).
 """
 from __future__ import annotations
 
+import collections
+import copy
 import csv
 import io
+import logging
+import threading
 import time
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
+from pydantic import BaseModel, ConfigDict, Field
 
 try:
-    from . import dnstv, dnstv_analyse, dnstv_appareils
+    from . import dnstv, dnstv_analyse, dnstv_appareils, dnstv_journal, dnstv_protection, dnstv_regles
     from . import dnstv_routes as _r
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_analyse, dnstv_appareils
+    from api import dnstv, dnstv_analyse, dnstv_appareils, dnstv_journal, dnstv_protection, dnstv_regles
     from api import dnstv_routes as _r
 
-from secubox_core.auth import require_jwt
+from secubox_core.auth import require_jwt, require_personne
 
 router = APIRouter(tags=["adblock-tv-protection"])
+logger = logging.getLogger("secubox.ad-guard.tv-privacy")
 
 
 def est_admin_reel(p) -> bool:
@@ -126,3 +132,283 @@ def evenements(heures: int = 1, detail: bool = False, lecteur=Depends(_r.require
         raise HTTPException(422, str(e)) from None
 
 
+
+
+# ── retour en un geste, pause minutée, exceptions, journal (administrateur) ─────────────────────────
+
+class AppareilIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    appareil: Optional[str] = Field(default=None, max_length=40)       # None : tous les appareils du périmètre
+
+
+class PauseIn(AppareilIn):
+    minutes: int
+
+
+class ExceptionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    appareil: str = Field(min_length=1, max_length=40)
+    domaine: str = Field(min_length=3, max_length=253)
+    type: str = Field(max_length=10)
+    actif: bool = True
+
+
+def _mac_de(etat: dict, nom: str) -> Optional[str]:
+    return next((c["mac"] for c in etat.get("clients", []) if c["nom"] == nom and c.get("mac")), None)
+
+
+def _journaliser(entrees: list) -> None:
+    """Le journal ne doit jamais faire échouer un geste déjà appliqué : une erreur est seulement tracée."""
+    try:
+        dnstv_journal.ajouter(entrees)
+    except (OSError, ValueError) as e:
+        logger.warning("journal des décisions non écrit : %s", type(e).__name__)
+
+
+def _geste(geste, action: str, origine: str, motif: str) -> tuple:
+    """Applique `geste(etat, pauses)` sous le verrou des règles, écrit état et pauses, demande `apply` au contrôleur root (qui audite
+    chaque changement de mode dans audit.log) ; en cas d'échec, état et pauses reviennent à leur version précédente. Journalise."""
+    with _r._verrou():
+        etat, ancien = _r._etat_et_copie()
+        try:
+            pauses = dnstv_protection.charger_pauses()
+        except dnstv_protection.ErreurProtection as e:
+            raise HTTPException(409, str(e)) from None
+        anciennes = copy.deepcopy(pauses)
+        try:
+            touches = geste(etat, pauses)
+        except dnstv_protection.ErreurProtection as e:
+            raise HTTPException(404 if "inconnu" in str(e) else 422, str(e)) from None
+        if not touches:
+            return [], None, pauses
+        try:
+            dnstv.ecrire_etat(etat)
+            dnstv_protection.ecrire_pauses(pauses)
+        except (dnstv.ErreurTV, dnstv_protection.ErreurProtection) as e:
+            dnstv.ecrire_etat(ancien)
+            raise HTTPException(422, str(e)) from None
+        try:
+            application = _r._ctl("apply")
+        except HTTPException:
+            dnstv.ecrire_etat(ancien)
+            dnstv_protection.ecrire_pauses(anciennes)
+            raise
+        maintenant = int(time.time())
+        _journaliser([dnstv_journal.entree(maintenant, n, _mac_de(etat, n), "", "", action, origine, motif) for n in touches])
+    return touches, application, pauses
+
+
+def _cible(appareil: Optional[str]):
+    return None if appareil is None else [appareil]
+
+
+@router.post("/protection/observe", dependencies=[Depends(require_jwt)])
+def tout_en_observe(corps: AppareilIn):
+    """Retour en un geste : l'appareil (ou tous) repasse en OBSERVE, sans échéance ; sa pause éventuelle est oubliée."""
+    touches, app, _ = _geste(lambda e, p: dnstv_protection.passer_en_observe(e, p, _cible(corps.appareil)), "observe", "admin", "retour en OBSERVE")
+    return {"appareils": touches, "application": app}
+
+
+@router.post("/protection/pause", dependencies=[Depends(require_jwt)])
+def pause(corps: PauseIn):
+    """Pause minutée (15, 60 ou 240 min) : les appareils protégés passent en OBSERVE, reprise automatique à l'échéance."""
+    if corps.minutes not in dnstv_protection.DUREES_MIN:
+        raise HTTPException(422, "durée de pause : 15, 60 ou 240 minutes")
+    maintenant = int(time.time())
+    touches, app, _ = _geste(lambda e, p: dnstv_protection.mettre_en_pause(e, p, _cible(corps.appareil), corps.minutes, maintenant, "admin"),
+                             "pause", "admin", dnstv_protection.duree_lisible(corps.minutes))
+    return {"appareils": touches, "jusqu_a": maintenant + corps.minutes * 60, "application": app}
+
+
+@router.post("/protection/reprendre", dependencies=[Depends(require_jwt)])
+def reprendre(corps: AppareilIn):
+    """Reprise immédiate de la protection des appareils en pause (modes d'avant)."""
+    touches, app, _ = _geste(lambda e, p: dnstv_protection.reprendre(e, p, _cible(corps.appareil), int(time.time())),
+                             "reprise", "admin", "reprise manuelle")
+    return {"appareils": touches, "application": app}
+
+
+@router.get("/protection/exceptions")
+def exceptions(lecteur=Depends(_r.require_lecture_nominative)):
+    """Vue unifiée des exceptions appareil × domaine (lot 3), des autorisations au puits et des suspects jugés légitimes."""
+    try:
+        ex = dnstv_protection.charger_exceptions()
+    except dnstv_protection.ErreurProtection as e:
+        raise HTTPException(409, str(e)) from None
+    v = dnstv_protection.vue_exceptions(ex, _r._etat(), _r._ignores())
+    if not _admin(lecteur):
+        for e in v["exceptions"]:
+            e["mac"] = dnstv_appareils.mac_courte(e["mac"]) if e.get("mac") else ""
+    return v
+
+
+@router.post("/protection/exceptions", dependencies=[Depends(require_jwt)])
+def exception_poser(corps: ExceptionIn):
+    """Pose ou retire une exception (`autoriser` : liste blanche ; `bloquer` : liste noire) pour UN appareil et UN domaine."""
+    with _r._verrou():
+        etat, ancien_etat = _r._etat_et_copie()
+        regles, ancien_regles = _r._regles(), _r._regles()
+        avant = regles.liste()
+        try:
+            ex = dnstv_protection.charger_exceptions()
+            nouv = dnstv_protection.poser_exception(ex, etat, regles, corps.appareil, corps.domaine, corps.type, corps.actif, int(time.time()))
+        except dnstv_protection.ErreurProtection as e:
+            raise HTTPException(404 if "inconnu" in str(e) else 422, str(e)) from None
+        except dnstv_regles.ErreurRegle as e:
+            raise HTTPException(422, str(e)) from None
+        dnstv_regles.ecrire(regles)
+        try:
+            dnstv.ecrire_etat(etat)
+        except dnstv.ErreurTV as e:
+            dnstv_regles.ecrire(ancien_regles)
+            raise HTTPException(422, str(e)) from None
+        application = _r._appliquer_ou_annuler_tout(ancien_etat, ancien_regles)
+        dnstv_protection.ecrire_exceptions(nouv)
+        d = dnstv.valider_domaine(corps.domaine)
+        _journaliser(dnstv_journal.depuis_regles(avant, regles.liste(), etat)
+                     + [dnstv_journal.entree(int(time.time()), corps.appareil, _mac_de(etat, corps.appareil), d, "", "exception", "admin",
+                                             f"{corps.type} {'posée' if corps.actif else 'retirée'}")])
+    return {"exceptions": len(nouv), "application": application}
+
+
+JOURNAL_HEURES = (1, 24, 168, 720)
+
+
+@router.get("/protection/journal")
+def journal(heures: int = 24, detail: bool = False, lecteur=Depends(_r.require_lecture_nominative)):
+    """Journal des décisions, AGRÉGÉ par défaut (appareil × domaine × action) ; `detail=1` (administrateur) : lignes, 500 au plus."""
+    if heures not in JOURNAL_HEURES:
+        raise HTTPException(422, "heures : 1, 24, 168 ou 720")
+    if detail and not _admin(lecteur):
+        raise HTTPException(403, "détail ligne à ligne : administrateur requis")
+    lignes = dnstv_journal.lire(depuis=int(time.time()) - heures * 3600)
+    out = {"heures": heures, "total": len(lignes), "agregats": dnstv_journal.agreger(lignes)[:200]}
+    if detail:
+        out["lignes"] = lignes[:500]
+    return out
+
+
+@router.get("/protection/journal.csv", dependencies=[Depends(require_jwt)])
+def journal_csv():
+    """Export CSV du journal des décisions (les deux générations), MAC tronquée."""
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["horodatage", "appareil", "mac", "domaine", "categorie", "action", "origine", "motif"])
+    for e in dnstv_journal.lire():
+        w.writerow([_cellule(v) for v in (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(e["ts"])), e.get("appareil"), e.get("mac"),
+                                          e.get("domaine"), e.get("categorie"), e["action"], e.get("origine"), e.get("motif"))])
+    return Response(out.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="tv-privacy-journal.csv"'})
+
+
+@router.get("/protection/diagnostic")
+def diagnostic(lecteur=Depends(_r.require_lecture_nominative)):
+    """Diagnostic : erreurs DNS récentes (24 h, agrégées), exceptions et autorisations, pauses en cours, derniers retours arrière."""
+    etat = _r._etat()
+    ev = dnstv_analyse.evenements_agreges(_r._magasin(), 24, int(time.time()), _noms_par_ip())
+    try:
+        pauses = dnstv_protection.charger_pauses()
+    except dnstv_protection.ErreurProtection:
+        pauses = []
+    retours = [e for e in dnstv_journal.lire(depuis=int(time.time()) - 7 * 86400)
+               if e["action"] in ("retrait", "rejet", "observe", "pause", "reprise", "deblocage")][:30]
+    return {"erreurs_dns": [g for g in ev["groupes"] if g.get("erreurs")][:50],
+            "exceptions": exceptions(lecteur)["exceptions"],
+            "pauses": [{"appareil": p["appareil"], "fin": p["fin"], "origine": p["origine"]} for p in pauses],
+            "retours_arriere": retours,
+            "modes": [{"nom": c["nom"], "mode": c["mode"], "mode_nom": dnstv.nom_mode(c["mode"])} for c in etat.get("clients", [])],
+            "message": dnstv_protection.MESSAGE_HONNETE}
+
+
+# ── route LAMBDA « Ça ne marche plus ? Je débloque » ─────────────────────────────────────────────────
+# Garde `require_personne` (AGENTS.md : garde d'usager posée EXPLICITEMENT) : une personne admise (profil user ou plus). Refusés :
+# le tableau de bord anonyme (aucune session), l'invité, la session plafonnée, le jeton à portée et le porteur délégué du pilotage.
+# Bornée : deux gestes qui RELÂCHENT la protection (pause minutée, retour en observation), jamais de durcissement, de liste de
+# domaines ni d'historique ; la liste des TV ne donne que leur NOM. Débit limité.
+
+DEBIT_FENETRE_S = 600
+DEBIT_PAR_PORTEUR = 5
+DEBIT_BOX = 20
+_DEBIT: dict = {}
+_DEBIT_VERROU = threading.Lock()
+
+
+def _debit(sub: str, maintenant: float) -> None:
+    """5 gestes par porteur et 20 pour la box sur 10 minutes ; 429 au-delà."""
+    with _DEBIT_VERROU:
+        for cle, plafond in ((sub, DEBIT_PAR_PORTEUR), ("*", DEBIT_BOX)):
+            q = _DEBIT.setdefault(cle, collections.deque())
+            while q and maintenant - q[0] > DEBIT_FENETRE_S:
+                q.popleft()
+            if len(q) >= plafond:
+                raise HTTPException(429, "trop de demandes : réessayer dans quelques minutes")
+        for cle in (sub, "*"):
+            _DEBIT[cle].append(maintenant)
+        if len(_DEBIT) > 1000:                                          # mémoire bornée
+            for k in [k for k, q in _DEBIT.items() if k != "*" and not q]:
+                del _DEBIT[k]
+
+
+class UsagerIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tv: str = Field(min_length=1, max_length=40)                       # identifiant d'une TV (liste minimale) ou « toutes »
+    geste: Literal["pause", "observe"]
+    minutes: Optional[int] = None
+
+
+def _tv_du_perimetre(etat: dict) -> dict:
+    """slug -> nom des appareils du périmètre (mode ≠ off)."""
+    return {dnstv._slug(c["nom"]): c["nom"] for c in etat.get("clients", []) if c["mode"] != "off"}
+
+
+@router.get("/protection/usager/tv")
+def usager_tv(personne=Depends(require_personne)):
+    """Liste MINIMALE des TV pour choisir : identifiant, nom, protégée ou non, fin de pause. Ni MAC, ni adresse, ni domaine."""
+    etat, erreur = dnstv.lire_etat()
+    if erreur:
+        raise HTTPException(409, "état illisible")
+    try:
+        pauses = {p["appareil"]: p["fin"] for p in dnstv_protection.charger_pauses()}
+    except dnstv_protection.ErreurProtection:
+        pauses = {}
+    tv = []
+    for slug, nom in sorted(_tv_du_perimetre(etat).items(), key=lambda x: x[1]):
+        modes = [c["mode"] for c in etat["clients"] if c["nom"] == nom]
+        tv.append({"id": slug, "nom": nom, "protege": any(m in dnstv_protection.MODES_PROTEGES for m in modes), "pause_jusqu_a": pauses.get(nom)})
+    return {"tv": tv, "durees": list(dnstv_protection.DUREES_MIN), "message": dnstv_protection.MESSAGE_HONNETE}
+
+
+@router.post("/protection/usager/debloquer")
+def usager_debloquer(corps: UsagerIn, personne=Depends(require_personne)):
+    """« Ça ne marche plus ? Je débloque » : pause minutée ou retour en observation d'UNE TV ou de toutes. Journalisé (origine usager),
+    appliqué et audité par le contrôleur root."""
+    if corps.geste == "pause" and corps.minutes not in dnstv_protection.DUREES_MIN:
+        raise HTTPException(422, "durée de pause : 15, 60 ou 240 minutes")
+    if corps.geste == "observe" and corps.minutes is not None:
+        raise HTTPException(422, "pas de durée pour un retour en observation")
+    etat, erreur = dnstv.lire_etat()
+    if erreur:
+        raise HTTPException(409, "état illisible")
+    perimetre = _tv_du_perimetre(etat)
+    if corps.tv == "toutes":
+        noms, libelle = sorted(perimetre.values()), "toutes les TV"
+    elif corps.tv in perimetre:
+        noms, libelle = [perimetre[corps.tv]], perimetre[corps.tv]
+    else:
+        raise HTTPException(404, "TV inconnue")
+    sub = str((personne or {}).get("sub") or "?") if isinstance(personne, dict) else "?"
+    _debit(sub, time.monotonic())
+    acteur = _r._acteur(personne)
+    if corps.geste == "pause":
+        maintenant = int(time.time())
+        _geste(lambda e, p: dnstv_protection.mettre_en_pause(e, p, noms, corps.minutes, maintenant, "usager"), "pause", "usager",
+               f"{dnstv_protection.duree_lisible(corps.minutes)} par {acteur}")
+        message = f"protection en pause pour {libelle} pendant {dnstv_protection.duree_lisible(corps.minutes)}"
+        jusqu_a = maintenant + corps.minutes * 60
+    else:
+        _geste(lambda e, p: dnstv_protection.passer_en_observe(e, p, noms), "observe", "usager", f"retour en observation par {acteur}")
+        message = f"{libelle} : protection retirée, la TV est seulement observée" if corps.tv != "toutes" \
+            else "toutes les TV : protection retirée, elles sont seulement observées"
+        jusqu_a = None
+    logger.info("déblocage usager (%s) : %s %s", acteur, corps.geste, corps.tv)
+    return {"message": message, "jusqu_a": jusqu_a, "rappel": dnstv_protection.MESSAGE_HONNETE}

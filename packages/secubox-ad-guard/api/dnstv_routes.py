@@ -27,9 +27,9 @@ from secubox_core import auth as _auth
 from secubox_core.auth import est_admin_reel, require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_analyse, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from . import dnstv, dnstv_analyse, dnstv_journal, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_analyse, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from api import dnstv, dnstv_analyse, dnstv_journal, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 logger = logging.getLogger("secubox.ad-guard.adblock-tv")
@@ -573,6 +573,15 @@ def _appliquer_ou_annuler(ancien: "dnstv_regles.Regles") -> dict:
         raise
 
 
+def _journal_regles(avant: list, regles: "dnstv_regles.Regles") -> None:
+    """Journal des décisions (lot 3, #3374) : les pas d'historique ajoutés aux règles ; une erreur ne défait jamais le geste."""
+    try:
+        etat, _ = dnstv.lire_etat()
+        dnstv_journal.ajouter(dnstv_journal.depuis_regles(avant, regles.liste(), etat))
+    except (OSError, ValueError) as e:
+        logger.warning("journal des décisions non écrit : %s", type(e).__name__)
+
+
 # Les routes qui appellent le contrôleur sont SYNCHRONES (`def`) : FastAPI les exécute dans un fil, la boucle du groupe n'est pas gelée
 # pendant un sudo ou un éventuel rechargement complet d'Unbound.
 @router.post("/auto/regles/{rid}/{action}", dependencies=[Depends(require_jwt)])
@@ -593,7 +602,9 @@ def regle_action(rid: str, action: str):
         except dnstv_regles.ErreurRegle as e:
             raise HTTPException(422, str(e)) from e
         dnstv_regles.ecrire(regles)
-        return {"regle": r, "application": _appliquer_ou_annuler(ancien)}     # toujours : le contrôleur audite chaque transition effective
+        application = _appliquer_ou_annuler(ancien)                               # toujours : le contrôleur audite chaque transition effective
+        _journal_regles(ancien.liste(), regles)
+        return {"regle": r, "application": application}
 
 
 @router.post("/auto/appareils/{appareil}/ca-ne-marche-plus", dependencies=[Depends(require_jwt)])
@@ -608,7 +619,9 @@ def ca_ne_marche_plus(appareil: str):
         if not touches:
             return {"retirees": 0, "application": None}
         dnstv_regles.ecrire(regles)
-        return {"retirees": len(touches), "application": _appliquer_ou_annuler(ancien)}
+        application = _appliquer_ou_annuler(ancien)
+        _journal_regles(ancien.liste(), regles)
+        return {"retirees": len(touches), "application": application}
 
 
 @router.get("/auto/reglage", dependencies=[Depends(require_lecture_nominative)])

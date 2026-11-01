@@ -19,7 +19,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_analyse, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
+from api import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
 
@@ -48,6 +48,30 @@ def ecrire_cache_classification(etat, taxo, magasin, regles, maintenant) -> None
                                    etat=etat, regles=regles.liste())
     except Exception as e:                                       # noqa: BLE001
         print(f"cache de classification non écrit : {type(e).__name__}", file=sys.stderr)
+
+
+class _SansMoteur(Exception):
+    """Rien à faire pour le moteur, mais une reprise de pause a changé l'état : l'application reste due."""
+
+
+def reprendre_pauses(etat: dict, now: int) -> list:
+    """Lot 3 (#3374) : reprise AUTOMATIQUE des pauses échues (modes d'avant restaurés, sauf adresse changée entre-temps par
+    l'administrateur), journal « reprise ». Sous le verrou des règles. Fichier des pauses illisible : rien n'est repris (tracé)."""
+    try:
+        pauses = dnstv_protection.charger_pauses()
+    except dnstv_protection.ErreurProtection as e:
+        print(f"pauses illisibles, aucune reprise : {e}", file=sys.stderr)
+        return []
+    repris = dnstv_protection.reprendre(etat, pauses, None, now, echues=True)
+    if repris:
+        dnstv.ecrire_etat(etat)
+        dnstv_protection.ecrire_pauses(pauses)
+        try:
+            macs = {c["nom"]: c.get("mac") for c in etat["clients"] if c.get("mac")}
+            dnstv_journal.ajouter([dnstv_journal.entree(now, n, macs.get(n), "", "", "reprise", "auto", "fin de pause") for n in repris])
+        except (OSError, ValueError) as e:
+            print(f"journal des décisions non écrit : {type(e).__name__}", file=sys.stderr)
+    return repris
 
 
 def voisins_du_lan() -> dict:
@@ -97,8 +121,12 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             if erreur:
                 print(erreur, file=sys.stderr)
                 return 1
+            if reprendre_pauses(etat, now):
+                etat_modifie = True
             if not etat["actif"] or (not dnstv_auto.appareils(etat) and not etat.get("ajout_auto")):
-                return 0
+                if not etat_modifie:
+                    return 0
+                raise _SansMoteur
             # #3374 : état v1 -> v2 (par MAC), une seule fois, sans rien perdre ni changer un mode ; seulement quand le moteur travaille (inactif = il n'écrit rien)
             try:
                 migration = dnstv_appareils.migrer_fichier()
@@ -112,6 +140,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
                     return 1
             reglage = dnstv_auto.reglage_depuis(etat)
             regles = dnstv_regles.charger()
+            avant_regles = regles.liste()                         # lot 3 : le journal des décisions se déduit de l'historique des règles
             # #3374 : taxonomie unique (référence TV, listes, services, profil, corrections manuelles) ; la garde du moteur s'y appuie.
             # Fermé en cas d'échec : corrections illisibles = ni ajout automatique (ni profil posé), ni essai, ni confirmation automatiques.
             corrections_lisibles = True
@@ -148,6 +177,12 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             if res["agrege"] != dnstv_profil.charger_agrege():
                 dnstv_profil.ecrire_agrege(res["agrege"])
             ecrire_cache_classification(etat, taxo, magasin, regles, now)
+            try:
+                dnstv_journal.ajouter(dnstv_journal.depuis_regles(avant_regles, regles.liste(), etat, lambda d: taxo.classer(d)["categorie"]))
+            except (OSError, ValueError) as e:
+                print(f"journal des décisions non écrit : {type(e).__name__}", file=sys.stderr)
+    except _SansMoteur:
+        pass
     except dnstv_regles.ErreurRegle as e:
         print(f"règles illisibles, rien n'est changé : {e}", file=sys.stderr)
         return 1
