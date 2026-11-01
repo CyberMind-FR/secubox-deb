@@ -19,7 +19,7 @@ Vérifié par version installée sur gk2 = version de master (2026-11-01) :
 - closes #3338 (boutique Alpha 20 : appstore 0.11.0) ; closes #3347 (membres d'alias mail : mail 2.16.8)
 - closes #3351 (live.secubox.in : live 0.1.5) ; closes #3302 (bascule d'interface depuis la Flotte : pilotage 0.6.16)
 - closes #3349 (retour par instantané : profiles + agent 0.8.0 sur les box pilotées)
-Restent ouvertes : #3337 (secubox-fonction-maitre non installé sur gk2, décision dépôt apt en attente).
+- closes #3337 : secubox-fonction-maitre 0.1.51 publié (avec service-pilotage, service-mesh, service-administration, Depends inchangés vs 0.1.42) et installé sur gk2, seul maître.
 
 ## 2026-11-01 — mochabinleds : LED de supervision à 8 séquences, seuils relatifs évolutifs, déployé gk2 + gk1 + gk6 (closes #3361)
 
