@@ -6,9 +6,12 @@
 # Collecteur de la LED de supervision (#3361) : relève les compteurs toutes les
 # 10 s, entretient la référence propre à la box (/var/lib/secubox-leds/) et publie
 # un niveau 0..4 par mesure dans /run/secubox-leds/flux.json, lu par le moteur.
-# Compte dédié secubox-leds ; seule capacité CAP_NET_ADMIN (lecture des compteurs
-# nftables sbx_drop_* par /usr/sbin/nft). Pas d'isolation réseau : le collecteur
-# doit voir l'espace réseau de l'hôte (/proc/net/dev, nftables, conntrack).
+# Compte dédié secubox-leds, AUCUNE capacité : les compteurs nftables sbx_drop_* sont
+# publiés dans /run/secubox-leds/nft.json par l'unité root secubox-led-nft. Pas
+# d'isolation réseau : le collecteur doit voir l'espace réseau de l'hôte
+# (/proc/net/dev, conntrack) ; aucune socket réseau (AF_UNIX seul).
+# /run/secubox-leds est créé ici (0775 secubox-leds:secubox-leds) : secubox-led-nft
+# (root, Group=secubox-leds, sans CAP_DAC_OVERRIDE) y écrit par le groupe.
 [Unit]
 Description=SecuBox LED - collecteur de supervision
 After=network.target
@@ -28,8 +31,7 @@ Nice=19
 CPUWeight=10
 IOWeight=10
 AppArmorProfile=secubox-led-flux
-AmbientCapabilities=CAP_NET_ADMIN
-CapabilityBoundingSet=CAP_NET_ADMIN
+CapabilityBoundingSet=
 NoNewPrivileges=yes
 UMask=0027
 ProtectSystem=strict
@@ -37,10 +39,10 @@ ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
 RuntimeDirectory=secubox-leds
-RuntimeDirectoryMode=0755
+RuntimeDirectoryMode=0775
 StateDirectory=secubox-leds
 StateDirectoryMode=0750
-RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictAddressFamilies=AF_UNIX
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes

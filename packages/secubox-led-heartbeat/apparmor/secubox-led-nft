@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de secubox-led-nft (#3361) : root, seule capacité
+# net_admin (lecture netlink des compteurs nftables). Exécute nft, sh, timeout,
+# head, mv et sleep ; N'ÉCRIT que /run/secubox-leds/nft.json et son .tmp.
+# Aucun secret.
+#
+# Le profil s'applique à toutes les commandes de l'unité (AppArmorProfile=), donc
+# aussi à ExecCondition=/usr/sbin/secubox-led-board (env -> bash, tr, grep ; lecture
+# seule du Device Tree et de /sys/class/leds).
+
+#include <tunables/global>
+
+profile secubox-led-nft /usr/sbin/secubox-led-nft {
+  #include <abstractions/base>
+
+  capability net_admin,
+  network netlink raw,
+
+  /usr/sbin/secubox-led-nft r,
+  /{,usr/}bin/{,da}sh rix,
+  /usr/bin/timeout rix,
+  /usr/sbin/nft rix,
+  /usr/bin/head rix,
+  /{,usr/}bin/mv rix,
+  /{,usr/}bin/sleep rix,
+
+  # nft : résolution des noms (protocoles, services)
+  /etc/nftables.conf r,
+  /etc/iproute2/** r,
+  /usr/share/iproute2/** r,
+  /etc/protocols r,
+  /etc/services r,
+
+  # Garde secubox-led-board (ExecCondition), lecture seule
+  /usr/sbin/secubox-led-board rix,
+  /usr/bin/env rix,
+  /{,usr/}bin/bash rix,
+  /{,usr/}bin/tr rix,
+  /{,usr/}bin/grep rix,
+  @{PROC}/device-tree/ r,
+  @{PROC}/device-tree/** r,
+  /sys/firmware/devicetree/** r,
+  /sys/devices/**/name r,
+  /sys/class/leds/ r,
+  /sys/class/leds/** r,
+
+  deny /etc/secubox/secrets/** rw,
+
+  # Sortie
+  /run/secubox-leds/ r,
+  /run/secubox-leds/nft.json rw,
+  /run/secubox-leds/nft.json.tmp rw,
+}

@@ -119,9 +119,19 @@ case "$1" in
             apparmor_parser -r /etc/apparmor.d/secubox-led-flux \
               || echo "secubox-led-heartbeat : profil AppArmor non charge (apparmor_parser -r /etc/apparmor.d/secubox-led-flux)" >&2
         fi
-        # SupplementaryGroups=actord-ingest : sans actord le groupe manque et l'unite echoue.
-        getent group actord-ingest >/dev/null || addgroup --system actord-ingest
-        systemctl enable --now secubox-led-flux.service || true
+        if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
+           && [ -f /etc/apparmor.d/secubox-led-nft ]; then
+            apparmor_parser -r /etc/apparmor.d/secubox-led-nft \
+              || echo "secubox-led-heartbeat : profil AppArmor non charge (apparmor_parser -r /etc/apparmor.d/secubox-led-nft)" >&2
+        fi
+        # SupplementaryGroups=actord-ingest : sans actord le groupe manque et l'unite
+        # echoue. Le groupe appartient a secubox-actord (qui le cree aussi) : on ne le
+        # cree ici que s'il manque, et un echec ne doit pas faire echouer dpkg (set -e) :
+        # le collecteur tourne alors sans les mesures d'actord.
+        getent group actord-ingest >/dev/null || addgroup --system actord-ingest \
+            || echo "secubox-led-heartbeat : groupe actord-ingest non cree (secubox-led-flux ne demarrera pas)" >&2
+        # Collecteur sans capacite + releve root des compteurs nftables (#3361).
+        systemctl enable --now secubox-led-flux.service secubox-led-nft.service || true
         systemctl enable secubox-led-pulse.service 2>/dev/null || true
         if [ -e /sys/class/leds/red:led1/brightness ]; then
             systemctl restart secubox-led-pulse.service 2>/dev/null || true

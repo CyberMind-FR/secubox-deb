@@ -110,9 +110,17 @@ sont des `par_led` ; toutes les nouvelles couches respirent, palette vert / cyan
 
 ### Collecteur et seuils relatifs
 
-`secubox-led-flux` (compte `secubox-leds`, `Nice=19`, AppArmor enforce, seule capacité `CAP_NET_ADMIN`
-pour lire les compteurs nftables `sbx_drop_*`) relève les mesures toutes les 10 s et publie
-`/run/secubox-leds/flux.json`. Les sources `flux` de `leds.toml` (`cle = "reseau.octets_in"`, …) en
+`secubox-led-flux` (compte `secubox-leds`, `Nice=19`, AppArmor enforce, **aucune capacité**, sockets
+`AF_UNIX` seules) relève les mesures toutes les 10 s et publie `/run/secubox-leds/flux.json`. Les
+compteurs nftables `sbx_drop_*` lui viennent de **`secubox-led-nft`**, une petite unité root dont la
+seule capacité est `CAP_NET_ADMIN` (profil AppArmor `secubox-led-nft` : `nft`, `sh`, `timeout`,
+`head`, `mv`, `sleep` ; écriture limitée à `nft.json`) : toutes les 10 s, `nft -j list counters`
+(délai 5 s, sortie bornée à 1 Mio) est écrit atomiquement dans `/run/secubox-leds/nft.json` (0644).
+Ce répertoire est le `RuntimeDirectory` de `secubox-led-flux` (0775 `secubox-leds`) ;
+`secubox-led-nft` porte `Requires=`/`After=secubox-led-flux.service` et y écrit par
+`Group=secubox-leds` (root sans `CAP_DAC_OVERRIDE`).
+
+Les sources `flux` de `leds.toml` (`cle = "reseau.octets_in"`, …) en
 lisent le niveau. Les seuils sont **relatifs et évolutifs** : chaque mesure est comparée à une
 référence propre à la box (168 tranches horaires de la semaine, moyenne exponentielle à demi-vie de
 7 jours, tendance d'1 heure, apprentissage de 24 h en violet) : écart réduit < 1 normal (vert), < 2
@@ -120,8 +128,43 @@ activité (cyan), < 3 attention (jaune), au-delà dégradation (orange). Le nive
 **absolu** (service arrêté, événement Actor critique). Le dénominateur ne descend jamais sous un
 plancher : `[flux.planchers]` de `leds.toml` (lu au démarrage du collecteur ; valeur non numérique ou
 ≤ 0 : défaut et message dans le journal). Rotation adaptative : durée × (1 + niveau max), plafond
-24 s ; une séquence au niveau 4 passe seule à l'écran (rappel toutes les 30 s si plusieurs).
+24 s ; une séquence au niveau 4 passe seule à l'écran. Avec plusieurs couches en alerte, chacune
+reçoit un créneau de `min(repère + durée, 30 s / nombre)`, jamais moins que **repère + 2 s** : le
+rappel de chaque couche tient en 30 s jusqu'à huit alertes ; **au-delà de 8 alertes**, il dépasse
+30 s (créneau minimal × nombre de couches).
 `leds.toml` est un conffile : une configuration locale est conservée à la mise à jour.
+
+#### Sources du collecteur (clés `flux`)
+
+Chaque source n'est lue que si le fichier est régulier, non inscriptible par tous et appartient
+à root ou au compte producteur déclaré (`/run/secubox` est en 1777 : un faux relevé déposé par un
+autre compte est ignoré, clé absente).
+
+| Clés | Origine | Propriétaire accepté |
+|---|---|---|
+| `reseau.octets_*`, `fw.paquets_*` | `/proc/net/dev` (interface WAN) | root |
+| `reseau.connexions` | `/proc/sys/net/netfilter/nf_conntrack_count` | root |
+| `fw.bloques` | `/run/secubox-leds/nft.json` (compteurs `sbx_drop_*`, moins de 60 s) | root (`secubox-led-nft`) |
+| `waf.*` | `/var/cache/secubox/metrics-cache.json` | `secubox` |
+| `actor.*` | `/run/secubox/actord-mesures.json` | `secubox-actord` |
+| `adguard.*` | `/var/lib/secubox/ad-guard/ad-guard.db` (SQLite `mode=ro&immutable=1`) | `secubox` |
+| `services.*` | `/var/cache/secubox/health-doctor.json` | `secubox` |
+
+Base ad-guard indisponible : un seul message dans le journal, clés `adguard.*` absentes.
+
+#### Planchers par défaut (`[flux.planchers]`)
+
+Les compteurs cumulés sont convertis en débit par minute : relevés toutes les 10 s, chaque écart y
+compte 6 fois. Les planchers sont choisis pour qu'une box calme ne passe pas au jaune pour
+2 événements (12/min), alors que 20 événements (120/min) alertent.
+
+| Clé | Plancher | Unité |
+|---|---|---|
+| `reseau.octets_in`, `reseau.octets_out` | 50000 | octets/min |
+| `fw.paquets_in`, `fw.paquets_out` | 60 | paquets/min |
+| `fw.bloques`, `waf.blocages`, `adguard.requetes` | 15 | événements/min |
+| `actor.evenements`, `actor.suspects`, `actor.critiques`, `services.degrades` | 2,5 | nombre |
+| autres jauges | 1 | nombre |
 
 ### Sources (locales, lecture seule, sans réseau ni secret)
 

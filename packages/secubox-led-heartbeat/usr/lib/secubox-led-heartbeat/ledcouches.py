@@ -98,7 +98,7 @@ SOURCES_DEFAUT = {
     # Même cache : connexions HTTPS établies (instantané, pas de journal relu).
     "visites": {"type": "jauge_json", "chemin": "/var/cache/secubox/metrics-cache.json",
                 "cle": "connections.https", "seuils": [1, 20, 100], "fraicheur_max": 300},
-    # Alertes du SOC non acquittées ; une critique non vue = niveau 3. Le SOC
+    # Alertes du SOC non acquittées ; une critique non vue = niveau 4. Le SOC
     # n'écrit ce fichier qu'au changement : fraîcheur d'un jour, et SOC arrêté
     # (socket absente) = inconnu.
     "alertes": {"type": "alertes_json", "chemin": "/var/lib/secubox/soc/alerts.json",

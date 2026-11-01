@@ -4,7 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """Collecteur secubox-led-flux de la LED de supervision (ref #3361).
 
-Toutes les 10 s : relevés bruts (releves.py + compteurs nftables sbx_drop_*), conversion
+Toutes les 10 s : relevés bruts (releves.py, dont les compteurs nftables sbx_drop_* publiés
+par l'unité root secubox-led-nft dans /run/secubox-leds/nft.json), conversion
 des compteurs cumulés en débit par minute, niveau 0..4 de chaque mesure contre la
 référence propre à la box, puis publication atomique de /run/secubox-leds/flux.json :
   {"genere_le": <epoch>, "niveaux": {"<cle>": 0..4|null},
@@ -17,7 +18,6 @@ import json
 import math
 import os
 import signal
-import subprocess
 import sys
 import time
 import tomllib
@@ -28,14 +28,11 @@ import releves as _releves
 
 PERIODE_S = 10.0
 SAUVEGARDE_S = 900.0
-DELAI_NFT_S = 5.0
-NFT = "/usr/sbin/nft"
 CHEMIN_FLUX = Path("/run/secubox-leds/flux.json")
 CHEMIN_REF = Path("/var/lib/secubox-leds/reference.json")
 CHEMIN_CONFIG = Path("/etc/secubox/leds.toml")
 LIMITE_CONFIG = 1024 * 1024
 LIMITE_REF = 16 * 1024 * 1024
-LIMITE_NFT = 1024 * 1024  # sortie de nft au-delà : relevé ignoré
 
 # Compteurs cumulés : convertis en débit par minute avant niveau et observation.
 CUMULES = frozenset({"reseau.octets_in", "reseau.octets_out", "fw.paquets_in", "fw.paquets_out",
@@ -43,14 +40,22 @@ CUMULES = frozenset({"reseau.octets_in", "reseau.octets_out", "fw.paquets_in", "
 # Niveau 4 absolu, prioritaire sur le relatif, dès que la valeur dépasse 0.
 ABSOLUS = frozenset({"services.arretes", "actor.critiques"})
 
+# Planchers de dispersion (#3361, point 4 du plan) : une box calme ne passe pas au jaune
+# pour 2 événements. Un compteur relevé toutes les 10 s et converti en débit par minute
+# multiplie chaque écart par 6 : 2 événements = 12/min, d'où 15 ; 20 événements = 120/min
+# alertent toujours. Les jauges de comptage (actor.*, services.degrades) : 2.5.
 PLANCHER_JAUGE = 1.0
-PLANCHER_DEBIT = 5.0
+PLANCHER_COMPTAGE = 2.5
+PLANCHER_DEBIT = 15.0
+PLANCHER_PAQUETS = 60.0
 PLANCHER_OCTETS = 50000.0
 PLANCHERS_DEFAUT = {
     "reseau.octets_in": PLANCHER_OCTETS, "reseau.octets_out": PLANCHER_OCTETS,
-    "fw.paquets_in": PLANCHER_DEBIT, "fw.paquets_out": PLANCHER_DEBIT,
+    "fw.paquets_in": PLANCHER_PAQUETS, "fw.paquets_out": PLANCHER_PAQUETS,
     "fw.bloques": PLANCHER_DEBIT, "waf.blocages": PLANCHER_DEBIT,
     "adguard.requetes": PLANCHER_DEBIT,
+    "actor.evenements": PLANCHER_COMPTAGE, "actor.suspects": PLANCHER_COMPTAGE,
+    "actor.critiques": PLANCHER_COMPTAGE, "services.degrades": PLANCHER_COMPTAGE,
 }
 
 
@@ -148,19 +153,6 @@ def ecrire_atomique(chemin, donnees, mode):
         raise
 
 
-def lire_nft():
-    """Somme des compteurs nftables sbx_drop_* ; None si nft échoue, dépasse 5 s,
-    renvoie plus de 1 Mio ou une sortie inexploitable (fw.bloques absent du relevé)."""
-    try:
-        r = subprocess.run([NFT, "-j", "list", "counters"], capture_output=True, text=True,
-                           timeout=DELAI_NFT_S, check=False, env={"PATH": "/usr/sbin:/usr/bin"})
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if r.returncode != 0 or len(r.stdout) > LIMITE_NFT:
-        return None
-    return _releves.compteurs_nft(r.stdout)
-
-
 def charger_reference(chemin):
     """Référence persistée ; fichier absent, illisible ou corrompu : référence vide."""
     try:
@@ -183,12 +175,11 @@ def charger_reference(chemin):
 class Collecteur:
     """État du collecteur : référence, derniers compteurs, échéance de sauvegarde."""
 
-    def __init__(self, chemin_flux=CHEMIN_FLUX, chemin_ref=CHEMIN_REF, lire=None, nft=lire_nft,
+    def __init__(self, chemin_flux=CHEMIN_FLUX, chemin_ref=CHEMIN_REF, lire=None,
                  planchers=None, chemin_config=CHEMIN_CONFIG):
         self.chemin_flux = Path(chemin_flux)
         self.chemin_ref = Path(chemin_ref)
         self.lire = lire or _releves.releves
-        self.nft = nft
         self.chemin_config = Path(chemin_config)
         self.planchers_fournis = planchers is not None
         self.planchers = dict(planchers or {})
@@ -211,9 +202,6 @@ class Collecteur:
 
     def passage(self, t):
         valeurs = self.lire()
-        bloques = self.nft()
-        if bloques is not None:
-            valeurs["fw.bloques"] = float(bloques)
         niveaux = pas_de_collecte(self.ref, self.prec, valeurs, t, self.planchers)
         apprentissage = sorted(c for c in valeurs if self.ref.en_apprentissage(c, t))
         try:

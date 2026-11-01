@@ -62,7 +62,7 @@ Usage:
   secubox-led verifier
 
 Formes (demo) : par_led jauge mono double triple etale rotatif
-Couches (demo) : celles de /etc/secubox/leds.toml (systeme, trafic), ou toutes
+Couches (demo) : celles de /etc/secubox/leds.toml (systeme, reseau, firewall, waf, actor, adguard, services, soc), ou toutes
 
 Layers:
   hw, 1, bottom    LED1 - Hardware layer (network, CPU, memory)

@@ -100,7 +100,7 @@ type = "iowait"              # attente d'E/S, /proc/stat (%)
 seuils = [5, 15, 30]
 
 [sources.alertes]
-type = "alertes_json"        # alertes SOC non acquittées ; critique => niveau 3
+type = "alertes_json"        # alertes SOC non acquittées ; critique => niveau 4
 chemin = "/var/lib/secubox/soc/alerts.json"
 seuils = [1, 3, 10]
 
@@ -187,11 +187,15 @@ cle = "services.arretes"
 [flux.planchers]
 "reseau.octets_in" = 50000.0
 "reseau.octets_out" = 50000.0
-"fw.paquets_in" = 5.0
-"fw.paquets_out" = 5.0
-"fw.bloques" = 5.0
-"waf.blocages" = 5.0
-"adguard.requetes" = 5.0
+"fw.paquets_in" = 60.0
+"fw.paquets_out" = 60.0
+"fw.bloques" = 15.0
+"waf.blocages" = 15.0
+"adguard.requetes" = 15.0
+"actor.evenements" = 2.5
+"actor.suspects" = 2.5
+"actor.critiques" = 2.5
+"services.degrades" = 2.5
 
 # Couches, affichées dans l'ordre, sans limite de nombre. Huit séquences par défaut,
 # ~8 s chacune (rotation adaptative : duree x (1 + niveau max), plafond 24 s ; une

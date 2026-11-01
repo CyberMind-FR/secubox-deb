@@ -90,8 +90,7 @@ def _collecteur(tmp_path, valeurs=None):
     return flux.Collecteur(
         chemin_flux=tmp_path / "run" / "flux.json",
         chemin_ref=tmp_path / "lib" / "reference.json",
-        lire=lambda: dict(valeurs or {"reseau.connexions": 5.0}),
-        nft=lambda: 7.0)
+        lire=lambda: dict(valeurs or {"reseau.connexions": 5.0, "fw.bloques": 7.0}))
 
 
 def test_reference_sauvee_toutes_les_15_min(tmp_path, monkeypatch):
@@ -133,7 +132,7 @@ def test_apprentissage_par_cle(tmp_path):
     valeurs = {"reseau.connexions": 5.0}
     c = flux.Collecteur(chemin_flux=tmp_path / "run" / "flux.json",
                         chemin_ref=tmp_path / "lib" / "reference.json",
-                        lire=lambda: dict(valeurs), nft=lambda: None)
+                        lire=lambda: dict(valeurs))
     c.demarrer(T0)
     c.passage(T0 + 10)
     t = T0 + 90000  # > 24 h, sans saut > 6 h : on rejoue toutes les heures
@@ -160,17 +159,22 @@ def _sortie_nft(paquets):
     return json.dumps({"nftables": [{"counter": {"name": "sbx_drop_input", "packets": paquets}}]})
 
 
-def test_nft_invalide_sans_faux_pic(tmp_path, monkeypatch):
-    """Valide, puis invalide, puis valide : la sortie illisible ne vaut pas 0 (faux pic)."""
+def test_nft_invalide_sans_faux_pic(tmp_path):
+    """nft.json valide, puis invalide, puis valide : la sortie illisible ne vaut pas 0 (faux pic)."""
+    import releves
     (tmp_path / "run").mkdir()
     (tmp_path / "lib").mkdir()
+    nft = tmp_path / "box" / "run/secubox-leds/nft.json"
+    nft.parent.mkdir(parents=True)
     # un relevé par heure (sorti de l'apprentissage après 24 h), 60 blocages par heure
     sorties = iter([_sortie_nft(100000 + 60 * i) for i in range(40)] + ["pas du json"]
                    + [_sortie_nft(100000 + 60 * i) for i in range(41, 51)])
-    monkeypatch.setattr(flux.subprocess, "run", lambda *a, **k: _R(0, next(sorties)))
+
+    def lire():
+        nft.write_text(next(sorties))
+        return releves.releves(tmp_path / "box")
     c = flux.Collecteur(chemin_flux=tmp_path / "run" / "flux.json",
-                        chemin_ref=tmp_path / "lib" / "reference.json",
-                        lire=dict, nft=flux.lire_nft)
+                        chemin_ref=tmp_path / "lib" / "reference.json", lire=lire)
     c.demarrer(T0)
     for i in range(1, 52):
         c.passage(T0 + 3600 * i)
@@ -178,45 +182,11 @@ def test_nft_invalide_sans_faux_pic(tmp_path, monkeypatch):
         assert (n.get("fw.bloques") or 0) < 2
 
 
-class _R:
-    def __init__(self, rc, out):
-        self.returncode, self.stdout = rc, out
-
-
-def test_lire_nft_code_retour(monkeypatch):
-    monkeypatch.setattr(flux.subprocess, "run", lambda *a, **k: _R(1, '{"nftables": []}'))
-    assert flux.lire_nft() is None
-
-
-def test_lire_nft_delai(monkeypatch):
-    def lent(*a, **k):
-        raise flux.subprocess.TimeoutExpired(cmd="nft", timeout=5)
-    monkeypatch.setattr(flux.subprocess, "run", lent)
-    assert flux.lire_nft() is None
-
-
-def test_lire_nft_trop_gros(monkeypatch):
-    monkeypatch.setattr(flux.subprocess, "run", lambda *a, **k: _R(0, " " * (1024 * 1024 + 1)))
-    assert flux.lire_nft() is None
-
-
-def test_lire_nft_invalide(monkeypatch):
-    monkeypatch.setattr(flux.subprocess, "run", lambda *a, **k: _R(0, "pas du json"))
-    assert flux.lire_nft() is None
-
-
 def test_reference_illisible_message(tmp_path, capsys):
     p = tmp_path / "reference.json"
     p.write_text("{tronq")
     assert flux.charger_reference(p).vers_dict()["cles"] == {}
     assert "référence illisible, réapprentissage" in capsys.readouterr().err
-
-
-def test_nft_absent_ou_lent(monkeypatch):
-    def echec(*a, **k):
-        raise FileNotFoundError
-    monkeypatch.setattr(flux.subprocess, "run", echec)
-    assert flux.lire_nft() is None
 
 
 def _unite():
@@ -227,11 +197,11 @@ def test_unite_confinee():
     u = _unite()
     for ligne in ("User=secubox-leds", "Group=secubox-leds", "SupplementaryGroups=actord-ingest",
                   "Nice=19", "CPUWeight=10", "IOWeight=10",
-                  "AmbientCapabilities=CAP_NET_ADMIN", "CapabilityBoundingSet=CAP_NET_ADMIN",
+                  "CapabilityBoundingSet=",
                   "ProtectSystem=strict", "NoNewPrivileges=yes", "RuntimeDirectory=secubox-leds",
                   "StateDirectory=secubox-leds", "ExecStart=/usr/sbin/secubox-led-flux",
                   "ExecCondition=/usr/sbin/secubox-led-board", "AppArmorProfile=secubox-led-flux",
-                  "RestrictAddressFamilies=AF_UNIX AF_NETLINK", "MemoryMax=64M"):
+                  "RestrictAddressFamilies=AF_UNIX", "MemoryMax=64M"):
         assert re.search(r"^" + re.escape(ligne) + r"$", u, re.M), ligne
     assert "PrivateNetwork" not in u
     rw = re.findall(r"^ReadWritePaths=(.*)$", u, re.M)
@@ -242,9 +212,9 @@ def test_unite_confinee():
 def test_apparmor_flux():
     p = (PAQUET / "apparmor" / "secubox-led-flux").read_text()
     assert "profile secubox-led-flux" in p
-    assert "capability net_admin," in p
-    assert "network netlink raw," in p
-    assert "/usr/sbin/nft" in p
+    assert "capability" not in p.replace("aucune capacité", "")
+    assert "network" not in p
+    assert "/usr/sbin/nft" not in p
     assert "deny /etc/secubox/secrets/** r" in p
     assert "flags=(complain)" not in p
 
@@ -262,7 +232,7 @@ def test_postinst_compte_et_activation():
     p = (PAQUET / "debian" / "postinst").read_text()
     garde = p.index("/usr/sbin/secubox-led-board; then")
     assert p.index("adduser --system --group --no-create-home --home /nonexistent") > garde
-    assert "systemctl enable --now secubox-led-flux.service || true" in p
+    assert "systemctl enable --now secubox-led-flux.service secubox-led-nft.service || true" in p
     g = p.index("getent group actord-ingest >/dev/null || addgroup --system actord-ingest")
     assert garde < g < p.index("systemctl enable --now secubox-led-flux.service")
     assert "secubox-led-flux.service" in (PAQUET / "debian" / "prerm").read_text()
