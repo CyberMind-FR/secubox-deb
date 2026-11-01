@@ -149,7 +149,7 @@ def test_le_mode_ram_a_disparu_du_live():
 FIX = RACINE / "board" / "mochabin" / "secubox-uboot-env.cmd"
 FIX_SCR = RACINE / "board" / "mochabin" / "secubox-uboot-env.scr"
 LIGNE_FIX = "fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}"
-BOOTCMD = "setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}"
+BOOTCMD = "setenv ethact mvpp2-2; setenv ipaddr 169.254.10.1; setenv netmask 255.255.0.0; ping 169.254.10.2; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}"
 ADRESSES_3091 = {"kernel_addr_r": 0x08000000, "fdt_addr_r": 0x0c000000, "ramdisk_addr_r": 0x0c100000}
 RESERVE = (0x04000000, 0x05400000)          # PSCI + TEE vus dans les traces du noyau (0x04000000-0x053fffff)
 
@@ -174,8 +174,10 @@ def test_fix_bootcmd_active_le_port_wan_avant_de_charger_le_systeme():
     """Démarré de l'eMMC sans que U-Boot ait touché le port WAN cuivre, Linux n'a pas de réseau."""
     ins = _instructions()
     assert "setenv ethact mvpp2-2" in ins and "setenv autoload no" in ins       # dhcp sans tentative TFTP
-    assert BOOTCMD.index("setenv ethact mvpp2-2") < BOOTCMD.index("dhcp;") < BOOTCMD.index("fatload mmc 0:1")
-    assert "dhcp;" in BOOTCMD and "dhcp &&" not in BOOTCMD                      # un DHCP raté n'arrête pas le démarrage
+    # Le port WAN est touché par un ping local (2026-11-01) : sans câble, dhcp bloquait le démarrage (~129 BOOTP).
+    assert BOOTCMD.index("setenv ethact mvpp2-2") < BOOTCMD.index("ping 169.254.10.2;") < BOOTCMD.index("fatload mmc 0:1")
+    assert "ping 169.254.10.2;" in BOOTCMD and "ping 169.254.10.2 &&" not in BOOTCMD   # un ping raté n'arrête pas le démarrage
+    assert "dhcp" not in BOOTCMD
 
 
 @pytest.mark.parametrize("cle,valeur", ADRESSES_3091.items())

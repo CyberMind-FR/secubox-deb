@@ -6,8 +6,8 @@
 
 Faits du banc (MOCHAbin, U-Boot Marvell 2018.03 d'usine, 2026-10-29) : loadaddr=0x6000000, pas de scriptaddr,
 ethact=mvpp2-0 (SFP+) ; WAN cuivre = mvpp2-2 ; adresses sûres #3091 (noyau 0x08000000, fdt 0x0c000000,
-ramdisk 0x0c100000) ; séquence qui démarre l'eMMC : setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1
-${loadaddr} boot.scr; source ${loadaddr}, adresses et autoload=no posés avant le dhcp.
+ramdisk 0x0c100000) ; séquence qui démarre l'eMMC : setenv ethact mvpp2-2; ping local 169.254.10.2 (touche le WAN sans BOOTP,
+2026-11-01) ; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}, adresses et autoload=no posés avant.
 
 Les valeurs attendues sont écrites ici en dur : elles ne sont pas relues du générateur qu'elles vérifient."""
 import importlib.machinery
@@ -34,7 +34,7 @@ ATTENDU = {
     "mochabin": {
         "titre": "MOCHAbin", "ethact": "mvpp2-2", "nom": "mochabin-live",
         "adresses": {"kernel_addr_r": "0x08000000", "fdt_addr_r": "0x0c000000", "ramdisk_addr_r": "0x0c100000"},
-        "bootcmd": "setenv ethact mvpp2-2; dhcp; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}",
+        "bootcmd": "setenv ethact mvpp2-2; setenv ipaddr 169.254.10.1; setenv netmask 255.255.0.0; ping 169.254.10.2; mmc dev 0; fatload mmc 0:1 ${loadaddr} boot.scr; source ${loadaddr}",
         "usb": "usb start; fatload usb 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}",
         "installe": "mmc dev 0; fatload mmc 0:1 ${loadaddr} secubox-uboot-env.scr; source ${loadaddr}",
     },
@@ -103,14 +103,22 @@ def test_le_cmd_pose_adresses_wan_autoload_et_bootcmd_du_support_installe(carte)
     assert setenv(t, "bootcmd") == a["bootcmd"]
 
 
-def test_la_mochabin_pose_adresses_et_autoload_avant_le_dhcp_du_bootcmd():
+def test_la_mochabin_pose_adresses_et_autoload_avant_le_ping_du_bootcmd():
     t = cmd_de("mochabin")
     lignes = corps(t)
     i_bootcmd = next(i for i, x in enumerate(lignes) if x.startswith("setenv bootcmd '"))
     for k in ("kernel_addr_r", "fdt_addr_r", "ramdisk_addr_r", "ethact", "autoload"):
         assert next(i for i, x in enumerate(lignes) if x.startswith(f"setenv {k} ")) < i_bootcmd, k
     b = setenv(t, "bootcmd")
-    assert b.index("setenv ethact mvpp2-2") < b.index("dhcp") < b.index("fatload mmc 0:1")
+    assert b.index("setenv ethact mvpp2-2") < b.index("ping 169.254.10.2") < b.index("fatload mmc 0:1")
+
+
+def test_le_bootcmd_mochabin_ne_lance_jamais_de_bootp():
+    """2026-11-01, banc gk6 : `dhcp` dans le bootcmd enchaînait ~129 BOOTP sans câble et bloquait le démarrage hors
+    réseau. Le port WAN est touché par un `ping` local (échec en quelques secondes), jamais par dhcp/bootp/pxe."""
+    b = setenv(cmd_de("mochabin"), "bootcmd")
+    for interdit in ("dhcp", "bootp", "pxe", "tftp"):
+        assert interdit not in b, interdit
 
 
 @pytest.mark.parametrize("carte", CARTES)
