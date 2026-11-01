@@ -61,16 +61,14 @@ corriger_profil(etat: dict, mac: str, type_: str | None, maintenant: int) -> dic
 1. Rien si `schema == 2` (idempotent) ou fichier absent.
 2. Copie octet pour octet en `etat.json.avant-3374` (`O_EXCL|O_NOFOLLOW`, 0640), **une seule fois**.
 3. Regroupement des `clients` par MAC. Les clients sans MAC restent tels quels, sans entrée `appareils`.
-4. **Règle de fusion du mode** : pour une MAC, le mode le plus fréquent parmi ses adresses ; en cas
-   d'égalité, celui de l'entrée la plus récente (`ajoute` le plus grand ; à égalité, la dernière de la
-   liste). Choix : le mode majoritaire est celui que l'administrateur ou le moteur a voulu le plus
-   souvent ; le « plus protecteur » imposerait `block` (hors puits de production) sur un appareil
-   que personne n'a déclaré ainsi. Toutes les adresses de la MAC prennent ce mode.
-5. Le `nom` de l'appareil = celui de l'entrée élue. Les `nom` des clients ne sont **pas** renommés
-   (vue Unbound et règles sont indexées par `_slug(nom)`).
-6. L'état produit est revalidé ; s'il est refusé (p. ex. réglage `puits` divergent pour un même nom
-   une fois tout en auto), on garde les modes d'origine et on n'ajoute que `schema` et `appareils`.
-7. Écriture atomique (`ecrire_etat`). Si des modes ont changé, le moteur auto demande l'application.
+4. **Aucun mode n'est modifié** (décision du contrôleur, revue du lot 1) : la migration n'ajoute que
+   `schema` et `appareils`, elle n'a donc aucun effet DNS. Les modes divergents d'une même MAC sont
+   signalés (`modes_divergents` dans le rapport et dans la vue, qui affiche le mode le plus strict :
+   block > auto > observe > off).
+5. Le nom affiché vient de `clients` (entrée la plus récente) : un renommage s'y voit aussitôt.
+6. Routes de lecture : aucun verrou si l'état est déjà v2 ; sinon verrou commun pris sans attendre,
+   migration différée s'il est occupé. `POST …/profil` répond 409 tant que l'état est v1.
+7. Sauvegarde : brouillon `O_EXCL`, écriture complète, `fsync`, puis `link` (jamais d'écrasement).
 
 ## Source NAC choisie
 
