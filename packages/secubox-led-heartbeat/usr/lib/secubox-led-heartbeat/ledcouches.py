@@ -589,7 +589,9 @@ def charger_config(chemin, exiger_root=False) -> Config:
         if not isinstance(typ, str) or typ not in TYPES_SOURCE:
             log.warning("sources.%s : type %r inconnu, ignorée", nom, typ)
             continue
-        if not _seuils_valides(opts.get("seuils")):
+        if typ == "flux":                           # niveau déjà calculé : pas de seuils
+            opts.setdefault("seuils", [1, 2, 3])
+        elif not _seuils_valides(opts.get("seuils")):
             defaut = SOURCES_DEFAUT.get(nom, {}).get("seuils", [1, 2, 3])
             log.warning("sources.%s : seuils %r invalides -> %s", nom, opts.get("seuils"), defaut)
             opts["seuils"] = defaut

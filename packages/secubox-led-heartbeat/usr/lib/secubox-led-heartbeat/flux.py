@@ -14,11 +14,13 @@ Le niveau est évalué AVANT l'observation du même relevé (contrat de Referenc
 La référence est sauvée au démarrage, toutes les 15 min et à l'arrêt (SIGTERM).
 """
 import json
+import math
 import os
 import signal
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
 
 from reference import Reference
@@ -30,6 +32,8 @@ DELAI_NFT_S = 5.0
 NFT = "/usr/sbin/nft"
 CHEMIN_FLUX = Path("/run/secubox-leds/flux.json")
 CHEMIN_REF = Path("/var/lib/secubox-leds/reference.json")
+CHEMIN_CONFIG = Path("/etc/secubox/leds.toml")
+LIMITE_CONFIG = 1024 * 1024
 LIMITE_REF = 16 * 1024 * 1024
 LIMITE_NFT = 1024 * 1024  # sortie de nft au-delà : relevé ignoré
 
@@ -56,6 +60,43 @@ def plancher(planchers, cle):
     if p is None:
         p = PLANCHERS_DEFAUT.get(cle, PLANCHER_JAUGE)
     return float(p)
+
+
+def lire_planchers(chemin=CHEMIN_CONFIG):
+    """Planchers de dispersion de [flux.planchers] dans leds.toml (ref #3361).
+
+    Les défauts de PLANCHERS_DEFAUT, surchargés clé par clé. Lecture tolérante : fichier
+    absent ou illisible, table absente, valeur non numérique, booléenne, non finie ou
+    <= 0 : le défaut s'applique (message sur stderr), le collecteur démarre toujours.
+    """
+    planchers = dict(PLANCHERS_DEFAUT)
+    try:
+        with open(chemin, "rb") as f:
+            brut = f.read(LIMITE_CONFIG + 1)
+        if len(brut) > LIMITE_CONFIG:
+            raise ValueError("trop gros")
+        table = tomllib.loads(brut.decode("utf-8")).get("flux", {})
+    except FileNotFoundError:
+        return planchers
+    except (OSError, ValueError, RecursionError) as e:  # TOMLDecodeError et UnicodeError en sont
+        print(f"secubox-led-flux : {chemin} illisible, planchers par défaut ({e})", file=sys.stderr)
+        return planchers
+    table = table.get("planchers") if isinstance(table, dict) else None
+    if table is None:
+        return planchers
+    if not isinstance(table, dict):
+        print("secubox-led-flux : flux.planchers n'est pas une table, planchers par défaut",
+              file=sys.stderr)
+        return planchers
+    for cle, v in table.items():
+        ok = (isinstance(v, (int, float)) and not isinstance(v, bool)
+              and math.isfinite(v) and v > 0)
+        if ok:
+            planchers[cle] = float(v)
+        else:
+            print(f"secubox-led-flux : flux.planchers.{cle} = {v!r} invalide, défaut "
+                  f"{planchers.get(cle, PLANCHER_JAUGE)}", file=sys.stderr)
+    return planchers
 
 
 def pas_de_collecte(ref, prec, valeurs, t, planchers):
@@ -143,11 +184,13 @@ class Collecteur:
     """État du collecteur : référence, derniers compteurs, échéance de sauvegarde."""
 
     def __init__(self, chemin_flux=CHEMIN_FLUX, chemin_ref=CHEMIN_REF, lire=None, nft=lire_nft,
-                 planchers=None):
+                 planchers=None, chemin_config=CHEMIN_CONFIG):
         self.chemin_flux = Path(chemin_flux)
         self.chemin_ref = Path(chemin_ref)
         self.lire = lire or _releves.releves
         self.nft = nft
+        self.chemin_config = Path(chemin_config)
+        self.planchers_fournis = planchers is not None
         self.planchers = dict(planchers or {})
         self.ref = Reference()
         self.prec = {}
@@ -160,6 +203,8 @@ class Collecteur:
             print(f"secubox-led-flux : référence non sauvée ({e})", file=sys.stderr)
 
     def demarrer(self, t):
+        if not self.planchers_fournis:
+            self.planchers = lire_planchers(self.chemin_config)
         self.ref = charger_reference(self.chemin_ref)
         self.sauver_reference(t)
         self.prochaine_sauvegarde = t + SAUVEGARDE_S

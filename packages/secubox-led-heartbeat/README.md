@@ -9,7 +9,7 @@ Displays system health, security status, and resource usage via the IS31FL3199 I
 
 Depuis 2.3.0, l'affichage est un moteur en couches (`secubox-led-pulse`), voir plus bas.
 
-Paquet Debian : version `2.3.3-1~trixie1`, architecture `all`.
+Paquet Debian : version `2.4.0-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -100,9 +100,28 @@ Niveau 4 « critique » (#3361) : une alerte SOC critique non acquittée s'affic
 passe seule à l'écran en éclats jusqu'au retour sous 4, y compris avec une palette personnalisée de
 4 entrées (le rouge y est ajouté en 5ᵉ).
 
-Défaut livré : couche `systeme` (CPU, mémoire, E/S ; vert → jaune → orange → rouge ;
-respiration ; 8 s) puis couche `trafic` (attaques, visites, alertes ; cyan → bleu → violet →
-rose ; pulsations ; 8 s).
+Défaut livré (2.4.0, #3361) : **8 séquences** de 8 s, dans l'ordre `systeme` (CPU, mémoire, E/S ;
+vert → jaune → orange → rouge), `reseau` (octets entrants, sortants, connexions), `firewall` (paquets
+entrants, sortants, bloqués), `waf` (requêtes, blocages, attaques), `actor` (événements, suspects,
+critiques), `adguard` (requêtes, trackers, appareils), `services` (actifs, dégradés, arrêtés), `soc`
+(alertes non acquittées, une mesure sur les 3 LED en forme `triple`). Les six couches `flux`
+sont des `par_led` ; toutes les nouvelles couches respirent, palette vert / cyan / jaune / orange / rouge (niveaux
+0 à 4) ; le violet est réservé à l'apprentissage.
+
+### Collecteur et seuils relatifs
+
+`secubox-led-flux` (compte `secubox-leds`, `Nice=19`, AppArmor enforce, seule capacité `CAP_NET_ADMIN`
+pour lire les compteurs nftables `sbx_drop_*`) relève les mesures toutes les 10 s et publie
+`/run/secubox-leds/flux.json`. Les sources `flux` de `leds.toml` (`cle = "reseau.octets_in"`, …) en
+lisent le niveau. Les seuils sont **relatifs et évolutifs** : chaque mesure est comparée à une
+référence propre à la box (168 tranches horaires de la semaine, moyenne exponentielle à demi-vie de
+7 jours, tendance d'1 heure, apprentissage de 24 h en violet) : écart réduit < 1 normal (vert), < 2
+activité (cyan), < 3 attention (jaune), au-delà dégradation (orange). Le niveau 4 (rouge) est
+**absolu** (service arrêté, événement Actor critique). Le dénominateur ne descend jamais sous un
+plancher : `[flux.planchers]` de `leds.toml` (lu au démarrage du collecteur ; valeur non numérique ou
+≤ 0 : défaut et message dans le journal). Rotation adaptative : durée × (1 + niveau max), plafond
+24 s ; une séquence au niveau 4 passe seule à l'écran (rappel toutes les 30 s si plusieurs).
+`leds.toml` est un conffile : une configuration locale est conservée à la mise à jour.
 
 ### Sources (locales, lecture seule, sans réseau ni secret)
 
@@ -111,8 +130,8 @@ rose ; pulsations ; 8 s).
 | `cpu` | `cpu` | `/proc/stat` (delta, hors idle et iowait) | 50 / 75 / 90 % |
 | `memoire` | `memoire` | `/proc/meminfo` (100 − MemAvailable/MemTotal) | 60 / 80 / 92 % |
 | `es` | `iowait` | `/proc/stat` (part iowait) | 5 / 15 / 30 % |
-| `attaques` | `compteur_json` | `/var/cache/secubox/metrics-cache.json`, `waf.waf_blocked` (débit par minute) | 1 / 10 / 60 par min |
-| `visites` | `jauge_json` | même cache, `connections.https` (connexions établies) | 1 / 20 / 100 |
+| `attaques` | `compteur_json` | `/var/cache/secubox/metrics-cache.json`, `waf.waf_blocked` (débit par minute), plus utilisée par défaut | 1 / 10 / 60 par min |
+| `visites` | `jauge_json` | même cache, `connections.https` (connexions établies), plus utilisée par défaut | 1 / 20 / 100 |
 | `alertes` | `alertes_json` | `/var/lib/secubox/soc/alerts.json` (non acquittées ; une critique = 4) | 1 / 3 / 10 |
 
 Le cache `metrics-cache.json` est rafraîchi par `secubox-metrics` (30 s) ; au-delà de
@@ -158,7 +177,7 @@ Unité sans capacité, profil AppArmor enforce ; exception root écrite dans `RU
 secubox-led verifier                         # valide leds.toml, affiche les niveaux courants
 secubox-led demo <forme> [--duree 20]        # niveaux 0, 1, 2, 3 puis inconnu, chacun duree/5
 secubox-led demo triple --niveau 2 --rythme respiration
-secubox-led demo systeme|trafic|toutes       # couches réelles de leds.toml
+secubox-led demo systeme|reseau|firewall|waf|actor|adguard|services|soc|toutes       # couches réelles de leds.toml
 secubox-led-pulse demo rotatif --simule      # sans matériel : écritures sur la sortie
 ```
 
