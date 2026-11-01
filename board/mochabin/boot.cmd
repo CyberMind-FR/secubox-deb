@@ -21,13 +21,12 @@ setenv ramdisk_addr_r 0x0c100000
 
 echo "Boot: ${bootpart} | Root: ${rootpart}"
 
-# Try LED kernel first, fall back to standard
+# Noyau Debian courant : /boot/Image et /boot/initrd.img sont tenus à jour par
+# /etc/initramfs/post-update.d/zz-secubox-boot-image (FAT, pas de liens, #3271).
+# L'ancienne branche Image-secubox-led (noyau 6.12.85 sur mesure) est retirée.
 echo "Loading kernel..."
-if load ${bootpart} ${kernel_addr_r} Image-secubox-led; then
-    echo "LED kernel loaded"
-    setenv initrd_file "initrd.img-6.12.85+deb12-arm64"
-elif load ${bootpart} ${kernel_addr_r} Image; then
-    echo "Standard kernel loaded"
+if load ${bootpart} ${kernel_addr_r} Image; then
+    echo "Kernel loaded (Image)"
     setenv initrd_file "initrd.img"
 else
     echo "ERROR: No kernel found!"

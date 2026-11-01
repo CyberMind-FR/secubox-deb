@@ -1,0 +1,43 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox MOCHAbin — boot.scr charge des noms FIXES (/boot/Image, /boot/initrd.img) ;
+# /boot est en FAT (pas de liens). Sans ce hook, un nouveau noyau Debian s'installe
+# mais n'est jamais démarré (gk6 restait sur 6.12.107 avec 6.12.113 installé, #3271).
+#
+# Appelé par update-initramfs après chaque initrd : $1 = version, $2 = chemin de l'initrd.
+# Ne recopie QUE le noyau le plus récent installé, et seulement s'il tient dans /boot.
+# Variables de test : SECUBOX_BOOT_DIR (défaut /boot).
+set -eu
+VERSION="${1:-}"
+INITRD="${2:-}"
+BOOT="${SECUBOX_BOOT_DIR:-/boot}"
+[ -n "$VERSION" ] && [ -n "$INITRD" ] || exit 0
+[ -f "$BOOT/vmlinuz-$VERSION" ] && [ -f "$INITRD" ] || exit 0
+
+# Le plus récent des noyaux présents dans /boot (tri de versions).
+PLUS_RECENT=$(for f in "$BOOT"/vmlinuz-*; do [ -f "$f" ] && echo "${f#"$BOOT"/vmlinuz-}"; done | sort -V | tail -1)
+if [ "$VERSION" != "$PLUS_RECENT" ]; then
+    echo "secubox-boot-image : $VERSION n'est pas le plus récent ($PLUS_RECENT), Image inchangée"
+    exit 0
+fi
+
+besoin=$(( $(stat -c %s "$BOOT/vmlinuz-$VERSION") + $(stat -c %s "$INITRD") ))
+deja=0
+for f in "$BOOT/Image" "$BOOT/initrd.img"; do
+    [ -f "$f" ] && deja=$(( deja + $(stat -c %s "$f") ))
+done
+libre=$(( $(df -B1 --output=avail "$BOOT" | tail -1) + deja ))
+if [ "$besoin" -gt "$libre" ]; then
+    echo "secubox-boot-image : /boot trop petit ($besoin octets requis, $libre disponibles) — Image inchangée" >&2
+    exit 0
+fi
+
+# Remplacement en place (FAT, place limitée) ; sync avant de rendre la main.
+cat "$BOOT/vmlinuz-$VERSION" > "$BOOT/Image"
+cat "$INITRD" > "$BOOT/initrd.img"
+sync
+echo "secubox-boot-image : /boot/Image et /boot/initrd.img = $VERSION"
