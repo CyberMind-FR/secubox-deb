@@ -17,3 +17,24 @@ FAMILLE_LED = ("leds", "led-pulse", "led-flux", "led-nft", "led-heartbeat", "led
 def test_famille_led_toujours_active():
     for module in FAMILLE_LED:
         assert POLITIQUE.get(module) == "always-on", module
+
+
+def test_postinst_migre_les_manifestes_led(tmp_path):
+    """Un manifeste existant fait autorité (scan n'écrase pas sans --force) : le postinst
+    passe les seuls manifestes LED encore on-demand en always-on, sans toucher aux autres."""
+    import subprocess
+    d = tmp_path / "modules.d"
+    d.mkdir()
+    for m in ("led-pulse", "leds"):
+        (d / f"{m}.toml").write_text(f'id = "{m}"\nlifecycle = "on-demand"\n')
+    (d / "jellyfin.toml").write_text('id = "jellyfin"\nlifecycle = "on-demand"\n')
+    (d / "led-trigger.toml").write_text('id = "led-trigger"\nlifecycle = "never"\n')
+    script = (PKG / "debian" / "postinst").read_text()
+    debut = script.index("# --- migration LED always-on (#3366)")
+    fin = script.index("# --- fin migration LED", debut)
+    bloc = script[debut:fin]
+    subprocess.run(["bash", "-c", f'MODULES_D="{d}"\n{bloc}'], check=True)
+    assert 'lifecycle = "always-on"' in (d / "led-pulse.toml").read_text()
+    assert 'lifecycle = "always-on"' in (d / "leds.toml").read_text()
+    assert 'lifecycle = "on-demand"' in (d / "jellyfin.toml").read_text()
+    assert 'lifecycle = "never"' in (d / "led-trigger.toml").read_text()
