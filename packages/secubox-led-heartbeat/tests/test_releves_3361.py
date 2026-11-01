@@ -4,6 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """Relevés bruts du collecteur de la LED de supervision (ref #3361)."""
 import json
+import os
+import pwd
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -230,3 +232,23 @@ def test_requete_trackers_indexee(racine):
     base.close()
     assert "SCAN detections" not in plan and "idx_detections_time" in plan
     assert releves.releves(racine)["adguard.trackers"] == 2.0
+
+
+def test_lecture_par_blocs_bornes(tmp_path, monkeypatch):
+    """#3361 : un fichier de /proc/sys refuse os.read d'un seul tenant de 4 Mio (ENOMEM) ;
+    la lecture se fait par blocs de BLOC_LECTURE octets au plus."""
+    f = tmp_path / "nf_conntrack_count"
+    f.write_text("5251\n")
+    vrai_read = os.read
+    demandes = []
+
+    def read_borne(fd, n):
+        demandes.append(n)
+        if n > 65536:
+            raise OSError(12, "Cannot allocate memory")
+        return vrai_read(fd, n)
+
+    monkeypatch.setattr(releves.os, "read", read_borne)
+    moi = pwd.getpwuid(os.getuid()).pw_name
+    assert releves._lire(f, (moi,)) == b"5251\n"
+    assert max(demandes) <= releves.BLOC_LECTURE

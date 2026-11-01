@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 LIMITE_JSON = 4 * 1024 * 1024  # 4 Mio
+BLOC_LECTURE = 64 * 1024            # taille d'un os.read (compatible /proc/sys)
 DELAI_SQLITE_S = 1.0
 PREFIXE_NFT = "sbx_drop_"
 FRAICHEUR_NFT_S = 60.0
@@ -85,13 +86,16 @@ def _lire(chemin: Path, proprietaires, fraicheur_max=None):
             return None
         if fraicheur_max is not None and not (time.time() - st.st_mtime <= fraicheur_max):
             return None
-        brut = os.read(fd, LIMITE_JSON + 1)
-        while 0 < len(brut) <= LIMITE_JSON:
-            suite = os.read(fd, LIMITE_JSON + 1 - len(brut))
+        # Par blocs : /proc/sys alloue un tampon noyau de la taille demandée et
+        # refuse un os.read de 4 Mio (ENOMEM), d'où reseau.connexions absent (#3361).
+        morceaux, total = [], 0
+        while total <= LIMITE_JSON:
+            suite = os.read(fd, min(BLOC_LECTURE, LIMITE_JSON + 1 - total))
             if not suite:
                 break
-            brut += suite
-        return brut if len(brut) <= LIMITE_JSON else None
+            morceaux.append(suite)
+            total += len(suite)
+        return b"".join(morceaux) if total <= LIMITE_JSON else None
     except OSError:
         return None
     finally:
