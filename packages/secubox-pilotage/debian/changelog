@@ -1,3 +1,12 @@
+secubox-pilotage (0.6.18-1~trixie1) trixie; urgency=medium
+
+  * Profil AppArmor : la projection Auto-Load se lit sous
+    /var/lib/secubox-autoload-public (le code, l unite .path et secubox-autoload
+    l'utilisent depuis 0.6.16) ; le profil gardait l ancien chemin sous
+    /var/lib/secubox et aurait refuse la lecture en enforce (ref #3313, #3345).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 08:32:30 +0100
+
 secubox-pilotage (0.6.17-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

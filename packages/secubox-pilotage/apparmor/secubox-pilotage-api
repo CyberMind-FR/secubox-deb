@@ -38,8 +38,8 @@
   # Jamais /var/lib/secubox/p2p/ (0700 secubox : jetons de jonction ; défaut du banc gk2, #3126).
   /var/lib/secubox/p2p-public/ r,
   /var/lib/secubox/p2p-public/pairs-enroles.json r,
-  /var/lib/secubox/autoload-public/ r,
-  /var/lib/secubox/autoload-public/pairs-publics.json r,
+  /var/lib/secubox-autoload-public/ r,
+  /var/lib/secubox-autoload-public/pairs-publics.json r,
 
   # Données du module : base SQLite en WAL (verrous, fichier -shm projeté en mémoire, d'où k et m).
   /var/lib/secubox/pilotage/ r,
