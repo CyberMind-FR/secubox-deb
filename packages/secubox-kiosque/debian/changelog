@@ -2,7 +2,8 @@ secubox-kiosque (0.3.0-1~trixie1) trixie; urgency=medium
 
   * Écran Sécurité : carte « Ça ne marche plus ? Je débloque » (SBX TV
     Privacy) : choix de la TV par son nom ou « toutes les TV », pause de
-    15 min, 1 h ou 4 h, ou retour en observation, avec retour visuel ;
+    15 min, 1 h, 4 h ou 24 h au plus (jamais d'observation sans échéance),
+    avec retour visuel ;
     route d'usager bornée d'ad-guard (require_personne, débit limité),
     message honnête sur les pubs insérées dans la vidéo (ref #3374).
 

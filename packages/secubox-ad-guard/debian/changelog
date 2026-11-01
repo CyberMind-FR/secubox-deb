@@ -21,6 +21,14 @@ secubox-ad-guard (1.20.0-1~trixie1) trixie; urgency=medium
   * Page /tv-privacy/ dans la coque de l'administration (menu latéral), vues
     Protection et Diagnostic, message honnête sur les pubs insérées dans la
     vidéo (ref #3374).
+  * Passe 2 après relectures : gestes audités dans audit.log par le verbe
+    root borné audit-protection (origine, acteur, périmètre) ; « Je débloque »
+    limité à une pause de 24 h au plus ; ni adresse ni acteur pour le lecteur
+    délégué ; exceptions efficaces en AUTO comme en PROTECT (vue propre),
+    écrites avant l'application et restaurées en cas d'échec, plafond en
+    409, force pour une catégorie protégée ; défaut AUTO posé par le postinst
+    à la seule première installation ; « nouveaux » masqué sous un jour ;
+    ménage du cache (ref #3374).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 12:00:00 +0100
 

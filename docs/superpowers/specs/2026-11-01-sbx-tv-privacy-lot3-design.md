@@ -137,6 +137,37 @@ Carte « Ça ne marche plus ? Je débloque » dans l'écran Sécurité : choix d
 pause 15 min / 1 h / 4 h ou « repasser en observation », retour visuel (« protection en pause pour TV salon
 pendant 1 h »), message honnête. Garde utilisateur bornée côté API.
 
+## Passe 2 (après relectures)
+
+- **Audit (S2)** : chaque geste (pause, observe, reprise, exception) passe AVANT toute écriture par le verbe root borné
+  `secubox-adguard-tv audit-protection` (JSON sur l'entrée standard : `acteur`, `origine` usager|admin|auto, `geste`, `cibles`,
+  `minutes`, `domaine`, `type`, revalidés par root ; sudoers étendu). Un audit impossible refuse le geste (502). La reprise
+  automatique est auditée au mieux (acteur « moteur ») : elle rétablit la protection et n'est jamais bloquée par l'audit.
+- **Je débloque (S3, décision du propriétaire)** : l'usager ne fait qu'une PAUSE de 24 h au plus (15 min, 1 h, 4 h, 24 h), reprise
+  automatique. Le retour en OBSERVE sans échéance est réservé à l'administrateur (onglet Protection).
+- **Lecteur délégué (S1)** : `/protection/evenements` et `/protection/diagnostic` ne rendent ni l'adresse du client ni le motif
+  (qui nomme l'acteur) à un lecteur qui n'est pas administrateur réel.
+- **Exceptions (S4, I1)** : `exceptions.json` est écrit avant l'application et restauré si elle échoue. Une exception a un effet en
+  AUTO comme en PROTECT, selon le mode EFFECTIF (pause comprise) : en PROTECT, l'appareil reçoit une vue propre
+  `sbx-tv-block-<slug>` où « autoriser » prime sur la liste livrée (zone transparente) et « bloquer » ajoute une zone NXDOMAIN ;
+  les appareils PROTECT sans exception gardent la vue commune. OBSERVE sans pause : « bloquer » est refusé (422, aucun effet) ;
+  OFF : refusé. Plafond d'autorisations : 409 explicite. Bloquer une catégorie protégée autre qu'INCONNU exige `force`.
+- **Première installation (I2)** : le postinst (`configure`, `$2` vide, aucun `etat.json`) pose l'état initial (AUTO, ajout
+  automatique selon `ajout_auto_initial`) ; un état absent ne l'active jamais ; une mise à niveau ne change rien.
+- **« Nouveaux » (I3)** : non calculé (None) pour 1 h et 24 h, la première vue étant au jour UTC.
+- Mineurs : cache SQLite corrompu = `cache: false` ; ménage des temporaires orphelins et de l'ancien JSON à chaque passage du
+  moteur (et par le postinst) ; un changement de mode oublie la pause ; `.a-appliquer` posé à la reprise avant la réécriture des
+  pauses ; `sub` absent = 403 ; le débit ne décompte que les gestes appliqués.
+
+### Reportés
+
+- M1 : les données anciennes à suffixe `.home` de `dnstv_counts` restent des domaines distincts dans le cache de l'analyseur (les
+  nouvelles sont rattachées à l'ingestion ; elles disparaissent avec la rétention de 30 jours).
+- M2 : journal, un pas peut manquer quand l'historique d'une règle est saturé (10) et qu'une transition tombe à la même seconde.
+- M7 : sans objet depuis I2 (le TOML n'est plus lu par `lire_etat`, seulement par le postinst).
+- Doute 4 : la liste d'usager montre tout le périmètre hors `off` (enceinte comprise) ; filtrer par profil TV plus tard.
+- Doute 5 : kiosque sans ad-guard : masquer la carte si `/protection/usager/tv` répond 404.
+
 ## Versions
 
 `secubox-ad-guard` 1.20.0-1~trixie1 ; `secubox-kiosque` 0.3.0-1~trixie1.

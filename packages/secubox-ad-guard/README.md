@@ -204,8 +204,8 @@ Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot3-design.md`. 
 les pubs que la TV va chercher, pas celles qu'un service insère dans sa propre vidéo ».
 
 - **Modes** : `OBSERVE`, `PROTECT` (l'ancien `block`), `AUTO`, `OFF`. `POST /adblock-tv/mode` et `/clients` acceptent `protect`
-  (toute casse) et `block` ; le stockage garde `block` (aucune migration) ; les réponses ajoutent `mode_nom`. Nouvelle installation
-  (aucun `etat.json`) : `mode_defaut = auto` et `ajout_auto` pris dans `[adblock_tv] ajout_auto_initial` (vrai dans le TOML livré).
+  (toute casse) et `block` ; le stockage garde `block` (aucune migration) ; les réponses ajoutent `mode_nom`. Première installation
+  seulement (postinst `configure` sans version précédente, aucun `etat.json`) : l'état initial est posé avec `mode_defaut = auto` et `ajout_auto` pris dans `[adblock_tv] ajout_auto_initial` (vrai dans le TOML livré) ; un état absent ne l'active jamais.
 - **Suffixe de recherche** : `x.doubleclick.net.home` (ou `.lan`, `.localdomain`) est ramené au domaine réel à l'ingestion, à la
   classification et dans les agrégats. Référence : `license.oqee.net` DRM ; `api.oqee.net`, `img1/img2.oqee.net`,
   `stream.proxad.net` STREAMING (mesure gk2 2026-11-01). Une correction de catégorie qui couvrirait une entrée protégée de
@@ -226,9 +226,14 @@ les pubs que la TV va chercher, pas celles qu'un service insère dans sa propre 
 | `GET /adblock-tv/protection/journal.csv` | `require_jwt` | export CSV du journal |
 | `GET /adblock-tv/protection/diagnostic` | `require_lecture_nominative` | erreurs DNS 24 h agrégées, exceptions, pauses, retours arrière 7 j, modes |
 | `GET /adblock-tv/protection/usager/tv` | **`require_personne`** | liste minimale des TV du périmètre : `id`, `nom`, `protege`, `pause_jusqu_a` (ni MAC, ni adresse, ni domaine) |
-| `POST /adblock-tv/protection/usager/debloquer` | **`require_personne`** | `{tv: id\|"toutes", geste: pause\|observe, minutes}` (`extra=forbid`) : seulement relâcher ; 5 gestes / 10 min par porteur, 20 pour la box (429) ; journal `origine=usager` |
+| `POST /adblock-tv/protection/usager/debloquer` | **`require_personne`** | `{tv: id\|"toutes", geste: "pause", minutes: 15\|60\|240\|1440}` (`extra=forbid`) : une PAUSE de 24 h au plus, reprise automatique ; jamais d'observation sans échéance (réservée à l'administrateur) ; 5 gestes appliqués / 10 min par porteur, 20 pour la box (429) ; `sub` absent : 403 ; journal `origine=usager` |
 
-Chaque geste qui change un mode passe par `sudo secubox-adguard-tv apply` (audit des changements de mode dans `audit.log`) ou
+Chaque geste est d'abord écrit dans `audit.log` par `sudo secubox-adguard-tv audit-protection` (JSON sur l'entrée standard :
+acteur, origine usager|admin|auto, geste, appareils, durée, domaine, type ; revalidé par root ; un échec refuse le geste). Les
+exceptions valent en AUTO et en PROTECT (vue propre `sbx-tv-block-<appareil>` : « autoriser » prime sur la liste livrée,
+« bloquer » ajoute un NXDOMAIN) ; « bloquer » est refusé en OBSERVE (sans pause), le plafond d'autorisations rend 409, et
+bloquer une catégorie protégée autre qu'INCONNU exige `force`. Événements et diagnostic : ni adresse ni motif pour un lecteur
+qui n'est pas administrateur réel. Chaque geste qui change un mode passe ensuite par `sudo secubox-adguard-tv apply` (audit des changements de mode dans `audit.log`) ou
 `regles-appliquer` ; en cas d'échec, état, pauses et règles reviennent à leur version précédente. Écritures sous le verrou des
 règles, fichiers 0640 écrits atomiquement, liens symboliques refusés. Le journal se déduit de l'historique des règles (moteur
 et routes). Pilotage : les gestes administrateur sont ouverts au relais (`routes-ouvertes.d`), pas la route d'usager.
