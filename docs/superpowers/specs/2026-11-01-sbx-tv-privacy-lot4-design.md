@@ -382,3 +382,16 @@ Le paquet ne sait faire que « tout le LAN ». Trois pistes pour limiter aux TV,
    ou un port miroir (DPI seulement, sans forçage DNS) ? Cela décide si `secubox-pseudo-routeur` 0.2 est construit.
 2. **IPv6** : sur LAN plat, le forçage DNS ne couvre que l'IPv4 même en mode LAN. Faut-il, pour une TV du périmètre, proposer
    plus tard de couper son IPv6 (au prix de sa connectivité v6) ?
+
+## 13. Réalisation (2026-11-01) et écarts
+
+Livré dans le worktree #3374 : `secubox-ad-guard` 1.21.0, `secubox-toolbox-ng` 0.14.0 (sbxdpi), `secubox-ndpid-engine` 1.7.4. Rien déployé.
+
+- Écarts assumés : `POST /protection/dpi/perimetre` non construit (choix par défaut fixé : seules les TV, par MAC) ; un forçage refusé par
+  `nft -c` ou au chargement est audité et rendu (`contournement: refuse|retour`) **sans** faire échouer l'application du DNS (le filtrage DNS
+  prime) ; « nouveau » pour la corrélation = non demandé dans les 10 min précédant la coupure (pas 30 jours) ; les constats « sans DNS » se
+  fondent sur les réponses du cache d'Unbound de toute la maison (24 h), pas par appareil.
+- Le filtre par MAC restreint **toute** la capture de nDPId tant qu'ad-guard a des cibles : la carte DPI du Hall et `/ndpid/` ne voient plus
+  que les TV du périmètre. À trancher avec le propriétaire avant déploiement.
+- Option `-B` de nDPId (filtre BPF) : à vérifier sur la version compilée (1.7) avant déploiement.
+- `secubox-pseudo-routeur` 0.2 (`activer-transfert --tv-seulement`, § 10.3) : non construit, en attente de la question 1 du § 12.
