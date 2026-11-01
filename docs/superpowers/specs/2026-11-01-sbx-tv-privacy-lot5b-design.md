@@ -81,3 +81,23 @@ passés en essai ou confirmés sur 7 jours, sans détail par appareil ni domaine
 ## 8. Version
 
 `secubox-ad-guard` 1.22.0-1~trixie1.
+
+## Passe 2 (relectures du 2026-11-01)
+
+- **B1** : à l'ouverture (`depuis=0`, F5), `/protection/direct` rend les `limite` découvertes les PLUS RÉCENTES (remises dans l'ordre) ;
+  ensuite le curseur croissant. `etats` donne l'état courant des 200 plus récentes, pour mettre à jour les lignes déjà affichées (m3).
+- **I1** : API et moteur classent par la même fonction `dnstv_assistant.taxonomie()` (listes, référence, services, profil, corrections
+  manuelles, règles). Un domaine reclassé à la main en catégorie protégée exige `force` dès la route. Côté API, la taxonomie reste en cache
+  dans le processus et n'est rechargée que si la date ou la taille d'un fichier source change (m4).
+- **I2** : une découverte sans nom de domaine (`sans-dns`, `dns-chiffre`, `contournement`, adresse:port) propose « Vu / plus tard »
+  (`POST /protection/assistant/vu {mac, decouverte}`, audit `assistant` type `vu` sans domaine). Le moteur la marque `plus-tard`, sans
+  effet DNS. **Reporté** : « bloquer » et « légitime » par adresse, qui demandent un mécanisme nftables par appareil (autre lot).
+- **Arbitrage du pilotage délégué** : `^/adblock-tv/protection/assistant/(choix|annuler|guide)$` reste dans `routes-ouvertes.d`. Ce sont des
+  gestes d'administrateur relayés par le maître, cohérents avec le lot 3. Le compteur du kiosque n'y figure pas.
+- m1 : purge des entrées traitées avant de compter les plafonds ; un message distinct pour les actions en attente et pour les choix traités en 24 h.
+- m2 : rejeu après un arrêt du moteur entre exceptions et file. Une exception déjà présente dans le même sens est marquée `applique`, sans
+  être reposée ni journalisée deux fois.
+- `marquer_id` vérifie la MAC (et le domaine quand il est donné) ; un audit d'intention suivi d'un échec d'écriture de la file ajoute une
+  entrée `annule`.
+- m5 : le panneau « Candidats en attente de validation » ne montre que les appareils en apprentissage guidé.
+- m7 : « appareil inconnu (IPv6) » s'applique aussi au tableau des erreurs DNS du diagnostic.

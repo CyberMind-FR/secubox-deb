@@ -38,11 +38,13 @@ def _dec(i, domaine, **k):
     return d
 
 
-def _page(scenario, n_ev=1, client_ev=None, proteger=False, applique=None):
+def _page(scenario, n_ev=1, client_ev=None, proteger=False, applique=None, sans_domaine=False, etats=None, diag=None):
     """Page réelle, API simulée avec état : la file suit les POST (choix, annuler) ; `depuis` > 0 rend UNE nouvelle découverte, une fois."""
     premier = [_dec(2, "relais-pub.example.net"), _dec(1, "x.example.org", appareil=HOSTILE)]
     if applique:
         premier[0]["action"] = {"id": "a" * 16, "choix": "bloquer", "etat": "applique", "applique": applique, "raison": "", "force": False}
+    if sans_domaine:
+        premier.insert(0, _dec(4, "203.0.113.9:443", type="sans-dns", actionnable=False, vu_possible=True, vu=False, categorie="INCONNU"))
     nouveau = [_dec(3, "nouveau-pub.example.net", raison="apparu 3 s après le blocage de ads.example.com")]
     analyse = {"cache": True, "admin": True, "genere": 1761955200, "total": 0, "categories": ["PUBLICITE"], "protegees": [], "sources": [],
                "metriques": {"domaines": 1, "requetes": 5, "bloquees": 0, "part_bloquee": 0, "par_categorie": {"PUBLICITE": {"domaines": 1, "requetes": 5}}},
@@ -76,6 +78,8 @@ def _page(scenario, n_ev=1, client_ev=None, proteger=False, applique=None):
                              "force": corps.get("force", False), "etat": "en-attente", "applique": None, "raison": "", "cree": 1761955300}
                         file.append(x)
                         return route.fulfill(status=200, content_type="application/json", body=json.dumps(x))
+                    if u.endswith("/assistant/vu"):
+                        return route.fulfill(status=200, content_type="application/json", body=json.dumps({"decouverte": corps["decouverte"], "vu": True}))
                     if u.endswith("/assistant/annuler"):
                         file[:] = [x for x in file if x["id"] != corps["id"]]
                         return route.fulfill(status=200, content_type="application/json", body=json.dumps({"annule": corps["id"]}))
@@ -87,11 +91,14 @@ def _page(scenario, n_ev=1, client_ev=None, proteger=False, applique=None):
                     if depuis:
                         vu["nouveau"] = True
                     corps = {"decouvertes": dec, "dernier_id": max([d["id"] for d in dec] or [depuis]), "file": list(file), "candidats": [],
+                             "etats": (etats or {}) if depuis else {},
                              "appareils": [{"mac": MAC, "nom": "TV salon", "guide": False}], "genere": 1761955300}
                 elif "/protection/analyse" in u:
                     corps = analyse
                 elif "/protection/evenements" in u:
                     corps = evenements
+                elif "/protection/diagnostic" in u and diag:
+                    corps = diag
                 elif "/protection/" in u:
                     corps = {}
                 else:
@@ -223,4 +230,40 @@ def test_evenement_d_une_ipv6_brute_affiche_appareil_inconnu():
         c = pg.locator("#evenements tr >> nth=0 >> td >> nth=0")
         return c.inner_text(), c.get_attribute("title")
     (texte, titre), erreurs, _p, _g = _page(sc, client_ev="2a01:e0a:abc:1::1234")
+    assert texte == "appareil inconnu (IPv6)" and titre == "2a01:e0a:abc:1::1234" and not erreurs
+
+
+# ── passe 2 ──
+def test_i2_vu_plus_tard_pour_une_decouverte_sans_domaine():
+    def sc(pg, gets, posts):
+        _ouvrir(pg)
+        avant = pg.inner_text("#di-liste tr[data-id='4']")
+        pg.click("#di-liste tr[data-id='4'] >> text=Vu / plus tard")
+        pg.wait_for_timeout(300)
+        return avant, pg.inner_text("#di-liste tr[data-id='4']")
+    (avant, apres), erreurs, posts, _g = _page(sc, sans_domaine=True)
+    assert "Confirmer le blocage" not in avant and not erreurs
+    assert posts == [("/protection/assistant/vu", {"mac": MAC, "decouverte": 4})]
+    assert "vu" in apres and "Vu / plus tard" not in apres
+
+
+def test_m3_etat_d_une_decouverte_deja_affichee_mis_a_jour():
+    def sc(pg, gets, posts):
+        _ouvrir(pg)
+        pg.clock.run_for(16000)
+        pg.wait_for_timeout(300)
+        return pg.inner_text("#di-liste tr[data-id='1']")
+    t, erreurs, _p, _g = _page(sc, etats={"1": "legitime"})
+    assert "légitime" in t and "Confirmer le blocage" not in t and not erreurs
+
+
+def test_m7_erreurs_dns_du_diagnostic_sans_ipv6_brute():
+    def sc(pg, gets, posts):
+        pg.click("#t-diagnostic")
+        pg.wait_for_timeout(300)
+        c = pg.locator("#d-erreurs tr >> nth=0 >> td >> nth=0")
+        return c.inner_text(), c.get_attribute("title")
+    diag = {"erreurs_dns": [{"appareil": "2a01:e0a:abc:1::1234", "domaine": "api.example.net", "erreurs": 3, "dernier": 1761955000}],
+            "pauses": [], "exceptions": [], "retours_arriere": []}
+    (texte, titre), erreurs, _p, _g = _page(sc, diag=diag)
     assert texte == "appareil inconnu (IPv6)" and titre == "2a01:e0a:abc:1::1234" and not erreurs
