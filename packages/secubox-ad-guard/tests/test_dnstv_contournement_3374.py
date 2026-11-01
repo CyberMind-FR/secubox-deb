@@ -56,7 +56,8 @@ def test_suspensions_valides_et_expirees():
 def nft(monde, monkeypatch):  # noqa: F811
     t = monde["tmp"]
     s = t / "nft"
-    s.write_text(f"#!/bin/sh\necho \"nft $*\" >> {monde['journal']}\n[ -f {t}/nft-refuse ] && exit 1\nexit 0\n")
+    s.write_text(f"#!/bin/sh\necho \"nft $*\" >> {monde['journal']}\n[ -f {t}/nft-refuse ] && exit 1\n"
+                 f"case \"$*\" in *.nft.new*) [ -f {t}/nft-refuse-nouveau ] && exit 1;; esac\nexit 0\n")
     s.chmod(0o755)
     monkeypatch.setenv("SECUBOX_ADGUARD_TV_NFT", str(s))
     monkeypatch.setenv("SECUBOX_ADGUARD_TV_NFT_FICHIER", str(t / "nftables.d" / "zz-secubox-adguard-contournement.nft"))
@@ -87,7 +88,7 @@ def test_contrôle_refuse_garde_l_ancienne_version(nft):
     ctl(nft, "apply")
     f = nft["tmp"] / "nftables.d" / "zz-secubox-adguard-contournement.nft"
     avant = f.read_text()
-    (nft["tmp"] / "nft-refuse").touch()
+    (nft["tmp"] / "nft-refuse-nouveau").touch()                         # seul le nouveau jeu est refusé
     dnstv.ecrire_etat(etat("auto", "observe"), nft["etat"])
     assert ctl(nft, "apply") == 0                                       # le DNS est appliqué ; le forçage garde sa version précédente
     assert f.read_text() == avant
@@ -108,3 +109,23 @@ def test_disable_retire_la_table(nft):
     ctl(nft, "disable")
     assert "nft delete table inet secubox_adguard_contournement" in nft["journal"].read_text()
     assert not (nft["tmp"] / "nftables.d" / "zz-secubox-adguard-contournement.nft").exists()
+
+
+def test_m5_fichier_en_place_invalide_est_supprime(nft):
+    dnstv.ecrire_etat(etat(), nft["etat"])
+    ctl(nft, "apply")
+    f = nft["tmp"] / "nftables.d" / "zz-secubox-adguard-contournement.nft"
+    assert f.exists()
+    (nft["tmp"] / "nft-refuse").touch()                         # le noyau ne sait plus charger ce jeu (module absent…)
+    ctl(nft, "apply")                                            # même contenu : revalidé quand même
+    assert not f.exists()                                        # nftables.service ne doit jamais échouer au démarrage
+    a = (nft["tmp"] / "audit.log").read_text()
+    assert "contournement-invalide" in a
+
+
+def test_echec_du_retrait_de_table_audite(nft):
+    dnstv.ecrire_etat(etat(), nft["etat"])
+    ctl(nft, "apply")
+    (nft["tmp"] / "nft-refuse").touch()
+    ctl(nft, "disable")
+    assert "contournement-retrait-echec" in (nft["tmp"] / "audit.log").read_text()

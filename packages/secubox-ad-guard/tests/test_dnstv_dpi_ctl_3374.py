@@ -46,10 +46,6 @@ def test_conntrack_dump_ne_rend_que_le_perimetre_et_n_ecrit_rien(dpi, capsys):
     assert "192.168.1.50 dst=151.101.1.9" in out and "2a01:e0a::1" in out and "192.168.1.60" not in out
 
 
-def test_conntrack_absent_rend_vide(dpi, capsys):
-    assert ctl(dpi, "conntrack-dump") == 0 and capsys.readouterr().out == ""
-
-
 def test_dpi_cibles_ecrit_les_cibles_de_sbxdpi_sans_filtre_de_capture(dpi):
     assert ctl(dpi, "dpi-cibles") == 0
     f = dpi["tmp"] / "run" / "sbxdpi-cibles" / "cibles.json"
@@ -122,3 +118,7 @@ def test_m1_la_memoire_de_24_h_alimente_les_cibles(dpi):
     assert ctl(dpi, "dpi-cibles") == 0
     c = json.loads((dpi["tmp"] / "run" / "sbxdpi-cibles" / "cibles.json").read_text())
     assert c["appareils"][0]["adresses"] == ["192.168.1.50", "2a01:e0a::1", "2a01:e0a::99"]
+
+
+def test_m6_conntrack_absent_rend_le_code_indisponible(dpi, capsys):
+    assert ctl(dpi, "conntrack-dump") == 4 and capsys.readouterr().out == ""

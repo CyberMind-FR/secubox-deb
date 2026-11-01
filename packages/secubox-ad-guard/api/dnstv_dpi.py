@@ -593,6 +593,7 @@ def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str
 # ── passage du moteur (secubox-adguard-auto, chaque minute) ─────────────────────────────────────────────────
 FICHIER_ETAT = "etat-dpi.json"
 PERIODE_CIBLES_S = 300
+CONNTRACK_INDISPONIBLE = 4                             # code de `conntrack-dump` quand /proc/net/nf_conntrack manque
 DUREE_CHARGE_S = 300                                  # saturation continue d'au moins 5 min : jamais sur un simple pic
 SBXDPI_APPAREILS = Path(os.environ.get("SECUBOX_ADGUARD_SBXDPI", "/run/secubox/sbxdpi/appareils.json"))
 SBXDPI_MAX = 8 * 1024 * 1024
@@ -707,10 +708,12 @@ def moteur(maintenant: int, executer: Callable[[str], object], voisins: Dict[str
     if maintenant - cibles_ts >= PERIODE_CIBLES_S or prev.get("cibles") != c:
         executer("dpi-cibles")
         cibles_ts = maintenant
-    ct = None
+    ct, ct_statut = None, "absent"
     r = executer("conntrack-dump")
-    if getattr(r, "returncode", 1) == 0 and getattr(r, "stdout", ""):
-        ct = r.stdout
+    if getattr(r, "returncode", 1) == 0:
+        ct, ct_statut = getattr(r, "stdout", "") or "", "ok"
+    elif getattr(r, "returncode", 1) == CONNTRACK_INDISPONIBLE:
+        ct_statut = "indisponible"                         # m6 : /proc/net/nf_conntrack absent (noyau sans procfs conntrack)
     sbx = None
     chemin = sbxdpi_chemin or SBXDPI_APPAREILS
     try:
@@ -729,6 +732,7 @@ def moteur(maintenant: int, executer: Callable[[str], object], voisins: Dict[str
     with verrou_dpi():                                 # I2 : la charge est relue SOUS le verrou, jamais reprise du début du passage
         actuel = lire_etat_dpi() or {}
         ch = garde_charge(actuel.get("charge") or {}, maintenant, charge()[1], cpus or os.cpu_count() or 1, usage, executer)
+        res["etat"]["sources"]["conntrack"] = ct_statut
         e = dict(res["etat"], charge=ch, cibles=c, cibles_ts=cibles_ts)
         _ecrire_etat_dpi(e)
     return {"ok": True, "etat": e}

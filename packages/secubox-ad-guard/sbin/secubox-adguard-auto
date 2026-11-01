@@ -11,6 +11,8 @@ contrôleur privilégié (`sudo -n secubox-adguard-tv regles-appliquer`, argumen
 """
 from __future__ import annotations
 
+import contextlib
+import os
 import subprocess
 import sys
 import time
@@ -186,15 +188,22 @@ def suspendre_forcage(changements: list, etat: dict, now: int) -> bool:
         ancien = f.read_text(encoding="utf-8") if f.is_file() and not f.is_symlink() else ""
     except OSError:
         ancien = ""
-    tmp = f.with_name("." + f.name + ".tmp")
-    tmp.write_text(dnstv_contournement.suspendre(ancien, macs, now), encoding="utf-8")
-    tmp.chmod(0o640)
-    tmp.replace(f)
+    import tempfile
+    fd, tmp = tempfile.mkstemp(dir=f.parent, prefix="." + f.name + ".")    # nom aléatoire, créé en O_EXCL : jamais suivi
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            os.fchmod(h.fileno(), 0o640)
+            h.write(dnstv_contournement.suspendre(ancien, macs, now))
+        os.replace(tmp, f)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
     try:
         dnstv_journal.ajouter([dnstv_journal.entree(now, c["nom"], c.get("mac"), "", "", "pause", "auto", "forçage DNS suspendu 24 h : lecture cassée")
                                for c in etat["clients"] if c.get("mac") in macs])
-    except (OSError, ValueError):
-        pass
+    except (OSError, ValueError) as e:
+        print(f"journal des décisions non écrit (suspension du forçage) : {type(e).__name__}: {e}", file=sys.stderr)
     return True
 
 

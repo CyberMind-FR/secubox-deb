@@ -143,3 +143,31 @@ def test_moteur_ecrit_la_suspension_et_survit_a_un_passage_dpi_en_echec(dossier)
     assert m.suspendre_forcage(ch, etat, NOW)
     assert C.lire_suspensions((dossier / C.FICHIER_SUSPENSIONS).read_text(), NOW + 10) == {MAC}
     m.rafraichir_dpi(NOW, voisins=lambda: {}, executer=lambda v: (_ for _ in ()).throw(OSError("panne")))   # jamais d'exception
+
+
+def test_suspension_ecrite_par_mkstemp_jamais_par_un_nom_previsible(dossier, tmp_path):
+    m = _module_auto()
+    cible = tmp_path / "ailleurs.txt"
+    cible.write_text("intact")
+    (dossier / ("." + C.FICHIER_SUSPENSIONS + ".tmp")).symlink_to(cible)       # piège sur l'ancien nom fixe
+    etat, _ = dnstv.lire_etat()
+    ch = [{"appareil": "tv-salon", "domaine": "x.example", "de": "essai", "vers": "retire", "motif": "contenu habituel plus demandé"}]
+    assert m.suspendre_forcage(ch, etat, NOW)
+    assert cible.read_text() == "intact"
+
+
+def test_journal_impossible_le_dit_sur_stderr(dossier, monkeypatch, capsys):
+    m = _module_auto()
+    monkeypatch.setattr(m.dnstv_journal, "ajouter", lambda *a: (_ for _ in ()).throw(OSError("disque plein")))
+    etat, _ = dnstv.lire_etat()
+    ch = [{"appareil": "tv-salon", "domaine": "x.example", "de": "essai", "vers": "retire", "motif": "contenu habituel plus demandé"}]
+    m.suspendre_forcage(ch, etat, NOW)
+    assert "journal" in capsys.readouterr().err
+
+
+def test_conntrack_indisponible_n_est_pas_ok(dossier):
+    def executer(verbe):
+        return Rep(4, "") if verbe == "conntrack-dump" else Rep(0, "")
+    D.moteur(NOW, executer, voisins={}, charge=lambda: (0.1, 0.1, 0.1), cpus=4, sbxdpi_chemin=dossier / "absent.json",
+             cpu_ndpid=lambda: None)
+    assert json.loads((dossier / D.FICHIER_ETAT).read_text())["sources"]["conntrack"] == "indisponible"
