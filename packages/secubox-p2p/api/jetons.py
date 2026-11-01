@@ -77,8 +77,14 @@ def generer(ttl: int, auto_approve: bool, nom_prevu: Optional[str] = None, flash
         "peer_fp": None, "used_by": None,
         "nom_prevu": nom_prevu, "flash": bool(flash),
     }
-    jetons = lire(chemin)
-    jetons.append(entree)
-    ecrire(jetons, chemin)
+    # #3362 : sous le verrou des écrivains de l'état p2p (le même que « Oublier ce nœud »), lecture stricte : un fichier
+    # illisible n'est jamais remplacé par la seule nouvelle entrée.
+    from . import oubli                      # noqa: PLC0415 — import tardif, oubli n'importe pas jetons
+    chemin = str(chemin or chemin_jetons())
+    os.makedirs(os.path.dirname(chemin) or ".", exist_ok=True)
+    with oubli.verrou(os.path.dirname(os.path.dirname(chemin)) or "."):
+        jetons = oubli.lire_strict_liste(chemin)
+        jetons.append(entree)
+        ecrire(jetons, chemin)
     return {"token": jeton, "token_hash": h, "expires": expire.isoformat(), "ttl": ttl,
             "auto_approve": auto_approve, "nom_prevu": nom_prevu, "flash": bool(flash)}

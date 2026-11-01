@@ -1067,6 +1067,12 @@ for nom, v in sorted(d.items() if isinstance(d, dict) else []):
 PY
 }
 
+# Le pair <ip> a-t-il encore un /32 EXACT sur wg-mesh ? (pair_du_maillage accepte aussi un réseau couvrant, côté satellite)
+# Comparaison littérale des champs (aucune expression rationnelle : les points de l'adresse ne sont pas des jokers).
+pair_du_maillage_exact() {
+    wg show wg-mesh allowed-ips 2>/dev/null | tr ',\t' '  ' | awk -v cible="$1/32" '{ for (i = 2; i <= NF; i++) if ($i == cible) t = 1 } END { exit !t }'
+}
+
 # OUBLIER UN PAIR (#3362) : appelé par secubox-oubli-pair quand « Oublier ce nœud » a retiré le pair de wg_mesh.json. La
 # synchronisation ne retire que ce qu'un pair JOIGNABLE ne publie plus : un pair oublié n'y passe jamais, ses noms restaient
 # servis. Ici, tout nom dont la route vise exactement <ip> part (cmd_retirer, en lot), puis ses ports ; une seule génération
@@ -1078,14 +1084,19 @@ cmd_oublier_pair() {
     export RELAIS_EN_LOT=1
     for nom in $(routes_de_ip "$ROUTES" "$ip"); do
         nom_valide "$nom" || continue
-        if ( cmd_retirer "$nom" ) >/dev/null 2>&1; then
-            n=$((n + 1)); audit_relais relais_retire_oubli "$nom" "$ip"
+        local sortie
+        if sortie="$( ( cmd_retirer "$nom" ) 2>&1 )"; then
+            n=$((n + 1)); audit_relais relais_retire_oubli "$nom" "$ip"; log "${sortie##*$'\n'}"
         else
-            echecs=$((echecs + 1)); log "non retiré : $nom"
+            echecs=$((echecs + 1)); log "non retiré : $nom — ${sortie//$'\n'/ ; }"
         fi
     done
     for cle in $(ports_de_ip "$RELAIS_PORTS_ETAT" "$ip"); do
-        ( cmd_retirer_port "$cle" ) >/dev/null 2>&1 || echecs=$((echecs + 1))
+        if sortie="$( ( cmd_retirer_port "$cle" ) 2>&1 )"; then
+            log "${sortie##*$'\n'}"
+        else
+            echecs=$((echecs + 1)); log "port non retiré : $cle — ${sortie//$'\n'/ ; }"
+        fi
     done
     unset RELAIS_EN_LOT
     ports_nft_appliquer || echecs=$((echecs + 1))
@@ -1095,11 +1106,6 @@ cmd_oublier_pair() {
     fi
     [ "$echecs" -eq 0 ] || meurt "$echecs nom(s) ou port(s) non retiré(s) pour $ip"
     log "pair oublié $ip : $n nom(s) relayé(s) retiré(s)"
-}
-
-# Le pair <ip> a-t-il encore un /32 EXACT sur wg-mesh ? (pair_du_maillage accepte aussi un réseau couvrant, côté satellite)
-pair_du_maillage_exact() {
-    wg show wg-mesh allowed-ips 2>/dev/null | tr '\t' ' ' | grep -qE "(^| )$1/32( |,|$)"
 }
 
 # pair-de <box> : IP maillée du pair nommé <box> dans l'état du maillage (wg_mesh.json), seulement s'il y est UNE fois et que

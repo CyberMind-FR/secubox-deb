@@ -17,7 +17,7 @@ import os
 import sys
 
 sys.path.insert(0, "/usr/lib/secubox/p2p")
-from api import automesh, jetons  # noqa: E402
+from api import automesh, jetons, oubli  # noqa: E402
 from api.ancre import audit  # noqa: E402
 
 VERSION = "2.0.0"
@@ -78,7 +78,11 @@ def main(argv=None):
     except ValueError:
         print("sbx-mesh-invite : adresse du maître inutilisable (--adresse)", file=sys.stderr)
         return 1
-    emis = jetons.generer(a.ttl, auto, nom_prevu=a.nom, flash=a.flash)
+    try:
+        emis = jetons.generer(a.ttl, auto, nom_prevu=a.nom, flash=a.flash)
+    except oubli.EtatIllisible as e:            # #3362 : tokens.json illisible n'est jamais remplacé
+        print(f"sbx-mesh-invite : {e} — aucun jeton émis", file=sys.stderr)
+        return 1
     _rendre_au_service(jetons.dossier_p2p())
     code = automesh.encoder(adresse, emis["token"])
     try:

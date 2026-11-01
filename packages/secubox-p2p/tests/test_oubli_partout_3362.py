@@ -10,6 +10,8 @@ import re
 import stat
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -116,8 +118,9 @@ def maitre(tmp_path, monkeypatch):
     monkeypatch.setenv("SBX_AUDIT", str(tmp_path / "audit.log"))
     appels = {"root": [], "pilotage": []}
 
-    def root(cibles, nom):
+    def root(cibles, nom, force=False, acteur="?"):
         appels["root"].append((list(cibles["cles"]), list(cibles["ips"]), nom))
+        appels.setdefault("force", []).append(force)
         return dict(appels.get("etapes_root") or {"wg_direct": {"ok": True, "detail": "retiré"},
                                                   "relais": {"ok": True, "detail": ""}, "noms": {"ok": True, "detail": ""},
                                                   "autoload": {"ok": True, "detail": ""}})
@@ -132,11 +135,26 @@ def maitre(tmp_path, monkeypatch):
     main.app.dependency_overrides.clear()
 
 
+def _oublier(corps, attendu=202):
+    """#3362 (correction) : la route répond 202 avec une opération ; les étapes root se suivent par GET."""
+    c = TestClient(main.app)
+    r = c.post("/master-link/oublier", json=corps)
+    assert r.status_code == attendu, r.text
+    if attendu != 202:
+        return r
+    op = r.json()["operation"]
+    assert re.fullmatch(r"[0-9a-f]{32}", op)
+    for _ in range(200):
+        d = c.get(f"/master-link/oublier/{op}").json()
+        if d["etat"] == "termine":
+            return d
+        time.sleep(0.02)
+    raise AssertionError("opération jamais terminée")
+
+
 def test_route_enchaine_tous_les_nettoyages(maitre):
     tmp, appels = maitre
-    r = TestClient(main.app).post("/master-link/oublier", json={"nom": "lgm-ebin", "confirmation": "lgm-ebin"})
-    assert r.status_code == 200, r.text
-    d = r.json()
+    d = _oublier({"nom": "lgm-ebin", "confirmation": "lgm-ebin"})
     assert d["status"] == "ok" and d["restes"] == []
     assert set(d["etapes"]) >= {"registre", "jonctions", "projection", "wg_direct", "relais", "noms", "autoload", "pilotage"}
     assert appels["root"] == [([K_LGM], ["10.10.0.7"], "lgm-ebin")] and appels["pilotage"] == [("lgm-ebin", False)]
@@ -153,20 +171,17 @@ def test_route_rapporte_ce_qui_reste_sans_mentir(maitre):
     tmp, appels = maitre
     appels["etapes_root"] = {"wg_direct": {"ok": True, "detail": ""}, "relais": {"ok": False, "detail": "haproxy refusé"},
                              "noms": {"ok": True, "detail": ""}, "autoload": {"ok": True, "detail": ""}}
-    r = TestClient(main.app).post("/master-link/oublier", json={"nom": "lgm-ebin", "confirmation": "lgm-ebin"})
-    assert r.status_code == 200
-    d = r.json()
+    d = _oublier({"nom": "lgm-ebin", "confirmation": "lgm-ebin"})
     assert d["status"] == "partiel" and d["restes"] == ["relais"]
     assert "p2p_noeud_oubli_partiel" in (tmp / "audit.log").read_text()
 
 
 def test_route_homonyme_garde_abonnement_et_flotte(maitre):
     tmp, appels = maitre
-    r = TestClient(main.app).post("/master-link/oublier", json={"nom": "gk1", "confirmation": "gk1", "public_key": K_OLD})
-    assert r.status_code == 200, r.text
+    d = _oublier({"nom": "gk1", "confirmation": "gk1", "public_key": K_OLD})
     assert appels["root"] == [([K_OLD], ["10.10.0.2"], None)]       # pas de nom : autoload et noms du pair gardés
     assert appels["pilotage"] == []
-    assert r.json()["etapes"]["pilotage"]["ok"] is True
+    assert d["etapes"]["pilotage"]["ok"] is True
 
 
 def test_suites_root_par_sudo_argv_fixe(monkeypatch):
@@ -177,10 +192,11 @@ def test_suites_root_par_sudo_argv_fixe(monkeypatch):
         stdout = json.dumps({"etapes": {"wg_direct": {"ok": True, "detail": "x"}}})
         stderr = ""
     monkeypatch.setattr(main.subprocess, "run", lambda argv, **k: vus.append((argv, k)) or R())
-    e = main._oubli_suites_root({"cles": [K_LGM], "ips": ["10.10.0.7"]}, "lgm-ebin")
+    e = main._oubli_suites_root({"cles": [K_LGM], "ips": ["10.10.0.7"]}, "lgm-ebin", force=True, acteur="admin")
     assert e == {"wg_direct": {"ok": True, "detail": "x"}}
     argv, k = vus[0]
-    assert argv == ["sudo", "-n", "/usr/sbin/secubox-oubli-pair", "--cle", K_LGM, "--ip", "10.10.0.7", "--nom", "lgm-ebin"]
+    assert argv == ["sudo", "-n", "/usr/sbin/secubox-oubli-pair", "--acteur", "admin", "--cle", K_LGM, "--ip", "10.10.0.7",
+                    "--nom", "lgm-ebin", "--force"]
     assert k.get("shell") is not True and k.get("timeout")
     R.returncode, R.stdout, R.stderr = 1, "", "sudo: refus"
     e = main._oubli_suites_root({"cles": [K_LGM], "ips": []}, None)
@@ -300,3 +316,153 @@ def test_relais_oublier_pair_retire_les_noms_de_cette_ip(tmp_path):
                                   "hall.gk4.x.in": ["10.10.0.9", 9080], "hall.x.in": ["127.0.0.1", 8085]}))
     r = subprocess.run([sys.executable, "-I", str(code), str(routes), "10.10.0.7"], capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout.split() == ["cloud.lgm.x.in", "hall.lgm.x.in"]
+
+
+# ── passe de correction après revue (#3362) ──────────────────────────────────────────────────────────────────────────
+
+def test_jetons_illisibles_503_et_fichier_intact(maitre):
+    tmp, appels = maitre
+    f = tmp / "p2p" / "master-link" / "tokens.json"
+    f.write_text("{coupé")
+    _oublier({"nom": "lgm-ebin", "confirmation": "lgm-ebin"}, attendu=503)
+    assert f.read_text() == "{coupé"
+    assert "lgm-ebin" in (tmp / "p2p" / "peers.json").read_text() and appels["root"] == []
+    (tmp / "p2p" / "master-link" / "requests.json").write_text("[1, ")
+    f.write_text("[]")
+    _oublier({"nom": "lgm-ebin", "confirmation": "lgm-ebin"}, attendu=503)
+
+
+def test_jetons_non_reecrits_sans_entree_du_pair(maitre):
+    tmp, appels = maitre
+    f = tmp / "p2p" / "master-link" / "tokens.json"
+    f.write_text(json.dumps([{"hash": "hx", "status": "active", "flash": True, "nom_prevu": "gk9"}]))
+    avant = f.stat().st_mtime_ns
+    time.sleep(0.01)
+    _oublier({"nom": "lgm-ebin", "confirmation": "lgm-ebin"})
+    assert f.stat().st_mtime_ns == avant
+
+
+def test_ecriture_concurrente_des_jetons_non_perdue(maitre):
+    tmp, appels = maitre
+    from api import jetons as J
+    tient, relache = threading.Event(), threading.Event()
+
+    def ecrivain():
+        with oubli.verrou(tmp / "p2p"):
+            tient.set()
+            relache.wait(5)
+        J.generer(3600, True, nom_prevu="gk9", flash=True, chemin=str(tmp / "p2p" / "master-link" / "tokens.json"))
+    t = threading.Thread(target=ecrivain)
+    t.start()
+    tient.wait(5)
+    res = {}
+    o = threading.Thread(target=lambda: res.update(d=_oublier({"nom": "lgm-ebin", "confirmation": "lgm-ebin"})))
+    o.start()
+    time.sleep(0.1)
+    relache.set()
+    t.join(5)
+    o.join(10)
+    jet = json.loads((tmp / "p2p" / "master-link" / "tokens.json").read_text())
+    assert {j["hash"]: j["status"] for j in jet}["h1"] == "revoked"
+    assert any(j.get("nom_prevu") == "gk9" for j in jet)              # le jeton émis pendant l'oubli est gardé
+
+
+def test_generer_un_jeton_sous_le_verrou_et_lecture_stricte(tmp_path):
+    from api import jetons as J
+    ml = tmp_path / "master-link"
+    ml.mkdir()
+    (ml / "tokens.json").write_text("{coupé")
+    with pytest.raises(oubli.EtatIllisible):
+        J.generer(3600, True, chemin=str(ml / "tokens.json"))
+    assert (ml / "tokens.json").read_text() == "{coupé"
+    src = (ICI / "api" / "jetons.py").read_text()
+    assert "oubli.verrou(" in src
+
+
+def test_save_json_des_fichiers_de_jonction_atomique_sous_verrou():
+    src = (ICI / "api" / "main.py").read_text()
+    i = src.index("def save_json(")
+    bloc = src[i:src.index("\ndef ", i + 10)]
+    assert "ML_REQUESTS_FILE" in bloc and "ML_TOKENS_FILE" in bloc
+
+
+def test_get_operation_garde_et_inconnue(maitre):
+    c = TestClient(main.app)
+    assert c.get("/master-link/oublier/" + "0" * 32).status_code == 404
+    assert c.get("/master-link/oublier/pas-un-id").status_code in (404, 422)
+    src = (ICI / "api" / "main.py").read_text()
+    i = src.index('@app.get("/master-link/oublier/{operation}")')
+    assert "require_jwt" in src[i:i + 300]
+
+
+def test_force_et_acteur_transmis(maitre):
+    tmp, appels = maitre
+    _oublier({"nom": "lgm-ebin", "confirmation": "lgm-ebin", "force": True})
+    assert appels["force"] == [True]
+
+
+def test_helper_refuse_une_poignee_recente_sauf_force(banc):
+    tmp, env, log = banc
+    env["SBX_OUBLI_WG_BIN"] = str(_bin(tmp, "wg-hs", f'echo "wg $*" >> {log}\n'
+                                         f'[ "$3" = latest-handshakes ] && {{ echo "{K_LGM}\t$(date +%s)"; exit 0; }}\n'
+                                         f'[ "$1" = show ] && echo {K_LGM}\nexit 0'))
+    r = _helper(env, "--cle", K_LGM, "--acteur", "admin")
+    assert r.returncode == 2 and "poignée" in r.stdout
+    assert "remove" not in log.read_text()
+    r = _helper(env, "--cle", K_LGM, "--acteur", "admin", "--force")
+    assert r.returncode == 0
+    a = (tmp / "audit.log").read_text()
+    assert '"force": true' in a and '"acteur": "admin"' in a
+
+
+def test_helper_acteur_valide_et_audit_en_echec_remonte(banc):
+    tmp, env, log = banc
+    assert _helper(env, "--cle", K_LGM, "--acteur", "a b;c").returncode == 2
+    env["SBX_OUBLI_AUDIT"] = str(tmp / "absent" / "audit.log")
+    r = _helper(env, "--cle", K_LGM, "--acteur", "admin")
+    assert r.returncode == 0 and json.loads(r.stdout)["audit_ok"] is False and "audit" in r.stderr
+
+
+def test_helper_nom_31_et_shebang_isole(banc):
+    tmp, env, log = banc
+    assert _helper(env, "--cle", K_LGM, "--nom", "a" * 32).returncode == 2
+    assert HELPER.read_text().splitlines()[0] == "#!/usr/bin/python3 -I"
+
+
+def test_helper_refuse_un_etat_en_lien(banc):
+    tmp, env, log = banc
+    (tmp / "vrai.json").write_text((tmp / "wg_mesh.json").read_text())
+    (tmp / "wg_mesh.json").unlink()
+    (tmp / "wg_mesh.json").symlink_to(tmp / "vrai.json")
+    assert _helper(env, "--cle", K_LGM).returncode == 2
+
+
+def test_helper_noms_partiel_sans_redemarrage(banc):
+    tmp, env, log = banc
+    env["SBX_OUBLI_NOMS"] = str(_bin(tmp, "noms-3", f'echo "noms $*" >> {log}; exit 3'))
+    r = _helper(env, "--cle", K_LGM, "--ip", "10.10.0.7")
+    e = json.loads(r.stdout)["etapes"]["noms"]
+    assert e["ok"] is False and "administrateur" in e["detail"]
+    assert "noms --sans-redemarrage" in log.read_text()
+
+
+def test_apparmor_du_helper():
+    prof = (ICI / "apparmor" / "usr.sbin.secubox-oubli-pair").read_text()
+    assert "flags=(enforce)" in prof or "profile secubox-oubli-pair /usr/sbin/secubox-oubli-pair" in prof
+    for x in ("/usr/bin/wg", "/usr/sbin/secubox-relais-maillage", "/usr/sbin/secubox-annuaire-noms", "/usr/sbin/autoloadctl",
+              "/var/log/secubox/audit.log", "/var/lib/secubox/p2p/wg_mesh.json"):
+        assert x in prof, x
+    assert "SPDX" in prof
+    rules = (ICI / "debian" / "rules").read_text()
+    post = (ICI / "debian" / "postinst").read_text()
+    assert "apparmor/usr.sbin.secubox-oubli-pair" in rules and "apparmor_parser" in post and "secubox-oubli-pair" in post
+
+
+def test_relais_greps_litteraux_et_retrait_journalise():
+    texte = (ICI / "sbin" / "secubox-relais-maillage").read_text()
+    i = texte.index("cmd_oublier_pair() {")
+    corps = texte[i:texte.index("\n}\n", i)]
+    assert ">/dev/null 2>&1" not in corps
+    assert texte.index("pair_du_maillage_exact() {") < i
+    j = texte.index("pair_du_maillage_exact() {")
+    assert "grep -qE" not in texte[j:texte.index("\n}\n", j)]

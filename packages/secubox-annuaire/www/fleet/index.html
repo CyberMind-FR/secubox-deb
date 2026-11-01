@@ -771,7 +771,18 @@
                     if (!r.ok) { msg.textContent = await pbErreur(r); ok.disabled = false; return; }
                     // #3362 : secubox-p2p enchaîne TOUS les nettoyages (wg-mesh, jonctions, relais, noms, autoload, Flotte) ;
                     // « partiel » : ce qui reste est nommé, jamais un faux succès.
-                    const d = await r.json();
+                    // correction #3362 : 202 + opération ; les étapes root tournent en tâche de fond, suivies ici jusqu'à « termine ».
+                    const op = (await r.json()).operation;
+                    let d = null;
+                    for (let i = 0; i < 300; i++) {
+                        const rs = await pbFetch('/api/v1/p2p/master-link/oublier/' + encodeURIComponent(op));
+                        if (!rs.ok) { msg.textContent = 'Suivi de l\'oubli impossible : ' + await pbErreur(rs); return; }
+                        d = await rs.json();
+                        if (d.etat === 'termine') break;
+                        msg.textContent = 'Oubli en cours… (' + Object.keys(d.etapes || {}).length + ' étape(s) faite(s))';
+                        await new Promise(res => setTimeout(res, 2000));
+                    }
+                    if (!d || d.etat !== 'termine') { msg.textContent = 'Oubli toujours en cours (opération ' + op + ')'; return; }
                     if (d.status === 'partiel') {
                         msg.textContent = 'Oublié, sauf : ' + d.restes.map(k => k + ' (' + ((d.etapes || {})[k] || {}).detail + ')').join(', ');
                         return;                                   // l'état est déjà écrit : un second envoi dirait « inconnu »

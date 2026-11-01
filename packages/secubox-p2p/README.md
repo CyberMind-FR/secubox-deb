@@ -288,6 +288,14 @@ Cette route est LE point d'entrée de l'oubli sur le maître ; la Flotte (secubo
 | `autoload` | `abonnements_maillage` et `droits-maillage.json` | `autoloadctl maillage-oublier --nom` |
 | `pilotage` | Flotte du pilotage (boites, inventaire, événements) | `POST /boxes/{nom}/oublier` sur `/run/secubox/pilotage.sock`, jeton de l'administrateur |
 
+**Asynchrone** (correction #3362) : la partie sous verrou (registre, transport, jonctions, projection) est synchrone ; la route répond ensuite **202** `{"operation", "etat": "en_cours", "suivi"}` et les étapes root et pilotage tournent en tâche de fond. `GET /api/v1/p2p/master-link/oublier/{operation}` (`require_jwt`) rend `{"etat": "en_cours"|"termine", "status", "etapes", "restes"}` ; les 50 dernières opérations sont gardées en mémoire du service (404 après un redémarrage). La Flotte suit l'opération.
+
+**Jonctions** : `requests.json` et `tokens.json` sont lus strictement (illisibles : 503, rien n'est modifié) et réécrits seulement si une entrée du pair en part. Tous leurs écrivains (`save_json`, `jetons.generer`, donc `sbx-mesh-invite`) écrivent atomiquement sous le même verrou `.etat.lock`.
+
+**Garde de vivacité côté root** : `secubox-oubli-pair` refuse une clé dont la poignée de main sur l'interface (`wg show wg-mesh latest-handshakes`, source du noyau que le compte `secubox` n'écrit pas) a moins de 180 s, sauf `--force`, transmis seulement quand l'administrateur force, et audité avec l'acteur (`--acteur`). Profil AppArmor enforce `/etc/apparmor.d/usr.sbin.secubox-oubli-pair`, chargé par le postinst.
+
+**Risque résiduel du compte partagé** : l'API p2p tourne sous `secubox`, compte partagé par d'autres modules, qui écrit `wg_mesh.json` et `peers.json` et peut lancer `secubox-oubli-pair` par sudo. Un processus compromis sous ce compte peut donc retirer un pair de l'état puis faire appliquer les suites root. La garde de poignée de main limite ce risque aux pairs inactifs depuis 180 s, ou à un appel avec `--force` (audité). Un compte dédié `secubox-p2p` le supprimerait (à faire).
+
 Un nom encore porté par un autre pair (ancienne clé d'un nœud réinstallé, désignée par `public_key`) garde son abonnement, ses noms et sa Flotte. `secubox-oubli-pair` revérifie chaque cible contre l'état écrit (clé absente de `wg_mesh.json` et différente de l'ancre, adresse libre et dans le réseau, nom porté par aucun pair) et refuse sinon (code 2). Réponse : `{"status": "ok" | "partiel", "oublie", "retires", "etapes": {étape: {ok, detail}}, "restes": [étapes en échec]}` ; chaque étape en échec est journalisée et auditée (`p2p_noeud_oubli_partiel`), chaque suite root aussi (`p2p_oubli_suite`).
 
 Statut d'un pair : `/peers` et `/status` le MESURENT (poignée de main WireGuard du pair wg-mesh de même adresse, `mesh.statut_registre`) ; le `status` écrit dans `peers.json` n'est jamais rendu, et un pair approuvé n'y est plus écrit `online`.

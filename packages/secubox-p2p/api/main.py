@@ -12,7 +12,9 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
+import contextvars
 import functools
+import threading
 import logging
 import subprocess
 import asyncio
@@ -138,10 +140,11 @@ def load_json(path: Path, default: Any = None) -> Any:
 
 def save_json(path: Path, data: Any):
     init_dirs()
-    if Path(path) in (PEERS_FILE, WG_MESH_CONFIG):
-        # #3335 (relecture #3341) : mêmes fichiers que « Oublier ce nœud » : écriture atomique sous son verrou
+    if Path(path) in (PEERS_FILE, WG_MESH_CONFIG, ML_REQUESTS_FILE, ML_TOKENS_FILE):
+        # #3335 (relecture #3341), #3362 : mêmes fichiers que « Oublier ce nœud » (jonctions comprises) : écriture atomique
+        # sous son verrou
         with oubli.verrou(P2P_DIR):
-            oubli.ecrire_atomique(path, data, 0o600 if Path(path) == WG_MESH_CONFIG else 0o644)
+            oubli.ecrire_atomique(path, data, 0o644 if Path(path) == PEERS_FILE else 0o600)
     else:
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
@@ -363,8 +366,11 @@ def ml_token_generate(ttl: int = None, token_type: str = "join", auto_approve: b
         ttl = config.get("token_ttl", ML_DEFAULT_TOKEN_TTL)
 
     ml_init()
-    emis = jetons.generer(ttl, auto_approve, nom_prevu=nom_prevu, flash=flash,
-                          token_type=token_type, chemin=ML_TOKENS_FILE)
+    try:
+        emis = jetons.generer(ttl, auto_approve, nom_prevu=nom_prevu, flash=flash,
+                              token_type=token_type, chemin=ML_TOKENS_FILE)
+    except oubli.EtatIllisible:                 # #3362 : tokens.json illisible n'est jamais remplacé
+        raise HTTPException(status_code=503, detail="jetons de jonction illisibles : aucun jeton émis") from None
     token, token_hash, expires = emis["token"], emis["token_hash"], emis["expires"]
 
     # Build join URL
@@ -2470,28 +2476,39 @@ def _add_approved_peer(join_request: Dict):
 
 OUBLI_PAIR_CTL = "/usr/sbin/secubox-oubli-pair"
 PILOTAGE_SOCK = "/run/secubox/pilotage.sock"
-_OUBLI_ETAPES_ROOT = ("wg_direct", "relais", "noms", "autoload")
+RE_ACTEUR = re.compile(r"[A-Za-z0-9._@-]{1,64}")
+RE_NOM_PAIR_31 = re.compile(r"[a-z0-9][a-z0-9-]{0,30}")      # nom de pair de l'autoload et de l'assistant root
+OPERATIONS_OUBLI: Dict[str, Dict] = {}                        # #3362 : opérations d'oubli (mémoire du service, 50 au plus)
+_OPERATIONS_MAX = 50
+_operations_verrou = threading.Lock()
 
 
-def _oubli_suites_root(cibles: Dict, nom: Optional[str]) -> Dict:
+def _oubli_suites_root(cibles: Dict, nom: Optional[str], force: bool = False, acteur: str = "?") -> Dict:
     """#3362 : les nettoyages qui exigent root (pair retiré de l'interface wg-mesh par sa clé EXACTE, noms relayés vers son
     adresse, noms Unbound, abonnement de l'autoload) par `sudo -n secubox-oubli-pair`, argv fixe, sans shell. L'assistant
-    revérifie chaque cible contre l'état déjà écrit (il refuse ce qui n'est pas oublié). Rend {étape: {ok, detail}} ;
-    jamais d'exception : un échec devient une étape « racine » en échec."""
-    argv = ["sudo", "-n", OUBLI_PAIR_CTL]
+    revérifie chaque cible contre l'état déjà écrit et contre l'interface (poignée de main récente refusée sans --force).
+    Rend {étape: {ok, detail}} ; jamais d'exception : un échec devient une étape « racine » en échec."""
+    acteur = acteur if RE_ACTEUR.fullmatch(acteur or "") else "inconnu"
+    argv = ["sudo", "-n", OUBLI_PAIR_CTL, "--acteur", acteur]
     for c in cibles.get("cles") or []:
         argv += ["--cle", c]
     for ip in cibles.get("ips") or []:
         argv += ["--ip", ip]
     if nom:
         argv += ["--nom", nom]
+    if force:
+        argv += ["--force"]
     try:
-        r = subprocess.run(argv, capture_output=True, text=True, timeout=180, check=False)
-        etapes = json.loads(r.stdout or "{}").get("etapes") if r.returncode == 0 else None
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=900, check=False)
+        doc = json.loads(r.stdout or "{}") if (r.stdout or "").strip() else {}
+        etapes = doc.get("etapes") if r.returncode == 0 else None
         if isinstance(etapes, dict) and etapes:
-            return {str(k): {"ok": bool(v.get("ok")), "detail": str(v.get("detail") or "")[:300]}
-                    for k, v in etapes.items() if isinstance(v, dict)}
-        detail = f"code {r.returncode} : {(r.stderr or r.stdout or '').strip()[:300]}"
+            out = {str(k): {"ok": bool(v.get("ok")), "detail": str(v.get("detail") or "")[:300]}
+                   for k, v in etapes.items() if isinstance(v, dict)}
+            if doc.get("audit_ok") is False:
+                out["audit_racine"] = {"ok": False, "detail": f"journal d'audit non écrit : {(r.stderr or '').strip()[:200]}"}
+            return out
+        detail = f"code {r.returncode} : {str(doc.get('erreur') or r.stderr or r.stdout or '').strip()[:300]}"
     except (OSError, subprocess.SubprocessError, ValueError, AttributeError) as e:
         detail = f"{type(e).__name__} : {str(e)[:200]}"
     return {"racine": {"ok": False, "detail": detail}}
@@ -2511,6 +2528,41 @@ def _oubli_pilotage(nom: str, force: bool) -> Dict:
     return {"ok": False, "detail": err.replace("annuaire ", "pilotage ")[:300]}
 
 
+def _lancer_operation(fonction) -> None:
+    """Étapes longues en tâche de fond, dans le contexte de la requête (jeton de l'administrateur pour le pilotage)."""
+    ctx = contextvars.copy_context()
+    threading.Thread(target=ctx.run, args=(fonction,), daemon=True, name="oubli-noeud").start()
+
+
+def _operation_maj(op: str, **champs) -> None:
+    with _operations_verrou:
+        OPERATIONS_OUBLI[op].update(champs)
+
+
+def _finir_oubli(op: str, nom: str, retires: Dict, force: bool, acteur: str) -> None:
+    """Fin de l'oubli (tâche de fond) : étapes root, puis Flotte du pilotage ; chaque échec journalisé et audité."""
+    etapes = dict(OPERATIONS_OUBLI[op]["etapes"])
+    try:
+        nom_libre = bool(retires.get("nom_libre"))
+        nom_root = nom if nom_libre and RE_NOM_PAIR_31.fullmatch(nom) else None
+        etapes.update(_oubli_suites_root(retires, nom_root, force=force, acteur=acteur))
+        if nom_libre:
+            etapes["pilotage"] = _oubli_pilotage(nom, force)
+        else:
+            etapes["pilotage"] = {"ok": True, "detail": "nom encore porté par un autre pair : Flotte gardée"}
+            etapes.setdefault("autoload", {"ok": True, "detail": "nom encore porté par un autre pair : abonnement gardé"})
+    except Exception as e:  # noqa: BLE001 — l'opération doit toujours se terminer, et dire pourquoi
+        etapes["interne"] = {"ok": False, "detail": f"{type(e).__name__} : {str(e)[:200]}"}
+    restes = [k for k, v in etapes.items() if not v.get("ok")]
+    for k in restes:
+        log.warning("oubli de %s : étape %s en échec : %s", nom, k, etapes[k].get("detail"))
+        _audit_jonction("p2p_noeud_oubli_partiel", noeud=nom, etape=k, motif=etapes[k].get("detail"), acteur=acteur)
+    _audit_jonction("p2p_noeud_oublie", noeud=nom, force=force, acteur=acteur, registre=retires["registre"],
+                    wg=retires["wg"], cles=retires["cles"], ips=retires["ips"], restes=restes, operation=op)
+    _operation_maj(op, etat="termine", etapes=etapes, restes=restes, status="partiel" if restes else "ok",
+                   termine_le=time.time())
+
+
 class OublierRequest(BaseModel):
     model_config = {"extra": "forbid"}
     nom: str = Field(..., min_length=1, max_length=63)
@@ -2520,18 +2572,17 @@ class OublierRequest(BaseModel):
     force: bool = False
 
 
-@app.post("/master-link/oublier")
+@app.post("/master-link/oublier", status_code=202)
 def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
     """« Oublier ce nœud » (#3335, #3362) : LE point d'entrée du maître. Il retire le pair de TOUS les états où il est
-    référencé, dans l'ordre :
-      1. sous le verrou des écrivains (`.etat.lock`), lecture stricte puis écritures atomiques : registre (peers.json),
-         transport (wg_mesh.json → sbx-mesh-up rend wg-mesh.conf), jonctions (demande approuvée, jetons consommés) ;
-      2. projection du pilotage (pairs-enroles.json) ;
-      3. root, par secubox-oubli-pair : interface wg-mesh (clé exacte), noms relayés, noms Unbound, abonnement autoload ;
-      4. Flotte du pilotage.
-    Un nom encore porté par un autre pair (ancienne clé d'un nœud réinstallé) garde son abonnement et sa Flotte.
-    Chaque échec est journalisé et rendu dans `restes` ; `status` vaut « partiel » tant qu'il reste quelque chose.
-    Confirmation : le nom retapé ; nœud en ligne ou mesure absente : `force`. Un état illisible n'est jamais réécrit (503)."""
+    référencé :
+      1. SYNCHRONE, sous le verrou des écrivains (`.etat.lock`), lecture stricte (illisible : 503, rien n'est modifié) puis
+         écritures atomiques : registre (peers.json), transport (wg_mesh.json → sbx-mesh-up rend wg-mesh.conf), jonctions
+         (demande approuvée, jetons consommés : fichiers réécrits seulement si une entrée du pair en part) ; projection.
+      2. EN TÂCHE DE FOND (202, opération suivie par GET /master-link/oublier/{operation}) : root par secubox-oubli-pair
+         (interface wg-mesh par clé exacte, noms relayés, noms Unbound, abonnement autoload), puis Flotte du pilotage.
+    Un nom encore porté par un autre pair garde son abonnement et sa Flotte. Chaque échec est journalisé, audité et rendu
+    dans `restes` ; `status` vaut « partiel » tant qu'il reste quelque chose."""
     if req.confirmation != req.nom:
         raise HTTPException(status_code=400, detail="confirmation : retapez exactement le nom du nœud")
     acteur = str(user.get("sub", "?"))
@@ -2540,50 +2591,58 @@ def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
     cle_maitre = a.get("cle_publique") if isinstance(a, dict) else None
     init_dirs()
     ml_init()
-    etapes: Dict[str, Dict] = {}
     try:
         with oubli.verrou(P2P_DIR):
             peers_doc = oubli.lire_strict(PEERS_FILE, {"peers": []})
             wg_state = oubli.lire_strict(WG_MESH_CONFIG, {"peers": []})
-            demandes = load_json(ML_REQUESTS_FILE, [])
-            jetons = load_json(ML_TOKENS_FILE, [])
+            demandes = oubli.lire_strict_liste(ML_REQUESTS_FILE)
+            jetons_ml = oubli.lire_strict_liste(ML_TOKENS_FILE)
             peers, wg, retires = oubli.oublier(peers_doc, wg_state, req.nom, handshakes=mesh.load_handshakes(),
                                                now=time.time(), local=local, force=req.force, cle=req.public_key,
                                                empreinte=req.fingerprint, cle_maitre=cle_maitre)
-            demandes, jetons, n_jonctions = oubli.oublier_jonctions(demandes, jetons, req.nom, retires)
+            demandes, jetons_ml, n_jonctions = oubli.oublier_jonctions(demandes, jetons_ml, req.nom, retires)
             oubli.ecrire_atomique(WG_MESH_CONFIG, wg, 0o600)   # secubox-p2p-mesh.path → sbx-mesh-up rend la conf persistée
             oubli.ecrire_atomique(PEERS_FILE, peers, 0o644)
-            oubli.ecrire_atomique(ML_REQUESTS_FILE, demandes, 0o600)
-            oubli.ecrire_atomique(ML_TOKENS_FILE, jetons, 0o600)
+            if n_jonctions["demandes"]:
+                oubli.ecrire_atomique(ML_REQUESTS_FILE, demandes, 0o600)
+            if n_jonctions["jetons"]:
+                oubli.ecrire_atomique(ML_TOKENS_FILE, jetons_ml, 0o600)
     except oubli.EtatIllisible as e:
         _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=acteur)
         raise HTTPException(status_code=503, detail="état du maillage illisible : rien n'est modifié") from None
     except oubli.Refus as e:
         _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=acteur)
         raise HTTPException(status_code=409, detail=str(e)) from None
-    etapes["registre"] = {"ok": True, "detail": f"{retires['registre']} entrée(s) du registre, {retires['wg']} pair(s) wg-mesh"}
-    etapes["jonctions"] = {"ok": True, "detail": f"{n_jonctions['demandes']} demande(s), {n_jonctions['jetons']} jeton(s) révoqué(s)"}
+    etapes: Dict[str, Dict] = {
+        "registre": {"ok": True, "detail": f"{retires['registre']} entrée(s) du registre, {retires['wg']} pair(s) wg-mesh"},
+        "jonctions": {"ok": True, "detail": f"{n_jonctions['demandes']} demande(s), {n_jonctions['jetons']} jeton(s) révoqué(s)"},
+    }
     try:
         pairs_enroles.publier(peers, PAIRS_ENROLES_DIR)
         etapes["projection"] = {"ok": True, "detail": "pairs-enroles.json republié"}
     except (pairs_enroles.ProjectionErreur, OSError) as e:
         etapes["projection"] = {"ok": False, "detail": str(e)[:300]}
-    nom_libre = bool(retires.get("nom_libre"))
-    etapes.update(_oubli_suites_root(retires, req.nom if nom_libre else None))
-    if nom_libre:
-        etapes["pilotage"] = _oubli_pilotage(req.nom, req.force)
-    else:
-        etapes["pilotage"] = {"ok": True, "detail": "nom encore porté par un autre pair : Flotte gardée"}
-        etapes.setdefault("autoload", {"ok": True, "detail": "nom encore porté par un autre pair : abonnement gardé"})
-    restes = [k for k, v in etapes.items() if not v.get("ok")]
-    for k in restes:
-        log.warning("oubli de %s : étape %s en échec : %s", req.nom, k, etapes[k].get("detail"))
-        _audit_jonction("p2p_noeud_oubli_partiel", noeud=req.nom, etape=k, motif=etapes[k].get("detail"), acteur=acteur)
-    _audit_jonction("p2p_noeud_oublie", noeud=req.nom, force=req.force, acteur=acteur, registre=retires["registre"],
-                    wg=retires["wg"], cles=retires["cles"], ips=retires["ips"], restes=restes)
-    return {"status": "partiel" if restes else "ok", "oublie": req.nom,
-            "retires": {"registre": retires["registre"], "wg": retires["wg"], **n_jonctions},
-            "etapes": etapes, "restes": restes}
+    op = secrets.token_hex(16)
+    with _operations_verrou:
+        while len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX:
+            OPERATIONS_OUBLI.pop(next(iter(OPERATIONS_OUBLI)))
+        OPERATIONS_OUBLI[op] = {"operation": op, "oublie": req.nom, "etat": "en_cours", "status": "en_cours",
+                                "retires": {"registre": retires["registre"], "wg": retires["wg"], **n_jonctions},
+                                "etapes": etapes, "restes": [], "debut": time.time()}
+    _lancer_operation(lambda: _finir_oubli(op, req.nom, retires, req.force, acteur))
+    return {"operation": op, "etat": "en_cours", "oublie": req.nom, "suivi": f"/api/v1/p2p/master-link/oublier/{op}"}
+
+
+@app.get("/master-link/oublier/{operation}")
+def ml_oublier_suivi(operation: str, user: dict = Depends(require_jwt)):
+    """#3362 : état d'une opération d'oubli (étapes faites, restes, « termine »). Inconnue (ou service redémarré) : 404."""
+    if not re.fullmatch(r"[0-9a-f]{32}", operation):
+        raise HTTPException(status_code=404, detail="opération inconnue")
+    with _operations_verrou:
+        d = OPERATIONS_OUBLI.get(operation)
+        if d is None:
+            raise HTTPException(status_code=404, detail="opération inconnue")
+        return json.loads(json.dumps(d))
 
 
 @app.post("/master-link/approve")

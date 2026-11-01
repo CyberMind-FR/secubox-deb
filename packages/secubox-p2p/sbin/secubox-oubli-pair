@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3 -I
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
@@ -6,7 +6,7 @@
 """secubox-oubli-pair — suites root de « Oublier ce nœud » (#3362), appelées par secubox-p2p (POST /master-link/oublier)
 par `sudo -n`, après que l'état (peers.json, wg_mesh.json) a été écrit SANS le pair.
 
-  secubox-oubli-pair [--cle <clé publique>]… [--ip <10.x mesh>]… [--nom <pair>]
+  secubox-oubli-pair --acteur <administrateur> [--cle <clé publique>]… [--ip <10.x mesh>]… [--nom <pair>] [--force]
 
 Étapes, chacune indépendante, chacune auditée (p2p_oubli_suite) ; la sortie est un JSON {"etapes": {nom: {ok, detail}}} :
   wg_direct  `wg set wg-mesh peer <clé> remove` pour chaque clé EXACTE encore vue sur l'interface (jamais d'autre forme) ;
@@ -17,7 +17,11 @@ par `sudo -n`, après que l'état (peers.json, wg_mesh.json) a été écrit SANS
 GARDES (le compte `secubox` écrit wg_mesh.json : l'assistant ne lui fait pas confiance pour autant) : chaque clé doit être
 une clé WireGuard valide, ABSENTE de wg_mesh.json et différente de celle de l'ancre du maître ; chaque adresse doit être
 dans le réseau du maillage et tenue par aucun pair restant ; le nom doit être valide et porté par aucun pair restant
-(wg_mesh.json, peers.json). État illisible, argument refusé ou rien à faire : code 2, aucune action.
+(wg_mesh.json, peers.json). Les états sont lus sans suivre de lien, fichiers ordinaires de root ou de `secubox`.
+Recoupement avec une source que le compte `secubox` n'écrit pas : l'interface du noyau. Une clé dont la poignée de main
+(`wg show wg-mesh latest-handshakes`) a moins de 180 s est refusée, sauf `--force` (transmis par la route quand
+l'administrateur force, audité). État illisible, argument refusé ou rien à faire : code 2, aucune action.
+Audit : une ligne par étape, avec l'acteur ; un audit non écrit est dit sur stderr et dans la sortie (`audit_ok`).
 
 Surcharges réservées aux essais, honorées HORS root seulement : SBX_OUBLI_WG_ETAT, SBX_OUBLI_PEERS, SBX_OUBLI_ANCRE,
 SBX_OUBLI_AUDIT, SBX_OUBLI_WG_BIN, SBX_OUBLI_RELAIS, SBX_OUBLI_NOMS, SBX_OUBLI_NOMS_CONF, SBX_OUBLI_AUTOLOADCTL."""
@@ -25,14 +29,21 @@ import argparse
 import ipaddress
 import json
 import os
+import pwd
 import re
+import stat
 import subprocess
 import sys
 import time
 
 RE_CLE = re.compile(r"^[A-Za-z0-9+/]{43}=$")
-RE_NOM = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
+RE_NOM = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}$")          # nom de pair de l'autoload (31 au plus)
+RE_ACTEUR = re.compile(r"^[A-Za-z0-9._@-]{1,64}$")
 IFACE = "wg-mesh"
+POIGNEE_RECENTE_S = 180
+AUDIT_OK = [True]
+ACTEUR = ["inconnu"]
+FORCE = [False]
 DEFAUTS = {
     "SBX_OUBLI_WG_ETAT": "/var/lib/secubox/p2p/wg_mesh.json",
     "SBX_OUBLI_PEERS": "/var/lib/secubox/p2p/peers.json",
@@ -52,22 +63,41 @@ def chemin(cle: str) -> str:
     return DEFAUTS[cle]
 
 
-def lire(path: str, defaut):
+def _proprietaires_admis() -> set:
+    admis = {0}
     try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
+        admis.add(pwd.getpwnam("secubox").pw_uid)
+    except KeyError:
+        pass
+    if os.geteuid() != 0:                      # essais hors root : les fichiers sont à l'utilisateur de l'essai
+        admis.add(os.geteuid())
+    return admis
+
+
+def lire(path: str, defaut):
+    """JSON lu SANS suivre de lien (O_NOFOLLOW), fichier ordinaire de root ou de `secubox` ; sinon ValueError."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     except FileNotFoundError:
         return defaut
+    except OSError as e:
+        raise ValueError(f"{path} : ouverture refusée ({e.strerror})") from e
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if not stat.S_ISREG(st.st_mode) or st.st_uid not in _proprietaires_admis() or st.st_size > 4 * 1024 * 1024:
+            raise ValueError(f"{path} : fichier refusé (type, propriétaire ou taille)")
+        return json.loads(f.read().decode("utf-8"))
 
 
 def audit(etape: str, ok: bool, detail: str) -> None:
     ligne = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "p2p", "evenement": "p2p_oubli_suite",
-             "etape": etape, "ok": ok, "detail": detail[:300]}
+             "etape": etape, "ok": ok, "detail": detail[:300], "acteur": ACTEUR[0], "force": FORCE[0]}
     try:
         with open(chemin("SBX_OUBLI_AUDIT"), "a", encoding="utf-8") as f:
             f.write(json.dumps(ligne, ensure_ascii=False) + "\n")
-    except OSError:
-        pass
+    except OSError as e:
+        AUDIT_OK[0] = False
+        print(f"secubox-oubli-pair : audit non écrit ({e.strerror}) : {etape}", file=sys.stderr)
 
 
 def lancer(argv, timeout: int = 120):
@@ -128,7 +158,27 @@ def gardes(a):
         noms = {p.get("name") for p in pairs} | {p.get("name") for p in registre.get("peers") or [] if isinstance(p, dict)}
         if a.nom in noms:
             return "nom encore porté par un pair", None
+    recentes = poignees_recentes(a.cle)
+    if recentes and not a.force:
+        return f"poignée de main WireGuard de moins de {POIGNEE_RECENTE_S} s ({', '.join(recentes)}) : --force exigé", None
     return None, None
+
+
+def poignees_recentes(cles) -> list:
+    """Clés de `cles` dont l'interface (noyau, hors de portée du compte secubox) a vu une poignée de main récente."""
+    if not cles:
+        return []
+    rc, sortie = lancer([chemin("SBX_OUBLI_WG_BIN"), "show", IFACE, "latest-handshakes"], timeout=20)
+    if rc != 0:
+        return []                                  # interface absente : aucun pair n'y vit
+    maintenant, out = time.time(), []
+    for ligne in sortie.splitlines():
+        champs = ligne.split()
+        if len(champs) == 2 and champs[0] in cles and champs[1].isdigit():
+            ts = int(champs[1])
+            if ts > 0 and maintenant - ts < POIGNEE_RECENTE_S:
+                out.append(champs[0][:8])
+    return out
 
 
 def etape_wg(cles) -> dict:
@@ -169,7 +219,10 @@ def etape_noms(nom, ips) -> dict:
     noms = chemin("SBX_OUBLI_NOMS")
     if not os.access(noms, os.X_OK):
         return {"ok": True, "detail": "annuaire-noms absent"}
-    rc, err = lancer([noms], timeout=120)
+    rc, err = lancer([noms, "--sans-redemarrage"], timeout=600)
+    if rc == 3:
+        return {"ok": False, "detail": "noms régénérés, mais Unbound n'écoute pas une adresse : redémarrage à décider "
+                                       "par l'administrateur (jamais depuis l'oubli)"}
     if rc != 0:
         return {"ok": False, "detail": f"régénération : {err[-200:]}"}
     try:
@@ -200,10 +253,15 @@ def main(argv=None) -> int:
     ap.add_argument("--cle", action="append", default=[])
     ap.add_argument("--ip", action="append", default=[])
     ap.add_argument("--nom")
+    ap.add_argument("--acteur", default="inconnu")
+    ap.add_argument("--force", action="store_true")
     try:
         a = ap.parse_args(argv)
     except SystemExit:
         return 2
+    if not RE_ACTEUR.match(a.acteur):
+        return refuser("acteur invalide")
+    ACTEUR[0], FORCE[0] = a.acteur, bool(a.force)
     if len(a.cle) > 8 or len(a.ip) > 8:
         return refuser("trop de cibles")
     motif, _ = gardes(a)
@@ -218,7 +276,7 @@ def main(argv=None) -> int:
         except (OSError, subprocess.SubprocessError) as e:
             etapes[nom] = {"ok": False, "detail": f"{type(e).__name__} : {str(e)[:200]}"}
         audit(nom, etapes[nom]["ok"], etapes[nom]["detail"])
-    print(json.dumps({"etapes": etapes}, ensure_ascii=False))
+    print(json.dumps({"etapes": etapes, "audit_ok": AUDIT_OK[0]}, ensure_ascii=False))
     return 0
 
 

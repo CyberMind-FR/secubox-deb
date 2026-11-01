@@ -16,6 +16,8 @@ def test_bouton_oublier_et_routes():
     # plus le pilotage elle-même (elle oubliait la box homonyme quand une ancienne clé était désignée) et montre ce qui reste.
     assert "/api/v1/pilotage/boxes/" not in bloc
     assert "d.restes" in bloc and "partiel" in bloc
+    # correction #3362 : 202 + opération suivie par GET jusqu'à « termine » (plus de 504 trompeur)
+    assert "/api/v1/p2p/master-link/oublier/' + encodeURIComponent(" in bloc and "'termine'" in bloc and "operation" in bloc
     assert "saisie.value !== nom" in bloc                                 # nom retapé, sinon rien n'est envoyé
     assert "forcer.checked" in bloc and "force: true" in bloc            # nœud encore en ligne : « forcer » coché
     assert "oublierNoeud(p.name, act, p.public_key)" in PAGE and "public_key: cle" in bloc and "<th>Dernier vu</th><th></th>" in PAGE

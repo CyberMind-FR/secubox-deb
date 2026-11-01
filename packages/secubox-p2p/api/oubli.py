@@ -46,6 +46,9 @@ def verrou(dossier):
     """Verrou exclusif `<dossier>/.etat.lock` (flock) des écrivains de peers.json et wg_mesh.json."""
     fd = os.open(os.path.join(str(dossier), VERROU), os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
     try:
+        if os.geteuid() == 0:            # #3362 : créé par root (sbx-mesh-invite), il resterait fermé au service
+            st = os.stat(str(dossier))
+            os.fchown(fd, st.st_uid, st.st_gid)
         fcntl.flock(fd, fcntl.LOCK_EX)
         yield
     finally:
@@ -65,6 +68,24 @@ def lire_strict(chemin, defaut):
     except ValueError as e:
         raise EtatIllisible(f"{chemin} illisible") from e
     if not isinstance(doc, dict):
+        raise EtatIllisible(f"{chemin} de forme inattendue")
+    return doc
+
+
+def lire_strict_liste(chemin):
+    """#3362 : demandes et jetons de jonction (listes JSON). Absent → [] ; présent mais illisible ou pas une liste →
+    EtatIllisible : jamais lu comme vide, donc jamais réécrit vide (load_json avalait l'erreur et rendait [])."""
+    try:
+        texte = Path(chemin).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        raise EtatIllisible(f"{chemin} illisible") from e
+    try:
+        doc = json.loads(texte)
+    except ValueError as e:
+        raise EtatIllisible(f"{chemin} illisible") from e
+    if not isinstance(doc, list):
         raise EtatIllisible(f"{chemin} de forme inattendue")
     return doc
 

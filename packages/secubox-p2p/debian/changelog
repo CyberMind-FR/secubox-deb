@@ -9,6 +9,13 @@ secubox-p2p (1.21.0-1~trixie1) trixie; urgency=medium
     gardes reverifiees). Reponse partiel avec les etapes restantes, auditees.
   * Statut des pairs du registre mesure par poignee de main WireGuard,
     jamais online fige (ref #3362).
+  * Correction apres revue : jetons et demandes lus strictement (503 si
+    illisibles), reecrits seulement si une entree du pair part, tous leurs
+    ecrivains atomiques sous le meme verrou ; oubli asynchrone (202 + GET
+    de l operation) ; secubox-oubli-pair refuse une poignee de main de moins
+    de 180 s sauf --force audite, --acteur, lecture O_NOFOLLOW, profil
+    AppArmor enforce charge par le postinst ; relais : comparaison litterale
+    des adresses, retraits journalises (ref #3362).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 10:10:28 +0100
 
