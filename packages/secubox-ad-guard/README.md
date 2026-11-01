@@ -162,6 +162,16 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 
 `/status` (`clients[*]`, clé `appareils`) et `/auto/detection` (`appareils[*]`) gagnent `profil`, `profil_source`, `profil_confiance` et `ips` ; aucun champ retiré. État `etat.json` en schéma 2 (#3374) : `clients` inchangé (une entrée par adresse), plus `schema: 2` et `appareils` (MAC → `nom`, `profil` manuel). Migration au chargement (API et moteur auto), idempotente, sauvegarde unique `etat.json.avant-3374` ; le NAC est lu en lecture seule (`/var/lib/secubox/nac/devices.db`, fichier ordinaire, propriétaire vérifié, 64 Mio au plus), repli `ip neigh`. Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot1-design.md`.
 
+### Taxonomie unique (lot 2, 1.18.0, #3374)
+
+| Route | Garde | Rôle |
+|---|---|---|
+| `GET /adblock-tv/classification?mac=&categorie=&limite=` | `require_lecture` | lu dans le cache `classification-cache.json` (0640) que le moteur AUTO rafraîchit toutes les 5 min ; cache absent : `domaines: []`, `cache: false`. Par ligne : `domaine`, `mac` **tronquée**, `categorie`, `source` (`liste`, `apprentissage`, `ndpi`, `manuelle`, `profil`, ou `aucune`), `confiance`, `derniere_observation` **au jour**, `requetes`, `bloquees`, `ancienne`, `protegee` |
+| `GET /adblock-tv/classification/detail?mac=&categorie=&limite=` | `require_jwt` | même cache, MAC complète, `ips`, horodatage à la seconde (`precision`) |
+| `POST /adblock-tv/classification` | `require_jwt` | `{"domaine", "categorie" \| null, "mac" \| null}` (`extra=forbid`) : correction manuelle, par MAC ou pour toute la maison ; `null` la retire ; refusée si trop large (suffixe public, parent d'une entrée protégée de la référence) ; auditée dans `audit.log` par `sudo secubox-adguard-tv audit-classification` (enregistrement sur l'entrée standard, revalidé par root) AVANT écriture ; aucun effet DNS immédiat |
+
+Catégories : `PUBLICITE`, `TRACKING`, `TELEMETRIE`, `STREAMING`, `CDN`, `DRM`, `AUTHENTIFICATION`, `MISE_A_JOUR`, `SERVICES_CONSTRUCTEUR`, `INCONNU` (`api/dnstv_taxonomie.py`, correspondance depuis les anciennes valeurs). **Garde** : `STREAMING`, `CDN`, `DRM`, `AUTHENTIFICATION`, `MISE_A_JOUR` et `INCONNU` ne sont jamais mis en essai ni confirmés par le moteur AUTO (essai automatique, confirmation automatique, profil de base à l'ajout) ; ils restent proposés en candidats. Seule une décision de l'administrateur (règle confirmée à la main sur au moins un appareil — valable alors pour tous les chemins automatiques et tous les appareils —, ou correction de catégorie) lève la garde. Corrections illisibles : ajout, profil, essai et confirmation automatiques suspendus (fermé en cas d'échec). `systeme` et `connectivite` de services.txt sont INCONNU, donc protégés. Référence sourcée : `lists/reference-tv.txt` (au manifeste). Corrections : `classification.json` dans le dossier d'état, écrit atomiquement sous le verrou des règles. Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot2-design.md`.
+
 « Bloquer » réutilise `POST /adblock-tv/custom`. La vérification compare, pour chaque adresse de l'appareil, la vue Unbound attendue (`sbx-tv-auto-<slug>`, ou aucune pour `off`) à celle du drop-in.
 
 ## Capteur DNS d'Actor Intelligence (#2240)

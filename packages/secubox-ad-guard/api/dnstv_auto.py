@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Dict, List
 
 try:
-    from . import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux
+    from . import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
 except ImportError:
-    from api import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux
+    from api import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
 
 HISTORIQUE_H = 48
 
@@ -67,7 +67,7 @@ def appareils(etat: dict) -> Dict[str, List[str]]:
     return out
 
 
-def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note) -> None:
+def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note, refus=lambda app, d: None) -> None:
     """Essais arrivés à échéance (#2047) : sans régression, la règle est CONFIRMÉE automatiquement ; si l'appareil a été trop peu
     actif pour l'éprouver, l'essai est prolongé d'une période ; en cas de régression (rafale de refus, contenu habituel disparu),
     on ne touche à rien : l'expiration normale retire la règle."""
@@ -76,6 +76,8 @@ def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note
         adresses = adr.get(r["appareil"])
         if not adresses:
             continue                                         # appareil plus en mode auto : l'expiration joue
+        if refus(r["appareil"], r["domaine"]):
+            continue                                         # catégorie protégée (#3374) : jamais confirmée seule, l'expiration la retire
         evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
         if dnstv_signaux.rafale(evts, {r["domaine"]}, maintenant, reglage.seuil_refus_min, reglage.duree_rafale_min):
             continue
@@ -89,8 +91,16 @@ def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note
         note(regles.transiter(r["id"], "confirme", "auto", "essai sans régression", maintenant), "essai", "confirme", "essai sans régression")
 
 
-def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
+def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None) -> dict:
+    """Un passage du moteur. `taxo` (#3374) : taxonomie complète (corrections manuelles comprises) ; à défaut, celle des listes du paquet
+    avec le classeur `classer`. Garde : un domaine de catégorie protégée n'entre jamais SEUL en essai ni en confirmation."""
     changements, applique, candidats = [], False, 0
+    taxo = taxo or dnstv_taxonomie.Taxonomie.depuis_dossier(classer=classer, regles=regles)
+    macs = dnstv_taxonomie.macs_par_appareil(etat)
+    admin = dnstv_taxonomie.confirmes_par_admin(regles)       # une fois par passage : le moteur ne confirme jamais au nom de l'administrateur
+
+    def refus(appareil: str, domaine: str):
+        return dnstv_taxonomie.refus_auto(taxo, domaine, macs.get(appareil, ()), admin)
     def note(r, de, vers, motif):
         nonlocal applique
         changements.append({"appareil": r["appareil"], "domaine": r["domaine"], "de": de, "vers": vers, "motif": motif})
@@ -98,7 +108,7 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
             applique = True
     avant = {r["id"]: r["etat"] for r in regles.liste()}
     if reglage.confirmation_auto:
-        _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note)
+        _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note, refus)
     avant = {r["id"]: r["etat"] for r in regles.liste()}
     for r in regles.expirer(maintenant):
         note(r, avant[r["id"]], r["etat"], r["motif"])
@@ -120,7 +130,7 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
                 continue
             candidats += 1
             changements.append({"appareil": appareil, "domaine": c.domaine, "de": "", "vers": "candidat", "motif": c.motif})
-            if reglage.auto_essai and c.risque == "faible":     # un candidat « partagé » ou « variable » reste à valider par un humain
+            if reglage.auto_essai and c.risque == "faible" and not refus(appareil, c.domaine):   # « partagé », « variable » ou protégé : humain
                 r = regles.transiter(n["id"], "essai", "auto", "essai automatique", maintenant)
                 note(r, "candidat", "essai", "essai automatique")
         en_essai = [r for r in regles.liste() if r["appareil"] == appareil and r["etat"] == "essai"]
@@ -155,7 +165,7 @@ def tick(etat, regles, magasin, classer, reglage, maintenant) -> dict:
     if reglage.auto_essai:
         for r in regles.liste():
             if (r["etat"] == "candidat" and r.get("origine") == "auto" and r["risque"] == "faible"
-                    and str(r.get("motif", "")).startswith("confirmé sur ")):
+                    and str(r.get("motif", "")).startswith("confirmé sur ") and not refus(r["appareil"], r["domaine"])):
                 note(regles.transiter(r["id"], "essai", "auto", "essai automatique (confirmé ailleurs)", maintenant),
                      "candidat", "essai", "essai automatique (confirmé ailleurs)")
     return {"changements": changements, "candidats": candidats, "applique": applique, "agrege": agrege}

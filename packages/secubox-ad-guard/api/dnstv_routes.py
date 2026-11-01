@@ -26,9 +26,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from secubox_core.auth import require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
+    from . import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
+    from api import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 logger = logging.getLogger("secubox.ad-guard.adblock-tv")
@@ -997,3 +997,112 @@ def profil_corriger(mac: str, corps: ProfilIn):
     logger.info("profil d'appareil %s corrigé : %s", dnstv_appareils.mac_courte(mac), corps.type)
     a = _appareil_de(_vue_appareils(etat), mac, "")
     return dict(a or {}, mac=mac)
+
+
+# ── SBX TV PRIVACY lot 2 (#3374) : taxonomie unique, classification sourcée ────────────────────────────────────────────
+
+CLASSIFICATION_MAX = 1000
+
+
+class ClassificationIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    domaine: str = Field(min_length=3, max_length=253)
+    categorie: Optional[str] = Field(default=None, max_length=24)     # None : retire la correction manuelle
+    mac: Optional[str] = Field(default=None, max_length=17)           # None : toute la maison
+
+
+def _taxonomie(manuelles: dict) -> "dnstv_taxonomie.Taxonomie":
+    try:
+        regles = dnstv_regles.charger()
+    except dnstv_regles.ErreurRegle:
+        regles = None                                                  # règles illisibles : pas de source « apprentissage », le reste vaut
+    p = _perso_path()
+    return dnstv_taxonomie.Taxonomie.depuis_dossier(perso=p if p.is_file() and not p.is_symlink() else None, manuelles=manuelles, regles=regles)
+
+
+def _filtre_mac(mac: Optional[str]) -> Optional[str]:
+    if mac is None or mac == "":
+        return None
+    m = mac.strip().lower()
+    if not dnstv.MAC_RE.match(m):
+        raise HTTPException(422, "MAC invalide")
+    return m
+
+
+def _classification_filtree(mac: Optional[str], categorie: Optional[str], limite: int) -> tuple:
+    """(lignes filtrées, total, cache lu ?) depuis le cache écrit par le moteur AUTO ; aucun calcul lourd dans la requête."""
+    m_filtre = _filtre_mac(mac)
+    if categorie is not None and categorie not in dnstv_taxonomie.CATEGORIES:
+        raise HTTPException(422, "catégorie inconnue")
+    cache = dnstv_taxonomie.lire_cache()
+    if cache is None:
+        return [], 0, None
+    out = [e for e in cache["domaines"] if isinstance(e, dict)
+           and (m_filtre is None or e.get("mac") == m_filtre) and (categorie is None or e.get("categorie") == categorie)]
+    return out[:max(1, min(int(limite), CLASSIFICATION_MAX))], len(out), cache.get("genere")
+
+
+def _reponse(lignes: list, total: int, genere) -> dict:
+    return {"domaines": lignes, "total": total, "cache": genere is not None, "genere": genere,
+            "categories": list(dnstv_taxonomie.CATEGORIES), "protegees": sorted(dnstv_taxonomie.PROTEGEES),
+            "sources": list(dnstv_taxonomie.SOURCES)}
+
+
+def _pour_lecteur(e: dict) -> dict:
+    """Vue d'un simple lecteur : MAC tronquée, dernière observation au jour, sans adresses."""
+    d = {k: v for k, v in e.items() if k not in ("ips", "mac", "derniere_observation", "precision")}
+    d["mac"] = dnstv_appareils.mac_courte(e["mac"]) if e.get("mac") else None
+    d["derniere_observation"] = dnstv._jour(e["derniere_observation"]) if e.get("derniere_observation") else None
+    return d
+
+
+@router.get("/classification", dependencies=[Depends(require_lecture)])
+def classification(mac: Optional[str] = None, categorie: Optional[str] = None, limite: int = 500):
+    """Domaines classés par appareil (catégorie unique, source, confiance, dernière observation au jour, MAC tronquée), lus dans le
+    cache que le moteur AUTO rafraîchit. Cache absent : réponse vide, `cache: false`. Le détail complet : `/classification/detail`."""
+    lignes, total, genere = _classification_filtree(mac, categorie, limite)
+    return _reponse([_pour_lecteur(e) for e in lignes], total, genere)
+
+
+@router.get("/classification/detail", dependencies=[Depends(require_jwt)])
+def classification_detail(mac: Optional[str] = None, categorie: Optional[str] = None, limite: int = 500):
+    """Comme `/classification`, avec MAC complète, adresses et horodatage à la seconde : administrateur seulement."""
+    return _reponse(*_classification_filtree(mac, categorie, limite))
+
+
+def _ctl_entree(action: str, entree: str) -> None:
+    """Contrôleur root avec une entrée standard bornée (verbe exact du sudoers). Un échec rend 502."""
+    argv = ["sudo", "-n", CTL, action] if os.geteuid() != 0 else [CTL, action]
+    try:
+        r = subprocess.run(argv, input=entree, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise HTTPException(502, f"contrôleur injoignable ({type(e).__name__})") from e
+    if r.returncode != 0:
+        raise HTTPException(502, ((r.stderr or r.stdout).strip() or "audit refusé")[:300])
+
+
+def _acteur(jeton) -> str:
+    sub = str((jeton or {}).get("sub") or "inconnu") if isinstance(jeton, dict) else "inconnu"
+    return sub if re.fullmatch(r"[A-Za-z0-9_.@-]{1,64}", sub) else "inconnu"
+
+
+@router.post("/classification")
+def classification_corriger(corps: ClassificationIn, jeton=Depends(require_jwt)):
+    """Correction manuelle de la catégorie d'un domaine (pour une MAC, ou pour toute la maison) ; `categorie: null` la retire.
+    Auditée dans audit.log AVANT d'être écrite (un audit impossible refuse la correction). Aucun effet DNS immédiat."""
+    m = _filtre_mac(corps.mac) if corps.mac else None
+    with _verrou():
+        try:
+            avant = dnstv_taxonomie.charger_manuelles()
+            ref = dnstv_taxonomie.Taxonomie.depuis_dossier().reference.items()
+            apres = dnstv_taxonomie.corriger(avant, corps.domaine, m, corps.categorie, int(time.time()), reference=ref)
+        except dnstv_taxonomie.ErreurTaxonomie as e:
+            raise HTTPException(422, str(e)) from e
+        domaine = dnstv.valider_domaine(corps.domaine)
+        ancienne = (avant.get((m or "", domaine)) or {}).get("categorie")
+        _ctl_entree("audit-classification", json.dumps({
+            "acteur": _acteur(jeton), "domaine": domaine, "mac": dnstv_appareils.mac_courte(m) if m else "maison",
+            "ancienne": ancienne, "nouvelle": corps.categorie}))
+        dnstv_taxonomie.ecrire_manuelles(apres)
+    logger.info("classification corrigée : %s (%s) %s -> %s", domaine, dnstv_appareils.mac_courte(m) if m else "maison", ancienne, corps.categorie)
+    return dict(_taxonomie(apres).classer(domaine, [m] if m else []), mac=m)
