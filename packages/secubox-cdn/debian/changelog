@@ -1,3 +1,12 @@
+secubox-cdn (1.5.3-1~trixie1) trixie; urgency=medium
+
+  * /preload_url : cible vérifiée (api/cible.py) — http(s) sans identifiants, port web,
+    nom résolu exclusivement vers des adresses publiques ; redirections non suivies,
+    réponse lue en flux bornée à 50 Mio et 60 s, connexion épinglée sur l IP validée
+    (rebinding), résolution hors boucle, refus consignés (ref #3284).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 08:09:03 +0100
+
 secubox-cdn (1.5.2-1~trixie1) trixie; urgency=medium
 
   * /restart (rechargement de nginx) passe de GET à POST, et la page Maintenance l'appelle
