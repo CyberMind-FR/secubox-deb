@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-IrltPiMVTiOTUcxuFQVhpJi9yTXpJ4jiIOdCBK6CC1Y='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-uAwI6+2mE3Bm5KMPzXiWC8qhSrPGzDFqzpHJthc8ifc='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -675,7 +675,7 @@
   function rendreEtatDpi(e){
     var sel=el('ap-mac'),garde=sel.value;vider(sel);
     if(!e||!e.disponible){el('ap-sources').textContent='analyse indisponible ('+((e&&e.raison)||'absent')+')';}
-    else el('ap-sources').textContent='sources : sbxdpi '+(e.sources.sbxdpi||'—')+', conntrack '+(e.sources.conntrack||'—')+(e.pause_charge?' — nDPI arrêté (charge élevée)':'');
+    else el('ap-sources').textContent='sources : sbxdpi '+(e.sources.sbxdpi||'—')+', conntrack '+(e.sources.conntrack||'—')+(e.pause_charge?' — DPI ARRÊTÉ pour toute la box (Hall, /ndpid/ compris) : charge élevée plus de 5 min ; relance manuelle':'');
     el('ap-reprendre').hidden=!(e&&e.pause_charge);
     ((e&&e.appareils)||[]).forEach(function(a){if(a.mac)sel.appendChild(h('option',{value:a.mac},a.nom||a.mac));});
     if(garde)sel.value=garde;

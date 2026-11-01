@@ -40,15 +40,4 @@ choisit() {
 
 IF="$(choisit)" || { echo "nDPId : aucune interface à analyser sur cette box (aucune carte physique), rien à lancer"; exit 0; }
 echo "nDPId : interface $IF"
-# SBX TV Privacy lot 4 (#3374) : filtre de capture par MAC, posé par root (secubox-adguard-tv dpi-cibles) dans
-# /etc/secubox/ndpid-engine.d/tv-privacy.env. Seule la forme « ether host <mac> [or ether host <mac>]… » est acceptée ;
-# toute autre valeur est ignorée (capture sans filtre, comme avant) et signalée.
-MAC_RE='[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]'
-if [ -n "${FILTRE_BPF:-}" ]; then
-    if printf '%s\n' "$FILTRE_BPF" | grep -Eqx "ether host $MAC_RE( or ether host $MAC_RE){0,255}"; then
-        echo "nDPId : filtre de capture SBX TV Privacy ($(printf '%s' "$FILTRE_BPF" | grep -o 'ether host' | wc -l) appareil(s))"
-        exec "$NDPID" -l -i "$IF" -B "$FILTRE_BPF" -c "$COLLECTEUR" -u "$UTILISATEUR" -g "$GROUPE"
-    fi
-    echo "nDPId : filtre de capture hors forme, ignoré" >&2
-fi
 exec "$NDPID" -l -i "$IF" -c "$COLLECTEUR" -u "$UTILISATEUR" -g "$GROUPE"

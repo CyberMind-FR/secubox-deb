@@ -391,7 +391,12 @@ Livré dans le worktree #3374 : `secubox-ad-guard` 1.21.0, `secubox-toolbox-ng` 
   `nft -c` ou au chargement est audité et rendu (`contournement: refuse|retour`) **sans** faire échouer l'application du DNS (le filtrage DNS
   prime) ; « nouveau » pour la corrélation = non demandé dans les 10 min précédant la coupure (pas 30 jours) ; les constats « sans DNS » se
   fondent sur les réponses du cache d'Unbound de toute la maison (24 h), pas par appareil.
-- Le filtre par MAC restreint **toute** la capture de nDPId tant qu'ad-guard a des cibles : la carte DPI du Hall et `/ndpid/` ne voient plus
-  que les TV du périmètre. À trancher avec le propriétaire avant déploiement.
-- Option `-B` de nDPId (filtre BPF) : à vérifier sur la version compilée (1.7) avant déploiement.
+- **Arbitrage du 2026-11-01 (remplace § 3.2)** : aucun filtre de capture dans nDPId (il aurait réduit toute la capture aux TV et cassé
+  la carte DPI du Hall et `/ndpid/`). nDPId garde sa capture complète ; le tri par appareil se fait **uniquement dans sbxdpi** (cibles
+  écrites par `dpi-cibles`, qui ne pose plus que ce fichier). L'option `-B` sort du lot. Bridage conservé : `Nice=10` et `CPUQuota=40%`
+  (et non 25 %) : aucune mesure de nDPId sur gk2 n'existe, nDPId est mono-fil et capture tout le LAN ; un plafond trop bas ferait perdre
+  des paquets à pcap et dégraderait `/ndpid/`. À confirmer par la mesure T9 (`pidstat` de nDPId, pertes pcap).
+- Garde de charge : arrêt seulement après **5 minutes** de saturation continue (charge à 5 min > nombre de cœurs) ; elle arrête **tout** le
+  DPI de la box, ce que la page annonce (« DPI ARRÊTÉ pour toute la box (Hall, /ndpid/ compris) ») et que `audit.log` trace ; reprise
+  manuelle.
 - `secubox-pseudo-routeur` 0.2 (`activer-transfert --tv-seulement`, § 10.3) : non construit, en attente de la question 1 du § 12.

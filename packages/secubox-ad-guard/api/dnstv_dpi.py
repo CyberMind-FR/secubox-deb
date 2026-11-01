@@ -507,7 +507,7 @@ def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str
 # ── passage du moteur (secubox-adguard-auto, chaque minute) ─────────────────────────────────────────────────
 FICHIER_ETAT = "etat-dpi.json"
 PERIODE_CIBLES_S = 300
-DUREE_CHARGE_S = 600
+DUREE_CHARGE_S = 300                                  # saturation continue d'au moins 5 min : jamais sur un simple pic
 SBXDPI_APPAREILS = Path(os.environ.get("SECUBOX_ADGUARD_SBXDPI", "/run/secubox/sbxdpi/appareils.json"))
 SBXDPI_MAX = 8 * 1024 * 1024
 
@@ -552,7 +552,7 @@ def _resolus(maintenant: int) -> Set[str]:
 def moteur(maintenant: int, executer: Callable[[str], object], voisins: Dict[str, str], charge=os.getloadavg, cpus=None,
            sbxdpi_chemin: Optional[Path] = None) -> dict:
     """Un passage : cibles (toutes les 5 min ou si elles changent), conntrack (verbe root), fichier de sbxdpi, découvertes, garde de
-    charge (charge à 5 min > nombre de cœurs pendant 10 min : arrêt de nDPId, reprise MANUELLE). N'échoue jamais le moteur."""
+    charge (charge à 5 min > nombre de cœurs pendant 5 min : arrêt de nDPId, reprise MANUELLE). N'échoue jamais le moteur."""
     etat, erreur = dnstv.lire_etat()
     if erreur or not etat.get("actif"):
         return {"ok": False}

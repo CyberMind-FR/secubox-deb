@@ -45,15 +45,18 @@ def test_passage_ecrit_l_etat_et_demande_les_cibles_toutes_les_5_minutes(dossier
     assert "dpi-cibles" in appels
 
 
-def test_garde_de_charge_arrete_nDPId_apres_10_minutes_puis_attend_la_reprise_manuelle(dossier):
+def test_garde_de_charge_arrete_nDPId_apres_5_minutes_puis_attend_la_reprise_manuelle(dossier):
     appels = []
-    for k in range(0, 11):
+    for k in range(0, 5):
+        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k)
+    assert "ndpid-arreter" not in appels                                     # 4 min : un pic, pas un arrêt
+    for k in range(5, 11):
         lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k)
     assert appels.count("ndpid-arreter") == 1
     e = json.loads((dossier / D.FICHIER_ETAT).read_text())
-    assert e["charge"]["pause"] == NOW + 600
+    assert e["charge"]["pause"] == NOW + 300
     lancer(dossier, appels, charge=(0.1, 0.1, 0.1), now=NOW + 1200)
-    assert json.loads((dossier / D.FICHIER_ETAT).read_text())["charge"]["pause"] == NOW + 600     # reprise manuelle seulement
+    assert json.loads((dossier / D.FICHIER_ETAT).read_text())["charge"]["pause"] == NOW + 300     # reprise manuelle seulement
     D.reprendre_manuellement(lambda verbe: appels.append(verbe) or Rep())
     assert "ndpid-reprendre" in appels and json.loads((dossier / D.FICHIER_ETAT).read_text())["charge"]["pause"] is None
 
@@ -62,7 +65,7 @@ def test_charge_breve_n_arrete_rien(dossier):
     appels = []
     lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW)
     lancer(dossier, appels, charge=(0.1, 0.1, 0.1), now=NOW + 60)
-    for k in range(2, 11):
+    for k in range(2, 6):
         lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k)
     assert "ndpid-arreter" not in appels
 

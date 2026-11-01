@@ -12,7 +12,7 @@
   secubox-adguard-tv cache-dump  écrit sur la SORTIE STANDARD les seuls couples « nom<TAB>adresse » (A/AAAA) du cache d'Unbound (#2240) : lecture
                                 seule, rien n'est écrit sur le disque par root ; le capteur DNS les range lui-même, sous son compte
   secubox-adguard-tv conntrack-dump  lot 4 (#3374) : lignes de /proc/net/nf_conntrack dont la source est un appareil du périmètre (lecture seule)
-  secubox-adguard-tv dpi-cibles       lot 4 : filtre BPF par MAC de nDPId et cibles de sbxdpi, reconstruits par root depuis l'état revalidé
+  secubox-adguard-tv dpi-cibles       lot 4 : cibles de sbxdpi (tri par appareil), reconstruites par root depuis l'état revalidé
   secubox-adguard-tv ndpid-arreter    lot 4 : garde de charge, arrête nDPId (reprise manuelle : ndpid-reprendre)
 
 Lancé en root par sudo depuis l'API (utilisateur `secubox`) : l'état et la liste personnalisée sont donc écrits par un compte NON privilégié.
@@ -484,7 +484,6 @@ CONNTRACK = os.environ.get("SECUBOX_ADGUARD_TV_CONNTRACK", "/proc/net/nf_conntra
 SYSTEMCTL = os.environ.get("SECUBOX_ADGUARD_TV_SYSTEMCTL", "systemctl")
 IP_CMD = os.environ.get("SECUBOX_ADGUARD_TV_IP", "ip")
 CIBLES = Path(os.environ.get("SECUBOX_ADGUARD_TV_CIBLES", "/run/secubox/sbxdpi-cibles.json"))
-BPF_ENV = Path(os.environ.get("SECUBOX_ADGUARD_TV_BPF_ENV", "/etc/secubox/ndpid-engine.d/tv-privacy.env"))
 UNITE_NDPID = "secubox-ndpid-engine.service"
 CONNTRACK_MAX = 64 * 1024 * 1024
 
@@ -544,20 +543,15 @@ def dpi_cibles() -> int:
     etat, vois = _perimetre_root()
     c = dnstv_dpi.cibles(etat, vois)
     macs = [a["mac"] for a in c["appareils"] if dnstv.MAC_RE.match(a["mac"])]
-    filtre = " or ".join(f"ether host {m}" for m in macs) or "ether host 00:00:00:00:00:00"     # périmètre vide : nDPId n'analyse rien
-    _ecrire_root(CIBLES, json.dumps(c, sort_keys=True), 0o644)
-    env = ("# Généré par secubox-adguard-tv dpi-cibles (SBX TV Privacy lot 4, #3374) : ne pas modifier à la main.\n"
-           f'FILTRE_BPF="{filtre}"\n')
-    if _ecrire_root(BPF_ENV, env, 0o644):
-        subprocess.run([SYSTEMCTL, "try-restart", UNITE_NDPID], capture_output=True, text=True, timeout=60)
-        audit("dpi-cibles", f"appareils={len(macs)} filtre mis à jour")
+    if _ecrire_root(CIBLES, json.dumps(c, sort_keys=True), 0o644):          # lu par sbxdpi ; AUCUN filtre de capture (Hall, /ndpid/)
+        audit("dpi-cibles", f"appareils={len(macs)} cibles de sbxdpi mises à jour")
     print(json.dumps({"ok": True, "appareils": len(macs)}))
     return 0
 
 
 def ndpid(geste: str) -> int:
     r = subprocess.run([SYSTEMCTL, "stop" if geste == "arreter" else "start", UNITE_NDPID], capture_output=True, text=True, timeout=60)
-    audit("ndpid-arret" if geste == "arreter" else "ndpid-reprise", "garde de charge" if geste == "arreter" else "reprise manuelle")
+    audit("ndpid-arret" if geste == "arreter" else "ndpid-reprise", "garde de charge : TOUT le DPI de la box arrêté" if geste == "arreter" else "reprise manuelle")
     print(json.dumps({"ok": r.returncode == 0}))
     return 0 if r.returncode == 0 else 1
 

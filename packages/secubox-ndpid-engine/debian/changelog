@@ -1,6 +1,6 @@
 secubox-ndpid-engine (1.7.4-1~trixie1) trixie; urgency=medium
 
-  * SBX TV Privacy lot 4 (ref #3374) : filtre de capture par MAC (FILTRE_BPF, lu dans /etc/secubox/ndpid-engine.d/tv-privacy.env, ecrit par root via secubox-adguard-tv dpi-cibles), passe a nDPId par -B ; seule la forme « ether host <mac> [or ether host <mac>]... » est acceptee, toute autre valeur est ignoree et signalee. Garde CPU de l'unite : CPUQuota=25 %, Nice=10. 3 tests.
+  * SBX TV Privacy lot 4 (ref #3374) : garde CPU de l'unite, CPUQuota=40 % et Nice=10. Capture complete inchangee (aucun filtre de capture : la carte DPI du Hall et /ndpid/ gardent tout le trafic) ; le tri par appareil se fait dans sbxdpi. 40 % plutot que 25 % faute de mesure de nDPId sur gk2 (mono-fil, tout le LAN : un plafond trop bas ferait perdre des paquets).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 18:00:00 +0100
 

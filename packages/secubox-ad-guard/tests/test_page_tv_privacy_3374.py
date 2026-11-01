@@ -335,3 +335,7 @@ def test_onglet_applications_dpi_par_appareil():
 
 def test_applications_rafraichies_seulement_onglet_visible():
     assert "if(!document.hidden&&!el('v-applications').hidden" in CODE
+
+
+def test_arret_du_dpi_annonce_pour_toute_la_box():
+    assert "DPI ARRÊTÉ pour toute la box (Hall, /ndpid/ compris)" in CODE and "relance manuelle" in CODE

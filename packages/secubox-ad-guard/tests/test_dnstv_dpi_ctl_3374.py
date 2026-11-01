@@ -28,8 +28,7 @@ def dpi(monde, monkeypatch):  # noqa: F811
                      "*) echo '[]';; esac\n")
     ipcmd.chmod(0o755)
     for k, v in {"SECUBOX_ADGUARD_TV_CONNTRACK": ct, "SECUBOX_ADGUARD_TV_SYSTEMCTL": sysctl, "SECUBOX_ADGUARD_TV_IP": ipcmd,
-                 "SECUBOX_ADGUARD_TV_CIBLES": t / "run" / "sbxdpi-cibles.json",
-                 "SECUBOX_ADGUARD_TV_BPF_ENV": t / "ndpid-engine.d" / "tv-privacy.env"}.items():
+                 "SECUBOX_ADGUARD_TV_CIBLES": t / "run" / "sbxdpi-cibles.json"}.items():
         monkeypatch.setenv(k, str(v))
     dnstv.ecrire_etat({"actif": True, "clients": [{"ip": "192.168.1.50", "nom": "TV salon", "mode": "auto", "mac": MAC},
                                                   {"ip": "192.168.1.60", "nom": "Hors", "mode": "off", "mac": "aa:bb:cc:00:00:09"}]},
@@ -51,22 +50,13 @@ def test_conntrack_absent_rend_vide(dpi, capsys):
     assert ctl(dpi, "conntrack-dump") == 0 and capsys.readouterr().out == ""
 
 
-def test_dpi_cibles_pose_le_filtre_bpf_par_mac_et_ne_redemarre_que_si_change(dpi, capsys):
+def test_dpi_cibles_ecrit_les_cibles_de_sbxdpi_sans_filtre_de_capture(dpi):
     assert ctl(dpi, "dpi-cibles") == 0
-    env = Path(str(dpi["tmp"] / "ndpid-engine.d" / "tv-privacy.env")).read_text()
-    assert 'FILTRE_BPF="ether host aa:bb:cc:00:00:01"' in env and "aa:bb:cc:00:00:09" not in env
     c = json.loads((dpi["tmp"] / "run" / "sbxdpi-cibles.json").read_text())
     assert c["appareils"] == [{"mac": MAC, "adresses": ["192.168.1.50", "2a01:e0a::1"]}]
-    assert dpi["journal"].read_text().count("systemctl try-restart secubox-ndpid-engine.service") == 1
+    assert (not dpi["journal"].exists() or "restart" not in dpi["journal"].read_text()) and not (dpi["tmp"] / "ndpid-engine.d").exists()
     assert ctl(dpi, "dpi-cibles") == 0
-    assert dpi["journal"].read_text().count("try-restart") == 1                       # rien n'a changé : pas de redémarrage
-    assert "dpi-cibles" in (dpi["tmp"] / "audit.log").read_text()
-
-
-def test_dpi_cibles_vide_n_analyse_rien(dpi):
-    dnstv.ecrire_etat({"actif": True, "clients": []}, dpi["etat"])
-    assert ctl(dpi, "dpi-cibles") == 0
-    assert 'FILTRE_BPF="ether host 00:00:00:00:00:00"' in (dpi["tmp"] / "ndpid-engine.d" / "tv-privacy.env").read_text()
+    assert (dpi["tmp"] / "audit.log").read_text().count("dpi-cibles") == 1          # inchangé : pas de nouvelle entrée
 
 
 def test_garde_de_charge_arrete_puis_reprend_nDPId(dpi):
