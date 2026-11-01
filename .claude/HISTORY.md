@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-01 — CI au vert et démarrage des MOCHAbin sur le noyau Debian courant
+
+- closes #3313 (PR #3372) : pilotage 0.6.18, profil AppArmor sur /var/lib/secubox-autoload-public (lecture refusée en
+  enforce depuis 0.6.16) ; hub 1.12.35, un seul list-units par cycle. bbs/core verts en local. Déployé gk2.
+- ref #3271 (PR #3373) : hook /etc/initramfs/post-update.d/zz-secubox-boot-image (tient /boot/Image et initrd.img sur le
+  noyau le plus récent, /boot FAT), boot.cmd sans Image-secubox-led, build-image copie board/<board>/etc/.
+  gk6 : en-têtes 6.12.113 + DKMS LED reconstruit, démarre 6.12.113 ; secubox-uboot-env.scr lancé à la console
+  (bootcmd eMMC, netboot en secours) : redémarrage en < 2 min au lieu de 129 BOOTP. gk6 en profil minimal (3,3 → 1,8 Go).
+
 ## 2026-11-01 — Sécurité avant l'Alpha 20 : appairage eye-remote et SSRF du CDN
 
 - closes #3283 : eye-remote 1.1.2 (PR #3370), `POST /pair/qr` en `require_jwt` ; déployé gk2. Hors périmètre → #3369
