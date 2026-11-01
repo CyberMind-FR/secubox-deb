@@ -114,11 +114,11 @@ sont des `par_led` ; toutes les nouvelles couches respirent, palette vert / cyan
 `AF_UNIX` seules) relève les mesures toutes les 10 s et publie `/run/secubox-leds/flux.json`. Les
 compteurs nftables `sbx_drop_*` lui viennent de **`secubox-led-nft`**, une petite unité root dont la
 seule capacité est `CAP_NET_ADMIN` (profil AppArmor `secubox-led-nft` : `nft`, `sh`, `timeout`,
-`head`, `mv`, `sleep` ; écriture limitée à `nft.json`) : toutes les 10 s, `nft -j list counters`
-(délai 5 s, sortie bornée à 1 Mio) est écrit atomiquement dans `/run/secubox-leds/nft.json` (0644).
-Ce répertoire est le `RuntimeDirectory` de `secubox-led-flux` (0775 `secubox-leds`) ;
-`secubox-led-nft` porte `Requires=`/`After=secubox-led-flux.service` et y écrit par
-`Group=secubox-leds` (root sans `CAP_DAC_OVERRIDE`).
+`mktemp`, `head`, `chmod`, `mv`, `sleep` ; écriture limitée à `nft.json*`) : toutes les 10 s,
+`nft -j list counters` (délai 5 s, sortie bornée à 1 Mio) est écrit dans un temporaire `mktemp` puis
+renommé atomiquement en `/run/secubox-led-nft/nft.json` (0644). Ce dossier est le `RuntimeDirectory`
+propre à `secubox-led-nft` (0755 root:root), indépendant de `/run/secubox-leds` du collecteur : un
+redémarrage de l'un ne casse pas l'autre.
 
 Les sources `flux` de `leds.toml` (`cle = "reseau.octets_in"`, …) en
 lisent le niveau. Les seuils sont **relatifs et évolutifs** : chaque mesure est comparée à une
@@ -144,13 +144,14 @@ autre compte est ignoré, clé absente).
 |---|---|---|
 | `reseau.octets_*`, `fw.paquets_*` | `/proc/net/dev` (interface WAN) | root |
 | `reseau.connexions` | `/proc/sys/net/netfilter/nf_conntrack_count` | root |
-| `fw.bloques` | `/run/secubox-leds/nft.json` (compteurs `sbx_drop_*`, moins de 60 s) | root (`secubox-led-nft`) |
+| `fw.bloques` | `/run/secubox-led-nft/nft.json` (compteurs `sbx_drop_*`, moins de 60 s) | root (`secubox-led-nft`) |
 | `waf.*` | `/var/cache/secubox/metrics-cache.json` | `secubox` |
 | `actor.*` | `/run/secubox/actord-mesures.json` | `secubox-actord` |
-| `adguard.*` | `/var/lib/secubox/ad-guard/ad-guard.db` (SQLite `mode=ro&immutable=1`) | `secubox` |
+| `adguard.*` | `/var/lib/secubox/ad-guard/ad-guard.db` (SQLite `mode=ro`, délai 1 s) | `secubox` |
 | `services.*` | `/var/cache/secubox/health-doctor.json` | `secubox` |
 
-Base ad-guard indisponible : un seul message dans le journal, clés `adguard.*` absentes.
+Base ad-guard indisponible : un seul message dans le journal (réarmé quand elle revient), clés
+`adguard.*` absentes.
 
 #### Planchers par défaut (`[flux.planchers]`)
 

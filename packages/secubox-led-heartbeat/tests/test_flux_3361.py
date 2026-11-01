@@ -164,7 +164,7 @@ def test_nft_invalide_sans_faux_pic(tmp_path):
     import releves
     (tmp_path / "run").mkdir()
     (tmp_path / "lib").mkdir()
-    nft = tmp_path / "box" / "run/secubox-leds/nft.json"
+    nft = tmp_path / "box" / "run/secubox-led-nft/nft.json"
     nft.parent.mkdir(parents=True)
     # un relevé par heure (sorti de l'apprentissage après 24 h), 60 blocages par heure
     sorties = iter([_sortie_nft(100000 + 60 * i) for i in range(40)] + ["pas du json"]

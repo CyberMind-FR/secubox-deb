@@ -23,7 +23,7 @@ T0 = 1793509200.0
 
 
 def _nft_json(r, paquets=42):
-    p = r / "run/secubox-leds/nft.json"
+    p = r / "run/secubox-led-nft/nft.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps({"nftables": [{"counter": {"name": "sbx_drop_in", "packets": paquets}}]}))
     return p
@@ -112,19 +112,23 @@ def test_apparmor_flux_sans_reseau_ni_nft():
     for interdit in ("capability net_admin", "network netlink", "/usr/sbin/nft", "/etc/nftables.conf",
                      "/etc/iproute2"):
         assert interdit not in p, interdit
-    assert "/run/secubox-leds/nft.json r," in p
+    assert "/run/secubox-led-nft/nft.json r," in p and "/run/secubox-leds/nft.json" not in p
 
 
 def test_unite_nft():
     u = _unite("secubox-led-nft.service")
     for ligne in ("User=root", "CapabilityBoundingSet=CAP_NET_ADMIN", "NoNewPrivileges=yes",
-                  "ProtectSystem=strict", "ReadWritePaths=/run/secubox-leds", "PrivateTmp=yes",
+                  "ProtectSystem=strict", "RuntimeDirectory=secubox-led-nft",
+                  "RuntimeDirectoryMode=0755", "PrivateTmp=yes",
                   "Nice=19", "CPUWeight=10", "ExecCondition=/usr/sbin/secubox-led-board",
                   "AppArmorProfile=secubox-led-nft", "RestrictAddressFamilies=AF_NETLINK AF_UNIX",
-                  "ExecStart=/usr/sbin/secubox-led-nft", "After=secubox-led-flux.service",
-                  "Requires=secubox-led-flux.service"):
+                  "ExecStart=/usr/sbin/secubox-led-nft"):
         assert _a(u, ligne), ligne
     assert "AmbientCapabilities" not in u
+    # I-1 : dossier propre, aucun lien au RuntimeDirectory du collecteur (#3361)
+    for interdit in ("Requires=", "After=secubox-led-flux", "secubox-leds", "Group=secubox"):
+        assert interdit not in u.split("[Unit]", 1)[1], interdit
+    assert "RuntimeDirectoryMode=0755" in _unite("secubox-led-flux.service")
 
 
 def test_apparmor_nft():
@@ -133,12 +137,12 @@ def test_apparmor_nft():
     assert "capability net_admin," in p and "network netlink raw," in p
     execs = set(re.findall(r"^\s*(\S+)\s+[a-z]*x,", p, re.M))
     noms = {e.rsplit("/", 1)[-1] for e in execs}
-    permis = {"nft", "sh", "dash", "{,da}sh", "timeout", "head", "mv", "sleep", "secubox-led-nft",
+    permis = {"nft", "sh", "dash", "{,da}sh", "mktemp", "chmod", "timeout", "head", "mv", "sleep", "secubox-led-nft",
               # garde ExecCondition=/usr/sbin/secubox-led-board
               "secubox-led-board", "env", "bash", "tr", "grep"}
     assert noms <= permis, noms - permis
     ecritures = re.findall(r"^\s*(\S+)\s+[a-z]*w[a-z]*,", p, re.M)
-    assert ecritures and all(e.startswith("/run/secubox-leds/nft.json") for e in ecritures), ecritures
+    assert ecritures and all(e.startswith("/run/secubox-led-nft/nft.json") for e in ecritures), ecritures
 
 
 def test_script_nft():
@@ -146,9 +150,11 @@ def test_script_nft():
     assert s.startswith("#!/bin/sh")
     assert "/usr/sbin/nft -j list counters" in s
     assert "timeout 5" in s and "head -c 1048576" in s
-    assert "mv -f" in s and "umask 022" in s and "sleep 10" in s
-    assert not re.search(r"\b(rm|chmod|cat)\b", s.split("set -u", 1)[1])
-    assert "/run/secubox-leds/nft.json" in s
+    assert "mv -f" in s and "chmod 0644" in s and "sleep 10" in s
+    assert "mktemp /run/secubox-led-nft/nft.json." in s
+    assert ".tmp" not in s and "/run/secubox-leds" not in s
+    assert not re.search(r"\b(rm|cat)\b", s.split("set -u", 1)[1])
+    assert "/run/secubox-led-nft/nft.json" in s
 
 
 @pytest.mark.skipif(shutil.which("shellcheck") is None, reason="shellcheck absent")
@@ -181,9 +187,25 @@ def test_postinst_groupe_actord_non_fatal():
 
 # -- 4. ad-guard --------------------------------------------------------------------
 
-def test_adguard_immuable_et_proprietaire():
+def test_adguard_sans_immutable():
     src = (PAQUET / "usr/lib/secubox-led-heartbeat/releves.py").read_text()
-    assert "?mode=ro&immutable=1" in src
+    assert "immutable=1\"" not in src and "&immutable" not in src and "?mode=ro\"" in src
+    assert releves.DELAI_SQLITE_S == 1.0
+    assert "ad-guard.db* rk," in (PAQUET / "apparmor/secubox-led-flux").read_text()
+
+
+def test_adguard_message_rearme(racine, capsys):  # noqa: F811
+    db = racine / "var/lib/secubox/ad-guard/ad-guard.db"
+    cache = db.with_name("cache.db")
+    db.rename(cache)
+    releves.releves(racine)
+    releves.releves(racine)
+    assert capsys.readouterr().err.count("ad-guard") == 1
+    cache.rename(db)
+    assert "adguard.requetes" in releves.releves(racine)  # source revenue : message réarmé
+    db.rename(cache)
+    releves.releves(racine)
+    assert capsys.readouterr().err.count("ad-guard") == 1
 
 
 def test_adguard_journalise_une_fois(tmp_path, capsys):
@@ -256,4 +278,7 @@ def test_documentation():
     assert "trafic" not in aide
     ch = (PAQUET / "debian/changelog").read_text().split("\n -- ")[0]
     assert "dpkg propose la fusion" not in ch
-    assert "conservée, à remplacer à la main" in ch and "secubox-led-nft" in ch
+    assert "conservée, à remplacer à la main" not in ch and "secubox-led-nft" in ch
+    assert ("dpkg demande ; en non interactif (confold), la version locale est conservée et doit "
+            "être fusionnée à la main") in ch
+    assert "immutable" not in ch

@@ -5,7 +5,7 @@
 #
 # Profil AppArmor ENFORCE du collecteur de la LED de supervision (#3361).
 # Compte secubox-leds, aucune capacité ni socket réseau ; LIT les sources de mesures
-# (dont /run/secubox-leds/nft.json, publié par secubox-led-nft), N'ÉCRIT que
+# (dont /run/secubox-led-nft/nft.json, publié par secubox-led-nft), N'ÉCRIT que
 # /run/secubox-leds/ et /var/lib/secubox-leds/. Aucun secret.
 #
 # Le profil s'applique à toutes les commandes de l'unité (AppArmorProfile=), donc
@@ -51,7 +51,7 @@ profile secubox-led-flux /usr/sbin/secubox-led-flux {
   /run/secubox/actord-mesures.json r,
   /var/lib/secubox/ad-guard/ r,
   /var/lib/secubox/ad-guard/ad-guard.db* rk,
-  /run/secubox-leds/nft.json r,           # compteurs sbx_drop_* (secubox-led-nft, root)
+  /run/secubox-led-nft/nft.json r,           # compteurs sbx_drop_* (secubox-led-nft, root)
 
   # Sorties
   /run/secubox-leds/ r,

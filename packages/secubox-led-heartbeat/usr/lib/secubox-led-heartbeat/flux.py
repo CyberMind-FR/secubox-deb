@@ -5,7 +5,7 @@
 """Collecteur secubox-led-flux de la LED de supervision (ref #3361).
 
 Toutes les 10 s : relevés bruts (releves.py, dont les compteurs nftables sbx_drop_* publiés
-par l'unité root secubox-led-nft dans /run/secubox-leds/nft.json), conversion
+par l'unité root secubox-led-nft dans /run/secubox-led-nft/nft.json), conversion
 des compteurs cumulés en débit par minute, niveau 0..4 de chaque mesure contre la
 référence propre à la box, puis publication atomique de /run/secubox-leds/flux.json :
   {"genere_le": <epoch>, "niveaux": {"<cle>": 0..4|null},

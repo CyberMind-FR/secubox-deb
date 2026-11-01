@@ -6,21 +6,18 @@
 # Relève des compteurs nftables sbx_drop_* pour la LED de supervision (#3361).
 # Seule unité du groupe à détenir CAP_NET_ADMIN (lecture netlink de nftables) :
 # le collecteur Python secubox-led-flux n'a plus aucune capacité et lit le résultat
-# dans /run/secubox-leds/nft.json (0644 root).
-# /run/secubox-leds appartient à secubox-led-flux (RuntimeDirectory, 0775 secubox-leds) :
-# Requires= + After= garantissent qu'il existe au démarrage et que cette unité s'arrête
-# avec lui. Root SANS CAP_DAC_OVERRIDE : l'écriture passe par Group=secubox-leds.
+# dans /run/secubox-led-nft/nft.json (0644 root).
+# Dossier runtime PROPRE (RuntimeDirectory=secubox-led-nft, 0755 root:root) : partager
+# /run/secubox-leds avec le collecteur cassait l'écriture, sans message, à chaque
+# redémarrage automatique de secubox-led-flux (dossier supprimé, montage périmé).
 [Unit]
 Description=SecuBox LED - releve des compteurs nftables
-After=secubox-led-flux.service
-Requires=secubox-led-flux.service
 
 [Service]
 Type=simple
 ExecCondition=/usr/sbin/secubox-led-board
 ExecStart=/usr/sbin/secubox-led-nft
 User=root
-Group=secubox-leds
 Restart=on-failure
 RestartSec=30
 TimeoutStopSec=10
@@ -33,7 +30,8 @@ NoNewPrivileges=yes
 UMask=0022
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/run/secubox-leds
+RuntimeDirectory=secubox-led-nft
+RuntimeDirectoryMode=0755
 PrivateTmp=yes
 PrivateDevices=yes
 RestrictAddressFamilies=AF_NETLINK AF_UNIX

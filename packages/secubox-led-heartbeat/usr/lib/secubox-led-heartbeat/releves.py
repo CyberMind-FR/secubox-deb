@@ -8,7 +8,7 @@ Lit les compteurs que publient déjà les modules SecuBox (caches JSON, /proc,
 base SQLite d'ad-guard en lecture seule). Aucune source n'est obligatoire :
 une source absente, illisible ou mal formée donne simplement des clés absentes,
 jamais une exception. Le module ne lance aucun processus : `fw.bloques` (somme
-des compteurs nftables `sbx_drop_*`) vient de /run/secubox-leds/nft.json, publié
+des compteurs nftables `sbx_drop_*`) vient de /run/secubox-led-nft/nft.json, publié
 toutes les 10 s par l'unité root secubox-led-nft (`nft -j list counters`) ; le
 collecteur n'a ainsi aucune capacité.
 
@@ -38,7 +38,7 @@ PROPRIETAIRES = {
     "cache": ("secubox",),          # /var/cache/secubox/*.json
     "adguard": ("secubox",),        # /var/lib/secubox/ad-guard/ad-guard.db
     "proc": (),                     # /proc : root seul
-    "nft": (),                      # /run/secubox-leds/nft.json : root seul (secubox-led-nft)
+    "nft": (),                      # /run/secubox-led-nft/nft.json : root seul (secubox-led-nft)
 }
 _ADGUARD_SIGNALE = False
 
@@ -181,7 +181,8 @@ def _actor(racine: Path, out: dict) -> None:
 
 
 def _adguard_indisponible(raison: str) -> None:
-    """Signale une seule fois (stderr) que la base d'ad-guard est indisponible."""
+    """Signale une seule fois (stderr) que la base d'ad-guard est indisponible ; réarmé
+    dès que la base redevient lisible, pour qu'une nouvelle panne soit signalée."""
     global _ADGUARD_SIGNALE
     if not _ADGUARD_SIGNALE:
         _ADGUARD_SIGNALE = True
@@ -190,7 +191,12 @@ def _adguard_indisponible(raison: str) -> None:
 
 
 def _adguard(racine: Path, out: dict) -> None:
-    """Base SQLite d'ad-guard en lecture seule et immuable (aucun verrou, aucun -wal)."""
+    """Base SQLite d'ad-guard en lecture seule (mode=ro, délai 1 s).
+
+    Pas d'`immutable=1` : ad-guard écrit la base en continu, et une base déclarée
+    immuable mais modifiée donne des lectures incohérentes (contenu WAL ignoré puis
+    rattrapé : faux pic). Propriétaire vérifié par fstat avant connect."""
+    global _ADGUARD_SIGNALE
     chemin = racine / "var/lib/secubox/ad-guard/ad-guard.db"
     try:
         fd, _ = _ouvrir(chemin, PROPRIETAIRES["adguard"])
@@ -205,7 +211,7 @@ def _adguard(racine: Path, out: dict) -> None:
     jour = aujourdhui.isoformat()
     lendemain = (aujourdhui + timedelta(days=1)).isoformat()
     try:
-        base = sqlite3.connect(f"file:{chemin}?mode=ro&immutable=1", uri=True,
+        base = sqlite3.connect(f"file:{chemin}?mode=ro", uri=True,
                                timeout=DELAI_SQLITE_S)
         try:
             requetes = base.execute("SELECT MAX(id) FROM detections").fetchone()[0]
@@ -216,14 +222,15 @@ def _adguard(racine: Path, out: dict) -> None:
     except (sqlite3.Error, OSError, ValueError) as e:
         _adguard_indisponible(type(e).__name__)
         return
+    _ADGUARD_SIGNALE = False
     out["adguard.requetes"] = float(requetes or 0)
     out["adguard.trackers"] = float(trackers)
     out["adguard.appareils"] = float(appareils)
 
 
 def _nft(racine: Path, out: dict) -> None:
-    """fw.bloques d'après /run/secubox-leds/nft.json (root, moins de 60 s)."""
-    brut = _lire(racine / "run/secubox-leds/nft.json", PROPRIETAIRES["nft"], FRAICHEUR_NFT_S)
+    """fw.bloques d'après /run/secubox-led-nft/nft.json (root, moins de 60 s)."""
+    brut = _lire(racine / "run/secubox-led-nft/nft.json", PROPRIETAIRES["nft"], FRAICHEUR_NFT_S)
     if brut is None:
         return
     n = compteurs_nft(brut.decode("utf-8", "replace"))

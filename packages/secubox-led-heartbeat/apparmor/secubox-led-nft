@@ -5,7 +5,8 @@
 #
 # Profil AppArmor ENFORCE de secubox-led-nft (#3361) : root, seule capacité
 # net_admin (lecture netlink des compteurs nftables). Exécute nft, sh, timeout,
-# head, mv et sleep ; N'ÉCRIT que /run/secubox-leds/nft.json et son .tmp.
+# head, mktemp, chmod, mv et sleep ; N'ÉCRIT que /run/secubox-led-nft/nft.json et
+# ses temporaires nft.json.XXXXXX (mktemp).
 # Aucun secret.
 #
 # Le profil s'applique à toutes les commandes de l'unité (AppArmorProfile=), donc
@@ -25,6 +26,8 @@ profile secubox-led-nft /usr/sbin/secubox-led-nft {
   /usr/bin/timeout rix,
   /usr/sbin/nft rix,
   /usr/bin/head rix,
+  /usr/bin/mktemp rix,
+  /{,usr/}bin/chmod rix,
   /{,usr/}bin/mv rix,
   /{,usr/}bin/sleep rix,
 
@@ -51,7 +54,6 @@ profile secubox-led-nft /usr/sbin/secubox-led-nft {
   deny /etc/secubox/secrets/** rw,
 
   # Sortie
-  /run/secubox-leds/ r,
-  /run/secubox-leds/nft.json rw,
-  /run/secubox-leds/nft.json.tmp rw,
+  /run/secubox-led-nft/ r,
+  /run/secubox-led-nft/nft.json* rw,
 }
