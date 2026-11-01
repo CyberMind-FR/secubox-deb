@@ -545,3 +545,27 @@ def test_conditionnement():
     assert "systemctl enable secubox-maillage-pairs.timer" in post
     assert "systemctl start secubox-maillage-pairs.timer" in post
     assert os.access(SCRIPT, os.X_OK) and SCRIPT.read_text().startswith("#!/usr/bin/env python3")
+
+
+def test_liste_du_maitre_lue_hors_du_verrou(env, monkeypatch):
+    """#3362 passe 3 : l'appel HTTP au maître ne se fait jamais sous `.etat.lock` (il figeait l'API du maître… et de la box)."""
+    import fcntl
+    cli = _charger()
+    vus = []
+    reel = cli.lire_liste
+
+    def lire(url):
+        fd = os.open(os.path.join(os.path.dirname(str(env.etat)), ".etat.lock"), os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            vus.append("libre")
+        except BlockingIOError:
+            vus.append("tenu")
+        finally:
+            os.close(fd)
+        return reel(url)
+    monkeypatch.setattr(cli, "lire_liste", lire)
+    env.maitre(corps=LISTE)
+    assert cli.synchroniser() == 0
+    assert vus == ["libre"]
+    assert {p["name"] for p in _pairs_ecrits(env)} >= {"gk3", "gk4"}

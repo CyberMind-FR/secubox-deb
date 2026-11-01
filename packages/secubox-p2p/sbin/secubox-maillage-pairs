@@ -218,8 +218,11 @@ def _ecrire_et_auditer(chemin, etat, nouvel, modele):
 
 def synchroniser(maintenant=None):
     """Code de sortie : 0 (rien à faire ou fait), 1 (écriture refusée : rien n'est à moitié écrit).
-    Lecture-calcul-écriture sous le verrou `.etat.lock` du dossier, commun aux écrivains de wg_mesh.json (#3335)."""
+    Lecture-calcul-écriture sous le verrou `.etat.lock` du dossier, commun aux écrivains de wg_mesh.json (#3335).
+    La liste du maître (appel HTTP, jusqu'à 6 s) est lue AVANT, hors du verrou (#3362) : le tenir pendant le réseau
+    figeait tous les écrivains de l'état ; l'état est relu sous le verrou pour le calcul."""
     chemin = _chemin("SBX_PAIRS_ETAT", ETAT)
+    liste = _liste_du_maitre(chemin)
     try:
         fd = os.open(os.path.join(os.path.dirname(chemin) or ".", ".etat.lock"),
                      os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
@@ -228,12 +231,32 @@ def synchroniser(maintenant=None):
         return 0
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
-        return _synchroniser(chemin, maintenant)
+        return _synchroniser(chemin, maintenant, liste)
     finally:
         os.close(fd)
 
 
-def _synchroniser(chemin, maintenant=None):
+def _liste_du_maitre(chemin):
+    """Liste des pairs publiée par le maître (lue HORS du verrou), ou None : pas d'état, maître de l'état, liens directs
+    désactivés, pas d'ancre, maître différent de l'ancre, ou liste indisponible."""
+    etat, _ = _etat_lu(chemin)
+    if etat is None or etat.get("role") == "master" or not _liens_directs_actifs():
+        return None
+    a = ancre.lire(_chemin("SBX_PAIRS_ANCRE", ANCRE))
+    if a is None or not isinstance(a.get("cle_publique"), str):
+        log("pas d'ancre du maître : pas de liste")
+        return None
+    maitre, ip_maitre = trouver_maitre(etat, a["cle_publique"])
+    if maitre is None or not ancre.accepte(a, maitre.get("public_key")):
+        log("le maître de l'état n'est pas celui de l'ancre : pas de liste")
+        return None
+    liste = lire_liste(_url_maitre(ip_maitre))
+    if liste is None:
+        log("liste du maître indisponible ou invalide : pas de liste")
+    return liste
+
+
+def _synchroniser(chemin, maintenant=None, liste=None):
     etat, modele = _etat_lu(chemin)
     if etat is None:
         log("état du maillage absent ou illisible : rien à faire")
@@ -250,22 +273,7 @@ def _synchroniser(chemin, maintenant=None):
             return _ecrire_et_auditer(chemin, etat, pairs_directs.appliquer(etat, calcul, maintenant), modele)
         log("liens directs désactivés ([maillage] liens_directs = false)")
         return 0
-    a = ancre.lire(_chemin("SBX_PAIRS_ANCRE", ANCRE))
-    liste = None
-    if a is None or not isinstance(a.get("cle_publique"), str):
-        log("pas d'ancre du maître : pas de liste")
-    else:
-        maitre, ip_maitre = trouver_maitre(etat, a["cle_publique"])
-        if maitre is None or not ancre.accepte(a, maitre.get("public_key")):
-            log("le maître de l'état n'est pas celui de l'ancre : pas de liste")
-        else:
-            liste = lire_liste(_url_maitre(ip_maitre))
-            if liste is None:
-                log("liste du maître indisponible ou invalide : pas de liste")
-    # Relecture juste avant le calcul : l'API écrit aussi ce fichier.
-    etat, modele = _etat_lu(chemin)
-    if etat is None or etat.get("role") == "master":
-        return 0
+    # L'état vient d'être lu SOUS le verrou : la liste, lue avant, est confrontée à l'état courant.
     poignees = mesh.load_handshakes(_chemin("SBX_PAIRS_POIGNEES", POIGNEES))
     if poignees is None:       # sans mesure, ni ajout, ni promotion, ni rétrogradation : on ne décide pas à l'aveugle
         log("mesure des poignées de main absente ou périmée : rien ne change")

@@ -119,15 +119,37 @@ class MesureIndisponible(Exception):
     """L'interface n'a pas pu être lue, et son absence n'est pas établie."""
 
 
+_ABSENCE = []                                    # absence établie une fois par passage : `ip link` n'est lancé qu'une fois
+
+
+def _mesurer(argv, timeout):
+    """executer() pour une MESURE : toute erreur d'exécution (binaire absent, refus, délai) → MesureIndisponible."""
+    try:
+        return executer(argv, timeout)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise MesureIndisponible(f"{os.path.basename(argv[0])} : {type(e).__name__}") from None
+
+
 def interface_absente() -> bool:
-    """Absence ÉTABLIE de wg-mesh : `ip link show wg-mesh` répond explicitement qu'elle n'existe pas."""
-    rc, _, err = executer([chemin("SBX_OUBLI_IP_BIN"), "link", "show", IFACE], timeout=10)
-    return rc != 0 and "does not exist" in err
+    """Absence ÉTABLIE de wg-mesh : `ip link show wg-mesh` répond explicitement qu'elle n'existe pas. Une erreur
+    d'exécution de `ip` n'établit rien (False)."""
+    if not _ABSENCE:
+        try:
+            rc, _, err = _mesurer([chemin("SBX_OUBLI_IP_BIN"), "link", "show", IFACE], 10)
+            _ABSENCE.append(rc != 0 and "does not exist" in err)
+        except MesureIndisponible:
+            _ABSENCE.append(False)
+    return _ABSENCE[0]
 
 
 def lire_interface(*quoi) -> str:
     """stdout de `wg show wg-mesh <quoi>` ; interface absente (vérifiée) → "" ; toute autre erreur → MesureIndisponible."""
-    rc, out, err = executer([chemin("SBX_OUBLI_WG_BIN"), "show", IFACE, *quoi], timeout=20)
+    try:
+        rc, out, err = _mesurer([chemin("SBX_OUBLI_WG_BIN"), "show", IFACE, *quoi], 20)
+    except MesureIndisponible:
+        if interface_absente():
+            return ""
+        raise
     if rc == 0:
         return out
     if interface_absente():
@@ -222,7 +244,7 @@ def etape_wg(cles) -> dict:
         sortie = lire_interface("peers")
     except MesureIndisponible as e:
         return {"ok": False, "detail": f"interface illisible : {e}"}
-    if not sortie and interface_absente():
+    if not sortie and _ABSENCE and _ABSENCE[0]:
         return {"ok": True, "detail": "interface wg-mesh absente"}
     vues = set(sortie.split())
     faits, echecs = [], []

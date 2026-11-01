@@ -409,14 +409,15 @@ def ml_token_generate(ttl: int = None, token_type: str = "join", auto_approve: b
     }
 
 
-def ml_token_validate(token: str) -> Dict:
-    """Validate a token."""
+def ml_token_validate(token: str, attente: Optional[float] = None) -> Dict:
+    """Validate a token. `attente` : verrou pris sans bloquer, réessayé au plus `attente` s (route publique), sinon
+    oubli.VerrouOccupe."""
     if not token:
         return {"valid": False, "error": "missing_token"}
 
     token_hash = hash_token(token)
     init_dirs()
-    with oubli.verrou(P2P_DIR):                  # #3362 : lire, marquer « expiré », écrire : une section critique
+    with oubli.verrou(P2P_DIR, attente=attente):  # #3362 : lire, marquer « expiré », écrire : une section critique
         return _ml_token_validate(get_ml_tokens(), token_hash)
 
 
@@ -2129,14 +2130,21 @@ fi
     return PlainTextResponse(content=script, media_type="text/plain")
 
 
+ATTENTE_VERROU_PUBLIC_S = 2.0
+
+
 @app.post("/master-link/token/validate")
-async def ml_validate_token(token: str):
-    """Validate a token (public)."""
-    return ml_token_validate(token)
+def ml_validate_token(token: str):
+    """Validate a token (public). #3362 passe 3 : `def` (pool, jamais la boucle) et verrou non bloquant, réessayé ~2 s,
+    puis 503 : un appelant anonyme ne peut ni figer l'API ni occuper un fil indéfiniment."""
+    try:
+        return ml_token_validate(token, attente=ATTENTE_VERROU_PUBLIC_S)
+    except oubli.VerrouOccupe:
+        raise HTTPException(status_code=503, detail="état du maillage occupé : réessayer") from None
 
 
 @app.post("/master-link/token/revoke")
-async def ml_revoke_token(token: str, user: dict = Depends(require_jwt)):
+def ml_revoke_token(token: str, user: dict = Depends(require_jwt)):
     """Revoke a token."""
     token_hash = hash_token(token)
     init_dirs()
@@ -2152,13 +2160,13 @@ async def ml_revoke_token(token: str, user: dict = Depends(require_jwt)):
 
 
 @app.post("/master-link/token/cleanup")
-async def ml_cleanup(user: dict = Depends(require_jwt)):
+def ml_cleanup(user: dict = Depends(require_jwt)):
     """Cleanup expired tokens."""
     return ml_cleanup_tokens()
 
 
 @app.post("/master-link/cleanup-local")
-async def ml_cleanup_local(user: dict = Depends(require_jwt)):
+def ml_cleanup_local(user: dict = Depends(require_jwt)):
     """Cleanup expired tokens (JWT required — plus de confiance dans la provenance, #2476)."""
     return ml_cleanup_tokens()
 
@@ -2639,6 +2647,9 @@ def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
     local = socket.gethostname().split(".")[0].lower()
     a = ancre.lire()
     cle_maitre = a.get("cle_publique") if isinstance(a, dict) else None
+    with _operations_verrou:                     # #3362 passe 3 : aucune place (rien de terminé à purger) → 429, rien d'oublié
+        if len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX and not any(v.get("etat") == "termine" for v in OPERATIONS_OUBLI.values()):
+            raise HTTPException(status_code=429, detail="trop d'oublis en cours : réessayer quand l'un d'eux est terminé")
     init_dirs()
     ml_init()
     try:
@@ -2703,12 +2714,24 @@ async def ml_approve(req: ApproveRequest, user: dict = Depends(require_jwt)):
 
     #3362 (passe 2) : lecture, décision et écritures dans UNE section critique : une approbation concurrente d'un oubli ne
     ramène pas le pair oublié."""
+    # #3362 passe 3 : le verrou se prend dans un fil du pool, jamais dans la boucle ; la notification d'une promotion
+    # (tâche asyncio) est lancée ici, APRÈS le retour du fil.
+    reponse, promotion = await asyncio.to_thread(_ml_approve_verrouille, req)
+    if promotion:
+        asyncio.create_task(_notify_peer_promotion(*promotion))
+    return reponse
+
+
+def _ml_approve_verrouille(req: ApproveRequest):
+    """(réponse, (adresse, profondeur) d'une promotion à notifier ou None), sous le verrou."""
     init_dirs()
     with oubli.verrou(P2P_DIR):
-        return _ml_approve(req)
+        promotion: List = []
+        reponse = _ml_approve(req, promotion)
+        return reponse, (tuple(promotion[0]) if promotion else None)
 
 
-def _ml_approve(req: ApproveRequest):
+def _ml_approve(req: ApproveRequest, promotion: List):
     requests = get_ml_requests()
     config = get_ml_config()
     now = datetime.utcnow()
@@ -2788,7 +2811,7 @@ def _ml_approve(req: ApproveRequest):
         # Notify peer of promotion (background)
         peer_addr = join_request.get("address")
         if peer_addr:
-            asyncio.create_task(_notify_peer_promotion(peer_addr, current_depth))
+            promotion.append((peer_addr, current_depth))          # notifiée par la coroutine, après le fil
 
         return {
             "success": True,

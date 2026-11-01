@@ -70,6 +70,23 @@ def ecrire(jetons: List[Dict], chemin: Optional[str] = None) -> None:
         raise
 
 
+def _rendre_le_dossier(dossier: str) -> None:
+    """Lancé en root (sbx-mesh-invite), un dossier master-link créé ici resterait à root : le service ne pourrait plus y
+    écrire. Rendu à `secubox` par descripteur, sans suivre de lien (O_DIRECTORY | O_NOFOLLOW) (#3362)."""
+    if os.geteuid() != 0:
+        return
+    try:
+        import pwd                            # noqa: PLC0415
+        u = pwd.getpwnam("secubox")
+    except KeyError:
+        return
+    fd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        os.fchown(fd, u.pw_uid, u.pw_gid)
+    finally:
+        os.close(fd)
+
+
 def generer(ttl: int, auto_approve: bool, nom_prevu: Optional[str] = None, flash: bool = False,
             token_type: str = "join", chemin: Optional[str] = None) -> Dict:
     """Fabrique et persiste un jeton ; rend le jeton en clair (une seule fois) et son empreinte."""
@@ -90,6 +107,7 @@ def generer(ttl: int, auto_approve: bool, nom_prevu: Optional[str] = None, flash
     from . import oubli                      # noqa: PLC0415 — import tardif, oubli n'importe pas jetons
     chemin = str(chemin or chemin_jetons())
     os.makedirs(os.path.dirname(chemin) or ".", exist_ok=True)
+    _rendre_le_dossier(os.path.dirname(chemin) or ".")
     with oubli.verrou(os.path.dirname(os.path.dirname(chemin)) or "."):
         jetons = oubli.lire_strict_liste(chemin)
         jetons.append(entree)

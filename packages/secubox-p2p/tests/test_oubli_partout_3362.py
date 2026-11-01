@@ -605,3 +605,123 @@ def test_postinst_echec_apparmor_audite():
     post = (ICI / "debian" / "postinst").read_text()
     i = post.index("usr.sbin.secubox-oubli-pair")
     assert "audit.log" in post[i:i + 900]
+
+
+# ── passe 3 (#3362) : jamais de flock bloquant dans la boucle asyncio ────────────────────────────────────────────────
+
+def _tenir(tmp, duree):
+    tient = threading.Event()
+
+    def t():
+        with oubli.verrou(tmp / "p2p"):
+            tient.set()
+            time.sleep(duree)
+    th = threading.Thread(target=t, daemon=True)
+    th.start()
+    tient.wait(5)
+    return th
+
+
+def test_route_publique_503_vite_et_status_repond_pendant_un_verrou_tenu(maitre):
+    tmp, _ = maitre
+    main.app.dependency_overrides[main.require_lecture] = lambda: {"sub": "admin"}
+    with TestClient(main.app) as c:                        # UNE boucle : un flock bloquant la figerait pour tous
+        th = _tenir(tmp, 6)                                # gel attendu sans correction : ~6 s ; seuils tenus sous charge
+        res = {}
+
+        def publique():
+            t0 = time.monotonic()
+            res["r"] = c.post("/master-link/token/validate", params={"token": _jeton()})
+            res["t"] = time.monotonic() - t0
+        a = threading.Thread(target=publique)
+        a.start()
+        time.sleep(0.3)
+        t0 = time.monotonic()
+        assert c.get("/status").status_code == 200
+        assert time.monotonic() - t0 < 3
+        a.join(8)
+        assert res["r"].status_code == 503 and res["t"] < 3
+        th.join(8)
+
+
+def test_approbation_hors_de_la_boucle(maitre):
+    tmp, _ = maitre
+    (_ml(tmp) / "requests.json").write_text(json.dumps([{"fingerprint": "sb-x", "hostname": "x", "status": "pending"}]))
+    main.app.dependency_overrides[main.require_lecture] = lambda: {"sub": "admin"}
+    with TestClient(main.app) as c:
+        th = _tenir(tmp, 2)
+        a = threading.Thread(target=lambda: c.post("/master-link/approve", json={"fingerprint": "sb-x", "action": "reject"}))
+        a.start()
+        time.sleep(0.3)
+        t0 = time.monotonic()
+        assert c.get("/status").status_code == 200
+        assert time.monotonic() - t0 < 1.5
+        a.join(5)
+        th.join(5)
+    assert json.loads((_ml(tmp) / "requests.json").read_text())[0]["status"] == "rejected"
+
+
+def test_promotion_notifiee_apres_le_fil(maitre, monkeypatch):
+    tmp, _ = maitre
+    (_ml(tmp) / "requests.json").write_text(json.dumps([{"fingerprint": "sb-x", "hostname": "x", "status": "approved",
+                                                         "address": "192.168.1.9", "depth": 1}]))
+    vus = []
+
+    async def notifier(addr, depth):
+        vus.append((addr, depth))
+    monkeypatch.setattr(main, "_notify_peer_promotion", notifier)
+    with TestClient(main.app) as c:
+        r = c.post("/master-link/approve", json={"fingerprint": "sb-x", "action": "promote"})
+        assert r.status_code == 200, r.text
+        assert r.json()["new_role"] == "sub-master"
+        for _ in range(50):
+            if vus:
+                break
+            time.sleep(0.02)
+    assert vus == [("192.168.1.9", 1)]
+
+
+def test_routes_de_jetons_hors_boucle():
+    src = (ICI / "api" / "main.py").read_text()
+    for f in ("ml_validate_token", "ml_revoke_token", "ml_cleanup", "ml_cleanup_local"):
+        assert f"\ndef {f}(" in src and f"async def {f}(" not in src, f
+    i = src.index("async def ml_approve(")
+    assert "asyncio.to_thread(" in src[i:i + 900]
+
+
+def test_oubli_429_si_aucune_operation_purgeable(maitre):
+    tmp, _ = maitre
+    with main._operations_verrou:
+        main.OPERATIONS_OUBLI.clear()
+        for i in range(main._OPERATIONS_MAX):
+            main.OPERATIONS_OUBLI[f"{i:032x}"] = {"etat": "en_cours"}
+    try:
+        r = TestClient(main.app).post("/master-link/oublier", json={"nom": "lgm-ebin", "confirmation": "lgm-ebin"})
+        assert r.status_code == 429
+        assert "lgm-ebin" in (tmp / "p2p" / "peers.json").read_text()     # rien n'est oublié
+    finally:
+        with main._operations_verrou:
+            main.OPERATIONS_OUBLI.clear()
+
+
+def test_helper_erreur_d_execution_de_wg_refus_sans_trace(banc):
+    tmp, env, log = banc
+    env["SBX_OUBLI_WG_BIN"] = str(tmp / "wg-introuvable")
+    env["SBX_OUBLI_IP_BIN"] = str(tmp / "ip-introuvable")
+    r = _helper(env, "--cle", K_LGM)
+    assert r.returncode == 2 and "mesure" in r.stdout and "Traceback" not in r.stderr
+
+
+def test_helper_ip_link_une_seule_fois_si_absente(banc):
+    tmp, env, log = banc
+    env["SBX_OUBLI_WG_BIN"] = str(_bin(tmp, "wg-absent", 'echo "Unable to access interface" >&2; exit 1'))
+    env["SBX_OUBLI_IP_BIN"] = str(_bin(tmp, "ip-absent1", f'echo "ip $*" >> {log}; echo \'Device "wg-mesh" does not exist.\' >&2; exit 1'))
+    r = _helper(env, "--cle", K_LGM)
+    assert r.returncode == 0, r.stdout
+    assert log.read_text().count("ip link show wg-mesh") == 1
+
+
+def test_iproute2_dans_depends():
+    ctl = (ICI / "debian" / "control").read_text()
+    dep = ctl[ctl.index("\nDepends:"):ctl.index("\nRecommends:")]
+    assert "\n iproute2," in dep

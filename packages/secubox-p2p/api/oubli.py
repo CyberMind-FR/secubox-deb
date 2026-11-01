@@ -23,6 +23,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -36,6 +37,10 @@ VERROU = ".etat.lock"
 
 class Refus(Exception):
     """Oubli refusé : le message est montré à l'administrateur."""
+
+
+class VerrouOccupe(Exception):
+    """Le verrou est tenu au-delà de l'attente bornée demandée (route publique, #3362 passe 3)."""
 
 
 class EtatIllisible(Exception):
@@ -55,7 +60,7 @@ def tenu(dossier) -> bool:
 
 
 @contextlib.contextmanager
-def verrou(dossier):
+def verrou(dossier, attente: Optional[float] = None):
     """Verrou exclusif `<dossier>/.etat.lock` (flock) des écrivains de peers.json, wg_mesh.json, requests.json et tokens.json.
 
     RÉENTRANT DANS UN MÊME FIL (#3362, passe 2) : une section critique de lecture-modification-écriture (jonction,
@@ -75,7 +80,18 @@ def verrou(dossier):
         if os.geteuid() == 0:            # #3362 : créé par root (sbx-mesh-invite), il resterait fermé au service
             st = os.stat(str(dossier))
             os.fchown(fd, st.st_uid, st.st_gid)
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        if attente is None:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        else:                            # non bloquant, réessai borné : un appelant public ne fige jamais rien
+            fin = time.monotonic() + attente
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= fin:
+                        raise VerrouOccupe("état du maillage occupé") from None
+                    time.sleep(0.05)
         prof[cle] = 1
         try:
             yield
