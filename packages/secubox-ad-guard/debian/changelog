@@ -7,6 +7,7 @@ secubox-ad-guard (1.21.0-1~trixie1) trixie; urgency=medium
   * Controleur root : verbes conntrack-dump (lecture seule), dpi-cibles (cibles de sbxdpi seulement : aucun filtre de capture, nDPId garde tout le trafic pour le Hall et /ndpid/), ndpid-arreter / ndpid-reprendre ; sudoers etendu (arguments exacts).
   * Routes /adblock-tv/protection/dpi/{etat,applications,flux,decouvertes,coupures,reprendre} : donnees par appareil en require_jwt, etat reduit pour le porteur delegue ; reprise ouverte au relais du pilotage.
   * Page /tv-privacy/ : onglet « Applications » (couverture « DNS seulement » / « DNS + DPI », cartes nDPI avec badges, frise des coupures, decouvertes, SSAI explique).
+  * Passe 2 (relectures) : dpi-appareils.db bornee a 20 Mio (auto_vacuum incremental) ; verrou SQLite distinct d'une corruption, API en lecture seule ; correlation lineaire et incrementale faite une seule fois ; garde de charge a etat unique sous verrou, 5 min + nDPId >= 20 % d'un coeur, revérifiee par root (audit du code reel) ; cibles de sbxdpi dans /run/secubox/sbxdpi-cibles/ (root), memoire de 24 h incluse ; fichier nft toujours chargeable ; conntrack « indisponible » ; decouvertes recentes d'abord et forcage refuse affiches dans la page.
   * Reference TV : metaproxy.francetvpub.fr PUBLICITE, imasdk.googleapis.com STREAMING (protege : #2146, replay Free sans fin s'il est bloque), audiences.free.fr et stats.oqee.net TRACKING, m.media-amazon.com CDN (mesure gk2 2026-11-01).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 18:00:00 +0100

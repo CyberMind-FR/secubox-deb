@@ -250,7 +250,7 @@ au DRM. Sur un LAN plat, la box ne voit que le DNS des TV : l'onglet « Applicat
 conntrack) n'apparaissent (« DNS + DPI ») que s'ils traversent la box (mode LAN).
 
 - Moteur (chaque minute) : `etat-dpi.json`, `dpi-appareils.db` (flux 7 j, découvertes 30 j), cibles de sbxdpi (verbe root `dpi-cibles`, toutes les 5 min ;
-  aucun filtre de capture : nDPId garde tout le trafic), garde de charge après 5 min de saturation (`ndpid-arreter` arrête TOUT le DPI, reprise manuelle `POST /adblock-tv/protection/dpi/reprendre`).
+  aucun filtre de capture : nDPId garde tout le trafic), garde de charge après 5 min de saturation si nDPId prend ≥ 20 % d'un cœur (`ndpid-arreter`, revérifié par root, arrête TOUT le DPI, reprise manuelle `POST /adblock-tv/protection/dpi/reprendre`).
 - Découvertes : `repli` (domaine PUB apparu ≤ 30 s après un refus PUB, candidat puis essai AUTO), `repli-protege` (jamais bloqué), `secours`,
   `sans-dns`, `dns-chiffre`, `contournement`. `GET /adblock-tv/protection/dpi/decouvertes?depuis=<id>` est l'interface du lot 5b.
 - Routes (`require_jwt` sauf `/etat` en lecture nominative) : `GET /adblock-tv/protection/dpi/{etat,applications,flux,decouvertes,coupures}`,

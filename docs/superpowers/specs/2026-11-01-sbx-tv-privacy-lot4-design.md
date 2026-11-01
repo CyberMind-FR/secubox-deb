@@ -178,8 +178,10 @@ Chaque appareil porte `couverture` ∈ `dns+dpi` (flux vus dans l'heure), `dns` 
 | API | requêtes SQL bornées, cache 30 s | `limite` ≤ 200 |
 | Disque | < 20 Mio (`DOSSIER_ETAT`) + 4 Mio en `/run` | rétention 7 j |
 
-Arrêt de sécurité : si la charge moyenne sur 5 min dépasse le nombre de cœurs pendant 10 min, le moteur écrit
-`dpi: {pause: "charge"}` et le verbe root arrête `secubox-ndpid-engine` ; reprise manuelle (**choix par défaut**, § 9).
+Arrêt de sécurité (passe 2) : si la charge moyenne sur 5 min dépasse le nombre de cœurs pendant **au moins 5 min** ET que nDPId
+prend lui-même ≥ 20 % d'un cœur (cgroup `cpu.stat`), le verbe root `ndpid-arreter` — qui **revérifie** les deux conditions et refuse
+sinon — arrête `secubox-ndpid-engine`, donc **tout** le DPI de la box ; sinon on signale sans arrêter. État unique `charge.etat`
+(normal | haute | arrete) écrit sous verrou ; reprise manuelle (**choix par défaut**, § 9).
 
 ## 4. API (préfixe `/api/v1/ad-guard`)
 
@@ -278,9 +280,10 @@ Versions visées : `secubox-ad-guard` 1.21.0, `secubox-toolbox-ng` (mineure suiv
 2. **Contournement** : afficher **et** forcer le DNS pour les appareils du périmètre en PROTECT ou AUTO (§ 11).
 3. **Replis** : candidats AUTO **en essai** dès le lot 4, gardes existantes (§ 3.5).
 4. **Choix par défaut** (recommandation retenue) :
-   - capture nDPI limitée aux seules TV du périmètre, filtrées par MAC ;
-   - garde de charge : arrêt automatique de nDPId quand gk2 sature (charge sur 5 min > nombre de cœurs pendant 10 min),
-     reprise manuelle par l'administrateur.
+   - ~~capture nDPI limitée aux seules TV par filtre MAC~~ — **remplacé** (arbitrage § 13) : capture complète, tri par appareil
+     dans sbxdpi ;
+   - garde de charge : arrêt automatique de nDPId quand gk2 sature (charge sur 5 min > nombre de cœurs pendant **5 min**, et nDPId
+     ≥ 20 % d'un cœur ; sinon signal seul), revérifié par root, annoncé dans la page, audité, reprise manuelle par l'administrateur.
 
 ## 10. Mode LAN approfondi
 
@@ -338,8 +341,12 @@ Le paquet ne sait faire que « tout le LAN ». Trois pistes pour limiter aux TV,
 1. Préalables : `df -h /` sur gk2 ; `dpkg -l secubox-ad-guard secubox-toolbox-ng secubox-ndpid-engine` aux versions du lot 4 ;
    la TV banc (pas une TV du foyer) déclarée dans TV Privacy, en OBSERVE.
 2. Relever la référence : 10 min de lecture OQEE ; onglet « Applications » = « DNS seulement » (attendu).
-3. Côté gk2 : `sysctl net.ipv4.ip_forward` (noter la valeur) ; poser la chaîne forward restreinte à la MAC de la TV banc
-   (pseudo-routeur 0.2, ou à la main en mode banc avec le propriétaire), vérifier `nft list table inet secubox_pseudo_routeur`.
+3. Côté gk2 : `sysctl net.ipv4.ip_forward` (noter la valeur ; gk2 transfère peut-être déjà pour les LXC et WireGuard).
+   Installer `secubox-pseudo-routeur` 0.2 **depuis le dépôt apt** (source d'abord, jamais d'édition à chaud) et lancer
+   `pseudo-routeurctl activer-transfert --tv-seulement` avec la MAC de la TV banc. **Attention** : la table du pseudo-routeur 0.1
+   est en `policy drop` sur `forward` ; posée telle quelle, elle couperait les LXC et WireGuard de gk2. La 0.2 doit limiter sa chaîne
+   à `ether saddr @sbx_tv_perimetre` sans changer la politique des autres flux (test de paquet exigé). Vérifier
+   `nft list table inet secubox_pseudo_routeur` puis qu'un LXC (ex. roundcube) répond toujours.
 4. Sur la TV banc : IP fixe, passerelle et DNS = 192.168.1.200. Vérifier qu'elle lit une vidéo.
 5. Attendre 2 min : onglet « Applications » = « DNS + DPI », applications nDPI visibles ; `pidstat 5` sur nDPId, nDPIsrvd,
    sbxdpi pendant 30 min de lecture (budget § 3.7).
@@ -348,7 +355,12 @@ Le paquet ne sait faire que « tout le LAN ». Trois pistes pour limiter aux TV,
 7. Essai OBSERVE / AUTO du lot 7 avec la frise des coupures.
 8. Retour : TV en DHCP ; retirer la chaîne ; remettre `ip_forward` à sa valeur de l'étape 3 ; contrôler que le foyer n'a
    rien vu (aucun autre client n'a changé de passerelle).
-9. Critère d'arrêt immédiat à toute étape : lecture cassée, charge gk2 > 4 sur 5 min, DNS du foyer lent.
+9. Critère d'arrêt immédiat à toute étape : lecture cassée, charge gk2 > 4 sur 5 min, DNS du foyer lent, garde de charge
+   déclenchée (onglet « Applications » : « DPI ARRÊTÉ »). Après l'essai : vérifier que `secubox-ndpid-engine` tourne (sinon reprise
+   manuelle depuis l'onglet) et que `/ndpid/` montre tout le trafic.
+10. Déploiement : la table `inet secubox_adguard_contournement` est chargée dès l'installation pour toute TV en PROTECT/AUTO, même
+   sur le LAN plat (inerte). Un fichier de `/etc/nftables.d` qui ne se charge plus ferait échouer `nftables.service` : le contrôleur
+   le revalide (`nft -c`) à chaque application et le retire s'il est invalide (audit `contournement-invalide`).
 
 ## 11. Contournement : afficher et forcer le DNS
 
@@ -370,7 +382,10 @@ Le paquet ne sait faire que « tout le LAN ». Trois pistes pour limiter aux TV,
 - **Verbe root borné** : `secubox-adguard-tv apply` (et `regles-appliquer` quand il recharge) reconstruit le jeu de règles à
   partir de l'état revalidé ; rien n'est lu en clair depuis l'API. **Double tampon** : fichier fantôme
   `/var/lib/secubox-adguard-tv/contournement.nft.new`, contrôle `nft -c -f`, échange atomique, `nft -f` ; si le chargement
-  échoue, la version précédente est rechargée (retour arrière) et la commande échoue, auditée. `disable` retire la table.
+  échoue, la version précédente est rechargée (retour arrière). **La commande n'échoue pas** : le filtrage DNS prime ; le refus est
+  audité (`contournement-refuse`, `contournement-retour`), publié (`contournement-resultat.json`) et **affiché dans la page**
+  (« Forçage DNS refusé par nftables »). Un fichier en place que `nft -c` refuse est retiré (`contournement-invalide`).
+  `disable` retire la table ; un échec du retrait est audité (`contournement-retrait-echec`).
   Chaque changement écrit `contournement` dans `audit.log` (appareils forcés, nombre d'adresses DoH).
 - **Retour arrière si la lecture casse** : le moteur AUTO surveille déjà « contenu habituel plus demandé ». Au lot 4, si ce
   signal se déclenche pour un appareil dont le forçage a été posé depuis moins de 24 h, le forçage est suspendu pour cet appareil
@@ -400,3 +415,27 @@ Livré dans le worktree #3374 : `secubox-ad-guard` 1.21.0, `secubox-toolbox-ng` 
   DPI de la box, ce que la page annonce (« DPI ARRÊTÉ pour toute la box (Hall, /ndpid/ compris) ») et que `audit.log` trace ; reprise
   manuelle.
 - `secubox-pseudo-routeur` 0.2 (`activer-transfert --tv-seulement`, § 10.3) : non construit, en attente de la question 1 du § 12.
+
+### Passe 2 (relectures du 2026-11-01)
+
+Corrigé, chaque fois avec un test rouge d'abord (rapport) :
+- **B1** `dpi-appareils.db` bornée à 20 Mio (`auto_vacuum=INCREMENTAL`, purge des plus anciennes minutes puis `incremental_vacuum`),
+  testée avec 400 000 lignes conntrack. **B2** `imasdk.googleapis.com` en STREAMING (protégé, #2146) ; test de non-régression.
+- **I1** verrou ≠ corruption ; API en lecture seule (`mode=ro`) ; `quick_check` une fois par heure côté moteur. **I2** garde de charge
+  à état unique sous verrou, reprise jamais écrasée, garde réarmée. **I3** corrélation linéaire (bissection) et incrémentale (curseur
+  par MAC, horodatage de la dernière coupure close), faite une seule fois dans `passage` ; `tick` reçoit les découvertes
+  (50 000 événements, 500 coupures : 0,054 s sur x86). **I4** 5 min + part CPU de nDPId ≥ 20 %. **S1** root revérifie, audit du code
+  réel, pause affichée seulement si l'arrêt a réussi. **S2** cibles dans `/run/secubox/sbxdpi-cibles/` (0750 root:secubox-toolbox,
+  fichier 0640), sbxdpi refuse un fichier non root et vérifie la taille avant lecture.
+- m1 mémoire de 24 h dans les cibles ; m2 clé avec adresse locale et protocole ; m3 frise sur toutes les adresses de la MAC ; m5 fichier
+  nft toujours chargeable ; m6 conntrack « indisponible » si `/proc/net/nf_conntrack` manque, lecture bornée à 5 s ; m7 purge au
+  rechargement des cibles ; écritures par `mkstemp` ; échecs écrits sur stderr ou audités ; découvertes récentes d'abord.
+
+Reportés :
+- **m4** : `a_suspendre` ne vérifie pas « forçage posé depuis moins de 24 h » ; une suspension n'est appliquée au noyau qu'au prochain
+  `apply`/`regles-appliquer` (la suspension pose `.a-appliquer`, donc au passage suivant du moteur).
+- **Doute 4** : « nouveau » = absent des 10 min précédentes ; « sans DNS » s'appuie sur le cache d'Unbound de toute la maison (faux
+  négatifs plutôt que faux positifs) — à noter dans l'onglet.
+- **Doute 6** : commit `4766505fd` regroupant deux tâches (effacé par la fusion en squash).
+- **Doute 7** : GET par appareil en `require_jwt` : la page relayée par le pilotage n'a que `/dpi/etat` — à écrire dans la note du
+  pilotage.
