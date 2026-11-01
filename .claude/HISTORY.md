@@ -20,7 +20,9 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   `audiences.free.fr`, `stats.oqee.net` (INCONNU, jamais bloqués par AUTO) → test par TV puis lot 4 (DPI).
 - ref #3362 : p2p 1.21.0, autoload 0.9.2, annuaire 0.17.3 (PR #3387, six passes de relecture sécurité), déployés gk2.
   Oubli = registre + wg + projection + relais + autoload + Flotte ; lecture-modif-écriture sous verrou (`maj_json`), API
-  sans verrou dans la boucle asyncio, route publique en 503. Reste : oubli des 3 pairs morts par la Flotte, puis closes.
+  sans verrou dans la boucle asyncio, route publique en 503. annuaire 0.17.4 (PR #3390) : confirmation lisible et non effacée
+  par le rafraîchissement. Pairs morts c3box (ancienne clé gk1), secubox-vm-x64 et lgm-ebin oubliés par la Flotte : gk2 = 5 pairs
+  (gk1, gk3, gk4, gk5, gk6) au registre comme dans wg-mesh. closes #3362
 
 ## 2026-11-01 — CI au vert et démarrage des MOCHAbin sur le noyau Debian courant
 

@@ -178,8 +178,8 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 00000000000. **Avant l'Alpha 20 (arbitrage du propriétaire, 2026-11-01) : finir SBX TV Privacy #3374**, lots 5 → 4 (DPI par
   appareil, contournements, anti faux repli ; rend visibles les pubs servies par le flux) → 5b (assistant en direct) → 6 → 7
   (Freebox, 2 Android TV, Apple TV). Test en cours sur la TV du propriétaire (MAC 38:07:16:93:4e:95) : bloquer
-  `audiences.free.fr`, `stats.oqee.net`, `metaproxy.francetvpub.fr`, puis classer selon la lecture. #3362 : oublier
-  lgm-ebin et secubox-vm-x64 par la Flotte, retirer l'ancienne clé gk1, puis `closes #3362`. Reportés notés dans la
+  `audiences.free.fr`, `stats.oqee.net`, `metaproxy.francetvpub.fr`, puis classer selon la lecture. Lots 1 à 4 déployés (lot 4 = DPI par appareil, ad-guard 1.21.0) ;
+  suivant : 5b (assistant en direct), 6, 7, et l'essai mode LAN (TV banc) avec le propriétaire. Reportés notés dans la
   conception lot 3 (débit non atomique, `.home` ancien, M2, M7) ; pierre tombale p2p à ouvrir en issue.
 0000000000. **WAF et vulnérabilités (2026-10-29)** : #3257 et #3273 déployés sur gk2 en mode detect (waf-ng 1.32.0) —
   étalonner les seuils provisoires sur le trafic réel, construire l'amd64, observer C1/HTTP/2. **Conteneurs trixie (#3274,
