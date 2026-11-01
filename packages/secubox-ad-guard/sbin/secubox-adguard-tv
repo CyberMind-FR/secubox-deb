@@ -415,8 +415,54 @@ def audit_classification(entree: str) -> int:
     return 0
 
 
+# Gestes de protection (#3374 lot 3) : pause, retour en observation, reprise, exception. L'API (ou le moteur) passe UN enregistrement
+# sur l'entrée standard ; root le revalide champ par champ et l'ajoute à audit.log avec l'ORIGINE (usager, admin, auto) et l'ACTEUR.
+GESTES_PROTECTION = ("pause", "observe", "reprise", "exception")
+ORIGINES_PROTECTION = ("usager", "admin", "auto")
+TYPES_EXCEPTION = ("autoriser", "bloquer", "autoriser-retire", "bloquer-retire")
+
+
+def _enregistrement_protection(r) -> bool:
+    if not isinstance(r, dict) or set(r) != {"acteur", "origine", "geste", "cibles", "minutes", "domaine", "type"}:
+        return False
+    if not (isinstance(r["acteur"], str) and ACTEUR_RE.match(r["acteur"]) and r["origine"] in ORIGINES_PROTECTION
+            and r["geste"] in GESTES_PROTECTION):
+        return False
+    c = r["cibles"]
+    if not isinstance(c, list) or not 1 <= len(c) <= 64 or not all(isinstance(x, str) and dnstv.NOM_RE.match(x) for x in c):
+        return False
+    m = r["minutes"]
+    if m is not None and (not isinstance(m, int) or isinstance(m, bool) or not 1 <= m <= 1440):
+        return False
+    if r["geste"] == "exception":
+        return (isinstance(r["domaine"], str) and dnstv.valider_domaine(r["domaine"]) == r["domaine"] and r["type"] in TYPES_EXCEPTION
+                and m is None)
+    return r["domaine"] is None and r["type"] is None
+
+
+def audit_protection(entree: str) -> int:
+    try:
+        r = json.loads(entree) if len(entree) <= AUDIT_ENTREE_MAX else None
+    except ValueError:
+        r = None
+    if not _enregistrement_protection(r):
+        print("enregistrement d'audit refusé", file=sys.stderr)
+        return 2
+    ligne = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "ad-guard-tv", "action": "protection", **r}
+    try:
+        AUDIT.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(AUDIT, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        with os.fdopen(fd, "a", encoding="utf-8") as h:
+            h.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+    except OSError as e:
+        print(f"audit.log non écrit ({type(e).__name__})", file=sys.stderr)
+        return 1                                                        # l'API refuse alors le geste : jamais de décision non tracée
+    return 0
+
+
 def main(argv: list[str], entree: str | None = None) -> int:
-    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump", "audit-classification"):
+    if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump", "audit-classification",
+                                         "audit-protection"):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
@@ -426,6 +472,8 @@ def main(argv: list[str], entree: str | None = None) -> int:
         return etat_courant()
     if argv[1] == "audit-classification":
         return audit_classification(sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree)
+    if argv[1] == "audit-protection":
+        return audit_protection(sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree)
     if argv[1] == "cache-dump":
         return cache_dump()                                              # lecture seule : ni verrou, ni écriture
     with verrou_controleur():

@@ -150,6 +150,17 @@ def api(monde, monkeypatch):
             ctl(monde, action)
         return json.loads(tampon.getvalue() or "{}")
     monkeypatch.setattr(r, "_ctl", appel)
+
+    # Lot 3 (#3374) : les verbes d'audit à entrée standard passent eux aussi par le vrai contrôleur, en processus.
+    def appel_entree(action, entree):
+        from fastapi import HTTPException
+        loader = importlib.machinery.SourceFileLoader("tv_ctl", str(CTL))
+        spec = importlib.util.spec_from_loader("tv_ctl", loader)
+        m = importlib.util.module_from_spec(spec)
+        loader.exec_module(m)
+        if m.main(["secubox-adguard-tv", action], entree=entree) != 0:
+            raise HTTPException(502, "audit refusé")
+    monkeypatch.setattr(r, "_ctl_entree", appel_entree)
     app = FastAPI()
     app.include_router(r.router)
     app.dependency_overrides[auth.require_jwt] = lambda: {"sub": "admin"}

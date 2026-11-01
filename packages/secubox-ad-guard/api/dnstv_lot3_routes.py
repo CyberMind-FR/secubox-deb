@@ -15,6 +15,7 @@ import collections
 import copy
 import csv
 import io
+import json
 import logging
 import threading
 import time
@@ -184,9 +185,17 @@ def _journaliser(entrees: list) -> None:
         logger.warning("journal des décisions non écrit : %s", type(e).__name__)
 
 
-def _geste(geste, action: str, origine: str, motif: str) -> tuple:
-    """Applique `geste(etat, pauses)` sous le verrou des règles, écrit état et pauses, demande `apply` au contrôleur root (qui audite
-    chaque changement de mode dans audit.log) ; en cas d'échec, état et pauses reviennent à leur version précédente. Journalise."""
+def _audit(acteur: str, origine: str, geste: str, cibles: list, minutes: Optional[int] = None, domaine: Optional[str] = None,
+           type_: Optional[str] = None) -> None:
+    """Décision de sécurité dans audit.log (geste, périmètre, origine, acteur) par le verbe root borné `audit-protection` ; un échec
+    rend 502 et le geste est refusé : jamais de décision non tracée."""
+    _r._ctl_entree("audit-protection", json.dumps({"acteur": acteur, "origine": origine, "geste": geste, "cibles": sorted(cibles)[:64],
+                                                   "minutes": minutes, "domaine": domaine, "type": type_}))
+
+
+def _geste(geste, action: str, origine: str, motif: str, acteur: str = "inconnu", minutes: Optional[int] = None) -> tuple:
+    """Applique `geste(etat, pauses)` sous le verrou des règles : audit (audit.log) AVANT toute écriture, puis état et pauses, puis
+    `apply` au contrôleur root ; en cas d'échec, état et pauses reviennent à leur version précédente. Journalise."""
     with _r._verrou():
         etat, ancien = _r._etat_et_copie()
         try:
@@ -200,6 +209,7 @@ def _geste(geste, action: str, origine: str, motif: str) -> tuple:
             raise HTTPException(404 if "inconnu" in str(e) else 422, str(e)) from None
         if not touches:
             return [], None, pauses
+        _audit(acteur, origine, action, touches, minutes)
         try:
             dnstv.ecrire_etat(etat)
             dnstv_protection.ecrire_pauses(pauses)
@@ -221,29 +231,30 @@ def _cible(appareil: Optional[str]):
     return None if appareil is None else [appareil]
 
 
-@router.post("/protection/observe", dependencies=[Depends(require_jwt)])
-def tout_en_observe(corps: AppareilIn):
+@router.post("/protection/observe")
+def tout_en_observe(corps: AppareilIn, jeton=Depends(require_jwt)):
     """Retour en un geste : l'appareil (ou tous) repasse en OBSERVE, sans échéance ; sa pause éventuelle est oubliée."""
-    touches, app, _ = _geste(lambda e, p: dnstv_protection.passer_en_observe(e, p, _cible(corps.appareil)), "observe", "admin", "retour en OBSERVE")
+    touches, app, _ = _geste(lambda e, p: dnstv_protection.passer_en_observe(e, p, _cible(corps.appareil)), "observe", "admin", "retour en OBSERVE",
+                             _r._acteur(jeton))
     return {"appareils": touches, "application": app}
 
 
-@router.post("/protection/pause", dependencies=[Depends(require_jwt)])
-def pause(corps: PauseIn):
+@router.post("/protection/pause")
+def pause(corps: PauseIn, jeton=Depends(require_jwt)):
     """Pause minutée (15, 60 ou 240 min) : les appareils protégés passent en OBSERVE, reprise automatique à l'échéance."""
     if corps.minutes not in dnstv_protection.DUREES_MIN:
         raise HTTPException(422, "durée de pause : 15, 60 ou 240 minutes")
     maintenant = int(time.time())
     touches, app, _ = _geste(lambda e, p: dnstv_protection.mettre_en_pause(e, p, _cible(corps.appareil), corps.minutes, maintenant, "admin"),
-                             "pause", "admin", dnstv_protection.duree_lisible(corps.minutes))
+                             "pause", "admin", dnstv_protection.duree_lisible(corps.minutes), _r._acteur(jeton), corps.minutes)
     return {"appareils": touches, "jusqu_a": maintenant + corps.minutes * 60, "application": app}
 
 
-@router.post("/protection/reprendre", dependencies=[Depends(require_jwt)])
-def reprendre(corps: AppareilIn):
+@router.post("/protection/reprendre")
+def reprendre(corps: AppareilIn, jeton=Depends(require_jwt)):
     """Reprise immédiate de la protection des appareils en pause (modes d'avant)."""
     touches, app, _ = _geste(lambda e, p: dnstv_protection.reprendre(e, p, _cible(corps.appareil), int(time.time())),
-                             "reprise", "admin", "reprise manuelle")
+                             "reprise", "admin", "reprise manuelle", _r._acteur(jeton))
     return {"appareils": touches, "application": app}
 
 
@@ -261,8 +272,8 @@ def exceptions(lecteur=Depends(_r.require_lecture_nominative)):
     return v
 
 
-@router.post("/protection/exceptions", dependencies=[Depends(require_jwt)])
-def exception_poser(corps: ExceptionIn):
+@router.post("/protection/exceptions")
+def exception_poser(corps: ExceptionIn, jeton=Depends(require_jwt)):
     """Pose ou retire une exception (`autoriser` : liste blanche ; `bloquer` : liste noire) pour UN appareil et UN domaine."""
     with _r._verrou():
         etat, ancien_etat = _r._etat_et_copie()
@@ -275,6 +286,8 @@ def exception_poser(corps: ExceptionIn):
             raise HTTPException(404 if "inconnu" in str(e) else 422, str(e)) from None
         except dnstv_regles.ErreurRegle as e:
             raise HTTPException(422, str(e)) from None
+        _audit(_r._acteur(jeton), "admin", "exception", [corps.appareil], None, dnstv.valider_domaine(corps.domaine),
+               corps.type if corps.actif else corps.type + "-retire")
         dnstv_regles.ecrire(regles)
         try:
             dnstv.ecrire_etat(etat)
@@ -426,11 +439,11 @@ def usager_debloquer(corps: UsagerIn, personne=Depends(require_personne)):
     if corps.geste == "pause":
         maintenant = int(time.time())
         _geste(lambda e, p: dnstv_protection.mettre_en_pause(e, p, noms, corps.minutes, maintenant, "usager"), "pause", "usager",
-               f"{dnstv_protection.duree_lisible(corps.minutes)} par {acteur}")
+               f"{dnstv_protection.duree_lisible(corps.minutes)} par {acteur}", acteur, corps.minutes)
         message = f"protection en pause pour {libelle} pendant {dnstv_protection.duree_lisible(corps.minutes)}"
         jusqu_a = maintenant + corps.minutes * 60
     else:
-        _geste(lambda e, p: dnstv_protection.passer_en_observe(e, p, noms), "observe", "usager", f"retour en observation par {acteur}")
+        _geste(lambda e, p: dnstv_protection.passer_en_observe(e, p, noms), "observe", "usager", f"retour en observation par {acteur}", acteur)
         message = f"{libelle} : protection retirée, la TV est seulement observée" if corps.tv != "toutes" \
             else "toutes les TV : protection retirée, elles sont seulement observées"
         jusqu_a = None

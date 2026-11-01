@@ -54,6 +54,21 @@ class _SansMoteur(Exception):
     """Rien à faire pour le moteur, mais une reprise de pause a changé l'état : l'application reste due."""
 
 
+def audit_reprise(noms: list, executer=None) -> None:
+    """Reprise automatique dans audit.log (origine auto, acteur « moteur ») par le verbe borné `audit-protection` ; au mieux : la reprise
+    RÉTABLIT la protection, elle n'est jamais empêchée par l'audit (le changement de mode est aussi tracé par regles-appliquer)."""
+    import json
+    corps = json.dumps({"acteur": "moteur", "origine": "auto", "geste": "reprise", "cibles": sorted(noms)[:64], "minutes": None,
+                        "domaine": None, "type": None})
+    try:
+        r = (executer or (lambda: subprocess.run(["sudo", "-n", CTL, "audit-protection"], input=corps, capture_output=True, text=True,
+                                                 timeout=30)))()
+        if r.returncode != 0:
+            print("audit de la reprise refusé : " + (r.stderr or "").strip()[:120], file=sys.stderr)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"audit de la reprise impossible : {type(e).__name__}", file=sys.stderr)
+
+
 def reprendre_pauses(etat: dict, now: int) -> list:
     """Lot 3 (#3374) : reprise AUTOMATIQUE des pauses échues (modes d'avant restaurés, sauf adresse changée entre-temps par
     l'administrateur), journal « reprise ». Sous le verrou des règles. Fichier des pauses illisible : rien n'est repris (tracé)."""
@@ -64,6 +79,7 @@ def reprendre_pauses(etat: dict, now: int) -> list:
         return []
     repris = dnstv_protection.reprendre(etat, pauses, None, now, echues=True)
     if repris:
+        audit_reprise(repris)
         dnstv.ecrire_etat(etat)
         dnstv_protection.ecrire_pauses(pauses)
         try:
