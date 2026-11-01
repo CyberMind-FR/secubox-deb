@@ -152,17 +152,14 @@ def save_json(path: Path, data: Any):
     else:
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
-    if Path(path) == PEERS_FILE:
-        # #3126 : chaque écriture du registre republie la projection du pilotage ; un échec ne bloque jamais le registre.
-        try:
-            pairs_enroles.publier(data, PAIRS_ENROLES_DIR)
-        except (pairs_enroles.ProjectionErreur, OSError) as e:
-            log.warning("projection des pairs enrôlés non publiée : %s", e)
 
 
 def _ecrire_sous_verrou(path: Path, data: Any) -> None:
-    """Écriture atomique d'un fichier d'état du maillage ; l'appelant TIENT `oubli.verrou(P2P_DIR)` (#3362)."""
+    """Écriture atomique d'un fichier d'état du maillage ; l'appelant TIENT `oubli.verrou(P2P_DIR)` (#3362). Le
+    registre écrit : projection publiée dans la même section (#3126)."""
     oubli.ecrire_atomique(path, data, 0o644 if Path(path) == PEERS_FILE else 0o600)
+    if Path(path) == PEERS_FILE:
+        _publier_projection(data)
 
 
 def _maj(path: Path, fn, defaut: Any = None):
@@ -172,23 +169,22 @@ def _maj(path: Path, fn, defaut: Any = None):
     init_dirs()
     if defaut is None:
         defaut = [] if Path(path) in (ML_REQUESTS_FILE, ML_TOKENS_FILE) else {"peers": []}
-    ecrit = {}
-
-    def avec_trace(doc):
-        r = fn(doc)
-        ecrit["doc"] = doc
-        return r
     try:
-        res = oubli.maj_json(path, avec_trace, dossier=P2P_DIR, defaut=defaut,
-                             mode=0o644 if Path(path) == PEERS_FILE else 0o600)
+        res = oubli.maj_json(path, fn, dossier=P2P_DIR, defaut=defaut,
+                             mode=0o644 if Path(path) == PEERS_FILE else 0o600,
+                             apres_ecriture=_publier_projection if Path(path) == PEERS_FILE else None)
     except oubli.EtatIllisible:
         raise HTTPException(status_code=503, detail="état du maillage illisible : rien n'est modifié") from None
-    if Path(path) == PEERS_FILE and "doc" in ecrit and res is not oubli.SANS_ECRITURE:
-        try:
-            pairs_enroles.publier(ecrit["doc"], PAIRS_ENROLES_DIR)
-        except (pairs_enroles.ProjectionErreur, OSError) as e:
-            log.warning("projection des pairs enrôlés non publiée : %s", e)
-    return res
+    return None if res is oubli.SANS_ECRITURE else res
+
+
+def _publier_projection(doc: Any) -> None:
+    """#3126/#3362 : projection du pilotage (pairs-enroles.json), publiée SOUS le verrou du registre, juste après son
+    écriture : une publication plus ancienne ne peut pas écraser une plus récente. Un échec ne bloque jamais le registre."""
+    try:
+        pairs_enroles.publier(doc, PAIRS_ENROLES_DIR)
+    except (pairs_enroles.ProjectionErreur, OSError) as e:
+        log.warning("projection des pairs enrôlés non publiée : %s", e)
 
 
 def _liste_pairs(doc: Dict) -> List[Dict]:
@@ -1619,14 +1615,17 @@ def get_wireguard_status():
 @app.post("/wireguard/init")
 def init_wireguard(user: dict = Depends(require_jwt)):
     """Initialize WireGuard mesh interface (lecture-modification-écriture sous le verrou, #3362 passe 5)."""
-    return _maj(WG_MESH_CONFIG, _init_wireguard, defaut=_wg_defaut())
+    # #3362 passe 6 : `wg genkey` / `wg pubkey` calculés AVANT la section critique (jamais de sous-processus sous le
+    # verrou) ; utilisés seulement si l'état courant n'a pas encore de clé.
+    cles = generate_wg_keypair()
+    return _maj(WG_MESH_CONFIG, lambda config: _init_wireguard(config, cles), defaut=_wg_defaut())
 
 
-def _init_wireguard(config: Dict) -> Dict:
+def _init_wireguard(config: Dict, cles: tuple) -> Dict:
 
     # Generate keypair if not exists
     if not config.get("private_key"):
-        private_key, public_key = generate_wg_keypair()
+        private_key, public_key = cles
         if not private_key:
             raise HTTPException(status_code=500, detail="Failed to generate WireGuard keys")
         config["private_key"] = private_key
@@ -2748,6 +2747,11 @@ def _ml_oublier_reserve(op: str, req: "OublierRequest", acteur: str, local: str,
                 oubli.ecrire_atomique(ML_REQUESTS_FILE, demandes, 0o600)
             if n_jonctions["jetons"]:
                 oubli.ecrire_atomique(ML_TOKENS_FILE, jetons_ml, 0o600)
+            try:                                      # #3362 passe 6 : projection publiée AVANT de rendre le verrou
+                pairs_enroles.publier(peers, PAIRS_ENROLES_DIR)
+                projection = {"ok": True, "detail": "pairs-enroles.json republié"}
+            except (pairs_enroles.ProjectionErreur, OSError) as e:
+                projection = {"ok": False, "detail": str(e)[:300]}
     except oubli.EtatIllisible as e:
         _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=acteur)
         raise HTTPException(status_code=503, detail="état du maillage illisible : rien n'est modifié") from None
@@ -2758,11 +2762,7 @@ def _ml_oublier_reserve(op: str, req: "OublierRequest", acteur: str, local: str,
         "registre": {"ok": True, "detail": f"{retires['registre']} entrée(s) du registre, {retires['wg']} pair(s) wg-mesh"},
         "jonctions": {"ok": True, "detail": f"{n_jonctions['demandes']} demande(s), {n_jonctions['jetons']} jeton(s) révoqué(s)"},
     }
-    try:
-        pairs_enroles.publier(peers, PAIRS_ENROLES_DIR)
-        etapes["projection"] = {"ok": True, "detail": "pairs-enroles.json republié"}
-    except (pairs_enroles.ProjectionErreur, OSError) as e:
-        etapes["projection"] = {"ok": False, "detail": str(e)[:300]}
+    etapes["projection"] = projection
     with _operations_verrou:
         OPERATIONS_OUBLI[op] = {"operation": op, "oublie": req.nom, "etat": "en_cours", "status": "en_cours",
                                 "retires": {"registre": retires["registre"], "wg": retires["wg"], **n_jonctions},
@@ -3050,6 +3050,14 @@ def _wg_cles():
     return genkey, pubkey
 
 
+def _cles_precalculees(etat: Dict) -> tuple:
+    """(genkey, pubkey) dont les résultats sont calculés MAINTENANT (hors verrou) pour l'état lu."""
+    genkey, pubkey = _wg_cles()
+    priv = etat.get("private_key") if isinstance(etat, dict) and mesh.valid_wg_key(etat.get("private_key")) else genkey()
+    pub = pubkey(priv)
+    return (lambda: priv), (lambda k: pub if k == priv else pubkey(k))
+
+
 def _transformer_etat_wg(fn) -> Any:
     """#3362 (passe 5) : `fn(état courant) -> (nouvel état, résultat)`, appliqué sous le verrou (lecture stricte, écriture
     atomique 0600) ; l'unité .path (root) applique le changement. Rend `résultat`."""
@@ -3072,7 +3080,10 @@ async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
     # #2885 : la cle du pair part avec la demande, sinon le maitre l'inscrit sans tunnel.
     corps = {"token": token, "fingerprint": my_fp, "hostname": my_hostname, "address": my_addr}
     try:
-        genkey, pubkey = _wg_cles()
+        # #3362 passe 6 : clés calculées HORS du verrou, d'après l'état lu ; sous le verrou, seules les valeurs
+        # précalculées servent (un sous-processus n'y tourne que si l'état a changé de clé entre-temps).
+        genkey, pubkey = await asyncio.to_thread(_cles_precalculees, get_wg_mesh_config())
+
         def preparer(etat):
             e, p = mesh.preparer_pair(etat, genkey, pubkey)
             return e, (e, p)
@@ -3080,6 +3091,9 @@ async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
         corps.update({"wg_public_key": pub, "wg_port": int(etat_wg.get("listen_port", WG_PORT))})
     except (OSError, subprocess.SubprocessError, ValueError) as e:
         log.warning("tunnel du pair non prepare : %s", e)     # l'inscription reste possible sans tunnel
+    except HTTPException as e:                            # #3362 : état illisible (503) — dit, audité, jonction sans tunnel
+        log.warning("tunnel du pair non prepare : etat du maillage illisible (%s)", e.status_code)
+        _audit_jonction("p2p_jonction_etat_illisible", maitre=master_addr, code=e.status_code)
     try:
         proc = await asyncio.create_subprocess_exec(
             "curl", "-s", "--connect-timeout", "10",
@@ -3111,6 +3125,9 @@ async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
                                             lambda etat: (mesh.appliquer_offre(etat, result["wg"], master_addr), None))
                 except (OSError, ValueError) as e:
                     log.warning("offre de tunnel du maitre refusee : %s", e)
+                except HTTPException as e:            # #3362 : état illisible — dit et audité, l'approbation reste
+                    log.warning("offre de tunnel non appliquee : etat du maillage illisible (%s)", e.status_code)
+                    _audit_jonction("p2p_jonction_etat_illisible", maitre=master_addr, code=e.status_code)
 
         return result
 

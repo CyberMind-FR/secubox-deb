@@ -42,6 +42,10 @@ secubox-p2p (1.21.0-1~trixie1) trixie; urgency=medium
     reseau sans jamais reintroduire une entree oubliee entre-temps ; jetons
     ecrits par descripteur de dossier ; repere avec ctime ; place d oubli
     rendue seulement avant toute ecriture (ref #3362).
+  * Passe 6 : projection pairs-enroles.json publiee sous le verrou du
+    registre (maj_json apres_ecriture, oubli avant de rendre le verrou) ;
+    cles wg calculees hors du verrou ; etat illisible a la jonction audite
+    (ref #3362).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 10:10:28 +0100
 

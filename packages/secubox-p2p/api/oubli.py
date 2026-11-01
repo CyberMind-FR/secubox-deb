@@ -153,11 +153,13 @@ def ecrire_atomique(chemin, doc, mode: int = 0o600) -> None:
         raise
 
 
-def maj_json(chemin, fn, *, dossier=None, defaut=None, mode: int = 0o600):
-    """#3362 (passe 5) : lecture-modification-écriture ATOMIQUE d'un état du maillage. Sous `verrou(dossier)` (réentrant ;
-    par défaut le dossier du fichier) : lecture STRICTE (`lire_strict`, ou `lire_strict_liste` si `defaut` est une liste),
-    `fn(document)` qui le modifie EN PLACE, puis `ecrire_atomique`. Rend le résultat de `fn`. Une exception de `fn` (refus)
-    annule l'écriture ; `fn` rend `SANS_ECRITURE` pour ne rien réécrire."""
+def maj_json(chemin, fn, *, dossier=None, defaut=None, mode: int = 0o600, apres_ecriture=None):
+    """#3362 (passes 5 et 6) : lecture-modification-écriture ATOMIQUE d'un état du maillage. Sous `verrou(dossier)`
+    (réentrant ; par défaut le dossier du fichier) : lecture STRICTE (`lire_strict`, ou `lire_strict_liste` si `defaut`
+    est une liste), `fn(document)` qui le modifie EN PLACE, puis `ecrire_atomique`, puis `apres_ecriture(document)`
+    TOUJOURS SOUS LE VERROU (projection : une publication plus ancienne ne peut plus écraser la suivante).
+    Rend le résultat de `fn`, ou `SANS_ECRITURE` si `fn` l'a rendu (rien n'est écrit ni rappelé). Une exception de `fn`
+    (refus) annule l'écriture."""
     dossier = dossier if dossier is not None else os.path.dirname(str(chemin)) or "."
     with verrou(dossier):
         if isinstance(defaut, list):
@@ -166,8 +168,10 @@ def maj_json(chemin, fn, *, dossier=None, defaut=None, mode: int = 0o600):
             doc = lire_strict(chemin, defaut if defaut is not None else {})
         res = fn(doc)
         if res is SANS_ECRITURE:
-            return None
+            return SANS_ECRITURE
         ecrire_atomique(chemin, doc, mode)
+        if apres_ecriture is not None:
+            apres_ecriture(doc)
         return res
 
 

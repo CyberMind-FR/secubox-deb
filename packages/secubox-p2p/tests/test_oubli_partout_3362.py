@@ -919,3 +919,53 @@ def test_429_place_rendue_seulement_avant_toute_ecriture(maitre, monkeypatch):
     main.OPERATIONS_OUBLI.clear()
     r = TestClient(main.app).post("/master-link/oublier", json={"nom": "inconnu", "confirmation": "inconnu"})
     assert r.status_code == 409 and main.OPERATIONS_OUBLI == {}      # refus avant écriture : place rendue
+
+
+# ── passe 6 (#3362) : la projection pairs-enroles.json est publiée SOUS le verrou ───────────────────────────────────
+
+def test_ajout_et_oubli_entrelaces_projection_sans_le_pair_oublie(maitre, monkeypatch):
+    tmp, _ = maitre
+    f = tmp / "p2p" / "peers.json"
+    d = json.loads(f.read_text())
+    for p in d["peers"]:
+        p["joined_via"] = "master-link"                 # pairs enrôlés : présents dans la projection
+    f.write_text(json.dumps(d))
+    reel = main.pairs_enroles.publier
+    fini = threading.Event()
+
+    def publier(doc, dossier):
+        noms = [p.get("name") for p in (doc.get("peers") or [])]
+        if "lgm-ebin" in noms and not getattr(publier, "fait", False):
+            publier.fait = True                     # publication de l'AJOUT, encore porteuse de lgm-ebin
+            threading.Thread(target=lambda: (TestClient(main.app).post(
+                "/master-link/oublier", json={"nom": "lgm-ebin", "confirmation": "lgm-ebin"}), fini.set()),
+                daemon=True).start()
+            fini.wait(1.0)                          # hors verrou (ancien code) : l'oubli publie avant nous
+        return reel(doc, dossier)
+    monkeypatch.setattr(main.pairs_enroles, "publier", publier)
+    r = TestClient(main.app).post("/peers", json={"address": "192.168.1.88", "fingerprint": "fp", "action": "approve"})
+    assert r.status_code == 200
+    fini.wait(5)
+    proj = (tmp / "public" / "pairs-enroles.json").read_text()
+    assert "lgm-ebin" not in proj
+
+
+def test_maj_json_signale_l_ecriture_et_rappelle_sous_verrou(tmp_path):
+    f = tmp_path / "x.json"
+    vus = []
+    r = oubli.maj_json(f, lambda d: d.update(a=1), defaut={}, apres_ecriture=lambda d: vus.append(oubli.tenu(tmp_path)))
+    assert vus == [True] and r is None
+    r = oubli.maj_json(f, lambda d: oubli.SANS_ECRITURE, defaut={}, apres_ecriture=lambda d: vus.append("non"))
+    assert r is oubli.SANS_ECRITURE and vus == [True]
+
+
+def test_cles_wg_hors_verrou_et_rejoindre_503_audite():
+    src = (ICI / "api" / "main.py").read_text()
+    i = src.index("def init_wireguard(")
+    corps = src[i:src.index("\ndef _init_wireguard(", i)]
+    assert "generate_wg_keypair()" in corps                      # calculées AVANT la section critique
+    j = src.index("def _init_wireguard(")
+    assert "generate_wg_keypair()" not in src[j:src.index("\n@app", j)]
+    k = src.index("async def _rejoindre_maitre(")
+    bloc = src[k:k + 4000]
+    assert "except HTTPException" in bloc and "_audit_jonction(" in bloc
