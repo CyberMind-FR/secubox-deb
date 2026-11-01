@@ -90,7 +90,7 @@ sync_api = pytest.importorskip("playwright.sync_api")
 HOSTILE = "<img src=x onerror=window.xss=1>"
 
 
-def _page(scenario, statut=200, chemin="/tv-privacy/"):
+def _page(scenario, statut=200, chemin="/tv-privacy/", n_ev=1):
     appareils = {"appareils": [{"mac": "02:00:5e:00:00:01", "nom": HOSTILE, "ips": ["2001:db8::1", "192.0.2.1"], "mode": "auto",
                                 "modes_divergents": True, "profil": "LG_WEBOS", "profil_source": "nac", "profil_confiance": 90}],
                  "profils": ["LG_WEBOS", "INCONNU"]}
@@ -106,6 +106,9 @@ def _page(scenario, statut=200, chemin="/tv-privacy/"):
                "lignes": [dict(ligne), dict(ligne, domaine="video.example.org", categorie="STREAMING", protegee=True, bloquees=0, requetes=30)]}
     evenements = {"heures": 1, "total": 1, "groupes": [{"appareil": HOSTILE, "client": "192.0.2.1", "domaine": "pub.example.com", "occurrences": 7,
                                                          "premier": 1761955000, "dernier": 1761955100, "decision": "BLOCKED", "bloquees": 7, "erreurs": 0, "nouveau": True}]}
+    if n_ev > 1:                                                          # liste longue : la page n'en montre qu'une partie
+        g0 = evenements["groupes"][0]
+        evenements = {"heures": 1, "total": n_ev, "groupes": [dict(g0, domaine=f"d{i}.example.com") for i in range(n_ev)]}
     usager = {"tv": [{"id": "tv-salon", "nom": "TV salon", "protege": True, "pause_jusqu_a": None}]}
     vide = {"exceptions": [], "hors_champ": [], "agregats": [], "pauses": [], "erreurs_dns": [], "retours_arriere": []}
 
@@ -177,6 +180,16 @@ def test_evenements_agreges_affiches():
     (t,), erreurs, _p, gets, _c = _page(lambda pg: (pg.inner_text("#evenements"),))
     assert "pub.example.com" in t and "nouveau" in t and "bloqué" in t and not erreurs
     assert any("/protection/evenements?heures=1" in u for u in gets)
+
+
+def test_evenements_longs_affiches_par_dix_puis_voir_plus():
+    def sc(pg):
+        avant = pg.eval_on_selector_all("#evenements tr:not(.plus)", "t => t.length")
+        pg.click("#evenements tr.plus button")
+        pg.wait_for_timeout(200)
+        return avant, pg.eval_on_selector_all("#evenements tr:not(.plus)", "t => t.length"), pg.inner_text("#evenements tr.plus")
+    (avant, apres, reste), erreurs, _p, _g, _c = _page(sc, n_ev=45)
+    assert (avant, apres) == (10, 30) and "15 restants" in reste and not erreurs
 
 
 def test_bouton_je_debloque():

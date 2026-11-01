@@ -15,7 +15,7 @@
   `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, adresses de documentation, aucune écriture.
 -->
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-lOSqU2ybBFboUVdnCKwZYgGYdzpdfN+yWhvXG1MeYO4='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-4bvKZxp78k+odReMMHCSjJqqZ8ygyDfoXdBWbsV5sNg='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -343,10 +343,11 @@
     el('n-part').textContent=pct(an.metriques.part_bloquee);el('cat-note').textContent='requêtes par catégorie';
     barres(box,an.metriques.par_categorie,an.protegees);
   }
-  function rendreEvenements(ev){
-    var tb=el('evenements');vider(tb);var g=ev?ev.groupes||[]:null;
+  var EV_PAGE=10,evVus=EV_PAGE;
+  function rendreEvenements(ev,garder){
+    var tb=el('evenements');vider(tb);var g=ev?ev.groupes||[]:null;if(!garder)evVus=EV_PAGE;
     if(!g||!g.length){vide(tb,6,g?'Aucune requête sur la fenêtre.':'—');return;}
-    g.slice(0,40).forEach(function(x){
+    g.slice(0,evVus).forEach(function(x){
       var tr=h('tr');tr.appendChild(h('td',null,x.appareil));tr.appendChild(h('td',{class:'mono'},x.domaine));tr.appendChild(h('td',{class:'num'},fmt(x.occurrences)));
       tr.appendChild(h('td',null,heure(x.premier)+' – '+heure(x.dernier)));
       var td=h('td');td.appendChild(h('span',{class:'pastille '+(x.decision==='BLOCKED'?'vert':x.decision==='UPSTREAM_ERROR'?'rouge':'gris')},x.decision==='BLOCKED'?'bloqué':x.decision==='UPSTREAM_ERROR'?'erreur':'résolu'));
@@ -354,6 +355,9 @@
       tr.appendChild(td);var tdd=h('td');
       if(etat.admin&&!DEMO){var b=h('button',{type:'button',class:'petit','aria-expanded':'false'},'Détail');b.addEventListener('click',function(){deplierEvenement(tr,x,b);});tdd.appendChild(b);}
       tr.appendChild(tdd);tb.appendChild(tr);});
+    if(g.length>evVus){var tr2=h('tr',{class:'plus'}),td2=h('td',{colspan:'6'}),b2=h('button',{type:'button',class:'petit'},'Voir plus ('+fmt(g.length-evVus)+' restants)');
+      b2.addEventListener('click',function(){evVus+=20;rendreEvenements(ev,true);hauteur();});td2.appendChild(b2);
+      td2.appendChild(h('span',{class:'note'},' · liste complète, filtres et export : onglet Analyseur'));tr2.appendChild(td2);tb.appendChild(tr2);}
   }
   function deplierEvenement(tr,x,b){
     var s=tr.nextSibling;if(s&&s.classList&&s.classList.contains('sous')){s.remove();b.setAttribute('aria-expanded','false');hauteur();return;}
