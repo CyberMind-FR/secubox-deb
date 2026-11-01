@@ -152,7 +152,7 @@ def test_gardes_et_routes_synchrones(donnees):
     app.include_router(r.router)
     app.dependency_overrides[auth.require_lecture] = lambda: {"sub": "lecteur"}           # lecture seule : l'écriture reste refusée
     c = TestClient(app)
-    assert c.get("/adblock-tv/auto/detection").status_code == 200 and c.get("/adblock-tv/auto/profil").status_code == 200
+    assert c.get("/adblock-tv/auto/detection").status_code == 403 and c.get("/adblock-tv/auto/profil").status_code == 200   # #3374
     for chemin, corps in (("/adblock-tv/auto/detection/reglage", {"ajout_auto": False}), ("/adblock-tv/auto/appareils/TV banc/ignorer", None),
                           ("/adblock-tv/auto/appareils/TV banc/puits", {"actif": False})):
         assert c.post(chemin, json=corps).status_code in (401, 403), chemin

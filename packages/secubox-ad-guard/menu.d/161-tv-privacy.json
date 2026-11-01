@@ -1,0 +1,10 @@
+{
+  "id": "tv-privacy",
+  "name": "SBX TV Privacy",
+  "category": "wall",
+  "icon": "📺",
+  "path": "/tv-privacy/",
+  "order": 161,
+  "description": "Vie privée des téléviseurs : équipements, domaines classés, corrections",
+  "theme": "bouclier"
+}

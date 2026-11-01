@@ -152,7 +152,7 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 
 | Route | Garde | Rôle |
 |---|---|---|
-| `GET /adblock-tv/gardien` | `require_lecture` | Guardian (#2287) : appareils connectés (NAC), DNS du jour, menaces 24 h (actord, `null` si indisponible), courbe 7 jours, types, catégories, appareils principaux ; cache 60 s. Page : `/guardian/` (`?embed=1` cardlet, `?demo=1` démonstration annoncée) |
+| `GET /adblock-tv/gardien` | `require_lecture_nominative` | Guardian (#2287) : appareils connectés (NAC), DNS du jour, menaces 24 h (actord, `null` si indisponible), courbe 7 jours, types, catégories, appareils principaux ; cache 60 s. Page : `/guardian/` (`?embed=1` cardlet, `?demo=1` démonstration annoncée) |
 | `GET /adblock-tv/simple` | `require_lecture` | cartes par appareil (adresses regroupées), protégés, blocages 24 h |
 | `POST /adblock-tv/simple/appareils/{nom}/protection` | `require_jwt` | `{"actif": bool}` ; applique puis relit le drop-in Unbound ; réponse `verifie` / `ecart` |
 | `GET /adblock-tv/simple/suspects?minutes=60` | `require_lecture` | noms servis qui ressemblent à une pub (mot entier dans un libellé), hors bloqués et jugés légitimes |
@@ -166,13 +166,37 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 
 | Route | Garde | Rôle |
 |---|---|---|
-| `GET /adblock-tv/classification?mac=&categorie=&limite=` | `require_lecture` | lu dans le cache `classification-cache.json` (0640) que le moteur AUTO rafraîchit toutes les 5 min ; cache absent : `domaines: []`, `cache: false`. Par ligne : `domaine`, `mac` **tronquée**, `categorie`, `source` (`liste`, `apprentissage`, `ndpi`, `manuelle`, `profil`, ou `aucune`), `confiance`, `derniere_observation` **au jour**, `requetes`, `bloquees`, `ancienne`, `protegee` |
+| `GET /adblock-tv/classification?mac=&categorie=&limite=` | `require_lecture_nominative` | lu dans le cache `classification-cache.json` (0640) que le moteur AUTO rafraîchit toutes les 5 min ; cache absent : `domaines: []`, `cache: false`. Par ligne : `domaine`, `mac` **tronquée**, `categorie`, `source` (`liste`, `apprentissage`, `ndpi`, `manuelle`, `profil`, ou `aucune`), `confiance`, `derniere_observation` **au jour**, `requetes`, `bloquees`, `ancienne`, `protegee` |
 | `GET /adblock-tv/classification/detail?mac=&categorie=&limite=` | `require_jwt` | même cache, MAC complète, `ips`, horodatage à la seconde (`precision`) |
 | `POST /adblock-tv/classification` | `require_jwt` | `{"domaine", "categorie" \| null, "mac" \| null}` (`extra=forbid`) : correction manuelle, par MAC ou pour toute la maison ; `null` la retire ; refusée si trop large (suffixe public, parent d'une entrée protégée de la référence) ; auditée dans `audit.log` par `sudo secubox-adguard-tv audit-classification` (enregistrement sur l'entrée standard, revalidé par root) AVANT écriture ; aucun effet DNS immédiat |
 
 Catégories : `PUBLICITE`, `TRACKING`, `TELEMETRIE`, `STREAMING`, `CDN`, `DRM`, `AUTHENTIFICATION`, `MISE_A_JOUR`, `SERVICES_CONSTRUCTEUR`, `INCONNU` (`api/dnstv_taxonomie.py`, correspondance depuis les anciennes valeurs). **Garde** : `STREAMING`, `CDN`, `DRM`, `AUTHENTIFICATION`, `MISE_A_JOUR` et `INCONNU` ne sont jamais mis en essai ni confirmés par le moteur AUTO (essai automatique, confirmation automatique, profil de base à l'ajout) ; ils restent proposés en candidats. Seule une décision de l'administrateur (règle confirmée à la main sur au moins un appareil — valable alors pour tous les chemins automatiques et tous les appareils —, ou correction de catégorie) lève la garde. Corrections illisibles : ajout, profil, essai et confirmation automatiques suspendus (fermé en cas d'échec). `systeme` et `connectivite` de services.txt sont INCONNU, donc protégés. Référence sourcée : `lists/reference-tv.txt` (au manifeste). Corrections : `classification.json` dans le dossier d'état, écrit atomiquement sous le verrou des règles. Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot2-design.md`.
 
 « Bloquer » réutilise `POST /adblock-tv/custom`. La vérification compare, pour chaque adresse de l'appareil, la vue Unbound attendue (`sbx-tv-auto-<slug>`, ou aucune pour `off`) à celle du drop-in.
+
+### Données personnelles et mode tableau de bord (1.19.0, #3374)
+
+Garde `require_lecture_nominative` (`api/dnstv_routes.py`) : `require_lecture`, puis **403** sauf pour un administrateur réel
+(`est_admin_reel`) ou le porteur délégué du pilotage rendu par la garde (déjà borné à GET/HEAD par `secubox_core.auth`).
+Refusés : le porteur anonyme du mode tableau de bord (`[tableau_de_bord] actif`, LAN nginx sans jeton ; sur gk2 ce « LAN »
+inclut le réseau de la box opérateur) et tout jeton d'usager. Elle garde toute route qui renvoie une MAC, une adresse, un nom
+d'appareil, des domaines ou des compteurs par appareil, ou la topologie de la box : `/appareils`, `/classification`, `/stats`,
+`/export`, `/clients/vus`, `/path-test`, `/bypass`, `/sources`, `/live`, `/serie`, `/flux`, `/auto/regles`, `/auto/reglage`,
+`/auto/detection`, `/auto/appareils/{nom}/refus`, `/simple`, `/simple/suspects`, `/gardien`, `/dns-box`.
+`GET /adblock-tv/status` reste en `require_lecture` ; à tout autre lecteur qu'un administrateur, il rend `clients: []`,
+`appareils: []` et `erreur` en booléen (sans texte). Restent servis au tableau de bord, sans donnée par appareil : `/limites`,
+`/custom`, `/auto/profil`. La page `/guardian/` demande donc désormais une session d'administrateur.
+
+### Page SBX TV Privacy (1.19.0, #3374)
+
+`/tv-privacy/` (menu « SBX TV Privacy », catégorie `wall`, `menu.d/161-tv-privacy.json`) : page Aurora autonome, une colonne
+sur téléphone, `?demo=1` (démonstration annoncée, aucune écriture), `?embed=1`, hauteur postée (`sbxVue`, `onglet: tv-privacy`).
+Trois onglets : **Vue générale** (équipements détectés et protégés — mode ≠ observe —, domaines par catégorie, événements de la
+dernière heure via `/live`), **Équipements** (`GET /adblock-tv/appareils` ; IPv4 en tête, IPv6 repliées, `modes_divergents`
+signalé ; « Corriger le profil » → `POST /adblock-tv/appareils/{mac}/profil` après confirmation dans la page), **Analyseur**
+(`GET /adblock-tv/classification/detail`, repli sur `/classification` sans droits d'administrateur ; filtres appareil et
+catégorie ; « Afficher plus » augmente `limite` par 100 jusqu'à 1000, la route n'a pas de décalage ; « Corriger » →
+`POST /adblock-tv/classification` après confirmation). Session d'administrateur requise ; toute donnée reçue est posée par `textContent` ; CSP stricte en `<meta>` (`default-src 'self'`, script et style en ligne autorisés par leur sha256, vérifiés par `tests/test_page_tv_privacy_3374.py`).
 
 ## Capteur DNS d'Actor Intelligence (#2240)
 

@@ -11,6 +11,9 @@ override_dh_auto_install:
 	cp -r www/ad-guard/. debian/secubox-ad-guard/usr/share/secubox/www/ad-guard/
 	install -d debian/secubox-ad-guard/usr/share/secubox/www/guardian
 	cp -r www/guardian/. debian/secubox-ad-guard/usr/share/secubox/www/guardian/
+	# SBX TV Privacy (#3374) : page de lecture et de correction, servie comme /guardian/ par la racine statique.
+	install -d debian/secubox-ad-guard/usr/share/secubox/www/tv-privacy
+	cp -r www/tv-privacy/. debian/secubox-ad-guard/usr/share/secubox/www/tv-privacy/
 	install -d debian/secubox-ad-guard/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-ad-guard/usr/share/secubox/menu.d/ || true
 	install -d debian/secubox-ad-guard/etc/secubox

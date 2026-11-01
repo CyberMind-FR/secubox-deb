@@ -381,7 +381,7 @@ def test_gardes_des_nouvelles_routes():
     for route in r.router.routes:
         if "/appareils" in route.path and "/auto/" not in route.path:
             gardes[(route.path, tuple(sorted(route.methods)))] = {d.call for d in route.dependant.dependencies}
-    assert auth.require_lecture in gardes[("/adblock-tv/appareils", ("GET",))]
+    assert r.require_lecture_nominative in gardes[("/adblock-tv/appareils", ("GET",))]
     assert auth.require_jwt in gardes[("/adblock-tv/appareils/{mac}/profil", ("POST",))]
 
 
