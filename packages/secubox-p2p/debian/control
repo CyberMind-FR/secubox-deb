@@ -14,6 +14,7 @@ Depends: ${misc:Depends},
  python3-uvicorn | python3-pip,
  avahi-daemon,
  avahi-utils,
+ iproute2,
  wireguard-tools,
  python3-aiohttp
 # secubox-annuaire : Recommends, plus Depends (#2877). Le client (api/annuaire_client.py) parle a l'annuaire par sa socket et « ne leve jamais » : sans lui, le catalogue est vide, pas une panne.

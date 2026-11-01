@@ -11,7 +11,13 @@ PAGE = (Path(__file__).resolve().parents[1] / "www" / "fleet" / "index.html").re
 def test_bouton_oublier_et_routes():
     i = PAGE.index("function oublierNoeud(")
     bloc = PAGE[i:i + 3000]
-    assert "/api/v1/p2p/master-link/oublier" in bloc and "/oublier'" in bloc and "/api/v1/pilotage/boxes/" in bloc
+    assert "/api/v1/p2p/master-link/oublier" in bloc
+    # #3362 : UN seul point d'entrée (secubox-p2p enchaîne tous les nettoyages, Flotte du pilotage comprise) ; la page n'appelle
+    # plus le pilotage elle-même (elle oubliait la box homonyme quand une ancienne clé était désignée) et montre ce qui reste.
+    assert "/api/v1/pilotage/boxes/" not in bloc
+    assert "d.restes" in bloc and "partiel" in bloc
+    # correction #3362 : 202 + opération suivie par GET jusqu'à « termine » (plus de 504 trompeur)
+    assert "/api/v1/p2p/master-link/oublier/' + encodeURIComponent(" in bloc and "'termine'" in bloc and "operation" in bloc
     assert "saisie.value !== nom" in bloc                                 # nom retapé, sinon rien n'est envoyé
     assert "forcer.checked" in bloc and "force: true" in bloc            # nœud encore en ligne : « forcer » coché
     assert "oublierNoeud(p.name, act, p.public_key)" in PAGE and "public_key: cle" in bloc and "<th>Dernier vu</th><th></th>" in PAGE
@@ -19,3 +25,9 @@ def test_bouton_oublier_et_routes():
 
 def test_le_bouton_n_est_pose_que_pour_un_nom_valide():
     assert "/^[a-z0-9][a-z0-9-]{0,62}$/.test(p.name)" in PAGE
+
+
+def test_bouton_reactive_si_le_suivi_echoue():
+    """#3362 passe 2 : un suivi en échec ne laisse pas le bouton désactivé."""
+    i = PAGE.index("Suivi de l\\'oubli impossible")
+    assert "ok.disabled = false" in PAGE[i:i + 120]

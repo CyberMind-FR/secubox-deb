@@ -10,14 +10,15 @@
                                            code `sbxmesh1.…` pour automesh ; --flash : ne vaut que
                                            pour le nom N et remplace la clé d'un pair de ce nom.
 
-Le jeton n'est jamais écrit dans l'audit ; tokens.json reste au compte du service `secubox`."""
+Le jeton n'est jamais écrit dans l'audit ; tokens.json et son dossier restent au compte du service `secubox` (rendus par
+jetons.ecrire, sous le verrou, avant le remplacement : #3362)."""
 import argparse
 import json
 import os
 import sys
 
 sys.path.insert(0, "/usr/lib/secubox/p2p")
-from api import automesh, jetons  # noqa: E402
+from api import automesh, jetons, oubli  # noqa: E402
 from api.ancre import audit  # noqa: E402
 
 VERSION = "2.0.0"
@@ -29,26 +30,6 @@ def _adresse_lan():
     """Même fonction que l'API (import tardif : tire FastAPI)."""
     from api import main
     return main.get_lan_ip()
-
-
-def _rendre_au_service(dossier):
-    """Lancée en root, la CLI laisserait tokens.json à root : le service `secubox` en tomberait en EACCES."""
-    if os.geteuid() != 0:
-        return
-    try:
-        import pwd
-        u = pwd.getpwnam("secubox")
-    except KeyError:
-        return
-    ml = os.path.join(dossier, "master-link")
-    for n in (ml, os.path.join(ml, "tokens.json")):
-        if os.path.islink(n):
-            print(f"sbx-mesh-invite : {n} est un lien, propriétaire inchangé", file=sys.stderr)
-            continue
-        try:
-            os.lchown(n, u.pw_uid, u.pw_gid)       # jamais de suivi de lien : le dossier est écrivable par le service
-        except OSError:
-            pass
 
 
 def main(argv=None):
@@ -78,8 +59,14 @@ def main(argv=None):
     except ValueError:
         print("sbx-mesh-invite : adresse du maître inutilisable (--adresse)", file=sys.stderr)
         return 1
-    emis = jetons.generer(a.ttl, auto, nom_prevu=a.nom, flash=a.flash)
-    _rendre_au_service(jetons.dossier_p2p())
+    try:
+        emis = jetons.generer(a.ttl, auto, nom_prevu=a.nom, flash=a.flash)
+    except oubli.EtatIllisible as e:            # #3362 : tokens.json illisible n'est jamais remplacé
+        print(f"sbx-mesh-invite : {e} — aucun jeton émis", file=sys.stderr)
+        return 1
+    except OSError as e:                        # #3362 : master-link en lien, droits… : message clair, aucun jeton
+        print(f"sbx-mesh-invite : {e.strerror or e} ({e.filename or 'master-link'}) — aucun jeton émis", file=sys.stderr)
+        return 1
     code = automesh.encoder(adresse, emis["token"])
     try:
         audit("code_emis", chemin=os.environ.get("SBX_AUDIT", "/var/log/secubox/audit.log"),

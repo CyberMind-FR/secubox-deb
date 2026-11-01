@@ -1,3 +1,15 @@
+secubox-annuaire (0.17.3-1~trixie1) trixie; urgency=medium
+
+  * Flotte, bouton Oublier : un seul appel, POST /api/v1/p2p/master-link/oublier,
+    qui enchaine tous les nettoyages (pilotage compris) ; les etapes restantes
+    d un oubli partiel sont affichees. La page n oublie plus la box homonyme
+    du pilotage quand une ancienne cle est designee (ref #3362).
+  * Correction apres revue : la Flotte suit l operation d oubli (202, GET) ;
+    secubox-annuaire-noms prend son verrou et le verrou commun d Unbound,
+    --sans-redemarrage (code 3, jamais de restart depuis l oubli) (ref #3362).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 10:10:10 +0100
+
 secubox-annuaire (0.17.2-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : la voie rapide (20 s) ne décode plus tout le journal : filtre par opération dans SQLite (ref #3355).

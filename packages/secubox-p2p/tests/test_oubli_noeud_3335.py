@@ -24,7 +24,7 @@ def test_oublier_retire_le_pair_du_registre_et_de_wg_mesh():
     peers, wg, retires = oubli.oublier(PEERS, WG, "lgm-ebin", handshakes={}, now=1000, local="gk2")
     assert [p["name"] for p in peers["peers"]] == ["gk4"]
     assert [p["name"] for p in wg["peers"]] == ["gk4"]
-    assert retires == {"registre": 1, "wg": 1}
+    assert (retires["registre"], retires["wg"]) == (1, 1)
     assert wg["enabled"] is True                       # le reste de l'état est gardé tel quel
 
 
@@ -49,8 +49,8 @@ def test_oublier_un_nom_inconnu_est_refuse():
 
 def test_la_route_exige_l_administrateur_et_la_confirmation():
     src = (Path(__file__).resolve().parents[1] / "api" / "main.py").read_text(encoding="utf-8")
-    i = src.index('@app.post("/master-link/oublier")')
-    bloc = src[i:i + 3200]
+    i = src.index('@app.post("/master-link/oublier"')
+    bloc = src[i:src.index("@app.get(\"/master-link/oublier/{operation}\")")]
     assert "require_jwt" in bloc and "confirmation" in bloc and "_audit_jonction" in bloc
 
 
@@ -99,7 +99,7 @@ def test_ecriture_atomique_sous_verrou(tmp_path):
 
 def test_la_route_est_synchrone_et_lit_strictement():
     src = (Path(__file__).resolve().parents[1] / "api" / "main.py").read_text(encoding="utf-8")
-    i = src.index('@app.post("/master-link/oublier")')
-    bloc = src[i:i + 2600]
+    i = src.index('@app.post("/master-link/oublier"')
+    bloc = src[i:src.index("@app.get(\"/master-link/oublier/{operation}\")")]
     assert "\ndef ml_oublier(" in bloc and "async def ml_oublier" not in bloc
     assert "oubli.verrou(" in bloc and "lire_strict" in bloc and "503" in bloc and "ecrire_atomique" in bloc

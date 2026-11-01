@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# #3362 : « Oublier ce nœud » (secubox-p2p, compte secubox) enchaîne ses nettoyages root par cet assistant SEUL :
+# chemin exact, aucun joker. L'assistant revérifie chaque cible contre l'état écrit (clé, adresse et nom oubliés).
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-oubli-pair

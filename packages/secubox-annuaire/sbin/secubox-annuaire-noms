@@ -26,9 +26,17 @@ Toutes les 5 minutes (minuterie), en root :
 
 Toute configuration Unbound neuve passe par unbound-checkconf ; refusée, on
 remet l'ancienne. Rien n'est réécrit quand rien n'a changé.
+
+VERROUS (#3362) : un passage à la fois (verrou propre, /run, root), et le
+contrôle d'Unbound (checkconf, reload, restart) sous le verrou COMMUN des
+écrivains d'Unbound (celui de secubox-dns-listes) : deux unbound-control
+concurrents ont déjà laissé Unbound mort. `--sans-redemarrage` (appel de
+« Oublier ce nœud ») : jamais de restart ; s'il en faudrait un, code 3.
 """
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import re
@@ -48,6 +56,8 @@ AVAHI = Path("/etc/avahi/services/secubox.service")
 UNBOUND = Path("/etc/unbound/unbound.conf.d/60-secubox-noms.conf")
 CONF = Path("/etc/secubox/annuaire.toml")
 PORT_MAILLAGE = 8799
+VERROU_NOMS = Path("/run/secubox-annuaire-noms.lock")           # root seul écrit /run : personne d'autre ne le tient
+VERROU_UNBOUND = Path("/var/lib/secubox-dns-listes/verrou")     # verrou commun d'Unbound (secubox_unbound.depot.VERROU)
 RE_LABEL = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
@@ -186,7 +196,22 @@ def ecoute_manquante(contenu: str, ecoutes: str) -> List[str]:
     return [a for a in voulues if f"{a}:53 " not in ecoutes + " "]
 
 
-def ecoute_garantie(contenu: str) -> str:
+@contextlib.contextmanager
+def _verrou(chemin: Path, facultatif: bool = False):
+    """flock exclusif, fichier 0600 ouvert sans suivre de lien. `facultatif` : dossier absent (pas de secubox-dns-listes)
+    → rien à prendre."""
+    if facultatif and not chemin.parent.is_dir():
+        yield
+        return
+    fd = os.open(chemin, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def ecoute_garantie(contenu: str, redemarrer: bool = True) -> str:
     """`unbound-control reload` n'ouvre PAS une adresse nouvelle (vu sur gk2 :
     zones servies en local, rien sur 10.10.0.1). On vérifie donc à chaque
     passage, et on redémarre seulement s'il en manque — une fois."""
@@ -195,11 +220,19 @@ def ecoute_garantie(contenu: str) -> str:
     manque = ecoute_manquante(contenu, ecoutes)
     if not manque:
         return ""
+    if not redemarrer:
+        return f" ; PARTIEL : écoute manquante ({', '.join(manque)}), redémarrage d'Unbound à décider par l'administrateur"
     subprocess.run(["systemctl", "restart", "unbound"], capture_output=True)
     return f" ; Unbound redémarré (écoute manquante : {', '.join(manque)})"
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    sans_redemarrage = "--sans-redemarrage" in (sys.argv[1:] if argv is None else argv)
+    with _verrou(VERROU_NOMS):
+        return _passage(sans_redemarrage)
+
+
+def _passage(sans_redemarrage: bool) -> int:
     try:
         wg = json.loads(WG.read_text())
     except (OSError, ValueError):
@@ -220,12 +253,16 @@ def main() -> int:
     if wg.get("role") == "master" and soi_mesh:
         noeuds = [soi] + [a for a in (adresses_de(p["mesh_ip"]) for p in wg.get("peers") or [] if p.get("mesh_ip")) if a]
         conf = unbound_maitre(z, soi_mesh, noeuds)
-        etat = applique_unbound(conf)
-        if not etat.startswith("REFUSÉ"):
-            etat += ecoute_garantie(conf)
+        with _verrou(VERROU_UNBOUND, facultatif=True):
+            etat = applique_unbound(conf)
+            if not etat.startswith("REFUSÉ"):
+                etat += ecoute_garantie(conf, redemarrer=not sans_redemarrage)
         print(f"noms (maître, {len(noeuds)} box) : {etat}")
+        if "PARTIEL" in etat:
+            return 3
     elif (m := maitre_de(wg)):
-        print(f"noms (pair → {m}) : {applique_unbound(unbound_pair(z, m))}")
+        with _verrou(VERROU_UNBOUND, facultatif=True):
+            print(f"noms (pair → {m}) : {applique_unbound(unbound_pair(z, m))}")
     return 0
 
 

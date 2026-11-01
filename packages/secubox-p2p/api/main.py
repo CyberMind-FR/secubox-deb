@@ -12,7 +12,10 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
+import contextvars
+import copy
 import functools
+import threading
 import logging
 import subprocess
 import asyncio
@@ -25,6 +28,7 @@ import time
 import hashlib
 import secrets
 from pathlib import Path
+from urllib.parse import quote
 from datetime import datetime, timedelta
 
 log = logging.getLogger("secubox.p2p")
@@ -137,19 +141,66 @@ def load_json(path: Path, default: Any = None) -> Any:
 
 def save_json(path: Path, data: Any):
     init_dirs()
-    if Path(path) in (PEERS_FILE, WG_MESH_CONFIG):
-        # #3335 (relecture #3341) : mêmes fichiers que « Oublier ce nœud » : écriture atomique sous son verrou
-        with oubli.verrou(P2P_DIR):
-            oubli.ecrire_atomique(path, data, 0o600 if Path(path) == WG_MESH_CONFIG else 0o644)
+    if Path(path) in (PEERS_FILE, WG_MESH_CONFIG, ML_REQUESTS_FILE, ML_TOKENS_FILE):
+        # #3335 (relecture #3341), #3362 : mêmes fichiers que « Oublier ce nœud » (jonctions comprises) : écriture atomique
+        # sous son verrou. Déjà dans une section critique de ce fil : variante « déjà sous verrou », sans reprendre le flock.
+        if oubli.tenu(P2P_DIR):
+            _ecrire_sous_verrou(path, data)
+        else:
+            with oubli.verrou(P2P_DIR):
+                _ecrire_sous_verrou(path, data)
     else:
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
+
+
+def _ecrire_sous_verrou(path: Path, data: Any) -> None:
+    """Écriture atomique d'un fichier d'état du maillage ; l'appelant TIENT `oubli.verrou(P2P_DIR)` (#3362). Le
+    registre écrit : projection publiée dans la même section (#3126)."""
+    oubli.ecrire_atomique(path, data, 0o644 if Path(path) == PEERS_FILE else 0o600)
     if Path(path) == PEERS_FILE:
-        # #3126 : chaque écriture du registre republie la projection du pilotage ; un échec ne bloque jamais le registre.
-        try:
-            pairs_enroles.publier(data, PAIRS_ENROLES_DIR)
-        except (pairs_enroles.ProjectionErreur, OSError) as e:
-            log.warning("projection des pairs enrôlés non publiée : %s", e)
+        _publier_projection(data)
+
+
+def _maj(path: Path, fn, defaut: Any = None):
+    """#3362 (passe 5) : TOUTE écriture de peers.json, wg_mesh.json, requests.json ou tokens.json passe ici :
+    lecture stricte, `fn(document)` (modifie en place), écriture atomique, sous `oubli.verrou(P2P_DIR)` (réentrant).
+    Illisible → 503, rien n'est réécrit. peers.json écrit : la projection du pilotage est republiée."""
+    init_dirs()
+    if defaut is None:
+        defaut = [] if Path(path) in (ML_REQUESTS_FILE, ML_TOKENS_FILE) else {"peers": []}
+    try:
+        res = oubli.maj_json(path, fn, dossier=P2P_DIR, defaut=defaut,
+                             mode=0o644 if Path(path) == PEERS_FILE else 0o600,
+                             apres_ecriture=_publier_projection if Path(path) == PEERS_FILE else None)
+    except oubli.EtatIllisible:
+        raise HTTPException(status_code=503, detail="état du maillage illisible : rien n'est modifié") from None
+    return None if res is oubli.SANS_ECRITURE else res
+
+
+def _publier_projection(doc: Any) -> None:
+    """#3126/#3362 : projection du pilotage (pairs-enroles.json), publiée SOUS le verrou du registre, juste après son
+    écriture : une publication plus ancienne ne peut pas écraser une plus récente. Un échec ne bloque jamais le registre."""
+    try:
+        pairs_enroles.publier(doc, PAIRS_ENROLES_DIR)
+    except (pairs_enroles.ProjectionErreur, OSError) as e:
+        log.warning("projection des pairs enrôlés non publiée : %s", e)
+
+
+def _liste_pairs(doc: Dict) -> List[Dict]:
+    """La liste `peers` du registre, créée si besoin (modifiable en place)."""
+    if not isinstance(doc.get("peers"), list):
+        doc["peers"] = []
+    return doc["peers"]
+
+
+def _ml_lire(path: Path) -> List[Dict]:
+    """#3362 (passe 2) : demandes ou jetons, lus STRICTEMENT dans une section critique ; illisibles → 503, rien n'est
+    réécrit (load_json rendait [] et le fichier était remplacé par une liste vide)."""
+    try:
+        return oubli.lire_strict_liste(path)
+    except oubli.EtatIllisible:
+        raise HTTPException(status_code=503, detail="jonctions du maillage illisibles : rien n'est modifié") from None
 
 
 def get_node_id() -> str:
@@ -320,8 +371,11 @@ def save_ml_config(config: Dict):
 
 
 def get_ml_tokens() -> List[Dict]:
-    """Get all master-link tokens."""
+    """Get all master-link tokens. Dans une section critique (#3362) : lecture STRICTE (503 si illisible) ; hors section
+    (lectures seules) : tolérante."""
     ml_init()
+    if oubli.tenu(P2P_DIR):
+        return _ml_lire(ML_TOKENS_FILE)
     return load_json(ML_TOKENS_FILE, [])
 
 
@@ -332,8 +386,11 @@ def save_ml_tokens(tokens: List[Dict]):
 
 
 def get_ml_requests() -> List[Dict]:
-    """Get all join requests."""
+    """Get all join requests. Dans une section critique (#3362) : lecture STRICTE (503 si illisible) ; hors section
+    (lectures seules) : tolérante."""
     ml_init()
+    if oubli.tenu(P2P_DIR):
+        return _ml_lire(ML_REQUESTS_FILE)
     return load_json(ML_REQUESTS_FILE, [])
 
 
@@ -362,8 +419,11 @@ def ml_token_generate(ttl: int = None, token_type: str = "join", auto_approve: b
         ttl = config.get("token_ttl", ML_DEFAULT_TOKEN_TTL)
 
     ml_init()
-    emis = jetons.generer(ttl, auto_approve, nom_prevu=nom_prevu, flash=flash,
-                          token_type=token_type, chemin=ML_TOKENS_FILE)
+    try:
+        emis = jetons.generer(ttl, auto_approve, nom_prevu=nom_prevu, flash=flash,
+                              token_type=token_type, chemin=ML_TOKENS_FILE)
+    except oubli.EtatIllisible:                 # #3362 : tokens.json illisible n'est jamais remplacé
+        raise HTTPException(status_code=503, detail="jetons de jonction illisibles : aucun jeton émis") from None
     token, token_hash, expires = emis["token"], emis["token_hash"], emis["expires"]
 
     # Build join URL
@@ -379,13 +439,19 @@ def ml_token_generate(ttl: int = None, token_type: str = "join", auto_approve: b
     }
 
 
-def ml_token_validate(token: str) -> Dict:
-    """Validate a token."""
+def ml_token_validate(token: str, attente: Optional[float] = None) -> Dict:
+    """Validate a token. `attente` : verrou pris sans bloquer, réessayé au plus `attente` s (route publique), sinon
+    oubli.VerrouOccupe."""
     if not token:
         return {"valid": False, "error": "missing_token"}
 
     token_hash = hash_token(token)
-    tokens = get_ml_tokens()
+    init_dirs()
+    with oubli.verrou(P2P_DIR, attente=attente):  # #3362 : lire, marquer « expiré », écrire : une section critique
+        return _ml_token_validate(get_ml_tokens(), token_hash)
+
+
+def _ml_token_validate(tokens: List[Dict], token_hash: str) -> Dict:
     now = datetime.utcnow()
 
     for t in tokens:
@@ -419,8 +485,15 @@ def ml_token_validate(token: str) -> Dict:
 
 
 def ml_token_mark_used(token_hash: str, peer_fp: str):
-    """Mark a token as used."""
-    tokens = get_ml_tokens()
+    """Mark a token as used (section critique, #3362)."""
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        tokens = get_ml_tokens()
+        _marquer_utilise(tokens, token_hash, peer_fp)
+        save_ml_tokens(tokens)
+
+
+def _marquer_utilise(tokens: List[Dict], token_hash: str, peer_fp: str) -> None:
     for t in tokens:
         if t.get("hash") == token_hash:
             t["status"] = "used"
@@ -428,12 +501,16 @@ def ml_token_mark_used(token_hash: str, peer_fp: str):
             t["used_by"] = peer_fp
             t["used_at"] = datetime.utcnow().isoformat()
             break
-    save_ml_tokens(tokens)
 
 
 def ml_cleanup_tokens():
-    """Remove expired tokens."""
-    tokens = get_ml_tokens()
+    """Remove expired tokens (section critique, lecture stricte : #3362)."""
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        return _ml_cleanup_tokens(get_ml_tokens())
+
+
+def _ml_cleanup_tokens(tokens: List[Dict]) -> Dict:
     now = datetime.utcnow().timestamp()
     cleaned = 0
 
@@ -711,7 +788,7 @@ class TokenGenerateRequest(BaseModel):
 # ============== Status ==============
 
 @app.get("/status", dependencies=[Depends(require_lecture)])
-async def get_status():
+def get_status():
     """Get P2P network status (public)."""
     init_dirs()
     peers_data = load_json(PEERS_FILE, {"peers": []})
@@ -723,7 +800,6 @@ async def get_status():
     # (older versions persisted get_self_peer() into PEERS_FILE, inflating these).
     local_id = get_node_id()
     peers = [p for p in peers if not p.get("is_local") and p.get("id") != local_id]
-    online_peers = [p for p in peers if p.get("status") == "online"]
 
     # Mesh view is driven by the wg-mesh transport (wg_mesh.json), which p2p
     # now owns (Gondwana Phase 1). The web UI reads total_peers/active_peers.
@@ -733,7 +809,10 @@ async def get_status():
     # dont la dernière poignée de main est récente — et, si la mesure manque,
     # on le DIT (`liveness: unavailable`) au lieu de supposer.
     handshakes = mesh.load_handshakes()
-    wg_nodes = mesh.peer_nodes(get_wg_mesh_config(), handshakes)
+    wg_state = get_wg_mesh_config()
+    wg_nodes = mesh.peer_nodes(wg_state, handshakes)
+    # #3362 : le registre hérité aussi est MESURÉ (poignée de main du pair wg-mesh de même adresse), jamais son « online » écrit.
+    online_peers = [p for p in mesh.statut_registre(peers, wg_state, handshakes) if p.get("status") == "online"]
     wg_peer_count = len(wg_nodes)
     wg_online = sum(1 for n in wg_nodes if n["status"] == "online")
 
@@ -770,25 +849,41 @@ async def discover_get(method: str = "all", timeout: int = 5):
     return await discover_peers(method, timeout)
 
 
+def _cles_du_registre(cle: str) -> set:
+    """Valeurs de `cle` dans le registre AVANT un appel réseau (lecture seule, tolérante)."""
+    d = load_json(PEERS_FILE, {"peers": []})
+    return {p.get(cle) for p in (d.get("peers") or [] if isinstance(d, dict) else []) if isinstance(p, dict)} - {None}
+
+
+def _fusionner_registre(candidats: List[Dict], cle: str, connus_au_depart: Optional[set]) -> int:
+    """#3362 (passe 5) : AJOUTE au registre, sous le verrou et contre l'état COURANT, les candidats (découverte, annonceurs,
+    pont) absents par `cle` (« id » ou « address »). Jamais un local, jamais une entrée présente à la lecture initiale
+    (`connus_au_depart`) et absente maintenant : elle a été oubliée entre-temps. Rend le nombre d'ajouts."""
+    def maj(doc):
+        peers = _liste_pairs(doc)
+        presents = {p.get(cle) for p in peers}
+        n = 0
+        for c in candidats:
+            v = c.get(cle)
+            if not v or c.get("is_local") or v in presents or (connus_au_depart and v in connus_au_depart):
+                continue
+            peers.append(c)
+            presents.add(v)
+            n += 1
+        return n if n else oubli.SANS_ECRITURE
+    return _maj(PEERS_FILE, maj) or 0
+
+
 @app.post("/discover")
 async def discover_post(req: DiscoverRequest, user: dict = Depends(require_jwt)):
     """Discover and optionally add peers."""
+    connus_au_depart = _cles_du_registre("id")            # #3362 : ce qui part pendant le réseau ne revient pas
     result = await discover_peers(req.method, req.timeout)
 
-    # Optionally auto-add discovered peers
+    # Optionally auto-add discovered peers — réseau fait, fusion sous le verrou (#3362 passe 5)
     if result["discovered"]:
-        peers_data = load_json(PEERS_FILE, {"peers": []})
-        peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else []
-        existing_ids = {p.get("id") for p in peers}
-
-        added = 0
-        for peer in result["discovered"]:
-            if peer["id"] not in existing_ids and not peer.get("is_local"):
-                peers.append(peer)
-                added += 1
-
+        added = await asyncio.to_thread(_fusionner_registre, result["discovered"], "id", connus_au_depart)
         if added > 0:
-            save_json(PEERS_FILE, {"peers": peers})
             result["added"] = added
 
     return result
@@ -811,7 +906,8 @@ async def list_peers():
     when there are no wg-mesh peers configured.
     """
     init_dirs()
-    nodes = mesh.peer_nodes(get_wg_mesh_config(), mesh.load_handshakes())
+    wg_state, handshakes = get_wg_mesh_config(), mesh.load_handshakes()
+    nodes = mesh.peer_nodes(wg_state, handshakes)
     if nodes:
         return {"peers": nodes, "count": len(nodes)}
 
@@ -820,21 +916,14 @@ async def list_peers():
     # A node is not its own peer: never insert/persist the local node here.
     local_id = get_node_id()
     peers = [p for p in peers if not p.get("is_local") and p.get("id") != local_id]
+    peers = mesh.statut_registre(peers, wg_state, handshakes)          # #3362 : statut mesuré, jamais la valeur écrite
     return {"peers": peers, "count": len(peers)}
 
 
 @app.post("/peers")
-async def add_peer(req: PeerRequest, user: dict = Depends(require_jwt)):
+def add_peer(req: PeerRequest, user: dict = Depends(require_jwt)):
     """Add a new peer manually."""
-    init_dirs()
-    peers_data = load_json(PEERS_FILE, {"peers": []})
-    peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else []
-
     peer_id = f"sb-{ident(req.address, n=12)}"
-
-    # Check if already exists
-    if any(p.get("id") == peer_id or p.get("address") == req.address for p in peers):
-        raise HTTPException(status_code=400, detail="Peer already exists")
 
     # Build addresses
     addresses = [{"type": "lan", "address": req.address, "port": API_PORT}]
@@ -853,30 +942,31 @@ async def add_peer(req: PeerRequest, user: dict = Depends(require_jwt)):
         "added": datetime.utcnow().isoformat(),
         "status": "pending"
     }
-    peers.append(peer)
-    save_json(PEERS_FILE, {"peers": peers})
+
+    def maj(doc):                                # #3362 passe 5 : contrôle et ajout contre l'état courant, sous le verrou
+        peers = _liste_pairs(doc)
+        if any(p.get("id") == peer_id or p.get("address") == req.address for p in peers):
+            raise HTTPException(status_code=400, detail="Peer already exists")
+        peers.append(peer)
+    _maj(PEERS_FILE, maj)
     return {"status": "ok", "peer": peer}
 
 
 @app.delete("/peers/{peer_id}")
-async def remove_peer(peer_id: str, user: dict = Depends(require_jwt)):
+def remove_peer(peer_id: str, user: dict = Depends(require_jwt)):
     """Remove a peer."""
-    init_dirs()
-    peers_data = load_json(PEERS_FILE, {"peers": []})
-    peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else []
-
     # Don't allow removing local node
     local_id = get_node_id()
     if peer_id == local_id:
         raise HTTPException(status_code=400, detail="Cannot remove local node")
 
-    original_count = len(peers)
-    peers = [p for p in peers if p.get('id') != peer_id]
-
-    if len(peers) == original_count:
-        raise HTTPException(status_code=404, detail="Peer not found")
-
-    save_json(PEERS_FILE, {"peers": peers})
+    def maj(doc):                                # #3362 passe 5 : sous le verrou
+        peers = _liste_pairs(doc)
+        reste = [p for p in peers if p.get('id') != peer_id]
+        if len(reste) == len(peers):
+            raise HTTPException(status_code=404, detail="Peer not found")
+        doc["peers"] = reste
+    _maj(PEERS_FILE, maj)
     return {"status": "ok", "removed": peer_id}
 
 
@@ -919,7 +1009,14 @@ async def probe_peer(peer_id: str, user: dict = Depends(require_jwt)):
     except:
         peer["status"] = "offline"
 
-    save_json(PEERS_FILE, {"peers": peers})
+    def maj(doc):                                # #3362 passe 5 : mise à jour seulement si le pair est TOUJOURS là
+        for p in _liste_pairs(doc):
+            if p.get("id") == peer_id:
+                p.update({k: peer[k] for k in ("status", "last_seen", "remote_info") if k in peer})
+                return True
+        return oubli.SANS_ECRITURE               # oublié pendant la sonde : jamais réintroduit
+    if not await asyncio.to_thread(_maj, PEERS_FILE, maj):
+        raise HTTPException(status_code=404, detail="Peer not found (retiré pendant la sonde)")
     return {"status": "ok", "peer": peer}
 
 
@@ -944,7 +1041,7 @@ async def list_services():
 
 
 @app.post("/services")
-async def register_service(req: ServiceRequest, user: dict = Depends(require_jwt)):
+def register_service(req: ServiceRequest, user: dict = Depends(require_jwt)):
     """Register a P2P service."""
     init_dirs()
     services = load_json(SERVICES_FILE, [])
@@ -965,7 +1062,7 @@ async def register_service(req: ServiceRequest, user: dict = Depends(require_jwt
 
 
 @app.delete("/services/{name}")
-async def unregister_service(name: str, user: dict = Depends(require_jwt)):
+def unregister_service(name: str, user: dict = Depends(require_jwt)):
     """Unregister a service."""
     init_dirs()
     services = load_json(SERVICES_FILE, [])
@@ -1366,7 +1463,7 @@ async def list_profiles():
 
 
 @app.post("/profiles")
-async def create_profile(req: ProfileRequest, user: dict = Depends(require_jwt)):
+def create_profile(req: ProfileRequest, user: dict = Depends(require_jwt)):
     """Create a P2P profile."""
     init_dirs()
     profiles = load_json(PROFILES_FILE, {})
@@ -1383,7 +1480,7 @@ async def create_profile(req: ProfileRequest, user: dict = Depends(require_jwt))
 
 
 @app.delete("/profiles/{name}")
-async def delete_profile(name: str, user: dict = Depends(require_jwt)):
+def delete_profile(name: str, user: dict = Depends(require_jwt)):
     """Delete a profile."""
     init_dirs()
     profiles = load_json(PROFILES_FILE, {})
@@ -1404,7 +1501,7 @@ async def list_threats():
 
 
 @app.post("/threats")
-async def report_threat(req: ThreatRequest, user: dict = Depends(require_jwt)):
+def report_threat(req: ThreatRequest, user: dict = Depends(require_jwt)):
     """Report a threat."""
     init_dirs()
     threats = load_json(THREATS_FILE, {})
@@ -1423,7 +1520,7 @@ async def report_threat(req: ThreatRequest, user: dict = Depends(require_jwt)):
 
 
 @app.delete("/threats/{ip}")
-async def remove_threat(ip: str, user: dict = Depends(require_jwt)):
+def remove_threat(ip: str, user: dict = Depends(require_jwt)):
     """Remove a threat entry."""
     init_dirs()
     threats = load_json(THREATS_FILE, {})
@@ -1439,6 +1536,18 @@ WG_MESH_CONFIG = P2P_DIR / "wg_mesh.json"
 WG_INTERFACE = mesh.MESH_INTERFACE
 WG_PORT = mesh.MESH_PORT
 WG_NETWORK = mesh.MESH_NETWORK
+
+
+def _wg_defaut() -> Dict:
+    return {
+        "enabled": False,
+        "interface": WG_INTERFACE,
+        "listen_port": WG_PORT,
+        "network": WG_NETWORK,
+        "private_key": None,
+        "public_key": None,
+        "peers": []
+    }
 
 
 def get_wg_mesh_config() -> Dict:
@@ -1504,13 +1613,19 @@ def get_wireguard_status():
 
 
 @app.post("/wireguard/init")
-async def init_wireguard(user: dict = Depends(require_jwt)):
-    """Initialize WireGuard mesh interface."""
-    config = get_wg_mesh_config()
+def init_wireguard(user: dict = Depends(require_jwt)):
+    """Initialize WireGuard mesh interface (lecture-modification-écriture sous le verrou, #3362 passe 5)."""
+    # #3362 passe 6 : `wg genkey` / `wg pubkey` calculés AVANT la section critique (jamais de sous-processus sous le
+    # verrou) ; utilisés seulement si l'état courant n'a pas encore de clé.
+    cles = generate_wg_keypair()
+    return _maj(WG_MESH_CONFIG, lambda config: _init_wireguard(config, cles), defaut=_wg_defaut())
+
+
+def _init_wireguard(config: Dict, cles: tuple) -> Dict:
 
     # Generate keypair if not exists
     if not config.get("private_key"):
-        private_key, public_key = generate_wg_keypair()
+        private_key, public_key = cles
         if not private_key:
             raise HTTPException(status_code=500, detail="Failed to generate WireGuard keys")
         config["private_key"] = private_key
@@ -1527,8 +1642,6 @@ async def init_wireguard(user: dict = Depends(require_jwt)):
     config["role"] = p2p_cfg["role"]
     config["ddns"] = mesh.ddns_name(get_hostname())
 
-    save_json(WG_MESH_CONFIG, config)
-
     return {
         "status": "ok",
         "public_key": config["public_key"],
@@ -1538,37 +1651,36 @@ async def init_wireguard(user: dict = Depends(require_jwt)):
 
 
 @app.post("/wireguard/peer")
-async def add_wireguard_peer(
+def add_wireguard_peer(
     public_key: str,
     endpoint: str,
     allowed_ips: str = "10.10.0.0/24",
     user: dict = Depends(require_jwt)
 ):
-    """Add a WireGuard mesh peer."""
-    config = get_wg_mesh_config()
-    peers = config.get("peers", [])
-
-    # Check if already exists
-    if any(p.get("public_key") == public_key for p in peers):
-        raise HTTPException(status_code=400, detail="Peer already exists")
-
+    """Add a WireGuard mesh peer (sous le verrou, contre l'état courant : #3362 passe 5)."""
     peer = {
         "public_key": public_key,
         "endpoint": endpoint,
         "allowed_ips": allowed_ips,
         "added": datetime.utcnow().isoformat()
     }
-    peers.append(peer)
-    config["peers"] = peers
-    save_json(WG_MESH_CONFIG, config)
 
+    def maj(config):
+        peers = _liste_pairs(config)
+        if any(p.get("public_key") == public_key for p in peers):
+            raise HTTPException(status_code=400, detail="Peer already exists")
+        peers.append(peer)
+    _maj(WG_MESH_CONFIG, maj, defaut=_wg_defaut())
     return {"status": "ok", "peer": peer}
 
 
 @app.post("/wireguard/enable")
 def enable_wireguard(user: dict = Depends(require_jwt)):
-    """Enable and start WireGuard mesh interface."""
-    config = get_wg_mesh_config()
+    """Enable and start WireGuard mesh interface (sous le verrou, #3362 passe 5)."""
+    return _maj(WG_MESH_CONFIG, _enable_wireguard, defaut=_wg_defaut())
+
+
+def _enable_wireguard(config: Dict) -> Dict:
 
     if not config.get("private_key"):
         raise HTTPException(status_code=400, detail="WireGuard not initialized")
@@ -1585,7 +1697,6 @@ def enable_wireguard(user: dict = Depends(require_jwt)):
     # Provisioning (wg-quick, /etc/wireguard write) is delegated to the root
     # CLI sbx-mesh-up; this unprivileged endpoint only marks the intent.
     config["enabled"] = True
-    save_json(WG_MESH_CONFIG, config)
 
     return {"status": "ok", "message": "mesh marked enabled; run 'sbx-mesh-up' as root to provision the interface"}
 
@@ -1608,7 +1719,7 @@ async def list_announcers():
 
 
 @app.post("/announcers")
-async def add_announcer(
+def add_announcer(
     url: str,
     name: Optional[str] = None,
     user: dict = Depends(require_jwt)
@@ -1634,7 +1745,7 @@ async def add_announcer(
 
 
 @app.delete("/announcers/{announcer_id}")
-async def remove_announcer(announcer_id: str, user: dict = Depends(require_jwt)):
+def remove_announcer(announcer_id: str, user: dict = Depends(require_jwt)):
     """Remove an announcer server."""
     announcers = get_announcers()
     announcers = [a for a in announcers if a.get("id") != announcer_id]
@@ -1645,6 +1756,7 @@ async def remove_announcer(announcer_id: str, user: dict = Depends(require_jwt))
 @app.post("/announcers/sync")
 async def sync_with_announcers(user: dict = Depends(require_jwt)):
     """Sync peer list with all remote announcers."""
+    connus_au_depart = _cles_du_registre("address")       # #3362 : ce qui part pendant le réseau ne revient pas
     announcers = get_announcers()
     results = []
     all_remote_peers = []
@@ -1682,23 +1794,11 @@ async def sync_with_announcers(user: dict = Depends(require_jwt)):
             announcer["status"] = "error"
             results.append({"announcer": announcer["url"], "status": "error", "error": str(e)})
 
-    save_json(ANNOUNCERS_FILE, announcers)
+    await asyncio.to_thread(save_json, ANNOUNCERS_FILE, announcers)  # #3362 : verrou hors de la boucle
 
-    # Merge remote peers with local peers
+    # Merge remote peers with local peers — fusion sous le verrou, contre l'état courant (#3362 passe 5)
     if all_remote_peers:
-        peers_data = load_json(PEERS_FILE, {"peers": []})
-        peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else []
-        existing_addrs = {p.get("address") for p in peers}
-
-        added = 0
-        for peer in all_remote_peers:
-            if peer.get("address") and peer["address"] not in existing_addrs:
-                peers.append(peer)
-                existing_addrs.add(peer["address"])
-                added += 1
-
-        if added > 0:
-            save_json(PEERS_FILE, {"peers": peers})
+        added = await asyncio.to_thread(_fusionner_registre, all_remote_peers, "address", connus_au_depart)
 
         results.append({"merged": added, "total_remote_peers": len(all_remote_peers)})
 
@@ -1749,6 +1849,7 @@ async def discover_via_bridge(
     user: dict = Depends(require_jwt)
 ):
     """Discover peers through a bridge peer (multi-hop discovery)."""
+    connus_au_depart = _cles_du_registre("address")       # #3362 : ce qui part pendant le réseau ne revient pas
     # Query the bridge peer for its known peers
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -1770,20 +1871,9 @@ async def discover_via_bridge(
             peer["discovered_via"] = f"bridge:{bridge_peer}"
             peer["bridge_peer"] = bridge_peer
 
-        # Optionally add to local peer list
-        peers_data = load_json(PEERS_FILE, {"peers": []})
-        peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else []
-        existing_addrs = {p.get("address") for p in peers}
-
-        added = 0
-        for peer in remote_peers:
-            if peer.get("address") and peer["address"] not in existing_addrs and not peer.get("is_local"):
-                peers.append(peer)
-                existing_addrs.add(peer["address"])
-                added += 1
-
-        if added > 0:
-            save_json(PEERS_FILE, {"peers": peers})
+        # Optionally add to local peer list — fusion sous le verrou, contre l'état courant (#3362 passe 5)
+        added = await asyncio.to_thread(_fusionner_registre, [p for p in remote_peers if isinstance(p, dict)],
+                                        "address", connus_au_depart)
 
         return {
             "status": "ok",
@@ -1801,7 +1891,7 @@ async def discover_via_bridge(
 # ============== Master-Link ==============
 
 @app.get("/master-link/status", dependencies=[Depends(require_lecture)])
-async def ml_status():
+def ml_status():
     """Get master-link status (public read)."""
     config = get_ml_config()
     requests = get_ml_requests()
@@ -1837,7 +1927,7 @@ async def ml_status():
 
 
 @app.post("/master-link/token")
-async def ml_generate_token(req: TokenGenerateRequest, user: dict = Depends(require_jwt)):
+def ml_generate_token(req: TokenGenerateRequest, user: dict = Depends(require_jwt)):
     """Generate a join token (auth required)."""
     config = get_ml_config()
 
@@ -1855,7 +1945,7 @@ async def ml_generate_token(req: TokenGenerateRequest, user: dict = Depends(requ
 
 
 @app.post("/master-link/invite")
-async def ml_generate_invite(
+def ml_generate_invite(
     ttl: int = 3600,
     auto_approve: bool = True,
     user: dict = Depends(require_jwt)
@@ -1927,7 +2017,7 @@ Expires: {result['expires']}
 
 
 @app.post("/master-link/invite-local")
-async def ml_generate_invite_local(
+def ml_generate_invite_local(
     ttl: int = 3600,
     auto_approve: bool = True,
     user: dict = Depends(require_jwt)
@@ -1980,7 +2070,7 @@ async def ml_generate_invite_local(
 
 
 @app.get("/master-link/join-script", dependencies=[Depends(require_lecture)])
-async def ml_join_script(token: str, request: Request):
+def ml_join_script(token: str, request: Request):
     """Return a shell script for joining (OpenWRT compatible)."""
     from fastapi.responses import PlainTextResponse
 
@@ -2079,42 +2169,59 @@ fi
     return PlainTextResponse(content=script, media_type="text/plain")
 
 
+ATTENTE_VERROU_PUBLIC_S = 2.0
+
+
 @app.post("/master-link/token/validate")
-async def ml_validate_token(token: str):
-    """Validate a token (public)."""
-    return ml_token_validate(token)
+def ml_validate_token(token: str):
+    """Validate a token (public). #3362 passe 3 : `def` (pool, jamais la boucle) et verrou non bloquant, réessayé ~2 s,
+    puis 503 : un appelant anonyme ne peut ni figer l'API ni occuper un fil indéfiniment."""
+    try:
+        return ml_token_validate(token, attente=ATTENTE_VERROU_PUBLIC_S)
+    except oubli.VerrouOccupe:
+        raise HTTPException(status_code=503, detail="état du maillage occupé : réessayer") from None
 
 
 @app.post("/master-link/token/revoke")
-async def ml_revoke_token(token: str, user: dict = Depends(require_jwt)):
+def ml_revoke_token(token: str, user: dict = Depends(require_jwt)):
     """Revoke a token."""
     token_hash = hash_token(token)
-    tokens = get_ml_tokens()
-
-    for t in tokens:
-        if t.get("hash") == token_hash:
-            t["status"] = "revoked"
-            save_ml_tokens(tokens)
-            return {"status": "ok", "revoked": token_hash}
+    init_dirs()
+    with oubli.verrou(P2P_DIR):                  # #3362 : section critique, lecture stricte
+        tokens = get_ml_tokens()
+        for t in tokens:
+            if t.get("hash") == token_hash:
+                t["status"] = "revoked"
+                save_ml_tokens(tokens)
+                return {"status": "ok", "revoked": token_hash}
 
     raise HTTPException(status_code=404, detail="Token not found")
 
 
 @app.post("/master-link/token/cleanup")
-async def ml_cleanup(user: dict = Depends(require_jwt)):
+def ml_cleanup(user: dict = Depends(require_jwt)):
     """Cleanup expired tokens."""
     return ml_cleanup_tokens()
 
 
 @app.post("/master-link/cleanup-local")
-async def ml_cleanup_local(user: dict = Depends(require_jwt)):
+def ml_cleanup_local(user: dict = Depends(require_jwt)):
     """Cleanup expired tokens (JWT required — plus de confiance dans la provenance, #2476)."""
     return ml_cleanup_tokens()
 
 
 @app.post("/master-link/join")
 def ml_join(req: JoinRequest, request: Request):
-    """Handle join request from new node (token validated)."""
+    """Handle join request from new node (token validated).
+
+    #3362 (passe 2) : validation du jeton, lecture des demandes, inscription et écritures dans UNE section critique
+    (`oubli.verrou`) : une jonction qui a lu avant un oubli concurrent ne réécrit plus sa copie périmée."""
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        return _ml_join(req, request)
+
+
+def _ml_join(req: JoinRequest, request: Request):
     # Validate token
     validation = ml_token_validate(req.token)
     if not validation.get("valid"):
@@ -2265,11 +2372,12 @@ def _renommer_au_retour(existing: Dict, req: "JoinRequest", requests: List[Dict]
         _audit_jonction("renommage_refuse", raison="nom deja pris", nom=nom, ancien_nom=ancien)
         return
     existing["hostname"] = nom
-    legacy = load_json(PEERS_FILE, {"peers": []})
-    for lp in legacy.get("peers", []):
-        if lp.get("fingerprint") == existing.get("fingerprint"):
-            lp["name"] = nom
-    save_json(PEERS_FILE, legacy)
+
+    def maj(legacy):
+        for lp in _liste_pairs(legacy):
+            if lp.get("fingerprint") == existing.get("fingerprint"):
+                lp["name"] = nom
+    _maj(PEERS_FILE, maj)
     _audit_jonction("pair_renomme", nom=nom, ancien_nom=ancien, mesh_ip=existing.get("mesh_ip"))
 
 
@@ -2289,11 +2397,9 @@ def _remplacer_homonyme(join_request: Dict, ancien: Dict, requests: List[Dict]) 
                     ancienne_empreinte=ancien.get("fingerprint"),
                     nouvelle_empreinte=join_request.get("fingerprint"), mesh_ip=ancien.get("mesh_ip"))
     requests[:] = [r for r in requests if r is not ancien]
-    legacy = load_json(PEERS_FILE, {"peers": []})
-    if isinstance(legacy, dict):
-        legacy["peers"] = [p for p in legacy.get("peers", [])
-                           if p.get("fingerprint") != ancien.get("fingerprint")]
-        save_json(PEERS_FILE, legacy)
+    def maj(legacy):
+        legacy["peers"] = [p for p in _liste_pairs(legacy) if p.get("fingerprint") != ancien.get("fingerprint")]
+    _maj(PEERS_FILE, maj)
     if not join_request.get("mesh_ip"):
         _assign_mesh_ip(join_request)
 
@@ -2341,7 +2447,13 @@ def _add_mesh_peer(join_request: Dict) -> bool:
     ip = join_request.get("mesh_ip")
     if not (pk and ip):
         return False
-    state = get_wg_mesh_config()
+    def maj(state):                              # #3362 passe 5 : contre l'état courant, sous le verrou
+        _inscrire_au_transport(state, join_request, pk, ip)
+    _maj(WG_MESH_CONFIG, maj, defaut=_wg_defaut())
+    return True
+
+
+def _inscrire_au_transport(state: Dict, join_request: Dict, pk: str, ip: str) -> None:
     ancienne = join_request.get("remplace_cle")
     if ancienne and ancienne != pk:                 # reflash (#3100) : l'ancienne clé quitte le transport
         state["peers"] = [p for p in state.get("peers", []) if p.get("public_key") != ancienne]
@@ -2362,8 +2474,6 @@ def _add_mesh_peer(join_request: Dict) -> bool:
     if ep:
         peer["endpoint"] = ep
     mesh.upsert_mesh_peer(state, peer)
-    save_json(WG_MESH_CONFIG, state)
-    return True
 
 
 def _wg_offer(join_request: Dict) -> Optional[Dict]:
@@ -2405,11 +2515,11 @@ def _provision(join_request: Dict) -> None:
         _assign_mesh_ip(join_request)
         _add_mesh_peer(join_request)
     # Le registre hérité suit, sinon l'interface afficherait l'ancienne adresse.
-    legacy = load_json(PEERS_FILE, {"peers": []})
-    for lp in legacy.get("peers", []):
-        if lp.get("fingerprint") == join_request.get("fingerprint"):
-            lp["mesh_ip"] = join_request["mesh_ip"]
-    save_json(PEERS_FILE, legacy)
+    def maj(legacy):
+        for lp in _liste_pairs(legacy):
+            if lp.get("fingerprint") == join_request.get("fingerprint"):
+                lp["mesh_ip"] = join_request["mesh_ip"]
+    _maj(PEERS_FILE, maj)
 
 
 def _record_wg_identity(join_request: Dict, req: "JoinRequest") -> None:
@@ -2437,14 +2547,7 @@ def _record_wg_identity(join_request: Dict, req: "JoinRequest") -> None:
 
 def _add_approved_peer(join_request: Dict):
     """Add approved peer to peer list."""
-    peers_data = load_json(PEERS_FILE, {"peers": []})
-    peers = peers_data.get("peers", []) if isinstance(peers_data, dict) else []
-
     peer_id = f"sb-{ident(join_request['fingerprint'], n=12)}"
-
-    # Check if already exists
-    if any(p.get("id") == peer_id for p in peers):
-        return
 
     peer = {
         "id": peer_id,
@@ -2456,10 +2559,115 @@ def _add_approved_peer(join_request: Dict):
         "role": join_request.get("role", "peer"),
         "added": datetime.utcnow().isoformat(),
         "joined_via": "master-link",
-        "status": "online"
+        # #3362 : jamais « online » écrit (il restait figé, même sans poignée de main) ; lu, il est mesuré (statut_registre)
+        "status": "unknown"
     }
-    peers.append(peer)
-    save_json(PEERS_FILE, {"peers": peers})
+
+    def maj(doc):                                # #3362 passe 5 : contre l'état courant, sous le verrou
+        peers = _liste_pairs(doc)
+        if any(p.get("id") == peer_id for p in peers):
+            return oubli.SANS_ECRITURE
+        peers.append(peer)
+    _maj(PEERS_FILE, maj)
+
+
+OUBLI_PAIR_CTL = "/usr/sbin/secubox-oubli-pair"
+PILOTAGE_SOCK = "/run/secubox/pilotage.sock"
+RE_ACTEUR = re.compile(r"[A-Za-z0-9._@-]{1,64}")
+RE_NOM_PAIR_31 = re.compile(r"[a-z0-9][a-z0-9-]{0,30}")      # nom de pair de l'autoload et de l'assistant root
+OPERATIONS_OUBLI: Dict[str, Dict] = {}                        # #3362 : opérations d'oubli (mémoire du service, 50 au plus)
+_OPERATIONS_MAX = 50
+_operations_verrou = threading.Lock()
+
+
+def _oubli_suites_root(cibles: Dict, nom: Optional[str], force: bool = False, acteur: str = "?") -> Dict:
+    """#3362 : les nettoyages qui exigent root (pair retiré de l'interface wg-mesh par sa clé EXACTE, noms relayés vers son
+    adresse, noms Unbound, abonnement de l'autoload) par `sudo -n secubox-oubli-pair`, argv fixe, sans shell. L'assistant
+    revérifie chaque cible contre l'état déjà écrit et contre l'interface (poignée de main récente refusée sans --force).
+    Rend {étape: {ok, detail}} ; jamais d'exception : un échec devient une étape « racine » en échec."""
+    acteur = acteur if RE_ACTEUR.fullmatch(acteur or "") else "inconnu"
+    argv = ["sudo", "-n", OUBLI_PAIR_CTL, "--acteur", acteur]
+    for c in cibles.get("cles") or []:
+        argv += ["--cle", c]
+    for ip in cibles.get("ips") or []:
+        argv += ["--ip", ip]
+    if nom:
+        argv += ["--nom", nom]
+    if force:
+        argv += ["--force"]
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=900, check=False)
+        doc = json.loads(r.stdout or "{}") if (r.stdout or "").strip() else {}
+        etapes = doc.get("etapes") if r.returncode == 0 else None
+        if isinstance(etapes, dict) and etapes:
+            out = {str(k): {"ok": bool(v.get("ok")), "detail": str(v.get("detail") or "")[:300]}
+                   for k, v in etapes.items() if isinstance(v, dict)}
+            if doc.get("audit_ok") is False:
+                out["audit_racine"] = {"ok": False, "detail": f"journal d'audit non écrit : {(r.stderr or '').strip()[:200]}"}
+            return out
+        detail = f"code {r.returncode} : {str(doc.get('erreur') or r.stderr or r.stdout or '').strip()[:300]}"
+    except (OSError, subprocess.SubprocessError, ValueError, AttributeError) as e:
+        detail = f"{type(e).__name__} : {str(e)[:200]}"
+    return {"racine": {"ok": False, "detail": detail}}
+
+
+def _oubli_pilotage(nom: str, force: bool) -> Dict:
+    """#3362 : la box quitte la Flotte du pilotage (boites, inventaire, événements) par sa route d'administration
+    (`POST /boxes/{nom}/oublier`), sur sa socket locale, avec le jeton de l'administrateur qui oublie. 404 : rien à oublier."""
+    _, err = annuaire_client._requete_avec_essais("POST", f"/boxes/{quote(nom, safe='')}/oublier", PILOTAGE_SOCK,
+                                                  body={"confirmation": nom, "force": bool(force)})
+    if err is None:
+        return {"ok": True, "detail": "box oubliée de la Flotte"}
+    if "HTTP 404" in err:
+        return {"ok": True, "detail": "box inconnue du pilotage"}
+    if "FileNotFoundError" in err or "ConnectionRefusedError" in err:
+        return {"ok": True, "detail": "pilotage absent"}
+    return {"ok": False, "detail": err.replace("annuaire ", "pilotage ")[:300]}
+
+
+_TACHES: set = set()      # #3362 : référence forte des tâches asyncio lancées sans attente (sinon le GC peut les couper)
+
+
+def _garder_tache(tache):
+    _TACHES.add(tache)
+    tache.add_done_callback(_TACHES.discard)
+    return tache
+
+
+def _lancer_operation(fonction) -> None:
+    """Étapes longues en tâche de fond, dans le contexte de la requête (jeton de l'administrateur pour le pilotage)."""
+    ctx = contextvars.copy_context()
+    threading.Thread(target=ctx.run, args=(fonction,), daemon=True, name="oubli-noeud").start()
+
+
+def _operation_maj(op: str, **champs) -> None:
+    with _operations_verrou:
+        OPERATIONS_OUBLI[op].update(champs)
+
+
+def _finir_oubli(op: str, nom: str, retires: Dict, force: bool, acteur: str, etapes_initiales: Dict) -> None:
+    """Fin de l'oubli (tâche de fond) : étapes root, puis Flotte du pilotage ; chaque échec journalisé et audité.
+    L'état initial arrive en argument : le dict partagé n'est jamais relu hors de son verrou."""
+    etapes = {k: dict(v) for k, v in etapes_initiales.items()}
+    try:
+        nom_libre = bool(retires.get("nom_libre"))
+        nom_root = nom if nom_libre and RE_NOM_PAIR_31.fullmatch(nom) else None
+        etapes.update(_oubli_suites_root(retires, nom_root, force=force, acteur=acteur))
+        if nom_libre:
+            etapes["pilotage"] = _oubli_pilotage(nom, force)
+        else:
+            etapes["pilotage"] = {"ok": True, "detail": "nom encore porté par un autre pair : Flotte gardée"}
+            etapes.setdefault("autoload", {"ok": True, "detail": "nom encore porté par un autre pair : abonnement gardé"})
+    except Exception as e:  # noqa: BLE001 — l'opération doit toujours se terminer, et dire pourquoi
+        etapes["interne"] = {"ok": False, "detail": f"{type(e).__name__} : {str(e)[:200]}"}
+    restes = [k for k, v in etapes.items() if not v.get("ok")]
+    for k in restes:
+        log.warning("oubli de %s : étape %s en échec : %s", nom, k, etapes[k].get("detail"))
+        _audit_jonction("p2p_noeud_oubli_partiel", noeud=nom, etape=k, motif=etapes[k].get("detail"), acteur=acteur)
+    _audit_jonction("p2p_noeud_oublie", noeud=nom, force=force, acteur=acteur, registre=retires["registre"],
+                    wg=retires["wg"], cles=retires["cles"], ips=retires["ips"], restes=restes, operation=op)
+    _operation_maj(op, etat="termine", etapes=etapes, restes=restes, status="partiel" if restes else "ok",
+                   termine_le=time.time())
 
 
 class OublierRequest(BaseModel):
@@ -2471,44 +2679,134 @@ class OublierRequest(BaseModel):
     force: bool = False
 
 
-@app.post("/master-link/oublier")
+@app.post("/master-link/oublier", status_code=202)
 def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
-    """« Oublier ce nœud » (#3335) : retire un nœud obsolète du registre des pairs et de wg-mesh (sbx-mesh-up, root,
-    applique le retrait au changement de wg_mesh.json). Confirmation : le nom retapé ; désignation par la clé publique
-    (la Flotte la transmet) ; nœud en ligne ou mesure absente : `force`. Lecture, calcul et écritures atomiques sous le
-    verrou des écrivains de peers.json et wg_mesh.json ; un état illisible n'est jamais réécrit (503)."""
+    """« Oublier ce nœud » (#3335, #3362) : LE point d'entrée du maître. Il retire le pair de TOUS les états où il est
+    référencé :
+      1. SYNCHRONE, sous le verrou des écrivains (`.etat.lock`), lecture stricte (illisible : 503, rien n'est modifié) puis
+         écritures atomiques : registre (peers.json), transport (wg_mesh.json → sbx-mesh-up rend wg-mesh.conf), jonctions
+         (demande approuvée, jetons consommés : fichiers réécrits seulement si une entrée du pair en part) ; projection.
+      2. EN TÂCHE DE FOND (202, opération suivie par GET /master-link/oublier/{operation}) : root par secubox-oubli-pair
+         (interface wg-mesh par clé exacte, noms relayés, noms Unbound, abonnement autoload), puis Flotte du pilotage.
+    Un nom encore porté par un autre pair garde son abonnement et sa Flotte. Chaque échec est journalisé, audité et rendu
+    dans `restes` ; `status` vaut « partiel » tant qu'il reste quelque chose."""
     if req.confirmation != req.nom:
         raise HTTPException(status_code=400, detail="confirmation : retapez exactement le nom du nœud")
+    acteur = str(user.get("sub", "?"))
     local = socket.gethostname().split(".")[0].lower()
     a = ancre.lire()
     cle_maitre = a.get("cle_publique") if isinstance(a, dict) else None
+    op = secrets.token_hex(16)
+    with _operations_verrou:                     # #3362 : contrôle 429 ET réservation de la place dans la MÊME section
+        # seules les opérations TERMINÉES sont purgées (une opération en cours reste suivable)
+        terminees = [k for k, v in OPERATIONS_OUBLI.items() if v.get("etat") == "termine"]
+        while len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX and terminees:
+            OPERATIONS_OUBLI.pop(terminees.pop(0))
+        if len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX:
+            raise HTTPException(status_code=429, detail="trop d'oublis en cours : réessayer quand l'un d'eux est terminé")
+        OPERATIONS_OUBLI[op] = {"operation": op, "oublie": req.nom, "etat": "reservee", "status": "en_cours",
+                                "etapes": {}, "restes": [], "debut": time.time()}
+    trace = {"ecrit": False}
+    try:
+        return _ml_oublier_reserve(op, req, acteur, local, cle_maitre, trace)
+    except BaseException as e:
+        with _operations_verrou:
+            if not trace["ecrit"]:               # refus AVANT toute écriture (409, 503…) : la place est rendue
+                OPERATIONS_OUBLI.pop(op, None)
+            else:                                # l'état est déjà écrit : l'opération reste, terminée, avec ses restes
+                OPERATIONS_OUBLI[op].update(etat="termine", status="partiel", restes=["interne"],
+                                            termine_le=time.time())
+                OPERATIONS_OUBLI[op].setdefault("etapes", {})["interne"] = {
+                    "ok": False, "detail": f"{type(e).__name__} : {str(e)[:200]}"}
+        if trace["ecrit"]:
+            _audit_jonction("p2p_noeud_oubli_partiel", noeud=req.nom, etape="interne", motif=type(e).__name__,
+                            acteur=acteur)
+        raise
+
+
+def _ml_oublier_reserve(op: str, req: "OublierRequest", acteur: str, local: str, cle_maitre: Optional[str],
+                        trace: Dict) -> Dict:
+    """Suite de ml_oublier, la place de l'opération `op` étant réservée ; `trace["ecrit"]` passe à vrai dès que l'état
+    est écrit."""
     init_dirs()
+    ml_init()
     try:
         with oubli.verrou(P2P_DIR):
             peers_doc = oubli.lire_strict(PEERS_FILE, {"peers": []})
             wg_state = oubli.lire_strict(WG_MESH_CONFIG, {"peers": []})
+            demandes = oubli.lire_strict_liste(ML_REQUESTS_FILE)
+            jetons_ml = oubli.lire_strict_liste(ML_TOKENS_FILE)
             peers, wg, retires = oubli.oublier(peers_doc, wg_state, req.nom, handshakes=mesh.load_handshakes(),
                                                now=time.time(), local=local, force=req.force, cle=req.public_key,
                                                empreinte=req.fingerprint, cle_maitre=cle_maitre)
-            oubli.ecrire_atomique(WG_MESH_CONFIG, wg, 0o600)   # secubox-p2p-mesh.path → sbx-mesh-up retire le pair
+            demandes, jetons_ml, n_jonctions = oubli.oublier_jonctions(demandes, jetons_ml, req.nom, retires)
+            trace["ecrit"] = True                     # à partir d'ici, quelque chose peut être écrit
+            oubli.ecrire_atomique(WG_MESH_CONFIG, wg, 0o600)   # secubox-p2p-mesh.path → sbx-mesh-up rend la conf persistée
             oubli.ecrire_atomique(PEERS_FILE, peers, 0o644)
+            if n_jonctions["demandes"]:
+                oubli.ecrire_atomique(ML_REQUESTS_FILE, demandes, 0o600)
+            if n_jonctions["jetons"]:
+                oubli.ecrire_atomique(ML_TOKENS_FILE, jetons_ml, 0o600)
+            try:                                      # #3362 passe 6 : projection publiée AVANT de rendre le verrou
+                pairs_enroles.publier(peers, PAIRS_ENROLES_DIR)
+                projection = {"ok": True, "detail": "pairs-enroles.json republié"}
+            except (pairs_enroles.ProjectionErreur, OSError) as e:
+                projection = {"ok": False, "detail": str(e)[:300]}
     except oubli.EtatIllisible as e:
-        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=str(user.get("sub", "?")))
+        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=acteur)
         raise HTTPException(status_code=503, detail="état du maillage illisible : rien n'est modifié") from None
     except oubli.Refus as e:
-        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=str(user.get("sub", "?")))
+        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=acteur)
         raise HTTPException(status_code=409, detail=str(e)) from None
-    try:
-        pairs_enroles.publier(peers, PAIRS_ENROLES_DIR)
-    except (pairs_enroles.ProjectionErreur, OSError) as e:
-        log.warning("projection des pairs enrôlés non publiée : %s", e)
-    _audit_jonction("p2p_noeud_oublie", noeud=req.nom, force=req.force, acteur=str(user.get("sub", "?")), **retires)
-    return {"status": "ok", "oublie": req.nom, "retires": retires}
+    etapes: Dict[str, Dict] = {
+        "registre": {"ok": True, "detail": f"{retires['registre']} entrée(s) du registre, {retires['wg']} pair(s) wg-mesh"},
+        "jonctions": {"ok": True, "detail": f"{n_jonctions['demandes']} demande(s), {n_jonctions['jetons']} jeton(s) révoqué(s)"},
+    }
+    etapes["projection"] = projection
+    with _operations_verrou:
+        OPERATIONS_OUBLI[op] = {"operation": op, "oublie": req.nom, "etat": "en_cours", "status": "en_cours",
+                                "retires": {"registre": retires["registre"], "wg": retires["wg"], **n_jonctions},
+                                "etapes": {k: dict(v) for k, v in etapes.items()}, "restes": [], "debut": time.time()}
+    _lancer_operation(lambda: _finir_oubli(op, req.nom, retires, req.force, acteur, etapes))
+    return {"operation": op, "etat": "en_cours", "oublie": req.nom, "suivi": f"/api/v1/p2p/master-link/oublier/{op}"}
+
+
+@app.get("/master-link/oublier/{operation}")
+def ml_oublier_suivi(operation: str, user: dict = Depends(require_jwt)):
+    """#3362 : état d'une opération d'oubli (étapes faites, restes, « termine »). Inconnue (ou service redémarré) : 404."""
+    if not re.fullmatch(r"[0-9a-f]{32}", operation):
+        raise HTTPException(status_code=404, detail="opération inconnue")
+    with _operations_verrou:
+        d = OPERATIONS_OUBLI.get(operation)
+        if d is None:
+            raise HTTPException(status_code=404, detail="opération inconnue")
+        return json.loads(json.dumps(d))
 
 
 @app.post("/master-link/approve")
 async def ml_approve(req: ApproveRequest, user: dict = Depends(require_jwt)):
-    """Approve, reject, or promote a peer (auth required)."""
+    """Approve, reject, or promote a peer (auth required).
+
+    #3362 (passe 2) : lecture, décision et écritures dans UNE section critique : une approbation concurrente d'un oubli ne
+    ramène pas le pair oublié."""
+    # #3362 passe 3 : le verrou se prend dans un fil du pool, jamais dans la boucle ; la notification d'une promotion
+    # (tâche asyncio) est lancée ici, APRÈS le retour du fil.
+    reponse, promotion = await asyncio.to_thread(_ml_approve_verrouille, req)
+    if promotion:
+        _garder_tache(asyncio.create_task(_notify_peer_promotion(*promotion)))
+    return reponse
+
+
+def _ml_approve_verrouille(req: ApproveRequest):
+    """(réponse, (adresse, profondeur) d'une promotion à notifier ou None), sous le verrou."""
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        promotion: List = []
+        reponse = _ml_approve(req, promotion)
+        return reponse, (tuple(promotion[0]) if promotion else None)
+
+
+def _ml_approve(req: ApproveRequest, promotion: List):
     requests = get_ml_requests()
     config = get_ml_config()
     now = datetime.utcnow()
@@ -2588,7 +2886,7 @@ async def ml_approve(req: ApproveRequest, user: dict = Depends(require_jwt)):
         # Notify peer of promotion (background)
         peer_addr = join_request.get("address")
         if peer_addr:
-            asyncio.create_task(_notify_peer_promotion(peer_addr, current_depth))
+            promotion.append((peer_addr, current_depth))          # notifiée par la coroutine, après le fil
 
         return {
             "success": True,
@@ -2638,14 +2936,14 @@ async def ml_pairs():
 
 
 @app.get("/master-link/peers", dependencies=[Depends(require_lecture)])
-async def ml_list_peers():
+def ml_list_peers():
     """List all join requests and their status (public read)."""
     requests = get_ml_requests()
     return {"peers": requests, "count": len(requests)}
 
 
 @app.get("/master-link/tree", dependencies=[Depends(require_lecture)])
-async def ml_tree():
+def ml_tree():
     """Get mesh hierarchy tree (public read)."""
     config = get_ml_config()
     requests = get_ml_requests()
@@ -2680,13 +2978,13 @@ async def ml_tree():
 
 
 @app.get("/master-link/config")
-async def ml_get_config(user: dict = Depends(require_jwt)):
+def ml_get_config(user: dict = Depends(require_jwt)):
     """Get full master-link configuration (auth required)."""
     return get_ml_config()
 
 
 @app.post("/master-link/config")
-async def ml_set_config(
+def ml_set_config(
     role: Optional[str] = None,
     upstream: Optional[str] = None,
     depth: Optional[int] = None,
@@ -2752,11 +3050,23 @@ def _wg_cles():
     return genkey, pubkey
 
 
-def _ecrire_etat_wg(etat: Dict) -> None:
-    """Ecriture atomique en 0600 : l'unite .path (root) applique le changement."""
-    init_dirs()
-    with oubli.verrou(P2P_DIR):            # #3335 : verrou commun des écrivains de wg_mesh.json
-        oubli.ecrire_atomique(WG_MESH_CONFIG, etat, 0o600)
+def _cles_precalculees(etat: Dict) -> tuple:
+    """(genkey, pubkey) dont les résultats sont calculés MAINTENANT (hors verrou) pour l'état lu."""
+    genkey, pubkey = _wg_cles()
+    priv = etat.get("private_key") if isinstance(etat, dict) and mesh.valid_wg_key(etat.get("private_key")) else genkey()
+    pub = pubkey(priv)
+    return (lambda: priv), (lambda k: pub if k == priv else pubkey(k))
+
+
+def _transformer_etat_wg(fn) -> Any:
+    """#3362 (passe 5) : `fn(état courant) -> (nouvel état, résultat)`, appliqué sous le verrou (lecture stricte, écriture
+    atomique 0600) ; l'unité .path (root) applique le changement. Rend `résultat`."""
+    def maj(doc):
+        nouveau, res = fn(copy.deepcopy(doc))
+        doc.clear()
+        doc.update(nouveau)
+        return res
+    return _maj(WG_MESH_CONFIG, maj, defaut=_wg_defaut())
 
 
 async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
@@ -2770,12 +3080,20 @@ async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
     # #2885 : la cle du pair part avec la demande, sinon le maitre l'inscrit sans tunnel.
     corps = {"token": token, "fingerprint": my_fp, "hostname": my_hostname, "address": my_addr}
     try:
-        genkey, pubkey = _wg_cles()
-        etat_wg, pub = mesh.preparer_pair(get_wg_mesh_config(), genkey, pubkey)
-        _ecrire_etat_wg(etat_wg)
+        # #3362 passe 6 : clés calculées HORS du verrou, d'après l'état lu ; sous le verrou, seules les valeurs
+        # précalculées servent (un sous-processus n'y tourne que si l'état a changé de clé entre-temps).
+        genkey, pubkey = await asyncio.to_thread(_cles_precalculees, get_wg_mesh_config())
+
+        def preparer(etat):
+            e, p = mesh.preparer_pair(etat, genkey, pubkey)
+            return e, (e, p)
+        etat_wg, pub = await asyncio.to_thread(_transformer_etat_wg, preparer)
         corps.update({"wg_public_key": pub, "wg_port": int(etat_wg.get("listen_port", WG_PORT))})
     except (OSError, subprocess.SubprocessError, ValueError) as e:
         log.warning("tunnel du pair non prepare : %s", e)     # l'inscription reste possible sans tunnel
+    except HTTPException as e:                            # #3362 : état illisible (503) — dit, audité, jonction sans tunnel
+        log.warning("tunnel du pair non prepare : etat du maillage illisible (%s)", e.status_code)
+        _audit_jonction("p2p_jonction_etat_illisible", maitre=master_addr, code=e.status_code)
     try:
         proc = await asyncio.create_subprocess_exec(
             "curl", "-s", "--connect-timeout", "10",
@@ -2796,16 +3114,20 @@ async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
 
         # If approved, update local config
         if result.get("status") == "approved":
-            config = get_ml_config()
+            config = await asyncio.to_thread(get_ml_config)
             config["role"] = "peer"
             config["upstream"] = master_addr
             config["depth"] = result.get("depth", 1)
-            save_ml_config(config)
+            await asyncio.to_thread(save_ml_config, config)
             if isinstance(result.get("wg"), dict) and corps.get("wg_public_key"):
                 try:
-                    _ecrire_etat_wg(mesh.appliquer_offre(get_wg_mesh_config(), result["wg"], master_addr))
+                    await asyncio.to_thread(_transformer_etat_wg,
+                                            lambda etat: (mesh.appliquer_offre(etat, result["wg"], master_addr), None))
                 except (OSError, ValueError) as e:
                     log.warning("offre de tunnel du maitre refusee : %s", e)
+                except HTTPException as e:            # #3362 : état illisible — dit et audité, l'approbation reste
+                    log.warning("offre de tunnel non appliquee : etat du maillage illisible (%s)", e.status_code)
+                    _audit_jonction("p2p_jonction_etat_illisible", maitre=master_addr, code=e.status_code)
 
         return result
 
@@ -2902,7 +3224,7 @@ async def _dht_startup():
         net = dht.DHTNetwork(did, id_pubkey, wg_pubkey, endpoint)
         await net.start(host="0.0.0.0", port=cfg["dht"]["port"])
         net.load_routing()
-        asyncio.create_task(net.bootstrap(seeds=cfg["dht"]["bootstrap"], annuaire_nodes=[]))
+        _garder_tache(asyncio.create_task(net.bootstrap(seeds=cfg["dht"]["bootstrap"], annuaire_nodes=[])))
         app.state.dht = net
         log.info("DHT started did=%s port=%s", did, cfg["dht"]["port"])
     except Exception as exc:  # noqa: BLE001

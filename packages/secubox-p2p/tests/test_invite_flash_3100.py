@@ -136,24 +136,13 @@ def _charger_cli():
     return m
 
 
-def test_cli_ne_suit_pas_les_liens(tmp_path, monkeypatch, capsys):
-    cli = _charger_cli()
-    p2p = tmp_path / "p2p"
-    ml = p2p / "master-link"
-    ml.mkdir(parents=True)
-    cible = tmp_path / "secret"
-    cible.write_text("x")
-    (p2p / "piege").symlink_to(cible)
-    (ml / "tokens.json").symlink_to(cible)
-    appels = []
-    monkeypatch.setattr(os, "geteuid", lambda: 0)
-    monkeypatch.setattr(os, "lchown", lambda *a, **k: appels.append(a[0]))
-    monkeypatch.setattr(os, "chown", lambda *a, **k: appels.append(("chown", a[0])))
-    cli._rendre_au_service(str(p2p))
-    assert str(ml) in appels                                       # le dossier lui-même
-    assert str(ml / "tokens.json") not in appels and str(p2p / "piege") not in appels
-    assert not [a for a in appels if isinstance(a, tuple)]
-    assert "lien" in capsys.readouterr().err
+def test_cli_ne_change_plus_de_proprietaire_elle_meme():
+    """#3362 passe 3 : le propriétaire des jetons (fichier et dossier) est rendu au service par jetons.ecrire, sous le verrou,
+    avant le remplacement ; la CLI n'a plus de lchown après coup."""
+    src = (pathlib.Path(__file__).resolve().parents[1] / "scripts" / "sbx-mesh-invite").read_text()
+    assert "lchown" not in src and "_rendre_au_service" not in src
+    j = (pathlib.Path(__file__).resolve().parents[1] / "api" / "jetons.py").read_text()
+    assert "O_DIRECTORY" in j and "O_NOFOLLOW" in j
 
 
 def test_flash_ttl_48h_par_defaut(tmp_path):

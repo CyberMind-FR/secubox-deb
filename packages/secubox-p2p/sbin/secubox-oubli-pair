@@ -1,0 +1,345 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-oubli-pair — suites root de « Oublier ce nœud » (#3362), appelées par secubox-p2p (POST /master-link/oublier)
+par `sudo -n`, après que l'état (peers.json, wg_mesh.json) a été écrit SANS le pair.
+
+  secubox-oubli-pair --acteur <administrateur> [--cle <clé publique>]… [--ip <10.x mesh>]… [--nom <pair>] [--force]
+
+Étapes, chacune indépendante, chacune auditée (p2p_oubli_suite) ; la sortie est un JSON {"etapes": {nom: {ok, detail}}} :
+  wg_direct  `wg set wg-mesh peer <clé> remove` pour chaque clé EXACTE encore vue sur l'interface (jamais d'autre forme) ;
+  relais     `secubox-relais-maillage oublier-pair <ip>` : les noms relayés et les ports vers l'adresse du pair ;
+  noms       `secubox-annuaire-noms` régénère 60-secubox-noms.conf depuis wg_mesh.json, puis le nom ne doit plus y paraître ;
+  autoload   `autoloadctl maillage-oublier --nom <pair>` (seulement avec --nom).
+
+GARDES (le compte `secubox` écrit wg_mesh.json : l'assistant ne lui fait pas confiance pour autant) : chaque clé doit être
+une clé WireGuard valide, ABSENTE de wg_mesh.json et différente de celle de l'ancre du maître ; chaque adresse doit être
+dans le réseau du maillage et tenue par aucun pair restant ; le nom doit être valide et porté par aucun pair restant
+(wg_mesh.json, peers.json). Les états sont lus sans suivre de lien, fichiers ordinaires de root ou de `secubox`.
+Recoupement avec une source que le compte `secubox` n'écrit pas : l'interface du noyau. Une clé dont la poignée de main
+(`wg show wg-mesh latest-handshakes`) a moins de 180 s est refusée, sauf `--force`, audité. GARDE FERMÉE : si la mesure
+échoue, l'oubli est refusé (sauf `--force`) ; seule une interface dont `ip link show wg-mesh` dit qu'elle n'existe pas
+vaut « aucun pair vivant ». `--force` est accepté de TOUT appelant du compte secubox (sudoers) : seule la route
+p2p ne le transmet que sur décision de l'administrateur (risque résiduel du compte partagé, voir le README). État illisible, argument refusé ou rien à faire : code 2, aucune action.
+Audit : une ligne par étape, avec l'acteur ; un audit non écrit est dit sur stderr et dans la sortie (`audit_ok`).
+
+Surcharges réservées aux essais, honorées HORS root seulement : SBX_OUBLI_WG_ETAT, SBX_OUBLI_PEERS, SBX_OUBLI_ANCRE,
+SBX_OUBLI_AUDIT, SBX_OUBLI_WG_BIN, SBX_OUBLI_IP_BIN, SBX_OUBLI_RELAIS, SBX_OUBLI_NOMS, SBX_OUBLI_NOMS_CONF, SBX_OUBLI_AUTOLOADCTL."""
+import argparse
+import ipaddress
+import json
+import os
+import pwd
+import re
+import stat
+import subprocess
+import sys
+import time
+
+RE_CLE = re.compile(r"^[A-Za-z0-9+/]{43}=$")
+RE_NOM = re.compile(r"^[a-z0-9][a-z0-9-]{0,30}$")          # nom de pair de l'autoload (31 au plus)
+RE_ACTEUR = re.compile(r"^[A-Za-z0-9._@-]{1,64}$")
+IFACE = "wg-mesh"
+POIGNEE_RECENTE_S = 180
+AUDIT_OK = [True]
+ACTEUR = ["inconnu"]
+FORCE = [False]
+DEFAUTS = {
+    "SBX_OUBLI_WG_ETAT": "/var/lib/secubox/p2p/wg_mesh.json",
+    "SBX_OUBLI_PEERS": "/var/lib/secubox/p2p/peers.json",
+    "SBX_OUBLI_ANCRE": "/etc/secubox/p2p/ancre-maitre.json",
+    "SBX_OUBLI_AUDIT": "/var/log/secubox/audit.log",
+    "SBX_OUBLI_WG_BIN": "/usr/bin/wg",
+    "SBX_OUBLI_IP_BIN": "/usr/bin/ip",
+    "SBX_OUBLI_RELAIS": "/usr/sbin/secubox-relais-maillage",
+    "SBX_OUBLI_NOMS": "/usr/sbin/secubox-annuaire-noms",
+    "SBX_OUBLI_NOMS_CONF": "/etc/unbound/unbound.conf.d/60-secubox-noms.conf",
+    "SBX_OUBLI_AUTOLOADCTL": "/usr/sbin/autoloadctl",
+}
+
+
+def chemin(cle: str) -> str:
+    if os.geteuid() != 0 and os.environ.get(cle):
+        return os.environ[cle]
+    return DEFAUTS[cle]
+
+
+def _proprietaires_admis() -> set:
+    admis = {0}
+    try:
+        admis.add(pwd.getpwnam("secubox").pw_uid)
+    except KeyError:
+        pass
+    if os.geteuid() != 0:                      # essais hors root : les fichiers sont à l'utilisateur de l'essai
+        admis.add(os.geteuid())
+    return admis
+
+
+def lire(path: str, defaut):
+    """JSON lu SANS suivre de lien (O_NOFOLLOW), fichier ordinaire de root ou de `secubox` ; sinon ValueError."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return defaut
+    except OSError as e:
+        raise ValueError(f"{path} : ouverture refusée ({e.strerror})") from e
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        if not stat.S_ISREG(st.st_mode) or st.st_uid not in _proprietaires_admis() or st.st_size > 4 * 1024 * 1024:
+            raise ValueError(f"{path} : fichier refusé (type, propriétaire ou taille)")
+        return json.loads(f.read().decode("utf-8"))
+
+
+def audit(etape: str, ok: bool, detail: str) -> None:
+    ligne = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "p2p", "evenement": "p2p_oubli_suite",
+             "etape": etape, "ok": ok, "detail": detail[:300], "acteur": ACTEUR[0], "force": FORCE[0]}
+    try:
+        with open(chemin("SBX_OUBLI_AUDIT"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+    except OSError as e:
+        AUDIT_OK[0] = False
+        print(f"secubox-oubli-pair : audit non écrit ({e.strerror}) : {etape}", file=sys.stderr)
+
+
+def executer(argv, timeout: int = 120):
+    """(code, stdout, stderr) SÉPARÉS : une sortie d'erreur n'est jamais lue comme une mesure."""
+    r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+    return r.returncode, r.stdout or "", r.stderr or ""
+
+
+def lancer(argv, timeout: int = 120):
+    """(code, message) pour le rapport : stderr, sinon stdout."""
+    rc, out, err = executer(argv, timeout)
+    return rc, (err or out).strip()
+
+
+class MesureIndisponible(Exception):
+    """L'interface n'a pas pu être lue, et son absence n'est pas établie."""
+
+
+_ABSENCE = []                                    # absence établie une fois par passage : `ip link` n'est lancé qu'une fois
+
+
+def _mesurer(argv, timeout):
+    """executer() pour une MESURE : toute erreur d'exécution (binaire absent, refus, délai) → MesureIndisponible."""
+    try:
+        return executer(argv, timeout)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise MesureIndisponible(f"{os.path.basename(argv[0])} : {type(e).__name__}") from None
+
+
+def interface_absente() -> bool:
+    """Absence ÉTABLIE de wg-mesh : `ip link show wg-mesh` répond explicitement qu'elle n'existe pas. Une erreur
+    d'exécution de `ip` n'établit rien (False)."""
+    if not _ABSENCE:
+        try:
+            rc, _, err = _mesurer([chemin("SBX_OUBLI_IP_BIN"), "link", "show", IFACE], 10)
+            _ABSENCE.append(rc != 0 and "does not exist" in err)
+        except MesureIndisponible:
+            _ABSENCE.append(False)
+    return _ABSENCE[0]
+
+
+def lire_interface(*quoi) -> str:
+    """stdout de `wg show wg-mesh <quoi>` ; interface absente (vérifiée) → "" ; toute autre erreur → MesureIndisponible."""
+    try:
+        rc, out, err = _mesurer([chemin("SBX_OUBLI_WG_BIN"), "show", IFACE, *quoi], 20)
+    except MesureIndisponible:
+        if interface_absente():
+            return ""
+        raise
+    if rc == 0:
+        return out
+    if interface_absente():
+        return ""
+    raise MesureIndisponible(err.strip()[:120] or f"code {rc}")
+
+
+def refuser(motif: str) -> int:
+    print(json.dumps({"erreur": motif}, ensure_ascii=False))
+    return 2
+
+
+def _ip_pair(p) -> str:
+    ip = p.get("mesh_ip")
+    if isinstance(ip, str) and ip:
+        return ip
+    ai = str(p.get("allowed_ips") or "").split(",")[0].strip()
+    return ai[:-3] if ai.endswith("/32") else ""
+
+
+def gardes(a):
+    """(None, contexte) si tout est oublié dans l'état ; (motif, None) sinon."""
+    if not (a.cle or a.ip or a.nom):
+        return "rien à oublier", None
+    try:
+        etat = lire(chemin("SBX_OUBLI_WG_ETAT"), {"peers": []})
+        registre = lire(chemin("SBX_OUBLI_PEERS"), {"peers": []})
+        ancre = lire(chemin("SBX_OUBLI_ANCRE"), {})
+    except (OSError, ValueError):
+        return "état illisible", None
+    if not isinstance(etat, dict) or not isinstance(registre, dict):
+        return "état de forme inattendue", None
+    pairs = [p for p in etat.get("peers") or [] if isinstance(p, dict)]
+    cles_restantes = {str(p.get("public_key") or "") for p in pairs}
+    ips_restantes = {_ip_pair(p) for p in pairs}
+    try:
+        reseau = ipaddress.ip_network(str(etat.get("network") or "10.10.0.0/24"), strict=False)
+    except ValueError:
+        return "réseau du maillage illisible", None
+    cle_ancre = ancre.get("cle_publique") if isinstance(ancre, dict) else None
+    for c in a.cle:
+        if not RE_CLE.match(c):
+            return "clé publique invalide", None
+        if c in cles_restantes or c == cle_ancre or c == etat.get("public_key"):
+            return "clé encore dans l'état du maillage (ou du maître) : pas oubliée", None
+    for ip in a.ip:
+        try:
+            adr = ipaddress.ip_address(ip)
+        except ValueError:
+            return "adresse invalide", None
+        if adr not in reseau or str(adr) == str(etat.get("address") or "").split("/")[0]:
+            return "adresse hors du maillage ou du maître", None
+        if str(adr) in ips_restantes:
+            return "adresse encore tenue par un pair", None
+    if a.nom is not None:
+        if not RE_NOM.match(a.nom):
+            return "nom invalide", None
+        noms = {p.get("name") for p in pairs} | {p.get("name") for p in registre.get("peers") or [] if isinstance(p, dict)}
+        if a.nom in noms:
+            return "nom encore porté par un pair", None
+    try:
+        recentes = poignees_recentes(a.cle)
+    except MesureIndisponible as e:
+        if not a.force:
+            return f"mesure des poignées de main impossible ({e}) : --force exigé", None
+        recentes = []
+    if recentes and not a.force:
+        return f"poignée de main WireGuard de moins de {POIGNEE_RECENTE_S} s ({', '.join(recentes)}) : --force exigé", None
+    return None, None
+
+
+def poignees_recentes(cles) -> list:
+    """Clés de `cles` dont l'interface (noyau, hors de portée du compte secubox) a vu une poignée de main récente."""
+    if not cles:
+        return []
+    sortie = lire_interface("latest-handshakes")     # "" : interface absente (vérifiée), aucun pair n'y vit
+    maintenant, out = time.time(), []
+    for ligne in sortie.splitlines():
+        champs = ligne.split()
+        if len(champs) == 2 and champs[0] in cles and champs[1].isdigit():
+            ts = int(champs[1])
+            if ts > 0 and maintenant - ts < POIGNEE_RECENTE_S:
+                out.append(champs[0][:8])
+    return out
+
+
+def etape_wg(cles) -> dict:
+    if not cles:
+        return {"ok": True, "detail": "aucune clé"}
+    wg = chemin("SBX_OUBLI_WG_BIN")
+    try:
+        sortie = lire_interface("peers")
+    except MesureIndisponible as e:
+        return {"ok": False, "detail": f"interface illisible : {e}"}
+    if not sortie and _ABSENCE and _ABSENCE[0]:
+        return {"ok": True, "detail": "interface wg-mesh absente"}
+    vues = set(sortie.split())
+    faits, echecs = [], []
+    for c in cles:
+        if c not in vues:
+            continue
+        rc, err = lancer([wg, "set", IFACE, "peer", c, "remove"], timeout=20)
+        (faits if rc == 0 else echecs).append(c[:8] + ("" if rc == 0 else f" ({err[:80]})"))
+    try:
+        apres = set(lire_interface("peers").split())
+    except MesureIndisponible as e:
+        return {"ok": False, "detail": f"retrait non vérifié : {e}"}
+    restent = [c[:8] for c in cles if c in apres]
+    if echecs or restent:
+        return {"ok": False, "detail": f"encore sur wg-mesh : {', '.join(restent or echecs)}"}
+    return {"ok": True, "detail": f"{len(faits)} pair(s) retiré(s) de l'interface"}
+
+
+def etape_relais(ips) -> dict:
+    if not ips:
+        return {"ok": True, "detail": "aucune adresse"}
+    relais = chemin("SBX_OUBLI_RELAIS")
+    if not os.access(relais, os.X_OK):
+        return {"ok": True, "detail": "relais absent"}
+    for ip in ips:
+        rc, err = lancer([relais, "oublier-pair", ip], timeout=180)
+        if rc != 0:
+            return {"ok": False, "detail": f"{ip} : {err[-200:]}"}
+    return {"ok": True, "detail": "noms et ports relayés retirés"}
+
+
+def etape_noms(nom, ips) -> dict:
+    noms = chemin("SBX_OUBLI_NOMS")
+    if not os.access(noms, os.X_OK):
+        return {"ok": True, "detail": "annuaire-noms absent"}
+    rc, err = lancer([noms, "--sans-redemarrage"], timeout=600)
+    if rc == 3:
+        return {"ok": False, "detail": "noms régénérés, mais Unbound n'écoute pas une adresse : redémarrage à décider "
+                                       "par l'administrateur (jamais depuis l'oubli)"}
+    if rc != 0:
+        return {"ok": False, "detail": f"régénération : {err[-200:]}"}
+    try:
+        with open(chemin("SBX_OUBLI_NOMS_CONF"), encoding="utf-8") as f:
+            texte = f.read()
+    except FileNotFoundError:
+        return {"ok": True, "detail": "aucune conf Unbound des noms"}
+    except OSError as e:
+        return {"ok": False, "detail": f"conf illisible : {e}"}
+    traces = [x for x in ([f'"{nom}.'] if nom else []) + [f" A {ip}\"" for ip in ips] if x in texte]
+    if traces:
+        return {"ok": False, "detail": "le pair paraît encore dans 60-secubox-noms.conf"}
+    return {"ok": True, "detail": "noms Unbound régénérés"}
+
+
+def etape_autoload(nom) -> dict:
+    if not nom:
+        return {"ok": True, "detail": "nom encore porté : abonnement gardé"}
+    ctl = chemin("SBX_OUBLI_AUTOLOADCTL")
+    if not os.access(ctl, os.X_OK):
+        return {"ok": True, "detail": "autoload absent"}
+    rc, err = lancer([ctl, "maillage-oublier", "--nom", nom], timeout=60)
+    return {"ok": rc == 0, "detail": err[-200:]}
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="secubox-oubli-pair")
+    ap.add_argument("--cle", action="append", default=[])
+    ap.add_argument("--ip", action="append", default=[])
+    ap.add_argument("--nom")
+    ap.add_argument("--acteur", default="inconnu")
+    ap.add_argument("--force", action="store_true")
+    try:
+        a = ap.parse_args(argv)
+    except SystemExit:
+        return 2
+    if not RE_ACTEUR.match(a.acteur):
+        return refuser("acteur invalide")
+    ACTEUR[0], FORCE[0] = a.acteur, bool(a.force)
+    if len(a.cle) > 8 or len(a.ip) > 8:
+        return refuser("trop de cibles")
+    motif, _ = gardes(a)
+    if motif:
+        audit("gardes", False, motif)
+        return refuser(motif)
+    etapes = {}
+    for nom, f in (("wg_direct", lambda: etape_wg(a.cle)), ("relais", lambda: etape_relais(a.ip)),
+                   ("noms", lambda: etape_noms(a.nom, a.ip)), ("autoload", lambda: etape_autoload(a.nom))):
+        try:
+            etapes[nom] = f()
+        except (OSError, subprocess.SubprocessError) as e:
+            etapes[nom] = {"ok": False, "detail": f"{type(e).__name__} : {str(e)[:200]}"}
+        audit(nom, etapes[nom]["ok"], etapes[nom]["detail"])
+    print(json.dumps({"etapes": etapes, "audit_ok": AUDIT_OK[0]}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

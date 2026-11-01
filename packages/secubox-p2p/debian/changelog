@@ -1,3 +1,54 @@
+secubox-p2p (1.21.0-1~trixie1) trixie; urgency=medium
+
+  * Oublier ce noeud : un seul point d entree (POST /master-link/oublier)
+    retire le pair de tous les etats du maitre : peers.json (par adresse sur
+    designation par cle, l homonyme reste), wg_mesh.json, demandes et jetons
+    de jonction, pairs-enroles.json, interface wg-mesh (cle exacte),
+    noms relayes et ports (relais oublier-pair), noms Unbound, abonnement
+    autoload, Flotte du pilotage. Assistant root secubox-oubli-pair (sudo,
+    gardes reverifiees). Reponse partiel avec les etapes restantes, auditees.
+  * Statut des pairs du registre mesure par poignee de main WireGuard,
+    jamais online fige (ref #3362).
+  * Correction apres revue : jetons et demandes lus strictement (503 si
+    illisibles), reecrits seulement si une entree du pair part, tous leurs
+    ecrivains atomiques sous le meme verrou ; oubli asynchrone (202 + GET
+    de l operation) ; secubox-oubli-pair refuse une poignee de main de moins
+    de 180 s sauf --force (accepte par l assistant de tout appelant du compte
+    secubox ; seule la route ne le transmet que sur decision de
+    l administrateur), audite ; --acteur, lecture O_NOFOLLOW, profil
+    AppArmor enforce charge par le postinst (relais-maillage, annuaire-noms
+    et autoloadctl hors confinement faute de profil) ; relais : comparaison
+    litterale des adresses, retraits journalises (ref #3362).
+  * Passe 2 : toute lecture-modification-ecriture de requests.json et
+    tokens.json (validation, marquage, nettoyage, revocation, jonction,
+    approbation) en une section critique, lecture stricte (503) ; garde wg
+    fermee si la mesure echoue (sauf interface absente verifiee) ; jetons
+    rendus au service avant remplacement (ref #3362).
+  * Passe 3 : plus aucun flock bloquant dans la boucle asyncio (routes de
+    jetons en def, approbation par asyncio.to_thread, promotion notifiee
+    apres le fil) ; validation publique non bloquante (2 s puis 503) ;
+    secubox-maillage-pairs lit la liste du maitre hors du verrou ; 429 si
+    aucune operation d oubli n est purgeable ; erreurs d execution de wg et
+    ip refusees proprement ; iproute2 en Depends (ref #3362).
+  * Passe 4 : secubox-maillage-pairs ignore la liste du maitre si l etat a
+    change (inode, mtime, taille) pendant l appel ou si le maitre n est plus
+    celui de l ancre ; aucune coroutine n ecrit sous le verrou (routes sans
+    await en def, ecritures par asyncio.to_thread, garde AST) ; taches
+    asyncio gardees ; place d oubli reservee avec le controle 429 ;
+    sbx-mesh-invite refuse un master-link en lien (code 1) (ref #3362).
+  * Passe 5 : toute ecriture de peers.json et wg_mesh.json passe par
+    oubli.maj_json (lecture stricte, modification, ecriture atomique sous un
+    seul verrou) ; decouverte, annonceurs, pont et sonde fusionnent apres le
+    reseau sans jamais reintroduire une entree oubliee entre-temps ; jetons
+    ecrits par descripteur de dossier ; repere avec ctime ; place d oubli
+    rendue seulement avant toute ecriture (ref #3362).
+  * Passe 6 : projection pairs-enroles.json publiee sous le verrou du
+    registre (maj_json apres_ecriture, oubli avant de rendre le verrou) ;
+    cles wg calculees hors du verrou ; etat illisible a la jonction audite
+    (ref #3362).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 10:10:28 +0100
+
 secubox-p2p (1.20.4-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

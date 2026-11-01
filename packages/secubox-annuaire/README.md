@@ -110,7 +110,8 @@ Pour en admettre d'autres, lister un domaine par ligne (`#` = commentaire) dans
 ## Offres du Hall et Flotte (#3335)
 
 - Une carte du Hall (`FEATURED`) n'est publiée comme offre `app` que si son hôte est un vhost déclaré par CE nœud (`domain = "…"` de `/etc/secubox/haproxy.toml`) : la curation est la même sur chaque nœud, seul celui qui sert le domaine l'offre ; sans `haproxy.toml` lisible, aucune offre `app`. Les offres `sync` disparues sont révoquées à la synchronisation suivante.
-- Flotte, tableau des pairs : bouton « Oublier » (nom retapé, « forcer » pour un nœud actif) → `secubox-p2p` puis `secubox-pilotage`.
+- Flotte, tableau des pairs : bouton « Oublier » (nom retapé, « forcer » pour un nœud actif) → `POST /api/v1/p2p/master-link/oublier` SEUL : secubox-p2p enchaîne tous les nettoyages, Flotte du pilotage comprise (#3362) ; l'oubli répond 202 avec une opération, que la page suit jusqu'à « termine » ; une réponse « partiel » affiche les étapes restantes.
+- `secubox-annuaire-noms` (#3362) : un passage à la fois (`/run/secubox-annuaire-noms.lock`), et le contrôle d'Unbound (checkconf, reload, restart) sous le verrou commun d'Unbound (`/var/lib/secubox-dns-listes/verrou`, celui de secubox-dns-listes). `--sans-redemarrage` (appel de l'oubli) ne redémarre jamais Unbound : si une adresse n'est pas écoutée, code 3, et l'oubli est « partiel » avec un message pour l'administrateur.
 
 ## Droits du maillage (#3305)
 

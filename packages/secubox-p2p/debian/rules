@@ -61,6 +61,9 @@ override_dh_auto_install:
 	install -m 755 $(CURDIR)/sbin/secubox-p2pctl $(CURDIR)/debian/secubox-p2p/usr/sbin/
 	install -m 755 $(CURDIR)/sbin/secubox-relais-maillage $(CURDIR)/debian/secubox-p2p/usr/sbin/
 	install -m 755 $(CURDIR)/sbin/secubox-maillage-pairs $(CURDIR)/debian/secubox-p2p/usr/sbin/
+	# #3362 : suites root de « Oublier ce nœud » (sudo depuis l'API, gardes revérifiées)
+	install -m 755 $(CURDIR)/sbin/secubox-oubli-pair $(CURDIR)/debian/secubox-p2p/usr/sbin/
+	install -D -m 644 $(CURDIR)/apparmor/usr.sbin.secubox-oubli-pair $(CURDIR)/debian/secubox-p2p/etc/apparmor.d/usr.sbin.secubox-oubli-pair
 
 	# Install ephemeral sweep timer/service (TTL backstop, Task 4)
 	install -d $(CURDIR)/debian/secubox-p2p/lib/systemd/system
@@ -86,6 +89,8 @@ override_dh_auto_install:
 	# Install scoped sudoers (secubox -> secubox-p2pctl, exact path only)
 	install -d $(CURDIR)/debian/secubox-p2p/etc/sudoers.d
 	install -m 440 $(CURDIR)/sudoers/secubox-p2p-ephemeral \
+		$(CURDIR)/debian/secubox-p2p/etc/sudoers.d/
+	install -m 440 $(CURDIR)/sudoers/secubox-p2p-oubli \
 		$(CURDIR)/debian/secubox-p2p/etc/sudoers.d/
 
 	# Install nft drop-in (own table, policy accept, udp/51825)
