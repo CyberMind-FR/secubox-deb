@@ -61,6 +61,7 @@
         #pb-pan h4{margin:12px 0 6px;font-size:.78rem;color:var(--doux)} #pb-pan h3 .btn{margin-left:8px;vertical-align:middle}
         .pb-etat{color:var(--doux);font-size:.78rem;line-height:1.4} .pb-msg{margin:6px 0;font-size:.8rem;min-height:1em;overflow-wrap:anywhere} .pb-msg.grave{color:#ffd9de}
         .pb-act{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:5px 0;border-top:1px solid rgba(86,150,255,.12)} .pb-lib{flex:1 1 170px;font-size:.8rem}
+        .oubli-conf{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.oubli-conf input[type=text]{flex:0 1 160px;width:160px}
         .pb-act input{flex:1 1 150px;max-width:260px} .pb-vide{color:var(--faible);font-size:.78rem}
         .pb-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:.78rem} .pb-bar input[type=number]{width:80px}
         input[type=number]{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px}
@@ -281,7 +282,10 @@
         }
 
         // Pairs du transport wg-mesh (GET /api/v1/p2p/peers) : couvre aussi les pairs sans annuaire. Module absent ou liste vide : panneau masqué.
-        async function chargerP2p() {
+        // Jamais de rafraîchissement pendant une confirmation ouverte (AURORA §6) : la saisie du nom serait effacée.
+        function confirmationOuverte(id) { const b = $(id); return !!(b && b.querySelector('.oubli-conf, .pb-conf')); }
+        async function chargerP2p(force) {
+            if (!force && confirmationOuverte('p2p-body')) return;
             let liste = [];
             try {
                 if (DEMO) liste = [{ name: 'pair-exemple', address: '10.10.0.2', status: 'online', last_seen: Math.floor(Date.now() / 1000) - 30 }];
@@ -761,7 +765,7 @@
             const lab = el('label', 'pb-forcer'), forcer = el('input'); forcer.type = 'checkbox'; lab.append(forcer, el('span', null, ' forcer (nœud actif)'));
             const ok = el('button', 'btn sm danger', 'Oublier ' + nom), non = el('button', 'btn sm', 'Annuler'), msg = el('span', 'pb-detail');
             ok.type = non.type = 'button';
-            non.addEventListener('click', () => chargerP2p());
+            non.addEventListener('click', () => chargerP2p(true));
             ok.addEventListener('click', async () => {
                 if (saisie.value !== nom) { msg.textContent = 'Retapez exactement « ' + nom + ' ».'; return; }
                 ok.disabled = true; msg.textContent = 'Oubli en cours…';
@@ -787,10 +791,10 @@
                         msg.textContent = 'Oublié, sauf : ' + d.restes.map(k => k + ' (' + ((d.etapes || {})[k] || {}).detail + ')').join(', ');
                         return;                                   // l'état est déjà écrit : un second envoi dirait « inconnu »
                     }
-                    chargerP2p(); chargerPilotage(); loadFleet();
+                    chargerP2p(true); chargerPilotage(); loadFleet();
                 } catch (e) { msg.textContent = 'Oubli impossible : ' + e.message; ok.disabled = false; }
             });
-            td.append(saisie, lab, ok, non, msg);
+            const boite = el('div', 'oubli-conf'); boite.append(saisie, lab, ok, non, msg); td.append(boite);   // tout reste visible : le champ ne prend pas la ligne
             saisie.focus();
         }
         // ===== fin pilotage-box =====
