@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE du collecteur de la LED de supervision (#3361).
+# Compte secubox-leds ; LIT les sources de mesures, LANCE /usr/sbin/nft (compteurs
+# sbx_drop_*, CAP_NET_ADMIN + netlink), N'ÉCRIT que /run/secubox-leds/ et
+# /var/lib/secubox-leds/. Aucun secret.
+#
+# Le profil s'applique à toutes les commandes de l'unité (AppArmorProfile=), donc
+# aussi à ExecCondition=/usr/sbin/secubox-led-board.
+
+#include <tunables/global>
+
+profile secubox-led-flux /usr/sbin/secubox-led-flux {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/sbin/secubox-led-flux r,
+  /usr/bin/python3* rix,
+
+  # Garde secubox-led-board (ExecCondition)
+  /usr/sbin/secubox-led-board rix,
+  /usr/bin/env rix,
+  /{,usr/}bin/bash rix,
+  /{,usr/}bin/tr rix,
+  /{,usr/}bin/grep rix,
+  @{PROC}/device-tree/ r,
+  @{PROC}/device-tree/** r,
+  /sys/firmware/devicetree/** r,
+  /sys/devices/**/name r,
+  /sys/class/leds/ r,
+  /sys/class/leds/** r,
+
+  /usr/lib/python3/** r,
+  /usr/lib/python3.*/** r,
+  /usr/lib/secubox-led-heartbeat/ r,
+  /usr/lib/secubox-led-heartbeat/** r,
+
+  /etc/secubox/leds.toml r,
+  deny /etc/secubox/secrets/** r,
+
+  # Sources de mesures
+  @{PROC}/net/dev r,
+  @{PROC}/@{pid}/net/dev r,
+  @{PROC}/sys/net/netfilter/nf_conntrack_count r,
+  /var/cache/secubox/metrics-cache.json r,
+  /var/cache/secubox/health-doctor.json r,
+  /run/secubox/actord-mesures.json r,
+  /var/lib/secubox/ad-guard/ r,
+  /var/lib/secubox/ad-guard/ad-guard.db* rk,
+
+  # Compteurs nftables sbx_drop_*
+  /usr/sbin/nft rix,
+  /etc/nftables.conf r,
+  /etc/iproute2/** r,
+  capability net_admin,
+  network netlink raw,
+
+  # Sorties
+  /run/secubox-leds/ r,
+  /run/secubox-leds/** rw,
+  /var/lib/secubox-leds/ r,
+  /var/lib/secubox-leds/** rw,
+}

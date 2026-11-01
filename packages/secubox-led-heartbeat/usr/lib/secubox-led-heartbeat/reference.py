@@ -152,6 +152,13 @@ class Reference:
             n = min(n, 1)
         return n
 
+    def en_apprentissage(self, cle, t):
+        """Vrai si `cle` est inconnue ou dans ses premières heures d'observation à l'instant `t`."""
+        c = self._cles.get(cle)
+        if c is None or c["court"] is None:
+            return True
+        return not (t - c["premiere"] >= self.apprentissage)
+
     # -- persistance ---------------------------------------------------------------
 
     def vers_dict(self):

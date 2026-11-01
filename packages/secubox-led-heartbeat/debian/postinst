@@ -55,6 +55,11 @@ case "$1" in
             exit 0
         fi
 
+        # Collecteur de la LED de supervision (#3361) : compte systeme dedie.
+        if ! getent passwd secubox-leds >/dev/null; then
+            adduser --system --group --no-create-home --home /nonexistent secubox-leds >/dev/null
+        fi
+
         # Compile and install Device Tree overlay
         compile_overlay || true
 
@@ -109,6 +114,12 @@ case "$1" in
             apparmor_parser -r /etc/apparmor.d/secubox-led-pulse \
               || echo "secubox-led-heartbeat : profil AppArmor non charge (apparmor_parser -r /etc/apparmor.d/secubox-led-pulse)" >&2
         fi
+        if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
+           && [ -f /etc/apparmor.d/secubox-led-flux ]; then
+            apparmor_parser -r /etc/apparmor.d/secubox-led-flux \
+              || echo "secubox-led-heartbeat : profil AppArmor non charge (apparmor_parser -r /etc/apparmor.d/secubox-led-flux)" >&2
+        fi
+        systemctl enable --now secubox-led-flux.service || true
         systemctl enable secubox-led-pulse.service 2>/dev/null || true
         if [ -e /sys/class/leds/red:led1/brightness ]; then
             systemctl restart secubox-led-pulse.service 2>/dev/null || true

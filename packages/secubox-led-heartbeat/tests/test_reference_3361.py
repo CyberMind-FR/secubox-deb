@@ -151,3 +151,13 @@ def test_date_implausible_ignoree():
     assert r.vers_dict()["cles"] == {}
     r.observer("k", 10.0, LUNDI)
     assert r.niveau("k", 10.0, 86400, 1.0) is None
+
+
+def test_en_apprentissage():
+    from reference import Reference
+    ref = Reference()
+    t = 1793509200.0
+    assert ref.en_apprentissage("x", t) is True  # clé jamais vue : encore à apprendre
+    ref.observer("x", 1.0, t)
+    assert ref.en_apprentissage("x", t + 3600) is True
+    assert ref.en_apprentissage("x", t + 86400) is False

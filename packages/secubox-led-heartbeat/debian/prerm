@@ -5,6 +5,7 @@ case "$1" in
     remove|upgrade|deconfigure)
         # Stop HealthBump 3-tier system
         systemctl stop secubox-led-pulse.service 2>/dev/null || true
+        systemctl stop secubox-led-flux.service 2>/dev/null || true
         systemctl stop secubox-healthbump.timer 2>/dev/null || true
         systemctl stop secubox-led-trigger.service 2>/dev/null || true
         # Stop legacy service
