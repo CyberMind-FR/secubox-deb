@@ -110,7 +110,7 @@ Pour en admettre d'autres, lister un domaine par ligne (`#` = commentaire) dans
 ## Offres du Hall et Flotte (#3335)
 
 - Une carte du Hall (`FEATURED`) n'est publiée comme offre `app` que si son hôte est un vhost déclaré par CE nœud (`domain = "…"` de `/etc/secubox/haproxy.toml`) : la curation est la même sur chaque nœud, seul celui qui sert le domaine l'offre ; sans `haproxy.toml` lisible, aucune offre `app`. Les offres `sync` disparues sont révoquées à la synchronisation suivante.
-- Flotte, tableau des pairs : bouton « Oublier » (nom retapé, « forcer » pour un nœud actif) → `secubox-p2p` puis `secubox-pilotage`.
+- Flotte, tableau des pairs : bouton « Oublier » (nom retapé, « forcer » pour un nœud actif) → `POST /api/v1/p2p/master-link/oublier` SEUL : secubox-p2p enchaîne tous les nettoyages, Flotte du pilotage comprise (#3362) ; une réponse « partiel » affiche les étapes restantes.
 
 ## Droits du maillage (#3305)
 

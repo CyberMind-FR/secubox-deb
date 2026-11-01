@@ -769,8 +769,13 @@
                 try {
                     const r = await pbFetch('/api/v1/p2p/master-link/oublier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps(Object.assign({ nom: nom }, cle ? { public_key: cle } : {})) });
                     if (!r.ok) { msg.textContent = await pbErreur(r); ok.disabled = false; return; }
-                    const rp = await pbFetch('/api/v1/pilotage/boxes/' + encodeURIComponent(nom) + '/oublier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps({}) });
-                    if (!rp.ok && rp.status !== 404) { msg.textContent = 'Maillage oublié ; Flotte : ' + await pbErreur(rp); ok.disabled = false; return; }
+                    // #3362 : secubox-p2p enchaîne TOUS les nettoyages (wg-mesh, jonctions, relais, noms, autoload, Flotte) ;
+                    // « partiel » : ce qui reste est nommé, jamais un faux succès.
+                    const d = await r.json();
+                    if (d.status === 'partiel') {
+                        msg.textContent = 'Oublié, sauf : ' + d.restes.map(k => k + ' (' + ((d.etapes || {})[k] || {}).detail + ')').join(', ');
+                        return;                                   // l'état est déjà écrit : un second envoi dirait « inconnu »
+                    }
                     chargerP2p(); chargerPilotage(); loadFleet();
                 } catch (e) { msg.textContent = 'Oubli impossible : ' + e.message; ok.disabled = false; }
             });

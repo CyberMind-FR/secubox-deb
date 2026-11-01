@@ -11,7 +11,11 @@ PAGE = (Path(__file__).resolve().parents[1] / "www" / "fleet" / "index.html").re
 def test_bouton_oublier_et_routes():
     i = PAGE.index("function oublierNoeud(")
     bloc = PAGE[i:i + 3000]
-    assert "/api/v1/p2p/master-link/oublier" in bloc and "/oublier'" in bloc and "/api/v1/pilotage/boxes/" in bloc
+    assert "/api/v1/p2p/master-link/oublier" in bloc
+    # #3362 : UN seul point d'entrée (secubox-p2p enchaîne tous les nettoyages, Flotte du pilotage comprise) ; la page n'appelle
+    # plus le pilotage elle-même (elle oubliait la box homonyme quand une ancienne clé était désignée) et montre ce qui reste.
+    assert "/api/v1/pilotage/boxes/" not in bloc
+    assert "d.restes" in bloc and "partiel" in bloc
     assert "saisie.value !== nom" in bloc                                 # nom retapé, sinon rien n'est envoyé
     assert "forcer.checked" in bloc and "force: true" in bloc            # nœud encore en ligne : « forcer » coché
     assert "oublierNoeud(p.name, act, p.public_key)" in PAGE and "public_key: cle" in bloc and "<th>Dernier vu</th><th></th>" in PAGE
