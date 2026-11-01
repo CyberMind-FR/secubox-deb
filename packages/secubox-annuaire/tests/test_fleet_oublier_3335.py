@@ -31,3 +31,18 @@ def test_bouton_reactive_si_le_suivi_echoue():
     """#3362 passe 2 : un suivi en échec ne laisse pas le bouton désactivé."""
     i = PAGE.index("Suivi de l\\'oubli impossible")
     assert "ok.disabled = false" in PAGE[i:i + 120]
+
+
+def test_confirmation_tient_dans_la_ligne():
+    """Sur gk2 (2026-11-01), le champ de confirmation prenait toute la ligne et poussait « Oublier <nom> » hors de l'écran."""
+    i = PAGE.index("function oublierNoeud(")
+    corps = PAGE[i:PAGE.index("td.append", i) + 200] if "td.append" in PAGE[i:] else PAGE[i:]
+    assert "el('div', 'oubli-conf')" in corps and "td.append(saisie" not in corps
+    assert ".oubli-conf{display:flex;flex-wrap:wrap" in PAGE and ".oubli-conf input[type=text]{flex:0 1 160px;width:160px}" in PAGE
+
+
+def test_pas_de_rafraichissement_pendant_la_confirmation():
+    """Sur gk2 (2026-11-01), le rafraîchissement périodique redessinait les pairs et effaçait le nom en cours de saisie."""
+    i = PAGE.index("async function chargerP2p(")
+    assert PAGE[i:i + 200].count("if (!force && confirmationOuverte('p2p-body')) return;") == 1
+    assert "non.addEventListener('click', () => chargerP2p(true));" in PAGE

@@ -1,3 +1,9 @@
+secubox-annuaire (0.17.4-1~trixie1) trixie; urgency=medium
+
+  * Flotte, oubli d un pair : la confirmation (nom retapé, forcer, Oublier, Annuler) tient dans la ligne au lieu de pousser le bouton hors de l écran, et la liste des pairs ne se rafraîchit plus pendant une confirmation ouverte (la saisie était effacée) (ref #3362).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 16:48:02 +0100
+
 secubox-annuaire (0.17.3-1~trixie1) trixie; urgency=medium
 
   * Flotte, bouton Oublier : un seul appel, POST /api/v1/p2p/master-link/oublier,
