@@ -642,7 +642,14 @@ def _unites_au_repos_cache() -> tuple:
     """
     if time.time() - _au_repos["ts"] >= _AU_REPOS_TTL:
         try:
-            _au_repos["repos"], _au_repos["absents"] = unites_au_repos()
+            # Les noms viennent du list-units du cycle (#1835) quand il est frais :
+            # unites_au_repos() relancerait sinon son propre list-units secubox-*.
+            noms = None
+            brut = _cache.get("units_brut")
+            if brut and time.time() - _cache.get("units_ts", 0) < CACHE_TTL:
+                noms = [c[0][8:-8] for c in (l.split() for l in brut.splitlines())
+                        if c and c[0].startswith("secubox-") and c[0].endswith(".service")]
+            _au_repos["repos"], _au_repos["absents"] = unites_au_repos(noms)
         except Exception as e:  # noqa: BLE001 — garder la valeur précédente
             log.warning("unités au repos indisponibles : %s", e)
         _au_repos["ts"] = time.time()

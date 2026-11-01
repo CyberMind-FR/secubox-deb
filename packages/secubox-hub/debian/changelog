@@ -1,3 +1,12 @@
+secubox-hub (1.12.35-1~trixie1) trixie; urgency=medium
+
+  * Un seul list-units par cycle (#1835) : le relevé des unités au repos
+    prend les noms dans le list-units du cycle au lieu de relancer le sien
+    (le test test_un_seul_list_units_par_cycle échouait sur un processus neuf)
+    (ref #3313).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 08:36:16 +0100
+
 secubox-hub (1.12.34-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
