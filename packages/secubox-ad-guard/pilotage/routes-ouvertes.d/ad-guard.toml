@@ -29,6 +29,8 @@ chemins = [
     "^/adblock-tv/protection/(observe|pause|reprendre|exceptions)$",
     # Lot 4 (#3374) : reprise manuelle de nDPId après une pause de charge.
     "^/adblock-tv/protection/dpi/reprendre$",
+    # Lot 5b (#3374) : choix différés de l'assistant « En direct » (administrateur). Le compteur du kiosque n'est pas une écriture.
+    "^/adblock-tv/protection/assistant/(choix|annuler|guide)$",
 ]
 
 [[routes]]

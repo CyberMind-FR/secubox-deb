@@ -223,6 +223,12 @@ def constats(flux: Iterable[dict], resolus: Set[str], box: Set[str], doh: Set[st
     return out
 
 
+def flux_tiers(flux: Iterable[dict], box: Set[str]) -> List[dict]:
+    """Lot 5b : seuls les flux vers un TIERS comptent. Un flux vers une adresse de la box (son DNS 53/853 compris, que conntrack voit
+    puisque la TV l'interroge) ne prouve pas que les flux de l'appareil traversent la box : il ne fait pas passer en « DNS + DPI »."""
+    return [f for f in flux if not (f.get("distant") and f["distant"] in box)]
+
+
 def couverture(dernier_flux: Optional[int], maintenant: int) -> str:
     """`dns+dpi` si des flux de l'appareil ont été vus (DPI ou conntrack) dans l'heure ; sinon `dns` (DNS seulement)."""
     return "dns+dpi" if dernier_flux is not None and 0 <= maintenant - int(dernier_flux) <= FENETRE_COUVERTURE_S else "dns"
@@ -288,6 +294,7 @@ RETENTION_DECOUVERTES_S = 30 * 86400
 MAX_DECOUVERTES = 5000
 PEREMPTION_SBXDPI_S = 120
 MAX_OCTETS = 20 * 1024 * 1024                         # B1 : plafond du fichier ; au-delà, les plus anciennes minutes partent
+ETATS_ASSISTANT = ("confirmee", "legitime", "plus-tard")       # lot 5b : choix de l'administrateur appliqués par le moteur
 TYPES_DECOUVERTE = ("repli", "repli-protege", "secours", "sans-dns", "dns-chiffre", "contournement")
 
 SCHEMA = """
@@ -439,6 +446,18 @@ class MagasinDPI:
         with self._cx() as cx:
             cx.execute("UPDATE decouvertes SET etat=? WHERE mac=? AND domaine=? AND type='repli' AND etat='nouvelle'", (etat, mac, domaine))
 
+    def marquer_id(self, ident: int, etat: str, mac: str, domaine: Optional[str] = None) -> None:
+        """Lot 5b : état posé par l'assistant (consommé par le moteur) sur UNE découverte, seulement si elle est bien celle de cet appareil
+        (et de ce domaine quand il est donné) : un identifiant périmé ou forgé ne marque jamais une autre ligne."""
+        if etat not in ETATS_ASSISTANT:
+            raise ValueError("état de découverte inconnu")
+        w, a = "id=? AND mac=?", [etat, int(ident), mac]
+        if domaine is not None:
+            w += " AND domaine=?"
+            a.append(domaine)
+        with self._cx() as cx:
+            cx.execute(f"UPDATE decouvertes SET etat=? WHERE {w}", a)
+
     def decouvertes(self, depuis_id: int = 0, type_: Optional[str] = None, mac: Optional[str] = None, limite: int = 100,
                     recentes: bool = False, etat: Optional[str] = None) -> List[dict]:
         if not self._lisible():
@@ -554,6 +573,7 @@ def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str
         sources["conntrack"] = "ok"
         tous = set().union(*adr.values()) if adr else set()
         bruts += [dict(f, minute=maintenant // 60, flux=1, octets=0, categorie="") for f in lire_conntrack(conntrack_texte, tous)]
+    bruts = flux_tiers(bruts, box)                        # lot 5b : jamais un flux vers gk2 lui-même (DNS de la box compris)
     connus = dict(voisins)
     connus.update({c["ip"]: m for m, c in per.items()})
     mem = mag.charger_voisins() if memoire is None else memoire

@@ -1,3 +1,18 @@
+secubox-ad-guard (1.22.0-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy lot 5b — assistant de détection en direct (ref #3374). Conception : docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot5b-design.md.
+  * Page /tv-privacy/ : onglet « En direct » (administrateur) : découvertes (candidat, régie pendant une coupure, repli suspect) avec appareil, domaine,
+    catégorie, confiance, raison ; interrogation à curseur toutes les 15 s, plafonnée, page visible seulement, jamais pendant une confirmation ouverte.
+    Choix « Confirmer le blocage », « C'est légitime », « Plus tard », confirmés dans la page ; état « en attente » (annulable) puis « appliqué à HH:MM ».
+  * api/dnstv_assistant.py : file d'actions différées assistant.json (sous verrou, atomique, bornée, sans doublon), consommée par secubox-adguard-auto
+    (exceptions du lot 3, origine admin ; force pour une catégorie protégée, revérifiée) ; apprentissage guidé par appareil, désactivé par défaut.
+  * Routes /adblock-tv/protection/direct et /protection/assistant/{choix,annuler,guide} (require_jwt), compteur agrégé du kiosque
+    /protection/usager/appris (require_personne) ; audit-protection étendu (gestes assistant, assistant-annule, guide).
+  * Correctifs : panneaux de la vue générale alignés en haut ; adresse brute d'un appareil non déclaré affichée « appareil inconnu (IPv6) » (adresse en
+    infobulle pour l'administrateur) ; couverture « DNS + DPI » comptée sur les seuls flux vers un tiers, jamais vers gk2 (DNS 53/853 de la box).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 21:00:00 +0100
+
 secubox-ad-guard (1.21.0-1~trixie1) trixie; urgency=medium
 
   * SBX TV Privacy lot 4 — DPI par appareil (ref #3374). Conception : docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot4-design.md.

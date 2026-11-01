@@ -262,6 +262,23 @@ conntrack) n'apparaissent (« DNS + DPI ») que s'ils traversent la box (mode LA
   ou illisible), il est **retiré** (forçage levé) et audité (`contournement-invalide`) : `nftables.service` ne doit jamais échouer au démarrage.
 - Listes : `lists/ssai.txt` (contenu qui insère ses propres pubs), `lists/resolveurs-doh.txt`.
 
+### Assistant de détection en direct (lot 5b, 1.22.0, #3374)
+
+Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot5b-design.md`. Onglet « En direct » de `/tv-privacy/` (administrateur) :
+découvertes du moteur au fil de l'eau (interrogation toutes les 15 s à curseur `depuis`, 200 lignes au plus, page visible seulement, jamais
+pendant une confirmation ouverte). Chaque découverte nommée propose « Confirmer le blocage », « C'est légitime », « Plus tard » ; rien n'est imposé.
+
+- File d'actions différées `assistant.json` (`DOSSIER_ETAT`, 0640, sous le verrou des règles, atomique) : 100 actions en attente au plus,
+  une par couple MAC × domaine, entrées traitées gardées 24 h. Le moteur `secubox-adguard-auto` la consomme à son passage (même sans appareil
+  en AUTO) : `bloquer` / `legitime` = exceptions du lot 3 (`bloquer` / `autoriser`, origine admin, décision manuelle), `plus-tard` sans effet DNS.
+  État affiché : « en attente » (annulable) puis « appliqué à HH:MM » ou « refusé par le moteur ».
+- Apprentissage guidé, par appareil, désactivé par défaut : les candidats de l'appareil attendent la validation au lieu de passer seuls en essai.
+- Gardes : bloquer une catégorie protégée (hors INCONNU) exige `force` (409), revérifié par le moteur ; `imasdk.googleapis.com` jamais sans `force`.
+  Audit AVANT écriture par `audit-protection` (gestes `assistant`, `assistant-annule`, `guide`).
+- Routes : `GET /adblock-tv/protection/direct?depuis=&limite=`, `POST /adblock-tv/protection/assistant/{choix,annuler,guide}` (`require_jwt`) ;
+  `GET /adblock-tv/protection/usager/appris` (`require_personne`, kiosque, préparé) : `{"nouveaux_pisteurs": N, "jours": 7}`, sans détail.
+- Couverture « DNS + DPI » : seuls les flux vers un tiers comptent ; le DNS que la TV envoie à la box (53/853) ne suffit plus.
+
 ## Capteur DNS d'Actor Intelligence (#2240)
 
 `secubox-ad-guard-dnssensor.timer` (chaque minute, utilisateur `secubox`, groupe `actord-ingest` en plus, durcissement complet) lance `secubox-adguard-dnssensor`. Il lit le magasin d'ad-guard en lecture seule et dépose une enveloppe `dns` vers actord **uniquement** pour un domaine malveillant ou anormal ; une requête ordinaire ne laisse aucune trace.

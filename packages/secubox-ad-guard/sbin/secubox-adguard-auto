@@ -21,7 +21,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_analyse, dnstv_contournement, dnstv_dpi, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
+from api import dnstv, dnstv_analyse, dnstv_assistant, dnstv_contournement, dnstv_dpi, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
 
@@ -95,6 +95,69 @@ def reprendre_pauses(etat: dict, now: int) -> list:
         except (OSError, ValueError) as e:
             print(f"journal des décisions non écrit : {type(e).__name__}", file=sys.stderr)
     return repris
+
+
+def appliquer_assistant(etat: dict, now: int) -> bool:
+    """Lot 5b (#3374) : consomme la file de l'assistant (choix de l'administrateur dans la vue « En direct »), sous le verrou des règles
+    déjà tenu. `bloquer` / `legitime` = exceptions du lot 3 (décision manuelle, origine admin) ; `plus-tard` ne touche pas au DNS.
+    Ordre : règles, état, exceptions, puis la file ; un échec laisse les actions EN ATTENTE (nouvel essai au passage suivant).
+    Rend vrai si l'état DNS doit être appliqué. Ne fait jamais échouer le moteur."""
+    try:
+        c = dnstv_assistant.charger()
+    except dnstv_assistant.ErreurAssistant as e:
+        print(f"file de l'assistant illisible, rien n'est appliqué : {e}", file=sys.stderr)
+        return False
+    if not any(x["etat"] == "en-attente" for x in c["file"]) and not c.get("vus"):
+        avant = len(c["file"])
+        dnstv_assistant.purger(c, now)
+        if len(c["file"]) != avant:
+            try:
+                dnstv_assistant.ecrire(c)
+            except (OSError, dnstv_assistant.ErreurAssistant) as e:
+                print(f"file de l'assistant non purgée : {type(e).__name__}", file=sys.stderr)
+        return False
+    try:
+        regles = dnstv_regles.charger()
+        ex = dnstv_protection.charger_exceptions()
+        pauses = dnstv_protection.charger_pauses()
+        taxo = dnstv_assistant.taxonomie(regles=regles)        # I1 : la même fonction que l'API
+    except (dnstv_regles.ErreurRegle, dnstv_protection.ErreurProtection, dnstv_taxonomie.ErreurTaxonomie, OSError) as e:
+        print(f"assistant : lecture impossible, actions laissées en attente : {e}", file=sys.stderr)
+        return False
+    avant_regles = regles.liste()
+    res = dnstv_assistant.consommer(c, etat, regles, ex, pauses, taxo, now)
+    try:
+        if res["dns"]:
+            dnstv_regles.ecrire(regles)
+            dnstv.ecrire_etat(etat)
+            dnstv_protection.ecrire_exceptions(res["exceptions"])
+        dnstv_assistant.ecrire(c)
+    except (OSError, dnstv.ErreurTV, dnstv_protection.ErreurProtection, dnstv_assistant.ErreurAssistant) as e:
+        print(f"assistant : écriture impossible ({type(e).__name__})", file=sys.stderr)
+        return bool(res["dns"])                               # règles peut-être écrites : l'application reste due
+    try:
+        dnstv_journal.ajouter(dnstv_journal.depuis_regles(avant_regles, regles.liste(), etat)
+                              + [dnstv_journal.entree(now, x["appareil"], x["mac"], x["domaine"], "", "exception", "admin",
+                                                      f"assistant : {x['choix']}")
+                                 for x in c["file"] if x["id"] in res["appliquees"] and x["choix"] != "plus-tard"])   # m2 : jamais en double
+    except (OSError, ValueError) as e:
+        print(f"journal des décisions non écrit (assistant) : {type(e).__name__}", file=sys.stderr)
+    if res["marques"]:
+        try:
+            mag = dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db")
+            for ident, marque, mac, domaine in res["marques"]:
+                mag.marquer_id(ident, marque, mac, domaine)
+        except Exception as e:                               # noqa: BLE001 — l'état affiché des découvertes n'arrête jamais le moteur
+            print(f"découvertes non marquées : {type(e).__name__}", file=sys.stderr)
+    return bool(res["dns"])
+
+
+def guides_du_passage(etat: dict) -> set:
+    try:
+        return dnstv_assistant.slugs_guides(dnstv_assistant.charger(), etat)
+    except dnstv_assistant.ErreurAssistant as e:
+        print(f"apprentissage guidé illisible : {e}", file=sys.stderr)
+        return set()
 
 
 def voisins_du_lan() -> dict:
@@ -226,6 +289,8 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
                 return 1
             if reprendre_pauses(etat, now):
                 etat_modifie = True
+            if appliquer_assistant(etat, now):                # lot 5b : avant tout, même sans appareil en AUTO (PROTECT reçoit l'exception)
+                etat_modifie = True
             if not etat["actif"] or (not dnstv_auto.appareils(etat) and not etat.get("ajout_auto")):
                 if not etat_modifie:
                     return 0
@@ -275,7 +340,8 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
                     print(f"ajout automatique impossible : {e}", file=sys.stderr)     # plafond de règles : l'expiration et les signaux ci-dessous continuent
             # 2. règles : candidats, essais, signaux, agrégation
             replis, a_marquer = replis_du_passage(etat)
-            res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now, taxo=taxo, replis=replis)
+            res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now, taxo=taxo, replis=replis,
+                                  guides=guides_du_passage(etat))
             marquer_replis(a_marquer)
             if res["changements"]:
                 dnstv_regles.ecrire(regles)
