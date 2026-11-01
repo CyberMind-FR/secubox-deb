@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-01 — Sécurité avant l'Alpha 20 : appairage eye-remote et SSRF du CDN
+
+- closes #3283 : eye-remote 1.1.2 (PR #3370), `POST /pair/qr` en `require_jwt` ; déployé gk2. Hors périmètre → #3369
+  (/connected et /disconnected sans garde, code QR jamais consommé, 4 drop-ins locaux, route publique en 502 sur gk2).
+- closes #3284 : cdn 1.5.3 (PR #3371), `/preload_url` limité aux hôtes publics (api/cible.py), connexion épinglée sur
+  l'IP validée (Host + SNI), résolution hors boucle, 50 Mio / 60 s, sans redirection ; anonyme 401 vérifié sur gk2.
+- Constat : `garde_origine` (#1607) en mode « journal » par défaut sur gk2, 0 refus observé en 7 jours.
+
 ## 2026-11-01 — Ménage avant l'Alpha 20 : issues livrées et déployées fermées
 
 Vérifié par version installée sur gk2 = version de master (2026-11-01) :
