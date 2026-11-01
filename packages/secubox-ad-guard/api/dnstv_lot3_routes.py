@@ -129,9 +129,26 @@ def evenements(heures: int = 1, detail: bool = False, lecteur=Depends(_r.require
     if detail and not _admin(lecteur):
         raise HTTPException(403, "détail ligne à ligne : administrateur requis")
     try:
-        return dnstv_analyse.evenements_agreges(_r._magasin(), heures, int(time.time()), _noms_par_ip(), detail=detail)
+        res = dnstv_analyse.evenements_agreges(_r._magasin(), heures, int(time.time()), _noms_par_ip(), detail=detail)
     except dnstv_analyse.ErreurAnalyse as e:
         raise HTTPException(422, str(e)) from None
+    if not _admin(lecteur):
+        res["groupes"] = [_groupe_pour_lecteur(g) for g in res["groupes"]]
+    return res
+
+
+def _groupe_pour_lecteur(g: dict) -> dict:
+    """Groupe d'événements pour un lecteur qui n'est pas administrateur réel (porteur délégué) : sans l'adresse du client, sans lignes ;
+    l'appareil est son NOM, ou « appareil inconnu » si seul l'adresse le désigne (#3374, constat S1)."""
+    d = {k: v for k, v in g.items() if k not in ("client", "lignes")}
+    if d.get("appareil") == g.get("client"):
+        d["appareil"] = "appareil inconnu"
+    return d
+
+
+def _entree_pour_lecteur(e: dict) -> dict:
+    """Entrée de journal pour un lecteur qui n'est pas administrateur réel : sans motif (il peut nommer l'acteur)."""
+    return {k: v for k, v in e.items() if k != "motif"}
 
 
 
@@ -314,7 +331,12 @@ def diagnostic(lecteur=Depends(_r.require_lecture_nominative)):
         pauses = []
     retours = [e for e in dnstv_journal.lire(depuis=int(time.time()) - 7 * 86400)
                if e["action"] in ("retrait", "rejet", "observe", "pause", "reprise", "deblocage")][:30]
-    return {"erreurs_dns": [g for g in ev["groupes"] if g.get("erreurs")][:50],
+    admin = _admin(lecteur)
+    erreurs = [g for g in ev["groupes"] if g.get("erreurs")][:50]
+    if not admin:
+        erreurs = [_groupe_pour_lecteur(g) for g in erreurs]
+        retours = [_entree_pour_lecteur(e) for e in retours]
+    return {"erreurs_dns": erreurs,
             "exceptions": exceptions(lecteur)["exceptions"],
             "pauses": [{"appareil": p["appareil"], "fin": p["fin"], "origine": p["origine"]} for p in pauses],
             "retours_arriere": retours,
