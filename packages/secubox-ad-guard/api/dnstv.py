@@ -41,6 +41,12 @@ DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": []}
 MODES_DEFAUT = ("off", "auto")      # observe/block sortent un appareil du puits de production : réservés à la déclaration manuelle (revue #1959)
 MAC_RE = re.compile(r"^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$")
+# Lot 3 (#3374) : noms des modes dans l'API et l'interface. PROTECT est l'ancien « block » ; le STOCKAGE ne change pas (aucune migration).
+NOMS_MODES = {"off": "OFF", "observe": "OBSERVE", "block": "PROTECT", "auto": "AUTO"}
+ALIAS_MODES = {"protect": "block"}
+CONF_PAQUET = Path(os.environ.get("SECUBOX_ADGUARD_CONF", "/etc/secubox/ad-guard.toml"))
+# Suffixes de recherche qu'une TV colle à un nom (`googleads.g.doubleclick.net.home`) : ramenés au domaine réel (#3374, mesure gk2).
+SUFFIXES_RECHERCHE = ("localdomain", "home", "lan")
 DOSSIER_ETAT = Path(os.environ.get("SECUBOX_ADGUARD_TV_ETAT", "/var/lib/secubox/ad-guard/dnstv"))
 DOSSIER_LISTES = Path(os.environ.get("SECUBOX_ADGUARD_TV_LISTES", "/usr/share/secubox/ad-guard/lists"))
 CONF_UNBOUND = Path(os.environ.get("SECUBOX_ADGUARD_TV_UNBOUND", "/etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf"))
@@ -337,11 +343,67 @@ def valider_etat(brut) -> dict:
     return etat_valide
 
 
+def normaliser_mode(brut) -> str:
+    """Valeur STOCKÉE d'un mode reçu par l'API : `protect` (nom du lot 3, toute casse) devient `block` ; `block` reste accepté."""
+    if not isinstance(brut, str):
+        raise ErreurTV("mode inconnu (observe, protect, auto, off)")
+    m = ALIAS_MODES.get(brut.lower(), brut.lower())
+    if m not in MODES or brut != brut.strip():
+        raise ErreurTV("mode inconnu (observe, protect, auto, off)")
+    return m
+
+
+def nom_mode(mode: str) -> str:
+    """Nom affiché d'un mode stocké : OBSERVE, PROTECT, AUTO ou OFF."""
+    return NOMS_MODES.get(mode, "OFF")
+
+
+def domaine_reel(brut: str) -> str:
+    """Retire un suffixe de recherche ajouté par l'appareil (`.home`, `.lan`, `.localdomain`) si le reste est un domaine à deux étiquettes au
+    moins ; sinon rend la valeur telle quelle. Sert à l'ingestion, à la classification et aux agrégats."""
+    d = str(brut or "")
+    for s in SUFFIXES_RECHERCHE:
+        if d.endswith("." + s):
+            reste = d[: -len(s) - 1]
+            if reste.count(".") >= 1 and valider_domaine(reste) == reste:
+                return reste
+    return d
+
+
+def _conf_paquet() -> dict:
+    """Configuration du paquet (`/etc/secubox/ad-guard.toml`) ; absente ou illisible : {}."""
+    try:
+        import tomllib
+        with open(CONF_PAQUET, "rb") as h:
+            return tomllib.load(h)
+    except (OSError, ValueError, ImportError):
+        return {}
+
+
+def etat_initial(conf: dict) -> dict:
+    """État d'une NOUVELLE installation (aucun `etat.json`) : mode par défaut AUTO et, si le paquet le dit (`ajout_auto_initial`),
+    ajout automatique des TV actif (#3374 : utilisateurs lambda, plug and play avec garde-fous). Une box existante garde son état."""
+    tv = conf.get("adblock_tv", {}) if isinstance(conf, dict) else {}
+    return dict(ETAT_DEFAUT, clients=[], ignores=[], ajout_auto=tv.get("ajout_auto_initial") is True)
+
+
+def poser_etat_initial(dossier: Path = None) -> bool:
+    """PREMIÈRE installation seulement (postinst, `configure` sans version précédente) : écrit l'état initial (AUTO par défaut,
+    ajout automatique selon `ajout_auto_initial` du TOML) s'il n'existe pas encore. Rend vrai s'il l'a écrit. Une box existante,
+    une mise à niveau ou un état déjà présent ne sont jamais touchés (#3374, I2)."""
+    d = dossier or DOSSIER_ETAT
+    f = d / "etat.json"
+    if f.exists() or f.is_symlink():
+        return False
+    ecrire_etat(etat_initial(_conf_paquet()), d)
+    return True
+
+
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
     """(état, erreur). Un état absent = POC inactif ; un état CORROMPU = POC inactif ET l'erreur est rendue (jamais d'état deviné)."""
     f = (dossier or DOSSIER_ETAT) / "etat.json"
     if not f.is_file():
-        return dict(ETAT_DEFAUT, clients=[]), None
+        return dict(ETAT_DEFAUT, clients=[], ignores=[]), None    # I2 : un état absent n'active JAMAIS l'ajout automatique
     try:
         return valider_etat(json.loads(f.read_text())), None
     except (ValueError, OSError) as e:
@@ -361,6 +423,21 @@ def ecrire_etat(etat: dict, dossier: Path = None) -> dict:
 
 # ── configuration Unbound ────────────────────────────────────────────────────
 
+def vues_protect(etat: dict, regles_actives: Optional[Dict[str, List[str]]] = None) -> Dict[str, Tuple[List[str], List[str]]]:
+    """Lot 3 (#3374, I1) : appareils en PROTECT qui ont des exceptions -> (domaines autorisés, domaines bloqués en plus). Ces appareils
+    reçoivent une vue propre `sbx-tv-block-<slug>` ; les autres gardent la vue commune `sbx-tv-block` (rendu inchangé)."""
+    out: Dict[str, Tuple[List[str], List[str]]] = {}
+    for c in etat.get("clients", []):
+        if c["mode"] != "block":
+            continue
+        s = _slug(c["nom"])
+        aut = sorted(set(etat.get("autorisations", {}).get(s, [])))
+        bl = sorted(set((regles_actives or {}).get(s, [])))
+        if aut or bl:
+            out[s] = (aut, bl)
+    return out
+
+
 def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[Dict[str, List[str]]] = None) -> str:
     """Drop-in Unbound du POC. Journalisation par requête + UNE VUE PAR MODE pour les appareils du périmètre.
 
@@ -375,12 +452,15 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
          "server:",
          "    log-queries: yes", "    log-replies: yes", "    log-local-actions: yes", "    log-tag-queryreply: yes"]
     suivis = [c for c in etat["clients"] if c["mode"] != "off"]
+    protect = vues_protect(etat, regles_actives)
     if etat["actif"]:
         for c in suivis:
             if not IP_SURE_RE.fullmatch(c["ip"]):
                 raise ErreurTV("adresse IP invalide")             # défense en profondeur : jamais autre chose que [0-9a-fA-F:.] dans la configuration
             hote = "/128" if ":" in c["ip"] else "/32"
             vue = f"sbx-tv-auto-{_slug(c['nom'])}" if c["mode"] == "auto" else f"sbx-tv-{c['mode']}"
+            if c["mode"] == "block" and _slug(c["nom"]) in protect:
+                vue = f"sbx-tv-block-{_slug(c['nom'])}"           # exceptions de l'appareil (lot 3) : vue propre
             L.append(f"    access-control-view: {c['ip']}{hote} {vue}")
         # Autorisations (#1965) : un appareil en mode auto avec puits voit le puits global ; `local-zone-override` l'exempte d'un nom, SANS toucher aux autres clients
         # (mesuré sur Unbound 1.17.1 : fonctionne même dans une vue view-first, ce qu'une zone « transparent » de la vue ne fait pas).
@@ -400,6 +480,24 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
         for d in sorted(table):
             L.append(f'    local-zone: "{d}." always_nxdomain')
         L.append('    local-zone: "." transparent')
+        # PROTECT avec exceptions (lot 3, #3374) : « autoriser » prime sur la liste livrée (zone transparente plus précise, et la zone de
+        # liste du même nom est omise) ; « bloquer » ajoute un blocage. Une zone n'apparaît qu'une fois par vue.
+        for nom, (aut, bl) in sorted(protect.items()):
+            zones: Dict[str, str] = {}
+            for d in list(aut) + list(bl):
+                if valider_domaine(d) != d:
+                    raise ErreurTV("domaine d'exception invalide")
+            for d in sorted(table):
+                zones[d] = "always_nxdomain"
+            for d in bl:
+                zones[d] = "always_nxdomain"
+            for d in aut:
+                zones[d] = "transparent"
+            L.append("view:")
+            L.append(f'    name: "sbx-tv-block-{nom}"')
+            for d in sorted(zones):
+                L.append(f'    local-zone: "{d}." {zones[d]}')
+            L.append('    local-zone: "." transparent')
         # Mode auto : UNE vue par appareil, avec ses seules règles actives (essai ou confirmées).
         for nom in sorted({_slug(c["nom"]) for c in suivis if c["mode"] == "auto"}):
             L.append("view:")
@@ -448,13 +546,13 @@ class Analyseur:
         if m:
             if len(self._actions) > 4096:                          # un client qui boucle ne fait pas grossir la mémoire
                 self._actions.clear()
-            self._actions[(m["client"], m["qname"].lower().rstrip("."), m["qtype"])] = m["action"]
+            self._actions[(m["client"], domaine_reel(m["qname"].lower().rstrip(".")), m["qtype"])] = m["action"]
             return None
         m = RE_REPLY.search(ligne)
         if not m:
             return None
         ts = RE_TS.match(ligne)
-        client, qname, qtype, rcode = m["client"], m["qname"].lower().rstrip("."), m["qtype"], m["rcode"]
+        client, qname, qtype, rcode = m["client"], domaine_reel(m["qname"].lower().rstrip(".")), m["qtype"], m["rcode"]
         action = self._actions.pop((client, qname, qtype), None)
         if action in ACTIONS_BLOQUANTES:
             decision = "BLOCKED"
@@ -650,11 +748,13 @@ class Magasin:
             a += list(clients)
         out: Dict[str, Dict[str, dict]] = {}
         with self._cx() as cx:
-            for client, domaine, n, b, j in cx.execute(
-                    "SELECT client, domaine, SUM(hits), SUM(CASE WHEN decision='BLOCKED' THEN hits ELSE 0 END), MAX(jour) FROM dnstv_counts "
+            for client, domaine, n, b, j, j0 in cx.execute(
+                    "SELECT client, domaine, SUM(hits), SUM(CASE WHEN decision='BLOCKED' THEN hits ELSE 0 END), MAX(jour), MIN(jour) FROM dnstv_counts "
                     f"WHERE {' AND '.join(w)} GROUP BY client, domaine", a):
                 debut = calendar.timegm(time.strptime(j, "%Y-%m-%d")) if j else 0      # _jour() est en UTC
-                out.setdefault(client, {})[domaine] = {"requetes": int(n), "bloquees": int(b), "derniere": debut, "precision": "jour"}
+                premiere = calendar.timegm(time.strptime(j0, "%Y-%m-%d")) if j0 else 0  # lot 3 : « nouveau » sur une fenêtre
+                out.setdefault(client, {})[domaine] = {"requetes": int(n), "bloquees": int(b), "derniere": debut, "precision": "jour",
+                                                       "premiere": premiere}
             wr = ["1=1"] if clients is None else ["client IN (%s)" % ",".join("?" * len(clients))]
             for client, domaine, t in cx.execute(f"SELECT client, domaine, MAX(ts) FROM dnstv_recents WHERE {wr[0]} GROUP BY client, domaine",
                                                  list(clients or [])):

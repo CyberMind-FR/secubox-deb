@@ -19,7 +19,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
+from api import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
 
@@ -40,13 +40,59 @@ CACHE_CLASSIFICATION_S = 300
 def ecrire_cache_classification(etat, taxo, magasin, regles, maintenant) -> None:
     """Cache de GET /adblock-tv/classification (#3374) : recalculé au plus toutes les 5 min ; un échec ne fait jamais échouer le moteur."""
     try:
-        c = dnstv_taxonomie.lire_cache()
-        if c and 0 <= maintenant - int(c.get("genere", 0)) < CACHE_CLASSIFICATION_S:
+        g = dnstv_analyse.genere()                                # lot 3 : l'horodatage seul, sans relire le cache
+        if g is not None and 0 <= maintenant - g < CACHE_CLASSIFICATION_S:
             return
         obs = magasin.observations(dnstv._jour(maintenant - 30 * 86400))
-        dnstv_taxonomie.ecrire_cache(dnstv_taxonomie.construire_classification(etat, taxo, obs, regles.liste()), maintenant)
+        dnstv_analyse.ecrire_cache(dnstv_taxonomie.construire_classification(etat, taxo, obs, regles.liste()), maintenant,
+                                   etat=etat, regles=regles.liste())
     except Exception as e:                                       # noqa: BLE001
         print(f"cache de classification non écrit : {type(e).__name__}", file=sys.stderr)
+
+
+class _SansMoteur(Exception):
+    """Rien à faire pour le moteur, mais une reprise de pause a changé l'état : l'application reste due."""
+
+
+def audit_reprise(noms: list, executer=None) -> None:
+    """Reprise automatique dans audit.log (origine auto, acteur « moteur ») par le verbe borné `audit-protection` ; au mieux : la reprise
+    RÉTABLIT la protection, elle n'est jamais empêchée par l'audit (le changement de mode est aussi tracé par regles-appliquer)."""
+    import json
+    corps = json.dumps({"acteur": "moteur", "origine": "auto", "geste": "reprise", "cibles": sorted(noms)[:64], "minutes": None,
+                        "domaine": None, "type": None})
+    try:
+        r = (executer or (lambda: subprocess.run(["sudo", "-n", CTL, "audit-protection"], input=corps, capture_output=True, text=True,
+                                                 timeout=30)))()
+        if r.returncode != 0:
+            print("audit de la reprise refusé : " + (r.stderr or "").strip()[:120], file=sys.stderr)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"audit de la reprise impossible : {type(e).__name__}", file=sys.stderr)
+
+
+def reprendre_pauses(etat: dict, now: int) -> list:
+    """Lot 3 (#3374) : reprise AUTOMATIQUE des pauses échues (modes d'avant restaurés, sauf adresse changée entre-temps par
+    l'administrateur), journal « reprise ». Sous le verrou des règles. Fichier des pauses illisible : rien n'est repris (tracé)."""
+    try:
+        pauses = dnstv_protection.charger_pauses()
+    except dnstv_protection.ErreurProtection as e:
+        print(f"pauses illisibles, aucune reprise : {e}", file=sys.stderr)
+        return []
+    repris = dnstv_protection.reprendre(etat, pauses, None, now, echues=True)
+    if repris:
+        audit_reprise(repris)
+        dnstv.ecrire_etat(etat)
+        (dnstv.DOSSIER_ETAT / ".a-appliquer").touch()          # l'état restauré DOIT être appliqué, même si la suite échoue
+        try:
+            dnstv_protection.ecrire_pauses(pauses)
+        except (OSError, dnstv_protection.ErreurProtection) as e:
+            # la pause restée inscrite sera oubliée au passage suivant : ses adresses ne sont plus en observe
+            print(f"pauses non réécrites après reprise : {type(e).__name__}", file=sys.stderr)
+        try:
+            macs = {c["nom"]: c.get("mac") for c in etat["clients"] if c.get("mac")}
+            dnstv_journal.ajouter([dnstv_journal.entree(now, n, macs.get(n), "", "", "reprise", "auto", "fin de pause") for n in repris])
+        except (OSError, ValueError) as e:
+            print(f"journal des décisions non écrit : {type(e).__name__}", file=sys.stderr)
+    return repris
 
 
 def voisins_du_lan() -> dict:
@@ -83,6 +129,7 @@ def rafraichir_feed(now: int, voisins=None, locales=None, passerelles=None) -> b
 
 def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None) -> int:
     now = maintenant or int(time.time())
+    dnstv_analyse.menage(maintenant=now)                      # lot 3 : ancien JSON de 16 Mo et temporaires orphelins, même moteur inactif
     try:
         rafraichir_feed(now, voisins, locales, passerelles)               # avant toute sortie anticipée : utile même sans appareil en mode auto
     except Exception as e:                                           # noqa: BLE001 — ceinture et bretelles : jamais de panne du moteur par le fichier d'échange
@@ -96,8 +143,12 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             if erreur:
                 print(erreur, file=sys.stderr)
                 return 1
+            if reprendre_pauses(etat, now):
+                etat_modifie = True
             if not etat["actif"] or (not dnstv_auto.appareils(etat) and not etat.get("ajout_auto")):
-                return 0
+                if not etat_modifie:
+                    return 0
+                raise _SansMoteur
             # #3374 : état v1 -> v2 (par MAC), une seule fois, sans rien perdre ni changer un mode ; seulement quand le moteur travaille (inactif = il n'écrit rien)
             try:
                 migration = dnstv_appareils.migrer_fichier()
@@ -111,6 +162,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
                     return 1
             reglage = dnstv_auto.reglage_depuis(etat)
             regles = dnstv_regles.charger()
+            avant_regles = regles.liste()                         # lot 3 : le journal des décisions se déduit de l'historique des règles
             # #3374 : taxonomie unique (référence TV, listes, services, profil, corrections manuelles) ; la garde du moteur s'y appuie.
             # Fermé en cas d'échec : corrections illisibles = ni ajout automatique (ni profil posé), ni essai, ni confirmation automatiques.
             corrections_lisibles = True
@@ -147,6 +199,12 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             if res["agrege"] != dnstv_profil.charger_agrege():
                 dnstv_profil.ecrire_agrege(res["agrege"])
             ecrire_cache_classification(etat, taxo, magasin, regles, now)
+            try:
+                dnstv_journal.ajouter(dnstv_journal.depuis_regles(avant_regles, regles.liste(), etat, lambda d: taxo.classer(d)["categorie"]))
+            except (OSError, ValueError) as e:
+                print(f"journal des décisions non écrit : {type(e).__name__}", file=sys.stderr)
+    except _SansMoteur:
+        pass
     except dnstv_regles.ErreurRegle as e:
         print(f"règles illisibles, rien n'est changé : {e}", file=sys.stderr)
         return 1

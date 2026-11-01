@@ -483,6 +483,10 @@
    "espace": "services",
    "objet": "SERVICE"
   },
+  "tv-privacy": {
+   "espace": "protection",
+   "objet": "DEVICE"
+  },
   "users": {
    "espace": "identite",
    "objet": "USER"

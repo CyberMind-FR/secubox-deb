@@ -166,7 +166,7 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 
 | Route | Garde | Rôle |
 |---|---|---|
-| `GET /adblock-tv/classification?mac=&categorie=&limite=` | `require_lecture_nominative` | lu dans le cache `classification-cache.json` (0640) que le moteur AUTO rafraîchit toutes les 5 min ; cache absent : `domaines: []`, `cache: false`. Par ligne : `domaine`, `mac` **tronquée**, `categorie`, `source` (`liste`, `apprentissage`, `ndpi`, `manuelle`, `profil`, ou `aucune`), `confiance`, `derniere_observation` **au jour**, `requetes`, `bloquees`, `ancienne`, `protegee` |
+| `GET /adblock-tv/classification?mac=&categorie=&limite=` | `require_lecture_nominative` | lu dans le cache `classification-cache.db` (SQLite découpé depuis 1.20.0, 0640) que le moteur AUTO rafraîchit toutes les 5 min ; cache absent : `domaines: []`, `cache: false`. Par ligne : `domaine`, `mac` **tronquée**, `categorie`, `source` (`liste`, `apprentissage`, `ndpi`, `manuelle`, `profil`, ou `aucune`), `confiance`, `derniere_observation` **au jour**, `requetes`, `bloquees`, `ancienne`, `protegee` |
 | `GET /adblock-tv/classification/detail?mac=&categorie=&limite=` | `require_jwt` | même cache, MAC complète, `ips`, horodatage à la seconde (`precision`) |
 | `POST /adblock-tv/classification` | `require_jwt` | `{"domaine", "categorie" \| null, "mac" \| null}` (`extra=forbid`) : correction manuelle, par MAC ou pour toute la maison ; `null` la retire ; refusée si trop large (suffixe public, parent d'une entrée protégée de la référence) ; auditée dans `audit.log` par `sudo secubox-adguard-tv audit-classification` (enregistrement sur l'entrée standard, revalidé par root) AVANT écriture ; aucun effet DNS immédiat |
 
@@ -197,6 +197,51 @@ signalé ; « Corriger le profil » → `POST /adblock-tv/appareils/{mac}/profil
 (`GET /adblock-tv/classification/detail`, repli sur `/classification` sans droits d'administrateur ; filtres appareil et
 catégorie ; « Afficher plus » augmente `limite` par 100 jusqu'à 1000, la route n'a pas de décalage ; « Corriger » →
 `POST /adblock-tv/classification` après confirmation). Session d'administrateur requise ; toute donnée reçue est posée par `textContent` ; CSP stricte en `<meta>` (`default-src 'self'`, script et style en ligne autorisés par leur sha256, vérifiés par `tests/test_page_tv_privacy_3374.py`).
+
+### Protection (lot 3, 1.20.0, #3374)
+
+Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot3-design.md`. Message affiché partout : « SBX TV Privacy bloque
+les pubs que la TV va chercher, pas celles qu'un service insère dans sa propre vidéo ».
+
+- **Modes** : `OBSERVE`, `PROTECT` (l'ancien `block`), `AUTO`, `OFF`. `POST /adblock-tv/mode` et `/clients` acceptent `protect`
+  (toute casse) et `block` ; le stockage garde `block` (aucune migration) ; les réponses ajoutent `mode_nom`. Première installation
+  seulement (postinst `configure` sans version précédente, aucun `etat.json`) : l'état initial est posé avec `mode_defaut = auto` et `ajout_auto` pris dans `[adblock_tv] ajout_auto_initial` (vrai dans le TOML livré) ; un état absent ne l'active jamais.
+- **Suffixe de recherche** : `x.doubleclick.net.home` (ou `.lan`, `.localdomain`) est ramené au domaine réel à l'ingestion, à la
+  classification et dans les agrégats. Référence : `license.oqee.net` DRM ; `api.oqee.net`, `img1/img2.oqee.net`,
+  `stream.proxad.net` STREAMING (mesure gk2 2026-11-01). Une correction de catégorie qui couvrirait une entrée protégée de
+  `services.txt` (ex. `free.fr`, `proxad.net`) est refusée.
+- **Cache** : `classification-cache.db` (SQLite, remplacé atomiquement par le moteur, l'ancien JSON est supprimé) ; toutes les
+  lectures sont des requêtes bornées.
+
+| Route | Garde | Effet |
+|---|---|---|
+| `GET /adblock-tv/protection/analyse` | `require_lecture_nominative` | `fenetre` (1h, 24h, 7j, 30j), `mac`, `categorie`, `decision` (bloque, autorise, candidat, protege), `source` (répétables, 10 au plus), `confiance_min/max`, `q` (64 car. `[a-z0-9.-]`), `domaine`/`racine` exacts, `agreger` (domaine, racine, categorie, appareil, aucun), `decalage`, `limite` ≤ 200 (25) : `metriques` (domaines, requêtes, part bloquée, par catégorie, top 5 domaines et appareils, nouveaux), `agregats`, `lignes`, `total`, `admin`. MAC tronquée hors administrateur réel |
+| `GET /adblock-tv/protection/analyse.csv` | `require_jwt` | export CSV du résultat filtré (50 000 lignes au plus, cellules neutralisées) |
+| `GET /adblock-tv/protection/evenements?heures=1\|24&detail=` | `require_lecture_nominative` | requêtes récentes agrégées par appareil × domaine réel (occurrences, premier, dernier, décision dominante, nouveau, erreurs), blocages puis nouveautés puis fréquence ; `detail=1` administrateur |
+| `POST /adblock-tv/protection/observe` | `require_jwt` | `{"appareil": nom \| null}` : retour en OBSERVE (un ou tous), pause oubliée |
+| `POST /adblock-tv/protection/pause` | `require_jwt` | `{"appareil", "minutes": 15\|60\|240}` : OBSERVE jusqu'à l'échéance (`pauses.json`), reprise automatique par `secubox-adguard-auto` |
+| `POST /adblock-tv/protection/reprendre` | `require_jwt` | reprise immédiate (modes d'avant) |
+| `GET/POST /adblock-tv/protection/exceptions` | lecture nominative / `require_jwt` | modèle unique appareil × domaine (`exceptions.json`) : `autoriser` (règle rejetée, jamais reproposée, + autorisation au puits si AUTO) ou `bloquer` (règle confirmée par l'administrateur) ; la vue unifiée ajoute les autorisations au puits et les suspects légitimes ; hors champ documentés : liste blanche globale de `main.py`, adult-exempt |
+| `GET /adblock-tv/protection/journal?heures=&detail=` | `require_lecture_nominative` | journal des décisions (`decisions.jsonl`, 1 Mio + une rotation, MAC tronquée), agrégé par appareil × domaine × action ; `detail=1` administrateur |
+| `GET /adblock-tv/protection/journal.csv` | `require_jwt` | export CSV du journal |
+| `GET /adblock-tv/protection/diagnostic` | `require_lecture_nominative` | erreurs DNS 24 h agrégées, exceptions, pauses, retours arrière 7 j, modes |
+| `GET /adblock-tv/protection/usager/tv` | **`require_personne`** | liste minimale des TV du périmètre : `id`, `nom`, `protege`, `pause_jusqu_a` (ni MAC, ni adresse, ni domaine) |
+| `POST /adblock-tv/protection/usager/debloquer` | **`require_personne`** | `{tv: id\|"toutes", geste: "pause", minutes: 15\|60\|240\|1440}` (`extra=forbid`) : une PAUSE de 24 h au plus, reprise automatique ; jamais d'observation sans échéance (réservée à l'administrateur) ; 5 gestes appliqués / 10 min par porteur, 20 pour la box (429) ; `sub` absent : 403 ; journal `origine=usager` |
+
+Chaque geste est d'abord écrit dans `audit.log` par `sudo secubox-adguard-tv audit-protection` (JSON sur l'entrée standard :
+acteur, origine usager|admin|auto, geste, appareils, durée, domaine, type ; revalidé par root ; un échec refuse le geste). Les
+exceptions valent en AUTO et en PROTECT (vue propre `sbx-tv-block-<appareil>` : « autoriser » prime sur la liste livrée,
+« bloquer » ajoute un NXDOMAIN) ; « bloquer » est refusé en OBSERVE (sans pause), le plafond d'autorisations rend 409, et
+bloquer une catégorie protégée autre qu'INCONNU exige `force`. Événements et diagnostic : ni adresse ni motif pour un lecteur
+qui n'est pas administrateur réel. Chaque geste qui change un mode passe ensuite par `sudo secubox-adguard-tv apply` (audit des changements de mode dans `audit.log`) ou
+`regles-appliquer` ; en cas d'échec, état, pauses et règles reviennent à leur version précédente. Écritures sous le verrou des
+règles, fichiers 0640 écrits atomiquement, liens symboliques refusés. Le journal se déduit de l'historique des règles (moteur
+et routes). Pilotage : les gestes administrateur sont ouverts au relais (`routes-ouvertes.d`), pas la route d'usager.
+
+Page `/tv-privacy/` (1.20.0) : dans la coque de l'administration (menu latéral `/shared/sidebar.js` chargé hors `?embed=1` et hors
+démonstration ; CSP `script-src 'self'` + sha256, idem `style-src`), cinq onglets : Vue générale (bouton « Ça ne marche plus ? Je
+débloque », événements agrégés 1 h / 24 h dépliables), Équipements, Analyseur (métriques, filtres combinables retirables un à un,
+agrégats dépliables, listing 25 par page, export CSV), Protection (modes, OBSERVE, pause, reprise, exceptions, journal), Diagnostic.
 
 ## Capteur DNS d'Actor Intelligence (#2240)
 

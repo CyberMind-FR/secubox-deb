@@ -47,7 +47,7 @@ CORRESPONDANCE = {
 
 CONFIANCE = {"manuelle": 100, "reference": 90, "liste": 80, "services": 70, "profil": 70}
 FICHIER = "classification.json"
-FICHIER_CACHE = "classification-cache.json"
+FICHIER_CACHE = "classification-cache.db"           # lot 3 : SQLite découpé (l'ancien JSON de 16 Mo est supprimé)
 MODE_FICHIER = 0o640
 SOURCE_AUCUNE = "aucune"                              # rien ne classe le domaine (hors SOURCES : ce n'est pas une source)
 # Suffixes publics : une correction posée là couvrirait des milliers de domaines. Les SUFFIXES_2 du détecteur d'anomalies + suffixes français.
@@ -131,9 +131,12 @@ def _valider_manuelle(e) -> dict:
     return {"domaine": _domaine(e.get("domaine")), "mac": _mac(e.get("mac", "")), "categorie": cat, "maj": maj}
 
 
-def verifier_portee(domaine: str, categorie: Optional[str], reference: Iterable[Tuple[str, str]] = ()) -> None:
-    """Refuse une correction trop large : TLD seul, suffixe public (co.uk, com.fr…), ou domaine parent qui rendrait bloquable une
-    entrée protégée de la référence TV (ftven.fr -> PUBLICITE couvrirait k7.ftven.fr, nécessaire à la lecture)."""
+def verifier_portee(domaine: str, categorie: Optional[str], reference: Iterable[Tuple[str, str]] = (),
+                    services: Iterable[Tuple[str, str]] = ()) -> None:
+    """Refuse une correction trop large : TLD seul, suffixe public (co.uk, com.fr…), domaine parent qui rendrait bloquable une
+    entrée protégée de la référence TV (ftven.fr -> PUBLICITE couvrirait k7.ftven.fr, nécessaire à la lecture), ou domaine qui
+    couvrirait une entrée PROTÉGÉE de services.txt, elle-même comprise (free.fr -> PUBLICITE rendrait bloquable mafreebox.free.fr, #3374 lot 3).
+    `services` : couples (suffixe, type de service)."""
     if isinstance(domaine, str) and "." not in domaine.strip(".") and domaine.strip():
         raise ErreurTaxonomie("correction trop large : un domaine de premier niveau seul est un suffixe public")
     d = domaine.strip().lower().rstrip(".") if isinstance(domaine, str) else ""
@@ -144,13 +147,17 @@ def verifier_portee(domaine: str, categorie: Optional[str], reference: Iterable[
         if couvertes:
             raise ErreurTaxonomie(f"correction trop large : {d} couvre {couvertes[0]} (catégorie protégée de la référence) ; "
                                   "corriger le sous-domaine visé")
+        srv = sorted(x for x, t in services if depuis_ancienne(t) in PROTEGEES and (x == d or x.endswith("." + d)))
+        if srv:
+            raise ErreurTaxonomie(f"correction trop large : {d} couvre {srv[0]} (service protégé de services.txt) ; "
+                                  "corriger le sous-domaine visé")
 
 
 def corriger(manuelles: Manuelles, domaine: str, mac: Optional[str], categorie: Optional[str], maintenant: int,
-             reference: Iterable[Tuple[str, str]] = ()) -> Manuelles:
+             reference: Iterable[Tuple[str, str]] = (), services: Iterable[Tuple[str, str]] = ()) -> Manuelles:
     """Pose (ou retire si `categorie` est None) la correction manuelle d'un domaine, pour une MAC ou pour toute la maison. Pur.
     `reference` : entrées de la référence TV, pour refuser une correction qui en couvrirait une protégée (voir `verifier_portee`)."""
-    verifier_portee(domaine, categorie, reference)
+    verifier_portee(domaine, categorie, reference, services)
     d = _domaine(domaine.lower() if isinstance(domaine, str) else domaine)
     m = _mac(mac)
     out = dict(manuelles)
@@ -246,7 +253,7 @@ class Taxonomie:
                 "protegee": not blocage_auto_permis(categorie)}
 
     def classer(self, domaine: str, macs: Iterable[str] = ()) -> dict:
-        d = dnstv.valider_domaine(domaine) if isinstance(domaine, str) else None
+        d = dnstv.valider_domaine(dnstv.domaine_reel(domaine.strip().lower().rstrip("."))) if isinstance(domaine, str) else None
         if not d:
             return self._resultat(str(domaine)[:253], "INCONNU", SOURCE_AUCUNE, 0)
         suff = _suffixes(d)
@@ -324,12 +331,14 @@ def construire_classification(etat: dict, taxo: Taxonomie, observations: Dict[st
         e = lignes.get(cle)
         if e is None:
             e = lignes[cle] = dict(taxo.classer(domaine, [mac] if mac else []), mac=mac, ips=[], requetes=0, bloquees=0,
-                                   derniere_observation=None, precision=None)
+                                   derniere_observation=None, precision=None, premiere_observation=None)
         if ip and ip not in e["ips"]:
             e["ips"].append(ip)
         if obs:
             e["requetes"] += obs["requetes"]
             e["bloquees"] += obs["bloquees"]
+            if obs.get("premiere") and (e["premiere_observation"] is None or obs["premiere"] < e["premiere_observation"]):
+                e["premiere_observation"] = obs["premiere"]
             if obs["derniere"] and (e["derniere_observation"] is None or obs["derniere"] > e["derniere_observation"]):
                 e["derniere_observation"], e["precision"] = obs["derniere"], obs["precision"]
 
@@ -354,34 +363,19 @@ def construire_classification(etat: dict, taxo: Taxonomie, observations: Dict[st
     return sorted(lignes.values(), key=lambda e: (-(e["derniere_observation"] or 0), e["domaine"], e["mac"] or ""))
 
 
-def ecrire_cache(lignes: List[dict], maintenant: int, dossier: Optional[Path] = None) -> None:
-    """Cache de la classification (#3374, PERF-CACHE) : écriture atomique, 0640 (données personnelles : MAC, adresses)."""
-    d = dossier or dnstv.DOSSIER_ETAT
-    d.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=d, prefix=".classification-cache.")
+def ecrire_cache(lignes: List[dict], maintenant: int, dossier: Optional[Path] = None, **kw) -> None:
+    """Cache de la classification (#3374) : depuis le lot 3, base SQLite découpée (`dnstv_analyse`), 0640, remplacement atomique."""
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as h:
-            json.dump({"version": 1, "genere": int(maintenant), "domaines": lignes}, h, ensure_ascii=False)
-        os.chmod(tmp, MODE_FICHIER)
-        os.replace(tmp, d / FICHIER_CACHE)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
-        raise
+        from . import dnstv_analyse
+    except ImportError:
+        from api import dnstv_analyse
+    dnstv_analyse.ecrire_cache(lignes, maintenant, dossier, **kw)
 
 
 def lire_cache(dossier: Optional[Path] = None) -> Optional[dict]:
-    """Cache ou None (absent, lien symbolique, illisible) : l'API ne recalcule jamais de façon synchrone."""
-    f = (dossier or dnstv.DOSSIER_ETAT) / FICHIER_CACHE
+    """Cache entier ou None (absent, lien symbolique, illisible). Compatibilité : l'API passe par `dnstv_analyse` (requêtes bornées)."""
     try:
-        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW)
-    except OSError:
-        return None
-    try:
-        with os.fdopen(fd, "r", encoding="utf-8") as h:
-            brut = json.loads(h.read(16 * 1024 * 1024))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(brut, dict) or brut.get("version") != 1 or not isinstance(brut.get("domaines"), list):
-        return None
-    return brut
+        from . import dnstv_analyse
+    except ImportError:
+        from api import dnstv_analyse
+    return dnstv_analyse.toutes(dossier)

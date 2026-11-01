@@ -54,6 +54,12 @@ main { flex: 1; padding: 0 16px 96px; }
   background: transparent; font: inherit; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center;
 }
 .message { color: var(--orange); min-height: 20px; }
+/* « Ça ne marche plus ? Je débloque » (#3374) */
+.debloque { margin-top: 12px; border-color: var(--vert); }
+.choix { min-height: 48px; border-radius: 12px; border: 1px solid var(--bord); background: #0b1428; color: var(--texte); font: inherit; padding: 0 12px; }
+.gestes { display: flex; flex-wrap: wrap; gap: 8px; }
+.bouton.attention { border-color: var(--orange); color: var(--orange); }
+.bouton[disabled] { opacity: 0.5; }
 .onglets {
   position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr);
   background: rgba(7, 13, 28, 0.94); border-top: 1px solid var(--bord); padding-bottom: env(safe-area-inset-bottom);

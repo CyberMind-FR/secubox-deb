@@ -23,6 +23,10 @@ chemins = [
     "^/adblock-tv/auto/regles/[^/]+/(essayer|rejeter|confirmer|retirer|rouvrir)$",
     "^/adblock-tv/simple/appareils/[^/]+/protection$",
     "^/adblock-tv/simple/suspects/legitime$",
+    # Lot 3 SBX TV PRIVACY (#3374) : gestes de l'administrateur depuis la page /tv-privacy/ relayée. La route LAMBDA
+    # `/adblock-tv/protection/usager/debloquer` n'est PAS ouverte : le kiosque appelle l'API locale du maître avec la session
+    # de l'usager (et `require_personne` refuse de toute façon le porteur délégué).
+    "^/adblock-tv/protection/(observe|pause|reprendre|exceptions)$",
 ]
 
 [[routes]]

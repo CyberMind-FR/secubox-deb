@@ -24,4 +24,11 @@ servent que leurs API, l'interface tourne ailleurs. Première version : téléph
 - **Sécurité** : CSP stricte (aucun script ni style intégré, `default-src 'none'`), en-têtes posés dans la location nginx
   `/etc/nginx/secubox-routes.d/kiosque.conf`, derrière HAProxy → sbxwaf → nginx comme le reste. Le service worker ne met en cache
   que les fichiers statiques de `/kiosque/`, jamais une réponse d'API.
+- **« Ça ne marche plus ? Je débloque » (0.3.0, #3374)** : carte de l'écran Sécurité. La TV est choisie par son nom (ou
+  « toutes les TV ») dans `GET /api/v1/ad-guard/adblock-tv/protection/usager/tv` (nom seulement : ni MAC, ni adresse, ni
+  domaine) ; `POST …/protection/usager/debloquer` `{tv, geste: pause, minutes: 15|60|240|1440}` met la protection en pause
+  24 h au plus, avec reprise automatique ; l'usager ne repasse jamais une TV en observation sans échéance (réservé à l'admin). Garde `require_personne` côté ad-guard (personne admise, jamais le
+  tableau de bord anonyme ni un invité), débit limité (5 gestes / 10 min). Jamais de durcissement, de liste ni d'historique.
+  C'est la seule écriture du kiosque. Retour visuel : « protection en pause pour TV salon pendant 1 h ». Le kiosque appelle
+  l'API locale du maître : la route n'est pas ouverte au relais du pilotage.
 - **Ouvrir une box** : même chemin que la Flotte (box distante : `connexion-vhost` du maître ; box locale : son admin relayé).

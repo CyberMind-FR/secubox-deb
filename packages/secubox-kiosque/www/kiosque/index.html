@@ -45,6 +45,19 @@
       <div class="carte bientot"><span class="libelle">Bans récents</span><span class="detail">Bientôt : liste des bans et alertes.</span></div>
       <div class="carte bientot"><span class="libelle">Protection renforcée</span><span class="detail">Bientôt : action depuis le kiosque.</span></div>
     </div>
+    <div class="carte large debloque" id="debloque">
+      <span class="libelle">Ça ne marche plus ? Je débloque</span>
+      <label class="detail" for="k-tv">TV concernée</label>
+      <select id="k-tv" class="choix"><option value="toutes">Toutes les TV</option></select>
+      <div class="gestes">
+        <button type="button" class="bouton" data-minutes="15">Pause 15 min</button>
+        <button type="button" class="bouton" data-minutes="60">Pause 1 h</button>
+        <button type="button" class="bouton" data-minutes="240">Pause 4 h</button>
+        <button type="button" class="bouton" data-minutes="1440">Pause 24 h</button>
+      </div>
+      <strong id="k-retour" class="valeur petite" role="status" aria-live="polite"></strong>
+      <span class="detail">SBX TV Privacy bloque les pubs que la TV va chercher, pas celles qu'un service insère dans sa propre vidéo. La pause reprend toute seule, 24 h au plus.</span>
+    </div>
   </section>
 
   <section id="ecran-reseau" class="ecran" aria-labelledby="t-reseau">

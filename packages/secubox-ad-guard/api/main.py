@@ -76,6 +76,12 @@ except ImportError:                                  # lancé hors paquet (tests
     from api import direct, dnstv, stats_standard
     from api.dnstv_routes import router as _tv_router
 app.include_router(_tv_router)
+# lot 3 SBX TV PRIVACY (#3374) : routeur séparé, même préfixe /adblock-tv (déclaré dans son module, lu par les gardes du pilotage)
+try:
+    from .dnstv_lot3_routes import router as _tv_lot3_router
+except ImportError:                                  # lancé hors paquet
+    from api.dnstv_lot3_routes import router as _tv_lot3_router
+app.include_router(_tv_lot3_router)
 
 
 class DeviceType(str, Enum):

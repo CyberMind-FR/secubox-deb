@@ -27,9 +27,9 @@ from secubox_core import auth as _auth
 from secubox_core.auth import est_admin_reel, require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from . import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from api import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 logger = logging.getLogger("secubox.ad-guard.adblock-tv")
@@ -151,7 +151,8 @@ def declarer_client(c: ClientIn):
         etat = _etat()
         try:
             ip = dnstv._ip(c.ip)
-            etat["clients"] = [x for x in etat["clients"] if x["ip"] != ip] + [{"ip": ip, "nom": c.nom or ip, "mode": c.mode}]
+            mode = dnstv.normaliser_mode(c.mode)
+            etat["clients"] = [x for x in etat["clients"] if x["ip"] != ip] + [{"ip": ip, "nom": c.nom or ip, "mode": mode}]
             dnstv.ecrire_etat(etat)
         except dnstv.ErreurTV as e:
             _refuse(e)
@@ -174,11 +175,22 @@ def retirer_client(ip: str):
         return {"etat": etat, "application": _ctl("apply")}
 
 
+def _avec_noms(etat: dict) -> dict:
+    """Copie de l'état pour une réponse : chaque client garde `mode` (valeur stockée, lisible par l'ancien code) et reçoit `mode_nom`
+    (OBSERVE, PROTECT, AUTO, OFF ; lot 3, #3374)."""
+    e = copy.deepcopy(etat)
+    for c in e.get("clients", []):
+        c["mode_nom"] = dnstv.nom_mode(c.get("mode"))
+    return e
+
+
 @router.post("/mode", dependencies=[Depends(require_jwt)])
 def changer_mode(m: ModeIn):
-    """Bascule dynamique OBSERVE / BLOCK (ou off) : un appareil, ou tous ceux du périmètre."""
-    if m.mode not in dnstv.MODES:
-        raise HTTPException(422, "mode inconnu (off, observe, block, auto)")
+    """Bascule dynamique OBSERVE / PROTECT (alias rétrocompatible `block`) / AUTO (ou off) : un appareil, ou tous ceux du périmètre."""
+    try:
+        mode = dnstv.normaliser_mode(m.mode)
+    except dnstv.ErreurTV as e:
+        raise HTTPException(422, str(e)) from None
     with _verrou():
         etat = _etat()
         try:
@@ -186,17 +198,31 @@ def changer_mode(m: ModeIn):
         except dnstv.ErreurTV as e:
             _refuse(e)
         touches = 0
+        noms = set()
         for c in etat["clients"]:
             if cible is None or c["ip"] == cible:
-                c["mode"] = m.mode
+                c["mode"] = mode
                 touches += 1
+                noms.add(c["nom"])
         if not touches:
             raise HTTPException(404, "aucun appareil concerné")
         try:
             dnstv.ecrire_etat(etat)
         except dnstv.ErreurTV as e:
             _refuse(e)
-        return {"etat": etat, "application": _ctl("apply")}
+        _oublier_pauses(noms)
+        return {"etat": _avec_noms(etat), "application": _ctl("apply")}
+
+
+def _oublier_pauses(noms: set) -> None:
+    """Un mode choisi par l'administrateur l'emporte : la pause en cours de ces appareils est oubliée (aucune reprise ne l'écrasera)."""
+    try:
+        pauses = dnstv_protection.charger_pauses()
+        restantes = [x for x in pauses if x["appareil"] not in noms]
+        if len(restantes) != len(pauses):
+            dnstv_protection.ecrire_pauses(restantes)
+    except (OSError, dnstv_protection.ErreurProtection) as e:
+        logger.warning("pause non oubliée après changement de mode : %s", e)
 
 
 @router.get("/stats", dependencies=[Depends(require_lecture_nominative)])
@@ -561,6 +587,15 @@ def _appliquer_ou_annuler(ancien: "dnstv_regles.Regles") -> dict:
         raise
 
 
+def _journal_regles(avant: list, regles: "dnstv_regles.Regles") -> None:
+    """Journal des décisions (lot 3, #3374) : les pas d'historique ajoutés aux règles ; une erreur ne défait jamais le geste."""
+    try:
+        etat, _ = dnstv.lire_etat()
+        dnstv_journal.ajouter(dnstv_journal.depuis_regles(avant, regles.liste(), etat))
+    except (OSError, ValueError) as e:
+        logger.warning("journal des décisions non écrit : %s", type(e).__name__)
+
+
 # Les routes qui appellent le contrôleur sont SYNCHRONES (`def`) : FastAPI les exécute dans un fil, la boucle du groupe n'est pas gelée
 # pendant un sudo ou un éventuel rechargement complet d'Unbound.
 @router.post("/auto/regles/{rid}/{action}", dependencies=[Depends(require_jwt)])
@@ -581,7 +616,9 @@ def regle_action(rid: str, action: str):
         except dnstv_regles.ErreurRegle as e:
             raise HTTPException(422, str(e)) from e
         dnstv_regles.ecrire(regles)
-        return {"regle": r, "application": _appliquer_ou_annuler(ancien)}     # toujours : le contrôleur audite chaque transition effective
+        application = _appliquer_ou_annuler(ancien)                               # toujours : le contrôleur audite chaque transition effective
+        _journal_regles(ancien.liste(), regles)
+        return {"regle": r, "application": application}
 
 
 @router.post("/auto/appareils/{appareil}/ca-ne-marche-plus", dependencies=[Depends(require_jwt)])
@@ -596,7 +633,9 @@ def ca_ne_marche_plus(appareil: str):
         if not touches:
             return {"retirees": 0, "application": None}
         dnstv_regles.ecrire(regles)
-        return {"retirees": len(touches), "application": _appliquer_ou_annuler(ancien)}
+        application = _appliquer_ou_annuler(ancien)
+        _journal_regles(ancien.liste(), regles)
+        return {"retirees": len(touches), "application": application}
 
 
 @router.get("/auto/reglage", dependencies=[Depends(require_lecture_nominative)])
@@ -1055,16 +1094,16 @@ def _filtre_mac(mac: Optional[str]) -> Optional[str]:
 
 
 def _classification_filtree(mac: Optional[str], categorie: Optional[str], limite: int) -> tuple:
-    """(lignes filtrées, total, cache lu ?) depuis le cache écrit par le moteur AUTO ; aucun calcul lourd dans la requête."""
+    """(lignes filtrées, total, horodatage du cache) depuis le cache SQLite écrit par le moteur AUTO (lot 3) : requête bornée,
+    jamais le jeu complet relu à chaque appel."""
     m_filtre = _filtre_mac(mac)
     if categorie is not None and categorie not in dnstv_taxonomie.CATEGORIES:
         raise HTTPException(422, "catégorie inconnue")
-    cache = dnstv_taxonomie.lire_cache()
-    if cache is None:
-        return [], 0, None
-    out = [e for e in cache["domaines"] if isinstance(e, dict)
-           and (m_filtre is None or e.get("mac") == m_filtre) and (categorie is None or e.get("categorie") == categorie)]
-    return out[:max(1, min(int(limite), CLASSIFICATION_MAX))], len(out), cache.get("genere")
+    lignes, total, genere = dnstv_analyse.selection(limite=max(1, min(int(limite), CLASSIFICATION_MAX)), maintenant=int(time.time()),
+                                                    macs=[m_filtre] if m_filtre else [], categories=[categorie] if categorie else [])
+    for e in lignes:
+        e.pop("nom", None), e.pop("premiere_observation", None), e.pop("regle", None)
+    return lignes, total, genere
 
 
 def _reponse(lignes: list, total: int, genere) -> dict:
@@ -1119,8 +1158,9 @@ def classification_corriger(corps: ClassificationIn, jeton=Depends(require_jwt))
     with _verrou():
         try:
             avant = dnstv_taxonomie.charger_manuelles()
-            ref = dnstv_taxonomie.Taxonomie.depuis_dossier().reference.items()
-            apres = dnstv_taxonomie.corriger(avant, corps.domaine, m, corps.categorie, int(time.time()), reference=ref)
+            tx = dnstv_taxonomie.Taxonomie.depuis_dossier()
+            apres = dnstv_taxonomie.corriger(avant, corps.domaine, m, corps.categorie, int(time.time()), reference=tx.reference.items(),
+                                             services=tx.services.items())
         except dnstv_taxonomie.ErreurTaxonomie as e:
             raise HTTPException(422, str(e)) from e
         domaine = dnstv.valider_domaine(corps.domaine)
