@@ -17,6 +17,9 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   confirmer / légitime / plus tard, file d'actions différées auditée, apprentissage guidé par appareil désactivé par défaut).
   annuaire 0.17.4 (PR #3390). Mode LAN étudié (pseudo-routeur #2940 risqué : passerelle de tout le LAN, IPv4 seule) :
   essai sur TV banc à faire avec le propriétaire. Instabilité test_dnssensor_2240 → #3391.
+- ref #3374 : ad-guard 1.23.0 (PR #3394, lot 6 nettoyage) déployé gk2 : POST /detect et classeur naïf retirés, /devices et
+  /stats/by-device-type sur l'inventaire TV Privacy par MAC (require_jwt), README « Listes blanches » vérifié. #3393 ouverte :
+  /learn/thresholds ne peut pas écrire filters.json (agrégateur hors du groupe secubox-toolbox, déjà le cas avant).
 
 ## 2026-11-01 — SBX TV Privacy lots 1 à 3 déployés ; oublier un nœud l'oublie partout
 
