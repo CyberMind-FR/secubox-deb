@@ -22,10 +22,10 @@ def test_en_tete_spdx_et_titre():
     assert "<title>SBX TV Privacy</title>" in SRC
 
 
-def test_six_vues_en_onglets_accessibles():
-    for v in ("generale", "equipements", "applications", "analyseur", "protection", "diagnostic"):
+def test_sept_vues_en_onglets_accessibles():
+    for v in ("generale", "equipements", "applications", "direct", "analyseur", "protection", "diagnostic"):
         assert f'id="v-{v}" role="tabpanel"' in SRC and f'id="t-{v}" aria-controls="v-{v}"' in SRC
-    assert SRC.count('role="tab"') == 6 and "aria-selected" in SRC and 'role="tablist"' in SRC
+    assert SRC.count('role="tab"') == 7 and "aria-selected" in SRC and 'role="tablist"' in SRC
 
 
 def test_coque_de_l_administration_menu_lateral():
@@ -49,7 +49,8 @@ def test_routes_appelees_existantes_seulement():
     from api import dnstv_routes as r
     from api import dnstv_lot3_routes as l3
     from api import dnstv_lot4_routes as l4
-    existantes = {x.path.replace("/adblock-tv", "", 1) for x in [*r.router.routes, *l3.router.routes, *l4.router.routes]}
+    from api import dnstv_lot5_routes as l5
+    existantes = {x.path.replace("/adblock-tv", "", 1) for x in [*r.router.routes, *l3.router.routes, *l4.router.routes, *l5.router.routes]}
     citees = {c for c in re.findall(r"(?:lire|ecrire|source|telecharger|geste)\('(/[a-z/.-]+?)(?:\?|')", CODE) if not c.endswith("/")} | {"/appareils/{mac}/profil"}
     assert {"/appareils", "/classification", "/protection/analyse", "/protection/evenements", "/protection/usager/tv", "/protection/usager/debloquer",
             "/protection/pause", "/protection/observe", "/protection/reprendre", "/protection/exceptions", "/protection/journal",
@@ -262,7 +263,7 @@ def test_csp_stricte_par_hash_a_jour():
 
 # ── Mise en page Aurora : aucun débordement horizontal (démonstration, puis avec le vrai menu latéral partagé) ──
 COQUE = RACINE.parent / "secubox-hub" / "www" / "shared"
-ONGLETS = ("generale", "equipements", "applications", "analyseur", "protection", "diagnostic")
+ONGLETS = ("generale", "equipements", "applications", "direct", "analyseur", "protection", "diagnostic")
 MENU = json.dumps({"categories": [{"name": "Sécurité", "icon": "S", "items": [{"path": "/tv-privacy/", "name": "SBX TV Privacy", "icon": "T"}]}]})
 MESURE = "() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]"
 
