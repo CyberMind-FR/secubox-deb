@@ -91,9 +91,11 @@ def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note
         note(regles.transiter(r["id"], "confirme", "auto", "essai sans régression", maintenant), "essai", "confirme", "essai sans régression")
 
 
-def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=None) -> dict:
+def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=None, guides=frozenset()) -> dict:
     """Un passage du moteur. `taxo` (#3374) : taxonomie complète (corrections manuelles comprises) ; à défaut, celle des listes du paquet
-    avec le classeur `classer`. Garde : un domaine de catégorie protégée n'entre jamais SEUL en essai ni en confirmation."""
+    avec le classeur `classer`. Garde : un domaine de catégorie protégée n'entre jamais SEUL en essai ni en confirmation.
+    `guides` (lot 5b) : slugs des appareils en apprentissage guidé ; leurs candidats n'entrent JAMAIS seuls en essai, ils attendent la
+    validation de l'administrateur dans l'assistant. Vide par défaut : AUTO pur inchangé."""
     changements, applique, candidats = [], False, 0
     taxo = taxo or dnstv_taxonomie.Taxonomie.depuis_dossier(classer=classer, regles=regles)
     macs = dnstv_taxonomie.macs_par_appareil(etat)
@@ -130,7 +132,7 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
                 continue
             candidats += 1
             changements.append({"appareil": appareil, "domaine": c.domaine, "de": "", "vers": "candidat", "motif": c.motif})
-            if reglage.auto_essai and c.risque == "faible" and not refus(appareil, c.domaine):   # « partagé », « variable » ou protégé : humain
+            if reglage.auto_essai and appareil not in guides and c.risque == "faible" and not refus(appareil, c.domaine):   # « partagé », « variable » ou protégé : humain
                 r = regles.transiter(n["id"], "essai", "auto", "essai automatique", maintenant)
                 note(r, "candidat", "essai", "essai automatique")
         # Lot 4 (#3374, arbitrage 3) : anti faux repli — un domaine PUB apparu juste après un refus publicitaire est proposé puis mis à
@@ -148,7 +150,7 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
             exclus.add(c["domaine"])
             candidats += 1
             changements.append({"appareil": appareil, "domaine": c["domaine"], "de": "", "vers": "candidat", "motif": n["motif"]})
-            if reglage.auto_essai and not refus(appareil, c["domaine"]):
+            if reglage.auto_essai and appareil not in guides and not refus(appareil, c["domaine"]):
                 r = regles.transiter(n["id"], "essai", "auto", "essai automatique (repli publicitaire)", maintenant)
                 note(r, "candidat", "essai", "essai automatique (repli publicitaire)")
         en_essai = [r for r in regles.liste() if r["appareil"] == appareil and r["etat"] == "essai"]
@@ -182,7 +184,7 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
     # vizchoice laissaient passer la pub sur une TV (gk2). Les autres candidats (risque non faible, proposés à la main) restent humains.
     if reglage.auto_essai:
         for r in regles.liste():
-            if (r["etat"] == "candidat" and r.get("origine") == "auto" and r["risque"] == "faible"
+            if (r["etat"] == "candidat" and r.get("origine") == "auto" and r["risque"] == "faible" and r["appareil"] not in guides
                     and str(r.get("motif", "")).startswith("confirmé sur ") and not refus(r["appareil"], r["domaine"])):
                 note(regles.transiter(r["id"], "essai", "auto", "essai automatique (confirmé ailleurs)", maintenant),
                      "candidat", "essai", "essai automatique (confirmé ailleurs)")

@@ -294,6 +294,7 @@ RETENTION_DECOUVERTES_S = 30 * 86400
 MAX_DECOUVERTES = 5000
 PEREMPTION_SBXDPI_S = 120
 MAX_OCTETS = 20 * 1024 * 1024                         # B1 : plafond du fichier ; au-delà, les plus anciennes minutes partent
+ETATS_ASSISTANT = ("confirmee", "legitime", "plus-tard")       # lot 5b : choix de l'administrateur appliqués par le moteur
 TYPES_DECOUVERTE = ("repli", "repli-protege", "secours", "sans-dns", "dns-chiffre", "contournement")
 
 SCHEMA = """
@@ -444,6 +445,13 @@ class MagasinDPI:
     def marquer(self, mac: str, domaine: str, etat: str) -> None:
         with self._cx() as cx:
             cx.execute("UPDATE decouvertes SET etat=? WHERE mac=? AND domaine=? AND type='repli' AND etat='nouvelle'", (etat, mac, domaine))
+
+    def marquer_id(self, ident: int, etat: str) -> None:
+        """Lot 5b : état posé par l'assistant (consommé par le moteur) sur UNE découverte."""
+        if etat not in ETATS_ASSISTANT:
+            raise ValueError("état de découverte inconnu")
+        with self._cx() as cx:
+            cx.execute("UPDATE decouvertes SET etat=? WHERE id=?", (etat, int(ident)))
 
     def decouvertes(self, depuis_id: int = 0, type_: Optional[str] = None, mac: Optional[str] = None, limite: int = 100,
                     recentes: bool = False, etat: Optional[str] = None) -> List[dict]:
