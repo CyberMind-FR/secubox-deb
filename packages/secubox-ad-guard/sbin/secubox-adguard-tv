@@ -465,8 +465,10 @@ def _enregistrement_protection(r) -> bool:
     if r["geste"] == "guide":                                           # lot 5b : apprentissage guidé d'un appareil, sans domaine
         return r["domaine"] is None and r["type"] in TYPES_GUIDE and m is None
     if r["geste"] == "annule":                                          # reprend le geste annulé, domaine et type compris s'il y en a
+        if r["type"] == TYPE_VU and r["domaine"] is not None:           # lot 6 passe 2 : « vu » ne porte jamais de domaine
+            return False
         return ((r["domaine"] is None or (isinstance(r["domaine"], str) and dnstv.valider_domaine(r["domaine"]) == r["domaine"]))
-                and (r["type"] is None or r["type"] in TYPES_EXCEPTION))
+                and (r["type"] is None or r["type"] in TYPES_EXCEPTION + TYPES_ASSISTANT + (TYPE_VU,)))   # lot 6 : type de l'assistant
     return r["domaine"] is None and r["type"] is None
 
 

@@ -455,6 +455,8 @@ class MagasinDPI:
         if domaine is not None:
             w += " AND domaine=?"
             a.append(domaine)
+        else:                                                     # lot 6 : sans domaine (« vu »), seule une découverte encore nouvelle
+            w += " AND etat='nouvelle'"                           # change : un choix déjà appliqué n'est jamais défait
         with self._cx() as cx:
             cx.execute(f"UPDATE decouvertes SET etat=? WHERE {w}", a)
 

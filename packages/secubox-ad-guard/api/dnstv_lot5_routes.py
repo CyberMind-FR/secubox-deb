@@ -172,6 +172,9 @@ def choix(corps: ChoixIn, jeton=Depends(require_jwt)):
     return x
 
 
+TYPES_ANNULABLES = ("bloquer", "legitime", "plus-tard", "vu")        # lot 6 : le type du geste annulé est transmis (root le revalide)
+
+
 def _ecrire_ou_annuler(c: dict, acteur: str, nom: str, domaine: Optional[str], type_: str) -> None:
     """Écrit la file ; si l'écriture échoue après l'audit d'intention, audit.log reçoit une entrée `annule` (au mieux), puis 503."""
     try:
@@ -180,7 +183,7 @@ def _ecrire_ou_annuler(c: dict, acteur: str, nom: str, domaine: Optional[str], t
         try:
             _r._ctl_entree("audit-protection", json.dumps({"acteur": acteur, "origine": "admin", "geste": "annule", "cibles": [nom],
                                                            "minutes": None, "domaine": domaine,
-                                                           "type": type_ if type_ in ("bloquer",) else None, "force": False}))
+                                                           "type": type_ if type_ in TYPES_ANNULABLES else None, "force": False}))
         except HTTPException:
             pass
         raise HTTPException(503, f"file non écrite ({type(e).__name__}) : rien n'est changé") from None

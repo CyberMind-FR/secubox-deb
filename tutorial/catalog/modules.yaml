@@ -86,7 +86,6 @@ modules:
         - "POST /delayed"
         - "POST /delayed/process"
         - "POST /delayed/{domain}/approve"
-        - "POST /detect"
         - "POST /learn/run"
         - "POST /learn/thresholds"
         - "POST /maintenance/cache/clear"
