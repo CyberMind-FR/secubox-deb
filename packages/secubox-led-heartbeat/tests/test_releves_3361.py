@@ -166,3 +166,62 @@ def test_compteurs_nft_invalide_zero(sortie):
 
 def test_compteurs_nft_non_texte():
     assert releves.compteurs_nft(None) == 0.0
+
+
+def test_fifo_cle_absente_sans_blocage(racine):
+    import os
+    import threading
+    p = racine / "run/secubox/actord-mesures.json"
+    p.unlink()
+    os.mkfifo(p)
+    (racine / "proc/net/dev").unlink()
+    os.mkfifo(racine / "proc/net/dev")
+    res = {}
+    t = threading.Thread(target=lambda: res.update(releves.releves(racine)), daemon=True)
+    t.start()
+    t.join(5)
+    assert not t.is_alive(), "releves() bloque sur un FIFO"
+    assert "actor.evenements" not in res and "reseau.octets_in" not in res
+    assert res["waf.requetes"] == 7.0
+
+
+def test_lien_symbolique_refuse(racine, tmp_path_factory):
+    ailleurs = tmp_path_factory.mktemp("ailleurs")
+    j = racine / "run/secubox/actord-mesures.json"
+    cible = ailleurs / "m.json"
+    cible.write_text(j.read_text())
+    j.unlink()
+    j.symlink_to(cible)
+    db = racine / "var/lib/secubox/ad-guard/ad-guard.db"
+    cible_db = ailleurs / "a.db"
+    db.rename(cible_db)
+    db.symlink_to(cible_db)
+    v = releves.releves(racine)
+    assert "actor.evenements" not in v
+    assert not any(k.startswith("adguard.") for k in v)
+    assert v["waf.requetes"] == 7.0
+
+
+def test_json_inscriptible_par_tous_refuse(racine):
+    (racine / "run/secubox/actord-mesures.json").chmod(0o666)
+    assert "actor.evenements" not in releves.releves(racine)
+
+
+def test_valeurs_non_finies_rejetees(racine):
+    (racine / "var/cache/secubox/metrics-cache.json").write_text(
+        '{"waf": {"waf_blocked": NaN, "alerts_today": Infinity}, "connections": {"https": 2}}')
+    (racine / "proc/sys/net/netfilter/nf_conntrack_count").write_text("inf")
+    v = releves.releves(racine)
+    assert "waf.blocages" not in v and "waf.attaques" not in v and "reseau.connexions" not in v
+    assert v["waf.requetes"] == 2.0
+
+
+def test_requete_trackers_indexee(racine):
+    base = sqlite3.connect(racine / "var/lib/secubox/ad-guard/ad-guard.db")
+    base.execute("CREATE INDEX idx_detections_time ON detections(timestamp)")
+    base.commit()
+    plan = " ".join(str(r) for r in base.execute(
+        "EXPLAIN QUERY PLAN " + releves.REQUETE_TRACKERS, ("2026-11-01", "2026-11-02")))
+    base.close()
+    assert "SCAN detections" not in plan and "idx_detections_time" in plan
+    assert releves.releves(racine)["adguard.trackers"] == 2.0

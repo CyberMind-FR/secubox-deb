@@ -12,8 +12,11 @@ des compteurs nftables `sbx_drop_*`) est ajouté par le collecteur, qui appelle
 `nft -j list counters` puis `compteurs_nft`.
 """
 import json
+import math
+import os
 import sqlite3
-from datetime import datetime, timezone
+import stat
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 LIMITE_JSON = 4 * 1024 * 1024  # 4 Mio
@@ -21,21 +24,52 @@ DELAI_SQLITE_S = 1.0
 PREFIXE_NFT = "sbx_drop_"
 
 
-def _json(chemin: Path):
-    """Charge un JSON borné à 4 Mio ; None si absent, trop gros ou invalide."""
+REQUETE_TRACKERS = "SELECT COUNT(*) FROM detections WHERE timestamp >= ? AND timestamp < ?"
+
+
+def _lire(chemin: Path):
+    """Lit au plus 4 Mio d'un fichier ordinaire ; None sinon.
+
+    /run/secubox est en 1777 : un autre compte peut y déposer un FIFO ou un
+    lien symbolique. Ouverture sans suivre les liens et sans bloquer, descripteur
+    exigé ordinaire et non inscriptible par tous, lecture bornée.
+    """
+    fd = None
     try:
-        with open(chemin, "rb") as f:
-            brut = f.read(LIMITE_JSON + 1)
-        if len(brut) > LIMITE_JSON:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_mode & stat.S_IWOTH:
             return None
+        brut = os.read(fd, LIMITE_JSON + 1)
+        while 0 < len(brut) <= LIMITE_JSON:
+            suite = os.read(fd, LIMITE_JSON + 1 - len(brut))
+            if not suite:
+                break
+            brut += suite
+        return brut if len(brut) <= LIMITE_JSON else None
+    except OSError:
+        return None
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def _json(chemin: Path):
+    """Charge un JSON borné à 4 Mio ; None si absent, refusé, trop gros ou invalide."""
+    brut = _lire(chemin)
+    if brut is None:
+        return None
+    try:
         return json.loads(brut)
-    except (OSError, ValueError, RecursionError):
+    except (ValueError, RecursionError):
         return None
 
 
 def _nombre(valeur):
-    """Renvoie la valeur si c'est un entier ou flottant réel (pas un booléen), sinon None."""
+    """Renvoie la valeur si c'est un nombre fini (ni booléen, NaN ni infini), sinon None."""
     if isinstance(valeur, bool) or not isinstance(valeur, (int, float)):
+        return None
+    if isinstance(valeur, float) and not math.isfinite(valeur):
         return None
     return valeur
 
@@ -46,32 +80,33 @@ def _dict(valeur) -> dict:
 
 def _proc_net_dev(racine: Path, wan: str, out: dict) -> None:
     """Octets et paquets rx/tx de l'interface WAN d'après /proc/net/dev."""
-    try:
-        lignes = (racine / "proc/net/dev").read_text().splitlines()
-    except (OSError, UnicodeDecodeError):
+    brut = _lire(racine / "proc/net/dev")
+    if brut is None:
         return
+    lignes = brut.decode("utf-8", "replace").splitlines()
     for ligne in lignes:
         nom, sep, reste = ligne.partition(":")
         if not sep or nom.strip() != wan:
             continue
         try:
             c = [float(x) for x in reste.split()]
-            if len(c) < 10:
+            if len(c) < 10 or not all(math.isfinite(x) for x in c):
                 return
             out["reseau.octets_in"], out["fw.paquets_in"] = c[0], c[1]
             out["reseau.octets_out"], out["fw.paquets_out"] = c[8], c[9]
         except ValueError:
-            for k in ("reseau.octets_in", "fw.paquets_in", "reseau.octets_out", "fw.paquets_out"):
-                out.pop(k, None)
+            pass
         return
 
 
 def _conntrack(racine: Path, out: dict) -> None:
+    brut = _lire(racine / "proc/sys/net/netfilter/nf_conntrack_count")
     try:
-        out["reseau.connexions"] = float(
-            (racine / "proc/sys/net/netfilter/nf_conntrack_count").read_text().strip())
-    except (OSError, ValueError, UnicodeDecodeError):
-        pass
+        n = float(brut.decode("ascii").strip()) if brut is not None else None
+    except ValueError:
+        return
+    if n is not None and math.isfinite(n):
+        out["reseau.connexions"] = n
 
 
 def _metriques(racine: Path, out: dict) -> None:
@@ -102,15 +137,19 @@ def _actor(racine: Path, out: dict) -> None:
 
 def _adguard(racine: Path, out: dict) -> None:
     chemin = racine / "var/lib/secubox/ad-guard/ad-guard.db"
-    if not chemin.is_file():
+    try:
+        if not stat.S_ISREG(os.lstat(chemin).st_mode):
+            return
+    except OSError:
         return
-    jour = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    aujourdhui = datetime.now(timezone.utc).date()
+    jour = aujourdhui.isoformat()
+    lendemain = (aujourdhui + timedelta(days=1)).isoformat()
     try:
         base = sqlite3.connect(f"file:{chemin}?mode=ro", uri=True, timeout=DELAI_SQLITE_S)
         try:
             requetes = base.execute("SELECT MAX(id) FROM detections").fetchone()[0]
-            trackers = base.execute("SELECT COUNT(*) FROM detections WHERE timestamp LIKE ?",
-                                    (jour + "%",)).fetchone()[0]
+            trackers = base.execute(REQUETE_TRACKERS, (jour, lendemain)).fetchone()[0]
             appareils = base.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
         finally:
             base.close()
@@ -148,6 +187,8 @@ def releves(racine: Path = Path("/"), wan: str = "eth2") -> dict[str, float]:
 
     `racine` permet de simuler l'arborescence en test ; `wan` est l'interface
     dont on lit les octets et paquets. `fw.bloques` n'en fait pas partie.
+    `adguard.requetes` vaut MAX(id) de `detections` : un compteur cumulé (le
+    collecteur en dérive le débit).
     """
     racine = Path(racine)
     out: dict[str, float] = {}
