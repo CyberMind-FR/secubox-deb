@@ -100,12 +100,16 @@ def charger_avec_regles() -> tuple[dict, dict, dict]:
     """État + table + règles actives par appareil. Les règles ne sont lues QUE si un appareil est en mode auto : un fichier de règles
     absent ou corrompu ne doit pas empêcher d'appliquer ou de retirer les modes observe/block."""
     etat, table = charger()
-    if not any(c["mode"] == "auto" for c in etat["clients"]):
+    auto = any(c["mode"] == "auto" for c in etat["clients"])
+    if not auto and not any(c["mode"] == "block" for c in etat["clients"]):
         return etat, table, {}
     try:
         actives = dnstv_regles.charger(dnstv.DOSSIER_ETAT).par_appareil()
     except dnstv_regles.ErreurRegle as e:
-        raise SystemExit(f"règles refusées ({e}) — rien n'est changé")
+        if auto:
+            raise SystemExit(f"règles refusées ({e}) — rien n'est changé")
+        audit("regles-refusees", f"PROTECT sans exceptions de blocage ({e})"[:200])   # lot 3 : PROTECT s'applique quand même, avec ses listes
+        return etat, table, {}
     return etat, table, actives
 
 
@@ -144,6 +148,7 @@ def instantane(etat: dict, actives: dict, regles: dict | None = None) -> dict:
     """Ce que le DNS a RÉELLEMENT chargé : modes + domaines de chaque vue auto + état de chaque règle (pour l'audit)."""
     vues = {f"sbx-tv-auto-{dnstv._slug(c['nom'])}": sorted(set(actives.get(dnstv._slug(c["nom"]), [])))
             for c in etat["clients"] if c["mode"] == "auto"}
+    vues.update({f"sbx-tv-block-{s}": [d for d in bl if d not in aut] for s, (aut, bl) in dnstv.vues_protect(etat, actives).items()})   # lot 3 : PROTECT avec exceptions
     return {"actif": etat["actif"], "auto_essai": bool(etat.get("auto_essai")), "ajout_auto": bool(etat.get("ajout_auto")), "mode_defaut": etat.get("mode_defaut", "auto"),
             "modes": sorted([c["ip"], c["mode"], c["nom"], c.get("puits", True)] for c in etat["clients"]), "vues": vues, "etats": regles or {},
             "autorisations": etat.get("autorisations", {}),

@@ -15,7 +15,7 @@
   `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, adresses de documentation, aucune écriture.
 -->
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-iv+SN18mrkKX2Gu4kjgJgJCr4S94V37cuP+tkj1taJs='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Z6EVK4xxCvdfIotKV6dwsH7O+Mb14Xplgz/oBY19L5Q='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -213,6 +213,7 @@
         <label>Type<select id="ex-type"><option value="autoriser">autoriser</option><option value="bloquer">bloquer</option></select></label>
         <button type="button" id="ex-ajouter">Ajouter</button>
       </div>
+      <div id="ex-confirm"></div>
       <div class="tab espace"><table><thead><tr><th>Appareil</th><th>Domaine</th><th>Type</th><th>Source</th><th>Action</th></tr></thead><tbody id="exceptions"></tbody></table></div>
       <p class="note" id="hors-champ"></p>
     </div>
@@ -579,7 +580,11 @@
   el('tout-observe').addEventListener('click',function(){confirmer(el('tout-observe-confirm'),'Tous les appareils repassent en OBSERVE : plus aucun blocage, sans échéance.',function(){return geste('/protection/observe',{appareil:null},'Tout en OBSERVE');});});
   el('pause-tout').addEventListener('click',function(){geste('/protection/pause',{appareil:null,minutes:60},'Pause d’une heure').catch(function(){});});
   el('ex-ajouter').addEventListener('click',function(){var d=el('ex-domaine').value.trim().toLowerCase();if(!d){message('Domaine requis.','erreur');return;}
-    geste('/protection/exceptions',{appareil:el('ex-appareil').value,domaine:d,type:el('ex-type').value},'Exception posée').then(function(){el('ex-domaine').value='';}).catch(function(){});});
+    var corps={appareil:el('ex-appareil').value,domaine:d,type:el('ex-type').value};
+    geste('/protection/exceptions',corps,'Exception posée').then(function(){el('ex-domaine').value='';}).catch(function(e){
+      // Catégorie protégée (lecture, DRM…) : le serveur demande une confirmation explicite (force).
+      if(e&&/protégée/.test(e.message))confirmer(el('ex-confirm'),e.message+' — bloquer quand même ?',function(){
+        return geste('/protection/exceptions',Object.assign({force:true},corps),'Exception posée (confirmée)').then(function(){el('ex-domaine').value='';});});});});
 
   // ── diagnostic ──
   function chargerDiagnostic(){

@@ -42,6 +42,19 @@ class ErreurProtection(ValueError):
     """Entrée refusée ; le message est sûr à montrer."""
 
 
+class ErreurPlafond(ErreurProtection):
+    """Plafond atteint (autorisations au puits, exceptions) : refus explicite (409), jamais un succès silencieux."""
+
+
+def modes_effectifs(etat: dict, pauses: Iterable[dict], nom: str) -> List[str]:
+    """Modes d'un appareil, PAUSE comprise : une adresse en pause compte pour le mode qu'elle retrouvera à la reprise."""
+    avant = {}
+    for p in pauses or []:
+        if p["appareil"] == nom:
+            avant.update(p["modes"])
+    return [avant.get(c["ip"], c["mode"]) for c in etat.get("clients", []) if c["nom"] == nom]
+
+
 def _noms(etat: dict, noms: Optional[Iterable[str]]) -> List[str]:
     connus = sorted({c["nom"] for c in etat.get("clients", [])})
     if noms is None:
@@ -230,9 +243,14 @@ def _vers(regles, rid: str, chemin: List[str], origine: str, motif: str, mainten
 
 
 def poser_exception(exceptions: list, etat: dict, regles, nom: str, domaine: str, type_: str, actif: bool, maintenant: int,
-                    origine: str = "admin") -> list:
-    """Pose (`actif`) ou retire une exception appareil × domaine et met les règles (et l'autorisation au puits) en cohérence. Rend la
-    nouvelle liste ; modifie `etat` et `regles` en place. Seule l'origine `admin` est admise : l'usager ne pose aucune exception."""
+                    origine: str = "admin", pauses: Iterable[dict] = ()) -> list:
+    """Pose (`actif`) ou retire une exception appareil × domaine et met les règles et les autorisations en cohérence. Rend la nouvelle
+    liste ; modifie `etat` et `regles` en place. Seule l'origine `admin` est admise : l'usager ne pose aucune exception.
+
+    Effet selon le mode EFFECTIF (pause comprise) : AUTO et PROTECT reçoivent l'exception (`autoriser` : autorisation de l'appareil,
+    qui prime sur le puits global en AUTO et sur la liste livrée en PROTECT ; `bloquer` : règle confirmée appliquée dans la vue de
+    l'appareil). OBSERVE sans pause : `autoriser` est admis (rien n'est bloqué), `bloquer` est REFUSÉ (aucun effet) ; OFF : refusé.
+    Plafond d'autorisations atteint : `ErreurPlafond` (409), jamais un succès silencieux."""
     if origine != "admin":
         raise ErreurProtection("seul l'administrateur pose une exception")
     if type_ not in TYPES:
@@ -245,6 +263,11 @@ def poser_exception(exceptions: list, etat: dict, regles, nom: str, domaine: str
         raise ErreurProtection("appareil inconnu")
     slug = dnstv._slug(nom)
     mac = next((c["mac"] for c in cs if c.get("mac")), "")
+    modes = set(modes_effectifs(etat, pauses, nom))
+    if actif and modes <= {"off"}:
+        raise ErreurProtection("appareil hors du périmètre (OFF) : une exception n'aurait aucun effet")
+    if actif and type_ == "bloquer" and not modes & {"auto", "block"}:
+        raise ErreurProtection("appareil en OBSERVE : un blocage n'aurait aucun effet ; passez-le en PROTECT ou AUTO d'abord")
     autres = [e for e in exceptions if not (e["appareil"] == slug and e["domaine"] == d)]
     rid = dnstv_regles.identifiant(slug, d)
     try:
@@ -254,19 +277,28 @@ def poser_exception(exceptions: list, etat: dict, regles, nom: str, domaine: str
     motif = f"exception : {type_}" if actif else f"exception retirée : {type_}"
     if actif:
         if len(autres) >= EXCEPTIONS_MAX or sum(1 for e in autres if e["appareil"] == slug) >= EXCEPTIONS_PAR_APPAREIL:
-            raise ErreurProtection(f"{EXCEPTIONS_MAX} exceptions au plus, {EXCEPTIONS_PAR_APPAREIL} par appareil")
+            raise ErreurPlafond(f"{EXCEPTIONS_MAX} exceptions au plus, {EXCEPTIONS_PAR_APPAREIL} par appareil")
         if r is None:
             r = regles.proposer(slug, d, 0, "faible", maintenant, origine="admin", motif=motif)
         if type_ == "autoriser":
             _vers(regles, rid, {"candidat": ["rejete"], "essai": ["retire", "rejete"], "confirme": ["retire", "rejete"],
                                 "retire": ["rejete"], "rejete": []}[r["etat"]], "admin", motif, maintenant)
-            if all(c["mode"] == "auto" and c.get("puits", True) for c in cs):
-                aut = {k: list(v) for k, v in etat.get("autorisations", {}).items()}
-                liste = set(aut.get(slug, [])) | {d}
-                if len(liste) <= dnstv.AUTORISATIONS_PAR_APPAREIL:
-                    aut[slug] = sorted(liste)
-                    etat["autorisations"] = aut
+            aut = {k: list(v) for k, v in etat.get("autorisations", {}).items()}
+            liste = set(aut.get(slug, [])) | {d}
+            if len(liste) > dnstv.AUTORISATIONS_PAR_APPAREIL:
+                raise ErreurPlafond(f"{dnstv.AUTORISATIONS_PAR_APPAREIL} autorisations au plus pour cet appareil : en retirer une d'abord")
+            if sum(len(v) for k, v in aut.items() if k != slug) + len(liste) > dnstv.AUTORISATIONS_MAX:
+                raise ErreurPlafond(f"{dnstv.AUTORISATIONS_MAX} autorisations au plus pour la maison : en retirer une d'abord")
+            aut[slug] = sorted(liste)
+            etat["autorisations"] = aut
         else:
+            if d in etat.get("autorisations", {}).get(slug, []):          # « bloquer » remplace une autorisation du même couple
+                aut = {k: [x for x in v if not (k == slug and x == d)] for k, v in etat["autorisations"].items()}
+                aut = {k: v for k, v in aut.items() if v}
+                if aut:
+                    etat["autorisations"] = aut
+                else:
+                    etat.pop("autorisations", None)
             _vers(regles, rid, {"candidat": ["essai", "confirme"], "essai": ["confirme"], "confirme": [],
                                 "retire": ["essai", "confirme"], "rejete": ["candidat", "essai", "confirme"]}[r["etat"]], "admin", motif, maintenant)
         return autres + [{"appareil": slug, "mac": mac, "domaine": d, "type": type_, "origine": "admin", "maj": int(maintenant)}]

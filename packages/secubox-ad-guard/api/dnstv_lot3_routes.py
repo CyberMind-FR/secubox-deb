@@ -171,6 +171,7 @@ class ExceptionIn(BaseModel):
     domaine: str = Field(min_length=3, max_length=253)
     type: str = Field(max_length=10)
     actif: bool = True
+    force: bool = False                                                # bloquer une catégorie protégée : confirmation explicite
 
 
 def _mac_de(etat: dict, nom: str) -> Optional[str]:
@@ -274,29 +275,44 @@ def exceptions(lecteur=Depends(_r.require_lecture_nominative)):
 
 @router.post("/protection/exceptions")
 def exception_poser(corps: ExceptionIn, jeton=Depends(require_jwt)):
-    """Pose ou retire une exception (`autoriser` : liste blanche ; `bloquer` : liste noire) pour UN appareil et UN domaine."""
+    """Pose ou retire une exception (`autoriser` : liste blanche ; `bloquer` : liste noire) pour UN appareil et UN domaine, effective en
+    AUTO comme en PROTECT (pause comprise). Bloquer un domaine de catégorie protégée exige `force` (409 sinon). Ordre : audit, règles,
+    état, `exceptions.json`, application ; si l'application échoue, les trois fichiers reviennent à leur version précédente."""
+    d = dnstv.valider_domaine(corps.domaine)
+    if not d:
+        raise HTTPException(422, "nom de domaine invalide")
+    if corps.actif and corps.type == "bloquer" and not corps.force:
+        c = dnstv_analyse.dnstv_taxonomie.Taxonomie.depuis_dossier().classer(d)
+        if c["protegee"] and c["categorie"] != "INCONNU":                # INCONNU ne protège que du moteur AUTO : l'admin décide ici
+            raise HTTPException(409, f"catégorie {c['categorie']} protégée (lecture des vidéos, DRM…) : confirmer le blocage (force)")
     with _r._verrou():
         etat, ancien_etat = _r._etat_et_copie()
         regles, ancien_regles = _r._regles(), _r._regles()
         avant = regles.liste()
         try:
             ex = dnstv_protection.charger_exceptions()
-            nouv = dnstv_protection.poser_exception(ex, etat, regles, corps.appareil, corps.domaine, corps.type, corps.actif, int(time.time()))
+            pauses = dnstv_protection.charger_pauses()
+            nouv = dnstv_protection.poser_exception(ex, etat, regles, corps.appareil, corps.domaine, corps.type, corps.actif, int(time.time()),
+                                                    pauses=pauses)
+        except dnstv_protection.ErreurPlafond as e:
+            raise HTTPException(409, str(e)) from None
         except dnstv_protection.ErreurProtection as e:
             raise HTTPException(404 if "inconnu" in str(e) else 422, str(e)) from None
         except dnstv_regles.ErreurRegle as e:
             raise HTTPException(422, str(e)) from None
-        _audit(_r._acteur(jeton), "admin", "exception", [corps.appareil], None, dnstv.valider_domaine(corps.domaine),
-               corps.type if corps.actif else corps.type + "-retire")
+        _audit(_r._acteur(jeton), "admin", "exception", [corps.appareil], None, d, corps.type if corps.actif else corps.type + "-retire")
         dnstv_regles.ecrire(regles)
         try:
             dnstv.ecrire_etat(etat)
         except dnstv.ErreurTV as e:
             dnstv_regles.ecrire(ancien_regles)
             raise HTTPException(422, str(e)) from None
-        application = _r._appliquer_ou_annuler_tout(ancien_etat, ancien_regles)
-        dnstv_protection.ecrire_exceptions(nouv)
-        d = dnstv.valider_domaine(corps.domaine)
+        dnstv_protection.ecrire_exceptions(nouv)                       # AVANT l'application (S4) : jamais un DNS appliqué sans sa trace
+        try:
+            application = _r._appliquer_ou_annuler_tout(ancien_etat, ancien_regles)
+        except HTTPException:
+            dnstv_protection.ecrire_exceptions(ex)
+            raise
         _journaliser(dnstv_journal.depuis_regles(avant, regles.liste(), etat)
                      + [dnstv_journal.entree(int(time.time()), corps.appareil, _mac_de(etat, corps.appareil), d, "", "exception", "admin",
                                              f"{corps.type} {'posée' if corps.actif else 'retirée'}")])

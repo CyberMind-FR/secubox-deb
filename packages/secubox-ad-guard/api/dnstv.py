@@ -411,6 +411,21 @@ def ecrire_etat(etat: dict, dossier: Path = None) -> dict:
 
 # ── configuration Unbound ────────────────────────────────────────────────────
 
+def vues_protect(etat: dict, regles_actives: Optional[Dict[str, List[str]]] = None) -> Dict[str, Tuple[List[str], List[str]]]:
+    """Lot 3 (#3374, I1) : appareils en PROTECT qui ont des exceptions -> (domaines autorisés, domaines bloqués en plus). Ces appareils
+    reçoivent une vue propre `sbx-tv-block-<slug>` ; les autres gardent la vue commune `sbx-tv-block` (rendu inchangé)."""
+    out: Dict[str, Tuple[List[str], List[str]]] = {}
+    for c in etat.get("clients", []):
+        if c["mode"] != "block":
+            continue
+        s = _slug(c["nom"])
+        aut = sorted(set(etat.get("autorisations", {}).get(s, [])))
+        bl = sorted(set((regles_actives or {}).get(s, [])))
+        if aut or bl:
+            out[s] = (aut, bl)
+    return out
+
+
 def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[Dict[str, List[str]]] = None) -> str:
     """Drop-in Unbound du POC. Journalisation par requête + UNE VUE PAR MODE pour les appareils du périmètre.
 
@@ -425,12 +440,15 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
          "server:",
          "    log-queries: yes", "    log-replies: yes", "    log-local-actions: yes", "    log-tag-queryreply: yes"]
     suivis = [c for c in etat["clients"] if c["mode"] != "off"]
+    protect = vues_protect(etat, regles_actives)
     if etat["actif"]:
         for c in suivis:
             if not IP_SURE_RE.fullmatch(c["ip"]):
                 raise ErreurTV("adresse IP invalide")             # défense en profondeur : jamais autre chose que [0-9a-fA-F:.] dans la configuration
             hote = "/128" if ":" in c["ip"] else "/32"
             vue = f"sbx-tv-auto-{_slug(c['nom'])}" if c["mode"] == "auto" else f"sbx-tv-{c['mode']}"
+            if c["mode"] == "block" and _slug(c["nom"]) in protect:
+                vue = f"sbx-tv-block-{_slug(c['nom'])}"           # exceptions de l'appareil (lot 3) : vue propre
             L.append(f"    access-control-view: {c['ip']}{hote} {vue}")
         # Autorisations (#1965) : un appareil en mode auto avec puits voit le puits global ; `local-zone-override` l'exempte d'un nom, SANS toucher aux autres clients
         # (mesuré sur Unbound 1.17.1 : fonctionne même dans une vue view-first, ce qu'une zone « transparent » de la vue ne fait pas).
@@ -450,6 +468,24 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
         for d in sorted(table):
             L.append(f'    local-zone: "{d}." always_nxdomain')
         L.append('    local-zone: "." transparent')
+        # PROTECT avec exceptions (lot 3, #3374) : « autoriser » prime sur la liste livrée (zone transparente plus précise, et la zone de
+        # liste du même nom est omise) ; « bloquer » ajoute un blocage. Une zone n'apparaît qu'une fois par vue.
+        for nom, (aut, bl) in sorted(protect.items()):
+            zones: Dict[str, str] = {}
+            for d in list(aut) + list(bl):
+                if valider_domaine(d) != d:
+                    raise ErreurTV("domaine d'exception invalide")
+            for d in sorted(table):
+                zones[d] = "always_nxdomain"
+            for d in bl:
+                zones[d] = "always_nxdomain"
+            for d in aut:
+                zones[d] = "transparent"
+            L.append("view:")
+            L.append(f'    name: "sbx-tv-block-{nom}"')
+            for d in sorted(zones):
+                L.append(f'    local-zone: "{d}." {zones[d]}')
+            L.append('    local-zone: "." transparent')
         # Mode auto : UNE vue par appareil, avec ses seules règles actives (essai ou confirmées).
         for nom in sorted({_slug(c["nom"]) for c in suivis if c["mode"] == "auto"}):
             L.append("view:")
