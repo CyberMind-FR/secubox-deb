@@ -29,11 +29,10 @@ Retour du propriétaire sur `/tv-privacy/` : « sympa, pas très DPI causant ».
 - Une interface stable de **découvertes** que le lot 5b (assistant en direct) consommera.
 
 **Non-buts (lots suivants)**
-- Décider d'un blocage à partir du DPI : le lot 4 propose des **candidats** (source `ndpi` ou `apprentissage-repli`), le
-  moteur AUTO du lot 2 garde seul la décision, avec sa garde.
+- Décider d'un blocage à partir du DPI seul : le DPI produit des **constats** ; seules les découvertes de repli (fondées sur
+  le DNS) deviennent candidats puis essais du moteur AUTO, avec sa garde (§ 3.5, arbitrage 3).
 - Blocage anticipé des régies de secours partagé par le profil agrégé (point 2 de l'anti faux repli) : lot 5b, une fois
   les couples régie → secours mesurés.
-- Redirection forcée du port 53 (DNAT) ou blocage du DoH : hors lot (question ouverte 3).
 - Webapp kiosque : rien de nouveau au lot 4.
 
 **Anti-buts (jamais)**
@@ -64,7 +63,8 @@ mais leurs flux vont directement à la Freebox. nDPId ne voit donc les flux d'un
 3. la TV est branchée derrière gk2 (zone dédiée).
 
 Le lot 4 est conçu pour fonctionner dans les trois cas et pour **dire** le cas courant (§ 3.6). Sans visibilité, la page
-affiche « vu par le DNS seulement » et rien n'est inventé. C'est la question ouverte n° 1.
+affiche « DNS seulement » et rien n'est inventé. Arbitrage 1 : on construit tout ce qui marche sans toucher la topologie,
+on livre le chemin DPI (inerte tant que les flux ne passent pas par gk2), et le mode LAN est étudié au § 10.
 
 ## 3. Architecture
 
@@ -105,8 +105,8 @@ ad-guard (moteur secubox-adguard-auto, chaque minute)
   `secubox-adguard-tv dpi-cibles` (sudoers existant étendu) valide les MAC, compose `ether host aa:… or ether host bb:…`
   dans `/etc/secubox/ndpid-engine.d/tv-privacy.env` et redémarre `secubox-ndpid-engine` **seulement si la liste
   change** (ajout/retrait d'appareil, rare). Audit : `audit.log`.
-- Un filtre par MAC suit la TV quand son adresse IPv6 temporaire change (§ 3.3). Mode « tout le LAN » (filtre vide) :
-  possible, réservé à l'administrateur, déconseillé sur gk2 (question ouverte 2).
+- Un filtre par MAC suit la TV quand son adresse IPv6 temporaire change (§ 3.3). **Choix par défaut** (§ 9) : seules les
+  TV du périmètre, filtrées par MAC ; pas de mode « tout le LAN » au lot 4.
 - Garde-fou de charge : `CPUQuota=25%` et `Nice=10` sur `secubox-ndpid-engine`, posés par son propre paquet (1.7.4),
   jamais par ad-guard ; sbxdpi garde `MemoryMax=128M`.
 
@@ -158,8 +158,10 @@ meta(cle, valeur)
 - **SSAI** : attribut `ssai = true` dans la référence de la taxonomie (`replay-*.oqee.net`, source « mesure gk2
   2026-11-01 ») ; l'application correspondante porte le badge « publicités insérées dans la vidéo : non filtrables par la
   box sans toucher au flux ».
-- Les découvertes `repli` publicitaires sont aussi versées comme **candidats** (pas règles) au moteur AUTO, source
-  `apprentissage-repli` : sa garde, ses seuils et son essai s'appliquent sans changement.
+- Les découvertes `repli` publicitaires deviennent **candidats puis essais** du moteur AUTO dès le lot 4 (arbitrage 3),
+  motif « repli publicitaire : apparu N s après le blocage de X » : garde du lot 2 (`refus_auto`, catégorie protégée jamais en
+  essai), retrait automatique par « rafale de refus » ou « contenu habituel plus demandé » (lecture cassée), journal et audit
+  par `regles-appliquer`.
 
 ### 3.6 Couverture affichée
 
@@ -177,7 +179,7 @@ Chaque appareil porte `couverture` ∈ `dns+dpi` (flux vus dans l'heure), `dns` 
 | Disque | < 20 Mio (`DOSSIER_ETAT`) + 4 Mio en `/run` | rétention 7 j |
 
 Arrêt de sécurité : si la charge moyenne sur 5 min dépasse le nombre de cœurs pendant 10 min, le moteur écrit
-`dpi: {pause: "charge"}` et le verbe root arrête `secubox-ndpid-engine` ; reprise manuelle (question ouverte 4).
+`dpi: {pause: "charge"}` et le verbe root arrête `secubox-ndpid-engine` ; reprise manuelle (**choix par défaut**, § 9).
 
 ## 4. API (préfixe `/api/v1/ad-guard`)
 
@@ -265,16 +267,118 @@ Versions visées : `secubox-ad-guard` 1.21.0, `secubox-toolbox-ng` (mineure suiv
 `secubox-ad-guard` recommande (`Recommends`) `secubox-ndpid-engine` et `secubox-toolbox-ng` : sans eux, l'onglet dit
 « DPI absent ».
 
-## 9. Questions ouvertes pour le propriétaire
 
-1. **Comment les flux de la TV traversent-ils gk2 ?** Sur le LAN plat, gk2 ne voit que le DNS des TV. Faut-il (a) essayer
-   enfin `secubox-pseudo-routeur` (#2940) sur gk2, (b) poser un port miroir du commutateur vers une interface de gk2,
-   ou (c) brancher la TV banc derrière gk2 ? Sans l'une des trois, le lot 4 n'affiche que « DNS seulement » pour les TV.
-2. **Périmètre de capture** : seulement les appareils de TV Privacy (filtre par MAC, coût faible, recommandé), ou tout le
-   LAN (onglet plus riche, coût CPU à mesurer sur un gk2 déjà chargé) ?
-3. **Contournement constaté** (DoH/DoT, résolveur tiers) : seulement l'afficher (proposé), ou aussi proposer plus tard une
-   redirection du port 53 et un blocage du DoT 853 par appareil (hors lot 4, mais oriente la donnée gardée) ?
-4. **Garde de charge** : arrêter nDPId automatiquement quand gk2 sature (proposé, reprise manuelle), ou seulement le
-   signaler ?
-5. **Les découvertes `repli` deviennent-elles des candidats du moteur AUTO dès le lot 4** (proposé : candidats seulement,
-   garde du lot 2 inchangée), ou restent-elles affichées jusqu'à l'assistant du lot 5b ?
+## 9. Arbitrages du propriétaire (2026-11-01) et choix par défaut
+
+1. **Topologie** : « faire ce que tu peux, et approfondir le mode LAN ». Sans changer la topologie : rattachement par MAC,
+   flux sans DNS repérés depuis ce que gk2 voit (DNS, `reponses.db`, conntrack quand il y a du trafic transféré),
+   corrélation de repli fondée sur le DNS, badge SSAI, onglet « Applications » qui dit honnêtement « DNS seulement » ou
+   « DNS + DPI ». Le chemin DPI (sbxdpi étendu, filtre par MAC, `CPUQuota`) est livré, inerte sans flux transférés. Mode LAN :
+   § 10.
+2. **Contournement** : afficher **et** forcer le DNS pour les appareils du périmètre en PROTECT ou AUTO (§ 11).
+3. **Replis** : candidats AUTO **en essai** dès le lot 4, gardes existantes (§ 3.5).
+4. **Choix par défaut** (recommandation retenue) :
+   - capture nDPI limitée aux seules TV du périmètre, filtrées par MAC ;
+   - garde de charge : arrêt automatique de nDPId quand gk2 sature (charge sur 5 min > nombre de cœurs pendant 10 min),
+     reprise manuelle par l'administrateur.
+
+## 10. Mode LAN approfondi
+
+### 10.1 Ce que fait réellement `secubox-pseudo-routeur` 0.1.0 (#2940, lu dans le code)
+
+- **Pas d'ARP** : aucune usurpation ARP, aucun proxy ARP. Le paquet ne touche à la couche 2 que par les ensembles MAC du NAC.
+- **Passerelle DHCP** : `pseudo-routeurctl activer` appelle `freeboxctl passerelle-dhcp 192.168.1.200`, qui fait un `PUT
+  dhcp/config/ {"gateway": …}` sur l'API Freebox (droit « Modification des réglages ») et relit la valeur. C'est un réglage
+  **global** du serveur DHCP de la Freebox : **tous** les clients du LAN reçoivent gk2 comme passerelle à leur prochain
+  renouvellement de bail. Aucune sélection par appareil n'existe dans le paquet.
+- **nftables** : table `inet secubox_pseudo_routeur`, chaîne `forward` priorité `filter - 1`, **policy drop** ; `blocked` et
+  `quarantine_zone` du NAC rejetés d'abord, puis acceptation des zones `lan_allowed`, `lxc_zone`, `guest_zone`, `iot_zone` ;
+  compteur des rejets. Puis `sysctl net.ipv4.ip_forward=1`. **IPv4 seulement** : rien sur `net.ipv6.conf.*.forwarding`.
+- **Retour arrière** : `sonde-secours` (minuterie 60 s) vérifie `ip_forward`, la table nft et un `ping 1.1.1.1` ; au 3ᵉ échec
+  consécutif, `OnFailure=` lance `pseudo-routeur-retour.service` → `freeboxctl passerelle-dhcp 192.168.1.254`.
+  `activer` refuse sans sonde active.
+
+### 10.2 Risques sur un LAN de production (gk2 = production : **jamais d'activation par un agent**)
+
+- **Portée** : la bascule touche tout le foyer (visio gk1, voicestudio gk3, téléphones), pas seulement les TV.
+- **Retour lent** : le retour change le réglage DHCP, mais chaque client garde gk2 comme passerelle jusqu'au renouvellement
+  de son bail (souvent la moitié de sa durée, des heures). Les « < 3 min » du paquet sont le délai de **décision**, pas de
+  rétablissement. Si gk2 tombe, le foyer est sans Internet pendant ce temps.
+- **Routage asymétrique** : sur le /24 plat, la Freebox répond directement aux clients ; gk2 ne voit que le sens montant.
+  nDPI classe moins bien (le ClientHello TLS reste lisible, donc le SNI aussi) ; conntrack voit des flux à moitié.
+- **IPv6 hors champ** : les TV Android parlent surtout IPv6 ; les annonces RA viennent de la Freebox, le trafic IPv6 ne passe
+  pas par gk2. La redirection DNS (§ 11) et le DPI ne couvrent alors que l'IPv4.
+- **Charge** : tout le trafic du foyer traverse un gk2 déjà à 85-95 % de CPU par moments.
+- **WAN mvpp2** : jamais de MTU ni de down/up d'interface à distance (gk1 perdu le 2026-10-26).
+
+### 10.3 Ce qu'il faut pour les seules TV du périmètre
+
+Le paquet ne sait faire que « tout le LAN ». Trois pistes pour limiter aux TV, par ordre de préférence :
+
+1. **Passerelle fixée sur la TV** (réglage réseau manuel de la TV : IP fixe, passerelle 192.168.1.200, DNS 192.168.1.200).
+   Aucun changement Freebox, retour immédiat en remettant la TV en DHCP. Côté gk2 : `ip_forward=1` et la chaîne
+   `forward` du pseudo-routeur restreinte à `ether saddr @sbx_tv_perimetre` (nouvel ensemble alimenté par ad-guard) —
+   **à développer** dans `secubox-pseudo-routeur` 0.2 (verbe `activer-transfert --tv-seulement`, sans bascule DHCP).
+2. **Bail DHCP par appareil** servi par gk2 : impossible proprement tant que la Freebox sert le DHCP (deux serveurs sur le
+   même segment). Écarté.
+3. **Proxy ARP / usurpation ARP** pour les seules TV : contraire au cadre (modification du chemin à l'insu des appareils),
+   fragile. Écarté.
+
+### 10.4 Comparaison
+
+| Option | Voit | Coût / risque | Retour arrière | Verdict |
+|---|---|---|---|---|
+| Pseudo-routeur, tout le LAN | IPv4 montant de tout le foyer | élevé (portée, baux, CPU) | lent (baux) | non pour la production |
+| Pseudo-routeur, passerelle fixée sur la TV | IPv4 montant de la TV ; DNS forcé effectif | faible (une TV) | immédiat (TV en DHCP) | **recommandé pour l'essai** |
+| Port miroir du commutateur | les deux sens, IPv4 + IPv6 | nul sur le chemin ; commutateur administrable requis ; DPI seulement (aucune redirection possible) | débrancher | meilleur pour le DPI |
+| TV banc derrière gk2 (zone dédiée) | tout, deux sens, v4 + v6 | nul pour le foyer | rebrancher | idéal au banc, pas chez l'utilisateur |
+
+### 10.5 Procédure d'essai (avec le propriétaire, hors heures d'usage, jamais par un agent seul)
+
+1. Préalables : `df -h /` sur gk2 ; `dpkg -l secubox-ad-guard secubox-toolbox-ng secubox-ndpid-engine` aux versions du lot 4 ;
+   la TV banc (pas une TV du foyer) déclarée dans TV Privacy, en OBSERVE.
+2. Relever la référence : 10 min de lecture OQEE ; onglet « Applications » = « DNS seulement » (attendu).
+3. Côté gk2 : `sysctl net.ipv4.ip_forward` (noter la valeur) ; poser la chaîne forward restreinte à la MAC de la TV banc
+   (pseudo-routeur 0.2, ou à la main en mode banc avec le propriétaire), vérifier `nft list table inet secubox_pseudo_routeur`.
+4. Sur la TV banc : IP fixe, passerelle et DNS = 192.168.1.200. Vérifier qu'elle lit une vidéo.
+5. Attendre 2 min : onglet « Applications » = « DNS + DPI », applications nDPI visibles ; `pidstat 5` sur nDPId, nDPIsrvd,
+   sbxdpi pendant 30 min de lecture (budget § 3.7).
+6. Passer la TV banc en AUTO : vérifier la redirection DNS (`nft list table inet secubox_adguard_contournement`, compteurs qui
+   montent) ; essayer un résolveur tiers sur la TV (8.8.8.8) : la résolution doit passer par Unbound.
+7. Essai OBSERVE / AUTO du lot 7 avec la frise des coupures.
+8. Retour : TV en DHCP ; retirer la chaîne ; remettre `ip_forward` à sa valeur de l'étape 3 ; contrôler que le foyer n'a
+   rien vu (aucun autre client n'a changé de passerelle).
+9. Critère d'arrêt immédiat à toute étape : lecture cassée, charge gk2 > 4 sur 5 min, DNS du foyer lent.
+
+## 11. Contournement : afficher et forcer le DNS
+
+- **Portée** : appareils du périmètre **en PROTECT ou AUTO effectif** (pause comprise : un appareil en pause est en OBSERVE)
+  et qui ont une MAC. **Rien n'est appliqué à un appareil en OBSERVE ou OFF.** « Je débloque » et la pause passent par
+  `apply`, qui régénère le jeu de règles : la redirection et les blocages sont levés en même temps que le filtrage DNS.
+- **Limite écrite noir sur blanc** : ces règles ne s'appliquent **qu'au trafic qui traverse gk2**. Sur le LAN plat (passerelle
+  Freebox), une TV qui interroge 8.8.8.8 ne passe pas par gk2 : rien n'est redirigé. Seul le mode LAN (§ 10) les rend
+  effectives. L'onglet l'affiche (« forçage DNS : posé, effectif seulement si la TV passe par gk2 »).
+- **Règles** (table `inet secubox_adguard_contournement`, nftables uniquement) :
+  - `prerouting` nat (dstnat) : `ether saddr @sbx_tv_force udp/tcp dport 53 redirect to :53` (vers l'Unbound local, IPv4 et IPv6) ;
+  - `forward` filter : `ether saddr @sbx_tv_force tcp dport 853 reject`, `udp dport 853 reject` (DoT, DoQ) ;
+    `ip daddr @sbx_doh_v4 tcp dport 443 reject`, `ip6 daddr @sbx_doh_v6 tcp dport 443 reject`, idem UDP 443 (DoH/HTTP3)
+    vers la liste livrée `lists/resolveurs-doh.txt` (adresses IP de résolveurs DoH publics, source citée par ligne) ;
+  - compteurs nommés par règle (lus pour l'onglet).
+- **Jamais une catégorie protégée, jamais le DRM** : on ne bloque que des **adresses de résolveurs DNS** et le port 853 ; aucun
+  domaine de contenu, de CDN ni de DRM n'est concerné. Le port 53 est redirigé vers le résolveur de la box, qui laisse passer
+  les catégories protégées comme aujourd'hui.
+- **Verbe root borné** : `secubox-adguard-tv apply` (et `regles-appliquer` quand il recharge) reconstruit le jeu de règles à
+  partir de l'état revalidé ; rien n'est lu en clair depuis l'API. **Double tampon** : fichier fantôme
+  `/var/lib/secubox-adguard-tv/contournement.nft.new`, contrôle `nft -c -f`, échange atomique, `nft -f` ; si le chargement
+  échoue, la version précédente est rechargée (retour arrière) et la commande échoue, auditée. `disable` retire la table.
+  Chaque changement écrit `contournement` dans `audit.log` (appareils forcés, nombre d'adresses DoH).
+- **Retour arrière si la lecture casse** : le moteur AUTO surveille déjà « contenu habituel plus demandé ». Au lot 4, si ce
+  signal se déclenche pour un appareil dont le forçage a été posé depuis moins de 24 h, le forçage est suspendu pour cet appareil
+  (`contournement_suspendu` dans l'état, horodaté, 24 h), journalisé et audité ; l'administrateur peut le relever.
+
+## 12. Questions ouvertes restantes
+
+1. **Essai du mode LAN** : préférez-vous la passerelle fixée sur la TV banc (recommandé, § 10.3-1, demande pseudo-routeur 0.2)
+   ou un port miroir (DPI seulement, sans forçage DNS) ? Cela décide si `secubox-pseudo-routeur` 0.2 est construit.
+2. **IPv6** : sur LAN plat, le forçage DNS ne couvre que l'IPv4 même en mode LAN. Faut-il, pour une TV du périmètre, proposer
+   plus tard de couper son IPv6 (au prix de sa connectivité v6) ?
