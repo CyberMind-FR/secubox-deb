@@ -679,16 +679,22 @@ def contournement_appliquer(etat: dict) -> str:
     suspendus = C.lire_suspensions(texte, int(time.time()))
     doh, _ = dnstv_dpi.charger_resolveurs(dnstv.DOSSIER_LISTES / "resolveurs-doh.txt")
     contenu = C.rendre(etat, doh, suspendus)
-    precedent = None
+    precedent, retire = None, False
     if NFT_FICHIER.is_symlink() or (NFT_FICHIER.exists() and not NFT_FICHIER.is_file()):
-        NFT_FICHIER.unlink(missing_ok=True)                              # m5 : un lien ou autre chose qu'un fichier n'est jamais suivi
-        audit("contournement-invalide", "fichier nft en place : lien ou non régulier, retiré")
+        try:
+            NFT_FICHIER.unlink(missing_ok=True)                          # m5 : un lien ou autre chose qu'un fichier n'est jamais suivi
+            audit("contournement-invalide", "fichier nft en place : lien ou non régulier, retiré")
+        except OSError as e:                                             # un répertoire : refus audité, jamais une trace brute
+            audit("contournement-invalide", f"fichier nft en place non régulier, retrait impossible ({type(e).__name__})")
+            return "invalide"
+        retire = True
     else:
         try:
             precedent = NFT_FICHIER.read_text(encoding="utf-8") if NFT_FICHIER.is_file() else None
         except (OSError, UnicodeDecodeError):
             NFT_FICHIER.unlink(missing_ok=True)
             audit("contournement-invalide", "fichier nft en place illisible, retiré")
+            retire = True
     if precedent == contenu:
         if _nft("-c", "-f", str(NFT_FICHIER)):
             return "inchange"
@@ -699,6 +705,8 @@ def contournement_appliquer(etat: dict) -> str:
         audit("contournement-invalide", "fichier en place refusé par nft -c : retiré")
         return "invalide"
     if precedent is None and not C.forces(etat, suspendus):
+        if retire and not _nft("delete", "table", "inet", C.TABLE):      # fichier retiré : la table chargée ne doit pas survivre
+            audit("contournement-retrait-echec", "table absente ou nft en échec")
         return "aucun"                                                   # rien à forcer et rien de posé : aucune table, aucun bruit
     fantome = dossier_root() / "contournement.nft.new"
     fantome.unlink(missing_ok=True)

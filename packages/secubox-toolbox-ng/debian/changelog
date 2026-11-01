@@ -2,6 +2,7 @@ secubox-toolbox-ng (0.14.0-1~trixie1) trixie; urgency=medium
 
   * sbxdpi : agregat PAR APPAREIL, opt-in et borne (SBX TV Privacy lot 4, ref #3374). Seules les adresses du fichier de cibles (DPI_TARGETS_FILE, /run/secubox/sbxdpi-cibles/cibles.json, ecrit par root via secubox-adguard-tv dpi-cibles) sont comptees par adresse : application nDPI, categorie, nom d'hote (SNI/QUIC), port, adresse distante seulement sans nom, flux, octets, premiere et derniere vue, a la minute. Fenetre glissante de 10 minutes, 20 000 cles et 2 000 par adresse au plus, fichier DPI_DEVICES_OUT (/run/secubox/sbxdpi/appareils.json, 0640, groupe secubox) reecrit atomiquement a chaque flush. Sans cibles, rien n'est compte ni ecrit : le reste de sbxdpi reste sans PII. tmpfiles : /run/secubox/sbxdpi 2750 secubox-toolbox:secubox. 3 tests Go.
   * Passe 2 : le fichier de cibles vit dans /run/secubox/sbxdpi-cibles/ (0750 root:secubox-toolbox, fichier 0640, ecrit par root seul) ; sbxdpi refuse un fichier qui n'appartient pas a root, verifie la taille (1 Mio) avant lecture, purge les cles d'une adresse retiree des le rechargement et oublie le mtime d'un fichier disparu. 3 tests Go de plus.
+  * Passe 3 : tmpfiles cree /run/secubox/sbxdpi-cibles 0750 root:secubox-toolbox (le controleur root d'ad-guard y ecrit les cibles ; parent /run/secubox root).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 18:00:00 +0100
 
