@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Dict, List
 
 try:
-    from . import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
+    from . import dnstv, dnstv_detect, dnstv_dpi, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
 except ImportError:
-    from api import dnstv, dnstv_detect, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
+    from api import dnstv, dnstv_detect, dnstv_dpi, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
 
 HISTORIQUE_H = 48
 
@@ -133,6 +133,23 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None) -> dict
             if reglage.auto_essai and c.risque == "faible" and not refus(appareil, c.domaine):   # « partagé », « variable » ou protégé : humain
                 r = regles.transiter(n["id"], "essai", "auto", "essai automatique", maintenant)
                 note(r, "candidat", "essai", "essai automatique")
+        # Lot 4 (#3374, arbitrage 3) : anti faux repli — un domaine PUB apparu juste après un refus publicitaire est proposé puis mis à
+        # l'essai ; garde inchangée (catégorie protégée jamais en essai), retrait par rafale de refus ou contenu disparu ci-dessous.
+        for c in dnstv_dpi.candidats_repli(dnstv_dpi.correler(evts, lambda d: taxo.classer(d)["categorie"])):
+            if c["domaine"] in exclus:
+                continue
+            try:
+                n = regles.proposer(appareil, c["domaine"], c["confiance"], "faible", maintenant, motif="repli publicitaire : " + c["raison"])
+            except dnstv_regles.ErreurRegle:
+                break
+            if n is None:
+                continue
+            exclus.add(c["domaine"])
+            candidats += 1
+            changements.append({"appareil": appareil, "domaine": c["domaine"], "de": "", "vers": "candidat", "motif": n["motif"]})
+            if reglage.auto_essai and not refus(appareil, c["domaine"]):
+                r = regles.transiter(n["id"], "essai", "auto", "essai automatique (repli publicitaire)", maintenant)
+                note(r, "candidat", "essai", "essai automatique (repli publicitaire)")
         en_essai = [r for r in regles.liste() if r["appareil"] == appareil and r["etat"] == "essai"]
         if not en_essai:
             continue

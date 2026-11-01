@@ -11,6 +11,9 @@
   secubox-adguard-tv status     JSON : drop-in présent, état, configuration valide
   secubox-adguard-tv cache-dump  écrit sur la SORTIE STANDARD les seuls couples « nom<TAB>adresse » (A/AAAA) du cache d'Unbound (#2240) : lecture
                                 seule, rien n'est écrit sur le disque par root ; le capteur DNS les range lui-même, sous son compte
+  secubox-adguard-tv conntrack-dump  lot 4 (#3374) : lignes de /proc/net/nf_conntrack dont la source est un appareil du périmètre (lecture seule)
+  secubox-adguard-tv dpi-cibles       lot 4 : filtre BPF par MAC de nDPId et cibles de sbxdpi, reconstruits par root depuis l'état revalidé
+  secubox-adguard-tv ndpid-arreter    lot 4 : garde de charge, arrête nDPId (reprise manuelle : ndpid-reprendre)
 
 Lancé en root par sudo depuis l'API (utilisateur `secubox`) : l'état et la liste personnalisée sont donc écrits par un compte NON privilégié.
 Le contrôleur ne leur fait aucune confiance : il les relit en refusant les liens symboliques, valide chaque champ (adresse IP, mode, nom
@@ -470,9 +473,92 @@ def audit_protection(entree: str) -> int:
     return 0
 
 
+# ── lot 4 (#3374) : DPI par appareil ───────────────────────────────────────────────────────────────────────
+CONNTRACK = os.environ.get("SECUBOX_ADGUARD_TV_CONNTRACK", "/proc/net/nf_conntrack")
+SYSTEMCTL = os.environ.get("SECUBOX_ADGUARD_TV_SYSTEMCTL", "systemctl")
+IP_CMD = os.environ.get("SECUBOX_ADGUARD_TV_IP", "ip")
+CIBLES = Path(os.environ.get("SECUBOX_ADGUARD_TV_CIBLES", "/run/secubox/sbxdpi-cibles.json"))
+BPF_ENV = Path(os.environ.get("SECUBOX_ADGUARD_TV_BPF_ENV", "/etc/secubox/ndpid-engine.d/tv-privacy.env"))
+UNITE_NDPID = "secubox-ndpid-engine.service"
+CONNTRACK_MAX = 64 * 1024 * 1024
+
+
+def _voisins_root() -> dict:
+    """Table de voisinage lue par root lui-même (jamais un fichier écrit par `secubox`)."""
+    def executer(cmd, **kw):
+        return subprocess.run([IP_CMD, *cmd[1:]], **kw)
+    return dnstv.lire_voisins(executer=executer)
+
+
+def _perimetre_root() -> tuple[dict, dict]:
+    """(état revalidé, voisins) ; le périmètre DPI = appareils hors OFF qui ont une MAC."""
+    etat, _ = charger()
+    return etat, _voisins_root()
+
+
+def conntrack_dump() -> int:
+    from api import dnstv_dpi
+    etat, vois = _perimetre_root()
+    adresses = set().union(*[set(a["adresses"]) for a in dnstv_dpi.cibles(etat, vois)["appareils"]] or [set()])
+    try:
+        with open(CONNTRACK, encoding="utf-8", errors="replace") as h:
+            texte = h.read(CONNTRACK_MAX)
+    except OSError:
+        return 0                                                         # pas de conntrack (rien de transféré) : rien à rendre
+    for ligne in texte.splitlines():
+        f = dnstv_dpi.lire_conntrack(ligne, adresses)
+        if f:
+            sys.stdout.write(ligne.strip()[:400] + "\n")
+    return 0
+
+
+def _ecrire_root(chemin: Path, contenu: str, mode: int) -> bool:
+    """Écriture atomique par root ; rend vrai si le contenu a changé."""
+    try:
+        if chemin.read_text(encoding="utf-8") == contenu and not chemin.is_symlink():
+            return False
+    except OSError:
+        pass
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix="." + chemin.name + ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            os.fchmod(h.fileno(), mode)
+            h.write(contenu)
+        os.replace(tmp, chemin)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+    return True
+
+
+def dpi_cibles() -> int:
+    from api import dnstv_dpi
+    etat, vois = _perimetre_root()
+    c = dnstv_dpi.cibles(etat, vois)
+    macs = [a["mac"] for a in c["appareils"] if dnstv.MAC_RE.match(a["mac"])]
+    filtre = " or ".join(f"ether host {m}" for m in macs) or "ether host 00:00:00:00:00:00"     # périmètre vide : nDPId n'analyse rien
+    _ecrire_root(CIBLES, json.dumps(c, sort_keys=True), 0o644)
+    env = ("# Généré par secubox-adguard-tv dpi-cibles (SBX TV Privacy lot 4, #3374) : ne pas modifier à la main.\n"
+           f'FILTRE_BPF="{filtre}"\n')
+    if _ecrire_root(BPF_ENV, env, 0o644):
+        subprocess.run([SYSTEMCTL, "try-restart", UNITE_NDPID], capture_output=True, text=True, timeout=60)
+        audit("dpi-cibles", f"appareils={len(macs)} filtre mis à jour")
+    print(json.dumps({"ok": True, "appareils": len(macs)}))
+    return 0
+
+
+def ndpid(geste: str) -> int:
+    r = subprocess.run([SYSTEMCTL, "stop" if geste == "arreter" else "start", UNITE_NDPID], capture_output=True, text=True, timeout=60)
+    audit("ndpid-arret" if geste == "arreter" else "ndpid-reprise", "garde de charge" if geste == "arreter" else "reprise manuelle")
+    print(json.dumps({"ok": r.returncode == 0}))
+    return 0 if r.returncode == 0 else 1
+
+
 def main(argv: list[str], entree: str | None = None) -> int:
     if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump", "audit-classification",
-                                         "audit-protection"):
+                                         "audit-protection", "conntrack-dump", "dpi-cibles", "ndpid-arreter", "ndpid-reprendre"):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
@@ -486,6 +572,13 @@ def main(argv: list[str], entree: str | None = None) -> int:
         return audit_protection(sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree)
     if argv[1] == "cache-dump":
         return cache_dump()                                              # lecture seule : ni verrou, ni écriture
+    if argv[1] == "conntrack-dump":
+        return conntrack_dump()                                          # lecture seule
+    if argv[1] in ("ndpid-arreter", "ndpid-reprendre"):
+        return ndpid(argv[1].split("-")[1])
+    if argv[1] == "dpi-cibles":
+        with verrou_controleur():
+            return dpi_cibles()
     with verrou_controleur():
         if argv[1] == "apply":
             (dossier_root() / "desactive").unlink(missing_ok=True)         # une demande explicite lève la désactivation
