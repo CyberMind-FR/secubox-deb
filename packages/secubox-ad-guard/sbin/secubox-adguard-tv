@@ -466,7 +466,7 @@ def _enregistrement_protection(r) -> bool:
         return r["domaine"] is None and r["type"] in TYPES_GUIDE and m is None
     if r["geste"] == "annule":                                          # reprend le geste annulé, domaine et type compris s'il y en a
         return ((r["domaine"] is None or (isinstance(r["domaine"], str) and dnstv.valider_domaine(r["domaine"]) == r["domaine"]))
-                and (r["type"] is None or r["type"] in TYPES_EXCEPTION))
+                and (r["type"] is None or r["type"] in TYPES_EXCEPTION + TYPES_ASSISTANT + (TYPE_VU,)))   # lot 6 : type de l'assistant
     return r["domaine"] is None and r["type"] is None
 
 

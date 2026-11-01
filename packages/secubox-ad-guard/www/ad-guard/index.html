@@ -546,10 +546,11 @@
             const data = await api('/devices');
             const container = document.getElementById('device-grid');
             if (!data?.devices?.length) {
-                container.innerHTML = '<p class="vide" style="grid-column:1/-1;">Aucun appareil suivi pour l’instant.</p>'; hauteur();
+                const note = data?.note || 'Inventaire indisponible (session requise ?).';    // lot 6 : inventaire réel = appareils TV Privacy par MAC
+                container.innerHTML = '<p class="vide" style="grid-column:1/-1;">Aucun appareil suivi pour l’instant. ' + esc(note) + ' Déclarez vos téléviseurs dans l’onglet DNS AdBlock TV (TV Privacy).</p>'; hauteur();
                 return;
             }
-            const n = v => Number(v || 0).toLocaleString('fr-FR');
+            const n = v => v == null ? '—' : Number(v).toLocaleString('fr-FR');      // null = compteur illisible, jamais un 0
             container.innerHTML = data.devices.map(d => `
                 <div class="device-card ${d.block_rate > 30 ? 'high-block' : ''}">
                     <div class="device-header">
@@ -566,7 +567,7 @@
                         <div class="device-stat"><div class="value">${n(d.tracker_requests)}</div><div class="label">Traqueurs</div></div>
                     </div>
                     <div class="progress-bar"><div class="progress-fill ${d.block_rate > 30 ? 'high' : ''}" style="width:${Math.max(0, Math.min(100, Number(d.block_rate) || 0))}%"></div></div>
-                    <div class="note-bas">${esc(d.block_rate)} % de requêtes bloquées</div>
+                    <div class="note-bas">${d.block_rate == null ? 'compteurs DNS illisibles' : esc(d.block_rate) + ' % de requêtes bloquées'}</div>
                 </div>`).join('');
             hauteur();
         }

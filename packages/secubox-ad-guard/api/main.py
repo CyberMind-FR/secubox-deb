@@ -7,9 +7,10 @@
 Detects advertising networks, tracking domains, and provides per-device statistics.
 
 Features:
-- Ad network detection via DPI (nDPId integration)
+- Ad/tracker detection by DNS (blocklists compiled by secubox-dns-listes, per-device counters of dnstv)
+- Per-device DPI for TV Privacy devices only (sbxdpi, lot 4 #3374: api/dnstv_dpi.py); ad-guard reads no nDPId feed
 - Tracking domain classification
-- Device-type statistics (IoT, phones, computers, smart TVs)
+- Device statistics from the real inventory (dnstv devices by MAC, profiles from the NAC evidence, lot 1 #3374)
 - Delayed/scheduled blacklisting
 - Blocklist management (hosts, domains, regex)
 - Whitelist support for bypass rules
@@ -34,9 +35,9 @@ from enum import Enum
 from collections import defaultdict
 from functools import wraps
 
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException
 from secubox_core.auth import require_lecture
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 import httpx
 
 from secubox_core.auth import require_jwt
@@ -264,30 +265,8 @@ class AdGuard:
             r"\.amazon-adsystem\.",
         ]
         self._compiled_patterns = [re.compile(p, re.IGNORECASE) for p in self.ad_patterns]
-
-        # Device type fingerprints (OUI + hostname patterns)
-        self.device_fingerprints = {
-            DeviceType.SMART_TV: {
-                "oui": ["samsung", "lg", "sony", "vizio", "tcl", "hisense", "roku"],
-                "hostname": ["tv", "smarttv", "roku", "firetv", "appletv", "chromecast"]
-            },
-            DeviceType.PHONE: {
-                "oui": ["apple", "samsung", "huawei", "xiaomi", "oneplus", "google"],
-                "hostname": ["iphone", "android", "pixel", "galaxy"]
-            },
-            DeviceType.IOT: {
-                "oui": ["espressif", "tuya", "shenzhen", "amazon", "ring", "nest"],
-                "hostname": ["echo", "alexa", "nest", "ring", "hue", "wemo", "smartthings"]
-            },
-            DeviceType.GAME_CONSOLE: {
-                "oui": ["sony", "microsoft", "nintendo"],
-                "hostname": ["playstation", "xbox", "switch", "ps4", "ps5"]
-            },
-            DeviceType.STREAMING: {
-                "oui": ["roku", "amazon"],
-                "hostname": ["roku", "firestick", "shield", "appletv"]
-            }
-        }
+        # Lot 6 (#3374) : plus de classeur par sous-chaînes (« samsung » prenait un téléphone pour une TV) ; le type vient des
+        # profils du lot 1 (preuves du NAC), voir `_inventaire_reel`.
 
     def _ensure_dirs(self):
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -321,7 +300,8 @@ class AdGuard:
             )
         """)
 
-        # Device stats table
+        # Ancienne table des appareils : plus alimentée ni lue pour l'inventaire depuis le lot 6 (#3374). Conservée telle quelle (aucune
+        # migration destructive sur les box déjà installées) ; seuls les compteurs de /stats et /stats/db la lisent encore (0 ligne).
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS devices (
                 mac_address TEXT PRIMARY KEY,
@@ -545,20 +525,6 @@ class AdGuard:
 
         return AdCategory.ADVERTISING
 
-    def classify_device(self, mac: str, hostname: str = None, manufacturer: str = None) -> DeviceType:
-        """Classify device type based on MAC OUI and hostname."""
-        combined = f"{hostname or ''} {manufacturer or ''}".lower()
-
-        for device_type, fingerprints in self.device_fingerprints.items():
-            for oui in fingerprints.get("oui", []):
-                if oui in combined:
-                    return device_type
-            for pattern in fingerprints.get("hostname", []):
-                if pattern in combined:
-                    return device_type
-
-        return DeviceType.UNKNOWN
-
     def is_whitelisted(self, domain: str) -> bool:
         """Check if domain is whitelisted."""
         domain_lower = domain.lower()
@@ -690,159 +656,6 @@ class AdGuard:
             stats_cache.invalidate()
 
         return affected
-
-    def record_detection(
-        self,
-        client_ip: str,
-        domain: str,
-        client_mac: str = None,
-        device_type: DeviceType = DeviceType.UNKNOWN,
-        action: BlockAction = BlockAction.BLOCK
-    ) -> AdDetection:
-        """Record an ad/tracker detection."""
-        is_ad, category, matched_rule = self.is_ad_domain(domain)
-
-        if not is_ad:
-            category = AdCategory.ADVERTISING  # Default if manually recorded
-
-        now = datetime.utcnow().isoformat() + "Z"
-
-        detection = AdDetection(
-            timestamp=now,
-            client_ip=client_ip,
-            client_mac=client_mac,
-            device_type=device_type,
-            domain=domain,
-            category=category,
-            action=action,
-            matched_rule=matched_rule
-        )
-
-        conn = sqlite3.connect(self.db_file)
-        cursor = conn.cursor()
-
-        # Record detection
-        cursor.execute("""
-            INSERT INTO detections (timestamp, client_ip, client_mac, device_type, domain, category, action, matched_rule)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (now, client_ip, client_mac, device_type.value, domain, category.value, action.value, matched_rule))
-
-        # Update blocklist hit count
-        cursor.execute("""
-            UPDATE blocklist SET hits = hits + 1, last_hit = ? WHERE domain = ?
-        """, (now, domain.lower()))
-
-        # Update device stats
-        if client_mac:
-            cursor.execute("""
-                INSERT INTO devices (mac_address, ip_address, device_type, total_requests, blocked_requests, ad_requests, first_seen, last_seen)
-                VALUES (?, ?, ?, 1, ?, ?, ?, ?)
-                ON CONFLICT(mac_address) DO UPDATE SET
-                    ip_address = ?,
-                    total_requests = total_requests + 1,
-                    blocked_requests = blocked_requests + ?,
-                    ad_requests = ad_requests + 1,
-                    last_seen = ?
-            """, (
-                client_mac, client_ip, device_type.value,
-                1 if action == BlockAction.BLOCK else 0,
-                1 if category == AdCategory.ADVERTISING else 0,
-                now, now,
-                client_ip,
-                1 if action == BlockAction.BLOCK else 0,
-                now
-            ))
-
-            # Update per-device domain stats
-            cursor.execute("""
-                INSERT INTO device_domains (mac_address, domain, category, hits, last_hit)
-                VALUES (?, ?, ?, 1, ?)
-                ON CONFLICT(mac_address, domain) DO UPDATE SET
-                    hits = hits + 1,
-                    last_hit = ?
-            """, (client_mac, domain.lower(), category.value, now, now))
-
-        conn.commit()
-        conn.close()
-
-        return detection
-
-    def get_device_stats(self, mac_address: str = None) -> List[DeviceStats]:
-        """Get statistics per device."""
-        conn = sqlite3.connect(self.db_file)
-        cursor = conn.cursor()
-
-        if mac_address:
-            cursor.execute("SELECT * FROM devices WHERE mac_address = ?", (mac_address,))
-        else:
-            cursor.execute("SELECT * FROM devices ORDER BY blocked_requests DESC LIMIT 100")
-
-        devices = []
-        for row in cursor.fetchall():
-            mac = row[0]
-
-            # Get top blocked domains for this device
-            cursor.execute("""
-                SELECT domain, category, hits FROM device_domains
-                WHERE mac_address = ?
-                ORDER BY hits DESC LIMIT 10
-            """, (mac,))
-            top_domains = [
-                {"domain": r[0], "category": r[1], "hits": r[2]}
-                for r in cursor.fetchall()
-            ]
-
-            total = row[4] or 1
-            blocked = row[5] or 0
-
-            devices.append(DeviceStats(
-                mac_address=mac,
-                ip_address=row[1],
-                hostname=row[2],
-                device_type=DeviceType(row[3]) if row[3] else DeviceType.UNKNOWN,
-                total_requests=total,
-                blocked_requests=blocked,
-                ad_requests=row[6] or 0,
-                tracker_requests=row[7] or 0,
-                top_blocked_domains=top_domains,
-                last_seen=row[9] or "",
-                block_rate=round(blocked / total * 100, 2) if total > 0 else 0
-            ))
-
-        conn.close()
-        return devices
-
-    def get_stats_by_device_type(self) -> Dict[str, Any]:
-        """Get aggregated statistics by device type."""
-        conn = sqlite3.connect(self.db_file)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT device_type,
-                   COUNT(*) as device_count,
-                   SUM(total_requests) as total_requests,
-                   SUM(blocked_requests) as blocked_requests,
-                   SUM(ad_requests) as ad_requests
-            FROM devices
-            GROUP BY device_type
-            ORDER BY blocked_requests DESC
-        """)
-
-        stats = {}
-        for row in cursor.fetchall():
-            device_type = row[0] or "unknown"
-            total = row[2] or 1
-            blocked = row[3] or 0
-            stats[device_type] = {
-                "device_count": row[1],
-                "total_requests": total,
-                "blocked_requests": blocked,
-                "ad_requests": row[4] or 0,
-                "block_rate": round(blocked / total * 100, 2) if total > 0 else 0
-            }
-
-        conn.close()
-        return stats
 
     def add_delayed_block(self, domain: str, reason: str, delay_hours: int = 24) -> DelayedBlock:
         """Add domain to delayed blocking queue."""
@@ -1217,57 +1030,85 @@ async def get_stats():
     return s
 
 
+# ── Inventaire des appareils (lot 6 SBX TV PRIVACY, #3374) ──────────────────────────────────────────────────────────────────
+# `/devices` et `/stats/by-device-type` lisaient la table `devices`, que seul `POST /detect` (jamais appelé, retiré) alimentait : la page
+# « Appareils » restait vide. Ils lisent désormais l'inventaire réel : les appareils déclarés de TV Privacy, regroupés par MAC, typés par les
+# profils du lot 1 (preuves du NAC, jamais un nom ni une sous-chaîne), comptés par les compteurs DNS de dnstv.
+_TYPE_DE_PROFIL = {"SAMSUNG_TIZEN": "smart_tv", "LG_WEBOS": "smart_tv", "ANDROID_TV": "smart_tv", "GENERIC_SMART_TV": "smart_tv",
+                   "FREEBOX_PLAYER": "streaming", "APPLE_TV": "streaming", "GOOGLE_TV": "streaming"}
+_NOTE_INVENTAIRE = ("Inventaire tiré des appareils déclarés dans TV Privacy (regroupés par adresse MAC, profil déduit des preuves du NAC). "
+                    "Un appareil non déclaré n'y figure pas : l'inventaire complet du réseau est celui du NAC.")
+
+
+def _inventaire_reel() -> Dict[str, Any]:
+    try:
+        from . import dnstv_routes as _tvr
+    except ImportError:                                  # lancé hors paquet
+        from api import dnstv_routes as _tvr
+    etat, erreur = dnstv.lire_etat()
+    if erreur or not etat:
+        return {"devices": [], "count": 0, "source": "dnstv", "lisible": False,
+                "note": f"Inventaire illisible ({erreur or 'état absent'}) : rien n'est affiché plutôt qu'un zéro trompeur."}
+    vue = _tvr._vue_appareils(etat)
+    try:
+        magasin = dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db")
+    except Exception:                                    # noqa: BLE001 — base absente : appareils listés, compteurs inconnus
+        magasin = None
+    out = []
+    for a in vue:
+        total = bloquees = pubs = pistage = 0
+        compte = magasin is not None
+        for ip in a["ips"]:
+            if magasin is None:
+                break
+            try:
+                st = magasin.statistiques(client=ip)
+            except Exception:                            # noqa: BLE001
+                compte = False
+                break
+            total += int(st["requetes"] or 0)
+            bloquees += int(st["par_decision"].get("BLOCKED") or 0)
+            pubs += int(st["par_categorie"].get("advertising") or 0)
+            pistage += int(st["par_categorie"].get("tracking") or 0)
+        out.append({"mac_address": a["mac"] or "", "ip_address": a["ips"][0] if a["ips"] else None, "hostname": a["nom"],
+                    "device_type": _TYPE_DE_PROFIL.get(a["profil"], "unknown"), "profil": a["profil"],
+                    "profil_confiance": a["profil_confiance"], "total_requests": total if compte else None,
+                    "blocked_requests": bloquees if compte else None, "ad_requests": pubs if compte else None,
+                    "tracker_requests": pistage if compte else None,
+                    "block_rate": (round(bloquees / total * 100, 2) if total else 0) if compte else None})
+    out.sort(key=lambda d: -(d["blocked_requests"] or 0))
+    return {"devices": out, "count": len(out), "source": "dnstv", "lisible": True, "note": "" if out else _NOTE_INVENTAIRE}
+
+
 @app.get("/stats/by-device-type", dependencies=[Depends(require_jwt)])
 async def get_stats_by_device_type():
-    """Get statistics grouped by device type."""
-    return guard.get_stats_by_device_type()
+    """Statistiques par type d'appareil, sur l'inventaire réel (lot 6, #3374)."""
+    inv = await asyncio.to_thread(_inventaire_reel)
+    stats: Dict[str, Dict[str, Any]] = {}
+    for d in inv["devices"]:
+        s = stats.setdefault(d["device_type"], {"device_count": 0, "total_requests": 0, "blocked_requests": 0, "ad_requests": 0})
+        s["device_count"] += 1
+        for k in ("total_requests", "blocked_requests", "ad_requests"):
+            s[k] += d[k] or 0
+    for s in stats.values():
+        s["block_rate"] = round(s["blocked_requests"] / s["total_requests"] * 100, 2) if s["total_requests"] else 0
+    return stats
 
 
 @app.get("/devices", dependencies=[Depends(require_jwt)])
 async def list_devices():
-    """List device statistics."""
-    devices = guard.get_device_stats()
-    return {"devices": devices, "count": len(devices)}
+    """Appareils de l'inventaire réel (TV Privacy par MAC, profils du NAC) et leurs compteurs DNS."""
+    return await asyncio.to_thread(_inventaire_reel)
 
 
 @app.get("/devices/{mac_address}", dependencies=[Depends(require_jwt)])
 async def get_device(mac_address: str):
-    """Get specific device statistics."""
-    devices = guard.get_device_stats(mac_address)
-    if not devices:
-        raise HTTPException(status_code=404, detail="Device not found")
-    return devices[0]
-
-
-@app.post("/detect", dependencies=[Depends(require_jwt)])
-async def record_detection(
-    background_tasks: BackgroundTasks,
-    client_ip: str,
-    domain: str,
-    client_mac: str = None,
-    device_type: DeviceType = DeviceType.UNKNOWN
-):
-    """Record an ad/tracker detection."""
-    detection = guard.record_detection(client_ip, domain, client_mac, device_type)
-
-    # Send webhook notification in background
-    event = "block" if detection.action == BlockAction.BLOCK else "detect"
-    background_tasks.add_task(
-        guard._send_webhook,
-        event,
-        {
-            "domain": detection.domain,
-            "category": detection.category.value if detection.category else None,
-            "client_ip": detection.client_ip,
-            "client_mac": detection.client_mac,
-            "action": detection.action.value
-        }
-    )
-
-    # Invalidate stats cache on new detection
-    stats_cache.invalidate("overall_stats")
-
-    return detection
+    """Un appareil de l'inventaire réel, par MAC."""
+    inv = await asyncio.to_thread(_inventaire_reel)
+    for d in inv["devices"]:
+        if d["mac_address"] and d["mac_address"] == mac_address.lower():
+            return d
+    raise HTTPException(status_code=404, detail="Device not found")
 
 
 @app.get("/check/{domain}", dependencies=[Depends(require_lecture)])
@@ -1473,26 +1314,59 @@ async def learn_run():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class SeuilsApprentissage(BaseModel):
+    """Seuils de l'autolearn du toolbox (lot 6, #3374) : clés connues seulement, entiers stricts et bornés ; au moins une clé."""
+    model_config = ConfigDict(extra="forbid")
+    autolearn_ad_min_sites: Optional[StrictInt] = Field(None, ge=1, le=100)
+    autolearn_social_min_sites: Optional[StrictInt] = Field(None, ge=1, le=100)
+    autolearn_min_sites: Optional[StrictInt] = Field(None, ge=1, le=100)
+    autolearn_social_window_hours: Optional[StrictInt] = Field(None, ge=1, le=24 * 365)
+    autolearn_ti_min_weight: Optional[StrictInt] = Field(None, ge=0, le=100)
+
+
+def _ecrire_filters_atomique(cfg: dict) -> None:
+    """Écrit filters.json par fichier temporaire voisin + fsync + rename : jamais un fichier à moitié écrit pour l'autolearn."""
+    import tempfile
+    d = _FILTERS_F.parent
+    fd, tmp = tempfile.mkstemp(prefix=".filters.", suffix=".tmp", dir=str(d))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            h.write(_json.dumps(cfg, indent=2))
+            h.flush()
+            os.fsync(h.fileno())
+        try:
+            os.chmod(tmp, _FILTERS_F.stat().st_mode & 0o777)
+        except OSError:
+            os.chmod(tmp, 0o644)
+        os.replace(tmp, _FILTERS_F)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 @app.post("/learn/thresholds", dependencies=[Depends(require_jwt)])
-async def learn_set_thresholds(body: dict):
-    """Tune autolearn aggressiveness (persisted to filters.json, next cycle)."""
-    cfg = {}
+async def learn_set_thresholds(body: SeuilsApprentissage):
+    """Tune autolearn aggressiveness (persisted to filters.json, next cycle). Corps validé (422 sinon), écriture atomique."""
+    changed = body.model_dump(exclude_none=True)
+    if not changed:
+        raise HTTPException(status_code=422, detail="aucun seuil donné")
+    cfg: dict = {}
+    if _FILTERS_F.exists():
+        try:
+            brut = _json.loads(_FILTERS_F.read_text())
+        except (OSError, ValueError) as e:
+            raise HTTPException(status_code=409, detail=f"filters.json illisible ({type(e).__name__}) : rien n'est écrit") from None
+        if not isinstance(brut, dict):
+            raise HTTPException(status_code=409, detail="filters.json n'est pas un objet : rien n'est écrit")
+        cfg = brut
+    cfg.update(changed)
     try:
-        cfg = _json.loads(_FILTERS_F.read_text())
-    except Exception:
-        pass
-    changed = {}
-    for k in _LEARN_DEFAULTS:
-        if k in body:
-            try:
-                cfg[k] = int(body[k])
-                changed[k] = cfg[k]
-            except Exception:
-                pass
-    try:
-        _FILTERS_F.write_text(_json.dumps(cfg, indent=2))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"write filters.json: {e}")
+        _ecrire_filters_atomique(cfg)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"write filters.json: {type(e).__name__}") from None
     return {"status": "ok", "changed": changed, "note": "applies next cycle"}
 
 
