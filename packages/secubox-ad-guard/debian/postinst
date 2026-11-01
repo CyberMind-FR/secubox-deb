@@ -26,6 +26,16 @@ if [ "$1" = "configure" ]; then
     # L'unite debian/secubox-ad-guard.service subsiste comme reference du
     # mode autonome ; elle n'est deliberement pas installee (#1362).
 fi
+# SBX TV Privacy (#3374, I2) : PREMIÈRE installation seulement ($2 vide) — état initial AUTO, ajout automatique selon le TOML livré
+# (ajout_auto_initial). Une mise à niveau ne change rien ; un etat.json absent sur une box existante n'active rien.
+if [ "$1" = configure ] && [ -z "$2" ]; then
+    if [ ! -e /var/lib/secubox/ad-guard/dnstv/etat.json ] && [ ! -L /var/lib/secubox/ad-guard/dnstv/etat.json ]; then
+        runuser -u secubox -- python3 -c 'import sys; sys.path.insert(0, "/usr/lib/secubox/ad-guard"); from api import dnstv; dnstv.poser_etat_initial()' \
+            || echo "secubox-ad-guard : état initial SBX TV Privacy non écrit" >&2
+    fi
+fi
+# L'ancien cache de classification (JSON, jusqu'à 16 Mo) est remplacé par une base SQLite (#3374) : il est supprimé ici.
+rm -f /var/lib/secubox/ad-guard/dnstv/classification-cache.json
 # #1819 : les domaines dont la box elle-même a besoin (db-ip.com pour la base
 # ASN…) restent résolus — la liste est régénérée en arrière-plan, sans bloquer
 # dpkg, seulement si le puits DNS est actif.

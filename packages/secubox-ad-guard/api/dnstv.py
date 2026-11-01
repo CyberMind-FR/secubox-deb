@@ -387,11 +387,23 @@ def etat_initial(conf: dict) -> dict:
     return dict(ETAT_DEFAUT, clients=[], ignores=[], ajout_auto=tv.get("ajout_auto_initial") is True)
 
 
+def poser_etat_initial(dossier: Path = None) -> bool:
+    """PREMIÈRE installation seulement (postinst, `configure` sans version précédente) : écrit l'état initial (AUTO par défaut,
+    ajout automatique selon `ajout_auto_initial` du TOML) s'il n'existe pas encore. Rend vrai s'il l'a écrit. Une box existante,
+    une mise à niveau ou un état déjà présent ne sont jamais touchés (#3374, I2)."""
+    d = dossier or DOSSIER_ETAT
+    f = d / "etat.json"
+    if f.exists() or f.is_symlink():
+        return False
+    ecrire_etat(etat_initial(_conf_paquet()), d)
+    return True
+
+
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
     """(état, erreur). Un état absent = POC inactif ; un état CORROMPU = POC inactif ET l'erreur est rendue (jamais d'état deviné)."""
     f = (dossier or DOSSIER_ETAT) / "etat.json"
     if not f.is_file():
-        return etat_initial(_conf_paquet()), None
+        return dict(ETAT_DEFAUT, clients=[], ignores=[]), None    # I2 : un état absent n'active JAMAIS l'ajout automatique
     try:
         return valider_etat(json.loads(f.read_text())), None
     except (ValueError, OSError) as e:

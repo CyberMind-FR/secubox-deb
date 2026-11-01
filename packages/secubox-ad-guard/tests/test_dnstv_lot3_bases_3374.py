@@ -54,12 +54,11 @@ def test_etat_initial_nouvelle_installation(monde):
     assert dnstv.etat_initial({})["ajout_auto"] is False
 
 
-def test_lire_etat_sans_fichier_applique_le_defaut_du_paquet(monde, monkeypatch):
+def test_lire_etat_sans_fichier_n_active_pas_l_ajout_auto(monde, monkeypatch):
+    """Passe 2 (I2) : le défaut du paquet ne s'applique qu'à la première installation (postinst), jamais à un état absent."""
     monkeypatch.setattr(dnstv, "_conf_paquet", lambda: {"adblock_tv": {"ajout_auto_initial": True}})
     etat, err = dnstv.lire_etat()
-    assert err is None and etat["ajout_auto"] is True
-    dnstv.ecrire_etat(dict(etat, ajout_auto=False))
-    assert dnstv.lire_etat()[0]["ajout_auto"] is False                     # une box existante garde son réglage
+    assert err is None and etat["ajout_auto"] is False
 
 
 # ── suffixe de recherche ─────────────────────────────────────────────────────────────────────────────
