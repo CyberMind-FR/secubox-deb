@@ -339,3 +339,7 @@ def test_applications_rafraichies_seulement_onglet_visible():
 
 def test_arret_du_dpi_annonce_pour_toute_la_box():
     assert "DPI ARRÊTÉ pour toute la box (Hall, /ndpid/ compris)" in CODE and "relance manuelle" in CODE
+
+
+def test_signal_de_charge_sans_arret_affiche():
+    assert "e.charge_signal" in CODE

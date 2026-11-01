@@ -97,7 +97,8 @@ def etat_dpi(lecteur=Depends(_r.require_lecture_nominative)):
         else:
             appareils.append({"nom": a.get("nom"), "couverture": a.get("couverture")})
     return {"disponible": age <= 600, "raison": None if age <= 600 else "perime", "age_s": age, "sources": e.get("sources", {}),
-            "pause_charge": (e.get("charge") or {}).get("pause"), "appareils": appareils}
+            "pause_charge": (e.get("charge") or {}).get("depuis") if (e.get("charge") or {}).get("etat") == "arrete" else None,
+            "charge_signal": (e.get("charge") or {}).get("signal"), "appareils": appareils}
 
 
 @router.get("/protection/dpi/applications")

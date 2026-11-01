@@ -549,9 +549,58 @@ def dpi_cibles() -> int:
     return 0
 
 
+LOADAVG = os.environ.get("SECUBOX_ADGUARD_TV_LOADAVG", "/proc/loadavg")
+NDPID_CPU = os.environ.get("SECUBOX_ADGUARD_TV_NDPID_CPU", "/sys/fs/cgroup/system.slice/secubox-ndpid-engine.service/cpu.stat")
+ECHANTILLON_S = float(os.environ.get("SECUBOX_ADGUARD_TV_ECHANTILLON_S", "2"))
+PART_NDPID_MIN = 0.20
+
+
+def _usage_ndpid() -> int | None:
+    try:
+        with open(NDPID_CPU, encoding="ascii") as h:
+            for ligne in h.read(4096).splitlines():
+                k, _, v = ligne.partition(" ")
+                if k == "usage_usec":
+                    return int(v)
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+def _part_ndpid() -> float | None:
+    """Part d'un cœur prise par nDPId, MESURÉE par root sur son cgroup (deux relevés). Variable du banc : SECUBOX_ADGUARD_TV_NDPID_PART
+    (sudo remet l'environnement à zéro : sans effet en production)."""
+    if os.environ.get("SECUBOX_ADGUARD_TV_NDPID_PART"):
+        return float(os.environ["SECUBOX_ADGUARD_TV_NDPID_PART"])
+    a = _usage_ndpid()
+    t0 = time.monotonic()
+    time.sleep(ECHANTILLON_S)
+    b = _usage_ndpid()
+    dt = time.monotonic() - t0
+    if a is None or b is None or dt <= 0:
+        return None
+    return max(0, b - a) / (dt * 1e6)
+
+
 def ndpid(geste: str) -> int:
+    """S1 : root REVÉRIFIE la condition (charge à 5 min > nombre de cœurs ET nDPId ≥ 20 % d'un cœur) avant d'arrêter ; sinon refus (2).
+    L'audit porte le code de retour réel de systemctl."""
+    if geste == "arreter":
+        try:
+            with open(LOADAVG, encoding="ascii") as h:
+                charge5 = float(h.read(256).split()[1])
+        except (OSError, ValueError, IndexError):
+            charge5 = 0.0
+        ncpu = os.cpu_count() or 1
+        part = _part_ndpid() if charge5 > ncpu else None
+        if charge5 <= ncpu or part is None or part < PART_NDPID_MIN:
+            audit("ndpid-arret-refuse", f"charge5={charge5} coeurs={ncpu} part_ndpid={part}")
+            print(json.dumps({"ok": False, "refus": "condition de charge non remplie"}))
+            return 2
+    # sans check=True : le code de retour est lu et audité ci-dessous (S1), une erreur n'est jamais avalée
     r = subprocess.run([SYSTEMCTL, "stop" if geste == "arreter" else "start", UNITE_NDPID], capture_output=True, text=True, timeout=60)
-    audit("ndpid-arret" if geste == "arreter" else "ndpid-reprise", "garde de charge : TOUT le DPI de la box arrêté" if geste == "arreter" else "reprise manuelle")
+    audit("ndpid-arret" if geste == "arreter" else "ndpid-reprise",
+          ("garde de charge : TOUT le DPI de la box arrêté" if geste == "arreter" else "reprise manuelle") + f" rc={r.returncode}")
     print(json.dumps({"ok": r.returncode == 0}))
     return 0 if r.returncode == 0 else 1
 

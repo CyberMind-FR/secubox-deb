@@ -635,8 +635,67 @@ def _resolus(maintenant: int) -> Set[str]:
         return set()
 
 
+CGROUP_NDPID = Path(os.environ.get("SECUBOX_ADGUARD_NDPID_CGROUP", "/sys/fs/cgroup/system.slice/secubox-ndpid-engine.service/cpu.stat"))
+PART_NDPID_MIN = 0.20                                  # I4 : nDPId n'est arrêté que s'il prend au moins 20 % d'un cœur
+CHARGE_NORMALE = {"etat": "normal", "depuis": None, "signal": None, "usage_usec": None, "usage_ts": None}
+
+
+def usage_ndpid(chemin: Optional[Path] = None) -> Optional[int]:
+    """Temps CPU cumulé (µs) du cgroup de nDPId ; None si illisible (cgroup v1, unité absente)."""
+    try:
+        for ligne in (chemin or CGROUP_NDPID).read_text(encoding="ascii").splitlines():
+            k, _, v = ligne.partition(" ")
+            if k == "usage_usec":
+                return int(v)
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+@contextlib.contextmanager
+def verrou_dpi():
+    """I2 : un seul écrivain à la fois de `etat-dpi.json` (moteur ou reprise manuelle)."""
+    import fcntl
+    fd = os.open(dnstv.DOSSIER_ETAT / "etat-dpi.verrou", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def garde_charge(ch: dict, maintenant: int, charge5: float, ncpu: int, usage: Optional[int], executer) -> dict:
+    """Machine à états à champ unique `etat` ∈ normal | haute | arrete. Arrêt de nDPId (donc de TOUT le DPI de la box) seulement si la
+    charge à 5 min dépasse le nombre de cœurs depuis au moins 5 min ET que nDPId prend lui-même ≥ 20 % d'un cœur ; sinon on signale.
+    `arrete` n'est posé que si root a réellement arrêté nDPId (code 0) ; seule la reprise manuelle en sort."""
+    ch = dict(CHARGE_NORMALE, **{k: v for k, v in (ch or {}).items() if k in CHARGE_NORMALE})
+    part = None
+    if usage is not None and ch.get("usage_usec") is not None and ch.get("usage_ts") and maintenant > ch["usage_ts"]:
+        part = max(0, usage - ch["usage_usec"]) / ((maintenant - ch["usage_ts"]) * 1e6)
+    ch["usage_usec"], ch["usage_ts"] = usage, maintenant
+    if ch["etat"] == "arrete":
+        return ch
+    if charge5 <= ncpu:
+        ch.update(etat="normal", depuis=None, signal=None)
+        return ch
+    if ch["etat"] != "haute":
+        ch.update(etat="haute", depuis=maintenant, signal="charge élevée")
+    if maintenant - ch["depuis"] < DUREE_CHARGE_S:
+        return ch
+    if part is None or part < PART_NDPID_MIN:
+        ch["signal"] = ("charge élevée depuis plus de 5 min, nDPId non en cause"
+                        + (f" ({round(part * 100)} % d'un cœur)" if part is not None else " (part CPU illisible)") + " : aucun arrêt")
+        return ch
+    r = executer("ndpid-arreter")
+    if getattr(r, "returncode", 1) == 0:
+        ch.update(etat="arrete", depuis=maintenant, signal="DPI arrêté : charge élevée et nDPId à " + f"{round(part * 100)} %")
+    else:
+        ch["signal"] = "arrêt de nDPId refusé par le contrôleur (condition revérifiée par root)"
+    return ch
+
+
 def moteur(maintenant: int, executer: Callable[[str], object], voisins: Dict[str, str], charge=os.getloadavg, cpus=None,
-           sbxdpi_chemin: Optional[Path] = None) -> dict:
+           sbxdpi_chemin: Optional[Path] = None, cpu_ndpid: Callable[[], Optional[int]] = usage_ndpid) -> dict:
     """Un passage : cibles (toutes les 5 min ou si elles changent), conntrack (verbe root), fichier de sbxdpi, découvertes, garde de
     charge (charge à 5 min > nombre de cœurs pendant 5 min : arrêt de nDPId, reprise MANUELLE). N'échoue jamais le moteur."""
     etat, erreur = dnstv.lire_etat()
@@ -666,27 +725,26 @@ def moteur(maintenant: int, executer: Callable[[str], object], voisins: Dict[str
     res = passage(etat, dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db"), mag, lambda d: taxo.classer(d)["categorie"], maintenant, voisins,
                   sbx, ct, _resolus(maintenant), dnstv.adresses_locales(), doh)
     mag.menage(maintenant)
-    ch = dict(prev.get("charge") or {"haute_depuis": None, "pause": None})
-    n = cpus or os.cpu_count() or 1
-    if charge()[1] > n:
-        ch["haute_depuis"] = ch.get("haute_depuis") or maintenant
-        if ch.get("pause") is None and maintenant - ch["haute_depuis"] >= DUREE_CHARGE_S:
-            executer("ndpid-arreter")
-            ch["pause"] = maintenant
-    else:
-        ch["haute_depuis"] = None
-    e = dict(res["etat"], charge=ch, cibles=c, cibles_ts=cibles_ts)
-    _ecrire_etat_dpi(e)
+    usage = cpu_ndpid()
+    with verrou_dpi():                                 # I2 : la charge est relue SOUS le verrou, jamais reprise du début du passage
+        actuel = lire_etat_dpi() or {}
+        ch = garde_charge(actuel.get("charge") or {}, maintenant, charge()[1], cpus or os.cpu_count() or 1, usage, executer)
+        e = dict(res["etat"], charge=ch, cibles=c, cibles_ts=cibles_ts)
+        _ecrire_etat_dpi(e)
     return {"ok": True, "etat": e}
 
 
 def reprendre_manuellement(executer: Callable[[str], object]) -> dict:
-    """Reprise de nDPId après une pause de charge : geste de l'administrateur seulement."""
+    """Reprise de nDPId après un arrêt de charge : geste de l'administrateur seulement. Écrite sous le verrou ; la garde est réarmée
+    (`etat` = normal)."""
     r = executer("ndpid-reprendre")
-    e = lire_etat_dpi() or {"version": 1, "appareils": [], "sources": {}}
-    e["charge"] = {"haute_depuis": None, "pause": None}
-    _ecrire_etat_dpi(e)
-    return {"ok": getattr(r, "returncode", 1) == 0}
+    ok = getattr(r, "returncode", 1) == 0
+    if ok:
+        with verrou_dpi():
+            e = lire_etat_dpi() or {"version": 1, "appareils": [], "sources": {}}
+            e["charge"] = dict(CHARGE_NORMALE)
+            _ecrire_etat_dpi(e)
+    return {"ok": ok}
 
 
 def frise(evts: List[dict], categorie: Callable[[str], str], motifs_ssai: Iterable[re.Pattern] = (),

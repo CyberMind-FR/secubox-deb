@@ -25,11 +25,27 @@ def dossier(tmp_path, monkeypatch):
     return tmp_path
 
 
-def lancer(dossier, appels, charge=(0.5, 0.5, 0.5), now=NOW, sbx=None):
+def lancer(dossier, appels, charge=(0.5, 0.5, 0.5), now=NOW, sbx=None, cpu=None, rc_arret=0, pendant=None):
+    """`cpu` : usage cumulé du cgroup de nDPId en µs (None = illisible) ; `pendant` : action jouée au milieu du passage."""
     def executer(verbe):
         appels.append(verbe)
-        return Rep(0, "") if verbe != "conntrack-dump" else Rep(0, "")
-    return D.moteur(now, executer, voisins={}, charge=lambda: charge, cpus=4, sbxdpi_chemin=dossier / "absent.json")
+        if verbe == "conntrack-dump" and pendant:
+            pendant()
+        return Rep(rc_arret if verbe == "ndpid-arreter" else 0, "")
+    return D.moteur(now, executer, voisins={}, charge=lambda: charge, cpus=4, sbxdpi_chemin=dossier / "absent.json",
+                    cpu_ndpid=(lambda: cpu(now)) if cpu else (lambda: None))
+
+
+def ndpid_occupe(now):                                   # 50 % d'un cœur
+    return (now - NOW) * 500_000
+
+
+def ndpid_calme(now):                                    # 5 % d'un cœur
+    return (now - NOW) * 50_000
+
+
+def charge_etat(dossier):
+    return json.loads((dossier / D.FICHIER_ETAT).read_text())["charge"]
 
 
 def test_passage_ecrit_l_etat_et_demande_les_cibles_toutes_les_5_minutes(dossier):
@@ -48,26 +64,56 @@ def test_passage_ecrit_l_etat_et_demande_les_cibles_toutes_les_5_minutes(dossier
 def test_garde_de_charge_arrete_nDPId_apres_5_minutes_puis_attend_la_reprise_manuelle(dossier):
     appels = []
     for k in range(0, 5):
-        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k)
+        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k, cpu=ndpid_occupe)
     assert "ndpid-arreter" not in appels                                     # 4 min : un pic, pas un arrêt
     for k in range(5, 11):
-        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k)
+        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k, cpu=ndpid_occupe)
     assert appels.count("ndpid-arreter") == 1
-    e = json.loads((dossier / D.FICHIER_ETAT).read_text())
-    assert e["charge"]["pause"] == NOW + 300
-    lancer(dossier, appels, charge=(0.1, 0.1, 0.1), now=NOW + 1200)
-    assert json.loads((dossier / D.FICHIER_ETAT).read_text())["charge"]["pause"] == NOW + 300     # reprise manuelle seulement
+    c = charge_etat(dossier)
+    assert c["etat"] == "arrete" and c["depuis"] == NOW + 300
+    lancer(dossier, appels, charge=(0.1, 0.1, 0.1), now=NOW + 1200, cpu=ndpid_occupe)
+    assert charge_etat(dossier)["etat"] == "arrete"                          # reprise manuelle seulement
     D.reprendre_manuellement(lambda verbe: appels.append(verbe) or Rep())
-    assert "ndpid-reprendre" in appels and json.loads((dossier / D.FICHIER_ETAT).read_text())["charge"]["pause"] is None
+    assert "ndpid-reprendre" in appels and charge_etat(dossier)["etat"] == "normal"
 
 
 def test_charge_breve_n_arrete_rien(dossier):
     appels = []
-    lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW)
-    lancer(dossier, appels, charge=(0.1, 0.1, 0.1), now=NOW + 60)
+    lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW, cpu=ndpid_occupe)
+    lancer(dossier, appels, charge=(0.1, 0.1, 0.1), now=NOW + 60, cpu=ndpid_occupe)
     for k in range(2, 6):
-        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k)
+        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k, cpu=ndpid_occupe)
     assert "ndpid-arreter" not in appels
+
+
+def test_nDPId_peu_gourmand_on_signale_sans_arreter(dossier):
+    appels = []
+    for k in range(0, 8):
+        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k, cpu=ndpid_calme)
+    assert "ndpid-arreter" not in appels
+    c = charge_etat(dossier)
+    assert c["etat"] == "haute" and "nDPId non en cause" in c["signal"]
+
+
+def test_arret_refuse_par_root_n_affiche_pas_de_pause(dossier):
+    appels = []
+    for k in range(0, 7):
+        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k, cpu=ndpid_occupe, rc_arret=2)
+    assert "ndpid-arreter" in appels and charge_etat(dossier)["etat"] != "arrete"
+
+
+def test_reprise_pendant_un_passage_n_est_pas_ecrasee_et_la_garde_se_rearme(dossier):
+    appels = []
+    for k in range(0, 6):
+        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k, cpu=ndpid_occupe)
+    assert charge_etat(dossier)["etat"] == "arrete"
+    lancer(dossier, appels, charge=(0.1, 0.1, 0.1), now=NOW + 600, cpu=ndpid_occupe,
+           pendant=lambda: D.reprendre_manuellement(lambda v: Rep()))
+    assert charge_etat(dossier)["etat"] == "normal"                          # la reprise tombée au milieu du passage tient
+    n = appels.count("ndpid-arreter")
+    for k in range(11, 18):
+        lancer(dossier, appels, charge=(9.0, 9.0, 9.0), now=NOW + 60 * k, cpu=ndpid_occupe)
+    assert appels.count("ndpid-arreter") == n + 1                            # garde réarmée
 
 
 def test_lecture_cassee_suspend_le_forcage_de_l_appareil():

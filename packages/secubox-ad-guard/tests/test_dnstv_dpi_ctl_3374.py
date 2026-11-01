@@ -59,7 +59,9 @@ def test_dpi_cibles_ecrit_les_cibles_de_sbxdpi_sans_filtre_de_capture(dpi):
     assert (dpi["tmp"] / "audit.log").read_text().count("dpi-cibles") == 1          # inchangé : pas de nouvelle entrée
 
 
-def test_garde_de_charge_arrete_puis_reprend_nDPId(dpi):
+def test_garde_de_charge_arrete_puis_reprend_nDPId(dpi, monkeypatch):
+    _charge_root(dpi, monkeypatch, "9.0", [])
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_NDPID_PART", "0.5")
     assert ctl(dpi, "ndpid-arreter") == 0 and ctl(dpi, "ndpid-reprendre") == 0
     j = dpi["journal"].read_text()
     assert "systemctl stop secubox-ndpid-engine.service" in j and "systemctl start secubox-ndpid-engine.service" in j
@@ -71,3 +73,38 @@ def test_sudoers_nomme_les_nouveaux_verbes_exactement():
     s = (PKG / "sudoers.d" / "secubox-adguard-tv").read_text()
     for v in ("conntrack-dump", "dpi-cibles", "ndpid-arreter", "ndpid-reprendre"):
         assert f"/usr/sbin/secubox-adguard-tv {v}" in s
+
+
+def _charge_root(dpi, monkeypatch, charge, parts):
+    t = dpi["tmp"]
+    (t / "loadavg").write_text(f"{charge} {charge} {charge} 1/100 1\n")
+    st = t / "cpu.stat"
+    st.write_text("usage_usec 0\n")
+    vals = iter(parts)
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_LOADAVG", str(t / "loadavg"))
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_NDPID_CPU", str(st))
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_ECHANTILLON_S", "0")
+    import os
+    monkeypatch.setattr(os, "cpu_count", lambda: 4)
+    return st, vals
+
+
+def test_root_revérifie_la_charge_et_refuse_sinon(dpi, monkeypatch):
+    _charge_root(dpi, monkeypatch, "0.50", [])
+    assert ctl(dpi, "ndpid-arreter") == 2
+    assert not dpi["journal"].exists() or "stop" not in dpi["journal"].read_text()
+    assert "ndpid-arret-refuse" in (dpi["tmp"] / "audit.log").read_text()
+
+
+def test_root_refuse_si_nDPId_n_est_pas_en_cause(dpi, monkeypatch):
+    _charge_root(dpi, monkeypatch, "9.0", [])                       # cpu.stat immobile : 0 %
+    assert ctl(dpi, "ndpid-arreter") == 2
+
+
+def test_audit_de_l_arret_porte_le_code_reel(dpi, monkeypatch):
+    t = dpi["tmp"]
+    _charge_root(dpi, monkeypatch, "9.0", [])
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_NDPID_PART", "0.5")      # part mesurée injectée (banc)
+    (t / "systemctl").write_text(f"#!/bin/sh\necho \"systemctl $*\" >> {dpi['journal']}\nexit 5\n")
+    assert ctl(dpi, "ndpid-arreter") == 1
+    assert "rc=5" in (t / "audit.log").read_text()

@@ -34,7 +34,7 @@ def client(tmp_path, monkeypatch):
                                    "refus_ts": now - 100, "delai_s": 3, "confiance": 70, "raison": "apparu 3 s après le blocage de pagead2"}])
     D._ecrire_etat_dpi({"version": 1, "genere": now, "sources": {"sbxdpi": "absent", "conntrack": "absent"},
                         "appareils": [{"mac": MAC, "nom": "TV salon", "mode": "auto", "couverture": "dns+dpi"}],
-                        "charge": {"haute_depuis": None, "pause": None}})
+                        "charge": {"etat": "normal", "depuis": None}})
     app = FastAPI()
     app.include_router(L.router)
     qui = {"sub": "admin"}
