@@ -7,6 +7,11 @@ secubox-ad-guard (1.19.0-1~trixie1) trixie; urgency=medium
     simple, simple/suspects) exigent une vraie session (require_lecture_nominative) :
     le lecteur anonyme du mode tableau de bord reçoit 403. /status lui rend les
     compteurs sans clients ni appareils (ref #3374).
+  * Page /tv-privacy/ « SBX TV Privacy » (entrée de menu, catégorie wall) : vue
+    générale, équipements (correction de profil confirmée), analyseur des
+    domaines par appareil (filtres, correction de catégorie confirmée). Lecture
+    des routes existantes seulement, données posées par textContent. Non repris :
+    pagination par décalage (la route n'offre que `limite`) (ref #3374).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 10:02:18 +0100
 

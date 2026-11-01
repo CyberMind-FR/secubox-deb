@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « SBX TV Privacy » (#3374) : ce que les téléviseurs et lecteurs du foyer demandent au DNS de la box.
+  Trois vues : vue générale, équipements (par MAC), analyseur (domaines classés par appareil).
+  DONNÉES RÉELLES UNIQUEMENT, lues dans les routes existantes d'ad-guard (`/adblock-tv/appareils`, `/adblock-tv/classification`,
+  `/adblock-tv/live`) ; une session est requise (données personnelles par appareil, jamais servies au tableau de bord anonyme).
+  Deux corrections, celles qu'offre déjà l'API, chacune confirmée dans la page : profil d'un appareil, catégorie d'un domaine.
+  Tout texte venu du réseau (noms d'hôtes, domaines) est posé par textContent, jamais interprété comme du HTML.
+  `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, adresses de documentation, aucune écriture.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBX TV Privacy</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+    color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35}
+  body.emb{scrollbar-width:none}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));
+    box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .app>*,.grille>*{min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+  .tete .marque b{display:block;font-size:1.3rem;font-weight:800}
+  .tete .marque small{color:var(--cyan);font-size:.72rem}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--faible);font-size:.74rem}
+  button,select{font:inherit;color:var(--texte);background:rgba(41,182,246,.10);border:1px solid var(--trait2);border-radius:9px;padding:7px 12px;min-height:36px;cursor:pointer}
+  select{background:#0b1830}
+  button:hover{background:rgba(41,182,246,.2)}
+  button:focus-visible,select:focus-visible,[role=tab]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  button.danger{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.10)}
+  button[disabled]{opacity:.5;cursor:not-allowed}
+  .bandeau{border-radius:10px;padding:8px 12px;font-size:.82rem}
+  .demo{border:1px solid var(--orange);color:var(--orange);background:rgba(255,159,28,.10)}
+  .info{border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.10)}
+  .erreur{border:1px solid var(--rouge);color:#ffb3ba;background:rgba(255,77,94,.10)}
+  .ok{border:1px solid var(--vert);color:#a8f0c6;background:rgba(46,204,113,.10)}
+  [hidden]{display:none!important}
+  .onglets{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--trait);padding-bottom:6px}
+  .onglets [role=tab]{background:transparent;border:1px solid transparent;color:var(--doux)}
+  .onglets [role=tab][aria-selected=true]{color:var(--texte);border-color:var(--trait2);background:rgba(41,182,246,.14)}
+  .tuiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .tuile{border-radius:12px;border:1px solid var(--trait);background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));padding:10px;min-width:0}
+  .tuile .et{font-size:.74rem;color:var(--doux)}
+  .tuile .val{font-size:1.45rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .tuile .sous{font-size:.68rem;color:var(--faible)}
+  .grille{display:grid;grid-template-columns:1fr;gap:10px}
+  .pan{border-radius:12px;border:1px solid var(--trait);background:rgba(10,22,46,.6);padding:10px;min-width:0}
+  .pan h2{margin:0 0 8px;font-size:.88rem;display:flex;gap:8px;align-items:baseline}
+  .pan h2 small{margin-left:auto;color:var(--faible);font-weight:400;font-size:.7rem}
+  .ligne{display:grid;grid-template-columns:minmax(0,9rem) 3.5rem minmax(0,1fr);gap:8px;align-items:center;padding:3px 0;font-size:.8rem}
+  .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ligne .v{text-align:right;font-variant-numeric:tabular-nums;color:var(--doux)}
+  .barre{height:6px;border-radius:99px;background:rgba(159,179,214,.16);overflow:hidden}
+  .barre i{display:block;height:100%;background:var(--cyan)}
+  .barre i.prot{background:var(--vert)}
+  .vide{color:var(--faible);font-size:.8rem;padding:6px 0}
+  .tab{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:.8rem}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faible);text-align:left;padding:6px;font-weight:600}
+  td{white-space:nowrap;padding:6px;border-top:1px solid rgba(86,150,255,.12);vertical-align:top}
+  tr:hover td{background:rgba(41,182,246,.07)}
+  .mono{font-family:ui-monospace,"IBM Plex Mono",monospace;font-size:.76rem;white-space:nowrap}
+  td .confirm{white-space:normal;min-width:16rem}
+  .num{font-variant-numeric:tabular-nums;text-align:right}
+  .pastille{display:inline-block;border-radius:999px;padding:1px 8px;font-size:.7rem;border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12);white-space:nowrap}
+  .pastille.vert{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
+  .pastille.orange{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .pastille.gris{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.10)}
+  details summary{cursor:pointer;color:var(--doux);font-size:.74rem}
+  .filtres{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px}
+  .filtres label{display:grid;gap:3px;font-size:.72rem;color:var(--doux)}
+  .confirm{margin-top:6px;display:grid;gap:6px;padding:8px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.06)}
+  .confirm .actions{display:flex;flex-wrap:wrap;gap:6px}
+  .note{color:var(--faible);font-size:.72rem}
+  @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}.grille{grid-template-columns:1fr 1fr}}
+</style>
+<body>
+<div class="cadre"><main class="app">
+  <header class="tete">
+    <div class="marque"><b>SBX TV Privacy</b><small>Ce que les téléviseurs demandent au DNS de la box</small></div>
+    <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">Rafraîchir</button></div>
+  </header>
+  <div class="bandeau demo" id="demo" hidden>Démonstration : données fictives (adresses de documentation), aucune écriture.</div>
+  <div class="bandeau info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:inherit">Se connecter</a></div>
+  <div class="bandeau" id="message" role="status" aria-live="polite" hidden></div>
+
+  <nav class="onglets" role="tablist" aria-label="Vues SBX TV Privacy">
+    <button type="button" role="tab" id="t-generale" aria-controls="v-generale" aria-selected="true">Vue générale</button>
+    <button type="button" role="tab" id="t-equipements" aria-controls="v-equipements" aria-selected="false" tabindex="-1">Équipements</button>
+    <button type="button" role="tab" id="t-analyseur" aria-controls="v-analyseur" aria-selected="false" tabindex="-1">Analyseur</button>
+  </nav>
+
+  <section id="v-generale" role="tabpanel" aria-labelledby="t-generale">
+    <div class="tuiles">
+      <div class="tuile" title="Appareils connus du moteur TV (un par MAC, plus ceux sans MAC)."><div class="et">Équipements détectés</div><div class="val" id="n-detectes">—</div><div class="sous" id="n-detectes-sous"></div></div>
+      <div class="tuile" title="Équipements dont le mode n'est pas « observe » (auto ou block)."><div class="et">Équipements protégés</div><div class="val" id="n-proteges">—</div><div class="sous">mode ≠ observe</div></div>
+      <div class="tuile" title="Domaines distincts classés par le moteur AUTO (cache)."><div class="et">Domaines classés</div><div class="val" id="n-domaines">—</div><div class="sous" id="n-domaines-sous"></div></div>
+      <div class="tuile" title="Domaines dont la catégorie est protégée : jamais bloqués automatiquement."><div class="et">Domaines protégés</div><div class="val" id="n-dprot">—</div><div class="sous">catégories protégées</div></div>
+    </div>
+    <div class="grille" style="margin-top:10px">
+      <div class="pan"><h2>Domaines par catégorie <small id="cat-note"></small></h2><div id="categories"><div class="vide">—</div></div></div>
+      <div class="pan"><h2>Événements récents <small>dernière heure</small></h2><div class="tab"><table><thead><tr><th>Heure</th><th>Adresse</th><th>Domaine</th><th>Décision</th></tr></thead><tbody id="evenements"></tbody></table></div></div>
+    </div>
+  </section>
+
+  <section id="v-equipements" role="tabpanel" aria-labelledby="t-equipements" hidden>
+    <div class="pan"><h2>Équipements <small id="eq-note"></small></h2>
+      <div class="tab"><table><thead><tr><th>Nom</th><th>MAC</th><th>Adresses</th><th>Profil</th><th>Source</th><th class="num">Confiance</th><th>Mode</th><th>Action</th></tr></thead><tbody id="equipements"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="v-analyseur" role="tabpanel" aria-labelledby="t-analyseur" hidden>
+    <div class="pan"><h2>Analyseur <small id="an-note"></small></h2>
+      <div class="filtres">
+        <label>Appareil<select id="f-appareil"><option value="">Tous</option></select></label>
+        <label>Catégorie<select id="f-categorie"><option value="">Toutes</option></select></label>
+        <button type="button" id="f-appliquer">Filtrer</button>
+      </div>
+      <div class="tab"><table><thead><tr><th>Domaine</th><th>Appareil</th><th>Catégorie</th><th>Source</th><th class="num">Confiance</th><th class="num">Requêtes</th><th>Dernière observation</th><th>Action</th></tr></thead><tbody id="domaines"></tbody></table></div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" id="plus" hidden>Afficher plus</button><span class="note" id="pagination"></span></div>
+    </div>
+  </section>
+  <p class="note">La box ne voit que les noms demandés à son DNS : un appareil qui utilise un autre résolveur (DoH, DNS de la box opérateur) n'apparaît pas.</p>
+</main></div>
+<script>
+(function(){
+  'use strict';
+  var BASE='/api/v1/ad-guard/adblock-tv';
+  var q=new URLSearchParams(location.search),DEMO=!!q.get('demo');
+  if(q.get('embed'))document.body.classList.add('emb');
+  var PAS=100,MAX=1000;
+  var etat={appareils:[],profils:[],categories:[],protegees:[],limite:PAS,detail:true,ouvert:false};
+  function el(id){return document.getElementById(id);}
+  // Fabrique d'éléments : le texte passe TOUJOURS par textContent.
+  function h(tag,attrs,texte){var n=document.createElement(tag);if(attrs)for(var k in attrs){if(k==='class')n.className=attrs[k];else n.setAttribute(k,attrs[k]);}
+    if(texte!=null)n.textContent=String(texte);return n;}
+  function vider(n){while(n.firstChild)n.removeChild(n.firstChild);}
+  function fmt(n){return n==null?'—':Number(n).toLocaleString('fr-FR');}
+  function quand(ts){if(!ts)return '—';var d=new Date(ts*1000);return d.toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'});}
+  function message(texte,genre){var m=el('message');m.hidden=!texte;m.className='bandeau '+(genre||'info');m.textContent=texte||'';}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function entetes(json){var o={'Accept':'application/json'},t=jeton();if(t)o.Authorization='Bearer '+t;if(json)o['Content-Type']='application/json';return o;}
+  function lire(chemin){
+    return fetch(BASE+chemin,{headers:entetes(false),credentials:'same-origin',cache:'no-store'}).then(function(r){
+      if(r.status===401||r.status===403){var e=new Error('session');e.session=true;e.statut=r.status;throw e;}
+      if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+  }
+  function ecrire(chemin,corps){
+    if(DEMO)return Promise.reject(new Error('démonstration : aucune écriture'));
+    return fetch(BASE+chemin,{method:'POST',headers:entetes(true),credentials:'same-origin',cache:'no-store',body:JSON.stringify(corps)}).then(function(r){
+      return r.json().catch(function(){return {};}).then(function(j){if(!r.ok)throw new Error((j&&typeof j.detail==='string')?j.detail:('HTTP '+r.status));return j;});});
+  }
+  function hauteur(){try{parent.postMessage({sbxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+scrollY),onglet:'tv-privacy'},location.origin);}catch(e){}}
+
+  // ── onglets (clavier : flèches gauche/droite) ──
+  var ONGLETS=['generale','equipements','analyseur'];
+  function montrer(nom){ONGLETS.forEach(function(o){var t=el('t-'+o),sel=o===nom;t.setAttribute('aria-selected',sel?'true':'false');t.tabIndex=sel?0:-1;el('v-'+o).hidden=!sel;});hauteur();}
+  ONGLETS.forEach(function(o,i){var t=el('t-'+o);t.addEventListener('click',function(){montrer(o);});
+    t.addEventListener('keydown',function(e){var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(!d)return;var n=ONGLETS[(i+d+ONGLETS.length)%ONGLETS.length];montrer(n);el('t-'+n).focus();});});
+
+  // ── données de démonstration (RFC 5737 / 3849, noms fictifs) ──
+  var D={appareils:{appareils:[
+      {mac:'02:00:5e:00:00:01',nom:'Téléviseur salon',ips:['2001:db8::11','192.0.2.11','2001:db8::12'],mode:'auto',modes_divergents:true,profil:'SAMSUNG_TIZEN',profil_source:'observation',profil_confiance:70},
+      {mac:'02:00:5e:00:00:02',nom:'Lecteur box',ips:['192.0.2.20'],mode:'observe',modes_divergents:false,profil:'FREEBOX_PLAYER',profil_source:'nac',profil_confiance:90},
+      {mac:null,nom:'Clé de diffusion',ips:['192.0.2.30'],mode:'block',modes_divergents:false,profil:'INCONNU',profil_source:'aucune',profil_confiance:0}],
+      profils:['FREEBOX_PLAYER','ANDROID_TV','GOOGLE_TV','SAMSUNG_TIZEN','LG_WEBOS','APPLE_TV','GENERIC_SMART_TV','INCONNU']},
+    classification:{total:4,cache:true,genere:1761955200,categories:['PUBLICITE','TRACKING','TELEMETRIE','STREAMING','CDN','DRM','AUTHENTIFICATION','MISE_A_JOUR','SERVICES_CONSTRUCTEUR','INCONNU'],
+      protegees:['AUTHENTIFICATION','CDN','DRM','INCONNU','MISE_A_JOUR','STREAMING'],domaines:[
+      {domaine:'ads.example.com',mac:'02:00:5e:00:00:01',categorie:'PUBLICITE',source:'liste',confiance:90,requetes:412,derniere_observation:1761955000,protegee:false},
+      {domaine:'metrics.example.net',mac:'02:00:5e:00:00:01',categorie:'TELEMETRIE',source:'apprentissage',confiance:60,requetes:120,derniere_observation:1761954000,protegee:false},
+      {domaine:'video.example.org',mac:'02:00:5e:00:00:02',categorie:'STREAMING',source:'liste',confiance:95,requetes:980,derniere_observation:1761955100,protegee:true},
+      {domaine:'cdn.example.org',mac:'02:00:5e:00:00:02',categorie:'CDN',source:'manuelle',confiance:100,requetes:300,derniere_observation:1761953000,protegee:true}]},
+    live:{evenements:[{ts:1761955100,client:'192.0.2.11',domaine:'ads.example.com',decision:'BLOCKED'},{ts:1761955090,client:'192.0.2.20',domaine:'video.example.org',decision:'ALLOWED'}]}};
+
+  // ── vue générale ──
+  function rendreGenerale(app,cl){
+    var liste=app?app.appareils||[]:null;
+    el('n-detectes').textContent=liste?fmt(liste.length):'—';
+    el('n-detectes-sous').textContent=liste?(fmt(liste.filter(function(a){return a.mac;}).length)+' identifiés par MAC'):'';
+    el('n-proteges').textContent=liste?fmt(liste.filter(function(a){return a.mode&&a.mode!=='observe';}).length):'—';
+    var box=el('categories');vider(box);
+    if(!cl){el('n-domaines').textContent='—';el('n-dprot').textContent='—';box.appendChild(h('div',{class:'vide'},'—'));return;}
+    if(!cl.cache){el('n-domaines').textContent='—';el('n-dprot').textContent='—';box.appendChild(h('div',{class:'vide'},'Classification pas encore calculée par le moteur AUTO.'));return;}
+    var doms=cl.domaines||[],par={},prot=0;
+    doms.forEach(function(d){par[d.categorie]=(par[d.categorie]||0)+1;if(d.protegee)prot++;});
+    el('n-domaines').textContent=fmt(cl.total);
+    el('n-domaines-sous').textContent=cl.genere?('calculé le '+quand(cl.genere)):'';
+    el('n-dprot').textContent=doms.length<cl.total?'≥ '+fmt(prot):fmt(prot);
+    el('cat-note').textContent=doms.length<cl.total?('sur les '+fmt(doms.length)+' premiers'):'lignes domaine × appareil';
+    var cats=(cl.categories||[]).filter(function(c){return par[c];}),max=Math.max.apply(null,cats.map(function(c){return par[c];}).concat([1]));
+    if(!cats.length){box.appendChild(h('div',{class:'vide'},'Aucun domaine classé.'));return;}
+    var prots=cl.protegees||[];
+    cats.sort(function(a,b){return par[b]-par[a];}).forEach(function(c){
+      var l=h('div',{class:'ligne'}),b=h('div',{class:'barre'}),i=h('i',prots.indexOf(c)>=0?{class:'prot'}:null);
+      i.style.width=Math.round(100*par[c]/max)+'%';b.appendChild(i);
+      l.appendChild(h('span',{class:'n',title:c},c));l.appendChild(h('span',{class:'v'},fmt(par[c])));l.appendChild(b);box.appendChild(l);});
+  }
+  function rendreEvenements(lv){
+    var tb=el('evenements');vider(tb);var ev=lv?lv.evenements||[]:null;
+    if(!ev||!ev.length){var tr=h('tr');tr.appendChild(h('td',{colspan:'4',class:'vide'},ev?'Aucune requête dans la dernière heure.':'—'));tb.appendChild(tr);return;}
+    ev.slice(0,20).forEach(function(e){var tr=h('tr');tr.appendChild(h('td',null,quand(e.ts)));tr.appendChild(h('td',{class:'mono'},e.client));
+      tr.appendChild(h('td',{class:'mono'},e.domaine));var td=h('td');td.appendChild(h('span',{class:'pastille '+(e.decision==='BLOCKED'?'vert':'gris')},e.decision==='BLOCKED'?'bloqué':'résolu'));tr.appendChild(td);tb.appendChild(tr);});
+  }
+
+  // ── équipements ──
+  function v4(ip){return ip.indexOf(':')<0;}
+  function cellAdresses(ips){
+    var td=h('td',{class:'mono'}),a=(ips||[]).filter(v4),b=(ips||[]).filter(function(x){return !v4(x);});
+    a.forEach(function(x){td.appendChild(h('div',null,x));});
+    if(b.length){var d=h('details'),s=h('summary',null,b.length+' adresse'+(b.length>1?'s':'')+' IPv6');d.appendChild(s);b.forEach(function(x){d.appendChild(h('div',null,x));});td.appendChild(d);}
+    if(!a.length&&!b.length)td.textContent='—';return td;
+  }
+  function boutonProfil(a,td){
+    if(!a.mac){td.appendChild(h('span',{class:'note'},'sans MAC : non corrigeable'));return;}
+    var bt=h('button',{type:'button','aria-label':'Corriger le profil de '+(a.nom||a.mac)},'Corriger le profil');
+    bt.addEventListener('click',function(){
+      if(td.querySelector('.confirm'))return;
+      etat.ouvert=true;bt.disabled=true;
+      var c=h('div',{class:'confirm'}),id='p-'+a.mac.replace(/:/g,''),lab=h('label',{for:id},'Nouveau profil'),sel=h('select',{id:id});
+      sel.appendChild(h('option',{value:''},'(retirer la correction manuelle)'));
+      etat.profils.forEach(function(p){var o=h('option',{value:p},p);if(p===a.profil)o.selected=true;sel.appendChild(o);});
+      var act=h('div',{class:'actions'}),ok=h('button',{type:'button',class:'danger'},'Confirmer'),non=h('button',{type:'button'},'Annuler');
+      function fermer(){td.removeChild(c);bt.disabled=false;etat.ouvert=false;hauteur();}
+      non.addEventListener('click',fermer);
+      ok.addEventListener('click',function(){ok.disabled=true;
+        ecrire('/appareils/'+encodeURIComponent(a.mac)+'/profil',{type:sel.value||null}).then(function(){message('Profil corrigé : '+(sel.value||'correction retirée')+'.','ok');etat.ouvert=false;charger();})
+          .catch(function(e){ok.disabled=false;message('Correction refusée : '+e.message,'erreur');});});
+      act.appendChild(ok);act.appendChild(non);c.appendChild(lab);c.appendChild(sel);c.appendChild(act);td.appendChild(c);sel.focus();hauteur();
+    });
+    td.appendChild(bt);
+  }
+  function rendreEquipements(app){
+    var tb=el('equipements');vider(tb);var liste=app?app.appareils||[]:null;
+    el('eq-note').textContent=liste?(fmt(liste.length)+' appareil'+(liste.length>1?'s':'')):'';
+    if(!liste||!liste.length){var tr=h('tr');tr.appendChild(h('td',{colspan:'8',class:'vide'},liste?'Aucun équipement connu.':'—'));tb.appendChild(tr);return;}
+    liste.forEach(function(a){
+      var tr=h('tr');tr.appendChild(h('td',null,a.nom||'—'));tr.appendChild(h('td',{class:'mono'},a.mac||'—'));tr.appendChild(cellAdresses(a.ips));
+      var tp=h('td');tp.appendChild(h('span',{class:'pastille'},a.profil||'INCONNU'));tr.appendChild(tp);
+      tr.appendChild(h('td',null,a.profil_source||'—'));tr.appendChild(h('td',{class:'num'},a.profil_confiance==null?'—':a.profil_confiance+' %'));
+      var tm=h('td');tm.appendChild(h('span',{class:'pastille '+(a.mode==='observe'?'gris':'vert')},a.mode||'—'));
+      if(a.modes_divergents){tm.appendChild(document.createTextNode(' '));tm.appendChild(h('span',{class:'pastille orange',title:'Ses adresses n’ont pas toutes le même mode : le plus strict est affiché.'},'modes divergents'));}
+      tr.appendChild(tm);var ta=h('td');boutonProfil(a,ta);tr.appendChild(ta);tb.appendChild(tr);});
+  }
+
+  // ── analyseur ──
+  function nomDe(mac){if(!mac)return '—';for(var i=0;i<etat.appareils.length;i++)if(etat.appareils[i].mac===mac)return etat.appareils[i].nom||mac;return mac;}
+  function remplirFiltres(cl){
+    var sa=el('f-appareil'),sc=el('f-categorie'),va=sa.value,vc=sc.value;
+    while(sa.options.length>1)sa.remove(1);while(sc.options.length>1)sc.remove(1);
+    etat.appareils.filter(function(a){return a.mac;}).forEach(function(a){sa.appendChild(h('option',{value:a.mac},(a.nom||a.mac)+' ('+a.mac+')'));});
+    (etat.categories||[]).forEach(function(c){sc.appendChild(h('option',{value:c},c+(etat.protegees.indexOf(c)>=0?' (protégée)':'')));});
+    sa.value=va;sc.value=vc;
+  }
+  function boutonCategorie(d,td){
+    var bt=h('button',{type:'button','aria-label':'Corriger la catégorie de '+d.domaine},'Corriger');
+    bt.addEventListener('click',function(){
+      if(td.querySelector('.confirm'))return;etat.ouvert=true;bt.disabled=true;
+      var c=h('div',{class:'confirm'}),id='c-'+Math.random().toString(36).slice(2),lab=h('label',{for:id},'Catégorie de '+d.domaine),sel=h('select',{id:id});
+      sel.appendChild(h('option',{value:''},'(retirer la correction manuelle)'));
+      etat.categories.forEach(function(x){var o=h('option',{value:x},x);if(x===d.categorie)o.selected=true;sel.appendChild(o);});
+      var portee=h('label',null,''),cb=h('input',{type:'checkbox'});cb.checked=!!d.mac;portee.appendChild(cb);
+      portee.appendChild(document.createTextNode(d.mac?' pour cet appareil seulement (sinon : toute la maison)':' pour toute la maison'));if(!d.mac)cb.disabled=true;
+      var act=h('div',{class:'actions'}),ok=h('button',{type:'button',class:'danger'},'Confirmer'),non=h('button',{type:'button'},'Annuler');
+      function fermer(){td.removeChild(c);bt.disabled=false;etat.ouvert=false;hauteur();}
+      non.addEventListener('click',fermer);
+      ok.addEventListener('click',function(){ok.disabled=true;
+        ecrire('/classification',{domaine:d.domaine,categorie:sel.value||null,mac:(cb.checked&&d.mac)?d.mac:null}).then(function(){message('Catégorie corrigée pour '+d.domaine+' (sans effet DNS immédiat).','ok');etat.ouvert=false;chargerAnalyseur();})
+          .catch(function(e){ok.disabled=false;message('Correction refusée : '+e.message,'erreur');});});
+      act.appendChild(ok);act.appendChild(non);c.appendChild(lab);c.appendChild(sel);c.appendChild(portee);c.appendChild(act);td.appendChild(c);sel.focus();hauteur();
+    });
+    td.appendChild(bt);
+  }
+  function rendreAnalyseur(cl){
+    var tb=el('domaines');vider(tb);
+    if(!cl){var tr0=h('tr');tr0.appendChild(h('td',{colspan:'8',class:'vide'},'—'));tb.appendChild(tr0);el('plus').hidden=true;el('pagination').textContent='';return;}
+    var doms=cl.domaines||[];
+    el('an-note').textContent=cl.cache?(cl.genere?'cache du '+quand(cl.genere):''):'classification pas encore calculée';
+    if(!doms.length){var tr=h('tr');tr.appendChild(h('td',{colspan:'8',class:'vide'},'Aucun domaine pour ce filtre.'));tb.appendChild(tr);}
+    doms.forEach(function(d){
+      var tr=h('tr');tr.appendChild(h('td',{class:'mono'},d.domaine));tr.appendChild(h('td',null,etat.detail?nomDe(d.mac):(d.mac||'maison')));
+      var tc=h('td');tc.appendChild(h('span',{class:'pastille '+(d.protegee?'vert':'orange')},d.categorie||'INCONNU'));
+      if(d.protegee){tc.appendChild(document.createTextNode(' '));tc.appendChild(h('span',{class:'note',title:'Catégorie protégée : jamais bloquée automatiquement.'},'protégé'));}
+      tr.appendChild(tc);tr.appendChild(h('td',null,d.source||'—'));tr.appendChild(h('td',{class:'num'},d.confiance==null?'—':d.confiance+' %'));
+      tr.appendChild(h('td',{class:'num'},fmt(d.requetes)));
+      tr.appendChild(h('td',null,typeof d.derniere_observation==='number'?quand(d.derniere_observation):(d.derniere_observation||'—')));
+      var ta=h('td');if(etat.detail)boutonCategorie(d,ta);else ta.appendChild(h('span',{class:'note'},'administrateur'));tr.appendChild(ta);tb.appendChild(tr);});
+    el('pagination').textContent=fmt(doms.length)+' sur '+fmt(cl.total)+' lignes';
+    el('plus').hidden=!(doms.length<cl.total&&etat.limite<MAX);
+  }
+  function requeteClassification(){
+    var p=new URLSearchParams();p.set('limite',String(etat.limite));
+    var a=el('f-appareil').value,c=el('f-categorie').value;if(a)p.set('mac',a);if(c)p.set('categorie',c);
+    // Détail (MAC complète, horodatage) : administrateur ; sinon la vue lecteur, MAC tronquée, sans correction possible.
+    return lire('/classification/detail?'+p).then(function(j){etat.detail=true;return j;}).catch(function(e){
+      if(!e.session)throw e;etat.detail=false;if(a)p.delete('mac');return lire('/classification?'+p);});
+  }
+  function chargerAnalyseur(){
+    if(DEMO){rendreAnalyseur(filtreDemo());return;}
+    requeteClassification().then(rendreAnalyseur).catch(echec);
+  }
+  function filtreDemo(){var a=el('f-appareil').value,c=el('f-categorie').value,cl=D.classification;
+    var l=cl.domaines.filter(function(d){return(!a||d.mac===a)&&(!c||d.categorie===c);});return Object.assign({},cl,{domaines:l,total:l.length});}
+
+  function echec(e){
+    if(e&&e.session){el('session').hidden=false;rendreGenerale(null,null);rendreEquipements(null);rendreAnalyseur(null);rendreEvenements(null);}
+    else message('Lecture impossible : '+(e&&e.message||'erreur'),'erreur');
+    hauteur();
+  }
+  function appliquer(app,cl,lv){
+    etat.appareils=app.appareils||[];etat.profils=app.profils||[];etat.categories=cl.categories||[];etat.protegees=cl.protegees||[];
+    el('session').hidden=true;remplirFiltres(cl);rendreGenerale(app,cl);rendreEquipements(app);rendreEvenements(lv);
+    el('heure').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  }
+  function charger(){
+    if(DEMO){el('demo').hidden=false;appliquer(D.appareils,D.classification,D.live);rendreAnalyseur(filtreDemo());hauteur();return;}
+    Promise.all([lire('/appareils'),lire('/classification?limite='+MAX),lire('/live?secondes=3600&limite=20').catch(function(){return null;})])
+      .then(function(r){appliquer(r[0],r[1],r[2]);chargerAnalyseur();hauteur();}).catch(echec);
+  }
+  el('rafraichir').addEventListener('click',function(){message('');charger();});
+  el('f-appliquer').addEventListener('click',function(){etat.limite=PAS;chargerAnalyseur();});
+  el('plus').addEventListener('click',function(){etat.limite=Math.min(MAX,etat.limite+PAS);chargerAnalyseur();});
+  charger();
+  setInterval(function(){if(!document.hidden&&!etat.ouvert&&!DEMO)charger();},60000);
+  try{new ResizeObserver(hauteur).observe(document.body);}catch(e){}
+  addEventListener('resize',hauteur);
+})();
+</script>
+</body>
