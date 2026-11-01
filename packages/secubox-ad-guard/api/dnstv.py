@@ -41,6 +41,12 @@ DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": []}
 MODES_DEFAUT = ("off", "auto")      # observe/block sortent un appareil du puits de production : réservés à la déclaration manuelle (revue #1959)
 MAC_RE = re.compile(r"^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$")
+# Lot 3 (#3374) : noms des modes dans l'API et l'interface. PROTECT est l'ancien « block » ; le STOCKAGE ne change pas (aucune migration).
+NOMS_MODES = {"off": "OFF", "observe": "OBSERVE", "block": "PROTECT", "auto": "AUTO"}
+ALIAS_MODES = {"protect": "block"}
+CONF_PAQUET = Path(os.environ.get("SECUBOX_ADGUARD_CONF", "/etc/secubox/ad-guard.toml"))
+# Suffixes de recherche qu'une TV colle à un nom (`googleads.g.doubleclick.net.home`) : ramenés au domaine réel (#3374, mesure gk2).
+SUFFIXES_RECHERCHE = ("localdomain", "home", "lan")
 DOSSIER_ETAT = Path(os.environ.get("SECUBOX_ADGUARD_TV_ETAT", "/var/lib/secubox/ad-guard/dnstv"))
 DOSSIER_LISTES = Path(os.environ.get("SECUBOX_ADGUARD_TV_LISTES", "/usr/share/secubox/ad-guard/lists"))
 CONF_UNBOUND = Path(os.environ.get("SECUBOX_ADGUARD_TV_UNBOUND", "/etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf"))
@@ -337,11 +343,55 @@ def valider_etat(brut) -> dict:
     return etat_valide
 
 
+def normaliser_mode(brut) -> str:
+    """Valeur STOCKÉE d'un mode reçu par l'API : `protect` (nom du lot 3, toute casse) devient `block` ; `block` reste accepté."""
+    if not isinstance(brut, str):
+        raise ErreurTV("mode inconnu (observe, protect, auto, off)")
+    m = ALIAS_MODES.get(brut.lower(), brut.lower())
+    if m not in MODES or brut != brut.strip():
+        raise ErreurTV("mode inconnu (observe, protect, auto, off)")
+    return m
+
+
+def nom_mode(mode: str) -> str:
+    """Nom affiché d'un mode stocké : OBSERVE, PROTECT, AUTO ou OFF."""
+    return NOMS_MODES.get(mode, "OFF")
+
+
+def domaine_reel(brut: str) -> str:
+    """Retire un suffixe de recherche ajouté par l'appareil (`.home`, `.lan`, `.localdomain`) si le reste est un domaine à deux étiquettes au
+    moins ; sinon rend la valeur telle quelle. Sert à l'ingestion, à la classification et aux agrégats."""
+    d = str(brut or "")
+    for s in SUFFIXES_RECHERCHE:
+        if d.endswith("." + s):
+            reste = d[: -len(s) - 1]
+            if reste.count(".") >= 1 and valider_domaine(reste) == reste:
+                return reste
+    return d
+
+
+def _conf_paquet() -> dict:
+    """Configuration du paquet (`/etc/secubox/ad-guard.toml`) ; absente ou illisible : {}."""
+    try:
+        import tomllib
+        with open(CONF_PAQUET, "rb") as h:
+            return tomllib.load(h)
+    except (OSError, ValueError, ImportError):
+        return {}
+
+
+def etat_initial(conf: dict) -> dict:
+    """État d'une NOUVELLE installation (aucun `etat.json`) : mode par défaut AUTO et, si le paquet le dit (`ajout_auto_initial`),
+    ajout automatique des TV actif (#3374 : utilisateurs lambda, plug and play avec garde-fous). Une box existante garde son état."""
+    tv = conf.get("adblock_tv", {}) if isinstance(conf, dict) else {}
+    return dict(ETAT_DEFAUT, clients=[], ignores=[], ajout_auto=tv.get("ajout_auto_initial") is True)
+
+
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
     """(état, erreur). Un état absent = POC inactif ; un état CORROMPU = POC inactif ET l'erreur est rendue (jamais d'état deviné)."""
     f = (dossier or DOSSIER_ETAT) / "etat.json"
     if not f.is_file():
-        return dict(ETAT_DEFAUT, clients=[]), None
+        return etat_initial(_conf_paquet()), None
     try:
         return valider_etat(json.loads(f.read_text())), None
     except (ValueError, OSError) as e:
@@ -448,13 +498,13 @@ class Analyseur:
         if m:
             if len(self._actions) > 4096:                          # un client qui boucle ne fait pas grossir la mémoire
                 self._actions.clear()
-            self._actions[(m["client"], m["qname"].lower().rstrip("."), m["qtype"])] = m["action"]
+            self._actions[(m["client"], domaine_reel(m["qname"].lower().rstrip(".")), m["qtype"])] = m["action"]
             return None
         m = RE_REPLY.search(ligne)
         if not m:
             return None
         ts = RE_TS.match(ligne)
-        client, qname, qtype, rcode = m["client"], m["qname"].lower().rstrip("."), m["qtype"], m["rcode"]
+        client, qname, qtype, rcode = m["client"], domaine_reel(m["qname"].lower().rstrip(".")), m["qtype"], m["rcode"]
         action = self._actions.pop((client, qname, qtype), None)
         if action in ACTIONS_BLOQUANTES:
             decision = "BLOCKED"

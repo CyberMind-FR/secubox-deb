@@ -131,9 +131,12 @@ def _valider_manuelle(e) -> dict:
     return {"domaine": _domaine(e.get("domaine")), "mac": _mac(e.get("mac", "")), "categorie": cat, "maj": maj}
 
 
-def verifier_portee(domaine: str, categorie: Optional[str], reference: Iterable[Tuple[str, str]] = ()) -> None:
-    """Refuse une correction trop large : TLD seul, suffixe public (co.uk, com.fr…), ou domaine parent qui rendrait bloquable une
-    entrée protégée de la référence TV (ftven.fr -> PUBLICITE couvrirait k7.ftven.fr, nécessaire à la lecture)."""
+def verifier_portee(domaine: str, categorie: Optional[str], reference: Iterable[Tuple[str, str]] = (),
+                    services: Iterable[Tuple[str, str]] = ()) -> None:
+    """Refuse une correction trop large : TLD seul, suffixe public (co.uk, com.fr…), domaine parent qui rendrait bloquable une
+    entrée protégée de la référence TV (ftven.fr -> PUBLICITE couvrirait k7.ftven.fr, nécessaire à la lecture), ou domaine qui
+    couvrirait une entrée PROTÉGÉE de services.txt, elle-même comprise (free.fr -> PUBLICITE rendrait bloquable mafreebox.free.fr, #3374 lot 3).
+    `services` : couples (suffixe, type de service)."""
     if isinstance(domaine, str) and "." not in domaine.strip(".") and domaine.strip():
         raise ErreurTaxonomie("correction trop large : un domaine de premier niveau seul est un suffixe public")
     d = domaine.strip().lower().rstrip(".") if isinstance(domaine, str) else ""
@@ -144,13 +147,17 @@ def verifier_portee(domaine: str, categorie: Optional[str], reference: Iterable[
         if couvertes:
             raise ErreurTaxonomie(f"correction trop large : {d} couvre {couvertes[0]} (catégorie protégée de la référence) ; "
                                   "corriger le sous-domaine visé")
+        srv = sorted(x for x, t in services if depuis_ancienne(t) in PROTEGEES and (x == d or x.endswith("." + d)))
+        if srv:
+            raise ErreurTaxonomie(f"correction trop large : {d} couvre {srv[0]} (service protégé de services.txt) ; "
+                                  "corriger le sous-domaine visé")
 
 
 def corriger(manuelles: Manuelles, domaine: str, mac: Optional[str], categorie: Optional[str], maintenant: int,
-             reference: Iterable[Tuple[str, str]] = ()) -> Manuelles:
+             reference: Iterable[Tuple[str, str]] = (), services: Iterable[Tuple[str, str]] = ()) -> Manuelles:
     """Pose (ou retire si `categorie` est None) la correction manuelle d'un domaine, pour une MAC ou pour toute la maison. Pur.
     `reference` : entrées de la référence TV, pour refuser une correction qui en couvrirait une protégée (voir `verifier_portee`)."""
-    verifier_portee(domaine, categorie, reference)
+    verifier_portee(domaine, categorie, reference, services)
     d = _domaine(domaine.lower() if isinstance(domaine, str) else domaine)
     m = _mac(mac)
     out = dict(manuelles)
@@ -246,7 +253,7 @@ class Taxonomie:
                 "protegee": not blocage_auto_permis(categorie)}
 
     def classer(self, domaine: str, macs: Iterable[str] = ()) -> dict:
-        d = dnstv.valider_domaine(domaine) if isinstance(domaine, str) else None
+        d = dnstv.valider_domaine(dnstv.domaine_reel(domaine.strip().lower().rstrip("."))) if isinstance(domaine, str) else None
         if not d:
             return self._resultat(str(domaine)[:253], "INCONNU", SOURCE_AUCUNE, 0)
         suff = _suffixes(d)

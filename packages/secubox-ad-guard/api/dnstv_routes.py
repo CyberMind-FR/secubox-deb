@@ -151,7 +151,8 @@ def declarer_client(c: ClientIn):
         etat = _etat()
         try:
             ip = dnstv._ip(c.ip)
-            etat["clients"] = [x for x in etat["clients"] if x["ip"] != ip] + [{"ip": ip, "nom": c.nom or ip, "mode": c.mode}]
+            mode = dnstv.normaliser_mode(c.mode)
+            etat["clients"] = [x for x in etat["clients"] if x["ip"] != ip] + [{"ip": ip, "nom": c.nom or ip, "mode": mode}]
             dnstv.ecrire_etat(etat)
         except dnstv.ErreurTV as e:
             _refuse(e)
@@ -174,11 +175,22 @@ def retirer_client(ip: str):
         return {"etat": etat, "application": _ctl("apply")}
 
 
+def _avec_noms(etat: dict) -> dict:
+    """Copie de l'état pour une réponse : chaque client garde `mode` (valeur stockée, lisible par l'ancien code) et reçoit `mode_nom`
+    (OBSERVE, PROTECT, AUTO, OFF ; lot 3, #3374)."""
+    e = copy.deepcopy(etat)
+    for c in e.get("clients", []):
+        c["mode_nom"] = dnstv.nom_mode(c.get("mode"))
+    return e
+
+
 @router.post("/mode", dependencies=[Depends(require_jwt)])
 def changer_mode(m: ModeIn):
-    """Bascule dynamique OBSERVE / BLOCK (ou off) : un appareil, ou tous ceux du périmètre."""
-    if m.mode not in dnstv.MODES:
-        raise HTTPException(422, "mode inconnu (off, observe, block, auto)")
+    """Bascule dynamique OBSERVE / PROTECT (alias rétrocompatible `block`) / AUTO (ou off) : un appareil, ou tous ceux du périmètre."""
+    try:
+        mode = dnstv.normaliser_mode(m.mode)
+    except dnstv.ErreurTV as e:
+        raise HTTPException(422, str(e)) from None
     with _verrou():
         etat = _etat()
         try:
@@ -188,7 +200,7 @@ def changer_mode(m: ModeIn):
         touches = 0
         for c in etat["clients"]:
             if cible is None or c["ip"] == cible:
-                c["mode"] = m.mode
+                c["mode"] = mode
                 touches += 1
         if not touches:
             raise HTTPException(404, "aucun appareil concerné")
@@ -196,7 +208,7 @@ def changer_mode(m: ModeIn):
             dnstv.ecrire_etat(etat)
         except dnstv.ErreurTV as e:
             _refuse(e)
-        return {"etat": etat, "application": _ctl("apply")}
+        return {"etat": _avec_noms(etat), "application": _ctl("apply")}
 
 
 @router.get("/stats", dependencies=[Depends(require_lecture_nominative)])
@@ -1119,8 +1131,9 @@ def classification_corriger(corps: ClassificationIn, jeton=Depends(require_jwt))
     with _verrou():
         try:
             avant = dnstv_taxonomie.charger_manuelles()
-            ref = dnstv_taxonomie.Taxonomie.depuis_dossier().reference.items()
-            apres = dnstv_taxonomie.corriger(avant, corps.domaine, m, corps.categorie, int(time.time()), reference=ref)
+            tx = dnstv_taxonomie.Taxonomie.depuis_dossier()
+            apres = dnstv_taxonomie.corriger(avant, corps.domaine, m, corps.categorie, int(time.time()), reference=tx.reference.items(),
+                                             services=tx.services.items())
         except dnstv_taxonomie.ErreurTaxonomie as e:
             raise HTTPException(422, str(e)) from e
         domaine = dnstv.valider_domaine(corps.domaine)

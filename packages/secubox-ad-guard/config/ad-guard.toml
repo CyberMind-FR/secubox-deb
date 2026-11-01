@@ -40,6 +40,10 @@ unbound_blocklist = "/var/lib/unbound/blocklist.conf"
 # vit dans /var/lib/secubox/ad-guard/dnstv/etat.json, géré par l'API et l'interface — pas ici.
 # Les compteurs de plus de `retention_jours` jours sont purgés chaque jour.
 retention_jours = 30
+# Nouvelle installation SEULEMENT (aucun etat.json) : mode AUTO par défaut et ajout automatique des TV actif (#3374 lot 3, utilisateurs
+# lambda : plug and play avec garde-fous ; l'inconnu et les catégories protégées ne sont jamais bloqués automatiquement). Une box qui a
+# déjà un état garde le sien : aucune migration de mode.
+ajout_auto_initial = true
 
 [adblock_tv_auto]
 # Mode « auto » (#1954) : seuils de DÉPART, mesurés sur UNE TV et UNE application — à calibrer sur plusieurs jours réels.

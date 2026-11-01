@@ -6,9 +6,9 @@
 # SBX TV PRIVACY lot 2 (#3374) — classification de référence des domaines NÉCESSAIRES aux TV.
 # Format : suffixe  CATEGORIE  # source (obligatoire). Le plus long suffixe gagne ; à suffixe égal, cette référence passe avant les listes.
 # Catégories : PUBLICITE TRACKING TELEMETRIE STREAMING CDN DRM AUTHENTIFICATION MISE_A_JOUR SERVICES_CONSTRUCTEUR INCONNU.
-# Aucun domaine sans source. DRM (Widevine, PlayReady, FairPlay) et AUTHENTIFICATION : aucune entrée, faute de source dans le dépôt
+# Aucun domaine sans source. DRM : la seule entrée est mesurée (license.oqee.net, gk2 2026-11-01) ; AUTHENTIFICATION : aucune entrée, faute de source
 # ou de mesure au banc ; ces domaines restent INCONNU, donc protégés du moteur AUTO.
-# version: 2026.11.01-2
+# version: 2026.11.01-3
 cloudreplay.ftven.fr                       STREAMING    # docs/poc-dns-adblock-tv-results.md §8 : nécessaire à la lecture (France TV)
 k7.ftven.fr                                STREAMING    # docs/poc-dns-adblock-tv-results.md §8 : nécessaire à la lecture (France TV)
 hdfauth.ftven.fr                           STREAMING    # docs/poc-dns-adblock-tv-results.md §8 : nécessaire à la lecture (France TV)
@@ -24,3 +24,8 @@ cloudfront.net                             CDN          # api/dnstv_detect.py LI
 akamaized.net                              CDN          # api/dnstv_detect.py LISTE_NOIRE : CDN générique, jamais proposé
 akamaiedge.net                             CDN          # api/dnstv_detect.py LISTE_NOIRE : CDN générique, jamais proposé
 quanteec.com                               INCONNU      # lists/services.txt (qualite_video) : diffusion vidéo, rôle non mesuré — arbitrage #3374, protégé
+license.oqee.net                           DRM          # mesure gk2 2026-11-01 (issue #3374) : licence DRM d'OQEE (Free Ciné), nécessaire à la lecture
+api.oqee.net                               STREAMING    # mesure gk2 2026-11-01 (issue #3374) : API d'OQEE (Free Ciné)
+img1.oqee.net                              STREAMING    # mesure gk2 2026-11-01 (issue #3374) : visuels d'OQEE
+img2.oqee.net                              STREAMING    # mesure gk2 2026-11-01 (issue #3374) : visuels d'OQEE
+stream.proxad.net                          STREAMING    # mesure gk2 2026-11-01 (issue #3374) : flux vidéo (media4.stream.proxad.net)
