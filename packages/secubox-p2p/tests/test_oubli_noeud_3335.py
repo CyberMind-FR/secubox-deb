@@ -50,7 +50,7 @@ def test_oublier_un_nom_inconnu_est_refuse():
 def test_la_route_exige_l_administrateur_et_la_confirmation():
     src = (Path(__file__).resolve().parents[1] / "api" / "main.py").read_text(encoding="utf-8")
     i = src.index('@app.post("/master-link/oublier"')
-    bloc = src[i:i + 3200]
+    bloc = src[i:src.index("@app.get(\"/master-link/oublier/{operation}\")")]
     assert "require_jwt" in bloc and "confirmation" in bloc and "_audit_jonction" in bloc
 
 
@@ -100,6 +100,6 @@ def test_ecriture_atomique_sous_verrou(tmp_path):
 def test_la_route_est_synchrone_et_lit_strictement():
     src = (Path(__file__).resolve().parents[1] / "api" / "main.py").read_text(encoding="utf-8")
     i = src.index('@app.post("/master-link/oublier"')
-    bloc = src[i:i + 2600]
+    bloc = src[i:src.index("@app.get(\"/master-link/oublier/{operation}\")")]
     assert "\ndef ml_oublier(" in bloc and "async def ml_oublier" not in bloc
     assert "oubli.verrou(" in bloc and "lire_strict" in bloc and "503" in bloc and "ecrire_atomique" in bloc

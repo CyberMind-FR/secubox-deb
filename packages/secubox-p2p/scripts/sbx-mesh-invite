@@ -64,6 +64,9 @@ def main(argv=None):
     except oubli.EtatIllisible as e:            # #3362 : tokens.json illisible n'est jamais remplacé
         print(f"sbx-mesh-invite : {e} — aucun jeton émis", file=sys.stderr)
         return 1
+    except OSError as e:                        # #3362 : master-link en lien, droits… : message clair, aucun jeton
+        print(f"sbx-mesh-invite : {e.strerror or e} ({e.filename or 'master-link'}) — aucun jeton émis", file=sys.stderr)
+        return 1
     code = automesh.encoder(adresse, emis["token"])
     try:
         audit("code_emis", chemin=os.environ.get("SBX_AUDIT", "/var/log/secubox/audit.log"),

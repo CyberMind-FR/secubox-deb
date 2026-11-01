@@ -569,3 +569,40 @@ def test_liste_du_maitre_lue_hors_du_verrou(env, monkeypatch):
     assert cli.synchroniser() == 0
     assert vus == ["libre"]
     assert {p["name"] for p in _pairs_ecrits(env)} >= {"gk3", "gk4"}
+
+
+def test_oubli_entre_la_liste_et_le_verrou_ne_ramene_pas_le_pair(env, monkeypatch):
+    """#3362 passe 4 (TOCTOU) : la liste du maître est lue hors du verrou ; un oubli qui réécrit l'état entre-temps ne doit
+    pas être défait par le calcul (repère inode/mtime/taille changé → liste ignorée, rétrogradations seulement)."""
+    doc = _etat()
+    doc["peers"].append(_direct("gk3", K_A, "10.10.0.3", "192.168.1.30:51820", etat_d="sonde"))
+    env.etat.write_text(json.dumps(doc))
+    cli = _charger()
+    reel = cli.lire_liste
+
+    def lire_puis_oubli(url):
+        liste = reel(url)
+        apres = _etat()                                  # l'oubli retire gk3 de l'état, pendant l'appel réseau
+        tmp = env.etat.with_name(".oubli")
+        tmp.write_text(json.dumps(apres))
+        os.replace(tmp, env.etat)
+        return liste
+    monkeypatch.setattr(cli, "lire_liste", lire_puis_oubli)
+    env.maitre(corps=LISTE)
+    assert cli.synchroniser() == 0
+    assert "gk3" not in [p["name"] for p in _pairs_ecrits(env)]
+
+
+def test_maitre_reverifie_sous_le_verrou(env, monkeypatch):
+    """L'ancre change entre la lecture de la liste et le verrou : la liste n'est plus celle du maître, elle est ignorée."""
+    cli = _charger()
+    reel = cli.lire_liste
+
+    def lire_puis_ancre(url):
+        liste = reel(url)
+        env.ancre.write_text(json.dumps({"cle_publique": K_B}))
+        return liste
+    monkeypatch.setattr(cli, "lire_liste", lire_puis_ancre)
+    env.maitre(corps=LISTE)
+    assert cli.synchroniser() == 0
+    assert not [p for p in _pairs_ecrits(env) if p.get("direct") is True]

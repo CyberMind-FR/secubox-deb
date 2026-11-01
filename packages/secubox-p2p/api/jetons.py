@@ -8,6 +8,7 @@ Le jeton (64 hexadécimaux, le format qu'exige automesh) n'est JAMAIS stocké : 
 Un jeton `flash` ne vaut que pour `nom_prevu` : il autorise le remplacement de la clé d'un pair de ce nom (reflash)."""
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -106,7 +107,10 @@ def generer(ttl: int, auto_approve: bool, nom_prevu: Optional[str] = None, flash
     # illisible n'est jamais remplacé par la seule nouvelle entrée.
     from . import oubli                      # noqa: PLC0415 — import tardif, oubli n'importe pas jetons
     chemin = str(chemin or chemin_jetons())
-    os.makedirs(os.path.dirname(chemin) or ".", exist_ok=True)
+    dossier = os.path.dirname(chemin) or "."
+    if os.path.islink(dossier):                 # #3362 : jamais d'écriture à travers un lien (dossier du service)
+        raise OSError(errno.ELOOP, f"{dossier} est un lien symbolique : refusé")
+    os.makedirs(dossier, exist_ok=True)
     _rendre_le_dossier(os.path.dirname(chemin) or ".")
     with oubli.verrou(os.path.dirname(os.path.dirname(chemin)) or "."):
         jetons = oubli.lire_strict_liste(chemin)

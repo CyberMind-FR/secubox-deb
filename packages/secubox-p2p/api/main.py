@@ -758,7 +758,7 @@ class TokenGenerateRequest(BaseModel):
 # ============== Status ==============
 
 @app.get("/status", dependencies=[Depends(require_lecture)])
-async def get_status():
+def get_status():
     """Get P2P network status (public)."""
     init_dirs()
     peers_data = load_json(PEERS_FILE, {"peers": []})
@@ -837,7 +837,7 @@ async def discover_post(req: DiscoverRequest, user: dict = Depends(require_jwt))
                 added += 1
 
         if added > 0:
-            save_json(PEERS_FILE, {"peers": peers})
+            await asyncio.to_thread(save_json, PEERS_FILE, {"peers": peers})  # #3362 : verrou hors de la boucle
             result["added"] = added
 
     return result
@@ -875,7 +875,7 @@ async def list_peers():
 
 
 @app.post("/peers")
-async def add_peer(req: PeerRequest, user: dict = Depends(require_jwt)):
+def add_peer(req: PeerRequest, user: dict = Depends(require_jwt)):
     """Add a new peer manually."""
     init_dirs()
     peers_data = load_json(PEERS_FILE, {"peers": []})
@@ -910,7 +910,7 @@ async def add_peer(req: PeerRequest, user: dict = Depends(require_jwt)):
 
 
 @app.delete("/peers/{peer_id}")
-async def remove_peer(peer_id: str, user: dict = Depends(require_jwt)):
+def remove_peer(peer_id: str, user: dict = Depends(require_jwt)):
     """Remove a peer."""
     init_dirs()
     peers_data = load_json(PEERS_FILE, {"peers": []})
@@ -970,7 +970,7 @@ async def probe_peer(peer_id: str, user: dict = Depends(require_jwt)):
     except:
         peer["status"] = "offline"
 
-    save_json(PEERS_FILE, {"peers": peers})
+    await asyncio.to_thread(save_json, PEERS_FILE, {"peers": peers})  # #3362 : verrou hors de la boucle
     return {"status": "ok", "peer": peer}
 
 
@@ -995,7 +995,7 @@ async def list_services():
 
 
 @app.post("/services")
-async def register_service(req: ServiceRequest, user: dict = Depends(require_jwt)):
+def register_service(req: ServiceRequest, user: dict = Depends(require_jwt)):
     """Register a P2P service."""
     init_dirs()
     services = load_json(SERVICES_FILE, [])
@@ -1016,7 +1016,7 @@ async def register_service(req: ServiceRequest, user: dict = Depends(require_jwt
 
 
 @app.delete("/services/{name}")
-async def unregister_service(name: str, user: dict = Depends(require_jwt)):
+def unregister_service(name: str, user: dict = Depends(require_jwt)):
     """Unregister a service."""
     init_dirs()
     services = load_json(SERVICES_FILE, [])
@@ -1417,7 +1417,7 @@ async def list_profiles():
 
 
 @app.post("/profiles")
-async def create_profile(req: ProfileRequest, user: dict = Depends(require_jwt)):
+def create_profile(req: ProfileRequest, user: dict = Depends(require_jwt)):
     """Create a P2P profile."""
     init_dirs()
     profiles = load_json(PROFILES_FILE, {})
@@ -1434,7 +1434,7 @@ async def create_profile(req: ProfileRequest, user: dict = Depends(require_jwt))
 
 
 @app.delete("/profiles/{name}")
-async def delete_profile(name: str, user: dict = Depends(require_jwt)):
+def delete_profile(name: str, user: dict = Depends(require_jwt)):
     """Delete a profile."""
     init_dirs()
     profiles = load_json(PROFILES_FILE, {})
@@ -1455,7 +1455,7 @@ async def list_threats():
 
 
 @app.post("/threats")
-async def report_threat(req: ThreatRequest, user: dict = Depends(require_jwt)):
+def report_threat(req: ThreatRequest, user: dict = Depends(require_jwt)):
     """Report a threat."""
     init_dirs()
     threats = load_json(THREATS_FILE, {})
@@ -1474,7 +1474,7 @@ async def report_threat(req: ThreatRequest, user: dict = Depends(require_jwt)):
 
 
 @app.delete("/threats/{ip}")
-async def remove_threat(ip: str, user: dict = Depends(require_jwt)):
+def remove_threat(ip: str, user: dict = Depends(require_jwt)):
     """Remove a threat entry."""
     init_dirs()
     threats = load_json(THREATS_FILE, {})
@@ -1555,7 +1555,7 @@ def get_wireguard_status():
 
 
 @app.post("/wireguard/init")
-async def init_wireguard(user: dict = Depends(require_jwt)):
+def init_wireguard(user: dict = Depends(require_jwt)):
     """Initialize WireGuard mesh interface."""
     config = get_wg_mesh_config()
 
@@ -1589,7 +1589,7 @@ async def init_wireguard(user: dict = Depends(require_jwt)):
 
 
 @app.post("/wireguard/peer")
-async def add_wireguard_peer(
+def add_wireguard_peer(
     public_key: str,
     endpoint: str,
     allowed_ips: str = "10.10.0.0/24",
@@ -1659,7 +1659,7 @@ async def list_announcers():
 
 
 @app.post("/announcers")
-async def add_announcer(
+def add_announcer(
     url: str,
     name: Optional[str] = None,
     user: dict = Depends(require_jwt)
@@ -1685,7 +1685,7 @@ async def add_announcer(
 
 
 @app.delete("/announcers/{announcer_id}")
-async def remove_announcer(announcer_id: str, user: dict = Depends(require_jwt)):
+def remove_announcer(announcer_id: str, user: dict = Depends(require_jwt)):
     """Remove an announcer server."""
     announcers = get_announcers()
     announcers = [a for a in announcers if a.get("id") != announcer_id]
@@ -1733,7 +1733,7 @@ async def sync_with_announcers(user: dict = Depends(require_jwt)):
             announcer["status"] = "error"
             results.append({"announcer": announcer["url"], "status": "error", "error": str(e)})
 
-    save_json(ANNOUNCERS_FILE, announcers)
+    await asyncio.to_thread(save_json, ANNOUNCERS_FILE, announcers)  # #3362 : verrou hors de la boucle
 
     # Merge remote peers with local peers
     if all_remote_peers:
@@ -1749,7 +1749,7 @@ async def sync_with_announcers(user: dict = Depends(require_jwt)):
                 added += 1
 
         if added > 0:
-            save_json(PEERS_FILE, {"peers": peers})
+            await asyncio.to_thread(save_json, PEERS_FILE, {"peers": peers})  # #3362 : verrou hors de la boucle
 
         results.append({"merged": added, "total_remote_peers": len(all_remote_peers)})
 
@@ -1834,7 +1834,7 @@ async def discover_via_bridge(
                 added += 1
 
         if added > 0:
-            save_json(PEERS_FILE, {"peers": peers})
+            await asyncio.to_thread(save_json, PEERS_FILE, {"peers": peers})  # #3362 : verrou hors de la boucle
 
         return {
             "status": "ok",
@@ -1852,7 +1852,7 @@ async def discover_via_bridge(
 # ============== Master-Link ==============
 
 @app.get("/master-link/status", dependencies=[Depends(require_lecture)])
-async def ml_status():
+def ml_status():
     """Get master-link status (public read)."""
     config = get_ml_config()
     requests = get_ml_requests()
@@ -1888,7 +1888,7 @@ async def ml_status():
 
 
 @app.post("/master-link/token")
-async def ml_generate_token(req: TokenGenerateRequest, user: dict = Depends(require_jwt)):
+def ml_generate_token(req: TokenGenerateRequest, user: dict = Depends(require_jwt)):
     """Generate a join token (auth required)."""
     config = get_ml_config()
 
@@ -1906,7 +1906,7 @@ async def ml_generate_token(req: TokenGenerateRequest, user: dict = Depends(requ
 
 
 @app.post("/master-link/invite")
-async def ml_generate_invite(
+def ml_generate_invite(
     ttl: int = 3600,
     auto_approve: bool = True,
     user: dict = Depends(require_jwt)
@@ -1978,7 +1978,7 @@ Expires: {result['expires']}
 
 
 @app.post("/master-link/invite-local")
-async def ml_generate_invite_local(
+def ml_generate_invite_local(
     ttl: int = 3600,
     auto_approve: bool = True,
     user: dict = Depends(require_jwt)
@@ -2031,7 +2031,7 @@ async def ml_generate_invite_local(
 
 
 @app.get("/master-link/join-script", dependencies=[Depends(require_lecture)])
-async def ml_join_script(token: str, request: Request):
+def ml_join_script(token: str, request: Request):
     """Return a shell script for joining (OpenWRT compatible)."""
     from fastapi.responses import PlainTextResponse
 
@@ -2585,6 +2585,15 @@ def _oubli_pilotage(nom: str, force: bool) -> Dict:
     return {"ok": False, "detail": err.replace("annuaire ", "pilotage ")[:300]}
 
 
+_TACHES: set = set()      # #3362 : référence forte des tâches asyncio lancées sans attente (sinon le GC peut les couper)
+
+
+def _garder_tache(tache):
+    _TACHES.add(tache)
+    tache.add_done_callback(_TACHES.discard)
+    return tache
+
+
 def _lancer_operation(fonction) -> None:
     """Étapes longues en tâche de fond, dans le contexte de la requête (jeton de l'administrateur pour le pilotage)."""
     ctx = contextvars.copy_context()
@@ -2647,9 +2656,26 @@ def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
     local = socket.gethostname().split(".")[0].lower()
     a = ancre.lire()
     cle_maitre = a.get("cle_publique") if isinstance(a, dict) else None
-    with _operations_verrou:                     # #3362 passe 3 : aucune place (rien de terminé à purger) → 429, rien d'oublié
-        if len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX and not any(v.get("etat") == "termine" for v in OPERATIONS_OUBLI.values()):
+    op = secrets.token_hex(16)
+    with _operations_verrou:                     # #3362 : contrôle 429 ET réservation de la place dans la MÊME section
+        # seules les opérations TERMINÉES sont purgées (une opération en cours reste suivable)
+        terminees = [k for k, v in OPERATIONS_OUBLI.items() if v.get("etat") == "termine"]
+        while len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX and terminees:
+            OPERATIONS_OUBLI.pop(terminees.pop(0))
+        if len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX:
             raise HTTPException(status_code=429, detail="trop d'oublis en cours : réessayer quand l'un d'eux est terminé")
+        OPERATIONS_OUBLI[op] = {"operation": op, "oublie": req.nom, "etat": "reservee", "status": "en_cours",
+                                "etapes": {}, "restes": [], "debut": time.time()}
+    try:
+        return _ml_oublier_reserve(op, req, acteur, local, cle_maitre)
+    except BaseException:
+        with _operations_verrou:                 # refus (409, 503…) : la place réservée est rendue
+            OPERATIONS_OUBLI.pop(op, None)
+        raise
+
+
+def _ml_oublier_reserve(op: str, req: "OublierRequest", acteur: str, local: str, cle_maitre: Optional[str]) -> Dict:
+    """Suite de ml_oublier, la place de l'opération `op` étant réservée."""
     init_dirs()
     ml_init()
     try:
@@ -2683,12 +2709,7 @@ def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
         etapes["projection"] = {"ok": True, "detail": "pairs-enroles.json republié"}
     except (pairs_enroles.ProjectionErreur, OSError) as e:
         etapes["projection"] = {"ok": False, "detail": str(e)[:300]}
-    op = secrets.token_hex(16)
     with _operations_verrou:
-        # seules les opérations TERMINÉES sont purgées (une opération en cours reste suivable)
-        terminees = [k for k, v in OPERATIONS_OUBLI.items() if v.get("etat") == "termine"]
-        while len(OPERATIONS_OUBLI) >= _OPERATIONS_MAX and terminees:
-            OPERATIONS_OUBLI.pop(terminees.pop(0))
         OPERATIONS_OUBLI[op] = {"operation": op, "oublie": req.nom, "etat": "en_cours", "status": "en_cours",
                                 "retires": {"registre": retires["registre"], "wg": retires["wg"], **n_jonctions},
                                 "etapes": {k: dict(v) for k, v in etapes.items()}, "restes": [], "debut": time.time()}
@@ -2718,7 +2739,7 @@ async def ml_approve(req: ApproveRequest, user: dict = Depends(require_jwt)):
     # (tâche asyncio) est lancée ici, APRÈS le retour du fil.
     reponse, promotion = await asyncio.to_thread(_ml_approve_verrouille, req)
     if promotion:
-        asyncio.create_task(_notify_peer_promotion(*promotion))
+        _garder_tache(asyncio.create_task(_notify_peer_promotion(*promotion)))
     return reponse
 
 
@@ -2861,14 +2882,14 @@ async def ml_pairs():
 
 
 @app.get("/master-link/peers", dependencies=[Depends(require_lecture)])
-async def ml_list_peers():
+def ml_list_peers():
     """List all join requests and their status (public read)."""
     requests = get_ml_requests()
     return {"peers": requests, "count": len(requests)}
 
 
 @app.get("/master-link/tree", dependencies=[Depends(require_lecture)])
-async def ml_tree():
+def ml_tree():
     """Get mesh hierarchy tree (public read)."""
     config = get_ml_config()
     requests = get_ml_requests()
@@ -2903,13 +2924,13 @@ async def ml_tree():
 
 
 @app.get("/master-link/config")
-async def ml_get_config(user: dict = Depends(require_jwt)):
+def ml_get_config(user: dict = Depends(require_jwt)):
     """Get full master-link configuration (auth required)."""
     return get_ml_config()
 
 
 @app.post("/master-link/config")
-async def ml_set_config(
+def ml_set_config(
     role: Optional[str] = None,
     upstream: Optional[str] = None,
     depth: Optional[int] = None,
@@ -2995,7 +3016,7 @@ async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
     try:
         genkey, pubkey = _wg_cles()
         etat_wg, pub = mesh.preparer_pair(get_wg_mesh_config(), genkey, pubkey)
-        _ecrire_etat_wg(etat_wg)
+        await asyncio.to_thread(_ecrire_etat_wg, etat_wg)
         corps.update({"wg_public_key": pub, "wg_port": int(etat_wg.get("listen_port", WG_PORT))})
     except (OSError, subprocess.SubprocessError, ValueError) as e:
         log.warning("tunnel du pair non prepare : %s", e)     # l'inscription reste possible sans tunnel
@@ -3019,14 +3040,14 @@ async def _rejoindre_maitre(master_addr: str, token: str) -> Dict:
 
         # If approved, update local config
         if result.get("status") == "approved":
-            config = get_ml_config()
+            config = await asyncio.to_thread(get_ml_config)
             config["role"] = "peer"
             config["upstream"] = master_addr
             config["depth"] = result.get("depth", 1)
-            save_ml_config(config)
+            await asyncio.to_thread(save_ml_config, config)
             if isinstance(result.get("wg"), dict) and corps.get("wg_public_key"):
                 try:
-                    _ecrire_etat_wg(mesh.appliquer_offre(get_wg_mesh_config(), result["wg"], master_addr))
+                    await asyncio.to_thread(_ecrire_etat_wg, mesh.appliquer_offre(get_wg_mesh_config(), result["wg"], master_addr))
                 except (OSError, ValueError) as e:
                     log.warning("offre de tunnel du maitre refusee : %s", e)
 
@@ -3125,7 +3146,7 @@ async def _dht_startup():
         net = dht.DHTNetwork(did, id_pubkey, wg_pubkey, endpoint)
         await net.start(host="0.0.0.0", port=cfg["dht"]["port"])
         net.load_routing()
-        asyncio.create_task(net.bootstrap(seeds=cfg["dht"]["bootstrap"], annuaire_nodes=[]))
+        _garder_tache(asyncio.create_task(net.bootstrap(seeds=cfg["dht"]["bootstrap"], annuaire_nodes=[])))
         app.state.dht = net
         log.info("DHT started did=%s port=%s", did, cfg["dht"]["port"])
     except Exception as exc:  # noqa: BLE001

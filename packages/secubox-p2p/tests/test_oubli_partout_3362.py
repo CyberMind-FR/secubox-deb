@@ -725,3 +725,60 @@ def test_iproute2_dans_depends():
     ctl = (ICI / "debian" / "control").read_text()
     dep = ctl[ctl.index("\nDepends:"):ctl.index("\nRecommends:")]
     assert "\n iproute2," in dep
+
+
+# ── passe 4 (#3362) : aucune écriture verrouillée dans la boucle ─────────────────────────────────────────────────────
+
+def _async_qui_verrouillent():
+    """Coroutines du module qui atteignent (directement ou par des fonctions SYNCHRONES du module) save_json,
+    oubli.verrou ou jetons.generer. Un appel passé à asyncio.to_thread n'est pas un appel : la fonction n'est que nommée."""
+    import ast
+    arbre = ast.parse((ICI / "api" / "main.py").read_text())
+    defs = {n.name: n for n in arbre.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    interdits = {"save_json", "verrou", "generer"}
+
+    def appels(f):
+        out = set()
+        for n in ast.walk(f):
+            if isinstance(n, ast.Call):
+                c = n.func
+                out.add(c.id if isinstance(c, ast.Name) else c.attr if isinstance(c, ast.Attribute) else None)
+        return out - {None}
+
+    memo = {}
+
+    def atteint(nom, pile=()):
+        if nom in interdits:
+            return True
+        f = defs.get(nom)
+        if f is None or isinstance(f, ast.AsyncFunctionDef) or nom in pile:
+            return False
+        if nom not in memo:
+            memo[nom] = any(atteint(x, pile + (nom,)) for x in appels(f))
+        return memo[nom]
+    return sorted(n for n, f in defs.items() if isinstance(f, ast.AsyncFunctionDef)
+                  and any(atteint(x) for x in appels(f)))
+
+
+def test_aucune_coroutine_n_ecrit_sous_verrou():
+    assert _async_qui_verrouillent() == []
+
+
+def test_taches_gardees_et_place_reservee_avec_le_429():
+    src = (ICI / "api" / "main.py").read_text()
+    assert "_TACHES" in src and "add_done_callback(_TACHES.discard)" in src
+    i = src.index("trop d'oublis en cours")
+    bloc = src[src.rindex("with _operations_verrou:", 0, i):i + 900]
+    assert "OPERATIONS_OUBLI[op] =" in bloc                     # réservée dans la même section que le contrôle
+
+
+def test_invite_master_link_en_lien_message_clair(tmp_path):
+    p2p = tmp_path / "p2p"
+    p2p.mkdir()
+    (tmp_path / "ailleurs").mkdir()
+    (p2p / "master-link").symlink_to(tmp_path / "ailleurs")
+    script = ICI / "scripts" / "sbx-mesh-invite"
+    env = dict(os.environ, SBX_P2P_DIR=str(p2p), SBX_AUDIT=str(tmp_path / "audit.log"), PYTHONPATH=str(ICI))
+    r = subprocess.run([sys.executable, str(script), "--code", "--json", "--adresse", "192.168.1.1"],
+                       env=env, capture_output=True, text=True, timeout=30)
+    assert r.returncode == 1 and "Traceback" not in r.stderr and "lien" in r.stderr

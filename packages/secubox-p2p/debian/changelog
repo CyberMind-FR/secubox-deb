@@ -30,6 +30,12 @@ secubox-p2p (1.21.0-1~trixie1) trixie; urgency=medium
     secubox-maillage-pairs lit la liste du maitre hors du verrou ; 429 si
     aucune operation d oubli n est purgeable ; erreurs d execution de wg et
     ip refusees proprement ; iproute2 en Depends (ref #3362).
+  * Passe 4 : secubox-maillage-pairs ignore la liste du maitre si l etat a
+    change (inode, mtime, taille) pendant l appel ou si le maitre n est plus
+    celui de l ancre ; aucune coroutine n ecrit sous le verrou (routes sans
+    await en def, ecritures par asyncio.to_thread, garde AST) ; taches
+    asyncio gardees ; place d oubli reservee avec le controle 429 ;
+    sbx-mesh-invite refuse un master-link en lien (code 1) (ref #3362).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 10:10:28 +0100
 
