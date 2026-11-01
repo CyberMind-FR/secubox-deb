@@ -502,3 +502,102 @@ def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str
     appareils = [{"mac": m, "nom": c["nom"], "mode": c["mode"], "couverture": couverture(mag.dernier_flux(m), maintenant)}
                  for m, c in sorted(per.items(), key=lambda kv: kv[1]["nom"])]
     return {"etat": {"version": 1, "genere": maintenant, "sources": sources, "appareils": appareils}, "candidats": candidats, "memoire": mem}
+
+
+# ── passage du moteur (secubox-adguard-auto, chaque minute) ─────────────────────────────────────────────────
+FICHIER_ETAT = "etat-dpi.json"
+PERIODE_CIBLES_S = 300
+DUREE_CHARGE_S = 600
+SBXDPI_APPAREILS = Path(os.environ.get("SECUBOX_ADGUARD_SBXDPI", "/run/secubox/sbxdpi/appareils.json"))
+SBXDPI_MAX = 8 * 1024 * 1024
+
+
+def lire_etat_dpi(dossier: Optional[Path] = None) -> Optional[dict]:
+    try:
+        e = json.loads(((dossier or dnstv.DOSSIER_ETAT) / FICHIER_ETAT).read_text(encoding="utf-8"))
+        return e if isinstance(e, dict) and e.get("version") == 1 else None
+    except (OSError, ValueError):
+        return None
+
+
+def _ecrire_etat_dpi(e: dict, dossier: Optional[Path] = None) -> None:
+    import tempfile
+    d = dossier or dnstv.DOSSIER_ETAT
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".etat-dpi.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            os.fchmod(h.fileno(), 0o640)
+            json.dump(e, h, ensure_ascii=False)
+        os.replace(tmp, d / FICHIER_ETAT)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def _resolus(maintenant: int) -> Set[str]:
+    f = dnstv.DOSSIER_ETAT / "reponses.db"
+    if not f.is_file():
+        return set()
+    try:
+        cx = sqlite3.connect(f"file:{f}?mode=ro", uri=True, timeout=5)
+        try:
+            return {ip for (ip,) in cx.execute("SELECT ip FROM rep WHERE derniere >= ? LIMIT 200000", (maintenant - 86400,))}
+        finally:
+            cx.close()
+    except sqlite3.Error:
+        return set()
+
+
+def moteur(maintenant: int, executer: Callable[[str], object], voisins: Dict[str, str], charge=os.getloadavg, cpus=None,
+           sbxdpi_chemin: Optional[Path] = None) -> dict:
+    """Un passage : cibles (toutes les 5 min ou si elles changent), conntrack (verbe root), fichier de sbxdpi, découvertes, garde de
+    charge (charge à 5 min > nombre de cœurs pendant 10 min : arrêt de nDPId, reprise MANUELLE). N'échoue jamais le moteur."""
+    etat, erreur = dnstv.lire_etat()
+    if erreur or not etat.get("actif"):
+        return {"ok": False}
+    prev = lire_etat_dpi() or {}
+    c = cibles(etat, voisins)
+    cibles_ts = int(prev.get("cibles_ts", 0) or 0)
+    if maintenant - cibles_ts >= PERIODE_CIBLES_S or prev.get("cibles") != c:
+        executer("dpi-cibles")
+        cibles_ts = maintenant
+    ct = None
+    r = executer("conntrack-dump")
+    if getattr(r, "returncode", 1) == 0 and getattr(r, "stdout", ""):
+        ct = r.stdout
+    sbx = None
+    chemin = sbxdpi_chemin or SBXDPI_APPAREILS
+    try:
+        if chemin.is_file() and not chemin.is_symlink():
+            with open(chemin, encoding="utf-8") as h:
+                sbx = h.read(SBXDPI_MAX)
+    except OSError:
+        sbx = None
+    mag = MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db")
+    taxo = dnstv_taxonomie.Taxonomie.depuis_dossier()
+    doh = charger_resolveurs(dnstv.DOSSIER_LISTES / "resolveurs-doh.txt")
+    res = passage(etat, dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db"), mag, lambda d: taxo.classer(d)["categorie"], maintenant, voisins,
+                  sbx, ct, _resolus(maintenant), dnstv.adresses_locales(), doh)
+    mag.menage(maintenant)
+    ch = dict(prev.get("charge") or {"haute_depuis": None, "pause": None})
+    n = cpus or os.cpu_count() or 1
+    if charge()[1] > n:
+        ch["haute_depuis"] = ch.get("haute_depuis") or maintenant
+        if ch.get("pause") is None and maintenant - ch["haute_depuis"] >= DUREE_CHARGE_S:
+            executer("ndpid-arreter")
+            ch["pause"] = maintenant
+    else:
+        ch["haute_depuis"] = None
+    e = dict(res["etat"], charge=ch, cibles=c, cibles_ts=cibles_ts)
+    _ecrire_etat_dpi(e)
+    return {"ok": True, "etat": e}
+
+
+def reprendre_manuellement(executer: Callable[[str], object]) -> dict:
+    """Reprise de nDPId après une pause de charge : geste de l'administrateur seulement."""
+    r = executer("ndpid-reprendre")
+    e = lire_etat_dpi() or {"version": 1, "appareils": [], "sources": {}}
+    e["charge"] = {"haute_depuis": None, "pause": None}
+    _ecrire_etat_dpi(e)
+    return {"ok": getattr(r, "returncode", 1) == 0}

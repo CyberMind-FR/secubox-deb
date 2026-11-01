@@ -95,3 +95,11 @@ def suspendre(texte: str, macs: Iterable[str], maintenant: int) -> str:
         if dnstv.MAC_RE.match(m):
             garde[m] = maintenant
     return json.dumps({"version": 1, "suspendus": garde}, sort_keys=True)
+
+
+def a_suspendre(changements: Iterable[dict], etat: dict) -> List[str]:
+    """MAC forcées dont un essai vient d'être retiré parce que le contenu habituel n'est plus demandé (lecture cassée) : le forçage du DNS
+    est suspendu 24 h pour elles, par prudence (on ne sait pas lequel, de la règle ou du forçage, a cassé la lecture)."""
+    slugs = {c["appareil"] for c in changements if c.get("vers") == "retire" and c.get("motif") == "contenu habituel plus demandé"}
+    f = set(forces(etat))
+    return sorted({c["mac"] for c in etat.get("clients", []) if c.get("mac") in f and dnstv._slug(c["nom"]) in slugs})
