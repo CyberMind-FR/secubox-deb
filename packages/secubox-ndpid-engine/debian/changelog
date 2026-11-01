@@ -1,3 +1,9 @@
+secubox-ndpid-engine (1.7.4-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy lot 4 (ref #3374) : garde CPU de l'unite, CPUQuota=40 % et Nice=10. Capture complete inchangee (aucun filtre de capture : la carte DPI du Hall et /ndpid/ gardent tout le trafic) ; le tri par appareil se fait dans sbxdpi. 40 % plutot que 25 % faute de mesure de nDPId sur gk2 (mono-fil, tout le LAN : un plafond trop bas ferait perdre des paquets).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 18:00:00 +0100
+
 secubox-ndpid-engine (1.7.3-1~trixie1) trixie; urgency=medium
 
   * nDPIsrvd ne boucle plus sur une box sans toolbox (#3240). L'unite passait -G secubox-ndpi:secubox-toolbox ; sans le paquet toolbox (profil minimal, ESPRESSObin v7) le groupe n'existe pas, nDPIsrvd sortait en 1 (Could not chmod/chown ... No such file or directory), Restart=on-failure le relancait toutes les 3 s et le moteur (Requires=) tombait avec lui. Nouveau lanceur secubox-ndpisrvd-run : le groupe lecteur s'il existe, sinon (absent ou vide) le groupe du producteur, le socket distributeur reste ferme a tout autre compte. 5 tests.

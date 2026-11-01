@@ -25,4 +25,5 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ProtectControlGroups=yes
-ReadWritePaths=/var/lib/secubox/ad-guard /var/lib/secubox-adguard-tv /etc/unbound/unbound.conf.d /var/log/secubox
+# Lot 4 (#3374) : cibles de sbxdpi (dossier root, tmpfiles de toolbox-ng) et forçage nft ; « - » : absents, ignorés.
+ReadWritePaths=/var/lib/secubox/ad-guard /var/lib/secubox-adguard-tv /etc/unbound/unbound.conf.d /var/log/secubox -/run/secubox/sbxdpi-cibles -/etc/nftables.d

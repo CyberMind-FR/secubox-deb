@@ -40,6 +40,8 @@ type counter struct {
 type aggregator struct {
 	// capteur : capteur Actor Intelligence (#2240), nil si non armé ; Observe est sans effet sur nil. Posé avant le démarrage des lecteurs, jamais modifié ensuite.
 	capteur *ActorSensor
+	// appareils : agrégat par adresse cible (SBX TV Privacy lot 4, #3374), nil si non armé ; nil-safe.
+	appareils *suiviAppareils
 
 	mu         sync.Mutex
 	protocols  map[string]*counter // master proto: "TLS"
@@ -526,6 +528,7 @@ func flushLoop(ctx context.Context, cfg Config, agg *aggregator) {
 			return
 		case <-t.C:
 			agg.writeSnapshot(cfg.CachePath)
+			agg.appareils.flush() // lot 4 : fichier par appareil, seulement si des cibles existent
 		}
 	}
 }

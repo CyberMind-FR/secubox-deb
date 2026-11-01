@@ -36,11 +36,13 @@ def banc(tmp_path):
         if physique:
             (sys_net / nom / "device").mkdir()
 
-    def lance(interface="", route_defaut=None):
+    def lance(interface="", route_defaut=None, filtre=None):
         if route_defaut:
             route.write_text(f"default via 192.168.1.254 dev {route_defaut} proto dhcp src 192.168.1.82 metric 1024\n")
         env = {"PATH": "/usr/bin:/bin", "SECUBOX_SYS_NET": str(sys_net), "SECUBOX_NDPID_BIN": str(ndpid), "SECUBOX_IP_CMD": str(ip),
                "INTERFACE": interface, "COLLECTEUR": "/run/c.sock", "UTILISATEUR": "u", "GROUPE": "g"}
+        if filtre is not None:
+            env["FILTRE_BPF"] = filtre                     # lot 4 (#3374)
         r = subprocess.run(["sh", str(LANCEUR)], capture_output=True, text=True, env=env, timeout=20)
         return r, (appels.read_text().strip() if appels.exists() else None)
     return carte, lance

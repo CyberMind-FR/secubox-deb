@@ -1,0 +1,124 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Lot 4 (#3374) : verbes root bornés du DPI — conntrack-dump (lecture seule), dpi-cibles (filtre BPF par MAC, cibles de sbxdpi),
+ndpid-arreter / ndpid-reprendre (garde de charge)."""
+import json
+from pathlib import Path
+
+import pytest
+
+from api import dnstv
+from test_dnstv_ctl_api import ctl, monde  # noqa: F401  (fixtures)
+
+PKG = Path(__file__).resolve().parents[1]
+MAC = "aa:bb:cc:00:00:01"
+
+
+@pytest.fixture
+def dpi(monde, monkeypatch):  # noqa: F811
+    t = monde["tmp"]
+    ct = t / "nf_conntrack"
+    sysctl = t / "systemctl"
+    sysctl.write_text(f"#!/bin/sh\necho \"systemctl $*\" >> {monde['journal']}\nexit 0\n")
+    sysctl.chmod(0o755)
+    ipcmd = t / "ip"
+    ipcmd.write_text("#!/bin/sh\ncase \"$2\" in -6) echo '[{\"dst\":\"2a01:e0a::1\",\"lladdr\":\"AA:BB:CC:00:00:01\",\"dev\":\"eth0\"}]';; "
+                     "*) echo '[]';; esac\n")
+    ipcmd.chmod(0o755)
+    for k, v in {"SECUBOX_ADGUARD_TV_CONNTRACK": ct, "SECUBOX_ADGUARD_TV_SYSTEMCTL": sysctl, "SECUBOX_ADGUARD_TV_IP": ipcmd,
+                 "SECUBOX_ADGUARD_TV_CIBLES": t / "run" / "sbxdpi-cibles" / "cibles.json"}.items():
+        monkeypatch.setenv(k, str(v))
+    dnstv.ecrire_etat({"actif": True, "clients": [{"ip": "192.168.1.50", "nom": "TV salon", "mode": "auto", "mac": MAC},
+                                                  {"ip": "192.168.1.60", "nom": "Hors", "mode": "off", "mac": "aa:bb:cc:00:00:09"}]},
+                      monde["etat"])
+    return {"ct": ct, **monde}
+
+
+def test_conntrack_dump_ne_rend_que_le_perimetre_et_n_ecrit_rien(dpi, capsys):
+    dpi["ct"].write_text(
+        "ipv4     2 tcp      6 100 ESTABLISHED src=192.168.1.50 dst=151.101.1.9 sport=1 dport=443 src=151.101.1.9 dst=192.168.1.50 sport=443 dport=1 use=1\n"
+        "ipv4     2 tcp      6 100 ESTABLISHED src=192.168.1.60 dst=151.101.1.9 sport=1 dport=443 src=151.101.1.9 dst=192.168.1.60 sport=443 dport=1 use=1\n"
+        "ipv6     10 udp      17 29 src=2a01:e0a::1 dst=2001:4860:4860::8888 sport=4 dport=853 src=2001:4860:4860::8888 dst=2a01:e0a::1 sport=853 dport=4 use=1\n")
+    assert ctl(dpi, "conntrack-dump") == 0
+    out = capsys.readouterr().out
+    assert "192.168.1.50 dst=151.101.1.9" in out and "2a01:e0a::1" in out and "192.168.1.60" not in out
+
+
+def test_dpi_cibles_ecrit_les_cibles_de_sbxdpi_sans_filtre_de_capture(dpi):
+    assert ctl(dpi, "dpi-cibles") == 0
+    f = dpi["tmp"] / "run" / "sbxdpi-cibles" / "cibles.json"
+    c = json.loads(f.read_text())
+    assert c["appareils"] == [{"mac": MAC, "adresses": ["192.168.1.50", "2a01:e0a::1"]}]
+    assert f.stat().st_mode & 0o777 == 0o640 and f.parent.stat().st_mode & 0o777 == 0o750          # S2
+    assert (not dpi["journal"].exists() or "restart" not in dpi["journal"].read_text()) and not (dpi["tmp"] / "ndpid-engine.d").exists()
+    assert ctl(dpi, "dpi-cibles") == 0
+    assert (dpi["tmp"] / "audit.log").read_text().count("dpi-cibles") == 1          # inchangé : pas de nouvelle entrée
+
+
+def test_garde_de_charge_arrete_puis_reprend_nDPId(dpi, monkeypatch):
+    _charge_root(dpi, monkeypatch, "9.0", [])
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_NDPID_PART", "0.5")
+    assert ctl(dpi, "ndpid-arreter") == 0 and ctl(dpi, "ndpid-reprendre") == 0
+    j = dpi["journal"].read_text()
+    assert "systemctl stop secubox-ndpid-engine.service" in j and "systemctl start secubox-ndpid-engine.service" in j
+    a = (dpi["tmp"] / "audit.log").read_text()
+    assert "ndpid-arret" in a and "ndpid-reprise" in a
+
+
+def test_sudoers_nomme_les_nouveaux_verbes_exactement():
+    s = (PKG / "sudoers.d" / "secubox-adguard-tv").read_text()
+    for v in ("conntrack-dump", "dpi-cibles", "ndpid-arreter", "ndpid-reprendre"):
+        assert f"/usr/sbin/secubox-adguard-tv {v}" in s
+
+
+def _charge_root(dpi, monkeypatch, charge, parts):
+    t = dpi["tmp"]
+    (t / "loadavg").write_text(f"{charge} {charge} {charge} 1/100 1\n")
+    st = t / "cpu.stat"
+    st.write_text("usage_usec 0\n")
+    vals = iter(parts)
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_LOADAVG", str(t / "loadavg"))
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_NDPID_CPU", str(st))
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_ECHANTILLON_S", "0")
+    import os
+    monkeypatch.setattr(os, "cpu_count", lambda: 4)
+    return st, vals
+
+
+def test_root_revérifie_la_charge_et_refuse_sinon(dpi, monkeypatch):
+    _charge_root(dpi, monkeypatch, "0.50", [])
+    assert ctl(dpi, "ndpid-arreter") == 2
+    assert not dpi["journal"].exists() or "stop" not in dpi["journal"].read_text()
+    assert "ndpid-arret-refuse" in (dpi["tmp"] / "audit.log").read_text()
+
+
+def test_root_refuse_si_nDPId_n_est_pas_en_cause(dpi, monkeypatch):
+    _charge_root(dpi, monkeypatch, "9.0", [])                       # cpu.stat immobile : 0 %
+    assert ctl(dpi, "ndpid-arreter") == 2
+
+
+def test_audit_de_l_arret_porte_le_code_reel(dpi, monkeypatch):
+    t = dpi["tmp"]
+    _charge_root(dpi, monkeypatch, "9.0", [])
+    monkeypatch.setenv("SECUBOX_ADGUARD_TV_NDPID_PART", "0.5")      # part mesurée injectée (banc)
+    (t / "systemctl").write_text(f"#!/bin/sh\necho \"systemctl $*\" >> {dpi['journal']}\nexit 5\n")
+    assert ctl(dpi, "ndpid-arreter") == 1
+    assert "rc=5" in (t / "audit.log").read_text()
+
+
+def test_m1_la_memoire_de_24_h_alimente_les_cibles(dpi):
+    import time as _t
+    from api import dnstv_dpi as D
+    m = D.MagasinDPI(dpi["etat"] / "dpi-appareils.db")
+    now = int(_t.time())
+    m.ecrire_voisins({"2a01:e0a::99": (MAC, now - 3600), "2a01:e0a::98": (MAC, now - 2 * 86400),
+                      "192.168.1.200": ("aa:bb:cc:00:00:77", now)})                     # MAC hors périmètre : ignorée
+    assert ctl(dpi, "dpi-cibles") == 0
+    c = json.loads((dpi["tmp"] / "run" / "sbxdpi-cibles" / "cibles.json").read_text())
+    assert c["appareils"][0]["adresses"] == ["192.168.1.50", "2a01:e0a::1", "2a01:e0a::99"]
+
+
+def test_m6_conntrack_absent_rend_le_code_indisponible(dpi, capsys):
+    assert ctl(dpi, "conntrack-dump") == 4 and capsys.readouterr().out == ""

@@ -1,3 +1,17 @@
+secubox-ad-guard (1.21.0-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy lot 4 — DPI par appareil (ref #3374). Conception : docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot4-design.md.
+  * api/dnstv_dpi.py : rattachement adresse -> MAC (table de voisinage puis memoire de 24 h, jamais au hasard ; une TV qui change d'IPv6 reste un appareil), correlation de repli publicitaire (domaine nouveau dans les 30 s apres un refus PUBLICITE/TRACKING, raison « apparu N s apres le blocage de X », confiance 40/70/90), spot de secours (meme hote et meme volume apres deux coupures, hypothese etiquetee), constats sans DNS / DNS chiffre / contournement, badge SSAI (lists/ssai.txt), lecture de conntrack et du fichier par appareil de sbxdpi, magasin borne dpi-appareils.db (flux 7 j a la minute, decouvertes 30 j et 5 000 au plus, base corrompue recreee).
+  * Moteur AUTO : les replis PUB deviennent candidats puis ESSAIS (garde inchangee : categorie protegee jamais en essai ; retrait par rafale de refus ou contenu habituel plus demande). Passage DPI chaque minute (etat-dpi.json), cibles toutes les 5 min, garde de charge (charge a 5 min > nombre de coeurs pendant au moins 5 min : arret de nDPId, donc de TOUT le DPI de la box, annonce dans la page et audite, reprise manuelle).
+  * Forcage du DNS (arbitrage 2) pour les appareils PROTECT/AUTO effectifs avec MAC : redirection 53 vers le resolveur de la box, rejet de DoT/DoQ (853) et des resolveurs DoH connus (lists/resolveurs-doh.txt) ; table nftables inet secubox_adguard_contournement, double tampon (nft -c), retour a la version precedente, audit ; leve par OBSERVE, la pause et « Je debloque » ; suspendu 24 h si la lecture casse. Effectif seulement pour le trafic qui traverse la box (mode LAN).
+  * Controleur root : verbes conntrack-dump (lecture seule), dpi-cibles (cibles de sbxdpi seulement : aucun filtre de capture, nDPId garde tout le trafic pour le Hall et /ndpid/), ndpid-arreter / ndpid-reprendre ; sudoers etendu (arguments exacts).
+  * Routes /adblock-tv/protection/dpi/{etat,applications,flux,decouvertes,coupures,reprendre} : donnees par appareil en require_jwt, etat reduit pour le porteur delegue ; reprise ouverte au relais du pilotage.
+  * Page /tv-privacy/ : onglet « Applications » (couverture « DNS seulement » / « DNS + DPI », cartes nDPI avec badges, frise des coupures, decouvertes, SSAI explique).
+  * Passe 2 (relectures) : dpi-appareils.db bornee a 20 Mio (auto_vacuum incremental) ; verrou SQLite distinct d'une corruption, API en lecture seule ; correlation lineaire et incrementale faite une seule fois ; garde de charge a etat unique sous verrou, 5 min + nDPId >= 20 % d'un coeur, revérifiee par root (audit du code reel) ; cibles de sbxdpi dans /run/secubox/sbxdpi-cibles/ (root), memoire de 24 h incluse ; fichier nft toujours chargeable ; conntrack « indisponible » ; decouvertes recentes d'abord et forcage refuse affiches dans la page.
+  * Reference TV : metaproxy.francetvpub.fr PUBLICITE, imasdk.googleapis.com STREAMING (protege : #2146, replay Free sans fin s'il est bloque), audiences.free.fr et stats.oqee.net TRACKING, m.media-amazon.com CDN (mesure gk2 2026-11-01).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 18:00:00 +0100
+
 secubox-ad-guard (1.20.2-1~trixie1) trixie; urgency=medium
 
   * Page /tv-privacy/ : les styles injectés par la coque partagée (health-banner.js, sidebar.js) sont permis en ligne ; le bandeau de santé ne s affiche plus brut (« Backbone22 »). Scripts toujours par hachage (ref #3374).

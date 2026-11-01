@@ -10,6 +10,11 @@ Requires=secubox-ndpisrvd.service
 [Service]
 Type=simple
 EnvironmentFile=-/etc/secubox/ndpid-engine.env
+# Lot 4 (#3374) : garde CPU (gk2 chargé). Capture COMPLÈTE conservée (Hall, /ndpid/) : aucun filtre de capture.
+# 40 % d'un cœur et non 25 % : aucune mesure de nDPId sur gk2 n'existe ; nDPId est mono-fil et capture tout le LAN, un plafond
+# trop bas ferait perdre des paquets à pcap (classification dégradée sur /ndpid/). 40 % laisse plus de 3,5 cœurs au reste.
+CPUQuota=40%
+Nice=10
 # LA CAPTURE EXIGE CAP_NET_RAW ; ABANDONNER SES PRIVILÈGES EXIGE CAP_SETUID.
 #
 # Le premier périmètre ne gardait que NET_RAW et NET_ADMIN — et le démon

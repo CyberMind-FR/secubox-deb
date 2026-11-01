@@ -92,6 +92,9 @@ type Config struct {
 	ActorSock    string
 	ActorRisques string
 	ActorSeuil   int
+	// SBX TV Privacy lot 4 (#3374) : cibles (écrites par root pour ad-guard) et sortie par appareil.
+	TargetsFile string
+	DevicesOut  string
 
 	// onReady, if set, is called once the API listener is up (test hook).
 	onReady func()
@@ -137,6 +140,8 @@ func defaultConfig() Config {
 		ActorSock:       os.Getenv("DPI_ACTOR_SOCK"), // vide par défaut : le capteur n'est armé que si le socket d'actord est déclaré
 		ActorRisques:    os.Getenv("DPI_ACTOR_RISQUES"),
 		ActorSeuil:      envIntDefault("DPI_ACTOR_SEUIL", 0),
+		TargetsFile:     getenvDefault("DPI_TARGETS_FILE", "/run/secubox/sbxdpi-cibles/cibles.json"),
+		DevicesOut:      getenvDefault("DPI_DEVICES_OUT", "/run/secubox/sbxdpi/appareils.json"),
 	}
 }
 
@@ -189,6 +194,10 @@ func run(ctx context.Context, cfg Config) error {
 		log.Printf("sbxdpi: capteur Actor Intelligence actif (socket %s, seuil %d)", cfg.ActorSock, agg.capteur.seuil)
 	}
 
+	if cfg.TargetsFile != "" && cfg.DevicesOut != "" {
+		agg.appareils = newSuiviAppareils(cfg.TargetsFile, cfg.DevicesOut)
+		agg.appareils.recharger()
+	}
 	filt := newFilter(cfg)
 	if agg.capteur != nil {
 		agg.capteur.muet = filt.riskMuted // la liste de silence de l'opérateur vaut aussi pour le capteur

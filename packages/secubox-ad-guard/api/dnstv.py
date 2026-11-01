@@ -118,7 +118,7 @@ def verifier_manifeste(dossier: Path) -> List[str]:
             except ImportError:
                 from api import dnstv_taxonomie
             problemes += [f"ligne invalide {m}" for m in dnstv_taxonomie.charger_reference_detail(f)[1]]
-        elif nom != "services.txt":             # plusieurs colonnes : validation propre (dnstv_taxonomie pour la référence)
+        elif nom not in ("services.txt", "ssai.txt", "resolveurs-doh.txt"):   # formats propres, validés par leur chargeur (dnstv_dpi, lot 4)
             _, mauvaises, _ = lire_liste(f)
             problemes += [f"ligne invalide {m}" for m in mauvaises]
     return problemes

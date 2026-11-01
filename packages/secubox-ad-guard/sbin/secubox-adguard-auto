@@ -11,6 +11,8 @@ contrôleur privilégié (`sudo -n secubox-adguard-tv regles-appliquer`, argumen
 """
 from __future__ import annotations
 
+import contextlib
+import os
 import subprocess
 import sys
 import time
@@ -19,7 +21,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
+from api import dnstv, dnstv_analyse, dnstv_contournement, dnstv_dpi, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
 
@@ -127,13 +129,92 @@ def rafraichir_feed(now: int, voisins=None, locales=None, passerelles=None) -> b
     return True
 
 
-def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None) -> int:
+class _Echec:
+    returncode, stdout, stderr = 1, "", "contrôleur absent"
+
+
+def _verbe_root(verbe: str):
+    """Un verbe EXACT du contrôleur root (sudoers : arguments fixes). Contrôleur absent (banc, tests) : échec silencieux."""
+    if not Path(CTL).exists():
+        return _Echec()
+    try:
+        return subprocess.run(["sudo", "-n", CTL, verbe], capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return _Echec()
+
+
+def rafraichir_dpi(now: int, voisins=None, executer=None) -> None:
+    """Lot 4 (#3374) : passage DPI par appareil (sources, découvertes, garde de charge). Ne fait JAMAIS échouer le moteur."""
+    try:
+        dnstv_dpi.moteur(now, executer or _verbe_root, (voisins or voisins_du_lan)())
+    except Exception as e:                                   # noqa: BLE001
+        print(f"passage DPI : {type(e).__name__}: {e}", file=sys.stderr)
+
+
+def replis_du_passage(etat: dict):
+    """I3 : découvertes `repli` nouvelles rangées par le passage DPI, par appareil (slug) ; jamais recalculées ici."""
+    try:
+        mag = dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db", lecture_seule=True)
+        slugs = {c["mac"]: dnstv._slug(c["nom"]) for c in etat["clients"] if c.get("mac")}
+        out, vus = {}, []
+        for d in mag.decouvertes(type_="repli", etat="nouvelle", limite=500):     # filtré en SQL : jamais masqué par les anciennes
+            if d["mac"] in slugs:
+                out.setdefault(slugs[d["mac"]], []).append(d)
+                vus.append((d["mac"], d["domaine"]))
+        return out, vus
+    except Exception as e:                                   # noqa: BLE001 — jamais de panne du moteur par le DPI
+        print(f"replis illisibles : {type(e).__name__}", file=sys.stderr)
+        return {}, []
+
+
+def marquer_replis(vus: list) -> None:
+    if not vus:
+        return
+    try:
+        mag = dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db")
+        for mac, domaine in vus:
+            mag.marquer(mac, domaine, "candidat")
+    except Exception as e:                                   # noqa: BLE001
+        print(f"replis non marqués : {type(e).__name__}", file=sys.stderr)
+
+
+def suspendre_forcage(changements: list, etat: dict, now: int) -> bool:
+    """Lecture cassée (contenu habituel plus demandé) sur un appareil forcé : forçage du DNS suspendu 24 h (lot 4). Rend vrai si écrit."""
+    macs = dnstv_contournement.a_suspendre(changements, etat)
+    if not macs:
+        return False
+    f = dnstv.DOSSIER_ETAT / dnstv_contournement.FICHIER_SUSPENSIONS
+    try:
+        ancien = f.read_text(encoding="utf-8") if f.is_file() and not f.is_symlink() else ""
+    except OSError:
+        ancien = ""
+    import tempfile
+    fd, tmp = tempfile.mkstemp(dir=f.parent, prefix="." + f.name + ".")    # nom aléatoire, créé en O_EXCL : jamais suivi
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            os.fchmod(h.fileno(), 0o640)
+            h.write(dnstv_contournement.suspendre(ancien, macs, now))
+        os.replace(tmp, f)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+    try:
+        dnstv_journal.ajouter([dnstv_journal.entree(now, c["nom"], c.get("mac"), "", "", "pause", "auto", "forçage DNS suspendu 24 h : lecture cassée")
+                               for c in etat["clients"] if c.get("mac") in macs])
+    except (OSError, ValueError) as e:
+        print(f"journal des décisions non écrit (suspension du forçage) : {type(e).__name__}: {e}", file=sys.stderr)
+    return True
+
+
+def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None, dpi=None) -> int:
     now = maintenant or int(time.time())
     dnstv_analyse.menage(maintenant=now)                      # lot 3 : ancien JSON de 16 Mo et temporaires orphelins, même moteur inactif
     try:
         rafraichir_feed(now, voisins, locales, passerelles)               # avant toute sortie anticipée : utile même sans appareil en mode auto
     except Exception as e:                                           # noqa: BLE001 — ceinture et bretelles : jamais de panne du moteur par le fichier d'échange
         print(f"fichier d'échange dpi-feed : {type(e).__name__}: {e}", file=sys.stderr)
+    rafraichir_dpi(now, voisins, dpi)
     cl = classeur()
     magasin = dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db")
     etat_modifie, ajouts, res = False, [], {"changements": [], "applique": False}
@@ -193,9 +274,16 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
                 except dnstv_regles.ErreurRegle as e:
                     print(f"ajout automatique impossible : {e}", file=sys.stderr)     # plafond de règles : l'expiration et les signaux ci-dessous continuent
             # 2. règles : candidats, essais, signaux, agrégation
-            res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now, taxo=taxo)
+            replis, a_marquer = replis_du_passage(etat)
+            res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now, taxo=taxo, replis=replis)
+            marquer_replis(a_marquer)
             if res["changements"]:
                 dnstv_regles.ecrire(regles)
+                try:
+                    if suspendre_forcage(res["changements"], etat, now):
+                        etat_modifie = True                       # le contrôleur doit relever le forçage de cet appareil
+                except OSError as e:
+                    print(f"suspension du forçage non écrite : {type(e).__name__}", file=sys.stderr)
             if res["agrege"] != dnstv_profil.charger_agrege():
                 dnstv_profil.ecrire_agrege(res["agrege"])
             ecrire_cache_classification(etat, taxo, magasin, regles, now)
