@@ -1,3 +1,9 @@
+secubox-ad-guard (1.20.1-1~trixie1) trixie; urgency=medium
+
+  * Page /tv-privacy/ : la CSP permet les gestionnaires et styles en attribut du menu latéral partagé (script-src-attr / style-src-attr) ; les blocs en ligne restent par hachage (ref #3374).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 11:32:23 +0100
+
 secubox-ad-guard (1.20.0-1~trixie1) trixie; urgency=medium
 
   * SBX TV Privacy lot 3 « protection » : modes OBSERVE / PROTECT / AUTO
