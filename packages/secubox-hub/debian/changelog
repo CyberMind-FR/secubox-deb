@@ -1,3 +1,9 @@
+secubox-hub (1.12.36-1~trixie1) trixie; urgency=medium
+
+  * Espaces : l'entrée de menu tv-privacy est classée dans l'espace protection (ref #3374).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 11:32:23 +0100
+
 secubox-hub (1.12.35-1~trixie1) trixie; urgency=medium
 
   * Un seul list-units par cycle (#1835) : le relevé des unités au repos

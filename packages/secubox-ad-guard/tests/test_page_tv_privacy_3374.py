@@ -90,7 +90,7 @@ sync_api = pytest.importorskip("playwright.sync_api")
 HOSTILE = "<img src=x onerror=window.xss=1>"
 
 
-def _page(scenario, statut=200, chemin="/tv-privacy/"):
+def _page(scenario, statut=200, chemin="/tv-privacy/", n_ev=1):
     appareils = {"appareils": [{"mac": "02:00:5e:00:00:01", "nom": HOSTILE, "ips": ["2001:db8::1", "192.0.2.1"], "mode": "auto",
                                 "modes_divergents": True, "profil": "LG_WEBOS", "profil_source": "nac", "profil_confiance": 90}],
                  "profils": ["LG_WEBOS", "INCONNU"]}
@@ -106,6 +106,9 @@ def _page(scenario, statut=200, chemin="/tv-privacy/"):
                "lignes": [dict(ligne), dict(ligne, domaine="video.example.org", categorie="STREAMING", protegee=True, bloquees=0, requetes=30)]}
     evenements = {"heures": 1, "total": 1, "groupes": [{"appareil": HOSTILE, "client": "192.0.2.1", "domaine": "pub.example.com", "occurrences": 7,
                                                          "premier": 1761955000, "dernier": 1761955100, "decision": "BLOCKED", "bloquees": 7, "erreurs": 0, "nouveau": True}]}
+    if n_ev > 1:                                                          # liste longue : la page n'en montre qu'une partie
+        g0 = evenements["groupes"][0]
+        evenements = {"heures": 1, "total": n_ev, "groupes": [dict(g0, domaine=f"d{i}.example.com") for i in range(n_ev)]}
     usager = {"tv": [{"id": "tv-salon", "nom": "TV salon", "protege": True, "pause_jusqu_a": None}]}
     vide = {"exceptions": [], "hors_champ": [], "agregats": [], "pauses": [], "erreurs_dns": [], "retours_arriere": []}
 
@@ -179,6 +182,16 @@ def test_evenements_agreges_affiches():
     assert any("/protection/evenements?heures=1" in u for u in gets)
 
 
+def test_evenements_longs_affiches_par_dix_puis_voir_plus():
+    def sc(pg):
+        avant = pg.eval_on_selector_all("#evenements tr:not(.plus)", "t => t.length")
+        pg.click("#evenements tr.plus button")
+        pg.wait_for_timeout(200)
+        return avant, pg.eval_on_selector_all("#evenements tr:not(.plus)", "t => t.length"), pg.inner_text("#evenements tr.plus")
+    (avant, apres, reste), erreurs, _p, _g, _c = _page(sc, n_ev=45)
+    assert (avant, apres) == (10, 30) and "15 restants" in reste and not erreurs
+
+
 def test_bouton_je_debloque():
     def sc(pg):
         pg.click("#debloque-ouvrir")
@@ -237,5 +250,68 @@ def test_csp_stricte_par_hash_a_jour():
     # 'self' : le menu latéral et sa feuille de style servis par l'admin ; rien d'externe ; les blocs en ligne par hachage.
     assert csp["script-src"] == ["'self'", _hash(scripts[0])], "script modifié sans mise à jour de la CSP"
     assert csp["style-src"] == ["'self'", _hash(styles[0])], "style modifié sans mise à jour de la CSP"
-    assert "unsafe-eval" not in m.group(1) and "unsafe-inline" not in m.group(1) and "http" not in m.group(1)
+    # Le menu latéral partagé (/shared/sidebar.js) pose des gestionnaires et des styles en ATTRIBUT : seuls les attributs sont
+    # permis en ligne (CSP3 *-src-attr) ; un <script> ou <style> en ligne reste refusé sans son hachage.
+    assert csp["script-src-attr"] == ["'unsafe-inline'"] and csp["style-src-attr"] == ["'unsafe-inline'"]
+    sans_attr = ";".join(d for d in m.group(1).split(";") if "-src-attr" not in d)
+    assert "unsafe-eval" not in m.group(1) and "unsafe-inline" not in sans_attr and "http" not in m.group(1)
     assert ' style="' not in SRC and "<script " not in SRC                    # aucun style ni script hors des blocs hachés
+
+
+# ── Mise en page Aurora : aucun débordement horizontal (démonstration, puis avec le vrai menu latéral partagé) ──
+COQUE = RACINE.parent / "secubox-hub" / "www" / "shared"
+ONGLETS = ("generale", "equipements", "analyseur", "protection", "diagnostic")
+MENU = json.dumps({"categories": [{"name": "Sécurité", "icon": "S", "items": [{"path": "/tv-privacy/", "name": "SBX TV Privacy", "icon": "T"}]}]})
+MESURE = "() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]"
+
+
+def _debordements(largeur, coque_reelle):
+    """Largeur de la page et du document, onglet par onglet. `coque_reelle` : le vrai /shared/sidebar.js du dépôt sur la page en démonstration."""
+    def tache():
+        with sync_api.sync_playwright() as p:
+            try:
+                nav = p.chromium.launch()
+            except Exception as e:
+                return ("skip", str(e))
+            pg = nav.new_page(viewport={"width": largeur, "height": 900})
+            erreurs = []
+            pg.on("pageerror", lambda e: erreurs.append(str(e)))
+
+            def partage(route):
+                f = COQUE / route.request.url.split("/shared/", 1)[1].split("?")[0]
+                if not f.is_file():
+                    return route.fulfill(status=404, body="")
+                route.fulfill(status=200, body=f.read_bytes(), content_type="text/javascript" if f.suffix == ".js" else "text/css")
+            pg.route("http://t.test/shared/**", partage)
+            pg.route("http://t.test/api/**", lambda r: r.fulfill(status=200, content_type="application/json", body=MENU if "/hub/public/menu" in r.request.url else "{}"))
+            pg.route("http://t.test/tv-privacy/**", lambda r: r.fulfill(status=200, content_type="text/html", body=SRC))
+            pg.goto(("http://t.test/tv-privacy/?demo=1") if coque_reelle else PAGE.as_uri() + "?demo=1")
+            if coque_reelle:                                   # la démonstration n'ouvre pas le menu : on le monte comme l'admin le fait
+                pg.evaluate("() => {document.body.classList.remove('emb');var s=document.createElement('script');s.src='/shared/sidebar.js';document.body.appendChild(s);}")
+            pg.wait_for_timeout(900)
+            mesures = {}
+            for o in ONGLETS:
+                pg.click(f"#t-{o}")
+                pg.wait_for_timeout(150)
+                mesures[o] = pg.evaluate(MESURE)
+            if coque_reelle:                                   # habillage Aurora du menu, sans le bloc d'état ni les LED de l'ancienne barre
+                mesures["coque"] = pg.evaluate("() => [document.documentElement.classList.contains('sbx-aurora'), !!document.querySelector('link[href=\"/shared/cadre-aurora.css\"]'),"
+                                               " [...document.querySelectorAll('.header-leds-metrics')].every(e => e.offsetParent === null)]")
+            nav.close()
+            return ("ok", mesures, erreurs)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        res = ex.submit(tache).result(timeout=90)
+    if res[0] == "skip":
+        pytest.skip(res[1])
+    return res[1:]
+
+
+@pytest.mark.parametrize("largeur", [1400, 420])
+@pytest.mark.parametrize("coque_reelle", [False, True], ids=["demo", "menu-lateral"])
+def test_aucun_debordement_horizontal(largeur, coque_reelle):
+    mesures, erreurs = _debordements(largeur, coque_reelle)
+    coque = mesures.pop("coque", None)
+    assert coque in (None, [True, True, True]), f"menu sans l'habillage Aurora : {coque}"
+    trop = {o: m for o, m in mesures.items() if m[0] > m[1]}
+    assert not trop, f"débordement horizontal à {largeur} px : {trop}"
+    assert not erreurs

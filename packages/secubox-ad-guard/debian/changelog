@@ -1,3 +1,13 @@
+secubox-ad-guard (1.20.1-1~trixie1) trixie; urgency=medium
+
+  * Page /tv-privacy/ : la CSP permet les gestionnaires et styles en attribut du menu latéral partagé (script-src-attr / style-src-attr) ; les blocs en ligne restent par hachage (ref #3374).
+  * Événements récents : 10 groupes affichés, puis « Voir plus » par 20 ; la liste complète reste dans l'onglet Analyseur.
+  * Page /tv-privacy/ conforme Aurora dans l'admin : en-tête (marque, pastille d'état, heure, ⟳ Rafraîchir), html.sbx-aurora (cadre-aurora.css du menu),
+    règles de la coque que la CSP refuse en ligne reprises dans le bloc haché (bloc d'état et LED de l'ancienne barre masqués, ☰ mobile, marges du contenu),
+    réponse au skin hybrid-skin.css à spécificité supérieure ; aucun débordement horizontal à 1400 et 420 px ; routes, corps et gardes inchangés (ref #3374).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 11:32:23 +0100
+
 secubox-ad-guard (1.20.0-1~trixie1) trixie; urgency=medium
 
   * SBX TV Privacy lot 3 « protection » : modes OBSERVE / PROTECT / AUTO
