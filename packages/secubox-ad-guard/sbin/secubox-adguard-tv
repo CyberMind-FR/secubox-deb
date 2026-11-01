@@ -422,13 +422,15 @@ def audit_classification(entree: str) -> int:
 
 # Gestes de protection (#3374 lot 3) : pause, retour en observation, reprise, exception. L'API (ou le moteur) passe UN enregistrement
 # sur l'entrée standard ; root le revalide champ par champ et l'ajoute à audit.log avec l'ORIGINE (usager, admin, auto) et l'ACTEUR.
-GESTES_PROTECTION = ("pause", "observe", "reprise", "exception")
+GESTES_PROTECTION = ("pause", "observe", "reprise", "exception", "annule")      # annule : retour arrière après un échec
 ORIGINES_PROTECTION = ("usager", "admin", "auto")
 TYPES_EXCEPTION = ("autoriser", "bloquer", "autoriser-retire", "bloquer-retire")
 
 
 def _enregistrement_protection(r) -> bool:
-    if not isinstance(r, dict) or set(r) != {"acteur", "origine", "geste", "cibles", "minutes", "domaine", "type"}:
+    if not isinstance(r, dict) or set(r) != {"acteur", "origine", "geste", "cibles", "minutes", "domaine", "type", "force"}:
+        return False
+    if not isinstance(r["force"], bool):                                 # blocage confirmé d'une catégorie protégée (passe 3)
         return False
     if not (isinstance(r["acteur"], str) and ACTEUR_RE.match(r["acteur"]) and r["origine"] in ORIGINES_PROTECTION
             and r["geste"] in GESTES_PROTECTION):
@@ -442,6 +444,9 @@ def _enregistrement_protection(r) -> bool:
     if r["geste"] == "exception":
         return (isinstance(r["domaine"], str) and dnstv.valider_domaine(r["domaine"]) == r["domaine"] and r["type"] in TYPES_EXCEPTION
                 and m is None)
+    if r["geste"] == "annule":                                          # reprend le geste annulé, domaine et type compris s'il y en a
+        return ((r["domaine"] is None or (isinstance(r["domaine"], str) and dnstv.valider_domaine(r["domaine"]) == r["domaine"]))
+                and (r["type"] is None or r["type"] in TYPES_EXCEPTION))
     return r["domaine"] is None and r["type"] is None
 
 

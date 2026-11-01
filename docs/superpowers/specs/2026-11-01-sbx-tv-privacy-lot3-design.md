@@ -159,6 +159,14 @@ pendant 1 h »), message honnête. Garde utilisateur bornée côté API.
   moteur (et par le postinst) ; un changement de mode oublie la pause ; `.a-appliquer` posé à la reprise avant la réécriture des
   pauses ; `sub` absent = 403 ; le débit ne décompte que les gestes appliqués.
 
+### Passe 3
+
+- `exceptions.json` écrit DANS le bloc protégé : un échec d'écriture restaure règles et état (503, rien n'est appliqué).
+- L'audit transmet `force` (booléen validé par `audit-protection`) ; tout retour arrière ajoute une entrée `annule`.
+- Lecteur délégué : le journal du diagnostic ne contient plus la MAC tronquée.
+- Taxonomie indisponible au contrôle `force` : 503. Diagnostic : `protect_sans_regles` signale PROTECT appliqué sans `regles.json`
+  lisible.
+
 ### Reportés
 
 - M1 : les données anciennes à suffixe `.home` de `dnstv_counts` restent des domaines distincts dans le cache de l'analyseur (les
@@ -166,6 +174,9 @@ pendant 1 h »), message honnête. Garde utilisateur bornée côté API.
 - M2 : journal, un pas peut manquer quand l'historique d'une règle est saturé (10) et qu'une transition tombe à la même seconde.
 - M7 : sans objet depuis I2 (le TOML n'est plus lu par `lire_etat`, seulement par le postinst).
 - Doute 4 : la liste d'usager montre tout le périmètre hors `off` (enceinte comprise) ; filtrer par profil TV plus tard.
+- Débit de la route d'usager : vérification puis décompte en deux temps (non atomique) ; deux gestes simultanés peuvent dépasser
+  le plafond d'une unité. Reporté (passe 3).
+- Mémoire d'Unbound des vues `sbx-tv-block-<appareil>` (copie de la liste livrée par vue) : à mesurer au déploiement.
 - Doute 5 : kiosque sans ad-guard : masquer la carte si `/protection/usager/tv` répond 404.
 
 ## Versions

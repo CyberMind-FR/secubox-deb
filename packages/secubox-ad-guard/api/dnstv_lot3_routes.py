@@ -148,8 +148,8 @@ def _groupe_pour_lecteur(g: dict) -> dict:
 
 
 def _entree_pour_lecteur(e: dict) -> dict:
-    """Entrée de journal pour un lecteur qui n'est pas administrateur réel : sans motif (il peut nommer l'acteur)."""
-    return {k: v for k, v in e.items() if k != "motif"}
+    """Entrée de journal pour un lecteur qui n'est pas administrateur réel : sans motif (il peut nommer l'acteur) ni MAC."""
+    return {k: v for k, v in e.items() if k not in ("motif", "mac")}
 
 
 
@@ -187,11 +187,19 @@ def _journaliser(entrees: list) -> None:
 
 
 def _audit(acteur: str, origine: str, geste: str, cibles: list, minutes: Optional[int] = None, domaine: Optional[str] = None,
-           type_: Optional[str] = None) -> None:
-    """Décision de sécurité dans audit.log (geste, périmètre, origine, acteur) par le verbe root borné `audit-protection` ; un échec
-    rend 502 et le geste est refusé : jamais de décision non tracée."""
+           type_: Optional[str] = None, force: bool = False) -> None:
+    """Décision de sécurité dans audit.log (geste, périmètre, origine, acteur, `force`) par le verbe root borné `audit-protection` ;
+    un échec rend 502 et le geste est refusé : jamais de décision non tracée."""
     _r._ctl_entree("audit-protection", json.dumps({"acteur": acteur, "origine": origine, "geste": geste, "cibles": sorted(cibles)[:64],
-                                                   "minutes": minutes, "domaine": domaine, "type": type_}))
+                                                   "minutes": minutes, "domaine": domaine, "type": type_, "force": bool(force)}))
+
+
+def _audit_annule(acteur: str, origine: str, cibles: list, domaine: Optional[str] = None, type_: Optional[str] = None) -> None:
+    """Après un retour arrière : entrée `annule` dans audit.log, au mieux (le geste est déjà refusé ; l'échec est seulement tracé)."""
+    try:
+        _audit(acteur, origine, "annule", cibles, None, domaine, type_)
+    except HTTPException as e:
+        logger.warning("audit de l'annulation impossible : %s", e.detail)
 
 
 def _geste(geste, action: str, origine: str, motif: str, acteur: str = "inconnu", minutes: Optional[int] = None) -> tuple:
@@ -222,6 +230,7 @@ def _geste(geste, action: str, origine: str, motif: str, acteur: str = "inconnu"
         except HTTPException:
             dnstv.ecrire_etat(ancien)
             dnstv_protection.ecrire_pauses(anciennes)
+            _audit_annule(acteur, origine, touches)
             raise
         maintenant = int(time.time())
         _journaliser([dnstv_journal.entree(maintenant, n, _mac_de(etat, n), "", "", action, origine, motif) for n in touches])
@@ -282,7 +291,10 @@ def exception_poser(corps: ExceptionIn, jeton=Depends(require_jwt)):
     if not d:
         raise HTTPException(422, "nom de domaine invalide")
     if corps.actif and corps.type == "bloquer" and not corps.force:
-        c = dnstv_analyse.dnstv_taxonomie.Taxonomie.depuis_dossier().classer(d)
+        try:
+            c = dnstv_analyse.dnstv_taxonomie.Taxonomie.depuis_dossier().classer(d)
+        except (OSError, ValueError) as e:
+            raise HTTPException(503, f"taxonomie indisponible ({type(e).__name__}) : blocage refusé, réessayer") from None
         if c["protegee"] and c["categorie"] != "INCONNU":                # INCONNU ne protège que du moteur AUTO : l'admin décide ici
             raise HTTPException(409, f"catégorie {c['categorie']} protégée (lecture des vidéos, DRM…) : confirmer le blocage (force)")
     with _r._verrou():
@@ -300,18 +312,27 @@ def exception_poser(corps: ExceptionIn, jeton=Depends(require_jwt)):
             raise HTTPException(404 if "inconnu" in str(e) else 422, str(e)) from None
         except dnstv_regles.ErreurRegle as e:
             raise HTTPException(422, str(e)) from None
-        _audit(_r._acteur(jeton), "admin", "exception", [corps.appareil], None, d, corps.type if corps.actif else corps.type + "-retire")
+        acteur, type_audit = _r._acteur(jeton), corps.type if corps.actif else corps.type + "-retire"
+        _audit(acteur, "admin", "exception", [corps.appareil], None, d, type_audit, corps.force)
         dnstv_regles.ecrire(regles)
         try:
             dnstv.ecrire_etat(etat)
         except dnstv.ErreurTV as e:
             dnstv_regles.ecrire(ancien_regles)
+            _audit_annule(acteur, "admin", [corps.appareil], d, type_audit)
             raise HTTPException(422, str(e)) from None
-        dnstv_protection.ecrire_exceptions(nouv)                       # AVANT l'application (S4) : jamais un DNS appliqué sans sa trace
+        try:
+            dnstv_protection.ecrire_exceptions(nouv)                   # AVANT l'application (S4) : jamais un DNS appliqué sans sa trace
+        except (OSError, dnstv_protection.ErreurProtection) as e:
+            dnstv_regles.ecrire(ancien_regles)                         # passe 3 : règles ET état reviennent, rien n'est appliqué
+            dnstv.ecrire_etat(ancien_etat)
+            _audit_annule(acteur, "admin", [corps.appareil], d, type_audit)
+            raise HTTPException(503, f"exceptions non écrites ({type(e).__name__}) : rien n'est changé") from None
         try:
             application = _r._appliquer_ou_annuler_tout(ancien_etat, ancien_regles)
         except HTTPException:
             dnstv_protection.ecrire_exceptions(ex)
+            _audit_annule(acteur, "admin", [corps.appareil], d, type_audit)
             raise
         _journaliser(dnstv_journal.depuis_regles(avant, regles.liste(), etat)
                      + [dnstv_journal.entree(int(time.time()), corps.appareil, _mac_de(etat, corps.appareil), d, "", "exception", "admin",
@@ -365,7 +386,15 @@ def diagnostic(lecteur=Depends(_r.require_lecture_nominative)):
     if not admin:
         erreurs = [_groupe_pour_lecteur(g) for g in erreurs]
         retours = [_entree_pour_lecteur(e) for e in retours]
-    return {"erreurs_dns": erreurs,
+    # PROTECT appliqué sans regles.json lisible : le contrôleur applique alors les seules listes (blocages d'exception ignorés).
+    protect_sans_regles = False
+    if any(c["mode"] == "block" for c in etat.get("clients", [])):
+        try:
+            dnstv_regles.charger()
+        except dnstv_regles.ErreurRegle:
+            protect_sans_regles = True
+    return {"protect_sans_regles": protect_sans_regles,
+            "erreurs_dns": erreurs,
             "exceptions": exceptions(lecteur)["exceptions"],
             "pauses": [{"appareil": p["appareil"], "fin": p["fin"], "origine": p["origine"]} for p in pauses],
             "retours_arriere": retours,

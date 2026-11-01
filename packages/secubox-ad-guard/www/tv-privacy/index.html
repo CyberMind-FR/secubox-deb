@@ -15,7 +15,7 @@
   `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, adresses de documentation, aucune écriture.
 -->
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-OaBVOydUgV/w8PSF7obRdaPw4AVQJ9Z8c7tDdNU3Qfc='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-lOSqU2ybBFboUVdnCKwZYgGYdzpdfN+yWhvXG1MeYO4='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -589,6 +589,7 @@
   // ── diagnostic ──
   function chargerDiagnostic(){
     source('/protection/diagnostic').then(function(d){
+      if(d.protect_sans_regles)message('PROTECT appliqué sans regles.json lisible : seules les listes livrées bloquent, les blocages d’exception sont ignorés.','erreur');
       var te=el('d-erreurs');vider(te);(d.erreurs_dns||[]).forEach(function(x){var tr=h('tr');tr.appendChild(h('td',null,x.appareil));tr.appendChild(h('td',{class:'mono'},x.domaine));
         tr.appendChild(h('td',{class:'num'},fmt(x.erreurs)));tr.appendChild(h('td',null,quand(x.dernier)));te.appendChild(tr);});if(!te.firstChild)vide(te,4,'Aucune erreur DNS sur 24 h.');
       var bp=el('d-pauses');vider(bp);(d.pauses||[]).forEach(function(p){bp.appendChild(h('div',null,p.appareil+' : jusqu’à '+heure(p.fin)+' ('+p.origine+')'));});if(!bp.firstChild)bp.appendChild(h('div',{class:'vide'},'Aucune pause.'));

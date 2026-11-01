@@ -65,7 +65,8 @@ def test_s1_evenements_et_diagnostic_sans_adresse_ni_acteur_pour_le_delegue(tv, 
 def test_s2_verbe_root_audit_protection_valide_et_ecrit(monde):
     import io
     import sys
-    bon = {"acteur": "marie", "origine": "usager", "geste": "pause", "cibles": ["TV salon"], "minutes": 60, "domaine": None, "type": None}
+    bon = {"acteur": "marie", "origine": "usager", "geste": "pause", "cibles": ["TV salon"], "minutes": 60, "domaine": None, "type": None,
+           "force": False}
     for brut, rc in ((bon, 0), (dict(bon, origine="pirate"), 2), (dict(bon, geste="durcir"), 2), (dict(bon, acteur="a b"), 2),
                      (dict(bon, cibles=["x\ny"]), 2), (dict(bon, minutes=999999), 2), (dict(bon, extra=1), 2),
                      (dict(bon, geste="exception", domaine="pas un domaine", type="bloquer"), 2)):
@@ -339,3 +340,76 @@ def test_garde_porteur_delegue_403(brut, monkeypatch):
     h = {"Authorization": "Bearer x"}
     assert c.get("/adblock-tv/protection/usager/tv", headers=h).status_code == 403
     assert c.post("/adblock-tv/protection/usager/debloquer", headers=h, json={"tv": "toutes", "geste": "pause", "minutes": 15}).status_code == 403
+
+
+# ── passe 3 ──────────────────────────────────────────────────────────────────────────────────────────
+def test_p3_ecriture_des_exceptions_en_echec_restaure_regles_et_etat(tv, monde, monkeypatch):
+    from api import dnstv_routes as r
+    vus = []
+    monkeypatch.setattr(r, "_ctl_entree", lambda a, e: vus.append(json.loads(e)))
+
+    def casse(*a, **k):
+        raise OSError("disque plein")
+    monkeypatch.setattr(P, "ecrire_exceptions", casse)
+    rep = tv.post("/adblock-tv/protection/exceptions", json={"appareil": "TV salon", "domaine": "pub.example.com", "type": "autoriser"})
+    assert rep.status_code == 503
+    assert "autorisations" not in dnstv.lire_etat()[0] and R.charger().liste() == []
+    assert [x["geste"] for x in vus] == ["exception", "annule"]
+
+
+def test_p3_force_audite(tv, monkeypatch):
+    from api import dnstv_routes as r
+    vus = []
+    monkeypatch.setattr(r, "_ctl_entree", lambda a, e: vus.append(json.loads(e)))
+    tv.post("/adblock-tv/protection/exceptions", json={"appareil": "TV salon", "domaine": "license.oqee.net", "type": "bloquer", "force": True})
+    tv.post("/adblock-tv/protection/pause", json={"appareil": "TV salon", "minutes": 15})
+    assert vus[0]["force"] is True and vus[1]["force"] is False
+
+
+def test_p3_verbe_root_valide_force_et_annule(monde):
+    import io
+    import sys
+    bon = {"acteur": "admin", "origine": "admin", "geste": "exception", "cibles": ["TV salon"], "minutes": None,
+           "domaine": "x.example.com", "type": "bloquer", "force": True}
+    for brut, rc in ((bon, 0), (dict(bon, force="oui"), 2), ({k: v for k, v in bon.items() if k != "force"}, 2),
+                     (dict(bon, geste="annule"), 0), (dict(bon, geste="annule", domaine=None, type=None), 0)):
+        sys.stdin = io.StringIO(json.dumps(brut))
+        try:
+            assert ctl(monde, "audit-protection") == rc, brut
+        finally:
+            sys.stdin = sys.__stdin__
+
+
+def test_p3_annule_audite_apres_retour_arriere_d_un_geste(tv, monkeypatch):
+    from fastapi import HTTPException
+    from api import dnstv_routes as r
+    vus = []
+    monkeypatch.setattr(r, "_ctl_entree", lambda a, e: vus.append(json.loads(e)))
+
+    def echec(action):
+        raise HTTPException(502, "contrôleur en échec")
+    monkeypatch.setattr(r, "_ctl", echec)
+    assert tv.post("/adblock-tv/protection/pause", json={"appareil": "TV salon", "minutes": 15}).status_code == 502
+    assert [x["geste"] for x in vus] == ["pause", "annule"]
+
+
+def test_p3_journal_lecteur_sans_mac(tv, monde, monkeypatch):
+    from api import dnstv_journal as J, dnstv_lot3_routes as L
+    J.ajouter([J.entree(T0, "TV salon", MAC1, "x.example.com", "", "retrait", "admin", "m")], monde["etat"])
+    monkeypatch.setattr(L, "est_admin_reel", lambda p: False)
+    assert "00:24:d4" not in tv.get("/adblock-tv/protection/diagnostic").text
+
+
+def test_p3_taxonomie_indisponible_503(tv, monkeypatch):
+    from api import dnstv_taxonomie as T
+
+    def casse(*a, **k):
+        raise OSError("listes absentes")
+    monkeypatch.setattr(T.Taxonomie, "depuis_dossier", classmethod(lambda cls, *a, **k: casse()))
+    rep = tv.post("/adblock-tv/protection/exceptions", json={"appareil": "TV salon", "domaine": "x.example.com", "type": "bloquer"})
+    assert rep.status_code == 503
+
+
+def test_p3_diagnostic_signale_protect_sans_regles(tv, monde):
+    (monde["etat"] / "regles.json").write_text("{pas du json")
+    assert tv.get("/adblock-tv/protection/diagnostic").json()["protect_sans_regles"] is True
