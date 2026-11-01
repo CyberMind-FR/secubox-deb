@@ -12,8 +12,11 @@ catégorie bloquable ; la garde du lot 2 (`dnstv_taxonomie.refus_auto`) reste se
 from __future__ import annotations
 
 import ipaddress
+import contextlib
 import json
+import os
 import re
+import sqlite3
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 
@@ -266,3 +269,236 @@ def lire_sbxdpi(texte: str) -> dict:
     except (TypeError, ValueError):
         genere = 0
     return {"genere": genere, "flux": out}
+
+
+# ── magasin borné : dpi-appareils.db ────────────────────────────────────────────────────────────────────────
+RETENTION_FLUX_S = 7 * 86400
+RETENTION_DECOUVERTES_S = 30 * 86400
+MAX_DECOUVERTES = 5000
+PEREMPTION_SBXDPI_S = 120
+TYPES_DECOUVERTE = ("repli", "repli-protege", "secours", "sans-dns", "dns-chiffre", "contournement")
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS flux (mac TEXT NOT NULL, minute INTEGER NOT NULL, appli TEXT NOT NULL, categorie_ndpi TEXT NOT NULL DEFAULT '',
+    hote TEXT NOT NULL DEFAULT '', port INTEGER NOT NULL DEFAULT 0, distant TEXT NOT NULL DEFAULT '', flux INTEGER NOT NULL DEFAULT 0,
+    octets INTEGER NOT NULL DEFAULT 0, sans_dns INTEGER NOT NULL DEFAULT 0, dns_chiffre INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (mac, minute, appli, hote, port, distant));
+CREATE INDEX IF NOT EXISTS flux_mac ON flux(mac, minute);
+CREATE TABLE IF NOT EXISTS decouvertes (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, mac TEXT NOT NULL, type TEXT NOT NULL,
+    domaine TEXT NOT NULL, categorie TEXT NOT NULL DEFAULT '', appli TEXT NOT NULL DEFAULT '', confiance INTEGER NOT NULL DEFAULT 0,
+    raison TEXT NOT NULL DEFAULT '', refus_domaine TEXT NOT NULL DEFAULT '', refus_ts INTEGER NOT NULL DEFAULT 0,
+    delai_s INTEGER NOT NULL DEFAULT 0, coupures INTEGER NOT NULL DEFAULT 1, etat TEXT NOT NULL DEFAULT 'nouvelle',
+    UNIQUE (mac, type, domaine, refus_ts));
+CREATE TABLE IF NOT EXISTS voisins (adresse TEXT PRIMARY KEY, mac TEXT NOT NULL, vu INTEGER NOT NULL);
+"""
+
+
+class MagasinDPI:
+    """SQLite du lot 4 : flux par appareil à la minute (7 j), découvertes (30 j, 5 000 au plus), mémoire adresse -> MAC (24 h).
+    Écrit par le seul moteur ; l'API lit. Base corrompue : mise de côté (`.corrompue`) et recréée vide."""
+
+    def __init__(self, chemin):
+        self.chemin = Path(chemin)
+        self.corrompue_recreee = False
+        try:
+            with self._cx() as cx:
+                if cx.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                    raise sqlite3.DatabaseError("quick_check")
+                cx.executescript(SCHEMA)
+        except sqlite3.DatabaseError:
+            with contextlib.suppress(OSError):
+                os.replace(self.chemin, self.chemin.with_name(self.chemin.name + ".corrompue"))
+            self.corrompue_recreee = True
+            with self._cx() as cx:
+                cx.executescript(SCHEMA)
+        with contextlib.suppress(OSError):
+            os.chmod(self.chemin, 0o640)
+
+    @contextlib.contextmanager
+    def _cx(self):
+        cx = sqlite3.connect(str(self.chemin), timeout=10)
+        try:
+            with cx:
+                yield cx
+        finally:
+            cx.close()
+
+    def ingerer(self, lignes: Iterable[dict]) -> int:
+        """Une ligne par (mac, minute, appli, hôte, port, distant) ; la valeur la plus récente d'une même minute REMPLACE (compteurs cumulés)."""
+        n = 0
+        with self._cx() as cx:
+            for x in lignes:
+                cx.execute("INSERT OR REPLACE INTO flux VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                           (x["mac"], int(x["minute"]), x["appli"], x.get("categorie_ndpi", ""), x.get("hote", ""), int(x.get("port", 0)),
+                            x.get("distant", ""), int(x.get("flux", 0)), int(x.get("octets", 0)), int(bool(x.get("sans_dns"))),
+                            int(bool(x.get("dns_chiffre")))))
+                n += 1
+        return n
+
+    def dernier_flux(self, mac: str) -> Optional[int]:
+        with self._cx() as cx:
+            v = cx.execute("SELECT MAX(minute) FROM flux WHERE mac=?", (mac,)).fetchone()[0]
+        return None if v is None else int(v) * 60
+
+    def applications(self, mac: str, depuis: int, limite: int = 50) -> List[dict]:
+        with self._cx() as cx:
+            lignes = cx.execute(
+                "SELECT appli, MAX(categorie_ndpi), SUM(flux), SUM(octets), MIN(minute), MAX(minute), MAX(sans_dns), MAX(dns_chiffre) "
+                "FROM flux WHERE mac=? AND minute>=? GROUP BY appli ORDER BY SUM(octets) DESC, appli LIMIT ?",
+                (mac, int(depuis) // 60, max(1, min(int(limite), 200)))).fetchall()
+            out = []
+            for a, c, f, o, p, d, sd, dc in lignes:
+                hotes = [h for (h,) in cx.execute("SELECT hote FROM flux WHERE mac=? AND appli=? AND minute>=? AND hote!='' GROUP BY hote "
+                                                  "ORDER BY SUM(octets) DESC LIMIT 10", (mac, a, int(depuis) // 60))]
+                out.append({"appli": a, "categorie_ndpi": c, "flux": int(f or 0), "octets": int(o or 0), "premier": int(p) * 60,
+                            "dernier": int(d) * 60, "hotes": hotes, "sans_dns": bool(sd), "dns_chiffre": bool(dc)})
+        return out
+
+    def lignes_flux(self, mac: str, depuis: int, appli: Optional[str] = None, decalage: int = 0, limite: int = 50) -> Tuple[int, List[dict]]:
+        w, a = ["mac=?", "minute>=?"], [mac, int(depuis) // 60]
+        if appli:
+            w.append("appli=?")
+            a.append(appli)
+        with self._cx() as cx:
+            total = cx.execute(f"SELECT COUNT(*) FROM flux WHERE {' AND '.join(w)}", a).fetchone()[0]
+            lignes = cx.execute(f"SELECT minute, appli, categorie_ndpi, hote, port, distant, flux, octets, sans_dns, dns_chiffre FROM flux "
+                                f"WHERE {' AND '.join(w)} ORDER BY minute DESC, octets DESC LIMIT ? OFFSET ?",
+                                [*a, max(1, min(int(limite), 200)), max(0, int(decalage))]).fetchall()
+        return int(total), [{"ts": m * 60, "appli": ap, "categorie_ndpi": c, "hote": h, "port": p, "distant": d, "flux": f, "octets": o,
+                             "sans_dns": bool(sd), "dns_chiffre": bool(dc)} for m, ap, c, h, p, d, f, o, sd, dc in lignes]
+
+    def ajouter_decouvertes(self, mac: str, decouvertes: Iterable[dict]) -> int:
+        n = 0
+        with self._cx() as cx:
+            for d in decouvertes:
+                if d.get("type") not in TYPES_DECOUVERTE:
+                    continue
+                cle = d.get("domaine") or d.get("hote") or ""
+                cur = cx.execute("INSERT OR IGNORE INTO decouvertes (ts, mac, type, domaine, categorie, appli, confiance, raison, refus_domaine, "
+                                 "refus_ts, delai_s, coupures) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                 (int(d.get("ts", 0)), mac, d["type"], str(cle)[:260], d.get("categorie", ""), d.get("appli", ""),
+                                  int(d.get("confiance", 0)), str(d.get("raison", ""))[:300], d.get("refus_domaine", ""),
+                                  int(d.get("refus_ts", 0)), int(d.get("delai_s", 0)), int(d.get("coupures", 1))))
+                if cur.rowcount:
+                    n += 1
+                elif d.get("coupures", 1) > 1:
+                    cx.execute("UPDATE decouvertes SET coupures=MAX(coupures, ?), confiance=MAX(confiance, ?) WHERE mac=? AND type=? AND domaine=? "
+                               "AND refus_ts=?", (int(d["coupures"]), int(d.get("confiance", 0)), mac, d["type"], str(cle)[:260],
+                                                  int(d.get("refus_ts", 0))))
+        return n
+
+    def marquer(self, mac: str, domaine: str, etat: str) -> None:
+        with self._cx() as cx:
+            cx.execute("UPDATE decouvertes SET etat=? WHERE mac=? AND domaine=? AND type='repli' AND etat='nouvelle'", (etat, mac, domaine))
+
+    def decouvertes(self, depuis_id: int = 0, type_: Optional[str] = None, mac: Optional[str] = None, limite: int = 100) -> List[dict]:
+        w, a = ["id>?"], [int(depuis_id)]
+        if type_:
+            w.append("type=?")
+            a.append(type_)
+        if mac:
+            w.append("mac=?")
+            a.append(mac)
+        cols = ("id", "ts", "mac", "type", "domaine", "categorie", "appli", "confiance", "raison", "refus_domaine", "refus_ts", "delai_s",
+                "coupures", "etat")
+        with self._cx() as cx:
+            lignes = cx.execute(f"SELECT {', '.join(cols)} FROM decouvertes WHERE {' AND '.join(w)} ORDER BY id LIMIT ?",
+                                [*a, max(1, min(int(limite), 500))]).fetchall()
+        return [dict(zip(cols, row)) for row in lignes]
+
+    def charger_voisins(self) -> Dict[str, Tuple[str, int]]:
+        with self._cx() as cx:
+            return {a: (m, v) for a, m, v in cx.execute("SELECT adresse, mac, vu FROM voisins")}
+
+    def ecrire_voisins(self, memoire: Dict[str, Tuple[str, int]]) -> None:
+        with self._cx() as cx:
+            cx.execute("DELETE FROM voisins")
+            cx.executemany("INSERT INTO voisins VALUES (?,?,?)", [(a, m, v) for a, (m, v) in list(memoire.items())[:5000]])
+
+    def menage(self, maintenant: int) -> None:
+        with self._cx() as cx:
+            cx.execute("DELETE FROM flux WHERE minute < ?", ((maintenant - RETENTION_FLUX_S) // 60,))
+            cx.execute("DELETE FROM decouvertes WHERE ts < ?", (maintenant - RETENTION_DECOUVERTES_S,))
+            cx.execute("DELETE FROM decouvertes WHERE id <= (SELECT COALESCE(MAX(id), 0) FROM decouvertes) - ?", (MAX_DECOUVERTES,))
+
+
+# ── un passage du moteur ────────────────────────────────────────────────────────────────────────────────────
+def perimetre(etat: dict) -> Dict[str, dict]:
+    """MAC -> client, pour les appareils déclarés hors OFF qui ont une MAC (le DPI observe aussi en OBSERVE ; il n'agit jamais)."""
+    return {c["mac"]: c for c in etat.get("clients", []) if c.get("mac") and c.get("mode") != "off"}
+
+
+def _adresses(etat: dict, voisins: Dict[str, str]) -> Dict[str, Set[str]]:
+    per = perimetre(etat)
+    out = {m: {c["ip"]} for m, c in per.items()}
+    for a, m in voisins.items():
+        if m in out and _ip(a):
+            out[m].add(a)
+    return out
+
+
+def cibles(etat: dict, voisins: Dict[str, str]) -> dict:
+    """`dpi-cibles.json` : MAC et adresses du périmètre, lu par sbxdpi (agrégat par adresse) et par le contrôleur root (filtre BPF)."""
+    return {"version": 1, "appareils": [{"mac": m, "adresses": sorted(a)} for m, a in sorted(_adresses(etat, voisins).items())]}
+
+
+def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str], maintenant: int, voisins: Dict[str, str],
+            sbxdpi_texte: Optional[str], conntrack_texte: Optional[str], resolus: Set[str], box: Set[str],
+            doh: Tuple[Set[str], Set[str]], memoire: Optional[Dict[str, Tuple[str, int]]] = None) -> dict:
+    """Lit les sources, range les flux par MAC, relève constats et replis. Rend l'état affichable et les candidats de repli par MAC."""
+    per = perimetre(etat)
+    adr = _adresses(etat, voisins)
+    sources = {"sbxdpi": "absent", "conntrack": "absent"}
+    bruts: List[dict] = []
+    if sbxdpi_texte is not None:
+        try:
+            s = lire_sbxdpi(sbxdpi_texte)
+            if not 0 <= maintenant - s["genere"] <= PEREMPTION_SBXDPI_S:
+                sources["sbxdpi"] = "perime"
+            else:
+                sources["sbxdpi"] = "ok"
+                bruts += [dict(f, minute=f["dernier"] // 60) for f in s["flux"]]
+        except ErreurDPI:
+            sources["sbxdpi"] = "illisible"
+    if conntrack_texte is not None:
+        sources["conntrack"] = "ok"
+        tous = set().union(*adr.values()) if adr else set()
+        bruts += [dict(f, minute=maintenant // 60, flux=1, octets=0, categorie="") for f in lire_conntrack(conntrack_texte, tous)]
+    connus = dict(voisins)
+    connus.update({c["ip"]: m for m, c in per.items()})
+    mem = mag.charger_voisins() if memoire is None else memoire
+    rattache, mem = rattacher({f["local"] for f in bruts}, connus, mem, maintenant)
+    mag.ecrire_voisins(mem)
+    lignes, par_mac = [], {}
+    for f in bruts:
+        m = rattache.get(f["local"])
+        if m in per:
+            par_mac.setdefault(m, []).append(f)
+    candidats: Dict[str, List[dict]] = {}
+    for m, c in per.items():
+        fl = par_mac.get(m, [])
+        cs = constats(fl, resolus, box, doh[0], doh[1])
+        signales = {(x["distant"], x["port"]): x["type"] for x in cs}
+        for f in fl:
+            t = signales.get((f["distant"], f["port"]))
+            lignes.append({"mac": m, "minute": f["minute"], "appli": f["appli"] or f["proto"].upper(), "categorie_ndpi": f.get("categorie", ""),
+                           "hote": f["hote"], "port": f["port"], "distant": "" if f["hote"] else f["distant"], "flux": f["flux"],
+                           "octets": f["octets"], "sans_dns": t == "sans-dns", "dns_chiffre": t == "dns-chiffre"})
+        mag.ajouter_decouvertes(m, [{"type": x["type"], "domaine": f"{x['distant']}:{x['port']}", "appli": x["appli"], "ts": maintenant,
+                                     "confiance": 80, "raison": {"sans-dns": "adresse en dur : aucun nom DNS ni SNI",
+                                                                 "dns-chiffre": "DNS chiffré (DoH/DoT) : la box ne voit pas ces requêtes",
+                                                                 "contournement": "DNS envoyé à un autre résolveur que la box"}[x["type"]]}
+                                    for x in cs])
+        evts = mag_dns.evenements(sorted(adr.get(m, ())), maintenant - 3600)
+        dec = correler(evts, categorie)
+        mag.ajouter_decouvertes(m, dec)
+        refus = {d["refus_ts"] for d in dec}
+        if refus and fl:
+            mag.ajouter_decouvertes(m, [dict(s, domaine=s["hote"], ts=maintenant, confiance=60, refus_ts=s["refus_ts"][0])
+                                        for s in secours([{"ts": f["dernier"] if "dernier" in f else maintenant, "hote": f["hote"],
+                                                           "octets": f["octets"]} for f in fl], refus)])
+        candidats[m] = candidats_repli(dec)
+    mag.ingerer(lignes)
+    appareils = [{"mac": m, "nom": c["nom"], "mode": c["mode"], "couverture": couverture(mag.dernier_flux(m), maintenant)}
+                 for m, c in sorted(per.items(), key=lambda kv: kv[1]["nom"])]
+    return {"etat": {"version": 1, "genere": maintenant, "sources": sources, "appareils": appareils}, "candidats": candidats, "memoire": mem}
