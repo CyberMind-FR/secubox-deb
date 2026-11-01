@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-01 — mochabinleds : LED de supervision à 8 séquences, seuils relatifs évolutifs, déployé gk2 + gk1 + gk6 (closes #3361)
+
+- secubox-led-heartbeat 2.4.0 (PR #3363) puis 2.4.1 (PR #3365, lecture /proc/sys par blocs : ENOMEM sur 4 Mio).
+- Collecteur secubox-led-flux (compte secubox-leds, aucune capacité, AppArmor) : référence par tranche horaire (EWMA 7 j)
+  + tendance courte (1 h), apprentissage 24 h (violet), planchers ; rouge absolu (service arrêté, Actor critique, SOC critique).
+- secubox-led-nft (root, CAP_NET_ADMIN seule, dossier /run/secubox-led-nft) publie les compteurs sbx_drop_*.
+- Banc gk6 : 0 refus AppArmor ; CPU flux 0,03 %, nft 0,35 %, pulse 0,65 % d'un cœur ; 7 Mo.
+- gk2 : I2C rétabli à chaud (blacklist i2c_mv64xxx retiré, initrd switch3093 garde encore une copie), LED OK.
+- gk6 enrôlé dans le maillage de gk2 (10.10.0.11, formule atelier) ; à passer en profil léger.
+- Suites : #3364 (ad-guard publie ses compteurs ; base 0640 illisible sur gk1/gk6), #3362 (« oublier » incomplet),
+  #3360 (garde secubox-led-board, à rebaser sur 2.4.1).
+- gitea LXC gk2 : memory.max 256M→512M, high 640M→384M (35 OOM en 45 h).
+
 ## 2026-10-30 — Pilotage distant TR-369 : L5 « box légère / headless » fusionné, non déployé (ref #3126)
 
 - **PR #3300** : une box sans interface web est administrée depuis le maître. Jeton délégué Ed25519 de 30 s frappé par

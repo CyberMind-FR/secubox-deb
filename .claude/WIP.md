@@ -56,6 +56,8 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
   (marque rangée, message à leur origine exacte).
 - **Fait (webos 1.19.20, ephemeride 0.1.1, ipv6guard 0.2.2 ; 2026-10-22)** : fiches `registre.d` des modules API seule.
 - **Fait (webos 1.19.21, streamlit 1.6.2 ; 2026-10-22)** : rubrique « Applications » (vignettes Streamlit sous session).
+- ✅ mochabinleds déployé gk2/gk1/gk6 (closes #3361, voir HISTORY 2026-11-01).
+- ⬜ **Next Up** : page Planification (secubox-system, lecture seule : minuteries, cron gitea, envois de mails) + secubox-gitea-nuit (miroirs + gc à 3 h) ; gk6 profil léger ; #3364 ; #3362.
 - ⬜ **Next Up** : phase 4, reste — **GO du propriétaire** sur la fusion des flux (retirer ou masquer les cartes MetaNews / Flux
   YouTube / Billets de l'accueil v2 — ne se fait pas sur un « next ») ; à trancher : reprise du relevé système dans les courbes
   de `secubox-metrics` ; option `hall.v2.hero-dice` ; mesure du dé sur RPi4.
