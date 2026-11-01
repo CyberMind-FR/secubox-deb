@@ -1,3 +1,11 @@
+secubox-eye-remote (1.1.2-1~trixie1) trixie; urgency=medium
+
+  * /pair/qr exige un administrateur réel (require_jwt) : en mode tableau de bord,
+    require_lecture laissait un lecteur anonyme du LAN ouvrir une session
+    d appairage (closes #3283).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 08:06:55 +0100
+
 secubox-eye-remote (1.1.1-1~trixie1) trixie; urgency=medium
 
   * POST /pair/qr (était GET) : la route CRÉE une session d'appairage ; la page la demande
