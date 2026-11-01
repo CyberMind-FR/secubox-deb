@@ -384,6 +384,29 @@ def peer_liveness(handshakes, public_key: str, now: float) -> str:
     return "online" if now - ts <= LIVENESS_MAX_AGE else "offline"
 
 
+def statut_registre(peers, state, handshakes, now: float = None) -> list:
+    """#3362 : le statut d'une entrée du registre hérité (peers.json) n'est jamais la valeur écrite (« online » posé à
+    l'approbation, figé) : c'est la vivacité du pair wg-mesh de même adresse (poignée de main récente). Sans pair wg-mesh
+    correspondant : « offline » ; mesure absente : « unknown ». Rend des copies ; l'entrée d'origine n'est pas modifiée."""
+    import time
+    now = time.time() if now is None else now
+    cles = {}
+    for p in (state or {}).get("peers", []) if isinstance(state, dict) else []:
+        if isinstance(p, dict):
+            ip = p.get("mesh_ip") or _host_ip(p.get("allowed_ips", ""))
+            if ip:
+                cles[ip] = str(p.get("public_key") or "")
+    out = []
+    for p in peers or []:
+        if not isinstance(p, dict):
+            continue
+        q = dict(p)
+        cle = cles.get(p.get("mesh_ip") or "")
+        q["status"] = "unknown" if handshakes is None else (peer_liveness(handshakes, cle, now) if cle else "offline")
+        out.append(q)
+    return out
+
+
 def peer_nodes(state: dict, handshakes=None, now: float = None) -> list:
     """Map wg_mesh.json peers to app-layer node dicts for the /peers + /status
     API and the P2P web UI. The mesh transport (wg_mesh.json) is the source of

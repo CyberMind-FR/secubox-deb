@@ -13,6 +13,7 @@
 #   relayer-port <proto/port> <ip-du-pair> <module> | retirer-port <proto/port>   (ports média, #3154)
 #   relayer --sans-sonde <nom> <ip> [port]      rétablissement (retour arrière du pilotage) sans sonder le pair
 #   pair-de <box>                               IP maillée du pair <box> (wg_mesh.json + wg-mesh)
+#   oublier-pair <ip-maillée>                   pair oublié (#3362) : retire tous les noms et ports relayés vers <ip>
 #   etat
 # Sur le PAIR (le nœud sans WAN, ex. gk3) :
 #   ouvrir <ip-maillée-du-relais> [port]        (port par défaut : 9080)
@@ -1052,6 +1053,55 @@ cmd_retirer() {
     log "relais retiré pour $nom (certificat conservé, DNS inchangé)"
 }
 
+# Noms dont la route vise exactement <ip> (routes JSON { nom: [ip, port] }). Lecture seule ; fichier absent : rien.
+routes_de_ip() {   # routes_de_ip <routes.json> <ip>
+    python3 - "$1" "$2" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except FileNotFoundError:
+    sys.exit(0)
+for nom, v in sorted(d.items() if isinstance(d, dict) else []):
+    if isinstance(v, list) and v and v[0] == sys.argv[2]:
+        print(nom)
+PY
+}
+
+# OUBLIER UN PAIR (#3362) : appelé par secubox-oubli-pair quand « Oublier ce nœud » a retiré le pair de wg_mesh.json. La
+# synchronisation ne retire que ce qu'un pair JOIGNABLE ne publie plus : un pair oublié n'y passe jamais, ses noms restaient
+# servis. Ici, tout nom dont la route vise exactement <ip> part (cmd_retirer, en lot), puis ses ports ; une seule génération
+# HAProxy à la fin. Refus si <ip> est encore un pair de l'interface (rien n'est oublié).
+cmd_oublier_pair() {
+    local ip="${1:-}" nom n=0 echecs=0 cle
+    ip_valide "$ip" || meurt "adresse de pair invalide : « $ip »"
+    if pair_du_maillage_exact "$ip"; then meurt "$ip est encore un pair de wg-mesh : rien n'est oublié"; fi
+    export RELAIS_EN_LOT=1
+    for nom in $(routes_de_ip "$ROUTES" "$ip"); do
+        nom_valide "$nom" || continue
+        if ( cmd_retirer "$nom" ) >/dev/null 2>&1; then
+            n=$((n + 1)); audit_relais relais_retire_oubli "$nom" "$ip"
+        else
+            echecs=$((echecs + 1)); log "non retiré : $nom"
+        fi
+    done
+    for cle in $(ports_de_ip "$RELAIS_PORTS_ETAT" "$ip"); do
+        ( cmd_retirer_port "$cle" ) >/dev/null 2>&1 || echecs=$((echecs + 1))
+    done
+    unset RELAIS_EN_LOT
+    ports_nft_appliquer || echecs=$((echecs + 1))
+    if [ "$n" -gt 0 ]; then
+        haproxyctl generate --allow-shrink >/dev/null && haproxyctl reload >/dev/null || meurt "HAProxy n'a pas rechargé"
+        systemctl reload secubox-waf-ng 2>/dev/null || true
+    fi
+    [ "$echecs" -eq 0 ] || meurt "$echecs nom(s) ou port(s) non retiré(s) pour $ip"
+    log "pair oublié $ip : $n nom(s) relayé(s) retiré(s)"
+}
+
+# Le pair <ip> a-t-il encore un /32 EXACT sur wg-mesh ? (pair_du_maillage accepte aussi un réseau couvrant, côté satellite)
+pair_du_maillage_exact() {
+    wg show wg-mesh allowed-ips 2>/dev/null | tr '\t' ' ' | grep -qE "(^| )$1/32( |,|$)"
+}
+
 # pair-de <box> : IP maillée du pair nommé <box> dans l'état du maillage (wg_mesh.json), seulement s'il y est UNE fois et que
 # wg-mesh le connaît (pair_du_maillage). Lu par secubox-pilotage-vhost (#3126 R-L5-30 I1) : un admin.<box> n'est « tenu par le
 # relais » que si sa route vise CETTE IP. Lecture seule.
@@ -1194,7 +1244,8 @@ cmd_fermer() {
 case "${1:-}" in
     relayer) shift; verrou_commun; cmd_relayer "$@" ;;
     retirer) shift; verrou_commun; cmd_retirer "$@" ;;
-    pair-de) shift; verrou_commun; cmd_pair_de "$@" ;;   # sous le verrou commun (R-L5-31 M3)
+    pair-de) shift; verrou_commun; cmd_pair_de "$@" ;;
+    oublier-pair) shift; verrou_commun; cmd_oublier_pair "$@" ;;   # #3362, appelé par secubox-oubli-pair   # sous le verrou commun (R-L5-31 M3)
     relayer-port) shift; cmd_relayer_port "$@" ;;
     retirer-port) shift; cmd_retirer_port "$@" ;;
     etat)    cmd_etat ;;

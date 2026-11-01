@@ -272,3 +272,22 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 ## Oublier un nœud (#3335)
 
 `POST /api/v1/p2p/master-link/oublier` (`require_jwt`) `{"nom", "confirmation" (= nom), "public_key"?, "fingerprint"?, "force"?}` : retire un nœud obsolète du registre des pairs (`peers.json`, donc `pairs-enroles.json`) et de `wg_mesh.json` ; `sbx-mesh-up` (root, sur changement du fichier) retire le pair de wg-mesh. Refus (409, audité `p2p_noeud_oubli_refuse`) : nom invalide, nœud local, `master`, nom inconnu, nœud en ligne (poignée de main < 180 s) sans `force`. Succès audité `p2p_noeud_oublie`. Pair désigné par sa clé publique (la Flotte la transmet) ; plusieurs pairs du même nom sans clé : 409. Mesure des poignées absente : `force` exigé. Le pair maître (rôle `master` ou clé de l'ancre) n'est jamais oublié. Écritures atomiques sous le verrou `.etat.lock` du dossier du maillage, commun aux écrivains de `peers.json` et `wg_mesh.json` ; un état présent mais illisible n'est jamais réécrit (503).
+
+### Partout, par un seul point d'entrée (#3362)
+
+Cette route est LE point d'entrée de l'oubli sur le maître ; la Flotte (secubox-annuaire) n'appelle qu'elle. Elle enchaîne :
+
+| Étape | État retiré | Comment |
+|---|---|---|
+| `registre` | `peers.json` (entrées du pair : par clé désignée, son adresse ; un homonyme garde la sienne) et `wg_mesh.json` | sous `.etat.lock`, écritures atomiques ; `secubox-p2p-mesh.path` → `sbx-mesh-up` rend `/etc/wireguard/wg-mesh.conf` |
+| `jonctions` | `master-link/requests.json` (demande approuvée : sinon le pair revenait à sa jonction suivante) et `tokens.json` (jetons consommés, jeton flash prévu pour le nom : `revoked`) | même verrou, atomique |
+| `projection` | `p2p-public/pairs-enroles.json` | republiée |
+| `wg_direct` | interface wg-mesh | `secubox-oubli-pair` (root, sudo, argv fixe) : `wg set wg-mesh peer <clé exacte> remove`, puis vérification |
+| `relais` | noms relayés vers l'adresse du pair (vhost HAProxy, route sbxwaf) et ses ports médias | `secubox-relais-maillage oublier-pair <ip>` |
+| `noms` | `/etc/unbound/unbound.conf.d/60-secubox-noms.conf` | `secubox-annuaire-noms` régénère, puis le nom ne doit plus y paraître |
+| `autoload` | `abonnements_maillage` et `droits-maillage.json` | `autoloadctl maillage-oublier --nom` |
+| `pilotage` | Flotte du pilotage (boites, inventaire, événements) | `POST /boxes/{nom}/oublier` sur `/run/secubox/pilotage.sock`, jeton de l'administrateur |
+
+Un nom encore porté par un autre pair (ancienne clé d'un nœud réinstallé, désignée par `public_key`) garde son abonnement, ses noms et sa Flotte. `secubox-oubli-pair` revérifie chaque cible contre l'état écrit (clé absente de `wg_mesh.json` et différente de l'ancre, adresse libre et dans le réseau, nom porté par aucun pair) et refuse sinon (code 2). Réponse : `{"status": "ok" | "partiel", "oublie", "retires", "etapes": {étape: {ok, detail}}, "restes": [étapes en échec]}` ; chaque étape en échec est journalisée et auditée (`p2p_noeud_oubli_partiel`), chaque suite root aussi (`p2p_oubli_suite`).
+
+Statut d'un pair : `/peers` et `/status` le MESURENT (poignée de main WireGuard du pair wg-mesh de même adresse, `mesh.statut_registre`) ; le `status` écrit dans `peers.json` n'est jamais rendu, et un pair approuvé n'y est plus écrit `online`.

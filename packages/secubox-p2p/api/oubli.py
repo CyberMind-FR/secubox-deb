@@ -105,8 +105,7 @@ def oublier(peers_doc, wg_state, nom: str, *, handshakes: Optional[dict], now: f
         if p.get("name") != nom:
             return False
         return empreinte is None or p.get("fingerprint") == empreinte
-    cibles_reg = [p for p in liste if du_registre(p)]
-    if (not cibles_wg and not cibles_reg) or (cle is not None and not cibles_wg):
+    if cle is not None and not cibles_wg:
         raise Refus(f"nœud inconnu : {nom}")      # une clé désignée qui ne correspond à aucun pair wg-mesh : rien
     for p in cibles_wg:
         if p.get("role") == "master" or (cle_maitre and p.get("public_key") == cle_maitre):
@@ -118,6 +117,57 @@ def oublier(peers_doc, wg_state, nom: str, *, handshakes: Optional[dict], now: f
             if mesh.peer_liveness(handshakes, str(p.get("public_key") or ""), now) == "online":
                 raise Refus(f"{nom} est en ligne : confirmer l'oubli d'un nœud actif (force)")
     ids = {id(p) for p in cibles_wg}
-    peers_doc["peers"] = [p for p in liste if not du_registre(p)]
-    wg_state["peers"] = [p for p in wg if id(p) not in ids]
-    return peers_doc, wg_state, {"registre": len(cibles_reg), "wg": len(cibles_wg)}
+    restants_wg = [p for p in wg if id(p) not in ids]
+    ips = sorted({ip for p in cibles_wg for ip in [_ip_pair(p)] if ip})
+    cles = [str(p.get("public_key")) for p in cibles_wg if RE_CLE.fullmatch(str(p.get("public_key") or ""))]
+    # #3362 : l'adresse d'un pair ciblé désigne aussi son entrée du registre (désignation par clé : l'homonyme garde la sienne).
+    ips_restantes = {_ip_pair(p) for p in restants_wg}
+    nom_partage = any(p.get("name") == nom for p in restants_wg)
+    def du_registre_cible(p):
+        if empreinte is not None:
+            return du_registre(p)
+        if p.get("mesh_ip") and p.get("mesh_ip") in ips:
+            return True
+        return p.get("name") == nom and not nom_partage and not (p.get("mesh_ip") in ips_restantes and p.get("mesh_ip"))
+    retires_reg = [p for p in liste if du_registre_cible(p)]
+    if not cibles_wg and not retires_reg:
+        raise Refus(f"nœud inconnu : {nom}")
+    peers_doc["peers"] = [p for p in liste if not du_registre_cible(p)]
+    wg_state["peers"] = restants_wg
+    nom_libre = not nom_partage and not any(p.get("name") == nom for p in peers_doc["peers"])
+    return peers_doc, wg_state, {"registre": len(retires_reg), "wg": len(cibles_wg), "cles": cles, "ips": ips,
+                                 "empreintes": sorted({str(p["fingerprint"]) for p in retires_reg if p.get("fingerprint")}),
+                                 "nom_libre": nom_libre}
+
+
+def _ip_pair(p) -> Optional[str]:
+    """Adresse du maillage d'une entrée wg_mesh.json : `mesh_ip`, sinon l'hôte d'un `allowed_ips` en /32."""
+    ip = p.get("mesh_ip")
+    if isinstance(ip, str) and ip:
+        return ip
+    ai = str(p.get("allowed_ips") or "").split(",")[0].strip()
+    return ai[:-3] if ai.endswith("/32") else None
+
+
+def oublier_jonctions(demandes, jetons, nom: str, cibles: dict):
+    """#3362 : les jonctions du pair oublié. Une demande approuvée qui reste ferait revenir le pair à sa prochaine jonction
+    (« Already approved » → `_provision`) et garderait son adresse et son nom : elle part (empreinte ou clé du pair).
+    Les jetons qu'il a consommés sont révoqués ; un jeton flash prévu pour son nom aussi, si le nom n'est plus porté.
+    Rend (demandes, jetons, {"demandes": n, "jetons": m}) ; les entrées d'origine ne sont pas modifiées."""
+    fps = set(cibles.get("empreintes") or [])
+    cles = set(cibles.get("cles") or [])
+    demandes = copy.deepcopy([d for d in demandes or [] if isinstance(d, dict)])
+    jetons = copy.deepcopy([j for j in jetons or [] if isinstance(j, dict)])
+    def du_pair(d):
+        return (d.get("fingerprint") in fps and d.get("fingerprint")) or (d.get("wg_public_key") in cles and d.get("wg_public_key"))
+    partantes = [d for d in demandes if du_pair(d)]
+    fps |= {d["fingerprint"] for d in partantes if d.get("fingerprint")}
+    n_jetons = 0
+    for j in jetons:
+        if j.get("status") == "revoked":
+            continue
+        if (j.get("peer_fp") and j.get("peer_fp") in fps) or (
+                cibles.get("nom_libre") and j.get("flash") and j.get("nom_prevu") == nom):
+            j["status"] = "revoked"
+            n_jetons += 1
+    return [d for d in demandes if not du_pair(d)], jetons, {"demandes": len(partantes), "jetons": n_jetons}

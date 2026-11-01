@@ -25,6 +25,7 @@ import time
 import hashlib
 import secrets
 from pathlib import Path
+from urllib.parse import quote
 from datetime import datetime, timedelta
 
 log = logging.getLogger("secubox.p2p")
@@ -723,7 +724,6 @@ async def get_status():
     # (older versions persisted get_self_peer() into PEERS_FILE, inflating these).
     local_id = get_node_id()
     peers = [p for p in peers if not p.get("is_local") and p.get("id") != local_id]
-    online_peers = [p for p in peers if p.get("status") == "online"]
 
     # Mesh view is driven by the wg-mesh transport (wg_mesh.json), which p2p
     # now owns (Gondwana Phase 1). The web UI reads total_peers/active_peers.
@@ -733,7 +733,10 @@ async def get_status():
     # dont la dernière poignée de main est récente — et, si la mesure manque,
     # on le DIT (`liveness: unavailable`) au lieu de supposer.
     handshakes = mesh.load_handshakes()
-    wg_nodes = mesh.peer_nodes(get_wg_mesh_config(), handshakes)
+    wg_state = get_wg_mesh_config()
+    wg_nodes = mesh.peer_nodes(wg_state, handshakes)
+    # #3362 : le registre hérité aussi est MESURÉ (poignée de main du pair wg-mesh de même adresse), jamais son « online » écrit.
+    online_peers = [p for p in mesh.statut_registre(peers, wg_state, handshakes) if p.get("status") == "online"]
     wg_peer_count = len(wg_nodes)
     wg_online = sum(1 for n in wg_nodes if n["status"] == "online")
 
@@ -811,7 +814,8 @@ async def list_peers():
     when there are no wg-mesh peers configured.
     """
     init_dirs()
-    nodes = mesh.peer_nodes(get_wg_mesh_config(), mesh.load_handshakes())
+    wg_state, handshakes = get_wg_mesh_config(), mesh.load_handshakes()
+    nodes = mesh.peer_nodes(wg_state, handshakes)
     if nodes:
         return {"peers": nodes, "count": len(nodes)}
 
@@ -820,6 +824,7 @@ async def list_peers():
     # A node is not its own peer: never insert/persist the local node here.
     local_id = get_node_id()
     peers = [p for p in peers if not p.get("is_local") and p.get("id") != local_id]
+    peers = mesh.statut_registre(peers, wg_state, handshakes)          # #3362 : statut mesuré, jamais la valeur écrite
     return {"peers": peers, "count": len(peers)}
 
 
@@ -2456,10 +2461,54 @@ def _add_approved_peer(join_request: Dict):
         "role": join_request.get("role", "peer"),
         "added": datetime.utcnow().isoformat(),
         "joined_via": "master-link",
-        "status": "online"
+        # #3362 : jamais « online » écrit (il restait figé, même sans poignée de main) ; lu, il est mesuré (statut_registre)
+        "status": "unknown"
     }
     peers.append(peer)
     save_json(PEERS_FILE, {"peers": peers})
+
+
+OUBLI_PAIR_CTL = "/usr/sbin/secubox-oubli-pair"
+PILOTAGE_SOCK = "/run/secubox/pilotage.sock"
+_OUBLI_ETAPES_ROOT = ("wg_direct", "relais", "noms", "autoload")
+
+
+def _oubli_suites_root(cibles: Dict, nom: Optional[str]) -> Dict:
+    """#3362 : les nettoyages qui exigent root (pair retiré de l'interface wg-mesh par sa clé EXACTE, noms relayés vers son
+    adresse, noms Unbound, abonnement de l'autoload) par `sudo -n secubox-oubli-pair`, argv fixe, sans shell. L'assistant
+    revérifie chaque cible contre l'état déjà écrit (il refuse ce qui n'est pas oublié). Rend {étape: {ok, detail}} ;
+    jamais d'exception : un échec devient une étape « racine » en échec."""
+    argv = ["sudo", "-n", OUBLI_PAIR_CTL]
+    for c in cibles.get("cles") or []:
+        argv += ["--cle", c]
+    for ip in cibles.get("ips") or []:
+        argv += ["--ip", ip]
+    if nom:
+        argv += ["--nom", nom]
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=180, check=False)
+        etapes = json.loads(r.stdout or "{}").get("etapes") if r.returncode == 0 else None
+        if isinstance(etapes, dict) and etapes:
+            return {str(k): {"ok": bool(v.get("ok")), "detail": str(v.get("detail") or "")[:300]}
+                    for k, v in etapes.items() if isinstance(v, dict)}
+        detail = f"code {r.returncode} : {(r.stderr or r.stdout or '').strip()[:300]}"
+    except (OSError, subprocess.SubprocessError, ValueError, AttributeError) as e:
+        detail = f"{type(e).__name__} : {str(e)[:200]}"
+    return {"racine": {"ok": False, "detail": detail}}
+
+
+def _oubli_pilotage(nom: str, force: bool) -> Dict:
+    """#3362 : la box quitte la Flotte du pilotage (boites, inventaire, événements) par sa route d'administration
+    (`POST /boxes/{nom}/oublier`), sur sa socket locale, avec le jeton de l'administrateur qui oublie. 404 : rien à oublier."""
+    _, err = annuaire_client._requete_avec_essais("POST", f"/boxes/{quote(nom, safe='')}/oublier", PILOTAGE_SOCK,
+                                                  body={"confirmation": nom, "force": bool(force)})
+    if err is None:
+        return {"ok": True, "detail": "box oubliée de la Flotte"}
+    if "HTTP 404" in err:
+        return {"ok": True, "detail": "box inconnue du pilotage"}
+    if "FileNotFoundError" in err or "ConnectionRefusedError" in err:
+        return {"ok": True, "detail": "pilotage absent"}
+    return {"ok": False, "detail": err.replace("annuaire ", "pilotage ")[:300]}
 
 
 class OublierRequest(BaseModel):
@@ -2473,37 +2522,68 @@ class OublierRequest(BaseModel):
 
 @app.post("/master-link/oublier")
 def ml_oublier(req: OublierRequest, user: dict = Depends(require_jwt)):
-    """« Oublier ce nœud » (#3335) : retire un nœud obsolète du registre des pairs et de wg-mesh (sbx-mesh-up, root,
-    applique le retrait au changement de wg_mesh.json). Confirmation : le nom retapé ; désignation par la clé publique
-    (la Flotte la transmet) ; nœud en ligne ou mesure absente : `force`. Lecture, calcul et écritures atomiques sous le
-    verrou des écrivains de peers.json et wg_mesh.json ; un état illisible n'est jamais réécrit (503)."""
+    """« Oublier ce nœud » (#3335, #3362) : LE point d'entrée du maître. Il retire le pair de TOUS les états où il est
+    référencé, dans l'ordre :
+      1. sous le verrou des écrivains (`.etat.lock`), lecture stricte puis écritures atomiques : registre (peers.json),
+         transport (wg_mesh.json → sbx-mesh-up rend wg-mesh.conf), jonctions (demande approuvée, jetons consommés) ;
+      2. projection du pilotage (pairs-enroles.json) ;
+      3. root, par secubox-oubli-pair : interface wg-mesh (clé exacte), noms relayés, noms Unbound, abonnement autoload ;
+      4. Flotte du pilotage.
+    Un nom encore porté par un autre pair (ancienne clé d'un nœud réinstallé) garde son abonnement et sa Flotte.
+    Chaque échec est journalisé et rendu dans `restes` ; `status` vaut « partiel » tant qu'il reste quelque chose.
+    Confirmation : le nom retapé ; nœud en ligne ou mesure absente : `force`. Un état illisible n'est jamais réécrit (503)."""
     if req.confirmation != req.nom:
         raise HTTPException(status_code=400, detail="confirmation : retapez exactement le nom du nœud")
+    acteur = str(user.get("sub", "?"))
     local = socket.gethostname().split(".")[0].lower()
     a = ancre.lire()
     cle_maitre = a.get("cle_publique") if isinstance(a, dict) else None
     init_dirs()
+    ml_init()
+    etapes: Dict[str, Dict] = {}
     try:
         with oubli.verrou(P2P_DIR):
             peers_doc = oubli.lire_strict(PEERS_FILE, {"peers": []})
             wg_state = oubli.lire_strict(WG_MESH_CONFIG, {"peers": []})
+            demandes = load_json(ML_REQUESTS_FILE, [])
+            jetons = load_json(ML_TOKENS_FILE, [])
             peers, wg, retires = oubli.oublier(peers_doc, wg_state, req.nom, handshakes=mesh.load_handshakes(),
                                                now=time.time(), local=local, force=req.force, cle=req.public_key,
                                                empreinte=req.fingerprint, cle_maitre=cle_maitre)
-            oubli.ecrire_atomique(WG_MESH_CONFIG, wg, 0o600)   # secubox-p2p-mesh.path → sbx-mesh-up retire le pair
+            demandes, jetons, n_jonctions = oubli.oublier_jonctions(demandes, jetons, req.nom, retires)
+            oubli.ecrire_atomique(WG_MESH_CONFIG, wg, 0o600)   # secubox-p2p-mesh.path → sbx-mesh-up rend la conf persistée
             oubli.ecrire_atomique(PEERS_FILE, peers, 0o644)
+            oubli.ecrire_atomique(ML_REQUESTS_FILE, demandes, 0o600)
+            oubli.ecrire_atomique(ML_TOKENS_FILE, jetons, 0o600)
     except oubli.EtatIllisible as e:
-        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=str(user.get("sub", "?")))
+        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=acteur)
         raise HTTPException(status_code=503, detail="état du maillage illisible : rien n'est modifié") from None
     except oubli.Refus as e:
-        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=str(user.get("sub", "?")))
+        _audit_jonction("p2p_noeud_oubli_refuse", noeud=req.nom, motif=str(e), acteur=acteur)
         raise HTTPException(status_code=409, detail=str(e)) from None
+    etapes["registre"] = {"ok": True, "detail": f"{retires['registre']} entrée(s) du registre, {retires['wg']} pair(s) wg-mesh"}
+    etapes["jonctions"] = {"ok": True, "detail": f"{n_jonctions['demandes']} demande(s), {n_jonctions['jetons']} jeton(s) révoqué(s)"}
     try:
         pairs_enroles.publier(peers, PAIRS_ENROLES_DIR)
+        etapes["projection"] = {"ok": True, "detail": "pairs-enroles.json republié"}
     except (pairs_enroles.ProjectionErreur, OSError) as e:
-        log.warning("projection des pairs enrôlés non publiée : %s", e)
-    _audit_jonction("p2p_noeud_oublie", noeud=req.nom, force=req.force, acteur=str(user.get("sub", "?")), **retires)
-    return {"status": "ok", "oublie": req.nom, "retires": retires}
+        etapes["projection"] = {"ok": False, "detail": str(e)[:300]}
+    nom_libre = bool(retires.get("nom_libre"))
+    etapes.update(_oubli_suites_root(retires, req.nom if nom_libre else None))
+    if nom_libre:
+        etapes["pilotage"] = _oubli_pilotage(req.nom, req.force)
+    else:
+        etapes["pilotage"] = {"ok": True, "detail": "nom encore porté par un autre pair : Flotte gardée"}
+        etapes.setdefault("autoload", {"ok": True, "detail": "nom encore porté par un autre pair : abonnement gardé"})
+    restes = [k for k, v in etapes.items() if not v.get("ok")]
+    for k in restes:
+        log.warning("oubli de %s : étape %s en échec : %s", req.nom, k, etapes[k].get("detail"))
+        _audit_jonction("p2p_noeud_oubli_partiel", noeud=req.nom, etape=k, motif=etapes[k].get("detail"), acteur=acteur)
+    _audit_jonction("p2p_noeud_oublie", noeud=req.nom, force=req.force, acteur=acteur, registre=retires["registre"],
+                    wg=retires["wg"], cles=retires["cles"], ips=retires["ips"], restes=restes)
+    return {"status": "partiel" if restes else "ok", "oublie": req.nom,
+            "retires": {"registre": retires["registre"], "wg": retires["wg"], **n_jonctions},
+            "etapes": etapes, "restes": restes}
 
 
 @app.post("/master-link/approve")

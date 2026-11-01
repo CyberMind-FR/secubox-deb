@@ -1,3 +1,17 @@
+secubox-p2p (1.21.0-1~trixie1) trixie; urgency=medium
+
+  * Oublier ce noeud : un seul point d entree (POST /master-link/oublier)
+    retire le pair de tous les etats du maitre : peers.json (par adresse sur
+    designation par cle, l homonyme reste), wg_mesh.json, demandes et jetons
+    de jonction, pairs-enroles.json, interface wg-mesh (cle exacte),
+    noms relayes et ports (relais oublier-pair), noms Unbound, abonnement
+    autoload, Flotte du pilotage. Assistant root secubox-oubli-pair (sudo,
+    gardes reverifiees). Reponse partiel avec les etapes restantes, auditees.
+  * Statut des pairs du registre mesure par poignee de main WireGuard,
+    jamais online fige (ref #3362).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 10:10:28 +0100
+
 secubox-p2p (1.20.4-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

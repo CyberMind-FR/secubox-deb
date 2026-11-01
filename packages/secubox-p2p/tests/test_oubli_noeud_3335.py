@@ -24,7 +24,7 @@ def test_oublier_retire_le_pair_du_registre_et_de_wg_mesh():
     peers, wg, retires = oubli.oublier(PEERS, WG, "lgm-ebin", handshakes={}, now=1000, local="gk2")
     assert [p["name"] for p in peers["peers"]] == ["gk4"]
     assert [p["name"] for p in wg["peers"]] == ["gk4"]
-    assert retires == {"registre": 1, "wg": 1}
+    assert (retires["registre"], retires["wg"]) == (1, 1)
     assert wg["enabled"] is True                       # le reste de l'état est gardé tel quel
 
 
