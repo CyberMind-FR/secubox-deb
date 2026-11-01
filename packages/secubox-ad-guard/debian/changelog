@@ -1,3 +1,15 @@
+secubox-ad-guard (1.17.0-1~trixie1) trixie; urgency=medium
+
+  * SBX TV PRIVACY, lot 1 « socle appareil » : un appareil = une MAC (ses IP rattachées),
+    état etat.json en schéma 2 (appareils par MAC, clients par adresse inchangés), migration
+    non destructive au chargement (sauvegarde unique etat.json.avant-3374, mode le plus fréquent
+    par MAC), inventaire NAC lu en lecture seule avec repli ip neigh, profils d'équipement
+    (FREEBOX_PLAYER, ANDROID_TV, GOOGLE_TV, SAMSUNG_TIZEN, LG_WEBOS, APPLE_TV, GENERIC_SMART_TV,
+    INCONNU) avec source et confiance, correction manuelle POST /adblock-tv/appareils/{mac}/profil
+    (require_jwt) ; GET /adblock-tv/appareils ; /status et /auto/detection enrichis (ref #3374).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 09:00:53 +0100
+
 secubox-ad-guard (1.16.5-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

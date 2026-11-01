@@ -9,8 +9,10 @@ dans Unbound : elle écrit l'état (fichier JSON validé) puis demande au contr�
 """
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
+import logging
 import os
 import re
 import subprocess
@@ -19,16 +21,17 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from secubox_core.auth import require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
+    from . import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_ajout, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
+    from api import dnstv, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
+logger = logging.getLogger("secubox.ad-guard.adblock-tv")
 CTL = os.environ.get("SECUBOX_ADGUARD_TV_CTL", "/usr/sbin/secubox-adguard-tv")
 CUSTOM_MAX = 2000
 SONDE_ZONE = "sbx-dnspath.invalid"          # `.invalid` : jamais résolu hors de la box ; seule sa ligne de journal nous importe
@@ -94,10 +97,12 @@ def _refuse(e: dnstv.ErreurTV):
 
 @router.get("/status", dependencies=[Depends(require_lecture)])
 async def statut():
+    await asyncio.to_thread(_migrer)
     etat, erreur = dnstv.lire_etat()
     table = _table()
     stats = _magasin().statistiques()
-    return {"actif": etat["actif"], "clients": etat["clients"], "erreur": erreur, "dropin_present": dnstv.CONF_UNBOUND.is_file(),
+    vue = await asyncio.to_thread(_vue_appareils, etat)
+    return {"actif": etat["actif"], "clients": _clients_enrichis(etat["clients"], vue), "appareils": vue, "erreur": erreur, "dropin_present": dnstv.CONF_UNBOUND.is_file(),
             "listes": {"domaines": len(table), "problemes": dnstv.verifier_manifeste(dnstv.DOSSIER_LISTES),
                        "par_categorie": {c: sum(1 for v in table.values() if v == c) for c in dnstv.CATEGORIES}},
             "compteurs": {"requetes": stats["requetes"], "domaines_uniques": stats["domaines_uniques"],
@@ -645,6 +650,7 @@ def _clients_du_nom(etat: dict, nom: str) -> list:
 
 @router.get("/auto/detection", dependencies=[Depends(require_lecture)])
 def detection():
+    _migrer()
     etat = _etat()
     par: dict = {}
     for c in etat["clients"]:
@@ -653,6 +659,9 @@ def detection():
         a["adresses"].append(c["ip"])
     for a in par.values():
         a["autorisations"] = etat.get("autorisations", {}).get(dnstv_regles.slug(a["nom"]), [])
+    vue = _vue_appareils(etat)
+    for a in par.values():
+        a.update(_champs_profil(_appareil_de(vue, a["mac"], a["nom"])))
     suivi = dnstv_ajout.charger_suivi()
     reglage = dnstv_auto.reglage_depuis(etat)
     return {"ajout_auto": etat["ajout_auto"], "mode_defaut": etat["mode_defaut"], "ignores": etat["ignores"],
@@ -897,3 +906,94 @@ def suspect_legitime(corps: SuspectIn):
         tmp.write_text(json.dumps(liste), encoding="utf-8")
         os.replace(tmp, _ignores_path())
     return {"domaine": d, "ignores": len(liste)}
+
+
+# ── SBX TV PRIVACY lot 1 (#3374) : appareils par MAC, profils d'équipement ───────────────────────────────────────────────
+
+def _migrer() -> None:
+    """Migration v1 -> v2 au chargement : sans verrou si l'état est déjà v2, verrou NON bloquant sinon (occupé : au prochain passage)."""
+    try:
+        dnstv_appareils.migrer_si_v1()
+    except (OSError, dnstv.ErreurTV) as e:
+        logger.warning("migration #3374 non faite : %s", e)
+
+
+OBSERVATION_CACHE_S = 120
+
+
+def _observation(ips: List[str]) -> dict:
+    """ip -> domaines témoins (Samsung, LG) sur 3 jours : UNE requête pour toutes les adresses, mise en cache 120 s (comme `_voisins`)."""
+    cle = tuple(sorted(set(ips)))
+    t, c, v = _CACHE.get("observation", (0.0, None, {}))
+    if c == cle and time.time() - t < OBSERVATION_CACHE_S:
+        return v
+    try:
+        v = dnstv_appareils.domaines_temoins(_magasin(), list(cle))
+    except Exception as e:                                   # noqa: BLE001 — base absente ou verrouillée : pas d'observation, jamais d'erreur 500
+        logger.info("observation DNS indisponible pour le profil : %s", type(e).__name__)
+        v = {}
+    _CACHE["observation"] = (time.time(), cle, v)
+    return v
+
+
+def _vue_appareils(etat: dict, nac: Optional[dict] = None) -> List[dict]:
+    nac = dnstv_appareils.lire_inventaire_nac() if nac is None else nac
+    ips = [c["ip"] for c in etat["clients"]]
+    return dnstv_appareils.vue_appareils(etat, nac, _voisins(), _observation(ips))
+
+
+def _champs_profil(a: Optional[dict]) -> dict:
+    if not a:
+        return {"profil": "INCONNU", "profil_source": "aucune", "profil_confiance": 0, "ips": [], "modes_divergents": False}
+    return {"profil": a["profil"], "profil_source": a["profil_source"], "profil_confiance": a["profil_confiance"], "ips": a["ips"],
+            "modes_divergents": a["modes_divergents"]}
+
+
+def _appareil_de(vue: List[dict], mac: Optional[str], nom: str) -> Optional[dict]:
+    for a in vue:
+        if (mac and a["mac"] == mac) or (not mac and a["mac"] is None and a["nom"] == nom):
+            return a
+    return None
+
+
+def _clients_enrichis(clients: List[dict], vue: List[dict]) -> List[dict]:
+    """Les entrées par adresse d'origine, inchangées, avec en plus le profil et les adresses de leur appareil."""
+    return [dict(c, **_champs_profil(_appareil_de(vue, c.get("mac"), c["nom"]))) for c in clients]
+
+
+class ProfilIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Optional[str] = Field(default=None, max_length=20)        # None : efface la correction manuelle
+
+
+@router.get("/appareils", dependencies=[Depends(require_lecture)])
+def appareils_par_mac():
+    """Appareils par MAC : adresses, mode, profil d'équipement, source et confiance."""
+    _migrer()
+    nac = dnstv_appareils.lire_inventaire_nac()
+    vue = _vue_appareils(_etat(), nac)
+    return {"appareils": vue, "nac": bool(nac), "profils": list(dnstv.PROFILS)}
+
+
+@router.post("/appareils/{mac}/profil", dependencies=[Depends(require_jwt)])
+def profil_corriger(mac: str, corps: ProfilIn):
+    """Correction manuelle du profil d'un appareil (elle prime toujours) ; `type: null` la retire. Aucun effet DNS au lot 1 : pas de contrôleur."""
+    mac = (mac or "").strip().lower()
+    if not dnstv.MAC_RE.match(mac):
+        raise HTTPException(404, "appareil inconnu")
+    _migrer()
+    with _verrou():
+        etat = _etat()
+        if etat.get("schema") != dnstv.SCHEMA_ETAT:
+            raise HTTPException(409, "état encore en schéma 1 : migration en attente, réessayer dans une minute")
+        try:
+            etat = dnstv_appareils.corriger_profil(etat, mac, corps.type, int(time.time()))
+            dnstv.ecrire_etat(etat)
+        except dnstv_appareils.AppareilInconnu as e:
+            raise HTTPException(404, str(e)) from e
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+    # Pas d'utilitaire d'audit commun dans ad-guard (seul le contrôleur root écrit audit.log) : journal applicatif ; audit prévu au lot 3.
+    logger.info("profil d'appareil %s corrigé : %s", dnstv_appareils.mac_courte(mac), corps.type)
+    a = _appareil_de(_vue_appareils(etat), mac, "")
+    return dict(a or {}, mac=mac)

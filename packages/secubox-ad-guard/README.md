@@ -157,6 +157,10 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 | `POST /adblock-tv/simple/appareils/{nom}/protection` | `require_jwt` | `{"actif": bool}` ; applique puis relit le drop-in Unbound ; réponse `verifie` / `ecart` |
 | `GET /adblock-tv/simple/suspects?minutes=60` | `require_lecture` | noms servis qui ressemblent à une pub (mot entier dans un libellé), hors bloqués et jugés légitimes |
 | `POST /adblock-tv/simple/suspects/legitime` | `require_jwt` | `{"domaine": ...}` ; mémorisé dans `suspects-ignores.json` (500 au plus) |
+| `GET /adblock-tv/appareils` | `require_lecture` | SBX TV PRIVACY (#3374) : un élément par MAC — `mac`, `nom`, `noms`, `ips` (clients, NAC, `ip neigh`), `mode`, `profil`, `profil_source` (`nac`, `manuel`, `observation`), `profil_confiance` (0-100), `preuves`, `nac` ; clients sans MAC : `mac` = null |
+| `POST /adblock-tv/appareils/{mac}/profil` | `require_jwt` | `{"type": "FREEBOX_PLAYER"\|"ANDROID_TV"\|"GOOGLE_TV"\|"SAMSUNG_TIZEN"\|"LG_WEBOS"\|"APPLE_TV"\|"GENERIC_SMART_TV"\|"INCONNU"\|null}` : correction manuelle (prime toujours), `null` la retire ; aucun effet DNS |
+
+`/status` (`clients[*]`, clé `appareils`) et `/auto/detection` (`appareils[*]`) gagnent `profil`, `profil_source`, `profil_confiance` et `ips` ; aucun champ retiré. État `etat.json` en schéma 2 (#3374) : `clients` inchangé (une entrée par adresse), plus `schema: 2` et `appareils` (MAC → `nom`, `profil` manuel). Migration au chargement (API et moteur auto), idempotente, sauvegarde unique `etat.json.avant-3374` ; le NAC est lu en lecture seule (`/var/lib/secubox/nac/devices.db`, fichier ordinaire, propriétaire vérifié, 64 Mio au plus), repli `ip neigh`. Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot1-design.md`.
 
 « Bloquer » réutilise `POST /adblock-tv/custom`. La vérification compare, pour chaque adresse de l'appareil, la vue Unbound attendue (`sbx-tv-auto-<slug>`, ou aucune pour `off`) à celle du drop-in.
 
