@@ -5,18 +5,20 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — « SBX TV Privacy » (#3374) : ce que les téléviseurs et lecteurs du foyer demandent au DNS de la box.
-  Trois vues : vue générale, équipements (par MAC), analyseur (domaines classés par appareil).
-  DONNÉES RÉELLES UNIQUEMENT, lues dans les routes existantes d'ad-guard (`/adblock-tv/appareils`, `/adblock-tv/classification`,
-  `/adblock-tv/live`) ; une session est requise (données personnelles par appareil, jamais servies au tableau de bord anonyme).
-  Deux corrections, celles qu'offre déjà l'API, chacune confirmée dans la page : profil d'un appareil, catégorie d'un domaine.
+  SecuBox — « SBX TV Privacy » (#3374) : ce que les téléviseurs et lecteurs du foyer demandent au DNS de la box, et la protection.
+  Cinq vues : vue générale (événements agrégés, bouton « Ça ne marche plus ? Je débloque »), équipements (par MAC), analyseur
+  (métriques, filtres combinables, agrégats, listing paginé côté serveur), protection (modes OBSERVE / PROTECT / AUTO, retour en
+  OBSERVE, pause minutée, exceptions, journal des décisions), diagnostic (erreurs DNS, exceptions, pauses, retours arrière).
+  DONNÉES RÉELLES UNIQUEMENT, lues dans les routes d'ad-guard ; une session est requise (données personnelles par appareil).
+  Coque de l'administration : menu latéral commun (/shared/sidebar.js), chargé hors ?embed=1 et hors démonstration.
   Tout texte venu du réseau (noms d'hôtes, domaines) est posé par textContent, jamais interprété comme du HTML.
   `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, adresses de documentation, aucune écriture.
 -->
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-BnjLOd11tpiowH34KK8XsZaMvoX9PzNwtpmf5uFvZJw='; style-src 'sha256-yAe2uL+8rXil4p36hq6QB0Zvuw/cQnqE/JV8Qf5xu1s='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-JIODXi9umGdt1/I7OHKNklaftmneHfe5ZyQ+I4ffg2c='; style-src 'self' 'sha256-1dTC9+qxI93QSVbtyBBJp7sCJ4gTgAN5L2Qi/EbLxew='; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
   :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
     --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
@@ -24,7 +26,10 @@
   html,body{margin:0}
   body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
     color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35}
-  body.emb{scrollbar-width:none}
+  body.emb{scrollbar-width:none} body.emb #sidebar{display:none}
+  .principal{min-width:0}
+  body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+  @media (max-width:768px){body:not(.emb) .principal{margin-left:0;padding-top:56px}}
   .cadre{container-type:inline-size;container-name:a;padding:10px}
   .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));
     box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
@@ -32,18 +37,23 @@
   .tete{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
   .tete .marque b{display:block;font-size:1.3rem;font-weight:800}
   .tete .marque small{color:var(--cyan);font-size:.72rem}
-  .droite{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--faible);font-size:.74rem}
-  button,select{font:inherit;color:var(--texte);background:rgba(41,182,246,.10);border:1px solid var(--trait2);border-radius:9px;padding:7px 12px;min-height:36px;cursor:pointer}
-  select{background:#0b1830}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--faible);font-size:.74rem;flex-wrap:wrap}
+  button,select,input{font:inherit;color:var(--texte);background:rgba(41,182,246,.10);border:1px solid var(--trait2);border-radius:9px;padding:7px 12px;min-height:36px}
+  button{cursor:pointer}
+  select,input{background:#0b1830}
+  input[type=number]{width:5.5rem}
   button:hover{background:rgba(41,182,246,.2)}
-  button:focus-visible,select:focus-visible,[role=tab]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  button:focus-visible,select:focus-visible,input:focus-visible,[role=tab]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
   button.danger{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.10)}
+  button.fort{border-color:var(--vert);color:#a8f0c6;background:rgba(46,204,113,.12);font-weight:600}
+  button.petit{min-height:28px;padding:3px 8px;font-size:.76rem}
   button[disabled]{opacity:.5;cursor:not-allowed}
   .bandeau{border-radius:10px;padding:8px 12px;font-size:.82rem}
   .demo{border:1px solid var(--orange);color:var(--orange);background:rgba(255,159,28,.10)}
   .info{border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.10)}
   .erreur{border:1px solid var(--rouge);color:#ffb3ba;background:rgba(255,77,94,.10)}
   .ok{border:1px solid var(--vert);color:#a8f0c6;background:rgba(46,204,113,.10)}
+  .honnete{border:1px dashed var(--trait2);color:var(--doux);background:rgba(10,22,46,.5)}
   [hidden]{display:none!important}
   .onglets{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--trait);padding-bottom:6px}
   .onglets [role=tab]{background:transparent;border:1px solid transparent;color:var(--doux)}
@@ -52,10 +62,10 @@
   .tuile{border-radius:12px;border:1px solid var(--trait);background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));padding:10px;min-width:0}
   .tuile .et{font-size:.74rem;color:var(--doux)}
   .tuile .val{font-size:1.45rem;font-weight:700;font-variant-numeric:tabular-nums}
-  .tuile .sous{font-size:.68rem;color:var(--faible)}
+  .tuile .sous{font-size:.68rem;color:var(--faible);overflow:hidden;text-overflow:ellipsis}
   .grille{display:grid;grid-template-columns:1fr;gap:10px}
   .pan{border-radius:12px;border:1px solid var(--trait);background:rgba(10,22,46,.6);padding:10px;min-width:0}
-  .pan h2{margin:0 0 8px;font-size:.88rem;display:flex;gap:8px;align-items:baseline}
+  .pan h2{margin:0 0 8px;font-size:.88rem;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
   .pan h2 small{margin-left:auto;color:var(--faible);font-weight:400;font-size:.7rem}
   .ligne{display:grid;grid-template-columns:minmax(0,9rem) 3.5rem minmax(0,1fr);gap:8px;align-items:center;padding:3px 0;font-size:.8rem}
   .ligne .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -69,18 +79,28 @@
   th{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--faible);text-align:left;padding:6px;font-weight:600}
   td{white-space:nowrap;padding:6px;border-top:1px solid rgba(86,150,255,.12);vertical-align:top}
   tr:hover td{background:rgba(41,182,246,.07)}
+  tr.sous td{background:rgba(6,13,27,.6);white-space:normal}
   .mono{font-family:ui-monospace,"IBM Plex Mono",monospace;font-size:.76rem;white-space:nowrap}
   td .confirm{white-space:normal;min-width:16rem}
   .num{font-variant-numeric:tabular-nums;text-align:right}
   .pastille{display:inline-block;border-radius:999px;padding:1px 8px;font-size:.7rem;border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12);white-space:nowrap}
   .pastille.vert{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}
   .pastille.orange{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .pastille.rouge{border-color:var(--rouge);color:#ffb3ba;background:rgba(255,77,94,.12)}
   .pastille.gris{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.10)}
+  .puce{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 4px 2px 10px;font-size:.72rem;border:1px solid var(--trait2);background:rgba(41,182,246,.08)}
+  .puce button{min-height:22px;padding:0 7px;border-radius:999px;font-size:.72rem}
+  .puces{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
   details summary{cursor:pointer;color:var(--doux);font-size:.74rem}
   .filtres{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-bottom:8px}
-  .filtres label{display:grid;gap:3px;font-size:.72rem;color:var(--doux)}
+  .filtres label,.form label{display:grid;gap:3px;font-size:.72rem;color:var(--doux)}
+  .filtres select[multiple]{min-height:5.6rem;min-width:9rem}
+  .cases{display:flex;flex-wrap:wrap;gap:6px;font-size:.76rem;color:var(--doux)}
+  .cases label{display:inline-flex;gap:4px;align-items:center}
+  .form{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
   .confirm{margin-top:6px;display:grid;gap:6px;padding:8px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.06)}
-  .confirm .actions{display:flex;flex-wrap:wrap;gap:6px}
+  .confirm .actions,.actions{display:flex;flex-wrap:wrap;gap:6px}
+  .debloque{border:1px solid var(--vert);border-radius:12px;padding:10px;background:rgba(46,204,113,.06);display:grid;gap:8px}
   .note{color:var(--faible);font-size:.72rem}
   .lien{color:inherit}
   .espace{margin-top:10px}
@@ -88,7 +108,8 @@
   @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}.grille{grid-template-columns:1fr 1fr}}
 </style>
 <body>
-<div class="cadre"><main class="app">
+<nav class="sidebar" id="sidebar" aria-label="Menu de l'administration"></nav>
+<main class="principal"><div class="cadre"><div class="app">
   <header class="tete">
     <div class="marque"><b>SBX TV Privacy</b><small>Ce que les téléviseurs demandent au DNS de la box</small></div>
     <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">Rafraîchir</button></div>
@@ -96,23 +117,42 @@
   <div class="bandeau demo" id="demo" hidden>Démonstration : données fictives (adresses de documentation), aucune écriture.</div>
   <div class="bandeau info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" class="lien">Se connecter</a></div>
   <div class="bandeau" id="message" role="status" aria-live="polite" hidden></div>
+  <div class="bandeau honnete" id="honnete">SBX TV Privacy bloque les pubs que la TV va chercher, pas celles qu'un service insère dans sa propre vidéo.</div>
 
   <nav class="onglets" role="tablist" aria-label="Vues SBX TV Privacy">
     <button type="button" role="tab" id="t-generale" aria-controls="v-generale" aria-selected="true">Vue générale</button>
     <button type="button" role="tab" id="t-equipements" aria-controls="v-equipements" aria-selected="false" tabindex="-1">Équipements</button>
     <button type="button" role="tab" id="t-analyseur" aria-controls="v-analyseur" aria-selected="false" tabindex="-1">Analyseur</button>
+    <button type="button" role="tab" id="t-protection" aria-controls="v-protection" aria-selected="false" tabindex="-1">Protection</button>
+    <button type="button" role="tab" id="t-diagnostic" aria-controls="v-diagnostic" aria-selected="false" tabindex="-1">Diagnostic</button>
   </nav>
 
   <section id="v-generale" role="tabpanel" aria-labelledby="t-generale">
-    <div class="tuiles">
+    <div class="debloque">
+      <div class="actions"><button type="button" class="fort" id="debloque-ouvrir" aria-expanded="false" aria-controls="debloque-panneau">Ça ne marche plus ? Je débloque</button></div>
+      <div id="debloque-panneau" hidden>
+        <div class="form">
+          <label>Quelle TV ?<select id="debloque-tv"><option value="toutes">Toutes les TV</option></select></label>
+          <button type="button" data-minutes="15">Pause 15 min</button>
+          <button type="button" data-minutes="60">Pause 1 h</button>
+          <button type="button" data-minutes="240">Pause 4 h</button>
+          <button type="button" id="debloque-observe" class="danger">Repasser en observation</button>
+        </div>
+        <p class="note">La pause reprend toute seule à l'échéance. Aucun réglage ne peut être durci d'ici.</p>
+      </div>
+      <div class="bandeau ok" id="debloque-retour" role="status" aria-live="polite" hidden></div>
+    </div>
+    <div class="tuiles espace">
       <div class="tuile" title="Appareils connus du moteur TV (un par MAC, plus ceux sans MAC)."><div class="et">Équipements détectés</div><div class="val" id="n-detectes">—</div><div class="sous" id="n-detectes-sous"></div></div>
-      <div class="tuile" title="Équipements dont le mode n'est pas « observe » (auto ou block)."><div class="et">Équipements protégés</div><div class="val" id="n-proteges">—</div><div class="sous">mode ≠ observe</div></div>
-      <div class="tuile" title="Domaines distincts classés par le moteur AUTO (cache)."><div class="et">Domaines classés</div><div class="val" id="n-domaines">—</div><div class="sous" id="n-domaines-sous"></div></div>
-      <div class="tuile" title="Domaines dont la catégorie est protégée : jamais bloqués automatiquement."><div class="et">Domaines protégés</div><div class="val" id="n-dprot">—</div><div class="sous">catégories protégées</div></div>
+      <div class="tuile" title="Équipements en PROTECT ou AUTO."><div class="et">Équipements protégés</div><div class="val" id="n-proteges">—</div><div class="sous">PROTECT ou AUTO</div></div>
+      <div class="tuile" title="Domaines distincts classés par le moteur AUTO (cache, 30 jours)."><div class="et">Domaines classés</div><div class="val" id="n-domaines">—</div><div class="sous" id="n-domaines-sous"></div></div>
+      <div class="tuile" title="Part des requêtes refusées sur 30 jours."><div class="et">Part bloquée</div><div class="val" id="n-part">—</div><div class="sous">requêtes, 30 jours</div></div>
     </div>
     <div class="grille espace">
       <div class="pan"><h2>Domaines par catégorie <small id="cat-note"></small></h2><div id="categories"><div class="vide">—</div></div></div>
-      <div class="pan"><h2>Événements récents <small>dernière heure</small></h2><div class="tab"><table><thead><tr><th>Heure</th><th>Adresse</th><th>Domaine</th><th>Décision</th></tr></thead><tbody id="evenements"></tbody></table></div></div>
+      <div class="pan"><h2>Événements récents <small><label>Fenêtre <select id="ev-heures"><option value="1">1 h</option><option value="24">24 h</option></select></label></small></h2>
+        <p class="note">Regroupés par appareil et domaine : blocages et nouveautés d'abord, puis les plus fréquents.</p>
+        <div class="tab"><table><thead><tr><th>Appareil</th><th>Domaine</th><th class="num">Fois</th><th>Premier – dernier</th><th>Décision</th><th></th></tr></thead><tbody id="evenements"></tbody></table></div></div>
     </div>
   </section>
 
@@ -123,33 +163,98 @@
   </section>
 
   <section id="v-analyseur" role="tabpanel" aria-labelledby="t-analyseur" hidden>
-    <div class="pan"><h2>Analyseur <small id="an-note"></small></h2>
+    <div class="pan"><h2>Filtres <small id="an-note"></small></h2>
       <div class="filtres">
-        <label>Appareil<select id="f-appareil"><option value="">Tous</option></select></label>
-        <label>Catégorie<select id="f-categorie"><option value="">Toutes</option></select></label>
-        <button type="button" id="f-appliquer">Filtrer</button>
+        <label>Fenêtre<select id="f-fenetre"><option value="1h">1 h</option><option value="24h">24 h</option><option value="7j">7 j</option><option value="30j" selected>30 j</option></select></label>
+        <label>Appareil(s)<select id="f-appareil" multiple></select></label>
+        <label>Catégorie(s)<select id="f-categorie" multiple></select></label>
+        <label>Source<select id="f-source"><option value="">Toutes</option></select></label>
+        <label>Confiance min<input type="number" id="f-cmin" min="0" max="100" value="0"></label>
+        <label>Confiance max<input type="number" id="f-cmax" min="0" max="100" value="100"></label>
+        <label>Domaine contient<input type="search" id="f-q" maxlength="64" placeholder="doubleclick"></label>
+        <label>Regrouper par<select id="f-agreger"><option value="racine">domaine racine</option><option value="domaine">domaine</option><option value="categorie">catégorie</option><option value="appareil">appareil</option><option value="aucun">sans regroupement</option></select></label>
       </div>
-      <div class="tab"><table><thead><tr><th>Domaine</th><th>Appareil</th><th>Catégorie</th><th>Source</th><th class="num">Confiance</th><th class="num">Requêtes</th><th>Dernière observation</th><th>Action</th></tr></thead><tbody id="domaines"></tbody></table></div>
-      <div class="suite"><button type="button" id="plus" hidden>Afficher plus</button><span class="note" id="pagination"></span></div>
+      <div class="cases" id="f-decision" role="group" aria-label="Décision">
+        <label><input type="checkbox" value="bloque"> bloqué</label><label><input type="checkbox" value="autorise"> autorisé</label>
+        <label><input type="checkbox" value="candidat"> candidat</label><label><input type="checkbox" value="protege"> protégé</label>
+      </div>
+      <div class="suite"><button type="button" id="f-appliquer">Filtrer</button><button type="button" id="f-export" hidden>Exporter en CSV</button></div>
+      <div class="puces" id="f-actifs" aria-label="Filtres actifs"></div>
+    </div>
+    <div class="tuiles espace">
+      <div class="tuile"><div class="et">Domaines distincts</div><div class="val" id="m-domaines">—</div><div class="sous" id="m-nouveaux"></div></div>
+      <div class="tuile"><div class="et">Requêtes</div><div class="val" id="m-requetes">—</div><div class="sous">compteurs du cache (30 j)</div></div>
+      <div class="tuile"><div class="et">Part bloquée</div><div class="val" id="m-part">—</div><div class="sous" id="m-bloquees"></div></div>
+      <div class="tuile"><div class="et">Lignes</div><div class="val" id="m-lignes">—</div><div class="sous">domaine × appareil</div></div>
+    </div>
+    <div class="grille espace">
+      <div class="pan"><h2>Top domaines</h2><div id="m-top-domaines"><div class="vide">—</div></div></div>
+      <div class="pan"><h2>Top appareils</h2><div id="m-top-appareils"><div class="vide">—</div></div></div>
+      <div class="pan"><h2>Par catégorie</h2><div id="m-categories"><div class="vide">—</div></div></div>
+      <div class="pan"><h2>Agrégats <small id="ag-note"></small></h2>
+        <div class="tab"><table><thead><tr><th>Clé</th><th class="num">Domaines</th><th class="num">Requêtes</th><th class="num">Bloquées</th><th class="num">Part</th><th></th></tr></thead><tbody id="agregats"></tbody></table></div></div>
+    </div>
+    <div class="pan espace"><h2>Listing <small id="pagination"></small></h2>
+      <div class="tab"><table><thead><tr><th>Domaine</th><th>Appareil</th><th>Catégorie</th><th>Source</th><th class="num">Confiance</th><th class="num">Requêtes</th><th class="num">Bloquées</th><th>Dernière observation</th><th>Action</th></tr></thead><tbody id="domaines"></tbody></table></div>
+      <div class="suite"><button type="button" id="plus" hidden>Afficher plus</button></div>
+    </div>
+  </section>
+
+  <section id="v-protection" role="tabpanel" aria-labelledby="t-protection" hidden>
+    <div class="pan"><h2>Modes par appareil <small>OBSERVE : rien n'est bloqué · PROTECT : listes · AUTO : règles apprises</small></h2>
+      <div class="actions"><button type="button" class="danger" id="tout-observe">Tout repasser en OBSERVE</button><button type="button" id="pause-tout">Tout mettre en pause 1 h</button></div>
+      <div id="tout-observe-confirm"></div>
+      <div class="tab espace"><table><thead><tr><th>Appareil</th><th>Mode</th><th>Pause</th><th>Changer</th><th>Gestes</th></tr></thead><tbody id="modes"></tbody></table></div>
+    </div>
+    <div class="pan espace"><h2>Exceptions <small>autoriser = liste blanche · bloquer = liste noire, pour un appareil</small></h2>
+      <div class="form">
+        <label>Appareil<select id="ex-appareil"></select></label>
+        <label>Domaine<input type="text" id="ex-domaine" maxlength="253" placeholder="pub.example.com"></label>
+        <label>Type<select id="ex-type"><option value="autoriser">autoriser</option><option value="bloquer">bloquer</option></select></label>
+        <button type="button" id="ex-ajouter">Ajouter</button>
+      </div>
+      <div class="tab espace"><table><thead><tr><th>Appareil</th><th>Domaine</th><th>Type</th><th>Source</th><th>Action</th></tr></thead><tbody id="exceptions"></tbody></table></div>
+      <p class="note" id="hors-champ"></p>
+    </div>
+    <div class="pan espace"><h2>Journal des décisions <small><label>Fenêtre <select id="j-heures"><option value="24">24 h</option><option value="168">7 j</option><option value="720">30 j</option></select></label></small></h2>
+      <div class="actions"><button type="button" id="j-export">Exporter le journal (CSV)</button></div>
+      <div class="tab espace"><table><thead><tr><th>Dernier</th><th>Appareil</th><th>Domaine</th><th>Action</th><th class="num">Fois</th><th>Origine</th></tr></thead><tbody id="journal"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="v-diagnostic" role="tabpanel" aria-labelledby="t-diagnostic" hidden>
+    <div class="grille">
+      <div class="pan"><h2>Erreurs DNS récentes <small>24 h, regroupées</small></h2><div class="tab"><table><thead><tr><th>Appareil</th><th>Domaine</th><th class="num">Erreurs</th><th>Dernière</th></tr></thead><tbody id="d-erreurs"></tbody></table></div></div>
+      <div class="pan"><h2>Pauses en cours</h2><div id="d-pauses"><div class="vide">—</div></div></div>
+      <div class="pan"><h2>Domaines autorisés</h2><div class="tab"><table><thead><tr><th>Appareil</th><th>Domaine</th><th>Source</th></tr></thead><tbody id="d-autorises"></tbody></table></div></div>
+      <div class="pan"><h2>Retours arrière <small>7 jours</small></h2><div class="tab"><table><thead><tr><th>Quand</th><th>Appareil</th><th>Domaine</th><th>Action</th><th>Origine</th></tr></thead><tbody id="d-retours"></tbody></table></div></div>
     </div>
   </section>
   <p class="note">La box ne voit que les noms demandés à son DNS : un appareil qui utilise un autre résolveur (DoH, DNS de la box opérateur) n'apparaît pas.</p>
-</main></div>
+</div></div></main>
 <script>
 (function(){
   'use strict';
   var BASE='/api/v1/ad-guard/adblock-tv';
-  var q=new URLSearchParams(location.search),DEMO=!!q.get('demo');
-  if(q.get('embed'))document.body.classList.add('emb');
-  var PAS=100,MAX=1000;
-  var etat={appareils:[],profils:[],categories:[],protegees:[],limite:PAS,detail:true,ouvert:false};
+  var q=new URLSearchParams(location.search),DEMO=!!q.get('demo'),EMB=!!q.get('embed');
+  // Coque de l'administration : menu latéral commun, hors ?embed=1 et hors démonstration (AURORA-REFERENCE §9).
+  if(EMB||DEMO)document.body.classList.add('emb');
+  else{var sb=document.createElement('script');sb.src='/shared/sidebar.js';document.body.appendChild(sb);}
+  // La CSP (par hachage) bloque les gestionnaires en ligne du menu : on replie/déplie ses sections ici.
+  document.addEventListener('click',function(e){var t=e.target&&e.target.closest?e.target.closest('#sidebar .nav-section-title'):null;if(!t)return;
+    var s=t.closest('.nav-section');if(!s)return;s.classList.toggle('collapsed');var i=t.querySelector('.toggle-icon');if(i)i.textContent=s.classList.contains('collapsed')?'▶':'▼';});
+  var PAS=25;
+  var MODES={observe:'OBSERVE',block:'PROTECT',auto:'AUTO',off:'OFF'};
+  var etat={appareils:[],profils:[],categories:[],protegees:[],sources:[],decalage:0,admin:false,ouvert:false,filtres:null,pauses:{}};
   function el(id){return document.getElementById(id);}
   // Fabrique d'éléments : le texte passe TOUJOURS par textContent.
   function h(tag,attrs,texte){var n=document.createElement(tag);if(attrs)for(var k in attrs){if(k==='class')n.className=attrs[k];else n.setAttribute(k,attrs[k]);}
     if(texte!=null)n.textContent=String(texte);return n;}
   function vider(n){while(n.firstChild)n.removeChild(n.firstChild);}
   function fmt(n){return n==null?'—':Number(n).toLocaleString('fr-FR');}
-  function quand(ts){if(!ts)return '—';var d=new Date(ts*1000);return d.toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'});}
+  function pct(x){return x==null?'—':(Math.round(x*1000)/10).toLocaleString('fr-FR')+' %';}
+  function quand(ts){if(!ts)return '—';if(typeof ts==='string')return ts;var d=new Date(ts*1000);return d.toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'});}
+  function heure(ts){if(!ts)return '—';return new Date(ts*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
   function message(texte,genre){var m=el('message');m.hidden=!texte;m.className='bandeau '+(genre||'info');m.textContent=texte||'';}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function entetes(json){var o={'Accept':'application/json'},t=jeton();if(t)o.Authorization='Bearer '+t;if(json)o['Content-Type']='application/json';return o;}
@@ -163,11 +268,27 @@
     return fetch(BASE+chemin,{method:'POST',headers:entetes(true),credentials:'same-origin',cache:'no-store',body:JSON.stringify(corps)}).then(function(r){
       return r.json().catch(function(){return {};}).then(function(j){if(!r.ok)throw new Error((j&&typeof j.detail==='string')?j.detail:('HTTP '+r.status));return j;});});
   }
+  function telecharger(chemin,nom){
+    if(DEMO){message('Démonstration : aucun export.','info');return;}
+    fetch(BASE+chemin,{headers:entetes(false),credentials:'same-origin',cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.blob();})
+      .then(function(b){var u=URL.createObjectURL(b),a=h('a',{href:u,download:nom});document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},2000);})
+      .catch(function(e){message('Export impossible : '+e.message,'erreur');});
+  }
   function hauteur(){try{parent.postMessage({sbxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+scrollY),onglet:'tv-privacy'},location.origin);}catch(e){}}
+  function vide(tb,cols,texte){var tr=h('tr');tr.appendChild(h('td',{colspan:String(cols),class:'vide'},texte));tb.appendChild(tr);}
+  function confirmer(td,texte,action){
+    if(td.querySelector('.confirm'))return;etat.ouvert=true;
+    var c=h('div',{class:'confirm'}),act=h('div',{class:'actions'}),ok=h('button',{type:'button',class:'danger'},'Confirmer'),non=h('button',{type:'button'},'Annuler');
+    function fermer(){if(c.parentNode)c.parentNode.removeChild(c);etat.ouvert=false;hauteur();}
+    non.addEventListener('click',fermer);ok.addEventListener('click',function(){ok.disabled=true;action().then(fermer,function(){ok.disabled=false;});});
+    c.appendChild(h('span',null,texte));act.appendChild(ok);act.appendChild(non);c.appendChild(act);td.appendChild(c);ok.focus();hauteur();
+  }
 
   // ── onglets (clavier : flèches gauche/droite) ──
-  var ONGLETS=['generale','equipements','analyseur'];
-  function montrer(nom){ONGLETS.forEach(function(o){var t=el('t-'+o),sel=o===nom;t.setAttribute('aria-selected',sel?'true':'false');t.tabIndex=sel?0:-1;el('v-'+o).hidden=!sel;});hauteur();}
+  var ONGLETS=['generale','equipements','analyseur','protection','diagnostic'];
+  var CHARGE={analyseur:function(){chargerAnalyseur(false);},protection:function(){chargerProtection();},diagnostic:function(){chargerDiagnostic();}};
+  function montrer(nom){ONGLETS.forEach(function(o){var t=el('t-'+o),sel=o===nom;t.setAttribute('aria-selected',sel?'true':'false');t.tabIndex=sel?0:-1;el('v-'+o).hidden=!sel;});
+    if(CHARGE[nom])CHARGE[nom]();hauteur();}
   ONGLETS.forEach(function(o,i){var t=el('t-'+o);t.addEventListener('click',function(){montrer(o);});
     t.addEventListener('keydown',function(e){var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(!d)return;var n=ONGLETS[(i+d+ONGLETS.length)%ONGLETS.length];montrer(n);el('t-'+n).focus();});});
 
@@ -177,43 +298,87 @@
       {mac:'02:00:5e:00:00:02',nom:'Lecteur box',ips:['192.0.2.20'],mode:'observe',modes_divergents:false,profil:'FREEBOX_PLAYER',profil_source:'nac',profil_confiance:90},
       {mac:null,nom:'Clé de diffusion',ips:['192.0.2.30'],mode:'block',modes_divergents:false,profil:'INCONNU',profil_source:'aucune',profil_confiance:0}],
       profils:['FREEBOX_PLAYER','ANDROID_TV','GOOGLE_TV','SAMSUNG_TIZEN','LG_WEBOS','APPLE_TV','GENERIC_SMART_TV','INCONNU']},
-    classification:{total:4,cache:true,genere:1761955200,categories:['PUBLICITE','TRACKING','TELEMETRIE','STREAMING','CDN','DRM','AUTHENTIFICATION','MISE_A_JOUR','SERVICES_CONSTRUCTEUR','INCONNU'],
-      protegees:['AUTHENTIFICATION','CDN','DRM','INCONNU','MISE_A_JOUR','STREAMING'],domaines:[
-      {domaine:'ads.example.com',mac:'02:00:5e:00:00:01',categorie:'PUBLICITE',source:'liste',confiance:90,requetes:412,derniere_observation:1761955000,protegee:false},
-      {domaine:'metrics.example.net',mac:'02:00:5e:00:00:01',categorie:'TELEMETRIE',source:'apprentissage',confiance:60,requetes:120,derniere_observation:1761954000,protegee:false},
-      {domaine:'video.example.org',mac:'02:00:5e:00:00:02',categorie:'STREAMING',source:'liste',confiance:95,requetes:980,derniere_observation:1761955100,protegee:true},
-      {domaine:'cdn.example.org',mac:'02:00:5e:00:00:02',categorie:'CDN',source:'manuelle',confiance:100,requetes:300,derniere_observation:1761953000,protegee:true}]},
-    live:{evenements:[{ts:1761955100,client:'192.0.2.11',domaine:'ads.example.com',decision:'BLOCKED'},{ts:1761955090,client:'192.0.2.20',domaine:'video.example.org',decision:'ALLOWED'}]}};
+    analyse:{cache:true,admin:true,genere:1761955200,total:3,decalage:0,limite:25,agreger:'racine',
+      categories:['PUBLICITE','TRACKING','TELEMETRIE','STREAMING','CDN','DRM','AUTHENTIFICATION','MISE_A_JOUR','SERVICES_CONSTRUCTEUR','INCONNU'],
+      protegees:['AUTHENTIFICATION','CDN','DRM','INCONNU','MISE_A_JOUR','STREAMING'],sources:['liste','apprentissage','ndpi','manuelle','profil','aucune'],
+      metriques:{domaines:3,requetes:1512,bloquees:412,part_bloquee:0.2725,nouveaux:1,par_categorie:{PUBLICITE:{domaines:1,requetes:412},STREAMING:{domaines:1,requetes:980},TELEMETRIE:{domaines:1,requetes:120}},
+        top_domaines:[{cle:'video.example.org',requetes:980,bloquees:0,part_bloquee:0},{cle:'ads.example.com',requetes:412,bloquees:412,part_bloquee:1}],
+        top_appareils:[{cle:'02:00:5e:00:00:02',nom:'Lecteur box',requetes:980,bloquees:0,part_bloquee:0},{cle:'02:00:5e:00:00:01',nom:'Téléviseur salon',requetes:532,bloquees:412,part_bloquee:0.774}]},
+      agregats:[{cle:'example.org',domaines:1,requetes:980,bloquees:0,part_bloquee:0},{cle:'example.com',domaines:1,requetes:412,bloquees:412,part_bloquee:1},{cle:'example.net',domaines:1,requetes:120,bloquees:0,part_bloquee:0}],
+      lignes:[{domaine:'ads.example.com',mac:'02:00:5e:00:00:01',nom:'Téléviseur salon',categorie:'PUBLICITE',source:'liste',confiance:90,requetes:412,bloquees:412,derniere_observation:1761955000,protegee:false},
+        {domaine:'metrics.example.net',mac:'02:00:5e:00:00:01',nom:'Téléviseur salon',categorie:'TELEMETRIE',source:'apprentissage',confiance:60,requetes:120,bloquees:0,derniere_observation:1761954000,protegee:false},
+        {domaine:'video.example.org',mac:'02:00:5e:00:00:02',nom:'Lecteur box',categorie:'STREAMING',source:'liste',confiance:95,requetes:980,bloquees:0,derniere_observation:1761955100,protegee:true}]},
+    evenements:{heures:1,total:2,groupes:[{appareil:'Téléviseur salon',client:'192.0.2.11',domaine:'ads.example.com',occurrences:24,premier:1761954000,dernier:1761955100,decision:'BLOCKED',bloquees:24,erreurs:0,nouveau:false},
+      {appareil:'Lecteur box',client:'192.0.2.20',domaine:'video.example.org',occurrences:310,premier:1761952000,dernier:1761955090,decision:'ALLOWED',bloquees:0,erreurs:0,nouveau:false}]},
+    usager:{tv:[{id:'televiseur-salon',nom:'Téléviseur salon',protege:true,pause_jusqu_a:null},{id:'lecteur-box',nom:'Lecteur box',protege:false,pause_jusqu_a:null}]},
+    diagnostic:{erreurs_dns:[{appareil:'Lecteur box',domaine:'api.example.net',erreurs:3,dernier:1761955000}],pauses:[],retours_arriere:[{ts:1761950000,appareil:'Téléviseur salon',domaine:'cdn.example.org',action:'retrait',origine:'auto'}],
+      exceptions:[{appareil:'televiseur-salon',nom:'Téléviseur salon',domaine:'cdn.example.org',type:'autoriser',source:'exception'}],modes:[]},
+    exceptions:{exceptions:[{appareil:'televiseur-salon',nom:'Téléviseur salon',domaine:'cdn.example.org',type:'autoriser',source:'exception'}],hors_champ:[{mecanisme:'adult-exempt',raison:'autre finalité'}]},
+    journal:{heures:24,total:1,agregats:[{appareil:'Téléviseur salon',domaine:'cdn.example.org',action:'retrait',occurrences:1,premier:1761950000,dernier:1761950000,origines:['auto']}]}};
+  function source(chemin){
+    if(!DEMO)return lire(chemin);
+    var k=chemin.indexOf('/protection/analyse')===0?'analyse':chemin.indexOf('/protection/evenements')===0?'evenements':chemin.indexOf('/protection/usager/tv')===0?'usager':
+      chemin.indexOf('/protection/diagnostic')===0?'diagnostic':chemin.indexOf('/protection/exceptions')===0?'exceptions':chemin.indexOf('/protection/journal')===0?'journal':'appareils';
+    return Promise.resolve(D[k]);
+  }
 
   // ── vue générale ──
-  function rendreGenerale(app,cl){
+  function barres(box,par,prots){
+    vider(box);var cats=Object.keys(par||{});if(!cats.length){box.appendChild(h('div',{class:'vide'},'Aucun domaine classé.'));return;}
+    var max=Math.max.apply(null,cats.map(function(c){return par[c].requetes||0;}).concat([1]));
+    cats.sort(function(a,b){return (par[b].requetes||0)-(par[a].requetes||0);}).forEach(function(c){
+      var l=h('div',{class:'ligne'}),b=h('div',{class:'barre'}),i=h('i',(prots||[]).indexOf(c)>=0?{class:'prot'}:null);
+      i.style.width=Math.round(100*(par[c].requetes||0)/max)+'%';b.appendChild(i);
+      l.appendChild(h('span',{class:'n',title:c+' : '+fmt(par[c].domaines)+' domaines'},c));l.appendChild(h('span',{class:'v'},fmt(par[c].requetes)));l.appendChild(b);box.appendChild(l);});
+  }
+  function rendreGenerale(app,an){
     var liste=app?app.appareils||[]:null;
     el('n-detectes').textContent=liste?fmt(liste.length):'—';
     el('n-detectes-sous').textContent=liste?(fmt(liste.filter(function(a){return a.mac;}).length)+' identifiés par MAC'):'';
-    el('n-proteges').textContent=liste?fmt(liste.filter(function(a){return a.mode&&a.mode!=='observe';}).length):'—';
-    var box=el('categories');vider(box);
-    if(!cl){el('n-domaines').textContent='—';el('n-dprot').textContent='—';box.appendChild(h('div',{class:'vide'},'—'));return;}
-    if(!cl.cache){el('n-domaines').textContent='—';el('n-dprot').textContent='—';box.appendChild(h('div',{class:'vide'},'Classification pas encore calculée par le moteur AUTO.'));return;}
-    var doms=cl.domaines||[],par={},prot=0;
-    doms.forEach(function(d){par[d.categorie]=(par[d.categorie]||0)+1;if(d.protegee)prot++;});
-    el('n-domaines').textContent=fmt(cl.total);
-    el('n-domaines-sous').textContent=cl.genere?('calculé le '+quand(cl.genere)):'';
-    el('n-dprot').textContent=doms.length<cl.total?'≥ '+fmt(prot):fmt(prot);
-    el('cat-note').textContent=doms.length<cl.total?('sur les '+fmt(doms.length)+' premiers'):'lignes domaine × appareil';
-    var cats=(cl.categories||[]).filter(function(c){return par[c];}),max=Math.max.apply(null,cats.map(function(c){return par[c];}).concat([1]));
-    if(!cats.length){box.appendChild(h('div',{class:'vide'},'Aucun domaine classé.'));return;}
-    var prots=cl.protegees||[];
-    cats.sort(function(a,b){return par[b]-par[a];}).forEach(function(c){
-      var l=h('div',{class:'ligne'}),b=h('div',{class:'barre'}),i=h('i',prots.indexOf(c)>=0?{class:'prot'}:null);
-      i.style.width=Math.round(100*par[c]/max)+'%';b.appendChild(i);
-      l.appendChild(h('span',{class:'n',title:c},c));l.appendChild(h('span',{class:'v'},fmt(par[c])));l.appendChild(b);box.appendChild(l);});
+    el('n-proteges').textContent=liste?fmt(liste.filter(function(a){return a.mode==='auto'||a.mode==='block';}).length):'—';
+    var box=el('categories');
+    if(!an||!an.cache){el('n-domaines').textContent='—';el('n-part').textContent='—';vider(box);box.appendChild(h('div',{class:'vide'},an?'Classification pas encore calculée par le moteur AUTO.':'—'));return;}
+    el('n-domaines').textContent=fmt(an.metriques.domaines);el('n-domaines-sous').textContent=an.genere?('calculé le '+quand(an.genere)):'';
+    el('n-part').textContent=pct(an.metriques.part_bloquee);el('cat-note').textContent='requêtes par catégorie';
+    barres(box,an.metriques.par_categorie,an.protegees);
   }
-  function rendreEvenements(lv){
-    var tb=el('evenements');vider(tb);var ev=lv?lv.evenements||[]:null;
-    if(!ev||!ev.length){var tr=h('tr');tr.appendChild(h('td',{colspan:'4',class:'vide'},ev?'Aucune requête dans la dernière heure.':'—'));tb.appendChild(tr);return;}
-    ev.slice(0,20).forEach(function(e){var tr=h('tr');tr.appendChild(h('td',null,quand(e.ts)));tr.appendChild(h('td',{class:'mono'},e.client));
-      tr.appendChild(h('td',{class:'mono'},e.domaine));var td=h('td');td.appendChild(h('span',{class:'pastille '+(e.decision==='BLOCKED'?'vert':'gris')},e.decision==='BLOCKED'?'bloqué':'résolu'));tr.appendChild(td);tb.appendChild(tr);});
+  function rendreEvenements(ev){
+    var tb=el('evenements');vider(tb);var g=ev?ev.groupes||[]:null;
+    if(!g||!g.length){vide(tb,6,g?'Aucune requête sur la fenêtre.':'—');return;}
+    g.slice(0,40).forEach(function(x){
+      var tr=h('tr');tr.appendChild(h('td',null,x.appareil));tr.appendChild(h('td',{class:'mono'},x.domaine));tr.appendChild(h('td',{class:'num'},fmt(x.occurrences)));
+      tr.appendChild(h('td',null,heure(x.premier)+' – '+heure(x.dernier)));
+      var td=h('td');td.appendChild(h('span',{class:'pastille '+(x.decision==='BLOCKED'?'vert':x.decision==='UPSTREAM_ERROR'?'rouge':'gris')},x.decision==='BLOCKED'?'bloqué':x.decision==='UPSTREAM_ERROR'?'erreur':'résolu'));
+      if(x.nouveau){td.appendChild(document.createTextNode(' '));td.appendChild(h('span',{class:'pastille orange'},'nouveau'));}
+      tr.appendChild(td);var tdd=h('td');
+      if(etat.admin&&!DEMO){var b=h('button',{type:'button',class:'petit','aria-expanded':'false'},'Détail');b.addEventListener('click',function(){deplierEvenement(tr,x,b);});tdd.appendChild(b);}
+      tr.appendChild(tdd);tb.appendChild(tr);});
   }
+  function deplierEvenement(tr,x,b){
+    var s=tr.nextSibling;if(s&&s.classList&&s.classList.contains('sous')){s.remove();b.setAttribute('aria-expanded','false');hauteur();return;}
+    lire('/protection/evenements?heures='+el('ev-heures').value+'&detail=1').then(function(j){
+      var g=(j.groupes||[]).filter(function(y){return y.client===x.client&&y.domaine===x.domaine;})[0],sr=h('tr',{class:'sous'}),td=h('td',{colspan:'6'});
+      ((g&&g.lignes)||[]).forEach(function(l){td.appendChild(h('div',{class:'mono'},quand(l.ts)+' · '+l.domaine+' · '+l.decision));});
+      if(!td.firstChild)td.textContent='Aucune ligne.';sr.appendChild(td);tr.parentNode.insertBefore(sr,tr.nextSibling);b.setAttribute('aria-expanded','true');hauteur();
+    }).catch(function(e){message('Détail impossible : '+e.message,'erreur');});
+  }
+  function chargerEvenements(){source('/protection/evenements?heures='+el('ev-heures').value).then(rendreEvenements).catch(function(){rendreEvenements(null);});}
+  el('ev-heures').addEventListener('change',chargerEvenements);
+
+  // ── « Ça ne marche plus ? Je débloque » (route d'usager, bornée) ──
+  function chargerUsager(){
+    return source('/protection/usager/tv').then(function(j){var s=el('debloque-tv'),v=s.value;while(s.options.length>1)s.remove(1);
+      (j.tv||[]).forEach(function(t){s.appendChild(h('option',{value:t.id},t.nom+(t.pause_jusqu_a?' (en pause)':'')));});s.value=v||'toutes';}).catch(function(){});
+  }
+  el('debloque-ouvrir').addEventListener('click',function(){var p=el('debloque-panneau'),o=p.hidden;p.hidden=!o;this.setAttribute('aria-expanded',o?'true':'false');if(o)chargerUsager();hauteur();});
+  function debloquer(corps){
+    var r=el('debloque-retour');
+    ecrire('/protection/usager/debloquer',corps).then(function(j){r.hidden=false;r.className='bandeau ok';r.textContent=j.message||'Fait.';chargerUsager();charger();})
+      .catch(function(e){r.hidden=false;r.className='bandeau erreur';r.textContent='Refusé : '+e.message;});
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#debloque-panneau [data-minutes]'),function(b){
+    b.addEventListener('click',function(){debloquer({tv:el('debloque-tv').value,geste:'pause',minutes:Number(b.getAttribute('data-minutes'))});});});
+  el('debloque-observe').addEventListener('click',function(){debloquer({tv:el('debloque-tv').value,geste:'observe'});});
 
   // ── équipements ──
   function v4(ip){return ip.indexOf(':')<0;}
@@ -242,30 +407,62 @@
     });
     td.appendChild(bt);
   }
+  function pastilleMode(m){return h('span',{class:'pastille '+(m==='observe'||m==='off'?'gris':'vert')},MODES[m]||m||'—');}
   function rendreEquipements(app){
     var tb=el('equipements');vider(tb);var liste=app?app.appareils||[]:null;
     el('eq-note').textContent=liste?(fmt(liste.length)+' appareil'+(liste.length>1?'s':'')):'';
-    if(!liste||!liste.length){var tr=h('tr');tr.appendChild(h('td',{colspan:'8',class:'vide'},liste?'Aucun équipement connu.':'—'));tb.appendChild(tr);return;}
+    if(!liste||!liste.length){vide(tb,8,liste?'Aucun équipement connu.':'—');return;}
     liste.forEach(function(a){
       var tr=h('tr');tr.appendChild(h('td',null,a.nom||'—'));tr.appendChild(h('td',{class:'mono'},a.mac||'—'));tr.appendChild(cellAdresses(a.ips));
       var tp=h('td');tp.appendChild(h('span',{class:'pastille'},a.profil||'INCONNU'));tr.appendChild(tp);
       tr.appendChild(h('td',null,a.profil_source||'—'));tr.appendChild(h('td',{class:'num'},a.profil_confiance==null?'—':a.profil_confiance+' %'));
-      var tm=h('td');tm.appendChild(h('span',{class:'pastille '+(a.mode==='observe'?'gris':'vert')},a.mode||'—'));
+      var tm=h('td');tm.appendChild(pastilleMode(a.mode));
       if(a.modes_divergents){tm.appendChild(document.createTextNode(' '));tm.appendChild(h('span',{class:'pastille orange',title:'Ses adresses n’ont pas toutes le même mode : le plus strict est affiché.'},'modes divergents'));}
       tr.appendChild(tm);var ta=h('td');boutonProfil(a,ta);tr.appendChild(ta);tb.appendChild(tr);});
   }
 
-  // ── analyseur ──
-  function nomDe(mac){if(!mac)return '—';for(var i=0;i<etat.appareils.length;i++)if(etat.appareils[i].mac===mac)return etat.appareils[i].nom||mac;return mac;}
-  function remplirFiltres(cl){
-    var sa=el('f-appareil'),sc=el('f-categorie'),va=sa.value,vc=sc.value;
-    while(sa.options.length>1)sa.remove(1);while(sc.options.length>1)sc.remove(1);
-    etat.appareils.filter(function(a){return a.mac;}).forEach(function(a){sa.appendChild(h('option',{value:a.mac},(a.nom||a.mac)+' ('+a.mac+')'));});
-    (etat.categories||[]).forEach(function(c){sc.appendChild(h('option',{value:c},c+(etat.protegees.indexOf(c)>=0?' (protégée)':'')));});
-    sa.value=va;sc.value=vc;
+  // ── analyseur : métriques, filtres combinables, agrégats dépliables, listing paginé (serveur) ──
+  function choisis(sel){return Array.prototype.filter.call(sel.options,function(o){return o.selected;}).map(function(o){return o.value;});}
+  function lireFiltres(){
+    return {fenetre:el('f-fenetre').value,mac:choisis(el('f-appareil')),categorie:choisis(el('f-categorie')),
+      decision:Array.prototype.filter.call(document.querySelectorAll('#f-decision input'),function(c){return c.checked;}).map(function(c){return c.value;}),
+      source:el('f-source').value?[el('f-source').value]:[],confiance_min:el('f-cmin').value||'0',confiance_max:el('f-cmax').value||'100',
+      q:el('f-q').value.trim().toLowerCase(),agreger:el('f-agreger').value,domaine:'',racine:''};
   }
+  function parametres(f,decalage,limite,sansAgreger){
+    var p=new URLSearchParams();p.set('fenetre',f.fenetre);
+    ['mac','categorie','decision','source'].forEach(function(k){f[k].forEach(function(v){p.append(k,v);});});
+    if(f.confiance_min!=='0')p.set('confiance_min',f.confiance_min);if(f.confiance_max!=='100')p.set('confiance_max',f.confiance_max);
+    if(f.q)p.set('q',f.q);if(f.domaine)p.set('domaine',f.domaine);if(f.racine)p.set('racine',f.racine);
+    p.set('agreger',sansAgreger?'aucun':f.agreger);p.set('decalage',String(decalage||0));p.set('limite',String(limite||PAS));return p.toString();
+  }
+  function nomDe(mac){if(!mac)return '—';for(var i=0;i<etat.appareils.length;i++)if(etat.appareils[i].mac===mac)return etat.appareils[i].nom||mac;return mac;}
+  function puces(f){
+    var box=el('f-actifs');vider(box);
+    function puce(texte,retirer){var p=h('span',{class:'puce'},texte),b=h('button',{type:'button','aria-label':'Retirer le filtre '+texte},'×');b.addEventListener('click',function(){retirer();chargerAnalyseur(false);});p.appendChild(b);box.appendChild(p);}
+    if(f.fenetre!=='30j')puce('fenêtre '+f.fenetre,function(){el('f-fenetre').value='30j';});
+    f.mac.forEach(function(m){puce('appareil '+nomDe(m),function(){Array.prototype.forEach.call(el('f-appareil').options,function(o){if(o.value===m)o.selected=false;});});});
+    f.categorie.forEach(function(c){puce('catégorie '+c,function(){Array.prototype.forEach.call(el('f-categorie').options,function(o){if(o.value===c)o.selected=false;});});});
+    f.decision.forEach(function(d){puce('décision '+d,function(){Array.prototype.forEach.call(document.querySelectorAll('#f-decision input'),function(c){if(c.value===d)c.checked=false;});});});
+    f.source.forEach(function(s){puce('source '+s,function(){el('f-source').value='';});});
+    if(f.confiance_min!=='0')puce('confiance ≥ '+f.confiance_min,function(){el('f-cmin').value='0';});
+    if(f.confiance_max!=='100')puce('confiance ≤ '+f.confiance_max,function(){el('f-cmax').value='100';});
+    if(f.q)puce('contient « '+f.q+' »',function(){el('f-q').value='';});
+    if(!box.firstChild)box.appendChild(h('span',{class:'note'},'Aucun filtre actif.'));
+  }
+  function remplirFiltres(an){
+    var sa=el('f-appareil'),sc=el('f-categorie'),ss=el('f-source'),va=choisis(sa),vc=choisis(sc),vs=ss.value;
+    vider(sa);vider(sc);while(ss.options.length>1)ss.remove(1);
+    etat.appareils.filter(function(a){return a.mac;}).forEach(function(a){var o=h('option',{value:a.mac},a.nom||a.mac);o.selected=va.indexOf(a.mac)>=0;sa.appendChild(o);});
+    (an.categories||[]).forEach(function(c){var o=h('option',{value:c},c+((an.protegees||[]).indexOf(c)>=0?' (protégée)':''));o.selected=vc.indexOf(c)>=0;sc.appendChild(o);});
+    (an.sources||[]).forEach(function(s){ss.appendChild(h('option',{value:s},s));});ss.value=vs;
+  }
+  function tops(box,liste,appareil){vider(box);if(!liste||!liste.length){box.appendChild(h('div',{class:'vide'},'—'));return;}
+    var max=Math.max.apply(null,liste.map(function(x){return x.requetes||0;}).concat([1]));
+    liste.forEach(function(x){var l=h('div',{class:'ligne'}),b=h('div',{class:'barre'}),i=h('i');i.style.width=Math.round(100*(x.requetes||0)/max)+'%';b.appendChild(i);
+      var nom=appareil?(x.nom||x.cle||'sans MAC'):x.cle;l.appendChild(h('span',{class:'n mono',title:nom+' · bloquées '+pct(x.part_bloquee)},nom));l.appendChild(h('span',{class:'v'},fmt(x.requetes)));l.appendChild(b);box.appendChild(l);});}
   function boutonCategorie(d,td){
-    var bt=h('button',{type:'button','aria-label':'Corriger la catégorie de '+d.domaine},'Corriger');
+    var bt=h('button',{type:'button',class:'petit','aria-label':'Corriger la catégorie de '+d.domaine},'Corriger');
     bt.addEventListener('click',function(){
       if(td.querySelector('.confirm'))return;etat.ouvert=true;bt.disabled=true;
       var c=h('div',{class:'confirm'}),id='c-'+Math.random().toString(36).slice(2),lab=h('label',{for:id},'Catégorie de '+d.domaine),sel=h('select',{id:id});
@@ -277,61 +474,140 @@
       function fermer(){td.removeChild(c);bt.disabled=false;etat.ouvert=false;hauteur();}
       non.addEventListener('click',fermer);
       ok.addEventListener('click',function(){ok.disabled=true;
-        ecrire('/classification',{domaine:d.domaine,categorie:sel.value||null,mac:(cb.checked&&d.mac)?d.mac:null}).then(function(){message('Catégorie corrigée pour '+d.domaine+' (sans effet DNS immédiat).','ok');etat.ouvert=false;chargerAnalyseur();})
+        ecrire('/classification',{domaine:d.domaine,categorie:sel.value||null,mac:(cb.checked&&d.mac)?d.mac:null}).then(function(){message('Catégorie corrigée pour '+d.domaine+' (sans effet DNS immédiat).','ok');etat.ouvert=false;chargerAnalyseur(false);})
           .catch(function(e){ok.disabled=false;message('Correction refusée : '+e.message,'erreur');});});
       act.appendChild(ok);act.appendChild(non);c.appendChild(lab);c.appendChild(sel);c.appendChild(portee);c.appendChild(act);td.appendChild(c);sel.focus();hauteur();
     });
     td.appendChild(bt);
   }
-  function rendreAnalyseur(cl){
-    var tb=el('domaines');vider(tb);
-    if(!cl){var tr0=h('tr');tr0.appendChild(h('td',{colspan:'8',class:'vide'},'—'));tb.appendChild(tr0);el('plus').hidden=true;el('pagination').textContent='';return;}
-    var doms=cl.domaines||[];
-    el('an-note').textContent=cl.cache?(cl.genere?'cache du '+quand(cl.genere):''):'classification pas encore calculée';
-    if(!doms.length){var tr=h('tr');tr.appendChild(h('td',{colspan:'8',class:'vide'},'Aucun domaine pour ce filtre.'));tb.appendChild(tr);}
-    doms.forEach(function(d){
-      var tr=h('tr');tr.appendChild(h('td',{class:'mono'},d.domaine));tr.appendChild(h('td',null,etat.detail?nomDe(d.mac):(d.mac||'maison')));
-      var tc=h('td');tc.appendChild(h('span',{class:'pastille '+(d.protegee?'vert':'orange')},d.categorie||'INCONNU'));
-      if(d.protegee){tc.appendChild(document.createTextNode(' '));tc.appendChild(h('span',{class:'note',title:'Catégorie protégée : jamais bloquée automatiquement.'},'protégé'));}
-      tr.appendChild(tc);tr.appendChild(h('td',null,d.source||'—'));tr.appendChild(h('td',{class:'num'},d.confiance==null?'—':d.confiance+' %'));
-      tr.appendChild(h('td',{class:'num'},fmt(d.requetes)));
-      tr.appendChild(h('td',null,typeof d.derniere_observation==='number'?quand(d.derniere_observation):(d.derniere_observation||'—')));
-      var ta=h('td');if(etat.detail)boutonCategorie(d,ta);else ta.appendChild(h('span',{class:'note'},'administrateur'));tr.appendChild(ta);tb.appendChild(tr);});
-    el('pagination').textContent=fmt(doms.length)+' sur '+fmt(cl.total)+' lignes';
-    el('plus').hidden=!(doms.length<cl.total&&etat.limite<MAX);
+  function ligneDomaine(d){
+    var tr=h('tr');tr.appendChild(h('td',{class:'mono'},d.domaine));tr.appendChild(h('td',null,d.nom||(etat.admin?nomDe(d.mac):(d.mac||'maison'))));
+    var tc=h('td');tc.appendChild(h('span',{class:'pastille '+(d.protegee?'vert':'orange')},d.categorie||'INCONNU'));
+    if(d.protegee){tc.appendChild(document.createTextNode(' '));tc.appendChild(h('span',{class:'note',title:'Catégorie protégée : jamais bloquée automatiquement.'},'protégé'));}
+    if(d.regle){tc.appendChild(document.createTextNode(' '));tc.appendChild(h('span',{class:'pastille gris'},d.regle));}
+    tr.appendChild(tc);tr.appendChild(h('td',null,d.source||'—'));tr.appendChild(h('td',{class:'num'},d.confiance==null?'—':d.confiance+' %'));
+    tr.appendChild(h('td',{class:'num'},fmt(d.requetes)));tr.appendChild(h('td',{class:'num'},fmt(d.bloquees)));
+    tr.appendChild(h('td',null,quand(d.derniere_observation)));
+    var ta=h('td');if(etat.admin&&!DEMO)boutonCategorie(d,ta);else ta.appendChild(h('span',{class:'note'},etat.admin?'—':'administrateur'));tr.appendChild(ta);return tr;
   }
-  function requeteClassification(){
-    var p=new URLSearchParams();p.set('limite',String(etat.limite));
-    var a=el('f-appareil').value,c=el('f-categorie').value;if(a)p.set('mac',a);if(c)p.set('categorie',c);
-    // Détail (MAC complète, horodatage) : administrateur ; sinon la vue lecteur, MAC tronquée, sans correction possible.
-    return lire('/classification/detail?'+p).then(function(j){etat.detail=true;return j;}).catch(function(e){
-      if(!e.session)throw e;etat.detail=false;if(a)p.delete('mac');return lire('/classification?'+p);});
+  function deplierAgregat(tr,g,b){
+    var s=tr.nextSibling;if(s&&s.classList&&s.classList.contains('sous')){s.remove();b.setAttribute('aria-expanded','false');hauteur();return;}
+    var f=Object.assign({},etat.filtres),cle=etat.agreger;
+    if(cle==='domaine')f.domaine=g.cle;else if(cle==='racine')f.racine=g.cle;else if(cle==='categorie')f.categorie=[g.cle];else if(cle==='appareil'){if(!g.cle||g.cle.indexOf('…')>=0){message('Détail par appareil : administrateur requis.','info');return;}f.mac=[g.cle];}
+    source('/protection/analyse?'+parametres(f,0,PAS,true)).then(function(j){
+      var sr=h('tr',{class:'sous'}),td=h('td',{colspan:'6'}),t=h('table'),tb=h('tbody');
+      (j.lignes||[]).forEach(function(d){var r=h('tr');r.appendChild(h('td',{class:'mono'},d.domaine));r.appendChild(h('td',null,d.nom||d.mac||'maison'));r.appendChild(h('td',null,d.categorie));
+        r.appendChild(h('td',{class:'num'},fmt(d.requetes)));r.appendChild(h('td',{class:'num'},fmt(d.bloquees)));tb.appendChild(r);});
+      t.appendChild(tb);td.appendChild(t);td.appendChild(h('div',{class:'note'},fmt((j.lignes||[]).length)+' sur '+fmt(j.total)+' lignes'));
+      sr.appendChild(td);tr.parentNode.insertBefore(sr,tr.nextSibling);b.setAttribute('aria-expanded','true');hauteur();
+    }).catch(echec);
   }
-  function chargerAnalyseur(){
-    if(DEMO){rendreAnalyseur(filtreDemo());return;}
-    requeteClassification().then(rendreAnalyseur).catch(echec);
+  function rendreAnalyse(an,ajouter){
+    etat.admin=!!an.admin;el('f-export').hidden=!etat.admin;
+    el('an-note').textContent=an.cache?(an.genere?'cache du '+quand(an.genere):''):'classification pas encore calculée';
+    var m=an.metriques||{};
+    el('m-domaines').textContent=fmt(m.domaines);el('m-nouveaux').textContent=fmt(m.nouveaux)+' nouveau'+(m.nouveaux>1?'x':'')+' sur la fenêtre';
+    el('m-requetes').textContent=fmt(m.requetes);el('m-part').textContent=pct(m.part_bloquee);el('m-bloquees').textContent=fmt(m.bloquees)+' bloquées';el('m-lignes').textContent=fmt(an.total);
+    tops(el('m-top-domaines'),m.top_domaines,false);tops(el('m-top-appareils'),m.top_appareils,true);barres(el('m-categories'),m.par_categorie,an.protegees);
+    var ta=el('agregats');vider(ta);etat.agreger=an.agreger;el('ag-note').textContent=an.agreger==='aucun'?'':'par '+an.agreger;
+    if(!(an.agregats||[]).length)vide(ta,6,an.agreger==='aucun'?'Sans regroupement.':'—');
+    (an.agregats||[]).forEach(function(g){var tr=h('tr');tr.appendChild(h('td',{class:'mono'},an.agreger==='appareil'?(g.nom||g.cle||'sans MAC'):(g.cle||'—')));
+      tr.appendChild(h('td',{class:'num'},fmt(g.domaines)));tr.appendChild(h('td',{class:'num'},fmt(g.requetes)));tr.appendChild(h('td',{class:'num'},fmt(g.bloquees)));tr.appendChild(h('td',{class:'num'},pct(g.part_bloquee)));
+      var tb=h('td'),b=h('button',{type:'button',class:'petit','aria-expanded':'false','aria-label':'Détail de '+(g.nom||g.cle)},'Détail');b.addEventListener('click',function(){deplierAgregat(tr,g,b);});tb.appendChild(b);tr.appendChild(tb);ta.appendChild(tr);});
+    var tl=el('domaines');if(!ajouter)vider(tl);
+    (an.lignes||[]).forEach(function(d){tl.appendChild(ligneDomaine(d));});
+    if(!tl.firstChild)vide(tl,9,an.cache?'Aucun domaine pour ces filtres.':'—');
+    var vus=etat.decalage+(an.lignes||[]).length;
+    el('pagination').textContent=fmt(vus)+' sur '+fmt(an.total);el('plus').hidden=!(vus<an.total);hauteur();
   }
-  function filtreDemo(){var a=el('f-appareil').value,c=el('f-categorie').value,cl=D.classification;
-    var l=cl.domaines.filter(function(d){return(!a||d.mac===a)&&(!c||d.categorie===c);});return Object.assign({},cl,{domaines:l,total:l.length});}
+  function chargerAnalyseur(ajouter){
+    if(!ajouter){etat.filtres=lireFiltres();etat.decalage=0;puces(etat.filtres);}
+    source('/protection/analyse?'+parametres(etat.filtres,etat.decalage,PAS)).then(function(an){
+      if(!etat.categories.length){etat.categories=an.categories||[];remplirFiltres(an);}rendreAnalyse(an,ajouter);}).catch(echec);
+  }
+  el('f-appliquer').addEventListener('click',function(){chargerAnalyseur(false);});
+  el('plus').addEventListener('click',function(){etat.decalage+=PAS;chargerAnalyseur(true);});
+  el('f-export').addEventListener('click',function(){telecharger('/protection/analyse.csv?'+parametres(etat.filtres||lireFiltres(),0,PAS,true),'tv-privacy-analyse.csv');});
+
+  // ── protection : modes, retour en OBSERVE, pause, exceptions, journal ──
+  function geste(chemin,corps,texte){return ecrire(chemin,corps).then(function(j){message(texte+((j.appareils&&j.appareils.length)?' : '+j.appareils.join(', '):' : rien à changer')+'.','ok');charger();chargerProtection();return j;},
+    function(e){message('Refusé : '+e.message,'erreur');throw e;});}
+  function changerMode(a,mode){
+    var ips=a.ips||[],i=0;
+    function suite(){if(i>=ips.length)return Promise.resolve();var ip=ips[i++];return ecrire('/mode',{mode:mode,ip:ip}).then(suite);}
+    return suite().then(function(){message(a.nom+' : mode '+(MODES[mode]||mode)+'.','ok');charger();chargerProtection();},function(e){message('Refusé : '+e.message,'erreur');});
+  }
+  function rendreModes(app){
+    var tb=el('modes');vider(tb);var liste=(app&&app.appareils)||[];
+    if(!liste.length){vide(tb,5,'Aucun appareil.');return;}
+    var sel=el('ex-appareil'),v=sel.value;vider(sel);
+    liste.forEach(function(a){
+      sel.appendChild(h('option',{value:a.nom},a.nom));
+      var tr=h('tr');tr.appendChild(h('td',null,a.nom));var tm=h('td');tm.appendChild(pastilleMode(a.mode));tr.appendChild(tm);
+      var p=etat.pauses[a.nom];tr.appendChild(h('td',null,p?('jusqu’à '+heure(p.fin)+' ('+(p.origine==='usager'?'usager':'admin')+')'):'—'));
+      var tc=h('td'),s=h('select',{'aria-label':'Mode de '+a.nom});['observe','block','auto'].forEach(function(m){var o=h('option',{value:m},MODES[m]);if(m===a.mode)o.selected=true;s.appendChild(o);});
+      var ok=h('button',{type:'button',class:'petit'},'Appliquer');ok.addEventListener('click',function(){changerMode(a,s.value);});tc.appendChild(s);tc.appendChild(document.createTextNode(' '));tc.appendChild(ok);tr.appendChild(tc);
+      var tg=h('td'),act=h('div',{class:'actions'});
+      [[15,'15 min'],[60,'1 h'],[240,'4 h']].forEach(function(d){var b=h('button',{type:'button',class:'petit'},'Pause '+d[1]);b.addEventListener('click',function(){geste('/protection/pause',{appareil:a.nom,minutes:d[0]},'Pause '+d[1]).catch(function(){});});act.appendChild(b);});
+      if(p){var r=h('button',{type:'button',class:'petit'},'Reprendre');r.addEventListener('click',function(){geste('/protection/reprendre',{appareil:a.nom},'Protection reprise').catch(function(){});});act.appendChild(r);}
+      var o2=h('button',{type:'button',class:'petit danger'},'OBSERVE');o2.addEventListener('click',function(){geste('/protection/observe',{appareil:a.nom},'Retour en OBSERVE').catch(function(){});});act.appendChild(o2);
+      tg.appendChild(act);tr.appendChild(tg);tb.appendChild(tr);});
+    if(v)sel.value=v;
+  }
+  function rendreExceptions(v){
+    var tb=el('exceptions');vider(tb);var l=(v&&v.exceptions)||[];
+    if(!l.length)vide(tb,5,'Aucune exception.');
+    l.forEach(function(e){var tr=h('tr');tr.appendChild(h('td',null,e.nom||e.appareil||'—'));tr.appendChild(h('td',{class:'mono'},e.domaine));
+      var tt=h('td');tt.appendChild(h('span',{class:'pastille '+(e.type==='bloquer'?'orange':'vert')},e.type));tr.appendChild(tt);tr.appendChild(h('td',null,e.source));
+      var ta=h('td');if(e.source==='exception'){var b=h('button',{type:'button',class:'petit'},'Retirer');b.addEventListener('click',function(){
+        confirmer(ta,'Retirer l’exception '+e.type+' '+e.domaine+' ?',function(){return geste('/protection/exceptions',{appareil:e.nom,domaine:e.domaine,type:e.type,actif:false},'Exception retirée');});});ta.appendChild(b);}
+      else ta.appendChild(h('span',{class:'note'},e.source==='puits'?'onglet AdBlock TV':'liste des suspects'));tr.appendChild(ta);tb.appendChild(tr);});
+    el('hors-champ').textContent=(v&&v.hors_champ||[]).length?'Hors champ : '+v.hors_champ.map(function(x){return x.mecanisme+' ('+x.raison+')';}).join(' ; ')+'.':'';
+  }
+  function rendreJournal(j){
+    var tb=el('journal');vider(tb);var l=(j&&j.agregats)||[];if(!l.length){vide(tb,6,'Aucune décision sur la fenêtre.');return;}
+    l.forEach(function(x){var tr=h('tr');tr.appendChild(h('td',null,quand(x.dernier)));tr.appendChild(h('td',null,x.appareil||'—'));tr.appendChild(h('td',{class:'mono'},x.domaine||'—'));
+      tr.appendChild(h('td',null,x.action));tr.appendChild(h('td',{class:'num'},fmt(x.occurrences)));tr.appendChild(h('td',null,(x.origines||[]).join(', ')));tb.appendChild(tr);});
+  }
+  function chargerProtection(){
+    Promise.all([source('/appareils'),source('/protection/exceptions').catch(function(){return null;}),source('/protection/journal?heures='+el('j-heures').value).catch(function(){return null;}),
+      source('/protection/diagnostic').catch(function(){return null;})]).then(function(r){
+      etat.pauses={};((r[3]&&r[3].pauses)||[]).forEach(function(p){etat.pauses[p.appareil]=p;});
+      rendreModes(r[0]);rendreExceptions(r[1]);rendreJournal(r[2]);hauteur();}).catch(echec);
+  }
+  el('j-heures').addEventListener('change',chargerProtection);
+  el('j-export').addEventListener('click',function(){telecharger('/protection/journal.csv','tv-privacy-journal.csv');});
+  el('tout-observe').addEventListener('click',function(){confirmer(el('tout-observe-confirm'),'Tous les appareils repassent en OBSERVE : plus aucun blocage, sans échéance.',function(){return geste('/protection/observe',{appareil:null},'Tout en OBSERVE');});});
+  el('pause-tout').addEventListener('click',function(){geste('/protection/pause',{appareil:null,minutes:60},'Pause d’une heure').catch(function(){});});
+  el('ex-ajouter').addEventListener('click',function(){var d=el('ex-domaine').value.trim().toLowerCase();if(!d){message('Domaine requis.','erreur');return;}
+    geste('/protection/exceptions',{appareil:el('ex-appareil').value,domaine:d,type:el('ex-type').value},'Exception posée').then(function(){el('ex-domaine').value='';}).catch(function(){});});
+
+  // ── diagnostic ──
+  function chargerDiagnostic(){
+    source('/protection/diagnostic').then(function(d){
+      var te=el('d-erreurs');vider(te);(d.erreurs_dns||[]).forEach(function(x){var tr=h('tr');tr.appendChild(h('td',null,x.appareil));tr.appendChild(h('td',{class:'mono'},x.domaine));
+        tr.appendChild(h('td',{class:'num'},fmt(x.erreurs)));tr.appendChild(h('td',null,quand(x.dernier)));te.appendChild(tr);});if(!te.firstChild)vide(te,4,'Aucune erreur DNS sur 24 h.');
+      var bp=el('d-pauses');vider(bp);(d.pauses||[]).forEach(function(p){bp.appendChild(h('div',null,p.appareil+' : jusqu’à '+heure(p.fin)+' ('+p.origine+')'));});if(!bp.firstChild)bp.appendChild(h('div',{class:'vide'},'Aucune pause.'));
+      var ta=el('d-autorises');vider(ta);(d.exceptions||[]).filter(function(e){return e.type==='autoriser';}).forEach(function(e){var tr=h('tr');tr.appendChild(h('td',null,e.nom||e.appareil));
+        tr.appendChild(h('td',{class:'mono'},e.domaine));tr.appendChild(h('td',null,e.source));ta.appendChild(tr);});if(!ta.firstChild)vide(ta,3,'Aucun domaine autorisé.');
+      var tr2=el('d-retours');vider(tr2);(d.retours_arriere||[]).forEach(function(x){var tr=h('tr');tr.appendChild(h('td',null,quand(x.ts)));tr.appendChild(h('td',null,x.appareil||'—'));
+        tr.appendChild(h('td',{class:'mono'},x.domaine||'—'));tr.appendChild(h('td',null,x.action));tr.appendChild(h('td',null,x.origine));tr2.appendChild(tr);});if(!tr2.firstChild)vide(tr2,5,'Aucun retour arrière sur 7 jours.');
+      hauteur();}).catch(echec);
+  }
 
   function echec(e){
-    if(e&&e.session){el('session').hidden=false;rendreGenerale(null,null);rendreEquipements(null);rendreAnalyseur(null);rendreEvenements(null);}
+    if(e&&e.session){el('session').hidden=false;rendreGenerale(null,null);rendreEquipements(null);rendreEvenements(null);}
     else message('Lecture impossible : '+(e&&e.message||'erreur'),'erreur');
     hauteur();
   }
-  function appliquer(app,cl,lv){
-    etat.appareils=app.appareils||[];etat.profils=app.profils||[];etat.categories=cl.categories||[];etat.protegees=cl.protegees||[];
-    el('session').hidden=true;remplirFiltres(cl);rendreGenerale(app,cl);rendreEquipements(app);rendreEvenements(lv);
-    el('heure').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  }
   function charger(){
-    if(DEMO){el('demo').hidden=false;appliquer(D.appareils,D.classification,D.live);rendreAnalyseur(filtreDemo());hauteur();return;}
-    Promise.all([lire('/appareils'),lire('/classification?limite='+MAX),lire('/live?secondes=3600&limite=20').catch(function(){return null;})])
-      .then(function(r){appliquer(r[0],r[1],r[2]);chargerAnalyseur();hauteur();}).catch(echec);
+    if(DEMO)el('demo').hidden=false;
+    Promise.all([source('/appareils'),source('/protection/analyse?fenetre=30j&agreger=categorie&limite=1').catch(function(e){if(e.session)throw e;return null;})])
+      .then(function(r){etat.appareils=r[0].appareils||[];etat.profils=r[0].profils||[];if(r[1]){etat.admin=!!r[1].admin;etat.categories=r[1].categories||[];etat.protegees=r[1].protegees||[];etat.sources=r[1].sources||[];remplirFiltres(r[1]);}
+        el('session').hidden=true;rendreGenerale(r[0],r[1]);rendreEquipements(r[0]);chargerEvenements();
+        el('heure').textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});hauteur();}).catch(echec);
   }
   el('rafraichir').addEventListener('click',function(){message('');charger();});
-  el('f-appliquer').addEventListener('click',function(){etat.limite=PAS;chargerAnalyseur();});
-  el('plus').addEventListener('click',function(){etat.limite=Math.min(MAX,etat.limite+PAS);chargerAnalyseur();});
   charger();
   setInterval(function(){if(!document.hidden&&!etat.ouvert&&!DEMO)charger();},60000);
   try{new ResizeObserver(hauteur).observe(document.body);}catch(e){}

@@ -85,9 +85,11 @@ def analyse(f: dict = Depends(_params), agreger: str = "racine", decalage: int =
         res["lignes"] = [_pour_lecteur(x) for x in res["lignes"]]
         for g in (res["agregats"] if agreger == "appareil" else []) + res["metriques"]["top_appareils"]:
             g["cle"] = dnstv_appareils.mac_courte(g["cle"]) if g.get("cle") else None
+    res["admin"] = _admin(lecteur)
     res["categories"] = list(dnstv_analyse.dnstv_taxonomie.CATEGORIES)
     res["protegees"] = sorted(dnstv_analyse.dnstv_taxonomie.PROTEGEES)
     res["decisions"], res["fenetres"], res["agregations"] = list(dnstv_analyse.DECISIONS), list(dnstv_analyse.FENETRES), list(dnstv_analyse.AGREGATS)
+    res["sources"] = list(dnstv_analyse.dnstv_taxonomie.SOURCES) + [dnstv_analyse.dnstv_taxonomie.SOURCE_AUCUNE]
     return res
 
 
