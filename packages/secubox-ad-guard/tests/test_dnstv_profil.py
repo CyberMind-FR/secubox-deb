@@ -57,9 +57,10 @@ def test_une_regle_apprise_localement_puis_confirmee_par_l_admin_compte():
 
 def test_equiper_cree_des_regles_confirmees_idempotent():
     r = R.Regles()
-    assert P.equiper(r, "tv-n", [("a.example.com", "profil de base"), ("b.example.com", "profil agrégé (2 appareils)")], T0) == 2
-    assert r.actives("tv-n") == ["a.example.com", "b.example.com"]
-    assert P.equiper(r, "tv-n", [("a.example.com", "profil de base")], T0 + 9) == 0
+    # domaines classés publicité par les listes livrées : un domaine inconnu n'est jamais posé seul (#3374)
+    assert P.equiper(r, "tv-n", [("criteo.com", "profil de base"), ("doubleclick.net", "profil agrégé (2 appareils)")], T0) == 2
+    assert r.actives("tv-n") == ["criteo.com", "doubleclick.net"]
+    assert P.equiper(r, "tv-n", [("criteo.com", "profil de base")], T0 + 9) == 0
     assert all(x["etat"] == "confirme" and x["origine"] == "auto" for x in r.liste())
 
 

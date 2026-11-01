@@ -46,8 +46,8 @@ def activite(t, n=150):
 
 def test_essai_sans_regression_est_confirme_a_l_echeance(magasin):
     t = int(time.time())
-    r = R.Regles()
-    rid = en_essai(r, "ad.example.com", t - R.ESSAI_S - 60)
+    r = R.Regles()                                       # domaine classé publicité : un inconnu n'est jamais confirmé seul (#3374)
+    rid = en_essai(r, "ads.exemple-pub.net", t - R.ESSAI_S - 60)
     charger(magasin, activite(t - 100))
     res = M.tick(ETAT, r, magasin, classer, M.Reglage(confirmation_auto=True), t)
     assert r.get(rid)["etat"] == "confirme"
@@ -66,8 +66,8 @@ def test_sans_confirmation_auto_l_essai_expire_comme_avant(magasin):
 
 def test_appareil_peu_actif_prolonge_l_essai_au_lieu_de_confirmer_a_l_aveugle(magasin):
     t = int(time.time())
-    r = R.Regles()
-    rid = en_essai(r, "ad.example.com", t - R.ESSAI_S - 60)
+    r = R.Regles()                                       # domaine classé publicité : un inconnu n'est jamais confirmé seul (#3374)
+    rid = en_essai(r, "ads.exemple-pub.net", t - R.ESSAI_S - 60)
     charger(magasin, activite(t - 100, n=5))             # TV éteinte presque tout le temps : règle jamais éprouvée
     M.tick(ETAT, r, magasin, classer, M.Reglage(confirmation_auto=True), t)
     p = r.get(rid)

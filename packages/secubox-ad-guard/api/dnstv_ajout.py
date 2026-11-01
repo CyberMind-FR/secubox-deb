@@ -85,7 +85,7 @@ def _adresse_utilisable(brut) -> Optional[str]:
 
 
 def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vues: Dict[str, int], profil: List[Tuple[str, str]],
-              suivi: dict, reglage, maintenant: int, exclus=frozenset()) -> dict:
+              suivi: dict, reglage, maintenant: int, exclus=frozenset(), taxo=None) -> dict:
     """Modifie `etat`, `regles` et `suivi` EN PLACE et rend {"changements": [...], "etat_modifie": bool}. Rien si `ajout_auto` est faux."""
     rien = {"changements": [], "etat_modifie": False}
     if not etat.get("ajout_auto"):
@@ -194,7 +194,7 @@ def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vue
     etat["clients"] = valide["clients"]
     if etat.get("mode_defaut", "auto") == "auto":
         for nom, _ in nouveaux:
-            dnstv_profil.equiper(regles, dnstv._slug(nom), profil, maintenant)
+            dnstv_profil.equiper(regles, dnstv._slug(nom), profil, maintenant, taxo=taxo)   # garde #3374 : catégories protégées jamais posées
     suivi["ajouts"] = (suivi["ajouts"] + [maintenant] * len(nouveaux))[-AJOUTS_MAX:]
     suivi["dernier_changement"] = maintenant
     return {"changements": changements, "etat_modifie": True}

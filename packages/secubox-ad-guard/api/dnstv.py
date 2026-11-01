@@ -21,6 +21,7 @@ configuration Unbound. Il est utilisé par le contrôleur root (`secubox-adguard
 """
 from __future__ import annotations
 
+import calendar
 import hashlib
 import ipaddress
 import json
@@ -105,7 +106,7 @@ def verifier_manifeste(dossier: Path) -> List[str]:
             continue
         if attendu.get(nom) != sha256_fichier(f):
             problemes.append(f"{nom}: empreinte différente du manifeste (modifiée sans mise à jour du manifeste)")
-        if nom != "services.txt":                                       # services.txt a trois colonnes ; il a sa propre validation
+        if nom not in ("services.txt", "reference-tv.txt"):             # plusieurs colonnes : validation propre (dnstv_taxonomie pour la référence)
             _, mauvaises, _ = lire_liste(f)
             problemes += [f"ligne invalide {m}" for m in mauvaises]
     return problemes
@@ -630,6 +631,30 @@ class Magasin:
                     "SELECT client, domaine, SUM(hits), SUM(CASE WHEN decision='BLOCKED' THEN hits ELSE 0 END) FROM dnstv_counts WHERE jour>=? GROUP BY client, domaine",
                     (depuis_jour,)):
                 out.setdefault(client, {})[domaine] = (int(n), int(b))
+        return out
+
+    def observations(self, depuis_jour: str, clients: Optional[List[str]] = None) -> Dict[str, Dict[str, dict]]:
+        """client -> domaine -> {requetes, bloquees, derniere, precision} depuis `depuis_jour` (#3374). `derniere` : horodatage exact tiré de
+        dnstv_recents (48 h), sinon le début du dernier jour vu dans dnstv_counts (`precision` = « jour »)."""
+        w, a = ["jour>=?"], [depuis_jour]
+        if clients is not None:
+            if not clients:
+                return {}
+            w.append("client IN (%s)" % ",".join("?" * len(clients)))
+            a += list(clients)
+        out: Dict[str, Dict[str, dict]] = {}
+        with self._cx() as cx:
+            for client, domaine, n, b, j in cx.execute(
+                    "SELECT client, domaine, SUM(hits), SUM(CASE WHEN decision='BLOCKED' THEN hits ELSE 0 END), MAX(jour) FROM dnstv_counts "
+                    f"WHERE {' AND '.join(w)} GROUP BY client, domaine", a):
+                debut = calendar.timegm(time.strptime(j, "%Y-%m-%d")) if j else 0      # _jour() est en UTC
+                out.setdefault(client, {})[domaine] = {"requetes": int(n), "bloquees": int(b), "derniere": debut, "precision": "jour"}
+            wr = ["1=1"] if clients is None else ["client IN (%s)" % ",".join("?" * len(clients))]
+            for client, domaine, t in cx.execute(f"SELECT client, domaine, MAX(ts) FROM dnstv_recents WHERE {wr[0]} GROUP BY client, domaine",
+                                                 list(clients or [])):
+                e = out.setdefault(client, {}).setdefault(domaine, {"requetes": 0, "bloquees": 0, "derniere": 0, "precision": "seconde"})
+                if t and t >= e["derniere"]:
+                    e["derniere"], e["precision"] = int(t), "seconde"
         return out
 
     def par_client(self) -> List[dict]:

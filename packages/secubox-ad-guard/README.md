@@ -162,6 +162,15 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 
 `/status` (`clients[*]`, clé `appareils`) et `/auto/detection` (`appareils[*]`) gagnent `profil`, `profil_source`, `profil_confiance` et `ips` ; aucun champ retiré. État `etat.json` en schéma 2 (#3374) : `clients` inchangé (une entrée par adresse), plus `schema: 2` et `appareils` (MAC → `nom`, `profil` manuel). Migration au chargement (API et moteur auto), idempotente, sauvegarde unique `etat.json.avant-3374` ; le NAC est lu en lecture seule (`/var/lib/secubox/nac/devices.db`, fichier ordinaire, propriétaire vérifié, 64 Mio au plus), repli `ip neigh`. Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot1-design.md`.
 
+### Taxonomie unique (lot 2, 1.18.0, #3374)
+
+| Route | Garde | Rôle |
+|---|---|---|
+| `GET /adblock-tv/classification?mac=&categorie=&limite=` | `require_lecture` | domaines classés par appareil (observés 30 jours, règles, corrections) : `domaine`, `mac`, `ips`, `categorie`, `source` (`liste`, `apprentissage`, `ndpi`, `manuelle`, `profil`), `confiance` (0-100), `derniere_observation` (+ `precision` : `seconde` ou `jour`), `requetes`, `bloquees`, `ancienne`, `protegee` ; rend aussi `categories`, `protegees`, `sources` |
+| `POST /adblock-tv/classification` | `require_jwt` | `{"domaine", "categorie" \| null, "mac" \| null}` (`extra=forbid`) : correction manuelle, par MAC ou pour toute la maison ; `null` la retire ; aucun effet DNS immédiat |
+
+Catégories : `PUBLICITE`, `TRACKING`, `TELEMETRIE`, `STREAMING`, `CDN`, `DRM`, `AUTHENTIFICATION`, `MISE_A_JOUR`, `SERVICES_CONSTRUCTEUR`, `INCONNU` (`api/dnstv_taxonomie.py`, correspondance depuis les anciennes valeurs). **Garde** : `STREAMING`, `CDN`, `DRM`, `AUTHENTIFICATION`, `MISE_A_JOUR` et `INCONNU` ne sont jamais mis en essai ni confirmés par le moteur AUTO (essai automatique, confirmation automatique, profil de base à l'ajout) ; ils restent proposés en candidats. Seule une décision de l'administrateur (règle confirmée à la main, ou correction de catégorie) lève la garde. Référence sourcée : `lists/reference-tv.txt` (au manifeste). Corrections : `classification.json` dans le dossier d'état, écrit atomiquement sous le verrou des règles. Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot2-design.md`.
+
 « Bloquer » réutilise `POST /adblock-tv/custom`. La vérification compare, pour chaque adresse de l'appareil, la vue Unbound attendue (`sbx-tv-auto-<slug>`, ou aucune pour `off`) à celle du drop-in.
 
 ## Capteur DNS d'Actor Intelligence (#2240)
