@@ -127,3 +127,27 @@ def test_dict_invalide_repart_vide(d):
     assert isinstance(r, Reference)
     assert r.niveau("k", 1.0, LUNDI, 1.0) is None
     r.observer("k", 1.0, LUNDI)
+
+
+def test_saut_horloge_avant_reapprend():
+    r = Reference()
+    r.observer("k", 10.0, 1767225600 + 86400)
+    r.observer("k", 10.0, LUNDI)
+    assert r.niveau("k", 1e9, LUNDI + PAS, 1.0) <= 1
+
+
+def test_saut_horloge_apres_historique_reapprend():
+    r = Reference()
+    fin = _nourrir(r, "k", LUNDI, 30 * JOUR, 10.0)
+    assert r.niveau("k", 1e9, fin + PAS, 1.0) == 3
+    r.observer("k", 10.0, fin + 10 * JOUR)
+    assert r.niveau("k", 1e9, fin + 10 * JOUR, 1.0) <= 1
+
+
+def test_date_implausible_ignoree():
+    r = Reference()
+    r.observer("k", 10.0, 86400)
+    assert r.niveau("k", 10.0, 86400, 1.0) is None
+    assert r.vers_dict()["cles"] == {}
+    r.observer("k", 10.0, LUNDI)
+    assert r.niveau("k", 10.0, 86400, 1.0) is None

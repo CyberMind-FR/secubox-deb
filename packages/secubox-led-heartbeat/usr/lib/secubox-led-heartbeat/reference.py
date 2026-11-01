@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """Référence évolutive de l'activité habituelle d'une box (LED de supervision, ref #3361).
 
-Pour chaque mesure (clé), deux références s'additionnent :
+Pour chaque mesure (clé), deux références coexistent (le niveau est le plus haut des deux) :
   - la longue : moyenne et dispersion EWMA (demi-vie 7 j) par tranche horaire de la
     semaine (168 tranches, heure locale, lundi 0 h = 0) ;
   - la courte : moyenne et dispersion EWMA (demi-vie 1 h), toutes tranches confondues.
@@ -28,6 +28,8 @@ import time
 VERSION = 1
 DELTA_MAX_COURT = 3600.0         # borne de l'écart entre deux relevés (saut d'horloge, arrêt)
 ECART_MAX_VISITES = 14 * 86400.0  # borne de l'écart entre deux visites d'une même tranche
+SAUT_MAX_AVANT = 6 * 3600.0       # au-delà (ou en arrière) : horloge sautée, la clé réapprend
+T_MIN_PLAUSIBLE = 1767225600      # 2026-01-01 : avant, l'horloge n'est pas encore calée
 
 
 def tranche(t):
@@ -44,6 +46,7 @@ def _alpha(dt, demi_vie):
 
 
 def _fini(x):
+    """Vrai si x est un nombre réel fini (ni booléen, ni NaN, ni infini)."""
     return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
 
 
@@ -73,13 +76,18 @@ class Reference:
 
     def observer(self, cle, valeur, t):
         """Enregistre un relevé de la mesure `cle` à l'instant `t` (epoch)."""
-        if not (_fini(valeur) and _fini(t)):
+        if not (_fini(valeur) and _fini(t)) or t < T_MIN_PLAUSIBLE:
             return
         c = self._cles.get(cle)
         if c is None:
             c = {"premiere": float(t), "court": None, "tranches": {}}
             self._cles[cle] = c
-        c["premiere"] = min(c["premiere"], float(t))
+        elif c["court"] is not None:
+            ecart = t - c["court"]["t"]
+            if ecart < 0 or ecart > SAUT_MAX_AVANT:
+                # horloge sautée (RTC absente, NTP) : la clé réapprend ; les tranches repliées restent
+                c["premiere"] = float(t)
+                c["court"] = None
         self._maj_courte(c, float(valeur), float(t))
         self._maj_longue(c, float(valeur), float(t))
 
@@ -131,7 +139,7 @@ class Reference:
     def niveau(self, cle, valeur, t, plancher):
         """Niveau 0..3 de `valeur` contre la référence ; None si la clé est inconnue."""
         c = self._cles.get(cle)
-        if c is None or c["court"] is None or not (_fini(valeur) and _fini(t)):
+        if c is None or c["court"] is None or not (_fini(valeur) and _fini(t)) or t < T_MIN_PLAUSIBLE:
             return None
         niveaux = []
         s = c["court"]
