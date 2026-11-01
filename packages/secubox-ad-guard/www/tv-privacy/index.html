@@ -6,9 +6,9 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   SecuBox — « SBX TV Privacy » (#3374) : ce que les téléviseurs et lecteurs du foyer demandent au DNS de la box, et la protection.
-  Cinq vues : vue générale (événements agrégés, bouton « Ça ne marche plus ? Je débloque »), équipements (par MAC), analyseur
+  Six vues : vue générale (événements agrégés, bouton « Ça ne marche plus ? Je débloque »), équipements (par MAC), analyseur
   (métriques, filtres combinables, agrégats, listing paginé côté serveur), protection (modes OBSERVE / PROTECT / AUTO, retour en
-  OBSERVE, pause minutée, exceptions, journal des décisions), diagnostic (erreurs DNS, exceptions, pauses, retours arrière).
+  OBSERVE, pause minutée, exceptions, journal des décisions), applications (lot 4 : DPI par appareil, frise des coupures, SSAI), diagnostic (erreurs DNS, exceptions, pauses, retours arrière).
   DONNÉES RÉELLES UNIQUEMENT, lues dans les routes d'ad-guard ; une session est requise (données personnelles par appareil).
   Coque de l'administration : menu latéral commun (/shared/sidebar.js), chargé hors ?embed=1 et hors démonstration.
   Tout texte venu du réseau (noms d'hôtes, domaines) est posé par textContent, jamais interprété comme du HTML.
@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-dz0+FaC1L46UKFUgWrPCWAEHPH9hK6fajXmxAP8JzU4='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-IrltPiMVTiOTUcxuFQVhpJi9yTXpJ4jiIOdCBK6CC1Y='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -107,6 +107,7 @@
   .confirm .actions,.actions{display:flex;flex-wrap:wrap;gap:6px}
   .debloque{border:1px solid var(--vert);border-radius:12px;padding:10px;background:rgba(46,204,113,.06);display:grid;gap:8px}
   .note{color:var(--faible);font-size:.72rem}
+  .mono.coupe{white-space:normal;overflow-wrap:anywhere}
   .lien{color:inherit}
   .espace{margin-top:10px}
   .suite{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -173,6 +174,7 @@
   <nav class="onglets" role="tablist" aria-label="Vues SBX TV Privacy">
     <button type="button" role="tab" id="t-generale" aria-controls="v-generale" aria-selected="true">Vue générale</button>
     <button type="button" role="tab" id="t-equipements" aria-controls="v-equipements" aria-selected="false" tabindex="-1">Équipements</button>
+    <button type="button" role="tab" id="t-applications" aria-controls="v-applications" aria-selected="false" tabindex="-1">Applications</button>
     <button type="button" role="tab" id="t-analyseur" aria-controls="v-analyseur" aria-selected="false" tabindex="-1">Analyseur</button>
     <button type="button" role="tab" id="t-protection" aria-controls="v-protection" aria-selected="false" tabindex="-1">Protection</button>
     <button type="button" role="tab" id="t-diagnostic" aria-controls="v-diagnostic" aria-selected="false" tabindex="-1">Diagnostic</button>
@@ -211,6 +213,22 @@
     <div class="pan"><h2>Équipements <small id="eq-note"></small></h2>
       <div class="tab"><table><thead><tr><th>Nom</th><th>MAC</th><th>Adresses</th><th>Profil</th><th>Source</th><th class="num">Confiance</th><th>Mode</th><th>Action</th></tr></thead><tbody id="equipements"></tbody></table></div>
     </div>
+  </section>
+
+  <section id="v-applications" role="tabpanel" aria-labelledby="t-applications" hidden>
+    <div class="pan"><h2>Applications par appareil <small id="ap-sources"></small></h2>
+      <div class="actions"><label>Appareil <select id="ap-mac"></select></label><label>Fenêtre <select id="ap-fenetre"><option value="1h">1 h</option><option value="24h" selected>24 h</option><option value="7j">7 j</option></select></label>
+        <span id="ap-couverture" class="pastille gris">—</span><button type="button" id="ap-reprendre" hidden>Relancer l’analyse DPI</button></div>
+      <p class="note" id="ap-explication">DNS seulement : la box voit les noms que l’appareil demande, pas ses flux (ils vont directement à la box opérateur sur un réseau plat). DNS + DPI : ses flux traversent la box et sont classés par nDPI.</p>
+      <p class="note" id="ap-forcage"></p>
+      <div id="ap-cartes" class="grille espace"><div class="vide">—</div></div>
+    </div>
+    <div class="grille espace">
+      <div class="pan"><h2>Coupures publicitaires <small>ce qui apparaît dans les 30 s après un blocage</small></h2><div id="ap-frise"><div class="vide">—</div></div></div>
+      <div class="pan"><h2>Découvertes <small>lecture seule ; les actions viendront avec l’assistant</small></h2>
+        <div class="tab"><table><thead><tr><th>Quand</th><th>Type</th><th>Domaine</th><th class="num">Confiance</th><th>Raison</th></tr></thead><tbody id="ap-decouvertes"></tbody></table></div></div>
+    </div>
+    <p class="note">Ce service insère des publicités dans sa propre vidéo (badge SSAI) : la box les voit passer mais ne peut pas les retirer sans toucher au flux, ce qu’elle ne fait jamais.</p>
   </section>
 
   <section id="v-analyseur" role="tabpanel" aria-labelledby="t-analyseur" hidden>
@@ -337,8 +355,8 @@
   }
 
   // ── onglets (clavier : flèches gauche/droite) ──
-  var ONGLETS=['generale','equipements','analyseur','protection','diagnostic'];
-  var CHARGE={analyseur:function(){chargerAnalyseur(false);},protection:function(){chargerProtection();},diagnostic:function(){chargerDiagnostic();}};
+  var ONGLETS=['generale','equipements','applications','analyseur','protection','diagnostic'];
+  var CHARGE={applications:function(){chargerApplications();},analyseur:function(){chargerAnalyseur(false);},protection:function(){chargerProtection();},diagnostic:function(){chargerDiagnostic();}};
   function montrer(nom){ONGLETS.forEach(function(o){var t=el('t-'+o),sel=o===nom;t.setAttribute('aria-selected',sel?'true':'false');t.tabIndex=sel?0:-1;el('v-'+o).hidden=!sel;});
     if(CHARGE[nom])CHARGE[nom]();hauteur();}
   ONGLETS.forEach(function(o,i){var t=el('t-'+o);t.addEventListener('click',function(){montrer(o);});
@@ -366,9 +384,19 @@
     diagnostic:{erreurs_dns:[{appareil:'Lecteur box',domaine:'api.example.net',erreurs:3,dernier:1761955000}],pauses:[],retours_arriere:[{ts:1761950000,appareil:'Téléviseur salon',domaine:'cdn.example.org',action:'retrait',origine:'auto'}],
       exceptions:[{appareil:'televiseur-salon',nom:'Téléviseur salon',domaine:'cdn.example.org',type:'autoriser',source:'exception'}],modes:[]},
     exceptions:{exceptions:[{appareil:'televiseur-salon',nom:'Téléviseur salon',domaine:'cdn.example.org',type:'autoriser',source:'exception'}],hors_champ:[{mecanisme:'adult-exempt',raison:'autre finalité'}]},
+    dpi:{disponible:true,age_s:30,sources:{sbxdpi:'absent',conntrack:'absent'},pause_charge:null,appareils:[
+      {mac:'02:00:5e:00:00:01',nom:'Téléviseur salon',mode:'auto',couverture:'dns+dpi',forcage:{pose:true,suspendu:false,note:'forçage DNS posé, effectif seulement si les flux de l’appareil traversent la box (mode LAN)'}},
+      {mac:'02:00:5e:00:00:02',nom:'Lecteur box',mode:'observe',couverture:'dns',forcage:{pose:false,suspendu:false,note:''}}]},
+    applications:{applications:[{appli:'TLS',categorie_ndpi:'Media',categorie:'STREAMING',flux:12,octets:812000000,premier:1761950000,dernier:1761955000,hotes:['video.example.org'],sans_dns:false,dns_chiffre:false,ssai:true},
+      {appli:'TLS.Google',categorie_ndpi:'Advertisement',categorie:'PUBLICITE',flux:4,octets:120000,premier:1761950000,dernier:1761954000,hotes:['ads.example.com'],sans_dns:false,dns_chiffre:false,ssai:false},
+      {appli:'TLS',categorie_ndpi:'',categorie:'INCONNU',flux:2,octets:3000,premier:1761950000,dernier:1761954000,hotes:[],sans_dns:true,dns_chiffre:false,ssai:false}]},
+    coupures:{coupures:[{refus_ts:1761954000,refus_domaine:'ads.example.com',apparitions:[{delai_s:3,domaine:'relais-pub.example.net',categorie:'PUBLICITE',type:'repli',ssai:false},
+      {delai_s:5,domaine:'video.example.org',categorie:'STREAMING',type:'repli-protege',ssai:true}]}]},
+    decouvertes:{decouvertes:[{id:1,ts:1761954003,type:'repli',domaine:'relais-pub.example.net',confiance:70,raison:'apparu 3 s après le blocage de ads.example.com'}]},
     journal:{heures:24,total:1,agregats:[{appareil:'Téléviseur salon',domaine:'cdn.example.org',action:'retrait',occurrences:1,premier:1761950000,dernier:1761950000,origines:['auto']}]}};
   function source(chemin){
     if(!DEMO)return lire(chemin);
+    if(chemin.indexOf('/protection/dpi/')===0){var n=chemin.split('?')[0].split('/')[3];return Promise.resolve(D[n==='etat'?'dpi':n]);}
     var k=chemin.indexOf('/protection/analyse')===0?'analyse':chemin.indexOf('/protection/evenements')===0?'evenements':chemin.indexOf('/protection/usager/tv')===0?'usager':
       chemin.indexOf('/protection/diagnostic')===0?'diagnostic':chemin.indexOf('/protection/exceptions')===0?'exceptions':chemin.indexOf('/protection/journal')===0?'journal':'appareils';
     return Promise.resolve(D[k]);
@@ -641,6 +669,55 @@
       if(e&&/protégée/.test(e.message))confirmer(el('ex-confirm'),e.message+' — bloquer quand même ?',function(){
         return geste('/protection/exceptions',Object.assign({force:true},corps),'Exception posée (confirmée)').then(function(){el('ex-domaine').value='';});});});});
 
+  // ── applications (lot 4 : DPI par appareil) ──
+  var BADGES=[['sans_dns','adresse en dur','rouge'],['dns_chiffre','DNS chiffré','rouge']];
+  function octets(n){if(n==null)return '—';var u=['o','Ko','Mo','Go'],i=0;while(n>=1000&&i<3){n/=1000;i++;}return (Math.round(n*10)/10).toLocaleString('fr-FR')+' '+u[i];}
+  function rendreEtatDpi(e){
+    var sel=el('ap-mac'),garde=sel.value;vider(sel);
+    if(!e||!e.disponible){el('ap-sources').textContent='analyse indisponible ('+((e&&e.raison)||'absent')+')';}
+    else el('ap-sources').textContent='sources : sbxdpi '+(e.sources.sbxdpi||'—')+', conntrack '+(e.sources.conntrack||'—')+(e.pause_charge?' — nDPI arrêté (charge élevée)':'');
+    el('ap-reprendre').hidden=!(e&&e.pause_charge);
+    ((e&&e.appareils)||[]).forEach(function(a){if(a.mac)sel.appendChild(h('option',{value:a.mac},a.nom||a.mac));});
+    if(garde)sel.value=garde;
+    var a=((e&&e.appareils)||[]).filter(function(x){return x.mac===sel.value;})[0];
+    var c=el('ap-couverture');c.textContent=a?(a.couverture==='dns+dpi'?'DNS + DPI':'DNS seulement'):'—';c.className='pastille '+(a&&a.couverture==='dns+dpi'?'vert':'gris');
+    var f=a&&a.forcage;el('ap-forcage').textContent=f?(f.suspendu?'Forçage DNS suspendu 24 h (lecture cassée).':f.pose?'Forçage DNS : '+f.note+'.':'Forçage DNS : non posé (appareil en OBSERVE ou sans MAC).'):'';
+    return a;
+  }
+  function rendreApplications(r){
+    var box=el('ap-cartes');vider(box);var l=(r&&r.applications)||[];
+    if(!l.length){box.appendChild(h('div',{class:'vide'},'Aucun flux vu pour cet appareil : DNS seulement, ou rien sur la fenêtre.'));return;}
+    l.forEach(function(x){var p=h('div',{class:'pan'});var t=h('h2',null,x.appli+' ');t.appendChild(h('small',null,(x.categorie_ndpi||'—')+' · '+(x.categorie||'—')));p.appendChild(t);
+      p.appendChild(h('div',{class:'mono coupe'},(x.hotes||[]).join(', ')||'aucun nom (adresse seule)'));
+      p.appendChild(h('div',null,octets(x.octets)+' · '+fmt(x.flux)+' flux · dernier '+quand(x.dernier)));
+      var b=h('div',{class:'actions'});BADGES.forEach(function(g){if(x[g[0]])b.appendChild(h('span',{class:'pastille '+g[2]},g[1]));});
+      if(x.ssai)b.appendChild(h('span',{class:'pastille orange',title:'Ce service insère des publicités dans sa propre vidéo'},'SSAI'));
+      if(b.firstChild)p.appendChild(b);box.appendChild(p);});
+  }
+  function rendreFrise(r){
+    var box=el('ap-frise');vider(box);var l=(r&&r.coupures)||[];
+    if(!l.length){box.appendChild(h('div',{class:'vide'},'Aucune coupure publicitaire sur la fenêtre.'));return;}
+    l.forEach(function(c){var d=h('div',{class:'espace'});d.appendChild(h('div',null,heure(c.refus_ts)+' — blocage de '+c.refus_domaine));
+      c.apparitions.forEach(function(a){var ligne=h('div',{class:'mono coupe'},'+'+a.delai_s+' s '+a.domaine+' — '+a.categorie+(a.type==='repli-protege'?' (protégé, jamais bloqué)':' (repli publicitaire)'));
+        if(a.ssai)ligne.appendChild(h('span',{class:'pastille orange'},'SSAI'));d.appendChild(ligne);});box.appendChild(d);});
+  }
+  function rendreDecouvertes(r){
+    var tb=el('ap-decouvertes');vider(tb);var TYPES={'repli':'repli publicitaire','repli-protege':'repli (protégé)','secours':'spot de secours','sans-dns':'adresse en dur','dns-chiffre':'DNS chiffré','contournement':'contourne la box'};
+    ((r&&r.decouvertes)||[]).slice(-50).reverse().forEach(function(x){var tr=h('tr');tr.appendChild(h('td',null,quand(x.ts)));tr.appendChild(h('td',null,TYPES[x.type]||x.type));
+      tr.appendChild(h('td',{class:'mono coupe'},x.domaine));tr.appendChild(h('td',{class:'num'},fmt(x.confiance)));tr.appendChild(h('td',null,x.raison||''));tb.appendChild(tr);});
+    if(!tb.firstChild)vide(tb,5,'Aucune découverte.');
+  }
+  function chargerApplications(){
+    source('/protection/dpi/etat').then(function(e){var a=rendreEtatDpi(e);if(!a){rendreApplications(null);rendreFrise(null);rendreDecouvertes(null);hauteur();return;}
+      var m=encodeURIComponent(a.mac),f=el('ap-fenetre').value;
+      return Promise.all([source('/protection/dpi/applications?mac='+m+'&fenetre='+f),source('/protection/dpi/coupures?mac='+m+'&fenetre='+(f==='1h'?'1h':'24h')),
+        source('/protection/dpi/decouvertes?mac='+m+'&limite=500')]).then(function(r){rendreApplications(r[0]);rendreFrise(r[1]);rendreDecouvertes(r[2]);hauteur();});
+    }).catch(echec);
+  }
+  el('ap-mac').addEventListener('change',chargerApplications);
+  el('ap-fenetre').addEventListener('change',chargerApplications);
+  el('ap-reprendre').addEventListener('click',function(){ecrire('/protection/dpi/reprendre',{}).then(function(){message('Analyse DPI relancée.','ok');chargerApplications();},function(e){message(e.message,'erreur');});});
+
   // ── diagnostic ──
   function chargerDiagnostic(){
     source('/protection/diagnostic').then(function(d){
@@ -672,6 +749,7 @@
   el('rafraichir').addEventListener('click',function(){message('');charger();});
   charger();
   setInterval(function(){if(!document.hidden&&!etat.ouvert&&!DEMO)charger();},60000);
+  setInterval(function(){if(!document.hidden&&!el('v-applications').hidden&&!etat.ouvert&&!DEMO)chargerApplications();},30000);
   try{new ResizeObserver(hauteur).observe(document.body);}catch(e){}
   addEventListener('resize',hauteur);
 })();

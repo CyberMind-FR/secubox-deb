@@ -22,10 +22,10 @@ def test_en_tete_spdx_et_titre():
     assert "<title>SBX TV Privacy</title>" in SRC
 
 
-def test_cinq_vues_en_onglets_accessibles():
-    for v in ("generale", "equipements", "analyseur", "protection", "diagnostic"):
+def test_six_vues_en_onglets_accessibles():
+    for v in ("generale", "equipements", "applications", "analyseur", "protection", "diagnostic"):
         assert f'id="v-{v}" role="tabpanel"' in SRC and f'id="t-{v}" aria-controls="v-{v}"' in SRC
-    assert SRC.count('role="tab"') == 5 and "aria-selected" in SRC and 'role="tablist"' in SRC
+    assert SRC.count('role="tab"') == 6 and "aria-selected" in SRC and 'role="tablist"' in SRC
 
 
 def test_coque_de_l_administration_menu_lateral():
@@ -48,7 +48,8 @@ def test_message_honnete_et_bouton_debloque():
 def test_routes_appelees_existantes_seulement():
     from api import dnstv_routes as r
     from api import dnstv_lot3_routes as l3
-    existantes = {x.path.replace("/adblock-tv", "", 1) for x in [*r.router.routes, *l3.router.routes]}
+    from api import dnstv_lot4_routes as l4
+    existantes = {x.path.replace("/adblock-tv", "", 1) for x in [*r.router.routes, *l3.router.routes, *l4.router.routes]}
     citees = {c for c in re.findall(r"(?:lire|ecrire|source|telecharger|geste)\('(/[a-z/.-]+?)(?:\?|')", CODE) if not c.endswith("/")} | {"/appareils/{mac}/profil"}
     assert {"/appareils", "/classification", "/protection/analyse", "/protection/evenements", "/protection/usager/tv", "/protection/usager/debloquer",
             "/protection/pause", "/protection/observe", "/protection/reprendre", "/protection/exceptions", "/protection/journal",
@@ -261,7 +262,7 @@ def test_csp_stricte_par_hash_a_jour():
 
 # ── Mise en page Aurora : aucun débordement horizontal (démonstration, puis avec le vrai menu latéral partagé) ──
 COQUE = RACINE.parent / "secubox-hub" / "www" / "shared"
-ONGLETS = ("generale", "equipements", "analyseur", "protection", "diagnostic")
+ONGLETS = ("generale", "equipements", "applications", "analyseur", "protection", "diagnostic")
 MENU = json.dumps({"categories": [{"name": "Sécurité", "icon": "S", "items": [{"path": "/tv-privacy/", "name": "SBX TV Privacy", "icon": "T"}]}]})
 MESURE = "() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]"
 
@@ -316,3 +317,21 @@ def test_aucun_debordement_horizontal(largeur, coque_reelle):
     trop = {o: m for o, m in mesures.items() if m[0] > m[1]}
     assert not trop, f"débordement horizontal à {largeur} px : {trop}"
     assert not erreurs
+
+
+# ── Lot 4 (#3374) : onglet « Applications » (DPI par appareil) ──
+def test_onglet_applications_dpi_par_appareil():
+    for r in ("/protection/dpi/etat", "/protection/dpi/applications", "/protection/dpi/coupures", "/protection/dpi/decouvertes",
+              "/protection/dpi/reprendre"):
+        assert f"'{r}" in CODE, r
+    assert "DNS seulement" in SRC and "DNS + DPI" in SRC                         # couverture dite honnêtement
+    assert "Ce service insère des publicités dans sa propre vidéo" in SRC         # SSAI honnête
+    assert "ne peut pas les retirer sans toucher au flux" in SRC
+    assert "effectif seulement si" in SRC or "f.note" in CODE                    # forçage : limite écrite
+    for b in ("adresse en dur", "DNS chiffré", "contourne la box"):
+        assert b in SRC, b
+    assert "apparitions" in CODE and "delai_s" in CODE                            # frise des coupures
+
+
+def test_applications_rafraichies_seulement_onglet_visible():
+    assert "if(!document.hidden&&!el('v-applications').hidden" in CODE
