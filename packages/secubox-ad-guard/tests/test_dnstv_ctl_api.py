@@ -35,11 +35,13 @@ def monde(tmp_path, monkeypatch):
     journal = tmp_path / "appels.log"
     checkconf = _script(tmp_path / "checkconf", f'echo checkconf >> {journal}; [ -f {tmp_path}/refuse ] && {{ echo "erreur de syntaxe" >&2; exit 1; }}; exit 0\n')
     control = _script(tmp_path / "control", f'echo "control $*" >> {journal}\nexit 0\n')
+    nft = _script(tmp_path / "nft-neutre", "exit 0\n")                    # lot 4 : jamais le vrai nft dans les tests
     conf = tmp_path / "unbound.d" / "94-secubox-adguard-tv.conf"
     for k, v in {"SECUBOX_ADGUARD_TV_ETAT": etat, "SECUBOX_ADGUARD_TV_LISTES": LISTES, "SECUBOX_ADGUARD_TV_UNBOUND": conf,
                  "SECUBOX_ADGUARD_TV_CHECKCONF": checkconf, "SECUBOX_ADGUARD_TV_CONTROL": control,
                  "SECUBOX_ADGUARD_TV_AUDIT": tmp_path / "audit.log", "SECUBOX_ADGUARD_TV_SANS_ROOT": "1",
-                 "SECUBOX_ADGUARD_TV_APPLIQUE": tmp_path / "racine" / "applique.json"}.items():
+                 "SECUBOX_ADGUARD_TV_APPLIQUE": tmp_path / "racine" / "applique.json", "SECUBOX_ADGUARD_TV_NFT": nft,
+                 "SECUBOX_ADGUARD_TV_NFT_FICHIER": tmp_path / "nftables.d" / "zz-secubox-adguard-contournement.nft"}.items():
         monkeypatch.setenv(k, str(v))
     monkeypatch.setattr(dnstv, "DOSSIER_ETAT", etat)
     monkeypatch.setattr(dnstv, "DOSSIER_LISTES", LISTES)

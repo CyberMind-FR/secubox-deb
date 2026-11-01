@@ -17,7 +17,7 @@ MAC = "aa:bb:cc:00:00:01"
 
 
 @pytest.fixture
-def dpi(monde, monkeypatch):
+def dpi(monde, monkeypatch):  # noqa: F811
     t = monde["tmp"]
     ct = t / "nf_conntrack"
     sysctl = t / "systemctl"

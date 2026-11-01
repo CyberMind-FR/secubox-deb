@@ -241,7 +241,8 @@ def appliquer() -> int:
     audit_appareils(avant, etat)                                         # `apply` trace AUSSI les changements de périmètre (revue #1959)
     audit_transitions(avant, voulu)
     audit("apply", f"actif={etat['actif']} appareils={len(etat['clients'])} domaines={len(table)}")
-    print(json.dumps({"ok": True, "actif": etat["actif"], "appareils": len(etat["clients"]), "domaines": len(table)}))
+    cont = _contournement_au_mieux(etat) if etat["actif"] else (contournement_retirer() or "retire")
+    print(json.dumps({"ok": True, "actif": etat["actif"], "appareils": len(etat["clients"]), "domaines": len(table), "contournement": cont}))
     return 0
 
 
@@ -316,6 +317,10 @@ def regles_appliquer() -> int:
     voulu = instantane(etat, actives, etats_regles())
     avant = lire_instantane()
     ecrire_verifier(dnstv.rendre_unbound(etat, table, actives))
+    if etat["actif"]:
+        _contournement_au_mieux(etat)                                    # lot 4 : modes, pauses et suspensions suivis à chaque passage
+    else:
+        contournement_retirer()
     if (avant is None or avant.get("actif") != voulu["actif"] or avant.get("modes") != voulu["modes"]
             or set(avant.get("vues", {})) != set(voulu["vues"]) or avant.get("autorisations", {}) != voulu["autorisations"]):
         recharger()
@@ -356,6 +361,7 @@ def desactiver() -> int:
     racine = dossier_root()
     (racine / APPLIQUE.name).unlink(missing_ok=True)
     (racine / "desactive").touch(mode=0o600)
+    contournement_retirer()
     if existait:
         recharger()
     audit("disable", "drop-in retiré" if existait else "rien à retirer")
@@ -554,6 +560,77 @@ def ndpid(geste: str) -> int:
     audit("ndpid-arret" if geste == "arreter" else "ndpid-reprise", "garde de charge" if geste == "arreter" else "reprise manuelle")
     print(json.dumps({"ok": r.returncode == 0}))
     return 0 if r.returncode == 0 else 1
+
+
+# ── lot 4 (#3374), arbitrage 2 : forçage du DNS (nftables, double tampon, retour arrière) ─────────────────────
+NFT = os.environ.get("SECUBOX_ADGUARD_TV_NFT", "nft")
+NFT_FICHIER = Path(os.environ.get("SECUBOX_ADGUARD_TV_NFT_FICHIER", "/etc/nftables.d/zz-secubox-adguard-contournement.nft"))
+
+
+def _nft(*args: str) -> bool:
+    try:
+        return subprocess.run([NFT, *args], capture_output=True, text=True, timeout=60).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def contournement_appliquer(etat: dict) -> str:
+    """Reconstruit le forçage depuis l'état REVALIDÉ (jamais un texte de l'API). Fantôme -> `nft -c` -> échange -> `nft -f` ; un chargement
+    refusé remet la version précédente. Ne fait jamais échouer l'application du DNS : le refus est audité et rendu (`refuse`, `retour`)."""
+    from api import dnstv_contournement as C, dnstv_dpi
+    try:
+        texte = lire_sans_suivre(dnstv.DOSSIER_ETAT / C.FICHIER_SUSPENSIONS)
+    except OSError:
+        texte = ""
+    suspendus = C.lire_suspensions(texte, int(time.time()))
+    doh, _ = dnstv_dpi.charger_resolveurs(dnstv.DOSSIER_LISTES / "resolveurs-doh.txt")
+    contenu = C.rendre(etat, doh, suspendus)
+    try:
+        precedent = NFT_FICHIER.read_text(encoding="utf-8") if NFT_FICHIER.is_file() and not NFT_FICHIER.is_symlink() else None
+    except OSError:
+        precedent = None
+    if precedent == contenu:
+        return "inchange"
+    if precedent is None and not C.forces(etat, suspendus):
+        return "aucun"                                                   # rien à forcer et rien de posé : aucune table, aucun bruit
+    fantome = dossier_root() / "contournement.nft.new"
+    fantome.unlink(missing_ok=True)
+    fd = os.open(fantome, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as h:
+        h.write(contenu)
+    if not _nft("-c", "-f", str(fantome)):
+        fantome.unlink(missing_ok=True)
+        audit("contournement-refuse", "nft -c refuse le jeu de règles — version précédente gardée")
+        return "refuse"
+    fantome.unlink(missing_ok=True)
+    _ecrire_root(NFT_FICHIER, contenu, 0o644)
+    if not _nft("-f", str(NFT_FICHIER)):
+        if precedent is not None:
+            _ecrire_root(NFT_FICHIER, precedent, 0o644)
+            _nft("-f", str(NFT_FICHIER))
+        else:
+            NFT_FICHIER.unlink(missing_ok=True)
+            _nft("delete", "table", "inet", C.TABLE)
+        audit("contournement-retour", "chargement refusé — version précédente remise")
+        return "retour"
+    audit("contournement", f"appareils={len(C.forces(etat, suspendus))} doh={len(doh)} suspendus={len(suspendus)}")
+    return "ok"
+
+
+def contournement_retirer() -> None:
+    from api import dnstv_contournement as C
+    if NFT_FICHIER.exists() or NFT_FICHIER.is_symlink():
+        NFT_FICHIER.unlink(missing_ok=True)
+        _nft("delete", "table", "inet", C.TABLE)
+        audit("contournement", "forçage retiré")
+
+
+def _contournement_au_mieux(etat: dict) -> str:
+    try:
+        return contournement_appliquer(etat)
+    except Exception as e:                                               # noqa: BLE001 — le DNS reste appliqué quoi qu'il arrive
+        audit("contournement-refuse", f"{type(e).__name__}"[:120])
+        return "refuse"
 
 
 def main(argv: list[str], entree: str | None = None) -> int:
