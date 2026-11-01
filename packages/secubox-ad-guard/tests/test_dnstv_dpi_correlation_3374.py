@@ -55,10 +55,10 @@ def test_passage_incremental_ne_retraite_pas_les_coupures_deja_vues(tmp_path):
     args = dict(voisins={}, sbxdpi_texte=None, conntrack_texte=None, resolus=set(), box=set(), doh=(set(), set()))
     D.passage(etat, dns, m, cat, now, **args)
     assert [d["domaine"] for d in m.decouvertes()] == ["metaproxy.francetvpub.fr"]      # la 2e coupure n'a pas fini ses 30 s
-    D.passage(etat, dns, m, cat, now + 60, **args)
+    D.passage(etat, dns, m, cat, now + 120, **args)                                       # 30 s de fenêtre + 60 s de marge
     assert [d["domaine"] for d in m.decouvertes()] == ["metaproxy.francetvpub.fr", "audiences.free.fr"]
     assert dns.appels[-1] == now - 300 - D.AVANT_S                                        # ne relit que depuis la dernière coupure close
-    D.passage(etat, dns, m, cat, now + 120, **args)
+    D.passage(etat, dns, m, cat, now + 180, **args)
     assert dns.appels[-1] == now - 10 - D.AVANT_S and len(m.decouvertes()) == 2
 
 

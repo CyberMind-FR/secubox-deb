@@ -28,6 +28,7 @@ except ImportError:                                   # contrôleur et moteur im
     from api import dnstv, dnstv_taxonomie
 
 PUB = frozenset({"PUBLICITE", "TRACKING"})            # refus qui ouvrent une « coupure » et apparitions candidates
+MARGE_INGESTION_S = 60
 FENETRE_REPLI_S = 30                                  # une apparition compte si elle suit le refus de 30 s au plus
 AVANT_S = 600                                         # « nouveau » : pas demandé dans les 10 min qui précèdent la coupure
 ECART_COUPURE_S = 120                                 # deux refus à moins de 2 min = la même coupure
@@ -338,6 +339,11 @@ class MagasinDPI:
                         raise sqlite3.DatabaseError("quick_check")
                     if cx.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == 0:
                         cx.execute("PRAGMA auto_vacuum=INCREMENTAL")         # avant toute table : effectif sur une base neuve
+                    else:
+                        cols = {r[1] for r in cx.execute("PRAGMA table_info(flux)")}
+                        if cx.execute("PRAGMA auto_vacuum").fetchone()[0] != 2 or not {"local", "proto"} <= cols:
+                            # base antérieure à la passe 2 : la purge par plafond viderait les flux et l'INSERT échouerait
+                            raise sqlite3.DatabaseError("schéma antérieur")
                     cx.executescript(SCHEMA)
                 return
             except sqlite3.OperationalError:
@@ -434,7 +440,7 @@ class MagasinDPI:
             cx.execute("UPDATE decouvertes SET etat=? WHERE mac=? AND domaine=? AND type='repli' AND etat='nouvelle'", (etat, mac, domaine))
 
     def decouvertes(self, depuis_id: int = 0, type_: Optional[str] = None, mac: Optional[str] = None, limite: int = 100,
-                    recentes: bool = False) -> List[dict]:
+                    recentes: bool = False, etat: Optional[str] = None) -> List[dict]:
         if not self._lisible():
             return []
         w, a = ["id>?"], [int(depuis_id)]
@@ -444,6 +450,9 @@ class MagasinDPI:
         if mac:
             w.append("mac=?")
             a.append(mac)
+        if etat:
+            w.append("etat=?")
+            a.append(etat)
         cols = ("id", "ts", "mac", "type", "domaine", "categorie", "appli", "confiance", "raison", "refus_domaine", "refus_ts", "delai_s",
                 "coupures", "etat")
         with self._cx() as cx:
@@ -574,9 +583,10 @@ def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str
         # sa fenêtre de 30 s écoulée.
         curseur = mag.curseur(m)
         evts = mag_dns.evenements(sorted(adr.get(m, ())), max(maintenant - 3600, curseur - AVANT_S) if curseur else maintenant - 3600)
-        dec = [d for d in correler(evts, categorie) if curseur < d["refus_ts"] <= maintenant - FENETRE_REPLI_S]
+        close = maintenant - FENETRE_REPLI_S - MARGE_INGESTION_S          # 60 s de latence d'ingestion du journal d'Unbound
+        dec = [d for d in correler(evts, categorie) if curseur < d["refus_ts"] <= close]
         mag.ajouter_decouvertes(m, dec)
-        closes = [x for x in evts if x.get("decision") == "BLOCKED" and int(x["ts"]) <= maintenant - FENETRE_REPLI_S]
+        closes = [x for x in evts if x.get("decision") == "BLOCKED" and int(x["ts"]) <= close]
         if closes:
             mag.poser_curseur(m, max(curseur, max(int(x["ts"]) for x in closes)))
         refus = {d["refus_ts"] for d in dec}
@@ -639,7 +649,8 @@ def _resolus(maintenant: int) -> Set[str]:
 
 CGROUP_NDPID = Path(os.environ.get("SECUBOX_ADGUARD_NDPID_CGROUP", "/sys/fs/cgroup/system.slice/secubox-ndpid-engine.service/cpu.stat"))
 PART_NDPID_MIN = 0.20                                  # I4 : nDPId n'est arrêté que s'il prend au moins 20 % d'un cœur
-CHARGE_NORMALE = {"etat": "normal", "depuis": None, "signal": None, "usage_usec": None, "usage_ts": None}
+CHARGE_NORMALE = {"etat": "normal", "depuis": None, "signal": None, "usage_usec": None, "usage_ts": None, "refus_ts": None}
+ESPACEMENT_REFUS_S = 1800                              # après un refus de root, pas de nouvelle tentative (ni d'audit) avant 30 min
 
 
 def usage_ndpid(chemin: Optional[Path] = None) -> Optional[int]:
@@ -688,11 +699,14 @@ def garde_charge(ch: dict, maintenant: int, charge5: float, ncpu: int, usage: Op
         ch["signal"] = ("charge élevée depuis plus de 5 min, nDPId non en cause"
                         + (f" ({round(part * 100)} % d'un cœur)" if part is not None else " (part CPU illisible)") + " : aucun arrêt")
         return ch
+    if ch.get("refus_ts") and maintenant - ch["refus_ts"] < ESPACEMENT_REFUS_S:
+        return ch
     r = executer("ndpid-arreter")
     if getattr(r, "returncode", 1) == 0:
         ch.update(etat="arrete", depuis=maintenant, signal="DPI arrêté : charge élevée et nDPId à " + f"{round(part * 100)} %")
     else:
-        ch["signal"] = "arrêt de nDPId refusé par le contrôleur (condition revérifiée par root)"
+        ch["signal"] = "arrêt de nDPId refusé par le contrôleur (condition revérifiée par root) ; nouvel essai dans 30 min"
+        ch["refus_ts"] = maintenant
     return ch
 
 

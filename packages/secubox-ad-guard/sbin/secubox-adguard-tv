@@ -679,10 +679,16 @@ def contournement_appliquer(etat: dict) -> str:
     suspendus = C.lire_suspensions(texte, int(time.time()))
     doh, _ = dnstv_dpi.charger_resolveurs(dnstv.DOSSIER_LISTES / "resolveurs-doh.txt")
     contenu = C.rendre(etat, doh, suspendus)
-    try:
-        precedent = NFT_FICHIER.read_text(encoding="utf-8") if NFT_FICHIER.is_file() and not NFT_FICHIER.is_symlink() else None
-    except OSError:
-        precedent = None
+    precedent = None
+    if NFT_FICHIER.is_symlink() or (NFT_FICHIER.exists() and not NFT_FICHIER.is_file()):
+        NFT_FICHIER.unlink(missing_ok=True)                              # m5 : un lien ou autre chose qu'un fichier n'est jamais suivi
+        audit("contournement-invalide", "fichier nft en place : lien ou non régulier, retiré")
+    else:
+        try:
+            precedent = NFT_FICHIER.read_text(encoding="utf-8") if NFT_FICHIER.is_file() else None
+        except (OSError, UnicodeDecodeError):
+            NFT_FICHIER.unlink(missing_ok=True)
+            audit("contournement-invalide", "fichier nft en place illisible, retiré")
     if precedent == contenu:
         if _nft("-c", "-f", str(NFT_FICHIER)):
             return "inchange"
@@ -743,7 +749,7 @@ def _publier_resultat(resultat: str) -> None:
     try:
         fd, tmp = tempfile.mkstemp(dir=dnstv.DOSSIER_ETAT, prefix=".contournement-resultat.")
         with os.fdopen(fd, "w", encoding="utf-8") as h:
-            os.fchmod(h.fileno(), 0o644)
+            os.fchmod(h.fileno(), 0o640)
             h.write(json.dumps({"resultat": resultat, "ts": int(time.time())}))
         os.replace(tmp, dnstv.DOSSIER_ETAT / C.FICHIER_RESULTAT)
     except OSError as e:
@@ -782,7 +788,12 @@ def main(argv: list[str], entree: str | None = None) -> int:
         return ndpid(argv[1].split("-")[1])
     if argv[1] == "dpi-cibles":
         with verrou_controleur():
-            return dpi_cibles()
+            try:
+                return dpi_cibles()
+            except OSError as e:                                         # EROFS, droits… : audité, jamais une trace brute
+                audit("dpi-cibles-echec", f"{type(e).__name__}: {e.strerror or ''}"[:160])
+                print(json.dumps({"ok": False, "erreur": type(e).__name__}))
+                return 1
     with verrou_controleur():
         if argv[1] == "apply":
             (dossier_root() / "desactive").unlink(missing_ok=True)         # une demande explicite lève la désactivation

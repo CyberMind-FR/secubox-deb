@@ -86,6 +86,8 @@ def test_c2_unite_autorise_les_chemins_du_controleur_et_porte_son_exception():
     rw = next(ligne for ligne in u.splitlines() if ligne.startswith("ReadWritePaths="))
     for chemin in ("/etc/unbound/unbound.conf.d", "/var/log/secubox", "/var/lib/secubox-adguard-tv", "/var/lib/secubox/ad-guard"):
         assert chemin in rw
+    # Lot 4 (#3374) passe 3 : le contrôleur écrit aussi les cibles de sbxdpi et le forçage nft (sinon EROFS en production)
+    assert "-/run/secubox/sbxdpi-cibles" in rw.split() and "-/etc/nftables.d" in rw.split()
     assert "NoNewPrivileges=no" in u and "ProtectSystem=strict" in u
     assert "ProtectControlGroups=yes" in u
     # MESURÉ sur gk2 : LockPersonality (comme SystemCallFilter, RestrictNamespaces…) repose sur seccomp, et systemd active alors
@@ -98,6 +100,7 @@ def test_c2_unite_autorise_les_chemins_du_controleur_et_porte_son_exception():
     assert u.startswith("# SPDX-License-Identifier") and (ICI / "debian" / "secubox-ad-guard-auto.timer").read_text().startswith("# SPDX-License-Identifier")
     regles = (ICI.parents[1] / ".claude" / "RULES-CODE.md").read_text()
     assert "secubox-ad-guard-auto" in regles                                                       # l'exception est écrite
+    assert "/run/secubox/sbxdpi-cibles" in regles and "/etc/nftables.d" in regles
 
 
 # ── I1 : le drop-in est écrit et vérifié AVANT toute application à chaud ────────────────────────────────────────────────────

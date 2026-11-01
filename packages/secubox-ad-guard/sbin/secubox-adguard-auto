@@ -157,8 +157,8 @@ def replis_du_passage(etat: dict):
         mag = dnstv_dpi.MagasinDPI(dnstv.DOSSIER_ETAT / "dpi-appareils.db", lecture_seule=True)
         slugs = {c["mac"]: dnstv._slug(c["nom"]) for c in etat["clients"] if c.get("mac")}
         out, vus = {}, []
-        for d in mag.decouvertes(type_="repli", limite=500):
-            if d["etat"] == "nouvelle" and d["mac"] in slugs:
+        for d in mag.decouvertes(type_="repli", etat="nouvelle", limite=500):     # filtré en SQL : jamais masqué par les anciennes
+            if d["mac"] in slugs:
                 out.setdefault(slugs[d["mac"]], []).append(d)
                 vus.append((d["mac"], d["domaine"]))
         return out, vus

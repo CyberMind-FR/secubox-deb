@@ -439,3 +439,12 @@ Reportés :
 - **Doute 6** : commit `4766505fd` regroupant deux tâches (effacé par la fusion en squash).
 - **Doute 7** : GET par appareil en `require_jwt` : la page relayée par le pilotage n'a que `/dpi/etat` — à écrire dans la note du
   pilotage.
+
+### Passe 3
+
+- `dpi-cibles` ne tombait plus en EROFS : `ReadWritePaths` de `secubox-ad-guard-auto.service` couvre `-/run/secubox/sbxdpi-cibles` et
+  `-/etc/nftables.d` (exception § 10 de `RULES-CODE.md` mise à jour) ; `d /run/secubox/sbxdpi-cibles 0750 root secubox-toolbox` livré par
+  le tmpfiles de toolbox-ng (parent `/run/secubox` root:root) ; une `OSError` est auditée (`dpi-cibles-echec`).
+- Replis lus avec `etat='nouvelle'` filtré en SQL (plus masqués après 500 lignes). Base antérieure à la passe 2 (`auto_vacuum` ≠ 2 ou
+  `flux` sans `local`/`proto`) mise de côté et recréée. Curseur : 60 s de marge d'ingestion. Refus de `ndpid-arreter` : pas de nouvel
+  essai ni d'audit avant 30 min. Fichier nft en lien ou illisible retiré et audité. Résultat du forçage publié en 0640.

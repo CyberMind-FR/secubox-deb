@@ -258,6 +258,8 @@ conntrack) n'apparaissent (« DNS + DPI ») que s'ils traversent la box (mode LA
 - Forçage du DNS (PROTECT/AUTO, avec MAC) : table nftables `inet secubox_adguard_contournement` (`/etc/nftables.d/zz-secubox-adguard-contournement.nft`) :
   53 redirigé vers la box, 853 et 443 vers `lists/resolveurs-doh.txt` rejetés. Posé par `apply`/`regles-appliquer`, retiré par `disable`, levé en
   OBSERVE (pause, « Je débloque »), suspendu 24 h (`contournement-suspendu.json`) si le contenu habituel n'est plus demandé.
+- Si `nft -c` refuse le nouveau jeu, le forçage précédent est gardé ; si le fichier EN PLACE ne passe plus `nft -c` (ou est un lien,
+  ou illisible), il est **retiré** (forçage levé) et audité (`contournement-invalide`) : `nftables.service` ne doit jamais échouer au démarrage.
 - Listes : `lists/ssai.txt` (contenu qui insère ses propres pubs), `lists/resolveurs-doh.txt`.
 
 ## Capteur DNS d'Actor Intelligence (#2240)
