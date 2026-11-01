@@ -1,3 +1,29 @@
+secubox-ad-guard (1.20.0-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy lot 3 « protection » : modes OBSERVE / PROTECT / AUTO
+    (PROTECT = ancien block, alias rétrocompatible, aucune migration) ; AUTO
+    et ajout automatique par défaut des NOUVELLES installations
+    (ajout_auto_initial) (ref #3374).
+  * Exceptions unifiées appareil × domaine (autoriser, bloquer), branchées sur
+    les règles et les autorisations au puits ; journal des décisions
+    (decisions.jsonl borné, rotation, MAC tronquée, export CSV) déduit de
+    l'historique des règles (ref #3374).
+  * Retour en un geste (tout ou un appareil en OBSERVE), pause minutée
+    15 min / 1 h / 4 h avec reprise automatique par le moteur ; route d'usager
+    bornée « Ça ne marche plus ? Je débloque » (require_personne, débit
+    limité) (ref #3374).
+  * Cache de classification en SQLite découpé (fin du JSON de 16 Mo) ;
+    analyseur côté serveur (métriques, filtres combinables, agrégats,
+    pagination, export CSV) ; événements récents agrégés (ref #3374).
+  * Suffixe de recherche .home ramené au domaine réel ; référence OQEE
+    (license.oqee.net DRM, api/img*.oqee.net et stream.proxad.net STREAMING) ;
+    correction couvrant un service protégé de services.txt refusée (ref #3374).
+  * Page /tv-privacy/ dans la coque de l'administration (menu latéral), vues
+    Protection et Diagnostic, message honnête sur les pubs insérées dans la
+    vidéo (ref #3374).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 12:00:00 +0100
+
 secubox-ad-guard (1.19.0-1~trixie1) trixie; urgency=medium
 
   * Sécurité : les routes /adblock-tv qui renvoient une donnée personnelle par
