@@ -47,7 +47,8 @@ def test_message_honnete_et_bouton_debloque():
 
 def test_routes_appelees_existantes_seulement():
     from api import dnstv_routes as r
-    existantes = {x.path.replace("/adblock-tv", "", 1) for x in r.router.routes}
+    from api import dnstv_lot3_routes as l3
+    existantes = {x.path.replace("/adblock-tv", "", 1) for x in [*r.router.routes, *l3.router.routes]}
     citees = {c for c in re.findall(r"(?:lire|ecrire|source|telecharger|geste)\('(/[a-z/.-]+?)(?:\?|')", CODE) if not c.endswith("/")} | {"/appareils/{mac}/profil"}
     assert {"/appareils", "/classification", "/protection/analyse", "/protection/evenements", "/protection/usager/tv", "/protection/usager/debloquer",
             "/protection/pause", "/protection/observe", "/protection/reprendre", "/protection/exceptions", "/protection/journal",

@@ -315,6 +315,8 @@ def brut(monde, monkeypatch):
     from secubox_core import auth
     app = FastAPI()
     app.include_router(r.router)
+    from api import dnstv_lot3_routes as _l3
+    app.include_router(_l3.router)                  # lot 3 : routeur séparé, inclus par main.py
     dnstv.ecrire_etat(etat_base(), monde["etat"])
     return TestClient(app), auth
 

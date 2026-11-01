@@ -190,8 +190,8 @@ def test_route_analyse_et_garde(api, monde):
     gardes = {(y.path, tuple(sorted(y.methods))): {d.call for d in y.dependant.dependencies} for y in L.router.routes}
     from api.dnstv_routes import require_lecture_nominative
     from secubox_core import auth
-    assert require_lecture_nominative in gardes[("/protection/analyse", ("GET",))]
-    assert auth.require_jwt in gardes[("/protection/analyse.csv", ("GET",))]
+    assert require_lecture_nominative in gardes[("/adblock-tv/protection/analyse", ("GET",))]
+    assert auth.require_jwt in gardes[("/adblock-tv/protection/analyse.csv", ("GET",))]
 
 
 def test_route_analyse_mac_tronquee_hors_administrateur(api, monde, monkeypatch):

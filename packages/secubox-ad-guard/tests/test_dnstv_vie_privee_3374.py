@@ -30,6 +30,8 @@ def _client(monde, lecteur):
     from api import dnstv_routes as r
     app = FastAPI()
     app.include_router(r.router)
+    from api import dnstv_lot3_routes as _l3
+    app.include_router(_l3.router)                  # lot 3 : routeur séparé, inclus par main.py
     app.dependency_overrides[auth.require_jwt] = lambda: {"sub": "admin"}
     app.dependency_overrides[auth.require_lecture] = lambda: lecteur
     return TestClient(app)

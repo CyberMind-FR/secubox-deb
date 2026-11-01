@@ -163,6 +163,8 @@ def api(monde, monkeypatch):
     monkeypatch.setattr(r, "_ctl_entree", appel_entree)
     app = FastAPI()
     app.include_router(r.router)
+    from api import dnstv_lot3_routes as _l3
+    app.include_router(_l3.router)                  # lot 3 : routeur séparé, inclus par main.py
     app.dependency_overrides[auth.require_jwt] = lambda: {"sub": "admin"}
     app.dependency_overrides[auth.require_lecture] = lambda: {"sub": "admin"}
     return TestClient(app)
@@ -277,6 +279,8 @@ def test_les_routes_d_action_exigent_le_jeton(monde):
     from api import dnstv_routes as r
     app = FastAPI()
     app.include_router(r.router)
+    from api import dnstv_lot3_routes as _l3
+    app.include_router(_l3.router)                  # lot 3 : routeur séparé, inclus par main.py
     c = TestClient(app)
     for methode, chemin, corps in (("post", "/adblock-tv/etat", {"actif": True}), ("post", "/adblock-tv/mode", {"mode": "block"}),
                                    ("post", "/adblock-tv/clients", {"ip": "1.2.3.4"}), ("post", "/adblock-tv/custom", {"domaine": "x.example.com"}),

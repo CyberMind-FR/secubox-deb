@@ -205,12 +205,12 @@ def test_gardes_des_routes():
     from api.dnstv_routes import require_lecture_nominative
     from secubox_core import auth
     g = {(y.path, tuple(sorted(y.methods))): {d.call for d in y.dependant.dependencies} for y in L.router.routes}
-    for p in ("/protection/pause", "/protection/reprendre", "/protection/observe", "/protection/exceptions"):
+    for p in ("/adblock-tv/protection/pause", "/adblock-tv/protection/reprendre", "/adblock-tv/protection/observe", "/adblock-tv/protection/exceptions"):
         assert auth.require_jwt in g[(p, ("POST",))], p
-    for p in ("/protection/exceptions", "/protection/journal", "/protection/diagnostic"):
+    for p in ("/adblock-tv/protection/exceptions", "/adblock-tv/protection/journal", "/adblock-tv/protection/diagnostic"):
         assert require_lecture_nominative in g[(p, ("GET",))], p
-    assert auth.require_jwt in g[("/protection/journal.csv", ("GET",))]
-    for p, m in (("/protection/usager/tv", "GET"), ("/protection/usager/debloquer", "POST")):
+    assert auth.require_jwt in g[("/adblock-tv/protection/journal.csv", ("GET",))]
+    for p, m in (("/adblock-tv/protection/usager/tv", "GET"), ("/adblock-tv/protection/usager/debloquer", "POST")):
         assert auth.require_personne in g[(p, (m,))] and auth.require_jwt not in g[(p, (m,))], p
 
 

@@ -34,7 +34,7 @@ except ImportError:                                  # lancé hors paquet
 
 from secubox_core.auth import require_jwt, require_personne
 
-router = APIRouter(tags=["adblock-tv-protection"])
+router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv-protection"])
 logger = logging.getLogger("secubox.ad-guard.tv-privacy")
 
 

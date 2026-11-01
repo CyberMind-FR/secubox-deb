@@ -1171,11 +1171,3 @@ def classification_corriger(corps: ClassificationIn, jeton=Depends(require_jwt))
         dnstv_taxonomie.ecrire_manuelles(apres)
     logger.info("classification corrigée : %s (%s) %s -> %s", domaine, dnstv_appareils.mac_courte(m) if m else "maison", ancienne, corps.categorie)
     return dict(_taxonomie(apres).classer(domaine, [m] if m else []), mac=m)
-
-
-# ── lot 3 SBX TV PRIVACY (#3374) : protection, analyseur, route lambda — routeur séparé, inclus ici (même préfixe) ────────────
-try:
-    from . import dnstv_lot3_routes as _lot3
-except ImportError:                                  # lancé hors paquet
-    from api import dnstv_lot3_routes as _lot3
-router.include_router(_lot3.router)
