@@ -276,7 +276,8 @@ def test_documentation():
     assert "critique => niveau 3" not in toml and "critique => niveau 4" in toml
     aide = (PAQUET / "usr/sbin/secubox-led").read_text()
     assert "trafic" not in aide
-    ch = (PAQUET / "debian/changelog").read_text().split("\n -- ")[0]
+    texte = (PAQUET / "debian/changelog").read_text()
+    ch = texte[texte.index("secubox-led-heartbeat (2.4.0-1~trixie1)"):].split("\n -- ")[0]   # entrée 2.4.0
     assert "dpkg propose la fusion" not in ch
     assert "conservée, à remplacer à la main" not in ch and "secubox-led-nft" in ch
     assert ("dpkg demande ; en non interactif (confold), la version locale est conservée et doit "

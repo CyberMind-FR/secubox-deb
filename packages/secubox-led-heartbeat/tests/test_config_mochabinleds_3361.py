@@ -132,12 +132,13 @@ def test_collecteur_demarre_avec_les_planchers_lus(tmp_path):
 
 def test_version_et_paquet():
     premiere = (PKG / "debian" / "changelog").read_text().splitlines()[0]
-    assert premiere.startswith("secubox-led-heartbeat (2.4.0-1~trixie1) trixie;")
-    corps = (PKG / "debian" / "changelog").read_text().split("\n\n -- ")[0]
+    assert premiere.startswith("secubox-led-heartbeat (2.4.1-1~trixie1) trixie;")
+    texte = (PKG / "debian" / "changelog").read_text()
+    corps = texte[texte.index("secubox-led-heartbeat (2.4.0-1~trixie1)"):].split("\n\n -- ")[0]   # entrée 2.4.0
     for mot in ("collecteur", "relatifs", "critique", "adaptative", "priorité", "8 séquences",
                 "#3361"):
         assert mot.lower() in corps.lower(), mot
     ctl = (PKG / "debian" / "control").read_text()
     deps = re.search(r"Depends:(.*?)\nBreaks", ctl, re.S).group(1)
     assert "nftables" in deps and "python3" in deps
-    assert "2.4.0-1~trixie1" in (PKG / "README.md").read_text()
+    assert "2.4.1-1~trixie1" in (PKG / "README.md").read_text()

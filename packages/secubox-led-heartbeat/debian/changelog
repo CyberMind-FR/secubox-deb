@@ -1,3 +1,11 @@
+secubox-led-heartbeat (2.4.1-1~trixie1) trixie; urgency=medium
+
+  * Collecteur : lecture des sources par blocs de 64 Kio. Un os.read de 4 Mio sur
+    /proc/sys/net/netfilter/nf_conntrack_count échoue en ENOMEM, d où la clé
+    reseau.connexions absente sur gk1, gk2 et gk6 (ref #3361).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 01 Nov 2026 07:19:47 +0100
+
 secubox-led-heartbeat (2.4.0-1~trixie1) trixie; urgency=medium
 
   * LED de supervision du MOCHAbin : 8 séquences par défaut (système, réseau, firewall, WAF, actor, AdGuard, services, SOC), 8 s chacune, palette vert/cyan/jaune/orange/rouge (violet réservé à l'apprentissage) (ref #3361).
