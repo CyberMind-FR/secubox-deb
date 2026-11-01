@@ -249,11 +249,12 @@ def test_csp_stricte_par_hash_a_jour():
     assert len(styles) == 1 and len(scripts) == 1
     # 'self' : le menu latéral et sa feuille de style servis par l'admin ; rien d'externe ; les blocs en ligne par hachage.
     assert csp["script-src"] == ["'self'", _hash(scripts[0])], "script modifié sans mise à jour de la CSP"
-    assert csp["style-src"] == ["'self'", _hash(styles[0])], "style modifié sans mise à jour de la CSP"
-    # Le menu latéral partagé (/shared/sidebar.js) pose des gestionnaires et des styles en ATTRIBUT : seuls les attributs sont
-    # permis en ligne (CSP3 *-src-attr) ; un <script> ou <style> en ligne reste refusé sans son hachage.
-    assert csp["script-src-attr"] == ["'unsafe-inline'"] and csp["style-src-attr"] == ["'unsafe-inline'"]
-    sans_attr = ";".join(d for d in m.group(1).split(";") if "-src-attr" not in d)
+    # Styles : la coque partagée (sidebar.js, health-banner.js) INJECTE des blocs <style> ; refusés, le bandeau de santé
+    # s'affichait sans mise en forme (« Backbone22 » sur gk2). Les styles en ligne sont permis (aucun code exécuté) ; les
+    # SCRIPTS restent par hachage, seuls les gestionnaires en attribut du menu sont permis en ligne.
+    assert csp["style-src"] == ["'self'", "'unsafe-inline'"]
+    assert csp["script-src-attr"] == ["'unsafe-inline'"]
+    sans_attr = ";".join(d for d in m.group(1).split(";") if "-src-attr" not in d and not d.strip().startswith("style-src"))
     assert "unsafe-eval" not in m.group(1) and "unsafe-inline" not in sans_attr and "http" not in m.group(1)
     assert ' style="' not in SRC and "<script " not in SRC                    # aucun style ni script hors des blocs hachés
 
