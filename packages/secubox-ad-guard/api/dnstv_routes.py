@@ -27,9 +27,9 @@ from secubox_core import auth as _auth
 from secubox_core.auth import est_admin_reel, require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_analyse, dnstv_journal, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from . import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_analyse, dnstv_journal, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from api import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 logger = logging.getLogger("secubox.ad-guard.adblock-tv")
@@ -198,17 +198,31 @@ def changer_mode(m: ModeIn):
         except dnstv.ErreurTV as e:
             _refuse(e)
         touches = 0
+        noms = set()
         for c in etat["clients"]:
             if cible is None or c["ip"] == cible:
                 c["mode"] = mode
                 touches += 1
+                noms.add(c["nom"])
         if not touches:
             raise HTTPException(404, "aucun appareil concerné")
         try:
             dnstv.ecrire_etat(etat)
         except dnstv.ErreurTV as e:
             _refuse(e)
+        _oublier_pauses(noms)
         return {"etat": _avec_noms(etat), "application": _ctl("apply")}
+
+
+def _oublier_pauses(noms: set) -> None:
+    """Un mode choisi par l'administrateur l'emporte : la pause en cours de ces appareils est oubliée (aucune reprise ne l'écrasera)."""
+    try:
+        pauses = dnstv_protection.charger_pauses()
+        restantes = [x for x in pauses if x["appareil"] not in noms]
+        if len(restantes) != len(pauses):
+            dnstv_protection.ecrire_pauses(restantes)
+    except (OSError, dnstv_protection.ErreurProtection) as e:
+        logger.warning("pause non oubliée après changement de mode : %s", e)
 
 
 @router.get("/stats", dependencies=[Depends(require_lecture_nominative)])

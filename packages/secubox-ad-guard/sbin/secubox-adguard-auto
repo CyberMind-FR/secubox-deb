@@ -81,7 +81,12 @@ def reprendre_pauses(etat: dict, now: int) -> list:
     if repris:
         audit_reprise(repris)
         dnstv.ecrire_etat(etat)
-        dnstv_protection.ecrire_pauses(pauses)
+        (dnstv.DOSSIER_ETAT / ".a-appliquer").touch()          # l'état restauré DOIT être appliqué, même si la suite échoue
+        try:
+            dnstv_protection.ecrire_pauses(pauses)
+        except (OSError, dnstv_protection.ErreurProtection) as e:
+            # la pause restée inscrite sera oubliée au passage suivant : ses adresses ne sont plus en observe
+            print(f"pauses non réécrites après reprise : {type(e).__name__}", file=sys.stderr)
         try:
             macs = {c["nom"]: c.get("mac") for c in etat["clients"] if c.get("mac")}
             dnstv_journal.ajouter([dnstv_journal.entree(now, n, macs.get(n), "", "", "reprise", "auto", "fin de pause") for n in repris])
