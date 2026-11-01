@@ -243,6 +243,23 @@ démonstration ; CSP `script-src 'self'` + sha256, idem `style-src`), cinq ongle
 débloque », événements agrégés 1 h / 24 h dépliables), Équipements, Analyseur (métriques, filtres combinables retirables un à un,
 agrégats dépliables, listing 25 par page, export CSV), Protection (modes, OBSERVE, pause, reprise, exceptions, journal), Diagnostic.
 
+### DPI par appareil (lot 4, 1.21.0, #3374)
+
+Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot4-design.md`. On observe et on filtre le DNS ; on ne touche jamais au flux ni
+au DRM. Sur un LAN plat, la box ne voit que le DNS des TV : l'onglet « Applications » le dit (« DNS seulement »). Les flux (nDPI via sbxdpi,
+conntrack) n'apparaissent (« DNS + DPI ») que s'ils traversent la box (mode LAN).
+
+- Moteur (chaque minute) : `etat-dpi.json`, `dpi-appareils.db` (flux 7 j, découvertes 30 j), cibles de sbxdpi et filtre BPF par MAC de nDPId
+  (verbe root `dpi-cibles`, toutes les 5 min), garde de charge (`ndpid-arreter`, reprise manuelle `POST /adblock-tv/protection/dpi/reprendre`).
+- Découvertes : `repli` (domaine PUB apparu ≤ 30 s après un refus PUB, candidat puis essai AUTO), `repli-protege` (jamais bloqué), `secours`,
+  `sans-dns`, `dns-chiffre`, `contournement`. `GET /adblock-tv/protection/dpi/decouvertes?depuis=<id>` est l'interface du lot 5b.
+- Routes (`require_jwt` sauf `/etat` en lecture nominative) : `GET /adblock-tv/protection/dpi/{etat,applications,flux,decouvertes,coupures}`,
+  `POST /adblock-tv/protection/dpi/reprendre`.
+- Forçage du DNS (PROTECT/AUTO, avec MAC) : table nftables `inet secubox_adguard_contournement` (`/etc/nftables.d/zz-secubox-adguard-contournement.nft`) :
+  53 redirigé vers la box, 853 et 443 vers `lists/resolveurs-doh.txt` rejetés. Posé par `apply`/`regles-appliquer`, retiré par `disable`, levé en
+  OBSERVE (pause, « Je débloque »), suspendu 24 h (`contournement-suspendu.json`) si le contenu habituel n'est plus demandé.
+- Listes : `lists/ssai.txt` (contenu qui insère ses propres pubs), `lists/resolveurs-doh.txt`.
+
 ## Capteur DNS d'Actor Intelligence (#2240)
 
 `secubox-ad-guard-dnssensor.timer` (chaque minute, utilisateur `secubox`, groupe `actord-ingest` en plus, durcissement complet) lance `secubox-adguard-dnssensor`. Il lit le magasin d'ad-guard en lecture seule et dépose une enveloppe `dns` vers actord **uniquement** pour un domaine malveillant ou anormal ; une requête ordinaire ne laisse aucune trace.
