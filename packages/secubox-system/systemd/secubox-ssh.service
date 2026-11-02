@@ -10,6 +10,8 @@ StartLimitBurst=30
 
 [Service]
 Type=oneshot
+# Depot (root:secubox 1770) et resultats (root:secubox 0750) crees en root, jamais par tmpfiles (#3172).
+ExecStartPre=/usr/sbin/secubox-sshctl prepare
 ExecStart=/usr/sbin/secubox-sshctl traite
 UMask=0027
 NoNewPrivileges=true
@@ -27,9 +29,9 @@ RestrictRealtime=true
 LockPersonality=true
 SystemCallArchitectures=native
 IPAddressDeny=any
-# Ecrit des fichiers root dans des dossiers d autres proprietaires (resultats : secubox) ; rien d autre.
+# chown root:secubox des dossiers, audit.log (secubox, 0640) ; rien d autre. Exception ecrite : RULES-CODE § Exceptions.
 CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER
 # sshd -t / -T exigent le dossier de separation de privileges, absent quand ssh est arrete.
 RuntimeDirectory=sshd
 RuntimeDirectoryPreserve=yes
-ReadWritePaths=/etc/ssh/sshd_config.d /var/log/secubox /var/lib/secubox/system /run/secubox/system
+ReadWritePaths=/etc/ssh/sshd_config.d /var/log/secubox -/var/lib/secubox/system -/run/secubox/system

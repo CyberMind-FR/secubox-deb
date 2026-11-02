@@ -10,7 +10,7 @@
 
 L'API (secubox, NoNewPrivileges, ProtectSystem) ne lance rien en root : elle dépose une DEMANDE dans
 /run/secubox/system/ssh ; secubox-ssh.path lance `secubox-sshctl traite` (root, unité durcie), qui écrit le résultat
-dans /run/secubox/system/ssh-resultats/<id>.json, relu ici. Tant que le mot de passe par défaut est actif (ou inconnu),
+dans /run/secubox/system/ssh-resultats/<id>.json (root:secubox 0750, relu ici, purgé par le ctl). Tant que le mot de passe par défaut est actif (ou inconnu),
 permettre SSH par mot de passe est REFUSÉ (409) ici ET dans le ctl (qui vérifie aussi le mot de passe Linux).
 """
 from __future__ import annotations
@@ -47,12 +47,12 @@ class Interrupteur(BaseModel):
 def _ctl(verbe: str, valeur: str = "", acteur: str = "") -> Dict[str, Any]:
     """Dépose une demande, attend le résultat de l'unité root. Route `def` : l'attente tourne dans le pool."""
     ident = secrets.token_hex(8)
-    tmp = RESULTATS / f".demande.{ident}"
+    tmp = DEMANDES / f".tmp.{ident}"       # ignoré par le ctl tant qu'il n'est pas renommé
     try:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
         with os.fdopen(fd, "w") as f:
             json.dump({"verbe": verbe, "valeur": valeur, "acteur": acteur}, f)
-        os.replace(tmp, DEMANDES / f"{ident}.demande")      # même système de fichiers (/run) : atomique
+        os.replace(tmp, DEMANDES / f"{ident}.demande")      # même dossier : atomique
     except OSError as e:
         log.error("demande SSH non déposée : %s", e)
         raise HTTPException(status_code=500, detail="demande SSH non déposée") from None
@@ -64,8 +64,7 @@ def _ctl(verbe: str, valeur: str = "", acteur: str = "") -> Dict[str, Any]:
         except (OSError, ValueError):
             time.sleep(0.2)
             continue
-        res.unlink(missing_ok=True)
-        return r
+        return r          # le ctl purge les résultats (dossier root 0750 : l'API lit seulement)
     log.error("secubox-sshctl : pas de résultat pour %s %s", verbe, valeur)
     raise HTTPException(status_code=504, detail="secubox-sshctl n'a pas répondu")
 

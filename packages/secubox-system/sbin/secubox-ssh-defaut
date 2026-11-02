@@ -23,6 +23,7 @@ import importlib.util
 import json
 import os
 import sys
+import tempfile
 
 DEFAUT = b"secubox"
 SHADOW = os.environ.get("SECUBOX_SHADOW", "/etc/shadow")
@@ -95,14 +96,21 @@ def _cache_lit(cle):
 
 
 def _cache_ecrit(cle, resultat):
-    tmp = CACHE + ".tmp"
+    tmp = None
     try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        fd, tmp = tempfile.mkstemp(prefix=".ssh-defaut.", dir=os.path.dirname(CACHE))   # O_EXCL, 0600
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump({"cle": cle, "resultat": resultat}, f)
         os.replace(tmp, CACHE)
+        tmp = None
     except OSError as e:
         print(f"secubox-ssh-defaut : cache non écrit ({e.__class__.__name__})", file=sys.stderr)
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def main():

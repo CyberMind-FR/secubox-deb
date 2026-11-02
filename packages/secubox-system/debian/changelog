@@ -1,3 +1,9 @@
+secubox-system (1.12.2-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401, passe 2 (ref #3401) : dossiers de demandes (root:secubox 1770) et de résultats (root:secubox 0750) créés par secubox-sshctl prepare (ExecStartPre, plus de tmpfiles) ; demande lue par descripteur sans lien, fichier ordinaire, non bloquante, 4 Kio ; sauvegardes retirées après succès ; sshd -T vérifié pour chaque compte Linux au défaut ; cache de secubox-ssh-defaut écrit par mkstemp ; garde lancée au démarrage ; exception § 10 écrite dans RULES-CODE.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 09:45:46 +0100
+
 secubox-system (1.12.1-1~trixie1) trixie; urgency=medium
 
   * Relecture #3401 (ref #3401) : plus de sudo (inopérant sous NoNewPrivileges) — l'API dépose une demande, secubox-ssh.path la fait traiter par secubox-sshctl (unité durcie) ; règle sudoers retirée. Garde SSH fondée sur le mot de passe Linux (/etc/shadow, crypt, nouveau secubox-ssh-defaut avec cache par empreintes) ET web ; inconnu = garde ; vérification sshd -T -C après écriture (sinon défait et audité), état fondé sur sshd -T, retour arrière de « mot-de-passe on », trap EXIT, ssh.socket coupé à l'arrêt ; unités de garde durcies ; garde déclenchée aussi par /etc/shadow ; retrait du paquet : la garde n'est enlevée que si le défaut est prouvé changé.

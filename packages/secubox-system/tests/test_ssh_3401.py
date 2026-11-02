@@ -44,12 +44,13 @@ def banc(tmp_path):
     # -T : « no » si un drop-in à nous refuse le mot de passe, et si FAUX_SSHD_IGNORE n'existe pas (garde inopérante).
     sshd.write_text(f"""#!/bin/bash
 [ "$1" = "-t" ] && exit 0
-if [ ! -e {tmp_path}/ignore ] && grep -qs 'PasswordAuthentication no' {d}/*.conf; then
+u=$(printf '%s' "$3" | sed -n 's/^user=\\([^,]*\\).*/\\1/p')
+if [ ! -e {tmp_path}/ignore ] && ! grep -qsx "$u" {tmp_path}/ignore-users && grep -qs 'PasswordAuthentication no' {d}/*.conf; then
   echo "passwordauthentication no"; else echo "passwordauthentication yes"; fi
 """)
     sshd.chmod(0o755)
     defaut = tmp_path / "defaut"
-    defaut.write_text(f"#!/bin/bash\nexit $(cat {tmp_path}/rc)\n")
+    defaut.write_text(f"#!/bin/bash\ncat {tmp_path}/sortie 2>/dev/null; exit $(cat {tmp_path}/rc)\n")
     defaut.chmod(0o755)
     (tmp_path / "rc").write_text("0")
     env = {**os.environ, "SECUBOX_SSHCTL_ESSAI": "1", "SECUBOX_SSHD_DIR": str(d), "SECUBOX_AUDIT_LOG": str(tmp_path / "audit.log"),
@@ -93,7 +94,9 @@ def test_mot_de_passe_off_puis_on_et_retour_arriere(banc):
     f = banc.dir / "10-secubox-ssh-mot-de-passe.conf"
     assert banc("mot-de-passe", "off", "admin", rc="10").returncode == 0 and f.exists()
     assert banc("mot-de-passe", "on", "admin", rc="10").returncode == 0 and not f.exists()
+    assert not list(banc.dir.glob(".secubox-sshctl*"))            # aucune sauvegarde laissée après un succès
     banc("mot-de-passe", "off", "admin", rc="10")
+    assert not list(banc.dir.glob(".secubox-sshctl*"))
     # sshd -t refuse : le fichier d'avant revient.
     sshd = banc.tmp / "sshd"
     sshd.write_text("#!/bin/bash\nexit 1\n")
@@ -236,3 +239,65 @@ def test_retrait_garde_seulement_si_defaut_prouve_change():
     prerm = (SYSTEM / "debian" / "prerm").read_text()
     i = prerm.index("secubox-ssh-defaut")
     assert '"$rc" = "10"' in prerm[i:i + 300] and "05-secubox-mot-de-passe-defaut.conf" in prerm[i:i + 400]
+
+
+# ── passe 2 ─────────────────────────────────────────────────────────────
+def test_garde_verifie_chaque_compte_linux_au_defaut(banc):
+    (banc.tmp / "sortie").write_text('{"web": "inactif", "linux": ["pi"]}')
+    (banc.tmp / "ignore-users").write_text("pi\n")
+    r = banc("garde", rc="0")
+    assert r.returncode == 2 and not (banc.dir / "05-secubox-mot-de-passe-defaut.conf").exists()
+
+
+def _demande(banc, nom, contenu):
+    (banc.tmp / "dem" / nom).write_text(json.dumps(contenu))
+
+
+def test_traite_ne_suit_pas_un_lien_et_ne_bloque_pas_sur_une_fifo(banc):
+    cible = banc.tmp / "cible.json"
+    cible.write_text(json.dumps({"verbe": "acces", "valeur": "on", "acteur": "admin"}))
+    (banc.tmp / "dem" / "0123456789abcdef.demande").symlink_to(cible)
+    os.mkfifo(banc.tmp / "dem" / "fedcba9876543210.demande")
+    assert banc("traite").returncode == 0                          # ne bloque pas (timeout du banc : 30 s)
+    assert "ssh_acces_on" not in _evenements(banc.tmp) and cible.exists()
+    for n in ("0123456789abcdef", "fedcba9876543210"):
+        assert json.loads((banc.tmp / "res" / f"{n}.json").read_text())["code"] == 2
+
+
+def test_traite_plafonne_la_taille(banc):
+    _demande(banc, "0123456789abcdef.demande", {"verbe": "acces", "valeur": "on", "acteur": "admin", "x": "y" * 5000})
+    banc("traite")
+    assert json.loads((banc.tmp / "res" / "0123456789abcdef.json").read_text())["code"] == 2
+
+
+def test_dossiers_prepares_par_le_ctl_et_resultat_0640(banc):
+    for d in ("dem", "res"):
+        (banc.tmp / d).rmdir()
+    assert banc("prepare").returncode == 0
+    assert oct((banc.tmp / "dem").stat().st_mode & 0o7777) == "0o1770"
+    assert oct((banc.tmp / "res").stat().st_mode & 0o7777) == "0o750"
+    _demande(banc, "0123456789abcdef.demande", {"verbe": "etat"})
+    banc("traite")
+    assert oct((banc.tmp / "res" / "0123456789abcdef.json").stat().st_mode & 0o777) == "0o640"
+
+
+def test_plus_de_tmpfiles_pour_les_dossiers_ssh():
+    assert "/run/secubox/system/ssh" not in (SYSTEM / "tmpfiles.d" / "secubox-system.conf").read_text()
+
+
+@pytest.mark.parametrize("unite", ["secubox-ssh.service", "secubox-ssh-garde.service"])
+def test_unites_preparent_les_dossiers_et_chemins_optionnels(unite):
+    t = (SYSTEM / "systemd" / unite).read_text()
+    assert "ExecStartPre=/usr/sbin/secubox-sshctl prepare" in t
+    assert "-/run/secubox/system" in t.split() and "premier-pas" not in t
+
+
+def test_exception_rules_code_ecrite():
+    regles = (SYSTEM.parents[1] / ".claude" / "RULES-CODE.md").read_text()
+    ligne = next(x for x in regles.splitlines() if "secubox-ssh.service" in x and "secubox-ssh-garde.service" in x)
+    assert "§ 10" in ligne and "test_ssh_3401.py::test_exception_rules_code_ecrite" in ligne
+
+
+def test_cache_tmp_exclusif():
+    src = DEFAUT_BIN.read_text()
+    assert "mkstemp" in src and 'CACHE + ".tmp"' not in src
