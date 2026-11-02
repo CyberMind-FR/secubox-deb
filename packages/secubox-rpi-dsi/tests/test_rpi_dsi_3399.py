@@ -248,7 +248,7 @@ def test_debian_conforme():
     assert (deb / "compat").read_text().strip() == "13"
     ctl = (deb / "control").read_text()
     assert "Standards-Version: 4.6.2" in ctl and "Architecture: arm64" in ctl
-    assert (deb / "changelog").read_text().startswith("secubox-rpi-dsi (0.1.0-1~trixie1) trixie;")
+    assert re.match(r"secubox-rpi-dsi \(\d+\.\d+\.\d+-\d+~trixie1\) trixie;", (deb / "changelog").read_text())
     assert "GPL-2.0" in (deb / "copyright").read_text()
     for s in ("postinst", "prerm", "postrm"):
         subprocess.run(["sh", "-n", str(deb / s)], check=True, timeout=30)
