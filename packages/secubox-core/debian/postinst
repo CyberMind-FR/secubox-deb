@@ -344,9 +344,12 @@ REPRISE
         apparmor_parser -r /etc/apparmor.d/secubox-dns-listes \
           || echo "secubox-core : profil AppArmor secubox-dns-listes non charge (apparmor_parser -r /etc/apparmor.d/secubox-dns-listes)" >&2
     fi
+    # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
+    # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
+    deb-systemd-helper enable secubox-dns-listes.path secubox-dns-listes.timer >/dev/null 2>&1 || true
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload 2>/dev/null || true
-        systemctl enable --now secubox-dns-listes.path secubox-dns-listes.timer 2>/dev/null || true
+        systemctl start secubox-dns-listes.path secubox-dns-listes.timer 2>/dev/null || true
         [ -d /etc/unbound/unbound.conf.d ] && systemctl start --no-block secubox-dns-listes.service 2>/dev/null || true
     fi
 

@@ -228,6 +228,9 @@ SBXRLEVEL
     # sbxwaf/sbxmitm ; plus aucun conteneur mitmproxy à provisionner.)
 
     # 5. systemd : enable mais ne PAS start automatiquement (l'AP doit être configuré d'abord)
+    # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
+    # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
+    deb-systemd-helper enable secubox-toolbox.service secubox-toolbox-wg-restore.service secubox-toolbox-tor.path secubox-toolbox-tor.timer secubox-toolbox-tor-exempt-hosts.timer >/dev/null 2>&1 || true
     if [ -d /run/systemd/system ]; then
 # Phase 6.Q (#496) : SQLite tuning + indexes
 if [ -x /usr/sbin/secubox-toolbox-db-tune ]; then
@@ -244,21 +247,16 @@ for _f in /var/lib/secubox/toolbox/toolbox.db /var/lib/secubox/toolbox/toolbox.d
 done
 
       systemctl daemon-reload || true
-      systemctl enable secubox-toolbox.service || true
       # Phase 7 (#498) : boot-time peer-restore service for wg-toolbox.
       # Keeps the enrolled WG peers alive across reboots.
-      systemctl enable secubox-toolbox-wg-restore.service || true
       # #683 : kbin Tor egress — enable the path watcher so flipping tor_mode
       # in filters.json arms/disarms the tunnel (reconciler runs as root; the
       # portal stays NoNewPrivileges=true). Default tor_mode=false → reconcile
       # is a no-op until the operator flips it. Enable+start the .path; run one
       # reconcile so a fresh/false flag leaves no tunnel behind.
-      systemctl enable secubox-toolbox-tor.path 2>/dev/null || true
       systemctl start  secubox-toolbox-tor.path 2>/dev/null || true
-      systemctl enable secubox-toolbox-tor.timer 2>/dev/null || true
       systemctl start  secubox-toolbox-tor.timer 2>/dev/null || true
       # #799 : refresh cert-pinned Tor-egress exemptions (no-op until Tor armed)
-      systemctl enable secubox-toolbox-tor-exempt-hosts.timer 2>/dev/null || true
       systemctl start  secubox-toolbox-tor-exempt-hosts.timer 2>/dev/null || true
       # Pas de start auto — l'opérateur doit configurer mesh.toml et lancer toolbox-up
     fi
@@ -330,28 +328,25 @@ done
         /usr/sbin/nft -f /etc/nftables.d/secubox-blacklist.nft 2>/dev/null \
           || echo "secubox-toolbox: table secubox_blacklist à recharger à la main" >&2
       fi
+      # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
+      # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
+      deb-systemd-helper enable secubox-blacklist-sync.timer secubox-blacklist-attrib.timer secubox-escalate.timer secubox-toolbox-autolearn.timer secubox-toolbox-mesh-exclusion-publish.timer secubox-toolbox-mesh-exclusion-sync.timer >/dev/null 2>&1 || true
       if [ -d /run/systemd/system ]; then
-        systemctl enable secubox-blacklist-sync.timer 2>/dev/null || true
         systemctl start secubox-blacklist-sync.timer 2>/dev/null || true
         # Kick an immediate first sync (best-effort).
         systemctl start secubox-blacklist-sync.service 2>/dev/null || true
         # Phase 13.C (#524) : per-device attribution tailer timer.
-        systemctl enable secubox-blacklist-attrib.timer 2>/dev/null || true
         systemctl start secubox-blacklist-attrib.timer 2>/dev/null || true
         # Phase 13.D (#527) : escalation evaluator timer. The TIMER runs,
         # but every escalation SOURCE is default OFF — nothing escalates
         # until the operator opts in via a SECUBOX_ESCALATE_* drop-in.
-        systemctl enable secubox-escalate.timer 2>/dev/null || true
         systemctl start secubox-escalate.timer 2>/dev/null || true
         # #589 : autolearn bad-tracker timer (hourly) + a first run now so
         # the learned list exists immediately for ad_ghost.
-        systemctl enable secubox-toolbox-autolearn.timer 2>/dev/null || true
         systemctl start secubox-toolbox-autolearn.timer 2>/dev/null || true
         /usr/sbin/secubox-toolbox-autolearn 2>&1 | head -1 || true
         # #806 : mesh-federation publish + sync timers
-        systemctl enable secubox-toolbox-mesh-exclusion-publish.timer 2>/dev/null || true
         systemctl start  secubox-toolbox-mesh-exclusion-publish.timer 2>/dev/null || true
-        systemctl enable secubox-toolbox-mesh-exclusion-sync.timer 2>/dev/null || true
         systemctl start  secubox-toolbox-mesh-exclusion-sync.timer 2>/dev/null || true
       fi
     fi
