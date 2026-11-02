@@ -7,9 +7,13 @@
 # Auto-generated from debian/control
 
 name: secubox-ad-guard
-category: misc
+category: security
 tier: lite
-description: "SecuBox Ad Guard Module"
+description: "SecuBox Ad Guard — blocage des pubs et pisteurs par DNS, SBX TV Privacy (protection des TV et box)"
+description_longue: >-
+  Bloque par DNS les régies publicitaires, pisteurs et télémétries que les appareils du réseau vont chercher,
+  avec SBX TV Privacy pour les TV et box (observation, protection, retour arrière en un geste).
+  Ne retire pas les publicités insérées dans le flux vidéo lui-même (même serveur que le contenu).
 
 depends:
   - secubox-core
