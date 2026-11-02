@@ -1,3 +1,9 @@
+secubox-core (1.8.14-1~trixie1) trixie; urgency=medium
+
+  * Mot de passe par défaut (ref #3401) : nouvel indicateur unique secubox_core.mot_de_passe_defaut (actif, etat, est_le_defaut, audit) — compare l'empreinte argon2 du compte admin au mot de passe du premier démarrage, verdict mis en cache par empreinte ; le clair n'est jamais stocké ni journalisé. audit() écrit en ajout seul dans /var/log/secubox/audit.log (0640).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:31:34 +0100
+
 secubox-core (1.8.13-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
