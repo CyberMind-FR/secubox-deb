@@ -22,5 +22,12 @@ def test_bandeau_rouge_persistant_sans_bouton_fermer_et_lien():
     assert "innerHTML" not in bloc and "startsWith('/')" in bloc
 
 
-def test_disparait_quand_le_defaut_est_leve():
-    assert "etat.actif !== true" in JS and "el.remove()" in JS
+def test_disparait_quand_le_defaut_est_leve_ou_pour_un_non_admin():
+    # {} (non-administrateur) ou inactif : pas de bandeau.
+    assert "etat.actif !== true && etat.inconnu !== true" in JS and "el.remove()" in JS
+
+
+def test_etat_inconnu_affiche_un_avertissement():
+    i = JS.index("function defaultPasswordStrip")
+    bloc = JS[i:JS.index("async function checkDefaultPassword")]
+    assert "etat.inconnu" in bloc and "#b45309" in bloc

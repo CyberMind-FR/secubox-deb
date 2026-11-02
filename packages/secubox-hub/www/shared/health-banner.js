@@ -907,7 +907,7 @@
 
     function defaultPasswordStrip(etat) {
         let el = document.getElementById('sbx-mot-de-passe-defaut');
-        if (!etat || etat.actif !== true) {
+        if (!etat || (etat.actif !== true && etat.inconnu !== true)) {
             if (el) el.remove();
             return;
         }
@@ -923,7 +923,9 @@
             lien.textContent = 'Changer le mot de passe';
             el.append(msg, lien);
         }
-        el.firstChild.textContent = String(etat.message || 'Mot de passe par défaut actif.');
+        // Rouge : défaut actif. Ambre : état inconnu (accès encadré par prudence, à vérifier).
+        el.style.background = etat.inconnu ? '#b45309' : '#b00020';
+        el.firstChild.textContent = String(etat.message || (etat.inconnu ? 'État du mot de passe admin inconnu.' : 'Mot de passe par défaut actif.'));
         const lien = String(etat.lien || '/users/');
         el.lastChild.href = lien.startsWith('/') ? lien : '/users/';
         if (!el.isConnected && document.body) document.body.prepend(el);
