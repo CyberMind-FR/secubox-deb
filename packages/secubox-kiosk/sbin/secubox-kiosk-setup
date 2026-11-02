@@ -275,22 +275,16 @@ XINITRC
     chmod +x "${KIOSK_HOME}/.xinitrc"
 }
 
-# ── Setup Root Autologin on TTY2 ─────────────────────────────────
-setup_root_autologin_tty2() {
-    # Create autologin override for tty2
-    mkdir -p /etc/systemd/system/getty@tty2.service.d
-    cat > /etc/systemd/system/getty@tty2.service.d/autologin.conf <<EOF
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
-Type=idle
-EOF
-
-    # Enable getty on tty2
+# ── Console de secours sur TTY2 (#3412) ───────────────────────────
+# JAMAIS d'ouverture de session automatique : l'écran du kiosque est public ; kiosque arrêté, il basculait sur un shell root.
+# tty2 = getty normal (identifiant + mot de passe). Celle posée par une version antérieure est retirée (seulement si c'est la nôtre).
+setup_console_secours_tty2() {
+    local rc=0
+    /usr/sbin/secubox-kiosk-retire-autologin || rc=$?
+    if [[ "$rc" -eq 10 ]]; then systemctl daemon-reload 2>/dev/null || true; fi
     systemctl enable getty@tty2.service 2>/dev/null || true
     systemctl start getty@tty2.service 2>/dev/null || true
-
-    log "Root autologin enabled on tty2 (Ctrl+Alt+F2 to access)"
+    log "Console de secours : tty2 avec connexion (Ctrl+Alt+F2)"
 }
 
 # ── Update Service File (using launcher script) ─────────────────────────
@@ -320,7 +314,8 @@ After=secubox-firstboot.service
 
 Wants=network-online.target
 Wants=nginx.service
-Conflicts=getty@tty1.service
+# Le kiosque tient tty7 : un getty sur tty1 ne doit pas l'arrêter (#3412).
+Conflicts=getty@tty7.service
 PartOf=graphical.target
 
 [Service]
@@ -381,8 +376,8 @@ enable_kiosk() {
     touch "${ENABLED_MARKER}"
     echo "$mode" > "$MODE_FILE"
 
-    # Setup root autologin on tty2 (so user can still access console)
-    setup_root_autologin_tty2
+    # Console de secours sur tty2, avec connexion (#3412)
+    setup_console_secours_tty2
 
     # Disable getty on tty1 (kiosk uses it)
     systemctl disable getty@tty1.service 2>/dev/null || true
@@ -456,8 +451,8 @@ enable_console() {
     # Enable console TUI service
     systemctl enable secubox-console.service 2>/dev/null || true
 
-    # Setup root autologin on tty2 for emergency access
-    setup_root_autologin_tty2
+    # Console de secours sur tty2, avec connexion (#3412)
+    setup_console_secours_tty2
 
     # Start console TUI
     systemctl start secubox-console.service || log "Console TUI will start on next boot"
@@ -570,10 +565,7 @@ show_status() {
         echo "State: CONSOLE LOGIN (TTY1)"
     fi
 
-    # Check tty2 autologin
-    if [[ -f /etc/systemd/system/getty@tty2.service.d/autologin.conf ]]; then
-        echo "Emergency: TTY2 (Ctrl+Alt+F2)"
-    fi
+    echo "Emergency: TTY2 login (Ctrl+Alt+F2)"
 
     echo ""
 }

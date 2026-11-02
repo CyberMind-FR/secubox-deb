@@ -1,0 +1,26 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+if [ "$1" = "configure" ]; then
+    # Autologin root posé par une version antérieure (#3412) : retiré s'il est exactement le nôtre ; la console de secours
+    # devient un getty normal (identifiant + mot de passe). Code 10 = « retiré » : pas une erreur.
+    RC=0; /usr/sbin/secubox-kiosk-retire-autologin || RC=$?
+    if [ "$RC" -eq 10 ] && [ -d /run/systemd/system ]; then
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        # Un shell root déjà ouvert par l'ancien autologin se ferme : le getty repart avec une invite de connexion.
+        systemctl try-restart getty@tty2.service >/dev/null 2>&1 || true
+        [ -e /var/lib/secubox/.kiosk-enabled ] && systemctl try-restart getty@tty1.service >/dev/null 2>&1 || true
+    fi
+    # L'unité écrite par secubox-kiosk-setup < 1.2.0 portait Conflicts=getty@tty1 : tout getty démarré sur tty1 arrêtait le kiosque (tty7).
+    U=/etc/systemd/system/secubox-kiosk.service
+    if [ -f "$U" ] && grep -q '^Conflicts=getty@tty1.service$' "$U" && grep -q 'secubox-kiosk-launcher' "$U"; then
+        sed -i 's/^Conflicts=getty@tty1.service$/Conflicts=getty@tty7.service/' "$U"
+        [ -d /run/systemd/system ] && systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+    /usr/sbin/secubox-kiosk-relance || true
+fi
+#DEBHELPER#
+exit 0

@@ -87,6 +87,13 @@ TOML
            && systemctl is-active --quiet secubox-kiosk.service; then
             systemctl restart secubox-kiosk.service >/dev/null 2>&1 || true
         fi
+        # UN KIOSQUE ACTIVÉ REVIENT (#3412) : ce paquet livre l'unité et la construit en --no-start, son prerm l'ARRÊTE pendant la mise à jour
+        # sans la relancer (écran public resté sur la console, vu deux fois sur gk7). Sentinelle + unité activée => on la relance.
+        if [ -e /var/lib/secubox/.kiosk-enabled ] && systemctl is-enabled --quiet secubox-kiosk.service 2>/dev/null \
+           && ! systemctl is-active --quiet secubox-kiosk.service; then
+            systemctl reset-failed secubox-kiosk.service >/dev/null 2>&1 || true
+            systemctl --no-block start secubox-kiosk.service >/dev/null 2>&1 || true
+        fi
     fi
 fi
 #DEBHELPER#

@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// Un kiosque activé revient toujours après une mise à jour (#3412).
+DPkg::Post-Invoke { "if [ -x /usr/sbin/secubox-kiosk-relance ]; then /usr/sbin/secubox-kiosk-relance || true; fi"; };

@@ -1,3 +1,9 @@
+secubox-premier-pas (0.9.3-1~trixie1) trixie; urgency=medium
+
+  * Le kiosque active est relance a la fin du postinst (#3412) : le paquet livre secubox-kiosk.service en --no-start, son prerm l'arretait pendant la mise a jour sans le relancer.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 10:07:42 +0100
+
 secubox-premier-pas (0.9.2-1~trixie1) trixie; urgency=medium
 
   * Relecture #3401, passe 2 (ref #3401) : « Plus tard » ne pose plus aucun marqueur ; le changement est redemandé à chaque connexion (avec à nouveau « Plus tard ») ; texte de l'étape mis à jour (LAN ou maillage).

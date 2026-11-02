@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox :: un kiosque activé revient toujours après une mise à jour (#3412).
+# Appelé par apt après chaque passage de dpkg (DPkg::Post-Invoke). Les paquets qui arrêtent le kiosque pendant leur mise à jour
+# (secubox-premier-pas livre l'unité et la construit en --no-start : son prerm l'arrête sans la relancer) ne sont pas les seuls
+# possibles : on rattrape ici, quel qu'en soit l'auteur. Rien si le kiosque n'est pas activé (sentinelle ET unité activée),
+# rien s'il tourne ou démarre déjà. Jamais bloquant : --no-block, et toujours 0 (apt ne doit pas échouer pour ça).
+SENTINELLE="${SECUBOX_KIOSK_SENTINELLE:-/var/lib/secubox/.kiosk-enabled}"
+UNITE=secubox-kiosk.service
+
+[ -e "$SENTINELLE" ] || exit 0
+[ -d "${SECUBOX_KIOSK_SYSTEMD_RUN:-/run/systemd/system}" ] || exit 0
+systemctl is-enabled --quiet "$UNITE" 2>/dev/null || exit 0
+case "$(systemctl is-active "$UNITE" 2>/dev/null)" in
+    active|activating|reloading) exit 0 ;;
+esac
+systemctl reset-failed "$UNITE" >/dev/null 2>&1 || true
+systemctl --no-block start "$UNITE" >/dev/null 2>&1 || true
+echo "secubox-kiosk : kiosque relancé après la mise à jour"
+exit 0
