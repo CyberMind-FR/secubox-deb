@@ -92,6 +92,9 @@ body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),tra
     <div class="champ"><label for="setup-pw2">Confirmer</label>
       <input type="password" id="setup-pw2" name="confirm-password" autocomplete="new-password" minlength="10" required></div>
     <button type="submit" id="btn-setup" class="btn">Définir le mot de passe</button>
+    <!-- #3401 : compte admin au mot de passe par défaut, depuis le réseau local, le kiosque ou le maillage seulement ;
+         pour cette connexion seulement, la question revient à la suivante. -->
+    <button type="button" id="btn-plus-tard" class="lien">Plus tard (mot de passe par défaut, réseau local)</button>
     <button type="button" class="lien" data-retour>← Annuler</button>
   </form>
 
@@ -268,6 +271,29 @@ function handleSetup() {
   });
 }
 
+// Étape 1c — « Plus tard » (#3401) : garder le mot de passe par défaut pour CETTE connexion. Le serveur ne l'accepte que
+// pour admin, depuis le LAN, le kiosque ou le maillage, et l'audite ; le setup_token est consommé (usage unique).
+function handlePlusTard() {
+  var jeton = _setupToken;
+  _setupToken = '';
+  setBtn('btn-plus-tard', true, 'Connexion…');
+  fetch('/api/v1/auth/plus-tard', {
+    method: 'POST',
+    headers: {'Authorization': 'Bearer ' + jeton},
+    credentials: 'include'
+  })
+  .then(function (r) { return lireJson(r, '« Plus tard » refusé'); })
+  .then(function (data) {
+    finalizeToken(data.access_token);
+    showMsg('Connecté avec le mot de passe par défaut — changez-le dès que possible.', 'success');
+    setTimeout(function () { window.location.href = _sbxRedirect(); }, 800);
+  })
+  .catch(function (err) {
+    setBtn('btn-plus-tard', false, 'Plus tard (mot de passe par défaut, réseau local)');
+    showMsg((err.message || 'Refusé') + ' — reconnectez-vous.', 'error');
+  });
+}
+
 // Étape 2 — vérifier un code pour un compte déjà inscrit.
 function handleMfa() {
   var code = $('mfa-code').value.trim();
@@ -357,6 +383,7 @@ onSubmit('setup-form', handleSetup);
 onSubmit('mfa-form', handleMfa);
 onSubmit('enroll-form', handleEnroll);
 $('btn-backup').addEventListener('click', finishBackup);
+$('btn-plus-tard').addEventListener('click', handlePlusTard);
 var retours = document.querySelectorAll('[data-retour]');
 for (var k = 0; k < retours.length; k++) retours[k].addEventListener('click', resetToLogin);
 
