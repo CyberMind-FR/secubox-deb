@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Status — vue d'ensemble de la console (#3412). Source unique : livré par secubox-core, copié par les images.
+# Le Hub est servi par l'agrégateur (pas d'unité secubox-hub : elle s'affichait « stopped » à tort) : on teste
+# secubox-aggregator et sa santé (/health sur sa socket). L'administration passe par HAProxy (443), plus par :9443.
+
+set -uo pipefail
+
+GOLD='\033[38;5;214m'; CYAN='\033[38;5;45m'; GREEN='\033[38;5;82m'
+RED='\033[38;5;196m'; GRAY='\033[38;5;242m'; WHITE='\033[38;5;250m'; RESET='\033[0m'
+ok="${GREEN}●${RESET}"; fail="${RED}●${RESET}"; warn="${GOLD}●${RESET}"
+DEFAUTS=/etc/default/secubox
+SOCK_AGREG=/run/secubox/aggregator.sock
+if [[ "${SECUBOX_TEST:-}" == 1 ]]; then   # chemins de test, jamais lus hors des tests
+    DEFAUTS="${SECUBOX_DEFAULTS:-$DEFAUTS}"; SOCK_AGREG="${SECUBOX_AGGREGATOR_SOCK:-$SOCK_AGREG}"
+fi
+
+# Une ligne : libellé (couleurs fixes, interprétées) puis donnée affichée TELLE QUELLE (%s, jamais d'échappement interprété).
+ligne() { printf '     %b %b%s:%b  %b%s%b%s\n' "$1" "$GRAY" "$2" "$RESET" "$CYAN" "$3" "$RESET" "${4:-}"; }
+
+# URL d'administration : https://admin.<nom>.<suffixe>/ si la box a un nom, sinon https://<ip>/.
+url_admin() {
+    local h="" s="secubox.in" ip
+    if [[ -r "$DEFAUTS" ]]; then
+        h=$(sed -n 's/^SECUBOX_HOSTNAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$DEFAUTS" | tail -1)
+        s=$(sed -n 's/^SECUBOX_DOMAIN_SUFFIX="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$DEFAUTS" | tail -1)
+        s="${s:-secubox.in}"
+    fi
+    [[ "$s" =~ ^[a-z0-9-]+(\.[a-z0-9-]+)*$ ]] || s="secubox.in"
+    [[ "$h" =~ ^[a-z0-9-]+$ ]] || h=""
+    if [[ -n "$h" ]]; then
+        echo "https://admin.${h}.${s}/"
+    else
+        ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+        [[ "$ip" =~ ^[0-9a-fA-F:.]+$ ]] || ip=localhost
+        echo "https://${ip}/"
+    fi
+}
+
+etat_unite() {
+    local svc="$1"
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+        printf '     %b %b%s%b\n' "$ok" "$GRAY" "$svc" "$RESET"
+    elif systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then
+        printf '     %b %b%s%b (stopped)\n' "$fail" "$GRAY" "$svc" "$RESET"
+    fi
+}
+
+# /health sur la socket Unix de l'agrégateur par python3 seul, toujours présent sur une box.
+sante_agregateur() {
+    timeout 5 python3 -I - "$SOCK_AGREG" <<'PY' >/dev/null 2>&1
+import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(3)
+s.connect(sys.argv[1])
+s.sendall(b"GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n")
+r = s.recv(64)
+sys.exit(0 if r.split(b" ")[1:2] == [b"200"] else 1)
+PY
+}
+
+etat_agregateur() {
+    if ! systemctl is-active --quiet secubox-aggregator 2>/dev/null; then
+        systemctl list-unit-files secubox-aggregator.service 2>/dev/null | grep -q secubox-aggregator \
+            && echo -e "     ${fail} ${GRAY}secubox-aggregator${RESET} (stopped)"
+        return
+    fi
+    if sante_agregateur; then
+        echo -e "     ${ok} ${GRAY}secubox-aggregator${RESET} (hub, API)"
+    else
+        echo -e "     ${warn} ${GRAY}secubox-aggregator${RESET} (démarre ou ne répond pas)"
+    fi
+}
+
+[[ "${1:-}" == "--url-admin" ]] && { url_admin; exit 0; }
+
+echo -e "${CYAN}"
+echo '  ╭──────────────────────────────────────────────────────────╮'
+echo '  │             ⚡ SecuBox System Status ⚡                  │'
+echo '  ╰──────────────────────────────────────────────────────────╯'
+echo -e "${RESET}"
+echo -e "${WHITE}  📊 System Info${RESET}"
+printf '     %bHostname:%b  %s\n' "$GRAY" "$RESET" "$(hostname)"
+printf '     %bUptime:%b    %s\n' "$GRAY" "$RESET" "$(uptime -p 2>/dev/null || echo 'N/A')"
+printf '     %bMemory:%b    %s\n' "$GRAY" "$RESET" "$(free -h | awk '/^Mem:/{printf "%s / %s", $3, $2}')"
+printf '     %bDisk:%b      %s\n' "$GRAY" "$RESET" "$(df -h / | awk 'NR==2{printf "%s / %s (%s)", $3, $2, $5}')"
+echo ""
+echo -e "${WHITE}  🌐 Network${RESET}"
+for iface in $(ip -o link show | awk -F': ' '{print $2}' | cut -d@ -f1 | grep -v '^lo$'); do
+    ip_addr=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+    [[ -n "$ip_addr" ]] && ligne "$ok" "$iface" "$ip_addr"
+done
+echo ""
+echo -e "${WHITE}  🔧 Core Services${RESET}"
+for svc in nginx haproxy secubox-waf-ng; do etat_unite "$svc"; done
+etat_agregateur
+echo ""
+echo -e "${WHITE}  🎮 Display Mode${RESET}"
+if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
+    echo -e "     ${ok} ${CYAN}Kiosk GUI${RESET} (Web browser on tty7)"
+elif [[ -f /var/lib/secubox/.tui-enabled ]]; then
+    echo -e "     ${ok} ${CYAN}Console TUI${RESET} (Text dashboard on tty1)"
+else
+    echo -e "     ${warn} ${CYAN}Console Shell${RESET} (Standard login)"
+fi
+echo ""
+echo -e "${GOLD}  ────────────────────────────────────────────────────────────${RESET}"
+echo -e "${WHITE}  🔗 Quick Access${RESET}"
+printf '     %bAdministration:%b  %b%s%b\n' "$GRAY" "$RESET" "$CYAN" "$(url_admin)" "$RESET"
+echo ""

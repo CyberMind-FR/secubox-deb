@@ -1,3 +1,9 @@
+secubox-kiosk (1.2.0-1~trixie1) trixie; urgency=medium
+
+  * Plus d'autologin root (#3412) : enable posait getty@tty2 autologin root, l'ecran public du kiosque arrete basculait sur un shell root. tty2 = getty normal avec connexion ; secubox-kiosk-retire-autologin (postinst) retire l'autologin pose par une version anterieure ou par build-image.sh, et celui de tty1 pose par build-rpi-usb.sh sur une box en kiosque, SEULEMENT s'ils sont exactement les notres. Unite generee : Conflicts=getty@tty7 (au lieu de tty1, qui arretait le kiosque), corrigee aussi au postinst. Un kiosque active revient toujours apres une mise a jour : secubox-kiosk-relance, appele par apt (DPkg::Post-Invoke), le relance s'il porte la sentinelle et l'unite est activee.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 10:07:42 +0100
+
 secubox-kiosk (1.1.0-1~trixie1) trixie; urgency=medium
 
   * Mode par defaut (#3397) : Wayland (Cage) sur Raspberry Pi et autres ARM, X11 seulement sur amd64 et en virtualisation. Corrige detect_vm : systemd-detect-virt affiche « none » ET sort en 1 sur materiel nu, la box etait vue comme une VM.

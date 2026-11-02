@@ -1,0 +1,56 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox :: retire l'autologin ROOT posé par le kiosque (#3412).
+# secubox-kiosk-setup < 1.2.0 et build-image.sh écrivaient getty@tty2.service.d/autologin.conf (agetty --autologin root) :
+# le kiosque arrêté, l'écran public basculait sur un shell root. build-rpi-usb.sh posait le même autologin sur tty1
+# (getty@tty1.service.d/override.conf, console HDMI) ; on ne le retire que sur une box en kiosque.
+# On ne retire QUE ce que nous avons écrit : un fichier dont les lignes utiles sont exactement les nôtres. Un réglage
+# d'opérateur (autre contenu, ligne de plus) reste en place. Sortie : 0 rien à faire, 10 au moins un fichier retiré.
+set -eu
+
+SYSD=/etc/systemd/system
+SENTINELLE=/var/lib/secubox/.kiosk-enabled
+if [ "${SECUBOX_TEST:-}" = 1 ]; then     # chemins de test, jamais lus hors des tests
+    SYSD="${SECUBOX_KIOSK_SYSTEMD_ETC:-$SYSD}"; SENTINELLE="${SECUBOX_KIOSK_SENTINELLE:-$SENTINELLE}"
+fi
+RC=0
+
+# Lignes utiles (sans vides ni commentaires, espaces de bord retirés), séparées par « | ».
+lignes() { sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$1" | grep -v -e '^$' -e '^#' | paste -sd'|' -; }
+
+est_le_notre() {
+    case "$(lignes "$1")" in
+        '[Service]|ExecStart=|ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM|Type=idle') return 0 ;;
+        '[Service]|ExecStart=|ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM') return 0 ;;
+    esac
+    return 1
+}
+
+retire() {
+    f="$1"
+    [ -L "$f" ] && return 0                  # un lien n'est pas ce que nous avons écrit
+    [ -f "$f" ] || return 0
+    if est_le_notre "$f"; then
+        # Sans mot de passe root utilisable, retirer l'autologin fermerait toute console locale : on avertit et on laisse.
+        if [ "$(passwd -S root 2>/dev/null | awk '{print $2}')" != P ]; then
+            echo "secubox-kiosk : $f garde son autologin root : root n'a pas de mot de passe utilisable (passwd root, puis réinstaller secubox-kiosk)" >&2
+            return 0
+        fi
+        rm -f "$f"
+        rmdir "$(dirname "$f")" 2>/dev/null || true
+        echo "secubox-kiosk : autologin root retiré ($f)"
+        RC=10
+    else
+        grep -q -- '--autologin root' "$f" 2>/dev/null \
+            && echo "secubox-kiosk : $f porte un autologin root qui n'est pas le nôtre, laissé en place" >&2
+    fi
+    return 0
+}
+
+retire "$SYSD/getty@tty2.service.d/autologin.conf"
+[ -e "$SENTINELLE" ] && retire "$SYSD/getty@tty1.service.d/override.conf"
+exit "$RC"

@@ -103,6 +103,9 @@ override_dh_auto_install:
 	# s'écrit pas en gk2.
 	install -m 755 usr/bin/secubox-domaine \
 	               debian/secubox-core/usr/bin/secubox-domaine
+	# Vue d'ensemble de la console (#3412) : source unique, les images la copient.
+	install -m 755 usr/bin/secubox-status \
+	               debian/secubox-core/usr/bin/secubox-status
 
 	# LE CHAUFFE-LED APPARTIENT A SON PROPRE PAQUET (#1362). secubox-core
 	# livrait AUSSI usr/sbin/secubox-led-heartbeat et son unite — deux paquets

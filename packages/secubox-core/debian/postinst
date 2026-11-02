@@ -500,3 +500,16 @@ fi
 if [ "$1" = "configure" ] && [ -x /usr/bin/secubox-domaine ]; then
     /usr/bin/secubox-domaine --migrer || true
 fi
+
+# CONSOLE EN UTF-8 (#3412). Les images RPi/arm64 installaient console-setup sans le régler : debconf choisissait
+# CHARMAP="ISO-8859-15" alors que LANG est en UTF-8 — les cadres du message d'accueil (╭─╮) s'affichaient illisibles.
+# On ne corrige QUE cette valeur-là, et seulement si la locale du système est en UTF-8.
+if [ "$1" = "configure" ] && [ -f /etc/default/console-setup ] && [ ! -L /etc/default/console-setup ] \
+   && grep -q '^CHARMAP="\{0,1\}ISO-8859-15"\{0,1\}$' /etc/default/console-setup \
+   && grep -qi '^LANG=.*utf-\{0,1\}8' /etc/default/locale 2>/dev/null; then
+    sed -i 's/^CHARMAP=.*/CHARMAP="UTF-8"/' /etc/default/console-setup
+    # debconf aussi : sans cela, un dpkg-reconfigure console-setup reviendrait à ISO-8859-15.
+    echo "console-setup console-setup/charmap47 select UTF-8" | debconf-set-selections >/dev/null 2>&1 || true
+    echo "secubox-core : console-setup passé en CHARMAP=UTF-8"
+    [ -d /run/systemd/system ] && systemctl try-restart console-setup.service >/dev/null 2>&1 || true
+fi

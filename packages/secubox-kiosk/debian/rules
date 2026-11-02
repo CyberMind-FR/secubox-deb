@@ -12,6 +12,9 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	install -D -m 755 sbin/secubox-kiosk-setup debian/secubox-kiosk/usr/sbin/secubox-kiosk-setup
+	install -D -m 755 sbin/secubox-kiosk-retire-autologin debian/secubox-kiosk/usr/sbin/secubox-kiosk-retire-autologin
+	install -D -m 755 sbin/secubox-kiosk-relance debian/secubox-kiosk/usr/sbin/secubox-kiosk-relance
+	install -D -m 644 apt/80secubox-kiosk-relance debian/secubox-kiosk/etc/apt/apt.conf.d/80secubox-kiosk-relance
 	install -D -m 644 systemd/secubox-kiosk-setup@.service debian/secubox-kiosk/usr/lib/systemd/system/secubox-kiosk-setup@.service
 
 override_dh_auto_test:

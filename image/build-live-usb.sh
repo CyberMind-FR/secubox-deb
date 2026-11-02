@@ -716,7 +716,7 @@ echo -e "    ${CYAN}secubox-mode kiosk${GRAY}    Switch to Kiosk GUI${RESET}"
 echo -e "    ${CYAN}secubox-mode tui${GRAY}      Switch to TUI dashboard${RESET}"
 echo -e "    ${CYAN}secubox-mode console${GRAY}  Switch to shell console${RESET}"
 echo ""
-echo -e "  ${GRAY}Web UI: https://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):9443${RESET}"
+echo -e "  ${GRAY}Web UI: https://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost')/${RESET}"
 echo ""
 HELP_CMD
 chmod +x "${ROOTFS}/usr/bin/secubox-help"
@@ -3073,7 +3073,7 @@ printf '%b' "\e[38;5;29m
 \e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
 
 \e[38;5;250m  🔐 Default: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
-\e[38;5;250m  🌐 Web UI: \e[38;5;45mhttps://\\4:9443\e[0m
+\e[38;5;250m  🌐 Web UI: \e[38;5;45mhttps://\\4/\e[0m
 \e[38;5;250m  📡 SSH:    \e[38;5;45mport 22\e[0m
 
 \e[38;5;242m─────────────────────────────────────────────────────────────\e[0m
@@ -3105,7 +3105,7 @@ printf '%b' "\e[38;5;214m
 
 \e[38;5;242m  Build: ${BUILD_TIMESTAMP}\e[0m
 
-\e[38;5;250m  🌐 Web UI:     \e[38;5;45mhttps://\${ip}:9443\e[0m
+\e[38;5;250m  🌐 Web UI:     \e[38;5;45mhttps://\${ip}/\e[0m
 \e[38;5;250m  🔐 Credentials: \e[38;5;214mroot\e[38;5;250m / \e[38;5;214msecubox\e[0m
 \e[38;5;250m  📖 Docs:       \e[38;5;45mhttps://secubox.in/docs\e[0m
 
@@ -3116,82 +3116,8 @@ MOTD_DYN
 chmod +x "${ROOTFS}/etc/update-motd.d/10-secubox"
 
 # Dynamic status script for interactive use
-cat > "${ROOTFS}/usr/bin/secubox-status" <<'STATUS_SCRIPT'
-#!/bin/bash
-# SecuBox Status - CRT-style system overview
-# CyberMind — https://cybermind.fr
-
-# Colors
-GOLD='\033[38;5;214m'
-CYAN='\033[38;5;45m'
-GREEN='\033[38;5;82m'
-RED='\033[38;5;196m'
-GRAY='\033[38;5;242m'
-WHITE='\033[38;5;250m'
-RESET='\033[0m'
-
-# Status indicators
-ok="${GREEN}●${RESET}"
-fail="${RED}●${RESET}"
-warn="${GOLD}●${RESET}"
-
-# Header
-echo -e "${CYAN}"
-echo '  ╭──────────────────────────────────────────────────────────╮'
-echo '  │           ⚡ SecuBox System Status ⚡                   │'
-echo '  ╰──────────────────────────────────────────────────────────╯'
-echo -e "${RESET}"
-
-# System info
-echo -e "${WHITE}  📊 System Info${RESET}"
-echo -e "     ${GRAY}Hostname:${RESET}  $(hostname)"
-echo -e "     ${GRAY}Uptime:${RESET}    $(uptime -p 2>/dev/null || echo 'N/A')"
-echo -e "     ${GRAY}Memory:${RESET}    $(free -h | awk '/^Mem:/{printf "%s / %s (%.1f%%)", $3, $2, $3/$2*100}')"
-echo -e "     ${GRAY}Disk:${RESET}      $(df -h / | awk 'NR==2{printf "%s / %s (%s)", $3, $2, $5}')"
-echo ""
-
-# Network info
-echo -e "${WHITE}  🌐 Network${RESET}"
-for iface in $(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$'); do
-    ip_addr=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
-    if [[ -n "$ip_addr" ]]; then
-        echo -e "     ${GREEN}●${RESET} ${GRAY}${iface}:${RESET}  ${CYAN}${ip_addr}${RESET}"
-    fi
-done
-echo ""
-
-# Core services
-echo -e "${WHITE}  🔧 Core Services${RESET}"
-services=(nginx haproxy secubox-api secubox-hub)
-for svc in "${services[@]}"; do
-    if systemctl is-active --quiet "$svc" 2>/dev/null; then
-        echo -e "     ${ok} ${GRAY}${svc}${RESET}"
-    elif systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then
-        echo -e "     ${fail} ${GRAY}${svc}${RESET} (stopped)"
-    fi
-done
-echo ""
-
-# Mode detection
-echo -e "${WHITE}  🎮 Display Mode${RESET}"
-if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
-    echo -e "     ${ok} ${CYAN}Kiosk GUI${RESET} (Web browser on tty7)"
-elif [[ -f /var/lib/secubox/.tui-enabled ]]; then
-    echo -e "     ${ok} ${CYAN}Console TUI${RESET} (Text dashboard on tty1)"
-else
-    echo -e "     ${warn} ${CYAN}Console Shell${RESET} (Standard login)"
-fi
-echo ""
-
-# Quick links
-echo -e "${GOLD}  ────────────────────────────────────────────────────────────${RESET}"
-echo -e "${WHITE}  🔗 Quick Access${RESET}"
-IP=$(hostname -I | awk '{print $1}')
-echo -e "     ${GRAY}Dashboard:${RESET}  ${CYAN}https://${IP:-localhost}:9443${RESET}"
-echo -e "     ${GRAY}Admin API:${RESET}  ${CYAN}https://${IP:-localhost}:9443/api/v1/${RESET}"
-echo ""
-STATUS_SCRIPT
-chmod +x "${ROOTFS}/usr/bin/secubox-status"
+# Vue d'ensemble de la console : source unique livrée par secubox-core (#3412) — teste l'agrégateur (pas secubox-hub), URL d'administration réelle.
+install -D -m 755 "${REPO_DIR}/packages/secubox-core/usr/bin/secubox-status" "${ROOTFS}/usr/bin/secubox-status"
 
 # Password reset script for TTY recovery
 cat > "${ROOTFS}/usr/bin/secubox-passwd" <<'PASSWD_SCRIPT'
@@ -3265,7 +3191,7 @@ show_status "Nginx" "systemctl is-active --quiet nginx"
 show_status "SecuBox API" "systemctl is-active --quiet secubox-api"
 
 echo ""
-echo -e "${GRAY}  Dashboard: https://$(hostname -I | awk '{print $1}' || echo 'localhost'):9443${RESET}"
+echo -e "${GRAY}  Dashboard: https://$(hostname -I | awk '{print $1}' || echo 'localhost')/${RESET}"
 echo ""
 BOOT_BANNER
 chmod +x "${ROOTFS}/usr/sbin/secubox-boot-banner"
