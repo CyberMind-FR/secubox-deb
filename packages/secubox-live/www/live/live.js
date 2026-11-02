@@ -12,11 +12,17 @@
   function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR'); }
   function texte(id, v) { $(id).textContent = v == null ? '—' : v; }
 
+  // #3408 : pourcentage arrondi ; couleur par seuil quand `couleur` est une fonction (CPU : vert, ambre, rouge)
   function jauge(v, couleur) {
-    var d = el('div', 'jauge'), i = el('i'), s = el('span');
-    if (v != null) { s.style.width = Math.max(0, Math.min(100, v)) + '%'; s.style.background = couleur; }
-    i.appendChild(s); d.appendChild(i); d.appendChild(el('span', null, v == null ? '—' : v + ' %')); return d;
+    var d = el('div', 'jauge'), i = el('i'), s = el('span'), r = v == null ? null : Math.round(v);
+    if (r != null) {
+      s.style.width = Math.max(0, Math.min(100, r)) + '%';
+      s.style.background = typeof couleur === 'function' ? couleur(r) : couleur;
+    }
+    i.appendChild(s); d.appendChild(i); d.appendChild(el('span', null, r == null ? '—' : r + ' %')); return d;
   }
+
+  function couleurCharge(p) { return p >= 80 ? '#f87171' : p >= 50 ? '#fbbf24' : '#34d399'; }
 
   function noeuds(liste) {
     var tb = $('noeuds'); vider(tb);
@@ -24,7 +30,7 @@
     liste.forEach(function (n) {
       var tr = el('tr'), p = el('span', 'pastille ' + (n.etat === 'hors ligne' ? 'p-ko' : n.etat === 'interface distante' ? 'p-leger' : 'p-ok'), n.etat), tdE = el('td');
       tdE.appendChild(p);
-      var c = el('td'); c.appendChild(jauge(n.cpu, '#22d3ee'));
+      var c = el('td'); c.appendChild(jauge(n.cpu, couleurCharge));
       var m = el('td'); m.appendChild(jauge(n.memoire, '#a78bfa'));
       [el('td', 'mono', n.nom), el('td', null, n.role || '—'), el('td', null, n.materiel || '—'), tdE, c, m, el('td', null, n.marche || '—')]
         .forEach(function (x) { tr.appendChild(x); });
