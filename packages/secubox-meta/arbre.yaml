@@ -50,6 +50,7 @@ hors-arbre:
   - secubox-profil-media
   - secubox-profil-provision
   - secubox-eye-square        # kiosque Pi, installation a la demande ; plus propose par defaut (#2018)
+  - secubox-rpi-dsi           # ecran officiel RPi 7" DSI, RPi4/400 seulement, installation a la demande (#3399)
   - secubox-profil-complet
 
 
