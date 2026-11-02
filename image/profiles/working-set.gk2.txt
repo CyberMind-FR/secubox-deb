@@ -180,3 +180,6 @@ voice
 wan-link-guard
 webos
 zia
+# AJOUT MANUEL 2026-11-02 (#3405) : pilotage-agent. Installé par défaut sur toute box (lite, minimal, donc isp et
+# full) mais jamais actif sur gk2, qui est le maître (R35 : l agent s y ignore) ; le relevé de gk2 ne peut donc pas le voir.
+pilotage-agent

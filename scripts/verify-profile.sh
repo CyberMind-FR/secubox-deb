@@ -16,7 +16,7 @@ WS="${WORKING_SET:-$REPO/image/profiles/working-set.gk2.txt}"
 
 mapfile -t WORKING < <(grep -vE '^\s*#|^\s*$' "$WS")
 in_ws(){ local x; for x in "${WORKING[@]}"; do [[ "$x" == "$1" ]] && return 0; done; return 1; }
-deps_of(){ awk '/^Depends:/{f=1} f&&/^[A-Z][a-zA-Z-]*:/&&!/^Depends:/{f=0} f' "$1" | grep -oE 'secubox-[a-z0-9-]+' | sed 's/secubox-//' | sort -u; }
+deps_of(){ awk '/^Depends:/{f=1} f&&/^[A-Z][a-zA-Z-]*:/&&!/^Depends:/{f=0} f' "$1" | grep -v '^\s*#' | grep -oE 'secubox-[a-z0-9-]+' | sed 's/secubox-//' | sort -u; }
 is_meta(){ grep -q '^Section: metapackages' "$1" 2>/dev/null; }
 
 FAIL=0; declare -A SEEN
