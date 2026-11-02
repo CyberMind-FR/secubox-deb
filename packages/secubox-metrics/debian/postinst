@@ -45,7 +45,14 @@ if [ "$1" = "configure" ]; then
 
     # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
     # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
-    deb-systemd-helper enable secubox-geoipupdate.timer secubox-metrics-rapport.timer secubox-metrics-rapport-quotidien.timer secubox-metrics-rapport-waf.timer secubox-metrics-redemarrage.timer secubox-metrics-memoire.timer >/dev/null 2>&1 || true
+    # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+    for _u in secubox-geoipupdate.timer secubox-metrics-rapport.timer secubox-metrics-rapport-quotidien.timer secubox-metrics-rapport-waf.timer secubox-metrics-redemarrage.timer secubox-metrics-memoire.timer; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload || true
         # 3. Base ASN (#194) : le timer, et le recuperateur avec repli DB-IP.
@@ -100,10 +107,12 @@ done
 # jour, et ne repartait pas au reboot. On force donc, APRES le bloc debhelper
 # (dernier mot), l'activation et le (re)demarrage. Place ici a dessein : rien
 # ne vient plus le desactiver ensuite.
-# #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
-# desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
-deb-systemd-helper enable secubox-metrics.service >/dev/null 2>&1 || true
-if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
-    systemctl restart secubox-metrics.service >/dev/null 2>&1 || true
+if [ "$1" = "configure" ]; then
+    # #3411 : activation HORS du test systemd (chroot d'image). EXCEPTION au motif was-enabled : #1368 exige que ce
+    # service coeur soit TOUJOURS arme (registre deb-systemd-helper desynchronise constate) ; enable force, comme avant.
+    deb-systemd-helper enable secubox-metrics.service >/dev/null 2>&1 || true
+    if [ -d /run/systemd/system ]; then
+        systemctl restart secubox-metrics.service >/dev/null 2>&1 || true
+    fi
 fi
 exit 0

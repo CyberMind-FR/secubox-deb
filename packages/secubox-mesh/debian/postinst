@@ -38,10 +38,17 @@ case "$1" in
       udevadm control --reload || true
     fi
 
-    # 6. systemd : daemon-reload + (re)start (dh_installsystemd gère enable)
+    # 6. systemd : activation par deb-systemd-helper ci-dessous (hors test systemd), puis daemon-reload + restart
     # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
     # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
-    deb-systemd-helper enable secubox-mesh.service >/dev/null 2>&1 || true
+    # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+    for _u in secubox-mesh.service; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
       # Si l'ancien 1.1.0 tournait, on le bascule en douceur (restart, pas mass)

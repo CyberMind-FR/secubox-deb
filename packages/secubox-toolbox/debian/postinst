@@ -230,7 +230,14 @@ SBXRLEVEL
     # 5. systemd : enable mais ne PAS start automatiquement (l'AP doit être configuré d'abord)
     # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
     # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
-    deb-systemd-helper enable secubox-toolbox.service secubox-toolbox-wg-restore.service secubox-toolbox-tor.path secubox-toolbox-tor.timer secubox-toolbox-tor-exempt-hosts.timer >/dev/null 2>&1 || true
+    # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+    for _u in secubox-toolbox.service secubox-toolbox-wg-restore.service secubox-toolbox-tor.path secubox-toolbox-tor.timer secubox-toolbox-tor-exempt-hosts.timer; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
     if [ -d /run/systemd/system ]; then
 # Phase 6.Q (#496) : SQLite tuning + indexes
 if [ -x /usr/sbin/secubox-toolbox-db-tune ]; then
@@ -330,7 +337,14 @@ done
       fi
       # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
       # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
-      deb-systemd-helper enable secubox-blacklist-sync.timer secubox-blacklist-attrib.timer secubox-escalate.timer secubox-toolbox-autolearn.timer secubox-toolbox-mesh-exclusion-publish.timer secubox-toolbox-mesh-exclusion-sync.timer >/dev/null 2>&1 || true
+      # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+      for _u in secubox-blacklist-sync.timer secubox-blacklist-attrib.timer secubox-escalate.timer secubox-toolbox-autolearn.timer secubox-toolbox-mesh-exclusion-publish.timer secubox-toolbox-mesh-exclusion-sync.timer; do
+        if deb-systemd-helper --quiet was-enabled "$_u"; then
+          deb-systemd-helper enable "$_u" >/dev/null || true
+        else
+          deb-systemd-helper update-state "$_u" >/dev/null || true
+        fi
+      done
       if [ -d /run/systemd/system ]; then
         systemctl start secubox-blacklist-sync.timer 2>/dev/null || true
         # Kick an immediate first sync (best-effort).

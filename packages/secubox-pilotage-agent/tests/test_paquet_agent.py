@@ -110,7 +110,7 @@ def test_regles_installent_ctl_sudoers_et_tmpfiles():
     assert t == ["d /var/lib/secubox-pilotagectl 0700 root root -"]
     pi = sans_commentaires(lire("debian/postinst"))
     assert "systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-pilotagectl.conf" in pi
-    assert pi.index("systemd-tmpfiles --create") < pi.index("deb-systemd-helper enable")
+    assert pi.index("systemd-tmpfiles --create") < pi.index("deb-systemd-helper --quiet was-enabled")
     c = lire("debian/control")
     assert re.search(r"^Depends:.*\bsudo\b", c, re.M) and re.search(r"^Depends:.*\bpython3 \(>= 3\.11\)", c, re.M)
     assert "rm -rf /var/lib/secubox-pilotagectl" in lire("debian/postrm")
@@ -168,7 +168,7 @@ def test_paquet_coherent():
     assert "wireguard-tools" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
     pi = lire("debian/postinst")
     for m in ("adduser --system --no-create-home --group secubox-pilotage-agent",
-              "apparmor_parser", "deb-systemd-helper enable secubox-pilotage-agent.service",
+              "apparmor_parser", "for _u in secubox-pilotage-agent.service",
               "systemctl start secubox-pilotage-agent.service"):
         assert m in pi, m
     assert "systemctl stop secubox-pilotage-agent" in lire("debian/prerm")

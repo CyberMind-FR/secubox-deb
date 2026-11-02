@@ -346,7 +346,14 @@ REPRISE
     fi
     # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
     # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
-    deb-systemd-helper enable secubox-dns-listes.path secubox-dns-listes.timer >/dev/null 2>&1 || true
+    # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+    for _u in secubox-dns-listes.path secubox-dns-listes.timer; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload 2>/dev/null || true
         systemctl start secubox-dns-listes.path secubox-dns-listes.timer 2>/dev/null || true

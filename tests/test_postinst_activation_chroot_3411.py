@@ -11,6 +11,8 @@ démarrage reste conditionné."""
 import re
 from pathlib import Path
 
+import pytest
+
 RACINE = Path(__file__).resolve().parents[1]
 
 # Exceptions justifiées : chemin relatif -> raison. Vide à ce jour.
@@ -70,6 +72,52 @@ def test_aucun_postinst_ne_conditionne_l_activation_a_systemd_en_marche():
     assert vus > 50, "inventaire des postinst anormalement court"
     assert not fautes, ("`systemctl enable` sous `[ -d /run/systemd/system ]` : sauté dans le chroot des images ; "
                         "activer avec deb-systemd-helper enable hors du test (#3411) :\n  " + "\n  ".join(fautes))
+
+
+# Activation forcée (sans was-enabled) admise : chemin -> raison.
+ENABLE_FORCE = {"packages/secubox-metrics/debian/postinst": "#1368 : API du tableau de bord toujours armée"}
+
+# Jamais activés par un paquet : l'opérateur (ou le contrôleur) décide.
+INTERDITS = ("secubox-lan-dhcp", "secubox-authwatch", "sbxdpi", "secubox-toolbox-egress-proxy")
+
+# Postinst corrigés par #3411 : le motif debhelper y est exigé.
+CORRIGES = [f"packages/secubox-{m}/debian/postinst" for m in (
+    "ipv6guard", "freebox", "ephemeride", "pseudo-routeur", "mesh", "netmodes", "metrics", "pilotage",
+    "pilotage-agent", "toolbox", "core", "waf-ng")] + [
+    "packages/secubox-annuaire/composants/openpgp/debian/postinst",
+    "packages/secubox-auth/composants/sbxid/debian/postinst"]
+
+MOTIF = re.compile(r'if deb-systemd-helper --quiet was-enabled "\$_u"; then\n\s*deb-systemd-helper enable "\$_u" >/dev/null \|\| true\n'
+                   r'\s*else\n\s*deb-systemd-helper update-state "\$_u" >/dev/null \|\| true\n\s*fi')
+
+
+@pytest.mark.parametrize("rel", CORRIGES)
+def test_motif_debhelper_respecte_un_disable_manuel(rel):
+    texte = (RACINE / rel).read_text(encoding="utf-8")
+    assert "deb-systemd-helper" in texte
+    if rel in ENABLE_FORCE:
+        bloc = texte[texte.rindex('if [ "$1" = "configure" ]; then'):]
+        assert "deb-systemd-helper enable secubox-metrics.service" in bloc, "enable forcé hors du bloc configure"
+        texte = texte[:texte.rindex('if [ "$1" = "configure" ]; then')]
+    nus = [l for l in texte.splitlines() if re.match(r'^\s*deb-systemd-helper enable (?!"\$_u")', l)]
+    assert not nus, f"enable sans was-enabled : {nus}"
+    assert MOTIF.search(texte)
+
+
+@pytest.mark.parametrize("rel,texte", list(_postinsts()))
+def test_services_jamais_actives_par_un_paquet(rel, texte):
+    for l in texte.splitlines():
+        if re.search(r"(systemctl|deb-systemd-helper)\s+(?:--\S+\s+)*enable\b", l) or l.strip().startswith("for _u in"):
+            for u in INTERDITS:
+                assert not re.search(rf"\b{re.escape(u)}(\.service)?\b", l), f"{rel} : {u} activé ({l.strip()})"
+
+
+def test_relais_pilotage_toujours_derriere_relais_pret():
+    texte = (RACINE / "packages/secubox-pilotage-agent/debian/postinst").read_text(encoding="utf-8")
+    for n, l in enumerate(texte.splitlines()):
+        if "secubox-pilotage-relais.socket" in l and re.search(r"enable|for _u in", l):
+            avant = texte.splitlines()[max(0, n - 3):n]
+            assert any('if [ "$relais_pret" = 1 ]' in a for a in avant), l
 
 
 def test_liste_blanche_a_jour():

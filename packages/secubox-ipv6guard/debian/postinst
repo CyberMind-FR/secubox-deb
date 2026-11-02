@@ -8,7 +8,14 @@ case "$1" in
         --shell /usr/sbin/nologin secubox-ipv6guard >/dev/null
     # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
     # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
-    deb-systemd-helper enable secubox-ipv6guard.service >/dev/null 2>&1 || true
+    # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+    for _u in secubox-ipv6guard.service; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
       # try-restart : une mise à jour recharge le code sans démarrer ce que l'opérateur a arrêté ; un premier démarrage se fait.

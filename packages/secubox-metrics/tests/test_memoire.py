@@ -113,7 +113,7 @@ def test_la_route_et_le_timer_sont_cables():
     rules = (pkg / "debian" / "rules").read_text()
     assert "secubox-metrics-memoire.timer" in rules and "secubox-metrics-memoire.service" in rules
     pi = (pkg / "debian" / "postinst").read_text()
-    assert "secubox-metrics-memoire.timer" in pi.split("deb-systemd-helper enable", 1)[1].split("\n", 1)[0]   # #3411
+    assert "secubox-metrics-memoire.timer" in pi.split("for _u in secubox-geoipupdate", 1)[1].split("\n", 1)[0]   # #3411
     assert "systemctl start secubox-metrics-memoire.timer" in pi
     svc = (pkg / "systemd" / "secubox-metrics-memoire.service").read_text()
     assert "User=secubox" in svc and "StateDirectory=secubox/metrics" in svc and "api.memoire" in svc

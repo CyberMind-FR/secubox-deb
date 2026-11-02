@@ -174,7 +174,7 @@ def test_postinst_et_prerm():
     assert "apparmor_parser -r /etc/apparmor.d/secubox-pilotage-api" in p
     assert "/usr/sbin/secubox-pilotage-ecoute" in p
     assert "/etc/secubox/pilotage" not in p                         # M8 : dossier jamais utilisé par le maître
-    assert "deb-systemd-helper enable secubox-pilotage.socket secubox-pilotage-canal.socket" in p
+    assert "for _u in secubox-pilotage.socket secubox-pilotage-canal.socket" in p
     assert "systemctl start secubox-pilotage.socket secubox-pilotage-canal.socket" in p
     prerm = code("debian/prerm")
     assert "systemctl stop secubox-pilotage.service" in prerm
