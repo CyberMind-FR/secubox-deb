@@ -42,7 +42,7 @@
     // opting-out page, unlike a window flag).
     if (document.querySelector('meta[name="sbx-no-health-banner"]')) return;
 
-    const VERSION = '1.4.8';
+    const VERSION = '1.5.0';
     const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
         || '/api/v1/metrics/visitor-origin';
     const LIVE_HOSTS_API     = window.SECUBOX_LIVE_HOSTS_API
@@ -898,6 +898,48 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // MOT DE PASSE PAR DÉFAUT ACTIF (#3401) — bandeau rouge persistant
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Route gardée (require_lecture) : un visiteur anonyme d'un site public reçoit 401 et ne voit rien. Le bandeau ne
+    // se ferme pas : il disparaît de lui-même quand le mot de passe admin est changé.
+    const DEFAULT_PASSWORD_API = window.SECUBOX_DEFAULT_PASSWORD_API || '/api/v1/auth/mot-de-passe-defaut';
+    const DEFAULT_PASSWORD_INTERVAL = 60000;
+
+    function defaultPasswordStrip(etat) {
+        let el = document.getElementById('sbx-mot-de-passe-defaut');
+        if (!etat || etat.actif !== true) {
+            if (el) el.remove();
+            return;
+        }
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'sbx-mot-de-passe-defaut';
+            el.setAttribute('role', 'alert');
+            el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483646;background:#b00020;color:#fff;'
+                + 'font:600 14px/1.4 system-ui,sans-serif;padding:8px 16px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.4)';
+            const msg = document.createElement('span');
+            const lien = document.createElement('a');
+            lien.style.cssText = 'color:#fff;text-decoration:underline;margin-left:12px';
+            lien.textContent = 'Changer le mot de passe';
+            el.append(msg, lien);
+        }
+        el.firstChild.textContent = String(etat.message || 'Mot de passe par défaut actif.');
+        const lien = String(etat.lien || '/users/');
+        el.lastChild.href = lien.startsWith('/') ? lien : '/users/';
+        if (!el.isConnected && document.body) document.body.prepend(el);
+    }
+
+    async function checkDefaultPassword() {
+        try {
+            const h = { Accept: 'application/json' };
+            try { const t = localStorage.getItem('sbx_token'); if (t) h.Authorization = 'Bearer ' + t; } catch (_) { /* stockage bloqué */ }
+            const r = await fetch(DEFAULT_PASSWORD_API, { credentials: 'same-origin', cache: 'no-store', headers: h });
+            if (!r.ok) return;
+            defaultPasswordStrip(await r.json());
+        } catch (_) { /* hors ligne : on garde l'état affiché */ }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // INITIALIZATION
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -915,6 +957,8 @@
         // Inject styles
         injectBannerStyles();
         pollLivePanel();
+        checkDefaultPassword();
+        setInterval(checkDefaultPassword, DEFAULT_PASSWORD_INTERVAL);
         setInterval(pollLivePanel, LIVE_REFRESH_INTERVAL);
 
         // Create banner and trigger
