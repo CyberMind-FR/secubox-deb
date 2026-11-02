@@ -1,3 +1,9 @@
+secubox-lite (1.11.0-1~trixie1) trixie; urgency=medium
+
+  * Dépend de secubox-pilotage-agent : une box flashée rejoint la Flotte ; isp et full en héritent (ref #3405).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:43:31 +0100
+
 secubox-lite (1.10.0-1~trixie1) trixie; urgency=medium
 
   * Sans toolbox (cabine numérique Gondwana), moteur d'interception ni intercepteur (ref #3259, décision du
