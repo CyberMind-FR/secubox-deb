@@ -496,8 +496,10 @@ def audit_protection(entree: str) -> int:
 
 # Seuils de l'autolearn du toolbox (#3393) : filters.json appartient à secubox-toolbox (664) dans un dossier root (755) ; l'API (compte
 # secubox, hors du groupe secubox-toolbox) passe ici {"acteur", "seuils"} sur l'entrée standard. Root revalide clés et bornes (mêmes que
-# le modèle Pydantic de l'API), ouvre le fichier EXISTANT sans suivre de lien ni le créer, l'écrit en place (propriétaire, droits, inode
-# inchangés) et audite. Codes : 0 écrit, 2 entrée refusée, 4 filters.json absent/lien/illisible, 1 écriture impossible.
+# le modèle Pydantic de l'API), lit le fichier EXISTANT sans suivre de lien ni le créer, écrit un temporaire dans le même dossier (O_EXCL,
+# propriétaire et droits copiés de l'original), fsync, rename atomique, fsync du dossier : un arrêt ne laisse jamais un fichier tronqué.
+# Le portail toolbox relit par chemin (cache 5 s) et secubox-toolbox-tor.path (PathModified) voit aussi le rename.
+# Codes : 0 écrit, 2 entrée refusée, 4 filters.json absent/lien/illisible, 1 écriture impossible.
 FILTERS = Path(os.environ.get("SECUBOX_ADGUARD_TV_FILTERS", "/etc/secubox/toolbox/filters.json"))
 FILTERS_MAX = 1 << 20
 SEUILS_BORNES = {"autolearn_ad_min_sites": (1, 100), "autolearn_social_min_sites": (1, 100), "autolearn_min_sites": (1, 100),
@@ -507,11 +509,37 @@ SEUILS_BORNES = {"autolearn_ad_min_sites": (1, 100), "autolearn_social_min_sites
 def _seuils_valides(r) -> bool:
     if not isinstance(r, dict) or set(r) != {"acteur", "seuils"}:
         return False
-    if not (isinstance(r["acteur"], str) and ACTEUR_RE.match(r["acteur"])):
+    if not (isinstance(r["acteur"], str) and ACTEUR_RE.fullmatch(r["acteur"])):
         return False
     s = r["seuils"]
     return (isinstance(s, dict) and 1 <= len(s) <= len(SEUILS_BORNES)
             and all(k in SEUILS_BORNES and type(v) is int and SEUILS_BORNES[k][0] <= v <= SEUILS_BORNES[k][1] for k, v in s.items()))
+
+
+def _remplacer_atomiquement(chemin: Path, donnees: bytes, st: os.stat_result) -> None:
+    """Temporaire O_EXCL dans le même dossier, propriétaire/droits de l'original, fsync, rename, fsync du dossier ; retiré en cas d'échec."""
+    fd, tmp = tempfile.mkstemp(dir=chemin.parent, prefix=".filters.json.")
+    try:
+        try:
+            os.fchmod(fd, stat.S_IMODE(st.st_mode))
+            if os.geteuid() == 0 or (st.st_uid, st.st_gid) != (os.geteuid(), os.getegid()):
+                os.fchown(fd, st.st_uid, st.st_gid)
+            vue = memoryview(donnees)
+            while vue:
+                vue = vue[os.write(fd, vue):]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, chemin)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+    dfd = os.open(chemin.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
 
 
 def seuils(entree: str) -> int:
@@ -523,41 +551,38 @@ def seuils(entree: str) -> int:
         print("seuils refusés", file=sys.stderr)
         return 2
     try:
-        fd = os.open(FILTERS, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+        fd = os.open(FILTERS, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)   # O_NONBLOCK : une FIFO ne bloque pas
     except OSError as e:
         print(f"filters.json inutilisable ({type(e).__name__}) : rien n'est écrit", file=sys.stderr)
         return 4
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
             print("filters.json n'est pas un fichier ordinaire : rien n'est écrit", file=sys.stderr)
             return 4
+        fcntl.fcntl(fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) & ~os.O_NONBLOCK)
         brut = b""
         while len(brut) <= FILTERS_MAX:
             morceau = os.read(fd, 65536)
             if not morceau:
                 break
             brut += morceau
-        try:
-            cfg = json.loads(brut.decode("utf-8")) if len(brut) <= FILTERS_MAX else None
-        except ValueError:
-            cfg = None
-        if not isinstance(cfg, dict):
-            print("filters.json illisible ou n'est pas un objet : rien n'est écrit", file=sys.stderr)
-            return 4
-        cfg.update(r["seuils"])
-        vue = memoryview(json.dumps(cfg, indent=2).encode("utf-8"))
-        try:
-            os.lseek(fd, 0, os.SEEK_SET)
-            os.ftruncate(fd, 0)
-            while vue:
-                vue = vue[os.write(fd, vue):]
-            os.fsync(fd)
-        except OSError as e:
-            audit("seuils-echec", f"acteur={r['acteur']} {type(e).__name__}")
-            print(f"filters.json non écrit ({type(e).__name__})", file=sys.stderr)
-            return 1
     finally:
         os.close(fd)
+    try:
+        cfg = json.loads(brut.decode("utf-8")) if len(brut) <= FILTERS_MAX else None
+    except ValueError:
+        cfg = None
+    if not isinstance(cfg, dict):
+        print("filters.json illisible ou n'est pas un objet : rien n'est écrit", file=sys.stderr)
+        return 4
+    cfg.update(r["seuils"])
+    try:
+        _remplacer_atomiquement(FILTERS, json.dumps(cfg, indent=2).encode("utf-8"), st)
+    except OSError as e:
+        audit("seuils-echec", f"acteur={r['acteur']} {type(e).__name__}")
+        print(f"filters.json non écrit ({type(e).__name__})", file=sys.stderr)
+        return 1
     audit("seuils", f"acteur={r['acteur']} " + " ".join(f"{k}={v}" for k, v in sorted(r["seuils"].items())))
     print(json.dumps({"ok": True, "changed": r["seuils"]}))
     return 0

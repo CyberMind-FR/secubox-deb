@@ -1351,7 +1351,11 @@ async def learn_set_thresholds(body: SeuilsApprentissage, jeton=Depends(require_
     entree = _json.dumps({"acteur": acteur, "seuils": changed})
     try:
         r = await asyncio.to_thread(subprocess.run, _argv_seuils(), input=entree, capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        logger.warning("learn/thresholds : contrôleur seuils hors délai (verrou tenu ?)")
+        raise HTTPException(status_code=503, detail="contrôleur occupé, réessayer") from None
+    except OSError as e:
+        logger.warning("learn/thresholds : contrôleur seuils injoignable (%s)", type(e).__name__)
         raise HTTPException(status_code=503, detail=_ECRITURE_REFUSEE) from None
     msg = (r.stderr or "").strip()[:300]
     if not msg.startswith(("filters.json", "seuils refusés")):          # seuls les messages connus du contrôleur, jamais une trace
@@ -1359,11 +1363,12 @@ async def learn_set_thresholds(body: SeuilsApprentissage, jeton=Depends(require_
     if r.returncode == 0:
         return {"status": "ok", "changed": changed, "note": "applies next cycle"}
     if r.returncode == 4 and msg:
-        raise HTTPException(status_code=409, detail=msg or "filters.json absent ou n'est pas un fichier ordinaire : rien n'est écrit")
+        raise HTTPException(status_code=409, detail=msg)
     if r.returncode == 2 and msg:
-        raise HTTPException(status_code=422, detail=msg or "seuils refusés")
+        raise HTTPException(status_code=422, detail=msg)
     if r.returncode == 1 and msg:
         raise HTTPException(status_code=502, detail=msg)
+    logger.warning("learn/thresholds : écriture refusée rc=%s stderr=%r", r.returncode, (r.stderr or "")[:200])
     raise HTTPException(status_code=503, detail=_ECRITURE_REFUSEE)
 
 

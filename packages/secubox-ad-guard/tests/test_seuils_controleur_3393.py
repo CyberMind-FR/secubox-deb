@@ -58,18 +58,9 @@ def test_api_ecrit_par_le_controleur_et_audite(box):
     assert r.status_code == 200, r.text
     assert r.json()["changed"] == {"autolearn_min_sites": 5}
     assert json.loads(f.read_text()) == {"autolearn": True, "autolearn_min_sites": 5, "tor": {"actif": True}}
-    assert f.stat().st_ino == st0.st_ino and f.stat().st_mode == st0.st_mode            # en place
+    assert f.stat().st_mode == st0.st_mode
     ligne = json.loads((box / "audit.log").read_text().splitlines()[-1])
     assert ligne["action"] == "seuils" and "autolearn_min_sites=5" in ligne["detail"]
-
-
-def test_dossier_non_inscriptible_ecrit_en_place(box):
-    os.chmod(box, 0o555)
-    try:
-        assert TestClient(m.app).post("/learn/thresholds", json={"autolearn_ti_min_weight": 0}).status_code == 200
-    finally:
-        os.chmod(box, 0o755)
-    assert json.loads((box / "filters.json").read_text())["autolearn_ti_min_weight"] == 0
 
 
 @pytest.mark.parametrize("entree", ["", "pas du json", "[]", '{"seuils": {}}', '{"acteur": "admin", "seuils": {}}',
@@ -126,3 +117,71 @@ def test_sudoers_verbe_exact():
 def test_argv_production_sudo_exact(monkeypatch):
     monkeypatch.setattr(m.os, "geteuid", lambda: 1000)
     assert m._argv_seuils() == ["sudo", "-n", "/usr/sbin/secubox-adguard-tv", "seuils"]
+
+
+# ── passe de correction (relecture sécurité) ──
+def _module_ctl(box, monkeypatch):
+    import importlib.machinery
+    import importlib.util
+    lo = importlib.machinery.SourceFileLoader("tvctl_3393", str(CTL))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("tvctl_3393", lo))
+    lo.exec_module(mod)
+    monkeypatch.setattr(mod, "FILTERS", box / "filters.json")
+    monkeypatch.setattr(mod, "AUDIT", box / "audit.log")
+    return mod
+
+
+OK = '{"acteur": "admin", "seuils": {"autolearn_min_sites": 3}}'
+
+
+def test_ecriture_atomique_proprietaire_et_droits_copies(box):
+    f = box / "filters.json"
+    os.chmod(f, 0o664)
+    st0 = f.stat()
+    assert _ctl(OK).returncode == 0
+    st1 = f.stat()
+    assert st1.st_ino != st0.st_ino                                             # rename atomique : jamais de fichier tronqué
+    assert (st1.st_uid, st1.st_gid, st1.st_mode) == (st0.st_uid, st0.st_gid, st0.st_mode)
+    assert json.loads(f.read_text())["autolearn_min_sites"] == 3
+    assert sorted(p.name for p in box.iterdir() if p.name.startswith((".filters", "filters"))) == ["filters.json"]
+
+
+def test_echec_d_ecriture_laisse_l_original_intact(box, monkeypatch):
+    mod = _module_ctl(box, monkeypatch)
+    avant = (box / "filters.json").read_text()
+
+    def panne(fd):
+        raise OSError(28, "plein")
+    monkeypatch.setattr(mod.os, "fsync", panne)
+    assert mod.seuils(OK) == 1
+    assert (box / "filters.json").read_text() == avant
+    assert sorted(p.name for p in box.iterdir() if "filters" in p.name) == ["filters.json"]
+
+
+def test_acteur_avec_retour_ligne_refuse(box):
+    assert _ctl('{"acteur": "admin\\n", "seuils": {"autolearn_min_sites": 3}}').returncode == 2
+
+
+def test_fifo_ne_bloque_pas(box):
+    f = box / "filters.json"
+    f.unlink()
+    os.mkfifo(f)
+    assert _ctl(OK).returncode == 4
+
+
+def test_api_503_controleur_occupe(box, monkeypatch):
+    def lent(*a, **k):
+        raise subprocess.TimeoutExpired("ctl", 30)
+    monkeypatch.setattr(m.subprocess, "run", lent)
+    r = TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4})
+    assert r.status_code == 503 and "occupé" in r.json()["detail"]
+
+
+def test_api_journalise_rc_et_stderr_avant_503(box, monkeypatch, caplog):
+    faux = box / "faux-sudo"
+    faux.write_text("#!/bin/sh\necho 'sudo: a password is required' >&2\nexit 1\n")
+    faux.chmod(0o755)
+    monkeypatch.setattr(m, "_argv_seuils", lambda: [str(faux)])
+    with caplog.at_level("WARNING"):
+        assert TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4}).status_code == 503
+    assert any("rc=1" in r.getMessage() and "a password is required" in r.getMessage() for r in caplog.records)

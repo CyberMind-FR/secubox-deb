@@ -3,6 +3,9 @@ secubox-ad-guard (1.24.1-1~trixie1) trixie; urgency=medium
   * POST /learn/thresholds (ref #3393) : filters.json (secubox-toolbox 664, dossier root 755) n'était pas inscriptible par
     l'agrégateur (secubox). Écriture par le verbe root borné `secubox-adguard-tv seuils` (JSON sur stdin, revalidé, en place sans
     suivre de lien, sous verrou, audité) ; règle sudoers exacte. 503 « écriture non autorisée » si sudo/verbe indisponible, jamais 500.
+  * Relecture (ref #3393) : root écrit un temporaire O_EXCL (propriétaire/droits copiés), fsync, rename atomique, fsync du
+    dossier ; ACTEUR_RE.fullmatch ; O_NONBLOCK à l'ouverture ; 503 « contrôleur occupé » sur délai ; rc et stderr journalisés.
+  * Fiche App Store (ref #3402) : category security, description nommant SBX TV Privacy, description_longue honnête.
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:23:25 +0100
 
