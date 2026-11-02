@@ -51,11 +51,13 @@ from secubox_core import mot_de_passe_defaut as _mdp_defaut
 
 
 async def _refuse_si_mot_de_passe_defaut(user: dict, action: str) -> None:
-    """#3401 : tant que le mot de passe par défaut du compte admin est actif, AUCUNE exposition externe (WAN, Tor,
-    SSL public, émancipation). Refus explicite (409) et audité ; la configuration existante n'est pas touchée."""
-    if await asyncio.to_thread(_mdp_defaut.actif):
-        _mdp_defaut.audit("exposition_refusee", {"action": action, "acteur": str((user or {}).get("sub", "?"))[:64]})
-        raise HTTPException(status_code=409, detail="Exposition externe refusée : " + _mdp_defaut.MESSAGE)
+    """#3401 : tant que le mot de passe par défaut du compte admin est actif OU inconnu, AUCUNE nouvelle exposition
+    (WAN, mesh, Tor, SSL public, émancipation). Refus explicite (409), audité par la garde commune ; les expositions
+    déjà en place ne sont pas modifiées."""
+    message = await asyncio.to_thread(_mdp_defaut.refus_exposition, action, str((user or {}).get("sub", "?")))
+    if message:
+        raise HTTPException(status_code=409, detail=message)
+
 
 app = FastAPI(title="SecuBox Exposure Manager API", version="2.0.0")
 
@@ -214,7 +216,7 @@ async def get_exposure(vhost: str, user: dict = Depends(require_jwt)):
 @app.post("/exposure/{vhost}")
 async def set_exposure(vhost: str, body: ExposureSet, user: dict = Depends(require_jwt)):
     _validate_vhost(vhost)
-    if body.reach == "wan" or body.tor:
+    if body.reach == "wan" or body.tor or body.mesh:
         await _refuse_si_mot_de_passe_defaut(user, f"exposure:{vhost}")
     p = _reach.snippet_path(vhost)
     try:

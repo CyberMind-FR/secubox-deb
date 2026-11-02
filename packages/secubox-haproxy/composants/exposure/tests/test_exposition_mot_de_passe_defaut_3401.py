@@ -24,8 +24,11 @@ def c(tmp_path, monkeypatch):
     async def _rien(*a, **k):
         return None
     monkeypatch.setattr(m, "_apply_tor", _rien)
-    monkeypatch.setattr(m._mdp_defaut, "actif", lambda *a, **k: True)
-    monkeypatch.setattr(m._mdp_defaut, "audit", lambda *a, **k: None)
+    users = tmp_path / "users.json"      # un VRAI users.json, au mot de passe par défaut
+    from argon2 import PasswordHasher
+    users.write_text('{"users": [{"username": "admin", "password_hash": "%s"}]}' % PasswordHasher().hash("secubox"))
+    monkeypatch.setenv("SECUBOX_USERS_JSON", str(users))
+    monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "audit.log"))
     m.app.dependency_overrides[m.require_jwt] = lambda: {"sub": "admin"}
     c = TestClient(m.app)
     c.snip = tmp_path / "snip"
@@ -40,6 +43,15 @@ def test_wan_refuse_sans_rien_ecrire(c):
 
 def test_tor_refuse(c):
     assert c.post("/exposure/z.example", json={"reach": "lan", "mesh": False, "tor": True}).status_code == 409
+
+
+def test_mesh_refuse(c):
+    assert c.post("/exposure/z.example", json={"reach": "lan", "mesh": True, "tor": False}).status_code == 409
+
+
+def test_etat_inconnu_refuse(c, tmp_path, monkeypatch):
+    (tmp_path / "users.json").write_text("{corrompu")
+    assert c.post("/exposure/z.example", json={"reach": "wan", "mesh": False, "tor": False}).status_code == 409
 
 
 def test_lan_reste_permis(c):

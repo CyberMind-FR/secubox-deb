@@ -1,3 +1,9 @@
+secubox-haproxy (1.12.11-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401 (ref #3401) : garde commune d'exposition (fail-closed) sur POST /vhost, /certificates/acme, /vhost/{name}/waf-bypass (contournement seulement), composant vhost (POST /vhost, /certificate/issue) et exposure (reach wan, mesh, Tor, SSL, émancipation). Les expositions déjà en place ne sont pas modifiées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:58:34 +0100
+
 secubox-haproxy (1.12.10-1~trixie1) trixie; urgency=medium
 
   * Exposition (ref #3401) : tant que le mot de passe par défaut est actif, toute exposition externe (reach wan, Tor, SSL, émancipation) est refusée explicitement (409) et auditée ; la configuration existante n'est pas modifiée, LAN et localhost restent permis.

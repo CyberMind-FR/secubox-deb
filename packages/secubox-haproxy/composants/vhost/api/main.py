@@ -29,6 +29,7 @@ from api.exposure_read import read_exposure
 from api.modules_read import module_de
 from api.exposure_seed import ensure_snippet
 from secubox_core.auth import require_lecture
+from secubox_core.garde_exposition import exiger_mot_de_passe_change  # #3401
 
 app = FastAPI(title="SecuBox VHost", version="1.1.0")
 config = get_config("vhost")
@@ -609,7 +610,7 @@ server {{
     return conf
 
 
-@app.post("/vhost", dependencies=[Depends(require_jwt)])
+@app.post("/vhost", dependencies=[Depends(require_jwt), Depends(exiger_mot_de_passe_change)])
 async def create_vhost(vhost: VHostCreate):
     """Create a new virtual host"""
     NGINX_VHOST_DIR.mkdir(parents=True, exist_ok=True)
@@ -801,7 +802,7 @@ class CertRequest(BaseModel):
     email: str
 
 
-@app.post("/certificate/issue", dependencies=[Depends(require_jwt)])
+@app.post("/certificate/issue", dependencies=[Depends(require_jwt), Depends(exiger_mot_de_passe_change)])
 async def request_certificate(req: CertRequest, background_tasks: BackgroundTasks):
     """Request a Let's Encrypt certificate"""
     if not acme_available():
