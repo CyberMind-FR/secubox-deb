@@ -50,7 +50,7 @@ etat_unite() {
     fi
 }
 
-# /health sur la socket Unix de l'agrégateur par python3 seul ( est toujours là sur une box).
+# /health sur la socket Unix de l'agrégateur par python3 seul, toujours présent sur une box.
 sante_agregateur() {
     timeout 5 python3 -I - "$SOCK_AGREG" <<'PY' >/dev/null 2>&1
 import socket, sys
