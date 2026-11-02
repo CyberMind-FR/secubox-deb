@@ -3,6 +3,9 @@ set -e
 case "$1" in
   remove|deconfigure)
     rm -f /etc/nginx/secubox.d/system.conf
+    # #3401 : plus de ctl, plus de regle sudoers. La garde SSH du mot de passe par defaut reste posee (refus prudent).
+    systemctl disable --now secubox-ssh-garde.path 2>/dev/null || true
+    rm -f /etc/sudoers.d/secubox-ssh
     systemctl reload nginx 2>/dev/null || true
     ;;
   upgrade)

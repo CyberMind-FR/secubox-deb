@@ -11,7 +11,8 @@ Package: secubox-system
 Architecture: all
 Depends: ${misc:Depends},
          polkitd | policykit-1,
- secubox-core (>= 1.8.10~),
+ secubox-core (>= 1.8.14~),
+ jq,
  python3-psutil,
  python3-fastapi | python3-pip,
  systemd,

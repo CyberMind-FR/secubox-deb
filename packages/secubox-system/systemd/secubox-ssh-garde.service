@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox : garde SSH du mot de passe par defaut (#3401)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3401
+
+[Service]
+Type=oneshot
+# Root : ecrit /etc/ssh/sshd_config.d et recharge ssh. Pose le drop-in tant que le mot de passe par defaut
+# est actif, le leve des qu il change ; chaque transition est ecrite dans audit.log.
+UMask=0022
+ExecStart=/usr/sbin/secubox-sshctl garde

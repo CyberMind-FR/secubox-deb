@@ -1,3 +1,9 @@
+secubox-system (1.12.0-1~trixie1) trixie; urgency=medium
+
+  * Accès SSH (ref #3401) : interrupteur dans la page Système (service ssh, SSH par mot de passe ou par clé seulement), routes GET /ssh, POST /ssh/acces et /ssh/mot-de-passe (require_jwt), écritures par le nouveau ctl root secubox-sshctl (sudo, règle à la lettre /etc/sudoers.d/secubox-ssh), validées par sshd -t et auditées. Tant que le mot de passe par défaut est actif, SSH par mot de passe est refusé (409, et drop-in 05-secubox-mot-de-passe-defaut.conf posé par secubox-ssh-garde.path au changement de users.json, levé automatiquement au changement du mot de passe). Dépend de jq.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:31:34 +0100
+
 secubox-system (1.11.7-1~trixie1) trixie; urgency=medium
 
   * Passe finale L5 (ref #3126, R-L5-17) : run_diagnostic_test refuse un `test` qui n'est pas une chaîne (422, plus de 500) ; en-tête de

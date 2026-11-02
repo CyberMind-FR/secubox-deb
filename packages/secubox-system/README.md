@@ -80,3 +80,13 @@ restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
 `/restart_services`, `/reload_firewall`, `/kiosk/*`, `/backup` et `/set_backup_schedule` ne sont PAS ouvertes au jeton
 délégué (R-L5-15, R-L5-16) : les premières passent par les actions du pilotage (L2). `POST /check_updates` et
 `POST /run_diagnostic_test` (GET avant 1.11.6).
+
+## Accès SSH (#3401)
+
+| Méthode | Route | Garde | Effet |
+|---|---|---|---|
+| GET | `/api/v1/system/ssh` | `require_jwt` | état : service, mot de passe permis, garde du mot de passe par défaut |
+| POST | `/api/v1/system/ssh/acces` | `require_jwt` | `{"actif": bool}` active / désactive `ssh.service` |
+| POST | `/api/v1/system/ssh/mot-de-passe` | `require_jwt` | `{"actif": bool}` ; **409** tant que le mot de passe par défaut est actif |
+
+Écritures par `secubox-sshctl` (root, sudo, `/etc/sudoers.d/secubox-ssh`) : drop-ins `/etc/ssh/sshd_config.d/05-secubox-mot-de-passe-defaut.conf` (garde, posée/levée par `secubox-ssh-garde.path` au changement de `users.json`) et `10-secubox-ssh-mot-de-passe.conf` (choix de l'administrateur), validés par `sshd -t`, audités.

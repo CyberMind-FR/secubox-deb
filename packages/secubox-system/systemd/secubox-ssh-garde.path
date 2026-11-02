@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox : garde SSH du mot de passe par defaut (#3401)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3401
+
+[Path]
+# users.json change (mot de passe admin choisi, ou remis) : la garde SSH se recalcule.
+PathChanged=/etc/secubox/users.json
+Unit=secubox-ssh-garde.service
+
+[Install]
+WantedBy=paths.target

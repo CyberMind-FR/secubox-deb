@@ -140,6 +140,15 @@
                     <button class="btn prim" id="kioskOn" type="button">Activer</button><button class="btn danger" id="kioskOff" type="button">Désactiver</button>
                 </div></div>
 
+            <div class="pan" id="pSsh"><h3>Accès SSH</h3>
+                <div id="cSsh" class="conf"></div><div id="rSsh" class="retour" hidden></div>
+                <dl class="kv"><dt>Service</dt><dd id="shServ">—</dd><dt>Par mot de passe</dt><dd id="shMdp">—</dd><dt>Par clé</dt><dd>toujours possible</dd></dl>
+                <p class="note" id="shDefaut" hidden>Mot de passe par défaut actif : SSH par mot de passe reste refusé. <a href="/users/" style="color:var(--cyan)">Changez d’abord le mot de passe par défaut</a>.</p>
+                <div class="actions" style="margin-top:10px">
+                    <button class="btn prim" id="sshOn" type="button">Activer SSH</button><button class="btn danger" id="sshOff" type="button">Désactiver SSH</button>
+                    <button class="btn" id="sshMdpOn" type="button">Permettre le mot de passe</button><button class="btn" id="sshMdpOff" type="button">Clé seulement</button>
+                </div></div>
+
             <div class="pan large"><h3>Détection de la carte <button class="btn sm" id="redetect" type="button">Relancer la détection</button></h3>
                 <div id="cCarte" class="conf"></div><div id="rCarte" class="retour" hidden></div>
                 <div class="grille">
@@ -329,6 +338,7 @@
                 $('kkServ').appendChild(pastille(k.service_active ? 'ok' : 'hors', k.service_active ? 'EN COURS' : 'ARRÊTÉ'));
             } else { $('kkEtat').textContent = '—'; $('kkMode').textContent = '—'; $('kkServ').textContent = '—'; }
             rendreCarte(); rendreServices(); rendreReseau(); rendreSessions(); rendreJournal(); rendrePaquets(); rendreConf();
+            chargerSsh();
             $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
             annoncer();
         }
@@ -489,6 +499,26 @@
         }
         $('kioskOn').addEventListener('click', () => { const m = $('kioskMode').value; demande('cKiosk', 'Activer le mode kiosque (' + m + ')', () => kiosque('POST', '/kiosk/enable?mode=' + encodeURIComponent(m), 'Mode kiosque activé (' + m + ').')); });
         $('kioskOff').addEventListener('click', () => demande('cKiosk', 'Désactiver le mode kiosque', () => kiosque('POST', '/kiosk/disable', 'Mode kiosque désactivé.')));
+
+        // Accès SSH (#3401) : écritures par secubox-sshctl ; SSH par mot de passe refusé tant que le défaut est actif.
+        async function chargerSsh() {
+            if (DEMO) return;
+            let e = null; try { e = await lire('/ssh'); } catch (err) { e = null; }
+            $('shServ').replaceChildren(); $('shMdp').replaceChildren();
+            if (!e) { $('shServ').textContent = '—'; $('shMdp').textContent = '—'; return; }
+            $('shServ').appendChild(pastille(e.service ? 'ok' : '', e.service ? 'ACTIF' : 'ARRÊTÉ'));
+            $('shMdp').appendChild(pastille(e.mot_de_passe ? 'att' : 'ok', e.mot_de_passe ? 'PERMIS' : 'REFUSÉ'));
+            $('shDefaut').hidden = !e.mot_de_passe_defaut;
+            $('sshMdpOn').disabled = !!e.mot_de_passe_defaut;
+        }
+        async function ssh(chemin, actif, ok) {
+            const r = await ecrire('POST', chemin, { actif });
+            if (reussi(r)) { retour('rSsh', true, ok); chargerSsh(); } else retour('rSsh', false, 'Refusé : ' + detail(r));
+        }
+        $('sshOn').addEventListener('click', () => demande('cSsh', 'Activer le service SSH', () => ssh('/ssh/acces', true, 'SSH activé.')));
+        $('sshOff').addEventListener('click', () => demande('cSsh', 'Désactiver le service SSH', () => ssh('/ssh/acces', false, 'SSH désactivé.')));
+        $('sshMdpOn').addEventListener('click', () => demande('cSsh', 'Permettre SSH par mot de passe', () => ssh('/ssh/mot-de-passe', true, 'SSH par mot de passe permis.')));
+        $('sshMdpOff').addEventListener('click', () => demande('cSsh', 'SSH par clé seulement', () => ssh('/ssh/mot-de-passe', false, 'SSH par clé seulement.')));
 
         $('redetect').addEventListener('click', async () => {
             const r = await ecrire('POST', '/board/detect');

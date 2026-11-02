@@ -20,6 +20,16 @@ case "$1" in
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
 
+    # #3401 : interrupteur « Acces SSH » de la page Systeme, par le ctl root (regle sudoers a la lettre), et
+    # garde du mot de passe par defaut recalculee a chaque changement de users.json.
+    cat > /etc/sudoers.d/secubox-ssh <<'SUDOERS'
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-sshctl etat, /usr/sbin/secubox-sshctl acces *, /usr/sbin/secubox-sshctl mot-de-passe *
+SUDOERS
+    chmod 0440 /etc/sudoers.d/secubox-ssh
+    visudo -cf /etc/sudoers.d/secubox-ssh >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-ssh
+    systemctl enable --now secubox-ssh-garde.path || true
+    /usr/sbin/secubox-sshctl garde || echo "system : garde SSH du mot de passe par defaut non posee" >&2
+
     # Eye Remote OTG support
     chmod +x /usr/lib/secubox/eye-remote-connected.sh 2>/dev/null || true
     chmod +x /usr/lib/secubox/eye-remote-disconnected.sh 2>/dev/null || true
