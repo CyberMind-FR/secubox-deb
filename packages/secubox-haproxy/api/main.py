@@ -36,7 +36,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from enum import Enum
 
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from secubox_core.auth import router as auth_router, require_jwt
@@ -44,6 +44,7 @@ from secubox_core.config import get_config
 from secubox_core.logger import get_logger
 from api import webui_identity as _webui_identity
 from secubox_core.auth import require_lecture
+from secubox_core.garde_exposition import exiger_mot_de_passe_change  # #3401
 
 app = FastAPI(title="secubox-haproxy", version="2.0.0", root_path="/api/v1/haproxy")
 
@@ -882,7 +883,7 @@ class VHostCreate(BaseModel):
     enabled: bool = True
 
 
-@router.post("/vhost", dependencies=[Depends(require_jwt)])
+@router.post("/vhost", dependencies=[Depends(require_jwt), Depends(exiger_mot_de_passe_change)])
 async def add_vhost(req: VHostCreate):
     """Add a vhost with WAF protection by default."""
     cfg = _cfg()
@@ -922,8 +923,10 @@ class WAFBypassRequest(BaseModel):
 
 
 @router.post("/vhost/{name}/waf-bypass", dependencies=[Depends(require_jwt)])
-async def set_vhost_waf_bypass(name: str, req: WAFBypassRequest):
+async def set_vhost_waf_bypass(name: str, req: WAFBypassRequest, request: Request, user: dict = Depends(require_jwt)):
     """Set WAF bypass for a specific vhost."""
+    if req.bypass:   # #3401 : contourner le WAF ouvre ; le remettre reste toujours permis
+        await exiger_mot_de_passe_change(request, user)
     log.info("Set WAF bypass for %s: %s", name, req.bypass)
     await sync_waf_routes()
     return {"success": True, "name": name, "waf_bypass": req.bypass}
@@ -1216,7 +1219,7 @@ class AcmeRequest(BaseModel):
     staging: bool = False  # Use staging server for testing
 
 
-@router.post("/certificates/acme", dependencies=[Depends(require_jwt)])
+@router.post("/certificates/acme", dependencies=[Depends(require_jwt), Depends(exiger_mot_de_passe_change)])
 def request_acme_certificate(req: AcmeRequest):
     """Request certificate via ACME (Let's Encrypt)."""
     cert_dir = Path(CERTS_DIR)

@@ -1,3 +1,9 @@
+secubox-portal (2.5.1-1~trixie1) trixie; urgency=medium
+
+  * Écran de changement imposé (ref #3401) : bouton « Plus tard » qui échange le setup_token contre une session pour cette connexion seulement (POST /api/v1/auth/plus-tard ; admin au mot de passe par défaut, LAN/kiosque/maillage ; le jeton est oublié aussitôt).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 09:45:51 +0100
+
 secubox-portal (2.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Page de connexion /login.html au profil Aurora (#2687) : page autonome (plus de police distante), textes en francais, sans menu commun ni mode demonstration. Flux, routes, corps, en-tetes, attributs autocomplete et stockage du jeton (sbx_token, secubox_token, secubox_user, secubox_role) inchanges ; ajout d'attributs name sur les champs.

@@ -63,3 +63,9 @@ Configuration file: `/etc/secubox/auth.toml`
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+## Mot de passe par défaut (#3401)
+
+- `GET /api/v1/auth/mot-de-passe-defaut` : `{etat: actif|inactif|inconnu, actif, inconnu, compte, message, lien}` pour un administrateur réel (`require_jwt`, 401 sinon) — lu par le bandeau santé partagé.
+- `POST /login` avec le mot de passe par défaut : le changement est **toujours** demandé (`setup_token` à usage unique), depuis la zone de confiance seulement (verdict LAN nginx : LAN, loopback, kiosque ; plus le maillage 10.10.0.0/24 et 10.64.0.0/16). Hors zone : le même 401 qu'un mauvais mot de passe, tentative auditée.
+- `POST /api/v1/auth/plus-tard` (preuve : le `setup_token`) : « Plus tard » — échange le jeton contre une session pour cette connexion seulement ; `admin` au mot de passe par défaut, zone de confiance, audité (`mot_de_passe_defaut_reporte`), rien de persisté.

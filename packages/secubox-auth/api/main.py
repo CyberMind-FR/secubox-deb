@@ -227,6 +227,7 @@ def _verify_totp_ntp_aware(username: str, code: str) -> bool:
 # pose X-SecuBox-LAN avec proxy_set_header, qui ÉCRASE la valeur d'un client.
 # Absent (requête hors nginx) = pas LAN = OTP exigé : l'échec ferme.
 from secubox_core.auth import _requete_lan
+from secubox_core import mot_de_passe_defaut as _mdp_defaut
 
 OTP_LAN_VALEURS = ("facultatif", "obligatoire")
 _REGLAGES = Path(os.environ.get("SECUBOX_AUTH_REGLAGES", str(_DATA_DIR / "reglages.json")))
@@ -368,6 +369,20 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     # s'ouvre pas du tout.
     lan = _requete_lan(request)
     a_changer = bool(user.get("must_change_password"))
+    # MOT DE PASSE PAR DÉFAUT (#3401) : tant qu'il est actif, le CHANGEMENT est toujours demandé (setup_token), pour
+    # tout compte. Zone de confiance : le verdict LAN de nginx (LAN, loopback, kiosque) PLUS le maillage (wg-mesh,
+    # wg-autoload). Hors de cette zone : le MÊME 401 qu'un mauvais mot de passe (aucun oracle), la tentative auditée.
+    defaut = _mdp_defaut.est_le_defaut(req.password) and user_store.verify_password(req.username, req.password)
+    confiance = _zone_de_confiance(request)
+    if defaut and not confiance:
+        _mdp_defaut.audit("connexion_refusee_hors_lan", {"compte": req.username, "ip": ip})
+        _emit_session_event("login_failed", req.username, {
+            "reason": "invalid_credentials", "ip": ip, "user_agent": ua,
+        })
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+    if defaut:
+        a_changer = True
+        lan = True          # zone de confiance : la suite du flux « à changer » s'applique
     if a_changer and not lan:
         _emit_session_event("login_failed", req.username, {
             "reason": "premiere_configuration_hors_lan", "ip": ip, "user_agent": ua,
@@ -387,10 +402,15 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _emit_session_event("login_failed", req.username, {"reason": "invalid_credentials", "ip": ip})
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
-    # « À changer » avec un mot de passe (le admin/secubox du premier démarrage) :
-    # le bon mot de passe ouvre le CHANGEMENT, jamais une session directe.
+    if defaut:
+        # Chaque connexion réussie avec le défaut est tracée (#3401) ; le clair n'y figure jamais.
+        _mdp_defaut.audit("connexion_reussie", {"compte": req.username, "ip": ip})
+
+    # « À changer » (défaut du premier démarrage, ou mot de passe réinitialisé) : le bon mot de passe ouvre le
+    # CHANGEMENT, jamais une session directe. Le jeton est à usage unique (jti) ; « Plus tard » (POST /plus-tard)
+    # l'échange contre une session pour CETTE connexion seulement.
     if a_changer:
-        setup_tok = create_token(req.username, scope="set-password", expires_in=900)
+        setup_tok = create_token(req.username, scope="set-password", expires_in=900, jti=secrets.token_hex(8))
         _append_audit("setup_token_issued", req.username, {"ip": ip, "motif": "changement_impose"})
         return {"setup_required": True, "setup_token": setup_tok}
 
@@ -657,6 +677,8 @@ def _set_password(req: _SetPasswordIn, request: _Request):
     scope = payload.get("scope")
     username = payload["sub"]
     if scope == "set-password":
+        if not _consommer_setup(payload):
+            raise HTTPException(status_code=401, detail="Jeton déjà utilisé ou expiré")
         _users_engine.set_password(username, req.new_password)
         _users_engine.revoke_sessions(username)
         return {"ok": True, "message": "Mot de passe défini, veuillez vous reconnecter"}
@@ -670,6 +692,73 @@ def _set_password(req: _SetPasswordIn, request: _Request):
         _coffre.changer(username, req.old_password, req.new_password)   # la serrure du Coffre suit (#1855)
         return {"ok": True, "message": "Mot de passe modifié"}
     raise HTTPException(status_code=403, detail="Token hors scope")
+
+
+# ─── « Plus tard » : reporter le changement du mot de passe par défaut (#3401) ─────
+# Arbitrage du propriétaire : rien n'est persisté ; la question revient à la connexion suivante. Seulement `admin`,
+# seulement depuis la zone de confiance (LAN, kiosque, maillage), seulement tant que le défaut est actif ; chaque
+# usage est audité. Le setup_token est à usage unique : son jti est consommé ici comme par /set-password.
+_setup_consommes: Dict[str, float] = {}
+_setup_verrou = threading.Lock()
+
+
+def _consommer_setup(payload: dict) -> bool:
+    """Vrai la PREMIÈRE fois qu'un setup_token (jti) est présenté. Un jeton sans jti (émis avant #3401) est accepté
+    une fois par /set-password comme avant, jamais par /plus-tard."""
+    jti = payload.get("jti")
+    if not jti:
+        return True
+    maintenant = time.time()
+    with _setup_verrou:
+        for k in [k for k, fin in _setup_consommes.items() if fin < maintenant]:
+            del _setup_consommes[k]
+        if jti in _setup_consommes:
+            return False
+        _setup_consommes[jti] = float(payload.get("exp") or maintenant + 900)
+        return True
+
+
+def _zone_de_confiance(request: _Request) -> bool:
+    """Verdict LAN de nginx (LAN, loopback, kiosque) OU adresse du maillage. N'élargit pas le verdict LAN ailleurs."""
+    from secubox_core.auth import adresse_client  # noqa: PLC0415
+    return _requete_lan(request) or _mdp_defaut.adresse_du_maillage(adresse_client(request))
+
+
+@_login_router.post("/plus-tard")
+def _plus_tard(request: _Request, response: _Response):
+    """Échange un setup_token contre une session normale, pour cette connexion seulement (porte sa propre preuve :
+    le jeton à portée « set-password », comme /set-password)."""
+    ip, ua = _client_meta(request)
+    auth_h = request.headers.get("Authorization", "")
+    if not auth_h.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Token Bearer manquant")
+    payload = _jwt_decode(auth_h.split(" ", 1)[1])
+    if payload.get("scope") != "set-password" or not payload.get("jti"):
+        raise HTTPException(status_code=401, detail="Jeton invalide")
+    username = str(payload.get("sub") or "")
+    if not _zone_de_confiance(request):
+        _mdp_defaut.audit("mot_de_passe_defaut_report_refuse", {"compte": username, "ip": ip, "motif": "hors_zone"})
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+    if username != _mdp_defaut.COMPTE or _mdp_defaut.verdict(username) != _mdp_defaut.ACTIF:
+        _mdp_defaut.audit("mot_de_passe_defaut_report_refuse", {"compte": username, "ip": ip, "motif": "compte"})
+        raise HTTPException(status_code=403, detail="« Plus tard » n'est permis que pour admin au mot de passe par défaut")
+    if not _consommer_setup(payload):
+        raise HTTPException(status_code=401, detail="Jeton déjà utilisé ou expiré")
+    _mdp_defaut.audit("mot_de_passe_defaut_reporte", {"compte": username, "ip": ip})
+    jti = secrets.token_hex(8)
+    tok = create_token(username, jti=jti)
+    _set_session_cookie(response, tok, request=request)
+    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
+                                                  "otp": "facultatif (LAN)", "motif": "mot_de_passe_defaut_reporte"})
+    _users_engine.touch_last_login(username)
+    return {"access_token": tok, "token_type": "bearer", "expires_in": 86400, "mot_de_passe_defaut": True}
+
+
+@_login_router.get("/mot-de-passe-defaut", dependencies=[Depends(require_jwt)])
+async def _mot_de_passe_defaut():
+    """État du mot de passe par défaut (#3401), pour le bandeau santé : administrateur réel seulement (require_jwt) ;
+    tout autre appelant reçoit 401 et le bandeau n'affiche rien."""
+    return await asyncio.to_thread(_mdp_defaut.etat)
 
 
 @_login_router.get("/preflight", dependencies=[Depends(require_lecture)])

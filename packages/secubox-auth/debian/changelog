@@ -1,3 +1,21 @@
+secubox-auth (1.8.15-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401, passe 2 (ref #3401) : le changement du mot de passe par défaut est toujours demandé ; POST /plus-tard échange le setup_token (désormais à usage unique, jti) contre une session pour cette connexion seulement (admin, LAN/kiosque/maillage, audité, rien de persisté) ; GET /mot-de-passe-defaut sous require_jwt.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 09:45:46 +0100
+
+secubox-auth (1.8.14-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401 (ref #3401) : session directe avec le défaut seulement pour admin et seulement avec le marqueur « Plus tard » de premier-pas (sinon changement obligatoire, comme avant) ; hors LAN, le même 401 qu'un mauvais mot de passe (plus d'oracle), tentative auditée ; GET /mot-de-passe-defaut rend l'état à un administrateur réel seulement ({} sinon).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:58:34 +0100
+
+secubox-auth (1.8.13-1~trixie1) trixie; urgency=medium
+
+  * Mot de passe par défaut (ref #3401) : depuis le LAN, il ouvre une session (« Plus tard » de l'assistant) au lieu d'imposer le changement, chaque connexion réussie auditée dans /var/log/secubox/audit.log ; hors LAN, refus explicite 403 « changez le mot de passe par défaut » (un mauvais mot de passe reste un 401 muet). Nouvelle route GET /mot-de-passe-defaut (require_lecture) pour le bandeau santé. Un mot de passe réinitialisé impose toujours le changement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:31:34 +0100
+
 secubox-auth (1.8.12-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

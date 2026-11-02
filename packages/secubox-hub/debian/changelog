@@ -1,3 +1,15 @@
+secubox-hub (1.12.38-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401 (ref #3401) : bandeau ambre « état du mot de passe admin inconnu » ; rien pour un non-administrateur (la route rend {}).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:58:34 +0100
+
+secubox-hub (1.12.37-1~trixie1) trixie; urgency=medium
+
+  * Bandeau santé partagé 1.5.0 (ref #3401) : bandeau rouge persistant « mot de passe par défaut actif » avec lien vers Utilisateurs, lu sur /api/v1/auth/mot-de-passe-defaut ; disparaît de lui-même au changement du mot de passe.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:31:34 +0100
+
 secubox-hub (1.12.36-1~trixie1) trixie; urgency=medium
 
   * Espaces : l'entrée de menu tv-privacy est classée dans l'espace protection (ref #3374).

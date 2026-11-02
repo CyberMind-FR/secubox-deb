@@ -18,6 +18,7 @@ secubox-auth GET /delegation/entrer     # entrée déléguée (#1720) : assertio
 secubox-auth POST /totp/enroll          # porte par l'enrollment_token
 secubox-auth POST /totp/confirm         # porte par l'enrollment_token
 secubox-auth POST /set-password         # porte par le setup_token
+secubox-auth POST /plus-tard            # porte par le setup_token a usage unique, admin, zone LAN/kiosque/maillage (#3401)
 secubox-auth POST /redeem_voucher       # documente « public endpoint » dans le code
 
 # ── Session propre : cookie + CSRF double-envoi, pas de JWT ────────────────

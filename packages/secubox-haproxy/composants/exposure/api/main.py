@@ -47,6 +47,17 @@ from api import exclusion as _excl
 # and tests can monkeypatch it directly as `main._publish`.
 from api.mesh_egress import _publish
 from secubox_core.auth import require_lecture
+from secubox_core import mot_de_passe_defaut as _mdp_defaut
+
+
+async def _refuse_si_mot_de_passe_defaut(user: dict, action: str) -> None:
+    """#3401 : tant que le mot de passe par défaut du compte admin est actif OU inconnu, AUCUNE nouvelle exposition
+    PUBLIQUE (WAN, Tor, SSL public, émancipation) ; LAN et maillage restent permis. Refus explicite (409), audité par la garde commune ; les expositions
+    déjà en place ne sont pas modifiées."""
+    message = await asyncio.to_thread(_mdp_defaut.refus_exposition, action, str((user or {}).get("sub", "?")))
+    if message:
+        raise HTTPException(status_code=409, detail=message)
+
 
 app = FastAPI(title="SecuBox Exposure Manager API", version="2.0.0")
 
@@ -205,6 +216,8 @@ async def get_exposure(vhost: str, user: dict = Depends(require_jwt)):
 @app.post("/exposure/{vhost}")
 async def set_exposure(vhost: str, body: ExposureSet, user: dict = Depends(require_jwt)):
     _validate_vhost(vhost)
+    if body.reach == "wan" or body.tor:      # publique seulement : LAN et maillage restent permis
+        await _refuse_si_mot_de_passe_defaut(user, f"exposure:{vhost}")
     p = _reach.snippet_path(vhost)
     try:
         prev = p.read_text()                    # last-good content (may not exist)
@@ -1301,6 +1314,7 @@ def tor_reconcile_persist(user: str = "reconcile") -> dict:
 @app.post("/tor/add")
 async def tor_add(req: TorAddRequest, user: dict = Depends(require_jwt)):
     """Add Tor hidden service"""
+    await _refuse_si_mot_de_passe_defaut(user, "tor_add")
     # Cert-pin / MITM-bypass gate — check the ORIGINAL host before sanitisation
     # strips its dots. Covers /emancipate too (it calls this). Never anonymously
     # re-expose an endpoint clients pin.
@@ -1345,12 +1359,14 @@ async def tor_emancipate_webui(federate: bool = False, user: dict = Depends(requ
     Offloaded to a thread — emancipate_webui blocks for up to 10s (torrc
     reload + onion poll) via _tor_add_sync, and this runs on the shared
     aggregator event loop."""
+    await _refuse_si_mot_de_passe_defaut(user, "tor_emancipate_webui")
     return await asyncio.to_thread(emancipate_webui, federate, user)
 
 
 @app.post("/ssl/add")
 async def ssl_add(req: SslAddRequest, user: dict = Depends(require_jwt)):
     """Add SSL backend"""
+    await _refuse_si_mot_de_passe_defaut(user, "ssl_add")
     # This would integrate with HAProxy or nginx
     # Simplified implementation
 
@@ -1387,6 +1403,7 @@ async def ssl_remove(req: SslRemoveRequest, user: dict = Depends(require_jwt)):
 @app.post("/emancipate")
 async def emancipate(req: EmancipateRequest, user: dict = Depends(require_jwt)):
     """Emancipate a service (expose via Tor/DNS/Mesh)"""
+    await _refuse_si_mot_de_passe_defaut(user, "emancipate")
     config = load_config()
 
     if "emancipated" not in config:

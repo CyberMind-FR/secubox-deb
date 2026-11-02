@@ -147,7 +147,9 @@ def test_unite_renommer_livree_root_et_bornee():
     regles = (SYSTEM / "debian" / "rules").read_text()
     assert "systemd/secubox-systeme-renommer@.service" in regles
     assert "renommer" not in regles.split("override_dh_installsystemd:")[1]     # jamais démarrée à l'installation
-    assert "secubox-core (>= 1.8.10~)" in (SYSTEM / "debian" / "control").read_text()
+    # Au moins 1.8.10 (secubox-renommer) ; #3401 l'a monté à 1.8.14 (indicateur du mot de passe par défaut).
+    v = re.search(r"secubox-core \(>= 1\.8\.(\d+)~\)", (SYSTEM / "debian" / "control").read_text())
+    assert v and int(v.group(1)) >= 10
     # la règle polkit existante l'accepte (sujet secubox-system.service, unités secubox-*.service)
     regle = (SYSTEM / "polkit" / "50-secubox-system.rules").read_text()
     motif = re.search(r"/(\^secubox-[^/]+)/\.test\(unite\)", regle).group(1)

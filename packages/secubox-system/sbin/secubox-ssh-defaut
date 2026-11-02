@@ -1,0 +1,140 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-ssh-defaut — le mot de passe par défaut est-il encore actif pour SSH ? (#3401)
+
+Lancé en root par secubox-sshctl (`cd / && python3 -I`). DEUX sources, la garde SSH ne se lève que si les DEUX sont
+changées :
+  - le mot de passe LINUX (/etc/shadow) de root et de tout compte qui en a un, comparé au défaut par crypt(3) (libcrypt,
+    par ctypes : le module `crypt` n'existe plus en Python 3.13) ;
+  - le mot de passe WEB du compte admin (secubox_core/mot_de_passe_defaut.py, chargé par son CHEMIN : ni le paquet
+    secubox_core ni FastAPI).
+Sortie : 0 actif, 10 inactif, tout autre code = inconnu (la garde est maintenue). Stdout : JSON {web, linux} (noms de
+comptes seulement, jamais d'empreinte). Le verdict est mis en cache par condensat des empreintes (root, 0600) : un
+`touch_last_login` qui réécrit users.json ne relance pas argon2 ni crypt.
+"""
+import ctypes
+import ctypes.util
+import hashlib
+import hmac
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+
+DEFAUT = b"secubox"
+SHADOW = os.environ.get("SECUBOX_SHADOW", "/etc/shadow")
+WEB_PY = os.environ.get("SECUBOX_DEFAUT_WEB_PY", "/usr/lib/python3/dist-packages/secubox_core/mot_de_passe_defaut.py")
+CACHE = os.environ.get("SECUBOX_SSH_CACHE", "/var/lib/secubox/system/ssh-defaut.cache")
+ACTIF, INACTIF, INCONNU = 0, 10, 2
+
+
+def _crypt():
+    nom = ctypes.util.find_library("crypt") or "libcrypt.so.1"
+    lib = ctypes.CDLL(nom)
+    lib.crypt.restype = ctypes.c_char_p
+    lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    return lib.crypt
+
+
+def comptes_shadow():
+    """[(compte, empreinte)] des comptes qui ONT un mot de passe. Lève OSError si /etc/shadow est illisible."""
+    out = []
+    with open(SHADOW, encoding="utf-8") as f:
+        for ligne in f:
+            champs = ligne.rstrip("\n").split(":")
+            if len(champs) < 2:
+                continue
+            h = champs[1]
+            if not h or h[0] in "!*":
+                continue
+            out.append((champs[0], h))
+    return out
+
+
+def linux_defaut(comptes):
+    """Noms des comptes dont le mot de passe Linux est le défaut. Lève RuntimeError si crypt ne sait pas lire."""
+    crypt = _crypt()
+    trouves = []
+    for nom, h in comptes:
+        r = crypt(DEFAUT, h.encode())
+        if not r or r.startswith(b"*"):
+            raise RuntimeError(f"empreinte illisible pour {nom}")
+        if hmac.compare_digest(r, h.encode()):
+            trouves.append(nom)
+    return trouves
+
+
+def web():
+    spec = importlib.util.spec_from_file_location("sbx_mot_de_passe_defaut", WEB_PY)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _cle(comptes, web_mod):
+    try:
+        h = web_mod._empreinte(web_mod.COMPTE, None) or ""
+    except Exception:  # noqa: BLE001 — empreinte web illisible : pas de cache
+        return None
+    d = hashlib.sha256(h.encode())
+    for nom, e in comptes:
+        d.update(b"\0" + nom.encode() + b":" + e.encode())
+    return d.hexdigest()
+
+
+def _cache_lit(cle):
+    try:
+        with open(CACHE, encoding="utf-8") as f:
+            c = json.load(f)
+        return c["resultat"] if c.get("cle") == cle else None
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _cache_ecrit(cle, resultat):
+    tmp = None
+    try:
+        fd, tmp = tempfile.mkstemp(prefix=".ssh-defaut.", dir=os.path.dirname(CACHE))   # O_EXCL, 0600
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"cle": cle, "resultat": resultat}, f)
+        os.replace(tmp, CACHE)
+        tmp = None
+    except OSError as e:
+        print(f"secubox-ssh-defaut : cache non écrit ({e.__class__.__name__})", file=sys.stderr)
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
+def main():
+    try:
+        comptes = comptes_shadow()
+        w = web()
+    except Exception as e:  # noqa: BLE001 — tout doute = inconnu
+        print(f"secubox-ssh-defaut : inconnu ({e.__class__.__name__})", file=sys.stderr)
+        return INCONNU
+    cle = _cle(comptes, w)
+    resultat = _cache_lit(cle) if cle else None
+    if resultat is None:
+        try:
+            resultat = {"web": w.verdict(), "linux": linux_defaut(comptes)}
+        except Exception as e:  # noqa: BLE001
+            print(f"secubox-ssh-defaut : inconnu ({e.__class__.__name__})", file=sys.stderr)
+            return INCONNU
+        if cle and resultat["web"] != "inconnu":
+            _cache_ecrit(cle, resultat)
+    print(json.dumps(resultat))
+    if resultat["web"] == "inconnu":
+        return INCONNU
+    return ACTIF if (resultat["web"] == "actif" or resultat["linux"]) else INACTIF
+
+
+if __name__ == "__main__":
+    sys.exit(main())

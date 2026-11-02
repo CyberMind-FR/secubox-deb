@@ -1,0 +1,269 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-sshctl — accès SSH, en root (#3401).
+#
+# Seul chemin d'écriture de la configuration SSH SecuBox. JAMAIS appelé par sudo : l'API (secubox, NoNewPrivileges)
+# dépose une demande dans /run/secubox/system/ssh ; secubox-ssh.path lance `traite`, qui écrit le résultat dans
+# /run/secubox/system/ssh-resultats/<id>.json. secubox-ssh-garde.path lance `garde` au changement de users.json ou
+# de /etc/shadow.
+#   etat                           JSON, fondé sur `sshd -T` (configuration effective)
+#   acces <on|off> <acteur>        active / désactive ssh.service (et ssh.socket à l'arrêt)
+#   mot-de-passe <on|off> <acteur> permet / refuse SSH par mot de passe (la clé reste possible) ;
+#                                  « on » REFUSÉ (code 3) tant que le mot de passe par défaut est actif ou inconnu
+#   garde                          pose / lève 05-secubox-mot-de-passe-defaut.conf
+#   traite                         draine les demandes de l'API
+#
+# « Défaut actif » = mot de passe LINUX (root ou tout compte avec mot de passe) OU mot de passe WEB admin égal au
+# défaut (secubox-ssh-defaut). Inconnu = actif. Chaque écriture est validée par `sshd -t` PUIS par `sshd -T -C` (root
+# et admin, depuis une adresse publique : passwordauthentication no) quand la garde est due ; sinon défaite et auditée.
+set -euo pipefail
+
+readonly ESSAI="${SECUBOX_SSHCTL_ESSAI:-0}"   # tests seulement (l'unité systemd part d'un environnement propre)
+if [[ "$ESSAI" == "1" ]]; then
+    readonly DIR="${SECUBOX_SSHD_DIR:?}" AUDIT="${SECUBOX_AUDIT_LOG:?}" SSHD="${SECUBOX_SSHD_BIN:?}"
+    readonly DEFAUT="${SECUBOX_SSH_DEFAUT_BIN:?}" DEMANDES="${SECUBOX_SSH_DEMANDES:-/nonexistent}"
+    readonly RESULTATS="${SECUBOX_SSH_RESULTATS:-/nonexistent}"
+else
+    readonly DIR=/etc/ssh/sshd_config.d AUDIT=/var/log/secubox/audit.log SSHD=/usr/sbin/sshd
+    readonly DEFAUT=/usr/sbin/secubox-ssh-defaut DEMANDES=/run/secubox/system/ssh
+    readonly RESULTATS=/run/secubox/system/ssh-resultats
+fi
+readonly TAILLE_MAX=4096
+readonly GARDE="$DIR/05-secubox-mot-de-passe-defaut.conf"
+readonly MDP="$DIR/10-secubox-ssh-mot-de-passe.conf"
+readonly ENTETE="# Géré par secubox-sshctl (#3401) — ne pas éditer à la main."
+
+TEMPS=()
+nettoie() { local f; for f in "${TEMPS[@]+"${TEMPS[@]}"}"; do rm -f -- "$f"; done; }
+trap nettoie EXIT
+
+refus() { echo "secubox-sshctl : $*" >&2; exit 2; }
+
+audit() {   # audit <evenement> [acteur]
+    local ligne
+    ligne=$(jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg ev "$1" --arg ac "${2:-systeme}" \
+        '{ts: $ts, type: "ssh", evenement: $ev, acteur: $ac}')
+    printf '%s\n' "$ligne" >> "$AUDIT" || echo "secubox-sshctl : audit non écrit : $ligne" >&2
+}
+
+# defaut_actif : 0 si le défaut est actif OU inconnu (la garde est due), 1 s'il est prouvé changé. Remplit
+# COMPTES_DEFAUT (comptes Linux au défaut, noms validés) pour la vérification sshd -T.
+COMPTES_DEFAUT=()
+defaut_actif() {
+    local rc=0 sortie="" c
+    sortie=$(cd / && "$DEFAUT" 2>/dev/null) || rc=$?
+    COMPTES_DEFAUT=()
+    while IFS= read -r c; do
+        [[ "$c" =~ ^[a-z_][a-z0-9_.-]{0,31}$ ]] && COMPTES_DEFAUT+=("$c")
+    done < <(jq -r '.linux[]? // empty' <<<"$sortie" 2>/dev/null || true)
+    [[ "$rc" != "10" ]]
+}
+
+recharge() {
+    [[ "$ESSAI" == "1" ]] && return 0
+    systemctl try-reload-or-restart ssh.service || true
+}
+
+# effectif <user> : la valeur effective de passwordauthentication depuis une adresse publique.
+effectif() {
+    "$SSHD" -T -C "user=$1,addr=203.0.113.1,host=x,laddr=192.0.2.1,lport=22" 2>/dev/null \
+        | awk '$1 == "passwordauthentication" { print $2; exit }'
+}
+
+# valide <garde_due> : sshd -t, puis (garde due) sshd -T refuse le mot de passe pour root, admin et chaque compte
+# Linux encore au mot de passe par défaut.
+valide() {
+    local u
+    "$SSHD" -t || return 1
+    if [[ "$1" == "1" ]]; then
+        for u in root admin "${COMPTES_DEFAUT[@]+"${COMPTES_DEFAUT[@]}"}"; do
+            [[ "$(effectif "$u")" == "no" ]] || return 1
+        done
+    fi
+}
+
+SAUVE=""
+sauve() {   # sauve <fichier> : copie dans $SAUVE (vide si absent), nettoyée à la sortie
+    SAUVE=""
+    if [[ -f "$1" ]]; then
+        SAUVE=$(mktemp "$DIR/.secubox-sshctl.sauve.XXXXXX"); TEMPS+=("$SAUVE")
+        cp -p -- "$1" "$SAUVE"
+    fi
+}
+
+restaure() {   # restaure <fichier> <copie>
+    if [[ -n "$2" ]]; then mv -f -- "$2" "$1"; else rm -f -- "$1"; fi
+}
+
+pose() {   # pose <fichier> <contenu>
+    local tmp
+    tmp=$(mktemp "$DIR/.secubox-sshctl.XXXXXX"); TEMPS+=("$tmp")
+    printf '%s\n' "$2" > "$tmp"
+    chmod 0644 "$tmp"
+    mv -f -- "$tmp" "$1"
+}
+
+# applique <fichier> <contenu|""> <garde_due> <evenement_echec> : écrit (ou supprime si contenu vide), valide,
+# défait et audite en cas d'échec.
+applique() {
+    local f="$1" contenu="$2" due="$3" s
+    sauve "$f"; s="$SAUVE"
+    if [[ -n "$contenu" ]]; then pose "$f" "$contenu"; else rm -f -- "$f"; fi
+    if ! valide "$due"; then
+        restaure "$f" "$s"
+        audit "$4"
+        refus "sshd refuse la configuration ou n'applique pas la garde : rien n'est changé"
+    fi
+    # Succès : la sauvegarde ne sert plus (le trap EXIT n'est pas hérité des sous-shells de `traite`).
+    [[ -z "$s" ]] || rm -f -- "$s"
+}
+
+acteur_valide() { [[ "${1:-}" =~ ^[A-Za-z0-9_.@-]{1,64}$ ]] || refus "acteur invalide"; }
+
+etat() {
+    local service=false mdp defaut=false garde=false
+    if [[ "$ESSAI" != "1" ]] && systemctl is-active --quiet ssh.service; then service=true; fi
+    mdp=$(effectif root)
+    [[ -f "$GARDE" ]] && garde=true
+    defaut_actif && defaut=true
+    jq -cn --argjson s "$service" --arg m "${mdp:-inconnu}" --argjson g "$garde" --argjson d "$defaut" \
+        '{service: $s, mot_de_passe: ($m == "yes"), mot_de_passe_effectif: $m, garde_defaut: $g, mot_de_passe_defaut: $d}'
+}
+
+acces() {
+    [[ "${1:-}" == "on" || "${1:-}" == "off" ]] || refus "acces attend on ou off"
+    acteur_valide "${2:-}"
+    if [[ "$ESSAI" != "1" ]]; then
+        if [[ "$1" == "on" ]]; then
+            systemctl enable --now ssh.service
+        else
+            systemctl disable --now ssh.socket 2>/dev/null || true
+            systemctl disable --now ssh.service
+        fi
+    fi
+    audit "ssh_acces_$1" "$2"
+}
+
+mot_de_passe() {
+    [[ "${1:-}" == "on" || "${1:-}" == "off" ]] || refus "mot-de-passe attend on ou off"
+    acteur_valide "${2:-}"
+    if [[ "$1" == "on" ]]; then
+        if defaut_actif; then
+            audit "ssh_mot_de_passe_refuse_defaut" "$2"
+            echo "secubox-sshctl : changez d'abord le mot de passe par défaut" >&2
+            exit 3
+        fi
+        applique "$MDP" "" 0 "ssh_mot_de_passe_echec"
+    else
+        applique "$MDP" "$ENTETE
+PasswordAuthentication no
+KbdInteractiveAuthentication no" 0 "ssh_mot_de_passe_echec"
+    fi
+    recharge
+    audit "ssh_mot_de_passe_$1" "$2"
+}
+
+garde() {
+    if defaut_actif; then
+        if [[ ! -f "$GARDE" ]]; then
+            applique "$GARDE" "$ENTETE
+# Mot de passe par défaut actif (Linux ou web) : SSH par mot de passe refusé (la clé reste possible). Levé
+# automatiquement quand les deux sont changés.
+PasswordAuthentication no
+KbdInteractiveAuthentication no" 1 "ssh_garde_defaut_echec"
+            recharge
+            audit "ssh_garde_defaut_posee"
+        fi
+    else
+        if [[ -f "$GARDE" ]]; then
+            applique "$GARDE" "" 0 "ssh_garde_defaut_echec"
+            recharge
+            audit "ssh_garde_defaut_levee"
+        fi
+    fi
+}
+
+# prepare : dépôt root:secubox 1770 (sticky : l'API dépose, ne retire que ses fichiers) et résultats root:secubox
+# 0750 (l'API lit seulement). Créés ICI, en root, jamais par tmpfiles sous le parent secubox (#3172) ; un lien à
+# leur place est retiré, jamais suivi.
+prepare() {
+    local d mode
+    for d in "$DEMANDES:1770" "$RESULTATS:0750"; do
+        mode="${d##*:}"; d="${d%:*}"
+        [[ -L "$d" ]] && rm -f -- "$d"
+        [[ -d "$d" ]] || mkdir -- "$d"
+        [[ -d "$d" && ! -L "$d" ]] || refus "dossier $d invalide"
+        chmod "$mode" -- "$d"
+        if [[ "$ESSAI" != "1" ]]; then chown -h root:secubox -- "$d"; fi
+    done
+}
+
+# lit_demande <fichier> : une seule lecture par descripteur, sans suivre de lien, fichier ordinaire exigé (fstat),
+# jamais bloquante (FIFO), taille plafonnée ; rend « verbe<TAB>valeur<TAB>acteur » ou échoue.
+lit_demande() {
+    (cd / && python3 -I -c '
+import json, os, stat, sys
+try:
+    fd = os.open(sys.argv[1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+except OSError:
+    sys.exit(2)
+try:
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_size > int(sys.argv[2]):
+        sys.exit(2)
+    d = json.loads(os.read(fd, int(sys.argv[2]) + 1))
+finally:
+    os.close(fd)
+v = [str(d.get(k, "")) for k in ("verbe", "valeur", "acteur")] if isinstance(d, dict) else None
+if not v or any(("\t" in x or "\n" in x) for x in v):
+    sys.exit(2)
+print("\t".join(v))
+' "$1" "$TAILLE_MAX")
+}
+
+# traite : chaque demande <id>.demande = {"verbe": etat|acces|mot-de-passe, "valeur": on|off, "acteur": ...}.
+# Les fichiers « .tmp.* » de l'API (en cours d'écriture) sont laissés ; tout autre nom est retiré.
+traite() {
+    local d nom id ligne verbe valeur acteur sortie rc tmp
+    prepare
+    find "$RESULTATS" -mindepth 1 -maxdepth 1 -type f -mmin +5 -delete 2>/dev/null || true
+    while IFS= read -r -d '' d; do
+        nom=$(basename -- "$d")
+        [[ "$nom" == .tmp.* ]] && continue
+        if [[ ! "$nom" =~ ^[a-f0-9]{16}\.demande$ ]]; then rm -f -- "$d"; continue; fi
+        id="${nom%.demande}"
+        rc=0; sortie=""
+        if ligne=$(lit_demande "$d"); then
+            IFS=$'\t' read -r verbe valeur acteur <<<"$ligne"
+            case "$verbe" in
+                etat) sortie=$(etat) || rc=$? ;;
+                acces) sortie=$( (acces "$valeur" "$acteur") 2>&1) || rc=$? ;;
+                mot-de-passe) sortie=$( (mot_de_passe "$valeur" "$acteur") 2>&1) || rc=$? ;;
+                *) sortie="verbe inconnu"; rc=2 ;;
+            esac
+        else
+            sortie="demande illisible (lien, FIFO, trop grande ou JSON invalide)"; rc=2
+        fi
+        rm -f -- "$d"
+        (( ${#sortie} > 400 )) && sortie="${sortie:${#sortie}-400}"
+        tmp=$(mktemp "$RESULTATS/.r.XXXXXX"); TEMPS+=("$tmp")
+        chmod 0640 "$tmp"
+        if [[ "$ESSAI" != "1" ]]; then chgrp secubox "$tmp"; fi
+        jq -cn --argjson rc "$rc" --arg s "$sortie" '{code: $rc, sortie: $s}' > "$tmp"
+        mv -f -- "$tmp" "$RESULTATS/$id.json"
+    done < <(find "$DEMANDES" -mindepth 1 -maxdepth 1 -print0)
+}
+
+case "${1:-}" in
+    etat) etat ;;
+    acces) acces "${2:-}" "${3:-}" ;;
+    mot-de-passe) mot_de_passe "${2:-}" "${3:-}" ;;
+    garde) garde ;;
+    traite) traite ;;
+    prepare) prepare ;;
+    *) refus "usage : etat | acces <on|off> <acteur> | mot-de-passe <on|off> <acteur> | garde | traite | prepare" ;;
+esac

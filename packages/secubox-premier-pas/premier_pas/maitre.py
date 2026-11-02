@@ -88,9 +88,9 @@ def enregistre(nom: str, profil: Dict[str, Any]) -> Dict[str, Any]:
     propre.setdefault("box", {})["nom"] = nom
     admin = profil.get("admin") or {}
     mdp = admin.get("mot_de_passe")
-    if mdp and mdp not in ("demander", "défini") and not P._ARGON2.match(str(mdp)):
+    if mdp and mdp not in ("demander", "défini", P.PLUS_TARD) and not P._ARGON2.match(str(mdp)):
         empreinte = R.hache_mdp(str(mdp), str(admin.get("confirmation", "")))
-    elif mdp == "demander" or (P._ARGON2.match(str(mdp or ""))):
+    elif mdp in ("demander", P.PLUS_TARD) or (P._ARGON2.match(str(mdp or ""))):
         empreinte = mdp
     else:
         empreinte = (ancien.get("admin") or {}).get("mot_de_passe", "demander")

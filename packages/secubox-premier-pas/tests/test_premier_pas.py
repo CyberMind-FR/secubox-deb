@@ -2,6 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """Premier Pas (#1522) : profil, plan, application. Rien ne touche le système :
 l'exécuteur est un faux qui enregistre les commandes."""
+import re
 import copy
 import sys
 import tomllib
@@ -194,7 +195,8 @@ def test_premier_pas_utilise_secubox_renommer(complet):
     assert not any(a.argv and a.argv[0] == "hostnamectl" for a in M.plan(complet))
     assert not hasattr(M, "_renomme") and not hasattr(M, "_avahi_nouveau_nom") and not hasattr(M, "HOSTS")
     controle = (Path(__file__).resolve().parents[1] / "debian" / "control").read_text()
-    assert "secubox-core (>= 1.8.10~)" in controle
+    v = re.search(r"secubox-core \(>= 1\.8\.(\d+)~\)", controle)   # au moins 1.8.10 ; 1.8.14 depuis #3401
+    assert v and int(v.group(1)) >= 10
 
 
 # ── #2306 : l'étape réseau sans `secubox-net-detect` ─────────────────────────────────────────────

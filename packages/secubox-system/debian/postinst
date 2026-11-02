@@ -20,6 +20,15 @@ case "$1" in
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
 
+    # #3401 : interrupteur « Acces SSH » de la page Systeme. Plus de sudo (l'API tourne en NoNewPrivileges) : elle
+    # depose une demande, secubox-ssh.path la fait traiter par secubox-sshctl (root, unite durcie). La garde du mot de
+    # passe par defaut se recalcule a chaque changement de users.json ou de /etc/shadow.
+    rm -f /etc/sudoers.d/secubox-ssh
+    /usr/sbin/secubox-sshctl prepare || echo "system : dossiers de demandes SSH non prepares" >&2
+    systemctl enable secubox-ssh-garde.service || true
+    systemctl enable --now secubox-ssh.path secubox-ssh-garde.path || true
+    systemctl start secubox-ssh-garde.service || echo "system : garde SSH du mot de passe par defaut non posee" >&2
+
     # Eye Remote OTG support
     chmod +x /usr/lib/secubox/eye-remote-connected.sh 2>/dev/null || true
     chmod +x /usr/lib/secubox/eye-remote-disconnected.sh 2>/dev/null || true

@@ -1,3 +1,21 @@
+secubox-core (1.8.16-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401, passe 2 (ref #3401) : plus aucun marqueur « Plus tard » persistant (arbitrage du propriétaire) ; zone de confiance du maillage (10.10.0.0/24, 10.64.0.0/16) pour la connexion avec le défaut ; garde d'exposition limitée à l'exposition PUBLIQUE (maillage permis), administrateur (sub) écrit dans l'audit du refus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 09:45:46 +0100
+
+secubox-core (1.8.15-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401 (ref #3401) : mot_de_passe_defaut devient TERNAIRE (actif / inactif / inconnu ; illisible, corrompu, compte absent, erreur = inconnu, traité comme actif par toute garde) ; point d'entrée script sans le paquet ni FastAPI (codes 0 / 10 / autre) ; marqueur « Plus tard » ; nouvelle garde commune secubox_core.garde_exposition (dépendance FastAPI, 409 audité).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:58:34 +0100
+
+secubox-core (1.8.14-1~trixie1) trixie; urgency=medium
+
+  * Mot de passe par défaut (ref #3401) : nouvel indicateur unique secubox_core.mot_de_passe_defaut (actif, etat, est_le_defaut, audit) — compare l'empreinte argon2 du compte admin au mot de passe du premier démarrage, verdict mis en cache par empreinte ; le clair n'est jamais stocké ni journalisé. audit() écrit en ajout seul dans /var/log/secubox/audit.log (0640).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:31:34 +0100
+
 secubox-core (1.8.13-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

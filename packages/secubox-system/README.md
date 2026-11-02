@@ -80,3 +80,13 @@ restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
 `/restart_services`, `/reload_firewall`, `/kiosk/*`, `/backup` et `/set_backup_schedule` ne sont PAS ouvertes au jeton
 délégué (R-L5-15, R-L5-16) : les premières passent par les actions du pilotage (L2). `POST /check_updates` et
 `POST /run_diagnostic_test` (GET avant 1.11.6).
+
+## Accès SSH (#3401)
+
+| Méthode | Route | Garde | Effet |
+|---|---|---|---|
+| GET | `/api/v1/system/ssh` | `require_jwt` | état : service, mot de passe permis, garde du mot de passe par défaut |
+| POST | `/api/v1/system/ssh/acces` | `require_jwt` | `{"actif": bool}` active / désactive `ssh.service` |
+| POST | `/api/v1/system/ssh/mot-de-passe` | `require_jwt` | `{"actif": bool}` ; **409** tant que le mot de passe par défaut est actif |
+
+Écritures par `secubox-sshctl` (root), **sans sudo** : l'API dépose une demande dans `/run/secubox/system/ssh`, `secubox-ssh.path` la fait traiter par `secubox-ssh.service` (unité durcie), résultat relu dans `/run/secubox/system/ssh-resultats/`. Drop-ins `/etc/ssh/sshd_config.d/05-secubox-mot-de-passe-defaut.conf` (garde, posée/levée par `secubox-ssh-garde.path` au changement de `users.json` ou de `/etc/shadow`) et `10-secubox-ssh-mot-de-passe.conf` (choix de l'administrateur), validés par `sshd -t` puis `sshd -T -C` (root et admin depuis une adresse publique), défaits et audités sinon. « Défaut actif » = mot de passe Linux (root ou tout compte, `secubox-ssh-defaut`, crypt) OU web admin égal au défaut ; inconnu = actif. Au retrait du paquet, la garde n'est enlevée que si le défaut est prouvé changé.

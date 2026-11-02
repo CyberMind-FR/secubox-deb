@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox : garde SSH du mot de passe par defaut (#3401)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3401
+
+[Service]
+Type=oneshot
+# Root : ecrit /etc/ssh/sshd_config.d, lit /etc/shadow, recharge ssh. Pose le drop-in tant que le mot de passe par
+# defaut (Linux ou web) est actif ou inconnu, le leve quand les deux sont changes ; chaque transition est auditee.
+# Depot (root:secubox 1770) et resultats (root:secubox 0750) crees en root, jamais par tmpfiles (#3172).
+ExecStartPre=/usr/sbin/secubox-sshctl prepare
+ExecStart=/usr/sbin/secubox-sshctl garde
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+IPAddressDeny=any
+# chown root:secubox des dossiers, audit.log (secubox, 0640) ; rien d autre. Exception ecrite : RULES-CODE § Exceptions.
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER
+# sshd -t / -T exigent le dossier de separation de privileges, absent quand ssh est arrete.
+RuntimeDirectory=sshd
+RuntimeDirectoryPreserve=yes
+ReadWritePaths=/etc/ssh/sshd_config.d /var/log/secubox -/var/lib/secubox/system -/run/secubox/system
+
+[Install]
+# Au demarrage : dossiers de l API prepares, garde recalculee.
+WantedBy=multi-user.target

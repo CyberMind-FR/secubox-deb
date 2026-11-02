@@ -54,6 +54,13 @@ try:
 except ImportError:
     log.warning("Router metrics non disponible")
 
+# Interrupteur « Accès SSH » (#3401) : écritures par secubox-sshctl (root, sudo)
+try:
+    from api.routers.ssh import router as ssh_router
+    app.include_router(ssh_router)
+except ImportError as e:
+    log.error("Router ssh non chargé : %s", e)
+
 # Import et inclusion du router remote-ui (OTG + WiFi)
 try:
     from api.routers.remote_ui import router as remote_ui_router
