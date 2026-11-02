@@ -35,7 +35,7 @@ Options:
   --x11      Use X11/startx mode (better VM compatibility)
   --wayland  Use Cage/Wayland mode (native, requires DRM)
 
-Default: X11 mode (recommended for VMs and most hardware)
+Default: Wayland on Raspberry Pi / ARM, X11 on amd64 and in VMs
 
 Modes:
   - GUI Kiosk: Fullscreen Chromium displaying SecuBox WebUI
@@ -47,27 +47,35 @@ EOF
 
 # Detect if running in VM
 detect_vm() {
-    local virt
-    virt=$(systemd-detect-virt 2>/dev/null || echo "none")
-    if [[ "$virt" != "none" ]]; then
+    # systemd-detect-virt prints "none" AND exits 1 on bare metal : rely on the exit code only (#3397)
+    if systemd-detect-virt -q 2>/dev/null; then
         echo "vm"
     else
         echo "bare"
     fi
 }
 
-# Get current mode (default: x11)
+# Default mode (#3397) : X11 only on amd64 and under virtualisation, Wayland elsewhere (RPi, other ARM)
+default_mode() {
+    if [[ "$(detect_vm)" == "vm" || "$(dpkg --print-architecture 2>/dev/null)" == "amd64" ]]; then
+        echo "x11"
+    else
+        echo "wayland"
+    fi
+}
+
+# Get current mode (default: default_mode)
 get_mode() {
     if [[ -f "$MODE_FILE" ]]; then
         cat "$MODE_FILE"
     else
-        echo "x11"
+        default_mode
     fi
 }
 
 # ── Install Minimal GUI Packages ────────────────────────────────────
 install_kiosk() {
-    local mode="${1:-x11}"
+    local mode="${1:-$(default_mode)}"
     log "Installing kiosk mode packages (${mode})..."
 
     # Check if already installed
@@ -121,7 +129,7 @@ XWRAP
 
 # ── Setup Kiosk User and Scripts ────────────────────────────────────
 setup_kiosk_user() {
-    local mode="${1:-x11}"
+    local mode="${1:-$(default_mode)}"
 
     # Create kiosk user with UID 1000 if not exists
     if ! id "$KIOSK_USER" &>/dev/null; then
@@ -288,7 +296,7 @@ EOF
 # ── Update Service File (using launcher script) ─────────────────────────
 update_service_file() {
     local KIOSK_UID="${1:-1000}"
-    local mode="${2:-x11}"
+    local mode="${2:-$(default_mode)}"
 
     # Use the robust launcher script that handles:
     # - Dynamic UID detection (no hardcoded values)
@@ -502,7 +510,8 @@ show_status() {
         echo "  Installed: no"
     fi
 
-    local kiosk_mode="x11"
+    local kiosk_mode
+    kiosk_mode="$(default_mode)"
     if [[ -f "$MODE_FILE" ]]; then
         kiosk_mode=$(cat "$MODE_FILE")
     fi
@@ -597,9 +606,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Default mode: x11 (more compatible)
+# Default mode: X11 on amd64 / VM, Wayland on RPi and other ARM (#3397)
 if [[ -z "$MODE" ]]; then
-    MODE="x11"
+    MODE="$(default_mode)"
 fi
 
 case "${CMD:-}" in

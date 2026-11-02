@@ -1,3 +1,9 @@
+secubox-kiosk (1.1.0-1~trixie1) trixie; urgency=medium
+
+  * Mode par defaut (#3397) : Wayland (Cage) sur Raspberry Pi et autres ARM, X11 seulement sur amd64 et en virtualisation. Corrige detect_vm : systemd-detect-virt affiche « none » ET sort en 1 sur materiel nu, la box etait vue comme une VM.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 06:40:41 +0100
+
 secubox-kiosk (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Unite root a la demande secubox-kiosk-setup@.service (#2615) : trois instances seulement (enable-x11, enable-wayland, disable), toute autre est refusee. L'API systeme (User=secubox, NoNewPrivileges) la demarre par polkit ; avant, elle lancait le script root directement et ecrivait /home/secubox-kiosk/.xinitrc sous son propre compte : « Permission denied » a chaque activation du kiosque par l'API. La sortie va dans /run/secubox/kiosk-setup.log (motif d'echec relu par l'API).
