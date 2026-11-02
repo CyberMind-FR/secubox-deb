@@ -75,3 +75,15 @@ def test_audit_en_ajout_sans_mot_de_passe(tmp_path):
     lignes = log.read_text().splitlines()
     assert len(lignes) == 2 and json.loads(lignes[0])["evenement"] == "connexion"
     assert "secubox\"" not in log.read_text() and oct(log.stat().st_mode & 0o777) == "0o640"
+
+
+
+def test_maillage_zone_de_confiance():
+    assert D.adresse_du_maillage("10.10.0.7") and D.adresse_du_maillage("10.64.3.2")
+    assert not D.adresse_du_maillage("10.11.0.7") and not D.adresse_du_maillage("203.0.113.5")
+    assert not D.adresse_du_maillage("pas-une-ip")
+
+
+def test_aucun_marqueur_persistant():
+    src = Path(D.__file__).read_text()
+    assert "MARQUEUR_PLUS_TARD" not in src and "plus_tard_choisi" not in src

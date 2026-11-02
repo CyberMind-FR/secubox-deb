@@ -24,6 +24,7 @@ def app(tmp_path, monkeypatch):
     @a.post("/x", dependencies=[Depends(G.exiger_mot_de_passe_change)])
     def x():
         return {"ok": True}
+    a.dependency_overrides[G.require_jwt] = lambda: {"sub": "gk-admin"}
     a.users = tmp_path / "users.json"
     monkeypatch.setenv("SECUBOX_USERS_JSON", str(a.users))
     return a
@@ -37,7 +38,8 @@ def test_refus_409_si_defaut_actif_avec_un_vrai_users_json(app, tmp_path):
     _users(app.users, "secubox")
     r = TestClient(app).post("/x")
     assert r.status_code == 409 and "mot de passe par défaut" in r.json()["detail"]
-    assert "exposition_refusee" in (tmp_path / "audit.log").read_text()
+    ligne = json.loads((tmp_path / "audit.log").read_text().splitlines()[-1])
+    assert ligne["evenement"] == "exposition_refusee" and ligne["acteur"] == "gk-admin"
 
 
 def test_refus_si_inconnu(app):

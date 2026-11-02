@@ -18,6 +18,7 @@ Bibliothèque stdlib + argon2 seulement : le ctl root la lance comme script (`py
 from __future__ import annotations
 
 import hmac
+import ipaddress
 import json
 import logging
 import os
@@ -52,17 +53,17 @@ def _audit_path() -> Path:
 
 
 ACTIF, INACTIF, INCONNU = "actif", "inactif", "inconnu"
-#: Posé par premier-pas quand la personne choisit « Plus tard » (#3401). Seul ce marqueur ouvre une session directe
-#: avec le défaut ; un compte « à changer » sans lui garde le changement obligatoire.
-MARQUEUR_PLUS_TARD = Path("/etc/secubox/premier-pas-plus-tard")
+#: Zone de confiance de la connexion avec le défaut (#3401, arbitrage : « le LAN et les mesh restent secure ») : le
+#: verdict LAN de nginx, PLUS le maillage (wg-mesh, wg-autoload). Le verdict LAN de nginx n'est pas élargi ailleurs.
+RESEAUX_MAILLAGE = (ipaddress.ip_network("10.10.0.0/24"), ipaddress.ip_network("10.64.0.0/16"))
 
 
-def marqueur_plus_tard() -> Path:
-    return Path(os.environ.get("SECUBOX_PLUS_TARD", str(MARQUEUR_PLUS_TARD)))
-
-
-def plus_tard_choisi() -> bool:
-    return marqueur_plus_tard().is_file()
+def adresse_du_maillage(adresse: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(str(adresse).strip())
+    except ValueError:
+        return False
+    return any(ip in r for r in RESEAUX_MAILLAGE)
 
 
 class _Inconnu(Exception):
