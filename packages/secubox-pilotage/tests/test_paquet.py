@@ -182,14 +182,17 @@ def test_postinst_et_prerm():
 
 
 def test_pas_d_entree_de_menu_et_hors_arbre():
-    """R29 : 595-fleet (annuaire) existe ; l'agent est installé à la demande, hors de l'arbre des méta-paquets ; le maître
+    """R29 : 595-fleet (annuaire) existe ; l'agent est recommandé par le socle (secubox-service-administration, #3405 :
+    installé par défaut, inerte sans maillage) et n'est plus hors de l'arbre des méta-paquets ; le maître
     (secubox-pilotage) est porté par la fonction « Maître du parc » (secubox-fonction-maitre, #3337), jamais par une box ordinaire."""
     assert not (ICI / "menu.d").exists()
     assert "menu.d" not in lire("debian/rules")
     arbre = lire("secubox-meta/arbre.yaml", DEPOT / "packages")
     debut = arbre.index("\nhors-arbre:") + len("\nhors-arbre:\n")
     hors = re.match(r"(?:  - .*\n|\s*#.*\n)*", arbre[debut:]).group(0)      # la seule liste hors-arbre
-    assert re.search(r"^  - secubox-pilotage-agent\s+#.*#3126", hors, re.M)
+    assert not re.search(r"^  - secubox-pilotage-agent\s", hors, re.M)
+    assert re.search(r"^meta: secubox-service-administration$[\s\S]*?^recommande:[\s\S]*?^  - secubox-pilotage-agent\b",
+                     arbre, re.M)
     assert not re.search(r"^  - secubox-pilotage\s", hors, re.M)
     assert re.search(r"^meta: secubox-service-pilotage$[\s\S]*?^  - secubox-pilotage$", arbre, re.M)
 

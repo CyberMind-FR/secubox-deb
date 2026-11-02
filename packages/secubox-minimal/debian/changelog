@@ -1,3 +1,9 @@
+secubox-minimal (0.11.0-1~trixie1) trixie; urgency=medium
+
+  * Dépend de secubox-pilotage-agent, comme le profil minimal le déclarait déjà (ref #3405).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:43:31 +0100
+
 secubox-minimal (0.10.1-1~trixie1) trixie; urgency=medium
 
   * secubox-toolbox-ng (moteur d'interception) rejoint les Conflicts, comme le dit déjà la description (ref #3259).
