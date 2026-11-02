@@ -1,3 +1,11 @@
+secubox-ad-guard (1.24.1-1~trixie1) trixie; urgency=medium
+
+  * POST /learn/thresholds (ref #3393) : filters.json (secubox-toolbox 664, dossier root 755) n'était pas inscriptible par
+    l'agrégateur (secubox). Écriture par le verbe root borné `secubox-adguard-tv seuils` (JSON sur stdin, revalidé, en place sans
+    suivre de lien, sous verrou, audité) ; règle sudoers exacte. 503 « écriture non autorisée » si sudo/verbe indisponible, jamais 500.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:23:25 +0100
+
 secubox-ad-guard (1.24.0-1~trixie1) trixie; urgency=medium
 
   * Corrélation DNS/DPI (ref #3395) : adresse distante -> nom DNS le plus récent (reponses.db, 24 h, global à la box).

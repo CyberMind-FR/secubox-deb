@@ -44,9 +44,11 @@ Configuration file: `/etc/secubox/ad-guard.toml`
   (lot 6, #3374) : appareils déclarés de TV Privacy regroupés par MAC, type tiré des profils du lot 1 (preuves du NAC), compteurs DNS de
   dnstv. Réponse `/devices` : `{devices, count, source: "dnstv", lisible, note}` ; un compteur illisible vaut `null`, jamais 0.
 - `POST /api/v1/ad-guard/learn/thresholds` (`require_jwt`) - corps strict (`extra="forbid"`, entiers bornés, au moins une clé ; 422 sinon),
-  écriture EN PLACE de `/etc/secubox/toolbox/filters.json` (fichier existant ouvert `O_WRONLY|O_NOFOLLOW`, tronqué, écrit, fsync :
-  propriétaire `secubox-toolbox`, droits et inode inchangés, le dossier root 755 n'a pas à être inscriptible) ; 409 si le fichier est absent,
-  un lien, ou illisible (rien n'est écrit).
+  écriture par le contrôleur root `secubox-adguard-tv seuils` depuis 1.24.1 (#3393 ; l'agrégateur tourne sous `secubox`, hors du groupe
+  `secubox-toolbox`) : `{acteur, seuils}` sur l'entrée standard, revalidé par root, `/etc/secubox/toolbox/filters.json` EXISTANT ouvert
+  `O_RDWR|O_NOFOLLOW` sous verrou, tronqué, écrit, fsync (propriétaire, droits et inode inchangés), audité dans `audit.log` (`seuils`).
+  409 si le fichier est absent, un lien, ou illisible (rien n'est écrit) ; 503 « écriture non autorisée » si sudo ou le verbe manquent ;
+  502 si l'écriture échoue côté root. Jamais 500.
 
 ### Retiré en 1.23.0 (lot 6 « nettoyage », #3374)
 

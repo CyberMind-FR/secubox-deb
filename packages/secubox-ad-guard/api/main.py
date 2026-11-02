@@ -1326,47 +1326,45 @@ class SeuilsApprentissage(BaseModel):
     autolearn_ti_min_weight: Optional[StrictInt] = Field(None, ge=0, le=100)
 
 
-def _ecrire_filters_en_place(cfg: dict) -> None:
-    """Écrit filters.json EN PLACE (passe 2 du lot 6, #3374) : le dossier /etc/secubox/toolbox appartient à root (755), le fichier à
-    secubox-toolbox (664). Un temporaire + rename y échouerait (EACCES) et donnerait le fichier à secubox, cassant l'interrupteur Tor et
-    les réglages mitm du portail toolbox (#683). On ouvre le fichier EXISTANT sans le créer ni suivre de lien, on tronque, on écrit, fsync ;
-    propriétaire, droits et inode ne changent jamais."""
-    donnees = _json.dumps(cfg, indent=2).encode("utf-8")
-    fd = os.open(_FILTERS_F, os.O_WRONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise OSError("filters.json n'est pas un fichier ordinaire")
-        os.ftruncate(fd, 0)
-        vue = memoryview(donnees)
-        while vue:
-            n = os.write(fd, vue)
-            vue = vue[n:]
-        os.fsync(fd)
-    finally:
-        os.close(fd)
+_CTL_TV = os.environ.get("SECUBOX_ADGUARD_TV_CTL", "/usr/sbin/secubox-adguard-tv")
 
 
-@app.post("/learn/thresholds", dependencies=[Depends(require_jwt)])
-async def learn_set_thresholds(body: SeuilsApprentissage):
-    """Tune autolearn aggressiveness (persisted to filters.json, next cycle). Corps validé (422 sinon), écriture en place."""
+def _argv_seuils() -> list:
+    """Verbe root EXACT du sudoers (#3393) : l'agrégateur tourne sous `secubox`, qui ne peut pas écrire filters.json (secubox-toolbox 664,
+    dossier root 755) et n'entre pas dans le groupe secubox-toolbox."""
+    return ["sudo", "-n", _CTL_TV, "seuils"] if os.geteuid() != 0 else [_CTL_TV, "seuils"]
+
+
+_ECRITURE_REFUSEE = "écriture non autorisée : contrôleur secubox-adguard-tv seuils ou sudo indisponible (rien n'est écrit)"
+
+
+@app.post("/learn/thresholds")
+async def learn_set_thresholds(body: SeuilsApprentissage, jeton=Depends(require_jwt)):
+    """Tune autolearn aggressiveness (persisted to filters.json, next cycle). Corps validé (422 sinon) ; l'écriture EN PLACE, le verrou et
+    l'audit sont faits par root (`secubox-adguard-tv seuils`, données sur l'entrée standard, revalidées). 409 : filters.json absent, lien
+    ou illisible ; 503 : verbe ou sudo indisponible ; 502 : écriture refusée par le contrôleur. Jamais 500."""
     changed = body.model_dump(exclude_none=True)
     if not changed:
         raise HTTPException(status_code=422, detail="aucun seuil donné")
-    if _FILTERS_F.is_symlink() or not _FILTERS_F.is_file():
-        raise HTTPException(status_code=409, detail="filters.json absent ou n'est pas un fichier ordinaire (créé par le paquet toolbox) : rien n'est écrit")
+    sub = str(jeton.get("sub") or "inconnu") if isinstance(jeton, dict) else "inconnu"
+    acteur = sub if re.fullmatch(r"[A-Za-z0-9_.@-]{1,64}", sub) else "inconnu"
+    entree = _json.dumps({"acteur": acteur, "seuils": changed})
     try:
-        brut = _json.loads(_FILTERS_F.read_text())
-    except (OSError, ValueError) as e:
-        raise HTTPException(status_code=409, detail=f"filters.json illisible ({type(e).__name__}) : rien n'est écrit") from None
-    if not isinstance(brut, dict):
-        raise HTTPException(status_code=409, detail="filters.json n'est pas un objet : rien n'est écrit")
-    cfg = brut
-    cfg.update(changed)
-    try:
-        _ecrire_filters_en_place(cfg)
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"write filters.json: {type(e).__name__}") from None
-    return {"status": "ok", "changed": changed, "note": "applies next cycle"}
+        r = await asyncio.to_thread(subprocess.run, _argv_seuils(), input=entree, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        raise HTTPException(status_code=503, detail=_ECRITURE_REFUSEE) from None
+    msg = (r.stderr or "").strip()[:300]
+    if not msg.startswith(("filters.json", "seuils refusés")):          # seuls les messages connus du contrôleur, jamais une trace
+        msg = ""
+    if r.returncode == 0:
+        return {"status": "ok", "changed": changed, "note": "applies next cycle"}
+    if r.returncode == 4 and msg:
+        raise HTTPException(status_code=409, detail=msg or "filters.json absent ou n'est pas un fichier ordinaire : rien n'est écrit")
+    if r.returncode == 2 and msg:
+        raise HTTPException(status_code=422, detail=msg or "seuils refusés")
+    if r.returncode == 1 and msg:
+        raise HTTPException(status_code=502, detail=msg)
+    raise HTTPException(status_code=503, detail=_ECRITURE_REFUSEE)
 
 
 # ============================================================================

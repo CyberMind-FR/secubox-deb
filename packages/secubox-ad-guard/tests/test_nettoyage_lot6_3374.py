@@ -7,7 +7,6 @@
 écrit atomiquement, docstring juste, remarques du lot 5b (marquage sans domaine, type transmis à `annule`), section « Listes blanches »."""
 import importlib.machinery
 import importlib.util
-import os
 import json
 import time
 from pathlib import Path
@@ -99,16 +98,7 @@ def test_la_page_explique_un_inventaire_vide():
     assert "data?.note" in bloc and "TV Privacy" in bloc
 
 
-# ── 3. /learn/thresholds ──
-def test_seuils_valides_ecrits_atomiquement_sans_toucher_le_reste(monde):
-    f = monde / "filters.json"
-    f.write_text(json.dumps({"autolearn": True, "autolearn_min_sites": 2}))
-    r = TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 5})
-    assert r.status_code == 200 and r.json()["changed"] == {"autolearn_min_sites": 5}
-    assert json.loads(f.read_text()) == {"autolearn": True, "autolearn_min_sites": 5}
-    assert sorted(p.name for p in monde.iterdir() if p.name.startswith("filters")) == ["filters.json"]     # pas de fichier temporaire laissé
-
-
+# ── 3. /learn/thresholds ── (écriture par le contrôleur root depuis #3393 : test_seuils_controleur_3393.py)
 @pytest.mark.parametrize("corps", [{}, {"inconnu": 3}, {"autolearn_min_sites": 0}, {"autolearn_min_sites": 10_000},
                                    {"autolearn_ti_min_weight": 101}, {"autolearn_social_window_hours": -1}, {"autolearn_min_sites": "x"},
                                    {"autolearn_min_sites": None}, {"autolearn_min_sites": 2.5}])
@@ -193,46 +183,6 @@ def test_readme_dit_quelle_liste_blanche_sert_a_quoi_et_laquelle_prime():
 
 
 # ── passe 2 ──
-def test_seuils_ecrits_en_place_dossier_non_inscriptible(monde):
-    import os
-    d = monde / "toolbox"
-    d.mkdir()
-    f = d / "filters.json"
-    f.write_text('{"autolearn": true, "tor": {"actif": true}}')
-    os.chmod(f, 0o664)
-    st0 = f.stat()
-    os.chmod(d, 0o555)                                                         # comme /etc/secubox/toolbox (root, 755) vu de l'API
-    try:
-        m._FILTERS_F = m._P(f)
-        r = TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4})
-        assert r.status_code == 200, r.text
-        st1 = f.stat()
-        assert (st1.st_ino, st1.st_uid, st1.st_gid, st1.st_mode) == (st0.st_ino, st0.st_uid, st0.st_gid, st0.st_mode)
-        assert json.loads(f.read_text()) == {"autolearn": True, "tor": {"actif": True}, "autolearn_min_sites": 4}
-    finally:
-        os.chmod(d, 0o755)
-
-
-def test_seuils_jamais_de_creation_ni_de_lien(monde):
-    import os
-    f = monde / "filters.json"
-    assert not f.exists()
-    assert TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4}).status_code == 409   # absent : jamais recréé par secubox
-    assert not f.exists()
-    cible = monde / "ailleurs.json"
-    cible.write_text("{}")
-    os.symlink(cible, f)
-    assert TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4}).status_code == 409
-    assert cible.read_text() == "{}"
-
-
-def test_seuils_fichier_illisible_409(monde):
-    f = monde / "filters.json"
-    f.write_text("{pas du json")
-    assert TestClient(m.app).post("/learn/thresholds", json={"autolearn_min_sites": 4}).status_code == 409
-    assert f.read_text() == "{pas du json"
-
-
 def test_root_refuse_annule_vu_avec_domaine():
     r = {"acteur": "admin", "origine": "admin", "geste": "annule", "cibles": ["TV salon"], "minutes": None, "domaine": "x.example.com",
          "type": "vu", "force": False}

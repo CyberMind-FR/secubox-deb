@@ -14,6 +14,8 @@
   secubox-adguard-tv conntrack-dump  lot 4 (#3374) : lignes de /proc/net/nf_conntrack dont la source est un appareil du périmètre (lecture seule)
   secubox-adguard-tv dpi-cibles       lot 4 : cibles de sbxdpi (tri par appareil), reconstruites par root depuis l'état revalidé
   secubox-adguard-tv ndpid-arreter    lot 4 : garde de charge, arrête nDPId (reprise manuelle : ndpid-reprendre)
+  secubox-adguard-tv seuils           #3393 : seuils de l'autolearn (JSON sur l'entrée standard, revalidé) écrits EN PLACE dans
+                                      /etc/secubox/toolbox/filters.json, sous verrou, audités
 
 Lancé en root par sudo depuis l'API (utilisateur `secubox`) : l'état et la liste personnalisée sont donc écrits par un compte NON privilégié.
 Le contrôleur ne leur fait aucune confiance : il les relit en refusant les liens symboliques, valide chaque champ (adresse IP, mode, nom
@@ -492,6 +494,75 @@ def audit_protection(entree: str) -> int:
     return 0
 
 
+# Seuils de l'autolearn du toolbox (#3393) : filters.json appartient à secubox-toolbox (664) dans un dossier root (755) ; l'API (compte
+# secubox, hors du groupe secubox-toolbox) passe ici {"acteur", "seuils"} sur l'entrée standard. Root revalide clés et bornes (mêmes que
+# le modèle Pydantic de l'API), ouvre le fichier EXISTANT sans suivre de lien ni le créer, l'écrit en place (propriétaire, droits, inode
+# inchangés) et audite. Codes : 0 écrit, 2 entrée refusée, 4 filters.json absent/lien/illisible, 1 écriture impossible.
+FILTERS = Path(os.environ.get("SECUBOX_ADGUARD_TV_FILTERS", "/etc/secubox/toolbox/filters.json"))
+FILTERS_MAX = 1 << 20
+SEUILS_BORNES = {"autolearn_ad_min_sites": (1, 100), "autolearn_social_min_sites": (1, 100), "autolearn_min_sites": (1, 100),
+                 "autolearn_social_window_hours": (1, 24 * 365), "autolearn_ti_min_weight": (0, 100)}
+
+
+def _seuils_valides(r) -> bool:
+    if not isinstance(r, dict) or set(r) != {"acteur", "seuils"}:
+        return False
+    if not (isinstance(r["acteur"], str) and ACTEUR_RE.match(r["acteur"])):
+        return False
+    s = r["seuils"]
+    return (isinstance(s, dict) and 1 <= len(s) <= len(SEUILS_BORNES)
+            and all(k in SEUILS_BORNES and type(v) is int and SEUILS_BORNES[k][0] <= v <= SEUILS_BORNES[k][1] for k, v in s.items()))
+
+
+def seuils(entree: str) -> int:
+    try:
+        r = json.loads(entree) if len(entree) <= AUDIT_ENTREE_MAX else None
+    except ValueError:
+        r = None
+    if not _seuils_valides(r):
+        print("seuils refusés", file=sys.stderr)
+        return 2
+    try:
+        fd = os.open(FILTERS, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError as e:
+        print(f"filters.json inutilisable ({type(e).__name__}) : rien n'est écrit", file=sys.stderr)
+        return 4
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            print("filters.json n'est pas un fichier ordinaire : rien n'est écrit", file=sys.stderr)
+            return 4
+        brut = b""
+        while len(brut) <= FILTERS_MAX:
+            morceau = os.read(fd, 65536)
+            if not morceau:
+                break
+            brut += morceau
+        try:
+            cfg = json.loads(brut.decode("utf-8")) if len(brut) <= FILTERS_MAX else None
+        except ValueError:
+            cfg = None
+        if not isinstance(cfg, dict):
+            print("filters.json illisible ou n'est pas un objet : rien n'est écrit", file=sys.stderr)
+            return 4
+        cfg.update(r["seuils"])
+        vue = memoryview(json.dumps(cfg, indent=2).encode("utf-8"))
+        try:
+            os.lseek(fd, 0, os.SEEK_SET)
+            os.ftruncate(fd, 0)
+            while vue:
+                vue = vue[os.write(fd, vue):]
+            os.fsync(fd)
+        except OSError as e:
+            audit("seuils-echec", f"acteur={r['acteur']} {type(e).__name__}")
+            print(f"filters.json non écrit ({type(e).__name__})", file=sys.stderr)
+            return 1
+    finally:
+        os.close(fd)
+    audit("seuils", f"acteur={r['acteur']} " + " ".join(f"{k}={v}" for k, v in sorted(r["seuils"].items())))
+    print(json.dumps({"ok": True, "changed": r["seuils"]}))
+    return 0
+
+
 # ── lot 4 (#3374) : DPI par appareil ───────────────────────────────────────────────────────────────────────
 CONNTRACK = os.environ.get("SECUBOX_ADGUARD_TV_CONNTRACK", "/proc/net/nf_conntrack")
 SYSTEMCTL = os.environ.get("SECUBOX_ADGUARD_TV_SYSTEMCTL", "systemctl")
@@ -789,7 +860,7 @@ def _contournement_au_mieux(etat: dict) -> str:
 
 def main(argv: list[str], entree: str | None = None) -> int:
     if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump", "audit-classification",
-                                         "audit-protection", "conntrack-dump", "dpi-cibles", "ndpid-arreter", "ndpid-reprendre"):
+                                         "audit-protection", "conntrack-dump", "dpi-cibles", "ndpid-arreter", "ndpid-reprendre", "seuils"):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
@@ -801,6 +872,10 @@ def main(argv: list[str], entree: str | None = None) -> int:
         return audit_classification(sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree)
     if argv[1] == "audit-protection":
         return audit_protection(sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree)
+    if argv[1] == "seuils":
+        texte = sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree
+        with verrou_controleur():                                        # un seul écrivain root de filters.json à la fois
+            return seuils(texte)
     if argv[1] == "cache-dump":
         return cache_dump()                                              # lecture seule : ni verrou, ni écriture
     if argv[1] == "conntrack-dump":
