@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-rpi-dsi (#3399) : chaque update-initramfs, AVANT z50-raspi-firmware (ordre run-parts),
+# revérifie ROOTPART. Utile si /etc/default/raspi-firmware (conffile de raspi-firmware) a été
+# remplacé par la version du mainteneur. Sur RPi4/400, ROOTPART non sûr et non réparable :
+# échec, raspi-firmware ne réécrit pas cmdline.txt avec root=/dev/mmcblk0p2.
+set -e
+H=/usr/sbin/secubox-rpi-dsi
+[ -x "$H" ] || exit 0
+if command -v ischroot >/dev/null 2>&1 && ischroot; then exit 0; fi
+"$H" is-target || exit 0
+"$H" ensure-rootpart || { echo "secubox-rpi-dsi: ROOTPART non sûr : arrêt avant raspi-firmware (déblocage : README)" >&2; exit 1; }
+exit 0

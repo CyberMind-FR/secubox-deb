@@ -1,0 +1,36 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# secubox-rpi-dsi (#3399) : sources DKMS dans /usr/src/secubox-rpi-dsi-<ver>/, overlay compilé.
+DKMS_VERSION := $(shell dpkg-parsechangelog -SVersion | sed -e 's/^[0-9]*://' -e 's/-[^-]*$$//')
+PKG := debian/secubox-rpi-dsi
+DKMS_SRC := $(PKG)/usr/src/secubox-rpi-dsi-$(DKMS_VERSION)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	dtc -@ -I dts -O dtb -o secubox-dsi-7inch.dtbo overlay/secubox-dsi-7inch.dts
+
+override_dh_auto_clean:
+	rm -f secubox-dsi-7inch.dtbo
+
+override_dh_auto_install:
+	install -D -m 644 secubox-dsi-7inch.dtbo $(PKG)/usr/lib/secubox-rpi-dsi/secubox-dsi-7inch.dtbo
+	install -D -m 644 overlay/secubox-dsi-7inch.dts $(PKG)/usr/share/secubox-rpi-dsi/secubox-dsi-7inch.dts
+	install -D -m 755 usr/sbin/secubox-rpi-dsi $(PKG)/usr/sbin/secubox-rpi-dsi
+	install -D -m 755 etc/kernel/postinst.d/00-secubox-rpi-dsi $(PKG)/etc/kernel/postinst.d/00-secubox-rpi-dsi
+	install -D -m 755 etc/initramfs/post-update.d/00-secubox-rpi-dsi $(PKG)/etc/initramfs/post-update.d/00-secubox-rpi-dsi
+	install -D -m 644 systemd/secubox-rpi-dsi-boot.service $(PKG)/usr/lib/systemd/system/secubox-rpi-dsi-boot.service
+	install -D -m 755 dkms/secubox-rpi-dsi-build $(DKMS_SRC)/secubox-rpi-dsi-build
+	sed 's/@VERSION@/$(DKMS_VERSION)/' dkms/dkms.conf > $(DKMS_SRC)/dkms.conf
+	chmod 644 $(DKMS_SRC)/dkms.conf
+	install -d $(DKMS_SRC)/patches
+	install -m 644 patches/*.patch $(DKMS_SRC)/patches/
+
+# unité activée (premier démarrage, reprise), jamais lancée par le postinst : il configure déjà
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-rpi-dsi-boot --no-start
+
+# rien à stripper ni à tester au build (modules construits sur la cible)
+override_dh_auto_test:

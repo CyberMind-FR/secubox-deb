@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-rpi-dsi-build (#3399)
+#
+# Appelé par DKMS (dkms.conf, MAKE[0]) dans le répertoire de construction :
+#   secubox-rpi-dsi-build build   <kernelver> <kernel_source_dir>
+#   secubox-rpi-dsi-build prepare <kernelver> <répertoire>     (extraction + patches, sans make)
+#
+# 1. Vérifie que /usr/src/linux-source-<maj.min>.tar.xz (paquet Debian linux-source-<maj.min>)
+#    porte la même version amont que le noyau visé ; sinon refus (rc 1).
+# 2. Extrait les seuls fichiers utiles (vc4, tc358762, panel-simple, edt-ft5x06).
+# 3. Applique TOUS les patches à blanc (--dry-run, sans fuzz), puis pour de bon :
+#    un patch qui ne passe pas = échec DKMS, aucun module construit.
+# 4. Construit les 4 modules ; un échec de make efface les .ko (jamais de module partiel).
+#
+# Variables de test (honorées SEULEMENT si SECUBOX_TEST=1 et euid != 0) :
+#   SECUBOX_RPI_DSI_TARBALL, SECUBOX_RPI_DSI_SRCVER, SECUBOX_RPI_DSI_IMGVER, SECUBOX_RPI_DSI_PATCHES.
+set -euo pipefail
+
+# Nettoyage global : couvre aussi les sorties par die (pas de trap RETURN, qui resterait armé).
+TMPDIRS=()
+nettoyer() { local d; for d in "${TMPDIRS[@]+"${TMPDIRS[@]}"}"; do rm -rf -- "$d"; done; }
+trap nettoyer EXIT
+
+say() { echo "secubox-rpi-dsi-build: $*" >&2; }
+die() { say "ERREUR : $*"; exit 1; }
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PATCHES="$HERE/patches"
+TARBALL=""
+SRCVER=""
+IMGVER=""
+
+readonly FILES=(
+    drivers/gpu/drm/vc4
+    drivers/gpu/drm/bridge/tc358762.c
+    drivers/gpu/drm/panel/panel-simple.c
+    drivers/input/touchscreen/edt-ft5x06.c
+)
+
+# 6.12.107-1 -> 1 (révision Debian, vide si absente)
+revision() { local v="${1#*:}"; [[ "$v" == *-* ]] && echo "${v##*-}" || echo ""; }
+# 6.12.107+deb13-arm64 -> 6.12.107 ; 6.12.107-1 -> 6.12.107
+amont_noyau() { local v="${1%%+*}"; echo "${v%%-*}"; }
+amont_paquet() { local v="${1#*:}"; v="${v%%-*}"; echo "${v%%+*}"; }
+
+choisir_source() {
+    local kver="$1" majmin
+    majmin="$(amont_noyau "$kver" | cut -d. -f1,2)"
+    [[ "$majmin" =~ ^[0-9]+\.[0-9]+$ ]] || die "version de noyau illisible : $kver"
+    TARBALL="/usr/src/linux-source-${majmin}.tar.xz"
+    SRCVER="$(dpkg-query -W -f='${Version}' "linux-source-${majmin}" 2>/dev/null || true)"
+    IMGVER="$(dpkg-query -W -f='${Version}' "linux-image-${kver}" 2>/dev/null || true)"
+    if [[ "${SECUBOX_TEST:-}" == "1" && "$(id -u)" != "0" ]]; then
+        TARBALL="${SECUBOX_RPI_DSI_TARBALL:-$TARBALL}"
+        SRCVER="${SECUBOX_RPI_DSI_SRCVER:-$SRCVER}"
+        IMGVER="${SECUBOX_RPI_DSI_IMGVER:-$IMGVER}"
+        PATCHES="${SECUBOX_RPI_DSI_PATCHES:-$PATCHES}"
+    fi
+    [[ -r "$TARBALL" ]] || die "$TARBALL absent : installer linux-source-${majmin}"
+    [[ -n "$SRCVER" ]] || die "paquet linux-source-${majmin} non installé"
+    local a b
+    a="$(amont_noyau "$kver")"; b="$(amont_paquet "$SRCVER")"
+    [[ "$a" == "$b" ]] || die "linux-source-${majmin} ($b) ne correspond pas au noyau $kver ($a) : refus"
+    # Révision Debian : comparée quand linux-image-<kver> la donne (les patches Debian changent avec elle).
+    if [[ -n "$IMGVER" ]]; then
+        local ra rb
+        ra="$(revision "$IMGVER")"; rb="$(revision "$SRCVER")"
+        if [[ "$(amont_paquet "$IMGVER")" != "$b" || ( -n "$ra" && -n "$rb" && "$ra" != "$rb" ) ]]; then
+            die "linux-source-${majmin} ($SRCVER) ne correspond pas à linux-image-${kver} ($IMGVER) : refus"
+        fi
+    fi
+}
+
+preparer() {
+    local kver="$1" dest top p
+    # Destination confinée au répertoire de travail (jamais / ni un chemin hors de $PWD).
+    dest="$(realpath -m -- "$2")"
+    [[ "$dest" == "$PWD"/?* ]] || die "destination $dest hors du répertoire de travail $PWD : refus"
+    choisir_source "$kver"
+    rm -rf -- "$dest"
+    mkdir -p -- "$dest"
+    top="$(tar -tJf "$TARBALL" | head -n1 | cut -d/ -f1)" || true
+    [[ -n "$top" && "$top" != "." && "$top" != ".." ]] || die "archive $TARBALL illisible"
+    local -a membres=()
+    for p in "${FILES[@]}"; do membres+=("$top/$p"); done
+    tar -xJf "$TARBALL" -C "$dest" --strip-components=1 \
+        --no-same-owner --no-same-permissions "${membres[@]}" \
+        || die "extraction incomplète de $TARBALL"
+    local -a liste=("$PATCHES"/*.patch)
+    [[ -e "${liste[0]}" ]] || die "aucun patch dans $PATCHES"
+    # À blanc d'abord : tout ou rien. Les patches de 0002 touchent deux fichiers indépendants
+    # de 0001, donc un essai à blanc séquentiel est exact.
+    local tmp
+    tmp="$(mktemp -d)"
+    TMPDIRS+=("$tmp")
+    cp -a -- "$dest/." "$tmp/"
+    for p in "${liste[@]}"; do
+        patch -d "$tmp" -p1 --fuzz=0 --forward --batch --quiet < "$p" \
+            || { rm -rf -- "$dest"; die "patch $(basename "$p") refusé par ces sources : aucun module construit"; }
+    done
+    for p in "${liste[@]}"; do
+        patch -d "$dest" -p1 --fuzz=0 --forward --batch --quiet < "$p" \
+            || { rm -rf -- "$dest"; die "patch $(basename "$p") : échec"; }
+    done
+    rm -rf -- "$tmp"
+    say "sources $SRCVER extraites et patchées dans $dest"
+}
+
+construire() {
+    local kver="$1" kdir="$2" src="$PWD/src" b
+    preparer "$kver" "$src"
+    rm -rf -- "$PWD/build"
+    mkdir -p "$PWD/build"
+    cp -a "$src/drivers/gpu/drm/vc4" "$PWD/build/vc4"
+    for b in tc358762:drivers/gpu/drm/bridge panel-simple:drivers/gpu/drm/panel edt-ft5x06:drivers/input/touchscreen; do
+        local nom="${b%%:*}" dir="${b#*:}"
+        mkdir -p "$PWD/build/$nom"
+        cp "$src/$dir/$nom.c" "$PWD/build/$nom/"
+        printf 'obj-m := %s.o\n' "$nom" > "$PWD/build/$nom/Kbuild"
+    done
+    local ok=1
+    make -C "$kdir" M="$PWD/build/vc4" CONFIG_DRM_VC4=m modules || ok=0
+    for b in tc358762 panel-simple edt-ft5x06; do
+        [[ $ok == 1 ]] || break
+        make -C "$kdir" M="$PWD/build/$b" modules || ok=0
+    done
+    if [[ $ok != 1 ]]; then
+        find "$PWD/build" -name '*.ko' -delete
+        die "compilation en échec pour $kver : aucun module installé"
+    fi
+}
+
+case "${1:-}" in
+    build)   [[ $# -eq 3 ]] || die "usage : $0 build <kernelver> <kernel_source_dir>"; construire "$2" "$3" ;;
+    prepare) [[ $# -eq 3 ]] || die "usage : $0 prepare <kernelver> <répertoire>"; preparer "$2" "$3" ;;
+    *) die "usage : $0 build|prepare <kernelver> <dir>" ;;
+esac

@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-rpi-dsi (#3399) : à chaque noyau installé, AVANT le hook dkms, initramfs-tools
+# et z50-raspi-firmware (ordre run-parts) : ROOTPART sûr puis overlay en place.
+# Sur RPi4/400, si ROOTPART ne peut être fixé, on échoue : raspi-firmware écrirait
+# root=/dev/mmcblk0p2 dans cmdline.txt et la box ne redémarrerait plus.
+# Hors RPi4/400 : rien. Paquet retiré (non purgé) : rien.
+set -e
+H=/usr/sbin/secubox-rpi-dsi
+[ -x "$H" ] || exit 0
+if command -v ischroot >/dev/null 2>&1 && ischroot; then exit 0; fi
+"$H" is-target || exit 0
+"$H" ensure-rootpart || { echo "secubox-rpi-dsi: ROOTPART indéterminable, noyau ${1:-?} : arrêt pour protéger cmdline.txt" >&2; exit 1; }
+"$H" install-overlay || echo "secubox-rpi-dsi: overlay non installé" >&2
+exit 0

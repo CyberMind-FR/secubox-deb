@@ -1,0 +1,35 @@
+Source: secubox-rpi-dsi
+Section: kernel
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper (>= 13), device-tree-compiler
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-rpi-dsi
+Architecture: arm64
+Depends: ${misc:Depends},
+         python3,
+         dkms,
+         linux-source-6.12,
+         linux-headers-arm64,
+         patch,
+         xz-utils,
+         make,
+         gcc,
+         raspi-firmware,
+         initramfs-tools,
+         util-linux
+Description: SecuBox - official Raspberry Pi 7" DSI touchscreen on the Debian kernel
+ OPTIONAL package, for a Raspberry Pi 4 / 400 fitted with the official 7"
+ DSI display only. Never pulled by a meta-package or a default image.
+ .
+ Builds by DKMS, for every installed kernel, patched vc4, tc358762,
+ panel-simple and edt-ft5x06 modules from the matching linux-source
+ tarball, and installs the secubox-dsi-7inch overlay through
+ /etc/default/raspi-firmware-custom (config.txt is never edited).
+ Pins ROOTPART in /etc/default/raspi-firmware so raspi-firmware never
+ writes root=/dev/mmcblk0p2 into cmdline.txt.
+ .
+ On any other hardware the postinst does nothing and says so.

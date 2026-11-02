@@ -278,7 +278,9 @@ jobs:
           sudo apt-get install -y -qq \
             build-essential dpkg-dev debhelper devscripts fakeroot \
             dh-python python3-all python3-setuptools golang-go \
-            cmake libpcap-dev pkg-config
+            cmake libpcap-dev pkg-config device-tree-compiler
+          # device-tree-compiler : Build-Depends de secubox-rpi-dsi (overlay
+          # compile par dtc au build, #3399).
           # cmake + libpcap-dev + pkg-config satisfy secubox-dpi-engine's
           # Build-Depends (it cmake-builds nDPId/nDPIsrvd against libpcap on
           # the native amd64 runner). Without them dpkg-checkbuilddeps aborted
@@ -416,7 +418,8 @@ jobs:
                 apt-get install -y -qq --no-install-recommends \
                   build-essential dpkg-dev debhelper devscripts fakeroot \
                   cmake pkg-config libpcap-dev git ca-certificates \
-                  wget unzip util-linux autoconf automake libtool curl python3
+                  wget unzip util-linux autoconf automake libtool curl python3 \
+                  device-tree-compiler
                 dpkg-buildpackage -us -uc -b'
           else
             dpkg-buildpackage -us -uc -b $DEPFLAG -a ${{ matrix.arch }}

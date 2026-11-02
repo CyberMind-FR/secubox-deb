@@ -1,0 +1,8 @@
+secubox-rpi-dsi (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Paquet initial (optionnel, RPi4/400 + écran officiel 7" DSI) : modules
+    vc4, tc358762, panel-simple et edt-ft5x06 patchés par DKMS depuis
+    linux-source, overlay secubox-dsi-7inch par raspi-firmware-custom,
+    ROOTPART fixé avant tout update-initramfs (ref #3399).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 09:00:00 +0100

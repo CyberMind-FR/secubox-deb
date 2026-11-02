@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# secubox-rpi-dsi (#3399) : au purge, dernier nettoyage de l'overlay (déjà fait par le prerm),
+# par le helper s'il est encore là, sinon à la main. ROOTPART est laissé volontairement dans
+# /etc/default/raspi-firmware : le retirer rendrait la box non démarrable.
+set -e
+if [ "$1" = "purge" ]; then
+    if [ -x /usr/sbin/secubox-rpi-dsi ]; then
+        /usr/sbin/secubox-rpi-dsi remove-overlay || true
+    else
+        rm -f /boot/firmware/overlays/secubox-dsi-7inch.dtbo
+        if [ -f /etc/default/raspi-firmware-custom ]; then
+            sed -i '/^[[:space:]]*dtoverlay=secubox-dsi-7inch\([,[:space:]]\|$\)/d' /etc/default/raspi-firmware-custom
+        fi
+    fi
+fi
+#DEBHELPER#
+exit 0

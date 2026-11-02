@@ -47,6 +47,8 @@ USE_LOCAL_CACHE=0
 INCLUDE_KIOSK=0
 NO_COMPRESS=0
 SLIPSTREAM_DEBS=0
+# Écran officiel RPi 7" DSI (#3399) : paquet OPTIONNEL, jamais dans un profil par défaut.
+INCLUDE_RPI_DSI="${INCLUDE_RPI_DSI:-0}"
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
 GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
@@ -66,6 +68,10 @@ Usage: sudo bash build-rpi-usb.sh [OPTIONS]
   --local-cache      Use local APT cache
   --slipstream       Install .deb packages from output/debs/
   --kiosk            Include GUI kiosk mode packages
+  --rpi-dsi          Add the optional secubox-rpi-dsi package (official 7" DSI
+                     display, RPi4/400 only; also INCLUDE_RPI_DSI=1). Inert in
+                     the chroot; secubox-rpi-dsi-boot.service builds the DKMS
+                     modules and enables the overlay at first boot.
   --no-compress      Skip gzip compression
   --help             Show this help
 
@@ -88,6 +94,7 @@ while [[ $# -gt 0 ]]; do
     --local-cache)  USE_LOCAL_CACHE=1;  shift   ;;
     --slipstream)   SLIPSTREAM_DEBS=1;  shift   ;;
     --kiosk)        INCLUDE_KIOSK=1;    shift   ;;
+    --rpi-dsi)      INCLUDE_RPI_DSI=1;  shift   ;;
     --no-compress)  NO_COMPRESS=1;      shift   ;;
     --help|-h)      usage ;;
     *) err "Unknown argument: $1" ;;
@@ -798,6 +805,15 @@ if [[ $DEBS_INSTALLED -eq 0 ]]; then
     rm -rf "$_plat"
     DEBS_INSTALLED=1
   fi
+fi
+
+# Option --rpi-dsi (#3399) : ajout explicite du paquet optionnel de l'écran 7" DSI,
+# hors de toute sélection de profil. Introuvable = échec franc (option demandée).
+if [[ "${INCLUDE_RPI_DSI}" == "1" ]]; then
+  _dsi="$(find "${REPO_DIR}/output/debs" "${REPO_DIR}/cache/repo/pool" -name 'secubox-rpi-dsi_*_arm64.deb' 2>/dev/null | sort -V | tail -n1 || true)"
+  [[ -n "${_dsi}" ]] || err "--rpi-dsi : secubox-rpi-dsi_*_arm64.deb introuvable (output/debs ou cache/repo/pool)"
+  cp "${_dsi}" "${ROOTFS}/tmp/secubox-debs/"
+  log "Paquet optionnel ajouté : $(basename "${_dsi}") (configuré au premier démarrage par secubox-rpi-dsi-boot.service)"
 fi
 
 # Install collected packages

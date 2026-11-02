@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# secubox-rpi-dsi (#3399). Tout passe par le helper (inerte hors RPi4/400 et en chroot, et le dit) :
+# ROOTPART sûr -> overlay -> DKMS (une seule version) -> update-initramfs si ROOTPART sûr.
+# Trigger linux-source : relance la construction (linux-source installé après linux-image).
+# Aucun service réseau : pas d'utilisateur dédié.
+set -e
+H=/usr/sbin/secubox-rpi-dsi
+
+case "$1" in
+    configure|triggered)
+        "$H" configure || echo "secubox-rpi-dsi: configuration incomplète (voir ci-dessus) ; reprise au démarrage par secubox-rpi-dsi-boot" >&2
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
