@@ -1,3 +1,9 @@
+secubox-rpi-dsi (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Tactile au demarrage (#3399) : vcc-supply et reset-gpios (broche 1 de l ATTINY) remis dans le fragment tactile, comme l overlay officiel ; sans eux la puce restait en remise a zero (-121). Valide au banc gk7 : ecran, tactile et kiosque au demarrage sans intervention.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 09:28:38 +0100
+
 secubox-rpi-dsi (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Paquet initial (optionnel, RPi4/400 + écran officiel 7" DSI) : modules

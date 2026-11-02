@@ -4,7 +4,8 @@
  * Même chaîne que l'overlay vc4-kms-dsi-7inch de Raspberry Pi : régulateur ATTINY (0x45) -> pont TC358762
  * (module DKMS, absent du noyau Debian) -> dalle raspberrypi,7inch-dsi (panel-simple patché, DKMS).
  * Tactile FT5406 dans un fragment séparé (fragment@4), désactivable : dtoverlay=secubox-dsi-7inch,touch=off
- * (sans vcc-supply ni reset-gpios : ces propriétés ont bloqué un démarrage au banc).
+ * vcc-supply + reset-gpios (broche 1 de l'ATTINY) comme l'overlay officiel : sans eux la puce reste en remise à zéro
+ * au démarrage (-121). Validé au banc gk7 le 2026-11-02 (le blocage antérieur venait de l'ancien pilote sans polling).
  */
 /dts-v1/;
 /plugin/;
@@ -104,6 +105,8 @@
 				touchscreen-size-y = <480>;
 				touchscreen-inverted-x;
 				touchscreen-inverted-y;
+				vcc-supply = <&reg_display>;
+				reset-gpios = <&reg_display 1 1>;
 			};
 		};
 	};

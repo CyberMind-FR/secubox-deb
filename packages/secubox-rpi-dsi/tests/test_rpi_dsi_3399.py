@@ -231,7 +231,7 @@ def test_tactile_fragment_separe_desactivable():
     frag4 = t[t.index("fragment@4 {"):t.index("__overrides__")]
     assert "edt,edt-ft5506" in frag4 and "touchscreen-inverted-x" in frag4
     assert "ts@38" not in t.split("fragment@4 {")[0]
-    assert "vcc-supply" not in frag4 and "reset-gpios" not in frag4
+    assert "vcc-supply = <&reg_display>;" in frag4 and "reset-gpios = <&reg_display 1 1>;" in frag4
     assert re.search(r'touch\s*=\s*<0>,"=4";', t)
 
 
@@ -248,7 +248,7 @@ def test_debian_conforme():
     assert (deb / "compat").read_text().strip() == "13"
     ctl = (deb / "control").read_text()
     assert "Standards-Version: 4.6.2" in ctl and "Architecture: arm64" in ctl
-    assert (deb / "changelog").read_text().startswith("secubox-rpi-dsi (0.1.0-1~trixie1) trixie;")
+    assert re.match(r"secubox-rpi-dsi \(\d+\.\d+\.\d+-\d+~trixie1\) trixie;", (deb / "changelog").read_text())
     assert "GPL-2.0" in (deb / "copyright").read_text()
     for s in ("postinst", "prerm", "postrm"):
         subprocess.run(["sh", "-n", str(deb / s)], check=True, timeout=30)
