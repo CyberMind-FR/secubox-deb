@@ -276,6 +276,17 @@ conntrack) n'apparaissent (« DNS + DPI ») que s'ils traversent la box (mode LA
   ou illisible), il est **retiré** (forçage levé) et audité (`contournement-invalide`) : `nftables.service` ne doit jamais échouer au démarrage.
 - Listes : `lists/ssai.txt` (contenu qui insère ses propres pubs), `lists/resolveurs-doh.txt`.
 
+### Corrélation DNS/DPI (1.24.0, #3395)
+
+- Le moteur nomme l'adresse distante d'un flux par la réponse DNS la plus récente qui y a résolu (`reponses.db` du capteur DNS, 24 h,
+  200 000 adresses au plus). Correspondance GLOBALE à la box : le cache d'Unbound ne dit pas quel appareil a demandé le nom.
+- Table `flux` de `dpi-appareils.db` : colonnes `nom_dns` et `categorie_dns` (taxonomie à 10 catégories) ajoutées par `ALTER TABLE` au
+  premier passage du moteur, lignes gardées. `nom_dns` est rempli sans SNI, ou quand il diffère du SNI ; vide s'il le répète.
+- `GET /adblock-tv/protection/dpi/flux` : chaque ligne porte `nom_dns`, `categorie_dns`. `GET .../dpi/applications` : `domaines_dns`
+  (10 au plus) = `{nom, categorie, etat}`, `etat` ∈ `bloque` | `autorise` (dernière décision DNS de l'appareil sur 24 h au plus) ou `null`.
+  Gardes inchangées (`require_jwt`). Les constats ne changent pas : `sans-dns` = adresse jamais résolue.
+- Page : domaines corrélés par application, bouton « Flux » (« via DNS : nom » sans SNI) ; aucun rafraîchissement tant qu'un détail est ouvert.
+
 ### Assistant de détection en direct (lot 5b, 1.22.0, #3374)
 
 Conception : `docs/superpowers/specs/2026-11-01-sbx-tv-privacy-lot5b-design.md`. Onglet « En direct » de `/tv-privacy/` (administrateur) :

@@ -196,10 +196,10 @@ def charger_resolveurs(chemin: Path) -> Tuple[Set[str], Set[str]]:
     return ips, noms
 
 
-def constats(flux: Iterable[dict], resolus: Set[str], box: Set[str], doh: Set[str], doh_noms: Set[str]) -> List[dict]:
+def constats(flux: Iterable[dict], resolus, box: Set[str], doh: Set[str], doh_noms: Set[str]) -> List[dict]:
     """`sans-dns` : adresse publique, aucun nom (SNI) et jamais résolue pour cet appareil ; `dns-chiffre` : DoT/DoQ (853), appli DoH_DoT,
     ou 443 vers un résolveur DoH connu ; `contournement` : DNS (53) vers un autre résolveur que la box. NTP, STUN, SSDP, mDNS, DHCP
-    et multicast ne comptent jamais."""
+    et multicast ne comptent jamais. `resolus` : ensemble d'adresses ou correspondance adresse -> nom (#3395), seule la présence compte."""
     out, vus = [], set()
     for f in flux:
         d = _ip(f.get("distant", ""))
@@ -295,6 +295,7 @@ MAX_DECOUVERTES = 5000
 PEREMPTION_SBXDPI_S = 120
 MAX_OCTETS = 20 * 1024 * 1024                         # B1 : plafond du fichier ; au-delà, les plus anciennes minutes partent
 ETATS_ASSISTANT = ("confirmee", "legitime", "plus-tard")       # lot 5b : choix de l'administrateur appliqués par le moteur
+COLONNES_CORRELATION = ("nom_dns", "categorie_dns")      # #3395 : ajoutées par ALTER TABLE, jamais en recréant la table
 TYPES_DECOUVERTE = ("repli", "repli-protege", "secours", "sans-dns", "dns-chiffre", "contournement")
 
 SCHEMA = """
@@ -302,6 +303,7 @@ CREATE TABLE IF NOT EXISTS flux (mac TEXT NOT NULL, minute INTEGER NOT NULL, app
     hote TEXT NOT NULL DEFAULT '', port INTEGER NOT NULL DEFAULT 0, distant TEXT NOT NULL DEFAULT '', flux INTEGER NOT NULL DEFAULT 0,
     octets INTEGER NOT NULL DEFAULT 0, sans_dns INTEGER NOT NULL DEFAULT 0, dns_chiffre INTEGER NOT NULL DEFAULT 0,
     local TEXT NOT NULL DEFAULT '', proto TEXT NOT NULL DEFAULT '',
+    nom_dns TEXT NOT NULL DEFAULT '', categorie_dns TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (mac, minute, local, proto, appli, hote, port, distant));
 CREATE INDEX IF NOT EXISTS flux_mac ON flux(mac, minute);
 CREATE TABLE IF NOT EXISTS decouvertes (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, mac TEXT NOT NULL, type TEXT NOT NULL,
@@ -351,6 +353,9 @@ class MagasinDPI:
                         if cx.execute("PRAGMA auto_vacuum").fetchone()[0] != 2 or not {"local", "proto"} <= cols:
                             # base antérieure à la passe 2 : la purge par plafond viderait les flux et l'INSERT échouerait
                             raise sqlite3.DatabaseError("schéma antérieur")
+                        for col in COLONNES_CORRELATION:                     # #3395 : migration NON destructive (lignes gardées)
+                            if col not in cols:
+                                cx.execute(f"ALTER TABLE flux ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
                     cx.executescript(SCHEMA)
                 return
             except sqlite3.OperationalError:
@@ -373,15 +378,21 @@ class MagasinDPI:
     def _lisible(self) -> bool:
         return not self.lecture_seule or self.chemin.is_file()
 
+    @staticmethod
+    def _correlee(cx) -> bool:
+        """#3395 : l'API lit en `mode=ro` une base que le moteur n'a peut-être pas encore migrée : colonnes absentes = valeurs vides."""
+        return set(COLONNES_CORRELATION) <= {r[1] for r in cx.execute("PRAGMA table_info(flux)")}
+
     def ingerer(self, lignes: Iterable[dict]) -> int:
         """Une ligne par (mac, minute, adresse locale, protocole, appli, hôte, port, distant) ; la valeur la plus récente d'une même minute
         REMPLACE (compteurs cumulés)."""
         rangs = [(x["mac"], int(x["minute"]), x["appli"], x.get("categorie_ndpi", ""), x.get("hote", ""), int(x.get("port", 0)),
                   x.get("distant", ""), int(x.get("flux", 0)), int(x.get("octets", 0)), int(bool(x.get("sans_dns"))),
-                  int(bool(x.get("dns_chiffre"))), x.get("local", ""), x.get("proto", "")) for x in lignes]
+                  int(bool(x.get("dns_chiffre"))), x.get("local", ""), x.get("proto", ""), x.get("nom_dns", "") or "",
+                  x.get("categorie_dns", "") or "") for x in lignes]
         with self._cx() as cx:
             cx.executemany("INSERT OR REPLACE INTO flux (mac, minute, appli, categorie_ndpi, hote, port, distant, flux, octets, sans_dns, "
-                           "dns_chiffre, local, proto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", rangs)
+                           "dns_chiffre, local, proto, nom_dns, categorie_dns) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rangs)
         return len(rangs)
 
     def dernier_flux(self, mac: str) -> Optional[int]:
@@ -400,11 +411,16 @@ class MagasinDPI:
                 "FROM flux WHERE mac=? AND minute>=? GROUP BY appli ORDER BY SUM(octets) DESC, appli LIMIT ?",
                 (mac, int(depuis) // 60, max(1, min(int(limite), 200)))).fetchall()
             out = []
+            correlee = self._correlee(cx)
             for a, c, f, o, p, d, sd, dc in lignes:
                 hotes = [h for (h,) in cx.execute("SELECT hote FROM flux WHERE mac=? AND appli=? AND minute>=? AND hote!='' GROUP BY hote "
                                                   "ORDER BY SUM(octets) DESC LIMIT 10", (mac, a, int(depuis) // 60))]
+                # #3395 : domaines DNS corrélés aux adresses de l'appli (10 au plus, par volume)
+                doms = [] if not correlee else [{"nom": n, "categorie": k} for n, k in cx.execute(
+                    "SELECT nom_dns, MAX(categorie_dns) FROM flux WHERE mac=? AND appli=? AND minute>=? AND nom_dns!='' GROUP BY nom_dns "
+                    "ORDER BY SUM(octets) DESC, nom_dns LIMIT 10", (mac, a, int(depuis) // 60))]
                 out.append({"appli": a, "categorie_ndpi": c, "flux": int(f or 0), "octets": int(o or 0), "premier": int(p) * 60,
-                            "dernier": int(d) * 60, "hotes": hotes, "sans_dns": bool(sd), "dns_chiffre": bool(dc)})
+                            "dernier": int(d) * 60, "hotes": hotes, "sans_dns": bool(sd), "dns_chiffre": bool(dc), "domaines_dns": doms})
         return out
 
     def lignes_flux(self, mac: str, depuis: int, appli: Optional[str] = None, decalage: int = 0, limite: int = 50) -> Tuple[int, List[dict]]:
@@ -416,11 +432,13 @@ class MagasinDPI:
             a.append(appli)
         with self._cx() as cx:
             total = cx.execute(f"SELECT COUNT(*) FROM flux WHERE {' AND '.join(w)}", a).fetchone()[0]
-            lignes = cx.execute(f"SELECT minute, appli, categorie_ndpi, hote, port, distant, flux, octets, sans_dns, dns_chiffre FROM flux "
+            corr = "nom_dns, categorie_dns" if self._correlee(cx) else "'', ''"
+            lignes = cx.execute(f"SELECT minute, appli, categorie_ndpi, hote, port, distant, flux, octets, sans_dns, dns_chiffre, {corr} FROM flux "
                                 f"WHERE {' AND '.join(w)} ORDER BY minute DESC, octets DESC LIMIT ? OFFSET ?",
                                 [*a, max(1, min(int(limite), 200)), max(0, int(decalage))]).fetchall()
         return int(total), [{"ts": m * 60, "appli": ap, "categorie_ndpi": c, "hote": h, "port": p, "distant": d, "flux": f, "octets": o,
-                             "sans_dns": bool(sd), "dns_chiffre": bool(dc)} for m, ap, c, h, p, d, f, o, sd, dc in lignes]
+                             "sans_dns": bool(sd), "dns_chiffre": bool(dc), "nom_dns": nd, "categorie_dns": cd}
+                            for m, ap, c, h, p, d, f, o, sd, dc, nd, cd in lignes]
 
     def ajouter_decouvertes(self, mac: str, decouvertes: Iterable[dict]) -> int:
         n = 0
@@ -554,9 +572,20 @@ def cibles(etat: dict, voisins: Dict[str, str]) -> dict:
 
 
 def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str], maintenant: int, voisins: Dict[str, str],
-            sbxdpi_texte: Optional[str], conntrack_texte: Optional[str], resolus: Set[str], box: Set[str],
+            sbxdpi_texte: Optional[str], conntrack_texte: Optional[str], resolus, box: Set[str],
             doh: Tuple[Set[str], Set[str]], memoire: Optional[Dict[str, Tuple[str, int]]] = None) -> dict:
-    """Lit les sources, range les flux par MAC, relève constats et replis. Rend l'état affichable et les candidats de repli par MAC."""
+    """Lit les sources, range les flux par MAC, relève constats et replis. Rend l'état affichable et les candidats de repli par MAC.
+
+    `resolus` : adresse -> nom DNS (`_resolus`, #3395), ou ensemble d'adresses (sans nom). Chaque ligne de flux porte `nom_dns` : le nom
+    DNS de l'adresse distante quand il n'y a pas de SNI, ou quand il DIFFÈRE du SNI (CDN, frontal) ; vide s'il répète le SNI ou si
+    l'adresse n'a jamais été résolue. `categorie_dns` : sa catégorie (taxonomie à 10 catégories), vide sans nom."""
+    noms = resolus if isinstance(resolus, dict) else {}
+    cats: Dict[str, str] = {}
+
+    def cat_dns(n: str) -> str:
+        if n and n not in cats:
+            cats[n] = categorie(n)
+        return cats.get(n, "")
     per = perimetre(etat)
     adr = _adresses(etat, voisins)
     sources = {"sbxdpi": "absent", "conntrack": "absent"}
@@ -593,9 +622,13 @@ def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str
         signales = {(x["distant"], x["port"]): x["type"] for x in cs}
         for f in fl:
             t = signales.get((f["distant"], f["port"]))
+            nd = noms.get(f["distant"], "") if f["distant"] else ""
+            if nd == f["hote"]:
+                nd = ""
             lignes.append({"mac": m, "minute": f["minute"], "local": f["local"], "proto": f["proto"], "appli": f["appli"] or f["proto"].upper(), "categorie_ndpi": f.get("categorie", ""),
                            "hote": f["hote"], "port": f["port"], "distant": "" if f["hote"] else f["distant"], "flux": f["flux"],
-                           "octets": f["octets"], "sans_dns": t == "sans-dns", "dns_chiffre": t == "dns-chiffre"})
+                           "octets": f["octets"], "sans_dns": t == "sans-dns", "dns_chiffre": t == "dns-chiffre", "nom_dns": nd,
+                           "categorie_dns": cat_dns(nd)})
         mag.ajouter_decouvertes(m, [{"type": x["type"], "domaine": f"{x['distant']}:{x['port']}", "appli": x["appli"], "ts": maintenant,
                                      "confiance": 80, "raison": {"sans-dns": "adresse en dur : aucun nom DNS ni SNI",
                                                                  "dns-chiffre": "DNS chiffré (DoH/DoT) : la box ne voit pas ces requêtes",
@@ -655,18 +688,35 @@ def _ecrire_etat_dpi(e: dict, dossier: Optional[Path] = None) -> None:
         raise
 
 
-def _resolus(maintenant: int) -> Set[str]:
+def _resolus(maintenant: int) -> Dict[str, str]:
+    """Adresse -> nom DNS qui y a résolu le plus récemment (`derniere`), sur 24 h, 200 000 adresses au plus (#3395).
+
+    GLOBAL à la box : `reponses.db` vient du cache d'Unbound (`registre` = domaine enregistré, `reseau` = ASN ou préfixe), il ne dit pas
+    quel appareil a demandé le nom ; une adresse partagée (CDN) peut donc porter le nom demandé par un autre appareil. Les constats n'en
+    dépendent pas : `sans-dns` reste « jamais résolue » (clé absente)."""
     f = dnstv.DOSSIER_ETAT / "reponses.db"
     if not f.is_file():
-        return set()
+        return {}
     try:
         cx = sqlite3.connect(f"file:{f}?mode=ro", uri=True, timeout=5)
         try:
-            return {ip for (ip,) in cx.execute("SELECT ip FROM rep WHERE derniere >= ? LIMIT 200000", (maintenant - 86400,))}
+            # SQLite : avec MAX(), les colonnes nues viennent de la ligne qui porte ce maximum (le nom le plus récent)
+            return {ip: nom for ip, nom, _ in cx.execute("SELECT ip, nom, MAX(derniere) FROM rep WHERE derniere >= ? GROUP BY ip LIMIT 200000",
+                                                         (maintenant - 86400,))}
         finally:
             cx.close()
     except sqlite3.Error:
-        return set()
+        return {}
+
+
+def etats_dns(evts: Iterable[dict]) -> Dict[str, str]:
+    """Domaine -> `bloque` | `autorise` selon la DERNIÈRE décision DNS vue pour l'appareil (évènements du plus ancien au plus récent)."""
+    out: Dict[str, str] = {}
+    for e in evts:
+        d = str(e.get("domaine") or "").lower().rstrip(".")
+        if d:
+            out[d] = "bloque" if e.get("decision") == "BLOCKED" else "autorise"
+    return out
 
 
 CGROUP_NDPID = Path(os.environ.get("SECUBOX_ADGUARD_NDPID_CGROUP", "/sys/fs/cgroup/system.slice/secubox-ndpid-engine.service/cpu.stat"))

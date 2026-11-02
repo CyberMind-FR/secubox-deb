@@ -78,6 +78,14 @@ def _verbe(verbe: str) -> dict:
         return {}
 
 
+def _adresses_appareil(mac: str, maintenant: int) -> list:
+    """m3 : toutes les adresses de la MAC déclarée (mémoire de 24 h du moteur), IPv6 comprises ; vide si l'appareil est inconnu."""
+    adresses = {c["ip"] for c in _etat_tv().get("clients", []) if c.get("mac") == mac}
+    if adresses:
+        adresses |= {a for a, (m, vu) in _magasin().charger_voisins().items() if m == mac and maintenant - vu <= dnstv_dpi.MEMOIRE_VOISINS_S}
+    return sorted(adresses)
+
+
 @router.get("/protection/dpi/etat")
 def etat_dpi(lecteur=Depends(_r.require_lecture_nominative)):
     """Disponibilité des sources, couverture par appareil (« dns » = DNS seulement, « dns+dpi »), pause de charge, forçage du DNS."""
@@ -109,14 +117,24 @@ def etat_dpi(lecteur=Depends(_r.require_lecture_nominative)):
 @router.get("/protection/dpi/applications")
 def applications(mac: str = Query(..., pattern=MAC_MOTIF), fenetre: Literal["1h", "24h", "7j"] = "24h",
                  limite: int = Query(50, ge=1, le=200), _=Depends(require_jwt)):
-    """Applications nDPI d'un appareil, triées par volume : hôtes, badges `sans_dns`, `dns_chiffre`, `ssai` et catégorie de l'hôte."""
+    """Applications nDPI d'un appareil, triées par volume : hôtes, badges `sans_dns`, `dns_chiffre`, `ssai` et catégorie de l'hôte.
+    #3395 : `domaines_dns` = noms DNS corrélés aux adresses de l'appli, chacun avec sa catégorie et `etat` (`bloque` | `autorise` :
+    dernière décision DNS de CET appareil sur 24 h au plus ; null si l'appareil ne l'a pas demandé dans ce délai)."""
     motifs = _motifs()
     taxo = dnstv_taxonomie.Taxonomie.depuis_dossier()
+    maintenant = int(time.time())
     out = []
-    for a in _magasin().applications(mac, int(time.time()) - FENETRES[fenetre], limite):
+    for a in _magasin().applications(mac, maintenant - FENETRES[fenetre], limite):
         a["ssai"] = any(dnstv_dpi.est_ssai(h, motifs) for h in a["hotes"])
         a["categorie"] = taxo.classer(a["hotes"][0])["categorie"] if a["hotes"] else "INCONNU"
         out.append(a)
+    if any(a.get("domaines_dns") for a in out):
+        adresses = _adresses_appareil(mac, maintenant)
+        etats = dnstv_dpi.etats_dns(dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db").evenements(
+            adresses, maintenant - min(FENETRES[fenetre], 86400))) if adresses else {}
+        for a in out:
+            for d in a.get("domaines_dns", []):
+                d["etat"] = etats.get(d["nom"])
     return {"mac": mac, "fenetre": fenetre, "applications": out}
 
 
@@ -148,12 +166,7 @@ def decouvertes(depuis: int = Query(0, ge=0), type: Optional[TypeDecouverte] = N
 @router.get("/protection/dpi/coupures")
 def coupures(mac: str = Query(..., pattern=MAC_MOTIF), fenetre: Literal["1h", "24h"] = "1h", _=Depends(require_jwt)):
     """Frise : chaque refus publicitaire et ce qui apparaît dans les 30 s (DNS), SSAI marqué."""
-    etat = _etat_tv()
-    adresses = {c["ip"] for c in etat.get("clients", []) if c.get("mac") == mac}
-    if adresses:                                     # m3 : toutes les adresses de la MAC (mémoire de 24 h du moteur), IPv6 comprises
-        maintenant = int(time.time())
-        adresses |= {a for a, (m, vu) in _magasin().charger_voisins().items() if m == mac and maintenant - vu <= dnstv_dpi.MEMOIRE_VOISINS_S}
-    adresses = sorted(adresses)
+    adresses = _adresses_appareil(mac, int(time.time()))
     if not adresses:
         raise HTTPException(404, "appareil inconnu")
     taxo = dnstv_taxonomie.Taxonomie.depuis_dossier()
