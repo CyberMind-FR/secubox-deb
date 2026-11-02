@@ -61,7 +61,9 @@ def test_garde_marque_a_changer_et_audite(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "api", api)
     monkeypatch.setattr(M, "USERS_FILE", users)
     monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "audit.log"))
+    monkeypatch.setenv("SECUBOX_PLUS_TARD", str(tmp_path / "plus-tard"))
     M._garde_mot_de_passe_defaut()
+    assert (tmp_path / "plus-tard").is_file()        # le marqueur qu'auth exige pour la session directe
     u = json.loads(users.read_text())["users"][0]
     assert u["must_change_password"] is True and u["password_hash"] == "$argon2id$x"
     assert "premier_pas_plus_tard" in (tmp_path / "audit.log").read_text()
@@ -70,3 +72,28 @@ def test_garde_marque_a_changer_et_audite(tmp_path, monkeypatch):
 def test_page_offre_plus_tard_et_explique_l_encadrement():
     assert 'id="plustard"' in PAGE and "({plus_tard: true})" in PAGE
     assert "réseau local seulement" in PAGE and "SSH par mot de passe refusé" in PAGE
+
+
+def test_box_en_plus_tard_est_en_service(tmp_path, monkeypatch):
+    import json
+    from premier_pas import en_service as E
+    users = tmp_path / "users.json"
+    users.write_text(json.dumps({"users": [{"username": "admin", "password_hash": "$argon2id$x", "must_change_password": True}]}))
+    monkeypatch.setenv("SECUBOX_PLUS_TARD", str(tmp_path / "plus-tard"))
+    assert not E.box_en_service(users)
+    (tmp_path / "plus-tard").write_text("")
+    assert E.box_en_service(users)
+
+
+def test_moteur_users_absent_message_clair(monkeypatch):
+    import builtins
+    vrai = builtins.__import__
+
+    def faux(nom, *a, **k):
+        if nom == "api":
+            raise ImportError("absent")
+        return vrai(nom, *a, **k)
+    monkeypatch.setattr(builtins, "__import__", faux)
+    import pytest
+    with pytest.raises(RuntimeError, match="secubox-auth"):
+        M._garde_mot_de_passe_defaut()

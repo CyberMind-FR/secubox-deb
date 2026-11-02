@@ -42,7 +42,9 @@ def box_en_service(users: Optional[Path] = None) -> bool:
     except (OSError, ValueError, AttributeError, TypeError):
         return False
     a = admin[0] if admin else {}
-    return bool(a.get("password_hash") and (not a.get("must_change_password") or a.get("totp")))
+    # « Plus tard » (#3401) : le propriétaire a gardé le défaut en connaissance de cause — la box est en service.
+    plus_tard = Path(os.environ.get("SECUBOX_PLUS_TARD", "/etc/secubox/premier-pas-plus-tard")).is_file()
+    return bool(a.get("password_hash") and (not a.get("must_change_password") or a.get("totp") or plus_tard))
 
 
 def assistant_en_cours(dossier: Optional[Path] = None) -> bool:

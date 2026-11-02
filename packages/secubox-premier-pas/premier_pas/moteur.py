@@ -179,9 +179,18 @@ def _pose_empreinte_admin(empreinte: str) -> None:
 def _garde_mot_de_passe_defaut() -> None:
     """« Plus tard » (#3401) : l'empreinte reste celle du premier démarrage, le compte reste « à changer ». Les gardes
     (connexion web LAN seule, SSH par mot de passe refusé, exposition refusée, bandeau rouge) lisent l'indicateur
-    unique `secubox_core.mot_de_passe_defaut` ; rien d'autre à poser ici."""
+    unique `secubox_core.mot_de_passe_defaut`. Le marqueur « Plus tard » est ce qu'auth exige pour ouvrir une session
+    directe avec le défaut (sinon : changement obligatoire)."""
     sys.path.insert(0, "/usr/lib/secubox/users")
-    from api import engine  # noqa: PLC0415
+    try:
+        from api import engine  # noqa: PLC0415
+    except ImportError as e:
+        raise RuntimeError(f"moteur des comptes introuvable (paquet secubox-auth absent ?) : {e}") from None
+    from secubox_core import mot_de_passe_defaut  # noqa: PLC0415
+    marqueur = mot_de_passe_defaut.marqueur_plus_tard()
+    marqueur.parent.mkdir(parents=True, exist_ok=True)
+    marqueur.write_text("« Plus tard » choisi dans premier-pas (#3401)\n")
+    os.chmod(marqueur, 0o644)
     e = engine.Engine(users_path=USERS_FILE)
     doc = e._load()
     u = e._find(doc, "admin")
@@ -189,7 +198,6 @@ def _garde_mot_de_passe_defaut() -> None:
         raise RuntimeError("compte admin absent de users.json")
     u["must_change_password"] = True
     e._save(doc)
-    from secubox_core import mot_de_passe_defaut  # noqa: PLC0415
     mot_de_passe_defaut.audit("premier_pas_plus_tard", {"compte": "admin"})
 
 
