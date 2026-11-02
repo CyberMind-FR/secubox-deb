@@ -15,6 +15,7 @@
 * [[Architecture]]
 * [[Trixie]]
 * [[Hardware-Matrix]]
+* [[RPi-Ecran-DSI-7]]
 * [[Roadmap]]
 * [[Profils]]
 * [[Valider-un-parc|Valider un parc]]
