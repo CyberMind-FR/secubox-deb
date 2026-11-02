@@ -45,6 +45,8 @@ OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
 USE_LOCAL_CACHE=0
 INCLUDE_KIOSK=0
+# Démarrage réduit (#442, Pi 400) : OPT-IN depuis #3411 — par défaut les unités activées par les paquets restent activées.
+BOOT_MINIMAL="${BOOT_MINIMAL:-0}"
 NO_COMPRESS=0
 SLIPSTREAM_DEBS=0
 # Écran officiel RPi 7" DSI (#3399) : paquet OPTIONNEL, jamais dans un profil par défaut.
@@ -72,6 +74,9 @@ Usage: sudo bash build-rpi-usb.sh [OPTIONS]
                      display, RPi4/400 only; also INCLUDE_RPI_DSI=1). Inert in
                      the chroot; secubox-rpi-dsi-boot.service builds the DKMS
                      modules and enables the overlay at first boot.
+  --boot-minimal     Trim multi-user.target.wants/ to the kiosk-essential
+                     whitelist (#442, Pi 400 kiosk only; also BOOT_MINIMAL=1).
+                     Off by default (#3411): module services stay enabled.
   --no-compress      Skip gzip compression
   --help             Show this help
 
@@ -95,6 +100,7 @@ while [[ $# -gt 0 ]]; do
     --slipstream)   SLIPSTREAM_DEBS=1;  shift   ;;
     --kiosk)        INCLUDE_KIOSK=1;    shift   ;;
     --rpi-dsi)      INCLUDE_RPI_DSI=1;  shift   ;;
+    --boot-minimal) BOOT_MINIMAL=1;     shift   ;;
     --no-compress)  NO_COMPRESS=1;      shift   ;;
     --help|-h)      usage ;;
     *) err "Unknown argument: $1" ;;
@@ -979,47 +985,54 @@ ok "SecuBox packages installed"
 # Debian/system minimum. Everything else stays *installed* (so a
 # future profile change can re-enable) but is removed from the boot
 # wants list.
-log "Trimming multi-user.target.wants/ to kiosk-essential whitelist (#442)"
+# #3411 : ce rognage s'appliquait à TOUTE image RPi et désactivait en silence les services des modules
+# (constat gk7, RPi4 : freebox en 502, exposure, ipv6guard, blacklist-sync…). Il est désormais opt-in
+# (--boot-minimal) : réservé au kiosque Pi 400 ; la mémoire est tenue par apply-memory-policy.sh (zram, secubox.slice).
+if [[ "${BOOT_MINIMAL}" -eq 1 ]]; then
+    log "Trimming multi-user.target.wants/ to kiosk-essential whitelist (#442)"
 
-KIOSK_WANTS_KEEP=(
-    # Debian/system core
-    avahi-daemon.service
-    console-setup.service
-    cron.service
-    e2scrub_reap.service
-    networking.service
-    nginx.service
-    remote-fs.target
-    ssh.service
-    systemd-networkd.service
-    wpa_supplicant.service
-    # SecuBox kiosk web stack — serves http://127.0.0.1/
-    secubox-auth.service
-    secubox-certs.service
-    secubox-cookies.service
-    secubox-core.service
-    secubox-defaults.service
-    secubox-hardening.service
-    secubox-hub.service
-    secubox-portal.service
-    secubox-runtime.service
-    secubox-system.service
-    secubox-users.service
-)
-declare -A _KEEP_SET
-for s in "${KIOSK_WANTS_KEEP[@]}"; do _KEEP_SET["$s"]=1; done
+    KIOSK_WANTS_KEEP=(
+        # Debian/system core
+        avahi-daemon.service
+        console-setup.service
+        cron.service
+        e2scrub_reap.service
+        networking.service
+        nginx.service
+        remote-fs.target
+        ssh.service
+        systemd-networkd.service
+        wpa_supplicant.service
+        # SecuBox kiosk web stack — serves http://127.0.0.1/
+        secubox-auth.service
+        secubox-certs.service
+        secubox-cookies.service
+        secubox-core.service
+        secubox-defaults.service
+        secubox-hardening.service
+        secubox-hub.service
+        secubox-portal.service
+        secubox-runtime.service
+        secubox-system.service
+        secubox-users.service
+    )
+    declare -A _KEEP_SET
+    for s in "${KIOSK_WANTS_KEEP[@]}"; do _KEEP_SET["$s"]=1; done
 
-_wants_dir="${ROOTFS}/etc/systemd/system/multi-user.target.wants"
-_removed=0
-for f in "${_wants_dir}"/*; do
-    [[ -e "$f" ]] || continue
-    bn=$(basename "$f")
-    if [[ -z "${_KEEP_SET[$bn]:-}" ]]; then
-        rm -f "$f"
-        _removed=$((_removed + 1))
-    fi
-done
-ok "Removed ${_removed} non-essential symlinks (kept ${#KIOSK_WANTS_KEEP[@]})"
+    _wants_dir="${ROOTFS}/etc/systemd/system/multi-user.target.wants"
+    _removed=0
+    for f in "${_wants_dir}"/*; do
+        [[ -e "$f" ]] || continue
+        bn=$(basename "$f")
+        if [[ -z "${_KEEP_SET[$bn]:-}" ]]; then
+            rm -f "$f"
+            _removed=$((_removed + 1))
+        fi
+    done
+    ok "Removed ${_removed} non-essential symlinks (kept ${#KIOSK_WANTS_KEEP[@]})"
+else
+    log "multi-user.target.wants/ conservé tel que les paquets l'ont activé (--boot-minimal pour le rogner, #442/#3411)"
+fi
 
 # secubox-bootmenu.service fails with exit 1 in the early-boot tty
 # context (read -t on tty1 returns non-zero before getty is ready).
