@@ -12,7 +12,8 @@ override_dh_auto_install:
 	install -D -m 0755 sbin/secubox-majctl debian/secubox-system/usr/sbin/secubox-majctl
 	# #3401 — acces SSH (webui Systeme) et garde du mot de passe par defaut, par un ctl root
 	install -D -m 0755 sbin/secubox-sshctl debian/secubox-system/usr/sbin/secubox-sshctl
-	install -m 0644 systemd/secubox-ssh-garde.path systemd/secubox-ssh-garde.service debian/secubox-system/usr/lib/systemd/system/
+	install -D -m 0755 sbin/secubox-ssh-defaut debian/secubox-system/usr/sbin/secubox-ssh-defaut
+	install -m 0644 systemd/secubox-ssh-garde.path systemd/secubox-ssh-garde.service systemd/secubox-ssh.path systemd/secubox-ssh.service debian/secubox-system/usr/lib/systemd/system/
 	install -D -m 0644 tmpfiles.d/secubox-system.conf debian/secubox-system/usr/lib/tmpfiles.d/secubox-system.conf
 	install -D -m 0644 polkit/50-secubox-system.rules debian/secubox-system/usr/share/polkit-1/rules.d/50-secubox-system.rules
 	install -d debian/secubox-system/usr/lib/secubox/system/

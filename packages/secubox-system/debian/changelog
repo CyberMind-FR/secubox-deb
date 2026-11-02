@@ -1,3 +1,9 @@
+secubox-system (1.12.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401 (ref #3401) : plus de sudo (inopérant sous NoNewPrivileges) — l'API dépose une demande, secubox-ssh.path la fait traiter par secubox-sshctl (unité durcie) ; règle sudoers retirée. Garde SSH fondée sur le mot de passe Linux (/etc/shadow, crypt, nouveau secubox-ssh-defaut avec cache par empreintes) ET web ; inconnu = garde ; vérification sshd -T -C après écriture (sinon défait et audité), état fondé sur sshd -T, retour arrière de « mot-de-passe on », trap EXIT, ssh.socket coupé à l'arrêt ; unités de garde durcies ; garde déclenchée aussi par /etc/shadow ; retrait du paquet : la garde n'est enlevée que si le défaut est prouvé changé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:58:34 +0100
+
 secubox-system (1.12.0-1~trixie1) trixie; urgency=medium
 
   * Accès SSH (ref #3401) : interrupteur dans la page Système (service ssh, SSH par mot de passe ou par clé seulement), routes GET /ssh, POST /ssh/acces et /ssh/mot-de-passe (require_jwt), écritures par le nouveau ctl root secubox-sshctl (sudo, règle à la lettre /etc/sudoers.d/secubox-ssh), validées par sshd -t et auditées. Tant que le mot de passe par défaut est actif, SSH par mot de passe est refusé (409, et drop-in 05-secubox-mot-de-passe-defaut.conf posé par secubox-ssh-garde.path au changement de users.json, levé automatiquement au changement du mot de passe). Dépend de jq.

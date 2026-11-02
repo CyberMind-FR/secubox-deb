@@ -8,7 +8,28 @@ Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3401
 
 [Service]
 Type=oneshot
-# Root : ecrit /etc/ssh/sshd_config.d et recharge ssh. Pose le drop-in tant que le mot de passe par defaut
-# est actif, le leve des qu il change ; chaque transition est ecrite dans audit.log.
-UMask=0022
+# Root : ecrit /etc/ssh/sshd_config.d, lit /etc/shadow, recharge ssh. Pose le drop-in tant que le mot de passe par
+# defaut (Linux ou web) est actif ou inconnu, le leve quand les deux sont changes ; chaque transition est auditee.
 ExecStart=/usr/sbin/secubox-sshctl garde
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+IPAddressDeny=any
+# Ecrit des fichiers root dans des dossiers d autres proprietaires (resultats : secubox) ; rien d autre.
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER
+# sshd -t / -T exigent le dossier de separation de privileges, absent quand ssh est arrete.
+RuntimeDirectory=sshd
+RuntimeDirectoryPreserve=yes
+ReadWritePaths=/etc/ssh/sshd_config.d /var/log/secubox /var/lib/secubox/system /run/secubox/system

@@ -4,8 +4,17 @@ case "$1" in
   remove|deconfigure)
     rm -f /etc/nginx/secubox.d/system.conf
     # #3401 : plus de ctl, plus de regle sudoers. La garde SSH du mot de passe par defaut reste posee (refus prudent).
-    systemctl disable --now secubox-ssh-garde.path 2>/dev/null || true
-    rm -f /etc/sudoers.d/secubox-ssh
+    systemctl disable --now secubox-ssh.path secubox-ssh-garde.path 2>/dev/null || true
+    # La garde n'est retiree que si le mot de passe par defaut est PROUVE change (Linux et web, code 10) ; sinon elle
+    # reste posee (refus prudent) : la supprimer a la main une fois les mots de passe changes, puis recharger ssh.
+    rc=0; (cd / && /usr/sbin/secubox-ssh-defaut >/dev/null 2>&1) || rc=$?
+    if [ "$rc" = "10" ]; then
+        rm -f /etc/ssh/sshd_config.d/05-secubox-mot-de-passe-defaut.conf
+        systemctl try-reload-or-restart ssh.service 2>/dev/null || true
+    else
+        echo "system : garde SSH du mot de passe par defaut laissee en place (defaut actif ou inconnu)" >&2
+    fi
+    rm -f /var/lib/secubox/system/ssh-defaut.cache
     systemctl reload nginx 2>/dev/null || true
     ;;
   upgrade)

@@ -7,8 +7,10 @@ Description=SecuBox : garde SSH du mot de passe par defaut (#3401)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3401
 
 [Path]
-# users.json change (mot de passe admin choisi, ou remis) : la garde SSH se recalcule.
+# users.json (mot de passe web admin) ou /etc/shadow (mot de passe Linux) change : la garde se recalcule.
+# touch_last_login reecrit users.json a chaque connexion : secubox-ssh-defaut garde un cache par empreinte.
 PathChanged=/etc/secubox/users.json
+PathChanged=/etc/shadow
 Unit=secubox-ssh-garde.service
 
 [Install]
