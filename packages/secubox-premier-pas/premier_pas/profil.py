@@ -15,7 +15,7 @@ l'étape qui manque. Il n'est jamais appliqué à moitié.
 Format TOML (docs/design/premier-pas-maquette.html) :
 
     [box]      nom, langue, clavier, fuseau, ntp
-    [admin]    mot_de_passe = "demander" | empreinte argon2 ; totp = "enroler"
+    [admin]    mot_de_passe = "demander" | "plus_tard" (#3401) | empreinte argon2 ; totp = "enroler"
     [reseau]   mode = routeur|pont|lan ; domaine (absent si mode = lan)
     [services] profil = un profil de secubox-profilectl
     [maillage] mode = rejoindre|premiere|plus_tard|automesh ; rejoindre, jeton ; ancre_cle, ancre_adresse, ancre_nom, ancre_empreinte (#3100) ; aide = demander|non (automesh)
@@ -49,6 +49,8 @@ MODES_MAILLAGE = ("rejoindre", "premiere", "plus_tard", "automesh")
 # `automesh` (#2544) : la box rejoint son parent TOUTE SEULE avec le code d'invitation déposé par la préparation (Auto-Load) ; aucun secret dans le profil.
 # `aide = "demander"` publie UNE demande d'aide ouverte « première installation » : le maître la voit et répond, le demandeur garde le dernier mot.
 AIDES_MAILLAGE = ("demander", "non")
+# « Plus tard » (#3401) : le mot de passe par défaut est gardé ; la box l'encadre tant qu'il est actif.
+PLUS_TARD = "plus_tard"
 PROFILS_DIR = Path("/usr/share/secubox/profiles")
 # « actuel » : garder les modules de l'image, sans secubox-profilectl. Un profil
 # nommé est un instantané d'une AUTRE box : il arrête ce qu'il ne liste pas et
@@ -143,12 +145,15 @@ def examine(profil: Dict[str, Any], profils_connus: Optional[List[str]] = None) 
     # admin
     admin = profil.get("admin") or {}
     mdp = admin.get("mot_de_passe")
-    if mdp is None or mdp == "demander":
+    if mdp == PLUS_TARD:
+        # « Plus tard » (#3401) : le mot de passe par défaut reste, encadré tant qu'il est actif. Réponse complète.
+        pass
+    elif mdp is None or mdp == "demander":
         # « demander » est une réponse légitime, mais elle exige un écran :
         # en silencieux, l'assistant s'ouvrira à cette étape.
         ex.manquantes.append("admin")
     elif not _ARGON2.match(str(mdp)):
-        refuse("admin", "mot_de_passe : « demander » ou une empreinte argon2, jamais du clair")
+        refuse("admin", "mot_de_passe : « demander », « plus_tard » ou une empreinte argon2, jamais du clair")
 
     # reseau
     reseau = profil.get("reseau") or {}

@@ -139,3 +139,7 @@ Limite connue : la box neuve n'ouvre la session distante que dans les 15 minutes
     premier-pasctl reponses --fichier reponses.toml --signature reponses.toml.sig [--trousseau K] [--json]   # code 4 : refusé
 
 Exemple : `examples/reponses-autoload.toml`.
+
+## « Plus tard » (#3401)
+
+`[admin] mot_de_passe = "plus_tard"` : le mot de passe par défaut est gardé, le compte reste « à changer ». Tant qu'il est actif (indicateur `secubox_core.mot_de_passe_defaut`) : connexion web depuis le LAN seulement, SSH par mot de passe refusé, exposition externe refusée, bandeau rouge.

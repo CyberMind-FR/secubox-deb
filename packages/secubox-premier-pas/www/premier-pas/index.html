@@ -135,10 +135,13 @@ const PAGES = {
   admin: {
     aide: "Votre compte d'administration (identifiant « admin »). Au moins 12 caractères : une phrase se retient mieux qu'un mot. À la première connexion, la box vous fera scanner un QR avec votre application d'authentification.",
     corps: p => `${(p.admin||{}).mot_de_passe === "défini" ? '<p class="note">Un mot de passe est déjà choisi. Vous pouvez le remplacer.</p>' : ''}
+      ${(p.admin||{}).mot_de_passe === "plus_tard" ? '<p class="note">Vous avez choisi « Plus tard » : le mot de passe par défaut reste actif.</p>' : ''}
       <div class="champs"><label>Mot de passe<input id="c-mdp" type="password" autocomplete="new-password"></label>
       <label>Encore une fois<input id="c-mdp2" type="password" autocomplete="new-password"></label></div>`,
     valeurs: () => ({mot_de_passe: $("#c-mdp").value, confirmation: $("#c-mdp2").value}),
     passable: p => (p.admin||{}).mot_de_passe === "défini" && !$("#c-mdp").value,
+    // « Plus tard » (#3401) : le mot de passe par défaut reste ; la box l'encadre tant qu'il est actif.
+    plus_tard: true,
   },
   reseau: {
     aide: "Comment la box se branche, et sous quel nom on la joint. Sans domaine, elle reste joignable sur le réseau local seulement.",
@@ -195,7 +198,9 @@ function rendEtape() {
   if (pg.extra) h += pg.extra(p);
   h += `<p class="erreur" id="err">${esc(e.motif || "")}</p>
     <div class="nav"><button type="button" class="b" id="prec" ${cur ? "" : "disabled"}>Retour</button>
-    <button type="button" class="b prim" id="suiv">Continuer</button></div>`;
+    ${pg.plus_tard ? `<button type="button" class="b" id="plustard">Plus tard</button>` : ""}
+    <button type="button" class="b prim" id="suiv">Continuer</button></div>
+    ${pg.plus_tard ? `<p class="note" id="plustard-note">« Plus tard » garde le mot de passe par défaut « secubox ». Tant qu'il est actif : connexion depuis le réseau local seulement, SSH par mot de passe refusé, aucune exposition sur Internet, et un bandeau rouge vous le rappelle. Vous le changerez depuis l'administration (Utilisateurs).</p>` : ""}`;
   $("#ecran").innerHTML = h;
   document.querySelectorAll(".opt").forEach(b => b.onclick = () => {
     brouillon[pg.cle] = b.dataset.v;
@@ -205,6 +210,7 @@ function rendEtape() {
   visibilite(e.id);
   $("#prec").onclick = () => { cur--; brouillon = {}; rendEtape(); };
   $("#suiv").onclick = () => enregistre(e.id, pg);
+  if (pg.plus_tard) $("#plustard").onclick = () => enregistre(e.id, Object.assign({}, pg, {passable: null, valeurs: () => ({plus_tard: true})}));
   const premier = $("#ecran input, #ecran select, #ecran .opt[aria-pressed=true]");
   if (premier) premier.focus();
 }
@@ -234,7 +240,7 @@ function rendRecap() {
   $("#ecran").innerHTML = `<h1>Appliquer</h1>
     <p class="aide">${manque.length ? "Il reste à compléter : " + manque.map(e => esc(e.libelle)).join(", ") + "." : "Tout est prêt. La box applique, redémarre ses services et ouvre le Hall."}</p>
     <dl class="recap"><dt>Nom</dt><dd>${esc(b.nom || "—")}</dd><dt>Fuseau</dt><dd>${esc(b.fuseau || "—")}</dd>
-    <dt>Administrateur</dt><dd>${(p.admin||{}).mot_de_passe === "défini" ? "mot de passe choisi · TOTP à la 1re connexion" : "—"}</dd>
+    <dt>Administrateur</dt><dd>${(p.admin||{}).mot_de_passe === "défini" ? "mot de passe choisi · TOTP à la 1re connexion" : (p.admin||{}).mot_de_passe === "plus_tard" ? "mot de passe par défaut gardé (plus tard) · accès encadré tant qu'il est actif" : "—"}</dd>
     <dt>Réseau</dt><dd>${esc(r.mode || "—")}${r.domaine ? " · " + esc(r.domaine) : ""}</dd>
     <dt>Services</dt><dd>${esc((p.services||{}).profil || "—")}</dd>
     <dt>Maillage</dt><dd>${esc(m.mode === "rejoindre" ? "rejoindre " + m.rejoindre : (m.mode || "—"))}</dd>

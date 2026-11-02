@@ -77,7 +77,8 @@ def vue(profil: Dict[str, Any]) -> Dict[str, Any]:
     """Le profil montrable : ni empreinte du mot de passe, ni jeton du maillage."""
     v = {k: dict(b) for k, b in profil.items() if isinstance(b, dict)}
     if "admin" in v and "mot_de_passe" in v["admin"]:
-        v["admin"]["mot_de_passe"] = "défini" if v["admin"]["mot_de_passe"] != "demander" else "demander"
+        mdp = v["admin"]["mot_de_passe"]
+        v["admin"]["mot_de_passe"] = mdp if mdp in ("demander", P.PLUS_TARD) else "défini"
     if "maillage" in v and v["maillage"].get("jeton"):
         v["maillage"]["jeton"] = "défini"
     return v
@@ -131,7 +132,10 @@ def enregistre(etape: str, valeurs: Dict[str, Any]) -> Dict[str, Any]:
         raise Refus("Cette box est déjà configurée : l'assistant est fermé.")
     profil = lit()
     if etape == "admin":
-        if "empreinte" in valeurs:
+        if valeurs.get("plus_tard") is True:
+            # « Plus tard » (#3401) : aucun mot de passe saisi ; le défaut reste, encadré.
+            profil.setdefault("admin", {})["mot_de_passe"] = P.PLUS_TARD
+        elif "empreinte" in valeurs:
             # Venue du panneau maître : il ne détient QUE l'empreinte (#1522).
             e = str(valeurs["empreinte"])
             if not P._ARGON2.match(e):
