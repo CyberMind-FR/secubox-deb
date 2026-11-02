@@ -1,3 +1,9 @@
+secubox-tor (1.7.5-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401 (ref #3401) : POST /hidden_service/add refusé (409, audité) tant que le mot de passe par défaut admin est actif ou inconnu.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:58:34 +0100
+
 secubox-tor (1.7.4-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

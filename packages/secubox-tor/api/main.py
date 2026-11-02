@@ -36,6 +36,7 @@ import httpx
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 from secubox_core.auth import require_lecture
+from secubox_core.garde_exposition import exiger_mot_de_passe_change  # #3401
 
 app = FastAPI(title="SecuBox Tor Shield API", version="2.0.0")
 
@@ -740,7 +741,7 @@ async def check_leaks():
     return {"tests": tests, "leak_count": leak_count, "protected": leak_count == 0}
 
 
-@app.post("/hidden_service/add", dependencies=[Depends(require_jwt)])
+@app.post("/hidden_service/add", dependencies=[Depends(require_jwt), Depends(exiger_mot_de_passe_change)])
 async def add_hidden_service(req: HiddenService):
     """Add a hidden service."""
     config = load_config()
