@@ -130,11 +130,11 @@ def applications(mac: str = Query(..., pattern=MAC_MOTIF), fenetre: Literal["1h"
         out.append(a)
     if any(a.get("domaines_dns") for a in out):
         adresses = _adresses_appareil(mac, maintenant)
-        etats = dnstv_dpi.etats_dns(dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db").evenements(
-            adresses, maintenant - min(FENETRES[fenetre], 86400))) if adresses else {}
+        noms = [d["nom"] for a in out for d in a.get("domaines_dns", [])]
+        etats = dnstv_dpi.derniers_etats_dns(dnstv.DOSSIER_ETAT / "dnstv.db", adresses, noms, maintenant - min(FENETRES[fenetre], 86400))
         for a in out:
             for d in a.get("domaines_dns", []):
-                d["etat"] = etats.get(d["nom"])
+                d["etat"] = etats.get(d["nom"].lower().rstrip("."))
     return {"mac": mac, "fenetre": fenetre, "applications": out}
 
 

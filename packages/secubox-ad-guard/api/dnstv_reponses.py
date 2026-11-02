@@ -41,6 +41,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS rep (registre TEXT NOT NULL, nom TEXT NOT NULL, ip TEXT NOT NULL, reseau TEXT NOT NULL,
     premiere INTEGER NOT NULL, derniere INTEGER NOT NULL, PRIMARY KEY (nom, ip));
 CREATE INDEX IF NOT EXISTS rep_registre ON rep(registre);
+CREATE INDEX IF NOT EXISTS rep_ip ON rep(ip, derniere);
 CREATE TABLE IF NOT EXISTS accepte (registre TEXT PRIMARY KEY);
 """
 

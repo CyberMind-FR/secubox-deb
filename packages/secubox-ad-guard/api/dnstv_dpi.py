@@ -622,8 +622,8 @@ def passage(etat: dict, mag_dns, mag: MagasinDPI, categorie: Callable[[str], str
         signales = {(x["distant"], x["port"]): x["type"] for x in cs}
         for f in fl:
             t = signales.get((f["distant"], f["port"]))
-            nd = noms.get(f["distant"], "") if f["distant"] else ""
-            if nd == f["hote"]:
+            nd = _nom(noms.get(f["distant"], "")) if f["distant"] else ""
+            if nd == _nom(f["hote"]):
                 nd = ""
             lignes.append({"mac": m, "minute": f["minute"], "local": f["local"], "proto": f["proto"], "appli": f["appli"] or f["proto"].upper(), "categorie_ndpi": f.get("categorie", ""),
                            "hote": f["hote"], "port": f["port"], "distant": "" if f["hote"] else f["distant"], "flux": f["flux"],
@@ -688,12 +688,21 @@ def _ecrire_etat_dpi(e: dict, dossier: Optional[Path] = None) -> None:
         raise
 
 
+MAX_RESOLUS = 200000
+
+
+def _nom(brut) -> str:
+    return str(brut or "").strip().lower().rstrip(".")
+
+
 def _resolus(maintenant: int) -> Dict[str, str]:
     """Adresse -> nom DNS qui y a résolu le plus récemment (`derniere`), sur 24 h, 200 000 adresses au plus (#3395).
 
     GLOBAL à la box : `reponses.db` vient du cache d'Unbound (`registre` = domaine enregistré, `reseau` = ASN ou préfixe), il ne dit pas
     quel appareil a demandé le nom ; une adresse partagée (CDN) peut donc porter le nom demandé par un autre appareil. Les constats n'en
-    dépendent pas : `sans-dns` reste « jamais résolue » (clé absente)."""
+    dépendent pas : `sans-dns` reste « jamais résolue » (clé absente). Au-delà de `MAX_RESOLUS`, ce sont les adresses les plus ANCIENNES
+    qui partent. Index `rep_ip (ip, derniere)` posé par `dnstv_reponses.ouvrir` (capteur DNS) ; pas de cache en mémoire : le moteur est
+    un processus neuf à chaque passage (minuterie)."""
     f = dnstv.DOSSIER_ETAT / "reponses.db"
     if not f.is_file():
         return {}
@@ -701,8 +710,9 @@ def _resolus(maintenant: int) -> Dict[str, str]:
         cx = sqlite3.connect(f"file:{f}?mode=ro", uri=True, timeout=5)
         try:
             # SQLite : avec MAX(), les colonnes nues viennent de la ligne qui porte ce maximum (le nom le plus récent)
-            return {ip: nom for ip, nom, _ in cx.execute("SELECT ip, nom, MAX(derniere) FROM rep WHERE derniere >= ? GROUP BY ip LIMIT 200000",
-                                                         (maintenant - 86400,))}
+            return {ip: _nom(nom) for ip, nom, _ in cx.execute(
+                "SELECT ip, nom, MAX(derniere) AS d FROM rep WHERE derniere >= ? GROUP BY ip ORDER BY d DESC LIMIT ?",
+                (maintenant - 86400, MAX_RESOLUS))}
         finally:
             cx.close()
     except sqlite3.Error:
@@ -713,10 +723,32 @@ def etats_dns(evts: Iterable[dict]) -> Dict[str, str]:
     """Domaine -> `bloque` | `autorise` selon la DERNIÈRE décision DNS vue pour l'appareil (évènements du plus ancien au plus récent)."""
     out: Dict[str, str] = {}
     for e in evts:
-        d = str(e.get("domaine") or "").lower().rstrip(".")
+        d = _nom(e.get("domaine"))
         if d:
             out[d] = "bloque" if e.get("decision") == "BLOCKED" else "autorise"
     return out
+
+
+def derniers_etats_dns(chemin: Path, clients: Iterable[str], noms: Iterable[str], depuis: int, limite: int = 2000) -> Dict[str, str]:
+    """Dernière décision DNS de CES adresses pour CES noms seulement (`dnstv.db`, table `dnstv_recents`), en LECTURE SEULE (`mode=ro`,
+    jamais `dnstv.Magasin` qui crée le schéma) : une ligne par nom (MAX(ts)), donc jamais tronquée par l'ancienneté. Base absente ou
+    illisible : {}."""
+    cl = sorted({c for c in clients if c})[:64]
+    ns = sorted({_nom(n) for n in noms if _nom(n)})[:max(1, int(limite))]
+    f = Path(chemin)
+    if not cl or not ns or not f.is_file():
+        return {}
+    try:
+        cx = sqlite3.connect(f"file:{f}?mode=ro", uri=True, timeout=5)
+        try:
+            lignes = cx.execute(
+                f"SELECT domaine, decision, MAX(ts) FROM dnstv_recents WHERE ts>=? AND client IN ({','.join('?' * len(cl))}) "
+                f"AND domaine IN ({','.join('?' * len(ns))}) GROUP BY domaine", [int(depuis), *cl, *ns]).fetchall()
+        finally:
+            cx.close()
+    except sqlite3.Error:
+        return {}
+    return {_nom(d): ("bloque" if dec == "BLOCKED" else "autorise") for d, dec, _ in lignes}
 
 
 CGROUP_NDPID = Path(os.environ.get("SECUBOX_ADGUARD_NDPID_CGROUP", "/sys/fs/cgroup/system.slice/secubox-ndpid-engine.service/cpu.stat"))

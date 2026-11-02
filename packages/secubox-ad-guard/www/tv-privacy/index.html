@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-HJDkhcsi87AVwXVr/pSFPH+DvMNJH2ZspvHyI0YmLBM='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qgUZd7vXT1pw4lHQda8SMzaUolzgi7JXjjqeVsPm6fg='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -732,7 +732,7 @@
       if(b.firstChild)p.appendChild(b);
       // #3395 : domaines DNS corrélés aux adresses de l'appli (cache d'Unbound, 24 h), catégorie et dernière décision DNS de l'appareil
       var dd=x.domaines_dns||[];
-      if(dd.length){var ul=h('div',{class:'espace'});ul.appendChild(h('div',{class:'note'},'Domaines DNS corrélés'));
+      if(dd.length){var ul=h('div',{class:'espace'});ul.appendChild(h('div',{class:'note'},'Domaines DNS corrélés (nom résolu sur la box, pas forcément demandé par cet appareil)'));
         dd.forEach(function(d){var li=h('div',{class:'mono coupe'},d.nom+' — '+(d.categorie||'INCONNU')+' ');
           if(d.etat)li.appendChild(h('span',{class:'pastille '+(d.etat==='bloque'?'rouge':'vert')},d.etat==='bloque'?'bloqué':'autorisé'));ul.appendChild(li);});
         p.appendChild(ul);}
@@ -740,15 +740,18 @@
   }
   function boutonFlux(p,appli){
     var bt=h('button',{type:'button',class:'petit','aria-expanded':'false'},'Flux'),zone=h('div',{class:'espace'});p.appendChild(bt);p.appendChild(zone);
+    var generation=0;                                     // une réponse arrivée après fermeture (ou d'un clic précédent) est ignorée
+    function fermerFlux(){if(bt.getAttribute('aria-expanded')!=='true')return;generation++;vider(zone);bt.setAttribute('aria-expanded','false');
+      etat.fluxOuverts=Math.max(0,etat.fluxOuverts-1);hauteur();}
     bt.addEventListener('click',function(){
-      if(bt.getAttribute('aria-expanded')==='true'){vider(zone);bt.setAttribute('aria-expanded','false');etat.fluxOuverts--;hauteur();return;}
-      etat.fluxOuverts++;bt.setAttribute('aria-expanded','true');   // pas de rafraîchissement tant que le détail est ouvert
+      if(bt.getAttribute('aria-expanded')==='true'){fermerFlux();return;}
+      var g=++generation;etat.fluxOuverts++;bt.setAttribute('aria-expanded','true');   // pas de rafraîchissement tant que le détail est ouvert
       source('/protection/dpi/flux?mac='+encodeURIComponent(el('ap-mac').value)+'&appli='+encodeURIComponent(appli)+'&fenetre='+el('ap-fenetre').value+'&limite=20').then(function(r){
-        vider(zone);var l=(r&&r.lignes)||[];
+        if(g!==generation)return;vider(zone);var l=(r&&r.lignes)||[];
         if(!l.length)zone.appendChild(h('div',{class:'vide'},'Aucun flux.'));
         l.forEach(function(f){var nom=f.hote?f.hote+(f.nom_dns?' (DNS : '+f.nom_dns+')':''):f.nom_dns?'via DNS : '+f.nom_dns+' — '+(f.categorie_dns||'INCONNU'):(f.distant||'—')+' (aucun nom)';
           zone.appendChild(h('div',{class:'mono coupe'},heure(f.ts)+' · '+nom+' :'+f.port+' · '+octets(f.octets)));});
-        hauteur();}).catch(echec);
+        hauteur();}).catch(function(e){if(g!==generation)return;fermerFlux();echec(e);});
     });
   }
   function rendreFrise(r){

@@ -146,3 +146,50 @@ def test_routes_exposent_la_correlation(client):
     assert apps[0]["domaines_dns"] == [{"nom": "cdn.example.com", "categorie": "CDN", "etat": "autorise"}]
     lignes = client.get(f"/adblock-tv/protection/dpi/flux?mac={MAC}").json()["lignes"]
     assert lignes[0]["nom_dns"] == "cdn.example.com" and lignes[0]["categorie_dns"] == "CDN"
+
+
+# ── passe de correction (relecture #3395) ──
+def test_derniers_etats_dns_le_plus_recent_gagne_meme_au_dela_de_la_limite(tmp_path):
+    m = dnstv.Magasin(tmp_path / "dnstv.db")
+    vieux = [(dnstv.Evenement(NOW - 5000 + i, TV, "ads.example.com", "A", "NOERROR", "ALLOWED"), "") for i in range(30)]
+    m.ajouter(vieux + [(dnstv.Evenement(NOW - 10, TV, "ads.example.com", "A", "NOERROR", "BLOCKED"), ""),
+                       (dnstv.Evenement(NOW - 9, "192.168.1.99", "cdn.example.com", "A", "NOERROR", "BLOCKED"), "")])
+    avant = (tmp_path / "dnstv.db").stat().st_mtime_ns
+    e = D.derniers_etats_dns(tmp_path / "dnstv.db", [TV], ["ADS.example.com.", "cdn.example.com"], NOW - 86400, limite=5)
+    assert e == {"ads.example.com": "bloque"}                       # autre appareil ignoré ; tri du plus récent
+    assert (tmp_path / "dnstv.db").stat().st_mtime_ns == avant      # lecture seule
+    assert D.derniers_etats_dns(tmp_path / "absente.db", [TV], ["x.example"], 0) == {}
+    assert not (tmp_path / "absente.db").exists()
+
+
+def test_resolus_garde_les_plus_recents_et_index(tmp_path, monkeypatch):
+    from api import dnstv_reponses as R
+    monkeypatch.setattr(dnstv, "DOSSIER_ETAT", tmp_path)
+    cx = R.ouvrir(tmp_path / "reponses.db")
+    cx.executemany("INSERT INTO rep VALUES (?,?,?,?,?,?)", [("a.example", "a.example", "151.101.1.1", "", NOW - 50, NOW - 50),
+                                                            ("b.example", "b.example", "151.101.1.2", "", NOW - 5, NOW - 5)])
+    cx.commit()
+    assert "rep_ip" in {r[1] for r in cx.execute("PRAGMA index_list(rep)")}
+    cx.close()
+    monkeypatch.setattr(D, "MAX_RESOLUS", 1)
+    assert D._resolus(NOW) == {"151.101.1.2": "b.example"}
+
+
+def test_nom_dns_normalise_et_compare_au_sni_normalise(tmp_path):
+    import json
+    etat = {"actif": True, "clients": [{"ip": TV, "nom": "TV", "mode": "auto", "mac": MAC}]}
+    m = D.MagasinDPI(tmp_path / "d.db")
+    sbx = {"version": 1, "genere": NOW, "flux": [
+        {"local": TV, "appli": "TLS", "hote": "video.example.org", "distant": "151.101.1.8", "port": 443, "proto": "tcp", "flux": 1,
+         "octets": 10, "premier": NOW - 30, "dernier": NOW}]}
+    D.passage(etat, SansDNS(), m, lambda d: "STREAMING", NOW, {}, json.dumps(sbx), _ct(TV, "151.101.1.9", 443),
+              {"151.101.1.8": "Video.Example.org.", "151.101.1.9": "Edge.CDN.example."}, BOX, (set(), set()))
+    _, lignes = m.lignes_flux(MAC, NOW - 3600)
+    assert sorted(x["nom_dns"] for x in lignes) == ["", "edge.cdn.example"]
+
+
+def test_page_flux_garde_de_generation_et_note():
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "www/tv-privacy/index.html").read_text(encoding="utf-8")
+    assert "pas forcément demandé par cet appareil" in src
+    assert "generation" in src and "fermerFlux" in src

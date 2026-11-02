@@ -283,7 +283,7 @@ conntrack) n'apparaissent (« DNS + DPI ») que s'ils traversent la box (mode LA
 - Table `flux` de `dpi-appareils.db` : colonnes `nom_dns` et `categorie_dns` (taxonomie à 10 catégories) ajoutées par `ALTER TABLE` au
   premier passage du moteur, lignes gardées. `nom_dns` est rempli sans SNI, ou quand il diffère du SNI ; vide s'il le répète.
 - `GET /adblock-tv/protection/dpi/flux` : chaque ligne porte `nom_dns`, `categorie_dns`. `GET .../dpi/applications` : `domaines_dns`
-  (10 au plus) = `{nom, categorie, etat}`, `etat` ∈ `bloque` | `autorise` (dernière décision DNS de l'appareil sur 24 h au plus) ou `null`.
+  (10 au plus) = `{nom, categorie, etat}`, `etat` ∈ `bloque` | `autorise` (dernière décision DNS de l'appareil sur 24 h au plus, requête dédiée en lecture seule) ou `null`. Index `rep_ip` ajouté à `reponses.db`.
   Gardes inchangées (`require_jwt`). Les constats ne changent pas : `sans-dns` = adresse jamais résolue.
 - Page : domaines corrélés par application, bouton « Flux » (« via DNS : nom » sans SNI) ; aucun rafraîchissement tant qu'un détail est ouvert.
 
