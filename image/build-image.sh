@@ -398,6 +398,17 @@ for _loc in en_US.UTF-8; do
 done
 chroot "${ROOTFS}" locale-gen || true
 chroot "${ROOTFS}" bash -c "update-locale LANG=en_US.UTF-8 || true"
+# CONSOLE EN UTF-8 (#3412) : sans ce fichier, debconf choisissait CHARMAP="ISO-8859-15" alors que LANG est en UTF-8
+# (cadres du message d'accueil illisibles).
+mkdir -p "${ROOTFS}/etc/default"
+cat > "${ROOTFS}/etc/default/console-setup" <<'CONSOLE_SETUP'
+ACTIVE_CONSOLES="/dev/tty[1-6]"
+CHARMAP="UTF-8"
+CODESET="guess"
+FONTFACE="Fixed"
+FONTSIZE="8x16"
+VIDEOMODE=
+CONSOLE_SETUP
 
 # Mot de passe root par défaut (à changer au premier boot)
 chroot "${ROOTFS}" bash -c 'echo "root:secubox" | chpasswd'
@@ -1219,17 +1230,10 @@ if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
   # Disable getty on tty1 (kiosk uses VT7, console access via tty2)
   chroot "${ROOTFS}" systemctl disable getty@tty1.service 2>/dev/null || true
 
-  # Enable autologin on tty2 for emergency access
-  mkdir -p "${ROOTFS}/etc/systemd/system/getty@tty2.service.d"
-  cat > "${ROOTFS}/etc/systemd/system/getty@tty2.service.d/autologin.conf" <<'AUTOLOGIN'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
-Type=idle
-AUTOLOGIN
+  # Console de secours sur tty2 : getty normal AVEC connexion, jamais d'autologin root (#3412, écran public).
   chroot "${ROOTFS}" systemctl enable getty@tty2.service 2>/dev/null || true
 
-  ok "Kiosk service installed and enabled (graphical.target, TTY2 autologin)"
+  ok "Kiosk service installed and enabled (graphical.target, tty2 avec connexion)"
 fi
 
 # ── Operator tools: flash/install/TUI (all boards) ──────────────────
@@ -1395,82 +1399,8 @@ LOGS_CMD
 chmod +x "${ROOTFS}/usr/bin/secubox-logs"
 
 # SecuBox status command
-cat > "${ROOTFS}/usr/bin/secubox-status" <<'STATUS_SCRIPT'
-#!/bin/bash
-# SecuBox Status - CRT-style system overview
-# CyberMind — https://cybermind.fr
-
-# Colors
-GOLD='\033[38;5;214m'
-CYAN='\033[38;5;45m'
-GREEN='\033[38;5;82m'
-RED='\033[38;5;196m'
-GRAY='\033[38;5;242m'
-WHITE='\033[38;5;250m'
-RESET='\033[0m'
-
-# Status indicators
-ok="${GREEN}●${RESET}"
-fail="${RED}●${RESET}"
-warn="${GOLD}●${RESET}"
-
-# Header
-echo -e "${CYAN}"
-echo '  ╭──────────────────────────────────────────────────────────╮'
-echo '  │           ⚡ SecuBox System Status ⚡                   │'
-echo '  ╰──────────────────────────────────────────────────────────╯'
-echo -e "${RESET}"
-
-# System info
-echo -e "${WHITE}  📊 System Info${RESET}"
-echo -e "     ${GRAY}Hostname:${RESET}  $(hostname)"
-echo -e "     ${GRAY}Uptime:${RESET}    $(uptime -p 2>/dev/null || echo 'N/A')"
-echo -e "     ${GRAY}Memory:${RESET}    $(free -h | awk '/^Mem:/{printf "%s / %s (%.1f%%)", $3, $2, $3/$2*100}')"
-echo -e "     ${GRAY}Disk:${RESET}      $(df -h / | awk 'NR==2{printf "%s / %s (%s)", $3, $2, $5}')"
-echo ""
-
-# Network info
-echo -e "${WHITE}  🌐 Network${RESET}"
-for iface in $(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$'); do
-    ip_addr=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
-    if [[ -n "$ip_addr" ]]; then
-        echo -e "     ${GREEN}●${RESET} ${GRAY}${iface}:${RESET}  ${CYAN}${ip_addr}${RESET}"
-    fi
-done
-echo ""
-
-# Core services
-echo -e "${WHITE}  🔧 Core Services${RESET}"
-services=(nginx haproxy secubox-api secubox-hub)
-for svc in "${services[@]}"; do
-    if systemctl is-active --quiet "$svc" 2>/dev/null; then
-        echo -e "     ${ok} ${GRAY}${svc}${RESET}"
-    elif systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then
-        echo -e "     ${fail} ${GRAY}${svc}${RESET} (stopped)"
-    fi
-done
-echo ""
-
-# Mode detection
-echo -e "${WHITE}  🎮 Display Mode${RESET}"
-if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
-    echo -e "     ${ok} ${CYAN}Kiosk GUI${RESET} (Web browser on tty7)"
-elif [[ -f /var/lib/secubox/.tui-enabled ]]; then
-    echo -e "     ${ok} ${CYAN}Console TUI${RESET} (Text dashboard on tty1)"
-else
-    echo -e "     ${warn} ${CYAN}Console Shell${RESET} (Standard login)"
-fi
-echo ""
-
-# Quick links
-echo -e "${GOLD}  ────────────────────────────────────────────────────────────${RESET}"
-echo -e "${WHITE}  🔗 Quick Access${RESET}"
-IP=$(hostname -I | awk '{print $1}')
-echo -e "     ${GRAY}Dashboard:${RESET}  ${CYAN}https://${IP:-localhost}${RESET}"
-echo -e "     ${GRAY}Admin API:${RESET}  ${CYAN}https://${IP:-localhost}/api/v1/${RESET}"
-echo ""
-STATUS_SCRIPT
-chmod +x "${ROOTFS}/usr/bin/secubox-status"
+# Vue d'ensemble de la console : source unique livrée par secubox-core (#3412) — teste l'agrégateur (pas secubox-hub), URL d'administration réelle.
+install -D -m 755 "${REPO_DIR}/packages/secubox-core/usr/bin/secubox-status" "${ROOTFS}/usr/bin/secubox-status"
 
 # SecuBox password reset command
 cat > "${ROOTFS}/usr/bin/secubox-passwd" <<'PASSWD_SCRIPT'

@@ -1,0 +1,90 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Status — vue d'ensemble de la console (#3412). Source unique : livré par secubox-core, copié par les images.
+# Le Hub est servi par l'agrégateur (pas d'unité secubox-hub : elle s'affichait « stopped » à tort) : on teste
+# secubox-aggregator et sa santé (/health sur sa socket). L'administration passe par HAProxy (443), plus par :9443.
+
+GOLD='\033[38;5;214m'; CYAN='\033[38;5;45m'; GREEN='\033[38;5;82m'
+RED='\033[38;5;196m'; GRAY='\033[38;5;242m'; WHITE='\033[38;5;250m'; RESET='\033[0m'
+ok="${GREEN}●${RESET}"; fail="${RED}●${RESET}"; warn="${GOLD}●${RESET}"
+DEFAUTS="${SECUBOX_DEFAULTS:-/etc/default/secubox}"
+SOCK_AGREG="${SECUBOX_AGGREGATOR_SOCK:-/run/secubox/aggregator.sock}"
+
+# URL d'administration : https://admin.<nom>.<suffixe>/ si la box a un nom, sinon https://<ip>/.
+url_admin() {
+    local h="" s="secubox.in" ip
+    if [[ -r "$DEFAUTS" ]]; then
+        h=$(sed -n 's/^SECUBOX_HOSTNAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$DEFAUTS" | tail -1)
+        s=$(sed -n 's/^SECUBOX_DOMAIN_SUFFIX="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$DEFAUTS" | tail -1)
+        s="${s:-secubox.in}"
+    fi
+    if [[ -n "$h" ]]; then
+        echo "https://admin.${h}.${s}/"
+    else
+        ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+        echo "https://${ip:-localhost}/"
+    fi
+}
+
+etat_unite() {
+    local svc="$1"
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+        echo -e "     ${ok} ${GRAY}${svc}${RESET}"
+    elif systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "$svc"; then
+        echo -e "     ${fail} ${GRAY}${svc}${RESET} (stopped)"
+    fi
+}
+
+etat_agregateur() {
+    if ! systemctl is-active --quiet secubox-aggregator 2>/dev/null; then
+        systemctl list-unit-files secubox-aggregator.service 2>/dev/null | grep -q secubox-aggregator \
+            && echo -e "     ${fail} ${GRAY}secubox-aggregator${RESET} (stopped)"
+        return
+    fi
+    if curl -fsS -m 3 --unix-socket "$SOCK_AGREG" http://localhost/health >/dev/null 2>&1; then
+        echo -e "     ${ok} ${GRAY}secubox-aggregator${RESET} (hub, API)"
+    else
+        echo -e "     ${warn} ${GRAY}secubox-aggregator${RESET} (démarre ou ne répond pas)"
+    fi
+}
+
+[[ "${1:-}" == "--url-admin" ]] && { url_admin; exit 0; }
+
+echo -e "${CYAN}"
+echo '  ╭──────────────────────────────────────────────────────────╮'
+echo '  │             ⚡ SecuBox System Status ⚡                  │'
+echo '  ╰──────────────────────────────────────────────────────────╯'
+echo -e "${RESET}"
+echo -e "${WHITE}  📊 System Info${RESET}"
+echo -e "     ${GRAY}Hostname:${RESET}  $(hostname)"
+echo -e "     ${GRAY}Uptime:${RESET}    $(uptime -p 2>/dev/null || echo 'N/A')"
+echo -e "     ${GRAY}Memory:${RESET}    $(free -h | awk '/^Mem:/{printf "%s / %s", $3, $2}')"
+echo -e "     ${GRAY}Disk:${RESET}      $(df -h / | awk 'NR==2{printf "%s / %s (%s)", $3, $2, $5}')"
+echo ""
+echo -e "${WHITE}  🌐 Network${RESET}"
+for iface in $(ip -o link show | awk -F': ' '{print $2}' | cut -d@ -f1 | grep -v '^lo$'); do
+    ip_addr=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+    [[ -n "$ip_addr" ]] && echo -e "     ${ok} ${GRAY}${iface}:${RESET}  ${CYAN}${ip_addr}${RESET}"
+done
+echo ""
+echo -e "${WHITE}  🔧 Core Services${RESET}"
+for svc in nginx haproxy secubox-waf-ng; do etat_unite "$svc"; done
+etat_agregateur
+echo ""
+echo -e "${WHITE}  🎮 Display Mode${RESET}"
+if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
+    echo -e "     ${ok} ${CYAN}Kiosk GUI${RESET} (Web browser on tty7)"
+elif [[ -f /var/lib/secubox/.tui-enabled ]]; then
+    echo -e "     ${ok} ${CYAN}Console TUI${RESET} (Text dashboard on tty1)"
+else
+    echo -e "     ${warn} ${CYAN}Console Shell${RESET} (Standard login)"
+fi
+echo ""
+echo -e "${GOLD}  ────────────────────────────────────────────────────────────${RESET}"
+echo -e "${WHITE}  🔗 Quick Access${RESET}"
+echo -e "     ${GRAY}Administration:${RESET}  ${CYAN}$(url_admin)${RESET}"
+echo ""

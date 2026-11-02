@@ -1,3 +1,9 @@
+secubox-core (1.8.17-1~trixie1) trixie; urgency=medium
+
+  * Console d'une box a ecran public (ref #3412) : /usr/bin/secubox-status livre ici (source unique, copiee par les images) ; il teste secubox-aggregator et sa sante (/health) au lieu de secubox-hub (servi par l'agregateur, affiche stopped a tort) et donne l'URL d'administration reelle (https://admin.<nom>.<suffixe>/ ou https://<ip>/) au lieu de :9443. Postinst : CHARMAP=ISO-8859-15 passe en UTF-8 quand la locale est en UTF-8 (cadres du message d'accueil illisibles). Images : console-setup en UTF-8, plus d'autologin root sur tty1 (RPi) ni tty2 (kiosque), :9443 retire des messages.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 10:09:52 +0100
+
 secubox-core (1.8.16-1~trixie1) trixie; urgency=medium
 
   * Relecture #3401, passe 2 (ref #3401) : plus aucun marqueur « Plus tard » persistant (arbitrage du propriétaire) ; zone de confiance du maillage (10.10.0.0/24, 10.64.0.0/16) pour la connexion avec le défaut ; garde d'exposition limitée à l'exposition PUBLIQUE (maillage permis), administrateur (sub) écrit dans l'audit du refus.
