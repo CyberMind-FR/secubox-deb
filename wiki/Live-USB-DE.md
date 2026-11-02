@@ -58,9 +58,9 @@ sync
 
 | Dienst | Benutzername | Passwort |
 |--------|--------------|----------|
-| Web UI | admin | admin |
+| Web UI | admin | secubox |
+| Hostname | secubox | |
 | SSH | root | secubox |
-| SSH | secubox | secubox |
 
 **Wichtig:** Ändern Sie die Passwörter nach dem ersten Start!
 

@@ -223,7 +223,8 @@ jobs:
           \`\`\`
 
           ### Default Credentials
-          - **Web UI:** https://<IP>:9443 (admin / secubox)
+          - **Web UI:** https://<IP>/ (admin / secubox)
+          - **Nom d hôte :** secubox
           - **SSH:** root / secubox
 
           ## Checksums

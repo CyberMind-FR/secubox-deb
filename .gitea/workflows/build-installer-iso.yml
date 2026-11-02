@@ -321,8 +321,8 @@ jobs:
             | Service | Username | Password |
             |---------|----------|----------|
             | SSH | root | secubox |
-            | SSH | secubox | secubox |
-            | Web UI | admin | admin |
+            | Web UI | admin | secubox |
+            | Hostname | secubox | |
 
             ### Verification
 

@@ -57,8 +57,8 @@ The GRUB menu offers several boot modes:
 | Service | Username | Password |
 |---------|----------|----------|
 | SSH | root | secubox |
-| SSH | secubox | secubox |
-| Web UI | admin | admin |
+| Web UI | admin | secubox |
+| Hostname | secubox | |
 
 **Important:** Change these passwords immediately after first boot!
 

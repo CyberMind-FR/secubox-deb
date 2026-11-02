@@ -58,9 +58,9 @@ sync
 
 | Service | Username | Password |
 |---------|----------|----------|
-| Web UI | admin | admin |
+| Web UI | admin | secubox |
+| Hostname | secubox | |
 | SSH | root | secubox |
-| SSH | secubox | secubox |
 
 **Important:** Change passwords after first boot!
 

@@ -536,7 +536,8 @@ secubox-kiosk-setup console
 |--------|----------|----------|
 | SSH / Console | root | secubox |
 | SSH / Console | secubox | secubox |
-| Web UI | admin | admin (or generated) |
+| Web UI | admin | secubox |
+| Hostname | secubox | |
 
 **Note:** On first boot, if no `/boot/admin_password` file is present, a random password is generated and saved to `/boot/admin_password_generated.txt`.
 
