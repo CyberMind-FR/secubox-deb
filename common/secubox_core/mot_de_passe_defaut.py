@@ -12,7 +12,8 @@ On compare l'empreinte argon2 stockée au mot de passe connu du premier démarra
 journalisé : seul le verdict (booléen) sort d'ici. Le résultat est mis en cache par empreinte (argon2 coûte cher et le
 bandeau interroge souvent) ; un changement de mot de passe change l'empreinte, donc invalide le cache de lui-même.
 
-Bibliothèque stdlib + argon2 seulement : le ctl root (`secubox-sshctl`) l'importe sans FastAPI.
+Bibliothèque stdlib + argon2 seulement : le ctl root la lance comme script (`python3 -I`), sans le paquet ni FastAPI.
+État TERNAIRE (#3401, relecture) : « inconnu » compte comme « actif » pour toute garde (jamais fail-open).
 """
 from __future__ import annotations
 
@@ -34,6 +35,7 @@ COMPTE = "admin"
 #: Où mener la personne pour changer le mot de passe (page Utilisateurs : changement du mot de passe admin).
 LIEN_CHANGEMENT = "/users/"
 MESSAGE = "Mot de passe par défaut actif : changez le mot de passe par défaut du compte admin."
+MESSAGE_INCONNU = "État du mot de passe admin inconnu : accès encadré par prudence. Vérifiez le compte admin."
 
 log = logging.getLogger("secubox.mot_de_passe_defaut")
 _HASHER = PasswordHasher()
@@ -49,17 +51,37 @@ def _audit_path() -> Path:
     return Path(os.environ.get("SECUBOX_AUDIT_LOG", "/var/log/secubox/audit.log"))
 
 
+ACTIF, INACTIF, INCONNU = "actif", "inactif", "inconnu"
+#: Posé par premier-pas quand la personne choisit « Plus tard » (#3401). Seul ce marqueur ouvre une session directe
+#: avec le défaut ; un compte « à changer » sans lui garde le changement obligatoire.
+MARQUEUR_PLUS_TARD = Path("/etc/secubox/premier-pas-plus-tard")
+
+
+def marqueur_plus_tard() -> Path:
+    return Path(os.environ.get("SECUBOX_PLUS_TARD", str(MARQUEUR_PLUS_TARD)))
+
+
+def plus_tard_choisi() -> bool:
+    return marqueur_plus_tard().is_file()
+
+
+class _Inconnu(Exception):
+    pass
+
+
 def _empreinte(compte: str, users: Optional[Path]) -> Optional[str]:
+    """L'empreinte du compte, None s'il n'a aucun mot de passe. Lève _Inconnu si on ne sait pas lire."""
     try:
         doc = json.loads((users or _users_path()).read_text())
     except (OSError, ValueError) as e:
-        log.warning("users.json illisible (%s) : verdict « défaut inactif »", e.__class__.__name__)
-        return None
-    for u in doc.get("users", []) if isinstance(doc, dict) else []:
+        raise _Inconnu(f"users.json illisible ({e.__class__.__name__})") from None
+    if not isinstance(doc, dict) or not isinstance(doc.get("users"), list):
+        raise _Inconnu("users.json : forme inattendue")
+    for u in doc["users"]:
         if isinstance(u, dict) and u.get("username") == compte:
             h = u.get("password_hash")
             return h if isinstance(h, str) and h else None
-    return None
+    raise _Inconnu(f"compte {compte} absent")
 
 
 def est_le_defaut(mot_de_passe: str) -> bool:
@@ -67,31 +89,54 @@ def est_le_defaut(mot_de_passe: str) -> bool:
     return hmac.compare_digest(str(mot_de_passe).encode(), MOT_DE_PASSE_DEFAUT.encode())
 
 
-def empreinte_est_le_defaut(empreinte: Optional[str]) -> bool:
-    if not empreinte:
-        return False
+def _verdict_empreinte(empreinte: str) -> str:
     with _verrou:
         if empreinte in _cache:
             return _cache[empreinte]
     try:
-        verdict = bool(_HASHER.verify(empreinte, MOT_DE_PASSE_DEFAUT))
-    except (VerifyMismatchError, VerificationError, InvalidHash):
-        verdict = False
+        v = ACTIF if _HASHER.verify(empreinte, MOT_DE_PASSE_DEFAUT) else INACTIF
+    except VerifyMismatchError:
+        v = INACTIF
+    except (VerificationError, InvalidHash):
+        return INCONNU            # empreinte qu'on ne sait pas lire : pas mise en cache
     with _verrou:
         if len(_cache) > 64:
             _cache.clear()
-        _cache[empreinte] = verdict
-    return verdict
+        _cache[empreinte] = v
+    return v
 
 
-def actif(compte: str = COMPTE, users: Optional[Path] = None) -> bool:
-    """Vrai tant que l'empreinte du compte correspond au mot de passe par défaut."""
-    return empreinte_est_le_defaut(_empreinte(compte, users))
+def verdict(compte: str = COMPTE, users: Optional[Path] = None) -> str:
+    """TERNAIRE : « actif », « inactif » ou « inconnu » (fichier illisible, JSON corrompu, compte absent, erreur)."""
+    try:
+        h = _empreinte(compte, users)
+        return INACTIF if h is None else _verdict_empreinte(h)
+    except _Inconnu as e:
+        log.warning("mot de passe par défaut : état inconnu (%s), garde maintenue", e)
+        return INCONNU
+    except Exception as e:  # noqa: BLE001 — toute surprise = inconnu, donc garde maintenue (jamais fail-open)
+        log.warning("mot de passe par défaut : état inconnu (%s), garde maintenue", e.__class__.__name__)
+        return INCONNU
+
+
+def garde_requise(compte: str = COMPTE, users: Optional[Path] = None) -> bool:
+    """Les gardes (SSH, exposition, connexion) s'appliquent tant que le défaut n'est pas PROUVÉ changé."""
+    return verdict(compte, users) != INACTIF
 
 
 def etat(compte: str = COMPTE, users: Optional[Path] = None) -> Dict[str, Any]:
-    a = actif(compte, users)
-    return {"actif": a, "compte": compte, "message": MESSAGE if a else "", "lien": LIEN_CHANGEMENT if a else ""}
+    v = verdict(compte, users)
+    msg = {ACTIF: MESSAGE, INCONNU: MESSAGE_INCONNU}.get(v, "")
+    return {"etat": v, "actif": v == ACTIF, "inconnu": v == INCONNU, "compte": compte, "message": msg,
+            "lien": LIEN_CHANGEMENT if msg else ""}
+
+
+def refus_exposition(action: str, acteur: str = "?") -> Optional[str]:
+    """Point de garde commun des chemins d'exposition : le message de refus (audité), ou None si permis."""
+    if not garde_requise():
+        return None
+    audit("exposition_refusee", {"action": str(action)[:128], "acteur": str(acteur)[:64]})
+    return "Exposition externe refusée : " + MESSAGE
 
 
 def audit(evenement: str, details: Optional[Dict[str, Any]] = None, chemin: Optional[Path] = None) -> None:
@@ -110,5 +155,9 @@ def audit(evenement: str, details: Optional[Dict[str, Any]] = None, chemin: Opti
         log.warning("audit.log non écrit (%s) : %s", e.__class__.__name__, ligne)
 
 
-if __name__ == "__main__":  # `python3 -m secubox_core.mot_de_passe_defaut` : code de sortie 0 = défaut actif
-    raise SystemExit(0 if actif() else 1)
+#: Codes de sortie du point d'entrée CLI (le ctl root le lance en `cd / && python3 -I <ce fichier>`, sans importer
+#: le paquet secubox_core ni FastAPI). Tout autre code (exception, argon2 absent…) = inconnu : garde maintenue.
+SORTIE = {ACTIF: 0, INACTIF: 10, INCONNU: 2}
+
+if __name__ == "__main__":
+    raise SystemExit(SORTIE[verdict()])

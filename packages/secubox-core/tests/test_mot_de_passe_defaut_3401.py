@@ -4,6 +4,11 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#3401 : l'indicateur unique « mot de passe par défaut actif »."""
 import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
 
 from argon2 import PasswordHasher
 
@@ -18,16 +23,40 @@ def _users(tmp_path, mdp):
 
 
 def test_actif_quand_l_empreinte_est_celle_du_defaut(tmp_path):
-    assert D.actif(users=_users(tmp_path, "secubox")) is True
+    assert D.verdict(users=_users(tmp_path, "secubox")) == D.ACTIF
+    assert D.garde_requise(users=_users(tmp_path, "secubox"))
 
 
 def test_inactif_apres_changement(tmp_path):
-    assert D.actif(users=_users(tmp_path, "une phrase longue et choisie")) is False
+    f = _users(tmp_path, "une phrase longue et choisie")
+    assert D.verdict(users=f) == D.INACTIF and not D.garde_requise(users=f)
 
 
-def test_inactif_sans_empreinte_ou_fichier(tmp_path):
-    assert D.actif(users=_users(tmp_path, None)) is False
-    assert D.actif(users=tmp_path / "absent.json") is False
+def test_sans_mot_de_passe_le_defaut_n_est_pas_actif(tmp_path):
+    assert D.verdict(users=_users(tmp_path, None)) == D.INACTIF
+
+
+@pytest.mark.parametrize("contenu", [None, "{pas du json", '{"users": "x"}', '{"users": [{"username": "bob"}]}',
+                                     '{"users": [{"username": "admin", "password_hash": "$argon2id$casse"}]}'])
+def test_fail_closed_tout_doute_est_inconnu_et_garde(tmp_path, contenu):
+    f = tmp_path / "users.json"
+    if contenu is not None:
+        f.write_text(contenu)
+    assert D.verdict(users=f) == D.INCONNU and D.garde_requise(users=f)
+    assert D.etat(users=f)["inconnu"] is True
+
+
+def test_cli_codes_sans_importer_le_paquet(tmp_path):
+    src = Path(D.__file__)
+    env = {"SECUBOX_USERS_JSON": str(_users(tmp_path, "secubox")), "PATH": "/usr/bin:/bin"}
+    r = subprocess.run([sys.executable, str(src)], env=env, cwd="/", capture_output=True, timeout=30, check=False)
+    assert r.returncode == 0, r.stderr
+    env["SECUBOX_USERS_JSON"] = str(_users(tmp_path, "autre phrase bien longue"))
+    assert subprocess.run([sys.executable, str(src)], env=env, cwd="/", timeout=30, check=False).returncode == 10
+    env["SECUBOX_USERS_JSON"] = str(tmp_path / "absent")
+    assert subprocess.run([sys.executable, str(src)], env=env, cwd="/", timeout=30, check=False).returncode == 2
+    # Le module ne tire ni FastAPI ni le paquet secubox_core.
+    assert "import fastapi" not in src.read_text() and "from secubox_core" not in src.read_text()
 
 
 def test_etat_donne_message_et_lien_sans_le_clair(tmp_path):
