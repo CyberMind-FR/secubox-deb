@@ -1,3 +1,10 @@
+secubox-waf-ng (1.33.2-1~trixie1) trixie; urgency=medium
+
+  * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images
+    elle était sautée et le service restait désactivé sur la box flashée ; le démarrage reste conditionné (#3411).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 10:08:35 +0100
+
 secubox-waf-ng (1.33.1-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

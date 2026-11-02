@@ -60,11 +60,19 @@ case "$1" in
       fi
     fi
 
+    # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
+    # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
+    # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+    for _u in secubox-netmodes.service secubox-netmodes-retour-boot.service; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
-      systemctl enable secubox-netmodes.service >/dev/null 2>&1 || true
       # Filet de sécurité : défait au démarrage une application restée en attente de confirmation.
-      systemctl enable secubox-netmodes-retour-boot.service >/dev/null 2>&1 || true
       # L'API est dédiée (sa propre socket) : redémarrée pour prendre le nouveau code, le compte et le profil.
       if [ "$PROFIL_API" = 1 ]; then
         systemctl restart secubox-netmodes.service || true

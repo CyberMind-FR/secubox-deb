@@ -112,7 +112,9 @@ def test_la_route_et_le_timer_sont_cables():
     assert "require_lecture" in route
     rules = (pkg / "debian" / "rules").read_text()
     assert "secubox-metrics-memoire.timer" in rules and "secubox-metrics-memoire.service" in rules
-    assert "enable --now secubox-metrics-memoire.timer" in (pkg / "debian" / "postinst").read_text()
+    pi = (pkg / "debian" / "postinst").read_text()
+    assert "secubox-metrics-memoire.timer" in pi.split("for _u in secubox-geoipupdate", 1)[1].split("\n", 1)[0]   # #3411
+    assert "systemctl start secubox-metrics-memoire.timer" in pi
     svc = (pkg / "systemd" / "secubox-metrics-memoire.service").read_text()
     assert "User=secubox" in svc and "StateDirectory=secubox/metrics" in svc and "api.memoire" in svc
     assert "OnUnitActiveSec=5min" in (pkg / "systemd" / "secubox-metrics-memoire.timer").read_text()

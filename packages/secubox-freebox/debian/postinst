@@ -8,9 +8,18 @@ case "$1" in
         --shell /usr/sbin/nologin secubox-freebox >/dev/null
     # Le magasin du jeton : propre au service, fermé aux autres.
     install -d -m 0750 -o secubox-freebox -g secubox /var/lib/secubox/freebox
+    # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
+    # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
+    # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+    for _u in secubox-freebox.service; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
-      systemctl enable secubox-freebox.service >/dev/null 2>&1 || true
       # try-restart : une mise à jour recharge le code sans démarrer ce que l'opérateur a arrêté ; un premier démarrage se fait.
       if systemctl is-active --quiet secubox-freebox.service; then
         systemctl try-restart secubox-freebox.service || true

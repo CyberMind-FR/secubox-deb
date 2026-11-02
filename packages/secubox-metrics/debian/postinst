@@ -43,20 +43,30 @@ if [ "$1" = "configure" ]; then
     # (Non restaure : chown/chmod 0700 de /etc/secubox/secrets — le dossier des
     # secrets est root:secubox 0750 + ACL, tenu par secubox-core, #1701.)
 
+    # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
+    # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
+    # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+    for _u in secubox-geoipupdate.timer secubox-metrics-rapport.timer secubox-metrics-rapport-quotidien.timer secubox-metrics-rapport-waf.timer secubox-metrics-redemarrage.timer secubox-metrics-memoire.timer; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload || true
         # 3. Base ASN (#194) : le timer, et le recuperateur avec repli DB-IP.
-        systemctl enable --now secubox-geoipupdate.timer || true
+        systemctl start secubox-geoipupdate.timer || true
         # #1059 — activer le timer du rapport hebdomadaire (le .service est
         # oneshot, déclenché par le timer : on n'active QUE le timer). enable
         # --now le pose ET l'arme sans attendre un reboot.
-        systemctl enable --now secubox-metrics-rapport.timer || true
-        systemctl enable --now secubox-metrics-rapport-quotidien.timer || true
-        systemctl enable --now secubox-metrics-rapport-waf.timer || true
+        systemctl start secubox-metrics-rapport.timer || true
+        systemctl start secubox-metrics-rapport-quotidien.timer || true
+        systemctl start secubox-metrics-rapport-waf.timer || true
         # #3295 — redemarrage de prudence toutes les 6 h (remplace RuntimeMaxSec).
-        systemctl enable --now secubox-metrics-redemarrage.timer || true
+        systemctl start secubox-metrics-redemarrage.timer || true
         # #2146 — releve de la memoire toutes les 5 min (historique + alerte de fuite noyau).
-        systemctl enable --now secubox-metrics-memoire.timer || true
+        systemctl start secubox-metrics-memoire.timer || true
         # #2765 — le releve des courbes est passe a secubox-courbes (#2865, secubox-courbes-serie.timer) : l'ancienne minuterie est retiree.
         systemctl disable --now secubox-metrics-serie.timer 2>/dev/null || true
     fi
@@ -97,8 +107,12 @@ done
 # jour, et ne repartait pas au reboot. On force donc, APRES le bloc debhelper
 # (dernier mot), l'activation et le (re)demarrage. Place ici a dessein : rien
 # ne vient plus le desactiver ensuite.
-if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
-    systemctl enable secubox-metrics.service >/dev/null 2>&1 || true
-    systemctl restart secubox-metrics.service >/dev/null 2>&1 || true
+if [ "$1" = "configure" ]; then
+    # #3411 : activation HORS du test systemd (chroot d'image). EXCEPTION au motif was-enabled : #1368 exige que ce
+    # service coeur soit TOUJOURS arme (registre deb-systemd-helper desynchronise constate) ; enable force, comme avant.
+    deb-systemd-helper enable secubox-metrics.service >/dev/null 2>&1 || true
+    if [ -d /run/systemd/system ]; then
+        systemctl restart secubox-metrics.service >/dev/null 2>&1 || true
+    fi
 fi
 exit 0

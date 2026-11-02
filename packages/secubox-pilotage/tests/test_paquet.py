@@ -142,7 +142,7 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.6.18-1~trixie1) trixie;")
+    assert ch.startswith("secubox-pilotage (0.6.19-1~trixie1) trixie;")
     assert "Recommends: apparmor, secubox-p2p (>= 1.20.2~)" in c          # banc gk2 : projection p2p-public des pairs enrôlés
     depends = re.search(r"^Depends:(.*)$", c, re.M).group(1)
     assert "sudo" not in depends                                          # Final : plus aucune règle sudoers
@@ -161,7 +161,8 @@ def test_changelogs_jamais_dates_dans_le_futur(paquet):
 
 def test_postinst_et_prerm():
     p = code("debian/postinst")
-    assert "systemctl enable --now secubox-pilotage.service" in p
+    assert "deb-systemd-helper enable" in p and "secubox-pilotage.service" in p   # #3411 : activé hors du test systemd
+    assert "systemctl start secubox-pilotage.service" in p
     assert "adduser --system" in p and "secubox-pilotage" in p
     assert "tmpfiles" not in p                                      # systemd-tmpfiles refuse ces chemins
     # I3 : le dossier de données est préparé par descripteur (python3 -I), pas par chemin shell
@@ -173,7 +174,8 @@ def test_postinst_et_prerm():
     assert "apparmor_parser -r /etc/apparmor.d/secubox-pilotage-api" in p
     assert "/usr/sbin/secubox-pilotage-ecoute" in p
     assert "/etc/secubox/pilotage" not in p                         # M8 : dossier jamais utilisé par le maître
-    assert "systemctl enable --now secubox-pilotage.socket secubox-pilotage-canal.socket" in p
+    assert "for _u in secubox-pilotage.socket secubox-pilotage-canal.socket" in p
+    assert "systemctl start secubox-pilotage.socket secubox-pilotage-canal.socket" in p
     prerm = code("debian/prerm")
     assert "systemctl stop secubox-pilotage.service" in prerm
     assert "secubox-pilotage-ecoute --retirer" in prerm             # R28 : règles nft retirées
@@ -284,7 +286,8 @@ def test_assistant_invite_unite_sous_le_compte_des_jetons_et_durcie():
 def test_assistant_invite_installe_active_et_arrete():
     r = lire("debian/rules")
     assert "sbin/secubox-pilotage-invite" in r and "secubox-pilotage-invite.socket" in r and "secubox-pilotage-invite@.service" in r
-    assert "enable --now secubox-pilotage-invite.socket" in code("debian/postinst")
+    assert "secubox-pilotage-canal.socket secubox-pilotage-invite.socket" in code("debian/postinst")   # activé (#3411)
+    assert "systemctl start secubox-pilotage-invite.socket" in code("debian/postinst")
     assert "secubox-pilotage-invite.socket" in code("debian/prerm")
     assert "secubox-p2p" in lire("debian/control")
 

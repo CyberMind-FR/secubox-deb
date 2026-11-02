@@ -43,18 +43,27 @@ case "$1" in
     # Écouteurs de tunnel et règles nft (seulement pour les interfaces présentes).
     /usr/sbin/secubox-pilotage-ecoute || echo "secubox-pilotage : écouteurs de tunnel non posés" >&2
 
-    # Chroot d'image (pas de systemd en marche) : rien à activer ici.
+    # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
+    # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
+    # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
+    for _u in secubox-pilotage.socket secubox-pilotage-canal.socket secubox-pilotage-invite.socket secubox-pilotage.service secubox-pilotage-ecoute.path secubox-pilotage-ecoute.timer secubox-pilotage-vhost.path secubox-pilotage-vhost.timer; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
       if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
       # Les sockets d'abord (systemd les crée avec le bon propriétaire, groupe et mode), puis le service.
-      systemctl enable --now secubox-pilotage.socket secubox-pilotage-canal.socket || true
+      systemctl start secubox-pilotage.socket secubox-pilotage-canal.socket || true
       # Assistant de jonction (Rejoindre après un renommage, R-L2-35) : activé par socket, une instance par demande.
-      systemctl enable --now secubox-pilotage-invite.socket || true
-      systemctl enable --now secubox-pilotage.service || true
-      systemctl enable --now secubox-pilotage-ecoute.path secubox-pilotage-ecoute.timer || true
+      systemctl start secubox-pilotage-invite.socket || true
+      systemctl start secubox-pilotage.service || true
+      systemctl start secubox-pilotage-ecoute.path secubox-pilotage-ecoute.timer || true
       # vhosts admin.<box> des box légères : posés par le ctl root quand le plan du service change, repris toutes les heures
-      systemctl enable --now secubox-pilotage-vhost.path secubox-pilotage-vhost.timer || true
+      systemctl start secubox-pilotage-vhost.path secubox-pilotage-vhost.timer || true
       # mise à jour : le nouveau code et le nouveau profil doivent être pris
       if [ -n "$2" ]; then
         systemctl restart secubox-pilotage.service || true

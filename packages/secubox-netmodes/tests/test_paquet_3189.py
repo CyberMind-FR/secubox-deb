@@ -397,7 +397,7 @@ def test_postinst():
     assert "rm -f /etc/sudoers.d/secubox-netmodes" in p                  # jamais de sudoers cassé laissé en place
     for profil in ("secubox-netmodes", "secubox-lan-dhcp"):
         assert f"apparmor_parser -r /etc/apparmor.d/{profil}" in p, profil
-    assert "systemctl enable secubox-netmodes-retour-boot.service" in p
+    assert "for _u in secubox-netmodes.service secubox-netmodes-retour-boot.service" in p   # #3411
     assert "systemctl restart secubox-netmodes.service" in p
     # le profil est chargé AVANT de (re)démarrer l'API qui le nomme
     assert p.index("apparmor_parser -r /etc/apparmor.d/secubox-netmodes") < p.index(
