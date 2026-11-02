@@ -10,13 +10,12 @@ if [ "$1" = "configure" ]; then
     RC=0; /usr/sbin/secubox-kiosk-retire-autologin || RC=$?
     if [ "$RC" -eq 10 ] && [ -d /run/systemd/system ]; then
         systemctl daemon-reload >/dev/null 2>&1 || true
-        # Un shell root déjà ouvert par l'ancien autologin se ferme : le getty repart avec une invite de connexion.
-        systemctl try-restart getty@tty2.service >/dev/null 2>&1 || true
-        [ -e /var/lib/secubox/.kiosk-enabled ] && systemctl try-restart getty@tty1.service >/dev/null 2>&1 || true
+        # On ne relance PAS getty@tty1/tty2 : un apt lancé depuis cette console se tuerait lui-même. Le getty avec connexion
+        # s'applique à la prochaine déconnexion de la session ouverte (ou au prochain démarrage).
     fi
     # L'unité écrite par secubox-kiosk-setup < 1.2.0 portait Conflicts=getty@tty1 : tout getty démarré sur tty1 arrêtait le kiosque (tty7).
     U=/etc/systemd/system/secubox-kiosk.service
-    if [ -f "$U" ] && grep -q '^Conflicts=getty@tty1.service$' "$U" && grep -q 'secubox-kiosk-launcher' "$U"; then
+    if [ -f "$U" ] && [ ! -L "$U" ] && grep -q '^Conflicts=getty@tty1.service$' "$U" && grep -q 'secubox-kiosk-launcher' "$U"; then
         sed -i 's/^Conflicts=getty@tty1.service$/Conflicts=getty@tty7.service/' "$U"
         [ -d /run/systemd/system ] && systemctl daemon-reload >/dev/null 2>&1 || true
     fi

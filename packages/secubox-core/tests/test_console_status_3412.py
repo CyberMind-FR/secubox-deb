@@ -20,7 +20,7 @@ def _status(tmp_path, defauts: str, agreg_actif=True, sante=True, *args):
     b.mkdir()
     stubs = {
         "systemctl": "case \"$1\" in is-active) case \"$3\" in secubox-aggregator) exit %d;; *) exit 0;; esac;; list-unit-files) echo \"$2 enabled\";; esac" % (0 if agreg_actif else 3),
-        "curl": "exit %d" % (0 if sante else 7),
+        "python3": "exit %d" % (0 if sante else 1),
         "hostname": "[ \"$1\" = -I ] && echo '192.168.1.42 10.0.0.1' || echo gk7",
     }
     for n, c in stubs.items():
@@ -29,7 +29,7 @@ def _status(tmp_path, defauts: str, agreg_actif=True, sante=True, *args):
     d = tmp_path / "secubox"
     d.write_text(defauts)
     r = subprocess.run(["bash", str(STATUS), *args], capture_output=True, text=True,
-                       env={"PATH": f"{b}:/usr/bin:/bin", "SECUBOX_DEFAULTS": str(d)})
+                       env={"SECUBOX_TEST": "1", "PATH": f"{b}:/usr/bin:/bin", "SECUBOX_DEFAULTS": str(d)})
     return re.sub(r"\x1b\[[0-9;]*m", "", r.stdout)
 
 
@@ -85,7 +85,7 @@ def _charmap(tmp_path, charmap: str, lang: str) -> str:
     (etc / "console-setup").write_text(f'ACTIVE_CONSOLES="/dev/tty[1-6]"\nCHARMAP="{charmap}"\n')
     (etc / "locale").write_text(f"LANG={lang}\n")
     bloc = POSTINST.read_text().split("# CONSOLE EN UTF-8 (#3412)")[1].split("\n", 1)[1]
-    bloc = bloc.replace("/etc/default/", f"{etc}/").replace("[ -d /run/systemd/system ]", "false")
+    bloc = bloc.replace("debconf-set-selections", "cat").replace("/etc/default/", f"{etc}/").replace("[ -d /run/systemd/system ]", "false")
     subprocess.run(["sh", "-c", 'set -- configure\n' + bloc], check=True, capture_output=True)
     return (etc / "console-setup").read_text()
 
@@ -97,3 +97,30 @@ def test_postinst_passe_la_console_en_utf8(tmp_path):
 @pytest.mark.parametrize("charmap,lang", [("ISO-8859-15", "fr_FR@euro"), ("KOI8-R", "ru_RU.UTF-8")])
 def test_postinst_ne_touche_pas_le_reste(tmp_path, charmap, lang):
     assert f'CHARMAP="{charmap}"' in _charmap(tmp_path, charmap, lang)
+
+
+@pytest.mark.parametrize("defauts,attendu", [
+    ('SECUBOX_HOSTNAME="gk7;rm -rf /"\n', "https://192.168.1.42/"),
+    ('SECUBOX_HOSTNAME="\\e[2J"\n', "https://192.168.1.42/"),
+    ('SECUBOX_HOSTNAME="gk7"\nSECUBOX_DOMAIN_SUFFIX="x y"\n', "https://admin.gk7.secubox.in/"),
+])
+def test_noms_valides_avant_affichage(tmp_path, defauts, attendu):
+    assert _status(tmp_path, defauts, True, True, "--url-admin").strip() == attendu
+
+
+def test_status_sans_curl_ni_echo_e_sur_donnees():
+    t = STATUS.read_text()
+    assert t.startswith("#!/usr/bin/env bash") and "set -uo pipefail" in t
+    assert "curl" not in t and "python3 -I" in t
+    assert "echo -e" not in "".join(l for l in t.splitlines() if "$(" in l or "${ip" in l or "${iface" in l)
+
+
+def test_postinst_console_setup_refuse_les_liens_et_met_debconf_a_jour():
+    bloc = POSTINST.read_text().split("# CONSOLE EN UTF-8 (#3412)")[1]
+    assert "[ ! -L /etc/default/console-setup ]" in bloc
+    assert "console-setup/charmap47 select UTF-8" in bloc and "debconf-set-selections" in bloc
+
+
+def test_chemins_de_test_sous_drapeau():
+    t = STATUS.read_text()
+    assert t.index('"${SECUBOX_TEST:-}" == 1') < t.index("${SECUBOX_DEFAULTS")

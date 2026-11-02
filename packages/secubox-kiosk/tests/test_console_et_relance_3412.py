@@ -28,11 +28,15 @@ def test_unite_generee_ne_se_bat_plus_avec_tty1():
     assert "Conflicts=getty@tty1" not in t and "Conflicts=getty@tty7.service" in t
 
 
-def _retire(tmp_path, kiosque=False):
+def _retire(tmp_path, kiosque=False, statut="P"):
     sent = tmp_path / "kiosk-enabled"
     if kiosque:
         sent.touch()
-    env = {"PATH": "/usr/bin:/bin", "SECUBOX_KIOSK_SYSTEMD_ETC": str(tmp_path / "sysd"), "SECUBOX_KIOSK_SENTINELLE": str(sent)}
+    b = tmp_path / "bin"
+    b.mkdir(exist_ok=True)
+    (b / "passwd").write_text(f"#!/bin/sh\necho 'root {statut} 2026-11-01 0 99999 7 -1'\n")
+    (b / "passwd").chmod(0o755)
+    env = {"SECUBOX_TEST": "1", "PATH": f"{b}:/usr/bin:/bin", "SECUBOX_KIOSK_SYSTEMD_ETC": str(tmp_path / "sysd"), "SECUBOX_KIOSK_SENTINELLE": str(sent)}
     return subprocess.run(["sh", str(RETIRE)], env=env, capture_output=True, text=True).returncode
 
 
@@ -79,7 +83,7 @@ def _relance(tmp_path, sentinelle=True, enabled=True, etat="inactive"):
     run = tmp_path / "run"
     run.mkdir()
     r = subprocess.run(["sh", str(RELANCE)], capture_output=True, text=True,
-                       env={"PATH": f"{stubs}:/usr/bin:/bin", "SECUBOX_KIOSK_SENTINELLE": str(sent), "SECUBOX_KIOSK_SYSTEMD_RUN": str(run)})
+                       env={"SECUBOX_TEST": "1", "PATH": f"{stubs}:/usr/bin:/bin", "SECUBOX_KIOSK_SENTINELLE": str(sent), "SECUBOX_KIOSK_SYSTEMD_RUN": str(run)})
     assert r.returncode == 0
     return log.read_text() if log.exists() else ""
 
@@ -108,3 +112,35 @@ def test_paquet_livre_relance_et_migration():
 def test_premier_pas_relance_le_kiosque_active():
     post = (PAQUET.parent / "secubox-premier-pas" / "debian" / "postinst").read_text()
     assert "/var/lib/secubox/.kiosk-enabled" in post and "--no-block start secubox-kiosk.service" in post
+
+
+@pytest.mark.parametrize("statut", ["L", "NP"])
+def test_migration_garde_l_autologin_si_root_sans_mot_de_passe(tmp_path, statut):
+    f = _pose(tmp_path, "tty2", "autologin.conf", ANCIEN)
+    assert _retire(tmp_path, statut=statut) == 0 and f.exists()
+
+
+def test_migration_ignore_un_lien(tmp_path):
+    vrai = tmp_path / "ailleurs.conf"
+    vrai.write_text(ANCIEN)
+    d = tmp_path / "sysd" / "getty@tty2.service.d"
+    d.mkdir(parents=True)
+    (d / "autologin.conf").symlink_to(vrai)
+    assert _retire(tmp_path) == 0 and vrai.exists()
+
+
+def test_chemins_de_test_ignores_hors_drapeau():
+    for s in (RETIRE, RELANCE):
+        t = s.read_text()
+        assert '[ "${SECUBOX_TEST:-}" = 1 ]' in t
+        assert t.index("SECUBOX_TEST") < t.index("${SECUBOX_KIOSK_")
+
+
+def test_postinst_ne_relance_aucun_getty():
+    post = (PAQUET / "debian" / "postinst").read_text()
+    assert "restart getty@" not in post
+    assert '[ ! -L "$U" ]' in post
+
+
+def test_hook_apt_borne():
+    assert "timeout 30 /usr/sbin/secubox-kiosk-relance" in (PAQUET / "apt" / "80secubox-kiosk-relance").read_text()

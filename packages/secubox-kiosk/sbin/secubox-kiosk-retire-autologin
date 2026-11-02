@@ -12,8 +12,11 @@
 # d'opérateur (autre contenu, ligne de plus) reste en place. Sortie : 0 rien à faire, 10 au moins un fichier retiré.
 set -eu
 
-SYSD="${SECUBOX_KIOSK_SYSTEMD_ETC:-/etc/systemd/system}"
-SENTINELLE="${SECUBOX_KIOSK_SENTINELLE:-/var/lib/secubox/.kiosk-enabled}"
+SYSD=/etc/systemd/system
+SENTINELLE=/var/lib/secubox/.kiosk-enabled
+if [ "${SECUBOX_TEST:-}" = 1 ]; then     # chemins de test, jamais lus hors des tests
+    SYSD="${SECUBOX_KIOSK_SYSTEMD_ETC:-$SYSD}"; SENTINELLE="${SECUBOX_KIOSK_SENTINELLE:-$SENTINELLE}"
+fi
 RC=0
 
 # Lignes utiles (sans vides ni commentaires, espaces de bord retirés), séparées par « | ».
@@ -29,8 +32,14 @@ est_le_notre() {
 
 retire() {
     f="$1"
+    [ -L "$f" ] && return 0                  # un lien n'est pas ce que nous avons écrit
     [ -f "$f" ] || return 0
     if est_le_notre "$f"; then
+        # Sans mot de passe root utilisable, retirer l'autologin fermerait toute console locale : on avertit et on laisse.
+        if [ "$(passwd -S root 2>/dev/null | awk '{print $2}')" != P ]; then
+            echo "secubox-kiosk : $f garde son autologin root : root n'a pas de mot de passe utilisable (passwd root, puis réinstaller secubox-kiosk)" >&2
+            return 0
+        fi
         rm -f "$f"
         rmdir "$(dirname "$f")" 2>/dev/null || true
         echo "secubox-kiosk : autologin root retiré ($f)"

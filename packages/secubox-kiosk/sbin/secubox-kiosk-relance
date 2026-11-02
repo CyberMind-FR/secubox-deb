@@ -9,11 +9,15 @@
 # (secubox-premier-pas livre l'unité et la construit en --no-start : son prerm l'arrête sans la relancer) ne sont pas les seuls
 # possibles : on rattrape ici, quel qu'en soit l'auteur. Rien si le kiosque n'est pas activé (sentinelle ET unité activée),
 # rien s'il tourne ou démarre déjà. Jamais bloquant : --no-block, et toujours 0 (apt ne doit pas échouer pour ça).
-SENTINELLE="${SECUBOX_KIOSK_SENTINELLE:-/var/lib/secubox/.kiosk-enabled}"
+SENTINELLE=/var/lib/secubox/.kiosk-enabled
+SYSTEMD_RUN=/run/systemd/system
+if [ "${SECUBOX_TEST:-}" = 1 ]; then     # chemins de test, jamais lus hors des tests
+    SENTINELLE="${SECUBOX_KIOSK_SENTINELLE:-$SENTINELLE}"; SYSTEMD_RUN="${SECUBOX_KIOSK_SYSTEMD_RUN:-$SYSTEMD_RUN}"
+fi
 UNITE=secubox-kiosk.service
 
 [ -e "$SENTINELLE" ] || exit 0
-[ -d "${SECUBOX_KIOSK_SYSTEMD_RUN:-/run/systemd/system}" ] || exit 0
+[ -d "$SYSTEMD_RUN" ] || exit 0
 systemctl is-enabled --quiet "$UNITE" 2>/dev/null || exit 0
 case "$(systemctl is-active "$UNITE" 2>/dev/null)" in
     active|activating|reloading) exit 0 ;;
