@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-02 — Corrélation DNS/DPI déployée gk2 (closes #3395)
+
+- ad-guard 1.24.0 (PR #3396) : chaque flux DPI porte le nom DNS qui a annoncé son adresse (reponses.db, index rep_ip) et sa catégorie ; /protection/dpi/applications liste les domaines corrélés avec la dernière décision DNS de l appareil ; /tv-privacy/ : domaines par appli, bouton Flux « via DNS ». Nom commun à la box (pas par appareil). Vérifié gk2 : routes 401 sans jeton, index créé, moteur sans erreur.
+- Renommage d affichage metablogizer → Webhosts, streamlit → Webapps consigné sur #3375 (après Alpha 20, noms techniques inchangés).
+
 ## 2026-11-01 (soir) — SBX TV Privacy lots 4 et 5b déployés gk2
 
 - ref #3374 : ad-guard 1.21.0 (PR #3389, lot 4 : DPI par appareil, corrélation de repli, replis candidats AUTO en essai,

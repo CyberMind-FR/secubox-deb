@@ -178,7 +178,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 00000000000. **Avant l'Alpha 20 (arbitrage du propriétaire, 2026-11-01) : finir SBX TV Privacy #3374**, lots 5 → 4 (DPI par
   appareil, contournements, anti faux repli ; rend visibles les pubs servies par le flux) → 5b (assistant en direct) → 6 → 7
   (Freebox, 2 Android TV, Apple TV). Test en cours sur la TV du propriétaire (MAC 38:07:16:93:4e:95) : bloquer
-  `audiences.free.fr`, `stats.oqee.net`, `metaproxy.francetvpub.fr`, puis classer selon la lecture. Lots 1 à 6 déployés (ad-guard 1.23.0) ;
+  `audiences.free.fr`, `stats.oqee.net`, `metaproxy.francetvpub.fr`, puis classer selon la lecture. Lots 1 à 6 + corrélation DNS/DPI #3395 déployés (ad-guard 1.24.0) ;
   suivant : 7 (essais réels Freebox, 2 Android TV, Apple TV) et essai mode LAN (TV banc), AVEC le propriétaire ; #3391, #3393. Reportés notés dans la
   conception lot 3 (débit non atomique, `.home` ancien, M2, M7) ; pierre tombale p2p à ouvrir en issue.
 0000000000. **WAF et vulnérabilités (2026-10-29)** : #3257 et #3273 déployés sur gk2 en mode detect (waf-ng 1.32.0) —
