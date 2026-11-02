@@ -1,3 +1,9 @@
+secubox-system (1.12.3-1~trixie1) trixie; urgency=medium
+
+  * Routeur ssh charge meme si un autre routeur est casse (#3401) : imports isoles dans api/routers/__init__.py (metrics importe `core`, absent du paquet : « Router ssh non charge », interrupteur SSH en 404 au banc gk7).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 09:59:33 +0100
+
 secubox-system (1.12.2-1~trixie1) trixie; urgency=medium
 
   * Relecture #3401, passe 2 (ref #3401) : dossiers de demandes (root:secubox 1770) et de résultats (root:secubox 0750) créés par secubox-sshctl prepare (ExecStartPre, plus de tmpfiles) ; demande lue par descripteur sans lien, fichier ordinaire, non bloquante, 4 Kio ; sauvegardes retirées après succès ; sshd -T vérifié pour chaque compte Linux au défaut ; cache de secubox-ssh-defaut écrit par mkstemp ; garde lancée au démarrage ; exception § 10 écrite dans RULES-CODE.
