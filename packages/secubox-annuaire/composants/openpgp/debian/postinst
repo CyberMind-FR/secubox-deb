@@ -38,9 +38,11 @@ print(did_from_pubkey(public_from_private(raw)))
         echo "secubox-openpgp : annuaire non initialisé — plus tard : sbx-openpgp init && sbx-openpgp lier"
     fi
 
+    # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
+    # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
+    deb-systemd-helper enable secubox-openpgp.service >/dev/null 2>&1 || true
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload >/dev/null 2>&1 || true
-        systemctl enable secubox-openpgp.service >/dev/null 2>&1 || true
         systemctl restart secubox-openpgp.service >/dev/null 2>&1 || true
     fi
 

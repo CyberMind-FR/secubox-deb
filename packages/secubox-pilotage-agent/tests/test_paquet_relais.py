@@ -119,13 +119,14 @@ def test_postinst_compte_cles_et_activation():
               "apparmor_parser -r /etc/apparmor.d/usr.sbin.sbx-pilotage-relais",
               "runuser -u secubox-pilotage-relais -- /usr/sbin/sbx-pilotage-relais cle-publique",
               "chown root:root", "chmod 0644", "/etc/secubox-pilotage/relais.pub",
-              "systemctl enable --now secubox-pilotage-relais.socket",
+              "deb-systemd-helper enable secubox-pilotage-relais.socket",
+              "systemctl start secubox-pilotage-relais.socket",
               "/usr/sbin/secubox-pilotage-relais-acl"):
         assert m in p, m
     # Minor 9 : la socket n'est activée que si la clé publique est posée.
     bloc = p[p.index("relais_pret="):]
     assert 'if [ "$relais_pret" = 1 ]' in bloc and bloc.index('if [ "$relais_pret" = 1 ]') < bloc.index(
-        "systemctl enable --now secubox-pilotage-relais.socket")
+        "deb-systemd-helper enable secubox-pilotage-relais.socket")
     assert "[ -s /etc/secubox-pilotage/relais.pub ]" in p
     # Mise à niveau : l'état root des mains liées est projeté dans l'arbre du relais.
     assert "/var/lib/secubox-pilotagectl/mains-liees" in p and "/etc/secubox-pilotage/mains-liees" in p
@@ -149,7 +150,7 @@ def test_scripts_debian_posix():
 
 
 def test_version_montee_et_dependance_au_verificateur():
-    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.8.0-1~trixie1) trixie;")
+    assert lire("debian/changelog").startswith("secubox-pilotage-agent (0.8.1-1~trixie1) trixie;")
     c = lire("debian/control")
     # Le vérificateur Ed25519 (tâche 1) est dans secubox-core 1.8.11.
     assert "secubox-core (>= 1.8.11~)" in re.search(r"^Depends:(.*)$", c, re.M).group(1)
