@@ -471,7 +471,7 @@ def test_unite_de_reprise_livree():
     assert "Type=oneshot" in u and "ExecStart=/usr/sbin/secubox-pilotagectl _interface-reprise" in u
     assert "WantedBy=multi-user.target" in u
     assert "secubox-pilotage-interface-reprise.service" in (pkg / "debian" / "rules").read_text()
-    assert "enable secubox-pilotage-interface-reprise.service" in (pkg / "debian" / "postinst").read_text()
+    assert "secubox-pilotage-agent.service secubox-pilotage-interface-reprise.service" in (pkg / "debian" / "postinst").read_text()   # deb-systemd-helper enable (#3411)
 
 
 def test_retour_en_locale_coupe_rattrape(bi):
