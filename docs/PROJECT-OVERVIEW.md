@@ -375,8 +375,8 @@ opkg                             →    apt + repo apt.secubox.in
 | MOCHAbin | Armada 7040 Quad 1.8GHz | 4 GB | 2× SFP+ 10GbE + 4× GbE | Pro |
 | ESPRESSObin v7 | Armada 3720 Dual 1.2GHz | 1–2 GB | WAN + 2× LAN DSA | Lite |
 | ESPRESSObin Ultra | Armada 3720 Dual 1.2GHz | 2 GB | WAN PoE + 4× LAN + Wi-Fi | Lite+ |
-| Raspberry Pi 4/400 | BCM2711 Quad 1.5-1.8GHz | 2-8 GB | GbE + USB | Lite |
-| Raspberry Pi 5 | BCM2712 Quad 2.4GHz | 4-8 GB | GbE + USB | Full |
+| Raspberry Pi 4/400 | BCM2711 Quad 1.5-1.8GHz | 4 GB (validé, gk7) | GbE + USB | Lite |
+| Raspberry Pi 5 | BCM2712 Quad 2.4GHz | 8 GB conseillés (à préférer) | GbE + USB | Full |
 | VM x86_64 | Any | 2+ GB | Virtio/NAT | Full |
 
 ### Packages (126 modules)
