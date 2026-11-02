@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-02 — RPi4 écran tactile, mot de passe par défaut encadré, appstore, live (avant Alpha 20)
+
+- **secubox-rpi-dsi 0.1.1** (closes #3399, PR #3400/#3410) : paquet OPTIONNEL écran officiel RPi 7" DSI + tactile sur noyau Debian (DKMS : vc4 DSI1, tc358762 RPi, panel-simple raspberrypi,7inch-dsi, edt-ft5x06 polling ; overlay via raspi-firmware-custom ; ROOTPART=UUID). Validé au redémarrage sur gk7 (RPi4 4 Go) : écran, tactile, kiosque, premier pas au doigt, Hall. Wiki RPi-Ecran-DSI-7 + Hardware-Matrix (Pi 5 8 Go à préférer). Piège : update-initramfs → raspi-firmware réécrit cmdline.txt (mmcblk0) = box non démarrable.
+- **Mot de passe par défaut encadré** (closes #3401, PR #3413) : changement toujours demandé, « Plus tard » par connexion (admin, LAN/kiosque/maillage) ; verdict ternaire ; garde SSH (web + /etc/shadow, sshd -T, LAN gardé) ; exposition publique refusée ; interrupteur « Accès SSH » (page Système). core 1.8.16, auth 1.8.15, system 1.12.3, haproxy 1.12.12, tor 1.7.6, premier-pas 0.9.2, portal 2.5.1, hub 1.12.38 ; déployé gk2.
+- **ad-guard 1.24.1** (closes #3393, PR #3404) : seuils par verbe root borné ; fiche App Store TV Privacy (closes #3402 avec appstore 0.11.1 + freebox 0.6.1, PR #3403). Test dnssensor déterministe (PR #3406, #3391 surveillée).
+- **Agent de pilotage par défaut** (closes #3405, PR #3407) : meta 0.1.52, lite 1.11.0, minimal 0.11.0. gk7 dans la Flotte et sur live.
+- **live 0.1.6** (closes #3408, PR #3409) : CPU coloré/arrondi, visites sous les indicateurs. Kiosque Wayland par défaut sur RPi (closes #3397, kiosk 1.1.0 ; gk4 en Wayland).
+- **couture** : option « Pas de machine » en ligne (atelier-partage-4.zip remis).
+- En cours avant Alpha 20 : #3411 (services jamais activés dans les images), #3412 (autologin root, kiosque relancé, console UTF-8).
+
 ## 2026-11-02 — Corrélation DNS/DPI déployée gk2 (closes #3395)
 
 - ad-guard 1.24.0 (PR #3396) : chaque flux DPI porte le nom DNS qui a annoncé son adresse (reponses.db, index rep_ip) et sa catégorie ; /protection/dpi/applications liste les domaines corrélés avec la dernière décision DNS de l appareil ; /tv-privacy/ : domaines par appli, bouton Flux « via DNS ». Nom commun à la box (pas par appareil). Vérifié gk2 : routes 401 sans jeton, index créé, moteur sans erreur.
