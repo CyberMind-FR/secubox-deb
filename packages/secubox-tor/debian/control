@@ -16,7 +16,7 @@ Architecture: all
 # systeme n'a AUCUNE resolution DNS, alors qu'unbound-anchor, l'outil
 # qui sait semer l'ancre, n'est pas installe non plus.
 Depends: ${misc:Depends},
- secubox-core (>= 1.8.15~),
+ secubox-core (>= 1.8.16~),
  tor,
  unbound,
  nftables,
