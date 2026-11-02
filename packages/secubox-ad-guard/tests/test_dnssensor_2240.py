@@ -26,6 +26,8 @@ def capteur(tmp_path, monkeypatch):
     monkeypatch.setenv("SECUBOX_ADGUARD_TV_ETAT", str(tmp_path))
     monkeypatch.setenv("SECUBOX_ACTORD_SOCKET", str(tmp_path / "a.sock"))
     monkeypatch.setenv("SECUBOX_DNS_MALVEILLANTS", str(tmp_path / "liste.txt"))
+    monkeypatch.setenv("SECUBOX_DNSGUARD_ALERTES", str(tmp_path / "dnsguard" / "alerts.jsonl"))   # jamais le dns-guard réel de la machine (#3391)
+    monkeypatch.setenv("SECUBOX_GEOIP_ASN", str(tmp_path / "asn-absent.mmdb"))
     loader = importlib.machinery.SourceFileLoader("dnssensor_mod", str(SBIN))
     spec = importlib.util.spec_from_loader("dnssensor_mod", loader)
     m = importlib.util.module_from_spec(spec)
@@ -43,15 +45,23 @@ def magasin(tmp_path, recents, counts=()):
     cx.close()
 
 
-def serveur(chemin):
-    recu, srv = [], socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    srv.bind(chemin)
-    srv.listen(4)
+class _Serveur:
+    """Faux actord : le thread d'écoute traite les connexions dans l'ordre d'arrivée. `close()` y dépose une connexion
+    sentinelle (vide) et attend sa fin : toutes les enveloppes déjà envoyées sont alors dans `recu` (#3391 : avant,
+    `close()` ne synchronisait pas et le test lisait `recu` avant que le thread ait fini, d'où l'échec sous charge)."""
 
-    def boucle():
+    def __init__(self, chemin):
+        self.chemin, self.recu = chemin, []
+        self.srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.srv.bind(chemin)
+        self.srv.listen(16)
+        self.fil = threading.Thread(target=self._boucle, daemon=True)
+        self.fil.start()
+
+    def _boucle(self):
         while True:
             try:
-                c, _ = srv.accept()
+                c, _ = self.srv.accept()
             except OSError:
                 return
             buf = b""
@@ -60,10 +70,22 @@ def serveur(chemin):
                 if not d:
                     break
                 buf += d
-            recu.extend(json.loads(l) for l in buf.splitlines() if l)
             c.close()
-    threading.Thread(target=boucle, daemon=True).start()
-    return recu, srv
+            if not buf:                                  # sentinelle de close()
+                return
+            self.recu.extend(json.loads(l) for l in buf.splitlines() if l)
+
+    def close(self):
+        if self.fil.is_alive():
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.connect(self.chemin)
+            self.fil.join(10)
+        self.srv.close()
+
+
+def serveur(chemin):
+    s = _Serveur(chemin)
+    return s.recu, s
 
 
 def alea(n, graine):
