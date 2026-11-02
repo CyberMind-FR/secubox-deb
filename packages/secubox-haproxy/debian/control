@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-haproxy
 Architecture: all
 Depends: ${misc:Depends},
- secubox-core (>= 1.6.0),
+ secubox-core (>= 1.8.14~),
  python3-uvicorn | python3-pip,
  python3-httpx | python3-pip,
  nginx,

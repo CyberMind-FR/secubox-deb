@@ -1,3 +1,9 @@
+secubox-haproxy (1.12.10-1~trixie1) trixie; urgency=medium
+
+  * Exposition (ref #3401) : tant que le mot de passe par défaut est actif, toute exposition externe (reach wan, Tor, SSL, émancipation) est refusée explicitement (409) et auditée ; la configuration existante n'est pas modifiée, LAN et localhost restent permis.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:31:34 +0100
+
 secubox-haproxy (1.12.9-1~trixie1) trixie; urgency=medium
 
   * Entrée publique : X-SecuBox-Pilotage-Tunnel (écouteur nginx :8472 du tunnel, L2) et
