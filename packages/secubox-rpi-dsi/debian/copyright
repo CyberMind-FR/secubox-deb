@@ -1,0 +1,23 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: secubox-rpi-dsi
+Source: https://secubox.in
+
+Files: *
+Copyright: 2026 CyberMind / Gérald Kerma <devel@cybermind.fr>
+License: LicenseRef-CMSD-1.0
+ Source-Disclosed License — All rights reserved except as expressly granted.
+ See LICENCE-CMSD-1.0.md for terms.
+
+Files: patches/*.patch
+Copyright: The Linux kernel authors (Broadcom, Marek Vasut, Raspberry Pi Ltd,
+ EDT and others; see the headers of the patched files)
+ 2026 CyberMind / Gérald Kerma <devel@cybermind.fr> (adaptations)
+License: GPL-2.0-only
+ These patches modify Linux kernel sources (drivers/gpu/drm/vc4,
+ drivers/gpu/drm/bridge/tc358762.c, drivers/gpu/drm/panel/panel-simple.c,
+ drivers/input/touchscreen/edt-ft5x06.c of Linux v6.12.107), partly taken
+ from the Raspberry Pi kernel; they remain under the GPL version 2 like
+ the files they patch. The modules built from them are GPL-2.0.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in /usr/share/common-licenses/GPL-2.

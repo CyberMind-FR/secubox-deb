@@ -1,0 +1,49 @@
+SPDX-License-Identifier: GPL-2.0-only
+SecuBox #3399 -- panel-simple : entrée raspberrypi,7inch-dsi (800x480), reprise du noyau Raspberry Pi.
+Patch contre Linux v6.12.107 (paquet Debian linux-source-6.12), appliqué en -p1 sans fuzz.
+
+--- a/drivers/gpu/drm/panel/panel-simple.c	2026-11-02 08:04:19.474716681 +0100
++++ b/drivers/gpu/drm/panel/panel-simple.c	2026-11-02 08:04:19.476482859 +0100
+@@ -3713,6 +3713,32 @@
+ 	.connector_type = DRM_MODE_CONNECTOR_LVDS,
+ };
+ 
++/* SecuBox #3399 : écran officiel Raspberry Pi 7" (repris de l'entrée raspberrypi,7inch-dsi du noyau RPi) */
++static const struct drm_display_mode raspberrypi_7inch_mode = {
++	.clock = 30000,
++	.hdisplay = 800,
++	.hsync_start = 800 + 131,
++	.hsync_end = 800 + 131 + 2,
++	.htotal = 800 + 131 + 2 + 45,
++	.vdisplay = 480,
++	.vsync_start = 480 + 7,
++	.vsync_end = 480 + 7 + 2,
++	.vtotal = 480 + 7 + 2 + 22,
++	.flags = DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC,
++};
++
++static const struct panel_desc raspberrypi_7inch = {
++	.modes = &raspberrypi_7inch_mode,
++	.num_modes = 1,
++	.bpc = 8,
++	.size = {
++		.width = 154,
++		.height = 86,
++	},
++	.bus_format = MEDIA_BUS_FMT_RGB888_1X24,
++	.connector_type = DRM_MODE_CONNECTOR_DSI,
++};
++
+ static const struct drm_display_mode powertip_ph800480t013_idf02_mode = {
+ 	.clock = 24750,
+ 	.hdisplay = 800,
+@@ -4966,6 +4992,9 @@
+ 		.compatible = "powertip,ph128800t006-zhc01",
+ 		.data = &powertip_ph128800t006_zhc01,
+ 	}, {
++		.compatible = "raspberrypi,7inch-dsi",
++		.data = &raspberrypi_7inch,
++	}, {
+ 		.compatible = "powertip,ph800480t013-idf02",
+ 		.data = &powertip_ph800480t013_idf02,
+ 	}, {

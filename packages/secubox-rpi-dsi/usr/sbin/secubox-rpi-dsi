@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-rpi-dsi (#3399) — écran officiel RPi 7" DSI sur noyau Debian.
+#
+#   secubox-rpi-dsi is-target          0 si Raspberry Pi 4 / 400 (/proc/device-tree/model)
+#   secubox-rpi-dsi ensure-rootpart    fixe ROOTPART=UUID=<racine> dans /etc/default/raspi-firmware
+#                                      s'il n'y est pas déjà (jamais d'écrasement) ; rc 1 si impossible
+#   secubox-rpi-dsi rootpart-ok        0 si ROOTPART est défini et non vide
+#   secubox-rpi-dsi install-overlay    copie le .dtbo dans /boot/firmware/overlays/ et ajoute
+#                                      dtoverlay=secubox-dsi-7inch à /etc/default/raspi-firmware-custom
+#   secubox-rpi-dsi remove-overlay     retire la ligne et le .dtbo copié (ROOTPART reste en place)
+#   secubox-rpi-dsi update-initramfs   update-initramfs -u -k all, REFUSÉ si ROOTPART est vide
+#
+# Pourquoi ROOTPART : raspi-firmware (appelé par update-initramfs) régénère cmdline.txt avec
+# root=/dev/mmcblk0p2 par défaut, or la SD est mmcblk1 sous noyau Debian sur RPi4 : box morte.
+# config.txt n'est jamais édité directement.
+#
+# Variables de test (SEULEMENT si SECUBOX_TEST=1 et euid != 0) : SECUBOX_RPI_DSI_MODEL,
+# SECUBOX_RPI_DSI_RFCONF, SECUBOX_RPI_DSI_RFCUSTOM, SECUBOX_RPI_DSI_OVERLAYS,
+# SECUBOX_RPI_DSI_ROOTUUID, SECUBOX_RPI_DSI_AUDIT, SECUBOX_RPI_DSI_INITRAMFS.
+set -euo pipefail
+
+say() { echo "secubox-rpi-dsi: $*" >&2; }
+
+MODEL=/proc/device-tree/model
+RFCONF=/etc/default/raspi-firmware
+RFCUSTOM=/etc/default/raspi-firmware-custom
+OVERLAYS=/boot/firmware/overlays
+DTBO=/usr/lib/secubox-rpi-dsi/secubox-dsi-7inch.dtbo
+AUDIT=/var/log/secubox/audit.log
+INITRAMFS=update-initramfs
+ROOTUUID=""
+readonly LIGNE="dtoverlay=secubox-dsi-7inch"
+
+if [[ "${SECUBOX_TEST:-}" == "1" && "$(id -u)" != "0" ]]; then
+    MODEL="${SECUBOX_RPI_DSI_MODEL:-$MODEL}"
+    RFCONF="${SECUBOX_RPI_DSI_RFCONF:-$RFCONF}"
+    RFCUSTOM="${SECUBOX_RPI_DSI_RFCUSTOM:-$RFCUSTOM}"
+    OVERLAYS="${SECUBOX_RPI_DSI_OVERLAYS:-$OVERLAYS}"
+    DTBO="${SECUBOX_RPI_DSI_DTBO:-$DTBO}"
+    AUDIT="${SECUBOX_RPI_DSI_AUDIT:-$AUDIT}"
+    INITRAMFS="${SECUBOX_RPI_DSI_INITRAMFS:-$INITRAMFS}"
+    ROOTUUID="${SECUBOX_RPI_DSI_ROOTUUID:-}"
+fi
+
+audit() {
+    local d
+    d="$(dirname "$AUDIT")"
+    [[ -d "$d" ]] || return 0
+    printf '%s rpi-dsi %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$AUDIT" || say "audit non écrit : $*"
+}
+
+is_target() {
+    [[ -r "$MODEL" ]] || return 1
+    local m
+    m="$(tr -d '\0' < "$MODEL")"
+    [[ "$m" == "Raspberry Pi 4 Model B"* || "$m" == "Raspberry Pi 400"* ]]
+}
+
+# Valeur effective de ROOTPART (dernière affectation non commentée), vide sinon.
+rootpart_valeur() {
+    [[ -r "$RFCONF" ]] || { echo ""; return 0; }
+    sed -n -E 's/^[[:space:]]*ROOTPART=["'\'']?([^"'\'']*)["'\'']?[[:space:]]*$/\1/p' "$RFCONF" | tail -n1
+}
+
+rootpart_ok() { [[ -n "$(rootpart_valeur)" ]]; }
+
+# Écriture atomique : copie temporaire dans le même répertoire puis mv.
+remplacer() {
+    local cible="$1" tmp
+    tmp="$(mktemp "$(dirname "$cible")/.secubox-rpi-dsi.XXXXXX")"
+    cat > "$tmp"
+    if [[ -e "$cible" ]]; then chmod --reference="$cible" "$tmp"; else chmod 0644 "$tmp"; fi
+    mv -f -- "$tmp" "$cible"
+}
+
+ensure_rootpart() {
+    if rootpart_ok; then
+        say "ROOTPART déjà défini ($(rootpart_valeur)) : inchangé"
+        return 0
+    fi
+    local uuid="$ROOTUUID"
+    [[ -n "$uuid" ]] || uuid="$(findmnt -n -o UUID / 2>/dev/null || true)"
+    if [[ ! "$uuid" =~ ^[0-9A-Fa-f-]+$ ]]; then
+        say "UUID de la racine introuvable : ROOTPART non fixé, update-initramfs sera refusé"
+        return 1
+    fi
+    {
+        if [[ -r "$RFCONF" ]]; then
+            # une affectation vide existante est retirée, l'ajout fait foi
+            grep -v -E '^[[:space:]]*ROOTPART=["'\'']?["'\'']?[[:space:]]*$' "$RFCONF" || true
+        fi
+        echo "# SecuBox #3399 : la SD est mmcblk1 sous noyau Debian (RPi4), jamais mmcblk0p2"
+        echo "ROOTPART=UUID=$uuid"
+    } | remplacer "$RFCONF"
+    audit "ROOTPART=UUID=$uuid fixé dans $RFCONF"
+    say "ROOTPART=UUID=$uuid ajouté à $RFCONF"
+}
+
+install_overlay() {
+    [[ -r "$DTBO" ]] || { say "$DTBO absent"; return 1; }
+    if [[ -d "$OVERLAYS" ]]; then
+        install -m 0644 "$DTBO" "$OVERLAYS/secubox-dsi-7inch.dtbo"
+    else
+        say "$OVERLAYS absent : overlay non copié (raspi-firmware installé ?)"
+    fi
+    if [[ ! -e "$RFCUSTOM" ]] || ! grep -q -E "^[[:space:]]*${LIGNE}([,[:space:]]|$)" "$RFCUSTOM"; then
+        { [[ -r "$RFCUSTOM" ]] && cat "$RFCUSTOM"; echo "$LIGNE"; } | remplacer "$RFCUSTOM"
+        audit "$LIGNE ajouté à $RFCUSTOM"
+    fi
+}
+
+remove_overlay() {
+    if [[ -r "$RFCUSTOM" ]] && grep -q -E "^[[:space:]]*${LIGNE}([,[:space:]]|$)" "$RFCUSTOM"; then
+        { grep -v -E "^[[:space:]]*${LIGNE}([,[:space:]]|$)" "$RFCUSTOM" || true; } | remplacer "$RFCUSTOM"
+        audit "$LIGNE retiré de $RFCUSTOM"
+    fi
+    rm -f -- "$OVERLAYS/secubox-dsi-7inch.dtbo"
+}
+
+update_initramfs() {
+    if ! rootpart_ok; then
+        say "ROOTPART vide dans $RFCONF : update-initramfs REFUSÉ (cmdline.txt deviendrait root=/dev/mmcblk0p2)"
+        return 1
+    fi
+    "$INITRAMFS" -u -k all
+}
+
+case "${1:-}" in
+    is-target)        is_target ;;
+    rootpart-ok)      rootpart_ok ;;
+    ensure-rootpart)  ensure_rootpart ;;
+    install-overlay)  install_overlay ;;
+    remove-overlay)   remove_overlay ;;
+    update-initramfs) update_initramfs ;;
+    *) say "usage : $0 is-target|rootpart-ok|ensure-rootpart|install-overlay|remove-overlay|update-initramfs"; exit 2 ;;
+esac

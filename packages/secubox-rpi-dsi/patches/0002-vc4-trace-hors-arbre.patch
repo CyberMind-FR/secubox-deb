@@ -1,0 +1,22 @@
+SPDX-License-Identifier: GPL-2.0-only
+SecuBox #3399 -- vc4 : construction hors arbre (DKMS) de vc4_trace_points (TRACE_INCLUDE_PATH . et -I$(src)).
+Patch contre Linux v6.12.107 (paquet Debian linux-source-6.12), appliqué en -p1 sans fuzz.
+
+--- a/drivers/gpu/drm/vc4/vc4_trace.h	2026-11-02 08:04:19.426443243 +0100
++++ b/drivers/gpu/drm/vc4/vc4_trace.h	2026-11-02 08:04:19.427922322 +0100
+@@ -151,5 +151,5 @@
+ 
+ /* This part must be outside protection */
+ #undef TRACE_INCLUDE_PATH
+-#define TRACE_INCLUDE_PATH ../../drivers/gpu/drm/vc4
++#define TRACE_INCLUDE_PATH .
+ #include <trace/define_trace.h>
+--- a/drivers/gpu/drm/vc4/Makefile	2026-11-02 08:04:19.440597137 +0100
++++ b/drivers/gpu/drm/vc4/Makefile	2026-11-02 08:04:19.442408975 +0100
+@@ -35,3 +35,6 @@
+ vc4-$(CONFIG_DEBUG_FS) += vc4_debugfs.o
+ 
+ obj-$(CONFIG_DRM_VC4)  += vc4.o
++
++# SecuBox #3399 : construction hors arbre (DKMS), vc4_trace.h trouve dans $(src)
++CFLAGS_vc4_trace_points.o := -I$(src)

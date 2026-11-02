@@ -1,0 +1,21 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# secubox-rpi-dsi (#3399) : à la désinstallation seulement (pas à la mise à jour),
+# retire les modules DKMS, l'overlay et la ligne raspi-firmware-custom. ROOTPART reste.
+set -e
+if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+    VER=$(dpkg-query -W -f='${Version}' secubox-rpi-dsi 2>/dev/null || true)
+    VER=${VER#*:}; VER=${VER%-*}
+    if [ -n "$VER" ] && command -v dkms >/dev/null 2>&1; then
+        dkms remove -m secubox-rpi-dsi -v "$VER" --all >/dev/null 2>&1 || true
+    fi
+    if [ -x /usr/sbin/secubox-rpi-dsi ]; then
+        /usr/sbin/secubox-rpi-dsi remove-overlay || true
+        if /usr/sbin/secubox-rpi-dsi is-target; then
+            /usr/sbin/secubox-rpi-dsi update-initramfs || echo "secubox-rpi-dsi: initramfs non régénéré (ROOTPART vide ?)" >&2
+        fi
+    fi
+fi
+#DEBHELPER#
+exit 0
