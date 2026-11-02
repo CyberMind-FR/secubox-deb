@@ -1,3 +1,9 @@
+secubox-live (0.1.6-1~trixie1) trixie; urgency=medium
+
+  * live.secubox.in (#3408) : CPU des noeuds en couleur selon la charge (vert < 50 %, ambre < 80 %, rouge au-dela) et pourcentages arrondis (CPU, memoire) ; carte « Visites et attaques en temps reel » juste sous les 5 indicateurs, avant « Comprendre ces chiffres » ; bloc « Comprendre ces chiffres » en double (meme id) retire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 09:10:15 +0100
+
 secubox-live (0.1.5-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuterie étalée (RandomizedDelaySec, FixedRandomDelay,
