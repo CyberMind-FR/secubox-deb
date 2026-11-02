@@ -1,3 +1,9 @@
+secubox-haproxy (1.12.12-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401, passe 2 (ref #3401) : l'exposition au maillage redevient permise (seule l'exposition publique est refusée) ; contournement WAF : l'administrateur est écrit dans l'audit du refus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 09:45:46 +0100
+
 secubox-haproxy (1.12.11-1~trixie1) trixie; urgency=medium
 
   * Relecture #3401 (ref #3401) : garde commune d'exposition (fail-closed) sur POST /vhost, /certificates/acme, /vhost/{name}/waf-bypass (contournement seulement), composant vhost (POST /vhost, /certificate/issue) et exposure (reach wan, mesh, Tor, SSL, émancipation). Les expositions déjà en place ne sont pas modifiées.

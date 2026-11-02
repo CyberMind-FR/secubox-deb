@@ -45,8 +45,9 @@ def test_tor_refuse(c):
     assert c.post("/exposure/z.example", json={"reach": "lan", "mesh": False, "tor": True}).status_code == 409
 
 
-def test_mesh_refuse(c):
-    assert c.post("/exposure/z.example", json={"reach": "lan", "mesh": True, "tor": False}).status_code == 409
+def test_mesh_permis(c):
+    # Arbitrage : « le LAN et les mesh restent secure » — seule l'exposition PUBLIQUE est refusée.
+    assert c.post("/exposure/z.example", json={"reach": "lan", "mesh": True, "tor": False}).status_code == 200
 
 
 def test_etat_inconnu_refuse(c, tmp_path, monkeypatch):

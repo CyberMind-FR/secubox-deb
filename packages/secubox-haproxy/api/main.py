@@ -923,10 +923,10 @@ class WAFBypassRequest(BaseModel):
 
 
 @router.post("/vhost/{name}/waf-bypass", dependencies=[Depends(require_jwt)])
-async def set_vhost_waf_bypass(name: str, req: WAFBypassRequest, request: Request):
+async def set_vhost_waf_bypass(name: str, req: WAFBypassRequest, request: Request, user: dict = Depends(require_jwt)):
     """Set WAF bypass for a specific vhost."""
     if req.bypass:   # #3401 : contourner le WAF ouvre ; le remettre reste toujours permis
-        await exiger_mot_de_passe_change(request)
+        await exiger_mot_de_passe_change(request, user)
     log.info("Set WAF bypass for %s: %s", name, req.bypass)
     await sync_waf_routes()
     return {"success": True, "name": name, "waf_bypass": req.bypass}
