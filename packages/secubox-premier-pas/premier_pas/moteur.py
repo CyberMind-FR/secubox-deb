@@ -177,20 +177,15 @@ def _pose_empreinte_admin(empreinte: str) -> None:
 
 
 def _garde_mot_de_passe_defaut() -> None:
-    """« Plus tard » (#3401) : l'empreinte reste celle du premier démarrage, le compte reste « à changer ». Les gardes
-    (connexion web LAN seule, SSH par mot de passe refusé, exposition refusée, bandeau rouge) lisent l'indicateur
-    unique `secubox_core.mot_de_passe_defaut`. Le marqueur « Plus tard » est ce qu'auth exige pour ouvrir une session
-    directe avec le défaut (sinon : changement obligatoire)."""
+    """« Plus tard » (#3401) : l'empreinte reste celle du premier démarrage, le compte reste « à changer ». Rien d'autre
+    n'est persisté : à chaque connexion, le changement est redemandé, et l'écran de changement offre à nouveau
+    « Plus tard » (admin, LAN/kiosque/maillage, audité). Les gardes lisent `secubox_core.mot_de_passe_defaut`."""
     sys.path.insert(0, "/usr/lib/secubox/users")
     try:
         from api import engine  # noqa: PLC0415
     except ImportError as e:
         raise RuntimeError(f"moteur des comptes introuvable (paquet secubox-auth absent ?) : {e}") from None
     from secubox_core import mot_de_passe_defaut  # noqa: PLC0415
-    marqueur = mot_de_passe_defaut.marqueur_plus_tard()
-    marqueur.parent.mkdir(parents=True, exist_ok=True)
-    marqueur.write_text("« Plus tard » choisi dans premier-pas (#3401)\n")
-    os.chmod(marqueur, 0o644)
     e = engine.Engine(users_path=USERS_FILE)
     doc = e._load()
     u = e._find(doc, "admin")
@@ -236,7 +231,7 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
     ]
     mdp = admin.get("mot_de_passe")
     if mdp == P.PLUS_TARD:
-        out.append(Action("admin", "mot de passe par défaut conservé — à changer (connexion LAN seule, ni SSH par mot de passe "
+        out.append(Action("admin", "mot de passe par défaut conservé — redemandé à chaque connexion (LAN ou maillage seuls, ni SSH par mot de passe "
                                    "ni exposition externe tant qu'il est actif)", fn=_garde_mot_de_passe_defaut))
     elif mdp and mdp != "demander":
         out.append(Action("admin", "mot de passe admin (empreinte argon2)", fn=lambda: _pose_empreinte_admin(mdp)))

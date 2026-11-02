@@ -200,7 +200,7 @@ function rendEtape() {
     <div class="nav"><button type="button" class="b" id="prec" ${cur ? "" : "disabled"}>Retour</button>
     ${pg.plus_tard ? `<button type="button" class="b" id="plustard">Plus tard</button>` : ""}
     <button type="button" class="b prim" id="suiv">Continuer</button></div>
-    ${pg.plus_tard ? `<p class="note" id="plustard-note">« Plus tard » garde le mot de passe par défaut « secubox ». Tant qu'il est actif : connexion depuis le réseau local seulement, SSH par mot de passe refusé, aucune exposition sur Internet, et un bandeau rouge vous le rappelle. Vous le changerez depuis l'administration (Utilisateurs).</p>` : ""}`;
+    ${pg.plus_tard ? `<p class="note" id="plustard-note">« Plus tard » garde le mot de passe par défaut « secubox ». Tant qu'il est actif : le changement vous sera redemandé à chaque connexion (avec à nouveau « Plus tard »), connexion depuis le réseau local ou le maillage seulement, SSH par mot de passe refusé, aucune exposition sur Internet, et un bandeau rouge vous le rappelle. Vous le changerez depuis l'administration (Utilisateurs).</p>` : ""}`;
   $("#ecran").innerHTML = h;
   document.querySelectorAll(".opt").forEach(b => b.onclick = () => {
     brouillon[pg.cle] = b.dataset.v;
