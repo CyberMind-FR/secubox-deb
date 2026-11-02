@@ -70,8 +70,8 @@ Usage: sudo bash build-rpi-usb.sh [OPTIONS]
   --kiosk            Include GUI kiosk mode packages
   --rpi-dsi          Add the optional secubox-rpi-dsi package (official 7" DSI
                      display, RPi4/400 only; also INCLUDE_RPI_DSI=1). Inert in
-                     the chroot: run `dpkg-reconfigure secubox-rpi-dsi` once on
-                     the Pi to build the DKMS modules and enable the overlay.
+                     the chroot; secubox-rpi-dsi-boot.service builds the DKMS
+                     modules and enables the overlay at first boot.
   --no-compress      Skip gzip compression
   --help             Show this help
 
@@ -813,7 +813,7 @@ if [[ "${INCLUDE_RPI_DSI}" == "1" ]]; then
   _dsi="$(find "${REPO_DIR}/output/debs" "${REPO_DIR}/cache/repo/pool" -name 'secubox-rpi-dsi_*_arm64.deb' 2>/dev/null | sort -V | tail -n1 || true)"
   [[ -n "${_dsi}" ]] || err "--rpi-dsi : secubox-rpi-dsi_*_arm64.deb introuvable (output/debs ou cache/repo/pool)"
   cp "${_dsi}" "${ROOTFS}/tmp/secubox-debs/"
-  log "Paquet optionnel ajouté : $(basename "${_dsi}") (à activer sur la Pi : dpkg-reconfigure secubox-rpi-dsi)"
+  log "Paquet optionnel ajouté : $(basename "${_dsi}") (configuré au premier démarrage par secubox-rpi-dsi-boot.service)"
 fi
 
 # Install collected packages

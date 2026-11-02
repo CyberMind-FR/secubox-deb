@@ -6,26 +6,33 @@
 
 # SecuBox-Deb :: secubox-rpi-dsi (#3399) — écran officiel RPi 7" DSI sur noyau Debian.
 #
-#   secubox-rpi-dsi is-target          0 si Raspberry Pi 4 / 400 (/proc/device-tree/model)
-#   secubox-rpi-dsi ensure-rootpart    fixe ROOTPART=UUID=<racine> dans /etc/default/raspi-firmware
-#                                      s'il n'y est pas déjà (jamais d'écrasement) ; rc 1 si impossible
-#   secubox-rpi-dsi rootpart-ok        0 si ROOTPART est défini et non vide
-#   secubox-rpi-dsi install-overlay    copie le .dtbo dans /boot/firmware/overlays/ et ajoute
-#                                      dtoverlay=secubox-dsi-7inch à /etc/default/raspi-firmware-custom
-#   secubox-rpi-dsi remove-overlay     retire la ligne et le .dtbo copié (ROOTPART reste en place)
-#   secubox-rpi-dsi update-initramfs   update-initramfs -u -k all, REFUSÉ si ROOTPART est vide
+#   is-target          0 si Raspberry Pi 4 / 400 (/proc/device-tree/model)
+#   rootpart-ok        0 si ROOTPART est défini ET sûr (UUID=, PARTUUID= ou chemin existant ;
+#                      jamais /dev/mmcblk0p* sur RPi4/400)
+#   ensure-rootpart    fixe ROOTPART=UUID=<racine> s'il manque ou n'est pas sûr (une valeur sûre
+#                      n'est jamais écrasée ; une valeur non sûre est mise en commentaire) ; rc 1 sinon
+#   install-overlay    .dtbo dans /boot/firmware/overlays/ + dtoverlay=secubox-dsi-7inch dans
+#                      /etc/default/raspi-firmware-custom
+#   remove-overlay     retire la ligne et le .dtbo (ROOTPART reste en place)
+#   dkms-sync [ver]    retire les autres versions DKMS, ajoute <ver> et l'installe pour chaque noyau
+#   dkms-remove [ver]  dkms remove --all
+#   update-initramfs   update-initramfs -u -k all, REFUSÉ si ROOTPART n'est pas sûr
+#   configure          tout : ROOTPART, overlay, DKMS, initramfs (inerte hors RPi4/400 et en chroot)
+#   boot-check         au démarrage : configure seulement si les modules manquent pour le noyau courant
 #
 # Pourquoi ROOTPART : raspi-firmware (appelé par update-initramfs) régénère cmdline.txt avec
 # root=/dev/mmcblk0p2 par défaut, or la SD est mmcblk1 sous noyau Debian sur RPi4 : box morte.
 # config.txt n'est jamais édité directement.
 #
 # Variables de test (SEULEMENT si SECUBOX_TEST=1 et euid != 0) : SECUBOX_RPI_DSI_MODEL,
-# SECUBOX_RPI_DSI_RFCONF, SECUBOX_RPI_DSI_RFCUSTOM, SECUBOX_RPI_DSI_OVERLAYS,
-# SECUBOX_RPI_DSI_ROOTUUID, SECUBOX_RPI_DSI_AUDIT, SECUBOX_RPI_DSI_INITRAMFS.
+# SECUBOX_RPI_DSI_RFCONF, SECUBOX_RPI_DSI_RFCUSTOM, SECUBOX_RPI_DSI_OVERLAYS, SECUBOX_RPI_DSI_DTBO,
+# SECUBOX_RPI_DSI_ROOTUUID, SECUBOX_RPI_DSI_AUDIT, SECUBOX_RPI_DSI_INITRAMFS, SECUBOX_RPI_DSI_DKMS,
+# SECUBOX_RPI_DSI_MODULES, SECUBOX_RPI_DSI_KVER, SECUBOX_RPI_DSI_VERSION, SECUBOX_RPI_DSI_CHROOT.
 set -euo pipefail
 
 say() { echo "secubox-rpi-dsi: $*" >&2; }
 
+readonly NOM="secubox-rpi-dsi"
 MODEL=/proc/device-tree/model
 RFCONF=/etc/default/raspi-firmware
 RFCUSTOM=/etc/default/raspi-firmware-custom
@@ -33,8 +40,14 @@ OVERLAYS=/boot/firmware/overlays
 DTBO=/usr/lib/secubox-rpi-dsi/secubox-dsi-7inch.dtbo
 AUDIT=/var/log/secubox/audit.log
 INITRAMFS=update-initramfs
+DKMS=dkms
+MODULES=/lib/modules
+KVER="$(uname -r)"
+VERSION=""
+CHROOT=""
 ROOTUUID=""
 readonly LIGNE="dtoverlay=secubox-dsi-7inch"
+readonly RE_LIGNE="^[[:space:]]*${LIGNE}([,[:space:]]|$)"
 
 if [[ "${SECUBOX_TEST:-}" == "1" && "$(id -u)" != "0" ]]; then
     MODEL="${SECUBOX_RPI_DSI_MODEL:-$MODEL}"
@@ -44,14 +57,35 @@ if [[ "${SECUBOX_TEST:-}" == "1" && "$(id -u)" != "0" ]]; then
     DTBO="${SECUBOX_RPI_DSI_DTBO:-$DTBO}"
     AUDIT="${SECUBOX_RPI_DSI_AUDIT:-$AUDIT}"
     INITRAMFS="${SECUBOX_RPI_DSI_INITRAMFS:-$INITRAMFS}"
+    DKMS="${SECUBOX_RPI_DSI_DKMS:-$DKMS}"
+    MODULES="${SECUBOX_RPI_DSI_MODULES:-$MODULES}"
+    KVER="${SECUBOX_RPI_DSI_KVER:-$KVER}"
+    VERSION="${SECUBOX_RPI_DSI_VERSION:-}"
+    CHROOT="${SECUBOX_RPI_DSI_CHROOT:-}"
     ROOTUUID="${SECUBOX_RPI_DSI_ROOTUUID:-}"
 fi
 
+TMPF=""
+trap '[[ -n "$TMPF" ]] && rm -f -- "$TMPF"' EXIT
+
+# Ajout au journal d'audit SANS suivre de lien symbolique (O_NOFOLLOW) ; jamais bloquant.
 audit() {
-    local d
-    d="$(dirname "$AUDIT")"
-    [[ -d "$d" ]] || return 0
-    printf '%s rpi-dsi %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$AUDIT" || say "audit non écrit : $*"
+    [[ -d "$(dirname "$AUDIT")" ]] || return 0
+    local ligne
+    ligne="$(date -u +%Y-%m-%dT%H:%M:%SZ) rpi-dsi $*"
+    python3 -I -c '
+import os, sys
+fd = os.open(sys.argv[1], os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
+try:
+    os.write(fd, (sys.argv[2] + "\n").encode())
+finally:
+    os.close(fd)
+' "$AUDIT" "$ligne" 2>/dev/null || say "audit non écrit (lien refusé ou erreur) : $*"
+}
+
+is_chroot() {
+    [[ -n "$CHROOT" ]] && { [[ "$CHROOT" == 1 ]]; return; }
+    command -v ischroot >/dev/null 2>&1 && ischroot
 }
 
 is_target() {
@@ -67,20 +101,32 @@ rootpart_valeur() {
     sed -n -E 's/^[[:space:]]*ROOTPART=["'\'']?([^"'\'']*)["'\'']?[[:space:]]*$/\1/p' "$RFCONF" | tail -n1
 }
 
-rootpart_ok() { [[ -n "$(rootpart_valeur)" ]]; }
+valeur_sure() {
+    local v="$1"
+    [[ -n "$v" ]] || return 1
+    if [[ "$v" == /dev/mmcblk0p* ]] && is_target; then return 1; fi
+    [[ "$v" =~ ^(UUID|PARTUUID)=[0-9A-Fa-f-]+$ ]] && return 0
+    [[ "$v" == /* && -e "$v" ]]
+}
 
-# Écriture atomique : copie temporaire dans le même répertoire puis mv.
+rootpart_ok() { valeur_sure "$(rootpart_valeur)"; }
+
+# Écriture atomique : temporaire dans le même répertoire, sync, puis mv ; nettoyé en cas d'échec.
 remplacer() {
-    local cible="$1" tmp
-    tmp="$(mktemp "$(dirname "$cible")/.secubox-rpi-dsi.XXXXXX")"
-    cat > "$tmp"
-    if [[ -e "$cible" ]]; then chmod --reference="$cible" "$tmp"; else chmod 0644 "$tmp"; fi
-    mv -f -- "$tmp" "$cible"
+    local cible="$1"
+    TMPF="$(mktemp "$(dirname "$cible")/.secubox-rpi-dsi.XXXXXX")"
+    cat > "$TMPF"
+    if [[ -e "$cible" ]]; then chmod --reference="$cible" "$TMPF"; else chmod 0644 "$TMPF"; fi
+    sync -- "$TMPF"
+    mv -f -- "$TMPF" "$cible"
+    TMPF=""
 }
 
 ensure_rootpart() {
-    if rootpart_ok; then
-        say "ROOTPART déjà défini ($(rootpart_valeur)) : inchangé"
+    local actuelle
+    actuelle="$(rootpart_valeur)"
+    if valeur_sure "$actuelle"; then
+        say "ROOTPART déjà défini et sûr ($actuelle) : inchangé"
         return 0
     fi
     local uuid="$ROOTUUID"
@@ -91,43 +137,135 @@ ensure_rootpart() {
     fi
     {
         if [[ -r "$RFCONF" ]]; then
-            # une affectation vide existante est retirée, l'ajout fait foi
-            grep -v -E '^[[:space:]]*ROOTPART=["'\'']?["'\'']?[[:space:]]*$' "$RFCONF" || true
+            # toute affectation non sûre (vide, /dev/mmcblk0p*) est mise en commentaire
+            sed -E 's/^([[:space:]]*ROOTPART=.*)$/# secubox-rpi-dsi (non sûr) : \1/' "$RFCONF"
         fi
         echo "# SecuBox #3399 : la SD est mmcblk1 sous noyau Debian (RPi4), jamais mmcblk0p2"
         echo "ROOTPART=UUID=$uuid"
     } | remplacer "$RFCONF"
-    audit "ROOTPART=UUID=$uuid fixé dans $RFCONF"
-    say "ROOTPART=UUID=$uuid ajouté à $RFCONF"
+    audit "ROOTPART=UUID=$uuid fixé dans $RFCONF (ancienne valeur : '${actuelle}')"
+    say "ROOTPART=UUID=$uuid fixé dans $RFCONF"
 }
 
 install_overlay() {
     [[ -r "$DTBO" ]] || { say "$DTBO absent"; return 1; }
     if [[ -d "$OVERLAYS" ]]; then
-        install -m 0644 "$DTBO" "$OVERLAYS/secubox-dsi-7inch.dtbo"
+        remplacer "$OVERLAYS/secubox-dsi-7inch.dtbo" < "$DTBO"
+        chmod 0644 "$OVERLAYS/secubox-dsi-7inch.dtbo"
     else
         say "$OVERLAYS absent : overlay non copié (raspi-firmware installé ?)"
     fi
-    if [[ ! -e "$RFCUSTOM" ]] || ! grep -q -E "^[[:space:]]*${LIGNE}([,[:space:]]|$)" "$RFCUSTOM"; then
+    if [[ ! -e "$RFCUSTOM" ]] || ! grep -q -E "$RE_LIGNE" "$RFCUSTOM"; then
         { [[ -r "$RFCUSTOM" ]] && cat "$RFCUSTOM"; echo "$LIGNE"; } | remplacer "$RFCUSTOM"
         audit "$LIGNE ajouté à $RFCUSTOM"
     fi
 }
 
 remove_overlay() {
-    if [[ -r "$RFCUSTOM" ]] && grep -q -E "^[[:space:]]*${LIGNE}([,[:space:]]|$)" "$RFCUSTOM"; then
-        { grep -v -E "^[[:space:]]*${LIGNE}([,[:space:]]|$)" "$RFCUSTOM" || true; } | remplacer "$RFCUSTOM"
+    if [[ -r "$RFCUSTOM" ]] && grep -q -E "$RE_LIGNE" "$RFCUSTOM"; then
+        { grep -v -E "$RE_LIGNE" "$RFCUSTOM" || true; } | remplacer "$RFCUSTOM"
         audit "$LIGNE retiré de $RFCUSTOM"
     fi
     rm -f -- "$OVERLAYS/secubox-dsi-7inch.dtbo"
 }
 
+version_paquet() {
+    local v="$VERSION"
+    [[ -n "$v" ]] || v="$(dpkg-query -W -f='${Version}' "$NOM" 2>/dev/null || true)"
+    v="${v#*:}"; echo "${v%-*}"
+}
+
+# Versions enregistrées dans DKMS (« secubox-rpi-dsi/0.1.0, ... » ou « secubox-rpi-dsi/0.1.0: added »).
+versions_dkms() {
+    "$DKMS" status -m "$NOM" 2>/dev/null | sed -n -E "s|^${NOM}/([^,:[:space:]]+).*|\\1|p" | sort -u
+}
+
+dkms_remove() {
+    local v="${1:-}"
+    [[ -n "$v" ]] || return 0
+    if "$DKMS" remove -m "$NOM" -v "$v" --all; then
+        audit "dkms remove $NOM/$v --all"
+    else
+        say "dkms remove $NOM/$v en échec"
+    fi
+}
+
+dkms_sync() {
+    local ver="${1:-$(version_paquet)}" v k rc=0
+    [[ -n "$ver" ]] || { say "version du paquet inconnue"; return 1; }
+    # Montée de version : une seule version enregistrée.
+    while read -r v; do
+        [[ -n "$v" && "$v" != "$ver" ]] && dkms_remove "$v"
+    done < <(versions_dkms)
+    if ! versions_dkms | grep -qx -- "$ver"; then
+        "$DKMS" add -m "$NOM" -v "$ver" || { say "dkms add $NOM/$ver en échec"; return 1; }
+    fi
+    for k in "$MODULES"/*; do
+        k="${k##*/}"
+        [[ -e "$MODULES/$k/build" ]] || continue
+        if "$DKMS" install -m "$NOM" -v "$ver" -k "$k"; then
+            audit "dkms install $NOM/$ver pour $k"
+        else
+            audit "dkms install $NOM/$ver pour $k : ÉCHEC (aucun module partiel)"
+            say "DKMS en échec pour $k (aucun module partiel installé)"
+            rc=1
+        fi
+    done
+    return "$rc"
+}
+
 update_initramfs() {
     if ! rootpart_ok; then
-        say "ROOTPART vide dans $RFCONF : update-initramfs REFUSÉ (cmdline.txt deviendrait root=/dev/mmcblk0p2)"
+        say "ROOTPART absent ou non sûr dans $RFCONF : update-initramfs REFUSÉ (cmdline.txt deviendrait root=/dev/mmcblk0p2)"
+        audit "update-initramfs refusé : ROOTPART non sûr"
         return 1
     fi
-    "$INITRAMFS" -u -k all
+    if "$INITRAMFS" -u -k all; then
+        audit "update-initramfs -u -k all"
+    else
+        audit "update-initramfs -u -k all : ÉCHEC"
+        return 1
+    fi
+}
+
+configure() {
+    if is_chroot; then
+        say "chroot détecté : rien n'est activé (l'unité secubox-rpi-dsi-boot le fera au premier démarrage)"
+        return 0
+    fi
+    if ! is_target; then
+        say "matériel autre que Raspberry Pi 4/400 : rien n'est activé (paquet inerte)"
+        return 0
+    fi
+    local rootok=1 rc=0
+    ensure_rootpart || rootok=0
+    install_overlay || say "overlay non installé"
+    dkms_sync || rc=1
+    if [[ $rootok == 1 ]]; then
+        update_initramfs || rc=1
+    else
+        say "ROOTPART indéterminable : update-initramfs NON lancé (voir README, « Déblocage »)"
+        rc=1
+    fi
+    [[ $rc == 0 ]] && say "écran 7\" prêt au prochain redémarrage."
+    return "$rc"
+}
+
+modules_presents() {
+    local d="$MODULES/$KVER/updates/dkms" n
+    for n in vc4 tc358762 panel-simple edt-ft5x06; do
+        compgen -G "$d/$n.ko*" >/dev/null || return 1
+    done
+}
+
+boot_check() {
+    is_target || { say "matériel autre que Raspberry Pi 4/400 : rien à faire"; return 0; }
+    if modules_presents && rootpart_ok && [[ -r "$RFCUSTOM" ]] && grep -q -E "$RE_LIGNE" "$RFCUSTOM"; then
+        say "modules DKMS présents pour $KVER : rien à faire"
+        return 0
+    fi
+    say "configuration manquante pour $KVER : configure"
+    configure
 }
 
 case "${1:-}" in
@@ -136,6 +274,10 @@ case "${1:-}" in
     ensure-rootpart)  ensure_rootpart ;;
     install-overlay)  install_overlay ;;
     remove-overlay)   remove_overlay ;;
+    dkms-sync)        dkms_sync "${2:-}" ;;
+    dkms-remove)      dkms_remove "${2:-$(version_paquet)}" ;;
     update-initramfs) update_initramfs ;;
-    *) say "usage : $0 is-target|rootpart-ok|ensure-rootpart|install-overlay|remove-overlay|update-initramfs"; exit 2 ;;
+    configure)        configure ;;
+    boot-check)       boot_check ;;
+    *) say "usage : $0 is-target|rootpart-ok|ensure-rootpart|install-overlay|remove-overlay|dkms-sync [ver]|dkms-remove [ver]|update-initramfs|configure|boot-check"; exit 2 ;;
 esac

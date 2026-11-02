@@ -33,11 +33,11 @@ URL = "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/{}
 pytestmark = pytest.mark.skipif(os.geteuid() == 0, reason="variables de test refusées sous root")
 
 
-def run(args, env=None, check=False):
+def run(args, env=None, check=False, cwd=None):
     e = dict(os.environ, SECUBOX_TEST="1")
     e.update(env or {})
     return subprocess.run([str(a) for a in args], env=e, capture_output=True, text=True,
-                          timeout=120, check=check)
+                          timeout=120, check=check, cwd=cwd)
 
 
 # --- sources v6.12.107 (réseau ; sinon skip) ------------------------------------------
@@ -81,7 +81,7 @@ def test_prepare_extrait_et_patche(tarball, tmp_path):
     dest = tmp_path / "src"
     r = run([BUILD, "prepare", "6.12.107+deb13-arm64", dest],
             env={"SECUBOX_RPI_DSI_TARBALL": str(tarball), "SECUBOX_RPI_DSI_SRCVER": "6.12.107-1",
-                 "SECUBOX_RPI_DSI_PATCHES": str(PATCHES)})
+                 "SECUBOX_RPI_DSI_PATCHES": str(PATCHES)}, cwd=tmp_path)
     assert r.returncode == 0, r.stderr
     assert "raspberrypi,7inch-dsi" in (dest / KFILES[4]).read_text()
     assert (dest / "drivers/gpu/drm/vc4/vc4_drv.c").exists() is False  # seuls les fichiers fournis
@@ -91,7 +91,7 @@ def test_version_differente_refusee(tarball, tmp_path):
     dest = tmp_path / "src"
     r = run([BUILD, "prepare", "6.12.110+deb13-arm64", dest],
             env={"SECUBOX_RPI_DSI_TARBALL": str(tarball), "SECUBOX_RPI_DSI_SRCVER": "6.12.107-1",
-                 "SECUBOX_RPI_DSI_PATCHES": str(PATCHES)})
+                 "SECUBOX_RPI_DSI_PATCHES": str(PATCHES)}, cwd=tmp_path)
     assert r.returncode == 1
     assert "ne correspond pas" in r.stderr
     assert not dest.exists()
@@ -105,7 +105,7 @@ def test_patch_refuse_aucune_source_laissee(tarball, tmp_path):
     dest = tmp_path / "src"
     r = run([BUILD, "prepare", "6.12.107+deb13-arm64", dest],
             env={"SECUBOX_RPI_DSI_TARBALL": str(tarball), "SECUBOX_RPI_DSI_SRCVER": "6.12.107-1",
-                 "SECUBOX_RPI_DSI_PATCHES": str(mauvais)})
+                 "SECUBOX_RPI_DSI_PATCHES": str(mauvais)}, cwd=tmp_path)
     assert r.returncode == 1
     assert "refusé" in r.stderr
     assert not dest.exists()
@@ -113,8 +113,22 @@ def test_patch_refuse_aucune_source_laissee(tarball, tmp_path):
 
 def test_source_absente_refusee(tmp_path):
     r = run([BUILD, "prepare", "6.12.107+deb13-arm64", tmp_path / "s"],
-            env={"SECUBOX_RPI_DSI_TARBALL": str(tmp_path / "absent.tar.xz"), "SECUBOX_RPI_DSI_SRCVER": "6.12.107-1"})
+            env={"SECUBOX_RPI_DSI_TARBALL": str(tmp_path / "absent.tar.xz"), "SECUBOX_RPI_DSI_SRCVER": "6.12.107-1"}, cwd=tmp_path)
     assert r.returncode == 1 and "absent" in r.stderr
+
+
+def test_destination_hors_travail_refusee(tmp_path):
+    (tmp_path / "w").mkdir()
+    r = run([BUILD, "prepare", "6.12.107+deb13-arm64", "/tmp"], cwd=tmp_path / "w")
+    assert r.returncode == 1 and "hors du répertoire" in r.stderr
+
+
+def test_revision_debian_differente_refusee(tarball, tmp_path):
+    r = run([BUILD, "prepare", "6.12.107+deb13-arm64", tmp_path / "src"],
+            env={"SECUBOX_RPI_DSI_TARBALL": str(tarball), "SECUBOX_RPI_DSI_SRCVER": "6.12.107-1",
+                 "SECUBOX_RPI_DSI_IMGVER": "6.12.107-2", "SECUBOX_RPI_DSI_PATCHES": str(PATCHES)},
+            cwd=tmp_path)
+    assert r.returncode == 1 and "linux-image" in r.stderr
 
 
 # --- ROOTPART / overlay / cible -------------------------------------------------------
@@ -168,9 +182,9 @@ def test_rootpart_ajoute_si_absent(box):
 
 def test_rootpart_existant_jamais_ecrase(box):
     d, env = box
-    (d / "raspi-firmware").write_text('ROOTPART="/dev/sda2"\n')
+    (d / "raspi-firmware").write_text('ROOTPART="/dev/null"\n')
     assert run([HELPER, "ensure-rootpart"], env).returncode == 0
-    assert (d / "raspi-firmware").read_text() == 'ROOTPART="/dev/sda2"\n'
+    assert (d / "raspi-firmware").read_text() == 'ROOTPART="/dev/null"\n'
 
 
 def test_rootpart_vide_remplace(box):
@@ -218,7 +232,7 @@ def test_tactile_fragment_separe_desactivable():
     assert "edt,edt-ft5506" in frag4 and "touchscreen-inverted-x" in frag4
     assert "ts@38" not in t.split("fragment@4 {")[0]
     assert "vcc-supply" not in frag4 and "reset-gpios" not in frag4
-    assert re.search(r'touch\s*=\s*<0>,"\+4";', t)
+    assert re.search(r'touch\s*=\s*<0>,"=4";', t)
 
 
 def test_dkms_conf_quatre_modules_autoinstall():
@@ -241,8 +255,183 @@ def test_debian_conforme():
     assert "/boot/firmware/config.txt" not in (deb / "postinst").read_text()
 
 
-def test_postinst_hors_cible_inerte():
+def test_postinst_passe_par_le_helper():
     p = (PKG / "debian" / "postinst").read_text()
-    i_cible = p.index("is-target")
-    assert p.index("ensure-rootpart") > i_cible and p.index("dkms add") > i_cible
-    assert p.index("\"$H\" ensure-rootpart") < p.index("\"$H\" update-initramfs")
+    assert '"$H" configure' in p and "configure|triggered)" in p
+    h = HELPER.read_text()
+    corps = h[h.index("configure() {"):h.index("modules_presents()")]
+    assert corps.index("is_chroot") < corps.index("is_target") < corps.index("ensure_rootpart")
+    assert corps.index("ensure_rootpart") < corps.index("update_initramfs")
+
+# --- passe de correction ---------------------------------------------------------------
+
+FAUX_MAKE = """#!/bin/sh
+# faux make : crée <nom>.ko pour chaque M=
+for a in "$@"; do case "$a" in M=*) d="${a#M=}"; n=$(basename "$d"); : > "$d/$n.ko";; esac; done
+exit 0
+"""
+
+
+def test_construction_complete_faux_make(tarball, tmp_path):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "make").write_text(FAUX_MAKE)
+    (bindir / "make").chmod(0o755)
+    work = tmp_path / "dkmsbuild"
+    work.mkdir()
+    e = dict(os.environ, SECUBOX_TEST="1", PATH=f"{bindir}:{os.environ['PATH']}",
+             SECUBOX_RPI_DSI_TARBALL=str(tarball), SECUBOX_RPI_DSI_SRCVER="6.12.107-1",
+             SECUBOX_RPI_DSI_PATCHES=str(PATCHES))
+    r = subprocess.run(["bash", str(BUILD), "build", "6.12.107+deb13-arm64", "/nonexistent-kdir"],
+                       cwd=work, env=e, capture_output=True, text=True, timeout=120, check=False)
+    assert r.returncode == 0, r.stderr
+    for n in ("vc4", "tc358762", "panel-simple", "edt-ft5x06"):
+        assert (work / "build" / n / f"{n}.ko").exists(), n
+
+
+FAUX_DKMS = """#!/bin/sh
+# faux dkms : état dans $FAUX_DKMS_ETAT (une version par ligne), journal dans $FAUX_DKMS_LOG
+echo "$*" >> "$FAUX_DKMS_LOG"
+case "$1" in
+  status) while read -r v; do echo "secubox-rpi-dsi/$v: added"; done < "$FAUX_DKMS_ETAT" ;;
+  add) echo "$5" >> "$FAUX_DKMS_ETAT" ;;
+  remove) grep -vx "$5" "$FAUX_DKMS_ETAT" > "$FAUX_DKMS_ETAT.n" || true; mv "$FAUX_DKMS_ETAT.n" "$FAUX_DKMS_ETAT" ;;
+  install) [ "$7" = "6.12.999-casse" ] && exit 1; exit 0 ;;
+esac
+exit 0
+"""
+
+
+@pytest.fixture
+def dkmsbox(box):
+    d, env = box
+    f = d / "dkms"
+    f.write_text(FAUX_DKMS)
+    f.chmod(0o755)
+    (d / "etat").write_text("0.0.9\n")
+    mods = d / "modules"
+    (mods / "6.12.107+deb13-arm64" / "build").mkdir(parents=True)
+    (mods / "6.11.0-sans-headers").mkdir(parents=True)
+    env.update({"SECUBOX_RPI_DSI_DKMS": str(f), "FAUX_DKMS_ETAT": str(d / "etat"),
+                "FAUX_DKMS_LOG": str(d / "log.txt"), "SECUBOX_RPI_DSI_MODULES": str(mods),
+                "SECUBOX_RPI_DSI_KVER": "6.12.107+deb13-arm64", "SECUBOX_RPI_DSI_VERSION": "0.1.0-1~trixie1",
+                "SECUBOX_RPI_DSI_CHROOT": "0"})
+    return d, env
+
+
+def test_dkms_sync_retire_les_autres_versions(dkmsbox):
+    d, env = dkmsbox
+    r = run([HELPER, "dkms-sync"], env)
+    assert r.returncode == 0, r.stderr
+    log = (d / "log.txt").read_text()
+    assert "remove -m secubox-rpi-dsi -v 0.0.9 --all" in log
+    assert "add -m secubox-rpi-dsi -v 0.1.0" in log
+    assert "install -m secubox-rpi-dsi -v 0.1.0 -k 6.12.107+deb13-arm64" in log
+    assert "6.11.0-sans-headers" not in log
+    assert (d / "etat").read_text().split() == ["0.1.0"]
+    # deuxième passage : déjà ajouté, pas de second add
+    run([HELPER, "dkms-sync"], env, check=True)
+    assert (d / "log.txt").read_text().count("add -m") == 1
+    assert "dkms install secubox-rpi-dsi/0.1.0" in (d / "log" / "audit.log").read_text()
+
+
+def test_dkms_echec_signale(dkmsbox):
+    d, env = dkmsbox
+    (d / "modules" / "6.12.999-casse" / "build").mkdir(parents=True)
+    r = run([HELPER, "dkms-sync"], env)
+    assert r.returncode == 1
+    assert "ÉCHEC" in (d / "log" / "audit.log").read_text()
+
+
+def test_configure_inerte_en_chroot(dkmsbox):
+    d, env = dkmsbox
+    env["SECUBOX_RPI_DSI_CHROOT"] = "1"
+    r = run([HELPER, "configure"], env)
+    assert r.returncode == 0 and "chroot" in r.stderr
+    assert not (d / "log.txt").exists() and not (d / "raspi-firmware").exists()
+
+
+def test_configure_complet_puis_boot_check_idempotent(dkmsbox):
+    d, env = dkmsbox
+    r = run([HELPER, "configure"], env)
+    assert r.returncode == 0, r.stderr
+    assert "ROOTPART=UUID=" in (d / "raspi-firmware").read_text()
+    assert "update-initramfs" in (d / "log" / "audit.log").read_text()
+    upd = d / "modules" / "6.12.107+deb13-arm64" / "updates" / "dkms"
+    upd.mkdir(parents=True)
+    for n in ("vc4", "tc358762", "panel-simple", "edt-ft5x06"):
+        (upd / f"{n}.ko.xz").write_bytes(b"")
+    n_avant = (d / "log.txt").read_text().count("install")
+    r = run([HELPER, "boot-check"], env)
+    assert r.returncode == 0 and "rien à faire" in r.stderr
+    assert (d / "log.txt").read_text().count("install") == n_avant
+
+
+def test_boot_check_reconfigure_si_module_manquant(dkmsbox):
+    d, env = dkmsbox
+    r = run([HELPER, "boot-check"], env)
+    assert "configure" in r.stderr
+    assert "install -m secubox-rpi-dsi" in (d / "log.txt").read_text()
+
+
+def test_configure_hors_cible_inerte(dkmsbox):
+    d, env = dkmsbox
+    (d / "model").write_bytes(b"Globalscale MOCHAbin\0")
+    r = run([HELPER, "configure"], env)
+    assert r.returncode == 0 and "inerte" in r.stderr
+    assert not (d / "log.txt").exists()
+
+
+@pytest.mark.parametrize("valeur", ["/dev/mmcblk0p2", '"/dev/mmcblk0p2"', "/dev/inexistant9", "LABEL=x"])
+def test_rootpart_non_sur_remplace(box, valeur):
+    d, env = box
+    (d / "raspi-firmware").write_text(f"ROOTPART={valeur}\n")
+    assert run([HELPER, "rootpart-ok"], env).returncode == 1
+    assert run([HELPER, "update-initramfs"], env).returncode == 1
+    assert run([HELPER, "ensure-rootpart"], env).returncode == 0
+    txt = (d / "raspi-firmware").read_text()
+    actives = [x for x in txt.splitlines() if x.startswith("ROOTPART=")]
+    assert actives == ["ROOTPART=UUID=0b9c6d1e-1111-2222-3333-444455556666"]
+    assert f"# secubox-rpi-dsi (non sûr) : ROOTPART={valeur}" in txt
+
+
+@pytest.mark.parametrize("valeur", ["PARTUUID=1234abcd-02", "UUID=0b9c6d1e-aaaa"])
+def test_rootpart_sur_conserve(box, valeur):
+    d, env = box
+    (d / "raspi-firmware").write_text(f"ROOTPART={valeur}\n")
+    assert run([HELPER, "ensure-rootpart"], env).returncode == 0
+    assert (d / "raspi-firmware").read_text() == f"ROOTPART={valeur}\n"
+
+
+def test_audit_ne_suit_pas_un_lien(box):
+    d, env = box
+    cible = d / "victime"
+    cible.write_text("intact\n")
+    (d / "log" / "audit.log").symlink_to(cible)
+    (d / "raspi-firmware").write_text("")
+    assert run([HELPER, "ensure-rootpart"], env).returncode == 0
+    assert cible.read_text() == "intact\n"
+
+
+def test_overlay_temporaire_nettoye(box):
+    d, env = box
+    run([HELPER, "install-overlay"], env, check=True)
+    assert [p.name for p in (d / "overlays").iterdir()] == ["secubox-dsi-7inch.dtbo"]
+    assert not list(d.glob(".secubox-rpi-dsi.*"))
+
+
+def test_hooks_et_unite():
+    for h in ("etc/kernel/postinst.d/00-secubox-rpi-dsi", "etc/initramfs/post-update.d/00-secubox-rpi-dsi"):
+        s = (PKG / h).read_text()
+        subprocess.run(["sh", "-n", str(PKG / h)], check=True, timeout=30)
+        assert "ischroot" in s and "ensure-rootpart" in s and "exit 1" in s
+    assert "00-" < "z50-"
+    assert (PKG / "debian" / "triggers").read_text().strip() == "interest-noawait /usr/src/linux-source-6.12.tar.xz"
+    u = (PKG / "systemd" / "secubox-rpi-dsi-boot.service").read_text()
+    assert "Type=oneshot" in u and "boot-check" in u and "ConditionPathExists=" in u
+    assert "NoNewPrivileges=yes" in u and "WantedBy=multi-user.target" in u
+    assert "secubox-rpi-dsi-boot --no-start" in (PKG / "debian" / "rules").read_text()
+    pr = (PKG / "debian" / "prerm").read_text()
+    assert "remove|upgrade|deconfigure)" in pr and "dkms-remove" in pr
+    rules = (PKG.parents[1] / ".claude" / "RULES-CODE.md").read_text()
+    assert "secubox-rpi-dsi-boot.service" in rules

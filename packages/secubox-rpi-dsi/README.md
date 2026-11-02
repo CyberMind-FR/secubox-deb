@@ -21,17 +21,49 @@ que sur un RPi4/400, son postinst ne fait rien et le dit.
 - **Overlay** `secubox-dsi-7inch.dtbo` (compilé au build, `/usr/lib/secubox-rpi-dsi/`) copié dans
   `/boot/firmware/overlays/` ; `dtoverlay=secubox-dsi-7inch` ajouté à
   `/etc/default/raspi-firmware-custom` (lu par raspi-firmware). `config.txt` n'est jamais édité.
-  Tactile désactivable : remplacer la ligne par `dtoverlay=secubox-dsi-7inch,touch=off`.
+  Tactile désactivable : remplacer la ligne par `dtoverlay=secubox-dsi-7inch,touch=off`
+  (paramètre `touch = <0>,"=4"` : active/désactive le fragment 4).
+- **Montée de version** : une seule version DKMS enregistrée (les autres sont retirées avant `dkms add`).
+- **Ordre linux-source / linux-image** : trigger dpkg `interest-noawait` sur
+  `/usr/src/linux-source-6.12.tar.xz` (relance la construction + initramfs) et unité oneshot
+  `secubox-rpi-dsi-boot.service` (activée, jamais lancée par le postinst) qui, au démarrage,
+  reconfigure si les 4 modules manquent pour le noyau courant. La révision Debian de
+  `linux-source` est comparée à celle de `linux-image-<noyau>` quand elle est connue.
 - **ROOTPART** : raspi-firmware régénère `cmdline.txt` avec `root=/dev/mmcblk0p2` par défaut, alors
   que la SD est `mmcblk1` sous noyau Debian sur RPi4. Le postinst fixe `ROOTPART=UUID=<racine>`
-  dans `/etc/default/raspi-firmware` s'il n'y est pas (jamais d'écrasement), et ne lance
-  `update-initramfs` (vc4 DKMS dans l'initramfs) que si ROOTPART est défini.
+  dans `/etc/default/raspi-firmware` s'il manque ou n'est pas sûr, et ne lance
+  `update-initramfs` (vc4 DKMS dans l'initramfs) que si ROOTPART est sûr. Sûr = `UUID=…`,
+  `PARTUUID=…` ou un chemin existant, jamais `/dev/mmcblk0p*` sur RPi4/400 ; une valeur sûre
+  n'est jamais écrasée, une valeur non sûre est mise en commentaire (`# secubox-rpi-dsi (non sûr)`).
+- Hook `/etc/initramfs/post-update.d/00-secubox-rpi-dsi` : revérifie ROOTPART à chaque
+  `update-initramfs`, avant `z50-raspi-firmware`.
 - Hook `/etc/kernel/postinst.d/00-secubox-rpi-dsi` : à chaque nouveau noyau, avant dkms,
   initramfs-tools et raspi-firmware : ROOTPART puis overlay. Sur RPi4/400, s'il ne peut fixer
   ROOTPART, il fait échouer l'installation du noyau plutôt que d'écrire un `cmdline.txt` mortel.
 
-Pas d'API, pas de socket, pas de service, pas d'utilisateur dédié. Décisions (ROOTPART, overlay)
-journalisées dans `/var/log/secubox/audit.log`.
+Pas d'API, pas de socket, pas d'utilisateur dédié ; une seule unité oneshot root (exception § 10
+inscrite dans `.claude/RULES-CODE.md`). Décisions (ROOTPART, overlay)
+journalisées dans `/var/log/secubox/audit.log` (ouvert sans suivre de lien), ainsi que
+`dkms install/remove` et `update-initramfs`.
+
+### Piège du conffile
+
+`/etc/default/raspi-firmware` est un conffile de `raspi-firmware`. Après notre ajout de ROOTPART,
+une mise à jour de raspi-firmware qui modifie ce fichier pose la question dpkg habituelle :
+**garder la version installée** (choix par défaut, `--force-confold`). Si la version du mainteneur
+est prise, ROOTPART disparaît : le hook `post-update.d` le remet avant `z50-raspi-firmware`, mais
+vérifier `grep ROOTPART /etc/default/raspi-firmware` après coup.
+
+### Déblocage (hook noyau ou initramfs en échec)
+
+Sur RPi4/400, si ROOTPART ne peut être rendu sûr (racine sans UUID), les hooks sortent en 1 et
+l'installation du noyau reste « à configurer » : c'est voulu, `cmdline.txt` n'est pas réécrit.
+
+```sh
+findmnt -n -o UUID,PARTUUID /                       # repérer l'identifiant de la racine
+echo 'ROOTPART=PARTUUID=<partuuid>' | sudo tee -a /etc/default/raspi-firmware
+sudo secubox-rpi-dsi rootpart-ok && sudo dpkg --configure -a
+```
 
 ## Dépendances
 
@@ -46,9 +78,15 @@ reboot
 ```
 
 Image RPi : `sudo bash image/build-rpi-usb.sh --slipstream --rpi-dsi` (ou `INCLUDE_RPI_DSI=1`).
-Le paquet reste inerte dans le chroot ; une fois sur la Pi : `dpkg-reconfigure secubox-rpi-dsi`.
+Le paquet reste inerte dans le chroot ; `secubox-rpi-dsi-boot.service` construit les modules et
+pose l'overlay au premier démarrage (puis redémarrer pour l'écran).
 
-Commande d'appoint : `secubox-rpi-dsi is-target|rootpart-ok|ensure-rootpart|install-overlay|remove-overlay|update-initramfs`.
+Commande d'appoint : `secubox-rpi-dsi is-target|rootpart-ok|ensure-rootpart|install-overlay|remove-overlay|dkms-sync|dkms-remove|update-initramfs|configure|boot-check`.
+
+Extraction : `tar` (outil, pas `tarfile`) avec une liste de membres fixes, `--no-same-owner`,
+`--no-same-permissions`, dans une destination confinée au répertoire DKMS ; l'archive est celle du
+paquet Debian `linux-source`. RULES-CODE § 1 vise les extractions Python d'archives non fiables :
+pas d'exception à inscrire.
 
 ## Retrait
 

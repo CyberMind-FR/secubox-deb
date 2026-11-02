@@ -10,6 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-rpi-dsi
 Architecture: arm64
 Depends: ${misc:Depends},
+         python3,
          dkms,
          linux-source-6.12,
          linux-headers-arm64,

@@ -1,44 +1,18 @@
 #!/bin/sh
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-# secubox-rpi-dsi (#3399). Hors RPi4/400 : ne fait rien et le dit.
-# Ordre : ROOTPART sûr -> overlay -> DKMS -> update-initramfs (vc4 DKMS dans l'initramfs),
-# ce dernier SEULEMENT si ROOTPART est défini. Aucun service : pas d'utilisateur dédié.
+# secubox-rpi-dsi (#3399). Tout passe par le helper (inerte hors RPi4/400 et en chroot, et le dit) :
+# ROOTPART sûr -> overlay -> DKMS (une seule version) -> update-initramfs si ROOTPART sûr.
+# Trigger linux-source : relance la construction (linux-source installé après linux-image).
+# Aucun service réseau : pas d'utilisateur dédié.
 set -e
 H=/usr/sbin/secubox-rpi-dsi
 
-if [ "$1" = "configure" ]; then
-    # Construction d'image (chroot) : la racine et /proc/device-tree sont ceux de l'hôte.
-    if command -v ischroot >/dev/null 2>&1 && ischroot; then
-        echo "secubox-rpi-dsi: chroot détecté : rien n'est activé ; sur la Pi : dpkg-reconfigure secubox-rpi-dsi"
-        exit 0
-    fi
-    if ! "$H" is-target; then
-        echo "secubox-rpi-dsi: matériel autre que Raspberry Pi 4/400 : rien n'est activé (paquet inerte)."
-        exit 0
-    fi
-    ROOTOK=1
-    "$H" ensure-rootpart || ROOTOK=0
-    "$H" install-overlay || echo "secubox-rpi-dsi: overlay non installé" >&2
-    VER=$(dpkg-query -W -f='${Version}' secubox-rpi-dsi 2>/dev/null || true)
-    VER=${VER#*:}; VER=${VER%-*}
-    DKMSOK=1
-    if [ -n "$VER" ]; then
-        dkms add -m secubox-rpi-dsi -v "$VER" >/dev/null 2>&1 || true
-        for k in /lib/modules/*; do
-            k=${k##*/}
-            [ -e "/lib/modules/$k/build" ] || continue
-            dkms install -m secubox-rpi-dsi -v "$VER" -k "$k" \
-                || { DKMSOK=0; echo "secubox-rpi-dsi: DKMS en échec pour $k (aucun module partiel installé)" >&2; }
-        done
-    fi
-    if [ "$ROOTOK" = 1 ]; then
-        "$H" update-initramfs || echo "secubox-rpi-dsi: update-initramfs en échec" >&2
-    else
-        echo "secubox-rpi-dsi: ROOTPART indéterminable : update-initramfs NON lancé (fixer ROOTPART dans /etc/default/raspi-firmware)" >&2
-    fi
-    [ "$DKMSOK" = 1 ] && echo "secubox-rpi-dsi: écran 7\" prêt au prochain redémarrage."
-fi
+case "$1" in
+    configure|triggered)
+        "$H" configure || echo "secubox-rpi-dsi: configuration incomplète (voir ci-dessus) ; reprise au démarrage par secubox-rpi-dsi-boot" >&2
+        ;;
+esac
 
 #DEBHELPER#
 exit 0
