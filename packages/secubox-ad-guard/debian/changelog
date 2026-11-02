@@ -1,3 +1,16 @@
+secubox-ad-guard (1.24.0-1~trixie1) trixie; urgency=medium
+
+  * Corrélation DNS/DPI (ref #3395) : adresse distante -> nom DNS le plus récent (reponses.db, 24 h, global à la box).
+  * Table flux : colonnes nom_dns et categorie_dns ajoutées par ALTER TABLE (migration non destructive) ; l API lit une base
+    non migrée sans erreur (valeurs vides).
+  * /protection/dpi/flux : nom_dns, categorie_dns ; /protection/dpi/applications : domaines_dns {nom, categorie, etat}.
+  * Page tv-privacy : domaines corrélés par appli, détail des flux (« via DNS : nom »), hachage CSP mis à jour.
+  * Relecture : état bloqué/autorisé lu par une requête dédiée en lecture seule (dernière décision par nom, jamais tronquée par
+    l ancienneté) ; index rep_ip (ip, derniere) dans reponses.db, LIMIT des adresses les plus récentes ; noms DNS normalisés ;
+    page : réponse « Flux » ignorée après fermeture, compteur rendu sur erreur, note « pas forcément demandé par cet appareil ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 06:14:54 +0100
+
 secubox-ad-guard (1.23.0-1~trixie1) trixie; urgency=medium
 
   * SBX TV Privacy lot 6 « nettoyage » (ref #3374) : on retire ce qui est mort ou faux, sans fusion ni refonte.

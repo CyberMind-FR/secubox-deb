@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-Yz5cUQLGsNISJpWJmEQlgeQC4vnFS6NE6aQRYkolAGI='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qgUZd7vXT1pw4lHQda8SMzaUolzgi7JXjjqeVsPm6fg='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -334,7 +334,7 @@
     var s=t.closest('.nav-section');if(!s)return;s.classList.toggle('collapsed');var i=t.querySelector('.toggle-icon');if(i)i.textContent=s.classList.contains('collapsed')?'▶':'▼';});
   var PAS=25;
   var MODES={observe:'OBSERVE',block:'PROTECT',auto:'AUTO',off:'OFF'};
-  var etat={appareils:[],profils:[],categories:[],protegees:[],sources:[],decalage:0,admin:false,ouvert:false,filtres:null,pauses:{}};
+  var etat={appareils:[],profils:[],categories:[],protegees:[],sources:[],decalage:0,admin:false,ouvert:false,fluxOuverts:0,filtres:null,pauses:{}};
   function el(id){return document.getElementById(id);}
   // Fabrique d'éléments : le texte passe TOUJOURS par textContent.
   function h(tag,attrs,texte){var n=document.createElement(tag);if(attrs)for(var k in attrs){if(k==='class')n.className=attrs[k];else n.setAttribute(k,attrs[k]);}
@@ -406,9 +406,14 @@
     dpi:{disponible:true,age_s:30,sources:{sbxdpi:'absent',conntrack:'absent'},pause_charge:null,appareils:[
       {mac:'02:00:5e:00:00:01',nom:'Téléviseur salon',mode:'auto',couverture:'dns+dpi',forcage:{pose:true,suspendu:false,note:'forçage DNS posé, effectif seulement si les flux de l’appareil traversent la box (mode LAN)'}},
       {mac:'02:00:5e:00:00:02',nom:'Lecteur box',mode:'observe',couverture:'dns',forcage:{pose:false,suspendu:false,note:''}}]},
-    applications:{applications:[{appli:'TLS',categorie_ndpi:'Media',categorie:'STREAMING',flux:12,octets:812000000,premier:1761950000,dernier:1761955000,hotes:['video.example.org'],sans_dns:false,dns_chiffre:false,ssai:true},
-      {appli:'TLS.Google',categorie_ndpi:'Advertisement',categorie:'PUBLICITE',flux:4,octets:120000,premier:1761950000,dernier:1761954000,hotes:['ads.example.com'],sans_dns:false,dns_chiffre:false,ssai:false},
-      {appli:'TLS',categorie_ndpi:'',categorie:'INCONNU',flux:2,octets:3000,premier:1761950000,dernier:1761954000,hotes:[],sans_dns:true,dns_chiffre:false,ssai:false}]},
+    applications:{applications:[{appli:'TLS',categorie_ndpi:'Media',categorie:'STREAMING',flux:12,octets:812000000,premier:1761950000,dernier:1761955000,hotes:['video.example.org'],sans_dns:false,dns_chiffre:false,ssai:true,
+        domaines_dns:[{nom:'edge.cdn.example.net',categorie:'CDN',etat:'autorise'}]},
+      {appli:'TLS.Google',categorie_ndpi:'Advertisement',categorie:'PUBLICITE',flux:4,octets:120000,premier:1761950000,dernier:1761954000,hotes:['ads.example.com'],sans_dns:false,dns_chiffre:false,ssai:false,
+        domaines_dns:[{nom:'ads.example.com',categorie:'PUBLICITE',etat:'bloque'}]},
+      {appli:'TLS',categorie_ndpi:'',categorie:'INCONNU',flux:2,octets:3000,premier:1761950000,dernier:1761954000,hotes:[],sans_dns:true,dns_chiffre:false,ssai:false,
+        domaines_dns:[{nom:'metrics.example.net',categorie:'TRACKING',etat:null}]}]},
+    flux:{total:2,lignes:[{ts:1761955000,appli:'TLS',categorie_ndpi:'',hote:'',port:443,distant:'198.51.100.7',flux:1,octets:2000,sans_dns:false,dns_chiffre:false,nom_dns:'metrics.example.net',categorie_dns:'TRACKING'},
+      {ts:1761954000,appli:'TLS',categorie_ndpi:'Media',hote:'video.example.org',port:443,distant:'',flux:12,octets:812000000,sans_dns:false,dns_chiffre:false,nom_dns:'edge.cdn.example.net',categorie_dns:'CDN'}]},
     coupures:{coupures:[{refus_ts:1761954000,refus_domaine:'ads.example.com',apparitions:[{delai_s:3,domaine:'relais-pub.example.net',categorie:'PUBLICITE',type:'repli',ssai:false},
       {delai_s:5,domaine:'video.example.org',categorie:'STREAMING',type:'repli-protege',ssai:true}]}]},
     direct:{decouvertes:[{id:2,ts:1761954003,type:'repli',mac:'02:00:5e:00:00:01',appareil:'Téléviseur salon',domaine:'relais-pub.example.net',categorie:'PUBLICITE',protegee:false,confiance:70,raison:'apparu 3 s après le blocage de ads.example.com',etat:'nouvelle',actionnable:true,action:null},
@@ -717,14 +722,37 @@
     return a;
   }
   function rendreApplications(r){
-    var box=el('ap-cartes');vider(box);var l=(r&&r.applications)||[];
+    var box=el('ap-cartes');vider(box);etat.fluxOuverts=0;var l=(r&&r.applications)||[];
     if(!l.length){box.appendChild(h('div',{class:'vide'},'Aucun flux vu pour cet appareil : DNS seulement, ou rien sur la fenêtre.'));return;}
     l.forEach(function(x){var p=h('div',{class:'pan'});var t=h('h2',null,x.appli+' ');t.appendChild(h('small',null,(x.categorie_ndpi||'—')+' · '+(x.categorie||'—')));p.appendChild(t);
       p.appendChild(h('div',{class:'mono coupe'},(x.hotes||[]).join(', ')||'aucun nom (adresse seule)'));
       p.appendChild(h('div',null,octets(x.octets)+' · '+fmt(x.flux)+' flux · dernier '+quand(x.dernier)));
       var b=h('div',{class:'actions'});BADGES.forEach(function(g){if(x[g[0]])b.appendChild(h('span',{class:'pastille '+g[2]},g[1]));});
       if(x.ssai)b.appendChild(h('span',{class:'pastille orange',title:'Ce service insère des publicités dans sa propre vidéo'},'SSAI'));
-      if(b.firstChild)p.appendChild(b);box.appendChild(p);});
+      if(b.firstChild)p.appendChild(b);
+      // #3395 : domaines DNS corrélés aux adresses de l'appli (cache d'Unbound, 24 h), catégorie et dernière décision DNS de l'appareil
+      var dd=x.domaines_dns||[];
+      if(dd.length){var ul=h('div',{class:'espace'});ul.appendChild(h('div',{class:'note'},'Domaines DNS corrélés (nom résolu sur la box, pas forcément demandé par cet appareil)'));
+        dd.forEach(function(d){var li=h('div',{class:'mono coupe'},d.nom+' — '+(d.categorie||'INCONNU')+' ');
+          if(d.etat)li.appendChild(h('span',{class:'pastille '+(d.etat==='bloque'?'rouge':'vert')},d.etat==='bloque'?'bloqué':'autorisé'));ul.appendChild(li);});
+        p.appendChild(ul);}
+      boutonFlux(p,x.appli);box.appendChild(p);});
+  }
+  function boutonFlux(p,appli){
+    var bt=h('button',{type:'button',class:'petit','aria-expanded':'false'},'Flux'),zone=h('div',{class:'espace'});p.appendChild(bt);p.appendChild(zone);
+    var generation=0;                                     // une réponse arrivée après fermeture (ou d'un clic précédent) est ignorée
+    function fermerFlux(){if(bt.getAttribute('aria-expanded')!=='true')return;generation++;vider(zone);bt.setAttribute('aria-expanded','false');
+      etat.fluxOuverts=Math.max(0,etat.fluxOuverts-1);hauteur();}
+    bt.addEventListener('click',function(){
+      if(bt.getAttribute('aria-expanded')==='true'){fermerFlux();return;}
+      var g=++generation;etat.fluxOuverts++;bt.setAttribute('aria-expanded','true');   // pas de rafraîchissement tant que le détail est ouvert
+      source('/protection/dpi/flux?mac='+encodeURIComponent(el('ap-mac').value)+'&appli='+encodeURIComponent(appli)+'&fenetre='+el('ap-fenetre').value+'&limite=20').then(function(r){
+        if(g!==generation)return;vider(zone);var l=(r&&r.lignes)||[];
+        if(!l.length)zone.appendChild(h('div',{class:'vide'},'Aucun flux.'));
+        l.forEach(function(f){var nom=f.hote?f.hote+(f.nom_dns?' (DNS : '+f.nom_dns+')':''):f.nom_dns?'via DNS : '+f.nom_dns+' — '+(f.categorie_dns||'INCONNU'):(f.distant||'—')+' (aucun nom)';
+          zone.appendChild(h('div',{class:'mono coupe'},heure(f.ts)+' · '+nom+' :'+f.port+' · '+octets(f.octets)));});
+        hauteur();}).catch(function(e){if(g!==generation)return;fermerFlux();echec(e);});
+    });
   }
   function rendreFrise(r){
     var box=el('ap-frise');vider(box);var l=(r&&r.coupures)||[];
@@ -862,7 +890,7 @@
   el('rafraichir').addEventListener('click',function(){message('');charger();});
   charger();
   setInterval(function(){if(!document.hidden&&!etat.ouvert&&!DEMO)charger();},60000);
-  setInterval(function(){if(!document.hidden&&!el('v-applications').hidden&&!etat.ouvert&&!DEMO)chargerApplications();},30000);
+  setInterval(function(){if(!document.hidden&&!el('v-applications').hidden&&!etat.ouvert&&!etat.fluxOuverts&&!DEMO)chargerApplications();},30000);
   setInterval(function(){if(!document.hidden&&!el('v-direct').hidden&&!etat.ouvert&&!DEMO)chargerDirect();},15000);
   try{new ResizeObserver(hauteur).observe(document.body);}catch(e){}
   addEventListener('resize',hauteur);
