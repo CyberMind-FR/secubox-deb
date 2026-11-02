@@ -270,7 +270,8 @@ Depends: ${misc:Depends},
          secubox-certs
 Recommends: secubox-repo,
          secubox-backup,
-         secubox-config-advisor
+         secubox-config-advisor,
+         secubox-pilotage-agent
 Description: SecuBox — service « Administration »
  Tableau d'administration, App Store, profils, dépôt, certificats.
  .

@@ -26,5 +26,6 @@ pose tout ce qu'un maître de parc porte, en plus de la box elle-même :
 | `secubox-service-administration` | `secubox-profiles`, `secubox-appstore`, `secubox-certs` ; `secubox-repo` (dépôt apt) seulement recommandé |
 
 `secubox` ne fait que le suggérer : une box ordinaire ne le reçoit jamais sans
-le demander. L'agent `secubox-pilotage-agent` reste hors-arbre : toute box l'a
-déjà, maître compris.
+le demander. L'agent `secubox-pilotage-agent` est recommandé par
+`secubox-service-administration` (#3405) : toute box gérable l'a, maître compris
+(il s'y ignore) ; sortant seulement, il reste inerte sans maillage.
