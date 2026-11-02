@@ -227,6 +227,7 @@ def _verify_totp_ntp_aware(username: str, code: str) -> bool:
 # pose X-SecuBox-LAN avec proxy_set_header, qui ÉCRASE la valeur d'un client.
 # Absent (requête hors nginx) = pas LAN = OTP exigé : l'échec ferme.
 from secubox_core.auth import _requete_lan
+from secubox_core import mot_de_passe_defaut as _mdp_defaut
 
 OTP_LAN_VALEURS = ("facultatif", "obligatoire")
 _REGLAGES = Path(os.environ.get("SECUBOX_AUTH_REGLAGES", str(_DATA_DIR / "reglages.json")))
@@ -368,6 +369,16 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     # s'ouvre pas du tout.
     lan = _requete_lan(request)
     a_changer = bool(user.get("must_change_password"))
+    # MOT DE PASSE PAR DÉFAUT (#3401) : « Plus tard » dans l'assistant le laisse actif. Il reste utilisable, mais
+    # seulement depuis le LAN (verdict nginx : privé, loopback ; le kiosque entre par /console/jeton). Hors LAN, refus
+    # EXPLICITE — dit seulement à qui a donné le bon mot de passe, jamais à qui le devine.
+    defaut = _mdp_defaut.est_le_defaut(req.password) and user_store.verify_password(req.username, req.password)
+    if defaut and not lan:
+        _mdp_defaut.audit("connexion_refusee_hors_lan", {"compte": req.username, "ip": ip})
+        _emit_session_event("login_failed", req.username, {
+            "reason": "mot_de_passe_defaut_hors_lan", "ip": ip, "user_agent": ua,
+        })
+        raise HTTPException(status_code=403, detail=_mdp_defaut.MESSAGE)
     if a_changer and not lan:
         _emit_session_event("login_failed", req.username, {
             "reason": "premiere_configuration_hors_lan", "ip": ip, "user_agent": ua,
@@ -387,9 +398,14 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _emit_session_event("login_failed", req.username, {"reason": "invalid_credentials", "ip": ip})
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
 
-    # « À changer » avec un mot de passe (le admin/secubox du premier démarrage) :
-    # le bon mot de passe ouvre le CHANGEMENT, jamais une session directe.
-    if a_changer:
+    if defaut:
+        # Chaque connexion réussie avec le défaut est tracée (#3401) ; le clair n'y figure jamais.
+        _mdp_defaut.audit("connexion_reussie", {"compte": req.username, "ip": ip})
+
+    # « À changer » avec un mot de passe (un mot de passe réinitialisé par un administrateur) :
+    # le bon mot de passe ouvre le CHANGEMENT, jamais une session directe. Le défaut du premier démarrage fait
+    # exception depuis #3401 : « Plus tard » est un choix du propriétaire, la session s'ouvre (LAN seulement).
+    if a_changer and not defaut:
         setup_tok = create_token(req.username, scope="set-password", expires_in=900)
         _append_audit("setup_token_issued", req.username, {"ip": ip, "motif": "changement_impose"})
         return {"setup_required": True, "setup_token": setup_tok}
@@ -670,6 +686,13 @@ def _set_password(req: _SetPasswordIn, request: _Request):
         _coffre.changer(username, req.old_password, req.new_password)   # la serrure du Coffre suit (#1855)
         return {"ok": True, "message": "Mot de passe modifié"}
     raise HTTPException(status_code=403, detail="Token hors scope")
+
+
+@_login_router.get("/mot-de-passe-defaut", dependencies=[Depends(require_lecture)])
+def _mot_de_passe_defaut():
+    """Le mot de passe par défaut du compte admin est-il actif ? Booléen, message et lien seulement (#3401) :
+    le bandeau santé partagé (Hall + admin) en fait un bandeau rouge persistant."""
+    return _mdp_defaut.etat()
 
 
 @_login_router.get("/preflight", dependencies=[Depends(require_lecture)])

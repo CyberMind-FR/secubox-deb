@@ -1,3 +1,9 @@
+secubox-auth (1.8.13-1~trixie1) trixie; urgency=medium
+
+  * Mot de passe par défaut (ref #3401) : depuis le LAN, il ouvre une session (« Plus tard » de l'assistant) au lieu d'imposer le changement, chaque connexion réussie auditée dans /var/log/secubox/audit.log ; hors LAN, refus explicite 403 « changez le mot de passe par défaut » (un mauvais mot de passe reste un 401 muet). Nouvelle route GET /mot-de-passe-defaut (require_lecture) pour le bandeau santé. Un mot de passe réinitialisé impose toujours le changement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:31:34 +0100
+
 secubox-auth (1.8.12-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

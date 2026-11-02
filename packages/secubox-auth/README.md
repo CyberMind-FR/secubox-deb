@@ -63,3 +63,8 @@ Configuration file: `/etc/secubox/auth.toml`
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+## Mot de passe par défaut (#3401)
+
+- `GET /api/v1/auth/mot-de-passe-defaut` (`require_lecture`) : `{actif, compte, message, lien}` — lu par le bandeau santé partagé.
+- `POST /login` avec le mot de passe par défaut : session depuis le LAN (auditée dans `/var/log/secubox/audit.log`), **403** explicite hors LAN.
