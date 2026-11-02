@@ -66,5 +66,5 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 
 ## Mot de passe par défaut (#3401)
 
-- `GET /api/v1/auth/mot-de-passe-defaut` (`require_lecture`) : `{actif, compte, message, lien}` — lu par le bandeau santé partagé.
-- `POST /login` avec le mot de passe par défaut : session depuis le LAN (auditée dans `/var/log/secubox/audit.log`), **403** explicite hors LAN.
+- `GET /api/v1/auth/mot-de-passe-defaut` : `{etat: actif|inactif|inconnu, actif, inconnu, compte, message, lien}` pour un administrateur réel (`require_jwt`), `{}` pour tout autre appelant — lu par le bandeau santé partagé.
+- `POST /login` avec le mot de passe par défaut : session directe depuis le LAN **seulement** pour `admin` et si premier-pas a posé `/etc/secubox/premier-pas-plus-tard` (auditée) ; sinon changement obligatoire. Hors LAN : le même 401 qu'un mauvais mot de passe, tentative auditée.

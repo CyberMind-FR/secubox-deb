@@ -1,3 +1,9 @@
+secubox-auth (1.8.14-1~trixie1) trixie; urgency=medium
+
+  * Relecture #3401 (ref #3401) : session directe avec le défaut seulement pour admin et seulement avec le marqueur « Plus tard » de premier-pas (sinon changement obligatoire, comme avant) ; hors LAN, le même 401 qu'un mauvais mot de passe (plus d'oracle), tentative auditée ; GET /mot-de-passe-defaut rend l'état à un administrateur réel seulement ({} sinon).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 02 Nov 2026 08:58:34 +0100
+
 secubox-auth (1.8.13-1~trixie1) trixie; urgency=medium
 
   * Mot de passe par défaut (ref #3401) : depuis le LAN, il ouvre une session (« Plus tard » de l'assistant) au lieu d'imposer le changement, chaque connexion réussie auditée dans /var/log/secubox/audit.log ; hors LAN, refus explicite 403 « changez le mot de passe par défaut » (un mauvais mot de passe reste un 401 muet). Nouvelle route GET /mot-de-passe-defaut (require_lecture) pour le bandeau santé. Un mot de passe réinitialisé impose toujours le changement.

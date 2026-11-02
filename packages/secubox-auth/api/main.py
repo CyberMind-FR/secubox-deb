@@ -369,16 +369,16 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     # s'ouvre pas du tout.
     lan = _requete_lan(request)
     a_changer = bool(user.get("must_change_password"))
-    # MOT DE PASSE PAR DÉFAUT (#3401) : « Plus tard » dans l'assistant le laisse actif. Il reste utilisable, mais
-    # seulement depuis le LAN (verdict nginx : privé, loopback ; le kiosque entre par /console/jeton). Hors LAN, refus
-    # EXPLICITE — dit seulement à qui a donné le bon mot de passe, jamais à qui le devine.
+    # MOT DE PASSE PAR DÉFAUT (#3401) : « Plus tard » dans l'assistant le laisse actif. Utilisable seulement depuis
+    # le LAN (verdict nginx ; le kiosque entre par /console/jeton). Hors LAN : le MÊME 401 qu'un mauvais mot de passe
+    # (aucun oracle), la tentative seulement auditée.
     defaut = _mdp_defaut.est_le_defaut(req.password) and user_store.verify_password(req.username, req.password)
     if defaut and not lan:
         _mdp_defaut.audit("connexion_refusee_hors_lan", {"compte": req.username, "ip": ip})
         _emit_session_event("login_failed", req.username, {
-            "reason": "mot_de_passe_defaut_hors_lan", "ip": ip, "user_agent": ua,
+            "reason": "invalid_credentials", "ip": ip, "user_agent": ua,
         })
-        raise HTTPException(status_code=403, detail=_mdp_defaut.MESSAGE)
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
     if a_changer and not lan:
         _emit_session_event("login_failed", req.username, {
             "reason": "premiere_configuration_hors_lan", "ip": ip, "user_agent": ua,
@@ -404,8 +404,11 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
 
     # « À changer » avec un mot de passe (un mot de passe réinitialisé par un administrateur) :
     # le bon mot de passe ouvre le CHANGEMENT, jamais une session directe. Le défaut du premier démarrage fait
-    # exception depuis #3401 : « Plus tard » est un choix du propriétaire, la session s'ouvre (LAN seulement).
-    if a_changer and not defaut:
+    # exception depuis #3401 : « Plus tard » (marqueur premier-pas) est un choix du propriétaire, session LAN seulement.
+    # Session directe avec le défaut : SEULEMENT pour `admin` et seulement si premier-pas a posé le marqueur
+    # « Plus tard ». Tout autre compte « à changer » garde le changement obligatoire (#1707).
+    plus_tard = defaut and req.username == _mdp_defaut.COMPTE and _mdp_defaut.plus_tard_choisi()
+    if a_changer and not plus_tard:
         setup_tok = create_token(req.username, scope="set-password", expires_in=900)
         _append_audit("setup_token_issued", req.username, {"ip": ip, "motif": "changement_impose"})
         return {"setup_required": True, "setup_token": setup_tok}
@@ -688,11 +691,18 @@ def _set_password(req: _SetPasswordIn, request: _Request):
     raise HTTPException(status_code=403, detail="Token hors scope")
 
 
-@_login_router.get("/mot-de-passe-defaut", dependencies=[Depends(require_lecture)])
-def _mot_de_passe_defaut():
-    """Le mot de passe par défaut du compte admin est-il actif ? Booléen, message et lien seulement (#3401) :
-    le bandeau santé partagé (Hall + admin) en fait un bandeau rouge persistant."""
-    return _mdp_defaut.etat()
+@_login_router.get("/mot-de-passe-defaut")
+async def _mot_de_passe_defaut(request: _Request):
+    """État du mot de passe par défaut (#3401), pour le bandeau santé. Rendu SEULEMENT à un administrateur réel
+    (require_jwt) ; à tout autre appelant, `{}` — l'information ne sert pas d'invitation."""
+    from fastapi.security import HTTPAuthorizationCredentials  # noqa: PLC0415
+    h = request.headers.get("Authorization", "")
+    creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=h[7:]) if h.lower().startswith("bearer ") else None
+    try:
+        await require_jwt(request, creds)
+    except HTTPException:
+        return {}
+    return await asyncio.to_thread(_mdp_defaut.etat)
 
 
 @_login_router.get("/preflight", dependencies=[Depends(require_lecture)])

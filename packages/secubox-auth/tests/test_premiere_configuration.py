@@ -34,7 +34,8 @@ def c(tmp_path: Path, monkeypatch):
                  "SECUBOX_AUTH_AUDIT": tmp_path / "audit.log",
                  "SECUBOX_AUTH_TOTP_PENDING": tmp_path / "totp-pending.json",
                  "SECUBOX_AUTH_REGLAGES": tmp_path / "reglages.json",
-                 "SECUBOX_USERS_JSON": users, "SECUBOX_AUDIT_LOG": tmp_path / "audit-secubox.log"}.items():
+                 "SECUBOX_USERS_JSON": users, "SECUBOX_AUDIT_LOG": tmp_path / "audit-secubox.log",
+                 "SECUBOX_PLUS_TARD": tmp_path / "plus-tard"}.items():
         monkeypatch.setenv(k, str(v))
     monkeypatch.setenv("SECUBOX_JWT_SECRET", "test-secret-de-trente-deux-octets!!")
     from secubox_core import config as sbx_config, user_store
@@ -65,8 +66,14 @@ def test_compte_a_changer_avec_mot_de_passe_le_vide_ne_suffit_pas(c):
     assert r.status_code == 401 and "setup_token" not in r.text
 
 
-def test_le_defaut_ouvre_une_session_depuis_le_lan_et_s_audite(c, tmp_path):
-    # #3401 : « Plus tard » est un choix ; le défaut reste utilisable depuis le LAN, chaque connexion tracée.
+def test_le_bon_mot_de_passe_impose_le_changement_pas_une_session(c):
+    # Sans le marqueur « Plus tard », le flux d'origine (#1707) : changement obligatoire.
+    r = _login(c, "admin", "secubox", "1").json()
+    assert r.get("setup_required") is True and "access_token" not in r
+
+
+def test_plus_tard_ouvre_une_session_lan_pour_admin_et_s_audite(c, tmp_path):
+    (tmp_path / "plus-tard").write_text("")
     r = _login(c, "admin", "secubox", "1").json()
     assert "access_token" in r and r.get("setup_required") is not True
     lignes = [json.loads(x) for x in (tmp_path / "audit-secubox.log").read_text().splitlines()]
@@ -74,10 +81,21 @@ def test_le_defaut_ouvre_une_session_depuis_le_lan_et_s_audite(c, tmp_path):
     assert "secubox\"" not in (tmp_path / "audit-secubox.log").read_text()
 
 
-def test_depuis_le_wan_le_mot_de_passe_par_defaut_est_refuse_explicitement(c, tmp_path):
-    r = _login(c, "admin", "secubox", "0")
-    assert r.status_code == 403 and "setup_token" not in r.text and "access_token" not in r.text
-    assert "mot de passe par défaut" in r.json()["detail"]
+def test_plus_tard_ne_vaut_que_pour_admin(c, tmp_path):
+    (tmp_path / "plus-tard").write_text("")
+    users = tmp_path / "users.json"
+    d = json.loads(users.read_text())
+    d["users"].append(_compte("bob", "secubox", True))
+    users.write_text(json.dumps(d))
+    r = _login(c, "bob", "secubox", "1").json()
+    assert r.get("setup_required") is True and "access_token" not in r
+
+
+def test_depuis_le_wan_le_defaut_est_un_401_identique_mais_audite(c, tmp_path):
+    (tmp_path / "plus-tard").write_text("")
+    bon = _login(c, "admin", "secubox", "0")
+    faux = _login(c, "admin", "secubox2", "0")
+    assert bon.status_code == faux.status_code == 401 and bon.json() == faux.json()
     assert "connexion_refusee_hors_lan" in (tmp_path / "audit-secubox.log").read_text()
 
 
@@ -95,6 +113,15 @@ def test_un_mot_de_passe_reinitialise_impose_encore_le_changement(c, tmp_path):
     assert r.get("setup_required") is True and "access_token" not in r
 
 
-def test_etat_du_mot_de_passe_par_defaut(c):
-    r = c.get("/mot-de-passe-defaut", headers={"Authorization": "Bearer x"})
-    assert r.status_code != 404   # route gardée (require_lecture) : jamais anonyme hors tableau de bord
+def test_etat_vide_pour_un_non_administrateur(c):
+    assert c.get("/mot-de-passe-defaut").json() == {}
+    assert c.get("/mot-de-passe-defaut", headers={"Authorization": "Bearer faux"}).json() == {}
+
+
+def test_etat_rendu_a_un_administrateur_reel(c, monkeypatch):
+    from api import main as m
+
+    async def admin(request, creds=None):
+        return {"sub": "admin"}
+    monkeypatch.setattr(m, "require_jwt", admin)
+    assert c.get("/mot-de-passe-defaut").json()["etat"] == "actif"
