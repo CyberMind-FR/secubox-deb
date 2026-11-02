@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# debian/secubox.yaml — fiche de ce module pour l'App Store (#3402).
+# SANS CE FICHIER, LE MODULE N'EXISTE PAS POUR L'APP STORE.
+
+name: secubox-freebox
+category: network
+tier: lite
+description: "SecuBox Freebox — appareils, connexion, pare-feu IPv6 et redirections de la Freebox"
+
+description_longue: |
+  Relie la box à la Freebox par l'API Freebox OS : appareils du réseau, état de
+  la connexion, pare-feu IPv6 et redirections de ports.
+
+  L'autorisation se valide physiquement sur la Freebox (bouton en façade) ; le
+  jeton d'application reste sur la box et n'est jamais affiché.
+
+depends:
+  - secubox-core
