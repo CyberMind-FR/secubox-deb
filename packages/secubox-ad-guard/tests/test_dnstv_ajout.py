@@ -229,3 +229,24 @@ def test_une_adresse_n_en_evince_pas_une_plus_recente_qu_elle():
     vues = {"192.168.1.95": maintenant, NEUVES[0]: maintenant - 20 * 3600, **{a: maintenant - 8 * 3600 for a in ANCIENNES}}
     lancer(etat, regles, suivi, det=[], voisins={"192.168.1.95": MAC_BANC, NEUVES[0]: MAC_BANC}, vues=vues, maintenant=maintenant)
     assert NEUVES[0] not in {c["ip"] for c in etat["clients"]}, "la candidate est plus ancienne que les trois adresses en place"
+
+
+def test_nouvelle_adresse_suivie_en_auto_meme_si_l_appareil_est_declare_en_observe_3438():
+    # tv-banc (02/11) : IPv4 déclarée en observe en premier ; la nouvelle IPv6 en héritait et la pub passait.
+    mac = "38:07:16:93:4e:95"
+    neuve = "2a01:e0a:dec:c4e0:dd8b:64bc:5e25:6275"
+    ancienne = {"ip": "2a01:e0a:dec:c4e0:9965:15:943c:b567", "nom": "TV banc", "mode": "observe", "mac": mac, "origine": "suivi", "ajoute": T0}
+    etat, regles, suivi = monde(clients=[{"ip": "192.168.1.95", "nom": "TV banc", "mode": "observe", "mac": mac}, ancienne])
+    lancer(etat, regles, suivi, det=[], voisins={"192.168.1.95": mac, neuve: mac}, vues={neuve: T0 + 60}, maintenant=T0 + 120)
+    par_ip = {c["ip"]: c for c in etat["clients"]}
+    assert par_ip[neuve]["mode"] == "auto" and par_ip[neuve]["origine"] == "suivi"
+    assert par_ip[ancienne["ip"]]["mode"] == "auto"                          # les adresses suivies sont réalignées
+    assert par_ip["192.168.1.95"]["mode"] == "observe"                        # une adresse déclarée garde le choix de l'administrateur
+
+
+def test_nouvelle_adresse_suivie_garde_block_si_l_appareil_est_en_block_3438():
+    mac = "38:07:16:93:4e:95"
+    neuve = "2a01:e0a:dec:c4e0:1:2:3:4"
+    etat, regles, suivi = monde(clients=[{"ip": "192.168.1.95", "nom": "TV banc", "mode": "block", "mac": mac}])
+    lancer(etat, regles, suivi, det=[], voisins={neuve: mac}, vues={neuve: T0 + 60}, maintenant=T0 + 120)
+    assert {c["ip"]: c["mode"] for c in etat["clients"]}[neuve] == "block"
