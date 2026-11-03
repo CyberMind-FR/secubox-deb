@@ -214,3 +214,10 @@ def test_acces_par_ip_depuis_le_lan_seulement(box):
     assert "use_backend webui_direct if src_privee hote_ip or src_privee hote_local" in https_in
     # La règle précède le défaut vers l'inspection.
     assert https_in.index("use_backend webui_direct if src_privee") < https_in.index("default_backend")
+
+
+def test_localhost_et_nom_local_menent_a_l_administration_3442():
+    # Kiosque de la box (https://localhost/) et adresse annoncée par Premier Pas (<nom>.local) : 421 sinon.
+    src = (Path(__file__).resolve().parents[1] / "sbin" / "haproxyctl").read_text()
+    assert src.count("acl hote_local hdr(host) -i secubox.local localhost") == 2
+    assert src.count(r"acl hote_local hdr(host) -m reg -i ^[a-z0-9]([a-z0-9-]*[a-z0-9])?\.local(:[0-9]+)?$") == 2
