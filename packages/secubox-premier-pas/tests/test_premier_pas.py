@@ -32,6 +32,7 @@ def isole(tmp_path, monkeypatch):
     monkeypatch.setattr(M, "SECUBOX_CONF", tmp_path / "secubox.conf")
     monkeypatch.setattr(M, "MAJAUTO_DROPIN", tmp_path / "heure.conf")
     monkeypatch.setattr(M, "_pose_empreinte_admin", lambda e: None)
+    monkeypatch.setattr(M.time, "sleep", lambda s: None)   # essais rejoués (#3442) : pas de vraie pause en test
     return tmp_path
 
 

@@ -273,9 +273,12 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
     else:
         # MONTÉE DE NIVEAU (#3428) : sur une image lite, profilectl installe d'abord secubox-<profil> par apt. Sans réseau
         # il rend PROFILCTL_DIFFERE sans rien changer : avertissement, l'assistant continue avec le profil d'amorçage.
+        # ESSAIS (#3442) : l'étape réseau vient de basculer les interfaces (mode routeur) ; l'`apt-get update` qui suit rend 0 sans avoir rien lu
+        # du dépôt (vu sur gk8 : « Unable to locate package secubox-isp », dépôt joignable une minute plus tard). PROFILCTL_DIFFERE ne change
+        # rien au système : on le rejoue, puis on garde l'avertissement.
         out.append(Action("services", f"profil de services « {sp} »",
                           ["secubox-profilectl", "apply", "--profile", sp, "--yes"],
-                          codes_souples=(PROFILCTL_DIFFERE,)))
+                          essais=6, pause=20.0, codes_souples=(PROFILCTL_DIFFERE,)))
     if dom and os.access(HAPROXYCTL, os.X_OK):
         # FRONTAL APRÈS LE DOMAINE (#3442) : firstboot tente `haproxyctl frontal` avant que le domaine existe et renonce ; nginx autonome
         # gardait 443 et la racine menait au Hall, plus à l'administration. Idempotent (rend 0 si déjà actif) ; souple : un refus laisse

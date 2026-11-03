@@ -57,3 +57,15 @@ def test_defaults_aligne_avant_frontal(complet, tmp_path, monkeypatch):
     monkeypatch.setattr(M, "DEFAULTS_ALIGNER", aligner)
     argvs = [a.argv for a in M.plan(complet)]
     assert argvs.index([str(aligner)]) == argvs.index([str(M.HAPROXYCTL), "frontal"]) - 1
+
+
+def test_profil_rejoue_apres_la_bascule_reseau(complet, isole, tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "NET_DETECT", _outil(tmp_path))
+    appels = []
+    def exe(argv):
+        if argv[0] == "secubox-profilectl":
+            appels.append(argv)
+            return (M.PROFILCTL_DIFFERE, "E: Unable to locate package secubox-isp") if len(appels) < 3 else (0, "")
+        return (0, "")
+    r = M.appliquer(complet, exe, CONNUS, isole / "fait")
+    assert r.ok and len(appels) == 3 and not any("profil" in w for w in r.avertissements)
