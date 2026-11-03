@@ -1851,6 +1851,34 @@ cat > "${ROOTFS}/etc/secubox/users.json" <<EOF
 EOF
 chmod 644 "${ROOTFS}/etc/secubox/users.json"
 chroot "${ROOTFS}" chown root:secubox /etc/secubox/users.json 2>/dev/null || true
+# #3435 : ce fichier est au format v1 et arrive APRÈS les paquets ; la migration de secubox-auth ne repasserait
+# jamais dessus, et le moteur des comptes (v2) ne trouvait pas admin (premier pas arrêté à l'étape admin).
+# La migration efface les empreintes SHA-256 (password_hash = null) : on repose une empreinte argon2 du
+# mot de passe par défaut, toujours « à changer » (#3401 : « Plus tard » doit garder secubox utilisable).
+if [[ -x "${ROOTFS}/usr/sbin/usersctl" ]]; then
+  chroot "${ROOTFS}" /usr/sbin/usersctl migrate-v1-to-v2 \
+    || err "users.json : migration v1 → v2 impossible — image non produite"
+  chroot "${ROOTFS}" python3 - <<'PYV2' || err "users.json : empreinte argon2 du mot de passe par défaut impossible — image non produite"
+import sys
+sys.path.insert(0, "/usr/lib/secubox/users")
+from argon2 import PasswordHasher
+from api import engine
+e = engine.Engine(users_path="/etc/secubox/users.json")
+doc = e._load()
+for nom in ("admin", "root"):
+    u = e._find(doc, nom)
+    if u is None:
+        sys.exit(f"compte {nom} absent après migration")
+    u["password_hash"] = PasswordHasher().hash("secubox")
+    u["must_change_password"] = True
+e._save(doc)
+PYV2
+  rm -f "${ROOTFS}"/etc/secubox/users.json.pre-migrate.*
+  chroot "${ROOTFS}" chown root:secubox /etc/secubox/users.json 2>/dev/null || true
+  chmod 0640 "${ROOTFS}/etc/secubox/users.json"
+else
+  warn "usersctl absent (secubox-auth non installé) : users.json laissé au format v1"
+fi
 log "Created users.json (admin/secubox, root/secubox)"
 
 # ── Restore real systemctl ─────────────────────────────────────────
