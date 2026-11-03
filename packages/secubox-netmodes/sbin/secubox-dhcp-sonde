@@ -1,0 +1,334 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-dhcp-sonde (#3419) : jamais de DHCP servi s'il existe déjà un serveur DHCP sur le segment.
+
+  sonder <interface> [délai]   envoie un DHCPDISCOVER (jamais de REQUEST : aucun bail pris), attend les OFFER ;
+                               JSON des serveurs vus ; code 0 aucun serveur tiers, 10 serveur tiers, 1 sonde impossible
+  garde                        avant secubox-lan-dhcp : sonde chaque interface de lan-dhcp.conf et dhcp.d/*.conf ;
+                               un serveur tiers (ou une sonde impossible) refuse le démarrage (code 1) et l'audite
+  surveiller                   minuterie, DHCP actif : un serveur tiers apparu arrête secubox-lan-dhcp et l'audite
+
+Le choix explicite de l'administrateur (LAN isolé, mode routeur confirmé) s'écrit dans /etc/secubox/netmodes/dhcp.toml
+(`[sonde]` `forcer = true`, fichier root non inscriptible par d'autres) : la sonde tourne et audite quand même, mais
+ne refuse plus. Par défaut, la sonde a priorité.
+
+Bibliothèque standard seule (exécuté en root, `python3 -I`)."""
+import ipaddress
+import json
+import os
+import random
+import select
+import socket
+import stat
+import struct
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+CONF = Path("/var/lib/secubox-netmodes/lan-dhcp.conf")
+CONF_D = Path("/var/lib/secubox-netmodes/dhcp.d")
+FORCER = Path("/etc/secubox/netmodes/dhcp.toml")
+AUDIT = Path("/var/log/secubox/audit.log")
+UNITE = "secubox-lan-dhcp.service"
+SYS_NET = Path("/sys/class/net")
+DELAI = 4.0                                    # attente des OFFER, en secondes
+ESSAIS = 2                                     # DHCPDISCOVER envoyés (un serveur peut ignorer le premier)
+COOKIE = b"\x63\x82\x53\x63"
+NOM_IF = __import__("re").compile(r"[A-Za-z0-9._-]{1,15}")
+
+TIERS, SANS, IMPOSSIBLE = 10, 0, 1
+
+
+class SondeImpossible(Exception):
+    """La sonde n'a pas pu écouter ou émettre : ni « libre » ni « occupé »."""
+
+
+# --- paquets -----------------------------------------------------------------------------------------------------------
+
+def discover(mac: bytes, xid: int) -> bytes:
+    """DHCPDISCOVER minimal, drapeau broadcast (la réponse revient en diffusion : pas d'adresse pour la recevoir)."""
+    if len(mac) != 6:
+        raise ValueError("adresse MAC de 6 octets attendue")
+    entete = struct.pack("!BBBBIHH4s4s4s4s16s64s128s", 1, 1, 6, 0, xid, 0, 0x8000, bytes(4), bytes(4), bytes(4),
+                         bytes(4), mac + bytes(10), bytes(64), bytes(128))
+    options = COOKIE + bytes([53, 1, 1]) + bytes([55, 3, 1, 3, 54]) + bytes([255])
+    return entete + options
+
+
+def lire_offre(paquet: bytes, xid: int):
+    """Un DHCPOFFER pour notre xid : {"serveur": id de serveur (option 54) ou siaddr, "offerte": yiaddr} ; sinon None."""
+    if len(paquet) < 240 or paquet[0] != 2:
+        return None
+    if struct.unpack("!I", paquet[4:8])[0] != xid or paquet[236:240] != COOKIE:
+        return None
+    yiaddr, siaddr = paquet[16:20], paquet[20:24]
+    i, type_msg, serveur = 240, None, None
+    while i < len(paquet):
+        code = paquet[i]
+        if code == 255:
+            break
+        if code == 0:
+            i += 1
+            continue
+        if i + 1 >= len(paquet):
+            break
+        lg = paquet[i + 1]
+        val = paquet[i + 2:i + 2 + lg]
+        if len(val) != lg:
+            break
+        if code == 53 and lg == 1:
+            type_msg = val[0]
+        elif code == 54 and lg == 4:
+            serveur = val
+        i += 2 + lg
+    if type_msg != 2:
+        return None
+    return {"serveur": str(ipaddress.IPv4Address(serveur or siaddr)), "offerte": str(ipaddress.IPv4Address(yiaddr))}
+
+
+# --- sonde -------------------------------------------------------------------------------------------------------------
+
+def _socket_dhcp(interface, adresse):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        if interface:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, interface.encode() + b"\0")
+        s.bind(adresse)
+    except OSError:
+        s.close()
+        raise
+    return s
+
+
+def sonder(interface, mac: bytes, delai: float = DELAI, essais: int = ESSAIS, cible=("255.255.255.255", 67),
+           ecoute=("0.0.0.0", 68), lier=True, horloge=time.monotonic) -> list:
+    """Serveurs DHCP qui répondent sur `interface` (liste d'offres, sans doublon de serveur). Jamais de REQUEST.
+
+    `cible`, `ecoute` et `lier` existent pour les tests (faux serveur sur la boucle locale, ports non privilégiés)."""
+    xid = random.SystemRandom().getrandbits(32)
+    try:
+        s = _socket_dhcp(interface if lier else None, ecoute)
+    except OSError as exc:
+        raise SondeImpossible(f"écoute DHCP impossible sur {interface} : {exc}") from exc
+    vus = {}
+    try:
+        fin = horloge() + delai
+        for n in range(essais):
+            try:
+                s.sendto(discover(mac, xid), cible)
+            except OSError as exc:
+                raise SondeImpossible(f"DHCPDISCOVER non émis sur {interface} : {exc}") from exc
+            prochain = horloge() + delai / essais if n + 1 < essais else fin
+            while True:
+                reste = min(prochain, fin) - horloge()
+                if reste <= 0:
+                    break
+                prets, _, _ = select.select([s], [], [], reste)
+                if not prets:
+                    break
+                paquet, _src = s.recvfrom(4096)
+                offre = lire_offre(paquet, xid)
+                if offre:
+                    vus.setdefault(offre["serveur"], offre)
+    finally:
+        s.close()
+    return list(vus.values())
+
+
+def tiers(offres: list, locales: set) -> list:
+    """Les offres d'un AUTRE serveur que cette box (notre propre dnsmasq répond aussi à la sonde)."""
+    return [o for o in offres if o["serveur"] not in locales]
+
+
+# --- système -----------------------------------------------------------------------------------------------------------
+
+def adresses_locales() -> set:
+    r = subprocess.run(["ip", "-j", "-4", "addr", "show"], check=True, timeout=10, capture_output=True, text=True)
+    return {a["local"] for lien in json.loads(r.stdout or "[]") for a in lien.get("addr_info", []) if a.get("local")}
+
+
+def mac_de(interface: str) -> bytes:
+    texte = (SYS_NET / interface / "address").read_text(encoding="ascii").strip()
+    return bytes.fromhex(texte.replace(":", ""))
+
+
+def porteuse(interface: str) -> bool:
+    try:
+        return (SYS_NET / interface / "carrier").read_text(encoding="ascii").strip() == "1"
+    except OSError:                                      # interface baissée : carrier illisible (EINVAL)
+        return False
+
+
+def interfaces_conf(textes) -> list:
+    """Interfaces servies (`interface=` de lan-dhcp.conf et des fragments), validées, sans doublon, dans l'ordre."""
+    vues = []
+    for texte in textes:
+        for ligne in texte.splitlines():
+            ligne = ligne.strip()
+            if ligne.startswith("interface="):
+                for nom in ligne.split("=", 1)[1].split(","):
+                    nom = nom.strip()
+                    if NOM_IF.fullmatch(nom) and nom not in vues:
+                        vues.append(nom)
+    return vues
+
+
+def _lire_root(chemin: Path, maxi: int = 64 * 1024):
+    """Fichier ordinaire root, non inscriptible par groupe/autres, ouvert sans suivre de lien ; None s'il manque."""
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o022:
+            raise PermissionError(f"{chemin} refusé : fichier ordinaire root non inscriptible par d'autres exigé")
+        return os.read(fd, maxi + 1)[:maxi].decode("utf-8", "replace")
+    finally:
+        os.close(fd)
+
+
+def textes_conf() -> list:
+    textes = [_lire_root(CONF) or ""]
+    if CONF_D.is_dir():
+        textes += [_lire_root(p) or "" for p in sorted(CONF_D.glob("*.conf"))]
+    return textes
+
+
+def force_par_admin() -> bool:
+    import tomllib
+    texte = _lire_root(FORCER, 4096)
+    if not texte:
+        return False
+    try:
+        return tomllib.loads(texte).get("sonde", {}).get("forcer") is True
+    except tomllib.TOMLDecodeError as exc:
+        print(f"secubox-dhcp-sonde : {FORCER} illisible ({exc}) : la sonde garde la priorité", file=sys.stderr)
+        return False
+
+
+def auditer(action: str, detail: str, chemin: Path = AUDIT) -> None:
+    ligne = json.dumps({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "module": "netmodes",
+                        "action": action, "acteur": "secubox-dhcp-sonde", "detail": detail[:1000]},
+                       ensure_ascii=False) + "\n"
+    try:
+        fd = os.open(chemin, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
+        try:
+            os.write(fd, ligne.encode("utf-8"))
+        finally:
+            os.close(fd)
+    except OSError as exc:                               # ne se tait pas
+        print(f"secubox-dhcp-sonde : audit non écrit ({action}) : {exc}", file=sys.stderr)
+
+
+class Systeme:
+    """Accès au système, remplacé par un double dans les tests."""
+    interfaces = staticmethod(lambda: interfaces_conf(textes_conf()))
+    locales = staticmethod(adresses_locales)
+    porteuse = staticmethod(porteuse)
+    forcer = staticmethod(force_par_admin)
+    auditer = staticmethod(auditer)
+
+    @staticmethod
+    def sonder(interface):
+        return sonder(interface, mac_de(interface))
+
+    @staticmethod
+    def actif() -> bool:
+        return subprocess.run(["systemctl", "is-active", "--quiet", UNITE], check=False, timeout=30).returncode == 0
+
+    @staticmethod
+    def arreter() -> None:
+        subprocess.run(["systemctl", "stop", "--no-block", UNITE], check=True, timeout=30, capture_output=True,
+                       text=True)
+
+
+def bilan(sys_) -> tuple:
+    """(serveurs tiers par interface, erreurs) sur les interfaces servies."""
+    trouves, erreurs = {}, []
+    locales = sys_.locales()
+    for iface in sys_.interfaces():
+        if not sys_.porteuse(iface):
+            continue                                     # pas de lien : personne avec qui entrer en conflit
+        try:
+            t = tiers(sys_.sonder(iface), locales)
+        except (SondeImpossible, OSError, ValueError) as exc:
+            erreurs.append(f"{iface} : {exc}")
+            continue
+        if t:
+            trouves[iface] = t
+    return trouves, erreurs
+
+
+def _decrire(trouves: dict) -> str:
+    return " ; ".join(f"{i} : " + ", ".join(f"{o['serveur']} (offre {o['offerte']})" for o in offres)
+                      for i, offres in trouves.items())
+
+
+def garde(sys_=Systeme) -> int:
+    trouves, erreurs = bilan(sys_)
+    if not trouves and not erreurs:
+        return 0
+    if trouves:
+        detail = f"serveur DHCP déjà présent, {UNITE} non démarré : {_decrire(trouves)}"
+    else:
+        detail = f"sonde DHCP impossible, {UNITE} non démarré par prudence : {' ; '.join(erreurs)}"
+    if sys_.forcer():
+        sys_.auditer("dhcp-tiers-force", f"{detail} — démarrage FORCÉ par l'administrateur ({FORCER})")
+        print(f"secubox-dhcp-sonde : {detail} ; forcé par {FORCER}", file=sys.stderr)
+        return 0
+    sys_.auditer("dhcp-tiers-refus", detail)
+    print(f"secubox-dhcp-sonde : {detail}", file=sys.stderr)
+    return 1
+
+
+def surveiller(sys_=Systeme) -> int:
+    if not sys_.actif():
+        return 0
+    trouves, erreurs = bilan(sys_)
+    for e in erreurs:                                    # sonde impossible en cours de service : signalé, pas d'arrêt
+        print(f"secubox-dhcp-sonde : surveillance : {e}", file=sys.stderr)
+    if not trouves:
+        return 0
+    detail = f"serveur DHCP apparu sur le segment : {_decrire(trouves)}"
+    if sys_.forcer():
+        sys_.auditer("dhcp-tiers-force", f"{detail} — {UNITE} maintenu, forcé par l'administrateur ({FORCER})")
+        return 0
+    sys_.arreter()
+    sys_.auditer("dhcp-tiers-arret", f"{detail} ; {UNITE} arrêté")
+    print(f"secubox-dhcp-sonde : {detail} ; {UNITE} arrêté", file=sys.stderr)
+    return 0
+
+
+def main(argv=None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args == ["garde"]:
+        return garde()
+    if args == ["surveiller"]:
+        return surveiller()
+    if args and args[0] == "sonder" and len(args) in (2, 3) and NOM_IF.fullmatch(args[1]):
+        try:
+            delai = float(args[2]) if len(args) == 3 else DELAI
+            if not 0.5 <= delai <= 30:
+                raise ValueError(delai)
+            offres = sonder(args[1], mac_de(args[1]), delai)
+            locales = adresses_locales()
+        except (SondeImpossible, OSError, ValueError, subprocess.SubprocessError) as exc:
+            print(json.dumps({"erreur": str(exc)}, ensure_ascii=False))
+            return IMPOSSIBLE
+        t = tiers(offres, locales)
+        print(json.dumps({"interface": args[1], "offres": offres, "tiers": t}, ensure_ascii=False))
+        return TIERS if t else SANS
+    print("usage : secubox-dhcp-sonde sonder <interface> [délai] | garde | surveiller", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

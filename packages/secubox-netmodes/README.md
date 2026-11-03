@@ -290,3 +290,22 @@ DHCP vers la box (secubox-nac 3.9.5). Les ports isolés (`lanN`, 1.6.0) ne sont 
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+## Garde du DHCP du LAN (#3419)
+
+Avant chaque démarrage de `secubox-lan-dhcp`, `secubox-lan-dhcp-garde` lance `secubox-dhcp-sonde garde` : un
+DHCPDISCOVER (jamais de REQUEST, aucun bail) sur chaque interface servie. Un autre serveur DHCP sur le segment, ou une
+sonde impossible, refuse le démarrage (audit `dhcp-tiers-refus`). Pendant le service, `secubox-lan-dhcp-surveille.timer`
+(toutes les 5 min) arrête le DHCP si un serveur tiers apparaît (audit `dhcp-tiers-arret`).
+
+Choix explicite de l'administrateur (LAN isolé) : `/etc/secubox/netmodes/dhcp.toml`, root, non inscriptible par
+d'autres :
+
+```toml
+[sonde]
+forcer = true
+```
+
+La sonde tourne et audite toujours (`dhcp-tiers-force`). Diagnostic : `secubox-dhcp-sonde sonder br-lan`.
+
+Une seule interface (aucun port LAN distinct du WAN) : `secubox-net-detect` retient le mode `single`, jamais le routeur.

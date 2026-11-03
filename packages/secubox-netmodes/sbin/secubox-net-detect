@@ -9,7 +9,8 @@ set -u  # Exit on undefined variables, but allow command failures
 SECUBOX_CONF="/etc/secubox/secubox.conf"
 NETPLAN_DIR="/etc/netplan"
 SYS_NET="/sys/class/net"
-OUTPUT_JSON="${1:-/run/secubox/net-detect.json}"
+# #3419 : jamais $1 (le verbe) : « detect » écrivait un fichier « detect » dans le dossier courant.
+OUTPUT_JSON="/run/secubox/net-detect.json"
 
 # Colors for terminal output
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -423,6 +424,33 @@ wan_a_ne_pas_toucher() {
     return 1
 }
 
+# ── Mode effectif (#3419) ───────────────────────────────────────────
+# Une seule interface ne doit JAMAIS mener au mode routeur : sans port LAN distinct du WAN, pas de br-lan, pas de LAN
+# à servir (ni DHCP ni Unbound du LAN), donc mode « single » (client DHCP sur le WAN). Idem pour « bridge » : un pont
+# sans membre ne pontait rien. Le profil VM reste en « single » (ses cartes ont leur propre DHCP).
+# Usage : choisir_mode <mode demandé> <profil> <wan> "<lan…>" ; écrit le mode effectif sur la sortie standard.
+choisir_mode() {
+    local demande="$1" profil="$2" wan="$3" lan="$4" iface distincts=""
+    if [[ "$profil" == "vm" ]]; then
+        echo single
+        return 0
+    fi
+    for iface in $lan; do
+        [[ -n "$iface" && "$iface" != "$wan" ]] && distincts="$distincts $iface"
+    done
+    case "$demande" in
+        router|bridge)
+            if [[ -z "${distincts// /}" ]]; then
+                echo single
+            else
+                echo "$demande"
+            fi
+            ;;
+        single) echo single ;;
+        *)      echo single ;;      # mode inconnu : jamais le routeur par défaut
+    esac
+}
+
 # ── Main ────────────────────────────────────────────────────────────
 main() {
     local action="${1:-detect}"
@@ -451,10 +479,11 @@ main() {
     [[ -n "$sfp_ifaces" ]] && log "SFP interfaces: $sfp_ifaces"
     log "Profile: $profile"
 
-    # VMs use single mode (no bridge) - override any default
-    if [[ "$profile" == "vm" ]]; then
-        mode="single"
-        log "VM profile detected - using single mode (no bridge)"
+    # #3419 : mode effectif. VM, ou aucune interface LAN distincte du WAN : « single », jamais le routeur.
+    local demande="$mode"
+    mode=$(choisir_mode "$demande" "$profile" "$wan_iface" "$lan_ifaces")
+    if [[ "$mode" != "$demande" ]]; then
+        log "Mode $demande demandé, mode effectif : $mode (profil $profile, aucune interface LAN distincte du WAN $wan_iface)"
     fi
 
     case "$action" in
@@ -479,6 +508,18 @@ main() {
             timeout 30 netplan apply 2>/dev/null || log "netplan apply skipped or failed (code $?; 124 = delai de 30 s depasse)"
             ok "Network configuration applied (mode: $mode)"
             ;;
+        generate)
+            # #3419 : au démarrage (secubox-cmdline, secubox-net-detect.service, ordonnés AVANT sysinit/network-pre),
+            # `netplan apply` relance systemd-networkd, qui attend ces mêmes cibles : interblocage jusqu'au délai,
+            # unité en échec. Ici on écrit le netplan et on le compile seulement ; networkd le lit à son démarrage.
+            if [[ "$board" == "mochabin" ]] && wan_a_ne_pas_toucher "$wan_iface"; then
+                log "MOCHAbin : $wan_iface (mvpp2) est configuré ou indéterminé, netplan non réécrit."
+                return 0
+            fi
+            generate_netplan "$board" "$wan_iface" "$lan_ifaces" "$sfp_ifaces" "$mode"
+            timeout 20 netplan generate 2>/dev/null || log "netplan generate en échec (code $?) : networkd garde sa configuration précédente"
+            ok "Network configuration written (mode: $mode, appliquée au démarrage de networkd)"
+            ;;
         test)
             # Test WAN connectivity
             if check_link "$wan_iface"; then
@@ -488,9 +529,10 @@ main() {
             fi
             ;;
         *)
-            echo "Usage: $0 {detect|apply|test} [mode]"
-            echo "  detect - Detect interfaces and output JSON"
-            echo "  apply  - Generate and apply netplan (modes: router|bridge|single)"
+            echo "Usage: $0 {detect|apply|generate|test} [mode]"
+            echo "  detect   - Detect interfaces and output JSON"
+            echo "  apply    - Generate and apply netplan (modes: router|bridge|single)"
+            echo "  generate - Write and compile netplan only, no apply (boot time, #3419)"
             echo "  test   - Test WAN connectivity"
             exit 1
             ;;
