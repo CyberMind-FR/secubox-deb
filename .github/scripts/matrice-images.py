@@ -74,17 +74,17 @@ PROFIL_DEFAUT = "full"
 #: l'étape « Create GitHub Release » échouait (alpha 9). La release ne porte donc que lite et isp pour cette
 #: carte ; `full` reste constructible à la main (workflow_dispatch / build-image.sh --profile full).
 PROFILS_PUBLIES = {
-    "mochabin": ["lite", "isp"],
-    # ESPRESSObin (Armada 3720, 1 a 2 Go, swap 512 Mo) : lite seul. Depuis la refonte des profils (#2146), `isp` porte
-    # tout l'hebergement (courrier, Matrix, Nextcloud, photos, Git…) et vise 8 Go : l'y construire par defaut comme
-    # « socle de comparaison » donnerait une image qui cale au demarrage.
-    # `minimal` (#2834) : DPI, dns-guard, ad-guard, NAC, Freebox et la seule WebUI d'administration (ni WAF, ni Hall, ni hebergement). Il tient sur la carte
-    # la ou lite/isp calent, et se publie A COTE de lite pour l'ESPRESSObin v7.
-    "espressobin-v7": ["lite", "minimal"],
+    # MATRICE PAR MATÉRIEL DE RÉFÉRENCE (#3428, validée par le propriétaire le 2026-11-03) : UNE image par carte,
+    # base `lite` + options du matériel ; le profil final (isp, full…) s'installe depuis premier pas, par apt.
+    # Plus de variante isp/full publiée pour l'instant : full-mochabin dépassait les 2 Gio d'un fichier de release
+    # (alpha 9) et isp/full sur ESPRESSObin calaient. Un profil reste forçable à la main (--profil / workflow_dispatch).
+    "mochabin": ["lite"],
+    "vm-x64": ["lite"],
+    # rpi400 = rpi-arm64 : lite + kiosque HDMI (le kiosque est ajouté par le workflow pour rpi400/rpi4).
+    "rpi400": ["lite"],
+    # ESPRESSObin v7 (Armada 3720, 1 à 2 Go) : minimal (#2834) — ni WAF ni Hall, tient là où lite cale.
+    "espressobin-v7": ["minimal"],
     "espressobin-ultra": ["lite"],
-    # RPi 400 (BCM2711, 4 Go, carte uSD) : lite (le plus léger : protection, sans hébergement), isp et full. Le lite n'existait pas pour cette carte
-    # (#2497) : une uSD « lite RPi400 » n'avait donc aucune image publiée. full-rpi pèse 1,7 Go, sous la limite de 2 Gio d'un fichier de release.
-    "rpi400": ["lite", "isp", "full", "minimal"],
 }
 
 _RE_PROFIL = re.compile(r"^\s*SECUBOX_PROFILE\s*=\s*(\S+)", re.M)

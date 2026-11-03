@@ -70,7 +70,8 @@ jobs:
             output_pattern: "secubox-live-amd64-*.img*"
             needs_qemu: false
             embed_image: false
-            extra_args: "--kiosk"
+            # Profil d'amorçage lite (#3428) : le profil final s'installe depuis premier pas (apt).
+            extra_args: "--kiosk --profile lite"
 
           # MOCHAbin (arm64) - U-Boot distroboot
           - platform: mochabin
@@ -93,7 +94,8 @@ jobs:
             output_pattern: "secubox-*rpi-arm64-*.img*"
             needs_qemu: true
             embed_image: false
-            extra_args: "--kiosk"
+            # rpi-arm64 = lite + kiosque HDMI (#3428) ; nom produit : secubox-lite-rpi-arm64-<suite>.img.
+            extra_args: "--kiosk --profile lite"
 
     steps:
       # Skip job if platform doesn't match (workflow_dispatch only)
@@ -201,6 +203,7 @@ jobs:
           echo "=== Building embedded eMMC target image ==="
           sudo -E bash image/build-image.sh \
             --board mochabin \
+            --profile lite \
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
             --slipstream
