@@ -1944,6 +1944,44 @@ for svc in "${ROOTFS}/usr/lib/systemd/system/secubox-"*.service; do
 done
 ok "Enabled ${ENABLED_COUNT} SecuBox services"
 
+# .path ET .timer (#3442) : la boucle ci-dessus ne voit que les .service, et le
+# `systemctl enable` des postinst échoue dans le chroot. secubox-premier-pas-appliquer.path
+# restait désactivée : l'assistant déposait sa demande, personne ne la lisait, écran figé
+# sur « Démarrage… ». CE QUE LE PAQUET ACTIVE, ET SEULEMENT CELA : une unité est liée si
+# un postinst l'active (deb-systemd-helper enable, systemctl enable) ; les --no-enable
+# (bbs-ingest, pilotage-ecoute, majauto que premier-pas décide) restent désactivées.
+# Le bloc --no-enable de dh_installsystemd contient lui aussi `deb-systemd-helper enable`,
+# mais sous `debian-installed` (ré-activation d'une unité déjà activée) : il ne compte pas.
+_active_par_postinst() {
+  local u="${1//./\\.}" f txt
+  for f in "${ROOTFS}"/var/lib/dpkg/info/*.postinst; do
+    [[ -f "$f" ]] || continue
+    # Lignes continuées (`\` en fin de ligne) recollées : webfilter active ses unités sur deux lignes.
+    txt=$(sed -e ':a' -e '/\\$/N; s/\\\n//; ta' "$f")
+    grep -qE "^[^#]*systemctl[[:space:]]+enable[[:space:]][^#]*${u}([[:space:];]|$)" <<<"$txt" && return 0
+    grep -qE "^[^#]*deb-systemd-helper[[:space:]]+enable[[:space:]]+'${u}'" <<<"$txt" \
+      && ! grep -qE "deb-systemd-helper[[:space:]]+debian-installed[[:space:]]+'${u}'" <<<"$txt" && return 0
+  done
+  return 1
+}
+UNITS_COUNT=0
+for unit in "${ROOTFS}/usr/lib/systemd/system/secubox-"*.path "${ROOTFS}/usr/lib/systemd/system/secubox-"*.timer; do
+  [[ -f "$unit" ]] || continue
+  unit_name=$(basename "$unit")
+  case "$unit_name" in *@.path|*@.timer) continue ;; esac
+  _active_par_postinst "$unit_name" || continue
+  for target in $(sed -n 's/^WantedBy=//p' "$unit"); do
+    mkdir -p "${ROOTFS}/etc/systemd/system/${target}.wants"
+    ln -sf "/usr/lib/systemd/system/${unit_name}" \
+      "${ROOTFS}/etc/systemd/system/${target}.wants/${unit_name}"
+  done
+  grep -q '^WantedBy=' "$unit" && UNITS_COUNT=$((UNITS_COUNT + 1))
+done
+[[ ! -f "${ROOTFS}/usr/lib/systemd/system/secubox-premier-pas-appliquer.path" ]] \
+  || [[ -L "${ROOTFS}/etc/systemd/system/paths.target.wants/secubox-premier-pas-appliquer.path" ]] \
+  || { echo "ERREUR : secubox-premier-pas-appliquer.path non activée" >&2; exit 1; }
+ok "Enabled ${UNITS_COUNT} SecuBox .path/.timer units"
+
 # Enable nginx for API proxying
 ln -sf /usr/lib/systemd/system/nginx.service \
   "${ROOTFS}/etc/systemd/system/multi-user.target.wants/nginx.service" 2>/dev/null || true
