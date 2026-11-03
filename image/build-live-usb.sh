@@ -1982,6 +1982,26 @@ done
   || { echo "ERREUR : secubox-premier-pas-appliquer.path non activée" >&2; exit 1; }
 ok "Enabled ${UNITS_COUNT} SecuBox .path/.timer units"
 
+# APPARMOR SUR LE LIVE (#3442). L'unité Debian se saute d'elle-même sur un live
+# (ConditionPathExists=!/run/live/overlay/work) et la boucle ci-dessus ne voit que
+# secubox-* : aucun profil chargé, et chaque service à AppArmorProfile= obligatoire
+# (netmodes, profiles-releve, lan-dhcp, pilotage) échouait en 231/APPARMOR — sur gk8,
+# profilectl défaisait alors tout le profil ISP. Vérifié sur gk8 : les profils se
+# chargent sur l'overlay (133, dont 34 enforce) et netmodes tourne confiné sans refus.
+if [[ -f "${ROOTFS}/usr/lib/systemd/system/apparmor.service" ]]; then
+  mkdir -p "${ROOTFS}/etc/systemd/system/apparmor.service.d" "${ROOTFS}/etc/systemd/system/sysinit.target.wants"
+  cat > "${ROOTFS}/etc/systemd/system/apparmor.service.d/secubox-live.conf" <<'AALIVE'
+# SecuBox (#3442) : charger les profils aussi sur le live (overlayfs) — AppArmor enforce exigé.
+[Unit]
+ConditionPathExists=
+AALIVE
+  ln -sf /usr/lib/systemd/system/apparmor.service \
+    "${ROOTFS}/etc/systemd/system/sysinit.target.wants/apparmor.service"
+  ok "AppArmor chargé au démarrage du live"
+else
+  echo "ERREUR : apparmor.service absent de l'image (AppArmor enforce exigé)" >&2; exit 1
+fi
+
 # Enable nginx for API proxying
 ln -sf /usr/lib/systemd/system/nginx.service \
   "${ROOTFS}/etc/systemd/system/multi-user.target.wants/nginx.service" 2>/dev/null || true

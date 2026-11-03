@@ -1,3 +1,11 @@
+secubox-haproxy (1.12.13-1~trixie1) trixie; urgency=medium
+
+  * Frontal : localhost et <nom>.local, depuis une source privée, mènent à
+    l'administration comme secubox.local ; le kiosque de la box tombait en
+    421 après la bascule du frontal (constaté sur gk8) (ref #3442).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 17:05:00 +0100
+
 secubox-haproxy (1.12.12-1~trixie1) trixie; urgency=medium
 
   * Relecture #3401, passe 2 (ref #3401) : l'exposition au maillage redevient permise (seule l'exposition publique est refusée) ; contournement WAF : l'administrateur est écrit dans l'audit du refus.

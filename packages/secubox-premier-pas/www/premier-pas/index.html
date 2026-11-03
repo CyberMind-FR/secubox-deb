@@ -298,15 +298,34 @@ async function veille() {
   setTimeout(veille, 4000);
 }
 
+// Adresses de la box pour un navigateur externe (#3442) : nom .local puis IPv4 du LAN, liens vers l'administration (racine).
+let ACCES = null;
+function blocAcces(a, perdue) {
+  a = a || ACCES; if (a) ACCES = a;
+  const liens = [...((a && a.noms) || []), ...((a && a.ips) || [])].map(h => `https://${h}/`);
+  if (!liens.length) return "";
+  const l = liens.map(u => `<a href="${esc(u)}">${esc(u)}</a>`).join("<br>");
+  return perdue
+    ? `<p class="aide">La box ne répond plus à cette adresse : elle en a sans doute changé (mode routeur). Rouvrez-la par :<br>${l}</p><p class="note">L'adresse IP exacte est aussi affichée sur l'écran de la box.</p>`
+    : `<p class="note">Adresse de la box depuis un autre appareil :<br>${l}</p>`;
+}
+
 async function suivi() {
   SUIVI = true;
   $("#pied").hidden = true;          // le code ne sert plus une fois l'application lancée
   const prop = (ETAT && ETAT.proposition) || {};
   $("#ecran").innerHTML = `${banniereForcee(prop)}<h1>La box se configure</h1><p class="aide" id="act">Démarrage…</p>
-    <div class="barre" aria-hidden="true"><i id="bar"></i></div><p class="note">Ne l'éteignez pas. Cela peut prendre plusieurs minutes (services à installer).</p>`;
+    <div class="barre" aria-hidden="true"><i id="bar"></i></div><p class="note">Ne l'éteignez pas. Cela peut prendre plusieurs minutes (services à installer).</p>
+    <div id="acces">${blocAcces(ETAT && ETAT.acces)}</div>`;
+  let ratees = 0;
   const tour = async () => {
     let e;
-    try { e = await api("/etat"); } catch (_) { return setTimeout(tour, 3000); }
+    try { e = await api("/etat"); ratees = 0; } catch (_) {
+      // LE RÉSEAU BASCULE (#3442) : au mode routeur la box prend souvent une autre adresse, cette page ne peut plus la joindre.
+      if (++ratees === 3) $("#acces").innerHTML = blocAcces(ACCES, true);
+      return setTimeout(tour, 3000);
+    }
+    if (e.acces && (e.acces.ips || []).length) { ACCES = e.acces; if (!ratees) $("#acces").innerHTML = blocAcces(ACCES); }
     const m = e.moteur || {};
     if (e.fait) return fini();
     if (m.phase === "echec") {
@@ -327,7 +346,8 @@ function fini() {
   $("#rail").innerHTML = ""; $("#pas").textContent = ""; $("#pied").hidden = true;
   $("#ecran").innerHTML = `<h1>Votre box est prête</h1>
     <p class="aide">Connectez-vous avec le compte « admin » et votre mot de passe. La box vous fera ensuite scanner le QR de votre application d'authentification.</p>
-    <div class="nav"><span></span><button type="button" class="b prim" id="hall">Ouvrir le Hall</button></div>`;
+    ${blocAcces(ACCES)}
+    <div class="nav"><span></span><button type="button" class="b prim" id="hall">Ouvrir l'administration</button></div>`;
   try { sessionStorage.removeItem("premier-pas.jeton"); } catch (_) {}
   $("#hall").onclick = () => { location.href = "/"; };
 }

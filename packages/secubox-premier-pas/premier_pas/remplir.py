@@ -21,6 +21,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Dict
 
+from . import adresses as A
 from . import moteur as M
 from . import profil as P
 
@@ -97,7 +98,7 @@ def etat() -> Dict[str, Any]:
         etapes.append({"id": e, "libelle": P.LIBELLES[e], "statut": statut, "motif": ex.erreurs.get(e)})
     return {"fait": M.MARQUEUR.exists(), "complet": ex.complet, "reprendre": ex.premiere_etape,
             "etapes": etapes, "profil": vue(profil), "moteur": moteur,
-            "demande_en_cours": demande_path().exists(), "proposition": proposition()}
+            "demande_en_cours": demande_path().exists(), "proposition": proposition(), "acces": A.acces()}
 
 
 CHAMPS = {
