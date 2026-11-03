@@ -34,6 +34,7 @@ on:
           - x64
           - mochabin
           - rpi400
+          - rpi4-dsi
         default: all
       compress:
         description: 'Compress output (gzip)'
@@ -96,6 +97,21 @@ jobs:
             embed_image: false
             # rpi-arm64 = lite + kiosque HDMI (#3428) ; nom produit : secubox-lite-rpi-arm64-<suite>.img.
             extra_args: "--kiosk --profile lite"
+
+          # Raspberry Pi 4 + ecran officiel 7" DSI tactile (#3426) : meme script,
+          # kiosque + paquet optionnel secubox-rpi-dsi (arm64, pris dans
+          # output/debs = agregat secubox-debs-all), configure au 1er demarrage
+          # par secubox-rpi-dsi-boot.service. Fichier distinct : build-rpi-usb.sh
+          # nomme l'image secubox-<profil>-rpi4-dsi-arm64-<suite> avec --rpi-dsi,
+          # et ce motif ne recoupe PAS celui de rpi400 (secubox-*rpi-arm64-*).
+          - platform: rpi4-dsi
+            arch: arm64
+            script: build-rpi-usb.sh
+            artifact_name: secubox-rpi4-dsi-arm64
+            output_pattern: "secubox-*rpi4-dsi-arm64-*.img*"
+            needs_qemu: true
+            embed_image: false
+            extra_args: "--kiosk --rpi-dsi"
 
     steps:
       # Skip job if platform doesn't match (workflow_dispatch only)
@@ -405,6 +421,7 @@ jobs:
             | `secubox-live-amd64-${{ env.DEBIAN_SUITE }}.img.gz` | x64 PC | amd64 | GRUB UEFI/BIOS | `secubox-flash-disk` (press `d`) |
             | `secubox-mochabin-live-usb.img.gz` | MOCHAbin | arm64 | U-Boot extlinux | `secubox-flash-emmc` (press `f`) |
             | `secubox-rpi-arm64-${{ env.DEBIAN_SUITE }}.img.gz` | Raspberry Pi 400 | arm64 | Pi firmware | Manual install |
+            | `secubox-full-rpi4-dsi-arm64-${{ env.DEBIAN_SUITE }}.img.gz` | Raspberry Pi 4 + ecran officiel 7" tactile | arm64 | Pi firmware | Manual install |
 
             ### Flash to USB Drive
 
@@ -417,6 +434,9 @@ jobs:
 
             # Raspberry Pi 400
             zcat secubox-rpi-arm64-${{ env.DEBIAN_SUITE }}.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+
+            # Raspberry Pi 4 + ecran officiel 7" DSI tactile
+            zcat secubox-full-rpi4-dsi-arm64-${{ env.DEBIAN_SUITE }}.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
             ```
 
             ### Boot & Install to Internal Storage
