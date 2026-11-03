@@ -48,20 +48,29 @@ if [ "$1" = "configure" ]; then
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/premier-pas
     # API servie par l'agrégateur (comme la messagerie) : déclaration unique.
     python3 - <<'TOML' || echo "secubox-premier-pas : déclaration dans aggregator.toml impossible" >&2
-import pathlib, re
+import os, pathlib, re, sys
 f = pathlib.Path("/etc/secubox/aggregator.toml")
 # #3433 : dans une image, premier-pas est configuré AVANT l'agrégateur ; sans ce fichier l'inscription
 # était sautée et l'agrégateur créait ensuite le sien depuis l'exemple, sans premier-pas (API 404).
 exemple = pathlib.Path("/etc/secubox/aggregator.toml.example")
-if not f.exists() and exemple.exists():
-    f.write_text(exemple.read_text())
-    f.chmod(0o644)
-if f.exists():
-    s = f.read_text()
-    if '"premier-pas"' not in s:
-        s = re.sub(r'modules\s*=\s*\[', 'modules = [\n    "premier-pas",', s, count=1)
-        f.write_text(s)
-        print("secubox-premier-pas : déclaré dans aggregator.toml")
+
+def ecrire(texte):
+    tmp = f.with_suffix(".toml.tmp")
+    tmp.write_text(texte)
+    tmp.chmod(0o644)
+    os.replace(tmp, f)
+
+if not f.exists():
+    if not exemple.exists():
+        sys.exit("secubox-premier-pas : ni aggregator.toml ni son exemple — API non déclarée")
+    ecrire(exemple.read_text())
+s = f.read_text()
+if '"premier-pas"' not in s:
+    s, n = re.subn(r'modules\s*=\s*\[', 'modules = [\n    "premier-pas",', s, count=1)
+    if not n:
+        sys.exit("secubox-premier-pas : liste « modules » introuvable dans aggregator.toml — API non déclarée")
+    ecrire(s)
+    print("secubox-premier-pas : déclaré dans aggregator.toml")
 TOML
     # Verdict LAN de l'ouverture distante (#2731) : posé ici pour cette route seulement, et SEULEMENT si le fichier GeoIP du Hub existe (sinon
     # `$lan_client` est inconnue et nginx -t casserait toute la configuration), si secubox-proxy.conf ne pose pas DÉJÀ la directive, et si nginx -t passe.
