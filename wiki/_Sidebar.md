@@ -16,6 +16,7 @@
 * [[Trixie]]
 * [[Hardware-Matrix]]
 * [[RPi-Ecran-DSI-7]]
+* [[MirrorNet-Infrastructure-Distribuee]]
 * [[Roadmap]]
 * [[Profils]]
 * [[Valider-un-parc|Valider un parc]]
