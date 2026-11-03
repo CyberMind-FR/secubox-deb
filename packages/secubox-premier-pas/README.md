@@ -30,6 +30,7 @@ Paquet Debian : version `0.4.9-1~bookworm1`, architecture `all`.
 - `secubox-premier-pas-appliquer.path` : SecuBox Premier Pas — une face demande l'application du profil (#1522)
 - `secubox-premier-pas-appliquer.service` : SecuBox Premier Pas — application du profil rempli par une face (#1522), lance `premier-pasctl`
 - `secubox-premier-pas-console.service` : SecuBox Premier Pas — assistant du premier démarrage, face console (tty1) (#1522), lance `premier-pas-console`
+- Console : affiche `https://<nom>/premier-pas/` et une ligne par IPv4 utile (LAN puis WAN, interfaces internes exclues), relues toutes les 10 s (#3424).
 - `secubox-premier-pas.service` : SecuBox — premier démarrage : profil prêt appliqué, sinon assistant (#1522), lance `premier-pasctl`
 
 ## API

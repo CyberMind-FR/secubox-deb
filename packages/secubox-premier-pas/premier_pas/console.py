@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from . import adresses as A
 from . import profil as P
 from . import remplir as R
 
@@ -158,6 +159,8 @@ class Console:
         self.OR, self.CY, self.OK, self.KO, self.GR = (curses.color_pair(i) for i in range(1, 6))
         self.i = 0
         self.msg = ""
+        self.adr = (A.nom_hote(), A.ipv4_utiles())
+        self.adr_t = time.monotonic()
 
     def cadre(self, titre: str, compteur: str):
         e = self.e
@@ -220,10 +223,28 @@ class Console:
                 self.texte(y, 13, cadre, curses.A_REVERSE if actif else 0)
             y += 2
         if page.id == "bienvenue":
-            self.texte(15, 2, "Préparer depuis une autre SecuBox, code :", self.GR)
-            self.texte(16, 2, code_affiche(), self.OR | curses.A_BOLD)
+            for k, ligne in enumerate(A.lignes(*self.adr)[:4]):
+                self.texte(13 + k, 2, ligne, self.GR if k == 0 else self.CY)
+            self.texte(18, 2, "Code : " + code_affiche(), self.OR | curses.A_BOLD)
+        else:
+            nom, ips = self.adr
+            u_nom, u_ips = A.urls(nom, ips)
+            u = u_nom or (u_ips[0] if u_ips else "")
+            if u:
+                self.texte(18, 2, ("Navigateur : " + u)[:L - 4], self.GR)
         self.texte(17, 2, (motif or self.msg)[:L - 4], self.KO)
         self.e.refresh()
+
+    def adresses_changees(self, lecteur: Optional[Callable[[], List[str]]] = None, delai: float = 10.0) -> bool:
+        """Relit les adresses au plus toutes les `delai` s ; True si elles ont changé (IP obtenue tard par DHCP)."""
+        if time.monotonic() - self.adr_t < delai:
+            return False
+        self.adr_t = time.monotonic()
+        nouv = (A.nom_hote(), (lecteur or A.ipv4_utiles)())
+        if nouv == self.adr:
+            return False
+        self.adr = nouv
+        return True
 
     def touche(self):
         """Attend une touche, mais regarde toutes les 2 s si la box maîtresse
@@ -233,6 +254,8 @@ class Console:
             try:
                 return self.e.get_wch()
             except curses.error:
+                if self.adresses_changees():
+                    return "__adresses__"
                 p = R.proposition()
                 if p.get("statut") == "forcee":
                     return "__force__"
@@ -249,6 +272,8 @@ class Console:
             k = self.touche()
             if k in ("__force__", "__proposition__"):
                 return k
+            if k == "__adresses__":
+                continue                               # simple redessin : saisie et message conservés
             if change_choix(c, k, len(vis) == 1):
                 pass
             elif k in ("\t", curses.KEY_DOWN):
@@ -302,6 +327,8 @@ class Console:
             k = self.touche()
             if k in ("__force__", "__proposition__"):
                 return k
+            if k == "__adresses__":
+                continue
             if k in ("\n", "\r", curses.KEY_ENTER) and not manque:
                 return "appliquer"
             if k == "\x1b":
