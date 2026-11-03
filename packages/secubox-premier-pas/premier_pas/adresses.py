@@ -84,3 +84,13 @@ def lignes(nom: Optional[str] = None, ips: Optional[List[str]] = None, max_ip: i
     if not u_nom and not u_ips:
         out.append("(pas d'adresse réseau pour l'instant)")
     return out
+
+
+def acces(nom: Optional[str] = None, ips: Optional[List[str]] = None) -> dict:
+    """Adresses à montrer dans la page web (#3442) : la box change souvent d'adresse au mode routeur, la page doit dire où la retrouver.
+    LAN seulement (privées) : /etat est lu sans session, il ne livre pas l'adresse publique."""
+    nom = nom_hote() if nom is None else nom
+    ips = ipv4_utiles() if ips is None else ips
+    lan = [i for i in ips if any(ipaddress.IPv4Address(i) in r for r in _RFC1918)]
+    noms = [f"{nom}.local"] if nom and "." not in nom else ([nom] if nom else [])
+    return {"noms": noms, "ips": lan}
