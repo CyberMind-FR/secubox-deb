@@ -293,8 +293,9 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 
 ## Garde du DHCP du LAN (#3419)
 
-Avant chaque démarrage de `secubox-lan-dhcp`, `secubox-lan-dhcp-garde` lance `secubox-dhcp-sonde garde` : un
-DHCPDISCOVER (jamais de REQUEST, aucun bail) sur chaque interface servie. Un autre serveur DHCP sur le segment, ou une
+Avant chaque démarrage de `secubox-lan-dhcp` (relances automatiques comprises, par `ExecStartPre`), `secubox-lan-dhcp-garde` lance `secubox-dhcp-sonde garde` : un
+DHCPDISCOVER (jamais de REQUEST, aucun bail, MAC aléatoire localement administrée) sur chaque interface servie
+(`interface=` de la configuration), et sur elles seules ; aucune interface retenue vaut refus. Un autre serveur DHCP sur le segment, ou une
 sonde impossible, refuse le démarrage (audit `dhcp-tiers-refus`). Pendant le service, `secubox-lan-dhcp-surveille.timer`
 (toutes les 5 min) arrête le DHCP si un serveur tiers apparaît (audit `dhcp-tiers-arret`).
 

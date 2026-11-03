@@ -110,8 +110,11 @@ class Faux:
         self.offres, self.erreur, self.f, self.a, self.p = offres or [], erreur, forcer, actif, porteuse
         self.audits, self.arrets = [], 0
 
+    ifaces = ["br-lan"]
+    echec_arret = False
+
     def interfaces(self):
-        return ["br-lan"]
+        return self.ifaces
 
     def locales(self):
         return {"192.168.10.1"}
@@ -134,7 +137,10 @@ class Faux:
         return self.a
 
     def arreter(self):
+        self.audits.append(("<arret>", ""))
         self.arrets += 1
+        if self.echec_arret:
+            raise subprocess.CalledProcessError(1, ["systemctl", "stop"])
 
 
 TIERS = [{"serveur": "192.168.1.254", "offerte": "192.168.1.50"}]
@@ -168,7 +174,7 @@ def test_choix_force_de_l_administrateur_audite():
 def test_surveillance_arrete_le_dhcp_si_un_serveur_apparait():
     f = Faux(TIERS)
     assert S.surveiller(f) == 0
-    assert f.arrets == 1 and f.audits[0][0] == "dhcp-tiers-arret"
+    assert f.arrets == 1 and [a for a, _ in f.audits] == ["dhcp-tiers-arret", "<arret>"]    # audité AVANT l'arrêt
     f = Faux(TIERS, actif=False)
     S.surveiller(f)
     assert f.arrets == 0 and f.audits == []
@@ -187,6 +193,7 @@ def test_fichier_de_forcage_refuse_s_il_n_est_pas_root(tmp_path, monkeypatch):
 
 def test_audit_ecrit_une_ligne_json(tmp_path):
     a = tmp_path / "audit.log"
+    a.touch()
     S.auditer("dhcp-tiers-refus", "br-lan : 192.168.1.254", a)
     assert '"action": "dhcp-tiers-refus"' in a.read_text() and '"module": "netmodes"' in a.read_text()
 
@@ -205,8 +212,6 @@ def unite(nom):
 
 def test_lan_dhcp_garde_condition_et_relances_bornees():
     u = unite("secubox-lan-dhcp.service")
-    assert u["Requires"] == ["secubox-lan-dhcp-garde.service"]
-    assert "secubox-lan-dhcp-garde.service" in u["After"][0].split()
     assert u["ConditionPathExists"] == ["/var/lib/secubox-netmodes/lan-dhcp.conf"]
     assert u["Wants"] == ["secubox-lan-dhcp-surveille.timer"]
     burst, intervalle, pause = int(u["StartLimitBurst"][0]), int(u["StartLimitIntervalSec"][0]), int(u["RestartSec"][0])
@@ -271,3 +276,39 @@ def test_demarrage_sans_netplan_apply():
     assert "netplan generate" in bloc and "netplan apply" not in bloc
     assert re.search(r'mode=\$\(choisir_mode "\$demande"', texte)
     assert 'OUTPUT_JSON="/run/secubox/net-detect.json"' in texte
+
+
+def test_arret_en_echec_audite():
+    f = Faux(TIERS)
+    f.echec_arret = True
+    assert S.surveiller(f) == 1
+    assert [a for a, _ in f.audits] == ["dhcp-tiers-arret", "<arret>", "dhcp-tiers-arret-echec"]
+
+
+def test_garde_sans_interface_retenue_refuse():
+    f = Faux()
+    f.ifaces = []
+    assert S.garde(f) == 1 and "aucune interface" in f.audits[0][1]
+    f = Faux(forcer=True)
+    f.ifaces = []
+    assert S.garde(f) == 0 and f.audits[0][0] == "dhcp-tiers-force"
+
+
+def test_audit_jamais_cree_par_la_sonde(tmp_path, capsys):
+    a = tmp_path / "audit.log"
+    S.auditer("dhcp-tiers-refus", "x", a)
+    assert not a.exists() and "audit non écrit" in capsys.readouterr().err
+
+
+def test_mac_de_sonde_aleatoire_localement_administree():
+    macs = {S.mac_aleatoire() for _ in range(20)}
+    assert len(macs) > 1
+    assert all(len(m) == 6 and m[0] & 0x02 and not m[0] & 0x01 for m in macs)
+
+
+def test_garde_rejouee_a_chaque_demarrage_y_compris_relance():
+    u = unite("secubox-lan-dhcp.service")
+    assert u["ExecStartPre"] == ["+/bin/systemctl start secubox-lan-dhcp-garde.service"]
+    assert "Requires" not in u
+    g = unite("secubox-lan-dhcp-garde.service")
+    assert "RemainAfterExit" not in g and "Before" not in g    # retombe inactive : rejouée à chaque appel

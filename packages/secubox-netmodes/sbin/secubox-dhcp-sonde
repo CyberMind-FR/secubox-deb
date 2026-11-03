@@ -7,8 +7,9 @@
 
   sonder <interface> [délai]   envoie un DHCPDISCOVER (jamais de REQUEST : aucun bail pris), attend les OFFER ;
                                JSON des serveurs vus ; code 0 aucun serveur tiers, 10 serveur tiers, 1 sonde impossible
-  garde                        avant secubox-lan-dhcp : sonde chaque interface de lan-dhcp.conf et dhcp.d/*.conf ;
-                               un serveur tiers (ou une sonde impossible) refuse le démarrage (code 1) et l'audite
+  garde                        avant secubox-lan-dhcp : sonde chaque interface SERVIE (`interface=` de lan-dhcp.conf
+                               et dhcp.d/*.conf), et elles seules ; un serveur tiers, une sonde impossible ou aucune
+                               interface retenue refuse le démarrage (code 1) et l'audite
   surveiller                   minuterie, DHCP actif : un serveur tiers apparu arrête secubox-lan-dhcp et l'audite
 
 Le choix explicite de l'administrateur (LAN isolé, mode routeur confirmé) s'écrit dans /etc/secubox/netmodes/dhcp.toml
@@ -49,6 +50,14 @@ class SondeImpossible(Exception):
 
 
 # --- paquets -----------------------------------------------------------------------------------------------------------
+
+def mac_aleatoire() -> bytes:
+    """chaddr de la sonde : MAC localement administrée (bit 1), unicast (bit 0 à zéro), tirée au hasard. Jamais celle de
+    l'interface : un serveur qui retient une offre pour ce client ne touche pas à une interface aussi cliente."""
+    octets = bytearray(random.SystemRandom().getrandbits(8) for _ in range(6))
+    octets[0] = (octets[0] & 0xFC) | 0x02
+    return bytes(octets)
+
 
 def discover(mac: bytes, xid: int) -> bytes:
     """DHCPDISCOVER minimal, drapeau broadcast (la réponse revient en diffusion : pas d'adresse pour la recevoir)."""
@@ -154,11 +163,6 @@ def adresses_locales() -> set:
     return {a["local"] for lien in json.loads(r.stdout or "[]") for a in lien.get("addr_info", []) if a.get("local")}
 
 
-def mac_de(interface: str) -> bytes:
-    texte = (SYS_NET / interface / "address").read_text(encoding="ascii").strip()
-    return bytes.fromhex(texte.replace(":", ""))
-
-
 def porteuse(interface: str) -> bool:
     try:
         return (SYS_NET / interface / "carrier").read_text(encoding="ascii").strip() == "1"
@@ -219,7 +223,8 @@ def auditer(action: str, detail: str, chemin: Path = AUDIT) -> None:
                         "action": action, "acteur": "secubox-dhcp-sonde", "detail": detail[:1000]},
                        ensure_ascii=False) + "\n"
     try:
-        fd = os.open(chemin, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
+        # Jamais O_CREAT : root créerait audit.log en root:root, illisible pour le reste du parc (secubox-core le crée).
+        fd = os.open(chemin, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_CLOEXEC)
         try:
             os.write(fd, ligne.encode("utf-8"))
         finally:
@@ -238,11 +243,12 @@ class Systeme:
 
     @staticmethod
     def sonder(interface):
-        return sonder(interface, mac_de(interface))
+        return sonder(interface, mac_aleatoire())
 
     @staticmethod
     def actif() -> bool:
-        return subprocess.run(["systemctl", "is-active", "--quiet", UNITE], check=False, timeout=30).returncode == 0
+        return subprocess.run(["systemctl", "is-active", "--quiet", UNITE], check=False, timeout=30,
+                              capture_output=True, text=True).returncode == 0
 
     @staticmethod
     def arreter() -> None:
@@ -254,7 +260,10 @@ def bilan(sys_) -> tuple:
     """(serveurs tiers par interface, erreurs) sur les interfaces servies."""
     trouves, erreurs = {}, []
     locales = sys_.locales()
-    for iface in sys_.interfaces():
+    interfaces = sys_.interfaces()
+    if not interfaces:                                   # conf présente (condition de l'unité) mais rien de retenu
+        erreurs.append("aucune interface servie retenue (interface= absent, nom refusé ou fragment vide)")
+    for iface in interfaces:
         if not sys_.porteuse(iface):
             continue                                     # pas de lien : personne avec qui entrer en conflit
         try:
@@ -301,8 +310,13 @@ def surveiller(sys_=Systeme) -> int:
     if sys_.forcer():
         sys_.auditer("dhcp-tiers-force", f"{detail} — {UNITE} maintenu, forcé par l'administrateur ({FORCER})")
         return 0
-    sys_.arreter()
-    sys_.auditer("dhcp-tiers-arret", f"{detail} ; {UNITE} arrêté")
+    sys_.auditer("dhcp-tiers-arret", f"{detail} ; arrêt de {UNITE}")    # audité AVANT l'arrêt
+    try:
+        sys_.arreter()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        sys_.auditer("dhcp-tiers-arret-echec", f"{detail} ; arrêt de {UNITE} en échec : {exc}")
+        print(f"secubox-dhcp-sonde : {detail} ; arrêt de {UNITE} en échec : {exc}", file=sys.stderr)
+        return 1
     print(f"secubox-dhcp-sonde : {detail} ; {UNITE} arrêté", file=sys.stderr)
     return 0
 
@@ -318,7 +332,7 @@ def main(argv=None) -> int:
             delai = float(args[2]) if len(args) == 3 else DELAI
             if not 0.5 <= delai <= 30:
                 raise ValueError(delai)
-            offres = sonder(args[1], mac_de(args[1]), delai)
+            offres = sonder(args[1], mac_aleatoire(), delai)
             locales = adresses_locales()
         except (SondeImpossible, OSError, ValueError, subprocess.SubprocessError) as exc:
             print(json.dumps({"erreur": str(exc)}, ensure_ascii=False))

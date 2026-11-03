@@ -24,7 +24,7 @@ def test_la_ligne_de_commande_est_lue(tmp_path):
     cmd = tmp_path / "cmdline"
     cmd.write_text("boot=live quiet secubox.netmode=bridge secubox.mode=tui\n")
     r = subprocess.run(["bash", str(HANDLER), "parse"], capture_output=True, text=True, timeout=30, check=True,
-                       env=dict(os.environ, SECUBOX_CMDLINE_FILE=str(cmd)))
+                       env=dict(os.environ, SECUBOX_TEST="1", SECUBOX_CMDLINE_FILE=str(cmd)))
     assert "SECUBOX_NETMODE=bridge" in r.stdout and "SECUBOX_MODE=tui" in r.stdout
 
 
@@ -37,7 +37,7 @@ def test_reseau_genere_jamais_applique_au_demarrage(tmp_path):
         _fonctions().split("    # Handle network mode\n", 1)[1].split("    # Handle kiosk mode\n", 1)[0]
     script = script.replace("local ", "")
     r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30,
-                       env=dict(os.environ, SECUBOX_NET_DETECT=str(faux)))
+                       env=dict(os.environ, SECUBOX_TEST="1", SECUBOX_NET_DETECT=str(faux)))
     assert r.returncode == 0, r.stderr
     assert appels.read_text().split() == ["generate", "single"]     # mode inconnu : jamais le routeur
     assert not re.search(r'^\s*"\$net_detect" apply', HANDLER.read_text(), re.M)
@@ -59,7 +59,7 @@ def test_ancien_nom_live_migre_nom_choisi_intact(tmp_path):
     (etc / "hosts").write_text("127.0.0.1  localhost secubox-live secubox secubox.local\n")
     (etc / "secubox" / "secubox.conf").write_text('[global]\nhostname = "secubox-live"\n')
     script = _fonctions() + "\nlog() { :; }\nmigrer_nom_live\n"
-    env = dict(os.environ, SECUBOX_ETC=str(etc))
+    env = dict(os.environ, SECUBOX_TEST="1", SECUBOX_ETC=str(etc))
     subprocess.run(["bash", "-c", script], check=True, timeout=30, env=env)
     assert (etc / "hostname").read_text() == "secubox\n"
     assert "secubox-live" not in (etc / "hosts").read_text()
@@ -98,3 +98,24 @@ def test_image_n_active_jamais_le_dhcp_du_lan():
     boucle = LIVE.split('for svc in "${ROOTFS}/usr/lib/systemd/system/secubox-"*.service; do', 1)[1].split("done", 1)[0]
     assert "secubox-lan-dhcp*.service)" in boucle
     assert re.search(r"secubox-lan-dhcp\*\.service\)[^;]*?continue", boucle, re.S)
+
+
+def _parse(tmp_path, ligne, **env):
+    cmd = tmp_path / "cmdline"
+    cmd.write_text(ligne)
+    r = subprocess.run(["bash", str(HANDLER), "parse"], capture_output=True, text=True, timeout=30, check=True,
+                       env=dict(os.environ, SECUBOX_CMDLINE_FILE=str(cmd), **env))
+    return r.stdout
+
+
+def test_sans_parametre_le_routeur_est_demande(tmp_path):
+    # multi-ports sans secubox.netmode : « router » demandé ; secubox-net-detect le garde s'il y a des ports LAN
+    # distincts (tests/test_dhcp_sonde_3419.py::test_mode_effectif) et retombe en single sinon
+    assert "SECUBOX_NETMODE=router" in _parse(tmp_path, "boot=live quiet\n", SECUBOX_TEST="1")
+
+
+def test_crochets_d_environnement_ignores_hors_test(tmp_path):
+    # hors SECUBOX_TEST=1, /proc/cmdline est lu, jamais le fichier désigné par l'environnement
+    sortie = _parse(tmp_path, "secubox.netmode=bridge\n")
+    vrai = Path("/proc/cmdline").read_text()
+    assert ("SECUBOX_NETMODE=bridge" in sortie) == ("secubox.netmode=bridge" in vrai)

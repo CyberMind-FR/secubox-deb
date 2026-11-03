@@ -7,8 +7,15 @@
 set -u  # Exit on undefined variables, but allow command failures
 
 # #3419 : jamais "$1" (c'est le verbe, « apply ») : la ligne de commande n'était jamais lue, tout paramètre
-# secubox.* ignoré. Fichier substituable pour les tests seulement.
-CMDLINE="${SECUBOX_CMDLINE_FILE:-/proc/cmdline}"
+# secubox.* ignoré. Crochets d'environnement (fichiers substitués) honorés SEULEMENT sous SECUBOX_TEST=1.
+CMDLINE="/proc/cmdline"
+ETC="/etc"
+NET_DETECT="/usr/sbin/secubox-net-detect"
+if [[ "${SECUBOX_TEST:-0}" == "1" ]]; then
+    CMDLINE="${SECUBOX_CMDLINE_FILE:-$CMDLINE}"
+    ETC="${SECUBOX_ETC:-$ETC}"
+    NET_DETECT="${SECUBOX_NET_DETECT:-$NET_DETECT}"
+fi
 MARKER_DIR="/var/lib/secubox"
 
 log() { echo "[cmdline] $*" | systemd-cat -t secubox-cmdline -p info 2>/dev/null || echo "[cmdline] $*"; }
@@ -74,7 +81,6 @@ send_plymouth_mode() {
 
 # #3419 : ancien nom d'image du live (« secubox-live », Alpha 20 et avant) conservé par la persistance. Le nom
 # documenté est « secubox ». On ne remplace QUE ce nom exact : un nom choisi au premier pas n'est jamais touché.
-ETC="${SECUBOX_ETC:-/etc}"
 migrer_nom_live() {
     local actuel
     actuel=$(tr -d '[:space:]' < "${ETC}/hostname" 2>/dev/null) || return 0
@@ -87,7 +93,7 @@ migrer_nom_live() {
         sed -i -E 's/^hostname[[:space:]]*=[[:space:]]*"secubox-live"[[:space:]]*$/hostname = "secubox"/' \
             "${ETC}/secubox/secubox.conf"
     fi
-    [[ -n "${SECUBOX_ETC:-}" ]] || hostname secubox 2>/dev/null || true
+    [[ "$ETC" != "/etc" ]] || hostname secubox 2>/dev/null || true
     log "Nom d'hôte secubox-live (ancien nom de l'image) remplacé par secubox"
 }
 
@@ -174,7 +180,7 @@ apply_settings() {
     # #3419 : « generate », jamais « apply » : cette unité est ordonnée avant sysinit.target et network-pre.target ;
     # `netplan apply` y relançait systemd-networkd, qui attend ces cibles (interblocage, délai dépassé, unité en
     # échec). secubox-net-detect décide du mode EFFECTIF : sans interface LAN distincte du WAN, jamais le routeur.
-    local net_detect="${SECUBOX_NET_DETECT:-/usr/sbin/secubox-net-detect}"
+    local net_detect="$NET_DETECT"
     if [[ -x "$net_detect" ]]; then
         local netmode="$SECUBOX_NETMODE"
         case "$netmode" in

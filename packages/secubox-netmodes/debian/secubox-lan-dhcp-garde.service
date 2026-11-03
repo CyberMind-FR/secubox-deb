@@ -11,7 +11,7 @@
 [Unit]
 Description=SecuBox — garde du DHCP du LAN (aucun autre serveur DHCP sur le segment)
 After=systemd-networkd.service
-Before=secubox-lan-dhcp.service
+# Sans Before= : lancée par ExecStartPre de secubox-lan-dhcp pendant son démarrage (un ordre inverse se bloquerait).
 ConditionPathExists=/var/lib/secubox-netmodes/lan-dhcp.conf
 
 [Service]
