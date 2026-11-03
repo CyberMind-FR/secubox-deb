@@ -12,7 +12,10 @@ Type=oneshot
 RemainAfterExit=yes
 
 # Run network detection and generate netplan
-ExecStart=/usr/sbin/secubox-net-detect apply router
+# #3419 : « generate » (écrit et compile le netplan), jamais « apply » : ordonnée avant network-pre.target, l'unité
+# interbloquait `netplan apply` (qui relance networkd, ordonné après cette cible). Une seule interface : mode single.
+ExecStart=/usr/sbin/secubox-net-detect generate router
+TimeoutStartSec=60s
 
 # Create marker after successful configuration
 ExecStartPost=/bin/mkdir -p /var/lib/secubox

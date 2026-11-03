@@ -17,7 +17,8 @@ SuccessExitStatus=0 1 2
 
 # 45 s cote script + marge. L'ancienne valeur de 180 s laissait le demarrage
 # suspendu trois minutes avant meme d'echouer.
-TimeoutStartSec=90
+# #3419 : 45 s d'attente + 25 s au plus (netplan generate, networkctl reload, tous deux bornés) + alias.
+TimeoutStartSec=120
 
 [Install]
 WantedBy=multi-user.target

@@ -246,9 +246,9 @@ chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q
     python3-cryptography python3-jwt python3-zmq 2>&1" | tail -10 || warn "Some Python packages not installed"
 
 # Hostname
-echo "secubox-live" > "${ROOTFS}/etc/hostname"
+echo "secubox" > "${ROOTFS}/etc/hostname"   # #3419 : nom documenté
 cat > "${ROOTFS}/etc/hosts" << 'EOF'
-127.0.0.1  localhost secubox-live secubox
+127.0.0.1  localhost secubox
 ::1        localhost ip6-localhost ip6-loopback
 EOF
 

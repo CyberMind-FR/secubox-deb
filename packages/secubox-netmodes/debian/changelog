@@ -1,3 +1,17 @@
+secubox-netmodes (1.8.0-1~trixie1) trixie; urgency=medium
+
+  * Une seule interface ne mène jamais au mode routeur : secubox-net-detect choisit le mode effectif (single sans
+    interface LAN distincte du WAN) ; verbe « generate » (netplan generate, jamais apply) pour le démarrage, où
+    netplan apply s'interbloquait avec networkd ; OUTPUT_JSON ne prend plus le verbe pour chemin (ref #3419).
+  * Jamais de DHCP s'il existe déjà un serveur sur le segment : secubox-dhcp-sonde (DHCPDISCOVER sans bail) ;
+    secubox-lan-dhcp-garde refuse le démarrage et l'audite, secubox-lan-dhcp-surveille (minuteur 5 min) arrête le DHCP
+    si un serveur tiers apparaît (audité avant l'arrêt) ; garde rejouée à chaque démarrage, relances comprises
+    (ExecStartPre) ; chaddr aléatoire localement administrée ; seules les interfaces servies sont sondées ; forçage
+    explicite par /etc/secubox/netmodes/dhcp.toml (audité) (ref #3419).
+  * secubox-lan-dhcp : ConditionPathExists de sa configuration, relances bornées (3 en 2 min) (ref #3419).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 06:27:13 +0100
+
 secubox-netmodes (1.7.1-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images

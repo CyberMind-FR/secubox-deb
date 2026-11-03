@@ -7,7 +7,9 @@ After=local-fs.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-TimeoutStartSec=10s
+# #3419 : 10 s faisaient échouer l'unité (netplan apply interbloqué) ; le gestionnaire n'applique plus le
+# réseau (netplan generate seulement) et finit toujours en succès. Marge pour un support lent (clé USB).
+TimeoutStartSec=90s
 ExecStart=/usr/sbin/secubox-cmdline-handler apply
 
 [Install]

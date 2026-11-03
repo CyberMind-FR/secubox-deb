@@ -10,16 +10,29 @@
 [Unit]
 Description=SecuBox — DHCP du LAN (dnsmasq, mode routeur)
 After=systemd-networkd.service
+# #3419 : jamais de DHCP sans configuration rendue par netmodesctl (mode routeur appliqué) : une condition non remplie
+# n'est pas un échec, donc aucune boucle (VM à une interface, image qui l'aurait activé).
+ConditionPathExists=/var/lib/secubox-netmodes/lan-dhcp.conf
+# Surveillance périodique tant que le DHCP tourne : un serveur tiers apparu l'arrête (minuteur PartOf de cette unité).
+Wants=secubox-lan-dhcp-surveille.timer
+# #3419 : relances bornées (3 en 2 min), jamais une boucle sans fin.
+StartLimitIntervalSec=120
+StartLimitBurst=3
 
 [Service]
 # exec : `systemctl restart` échoue si l'exec échoue ; netmodesctl vérifie ensuite que dnsmasq reste actif (refus
 # AppArmor, port 67 pris : sans cela il bouclerait en silence et l'application serait déclarée réussie).
 Type=exec
+# #3419 : jamais de DHCP s'il existe déjà un serveur DHCP sur le segment. La garde (unité durcie à part, sonde sans bail)
+# est lancée À CHAQUE démarrage, relances automatiques comprises : un Requires= n'est pas garanti rejoué par une relance
+# Restart=. « + » : seul systemctl sort du profil AppArmor de dnsmasq ; la sonde tourne dans sa propre unité. Un serveur
+# tiers fait échouer ce démarrage ; les relances sont bornées par StartLimitBurst.
+ExecStartPre=+/bin/systemctl start secubox-lan-dhcp-garde.service
 # --conf-dir : un fragment par port isolé (#3201) ; le dossier doit exister (postinst) sinon dnsmasq s'arrête.
 ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/var/lib/secubox-netmodes/lan-dhcp.conf --conf-dir=/var/lib/secubox-netmodes/dhcp.d,*.conf --pid-file=
 # bind-dynamic (#3201) : un port isolé sans adresse ne l'arrête plus ; autre sortie en erreur (AppArmor, port 67) : on retente.
 Restart=on-failure
-RestartSec=5
+RestartSec=10
 AppArmorProfile=secubox-lan-dhcp
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_SETUID CAP_SETGID CAP_CHOWN
 NoNewPrivileges=yes

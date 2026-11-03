@@ -14,6 +14,8 @@ override_dh_auto_install:
 	install -m 0755 sbin/secubox-net-detect debian/secubox-netmodes/usr/sbin/
 	# #3189 : controleur root du mode routeur, seule surface privilegiee (sudoers a verbes exacts).
 	install -m 0755 sbin/netmodesctl debian/secubox-netmodes/usr/sbin/
+	# #3419 : sonde DHCP (garde avant le DHCP du LAN, surveillance periodique).
+	install -m 0755 sbin/secubox-dhcp-sonde debian/secubox-netmodes/usr/sbin/
 	install -d debian/secubox-netmodes/etc/sudoers.d
 	install -m 0440 debian/secubox-netmodes.sudoers debian/secubox-netmodes/etc/sudoers.d/secubox-netmodes
 	# Profils AppArmor (enforce) de l'API et du DHCP du LAN, charges par le postinst.
@@ -57,5 +59,8 @@ override_dh_installsystemd:
 	dh_installsystemd --name=secubox-net-fallback --no-enable --no-start
 	# DHCP du LAN : ni active ni demarre ; netmodesctl l'active a la bascule, le desactive au retour (#3189).
 	dh_installsystemd --name=secubox-lan-dhcp --no-enable --no-start
+	# #3419 : garde et surveillance, tirees par secubox-lan-dhcp (Requires=, Wants= du minuteur) ; jamais activees seules.
+	dh_installsystemd --name=secubox-lan-dhcp-garde --no-enable --no-start
+	dh_installsystemd --name=secubox-lan-dhcp-surveille --no-enable --no-start
 	# Retour au demarrage d'une application non confirmee : active, jamais lance a l'installation.
 	dh_installsystemd --name=secubox-netmodes-retour-boot --no-start

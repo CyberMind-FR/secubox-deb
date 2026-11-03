@@ -1,3 +1,10 @@
+secubox-surf (1.0.38-1~trixie1) trixie; urgency=medium
+
+  * Relances bornées (StartLimitBurst=5 en 600 s, RestartSec=15) : plus de boucle sans fin au premier démarrage
+    (ref #3419).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 06:27:13 +0100
+
 secubox-surf (1.0.37-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 (~60 % d un coeur en continu) (ref #3355) :

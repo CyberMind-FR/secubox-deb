@@ -6,7 +6,16 @@
 # ══════════════════════════════════════════════════════════════════
 set -u  # Exit on undefined variables, but allow command failures
 
-CMDLINE="${1:-/proc/cmdline}"
+# #3419 : jamais "$1" (c'est le verbe, « apply ») : la ligne de commande n'était jamais lue, tout paramètre
+# secubox.* ignoré. Crochets d'environnement (fichiers substitués) honorés SEULEMENT sous SECUBOX_TEST=1.
+CMDLINE="/proc/cmdline"
+ETC="/etc"
+NET_DETECT="/usr/sbin/secubox-net-detect"
+if [[ "${SECUBOX_TEST:-0}" == "1" ]]; then
+    CMDLINE="${SECUBOX_CMDLINE_FILE:-$CMDLINE}"
+    ETC="${SECUBOX_ETC:-$ETC}"
+    NET_DETECT="${SECUBOX_NET_DETECT:-$NET_DETECT}"
+fi
 MARKER_DIR="/var/lib/secubox"
 
 log() { echo "[cmdline] $*" | systemd-cat -t secubox-cmdline -p info 2>/dev/null || echo "[cmdline] $*"; }
@@ -70,8 +79,27 @@ send_plymouth_mode() {
     fi
 }
 
+# #3419 : ancien nom d'image du live (« secubox-live », Alpha 20 et avant) conservé par la persistance. Le nom
+# documenté est « secubox ». On ne remplace QUE ce nom exact : un nom choisi au premier pas n'est jamais touché.
+migrer_nom_live() {
+    local actuel
+    actuel=$(tr -d '[:space:]' < "${ETC}/hostname" 2>/dev/null) || return 0
+    [[ "$actuel" == "secubox-live" ]] || return 0
+    printf 'secubox\n' > "${ETC}/hostname.secubox-tmp" && mv -f "${ETC}/hostname.secubox-tmp" "${ETC}/hostname"
+    if [[ -f "${ETC}/hosts" && ! -L "${ETC}/hosts" ]]; then
+        sed -i -E 's/(^|[[:space:]])secubox-live([[:space:]]|$)/\1secubox\2/g' "${ETC}/hosts"
+    fi
+    if [[ -f "${ETC}/secubox/secubox.conf" && ! -L "${ETC}/secubox/secubox.conf" ]]; then
+        sed -i -E 's/^hostname[[:space:]]*=[[:space:]]*"secubox-live"[[:space:]]*$/hostname = "secubox"/' \
+            "${ETC}/secubox/secubox.conf"
+    fi
+    [[ "$ETC" != "/etc" ]] || hostname secubox 2>/dev/null || true
+    log "Nom d'hôte secubox-live (ancien nom de l'image) remplacé par secubox"
+}
+
 # Apply settings from command line
 apply_settings() {
+    migrer_nom_live
     mkdir -p "$MARKER_DIR"
 
     # Source parsed values
@@ -149,17 +177,21 @@ apply_settings() {
     esac
 
     # Handle network mode
-    if [[ -x /usr/sbin/secubox-net-detect ]]; then
-        case "$SECUBOX_NETMODE" in
-            router|bridge|single)
-                log "Applying network mode: $SECUBOX_NETMODE"
-                /usr/sbin/secubox-net-detect apply "$SECUBOX_NETMODE"
-                ;;
+    # #3419 : « generate », jamais « apply » : cette unité est ordonnée avant sysinit.target et network-pre.target ;
+    # `netplan apply` y relançait systemd-networkd, qui attend ces cibles (interblocage, délai dépassé, unité en
+    # échec). secubox-net-detect décide du mode EFFECTIF : sans interface LAN distincte du WAN, jamais le routeur.
+    local net_detect="$NET_DETECT"
+    if [[ -x "$net_detect" ]]; then
+        local netmode="$SECUBOX_NETMODE"
+        case "$netmode" in
+            router|bridge|single) ;;
             *)
-                log "Unknown netmode '$SECUBOX_NETMODE', using router"
-                /usr/sbin/secubox-net-detect apply router
+                log "Unknown netmode '$netmode', using single"
+                netmode="single"
                 ;;
         esac
+        log "Requested network mode: $netmode (effective mode decided by secubox-net-detect)"
+        "$net_detect" generate "$netmode" || log "secubox-net-detect generate failed (code $?), network left as is"
     fi
 
     # Handle kiosk mode
@@ -262,6 +294,8 @@ case "${1:-apply}" in
         ;;
     apply)
         apply_settings
+        # #3419 : une étape optionnelle en échec ne fait jamais échouer l'unité (et le démarrage) ; tout est journalisé.
+        exit 0
         ;;
     *)
         echo "Usage: $0 {parse|apply}"
