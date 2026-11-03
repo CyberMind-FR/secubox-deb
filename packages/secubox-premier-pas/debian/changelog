@@ -1,3 +1,11 @@
+secubox-premier-pas (0.9.7-1~trixie1) trixie; urgency=medium
+
+  * Depends: secubox-aggregator — dpkg configure l'agrégateur avant
+    premier-pas : sur un live neuf l'inscription dans aggregator.toml était
+    encore sautée (API 404) (ref #3440).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 13:57:39 +0100
+
 secubox-premier-pas (0.9.6-1~trixie1) trixie; urgency=medium
 
   * Inscription dans aggregator.toml même si l'agrégateur est configuré
