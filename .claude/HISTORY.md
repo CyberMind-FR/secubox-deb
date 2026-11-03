@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-03 — Live x64 : premier test du choix de profil (gk8, VM) (ref #3442)
+- Constats gk8 (VM VirtualBox, pont Wi-Fi 192.168.1.52) : assistant figé (`.path`/`.timer` jamais activées par build-live-usb.sh), racine sur le Hall (frontal HAProxy non relancé après le domaine ; `/etc/default/secubox` au nom de la machine CI), profil ISP impossible en amd64 (`secubox-ndpid-engine` 1.7.1 < 1.7.2 exigé).
+- PR #3443 fusionnée : build-live-usb.sh active les `.path`/`.timer` que leur postinst active (47 sur 53 vérifiées sur gk8), secubox-premier-pas 0.9.8 (defaults-aligner puis `haproxyctl frontal`, souples). Publiés : premier-pas 0.9.8 [all], ndpid-engine 1.7.4 [amd64].
+- gk8 joint au maillage gk2 par code `sbx-mesh-invite --code --nom gk8` ; admin servie à la racine après alignement + frontal à la main. Présence sans code en attente sur le maître : #3444. Reste : nouvelle image live, refaire gk8 sans geste manuel.
+
 ## 2026-11-02 — RPi4 écran tactile, mot de passe par défaut encadré, appstore, live (avant Alpha 20)
 
 - **secubox-rpi-dsi 0.1.1** (closes #3399, PR #3400/#3410) : paquet OPTIONNEL écran officiel RPi 7" DSI + tactile sur noyau Debian (DKMS : vc4 DSI1, tc358762 RPi, panel-simple raspberrypi,7inch-dsi, edt-ft5x06 polling ; overlay via raspi-firmware-custom ; ROOTPART=UUID). Validé au redémarrage sur gk7 (RPi4 4 Go) : écran, tactile, kiosque, premier pas au doigt, Hall. Wiki RPi-Ecran-DSI-7 + Hardware-Matrix (Pi 5 8 Go à préférer). Piège : update-initramfs → raspi-firmware réécrit cmdline.txt (mmcblk0) = box non démarrable.
