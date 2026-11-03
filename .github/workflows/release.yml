@@ -184,7 +184,8 @@ jobs:
           - MOCHAbin (Marvell Armada 7040) - arm64
           - ESPRESSObin v7 (Marvell Armada 3720) - arm64
           - ESPRESSObin Ultra (Marvell Armada 3720) - arm64
-          - Raspberry Pi 400 - arm64
+          - Raspberry Pi 4/400 avec écran HDMI (rpi-arm64) - arm64
+          - Raspberry Pi 4 + écran officiel 7" tactile (rpi4-dsi, secubox-full-rpi4-dsi-arm64) - arm64
           - VM x64 (VirtualBox/QEMU) - amd64
           - QEMU ARM64 emulation script (x86 hosts)
 
@@ -195,7 +196,8 @@ jobs:
           ### Live USB Images (Bootable + Flasher)
           - x64 Live USB (GRUB UEFI/BIOS) - amd64
           - EspressoBin V7 Live USB (U-Boot) - arm64
-          - Raspberry Pi 400 Live USB - arm64
+          - Raspberry Pi 4/400 avec écran HDMI Live USB (rpi-arm64) - arm64
+          - Raspberry Pi 4 + écran officiel 7" tactile (rpi4-dsi) Live USB - arm64
 
           ### Boot Options
           - ⚡ **SecuBox Live** - Normal boot with persistence

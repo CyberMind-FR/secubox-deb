@@ -84,7 +84,7 @@ Usage: sudo bash build-rpi-usb.sh [OPTIONS]
   --help             Show this help
 
 Target: Raspberry Pi 400 (arm64)
-Output: secubox-rpi-arm64-bookworm.img
+Output: secubox-rpi-arm64-bookworm.img (secubox-<profil>-rpi4-dsi-arm64-<suite>.img avec --rpi-dsi)
 
 Flash to USB/SD:
   zcat output/secubox-rpi-arm64-bookworm.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
@@ -135,7 +135,11 @@ case "${PROFILE_TAG}" in
   lite|minimal|isp|full) ;;
   *) err "--profile : lite|minimal|isp|full attendu (reçu « ${PROFILE_TAG} »)" ;;
 esac
-IMG_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-rpi-arm64-${SUITE}.img"
+# Image dédiée Pi 4 + écran officiel 7" DSI (--rpi-dsi, #3426) : nom distinct
+# (secubox-<profil>-rpi4-dsi-arm64-<suite>) pour ne pas écraser l'image HDMI.
+IMG_FAMILLE="rpi-arm64"
+[[ "${INCLUDE_RPI_DSI}" == "1" ]] && IMG_FAMILLE="rpi4-dsi-arm64"
+IMG_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-${IMG_FAMILLE}-${SUITE}.img"
 
 cleanup() {
   log "Cleaning up..."

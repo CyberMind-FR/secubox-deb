@@ -36,8 +36,15 @@ apt install secubox-rpi-dsi
 L'installation télécharge les sources du noyau, construit les pilotes (plusieurs minutes) et prépare le
 démarrage. **Redémarrez ensuite** : l'écran et le tactile fonctionnent dès le démarrage suivant.
 
-Pour une image prête à flasher, `image/build-rpi-usb.sh --rpi-dsi` inclut le paquet ; la box se configure
-seule à son premier démarrage.
+### Image dédiée « rpi4-dsi » (prête à flasher)
+
+Chaque release publie une image dédiée **Raspberry Pi 4 + écran officiel 7" tactile** :
+`secubox-full-rpi4-dsi-arm64-<suite>.img.gz` (kiosque et paquet `secubox-rpi-dsi` inclus). À côté d'elle,
+l'image `secubox-full-rpi-arm64-<suite>.img.gz` reste celle des Pi 4/400 avec écran HDMI. Flasher l'image
+`rpi4-dsi` sur la carte SD, brancher l'écran, démarrer : la box se configure seule au premier démarrage
+(construction des pilotes, puis redémarrage automatique). Ne pas l'utiliser sur un Pi branché en HDMI.
+
+Pour la construire soi-même : `image/build-rpi-usb.sh --kiosk --rpi-dsi` (nom de sortie distinct).
 
 ## Ce que fait le paquet
 
