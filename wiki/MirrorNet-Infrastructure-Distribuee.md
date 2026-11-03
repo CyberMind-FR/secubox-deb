@@ -13,6 +13,31 @@
 Cible de conception des versions **Alpha 21 et Alpha 22**, avant la bêta. Ces planches décrivent ce qui est visé, pas
 ce qui existe déjà : l'état réel est établi par les audits cités plus bas.
 
+## Un programme commun
+
+MirrorNet est le socle commun de cette évolution : une SecuBox devient un nœud d'infrastructure autonome, capable de
+coopérer avec les autres, de partager ses ressources et de garder les services disponibles. La défense collective et
+l'hébergement distribué ne sont pas deux projets séparés mais deux usages du même réseau de pairs.
+
+| Brique | Responsabilité |
+|---|---|
+| MirrorNet | réseau pair-à-pair chiffré entre SecuBox |
+| Distributed Hosting | hébergement distribué des sites |
+| Peer Replication | réplication des contenus entre pairs |
+| Load Balancing | répartition du trafic, sans point central |
+| Failover | continuité de service et réintégration |
+| USB Master | source portable et souveraine d'un site |
+| ActorD | intelligence et orchestration de la défense |
+| SBX WAF | défense applicative |
+| Federated Trust | confiance entre pairs : TRUSTED, PARTNER, LIMITED, OBSERVER, REVOKED |
+| Node Reputation | fiabilité des participants, explicable et réversible |
+| SBXOS | interface de pilotage : MIRRORNET > DISTRIBUTED INFRASTRUCTURE |
+
+Méthode : audit de l'existant, puis conception technique, puis implémentation après validation du propriétaire.
+Aucune proposition n'est présentée comme déjà réalisée.
+
+![MirrorNet Distributed Infrastructure, planche Rev 1.0](images/mirrornet/mdi-prompt-rev1.webp)
+
 ## Hébergement distribué (MDI)
 
 Un site, un blog ou un microblog est servi par plusieurs SecuBox à la fois. Sa **source maître** peut être une
@@ -48,7 +73,7 @@ AUTONOMOUS. Un site servi par plusieurs nœuds permet de corréler par site les 
 
 | Version | Contenu |
 |---|---|
-| Alpha 21 | correctifs de validation ; durcissement local anti-DDoS ; fondations de l'hébergement distribué (manifeste, source maître dont USB signée, réplication des sites statiques, identifiant de site transmis au WAF) ; SecuBox mobile |
+| Alpha 21 | correctifs de validation ; images par matériel de référence sur le profil lite (Pi 4/400 HDMI, Pi 4 + écran 7\" tactile, MOCHAbin, ESPRESSObin, PC/VM) avec montée de profil depuis premier pas ; durcissement local anti-DDoS ; fondations de l'hébergement distribué (manifeste, source maître dont USB signée, réplication des sites statiques, identifiant de site transmis au WAF) ; SecuBox mobile |
 | Alpha 22 | détection des campagnes DDoS et défense collective signée ; réplication des blogs, microblogs et CMS ; répartition de charge et basculement |
 | Bêta | validation sur matériel réel et banc multi-box |
 
@@ -57,4 +82,4 @@ AUTONOMOUS. Un site servi par plusieurs nœuds permet de corréler par site les 
 - Audit de l'existant, hébergement : `docs/audit/distributed-hosting-audit.md`
 - Caractérisation des sites : `docs/hosting/site-characterization.md`
 - Audit de l'existant, défense : `docs/audit/ddos-defense-audit.md`
-- Suivi : issues #3420 (hébergement) et #3417 (défense)
+- Suivi : programme #3429, issues #3420 (hébergement) et #3417 (défense)
