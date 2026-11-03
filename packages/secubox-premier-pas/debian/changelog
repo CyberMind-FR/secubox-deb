@@ -1,3 +1,11 @@
+secubox-premier-pas (0.9.5-1~trixie1) trixie; urgency=medium
+
+  * Étape services : le code 4 de secubox-profilectl (paquets du profil non
+    installables, pas de réseau) devient un avertissement ; l assistant
+    continue avec le profil d amorçage (ref #3428).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 07:19:37 +0100
+
 secubox-premier-pas (0.9.4-1~trixie1) trixie; urgency=medium
 
   * La console (tty1) indique ou continuer dans un navigateur : https://<nom>/premier-pas/ puis une ligne par IPv4 utile (LAN puis WAN, interfaces internes exclues), relue toutes les 10 s sans clignotement ni perte de saisie (#3424).

@@ -263,3 +263,17 @@ def test_nom_reserve_refuse_des_le_profil(complet, nom):
     ex = P.examine(complet, CONNUS)
     assert "nom" in ex.erreurs and "réservé" in ex.erreurs["nom"] and not ex.complet
     assert P.NOMS_RESERVES == frozenset({"admin", "www", "secubox", "localhost"})
+
+
+def test_montee_de_niveau_sans_reseau_avertit_et_continue_3428(complet, isole):
+    """#3428 : profilectl rend 4 quand secubox-<profil> n'a pas pu s'installer par apt (pas de réseau) ; rien n'a changé,
+    la box garde son profil d'amorçage, l'assistant le dit et continue."""
+    r = M.appliquer(complet, lambda a: (M.PROFILCTL_DIFFERE, "secubox-isp n'a pas pu être installé (apt rc=100)")
+                    if a[0] == "secubox-profilectl" else (0, ""), CONNUS, isole / "fait")
+    assert r.ok and (isole / "fait").exists()
+    assert len(r.avertissements) == 1 and r.avertissements[0].startswith("services")
+
+
+def test_un_autre_echec_de_profilectl_arrete_toujours_3428(complet, isole):
+    r = M.appliquer(complet, lambda a: (2, "apply: rolled_back") if a[0] == "secubox-profilectl" else (0, ""), CONNUS, isole / "fait")
+    assert not r.ok and r.echec == "services"

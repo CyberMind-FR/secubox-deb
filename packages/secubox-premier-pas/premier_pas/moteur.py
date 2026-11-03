@@ -66,9 +66,13 @@ class Action:
     essais: int = 1                   # tentatives (réseau qui revient, #1544)
     pause: float = 5.0
     souple: bool = False              # un échec est DIT mais n'arrête pas l'assistant (#2495) : ce qui ne doit pas bloquer une première installation
+    codes_souples: Tuple[int, ...] = ()  # codes de retour traités comme `souple` pour cette seule action (#3428)
 
 
 Executeur = Callable[[List[str]], Tuple[int, str]]
+
+#: `secubox-profilectl apply` : paquets du profil non installables (réseau, dépôt) — rien changé (api/montee.py, #3428).
+PROFILCTL_DIFFERE = 4
 
 _CAUSE = re.compile(r"❌|✗|\bfail|échec|erreur|error|refus|masked|→ rc=", re.I)
 
@@ -249,8 +253,11 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
     if sp == P.GARDER:
         out.append(Action("services", "modules actuels gardés"))
     else:
+        # MONTÉE DE NIVEAU (#3428) : sur une image lite, profilectl installe d'abord secubox-<profil> par apt. Sans réseau
+        # il rend PROFILCTL_DIFFERE sans rien changer : avertissement, l'assistant continue avec le profil d'amorçage.
         out.append(Action("services", f"profil de services « {sp} »",
-                          ["secubox-profilectl", "apply", "--profile", sp, "--yes"]))
+                          ["secubox-profilectl", "apply", "--profile", sp, "--yes"],
+                          codes_souples=(PROFILCTL_DIFFERE,)))
     if m["mode"] == "rejoindre":
         if m.get("ancre_cle"):
             # L'ancre AVANT la jonction (#3100) : la box retient le maître qui l'a flashée ; un autre maître déjà ancré arrête l'étape.
@@ -454,7 +461,7 @@ def appliquer(profil: Dict[str, Any], executeur: Executeur = execute_reel,
                     time.sleep(a.pause)
                 if code != 0:
                     msg = f"{' '.join(a.argv)} → code {code} : {cause(sortie)}"
-                    if a.souple:
+                    if a.souple or code in a.codes_souples:
                         journal(f"AVERTISSEMENT [{a.etape}] {msg} — l'assistant continue")
                         avertissements.append(f"{a.etape} : {a.quoi} — {cause(sortie, 160)}")
                         ecrit_etat(phase="application", etape=a.etape, action=a.quoi, n=i, total=len(actions), avertissements=avertissements)
