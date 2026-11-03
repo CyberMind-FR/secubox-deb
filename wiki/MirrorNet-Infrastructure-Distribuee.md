@@ -20,9 +20,9 @@ SecuBox, une **clé USB signée**, un stockage externe ou un serveur autorisé ;
 pairs MirrorNet. Si le maître disparaît, les répliques continuent de servir le site ; à son retour, les versions sont
 comparées et réconciliées, sans jamais écraser une modification plus récente.
 
-![Vue d'ensemble de l'hébergement distribué](images/mirrornet/mdi-vue-ensemble.png)
+![Vue d'ensemble de l'hébergement distribué](images/mirrornet/mdi-vue-ensemble.webp)
 
-![Dossier technique MDI](images/mirrornet/mdi-dossier-reverse-design.png)
+![Dossier technique MDI](images/mirrornet/mdi-dossier-reverse-design.webp)
 
 Choix arrêtés :
 
@@ -40,9 +40,9 @@ ActorD détecte et comprend les attaques, SBX WAF décide, nftables neutralise, 
 propage des bannissements **signés, datés et révocables**. Chaque box garde sa propre politique : OBSERVE, ASSISTED ou
 AUTONOMOUS. Un site servi par plusieurs nœuds permet de corréler par site les attaques vues par chacun.
 
-![De la protection actuelle à la défense collaborative](images/mirrornet/mcd-evolution-defense.png)
+![De la protection actuelle à la défense collaborative](images/mirrornet/mcd-evolution-defense.webp)
 
-![Dossier technique MCD](images/mirrornet/mcd-dossier-technique.png)
+![Dossier technique MCD](images/mirrornet/mcd-dossier-technique.webp)
 
 ## Calendrier
 
