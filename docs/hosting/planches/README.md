@@ -13,3 +13,4 @@ Planches du propriétaire (2026-11-03), référence de conception : elles décri
 - `mdi-vue-ensemble.png` : hébergement distribué, vue d ensemble.
 
 Issue #3420 ; audit `docs/audit/distributed-hosting-audit.md` ; caractérisation `docs/hosting/site-characterization.md`.
+- `mdi-prompt-rev1.png` : MirrorNet Distributed Infrastructure, planche Rev 1.0 (prompt, phases, livrables), programme #3429.
