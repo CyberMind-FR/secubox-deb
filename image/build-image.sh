@@ -1486,7 +1486,7 @@ if [[ $IS_X64 -eq 1 ]] || [[ "${BOARD}" == "vm-arm64" ]]; then
 GRUB_DEFAULT="secubox-kiosk"
 GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="SecuBox"
-GRUB_CMDLINE_LINUX_DEFAULT="quiet net.ifnames=1 secubox.mode=kiosk secubox.kiosk=1"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet loglevel=3 systemd.show_status=false rd.systemd.show_status=false rd.udev.log_level=3 udev.log_level=3 net.ifnames=1 secubox.mode=kiosk secubox.kiosk=1"
 GRUB_CMDLINE_LINUX=""
 GRUB_TERMINAL=console
 GRUB_DISABLE_OS_PROBER=true
@@ -1533,7 +1533,7 @@ menuentry "SecuBox (Kiosk Mode)" --class secubox --class debian --class os \$men
     insmod part_gpt
     insmod ext2
     search --no-floppy --label rootfs --set=root
-    linux /boot/vmlinuz-${KVER} ${ROOT_DEV} ro quiet splash secubox.mode=kiosk secubox.kiosk=1 net.ifnames=1
+    linux /boot/vmlinuz-${KVER} ${ROOT_DEV} ro quiet loglevel=3 systemd.show_status=false rd.systemd.show_status=false rd.udev.log_level=3 udev.log_level=3 splash secubox.mode=kiosk secubox.kiosk=1 net.ifnames=1
     initrd /boot/initrd.img-${KVER}
 }
 
