@@ -1851,6 +1851,13 @@ cat > "${ROOTFS}/etc/secubox/users.json" <<EOF
 EOF
 chmod 644 "${ROOTFS}/etc/secubox/users.json"
 chroot "${ROOTFS}" chown root:secubox /etc/secubox/users.json 2>/dev/null || true
+# #3435 : ce fichier est au format v1 et arrive APRÈS les paquets ; la migration de secubox-auth ne repasserait
+# jamais dessus, et le moteur des comptes (v2) ne trouvait pas admin (premier pas arrêté à l'étape admin).
+if [[ -x "${ROOTFS}/usr/sbin/usersctl" ]]; then
+  chroot "${ROOTFS}" /usr/sbin/usersctl migrate-v1-to-v2 \
+    || err "users.json : migration v1 → v2 impossible — image non produite"
+  chroot "${ROOTFS}" chown root:secubox /etc/secubox/users.json 2>/dev/null || true
+fi
 log "Created users.json (admin/secubox, root/secubox)"
 
 # ── Restore real systemctl ─────────────────────────────────────────
