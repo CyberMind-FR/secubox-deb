@@ -16,12 +16,12 @@ def _profils(carte):
 
 
 def test_mochabin_publie_lite_et_isp_seulement():
-    assert _profils("mochabin") == ["lite", "isp"]
+    assert _profils("mochabin") == ["lite"]   # #3428 : une image par matériel, base lite
 
 
 def test_les_autres_cartes_sont_inchangees():
-    assert _profils("rpi400") == ["lite", "isp", "full", "minimal"]          # #2497 : lite ajouté ; #2834 : minimal
-    assert _profils("vm-x64") == ["full", "isp"]
+    assert _profils("rpi400") == ["lite"]          # #3428 : rpi-arm64 = lite + kiosque
+    assert _profils("vm-x64") == ["lite"]
 
 
 def test_la_matrice_par_defaut_ne_contient_aucun_full_mochabin():
@@ -31,14 +31,14 @@ def test_la_matrice_par_defaut_ne_contient_aucun_full_mochabin():
 
 def test_l_espressobin_publie_lite_et_minimal():
     """Depuis la refonte des profils (#2146), isp porte l'hebergement (8 Go) : jamais sur une carte de 1 a 2 Go."""
-    assert _profils("espressobin-v7") == ["lite", "minimal"]      # #2834 : isp reste absent (hebergement, 8 Go)
+    assert _profils("espressobin-v7") == ["minimal"]      # #3428 : minimal seul
     assert _profils("espressobin-ultra") == ["lite"]
 
 
 def test_un_profil_force_ne_construit_que_celui_la_2497():
     assert m.matrice(RACINE, ["rpi400"], "lite") == [{"board": "rpi400", "profile": "lite"}]
     assert m.matrice(RACINE, ["rpi400", "vm-x64"], "isp") == [{"board": "rpi400", "profile": "isp"}, {"board": "vm-x64", "profile": "isp"}]
-    assert _profils("rpi400") == ["lite", "isp", "full", "minimal"]                    # auto : inchangé par la présence du paramètre
+    assert _profils("rpi400") == ["lite"]                    # auto : inchangé par la présence du paramètre
 
 
 def test_la_ligne_de_commande_accepte_auto_et_refuse_un_profil_inconnu(tmp_path):
@@ -62,7 +62,7 @@ def test_le_profil_minimal_se_demande_a_la_main_sans_changer_les_defauts_2816():
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     assert m.matrice(RACINE, ["espressobin-v7"], "minimal") == [{"board": "espressobin-v7", "profile": "minimal"}]
-    assert m.matrice(RACINE, ["espressobin-v7"]) == [{"board": "espressobin-v7", "profile": "lite"}, {"board": "espressobin-v7", "profile": "minimal"}]
+    assert m.matrice(RACINE, ["espressobin-v7"]) == [{"board": "espressobin-v7", "profile": "minimal"}]
     assert "minimal" in m.PROFILS_ACCEPTES
 
 

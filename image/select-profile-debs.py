@@ -165,6 +165,12 @@ def _copier(index: dict[str, tuple[Path, set[str]]], racines: list[str],
         print(f"[profil] ATTENTION : {p} requiert {n}, absent des .deb pour cette architecture",
               file=sys.stderr)
 
+    # #3428 : un module requis absent = image incomplète. On échoue au lieu de laisser `dpkg --force-depends`
+    # produire une image qui « marche » sans lui.
+    if manquants:
+        print("[profil] dependance(s) SecuBox manquante(s) : selection refusee", file=sys.stderr)
+        return 1
+
     dest.mkdir(parents=True, exist_ok=True)
     for p in sorted(vus):
         shutil.copy2(index[p][0], dest / index[p][0].name)

@@ -29,6 +29,14 @@ config, ne touchent à rien. `apply` et `rollback` n'agissent qu'avec `--yes` ; 
 lui, ils décrivent seulement ce qu'ils feraient. `apply` est le SEUL décideur de ce
 qui est allumé ou éteint (voir `docs/dossiers/simplification-modules-beta.md`).
 
+**Montée de niveau (0.27.0, #3428).** Les images sont livrées en profil d'amorçage (`lite`, `minimal` sur
+ESPRESSObin). `apply --profile lite|minimal|isp|full --yes` installe d'abord le méta-paquet `secubox-<profil>`
+par apt s'il manque (sans délai, chaque étape dans `/var/log/secubox/audit.log` : `profile_upgrade_start`,
+`profile_upgrade_done` ou `profile_upgrade_failed`), dérive les manifestes des nouveaux modules (`scan` sans
+`--force`), puis applique. Sans réseau ou dépôt injoignable : message clair sur stderr, **rien n'est changé**,
+code de retour **4** (`{"status": "deferred"}` avec `--json`) ; un échec pendant l installation elle-même rend **5** (échec, pas report) ; premier pas en fait un avertissement et
+continue. Redescendre (isp → lite) n'enlève aucun paquet : l'apply arrête seulement ce que le profil n'allume pas.
+
 ## Profils & export
 
 Cinq profils livrés dans `/usr/share/secubox/profiles/`, copiés dans `/etc/secubox/profiles/` par le postinst

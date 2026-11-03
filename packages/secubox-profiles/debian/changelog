@@ -1,3 +1,13 @@
+secubox-profiles (0.27.0-1~trixie1) trixie; urgency=medium
+
+  * apply --profile lite|minimal|isp|full --yes : installe d abord le méta-paquet
+    secubox-<profil> par apt s il manque (montée de niveau depuis une image lite),
+    sans délai, audité, puis dérive les manifestes des nouveaux modules (scan).
+    Téléchargement d abord (--download-only) : échec réseau = code 4, rien
+    changé ; échec à l installation = code 5. Audit profile_upgrade_skip (ref #3428).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 07:19:37 +0100
+
 secubox-profiles (0.26.10-1~trixie1) trixie; urgency=medium
 
   * postinst : migre les manifestes LED existants (/etc/secubox/modules.d/led*.toml)

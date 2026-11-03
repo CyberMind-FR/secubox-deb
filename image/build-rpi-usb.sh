@@ -30,7 +30,8 @@ SECUBOX_VERSION="$(_sbx_version)"
 
 # ── Defaults ──────────────────────────────────────────────────────
 SUITE="trixie"
-# Repli sur la variable exportee par build-image.sh, puis sur "full" —
+# Repli sur la variable exportee par build-image.sh, puis sur "lite" (#3428 : profil d'amorçage, le
+# profil final s'installe depuis premier pas) —
 # le profil entre dans le nom de l'image, il ne peut pas etre vide (#1294).
 # `${VAR#prefixe}` NE FOURNIT PAS de valeur par defaut sous `set -u` : si
 # SECUBOX_PROFILE n'est pas defini, la substitution echoue avant d'avoir pu
@@ -39,7 +40,7 @@ SUITE="trixie"
 # sans elle. Il faut donc neutraliser l'absence AVANT de retirer le prefixe.
 PROFILE_TAG="${SECUBOX_PROFILE:-}"
 PROFILE_TAG="${PROFILE_TAG#secubox-}"
-PROFILE_TAG="${PROFILE_TAG:-full}"
+PROFILE_TAG="${PROFILE_TAG:-lite}"
 IMG_SIZE=""           # vide = choisi selon le profil plus bas (#1294)
 OUT_DIR="${REPO_DIR}/output"
 APT_MIRROR="http://deb.debian.org/debian"
@@ -69,6 +70,8 @@ Usage: sudo bash build-rpi-usb.sh [OPTIONS]
   --size    SIZE     Total image size (default: 8G)
   --local-cache      Use local APT cache
   --slipstream       Install .deb packages from output/debs/
+  --profile PROFIL   lite|minimal|isp|full : secubox-<PROFIL> and its Depends
+                     only (default: lite, #3428 ; final profile from premier pas)
   --kiosk            Include GUI kiosk mode packages
   --rpi-dsi          Add the optional secubox-rpi-dsi package (official 7" DSI
                      display, RPi4/400 only; also INCLUDE_RPI_DSI=1). Inert in
@@ -93,7 +96,7 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --suite)        SUITE="$2";         shift 2 ;;
-    --profile)      PROFILE_TAG="$2";   shift 2 ;;
+    --profile)      PROFILE_TAG="${2#secubox-}"; shift 2 ;;
     --out)          OUT_DIR="$2";       shift 2 ;;
     --size)         IMG_SIZE="$2";      shift 2 ;;
     --local-cache)  USE_LOCAL_CACHE=1;  shift   ;;
@@ -128,6 +131,10 @@ WORK_DIR=$(mktemp -d)
 ROOTFS="${WORK_DIR}/rootfs"
 # Le PROFIL fait partie du nom, comme dans build-image.sh (#1112). Sans lui,
 # `isp` et `full` produisaient le meme fichier et s'ecrasaient.
+case "${PROFILE_TAG}" in
+  lite|minimal|isp|full) ;;
+  *) err "--profile : lite|minimal|isp|full attendu (reçu « ${PROFILE_TAG} »)" ;;
+esac
 IMG_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-rpi-arm64-${SUITE}.img"
 
 cleanup() {
@@ -822,6 +829,17 @@ if [[ $DEBS_INSTALLED -eq 0 ]]; then
   fi
 fi
 
+# Kiosque (#3428) : secubox-kiosk n'est qu'un Recommends de lite, que le sélecteur ne suit pas. Avec --kiosk on
+# l'ajoute explicitement (et sa fermeture Depends) ; absent des .deb, le kiosque reste celui posé par l'image.
+if [[ "${INCLUDE_KIOSK}" -eq 1 && $DEBS_INSTALLED -eq 1 ]]; then
+  _ksrc="${REPO_DIR}/output/debs"
+  ls "${_ksrc}"/secubox-kiosk_*.deb >/dev/null 2>&1 || _ksrc="$(dirname "$(find "${REPO_DIR}/cache/repo/pool" -name 'secubox-kiosk_*.deb' 2>/dev/null | sort -V | tail -n1)" 2>/dev/null || true)"
+  if [[ -n "${_ksrc}" && -d "${_ksrc}" ]]; then
+    python3 "${SCRIPT_DIR}/select-profile-debs.py" "${_ksrc}" kiosk "${ROOTFS}/tmp/secubox-debs" arm64 \
+      || warn "secubox-kiosk non sélectionné — kiosque de l'image seul"
+  fi
+fi
+
 # Option --rpi-dsi (#3399) : ajout explicite du paquet optionnel de l'écran 7" DSI,
 # hors de toute sélection de profil. Introuvable = échec franc (option demandée).
 if [[ "${INCLUDE_RPI_DSI}" == "1" ]]; then
@@ -881,6 +899,9 @@ if [[ $DEB_COUNT -gt 0 ]]; then
   # cas ou l'on a le plus besoin de savoir que rien ne s'est installe.
   INSTALLED=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep -c "^ii" || true)
   ok "Installed ${INSTALLED}/${DEB_COUNT} SecuBox packages"
+  # #3428 : le méta-paquet du profil doit être configuré, sinon l'image ment sur son profil.
+  chroot "${ROOTFS}" dpkg -l "secubox-${PROFILE_TAG}" 2>/dev/null | grep -q "^ii" \
+    || err "secubox-${PROFILE_TAG} non installé dans l'image — non produite"
 else
   # NE PAS continuer. Une image nommee « secubox-<profil>-... » sans un seul
   # paquet SecuBox est un mensonge, et un mensonge qui se decouvre tard : elle
@@ -1414,7 +1435,7 @@ log "7/7 Creating bootable image..."
 # embarque tout le catalogue applicatif et 8 Gio n'y suffisent pas.
 if [[ -z "${IMG_SIZE}" ]]; then
   case "${PROFILE_TAG}" in
-    isp) IMG_SIZE="8G"  ;;
+    lite|minimal|isp) IMG_SIZE="8G"  ;;
     *)   IMG_SIZE="12G" ;;
   esac
   log "Taille non precisee — profil ${PROFILE_TAG} : ${IMG_SIZE}"

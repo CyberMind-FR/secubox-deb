@@ -8,7 +8,7 @@
 #  SecuBox-DEB — build-live-usb.sh v2.0
 #  Build a bootable live USB image for amd64 with:
 #  - UEFI + Legacy BIOS hybrid boot
-#  - All SecuBox packages slipstreamed
+#  - SecuBox boot profile slipstreamed (--profile, default lite ; #3428)
 #  - Root autologin
 #  - Optional GUI kiosk mode
 #  - Network auto-detection
@@ -39,6 +39,9 @@ APT_MIRROR="http://deb.debian.org/debian"
 APT_SECUBOX="https://apt.secubox.in"
 USE_LOCAL_CACHE=0
 SLIPSTREAM_DEBS=1
+# Profil d'amorçage (#3428) : SEUL le méta-paquet secubox-<profil> et sa fermeture Depends entrent dans l'image ;
+# le profil final s'installe ensuite depuis premier pas (apt). « all » garde l'ancien slipstream de TOUS les .deb.
+IMAGE_PROFILE="lite"
 INCLUDE_PERSISTENCE=1
 INCLUDE_KIOSK=1
 PRESEED_FILE=""
@@ -80,6 +83,10 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --no-compress      Skip gzip compression (faster, for local testing)
   --slipstream       Include .deb packages from output/debs/ (default: enabled)
   --no-slipstream    Don't include local .deb packages
+  --profile PROFIL   lite|minimal|isp|full : only the secubox-<PROFIL> meta-package
+                     and its Depends (default: lite, #3428). "all" = every .deb
+                     found (previous behaviour). The final profile is installed
+                     later from premier pas (apt).
   --preseed FILE     Include preseed config archive
   --embed-image IMG  Embed image for disk flashing (creates installer USB)
   --overlay          Use advanced overlay partition layout (v1.6.7.2+)
@@ -96,7 +103,7 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
 
 Features:
   - UEFI + Legacy BIOS boot
-  - All SecuBox packages pre-installed
+  - Boot profile only (--profile, default lite); final profile from premier pas
   - Root autologin on console
   - Network auto-detection at first boot
   - GUI kiosk mode included by default (--no-kiosk to disable)
@@ -125,6 +132,7 @@ while [[ $# -gt 0 ]]; do
     --no-compress)    NO_COMPRESS=1;        shift   ;;
     --slipstream)     SLIPSTREAM_DEBS=1;    shift   ;;
     --no-slipstream)  SLIPSTREAM_DEBS=0;    shift   ;;
+    --profile)        IMAGE_PROFILE="${2#secubox-}"; shift 2 ;;
     --preseed)        PRESEED_FILE="$2";    shift 2 ;;
     --embed-image)    EMBED_IMAGE="$2";     shift 2 ;;
     --overlay)        OVERLAY_MODE=1;       shift   ;;
@@ -137,6 +145,11 @@ while [[ $# -gt 0 ]]; do
     *) err "Unknown argument: $1" ;;
   esac
 done
+
+case "$IMAGE_PROFILE" in
+  lite|minimal|isp|full|all) ;;
+  *) err "--profile : lite|minimal|isp|full|all attendu (reçu « ${IMAGE_PROFILE} »)" ;;
+esac
 
 # Validate static-IP block
 if [[ -n "$STATIC_IP" ]]; then
@@ -1217,9 +1230,9 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════
-# Step 4: SecuBox packages (slipstream ALL from cache/repo)
+# Step 4: SecuBox packages (boot profile from cache/repo, #3428)
 # ══════════════════════════════════════════════════════════════════
-log "4/8 Installing ALL SecuBox packages..."
+log "4/8 Installing SecuBox packages (profil d'amorçage : ${IMAGE_PROFILE})..."
 
 # Install Python dependencies FIRST (required by SecuBox packages)
 log "Installing Python dependencies..."
@@ -1424,6 +1437,23 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
     done
   fi
 
+  # PROFIL D'AMORÇAGE (#3428). Jusqu'ici TOUS les .deb trouvés entraient dans l'image (~180 paquets) : une clé
+  # « lite » démarrait avec le contenu de full. Hors « all », on ne garde que la fermeture Depends du méta-paquet
+  # (select-profile-debs.py, le même sélecteur que build-rpi-usb.sh et build-image.sh) ; le kiosque, simple
+  # Recommends de lite, est ajouté explicitement avec --kiosk. Méta-paquet absent = échec franc, jamais « tout ».
+  if [[ "${IMAGE_PROFILE}" != "all" ]]; then
+    _tous="${ROOTFS}/tmp/secubox-debs-tous"
+    mv "${ROOTFS}/tmp/secubox-debs" "${_tous}"
+    install -d "${ROOTFS}/tmp/secubox-debs"
+    python3 "${SCRIPT_DIR}/select-profile-debs.py" "${_tous}" "${IMAGE_PROFILE}" "${ROOTFS}/tmp/secubox-debs" amd64 \
+      || err "profil ${IMAGE_PROFILE} : sélection impossible (méta-paquet secubox-${IMAGE_PROFILE} absent ?) — image non produite"
+    if [[ "${INCLUDE_KIOSK}" -eq 1 ]]; then
+      python3 "${SCRIPT_DIR}/select-profile-debs.py" "${_tous}" kiosk "${ROOTFS}/tmp/secubox-debs" amd64 \
+        || warn "secubox-kiosk absent des .deb : le kiosque reste celui de l'image (lanceur de secubox-premier-pas)"
+    fi
+    rm -rf "${_tous}"
+  fi
+
   DEB_COUNT=$(ls "${ROOTFS}/tmp/secubox-debs/"*.deb 2>/dev/null | wc -l)
 
   # List all packages to be installed
@@ -1499,6 +1529,12 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | awk '{print "  ✓ " $2 " (" $3 ")"}' || true
   echo ""
 
+  # #3428 : méta-paquet du profil configuré, sinon l'image ment sur son profil.
+  if [[ "${IMAGE_PROFILE}" != "all" ]]; then
+    chroot "${ROOTFS}" dpkg -l "secubox-${IMAGE_PROFILE}" 2>/dev/null | grep -q "^ii" \
+      || err "secubox-${IMAGE_PROFILE} non configuré dans l'image (voir les erreurs dpkg ci-dessus) — non produite"
+  fi
+
   # Save list to image
   chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" > "${ROOTFS}/var/lib/secubox/installed-packages.txt" || true
 
@@ -1511,18 +1547,24 @@ else
 deb [trusted=yes] ${APT_SECUBOX} ${SUITE} main
 EOF
     chroot "${ROOTFS}" apt-get update -q
+    # Profil d'amorçage (#3428) : « all » garde l'ancien secubox-full ; sinon le seul méta-paquet du profil.
+    if [[ "${IMAGE_PROFILE}" == "all" ]]; then APT_PROFILE_PKGS="secubox-full"; else APT_PROFILE_PKGS="secubox-${IMAGE_PROFILE}"; fi
+    [[ "${INCLUDE_KIOSK}" -eq 1 ]] && APT_PROFILE_PKGS="${APT_PROFILE_PKGS} secubox-kiosk"
     # Non-interactive conffile handling: secubox-mesh ships mesh.toml as a
     # conffile and triggers a dpkg prompt (*** mesh.toml [Y/I/N/O/D/Z]) during
     # configure, which fails the whole install in the headless chroot. Keep the
     # packaged conffile and never prompt.
     chroot "${ROOTFS}" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-      -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef secubox-full' 2>/dev/null || true
+      -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef "$@"' _ ${APT_PROFILE_PKGS} \
+      || warn "apt-get install ${APT_PROFILE_PKGS} a échoué — la vérification ci-dessous tranche"
     chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
-    # Verify secubox-core installed (dependency of secubox-full)
-    if ! chroot "${ROOTFS}" dpkg -l secubox-core 2>/dev/null | grep -q "^ii"; then
-      warn "secubox-full unavailable"
-    fi
+    # #3428 : le méta-paquet du profil doit être « ii », sinon l'image n'est pas produite (plus d'avertissement muet).
+    _meta="secubox-${IMAGE_PROFILE}"; [[ "${IMAGE_PROFILE}" == "all" ]] && _meta="secubox-full"
+    chroot "${ROOTFS}" dpkg -l "${_meta}" 2>/dev/null | grep -q "^ii" \
+      || err "${_meta} non installé depuis ${APT_SECUBOX} — image non produite"
+  else
+    err "ni .deb locaux ni dépôt ${APT_SECUBOX}/${SUITE} joignable — image non produite (#3428)"
   fi
 fi
 

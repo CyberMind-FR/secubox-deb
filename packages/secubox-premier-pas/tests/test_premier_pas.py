@@ -263,3 +263,38 @@ def test_nom_reserve_refuse_des_le_profil(complet, nom):
     ex = P.examine(complet, CONNUS)
     assert "nom" in ex.erreurs and "réservé" in ex.erreurs["nom"] and not ex.complet
     assert P.NOMS_RESERVES == frozenset({"admin", "www", "secubox", "localhost"})
+
+
+def test_montee_de_niveau_sans_reseau_avertit_et_continue_3428(complet, isole):
+    """#3428 : profilectl rend 4 quand secubox-<profil> n'a pas pu s'installer par apt (pas de réseau) ; rien n'a changé,
+    la box garde son profil d'amorçage, l'assistant le dit et continue."""
+    r = M.appliquer(complet, lambda a: (M.PROFILCTL_DIFFERE, "secubox-isp n'a pas pu être installé (apt rc=100)")
+                    if a[0] == "secubox-profilectl" else (0, ""), CONNUS, isole / "fait")
+    assert r.ok and (isole / "fait").exists()
+    assert len(r.avertissements) == 1 and r.avertissements[0].startswith("services")
+
+
+def test_un_autre_echec_de_profilectl_arrete_toujours_3428(complet, isole):
+    r = M.appliquer(complet, lambda a: (2, "apply: rolled_back") if a[0] == "secubox-profilectl" else (0, ""), CONNUS, isole / "fait")
+    assert not r.ok and r.echec == "services"
+
+
+def test_echec_d_installation_du_profil_arrete_l_assistant_3428(complet, isole):
+    r = M.appliquer(complet, lambda a: (5, "installation de secubox-isp échouée") if a[0] == "secubox-profilectl" else (0, ""), CONNUS, isole / "fait")
+    assert not r.ok and r.echec == "services"
+
+
+def test_profilectl_sans_delai_dans_une_unite_3428(monkeypatch):
+    vus = {}
+
+    class R:
+        returncode, stdout, stderr = 0, "", ""
+
+    def faux_run(argv, **kw):
+        vus["argv"], vus["kw"] = argv, kw
+        return R()
+    monkeypatch.setattr(M.subprocess, "run", faux_run)
+    M.execute_reel(["secubox-profilectl", "apply", "--profile", "isp", "--yes"])
+    assert vus["argv"][:7] == ["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "--unit", "secubox-montee-profil"]
+    assert vus["argv"][7:] == ["secubox-profilectl", "apply", "--profile", "isp", "--yes"]
+    assert "timeout" not in vus["kw"]

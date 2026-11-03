@@ -66,9 +66,13 @@ class Action:
     essais: int = 1                   # tentatives (réseau qui revient, #1544)
     pause: float = 5.0
     souple: bool = False              # un échec est DIT mais n'arrête pas l'assistant (#2495) : ce qui ne doit pas bloquer une première installation
+    codes_souples: Tuple[int, ...] = ()  # codes de retour traités comme `souple` pour cette seule action (#3428)
 
 
 Executeur = Callable[[List[str]], Tuple[int, str]]
+
+#: `secubox-profilectl apply` : paquets du profil non installables (réseau, dépôt) — rien changé (api/montee.py, #3428).
+PROFILCTL_DIFFERE = 4
 
 _CAUSE = re.compile(r"❌|✗|\bfail|échec|erreur|error|refus|masked|→ rc=", re.I)
 
@@ -83,7 +87,23 @@ def cause(sortie: str, n: int = 300) -> str:
     return texte[:n]
 
 
+#: Unité transitoire de la montée de niveau (#3428). profilectl y lance apt-get, qui n'a JAMAIS de délai : un délai ici
+#: tuerait profilectl et laisserait apt orphelin, verrou dpkg pris. Dans une unité systemd, apt vit et meurt avec elle.
+UNITE_MONTEE = "secubox-montee-profil"
+
+
+def argv_montee(argv: List[str]) -> List[str]:
+    return ["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "--unit", UNITE_MONTEE, *argv]
+
+
 def execute_reel(argv: List[str]) -> Tuple[int, str]:
+    if argv and argv[0] == "secubox-profilectl":
+        # Sans délai : peut installer un méta-paquet par apt (api/montee.py de secubox-profiles).
+        try:
+            r = subprocess.run(argv_montee(argv), capture_output=True, text=True)
+            return r.returncode, (r.stdout + r.stderr)[-4000:]
+        except OSError as e:
+            return 127, str(e)
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=1800)
         return r.returncode, (r.stdout + r.stderr)[-4000:]
@@ -249,8 +269,11 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
     if sp == P.GARDER:
         out.append(Action("services", "modules actuels gardés"))
     else:
+        # MONTÉE DE NIVEAU (#3428) : sur une image lite, profilectl installe d'abord secubox-<profil> par apt. Sans réseau
+        # il rend PROFILCTL_DIFFERE sans rien changer : avertissement, l'assistant continue avec le profil d'amorçage.
         out.append(Action("services", f"profil de services « {sp} »",
-                          ["secubox-profilectl", "apply", "--profile", sp, "--yes"]))
+                          ["secubox-profilectl", "apply", "--profile", sp, "--yes"],
+                          codes_souples=(PROFILCTL_DIFFERE,)))
     if m["mode"] == "rejoindre":
         if m.get("ancre_cle"):
             # L'ancre AVANT la jonction (#3100) : la box retient le maître qui l'a flashée ; un autre maître déjà ancré arrête l'étape.
@@ -454,7 +477,7 @@ def appliquer(profil: Dict[str, Any], executeur: Executeur = execute_reel,
                     time.sleep(a.pause)
                 if code != 0:
                     msg = f"{' '.join(a.argv)} → code {code} : {cause(sortie)}"
-                    if a.souple:
+                    if a.souple or code in a.codes_souples:
                         journal(f"AVERTISSEMENT [{a.etape}] {msg} — l'assistant continue")
                         avertissements.append(f"{a.etape} : {a.quoi} — {cause(sortie, 160)}")
                         ecrit_etat(phase="application", etape=a.etape, action=a.quoi, n=i, total=len(actions), avertissements=avertissements)
