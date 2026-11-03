@@ -80,7 +80,14 @@ for i in $(seq 1 "$TIMEOUT"); do
     # A mi-parcours, une relance de netplan peut debloquer une configuration
     # qui n'a pas ete appliquee. Sans insister : si netplan echoue, le
     # demarrage continue quand meme.
-    [ "$i" -eq $((TIMEOUT / 2)) ] && { log "relance de netplan"; netplan apply 2>/dev/null || true; }
+    # #3419 : jamais `netplan apply` ici. Au démarrage il relance systemd-networkd et attend udev/systemctl : sur la
+    # VM à une interface il bloquait jusqu'au délai de l'unité (échec en timeout). generate + reload, bornés, rendent
+    # la main tout de suite ; networkd applique en arrière-plan.
+    [ "$i" -eq $((TIMEOUT / 2)) ] && {
+        log "recompilation du netplan et rechargement de networkd"
+        timeout 15 netplan generate 2>/dev/null || log "netplan generate en echec ou trop lent"
+        timeout 10 networkctl reload 2>/dev/null || log "networkctl reload en echec ou trop lent"
+    }
     sleep 1
     iface=""
 done

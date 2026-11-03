@@ -1,3 +1,10 @@
+secubox-core (1.8.19-1~trixie1) trixie; urgency=medium
+
+  * secubox-wait-network.sh : plus de netplan apply au démarrage (bloquait secubox-network-ready jusqu'au délai sur
+    la VM à une interface) ; netplan generate et networkctl reload bornés ; délai de l'unité porté à 120 s (ref #3419).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 06:27:13 +0100
+
 secubox-core (1.8.18-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images
