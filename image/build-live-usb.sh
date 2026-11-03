@@ -1399,6 +1399,25 @@ else
 fi
 log "Found ${CACHE_COUNT} packages in cache, ${OUTPUT_COUNT} in output/debs"
 
+# #3431 : hors tag, l'agrégat CI ne contient que les paquets modifiés (parfois un seul). Sans le
+# méta-paquet du profil, ces .deb ne forment pas une image : on les ignore et on passe par le dépôt.
+if [[ "${IMAGE_PROFILE}" != "all" ]] && [[ $((CACHE_COUNT + OUTPUT_COUNT)) -gt 0 ]]; then
+  # Même filtre d'architecture que la copie plus bas (_all/_amd64) ; « || true » : un dossier absent
+  # ne doit pas arrêter le script sous set -e/pipefail.
+  _meta_local=""
+  for _d in "$OUTPUT_DEBS" "$CACHE_DEBS"; do
+    [[ -d "$_d" ]] || continue
+    _meta_local=$(find "$_d" \( -name "secubox-${IMAGE_PROFILE}_*_all.deb" -o -name "secubox-${IMAGE_PROFILE}_*_amd64.deb" \) \
+                    -print -quit 2>/dev/null || true)
+    [[ -n "${_meta_local}" ]] && break
+  done
+  if [[ -z "${_meta_local}" ]]; then
+    warn "lot local partiel (${OUTPUT_COUNT} + ${CACHE_COUNT} .deb, sans secubox-${IMAGE_PROFILE}) : ignoré, profil installé depuis ${APT_SECUBOX}"
+    CACHE_COUNT=0
+    OUTPUT_COUNT=0
+  fi
+fi
+
 if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   log "Slipstream: Installing from local packages"
   install -d "${ROOTFS}/tmp/secubox-debs"
