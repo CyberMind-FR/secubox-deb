@@ -50,6 +50,12 @@ if [ "$1" = "configure" ]; then
     python3 - <<'TOML' || echo "secubox-premier-pas : déclaration dans aggregator.toml impossible" >&2
 import pathlib, re
 f = pathlib.Path("/etc/secubox/aggregator.toml")
+# #3433 : dans une image, premier-pas est configuré AVANT l'agrégateur ; sans ce fichier l'inscription
+# était sautée et l'agrégateur créait ensuite le sien depuis l'exemple, sans premier-pas (API 404).
+exemple = pathlib.Path("/etc/secubox/aggregator.toml.example")
+if not f.exists() and exemple.exists():
+    f.write_text(exemple.read_text())
+    f.chmod(0o644)
 if f.exists():
     s = f.read_text()
     if '"premier-pas"' not in s:

@@ -1,3 +1,10 @@
+secubox-premier-pas (0.9.6-1~trixie1) trixie; urgency=medium
+
+  * Inscription dans aggregator.toml même si l'agrégateur est configuré
+    après (image neuve : API 404) (ref #3433).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 12:48:09 +0100
+
 secubox-premier-pas (0.9.5-1~trixie1) trixie; urgency=medium
 
   * Étape services : le code 4 de secubox-profilectl (paquets du profil non
