@@ -89,7 +89,7 @@ def _mode_suivi(clients: List[dict], mac: str) -> str:
 
     Avant, elle recopiait la PREMIÈRE entrée de l'appareil : l'IPv4 de tv-banc déclarée en observe faisait sortir chaque
     nouvelle IPv6 du filtrage, et la pub revenait au premier changement d'adresse."""
-    return "block" if any(c.get("mac") == mac and c.get("mode") == "block" for c in clients) else "auto"
+    return "block" if any(c.get("mac") == mac and c.get("mode") == "block" and c.get("origine", "admin") != "suivi" for c in clients) else "auto"
 
 
 def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vues: Dict[str, int], profil: List[Tuple[str, str]],

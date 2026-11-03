@@ -250,3 +250,11 @@ def test_nouvelle_adresse_suivie_garde_block_si_l_appareil_est_en_block_3438():
     etat, regles, suivi = monde(clients=[{"ip": "192.168.1.95", "nom": "TV banc", "mode": "block", "mac": mac}])
     lancer(etat, regles, suivi, det=[], voisins={neuve: mac}, vues={neuve: T0 + 60}, maintenant=T0 + 120)
     assert {c["ip"]: c["mode"] for c in etat["clients"]}[neuve] == "block"
+
+
+def test_block_leve_par_l_administrateur_les_adresses_suivies_redeviennent_auto_3438():
+    mac = "38:07:16:93:4e:95"
+    suivie = {"ip": "2a01:e0a:dec:c4e0:1:2:3:4", "nom": "TV banc", "mode": "block", "mac": mac, "origine": "suivi", "ajoute": T0}
+    etat, regles, suivi = monde(clients=[{"ip": "192.168.1.95", "nom": "TV banc", "mode": "auto", "mac": mac}, suivie])
+    lancer(etat, regles, suivi, det=[], voisins={}, vues={suivie["ip"]: T0}, maintenant=T0 + 60)
+    assert {c["ip"]: c["mode"] for c in etat["clients"]}[suivie["ip"]] == "auto"
