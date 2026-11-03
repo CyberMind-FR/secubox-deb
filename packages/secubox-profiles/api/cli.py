@@ -22,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import apply, export, front_web, healthsync, manifest_edit, minuteurs, nginxgen, wafsync
+from . import apply, export, front_web, healthsync, manifest_edit, minuteurs, montee, nginxgen, wafsync
 from .actuate import TIMED_OUT
 from .audit import AUDIT_LOG
 from .diff import (ProtectedViolation, changements_epingles,
@@ -152,6 +152,26 @@ def _cmd_apply(args) -> int:
         return 1
     root = Path(args.root)
     mod_dir, prof_dir, pins_file, _ = _paths(root)
+    # MONTÉE DE NIVEAU (#3428) : une box livrée en profil d'amorçage (lite) n'a pas les modules d'isp/full.
+    # Avant l'apply, le méta-paquet du profil demandé est installé par apt (sans délai, audité) puis les
+    # manifestes des nouveaux modules sont dérivés (scan sans --force). Sans réseau : message clair, rien
+    # changé, RC_DIFFERE — premier pas continue avec le profil actuel. Jamais en mode épingles ni --only.
+    if args.profile and not args.only and not getattr(args, "pins_only", False):
+        _load_profile_or_none(root, args.profile)  # profil inconnu : refus AVANT d'installer quoi que ce soit
+        paquet = montee.meta_paquet(args.profile)
+        if not args.yes:
+            if paquet and not montee.est_installe(paquet):
+                print(f"ℹ️  {paquet} absent : `--yes` l'installera par apt avant d'appliquer le profil.")
+        else:
+            rc_m, msg, neuf = montee.installer(args.profile)
+            if rc_m != 0:
+                if args.json:
+                    print(json.dumps({"status": "deferred", "reason": msg}, ensure_ascii=False))
+                print(f"⚠️  {msg}", file=sys.stderr)
+                return rc_m
+            print(f"📦 {msg}")
+            if neuf:
+                _cmd_scan(argparse.Namespace(root=args.root, force=False))
     manifests = load_all(mod_dir)
     profile = _load_profile_or_none(root, _active_profile_name(root, args.profile))
     # Minuteries (`minuteurs_off`) et protégés coupés (`proteges_off`) du profil (#3218), pour ce plan seulement.
