@@ -1,3 +1,10 @@
+secubox-waf-ng (1.33.3-1~trixie1) trixie; urgency=medium
+
+  * secubox-actord-ingest.service : ni BindsTo ni PartOf ; un redémarrage d'actord ne tue plus le oneshot en pleine
+    attente (Result=signal), le Wants= d'actord le relance (ref #3419).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 06:27:13 +0100
+
 secubox-waf-ng (1.33.2-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images

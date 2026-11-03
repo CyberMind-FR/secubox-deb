@@ -20,8 +20,9 @@
 [Unit]
 Description=SecuBox — groupe de la socket d'ingestion Actor Intelligence
 After=secubox-actord.service
-BindsTo=secubox-actord.service
-PartOf=secubox-actord.service
+# #3419 : ni BindsTo= ni PartOf=. Un redémarrage d'actord pendant l'attente (jusqu'à 15 min) propageait l'arrêt à ce
+# oneshot, tué en plein travail (Result=signal, unité en échec au premier démarrage). Le Wants= d'actord le relance à
+# chaque démarrage ; s'il tourne déjà, le job fusionne et le script attend la NOUVELLE socket en écoute (ss -xl).
 
 [Service]
 Type=oneshot
