@@ -3,6 +3,9 @@ secubox-premier-pas (0.9.5-1~trixie1) trixie; urgency=medium
   * Étape services : le code 4 de secubox-profilectl (paquets du profil non
     installables, pas de réseau) devient un avertissement ; l assistant
     continue avec le profil d amorçage (ref #3428).
+  * secubox-profilectl lancé sans délai dans l unité transitoire
+    secubox-montee-profil (apt jamais coupé, verrou dpkg jamais orphelin) ;
+    le code 5 (installation échouée) reste un échec (ref #3428).
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 07:19:37 +0100
 

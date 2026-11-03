@@ -87,7 +87,23 @@ def cause(sortie: str, n: int = 300) -> str:
     return texte[:n]
 
 
+#: Unité transitoire de la montée de niveau (#3428). profilectl y lance apt-get, qui n'a JAMAIS de délai : un délai ici
+#: tuerait profilectl et laisserait apt orphelin, verrou dpkg pris. Dans une unité systemd, apt vit et meurt avec elle.
+UNITE_MONTEE = "secubox-montee-profil"
+
+
+def argv_montee(argv: List[str]) -> List[str]:
+    return ["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "--unit", UNITE_MONTEE, *argv]
+
+
 def execute_reel(argv: List[str]) -> Tuple[int, str]:
+    if argv and argv[0] == "secubox-profilectl":
+        # Sans délai : peut installer un méta-paquet par apt (api/montee.py de secubox-profiles).
+        try:
+            r = subprocess.run(argv_montee(argv), capture_output=True, text=True)
+            return r.returncode, (r.stdout + r.stderr)[-4000:]
+        except OSError as e:
+            return 127, str(e)
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=1800)
         return r.returncode, (r.stdout + r.stderr)[-4000:]

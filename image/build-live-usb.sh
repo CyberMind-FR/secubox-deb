@@ -1529,6 +1529,12 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" | awk '{print "  ✓ " $2 " (" $3 ")"}' || true
   echo ""
 
+  # #3428 : méta-paquet du profil configuré, sinon l'image ment sur son profil.
+  if [[ "${IMAGE_PROFILE}" != "all" ]]; then
+    chroot "${ROOTFS}" dpkg -l "secubox-${IMAGE_PROFILE}" 2>/dev/null | grep -q "^ii" \
+      || err "secubox-${IMAGE_PROFILE} non configuré dans l'image (voir les erreurs dpkg ci-dessus) — non produite"
+  fi
+
   # Save list to image
   chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" > "${ROOTFS}/var/lib/secubox/installed-packages.txt" || true
 
@@ -1549,13 +1555,16 @@ EOF
     # configure, which fails the whole install in the headless chroot. Keep the
     # packaged conffile and never prompt.
     chroot "${ROOTFS}" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-      -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef "$@"' _ ${APT_PROFILE_PKGS} 2>/dev/null || true
+      -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef "$@"' _ ${APT_PROFILE_PKGS} \
+      || warn "apt-get install ${APT_PROFILE_PKGS} a échoué — la vérification ci-dessous tranche"
     chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
-    # Verify secubox-core installed (dependency of every profile meta-package)
-    if ! chroot "${ROOTFS}" dpkg -l secubox-core 2>/dev/null | grep -q "^ii"; then
-      warn "${APT_PROFILE_PKGS} unavailable"
-    fi
+    # #3428 : le méta-paquet du profil doit être « ii », sinon l'image n'est pas produite (plus d'avertissement muet).
+    _meta="secubox-${IMAGE_PROFILE}"; [[ "${IMAGE_PROFILE}" == "all" ]] && _meta="secubox-full"
+    chroot "${ROOTFS}" dpkg -l "${_meta}" 2>/dev/null | grep -q "^ii" \
+      || err "${_meta} non installé depuis ${APT_SECUBOX} — image non produite"
+  else
+    err "ni .deb locaux ni dépôt ${APT_SECUBOX}/${SUITE} joignable — image non produite (#3428)"
   fi
 fi
 

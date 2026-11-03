@@ -75,3 +75,18 @@ def test_verify_profile_lite_et_minimal_verts():
     for p in ("lite", "minimal"):
         r = subprocess.run(["bash", str(RACINE / "scripts/verify-profile.sh"), p], capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_meta_paquet_verifie_dans_l_image_et_profil_rpi_borne():
+    assert LIVE.count('|| err "secubox-${IMAGE_PROFILE} non configuré') == 1
+    assert '|| err "${_meta} non installé depuis' in LIVE and "secubox-full' 2>/dev/null || true" not in LIVE
+    assert "lite|minimal|isp|full) ;;" in RPI and '|| err "secubox-${PROFILE_TAG} non installé' in RPI
+
+
+def test_select_profile_debs_refuse_une_dependance_manquante(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("sel", RACINE / "image/select-profile-debs.py")
+    sel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sel)
+    index = {"secubox-lite": (tmp_path / "l.deb", {"secubox-absent"})}
+    assert sel._copier(index, ["secubox-lite"], tmp_path / "d", "lite") == 1
+    assert not (tmp_path / "d").exists()

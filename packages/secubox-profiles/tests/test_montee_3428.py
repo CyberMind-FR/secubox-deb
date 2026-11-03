@@ -12,8 +12,8 @@ import api.montee as montee
 
 
 class FauxApt:
-    def __init__(self, installe=False, rc_update=0, rc_install=0):
-        self.vues, self.installe, self.rc_update, self.rc_install = [], installe, rc_update, rc_install
+    def __init__(self, installe=False, rc_update=0, rc_install=0, rc_dl=0):
+        self.vues, self.installe, self.rc_update, self.rc_install, self.rc_dl = [], installe, rc_update, rc_install, rc_dl
 
     def __call__(self, argv):
         self.vues.append(argv)
@@ -22,7 +22,7 @@ class FauxApt:
         if argv[:2] == ["apt-get", "update"]:
             return self.rc_update, "Err:1 https://apt.secubox.in trixie InRelease\n  Temporary failure resolving" if self.rc_update else ""
         if argv[:2] == ["apt-get", "install"]:
-            return self.rc_install, ""
+            return (self.rc_dl if "--download-only" in argv else self.rc_install), ""
         return 0, ""
 
 
@@ -35,7 +35,8 @@ def test_box_lite_vers_isp_installe_le_meta_paquet_par_apt(tmp_path):
     rc, msg, neuf = montee.installer("isp", run=apt, audit_path=journal)
     assert rc == 0 and neuf and "secubox-isp" in msg
     assert apt.vues[1] == ["apt-get", "update", "-q"]
-    assert apt.vues[2][:4] == ["apt-get", "install", "-y", "-q"] and apt.vues[2][-1] == "secubox-isp"
+    assert apt.vues[2] == ["apt-get", "install", "-y", "-q", "--download-only", "secubox-isp"]   # télécharger d'abord
+    assert apt.vues[3][:4] == ["apt-get", "install", "-y", "-q"] and apt.vues[3][-1] == "secubox-isp"
     assert _audit(journal) == ["profile_upgrade_start", "profile_upgrade_done"]
 
 
@@ -43,6 +44,7 @@ def test_full_aussi_et_deja_installe_ne_relance_pas_apt(tmp_path):
     apt = FauxApt(installe=True)
     assert montee.installer("full", run=apt, audit_path=tmp_path / "a")[:2] == (0, "secubox-full déjà installé")
     assert all(v[0] == "dpkg-query" for v in apt.vues)
+    assert _audit(tmp_path / "a") == ["profile_upgrade_skip"]
 
 
 def test_profil_sans_meta_paquet_n_appelle_pas_apt(tmp_path):
@@ -103,3 +105,16 @@ def test_dry_run_annonce_l_installation_sans_rien_installer(tmp_path, monkeypatc
     monkeypatch.setattr(cli, "_observe_all", lambda m, routes: {})
     assert cli.main(["--root", str(root), "apply", "--profile", "isp"]) == 0
     assert "secubox-isp absent" in capsys.readouterr().out
+
+
+def test_telechargement_impossible_rien_change(tmp_path):
+    apt = FauxApt(rc_dl=100)
+    rc, msg, _ = montee.installer("full", run=apt, audit_path=tmp_path / "a")
+    assert rc == montee.RC_DIFFERE and "Rien n'a été changé" in msg
+    assert not any(v[:2] == ["apt-get", "install"] and "--download-only" not in v for v in apt.vues)
+
+
+def test_echec_pendant_l_installation_est_un_echec_pas_un_report(tmp_path):
+    apt = FauxApt(rc_install=100)
+    rc, msg, _ = montee.installer("isp", run=apt, audit_path=tmp_path / "a")
+    assert rc == montee.RC_ECHEC != montee.RC_DIFFERE and "Rien n'a été changé" not in msg and "dpkg --audit" in msg

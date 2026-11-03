@@ -32,8 +32,10 @@ from . import audit
 #: (media-lab, secure-gateway, distante…) ne pilotent que des services déjà installés.
 PROFILS_META = ("lite", "minimal", "isp", "full")
 
-#: Code rendu quand les paquets du profil n'ont pas pu être installés (réseau, dépôt) : rien n'a changé.
+#: Code rendu quand les paquets du profil n'ont pas pu être TÉLÉCHARGÉS (réseau, dépôt) : rien n'a changé.
 RC_DIFFERE = 4
+#: Code rendu quand l'installation/configuration elle-même a échoué : le système a pu changer, c'est un ÉCHEC.
+RC_ECHEC = 5
 
 Lanceur = Callable[[List[str]], Tuple[int, str]]
 
@@ -73,19 +75,30 @@ def installer(profil: Optional[str], *, run: Lanceur = lancer,
               audit_path: Path = audit.AUDIT_LOG) -> Tuple[int, str, bool]:
     """Installe le méta-paquet du profil s'il manque. Rend (rc, message, installe_maintenant).
 
-    rc 0 : déjà présent, profil sans méta-paquet, ou installé ; RC_DIFFERE : apt a échoué (rien n'a changé).
+    rc 0 : déjà présent, profil sans méta-paquet, ou installé ; RC_DIFFERE : mise à jour des index ou téléchargement
+    impossible (rien n'a changé) ; RC_ECHEC : l'installation elle-même a échoué.
     """
     paquet = meta_paquet(profil)
     if paquet is None:
         return 0, f"profil « {profil} » sans méta-paquet : services déjà installés seulement", False
     if est_installe(paquet, run):
+        _trace("profile_upgrade_skip", paquet, audit_path, profile=profil)
         return 0, f"{paquet} déjà installé", False
     _trace("profile_upgrade_start", paquet, audit_path, profile=profil)
+    # Télécharger D'ABORD (--download-only ne touche pas au système) : seul un échec à ce stade garantit « rien changé ».
     rc, out = run(["apt-get", "update", "-q"])
     if rc == 0:
+        rc, out = run(["apt-get", "install", "-y", "-q", "--download-only", paquet])
+    if rc == 0:
         rc, out = run(["apt-get", "install", "-y", "-q", *_DPKG_OPTS, paquet])
+        if rc != 0:
+            _trace("profile_upgrade_failed", paquet, audit_path, profile=profil, rc=rc, stage="install", detail=_fin(out))
+            return RC_ECHEC, (
+                f"installation de {paquet} échouée (apt rc={rc} : {_fin(out, 200) or 'sans détail'}). Paquets "
+                "téléchargés mais installation/configuration interrompue : vérifier `dpkg --audit` puis "
+                f"`apt-get -f install`, et relancer secubox-profilectl apply --profile {profil} --yes"), False
     if rc != 0:
-        _trace("profile_upgrade_failed", paquet, audit_path, profile=profil, rc=rc, detail=_fin(out))
+        _trace("profile_upgrade_failed", paquet, audit_path, profile=profil, rc=rc, stage="download", detail=_fin(out))
         return RC_DIFFERE, (
             f"{paquet} n'a pas pu être installé (apt rc={rc} : {_fin(out, 200) or 'sans détail'}). "
             "Réseau ou dépôt apt.secubox.in injoignable ? Rien n'a été changé : la box garde son profil actuel. "

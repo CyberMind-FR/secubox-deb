@@ -34,7 +34,7 @@ ESPRESSObin). `apply --profile lite|minimal|isp|full --yes` installe d'abord le 
 par apt s'il manque (sans délai, chaque étape dans `/var/log/secubox/audit.log` : `profile_upgrade_start`,
 `profile_upgrade_done` ou `profile_upgrade_failed`), dérive les manifestes des nouveaux modules (`scan` sans
 `--force`), puis applique. Sans réseau ou dépôt injoignable : message clair sur stderr, **rien n'est changé**,
-code de retour **4** (`{"status": "deferred"}` avec `--json`) ; premier pas en fait un avertissement et
+code de retour **4** (`{"status": "deferred"}` avec `--json`) ; un échec pendant l installation elle-même rend **5** (échec, pas report) ; premier pas en fait un avertissement et
 continue. Redescendre (isp → lite) n'enlève aucun paquet : l'apply arrête seulement ce que le profil n'allume pas.
 
 ## Profils & export

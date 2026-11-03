@@ -131,6 +131,10 @@ WORK_DIR=$(mktemp -d)
 ROOTFS="${WORK_DIR}/rootfs"
 # Le PROFIL fait partie du nom, comme dans build-image.sh (#1112). Sans lui,
 # `isp` et `full` produisaient le meme fichier et s'ecrasaient.
+case "${PROFILE_TAG}" in
+  lite|minimal|isp|full) ;;
+  *) err "--profile : lite|minimal|isp|full attendu (reçu « ${PROFILE_TAG} »)" ;;
+esac
 IMG_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-rpi-arm64-${SUITE}.img"
 
 cleanup() {
@@ -895,6 +899,9 @@ if [[ $DEB_COUNT -gt 0 ]]; then
   # cas ou l'on a le plus besoin de savoir que rien ne s'est installe.
   INSTALLED=$(chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep -c "^ii" || true)
   ok "Installed ${INSTALLED}/${DEB_COUNT} SecuBox packages"
+  # #3428 : le méta-paquet du profil doit être configuré, sinon l'image ment sur son profil.
+  chroot "${ROOTFS}" dpkg -l "secubox-${PROFILE_TAG}" 2>/dev/null | grep -q "^ii" \
+    || err "secubox-${PROFILE_TAG} non installé dans l'image — non produite"
 else
   # NE PAS continuer. Une image nommee « secubox-<profil>-... » sans un seul
   # paquet SecuBox est un mensonge, et un mensonge qui se decouvre tard : elle
