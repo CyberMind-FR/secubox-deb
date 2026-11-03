@@ -46,6 +46,8 @@ ETAT = Path("/run/secubox-premier-pas/etat.json")
 JOURNAL = Path("/var/log/secubox/premier-pas.log")
 SECUBOX_CONF = Path("/etc/secubox/secubox.conf")
 NET_DETECT = Path("/usr/sbin/secubox-net-detect")
+HAPROXYCTL = Path("/usr/sbin/haproxyctl")
+DEFAULTS_ALIGNER = Path("/usr/sbin/secubox-defaults-aligner")
 USERS_FILE = Path("/etc/secubox/users.json")
 MAJAUTO_DROPIN = Path("/etc/systemd/system/secubox-majauto.timer.d/heure.conf")
 
@@ -274,6 +276,14 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
         out.append(Action("services", f"profil de services « {sp} »",
                           ["secubox-profilectl", "apply", "--profile", sp, "--yes"],
                           codes_souples=(PROFILCTL_DIFFERE,)))
+    if dom and os.access(HAPROXYCTL, os.X_OK):
+        # FRONTAL APRÈS LE DOMAINE (#3442) : firstboot tente `haproxyctl frontal` avant que le domaine existe et renonce ; nginx autonome
+        # gardait 443 et la racine menait au Hall, plus à l'administration. Idempotent (rend 0 si déjà actif) ; souple : un refus laisse
+        # nginx autonome, l'état d'avant, et se relance à la main.
+        # /etc/default/secubox porte encore le nom de la machine de build (vu sur gk8 : runnervm…) : frontal refuse tant qu'il diffère du domaine.
+        if os.access(DEFAULTS_ALIGNER, os.X_OK):
+            out.append(Action("services", "nom de la box dans /etc/default/secubox", [str(DEFAULTS_ALIGNER)], souple=True))
+        out.append(Action("services", "frontal HAProxy + sbxwaf", [str(HAPROXYCTL), "frontal"], souple=True))
     if m["mode"] == "rejoindre":
         if m.get("ancre_cle"):
             # L'ancre AVANT la jonction (#3100) : la box retient le maître qui l'a flashée ; un autre maître déjà ancré arrête l'étape.

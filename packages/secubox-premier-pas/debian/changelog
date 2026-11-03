@@ -1,3 +1,13 @@
+secubox-premier-pas (0.9.8-1~trixie1) trixie; urgency=medium
+
+  * Frontal HAProxy relancé après le domaine et le profil de services :
+    firstboot y renonçait faute de domaine, nginx autonome gardait 443 et
+    la racine menait au Hall au lieu de l'administration ; précédé de
+    secubox-defaults-aligner (nom de la machine de build resté dans
+    /etc/default/secubox, frontal refusé) (ref #3442).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 15:40:00 +0100
+
 secubox-premier-pas (0.9.7-1~trixie1) trixie; urgency=medium
 
   * Depends: secubox-aggregator — dpkg configure l'agrégateur avant
