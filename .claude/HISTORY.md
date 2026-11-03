@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-03 — Live x64 validé sur gk8 : premier pas ISP sans geste manuel (closes #3442, closes #3433, closes #3440, closes #3435)
+- PR #3445 fusionnée : secubox-premier-pas 0.9.9 (profil rejoué 6×20 s après la bascule réseau ; adresses nom .local + IPv4 LAN dans la page web, « Ouvrir l'administration ») ; build-live-usb.sh charge AppArmor au démarrage du live (apparmor.service se sautait sur l'overlay : netmodes 231/APPARMOR, profil ISP défait) ; secubox-haproxy 1.12.13 (localhost et <nom>.local → administration : kiosque en 421). Publiés : premier-pas 0.9.9, haproxy 1.12.13.
+- gk8 (VM, image du run 41667418014) : premier pas ISP terminé sans avertissement (essai 1 raté juste après la bascule, essai 2 installé), frontal actif, admin 200 par localhost / gk8.local / IP, users.json v2, page suivant le changement d'IP (.156 → .158) ; maillage gk2 par `sbx-mesh-invite --code --nom gk8 --flash`.
+- Restent : /run/secubox repassé en 0750 au démarrage (dirs-guard le rétablit toutes les 5 min, netmodes redémarre) ; services en échec sur le live : ad-guard-dnsfeed (241), cmdline, openpgp, threatfeed, webfilter-sync ; présence sans code #3444 ; #3431 non testé.
+
 ## 2026-11-03 — Live x64 : premier test du choix de profil (gk8, VM) (ref #3442)
 - Constats gk8 (VM VirtualBox, pont Wi-Fi 192.168.1.52) : assistant figé (`.path`/`.timer` jamais activées par build-live-usb.sh), racine sur le Hall (frontal HAProxy non relancé après le domaine ; `/etc/default/secubox` au nom de la machine CI), profil ISP impossible en amd64 (`secubox-ndpid-engine` 1.7.1 < 1.7.2 exigé).
 - PR #3443 fusionnée : build-live-usb.sh active les `.path`/`.timer` que leur postinst active (47 sur 53 vérifiées sur gk8), secubox-premier-pas 0.9.8 (defaults-aligner puis `haproxyctl frontal`, souples). Publiés : premier-pas 0.9.8 [all], ndpid-engine 1.7.4 [amd64].
