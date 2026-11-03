@@ -84,6 +84,14 @@ def _adresse_utilisable(brut) -> Optional[str]:
     return str(a)
 
 
+def _mode_suivi(clients: List[dict], mac: str) -> str:
+    """Mode d'une adresse ajoutée par le suivi (#3438) : auto par défaut, block si l'appareil est déjà en block.
+
+    Avant, elle recopiait la PREMIÈRE entrée de l'appareil : l'IPv4 de tv-banc déclarée en observe faisait sortir chaque
+    nouvelle IPv6 du filtrage, et la pub revenait au premier changement d'adresse."""
+    return "block" if any(c.get("mac") == mac and c.get("mode") == "block" and c.get("origine", "admin") != "suivi" for c in clients) else "auto"
+
+
 def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vues: Dict[str, int], profil: List[Tuple[str, str]],
               suivi: dict, reglage, maintenant: int, exclus=frozenset(), taxo=None) -> dict:
     """Modifie `etat`, `regles` et `suivi` EN PLACE et rend {"changements": [...], "etat_modifie": bool}. Rien si `ajout_auto` est faux."""
@@ -136,13 +144,19 @@ def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vue
             ips.discard(ancienne["ip"])
             changements.append({"type": "adresse-", "nom": ancienne["nom"], "detail": ancienne["ip"]})
         entree = {k: v for k, v in modele.items() if k not in ("ip", "ajoute", "preuve")}
-        entree.update(ip=a, ajoute=maintenant)
+        entree.update(ip=a, ajoute=maintenant, mode=_mode_suivi(clients, mac))
         if modele.get("origine", "admin") == "admin":
             entree["origine"] = "suivi"
         clients.append(entree)
         ips.add(a)
         changements.append({"type": "adresse+", "nom": modele["nom"], "detail": a})
     for mac, modele in auto.items():
+        # #3438 : les adresses ajoutées par le suivi suivent le mode de l'appareil (auto par défaut) ; les déclarées ne changent pas.
+        mode = _mode_suivi(clients, mac)
+        for c in clients:
+            if c.get("mac") == mac and c.get("origine") == "suivi" and c.get("mode") != mode:
+                c["mode"] = mode
+                changements.append({"type": "mode", "nom": c["nom"], "detail": f"{c['ip']} → {mode}"})
         adr = [c for c in clients if c.get("mac") == mac and c.get("origine") in ("auto", "suivi")]
         declarees = [c for c in clients if c.get("mac") == mac and c.get("origine", "admin") == "admin"]
         vue = {c["ip"]: max(vues.get(c["ip"], 0), c.get("ajoute", 0)) for c in adr}

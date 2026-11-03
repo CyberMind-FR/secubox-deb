@@ -1,3 +1,12 @@
+secubox-ad-guard (1.24.2-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy : une adresse ajoutée par le suivi passe en auto par défaut
+    (block si l'appareil est en block) au lieu de recopier la première
+    entrée de l'appareil ; les adresses suivies existantes sont réalignées.
+    Pubs revenues sur tv-banc (ref #3438).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 03 Nov 2026 13:47:28 +0100
+
 secubox-ad-guard (1.24.1-1~trixie1) trixie; urgency=medium
 
   * POST /learn/thresholds (ref #3393) : filters.json (secubox-toolbox 664, dossier root 755) n'était pas inscriptible par
