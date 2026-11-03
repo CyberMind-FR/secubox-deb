@@ -47,3 +47,13 @@ def test_frontal_refuse_ne_bloque_pas(complet, isole, tmp_path, monkeypatch):
         return (1, "ERROR: frontal : nginx -t refuse") if argv[-1] == "frontal" else (0, "")
     r = M.appliquer(complet, exe, CONNUS, isole / "fait")
     assert r.ok and any("frontal" in w for w in r.avertissements)
+
+
+def test_defaults_aligne_avant_frontal(complet, tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "HAPROXYCTL", _outil(tmp_path))
+    aligner = tmp_path / "secubox-defaults-aligner"
+    aligner.write_text("#!/bin/sh\n")
+    aligner.chmod(0o755)
+    monkeypatch.setattr(M, "DEFAULTS_ALIGNER", aligner)
+    argvs = [a.argv for a in M.plan(complet)]
+    assert argvs.index([str(aligner)]) == argvs.index([str(M.HAPROXYCTL), "frontal"]) - 1
