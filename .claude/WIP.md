@@ -175,6 +175,8 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
+0000000000000. **Alpha 21 puis 22, puis bêta (GO du propriétaire le 2026-11-04 ; conditions : #3462)** : plan `docs/mirrornet/plan-alpha21.md`, issues L1 à L10 = #3450 à #3460. L1 fusionné (PR #3461), NON déployé : banc gk4/gk6 puis gk2, vérifier `protegees.env` avant de redémarrer le WAF de gk2. Suivants, dans l'ordre de fusion : L3 #3452, L5a #3454, L7 #3457.
+
 00000000000. **Avant l'Alpha 20 (arbitrage du propriétaire, 2026-11-01) : finir SBX TV Privacy #3374**, lots 5 → 4 (DPI par
   appareil, contournements, anti faux repli ; rend visibles les pubs servies par le flux) → 5b (assistant en direct) → 6 → 7
   (Freebox, 2 Android TV, Apple TV). Test en cours sur la TV du propriétaire (MAC 38:07:16:93:4e:95) : bloquer

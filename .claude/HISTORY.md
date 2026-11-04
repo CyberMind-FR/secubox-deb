@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-04 — Alpha 21 L1 : partage threatmesh retiré, non déployé (ref #3450)
+- PR #3461 : threatmesh 1.2.0 (sans ingest ni diffusion, socket Unix), toolbox 2.13.9 (`mesh:` ignoré), waf-ng 1.34.0 (plages dans `/etc/secubox/waf/protegees.env`, reprises par preinst).
+- Écart au plan : fichier d'environnement au lieu de `ddos.toml` `[admin]`, à relier en L2.
+
 ## 2026-11-04 — Pages : déploiements rétablis, landing de retour (closes #3448)
 - PR #3449 : `static.yml` retiré. Son run en attente depuis le 07/10 bloquait le groupe de concurrence `pages`, et il publiait le dépôt entier à la place de la landing (racine en 404).
 - Runs 37612272947 et 41771118282 annulés ; `pages.yml` relancé (run 41774955060, succès) : racine du site en 200 sur la landing, `.claude/WIP.md` en 404.
