@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-04 — Bêta 1 : première image Mobile, démarrage validé en VM (ref #3467, ref #3470)
+- PR #3471, #3472, #3473, #3474, #3475 : profil `mobile`, dépendances déclarées installées avant dpkg, `apparmor` dans hardening, cache créé avant le test nginx. Run 41823008342 : 21 paquets, 1,46 Go compressée.
+- VirtualBox 2 Go : prêt en 50 s, aucun service en échec, AppArmor chargé, /run/secubox en 1777, 894 Mo utilisés dont le kiosque.
+- Reste : listes de blocage vides et Unbound local seulement sur box neuve ; retrait ; essais réseau réels. Essai du secondaire : gk2 reste seul DNS.
+- CI : une image hors tag exige une construction complète des paquets du même commit, sinon agrégat vide.
+
 ## 2026-11-04 — metablogizer 1.11.5 et haproxy 1.12.14 déployés sur gk2 (closes #3463, closes #3465)
 - Publiés dans apt, installés sur gk2, `haproxy.cfg` régénéré (seuls écarts : `hote_local` de #3442 et délai metablogizer). Copie : `/etc/haproxy/haproxy.cfg.avant-3465`.
 - Déploiement de L1 sur gk4/gk6 : en attente, sur décision du propriétaire.
