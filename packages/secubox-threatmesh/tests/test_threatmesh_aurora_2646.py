@@ -24,7 +24,8 @@ def test_page_autonome_sans_dialogue_natif():
 
 
 def test_routes_a_l_identique():
-    for r in ("'/status'", "'/peers'", "'/decisions?min_consensus=1&limit=40'", "'/feeds/refresh'", "'/mesh/gossip'", "method: 'POST'"):
+    for r in ("'/status'", "'/peers'", "'/decisions?min_consensus=1&limit=40'", "'/feeds/refresh'", "method: 'POST'"):
+        assert r in SRC
     assert "'/mesh/gossip'" not in SRC
     assert "localStorage.getItem('sbx_token')" in SRC and "'Bearer '" in SRC
     assert "DELETE" not in SRC and "'PUT'" not in SRC
