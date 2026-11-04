@@ -81,10 +81,10 @@
         <header class="tete">
             <div class="marque">
                 <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.2"/><circle cx="5" cy="6" r="1.8"/><circle cx="19" cy="6.5" r="1.8"/><circle cx="6" cy="19" r="1.8"/><circle cx="18.5" cy="18" r="1.8"/><path d="M10.2 10.8 6.4 7.3M13.8 10.8l3.9-3M10.4 13.4 7.2 17.5M13.6 13.6l3.5 3"/></svg>
-                <div><h1>ThreatMesh</h1><small>Renseignement de menaces souverain : flux publics, maillage SecuBox, décisions locales</small></div>
+                <div><h1>ThreatMesh</h1><small>Renseignement de menaces souverain : flux publics et décisions locales</small></div>
             </div>
             <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
-            <div class="droite"><span id="maj">—</span><button class="btn prim" id="btnFeeds" type="button" title="Relance la collecte des flux publics (POST /feeds/refresh), environ une minute.">↻ Actualiser les flux</button><button class="btn" id="btnGossip" type="button" title="Pousse maintenant nos décisions locales aux pairs du maillage (POST /mesh/gossip).">Diffuser au maillage</button><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+            <div class="droite"><span id="maj">—</span><button class="btn prim" id="btnFeeds" type="button" title="Relance la collecte des flux publics (POST /feeds/refresh), environ une minute.">↻ Actualiser les flux</button><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
         </header>
         <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, actions inertes</div>
         <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
@@ -93,7 +93,7 @@
         <section class="tuiles" aria-label="Indicateurs">
             <div class="tuile ro" title="Somme des entrées de toutes les sources (flux, maillage, décisions locales) dans la table threat_intel. Une même adresse présente dans deux sources compte deux fois : ce n’est pas un nombre d’adresses distinctes. Le blocage effectif passe par secubox-blacklist-sync vers nftables."><span class="l">IOC agrégés</span><span class="v" id="tTotal">—</span><span class="s">flux + maillage + local</span></div>
             <div class="tuile cy" title="Entrées issues des flux publics gratuits (sources « feed: »), relevés par secubox-threatfeed."><span class="l">Flux publics</span><span class="v" id="tFeeds">—</span><span class="s" id="sFeeds">entrées</span></div>
-            <div class="tuile vi" title="Entrées reçues des autres nœuds SecuBox (sources « mesh: »), diffusées par le maillage P2P."><span class="l">Maillage</span><span class="v" id="tMesh">—</span><span class="s" id="sMesh">entrées</span></div>
+            <div class="tuile vi" title="Partage entre nœuds retiré tant qu’il n’est pas signé (#3450) : reviendra par l’annuaire."><span class="l">Maillage</span><span class="v" id="tMesh">—</span><span class="s" id="sMesh">entrées</span></div>
             <div class="tuile ok" title="Mode du plan de contrôle. « sovereign » : aucune API centrale tierce, aucun compte, CAPI désactivé (#728)."><span class="l">Mode</span><span class="v long" id="tMode">—</span><span class="s" id="sMode">CAPI —</span></div>
             <div class="tuile cy" title="Identifiant de ce nœud dans le maillage (lu depuis secubox-p2p)."><span class="l">Nœud</span><span class="v long mono" id="tNoeud">—</span><span class="s">identifiant local</span></div>
         </section>
@@ -250,14 +250,6 @@
             if (r.demo) retour(true, 'Démonstration : action inerte.');
             else if (r.ok) retour(true, 'Actualisation des flux lancée (environ une minute).');
             else retour(false, r.statut === 401 || r.statut === 403 ? 'Connexion administrateur requise (Hub).' : 'Actualisation impossible' + (r.statut ? ' (HTTP ' + r.statut + ')' : ' : serveur injoignable') + '.');
-        });
-        $('btnGossip').addEventListener('click', async () => {
-            const b = $('btnGossip'); b.disabled = true;
-            const r = await ecrire('/mesh/gossip');
-            b.disabled = false;
-            if (r.demo) retour(true, 'Démonstration : action inerte.');
-            else if (r.ok && r.data) retour(true, 'Diffusion : ' + nb(r.data.pushed) + '/' + nb(r.data.peers) + ' pairs, ' + nb(r.data.shared) + ' décisions partagées.');
-            else retour(false, r.statut === 401 || r.statut === 403 ? 'Connexion administrateur requise (Hub).' : 'Diffusion impossible' + (r.statut ? ' (HTTP ' + r.statut + ')' : ' : serveur injoignable') + '.');
         });
         $('rafraichir').addEventListener('click', charger);
 

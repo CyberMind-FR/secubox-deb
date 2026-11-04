@@ -7,10 +7,9 @@ Wants=secubox-p2p.service
 Type=simple
 User=root
 WorkingDirectory=/usr/lib/secubox/threatmesh
-# Listens on :8780 — nginx proxies the dashboard; peers POST mesh decisions
-# over the WireGuard mesh. nft drop-in restricts :8780 to wg* + loopback.
-ExecStartPre=-/usr/sbin/nft -f /usr/share/secubox/threatmesh/nftables.d/secubox-threatmesh.nft
-ExecStart=/usr/bin/python3 -m uvicorn api.main:app --host 0.0.0.0 --port 8780 --workers 1
+# #3450 : partage non signé retiré, plus aucune écoute TCP.
+ExecStartPre=+/bin/rm -f /run/secubox/threatmesh.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/threatmesh.sock --workers 1
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=yes

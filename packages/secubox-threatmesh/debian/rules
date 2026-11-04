@@ -16,8 +16,6 @@ override_dh_auto_install:
 	install -d debian/secubox-threatmesh/etc/nginx/secubox-routes.d debian/secubox-threatmesh/etc/nginx/secubox.d
 	cp nginx/threatmesh.conf debian/secubox-threatmesh/etc/nginx/secubox-routes.d/
 	cp nginx/threatmesh.conf debian/secubox-threatmesh/etc/nginx/secubox.d/
-	install -d debian/secubox-threatmesh/usr/share/secubox/threatmesh/nftables.d
-	cp nftables.d/secubox-threatmesh.nft debian/secubox-threatmesh/usr/share/secubox/threatmesh/nftables.d/
 
 override_dh_installsystemd:
 	true

@@ -25,7 +25,7 @@ def test_page_autonome_sans_dialogue_natif():
 
 def test_routes_a_l_identique():
     for r in ("'/status'", "'/peers'", "'/decisions?min_consensus=1&limit=40'", "'/feeds/refresh'", "'/mesh/gossip'", "method: 'POST'"):
-        assert r in SRC
+    assert "'/mesh/gossip'" not in SRC
     assert "localStorage.getItem('sbx_token')" in SRC and "'Bearer '" in SRC
     assert "DELETE" not in SRC and "'PUT'" not in SRC
 
@@ -105,14 +105,11 @@ def test_filtre_cote_client(navigateur):
 
 
 def test_actions_post_a_l_identique(navigateur):
-    routes = {**API, "/mesh/gossip": (200, {"pushed": 1, "peers": 1, "shared": 5})}
-    ctx, p, _, appels = ouvre(navigateur, URL, routes, jeton="t")
+    ctx, p, _, appels = ouvre(navigateur, URL, API, jeton="t")
     p.wait_for_selector("#bAgg tr td.mono", state="attached")
     p.click("#btnFeeds")
     p.wait_for_function("document.getElementById('rActions').textContent.includes('lancée')")
-    p.click("#btnGossip")
-    p.wait_for_function("document.getElementById('rActions').textContent.includes('1/1 pairs')")
-    assert ("POST", "/feeds/refresh", "Bearer t") in appels and ("POST", "/mesh/gossip", "Bearer t") in appels
+    assert ("POST", "/feeds/refresh", "Bearer t") in appels
     ctx.close()
 
 
@@ -146,7 +143,6 @@ def test_demonstration_annoncee_et_actions_inertes(navigateur):
     assert p.is_visible("#demo") and "DÉMONSTRATION" in p.inner_text("#demo")
     p.click("#btnFeeds")
     p.wait_for_function("document.getElementById('rActions').textContent.includes('inerte')")
-    p.click("#btnGossip")
     assert appels == [] and err == []
     ctx.close()
 

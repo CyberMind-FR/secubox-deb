@@ -4,12 +4,14 @@ case "$1" in
   configure)
     install -d -m 0755 /var/lib/secubox/threatmesh
     systemctl daemon-reload 2>/dev/null || true
-    # mesh-port firewall (lock :8780 to wg*/lo under DEFAULT DROP)
-    if [ -f /usr/share/secubox/threatmesh/nftables.d/secubox-threatmesh.nft ]; then
-      nft -f /usr/share/secubox/threatmesh/nftables.d/secubox-threatmesh.nft 2>/dev/null || true
+    # #3450 : retire le port 8780 et les indicateurs reçus sans signature.
+    nft delete table inet secubox_threatmesh 2>/dev/null || true
+    if [ -w /var/lib/secubox/toolbox/toolbox.db ] && command -v sqlite3 >/dev/null 2>&1; then
+      sqlite3 /var/lib/secubox/toolbox/toolbox.db "DELETE FROM threat_intel WHERE source LIKE 'mesh:%';" 2>/dev/null || true
     fi
     if [ "$(systemctl is-enabled secubox-threatmesh.service 2>/dev/null)" != "masked" ]; then
       systemctl enable --now secubox-threatmesh.service 2>/dev/null || true
+      systemctl try-restart secubox-threatmesh.service 2>/dev/null || true
     fi
     systemctl enable --now secubox-threatfeed.timer 2>/dev/null || true
     # first feed population (background; logs to /tmp to avoid /var/log perms)

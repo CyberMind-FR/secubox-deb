@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-waf-ng — preinst (#3450)
+# Conserve les plages protégées écrites en dur par les versions précédentes.
+set -e
+
+ENV_FICHIER="${WAF_PROTEGEES_ENV:-/etc/secubox/waf/protegees.env}"
+UNITES="${WAF_UNITES:-/usr/lib/systemd/system/secubox-waf-ng.service /lib/systemd/system/secubox-waf-ng.service /etc/systemd/system/secubox-waf-ng.service.d/*.conf}"
+
+if [ "$1" = "upgrade" ] && [ ! -e "$ENV_FICHIER" ]; then
+  # shellcheck disable=SC2086
+  plages=$(sed -n 's/.*--actor-ban-protegees \([0-9a-fA-F:.,/]*\).*/\1/p' $UNITES 2>/dev/null | grep -m1 . || true)
+  if [ -n "$plages" ]; then
+    mkdir -p "$(dirname "$ENV_FICHIER")"
+    printf 'SECUBOX_WAF_PROTEGEES=%s\n' "$plages" > "$ENV_FICHIER"
+  fi
+fi
+
+#DEBHELPER#
+exit 0
