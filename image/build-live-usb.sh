@@ -1526,6 +1526,24 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   log "Reconfiguring packages..."
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
+  # #3467 : --force-depends laisse de cote ce que les paquets declarent. Un profil reduit l'a montre : python3-pyotp
+  # (secubox-auth) n'etait apporte par aucune liste, et usersctl echouait. On installe donc les Depends hors SecuBox
+  # (premiere alternative), puis on reconfigure ce qui attendait. Un nom introuvable est signale, sans masquer les autres.
+  _DEPS=$(chroot "${ROOTFS}" dpkg-query -W -f='${Depends}\n' 'secubox-*' 2>/dev/null \
+    | tr ',' '\n' | sed -E 's/\|.*//; s/\(.*\)//; s/:any//; s/[[:space:]]//g' \
+    | grep -E '^[a-z0-9][a-z0-9.+-]+$' | grep -v '^secubox-' | sort -u | tr '\n' ' ')
+  log "Installing declared dependencies: ${_DEPS}"
+  # shellcheck disable=SC2086
+  if ! chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends ${_DEPS}; then
+    warn "dependances : installation groupee refusee, essai paquet par paquet"
+    for _d in ${_DEPS}; do
+      chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive dpkg --force-depends --configure -a >/dev/null 2>&1 || true
+      chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${_d}" \
+        || warn "dependance non installee : ${_d}"
+    done
+  fi
+  chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
+
   # Install textual for console TUI (dependency of secubox-console)
   if ls "${ROOTFS}/tmp/secubox-debs/secubox-console_"*.deb >/dev/null 2>&1 || \
      chroot "${ROOTFS}" dpkg -l secubox-console 2>/dev/null | grep -q "^ii"; then
