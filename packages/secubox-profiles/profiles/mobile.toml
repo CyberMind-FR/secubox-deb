@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# Profil d'activation « mobile » (#3470) : clé USB amd64, agent sur un réseau existant, sans mode routeur ni Hall.
+# Même socle que `minimal`, plus le kiosque et la console, car la clé démarre sur un PC avec écran.
+name  = "mobile"
+label = "Mobile — clé USB : publicités, traqueurs, TV Privacy, Freebox"
+menu_off = [
+  "zkp", "assist", "ksm", "premier-pas-maitre", "centers",
+  "dpi", "ndpid", "mediaflow", "admin", "profiles", "network-anomaly", "netdiag", "grafana", "glances", "toolbox",
+]
+# Minuteries arrêtées et désactivées par ce profil (#3218, banc gk5) ; les autres profils les rétablissent.
+minuteurs_off = [
+  "dpi-resume", "yt-dlp-refresh",
+  "courbes-serie", "metrics-publish", "netstats", "network-anomaly-collecte", "profiles-releve",
+  "cache-warm@jitsi", "cache-warm@metacatalog",
+  # #3258 : Requires=secubox-streamlit.service ; rallumée par l'union, elle relancerait Streamlit, que minimal arrête.
+  "streamlit-idle",
+]
+# L'API du panneau /profiles/ (41 Mo) est coupée : `secubox-profilectl` (CLI root) reste le moyen de changer de profil.
+proteges_off = ["profiles"]
+on = [
+  # Pilotage distant (#3126, R-L5-34) : toute box reste télé-administrable par son maître.
+  "pilotage-agent",
+  # Socle d'administration : API, connexion, menu (secubox-portal reste INSTALLÉ, il livre login.html ; son API est servie
+  # par l'agrégateur, son service propre est arrêté : nginx sert les pages et passe les API).
+  "core", "aggregator", "auth", "users", "system", "hardening", "hub",
+  "network-ready", "runtime", "firstboot", "net-fallback",
+  "autoload-agent", "premier-pas", "waker",
+  # Maillage et relais : la box rejoint son maître et reste administrable par lui.
+  "p2p", "meshname", "annuaire", "groupe-declares",
+  # Fonctions du boîtier de garde.
+  "dns-guard", "ad-guard", "webfilter", "webfilter-feed",
+  "nac", "freebox", "ipv6guard", "wireguard",
+  # Clé branchée sur un PC : écran local.
+  "kiosk", "console",
+]

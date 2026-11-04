@@ -83,7 +83,7 @@ Usage: sudo bash build-live-usb.sh [OPTIONS]
   --no-compress      Skip gzip compression (faster, for local testing)
   --slipstream       Include .deb packages from output/debs/ (default: enabled)
   --no-slipstream    Don't include local .deb packages
-  --profile PROFIL   lite|minimal|isp|full : only the secubox-<PROFIL> meta-package
+  --profile PROFIL   lite|minimal|mobile|isp|full : only the secubox-<PROFIL> meta-package
                      and its Depends (default: lite, #3428). "all" = every .deb
                      found (previous behaviour). The final profile is installed
                      later from premier pas (apt).
@@ -147,8 +147,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$IMAGE_PROFILE" in
-  lite|minimal|isp|full|all) ;;
-  *) err "--profile : lite|minimal|isp|full|all attendu (reçu « ${IMAGE_PROFILE} »)" ;;
+  lite|minimal|mobile|isp|full|all) ;;
+  *) err "--profile : lite|minimal|mobile|isp|full|all attendu (reçu « ${IMAGE_PROFILE} »)" ;;
 esac
 
 # Validate static-IP block
