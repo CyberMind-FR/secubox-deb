@@ -2,6 +2,8 @@
 Description=SecuBox ThreatFeed — pull free public blocklists into threat_intel (#728)
 After=network-online.target
 Wants=network-online.target
+# Sans base toolbox (box neuve, toolbox non configurée) rien à alimenter : unité sautée, pas en échec (#3446).
+ConditionPathExists=/var/lib/secubox/toolbox/toolbox.db
 
 [Service]
 Type=oneshot

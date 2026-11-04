@@ -283,7 +283,9 @@ setup_console_secours_tty2() {
     /usr/sbin/secubox-kiosk-retire-autologin || rc=$?
     if [[ "$rc" -eq 10 ]]; then systemctl daemon-reload 2>/dev/null || true; fi
     systemctl enable getty@tty2.service 2>/dev/null || true
-    systemctl start getty@tty2.service 2>/dev/null || true
+    # --no-block (#3446) : appelé par secubox-cmdline AVANT sysinit.target, un start synchrone de getty (qui vient après) se bloquait
+    # jusqu'au délai de 90 s — secubox-cmdline en échec à chaque démarrage du live.
+    systemctl --no-block start getty@tty2.service 2>/dev/null || true
     log "Console de secours : tty2 avec connexion (Ctrl+Alt+F2)"
 }
 
