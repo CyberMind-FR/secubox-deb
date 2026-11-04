@@ -284,7 +284,9 @@ fi
 
 # ── 2. Répertoires ────────────────────────────────────────────────
 install -d -o secubox -g secubox -m 750 "${SECUBOX_DIR}"
-install -d -o secubox -g secubox -m 750 "${SECUBOX_RUN}"
+# /run/secubox : 1777 root:root, comme le tmpfiles de secubox-core et secubox-dirs-guard (#3446). En 750 secubox, firstboot (rejoué
+# à chaque démarrage du live) empêchait netmodes et openpgp — autres comptes, groupe secubox — de créer leur socket.
+install -d -o root -g root -m 1777 "${SECUBOX_RUN}"
 install -d -o secubox -g secubox -m 750 "${SECUBOX_DATA}"
 install -d -o secubox -g secubox -m 750 "${TLS_DIR}"
 install -d -o root    -g secubox -m 750 "${SECUBOX_DIR}/netmodes"

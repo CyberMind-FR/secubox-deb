@@ -1302,7 +1302,7 @@ fi
 
 # Create directories with correct ownership
 chroot "${ROOTFS}" install -d -o secubox -g secubox -m 750 /etc/secubox
-chroot "${ROOTFS}" install -d -o secubox -g secubox -m 775 /run/secubox
+chroot "${ROOTFS}" install -d -o root -g root -m 1777 /run/secubox   # #3446 : comme le tmpfiles de secubox-core
 chroot "${ROOTFS}" install -d -o secubox -g secubox -m 750 /var/lib/secubox
 chroot "${ROOTFS}" install -d -m 755 /usr/share/secubox/www
 
@@ -1315,7 +1315,7 @@ mkdir -p "${ROOTFS}/etc/tmpfiles.d"
 cat > "${ROOTFS}/etc/tmpfiles.d/secubox.conf" << 'TMPFILES'
 # SecuBox runtime directory for Unix sockets
 # Created by tmpfiles.d at boot (before services start)
-d /run/secubox 0775 secubox secubox -
+d /run/secubox 1777 root root -
 TMPFILES
 log "tmpfiles.d configured for /run/secubox"
 

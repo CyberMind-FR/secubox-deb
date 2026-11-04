@@ -8,6 +8,8 @@ Wants=unbound.service
 Type=simple
 User=secubox
 Group=secubox
+# Lit le journal d'Unbound (#3446) : sans ce groupe, « No journal files were opened » et redémarrage en boucle sur une box neuve.
+SupplementaryGroups=systemd-journal
 # Le POC n'est PAS activé à l'installation : `systemctl enable --now secubox-ad-guard-dnsfeed` après `secubox-adguard-tv apply`.
 ExecStart=/usr/sbin/secubox-adguard-dnsfeed
 Restart=on-failure
