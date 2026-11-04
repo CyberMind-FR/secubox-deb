@@ -175,7 +175,7 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 
 ## ⬜ Next Up (dans l'ordre)
 
-00000000000000. **Bêta 1 = clé USB mobile viable (#3467, #3381), AVANT les Alpha 21 et 22 (arbitrage du propriétaire, 2026-11-04)**. La bêta 2 (#3462) testera les Alpha 21 et 22 : leurs lots passent après.
+00000000000000. **Bêta 1 = clé USB mobile viable (#3467, #3381), AVANT les Alpha 21 et 22 (arbitrage du propriétaire, 2026-11-04)**. Sans chiffrement. Bêta 2 (#3468) : SBX Trust. Bêta 3 (#3462) : Alpha 21 et 22.
 
 0000000000000. **Alpha 21 puis 22, puis bêta (GO du propriétaire le 2026-11-04 ; conditions : #3462)** : plan `docs/mirrornet/plan-alpha21.md`, issues L1 à L10 = #3450 à #3460. L1 fusionné (PR #3461), NON déployé : banc gk4/gk6 puis gk2, vérifier `protegees.env` avant de redémarrer le WAF de gk2. Suivants, dans l'ordre de fusion : L3 #3452, L5a #3454, L7 #3457.
 
