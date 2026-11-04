@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-04 — Pages : déploiements rétablis, landing de retour (closes #3448)
+- PR #3449 : `static.yml` retiré. Son run en attente depuis le 07/10 bloquait le groupe de concurrence `pages`, et il publiait le dépôt entier à la place de la landing (racine en 404).
+- Runs 37612272947 et 41771118282 annulés ; `pages.yml` relancé (run 41774955060, succès) : racine du site en 200 sur la landing, `.claude/WIP.md` en 404.
+
 ## 2026-11-03 — Live x64 validé sur gk8 : premier pas ISP sans geste manuel (closes #3442, closes #3433, closes #3440, closes #3435)
 - PR #3445 fusionnée : secubox-premier-pas 0.9.9 (profil rejoué 6×20 s après la bascule réseau ; adresses nom .local + IPv4 LAN dans la page web, « Ouvrir l'administration ») ; build-live-usb.sh charge AppArmor au démarrage du live (apparmor.service se sautait sur l'overlay : netmodes 231/APPARMOR, profil ISP défait) ; secubox-haproxy 1.12.13 (localhost et <nom>.local → administration : kiosque en 421). Publiés : premier-pas 0.9.9, haproxy 1.12.13.
 - gk8 (VM, image du run 41667418014) : premier pas ISP terminé sans avertissement (essai 1 raté juste après la bascule, essai 2 installé), frontal actif, admin 200 par localhost / gk8.local / IP, users.json v2, page suivant le changement d'IP (.156 → .158) ; maillage gk2 par `sbx-mesh-invite --code --nom gk8 --flash`.
