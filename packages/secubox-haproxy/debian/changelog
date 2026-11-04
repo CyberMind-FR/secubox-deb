@@ -1,3 +1,10 @@
+secubox-haproxy (1.12.14-1~trixie1) trixie; urgency=medium
+
+  * Délai serveur de 10 min sur la publication metablogizer : plus de 504 pendant
+    que le serveur termine (ref #3465).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 04 Nov 2026 13:30:00 +0100
+
 secubox-haproxy (1.12.13-1~trixie1) trixie; urgency=medium
 
   * Frontal : localhost et <nom>.local, depuis une source privée, mènent à

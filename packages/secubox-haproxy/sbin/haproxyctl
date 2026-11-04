@@ -1465,6 +1465,9 @@ backend sbxwaf_inspector
     # Chemins EXACTS : le reste du panneau garde les 30 s.
     acl est_streamlit_long path_reg ^/api/v1/streamlit/(deploy|app/[^/]+/(publish|rename))\$
     http-request set-timeout server 10m if est_streamlit_long
+    # METABLOGIZER (#3465) : publier régénère nginx et les routes de tous les sites, plus de 30 s sous charge.
+    acl est_metablog_long path_reg ^/api/v1/metablogizer/(site/[^/]+/(publish|unpublish)|republish-all)$
+    http-request set-timeout server 10m if est_metablog_long
     option forwardfor
     http-request set-header X-Real-IP %[src]
     # %[query] rend la chaine de requete SANS le « ? » qui l'introduit : une
@@ -1491,6 +1494,9 @@ backend webui_direct
     # Meme delai que sbxwaf_inspector pour le depot et la publication Streamlit (#3247), chemins exacts.
     acl est_streamlit_long path_reg ^/api/v1/streamlit/(deploy|app/[^/]+/(publish|rename))$
     http-request set-timeout server 10m if est_streamlit_long
+    # METABLOGIZER (#3465) : publier régénère nginx et les routes de tous les sites, plus de 30 s sous charge.
+    acl est_metablog_long path_reg ^/api/v1/metablogizer/(site/[^/]+/(publish|unpublish)|republish-all)$
+    http-request set-timeout server 10m if est_metablog_long
     server srv0 127.0.0.1:9080 check
 EOF
     fi
@@ -1563,6 +1569,9 @@ backend webui_direct
     # Meme delai que sbxwaf_inspector pour le depot et la publication Streamlit (#3247), chemins exacts.
     acl est_streamlit_long path_reg ^/api/v1/streamlit/(deploy|app/[^/]+/(publish|rename))\$
     http-request set-timeout server 10m if est_streamlit_long
+    # METABLOGIZER (#3465) : publier régénère nginx et les routes de tous les sites, plus de 30 s sous charge.
+    acl est_metablog_long path_reg ^/api/v1/metablogizer/(site/[^/]+/(publish|unpublish)|republish-all)$
+    http-request set-timeout server 10m if est_metablog_long
     server srv0 127.0.0.1:9080 check
 EOF
     grep -q '^backend sbxwaf_inspector$' "$out" || cat >> "$out" << EOF

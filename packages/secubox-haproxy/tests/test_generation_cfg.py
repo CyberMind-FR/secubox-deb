@@ -152,8 +152,8 @@ def test_les_delais_longs_restent_des_exceptions_les_30_secondes_protegent_le_re
     cfg, _, _ = generation
     assert "timeout server 30s" in cfg                                           # la protection générale est intacte
     bloc = _backend_inspecteur(cfg)
-    # exactement quatre exceptions : dépôts de fichiers, voix, studio, dépôt/publication Streamlit — rien de plus
-    assert bloc.count("set-timeout server") == 4
+    # exactement cinq exceptions : dépôts de fichiers, voix, studio, dépôt/publication Streamlit, publication metablogizer — rien de plus
+    assert bloc.count("set-timeout server") == 5
     for interdit in ("path_beg /api/v1/ ", "path_beg / ", "hdr_beg(host) -i hall", "hdr_beg(host) -i admin"):
         assert interdit not in bloc
 
@@ -193,7 +193,7 @@ def test_l_acces_direct_au_webui_porte_le_meme_delai_streamlit(generation):
         fin = cfg.find("\nbackend ", debut + 10)
         bloc = cfg[debut:fin if fin != -1 else len(cfg)]
         assert ACL_STREAMLIT in bloc and "set-timeout server 10m if est_streamlit_long" in bloc
-        assert bloc.count("set-timeout server") == 1
+        assert bloc.count("set-timeout server") == 2
 
 
 def test_la_regle_streamlit_ne_couvre_que_ses_chemins():
@@ -205,3 +205,9 @@ def test_la_regle_streamlit_ne_couvre_que_ses_chemins():
     for non in ("/api/v1/streamlit/status", "/api/v1/streamlit/app/a/b/publish", "/api/v1/streamlit/deploy/x",
                 "/api/v1/streamlit/app/atelier/start", "/api/v1/autre/deploy"):
         assert not motif.match(non)
+
+
+def test_publication_metablogizer_delai_long_3465():
+    source = (Path(__file__).resolve().parents[1] / "sbin/haproxyctl").read_text().replace("\\$", "$")
+    acl = "acl est_metablog_long path_reg ^/api/v1/metablogizer/(site/[^/]+/(publish|unpublish)|republish-all)$"
+    assert source.count(acl) == source.count("if est_streamlit_long") == source.count("if est_metablog_long")
