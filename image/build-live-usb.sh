@@ -1503,6 +1503,17 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
     httpx python-jose aiofiles aiosqlite toml jinja2 psutil netifaces 2>/dev/null && \
     ok "Python dependencies installed via pip" || warn "Some pip packages failed (may be installed by apt later)"
 
+  # #3467 : --force-depends laisse de cote ce que les paquets declarent. Un profil reduit l'a montre : python3-pyotp
+  # (secubox-auth) n'etait apporte par aucune liste, et usersctl echouait. Les Depends hors SecuBox (premiere alternative)
+  # s'installent AVANT dpkg : ensuite le systeme est casse pour apt, qui refuse toute installation.
+  _DEPS=$(chroot "${ROOTFS}" bash -c 'for d in /tmp/secubox-debs/*.deb; do dpkg-deb -f "$d" Depends; done' 2>/dev/null \
+    | tr ',' '\n' | sed -E 's/\|.*//; s/\(.*\)//; s/:any//; s/[[:space:]]//g' \
+    | grep -E '^[a-z0-9][a-z0-9.+-]+$' | grep -v '^secubox-' | sort -u | tr '\n' ' ')
+  log "Installing declared dependencies: ${_DEPS}"
+  # shellcheck disable=SC2086
+  chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends ${_DEPS} \
+    || err "dependances declarees non installees — image non produite"
+
   # Install core first (dependency for all)
   if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
     log "Installing secubox-core (dependency)..."
@@ -1524,24 +1535,6 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   # Configure packages (skip apt-get -f as pip provides Python deps)
   # Second pass: reconfigure any packages that failed
   log "Reconfiguring packages..."
-  chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
-
-  # #3467 : --force-depends laisse de cote ce que les paquets declarent. Un profil reduit l'a montre : python3-pyotp
-  # (secubox-auth) n'etait apporte par aucune liste, et usersctl echouait. On installe donc les Depends hors SecuBox
-  # (premiere alternative), puis on reconfigure ce qui attendait. Un nom introuvable est signale, sans masquer les autres.
-  _DEPS=$(chroot "${ROOTFS}" dpkg-query -W -f='${Depends}\n' 'secubox-*' 2>/dev/null \
-    | tr ',' '\n' | sed -E 's/\|.*//; s/\(.*\)//; s/:any//; s/[[:space:]]//g' \
-    | grep -E '^[a-z0-9][a-z0-9.+-]+$' | grep -v '^secubox-' | sort -u | tr '\n' ' ')
-  log "Installing declared dependencies: ${_DEPS}"
-  # shellcheck disable=SC2086
-  if ! chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends ${_DEPS}; then
-    warn "dependances : installation groupee refusee, essai paquet par paquet"
-    for _d in ${_DEPS}; do
-      chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive dpkg --force-depends --configure -a >/dev/null 2>&1 || true
-      chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${_d}" \
-        || warn "dependance non installee : ${_d}"
-    done
-  fi
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 
   # Install textual for console TUI (dependency of secubox-console)
