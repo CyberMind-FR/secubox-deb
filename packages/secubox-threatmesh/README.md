@@ -7,7 +7,7 @@
 
 # 🕸️ ThreatMesh
 
-Sovereign threat-intel mesh (central-API replacement)
+Sovereign threat-intel (central-API replacement). Le partage non signé entre nœuds est retiré (#3450) ; socket `/run/secubox/threatmesh.sock`.
 
 **Category:** Security
 

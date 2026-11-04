@@ -16,17 +16,14 @@ Sovereign threat-intel control plane (self-sourced, no third-party central API):
 All IOCs land in the shared `threat_intel` table (toolbox.db); secubox-blacklist-sync
 drains it to the nft blacklist. No central account, no CAPI, no paywall.
 """
-import asyncio
 import json
 import re
 import sqlite3
 import subprocess
 import time
-import urllib.request
 from pathlib import Path
-from typing import Optional
 
-from fastapi import FastAPI, APIRouter, Depends, Request
+from fastapi import FastAPI, APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from secubox_core.auth import require_jwt
@@ -38,7 +35,6 @@ log = get_logger("threatmesh")
 TI_DB = Path("/var/lib/secubox/toolbox/toolbox.db")
 P2P_PEERS = Path("/var/lib/secubox/p2p/peers.json")
 P2P_NODE = Path("/var/lib/secubox/p2p/node_id")
-MESH_INTERVAL = 600          # gossip every 10 min
 LOCAL_ORIGINS = {"manual", "secubox-waf", "secubox"}
 IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?$")
 
@@ -131,69 +127,6 @@ def mesh_peers():
     return out
 
 
-def local_decisions():
-    """Our OWN locally-detected bad IPs: local-origin bans read from the shared
-    threat_intel table (sources tagged local, e.g. secubox-waf / manual), never
-    the imported feed/mesh/lists entries."""
-    ips = []
-    try:
-        with _conn() as c:
-            _ensure(c)
-            placeholders = ",".join("?" for _ in LOCAL_ORIGINS)
-            rows = c.execute(
-                "SELECT DISTINCT ioc FROM threat_intel "
-                f"WHERE ioc_type='ip' AND source IN ({placeholders})",
-                tuple(LOCAL_ORIGINS))
-            ips = [r["ioc"] for r in rows if IPV4.match(r["ioc"] or "")]
-    except Exception as e:
-        log.debug(f"local decisions: {e}")
-        return []
-    return sorted(set(ips))
-
-
-async def _post_json(url, payload, timeout=15):
-    def _do():
-        req = urllib.request.Request(
-            url, data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json", "User-Agent": "SecuBox-ThreatMesh/1.0"},
-            method="POST")
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status
-    return await asyncio.to_thread(_do)
-
-
-async def mesh_gossip_once():
-    peers = mesh_peers()
-    decisions = local_decisions()
-    if not peers or not decisions:
-        return {"peers": len(peers), "shared": len(decisions), "pushed": 0}
-    payload = {"node": node_id(), "ts": int(time.time()), "ips": decisions}
-    pushed = 0
-    for p in peers:
-        url = f"http://{p['address']}:8780/api/v1/threatmesh/mesh/ingest"
-        try:
-            await _post_json(url, payload)
-            pushed += 1
-        except Exception as e:
-            log.debug(f"gossip to {p['id']} failed: {e}")
-    return {"peers": len(peers), "shared": len(decisions), "pushed": pushed}
-
-
-async def _mesh_loop():
-    while True:
-        try:
-            r = await mesh_gossip_once()
-            log.info(f"mesh gossip: {r}")
-        except Exception as e:
-            log.error(f"mesh loop: {e}")
-        await asyncio.sleep(MESH_INTERVAL)
-
-
-@app.on_event("startup")
-async def _startup():
-    asyncio.create_task(_mesh_loop())
-
-
 # ── endpoints ───────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
@@ -233,23 +166,6 @@ async def decisions(min_consensus: int = 1, limit: int = 50000):
     } for i, r in enumerate(rows)]
 
 
-@router.post("/mesh/ingest")
-async def mesh_ingest(request: Request):
-    """Receive a peer's locally-detected decisions over the mesh -> threat_intel
-    tagged mesh:<node>. Trust boundary = the WireGuard mesh transport."""
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"ok": False, "error": "bad json"}, status_code=400)
-    node = str(body.get("node", "")).strip()[:64] or "unknown"
-    if not re.match(r"^[A-Za-z0-9._:-]+$", node):
-        return JSONResponse({"ok": False, "error": "bad node"}, status_code=400)
-    ips = [ip for ip in (body.get("ips") or []) if isinstance(ip, str) and IPV4.match(ip)]
-    n = upsert_iocs(((ip, "ip") for ip in ips[:20000]), f"mesh:{node}", weight=70, label="mesh")
-    log.info(f"mesh ingest from {node}: {n} ips")
-    return {"ok": True, "ingested": n}
-
-
 @router.post("/feeds/refresh", dependencies=[Depends(require_jwt)])
 def feeds_refresh():
     """Trigger the feed fetcher now (normally on a timer)."""
@@ -258,11 +174,6 @@ def feeds_refresh():
         return {"ok": True, "started": True}
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-
-
-@router.post("/mesh/gossip", dependencies=[Depends(require_jwt)])
-async def mesh_gossip_now():
-    return await mesh_gossip_once()
 
 
 app.include_router(router)

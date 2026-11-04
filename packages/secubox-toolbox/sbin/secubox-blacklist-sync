@@ -46,7 +46,7 @@ TI_MIN_CONSENSUS="${SECUBOX_BL_MIN_CONSENSUS:-2}"
 TI_MIN_WEIGHT="${SECUBOX_BL_MIN_WEIGHT:-80}"
 if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
     sqlite3 "$TOOLBOX_DB" \
-        "SELECT ioc FROM threat_intel WHERE ioc_type='ip' GROUP BY ioc \
+        "SELECT ioc FROM threat_intel WHERE ioc_type='ip' AND source NOT LIKE 'mesh:%' GROUP BY ioc \
          HAVING COUNT(DISTINCT source) >= $TI_MIN_CONSENSUS OR MAX(weight) >= $TI_MIN_WEIGHT;" \
         2>/dev/null >> "$TMP4.raw" || true
 fi

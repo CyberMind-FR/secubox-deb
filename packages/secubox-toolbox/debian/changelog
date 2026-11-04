@@ -1,3 +1,9 @@
+secubox-toolbox (2.13.9-1~trixie1) trixie; urgency=medium
+
+  * secubox-blacklist-sync : ignore les entrées mesh: non signées (ref #3450).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 04 Nov 2026 12:00:00 +0100
+
 secubox-toolbox (2.13.8-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images

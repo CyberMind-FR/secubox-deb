@@ -1,3 +1,10 @@
+secubox-threatmesh (1.2.0-1~trixie1) trixie; urgency=medium
+
+  * Partage d'indicateurs non signé retiré (ingest, diffusion, bouton) ; socket Unix au lieu de
+    0.0.0.0:8780 ; postinst : table nft et entrées mesh: retirées (ref #3450).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 04 Nov 2026 12:00:00 +0100
+
 secubox-threatmesh (1.1.2-1~trixie1) trixie; urgency=medium
 
   * secubox-threatfeed sauté sans base toolbox (ConditionPathExists) au lieu

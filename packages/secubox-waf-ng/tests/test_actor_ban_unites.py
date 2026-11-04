@@ -30,7 +30,23 @@ def test_actord_publie_ses_propositions_ou_le_waf_les_lit():
 
 def test_les_adresses_de_la_box_sont_protegees():
     w = (SYS / "secubox-waf-ng.service").read_text()
-    assert "--actor-ban-protegees" in w and "82.67.100.75" in w
+    assert "--actor-ban-protegees ${SECUBOX_WAF_PROTEGEES}" in w and "82.67.100.75" not in w
+    assert "EnvironmentFile=-/etc/secubox/waf/protegees.env" in w
+
+
+def test_preinst_conserve_la_plage_deja_en_service(tmp_path):
+    import subprocess
+    unite = tmp_path / "u.service"
+    unite.write_text("ExecStart=/usr/sbin/sbxwaf \\\n  --actor-ban-protegees 192.0.2.1/32,2001:db8::/48\n")
+    env = tmp_path / "waf" / "protegees.env"
+    preinst = SYS.parent / "debian/preinst"
+    e = {"PATH": "/usr/bin:/bin", "WAF_UNITES": str(unite), "WAF_PROTEGEES_ENV": str(env)}
+    subprocess.run(["sh", str(preinst), "upgrade", "1.33.3"], check=True, env=e)
+    assert env.read_text() == "SECUBOX_WAF_PROTEGEES=192.0.2.1/32,2001:db8::/48\n"
+    unite.write_text("--actor-ban-protegees ${SECUBOX_WAF_PROTEGEES}\n")
+    env.write_text("SECUBOX_WAF_PROTEGEES=198.51.100.0/24\n")
+    subprocess.run(["sh", str(preinst), "upgrade", "1.34.0"], check=True, env=e)
+    assert "198.51.100.0/24" in env.read_text()
 
 
 def test_le_kill_switch_logique_est_livre_en_auto_dans_l_unite_et_le_dropin():
