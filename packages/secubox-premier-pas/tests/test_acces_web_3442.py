@@ -32,3 +32,9 @@ def test_etat_porte_les_acces(monkeypatch):
 def test_page_affiche_les_adresses_et_ouvre_l_administration():
     assert "blocAcces(ETAT && ETAT.acces)" in PAGE and "blocAcces(ACCES, true)" in PAGE
     assert "Ouvrir l'administration" in PAGE and "Ouvrir le Hall" not in PAGE
+
+
+def test_adresses_visibles_des_le_premier_ecran_3467():
+    from pathlib import Path
+    page = (Path(__file__).resolve().parents[1] / "www/premier-pas/index.html").read_text(encoding="utf-8")
+    assert 'id="adresses"' in page and "rendAdresses(ETAT.acces)" in page and "/premier-pas/" in page
