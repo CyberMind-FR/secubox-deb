@@ -2136,6 +2136,8 @@ done
 [[ $DPKG_NEW_COUNT -gt 0 ]] && ok "Activated ${DPKG_NEW_COUNT} .dpkg-new configs"
 
 # Test nginx configuration in chroot
+  # #3467 : les tmpfiles ne tournent qu'au demarrage ; nginx -t exige le parent de son cache de polices.
+  install -d -m 755 "${ROOTFS}/var/cache/secubox"
 log "Testing nginx configuration..."
 if chroot "${ROOTFS}" nginx -t 2>&1; then
   ok "nginx configuration valid"
