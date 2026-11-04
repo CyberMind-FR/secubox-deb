@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-04 — metablogizer 1.11.5 et haproxy 1.12.14 déployés sur gk2 (closes #3463, closes #3465)
+- Publiés dans apt, installés sur gk2, `haproxy.cfg` régénéré (seuls écarts : `hote_local` de #3442 et délai metablogizer). Copie : `/etc/haproxy/haproxy.cfg.avant-3465`.
+- Déploiement de L1 sur gk4/gk6 : en attente, sur décision du propriétaire.
+
 ## 2026-11-04 — metablogizer : annonce rétabli, deux correctifs non déployés (ref #3463, ref #3465)
 - gk2 : `annonce` rendu à `secubox` (500 au téléversement) ; publié, confirmé par le propriétaire.
 - PR #3464 metablogizer 1.11.5 (site créé par root rendu à secubox, 403 explicite) ; PR #3466 haproxy 1.12.14 (délai de 10 min sur la publication). À déployer sur gk2.

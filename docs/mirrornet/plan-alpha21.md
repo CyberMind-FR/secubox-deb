@@ -206,7 +206,7 @@ masterlink absent par défaut, entrée `HISTORY.md` par lot, issues fermées une
    propriétaire sur un autre nœud exige un arbitrage ou la signature reportée.
 2. Valeurs de `marge_horloge` (120 s), `fenetre_convergence` (10 min), `delai_abandon` (30 j) à confirmer ; horloges
    NTP du parc NON VÉRIFIÉES.
-3. Diffusion d'office des sites **déjà** publiés sur gk2 (rétroactif) ou seulement des nouveaux.
-4. Publication USB activée par défaut sur toute box (vision) ou coupée sur les box accessibles à des tiers.
+3. **Tranché (propriétaire, 2026-11-04)** : diffusion d'office des **nouveaux** sites seulement ; un site déjà publié ne se diffuse que par activation manuelle, avec un bouton pour mailler ou démailler un site depuis le maître (panneau metablogizer, à porter par L5b et L10).
+4. Publication USB activée par défaut sur toute box (vision) ou coupée sur les box accessibles à des tiers : **à l'étude par le propriétaire** (bloque L9).
 5. Garde de service des appels mirrornet → adaptateur (socket locale) à définir.
 6. Filtrage effectif des publieurs par niveau en A21 (aujourd'hui : affiché seulement, tout nœud enrôlé publie).
