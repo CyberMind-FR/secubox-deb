@@ -102,6 +102,8 @@ EOF
 
     # Set permissions
     chmod -R 755 "$site_dir"
+    # #3463 : créé par root, le site resterait inaccessible en écriture à l'API (secubox).
+    if [ "$(id -u)" = 0 ] && id secubox >/dev/null 2>&1; then chown -R secubox:secubox "$site_dir"; fi
 
     log "Site created: $name at $site_dir"
     log "Domain: $domain"

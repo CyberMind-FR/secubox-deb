@@ -1390,6 +1390,13 @@ async def upload_content(name: str, file: UploadFile = File(...)):
     must NOT create public/ here, or we'd silently move the served root out from
     under an already-published site and the upload wouldn't show up.
     """
+    try:
+        return await _upload_content(name, file)
+    except PermissionError as e:
+        raise HTTPException(403, f"Écriture refusée dans le site : {e.filename}")
+
+
+async def _upload_content(name: str, file: UploadFile) -> dict:
     site_dir = SITES_ROOT / name
     if not site_dir.exists():
         site_dir.mkdir(parents=True)

@@ -1,3 +1,10 @@
+secubox-metablogizer (1.11.5-1~trixie1) trixie; urgency=medium
+
+  * metablogizerctl : site créé par root rendu à secubox ; téléversement refusé :
+    403 explicite au lieu d'un 500 (ref #3463).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 04 Nov 2026 13:00:00 +0100
+
 secubox-metablogizer (1.11.4-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
