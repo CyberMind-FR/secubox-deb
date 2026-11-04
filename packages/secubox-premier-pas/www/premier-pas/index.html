@@ -69,6 +69,7 @@ footer.pied{font-size:.72em;color:var(--muted)}
   <header><span class="marque">SecuBox · Premier Pas</span><span class="pas" id="pas">…</span></header>
   <nav class="rail" id="rail" aria-label="Étapes"></nav>
   <main id="ecran" aria-live="polite"><p class="aide">Chargement…</p></main>
+  <footer class="pied" id="adresses" hidden></footer>
   <footer class="pied" id="pied" hidden>Préparer cette box depuis une autre SecuBox : code <span class="code" id="code"></span></footer>
 </div>
 
@@ -76,6 +77,14 @@ footer.pied{font-size:.72em;color:var(--muted)}
 "use strict";
 const API = "/api/v1/premier-pas";
 const $ = s => document.querySelector(s);
+let SUIVI_ADRESSES = null;
+// #3467 : dès le premier écran, où ouvrir ce même assistant depuis un autre appareil. L'IP peut arriver tard par DHCP.
+function rendAdresses(a) {
+  const cibles = [...((a && a.ips) || []), ...((a && a.noms) || [])];
+  const z = $("#adresses");
+  z.hidden = !cibles.length;
+  z.innerHTML = "Configurer depuis un autre appareil : " + cibles.map(c => `<a href="https://${esc(c)}/premier-pas/">https://${esc(c)}/premier-pas/</a>`).join(" · ");
+}
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 // LE JETON DE DÉMARRAGE arrive dans le fragment (le lanceur du kiosque le
@@ -312,6 +321,7 @@ function blocAcces(a, perdue) {
 
 async function suivi() {
   SUIVI = true;
+  clearInterval(SUIVI_ADRESSES); $("#adresses").hidden = true;   // le bloc d'accès prend le relais
   $("#pied").hidden = true;          // le code ne sert plus une fois l'application lancée
   const prop = (ETAT && ETAT.proposition) || {};
   $("#ecran").innerHTML = `${banniereForcee(prop)}<h1>La box se configure</h1><p class="aide" id="act">Démarrage…</p>
@@ -343,6 +353,7 @@ async function suivi() {
 
 function fini() {
   SUIVI = true;
+  clearInterval(SUIVI_ADRESSES); $("#adresses").hidden = true;
   $("#rail").innerHTML = ""; $("#pas").textContent = ""; $("#pied").hidden = true;
   $("#ecran").innerHTML = `<h1>Votre box est prête</h1>
     <p class="aide">Connectez-vous avec le compte « admin » et votre mot de passe. La box vous fera ensuite scanner le QR de votre application d'authentification.</p>
@@ -371,6 +382,8 @@ function fini() {
       return;
     }
   }
+  rendAdresses(ETAT.acces);
+  SUIVI_ADRESSES = setInterval(async () => { try { rendAdresses((await api("/etat")).acces); } catch (_) {} }, 15000);
   if (!DISTANT) try { const c = await api("/code"); $("#code").textContent = c.code.match(/.{1,4}/g).join(" "); $("#pied").hidden = false; } catch (_) {}
   const prop = ETAT.proposition || {};
   setTimeout(veille, 4000);
