@@ -1,3 +1,10 @@
+secubox-hardening (1.6.4-1~trixie1) trixie; urgency=medium
+
+  * Dépend d'apparmor : il n'arrivait que par secubox-waf-ng, absent du profil
+    mobile, alors qu'AppArmor enforce est exigé partout (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 04 Nov 2026 11:38:52 +0100
+
 secubox-hardening (1.6.3-1~trixie1) trixie; urgency=medium
 
   * Le postinst et `hardeningctl apply` appliquent les sysctl par `sysctl --system` (ordre du démarrage), jamais plus
