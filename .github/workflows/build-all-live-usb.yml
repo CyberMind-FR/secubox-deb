@@ -71,8 +71,8 @@ jobs:
             output_pattern: "secubox-live-amd64-*.img*"
             needs_qemu: false
             embed_image: false
-            # Profil d'amorçage lite (#3428) : le profil final s'installe depuis premier pas (apt).
-            extra_args: "--kiosk --profile lite"
+            # Profil d'amorçage mobile (#3470, bêta 1 ; #3428) : le profil final s'installe depuis premier pas (apt).
+            extra_args: "--kiosk --profile mobile"
 
           # MOCHAbin (arm64) - U-Boot distroboot
           - platform: mochabin

@@ -42,6 +42,7 @@ hors-arbre:
   - secubox-full              # anciens métapaquets d'image, conservés tels quels
   - secubox-lite
   - secubox-isp
+  - secubox-mobile            # profil mobile : clé USB, secubox-minimal + kiosque et console (#3470)
   - secubox-minimal           # profil minimal : dns-guard, ad-guard, NAC, Freebox, maillage (#2816, #3260)
   - secubox-profil-socle
   - secubox-profil-defense

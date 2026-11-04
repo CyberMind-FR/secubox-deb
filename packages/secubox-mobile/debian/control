@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+Source: secubox-mobile
+Section: metapackages
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-mobile
+Architecture: all
+Depends: ${misc:Depends},
+ secubox-minimal
+Description: SecuBox Mobile — clé USB, blocage des publicités et traqueurs sur un réseau existant
+ Profil de la clé USB amd64 : agent sur un réseau existant, sans mode routeur.
+ Garde DNS, publicités et traqueurs, TV Privacy, Freebox, socle d'administration.
+ Sans Hall ni WAF : le contenu est celui de secubox-minimal, avec la console locale.

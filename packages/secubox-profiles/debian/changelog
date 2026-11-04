@@ -1,3 +1,9 @@
+secubox-profiles (0.28.0-1~trixie1) trixie; urgency=medium
+
+  * Nouveau profil mobile : clé USB, sans Hall (ref #3470).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 04 Nov 2026 15:00:00 +0100
+
 secubox-profiles (0.27.0-1~trixie1) trixie; urgency=medium
 
   * apply --profile lite|minimal|isp|full --yes : installe d abord le méta-paquet
