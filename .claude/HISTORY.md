@@ -9,6 +9,10 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-04 — metablogizer : annonce rétabli, deux correctifs non déployés (ref #3463, ref #3465)
+- gk2 : `annonce` rendu à `secubox` (500 au téléversement) ; publié, confirmé par le propriétaire.
+- PR #3464 metablogizer 1.11.5 (site créé par root rendu à secubox, 403 explicite) ; PR #3466 haproxy 1.12.14 (délai de 10 min sur la publication). À déployer sur gk2.
+
 ## 2026-11-04 — Alpha 21 L1 : partage threatmesh retiré, non déployé (ref #3450)
 - PR #3461 : threatmesh 1.2.0 (sans ingest ni diffusion, socket Unix), toolbox 2.13.9 (`mesh:` ignoré), waf-ng 1.34.0 (plages dans `/etc/secubox/waf/protegees.env`, reprises par preinst).
 - Écart au plan : fichier d'environnement au lieu de `ddos.toml` `[admin]`, à relier en L2.
