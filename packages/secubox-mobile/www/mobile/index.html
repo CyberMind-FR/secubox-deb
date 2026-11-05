@@ -58,14 +58,14 @@ const $=i=>document.getElementById(i);
 function jeton(){try{return localStorage.getItem('sbx_token')||''}catch(e){return''}}
 function entetes(){const t=jeton();return t?{Authorization:'Bearer '+t}:{}}
 function ligne(a,b){const d=document.createElement('div');d.className='lig';const x=document.createElement('span');x.textContent=a;const y=document.createElement('span');y.textContent=b;d.append(x,y);return d}
-const FBX={actif:'Réglée : la clé est le seul DNS',autorisation_requise:'Non connectée',droit_requis:'Droit « Modification des réglages » manquant',repris:'DNS changé à la main : laissé tel quel',autre_reseau:'Autre Freebox : rien modifié ici',origine_inconnue:'DNS d’origine inconnu : à rétablir à la main au retrait',appareil_inconnu:'En attente : la Freebox ne voit pas encore la clé'};
+const FBX={actif:'Réglée : la clé est le seul DNS',autorisation_requise:'Non connectée',droit_requis:'Droit « Modification des réglages » manquant',repris:'DNS changé à la main : laissé tel quel',autre_reseau:'Autre Freebox : rien modifié ici',origine_inconnue:'DNS d’origine inconnu : à rétablir à la main au retrait',appareil_inconnu:'En attente : la Freebox ne voit pas encore la clé',en_attente:'Connectée : réglage dans les deux minutes',mac_relayee:'Clé vue derrière un pont Wi-Fi ou un répéteur : branchez-la en filaire'};
 function rendre(e){
   const retiree=!!e.retiree,fb=e.freebox||'',actif=!retiree&&e.listes&&fb==='actif';
   const v=$('verdict');
   v.textContent=e.retrait_attente?'Retrait en attente : DNS non rendu, nouvel essai automatique':retiree?'Clé retirée : protection arrêtée':actif?'Réseau protégé':e.ip?'Protection incomplète':'Pas de réseau';
   v.className='verdict '+(actif?'ok':retiree||e.ip?'att':'ko');
   const d=$('detail');d.replaceChildren(ligne('Adresse DNS de la clé',e.ip||'—'),ligne('Domaines bloqués',e.listes?(e.bloques?Number(e.bloques).toLocaleString('fr-FR'):'Actifs'):'En préparation'),ligne('Freebox',e.durable===false?'Clé sans persistance : réseau non modifié':FBX[fb]||'—'),ligne('DNS distribué',(e.dns_freebox||[]).join(', ')||'—'),ligne('IPv6',{actif:'Protégé',contournement_possible:'Non couvert : des appareils peuvent contourner le blocage',inconnu:'État inconnu',repris:'DNS changé à la main : laissé tel quel'}[e.ipv6]||'—'));
-  const guide=fb==='autorisation_requise'||fb==='droit_requis';$('guide').hidden=retiree||!guide;$('manuel').hidden=retiree||!guide||!e.ip;$('ipManuelle').textContent=e.ip||'';
+  const guide=fb==='autorisation_requise'||fb==='droit_requis';$('guide').hidden=retiree||!guide;$('manuel').hidden=retiree||!(guide||fb==='mac_relayee')||!e.ip;$('ipManuelle').textContent=e.ip||'';
   $('btnRetirer').hidden=retiree;$('btnReprendre').hidden=!retiree;
 }
 async function charger(){

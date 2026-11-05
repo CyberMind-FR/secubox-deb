@@ -116,6 +116,10 @@ class Client:
     # ── session ──────────────────────────────────────────────────────────────
     def ouvrir_session(self):
         mem = self.magasin.lire()
+        if mem.get("app_token") and not mem.get("autorise") and mem.get("track_id") is not None:
+            # #3482 : validée sur l'écran de la Freebox ; toute ouverture de session doit le voir, pas seulement la page Freebox.
+            self.etat_autorisation()
+            mem = self.magasin.lire()
         if not (mem.get("app_token") and mem.get("autorise")):
             raise NonAutorise("La Freebox n'a pas encore autorisé SecuBox : validez la demande sur la Freebox.")
         self._pret()

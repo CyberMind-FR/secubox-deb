@@ -161,3 +161,14 @@ def test_le_magasin_oublie_le_jeton(tmp_path):
 def test_un_magasin_illisible_vaut_vide(tmp_path):
     (tmp_path / "app.json").write_text("{pas du json")
     assert m.Magasin(str(tmp_path / "app.json")).lire() == {}
+
+
+def test_session_voit_la_validation_faite_sur_la_freebox_3482(tmp_path):
+    mag = _magasin(tmp_path, app_token="T", track_id=7, autorise=False)
+    cl = c.Client(lambda *a, **k: (_ for _ in ()).throw(c.NonAutorise("stop")), mag, hote="http://x")
+    cl.etat_autorisation = lambda: mag.ecrire({"autorise": True})
+    cl._pret = lambda: None
+    cl._envoyer = lambda *a, **k: (200, {"result": {}})
+    with pytest.raises(Exception) as e:
+        cl.ouvrir_session()
+    assert not isinstance(e.value, c.NonAutorise) and mag.lire()["autorise"] is True

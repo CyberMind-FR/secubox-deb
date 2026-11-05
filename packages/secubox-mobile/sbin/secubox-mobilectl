@@ -290,7 +290,25 @@ def _noter(etat: dict, cle: str, ip: str, etat_f: Path) -> None:
         ecrire_etat(etat, etat_f)
 
 
+def macs_locales() -> set:
+    macs = set()
+    for f in Path("/sys/class/net").glob("*/address"):
+        try:
+            macs.add(f.read_text().strip().upper())
+        except OSError:
+            pass
+    return macs
+
+
 def regler_freebox(run: Lanceur, lan: dict, etat: dict, etat_f: Path) -> str:
+    r = _regler_freebox(run, lan, etat, etat_f)
+    if etat.get("freebox_dernier") != r:
+        etat["freebox_dernier"] = r
+        ecrire_etat(etat, etat_f)
+    return r
+
+
+def _regler_freebox(run: Lanceur, lan: dict, etat: dict, etat_f: Path) -> str:
     ip = lan["ip"]
     rc, lu = freebox(run, "dns-lire")
     dns = _ips(lu.get("dns"), 4) if rc == 0 else None
@@ -301,18 +319,22 @@ def regler_freebox(run: Lanceur, lan: dict, etat: dict, etat_f: Path) -> str:
         return "autre_reseau"       # l'origine relevée ne vaut que pour SA Freebox : on ne touche à rien
     if "dns_origine" in etat and dns != [ip] and not (len(dns) == 1 and dns[0] in posees):
         return "repris"             # changé par l'utilisateur : on ne le réécrit pas
-    if "dns_origine" not in etat:
-        if ip in dns or set(dns) & set(posees):
-            audit("origine_inconnue", dns=dns)    # état perdu : surtout pas notre adresse comme origine
-            return "origine_inconnue"
-        etat.update(dns_origine=dns, reseau=lan["passerelle"])
-        ecrire_etat(etat, etat_f)
     rc, b = freebox(run, "ip-fixe-lire", ip)
     if rc != 0:
         return "droit_requis"
     mac = b.get("mac", "")
     if not mac:
         return "appareil_inconnu"   # la Freebox ne voit pas encore la clé : nouvel essai au prochain passage
+    if mac.upper() not in macs_locales():
+        # #3482 : pont Wi-Fi ou répéteur. Le bail irait à un autre appareil, et le DNS sans bail mourrait au changement d'adresse.
+        audit("mac_relayee", ip=ip)
+        return "mac_relayee"
+    if "dns_origine" not in etat:
+        if ip in dns or set(dns) & set(posees):
+            audit("origine_inconnue", dns=dns)    # état perdu : surtout pas notre adresse comme origine
+            return "origine_inconnue"
+        etat.update(dns_origine=dns, reseau=lan["passerelle"])
+        ecrire_etat(etat, etat_f)
     baux = etat.setdefault("baux", {})
     if mac not in baux:
         baux[mac] = b.get("ip", "")
@@ -509,7 +531,8 @@ def etat_complet(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETI
     elif "dns_origine" in e and not (len(dns) == 1 and dns[0] in e.get("ips_posees", [])):
         r["freebox"] = "repris"
     else:
-        r["freebox"] = "droit_requis"
+        # #3482 : le dernier passage fait foi ; avant le premier, aucun droit n'a été refusé.
+        r["freebox"] = e.get("freebox_dernier") if e.get("freebox_dernier") not in (None, "actif") else "en_attente"
     return r
 
 

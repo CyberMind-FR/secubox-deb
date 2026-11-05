@@ -15,6 +15,11 @@ C = importlib.util.module_from_spec(_s)
 _l.exec_module(C)
 
 
+@pytest.fixture(autouse=True)
+def _mac_de_la_cle(monkeypatch):
+    monkeypatch.setattr(C, "macs_locales", lambda: {"AA:BB:CC:DD:EE:FF"})
+
+
 class Faux:
     def __init__(self, dns=("192.168.1.254",), ip="192.168.1.50", gw="192.168.1.254", dev="eth0"):
         self.dns, self.ip, self.gw, self.dev = list(dns), ip, gw, dev
@@ -412,3 +417,16 @@ def test_le_reseau_courant_devient_zone_de_confiance(tmp_path):
 def test_loopback_ipv6_est_de_confiance():
     geo = (CHEMIN.parents[2] / "secubox-hub/nginx/secubox-lan-geo.conf").read_text(encoding="utf-8")
     assert "\n    ::1 " in geo
+
+
+def test_mac_relayee_ne_touche_a_rien_3482(k, monkeypatch):
+    monkeypatch.setattr(C, "macs_locales", lambda: {"08:00:27:12:28:5A"})
+    f = Faux()
+    assert act(f, k)["freebox"] == "mac_relayee"
+    assert f.dns == ["192.168.1.254"] and f.bail == "" and "dns_origine" not in etat(k)
+    assert not [c for c in f.appels if "ip-fixe-poser" in c or "dns-regler" in c]
+
+
+def test_etat_avant_la_premiere_bascule_n_accuse_pas_le_droit_3482(k, tmp_path):
+    r = C.etat_complet(Faux(), k[0]["etat_f"], k[0]["retire"], k[1], tmp_path / "absent")
+    assert r["freebox"] == "en_attente"
