@@ -33,6 +33,8 @@ on = [
   "p2p", "meshname", "annuaire", "groupe-declares",
   # Fonctions du boîtier de garde.
   "dns-guard", "ad-guard", "webfilter", "webfilter-feed",
+  # Compteurs par appareil : sans eux, TV Privacy reste vide et « à l'arrêt » (#3467).
+  "ad-guard-dnsfeed",
   "nac", "freebox", "ipv6guard", "wireguard",
   # Clé branchée sur un PC : écran local.
   "kiosk", "console",
