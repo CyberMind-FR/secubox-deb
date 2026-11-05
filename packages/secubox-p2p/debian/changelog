@@ -1,3 +1,9 @@
+secubox-p2p (1.21.1-1~trixie1) trixie; urgency=medium
+
+  * Hub P2P : une box sans pair ni élection s’affiche Autonome, pas Maître (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 09:24:33 +0100
+
 secubox-p2p (1.21.0-1~trixie1) trixie; urgency=medium
 
   * Oublier ce noeud : un seul point d entree (POST /master-link/oublier)

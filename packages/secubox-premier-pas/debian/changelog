@@ -1,3 +1,9 @@
+secubox-premier-pas (0.9.13-1~trixie1) trixie; urgency=medium
+
+  * Maillage sans code annoncé comme tel ; console arrêtée à la fin du parcours sans échec (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 09:24:33 +0100
+
 secubox-premier-pas (0.9.12-1~trixie1) trixie; urgency=medium
 
   * Kiosque d'une clé mobile : l'administration standard, la page de protection par choix manuel (ref #3467).

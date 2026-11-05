@@ -263,7 +263,7 @@
             $('tServices').textContent = s ? nb(s.service_count) : '—';
             $('tMenaces').textContent = s ? nb(s.threat_count) : '—';
             const role = TOPO && TOPO.enabled ? TOPO.self_role : (s && s.master_link ? s.master_link.role : null);
-            $('tRole').textContent = role ? (role === 'master' ? 'Maître' : role === 'satellite' ? 'Satellite' : role) : '—';
+            $('tRole').textContent = role ? (role === 'master' ? (!(TOPO && TOPO.enabled) && !(PAIRS && PAIRS.length) ? 'Autonome' : 'Maître') : role === 'satellite' ? 'Satellite' : role) : '—';
             $('sRole').textContent = TOPO && TOPO.enabled ? 'élu (master-link)' : 'configuré';
             // Aperçu
             $('kNom').textContent = tiret(s && s.hostname); $('kId').textContent = tiret(s && s.node_id); $('kLan').textContent = tiret(s && s.lan_ip);

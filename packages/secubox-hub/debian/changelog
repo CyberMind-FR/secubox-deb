@@ -1,3 +1,9 @@
+secubox-hub (1.12.42-1~trixie1) trixie; urgency=medium
+
+  * Santé du tableau de bord : même relevé que la page Santé, tâches au repos et modules absents ne sont plus des pannes (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 09:24:33 +0100
+
 secubox-hub (1.12.41-1~trixie1) trixie; urgency=medium
 
   * Verdict LAN : ::1 reconnu ; depuis un navigateur local, le mot de passe par défaut était refusé (ref #3467).

@@ -298,7 +298,10 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
     elif m["mode"] == "automesh":
         # La jonction elle-même est faite par secubox-automesh (code déposé par la préparation) : ici on prépare le terrain — annuaire (inscription chez le
         # maître) et assistance — et on rend la main. Souple : une première installation ne doit pas échouer pour un maillage qui arrive plus tard.
-        out.append(Action("maillage", "maillage automatique : jonction, annuaire et assistance activés", fn=_activer_maillage, souple=True))
+        # #3467 : sans code déposé, rien n'est joint ; le journal et la page ne doivent pas dire le contraire.
+        quoi = ("maillage automatique : jonction, annuaire et assistance activés" if CODE_AUTOMESH.exists()
+                else "maillage : aucun code de maître, box autonome pour l'instant")
+        out.append(Action("maillage", quoi, fn=_activer_maillage, souple=True))
         if m.get("aide") == "demander":
             nom = str((profil.get("box") or {}).get("nom") or "")
             out.append(Action("maillage", "demande d'aide « première installation » publiée au maillage", fn=lambda: _demander_aide(nom), souple=True))
@@ -321,6 +324,7 @@ UNITES_MAILLAGE = ("secubox-automesh.timer", "secubox-annuaire.service", "secubo
 
 ANCRE_CHEMIN = Path("/etc/secubox/p2p/ancre-maitre.json")
 AUDIT_CHEMIN = Path("/var/log/secubox/audit.log")
+CODE_AUTOMESH = Path("/var/lib/secubox/p2p/automesh.code")
 
 
 def _charge_ancre():

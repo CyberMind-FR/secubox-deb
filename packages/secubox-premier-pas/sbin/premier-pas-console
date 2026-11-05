@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """premier-pas-console — l'assistant du premier démarrage, face console (#1522)."""
+import signal
 import sys
 from pathlib import Path
 
@@ -11,5 +12,8 @@ if (_ici / "premier_pas").is_dir():
     sys.path.insert(0, str(_ici))
 
 from premier_pas import console  # noqa: E402
+
+# #3467 : arrêté à la fin du parcours, ce n'est pas un échec. SystemExit laisse curses rendre le terminal.
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
 sys.exit(console.main())
