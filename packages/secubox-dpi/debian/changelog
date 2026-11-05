@@ -1,3 +1,9 @@
+secubox-dpi (1.14.7-1~trixie1) trixie; urgency=medium
+
+  * Détail par appareil tiré du moteur vivant ; un cumul de plus de 7 jours ne passe plus pour de l'activité (ref #3494).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 14:08:56 +0100
+
 secubox-dpi (1.14.6-1~trixie1) trixie; urgency=medium
 
   * dpi-vue : détail par appareil (reçu, envoyé, connexions, activité, usages, destinations, pays) (ref #3486).

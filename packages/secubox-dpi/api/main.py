@@ -442,11 +442,17 @@ def _registrable(host: str) -> str:
     return last2
 
 
+#: Fenêtre annoncée par le cumul (`window_days`) : au-delà, un relevé n'est plus l'activité d'un appareil (#3494).
+COLLECTOR_FENETRE_S = 7 * 86400
+
+
 def _collector_devices() -> list:
     try:
-        return json.loads(COLLECTOR_CUMUL.read_text()).get("devices", [])
+        devices = json.loads(COLLECTOR_CUMUL.read_text()).get("devices", [])
     except Exception:
         return []
+    limite = time.time() - COLLECTOR_FENETRE_S
+    return [d for d in devices if not d.get("last_seen") or float(d["last_seen"]) >= limite]
 
 
 # Première partie : nos propres vhosts (clés de haproxy-routes.json) — comme
@@ -884,14 +890,47 @@ def pub_suggestions():
     return _derive_suggestions()
 
 
+def _clients_depuis_sessions(sessions: list) -> list:
+    """Détail par appareil depuis les sessions de sbxdpi (#3494). Il ne mesure ni le sens des octets ni le pays par appareil : champs absents, pas à zéro."""
+    par = {}
+    for x in sessions:
+        did = x.get("device") or ""
+        if not did:
+            continue
+        c = par.setdefault(did, {"device": did, "name": _client_name(did, {}), "bytes": 0, "flows": 0, "first_seen": 0, "last_seen": 0,
+                                 "_u": {}, "_d": {}, "sessions": 0, "alerts": 0})
+        b = int(x.get("bytes", 0) or 0)
+        c["bytes"] += b
+        c["flows"] += int(x.get("flows", 0) or 0)
+        c["sessions"] += 1
+        c["last_seen"] = max(c["last_seen"], int(x.get("last", 0) or 0))
+        debut = int(x.get("start", 0) or 0)
+        c["first_seen"] = min(c["first_seen"] or debut, debut)
+        if x.get("usage"):
+            c["_u"][x["usage"]] = c["_u"].get(x["usage"], 0) + b
+        hote = x.get("application") or x.get("infra") or ""
+        if hote:
+            c["_d"][hote] = c["_d"].get(hote, 0) + b
+    out = []
+    for c in par.values():
+        total = c["bytes"]
+        c["usages"] = [{"name": k, "bytes": v, "pct": (v / total * 100) if total else 0.0}
+                       for k, v in sorted(c.pop("_u").items(), key=lambda kv: -kv[1])]
+        c["top_dst"] = [{"host": k, "bytes": v, "service": ""} for k, v in sorted(c.pop("_d").items(), key=lambda kv: -kv[1])[:8]]
+        c["countries"] = []
+        out.append(c)
+    return sorted(out, key=lambda c: -c["bytes"])
+
+
 @pub.get("/sessions", dependencies=[Depends(require_lecture)])
-def pub_sessions():
-    return _derive_sessions()
+async def pub_sessions():
+    return await _sbxdpi_get("/api/v1/dpi/sessions", []) or _derive_sessions()
 
 
 @pub.get("/clients", dependencies=[Depends(require_lecture)])
-def pub_clients():
-    return _derive_clients()
+async def pub_clients():
+    live = await _sbxdpi_get("/api/v1/dpi/sessions", [])
+    return _clients_depuis_sessions(live) if live else _derive_clients()
 
 
 @pub.get("/countries", dependencies=[Depends(require_lecture)])
