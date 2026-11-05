@@ -45,6 +45,10 @@ on:
         type: choice
         options: [bookworm, trixie]
         default: trixie
+      paquets_run:
+        description: "Identifiant d'un run build-packages complet à embarquer (vide : celui du commit)"
+        required: false
+        default: ''
   # Pas de `push: tags` : release.yml appelle déjà ce workflow ; son propre déclencheur sur l'étiquette le
   # lançait EN DOUBLE et monopolisait les runners (#1991). Reste appelable (workflow_call) et manuel.
 
@@ -172,9 +176,18 @@ jobs:
           done
           echo "::warning::paquets du commit toujours pas prêts après 2 h 45 — repli sur le dernier agrégat"
 
+      # #3467 : un commit sans paquet (suivi, métriques) a un agrégat vide : l'image échouerait. Run désigné explicitement.
+      - name: Download SecuBox packages (run désigné)
+        if: steps.filter.outputs.skip != 'true' && github.event.inputs.paquets_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ github.event.inputs.paquets_run }}" -R "$GITHUB_REPOSITORY" -n secubox-debs-all -D output/debs/
+          echo "paquets : run ${{ github.event.inputs.paquets_run }}, $(ls output/debs/secubox-*.deb | wc -l) paquets"
+
       - name: Download SecuBox packages (commit exact)
         id: debs-exact
-        if: steps.filter.outputs.skip != 'true'
+        if: steps.filter.outputs.skip != 'true' && github.event.inputs.paquets_run == ''
         uses: dawidd6/action-download-artifact@v3
         with:
           workflow: build-packages.yml
@@ -188,7 +201,7 @@ jobs:
         continue-on-error: true
 
       - name: Download SecuBox packages (repli — dernier réussi)
-        if: steps.filter.outputs.skip != 'true' && steps.debs-exact.outcome != 'success'
+        if: steps.filter.outputs.skip != 'true' && github.event.inputs.paquets_run == '' && steps.debs-exact.outcome != 'success'
         uses: dawidd6/action-download-artifact@v3
         with:
           workflow: build-packages.yml
@@ -200,7 +213,9 @@ jobs:
       - name: Provenance des paquets
         if: steps.filter.outputs.skip != 'true'
         run: |
-          if [ "${{ steps.debs-exact.outcome }}" = "success" ]; then
+          if [ -n "${{ github.event.inputs.paquets_run }}" ]; then
+            echo "paquets : run désigné ${{ github.event.inputs.paquets_run }}"
+          elif [ "${{ steps.debs-exact.outcome }}" = "success" ]; then
             echo "paquets : agrégat DU COMMIT ${{ github.sha }}"
           else
             echo "::warning::paquets : agrégat d'un AUTRE commit (le plus récent réussi) — l'image ne reflète pas ${{ github.sha }}"
