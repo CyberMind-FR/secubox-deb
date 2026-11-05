@@ -300,7 +300,7 @@ def plan(profil: Dict[str, Any]) -> List[Action]:
         # maître) et assistance — et on rend la main. Souple : une première installation ne doit pas échouer pour un maillage qui arrive plus tard.
         # #3467 : sans code déposé, rien n'est joint ; le journal et la page ne doivent pas dire le contraire.
         quoi = ("maillage automatique : jonction, annuaire et assistance activés" if CODE_AUTOMESH.exists()
-                else "maillage : aucun code de maître, box autonome pour l'instant")
+                else "maillage automatique : aucun code de maître, box autonome pour l'instant")
         out.append(Action("maillage", quoi, fn=_activer_maillage, souple=True))
         if m.get("aide") == "demander":
             nom = str((profil.get("box") or {}).get("nom") or "")
