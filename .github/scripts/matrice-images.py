@@ -128,6 +128,10 @@ def profils_pour(racine: Path, carte: str) -> list[str]:
 #: matrice publiée : il ne se construit que sur demande.
 PROFILS_ACCEPTES = ["lite", "isp", "full", "minimal"]
 
+#: Matrice complète d'une bêta (#3480) : chaque carte × chaque profil d'image, y compris les combinaisons que la matrice
+#: publiée écarte (`full` sur ESPRESSObin). Le profil `mobile` est livré par le live x64 de build-all-live-usb.yml.
+CARTES_COMPLETES = ["mochabin", "vm-x64", "vm-arm64", "rpi400", "espressobin-v7", "espressobin-ultra"]
+
 
 def matrice(racine: Path, cartes: list[str], profil: str | None = None) -> list[dict[str, str]]:
     """`profil` (lite|isp|full|minimal) force UN profil pour les cartes demandées (déclenchement manuel, #2497) : on construit l'image voulue, pas toute la matrice."""
@@ -143,13 +147,16 @@ def main() -> int:
     ap.add_argument("--racine", default=".", help="racine du dépôt")
     ap.add_argument("--cartes", required=True,
                     help="cartes séparées par des virgules, ou 'defaut'")
-    ap.add_argument("--profil", default="auto", choices=["auto", *PROFILS_ACCEPTES],
-                    help="force UN profil pour les cartes demandées (auto = ceux que la matrice publie)")
+    ap.add_argument("--profil", default="auto", choices=["auto", "complet", *PROFILS_ACCEPTES],
+                    help="force UN profil pour les cartes demandées (auto = ceux que la matrice publie ; complet = toutes les cartes × tous les profils)")
     ap.add_argument("--defaut", default="mochabin,vm-x64,rpi400,espressobin-v7",
                     help="cartes bâties quand --cartes vaut 'defaut'")
     a = ap.parse_args()
 
     racine = Path(a.racine).resolve()
+    if a.profil == "complet":
+        print(json.dumps({"include": [{"board": c, "profile": p} for c in CARTES_COMPLETES for p in PROFILS_ACCEPTES]}, ensure_ascii=False))
+        return 0
     brut = a.defaut if a.cartes.strip() in ("", "defaut", "all") else a.cartes
     cartes = [c.strip() for c in brut.split(",") if c.strip()]
 
