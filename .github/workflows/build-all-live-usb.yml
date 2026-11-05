@@ -33,6 +33,7 @@ on:
           - all
           - x64
           - mochabin
+          - espressobin
           - rpi400
           - rpi4-dsi
         default: all
@@ -89,6 +90,16 @@ jobs:
             # construite ici : le job atteignait les 6 h d'un runner (alpha 20), et build-image.yml publie déjà celle de la carte.
             embed_image: false
             extra_args: "--profile mobile"
+
+          # ESPRESSObin v7 et Ultra (arm64) - U-Boot : mêmes DTB armada-3720-espressobin*, profil de la clé validée, sans écran.
+          - platform: espressobin
+            arch: arm64
+            script: build-ebin-live-usb.sh
+            artifact_name: secubox-espressobin-v7-live-usb
+            output_pattern: "secubox-espressobin-v7-live-usb.img*"
+            needs_qemu: true
+            embed_image: false
+            extra_args: "--size 8G --profile mobile"
 
           # Raspberry Pi 400 (arm64) - Native Pi firmware boot
           # Ships in kiosk mode by default — Pi 400 = keyboard + HDMI →
