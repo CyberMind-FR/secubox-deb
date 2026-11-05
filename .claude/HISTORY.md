@@ -2822,3 +2822,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 - Validée par le propriétaire sur VM. Étiquette bêta = matrice complète : 6 cartes × lite, minimal, isp, full (matrice-images.py `complet`), plus les live dont la clé mobile amd64.
 - release.yml : un seul téléchargement des artefacts, release posée sur /mnt si plus grand (scripts/release-disque.sh). Plafond de construction d'image porté à 340 min.
 - Non testé au moment de l'étiquette : Freebox réelle, IPv6, vraie clé sur un autre PC, TV Privacy sur vrai téléviseur (dit dans les notes).
+
+## 2026-11-05 — Essai Freebox réel : trois défauts (ref #3482)
+- freebox 0.6.4 : l'ouverture de session détecte la validation faite sur l'écran. mobile 0.3.4 : MAC vue différente de celle de la clé = ni bail ni DNS (`mac_relayee`) ; `en_attente` au lieu d'un faux « droit manquant ». L'essai sur la VM s'est arrêté avant toute écriture sur la Freebox ; suite sur vraie clé après l'image.

@@ -1,3 +1,9 @@
+secubox-freebox (0.6.4-1~trixie1) trixie; urgency=medium
+
+  * Ouverture de session : la validation faite sur l'écran de la Freebox est détectée partout (ref #3482).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 12:29:19 +0100
+
 secubox-freebox (0.6.3-1~trixie1) trixie; urgency=medium
 
   * freeboxctl : dns-lire, dns-regler, dns6-lire, dns6-regler, ip-fixe-lire, ip-fixe-poser, ip-fixe-retirer pour la clé mobile (ref #3467).

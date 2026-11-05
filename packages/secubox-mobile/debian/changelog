@@ -1,3 +1,9 @@
+secubox-mobile (0.3.4-1~trixie1) trixie; urgency=medium
+
+  * Clé derrière un pont ou un répéteur : ni bail ni DNS posés ; plus de faux « droit manquant » avant la bascule (ref #3482).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 12:29:19 +0100
+
 secubox-mobile (0.3.3-1~trixie1) trixie; urgency=medium
 
   * Le réseau où la clé est branchée devient sa zone de confiance nginx (ref #3467).
