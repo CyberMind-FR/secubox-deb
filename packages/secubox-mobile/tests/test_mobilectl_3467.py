@@ -113,7 +113,7 @@ def test_retrait_rend_tout(k):
 def test_dns_muet_jamais_de_bascule(k):
     f = Faux()
     f.dig_ok = False
-    assert act(f, k)["etat"] == "erreur_dns" and f.dns == ["192.168.1.254"]
+    assert act(f, k)["freebox"] == "dns_muet" and f.dns == ["192.168.1.254"]
 
 
 def test_nft_refuse_jamais_de_bascule(k):
@@ -345,8 +345,20 @@ def test_dns_muet_apres_bascule_rend_le_reseau(k):
     f = Faux()
     act(f, k)
     f.dig_ok = False
+    assert act(f, k)["freebox"] == "dns_muet" and f.dns == ["192.168.1.50"]
+    act(f, k)
     assert act(f, k)["etat"] == "erreur_dns" and f.dns == ["192.168.1.254"]
     assert ["systemctl", "restart", "unbound"] in f.appels
+
+
+def test_dns_muet_passager_ne_rend_rien_et_le_compteur_repart(k):
+    f = Faux()
+    act(f, k)
+    f.dig_ok = False
+    act(f, k)
+    f.dig_ok = True
+    act(f, k)
+    assert "muet" not in etat(k) and f.dns == ["192.168.1.50"]
 
 
 def test_sans_persistance_le_reseau_n_est_pas_touche(k, monkeypatch):

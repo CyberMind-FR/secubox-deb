@@ -37,6 +37,7 @@ AUDIT = Path("/var/log/secubox/audit.log")
 SOURCE_LISTES = Path("/var/lib/secubox-dns-listes/sources/95-secubox-adblock.conf")
 STATUT_LISTES = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
 COMMENTAIRE = "secubox-mobile"
+MUET_MAX = 3
 RFC1918 = [ipaddress.ip_network(r) for r in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
 TUNNELS = ("wg", "tun", "tap", "lo", "docker", "veth")
 
@@ -452,11 +453,19 @@ def activer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, c
         run(["systemctl", "restart", "unbound"])
         if dns_repond(run, lan["ip"]):
             return {**res, "etat": "partiel", "freebox": "unbound_relance"}
+        # Un changement d'adresse rend aussi le DNS muet un instant : on ne rend le réseau qu'après 3 passages de suite.
+        etat["muet"] = etat.get("muet", 0) + 1
+        if "dns_origine" in etat:
+            ecrire_etat(etat, etat_f)
+        if etat["muet"] < MUET_MAX:
+            return {**res, "etat": "partiel", "freebox": "dns_muet"}
         audit("dns_muet", origine_connue="dns_origine" in etat)
         if "dns_origine" in etat:
             fini, detail = _rendre(run, etat, etat_f, lan)
             return {**res, "etat": "erreur_dns", "erreur": "DNS de la clé muet : réseau rendu à son origine.", "detail": detail, "fini": fini}
         return {**res, "etat": "erreur_dns", "erreur": "Le DNS de la clé ne répond pas : réseau laissé tel quel."}
+    if etat.pop("muet", 0):
+        ecrire_etat(etat, etat_f)
     if not durable():
         return {**res, "etat": "partiel", "freebox": "non_durable"}
     res["freebox"] = regler_freebox(run, lan, etat, etat_f)
