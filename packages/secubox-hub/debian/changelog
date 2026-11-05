@@ -1,3 +1,9 @@
+secubox-hub (1.12.40-1~trixie1) trixie; urgency=medium
+
+  * espaces.json : module mobile classé (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 06:46:35 +0100
+
 secubox-hub (1.12.39-1~trixie1) trixie; urgency=medium
 
   * nginx demarre sans DNS au boot (#3418) : le snippet des polices resout fonts.googleapis.com / fonts.gstatic.com a la requete (variable + resolver) ; avant, un proxy_pass a nom litteral faisait echouer nginx entier (constat VM Alpha 20). Test de depot contre tout proxy_pass a nom externe litteral.
