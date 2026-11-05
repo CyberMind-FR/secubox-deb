@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-mobilectl (#3467) — la clé USB protège le réseau où elle est branchée, puis se retire.
+
+activer : listes de blocage, Unbound et port 53 ouverts au réseau local, puis la Freebox distribue la clé comme SEUL DNS
+(jamais de secondaire : il contourne le blocage, essai du 2026-11-04). Idempotent : relancé par une minuterie, il suit
+un changement d'adresse quand la clé passe sur un autre PC.
+retirer : rend à la Freebox le DNS relevé avant l'activation. Si la clé est arrachée, l'utilisateur le fait à la main.
+Root : Unbound, nftables et /etc. La Freebox reste pilotée sous secubox-freebox."""
+from __future__ import annotations
+
+import ipaddress
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Callable, List, Optional, Tuple
+
+ETAT = Path("/var/lib/secubox/mobile/etat.json")
+RETIRE = Path("/run/secubox-mobile.retire")      # geste manuel : tient jusqu'au prochain démarrage
+UNBOUND = Path("/etc/unbound/unbound.conf.d/60-secubox-mobile.conf")
+AUDIT = Path("/var/log/secubox/audit.log")
+SOURCE_LISTES = Path("/var/lib/secubox-dns-listes/sources/95-secubox-adblock.conf")
+COMMENTAIRE = "secubox-mobile"
+
+Lanceur = Callable[[List[str]], Tuple[int, str]]
+
+
+def lancer(cmd: List[str]) -> Tuple[int, str]:
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return 1, str(e)
+    return r.returncode, (r.stdout + r.stderr).strip()
+
+
+def freebox(run: Lanceur, *args: str) -> Tuple[int, dict]:
+    rc, sortie = run(["runuser", "-u", "secubox-freebox", "--", "/usr/sbin/freeboxctl", *args])
+    try:
+        return rc, json.loads(sortie.splitlines()[-1])
+    except (ValueError, IndexError):
+        return rc or 1, {"erreur": sortie[:200]}
+
+
+def adresse_lan(run: Lanceur) -> Tuple[str, str]:
+    """(IPv4 privée de la route par défaut, interface), vides sans réseau."""
+    rc, s = run(["ip", "-j", "route", "get", "1.1.1.1"])
+    try:
+        r = json.loads(s)[0] if rc == 0 else {}
+    except (ValueError, IndexError):
+        r = {}
+    ip, dev = r.get("prefsrc", ""), r.get("dev", "")
+    try:
+        return (ip, dev) if ipaddress.IPv4Address(ip).is_private else ("", "")
+    except ValueError:
+        return "", ""
+
+
+def rendu_unbound(ip: str) -> str:
+    # ip-freebind : Unbound peut précéder l'adresse. Réseau local privé seulement, jamais d'écoute publique.
+    return ("server:\n    ip-freebind: yes\n    interface: 127.0.0.1\n    interface: ::1\n"
+            f"    interface: {ip}\n"
+            "    access-control: 10.0.0.0/8 allow\n    access-control: 172.16.0.0/12 allow\n"
+            "    access-control: 192.168.0.0/16 allow\n")
+
+
+def lire_etat(chemin: Path = ETAT) -> dict:
+    try:
+        return json.loads(chemin.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def ecrire_etat(e: dict, chemin: Path = ETAT) -> None:
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    tmp = chemin.with_suffix(".tmp")
+    tmp.write_text(json.dumps(e))
+    tmp.replace(chemin)
+
+
+def audit(action: str, **champs) -> None:
+    try:
+        with AUDIT.open("a") as f:
+            f.write(json.dumps({"ts": int(time.time()), "module": "mobile", "action": action, **champs}) + "\n")
+    except OSError:
+        pass
+
+
+def poser_unbound(run: Lanceur, ip: str, conf: Path = UNBOUND) -> Optional[str]:
+    """Écrit, valide, redémarre ; retour au fichier précédent si la validation échoue."""
+    voulu = rendu_unbound(ip)
+    avant = conf.read_text() if conf.exists() else None
+    if avant == voulu:
+        return None
+    conf.write_text(voulu)
+    rc, s = run(["unbound-checkconf"])
+    if rc != 0:
+        conf.unlink() if avant is None else conf.write_text(avant)
+        return "unbound-checkconf : " + s[:160]
+    rc, s = run(["systemctl", "restart", "unbound"])
+    return None if rc == 0 else "unbound : " + s[:160]
+
+
+def poignees_nft(sortie: str) -> List[str]:
+    return [ligne.rsplit("handle ", 1)[1].strip() for ligne in sortie.splitlines()
+            if f'comment "{COMMENTAIRE}"' in ligne and "handle " in ligne]
+
+
+def fermer_nft(run: Lanceur) -> None:
+    rc, s = run(["nft", "-a", "list", "chain", "inet", "filter", "input"])
+    for h in poignees_nft(s) if rc == 0 else []:
+        run(["nft", "delete", "rule", "inet", "filter", "input", "handle", h])
+
+
+def ouvrir_nft(run: Lanceur, dev: str) -> None:
+    """Règles ajoutées à la chaîne input en DEFAULT DROP, seulement sur l'interface du réseau local."""
+    fermer_nft(run)
+    for proto in ("udp", "tcp"):
+        run(["nft", "insert", "rule", "inet", "filter", "input", "iifname", dev, "ip", "saddr",
+             "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }", proto, "dport", "53", "accept",
+             "comment", COMMENTAIRE])
+
+
+def regler_freebox(run: Lanceur, ip: str, etat: dict) -> str:
+    """Rend l'état Freebox ; ne relève le DNS d'origine qu'une fois, jamais notre propre adresse."""
+    rc, lu = freebox(run, "dns-lire")
+    if rc != 0:
+        return "autorisation_requise"
+    dns = lu.get("dns", [])
+    ancienne = etat.get("ip")
+    if "dns_origine" not in etat:
+        if dns == [ip]:
+            return "actif"            # réglé à la main avant nous : rien à rendre au retrait
+        etat["dns_origine"] = dns
+    if ancienne and ancienne != ip and etat.get("mac"):
+        freebox(run, "ip-fixe-retirer", etat["mac"])     # autre PC : l'ancienne réservation ne sert plus
+    rc, r = freebox(run, "ip-fixe-poser", ip)
+    if rc != 0:
+        return "droit_requis"
+    etat["mac"] = r.get("mac", "")
+    if dns != [ip]:
+        rc, _ = freebox(run, "dns-regler", ip)
+        if rc != 0:
+            return "droit_requis"
+        audit("dns_freebox_pose", avant=dns, apres=[ip])
+    return "actif"
+
+
+def activer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, conf: Path = UNBOUND,
+            source: Path = SOURCE_LISTES) -> dict:
+    if retire.exists():
+        return {"etat": "retiree"}
+    ip, dev = adresse_lan(run)
+    if not ip:
+        return {"etat": "pas_de_reseau"}
+    res = {"ip": ip, "listes": source.exists()}
+    if not source.exists():
+        rc, _ = run(["/usr/sbin/secubox-adblock-sync", "sync"])
+        res["listes"] = rc == 0
+    err = poser_unbound(run, ip, conf)
+    if err:
+        return {**res, "etat": "erreur_dns", "erreur": err}
+    ouvrir_nft(run, dev)
+    etat = lire_etat(etat_f)
+    res["freebox"] = regler_freebox(run, ip, etat)
+    etat["ip"] = ip
+    ecrire_etat(etat, etat_f)
+    res["etat"] = "actif" if res["listes"] and res["freebox"] == "actif" else "partiel"
+    return res
+
+
+def retirer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, conf: Path = UNBOUND,
+            manuel: bool = False) -> dict:
+    if manuel:
+        retire.touch()
+    etat = lire_etat(etat_f)
+    res = {"etat": "retiree", "dns_rendu": False}
+    if "dns_origine" in etat:
+        rc, lu = freebox(run, "dns-lire")
+        # le DNS n'est rendu que s'il vise encore la clé : un réglage posé depuis par l'utilisateur reste.
+        if rc == 0 and lu.get("dns") == [etat.get("ip")]:
+            rc, _ = freebox(run, "dns-regler", ",".join(etat["dns_origine"]))
+            res["dns_rendu"] = rc == 0
+        elif rc == 0:
+            res["dns_rendu"] = True
+        if etat.get("mac"):
+            freebox(run, "ip-fixe-retirer", etat["mac"])
+        if not res["dns_rendu"]:
+            res["etat"] = "dns_non_rendu"     # état gardé : un prochain retrait ou démarrage saura le rendre
+            audit("retrait_incomplet", origine=etat["dns_origine"])
+            return res
+        audit("dns_freebox_rendu", apres=etat["dns_origine"])
+    fermer_nft(run)
+    if conf.exists():
+        conf.unlink()
+        run(["systemctl", "restart", "unbound"])
+    etat_f.unlink(missing_ok=True)
+    return res
+
+
+def main(argv: List[str]) -> int:
+    cmd = argv[0] if argv else "etat"
+    if cmd == "activer":
+        r = activer()
+    elif cmd == "retirer":
+        r = retirer(manuel="--manuel" in argv)
+    elif cmd == "etat":
+        r = {"reglages": lire_etat(), "retiree": RETIRE.exists()}
+    else:
+        print("usage : secubox-mobilectl activer|retirer [--manuel]|etat", file=sys.stderr)
+        return 2
+    print(json.dumps(r))
+    return 0 if r.get("etat") not in ("erreur_dns", "dns_non_rendu") else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

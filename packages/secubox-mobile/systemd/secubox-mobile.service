@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Root (exception RULES-CODE) : Unbound, nftables. Actif tant que la clé tourne ; l'arrêt rend le DNS à la Freebox.
+# After= réseau : à l'extinction, ce service s'arrête AVANT le réseau, la Freebox reste joignable.
+[Unit]
+Description=SecuBox Mobile — protection du réseau local, retrait à l'extinction (#3467)
+Wants=network-online.target unbound.service
+After=network-online.target unbound.service nftables.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=-/usr/sbin/secubox-mobilectl activer
+ExecStop=-/usr/sbin/secubox-mobilectl retirer
+TimeoutStartSec=600
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

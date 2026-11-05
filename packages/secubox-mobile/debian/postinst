@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+  systemctl daemon-reload 2>/dev/null || true
+  systemctl enable secubox-mobile.service secubox-mobile-suivi.timer 2>/dev/null || true
+fi
+#DEBHELPER#
+exit 0

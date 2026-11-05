@@ -262,6 +262,30 @@ class Freebox:
             i["conforme"] = i["actuel"] == i["cible"]
         return {"items": items, "ecarts": sum(1 for i in items if not i["conforme"]), "ip_box": ip_box}
 
+    def regler_dns(self, serveurs):
+        """DNS distribué par le DHCP (#3467) : uniquement la clé « dns ». Liste vide = la Freebox se donne elle-même."""
+        if not self.client.session:
+            self.client.ouvrir_session()
+        if not self.client.droits.get("settings"):
+            raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox ».")
+        avant = self._lire_autoconfig()["dns"]
+        self.client.ecrire("PUT", "dhcp/config/", {"dns": (list(serveurs) + [""] * 6)[:6]})
+        apres = self._lire_autoconfig()["dns"]
+        self._cache.clear()
+        self.journal({"action": "dns_dhcp", "avant": avant, "apres": apres, "voulu": list(serveurs)})
+        if apres != list(serveurs):
+            raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement de DNS.")
+        return {"dns": apres}
+
+    def retirer_ip_fixe(self, mac):
+        """Retire le bail statique posé pour cette MAC (#3467)."""
+        if not self.client.session:
+            self.client.ouvrir_session()
+        self.client.ecrire("DELETE", "dhcp/static_lease/" + mac)
+        self._cache.clear()
+        self.journal({"action": "ip_fixe_retiree", "mac": mac})
+        return {"retire": mac}
+
     def appliquer_autoconfig(self, ids, ip_box, confirme_dmz=False):
         """Applique les éléments demandés (pas plus), relit avant ET après, journalise. La DMZ exige `confirme_dmz`."""
         ids = list(dict.fromkeys(ids or []))
