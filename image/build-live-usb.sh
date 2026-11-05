@@ -1786,6 +1786,12 @@ ok "Core services fallback complete"
 # les unités déclarent déjà /run/secubox dans leurs ReadWritePaths.
 
 # ── Create build metadata ──────────────────────────────────────────
+# #3467 : la clé mobile est un support durable. Sur tmpfs, /var/lib/secubox perdait à chaque démarrage l'autorisation
+# Freebox et les réglages TV Privacy ; ce marqueur désactive var-lib-secubox.mount, les données vont à la persistance.
+if [[ "${IMAGE_PROFILE}" == "mobile" ]]; then
+  touch "${ROOTFS}/var/lib/secubox/.persistent"
+fi
+
 log "Creating build metadata..."
 BUILD_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 BUILD_DATE=$(date +"%Y-%m-%d")

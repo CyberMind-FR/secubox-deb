@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# GET /etat, POST /retirer, POST /reactiver : le contrôleur écrit Unbound et nftables, d'où root.
+secubox-mobile ALL=(root) NOPASSWD: /usr/sbin/secubox-mobilectl etat
+secubox-mobile ALL=(root) NOPASSWD: /usr/sbin/secubox-mobilectl retirer --manuel
+secubox-mobile ALL=(root) NOPASSWD: /usr/sbin/secubox-mobilectl reactiver

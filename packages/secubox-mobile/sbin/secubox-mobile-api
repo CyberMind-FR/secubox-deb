@@ -1,0 +1,12 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+"""Lanceur de l'API : un programme nommé, pour que le profil AppArmor s'y attache (#3467)."""
+import os
+import sys
+
+import uvicorn
+
+os.umask(0o007)      # socket jamais en 0666, même un instant (#2026)
+sys.path.insert(0, "/usr/lib/secubox/mobile")
+uvicorn.run("api.main:app", uds="/run/secubox/mobile.sock", workers=1, log_level="warning")

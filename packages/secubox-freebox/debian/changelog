@@ -1,3 +1,9 @@
+secubox-freebox (0.6.3-1~trixie1) trixie; urgency=medium
+
+  * freeboxctl : dns-lire, dns-regler, dns6-lire, dns6-regler, ip-fixe-lire, ip-fixe-poser, ip-fixe-retirer pour la clé mobile (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 06:25:28 +0100
+
 secubox-freebox (0.6.2-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images

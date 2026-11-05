@@ -36,4 +36,6 @@ on = [
   "nac", "freebox", "ipv6guard", "wireguard",
   # Clé branchée sur un PC : écran local.
   "kiosk", "console",
+  # Activation sur le réseau local et retrait à l'extinction (#3467).
+  "mobile", "mobile-api",
 ]

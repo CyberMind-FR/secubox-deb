@@ -11,9 +11,12 @@ l'utilisateur secubox-freebox (sudo -u, cote appelant).
 
   passerelle-dhcp <ip>   regle la passerelle DHCP, affiche le JSON du resultat
   lire-passerelle        affiche la passerelle DHCP actuelle (lecture seule)
+  dns-lire, dns-regler, dns6-lire, dns6-regler, ip-fixe-lire, ip-fixe-poser, ip-fixe-retirer, bail-poser : clé mobile (#3467)
 """
+import ipaddress
 import json
 import os
+import re
 import sys
 
 _lib_installe = "/usr/lib/secubox/freebox"
@@ -26,6 +29,20 @@ from api import service as S  # noqa: E402
 
 CHEMIN_MAGASIN = os.environ.get("SECUBOX_FREEBOX_MAGASIN", "/var/lib/secubox/freebox/app.json")
 HOTE = os.environ.get("SECUBOX_FREEBOX_HOTE", C.HOTE_DEFAUT)
+
+
+def _liste_ip(texte, famille):
+    ips = [x for x in texte.split(",") if x]
+    for x in ips:
+        if ipaddress.ip_address(x).version != famille:
+            raise ValueError("adresse invalide : " + x)
+    return ips
+
+
+def _mac(texte):
+    if not re.fullmatch(r"[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}", texte):
+        raise ValueError("adresse MAC invalide")
+    return texte
 
 
 def _fabriquer():
@@ -44,8 +61,36 @@ def main(argv):
     if argv[0] == "lire-passerelle":
         print(json.dumps({"passerelle": (svc.client.lire("dhcp/config/") or {}).get("gateway")}))
         return 0
-    print("usage : freeboxctl passerelle-dhcp <ip>|lire-passerelle", file=sys.stderr)
-    return 2
+    # Verbes de la clé mobile (#3467) : erreur en JSON pour le contrôleur appelant, valeurs validées avant tout appel.
+    try:
+        verbe, args = argv[0], argv[1:]
+        if verbe == "dns-lire" and not args:
+            print(json.dumps({"dns": svc.lire_dns()}))
+        elif verbe == "dns-regler" and len(args) == 1:
+            print(json.dumps(svc.regler_dns(_liste_ip(args[0], 4))))
+        elif verbe == "dns6-lire" and not args:
+            print(json.dumps(svc.lire_dns6()))
+        elif verbe == "dns6-regler" and len(args) in (1, 2):
+            print(json.dumps(svc.regler_dns6(args[0] == "1", _liste_ip(args[1] if len(args) == 2 else "", 6))))
+        elif verbe == "ip-fixe-lire" and len(args) == 1:
+            print(json.dumps(svc._etat_ip_fixe(_liste_ip(args[0], 4)[0])))
+        elif verbe == "ip-fixe-poser" and len(args) == 1:
+            ip = _liste_ip(args[0], 4)[0]
+            svc.appliquer_autoconfig(["ip_fixe"], ip)
+            print(json.dumps(svc._etat_ip_fixe(ip)))
+        elif verbe == "ip-fixe-retirer" and len(args) == 1:
+            print(json.dumps(svc.retirer_ip_fixe(_mac(args[0]))))
+        elif verbe == "bail-poser" and len(args) == 2:
+            print(json.dumps(svc.poser_bail(_mac(args[0]), _liste_ip(args[1], 4)[0])))
+        else:
+            print("usage : freeboxctl passerelle-dhcp <ip>|lire-passerelle|dns-lire|dns-regler <ip,...>|dns6-lire|"
+                  "dns6-regler <0|1> [ip,...]|ip-fixe-lire <ip>|ip-fixe-poser <ip>|ip-fixe-retirer <mac>|bail-poser <mac> <ip>", file=sys.stderr)
+            return 2
+    except (C.ErreurFreebox, ValueError, IndexError) as e:
+        print(json.dumps({"erreur": str(e)[:200]}))
+        return 1
+    return 0
+
 
 
 if __name__ == "__main__":

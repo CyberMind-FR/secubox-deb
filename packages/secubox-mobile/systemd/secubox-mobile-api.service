@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Utilisateur dédié : les gestes passent par sudo vers secubox-mobilectl (argv exact), d'où NoNewPrivileges absent.
+[Unit]
+Description=SecuBox Mobile API (#3467)
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-mobile
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/mobile
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStartPre=+/bin/rm -f /run/secubox/mobile.sock
+ExecStart=/usr/sbin/secubox-mobile-api
+TimeoutStartSec=120
+Restart=on-failure
+RestartSec=5
+ProtectHome=yes
+PrivateTmp=yes
+UMask=0027
+ProtectSystem=full
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -187,6 +187,10 @@
    "espace": "systeme",
    "objet": "BOX"
   },
+  "mobile": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
   "freebox": {
    "espace": "systeme",
    "objet": "BOX"

@@ -1,0 +1,10 @@
+{
+  "id": "mobile",
+  "name": "Protection mobile",
+  "category": "root",
+  "icon": "🛡️",
+  "path": "/mobile/",
+  "order": 1,
+  "description": "Clé USB : blocage des publicités et traqueurs sur ce réseau, retrait de la clé",
+  "theme": "reseau"
+}
