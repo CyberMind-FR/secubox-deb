@@ -36,6 +36,7 @@ APT_MIRROR="http://deb.debian.org/debian"
 APT_SECUBOX="https://apt.secubox.in"
 USE_LOCAL_CACHE=0
 SLIPSTREAM_DEBS=1
+PROFILE_TAG=""          # Vide : tous les .deb ; sinon secubox-<profil> et ses Depends
 EMBED_IMAGE=""          # Path to eMMC image to embed
 NO_COMPRESS=0
 
@@ -58,6 +59,7 @@ OPTIONS:
     --suite SUITE       Debian suite (default: trixie)
     --out DIR           Output directory (default: ./output)
     --size SIZE         USB image size (default: 2G)
+    --profile PROFIL    Only secubox-<PROFIL> and its Depends (default: all packages)
     --embed-image PATH  Embed eMMC image for flashing (recommended)
     --local-cache       Use local APT cache (apt-cacher-ng)
     --no-slipstream     Don't include local .deb packages
@@ -85,6 +87,7 @@ while [[ $# -gt 0 ]]; do
         --out)            OUT_DIR="$2";         shift 2 ;;
         --size)           IMG_SIZE="$2";        shift 2 ;;
         --embed-image)    EMBED_IMAGE="$2";     shift 2 ;;
+        --profile)        PROFILE_TAG="${2#secubox-}"; shift 2 ;;
         --local-cache)    USE_LOCAL_CACHE=1;    shift   ;;
         --no-slipstream)  SLIPSTREAM_DEBS=0;    shift   ;;
         --no-compress)    NO_COMPRESS=1;        shift   ;;
@@ -426,6 +429,12 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
             done
         fi
 
+        if [[ -n "$PROFILE_TAG" ]]; then
+            rm -f "${ROOTFS}/tmp/secubox-debs/"*.deb
+            python3 "${SCRIPT_DIR}/select-profile-debs.py" "${OUTPUT_DEBS}" "${PROFILE_TAG}" "${ROOTFS}/tmp/secubox-debs" arm64 \
+                || err "profil ${PROFILE_TAG} : sélection impossible — image non produite"
+        fi
+
         DEB_COUNT=$(find "${ROOTFS}/tmp/secubox-debs" -maxdepth 1 -name "*.deb" 2>/dev/null | wc -l)
         log "Installing ${DEB_COUNT} packages..."
 
@@ -450,6 +459,10 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
         # Verify installations (use || true to prevent grep failure)
         INSTALLED_COUNT=$(chroot "${ROOTFS}" bash -c 'dpkg -l "secubox-*" 2>/dev/null | grep "^ii" | wc -l || echo 0')
         log "Installed ${INSTALLED_COUNT}/${DEB_COUNT} packages"
+        if [[ -n "$PROFILE_TAG" ]]; then
+            chroot "${ROOTFS}" dpkg -l "secubox-${PROFILE_TAG}" 2>/dev/null | grep -q "^ii" \
+                || err "secubox-${PROFILE_TAG} non installé dans l'image — non produite"
+        fi
 
         rm -rf "${ROOTFS}/tmp/secubox-debs"
         ok "Local packages installed"

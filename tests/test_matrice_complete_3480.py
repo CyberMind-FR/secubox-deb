@@ -20,8 +20,8 @@ def _matrice(profil):
 
 def test_complet_toutes_les_cartes_tous_les_profils():
     m = _matrice("complet")
-    assert len(m) == 12
-    assert ("espressobin-ultra", "lite") in m and ("vm-arm64", "minimal") in m
+    assert len(m) == 11
+    assert ("espressobin-ultra", "mobile") in m and ("rpi400", "mobile") not in m and ("vm-arm64", "minimal") in m
     assert not {p for _, p in m} & {"isp", "full"}
     assert all((RACINE / "board" / carte).is_dir() for carte, _ in m)
 
@@ -44,6 +44,7 @@ def test_live_arm64_au_profil_mobile():
     wf = (RACINE / ".github/workflows/build-all-live-usb.yml").read_text(encoding="utf-8")
     assert wf.count('extra_args: "--kiosk --profile mobile"') == 2       # x64, rpi400
     assert 'extra_args: "--kiosk --rpi-dsi --profile mobile"' in wf
+    assert 'extra_args: "--size 8G --profile mobile"' in wf               # ESPRESSObin
     assert 'extra_args: "--profile mobile"' in wf                        # MOCHAbin, sans écran
     moch = (RACINE / "image/build-mochabin-live-usb.sh").read_text(encoding="utf-8")
     assert '"${PROFILE_TAG}" "${ROOTFS}/tmp/debs" arm64' in moch and "non installé dans l'image" in moch

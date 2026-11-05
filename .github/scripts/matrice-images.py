@@ -126,11 +126,12 @@ def profils_pour(racine: Path, carte: str) -> list[str]:
 
 #: Profils qu'un déclenchement MANUEL peut forcer. `minimal` (#2816 : DPI, dns-guard, ad-guard, NAC, Freebox, socle d'administration) n'est dans AUCUNE
 #: matrice publiée : il ne se construit que sur demande.
-PROFILS_ACCEPTES = ["lite", "isp", "full", "minimal"]
+PROFILS_ACCEPTES = ["lite", "isp", "full", "minimal", "mobile"]
 
 #: Matrice complète d'une bêta (#3480) : chaque carte × les profils d'amorçage légers. `isp` et `full`, trop lourds pour une
-#: image, s'installent au premier démarrage (#3428). Le profil `mobile` est livré par les live de build-all-live-usb.yml.
-PROFILS_COMPLETS = ["lite", "minimal"]
+#: image, s'installent au premier démarrage (#3428). RPi × mobile est écarté : même script et même nom que son live, déjà produit
+#: par build-all-live-usb.yml.
+PROFILS_COMPLETS = ["mobile", "minimal"]
 CARTES_COMPLETES = ["mochabin", "vm-x64", "vm-arm64", "rpi400", "espressobin-v7", "espressobin-ultra"]
 
 
@@ -149,14 +150,14 @@ def main() -> int:
     ap.add_argument("--cartes", required=True,
                     help="cartes séparées par des virgules, ou 'defaut'")
     ap.add_argument("--profil", default="auto", choices=["auto", "complet", *PROFILS_ACCEPTES],
-                    help="force UN profil pour les cartes demandées (auto = ceux que la matrice publie ; complet = toutes les cartes × lite et minimal)")
+                    help="force UN profil pour les cartes demandées (auto = ceux que la matrice publie ; complet = toutes les cartes × mobile et minimal)")
     ap.add_argument("--defaut", default="mochabin,vm-x64,rpi400,espressobin-v7",
                     help="cartes bâties quand --cartes vaut 'defaut'")
     a = ap.parse_args()
 
     racine = Path(a.racine).resolve()
     if a.profil == "complet":
-        print(json.dumps({"include": [{"board": c, "profile": p} for c in CARTES_COMPLETES for p in PROFILS_COMPLETS]}, ensure_ascii=False))
+        print(json.dumps({"include": [{"board": c, "profile": p} for c in CARTES_COMPLETES for p in PROFILS_COMPLETS if (c, p) != ("rpi400", "mobile")]}, ensure_ascii=False))
         return 0
     brut = a.defaut if a.cartes.strip() in ("", "defaut", "all") else a.cartes
     cartes = [c.strip() for c in brut.split(",") if c.strip()]
