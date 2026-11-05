@@ -2825,3 +2825,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-11-05 — Essai Freebox réel : trois défauts (ref #3482)
 - freebox 0.6.4 : l'ouverture de session détecte la validation faite sur l'écran. mobile 0.3.4 : MAC vue différente de celle de la clé = ni bail ni DNS (`mac_relayee`) ; `en_attente` au lieu d'un faux « droit manquant ». L'essai sur la VM s'est arrêté avant toute écriture sur la Freebox ; suite sur vraie clé après l'image.
+
+## 2026-11-05 — dpi-vue : détail par appareil (ref #3486)
+- secubox-dpi 1.14.6 : liste des appareils et fiche (reçu, envoyé, connexions, activité, usages, destinations, pays), page complète seulement. Données de /clients, aucune nouvelle API.

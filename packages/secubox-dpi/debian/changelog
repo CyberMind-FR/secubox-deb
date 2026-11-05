@@ -1,3 +1,9 @@
+secubox-dpi (1.14.6-1~trixie1) trixie; urgency=medium
+
+  * dpi-vue : détail par appareil (reçu, envoyé, connexions, activité, usages, destinations, pays) (ref #3486).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 13:45:18 +0100
+
 secubox-dpi (1.14.5-1~trixie1) trixie; urgency=medium
 
   * secubox-dpi-flowcap ne relance plus ndpiReader en boucle (#3245) : interface absente (defaut wg-toolbox) -> message unique au journal puis revérification toutes les 300 s (SECUBOX_DPI_IFACE_WAIT) sans lancer ndpiReader ; ndpiReader qui sort en moins de 10 s (SECUBOX_DPI_FAST_EXIT) -> attente croissante 10, 20, 40 ... plafonnée à 300 s, remise à zéro après une passe normale. Comportement nominal inchangé. Constaté sur gk1 : 54 % de CPU.
