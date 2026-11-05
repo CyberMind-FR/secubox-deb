@@ -36,6 +36,7 @@ APT_MIRROR="http://deb.debian.org/debian"
 APT_SECUBOX="https://apt.secubox.in"
 USE_LOCAL_CACHE=0
 SLIPSTREAM_DEBS=1
+PROFILE_TAG=""          # Vide : tous les .deb ; sinon secubox-<profil> et ses Depends (#3484)
 EMBED_IMAGE=""          # Path to eMMC image to embed
 NO_COMPRESS=0
 INCLUDE_LED_KERNEL=1    # Include LED-enabled kernel
@@ -63,6 +64,7 @@ OPTIONS:
     --suite SUITE       Debian suite (default: trixie)
     --out DIR           Output directory (default: ./output)
     --size SIZE         USB image size (default: 8G)
+    --profile PROFIL    Only secubox-<PROFIL> and its Depends (default: all packages)
     --embed-image PATH  Embed eMMC image for flashing (optional)
     --local-cache       Use local APT cache (apt-cacher-ng)
     --no-slipstream     Don't include local .deb packages
@@ -102,6 +104,7 @@ while [[ $# -gt 0 ]]; do
         --out)            OUT_DIR="$2";         shift 2 ;;
         --size)           IMG_SIZE="$2";        shift 2 ;;
         --embed-image)    EMBED_IMAGE="$2";     shift 2 ;;
+        --profile)        PROFILE_TAG="${2#secubox-}"; shift 2 ;;
         --local-cache)    USE_LOCAL_CACHE=1;    shift   ;;
         --slipstream)     SLIPSTREAM_DEBS=1;    shift   ;;
         --no-slipstream)  SLIPSTREAM_DEBS=0;    shift   ;;
@@ -532,11 +535,20 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     DEBS_DIR="${OUT_DIR}/debs"
     if [[ -d "$DEBS_DIR" ]] && compgen -G "${DEBS_DIR}/*.deb" > /dev/null; then
         mkdir -p "${ROOTFS}/tmp/debs"
-        cp "${DEBS_DIR}"/*.deb "${ROOTFS}/tmp/debs/" 2>/dev/null || true
+        if [[ -n "$PROFILE_TAG" ]]; then
+            python3 "${SCRIPT_DIR}/select-profile-debs.py" "${DEBS_DIR}" "${PROFILE_TAG}" "${ROOTFS}/tmp/debs" arm64 \
+                || err "profil ${PROFILE_TAG} : sélection impossible — image non produite"
+        else
+            cp "${DEBS_DIR}"/*.deb "${ROOTFS}/tmp/debs/" 2>/dev/null || true
+        fi
         DEB_COUNT=$(ls -1 "${ROOTFS}/tmp/debs/"*.deb 2>/dev/null | wc -l)
         log "Found $DEB_COUNT .deb packages"
 
         chroot "${ROOTFS}" bash -c "dpkg -i /tmp/debs/*.deb 2>/dev/null || apt-get -f install -y" || warn "Some packages failed"
+        if [[ -n "$PROFILE_TAG" ]]; then
+            chroot "${ROOTFS}" dpkg -l "secubox-${PROFILE_TAG}" 2>/dev/null | grep -q "^ii" \
+                || err "secubox-${PROFILE_TAG} non installé dans l'image — non produite"
+        fi
         rm -rf "${ROOTFS}/tmp/debs"
         ok "Packages slipstreamed"
     else

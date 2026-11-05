@@ -35,12 +35,12 @@ def test_live_usb_syntaxe_et_option_refusee():
 
 def test_rpi_profil_lite_par_defaut_et_kiosque_ajoute():
     assert 'PROFILE_TAG="${PROFILE_TAG:-lite}"' in RPI
-    assert "lite|minimal|isp) IMG_SIZE=\"8G\"" in RPI
+    assert "lite|minimal|mobile|isp) IMG_SIZE=\"8G\"" in RPI
     assert 'select-profile-debs.py" "${_ksrc}" kiosk' in RPI
 
 
 def test_workflow_live_usb_profils_de_la_matrice():
-    assert WF_LIVE.count('extra_args: "--kiosk --profile lite"') == 1      # rpi400 (rpi-arm64 = lite + kiosque HDMI)
+    assert 'extra_args: "--kiosk --profile lite"' not in WF_LIVE         # live arm64 au profil mobile (#3484)
     assert 'extra_args: "--kiosk --profile mobile"' in WF_LIVE         # x64 : la clé mobile (#3470)
     assert "--board mochabin \\\n            --profile lite" in WF_LIVE  # image eMMC embarquée : lite
 
@@ -81,7 +81,7 @@ def test_verify_profile_lite_et_minimal_verts():
 def test_meta_paquet_verifie_dans_l_image_et_profil_rpi_borne():
     assert LIVE.count('|| err "secubox-${IMAGE_PROFILE} non configuré') == 1
     assert '|| err "${_meta} non installé depuis' in LIVE and "secubox-full' 2>/dev/null || true" not in LIVE
-    assert "lite|minimal|isp|full) ;;" in RPI and '|| err "secubox-${PROFILE_TAG} non installé' in RPI
+    assert "lite|minimal|mobile|isp|full) ;;" in RPI and '|| err "secubox-${PROFILE_TAG} non installé' in RPI
 
 
 def test_select_profile_debs_refuse_une_dependance_manquante(tmp_path, monkeypatch):
