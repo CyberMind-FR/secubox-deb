@@ -1,3 +1,9 @@
+secubox-webfilter (0.5.5-1~trixie1) trixie; urgency=medium
+
+  * Synchronisation retentée si le réseau manque au démarrage (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 09:24:33 +0100
+
 secubox-webfilter (0.5.4-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

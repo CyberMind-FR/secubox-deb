@@ -17,6 +17,6 @@ NoNewPrivileges=yes
 ProtectKernelTunables=yes
 LockPersonality=yes
 RestrictSUIDSGID=yes
-ReadWritePaths=/etc/unbound/unbound.conf.d /etc/nftables.d /var/lib/secubox-mobile -/var/lib/secubox-dns-listes -/var/lib/secubox/ad-guard -/var/lib/secubox/freebox -/var/log/secubox /run
+ReadWritePaths=/etc/unbound/unbound.conf.d /etc/nftables.d -/etc/nginx/secubox-lan-geo.d /var/lib/secubox-mobile -/var/lib/secubox-dns-listes -/var/lib/secubox/ad-guard -/var/lib/secubox/freebox -/var/log/secubox /run
 StateDirectory=secubox-mobile
 StateDirectoryMode=0700

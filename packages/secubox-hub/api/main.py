@@ -1015,6 +1015,18 @@ async def modules(user=Depends(require_jwt)):
     await _ensure_services_warm()
     return await asyncio.to_thread(lambda: [{"id": k, **_svc(v)} for k, v in MODULES.items()])
 
+def modules_en_panne(statuts: dict, lot: dict | None) -> list:
+    """Ce qui est réellement en panne, selon le relevé de la page Santé (#3467) : une tâche de minuterie au repos, un
+    service en veille ou un module absent de ce profil n'est pas une panne. Sans relevé : l'état brut, comme avant."""
+    if not lot:
+        return [m for m, st in statuts.items() if not st.get("active")]
+    return [m for m in statuts if m in lot and lot[m].get("status") != "ok"]
+
+
+def _lot_sante() -> dict | None:
+    return (_cache.get("health_batch") or {}).get("modules") or None
+
+
 @router.get("/alerts")
 async def alerts(user=Depends(require_jwt)):
     # Use the cached _svc() (offloaded) instead of an un-timed per-module
@@ -1023,7 +1035,7 @@ async def alerts(user=Depends(require_jwt)):
     statuses = await asyncio.to_thread(lambda: {m: _svc(svc) for m, svc in MODULES.items()})
     return [{"type": "service_down", "module": m, "service": MODULES[m],
              "severity": "warning"}
-            for m, st in statuses.items() if not st.get("active")]
+            for m in modules_en_panne(statuses, _lot_sante())]
 
 @router.get("/monitoring")
 async def monitoring(user=Depends(require_jwt)):
@@ -1491,9 +1503,11 @@ async def system_health(user=Depends(require_jwt)):
     mem = stats.get("memory_percent", 0)
     disk = stats.get("disk_percent", 0)
 
-    modules_status = [_svc(v) for v in MODULES.values()]
-    active = sum(1 for m in modules_status if m["active"])
-    module_health = (active / len(MODULES)) * 100
+    statuts = {k: _svc(v) for k, v in MODULES.items()}
+    lot = _lot_sante()
+    pannes = modules_en_panne(statuts, lot)
+    presents = [m for m in statuts if m in lot] if lot else list(statuts)
+    module_health = (1 - len(pannes) / len(presents)) * 100 if presents else 100
 
     resource_health = 100 - max(cpu, mem, disk) / 2
     overall = int((module_health + resource_health) / 2)
@@ -1502,7 +1516,7 @@ async def system_health(user=Depends(require_jwt)):
         "overall": overall,
         "module_health": int(module_health),
         "resource_health": int(resource_health),
-        "issues": [m["name"] for m in modules_status if not m["active"]],
+        "issues": [statuts[m]["name"] for m in pannes],
     }
 
 

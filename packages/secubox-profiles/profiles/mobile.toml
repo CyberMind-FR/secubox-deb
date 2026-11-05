@@ -9,7 +9,7 @@ name  = "mobile"
 label = "Mobile — clé USB : publicités, traqueurs, TV Privacy, Freebox"
 menu_off = [
   "zkp", "assist", "ksm", "premier-pas-maitre", "centers",
-  "dpi", "ndpid", "mediaflow", "admin", "profiles", "network-anomaly", "netdiag", "grafana", "glances", "toolbox",
+  "dpi", "ndpid", "mediaflow", "profiles", "network-anomaly", "netdiag", "grafana", "glances", "toolbox",
 ]
 # Minuteries arrêtées et désactivées par ce profil (#3218, banc gk5) ; les autres profils les rétablissent.
 minuteurs_off = [
@@ -33,6 +33,10 @@ on = [
   "p2p", "meshname", "annuaire", "groupe-declares",
   # Fonctions du boîtier de garde.
   "dns-guard", "ad-guard", "webfilter", "webfilter-feed",
+  # Compteurs par appareil : sans eux, TV Privacy reste vide et « à l'arrêt » (#3467).
+  "ad-guard-dnsfeed",
+  # Administration : services, journaux, redémarrage et extinction depuis la page, sans console.
+  "admin",
   "nac", "freebox", "ipv6guard", "wireguard",
   # Clé branchée sur un PC : écran local.
   "kiosk", "console",

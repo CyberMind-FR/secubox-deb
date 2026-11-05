@@ -145,6 +145,16 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def noter_profil_actif(root: Path, nom: str) -> None:
+    """Sans ce fichier, le hub ne voit aucun profil actif et `menu_off` reste sans effet : le menu d'une box appliquée
+    en ligne de commande (premier pas) montrait des modules arrêtés, qui répondaient 404 (#3467)."""
+    actif = _paths(root)[3]
+    tmp = actif.with_name(actif.name + ".tmp")
+    tmp.write_text(nom + "\n", encoding="utf-8")
+    tmp.chmod(0o644)
+    tmp.replace(actif)
+
+
 def _cmd_apply(args) -> int:
     if not _running_as_root():
         print("apply doit être lancé en root (il pilote systemd/LXC/haproxy).",
@@ -232,6 +242,8 @@ def _cmd_apply(args) -> int:
         res_front = front_web.appliquer(profile, run=_run)
         _audit_front_web(res_front, profile)
         front_ok = bool(res_front.get("ok"))
+        if args.profile:
+            noter_profil_actif(root, args.profile)
     if args.json:
         print(json.dumps({"status": report.status, "changed": report.changed,
                           "failed": report.failed, "rolled_back": report.rolled_back}))

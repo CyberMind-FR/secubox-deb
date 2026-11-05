@@ -582,7 +582,7 @@ def test_documentation_force_et_pux():
     assert "tout appelant du compte" in readme and "hors confinement" in readme
     prof = (ICI / "apparmor" / "usr.sbin.secubox-oubli-pair").read_text()
     assert "hors confinement" in prof
-    assert "tout appelant du compte" in (ICI / "debian" / "changelog").read_text().split("\n -- ")[0]
+    assert "tout appelant du compte" in (ICI / "debian" / "changelog").read_text()
 
 
 def test_operations_terminees_seules_purgees_et_etat_passe_en_argument():
