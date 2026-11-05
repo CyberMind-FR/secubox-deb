@@ -10,3 +10,8 @@ def test_mobile_repose_sur_minimal_qui_exclut_le_hall():
     assert "secubox-minimal" in (RACINE / "secubox-mobile/debian/control").read_text(encoding="utf-8")
     conflits = (RACINE / "secubox-minimal/debian/control").read_text(encoding="utf-8")
     assert "Conflicts: secubox-webos, secubox-waf-ng" in conflits
+
+
+def test_la_cle_peut_rejoindre_le_maillage():
+    control = (RACINE / "secubox-mobile/debian/control").read_text(encoding="utf-8")
+    assert "secubox-p2p" in control and "secubox-annuaire" in control

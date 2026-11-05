@@ -14,6 +14,8 @@ Architecture: all
 Depends: ${misc:Depends},
  secubox-minimal,
  secubox-hardening,
+ secubox-p2p,
+ secubox-annuaire,
  secubox-freebox (>= 0.6.3~),
  secubox-ad-guard,
  unbound,
