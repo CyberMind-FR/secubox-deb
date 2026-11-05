@@ -1,3 +1,9 @@
+secubox-premier-pas (0.9.11-1~trixie1) trixie; urgency=medium
+
+  * Kiosque d'une clé mobile : page de protection à l'ouverture (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 06:33:49 +0100
+
 secubox-premier-pas (0.9.10-1~trixie1) trixie; urgency=medium
 
   * Page web : adresses pour configurer depuis un autre appareil, dès le premier

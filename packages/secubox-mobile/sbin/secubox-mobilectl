@@ -5,105 +5,196 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """SecuBox-Deb :: secubox-mobilectl (#3467) — la clé USB protège le réseau où elle est branchée, puis se retire.
 
-activer : listes de blocage, Unbound et port 53 ouverts au réseau local, puis la Freebox distribue la clé comme SEUL DNS
-(jamais de secondaire : il contourne le blocage, essai du 2026-11-04). Idempotent : relancé par une minuterie, il suit
-un changement d'adresse quand la clé passe sur un autre PC.
-retirer : rend à la Freebox le DNS relevé avant l'activation. Si la clé est arrachée, l'utilisateur le fait à la main.
-Root : Unbound, nftables et /etc. La Freebox reste pilotée sous secubox-freebox."""
+activer : listes de blocage, Unbound et port 53 ouverts au réseau local, puis la Freebox distribue la clé comme SEUL DNS,
+en IPv4 et en IPv6 (jamais de secondaire : il contourne le blocage, essai du 2026-11-04). Relancé par une minuterie.
+retirer : rend à la Freebox ce qui a été relevé. Clé arrachée : l'utilisateur le fait à la main.
+
+RÈGLES, payées à la relecture : le réseau ne vise la clé que si son DNS répond vraiment ; l'origine est écrite et
+synchronisée AVANT de toucher la Freebox ; on ne prend jamais une adresse de la clé pour une origine ; un réglage
+changé par l'utilisateur n'est ni réécrit ni écrasé. Root : Unbound, nftables. Freebox sous secubox-freebox."""
 from __future__ import annotations
 
+import fcntl
 import ipaddress
 import json
+import os
 import subprocess
 import sys
-import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
-ETAT = Path("/var/lib/secubox/mobile/etat.json")
+# Arbre root, hors de /var/lib/secubox (compte partagé), persistant sur la clé.
+ETAT = Path("/var/lib/secubox-mobile/etat.json")
+VERROU = Path("/run/secubox-mobile.lock")
 RETIRE = Path("/run/secubox-mobile.retire")      # geste manuel : tient jusqu'au prochain démarrage
 UNBOUND = Path("/etc/unbound/unbound.conf.d/60-secubox-mobile.conf")
+NFT = Path("/etc/nftables.d/zz-secubox-mobile.nft")
 AUDIT = Path("/var/log/secubox/audit.log")
 SOURCE_LISTES = Path("/var/lib/secubox-dns-listes/sources/95-secubox-adblock.conf")
 STATUT_LISTES = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
 COMMENTAIRE = "secubox-mobile"
+RFC1918 = [ipaddress.ip_network(r) for r in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
+TUNNELS = ("wg", "tun", "tap", "lo", "docker", "veth")
 
 Lanceur = Callable[[List[str]], Tuple[int, str]]
 
 
 def lancer(cmd: List[str]) -> Tuple[int, str]:
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=False)
     except (OSError, subprocess.TimeoutExpired) as e:
         return 1, str(e)
     return r.returncode, (r.stdout + r.stderr).strip()
 
 
+def audit(action: str, **champs) -> None:
+    ligne = {"ts": datetime.now(timezone.utc).isoformat(), "module": "mobile", "action": action, **champs}
+    try:
+        fd = os.open(AUDIT, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        with os.fdopen(fd, "a") as f:
+            f.write(json.dumps(ligne) + "\n")
+    except OSError as e:
+        print(f"audit impossible : {e}", file=sys.stderr)
+
+
 def freebox(run: Lanceur, *args: str) -> Tuple[int, dict]:
-    rc, sortie = run(["runuser", "-u", "secubox-freebox", "--", "/usr/sbin/freeboxctl", *args])
+    # 15 s par appel : tout le retrait doit tenir dans le délai d'arrêt de l'unité.
+    rc, sortie = run(["timeout", "15", "runuser", "-u", "secubox-freebox", "--", "/usr/sbin/freeboxctl", *args])
     try:
         return rc, json.loads(sortie.splitlines()[-1])
     except (ValueError, IndexError):
         return rc or 1, {"erreur": sortie[:200]}
 
 
-def adresse_lan(run: Lanceur) -> Tuple[str, str]:
-    """(IPv4 privée de la route par défaut, interface), vides sans réseau."""
+def _ips(valeurs, famille: int) -> Optional[List[str]]:
+    """La liste si elle est bien formée, sinon None : une réponse anormale n'est pas « aucun DNS »."""
+    if not isinstance(valeurs, list):
+        return None
+    try:
+        return valeurs if all(ipaddress.ip_address(v).version == famille for v in valeurs) else None
+    except (ValueError, TypeError):
+        return None
+
+
+def adresse_lan(run: Lanceur) -> dict:
+    """{ip, dev, reseau, passerelle} sur un réseau RFC 1918 avec passerelle, jamais un tunnel ; {} sinon."""
     rc, s = run(["ip", "-j", "route", "get", "1.1.1.1"])
     try:
         r = json.loads(s)[0] if rc == 0 else {}
     except (ValueError, IndexError):
-        r = {}
-    ip, dev = r.get("prefsrc", ""), r.get("dev", "")
+        return {}
+    ip, dev, gw = r.get("prefsrc", ""), r.get("dev", ""), r.get("gateway", "")
+    if not ip or not dev or not gw or dev.startswith(TUNNELS):
+        return {}
+    rc, s = run(["ip", "-j", "-4", "addr", "show", "dev", dev])
     try:
-        return (ip, dev) if ipaddress.IPv4Address(ip).is_private else ("", "")
-    except ValueError:
-        return "", ""
+        infos = json.loads(s)[0]["addr_info"] if rc == 0 else []
+        lg = next(a["prefixlen"] for a in infos if a.get("local") == ip)
+        reseau = ipaddress.ip_network(f"{ip}/{lg}", strict=False)
+        adresse, porte = ipaddress.ip_address(ip), ipaddress.ip_address(gw)
+    except (ValueError, IndexError, KeyError, StopIteration):
+        return {}
+    if not any(adresse in b for b in RFC1918) or porte not in reseau:
+        return {}
+    return {"ip": ip, "dev": dev, "reseau": str(reseau), "passerelle": gw}
 
 
-def rendu_unbound(ip: str) -> str:
-    # ip-freebind : Unbound peut précéder l'adresse. Réseau local privé seulement, jamais d'écoute publique.
-    return ("server:\n    ip-freebind: yes\n    interface: 127.0.0.1\n    interface: ::1\n"
-            f"    interface: {ip}\n"
-            "    access-control: 10.0.0.0/8 allow\n    access-control: 172.16.0.0/12 allow\n"
-            "    access-control: 192.168.0.0/16 allow\n")
+def adresse_v6(run: Lanceur, dev: str) -> dict:
+    """{ip6, reseau6} : adresse globale stable de l'interface, jamais une adresse temporaire ; {} sinon."""
+    rc, s = run(["ip", "-j", "-6", "addr", "show", "dev", dev, "scope", "global"])
+    try:
+        infos = json.loads(s)[0]["addr_info"] if rc == 0 else []
+    except (ValueError, IndexError):
+        return {}
+    for a in infos:
+        if a.get("temporary") or a.get("deprecated"):
+            continue
+        try:
+            ip = ipaddress.IPv6Address(a["local"])
+            if ip in ipaddress.ip_network("2000::/3"):
+                return {"ip6": str(ip), "reseau6": str(ipaddress.ip_network(f"{ip}/{a['prefixlen']}", strict=False))}
+        except (ValueError, KeyError):
+            continue
+    return {}
+
+
+def rendu_unbound(lan: dict) -> str:
+    # ip-freebind : Unbound peut précéder l'adresse. Réseau local seulement, jamais d'écoute publique.
+    t = ["server:", "    ip-freebind: yes", "    interface: 127.0.0.1", "    interface: ::1", f"    interface: {lan['ip']}"]
+    t.append(f"    access-control: {lan['reseau']} allow")
+    if lan.get("ip6"):
+        t += [f"    interface: {lan['ip6']}", f"    access-control: {lan['reseau6']} allow"]
+    return "\n".join(t) + "\n"
+
+
+def rendu_nft(lan: dict) -> str:
+    t = []
+    for proto in ("udp", "tcp"):
+        t.append(f'add rule inet filter input iifname "{lan["dev"]}" ip saddr {lan["reseau"]} {proto} dport 53 accept comment "{COMMENTAIRE}"')
+        if lan.get("ip6"):
+            t.append(f'add rule inet filter input iifname "{lan["dev"]}" ip6 saddr {lan["reseau6"]} {proto} dport 53 accept comment "{COMMENTAIRE}"')
+    return "\n".join(t) + "\n"
 
 
 def lire_etat(chemin: Path = ETAT) -> dict:
     try:
-        return json.loads(chemin.read_text())
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd) as f:
+            e = json.load(f)
+        return e if isinstance(e, dict) else {}
     except (OSError, ValueError):
         return {}
 
 
 def ecrire_etat(e: dict, chemin: Path = ETAT) -> None:
-    chemin.parent.mkdir(parents=True, exist_ok=True)
+    """Atomique et synchronisé : la coupure qui suit ne doit pas perdre l'origine."""
+    chemin.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     tmp = chemin.with_suffix(".tmp")
-    tmp.write_text(json.dumps(e))
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(e, f)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(chemin)
+    d = os.open(chemin.parent, os.O_RDONLY)
+    try:
+        os.fsync(d)
+    finally:
+        os.close(d)
+
+
+def _poser_fichier(chemin: Path, contenu: str) -> None:
+    tmp = chemin.with_suffix(".tmp")
+    tmp.write_text(contenu)
+    tmp.chmod(0o644)      # lu par l'utilisateur unbound, malgré le UMask de l'unité
     tmp.replace(chemin)
 
 
-def audit(action: str, **champs) -> None:
-    try:
-        with AUDIT.open("a") as f:
-            f.write(json.dumps({"ts": int(time.time()), "module": "mobile", "action": action, **champs}) + "\n")
-    except OSError:
-        pass
-
-
-def poser_unbound(run: Lanceur, ip: str, conf: Path = UNBOUND) -> Optional[str]:
-    """Écrit, valide, redémarre ; retour au fichier précédent si la validation échoue."""
-    voulu = rendu_unbound(ip)
+def poser_unbound(run: Lanceur, lan: dict, conf: Path = UNBOUND) -> Optional[str]:
+    """Écrit, valide, redémarre ; retour au fichier précédent à tout échec."""
+    voulu = rendu_unbound(lan)
     avant = conf.read_text() if conf.exists() else None
     if avant == voulu:
         return None
-    conf.write_text(voulu)
+
+    def defaire():
+        if avant is None:
+            conf.unlink(missing_ok=True)
+        else:
+            _poser_fichier(conf, avant)
+
+    _poser_fichier(conf, voulu)
     rc, s = run(["unbound-checkconf"])
     if rc != 0:
-        conf.unlink() if avant is None else conf.write_text(avant)
+        defaire()
         return "unbound-checkconf : " + s[:160]
     rc, s = run(["systemctl", "restart", "unbound"])
-    return None if rc == 0 else "unbound : " + s[:160]
+    if rc != 0:
+        defaire()
+        run(["systemctl", "restart", "unbound"])
+        return "unbound : " + s[:160]
+    return None
 
 
 def poignees_nft(sortie: str) -> List[str]:
@@ -111,135 +202,226 @@ def poignees_nft(sortie: str) -> List[str]:
             if f'comment "{COMMENTAIRE}"' in ligne and "handle " in ligne]
 
 
-def fermer_nft(run: Lanceur) -> None:
-    rc, s = run(["nft", "-a", "list", "chain", "inet", "filter", "input"])
+def _regles_en_place(run: Lanceur) -> Tuple[int, str]:
+    return run(["nft", "-a", "list", "chain", "inet", "filter", "input"])
+
+
+def poser_nft(run: Lanceur, lan: dict, fichier: Path = NFT) -> Optional[str]:
+    """Fichier relu à chaque rechargement de nftables. Rien ne bouge si tout est déjà en place : pas de micro-coupure."""
+    voulu = rendu_nft(lan)
+    rc, liste = _regles_en_place(run)
+    if rc != 0:
+        return "nft : chaîne input illisible"
+    anciennes = poignees_nft(liste)
+    if fichier.exists() and fichier.read_text() == voulu and len(anciennes) == voulu.count("\n"):
+        return None
+    tmp = fichier.with_suffix(".tmp")      # .tmp : hors du motif *.nft tant qu'il n'est pas validé
+    tmp.write_text(voulu)
+    rc, s = run(["nft", "-f", str(tmp)])
+    if rc != 0:
+        tmp.unlink(missing_ok=True)
+        return "nft : " + s[:160]
+    tmp.replace(fichier)
+    for h in anciennes:     # nouvelles règles d'abord, anciennes ensuite
+        run(["nft", "delete", "rule", "inet", "filter", "input", "handle", h])
+    return None
+
+
+def fermer_nft(run: Lanceur, fichier: Path = NFT) -> None:
+    fichier.unlink(missing_ok=True)
+    rc, s = _regles_en_place(run)
     for h in poignees_nft(s) if rc == 0 else []:
         run(["nft", "delete", "rule", "inet", "filter", "input", "handle", h])
 
 
-def ouvrir_nft(run: Lanceur, dev: str) -> None:
-    """Règles ajoutées à la chaîne input en DEFAULT DROP, seulement sur l'interface du réseau local."""
-    fermer_nft(run)
-    for proto in ("udp", "tcp"):
-        run(["nft", "insert", "rule", "inet", "filter", "input", "iifname", dev, "ip", "saddr",
-             "{ 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 }", proto, "dport", "53", "accept",
-             "comment", COMMENTAIRE])
+def dns_repond(run: Lanceur, ip: str) -> bool:
+    # Une réponse, quelle qu'elle soit : hors ligne, la racine peut échouer, le serveur répond quand même.
+    rc, _ = run(["dig", f"@{ip}", "+time=2", "+tries=2", "+short", "secubox.in"])
+    return rc == 0
 
 
-def regler_freebox(run: Lanceur, ip: str, etat: dict) -> str:
-    """Rend l'état Freebox ; ne relève le DNS d'origine qu'une fois, jamais notre propre adresse."""
+def regler_freebox(run: Lanceur, lan: dict, etat: dict, etat_f: Path) -> str:
+    ip, ip6 = lan["ip"], lan.get("ip6", "")
     rc, lu = freebox(run, "dns-lire")
-    if rc != 0:
+    dns = _ips(lu.get("dns"), 4) if rc == 0 else None
+    if rc != 0 or dns is None:
         return "autorisation_requise"
-    dns = lu.get("dns", [])
-    ancienne = etat.get("ip")
+    posee = etat.get("ip_posee")
+    if "dns_origine" in etat and etat.get("reseau") != lan["passerelle"]:
+        audit("autre_reseau", origine_reseau=etat.get("reseau"), passerelle=lan["passerelle"])
+        return "autre_reseau"       # l'origine relevée ne vaut que pour SA Freebox : on ne touche à rien
+    if "dns_origine" in etat and dns not in ([ip], [posee]):
+        return "repris"             # changé par l'utilisateur : on ne le réécrit pas
     if "dns_origine" not in etat:
         if dns == [ip]:
-            return "actif"            # réglé à la main avant nous : rien à rendre au retrait
-        etat["dns_origine"] = dns
-    if ancienne and ancienne != ip and etat.get("mac"):
-        freebox(run, "ip-fixe-retirer", etat["mac"])     # autre PC : l'ancienne réservation ne sert plus
-    rc, r = freebox(run, "ip-fixe-poser", ip)
+            audit("origine_inconnue", dns=dns)    # état perdu : surtout pas notre adresse comme origine
+            return "origine_inconnue"
+        rc, b = freebox(run, "ip-fixe-lire", ip)
+        if rc != 0:
+            return "droit_requis"
+        etat.update(dns_origine=dns, reseau=lan["passerelle"], mac=b.get("mac", ""), bail_origine=b.get("ip", ""))
+        ecrire_etat(etat, etat_f)
+    rc, _ = freebox(run, "ip-fixe-poser", ip)
     if rc != 0:
         return "droit_requis"
-    etat["mac"] = r.get("mac", "")
     if dns != [ip]:
         rc, _ = freebox(run, "dns-regler", ip)
         if rc != 0:
             return "droit_requis"
         audit("dns_freebox_pose", avant=dns, apres=[ip])
+    etat["ip_posee"] = ip
+    ecrire_etat(etat, etat_f)
+    regler_freebox_v6(run, ip6, etat, etat_f)
     return "actif"
 
 
+def regler_freebox_v6(run: Lanceur, ip6: str, etat: dict, etat_f: Path) -> None:
+    """Sans quoi les appareils en double pile contournent le blocage par le DNS IPv6 annoncé."""
+    rc, lu = freebox(run, "dns6-lire")
+    dns6 = _ips(lu.get("dns"), 6) if rc == 0 else None
+    if dns6 is None:
+        etat["ipv6"] = "inconnu"
+    elif not ip6:
+        etat["ipv6"] = "contournement_possible"
+    else:
+        if "dns6_origine" not in etat and dns6 != [ip6]:
+            etat["dns6_origine"] = {"use_custom_dns": bool(lu.get("use_custom_dns")), "dns": dns6}
+            ecrire_etat(etat, etat_f)
+        rc = 0 if dns6 == [ip6] and lu.get("use_custom_dns") else freebox(run, "dns6-regler", "1", ip6)[0]
+        if rc == 0:
+            etat["ip6_posee"] = ip6
+        etat["ipv6"] = "actif" if rc == 0 else "contournement_possible"
+    ecrire_etat(etat, etat_f)
+
+
+def _rendre(run: Lanceur, etat: dict) -> Tuple[bool, str]:
+    """(terminé, détail). Non terminé : l'état reste, pour retenter."""
+    if "dns_origine" not in etat:
+        return True, "rien_a_rendre"
+    rc, lu = freebox(run, "dns-lire")
+    dns = _ips(lu.get("dns"), 4) if rc == 0 else None
+    if dns is None:
+        return False, "freebox_injoignable"
+    detail = "laisse"
+    if dns == [etat.get("ip_posee")]:
+        rc, _ = freebox(run, "dns-regler", ",".join(etat["dns_origine"]))
+        if rc != 0:
+            return False, "freebox_refuse"
+        detail = "rendu"
+    audit("dns_freebox_" + detail, apres=etat["dns_origine"] if detail == "rendu" else dns)
+    if etat.get("mac"):         # le bail seulement après le DNS rendu
+        if etat.get("bail_origine"):
+            freebox(run, "ip-fixe-poser", etat["bail_origine"])
+        else:
+            freebox(run, "ip-fixe-retirer", etat["mac"])
+    o6 = etat.get("dns6_origine")
+    if o6 and etat.get("ip6_posee"):
+        rc, lu6 = freebox(run, "dns6-lire")
+        if rc == 0 and _ips(lu6.get("dns"), 6) == [etat["ip6_posee"]]:
+            freebox(run, "dns6-regler", "1" if o6.get("use_custom_dns") else "0", ",".join(o6.get("dns", [])))
+    return True, detail
+
+
+def _arrete_en_cours(run: Lanceur) -> bool:
+    return run(["systemctl", "is-system-running"])[1].strip() == "stopping"
+
+
+def _retirer(run: Lanceur, etat_f: Path, conf: Path, nft: Path) -> dict:
+    etat = lire_etat(etat_f)
+    fini, detail = _rendre(run, etat)
+    if not fini:
+        # DNS du réseau toujours sur la clé : son DNS reste ouvert, l'état reste pour retenter.
+        audit("retrait_incomplet", cause=detail)
+        return {"etat": "dns_non_rendu", "detail": detail}
+    fermer_nft(run, nft)
+    if conf.exists():
+        conf.unlink()
+        if not _arrete_en_cours(run):
+            run(["systemctl", "restart", "unbound"])
+    etat_f.unlink(missing_ok=True)
+    return {"etat": "retiree", "detail": detail}
+
+
 def activer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, conf: Path = UNBOUND,
-            source: Path = SOURCE_LISTES) -> dict:
+            source: Path = SOURCE_LISTES, nft: Path = NFT) -> dict:
     if retire.exists():
-        return {"etat": "retiree"}
-    ip, dev = adresse_lan(run)
-    if not ip:
+        # un retrait manuel resté en attente (Freebox injoignable) est retenté ici
+        return _retirer(run, etat_f, conf, nft) if lire_etat(etat_f) else {"etat": "retiree"}
+    lan = adresse_lan(run)
+    if not lan:
         return {"etat": "pas_de_reseau"}
-    res = {"ip": ip, "listes": source.exists()}
+    lan.update(adresse_v6(run, lan["dev"]))
+    res = {"ip": lan["ip"], "listes": source.exists()}
     if not source.exists():
         rc, _ = run(["/usr/sbin/secubox-adblock-sync", "sync"])
         res["listes"] = rc == 0
-    err = poser_unbound(run, ip, conf)
-    if err:
-        return {**res, "etat": "erreur_dns", "erreur": err}
-    ouvrir_nft(run, dev)
+    for err in (poser_unbound(run, lan, conf), poser_nft(run, lan, nft)):
+        if err:
+            audit("activation_refusee", cause=err)
+            return {**res, "etat": "erreur_dns", "erreur": err}
+    if not dns_repond(run, lan["ip"]):
+        audit("activation_refusee", cause="dns muet")
+        return {**res, "etat": "erreur_dns", "erreur": "Le DNS de la clé ne répond pas : réseau laissé tel quel."}
     etat = lire_etat(etat_f)
-    res["freebox"] = regler_freebox(run, ip, etat)
-    etat["ip"] = ip
-    ecrire_etat(etat, etat_f)
+    res["freebox"] = regler_freebox(run, lan, etat, etat_f)
     res["etat"] = "actif" if res["listes"] and res["freebox"] == "actif" else "partiel"
     return res
 
 
 def retirer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, conf: Path = UNBOUND,
-            manuel: bool = False) -> dict:
+            manuel: bool = False, nft: Path = NFT) -> dict:
     if manuel:
         retire.touch()
-    etat = lire_etat(etat_f)
-    res = {"etat": "retiree", "dns_rendu": False}
-    if "dns_origine" in etat:
-        rc, lu = freebox(run, "dns-lire")
-        # le DNS n'est rendu que s'il vise encore la clé : un réglage posé depuis par l'utilisateur reste.
-        if rc == 0 and lu.get("dns") == [etat.get("ip")]:
-            rc, _ = freebox(run, "dns-regler", ",".join(etat["dns_origine"]))
-            res["dns_rendu"] = rc == 0
-        elif rc == 0:
-            res["dns_rendu"] = True
-        if etat.get("mac"):
-            freebox(run, "ip-fixe-retirer", etat["mac"])
-        if not res["dns_rendu"]:
-            res["etat"] = "dns_non_rendu"     # état gardé : un prochain retrait ou démarrage saura le rendre
-            audit("retrait_incomplet", origine=etat["dns_origine"])
-            return res
-        audit("dns_freebox_rendu", apres=etat["dns_origine"])
-    fermer_nft(run)
-    if conf.exists():
-        conf.unlink()
-        run(["systemctl", "restart", "unbound"])
-    etat_f.unlink(missing_ok=True)
-    return res
+        audit("retrait_manuel")
+    return _retirer(run, etat_f, conf, nft)
 
 
 def etat_complet(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE,
                  source: Path = SOURCE_LISTES, statut: Path = STATUT_LISTES) -> dict:
     """Pour la page : aucune écriture, et jamais le DNS d'origine ni la MAC."""
-    ip, _ = adresse_lan(run)
-    r = {"ip": ip, "retiree": retire.exists(), "listes": source.exists(), "bloques": 0, "freebox": "", "dns_freebox": []}
+    lan = adresse_lan(run)
+    e = lire_etat(etat_f)
+    r = {"ip": lan.get("ip", ""), "retiree": retire.exists(), "listes": source.exists(), "bloques": 0, "freebox": "",
+         "dns_freebox": [], "ipv6": e.get("ipv6", ""), "retrait_attente": retire.exists() and bool(e)}
     try:
         r["bloques"] = int(json.loads(statut.read_text()).get("blocked", 0))
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, AttributeError):
         pass
     rc, lu = freebox(run, "dns-lire")
-    if rc != 0:
+    dns = _ips(lu.get("dns"), 4) if rc == 0 else None
+    if dns is None:
         r["freebox"] = "autorisation_requise"
         return r
-    r["dns_freebox"] = lu.get("dns", [])
-    if r["dns_freebox"] == [ip]:
-        r["freebox"] = "actif"
-    elif "dns_origine" in lire_etat(etat_f) or lire_etat(etat_f):
-        r["freebox"] = "droit_requis"
+    r["dns_freebox"] = dns
+    if "dns_origine" in e and e.get("reseau") != lan.get("passerelle"):
+        r["freebox"] = "autre_reseau"
+    elif dns == [r["ip"]] and r["ip"]:
+        r["freebox"] = "actif" if "dns_origine" in e else "origine_inconnue"
+    elif "dns_origine" in e and dns != [e.get("ip_posee")]:
+        r["freebox"] = "repris"
     else:
-        r["freebox"] = "autorisation_requise"
+        r["freebox"] = "droit_requis"
     return r
 
 
 def main(argv: List[str]) -> int:
     cmd = argv[0] if argv else "etat"
-    if cmd == "activer":
-        r = activer()
-    elif cmd == "retirer":
-        r = retirer(manuel="--manuel" in argv)
-    elif cmd == "reactiver":
-        RETIRE.unlink(missing_ok=True)
-        r = activer()
-    elif cmd == "etat":
-        r = etat_complet()
-    else:
+    if cmd not in ("activer", "retirer", "reactiver", "etat"):
         print("usage : secubox-mobilectl activer|retirer [--manuel]|reactiver|etat", file=sys.stderr)
         return 2
+    if cmd == "etat":
+        r = etat_complet()
+    else:
+        ETAT.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with open(VERROU, "w") as v:
+            fcntl.flock(v, fcntl.LOCK_EX)      # le suivi et un retrait manuel ne se croisent jamais
+            if cmd == "activer":
+                r = activer()
+            elif cmd == "retirer":
+                r = retirer(manuel="--manuel" in argv)
+            else:
+                RETIRE.unlink(missing_ok=True)
+                r = activer()
     print(json.dumps(r))
     return 0 if r.get("etat") not in ("erreur_dns", "dns_non_rendu") else 1
 

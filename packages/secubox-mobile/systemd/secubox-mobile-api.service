@@ -12,7 +12,7 @@ Group=secubox
 WorkingDirectory=/usr/lib/secubox/mobile
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStartPre=+/bin/rm -f /run/secubox/mobile.sock
-ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/mobile.sock --workers 1 --log-level warning
+ExecStart=/usr/sbin/secubox-mobile-api
 ExecStartPost=/bin/sh -c 'for i in $(seq 1 600); do [ -S /run/secubox/mobile.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/mobile.sock'
 TimeoutStartSec=120
 Restart=on-failure

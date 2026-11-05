@@ -1,9 +1,16 @@
 #!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 set -e
 if [ "$1" = configure ]; then
   getent passwd secubox-mobile >/dev/null 2>&1 || adduser --system --no-create-home --home /nonexistent \
     --shell /usr/sbin/nologin --ingroup secubox --gecos "SecuBox Mobile" secubox-mobile
+  install -d -m 0700 -o root -g root /var/lib/secubox-mobile
+  if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+    apparmor_parser -r /etc/apparmor.d/secubox-mobile-api >/dev/null 2>&1 || echo "secubox-mobile : profil AppArmor non chargé" >&2
+  fi
   systemctl daemon-reload 2>/dev/null || true
+  # enable sans --now : l'activation ne doit jamais tourner pendant la construction de l'image ni à la mise à jour.
   systemctl enable secubox-mobile.service secubox-mobile-suivi.timer 2>/dev/null || true
   systemctl enable --now secubox-mobile-api.service 2>/dev/null || true
 fi

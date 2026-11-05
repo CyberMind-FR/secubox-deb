@@ -262,15 +262,43 @@ class Freebox:
             i["conforme"] = i["actuel"] == i["cible"]
         return {"items": items, "ecarts": sum(1 for i in items if not i["conforme"]), "ip_box": ip_box}
 
+    def lire_dns(self):
+        """Réponse anormale = erreur, jamais « aucun DNS » : la clé relève ici ce qu'elle rendra."""
+        dns = (self.client.lire("dhcp/config/") or {}).get("dns")
+        if not isinstance(dns, list):
+            raise C.ErreurFreebox("Réponse DHCP inattendue de la Freebox.")
+        return [x for x in dns if x]
+
+    def lire_dns6(self):
+        c = self.client.lire("dhcpv6/config/") or {}
+        if not isinstance(c.get("dns"), list):
+            raise C.ErreurFreebox("Réponse DHCPv6 inattendue de la Freebox.")
+        return {"use_custom_dns": bool(c.get("use_custom_dns")), "dns": [x for x in c["dns"] if x]}
+
+    def regler_dns6(self, personnalise, serveurs):
+        """DNS IPv6 annoncé (#3467) : sans lui, les appareils en double pile contournent le blocage."""
+        if not self.client.session:
+            self.client.ouvrir_session()
+        if not self.client.droits.get("settings"):
+            raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox ».")
+        avant = self.lire_dns6()
+        self.client.ecrire("PUT", "dhcpv6/config/", {"use_custom_dns": bool(personnalise), "dns": list(serveurs)})
+        apres = self.lire_dns6()
+        self._cache.clear()
+        self.journal({"action": "dns6", "avant": avant, "apres": apres})
+        if apres["dns"] != list(serveurs) or apres["use_custom_dns"] != bool(personnalise):
+            raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement de DNS IPv6.")
+        return apres
+
     def regler_dns(self, serveurs):
         """DNS distribué par le DHCP (#3467) : uniquement la clé « dns ». Liste vide = la Freebox se donne elle-même."""
         if not self.client.session:
             self.client.ouvrir_session()
         if not self.client.droits.get("settings"):
             raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox ».")
-        avant = self._lire_autoconfig()["dns"]
+        avant = self.lire_dns()
         self.client.ecrire("PUT", "dhcp/config/", {"dns": (list(serveurs) + [""] * 6)[:6]})
-        apres = self._lire_autoconfig()["dns"]
+        apres = self.lire_dns()
         self._cache.clear()
         self.journal({"action": "dns_dhcp", "avant": avant, "apres": apres, "voulu": list(serveurs)})
         if apres != list(serveurs):

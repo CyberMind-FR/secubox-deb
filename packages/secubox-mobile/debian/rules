@@ -4,6 +4,8 @@
 
 override_dh_auto_install:
 	install -D -m 755 sbin/secubox-mobilectl debian/secubox-mobile/usr/sbin/secubox-mobilectl
+	install -m 755 sbin/secubox-mobile-api debian/secubox-mobile/usr/sbin/secubox-mobile-api
+	install -D -m 644 apparmor/secubox-mobile-api debian/secubox-mobile/etc/apparmor.d/secubox-mobile-api
 	install -d debian/secubox-mobile/usr/lib/secubox/mobile/api
 	install -m 644 api/*.py debian/secubox-mobile/usr/lib/secubox/mobile/api/
 	install -d debian/secubox-mobile/usr/share/secubox/www debian/secubox-mobile/usr/share/secubox/menu.d

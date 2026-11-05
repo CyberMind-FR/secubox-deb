@@ -2,6 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 [Unit]
 Description=SecuBox Mobile — suivi toutes les 2 minutes (#3467)
+PartOf=secubox-mobile.service
 
 [Timer]
 OnBootSec=2min

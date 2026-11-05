@@ -442,7 +442,8 @@ determine_url() {
         for aport in 9078 9080; do
             page="$(curl -s --connect-timeout 2 --max-time 5 --resolve "admin.localhost:$aport:127.0.0.1" "http://admin.localhost:$aport/" 2>/dev/null)" || continue
             if printf '%s' "$page" | grep -q '<title>SecuBox' && ! printf '%s' "$page" | grep -q 'id="featgrid"'; then
-                echo "http://admin.localhost:$aport/"
+                # #3467 : clé mobile, sa page de protection plutôt que le tableau de bord.
+                if [ -x /usr/sbin/secubox-mobilectl ]; then echo "http://admin.localhost:$aport/mobile/"; else echo "http://admin.localhost:$aport/"; fi
                 return
             fi
         done

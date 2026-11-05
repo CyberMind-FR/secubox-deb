@@ -7,3 +7,13 @@ After=secubox-mobile.service
 [Service]
 Type=oneshot
 ExecStart=-/usr/sbin/secubox-mobilectl activer
+UMask=0027
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=no
+ReadWritePaths=/etc/unbound/unbound.conf.d /etc/nftables.d /var/lib/secubox-mobile /var/lib/secubox-dns-listes /var/lib/secubox/ad-guard /var/lib/secubox/freebox /var/log/secubox /run
+StateDirectory=secubox-mobile
+StateDirectoryMode=0700
