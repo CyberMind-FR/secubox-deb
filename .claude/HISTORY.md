@@ -2817,3 +2817,8 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-10-12 — Image lite RPi400 (closes #2497)
 - matrice-images.py : rpi400 publie lite, isp, full ; option --profil pour forcer un profil. build-image.yml : choix du profil (auto/lite/isp/full) au déclenchement manuel. 4 tests de plus.
+
+## 2026-11-05 — Bêta 1 : release v3.0.0-beta.1 (ref #3480, #3467)
+- Validée par le propriétaire sur VM. Étiquette bêta = matrice complète : 6 cartes × lite, minimal, isp, full (matrice-images.py `complet`), plus les live dont la clé mobile amd64.
+- release.yml : un seul téléchargement des artefacts, release posée sur /mnt si plus grand (scripts/release-disque.sh). Plafond de construction d'image porté à 340 min.
+- Non testé au moment de l'étiquette : Freebox réelle, IPv6, vraie clé sur un autre PC, TV Privacy sur vrai téléviseur (dit dans les notes).

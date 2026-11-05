@@ -68,7 +68,7 @@ on:
         description: 'Profil à construire (auto = ceux que la matrice publie pour la carte) — ex. lite pour une image RPi400 légère (#2497)'
         required: false
         type: choice
-        options: [auto, lite, isp, full, minimal]
+        options: [auto, complet, lite, isp, full, minimal]
         default: auto
       kiosk:
         description: 'rpi400/rpi4 only: GUI kiosk (chromium fullscreen dashboard). auto = inclus pour rpi400/rpi4 (#2495)'
@@ -113,7 +113,10 @@ jobs:
           set -euo pipefail
           cartes='${{ inputs.board || github.event.inputs.board || 'defaut' }}'
           [ "$cartes" = "all" ] && cartes=defaut
-          m=$(python3 .github/scripts/matrice-images.py --cartes "$cartes" --profil '${{ github.event.inputs.profile || 'auto' }}')
+          profil='${{ github.event.inputs.profile || 'auto' }}'
+          # Une étiquette de bêta publie toute la matrice (#3480).
+          case "$GITHUB_REF" in refs/tags/v*-beta*) profil=complet ;; esac
+          m=$(python3 .github/scripts/matrice-images.py --cartes "$cartes" --profil "$profil")
           echo "$m" | python3 -m json.tool
           echo "include=$(echo "$m" | python3 -c 'import sys,json; print(json.dumps(json.load(sys.stdin)["include"]))')" >> "$GITHUB_OUTPUT"
 
@@ -320,8 +323,8 @@ jobs:
           sudo chown -R $(id -u):$(id -g) output/
         # 90 min etait sous la duree reelle : les constructions rpi400 mesurees
         # tiennent 93, 105 et 114 min. Le plafond ne coupait donc pas une
-        # derive, il coupait le travail normal.
-        timeout-minutes: 180
+        # derive, il coupait le travail normal. 340 (#3480) : `full` arm64 sous QEMU, sous la limite de 360 min d'un job hébergé.
+        timeout-minutes: 340
 
       - name: List output
         run: |

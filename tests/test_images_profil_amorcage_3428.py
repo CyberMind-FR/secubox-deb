@@ -18,7 +18,7 @@ WF_LIVE = (RACINE / ".github/workflows/build-all-live-usb.yml").read_text(encodi
 def test_live_usb_profil_lite_par_defaut_et_all_pour_l_ancien_comportement():
     assert 'IMAGE_PROFILE="lite"' in LIVE
     assert '--profile)        IMAGE_PROFILE="${2#secubox-}"' in LIVE
-    assert "lite|minimal|isp|full|all) ;;" in LIVE
+    assert "lite|minimal|mobile|isp|full|all) ;;" in LIVE
     # Hors « all », la fermeture Depends du méta-paquet seule ; le sélecteur échoue franchement s'il manque.
     assert 'if [[ "${IMAGE_PROFILE}" != "all" ]]; then' in LIVE
     assert re.search(r'select-profile-debs\.py" "\$\{_tous\}" "\$\{IMAGE_PROFILE\}" "\$\{ROOTFS\}/tmp/secubox-debs" amd64', LIVE)
@@ -40,7 +40,8 @@ def test_rpi_profil_lite_par_defaut_et_kiosque_ajoute():
 
 
 def test_workflow_live_usb_profils_de_la_matrice():
-    assert WF_LIVE.count('extra_args: "--kiosk --profile lite"') == 2      # x64 et rpi400 (rpi-arm64 = lite + kiosque HDMI)
+    assert WF_LIVE.count('extra_args: "--kiosk --profile lite"') == 1      # rpi400 (rpi-arm64 = lite + kiosque HDMI)
+    assert 'extra_args: "--kiosk --profile mobile"' in WF_LIVE         # x64 : la clé mobile (#3470)
     assert "--board mochabin \\\n            --profile lite" in WF_LIVE  # image eMMC embarquée : lite
 
 

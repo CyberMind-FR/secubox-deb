@@ -40,6 +40,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Placer la release sur le plus grand disque
+        run: bash scripts/release-disque.sh
+
       - name: Download image artifacts from the original run
         uses: actions/download-artifact@v4
         with:

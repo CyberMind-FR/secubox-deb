@@ -129,6 +129,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Matrice complète d'une bêta (#3480) : une trentaine d'images. La racine du runner n'y suffit pas, /mnt si elle a plus de place.
+      - name: Placer la release sur le plus grand disque
+        run: bash scripts/release-disque.sh
+
       - name: Download package artifacts
         uses: actions/download-artifact@v4
         with:
@@ -136,14 +140,9 @@ jobs:
           path: release/packages/
 
       - name: Download image artifacts
-        # `!= 'cancelled'` ET NON `== 'success'`. C'est le meme defaut que dans
-        # build-image.yml, mais UN ETAGE AU-DESSUS — et le commentaire de ce job
-        # affirme deja « ships whatever artifacts the upstream jobs managed to
-        # produce ». Il ne le faisait pas : une matrice partiellement reussie
-        # rend `result == 'failure'`, donc AUCUNE image n'etait recuperee, meme
-        # quand cinq sur six avaient abouti. C'est ce qui a vide v3.0.0-alpha.4
-        # de ses images (#1294).
-        if: needs.build-images.result != 'cancelled' && needs.build-images.result != 'skipped'
+        # `!= 'cancelled'` ET NON `== 'success'` : une matrice partiellement reussie rend `result == 'failure'`, et aucune image
+        # n'etait recuperee (v3.0.0-alpha.4, #1294). UN SEUL TELECHARGEMENT (#3480) : le motif couvre aussi les live, les
+        # recuperer deux fois doublait la place prise.
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -151,15 +150,10 @@ jobs:
           path: release/images/
           merge-multiple: true
 
-      - name: Download Live USB artifacts
-        # Meme raison que ci-dessus.
-        if: needs.build-live-usb.result != 'cancelled' && needs.build-live-usb.result != 'skipped'
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          pattern: secubox-*-${{ env.DEBIAN_SUITE }}
-          path: release/live-usb/
-          merge-multiple: true
+      - name: Trier les images live
+        run: |
+          mkdir -p release/live-usb
+          find release/images -maxdepth 1 -type f -name '*live*' -exec mv -t release/live-usb/ {} +
 
       - name: Generate release notes
         run: |
