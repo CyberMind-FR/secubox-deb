@@ -217,6 +217,13 @@
     pays:[{cc:'FR',bytes:10e9},{cc:'US',bytes:12e9},{cc:'DE',bytes:3.4e9},{cc:'IE',bytes:2.6e9},{cc:'SG',bytes:2e9},{cc:'NL',bytes:1.6e9},{cc:'CN',bytes:1.2e9}],
     clients:[{name:'PC Bureau',device:'a',bytes:12e9,usages:[{name:'web',bytes:6e9},{name:'cloud',bytes:3e9},{name:'social',bytes:3e9}],top_dst:[{host:'google.com',bytes:8.4e9}]},{name:'TV Salon',device:'b',bytes:10e9,usages:[{name:'streaming',bytes:10e9}],top_dst:[{host:'netflix.com',bytes:4.3e9}]},{name:'Smartphone',device:'c',bytes:6e9,usages:[{name:'social',bytes:3e9},{name:'web',bytes:3e9}],top_dst:[{host:'youtube.com',bytes:6.1e9}]}],
     sessions:[{application:'YouTube',bytes:11.2e9},{application:'Netflix',bytes:5.8e9},{application:'Chrome',bytes:3.2e9}],sugg:[{domain:'maegia.tv',bytes:5e6,reason:'1 sous-domaine non classé'}]};
+  // Démonstration du détail par appareil (#3486) : mêmes champs que /clients.
+  (function(){var n=Math.floor(Date.now()/1000),E=[
+    {r:.92,f:18420,a:60,u:[['web',5e9],['cloud',3e9],['social',2e9],['dns',1e9],['ai',.8e9]],t:[['google.com',4.2e9,'Google'],['github.com',2.1e9,'GitHub'],['chatgpt.com',.8e9,'ChatGPT'],['ovh.net',.6e9,'']],c:[['FR','France',5.1e9],['US','États-Unis',4.4e9],['DE','Allemagne',1.2e9]]},
+    {r:.98,f:2310,a:240,u:[['streaming',8.6e9],['web',.6e9],['dns',.1e9]],t:[['netflix.com',4.8e9,'Netflix'],['youtube.com',3.1e9,'YouTube'],['samsungcloud.com',.2e9,'Samsung']],c:[['US','États-Unis',4.9e9],['FR','France',3.8e9],['IE','Irlande',.6e9]]},
+    {r:.85,f:9140,a:7200,u:[['social',3e9],['streaming',1.5e9],['web',1.1e9]],t:[['instagram.com',2.2e9,'Instagram'],['tiktok.com',1.6e9,'TikTok'],['apple.com',.7e9,'Apple']],c:[['IE','Irlande',2.4e9],['US','États-Unis',2e9],['SG','Singapour',1.2e9]]}];
+    DEMO.clients.forEach(function(c,i){var e=E[i%3],o=function(x){return {name:x[0],bytes:x[1]};};c.down_bytes=c.bytes*e.r;c.up_bytes=c.bytes*(1-e.r);c.flows=e.f;c.last_seen=n-e.a;c.usages=e.u.map(o);
+      c.top_dst=e.t.map(function(x){return {host:x[0],bytes:x[1],service:x[2]};});c.countries=e.c.map(function(x){return {cc:x[0],flag:drapeau(x[0]),name:x[1],bytes:x[2]};});});})();
   el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxdpiVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+window.scrollY)},location.origin);}catch(e){}}}
   window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
