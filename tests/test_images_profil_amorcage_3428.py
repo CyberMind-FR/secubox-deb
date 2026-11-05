@@ -35,7 +35,7 @@ def test_live_usb_syntaxe_et_option_refusee():
 
 def test_rpi_profil_lite_par_defaut_et_kiosque_ajoute():
     assert 'PROFILE_TAG="${PROFILE_TAG:-lite}"' in RPI
-    assert "lite|minimal|isp) IMG_SIZE=\"8G\"" in RPI
+    assert "lite|minimal|mobile|isp) IMG_SIZE=\"8G\"" in RPI
     assert 'select-profile-debs.py" "${_ksrc}" kiosk' in RPI
 
 
@@ -81,7 +81,7 @@ def test_verify_profile_lite_et_minimal_verts():
 def test_meta_paquet_verifie_dans_l_image_et_profil_rpi_borne():
     assert LIVE.count('|| err "secubox-${IMAGE_PROFILE} non configuré') == 1
     assert '|| err "${_meta} non installé depuis' in LIVE and "secubox-full' 2>/dev/null || true" not in LIVE
-    assert "lite|minimal|isp|full) ;;" in RPI and '|| err "secubox-${PROFILE_TAG} non installé' in RPI
+    assert "lite|minimal|mobile|isp|full) ;;" in RPI and '|| err "secubox-${PROFILE_TAG} non installé' in RPI
 
 
 def test_select_profile_debs_refuse_une_dependance_manquante(tmp_path, monkeypatch):
