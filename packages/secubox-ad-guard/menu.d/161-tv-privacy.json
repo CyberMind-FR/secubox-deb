@@ -4,6 +4,7 @@
   "category": "wall",
   "icon": "📺",
   "path": "/tv-privacy/",
+  "unite": "ad-guard",
   "order": 161,
   "description": "Vie privée des téléviseurs : équipements, analyseur, protection, diagnostic",
   "theme": "bouclier"

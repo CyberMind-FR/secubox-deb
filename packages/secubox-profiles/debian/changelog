@@ -1,3 +1,9 @@
+secubox-profiles (0.28.3-1~trixie1) trixie; urgency=medium
+
+  * apply en ligne de commande : profil actif enregistré, menu_off effectif ; profil mobile : Administration active (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 09:20:30 +0100
+
 secubox-profiles (0.28.2-1~trixie1) trixie; urgency=medium
 
   * Profil mobile : ad-guard-dnsfeed reste actif, TV Privacy en dépend (ref #3467).

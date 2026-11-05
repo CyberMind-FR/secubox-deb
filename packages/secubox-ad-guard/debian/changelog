@@ -1,3 +1,9 @@
+secubox-ad-guard (1.24.4-1~trixie1) trixie; urgency=medium
+
+  * Carte TV Privacy : état lu sur ad-guard, elle restait « à l'arrêt » faute de service à son nom (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 09:20:30 +0100
+
 secubox-ad-guard (1.24.3-1~trixie1) trixie; urgency=medium
 
   * secubox-ad-guard-dnsfeed : SupplementaryGroups=systemd-journal — sans lui
