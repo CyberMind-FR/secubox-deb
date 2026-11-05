@@ -70,7 +70,7 @@ Usage: sudo bash build-rpi-usb.sh [OPTIONS]
   --size    SIZE     Total image size (default: 8G)
   --local-cache      Use local APT cache
   --slipstream       Install .deb packages from output/debs/
-  --profile PROFIL   lite|minimal|isp|full : secubox-<PROFIL> and its Depends
+  --profile PROFIL   lite|minimal|mobile|isp|full : secubox-<PROFIL> and its Depends
                      only (default: lite, #3428 ; final profile from premier pas)
   --kiosk            Include GUI kiosk mode packages
   --rpi-dsi          Add the optional secubox-rpi-dsi package (official 7" DSI
@@ -132,8 +132,8 @@ ROOTFS="${WORK_DIR}/rootfs"
 # Le PROFIL fait partie du nom, comme dans build-image.sh (#1112). Sans lui,
 # `isp` et `full` produisaient le meme fichier et s'ecrasaient.
 case "${PROFILE_TAG}" in
-  lite|minimal|isp|full) ;;
-  *) err "--profile : lite|minimal|isp|full attendu (reçu « ${PROFILE_TAG} »)" ;;
+  lite|minimal|mobile|isp|full) ;;
+  *) err "--profile : lite|minimal|mobile|isp|full attendu (reçu « ${PROFILE_TAG} »)" ;;
 esac
 # Image dédiée Pi 4 + écran officiel 7" DSI (--rpi-dsi, #3426) : nom distinct
 # (secubox-<profil>-rpi4-dsi-arm64-<suite>) pour ne pas écraser l'image HDMI.
@@ -1439,7 +1439,7 @@ log "7/7 Creating bootable image..."
 # embarque tout le catalogue applicatif et 8 Gio n'y suffisent pas.
 if [[ -z "${IMG_SIZE}" ]]; then
   case "${PROFILE_TAG}" in
-    lite|minimal|isp) IMG_SIZE="8G"  ;;
+    lite|minimal|mobile|isp) IMG_SIZE="8G"  ;;
     *)   IMG_SIZE="12G" ;;
   esac
   log "Taille non precisee — profil ${PROFILE_TAG} : ${IMG_SIZE}"

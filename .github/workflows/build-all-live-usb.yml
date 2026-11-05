@@ -85,7 +85,10 @@ jobs:
             artifact_name: secubox-mochabin-live-usb
             output_pattern: "secubox-mochabin-live-usb.img*"
             needs_qemu: true
-            embed_image: true
+            # Même profil que la clé validée (#3484), sans kiosque : la carte n'a pas d'écran. L'image eMMC embarquée n'est plus
+            # construite ici : le job atteignait les 6 h d'un runner (alpha 20), et build-image.yml publie déjà celle de la carte.
+            embed_image: false
+            extra_args: "--profile mobile"
 
           # Raspberry Pi 400 (arm64) - Native Pi firmware boot
           # Ships in kiosk mode by default — Pi 400 = keyboard + HDMI →
@@ -99,8 +102,8 @@ jobs:
             output_pattern: "secubox-*rpi-arm64-*.img*"
             needs_qemu: true
             embed_image: false
-            # rpi-arm64 = lite + kiosque HDMI (#3428) ; nom produit : secubox-lite-rpi-arm64-<suite>.img.
-            extra_args: "--kiosk --profile lite"
+            # Même profil que la clé validée (#3484) + kiosque HDMI ; nom produit : secubox-mobile-rpi-arm64-<suite>.img.
+            extra_args: "--kiosk --profile mobile"
 
           # Raspberry Pi 4 + ecran officiel 7" DSI tactile (#3426) : meme script,
           # kiosque + paquet optionnel secubox-rpi-dsi (arm64, pris dans
@@ -115,7 +118,7 @@ jobs:
             output_pattern: "secubox-*rpi4-dsi-arm64-*.img*"
             needs_qemu: true
             embed_image: false
-            extra_args: "--kiosk --rpi-dsi"
+            extra_args: "--kiosk --rpi-dsi --profile mobile"
 
     steps:
       # Skip job if platform doesn't match (workflow_dispatch only)

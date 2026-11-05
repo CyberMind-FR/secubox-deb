@@ -40,7 +40,7 @@ def test_rpi_profil_lite_par_defaut_et_kiosque_ajoute():
 
 
 def test_workflow_live_usb_profils_de_la_matrice():
-    assert WF_LIVE.count('extra_args: "--kiosk --profile lite"') == 1      # rpi400 (rpi-arm64 = lite + kiosque HDMI)
+    assert 'extra_args: "--kiosk --profile lite"' not in WF_LIVE         # live arm64 au profil mobile (#3484)
     assert 'extra_args: "--kiosk --profile mobile"' in WF_LIVE         # x64 : la clé mobile (#3470)
     assert "--board mochabin \\\n            --profile lite" in WF_LIVE  # image eMMC embarquée : lite
 
