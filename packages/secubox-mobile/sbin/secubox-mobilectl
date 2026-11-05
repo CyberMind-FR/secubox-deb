@@ -25,6 +25,7 @@ RETIRE = Path("/run/secubox-mobile.retire")      # geste manuel : tient jusqu'au
 UNBOUND = Path("/etc/unbound/unbound.conf.d/60-secubox-mobile.conf")
 AUDIT = Path("/var/log/secubox/audit.log")
 SOURCE_LISTES = Path("/var/lib/secubox-dns-listes/sources/95-secubox-adblock.conf")
+STATUT_LISTES = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
 COMMENTAIRE = "secubox-mobile"
 
 Lanceur = Callable[[List[str]], Tuple[int, str]]
@@ -202,16 +203,42 @@ def retirer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, c
     return res
 
 
+def etat_complet(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE,
+                 source: Path = SOURCE_LISTES, statut: Path = STATUT_LISTES) -> dict:
+    """Pour la page : aucune écriture, et jamais le DNS d'origine ni la MAC."""
+    ip, _ = adresse_lan(run)
+    r = {"ip": ip, "retiree": retire.exists(), "listes": source.exists(), "bloques": 0, "freebox": "", "dns_freebox": []}
+    try:
+        r["bloques"] = int(json.loads(statut.read_text()).get("blocked", 0))
+    except (OSError, ValueError, TypeError):
+        pass
+    rc, lu = freebox(run, "dns-lire")
+    if rc != 0:
+        r["freebox"] = "autorisation_requise"
+        return r
+    r["dns_freebox"] = lu.get("dns", [])
+    if r["dns_freebox"] == [ip]:
+        r["freebox"] = "actif"
+    elif "dns_origine" in lire_etat(etat_f) or lire_etat(etat_f):
+        r["freebox"] = "droit_requis"
+    else:
+        r["freebox"] = "autorisation_requise"
+    return r
+
+
 def main(argv: List[str]) -> int:
     cmd = argv[0] if argv else "etat"
     if cmd == "activer":
         r = activer()
     elif cmd == "retirer":
         r = retirer(manuel="--manuel" in argv)
+    elif cmd == "reactiver":
+        RETIRE.unlink(missing_ok=True)
+        r = activer()
     elif cmd == "etat":
-        r = {"reglages": lire_etat(), "retiree": RETIRE.exists()}
+        r = etat_complet()
     else:
-        print("usage : secubox-mobilectl activer|retirer [--manuel]|etat", file=sys.stderr)
+        print("usage : secubox-mobilectl activer|retirer [--manuel]|reactiver|etat", file=sys.stderr)
         return 2
     print(json.dumps(r))
     return 0 if r.get("etat") not in ("erreur_dns", "dns_non_rendu") else 1

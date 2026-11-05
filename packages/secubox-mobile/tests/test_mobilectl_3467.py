@@ -118,3 +118,25 @@ def test_retrait_manuel_empeche_la_reactivation(lieux):
     C.activer(f, source=src, **k)
     C.retirer(f, manuel=True, **k)
     assert C.activer(f, source=src, **k)["etat"] == "retiree"
+
+
+def test_etat_ne_livre_ni_origine_ni_mac(lieux, tmp_path):
+    k, src = lieux
+    f = Faux()
+    C.activer(f, source=src, **k)
+    r = C.etat_complet(f, k["etat_f"], k["retire"], src, tmp_path / "absent")
+    assert r["freebox"] == "actif" and r["ip"] == "192.168.1.50"
+    assert "dns_origine" not in r and "mac" not in r
+
+
+def test_routes_gardees():
+    api = (CHEMIN.parents[1] / "api/main.py").read_text()
+    assert '@app.post("/retirer", dependencies=[Depends(require_jwt)])' in api
+    assert '@app.post("/reactiver", dependencies=[Depends(require_jwt)])' in api
+    assert '@app.get("/etat", dependencies=[Depends(require_lecture)])' in api
+
+
+def test_page_guide_le_retrait_et_la_freebox():
+    page = (CHEMIN.parents[1] / "www/mobile/index.html").read_text(encoding="utf-8")
+    for t in ("Retirer la clé", "Modification des réglages", "Clé arrachée", "sbx_token"):
+        assert t in page

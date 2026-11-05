@@ -19,7 +19,12 @@ Depends: ${misc:Depends},
  nftables,
  iproute2,
  python3,
- util-linux
+ util-linux,
+ sudo,
+ adduser,
+ python3-fastapi,
+ python3-uvicorn,
+ secubox-core
 Description: SecuBox Mobile — clé USB, blocage des publicités et traqueurs sur un réseau existant
  Profil de la clé USB amd64 : agent sur un réseau existant, sans mode routeur.
  Garde DNS, publicités et traqueurs, TV Privacy, Freebox, socle d'administration.

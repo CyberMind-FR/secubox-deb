@@ -1,6 +1,6 @@
-secubox-mobile (0.2.0-1~trixie1) trixie; urgency=medium
+secubox-mobile (0.3.0-1~trixie1) trixie; urgency=medium
 
-  * Activation (listes, Unbound et port 53 du réseau local, Freebox) et retrait à l'extinction (ref #3467).
+  * Activation (listes, Unbound et port 53 du réseau local, Freebox) et retrait à l'extinction ; page web, bouton « Retirer la clé », guidage Freebox (ref #3467).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 06:25:28 +0100
 
