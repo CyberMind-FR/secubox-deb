@@ -13,12 +13,15 @@ WorkingDirectory=/usr/lib/secubox/mobile
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStartPre=+/bin/rm -f /run/secubox/mobile.sock
 ExecStart=/usr/sbin/secubox-mobile-api
-ExecStartPost=/bin/sh -c 'for i in $(seq 1 600); do [ -S /run/secubox/mobile.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/mobile.sock'
 TimeoutStartSec=120
 Restart=on-failure
 RestartSec=5
 ProtectHome=yes
 PrivateTmp=yes
+UMask=0027
+ProtectSystem=full
+ProtectKernelModules=yes
+ProtectControlGroups=yes
 
 [Install]
 WantedBy=multi-user.target

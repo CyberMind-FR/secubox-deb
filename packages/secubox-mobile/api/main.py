@@ -29,7 +29,7 @@ CTL = "/usr/sbin/secubox-mobilectl"
 def _ctl(*args: str) -> JSONResponse:
     cmd: List[str] = ["sudo", "-n", CTL, *args]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=240, check=False)
         corps = json.loads(r.stdout.strip().splitlines()[-1])
     except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
         return JSONResponse({"erreur": "Contrôleur injoignable."}, status_code=502)
@@ -39,6 +39,11 @@ def _ctl(*args: str) -> JSONResponse:
 @app.get("/health")
 def health():
     return {"status": "ok", "module": "mobile"}
+
+
+@app.get("/status", dependencies=[Depends(require_lecture)])
+def status():
+    return _ctl("etat")
 
 
 @app.get("/etat", dependencies=[Depends(require_lecture)])

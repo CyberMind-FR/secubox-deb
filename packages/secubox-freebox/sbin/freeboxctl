@@ -11,7 +11,7 @@ l'utilisateur secubox-freebox (sudo -u, cote appelant).
 
   passerelle-dhcp <ip>   regle la passerelle DHCP, affiche le JSON du resultat
   lire-passerelle        affiche la passerelle DHCP actuelle (lecture seule)
-  dns-lire, dns-regler, dns6-lire, dns6-regler, ip-fixe-lire, ip-fixe-poser, ip-fixe-retirer : clé mobile (#3467)
+  dns-lire, dns-regler, dns6-lire, dns6-regler, ip-fixe-lire, ip-fixe-poser, ip-fixe-retirer, bail-poser : clé mobile (#3467)
 """
 import ipaddress
 import json
@@ -37,6 +37,12 @@ def _liste_ip(texte, famille):
         if ipaddress.ip_address(x).version != famille:
             raise ValueError("adresse invalide : " + x)
     return ips
+
+
+def _mac(texte):
+    if not re.fullmatch(r"[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}", texte):
+        raise ValueError("adresse MAC invalide")
+    return texte
 
 
 def _fabriquer():
@@ -73,12 +79,12 @@ def main(argv):
             svc.appliquer_autoconfig(["ip_fixe"], ip)
             print(json.dumps(svc._etat_ip_fixe(ip)))
         elif verbe == "ip-fixe-retirer" and len(args) == 1:
-            if not re.fullmatch(r"[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}", args[0]):
-                raise ValueError("adresse MAC invalide")
-            print(json.dumps(svc.retirer_ip_fixe(args[0])))
+            print(json.dumps(svc.retirer_ip_fixe(_mac(args[0]))))
+        elif verbe == "bail-poser" and len(args) == 2:
+            print(json.dumps(svc.poser_bail(_mac(args[0]), _liste_ip(args[1], 4)[0])))
         else:
             print("usage : freeboxctl passerelle-dhcp <ip>|lire-passerelle|dns-lire|dns-regler <ip,...>|dns6-lire|"
-                  "dns6-regler <0|1> [ip,...]|ip-fixe-lire <ip>|ip-fixe-poser <ip>|ip-fixe-retirer <mac>", file=sys.stderr)
+                  "dns6-regler <0|1> [ip,...]|ip-fixe-lire <ip>|ip-fixe-poser <ip>|ip-fixe-retirer <mac>|bail-poser <mac> <ip>", file=sys.stderr)
             return 2
     except (C.ErreurFreebox, ValueError, IndexError) as e:
         print(json.dumps({"erreur": str(e)[:200]}))

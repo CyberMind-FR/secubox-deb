@@ -20,7 +20,7 @@ class Faux:
         self.dns, self.ip, self.gw, self.dev = list(dns), ip, gw, dev
         self.autorise = self.droit = self.nft_ok = self.dig_ok = self.check_ok = True
         self.dns6, self.perso6, self.ip6 = ["2001:db8::1"], False, "2001:db8::50"
-        self.bail, self.regles, self.appels = "", 0, []
+        self.bail, self.regles, self.appels, self.echec = "", 0, [], None
 
     def __call__(self, cmd):
         self.appels.append(cmd)
@@ -34,7 +34,7 @@ class Faux:
                 infos.append({"local": self.ip6, "prefixlen": 64})
             return 0, json.dumps([{"addr_info": infos}])
         if cmd[0] == "timeout":
-            return self.fb(cmd[7:])
+            return self.fb(cmd[cmd.index("/usr/sbin/freeboxctl") + 1:])
         if cmd[:3] == ["nft", "-a", "list"]:
             return 0, "\n".join(f'accept comment "secubox-mobile" # handle {i}' for i in range(self.regles))
         if cmd[:2] == ["nft", "-f"]:
@@ -65,6 +65,11 @@ class Faux:
             self.perso6, self.dns6 = v[1] == "1", [x for x in (v[2] if len(v) > 2 else "").split(",") if x]
         if v[0] == "ip-fixe-poser":
             self.bail = v[1]
+        if v[0] == "bail-poser":
+            self.bail = v[2]
+            self.echec = None
+        if self.echec and v[0] == self.echec:
+            return 1, json.dumps({"erreur": "panne"})
         if v[0] == "ip-fixe-retirer":
             self.bail = ""
         return 0, json.dumps({"mac": "AA:BB:CC:DD:EE:FF"})
@@ -73,6 +78,7 @@ class Faux:
 @pytest.fixture
 def k(tmp_path, monkeypatch):
     monkeypatch.setattr(C, "AUDIT", tmp_path / "audit.log")
+    monkeypatch.setattr(C, "durable", lambda: True)
     src = tmp_path / "src"
     src.write_text("x")
     return dict(etat_f=tmp_path / "m/e.json", retire=tmp_path / "r", conf=tmp_path / "u.conf", nft=tmp_path / "z.nft"), src
@@ -147,7 +153,7 @@ def test_echec_freebox_ne_fausse_pas_l_adresse_posee(k):
     act(f, k)
     f.droit = False
     f.ip = "192.168.1.77"
-    assert act(f, k)["freebox"] == "droit_requis" and etat(k)["ip_posee"] == "192.168.1.50"
+    assert act(f, k)["freebox"] == "droit_requis" and "192.168.1.50" in etat(k)["ips_posees"]
     f.droit = True
     assert ret(f, k)["detail"] == "rendu" and f.dns == ["192.168.1.254"]
 
@@ -273,3 +279,97 @@ def test_api_a_son_profil_apparmor():
     u = (CHEMIN.parents[1] / "systemd/secubox-mobile-api.service").read_text()
     assert "ExecStart=/usr/sbin/secubox-mobile-api" in u
     assert "/usr/sbin/secubox-mobile-api {" in (CHEMIN.parents[1] / "apparmor/secubox-mobile-api").read_text()
+
+
+def test_dns6_change_par_l_utilisateur_ni_reecrit_ni_ecrase(k):
+    f = Faux()
+    act(f, k)
+    f.dns6 = ["2001:db8::9"]
+    act(f, k)
+    assert f.dns6 == ["2001:db8::9"] and etat(k)["ipv6"] == "repris"
+    ret(f, k)
+    assert f.dns6 == ["2001:db8::9"]
+
+
+def test_echec_ipv6_au_retrait_garde_l_etat_et_retente(k):
+    f = Faux()
+    act(f, k)
+    f.echec = "dns6-regler"
+    assert ret(f, k)["etat"] == "dns_non_rendu" and etat(k)["dns6_origine"]
+    assert f.dns == ["192.168.1.254"]
+    f.echec = None
+    assert ret(f, k)["etat"] == "retiree" and f.dns6 == ["2001:db8::1"]
+
+
+def test_echec_bail_au_retrait_retente(k):
+    f = Faux()
+    act(f, k)
+    f.echec = "ip-fixe-retirer"
+    assert ret(f, k)["etat"] == "dns_non_rendu"
+    f.echec = None
+    assert ret(f, k)["etat"] == "retiree" and f.bail == ""
+
+
+def test_expiration_apres_ecriture_reconnue_au_retrait(k):
+    f = Faux()
+    fb = f.fb
+
+    def applique_puis_expire(v):
+        r = fb(v)
+        return (1, "") if v[0] == "dns-regler" else r
+    f.fb = applique_puis_expire
+    act(f, k)
+    assert f.dns == ["192.168.1.50"]
+    f.fb = fb
+    assert ret(f, k)["detail"] == "rendu" and f.dns == ["192.168.1.254"]
+
+
+def test_retrait_sur_une_autre_freebox_ne_touche_rien(k):
+    f = Faux()
+    act(f, k)
+    f.dns, f.gw, f.ip = ["10.0.0.1"], "192.168.1.1", "192.168.1.60"
+    assert ret(f, k)["detail"] == "autre_reseau" and f.dns == ["10.0.0.1"] and etat(k)["dns_origine"]
+
+
+def test_ancienne_adresse_de_la_liste_jamais_origine(k):
+    assert act(Faux(dns=["192.168.1.50", "9.9.9.9"]), k)["freebox"] == "origine_inconnue"
+
+
+def test_origine_mal_formee_n_est_pas_rendue(k):
+    k[0]["etat_f"].parent.mkdir()
+    k[0]["etat_f"].write_text(json.dumps({"dns_origine": "pas une liste", "reseau": "192.168.1.254"}))
+    assert "dns_origine" not in C.lire_etat(k[0]["etat_f"])
+
+
+def test_dns_muet_apres_bascule_rend_le_reseau(k):
+    f = Faux()
+    act(f, k)
+    f.dig_ok = False
+    assert act(f, k)["etat"] == "erreur_dns" and f.dns == ["192.168.1.254"]
+    assert ["systemctl", "restart", "unbound"] in f.appels
+
+
+def test_sans_persistance_le_reseau_n_est_pas_touche(k, monkeypatch):
+    monkeypatch.setattr(C, "durable", lambda: False)
+    f = Faux()
+    assert act(f, k)["freebox"] == "non_durable" and f.dns == ["192.168.1.254"]
+
+
+def test_freebox_jointe_par_son_adresse(k):
+    f = Faux()
+    act(f, k)
+    assert "SECUBOX_FREEBOX_HOTE=http://192.168.1.254" in [c for c in f.appels if c[0] == "timeout"][0]
+
+
+def test_fifo_jamais_lue(tmp_path, k):
+    import os
+    fifo = tmp_path / "fifo"
+    os.mkfifo(fifo)
+    r = C.etat_complet(Faux(), k[0]["etat_f"], k[0]["retire"], k[1], fifo)
+    assert r["bloques"] == 0
+
+
+def test_marqueur_de_persistance_hors_de_la_branche_slipstream():
+    b = (CHEMIN.parents[3] / "image/build-live-usb.sh").read_text(encoding="utf-8")
+    assert b.index('touch "${ROOTFS}/var/lib/secubox/.persistent"') < b.index('log "Creating build metadata..."')
+    assert b.index('touch "${ROOTFS}/var/lib/secubox/.persistent"') > b.index('rm -rf "${ROOTFS}/tmp/secubox-debs"')

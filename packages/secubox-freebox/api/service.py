@@ -305,6 +305,15 @@ class Freebox:
             raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement de DNS.")
         return {"dns": apres}
 
+    def poser_bail(self, mac, ip):
+        """Restaure le bail d'origine de cette MAC (#3467), sans chercher l'hôte par son adresse."""
+        if not self.client.session:
+            self.client.ouvrir_session()
+        self.client.ecrire("PUT", "dhcp/static_lease/" + mac, {"mac": mac, "ip": ip})
+        self._cache.clear()
+        self.journal({"action": "bail_restaure", "mac": mac, "ip": ip})
+        return {"mac": mac, "ip": ip}
+
     def retirer_ip_fixe(self, mac):
         """Retire le bail statique posé pour cette MAC (#3467)."""
         if not self.client.session:

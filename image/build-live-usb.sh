@@ -1569,12 +1569,6 @@ if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
   chroot "${ROOTFS}" dpkg -l 'secubox-*' 2>/dev/null | grep "^ii" > "${ROOTFS}/var/lib/secubox/installed-packages.txt" || true
 
   rm -rf "${ROOTFS}/tmp/secubox-debs"
-
-  # #3467 : la clé mobile est un support durable. Sur tmpfs, /var/lib/secubox perdait à chaque démarrage l'autorisation
-  # Freebox et les réglages TV Privacy ; ce marqueur désactive var-lib-secubox.mount, les données vont à la persistance.
-  if [[ "${IMAGE_PROFILE}" == "mobile" ]]; then
-    touch "${ROOTFS}/var/lib/secubox/.persistent"
-  fi
   ok "Slipstream: ${INSTALLED_COUNT}/${DEB_COUNT} packages installed successfully"
 else
   warn "No packages in cache/repo, trying APT..."
@@ -1792,6 +1786,12 @@ ok "Core services fallback complete"
 # les unités déclarent déjà /run/secubox dans leurs ReadWritePaths.
 
 # ── Create build metadata ──────────────────────────────────────────
+# #3467 : la clé mobile est un support durable. Sur tmpfs, /var/lib/secubox perdait à chaque démarrage l'autorisation
+# Freebox et les réglages TV Privacy ; ce marqueur désactive var-lib-secubox.mount, les données vont à la persistance.
+if [[ "${IMAGE_PROFILE}" == "mobile" ]]; then
+  touch "${ROOTFS}/var/lib/secubox/.persistent"
+fi
+
 log "Creating build metadata..."
 BUILD_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 BUILD_DATE=$(date +"%Y-%m-%d")

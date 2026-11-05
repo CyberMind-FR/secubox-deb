@@ -18,7 +18,9 @@ import fcntl
 import ipaddress
 import json
 import os
+import stat
 import subprocess
+import time
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,19 +50,31 @@ def lancer(cmd: List[str]) -> Tuple[int, str]:
     return r.returncode, (r.stdout + r.stderr).strip()
 
 
+def _ordinaire(fd: int) -> None:
+    """Dans un dossier d'un compte partagé : ni lien (O_NOFOLLOW), ni FIFO, ni périphérique."""
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise OSError("pas un fichier ordinaire")
+
+
 def audit(action: str, **champs) -> None:
     ligne = {"ts": datetime.now(timezone.utc).isoformat(), "module": "mobile", "action": action, **champs}
     try:
-        fd = os.open(AUDIT, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        fd = os.open(AUDIT, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o640)
+        _ordinaire(fd)
         with os.fdopen(fd, "a") as f:
             f.write(json.dumps(ligne) + "\n")
     except OSError as e:
         print(f"audit impossible : {e}", file=sys.stderr)
 
 
+_PASSERELLE = ""     # la Freebox par son adresse : son nom passerait par l'Unbound de la clé, peut-être mort
+
+
 def freebox(run: Lanceur, *args: str) -> Tuple[int, dict]:
     # 15 s par appel : tout le retrait doit tenir dans le délai d'arrêt de l'unité.
-    rc, sortie = run(["timeout", "15", "runuser", "-u", "secubox-freebox", "--", "/usr/sbin/freeboxctl", *args])
+    hote = [f"SECUBOX_FREEBOX_HOTE=http://{_PASSERELLE}"] if _PASSERELLE else []
+    rc, sortie = run(["timeout", "15", "runuser", "-u", "secubox-freebox", "--", "env", *hote, "/usr/sbin/freeboxctl", *args])
     try:
         return rc, json.loads(sortie.splitlines()[-1])
     except (ValueError, IndexError):
@@ -97,6 +111,8 @@ def adresse_lan(run: Lanceur) -> dict:
         return {}
     if not any(adresse in b for b in RFC1918) or porte not in reseau:
         return {}
+    global _PASSERELLE
+    _PASSERELLE = gw
     return {"ip": ip, "dev": dev, "reseau": str(reseau), "passerelle": gw}
 
 
@@ -142,9 +158,16 @@ def lire_etat(chemin: Path = ETAT) -> dict:
         fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW)
         with os.fdopen(fd) as f:
             e = json.load(f)
-        return e if isinstance(e, dict) else {}
     except (OSError, ValueError):
         return {}
+    if not isinstance(e, dict):
+        return {}
+    # une origine mal formée ou contenant une adresse de la clé n'est jamais rendue au réseau
+    posees = e.get("ips_posees") or []
+    if "dns_origine" in e and (_ips(e["dns_origine"], 4) is None or set(e["dns_origine"]) & set(posees)):
+        audit("origine_invalide")
+        e.pop("dns_origine")
+    return e
 
 
 def ecrire_etat(e: dict, chemin: Path = ETAT) -> None:
@@ -172,26 +195,25 @@ def _poser_fichier(chemin: Path, contenu: str) -> None:
 
 
 def poser_unbound(run: Lanceur, lan: dict, conf: Path = UNBOUND) -> Optional[str]:
-    """Écrit, valide, redémarre ; retour au fichier précédent à tout échec."""
+    """Double tampon : temporaire validé, puis renommé ; retour au précédent si Unbound ne repart pas."""
     voulu = rendu_unbound(lan)
     avant = conf.read_text() if conf.exists() else None
     if avant == voulu:
         return None
-
-    def defaire():
+    tmp = conf.with_suffix(".tmp")      # hors du motif *.conf d'Unbound
+    tmp.write_text(voulu)
+    tmp.chmod(0o644)                    # lu par l'utilisateur unbound, malgré le UMask de l'unité
+    rc, s = run(["unbound-checkconf", str(tmp)])
+    if rc != 0:
+        tmp.unlink(missing_ok=True)
+        return "unbound-checkconf : " + s[:160]
+    tmp.replace(conf)
+    rc, s = run(["systemctl", "restart", "unbound"])
+    if rc != 0:
         if avant is None:
             conf.unlink(missing_ok=True)
         else:
             _poser_fichier(conf, avant)
-
-    _poser_fichier(conf, voulu)
-    rc, s = run(["unbound-checkconf"])
-    if rc != 0:
-        defaire()
-        return "unbound-checkconf : " + s[:160]
-    rc, s = run(["systemctl", "restart", "unbound"])
-    if rc != 0:
-        defaire()
         run(["systemctl", "restart", "unbound"])
         return "unbound : " + s[:160]
     return None
@@ -224,11 +246,16 @@ def poser_nft(run: Lanceur, lan: dict, fichier: Path = NFT) -> Optional[str]:
     tmp.replace(fichier)
     for h in anciennes:     # nouvelles règles d'abord, anciennes ensuite
         run(["nft", "delete", "rule", "inet", "filter", "input", "handle", h])
+    rc, liste = _regles_en_place(run)
+    if rc != 0 or len(poignees_nft(liste)) != voulu.count("\n"):
+        return "nft : règles absentes après la pose"
+    audit("port53_ouvert", dev=lan["dev"], reseau=lan["reseau"], reseau6=lan.get("reseau6", ""))
     return None
 
 
 def fermer_nft(run: Lanceur, fichier: Path = NFT) -> None:
     fichier.unlink(missing_ok=True)
+    audit("port53_ferme")
     rc, s = _regles_en_place(run)
     for h in poignees_nft(s) if rc == 0 else []:
         run(["nft", "delete", "rule", "inet", "filter", "input", "handle", h])
@@ -240,86 +267,119 @@ def dns_repond(run: Lanceur, ip: str) -> bool:
     return rc == 0
 
 
+def _noter(etat: dict, cle: str, ip: str, etat_f: Path) -> None:
+    """Avant d'écrire : si la Freebox applique puis que l'appel expire, le retrait reconnaît quand même notre adresse."""
+    if ip not in etat.setdefault(cle, []):
+        etat[cle].append(ip)
+        ecrire_etat(etat, etat_f)
+
+
 def regler_freebox(run: Lanceur, lan: dict, etat: dict, etat_f: Path) -> str:
-    ip, ip6 = lan["ip"], lan.get("ip6", "")
+    ip = lan["ip"]
     rc, lu = freebox(run, "dns-lire")
     dns = _ips(lu.get("dns"), 4) if rc == 0 else None
     if rc != 0 or dns is None:
         return "autorisation_requise"
-    posee = etat.get("ip_posee")
+    posees = etat.get("ips_posees", [])
     if "dns_origine" in etat and etat.get("reseau") != lan["passerelle"]:
-        audit("autre_reseau", origine_reseau=etat.get("reseau"), passerelle=lan["passerelle"])
         return "autre_reseau"       # l'origine relevée ne vaut que pour SA Freebox : on ne touche à rien
-    if "dns_origine" in etat and dns not in ([ip], [posee]):
+    if "dns_origine" in etat and dns != [ip] and not (len(dns) == 1 and dns[0] in posees):
         return "repris"             # changé par l'utilisateur : on ne le réécrit pas
     if "dns_origine" not in etat:
-        if dns == [ip]:
+        if ip in dns or set(dns) & set(posees):
             audit("origine_inconnue", dns=dns)    # état perdu : surtout pas notre adresse comme origine
             return "origine_inconnue"
-        rc, b = freebox(run, "ip-fixe-lire", ip)
-        if rc != 0:
-            return "droit_requis"
-        etat.update(dns_origine=dns, reseau=lan["passerelle"], mac=b.get("mac", ""), bail_origine=b.get("ip", ""))
+        etat.update(dns_origine=dns, reseau=lan["passerelle"])
+        ecrire_etat(etat, etat_f)
+    rc, b = freebox(run, "ip-fixe-lire", ip)
+    if rc != 0:
+        return "droit_requis"
+    mac = b.get("mac", "")
+    if not mac:
+        return "appareil_inconnu"   # la Freebox ne voit pas encore la clé : nouvel essai au prochain passage
+    baux = etat.setdefault("baux", {})
+    if mac not in baux:
+        baux[mac] = b.get("ip", "")
         ecrire_etat(etat, etat_f)
     rc, _ = freebox(run, "ip-fixe-poser", ip)
     if rc != 0:
         return "droit_requis"
     if dns != [ip]:
+        _noter(etat, "ips_posees", ip, etat_f)
         rc, _ = freebox(run, "dns-regler", ip)
         if rc != 0:
             return "droit_requis"
         audit("dns_freebox_pose", avant=dns, apres=[ip])
-    etat["ip_posee"] = ip
-    ecrire_etat(etat, etat_f)
-    regler_freebox_v6(run, ip6, etat, etat_f)
+    elif ip not in posees:
+        _noter(etat, "ips_posees", ip, etat_f)
+    regler_freebox_v6(run, lan, etat, etat_f)
     return "actif"
 
 
-def regler_freebox_v6(run: Lanceur, ip6: str, etat: dict, etat_f: Path) -> None:
+def regler_freebox_v6(run: Lanceur, lan: dict, etat: dict, etat_f: Path) -> None:
     """Sans quoi les appareils en double pile contournent le blocage par le DNS IPv6 annoncé."""
+    ip6 = lan.get("ip6", "")
     rc, lu = freebox(run, "dns6-lire")
     dns6 = _ips(lu.get("dns"), 6) if rc == 0 else None
+    posees = etat.get("ips6_posees", [])
     if dns6 is None:
         etat["ipv6"] = "inconnu"
-    elif not ip6:
+    elif "dns6_origine" in etat and dns6 != [ip6] and not (len(dns6) == 1 and dns6[0] in posees):
+        etat["ipv6"] = "repris"     # changé par l'utilisateur : ni réécrit ni écrasé
+    elif not ip6 or not dns_repond(run, ip6):
         etat["ipv6"] = "contournement_possible"
     else:
-        if "dns6_origine" not in etat and dns6 != [ip6]:
+        if "dns6_origine" not in etat and not set(dns6) & set(posees):
             etat["dns6_origine"] = {"use_custom_dns": bool(lu.get("use_custom_dns")), "dns": dns6}
             ecrire_etat(etat, etat_f)
+        _noter(etat, "ips6_posees", ip6, etat_f)
         rc = 0 if dns6 == [ip6] and lu.get("use_custom_dns") else freebox(run, "dns6-regler", "1", ip6)[0]
-        if rc == 0:
-            etat["ip6_posee"] = ip6
         etat["ipv6"] = "actif" if rc == 0 else "contournement_possible"
     ecrire_etat(etat, etat_f)
 
 
-def _rendre(run: Lanceur, etat: dict) -> Tuple[bool, str]:
-    """(terminé, détail). Non terminé : l'état reste, pour retenter."""
-    if "dns_origine" not in etat:
+def _rendre(run: Lanceur, etat: dict, etat_f: Path, lan: dict) -> Tuple[bool, str]:
+    """(terminé, détail). Chaque élément rendu sort de l'état ; ce qui échoue y reste pour le prochain essai."""
+    if "dns_origine" not in etat and not etat.get("baux") and not etat.get("dns6_origine"):
         return True, "rien_a_rendre"
-    rc, lu = freebox(run, "dns-lire")
-    dns = _ips(lu.get("dns"), 4) if rc == 0 else None
-    if dns is None:
-        return False, "freebox_injoignable"
-    detail = "laisse"
-    if dns == [etat.get("ip_posee")]:
-        rc, _ = freebox(run, "dns-regler", ",".join(etat["dns_origine"]))
+    if etat.get("reseau") and etat["reseau"] != lan.get("passerelle"):
+        return False, "autre_reseau"       # jamais l'origine d'une Freebox sur une autre
+    detail, restes = "laisse", []
+    if "dns_origine" in etat:
+        rc, lu = freebox(run, "dns-lire")
+        dns = _ips(lu.get("dns"), 4) if rc == 0 else None
+        if dns is None:
+            return False, "freebox_injoignable"
+        if len(dns) == 1 and dns[0] in etat.get("ips_posees", []):
+            rc, _ = freebox(run, "dns-regler", ",".join(etat["dns_origine"]))
+            if rc != 0:
+                return False, "freebox_refuse"
+            detail = "rendu"
+        audit("dns_freebox_" + detail, apres=etat["dns_origine"] if detail == "rendu" else dns)
+        etat.pop("dns_origine")
+        ecrire_etat(etat, etat_f)
+    for mac, origine in list(etat.get("baux", {}).items()):     # le bail seulement après le DNS rendu
+        rc, _ = freebox(run, "bail-poser", mac, origine) if origine else freebox(run, "ip-fixe-retirer", mac)
         if rc != 0:
-            return False, "freebox_refuse"
-        detail = "rendu"
-    audit("dns_freebox_" + detail, apres=etat["dns_origine"] if detail == "rendu" else dns)
-    if etat.get("mac"):         # le bail seulement après le DNS rendu
-        if etat.get("bail_origine"):
-            freebox(run, "ip-fixe-poser", etat["bail_origine"])
-        else:
-            freebox(run, "ip-fixe-retirer", etat["mac"])
+            restes.append("bail")
+            continue
+        del etat["baux"][mac]
+        ecrire_etat(etat, etat_f)
     o6 = etat.get("dns6_origine")
-    if o6 and etat.get("ip6_posee"):
-        rc, lu6 = freebox(run, "dns6-lire")
-        if rc == 0 and _ips(lu6.get("dns"), 6) == [etat["ip6_posee"]]:
-            freebox(run, "dns6-regler", "1" if o6.get("use_custom_dns") else "0", ",".join(o6.get("dns", [])))
-    return True, detail
+    if o6:
+        rc, lu = freebox(run, "dns6-lire")
+        dns6 = _ips(lu.get("dns"), 6) if rc == 0 else None
+        if dns6 is None:
+            restes.append("ipv6")
+        else:
+            if len(dns6) == 1 and dns6[0] in etat.get("ips6_posees", []):
+                rc, _ = freebox(run, "dns6-regler", "1" if o6.get("use_custom_dns") else "0", ",".join(o6.get("dns", [])))
+            if rc != 0:
+                restes.append("ipv6")
+            else:
+                etat.pop("dns6_origine")
+                ecrire_etat(etat, etat_f)
+    return (False, "reste:" + ",".join(restes)) if restes else (True, detail)
 
 
 def _arrete_en_cours(run: Lanceur) -> bool:
@@ -328,7 +388,7 @@ def _arrete_en_cours(run: Lanceur) -> bool:
 
 def _retirer(run: Lanceur, etat_f: Path, conf: Path, nft: Path) -> dict:
     etat = lire_etat(etat_f)
-    fini, detail = _rendre(run, etat)
+    fini, detail = _rendre(run, etat, etat_f, adresse_lan(run))
     if not fini:
         # DNS du réseau toujours sur la clé : son DNS reste ouvert, l'état reste pour retenter.
         audit("retrait_incomplet", cause=detail)
@@ -340,6 +400,16 @@ def _retirer(run: Lanceur, etat_f: Path, conf: Path, nft: Path) -> dict:
             run(["systemctl", "restart", "unbound"])
     etat_f.unlink(missing_ok=True)
     return {"etat": "retiree", "detail": detail}
+
+
+def durable(live: Path = Path("/run/live"), persistance: Path = Path("/run/live/persistence")) -> bool:
+    """Démarrée sans persistance, la clé oublierait l'origine en s'éteignant : le réseau n'est pas touché."""
+    if not live.exists():
+        return True
+    try:
+        return any(persistance.iterdir())
+    except OSError:
+        return False
 
 
 def activer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, conf: Path = UNBOUND,
@@ -359,10 +429,19 @@ def activer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, c
         if err:
             audit("activation_refusee", cause=err)
             return {**res, "etat": "erreur_dns", "erreur": err}
-    if not dns_repond(run, lan["ip"]):
-        audit("activation_refusee", cause="dns muet")
-        return {**res, "etat": "erreur_dns", "erreur": "Le DNS de la clé ne répond pas : réseau laissé tel quel."}
     etat = lire_etat(etat_f)
+    if not dns_repond(run, lan["ip"]):
+        # Le réseau vise peut-être déjà la clé : relancer, puis rendre plutôt que laisser un DNS mort.
+        run(["systemctl", "restart", "unbound"])
+        if dns_repond(run, lan["ip"]):
+            return {**res, "etat": "partiel", "freebox": "unbound_relance"}
+        audit("dns_muet", origine_connue="dns_origine" in etat)
+        if "dns_origine" in etat:
+            fini, detail = _rendre(run, etat, etat_f, lan)
+            return {**res, "etat": "erreur_dns", "erreur": "DNS de la clé muet : réseau rendu à son origine.", "detail": detail, "fini": fini}
+        return {**res, "etat": "erreur_dns", "erreur": "Le DNS de la clé ne répond pas : réseau laissé tel quel."}
+    if not durable():
+        return {**res, "etat": "partiel", "freebox": "non_durable"}
     res["freebox"] = regler_freebox(run, lan, etat, etat_f)
     res["etat"] = "actif" if res["listes"] and res["freebox"] == "actif" else "partiel"
     return res
@@ -382,9 +461,13 @@ def etat_complet(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETI
     lan = adresse_lan(run)
     e = lire_etat(etat_f)
     r = {"ip": lan.get("ip", ""), "retiree": retire.exists(), "listes": source.exists(), "bloques": 0, "freebox": "",
-         "dns_freebox": [], "ipv6": e.get("ipv6", ""), "retrait_attente": retire.exists() and bool(e)}
+         "dns_freebox": [], "ipv6": e.get("ipv6", ""), "retrait_attente": retire.exists() and bool(e),
+         "durable": durable()}
     try:
-        r["bloques"] = int(json.loads(statut.read_text()).get("blocked", 0))
+        fd = os.open(statut, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        _ordinaire(fd)
+        with os.fdopen(fd) as f:
+            r["bloques"] = int(json.loads(f.read(65536)).get("blocked", 0))
     except (OSError, ValueError, TypeError, AttributeError):
         pass
     rc, lu = freebox(run, "dns-lire")
@@ -397,7 +480,7 @@ def etat_complet(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETI
         r["freebox"] = "autre_reseau"
     elif dns == [r["ip"]] and r["ip"]:
         r["freebox"] = "actif" if "dns_origine" in e else "origine_inconnue"
-    elif "dns_origine" in e and dns != [e.get("ip_posee")]:
+    elif "dns_origine" in e and not (len(dns) == 1 and dns[0] in e.get("ips_posees", [])):
         r["freebox"] = "repris"
     else:
         r["freebox"] = "droit_requis"
@@ -414,7 +497,16 @@ def main(argv: List[str]) -> int:
     else:
         ETAT.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with open(VERROU, "w") as v:
-            fcntl.flock(v, fcntl.LOCK_EX)      # le suivi et un retrait manuel ne se croisent jamais
+            # le suivi et un retrait manuel ne se croisent jamais ; 200 s, sous le délai de l'API
+            for _ in range(200):
+                try:
+                    fcntl.flock(v, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except OSError:
+                    time.sleep(1)
+            else:
+                print(json.dumps({"etat": "occupe"}))
+                return 0
             if cmd == "activer":
                 r = activer()
             elif cmd == "retirer":
@@ -423,7 +515,8 @@ def main(argv: List[str]) -> int:
                 RETIRE.unlink(missing_ok=True)
                 r = activer()
     print(json.dumps(r))
-    return 0 if r.get("etat") not in ("erreur_dns", "dns_non_rendu") else 1
+    # activer finit à 0 : l'unité reste active, donc son ExecStop rendra le DNS ; seul un plantage la met en échec.
+    return 1 if cmd != "activer" and r.get("etat") in ("erreur_dns", "dns_non_rendu") else 0
 
 
 if __name__ == "__main__":

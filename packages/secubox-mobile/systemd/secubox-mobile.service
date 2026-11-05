@@ -10,7 +10,7 @@ After=network-online.target unbound.service nftables.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=-/usr/sbin/secubox-mobilectl activer
+ExecStart=/usr/sbin/secubox-mobilectl activer
 ExecStop=-/usr/sbin/secubox-mobilectl retirer
 TimeoutStartSec=600
 TimeoutStopSec=90
@@ -20,8 +20,11 @@ ProtectHome=yes
 PrivateTmp=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
-RestrictSUIDSGID=no
-ReadWritePaths=/etc/unbound/unbound.conf.d /etc/nftables.d /var/lib/secubox-mobile /var/lib/secubox-dns-listes /var/lib/secubox/ad-guard /var/lib/secubox/freebox /var/log/secubox /run
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+ReadWritePaths=/etc/unbound/unbound.conf.d /etc/nftables.d /var/lib/secubox-mobile -/var/lib/secubox-dns-listes -/var/lib/secubox/ad-guard -/var/lib/secubox/filterlists -/var/lib/secubox/freebox -/var/log/secubox /run
 StateDirectory=secubox-mobile
 StateDirectoryMode=0700
 
