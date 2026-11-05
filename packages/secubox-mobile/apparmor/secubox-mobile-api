@@ -5,12 +5,13 @@
 
 #include <tunables/global>
 
-/usr/sbin/secubox-mobile-api {
+/usr/sbin/secubox-mobile-api flags=(attach_disconnected) {
   #include <abstractions/base>
   #include <abstractions/python>
   #include <abstractions/nameservice>
 
   /usr/sbin/secubox-mobile-api r,
+  /usr/sbin/ r,
   /usr/bin/python3* rix,
   # Le seul assistant privilégié : sudo (sudoers à argv exact), hors de ce profil.
   /usr/bin/sudo Ux,

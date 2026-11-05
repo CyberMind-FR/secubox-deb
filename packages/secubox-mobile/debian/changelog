@@ -1,3 +1,9 @@
+secubox-mobile (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * Essai en VM : listes compilées par leur unité, socket de l'API en 660, profil AppArmor complété (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 07:49:57 +0100
+
 secubox-mobile (0.3.0-1~trixie1) trixie; urgency=medium
 
   * Activation (listes, Unbound et port 53 du réseau local, Freebox) et retrait à l'extinction ; page web, bouton « Retirer la clé », guidage Freebox, IPv6, profil AppArmor de l'API (ref #3467).
