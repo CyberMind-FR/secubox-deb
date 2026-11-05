@@ -45,8 +45,8 @@ LAN_IFACES=lan0 lan1 lan2 lan3
 DPI_MODE=passive
 SWAP_SIZE=512M
 
-# Image size: 4G for 8GB eMMC (ESPRESSObin Ultra has 8GB eMMC)
-IMG_SIZE="4G"
+# Image size: 7168M for 8GB eMMC (ESPRESSObin Ultra has 8GB eMMC) ; 4G refusait le profil lite (4769 MiB)
+IMG_SIZE="7168M"
 
 # Image compressee en xz : le .img.gz de lite pese 2,07 Gio, au-dela des 2 Gio d'un fichier de release GitHub (#2146).
 # Se flashe avec `xzcat <image>.img.xz | dd of=/dev/mmcblk0 bs=4M status=progress`.

@@ -633,12 +633,10 @@ mkdir -p "${WORK_DIR}/mnt/esp/dtbs/marvell"
 if [[ -d "${KERNEL_SRC}/dtbs" ]]; then
     cp -r "${KERNEL_SRC}/dtbs/"* "${WORK_DIR}/mnt/esp/dtbs/" 2>/dev/null || true
 fi
-# Try standard Debian location
-if [[ -d "${WORK_DIR}/mnt/rootfs/usr/lib/linux-image-"* ]]; then
-    DTB_DIR=$(ls -1d "${WORK_DIR}/mnt/rootfs/usr/lib/linux-image-"* | head -1)
-    if [[ -f "${DTB_DIR}/marvell/armada-7040-mochabin.dtb" ]]; then
-        cp "${DTB_DIR}/marvell/armada-7040-mochabin.dtb" "${WORK_DIR}/mnt/esp/dtbs/marvell/"
-    fi
+# Emplacement Debian, celui du noyau retenu : `[[ -d motif ]]` ne développe pas le motif, le DTB n'était jamais copié.
+DTB_DEBIAN="${WORK_DIR}/mnt/rootfs/usr/lib/linux-image-${KVER}/marvell/armada-7040-mochabin.dtb"
+if [[ -f "$DTB_DEBIAN" ]]; then
+    cp "$DTB_DEBIAN" "${WORK_DIR}/mnt/esp/dtbs/marvell/"
 fi
 
 [[ -s "${WORK_DIR}/mnt/esp/dtbs/marvell/armada-7040-mochabin.dtb" ]] || err "DTB armada-7040-mochabin.dtb absent de la partition de boot"
