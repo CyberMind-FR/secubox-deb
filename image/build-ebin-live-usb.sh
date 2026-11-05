@@ -89,6 +89,7 @@ while [[ $# -gt 0 ]]; do
         --embed-image)    EMBED_IMAGE="$2";     shift 2 ;;
         --profile)        PROFILE_TAG="${2#secubox-}"; shift 2 ;;
         --local-cache)    USE_LOCAL_CACHE=1;    shift   ;;
+        --slipstream)     SLIPSTREAM_DEBS=1;    shift   ;;
         --no-slipstream)  SLIPSTREAM_DEBS=0;    shift   ;;
         --no-compress)    NO_COMPRESS=1;        shift   ;;
         --help|-h)        usage ;;
