@@ -423,7 +423,8 @@ def activer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, c
     lan.update(adresse_v6(run, lan["dev"]))
     res = {"ip": lan["ip"], "listes": source.exists()}
     if not source.exists():
-        rc, _ = run(["/usr/sbin/secubox-adblock-sync", "sync"])
+        # par son unité : la compilation a ses propres droits, hors du bac à sable de celle-ci
+        rc, _ = run(["systemctl", "start", "secubox-adblock-sync.service"])
         res["listes"] = rc == 0
     for err in (poser_unbound(run, lan, conf), poser_nft(run, lan, nft)):
         if err:

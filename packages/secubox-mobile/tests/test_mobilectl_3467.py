@@ -278,7 +278,7 @@ def test_exception_root_documentee_et_unite_confinee():
 def test_api_a_son_profil_apparmor():
     u = (CHEMIN.parents[1] / "systemd/secubox-mobile-api.service").read_text()
     assert "ExecStart=/usr/sbin/secubox-mobile-api" in u
-    assert "/usr/sbin/secubox-mobile-api {" in (CHEMIN.parents[1] / "apparmor/secubox-mobile-api").read_text()
+    assert "/usr/sbin/secubox-mobile-api flags=(attach_disconnected) {" in (CHEMIN.parents[1] / "apparmor/secubox-mobile-api").read_text()
 
 
 def test_dns6_change_par_l_utilisateur_ni_reecrit_ni_ecrase(k):
@@ -373,3 +373,14 @@ def test_marqueur_de_persistance_hors_de_la_branche_slipstream():
     b = (CHEMIN.parents[3] / "image/build-live-usb.sh").read_text(encoding="utf-8")
     assert b.index('touch "${ROOTFS}/var/lib/secubox/.persistent"') < b.index('log "Creating build metadata..."')
     assert b.index('touch "${ROOTFS}/var/lib/secubox/.persistent"') > b.index('rm -rf "${ROOTFS}/tmp/secubox-debs"')
+
+
+def test_listes_compilees_par_leur_unite(tmp_path, k):
+    f = Faux()
+    C.activer(f, source=tmp_path / "absent", **k[0])
+    assert ["systemctl", "start", "secubox-adblock-sync.service"] in f.appels
+
+
+def test_socket_de_l_api_fermee_apres_le_demarrage():
+    u = (CHEMIN.parents[1] / "systemd/secubox-mobile-api.service").read_text()
+    assert "chmod 660 /run/secubox/mobile.sock" in u
