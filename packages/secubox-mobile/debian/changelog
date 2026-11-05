@@ -1,3 +1,9 @@
+secubox-mobile (0.3.3-1~trixie1) trixie; urgency=medium
+
+  * Le réseau où la clé est branchée devient sa zone de confiance nginx (ref #3467).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 05 Nov 2026 09:13:54 +0100
+
 secubox-mobile (0.3.2-1~trixie1) trixie; urgency=medium
 
   * Dépend de secubox-p2p et secubox-annuaire : le premier pas s'arrêtait à l'étape maillage (ref #3467).

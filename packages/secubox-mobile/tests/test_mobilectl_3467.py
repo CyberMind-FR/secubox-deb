@@ -85,7 +85,7 @@ def k(tmp_path, monkeypatch):
 
 
 def act(f, k):
-    return C.activer(f, source=k[1], **k[0])
+    return C.activer(f, source=k[1], geo=k[0]["conf"].with_name("absent") / "geo", **k[0])
 
 
 def ret(f, k, **a):
@@ -377,10 +377,26 @@ def test_marqueur_de_persistance_hors_de_la_branche_slipstream():
 
 def test_listes_compilees_par_leur_unite(tmp_path, k):
     f = Faux()
-    C.activer(f, source=tmp_path / "absent", **k[0])
+    C.activer(f, source=tmp_path / "absent", geo=tmp_path / "absent/geo", **k[0])
     assert ["systemctl", "start", "secubox-adblock-sync.service"] in f.appels
 
 
 def test_socket_de_l_api_fermee_apres_le_demarrage():
     u = (CHEMIN.parents[1] / "systemd/secubox-mobile-api.service").read_text()
     assert "chmod 660 /run/secubox/mobile.sock" in u
+
+
+def test_le_reseau_courant_devient_zone_de_confiance(tmp_path):
+    f = Faux(ip="192.168.0.20", gw="192.168.0.1")
+    geo = tmp_path / "geo"
+    C.poser_geo(f, {"reseau": "192.168.0.0/24", "reseau6": "2001:db8::/64"}, geo)
+    assert geo.read_text() == "192.168.0.0/24 1;\n2001:db8::/64 1;\n"
+    assert ["systemctl", "reload", "nginx"] in f.appels
+    f.appels.clear()
+    C.poser_geo(f, {"reseau": "192.168.0.0/24", "reseau6": "2001:db8::/64"}, geo)
+    assert not f.appels
+
+
+def test_loopback_ipv6_est_de_confiance():
+    geo = (CHEMIN.parents[2] / "secubox-hub/nginx/secubox-lan-geo.conf").read_text(encoding="utf-8")
+    assert "\n    ::1 " in geo

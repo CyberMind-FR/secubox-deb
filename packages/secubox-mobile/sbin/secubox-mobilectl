@@ -32,6 +32,7 @@ VERROU = Path("/run/secubox-mobile.lock")
 RETIRE = Path("/run/secubox-mobile.retire")      # geste manuel : tient jusqu'au prochain démarrage
 UNBOUND = Path("/etc/unbound/unbound.conf.d/60-secubox-mobile.conf")
 NFT = Path("/etc/nftables.d/zz-secubox-mobile.nft")
+GEO = Path("/etc/nginx/secubox-lan-geo.d/netmodes-lan.conf")     # fragment prévu pour le LAN local ; pas de mode routeur ici
 AUDIT = Path("/var/log/secubox/audit.log")
 SOURCE_LISTES = Path("/var/lib/secubox-dns-listes/sources/95-secubox-adblock.conf")
 STATUT_LISTES = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
@@ -261,6 +262,20 @@ def fermer_nft(run: Lanceur, fichier: Path = NFT) -> None:
         run(["nft", "delete", "rule", "inet", "filter", "input", "handle", h])
 
 
+def poser_geo(run: Lanceur, lan: dict, geo: Path = GEO) -> None:
+    """Le réseau où la clé est branchée est sa zone de confiance : sinon, hors de 192.168.1.0/24, personne ne se connecte."""
+    voulu = f"{lan['reseau']} 1;\n" + (f"{lan['reseau6']} 1;\n" if lan.get("reseau6") else "")
+    if geo.parent.exists() and (not geo.exists() or geo.read_text() != voulu):
+        avant = geo.read_text() if geo.exists() else ""
+        _poser_fichier(geo, voulu)
+        if run(["nginx", "-t"])[0] != 0:
+            _poser_fichier(geo, avant)
+            audit("zone_lan_refusee", reseau=lan["reseau"])
+            return
+        run(["systemctl", "reload", "nginx"])
+        audit("zone_lan_posee", reseau=lan["reseau"], reseau6=lan.get("reseau6", ""))
+
+
 def dns_repond(run: Lanceur, ip: str) -> bool:
     # Une réponse, quelle qu'elle soit : hors ligne, la racine peut échouer, le serveur répond quand même.
     rc, _ = run(["dig", f"@{ip}", "+time=2", "+tries=2", "+short", "secubox.in"])
@@ -413,7 +428,7 @@ def durable(live: Path = Path("/run/live"), persistance: Path = Path("/run/live/
 
 
 def activer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, conf: Path = UNBOUND,
-            source: Path = SOURCE_LISTES, nft: Path = NFT) -> dict:
+            source: Path = SOURCE_LISTES, nft: Path = NFT, geo: Path = GEO) -> dict:
     if retire.exists():
         # un retrait manuel resté en attente (Freebox injoignable) est retenté ici
         return _retirer(run, etat_f, conf, nft) if lire_etat(etat_f) else {"etat": "retiree"}
@@ -421,6 +436,7 @@ def activer(run: Lanceur = lancer, etat_f: Path = ETAT, retire: Path = RETIRE, c
     if not lan:
         return {"etat": "pas_de_reseau"}
     lan.update(adresse_v6(run, lan["dev"]))
+    poser_geo(run, lan, geo)
     res = {"ip": lan["ip"], "listes": source.exists()}
     if not source.exists():
         # par son unité : la compilation a ses propres droits, hors du bac à sable de celle-ci
