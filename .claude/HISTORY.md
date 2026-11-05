@@ -2828,3 +2828,6 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-11-05 — dpi-vue : détail par appareil (ref #3486)
 - secubox-dpi 1.14.6 : liste des appareils et fiche (reçu, envoyé, connexions, activité, usages, destinations, pays), page complète seulement. Données de /clients, aucune nouvelle API.
+
+## 2026-11-05 — DPI : détail par appareil vivant (ref #3494)
+- secubox-dpi 1.14.7 : /pub/clients et /pub/sessions tirés de sbxdpi ; cumul de plus de 7 jours écarté. Cause du gel : flowcap écoute wg-toolbox, sans trafic depuis le 2026-10-13. Sens des octets par appareil non mesuré par sbxdpi.
