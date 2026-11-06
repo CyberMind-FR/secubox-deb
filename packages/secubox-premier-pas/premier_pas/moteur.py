@@ -42,6 +42,7 @@ from . import ancre_p2p
 from . import profil as P
 
 MARQUEUR = Path("/var/lib/secubox/.premier-pas-fait")
+A_FAIRE = Path("/var/lib/secubox/.premier-pas-a-faire")   # lu par nginx : / ouvre l'assistant tant qu'il existe (#3515)
 ETAT = Path("/run/secubox-premier-pas/etat.json")
 JOURNAL = Path("/var/log/secubox/premier-pas.log")
 SECUBOX_CONF = Path("/etc/secubox/secubox.conf")
@@ -509,6 +510,8 @@ def appliquer(profil: Dict[str, Any], executeur: Executeur = execute_reel,
         faites.append(a.quoi)
     marqueur.parent.mkdir(parents=True, exist_ok=True)
     marqueur.write_text(time.strftime("%Y-%m-%dT%H:%M:%S\n"))
+    if marqueur == MARQUEUR:
+        A_FAIRE.unlink(missing_ok=True)
     ecrit_etat(phase="fait", total=len(actions), avertissements=avertissements)
     journal("premier pas terminé" + (f" ({len(avertissements)} avertissement(s))" if avertissements else ""))
     return Resultat(ok=True, faites=faites, avertissements=avertissements)
