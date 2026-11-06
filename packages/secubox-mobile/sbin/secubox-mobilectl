@@ -269,7 +269,8 @@ def poser_geo(run: Lanceur, lan: dict, geo: Path = GEO) -> None:
     if geo.parent.exists() and (not geo.exists() or geo.read_text() != voulu):
         avant = geo.read_text() if geo.exists() else ""
         _poser_fichier(geo, voulu)
-        if run(["nginx", "-t"])[0] != 0:
+        # Hors du bac à sable de l'unité : sous ProtectSystem=strict, nginx -t échoue toujours sur /run/nginx.pid (#3514).
+        if run(["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "/usr/sbin/nginx", "-t"])[0] != 0:
             _poser_fichier(geo, avant)
             audit("zone_lan_refusee", reseau=lan["reseau"])
             return
