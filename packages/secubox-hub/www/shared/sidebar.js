@@ -61,7 +61,17 @@
 
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.45.0';
+    const VERSION = 'v2.46.0';
+    // Le dé du Hall seul, version en infobulle (#3540). Sans le moteur (Hall absent), le nom reste affiché.
+    const LOGO_DE = '<sbx-dice size="44" speed="4" fov="40"><span class="logo">SECUBOX</span></sbx-dice>';
+    (function chargerDe() {
+        if (window.customElements && customElements.get('sbx-dice')) return;
+        if (document.querySelector('script[src="/sbx-dice.js"]')) return;
+        var script = document.createElement('script');
+        script.src = '/sbx-dice.js';
+        script.defer = true;
+        document.head.appendChild(script);
+    })();
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -1633,8 +1643,7 @@
             'Voir et démarrer les modules</a>' : '';
 
         sidebar.innerHTML = '<div class="sidebar-header">' +
-            '<a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span>' +
-            '<span class="logo-version">' + VERSION + '</span></div></a></div>' +
+            '<a href="/" class="logo-de" title="SecuBox ' + VERSION + '" aria-label="SecuBox, accueil">' + LOGO_DE + '</a></div>' +
             '<div class="sidebar-nav">' +
             '<div class="nav-section"><div class="nav-items">' +
             '<a href="/" class="nav-item"><span class="icon">🏠</span><span>Accueil</span></a>' +
