@@ -9,7 +9,7 @@
 *Mis à jour : 2026-11-01 (SBX TV Privacy lot 3 + #3362 déployés gk2 ; pilotage L2 fusionné #3278, non déployé ; WAF #3257 #3273 déployés ; conteneurs trixie #3274).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
-- ⬜ **Next Up (bêta 1, #3480)** : suivre la release v3.0.0-beta.1 ; essai Freebox réelle, IPv6, vraie clé, TV Privacy ; puis bêta 2 SBX Trust.
+- ⬜ **Next Up (bêta 1 validée le 2026-11-06)** : série corrective #3514, #3515, #3516, #3518, #3523, #3524, #3488 ; puis gk3 #3517 (sauvegarde d'abord), `secubox-ai` #3509, dictionnaire ZIA #3522, templates #3510, bêta 2 SBX Trust.
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
 

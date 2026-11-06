@@ -9,6 +9,13 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-06 — Bêta 1 validée par le propriétaire (ref #3480)
+- Correctifs images : `aggregator` 0.5.6 et `minimal` 0.11.1, closes #3503 ; 16 images republiées sur `v3.0.0-beta.1` (pré-version), contrôlées une à une (somme, agrégateur, premier-pas, hub, net-detect, netmodes), dont le live ESPRESSObin v7. Installateurs non reconstruits.
+- Essais réels : VM x64 (assistant, kiosque) ; RPi4 + LCD DSI (assistant, kiosque, tactile), après `secubox-rpi-dsi configure` à la main et frappe clavier pour secubox-bootmenu.
+- Torrent : `secubox-ytsas` 0.8.10 déployé gk2, closes #3505, closes #3507. ZIA : choix du moteur gk0, `secubox-zia` 0.3.2 déployé gk2 (ref #3512).
+- Pour la série suivante : #3514, #3515, #3516, #3518, #3523, #3524, #3488 (connexion automatique limitée à la console, par défaut, réglage kiosque au System Hub), #3489 ; plus tard #3525.
+- POC IA local hors dépôt (`~/poc-secubox-ai`, gk0), dialogue public `ai.gk0.secubox.in` : vhost nginx manuel sur gk2, exception de POC (#3509, #3511).
+
 ## 2026-11-04 — Bêta 1 : première image Mobile, démarrage validé en VM (ref #3467, ref #3470)
 - PR #3471, #3472, #3473, #3474, #3475 : profil `mobile`, dépendances déclarées installées avant dpkg, `apparmor` dans hardening, cache créé avant le test nginx. Run 41823008342 : 21 paquets, 1,46 Go compressée.
 - VirtualBox 2 Go : prêt en 50 s, aucun service en échec, AppArmor chargé, /run/secubox en 1777, 894 Mo utilisés dont le kiosque.
