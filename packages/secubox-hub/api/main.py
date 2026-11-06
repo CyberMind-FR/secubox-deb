@@ -793,6 +793,15 @@ def _refresh_health_batch():
     superposer_montes(modules, modules_montes())
     superposer_lxc(modules, SONDES_LXC)
 
+    # Une page de menu servie par un autre module (`unite`) a l'état de ce module (#3549) : sans cela,
+    # tv-privacy, servie par ad-guard, apparaissait à l'arrêt alors que le service répond.
+    try:
+        for item in _load_menu_definitions():
+            ident, unite = item.get("id"), item.get("unite")
+            if ident and unite and ident not in modules and unite in modules:
+                modules[ident] = modules[unite]
+    except (OSError, ValueError) as exc:
+        log.warning("états des pages servies par un autre module non repris : %s", exc)
     _cache["health_batch"] = {"modules": modules, "count": len(modules)}
     _cache["health_batch_ts"] = time.time()
 
