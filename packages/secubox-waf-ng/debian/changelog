@@ -1,3 +1,9 @@
+secubox-waf-ng (1.34.1-1~trixie1) trixie; urgency=medium
+
+  * Ligne d'alerte en direct : heure façon console [HH:MM:SS] (ref #3545).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 16:30:48 +0100
+
 secubox-waf-ng (1.34.0-1~trixie1) trixie; urgency=medium
 
   * Plages protégées lues dans /etc/secubox/waf/protegees.env, plus en dur dans l'unité ;
