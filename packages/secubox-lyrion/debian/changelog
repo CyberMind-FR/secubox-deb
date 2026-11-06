@@ -1,3 +1,9 @@
+secubox-lyrion (1.7.10-1~trixie1) trixie; urgency=medium
+
+  * La page ouverte ne sature plus la box : groupe entier tué au délai, médiathèque mémorisée, pas de lecture par-dessus la précédente, secubox-domaine à la demande (ref #3546).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 15:06:14 +0100
+
 secubox-lyrion (1.7.9-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

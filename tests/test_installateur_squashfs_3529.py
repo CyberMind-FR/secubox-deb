@@ -7,7 +7,8 @@ SCRIPT = (Path(__file__).resolve().parents[1] / "image/build-installer-iso.sh").
 
 
 def test_initramfs_regenere_avec_squashfs_avant_le_squashfs():
-    modules = SCRIPT.index("squashfs loop overlay")
+    modules = SCRIPT.index("manual_add_modules squashfs loop overlay")
+    assert 'rm -f "${DESTDIR}/etc/modprobe.d/secubox-blacklist.conf"' in SCRIPT
     regenere = SCRIPT.index('update-initramfs -u -k all', modules)
     assert regenere < SCRIPT.index('mksquashfs "${ROOTFS}"') < SCRIPT.index('cp "${ROOTFS}/boot/initrd.img-"')
 

@@ -61,7 +61,17 @@
 
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.45.0';
+    const VERSION = 'v2.48.0';
+    // Le dé du Hall seul, version en infobulle (#3540). Sans le moteur (Hall absent), le nom reste affiché.
+    const LOGO_DE = '<sbx-dice size="84" speed="4" fov="40"><span class="logo">SECUBOX</span></sbx-dice><span class="logo-sbx">SBX</span>';
+    (function chargerDe() {
+        if (window.customElements && customElements.get('sbx-dice')) return;
+        if (document.querySelector('script[src="/sbx-dice.js"]')) return;
+        var script = document.createElement('script');
+        script.src = '/sbx-dice.js';
+        script.defer = true;
+        document.head.appendChild(script);
+    })();
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -1633,8 +1643,7 @@
             'Voir et démarrer les modules</a>' : '';
 
         sidebar.innerHTML = '<div class="sidebar-header">' +
-            '<a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span>' +
-            '<span class="logo-version">' + VERSION + '</span></div></a></div>' +
+            '<a href="/" class="logo-de" title="SecuBox ' + VERSION + '" aria-label="SecuBox, accueil">' + LOGO_DE + '</a></div>' +
             '<div class="sidebar-nav">' +
             '<div class="nav-section"><div class="nav-items">' +
             '<a href="/" class="nav-item"><span class="icon">🏠</span><span>Accueil</span></a>' +
@@ -2338,6 +2347,64 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', marquerAurora);
     setTimeout(marquerAurora, 300);
 
+    // Barre d'icônes (#3533) : le menu se replie sur le logo et les icônes, se déplie au survol, au focus ou au toucher, et
+    // se replie seul. Par-dessus la page : le contenu ne bouge pas. Pas sur téléphone (hamburger) ni en cadre. Désactivable :
+    // localStorage sbx_menu_rail = "0".
+    var RAIL_LARGEUR = 76, RAIL_DELAI = 4000, _railMinuteur = null;
+    function railVoulu() {
+        if (EMBARQUE || window.innerWidth <= 768) return false;
+        try { return localStorage.getItem('sbx_menu_rail') !== '0'; } catch (e) { return true; }
+    }
+    function railMarges(actif) {
+        // Chaque page pose sa propre marge de 220 px : on mesure au lieu de lister cent feuilles de style.
+        document.querySelectorAll('body > *, body > * > main, .principal, main').forEach(function (e) {
+            if (e.id === 'sidebar' || e.classList.contains('sidebar')) return;
+            if (actif) {
+                var m = parseFloat(getComputedStyle(e).marginLeft);
+                if (m >= 200 && m <= 260) { e.style.setProperty('margin-left', RAIL_LARGEUR + 'px', 'important'); e.dataset.sbxRail = '1'; }
+            } else if (e.dataset.sbxRail) { e.style.removeProperty('margin-left'); delete e.dataset.sbxRail; }
+        });
+    }
+    function railReplier() {
+        clearTimeout(_railMinuteur);
+        var nav = document.getElementById('sidebar');
+        if (nav) nav.classList.remove('rail-ouvert');
+    }
+    function railAppliquer() {
+        var actif = railVoulu();
+        document.documentElement.classList.toggle('sbx-rail', actif);
+        railMarges(actif);
+        if (!actif) railReplier();
+    }
+    function railInit() {
+        if (EMBARQUE || !document.getElementById('sidebar')) return;
+        var st = document.createElement('style');
+        st.textContent =
+            'html.sbx-rail .sidebar{width:' + RAIL_LARGEUR + 'px!important;overflow:hidden;transition:width .22s ease .35s;z-index:1200}' +
+            'html.sbx-rail .sidebar:hover,html.sbx-rail .sidebar:focus-within,html.sbx-rail .sidebar.rail-ouvert{width:220px!important;transition-delay:0s;box-shadow:12px 0 30px rgba(0,0,0,.45)}' +
+            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) :is(.logo-sbx,.sidebar-footer,.toggle-icon,.nav-mode,.nav-mode-link,#sbx-recherche,#sbx-recherche-vide,.nav-section-title>span:not(.cat-icon),.nav-item>span:not(.icon)){display:none!important}' +
+            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) :is(.nav-item,.nav-section-title){justify-content:center;padding-left:0;padding-right:0}' +
+            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) .sidebar-header{padding:.75rem 0}' +
+            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) .sidebar-header sbx-dice{transform:scale(.72);transform-origin:center}' +
+            '@media (prefers-reduced-motion:reduce){html.sbx-rail .sidebar{transition:none}}';
+        document.head.appendChild(st);
+        var nav = document.getElementById('sidebar');
+        // Au toucher, pas de survol : le premier appui déplie, le suivant suit le lien ; repli seul ou en touchant ailleurs.
+        nav.addEventListener('click', function (e) {
+            if (!document.documentElement.classList.contains('sbx-rail')) return;
+            if (!window.matchMedia('(hover: none)').matches) return;
+            if (!nav.classList.contains('rail-ouvert')) { e.preventDefault(); e.stopPropagation(); nav.classList.add('rail-ouvert'); }
+            clearTimeout(_railMinuteur);
+            _railMinuteur = setTimeout(railReplier, RAIL_DELAI);
+        }, true);
+        document.addEventListener('click', function (e) { if (!nav.contains(e.target)) railReplier(); });
+        window.addEventListener('resize', railAppliquer);
+        railAppliquer();
+        // Les pages finissent leur mise en page après le menu.
+        setTimeout(railAppliquer, 400);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', railInit); else setTimeout(railInit, 0);
+
     function applyMobileMode(enable) {
         var sidebar = document.getElementById('sidebar');
         var toggle = document.getElementById('sidebar-toggle');
@@ -2485,7 +2552,7 @@
             sidebar.innerHTML = cachedHTML;
             console.log('[Sidebar] Instant render from HTML cache');
         } else {
-            sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
+            sidebar.innerHTML = '<div class="sidebar-header"><a href="/" class="logo-de" title="SecuBox ' + VERSION + '" aria-label="SecuBox, accueil">' + LOGO_DE + '</a>' +
                 '<div class="header-leds-metrics" id="header-leds-metrics">' +
                 '<div class="led-metric-row sync-status" id="sync-status-row"><div class="sync-led" id="sync-led">⏳</div><span class="led-metric-val sync-val" id="lm-sync" title="Data sync status">--</span></div>' +
                 '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,3)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-3"></div><span class="led-metric-val" id="lm-sec">--</span></div>' +
@@ -2614,7 +2681,7 @@
                 (enEspaces ? '<input id="sbx-recherche" type="search" placeholder="Rechercher un module…" aria-label="Rechercher un module" autocomplete="off" style="width:100%;margin-top:.35rem;padding:.3rem .5rem;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:transparent;color:inherit;font-size:.78rem"><div id="sbx-recherche-vide" hidden style="font-size:.72rem;opacity:.7;padding:.3rem 0">Aucun résultat.</div>' : '') +
                 '</div>' + menuHTML;
 
-            sidebar.innerHTML = '<div class="sidebar-header"><a href="/"><span class="logo-icon">🔒</span><div><span class="logo">SECUBOX</span><span class="logo-version">🚀 ' + VERSION + '</span></div></a>' +
+            sidebar.innerHTML = '<div class="sidebar-header"><a href="/" class="logo-de" title="SecuBox ' + VERSION + '" aria-label="SecuBox, accueil">' + LOGO_DE + '</a>' +
                 '<div class="header-leds-metrics" id="header-leds-metrics">' +
                 '<div class="led-metric-row sync-status" id="sync-status-row"><div class="sync-led" id="sync-led">⏳</div><span class="led-metric-val sync-val" id="lm-sync" title="Data sync status">--</span></div>' +
                 '<div class="led-metric-row" onmouseenter="SecuBoxSidebar.showHwLedTooltip(this,3)" onmouseleave="SecuBoxSidebar.hideHwLedTooltip()"><div class="hw-led-v" id="hw-led-3"></div><span class="led-metric-val" id="lm-sec">--</span></div>' +
