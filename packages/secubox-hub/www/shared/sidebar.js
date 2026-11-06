@@ -63,7 +63,7 @@
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
     const VERSION = 'v2.46.0';
     // Le dé du Hall seul, version en infobulle (#3540). Sans le moteur (Hall absent), le nom reste affiché.
-    const LOGO_DE = '<sbx-dice size="64" speed="4" fov="40"><span class="logo">SECUBOX</span></sbx-dice>';
+    const LOGO_DE = '<sbx-dice size="44" speed="4" fov="40"><span class="logo">SECUBOX</span></sbx-dice>';
     (function chargerDe() {
         if (window.customElements && customElements.get('sbx-dice')) return;
         if (document.querySelector('script[src="/sbx-dice.js"]')) return;
