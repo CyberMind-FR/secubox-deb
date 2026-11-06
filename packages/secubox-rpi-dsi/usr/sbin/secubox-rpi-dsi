@@ -232,11 +232,15 @@ update_initramfs() {
 
 # Plymouth a besoin de l'écran dès l'initramfs, et de splash au démarrage (#3525).
 ecran_au_demarrage() {
-    local m f=/etc/initramfs-tools/modules
+    # Mêmes racines que raspi-firmware, pour rester testable hors de /etc.
+    local m d f
+    d="$(dirname "$RFCONF")"
+    f="$d/../initramfs-tools/modules"
+    mkdir -p "$(dirname "$f")"
     for m in i2c_mux_pinctrl rpi_panel_attiny_regulator vc4 tc358762 panel_simple; do
         grep -qx "$m" "$f" 2>/dev/null || echo "$m" >> "$f"
     done
-    printf 'quiet splash plymouth.ignore-serial-consoles\n' > /etc/default/raspi-extra-cmdline
+    printf 'quiet splash plymouth.ignore-serial-consoles\n' > "$d/raspi-extra-cmdline"
 }
 
 configure() {
