@@ -1,3 +1,9 @@
+secubox-zia (0.3.2-1~trixie1) trixie; urgency=medium
+
+  * Choix du moteur : llm_urls (moteurs du maillage) s'ils répondent, llm_url en repli, répondeur heuristique en dernier (ref #3512).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 10:26:34 +0100
+
 secubox-zia (0.3.1-1~trixie1) trixie; urgency=medium
 
   * « Activez la radio. » répondait « Je n'ai rien trouvé de visible » (ref #3074) : ni « active » ni le vouvoiement

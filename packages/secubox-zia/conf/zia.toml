@@ -12,6 +12,8 @@ model_name = "heuristique"
 # sur la MOCHAbin (P0), pointer ici, ex. "http://127.0.0.1:8080". Les OBJETS viennent
 # toujours des outils du bus, jamais de la generation.
 llm_url = ""
+# Moteurs préférés (maillage), essayés dans l'ordre s'ils répondent ; llm_url reste le repli local.
+llm_urls = []
 n_predict = 120
 llm_timeout_s = 20
 
