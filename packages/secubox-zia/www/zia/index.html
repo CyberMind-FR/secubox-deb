@@ -187,6 +187,9 @@
             function ouvreObjet(svc, type, url, titre) {
                 if (DEMO) { toast('Démonstration : action inerte.'); return; }
                 if (parent === window) { if (url) location.href = url; else location.href = '/' + svc + '/'; return; }
+                // Page d'un module : son hôte admin, dans un onglet. Le Hall n'accepte « ouvre » que du cadre du service visé,
+                // et « ouvre-hote » passerait par le Surf (#3520).
+                if (/^service/.test(type) && url) { window.open(url, '_blank', 'noopener'); return; }
                 try {
                     if (type === 'service' || !url) { parent.postMessage({ sbx: 'ouvre', id: svc }, '*'); return; }
                     if (/^media\./.test(type)) { parent.postMessage({ sbx: 'voir', url: url, titre: titre }, '*'); return; }
