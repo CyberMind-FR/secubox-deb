@@ -26,6 +26,8 @@ PYEOF
 
         # Seed default users (admin + <hostname>) if missing
         HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname)"
+        # Dans une construction d'image, ce nom est celui de la machine de CI : jamais un compte (#3518).
+        if ischroot 2>/dev/null || [ -n "${SECUBOX_IMAGE_BUILD:-}" ]; then HOSTNAME_SHORT=""; fi
         for U in admin "$HOSTNAME_SHORT"; do
             [ -n "$U" ] || continue
             SBX_SEED_USER="$U" python3 - <<'PYEOF' || echo "WARN: seed for $U failed"

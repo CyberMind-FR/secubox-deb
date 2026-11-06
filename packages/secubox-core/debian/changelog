@@ -1,3 +1,9 @@
+secubox-core (1.8.20-1~trixie1) trixie; urgency=medium
+
+  * Secrets créés au premier démarrage (secubox-secrets-premier), jamais hérités d'une image (ref #3518).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 13:21:26 +0100
+
 secubox-core (1.8.19-1~trixie1) trixie; urgency=medium
 
   * secubox-wait-network.sh : plus de netplan apply au démarrage (bloquait secubox-network-ready jusqu'au délai sur

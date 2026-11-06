@@ -3590,6 +3590,9 @@ mkdir -p "${LIVE_DIR}/live"
 # Remove the build-time service-deny shim so the booted system starts services.
 rm -f "${ROOTFS}/usr/sbin/policy-rc.d"
 
+# Aucun secret de construction dans une image (#3518).
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/purger-secrets.sh"
+purger_secrets "${ROOTFS}" || { echo "purge des secrets échouée" >&2; exit 1; }
 mksquashfs "${ROOTFS}" "${LIVE_DIR}/live/filesystem.squashfs" \
   -comp xz -b 1M -Xdict-size 100% -e boot/grub -e boot/efi
 

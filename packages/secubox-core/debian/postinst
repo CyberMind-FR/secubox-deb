@@ -283,6 +283,7 @@ PY
     # l'installation d'un paquet. Sur une box déjà initialisée le
     # `ConditionPathExists=!` la rend inerte, donc l'activation est sûre ici.
     systemctl enable secubox-firstboot.service 2>/dev/null || true
+    systemctl enable secubox-secrets-premier.service 2>/dev/null || true
 
     # SSH (#2528) : le drop-in sshd_config.d vient d'etre pose ou mis a jour ; on ne recharge ssh QUE si la configuration
     # entiere est valide (un fichier defectueux ne doit jamais couper l'acces distant).
