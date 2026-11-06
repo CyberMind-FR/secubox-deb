@@ -1,3 +1,9 @@
+secubox-mail (2.16.9-1~trixie1) trixie; urgency=medium
+
+  * ssl renew : la lignée acme.sh est suivie même si certbot est installé, le certificat émis est déployé (ref #3552).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 23:16:37 +0100
+
 secubox-mail (2.16.8-1~trixie1) trixie; urgency=medium
 
   * Alias : membres geres un a un (ref #3347). mailctl alias membre-add /

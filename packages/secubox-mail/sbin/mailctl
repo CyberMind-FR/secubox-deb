@@ -1465,6 +1465,24 @@ mail_ssl_fqdn() {
 # without touching the network (bats mocks this function directly).
 acme_renew() {
     local fqdn="$1"
+    local acme_home="${ACME_HOME:-/root/.acme.sh}" lignee="" ecc=()
+
+    # La lignée décide de l'outil : certbot installé ne suffit pas, il ignore un certificat suivi par acme.sh.
+    if [ -d "$acme_home/${fqdn}_ecc" ]; then
+        lignee="$acme_home/${fqdn}_ecc"; ecc=(--ecc)
+    elif [ -d "$acme_home/$fqdn" ]; then
+        lignee="$acme_home/$fqdn"
+    fi
+    if [ -n "$lignee" ] && [ ! -d "/etc/letsencrypt/live/$fqdn" ] && [ -x "$acme_home/acme.sh" ]; then
+        # Sans --force : le code 2 dit « pas encore à renouveler », le certificat courant reste à déployer.
+        local rc=0
+        "$acme_home/acme.sh" --home "$acme_home" --renew -d "$fqdn" "${ecc[@]}" || rc=$?
+        [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ] || return 1
+        [ -s "$lignee/fullchain.cer" ] && [ -s "$lignee/$fqdn.key" ] || return 1
+        cp "$lignee/fullchain.cer" "$DATA_PATH/ssl/fullchain.pem" \
+            && cp "$lignee/$fqdn.key" "$DATA_PATH/ssl/privkey.pem"
+        return
+    fi
 
     if command -v certbot >/dev/null 2>&1; then
         # secubox-certbot (#1819) démarre certbot même quand une dérive pip casse sa pile.
