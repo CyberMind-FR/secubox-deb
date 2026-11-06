@@ -14,6 +14,7 @@ purger_secrets() {
     rm -f -- "$r"/etc/ssh/ssh_host_*
     rm -f -- "$r/etc/secubox/secrets/oidc/signing.pem" "$r"/etc/secubox/tls/cert.pem "$r"/etc/secubox/tls/key.pem
     rm -rf -- "${r:?}/etc/secubox/secrets/p2p" "${r:?}/etc/nginx/secubox-p2p-pair.conf"
+    rm -f -- "$r/etc/secubox/secrets/console.key" "$r/etc/nginx/secubox-console/secret.conf"
     rm -f -- "$r"/etc/haproxy/certs/000-defaut.pem "$r"/data/haproxy/certs/000-defaut.pem
     # Vide et non absent : systemd en génère un au premier démarrage, et /var/lib/dbus le suit.
     if [[ -e "$r/etc/machine-id" ]]; then : > "$r/etc/machine-id"; fi
