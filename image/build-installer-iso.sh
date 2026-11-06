@@ -438,6 +438,11 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
 
 ok "Packages installed"
 
+# secubox-hardening interdit squashfs dans modprobe.d, règle reprise dans l'initramfs : sans lui le live ne monte pas
+# son système (« Can not mount /dev/loop0 », #3529). Un module nommé ici est chargé explicitement, malgré la liste noire.
+printf '%s\n' squashfs loop overlay >> "${ROOTFS}/etc/initramfs-tools/modules"
+chroot "${ROOTFS}" update-initramfs -u -k all || err "update-initramfs a échoué"
+
 # ── Step 4: Installer script ──────────────────────────────────────
 if [[ $INCLUDE_INSTALLER -eq 1 ]]; then
   log "4/9 Creating headless installer..."
@@ -503,7 +508,11 @@ if [ -t 0 ]; then
     echo
     [[ $REPLY =~ ^[Yy]$ ]] || exit 0
 else
-    # Headless mode - auto proceed
+    # Sans console : un disque qui contient déjà quelque chose n'est jamais effacé (#3529).
+    if lsblk -n -o FSTYPE,PTTYPE "$TARGET_DISK" 2>/dev/null | grep -q '[^[:space:]]' \
+       && ! grep -qw 'secubox.effacer=1' /proc/cmdline; then
+        err "${TARGET_DISK} n'est pas vide : démarrer le live et lancer secubox-installer à la console, ou ajouter secubox.effacer=1"
+    fi
     log "Headless mode: auto-installing to ${TARGET_DISK}"
     sleep 5  # Brief pause for serial console
 fi
