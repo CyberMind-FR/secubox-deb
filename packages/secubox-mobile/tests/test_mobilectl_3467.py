@@ -409,6 +409,8 @@ def test_le_reseau_courant_devient_zone_de_confiance(tmp_path):
     C.poser_geo(f, {"reseau": "192.168.0.0/24", "reseau6": "2001:db8::/64"}, geo)
     assert geo.read_text() == "192.168.0.0/24 1;\n2001:db8::/64 1;\n"
     assert ["systemctl", "reload", "nginx"] in f.appels
+    # #3514 : jamais dans le bac à sable de l'unité, où nginx -t échoue toujours.
+    assert ["nginx", "-t"] not in f.appels and ["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "/usr/sbin/nginx", "-t"] in f.appels
     f.appels.clear()
     C.poser_geo(f, {"reseau": "192.168.0.0/24", "reseau6": "2001:db8::/64"}, geo)
     assert not f.appels

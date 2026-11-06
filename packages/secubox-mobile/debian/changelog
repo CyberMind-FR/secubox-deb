@@ -1,3 +1,9 @@
+secubox-mobile (0.3.5-1~trixie1) trixie; urgency=medium
+
+  * Zone de confiance : nginx -t hors du bac à sable, le réseau de la clé est enfin reconnu hors 192.168.1.0/24 (ref #3514).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 13:24:30 +0100
+
 secubox-mobile (0.3.4-1~trixie1) trixie; urgency=medium
 
   * Clé derrière un pont ou un répéteur : ni bail ni DNS posés ; plus de faux « droit manquant » avant la bascule (ref #3482).
