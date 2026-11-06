@@ -506,3 +506,8 @@ body .sidebar,
 :root.sbx-embed .principal,
 :root.sbx-embed .page { margin-left: 0 !important; }
 :root.sbx-embed body { padding-top: 0 !important; padding-bottom: 0 !important; }
+
+/* Le dé du Hall seul dans l'en-tête (#3540). */
+.sidebar-header a.logo-de { justify-content: center; }
+.sidebar-header sbx-dice { display: block; width: 64px; height: 64px; line-height: 64px; filter: brightness(1.8) saturate(1.1); }
+sbx-dice:defined .logo { display: none; }

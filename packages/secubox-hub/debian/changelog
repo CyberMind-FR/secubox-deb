@@ -1,3 +1,9 @@
+secubox-hub (1.12.44-1~trixie1) trixie; urgency=medium
+
+  * Menu latéral : le dé du Hall seul en haut à gauche, version en infobulle (ref #3540).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 13:45:57 +0100
+
 secubox-hub (1.12.43-1~trixie1) trixie; urgency=medium
 
   * / ouvre l'assistant sur une box neuve (ref #3515).
