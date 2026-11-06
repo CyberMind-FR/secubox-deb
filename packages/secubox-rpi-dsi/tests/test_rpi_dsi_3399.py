@@ -438,9 +438,7 @@ def test_hooks_et_unite():
 
 
 def test_service_systemd_jamais_pris_pour_un_chroot_3523():
-    s = next(Path(__file__).resolve().parents[1].rglob("secubox-rpi-dsi"))
-    for f in Path(__file__).resolve().parents[1].rglob("secubox-rpi-dsi"):
-        if f.is_file() and "debian/secubox" not in str(f):
-            s = f
-    texte = s.read_text(encoding="utf-8")
-    assert 'INVOCATION_ID' in texte and texte.index("INVOCATION_ID") < texte.index("ischroot", texte.index("is_chroot()"))
+    racine = Path(__file__).resolve().parents[1]
+    texte = (racine / "usr/sbin/secubox-rpi-dsi").read_text(encoding="utf-8")
+    corps = texte[texte.index("is_chroot() {"):]
+    assert corps.index("INVOCATION_ID") < corps.index("ischroot")
