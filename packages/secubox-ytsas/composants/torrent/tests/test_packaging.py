@@ -12,7 +12,12 @@ wired into postinst, and the public vhost lands in sites-available (not the
 location-snippet secubox.d/ dir).
 """
 
+import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 # #2050 : composant de secubox-ytsas ; control/rules/changelog sont ceux de l absorbeur,
@@ -63,3 +68,17 @@ def test_vhost_installed_to_sites_available_not_secubox_d():
     # Guard against reintroducing the location-snippet dir for this full vhost.
     assert "secubox-torrent/etc/nginx/secubox.d/torrent.conf" not in rules
     assert "secubox-torrent/etc/nginx/secubox-vhost.d" not in rules
+
+
+def test_debit_inferieur_a_un_octet_sans_unite_undefined():
+    # 0,8 o/s affichait « 819,2 undefined/s » : indice d'unité négatif (#3505).
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node absent")
+    racine = Path(__file__).resolve().parents[1]
+    for page in ("lxc/www/index.html", "www/torrent/index.html"):
+        source = (racine / page).read_text(encoding="utf-8")
+        fonction = re.search(r"function octets\(n\) \{.*?\n  \}", source, re.S).group(0)
+        script = fonction + "\nconsole.log([0.8, 0, 1, 2048].map(octets).join('|'));"
+        sortie = subprocess.run([node, "-e", script], check=True, timeout=30, capture_output=True, text=True).stdout.strip()
+        assert sortie == "0 o|0 o|1 o|2,0 Ko"
