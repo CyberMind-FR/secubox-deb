@@ -1,0 +1,33 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox :: secret du port console (#1695, #3488). Sans lui, le kiosque retombe sur la page de connexion.
+# Créé ici et non par secubox-webos, absent des images mobile. Propre à la box : créé au lancement du kiosque, jamais
+# dans une image (purger_secrets, #3518). Jamais affiché. Côté auth : root:secubox 0640. Côté nginx : 0600 root.
+set -eu
+CLE=/etc/secubox/secrets/console.key
+DOSSIER=/etc/nginx/secubox-console
+CONF="$DOSSIER/secret.conf"
+umask 077
+install -d -o root -g secubox -m 0750 /etc/secubox/secrets
+if [ ! -s "$CLE" ]; then
+    head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$CLE.tmp"
+    mv -f "$CLE.tmp" "$CLE"
+fi
+chown root:secubox "$CLE"
+chmod 0640 "$CLE"
+install -d -o root -g root -m 0700 "$DOSSIER"
+voulu="proxy_set_header X-SecuBox-Console \"$(cat "$CLE")\";"
+if [ ! -f "$CONF" ] || [ "$(cat "$CONF")" != "$voulu" ]; then
+    printf '%s\n' "$voulu" > "$CONF.tmp"
+    mv -f "$CONF.tmp" "$CONF"
+    if nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx
+    else
+        echo "secubox-console-cle : nginx -t a échoué, rechargement non fait" >&2
+        exit 1
+    fi
+fi
