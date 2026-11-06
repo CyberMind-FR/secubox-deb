@@ -71,3 +71,25 @@ test('add rejects (never hangs/crashes) when the torrent emits error', async () 
   client._next = new FakeTorrent(null, 'Bad', [], { emitError: true });
   await assert.rejects(() => eng.add('magnet:?xt=urn:btih:bad'), /bad torrent/);
 });
+
+test('stats distingue les pairs qui ont des pieces et ceux qui envoient (#3507)', async () => {
+  const eng = new Engine({ WebTorrentCtor: FakeWebTorrent, downloadDir: '/tmp/x', maxActive: 5, webrtc: true });
+  const r = await eng.add('magnet:?xt=urn:btih:' + 'a'.repeat(40));
+  eng.get(r.infohash).wires = [
+    { type: 'tcp', peerPieces: { buffer: new Uint8Array([0, 4]) }, downloadSpeed: () => 2048 },
+    { type: 'tcp', peerPieces: { buffer: new Uint8Array([0, 0]) }, downloadSpeed: () => 0.8 },
+  ];
+  const s = eng.stats(r.infohash);
+  assert.equal(s.sources, 1);
+  assert.equal(s.envoient, 1);
+});
+
+test('trackers ajoutes aux magnets, jamais a un .torrent (#3507)', async () => {
+  const vus = [];
+  class Client extends FakeWebTorrent { add(id, opts, cb) { vus.push(opts); return super.add(id, opts, cb); } }
+  const eng = new Engine({ WebTorrentCtor: Client, downloadDir: '/tmp/x', maxActive: 5, webrtc: true, trackers: ['udp://t/announce'] });
+  await eng.add('magnet:?xt=urn:btih:' + 'a'.repeat(40));
+  await eng.add(Buffer.from('x')).catch(() => {});
+  assert.deepEqual(vus[0].announce, ['udp://t/announce']);
+  assert.equal(vus[1].announce, undefined);
+});
