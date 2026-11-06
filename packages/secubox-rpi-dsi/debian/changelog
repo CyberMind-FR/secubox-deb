@@ -1,3 +1,9 @@
+secubox-rpi-dsi (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * Écran configuré au premier démarrage : ischroot ne trompe plus le service systemd (ref #3523).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 13:26:52 +0100
+
 secubox-rpi-dsi (0.1.1-1~trixie1) trixie; urgency=medium
 
   * Tactile au demarrage (#3399) : vcc-supply et reset-gpios (broche 1 de l ATTINY) remis dans le fragment tactile, comme l overlay officiel ; sans eux la puce restait en remise a zero (-121). Valide au banc gk7 : ecran, tactile et kiosque au demarrage sans intervention.

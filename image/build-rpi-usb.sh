@@ -562,18 +562,15 @@ ConditionPathExists=!/run/secubox/bootmenu-done
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/secubox-bootmenu
-ExecStartPost=/usr/bin/touch /run/secubox/bootmenu-done
+ExecStartPost=-/usr/bin/touch /run/secubox/bootmenu-done
 StandardInput=tty
 StandardOutput=tty
 TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
-
-[Install]
-WantedBy=sysinit.target
+# Lancé à la main seulement. Avant sysinit, il attendait la console sans limite et bloquait le démarrage (#3524).
+TimeoutStartSec=30
 BOOTSVC
-
-chroot "${ROOTFS}" systemctl enable secubox-bootmenu.service 2>/dev/null || true
 
 # Script to trigger boot menu on next reboot
 cat > "${ROOTFS}/usr/local/bin/secubox-bootmenu-show" <<'SHOWMENU'
