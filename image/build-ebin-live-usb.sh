@@ -552,6 +552,9 @@ umount -lf "${ROOTFS}/proc" 2>/dev/null || true
 umount -lf "${ROOTFS}/sys"  2>/dev/null || true
 umount -lf "${ROOTFS}/dev/pts" 2>/dev/null || true
 umount -lf "${ROOTFS}/dev"  2>/dev/null || true
+# Aucun secret de construction dans une image (#3518).
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/purger-secrets.sh"
+purger_secrets "${ROOTFS}" || { echo "purge des secrets échouée" >&2; exit 1; }
 
 # Clean up rootfs
 rm -rf "${ROOTFS}/tmp/"*

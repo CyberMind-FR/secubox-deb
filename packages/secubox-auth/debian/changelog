@@ -1,3 +1,9 @@
+secubox-auth (1.8.17-1~trixie1) trixie; urgency=medium
+
+  * Pas de compte au nom de la machine dans une construction d'image (ref #3518).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 13:21:26 +0100
+
 secubox-auth (1.8.16-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images

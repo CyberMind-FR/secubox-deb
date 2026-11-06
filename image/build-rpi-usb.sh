@@ -1418,6 +1418,9 @@ umount -lf "${ROOTFS}/sys"  2>/dev/null || true
 # bind was onto-self — Step 7's rsync to the loop-mounted real BOOT
 # partition then carries them along.
 umount "${ROOTFS}/boot/firmware" 2>/dev/null || warn "/boot/firmware bind was not mounted"
+# Aucun secret de construction dans une image (#3518).
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/purger-secrets.sh"
+purger_secrets "${ROOTFS}" || { echo "purge des secrets échouée" >&2; exit 1; }
 
 # (2) remove policy-rc.d (first boot must be able to start daemons)
 rm -f "${ROOTFS}/usr/sbin/policy-rc.d"
