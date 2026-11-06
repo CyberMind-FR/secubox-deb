@@ -1,3 +1,9 @@
+secubox-kiosk (1.2.2-1~trixie1) trixie; urgency=medium
+
+  * Dépend de secubox-plymouth (ref #3525).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 13:39:12 +0100
+
 secubox-kiosk (1.2.1-1~trixie1) trixie; urgency=medium
 
   * Console de secours tty2 démarrée sans attente (--no-block) : secubox-cmdline,

@@ -1,0 +1,16 @@
+Source: secubox-plymouth
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-plymouth
+Architecture: all
+Depends: ${misc:Depends}, plymouth, plymouth-themes
+Description: SecuBox - démarrage graphique, dé du Hall et barre Aurora
+ Thème Plymouth unique pour les plateformes avec écran : rotation du dé du Hall,
+ précalculée par son vrai moteur, et barre de chargement. Le dé reste affiché
+ jusqu'au kiosque quand il y en a un.

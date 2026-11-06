@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// SecuBox-Deb :: dé du logo du Hall, rotation précalculée par le moteur sbx-dice.js (#3525).
+Window.SetBackgroundTopColor(0.024, 0.051, 0.106);
+Window.SetBackgroundBottomColor(0.024, 0.051, 0.106);
+N = 90;
+for (i = 0; i < N; i++) {
+    if (i < 10) nom = "de-0" + i + ".png";
+    else nom = "de-" + i + ".png";
+    images[i] = Image(nom);
+}
+de = Sprite(images[0]);
+de.SetX(Window.GetX() + Window.GetWidth() / 2 - images[0].GetWidth() / 2);
+de.SetY(Window.GetY() + Window.GetHeight() / 2 - images[0].GetHeight() / 2 - 20);
+n = 0;
+fun rafraichir() {
+    n++;
+    de.SetImage(images[Math.Int(n / 3) % N]);   // 50 Hz / 3 : environ 16 images par seconde, un tour en 5,4 s
+}
+Plymouth.SetRefreshFunction(rafraichir);
+// Barre de chargement Aurora : progression estimée par Plymouth, jamais remise en arrière.
+fond_image = Image("barre-fond.png");
+plein_image = Image("barre.png");
+barre_x = Window.GetX() + Window.GetWidth() / 2 - fond_image.GetWidth() / 2;
+barre_y = de.GetY() + images[0].GetHeight() + 26;
+fond = Sprite(fond_image);
+fond.SetPosition(barre_x, barre_y, 1);
+plein = Sprite();
+plein.SetPosition(barre_x, barre_y, 2);
+plus_loin = 0;
+fun progression(duree, avance) {
+    if (avance > plus_loin) plus_loin = avance;
+    largeur = Math.Int(fond_image.GetWidth() * plus_loin);
+    if (largeur < 8) largeur = 8;
+    plein.SetImage(plein_image.Scale(largeur, plein_image.GetHeight()));
+}
+Plymouth.SetBootProgressFunction(progression);
+progression(0, 0);
+
+message = Sprite();
+message.SetY(barre_y + 24);
+fun afficher(texte) {
+    im = Image.Text(texte, 0.62, 0.70, 0.84);
+    message.SetImage(im);
+    message.SetX(Window.GetX() + Window.GetWidth() / 2 - im.GetWidth() / 2);
+}
+Plymouth.SetMessageFunction(afficher);
