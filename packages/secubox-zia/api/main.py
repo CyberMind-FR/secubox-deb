@@ -36,6 +36,7 @@ from secubox_core.logger import get_logger
 from .bus import Bus
 from .tools import Tools
 from .remote import Remote
+from .runtime import etat_moteurs
 from . import runtime
 from secubox_core.auth import require_lecture
 
@@ -327,9 +328,17 @@ async def set_config(body: Params) -> dict:
             "config": {k: CFG.get(k) for k in DEFAULT_CONFIG}}
 
 
+@router.get("/llm/etat", dependencies=[Depends(exige_admin)])
+async def llm_etat() -> dict:
+    """Moteurs réellement joignables, celui qui serait choisi, celui qui a servi en dernier (#3512)."""
+    return await etat_moteurs(CFG)
+
+
 @router.post("/llm/test", dependencies=[Depends(exige_admin)])
 async def llm_test() -> dict:
-    """Ping du llama-server configuré (health + modèle) — pour valider llm_url."""
+    """Sonde chaque moteur, sans cache, et rend aussi le ping du repli local (llm_url)."""
+    if CFG.get("llm_urls"):
+        return {**(await etat_moteurs(CFG, frais=True)), "ok": None}
     url = str(CFG.get("llm_url", "") or "").strip()
     if not url:
         return {"ok": False, "reason": "llm_url vide — moteur heuristique"}

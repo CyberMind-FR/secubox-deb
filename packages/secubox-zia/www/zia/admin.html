@@ -92,8 +92,8 @@
         <div id="erreur" role="alert" hidden></div>
 
         <section class="tuiles" aria-label="Indicateurs">
-            <div class="tuile cy" id="cMoteur" title="Moteur de formulation actif : un llama-server local, ou le répondeur heuristique (sans génération)."><span class="l">Moteur</span><span class="v" id="tMoteur">—</span><span class="s" id="sMoteur">formulation des réponses</span></div>
-            <div class="tuile cy" title="Nom du modèle affiché dans la carte ZIA (réglage « Nom du modèle »)."><span class="l">Modèle</span><span class="v" id="tModele" style="font-size:1.05rem;line-height:1.2">—</span><span class="s">nom affiché</span></div>
+            <div class="tuile cy" id="cMoteur" title="Moteur qui formulerait la réponse maintenant, d'après une sonde réelle : un moteur du maillage, le repli local, ou le répondeur heuristique si aucun ne répond."><span class="l">Moteur</span><span class="v" id="tMoteur">—</span><span class="s" id="sMoteur">formulation des réponses</span></div>
+            <div class="tuile cy" title="Modèle du moteur actif, lu sur le moteur. À défaut, le nom réglé dans « Nom du modèle »."><span class="l">Modèle</span><span class="v" id="tModele" style="font-size:1.05rem;line-height:1.2">—</span><span class="s" id="sModele">nom affiché</span></div>
             <div class="tuile cy" title="Objets que le bus renvoie au rôle de la session (MetaNews, Billets, PeerTube, registre). Le modèle n’en invente aucun."><span class="l">Objets au bus</span><span class="v" id="tObjets">—</span><span class="s">visibles à ce rôle</span></div>
             <div class="tuile cy" title="Échanges de chat traités depuis le démarrage du service (compteur en mémoire, remis à zéro au redémarrage)."><span class="l">Échanges</span><span class="v" id="tEchanges">—</span><span class="s">depuis le démarrage</span></div>
             <div class="tuile cy" title="Durée moyenne d’un échange, depuis le démarrage du service. « — » tant qu’aucun échange n’a eu lieu."><span class="l">Latence moyenne</span><span class="v" id="tLatence">—</span><span class="s" id="sLatence">par échange</span></div>
@@ -110,7 +110,7 @@
                     <label for="n_predict">Tokens générés <small>n_predict (entier)</small><input id="n_predict" inputmode="numeric" autocomplete="off"></label>
                     <label for="llm_timeout_s">Délai d’attente <small>llm_timeout_s (secondes)</small><input id="llm_timeout_s" inputmode="decimal" autocomplete="off"></label>
                 </div>
-                <div class="actions"><button class="btn prim" type="button" data-save="moteur">Enregistrer le moteur</button><button class="btn" type="button" id="test">Tester le modèle</button></div>
+                <div id="moteurs" class="note"></div><div class="actions"><button class="btn prim" type="button" data-save="moteur">Enregistrer le moteur</button><button class="btn" type="button" id="test">Tester le modèle</button></div>
                 <div class="retour" id="moteur-msg" role="status" hidden></div>
             </div>
 
@@ -210,17 +210,18 @@
 
         async function charger() {
             if (DEMO) { demoData(); SESSION_OK = true; SERVEUR_KO = false; remplir(CFG, null); rendre(); return; }
-            const essais = await Promise.allSettled([lire('/config'), lire('/metrics')]);
+            const essais = await Promise.allSettled([lire('/config'), lire('/metrics'), lire('/llm/etat')]);
             const val = i => essais[i].status === 'fulfilled' ? essais[i].value : null;
             const refus = essais.some(e => e.status === 'rejected' && (e.reason.statut === 401 || e.reason.statut === 403));
             SESSION_OK = !refus;
-            SERVEUR_KO = !refus && essais.every(e => e.status === 'rejected');
-            CFG = val(0); MET = val(1);
+            SERVEUR_KO = !refus && essais.slice(0, 2).every(e => e.status === 'rejected');
+            CFG = val(0); MET = val(1); ETAT = val(2);
             if (CFG) remplir(CFG, null);
             rendre();
         }
         // Métriques seules : l'actualisation automatique ne touche jamais aux champs en cours de saisie.
         async function chargerMetriques() {
+            try { ETAT = await lire('/llm/etat'); } catch (e) { ETAT = null; }
             try { MET = await lire('/metrics'); } catch (e) { if (e.statut === 401 || e.statut === 403) { MET = null; SESSION_OK = false; } }
             rendre();
         }
@@ -235,6 +236,24 @@
             if (!g || (g.b || []).indexOf('remote_enabled') >= 0) $('remote_enabled').checked = !!cfg.remote_enabled;
         }
 
+        let ETAT = null;
+        function hote(u) { try { return new URL(u).host; } catch (e) { return String(u); } }
+        function rendreMoteurs() {
+            const z = $('moteurs'); z.textContent = '';
+            if (!ETAT || !ETAT.moteurs) return false;
+            ETAT.moteurs.forEach(m => {
+                const l = document.createElement('div');
+                l.textContent = (m.disponible ? '🟢 ' : '⚪ ') + m.role + ' · ' + hote(m.url) + ' · ' + (m.disponible ? (m.modele || 'disponible') : 'indisponible') + (m.url === ETAT.actif ? ' · choisi' : '') + (ETAT.dernier && m.url === ETAT.dernier.url ? ' · a répondu en dernier' : '');
+                z.appendChild(l);
+            });
+            const a = ETAT.moteurs.find(m => m.url === ETAT.actif);
+            $('tMoteur').textContent = a ? 'LLM' : 'Heuristique';
+            $('sMoteur').textContent = a ? a.role + ' · ' + hote(a.url) : 'aucun moteur ne répond';
+            $('cMoteur').className = 'tuile ' + (a ? 'cy' : 'att');
+            if (a && a.modele) { $('tModele').textContent = a.modele; $('sModele').textContent = 'lu sur le moteur'; }
+            else $('sModele').textContent = 'nom affiché';
+            return true;
+        }
         function rendre() {
             $('demo').hidden = !DEMO;
             $('session').hidden = SESSION_OK;
@@ -252,9 +271,10 @@
             // Tuiles : les métriques d'abord, la config (vraie donnée aussi) en repli pour le moteur et le modèle.
             const m = MET, moteur = m && m.engine ? m.engine : (CFG ? (CFG.llm_url ? 'llm' : 'heuristique') : null);
             $('tMoteur').textContent = moteur === 'llm' ? 'LLM' : moteur === 'heuristique' ? 'Heuristique' : '—';
-            $('sMoteur').textContent = moteur === 'llm' ? 'llama-server local' : moteur === 'heuristique' ? 'sans génération' : 'formulation des réponses';
+            $('sMoteur').textContent = moteur === 'llm' ? 'llama-server' : moteur === 'heuristique' ? 'sans génération' : 'formulation des réponses';
             $('cMoteur').className = 'tuile ' + (moteur === 'heuristique' ? 'att' : 'cy');
             $('tModele').textContent = tiret((m && m.model) || (CFG && CFG.model_name));
+            rendreMoteurs();
             $('tObjets').textContent = m && m.objets_bus != null ? m.objets_bus : '—';
             $('tEchanges').textContent = m && m.chats != null ? m.chats : '—';
             // latence_ms_moy vaut 0 tant qu'aucun échange n'a eu lieu : ce n'est pas une mesure.
@@ -309,6 +329,7 @@
             const r = await ecrire('/llm/test');
             if (!r.ok) { retour('moteur-msg', false, 'Échec du test : ' + detail(r)); return; }
             const j = r.data || {};
+            if (j.moteurs) { ETAT = j; rendre(); const n = j.moteurs.filter(x => x.disponible).length; retour('moteur-msg', n > 0, n + ' moteur(s) sur ' + j.moteurs.length + ' répond(ent).'); return; }
             if (j.ok) retour('moteur-msg', true, 'Modèle joignable' + (j.model ? ' · ' + String(j.model).split('/').pop() : '') + '.');
             else retour('moteur-msg', false, 'Injoignable : ' + (j.reason || 'pas de réponse') + '.');
         });
