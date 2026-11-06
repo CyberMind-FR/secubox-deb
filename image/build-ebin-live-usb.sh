@@ -388,8 +388,8 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     CACHE_DEBS="${USER_HOME}/.cache/secubox/debs"
 
     # Count available packages (use find to avoid set -e failures)
-    CACHE_COUNT=$(find "$CACHE_DEBS" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l)
-    OUTPUT_COUNT=$(find "${OUTPUT_DEBS}" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l)
+    CACHE_COUNT=$(find "$CACHE_DEBS" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l || true)
+    OUTPUT_COUNT=$(find "${OUTPUT_DEBS}" -maxdepth 1 -name "secubox-*.deb" 2>/dev/null | wc -l || true)
     log "Found ${CACHE_COUNT} packages in cache, ${OUTPUT_COUNT} in output/debs"
 
     if [[ $CACHE_COUNT -gt 0 ]] || [[ $OUTPUT_COUNT -gt 0 ]]; then
@@ -574,17 +574,24 @@ SQUASH_SIZE=$(du -h "${LIVE_DIR}/live/filesystem.squashfs" | cut -f1)
 ok "SquashFS: ${SQUASH_SIZE}"
 
 # Copy kernel and initramfs
-cp "${ROOTFS}/boot/vmlinuz-"* "${LIVE_DIR}/boot/Image"
-cp "${ROOTFS}/boot/initrd.img-"* "${LIVE_DIR}/boot/initrd.img"
+# Noyau retenu seul, et décompressé : Debian le livre en gzip, le `booti` de U-Boot attend une Image (comme la MOCHAbin live).
+KVER="$(ls -1 "${ROOTFS}/boot" | sed -n 's/^vmlinuz-//p' | sort -V | tail -n1)"
+[[ -n "$KVER" ]] || err "Aucun noyau dans ${ROOTFS}/boot"
+if gzip -t "${ROOTFS}/boot/vmlinuz-${KVER}" 2>/dev/null; then
+    gunzip -c "${ROOTFS}/boot/vmlinuz-${KVER}" > "${LIVE_DIR}/boot/Image"
+else
+    cp "${ROOTFS}/boot/vmlinuz-${KVER}" "${LIVE_DIR}/boot/Image"
+fi
+cp "${ROOTFS}/boot/initrd.img-${KVER}" "${LIVE_DIR}/boot/initrd.img"
 
 # Copy device trees (use find to handle glob expansion properly)
-DTB_DIR=$(find "${ROOTFS}/usr/lib" -maxdepth 2 -type d -name "marvell" -path "*/linux-image-*" 2>/dev/null | head -1)
+DTB_DIR="${ROOTFS}/usr/lib/linux-image-${KVER}/marvell"
 if [[ -n "$DTB_DIR" ]] && [[ -d "$DTB_DIR" ]]; then
     cp "$DTB_DIR"/armada-3720-espressobin*.dtb "${LIVE_DIR}/boot/dtbs/marvell/" 2>/dev/null || true
     DTB_COUNT=$(ls "${LIVE_DIR}/boot/dtbs/marvell/"*.dtb 2>/dev/null | wc -l)
     log "Copied ${DTB_COUNT} EspressoBin DTBs"
 else
-    warn "No DTB directory found - boot may fail!"
+    err "DTB absents de ${DTB_DIR} — image non amorçable, non produite"
 fi
 
 # Copy extlinux config
