@@ -85,6 +85,8 @@ finally:
 
 is_chroot() {
     [[ -n "$CHROOT" ]] && { [[ "$CHROOT" == 1 ]]; return; }
+    # Lancé par systemd sur la machine : l'espace de montage isolé de l'unité trompe ischroot, qui croit à un chroot (#3523).
+    [[ -n "${INVOCATION_ID:-}" ]] && return 1
     command -v ischroot >/dev/null 2>&1 && ischroot
 }
 
