@@ -219,7 +219,12 @@
             VER = { version: '1.7.0' };
         }
 
+        let EN_COURS = false;
         async function charger() {
+            EN_COURS = true;
+            try { await chargerTout(); } finally { EN_COURS = false; }
+        }
+        async function chargerTout() {
             if (DEMO) { demoData(); SESSION_OK = true; ERREURS = []; rendre(); return; }
             ERREURS = []; let session = true;
             const essai = async (nom, chemin) => {
@@ -419,7 +424,7 @@
         // Pas d'actualisation onglet masqué, en démonstration, pendant une confirmation, ni pendant
         // qu'on manipule un lecteur (curseur, case, liste) : le rendu écraserait le geste.
         setInterval(() => {
-            if (document.hidden || DEMO || CONFIRM) return;
+            if (document.hidden || DEMO || CONFIRM || EN_COURS) return;   // jamais une lecture par-dessus la précédente (#3546)
             const a = document.activeElement;
             if (a && a !== document.body && $('listeJoueurs').contains(a)) return;
             charger();

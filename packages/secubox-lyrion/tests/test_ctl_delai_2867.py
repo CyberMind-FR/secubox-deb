@@ -23,6 +23,12 @@ with mock.patch("pathlib.Path.mkdir"):
 
 
 @pytest.fixture(autouse=True)
+def lancer_par_check_output(monkeypatch):
+    # Ces tests simulent la commande par check_output ; _lancer (#3546) a son propre test, avec de vrais processus.
+    monkeypatch.setattr(M, "_lancer", lambda cmd, delai, stderr=None: (0, M.subprocess.check_output(cmd, stderr=stderr, timeout=delai), b""))
+
+
+@pytest.fixture(autouse=True)
 def cache_vide():
     M._CACHE_CTL.clear()
     yield
