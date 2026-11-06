@@ -1,3 +1,9 @@
+secubox-hub (1.12.47-1~trixie1) trixie; urgency=medium
+
+  * Page de menu servie par un autre module : elle reprend son état, plus de fausse alerte tv-privacy (ref #3549).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 15:25:23 +0100
+
 secubox-hub (1.12.46-1~trixie1) trixie; urgency=medium
 
   * Menu : barre d'icônes qui se déplie au survol ou au toucher et se replie seule (ref #3533).
