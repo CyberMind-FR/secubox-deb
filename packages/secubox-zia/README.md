@@ -132,6 +132,7 @@ secubox-zia-bench /data/models/model.gguf
   protéger le parc ; ne démarre que si `/data/zia/llama-server` **et** un `/data/models/*.gguf`
   existent (sinon ZIA reste en répondeur heuristique).
 - L'installateur écrit `llm_url` dans `/etc/secubox/zia.toml` et redémarre `secubox-zia`.
+- `llm_urls` (liste, optionnelle) : moteurs préférés du maillage, sondés par `/health` et gardés 20 s ; repli sur `llm_url`, puis sur le répondeur heuristique. Un moteur en veille n'est pas réveillé (#3512).
 - **Contrainte réelle** (gk2, 30/08) : ~1 Go RAM dispo → un ~0.5 B Q4 seulement ; libérer de
   la RAM ou viser l'ultra-lite. À mesurer, jamais supposer.
 

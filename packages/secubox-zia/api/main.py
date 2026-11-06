@@ -45,6 +45,7 @@ CONFIG_FILE = Path("/etc/secubox/zia.toml")
 DEFAULT_CONFIG = {
     "model_name": "heuristique",     # affiché dans la carte ; « TinyLlama · Q4 » plus tard
     "llm_url": "",                   # llama-server (vide = répondeur heuristique)
+    "llm_urls": [],                  # moteurs préférés du maillage, essayés avant llm_url s'ils répondent (#3512)
     "n_predict": 120,
     "llm_timeout_s": 20,
     "metanews_sock": "/run/secubox/metanews.sock",
@@ -217,6 +218,7 @@ class Params(BaseModel):
     """Réglages admin de ZIA (tous facultatifs — on ne met à jour que ce qui vient)."""
     model_name: Optional[str] = None
     llm_url: Optional[str] = None
+    llm_urls: Optional[list[str]] = None
     n_predict: Optional[int] = None
     llm_timeout_s: Optional[float] = None
     default_role: Optional[str] = None

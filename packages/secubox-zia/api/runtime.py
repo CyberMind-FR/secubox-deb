@@ -20,6 +20,7 @@ Rend : { text, objects[], trace[], delegate|None }.
 from __future__ import annotations
 
 import re
+import time
 from typing import Any, Optional
 
 import httpx
@@ -248,6 +249,37 @@ def _mots_cles(msg: str) -> str:
     return " ".join(mots)
 
 
+# ── CHOIX DU MOTEUR (#3512) ─ `llm_urls` : moteurs préférés, dans l'ordre (un poste du maillage) ; `llm_url` :
+# le llama-server local, toujours essayé en dernier. Sonde courte et résultat gardé SONDE_TTL_S : un moteur
+# absent ne ralentit pas chaque réponse. Un moteur « veille » n'est pas réveillé pour une phrase de ZIA.
+SONDE_TTL_S = 20
+SONDE_DELAI_S = 1.5
+_SONDES: dict = {}
+
+
+def liste_moteurs(cfg: dict) -> list:
+    urls = [str(u).strip() for u in (cfg.get("llm_urls") or [])] + [str(cfg.get("llm_url", "") or "").strip()]
+    return list(dict.fromkeys(u for u in urls if u))
+
+
+async def _sonder(url: str) -> bool:
+    connu = _SONDES.get(url)
+    if connu and time.monotonic() - connu[0] < SONDE_TTL_S:
+        return connu[1]
+    try:
+        async with httpx.AsyncClient(timeout=SONDE_DELAI_S) as cli:
+            r = await cli.get(url.rstrip("/") + "/health")
+        ok = r.status_code == 200 and r.json().get("status") == "ok"
+    except (httpx.HTTPError, ValueError, AttributeError):
+        ok = False
+    _SONDES[url] = (time.monotonic(), ok)
+    return ok
+
+
+async def moteurs_disponibles(cfg: dict) -> list:
+    return [u for u in liste_moteurs(cfg) if await _sonder(u)]
+
+
 async def _llm_text(cfg: dict, prompt: str) -> Optional[str]:
     """Formulation par llama-server si disponible — sinon None (repli heuristique).
 
@@ -255,20 +287,21 @@ async def _llm_text(cfg: dict, prompt: str) -> Optional[str]:
     GABARIT DE CHAT du modèle (ChatML pour Qwen). Sans lui, `/completion` reçoit un
     prompt nu que le modèle instruct ne sait pas continuer (il rend un espace).
     """
-    url = str(cfg.get("llm_url", "") or "").strip()
-    if not url:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=float(cfg.get("llm_timeout_s", 20))) as cli:
-            r = await cli.post(url.rstrip("/") + "/v1/chat/completions",
-                               json={"messages": [{"role": "user", "content": prompt}],
-                                     "temperature": 0.3, "max_tokens": int(cfg.get("n_predict", 120))})
+    for url in await moteurs_disponibles(cfg):
+        try:
+            async with httpx.AsyncClient(timeout=float(cfg.get("llm_timeout_s", 20))) as cli:
+                r = await cli.post(url.rstrip("/") + "/v1/chat/completions",
+                                   json={"messages": [{"role": "user", "content": prompt}],
+                                         "temperature": 0.3, "max_tokens": int(cfg.get("n_predict", 120))})
             if r.status_code == 200:
                 j = r.json()
                 txt = (((j.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
-                return txt or None
-    except Exception:
-        return None
+                if txt:
+                    return txt
+        except (httpx.HTTPError, ValueError):
+            pass
+        # Moteur tombé entre la sonde et l'appel : le suivant répond, et on ne le resonde pas avant le délai.
+        _SONDES[url] = (time.monotonic(), False)
     return None
 
 
