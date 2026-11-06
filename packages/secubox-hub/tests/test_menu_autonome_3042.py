@@ -68,4 +68,4 @@ def test_la_cle_hote_choisit_le_prefixe_et_sans_domaine_pas_de_lien(monkeypatch)
 def test_la_barre_laterale_ouvre_un_lien_externe_dans_un_onglet():
     js = (PAQUETS / "secubox-hub" / "www" / "shared" / "sidebar.js").read_text(encoding="utf-8")
     assert "item.externe" in js and 'target="_blank" rel="noopener"' in js
-    assert "'v2.45.0'" in js
+    assert "'v2.46.0'" in js

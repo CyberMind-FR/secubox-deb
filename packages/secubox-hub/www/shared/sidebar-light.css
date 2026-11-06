@@ -434,5 +434,5 @@
 
 /* Le dé du Hall seul dans l'en-tête (#3540). */
 .sidebar-header a.logo-de { justify-content: center; }
-.sidebar-header sbx-dice { display: block; width: 44px; height: 44px; line-height: 44px; }
+.sidebar-header sbx-dice { display: block; width: 64px; height: 64px; line-height: 64px; filter: brightness(1.8) saturate(1.1); }
 sbx-dice:defined .logo { display: none; }
