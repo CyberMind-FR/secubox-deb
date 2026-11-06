@@ -58,6 +58,15 @@ def _hote(service: str) -> str:
     return f"{service}.{dom}" if dom else ""
 
 
+def adresses_service(sid: str, path: str) -> tuple[str, str]:
+    """(sbx://, url réelle) d'un service du registre. Le path porte déjà le module : ne pas le doubler (#3520).
+    La page d'un module vit sur l'hôte admin : sur le Hall, /<module>/ rend le Hall lui-même."""
+    chemin = "/" + str(path or f"/{sid}/").lstrip("/")
+    prive = chemin[len(sid) + 1:] if chemin.startswith(f"/{sid}/") else chemin
+    hote = _hote("admin")
+    return f"sbx://{sid}/{prive.lstrip('/')}", f"https://{hote}{chemin}" if hote else ""
+
+
 class Bus:
     """Vue unifiée des objets, avec adapters branchables et cache court."""
 
@@ -163,7 +172,7 @@ class Bus:
                     sid = s.get("id")
                     if not sid:
                         continue
-                    path = s.get("path") or f"/{sid}/"
+                    uri, url = adresses_service(sid, s.get("path") or f"/{sid}/")
                     # Contrat d'objet enrichi (RFC §3) : on GARDE `actions` plat
                     # (["open"…], compat UI existante) et on AJOUTE `capabilities`
                     # structurées, tirées du registre — uniquement si le module a
@@ -172,7 +181,7 @@ class Bus:
                     obj = {
                         "id": f"service:{sid}", "type": "service", "service": sid,
                         "title": s.get("name", sid), "summary": s.get("description", ""),
-                        "uri": f"sbx://{sid}{path}", "visibility": "guest",
+                        "uri": uri, "url": url, "visibility": "guest",
                         "actions": ["open"],
                         "tags": [s.get("category", ""), sid, "service"],
                     }
