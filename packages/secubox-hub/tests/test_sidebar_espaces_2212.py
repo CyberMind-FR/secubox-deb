@@ -37,6 +37,8 @@ def navigateur():
 def ouvre(navigateur, menu, url="http://sbx.test/waf/"):
     ctx = navigateur.new_context()
     p = ctx.new_page()
+    # Menu déplié : ce fichier teste la navigation ; la barre d'icônes a son test (#3533).
+    p.add_init_script("localStorage.setItem('sbx_menu_rail', '0')")
     erreurs = []
     p.on("pageerror", lambda e: erreurs.append(str(e)))
 
@@ -143,3 +145,8 @@ def test_pas_de_recherche_dans_la_vue_par_categories(navigateur):
     ctx, p, _ = ouvre(navigateur, MENU, "http://sbx.test/waf/?nav=categories")
     assert p.locator("#sbx-recherche").count() == 0
     ctx.close()
+
+
+def test_barre_d_icones_se_regle_et_laisse_le_telephone_tranquille_3533():
+    s = (Path(__file__).resolve().parents[1] / "www/shared/sidebar.js").read_text(encoding="utf-8")
+    assert "sbx_menu_rail" in s and "window.innerWidth <= 768" in s and "RAIL_DELAI" in s and "#sbx-recherche" in s

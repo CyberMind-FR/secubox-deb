@@ -61,7 +61,7 @@
 
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.47.0';
+    const VERSION = 'v2.48.0';
     // Le dé du Hall seul, version en infobulle (#3540). Sans le moteur (Hall absent), le nom reste affiché.
     const LOGO_DE = '<sbx-dice size="84" speed="4" fov="40"><span class="logo">SECUBOX</span></sbx-dice><span class="logo-sbx">SBX</span>';
     (function chargerDe() {
@@ -2382,7 +2382,7 @@
         st.textContent =
             'html.sbx-rail .sidebar{width:' + RAIL_LARGEUR + 'px!important;overflow:hidden;transition:width .22s ease .35s;z-index:1200}' +
             'html.sbx-rail .sidebar:hover,html.sbx-rail .sidebar:focus-within,html.sbx-rail .sidebar.rail-ouvert{width:220px!important;transition-delay:0s;box-shadow:12px 0 30px rgba(0,0,0,.45)}' +
-            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) :is(.logo-sbx,.sidebar-footer,.toggle-icon,.nav-section-title>span:not(.cat-icon),.nav-item>span:not(.icon)){display:none!important}' +
+            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) :is(.logo-sbx,.sidebar-footer,.toggle-icon,.nav-mode,.nav-mode-link,#sbx-recherche,#sbx-recherche-vide,.nav-section-title>span:not(.cat-icon),.nav-item>span:not(.icon)){display:none!important}' +
             'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) :is(.nav-item,.nav-section-title){justify-content:center;padding-left:0;padding-right:0}' +
             'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) .sidebar-header{padding:.75rem 0}' +
             'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) .sidebar-header sbx-dice{transform:scale(.72);transform-origin:center}' +
