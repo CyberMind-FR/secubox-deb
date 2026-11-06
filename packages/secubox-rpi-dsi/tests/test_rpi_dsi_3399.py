@@ -441,4 +441,4 @@ def test_service_systemd_jamais_pris_pour_un_chroot_3523():
     racine = Path(__file__).resolve().parents[1]
     texte = (racine / "usr/sbin/secubox-rpi-dsi").read_text(encoding="utf-8")
     corps = texte[texte.index("is_chroot() {"):]
-    assert corps.index("INVOCATION_ID") < corps.index("ischroot")
+    assert corps.index("INVOCATION_ID") < corps.index("command -v ischroot")
