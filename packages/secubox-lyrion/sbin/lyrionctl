@@ -57,7 +57,8 @@ LXC_NAME=$(config_get "name" "lyrion")
 LXC_IP=$(config_get "ip" "10.100.0.100")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "3000")
-PUBLIC_HOSTNAME=$(config_get "public_hostname" "$(secubox-domaine lyrion)")
+# Résolu à la demande : secubox-domaine coûte un python à chaque lancement de ce script, pour le seul verbe access (#3546).
+PUBLIC_HOSTNAME=$(config_get "public_hostname" "")
 
 # ── LXC helpers ───────────────────────────────────────────────────────────────
 # LE PANNEAU INTERROGE SOUS `secubox`, PAS SOUS ROOT (#1573). lxc-info ne voit
@@ -168,6 +169,7 @@ emit_access_json() {
     #   public: https://<PUBLIC_HOSTNAME>/   (LAN-only gated dedicated vhost)
     local lan_url public_url
     lan_url="http://$(hostname -I | awk '{print $1}'):${HTTP_PORT}/"
+    [ -n "$PUBLIC_HOSTNAME" ] || PUBLIC_HOSTNAME=$(secubox-domaine lyrion)
     if [ -n "$PUBLIC_HOSTNAME" ]; then
         public_url="https://${PUBLIC_HOSTNAME}/"
     else

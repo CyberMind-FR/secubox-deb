@@ -19,6 +19,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -94,10 +95,33 @@ def _invalider_cache_ctl() -> None:
     _CACHE_CTL.clear()
 
 
+def _lancer(cmd: List[str], delai: float, stderr=subprocess.PIPE) -> tuple:
+    """Lance dans son propre groupe et, au délai, tue TOUT le groupe : bash, ses enfants, sudo (#3546).
+    subprocess.run ne tue que le parent : sur une box chargée, les enfants s'empilaient jusqu'à la saturer."""
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr, start_new_session=True)
+    try:
+        out, err = proc.communicate(timeout=delai)
+    except subprocess.TimeoutExpired:
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            try:
+                os.killpg(proc.pid, sig)
+            except ProcessLookupError:
+                break
+            try:
+                proc.communicate(timeout=3)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        raise
+    return proc.returncode, out, err
+
+
 def _executer_ctl(args: tuple) -> Dict[str, Any]:
     cmd = [CTL, *args, "--json"]
     try:
-        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=DELAI_CTL)
+        rc, out, _ = _lancer(cmd, DELAI_CTL, stderr=subprocess.STDOUT)
+        if rc != 0:
+            raise subprocess.CalledProcessError(rc, cmd, output=out)
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail=f"lyrionctl : délai de {DELAI_CTL} s dépassé (la box est chargée) — réessayez dans un instant")
     except subprocess.CalledProcessError as e:
@@ -320,16 +344,16 @@ async def _ctl_medialib(*args: str) -> Dict[str, Any]:
     def _run() -> Dict[str, Any]:
         cmd = ["sudo", "-n", CTL, "medialib", *args]
         try:
-            proc = subprocess.run(cmd, capture_output=True, timeout=90)
+            _rc, sortie, erreur = _lancer(cmd, 90)
         except FileNotFoundError:
             raise HTTPException(status_code=500, detail=f"lyrionctl not found at {CTL}")
         except subprocess.TimeoutExpired:
             raise HTTPException(status_code=504, detail="lyrionctl medialib timed out")
-        out = proc.stdout.decode() if proc.stdout else ""
+        out = sortie.decode() if sortie else ""
         try:
             return json.loads(out)
         except json.JSONDecodeError:
-            err = proc.stderr.decode() if proc.stderr else ""
+            err = erreur.decode() if erreur else ""
             raise HTTPException(
                 status_code=500,
                 detail=f"medialib emitted non-JSON: out={out!r} err={err!r}",
@@ -371,8 +395,23 @@ async def medialib() -> Dict[str, Any]:
     Combines `medialib status` (the persisted/live mount) with
     `medialib detect` (audio-containing external mountpoints). Detection
     NEVER mounts — the webui offers an explicit opt-in per candidate."""
-    st = await _ctl_medialib("status")
-    det = await _ctl_medialib("detect")
+    # Une seule lecture à la fois, mémorisée : chaque actualisation de la page lançait deux sudo de plus (#3546).
+    async with _VERROU_MEDIA:
+        date, memo = _CACHE_MEDIA
+        if memo is not None and time.monotonic() - date < TTL_CTL:
+            return memo
+        st = await _ctl_medialib("status")
+        det = await _ctl_medialib("detect")
+        reponse = _reponse_media(st, det)
+        _CACHE_MEDIA[:] = [time.monotonic(), reponse]
+        return reponse
+
+
+_VERROU_MEDIA = asyncio.Lock()
+_CACHE_MEDIA: List[Any] = [0.0, None]
+
+
+def _reponse_media(st: Dict[str, Any], det: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "external": st.get("external"),
         "mounted": bool(st.get("mounted")),
@@ -394,6 +433,7 @@ async def medialib_mount(payload: Dict[str, Any] = Body(default=None)) -> Dict[s
     path = (payload or {}).get("path", "")
     if not isinstance(path, str) or not path.strip():
         raise HTTPException(status_code=400, detail='body must be {"path": "<host path>"}')
+    _CACHE_MEDIA[:] = [0.0, None]
     return await _ctl_medialib("mount", path)
 
 
@@ -440,4 +480,5 @@ async def upgrade(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
 @app.post("/medialib/unmount", dependencies=[Depends(require_jwt)])
 async def medialib_unmount() -> Dict[str, Any]:
     """Remove the external-media RO bind + persisted key, then rescan."""
+    _CACHE_MEDIA[:] = [0.0, None]
     return await _ctl_medialib("unmount")
