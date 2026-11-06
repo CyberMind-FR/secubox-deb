@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+PKG := debian/secubox-plymouth
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(PKG)/usr/share/plymouth/themes/secubox-dice
+	install -m 0644 theme/secubox-dice/* $(PKG)/usr/share/plymouth/themes/secubox-dice/
+	for u in plymouth-quit plymouth-quit-wait secubox-kiosk; do \
+	  install -D -m 0644 systemd/$$u.service.d/secubox-dice.conf $(PKG)/usr/lib/systemd/system/$$u.service.d/secubox-dice.conf; \
+	done

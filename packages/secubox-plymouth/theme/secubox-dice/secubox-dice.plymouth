@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=SecuBox Dice
+Description=Dé du logo du Hall en rotation
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/secubox-dice
+ScriptFile=/usr/share/plymouth/themes/secubox-dice/secubox-dice.script
