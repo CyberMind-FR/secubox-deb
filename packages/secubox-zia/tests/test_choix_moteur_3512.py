@@ -68,3 +68,16 @@ def test_sonde_gardee_en_cache(monkeypatch):
 def test_sans_liste_comportement_inchange():
     assert runtime.liste_moteurs({"llm_url": LOCAL}) == [LOCAL]
     assert runtime.liste_moteurs({}) == []
+
+
+def test_etat_reel_des_moteurs(monkeypatch):
+    def gestion(req):
+        if req.url.host == "distant":
+            if req.url.path == "/props":
+                return httpx.Response(200, json={"model_path": "/m/llama.gguf"})
+            return httpx.Response(200, json={"status": "ok"})
+        raise httpx.ConnectError("absent")
+    brancher(monkeypatch, gestion)
+    e = asyncio.run(runtime.etat_moteurs(CFG))
+    assert e["actif"] == DISTANT
+    assert [(m["role"], m["disponible"], m["modele"]) for m in e["moteurs"]] == [("maillage", True, "llama.gguf"), ("repli local", False, None)]

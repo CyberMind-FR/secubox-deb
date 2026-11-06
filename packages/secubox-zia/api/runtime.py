@@ -255,6 +255,7 @@ def _mots_cles(msg: str) -> str:
 SONDE_TTL_S = 20
 SONDE_DELAI_S = 1.5
 _SONDES: dict = {}
+_DERNIER: dict = {"url": None, "quand": None}
 
 
 def liste_moteurs(cfg: dict) -> list:
@@ -280,6 +281,34 @@ async def moteurs_disponibles(cfg: dict) -> list:
     return [u for u in liste_moteurs(cfg) if await _sonder(u)]
 
 
+async def _nom_du_modele(url: str) -> Optional[str]:
+    try:
+        async with httpx.AsyncClient(timeout=SONDE_DELAI_S) as cli:
+            r = await cli.get(url.rstrip("/") + "/props")
+        d = r.json() if r.status_code == 200 else {}
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not isinstance(d, dict):
+        return None
+    nom = d.get("model_path") or (d.get("default_generation_settings") or {}).get("model")
+    return str(nom).rsplit("/", 1)[-1] if nom else None
+
+
+async def etat_moteurs(cfg: dict, frais: bool = False) -> dict:
+    """L'état RÉEL, pas la configuration : qui répond, lequel serait choisi, lequel a servi en dernier."""
+    locale = str(cfg.get("llm_url", "") or "").strip()
+    moteurs, actif = [], None
+    for url in liste_moteurs(cfg):
+        if frais:
+            _SONDES.pop(url, None)
+        dispo = await _sonder(url)
+        if dispo and actif is None:
+            actif = url
+        moteurs.append({"url": url, "role": "repli local" if url == locale else "maillage", "disponible": dispo,
+                        "modele": await _nom_du_modele(url) if dispo else None})
+    return {"moteurs": moteurs, "actif": actif, "dernier": dict(_DERNIER)}
+
+
 async def _llm_text(cfg: dict, prompt: str) -> Optional[str]:
     """Formulation par llama-server si disponible — sinon None (repli heuristique).
 
@@ -297,6 +326,7 @@ async def _llm_text(cfg: dict, prompt: str) -> Optional[str]:
                 j = r.json()
                 txt = (((j.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
                 if txt:
+                    _DERNIER.update(url=url, quand=time.time())
                     return txt
         except (httpx.HTTPError, ValueError):
             pass

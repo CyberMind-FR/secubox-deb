@@ -1,3 +1,9 @@
+secubox-zia (0.3.3-1~trixie1) trixie; urgency=medium
+
+  * Administration : moteur et modèle réels, lus par sonde (maillage, repli local, dernier utilisé) ; le test essaie chaque moteur (ref #3512).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 11:13:05 +0100
+
 secubox-zia (0.3.2-1~trixie1) trixie; urgency=medium
 
   * Choix du moteur : llm_urls (moteurs du maillage) s'ils répondent, llm_url en repli, répondeur heuristique en dernier (ref #3512).
