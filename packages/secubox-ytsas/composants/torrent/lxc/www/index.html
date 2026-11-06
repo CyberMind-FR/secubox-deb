@@ -179,7 +179,7 @@
   function ext(name) { var m = /\.([A-Za-z0-9]+)$/.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
   function octets(n) {
     if (n == null || !isFinite(n)) return '—';
-    if (n === 0) return '0 o';
+    if (n < 1) return '0 o';
     var u = ['o', 'Ko', 'Mo', 'Go', 'To'], i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
     return (n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1).replace('.', ',') + ' ' + u[i];
   }
