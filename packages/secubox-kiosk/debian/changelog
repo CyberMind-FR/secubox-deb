@@ -1,8 +1,14 @@
-secubox-kiosk (1.2.2-1~trixie1) trixie; urgency=medium
+secubox-kiosk (1.2.3-1~trixie1) trixie; urgency=medium
 
   * Console sans mot de passe aussi sans secubox-webos : secret créé au lancement du kiosque (ref #3488).
 
  -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 14:22:57 +0100
+
+secubox-kiosk (1.2.2-1~trixie1) trixie; urgency=medium
+
+  * Dépend de secubox-plymouth (ref #3525).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 13:39:12 +0100
 
 secubox-kiosk (1.2.1-1~trixie1) trixie; urgency=medium
 

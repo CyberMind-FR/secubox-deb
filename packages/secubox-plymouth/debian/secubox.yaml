@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+name: secubox-plymouth
+category: system
+tier: lite
+description: "Démarrage graphique : dé du Hall et barre Aurora"
+depends:
+  - plymouth

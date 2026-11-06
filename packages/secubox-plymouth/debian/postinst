@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+case "$1" in
+  configure)
+    # Sans régénérer ici : update-initramfs sur un RPi sans ROOTPART rend la box indémarrable.
+    plymouth-set-default-theme secubox-dice 2>/dev/null || true
+    if [ -f /etc/plymouth/plymouthd.conf ]; then sed -i 's/^Theme=.*/Theme=secubox-dice/' /etc/plymouth/plymouthd.conf; fi
+    systemctl daemon-reload 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

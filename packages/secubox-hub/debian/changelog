@@ -1,3 +1,21 @@
+secubox-hub (1.12.47-1~trixie1) trixie; urgency=medium
+
+  * Page de menu servie par un autre module : elle reprend son état, plus de fausse alerte tv-privacy (ref #3549).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 15:25:23 +0100
+
+secubox-hub (1.12.46-1~trixie1) trixie; urgency=medium
+
+  * Menu : barre d'icônes qui se déplie au survol ou au toucher et se replie seule (ref #3533).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 14:48:27 +0100
+
+secubox-hub (1.12.45-1~trixie1) trixie; urgency=medium
+
+  * Menu latéral : « SBX » au style Aurora à côté du dé (ref #3540).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 14:36:47 +0100
+
 secubox-hub (1.12.44-1~trixie1) trixie; urgency=medium
 
   * Menu latéral : le dé du Hall seul en haut à gauche, version en infobulle (ref #3540).

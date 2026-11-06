@@ -10,6 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-kiosk
 Architecture: all
 Depends: ${misc:Depends},
+         secubox-plymouth,
          bash,
          systemd,
          secubox-premier-pas

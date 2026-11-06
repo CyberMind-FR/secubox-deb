@@ -509,5 +509,6 @@ body .sidebar,
 
 /* Le dé du Hall seul dans l'en-tête (#3540). */
 .sidebar-header a.logo-de { justify-content: center; }
-.sidebar-header sbx-dice { display: block; width: 64px; height: 64px; line-height: 64px; filter: brightness(1.8) saturate(1.1); }
+.logo-sbx { font-family: "IBM Plex Sans", "Inter", system-ui, sans-serif; font-size: 1.45rem; font-weight: 800; letter-spacing: .08em; background: linear-gradient(135deg, #29b6f6, #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sidebar-header sbx-dice { display: block; width: 84px; height: 84px; line-height: 84px; filter: brightness(1.8) saturate(1.1); }
 sbx-dice:defined .logo { display: none; }

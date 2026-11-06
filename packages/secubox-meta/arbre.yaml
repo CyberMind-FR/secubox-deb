@@ -263,6 +263,7 @@ suggere:
   - secubox-led-heartbeat
   - secubox-console
   - secubox-kiosk               # kiosque graphique : jamais installé sans le demander (#2504)
+  - secubox-plymouth            # thème de démarrage : tiré par le kiosque, jamais installé seul
 
 meta: secubox-service-identite
 niveau: service
