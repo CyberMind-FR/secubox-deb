@@ -438,9 +438,20 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
 
 ok "Packages installed"
 
-# secubox-hardening interdit squashfs dans modprobe.d, règle reprise dans l'initramfs : sans lui le live ne monte pas
-# son système (« Can not mount /dev/loop0 », #3529). Un module nommé ici est chargé explicitement, malgré la liste noire.
-printf '%s\n' squashfs loop overlay >> "${ROOTFS}/etc/initramfs-tools/modules"
+# secubox-hardening interdit squashfs dans modprobe.d, règle copiée dans l'initramfs : le montage échoue avec « request_module
+# fs-squashfs succeeded, but still no fs » et le live ne démarre pas (#3529). Lister le module dans conf/modules ne suffit pas.
+# On retire la règle de l'initramfs seul : le système monté et le système installé gardent ce durcissement.
+install -d "${ROOTFS}/etc/initramfs-tools/hooks"
+cat > "${ROOTFS}/etc/initramfs-tools/hooks/zz-secubox-live-squashfs" <<'HOOKSQ'
+#!/bin/sh
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+. /usr/share/initramfs-tools/hook-functions
+manual_add_modules squashfs loop overlay
+rm -f "${DESTDIR}/etc/modprobe.d/secubox-blacklist.conf"
+HOOKSQ
+chmod +x "${ROOTFS}/etc/initramfs-tools/hooks/zz-secubox-live-squashfs"
 chroot "${ROOTFS}" update-initramfs -u -k all || err "update-initramfs a échoué"
 
 # ── Step 4: Installer script ──────────────────────────────────────
