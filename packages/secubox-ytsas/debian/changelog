@@ -1,3 +1,9 @@
+secubox-ytsas (0.8.10-1~trixie1) trixie; urgency=medium
+
+  * Torrent : pairs avec des pièces et pairs qui envoient affichés, trackers additionnels sur les magnets, 40 connexions (ref #3507).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 07:04:17 +0100
+
 secubox-ytsas (0.8.9-1~trixie1) trixie; urgency=medium
 
   * Torrent : un débit inférieur à 1 o/s affichait « 819,2 undefined/s » (ref #3505).

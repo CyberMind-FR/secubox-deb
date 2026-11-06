@@ -110,7 +110,8 @@ export async function start() {
     ttl: Number(process.env.TORRENT_EPHEMERAL_TTL_HOURS || 6) * 3600,
     floor: Number(process.env.TORRENT_DISK_FLOOR_GB || 5) * 1e9,
     // Perf / anti-seedbox knobs (see engine.js):
-    maxConns: Number(process.env.TORRENT_MAX_CONNS || 20),
+    maxConns: Number(process.env.TORRENT_MAX_CONNS || 40),
+    trackers: (process.env.TORRENT_TRACKERS || '').split(',').map(s => s.trim()).filter(s => /^(udp|https?|wss?):\/\//.test(s)),
     // 'full' = real seedbox (uncapped); anything else = seed at ½ download BW
     // while downloading and 0 once complete.
     seed: process.env.TORRENT_SEED === 'full' ? 'full' : false,

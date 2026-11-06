@@ -164,6 +164,8 @@ TORRENT_WEBRTC=${TORRENT_WEBRTC:-true}
 TORRENT_PORT=8090
 TORRENT_EPHEMERAL_TTL_HOURS=${TORRENT_TTL:-6}
 TORRENT_DISK_FLOOR_GB=${TORRENT_FLOOR:-5}
+TORRENT_MAX_CONNS=${TORRENT_MAX_CONNS:-40}
+TORRENT_TRACKERS=${TORRENT_TRACKERS:-udp://tracker.opentrackr.org:1337/announce,udp://open.stealth.si:80/announce,udp://tracker.torrent.eu.org:451/announce}
 EOF"
 # the unit ships alongside this script (Task 8 installs both under the same
 # /usr/lib/secubox/torrent/ dir so $(dirname "$0") resolves on the board)

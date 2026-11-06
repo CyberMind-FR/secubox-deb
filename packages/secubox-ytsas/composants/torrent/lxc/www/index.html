@@ -248,7 +248,7 @@
 
   function statsLigne(st) {
     var pct = Math.round((st.progress || 0) * 100), fils = (st.wires || []).length;
-    return pct + ' % · ↓ ' + octets(st.downloadSpeed) + '/s · ↑ ' + octets(st.uploadSpeed) + '/s · ' + (st.numPeers || 0) + ' pairs · ' + fils + ' connexions';
+    return pct + ' % · ↓ ' + octets(st.downloadSpeed) + '/s · ↑ ' + octets(st.uploadSpeed) + '/s · ' + (st.numPeers || 0) + ' pairs · ' + fils + ' connexions' + (st.sources == null ? '' : ' · ' + st.sources + ' avec des pièces · ' + st.envoient + ' envoient');
   }
 
   function rendreListe() {

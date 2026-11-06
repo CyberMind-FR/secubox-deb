@@ -4,10 +4,15 @@
 //
 // WebTorrent engine wrapper: lifecycle, metadata, stats, peer/wire inspection.
 
+function aDesPieces(w) {
+  const octets = w.peerPieces && w.peerPieces.buffer;
+  return !!octets && octets.some(o => o !== 0);
+}
+
 export class Engine {
-  constructor({ WebTorrentCtor, downloadDir, maxActive, webrtc, onDone, maxConns = 20, seed = false, idleMs = 900000 }) {
+  constructor({ WebTorrentCtor, downloadDir, maxActive, webrtc, onDone, maxConns = 40, seed = false, idleMs = 900000, trackers = [] }) {
     this.downloadDir = downloadDir; this.maxActive = maxActive;
-    this.webrtc = webrtc; this.seed = seed; this.idleMs = idleMs;
+    this.webrtc = webrtc; this.seed = seed; this.idleMs = idleMs; this.trackers = trackers;
     this.onDone = typeof onDone === 'function' ? onDone : () => {};
     // Cap peer connections. WebTorrent SEEDS a completed torrent to every peer
     // that wants it, with no limit by default — on a small ARM board a popular
@@ -65,7 +70,11 @@ export class Engine {
       const to = setTimeout(() => {
         if (!settled) { settled = true; reject(new Error('torrent add timeout')); }
       }, 30000);
-      const t = this.client.add(torrentId, { path: this.downloadDir }, () => {});
+      // Trackers additionnels sur les magnets seuls : un .torrent peut etre prive
+      // (BEP 27), l'annoncer a un tracker public le divulguerait (#3507).
+      const opts = { path: this.downloadDir };
+      if (this.trackers.length && typeof torrentId === 'string' && torrentId.startsWith('magnet:')) opts.announce = this.trackers;
+      const t = this.client.add(torrentId, opts, () => {});
       const done = () => {
         if (settled) return;
         settled = true; clearTimeout(to);
@@ -119,8 +128,12 @@ export class Engine {
   }
   stats(infohash) {
     const t = this.get(infohash); if (!t) return null;
+    const wires = t.wires || [];
     return { progress: t.progress, downloadSpeed: t.downloadSpeed, uploadSpeed: t.uploadSpeed,
-             numPeers: t.numPeers, wires: (t.wires || []).map(w => ({ type: w.type })) };
+             numPeers: t.numPeers, wires: wires.map(w => ({ type: w.type })),
+             // Distingue « aucune source » de « sources qui ne nous servent pas » (#3507).
+             sources: wires.filter(aDesPieces).length,
+             envoient: wires.filter(w => typeof w.downloadSpeed === 'function' && w.downloadSpeed() >= 1).length };
   }
   remove(infohash, { deleteData } = {}) {
     const t = this.get(infohash); if (t) t.destroy({ destroyStore: !!deleteData }, () => {});
