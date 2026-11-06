@@ -640,3 +640,7 @@ if [[ "${USERS_CREES:-0}" == 1 ]]; then
 else
   log "Login     : comptes existants conservés"
 fi
+# Box neuve avec assistant : / l'ouvrira tant qu'il n'est pas terminé. Jamais sur une box déjà configurée (#3515).
+if [[ -d /usr/lib/secubox/premier-pas && ! -e /var/lib/secubox/.premier-pas-fait ]]; then
+  install -m 0644 /dev/null /var/lib/secubox/.premier-pas-a-faire || true
+fi

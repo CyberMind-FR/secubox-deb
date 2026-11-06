@@ -50,5 +50,6 @@ def rejouer(vierge: bool, relance: Callable[[], None], uid: int = None) -> Dict[
         except FileNotFoundError:
             pass
     journal.warning("premier-pas : assistant rejoué de force (%s) ; retiré : %s", "profil effacé" if vierge else "profil gardé", ", ".join(retires) or "rien")
+    M.A_FAIRE.touch()
     relance()
     return {"marqueur": avait, "retires": retires, "vierge": vierge}

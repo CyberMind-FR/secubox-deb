@@ -1,3 +1,9 @@
+secubox-premier-pas (0.9.14-1~trixie1) trixie; urgency=medium
+
+  * Marqueur de box neuve retiré à la fin de l'assistant, reposé en rejouant (ref #3515).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 13:25:47 +0100
+
 secubox-premier-pas (0.9.13-1~trixie1) trixie; urgency=medium
 
   * Maillage sans code annoncé comme tel ; console arrêtée à la fin du parcours sans échec (ref #3467).

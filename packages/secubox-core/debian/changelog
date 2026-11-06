@@ -1,3 +1,9 @@
+secubox-core (1.8.21-1~trixie1) trixie; urgency=medium
+
+  * / ouvre l'assistant sur une box neuve (ref #3515).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 13:25:47 +0100
+
 secubox-core (1.8.20-1~trixie1) trixie; urgency=medium
 
   * Secrets créés au premier démarrage (secubox-secrets-premier), jamais hérités d'une image (ref #3518).
