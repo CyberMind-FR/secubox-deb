@@ -196,6 +196,12 @@
             return res.statut ? 'HTTP ' + res.statut : 'Serveur injoignable';
         }
         function drapeau(c) { return /^[A-Za-z]{2}$/.test(c || '') ? String.fromCodePoint(127397 + c.toUpperCase().charCodeAt(0), 127397 + c.toUpperCase().charCodeAt(1)) : '—'; }
+        function horodatage(ts) {
+            if (!ts) return '';
+            const d = new Date(typeof ts === 'string' ? ts : ts * 1000); if (isNaN(d.getTime())) return '';
+            const p = n => String(n).padStart(2, '0');
+            return '[' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + ']';
+        }
         function ilYa(ts) {
             if (!ts) return '';
             const t = typeof ts === 'string' ? new Date(ts).getTime() : ts * 1000; if (isNaN(t)) return '';
@@ -268,6 +274,7 @@
             if (!ev.length) t.textContent = SESSION_OK ? 'Aucune attaque récente.' : '—';
             else {
                 const e = ev[0];
+                const heure = horodatage(e.ts); if (heure) t.append(el('span', 'mono', heure), ' ');
                 t.append(drapeau(e.country) + ' ', el('b', 'mono', e.ip), ' · ' + e.category + ' · ', el('span', 'pill ' + e.severity, e.severity.toUpperCase()), ' ' + ilYa(e.ts));
             }
             rendreEvenements(ev); rendreCats(); rendreDets();
