@@ -1,3 +1,9 @@
+secubox-hub (1.12.45-1~trixie1) trixie; urgency=medium
+
+  * Menu latéral : « SBX » au style Aurora à côté du dé (ref #3540).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 14:36:47 +0100
+
 secubox-hub (1.12.44-1~trixie1) trixie; urgency=medium
 
   * Menu latéral : le dé du Hall seul en haut à gauche, version en infobulle (ref #3540).
