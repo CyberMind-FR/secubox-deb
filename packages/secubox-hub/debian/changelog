@@ -1,3 +1,9 @@
+secubox-hub (1.12.46-1~trixie1) trixie; urgency=medium
+
+  * Menu : barre d'icônes qui se déplie au survol ou au toucher et se replie seule (ref #3533).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 14:48:27 +0100
+
 secubox-hub (1.12.45-1~trixie1) trixie; urgency=medium
 
   * Menu latéral : « SBX » au style Aurora à côté du dé (ref #3540).
