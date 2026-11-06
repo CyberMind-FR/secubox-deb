@@ -8,6 +8,13 @@ case "$1" in
         install -m 0644 /etc/secubox/aggregator.toml.example \
             /etc/secubox/aggregator.toml
         echo "secubox-aggregator: installed default config (pilot mounts: cookies, avatar)"
+        # Un conffile reste en .dpkg-new jusqu'à la configuration de ce paquet : dans une image, hub, premier-pas et ad-guard,
+        # configurés avant lui, n'ont pas pu se déclarer (API 404, #3503). On déclare ceux qui sont déjà installés.
+        for module in ad-guard hub premier-pas; do
+            if [ -f "/usr/lib/secubox/$module/api/main.py" ]; then
+                sed -i "0,/modules = \[/s//modules = [\n    \"$module\",/" /etc/secubox/aggregator.toml
+            fi
+        done
     fi
 
     # Ensure /run/secubox exists with the right ownership/mode (#471 invariant).

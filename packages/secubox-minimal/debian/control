@@ -10,6 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-minimal
 Architecture: all
 Depends: ${misc:Depends},
+ secubox-netmodes (>= 1.0),
 # SOCLE D'ADMINISTRATION (WebUI admin seulement, pas de Hall) : l'API, le menu, la connexion. secubox-portal livre login.html ; son API est
 # servie par l'agregateur, son service propre est arrete par le profil minimal (#3218, sans tete).
  secubox-core (>= 1.0),
