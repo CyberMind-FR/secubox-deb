@@ -1,3 +1,9 @@
+secubox-minimal (0.11.1-1~trixie1) trixie; urgency=medium
+
+  * Dépend de secubox-netmodes : l'assistant appelle secubox-net-detect, absent des images disque (#3503).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 06 Nov 2026 03:15:00 +0100
+
 secubox-minimal (0.11.0-1~trixie1) trixie; urgency=medium
 
   * Dépend de secubox-pilotage-agent, comme le profil minimal le déclarait déjà (ref #3405).
