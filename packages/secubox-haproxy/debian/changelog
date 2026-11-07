@@ -1,3 +1,10 @@
+secubox-haproxy (1.12.15-1~trixie1) trixie; urgency=medium
+
+  * postinst : une unite masquee par l image ne fait plus echouer dpkg
+    (ref #3554).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 16:23:42 +0100
+
 secubox-haproxy (1.12.14-1~trixie1) trixie; urgency=medium
 
   * Délai serveur de 10 min sur la publication metablogizer : plus de 504 pendant

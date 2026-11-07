@@ -20,7 +20,7 @@ case "$1" in
     install -d -o secubox -g secubox -m 750 /var/lib/secubox/nac
 
     systemctl daemon-reload
-    systemctl enable secubox-nac.service
+    systemctl enable secubox-nac.service || true
     systemctl start  secubox-nac.service || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true

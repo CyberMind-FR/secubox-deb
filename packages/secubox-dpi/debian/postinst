@@ -31,7 +31,7 @@ SUDOERS
     chmod 0440 /etc/sudoers.d/secubox-dpi-engine
     visudo -cf /etc/sudoers.d/secubox-dpi-engine >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-dpi-engine
     systemctl daemon-reload
-    systemctl enable secubox-dpi.service
+    systemctl enable secubox-dpi.service || true
     systemctl start  secubox-dpi.service || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true

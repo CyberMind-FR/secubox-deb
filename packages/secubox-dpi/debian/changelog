@@ -1,3 +1,10 @@
+secubox-dpi (1.14.8-1~trixie1) trixie; urgency=medium
+
+  * postinst : une unite masquee par l image ne fait plus echouer dpkg
+    (ref #3554).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 16:23:42 +0100
+
 secubox-dpi (1.14.7-1~trixie1) trixie; urgency=medium
 
   * Détail par appareil tiré du moteur vivant ; un cumul de plus de 7 jours ne passe plus pour de l'activité (ref #3494).

@@ -40,7 +40,7 @@ case "$1" in
     find /var/lib/secubox/auth -maxdepth 1 -type f -perm -o+w -exec chmod o-w {} +
 
     systemctl daemon-reload
-    systemctl enable secubox-auth.service
+    systemctl enable secubox-auth.service || true
     systemctl start  secubox-auth.service || true
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true

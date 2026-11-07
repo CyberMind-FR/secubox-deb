@@ -1,3 +1,10 @@
+secubox-cdn (1.5.4-1~trixie1) trixie; urgency=medium
+
+  * postinst : une unite masquee par l image ne fait plus echouer dpkg
+    (ref #3554).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 16:23:42 +0100
+
 secubox-cdn (1.5.3-1~trixie1) trixie; urgency=medium
 
   * /preload_url : cible vérifiée (api/cible.py) — http(s) sans identifiants, port web,

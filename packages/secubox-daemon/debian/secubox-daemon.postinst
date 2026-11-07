@@ -21,7 +21,7 @@ case "$1" in
 
     # Enable and start service
     systemctl daemon-reload
-    systemctl enable secuboxd.service
+    systemctl enable secuboxd.service || true
     systemctl start secuboxd.service || true
     ;;
 esac

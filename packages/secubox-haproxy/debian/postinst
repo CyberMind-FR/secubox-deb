@@ -24,7 +24,7 @@ SUDOERS
     chmod 0440 /etc/sudoers.d/secubox-haproxy
     visudo -cf /etc/sudoers.d/secubox-haproxy >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-haproxy
     systemctl daemon-reload
-    systemctl enable secubox-haproxy.service
+    systemctl enable secubox-haproxy.service || true
     systemctl start secubox-haproxy.service || true
     # #3056 : l'unité du composant exposure (root, /run/secubox/exposure.sock, hors agrégateur depuis #3013) est
     # installée par debian/rules, donc inconnue de dh_installsystemd : l'activer ici, sinon « HORS LIGNE ».
