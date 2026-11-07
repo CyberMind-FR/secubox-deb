@@ -632,6 +632,12 @@ chroot "$INSTALL_MNT" update-grub
 
 # Enable firstboot service
 chroot "$INSTALL_MNT" systemctl enable secubox-firstboot.service 2>/dev/null || true
+# Le squashfs n'a pas le kiosque activé au démarrage du live : la box installée garde le mode de la box qui l'installe (#3554).
+if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
+    install -d "$INSTALL_MNT/var/lib/secubox"
+    : > "$INSTALL_MNT/var/lib/secubox/.kiosk-enabled"
+    chroot "$INSTALL_MNT" systemctl enable secubox-kiosk.service 2>/dev/null || true
+fi
 
 # Cleanup
 umount "$INSTALL_MNT/sys"
