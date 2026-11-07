@@ -1,3 +1,10 @@
+secubox-nac (3.9.9-1~trixie1) trixie; urgency=medium
+
+  * postinst : une unite masquee par l image ne fait plus echouer dpkg
+    (ref #3554).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 16:23:42 +0100
+
 secubox-nac (3.9.8-1~trixie1) trixie; urgency=medium
 
   * /data rendu optionnel dans le bac a sable systemd : sans disque de

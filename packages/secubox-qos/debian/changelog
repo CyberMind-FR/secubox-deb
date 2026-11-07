@@ -1,3 +1,10 @@
+secubox-qos (1.6.2-1~trixie1) trixie; urgency=medium
+
+  * postinst : une unite masquee par l image ne fait plus echouer dpkg
+    (ref #3554).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 16:23:42 +0100
+
 secubox-qos (1.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Page /traffic/ (composant traffic) refaite au profil Aurora (ref #2571) : un seul fichier autonome (plus de police
