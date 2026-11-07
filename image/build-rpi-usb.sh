@@ -593,73 +593,6 @@ if [ -t 0 ] && [ -z "$SECUBOX_SPLASH_SHOWN" ]; then
 fi
 BASHRC
 
-# ── Plymouth Boot Splash Theme (SecuBox Cube) ──────────────────────
-log "Installing Plymouth SecuBox-Cube boot splash..."
-
-PLYMOUTH_DIR="${ROOTFS}/usr/share/plymouth/themes/secubox-cube"
-mkdir -p "${PLYMOUTH_DIR}"
-
-# Copy theme assets from source
-CUBE_SRC="${SCRIPT_DIR}/plymouth/secubox-cube"
-if [[ -d "${CUBE_SRC}" ]]; then
-    cp "${CUBE_SRC}/secubox-cube.plymouth" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/secubox-cube.script" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/logo.png" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/scanlines.png" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/progress-bg.png" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}/progress-fg.png" "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}"/icon-*.png "${PLYMOUTH_DIR}/"
-    cp "${CUBE_SRC}"/face-*.png "${PLYMOUTH_DIR}/"
-    log "  Copied cube theme assets from ${CUBE_SRC}"
-else
-    warn "Cube theme source not found, creating minimal theme..."
-    cat > "${PLYMOUTH_DIR}/secubox-cube.plymouth" <<'PLYTHEME'
-[Plymouth Theme]
-Name=SecuBox Cube
-Description=SecuBox 3D Rotating Cube Boot Splash
-ModuleName=script
-
-[script]
-ImageDir=/usr/share/plymouth/themes/secubox-cube
-ScriptFile=/usr/share/plymouth/themes/secubox-cube/secubox-cube.script
-PLYTHEME
-
-    cat > "${PLYMOUTH_DIR}/secubox-cube.script" <<'PLYSCRIPT'
-Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
-Window.SetBackgroundBottomColor(0.02, 0.04, 0.02);
-screen_width = Window.GetWidth();
-screen_height = Window.GetHeight();
-center_x = screen_width / 2;
-center_y = screen_height / 2;
-banner_image = Image.Text("SECUBOX", 0.0, 1.0, 0.61, "Sans Bold 48");
-banner_sprite = Sprite(banner_image);
-banner_sprite.SetPosition(center_x - banner_image.GetWidth() / 2, center_y - 50, 1);
-fun boot_progress_callback(duration, progress) {
-    bar_text = "";
-    for (i = 0; i < Math.Int(progress * 30); i++) bar_text = bar_text + "█";
-    for (i = Math.Int(progress * 30); i < 30; i++) bar_text = bar_text + "░";
-    bar_image = Image.Text(bar_text, 0.0, 0.8, 0.4, "Mono 12");
-    bar_sprite = Sprite(bar_image);
-    bar_sprite.SetPosition(center_x - bar_image.GetWidth() / 2, center_y + 80, 1);
-}
-Plymouth.SetBootProgressFunction(boot_progress_callback);
-PLYSCRIPT
-fi
-
-mkdir -p "${ROOTFS}/etc/plymouth"
-cat > "${ROOTFS}/etc/plymouth/plymouthd.conf" <<EOF
-[Daemon]
-Theme=secubox-cube
-ShowDelay=0
-DeviceTimeout=8
-EOF
-
-chroot "${ROOTFS}" plymouth-set-default-theme secubox-cube 2>/dev/null || true
-
-mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
-echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
-
-ok "Plymouth SecuBox-Cube theme installed"
 
 ok "System configured"
 
@@ -840,6 +773,15 @@ if [[ "${INCLUDE_KIOSK}" -eq 1 && $DEBS_INSTALLED -eq 1 ]]; then
       || warn "secubox-kiosk non sélectionné — kiosque de l'image seul"
   fi
 fi
+
+# Le dé au démarrage (#3554), HDMI comme DSI : hors de toute sélection de profil, absent = échec franc.
+_ply="$(find "${REPO_DIR}/output/debs" "${REPO_DIR}/cache/repo/pool" -name 'secubox-plymouth_*_all.deb' 2>/dev/null | sort -V | tail -n1)"
+[[ -n "${_ply}" ]] || err "secubox-plymouth_*_all.deb introuvable (output/debs ou cache/repo/pool)"
+cp "${_ply}" "${ROOTFS}/tmp/secubox-debs/"
+mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
+echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
+# Sans vc4 dans l'initramfs, pas d'affichage KMS sur le HDMI avant le montage de la racine.
+grep -qx vc4 "${ROOTFS}/etc/initramfs-tools/modules" 2>/dev/null || echo vc4 >> "${ROOTFS}/etc/initramfs-tools/modules"
 
 # Option --rpi-dsi (#3399) : ajout explicite du paquet optionnel de l'écran 7" DSI,
 # hors de toute sélection de profil. Introuvable = échec franc (option demandée).
@@ -1329,7 +1271,7 @@ EOF
 # cmdline.txt - Pi can boot WITHOUT initrd using root= directly
 # This avoids slow initramfs generation under QEMU
 cat > "${ROOTFS}/boot/firmware/cmdline.txt" <<EOF
-console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait fsck.repair=yes quiet
+console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait fsck.repair=yes quiet splash plymouth.ignore-serial-consoles
 EOF
 
 # Check if initrd already exists from kernel install
@@ -1569,7 +1511,7 @@ EOF
 
 # Update cmdline with UUID (splash for Plymouth boot graphics)
 cat > "${MNT}/boot/firmware/cmdline.txt" <<EOF
-console=serial0,115200 console=tty1 root=UUID=${ROOT_UUID} rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet splash
+console=serial0,115200 console=tty1 root=UUID=${ROOT_UUID} rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait quiet splash plymouth.ignore-serial-consoles
 EOF
 
 # Sync and unmount

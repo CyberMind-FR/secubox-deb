@@ -56,3 +56,17 @@ if [ -e "${ROOTFS}/usr/lib/systemd/system/dnsmasq.service" ] \
 else
     echo "[services] dnsmasq.service absent, rien a masquer"
 fi
+
+# ── Provisionnement lourd : jamais sur un live (#3554) ───────────────────
+#
+# Un live écrit en RAM. Mesuré sur la VM : en 4 minutes les LXC jellyfin,
+# voicestudio et picobrew remplissent l'overlay (2,8 Go sur 3,9), et 4 Go de
+# mémoire ne suffisent plus à démarrer. La condition ne vaut que sur l'overlay :
+# le système installé garde son provisionnement.
+for unite in "${ROOTFS}"/usr/lib/systemd/system/secubox-*-provision.service; do
+    [ -e "$unite" ] || continue
+    d="${ROOTFS}/etc/systemd/system/$(basename "$unite").d"
+    install -d "$d"
+    printf '[Unit]\nConditionPathExists=!/run/live/overlay/work\n' > "$d/secubox-live.conf"
+    echo "[services] $(basename "$unite") : sauté sur un live"
+done

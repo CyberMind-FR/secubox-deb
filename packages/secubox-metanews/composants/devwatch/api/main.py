@@ -174,6 +174,9 @@ def _git_weeks_sync(weeks_back: int = 26) -> list[dict] | None:
     aujourd'hui pour que today = days[-1] soit le VRAI compte du jour. Retourne
     None si git indisponible (on retombe alors sur l'agrégat GitHub). BLOQUANT :
     à appeler via asyncio.to_thread."""
+    # Sur un live, le clone (566 Mo) s'écrirait en RAM (#3554) : on garde l'agrégat GitHub.
+    if Path("/run/live/overlay/work").exists():
+        return None
     try:
         if (MIRROR / "HEAD").exists():
             subprocess.run(["git", "-C", str(MIRROR), "remote", "update", "--prune"],

@@ -60,6 +60,7 @@ jobs:
           name: secubox-debs-all
           path: output/debs/
           run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
         continue-on-error: true
 
       # PAQUETS DU MÊME COMMIT (#1478, même schéma que build-image #1383). Le

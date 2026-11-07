@@ -307,9 +307,6 @@ ShowStatus=no
 StatusUnitFormat=name
 EOF
 
-# Remove plymouth (causes console flickering)
-chroot "${ROOTFS}" apt-get remove --purge -y plymouth plymouth-label 2>/dev/null || true
-chroot "${ROOTFS}" apt-get autoremove -y 2>/dev/null || true
 
 # Disable console blanking and martian logging via kernel settings
 mkdir -p "${ROOTFS}/etc/sysctl.d"
@@ -437,6 +434,15 @@ chroot "${ROOTFS}" pip3 install --break-system-packages -q \
   2>/dev/null || warn "pip install partial"
 
 ok "Packages installed"
+
+# Politiques communes, les mêmes que les autres images (dnsmasq masqué, provisionnement hors du live, mémoire) (#3554).
+bash "${SCRIPT_DIR}/apply-memory-policy.sh" "${ROOTFS}"
+bash "${SCRIPT_DIR}/apply-service-policy.sh" "${ROOTFS}"
+
+# Le dé au démarrage (#3554) : le thème entre dans l'initramfs régénéré ci-dessous.
+chroot "${ROOTFS}" apt-get install -y -q secubox-plymouth || err "secubox-plymouth non installé"
+mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
+echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
 
 # secubox-hardening interdit squashfs dans modprobe.d, règle copiée dans l'initramfs : le montage échoue avec « request_module
 # fs-squashfs succeeded, but still no fs » et le live ne démarre pas (#3529). Lister le module dans conf/modules ne suffit pas.
@@ -904,22 +910,22 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live (Default)" {
-    linux /live/vmlinuz boot=live components persistence consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
+    linux /live/vmlinuz boot=live components persistence consoleblank=0 quiet splash loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Install (Headless Auto-Install)" {
-    linux /live/vmlinuz boot=live components toram systemd.unit=secubox-installer.target consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
+    linux /live/vmlinuz boot=live components toram systemd.unit=secubox-installer.target consoleblank=0 quiet splash loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (No Persistence)" {
-    linux /live/vmlinuz boot=live components nopersistence consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
+    linux /live/vmlinuz boot=live components nopersistence consoleblank=0 quiet splash loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux /live/vmlinuz boot=live components toram consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
+    linux /live/vmlinuz boot=live components toram consoleblank=0 quiet splash loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
@@ -939,12 +945,12 @@ menuentry "SecuBox Debug (Emergency Shell)" {
 }
 
 menuentry "SecuBox Debug (No Preseed)" {
-    linux /live/vmlinuz boot=live components systemd.mask=secubox-preseed.service consoleblank=0 plymouth.enable=0 loglevel=1 libata.force=noncq
+    linux /live/vmlinuz boot=live components systemd.mask=secubox-preseed.service consoleblank=0 quiet splash loglevel=1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Minimal (No Services)" {
-    linux /live/vmlinuz boot=live components systemd.mask=secubox-preseed.service systemd.mask=secubox-live-init.service systemd.mask=nginx.service systemd.mask=haproxy.service consoleblank=0 plymouth.enable=0 loglevel=1 libata.force=noncq
+    linux /live/vmlinuz boot=live components systemd.mask=secubox-preseed.service systemd.mask=secubox-live-init.service systemd.mask=nginx.service systemd.mask=haproxy.service consoleblank=0 quiet splash loglevel=1 libata.force=noncq
     initrd /live/initrd.img
 }
 
@@ -972,17 +978,17 @@ set menu_color_normal=cyan/black
 set menu_color_highlight=white/blue
 
 menuentry "SecuBox Live (Default)" {
-    linux /live/vmlinuz boot=live components persistence consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
+    linux /live/vmlinuz boot=live components persistence consoleblank=0 quiet splash loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (No Persistence)" {
-    linux /live/vmlinuz boot=live components nopersistence consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
+    linux /live/vmlinuz boot=live components nopersistence consoleblank=0 quiet splash loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
 menuentry "SecuBox Live (To RAM)" {
-    linux /live/vmlinuz boot=live components toram consoleblank=0 plymouth.enable=0 loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
+    linux /live/vmlinuz boot=live components toram consoleblank=0 quiet splash loglevel=1 usbcore.autosuspend=-1 libata.force=noncq
     initrd /live/initrd.img
 }
 
