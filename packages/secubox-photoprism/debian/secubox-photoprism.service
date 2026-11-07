@@ -31,7 +31,7 @@ NoNewPrivileges=no
 # reste root:root 1777, cree hors des unites.
 RuntimeDirectoryMode=0775
 
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox /data/photoprism
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox -/data/photoprism
 
 [Install]
 WantedBy=multi-user.target

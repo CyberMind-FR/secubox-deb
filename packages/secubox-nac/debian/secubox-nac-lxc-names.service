@@ -23,5 +23,5 @@ SystemCallArchitectures=native
 RestrictAddressFamilies=AF_UNIX
 IPAddressDeny=any
 CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
-ReadOnlyPaths=/var/lib/lxc /data/lxc
+ReadOnlyPaths=-/var/lib/lxc -/data/lxc
 ReadWritePaths=/var/lib/secubox/nac
