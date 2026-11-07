@@ -441,6 +441,11 @@ bash "${SCRIPT_DIR}/apply-service-policy.sh" "${ROOTFS}"
 
 # Le dé au démarrage (#3554) : le thème entre dans l'initramfs régénéré ci-dessous.
 chroot "${ROOTFS}" apt-get install -y -q secubox-plymouth || err "secubox-plymouth non installé"
+# Le kiosque de la box installée a besoin de son serveur graphique : le disque reçoit le squashfs, pas ce que le live ajoute.
+chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends xorg xinit x11-xserver-utils || err "Xorg non installé"
+# Le disque démarre aussi sur le dé : update-grub de l'installateur reprend cette ligne.
+sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' "${ROOTFS}/etc/default/grub"
+grep -q '^GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"' "${ROOTFS}/etc/default/grub" || err "GRUB sans splash"
 mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
 echo "FRAMEBUFFER=y" > "${ROOTFS}/etc/initramfs-tools/conf.d/plymouth"
 
