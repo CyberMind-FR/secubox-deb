@@ -1,3 +1,9 @@
+secubox-hub (1.12.48-1~trixie1) trixie; urgency=medium
+
+  * Barre d'icônes : au touchpad, le menu reste ouvert et le clic de retour n'est plus perdu (ref #3556).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 08:30:00 +0100
+
 secubox-hub (1.12.47-1~trixie1) trixie; urgency=medium
 
   * Page de menu servie par un autre module : elle reprend son état, plus de fausse alerte tv-privacy (ref #3549).

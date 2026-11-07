@@ -2350,7 +2350,7 @@
     // Barre d'icônes (#3533) : le menu se replie sur le logo et les icônes, se déplie au survol, au focus ou au toucher, et
     // se replie seul. Par-dessus la page : le contenu ne bouge pas. Pas sur téléphone (hamburger) ni en cadre. Désactivable :
     // localStorage sbx_menu_rail = "0".
-    var RAIL_LARGEUR = 76, RAIL_DELAI = 4000, _railMinuteur = null;
+    var RAIL_LARGEUR = 76, RAIL_DELAI = 4000, RAIL_SORTIE = 900, _railMinuteur = null;
     function railVoulu() {
         if (EMBARQUE || window.innerWidth <= 768) return false;
         try { return localStorage.getItem('sbx_menu_rail') !== '0'; } catch (e) { return true; }
@@ -2380,12 +2380,12 @@
         if (EMBARQUE || !document.getElementById('sidebar')) return;
         var st = document.createElement('style');
         st.textContent =
-            'html.sbx-rail .sidebar{width:' + RAIL_LARGEUR + 'px!important;overflow:hidden;transition:width .22s ease .35s;z-index:1200}' +
-            'html.sbx-rail .sidebar:hover,html.sbx-rail .sidebar:focus-within,html.sbx-rail .sidebar.rail-ouvert{width:220px!important;transition-delay:0s;box-shadow:12px 0 30px rgba(0,0,0,.45)}' +
-            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) :is(.logo-sbx,.sidebar-footer,.toggle-icon,.nav-mode,.nav-mode-link,#sbx-recherche,#sbx-recherche-vide,.nav-section-title>span:not(.cat-icon),.nav-item>span:not(.icon)){display:none!important}' +
-            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) :is(.nav-item,.nav-section-title){justify-content:center;padding-left:0;padding-right:0}' +
-            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) .sidebar-header{padding:.75rem 0}' +
-            'html.sbx-rail .sidebar:not(:hover):not(:focus-within):not(.rail-ouvert) .sidebar-header sbx-dice{transform:scale(.72);transform-origin:center}' +
+            'html.sbx-rail .sidebar{width:' + RAIL_LARGEUR + 'px!important;overflow:hidden;transition:width .22s ease;z-index:1200}' +
+            'html.sbx-rail .sidebar:focus-within,html.sbx-rail .sidebar.rail-ouvert{width:220px!important;box-shadow:12px 0 30px rgba(0,0,0,.45)}' +
+            'html.sbx-rail .sidebar:not(:focus-within):not(.rail-ouvert) :is(.logo-sbx,.sidebar-footer,.toggle-icon,.nav-mode,.nav-mode-link,#sbx-recherche,#sbx-recherche-vide,.nav-section-title>span:not(.cat-icon),.nav-item>span:not(.icon)){display:none!important}' +
+            'html.sbx-rail .sidebar:not(:focus-within):not(.rail-ouvert) :is(.nav-item,.nav-section-title){justify-content:center;padding-left:0;padding-right:0}' +
+            'html.sbx-rail .sidebar:not(:focus-within):not(.rail-ouvert) .sidebar-header{padding:.75rem 0}' +
+            'html.sbx-rail .sidebar:not(:focus-within):not(.rail-ouvert) .sidebar-header sbx-dice{transform:scale(.72);transform-origin:center}' +
             '@media (prefers-reduced-motion:reduce){html.sbx-rail .sidebar{transition:none}}';
         document.head.appendChild(st);
         var nav = document.getElementById('sidebar');
@@ -2397,6 +2397,23 @@
             clearTimeout(_railMinuteur);
             _railMinuteur = setTimeout(railReplier, RAIL_DELAI);
         }, true);
+        // Souris et touchpad (#3556) : un trajet lent ou une pause ne replie plus le menu, et le pointeur qui revient pendant le
+        // sursis le retrouve à la même place : le clic ne tombe plus sur un élément en mouvement.
+        nav.addEventListener('pointerenter', function (e) {
+            if (e.pointerType !== 'mouse' || !document.documentElement.classList.contains('sbx-rail')) return;
+            clearTimeout(_railMinuteur);
+            nav.classList.add('rail-ouvert');
+        });
+        nav.addEventListener('pointerleave', function (e) {
+            if (e.pointerType !== 'mouse') return;
+            clearTimeout(_railMinuteur);
+            _railMinuteur = setTimeout(function () {
+                // Un clic laisse le focus dans le menu : seul le clavier ou un champ de saisie le garde ouvert.
+                var a = document.activeElement;
+                if (a && nav.contains(a) && !a.matches(':focus-visible')) a.blur();
+                railReplier();
+            }, RAIL_SORTIE);
+        });
         document.addEventListener('click', function (e) { if (!nav.contains(e.target)) railReplier(); });
         window.addEventListener('resize', railAppliquer);
         railAppliquer();
