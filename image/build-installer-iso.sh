@@ -573,6 +573,8 @@ sleep 2
 partprobe "$TARGET_DISK"
 
 # Format partitions
+partprobe "$TARGET_DISK" 2>/dev/null || true
+udevadm settle --timeout=20 || true
 log "Formatting partitions..."
 mkfs.fat -F32 -n "ESP" "$PART_ESP"
 mkfs.ext4 -L "rootfs" -q "$PART_ROOT"
@@ -589,9 +591,11 @@ mount "$PART_ROOT" "$INSTALL_MNT"
 mkdir -p "$INSTALL_MNT/boot/efi" "$INSTALL_MNT/data"
 mount "$PART_ESP" "$INSTALL_MNT/boot/efi"
 
-# Copy the running live system
-rsync -ax --exclude={"/proc/*","/sys/*","/dev/*","/run/*","/tmp/*","/mnt/*","/media/*"} \
-    / "$INSTALL_MNT/"
+# Depuis le squashfs intact (#3554) : sur le système vivant, un fichier qui disparaît fait sortir rsync en 24 et arrête
+# l'installation, et le disque hériterait des secrets du live. Le système installé crée les siens au premier démarrage.
+SOURCE=/run/live/rootfs/filesystem.squashfs/
+[[ -d "$SOURCE/etc" ]] || err "squashfs du live introuvable : $SOURCE"
+rsync -aHAXx "$SOURCE" "$INSTALL_MNT/"
 
 ok "System files copied"
 
