@@ -1,3 +1,9 @@
+secubox-core (1.8.22-1~trixie1) trixie; urgency=medium
+
+  * Premier démarrage : chaque paquet recrée ses secrets, l'image n'en porte plus (ref #3558).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 10:00:00 +0100
+
 secubox-core (1.8.21-1~trixie1) trixie; urgency=medium
 
   * / ouvre l'assistant sur une box neuve (ref #3515).

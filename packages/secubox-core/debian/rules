@@ -75,6 +75,7 @@ override_dh_auto_install:
 
 	# Secrets generes SUR la box (#3243) : constat, creation au premier demarrage, renouvellement d'une box issue d'une image publiee.
 	install -D -m 0755 sbin/secubox-renouvelle-secrets debian/secubox-core/usr/sbin/secubox-renouvelle-secrets
+	install -D -m 0755 sbin/secubox-secrets-paquets debian/secubox-core/usr/sbin/secubox-secrets-paquets
 
 	# Renommage unique d'une box (#3126 L2 tache 5, #3242) : hosts, secubox.conf, hostnamectl, Avahi, audit.
 	install -D -m 0755 sbin/secubox-renommer debian/secubox-core/usr/sbin/secubox-renommer
