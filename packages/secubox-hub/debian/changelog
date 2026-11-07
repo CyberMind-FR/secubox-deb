@@ -1,6 +1,7 @@
 secubox-hub (1.12.48-1~trixie1) trixie; urgency=medium
 
   * Barre d'icônes : au touchpad, le menu reste ouvert et le clic de retour n'est plus perdu (ref #3556).
+  * Le dé du menu ne dépend plus du Hall : affiché aussi sur une box sans secubox-webos (ref #3556).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 08:30:00 +0100
 

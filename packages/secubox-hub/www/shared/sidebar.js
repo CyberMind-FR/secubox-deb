@@ -62,13 +62,13 @@
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
     const VERSION = 'v2.48.0';
-    // Le dé du Hall seul, version en infobulle (#3540). Sans le moteur (Hall absent), le nom reste affiché.
+    // Le dé du Hall seul, version en infobulle (#3540). Le moteur et ses faces sont livrés avec le menu : le Hall n'est pas requis (#3556).
     const LOGO_DE = '<sbx-dice size="84" speed="4" fov="40"><span class="logo">SECUBOX</span></sbx-dice><span class="logo-sbx">SBX</span>';
     (function chargerDe() {
         if (window.customElements && customElements.get('sbx-dice')) return;
-        if (document.querySelector('script[src="/sbx-dice.js"]')) return;
+        if (document.querySelector('script[src="/shared/sbx-dice.js"]')) return;
         var script = document.createElement('script');
-        script.src = '/sbx-dice.js';
+        script.src = '/shared/sbx-dice.js';
         script.defer = true;
         document.head.appendChild(script);
     })();
