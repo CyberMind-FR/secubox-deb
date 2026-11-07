@@ -29,6 +29,25 @@ def test_purge_refusee_sans_service_de_recreation(tmp_path):
     assert (tmp_path / "etc/ssh/ssh_host_rsa_key").exists()
 
 
+def test_purge_tout_le_dossier_des_secrets(tmp_path):
+    service_premier(tmp_path)
+    for f in ["etc/secubox/secrets/nouveau", "etc/secubox/toolbox/ca/key.pem", "var/lib/secubox-pilotage-relais/relais.key"]:
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text("secret")
+    assert purge(tmp_path).returncode == 0
+    assert not list((tmp_path / "etc/secubox").rglob("nouveau")) and not (tmp_path / "etc/secubox/toolbox/ca/key.pem").exists()
+    assert (tmp_path / "etc/secubox/toolbox/ca").is_dir()
+
+
+def test_purge_refuse_une_cle_privee_restante(tmp_path):
+    service_premier(tmp_path)
+    f = tmp_path / "etc/autre/cle"
+    f.parent.mkdir(parents=True)
+    f.write_text("-----BEGIN " + "PRIVATE KEY-----\n")
+    r = purge(tmp_path)
+    assert r.returncode == 1 and "clé privée" in r.stderr
+
+
 def test_purge(tmp_path):
     service_premier(tmp_path)
     for f in ["etc/ssh/ssh_host_ed25519_key", "etc/ssh/ssh_host_rsa_key.pub", "etc/secubox/secrets/oidc/signing.pem", "etc/secubox/tls/key.pem",
