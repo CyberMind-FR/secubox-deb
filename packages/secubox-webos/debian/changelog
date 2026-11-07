@@ -1,3 +1,9 @@
+secubox-webos (1.20.7-1~trixie1) trixie; urgency=medium
+
+  * Moteur du dé : ses faces sont cherchées à côté de lui (ref #3556).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 09:00:00 +0100
+
 secubox-webos (1.20.6-1~trixie1) trixie; urgency=medium
 
   * Les sondes du Hall n'interrogent plus les noms que le WAF ne route pas (#3174). Sur gk2, la

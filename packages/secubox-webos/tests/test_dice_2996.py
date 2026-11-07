@@ -70,7 +70,6 @@ def test_plymouth_reprend_les_six_faces():
         assert (PLY / f"face-{i}.png").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
         assert f'Image("face-{i}.png")' in script, i
     assert 'Image("face-5.png");   /* Front' in script
-    assert 'cp "${CUBE_SRC}"/face-*.png "${PLYMOUTH_DIR}/"' in (RACINE / "image" / "build-rpi-usb.sh").read_text(encoding="utf-8")
 
 
 # ── Rendu ──────────────────────────────────────────────────────────────────

@@ -7,6 +7,10 @@ override_dh_auto_install:
 	cp -r api debian/secubox-hub/usr/lib/secubox/hub/
 	install -d debian/secubox-hub/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-hub/usr/share/secubox/www/ || true
+	# Le dé du menu, depuis sa source unique dans secubox-webos : une box sans Hall l'affiche aussi (#3556).
+	install -m 644 ../secubox-webos/www/hall/sbx-dice.js debian/secubox-hub/usr/share/secubox/www/shared/sbx-dice.js
+	install -d debian/secubox-hub/usr/share/secubox/www/shared/dice
+	install -m 644 ../secubox-webos/www/hall/dice/*.jpg debian/secubox-hub/usr/share/secubox/www/shared/dice/
 	install -D -m 644 espaces.json debian/secubox-hub/usr/share/secubox/espaces.json
 	install -d debian/secubox-hub/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-hub/usr/share/secubox/menu.d/ || true

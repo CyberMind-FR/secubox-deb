@@ -20,13 +20,15 @@
   var LV=[0.5,0.8,-0.6], LL=Math.sqrt(LV[0]*LV[0]+LV[1]*LV[1]+LV[2]*LV[2]);
   var SPEEDS=[0.00031,0.00047,0.00019], UNI='#2563EB', ARETE='rgba(96,165,250,.35)', IS=320, R3=Math.sqrt(3);
 
+  // À côté du moteur : /dice/ pour le Hall, /shared/dice/ pour le menu d'une box sans Hall (#3556).
+  var BASE=(document.currentScript&&document.currentScript.src||'/sbx-dice.js').replace(/[^/]*$/,'')+'dice/';
   var IMGS=null, pretes=0, attente=[];
   function textures(cb){
     if(pretes===6) return cb();
     attente.push(cb);
     if(IMGS) return;
     IMGS=[];
-    for(var i=0;i<6;i++){ (function(i){ var im=new Image(); im.onload=function(){ if(++pretes===6){ attente.splice(0).forEach(function(f){ f(); }); } }; im.src='/dice/face-'+i+'.jpg'; IMGS[i]=im; })(i); }
+    for(var i=0;i<6;i++){ (function(i){ var im=new Image(); im.onload=function(){ if(++pretes===6){ attente.splice(0).forEach(function(f){ f(); }); } }; im.src=BASE+'face-'+i+'.jpg'; IMGS[i]=im; })(i); }
   }
 
   function Rx(a){var c=Math.cos(a),s=Math.sin(a);return[[1,0,0],[0,c,-s],[0,s,c]];}
