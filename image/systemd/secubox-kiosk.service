@@ -24,6 +24,9 @@ StartLimitIntervalSec=120
 [Service]
 Type=simple
 
+# Plymouth garde la console tant qu'il tourne : chvt resterait bloque (#3554)
+ExecStartPre=-+/usr/bin/plymouth quit
+
 # Clean VT state before starting
 ExecStartPre=+/usr/bin/chvt 7
 ExecStartPre=+/usr/bin/clear
