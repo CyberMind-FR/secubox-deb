@@ -1,3 +1,9 @@
+secubox-metanews (0.5.5-1~trixie1) trixie; urgency=medium
+
+  * devwatch : pas de miroir git sur un live, il s'écrirait en RAM (ref #3554).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 08:00:00 +0100
+
 secubox-metanews (0.5.4-1~trixie1) trixie; urgency=medium
 
   * Conteneur LXC créé en dernière Debian stable (ref #3285) : la suite est celle de l'hôte

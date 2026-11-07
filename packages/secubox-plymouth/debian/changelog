@@ -1,3 +1,9 @@
+secubox-plymouth (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Le kiosque Xorg ne restait plus bloqué derrière le dé : tty1 rendu avant chvt (ref #3554).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 07 Nov 2026 08:10:00 +0100
+
 secubox-plymouth (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Thème du dé du Hall et barre Aurora, tenu jusqu au kiosque (ref #3525).

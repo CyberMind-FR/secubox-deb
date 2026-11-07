@@ -16,7 +16,21 @@ def purge(r):
     return subprocess.run(["bash", "-c", f'source "{LIB}"; purger_secrets "$1"', "_", str(r)], capture_output=True, text=True, timeout=30, check=False)
 
 
+def service_premier(r):
+    f = r / "usr/lib/systemd/system/secubox-secrets-premier.service"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text("[Unit]\n")
+
+
+def test_purge_refusee_sans_service_de_recreation(tmp_path):
+    (tmp_path / "etc/ssh").mkdir(parents=True)
+    (tmp_path / "etc/ssh/ssh_host_rsa_key").write_text("secret")
+    assert purge(tmp_path).returncode == 3
+    assert (tmp_path / "etc/ssh/ssh_host_rsa_key").exists()
+
+
 def test_purge(tmp_path):
+    service_premier(tmp_path)
     for f in ["etc/ssh/ssh_host_ed25519_key", "etc/ssh/ssh_host_rsa_key.pub", "etc/secubox/secrets/oidc/signing.pem", "etc/secubox/tls/key.pem",
               "etc/secubox/secrets/p2p/x", "etc/machine-id", "var/lib/dbus/machine-id", "etc/ssh/sshd_config"]:
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)

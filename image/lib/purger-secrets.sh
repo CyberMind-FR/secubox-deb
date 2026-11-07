@@ -11,6 +11,9 @@
 purger_secrets() {
     local r="${1:?rootfs requis}" f
     [[ -d "$r/etc" && "$r" != / ]] || { echo "purger_secrets : racine refusée : $r" >&2; return 2; }
+    # Purger sans le service qui recrée les secrets laisse nginx sans configuration et la box sans interface (#3554).
+    [[ -e "$r/usr/lib/systemd/system/secubox-secrets-premier.service" ]] \
+        || { echo "purger_secrets : secubox-secrets-premier.service absent de $r : secubox-core trop ancien" >&2; return 3; }
     rm -f -- "$r"/etc/ssh/ssh_host_*
     rm -f -- "$r/etc/secubox/secrets/oidc/signing.pem" "$r"/etc/secubox/tls/cert.pem "$r"/etc/secubox/tls/key.pem
     rm -rf -- "${r:?}/etc/secubox/secrets/p2p" "${r:?}/etc/nginx/secubox-p2p-pair.conf"
