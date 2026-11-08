@@ -1,3 +1,12 @@
+secubox-zia (0.4.0-1~trixie1) trixie; urgency=medium
+
+  * Bus : sources relevées en parallèle, cache expiré servi aussitôt et
+    rafraîchi en tâche de fond, premier relevé dès le démarrage ; plus
+    d attente de metanews derrière le délai de 30 s du chemin public
+    (« Oups, réseau ») (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 07:24:31 +0100
+
 secubox-zia (0.3.9-1~trixie1) trixie; urgency=medium
 
   * Frappe progressive dans son propre élément : les actions SBX et les

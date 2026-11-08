@@ -135,6 +135,12 @@ def _audit(role: str, actions: list) -> None:
         log.error(f"audit action: {e}")
 
 app = FastAPI(title="secubox-zia", version="0.1.0", root_path="/api/v1/zia")
+
+
+@app.on_event("startup")
+async def _prechauffe_bus() -> None:
+    # Premier relevé dès le démarrage : la première question n'attend pas metanews (#3574).
+    BUS.prechauffer()
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 

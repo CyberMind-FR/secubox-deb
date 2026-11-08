@@ -14,6 +14,7 @@ service injoignable est simplement ignoré — jamais d'erreur qui casse le chat
 """
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 from typing import Optional
@@ -75,6 +76,7 @@ class Bus:
         self._cache: list[dict] = []
         self._ts = 0.0
         self._dernier: dict[str, list[dict]] = {}   # dernier relevé NON vide de chaque source (#3574)
+        self._releve: Optional[asyncio.Task] = None  # relevé en cours, partagé par toutes les requêtes
         self.ttl = float(cfg.get("bus_cache_s", 45))
         # Registre des capacités (couche d'actions) : bootstrap + manifestes des
         # modules. Le LLM ne l'écrit jamais ; il propose, on valide ici.
@@ -235,19 +237,35 @@ class Bus:
             return out
         return out
 
+    async def _rafraichir(self) -> None:
+        """Les sources EN PARALLÈLE : le relevé dure le temps de la plus lente (metanews, jusqu'à 20 s), pas leur
+        somme. Double tampon (#3011, #3574) : une source en échec rend [] et ne vide jamais son dernier relevé."""
+        noms = ("metanews", "billets", "peertube", "registre")
+        lots = await asyncio.gather(self._metanews(), self._billets(), self._peertube(), self._registry(),
+                                    return_exceptions=True)
+        frais = []
+        for nom, lot in zip(noms, lots):
+            frais += self._garde(nom, lot if isinstance(lot, list) else [])
+        self._cache = list(_SEED) + frais
+        self._ts = time.time()
+
+    def prechauffer(self) -> asyncio.Task:
+        """Lance un relevé s'il n'y en a pas déjà un (démarrage du service, cache expiré)."""
+        if self._releve is None or self._releve.done():
+            self._releve = asyncio.create_task(self._rafraichir())
+        return self._releve
+
     async def objets(self, role: str = "guest", force: bool = False) -> list[dict]:
-        """Tous les objets visibles pour ce rôle (cache court, adapters best-effort)."""
-        now = time.time()
-        if force or not self._cache or (now - self._ts) > self.ttl:
-            # Double tampon (#3011, #3574) : une source qui échoue ou dépasse son délai rend [] ; elle n'efface
-            # jamais son dernier relevé réussi. metanews dépasse souvent ses 20 s : sans ça, « les sujets
-            # récents » répondait « aucun sujet » pendant tout le cache.
-            frais = []
-            for nom, adapter in (("metanews", self._metanews), ("billets", self._billets),
-                                 ("peertube", self._peertube), ("registre", self._registry)):
-                frais += self._garde(nom, await adapter())
-            self._cache = list(_SEED) + frais
-            self._ts = now
+        """Tous les objets visibles pour ce rôle.
+
+        Jamais d'attente une fois un premier relevé fait : cache expiré = réponse immédiate avec le dernier relevé,
+        nouveau relevé en tâche de fond. Le chemin public coupe à 30 s (HAProxy) : attendre metanews (20 s) puis le
+        modèle (20 s) donnait « Oups, réseau » (#3574). Seul le tout premier relevé (ou `force`) est attendu.
+        """
+        if force or not self._ts:
+            await self.prechauffer()
+        elif (time.time() - self._ts) > self.ttl:
+            self.prechauffer()
         return policy.filtre(self._cache, role)
 
     def _garde(self, source: str, objets: list[dict]) -> list[dict]:
