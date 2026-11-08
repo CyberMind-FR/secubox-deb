@@ -22,7 +22,7 @@ def test_metanews_en_echec_garde_le_dernier_releve(monkeypatch):
     async def vide():
         return []
     monkeypatch.setattr(bus, "_metanews", metanews)
-    for nom in ("_billets", "_peertube", "_registry"):
+    for nom in ("_billets", "_peertube", "_registry", "_ytsas", "_bbs"):
         monkeypatch.setattr(bus, nom, vide)
     premier = asyncio.run(bus.objets(force=True))
     second = asyncio.run(bus.objets(force=True))      # metanews a dépassé son délai : []
@@ -42,7 +42,7 @@ def test_cache_expire_repond_sans_attendre_la_source_lente(monkeypatch):
         return []
 
     async def scenario():
-        for nom in ("_metanews", "_billets", "_peertube", "_registry"):
+        for nom in ("_metanews", "_billets", "_peertube", "_registry", "_ytsas", "_bbs"):
             monkeypatch.setattr(bus, nom, vide)
         await bus.objets(force=True)                 # premier relevé (attendu)
         monkeypatch.setattr(bus, "_metanews", lent)

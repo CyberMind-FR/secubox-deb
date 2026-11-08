@@ -1,3 +1,12 @@
+secubox-zia (0.4.1-1~trixie1) trixie; urgency=medium
+
+  * Adaptateur ytsas : la médiathèque téléchargée, réservée aux membres, sans
+    chemin interne ni URL d origine (ref #3574).
+  * Adaptateur BBS : rubriques publiques (les fils attendent un compte de
+    service ZIA).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 07:47:16 +0100
+
 secubox-zia (0.4.0-1~trixie1) trixie; urgency=medium
 
   * Bus : sources relevées en parallèle, cache expiré servi aussitôt et

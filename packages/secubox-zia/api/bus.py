@@ -237,12 +237,69 @@ class Bus:
             return out
         return out
 
+    async def _ytsas(self) -> list[dict]:
+        """Adapter YTSAS : la médiathèque téléchargée -> objets media.video réservés aux MEMBRES (#3574).
+
+        C'est la bibliothèque personnelle du propriétaire : jamais visible d'un invité du Hall ni de l'IA
+        publique. Ni chemin interne ni URL d'origine ne sortent : titre, et lien vers la page ytsas.
+        """
+        base = str(self.cfg.get("ytsas_url") or "http://10.100.0.180:8091").rstrip("/")
+        page = f"https://{_hote('admin')}/ytsas/" if _hote("admin") else ""
+        out: list[dict] = []
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as cli:
+                r = await cli.get(base + "/api/v1/ytsas/list", headers={"Accept": "application/json"})
+            if r.status_code != 200:
+                return out
+            elements = [e for e in r.json() if isinstance(e, dict) and str(e.get("complete")) == "1" and e.get("id")]
+            elements.sort(key=lambda e: float(e.get("added_at") or 0), reverse=True)
+            for e in elements[:40]:
+                out.append({
+                    "id": f"ytsas:media:{e['id']}", "type": "media.video", "service": "ytsas",
+                    "title": str(e.get("title") or "")[:160], "summary": "Médiathèque ytsas",
+                    "uri": f"sbx://ytsas/media/{e['id']}", "url": page, "visibility": "member",
+                    "actions": ["open"], "tags": ["vidéo", "ytsas", "médiathèque"],
+                })
+        except Exception:
+            return out
+        return out
+
+    async def _bbs(self) -> list[dict]:
+        """Adapter BBS : les rubriques publiques (/api/v1/bbs/menu) -> objets forum.section, visibles de tous.
+
+        Les FILS exigent un jeton : ils attendent le compte de service de ZIA (#3574), pas un contournement.
+        """
+        sock = self.cfg.get("bbs_sock", "/run/secubox/bbs.sock")
+        out: list[dict] = []
+        try:
+            tr = httpx.AsyncHTTPTransport(uds=sock)
+            async with httpx.AsyncClient(transport=tr, timeout=4.0) as cli:
+                r = await cli.get("http://x/api/v1/bbs/menu", headers={"Accept": "application/json"})
+            if r.status_code != 200:
+                return out
+            for c in (r.json().get("categories") or []):
+                slug = c.get("slug")
+                if not slug:
+                    continue
+                n = c.get("threads")
+                out.append({
+                    "id": f"bbs:rubrique:{slug}", "type": "forum.section", "service": "bbs",
+                    "title": c.get("title") or slug,
+                    "summary": f"Rubrique du BBS · {n} fils" if isinstance(n, int) else "Rubrique du BBS",
+                    "uri": f"sbx://bbs/rubrique/{slug}",
+                    "url": f"https://{_hote('bbs')}/c/{slug}" if _hote("bbs") else "", "visibility": "guest",
+                    "actions": ["open"], "tags": ["bbs", "forum", "discussion", str(slug).lower()],
+                })
+        except Exception:
+            return out
+        return out
+
     async def _rafraichir(self) -> None:
         """Les sources EN PARALLÈLE : le relevé dure le temps de la plus lente (metanews, jusqu'à 20 s), pas leur
         somme. Double tampon (#3011, #3574) : une source en échec rend [] et ne vide jamais son dernier relevé."""
-        noms = ("metanews", "billets", "peertube", "registre")
+        noms = ("metanews", "billets", "peertube", "registre", "ytsas", "bbs")
         lots = await asyncio.gather(self._metanews(), self._billets(), self._peertube(), self._registry(),
-                                    return_exceptions=True)
+                                    self._ytsas(), self._bbs(), return_exceptions=True)
         frais = []
         for nom, lot in zip(noms, lots):
             frais += self._garde(nom, lot if isinstance(lot, list) else [])
