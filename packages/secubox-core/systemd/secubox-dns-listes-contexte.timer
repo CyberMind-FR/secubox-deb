@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Reprise d'un changement de CONTEXTE différé (#3592) : la passe ne compile que si la dernière compilation a plus de
+# 15 min ; sinon elle s'arrête aussitôt (« inchange » ou « differe »), sans coût.
+[Unit]
+Description=SecuBox — reprise des listes DNS au contexte différé (#3592)
+
+[Timer]
+OnBootSec=20min
+OnUnitInactiveSec=16min
+Unit=secubox-dns-listes.service
+
+[Install]
+WantedBy=timers.target

@@ -1,3 +1,13 @@
+secubox-core (1.8.24-1~trixie1) trixie; urgency=medium
+
+  * dns-listes : un changement du seul contexte (vue TV Privacy réécrite) ne
+    relance plus une compilation complète à chaque écriture ; différé tant que
+    la dernière compilation a moins de 15 min, repris par la minuterie
+    secubox-dns-listes-contexte.timer. Une source déposée compile aussitôt
+    (ref #3592).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 13:44:08 +0100
+
 secubox-core (1.8.23-1~trixie1) trixie; urgency=medium
 
   * Racine : le Hall n est l accueil que si /etc/secubox/hall-accueil existe ;
