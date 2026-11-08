@@ -14,7 +14,8 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - PR #3591 : la racine ne renvoie au Hall que si `/etc/secubox/hall-accueil` existe (posé sur gk2) ; installateur en profil mobile + webos ; Dashboard (`secubox-hub` 1.12.49) obtient la session de console du kiosque. Validé en VM amd64 (ref #3554).
 - Déployés sur gk2 : hub ≤ 1.12.47 (closes #3549, closes #3540, closes #3533), `secubox-mail` 2.16.9 (closes #3552), `secubox-lyrion` 1.7.10 (closes #3546), `secubox-zia` 0.4.4 (closes #3520, closes #3574).
 - Livrés dans l'image bêta 1, installation validée en VM : closes #3558, closes #3518, closes #3529.
-- Restent ouvertes : #3545 (WAF 1.34, accord avant gk2), #3556 (hub 1.12.48 non déployé), #3523/#3524/#3525 (images RPi à valider sur matériel).
+- `secubox-waf-ng` 1.34.1 déployé sur gk2 (accord du propriétaire), admin 200, closes #3545. PR #3572 (ai-gateway multimodale, ref #3571) fusionnée.
+- Restent ouvertes :, #3556 (hub 1.12.48 non déployé), #3523/#3524/#3525 (images RPi à valider sur matériel).
 
 ## 2026-11-08 — Bêta 1 publiée (pré-version), ZIA étendue, veille CERT-FR (ref #3554, ref #3574, ref #3583, ref #3584)
 - `v3.0.0-beta.1` publiée le 2026-11-08 08:32 UTC (pré-version, 24 fichiers), tag `6848db517`. Correctifs d'image : provisionnement live hors RAM, dé Plymouth et kiosque (#3555, #3563, #3565), installateur depuis le squashfs (#3560, #3561, #3562), aucun secret embarqué (#3559), `/data` optionnel et postinst tolérant les unités masquées (#3564), authentification et LXC démasqués sur disque (#3568), `resolv.conf` de la box (#3569), dates de changelog (#3566), archive CLI en brouillon (#3573).
