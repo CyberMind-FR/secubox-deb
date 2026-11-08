@@ -84,6 +84,7 @@ class Bus:
         self._ts = 0.0
         self._dernier: dict[str, list[dict]] = {}   # dernier relevé NON vide de chaque source (#3574)
         self._releve: Optional[asyncio.Task] = None  # relevé en cours, partagé par toutes les requêtes
+        self._pair_hs: dict[str, float] = {}         # voisine injoignable → mise de côté jusqu'à (monotonic)
         self.ttl = float(cfg.get("bus_cache_s", 45))
         # Registre des capacités (couche d'actions) : bootstrap + manifestes des
         # modules. Le LLM ne l'écrit jamais ; il propose, on valide ici.
@@ -368,9 +369,49 @@ class Bus:
             return out
         return out
 
-    async def search(self, query: str, type_: str = "", role: str = "guest", limit: int = 8) -> list[dict]:
-        """Recherche plein-texte simple sur titre/résumé/tags (+ filtre de type)."""
+    async def _pairs(self, query: str) -> list[dict]:
+        """Objets PUBLICS des autres box du maillage (#3574), par leur route /objets (rôle invité, sans génération).
+
+        Les voisines viennent de `pairs_maillage` (zia.toml) : ZIA ne lit jamais le fichier du maillage, qui porte la
+        clé privée WireGuard. Appels en parallèle, 3 s ; une voisine muette est mise de côté 5 min. /objets ne relaie
+        jamais aux voisines : pas de boucle entre box.
+        """
+        pairs = [str(u).rstrip("/") for u in (self.cfg.get("pairs_maillage") or []) if str(u).startswith("https://")]
+        now = time.monotonic()
+        actifs = [u for u in pairs if self._pair_hs.get(u, 0) <= now]
+        if not actifs or not (query or "").strip():
+            return []
+
+        async def un(url: str) -> list[dict]:
+            try:
+                # Certificats internes des box : TLS sans vérification, comme l'adapter PeerTube (serveur-à-serveur).
+                async with httpx.AsyncClient(verify=False, timeout=3.0) as cli:
+                    r = await cli.get(url + "/api/v1/zia/objets", params={"q": query[:200], "limit": 4},
+                                      headers={"Accept": "application/json"})
+                if r.status_code != 200:
+                    raise ValueError(r.status_code)
+                noeud = url.split("//", 1)[1].split("/", 1)[0]
+                out = []
+                for o in (r.json().get("objets") or [])[:4]:
+                    if not (o.get("id") and o.get("title")):
+                        continue
+                    out.append({**{k: o.get(k) for k in ("type", "service", "title", "url")},
+                                "summary": f"sur {noeud} · " + str(o.get("summary") or ""),
+                                "id": f"maillage:{noeud}:{o['id']}", "visibility": "guest", "noeud": noeud,
+                                "actions": ["open"], "tags": list(o.get("tags") or []) + ["maillage", noeud]})
+                return out
+            except Exception:
+                self._pair_hs[url] = time.monotonic() + 300
+                return []
+        lots = await asyncio.gather(*(un(u) for u in actifs))
+        return [o for lot in lots for o in lot]
+
+    async def search(self, query: str, type_: str = "", role: str = "guest", limit: int = 8,
+                     maillage: bool = True) -> list[dict]:
+        """Recherche plein-texte simple sur titre/résumé/tags (+ filtre de type), puis les box voisines."""
         objs = await self.objets(role)
+        if maillage:
+            objs = objs + policy.filtre(await self._pairs(query), role)
         jeton = JETON_DEMANDEUR.get()
         if jeton and (type_.startswith("media.audio") or _AUDIO.search(query or "")):
             objs = objs + await self._podcasts(jeton)

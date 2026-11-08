@@ -29,9 +29,10 @@ class _Bus:
     def __init__(self):
         self.roles, self.appels = [], []
 
-    async def search(self, q, type_="", role="guest", limit=8):
+    async def search(self, q, type_="", role="guest", limit=8, maillage=True):
         self.roles.append(role)
         self.appels.append(("search", q, limit))
+        self.maillage = maillage
         return [o for o in OBJS if o["visibility"] == "guest" and q.lower()[:4] in o["title"].lower()][:limit]
 
     async def recent(self, limit=6, role="guest"):
@@ -59,6 +60,7 @@ def test_recherche_role_invite_sans_moteur(monkeypatch):
     ids = [o["id"] for o in r.json()["objets"]]
     assert ids == ["billets:post:a"] and "secret:1" not in ids
     assert set(bus.roles) == {"guest"}
+    assert bus.maillage is False          # /objets ne relaie jamais aux voisines : pas de boucle entre box (#3574)
     assert "visibility" not in r.json()["objets"][0]
 
 
