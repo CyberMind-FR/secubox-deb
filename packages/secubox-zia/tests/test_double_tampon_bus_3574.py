@@ -28,3 +28,28 @@ def test_metanews_en_echec_garde_le_dernier_releve(monkeypatch):
     second = asyncio.run(bus.objets(force=True))      # metanews a dépassé son délai : []
     assert SUJET["id"] in [o["id"] for o in premier]
     assert SUJET["id"] in [o["id"] for o in second]
+
+
+def test_cache_expire_repond_sans_attendre_la_source_lente(monkeypatch):
+    import time
+    bus = Bus({"bus_cache_s": 0})
+
+    async def lent():
+        await asyncio.sleep(5)
+        return [SUJET]
+
+    async def vide():
+        return []
+
+    async def scenario():
+        for nom in ("_metanews", "_billets", "_peertube", "_registry"):
+            monkeypatch.setattr(bus, nom, vide)
+        await bus.objets(force=True)                 # premier relevé (attendu)
+        monkeypatch.setattr(bus, "_metanews", lent)
+        bus._ts -= 10                                # cache expiré
+        t0 = time.monotonic()
+        await bus.objets()
+        duree = time.monotonic() - t0
+        bus._releve.cancel()
+        return duree
+    assert asyncio.run(scenario()) < 0.5
