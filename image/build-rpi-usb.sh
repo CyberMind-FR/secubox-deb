@@ -775,7 +775,9 @@ if [[ "${INCLUDE_KIOSK}" -eq 1 && $DEBS_INSTALLED -eq 1 ]]; then
 fi
 
 # Le dé au démarrage (#3554), HDMI comme DSI : hors de toute sélection de profil, absent = échec franc.
-_ply="$(find "${REPO_DIR}/output/debs" "${REPO_DIR}/cache/repo/pool" -name 'secubox-plymouth_*_all.deb' 2>/dev/null | sort -V | tail -n1)"
+# `|| true` : un des deux dossiers manque toujours (cache/repo/pool en CI) ; sous pipefail, l'échec de find
+# arrêtait le script EN SILENCE, avant le contrôle explicite qui suit (images RPi de la bêta 1, #3554).
+_ply="$(find "${REPO_DIR}/output/debs" "${REPO_DIR}/cache/repo/pool" -name 'secubox-plymouth_*_all.deb' 2>/dev/null | sort -V | tail -n1 || true)"
 [[ -n "${_ply}" ]] || err "secubox-plymouth_*_all.deb introuvable (output/debs ou cache/repo/pool)"
 cp "${_ply}" "${ROOTFS}/tmp/secubox-debs/"
 mkdir -p "${ROOTFS}/etc/initramfs-tools/conf.d"
