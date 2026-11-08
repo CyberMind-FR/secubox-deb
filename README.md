@@ -203,7 +203,8 @@ version meant to be installed by someone else, on their own PC, without a serial
   (planned for a later beta).
 - **Premier Pas, a 9-step wizard** on the box's own screen or from any device on the LAN: language and keyboard,
   box name, clock, administrator, network and domain, services, mesh, updates, then apply.
-  Step-by-step tutorial with screenshots (FR): [Premier Pas](docs/PREMIER-PAS-TUTORIEL.md).
+  Step-by-step tutorials with screenshots (FR): [Premier Pas](docs/PREMIER-PAS-TUTORIEL.md) ·
+  [finding your way in the admin](docs/ADMIN-NAVIGATION-TUTORIEL.md).
 - **A real boot screen and kiosk.** The SecuBox dice spins while the system starts (Plymouth, amd64 and Raspberry Pi),
   then the local screen opens the dashboard; the new WebOS desktop is included.
 - **No shared secrets.** Images no longer embed any private key: certificates, WAF and toolbox keys are created by
