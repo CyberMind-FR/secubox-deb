@@ -1,3 +1,11 @@
+secubox-hub (1.12.49-1~trixie1) trixie; urgency=medium
+
+  * Dashboard : sur la console du kiosque (admin.localhost:9078), passer par
+    login.html pour obtenir la session de console au lieu d afficher
+    « Session requise » (ref #3554).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 13:05:58 +0100
+
 secubox-hub (1.12.48-1~trixie1) trixie; urgency=medium
 
   * Barre d'icônes : au touchpad, le menu reste ouvert et le clic de retour n'est plus perdu (ref #3556).

@@ -254,6 +254,12 @@
             const chemins = ['/menu', '/dashboard', '/system_health', '/module-health/summary', '/health-monitor/summary', '/alerts', '/network_summary', '/network_mode', '/memory', '/disk', '/uptime', '/boot_mode', '/auth_mode'];
             const vals = await Promise.all(chemins.map(lire));
             const d = {}; noms.forEach((n, i) => { d[n] = vals[i]; });
+            // CONSOLE DU KIOSQUE (#1695, #3554) : sans session, login.html obtient celle de la console puis revient ici
+            // (garde anti-boucle de 15 s côté login.html). Ailleurs, la session requise reste dite, sans renvoi.
+            if (sessionRequise && !DEMO && location.port === '9078' && /^(hall|admin)\.localhost$/.test(location.hostname)) {
+                location.replace('/login.html?redirect=' + encodeURIComponent(location.pathname));
+                return;
+            }
             rendre(d);
             $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
