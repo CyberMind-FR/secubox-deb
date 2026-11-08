@@ -637,6 +637,14 @@ chroot "$INSTALL_MNT" update-grub
 
 # Enable firstboot service
 chroot "$INSTALL_MNT" systemctl enable secubox-firstboot.service 2>/dev/null || true
+# Le live masque des services (DISABLE_ON_LIVE plus haut) ; la box installée doit les retrouver, sinon personne ne se
+# connecte (secubox-auth masqué = /api/v1/auth en 502) et les applications LXC ne démarrent pas (#3554). On lève tous les
+# masques ; seuls l'authentification et LXC sont réactivés, le reste démarre selon le profil choisi dans Premier Pas.
+for svc in secubox-haproxy secubox-nac secubox-dpi secubox-qos secubox-mediaflow secubox-cdn secubox-vhost \
+           secubox-netmodes secubox-auth secuboxd lxc-net lxc; do
+    chroot "$INSTALL_MNT" systemctl unmask "${svc}.service" 2>/dev/null || true
+done
+chroot "$INSTALL_MNT" systemctl enable secubox-auth.service lxc-net.service lxc.service 2>/dev/null || true
 # Le squashfs n'a pas le kiosque activé au démarrage du live : la box installée garde le mode de la box qui l'installe (#3554).
 if [[ -f /var/lib/secubox/.kiosk-enabled ]]; then
     install -d "$INSTALL_MNT/var/lib/secubox"
@@ -808,7 +816,7 @@ fi
 
 # ── Disable services that cause restart loops on live boot ───────
 # These services require configs/dependencies that don't exist on live
-# They will be enabled after proper installation to disk
+# The installer unmasks them on the target disk (see « Enable firstboot service »)
 log "Disabling services incompatible with live boot..."
 
 DISABLE_ON_LIVE=(
