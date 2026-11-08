@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Progression de l'installation sur disque (#3554), servie par le live : lit etat.json et journal.txt écrits par
+  secubox-installer dans ce même dossier. Page autonome, sans dépendance, lisible sur l'écran de la box comme ailleurs.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — installation</title>
+    <style>
+        :root{--fond:#0a0d14;--carte:#111827;--trait:#24314a;--texte:#e8edf7;--doux:#9aa7bd;--cyan:#00d4ff;--vert:#2ecc71;--rouge:#ff4d5e;--or:#c9a84c}
+        *{box-sizing:border-box} html,body{margin:0;height:100%}
+        body{background:var(--fond);color:var(--texte);font-family:"DejaVu Sans",system-ui,sans-serif;display:flex;justify-content:center;padding:24px}
+        main{width:100%;max-width:900px}
+        h1{font-family:"DejaVu Serif",Georgia,serif;font-weight:400;color:var(--or);font-size:1.6rem;margin:0 0 18px}
+        .carte{background:var(--carte);border:1px solid var(--trait);border-radius:14px;padding:28px}
+        #titre{font-family:"DejaVu Serif",Georgia,serif;font-size:2rem;margin:0 0 10px}
+        #message{color:var(--doux);font-size:1.1rem;margin:0 0 18px;min-height:1.4em}
+        .barre{height:12px;border-radius:6px;background:#1c2536;overflow:hidden} .barre b{display:block;height:100%;width:0;background:var(--cyan);transition:width .6s}
+        .fini .barre b{background:var(--vert)} .erreur .barre b{background:var(--rouge)}
+        .ligne{display:flex;justify-content:space-between;color:var(--doux);font-size:.9rem;margin-top:8px}
+        #journal{margin:22px 0 0;padding:14px;border-radius:10px;background:#0b111c;border:1px solid var(--trait);
+                 font-family:"DejaVu Sans Mono",monospace;font-size:.85rem;line-height:1.6;white-space:pre-wrap;max-height:40vh;overflow:auto}
+        .erreur #titre{color:var(--rouge)} .fini #titre{color:var(--vert)}
+        .note{color:var(--doux);font-size:.85rem;margin-top:16px}
+    </style>
+</head>
+<body>
+<main>
+    <h1>SecuBox · Installation</h1>
+    <section class="carte" id="carte" aria-live="polite">
+        <p id="titre">Installation en attente</p>
+        <p id="message">L'installation sur disque n'a pas encore commencé.</p>
+        <div class="barre" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="barre"><b id="plein"></b></div>
+        <div class="ligne"><span id="etape">—</span><span id="duree">—</span></div>
+        <pre id="journal" aria-label="Étapes horodatées">—</pre>
+        <p class="note">Ne pas éteindre pendant l'installation. À la fin, retirer la clé USB : la machine redémarre sur son disque.</p>
+    </section>
+</main>
+<script>
+    const $ = id => document.getElementById(id);
+    const duree = s => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') + ' s'; };
+    async function lire() {
+        try {
+            const r = await fetch('etat.json', { cache: 'no-store' });
+            if (r.ok) {
+                const e = await r.json(), c = $('carte');
+                c.className = 'carte ' + (e.statut === 'fini' ? 'fini' : e.statut === 'erreur' ? 'erreur' : '');
+                $('titre').textContent = e.statut === 'fini' ? 'Installation terminée' : e.statut === 'erreur' ? 'Installation interrompue' : 'Installation en cours';
+                $('message').textContent = e.message || '';
+                const pc = e.statut === 'fini' ? 100 : Math.max(0, Math.min(100, e.pourcent || 0));
+                $('plein').style.width = pc + '%'; $('barre').setAttribute('aria-valuenow', pc);
+                $('etape').textContent = 'Étape ' + e.etape + ' / ' + e.total + (e.disque ? ' · ' + e.disque : '');
+                $('duree').textContent = duree((e.statut === 'en_cours' ? Date.now() / 1000 : e.maj) - e.debut);
+            }
+            const j = await fetch('journal.txt', { cache: 'no-store' });
+            if (j.ok) { const t = (await j.text()).trim(); if (t) { $('journal').textContent = t; $('journal').scrollTop = 1e9; } }
+        } catch (err) { /* live en cours de redémarrage : on réessaie */ }
+    }
+    lire(); setInterval(lire, 2000);
+</script>
+</body>
+</html>
