@@ -1,3 +1,14 @@
+secubox-core (1.8.26-1~trixie1) trixie; urgency=medium
+
+  * dns-listes : une TV qui change d adresse ne relance plus de compilation.
+    Sources inchangées et contexte qui ne diffère que par des adresses : les
+    lignes d adresses du 92 sont reposées d après les étiquettes de leur profil
+    (0,2 s contre plusieurs minutes), fichier identique à une compilation
+    complète (mesuré sur la configuration de gk2). Tout autre cas recompile
+    (ref #3548, ref #3592).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 14:07:46 +0100
+
 secubox-core (1.8.25-1~trixie1) trixie; urgency=medium
 
   * dns-listes : retrait du report de 15 min d un contexte seul (1.8.24) ; il

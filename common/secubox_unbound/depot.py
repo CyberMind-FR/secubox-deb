@@ -214,10 +214,19 @@ def _adopter(sources: Path, conf_d: Path) -> list:
     return adoptes
 
 
-def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bool = False) -> tuple:
+def _lire_meta(meta: Optional[Path]) -> Optional[dict]:
+    try:
+        return json.loads(Path(meta).read_text(encoding="utf-8")) if meta else None
+    except (OSError, ValueError):
+        return None
+
+
+def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bool = False,
+           meta: Optional[Path] = None, contexte_seul: bool = False) -> tuple:
     presentes = [sources / n for n in listes.SOURCES_CONNUES if (sources / n).is_file()]
     stats: dict = {}
     changements: dict = {}
+    nouvelle_meta = None
     if mode == "direct":
         for p in presentes:                       # retour arrière, mais pas un passe-droit : mêmes directives permises qu'à la compilation
             listes.lire([p], sources=[p.name])
@@ -226,13 +235,30 @@ def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bo
         changements[conf_d / listes.SORTIE] = None
     else:
         if presentes:
-            texte, stats = listes.compiler(presentes, fichiers_contexte(conf_d))
+            r = None
+            # RETOUCHE (#3548) : sources inchangées, seul le contexte bouge (une TV change d'adresse) : on repose les
+            # lignes d'adresses du 92 en place, sans recompiler. Tout autre cas, ou un doute : compilation complète.
+            if contexte_seul and meta and (conf_d / listes.SORTIE).is_file():
+                with contextlib.suppress(OSError, ValueError, listes.ErreurListes):
+                    r = listes.retoucher((conf_d / listes.SORTIE).read_text(encoding="utf-8"), _lire_meta(meta),
+                                         fichiers_contexte(conf_d))
+            if r is None:
+                texte, stats = listes.compiler(presentes, fichiers_contexte(conf_d))
+                nouvelle_meta = stats.pop("retouche", None)
+            else:
+                texte, stats = r
             changements[conf_d / listes.SORTIE] = texte
         else:
             changements[conf_d / listes.SORTIE] = None
         for n in listes.SOURCES_CONNUES:
             changements[conf_d / n] = None
-    return poser_vues(changements, s, forcer=forcer), stats, len(presentes)
+    if meta and mode == "direct":
+        with contextlib.suppress(OSError):
+            Path(meta).unlink()
+    r = poser_vues(changements, s, forcer=forcer)
+    if meta and nouvelle_meta is not None:              # après une pose réussie seulement : la méta décrit le 92 en place
+        ecrire_atomique(Path(meta), json.dumps(nouvelle_meta, ensure_ascii=False), 0o644, erreur=ErreurDepot)
+    return r, stats, len(presentes)
 
 
 def appliquer(systeme: Optional[SystemeUnbound] = None, sources: Path = SOURCES, conf_d: Path = CONF_D, etat: Path = ETAT,
@@ -282,7 +308,12 @@ def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, 
         while True:
             passes += 1
             avant = _entrees(sources, conf_d, mode)
-            r, stats, nb = _passe(s, mode, sources, conf_d, forcer=interrompu)
+            anc = precedent.get("signature") or {}
+            seul = (passes == 1 and not interrompu and isinstance(anc, dict)
+                    and all(anc.get(k) == avant.get(k) for k in ("mode", "code", "sources"))
+                    and anc.get("poses") == _poses(conf_d))
+            r, stats, nb = _passe(s, mode, sources, conf_d, forcer=interrompu,
+                                  meta=Path(etat).with_name("retouche.json"), contexte_seul=seul)
             interrompu = False
             applique = applique or r == "applique"
             if passes >= PASSES_MAX or _entrees(sources, conf_d, mode) == avant:
