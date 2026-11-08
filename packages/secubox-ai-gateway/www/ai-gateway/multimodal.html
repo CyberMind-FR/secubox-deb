@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Passerelle d'IA — entrées multimodales (#3571), profil Aurora. Maquette fonctionnelle : l'image et la vidéo sont
+  réellement envoyées au moteur local par la passerelle ; ce que le moteur ne sait pas faire est dit, jamais simulé.
+  Le média reste dans la page puis sur la box (classé LOCAL_ONLY par la passerelle) : rien n'est stocké.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — IA multimodale</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(5,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .large{grid-column:1/-1}
+        .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
+        .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums}
+        th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .lig{display:grid;grid-template-columns:minmax(80px,30%) 1fr auto;gap:4px 10px;align-items:center;font-size:.8rem;padding:3px 0}
+        .lig .n{overflow-wrap:anywhere;color:var(--doux)} .lig .q{font-variant-numeric:tabular-nums;font-weight:600}
+        .barre{height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre b{display:block;height:100%;background:var(--cyan)}
+        .barre b.vert{background:var(--vert)} .barre b.orange{background:var(--orange)} .barre b.violet{background:var(--violet)}
+        .depot{border:2px dashed var(--trait2);border-radius:12px;padding:22px;text-align:center;color:var(--doux);cursor:pointer;transition:border-color .15s}
+        .depot.sur,.depot:hover{border-color:var(--cyan);color:var(--texte)} .depot input{display:none}
+        .apercu{max-width:100%;max-height:260px;border-radius:10px;border:1px solid var(--trait);display:block;margin:8px auto 0}
+        textarea{width:100%;min-height:70px;resize:vertical;font:inherit;color:var(--texte);background:rgba(4,10,22,.7);border:1px solid var(--trait2);border-radius:10px;padding:8px 10px}
+        .reponse{white-space:pre-wrap;font-size:.88rem;line-height:1.5;min-height:40px}
+        .route{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.78rem}
+        .route .fl{color:var(--faible)}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 19"/></svg>
+                <div><h1>IA multimodale</h1><small>Images et vidéos analysées sur la box, jamais envoyées en ligne</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><a class="btn" href="./">← Passerelle</a></div>
+        </header>
+        <div class="info" id="session" hidden>Session requise. <a href="/login.html" style="color:var(--cyan)">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+
+        <section class="tuiles" aria-label="Capacités du moteur local">
+            <div class="tuile cy"><span class="l">Modèle local</span><span class="v mono" id="cModele" style="font-size:.85rem">—</span><span class="s">lu sur le moteur</span></div>
+            <div class="tuile" id="tImage"><span class="l">Images</span><span class="v" id="cImage">—</span><span class="s" id="sImage">JPEG, PNG, WebP, GIF</span></div>
+            <div class="tuile" id="tVideo"><span class="l">Vidéo</span><span class="v" id="cVideo">—</span><span class="s" id="sVideo">MP4, WebM, MOV, MKV</span></div>
+            <div class="tuile" id="tAudio"><span class="l">Audio</span><span class="v" id="cAudio">—</span><span class="s">WAV, MP3</span></div>
+            <div class="tuile"><span class="l">Documents</span><span class="v" style="color:var(--faible)">prévu</span><span class="s">PDF, texte, OCR</span></div>
+        </section>
+
+        <div class="grille">
+            <section class="pan">
+                <h3>1. Le média <i>une image ou une courte vidéo</i></h3>
+                <label class="depot" id="depot"><input type="file" id="fichier" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-matroska">
+                    <span id="depotTxt">Déposez un fichier ici, ou cliquez pour choisir</span></label>
+                <div id="apercu"></div>
+                <p class="note" id="infoFichier">Rien n'est envoyé avant « Analyser ».</p>
+            </section>
+            <section class="pan">
+                <h3>2. La question</h3>
+                <textarea id="question">Décris ce que tu vois, en français.</textarea>
+                <div class="route" id="route" aria-label="Chemin de la requête"></div>
+                <p style="margin:10px 0 0"><button class="btn" id="envoyer" type="button" disabled>Analyser sur la box</button></p>
+            </section>
+            <section class="pan large">
+                <h3>3. La réponse <i id="duree"></i></h3>
+                <div class="reponse" id="reponse"><span class="vide">—</span></div>
+                <p class="note">Sur un processeur sans carte graphique, comptez environ 30 s pour une image et 1 à 2 min pour une vidéo de quelques secondes (une image par seconde est analysée).</p>
+            </section>
+        </div>
+    </div></div></main>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search);
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/ai-gateway';
+        const $ = id => document.getElementById(id);
+        let CAP = null, MEDIA = null;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(json) { const h = { Accept: 'application/json' }, t = jeton(); if (t) h.Authorization = 'Bearer ' + t; if (json) h['Content-Type'] = 'application/json'; return h; }
+        function erreur(m) { $('erreur').textContent = m; $('erreur').hidden = !m; }
+        function oui(v) { return v ? 'oui' : 'non'; }
+        function tuile(id, ok) { const t = $('t' + id); t.classList.remove('ok', 'hors'); t.classList.add(ok ? 'ok' : 'hors'); }
+
+        async function capacites() {
+            try {
+                const r = await fetch(API + '/capabilities', { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                if (r.status === 401 || r.status === 403) { $('session').hidden = false; $('etat').textContent = 'Session requise'; return; }
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                CAP = await r.json();
+                const l = CAP.local || {}, m = l.modalites || {};
+                $('cModele').textContent = l.modele || '—';
+                $('cImage').textContent = oui(m.image); tuile('Image', m.image);
+                $('cVideo').textContent = oui(m.video); tuile('Video', m.video);
+                $('cAudio').textContent = oui(m.audio); tuile('Audio', m.audio);
+                $('etat').textContent = l.disponible ? 'Moteur local prêt' : 'Moteur local injoignable';
+                $('etat').className = 'actif' + (l.disponible ? '' : ' hors');
+            } catch (e) { erreur('Capacités illisibles : ' + e.message); $('etat').textContent = 'Indisponible'; $('etat').className = 'actif hors'; }
+            maj();
+        }
+
+        function genre(type) { return type.startsWith('image/') ? 'image' : type.startsWith('video/') ? 'video' : null; }
+
+        function choisir(f) {
+            erreur(''); MEDIA = null; $('apercu').innerHTML = '';
+            const g = genre(f.type || '');
+            const ent = (CAP && CAP.entrees) || {};
+            const permis = g === 'image' ? (ent.images || []) : g === 'video' ? (ent.videos || []) : [];
+            const max = g === 'video' ? ent.max_octets_video : ent.max_octets_media;
+            if (!g || (permis.length && !permis.includes(f.type))) { erreur('Type de fichier refusé : ' + (f.type || 'inconnu')); return maj(); }
+            if (max && f.size > max) { erreur('Fichier trop gros : ' + Math.round(max / 1048576) + ' Mo au plus.'); return maj(); }
+            const lecteur = new FileReader();
+            lecteur.onload = () => {
+                MEDIA = { genre: g, url: lecteur.result, nom: f.name, taille: f.size };
+                const v = document.createElement(g === 'image' ? 'img' : 'video');
+                v.className = 'apercu'; v.src = lecteur.result; if (g === 'video') { v.controls = true; v.muted = true; }
+                $('apercu').appendChild(v);
+                $('infoFichier').textContent = f.name + ' · ' + (f.size / 1024).toFixed(0) + ' Ko · ' + (g === 'image' ? 'image' : 'vidéo');
+                maj();
+            };
+            lecteur.readAsDataURL(f);
+        }
+
+        function maj() {
+            const m = ((CAP || {}).local || {}).modalites || {};
+            const r = $('route'); r.innerHTML = '';
+            const pas = MEDIA ? ['Ce navigateur', 'Passerelle : contrôle et classement « local seulement »', 'Moteur local (' + (MEDIA.genre === 'image' ? 'vision' : 'vidéo découpée en images') + ')'] : ['Choisissez un média'];
+            pas.forEach((p, i) => { if (i) r.appendChild(Object.assign(document.createElement('span'), { className: 'fl', textContent: '→' })); r.appendChild(Object.assign(document.createElement('span'), { className: 'pill' + (i === 2 ? ' cy' : ''), textContent: p })); });
+            const pris = MEDIA && m[MEDIA.genre];
+            $('envoyer').disabled = !pris;
+            if (MEDIA && !pris) erreur('Le moteur local de cette box ne comprend pas ce type de média.');
+        }
+
+        async function envoyer() {
+            const t0 = performance.now(); erreur(''); $('envoyer').disabled = true;
+            $('reponse').textContent = 'Analyse en cours sur la box…'; $('duree').textContent = '';
+            const partie = MEDIA.genre === 'image' ? { type: 'image_url', image_url: { url: MEDIA.url } } : { type: 'input_video', input_video: { url: MEDIA.url } };
+            try {
+                const r = await fetch(API + '/v1/chat/completions', { method: 'POST', credentials: 'same-origin', headers: entetes(true),
+                    body: JSON.stringify({ messages: [{ role: 'user', content: [{ type: 'text', text: $('question').value || 'Décris.' }, partie] }], max_tokens: 400, temperature: 0.2 }) });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error((d && d.detail) || ('HTTP ' + r.status));
+                $('reponse').textContent = ((d.choices || [])[0] || {}).message ? d.choices[0].message.content : '—';
+                $('duree').textContent = 'en ' + ((performance.now() - t0) / 1000).toFixed(0) + ' s, sur la box';
+            } catch (e) { $('reponse').innerHTML = '<span class="vide">—</span>'; erreur('Analyse impossible : ' + e.message); }
+            maj();
+        }
+
+        $('fichier').addEventListener('change', e => e.target.files[0] && choisir(e.target.files[0]));
+        const d = $('depot');
+        ['dragenter', 'dragover'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.add('sur'); }));
+        ['dragleave', 'drop'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.remove('sur'); }));
+        d.addEventListener('drop', e => e.dataTransfer.files[0] && choisir(e.dataTransfer.files[0]));
+        $('envoyer').addEventListener('click', envoyer);
+        capacites();
+    </script>
+</body>
+</html>

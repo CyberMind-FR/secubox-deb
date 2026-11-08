@@ -1,3 +1,16 @@
+secubox-ai-gateway (1.6.0-1~trixie1) trixie; urgency=medium
+
+  * Entrées multimodales : images et vidéos (parties OpenAI image_url,
+    input_video) envoyées au moteur local ; toute requête avec média reste
+    sur la box (LOCAL_ONLY), données incluses seulement (ni URL ni fichier),
+    types et tailles bornés (ref #3571).
+  * GET /capabilities : modalités réelles lues sur le moteur local (/props).
+  * Page « IA multimodale » (/ai-gateway/multimodal.html).
+  * Erreur d un fournisseur rendue en 502, plus en 200 ; disponibilité du
+    moteur local testée aussi par /health (llama-server).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 06:22:54 +0100
+
 secubox-ai-gateway (1.5.1-1~trixie1) trixie; urgency=medium
 
   * Description sans renvoi à ai-insights, retiré (ref #3017).

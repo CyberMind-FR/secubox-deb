@@ -27,7 +27,7 @@ import logging
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, List, Any, AsyncIterator
+from typing import Optional, Dict, List, Any, AsyncIterator, Union
 from enum import IntEnum
 from collections import defaultdict
 
@@ -39,6 +39,11 @@ import httpx
 
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+
+try:
+    from . import multimodal as mm
+except ImportError:  # chargé hors paquet (tests, agrégateur)
+    import multimodal as mm
 
 # Configuration
 CONFIG_PATH = Path("/etc/secubox/ai-gateway.toml")
@@ -128,11 +133,14 @@ class DataClassifier:
         messages = request_data.get("messages", [])
         for msg in messages:
             content = msg.get("content", "")
-            if isinstance(content, str):
-                classification, pattern = self.classify_text(content)
-                if classification < worst:
-                    worst = classification
-                    reason = f"pattern:{pattern}" if pattern else "matched"
+            if isinstance(content, list) and any(
+                    isinstance(p, dict) and p.get("type") != "text" for p in content):
+                # Un média ne quitte jamais la box (#3571).
+                return Classification.LOCAL_ONLY, "media"
+            classification, pattern = self.classify_text(mm.texte_de(content))
+            if classification < worst:
+                worst = classification
+                reason = f"pattern:{pattern}" if pattern else "matched"
 
         # Check prompt field (legacy completions API)
         prompt = request_data.get("prompt", "")
@@ -329,16 +337,32 @@ class ProviderRouter:
     async def check_provider_available(self, provider: ProviderConfig) -> bool:
         """Check if provider is available."""
         if provider.name == "localai":
-            try:
-                resp = await self.http_client.get(
-                    f"{provider.endpoint.rstrip('/v1')}/readyz",
-                    timeout=2.0
-                )
-                return resp.status_code == 200
-            except Exception:
-                return False
+            base = provider.endpoint.removesuffix("/").removesuffix("/v1")
+            for chemin in ("/health", "/readyz"):        # llama-server, puis LocalAI
+                try:
+                    resp = await self.http_client.get(f"{base}{chemin}", timeout=2.0)
+                    if resp.status_code == 200:
+                        return True
+                except Exception:
+                    pass
+            return False
         else:
             return bool(provider.api_key)
+
+    async def capacites_locales(self) -> Dict[str, Any]:
+        """Modalités réelles du moteur local (llama-server `GET /props`), jamais supposées (#3571)."""
+        p = self.providers.get("localai")
+        if not p or not p.enabled:
+            return {"moteur": None, "disponible": False, "modalites": mm.modalites_moteur({})}
+        base = p.endpoint.removesuffix("/").removesuffix("/v1")
+        try:
+            r = await self.http_client.get(f"{base}/props", timeout=3.0)
+            props = r.json() if r.status_code == 200 else {}
+        except Exception:
+            props = {}
+        return {"moteur": "localai", "disponible": bool(props),
+                "modele": Path(str(props.get("model_path", ""))).name or None,
+                "modalites": mm.modalites_moteur(props)}
 
     async def select_provider(self, classification: Classification) -> Optional[ProviderConfig]:
         """Select best available provider for classification."""
@@ -637,7 +661,7 @@ response_cache = ResponseCache(CACHE_DIR)
 
 class ChatMessage(BaseModel):
     role: str
-    content: str
+    content: Union[str, List[Dict[str, Any]]]    # texte, ou parties OpenAI (text, image_url, input_audio, input_video)
 
 
 class ChatCompletionRequest(BaseModel):
@@ -684,6 +708,10 @@ async def health():
 async def chat_completions(request: ChatCompletionRequest, req: Request):
     """OpenAI-compatible chat completions endpoint."""
     request_data = request.model_dump()
+    try:
+        media = mm.modalites(request_data.get("messages", []))
+    except mm.MediaRefuse as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Generate request hash for audit
     request_hash = hashlib.sha256(
@@ -712,7 +740,7 @@ async def chat_completions(request: ChatCompletionRequest, req: Request):
         )
 
     # Check cache (only for non-streaming, deterministic requests)
-    use_cache = not request.stream and request.temperature == 0
+    use_cache = not request.stream and request.temperature == 0 and not media
     if use_cache:
         cached = response_cache.get(request_data)
         if cached:
@@ -744,8 +772,23 @@ async def chat_completions(request: ChatCompletionRequest, req: Request):
             detail=f"No provider available for classification: {classification_str}"
         )
 
+    # Un média exige un moteur qui le comprend réellement (#3571).
+    if media:
+        cap = await router.capacites_locales()
+        manque = sorted(m for m in media if not cap["modalites"].get(m))
+        if manque:
+            audit.log("request_failed", classification_str, provider.name, request_hash,
+                      {"error": "modalite_absente", "manque": manque})
+            raise HTTPException(status_code=422,
+                                detail=f"le moteur local ne prend pas en charge : {', '.join(manque)}")
+
     # Route request
     response = await router.route_request(request_data, provider)
+    if isinstance(response, dict) and "error" in response and "choices" not in response:
+        # Une erreur du fournisseur n'est pas un succès : 502, tracée (#3571).
+        audit.log("request_failed", classification_str, provider.name, request_hash,
+                  {"error": "provider_error"})
+        raise HTTPException(status_code=502, detail=str((response.get("error") or {}).get("message", "erreur du fournisseur"))[:300])
 
     # Cache successful responses
     if use_cache and "error" not in response:
@@ -761,6 +804,18 @@ async def chat_completions(request: ChatCompletionRequest, req: Request):
     )
 
     return response
+
+
+@app.get("/capabilities", dependencies=[Depends(require_lecture)])
+async def capabilities():
+    """Ce que la passerelle accepte, et ce que le moteur local comprend réellement (#3571)."""
+    return {
+        "entrees": {"images": sorted(mm.IMAGES), "audio": sorted(mm.AUDIOS), "videos": sorted(mm.VIDEOS),
+                    "max_octets_media": mm.MAX_OCTETS_MEDIA, "max_octets_video": mm.MAX_OCTETS_VIDEO,
+                    "max_parties_media": mm.MAX_PARTIES_MEDIA},
+        "souverainete": "toute requête avec média reste locale (LOCAL_ONLY)",
+        "local": await router.capacites_locales(),
+    }
 
 
 @app.get("/v1/models", dependencies=[Depends(require_lecture)])
