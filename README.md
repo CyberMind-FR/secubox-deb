@@ -33,6 +33,11 @@
 ---
 
 <p align="center">
+  <a href="#-current-release-v300-beta1"><img src="docs/assets/poster/secubox-beta1.jpg" alt="SecuBox 3.0 — Bêta 1 : installation par clé USB, Premier Pas en 9 étapes, pare-feu fermé par défaut + WAF, applications en conteneurs LXC, filtrage DNS, secrets uniques par box" width="900"></a>
+</p>
+<p align="center"><sub><b>SecuBox 3.0 — Bêta 1</b> · <a href="#-current-release-v300-beta1">What's new</a></sub></p>
+
+<p align="center">
   <img src="docs/assets/poster/secubox-affiche-bilingue.jpg" alt="SecuBox — Reprenez le contrôle de votre réseau. Your network. Your rules." width="900">
 </p>
 <p align="center"><sub>Affiche illustrative · Illustrative poster. Les fonctions et l'interface représentées ne sont pas toutes au même niveau de maturité : voir « <a href="#-where-we-are">Où en est-on ? / Where we are</a> ».</sub></p>
@@ -83,12 +88,13 @@ Packages are built as `~trixie1` and published in the `trixie` suite of
 
 ## 🧭 Where we are
 
-*State on 2026-10-19. SecuBox is neither certified nor ready for every use: CSPN (ANSSI) certification is a goal, not an achievement.*
+*State on 2026-11-08, beta 1. SecuBox is neither certified nor ready for every use: CSPN (ANSSI) certification is a goal, not an achievement.*
 
 | Level | Components | Note |
 |---|---|---|
-| **Usable** (running on an infrastructure box) | Admin web UI, default-drop nftables firewall, `sbxwaf` WAF behind HAProxy TLS 1.3, DNS and ad filtering, WireGuard and peer-to-peer mesh, LXC services (mail, files, chat, code hosting, media) | Tested on MOCHAbin and x86. Updates are still frequent. |
-| **Being tested** | DPI classification (nDPId), self-provisioning of boards (Auto-Load), the `minimal` profile for 1 GB boards (ESPRESSObin) | DPI is memory-hungry and its output is not proof of an attack. On 1 GB the WAF and HAProxy saturate the board, so `minimal` leaves them out. |
+| **Usable** (running on an infrastructure box) | Admin web UI, default-drop nftables firewall, `sbxwaf` WAF behind HAProxy TLS 1.3, DNS and ad filtering (TV Privacy), WireGuard and peer-to-peer mesh, LXC services (mail, files, chat, code hosting, media, video conferencing) | Tested on MOCHAbin and x86. Updates are still frequent. |
+| **Beta 1 — to be tested by early users** | x86 install from a USB stick, Premier Pas setup wizard, boot splash and local kiosk screen, per-box secrets created at first boot | Validated in a VM and on test boxes; not yet on many different PCs. No disk encryption in this beta. |
+| **Being tested** | DPI classification (nDPId), self-provisioning of boards (Auto-Load), lighter profiles (`minimal`, `lite`) | A fresh x86 install still uses about 3 GB of RAM: making the default lighter, with the same features, is the next priority. |
 | **Design only** | Zone-based firewall (per port and per device), automatic peering of freshly prepared boards | Not coded or not deployed yet. |
 
 ## ⚡ Quick Start
@@ -168,7 +174,7 @@ release actually ships.
 | VirtualBox / QEMU | Lab & demo | `secubox-full-vm-x64-trixie.img.gz` (also `isp`) | Debian 13 |
 | Raspberry Pi 4 / 400 | Desktop appliance, kiosk | `secubox-full-rpi-arm64-trixie.img.gz` (also `lite`, `isp`) | Debian 13 |
 | Any x86_64 PC | Repurposed hardware | `secubox-live-amd64-trixie.img.gz` (live) | Debian 13 |
-| Any x86_64 PC | Permanent install — **headless auto-install** to the first disk | `secubox-installer-amd64-trixie.iso.gz` or `.img.gz` | Debian 13 |
+| Any x86_64 PC | Permanent install from a USB stick, then **Premier Pas** wizard (beta 1) | `secubox-installer-amd64-trixie.img.gz` (USB) or `.iso.gz` | Debian 13 |
 | MOCHAbin | Enterprise | `secubox-lite-mochabin-trixie.img.gz`, `secubox-isp-mochabin-trixie.img.gz`, or the live stick `secubox-mochabin-live-usb.img.gz` | Debian 13 |
 | ESPRESSObin v7 | Small gateway (1 GB: use the `minimal` profile) | `secubox-lite-espressobin-v7-trixie.img.xz` (1.7 GB compressed) | Debian 13 |
 
@@ -186,27 +192,33 @@ Flashing, U-Boot and first-boot steps:
 [ARM / U-Boot](https://github.com/CyberMind-FR/secubox-deb/wiki/ARM-Installation) ·
 [Supported hardware](https://github.com/CyberMind-FR/secubox-deb/wiki/Hardware)
 
-### 🧪 Current release: `v3.0.0-alpha.19`
+### 🧪 Current release: `v3.0.0-beta.1`
 
-Published 2026-10-27. This is a **pre-release line**: run it on a test box, not on the link your
-household depends on. Since alpha 18, the main changes are:
+**First beta.** The goal changes: until alpha 20, SecuBox ran on boxes prepared in the workshop; beta 1 is the first
+version meant to be installed by someone else, on their own PC, without a serial console. It is still a
+**pre-release**: install it on a spare machine, not on the link your household depends on.
 
-- **MOCHAbin as a real router.** Durable router mode (bridge `br-lan` under systemd-networkd, LAN DHCP, the box's
-  DNS with filtering and ad-guard, NAT, firewall), applied without ever restarting the mvpp2 WAN, with an automatic
-  rollback when not confirmed within 3 minutes (#3189). A « Réseau » panel maps WAN, mesh, tunnels, containers,
-  switch and clients (#3190); a port can be isolated into its own network (#3201); trusted routed LAN (#3206).
-- **WireGuard mesh.** New boxes join automatically under their own name, a node without WAN is relayed, and a
-  wildcard DNS record is created at the registrar for each new node.
-- **Hall « master view »** (Hall v2) is the default.
-- **Services.** Video conferencing (La Suite Meet), an App-Store-like shop, mail (external IMAP fetch, local relay,
-  webmail), SMB shares (ksmbd), podcaster portal and RSS, backups on `/data`, OVH DNS management.
-- **Debian stock kernel 6.12.113** on MOCHAbin (WAN and switch handled by the initrd), TFTP netboot and eMMC flash
-  from the live system.
+- **Install from a USB stick.** Write `secubox-installer-amd64-trixie.img.gz` to a stick, boot the PC on it: the live
+  system starts, the installer copies it to the first disk, then the PC boots from the disk. No disk encryption yet
+  (planned for a later beta).
+- **Premier Pas, a 9-step wizard** on the box's own screen or from any device on the LAN: language and keyboard,
+  box name, clock, administrator, network and domain, services, mesh, updates, applications.
+- **A real boot screen and kiosk.** The SecuBox dice spins while the system starts (Plymouth, amd64 and Raspberry Pi),
+  then the local screen opens the dashboard; the new WebOS desktop is included.
+- **No shared secrets.** Images no longer embed any private key: certificates, WAF and toolbox keys are created by
+  each box at first boot, and the image build refuses any private key it finds.
+- **Security by default.** nftables in default drop, all web traffic through the `sbxwaf` WAF behind HAProxy
+  TLS 1.3, DNS and ad filtering on for the whole LAN, apps in LXC containers.
+- **Robustness fixes found while testing the install:** the installer no longer fails on a live system copy, the
+  installed system no longer hangs behind the boot logo, services that need a `/data` disk no longer restart in a
+  loop without one, and package upgrades no longer fail on services the image disables.
 
-Images: `lite` (ESPRESSObin v7, MOCHAbin, RPi 400), `isp` (MOCHAbin, RPi 400, VM x64), `full` (RPi 400, VM x64),
-x64 live, the installer, and `minimal` (ESPRESSObin v7, RPi 400, rebuilt from master after the tag, #3223); the
-MOCHAbin live USB is missing this time, its build now exceeds GitHub's 6-hour job limit (#3225).
-Guided path: first section of the [wiki home](https://github.com/CyberMind-FR/secubox-deb/wiki).
+Known limits: about 3 GB of RAM used after install (lightening is the next work item), the double menu bar shown in
+the mock-ups is not in this beta, and ARM images get the same fixes but were tested less than amd64.
+
+Images: the amd64 installer (`.img.gz` for a USB stick, `.iso.gz`), the x64 live system, and the board images
+listed in the release (Raspberry Pi, MOCHAbin, ESPRESSObin, VMs). Previous release notes:
+[releases](https://github.com/CyberMind-FR/secubox-deb/releases).
 
 ### Verifying downloads
 
