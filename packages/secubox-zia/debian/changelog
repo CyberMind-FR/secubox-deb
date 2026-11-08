@@ -1,3 +1,11 @@
+secubox-zia (0.3.5-1~trixie1) trixie; urgency=medium
+
+  * GET /objets : sources SecuBox pour une IA (metanews, billets, PeerTube,
+    services) ; rôle invité imposé, aucune génération, question et nombre
+    bornés ; « dernières news » rend les sujets récents (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 06:46:18 +0100
+
 secubox-zia (0.3.4-1~trixie1) trixie; urgency=medium
 
   * Liens des services : sbx:// sans module doublé, « Ouvrir » vers la page réelle sur l'hôte admin (ref #3520).
