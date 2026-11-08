@@ -1,3 +1,11 @@
+secubox-security-posture (2.5.1-1~trixie1) trixie; urgency=medium
+
+  * Veille CERT-FR : rapprochement sur les noms distinctifs (vendeur, premier
+    mot du produit) ; les mots génériques (gateway, access, cloud…) ne valent
+    plus présence (faux « vous concerne » vus sur gk2) (ref #3584).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 11:47:16 +0100
+
 secubox-security-posture (2.5.0-1~trixie1) trixie; urgency=medium
 
   * cve-triage : veille CERT-FR (avis + alertes) rapprochée des logiciels
