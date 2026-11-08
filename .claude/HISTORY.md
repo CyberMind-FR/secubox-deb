@@ -15,6 +15,7 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - Déployés sur gk2 : hub ≤ 1.12.47 (closes #3549, closes #3540, closes #3533), `secubox-mail` 2.16.9 (closes #3552), `secubox-lyrion` 1.7.10 (closes #3546), `secubox-zia` 0.4.4 (closes #3520, closes #3574).
 - Livrés dans l'image bêta 1, installation validée en VM : closes #3558, closes #3518, closes #3529.
 - `secubox-waf-ng` 1.34.1 déployé sur gk2 (accord du propriétaire), admin 200, closes #3545. PR #3572 (ai-gateway multimodale, ref #3571) fusionnée.
+- gk2 surchargé (charge 59, swap 6 Go) : `secubox-dns-listes` recompilait à chaque réécriture de la vue TV ; `secubox-core` 1.8.24 diffère un contexte seul (15 min, minuterie de reprise), déployé gk2, closes #3592. PeerTube plafonné à 0,5 cœur (cpu.max, temporaire, accord du propriétaire).
 - Restent ouvertes :, #3556 (hub 1.12.48 non déployé), #3523/#3524/#3525 (images RPi à valider sur matériel).
 
 ## 2026-11-08 — Bêta 1 publiée (pré-version), ZIA étendue, veille CERT-FR (ref #3554, ref #3574, ref #3583, ref #3584)
