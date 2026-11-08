@@ -56,6 +56,7 @@ DEFAULT_CONFIG = {
     "ytsas_url": "http://10.100.0.180:8091",   # médiathèque ytsas (LXC) : objets réservés aux membres (#3574)
     "bbs_sock": "/run/secubox/bbs.sock",       # rubriques publiques du BBS (#3574)
     "podcaster_sock": "/run/secubox/podcaster.sock",   # épisodes, lus avec le jeton du demandeur (#3574)
+    "pairs_maillage": [],            # box voisines interrogées par /objets, ex. ["https://10.10.0.5"] (#3574)
     "webos_sock": "/run/secubox/webos.sock",
     "billets_sock": "/run/secubox/billets.sock",
     # Le PeerTube de cette box s'il y est installé, sinon la référence (#1723).
@@ -242,6 +243,7 @@ class Params(BaseModel):
     ytsas_url: Optional[str] = None
     bbs_sock: Optional[str] = None
     podcaster_sock: Optional[str] = None
+    pairs_maillage: Optional[list[str]] = None
     webos_sock: Optional[str] = None
     billets_sock: Optional[str] = None
     remote_enabled: Optional[bool] = None
@@ -285,7 +287,7 @@ async def objets_publics(q: str = "", limit: int = 6) -> JSONResponse:
     """
     q = (q or "")[:200]
     n = max(1, min(int(limit), 10))
-    objs = await BUS.recent(n, role="guest") if _ACTU.search(q) else await BUS.search(q, role="guest", limit=n)
+    objs = await BUS.recent(n, role="guest") if _ACTU.search(q) else await BUS.search(q, role="guest", limit=n, maillage=False)
     champs = ("id", "type", "service", "title", "summary", "url", "tags")
     return JSONResponse({"q": q, "objets": [{k: o.get(k) for k in champs if o.get(k)} for o in objs]})
 
