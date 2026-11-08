@@ -102,9 +102,11 @@ class Bus:
         """Adapter MetaNews : topics récents -> objets news.topic (via socket UDS)."""
         sock = self.cfg.get("metanews_sock", "/run/secubox/metanews.sock")
         out: list[dict] = []
+        # metanews met 8 à 14 s à rendre ses sujets sur gk2 : à 4 s, ZIA n'en voyait jamais aucun (#3574).
+        attente = float(self.cfg.get("metanews_timeout_s", 20))
         try:
             tr = httpx.AsyncHTTPTransport(uds=sock)
-            async with httpx.AsyncClient(transport=tr, timeout=4.0) as cli:
+            async with httpx.AsyncClient(transport=tr, timeout=attente) as cli:
                 r = await cli.get("http://x/api/v1/metanews/topics?limit=30",
                                   headers={"Accept": "application/json"})
                 if r.status_code != 200:

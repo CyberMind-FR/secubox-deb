@@ -1,3 +1,10 @@
+secubox-zia (0.3.6-1~trixie1) trixie; urgency=medium
+
+  * Délai propre à metanews (metanews_timeout_s, 20 s) : ses sujets mettent
+    8 à 14 s à venir et n atteignaient jamais le bus à 4 s (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 06:49:25 +0100
+
 secubox-zia (0.3.5-1~trixie1) trixie; urgency=medium
 
   * GET /objets : sources SecuBox pour une IA (metanews, billets, PeerTube,

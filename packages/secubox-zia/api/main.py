@@ -51,6 +51,7 @@ DEFAULT_CONFIG = {
     "n_predict": 120,
     "llm_timeout_s": 20,
     "metanews_sock": "/run/secubox/metanews.sock",
+    "metanews_timeout_s": 20,        # metanews est lent à rendre ses sujets (#3574)
     "webos_sock": "/run/secubox/webos.sock",
     "billets_sock": "/run/secubox/billets.sock",
     # Le PeerTube de cette box s'il y est installé, sinon la référence (#1723).
@@ -227,6 +228,7 @@ class Params(BaseModel):
     bus_cache_s: Optional[float] = None
     peertube_url: Optional[str] = None
     metanews_sock: Optional[str] = None
+    metanews_timeout_s: Optional[float] = None
     webos_sock: Optional[str] = None
     billets_sock: Optional[str] = None
     remote_enabled: Optional[bool] = None
