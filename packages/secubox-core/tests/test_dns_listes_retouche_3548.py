@@ -122,3 +122,27 @@ def test_depot_retouche_sans_compiler(tmp_path, monkeypatch):
     D.deposer_source("96-secubox-adult.conf", ADULT, lieux["sources"])   # une source : compilation complète
     D.appliquer(systeme=Faux(), **lieux)
     assert len(appels) == 2
+
+
+def test_une_adresse_changee_pendant_la_compilation_est_retouchee(tmp_path, monkeypatch):
+    """Sur gk2 chargé, une compilation dure plusieurs minutes : une TV change d'adresse pendant. La passe de rattrapage
+    repose les adresses, elle ne recompile pas."""
+    conf = tmp_path / "unbound.conf.d"
+    conf.mkdir()
+    (conf / "10-acl.conf").write_text(ACL)
+    (conf / "94-tv.conf").write_text(tv(["192.168.1.95/32"], ["192.168.1.96/32"], "ads.example"))
+    lieux = {"sources": tmp_path / "sources", "conf_d": conf, "etat": tmp_path / "etat.json",
+             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
+    D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
+    vrai, appels = L.compiler, []
+
+    def compiler(*a):
+        appels.append(1)
+        r = vrai(*a)
+        if len(appels) == 1:                                   # pendant la compilation : l'appareil observé change d'adresse
+            (conf / "94-tv.conf").write_text(tv(["192.168.1.95/32"], ["192.168.1.97/32"], "ads.example"))
+        return r
+    monkeypatch.setattr(L, "compiler", compiler)
+    r = D.appliquer(systeme=Faux(), **lieux)
+    assert r["etat"] == "applique" and r["passes"] == 2 and len(appels) == 1
+    assert 'access-control-tag: 192.168.1.97/32 "sbx0"' in (conf / "92-secubox-listes.conf").read_text()

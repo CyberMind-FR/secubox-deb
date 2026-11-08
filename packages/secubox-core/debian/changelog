@@ -1,3 +1,10 @@
+secubox-core (1.8.27-1~trixie1) trixie; urgency=medium
+
+  * dns-listes : la passe de rattrapage (adresse TV changée pendant une
+    compilation) repose aussi les adresses sans recompiler (ref #3548).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 14:30:20 +0100
+
 secubox-core (1.8.26-1~trixie1) trixie; urgency=medium
 
   * dns-listes : une TV qui change d adresse ne relance plus de compilation.

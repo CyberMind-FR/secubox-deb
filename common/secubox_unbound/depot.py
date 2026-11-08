@@ -304,14 +304,17 @@ def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, 
             if precedent.get("etat") == "erreur" and isinstance(t_echec, int) and maintenant() - t_echec < REESSAI_S:
                 return _noter(etat, {**precedent, "t": int(maintenant())})       # mêmes entrées, même échec : pas avant REESSAI_S
         _noter(etat, {"etat": "en-cours", "mode": mode, "adoptes": adoptes, "t": int(maintenant())})
-        applique, stats, nb, passes = False, {}, 0, 0
+        applique, stats, nb, passes, entrees_prec = False, {}, 0, 0, None
         while True:
             passes += 1
             avant = _entrees(sources, conf_d, mode)
-            anc = precedent.get("signature") or {}
-            seul = (passes == 1 and not interrompu and isinstance(anc, dict)
+            # Passe 1 : comparée à la signature notée. Passes suivantes (le contexte a bougé PENDANT la compilation, une TV
+            # a changé d'adresse) : comparée aux entrées de la passe d'avant, dont la méta décrit le 92 qu'elle vient de poser.
+            anc = (precedent.get("signature") or {}) if passes == 1 else (entrees_prec or {})
+            seul = (not interrompu and isinstance(anc, dict)
                     and all(anc.get(k) == avant.get(k) for k in ("mode", "code", "sources"))
-                    and anc.get("poses") == _poses(conf_d))
+                    and (passes > 1 or anc.get("poses") == _poses(conf_d)))
+            entrees_prec = avant
             r, stats, nb = _passe(s, mode, sources, conf_d, forcer=interrompu,
                                   meta=Path(etat).with_name("retouche.json"), contexte_seul=seul)
             interrompu = False
