@@ -22,7 +22,7 @@ import re
 import time
 import tomllib
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -31,7 +31,7 @@ from pydantic import BaseModel
 import httpx
 
 from secubox_core import auth as _auth, appareils
-from secubox_core.auth import router as auth_router, require_jwt
+from secubox_core.auth import router as auth_router
 from secubox_core.logger import get_logger
 
 from .bus import Bus
