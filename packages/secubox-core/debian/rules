@@ -85,7 +85,6 @@ override_dh_auto_install:
 	install -D -m 0644 systemd/secubox-dns-listes.service debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.service
 	install -D -m 0644 systemd/secubox-dns-listes.path debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.path
 	install -D -m 0644 systemd/secubox-dns-listes.timer debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.timer
-	install -D -m 0644 systemd/secubox-dns-listes-contexte.timer debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes-contexte.timer
 	install -D -m 0644 apparmor/secubox-dns-listes debian/secubox-core/etc/apparmor.d/secubox-dns-listes
 
 	# SSH : root par mot de passe depuis le reseau local seulement (#2528). Fichier de configuration (conffile) :

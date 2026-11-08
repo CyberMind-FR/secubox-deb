@@ -1,3 +1,11 @@
+secubox-core (1.8.25-1~trixie1) trixie; urgency=medium
+
+  * dns-listes : retrait du report de 15 min d un contexte seul (1.8.24) ; il
+    retardait l application des nouvelles adresses des TV (ref #3592,
+    ref #3548).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 13:54:05 +0100
+
 secubox-core (1.8.24-1~trixie1) trixie; urgency=medium
 
   * dns-listes : un changement du seul contexte (vue TV Privacy réécrite) ne
