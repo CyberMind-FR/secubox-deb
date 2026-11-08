@@ -1,3 +1,10 @@
+secubox-zia (0.3.7-1~trixie1) trixie; urgency=medium
+
+  * Bus : double tampon par source ; metanews en dépassement de délai ne vide
+    plus « les sujets récents » (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 06:58:09 +0100
+
 secubox-zia (0.3.6-1~trixie1) trixie; urgency=medium
 
   * Délai propre à metanews (metanews_timeout_s, 20 s) : ses sujets mettent

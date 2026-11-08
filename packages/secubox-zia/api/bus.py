@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 
@@ -74,6 +74,7 @@ class Bus:
         self.cfg = cfg
         self._cache: list[dict] = []
         self._ts = 0.0
+        self._dernier: dict[str, list[dict]] = {}   # dernier relevé NON vide de chaque source (#3574)
         self.ttl = float(cfg.get("bus_cache_s", 45))
         # Registre des capacités (couche d'actions) : bootstrap + manifestes des
         # modules. Le LLM ne l'écrit jamais ; il propose, on valide ici.
@@ -238,13 +239,21 @@ class Bus:
         """Tous les objets visibles pour ce rôle (cache court, adapters best-effort)."""
         now = time.time()
         if force or not self._cache or (now - self._ts) > self.ttl:
-            news = await self._metanews()
-            posts = await self._billets()
-            vids = await self._peertube()
-            svcs = await self._registry()
-            self._cache = list(_SEED) + news + posts + vids + svcs
+            # Double tampon (#3011, #3574) : une source qui échoue ou dépasse son délai rend [] ; elle n'efface
+            # jamais son dernier relevé réussi. metanews dépasse souvent ses 20 s : sans ça, « les sujets
+            # récents » répondait « aucun sujet » pendant tout le cache.
+            frais = []
+            for nom, adapter in (("metanews", self._metanews), ("billets", self._billets),
+                                 ("peertube", self._peertube), ("registre", self._registry)):
+                frais += self._garde(nom, await adapter())
+            self._cache = list(_SEED) + frais
             self._ts = now
         return policy.filtre(self._cache, role)
+
+    def _garde(self, source: str, objets: list[dict]) -> list[dict]:
+        if objets:
+            self._dernier[source] = objets
+        return self._dernier.get(source, [])
 
     async def search(self, query: str, type_: str = "", role: str = "guest", limit: int = 8) -> list[dict]:
         """Recherche plein-texte simple sur titre/résumé/tags (+ filtre de type)."""
