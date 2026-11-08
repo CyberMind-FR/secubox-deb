@@ -3,7 +3,8 @@ Description=SecuBox Kiosk Mode (X11/Chromium)
 Documentation=https://secubox.in/docs/kiosk
 
 # Start after multi-user (not graphical - we ARE the graphical part)
-After=multi-user.target
+# Pas After=multi-user.target (#3554) : les provisionnements du premier démarrage (oneshot, jusqu'à 30 min) retardent
+# multi-user ; le kiosque n'a besoin que de nginx, de X et des sessions. Le dé ne tourne plus 15 min sans fin.
 After=systemd-user-sessions.service
 
 # CRITICAL: Wait for X11 driver auto-detection (VirtualBox VMSVGA, etc.)
