@@ -373,6 +373,10 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
         if reste == 0:
             elagues.add(d)
 
+    # Une dérogation du contexte (autorisation TV, #3548) sur un nom qu'AUCUNE liste ne bloque : Unbound refuse un
+    # local-zone-override sans zone (« no local-zone for local-zone-override », toute la configuration tombe, constaté
+    # sur gk2 avec api.oqee.net). Une zone transparente le rend valide sans rien changer : le nom n'était bloqué nulle part.
+    orphelines = sorted(z for z in references if z not in cfg.zones and z != "." and _NOM_ZONE.fullmatch(z))
     nb_candidats, nb_elagues, nb_exceptions = len(S), len(elagues), len(X)
     emis = sorted(d for d, sd in S.items() if d not in elagues and (sd or d in X or d in references))
     del elagues
@@ -446,7 +450,9 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
         sortie.write(f'    local-zone: "{d}." always_nxdomain\n')
         if d in etiquette:
             sortie.write(f'    local-zone-tag: "{d}." "{etiquette[d]}"\n')
-    stats = {"sources": sorted(noms_sources), "classes": len(classes), "profils": len(profils),
+    for d in orphelines:
+        sortie.write(f'    local-zone: "{d}." transparent\n')
+    stats = {"sources": sorted(noms_sources), "classes": len(classes), "orphelines": len(orphelines), "profils": len(profils),
              "zones_chargees_avant": avant, "candidats": nb_candidats, "elagues": nb_elagues, "emis": len(emis),
              "etiquettes": len(groupes), "exceptions": nb_exceptions, "conflits_vue": len(cfg.conflits_vue),
              "duree_s": round(time.monotonic() - debut, 1), "retouche": meta}

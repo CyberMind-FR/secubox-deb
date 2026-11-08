@@ -146,3 +146,12 @@ def test_une_adresse_changee_pendant_la_compilation_est_retouchee(tmp_path, monk
     r = D.appliquer(systeme=Faux(), **lieux)
     assert r["etat"] == "applique" and r["passes"] == 2 and len(appels) == 1
     assert 'access-control-tag: 192.168.1.97/32 "sbx0"' in (conf / "92-secubox-listes.conf").read_text()
+
+
+def test_une_autorisation_sur_un_nom_jamais_bloque_reste_valide(lieux):
+    """api.oqee.net sur gk2 : autorisé pour une TV, bloqué par aucune liste. Le 92 déclare la zone (transparente)."""
+    src, conf = lieux
+    (conf / "94-tv.conf").write_text(tv(["192.168.1.95/32"], [], "api.libre.example"))
+    texte, stats = _compiler(src, conf)
+    assert '    local-zone: "api.libre.example." transparent\n' in texte and stats["orphelines"] == 1
+    assert '"ads.example." always_nxdomain' in texte
