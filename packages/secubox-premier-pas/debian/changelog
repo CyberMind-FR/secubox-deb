@@ -1,3 +1,10 @@
+secubox-premier-pas (0.9.15-1~trixie1) trixie; urgency=medium
+
+  * Le kiosque quitte Plymouth avant de changer de console : sur le systeme
+    installe, chvt 7 restait bloque derriere le logo (ref #3554).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 03:50:50 +0100
+
 secubox-premier-pas (0.9.14-1~trixie1) trixie; urgency=medium
 
   * Marqueur de box neuve retiré à la fin de l'assistant, reposé en rejouant (ref #3515).
