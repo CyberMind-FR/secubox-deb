@@ -6,11 +6,23 @@
 -->
 
 # TODO — SecuBox-DEB : backlog actif
-*Mis à jour : 2026-10-27 (release alpha.19).* Seul le backlog actif est ici (≥ 2026-09-01).
+*Mis à jour : 2026-11-08 (bêta 1 publiée).* Seul le backlog actif est ici (≥ 2026-09-01).
 Le reste est archivé, jamais perdu : `.claude/archive/INDEX.md` (≈ 240 cases ouvertes
 y dorment, par mois) — ne le lire que sur demande.
 
 ---
+
+## 2026-11-08 — après la bêta 1 (publiée en pré-version)
+- [ ] **Images RPi de la bêta 1** (#3587) : fusion, compilation RPi 4 / RPi 400 / DSI, contrôle des secrets, ajout à la release.
+- [ ] **Installation complète de l'image finale** sur VM, puis fermeture de #3554 (marqueur dans HISTORY).
+- [ ] **Publication automatique** : `release-envoyer.sh` compte des fichiers périmés d'une release précédente comme « arrivés » (bêta 1 publiée avec des images RPi du 6/11) ; ne publier que les fichiers du run.
+- [ ] **Leurres CERT-FR** (#3584) : extraire le chemin de la première ligne des requêtes raw Nuclei ; puis WAF 1.34 (`wafctl leurre`, catégorie apprentissage puis ban sur décision).
+- [ ] **secubox-ai en paquets pour gk3** (#3583), POC gk0 maintenu en attendant.
+- [ ] **Compte de service ZIA en lecture** (#3579) — ou relais du jeton du demandeur pour les fils du BBS et ytflux.
+- [ ] **ZIA** : nom du nœud plutôt que son adresse dans les résultats du maillage ; voisines du maillage découvertes sans lire la clé WireGuard ; `/v1/chat/completions` de la passerelle IA sans garde (préexistant).
+- [ ] **metanews** : `/topics` en 8 à 40 s (servir depuis un cache) ; résumés parfois sans rapport avec le titre.
+- [ ] **Module SearXNG** (#3581) ; **VoiceStudio gk3** : le moteur ne répond plus (accord requis avant diagnostic).
+- [ ] **Allègement** : ~3 Go de RAM après installation x86, `/data` absent sur petites box.
 
 ## 2026-10-27 — après le mode routeur (release alpha.19, #3208), dans l'ordre arbitré
 - [ ] **Zones du NAC/Guardian en réseau routé (#2891, reprise demandée le 2026-10-27)** : le client Guardian relié au

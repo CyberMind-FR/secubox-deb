@@ -6,10 +6,10 @@
 -->
 
 # WIP — chantier en cours + Next Up
-*Mis à jour : 2026-11-01 (SBX TV Privacy lot 3 + #3362 déployés gk2 ; pilotage L2 fusionné #3278, non déployé ; WAF #3257 #3273 déployés ; conteneurs trixie #3274).* Moins de 200 lignes, par construction : l'historique du
+*Mis à jour : 2026-11-08 (bêta 1 publiée en pré-version ; images RPi #3587 et essai d'installation complet à finir ; ZIA 0.4.4 et veille CERT-FR déployées gk2).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
-- ⬜ **Next Up (bêta 1 validée le 2026-11-06)** : série corrective #3514, #3515, #3516, #3518, #3523, #3524, #3488 ; puis gk3 #3517 (sauvegarde d'abord), `secubox-ai` #3509, dictionnaire ZIA #3522, templates #3510, bêta 2 SBX Trust.
+- ⬜ **Next Up (bêta 1 publiée le 2026-11-08, pré-version)** : images RPi (#3587, puis compilation et ajout à la release) ; installation complète de l'image finale sur VM (dé, Premier Pas, connexion, heure) ; puis fermeture de #3554. Ensuite : leurres CERT-FR exploitables (chemin des requêtes raw, #3584) et WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; module SearXNG (#3581) ; moteur VoiceStudio de gk3 muet (à diagnostiquer avec accord).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
 

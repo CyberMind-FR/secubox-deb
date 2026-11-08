@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-08 — Bêta 1 publiée (pré-version), ZIA étendue, veille CERT-FR (ref #3554, ref #3574, ref #3583, ref #3584)
+- `v3.0.0-beta.1` publiée le 2026-11-08 08:32 UTC (pré-version, 24 fichiers), tag `6848db517`. Correctifs d'image : provisionnement live hors RAM, dé Plymouth et kiosque (#3555, #3563, #3565), installateur depuis le squashfs (#3560, #3561, #3562), aucun secret embarqué (#3559), `/data` optionnel et postinst tolérant les unités masquées (#3564), authentification et LXC démasqués sur disque (#3568), `resolv.conf` de la box (#3569), dates de changelog (#3566), archive CLI en brouillon (#3573).
+- Images RPi absentes de la release : les anciennes (avant #3559) retirées ; leur compilation s'arrêtait en silence sur un `find` sous `pipefail` (#3587, en cours). Installation complète de l'image finale sur VM : à faire.
+- README bêta 1 et tutoriels Premier Pas / administration avec captures (#3567, #3570).
+- ZIA (`secubox-zia` 0.3.5 → 0.4.4, déployée gk2 ; 0.4.3 aussi gk3) : `/objets` public sans génération, metanews lent toléré, bus en parallèle et en arrière-plan, frappe progressive, adaptateurs ytsas (membres) et rubriques BBS, podcasts lus avec le jeton du demandeur, recherche dans les box du maillage (`pairs_maillage`), blocages du WAF expliqués (#3575 → #3585, #3577, #3578, #3580, #3582).
+- Passerelle IA : entrées image/vidéo, registre des capacités (#3572, ouverte). Veille CERT-FR dans cve-triage (`secubox-security-posture` 2.5.2, déployée gk2, #3586) : 4 avis concernent gk2 sur 80, 28 leurres possibles, wafgen n'en retient aucun (requêtes raw).
+- POC IA gk0 (hors dépôt) : DeepSeek 9B en mixte GPU/CPU, images SD-Turbo publiques (quotas, filtre), voix Piper (lecture pendant la rédaction), image jointe, sources SecuBox ; ZIA du Hall gk2 reste branché sur le relais gk0 (voulu). Passage en paquets pour gk3 : #3583.
+
 ## 2026-11-06 — Bêta 1 validée par le propriétaire (ref #3480)
 - Correctifs images : `aggregator` 0.5.6 et `minimal` 0.11.1, closes #3503 ; 16 images republiées sur `v3.0.0-beta.1` (pré-version), contrôlées une à une (somme, agrégateur, premier-pas, hub, net-detect, netmodes), dont le live ESPRESSObin v7. Installateurs non reconstruits.
 - Essais réels : VM x64 (assistant, kiosque) ; RPi4 + LCD DSI (assistant, kiosque, tactile), après `secubox-rpi-dsi configure` à la main et frappe clavier pour secubox-bootmenu.
