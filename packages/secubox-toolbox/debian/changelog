@@ -1575,7 +1575,7 @@ secubox-toolbox (2.5.0-1~bookworm1) bookworm; urgency=medium
     surface (4 writers can dupe a line, the launcher's sort -u
     de-dupes at next reload).  A real filelock lands in Phase 9.1.
 
- -- Gérald Kerma <devel@cybermind.fr>  mar., 09 juin 2026 04:27:27 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 09 Jun 2026 04:27:27 +0000
 
 secubox-toolbox (2.4.3-1~bookworm1) bookworm; urgency=medium
 
@@ -1598,7 +1598,7 @@ secubox-toolbox (2.4.3-1~bookworm1) bookworm; urgency=medium
       from non-blocking writes when 4 workers contend on the same
       SQLite file.
 
- -- Gérald Kerma <devel@cybermind.fr>  mar., 09 juin 2026 04:19:18 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 09 Jun 2026 04:19:18 +0000
 
 secubox-toolbox (2.4.2-1~bookworm1) bookworm; urgency=medium
 
@@ -1611,7 +1611,7 @@ secubox-toolbox (2.4.2-1~bookworm1) bookworm; urgency=medium
     Visiteur arrive sur kbin → voit immédiatement le bouton d'install
     adapté à son device, sans devoir aller sur une page tierce.
 
- -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 15:51:43 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 08 Jun 2026 15:51:43 +0000
 
 secubox-toolbox (2.4.1-1~bookworm1) bookworm; urgency=medium
 
@@ -1635,7 +1635,7 @@ secubox-toolbox (2.4.1-1~bookworm1) bookworm; urgency=medium
         bounded by the 400 MB envelope ; restart latency stays
         sub-second so no user-visible impact.
 
- -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 15:39:44 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 08 Jun 2026 15:39:44 +0000
 
 secubox-toolbox (2.4.0-1~bookworm1) bookworm; urgency=medium
 
@@ -1661,7 +1661,7 @@ secubox-toolbox (2.4.0-1~bookworm1) bookworm; urgency=medium
       - utiq_defense added to the mitm-wg-launch addon chain
         between inject_xff and local_store.
 
- -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 14:19:50 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 08 Jun 2026 14:19:50 +0000
 
 secubox-toolbox (2.3.3-1~bookworm1) bookworm; urgency=medium
 
@@ -1679,7 +1679,7 @@ secubox-toolbox (2.3.3-1~bookworm1) bookworm; urgency=medium
     until the mirror sync started failing.
     Postinst now installs both drop-ins atomically.
 
- -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 10:08:49 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 08 Jun 2026 10:08:49 +0000
 
 secubox-toolbox (2.3.2-1~bookworm1) bookworm; urgency=medium
 
@@ -1705,7 +1705,7 @@ secubox-toolbox (2.3.2-1~bookworm1) bookworm; urgency=medium
     tunnel never broke for more than a few seconds. The LXC stays
     provisioned + ready as a base for the --mode wireguard migration.
 
- -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 07:41:54 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 08 Jun 2026 07:41:54 +0000
 
 secubox-toolbox (2.3.1-1~bookworm1) bookworm; urgency=medium
 
@@ -1733,7 +1733,7 @@ secubox-toolbox (2.3.1-1~bookworm1) bookworm; urgency=medium
     (matches the existing mitmproxy LXC). Documented inline in the
     LXC template. Cutover stays opt-in until this is resolved.
 
- -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 07:28:47 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 08 Jun 2026 07:28:47 +0000
 
 secubox-toolbox (2.3.0-1~bookworm1) bookworm; urgency=medium
 
@@ -1761,7 +1761,7 @@ secubox-toolbox (2.3.0-1~bookworm1) bookworm; urgency=medium
       provisioner prints the exact nft replace + systemctl disable
       steps after a successful run.
 
- -- Gérald Kerma <devel@cybermind.fr>  lun., 08 juin 2026 07:02:00 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 08 Jun 2026 07:02:00 +0000
 
 secubox-toolbox (2.2.0-1~bookworm1) bookworm; urgency=medium
 
@@ -1796,7 +1796,7 @@ secubox-toolbox (2.2.0-1~bookworm1) bookworm; urgency=medium
       dashboard polling.
     - nginx/secubox-toolbox-limits.conf : http-context zone declaration.
 
- -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:44:13 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 07 Jun 2026 07:44:13 +0000
 
 secubox-toolbox (2.1.0-1~bookworm1) bookworm; urgency=medium
 

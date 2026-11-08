@@ -289,7 +289,7 @@ secubox-aggregator (0.2.1-1~bookworm1) bookworm; urgency=medium
       crowdsec.db at every invocation) + /etc/secubox (module config
       writes touched by toolbox/dpi).
 
- -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:57:29 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 07 Jun 2026 07:57:29 +0000
 
 secubox-aggregator (0.2.0-1~bookworm1) bookworm; urgency=medium
 
@@ -307,7 +307,7 @@ secubox-aggregator (0.2.0-1~bookworm1) bookworm; urgency=medium
   * Live numbers on gk2 : 119 of 121 modules mount, 3499 → 1984 MB
     RSS, free RAM 153 MB → 2.7 GiB.
 
- -- Gérald Kerma <devel@cybermind.fr>  dim., 07 juin 2026 07:44:13 +0000
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 07 Jun 2026 07:44:13 +0000
 
 secubox-aggregator (0.1.0-1~bookworm1) bookworm; urgency=medium
 
