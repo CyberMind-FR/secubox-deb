@@ -93,7 +93,7 @@
                 <div><h1>ZIA Hall</h1><small>L’IA locale, interface du bus d’objets</small></div>
             </div>
             <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
-            <div class="droite"><span id="maj">—</span><a id="adm" href="admin.html" title="Réglages ZIA" hidden>⚙ Réglages</a></div>
+            <div class="droite"><span id="maj">—</span><a id="secu" href="securite.html" title="Blocages du WAF expliqués (administrateur)" hidden>🛡️ Blocages</a> <a id="adm" href="admin.html" title="Réglages ZIA" hidden>⚙ Réglages</a></div>
         </header>
         <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, réponses fictives, aucun appel au service</div>
 
@@ -131,7 +131,7 @@
             let echanges = 0;
 
             // Roue de réglages : accès direct seulement (jamais dans le Hall embarqué).
-            if (!DANS_HALL && !Q.get('embed')) $('adm').hidden = false;
+            if (!DANS_HALL && !Q.get('embed')) { $('adm').hidden = false; $('secu').hidden = false; }
 
             function defile() { stream.scrollTop = stream.scrollHeight; annoncer(); }
             // **gras** et ❤ rendus en nœuds DOM : le texte venu de l'API n'est jamais interprété comme du HTML.

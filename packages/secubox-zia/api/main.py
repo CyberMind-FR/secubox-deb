@@ -36,6 +36,7 @@ from secubox_core.logger import get_logger
 
 from .bus import Bus
 from . import bus as bus_mod
+from . import securite
 from .tools import Tools
 from .remote import Remote
 from .runtime import etat_moteurs
@@ -56,6 +57,7 @@ DEFAULT_CONFIG = {
     "ytsas_url": "http://10.100.0.180:8091",   # médiathèque ytsas (LXC) : objets réservés aux membres (#3574)
     "bbs_sock": "/run/secubox/bbs.sock",       # rubriques publiques du BBS (#3574)
     "podcaster_sock": "/run/secubox/podcaster.sock",   # épisodes, lus avec le jeton du demandeur (#3574)
+    "waf_sock": "/run/secubox/waf.sock",   # blocages du WAF, lus avec le jeton de l'administrateur (#3583)
     "pairs_maillage": [],            # box voisines interrogées par /objets, ex. ["https://10.10.0.5"] (#3574)
     "webos_sock": "/run/secubox/webos.sock",
     "billets_sock": "/run/secubox/billets.sock",
@@ -244,6 +246,7 @@ class Params(BaseModel):
     bbs_sock: Optional[str] = None
     podcaster_sock: Optional[str] = None
     pairs_maillage: Optional[list[str]] = None
+    waf_sock: Optional[str] = None
     webos_sock: Optional[str] = None
     billets_sock: Optional[str] = None
     remote_enabled: Optional[bool] = None
@@ -290,6 +293,46 @@ async def objets_publics(q: str = "", limit: int = 6) -> JSONResponse:
     objs = await BUS.recent(n, role="guest") if _ACTU.search(q) else await BUS.search(q, role="guest", limit=n, maillage=False)
     champs = ("id", "type", "service", "title", "summary", "url", "tags")
     return JSONResponse({"q": q, "objets": [{k: o.get(k) for k in champs if o.get(k)} for o in objs]})
+
+
+def _jeton_de(request: Request) -> str:
+    entete = request.headers.get("authorization", "")
+    return entete[7:].strip() if entete.lower().startswith("bearer ") else request.cookies.get("secubox_session", "")
+
+
+@router.get("/securite/blocages", dependencies=[Depends(exige_admin)])
+async def securite_blocages(request: Request) -> JSONResponse:
+    """Adresses bloquées récentes, lues au WAF avec le jeton de l'administrateur, et leur fiche factuelle (#3583)."""
+    lot = await securite.blocages(CFG, _jeton_de(request))
+    if lot is None:
+        raise HTTPException(502, "le WAF ne répond pas ou refuse cette session")
+    return JSONResponse({"blocages": [securite.faits(a) for a in lot]})
+
+
+@router.post("/securite/expliquer", dependencies=[Depends(exige_admin)])
+async def securite_expliquer(body: dict, request: Request) -> JSONResponse:
+    """Les FAITS (code) puis leur explication (modèle) ; une proposition « à valider », jamais une action (#3583)."""
+    ip = str(body.get("adresse", ""))[:64]
+    lot = await securite.blocages(CFG, _jeton_de(request), 30)
+    if lot is None:
+        raise HTTPException(502, "le WAF ne répond pas ou refuse cette session")
+    entree = next((a for a in lot if a.get("client_ip") == ip), None)
+    if entree is None:
+        raise HTTPException(404, "adresse absente des blocages récents")
+    f = securite.faits(entree)
+    texte = await runtime._llm_text({**CFG, "n_predict": 350}, securite.consigne(f))
+    _audit_securite(ip)
+    return JSONResponse({"faits": f, "explication": texte,
+                         "moteur": (runtime._DERNIER or {}).get("url") if texte else None,
+                         "avertissement": "Explication générée par un modèle de langue : à vérifier contre les faits. "
+                                          "Rien n'a été appliqué."})
+
+
+def _audit_securite(ip: str) -> None:
+    try:
+        _audit("admin", [{"kind": "explication-waf", "service": "waf", "action": "expliquer", "params": {"adresse": ip}}])
+    except Exception:  # noqa: BLE001 — la trace ne bloque jamais la réponse
+        pass
 
 
 @router.get("/metrics", dependencies=[Depends(require_lecture)])

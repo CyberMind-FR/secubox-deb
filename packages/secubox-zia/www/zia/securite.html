@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  ZIA · Expliquer les blocages du WAF (#3583), profil Aurora. Administrateur seulement.
+  Le code établit les faits, le modèle les explique et PROPOSE ; rien n'est appliqué depuis cette page.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — ZIA · blocages expliqués</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--jaune:#ffd23f}
+        *{box-sizing:border-box} html,body{margin:0;min-height:100%}
+        body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,sans-serif;font-size:14px;line-height:1.4}
+        body.emb #sidebar{display:none}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        .cadre{padding:10px} .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));padding:14px;display:grid;gap:12px}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px} .tete h1{margin:0;font-size:1.3rem} .tete small{display:block;color:var(--cyan);font-size:.72rem}
+        .btn{font:inherit;font-size:.78rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:disabled{opacity:.5;cursor:wait}
+        .note{color:var(--faible);font-size:.74rem;margin:0}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .bloc{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);display:grid;gap:6px}
+        .ligne{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+        .ip{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700}
+        .pill{border:1px solid var(--faible);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;color:var(--doux)}
+        .pill.critical{border-color:var(--rouge);color:var(--rouge)} .pill.high{border-color:var(--orange);color:var(--orange)}
+        .pill.medium{border-color:var(--jaune);color:var(--jaune)} .pill.ok{border-color:var(--vert);color:var(--vert)}
+        .req{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.74rem;color:var(--doux);overflow-wrap:anywhere}
+        .expl{border-left:3px solid var(--cyan);padding:6px 10px;white-space:pre-wrap;font-size:.86rem}
+        .vide{color:var(--faible);text-align:center;padding:14px}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div><h1>🛡️ Blocages expliqués</h1><small>Le WAF mesure, ZIA explique et propose — vous décidez</small></div>
+            <button class="btn" id="actualiser" type="button" style="margin-left:auto">⟳ Actualiser</button>
+            <a class="btn" href="./" style="text-decoration:none">← ZIA</a>
+        </header>
+        <p class="info">Les faits viennent du pare-feu applicatif. L'explication est rédigée par un modèle de langue : vérifiez-la contre les faits. Rien n'est appliqué depuis cette page.</p>
+        <div id="erreur" role="alert" hidden></div>
+        <section id="liste" aria-live="polite"><p class="vide">Chargement…</p></section>
+    </div></div></main>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search);
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/zia', $ = id => document.getElementById(id);
+        const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(json) { const h = { Accept: 'application/json' }, t = jeton(); if (t) h.Authorization = 'Bearer ' + t; if (json) h['Content-Type'] = 'application/json'; return h; }
+        async function appel(chemin, corps) {
+            const r = await fetch(API + chemin, { method: corps ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+                headers: entetes(!!corps), body: corps ? JSON.stringify(corps) : undefined });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'session administrateur requise' : (d.detail || 'HTTP ' + r.status));
+            return d;
+        }
+        const quand = v => { if (!v) return '—'; const d = new Date(v); return isNaN(d) ? String(v) : d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }); };
+        function carte(f) {
+            const b = el('div', 'bloc'), l = el('div', 'ligne');
+            l.appendChild(el('span', 'ip', f.adresse));
+            l.appendChild(el('span', 'pill ' + (f.gravite_max || ''), f.gravite_max || 'gravité ?'));
+            if (f.deja_bannie) l.appendChild(el('span', 'pill ok', 'déjà bannie'));
+            l.appendChild(el('span', 'note', f.alertes + ' alerte(s) · ' + f.pays + ' · ' + (f.categories.join(', ') || 'catégorie ?') + ' · ' + quand(f.premiere) + ' → ' + quand(f.derniere_vue)));
+            const bt = el('button', 'btn', '💬 Expliquer'); bt.type = 'button'; bt.style.marginLeft = 'auto'; l.appendChild(bt); b.appendChild(l);
+            const r = f.derniere_requete || {};
+            b.appendChild(el('div', 'req', [r.method, r.host, r.path].filter(Boolean).join(' ') + (r.user_agent ? ' · ' + r.user_agent : '') + (r.rule_id ? ' · règle ' + r.rule_id : '')));
+            const z = el('div'); b.appendChild(z);
+            bt.addEventListener('click', async () => {
+                bt.disabled = true; const t0 = Date.now(); z.textContent = '';
+                const att = el('p', 'note', 'ZIA rédige… 0 s'); z.appendChild(att);
+                const m = setInterval(() => { att.textContent = 'ZIA rédige… ' + Math.round((Date.now() - t0) / 1000) + ' s'; }, 1000);
+                try {
+                    const d = await appel('/securite/expliquer', { adresse: f.adresse });
+                    z.textContent = '';
+                    z.appendChild(el('div', 'expl', d.explication || 'Aucun modèle disponible pour rédiger : seuls les faits ci-dessus sont sûrs.'));
+                    z.appendChild(el('p', 'note', d.avertissement));
+                } catch (e) { z.textContent = ''; z.appendChild(el('p', 'note', 'Explication impossible : ' + e.message)); }
+                finally { clearInterval(m); bt.disabled = false; }
+            });
+            return b;
+        }
+        async function charge() {
+            $('erreur').hidden = true; const L = $('liste');
+            try {
+                const d = await appel('/securite/blocages');
+                L.textContent = '';
+                if (!d.blocages.length) { L.appendChild(el('p', 'vide', 'Aucun blocage récent.')); return; }
+                d.blocages.forEach(f => L.appendChild(carte(f)));
+            } catch (e) { L.textContent = ''; $('erreur').textContent = 'Blocages illisibles : ' + e.message; $('erreur').hidden = false; }
+        }
+        $('actualiser').addEventListener('click', charge);
+        charge();
+    </script>
+</body>
+</html>
