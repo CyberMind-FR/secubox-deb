@@ -1,3 +1,10 @@
+secubox-core (1.8.23-1~trixie1) trixie; urgency=medium
+
+  * Racine : le Hall n est l accueil que si /etc/secubox/hall-accueil existe ;
+    sinon le tableau de bord (le Hall est propre à gk2) (ref #3554).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 12:59:12 +0100
+
 secubox-core (1.8.22-1~trixie1) trixie; urgency=medium
 
   * Premier démarrage : chaque paquet recrée ses secrets, l'image n'en porte plus (ref #3558).
