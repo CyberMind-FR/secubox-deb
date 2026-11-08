@@ -1,3 +1,9 @@
+secubox-profils (1.0.46-1~trixie1) trixie; urgency=medium
+
+  * PicoBrew retiré (à la demande du propriétaire, ref #3554).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 12:52:03 +0100
+
 secubox-profils (1.0.45-1~trixie1) trixie; urgency=medium
 
   * Sans secubox-reality (ref #3017).

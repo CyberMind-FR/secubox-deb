@@ -1,3 +1,9 @@
+secubox-premier-pas (0.9.16-1~trixie1) trixie; urgency=medium
+
+  * Le kiosque n attend plus multi-user.target : les provisionnements du premier démarrage le bloquaient 15 min derrière le dé (ref #3554).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 12:52:03 +0100
+
 secubox-premier-pas (0.9.15-1~trixie1) trixie; urgency=medium
 
   * Le kiosque quitte Plymouth avant de changer de console : sur le systeme
