@@ -887,6 +887,13 @@ umount -lf "${ROOTFS}/proc" 2>/dev/null || true
 umount -lf "${ROOTFS}/sys"  2>/dev/null || true
 umount -lf "${ROOTFS}/dev"  2>/dev/null || true
 # Aucun secret de construction dans une image (#3518).
+# resolv.conf de la box, pas celui de la machine de construction (#3554, même défaut que #1294/#2499) : la copie du
+# chroot pointait vers 127.0.0.53 sans systemd-resolved, avec le domaine de recherche du runner. Rien ne résolvait sur la
+# box installée, NTP non plus : l'heure dérivait et le code TOTP de la première connexion était refusé. Unbound seul,
+# sans résolveur public de secours qui contournerait le filtrage DNS de la box.
+rm -f "${ROOTFS}/etc/resolv.conf"
+printf '# SecuBox — unbound écoute en local.\nnameserver 127.0.0.1\n' > "${ROOTFS}/etc/resolv.conf"
+
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/purger-secrets.sh"
 purger_secrets "${ROOTFS}" || { echo "purge des secrets échouée" >&2; exit 1; }
 
