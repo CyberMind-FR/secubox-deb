@@ -157,5 +157,5 @@ il y en a un. Pour des raisons de sécurité, cette possibilité est limitée :
 | « Un autre poste configure cette box » | Terminez sur l'autre appareil, ou attendez puis cliquez « Réessayer ». |
 | Une étape affiche un message en rouge | Corrigez le champ indiqué ; l'étape n'est enregistrée qu'une fois valide. |
 
-Pour aller plus loin : [wiki SecuBox](https://github.com/CyberMind-FR/secubox-deb/wiki) ·
+Pour aller plus loin : [se repérer dans l'administration](ADMIN-NAVIGATION-TUTORIEL.md) · [wiki SecuBox](https://github.com/CyberMind-FR/secubox-deb/wiki) ·
 [signaler un problème](https://github.com/CyberMind-FR/secubox-deb/issues).
