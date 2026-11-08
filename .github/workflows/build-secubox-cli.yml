@@ -196,11 +196,12 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
+        # Ajoute seulement les archives CLI, en brouillon : la release porte le titre et les notes de
+        # SecuBox-DEB, et c'est release.yml (scripts/release-envoyer.sh) qui la publie quand tout est arrivé.
+        # Avant, ce job la publiait seul, sous le nom « SecuBox CLI », sans les images (bêta 1).
         with:
-          name: SecuBox CLI ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
           files: |
             artifacts/*.tar.gz
             artifacts/*.sha256
-          draft: false
+          draft: true
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
