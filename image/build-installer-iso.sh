@@ -398,7 +398,11 @@ fi
 
 if [[ $SECUBOX_REPO_OK -eq 1 ]]; then
   chroot "${ROOTFS}" apt-get update -q
-  chroot "${ROOTFS}" apt-get install -y -q secubox-full 2>/dev/null || warn "secubox-full not available"
+  # Profil « mobile » (#3554, choix du propriétaire) et non secubox-full : full embarquait tout gk2, Hall compris (webos,
+  # sbxos renvoyant vers hall.gk2, mood.gk2). webos reste pour le dé 3D, jamais comme accueil. Sans les « Recommends »,
+  # qui ramèneraient le Hall et ses compagnons ; les applications se rajoutent ensuite à la demande.
+  chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends secubox-mobile secubox-webos 2>/dev/null \
+    || warn "secubox-mobile not available"
 fi
 
 # Slipstream: integrate local .deb files
