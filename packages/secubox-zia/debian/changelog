@@ -1,3 +1,25 @@
+secubox-zia (0.3.7-1~trixie1) trixie; urgency=medium
+
+  * Bus : double tampon par source ; metanews en dépassement de délai ne vide
+    plus « les sujets récents » (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 06:58:09 +0100
+
+secubox-zia (0.3.6-1~trixie1) trixie; urgency=medium
+
+  * Délai propre à metanews (metanews_timeout_s, 20 s) : ses sujets mettent
+    8 à 14 s à venir et n atteignaient jamais le bus à 4 s (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 06:49:25 +0100
+
+secubox-zia (0.3.5-1~trixie1) trixie; urgency=medium
+
+  * GET /objets : sources SecuBox pour une IA (metanews, billets, PeerTube,
+    services) ; rôle invité imposé, aucune génération, question et nombre
+    bornés ; « dernières news » rend les sujets récents (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 06:46:18 +0100
+
 secubox-zia (0.3.4-1~trixie1) trixie; urgency=medium
 
   * Liens des services : sbx:// sans module doublé, « Ouvrir » vers la page réelle sur l'hôte admin (ref #3520).

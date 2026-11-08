@@ -18,10 +18,11 @@ d'abord). Le modèle GGUF (llama.cpp) se branche plus tard sans changer l'interf
 from __future__ import annotations
 
 import json
+import re
 import time
 import tomllib
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -30,7 +31,7 @@ from pydantic import BaseModel
 import httpx
 
 from secubox_core import auth as _auth, appareils
-from secubox_core.auth import router as auth_router, require_jwt
+from secubox_core.auth import router as auth_router
 from secubox_core.logger import get_logger
 
 from .bus import Bus
@@ -50,6 +51,7 @@ DEFAULT_CONFIG = {
     "n_predict": 120,
     "llm_timeout_s": 20,
     "metanews_sock": "/run/secubox/metanews.sock",
+    "metanews_timeout_s": 20,        # metanews est lent à rendre ses sujets (#3574)
     "webos_sock": "/run/secubox/webos.sock",
     "billets_sock": "/run/secubox/billets.sock",
     # Le PeerTube de cette box s'il y est installé, sinon la référence (#1723).
@@ -226,6 +228,7 @@ class Params(BaseModel):
     bus_cache_s: Optional[float] = None
     peertube_url: Optional[str] = None
     metanews_sock: Optional[str] = None
+    metanews_timeout_s: Optional[float] = None
     webos_sock: Optional[str] = None
     billets_sock: Optional[str] = None
     remote_enabled: Optional[bool] = None
@@ -254,6 +257,24 @@ def _apply_config(upd: dict) -> None:
 async def health() -> dict:
     return {"ok": True, "engine": "llm" if CFG.get("llm_url") else "heuristique",
             "model": CFG.get("model_name"), "uptime_s": round(time.time() - _M["started"])}
+
+
+_ACTU = re.compile(r"\b(news|actu\w*|derni[eè]re?s?|nouvelles?|r[ée]cent\w*|quoi de neuf|sujets?)\b", re.I)
+
+
+@router.get("/objets")
+async def objets_publics(q: str = "", limit: int = 6) -> JSONResponse:
+    """Sources SecuBox pour une IA (relais gk0, autres box) : objets du bus visibles d'un INVITÉ, sans génération.
+
+    Lecture seule et publique par construction : rôle invité imposé (aucun en-tête n'élargit la vue), aucun appel au
+    moteur (pas de boucle quand ce moteur est lui-même l'appelant), question et nombre bornés (#3574).
+    « Dernières news » et consorts rendent les sujets récents de metanews d'abord.
+    """
+    q = (q or "")[:200]
+    n = max(1, min(int(limit), 10))
+    objs = await BUS.recent(n, role="guest") if _ACTU.search(q) else await BUS.search(q, role="guest", limit=n)
+    champs = ("id", "type", "service", "title", "summary", "url", "tags")
+    return JSONResponse({"q": q, "objets": [{k: o.get(k) for k in champs if o.get(k)} for o in objs]})
 
 
 @router.get("/metrics", dependencies=[Depends(require_lecture)])
