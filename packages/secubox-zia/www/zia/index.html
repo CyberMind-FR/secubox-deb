@@ -212,8 +212,10 @@
                 }, 20);
             }
             function rend(r) {
-                const d = ajouteZia(null), bulle = d.querySelector('.bub');
-                frappe(bulle, r.text, () => { (r.objects || []).forEach(o => bulle.appendChild(objet(o))); defile(); });
+                // La frappe écrit dans SON span : actions et objets ajoutés à la bulle ne sont jamais effacés.
+                const d = ajouteZia(null), bulle = d.querySelector('.bub'), texte = el('span');
+                bulle.appendChild(texte);
+                frappe(texte, r.text, () => { (r.objects || []).forEach(o => bulle.appendChild(objet(o))); defile(); });
                 // ACTIONS SBX (#3074) : déjà validées côté serveur (capacité + rôle + valeur), RELAYÉES au Hall, seul à
                 // pouvoir commander la carte cible. La refonte Aurora (#2646) avait perdu ce relais : « coupe la radio »
                 // répondait « Je coupe le son » sans rien couper. Hors du Hall, rien n'est relayé.
