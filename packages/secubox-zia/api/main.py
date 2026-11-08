@@ -18,10 +18,11 @@ d'abord). Le modèle GGUF (llama.cpp) se branche plus tard sans changer l'interf
 from __future__ import annotations
 
 import json
+import re
 import time
 import tomllib
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -30,10 +31,12 @@ from pydantic import BaseModel
 import httpx
 
 from secubox_core import auth as _auth, appareils
-from secubox_core.auth import router as auth_router, require_jwt
+from secubox_core.auth import router as auth_router
 from secubox_core.logger import get_logger
 
 from .bus import Bus
+from . import bus as bus_mod
+from . import securite
 from .tools import Tools
 from .remote import Remote
 from .runtime import etat_moteurs
@@ -50,6 +53,12 @@ DEFAULT_CONFIG = {
     "n_predict": 120,
     "llm_timeout_s": 20,
     "metanews_sock": "/run/secubox/metanews.sock",
+    "metanews_timeout_s": 20,        # metanews est lent à rendre ses sujets (#3574)
+    "ytsas_url": "http://10.100.0.180:8091",   # médiathèque ytsas (LXC) : objets réservés aux membres (#3574)
+    "bbs_sock": "/run/secubox/bbs.sock",       # rubriques publiques du BBS (#3574)
+    "podcaster_sock": "/run/secubox/podcaster.sock",   # épisodes, lus avec le jeton du demandeur (#3574)
+    "waf_sock": "/run/secubox/waf.sock",   # blocages du WAF, lus avec le jeton de l'administrateur (#3583)
+    "pairs_maillage": [],            # box voisines interrogées par /objets, ex. ["https://10.10.0.5"] (#3574)
     "webos_sock": "/run/secubox/webos.sock",
     "billets_sock": "/run/secubox/billets.sock",
     # Le PeerTube de cette box s'il y est installé, sinon la référence (#1723).
@@ -133,6 +142,12 @@ def _audit(role: str, actions: list) -> None:
         log.error(f"audit action: {e}")
 
 app = FastAPI(title="secubox-zia", version="0.1.0", root_path="/api/v1/zia")
+
+
+@app.on_event("startup")
+async def _prechauffe_bus() -> None:
+    # Premier relevé dès le démarrage : la première question n'attend pas metanews (#3574).
+    BUS.prechauffer()
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 
@@ -226,6 +241,12 @@ class Params(BaseModel):
     bus_cache_s: Optional[float] = None
     peertube_url: Optional[str] = None
     metanews_sock: Optional[str] = None
+    metanews_timeout_s: Optional[float] = None
+    ytsas_url: Optional[str] = None
+    bbs_sock: Optional[str] = None
+    podcaster_sock: Optional[str] = None
+    pairs_maillage: Optional[list[str]] = None
+    waf_sock: Optional[str] = None
     webos_sock: Optional[str] = None
     billets_sock: Optional[str] = None
     remote_enabled: Optional[bool] = None
@@ -256,6 +277,64 @@ async def health() -> dict:
             "model": CFG.get("model_name"), "uptime_s": round(time.time() - _M["started"])}
 
 
+_ACTU = re.compile(r"\b(news|actu\w*|derni[eè]re?s?|nouvelles?|r[ée]cent\w*|quoi de neuf|sujets?)\b", re.I)
+
+
+@router.get("/objets")
+async def objets_publics(q: str = "", limit: int = 6) -> JSONResponse:
+    """Sources SecuBox pour une IA (relais gk0, autres box) : objets du bus visibles d'un INVITÉ, sans génération.
+
+    Lecture seule et publique par construction : rôle invité imposé (aucun en-tête n'élargit la vue), aucun appel au
+    moteur (pas de boucle quand ce moteur est lui-même l'appelant), question et nombre bornés (#3574).
+    « Dernières news » et consorts rendent les sujets récents de metanews d'abord.
+    """
+    q = (q or "")[:200]
+    n = max(1, min(int(limit), 10))
+    objs = await BUS.recent(n, role="guest") if _ACTU.search(q) else await BUS.search(q, role="guest", limit=n, maillage=False)
+    champs = ("id", "type", "service", "title", "summary", "url", "tags")
+    return JSONResponse({"q": q, "objets": [{k: o.get(k) for k in champs if o.get(k)} for o in objs]})
+
+
+def _jeton_de(request: Request) -> str:
+    entete = request.headers.get("authorization", "")
+    return entete[7:].strip() if entete.lower().startswith("bearer ") else request.cookies.get("secubox_session", "")
+
+
+@router.get("/securite/blocages", dependencies=[Depends(exige_admin)])
+async def securite_blocages(request: Request) -> JSONResponse:
+    """Adresses bloquées récentes, lues au WAF avec le jeton de l'administrateur, et leur fiche factuelle (#3583)."""
+    lot = await securite.blocages(CFG, _jeton_de(request))
+    if lot is None:
+        raise HTTPException(502, "le WAF ne répond pas ou refuse cette session")
+    return JSONResponse({"blocages": [securite.faits(a) for a in lot]})
+
+
+@router.post("/securite/expliquer", dependencies=[Depends(exige_admin)])
+async def securite_expliquer(body: dict, request: Request) -> JSONResponse:
+    """Les FAITS (code) puis leur explication (modèle) ; une proposition « à valider », jamais une action (#3583)."""
+    ip = str(body.get("adresse", ""))[:64]
+    lot = await securite.blocages(CFG, _jeton_de(request), 30)
+    if lot is None:
+        raise HTTPException(502, "le WAF ne répond pas ou refuse cette session")
+    entree = next((a for a in lot if a.get("client_ip") == ip), None)
+    if entree is None:
+        raise HTTPException(404, "adresse absente des blocages récents")
+    f = securite.faits(entree)
+    texte = await runtime._llm_text({**CFG, "n_predict": 350}, securite.consigne(f))
+    _audit_securite(ip)
+    return JSONResponse({"faits": f, "explication": texte,
+                         "moteur": (runtime._DERNIER or {}).get("url") if texte else None,
+                         "avertissement": "Explication générée par un modèle de langue : à vérifier contre les faits. "
+                                          "Rien n'a été appliqué."})
+
+
+def _audit_securite(ip: str) -> None:
+    try:
+        _audit("admin", [{"kind": "explication-waf", "service": "waf", "action": "expliquer", "params": {"adresse": ip}}])
+    except Exception:  # noqa: BLE001 — la trace ne bloque jamais la réponse
+        pass
+
+
 @router.get("/metrics", dependencies=[Depends(require_lecture)])
 async def metrics(request: Request) -> dict:
     n = _M["chats"] or 1
@@ -277,12 +356,18 @@ async def chat(body: ChatIn, request: Request) -> JSONResponse:
     """
     role = _role_effectif(request, body.role)
     t0 = time.time()
+    # Jeton du demandeur pour CETTE requête (#3574) : les podcasts se lisent en son nom, avec ses droits.
+    entete = request.headers.get("authorization", "")
+    jeton = entete[7:].strip() if entete.lower().startswith("bearer ") else request.cookies.get("secubox_session", "")
+    pose = bus_mod.JETON_DEMANDEUR.set(jeton or "")
     try:
         out = await runtime.respond(body.message, role, TOOLS, CFG, REMOTE)
     except Exception as e:  # jamais d'exception nue vers le client
         log.error(f"chat: {e}")
         out = {"text": "Désolé, j'ai buté sur cette demande. Réessaie autrement ?",
                "objects": [], "trace": [], "delegate": None, "engine": "heuristique"}
+    finally:
+        bus_mod.JETON_DEMANDEUR.reset(pose)
     # `actions[]` fait TOUJOURS partie du contrat de réponse (RFC §7) — vide par
     # défaut. Ce sont des actions SBX déjà VALIDÉES (cible/action/rôle/valeur) que
     # la cardlet ZIA transmet au Hall ; ZIA ne touche jamais le DOM.

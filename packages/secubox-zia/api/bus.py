@@ -14,9 +14,11 @@ service injoignable est simplement ignoré — jamais d'erreur qui casse le chat
 """
 from __future__ import annotations
 
+import asyncio
+import contextvars
 import re
 import time
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 
@@ -49,6 +51,12 @@ _SEED: list[dict] = []
 # Domaines des services (pour fabriquer une URL ouvrable, `url`, à côté de
 # `sbx://`) : <service>.<domaine de CETTE box> — [global] domain, sinon
 # [api] sso_cookie_domain (#1615, #1623). Jamais un nom de box écrit en dur.
+# Jeton du DEMANDEUR, posé par /v1/chat le temps d'une requête (#3574). Sert à lire, en son nom et avec ses seuls
+# droits, ce qui exige une session (podcasts). Jamais mis en cache, jamais partagé entre demandeurs.
+JETON_DEMANDEUR: contextvars.ContextVar[str] = contextvars.ContextVar("zia_jeton_demandeur", default="")
+_AUDIO = re.compile(r"podcast|[ée]pisode|audio|[ée]mission", re.I)
+
+
 def _hote(service: str) -> str:
     try:
         from secubox_core.auth import domaine_box
@@ -74,6 +82,9 @@ class Bus:
         self.cfg = cfg
         self._cache: list[dict] = []
         self._ts = 0.0
+        self._dernier: dict[str, list[dict]] = {}   # dernier relevé NON vide de chaque source (#3574)
+        self._releve: Optional[asyncio.Task] = None  # relevé en cours, partagé par toutes les requêtes
+        self._pair_hs: dict[str, float] = {}         # voisine injoignable → mise de côté jusqu'à (monotonic)
         self.ttl = float(cfg.get("bus_cache_s", 45))
         # Registre des capacités (couche d'actions) : bootstrap + manifestes des
         # modules. Le LLM ne l'écrit jamais ; il propose, on valide ici.
@@ -102,9 +113,11 @@ class Bus:
         """Adapter MetaNews : topics récents -> objets news.topic (via socket UDS)."""
         sock = self.cfg.get("metanews_sock", "/run/secubox/metanews.sock")
         out: list[dict] = []
+        # metanews met 8 à 14 s à rendre ses sujets sur gk2 : à 4 s, ZIA n'en voyait jamais aucun (#3574).
+        attente = float(self.cfg.get("metanews_timeout_s", 20))
         try:
             tr = httpx.AsyncHTTPTransport(uds=sock)
-            async with httpx.AsyncClient(transport=tr, timeout=4.0) as cli:
+            async with httpx.AsyncClient(transport=tr, timeout=attente) as cli:
                 r = await cli.get("http://x/api/v1/metanews/topics?limit=30",
                                   headers={"Accept": "application/json"})
                 if r.status_code != 200:
@@ -232,21 +245,176 @@ class Bus:
             return out
         return out
 
+    async def _ytsas(self) -> list[dict]:
+        """Adapter YTSAS : la médiathèque téléchargée -> objets media.video réservés aux MEMBRES (#3574).
+
+        C'est la bibliothèque personnelle du propriétaire : jamais visible d'un invité du Hall ni de l'IA
+        publique. Ni chemin interne ni URL d'origine ne sortent : titre, et lien vers la page ytsas.
+        """
+        base = str(self.cfg.get("ytsas_url") or "http://10.100.0.180:8091").rstrip("/")
+        page = f"https://{_hote('admin')}/ytsas/" if _hote("admin") else ""
+        out: list[dict] = []
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as cli:
+                r = await cli.get(base + "/api/v1/ytsas/list", headers={"Accept": "application/json"})
+            if r.status_code != 200:
+                return out
+            elements = [e for e in r.json() if isinstance(e, dict) and str(e.get("complete")) == "1" and e.get("id")]
+            elements.sort(key=lambda e: float(e.get("added_at") or 0), reverse=True)
+            for e in elements[:40]:
+                out.append({
+                    "id": f"ytsas:media:{e['id']}", "type": "media.video", "service": "ytsas",
+                    "title": str(e.get("title") or "")[:160], "summary": "Médiathèque ytsas",
+                    "uri": f"sbx://ytsas/media/{e['id']}", "url": page, "visibility": "member",
+                    "actions": ["open"], "tags": ["vidéo", "ytsas", "médiathèque"],
+                })
+        except Exception:
+            return out
+        return out
+
+    async def _bbs(self) -> list[dict]:
+        """Adapter BBS : les rubriques publiques (/api/v1/bbs/menu) -> objets forum.section, visibles de tous.
+
+        Les FILS exigent un jeton : ils attendent le compte de service de ZIA (#3574), pas un contournement.
+        """
+        sock = self.cfg.get("bbs_sock", "/run/secubox/bbs.sock")
+        out: list[dict] = []
+        try:
+            tr = httpx.AsyncHTTPTransport(uds=sock)
+            async with httpx.AsyncClient(transport=tr, timeout=4.0) as cli:
+                r = await cli.get("http://x/api/v1/bbs/menu", headers={"Accept": "application/json"})
+            if r.status_code != 200:
+                return out
+            for c in (r.json().get("categories") or []):
+                slug = c.get("slug")
+                if not slug:
+                    continue
+                n = c.get("threads")
+                out.append({
+                    "id": f"bbs:rubrique:{slug}", "type": "forum.section", "service": "bbs",
+                    "title": c.get("title") or slug,
+                    "summary": f"Rubrique du BBS · {n} fils" if isinstance(n, int) else "Rubrique du BBS",
+                    "uri": f"sbx://bbs/rubrique/{slug}",
+                    "url": f"https://{_hote('bbs')}/c/{slug}" if _hote("bbs") else "", "visibility": "guest",
+                    "actions": ["open"], "tags": ["bbs", "forum", "discussion", str(slug).lower()],
+                })
+        except Exception:
+            return out
+        return out
+
+    async def _rafraichir(self) -> None:
+        """Les sources EN PARALLÈLE : le relevé dure le temps de la plus lente (metanews, jusqu'à 20 s), pas leur
+        somme. Double tampon (#3011, #3574) : une source en échec rend [] et ne vide jamais son dernier relevé."""
+        noms = ("metanews", "billets", "peertube", "registre", "ytsas", "bbs")
+        lots = await asyncio.gather(self._metanews(), self._billets(), self._peertube(), self._registry(),
+                                    self._ytsas(), self._bbs(), return_exceptions=True)
+        frais = []
+        for nom, lot in zip(noms, lots):
+            frais += self._garde(nom, lot if isinstance(lot, list) else [])
+        self._cache = list(_SEED) + frais
+        self._ts = time.time()
+
+    def prechauffer(self) -> asyncio.Task:
+        """Lance un relevé s'il n'y en a pas déjà un (démarrage du service, cache expiré)."""
+        if self._releve is None or self._releve.done():
+            self._releve = asyncio.create_task(self._rafraichir())
+        return self._releve
+
     async def objets(self, role: str = "guest", force: bool = False) -> list[dict]:
-        """Tous les objets visibles pour ce rôle (cache court, adapters best-effort)."""
-        now = time.time()
-        if force or not self._cache or (now - self._ts) > self.ttl:
-            news = await self._metanews()
-            posts = await self._billets()
-            vids = await self._peertube()
-            svcs = await self._registry()
-            self._cache = list(_SEED) + news + posts + vids + svcs
-            self._ts = now
+        """Tous les objets visibles pour ce rôle.
+
+        Jamais d'attente une fois un premier relevé fait : cache expiré = réponse immédiate avec le dernier relevé,
+        nouveau relevé en tâche de fond. Le chemin public coupe à 30 s (HAProxy) : attendre metanews (20 s) puis le
+        modèle (20 s) donnait « Oups, réseau » (#3574). Seul le tout premier relevé (ou `force`) est attendu.
+        """
+        if force or not self._ts:
+            await self.prechauffer()
+        elif (time.time() - self._ts) > self.ttl:
+            self.prechauffer()
         return policy.filtre(self._cache, role)
 
-    async def search(self, query: str, type_: str = "", role: str = "guest", limit: int = 8) -> list[dict]:
-        """Recherche plein-texte simple sur titre/résumé/tags (+ filtre de type)."""
+    def _garde(self, source: str, objets: list[dict]) -> list[dict]:
+        if objets:
+            self._dernier[source] = objets
+        return self._dernier.get(source, [])
+
+    async def _podcasts(self, jeton: str) -> list[dict]:
+        """Épisodes du podcaster lus AVEC LE JETON DU DEMANDEUR (#3574) : la bibliothèque exige une session.
+
+        ZIA ne reçoit que ce que cette personne a le droit de lire ; rien n'est gardé au-delà de la requête.
+        """
+        sock = self.cfg.get("podcaster_sock", "/run/secubox/podcaster.sock")
+        hote = _hote("admin")
+        out: list[dict] = []
+        try:
+            tr = httpx.AsyncHTTPTransport(uds=sock)
+            async with httpx.AsyncClient(transport=tr, timeout=6.0) as cli:
+                r = await cli.get("http://x/public/library",
+                                  headers={"Accept": "application/json", "Authorization": f"Bearer {jeton}"})
+            if r.status_code != 200:
+                return out
+            eps = sorted((r.json().get("episodes") or []), key=lambda e: e.get("pubdate") or 0, reverse=True)
+            for e in eps[:25]:
+                if not e.get("id"):
+                    continue
+                out.append({
+                    "id": f"podcaster:episode:{e['id']}", "type": "media.audio", "service": "podcaster",
+                    "title": str(e.get("title") or "")[:160], "summary": str(e.get("feed") or "Podcast"),
+                    "uri": f"sbx://podcaster/episode/{e['id']}",
+                    "url": f"https://{hote}{e['media']}" if hote and e.get("media") else "",
+                    "visibility": "guest", "actions": ["play", "open"],
+                    "tags": ["podcast", "audio", str(e.get("feed") or "").lower()],
+                })
+        except Exception:
+            return out
+        return out
+
+    async def _pairs(self, query: str) -> list[dict]:
+        """Objets PUBLICS des autres box du maillage (#3574), par leur route /objets (rôle invité, sans génération).
+
+        Les voisines viennent de `pairs_maillage` (zia.toml) : ZIA ne lit jamais le fichier du maillage, qui porte la
+        clé privée WireGuard. Appels en parallèle, 3 s ; une voisine muette est mise de côté 5 min. /objets ne relaie
+        jamais aux voisines : pas de boucle entre box.
+        """
+        pairs = [str(u).rstrip("/") for u in (self.cfg.get("pairs_maillage") or []) if str(u).startswith("https://")]
+        now = time.monotonic()
+        actifs = [u for u in pairs if self._pair_hs.get(u, 0) <= now]
+        if not actifs or not (query or "").strip():
+            return []
+
+        async def un(url: str) -> list[dict]:
+            try:
+                # Certificats internes des box : TLS sans vérification, comme l'adapter PeerTube (serveur-à-serveur).
+                async with httpx.AsyncClient(verify=False, timeout=3.0) as cli:
+                    r = await cli.get(url + "/api/v1/zia/objets", params={"q": query[:200], "limit": 4},
+                                      headers={"Accept": "application/json"})
+                if r.status_code != 200:
+                    raise ValueError(r.status_code)
+                noeud = url.split("//", 1)[1].split("/", 1)[0]
+                out = []
+                for o in (r.json().get("objets") or [])[:4]:
+                    if not (o.get("id") and o.get("title")):
+                        continue
+                    out.append({**{k: o.get(k) for k in ("type", "service", "title", "url")},
+                                "summary": f"sur {noeud} · " + str(o.get("summary") or ""),
+                                "id": f"maillage:{noeud}:{o['id']}", "visibility": "guest", "noeud": noeud,
+                                "actions": ["open"], "tags": list(o.get("tags") or []) + ["maillage", noeud]})
+                return out
+            except Exception:
+                self._pair_hs[url] = time.monotonic() + 300
+                return []
+        lots = await asyncio.gather(*(un(u) for u in actifs))
+        return [o for lot in lots for o in lot]
+
+    async def search(self, query: str, type_: str = "", role: str = "guest", limit: int = 8,
+                     maillage: bool = True) -> list[dict]:
+        """Recherche plein-texte simple sur titre/résumé/tags (+ filtre de type), puis les box voisines."""
         objs = await self.objets(role)
+        if maillage:
+            objs = objs + policy.filtre(await self._pairs(query), role)
+        jeton = JETON_DEMANDEUR.get()
+        if jeton and (type_.startswith("media.audio") or _AUDIO.search(query or "")):
+            objs = objs + await self._podcasts(jeton)
         q = (query or "").strip().lower()
         mots = [m for m in re.split(r"\W+", q) if len(m) > 1]
 

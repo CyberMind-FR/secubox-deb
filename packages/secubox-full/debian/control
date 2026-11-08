@@ -34,7 +34,6 @@ Depends: ${misc:Depends},
  secubox-photoprism,
  secubox-lyrion (>= 1.0),
  secubox-mqtt,
- secubox-picobrew,
  secubox-ai-gateway,
  secubox-streamlit
 Recommends: wireguard-tools, secubox-voicestudio
@@ -42,6 +41,6 @@ Suggests: secubox-jitsi
 Description: SecuBox Full — isp + tout le contenu du Hall
  Le profil secubox-isp PLUS tout ce que le Hall presente : le Hall lui-meme
  (webos, sbxos), ses plugins (billets, actualites, messagerie, Nextcloud, BBS), l'assistant (zia, voice, voicestudio), les medias (radio,
- podcaster, PeerTube, Jellyfin, ytsas, Lyrion, photos PhotoPrism), la domotique (MQTT,
- picobrew), l'IA (ai-gateway, streamlit), les depots et l'assistance.
+ podcaster, PeerTube, Jellyfin, ytsas, Lyrion, photos PhotoPrism), la domotique (MQTT),
+ l'IA (ai-gateway, streamlit), les depots et l'assistance.
  Le materiel specifique (ecrans, capteurs) reste a la demande.

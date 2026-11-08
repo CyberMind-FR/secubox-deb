@@ -398,7 +398,11 @@ fi
 
 if [[ $SECUBOX_REPO_OK -eq 1 ]]; then
   chroot "${ROOTFS}" apt-get update -q
-  chroot "${ROOTFS}" apt-get install -y -q secubox-full 2>/dev/null || warn "secubox-full not available"
+  # Profil « mobile » (#3554, choix du propriétaire) et non secubox-full : full embarquait tout gk2, Hall compris (webos,
+  # sbxos renvoyant vers hall.gk2, mood.gk2). webos reste pour le dé 3D, jamais comme accueil. Sans les « Recommends »,
+  # qui ramèneraient le Hall et ses compagnons ; les applications se rajoutent ensuite à la demande.
+  chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends secubox-mobile secubox-webos 2>/dev/null \
+    || warn "secubox-mobile not available"
 fi
 
 # Slipstream: integrate local .deb files
@@ -470,6 +474,10 @@ if [[ $INCLUDE_INSTALLER -eq 1 ]]; then
   log "4/9 Creating headless installer..."
 
   # Auto-installer script for headless install
+  # Page de progression de l'installation (#3554) : https://<box>/installation/, lit etat.json et journal.txt
+  # écrits par secubox-installer dans le même dossier (servi par nginx depuis /usr/share/secubox/www).
+  install -d "${ROOTFS}/usr/share/secubox/www/installation"
+  install -m 0644 "${SCRIPT_DIR}/installation/index.html" "${ROOTFS}/usr/share/secubox/www/installation/index.html"
   cat > "${ROOTFS}/usr/bin/secubox-installer" <<'INSTALLERSCRIPT'
 #!/bin/bash
 # SecuBox Headless Installer
@@ -482,8 +490,32 @@ GOLD='\033[0;33m'; NC='\033[0m'; BOLD='\033[1m'
 
 log()  { echo -e "${CYAN}[INSTALL]${NC} $*"; }
 ok()   { echo -e "${GREEN}[  OK   ]${NC} $*"; }
-err()  { echo -e "${RED}[FAIL   ]${NC} $*" >&2; exit 1; }
 warn() { echo -e "${GOLD}[ WARN  ]${NC} $*"; }
+
+# ── Progression visible (#3554) : étapes horodatées sur la sortie, la console de la machine (tty1, sans réseau) et
+# un journal gardé sur le disque installé ; état JSON lu par la page /installation/ du live.
+TOTAL=7; DEBUT=$(date +%s)
+ETAT_DIR=/usr/share/secubox/www/installation; ETAT="$ETAT_DIR/etat.json"; JOURNAL="$ETAT_DIR/journal.txt"
+mkdir -p "$ETAT_DIR"; : > "$JOURNAL"
+_json() { sed 's/\\/\\\\/g; s/"/\\"/g' <<<"$1"; }
+ecrire_etat() {   # ecrire_etat <statut> <étape> <pourcent> <message>
+    printf '{"statut":"%s","etape":%s,"total":%s,"pourcent":%s,"message":"%s","debut":%s,"maj":%s,"disque":"%s"}\n' \
+        "$1" "$2" "$TOTAL" "$3" "$(_json "$4")" "$DEBUT" "$(date +%s)" "${TARGET_DISK:-}" > "$ETAT.tmp" && mv -f "$ETAT.tmp" "$ETAT"
+}
+ETAPE=0
+etape() {         # etape <n> <message> : une ligne horodatée partout, et l'état pour la page
+    ETAPE=$1; shift
+    local ligne; ligne="[$(date +%H:%M:%S)] ($ETAPE/$TOTAL) $*"
+    echo -e "${CYAN}${ligne}${NC}"; echo "$ligne" >> "$JOURNAL"
+    [ -w /dev/tty1 ] && [ "$(tty 2>/dev/null)" != /dev/tty1 ] && echo "$ligne" > /dev/tty1 || true
+    ecrire_etat en_cours "$ETAPE" $(( (ETAPE - 1) * 100 / TOTAL )) "$*"
+}
+err() {
+    local ligne; ligne="[$(date +%H:%M:%S)] ÉCHEC : $*"
+    echo -e "${RED}[FAIL   ]${NC} $*" >&2; echo "$ligne" >> "$JOURNAL"
+    [ -w /dev/tty1 ] && echo "$ligne" > /dev/tty1 || true
+    ecrire_etat erreur "$ETAPE" 0 "$*"; exit 1
+}
 
 echo ""
 echo -e "${BOLD}════════════════════════════════════════════════════════════${NC}"
@@ -514,7 +546,7 @@ detect_disk() {
 }
 
 TARGET_DISK=$(detect_disk) || err "No suitable disk found for installation"
-log "Target disk: ${TARGET_DISK}"
+etape 1 "Disque cible : ${TARGET_DISK}"
 
 # Safety check - confirm disk is really empty or ask
 DISK_SIZE=$(lsblk -b -d -n -o SIZE "$TARGET_DISK" 2>/dev/null || echo "0")
@@ -540,7 +572,7 @@ else
 fi
 
 # ── Partition the disk ────────────────────────────────────────
-log "Creating partitions..."
+etape 2 "Création des partitions"
 
 # Unmount any existing partitions
 umount "${TARGET_DISK}"* 2>/dev/null || true
@@ -580,7 +612,7 @@ partprobe "$TARGET_DISK"
 # Format partitions
 partprobe "$TARGET_DISK" 2>/dev/null || true
 udevadm settle --timeout=20 || true
-log "Formatting partitions..."
+etape 3 "Formatage"
 mkfs.fat -F32 -n "ESP" "$PART_ESP"
 mkfs.ext4 -L "rootfs" -q "$PART_ROOT"
 mkfs.ext4 -L "data" -q "$PART_DATA"
@@ -588,7 +620,7 @@ mkfs.ext4 -L "data" -q "$PART_DATA"
 ok "Partitions created"
 
 # ── Mount and copy system ─────────────────────────────────────
-log "Copying system files..."
+etape 4 "Copie du système"
 
 INSTALL_MNT="/mnt/secubox-install"
 mkdir -p "$INSTALL_MNT"
@@ -600,12 +632,18 @@ mount "$PART_ESP" "$INSTALL_MNT/boot/efi"
 # l'installation, et le disque hériterait des secrets du live. Le système installé crée les siens au premier démarrage.
 SOURCE=/run/live/rootfs/filesystem.squashfs/
 [[ -d "$SOURCE/etc" ]] || err "squashfs du live introuvable : $SOURCE"
-rsync -aHAXx "$SOURCE" "$INSTALL_MNT/"
+# Pourcentage de la copie (l'étape la plus longue) : 4/7 → 5/7 de la barre, au fil de rsync.
+rsync -aHAXx --info=progress2 --no-inc-recursive "$SOURCE" "$INSTALL_MNT/" \
+  | tr '\r' '\n' | while read -r _o pc _r; do
+      pc=${pc%%%}; case "$pc" in ''|*[!0-9]*) continue ;; esac
+      ecrire_etat en_cours 4 $(( 3 * 100 / TOTAL + pc * 100 / TOTAL / 100 )) "Copie du système : ${pc} %"
+    done
+[ "${PIPESTATUS[0]}" -eq 0 ] || err "copie du système interrompue (rsync ${PIPESTATUS[0]})"
 
 ok "System files copied"
 
 # ── Configure installed system ────────────────────────────────
-log "Configuring installed system..."
+etape 5 "Configuration du système installé"
 
 # fstab
 cat > "$INSTALL_MNT/etc/fstab" <<FSTAB
@@ -623,7 +661,7 @@ rm -f "$INSTALL_MNT/etc/live" 2>/dev/null || true
 echo "secubox-$(date +%s | tail -c 5)" > "$INSTALL_MNT/etc/hostname"
 
 # Install GRUB
-log "Installing GRUB bootloader..."
+etape 6 "Installation du chargeur de démarrage (GRUB)"
 mount --bind /dev "$INSTALL_MNT/dev"
 mount --bind /proc "$INSTALL_MNT/proc"
 mount --bind /sys "$INSTALL_MNT/sys"
@@ -659,6 +697,10 @@ umount "$INSTALL_MNT/dev"
 umount "$INSTALL_MNT/boot/efi"
 umount "$INSTALL_MNT"
 
+etape 7 "Installation terminée en $(( $(date +%s) - DEBUT )) s"
+ecrire_etat fini 7 100 "Installation terminée : retirez la clé, la machine redémarre sur son disque."
+# Le journal suit la box : /var/log/secubox-installer.log sur le disque installé.
+if mount "$PART_ROOT" "$INSTALL_MNT" 2>/dev/null; then cp -f "$JOURNAL" "$INSTALL_MNT/var/log/secubox-installer.log" || true; umount "$INSTALL_MNT"; fi
 ok "Installation complete!"
 
 echo ""
@@ -668,12 +710,9 @@ echo ""
 echo -e "  Installed to: ${TARGET_DISK}"
 echo ""
 echo -e "  ${BOLD}On first boot:${NC}"
-echo -e "    - SSH keys will be generated"
-echo -e "    - Web UI will be available at https://<IP>:8443"
-echo ""
-echo -e "  ${BOLD}Default credentials:${NC}"
-echo -e "    SSH:    root / secubox"
-echo -e "    Web UI: admin / admin"
+echo -e "    - l'assistant Premier Pas s'ouvre sur l'écran, ou à https://<adresse>/"
+echo -e "    - il fait choisir le mot de passe de l'administrateur (sinon « secubox », signalé à chaque connexion)"
+echo -e "  ${BOLD}Retirez la clé USB${NC} avant le redémarrage."
 echo ""
 echo -e "${BOLD}════════════════════════════════════════════════════════════${NC}"
 echo ""
