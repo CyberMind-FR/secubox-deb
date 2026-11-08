@@ -35,6 +35,7 @@ from secubox_core.auth import router as auth_router
 from secubox_core.logger import get_logger
 
 from .bus import Bus
+from . import bus as bus_mod
 from .tools import Tools
 from .remote import Remote
 from .runtime import etat_moteurs
@@ -54,6 +55,7 @@ DEFAULT_CONFIG = {
     "metanews_timeout_s": 20,        # metanews est lent à rendre ses sujets (#3574)
     "ytsas_url": "http://10.100.0.180:8091",   # médiathèque ytsas (LXC) : objets réservés aux membres (#3574)
     "bbs_sock": "/run/secubox/bbs.sock",       # rubriques publiques du BBS (#3574)
+    "podcaster_sock": "/run/secubox/podcaster.sock",   # épisodes, lus avec le jeton du demandeur (#3574)
     "webos_sock": "/run/secubox/webos.sock",
     "billets_sock": "/run/secubox/billets.sock",
     # Le PeerTube de cette box s'il y est installé, sinon la référence (#1723).
@@ -239,6 +241,7 @@ class Params(BaseModel):
     metanews_timeout_s: Optional[float] = None
     ytsas_url: Optional[str] = None
     bbs_sock: Optional[str] = None
+    podcaster_sock: Optional[str] = None
     webos_sock: Optional[str] = None
     billets_sock: Optional[str] = None
     remote_enabled: Optional[bool] = None
@@ -308,12 +311,18 @@ async def chat(body: ChatIn, request: Request) -> JSONResponse:
     """
     role = _role_effectif(request, body.role)
     t0 = time.time()
+    # Jeton du demandeur pour CETTE requête (#3574) : les podcasts se lisent en son nom, avec ses droits.
+    entete = request.headers.get("authorization", "")
+    jeton = entete[7:].strip() if entete.lower().startswith("bearer ") else request.cookies.get("secubox_session", "")
+    pose = bus_mod.JETON_DEMANDEUR.set(jeton or "")
     try:
         out = await runtime.respond(body.message, role, TOOLS, CFG, REMOTE)
     except Exception as e:  # jamais d'exception nue vers le client
         log.error(f"chat: {e}")
         out = {"text": "Désolé, j'ai buté sur cette demande. Réessaie autrement ?",
                "objects": [], "trace": [], "delegate": None, "engine": "heuristique"}
+    finally:
+        bus_mod.JETON_DEMANDEUR.reset(pose)
     # `actions[]` fait TOUJOURS partie du contrat de réponse (RFC §7) — vide par
     # défaut. Ce sont des actions SBX déjà VALIDÉES (cible/action/rôle/valeur) que
     # la cardlet ZIA transmet au Hall ; ZIA ne touche jamais le DOM.

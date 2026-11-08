@@ -15,6 +15,7 @@ service injoignable est simplement ignoré — jamais d'erreur qui casse le chat
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import re
 import time
 from typing import Optional
@@ -50,6 +51,12 @@ _SEED: list[dict] = []
 # Domaines des services (pour fabriquer une URL ouvrable, `url`, à côté de
 # `sbx://`) : <service>.<domaine de CETTE box> — [global] domain, sinon
 # [api] sso_cookie_domain (#1615, #1623). Jamais un nom de box écrit en dur.
+# Jeton du DEMANDEUR, posé par /v1/chat le temps d'une requête (#3574). Sert à lire, en son nom et avec ses seuls
+# droits, ce qui exige une session (podcasts). Jamais mis en cache, jamais partagé entre demandeurs.
+JETON_DEMANDEUR: contextvars.ContextVar[str] = contextvars.ContextVar("zia_jeton_demandeur", default="")
+_AUDIO = re.compile(r"podcast|[ée]pisode|audio|[ée]mission", re.I)
+
+
 def _hote(service: str) -> str:
     try:
         from secubox_core.auth import domaine_box
@@ -330,9 +337,43 @@ class Bus:
             self._dernier[source] = objets
         return self._dernier.get(source, [])
 
+    async def _podcasts(self, jeton: str) -> list[dict]:
+        """Épisodes du podcaster lus AVEC LE JETON DU DEMANDEUR (#3574) : la bibliothèque exige une session.
+
+        ZIA ne reçoit que ce que cette personne a le droit de lire ; rien n'est gardé au-delà de la requête.
+        """
+        sock = self.cfg.get("podcaster_sock", "/run/secubox/podcaster.sock")
+        hote = _hote("admin")
+        out: list[dict] = []
+        try:
+            tr = httpx.AsyncHTTPTransport(uds=sock)
+            async with httpx.AsyncClient(transport=tr, timeout=6.0) as cli:
+                r = await cli.get("http://x/public/library",
+                                  headers={"Accept": "application/json", "Authorization": f"Bearer {jeton}"})
+            if r.status_code != 200:
+                return out
+            eps = sorted((r.json().get("episodes") or []), key=lambda e: e.get("pubdate") or 0, reverse=True)
+            for e in eps[:25]:
+                if not e.get("id"):
+                    continue
+                out.append({
+                    "id": f"podcaster:episode:{e['id']}", "type": "media.audio", "service": "podcaster",
+                    "title": str(e.get("title") or "")[:160], "summary": str(e.get("feed") or "Podcast"),
+                    "uri": f"sbx://podcaster/episode/{e['id']}",
+                    "url": f"https://{hote}{e['media']}" if hote and e.get("media") else "",
+                    "visibility": "guest", "actions": ["play", "open"],
+                    "tags": ["podcast", "audio", str(e.get("feed") or "").lower()],
+                })
+        except Exception:
+            return out
+        return out
+
     async def search(self, query: str, type_: str = "", role: str = "guest", limit: int = 8) -> list[dict]:
         """Recherche plein-texte simple sur titre/résumé/tags (+ filtre de type)."""
         objs = await self.objets(role)
+        jeton = JETON_DEMANDEUR.get()
+        if jeton and (type_.startswith("media.audio") or _AUDIO.search(query or "")):
+            objs = objs + await self._podcasts(jeton)
         q = (query or "").strip().lower()
         mots = [m for m in re.split(r"\W+", q) if len(m) > 1]
 

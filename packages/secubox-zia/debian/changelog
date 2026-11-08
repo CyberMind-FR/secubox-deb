@@ -1,3 +1,11 @@
+secubox-zia (0.4.2-1~trixie1) trixie; urgency=medium
+
+  * Podcasts : épisodes lus avec le jeton du demandeur, pour cette requête
+    seulement ; sans session, rien n est demandé ; jamais dans le cache
+    partagé (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 08:03:34 +0100
+
 secubox-zia (0.4.1-1~trixie1) trixie; urgency=medium
 
   * Adaptateur ytsas : la médiathèque téléchargée, réservée aux membres, sans
