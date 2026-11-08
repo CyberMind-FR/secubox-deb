@@ -52,6 +52,8 @@ DEFAULT_CONFIG = {
     "llm_timeout_s": 20,
     "metanews_sock": "/run/secubox/metanews.sock",
     "metanews_timeout_s": 20,        # metanews est lent à rendre ses sujets (#3574)
+    "ytsas_url": "http://10.100.0.180:8091",   # médiathèque ytsas (LXC) : objets réservés aux membres (#3574)
+    "bbs_sock": "/run/secubox/bbs.sock",       # rubriques publiques du BBS (#3574)
     "webos_sock": "/run/secubox/webos.sock",
     "billets_sock": "/run/secubox/billets.sock",
     # Le PeerTube de cette box s'il y est installé, sinon la référence (#1723).
@@ -235,6 +237,8 @@ class Params(BaseModel):
     peertube_url: Optional[str] = None
     metanews_sock: Optional[str] = None
     metanews_timeout_s: Optional[float] = None
+    ytsas_url: Optional[str] = None
+    bbs_sock: Optional[str] = None
     webos_sock: Optional[str] = None
     billets_sock: Optional[str] = None
     remote_enabled: Optional[bool] = None
