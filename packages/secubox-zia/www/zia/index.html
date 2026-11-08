@@ -198,9 +198,24 @@
                 } catch (x) { /* hôte injoignable */ }
             }
             function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2600); }
+            // Frappe progressive (#3574) : le texte s'écrit en 2,5 s au plus, les objets suivent. Mouvement réduit : d'un coup.
+            const CALME = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+            function frappe(bulle, texte, fini) {
+                texte = String(texte || '…');
+                if (CALME || texte.length < 4) { md(bulle, texte); fini(); return; }
+                const pas = Math.max(1, Math.ceil(texte.length / 120)); let n = 0;
+                const t = setInterval(() => {
+                    n = Math.min(texte.length, n + pas);
+                    let bout = texte.slice(0, n); if (bout.split('**').length % 2 === 0) bout = bout.replace(/\*\*(?!.*\*\*)/, '');   // gras pas encore refermé
+                    bulle.textContent = ''; md(bulle, bout); defile();
+                    if (n >= texte.length) { clearInterval(t); fini(); }
+                }, 20);
+            }
             function rend(r) {
-                const d = ajouteZia(r.text || '…');
-                (r.objects || []).forEach(o => d.querySelector('.bub').appendChild(objet(o)));
+                // La frappe écrit dans SON span : actions et objets ajoutés à la bulle ne sont jamais effacés.
+                const d = ajouteZia(null), bulle = d.querySelector('.bub'), texte = el('span');
+                bulle.appendChild(texte);
+                frappe(texte, r.text, () => { (r.objects || []).forEach(o => bulle.appendChild(objet(o))); defile(); });
                 // ACTIONS SBX (#3074) : déjà validées côté serveur (capacité + rôle + valeur), RELAYÉES au Hall, seul à
                 // pouvoir commander la carte cible. La refonte Aurora (#2646) avait perdu ce relais : « coupe la radio »
                 // répondait « Je coupe le son » sans rien couper. Hors du Hall, rien n'est relayé.
@@ -230,16 +245,17 @@
                 m = (m || '').trim(); if (!m) return;
                 ajouteMoi(m); echanges += 1; $('tEchanges').textContent = echanges;
                 if (DEMO) { const r = reponseDemo(m); ajouteTrace(r.trace); rend(r); return; }
-                const p = ajouteZia('…');
+                const p = ajouteZia('…'), t0 = Date.now();
+                const attente = setInterval(() => { const b = p.querySelector('.bub'); b.textContent = 'ZIA cherche… ' + Math.round((Date.now() - t0) / 1000) + ' s'; }, 1000);
                 fetch(API + '/v1/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: m }) })
                     .then(r => r.ok ? r.json() : null)
                     .then(res => {
-                        p.remove();
+                        clearInterval(attente); p.remove();
                         if (!res) { ajouteZia('Service ZIA injoignable.'); return; }
                         ajouteTrace(res.trace); rend(res);
                         if (window.ZIAVoix) ZIAVoix.dit(res.text);
                     })
-                    .catch(() => { p.remove(); ajouteZia('Oups, réseau.'); });
+                    .catch(() => { clearInterval(attente); p.remove(); ajouteZia('Oups, réseau.'); });
             }
             stream.addEventListener('click', e => {
                 const b = e.target.closest('[data-act]'); if (!b) return;

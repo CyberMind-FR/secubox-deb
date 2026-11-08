@@ -1,3 +1,18 @@
+secubox-zia (0.3.9-1~trixie1) trixie; urgency=medium
+
+  * Frappe progressive dans son propre élément : les actions SBX et les
+    objets de la bulle ne sont plus effacés (régression de 0.3.8) (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 07:20:16 +0100
+
+secubox-zia (0.3.8-1~trixie1) trixie; urgency=medium
+
+  * Page : frappe progressive de la réponse (2,5 s au plus, d un coup si
+    mouvement réduit), compteur « ZIA cherche… N s » pendant l attente
+    (ref #3574).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 07:18:22 +0100
+
 secubox-zia (0.3.7-1~trixie1) trixie; urgency=medium
 
   * Bus : double tampon par source ; metanews en dépassement de délai ne vide
