@@ -1,3 +1,27 @@
+secubox-security-posture (2.5.2-1~trixie1) trixie; urgency=medium
+
+  * Veille CERT-FR : « cloud » et « meta » ne valent plus présence (ref #3584).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 11:49:49 +0100
+
+secubox-security-posture (2.5.1-1~trixie1) trixie; urgency=medium
+
+  * Veille CERT-FR : rapprochement sur les noms distinctifs (vendeur, premier
+    mot du produit) ; les mots génériques (gateway, access, cloud…) ne valent
+    plus présence (faux « vous concerne » vus sur gk2) (ref #3584).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 11:47:16 +0100
+
+secubox-security-posture (2.5.0-1~trixie1) trixie; urgency=medium
+
+  * cve-triage : veille CERT-FR (avis + alertes) rapprochée des logiciels
+    présents ; « vous concerne » / « leurre possible » ; modèles Nuclei des
+    produits absents récupérés pour les sondes WAF (toujours en détection,
+    générées par l administrateur) (ref #3584).
+  * secubox-cvectl certfr classer : root sans réseau, sudoers exact.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 11:44:02 +0100
+
 secubox-security-posture (2.4.2-1~trixie1) trixie; urgency=medium
 
   * antirootkit (ref #3058) : la page était en ligne mais aveugle et bruyante. (1) Point de contrôle `ausearch` périmé :
