@@ -40,6 +40,7 @@ CONF_D = Path("/etc/unbound/unbound.conf.d")
 REGLAGES = Path("/etc/secubox/dns-listes.toml")
 MODES = ("compile", "direct")
 REESSAI_S = 3600          # un échec sur les MÊMES entrées n'est retenté qu'après ce délai (minuterie quotidienne, ou entrée nouvelle)
+CONTEXTE_DELAI_S = 900    # contexte seul changé (vue TV, réseau) : pas plus d'une compilation par délai (#3592)
 PASSES_MAX = 3            # une source déposée PENDANT la compilation est reprise (systemd ne relance pas une unité active)
 _CODE = (Path(listes.__file__), Path(__file__))     # une mise à jour du compilateur impose de recompiler
 
@@ -270,13 +271,23 @@ def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, 
         adoptes = _adopter(sources, conf_d)
         sig = _signature(sources, conf_d, mode)
         if not interrompu and precedent.get("signature") == sig:
-            if precedent.get("etat") in ("applique", "inchange"):
-                return _noter(etat, {**{k: precedent[k] for k in ("stats", "passes") if k in precedent},
+            if precedent.get("etat") in ("applique", "inchange", "differe"):
+                return _noter(etat, {**{k: precedent[k] for k in ("stats", "passes", "t_compile") if k in precedent},
                                      "etat": "inchange", "mode": mode, "adoptes": [], "signature": sig,
                                      "t": int(maintenant())})
             t_echec = precedent.get("t_echec")
             if precedent.get("etat") == "erreur" and isinstance(t_echec, int) and maintenant() - t_echec < REESSAI_S:
                 return _noter(etat, {**precedent, "t": int(maintenant())})       # mêmes entrées, même échec : pas avant REESSAI_S
+        # CONTEXTE SEUL (#3592) : TV Privacy réécrit sa vue toutes les quelques minutes ; chaque écriture relançait une
+        # compilation complète (5 à 8 min de CPU sur gk2). Sources, mode et code inchangés, dernière compilation récente :
+        # on diffère sans toucher la signature notée, la minuterie (secubox-dns-listes-contexte.timer) reprend plus tard.
+        anc = precedent.get("signature") or {}
+        t_compil = precedent.get("t_compile", precedent.get("t"))
+        if (not interrompu and precedent.get("etat") in ("applique", "inchange", "differe")
+                and all(anc.get(k) == sig.get(k) for k in ("mode", "code", "sources", "poses"))
+                and anc.get("contexte") != sig.get("contexte")
+                and isinstance(t_compil, int) and maintenant() - t_compil < CONTEXTE_DELAI_S):
+            return _noter(etat, {**precedent, "etat": "differe", "t": int(maintenant())})
         _noter(etat, {"etat": "en-cours", "mode": mode, "adoptes": adoptes, "t": int(maintenant())})
         applique, stats, nb, passes = False, {}, 0, 0
         while True:
@@ -301,4 +312,5 @@ def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, 
         s.audit("listes", f"mode={mode} sources={nb} emis={stats.get('emis', '-')} "
                           f"avant={stats.get('zones_chargees_avant', '-')} adoptes={','.join(adoptes) or '-'} passes={passes}")
     return _noter(etat, {"etat": "applique" if applique else "inchange", "mode": mode, "stats": stats, "adoptes": adoptes,
-                         "passes": passes, "signature": {**avant, "poses": _poses(conf_d)}, "t": int(maintenant())})
+                         "passes": passes, "signature": {**avant, "poses": _poses(conf_d)}, "t": int(maintenant()),
+                         "t_compile": int(maintenant())})
