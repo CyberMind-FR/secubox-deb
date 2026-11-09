@@ -37,4 +37,8 @@ override_dh_auto_test:
 # Activation choisie par le postinst : le service du premier démarrage oui,
 # la minuterie des mises à jour seulement quand le profil le demande.
 override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start
+	# --no-stop-on-upgrade (#3606) : le preinst généré arrêtait TOUTES nos unités avant une mise à jour, dont
+	# secubox-majauto.service, qui est justement le processus qui installe ce paquet : il se tuait en plein dpkg
+	# (paquets incohérents, unité en échec), et le kiosque restait arrêté après la mise à jour de 3 h.
+	# Le postinst relance lui-même ce qui doit l'être (kiosque, minuterie, agrégateur).
+	dh_installsystemd --no-enable --no-start --no-stop-on-upgrade
