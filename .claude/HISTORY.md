@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-09 — Status Live v2 jalon 1 sur gk2 ; profil mobile réellement appliqué ; majauto ne se tue plus
+
+- Status Live v2 : spécification et arbitrages (page publique statique, paquet `secubox-status` séparé, gk2 seul d'abord) fusionnés (PR #3596, closes #3595). Jalon 1 : `secubox-status` 0.1.0 (collecteur 60 s sur les caches + /proc, fraîcheur, SQLite WAL, projection publique statique, API gardée, AppArmor enforce, socket 0660 ; relu par relecteur-securite) déployé sur gk2 (PR #3608, closes #3605). Premier relevé gk2 : dégradé (CPU 99 %, systemd PID 1 à 70 % ; 23 API de modules muettes dont aggregator selon le prober ; cache des vhosts figé depuis le 5 septembre).
+- Profil mobile : modules installés mais désactivés masqués du menu (hub 1.12.50/1.12.51, auth 1.8.19, PRs #3598 #3600) ; installateur sans `secubox-webos` (en Conflicts de minimal), slipstream filtré par profil, Chromium et unités d'auto-install dans le live (PRs #3599 #3601 #3602) ; `secubox-mobile` 0.3.5 enfin publié sur apt. Validé en VM gk13, pas encore sur gk2 (ref #3597).
+- `profilectl scan` refusait sans LXC installé : modules.d vide, profil sans effet (auth arrêté, console refusée). `secubox-profiles` 0.28.4 (PR #3604), validé VM gk13 (ref #3603).
+- `secubox-majauto` se tuait en mettant à jour `secubox-premier-pas` (preinst dh_installsystemd) ; `premier-pas` 0.9.17 `--no-stop-on-upgrade` (PR #3607), validé par une vraie passe majauto sur secubox-rpi (RPi4), réparé à la main avant. closes #3606.
+- Supports : micro-SD RPi400 (image live bêta 1) et clé live amd64 flashées. Images RPi pas encore sur la release (contrôle des clés privées à faire).
+
 ## 2026-11-08 — Kiosque sur l'administration, Hall facultatif ; fermeture des issues déployées
 
 - PR #3591 : la racine ne renvoie au Hall que si `/etc/secubox/hall-accueil` existe (posé sur gk2) ; installateur en profil mobile + webos ; Dashboard (`secubox-hub` 1.12.49) obtient la session de console du kiosque. Validé en VM amd64 (ref #3554).
