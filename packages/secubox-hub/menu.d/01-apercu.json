@@ -1,5 +1,6 @@
 {
   "id": "apercu",
+  "unite": "aggregator",
   "name": "Vue d'ensemble",
   "category": "root",
   "icon": "🧭",

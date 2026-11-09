@@ -1,5 +1,6 @@
 {
   "id": "sbxid",
+  "unite": "aggregator",
   "name": "Identité SBX OS",
   "category": "auth",
   "icon": "🪪",
