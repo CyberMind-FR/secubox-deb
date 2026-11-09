@@ -1,3 +1,11 @@
+secubox-hub (1.12.50-1~trixie1) trixie; urgency=medium
+
+  * Menu et Vue d'ensemble : un module installé par un méta-paquet mais dont
+    le service (et le socket éventuel) est désactivé ou masqué, et qui ne
+    tourne pas, n'est plus affiché ni compté « à l'arrêt » (#3597).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 04:00:00 +0100
+
 secubox-hub (1.12.49-1~trixie1) trixie; urgency=medium
 
   * Dashboard : sur la console du kiosque (admin.localhost:9078), passer par

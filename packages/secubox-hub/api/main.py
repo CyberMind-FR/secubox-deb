@@ -138,6 +138,38 @@ def _espaces_du_menu(items: list) -> list:
     return sorted(sortie, key=lambda e: e.get("ordre", 99))
 
 
+_ETATS_DESACTIVES = {"disabled", "masked", "masked-runtime"}
+
+
+def unites_desactivees(brut: str) -> set:
+    """Noms (sans `secubox-` ni suffixe) dont AUCUNE unité .service/.socket n'est activée (#3597).
+
+    `brut` : sortie de `systemctl list-unit-files 'secubox-*' --no-legend`. Un module dont le
+    service ET le socket éventuel sont disabled/masked n'est pas attendu par la box : un méta-paquet
+    l'a installé, le profil ne l'a pas activé. Une unité absente de la liste n'est jamais déclarée
+    désactivée (aucune donnée inventée)."""
+    etats: dict = {}
+    for ligne in (brut or "").splitlines():
+        c = ligne.split()
+        if len(c) < 2 or not c[0].startswith("secubox-"):
+            continue
+        nom, _, suffixe = c[0][8:].rpartition(".")
+        if suffixe not in ("service", "socket") or not nom or "@" in nom:
+            continue
+        etats.setdefault(nom, []).append(c[1])
+    return {n for n, e in etats.items() if all(x in _ETATS_DESACTIVES for x in e)}
+
+
+def _unites_desactivees() -> set:
+    """Lecture unique par calcul du menu ; en cas d'échec, ensemble vide (le menu reste complet)."""
+    try:
+        r = subprocess.run(["systemctl", "list-unit-files", "secubox-*", "--no-legend", "--no-pager"],
+                           capture_output=True, text=True, timeout=5)
+        return unites_desactivees(r.stdout) if r.returncode == 0 else set()
+    except Exception:  # noqa: BLE001
+        return set()
+
+
 def _compute_menu_sync() -> dict:
     """Compute full menu (synchronous, called from thread).
 
@@ -149,6 +181,9 @@ def _compute_menu_sync() -> dict:
     # eteint ; le laisser dans la navbar promet une page qui rendra 503, et
     # laisse croire que la decision n'a pas pris.
     epingles_off = _epingles_off() | _menu_off_du_profil()
+    # #3597 : installé par un méta-paquet mais désactivé par le profil = pas au menu (point rouge
+    # trompeur, « à l'arrêt » dans la Vue d'ensemble). S'il tourne malgré tout, il reste visible.
+    desactivees = _unites_desactivees()
 
     # Filter to only installed modules and check active status
     installed_items = []
@@ -188,6 +223,8 @@ def _compute_menu_sync() -> dict:
             item_copy = item.copy()
             item_copy["installed"] = True
             item_copy["active"] = _check_module_active(item.get("unite") or module_www)   # #2905 : page servie par un autre module
+            if not item_copy["active"] and (item.get("unite") or module_www) in desactivees:
+                continue
             if item.get("autonome"):
                 # Sa page n'est pas sous l'administration (#3054 : /metanews/ rendait « Module Not Found ») : le lien du menu
                 # vise SON vhost, dérivé du domaine de la box (`hote` optionnel, sinon l'id) — jamais un domaine codé en dur.
