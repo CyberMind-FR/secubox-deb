@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+Source: secubox-status
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-status
+Architecture: all
+Depends: ${misc:Depends},
+ python3 (>= 3.11),
+ python3-fastapi,
+ python3-uvicorn,
+ secubox-core,
+ adduser,
+ systemd
+Recommends: secubox-health,
+ secubox-profiles
+Description: SecuBox Status Live v2 — supervision locale de l'appliance, lecture seule
+ Collecte toutes les 60 s l'état de l'appliance à partir des caches existants
+ (santé des vhosts et des modules, relevé de validation des profils) et de
+ /proc, sans lancer de commande. Une mesure absente ou périmée vaut
+ « inconnu », jamais une panne ni un succès. Historique SQLite (WAL),
+ projection publique écrite en fichier statique, API locale gardée sur
+ /run/secubox/status.sock. Jalon 1 de Status Live v2 (#3595).

@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox Status Live v2 — API locale, lecture seule (#3605). Ne collecte rien : relit ce que
+# secubox-status-collect a écrit. Compte dédié, aucune capacité, aucun réseau IP.
+[Unit]
+Description=SecuBox Status Live — API locale (lecture seule)
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-status
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/status
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStartPre=+/bin/rm -f /run/secubox/status.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/status.sock --workers 1 --log-level warning
+# Socket 0660 (groupe secubox, que nginx traverse) : rien d'autre n'est écrit par ce service.
+UMask=0117
+StateDirectory=secubox-status
+StateDirectoryMode=0750
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ReadWritePaths=/run/secubox
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+secubox-status (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Status Live v2, jalon 1 (#3605, spec #3595) : collecteur local (caches de
+    santé des vhosts et des modules, relevé des profils, /proc), relevé v2
+    avec fraîcheur des sources (inconnu jamais compté en panne ni en succès),
+    historique SQLite WAL, projection publique en fichier statique, API
+    locale gardée sur /run/secubox/status.sock. Compte dédié, unités durcies.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 11:00:00 +0100
