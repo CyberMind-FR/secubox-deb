@@ -461,6 +461,8 @@ bash "${SCRIPT_DIR}/apply-service-policy.sh" "${ROOTFS}"
 chroot "${ROOTFS}" apt-get install -y -q secubox-plymouth || err "secubox-plymouth non installé"
 # Le kiosque de la box installée a besoin de son serveur graphique : le disque reçoit le squashfs, pas ce que le live ajoute.
 chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends xorg xinit x11-xserver-utils || err "Xorg non installé"
+# #3597 : le kiosque (secubox-kiosk-launcher) lance Chromium ; sans lui il sortait en 127 au premier démarrage du système installé.
+chroot "${ROOTFS}" apt-get install -y -q chromium || err "Chromium non installé (kiosque)"
 # Le disque démarre aussi sur le dé : update-grub de l'installateur reprend cette ligne.
 sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' "${ROOTFS}/etc/default/grub"
 grep -q '^GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"' "${ROOTFS}/etc/default/grub" || err "GRUB sans splash"
@@ -960,6 +962,40 @@ bash "${SCRIPT_DIR}/apply-apt-source.sh" "${ROOTFS}" "${SUITE}"
 log "7/9 Creating SquashFS filesystem..."
 mkdir -p "${ISO_DIR}/live"
 
+# Create installer target (systemd) — AVANT mksquashfs (#3597) : écrites après, ces unités manquaient au live
+# et l'entrée « Headless Auto-Install » démarrait sans rien installer.
+if [[ $INCLUDE_INSTALLER -eq 1 ]]; then
+  mkdir -p "${ROOTFS}/etc/systemd/system"
+  cat > "${ROOTFS}/etc/systemd/system/secubox-installer.target" <<EOF
+[Unit]
+Description=SecuBox Auto-Installer Target
+Requires=basic.target
+After=basic.target network-online.target
+AllowIsolate=yes
+
+[Install]
+Also=secubox-autoinstall.service
+EOF
+
+  cat > "${ROOTFS}/etc/systemd/system/secubox-autoinstall.service" <<EOF
+[Unit]
+Description=SecuBox Automatic Installation
+After=network-online.target
+Wants=network-online.target
+ConditionKernelCommandLine=systemd.unit=secubox-installer.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/secubox-installer
+StandardInput=null
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=secubox-installer.target
+EOF
+fi
+
 mksquashfs "${ROOTFS}" "${ISO_DIR}/live/filesystem.squashfs" \
   -comp xz -b 1M -Xdict-size 100% \
   -e boot/grub -e boot/efi
@@ -1081,38 +1117,6 @@ menuentry "System Shutdown" {
 EOF
 fi
 
-# Create installer target (systemd)
-if [[ $INCLUDE_INSTALLER -eq 1 ]]; then
-  mkdir -p "${ROOTFS}/etc/systemd/system"
-  cat > "${ROOTFS}/etc/systemd/system/secubox-installer.target" <<EOF
-[Unit]
-Description=SecuBox Auto-Installer Target
-Requires=basic.target
-After=basic.target network-online.target
-AllowIsolate=yes
-
-[Install]
-Also=secubox-autoinstall.service
-EOF
-
-  cat > "${ROOTFS}/etc/systemd/system/secubox-autoinstall.service" <<EOF
-[Unit]
-Description=SecuBox Automatic Installation
-After=network-online.target
-Wants=network-online.target
-ConditionKernelCommandLine=systemd.unit=secubox-installer.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/secubox-installer
-StandardInput=null
-StandardOutput=journal+console
-StandardError=journal+console
-
-[Install]
-WantedBy=secubox-installer.target
-EOF
-fi
 
 # Build GRUB EFI image
 mkdir -p "${ISO_DIR}/EFI/BOOT"
