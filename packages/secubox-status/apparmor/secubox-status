@@ -9,7 +9,7 @@
 
 #include <tunables/global>
 
-profile secubox-status {
+profile secubox-status flags=(attach_disconnected) {
   #include <abstractions/base>
   #include <abstractions/python>
   #include <abstractions/nameservice>
@@ -30,6 +30,18 @@ profile secubox-status {
 
   # Configuration ; jamais les secrets.
   /etc/secubox/status.toml r,
+  # Gardes de l'API (require_lecture / require_jwt de secubox_core) : secret de signature des sessions dans
+  # secubox.conf, comptes, réglages d'auth, sessions, journal de délégation — même liste que secubox-autoload-api.
+  # Sans elles, toute route gardée rendait 500 (« jwt_secret is not configured ») sur gk2 (#3623).
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/users.json r,
+  /etc/secubox/auth.toml r,
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/sessions.json r,
+  /var/log/secubox/delegation.log w,
+  /dev/null rw,
+  /proc/sys/net/core/somaxconn r,
   deny /etc/secubox/secrets/** rwklx,
 
   # Sources (caches d'autres modules), en lecture.
