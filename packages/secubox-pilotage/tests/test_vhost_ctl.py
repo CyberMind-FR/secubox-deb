@@ -267,6 +267,30 @@ def test_synchroniser_depuis_le_plan(banc):
     assert json.loads((banc.r / "www-stdin.log").read_text()) == {"en_usage": [{"paquet": "secubox-system", "version": "1.4.0"}]}
 
 
+def test_synchroniser_retire_une_box_du_registre_sans_fichier_nginx(banc):
+    """#3632 : admin.gk4 restait au registre (nom exclu du relais) une fois son fichier nginx disparu."""
+    (banc.r / "data/haproxy/certs/*.gk6.secubox.in.pem").write_text("joker")
+    assert banc.ctl("poser", "gk6", entree=PAGES).returncode == 0
+    banc.conf("gk6").unlink()                                          # fichier nginx disparu, entrée du registre restée
+    assert "admin.gk6.secubox.in" in registre(banc)["domaines"]
+    (banc.r / "var/lib/secubox/pilotage/vhosts.json").write_text(json.dumps({"boxes": []}))
+    r = banc.ctl("synchroniser")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "gk6" in json.loads(r.stdout)["retires"]
+    assert "admin.gk6.secubox.in" not in registre(banc)["domaines"]
+
+
+def test_synchroniser_garde_une_box_du_registre_toujours_au_plan(banc):
+    (banc.r / "data/haproxy/certs/*.gk6.secubox.in.pem").write_text("joker")
+    assert banc.ctl("poser", "gk6", entree=PAGES).returncode == 0
+    plan = {"boxes": [{"box": "gk6", "pages": [{"paquet": "secubox-system", "version": "1.4.0"}]}]}
+    (banc.r / "var/lib/secubox/pilotage/vhosts.json").write_text(json.dumps(plan))
+    r = banc.ctl("synchroniser")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.loads(r.stdout)["retires"] == []
+    assert "admin.gk6.secubox.in" in registre(banc)["domaines"]
+
+
 def test_plan_lien_ou_invalide_refuse(banc, tmp_path):
     f = banc.r / "var/lib/secubox/pilotage/vhosts.json"
     ailleurs = tmp_path / "ailleurs.json"

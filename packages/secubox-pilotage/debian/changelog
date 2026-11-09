@@ -1,3 +1,11 @@
+secubox-pilotage (0.6.20-1~trixie1) trixie; urgency=medium
+
+  * secubox-pilotage-vhost synchroniser : retire aussi les box sorties du plan qui ne sont plus
+    qu'au registre (fichier nginx disparu) ; leur nom admin.<box> est rendu au relais au lieu de
+    rester exclu (421) pour toujours (admin.gk3, admin.gk4 ; ref #3632).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 17:12:32 +0100
+
 secubox-pilotage (0.6.19-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images
