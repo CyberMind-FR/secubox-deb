@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+    purge)
+        # Historique et configuration semée (pas un conffile) ; le compte dédié est retiré s'il n'a plus de processus.
+        rm -rf /var/lib/secubox-status
+        rm -f /etc/secubox/status.toml /etc/apparmor.d/secubox-status
+        if id -u secubox-status >/dev/null 2>&1; then
+            deluser --system secubox-status >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
