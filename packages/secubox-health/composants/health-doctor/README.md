@@ -20,6 +20,11 @@ Socket Unix : `/run/secubox/health-doctor.sock`, `/run/secubox/metrics.sock`.
 - `secubox-health-doctor-runner.service` : SecuBox health-doctor — periodic check pass (#212) (utilisateur `secubox`), lance `python3`
 - `secubox-health-doctor-runner.timer` : SecuBox health-doctor — run vital-services checks every minute (#212)
 - `secubox-health-doctor.service` : SecuBox vital-services health monitor (#212) (utilisateur `secubox`), lance `python3`
+- `secubox-reparer.path` / `secubox-reparer.service` (root, #3628) : draine `/run/secubox/health-reparer/*.demande`
+  par `secubox-reparerctl process-ops`. N'agit que sur une unité `secubox-<id>.service` chargée **et** en échec :
+  dpkg interrompu terminé (`dpkg --configure -a`), `reset-failed`, démarrage, relecture. État :
+  `/var/lib/secubox-health-reparer/reparer.json` ; audit : `/var/log/secubox/audit.log` (`sante_reparation`) ;
+  journal : `/var/log/secubox/reparer.log`.
 
 ## API
 
@@ -31,6 +36,8 @@ Socket Unix : `/run/secubox/health-doctor.sock`, `/run/secubox/metrics.sock`.
 | `POST` | `/run` | require_jwt |
 | `POST` | `/waf-selftest/run` | require_jwt |
 | `GET` | `/registered` | require_lecture |
+| `POST` | `/reparer/{module}` | require_jwt (202, dépose la demande) |
+| `GET` | `/reparer` | require_jwt (suivi par module) |
 
 Routes relevées dans le code source, relatives au montage du module. « aucune » : pas de garde déclarée à cet endroit de la route.
 

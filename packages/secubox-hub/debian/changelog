@@ -1,3 +1,11 @@
+secubox-hub (1.12.53-1~trixie1) trixie; urgency=medium
+
+  * Santé : bouton « Réparer » sur un module en panne, avec une session administrateur ;
+    suit la réparation et affiche ses étapes (ref #3628). Côté serveur : secubox-health 1.4.0
+    (sans lui, la demande est refusée et la page le dit).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:57:00 +0100
+
 secubox-hub (1.12.52-1~trixie1) trixie; urgency=medium
 
   * Espaces : status (Status Live) dans Surveillance (#3623).

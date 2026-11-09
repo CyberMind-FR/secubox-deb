@@ -1,3 +1,14 @@
+secubox-health (1.4.0-1~trixie1) trixie; urgency=medium
+
+  * Bouton « Réparer » de la page Santé (ref #3628) : POST /api/v1/health-doctor/reparer/{id}
+    (require_jwt) dépose une demande, secubox-reparer.path/.service (root) la draine par
+    secubox-reparerctl : unité secubox-<id>.service chargée ET en échec seulement, dpkg
+    interrompu terminé, reset-failed, démarrage, relecture ; audit.log (O_NOFOLLOW).
+    Suivi : GET /api/v1/health-doctor/reparer.
+  * postinst : la boucle des scripts des composants ne tourne plus deux fois.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:57:00 +0100
+
 secubox-health (1.3.4-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

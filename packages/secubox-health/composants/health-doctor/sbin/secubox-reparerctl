@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: secubox-reparerctl — bouton « Réparer » de la page Santé (#3628)
+# CyberMind — https://cybermind.fr
+#
+# POURQUOI UN CTL ROOT. L'API health-doctor tourne en `secubox` (dans l'agrégateur) :
+# elle ne peut ni relancer une unité ni terminer un dpkg interrompu. Elle DÉPOSE une
+# demande dans /run/secubox/health-reparer ; l'unité root secubox-reparer.path la
+# voit et lance ce script (secubox-reparer.service). Ni sudo ni polkit.
+#
+# LISTE FERMÉE DE FAIT. Une demande ne vaut que pour une unité `secubox-<id>.service`
+# CHARGÉE et À L'ÉTAT `failed`. Rien d'autre n'est relancé : ni un service sain, ni
+# une unité hors SecuBox, quel que soit le contenu de la demande.
+#
+# Étapes : (1) une configuration dpkg interrompue est terminée (cas de la mise à jour
+# automatique coupée en plein dpkg, #3606) ; (2) reset-failed ; (3) démarrage sans
+# attendre la fin (une tâche oneshot comme majauto peut durer) ; (4) relecture.
+# Chaque réparation est écrite dans /var/log/secubox/audit.log.
+#
+# Verbes :
+#   reparer <id> [acteur]   répare une unité en échec, écrit l'état et l'audit
+#   process-ops             draine le dossier de demandes (un fichier = une demande)
+#   status                  état JSON des dernières réparations
+
+set -uo pipefail
+
+readonly VERSION="1.0.0"
+readonly SPOOL="${SECUBOX_REPARER_SPOOL:-/run/secubox/health-reparer}"
+readonly ETAT="${SECUBOX_REPARER_ETAT:-/var/lib/secubox-health-reparer/reparer.json}"
+readonly JOURNAL="${SECUBOX_REPARER_JOURNAL:-/var/log/secubox/reparer.log}"
+readonly AUDIT="${SECUBOX_AUDIT_LOG:-/var/log/secubox/audit.log}"
+readonly VERROU="${SECUBOX_REPARER_VERROU:-/run/lock/secubox-reparer.lock}"
+readonly DPKG_UPDATES="${SECUBOX_REPARER_DPKG_UPDATES:-/var/lib/dpkg/updates}"
+readonly SYSTEMCTL="${SECUBOX_REPARER_SYSTEMCTL:-systemctl}"
+readonly DPKG="${SECUBOX_REPARER_DPKG:-dpkg}"
+# Attente de l'état après démarrage, et pas de relecture (s).
+readonly ATTENTE_S="${SECUBOX_REPARER_ATTENTE_S:-20}"
+readonly PAS_S="${SECUBOX_REPARER_PAS_S:-1}"
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+
+_journal() { mkdir -p "$(dirname "$JOURNAL")" 2>/dev/null; printf '%s %s\n' "$(date -Is)" "$*" >> "$JOURNAL" 2>/dev/null || true; }
+
+# Identifiant de module : celui des unités secubox-<id>.service (minuscules, chiffres, tirets).
+_id_ok() { printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9-]{0,62}$'; }
+
+# Acteur : le `sub` du jeton, réduit à un jeu de caractères sûr (il finit dans l'audit).
+_acteur() { local a; a=$(printf '%s' "${1:-}" | tr -cd 'A-Za-z0-9@._:-' | cut -c1-64); printf '%s' "${a:-inconnu}"; }
+
+_prop() { "$SYSTEMCTL" show -p "$2" --value -- "$1" 2>/dev/null | head -n 1; }
+
+# État + audit en une passe Python : écriture ATOMIQUE de l'état (lisible par l'API, autre
+# compte) et ligne d'audit en ajout seul, sans suivre de lien symbolique.
+_consigne() {   # module acteur ok(true|false) phase message debut etapes_texte
+    python3 - "$ETAT" "$AUDIT" "$@" <<'PY'
+import json, os, sys, tempfile, time
+etat_p, audit_p, module, acteur, ok, phase, message, debut, etapes = sys.argv[1:10]
+entree = {"module": module, "acteur": acteur, "ok": ok == "true", "phase": phase,
+          "message": message, "debut": int(debut or 0), "fin": int(time.time()),
+          "etapes": [e for e in etapes.split("\n") if e]}
+os.makedirs(os.path.dirname(etat_p), exist_ok=True)
+try:
+    with open(etat_p, encoding="utf-8") as f:
+        etat = json.load(f)
+    if not isinstance(etat, dict) or not isinstance(etat.get("modules"), dict):
+        raise ValueError
+except (OSError, ValueError):
+    etat = {"modules": {}}
+etat["modules"][module] = entree
+# Borne : les 50 dernières réparations suffisent au suivi de la page.
+garde = sorted(etat["modules"].items(), key=lambda kv: kv[1].get("fin", 0))[-50:]
+etat = {"modules": dict(garde), "maj": entree["fin"]}
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(etat_p), prefix=".reparer-")
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    json.dump(etat, f, ensure_ascii=False)
+os.chmod(tmp, 0o644)
+os.replace(tmp, etat_p)
+if phase == "fini":
+    ligne = json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": "sante_reparation",
+                        "module": module, "unite": f"secubox-{module}.service", "acteur": acteur,
+                        "ok": entree["ok"], "message": message, "etapes": entree["etapes"]}, ensure_ascii=True)
+    try:
+        os.makedirs(os.path.dirname(audit_p), exist_ok=True)
+        fd = os.open(audit_p, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
+            f.write(ligne + "\n")
+    except OSError as e:
+        print(f"audit non écrit ({e.__class__.__name__}) : {ligne}", file=sys.stderr)
+PY
+}
+
+_json_msg() { python3 -c 'import json,sys; print(json.dumps({"ok": sys.argv[1] == "true", "module": sys.argv[2], "message": sys.argv[3]}, ensure_ascii=False))' "$@"; }
+
+# dpkg interrompu : fichiers en attente dans updates/ ou paquets à moitié configurés.
+_dpkg_interrompu() {
+    [ -n "$(ls -A -- "$DPKG_UPDATES" 2>/dev/null)" ] && return 0
+    [ -n "$("$DPKG" --audit 2>/dev/null)" ]
+}
+
+# Termine la configuration. Le verrou peut être tenu (apt en cours) : on attend qu'il se
+# libère, sans jamais tuer dpkg ni lui fixer de délai (une configuration coupée est pire).
+_dpkg_terminer() {
+    local essai rc out
+    for essai in $(seq 1 60); do
+        out=$("$DPKG" --force-confold --force-confdef --configure -a 2>&1); rc=$?
+        printf '%s\n' "$out" >> "$JOURNAL" 2>/dev/null || true
+        [ $rc -eq 0 ] && return 0
+        printf '%s' "$out" | grep -qi 'lock' || return $rc
+        _journal "dpkg occupé (essai $essai/60), nouvelle tentative dans 10 s"
+        sleep 10
+    done
+    return 1
+}
+
+cmd_reparer() {
+    local mod="${1:-}" acteur unite load avant debut etapes="" etat_fin sub result t
+    acteur=$(_acteur "${2:-}")
+    if ! _id_ok "$mod"; then
+        _json_msg false "" "identifiant de module invalide"; return 2
+    fi
+    unite="secubox-$mod.service"
+    debut=$(date +%s)
+    load=$(_prop "$unite" LoadState)
+    if [ "$load" != "loaded" ]; then
+        _consigne "$mod" "$acteur" false fini "unité $unite introuvable : rien à réparer" "$debut" ""
+        _journal "$mod : refus, unité non chargée ($load)"
+        _json_msg false "$mod" "unité introuvable"; return 1
+    fi
+    avant=$(_prop "$unite" ActiveState)
+    if [ "$avant" != "failed" ]; then
+        _consigne "$mod" "$acteur" false fini "$unite n'est pas en panne ($avant) : rien n'a été relancé" "$debut" ""
+        _journal "$mod : refus, état $avant"
+        _json_msg false "$mod" "pas en panne ($avant)"; return 1
+    fi
+    _consigne "$mod" "$acteur" false en_cours "réparation en cours" "$debut" ""
+    _journal "$mod : réparation demandée par $acteur"
+
+    if _dpkg_interrompu; then
+        _consigne "$mod" "$acteur" false en_cours "configuration dpkg interrompue : reprise" "$debut" "dpkg : configuration interrompue détectée"
+        if _dpkg_terminer; then
+            etapes+="dpkg : configuration terminée"$'\n'
+        else
+            etapes+="dpkg : configuration en échec (voir $JOURNAL)"$'\n'
+            _consigne "$mod" "$acteur" false fini "dpkg n'a pas pu terminer sa configuration ; service non relancé" "$debut" "$etapes"
+            _journal "$mod : dpkg --configure -a en échec"
+            _json_msg false "$mod" "dpkg en échec"; return 1
+        fi
+    fi
+
+    "$SYSTEMCTL" reset-failed -- "$unite" 2>>"$JOURNAL"
+    etapes+="échec effacé (reset-failed)"$'\n'
+    if ! "$SYSTEMCTL" start --no-block -- "$unite" 2>>"$JOURNAL"; then
+        etapes+="démarrage refusé par systemd"$'\n'
+        _consigne "$mod" "$acteur" false fini "systemd a refusé de démarrer $unite" "$debut" "$etapes"
+        _json_msg false "$mod" "démarrage refusé"; return 1
+    fi
+    etapes+="démarrage lancé"$'\n'
+
+    # Relecture : active → réparé ; inactive + Result=success → tâche ponctuelle terminée ;
+    # failed → encore en panne ; activating au bout du délai → tâche longue en cours (#oneshot).
+    t=0
+    while :; do
+        etat_fin=$(_prop "$unite" ActiveState); sub=$(_prop "$unite" SubState); result=$(_prop "$unite" Result)
+        case "$etat_fin" in
+            active)   _consigne "$mod" "$acteur" true fini "$unite relancé ($sub)" "$debut" "$etapes"
+                      _journal "$mod : réparé ($etat_fin/$sub)"; _json_msg true "$mod" "relancé"; return 0 ;;
+            failed)   _consigne "$mod" "$acteur" false fini "$unite retombe en panne ($result) : voir journalctl -u $unite" "$debut" "$etapes"
+                      _journal "$mod : retombe en panne ($result)"; _json_msg false "$mod" "retombe en panne"; return 1 ;;
+            inactive) if [ "$result" = "success" ] && [ "$t" -gt 0 ]; then
+                          _consigne "$mod" "$acteur" true fini "$unite a terminé sa tâche sans erreur" "$debut" "$etapes"
+                          _journal "$mod : tâche terminée"; _json_msg true "$mod" "tâche terminée"; return 0
+                      fi ;;
+        esac
+        if [ "$t" -ge "$ATTENTE_S" ]; then
+            if [ "$etat_fin" = "activating" ]; then
+                _consigne "$mod" "$acteur" true fini "$unite relancé : tâche en cours d'exécution" "$debut" "$etapes"
+                _journal "$mod : tâche en cours"; _json_msg true "$mod" "tâche en cours"; return 0
+            fi
+            _consigne "$mod" "$acteur" false fini "$unite : état $etat_fin/$sub après ${ATTENTE_S} s" "$debut" "$etapes"
+            _journal "$mod : état incertain $etat_fin/$sub"; _json_msg false "$mod" "état incertain"; return 1
+        fi
+        sleep "$PAS_S"; t=$((t + PAS_S))
+    done
+}
+
+# Une demande = un fichier « reparer <id> <acteur> ». Retirée AVANT d'agir (une demande
+# qui plante ne tourne pas en boucle) ; un seul passage à la fois.
+cmd_process_ops() {
+    mkdir -p "$(dirname "$VERROU")"
+    exec 9>"$VERROU"
+    flock -n 9 || { echo "reparerctl: un passage est déjà en cours" >&2; return 0; }
+    local f ligne verbe mod acteur fait=0
+    for f in "$SPOOL"/*.demande; do
+        [ -e "$f" ] || continue
+        if [ -L "$f" ] || [ ! -f "$f" ]; then rm -f -- "$f"; continue; fi
+        ligne=$(head -c 512 -- "$f" 2>/dev/null | head -n 1 | tr -cd 'A-Za-z0-9@._: -')
+        rm -f -- "$f"
+        read -r verbe mod acteur _ <<< "$ligne"
+        case "${verbe:-}" in
+            reparer) cmd_reparer "${mod:-}" "${acteur:-}" >/dev/null; fait=$((fait + 1)) ;;
+            *)       _journal "demande ignorée : ${verbe:-vide}" ;;
+        esac
+    done
+    printf '{"ok":true,"traitees":%s}\n' "$fait"
+}
+
+cmd_help() {
+    cat <<'EOF'
+secubox-reparerctl — bouton « Réparer » de la page Santé (#3628)
+
+  reparer <id> [acteur]  répare secubox-<id>.service s'il est en échec (dpkg, reset-failed, démarrage)
+  process-ops            draine /run/secubox/health-reparer/*.demande (unité .path, root)
+  status                 état JSON des dernières réparations
+EOF
+}
+
+case "${1:-help}" in
+    reparer)     shift; cmd_reparer "$@" ;;
+    process-ops) cmd_process_ops ;;
+    status)      cat "$ETAT" 2>/dev/null || echo '{"modules":{}}' ;;
+    version)     printf '{"ok":true,"version":"%s"}\n' "$VERSION" ;;
+    *)           cmd_help ;;
+esac
