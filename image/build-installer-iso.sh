@@ -970,6 +970,8 @@ if [[ $INCLUDE_INSTALLER -eq 1 ]]; then
 [Unit]
 Description=SecuBox Auto-Installer Target
 Requires=basic.target
+# Réseau et SSH (#3597) : une installation bloquée reste diagnosticable à distance (la cible isolée n'a sinon rien).
+Wants=systemd-networkd.service ssh.service secubox-autoinstall.service
 After=basic.target network-online.target
 AllowIsolate=yes
 
@@ -986,6 +988,8 @@ ConditionKernelCommandLine=systemd.unit=secubox-installer.target
 
 [Service]
 Type=oneshot
+# L'écran de démarrage cachait toute la progression (console figée sur la barre pleine).
+ExecStartPre=-/usr/bin/plymouth quit
 ExecStart=/usr/bin/secubox-installer
 StandardInput=null
 StandardOutput=journal+console
@@ -994,6 +998,11 @@ StandardError=journal+console
 [Install]
 WantedBy=secubox-installer.target
 EOF
+  # ACTIVATION (#3597) : écrite mais jamais activée, l'unité ne partait pas — la cible démarrait vide (VM : disque
+  # intact après 30 min). Lien posé ET vérifié : sans lui, image non produite.
+  chroot "${ROOTFS}" systemctl enable secubox-autoinstall.service 2>/dev/null || true
+  [[ -L "${ROOTFS}/etc/systemd/system/secubox-installer.target.wants/secubox-autoinstall.service" ]] \
+    || err "secubox-autoinstall.service non activée dans le live — l'installation automatique ne partirait pas"
 fi
 
 mksquashfs "${ROOTFS}" "${ISO_DIR}/live/filesystem.squashfs" \
