@@ -7,6 +7,8 @@ import json
 import os
 import stat
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 CTL = Path(__file__).resolve().parents[1] / "sbin" / "secubox-reparerctl"
@@ -57,7 +59,8 @@ def _env(tmp: Path) -> dict:
         "SECUBOX_REPARER_ETAT": str(tmp / "etat" / "reparer.json"),
         "SECUBOX_REPARER_JOURNAL": str(tmp / "reparer.log"),
         "SECUBOX_AUDIT_LOG": str(tmp / "audit.log"),
-        "SECUBOX_REPARER_VERROU": str(tmp / "verrou"),
+        "SECUBOX_REPARER_VERROU": str(tmp / "run" / "verrou"),
+        "SECUBOX_REPARER_DPKG_VERROU": str(tmp / "lock-frontend"),
         "SECUBOX_REPARER_DPKG_UPDATES": str(tmp / "updates"),
         "SECUBOX_REPARER_ATTENTE_S": "2",
         "SECUBOX_REPARER_PAS_S": "1",
@@ -72,7 +75,7 @@ def _unite(tmp: Path, nom: str, etat: str, apres: str | None = None) -> None:
 
 
 def _run(env, *args):
-    return subprocess.run(["bash", str(CTL), *args], env=env, capture_output=True, text=True, timeout=60)
+    return subprocess.run([sys.executable, "-I", str(CTL), *args], env=env, capture_output=True, text=True, timeout=60)
 
 
 def _etat(tmp: Path) -> dict:
@@ -176,18 +179,72 @@ def test_process_ops_draine_et_assainit(tmp_path):
     env = _env(tmp_path)
     _unite(tmp_path, "majauto", "loaded failed failed exit-code", apres="loaded active running success")
     spool = tmp_path / "spool"
-    (spool / "1-majauto.demande").write_text("reparer majauto gk2;rm$(id)\n")
-    (spool / "2-x.demande").write_text("shell rm -rf /\n")
+    (spool / "1-majauto.demande").write_text("reparer majauto gk2\n")
+    (spool / "2-inj.demande").write_text("reparer majauto gk2;rm$(id)\n")
+    (spool / "3-x.demande").write_text("shell rm -rf /\n")
     cible = tmp_path / "cible"
     cible.write_text("reparer majauto lien\n")
-    (spool / "3-lien.demande").symlink_to(cible)
+    (spool / "4-lien.demande").symlink_to(cible)
+    os.mkfifo(spool / "5-fifo.demande")                  # ne doit rien figer
+    (spool / "6-dossier.demande").mkdir()
+    (spool / "7-autre.txt").write_text("reparer majauto autre\n")
+    vieux = spool / ".vieux.tmp"
+    vieux.write_text("x")
+    os.utime(vieux, (0, 0))
     r = _run(env, "process-ops")
-    assert r.returncode == 0
+    assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout)["traitees"] == 1
-    assert not list(spool.iterdir())
-    assert cible.exists()                          # le lien est retiré, sa cible jamais lue ni touchée
+    assert not list(spool.iterdir())                     # tout est retiré : le .path ne boucle pas
+    assert cible.read_text() == "reparer majauto lien\n"
     a = _audit(tmp_path)
-    assert len(a) == 1 and a[0]["acteur"] == "gk2rmid"
+    assert len(a) == 1 and a[0]["acteur"] == "gk2"
+    jr = (tmp_path / "reparer.log").read_text()
+    assert "rm -rf" not in jr and "$(id)" not in jr     # le contenu d'une demande n'est jamais recopié
+
+
+def test_process_ops_attend_une_demande_en_cours_d_ecriture(tmp_path):
+    env = _env(tmp_path)
+    _unite(tmp_path, "majauto", "loaded failed failed exit-code", apres="loaded active running success")
+    spool = tmp_path / "spool"
+    (spool / ".1-majauto.tmp").write_text("reparer majauto gk2\n")
+    p = subprocess.Popen([sys.executable, "-I", str(CTL), "process-ops"], env=env, stdout=subprocess.PIPE, text=True)
+    time.sleep(0.6)
+    os.rename(spool / ".1-majauto.tmp", spool / "1-majauto.demande")
+    out, _ = p.communicate(timeout=60)
+    assert json.loads(out)["traitees"] == 1
+
+
+def test_unites_refusees(tmp_path):
+    env = _env(tmp_path)
+    for nom in ("lan-dhcp", "netmodes-retour-boot", "mobile-kiosque"):
+        _unite(tmp_path, nom, "loaded failed failed exit-code", apres="loaded active running success")
+        assert _run(env, "reparer", nom, "gk2").returncode == 1
+    assert "start" not in _appels(tmp_path)
+
+
+def test_dpkg_occupe_repond_sans_attendre(tmp_path):
+    env = _env(tmp_path)
+    (tmp_path / "faux" / "dpkg-casse").write_text("")
+    verrou = tmp_path / "lock-frontend"
+    verrou.write_text("")
+    _unite(tmp_path, "majauto", "loaded failed failed exit-code", apres="loaded active running success")
+    # lockf est un verrou de processus : un fils le tient, comme apt le ferait.
+    tient = subprocess.Popen([sys.executable, "-c",
+        "import fcntl,sys,time; f=open(sys.argv[1],'r+'); fcntl.lockf(f, fcntl.LOCK_EX); print('ok', flush=True); time.sleep(30)",
+        str(verrou)], stdout=subprocess.PIPE, text=True)
+    try:
+        assert tient.stdout.readline().strip() == "ok"
+        r = _run(env, "reparer", "majauto", "gk2")
+    finally:
+        tient.kill()
+    assert r.returncode == 1
+    assert "réessayer" in _etat(tmp_path)["modules"]["majauto"]["message"]
+    assert "--configure" not in _appels(tmp_path)
+
+
+def test_identifiant_multiligne_refuse(tmp_path):
+    env = _env(tmp_path)
+    assert _run(env, "reparer", "ok\nautre", "gk2").returncode == 2
 
 
 def test_audit_ne_suit_pas_un_lien(tmp_path):
@@ -198,3 +255,18 @@ def test_audit_ne_suit_pas_un_lien(tmp_path):
     _unite(tmp_path, "majauto", "loaded failed failed exit-code", apres="loaded active running success")
     _run(env, "reparer", "majauto", "gk2")
     assert victime.read_text() == "intact\n"
+
+
+def test_unite_root_et_son_exception():
+    base = CTL.parents[1]
+    u = (base / "systemd" / "secubox-reparer.service").read_text()
+    for opt in ("NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectControlGroups=yes", "LockPersonality=yes",
+                "RuntimeDirectory=secubox-reparer", "StateDirectory=secubox-health-reparer",
+                "ExecStart=/usr/sbin/secubox-reparerctl process-ops"):
+        assert opt in u, opt
+    actives = [ligne for ligne in u.splitlines() if ligne and not ligne.startswith("#")]
+    assert not [ligne for ligne in actives if ligne.startswith("User=") or "sudo" in ligne]
+    assert "DirectoryNotEmpty=/run/secubox/health-reparer" in (base / "systemd" / "secubox-reparer.path").read_text()
+    assert "d /run/secubox/health-reparer 0770 root secubox" in (base / "systemd" / "secubox-reparer.tmpfiles").read_text()
+    regles = (Path(__file__).resolve().parents[5] / ".claude" / "RULES-CODE.md").read_text()
+    assert "`secubox-reparer.service`" in regles and "test_unite_root_et_son_exception" in regles

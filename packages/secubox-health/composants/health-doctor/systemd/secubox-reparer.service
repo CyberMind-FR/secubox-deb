@@ -8,9 +8,24 @@ Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3628
 
 [Service]
 Type=oneshot
-# Root : reset-failed et démarrage d'une unité, et reprise d'un dpkg interrompu. La liste est
-# fermée par le ctl (unité secubox-* chargée ET en échec). Aucun délai : un dpkg coupé est pire.
+# Root, sans sudo : reset-failed et démarrage d'une unité, reprise d'un dpkg interrompu. Liste fermée
+# par le ctl (unité secubox-* chargée ET en échec, hors refus). Exception § 10 de RULES-CODE.md :
+# `dpkg --configure -a` lance les postinst des paquets, qui écrivent partout, chargent parfois un
+# module ou posent un bit setuid — d'où l'absence de ProtectSystem, ProtectKernelModules,
+# RestrictSUIDSGID, et UMask=0022 (un postinst attend le masque par défaut). Le reste du socle tient.
+ExecStart=/usr/sbin/secubox-reparerctl process-ops
+# Aucun délai sur le dpkg ; la lecture des demandes, elle, ne bloque jamais (O_NONBLOCK, fichiers ordinaires).
 TimeoutStartSec=infinity
 StateDirectory=secubox-health-reparer
 StateDirectoryMode=0755
-ExecStart=/usr/sbin/secubox-reparerctl process-ops
+RuntimeDirectory=secubox-reparer
+RuntimeDirectoryMode=0700
+UMask=0022
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native

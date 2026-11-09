@@ -207,7 +207,7 @@
                 }
                 fini(false, 'Pas de réponse du service de réparation après 3 min : l’unité secubox-reparer.path est-elle active ?');
             } catch (e) {
-                fini(false, e.statut === 401 || e.statut === 403 ? 'Session administrateur requise : connectez-vous pour réparer.' : 'Demande refusée (' + e.message + ').');
+                fini(false, e.statut === 401 || e.statut === 403 ? 'Session administrateur requise : connectez-vous pour réparer.' : e.statut === 409 ? 'Une réparation de ce module est déjà en cours.' : 'Demande refusée (' + e.message + ').');
             }
         }
         async function copie(txt) {

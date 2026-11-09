@@ -1,226 +1,353 @@
-#!/usr/bin/env bash
+#!/usr/bin/python3 -I
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-#
-# SecuBox-Deb :: secubox-reparerctl — bouton « Réparer » de la page Santé (#3628)
-# CyberMind — https://cybermind.fr
-#
-# POURQUOI UN CTL ROOT. L'API health-doctor tourne en `secubox` (dans l'agrégateur) :
-# elle ne peut ni relancer une unité ni terminer un dpkg interrompu. Elle DÉPOSE une
-# demande dans /run/secubox/health-reparer ; l'unité root secubox-reparer.path la
-# voit et lance ce script (secubox-reparer.service). Ni sudo ni polkit.
-#
-# LISTE FERMÉE DE FAIT. Une demande ne vaut que pour une unité `secubox-<id>.service`
-# CHARGÉE et À L'ÉTAT `failed`. Rien d'autre n'est relancé : ni un service sain, ni
-# une unité hors SecuBox, quel que soit le contenu de la demande.
-#
-# Étapes : (1) une configuration dpkg interrompue est terminée (cas de la mise à jour
-# automatique coupée en plein dpkg, #3606) ; (2) reset-failed ; (3) démarrage sans
-# attendre la fin (une tâche oneshot comme majauto peut durer) ; (4) relecture.
-# Chaque réparation est écrite dans /var/log/secubox/audit.log.
-#
-# Verbes :
-#   reparer <id> [acteur]   répare une unité en échec, écrit l'état et l'audit
-#   process-ops             draine le dossier de demandes (un fichier = une demande)
-#   status                  état JSON des dernières réparations
+"""SecuBox-Deb :: secubox-reparerctl — bouton « Réparer » de la page Santé (#3628).
 
-set -uo pipefail
+POURQUOI UN CTL ROOT. L'API health-doctor tourne en `secubox` (dans l'agrégateur) : elle ne peut
+ni relancer une unité ni terminer un dpkg interrompu. Elle DÉPOSE une demande dans
+/run/secubox/health-reparer ; l'unité root secubox-reparer.path la voit et lance ce script
+(secubox-reparer.service). Ni sudo ni polkit.
 
-readonly VERSION="1.0.0"
-readonly SPOOL="${SECUBOX_REPARER_SPOOL:-/run/secubox/health-reparer}"
-readonly ETAT="${SECUBOX_REPARER_ETAT:-/var/lib/secubox-health-reparer/reparer.json}"
-readonly JOURNAL="${SECUBOX_REPARER_JOURNAL:-/var/log/secubox/reparer.log}"
-readonly AUDIT="${SECUBOX_AUDIT_LOG:-/var/log/secubox/audit.log}"
-readonly VERROU="${SECUBOX_REPARER_VERROU:-/run/lock/secubox-reparer.lock}"
-readonly DPKG_UPDATES="${SECUBOX_REPARER_DPKG_UPDATES:-/var/lib/dpkg/updates}"
-readonly SYSTEMCTL="${SECUBOX_REPARER_SYSTEMCTL:-systemctl}"
-readonly DPKG="${SECUBOX_REPARER_DPKG:-dpkg}"
-# Attente de l'état après démarrage, et pas de relecture (s).
-readonly ATTENTE_S="${SECUBOX_REPARER_ATTENTE_S:-20}"
-readonly PAS_S="${SECUBOX_REPARER_PAS_S:-1}"
-export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+ENTRÉE NON FIABLE. Le dossier de demandes est inscriptible par le groupe secubox : chaque entrée
+est ouverte PAR DESCRIPTEUR relatif au dossier (lui-même ouvert sans suivre de lien), sans suivre
+de lien, sans bloquer (un FIFO ne fige rien), fstat exige un fichier ordinaire, 512 octets au
+plus. Le contenu n'est jamais recopié dans un journal : seulement le nom ou « invalide ».
 
-_journal() { mkdir -p "$(dirname "$JOURNAL")" 2>/dev/null; printf '%s %s\n' "$(date -Is)" "$*" >> "$JOURNAL" 2>/dev/null || true; }
+LISTE FERMÉE DE FAIT. Une demande ne vaut que pour une unité `secubox-<id>.service` CHARGÉE et À
+L'ÉTAT `failed`, hors REFUS (unités dont l'arrêt est une sécurité). Étapes : (1) une configuration
+dpkg interrompue est terminée (cas de la mise à jour automatique coupée, #3606) — si une mise à
+jour tient le verrou, on répond « réessayer » sans attendre ; (2) reset-failed ; (3) démarrage
+sans attendre la fin (une tâche oneshot comme majauto peut durer) ; (4) relecture. Chaque
+réparation est écrite dans /var/log/secubox/audit.log.
 
-# Identifiant de module : celui des unités secubox-<id>.service (minuscules, chiffres, tirets).
-_id_ok() { printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9-]{0,62}$'; }
+Verbes : reparer <id> [acteur] · process-ops · status · version
+"""
+from __future__ import annotations
 
-# Acteur : le `sub` du jeton, réduit à un jeu de caractères sûr (il finit dans l'audit).
-_acteur() { local a; a=$(printf '%s' "${1:-}" | tr -cd 'A-Za-z0-9@._:-' | cut -c1-64); printf '%s' "${a:-inconnu}"; }
+import fcntl
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+from datetime import datetime, timezone
 
-_prop() { "$SYSTEMCTL" show -p "$2" --value -- "$1" 2>/dev/null | head -n 1; }
+VERSION = "1.1.0"
+ENV = os.environ.get
+SPOOL = ENV("SECUBOX_REPARER_SPOOL", "/run/secubox/health-reparer")
+ETAT = ENV("SECUBOX_REPARER_ETAT", "/var/lib/secubox-health-reparer/reparer.json")
+JOURNAL = ENV("SECUBOX_REPARER_JOURNAL", "/var/log/secubox/reparer.log")
+AUDIT = ENV("SECUBOX_AUDIT_LOG", "/var/log/secubox/audit.log")
+VERROU = ENV("SECUBOX_REPARER_VERROU", "/run/secubox-reparer/verrou")
+DPKG_UPDATES = ENV("SECUBOX_REPARER_DPKG_UPDATES", "/var/lib/dpkg/updates")
+DPKG_VERROU = ENV("SECUBOX_REPARER_DPKG_VERROU", "/var/lib/dpkg/lock-frontend")
+SYSTEMCTL = ENV("SECUBOX_REPARER_SYSTEMCTL", "systemctl")
+DPKG = ENV("SECUBOX_REPARER_DPKG", "dpkg")
+ATTENTE_S = float(ENV("SECUBOX_REPARER_ATTENTE_S", "20"))
+PAS_S = float(ENV("SECUBOX_REPARER_PAS_S", "1"))
 
-# État + audit en une passe Python : écriture ATOMIQUE de l'état (lisible par l'API, autre
-# compte) et ligne d'audit en ajout seul, sans suivre de lien symbolique.
-_consigne() {   # module acteur ok(true|false) phase message debut etapes_texte
-    python3 - "$ETAT" "$AUDIT" "$@" <<'PY'
-import json, os, sys, tempfile, time
-etat_p, audit_p, module, acteur, ok, phase, message, debut, etapes = sys.argv[1:10]
-entree = {"module": module, "acteur": acteur, "ok": ok == "true", "phase": phase,
-          "message": message, "debut": int(debut or 0), "fin": int(time.time()),
-          "etapes": [e for e in etapes.split("\n") if e]}
-os.makedirs(os.path.dirname(etat_p), exist_ok=True)
-try:
-    with open(etat_p, encoding="utf-8") as f:
-        etat = json.load(f)
-    if not isinstance(etat, dict) or not isinstance(etat.get("modules"), dict):
-        raise ValueError
-except (OSError, ValueError):
-    etat = {"modules": {}}
-etat["modules"][module] = entree
-# Borne : les 50 dernières réparations suffisent au suivi de la page.
-garde = sorted(etat["modules"].items(), key=lambda kv: kv[1].get("fin", 0))[-50:]
-etat = {"modules": dict(garde), "maj": entree["fin"]}
-fd, tmp = tempfile.mkstemp(dir=os.path.dirname(etat_p), prefix=".reparer-")
-with os.fdopen(fd, "w", encoding="utf-8") as f:
-    json.dump(etat, f, ensure_ascii=False)
-os.chmod(tmp, 0o644)
-os.replace(tmp, etat_p)
-if phase == "fini":
-    ligne = json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "event": "sante_reparation",
-                        "module": module, "unite": f"secubox-{module}.service", "acteur": acteur,
-                        "ok": entree["ok"], "message": message, "etapes": entree["etapes"]}, ensure_ascii=True)
+ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
+DEMANDE_RE = re.compile(r"reparer ([a-z0-9][a-z0-9-]{0,62}) ([A-Za-z0-9@._:-]{1,64})\n?")
+# Unités dont l'arrêt est voulu ou est une sécurité : jamais relancées depuis une page.
+REFUS = frozenset({"lan-dhcp", "lan-dhcp-garde", "lan-dhcp-surveille", "netmodes-retour-boot", "reparer"})
+REFUS_PREFIXES = ("mobile",)
+TAILLE_MAX = 512
+TEMP_GRACE_S = 60          # un nom caché plus récent est une demande en cours d'écriture (API)
+
+
+def _maintenant() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _ajout(chemin: str, ligne: str, mode: int = 0o640) -> None:
+    """Ajout seul, sans suivre de lien (root écrit là où un autre compte pourrait poser un lien)."""
     try:
-        os.makedirs(os.path.dirname(audit_p), exist_ok=True)
-        fd = os.open(audit_p, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        os.makedirs(os.path.dirname(chemin), exist_ok=True)
+        fd = os.open(chemin, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, mode)
         with os.fdopen(fd, "a", encoding="utf-8") as f:
             f.write(ligne + "\n")
     except OSError as e:
-        print(f"audit non écrit ({e.__class__.__name__}) : {ligne}", file=sys.stderr)
-PY
-}
+        print(f"{chemin} non écrit ({e.__class__.__name__}) : {ligne}", file=sys.stderr)
 
-_json_msg() { python3 -c 'import json,sys; print(json.dumps({"ok": sys.argv[1] == "true", "module": sys.argv[2], "message": sys.argv[3]}, ensure_ascii=False))' "$@"; }
 
-# dpkg interrompu : fichiers en attente dans updates/ ou paquets à moitié configurés.
-_dpkg_interrompu() {
-    [ -n "$(ls -A -- "$DPKG_UPDATES" 2>/dev/null)" ] && return 0
-    [ -n "$("$DPKG" --audit 2>/dev/null)" ]
-}
+def journal(msg: str) -> None:
+    _ajout(JOURNAL, f"{_maintenant()} {msg}")
 
-# Termine la configuration. Le verrou peut être tenu (apt en cours) : on attend qu'il se
-# libère, sans jamais tuer dpkg ni lui fixer de délai (une configuration coupée est pire).
-_dpkg_terminer() {
-    local essai rc out
-    for essai in $(seq 1 60); do
-        out=$("$DPKG" --force-confold --force-confdef --configure -a 2>&1); rc=$?
-        printf '%s\n' "$out" >> "$JOURNAL" 2>/dev/null || true
-        [ $rc -eq 0 ] && return 0
-        printf '%s' "$out" | grep -qi 'lock' || return $rc
-        _journal "dpkg occupé (essai $essai/60), nouvelle tentative dans 10 s"
-        sleep 10
-    done
-    return 1
-}
 
-cmd_reparer() {
-    local mod="${1:-}" acteur unite load avant debut etapes="" etat_fin sub result t
-    acteur=$(_acteur "${2:-}")
-    if ! _id_ok "$mod"; then
-        _json_msg false "" "identifiant de module invalide"; return 2
-    fi
-    unite="secubox-$mod.service"
-    debut=$(date +%s)
-    load=$(_prop "$unite" LoadState)
-    if [ "$load" != "loaded" ]; then
-        _consigne "$mod" "$acteur" false fini "unité $unite introuvable : rien à réparer" "$debut" ""
-        _journal "$mod : refus, unité non chargée ($load)"
-        _json_msg false "$mod" "unité introuvable"; return 1
-    fi
-    avant=$(_prop "$unite" ActiveState)
-    if [ "$avant" != "failed" ]; then
-        _consigne "$mod" "$acteur" false fini "$unite n'est pas en panne ($avant) : rien n'a été relancé" "$debut" ""
-        _journal "$mod : refus, état $avant"
-        _json_msg false "$mod" "pas en panne ($avant)"; return 1
-    fi
-    _consigne "$mod" "$acteur" false en_cours "réparation en cours" "$debut" ""
-    _journal "$mod : réparation demandée par $acteur"
+def _acteur(brut: str) -> str:
+    return re.sub(r"[^A-Za-z0-9@._:-]", "", brut or "")[:64] or "inconnu"
 
-    if _dpkg_interrompu; then
-        _consigne "$mod" "$acteur" false en_cours "configuration dpkg interrompue : reprise" "$debut" "dpkg : configuration interrompue détectée"
-        if _dpkg_terminer; then
-            etapes+="dpkg : configuration terminée"$'\n'
-        else
-            etapes+="dpkg : configuration en échec (voir $JOURNAL)"$'\n'
-            _consigne "$mod" "$acteur" false fini "dpkg n'a pas pu terminer sa configuration ; service non relancé" "$debut" "$etapes"
-            _journal "$mod : dpkg --configure -a en échec"
-            _json_msg false "$mod" "dpkg en échec"; return 1
-        fi
-    fi
 
-    "$SYSTEMCTL" reset-failed -- "$unite" 2>>"$JOURNAL"
-    etapes+="échec effacé (reset-failed)"$'\n'
-    if ! "$SYSTEMCTL" start --no-block -- "$unite" 2>>"$JOURNAL"; then
-        etapes+="démarrage refusé par systemd"$'\n'
-        _consigne "$mod" "$acteur" false fini "systemd a refusé de démarrer $unite" "$debut" "$etapes"
-        _json_msg false "$mod" "démarrage refusé"; return 1
-    fi
-    etapes+="démarrage lancé"$'\n'
+def consigne(module: str, acteur: str, ok: bool, phase: str, message: str, debut: int, etapes: list[str]) -> None:
+    """État ATOMIQUE (lisible par l'API, autre compte) ; audit à la fin de chaque réparation."""
+    entree = {"module": module, "acteur": acteur, "ok": ok, "phase": phase, "message": message,
+              "debut": debut, "fin": int(time.time()), "etapes": list(etapes)}
+    dossier = os.path.dirname(ETAT)
+    os.makedirs(dossier, exist_ok=True)
+    try:
+        with open(ETAT, encoding="utf-8") as f:
+            etat = json.load(f)
+        if not isinstance(etat, dict) or not isinstance(etat.get("modules"), dict):
+            raise ValueError("forme")
+    except FileNotFoundError:
+        etat = {"modules": {}}
+    except (OSError, ValueError) as e:
+        journal(f"état illisible, repris à zéro ({e.__class__.__name__})")
+        etat = {"modules": {}}
+    etat["modules"][module] = entree
+    garde = sorted(etat["modules"].items(), key=lambda kv: kv[1].get("fin", 0))[-50:]
+    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".reparer-")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump({"modules": dict(garde), "maj": entree["fin"]}, f, ensure_ascii=False)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, ETAT)
+    if phase == "fini":
+        _ajout(AUDIT, json.dumps({"ts": _maintenant(), "event": "sante_reparation", "module": module,
+                                  "unite": f"secubox-{module}.service", "acteur": acteur, "ok": ok,
+                                  "message": message, "etapes": list(etapes)}, ensure_ascii=True))
 
-    # Relecture : active → réparé ; inactive + Result=success → tâche ponctuelle terminée ;
-    # failed → encore en panne ; activating au bout du délai → tâche longue en cours (#oneshot).
-    t=0
-    while :; do
-        etat_fin=$(_prop "$unite" ActiveState); sub=$(_prop "$unite" SubState); result=$(_prop "$unite" Result)
-        case "$etat_fin" in
-            active)   _consigne "$mod" "$acteur" true fini "$unite relancé ($sub)" "$debut" "$etapes"
-                      _journal "$mod : réparé ($etat_fin/$sub)"; _json_msg true "$mod" "relancé"; return 0 ;;
-            failed)   _consigne "$mod" "$acteur" false fini "$unite retombe en panne ($result) : voir journalctl -u $unite" "$debut" "$etapes"
-                      _journal "$mod : retombe en panne ($result)"; _json_msg false "$mod" "retombe en panne"; return 1 ;;
-            inactive) if [ "$result" = "success" ] && [ "$t" -gt 0 ]; then
-                          _consigne "$mod" "$acteur" true fini "$unite a terminé sa tâche sans erreur" "$debut" "$etapes"
-                          _journal "$mod : tâche terminée"; _json_msg true "$mod" "tâche terminée"; return 0
-                      fi ;;
-        esac
-        if [ "$t" -ge "$ATTENTE_S" ]; then
-            if [ "$etat_fin" = "activating" ]; then
-                _consigne "$mod" "$acteur" true fini "$unite relancé : tâche en cours d'exécution" "$debut" "$etapes"
-                _journal "$mod : tâche en cours"; _json_msg true "$mod" "tâche en cours"; return 0
-            fi
-            _consigne "$mod" "$acteur" false fini "$unite : état $etat_fin/$sub après ${ATTENTE_S} s" "$debut" "$etapes"
-            _journal "$mod : état incertain $etat_fin/$sub"; _json_msg false "$mod" "état incertain"; return 1
-        fi
-        sleep "$PAS_S"; t=$((t + PAS_S))
-    done
-}
 
-# Une demande = un fichier « reparer <id> <acteur> ». Retirée AVANT d'agir (une demande
-# qui plante ne tourne pas en boucle) ; un seul passage à la fois.
-cmd_process_ops() {
-    mkdir -p "$(dirname "$VERROU")"
-    exec 9>"$VERROU"
-    flock -n 9 || { echo "reparerctl: un passage est déjà en cours" >&2; return 0; }
-    local f ligne verbe mod acteur fait=0
-    for f in "$SPOOL"/*.demande; do
-        [ -e "$f" ] || continue
-        if [ -L "$f" ] || [ ! -f "$f" ]; then rm -f -- "$f"; continue; fi
-        ligne=$(head -c 512 -- "$f" 2>/dev/null | head -n 1 | tr -cd 'A-Za-z0-9@._: -')
-        rm -f -- "$f"
-        read -r verbe mod acteur _ <<< "$ligne"
-        case "${verbe:-}" in
-            reparer) cmd_reparer "${mod:-}" "${acteur:-}" >/dev/null; fait=$((fait + 1)) ;;
-            *)       _journal "demande ignorée : ${verbe:-vide}" ;;
-        esac
-    done
-    printf '{"ok":true,"traitees":%s}\n' "$fait"
-}
+def _prop(unite: str, nom: str) -> str:
+    try:
+        r = subprocess.run([SYSTEMCTL, "show", "-p", nom, "--value", "--", unite],
+                           capture_output=True, text=True, timeout=30)
+        return (r.stdout.splitlines() or [""])[0].strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
-cmd_help() {
-    cat <<'EOF'
-secubox-reparerctl — bouton « Réparer » de la page Santé (#3628)
 
-  reparer <id> [acteur]  répare secubox-<id>.service s'il est en échec (dpkg, reset-failed, démarrage)
-  process-ops            draine /run/secubox/health-reparer/*.demande (unité .path, root)
-  status                 état JSON des dernières réparations
-EOF
-}
+def _systemctl(*args: str) -> bool:
+    try:
+        r = subprocess.run([SYSTEMCTL, *args], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        journal(f"systemctl {args[0]} : {e.__class__.__name__}")
+        return False
+    if r.returncode:
+        journal(f"systemctl {args[0]} rc={r.returncode} : {r.stderr.strip()[:300]}")
+    return r.returncode == 0
 
-case "${1:-help}" in
-    reparer)     shift; cmd_reparer "$@" ;;
-    process-ops) cmd_process_ops ;;
-    status)      cat "$ETAT" 2>/dev/null || echo '{"modules":{}}' ;;
-    version)     printf '{"ok":true,"version":"%s"}\n' "$VERSION" ;;
-    *)           cmd_help ;;
-esac
+
+def _dpkg_interrompu() -> bool:
+    try:
+        if os.listdir(DPKG_UPDATES):
+            return True
+    except OSError:
+        pass
+    try:
+        r = subprocess.run([DPKG, "--audit"], capture_output=True, text=True, timeout=120)
+        return bool(r.stdout.strip())
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _dpkg_occupe() -> bool:
+    """Le verrou frontal est-il tenu (apt ou dpkg en cours) ? On le teste sans l'attendre."""
+    try:
+        fd = os.open(DPKG_VERROU, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    try:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.lockf(fd, fcntl.LOCK_UN)
+        return False
+    except OSError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def _dpkg_terminer() -> bool:
+    """Jamais de délai ni de kill : une configuration coupée est pire qu'une configuration lente."""
+    try:
+        r = subprocess.run([DPKG, "--force-confold", "--force-confdef", "--configure", "-a"],
+                           capture_output=True, text=True)
+    except OSError as e:
+        journal(f"dpkg --configure -a : {e.__class__.__name__}")
+        return False
+    for ligne in (r.stdout + r.stderr).splitlines()[-40:]:
+        journal(f"dpkg: {ligne[:300]}")
+    return r.returncode == 0
+
+
+def reparer(module: str, acteur_brut: str = "") -> tuple[bool, str]:
+    acteur = _acteur(acteur_brut)
+    if not ID_RE.fullmatch(module or ""):
+        return False, "identifiant de module invalide"
+    unite = f"secubox-{module}.service"
+    debut = int(time.time())
+    etapes: list[str] = []
+
+    def fin(ok: bool, message: str) -> tuple[bool, str]:
+        consigne(module, acteur, ok, "fini", message, debut, etapes)
+        journal(f"{module} : {'réparé' if ok else 'non réparé'} — {message}")
+        return ok, message
+
+    if module in REFUS or module.startswith(REFUS_PREFIXES):
+        return fin(False, f"{unite} ne se relance pas depuis la page : son arrêt est voulu ou protège la box")
+    load = _prop(unite, "LoadState")
+    if load != "loaded":
+        return fin(False, f"unité {unite} introuvable : rien à réparer")
+    avant = _prop(unite, "ActiveState")
+    if avant != "failed":
+        return fin(False, f"{unite} n'est pas en panne ({avant or 'état inconnu'}) : rien n'a été relancé")
+    consigne(module, acteur, False, "en_cours", "réparation en cours", debut, etapes)
+    journal(f"{module} : réparation demandée par {acteur}")
+
+    if _dpkg_interrompu():
+        if _dpkg_occupe():
+            return fin(False, "une mise à jour est en cours (dpkg occupé) : réessayer dans quelques minutes")
+        consigne(module, acteur, False, "en_cours", "configuration dpkg interrompue : reprise", debut, etapes)
+        if not _dpkg_terminer():
+            etapes.append(f"dpkg : configuration en échec (voir {JOURNAL})")
+            return fin(False, "dpkg n'a pas pu terminer sa configuration ; service non relancé")
+        etapes.append("dpkg : configuration terminée")
+
+    _systemctl("reset-failed", "--", unite)
+    etapes.append("échec effacé (reset-failed)")
+    if not _systemctl("start", "--no-block", "--", unite):
+        etapes.append("démarrage refusé par systemd")
+        return fin(False, f"systemd a refusé de démarrer {unite}")
+    etapes.append("démarrage lancé")
+
+    t = 0.0
+    while True:
+        etat, sub, result = _prop(unite, "ActiveState"), _prop(unite, "SubState"), _prop(unite, "Result")
+        if etat == "active":
+            return fin(True, f"{unite} relancé ({sub})")
+        if etat == "failed":
+            return fin(False, f"{unite} retombe en panne ({result}) : voir journalctl -u {unite}")
+        if etat == "inactive" and result == "success" and t > 0:
+            return fin(True, f"{unite} a terminé sa tâche sans erreur")
+        if t >= ATTENTE_S:
+            if etat == "activating":
+                return fin(True, f"{unite} relancé : tâche en cours d'exécution")
+            return fin(False, f"{unite} : état {etat}/{sub} après {int(ATTENTE_S)} s")
+        time.sleep(PAS_S)
+        t += PAS_S
+
+
+def _ouvre_spool() -> int:
+    fd = os.open(SPOOL, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    st = os.fstat(fd)
+    # Root possède le dossier, personne d'autre que le groupe n'y écrit (tmpfiles : 0770 root:secubox).
+    if st.st_mode & 0o002 or (os.geteuid() == 0 and st.st_uid != 0):
+        os.close(fd)
+        raise PermissionError(f"{SPOOL} : propriétaire ou droits inattendus")
+    return fd
+
+
+def _lit_demande(dfd: int, nom: str) -> str | None:
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        brut = os.read(fd, TAILLE_MAX + 1)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    if len(brut) > TAILLE_MAX:
+        return None
+    try:
+        return brut.decode("ascii")
+    except UnicodeDecodeError:
+        return None
+
+
+def _retire(dfd: int, nom: str) -> None:
+    try:
+        st = os.stat(nom, dir_fd=dfd, follow_symlinks=False)
+        if stat.S_ISDIR(st.st_mode):
+            shutil.rmtree(nom, dir_fd=dfd)
+        else:
+            os.unlink(nom, dir_fd=dfd)
+    except OSError as e:
+        journal(f"entrée {nom!r} non retirée ({e.__class__.__name__})")
+
+
+def process_ops() -> int:
+    """Draine TOUT le dossier (une entrée laissée relancerait l'unité .path en boucle)."""
+    os.makedirs(os.path.dirname(VERROU), exist_ok=True)
+    vfd = os.open(VERROU, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        fcntl.flock(vfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("reparerctl: un passage est déjà en cours", file=sys.stderr)
+        return 0
+    fait = 0
+    dfd = _ouvre_spool()
+    try:
+        for _tour in range(20):
+            noms = sorted(os.listdir(dfd))
+            attente = False
+            for nom in noms:
+                if nom.startswith("."):
+                    # Demande en cours d'écriture par l'API (nom caché puis rename) : on lui laisse le temps.
+                    try:
+                        age = time.time() - os.stat(nom, dir_fd=dfd, follow_symlinks=False).st_mtime
+                    except OSError:
+                        continue
+                    if age < TEMP_GRACE_S:
+                        attente = True
+                        continue
+                    _retire(dfd, nom)
+                    journal(f"entrée cachée abandonnée retirée : {nom!r}")
+                    continue
+                contenu = _lit_demande(dfd, nom) if nom.endswith(".demande") else None
+                _retire(dfd, nom)            # retirée AVANT d'agir : une demande qui plante ne boucle pas
+                m = DEMANDE_RE.fullmatch(contenu or "")
+                if not m:
+                    journal(f"demande invalide ignorée : {nom[:80]!r}")
+                    continue
+                reparer(m.group(1), m.group(2))
+                fait += 1
+            if not attente:
+                break
+            time.sleep(0.25)
+    finally:
+        os.close(dfd)
+    print(json.dumps({"ok": True, "traitees": fait}))
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    verbe = argv[1] if len(argv) > 1 else "help"
+    if verbe == "reparer":
+        if len(argv) < 3:
+            print(json.dumps({"ok": False, "message": "identifiant manquant"}))
+            return 2
+        if not ID_RE.fullmatch(argv[2]):
+            print(json.dumps({"ok": False, "message": "identifiant de module invalide"}))
+            return 2
+        ok, msg = reparer(argv[2], argv[3] if len(argv) > 3 else "")
+        print(json.dumps({"ok": ok, "module": argv[2], "message": msg}, ensure_ascii=False))
+        return 0 if ok else 1
+    if verbe == "process-ops":
+        return process_ops()
+    if verbe == "status":
+        try:
+            with open(ETAT, encoding="utf-8") as f:
+                print(f.read())
+        except OSError:
+            print('{"modules":{}}')
+        return 0
+    if verbe == "version":
+        print(json.dumps({"ok": True, "version": VERSION}))
+        return 0
+    print(__doc__)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

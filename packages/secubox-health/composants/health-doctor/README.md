@@ -21,7 +21,8 @@ Socket Unix : `/run/secubox/health-doctor.sock`, `/run/secubox/metrics.sock`.
 - `secubox-health-doctor-runner.timer` : SecuBox health-doctor — run vital-services checks every minute (#212)
 - `secubox-health-doctor.service` : SecuBox vital-services health monitor (#212) (utilisateur `secubox`), lance `python3`
 - `secubox-reparer.path` / `secubox-reparer.service` (root, #3628) : draine `/run/secubox/health-reparer/*.demande`
-  par `secubox-reparerctl process-ops`. N'agit que sur une unité `secubox-<id>.service` chargée **et** en échec :
+  par `secubox-reparerctl process-ops`. N'agit que sur une unité `secubox-<id>.service` chargée **et** en échec, hors refus
+  (`lan-dhcp*`, `netmodes-retour-boot`, `mobile*`) :
   dpkg interrompu terminé (`dpkg --configure -a`), `reset-failed`, démarrage, relecture. État :
   `/var/lib/secubox-health-reparer/reparer.json` ; audit : `/var/log/secubox/audit.log` (`sante_reparation`) ;
   journal : `/var/log/secubox/reparer.log`.

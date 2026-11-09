@@ -53,3 +53,20 @@ def test_garde_jwt_posee():
         if getattr(route, "path", "").startswith("/reparer"):
             deps = [d.call for d in route.dependant.dependencies]
             assert require_jwt in deps, route.path
+
+
+def test_deuxieme_demande_refusee_409(client, tmp_path):
+    c, spool = client
+    assert c.post("/reparer/majauto").status_code == 202
+    assert c.post("/reparer/majauto").status_code == 409        # demande encore dans le dossier
+    for f in spool.iterdir():
+        f.unlink()
+    (tmp_path / "reparer.json").write_text('{"modules": {"majauto": {"phase": "en_cours"}}}')
+    assert c.post("/reparer/majauto").status_code == 409        # réparation en cours
+    assert c.post("/reparer/hub").status_code == 202
+
+
+def test_aucun_fichier_cache_ne_reste(client):
+    c, spool = client
+    c.post("/reparer/majauto")
+    assert not [f for f in spool.iterdir() if f.name.startswith(".")]
