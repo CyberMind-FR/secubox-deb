@@ -1,3 +1,14 @@
+secubox-ytsas (0.8.11-1~trixie1) trixie; urgency=medium
+
+  * Case « via Tor » à l'ajout d'une vidéo ou d'une playlist (#3618) : yt-dlp
+    (sonde, énumération, téléchargement) passe par le SOCKS Tor de la box,
+    JAMAIS avec les cookies du compte (ils relieraient la requête anonyme à
+    l'identité). Proxy détecté à l'installation (SocksPort non boucle locale
+    de /etc/tor/torrc.d), surchargeable par tor_proxy dans ytsas.toml,
+    validé socks5h://IPv4:port ; sans Tor, la case est refusée clairement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 17:00:00 +0100
+
 secubox-ytsas (0.8.10-1~trixie1) trixie; urgency=medium
 
   * Torrent : pairs avec des pièces et pairs qui envoient affichés, trackers additionnels sur les magnets, 40 connexions (ref #3507).

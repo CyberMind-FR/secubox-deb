@@ -29,11 +29,11 @@ class RoutingEngine:
         self.added = []
         self.playlists = []
 
-    async def add(self, url):
+    async def add(self, url, tor=False):
         self.added.append(url)
         return {"id": "dQw4w9WgXcQ", "status": "downloading"}
 
-    async def add_playlist(self, url, limit=100):
+    async def add_playlist(self, url, limit=100, tor=False):
         self.playlists.append((url, limit))
         return {"playlist": True, "count": 2, "items": []}
 
@@ -75,12 +75,12 @@ class FakeLib:
 def _engine_with(lib, entries, monkeypatch):
     eng = Engine("/tmp/ytsas-test", lib, cookie_path=None)
 
-    async def fake_enum(url, limit=50):
+    async def fake_enum(url, limit=50, tor=False):
         return entries[:limit]
 
     downloaded = []
 
-    async def fake_dl(vid, url, item_dir):
+    async def fake_dl(vid, url, item_dir, tor=False):
         downloaded.append(vid)
 
     monkeypatch.setattr(eng, "enumerate_playlist", fake_enum)
@@ -126,7 +126,7 @@ async def test_add_playlist_bound_is_passed_to_enumeration(monkeypatch):
     eng, _ = _engine_with(lib, ENTRIES, monkeypatch)
     seen = {}
 
-    async def capture_enum(url, limit=50):
+    async def capture_enum(url, limit=50, tor=False):
         seen["limit"] = limit
         return ENTRIES[:limit]
 

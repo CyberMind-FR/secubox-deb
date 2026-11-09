@@ -40,7 +40,7 @@ def test_les_appels_d_api_sont_ceux_de_l_ancienne_page():
     for chemin in ("'/status'", "'/cookies/status'", "'/list'", "'/keep/'", "'/conserve/'", "'/remove/'", "'/retry/'", "'/ephemeral/'", "'/add'",
                    "'/cookies'", "'/stream/'"):
         assert chemin in SRC, chemin
-    assert "{ seconds: secs }" in SRC and "{ url: val }" in SRC
+    assert "{ seconds: secs }" in SRC and "{ url: val, tor: tor }" in SRC
     assert "'Content-Type': 'text/plain'" in SRC
     assert "localStorage.getItem('sbx_token')" in SRC and "'Bearer ' + tok" in SRC
     assert "encodeURIComponent(id)" in SRC
@@ -185,7 +185,7 @@ def test_ajouter_un_lien_et_deposer_les_cookies(navigateur, tmp_path):
     p.press("#urlInput", "Enter")
     p.wait_for_function("document.getElementById('toast').textContent.includes('Titre ajouté')")
     add = [a for a in appels if a[1] == "/add"][0]
-    assert add[0] == "POST" and json.loads(add[2]) == {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+    assert add[0] == "POST" and json.loads(add[2]) == {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "tor": False}
     assert add[3].get("content-type") == "application/json"
     f = tmp_path / "cookies.txt"
     f.write_text("# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tabc\n")

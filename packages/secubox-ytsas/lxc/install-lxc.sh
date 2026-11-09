@@ -194,6 +194,17 @@ if la test -f /opt/secubox-ytsas/www/public.html; then
   log "LXC index.html swapped to public player (admin dashboard kept at admin.html + aggregator)"
 fi
 
+# Proxy Tor de la case « via Tor » (#3618) : `tor_proxy` de ytsas.toml (exporté par le postinst), sinon le premier
+# SocksPort NON boucle locale du Tor de la box (drop-ins /etc/tor/torrc.d, ex. 50-secubox-socks-lan.conf de secubox-tor :
+# le conteneur l'atteint par le routage de l'hôte). Toujours validé : socks5h://<IPv4>:<port>, sinon vide.
+if [ -z "${YTSAS_TOR_PROXY:-}" ]; then
+  _socks=$(grep -hE '^[[:space:]]*SocksPort[[:space:]]+[0-9.]+:[0-9]+' /etc/tor/torrc.d/*.conf /etc/tor/torrc 2>/dev/null \
+             | awk '{print $2}' | grep -v '^127\.' | head -1 || true)
+  [ -n "$_socks" ] && YTSAS_TOR_PROXY="socks5h://$_socks"
+fi
+[[ "${YTSAS_TOR_PROXY:-}" =~ ^socks5h://([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{2,5}$ ]] || YTSAS_TOR_PROXY=""
+log "proxy Tor de la case « via Tor » : ${YTSAS_TOR_PROXY:-aucun}"
+
 # env file from host TOML values (exported by postinst into these vars). The
 # in-LXC unit reads it (EnvironmentFile). Paths are the app contract.
 la bash -c "cat > /opt/secubox-ytsas/ytsas.env <<EOF
@@ -207,6 +218,7 @@ YTSAS_PORT=$PORT
 YTSAS_MAX_ACTIVE=${YTSAS_MAX_ACTIVE:-3}
 YTSAS_EPHEMERAL_TTL_HOURS=${YTSAS_TTL:-6}
 YTSAS_DISK_FLOOR_GB=${YTSAS_FLOOR:-5}
+YTSAS_TOR_PROXY=$YTSAS_TOR_PROXY
 EOF"
 
 # --- garde d'ADMINISTRATION du Flux (#2714) ---

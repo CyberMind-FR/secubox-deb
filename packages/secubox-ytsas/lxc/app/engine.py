@@ -32,6 +32,7 @@ DELAI_SONDE = 120
 DELAI_PLAYLIST = 90
 
 # Progress lines from `yt-dlp --newline`: "[download]  12.3% of ...".
+_TOR_PROXY_RE = re.compile(r"socks5h://(?:\d{1,3}\.){3}\d{1,3}:\d{2,5}")
 _PROGRESS_RE = re.compile(r"\[download\]\s+([\d.]+)%")
 
 # YouTube refuse les données vidéo avec des cookies qu'il n'accepte plus (#2028).
@@ -81,8 +82,10 @@ def _empreinte(s: str) -> str:
 
 class Engine:
     def __init__(self, download_dir, library, cookie_path, max_active=2,
-                 ytdlp_bin="yt-dlp"):
+                 ytdlp_bin="yt-dlp", tor_proxy=None):
         self.download_dir = download_dir
+        # Proxy SOCKS du Tor de la box (#3618), validé : socks5h://<IPv4>:<port> (résolution DNS par Tor), sinon aucun.
+        self.tor_proxy = tor_proxy if tor_proxy and _TOR_PROXY_RE.fullmatch(tor_proxy) else None
         self.library = library
         self.cookie_path = cookie_path
         self.ytdlp_bin = ytdlp_bin
@@ -97,6 +100,14 @@ class Engine:
         self.cookies_stale = False
 
     # ------------------------------------------------------------------ helpers
+    def _tor_args(self, tor):
+        """`--proxy` vers Tor quand la vidéo est demandée « via Tor » (#3618) ; refus clair si Tor manque."""
+        if not tor:
+            return []
+        if not self.tor_proxy:
+            raise EngineError("Tor n'est pas disponible sur cette box (aucun SOCKS Tor détecté)")
+        return ["--proxy", self.tor_proxy]
+
     def _cookie_args(self):
         if self.cookie_path and os.path.isfile(self.cookie_path):
             return ["--cookies", self.cookie_path]
@@ -164,14 +175,16 @@ class Engine:
             n += 1
         return n
 
-    async def _probe(self, url):
-        """Fetch id + title without downloading. Raises AuthRequired/EngineError."""
-        argv = [self.ytdlp_bin, "-j", "--no-download", "--no-playlist",
+    async def _probe(self, url, tor=False):
+        """Fetch id + title without downloading. Raises AuthRequired/EngineError.
+
+        Via Tor (#3618) : JAMAIS les cookies du compte — ils relieraient la requête anonyme à l'identité."""
+        argv = [self.ytdlp_bin, "-j", "--no-download", "--no-playlist", *self._tor_args(tor),
                 # YouTube gates real formats behind a JS "n challenge"; deno alone
                 # is skipped without the EJS solver script — pull it from GitHub so
                 # actual video/audio formats are returned (else "only images").
                 "--remote-components", "ejs:github",
-                *self._cookie_args(), url]
+                *([] if tor else self._cookie_args()), url]
         try:
             proc = await asyncio.create_subprocess_exec(
                 *argv, stdout=asyncio.subprocess.PIPE,
@@ -215,27 +228,27 @@ class Engine:
         raise EngineError(msg[:200])
 
     # -------------------------------------------------------------------- add
-    async def add(self, url):
+    async def add(self, url, tor=False):
         """Probe metadata, insert the library row, kick the background download.
 
         Returns {id, title, status} on a successful queue. Raises AuthRequired
         / EngineError (both user-safe) if even the metadata probe fails, so the
         API can answer with a clear status instead of a raw error.
         """
-        vid, title = await self._probe(url)
+        vid, title = await self._probe(url, tor)
         item_dir = os.path.join(self.download_dir, vid)
         os.makedirs(item_dir, exist_ok=True)
         self.library.add(id=vid, url=url, title=title, path=item_dir)
         self.jobs[vid] = {"progress": 0.0, "status": "downloading",
-                          "title": title, "error": None,
+                          "title": title, "error": None, "tor": bool(tor),
                           "started_at": int(time.time())}
         # Fire-and-forget: the download runs under the semaphore in the
         # background; /list and /status reflect progress as it advances.
-        asyncio.create_task(self._download(vid, url, item_dir))
-        return {"id": vid, "title": title, "status": "downloading"}
+        asyncio.create_task(self._download(vid, url, item_dir, tor))
+        return {"id": vid, "title": title, "status": "downloading", "tor": bool(tor)}
 
     # ---------------------------------------------------------------- playlist
-    async def enumerate_playlist(self, url, limit=50):
+    async def enumerate_playlist(self, url, limit=50, tor=False):
         """Énumère une playlist À PLAT, SANS RIEN TÉLÉCHARGER (#1099).
 
         Une seule requête de métadonnées (`--flat-playlist`), la borne appliquée
@@ -244,8 +257,8 @@ class Engine:
         EngineError sinon (dont playlist vide/illisible)."""
         limit = max(1, min(int(limit or 50), 200))
         argv = [self.ytdlp_bin, "--flat-playlist", "--dump-json",
-                "--playlist-end", str(limit), "--no-warnings",
-                *self._cookie_args(), url]
+                "--playlist-end", str(limit), "--no-warnings", *self._tor_args(tor),
+                *([] if tor else self._cookie_args()), url]
         try:
             proc = await asyncio.create_subprocess_exec(
                 *argv, stdout=asyncio.subprocess.PIPE,
@@ -276,7 +289,7 @@ class Engine:
                               + (": " + detail if detail else ""))
         return items
 
-    def add_prefetched(self, vid, url, title):
+    def add_prefetched(self, vid, url, title, tor=False):
         """Enfile le download d'une vidéo DÉJÀ identifiée (énumération à plat) :
         saute la sonde de métadonnées (`_probe`), qu'on a déjà. Une entrée déjà
         complète sur disque est reportée SANS re-téléchargement — un ré-ajout de
@@ -289,32 +302,38 @@ class Engine:
         os.makedirs(item_dir, exist_ok=True)
         self.library.add(id=vid, url=url, title=title, path=item_dir)
         self.jobs[vid] = {"progress": 0.0, "status": "downloading",
-                          "title": title, "error": None,
+                          "title": title, "error": None, "tor": bool(tor),
                           "started_at": int(time.time())}
-        asyncio.create_task(self._download(vid, url, item_dir))
+        asyncio.create_task(self._download(vid, url, item_dir, tor))
         return {"id": vid, "title": title, "status": "downloading"}
 
-    async def add_playlist(self, url, limit=100):
+    async def add_playlist(self, url, limit=100, tor=False):
         """Énumère la playlist puis enfile CHAQUE vidéo (bornée). Une entrée
         fautive n'interrompt pas les autres. Renvoie un récapitulatif — le compte
         inclut les entrées déjà complètes (reportées, non re-téléchargées)."""
-        entries = await self.enumerate_playlist(url, limit)
+        entries = await self.enumerate_playlist(url, limit, tor)
         items = []
         for e in entries:
             try:
                 items.append(self.add_prefetched(
-                    e["id"], e["url"], e.get("title") or ""))
+                    e["id"], e["url"], e.get("title") or "", tor))
             except Exception:  # noqa: BLE001 — une entrée fautive n'arrête pas la playlist
                 continue
         return {"playlist": True, "count": len(items), "items": items}
 
-    async def _download(self, vid, url, item_dir):
+    async def _download(self, vid, url, item_dir, tor=False):
         async with self._sem:
             job = self.jobs.get(vid)
             if job is None:
                 return
             # Output template inside the per-id dir; predictable id-based name.
             out_tmpl = os.path.join(item_dir, "%(id)s.%(ext)s")
+
+            try:
+                proxy = self._tor_args(tor)
+            except EngineError as e:
+                job.update(status="error", error=str(e))
+                return
 
             async def essai(avec_cookies):
                 """Un passage de yt-dlp. Retourne (rc, stderr) ; rc None si yt-dlp est introuvable."""
@@ -336,6 +355,7 @@ class Engine:
                           "b[ext=mp4]/bv*+ba/b",
                     "--merge-output-format", "mp4",
                     "-o", out_tmpl,
+                    *proxy,
                     *(self._cookie_args() if avec_cookies else []),
                     url,
                 ]
@@ -371,13 +391,13 @@ class Engine:
                 await asyncio.gather(_read_progress(), _read_err())
                 return await proc.wait(), "".join(stderr_buf)
 
-            rc, stderr = await essai(avec_cookies=True)
+            rc, stderr = await essai(avec_cookies=not tor)       # via Tor : jamais les cookies (#3618)
             if rc is None:
                 job.update(status="error", error="yt-dlp introuvable")
                 return
             # YouTube refuse les données vidéo (403) avec des cookies qu'il n'accepte plus : une vidéo
             # publique n'en a pas besoin. On retente SANS cookies et on signale les cookies périmés (#2028).
-            if rc != 0 and self._has_cookies() and _FORBIDDEN_RE.search(stderr):
+            if rc != 0 and not tor and self._has_cookies() and _FORBIDDEN_RE.search(stderr):
                 self.cookies_stale = True
                 rc, stderr = await essai(avec_cookies=False)
                 if rc is None:

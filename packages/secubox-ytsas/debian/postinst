@@ -32,7 +32,9 @@ case "$1" in
     YTSAS_MAX_ACTIVE=$(grep -E '^max_active' /etc/secubox/ytsas.toml 2>/dev/null | grep -oE '[0-9]+' | head -1)
     YTSAS_TTL=$(grep -E '^ephemeral_ttl_hours' /etc/secubox/ytsas.toml 2>/dev/null | grep -oE '[0-9]+' | head -1)
     YTSAS_FLOOR=$(grep -E '^disk_floor_gb' /etc/secubox/ytsas.toml 2>/dev/null | grep -oE '[0-9]+' | head -1)
-    export YTSAS_MAX_ACTIVE YTSAS_TTL YTSAS_FLOOR
+    # Proxy Tor imposé par l'opérateur (#3618) ; vide = détecté par install-lxc.sh. Revalidé là-bas.
+    YTSAS_TOR_PROXY=$(grep -E '^tor_proxy' /etc/secubox/ytsas.toml 2>/dev/null | grep -oE 'socks5h://[0-9.]+:[0-9]+' | head -1)
+    export YTSAS_MAX_ACTIVE YTSAS_TTL YTSAS_FLOOR YTSAS_TOR_PROXY
 
     # Provision/refresh the dedicated yt-dlp LXC. This is SLOW (debootstrap +
     # pip install yt-dlp/fastapi/uvicorn) so detach it as a transient oneshot
@@ -43,6 +45,7 @@ case "$1" in
         --setenv=YTSAS_MAX_ACTIVE="${YTSAS_MAX_ACTIVE:-3}" \
         --setenv=YTSAS_TTL="${YTSAS_TTL:-6}" \
         --setenv=YTSAS_FLOOR="${YTSAS_FLOOR:-5}" \
+        --setenv=YTSAS_TOR_PROXY="${YTSAS_TOR_PROXY:-}" \
         bash /usr/lib/secubox/ytsas/install-lxc.sh \
         || echo "secubox-ytsas: LXC provisioning deferred (run /usr/lib/secubox/ytsas/install-lxc.sh manually)"
     else
