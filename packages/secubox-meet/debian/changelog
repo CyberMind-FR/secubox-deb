@@ -1,3 +1,10 @@
+secubox-meet (0.2.6-1~trixie1) trixie; urgency=medium
+
+  * oidc-enregistrer : l'opt-in administrateurs (#3612) est aussi posé quand
+    le client est déjà enregistré et appliqué (cas courant, retour anticipé).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:00:00 +0100
+
 secubox-meet (0.2.5-1~trixie1) trixie; urgency=medium
 
   * Visio : un administrateur réel de la box y entre en son nom (#3612,
