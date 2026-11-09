@@ -281,6 +281,7 @@ def test_scan_aborts_when_lxc_ls_did_not_execute(root, capsys, monkeypatch):
     # dans un manifeste qui fait ensuite autorité — c'est le C2 du review.
     # scan doit refuser d'écrire plutôt que de produire cet inventaire faux.
     monkeypatch.setattr("api.cli._running_as_root", lambda: True)
+    monkeypatch.setattr("api.cli._lxc_installe", lambda: True)
 
     def fake_run(argv):
         if argv[0:2] == ["systemctl", "list-unit-files"]:
@@ -577,3 +578,20 @@ def test_readme_ne_pretend_plus_que_apply_n_existe_pas():
     readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
     assert "n'existe pas encore" not in readme
     assert "secubox-profilectl apply" in readme
+
+
+def test_scan_sans_lxc_installe_derive_tout_en_natif(root, capsys, monkeypatch):
+    # #3603 : profil mobile, paquet lxc absent : aucun conteneur possible, le scan écrit ses manifestes.
+    monkeypatch.setattr("api.cli._running_as_root", lambda: True)
+    monkeypatch.setattr("api.cli._lxc_installe", lambda: False)
+
+    def fake_run(argv):
+        assert argv[0] != "lxc-ls", "lxc-ls ne doit pas être appelé sans LXC"
+        if argv[0:2] == ["systemctl", "list-unit-files"]:
+            return 0, "secubox-lyrion.service enabled\n"
+        return 0, ""
+
+    monkeypatch.setattr("api.cli._run", fake_run)
+    rc = main(["--root", str(root), "scan", "--force"])
+    assert rc == 0
+    assert "lxc-ls" not in capsys.readouterr().err
