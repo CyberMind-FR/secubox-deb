@@ -1,3 +1,12 @@
+secubox-status (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Page « Status Live » dans l'administration (/status/, #3623) : état de la
+    flotte, carte par appliance (composants, âge du relevé, modules,
+    disponibilité, signature, sonde externe, frise 24 h), lecture seule,
+    rafraîchie toutes les 30 s ; entrée de menu.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 14:00:00 +0100
+
 secubox-status (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Status Live v2, jalon 1 (#3605, spec #3595) : collecteur local (caches de

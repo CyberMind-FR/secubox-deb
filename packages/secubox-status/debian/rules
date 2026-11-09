@@ -22,6 +22,9 @@ override_dh_auto_install:
 	install -d $(P)/usr/lib/systemd/system
 	install -m 644 debian/secubox-status.service debian/secubox-status-collect.service \
 	  debian/secubox-status-collect.timer $(P)/usr/lib/systemd/system/
+	install -d $(P)/usr/share/secubox/www $(P)/usr/share/secubox/menu.d
+	cp -r www/. $(P)/usr/share/secubox/www/
+	cp -r menu.d/. $(P)/usr/share/secubox/menu.d/
 	install -d $(P)/etc/apparmor.d
 	install -m 644 apparmor/secubox-status $(P)/etc/apparmor.d/secubox-status
 	install -d $(P)/etc/nginx/secubox.d $(P)/etc/nginx/secubox-routes.d
