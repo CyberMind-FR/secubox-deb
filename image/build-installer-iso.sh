@@ -410,7 +410,10 @@ fi
 # Slipstream: integrate local .deb files
 if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
   DEBS_DIR="${REPO_DIR}/output/debs"
-  if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/*.deb >/dev/null 2>&1; then
+  if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/*.deb >/dev/null 2>&1 && ! ls "${DEBS_DIR}"/secubox-mobile_*.deb >/dev/null 2>&1; then
+    # Même règle que build-live-usb.sh : lot partiel sans le méta-paquet = ignoré, le profil vient du dépôt (étape apt ci-dessus).
+    warn "Slipstream: lot local partiel ($(ls "${DEBS_DIR}"/*.deb | wc -l) .deb, sans secubox-mobile) : ignoré, profil installé depuis le dépôt"
+  elif [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/*.deb >/dev/null 2>&1; then
     log "Slipstream: installing local packages..."
     install -d "${ROOTFS}/tmp/secubox-debs"
     # #3597 : le lot complet (~180 .deb) entrait tel quel (dpkg -i *.deb) : secubox-lite, appstore, peertube…
