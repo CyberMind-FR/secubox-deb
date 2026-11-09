@@ -1,0 +1,10 @@
+{
+  "id": "status",
+  "name": "Status Live",
+  "category": "mind",
+  "icon": "📡",
+  "path": "/status/",
+  "order": 705,
+  "description": "État de la flotte : relevés de chaque appliance, frise des 24 h",
+  "theme": "supervision"
+}

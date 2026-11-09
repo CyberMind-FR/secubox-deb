@@ -187,10 +187,6 @@
    "espace": "systeme",
    "objet": "BOX"
   },
-  "mobile": {
-   "espace": "systeme",
-   "objet": "BOX"
-  },
   "freebox": {
    "espace": "systeme",
    "objet": "BOX"
@@ -309,6 +305,10 @@
   },
   "metrics": {
    "espace": "surveillance",
+   "objet": "BOX"
+  },
+  "mobile": {
+   "espace": "systeme",
    "objet": "BOX"
   },
   "modem": {
@@ -446,6 +446,10 @@
   "soc": {
    "espace": "surveillance",
    "objet": "ALERT"
+  },
+  "status": {
+   "espace": "surveillance",
+   "objet": "BOX"
   },
   "streamforge": {
    "espace": "services",

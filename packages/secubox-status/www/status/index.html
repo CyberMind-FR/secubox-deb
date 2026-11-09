@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Status Live v2 (#3595, page d'administration #3623) au profil Aurora : page autonome, aucune dépendance.
+  Route lue : GET /api/v1/status/status (require_lecture), toutes les 30 s. Lecture seule.
+  Mesure absente = « inconnu » ou « — », jamais un succès ni une panne inventés. Tout le contenu par textContent.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives marquées comme telles.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Status Live</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#7f93b6;
+          --cyan:#29b6f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--bleu:#4ea1ff;--gris:#7d8ba1}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35}
+        body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));padding:14px;display:grid;gap:12px;min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .tete h1{margin:0;font-size:1.35rem;font-weight:800} .tete small{color:var(--cyan);font-size:.72rem;display:block}
+        .droite{margin-left:auto;color:var(--doux);font-size:.74rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+        .demo{background:var(--orange);color:#1a1000;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.74rem}
+        [hidden]{display:none!important}
+        .bandeau{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;background:rgba(10,22,46,.7)}
+        .bandeau .pt{width:14px;height:14px;border-radius:50%;flex:0 0 auto}
+        .bandeau .t{flex:1 1 260px;min-width:0} .bandeau .t b{font-size:1.15rem;display:block} .bandeau .t span{color:var(--doux);font-size:.82rem}
+        .chiffres{display:flex;gap:20px;flex-wrap:wrap}
+        .chiffres div{display:grid} .chiffres .l{color:var(--doux);font-size:.72rem} .chiffres .v{font-size:1.2rem;font-weight:700;font-variant-numeric:tabular-nums}
+        .noeuds{display:grid;gap:12px;grid-template-columns:1fr}
+        @container a (min-width:760px){.noeuds{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @container a (min-width:1150px){.noeuds{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        .carte{border:1px solid var(--trait);border-radius:14px;padding:14px;background:rgba(10,22,46,.6);display:grid;gap:12px;min-width:0}
+        .carte .h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .carte .h b{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:1.15rem}
+        .carte .h .pill{margin-left:auto}
+        .pt{width:12px;height:12px;border-radius:50%;display:inline-block}
+        .pill{display:inline-block;border:1px solid var(--gris);color:#c3cede;background:rgba(125,139,161,.15);border-radius:999px;padding:2px 10px;font-size:.7rem;font-weight:700;white-space:nowrap}
+        .comp{display:flex;flex-wrap:wrap;gap:6px}
+        dl{margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;font-size:.8rem}
+        dt{color:var(--faible);font-size:.72rem} dd{margin:2px 0 0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+        .frise{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:2px}
+        .frise i{display:block;height:22px;border-radius:2px}
+        .leg{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--doux);font-size:.72rem}
+        .leg span{display:inline-flex;align-items:center;gap:5px} .leg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+        .note{color:var(--faible);font-size:.74rem;margin:0}
+        .erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.82rem}
+        .vide{color:var(--faible);padding:14px;text-align:center;font-size:.82rem;border:1px dashed var(--trait2);border-radius:12px}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div><h1>Status Live</h1><small>Supervision de la flotte · lecture seule</small></div>
+            <div class="droite"><span class="demo" id="demo" hidden>Démonstration : données fictives</span><span id="maj">—</span></div>
+        </header>
+        <div class="erreur" id="erreur" hidden role="alert"></div>
+        <section class="bandeau" aria-live="polite">
+            <span class="pt" id="fPt"></span>
+            <div class="t"><b id="fEtat">Chargement…</b><span id="fDetail"></span></div>
+            <div class="chiffres">
+                <div><span class="l">Appliances</span><span class="v" id="fTotal">—</span></div>
+                <div><span class="l">Opérationnelles</span><span class="v" id="fOk">—</span></div>
+                <div><span class="l">Dégradées</span><span class="v" id="fDeg">—</span></div>
+                <div><span class="l">Inconnues</span><span class="v" id="fInc">—</span></div>
+            </div>
+        </section>
+        <section class="noeuds" id="noeuds" aria-label="Appliances"></section>
+        <div class="leg" aria-label="Légende">
+            <span><i style="background:var(--vert)"></i>opérationnel</span><span><i style="background:var(--orange)"></i>dégradé</span>
+            <span><i style="background:var(--rouge)"></i>indisponible</span><span><i style="background:var(--bleu)"></i>maintenance</span>
+            <span><i style="background:var(--gris);opacity:.45"></i>inconnu (mesure absente ou périmée)</span>
+        </div>
+        <p class="note">« Inconnu » n'est jamais compté comme opérationnel. Signature vérifiée : provenance prouvée par l'identité
+            du nœud (jalon 2), pas exactitude de la mesure. Sonde externe : vu depuis un point distinct de la machine (jalon 3).
+            Les autres appliances du maillage apparaîtront ici quand elles publieront leur relevé signé.</p>
+    </div></div></main>
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = Q.get('demo') === '1';
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/status';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const ETATS = {
+            operational: ['Opérationnel', 'var(--vert)'], degraded: ['Dégradé', 'var(--orange)'], outage: ['Indisponible', 'var(--rouge)'],
+            maintenance: ['Maintenance', 'var(--bleu)'], unknown: ['Inconnu', 'var(--gris)']
+        };
+        const COMPOSANTS = { services: 'Services', web: 'Sites web', system: 'Système', validation: 'Profil' };
+        const etat = s => ETATS[s] || ETATS.unknown;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || localStorage.getItem('jwt_token') || localStorage.getItem('token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+
+        function pill(s) {
+            const [lib, coul] = etat(s); const p = el('span', 'pill', lib);
+            p.style.borderColor = coul; p.style.color = coul; return p;
+        }
+        function age(iso) {
+            const t = Date.parse(iso); if (!isFinite(t)) return '—';
+            const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+            return s < 90 ? 'il y a ' + s + ' s' : s < 5400 ? 'il y a ' + Math.round(s / 60) + ' min' : 'il y a ' + Math.round(s / 3600) + ' h';
+        }
+        function nombre(v, suffixe) { return (typeof v === 'number' && isFinite(v)) ? String(v) + (suffixe || '') : '—'; }
+        function oui(v, siVrai, siFaux) { return v === true ? siVrai : v === false ? siFaux : 'pas encore (jalon à venir)'; }
+
+        function carte(n) {
+            const c = el('article', 'carte');
+            const h = el('div', 'h'); const pt = el('span', 'pt'); pt.style.background = etat(n.status)[1];
+            h.append(pt, el('b', '', String(n.id || '?')), pill(n.status)); c.appendChild(h);
+            const comp = el('div', 'comp');
+            Object.keys(COMPOSANTS).forEach(k => {
+                if (!n.components || !(k in n.components)) return;
+                const p = pill(n.components[k]); p.textContent = COMPOSANTS[k] + ' · ' + etat(n.components[k])[0].toLowerCase(); comp.appendChild(p);
+            });
+            c.appendChild(comp);
+            const dl = el('dl');
+            const ligne = (k, v) => { const d = el('div'); d.append(el('dt', '', k), el('dd', '', v)); dl.appendChild(d); };
+            ligne('Dernier relevé', age(n.last_seen));
+            const cn = n.counts || {};
+            ligne('Modules', cn.modules_total == null ? '—' : nombre(cn.modules_ok) + ' / ' + nombre(cn.modules_total) + ' en service' + (cn.modules_down ? ' · ' + cn.modules_down + ' muet(s)' : ''));
+            ligne('Disponibilité 30 j', nombre(n.availability_30d, ' %'));
+            ligne('Mesures', n.measurement_complete === true ? 'complètes et fraîches' : 'partielles (source absente ou périmée)');
+            ligne('Signature', oui(n.signature_verified, 'vérifiée', 'refusée'));
+            ligne('Sonde externe', oui(n.externally_confirmed, 'confirmé', 'non confirmé'));
+            c.appendChild(dl);
+            const fr = el('div', 'frise'); fr.setAttribute('role', 'img');
+            const hs = Array.isArray(n.hours) ? n.hours.slice(-24) : [];
+            fr.setAttribute('aria-label', '24 dernières heures, une case par heure');
+            hs.forEach(x => {
+                const i = el('i'); const [lib, coul] = etat(x.status); i.style.background = coul;
+                if (x.status === 'unknown') i.style.opacity = '.45';
+                const d = new Date(Date.parse(x.hour)); i.title = (isNaN(d) ? '' : d.getHours() + ' h : ') + lib; fr.appendChild(i);
+            });
+            const bloc = el('div'); bloc.append(el('dt', '', '24 dernières heures'), fr); c.appendChild(bloc);
+            return c;
+        }
+
+        function rendre(d) {
+            const f = d.fleet || {}; const [lib, coul] = etat(f.status);
+            $('fPt').style.background = coul; $('fEtat').textContent = 'Flotte : ' + lib.toLowerCase();
+            $('fDetail').textContent = 'Relevé généré ' + age(d.generated_at);
+            $('fTotal').textContent = nombre(f.nodes_total); $('fOk').textContent = nombre(f.nodes_operational);
+            $('fDeg').textContent = nombre(f.nodes_degraded); $('fInc').textContent = nombre(f.nodes_unknown);
+            const ns = Array.isArray(d.nodes) ? d.nodes : [];
+            $('noeuds').replaceChildren(...(ns.length ? ns.map(carte) : [el('div', 'vide', 'Aucune appliance relevée pour l’instant')]));
+            $('maj').textContent = 'Mis à jour ' + new Date().toLocaleTimeString('fr-FR') + ' · toutes les 30 s';
+        }
+
+        function demo() {
+            const h = (motif) => motif.split('').map((c, i) => ({ hour: new Date(Date.now() - (23 - i) * 3600e3).toISOString(),
+                status: { o: 'operational', d: 'degraded', u: 'unknown', x: 'outage', m: 'maintenance' }[c] }));
+            return { generated_at: new Date().toISOString(),
+                fleet: { status: 'degraded', nodes_total: 2, nodes_operational: 1, nodes_degraded: 1, nodes_unknown: 0 },
+                nodes: [
+                    { id: 'demo-a', status: 'operational', components: { services: 'operational', web: 'operational', system: 'operational', validation: 'operational' },
+                      last_seen: new Date().toISOString(), measurement_complete: true, signature_verified: null, externally_confirmed: null,
+                      availability_30d: 99.5, counts: { modules_total: 30, modules_ok: 30, modules_down: 0 }, hours: h('uuuuoooooooooooooooooooo') },
+                    { id: 'demo-b', status: 'degraded', components: { services: 'degraded', web: 'unknown', system: 'degraded', validation: 'operational' },
+                      last_seen: new Date(Date.now() - 50e3).toISOString(), measurement_complete: false, signature_verified: null, externally_confirmed: null,
+                      availability_30d: null, counts: { modules_total: 40, modules_ok: 36, modules_down: 4 }, hours: h('ooooooooooooooommoooddxd') }
+                ] };
+        }
+
+        async function charger() {
+            if (DEMO) { $('demo').hidden = false; rendre(demo()); return; }
+            try {
+                const r = await fetch(API + '/status', { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                if (r.status === 401 || r.status === 403) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
+                if (r.status === 503) { $('erreur').hidden = false; $('erreur').textContent = 'Aucun relevé encore : la collecte n’a pas tourné.'; return; }
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                $('erreur').hidden = true; rendre(await r.json());
+            } catch (e) {
+                $('erreur').hidden = false; $('erreur').textContent = 'Status Live injoignable (' + e.message + ') : la page réessaie toutes les 30 s.';
+            }
+        }
+        charger();
+        setInterval(() => { if (!document.hidden) charger(); }, 30000);
+    </script>
+</body>
+</html>

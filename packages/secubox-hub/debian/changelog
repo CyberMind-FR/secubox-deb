@@ -1,3 +1,9 @@
+secubox-hub (1.12.52-1~trixie1) trixie; urgency=medium
+
+  * Espaces : status (Status Live) dans Surveillance (#3623).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 14:00:00 +0100
+
 secubox-hub (1.12.51-1~trixie1) trixie; urgency=medium
 
   * Menu : Vue d'ensemble et Santé jugées sur l'agrégateur qui les sert
