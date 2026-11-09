@@ -6,10 +6,10 @@
 -->
 
 # WIP — chantier en cours + Next Up
-*Mis à jour : 2026-11-08 (bêta 1 publiée en pré-version ; images RPi #3587 et essai d'installation complet à finir ; ZIA 0.4.4 et veille CERT-FR déployées gk2).* Moins de 200 lignes, par construction : l'historique du
+*Mis à jour : 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
-- ⬜ **Next Up (bêta 1 publiée le 2026-11-08, pré-version)** : images RPi (#3587, puis compilation et ajout à la release) ; installation complète de l'image finale sur VM (dé, Premier Pas, connexion, heure) ; puis fermeture de #3554. Ensuite : leurres CERT-FR exploitables (chemin des requêtes raw, #3584) et WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; module SearXNG (#3581) ; moteur VoiceStudio de gk3 muet (à diagnostiquer avec accord).
+- ⬜ **Next Up (2026-11-09)** : bouton « Réparer » livré (#3628) ; reste : relance de l'agrégateur après mise à jour d'un module monté (majauto), corriger `secubox-pilotage-vhost synchroniser` (admin.gk4), Status Live jalon 3 (section « Appliances » de live.secubox.in, en attente de l'accord du propriétaire), #3554 (tutoriel). Ensuite : leurres CERT-FR (#3584), WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; SearXNG (#3581).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
 
