@@ -16,6 +16,8 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - `profilectl scan` refusait sans LXC installé : modules.d vide, profil sans effet (auth arrêté, console refusée). `secubox-profiles` 0.28.4 (PR #3604), validé VM gk13 (ref #3603).
 - `secubox-majauto` se tuait en mettant à jour `secubox-premier-pas` (preinst dh_installsystemd) ; `premier-pas` 0.9.17 `--no-stop-on-upgrade` (PR #3607), validé par une vraie passe majauto sur secubox-rpi (RPi4), réparé à la main avant. closes #3606.
 - Supports : micro-SD RPi400 (image live bêta 1) et clé live amd64 flashées. Images RPi pas encore sur la release (contrôle des clés privées à faire).
+- Visio gk3 (La Suite Meet), validée par le propriétaire : un administrateur réel entre en son nom (opt-in par client OIDC, audité ; auth 1.8.20, PR #3613, closes #3612) ; salle créée depuis l'administration au format de code de Meet (meet 0.2.8, PRs #3611 #3617, closes #3610) ; ports médias réglables, gk3 en 7883/7884 relayés par gk2 (gk1 garde 7881/7882 ; meet 0.2.7, PR #3616, closes #3615). Reste : redirections Freebox 7883/7884 vers gk2 pour les participants extérieurs.
+- `admin.gk3.secubox.in` rendu au relais (registre du pilotage resté sur une box revenue en interface locale ; `secubox-pilotage-vhost retirer gk3`). Défaut de fond à corriger : `synchroniser` ne retire que les box ayant encore leur fichier nginx (admin.gk4 probablement bloqué de même). `secubox-meta` 0.1.54 : secubox-status dans l'arbre, catalogue App Store regénérable (PR #3609, ref #3605).
 
 ## 2026-11-08 — Kiosque sur l'administration, Hall facultatif ; fermeture des issues déployées
 
