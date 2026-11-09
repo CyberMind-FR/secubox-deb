@@ -7,7 +7,8 @@
 
   SecuBox — Santé des services (#2538), profil projet référence Aurora (.claude/AURORA-REFERENCE.md).
   DONNÉES RÉELLES, LECTURE SEULE : GET /api/v1/hub/public/health-batch (état de chaque module), /api/v1/hub/public/menu (nom, page et espace de chaque module),
-  /api/v1/hub/public/info (nom de la box), /api/v1/health-doctor/checks (preuve dynamique du WAF). Seule action : rejouer le test du WAF (POST, jeton de session).
+  /api/v1/hub/public/info (nom de la box), /api/v1/health-doctor/checks (preuve dynamique du WAF). Actions (POST, jeton de session) : rejouer le test du WAF ; réparer un module en panne
+  (POST /api/v1/health-doctor/reparer/{id}, suivi GET /api/v1/health-doctor/reparer, #3628).
   Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives.
 -->
 <html lang="fr">
@@ -72,6 +73,7 @@
         .vide{color:var(--faible);font-size:.8rem;padding:8px 2px}
         .count{color:var(--faible);font-weight:400}
         #retour{font-size:.78rem;color:var(--doux)} #retour.ko{color:#ffd9de}
+        .btn.repare{border-color:#ff8a9a;color:#ffd9de} .rep-msg{font-size:.74rem;color:var(--doux);margin-top:6px} .rep-msg.ko{color:#ffd9de}
         .toast{position:fixed;bottom:16px;right:16px;max-width:26rem;padding:9px 14px;background:var(--cyan);color:#04202a;border-radius:10px;font-size:.82rem;z-index:200;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none}
         .toast.show{opacity:1;transform:translateY(0)}
     </style>
@@ -123,6 +125,7 @@
         const LIBELLE = { ok: 'en bonne santé', veille: 'en veille', att: 'dégradé', hors: 'en panne', inconnu: 'inconnu' };
         const RANG = { hors: 0, att: 1, inconnu: 2, veille: 3, ok: 4 };
 
+        const REPARE = new Set(), RETOURS = {};
         let MODULES = {}, NOMS = {}, FILTRE = 'tous', TEXTE = '', OUVERTS = new Set(), PAUSE = false, RELEVE = 0, HOTE = '';
 
         // Un état par module : error → en panne ; ok → sain (ou en veille si la sonde le dit) ; tout le reste → dégradé ; rien → inconnu.
@@ -163,7 +166,16 @@
             if (NOMS[id] && NOMS[id].path) { const a = el('a', 'btn sm', 'Ouvrir la page'); a.href = NOMS[id].path; act.appendChild(a); }
             const c = el('button', 'btn sm', 'Copier l’identifiant'); c.type = 'button';
             c.addEventListener('click', ev => { ev.stopPropagation(); copie(id); });
-            act.appendChild(c); det.appendChild(act);
+            act.appendChild(c);
+            // Réparer (#3628) : un module EN PANNE, avec une session. Le serveur revérifie tout (unité en échec, administrateur).
+            if (e === 'hors' && (DEMO || jeton())) {
+                const rb = el('button', 'btn sm repare', REPARE.has(id) ? 'Réparation…' : 'Réparer'); rb.type = 'button'; rb.disabled = REPARE.has(id);
+                rb.title = 'Termine une mise à jour interrompue, efface l’échec et relance le service.';
+                rb.addEventListener('click', ev => { ev.stopPropagation(); repare(id, rb); });
+                act.insertBefore(rb, act.firstChild);
+            }
+            det.appendChild(act);
+            if (RETOURS[id]) { const r = el('div', 'rep-msg' + (RETOURS[id].ok ? '' : ' ko'), RETOURS[id].txt); det.appendChild(r); }
             // Cliquer déplie — SAUF si la personne est en train de sélectionner du texte (la sélection reste possible).
             const bascule = () => {
                 const o = !OUVERTS.has(id); if (o) OUVERTS.add(id); else OUVERTS.delete(id);
@@ -173,6 +185,30 @@
             t.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); bascule(); } });
             d.appendChild(t); d.appendChild(det);
             return d;
+        }
+        // Dépose la demande puis suit GET /reparer jusqu'à la fin (« fini » postérieur au dépôt), 3 min au plus.
+        async function repare(id, b) {
+            REPARE.add(id); OUVERTS.add(id); b.disabled = true; b.textContent = 'Réparation…'; delete RETOURS[id];
+            const fini = (ok, txt) => { REPARE.delete(id); RETOURS[id] = { ok: ok, txt: txt }; toast((ok ? 'Réparé : ' : 'Échec : ') + ((NOMS[id] && NOMS[id].nom) || id)); charge(); };
+            try {
+                if (DEMO) { await new Promise(ok => setTimeout(ok, 600)); MODULES[id] = { status: 'ok', msg: 'Running' }; fini(true, 'Service relancé (démonstration).'); return; }
+                const t = jeton(); if (!t) { const e = new Error('session requise'); e.statut = 401; throw e; }
+                const h = { Authorization: 'Bearer ' + t, Accept: 'application/json' };
+                const d = await lire('/api/v1/health-doctor/reparer/' + encodeURIComponent(id), { method: 'POST', headers: h });
+                const depuis = (d && d.depose) || Math.floor(Date.now() / 1000);
+                for (let i = 0; i < 90; i++) {
+                    await new Promise(ok => setTimeout(ok, 2000));
+                    const s = await lire('/api/v1/health-doctor/reparer', { headers: h });
+                    const m = s && s.modules && s.modules[id];
+                    if (m && m.phase === 'fini' && (m.fin || 0) >= depuis) {
+                        const et = (m.etapes || []).length ? ' (' + m.etapes.join(' ; ') + ')' : '';
+                        fini(!!m.ok, (m.message || (m.ok ? 'réparé' : 'échec')) + et); return;
+                    }
+                }
+                fini(false, 'Pas de réponse du service de réparation après 3 min : l’unité secubox-reparer.path est-elle active ?');
+            } catch (e) {
+                fini(false, e.statut === 401 || e.statut === 403 ? 'Session administrateur requise : connectez-vous pour réparer.' : e.statut === 409 ? 'Une réparation de ce module est déjà en cours.' : 'Demande refusée (' + e.message + ').');
+            }
         }
         async function copie(txt) {
             try { await navigator.clipboard.writeText(txt); toast('Copié : ' + txt); }

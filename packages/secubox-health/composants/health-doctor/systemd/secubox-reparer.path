@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Santé : demandes de réparation d'un service en panne (#3628)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3628
+
+[Path]
+# L'API health-doctor (secubox, servie par l'agrégateur) dépose un fichier *.demande ici ;
+# cette unité root draine le dossier. Ni sudo ni polkit.
+DirectoryNotEmpty=/run/secubox/health-reparer
+Unit=secubox-reparer.service
+
+[Install]
+WantedBy=paths.target
