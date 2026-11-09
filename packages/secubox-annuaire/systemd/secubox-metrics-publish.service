@@ -18,3 +18,15 @@ ExecStart=-/usr/sbin/sbx-fleetctl publish-modules
 # Status Live v2 (#3626) : relevé d'état signé de cette box ; sur l'agrégateur (status.toml), collecte des pairs vérifiés.
 ExecStart=-/usr/sbin/sbx-fleetctl publish-status
 ExecStart=-/usr/sbin/sbx-fleetctl collect-status
+# Socle § 10 (relecture #3626 : l'unité lit désormais les pairs du maillage) ; jamais plus de 2 min par tour.
+TimeoutStartSec=120
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+UMask=0027
+ReadWritePaths=/var/lib/secubox/annuaire

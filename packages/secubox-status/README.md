@@ -45,7 +45,16 @@ Compte dédié `secubox-status` (groupe `secubox`, sans shell). Unités durcies 
 (`AF_UNIX` seul), `ProtectSystem=strict`, écriture limitée à `/var/lib/secubox-status` (`StateDirectory`, hors de
 l'arbre partagé `/var/lib/secubox`) et à la socket. Caches lus sans suivre de lien, 8 Mio au plus.
 
+## Jalon 2 : pairs (#3626)
+
+Sur l'agrégateur (`node_role = "aggregator"` dans `status.toml` ; défaut `agent`), la projection ajoute les box du
+maillage depuis `/var/lib/secubox/annuaire/fleet/status-pairs.json` (source `pairs`, périmée après 300 s). Ce fichier
+est écrit par `sbx-fleetctl collect-status` (secubox-annuaire) après vérification de chaque relevé signé ;
+secubox-status le revalide encore (énumérations, bornes) car il vient d'un autre compte. Nom affiché : celui de la
+fiche signée de la box, jamais son nom déclaré ; nom porté par deux identités : « contesté », état inconnu. Box sans
+relevé recevable : affichée, état inconnu, avec la raison — jamais par son adresse.
+
 ## Hors jalon 1
 
 Signature Ed25519 et fédération par l'Annuaire (jalon 2), page publique, exposition HAProxy et sondes externes
-(jalon 3), incidents (jalon 3-4).
+(jalon 3), incidents (jalon 3-4). Le jalon 2 est décrit plus haut.

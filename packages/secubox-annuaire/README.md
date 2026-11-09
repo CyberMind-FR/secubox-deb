@@ -132,3 +132,17 @@ source de l'écouteur wg-mesh, nom et empreinte lus dans `p2p-public/pairs-enrol
   (`/var/lib/secubox/annuaire/droits-self.json`, écriture atomique sans suivre de lien) ; `annuairectl bans-apply` n'applique
   l'union fédérée que si le dernier droit connu inclut `bans-waf`, sinon les seules bans publiées par la box. Une réponse de
   plus de 48 h reste valable (audit `droits_self_perimes`). Jamais de réponse : comme avant.
+
+
+## Status Live v2 — relevé d'état signé (#3626)
+
+- `StatusSnapshot` (annuaire/model.py) : contrat distinct de `ModulesSnapshot`, `extra="forbid"`, borné — états,
+  compteurs de modules, disponibilité 30 j, frise 24 h ; jamais de ressources, d'adresses ni de détail interne.
+- `sbx-fleetctl publish-status` (minuterie `secubox-metrics-publish`, 60 s) : signe le relevé de secubox-status avec
+  `node.key` → `/var/lib/secubox/annuaire/fleet/status.json`, servi aux pairs sur l'écoute du maillage
+  `GET /api/v1/annuaire/fleet/status/self` (`lecture_ou_pair`).
+- `sbx-fleetctl collect-status` (agrégateur seul, `status.toml`) : lit chaque pair (sans proxy ni redirection,
+  256 Kio et 5 s au plus), exige signature, forme, fiche signée UNIQUE pour l'adresse et DID correspondant (sinon
+  « box non liée »), horodatage plausible, séquence croissante (mémoire `status-sequences.json`, monotone ; une
+  séquence plus basse n'est acceptée qu'avec un `ts` signé plus récent : box réinitialisée) → `status-pairs.json`
+  (0640, écriture atomique), lu par secubox-status.

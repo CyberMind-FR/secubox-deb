@@ -142,8 +142,11 @@ def test_collecte_seulement_sur_l_agregateur(env):
 
 def test_anti_rejeu_dans_la_collecte():
     src = CLI.read_text()
-    assert 'n.get("sequence", 0) < vu' in src and "relevé rejoué (séquence ancienne)" in src
+    assert "status-sequences.json" in src and "relevé rejoué (séquence ancienne)" in src
+    assert "if not ts > str(vu.get(\"ts\") or \"\")" in src                  # réinitialisation : ts signé plus récent
     assert "ProxyHandler({})" in src and "_SansRedirection" in src and "limite: int = 256 * 1024" in src
+    assert "r.read1(65536)" in src and "cancel_futures=True" in src
+    assert "box non liée" in src and 'n["nom"] = nom_par_did.get(did)' in src
     assert 'n["signature_verified"] = True' in src
 
 
@@ -153,6 +156,8 @@ def test_publication_sur_l_ecoute_du_maillage():
     unite = (PKG_ROOT / "systemd" / "secubox-metrics-publish.service").read_text()
     assert "ExecStart=-/usr/sbin/sbx-fleetctl publish-status" in unite
     assert "ExecStart=-/usr/sbin/sbx-fleetctl collect-status" in unite
+    for ligne in ("TimeoutStartSec=120", "NoNewPrivileges=yes", "ProtectSystem=strict", "ReadWritePaths=/var/lib/secubox/annuaire"):
+        assert ligne in unite, ligne
 
 
 def test_source_locale_pairs_jamais_publiee(env):
@@ -161,3 +166,17 @@ def test_source_locale_pairs_jamais_publiee(env):
     rc, _out, err = _cli(env, "publish-status")
     assert rc == 0, err
     assert "pairs" not in json.loads(Path(env["FLEET_STATUS_PATH"]).read_text())["sources"]
+
+
+def test_ecriture_atomique_0640(tmp_path, monkeypatch):
+    import importlib.machinery, importlib.util
+    loader = importlib.machinery.SourceFileLoader("fleetctl_mod", str(CLI))
+    spec = importlib.util.spec_from_loader("fleetctl_mod", loader)
+    m = importlib.util.module_from_spec(spec)
+    loader.exec_module(m)
+    cible = tmp_path / "status-pairs.json"
+    m._ecrire_json(str(cible), {"a": 1})
+    assert json.loads(cible.read_text()) == {"a": 1} and (cible.stat().st_mode & 0o777) == 0o640
+    assert [p.name for p in tmp_path.iterdir()] == ["status-pairs.json"]
+    assert m._nom_lie({"boxname": "gk3"}) == "gk3" and m._nom_lie({"boxname": "10.10.0.5"}) == ""
+    assert m._nom_lie({"boxname": "Gk3 évil"}) == ""
