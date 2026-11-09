@@ -3,7 +3,9 @@
 """Bouton « Réparer » (#3628) : la route dépose une demande sûre, gardée par require_jwt."""
 from __future__ import annotations
 
+import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -61,7 +63,7 @@ def test_deuxieme_demande_refusee_409(client, tmp_path):
     assert c.post("/reparer/majauto").status_code == 409        # demande encore dans le dossier
     for f in spool.iterdir():
         f.unlink()
-    (tmp_path / "reparer.json").write_text('{"modules": {"majauto": {"phase": "en_cours"}}}')
+    (tmp_path / "reparer.json").write_text(json.dumps({"modules": {"majauto": {"phase": "en_cours", "debut": time.time()}}}))
     assert c.post("/reparer/majauto").status_code == 409        # réparation en cours
     assert c.post("/reparer/hub").status_code == 202
 
@@ -70,3 +72,9 @@ def test_aucun_fichier_cache_ne_reste(client):
     c, spool = client
     c.post("/reparer/majauto")
     assert not [f for f in spool.iterdir() if f.name.startswith(".")]
+
+
+def test_en_cours_perime_ne_bloque_pas(client, tmp_path):
+    c, _ = client
+    (tmp_path / "reparer.json").write_text('{"modules": {"majauto": {"phase": "en_cours", "debut": 1}}}')
+    assert c.post("/reparer/majauto").status_code == 202

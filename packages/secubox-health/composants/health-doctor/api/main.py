@@ -97,6 +97,7 @@ def registered():
 _log = _logging.getLogger("secubox.health-doctor.reparer")
 REPARER_SPOOL = _Path(_os.environ.get("SECUBOX_REPARER_SPOOL", "/run/secubox/health-reparer"))
 REPARER_ETAT = _Path(_os.environ.get("SECUBOX_REPARER_ETAT", "/var/lib/secubox-health-reparer/reparer.json"))
+REPARER_PERIME_S = 7200
 _ID_MODULE = _re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
 _ACTEUR_SUR = _re.compile(r"[^A-Za-z0-9@._:-]")
 
@@ -115,7 +116,9 @@ def _reparer_etat() -> dict:
 
 
 def _demande_en_attente(module: str) -> bool:
-    if (_reparer_etat()["modules"].get(module) or {}).get("phase") == "en_cours":
+    e = _reparer_etat()["modules"].get(module) or {}
+    # Un « en_cours » de plus de 2 h vient d'un passage mort (le ctl le clôt au passage suivant) : pas de 409.
+    if e.get("phase") == "en_cours" and _time.time() - float(e.get("debut") or 0) < REPARER_PERIME_S:
         return True
     try:
         return any(n.endswith(f"-{module}.demande") or n.endswith(f"-{module}.tmp") for n in _os.listdir(REPARER_SPOOL))

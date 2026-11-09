@@ -103,10 +103,17 @@ def consigne(module: str, acteur: str, ok: bool, phase: str, message: str, debut
     etat["modules"][module] = entree
     garde = sorted(etat["modules"].items(), key=lambda kv: kv[1].get("fin", 0))[-50:]
     fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".reparer-")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump({"modules": dict(garde), "maj": entree["fin"]}, f, ensure_ascii=False)
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, ETAT)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"modules": dict(garde), "maj": entree["fin"]}, f, ensure_ascii=False)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, ETAT)
+    except OSError as e:
+        journal(f"état non écrit ({e.__class__.__name__})")
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
     if phase == "fini":
         _ajout(AUDIT, json.dumps({"ts": _maintenant(), "event": "sante_reparation", "module": module,
                                   "unite": f"secubox-{module}.service", "acteur": acteur, "ok": ok,
@@ -276,6 +283,21 @@ def _retire(dfd: int, nom: str) -> None:
         journal(f"entrée {nom!r} non retirée ({e.__class__.__name__})")
 
 
+def _clore_interrompues() -> None:
+    """Verrou tenu = aucun autre passage : un « en_cours » restant vient d'un passage mort (redémarrage,
+    arrêt en plein dpkg). Il est clos et audité, sinon l'API répondrait 409 pour toujours."""
+    try:
+        with open(ETAT, encoding="utf-8") as f:
+            mods = json.load(f).get("modules") or {}
+    except (OSError, ValueError, AttributeError):
+        return
+    for module, e in list(mods.items()):
+        if isinstance(e, dict) and e.get("phase") == "en_cours" and ID_RE.fullmatch(str(module)):
+            consigne(module, _acteur(str(e.get("acteur", ""))), False, "fini",
+                     "réparation interrompue (redémarrage ou arrêt du service) : la relancer", int(e.get("debut") or 0),
+                     [str(x)[:200] for x in (e.get("etapes") or []) if isinstance(x, str)])
+
+
 def process_ops() -> int:
     """Draine TOUT le dossier (une entrée laissée relancerait l'unité .path en boucle)."""
     os.makedirs(os.path.dirname(VERROU), exist_ok=True)
@@ -286,6 +308,7 @@ def process_ops() -> int:
         print("reparerctl: un passage est déjà en cours", file=sys.stderr)
         return 0
     fait = 0
+    _clore_interrompues()
     dfd = _ouvre_spool()
     try:
         for _tour in range(20):
@@ -298,7 +321,7 @@ def process_ops() -> int:
                         age = time.time() - os.stat(nom, dir_fd=dfd, follow_symlinks=False).st_mtime
                     except OSError:
                         continue
-                    if age < TEMP_GRACE_S:
+                    if 0 <= age < TEMP_GRACE_S:     # une date future (touch -d) ne protège rien
                         attente = True
                         continue
                     _retire(dfd, nom)

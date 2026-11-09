@@ -260,7 +260,8 @@ def test_audit_ne_suit_pas_un_lien(tmp_path):
 def test_unite_root_et_son_exception():
     base = CTL.parents[1]
     u = (base / "systemd" / "secubox-reparer.service").read_text()
-    for opt in ("NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectControlGroups=yes", "LockPersonality=yes",
+    assert "NoNewPrivileges=yes" not in u      # motivé dans l exception (transitions AppArmor des postinst)
+    for opt in ("PrivateTmp=yes", "ProtectControlGroups=yes", "LockPersonality=yes",
                 "RuntimeDirectory=secubox-reparer", "StateDirectory=secubox-health-reparer",
                 "ExecStart=/usr/sbin/secubox-reparerctl process-ops"):
         assert opt in u, opt
@@ -270,3 +271,34 @@ def test_unite_root_et_son_exception():
     assert "d /run/secubox/health-reparer 0770 root secubox" in (base / "systemd" / "secubox-reparer.tmpfiles").read_text()
     regles = (Path(__file__).resolve().parents[5] / ".claude" / "RULES-CODE.md").read_text()
     assert "`secubox-reparer.service`" in regles and "test_unite_root_et_son_exception" in regles
+
+
+def test_dpkg_sans_delai():
+    """§ 7 (exception écrite) : dpkg --configure -a n'a jamais de timeout ; l'unité non plus."""
+    import ast
+    arbre = ast.parse(CTL.read_text())
+    f = next(n for n in arbre.body if isinstance(n, ast.FunctionDef) and n.name == "_dpkg_terminer")
+    appels = [n for n in ast.walk(f) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "run"]
+    assert appels and all("timeout" not in {k.arg for k in c.keywords} for c in appels)
+    assert "TimeoutStartSec=infinity" in (CTL.parents[1] / "systemd" / "secubox-reparer.service").read_text()
+
+
+def test_reparation_interrompue_close_au_passage_suivant(tmp_path):
+    env = _env(tmp_path)
+    (tmp_path / "etat").mkdir()
+    (tmp_path / "etat" / "reparer.json").write_text(json.dumps(
+        {"modules": {"majauto": {"phase": "en_cours", "acteur": "gk2", "debut": 1, "etapes": []}}}))
+    r = _run(env, "process-ops")
+    assert r.returncode == 0, r.stderr
+    e = _etat(tmp_path)["modules"]["majauto"]
+    assert e["phase"] == "fini" and e["ok"] is False and "interrompue" in e["message"]
+    assert _audit(tmp_path)[0]["module"] == "majauto"
+
+
+def test_entree_cachee_datee_du_futur_retiree(tmp_path):
+    env = _env(tmp_path)
+    f = tmp_path / "spool" / ".futur.tmp"
+    f.write_text("x")
+    os.utime(f, (4102444800, 4102444800))    # 2100
+    assert _run(env, "process-ops").returncode == 0
+    assert not f.exists()

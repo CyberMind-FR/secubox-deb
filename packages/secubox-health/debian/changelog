@@ -10,7 +10,8 @@ secubox-health (1.4.0-1~trixie1) trixie; urgency=medium
     entier ; dépôt atomique côté API (nom caché, fsync, rename) et 409 si déjà en cours ;
     verrou en RuntimeDirectory ; journal et audit sans suivre de lien ; dates UTC ; refus de
     lan-dhcp*, netmodes-retour-boot, mobile* ; dpkg occupé : « réessayer » sans attendre ;
-    unité durcie (exception § 10 écrite dans RULES-CODE.md) ; postrm purge.
+    unité durcie (exceptions § 7 et § 10 écrites dans RULES-CODE.md) ; réparation interrompue
+    close au passage suivant (plus de 409 sans fin) ; postrm purge.
   * postinst : la boucle des scripts des composants ne tourne plus deux fois.
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:57:00 +0100
