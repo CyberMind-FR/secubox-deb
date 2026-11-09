@@ -42,6 +42,7 @@ def lieux(tmp_path):
     for nom, p in (("vhosts", vh), ("modules", mo), ("profiles", pr)):
         cfg["sources"][nom]["path"] = str(p)
     cfg["status"]["node_id"] = "gk2"
+    cfg["status"]["node_role"] = "aggregator"
     return tmp_path, cfg
 
 
@@ -182,7 +183,7 @@ def test_config_type_inattendu_ignore(tmp_path):
     p = tmp_path / "s.toml"
     p.write_text('[status]\nnode_role = "pirate"\n[history]\nretention_days = "beaucoup"\n')
     cfg = config.charger(p)
-    assert cfg["status"]["node_role"] == "aggregator" and cfg["history"]["retention_days"] == 90
+    assert cfg["status"]["node_role"] == "agent" and cfg["history"]["retention_days"] == 90
     assert config.nom_de_noeud({"status": {"node_id": "../x"}}, "gk2.secubox.in") == "gk2"
 
 
@@ -214,3 +215,80 @@ def test_unites_durcies_socket_0660_et_apparmor():
                       "RestrictAddressFamilies=AF_UNIX", "AppArmorProfile=-secubox-status", "UMask=0027"):
             assert ligne in u, ligne
     assert "profile secubox-status" in (racine / "apparmor" / "secubox-status").read_text()
+
+
+# ── jalon 2 (#3626) : pairs vérifiés par l'Annuaire ──────────────────────────
+def _pairs(tmp, cfg, quand, noeuds, indispo=()):
+    p = tmp / "pairs.json"
+    p.write_text(json.dumps({"generated_at": quand.isoformat(), "noeuds": list(noeuds), "indisponibles": list(indispo)}))
+    cfg["sources"]["pairs"]["path"] = str(p)
+
+
+PAIR = {"nom": "gk3", "hostname": "gk3", "overall": "degraded", "components": {"services": "degraded"}, "sources": {"modules": "fresh"},
+        "collected_at": T0.isoformat(), "counts": {"modules_total": 9, "modules_ok": 8, "modules_down": 1},
+        "availability_30d": 97.0, "hours": [{"hour": T0.isoformat(), "status": "degraded"}], "signature_verified": True,
+        "stale": False, "node_did": "did:plc:" + "0" * 32, "sig": "x"}
+
+
+def test_pairs_verifies_dans_la_flotte_sans_signature_brute(lieux):
+    tmp, cfg = lieux
+    _pairs(tmp, cfg, T0, [PAIR], [{"nom": "gk5", "mesh_ip": "10.10.0.10", "raison": "injoignable"}])
+    _collecte(lieux)
+    pub = json.loads((tmp / "etat" / "public" / "public-v2.json").read_text())
+    ids = {n["id"]: n for n in pub["nodes"]}
+    assert set(ids) == {"gk2", "gk3", "gk5"} and pub["fleet"]["nodes_total"] == 3
+    assert ids["gk3"]["status"] == "degraded" and ids["gk3"]["signature_verified"] is True
+    assert ids["gk5"]["status"] == "unknown" and ids["gk5"]["raison"] == "injoignable"
+    assert pub["fleet"]["status"] == "degraded"
+    texte = json.dumps(pub)
+    assert "did:plc" not in texte and '"sig"' not in texte and "10.10.0.10" not in texte
+
+
+def test_fichier_des_pairs_perime_rend_les_pairs_inconnus(lieux):
+    tmp, cfg = lieux
+    _pairs(tmp, cfg, T0 - timedelta(hours=1), [PAIR])
+    _collecte(lieux)
+    pub = json.loads((tmp / "etat" / "public" / "public-v2.json").read_text())
+    assert {n["id"]: n["status"] for n in pub["nodes"]}["gk3"] == "unknown"
+
+
+def test_un_agent_ne_lit_pas_les_pairs(lieux):
+    tmp, cfg = lieux
+    cfg["status"]["node_role"] = "agent"
+    _pairs(tmp, cfg, T0, [PAIR])
+    _collecte(lieux)
+    pub = json.loads((tmp / "etat" / "public" / "public-v2.json").read_text())
+    assert [n["id"] for n in pub["nodes"]] == ["gk2"]
+
+
+def test_nom_de_la_fiche_jamais_le_hostname_declare(lieux):
+    tmp, cfg = lieux
+    imposteur = {**PAIR, "nom": "gk8", "hostname": "gk3"}
+    _pairs(tmp, cfg, T0, [imposteur])
+    _collecte(lieux)
+    pub = json.loads((tmp / "etat" / "public" / "public-v2.json").read_text())
+    assert [n["id"] for n in pub["nodes"]] == ["gk2", "gk8"]
+
+
+def test_nom_conteste_inconnu(lieux):
+    tmp, cfg = lieux
+    _pairs(tmp, cfg, T0, [{**PAIR, "nom_conteste": True}, {**PAIR, "node_did": "did:plc:" + "1" * 32, "nom_conteste": True}])
+    _collecte(lieux)
+    pub = json.loads((tmp / "etat" / "public" / "public-v2.json").read_text())
+    contestes = [n for n in pub["nodes"] if "contesté" in n["id"]]
+    assert len(contestes) == 2 and all(n["status"] == "unknown" for n in contestes)
+
+
+def test_valeurs_aberrantes_revalidees(lieux):
+    tmp, cfg = lieux
+    pourri = {**PAIR, "overall": "<script>", "availability_30d": 500, "counts": {"modules_total": -3, "modules_ok": "9"},
+              "hours": [{"hour": "demain", "status": "operational"}, {"hour": T0.isoformat(), "status": "génial"}],
+              "nom": "../../etc", "components": {"services": "x", "cpu": "operational"}}
+    _pairs(tmp, cfg, T0, [pourri], [{"nom": "", "raison": "injoignable"}])
+    _collecte(lieux)
+    pub = json.loads((tmp / "etat" / "public" / "public-v2.json").read_text())
+    n = [x for x in pub["nodes"] if x["id"] != "gk2"][0]
+    assert n["id"] == "box du maillage" and n["status"] == "unknown" and n["availability_30d"] is None
+    assert n["counts"]["modules_total"] is None and n["counts"]["modules_ok"] is None
+    assert n["hours"] == [{"hour": T0.isoformat(), "status": "unknown"}] and n["components"] == {"services": "unknown"}
+    assert "<script>" not in json.dumps(pub) and "../" not in json.dumps(pub)

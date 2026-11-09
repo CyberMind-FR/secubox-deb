@@ -130,7 +130,8 @@
             c.appendChild(comp);
             const dl = el('dl');
             const ligne = (k, v) => { const d = el('div'); d.append(el('dt', '', k), el('dd', '', v)); dl.appendChild(d); };
-            ligne('Dernier relevé', age(n.last_seen));
+            if (n.raison) ligne('Relevé indisponible', String(n.raison));
+            ligne('Dernier relevé', n.last_seen ? age(n.last_seen) : '—');
             const cn = n.counts || {};
             ligne('Modules', cn.modules_total == null ? '—' : nombre(cn.modules_ok) + ' / ' + nombre(cn.modules_total) + ' en service' + (cn.modules_down ? ' · ' + cn.modules_down + ' muet(s)' : ''));
             ligne('Disponibilité 30 j', nombre(n.availability_30d, ' %'));

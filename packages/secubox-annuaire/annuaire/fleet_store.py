@@ -39,6 +39,12 @@ MODULES_PATH = os.environ.get(
 )
 
 
+# Status Live v2 (#3626) : relevé signé de cette box (servi aux pairs) et, sur l'agrégateur, relevés VÉRIFIÉS des pairs
+# (lus par secubox-status, groupe secubox).
+STATUS_PATH = os.environ.get("FLEET_STATUS_PATH", "/var/lib/secubox/annuaire/fleet/status.json")
+STATUS_PAIRS_PATH = os.environ.get("FLEET_STATUS_PAIRS_PATH", "/var/lib/secubox/annuaire/fleet/status-pairs.json")
+
+
 def write(rec: Dict[str, Any], path: str = SELF_PATH) -> None:
     """Atomically persist `rec` as JSON at `path`.
 

@@ -48,6 +48,8 @@ profile secubox-status flags=(attach_disconnected) {
   /var/cache/secubox/health/status.json r,
   /var/cache/secubox/health/modules.json r,
   /var/lib/secubox/profiles/validation/releve.json r,
+  # Jalon 2 (#3626) : relevés des pairs vérifiés par l'Annuaire (agrégateur).
+  /var/lib/secubox/annuaire/fleet/status-pairs.json r,
 
   # Ressources du système.
   @{PROC}/stat r,
