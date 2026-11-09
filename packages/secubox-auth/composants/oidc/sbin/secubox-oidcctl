@@ -8,6 +8,7 @@ SecuBox-Deb :: secubox-oidcctl — clés et clients du fournisseur OIDC (#1589).
 
   init                                   clé de signature + répertoires (idempotent)
   client-add ID --redirect URI [--redirect URI…] [--app APP] [--name NOM]
+  client-admins ID on|off   un administrateur réel de la box entre en son nom dans ce service (#3612)
                                          (ré)enregistre un client ; imprime son
                                          SECRET sur la sortie, UNE fois, pour
                                          l'outil qui configure le service — qui
@@ -92,6 +93,16 @@ def client_add(a) -> None:
     print(secret)
 
 
+def client_admins(a) -> None:
+    """Opt-in du service (#3612) : un administrateur réel de la box y entre en son nom (audité par le fournisseur)."""
+    d = F.clients()
+    if a.id not in d or not isinstance(d[a.id], dict):
+        sys.exit("client inconnu")
+    d[a.id]["administrateurs"] = a.etat == "on"
+    _ecrit(d)
+    print(f"{a.id} : administrateurs {'admis' if a.etat == 'on' else 'refusés'}")
+
+
 def client_rm(a) -> None:
     d = F.clients()
     if d.pop(a.id, None) is None:
@@ -101,7 +112,9 @@ def client_rm(a) -> None:
 
 def client_ls(_a) -> None:
     for cid, c in sorted(F.clients().items()):
-        print(f"{cid}\t{c.get('name')}\tapp={c.get('app') or '-'}\t{' '.join(c.get('redirect_uris') or [])}")
+        # admins en DERNIÈRE colonne : meetctl lit les adresses de rappel en 4e colonne.
+        print(f"{cid}\t{c.get('name')}\tapp={c.get('app') or '-'}\t{' '.join(c.get('redirect_uris') or [])}"
+              f"\tadmins={'oui' if c.get('administrateurs') is True else 'non'}")
 
 
 def main() -> None:
@@ -117,9 +130,12 @@ def main() -> None:
     ca.add_argument("--name", default="")
     cr = s.add_parser("client-rm")
     cr.add_argument("id")
+    cad = s.add_parser("client-admins")
+    cad.add_argument("id")
+    cad.add_argument("etat", choices=("on", "off"))
     s.add_parser("client-ls")
     a = p.parse_args()
-    {"init": lambda _: init(), "client-add": client_add, "client-rm": client_rm,
+    {"init": lambda _: init(), "client-add": client_add, "client-admins": client_admins, "client-rm": client_rm,
      "client-ls": client_ls}[a.cmd](a)
 
 

@@ -21,7 +21,7 @@ set -euo pipefail
 
 readonly MODULE="meet"
 # Tenue en phase avec debian/changelog.
-readonly VERSION="0.2.4"
+readonly VERSION="0.2.5"
 readonly CONFIG_FILE="${SECUBOX_MEET_CONFIG:-/etc/secubox/meet.toml}"
 readonly STATE_DIR="${SECUBOX_MEET_STATE_DIR:-/etc/secubox/meet}"
 readonly INSTALL_SCRIPT="${SECUBOX_MEET_INSTALL_SCRIPT:-/usr/lib/secubox/meet/install-lxc.sh}"
@@ -279,6 +279,13 @@ oidc_appliquer() {
     fi
 }
 
+# Arbitrage du propriétaire (#3612) : un administrateur réel de la box entre dans Visio en son nom. Opt-in du client
+# « meet » chez le fournisseur ; souple (un fournisseur plus ancien sans ce verbe n'empêche pas l'enregistrement).
+oidc_admins() {
+    secubox-oidcctl client-admins meet on >/dev/null 2>&1 \
+        || warn "secubox-oidcctl client-admins indisponible : seules les personnes du Hall entrent dans Visio"
+}
+
 cmd_oidc_enregistrer() {
     local renouveler=false
     [ "${1:-}" = "--renouveler" ] && renouveler=true
@@ -293,6 +300,7 @@ cmd_oidc_enregistrer() {
         fi
         # Enregistré mais jamais parvenu au conteneur (arrêté, rendu en échec) : on réessaie.
         oidc_appliquer
+        oidc_admins
         printf '{"success": true, "already": true, "applique": %s, "hint": "%s"}\n' "$APPLIQUE" "$(json_escape "$HINT")"
         return 0
     fi
@@ -310,6 +318,7 @@ cmd_oidc_enregistrer() {
     chmod 0600 "$tmp"
     mv -f "$tmp" "$OIDC_SECRET_FILE"
     secret=""
+    oidc_admins
     oidc_appliquer
     printf '{"success": true, "client_id": "meet", "redirect_uri": "%s", "applique": %s, "hint": "%s"}\n' \
         "$(json_escape "$redirect")" "$APPLIQUE" "$(json_escape "$HINT")"
