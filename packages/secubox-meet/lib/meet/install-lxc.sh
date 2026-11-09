@@ -47,6 +47,22 @@ readonly DOMAIN_FILE="$STATE_DIR/domaine"
 # Noms dérivés du domaine de CETTE box, jamais d'un nom en dur.
 MEET_DOMAIN="${SECUBOX_MEET_DOMAIN:-$(secubox-domaine visio 2>/dev/null || true)}"
 LIVEKIT_DOMAIN="${SECUBOX_LIVEKIT_DOMAIN:-$(secubox-domaine livekit 2>/dev/null || true)}"
+# Ports médias de LiveKit (#3615) : ceux de meet.toml, comme meetctl ; une box par adresse publique et par port, donc
+# réglables (gk1 garde 7881/7882, gk3 prend les suivants derrière le même maître).
+port_conf() {   # port_conf <clé> <défaut>
+    local v
+    v=$(python3 -I -c 'import sys, tomllib
+try:
+    d = tomllib.load(open(sys.argv[1], "rb"))
+except (OSError, ValueError):
+    d = {}
+v = d.get(sys.argv[2])
+print(v if isinstance(v, int) and not isinstance(v, bool) else "")' "${SECUBOX_MEET_CONFIG:-/etc/secubox/meet.toml}" "$1" 2>/dev/null)
+    [[ "$v" =~ ^[0-9]+$ ]] && [ "$v" -ge 1024 ] && [ "$v" -le 65535 ] && { echo "$v"; return; }
+    echo "$2"
+}
+MEET_TCP_PORT="${SECUBOX_MEET_TCP_PORT:-$(port_conf tcp_port 7881)}"
+MEET_UDP_PORT="${SECUBOX_MEET_UDP_PORT:-$(port_conf udp_port 7882)}"
 
 log()  { printf '[meet-install] %s\n' "$*"; }
 fail() { printf '[meet-install] ERREUR : %s\n' "$*" >&2; exit 1; }
