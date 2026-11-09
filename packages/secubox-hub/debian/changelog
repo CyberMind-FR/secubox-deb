@@ -1,3 +1,10 @@
+secubox-hub (1.12.51-1~trixie1) trixie; urgency=medium
+
+  * Menu : Vue d'ensemble et Santé jugées sur l'agrégateur qui les sert
+    (clé unite), plus marquées inactives faute d'unité à leur nom (#3597).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 05:00:00 +0100
+
 secubox-hub (1.12.50-1~trixie1) trixie; urgency=medium
 
   * Menu et Vue d'ensemble : un module installé par un méta-paquet mais dont

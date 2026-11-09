@@ -1,3 +1,10 @@
+secubox-auth (1.8.19-1~trixie1) trixie; urgency=medium
+
+  * Menu : Identité et Accès jugés sur l'agrégateur qui les sert (clé
+    unite), plus marqués inactifs faute d'unité à leur nom (#3597).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 05:00:00 +0100
+
 secubox-auth (1.8.18-1~trixie1) trixie; urgency=medium
 
   * postinst : une unite masquee par l image ne fait plus echouer dpkg

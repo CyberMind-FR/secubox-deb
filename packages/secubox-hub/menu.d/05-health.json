@@ -1,5 +1,6 @@
 {
   "id": "health",
+  "unite": "aggregator",
   "name": "Health Monitor",
   "category": "root",
   "icon": "💚",
