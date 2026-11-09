@@ -49,7 +49,7 @@ from secubox_core.auth import require_jwt, require_lecture
 
 from api import activite
 
-VERSION = "0.2.6"
+VERSION = "0.2.7"
 
 CTL = "/usr/sbin/meetctl"
 

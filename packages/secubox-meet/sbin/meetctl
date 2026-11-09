@@ -21,7 +21,7 @@ set -euo pipefail
 
 readonly MODULE="meet"
 # Tenue en phase avec debian/changelog.
-readonly VERSION="0.2.6"
+readonly VERSION="0.2.7"
 readonly CONFIG_FILE="${SECUBOX_MEET_CONFIG:-/etc/secubox/meet.toml}"
 readonly STATE_DIR="${SECUBOX_MEET_STATE_DIR:-/etc/secubox/meet}"
 readonly INSTALL_SCRIPT="${SECUBOX_MEET_INSTALL_SCRIPT:-/usr/lib/secubox/meet/install-lxc.sh}"
@@ -71,6 +71,9 @@ DOMAIN="$(resolve_domain)"
 LIVEKIT_DOMAIN="$(config_get livekit_domain "$(secubox-domaine livekit 2>/dev/null || true)")"
 TCP_PORT="$(config_get tcp_port 7881)"
 UDP_PORT="$(config_get udp_port 7882)"
+# #3615 : un port hors 1024..65535 ou non numérique retombe sur le défaut (jamais injecté dans nft ni dans le rendu).
+[[ "$TCP_PORT" =~ ^[0-9]{4,5}$ ]] && [ "$TCP_PORT" -le 65535 ] || TCP_PORT=7881
+[[ "$UDP_PORT" =~ ^[0-9]{4,5}$ ]] && [ "$UDP_PORT" -le 65535 ] || UDP_PORT=7882
 WEB_PORT="$(config_get web_port 80)"
 
 # Unités systemd internes connues (liste blanche pour `logs`).
@@ -393,7 +396,10 @@ cmd_media_expose() {
                 return 1
             fi
             install -d -m 0755 "$(dirname "$NFT_DST")"
-            install -m 0644 "$NFT_SRC" "$NFT_DST"
+            # Règle rendue avec les ports de meet.toml (#3615) : la source livrée porte 7881/7882.
+            sed -E -e "s/(tcp dport )7881( .*:)7881 /\1${TCP_PORT}\2${TCP_PORT} /" \
+                   -e "s/(udp dport )7882( .*:)7882 /\1${UDP_PORT}\2${UDP_PORT} /" "$NFT_SRC" > "$NFT_DST.tmp" \
+                && chmod 0644 "$NFT_DST.tmp" && mv -f "$NFT_DST.tmp" "$NFT_DST"
             # La table est SUPPRIMÉE avant rechargement : `nft -f` ajoute les
             # règles, il ne remplace pas la table ; sans cela un second --apply
             # empile des DNAT identiques et rend le compteur illisible.

@@ -35,8 +35,8 @@ rendre_livekit_yaml() {
 port: 7880
 bind_addresses: ["0.0.0.0"]
 rtc:
-  tcp_port: 7881
-  udp_port: 7882
+  tcp_port: ${MEET_TCP_PORT:-7881}
+  udp_port: ${MEET_UDP_PORT:-7882}
   use_external_ip: true
 redis:
   address: 127.0.0.1:6379
