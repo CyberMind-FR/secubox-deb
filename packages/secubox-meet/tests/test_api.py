@@ -229,7 +229,7 @@ def test_sudoers_argv_exacts():
     unites = ("postgresql", "redis-server", "livekit", "meet-backend", "nginx")
     assert sorted(regles) == sorted(["status", "start", "stop", "restart", "media-expose", "media-expose --apply *",
                                      "media-expose --revoke *", "oidc-verifier", "oidc-enregistrer",
-                                     "en-direct", "reunions", "clore *"]                         # #3182 : + auteur
+                                     "en-direct", "reunions", "clore *", "comptes", "salle-creer *"]                         # #3182 : + auteur
                                     + [f"logs {u} [0-9]*" for u in unites])
     assert tuple(unites) == M.KNOWN_UNITS
     t = SUDOERS.read_text()
