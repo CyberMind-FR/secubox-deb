@@ -1,3 +1,12 @@
+secubox-auth (1.8.21-1~trixie1) trixie; urgency=medium
+
+  * Dépendance explicite à python-multipart (python3-python-multipart |
+    python3-multipart) : sur l'image mobile, secubox-users tournait en boucle
+    (« Form data requires python-multipart ») car l'alternative de
+    secubox-core était satisfaite par python3-pip (#3621).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 13:30:00 +0100
+
 secubox-auth (1.8.20-1~trixie1) trixie; urgency=medium
 
   * OIDC : un administrateur réel (session de compte, ni appareil, ni
