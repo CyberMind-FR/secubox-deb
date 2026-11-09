@@ -167,9 +167,9 @@
                 <div class="tuile ok" title="Réunions ouvertes en ce moment (LiveKit)."><span class="l">En cours</span><span class="v" id="tEnCours">—</span><span class="s">réunions ouvertes</span></div>
                 <div class="tuile" title="Participants connectés en ce moment."><span class="l">Participants</span><span class="v" id="tPresents">—</span><span class="s">connectés maintenant</span></div>
             </section>
-            <div class="pan"><h3>Créer une salle <i>propriétaire : un compte déjà connecté à Meet</i></h3>
+            <div class="pan"><h3>Créer une salle <i>code au format de Meet (xxx-yyyy-zzz), généré si vide · propriétaire : un compte déjà connecté</i></h3>
                 <form id="formSalle" class="outils" autocomplete="off">
-                    <label>Nom<input id="sNom" type="text" maxlength="100" required placeholder="Réunion d’équipe"></label>
+                    <label>Code (facultatif)<input id="sNom" type="text" maxlength="12" pattern="[a-z]{3}-[a-z]{4}-[a-z]{3}" placeholder="généré : xxx-yyyy-zzz"></label>
                     <label>Accès<select id="sAcces"><option value="public">public (le lien suffit)</option><option value="trusted" selected>confiance (comptes de la box)</option><option value="restricted">restreint (membres invités)</option></select></label>
                     <label>Propriétaire<select id="sProprio" required><option value="">chargement…</option></select></label>
                     <button type="submit" class="btn" id="bCreer">Créer la salle</button>
@@ -529,7 +529,8 @@
         $('formSalle').addEventListener('submit', async (ev) => {
             ev.preventDefault();
             const nom = $('sNom').value.trim(), proprietaire = $('sProprio').value, acces = $('sAcces').value;
-            if (!nom || !proprietaire) { retour('rSalle', false, 'Nom et propriétaire requis.'); return; }
+            if (!proprietaire) { retour('rSalle', false, 'Propriétaire requis.'); return; }
+            if (nom && !/^[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(nom)) { retour('rSalle', false, 'Code : format xxx-yyyy-zzz (lettres minuscules), ou laisser vide.'); return; }
             const res = await occupe(['bCreer'], () => ecrire('POST', '/salles', { nom, acces, proprietaire }));
             if (res.ok && res.data && res.data.slug) {
                 const dom = ETAT && domaineValide(ETAT.domain) ? ETAT.domain : null;

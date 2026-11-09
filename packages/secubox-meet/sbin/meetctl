@@ -21,7 +21,7 @@ set -euo pipefail
 
 readonly MODULE="meet"
 # Tenue en phase avec debian/changelog.
-readonly VERSION="0.2.7"
+readonly VERSION="0.2.8"
 readonly CONFIG_FILE="${SECUBOX_MEET_CONFIG:-/etc/secubox/meet.toml}"
 readonly STATE_DIR="${SECUBOX_MEET_STATE_DIR:-/etc/secubox/meet}"
 readonly INSTALL_SCRIPT="${SECUBOX_MEET_INSTALL_SCRIPT:-/usr/lib/secubox/meet/install-lxc.sh}"
@@ -531,7 +531,7 @@ cmd_comptes() {
 # ResourceAccess « owner ». Fait par l'ORM de Meet, dans une transaction, avec l'environnement de son unité
 # (systemd-run DANS le conteneur, comme install-lxc.sh) ; les valeurs passent en JSON sur l'entrée standard, jamais
 # dans le code Python ni dans une commande shell.
-readonly PY_SALLE='import json, sys
+readonly PY_SALLE='import json, secrets, string, sys
 from django.db import IntegrityError, transaction
 from core.models import ResourceAccess, RoleChoices, Room, User
 d = json.load(sys.stdin)
@@ -539,22 +539,30 @@ try:
     u = User.objects.get(sub=d["proprietaire"])
 except User.DoesNotExist:
     print(json.dumps({"success": False, "error": "propriétaire inconnu de Meet (il doit s y être connecté une fois)"})); sys.exit(1)
+# Le code EST le nom et l adresse de la salle ; le front de Meet n ouvre que [a-z]{3}-[a-z]{4}-[a-z]{3} (#3610).
+def code():
+    s = lambda n: "".join(secrets.choice(string.ascii_lowercase) for _ in range(n))
+    return s(3) + "-" + s(4) + "-" + s(3)
+nom = d["nom"] or code()
+while not d["nom"] and Room.objects.filter(slug=nom).exists():
+    nom = code()
 try:
     with transaction.atomic():
-        r = Room(name=d["nom"], access_level=d["acces"])
+        r = Room(name=nom, access_level=d["acces"])
         r.save()
         ResourceAccess.objects.create(resource=r, user=u, role=RoleChoices.OWNER)
 except IntegrityError:
     print(json.dumps({"success": False, "error": "une salle porte déjà cette adresse"})); sys.exit(1)
 print(json.dumps({"success": True, "id": str(r.pk), "slug": r.slug, "nom": r.name, "acces": r.access_level}))'
 
-cmd_salle_creer() {   # salle-creer <nom> <public|trusted|restricted> <sub du propriétaire> [acteur]
+cmd_salle_creer() {   # salle-creer <code|-> <public|trusted|restricted> <sub du propriétaire> [acteur]
     local nom="${1:-}" acces="${2:-}" sub="${3:-}" acteur="${4:-root}"
+    [ "$nom" = "-" ] && nom=""          # « - » : code généré au format de Meet
     if [ "$#" -lt 3 ] || [ "$#" -gt 4 ] || ! acteur_valide "$acteur" \
        || ! [[ "$acces" =~ ^(public|trusted|restricted)$ ]] \
        || ! [[ "$sub" =~ ^[A-Za-z0-9][A-Za-z0-9._@:-]{0,254}$ ]] \
-       || [ "${#nom}" -lt 1 ] || [ "${#nom}" -gt 100 ] || [[ "$nom" =~ [[:cntrl:]] ]]; then
-        echo '{"success": false, "error": "usage : meetctl salle-creer <nom (1-100 car.)> <public|trusted|restricted> <sub> [acteur]"}'
+       || { [ -n "$nom" ] && ! [[ "$nom" =~ ^[a-z]{3}-[a-z]{4}-[a-z]{3}$ ]]; }; then
+        echo '{"success": false, "error": "usage : meetctl salle-creer <code xxx-yyyy-zzz | -> <public|trusted|restricted> <sub> [acteur]"}'
         return 1
     fi
     lxc_exists || { echo '{"success": false, "error": "conteneur Meet absent"}'; return 1; }
@@ -565,11 +573,11 @@ cmd_salle_creer() {   # salle-creer <nom> <public|trusted|restricted> <sub du pr
         -p User=meet -p EnvironmentFile=/etc/meet/meet.env -p WorkingDirectory=/opt/meet/src/src/backend \
         /opt/meet/venv/bin/python manage.py shell -c "$PY_SALLE" 2>/dev/null | tail -n 1) || rc=$?
     if [ "$rc" -eq 0 ] && [[ "$out" == '{"success": true'* ]]; then
-        audit salle-creer "salle « $nom » ($acces) créée pour $sub" "$acteur"
+        audit salle-creer "salle ${nom:-générée} ($acces) créée pour $sub : $out" "$acteur"
         printf '%s\n' "$out"
         return 0
     fi
-    audit salle-creer-echec "salle « $nom » : création en échec" "$acteur"
+    audit salle-creer-echec "salle ${nom:-générée} : création en échec" "$acteur"
     if [[ "$out" == '{"success": false'* ]]; then printf '%s\n' "$out"; else echo '{"success": false, "error": "création en échec (journal du backend Meet)"}'; fi
     return 1
 }
@@ -595,8 +603,8 @@ meetctl v$VERSION — La Suite Meet (LXC-native)
   reunions                  Salles de Meet, état en direct et dernière réunion (JSON)
   clore <salle> [acteur]    Met fin à une réunion en cours (audité, réussite comme échec)
   comptes                   Comptes de Meet pouvant posséder une salle (JSON)
-  salle-creer <nom> <public|trusted|restricted> <sub> [acteur]
-                            Crée une salle et son propriétaire (audité)
+  salle-creer <code|-> <public|trusted|restricted> <sub> [acteur]
+                            Crée une salle (code xxx-yyyy-zzz, « - » = généré) et son propriétaire (audité)
   help                      Cette aide
 EOF
 }

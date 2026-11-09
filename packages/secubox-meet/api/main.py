@@ -49,7 +49,7 @@ from secubox_core.auth import require_jwt, require_lecture
 
 from api import activite
 
-VERSION = "0.2.7"
+VERSION = "0.2.8"
 
 CTL = "/usr/sbin/meetctl"
 
@@ -195,6 +195,7 @@ class SalleRequest(BaseModel):
     proprietaire: str = ""
 
 
+CODE_RE = re.compile(r"[a-z]{3}-[a-z]{4}-[a-z]{3}")
 SUB_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._@:-]{0,254}")
 
 
@@ -357,12 +358,13 @@ def comptes(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
 
 @app.post("/salles")
 async def creer_salle(req: SalleRequest, payload: Any = Depends(require_jwt)) -> Dict[str, Any]:
-    nom = req.nom.strip()
-    if not 1 <= len(nom) <= 100 or any(ord(ch) < 32 or ord(ch) == 127 for ch in nom):
-        raise HTTPException(status_code=400, detail="nom de salle : 1 à 100 caractères, sans caractère de contrôle")
+    # Le code EST le nom et l'adresse : le front de Meet n'ouvre que xxx-yyyy-zzz (#3610). Vide : généré par meetctl.
+    nom = req.nom.strip().lower()
+    if nom and not CODE_RE.fullmatch(nom):
+        raise HTTPException(status_code=400, detail="code de salle : format xxx-yyyy-zzz (lettres), ou vide pour en générer un")
     if not SUB_RE.fullmatch(req.proprietaire):
         raise HTTPException(status_code=400, detail="propriétaire invalide")
-    res = await asyncio.to_thread(lambda: _ctl_json("salle-creer", nom, req.acces, req.proprietaire, _acteur(payload),
+    res = await asyncio.to_thread(lambda: _ctl_json("salle-creer", nom or "-", req.acces, req.proprietaire, _acteur(payload),
                                                     timeout=60))
     _activite_cache.clear()
     return res
