@@ -15,10 +15,11 @@ from . import SCHEMA_PUBLIC, VERSION
 
 
 def noeud_public(releve: Dict[str, Any], cfg_public: Dict[str, Any], heures: List[Dict[str, str]],
-                 dispo_30j: Optional[float], detail: List[Dict[str, Any]]) -> Dict[str, Any]:
+                 dispo_30j: Optional[float], detail: List[Dict[str, Any]], id_public: str = "appliance") -> Dict[str, Any]:
+    """`id_public` : le `node_id` réglé EXPLICITEMENT, sinon un alias neutre — jamais le nom de la machine."""
     h = releve["health"]
     n: Dict[str, Any] = {
-        "id": releve["node"]["id"],
+        "id": id_public,
         "status": h["overall"],
         "components": {k: h[k] for k in ("services", "web", "system", "validation") if k in h},
         "last_seen": releve["collected_at"],

@@ -11,6 +11,8 @@ Routes `def` : leurs lectures de fichier tournent dans le pool, jamais sur la bo
 """
 from __future__ import annotations
 
+import logging
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any, Dict
@@ -25,6 +27,7 @@ from secubox_status import config, historique  # noqa: E402
 from secubox_status.sources import lire_json_borne  # noqa: E402
 
 ETAT = config.ETAT
+log = logging.getLogger("secubox-status")
 router = APIRouter(prefix="/api/v1/status")
 
 
@@ -33,8 +36,9 @@ def _lire(nom: str) -> Dict[str, Any]:
         d = lire_json_borne(ETAT / nom)
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="aucun relevé encore : la collecte n'a pas tourné")
-    except (OSError, ValueError) as e:
-        raise HTTPException(status_code=500, detail=f"relevé illisible : {str(e)[:120]}")
+    except (OSError, ValueError, RecursionError) as e:
+        log.warning("relevé %s illisible : %s", nom, e)
+        raise HTTPException(status_code=500, detail="relevé illisible")
     if not isinstance(d, dict):
         raise HTTPException(status_code=500, detail="relevé mal formé")
     return d
@@ -60,13 +64,17 @@ def summary() -> Dict[str, Any]:
 @router.get("/history", dependencies=[Depends(require_lecture)])
 def history(heures: int = Query(24, ge=1, le=24 * 30)) -> Dict[str, Any]:
     noeud = _lire("snapshot.json").get("node", {}).get("id")
-    cx = historique.ouvrir_lecture(ETAT / "status.db")
-    if cx is None or not isinstance(noeud, str):
-        raise HTTPException(status_code=503, detail="historique absent")
     try:
-        return {"node": noeud, "hours": historique.heures(cx, noeud, heures)}
-    finally:
-        cx.close()
+        cx = historique.ouvrir_lecture(ETAT / "status.db")
+        if cx is None or not isinstance(noeud, str):
+            raise HTTPException(status_code=503, detail="historique absent")
+        try:
+            return {"hours": historique.heures(cx, noeud, heures)}
+        finally:
+            cx.close()
+    except sqlite3.Error as e:
+        log.warning("historique illisible : %s", e)
+        raise HTTPException(status_code=503, detail="historique momentanément indisponible")
 
 
 @router.get("/admin/snapshot", dependencies=[Depends(require_jwt)])

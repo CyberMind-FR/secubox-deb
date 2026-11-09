@@ -81,6 +81,8 @@ def lire_source(chemin: Path, horodatage: Callable[[Any], Any], perime_apres_s: 
         return Lecture("absent", motif="fichier absent")
     except PermissionError:
         return Lecture("invalid", motif="lecture refusée")
+    except RecursionError:
+        return Lecture("invalid", motif="JSON trop imbriqué")
     except (OSError, ValueError, UnicodeDecodeError) as e:
         return Lecture("invalid", motif=str(e)[:120])
     if not isinstance(donnees, dict):

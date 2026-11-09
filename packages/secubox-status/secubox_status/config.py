@@ -59,6 +59,12 @@ def charger(chemin: Path = CONFIG) -> Dict[str, Any]:
     return cfg
 
 
+def id_public(cfg: Dict[str, Any]) -> str:
+    """Identifiant publié : seulement un `node_id` réglé explicitement et valide ; sinon « appliance »."""
+    v = cfg["status"].get("node_id") or ""
+    return v if _NOM.match(v) else "appliance"
+
+
 def nom_de_noeud(cfg: Dict[str, Any], hote: str) -> str:
     """Identifiant d'affichage du nœud (jamais une preuve d'identité : celle-ci viendra du DID au jalon 2)."""
     for candidat in (cfg["status"].get("node_id") or "", hote.split(".")[0].lower()):

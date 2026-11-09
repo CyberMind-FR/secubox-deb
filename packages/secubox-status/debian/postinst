@@ -14,6 +14,12 @@ case "$1" in
         if [ ! -e /etc/secubox/status.toml ] && [ ! -L /etc/secubox/status.toml ] && [ -d /etc/secubox ] && [ ! -L /etc/secubox ]; then
             install -m 0640 -o root -g secubox /usr/share/secubox/status/status.toml.example /etc/secubox/status.toml
         fi
+        # Profil AppArmor AVANT tout démarrage (les unités le nomment ; « - » : ignoré là où AppArmor est absent).
+        if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] \
+           && command -v apparmor_parser >/dev/null 2>&1; then
+            apparmor_parser -r /etc/apparmor.d/secubox-status \
+              || echo "secubox-status : profil AppArmor non chargé (apparmor_parser -r /etc/apparmor.d/secubox-status ; journalctl -k)" >&2
+        fi
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload
             systemctl enable secubox-status.service >/dev/null 2>&1 || true

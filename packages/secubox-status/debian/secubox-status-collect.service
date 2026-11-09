@@ -19,6 +19,7 @@ ExecStart=/usr/bin/python3 -m secubox_status.collecte
 StateDirectory=secubox-status
 StateDirectoryMode=0750
 UMask=0027
+AppArmorProfile=-secubox-status
 Nice=10
 MemoryMax=128M
 TimeoutStartSec=60

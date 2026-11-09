@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -24,10 +25,11 @@ from .sources import Lecture, lire_source
 log = logging.getLogger("secubox-status")
 
 
-def ecrire_atomique(chemin: Path, donnees: Any) -> None:
+def ecrire_atomique(chemin: Path, donnees: Any, mode: int = 0o640) -> None:
     texte = json.dumps(donnees, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     fd, tmp = tempfile.mkstemp(dir=str(chemin.parent), prefix=f".{chemin.name}.")
     try:
+        os.fchmod(fd, mode)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(texte)
             f.flush()
@@ -97,7 +99,8 @@ def collecter(cfg: Dict[str, Any], etat: Path, maintenant: Optional[datetime] = 
         historique.purger(cx, int(cfg["history"].get("retention_days", 90)), maintenant)
         public = projection.flotte(
             [projection.noeud_public(releve, cfg["public"], historique.heures(cx, noeud, 24, maintenant),
-                                     historique.disponibilite(cx, noeud, 30, maintenant), detail)],
+                                     historique.disponibilite(cx, noeud, 30, maintenant), detail,
+                                     config.id_public(cfg))],
             quand)
     finally:
         cx.close()
@@ -111,8 +114,8 @@ def main(argv=None) -> int:
     cfg = config.charger()
     try:
         r = collecter(cfg, config.ETAT)
-    except OSError as e:
-        log.error("collecte impossible : %s", e)
+    except (OSError, sqlite3.Error) as e:
+        log.exception("collecte impossible : %s", e)
         return 1
     log.info("relevé %s n°%d : %s (sources %s)", r["node"]["id"], r["sequence"], r["health"]["overall"],
              ", ".join(f"{k}={v}" for k, v in r["sources"].items()))

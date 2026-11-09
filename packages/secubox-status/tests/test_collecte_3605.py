@@ -148,14 +148,16 @@ def test_heures_sans_releve_sont_inconnues(lieux):
 
 
 def test_projection_publique_sans_secret_ni_inventaire(lieux):
-    tmp, _ = lieux
+    tmp, cfg = lieux
+    cfg["status"]["node_id"] = ""          # cas du TOML semé : jamais le nom de la machine (relecture #3605)
     _collecte(lieux)
     pub = json.loads((tmp / "etat" / "public" / "public-v2.json").read_text())
     texte = json.dumps(pub)
     assert pub["schema"] == "secubox.status.public" and pub["fleet"]["nodes_total"] == 1
     n = pub["nodes"][0]
     assert n["signature_verified"] is None and n["externally_confirmed"] is None
-    for interdit in ("kernel", "hostname", "6.12.113", "resources", "modules\"", "source_notes"):
+    assert n["id"] == "appliance"
+    for interdit in ("kernel", "hostname", PLAT["hostname"], "6.12.113", "resources", "modules\"", "source_notes"):
         assert interdit not in texte, interdit
 
 
@@ -186,3 +188,29 @@ def test_config_type_inattendu_ignore(tmp_path):
 
 def test_lecture_inconnue_vide():
     assert normalise.services(Lecture("stale"))[0] == "unknown"
+
+
+def test_json_trop_imbrique_ne_fait_pas_echouer_la_collecte(lieux):
+    tmp, cfg = lieux
+    Path(cfg["sources"]["profiles"]["path"]).write_text("[" * 100000 + "]" * 100000)
+    r = _collecte(lieux)
+    assert r["sources"]["profiles"] == "invalid"
+
+
+def test_projection_lisible_par_le_groupe(lieux):
+    tmp, _ = lieux
+    _collecte(lieux)
+    assert (tmp / "etat" / "public" / "public-v2.json").stat().st_mode & 0o777 == 0o640
+
+
+def test_unites_durcies_socket_0660_et_apparmor():
+    racine = Path(__file__).resolve().parent.parent
+    api = (racine / "debian" / "secubox-status.service").read_text()
+    col = (racine / "debian" / "secubox-status-collect.service").read_text()
+    assert "chmod 660 /run/secubox/status.sock" in api and "UMask=0027" in api
+    assert "RuntimeDirectory=secubox\n" not in api
+    for u in (api, col):
+        for ligne in ("User=secubox-status", "NoNewPrivileges=yes", "ProtectSystem=strict", "CapabilityBoundingSet=\n",
+                      "RestrictAddressFamilies=AF_UNIX", "AppArmorProfile=-secubox-status", "UMask=0027"):
+            assert ligne in u, ligne
+    assert "profile secubox-status" in (racine / "apparmor" / "secubox-status").read_text()

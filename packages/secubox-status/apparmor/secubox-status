@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de Status Live v2 (#3605), nommé par AppArmorProfile= dans secubox-status.service et
+# secubox-status-collect.service, chargé par le postinst. LECTURE des trois caches, de /proc, de /sys/class/thermal et
+# de status.toml ; ÉCRITURE du seul /var/lib/secubox-status et de la socket. Aucun secret, aucun sudo, aucun réseau IP.
+
+#include <tunables/global>
+
+profile secubox-status {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/status/ r,
+  /usr/lib/secubox/status/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # ExecStartPost de l'API : remettre la socket en 0660.
+  /{usr/,}bin/sh ix,
+  /{usr/,}bin/dash ix,
+  /{usr/,}bin/seq ix,
+  /{usr/,}bin/sleep ix,
+  /{usr/,}bin/chmod ix,
+
+  # Configuration ; jamais les secrets.
+  /etc/secubox/status.toml r,
+  deny /etc/secubox/secrets/** rwklx,
+
+  # Sources (caches d'autres modules), en lecture.
+  /var/cache/secubox/health/status.json r,
+  /var/cache/secubox/health/modules.json r,
+  /var/lib/secubox/profiles/validation/releve.json r,
+
+  # Ressources du système.
+  @{PROC}/stat r,
+  @{PROC}/meminfo r,
+  @{PROC}/loadavg r,
+  @{PROC}/uptime r,
+  owner @{PROC}/@{pid}/** r,
+  /sys/class/thermal/ r,
+  /sys/devices/virtual/thermal/** r,
+  /sys/devices/**/thermal_zone*/temp r,
+
+  # État, historique, projection publique.
+  /var/lib/secubox-status/ rw,
+  /var/lib/secubox-status/** rwk,
+
+  # API.
+  /run/secubox/ r,
+  /run/secubox/status.sock rw,
+  network unix stream,
+}
