@@ -244,7 +244,8 @@ Recommends: secubox-premier-pas,
 Suggests: secubox-led-heartbeat,
          secubox-console,
          secubox-kiosk,
-         secubox-plymouth
+         secubox-plymouth,
+         secubox-status
 Description: SecuBox — service « Noyau »
  Bibliothèque centrale, passerelle d'API, hôte de groupe, santé.
  .
