@@ -104,6 +104,26 @@ def collecter(cfg: Dict[str, Any], etat: Path, maintenant: Optional[datetime] = 
             quand)
     finally:
         cx.close()
+    # Jalon 2 (#3626) : pairs vérifiés par l'Annuaire, sur l'agrégateur seulement.
+    if cfg["status"].get("node_role") == "aggregator" and (cfg["sources"].get("pairs") or {}).get("enabled", True):
+        sp = cfg["sources"]["pairs"]
+        pairs = lire_source(Path(sp["path"]), lambda d: d.get("generated_at"),
+                            float(sp.get("stale_after_seconds", 300)), maintenant)
+        releve["sources"]["pairs"] = pairs.etat
+        if pairs.etat in ("fresh", "stale") and isinstance(pairs.donnees, dict):
+            frais = pairs.etat == "fresh"
+            vus = {n["id"] for n in public["nodes"]}
+            for rec in pairs.donnees.get("noeuds") or []:
+                if isinstance(rec, dict) and rec.get("hostname") not in vus:
+                    n = projection.noeud_pair(rec, frais and not rec.get("stale"))
+                    public["nodes"].append(n)
+                    vus.add(n["id"])
+            for ind in pairs.donnees.get("indisponibles") or []:
+                if isinstance(ind, dict) and ind.get("nom") not in vus:
+                    public["nodes"].append(projection.noeud_absent(ind))
+                    vus.add(str(ind.get("nom")))
+            public = projection.flotte(public["nodes"], quand)
+        ecrire_atomique(etat / "snapshot.json", releve)
     (etat / "public").mkdir(mode=0o750, exist_ok=True)
     ecrire_atomique(etat / "public" / "public-v2.json", public)
     return releve

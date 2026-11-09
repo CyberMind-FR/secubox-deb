@@ -40,6 +40,31 @@ def noeud_public(releve: Dict[str, Any], cfg_public: Dict[str, Any], heures: Lis
     return n
 
 
+def noeud_pair(rec: Dict[str, Any], frais: bool) -> Dict[str, Any]:
+    """Un pair vérifié par l'Annuaire (#3626) : liste blanche des champs du relevé signé. Relevé trop vieux = inconnu."""
+    return {
+        "id": str(rec.get("hostname") or "?")[:63],
+        "status": rec.get("overall", "unknown") if frais else "unknown",
+        "components": {k: v for k, v in (rec.get("components") or {}).items()
+                       if k in ("services", "web", "system", "validation")},
+        "last_seen": rec.get("collected_at"),
+        "measurement_complete": all(v == "fresh" for v in (rec.get("sources") or {}).values()) and frais,
+        "signature_verified": rec.get("signature_verified") is True,
+        "externally_confirmed": None,
+        "availability_30d": rec.get("availability_30d"),
+        "hours": (rec.get("hours") or [])[-24:],
+        "counts": {k: (rec.get("counts") or {}).get(k) for k in ("modules_total", "modules_ok", "modules_degraded",
+                                                                 "modules_down")},
+    }
+
+
+def noeud_absent(ind: Dict[str, Any]) -> Dict[str, Any]:
+    """Une box du maillage sans relevé recevable : affichée, état inconnu, avec la raison (jamais une box qui disparaît)."""
+    return {"id": str(ind.get("nom") or "?")[:63], "status": "unknown", "components": {}, "last_seen": None,
+            "measurement_complete": False, "signature_verified": None, "externally_confirmed": None,
+            "availability_30d": None, "hours": [], "counts": {}, "raison": str(ind.get("raison") or "")[:80]}
+
+
 def flotte(noeuds: List[Dict[str, Any]], genere: str) -> Dict[str, Any]:
     compte = {e: sum(1 for n in noeuds if n["status"] == e) for e in ("operational", "degraded", "outage", "unknown")}
     if not noeuds or compte["unknown"] == len(noeuds):

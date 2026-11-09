@@ -878,6 +878,50 @@ class ModulesSnapshot(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Status Live v2 (#3595, jalon 2 #3626) — relevé d'état signé d'une box, contrat DISTINCT de ModulesSnapshot.
+# Seulement des états, des compteurs et une frise : jamais de ressources, d'adresses, de noyau ni de détail interne.
+# ---------------------------------------------------------------------------
+
+_ETAT_STATUS = Literal["operational", "degraded", "outage", "maintenance", "unknown"]
+_ETAT_SOURCE = Literal["fresh", "partial", "stale", "absent", "invalid"]
+
+
+class StatusHeure(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hour:   str = Field(..., max_length=40, pattern=_RFC3339)
+    status: _ETAT_STATUS
+
+
+class StatusComptes(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    modules_total:    Optional[int] = Field(default=None, ge=0, le=10000)
+    modules_ok:       Optional[int] = Field(default=None, ge=0, le=10000)
+    modules_degraded: Optional[int] = Field(default=None, ge=0, le=10000)
+    modules_down:     Optional[int] = Field(default=None, ge=0, le=10000)
+
+
+class StatusSnapshot(BaseModel):
+    """Relevé Status Live signé d'une box (#3626) : vérifié par l'agrégateur avant toute agrégation."""
+    model_config = ConfigDict(extra="forbid")
+
+    node_did:         str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    issued_by:        str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    hostname:         str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]{0,62}$")
+    ts:               str = Field(..., max_length=40, pattern=_RFC3339, description="RFC 3339, signature")
+    collected_at:     str = Field(..., max_length=40, pattern=_RFC3339, description="RFC 3339, relevé")
+    sequence:         int = Field(..., ge=1, le=2**62, description="strictement croissante par box : anti-rejeu")
+    overall:          _ETAT_STATUS
+    components:       Dict[Literal["services", "web", "system", "validation"], _ETAT_STATUS] = Field(default_factory=dict)
+    sources:          Dict[Literal["modules", "vhosts", "profiles", "system"], _ETAT_SOURCE] = Field(default_factory=dict)
+    counts:           StatusComptes = Field(default_factory=StatusComptes)
+    availability_30d: Optional[float] = Field(default=None, ge=0, le=100)
+    hours:            List[StatusHeure] = Field(default_factory=list, max_length=24)
+    sig:              Optional[str] = Field(default=None, max_length=200)
+    signer_did:       Optional[str] = Field(default=None, pattern=r"^did:plc:[0-9a-f]{32}$")
+    signer_pub:       Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+# ---------------------------------------------------------------------------
 # Progressive Release Rings (center-driven artifact delivery)
 # ---------------------------------------------------------------------------
 

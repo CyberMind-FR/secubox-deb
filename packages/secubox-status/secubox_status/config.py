@@ -17,7 +17,8 @@ CONFIG = Path("/etc/secubox/status.toml")
 ETAT = Path("/var/lib/secubox-status")
 
 DEFAUTS: Dict[str, Any] = {
-    "status": {"node_id": "", "node_role": "aggregator"},
+    # Rôle par défaut « agent » (#3626) : seule la box qui agrège (gk2) le déclare dans son status.toml.
+    "status": {"node_id": "", "node_role": "agent"},
     "history": {"retention_days": 90},
     "sources": {
         "vhosts": {"enabled": True, "path": "/var/cache/secubox/health/status.json", "stale_after_seconds": 300},
@@ -25,6 +26,8 @@ DEFAUTS: Dict[str, Any] = {
         "profiles": {"enabled": True, "path": "/var/lib/secubox/profiles/validation/releve.json",
                      "stale_after_seconds": 900},
         "system": {"enabled": True},
+        # Jalon 2 (#3626) : relevés des pairs DÉJÀ vérifiés par l'Annuaire (signature, DID, séquence), agrégateur seul.
+        "pairs": {"enabled": True, "path": "/var/lib/secubox/annuaire/fleet/status-pairs.json", "stale_after_seconds": 300},
     },
     "public": {"expose_resources": False, "expose_module_inventory": False},
 }
@@ -55,7 +58,7 @@ def charger(chemin: Path = CONFIG) -> Dict[str, Any]:
         brut = {}
     cfg = _fusion(DEFAUTS, brut if isinstance(brut, dict) else {})
     if cfg["status"]["node_role"] not in ("aggregator", "agent"):
-        cfg["status"]["node_role"] = "aggregator"
+        cfg["status"]["node_role"] = "agent"
     return cfg
 
 

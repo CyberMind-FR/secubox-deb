@@ -1,3 +1,14 @@
+secubox-annuaire (0.17.6-1~trixie1) trixie; urgency=medium
+
+  * Status Live v2, jalon 2 (#3626) : StatusSnapshot (contrat distinct, borné,
+    sans détail interne), fleet.sign_status / normaliser_status, sbx-fleetctl
+    publish-status (minuterie secubox-metrics-publish) et collect-status sur
+    l'agrégateur (signature, forme, DID attendu par adresse, horodatage,
+    séquence croissante = anti-rejeu, box absentes nommées) ;
+    /fleet/status/self sur l'écoute du maillage.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:00:00 +0100
+
 secubox-annuaire (0.17.5-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images

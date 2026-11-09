@@ -7,7 +7,7 @@
 [status]
 # Identifiant d'affichage (vide = nom court de la machine). L'identité réelle viendra du DID (jalon 2).
 node_id = ""
-node_role = "aggregator"
+node_role = "agent"        # « aggregator » sur la seule box qui rassemble la flotte (gk2)
 
 [history]
 retention_days = 90

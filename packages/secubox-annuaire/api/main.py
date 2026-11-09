@@ -992,6 +992,12 @@ async def get_fleet_modules_self():
     return await asyncio.to_thread(fleet_store.read, fleet_store.MODULES_PATH) or {}
 
 
+@app.get("/fleet/status/self", dependencies=[Depends(lecture_ou_pair)])
+async def get_fleet_status_self():
+    """Le relevé Status Live signé de cette box (#3626, sbx-fleetctl publish-status), ou {} s'il n'est pas publié."""
+    return await asyncio.to_thread(fleet_store.read, fleet_store.STATUS_PATH) or {}
+
+
 def _fetch_modules_peer(url: str, timeout: float = 3, echeance_s: float = 5.0,
                         limite: int = 4 * 1024 * 1024) -> "tuple[Optional[Dict[str, Any]], Optional[str]]":
     """(relevé brut, None) ou (None, raison) — raison affichée dans la colonne de la box (injectable en test).

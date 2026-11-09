@@ -62,6 +62,11 @@ if LIB not in sys.path:
 KEY_PATH = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
 SECUBOX_CONF = os.environ.get("SECUBOX_CONF", "/etc/secubox/secubox.conf")
 RELEVE_PATH = os.environ.get("SECUBOX_PROFILS_VALIDATION", "/var/lib/secubox/profiles/validation/releve.json")
+# Status Live v2 (#3626) : relevé local et projection écrits par secubox-status (groupe secubox, 0640) ; rôle de la box.
+STATUS_RELEVE = os.environ.get("SECUBOX_STATUS_RELEVE", "/var/lib/secubox-status/snapshot.json")
+STATUS_PUBLIC = os.environ.get("SECUBOX_STATUS_PUBLIC", "/var/lib/secubox-status/public/public-v2.json")
+STATUS_CONF = os.environ.get("SECUBOX_STATUS_CONF", "/etc/secubox/status.toml")
+ANNUAIRE_DB = os.environ.get("ANNUAIRE_DB_PATH", "/var/lib/secubox/annuaire/journal.db")
 # Champs d'un paquet que le relevé signé porte (ModulesSnapshot) ; cpu_ns et releve_epoch restent internes au relevé.
 _CHAMPS_PAQUET = ("paquet", "version", "statut_dpkg", "installe", "attendu", "recommande", "meta", "hors_profil",
                   "etat", "unites", "agregateur", "memoire_o", "cpu_pct", "erreurs")
@@ -192,6 +197,180 @@ def cmd_publish_modules(args) -> int:
     return 0
 
 
+def _lire_json(chemin: str):
+    try:
+        with open(chemin, encoding="utf-8") as f:
+            d = json.load(f)
+        return d if isinstance(d, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def cmd_publish_status(args) -> int:
+    """Signe le relevé Status Live de cette box (#3626) : états, compteurs, frise — rien d'interne."""
+    if not _fleet_publish_enabled():
+        print(json.dumps({"skipped": "fleet_publish disabled"}))
+        return 0
+    releve = _lire_json(STATUS_RELEVE)
+    if not releve:
+        print(json.dumps({"skipped": "aucun relevé Status (secubox-status absent ou pas encore passé)"}, ensure_ascii=False))
+        return 0
+    from annuaire import fleet, fleet_store  # noqa: PLC0415
+    from annuaire.model import now_rfc3339  # noqa: PLC0415
+    precedent = fleet_store.read(fleet_store.STATUS_PATH)
+    if precedent and precedent.get("sequence") == releve.get("sequence"):
+        print(json.dumps({"skipped": "relevé inchangé"}, ensure_ascii=False))
+        return 0
+    priv = _load_box_priv()
+    node_did = _self_did(priv)
+    if _is_dryrun():
+        print(json.dumps({"dryrun": True, "would": "publish-status", "node_did": node_did}, indent=2))
+        return 0
+    public = _lire_json(STATUS_PUBLIC) or {}
+    soi = (public.get("nodes") or [{}])[0] if isinstance(public.get("nodes"), list) and public.get("nodes") else {}
+    sante = releve.get("health") if isinstance(releve.get("health"), dict) else {}
+    fields = {"node_did": node_did, "issued_by": node_did, "hostname": (releve.get("node") or {}).get("hostname"),
+              "ts": now_rfc3339(), "collected_at": releve.get("collected_at"), "sequence": releve.get("sequence"),
+              "overall": sante.get("overall", "unknown"),
+              "components": {k: sante[k] for k in ("services", "web", "system", "validation") if k in sante},
+              # Sources du CONTRAT seulement : « pairs » (agrégateur) reste locale.
+              "sources": {k: v for k, v in (releve.get("sources") or {}).items()
+                          if k in ("modules", "vhosts", "profiles", "system")},
+              "counts": {k: (releve.get("counts") or {}).get(k)
+                         for k in ("modules_total", "modules_ok", "modules_degraded", "modules_down")},
+              "availability_30d": soi.get("availability_30d"),
+              "hours": (soi.get("hours") or [])[-24:]}
+    from pydantic import ValidationError  # noqa: PLC0415
+    try:
+        rec = fleet.sign_status(priv, fields)
+    except ValidationError as e:
+        _die(f"relevé Status refusé par le modèle : {e.error_count()} erreur(s), champ {e.errors()[0].get('loc')}")
+    fleet_store.write(rec, fleet_store.STATUS_PATH)
+    print(json.dumps({"published": node_did, "sequence": rec["sequence"]}, indent=2))
+    return 0
+
+
+def _role_agregateur() -> bool:
+    try:
+        import tomllib  # noqa: PLC0415
+        with open(STATUS_CONF, "rb") as f:
+            return (tomllib.load(f).get("status") or {}).get("node_role", "agent") == "aggregator"
+    except (OSError, ValueError):
+        return False
+
+
+def _lire_pair(url: str, timeout: float = 3.0, echeance_s: float = 5.0, limite: int = 256 * 1024):
+    """(relevé brut, None) ou (None, raison) : sans proxy, sans redirection, taille et durée bornées."""
+    import time  # noqa: PLC0415
+    import urllib.error  # noqa: PLC0415
+    import urllib.request  # noqa: PLC0415
+
+    class _SansRedirection(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):  # noqa: ANN002, ANN003
+            return None
+
+    ouvreur = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SansRedirection())
+    debut, morceaux, taille = time.monotonic(), [], 0
+    try:
+        with ouvreur.open(urllib.request.Request(url, headers={"Accept": "application/json"}), timeout=timeout) as r:
+            while True:
+                if time.monotonic() - debut > echeance_s:
+                    return None, "délai dépassé"
+                m = r.read(65536)
+                if not m:
+                    break
+                taille += len(m)
+                if taille > limite:
+                    return None, "réponse trop volumineuse"
+                morceaux.append(m)
+    except urllib.error.HTTPError as e:
+        return None, "version trop ancienne" if e.code == 404 else f"réponse HTTP {e.code}"
+    except (urllib.error.URLError, OSError, ValueError):
+        return None, "injoignable"
+    from annuaire import fleet  # noqa: PLC0415
+    try:
+        data = fleet.charger_json(b"".join(morceaux))
+    except ValueError:
+        return None, "réponse illisible"
+    if not isinstance(data, dict) or not data:
+        return None, "relevé non publié"
+    norm = fleet.normaliser_status(data)
+    return (norm, None) if norm else (None, "signature invalide")
+
+
+def cmd_collect_status(args) -> int:
+    """Sur l'agrégateur seulement (status.toml) : relevés Status VÉRIFIÉS de chaque pair du maillage (#3626).
+
+    Même règles que /fleet/modules : signature ET forme, DID attendu pour l'adresse (fiches signées du répertoire),
+    horodatage pas dans le futur ; plus l'ANTI-REJEU : une séquence qui ne dépasse pas la dernière vue pour ce DID est
+    refusée. Les box sans relevé lisible sont NOMMÉES avec leur raison. Écrit un fichier unique (0640, groupe secubox)."""
+    if not _role_agregateur():
+        print(json.dumps({"skipped": "pas l'agrégateur de Status (status.toml)"}, ensure_ascii=False))
+        return 0
+    import concurrent.futures  # noqa: PLC0415
+    import ipaddress  # noqa: PLC0415
+    from collections import Counter  # noqa: PLC0415
+    from annuaire import fleet, fleet_store, mesh_sync  # noqa: PLC0415
+    from annuaire.log import Journal  # noqa: PLC0415
+    from annuaire.model import now_rfc3339  # noqa: PLC0415
+    maintenant = now_rfc3339()
+    meta = mesh_sync.read_self_meta() or {}
+    reseau = mesh_sync.reseau_maillage()
+    noeuds = mesh_sync.noeuds_du_repertoire(Journal(ANNUAIRE_DB))
+    ici = meta.get("mesh_ip", "")
+    pairs = [p for p in mesh_sync.completer_pairs(mesh_sync.read_mesh_peers(), noeuds, soi=ici, reseau=reseau)
+             if p.get("mesh_ip") and p.get("mesh_ip") != ici]
+    revendiquees = Counter(str(n.get("mesh_ip") or "") for n in noeuds)
+    attendus = {str(n["mesh_ip"]): str(n["did"]) for n in noeuds
+                if n.get("mesh_ip") and n.get("did") and revendiquees[str(n["mesh_ip"])] == 1}
+    net = ipaddress.ip_network(reseau, strict=False)
+    resultats, valides = [], []
+    for p in pairs:
+        try:
+            dedans = ipaddress.ip_address(p["mesh_ip"]) in net
+        except ValueError:
+            dedans = False
+        (valides if dedans else resultats).append(p if dedans else (p, None, "adresse hors du maillage"))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futurs = {pool.submit(_lire_pair, f"http://{p['mesh_ip']}:{mesh_sync.DEFAULT_MESH_PORT}"
+                              "/api/v1/annuaire/fleet/status/self"): p for p in valides}
+        fait = set()
+        try:
+            for f in concurrent.futures.as_completed(futurs, timeout=20):
+                fait.add(f)
+                try:
+                    rec, raison = f.result()
+                except Exception:  # noqa: BLE001 — un pair fautif n'arrête pas la collecte
+                    rec, raison = None, "injoignable"
+                resultats.append((futurs[f], rec, raison))
+        except concurrent.futures.TimeoutError:
+            resultats.extend((p, None, "délai dépassé") for f, p in futurs.items() if f not in fait)
+    soi_brut = fleet_store.read(fleet_store.STATUS_PATH)
+    soi = fleet.normaliser_status(soi_brut) if soi_brut else None
+    noeuds_ok, indisponibles = fleet.resoudre_releves(soi, resultats, attendus, maintenant, 5 * 60)
+    precedent = fleet_store.read(fleet_store.STATUS_PAIRS_PATH) or {}
+    sequences = {n.get("node_did"): n.get("sequence") for n in precedent.get("noeuds") or [] if isinstance(n, dict)}
+    retenus = []
+    for n in noeuds_ok:
+        if soi and n.get("node_did") == soi.get("node_did"):
+            continue                                   # la box locale vient du collecteur de secubox-status
+        vu = sequences.get(n.get("node_did"))
+        if isinstance(vu, int) and n.get("sequence", 0) < vu:
+            indisponibles.append({"nom": n.get("hostname") or "?", "mesh_ip": "", "raison": "relevé rejoué (séquence ancienne)"})
+            continue
+        n["signature_verified"] = True
+        retenus.append(n)
+    sortie = {"generated_at": maintenant, "noeuds": retenus,
+              "indisponibles": [i for i in indisponibles if i.get("nom") != "cette box"]}
+    tmp = fleet_store.STATUS_PAIRS_PATH + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o640)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(sortie, f, ensure_ascii=False)
+    os.replace(tmp, fleet_store.STATUS_PAIRS_PATH)
+    print(json.dumps({"pairs": len(retenus), "indisponibles": len(sortie["indisponibles"])}, ensure_ascii=False))
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(
         prog="sbx-fleetctl",
@@ -206,6 +385,12 @@ def main(argv=None) -> int:
     sub.add_parser(
         "publish-modules", help="signe le relevé de validation des modules de cette box (#3212)"
     ).set_defaults(fn=cmd_publish_modules)
+    sub.add_parser(
+        "publish-status", help="signe le relevé Status Live de cette box (#3626)"
+    ).set_defaults(fn=cmd_publish_status)
+    sub.add_parser(
+        "collect-status", help="agrégateur : relevés Status vérifiés des pairs du maillage (#3626)"
+    ).set_defaults(fn=cmd_collect_status)
     args = p.parse_args(argv)
     return args.fn(args)
 

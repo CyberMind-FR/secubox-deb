@@ -15,3 +15,6 @@ Group=secubox
 ExecStart=/usr/sbin/sbx-fleetctl publish
 # Relevé de validation des modules (#3212) : « - » — un relevé absent ou refusé ne fait pas échouer l'unité.
 ExecStart=-/usr/sbin/sbx-fleetctl publish-modules
+# Status Live v2 (#3626) : relevé d'état signé de cette box ; sur l'agrégateur (status.toml), collecte des pairs vérifiés.
+ExecStart=-/usr/sbin/sbx-fleetctl publish-status
+ExecStart=-/usr/sbin/sbx-fleetctl collect-status
