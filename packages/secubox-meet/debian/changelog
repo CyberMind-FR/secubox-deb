@@ -1,3 +1,11 @@
+secubox-meet (0.2.5-1~trixie1) trixie; urgency=medium
+
+  * Visio : un administrateur réel de la box y entre en son nom (#3612,
+    arbitrage du propriétaire) ; meetctl oidc-enregistrer pose l'opt-in
+    du client « meet » (secubox-oidcctl client-admins meet on).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 14:30:00 +0100
+
 secubox-meet (0.2.4-1~trixie1) trixie; urgency=medium
 
   * Créer une salle depuis l'administration (#3610) : meetctl comptes et
