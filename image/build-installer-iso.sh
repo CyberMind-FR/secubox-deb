@@ -401,8 +401,10 @@ if [[ $SECUBOX_REPO_OK -eq 1 ]]; then
   # Profil « mobile » (#3554, choix du propriétaire) et non secubox-full : full embarquait tout gk2, Hall compris (webos,
   # sbxos renvoyant vers hall.gk2, mood.gk2). webos reste pour le dé 3D, jamais comme accueil. Sans les « Recommends »,
   # qui ramèneraient le Hall et ses compagnons ; les applications se rajoutent ensuite à la demande.
-  chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends secubox-mobile secubox-webos 2>/dev/null \
-    || warn "secubox-mobile not available"
+  # #3597 : sans secubox-webos — secubox-minimal (base de mobile) le met en Conflicts ; les demander ensemble faisait
+  # échouer cette étape à chaque fois (avertissement seulement), l'image gardant ce que le slipstream avait posé.
+  chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends secubox-mobile secubox-kiosk \
+    || err "secubox-mobile : installation impossible depuis le dépôt — image non produite"
 fi
 
 # Slipstream: integrate local .deb files
@@ -413,10 +415,10 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     install -d "${ROOTFS}/tmp/secubox-debs"
     # #3597 : le lot complet (~180 .deb) entrait tel quel (dpkg -i *.deb) : secubox-lite, appstore, peertube…
     # installés mais désactivés par le profil mobile, affichés « à l'arrêt ». Même sélecteur que build-live-usb.sh :
-    # fermeture Depends de secubox-mobile, plus webos (dé 3D) ; méta-paquet absent = échec franc, jamais « tout ».
+    # fermeture Depends de secubox-mobile, plus le kiosque (webos est en Conflicts de minimal) ; méta-paquet absent = échec franc, jamais « tout ».
     install -d "${ROOTFS}/tmp/secubox-debs-tous"
     cp "${DEBS_DIR}"/*.deb "${ROOTFS}/tmp/secubox-debs-tous/"
-    for _p in mobile webos; do
+    for _p in mobile kiosk; do
       python3 "${SCRIPT_DIR}/select-profile-debs.py" "${ROOTFS}/tmp/secubox-debs-tous" "${_p}" "${ROOTFS}/tmp/secubox-debs" amd64 \
         || err "slipstream : sélection du profil ${_p} impossible (méta-paquet secubox-${_p} absent ?)"
     done
