@@ -191,13 +191,11 @@ Sortie de bêta : trois appliances authentifiées ; aucun faux `operational` sur
 aucun secret dans l'API publique ; historique gardé au redémarrage ; signature vérifiée avant ingestion ;
 mémoire maîtrisée sur arm64 ; installation et purge Debian reproductibles.
 
-## 11. Questions à arbitrer avant le jalon 1
+## 11. Arbitrages (2026-11-09)
 
-1. **Routes publiques sans authentification.** `AGENTS.md` impose une garde sur toute route. La page
-   publique demande une lecture anonyme : garde explicite « publique filtrée » (projection seule, débit
-   limité) à créer dans `secubox_core`, ou page statique générée par le collecteur et servie par nginx
-   (recommandé : aucune route anonyme sur l'API).
-2. **gk3** héberge voicestudio et reste intouchable sans accord : son installation (étape 2 du
-   déploiement) attend l'accord explicite du propriétaire.
-3. **Paquet indépendant ou composant de `secubox-health`.** La spec retient un paquet indépendant ;
-   à confirmer, vu le nombre de modules déjà montés dans l'agrégateur.
+1. **Page publique statique.** Le collecteur écrit la projection publique (`public-v2.json`) et la page ;
+   nginx les sert. Aucune route anonyme sur l'API : toutes les routes `/api/v1/status/*` portent
+   `require_lecture` ou `require_jwt`. Le tableau §6 se lit donc : routes « publiques » = fichiers statiques.
+2. **Paquet `secubox-status` séparé**, utilisateur dédié, installable en profil minimal.
+3. **gk2 seul d'abord.** Jalon 1 sur gk2 uniquement ; c3box et gk3 se décident au jalon 2
+   (gk3 = voicestudio, toujours sur accord explicite).
