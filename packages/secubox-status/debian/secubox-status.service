@@ -46,7 +46,7 @@ SystemCallArchitectures=native
 CapabilityBoundingSet=
 RestrictAddressFamilies=AF_UNIX
 IPAddressDeny=any
-ReadWritePaths=/run/secubox
+ReadWritePaths=/run/secubox -/var/log/secubox/delegation.log
 
 [Install]
 WantedBy=multi-user.target

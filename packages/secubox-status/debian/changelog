@@ -1,3 +1,12 @@
+secubox-status (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * AppArmor : l'API lit ce qu'exigent les gardes de secubox_core (secret des
+    sessions dans secubox.conf, comptes, réglages d'auth, sessions, journal
+    de délégation ; /dev/null, somaxconn). Toute route gardée rendait 500
+    sur gk2 (« jwt_secret is not configured ») (#3623).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 14:30:00 +0100
+
 secubox-status (0.1.1-1~trixie1) trixie; urgency=medium
 
   * Page « Status Live » dans l'administration (/status/, #3623) : état de la
