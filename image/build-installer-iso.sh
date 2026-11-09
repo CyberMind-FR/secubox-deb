@@ -411,7 +411,16 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
   if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/*.deb >/dev/null 2>&1; then
     log "Slipstream: installing local packages..."
     install -d "${ROOTFS}/tmp/secubox-debs"
-    cp "${DEBS_DIR}"/*.deb "${ROOTFS}/tmp/secubox-debs/"
+    # #3597 : le lot complet (~180 .deb) entrait tel quel (dpkg -i *.deb) : secubox-lite, appstore, peertube…
+    # installés mais désactivés par le profil mobile, affichés « à l'arrêt ». Même sélecteur que build-live-usb.sh :
+    # fermeture Depends de secubox-mobile, plus webos (dé 3D) ; méta-paquet absent = échec franc, jamais « tout ».
+    install -d "${ROOTFS}/tmp/secubox-debs-tous"
+    cp "${DEBS_DIR}"/*.deb "${ROOTFS}/tmp/secubox-debs-tous/"
+    for _p in mobile webos; do
+      python3 "${SCRIPT_DIR}/select-profile-debs.py" "${ROOTFS}/tmp/secubox-debs-tous" "${_p}" "${ROOTFS}/tmp/secubox-debs" amd64 \
+        || err "slipstream : sélection du profil ${_p} impossible (méta-paquet secubox-${_p} absent ?)"
+    done
+    rm -rf "${ROOTFS}/tmp/secubox-debs-tous"
 
     # Install secubox-core first
     if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
@@ -423,7 +432,7 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
 
     rm -rf "${ROOTFS}/tmp/secubox-debs"
-    ok "Slipstream: $(ls "${DEBS_DIR}"/*.deb 2>/dev/null | wc -l) packages installed"
+    ok "Slipstream: profil mobile, sélection installée"
   else
     warn "Slipstream: no .deb files in ${DEBS_DIR}"
   fi
