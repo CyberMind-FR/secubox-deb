@@ -24,6 +24,10 @@ if [ "${#PAQUETS[@]}" -eq 0 ]; then
     echo "à jour"; exit 0
 fi
 echo "à mettre à jour (${#PAQUETS[@]}) : ${PAQUETS[*]}"
+DEBUT=$(date +%s)
 apt-get "${LOCK[@]}" install -y -q --only-upgrade \
     -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef "${PAQUETS[@]}"
 echo "fait"
+# Un module monté dans l'agrégateur n'est servi à jour qu'après sa relance : UNE relance pour toute
+# la passe, seulement si nécessaire (#3630). Un échec ici ne fait pas échouer la mise à jour.
+secubox-majauto-agregateur "$DEBUT" "${PAQUETS[@]}" || echo "relance de l'agrégateur en échec"

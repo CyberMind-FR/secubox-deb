@@ -1,0 +1,103 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-majauto-agregateur — relance groupée de l'agrégateur (#3630).
+
+secubox-aggregator charge en processus le code des modules listés dans /etc/secubox/aggregator.toml
+(/usr/lib/secubox/<module>/) et secubox_core. Un paquet mis à jour n'en relance pas l'agrégateur : le
+nouveau code n'était servi qu'au redémarrage suivant (route du bouton « Réparer » en 404, #3628).
+
+En fin de passe secubox-majauto : si un des paquets mis à jour livre du code servi par l'agrégateur,
+`systemctl try-restart secubox-aggregator` UNE seule fois — sauf s'il a déjà redémarré depuis le début
+de la passe (son propre postinst). Une relance pour toute la passe, jamais une par paquet.
+
+Usage : secubox-majauto-agregateur <debut_epoch> <paquet>... [--simuler]
+Sortie : une ligne « relance : <raison> » ou « pas de relance : <raison> ».
+"""
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+import tomllib
+
+ENV = os.environ.get
+TOML = ENV("SECUBOX_AGREGATEUR_TOML", "/etc/secubox/aggregator.toml")
+DPKG_QUERY = ENV("SECUBOX_MAJAUTO_DPKG_QUERY", "dpkg-query")
+SYSTEMCTL = ENV("SECUBOX_MAJAUTO_SYSTEMCTL", "systemctl")
+UNITE = "secubox-aggregator.service"
+PAQUET_RE = re.compile(r"[a-z0-9][a-z0-9+.-]{1,99}")
+
+
+def modules_montes() -> set[str]:
+    try:
+        with open(TOML, "rb") as f:
+            mods = tomllib.load(f).get("modules") or []
+    except (OSError, tomllib.TOMLDecodeError):
+        return set()
+    return {m for m in mods if isinstance(m, str)}
+
+
+def fichiers(paquet: str) -> list[str]:
+    try:
+        r = subprocess.run([DPKG_QUERY, "-L", "--", paquet], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return r.stdout.splitlines() if r.returncode == 0 else []
+
+
+def servi_par_agregateur(paquet: str, montes: set[str]) -> str | None:
+    """Le premier chemin du paquet que l'agrégateur charge, sinon None."""
+    if paquet == "secubox-aggregator":
+        return None                 # son postinst le relance déjà
+    for chemin in fichiers(paquet):
+        if "/secubox_core/" in chemin and chemin.endswith(".py"):
+            return chemin
+        m = re.match(r"/usr/lib/secubox/([^/]+)/.+\.py$", chemin)
+        if m and m.group(1) in montes:
+            return chemin
+    return None
+
+
+def demarre_depuis(debut: int) -> bool:
+    try:
+        r = subprocess.run([SYSTEMCTL, "show", "-p", "ActiveEnterTimestamp", "--timestamp=unix", "--value", UNITE],
+                           capture_output=True, text=True, timeout=30)
+        v = r.stdout.strip().lstrip("@")
+        return bool(v) and int(v) >= debut
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
+
+
+def main(argv: list[str]) -> int:
+    simuler = "--simuler" in argv
+    args = [a for a in argv[1:] if a != "--simuler"]
+    if not args or not args[0].isdigit():
+        print(__doc__, file=sys.stderr)
+        return 2
+    debut, paquets = int(args[0]), [p for p in args[1:] if PAQUET_RE.fullmatch(p)]
+    montes = modules_montes()
+    if not montes:
+        print("pas de relance : aucun module monté (aggregator.toml absent ou vide)")
+        return 0
+    raison = next(((p, c) for p in paquets if (c := servi_par_agregateur(p, montes))), None)
+    if raison is None:
+        print("pas de relance : aucun paquet mis à jour n'est servi par l'agrégateur")
+        return 0
+    if demarre_depuis(debut):
+        print(f"pas de relance : l'agrégateur a déjà redémarré pendant la passe ({raison[0]})")
+        return 0
+    if simuler:
+        print(f"relance (simulée) : {raison[0]} ({raison[1]})")
+        return 0
+    # --no-block : un démarrage de l'agrégateur peut durer des minutes sur une carte chargée ; la passe n'attend pas.
+    r = subprocess.run([SYSTEMCTL, "try-restart", "--no-block", UNITE], capture_output=True, text=True, timeout=60)
+    print(f"relance : {raison[0]} ({raison[1]}) rc={r.returncode}")
+    return 0 if r.returncode == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
