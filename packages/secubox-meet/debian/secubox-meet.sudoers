@@ -28,5 +28,7 @@ Cmnd_Alias SECUBOX_MEETCTL_API = /usr/sbin/meetctl status, \
     /usr/sbin/meetctl logs nginx [0-9]*, \
     /usr/sbin/meetctl en-direct, \
     /usr/sbin/meetctl reunions, \
-    /usr/sbin/meetctl clore *
+    /usr/sbin/meetctl clore *, \
+    /usr/sbin/meetctl comptes, \
+    /usr/sbin/meetctl salle-creer *
 secubox ALL=(root) NOPASSWD: SECUBOX_MEETCTL_API

@@ -1,3 +1,14 @@
+secubox-meet (0.2.4-1~trixie1) trixie; urgency=medium
+
+  * Créer une salle depuis l'administration (#3610) : meetctl comptes et
+    salle-creer <nom> <public|trusted|restricted> <sub> [acteur] (ORM de Meet
+    dans le conteneur, transaction, valeurs en JSON sur l'entrée standard,
+    audité réussite comme échec) ; API GET /comptes et POST /salles
+    (administrateur) ; sudoers étendu à ces deux verbes exacts.
+  * meetctl et l'API annoncent de nouveau la version du paquet.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 13:30:00 +0100
+
 secubox-meet (0.2.3-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
