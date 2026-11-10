@@ -1,0 +1,14 @@
+secubox-mirrornet (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Phase 2 de MirrorNet v1 (ref #3645) : modèle de données (docs/MIRRORNET_DATA_MODEL.md),
+    schéma SQLite versionné avec migrations, ledger en partie double en ajout seul et chaîné,
+    contrôle d'intégrité, répartition à arrondi exact, API en lecture seule
+    (/api/v1/mirrornet/), compte dédié, AppArmor enforce.
+  * Relecture de sécurité : recursive_triggers (INSERT OR REPLACE ne contourne plus l'ajout
+    seul), inverse seulement par inverser() (identifiant inv:<tx>, contrôles dans la même
+    transaction, index uniques), chaîne couvrant le contenu des transactions et tête exposée,
+    montants entiers stricts et bornés, base 0700/0600 (ledger privé), /status, abonnements
+    en require_jwt, postrm (AppArmor, nginx, copie du ledger avant purge), pas de boucle de
+    redémarrage sur une base trop récente.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 07:01:57 +0100

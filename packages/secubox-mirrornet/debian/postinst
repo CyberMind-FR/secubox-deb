@@ -1,0 +1,33 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+    configure)
+        getent group secubox >/dev/null || groupadd --system secubox
+        # Compte dédié, sans shell ; groupe secubox pour servir la socket à nginx.
+        id -u secubox-mirrornet >/dev/null 2>&1 || \
+          adduser --system --ingroup secubox --no-create-home --home /nonexistent \
+            --shell /usr/sbin/nologin secubox-mirrornet >/dev/null
+        # Configuration semée une seule fois : une copie modifiée fait autorité.
+        if [ ! -e /etc/secubox/mirrornet.toml ] && [ ! -L /etc/secubox/mirrornet.toml ] && [ -d /etc/secubox ] && [ ! -L /etc/secubox ]; then
+            install -m 0640 -o root -g secubox /usr/share/secubox/mirrornet/mirrornet.toml.example /etc/secubox/mirrornet.toml
+        fi
+        # Profil AppArmor AVANT tout démarrage (« - » dans l'unité : ignoré là où AppArmor est absent).
+        if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] \
+           && command -v apparmor_parser >/dev/null 2>&1; then
+            apparmor_parser -r /etc/apparmor.d/secubox-mirrornet \
+              || echo "secubox-mirrornet : profil AppArmor non chargé (apparmor_parser -r /etc/apparmor.d/secubox-mirrornet)" >&2
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+            systemctl enable secubox-mirrornet.service >/dev/null 2>&1 || true
+            systemctl restart secubox-mirrornet.service || true
+            if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

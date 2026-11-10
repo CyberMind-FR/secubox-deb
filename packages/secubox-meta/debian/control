@@ -342,7 +342,8 @@ Recommends: secubox-federation
 Suggests: secubox-assist,
          secubox-mesh,
          secubox-daemon,
-         secubox-meshtastic
+         secubox-meshtastic,
+         secubox-mirrornet
 Description: SecuBox — service « Maillage »
  Annuaire-miroir, pair à pair, fédération SBX.
  .

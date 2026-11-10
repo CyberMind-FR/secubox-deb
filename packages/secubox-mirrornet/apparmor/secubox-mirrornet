@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de MirrorNet v1 (#3645), nommé par AppArmorProfile= dans secubox-mirrornet.service, chargé par
+# le postinst. Phase 2 : LECTURE du code, de mirrornet.toml et des fichiers des gardes ; ÉCRITURE du seul
+# /var/lib/secubox-mirrornet (base SQLite, WAL) et de la socket. Aucun secret, aucun sudo, aucun réseau IP.
+
+#include <tunables/global>
+
+profile secubox-mirrornet flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/mirrornet/ r,
+  /usr/lib/secubox/mirrornet/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # ExecStartPost : remettre la socket en 0660.
+  /{usr/,}bin/sh ix,
+  /{usr/,}bin/dash ix,
+  /{usr/,}bin/seq ix,
+  /{usr/,}bin/sleep ix,
+  /{usr/,}bin/chmod ix,
+
+  # Configuration ; jamais les secrets.
+  /etc/secubox/mirrornet.toml r,
+  # Gardes de l'API (require_lecture / require_jwt de secubox_core) : même liste que secubox-status (#3623).
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/users.json r,
+  /etc/secubox/auth.toml r,
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/sessions.json r,
+  /var/log/secubox/delegation.log w,
+  /dev/null rw,
+  /proc/sys/net/core/somaxconn r,
+  owner @{PROC}/@{pid}/** r,
+  deny /etc/secubox/secrets/** rwklx,
+
+  # Base locale (ledger privé) : SQLite en WAL.
+  /var/lib/secubox-mirrornet/ rw,
+  /var/lib/secubox-mirrornet/** rwk,
+
+  # API.
+  /run/secubox/ r,
+  /run/secubox/mirrornet.sock rw,
+  network unix stream,
+}

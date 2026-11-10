@@ -1,3 +1,9 @@
+secubox-meta (0.1.55-1~trixie1) trixie; urgency=medium
+
+  * secubox-service-mesh : secubox-mirrornet en Suggests (MirrorNet v1, phase 2, ref #3645).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 07:01:25 +0100
+
 secubox-meta (0.1.54-1~trixie1) trixie; urgency=medium
 
   * secubox-service-noyau : secubox-status en Suggests (Status Live v2,

@@ -1,0 +1,40 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+    remove)
+        # Profil déchargé, unités rechargées ; la route nginx (conffile) reste jusqu'à la purge et rend 502 sans service.
+        if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+            apparmor_parser -R /etc/apparmor.d/secubox-mirrornet 2>/dev/null || true
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+            if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+        fi
+        ;;
+    purge)
+        # La base contient le ledger de ce nœud, qui ne se reconstruit pas : copie datée (0600 root) AVANT retrait, et
+        # retrait SEULEMENT si la copie a réussi (disque plein : le dossier reste, l'administrateur est prévenu).
+        if [ -d /var/lib/secubox-mirrornet ] && [ ! -L /var/lib/secubox-mirrornet ]; then
+            install -d -m 0700 /var/backups/secubox-mirrornet
+            _copie="/var/backups/secubox-mirrornet/mirrornet-$(date +%Y%m%d-%H%M%S).tar.gz"
+            if tar -C /var/lib -czf "$_copie" secubox-mirrornet 2>/dev/null; then
+                chmod 0600 "$_copie"
+                echo "secubox-mirrornet : ledger sauvegardé dans $_copie" >&2
+                rm -rf /var/lib/secubox-mirrornet
+            else
+                rm -f "$_copie"
+                echo "secubox-mirrornet : copie du ledger impossible — /var/lib/secubox-mirrornet CONSERVÉ" >&2
+            fi
+        fi
+        rm -f /etc/secubox/mirrornet.toml /etc/apparmor.d/secubox-mirrornet
+        if id -u secubox-mirrornet >/dev/null 2>&1; then
+            deluser --system secubox-mirrornet >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
