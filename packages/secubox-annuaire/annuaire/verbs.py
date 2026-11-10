@@ -1340,7 +1340,8 @@ def subscription_state(journal: Journal, subscription_id: str) -> SubscriptionSt
     for entry in journal.iter_entries():
         if (entry.op == Op.SERVICE_SUBSCRIBE
                 and entry.payload_type == "Subscription"
-                and entry.payload.get("subscription_id") == subscription_id):
+                and entry.payload.get("subscription_id") == subscription_id
+                and entry.author == entry.payload.get("subscriber")):
             sub_payload = entry.payload
             break
 
@@ -1378,6 +1379,8 @@ def subscription_state(journal: Journal, subscription_id: str) -> SubscriptionSt
     for entry in journal.iter_entries():
         payload = entry.payload
         if payload.get("subscription_id") != subscription_id:
+            continue
+        if not forme_valide(entry.op, payload, entry.author):
             continue
 
         if entry.op == Op.SERVICE_REVOKE_SUB and entry.author == subscriber:
@@ -1593,6 +1596,35 @@ def subscribe(
 
 MOTIF_MAX = 200
 
+# #3647 (relecture) : `op` et `payload_type` ne sont pas signés ; un pair qui relaie pourrait réétiqueter la charge
+# signée d'un autre (un renouvellement en résiliation, une approbation en refus) et, arrivé le premier, bloquer la vraie
+# (dédoublonnage sur (auteur, signature)). Chaque opération service_* a donc une FORME (clés présentes, rôle de l'auteur)
+# vérifiée à l'import et par les lecteurs ; les gestes ajoutés par MirrorNet portent en plus `op` dans la charge signée.
+_FORMES = {
+    "service_offer": (("service_id", "provider", "name"), "provider", False),
+    "service_revoke_offer": (("service_id", "provider", "revoked_at"), "provider", False),
+    "service_subscribe": (("subscription_id", "subscriber", "service_id", "requested_at"), "subscriber", False),
+    "service_approve": (("subscription_id", "approver", "approved_at"), "approver", False),
+    "service_reject": (("subscription_id", "rejecter", "rejected_at"), "rejecter", False),
+    "service_revoke_sub": (("subscription_id", "subscriber", "revoked_at"), "subscriber", True),
+    "service_renew": (("subscription_id", "subscriber", "renewed_at", "expire_le"), "subscriber", True),
+    "service_revoke_offer_sub": (("subscription_id", "provider", "revoked_at"), "provider", True),
+}
+
+
+def forme_valide(op: Any, payload: Any, author: Any) -> bool:
+    """Charge d'une opération service_* bien formée et signée par la bonne partie. Autres opérations : True."""
+    op = op.value if hasattr(op, "value") else op
+    forme = _FORMES.get(op)
+    if forme is None:
+        return True
+    cles, role, op_signee = forme
+    if not isinstance(payload, dict) or any(k not in payload for k in cles) or payload.get(role) != author:
+        return False
+    if "op" in payload or op_signee:
+        return payload.get("op") == op
+    return True
+
 
 def _instant(ts: Optional[str]) -> Optional[datetime]:
     """RFC 3339 → datetime UTC conscient ; None si absent ou illisible (jamais d'exception)."""
@@ -1636,7 +1668,8 @@ def echeance_abonnement(journal: Journal, subscription_id: str,
     renouv = []
     for e in journal.iter_entries(ops=("service_renew",)):
         p = e.payload
-        if p.get("subscription_id") == subscription_id and e.author == sub.get("subscriber"):
+        if (p.get("subscription_id") == subscription_id and e.author == sub.get("subscriber")
+                and forme_valide(e.op, p, e.author)):
             fait, neuf = _instant(p.get("renewed_at")), _instant(p.get("expire_le"))
             if fait and neuf:
                 renouv.append((fait, neuf))
@@ -1679,8 +1712,9 @@ def cancel_subscription(journal: Journal, subscriber_priv: bytes, subscriber_did
         raise PermissionError("seul l'abonné résilie son abonnement")
     if subscription_state(journal, subscription_id) in (SubscriptionState.REVOKED, SubscriptionState.REJECTED):
         raise ValueError("abonnement déjà clos")
-    payload = {"subscription_id": subscription_id, "service_id": sub.get("service_id"),
-               "subscriber": subscriber_did, "motif": _motif(motif), "revoked_at": now_rfc3339()}
+    payload = {"op": Op.SERVICE_REVOKE_SUB.value, "subscription_id": subscription_id,
+               "service_id": sub.get("service_id"), "subscriber": subscriber_did, "motif": _motif(motif),
+               "revoked_at": now_rfc3339()}
     _signer_et_ajouter(journal, subscriber_priv, subscriber_did, Op.SERVICE_REVOKE_SUB, "ServiceRevokeSub", payload)
     return {"status": "revoked", "subscription_id": subscription_id, "role": "abonne"}
 
@@ -1693,8 +1727,9 @@ def revoke_subscriber(journal: Journal, provider_priv: bytes, provider_did: str,
         raise PermissionError("seul le fournisseur de l'offre révoque un abonné")
     if subscription_state(journal, subscription_id) in (SubscriptionState.REVOKED, SubscriptionState.REJECTED):
         raise ValueError("abonnement déjà clos")
-    payload = {"subscription_id": subscription_id, "service_id": sub.get("service_id"),
-               "provider": provider_did, "motif": _motif(motif), "revoked_at": now_rfc3339()}
+    payload = {"op": Op.SERVICE_REVOKE_OFFER_SUB.value, "subscription_id": subscription_id,
+               "service_id": sub.get("service_id"), "provider": provider_did, "motif": _motif(motif),
+               "revoked_at": now_rfc3339()}
     _signer_et_ajouter(journal, provider_priv, provider_did, Op.SERVICE_REVOKE_OFFER_SUB, "ServiceRevokeOfferSub",
                        payload)
     return {"status": "revoked", "subscription_id": subscription_id, "role": "fournisseur"}
@@ -1721,8 +1756,9 @@ def renew_subscription(journal: Journal, subscriber_priv: bytes, subscriber_did:
     if actuel is None or maintenant > actuel:
         raise ValueError("période close : un nouvel abonnement est nécessaire")
     neuf = (actuel + timedelta(seconds=duree)).isoformat()
-    payload = {"subscription_id": subscription_id, "service_id": sub.get("service_id"),
-               "subscriber": subscriber_did, "expire_le": neuf, "renewed_at": maintenant.isoformat()}
+    payload = {"op": Op.SERVICE_RENEW.value, "subscription_id": subscription_id,
+               "service_id": sub.get("service_id"), "subscriber": subscriber_did, "expire_le": neuf,
+               "renewed_at": maintenant.isoformat()}
     _signer_et_ajouter(journal, subscriber_priv, subscriber_did, Op.SERVICE_RENEW, "ServiceRenew", payload)
     return {"status": "renewed", "subscription_id": subscription_id, "expire_le": neuf}
 
@@ -2281,6 +2317,9 @@ def import_entries(journal: Journal, entries: List[Dict[str, Any]]) -> Dict[str,
         except ValueError:
             rejected += 1
             continue
+        if not forme_valide(op, payload, author):        # #3647 : charge réétiquetée ou forgée au nom d'un autre
+            rejected += 1
+            continue
         journal.append(
             op=op_enum, payload_type=ptype, payload=payload,
             author=author, sig=sig, author_pubkey_hex=pub,
@@ -2299,7 +2338,8 @@ def _get_subscription_payload(journal: Journal, subscription_id: str) -> Optiona
     for entry in journal.iter_entries():
         if (entry.op == Op.SERVICE_SUBSCRIBE
                 and entry.payload_type == "Subscription"
-                and entry.payload.get("subscription_id") == subscription_id):
+                and entry.payload.get("subscription_id") == subscription_id
+                and entry.author == entry.payload.get("subscriber")):       # #3647 : jamais au nom d'un autre
             return entry.payload
     return None
 

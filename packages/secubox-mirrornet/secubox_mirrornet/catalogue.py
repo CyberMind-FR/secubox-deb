@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import abonnements as A
-from .verif import DID, canonical_bytes, entree_valide
+from .verif import DID, canonical_bytes, entree_valide, forme_valide
 
 TAILLE_MAX = 4 * 1024 * 1024        # l'annuaire plafonne ses offres ; MemoryMax=128M pour tout le service
 NS = uuid.UUID("6d1f0f5e-3647-4d6b-9a8e-6d6972726f72")       # identifiants locaux déterministes (idempotence)
@@ -88,7 +88,10 @@ def offre_normalisee(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     compat = p.get("compat") or {}
     if not (ok_c and ok_d and ok_g and isinstance(quotas, dict) and isinstance(compat, dict)):
         return None
-    if any(type(v) is not int or v < 0 for v in quotas.values()):
+    if len(quotas) > 8 or any(not isinstance(k, str) or len(k) > 32 or type(v) is not int or not 0 <= v <= 10 ** 15
+                              for k, v in quotas.items()):
+        return None
+    if len(json.dumps(compat)) > 1024:
         return None
     return {"service_id": sid, "fournisseur": fournisseur, "nom": nom, "kind": kind, "endpoint": endpoint,
             "description": desc, "version": version, "classe": classe, "tarif": tarif, "quotas": quotas,
@@ -96,28 +99,26 @@ def offre_normalisee(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "approval_mode": "auto" if p.get("approval_mode") == "auto" else "pending"}
 
 
-_VERIFIEES: set = set()          # (auteur, sig) déjà vérifiés : chaque passe ne refait pas toutes les signatures
-_VERIFIEES_MAX = 200000
+_VERIFIEES: set = set()          # (auteur, clé, sig, empreinte de la charge) vérifiés à la passe précédente
 
 
-def _valide(e: Any) -> bool:
-    """entree_valide avec cache. La clé couvre la CHARGE (empreinte de sa forme canonique) : une signature valide
-    réemployée sur une charge modifiée ne retrouve pas l'entrée du cache, elle est revérifiée — et refusée."""
-    if not isinstance(e, dict) or not isinstance(e.get("payload"), dict):
+def _valide(e: Any, vues: set) -> bool:
+    """entree_valide + forme de l'opération, avec cache. La clé couvre la CHARGE (empreinte de sa forme canonique) :
+    une signature réemployée sur une charge modifiée ne retrouve pas le cache, elle est revérifiée — et refusée. Le
+    cache ne garde que les clés de la dernière passe (`vues`) : il ne grossit pas au-delà de l'export."""
+    if not isinstance(e, dict) or not isinstance(e.get("payload"), dict) or not isinstance(e.get("op"), str):
+        return False
+    if not forme_valide(e["op"], e["payload"], e.get("author")):
         return False
     try:
         cle = (e.get("author"), e.get("author_pubkey"), e.get("sig"),
                hashlib.sha256(canonical_bytes(e["payload"])).hexdigest())
     except (TypeError, ValueError):
         return False
-    if cle in _VERIFIEES:
+    if cle in _VERIFIEES or entree_valide(e):
+        vues.add(cle)
         return True
-    if not entree_valide(e):
-        return False
-    if len(_VERIFIEES) >= _VERIFIEES_MAX:
-        _VERIFIEES.clear()
-    _VERIFIEES.add(cle)
-    return True
+    return False
 
 
 def _index(entrees: List[Any]) -> Tuple[Dict[str, Any], int]:
@@ -128,8 +129,9 @@ def _index(entrees: List[Any]) -> Tuple[Dict[str, Any], int]:
     retirees: set = set()
     subs: Dict[str, Dict[str, Any]] = {}
     gestes: List[Dict[str, Any]] = []
+    vues: set = set()
     for e in entrees:
-        if not _valide(e):
+        if not _valide(e, vues):
             rejetees += 1
             continue
         op, p, auteur = e["op"], e["payload"], e["author"]
@@ -155,6 +157,8 @@ def _index(entrees: List[Any]) -> Tuple[Dict[str, Any], int]:
             subs.setdefault(sub_id, {"p": p, "sig": e["sig"]})
         else:
             gestes.append(e)
+    _VERIFIEES.clear()
+    _VERIFIEES.update(vues)
     return {"offres": offres, "signatures": signatures, "retirees": retirees, "subs": subs, "gestes": gestes}, rejetees
 
 

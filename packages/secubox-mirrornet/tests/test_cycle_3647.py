@@ -161,17 +161,21 @@ def test_gestes_de_la_mauvaise_partie_ignores(cx):
     sid = o["payload"]["service_id"]
     s = abonnement(moi, sid)
     sub_id = s["payload"]["subscription_id"]
-    faux_ok = tiers.signe("service_approve", {"subscription_id": sub_id, "service_id": sid, "approver": tiers.did})
-    faux_revoc = tiers.signe("service_revoke_offer_sub", {"subscription_id": sub_id, "provider": tiers.did, "motif": "x"})
+    faux_ok = tiers.signe("service_approve", {"subscription_id": sub_id, "service_id": sid, "approver": tiers.did,
+                                              "approved_at": T0.isoformat()})
+    faux_revoc = tiers.signe("service_revoke_offer_sub", {"op": "service_revoke_offer_sub", "subscription_id": sub_id,
+                                                          "provider": tiers.did, "motif": "x", "revoked_at": T0.isoformat()})
     ex = export(moi, [o, s, faux_ok, faux_revoc], [(f, "LIMITED"), (moi, "LIMITED"), (tiers, "LIMITED")])
     catalogue.synchroniser(cx, ex, T0)
     assert _etat(cx, sub_id)[0] == "Demande"
-    vrai_ok = f.signe("service_approve", {"subscription_id": sub_id, "service_id": sid, "approver": f.did})
+    vrai_ok = f.signe("service_approve", {"subscription_id": sub_id, "service_id": sid, "approver": f.did,
+                                          "approved_at": T0.isoformat()})
     ex["entrees"].append(vrai_ok)
     catalogue.synchroniser(cx, ex, T0)
     assert _etat(cx, sub_id)[0] == "Actif"
-    ex["entrees"].append(f.signe("service_revoke_offer_sub", {"subscription_id": sub_id, "provider": f.did,
-                                                              "motif": "quota"}))
+    ex["entrees"].append(f.signe("service_revoke_offer_sub", {"op": "service_revoke_offer_sub", "subscription_id": sub_id,
+                                                              "provider": f.did, "motif": "quota",
+                                                              "revoked_at": T0.isoformat()}))
     catalogue.synchroniser(cx, ex, T0)
     assert tuple(_etat(cx, sub_id)) == ("Resilie", "abonné révoqué par le fournisseur : quota")
     historique = [r[0] for r in cx.execute("SELECT vers FROM subscription_event ORDER BY rowid")]
@@ -253,8 +257,9 @@ def _annuaire_simule(main, tmp, moi, ex, monkeypatch, appels):
             return 200, dict(s["payload"], state="approved")
         if chemin.endswith("/cancel"):
             sub_id = chemin.split("/")[3]
-            ex["entrees"].append(moi.signe("service_revoke_sub", {"subscription_id": sub_id, "subscriber": moi.did,
-                                                                  "motif": corps["motif"]}))
+            ex["entrees"].append(moi.signe("service_revoke_sub", {"op": "service_revoke_sub", "subscription_id": sub_id,
+                                                                  "subscriber": moi.did, "motif": corps["motif"],
+                                                                  "revoked_at": T0.isoformat()}))
             _ecrire(tmp, ex)
             return 200, {"status": "revoked", "par": "abonne"}
         return 409, {"detail": "refusé par l'annuaire"}
@@ -407,3 +412,18 @@ def test_toml_livre_lisible_et_applique(monkeypatch):
     import tomllib
     tomllib.loads((ICI / "conf" / "mirrornet.toml").read_text())
     assert config.reglages() == {"confiance_min": "LIMITED", "grace_s": 432000, "intervalle_s": 60}
+
+
+def test_charge_reetiquetee_ou_au_nom_d_un_autre_rejetee(cx):
+    """C2 / C1 côté MirrorNet : un renouvellement réétiqueté en résiliation, un abonnement signé au nom d'autrui."""
+    f, moi, x = Noeud("gk6"), Noeud("gk12"), Noeud("x")
+    o = offre(f)
+    s = abonnement(moi, o["payload"]["service_id"])
+    sub_id = s["payload"]["subscription_id"]
+    renouv = moi.signe("service_renew", {"op": "service_renew", "subscription_id": sub_id, "subscriber": moi.did,
+                                         "renewed_at": T0.isoformat(), "expire_le": (T0 + timedelta(days=1)).isoformat()})
+    reetiquete = dict(renouv, op="service_revoke_sub")
+    au_nom = x.signe("service_subscribe", dict(s["payload"], subscription_id="e" * 64))      # subscriber = moi
+    st = catalogue.synchroniser(cx, export(moi, [o, s, reetiquete, au_nom], [(f, "LIMITED"), (moi, "LIMITED")]), T0)
+    assert st["rejetees"] == 2 and st["abonnements"] == 1
+    assert _etat(cx, sub_id)[0] == "Actif"

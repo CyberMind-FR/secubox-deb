@@ -47,3 +47,29 @@ def entree_valide(e: Any) -> bool:
     except (InvalidSignature, ValueError, TypeError):
         return False
     return True
+
+
+# Forme des opérations service_* (même table que l'annuaire, verbs._FORMES) : `op` n'est pas signé par les anciens
+# gestes ; une charge réétiquetée par un relais (renouvellement → résiliation) ou signée au nom d'un autre est refusée.
+FORMES = {
+    "service_offer": (("service_id", "provider", "name"), "provider", False),
+    "service_revoke_offer": (("service_id", "provider", "revoked_at"), "provider", False),
+    "service_subscribe": (("subscription_id", "subscriber", "service_id", "requested_at"), "subscriber", False),
+    "service_approve": (("subscription_id", "approver", "approved_at"), "approver", False),
+    "service_reject": (("subscription_id", "rejecter", "rejected_at"), "rejecter", False),
+    "service_revoke_sub": (("subscription_id", "subscriber", "revoked_at"), "subscriber", True),
+    "service_renew": (("subscription_id", "subscriber", "renewed_at", "expire_le"), "subscriber", True),
+    "service_revoke_offer_sub": (("subscription_id", "provider", "revoked_at"), "provider", True),
+}
+
+
+def forme_valide(op: str, charge: Dict[str, Any], auteur: str) -> bool:
+    forme = FORMES.get(op)
+    if forme is None:
+        return False                    # MirrorNet ne lit que les opérations service_* qu'il connaît
+    cles, role, op_signee = forme
+    if any(k not in charge for k in cles) or charge.get(role) != auteur:
+        return False
+    if "op" in charge or op_signee:
+        return charge.get("op") == op
+    return True

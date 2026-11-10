@@ -120,7 +120,7 @@ def test_periode_close_ne_se_renouvelle_pas(j):
     with pytest.raises(ValueError, match="période close"):
         V.renew_subscription(j, pa, da, s.subscription_id)
     # Un SERVICE_RENEW signé APRÈS l'échéance (rejoué, horloge fausse) est ignoré par le calcul d'échéance.
-    tard = {"subscription_id": s.subscription_id, "service_id": o.service_id, "subscriber": da,
+    tard = {"op": "service_renew", "subscription_id": s.subscription_id, "service_id": o.service_id, "subscriber": da,
             "expire_le": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
             "renewed_at": datetime.now(timezone.utc).isoformat()}
     V._signer_et_ajouter(j, pa, da, Op.SERVICE_RENEW, "ServiceRenew", tard)
@@ -130,7 +130,7 @@ def test_periode_close_ne_se_renouvelle_pas(j):
 def test_renouvellement_d_un_tiers_ignore(j):
     _pf, _df, _pa, _da, o, s = _abonne(j)
     pt, _, dt = _membre(j)
-    faux = {"subscription_id": s.subscription_id, "service_id": o.service_id, "subscriber": dt,
+    faux = {"op": "service_renew", "subscription_id": s.subscription_id, "service_id": o.service_id, "subscriber": dt,
             "expire_le": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
             "renewed_at": datetime.now(timezone.utc).isoformat()}
     V._signer_et_ajouter(j, pt, dt, Op.SERVICE_RENEW, "ServiceRenew", faux)
@@ -305,9 +305,11 @@ def test_vol_de_service_id_sans_effet(j):
         V.revoke_subscriber(j, pv, dv, s.subscription_id, "vol")
     # Même signée directement, la révocation de l'usurpateur ne compte pas.
     V._signer_et_ajouter(j, pv, dv, Op.SERVICE_REVOKE_OFFER_SUB, "ServiceRevokeOfferSub",
-                         {"subscription_id": s.subscription_id, "provider": dv, "motif": "vol"})
+                         {"op": "service_revoke_offer_sub", "subscription_id": s.subscription_id, "provider": dv,
+                          "motif": "vol", "revoked_at": "2026-11-10T00:00:00+00:00"})
     V._signer_et_ajouter(j, pv, dv, Op.SERVICE_APPROVE, "ServiceApprove",
-                         {"subscription_id": s.subscription_id, "service_id": o.service_id, "approver": dv})
+                         {"subscription_id": s.subscription_id, "service_id": o.service_id, "approver": dv,
+                          "approved_at": "2026-11-10T00:00:00+00:00"})
     assert V.subscription_state(j, s.subscription_id) is SubscriptionState.PENDING
 
 
@@ -331,8 +333,8 @@ def test_echeance_bornee_par_la_duree_de_l_offre(j):
     # Renouvellement signé avec une échéance démesurée : plafonné à une période.
     avant = datetime.fromisoformat(V.echeance_abonnement(j, s.subscription_id))
     V._signer_et_ajouter(j, pa, da, Op.SERVICE_RENEW, "ServiceRenew",
-                         {"subscription_id": s.subscription_id, "service_id": o.service_id, "subscriber": da,
-                          "expire_le": loin, "renewed_at": datetime.now(timezone.utc).isoformat()})
+                         {"op": "service_renew", "subscription_id": s.subscription_id, "service_id": o.service_id,
+                          "subscriber": da, "expire_le": loin, "renewed_at": datetime.now(timezone.utc).isoformat()})
     apres = datetime.fromisoformat(V.echeance_abonnement(j, s.subscription_id))
     assert apres - avant == timedelta(seconds=3600)
 
@@ -345,3 +347,40 @@ def test_export_exclut_l_usurpateur_et_les_observateurs(j):
     ex = MX.construire(j, da, {})
     auteurs = {e["author"] for e in ex["entrees"] if e["op"] == "service_offer"}
     assert auteurs == {df}
+
+
+def test_abonnement_au_nom_d_un_autre_sans_effet(j):
+    """C1 : un membre signe un abonnement dont `subscriber` désigne une victime : ni bloquant, ni lu."""
+    pf, df, pa, da, o, _s = _abonne(j)
+    pm, _, dm = _membre(j)
+    forge = {"subscription_id": "f" * 64, "subscriber": da, "service_id": o.service_id,
+             "requested_at": datetime.now(timezone.utc).isoformat()}
+    V._signer_et_ajouter(j, pm, dm, Op.SERVICE_SUBSCRIBE, "Subscription", forge)
+    assert V._get_subscription_payload(j, "f" * 64) is None
+    from api import main as M
+    assert M._abonnement_en_cours(j, da, o.service_id) == _s.subscription_id   # le sien, pas le faux
+
+
+def test_charge_reetiquetee_rejetee_a_l_import(tmp_path, j):
+    """C2 : un relais change l'opération d'une charge signée (renouvellement → résiliation) : rejeté à l'import,
+    et l'entrée authentique, arrivée ensuite, est bien ingérée."""
+    _pf, _df, pa, da, _o, s = _abonne(j)
+    V.renew_subscription(j, pa, da, s.subscription_id)
+    vraie = next(e for e in V.export_entries(j, ("service_renew",)))
+    fausse = dict(vraie, op="service_revoke_sub", payload_type="ServiceRevokeSub")
+    autre = Journal(str(tmp_path / "autre.db"))
+    res = V.import_entries(autre, [fausse, vraie])
+    assert res["rejected"] == 1 and res["ingested"] == 1
+    assert [e.op.value for e in autre.iter_entries()] == ["service_renew"]
+    # Approbation réétiquetée en refus (forme différente) : rejetée aussi.
+    assert not V.forme_valide("service_reject", {"subscription_id": "x", "approver": da, "approved_at": "t"}, da)
+
+
+def test_export_borne_par_service_id(j):
+    """C3 : republier cent fois ne grossit pas l'export : une seule offre par service_id."""
+    pf, df, pa, da, o, _s = _abonne(j)
+    charge = V.charge_signee(V.ServiceOffer(**{**o.model_dump(), "sig": None}))
+    for i in range(20):
+        V._signer_et_ajouter(j, pf, df, Op.SERVICE_OFFER, "ServiceOffer", dict(charge, description=str(i)))
+    ex = MX.construire(j, da, {})
+    assert len([e for e in ex["entrees"] if e["op"] == "service_offer"]) == 1

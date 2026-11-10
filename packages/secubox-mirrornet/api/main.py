@@ -94,6 +94,8 @@ def synchroniser_maintenant() -> Dict[str, Any]:
             # Clés d'idempotence : 24 h suffisent à une reprise ; une réservation en cours (statut 0) n'est pas touchée.
             limite = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
             cx.execute("DELETE FROM requete WHERE statut <> 0 AND ts < ?", (limite,))
+            orphelines = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+            cx.execute("DELETE FROM requete WHERE statut = 0 AND ts < ?", (orphelines,))
             return res
         except sqlite3.Error as e:
             log.warning("synchronisation MirrorNet en échec : %s", e)
@@ -366,11 +368,13 @@ def _liberer(cle: Optional[str]) -> None:
 
 
 @contextlib.contextmanager
-def _geste(cle: Optional[str]):
+def _geste(cle: Optional[str], request: Request):
+    """Échec AVANT signature : la réservation est libérée (la même clé pourra être rejouée). Après signature, jamais."""
     try:
         yield
     except BaseException:
-        _liberer(cle)
+        if not getattr(request.state, "signe", False):
+            _liberer(cle)
         raise
 
 
@@ -378,14 +382,22 @@ def _relayer(request: Request, chemin: str, corps: Optional[Dict[str, Any]], cle
     """Relaie le geste à l'annuaire. Dès qu'il est SIGNÉ (2xx) ou peut l'avoir été (504), la réponse est mémorisée sous
     la clé d'idempotence : une reprise ne le fait jamais signer une seconde fois, même si la suite échoue."""
     statut, rep = annuaire.appeler(chemin, corps, _jeton(request))
-    if statut == 504:
+    if statut >= 500 and statut != 503:
+        # 504 (sans réponse) ou toute autre 5xx de l'annuaire : le geste a PU être signé. Seuls 503 (connexion
+        # impossible) et les refus 4xx libèrent la clé ; ici la réponse est gardée, jamais rejouée vers l'annuaire.
+        detail = (rep.get("detail") if isinstance(rep, dict) else None) or f"annuaire : HTTP {statut}"
+        rep = {"detail": f"{detail} — résultat indéterminé, consulter /subscriptions avant de réessayer"}
         _memoriser(cle, 504, rep)
-        raise HTTPException(504, rep.get("detail") + " ; consulter /subscriptions avant de réessayer")
+        raise HTTPException(504, rep["detail"])
     if statut >= 400:
         detail = rep.get("detail") if isinstance(rep, dict) else None
         raise HTTPException(statut if statut in (401, 403, 404, 409, 422, 503) else 502,
                             detail or f"annuaire : HTTP {statut}")
-    _memoriser(cle, 200, rep)
+    try:
+        _memoriser(cle, 200, rep)
+    except sqlite3.Error as e:      # base occupée : la réservation (statut 0) reste, une reprise aura 409, pas 2 signatures
+        log.warning("mirrornet : réponse signée non mémorisée (%s) ; la clé reste réservée", e)
+        request.state.signe = True
     try:
         synchroniser_maintenant()      # l'annuaire a réécrit l'export avant de répondre : l'état est déjà visible
     except Exception as e:  # noqa: BLE001 — le geste est fait ; la boucle de fond rattrapera l'index
@@ -420,7 +432,7 @@ def publier(req: Publication, request: Request, x_idempotence: Optional[str] = H
     deja = _idempotent(x_idempotence, "publier", cible)
     if deja is not None:
         return deja
-    with _geste(x_idempotence):
+    with _geste(x_idempotence, request):
         return _relayer(request, "/self/service/offer", corps, x_idempotence)
 
 
@@ -457,7 +469,7 @@ def s_abonner(service_id: str, request: Request, req: Optional[Abonnement] = Non
     deja = _idempotent(x_idempotence, "abonner", service_id)
     if deja is not None:
         return deja
-    with _geste(x_idempotence):
+    with _geste(x_idempotence, request):
         synchroniser_maintenant()
         rows = _lignes(_SQL_OFFRE + " WHERE o.ref_annuaire = ?", (service_id,))
         if not rows:
@@ -498,7 +510,7 @@ def renouveler(subscription_id: str, request: Request, x_idempotence: Optional[s
     deja = _idempotent(x_idempotence, "renouveler", subscription_id)
     if deja is not None:
         return deja
-    with _geste(x_idempotence):
+    with _geste(x_idempotence, request):
         s = _abonnement_local(subscription_id)
         if s["role"] != "abonne":
             raise HTTPException(409, "seul l'abonné renouvelle")
@@ -514,7 +526,7 @@ def resilier(subscription_id: str, request: Request, motif: str = Query("", max_
     deja = _idempotent(x_idempotence, "resilier", subscription_id)
     if deja is not None:
         return deja
-    with _geste(x_idempotence):
+    with _geste(x_idempotence, request):
         s = _abonnement_local(subscription_id)
         if s["etat"] in A.TERMINAUX:
             raise HTTPException(409, f"abonnement déjà clos ({s['etat']})")

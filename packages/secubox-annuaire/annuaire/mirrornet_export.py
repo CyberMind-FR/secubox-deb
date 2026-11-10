@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from . import confiance
-from .verbs import _get_nodes, export_entries
+from .verbs import _get_nodes, export_entries, forme_valide
 
 FORMAT = 1
 CHEMIN_DEFAUT = Path("/var/lib/secubox/annuaire/mirrornet-export.json")
@@ -37,6 +37,7 @@ _OPS_ABONNEMENT = {"service_subscribe", "service_approve", "service_reject", "se
 
 
 OFFRES_PAR_FOURNISSEUR = 64          # plafond (déni de service : un pair qui inonde le journal de ses offres)
+ABONNEMENTS_PAR_ABONNE = 32
 
 
 def hauteur_pertinente(journal) -> int:
@@ -79,16 +80,28 @@ def construire(journal, soi: Optional[str], joignabilite_ip: Dict[str, Dict[str,
     for did, sids in par_fournisseur.items():
         if niv.get(did, ("OBSERVER",))[0] not in ("OBSERVER", "REVOKED"):
             gardes.update(sids[-OFFRES_PAR_FOURNISSEUR:])
-    gardees = []
-    for e in entrees:
+    # Une seule offre (la dernière) et un seul retrait par service_id ; au plus ABONNEMENTS_PAR_ABONNE abonnements
+    # d'un même abonné (les plus récents) avec leurs gestes : la taille de l'export reste bornée quoi qu'un membre signe.
+    derniere: Dict[tuple, int] = {}
+    for i, e in enumerate(entrees):
         op, p = e["op"], e["payload"]
-        if op == "service_offer":
-            if p.get("service_id") in gardes and fournisseur.get(p.get("service_id")) == e["author"]:
+        if op in ("service_offer", "service_revoke_offer"):
+            sid = p.get("service_id")
+            if sid in gardes and fournisseur.get(sid) == e["author"] and forme_valide(op, p, e["author"]):
+                derniere[(op, sid)] = i
+    par_abonne: Dict[str, List[str]] = {}
+    for e in entrees:
+        if e["op"] == "service_subscribe" and e["payload"].get("subscription_id") in miens \
+                and forme_valide(e["op"], e["payload"], e["author"]):
+            par_abonne.setdefault(e["author"], []).append(e["payload"]["subscription_id"])
+    retenus = {sid for liste in par_abonne.values() for sid in liste[-ABONNEMENTS_PAR_ABONNE:]}
+    gardees = []
+    for i, e in enumerate(entrees):
+        op, p = e["op"], e["payload"]
+        if op in ("service_offer", "service_revoke_offer"):
+            if derniere.get((op, p.get("service_id"))) == i:
                 gardees.append(e)
-        elif op == "service_revoke_offer":
-            if p.get("service_id") in gardes and fournisseur.get(p.get("service_id")) == e["author"]:
-                gardees.append(e)
-        elif p.get("subscription_id") in miens:
+        elif p.get("subscription_id") in retenus and forme_valide(op, p, e["author"]):
             gardees.append(e)
     noeuds: Dict[str, Dict[str, Any]] = {}
     dids_par_ip: Dict[str, set] = {}
@@ -111,21 +124,29 @@ def construire(journal, soi: Optional[str], joignabilite_ip: Dict[str, Dict[str,
             "_ip_vers_did": ip_vers_did}
 
 
+_ECRITES: Dict[str, str] = {}        # chemin -> dernière empreinte écrite ou relue par ce processus
+
+
 def ecrire(donnees: Dict[str, Any], chemin: Path = CHEMIN_DEFAUT) -> bool:
-    """Dépose l'export si son contenu (hors date) a changé. Rend True quand le fichier a été réécrit."""
+    """Dépose l'export si son contenu (hors date et hauteur) a changé. Rend True quand le fichier a été réécrit.
+    L'empreinte déjà écrite est gardée en mémoire : le fichier n'est pas relu ni réanalysé à chaque passe."""
     donnees = {k: v for k, v in donnees.items() if not k.startswith("_")}
     # La hauteur bouge à chaque entrée ingérée (assistance comprise) : hors empreinte, elle ne force pas la réécriture.
     corps = json.dumps({k: v for k, v in donnees.items() if k != "hauteur"}, sort_keys=True, separators=(",", ":"),
                        ensure_ascii=False)
     empreinte = hashlib.sha256(corps.encode()).hexdigest()
-    try:
-        ancien = json.loads(chemin.read_text(encoding="utf-8"))
-        if ancien.get("empreinte") == empreinte:
-            return False
-    except FileNotFoundError:
-        pass
-    except (OSError, ValueError, AttributeError) as e:
-        logging.getLogger("secubox.annuaire").debug("export MirrorNet précédent illisible : %s", e)
+    cle = str(chemin)
+    if _ECRITES.get(cle) == empreinte and chemin.exists():
+        return False
+    if cle not in _ECRITES:
+        try:
+            if json.loads(chemin.read_text(encoding="utf-8")).get("empreinte") == empreinte:
+                _ECRITES[cle] = empreinte
+                return False
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError, AttributeError) as e:
+            logging.getLogger("secubox.annuaire").debug("export MirrorNet précédent illisible : %s", e)
     sortie = dict(donnees, empreinte=empreinte, genere_le=datetime.now(timezone.utc).isoformat())
     chemin.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=".mirrornet-export.", dir=str(chemin.parent))
@@ -140,4 +161,5 @@ def ecrire(donnees: Dict[str, Any], chemin: Path = CHEMIN_DEFAUT) -> bool:
         except OSError:
             pass
         raise
+    _ECRITES[cle] = empreinte
     return True

@@ -728,6 +728,8 @@ async def pull_services(req: PullServicesRequest):
 MIRRORNET_EXPORT = Path(os.environ.get("ANNUAIRE_MIRRORNET_EXPORT", "/var/lib/secubox/annuaire/mirrornet-export.json"))
 _JOIGNABILITE: Dict[str, Dict[str, Any]] = {}     # mesh_ip -> {"ok_le", "echec_depuis"}
 _EXPORT_CACHE: Dict[str, Any] = {"hauteur": None, "donnees": None}
+_VERROU_EXPORT = threading.Lock()                  # deux fils n'écrivent jamais un export ancien après un récent
+_VERROU_ABONNEMENT = threading.Lock()              # vérification « déjà en cours » + signature : atomiques
 
 
 def _cle_du_noeud():
@@ -802,6 +804,11 @@ def _noter_joignabilite(suivi: Dict[str, bool]) -> None:
 def _exporter_mirrornet() -> None:
     """Dépose l'export MirrorNet ; la partie journal n'est recalculée que si la hauteur PERTINENTE (service_*,
     identités, nœuds, révocations) a changé. Jamais d'exception vers l'appelant (synchronisation, route)."""
+    with _VERROU_EXPORT:
+        _exporter_mirrornet_verrouille()
+
+
+def _exporter_mirrornet_verrouille() -> None:
     try:
         from annuaire import mirrornet_export as MX  # noqa: PLC0415
         j = get_journal()
@@ -825,7 +832,8 @@ def _abonnement_en_cours(j, abonne: str, service_id: str) -> Optional[str]:
     maintenant = datetime.now(timezone.utc)
     for e in j.iter_entries(ops=("service_subscribe",)):
         p = e.payload
-        if e.op != _Op.SERVICE_SUBSCRIBE or p.get("subscriber") != abonne or p.get("service_id") != service_id:
+        if (e.op != _Op.SERVICE_SUBSCRIBE or e.author != abonne or p.get("subscriber") != abonne
+                or p.get("service_id") != service_id):
             continue
         sid = p.get("subscription_id")
         if subscription_state(j, sid) not in (_SS.PENDING, _SS.APPROVED):
@@ -927,16 +935,19 @@ async def self_subscribe(service_id: str, req: SelfSubscribeRequest, ident: Dict
     if niveau in ("OBSERVER", "REVOKED") or offre.get("classe") == "prive":
         raise HTTPException(409, f"offre non ouverte à l'abonnement (fournisseur {niveau}, classe "
                                  f"{offre.get('classe') or 'public'})")
-    en_cours = await asyncio.to_thread(_abonnement_en_cours, j, did, service_id)
-    if en_cours:
-        raise HTTPException(409, f"abonnement déjà en cours : {en_cours}")
     duree = offre.get("duree_s")
     expire = ((datetime.now(timezone.utc) + timedelta(seconds=duree)).isoformat()
               if isinstance(duree, int) and duree > 0 else None)
+
+    def _verifier_puis_signer():
+        with _VERROU_ABONNEMENT:
+            en_cours = _abonnement_en_cours(j, did, service_id)
+            if en_cours:
+                raise HTTPException(409, f"abonnement déjà en cours : {en_cours}")
+            return subscribe(j, priv, did, service_id, version=req.version, tarif_accepte=offre.get("tarif"),
+                             expire_le=expire, provider=offre.get("provider"))
     try:
-        sub = await asyncio.to_thread(subscribe, j, priv, did, service_id, version=req.version,
-                                      tarif_accepte=offre.get("tarif"), expire_le=expire,
-                                      provider=offre.get("provider"))
+        sub = await asyncio.to_thread(_verifier_puis_signer)
     except PermissionError as e:
         raise HTTPException(403, str(e)) from None
     except ValueError as e:

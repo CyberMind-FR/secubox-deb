@@ -532,6 +532,14 @@ class ServiceOffer(BaseModel):
     def _tarif_valide(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return valider_tarif(v)
 
+    @field_validator("compat")
+    @classmethod
+    def _compat_borne(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        import json as _json  # noqa: PLC0415
+        if v is not None and len(_json.dumps(v)) > 1024:
+            raise ValueError("compat : 1 Kio au plus")
+        return v
+
     @field_validator("quotas")
     @classmethod
     def _quotas_valides(cls, v: Optional[Dict[str, int]]) -> Optional[Dict[str, int]]:
