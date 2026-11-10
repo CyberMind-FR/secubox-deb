@@ -1,3 +1,11 @@
+secubox-mirrornet (0.3.2-1~trixie1) trixie; urgency=medium
+
+  * Unité en Type=exec : la combinaison Type=simple + ExecStartPost + LoadCredential est
+    signalée par systemd comme sujette à une course (status=243/CREDENTIALS vu une fois au
+    redémarrage sur gk6, ref #3653).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 12:27:09 +0100
+
 secubox-mirrornet (0.3.1-1~trixie1) trixie; urgency=medium
 
   * Banc #3653 : le postinst crée /etc/nginx/secubox-mesh.d lui-même (configuré avant
