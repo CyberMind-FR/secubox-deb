@@ -95,7 +95,7 @@ MIGRATIONS = {
             periode_debut TEXT NOT NULL,
             periode_fin TEXT NOT NULL,
             unite TEXT NOT NULL CHECK (unite IN ('version_recue','requete','octet','jour')),
-            quantite INTEGER NOT NULL CHECK (quantite >= 0),
+            quantite INTEGER NOT NULL CHECK (typeof(quantite) = 'integer' AND quantite BETWEEN 0 AND 1000000000000000),
             servi_par TEXT NOT NULL,
             fraicheur_ok INTEGER NOT NULL DEFAULT 1 CHECK (fraicheur_ok IN (0,1)),
             sig_fournisseur TEXT NOT NULL,
@@ -134,7 +134,8 @@ MIGRATIONS = {
             id TEXT NOT NULL UNIQUE,
             transaction_id TEXT NOT NULL REFERENCES ledger_transaction(id),
             account_id TEXT NOT NULL REFERENCES account(id),
-            montant INTEGER NOT NULL CHECK (montant <> 0),
+            montant INTEGER NOT NULL
+                CHECK (typeof(montant) = 'integer' AND montant <> 0 AND montant BETWEEN -1000000000000000 AND 1000000000000000),
             empreinte_prec TEXT NOT NULL,
             empreinte TEXT NOT NULL UNIQUE
         )""",
@@ -143,7 +144,8 @@ MIGRATIONS = {
             account_id TEXT NOT NULL REFERENCES account(id),
             periode_debut TEXT NOT NULL,
             periode_fin TEXT NOT NULL,
-            montant INTEGER NOT NULL,
+            montant INTEGER NOT NULL
+                CHECK (typeof(montant) = 'integer' AND montant BETWEEN -1000000000000000 AND 1000000000000000),
             etat TEXT NOT NULL DEFAULT 'propose' CHECK (etat IN ('propose','accepte','enregistre','annule')),
             reference_externe TEXT
         )""",
@@ -182,6 +184,13 @@ MIGRATIONS = {
            BEGIN SELECT RAISE(ABORT, 'historique en ajout seul'); END""",
         """CREATE TRIGGER IF NOT EXISTS regle_sans_maj BEFORE UPDATE ON distribution_rule
            BEGIN SELECT RAISE(ABORT, 'règle versionnée : publier une nouvelle version'); END""",
+        """CREATE TRIGGER IF NOT EXISTS regle_sans_supp BEFORE DELETE ON distribution_rule
+           BEGIN SELECT RAISE(ABORT, 'règle versionnée : jamais supprimée'); END""",
+        # Un relevé n'est comptabilisé qu'UNE fois (hors inverse) ; une transaction n'est inversée qu'UNE fois.
+        """CREATE UNIQUE INDEX IF NOT EXISTS tx_releve_unique ON ledger_transaction(usage_record_id)
+           WHERE usage_record_id IS NOT NULL AND inverse_de IS NULL""",
+        """CREATE UNIQUE INDEX IF NOT EXISTS tx_inverse_unique ON ledger_transaction(inverse_de)
+           WHERE inverse_de IS NOT NULL""",
         "CREATE INDEX IF NOT EXISTS ledger_entry_tx ON ledger_entry(transaction_id)",
         "CREATE INDEX IF NOT EXISTS ledger_entry_compte ON ledger_entry(account_id)",
         "CREATE INDEX IF NOT EXISTS usage_abonnement ON usage_record(subscription_id)",
@@ -199,6 +208,10 @@ def ouvrir(chemin: Path | str, lecture_seule: bool = False) -> sqlite3.Connectio
         cx.execute("PRAGMA journal_mode=WAL")
     cx.row_factory = sqlite3.Row
     cx.execute("PRAGMA foreign_keys=ON")
+    # INSERT OR REPLACE supprime puis insère : sans déclencheurs récursifs, les déclencheurs BEFORE DELETE (ajout seul)
+    # ne voient pas cette suppression et un relevé ou une écriture serait remplacé en silence.
+    cx.execute("PRAGMA recursive_triggers=ON")
+    cx.execute("PRAGMA temp_store=MEMORY")       # tris en mémoire : le profil AppArmor n'ouvre pas /tmp
     return cx
 
 
@@ -236,6 +249,13 @@ def initialiser(chemin: Path | str) -> int:
         cx.close()
 
 
+CODE_BASE_TROP_RECENTE = 3     # RestartPreventExitStatus de l'unité : pas de redémarrage en boucle
+
+
 if __name__ == "__main__":     # ExecStartPre : python3 -m secubox_mirrornet.schema <chemin>
     import sys
-    print(f"mirrornet : schéma en version {initialiser(sys.argv[1] if len(sys.argv) > 1 else '/var/lib/secubox-mirrornet/mirrornet.db')}")
+    try:
+        print(f"mirrornet : schéma en version {initialiser(sys.argv[1] if len(sys.argv) > 1 else '/var/lib/secubox-mirrornet/mirrornet.db')}")
+    except RuntimeError as e:
+        print(f"mirrornet : {e}", file=sys.stderr)
+        sys.exit(CODE_BASE_TROP_RECENTE)

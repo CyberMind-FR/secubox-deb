@@ -17,7 +17,7 @@ Depends: ${misc:Depends},
  python3 (>= 3.11),
  python3-fastapi,
  python3-uvicorn,
- secubox-core,
+ secubox-core (>= 1.5.9),
  adduser,
  systemd
 Recommends: secubox-annuaire,

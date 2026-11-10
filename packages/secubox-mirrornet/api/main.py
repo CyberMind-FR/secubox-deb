@@ -73,6 +73,22 @@ def schema_version() -> Dict[str, Any]:
         cx.close()
 
 
+@router.get("/status", dependencies=[Depends(require_lecture)])
+def status() -> Dict[str, Any]:
+    """État du module (MODULE-COMPLIANCE, endpoint obligatoire) : base, schéma, volumes. Aucune donnée privée."""
+    present = config.BASE.exists()
+    res: Dict[str, Any] = {"module": "mirrornet", "phase": 2, "base": present, "ecriture": False}
+    if present:
+        cx = _base()
+        try:
+            res["schema"] = schema.version(cx)
+            for t in ("offer", "subscription", "dataset_version", "distribution_rule"):
+                res[f"n_{t}"] = cx.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        finally:
+            cx.close()
+    return res
+
+
 @router.get("/services", dependencies=[Depends(require_lecture)])
 def services() -> Dict[str, Any]:
     """Catalogue local des offres de service (hors jeux de données). Vide tant que la synchronisation n'existe pas."""
@@ -91,9 +107,10 @@ def datasets() -> Dict[str, Any]:
     return {"datasets": rows, "count": len(rows)}
 
 
-@router.get("/subscriptions", dependencies=[Depends(require_lecture)])
+@router.get("/subscriptions", dependencies=[Depends(require_jwt)])
 def subscriptions() -> Dict[str, Any]:
-    """Abonnements connus de ce nœud et leur dernier état local (la vérité reste le journal de l'annuaire)."""
+    """Abonnements connus de ce nœud et leur dernier état local (la vérité reste le journal de l'annuaire).
+    Administrateur : qui est abonné à quoi, à quel tarif, est une relation privée entre nœuds."""
     rows = [_json(r, "tarif_accepte") for r in _lignes(
         "SELECT s.id, s.ref_annuaire, s.abonne_did, s.offer_id, s.version, s.tarif_accepte, s.renouvellement, "
         "s.expire_le, s.grace_s, (SELECT vers FROM subscription_event e WHERE e.subscription_id = s.id "
@@ -132,8 +149,8 @@ def journal(limite: int = Query(100, ge=1, le=1000), avant: int = Query(0, ge=0)
             args = (avant,)
         sql += "ORDER BY e.rang DESC LIMIT ?"
         ecritures = [dict(r) for r in cx.execute(sql, args + (limite,))]
-        anomalies = ledger.verifier_integrite(cx)
-        return {"ecritures": ecritures, "integre": not anomalies, "anomalies": anomalies[:50]}
+        anomalies = ledger.verifier_integrite(cx)      # phase 5 : contrôle en tâche de fond + cache (PERF-CACHE)
+        return {"ecritures": ecritures, "integre": not anomalies, "anomalies": anomalies[:50], "tete": ledger.tete(cx)}
     finally:
         cx.close()
 

@@ -217,3 +217,100 @@ def test_montant_invalide():
             repartition.repartir(m, PARTS)
     with pytest.raises(repartition.RegleInvalide):
         repartition.repartir(10, PARTS, sans_relais="relais")
+
+
+# ── relecture de sécurité (#3645) ───────────────────────────────────────────────────────────────────────────────────
+def test_insert_or_replace_ne_contourne_pas_l_ajout_seul(cx):
+    sid = _abonnement(cx)
+    rid = _releve(cx, sid, 1)
+    b, a, _, _ = _comptes(cx)
+    tx = ledger.ecrire_transaction(cx, "t", [(b, -1), (a, 1)])
+    eid = cx.execute("SELECT id, transaction_id, account_id, montant, empreinte_prec, empreinte FROM ledger_entry LIMIT 1").fetchone()
+    cx.execute("INSERT INTO subscription_event (id, subscription_id, vers, ts) VALUES ('e1', ?, 'Actif', 't')", (sid,))
+    cx.execute("INSERT INTO distribution_rule (id, version, parts, valide_du, cree_le) VALUES ('r1', 1, '{}', 't', 't')")
+    for sql, args in (
+        ("INSERT OR REPLACE INTO usage_record (id, subscription_id, sequence, periode_debut, periode_fin, unite, quantite, "
+         "servi_par, sig_fournisseur, sig_abonne, recu_le) VALUES (?, ?, 1, 'a', 'b', 'jour', 99, 'x', 's', 's', 't')", (rid, sid)),
+        ("INSERT OR REPLACE INTO ledger_transaction (id, libelle, ts) VALUES (?, 'faux', 't')", (tx,)),
+        ("INSERT OR REPLACE INTO ledger_entry (rang, id, transaction_id, account_id, montant, empreinte_prec, empreinte) "
+         "VALUES (1, ?, ?, ?, 999, ?, 'x')", (eid[0], eid[1], eid[2], eid[4])),
+        ("INSERT OR REPLACE INTO subscription_event (id, subscription_id, vers, ts) VALUES ('e1', ?, 'Resilie', 't')", (sid,)),
+        ("INSERT OR REPLACE INTO distribution_rule (id, version, parts, valide_du, cree_le) VALUES ('r1', 1, '{\"x\":1}', 't', 't')", ()),
+    ):
+        with pytest.raises(sqlite3.IntegrityError):
+            cx.execute(sql, args)
+    with pytest.raises(sqlite3.IntegrityError, match="jamais supprimée"):
+        cx.execute("DELETE FROM distribution_rule")
+    assert ledger.verifier_integrite(cx) == []
+
+
+def test_inverse_seulement_par_inverser(cx):
+    sid = _abonnement(cx)
+    rid = _releve(cx, sid, 1)
+    b, a, _, _ = _comptes(cx)
+    tx = ledger.ecrire_transaction(cx, "usage", [(b, -10), (a, 10)], usage_record_id=rid)
+    with pytest.raises(TypeError):                     # plus de porte dérobée inverse_de
+        ledger.ecrire_transaction(cx, "x", [(b, -10), (a, 10)], usage_record_id=rid, inverse_de=tx)
+    with pytest.raises(ledger.LedgerErreur):           # une « inverse » qui n'est pas l'opposée exacte
+        ledger._ecrire(cx, "x", [(b, -10), (a, 10)], tx_id=None, usage_record_id=None, regle_id=None, detail=None,
+                       inverse_de=tx)
+    with pytest.raises(sqlite3.IntegrityError):        # filet en base : relevé comptabilisé deux fois
+        cx.execute("INSERT INTO ledger_transaction (id, usage_record_id, libelle, ts) VALUES ('bis', ?, 'x', 't')", (rid,))
+    inv = ledger.inverser(cx, tx, "erreur")
+    assert inv == f"inv:{tx}" and ledger.inverser(cx, tx, "erreur") == inv          # rejouer : idempotent
+    with pytest.raises(ledger.LedgerErreur):
+        ledger.inverser(cx, tx, "autre motif")
+    with pytest.raises(sqlite3.IntegrityError):        # filet en base : une seule inverse par transaction
+        cx.execute("INSERT INTO ledger_transaction (id, inverse_de, libelle, ts) VALUES ('inv2', ?, 'x', 't')", (tx,))
+
+
+def test_inversions_concurrentes_une_seule_passe(tmp_path):
+    import threading
+    base = tmp_path / "m.db"
+    schema.initialiser(base)
+    cx0 = schema.ouvrir(base)
+    b, a = ledger.compte(cx0, "credits", DID_B), ledger.compte(cx0, "credits", DID_A)
+    tx = ledger.ecrire_transaction(cx0, "t", [(b, -3), (a, 3)])
+    cx0.close()
+    res = []
+
+    def inverse(motif):
+        c = schema.ouvrir(base)
+        try:
+            res.append(ledger.inverser(c, tx, motif))
+        except (ledger.LedgerErreur, sqlite3.Error) as e:
+            res.append(type(e).__name__)
+        finally:
+            c.close()
+    fils = [threading.Thread(target=inverse, args=(f"m{i}",)) for i in range(6)]
+    for f in fils:
+        f.start()
+    for f in fils:
+        f.join()
+    c = schema.ouvrir(base)
+    assert c.execute("SELECT COUNT(*) FROM ledger_transaction WHERE inverse_de = ?", (tx,)).fetchone()[0] == 1
+    assert ledger.verifier_integrite(c) == []
+
+
+def test_alteration_du_contenu_detectee(cx):
+    b, a, _, _ = _comptes(cx)
+    ledger.ecrire_transaction(cx, "vrai libellé", [(b, -2), (a, 2)])
+    cx.execute("DROP TRIGGER ledger_tx_sans_maj")
+    cx.execute("UPDATE ledger_transaction SET libelle = 'faux', detail = '{\"x\": 1}'")
+    assert any("empreinte altérée" in x for x in ledger.verifier_integrite(cx))
+    assert ledger.tete(cx)["rang"] == 2
+
+
+def test_montants_entiers_meme_en_sql_direct(cx):
+    b, a, _, _ = _comptes(cx)
+    cx.execute("INSERT INTO ledger_transaction (id, libelle, ts) VALUES ('t', 'x', 't')")
+    for m in (1.5, 10 ** 16, -(10 ** 16)):     # un texte numérique (« 12 ») est converti en entier par SQLite : sans risque
+        with pytest.raises(sqlite3.IntegrityError):
+            cx.execute("INSERT INTO ledger_entry (id, transaction_id, account_id, montant, empreinte_prec, empreinte) "
+                       "VALUES (?, 't', ?, ?, 'p', ?)", (str(uuid.uuid4()), b, m, str(uuid.uuid4())))
+
+
+def test_unite_ledger_prive_et_sans_boucle():
+    u = (Path(__file__).resolve().parents[1] / "debian" / "secubox-mirrornet.service").read_text()
+    assert "UMask=0077" in u and "StateDirectoryMode=0700" in u and "RestartPreventExitStatus=3" in u
+    assert schema.CODE_BASE_TROP_RECENTE == 3

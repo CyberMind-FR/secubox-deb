@@ -4,8 +4,23 @@
 set -e
 
 case "$1" in
+    remove)
+        # Profil déchargé, route nginx (conffile resté) neutralisée par un rechargement valide.
+        if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+            apparmor_parser -R /etc/apparmor.d/secubox-mirrornet 2>/dev/null || true
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+            if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+        fi
+        ;;
     purge)
-        # La base contient le ledger de ce nœud : retirée seulement à la purge explicite du paquet.
+        # La base contient le ledger de ce nœud, qui ne se reconstruit pas : copie datée (0600 root) avant retrait.
+        if [ -d /var/lib/secubox-mirrornet ] && [ ! -L /var/lib/secubox-mirrornet ]; then
+            install -d -m 0700 /var/backups/secubox-mirrornet
+            tar -C /var/lib -czf "/var/backups/secubox-mirrornet/mirrornet-$(date +%Y%m%d-%H%M%S).tar.gz" secubox-mirrornet 2>/dev/null \
+              && echo "secubox-mirrornet : ledger sauvegardé dans /var/backups/secubox-mirrornet/" >&2 || true
+        fi
         rm -rf /var/lib/secubox-mirrornet
         rm -f /etc/secubox/mirrornet.toml /etc/apparmor.d/secubox-mirrornet
         if id -u secubox-mirrornet >/dev/null 2>&1; then

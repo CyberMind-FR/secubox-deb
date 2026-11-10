@@ -19,11 +19,15 @@ ExecStartPre=/usr/bin/python3 -m secubox_mirrornet.schema /var/lib/secubox-mirro
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/mirrornet.sock --workers 1 --log-level warning
 # uvicorn force sa socket en 0666 : remise en 0660 (groupe secubox, que nginx traverse) dès qu'elle existe.
 ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/mirrornet.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/mirrornet.sock'
-UMask=0027
+# Ledger privé (MIRRORNET_ECONOMY.md § 8) : base et WAL lisibles par le seul compte du service, jamais par le groupe
+# secubox (modules, agrégateur). La socket est remise en 0660 explicitement par ExecStartPost.
+UMask=0077
 AppArmorProfile=-secubox-mirrornet
 StateDirectory=secubox-mirrornet
-StateDirectoryMode=0750
+StateDirectoryMode=0700
 Restart=on-failure
+# Base plus récente que le code (retour arrière du paquet) : code 3, pas de redémarrage en boucle.
+RestartPreventExitStatus=3
 RestartSec=5
 MemoryMax=128M
 NoNewPrivileges=yes

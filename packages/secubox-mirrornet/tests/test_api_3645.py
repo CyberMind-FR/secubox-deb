@@ -40,6 +40,8 @@ def test_lectures_sur_base_vide(api):
     schema.initialiser(base)
     c = TestClient(main.app)
     assert c.get("/api/v1/mirrornet/schema").json() == {"version": 1, "attendue": 1}
+    st = c.get("/api/v1/mirrornet/status").json()
+    assert st["base"] is True and st["schema"] == 1 and st["ecriture"] is False and st["n_offer"] == 0
     for chemin, cle in (("services", "services"), ("datasets", "datasets"), ("subscriptions", "subscriptions"),
                         ("economy/distribution-rules", "rules")):
         r = c.get(f"/api/v1/mirrornet/{chemin}")
@@ -49,7 +51,7 @@ def test_lectures_sur_base_vide(api):
     ledger.ecrire_transaction(cx, "essai", [(a, -3), (b, 3)])
     cx.close()
     j = c.get("/api/v1/mirrornet/economy/ledger").json()
-    assert j["integre"] is True and len(j["ecritures"]) == 2
+    assert j["integre"] is True and len(j["ecritures"]) == 2 and j["tete"]["rang"] == 2
     compte = c.get("/api/v1/mirrornet/economy/account").json()
     assert compte["valeur_monetaire"] is False and len(compte["comptes"]) == 2
 
@@ -64,7 +66,7 @@ def test_gardes_et_aucune_ecriture():
         deps = [d.call for d in route.dependant.dependencies]
         if chemin.endswith("/health"):
             continue
-        if "/economy/account" in chemin or "/economy/ledger" in chemin:
-            assert main.require_jwt in deps, chemin                   # ledger privé : administrateur
+        if any(x in chemin for x in ("/economy/account", "/economy/ledger", "/subscriptions")):
+            assert main.require_jwt in deps, chemin                   # ledger et relations privés : administrateur
         else:
             assert main.require_lecture in deps or main.require_jwt in deps, chemin

@@ -15,11 +15,11 @@ synchronisation avec l'annuaire arrive en phase 3.
 
 | Principe | Mise en œuvre |
 |---|---|
-| Une base par nœud, privée | SQLite WAL `/var/lib/secubox-mirrornet/mirrornet.db`, compte `secubox-mirrornet`, 0750 |
+| Une base par nœud, privée | SQLite WAL `/var/lib/secubox-mirrornet/mirrornet.db`, compte `secubox-mirrornet`, dossier 0700 et fichiers 0600 (ledger privé, illisible par le groupe `secubox`) |
 | Identifiants stables | UUID v4 (texte) pour les objets de ce nœud ; `did:plc:<32 hex>` pour les nœuds ; identifiants de l'annuaire (`service_id`, `subscription_id`) gardés dans `ref_annuaire` |
 | La vérité partagée reste l'annuaire | offres, abonnements, manifestes : objets **signés** du journal ; la base n'en est qu'un index local, reconstructible |
-| Ajout seul | ledger, transactions, relevés d'usage, historique des abonnements, règles : déclencheurs `RAISE(ABORT)` sur UPDATE/DELETE |
-| Montants entiers | centièmes de crédit (`INTEGER`), jamais de flottant |
+| Ajout seul | ledger, transactions, relevés d'usage, historique des abonnements, règles : déclencheurs `RAISE(ABORT)` sur UPDATE/DELETE, `PRAGMA recursive_triggers=ON` (sans lui, `INSERT OR REPLACE` remplacerait en silence) |
+| Montants entiers | centièmes de crédit, `CHECK (typeof(x) = 'integer')` et borne ±10^15, jamais de flottant |
 | Crédits ≠ règlements | comptes de nature `credits` et `reglement` distincts ; aucun virement n'est jamais exécuté |
 | Versionné | `PRAGMA user_version` ; migrations idempotentes, une transaction par version ; base plus récente que le code jamais touchée |
 
@@ -87,12 +87,20 @@ moins de deux écritures, un montant non entier ou nul, une somme non nulle, un 
 comptabilisé (hors transaction inverse), un identifiant déjà utilisé avec un autre contenu. Réécrire une transaction
 identique sous le même identifiant ne fait rien (**idempotence**).
 
-Chaînage : `empreinte = BLAKE2b-256(empreinte_prec ‖ id ‖ transaction ‖ compte ‖ montant)`, genèse `0…0`.
-`ledger.verifier_integrite` recalcule toute la chaîne et la somme de chaque transaction ; une modification faite en
-contournant les déclencheurs (accès direct au fichier) est détectée (test `test_alteration_detectee`).
+Chaînage : `empreinte = BLAKE2b-256(empreinte_prec ‖ id ‖ transaction ‖ empreinte_contenu_transaction ‖ compte ‖ montant)`,
+genèse `0…0` ; le contenu de la transaction (libellé, détail, relevé, règle, inverse, horodatage) est couvert.
+`ledger.verifier_integrite` recalcule chaîne, contenus et sommes ; une modification faite en contournant les
+déclencheurs est détectée (tests `test_alteration_detectee`, `test_alteration_du_contenu_detectee`). La chaîne n'est
+**pas clé** : une troncature de queue ou une chaîne entièrement recalculée ne se voit qu'en comparant `ledger.tete`
+à un ancrage externe (ligne d'audit ou signature du nœud), prévu en phase 5.
 
-Correction : `ledger.inverser(tx, motif)` écrit la transaction opposée liée par `inverse_de` ; une transaction ne
-s'inverse qu'une fois ; l'originale reste.
+Index uniques : un relevé n'est comptabilisé qu'une fois hors inverse (`tx_releve_unique`) ; une transaction n'est
+inversée qu'une fois (`tx_inverse_unique`).
+
+Correction : `ledger.inverser(tx, motif)` (seule porte : `inverse_de` n'est pas un paramètre public) écrit, dans la
+même transaction SQLite que ses contrôles, les écritures exactement opposées, sous l'identifiant `inv:<tx>` (rejouer
+ne fait rien) ; une transaction ne s'inverse qu'une fois ; l'originale reste. Un relevé inversé n'est plus
+recomptabilisable : la correction d'usage passe par un nouveau relevé.
 
 ## 5. Répartition
 
