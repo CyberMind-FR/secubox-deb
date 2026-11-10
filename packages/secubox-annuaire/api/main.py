@@ -855,7 +855,7 @@ class SelfOfferRequest(BaseModel):
     compat: Optional[Dict[str, Any]] = None
     tarif: Optional[Dict[str, Any]] = None
     quotas: Optional[Dict[str, int]] = None
-    classe: Optional[str] = Field(None, pattern=r"^(public|communaute|prive)$")
+    classe: Optional[str] = Field(None, pattern=r"^(public|communaute|specialise|professionnel|prive)$")
     duree_s: Optional[int] = Field(None, gt=0, le=10 * 365 * 86400)
     grace_s: Optional[int] = Field(None, ge=0, le=90 * 86400)
     sonde: Optional[str] = Field(None, max_length=256, pattern=r"^/[A-Za-z0-9._/~-]*$")
@@ -1021,6 +1021,60 @@ async def self_reject(subscription_id: str, ident: Dict[str, Any] = Depends(_req
     from annuaire.verbs import reject_subscription  # noqa: PLC0415
     res = await asyncio.to_thread(_decider, reject_subscription, subscription_id)
     _auditer_mirrornet("mirrornet_refus", ident, subscription_id=subscription_id)
+    await asyncio.to_thread(_exporter_mirrornet)
+    return res
+
+
+class SelfDatasetVersionRequest(BaseModel):
+    """Manifeste d'une version (#3653) ; numéro et parent sont calculés par l'annuaire."""
+    model_config = {"extra": "forbid"}
+    empreinte: str = Field(..., pattern=r"^b2:[0-9a-f]{64}$")
+    taille: int = Field(..., ge=0, le=2 ** 40)
+    format: str = Field(..., min_length=1, max_length=80)
+    licence: str = Field(..., min_length=1, max_length=64)
+    provenance: str = Field(..., min_length=1, max_length=160)
+    classe: str = Field(..., pattern=r"^(public|communaute|specialise|professionnel|prive)$")
+    donnees_personnelles: str = Field("non", max_length=140)
+    fraicheur_s: Optional[int] = Field(None, gt=0, le=10 * 365 * 86400)
+
+
+class SelfDatasetRetractRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    empreinte: str = Field(..., pattern=r"^b2:[0-9a-f]{64}$")
+    motif: str = Field("", max_length=200)
+
+
+@app.post("/self/dataset/{service_id}/version")
+async def self_dataset_version(service_id: str, req: SelfDatasetVersionRequest,
+                               ident: Dict[str, Any] = Depends(_require_jwt)):
+    """Publie une version d'un jeu de données de CE nœud (manifeste signé par node.key, #3653)."""
+    from annuaire.verbs import publish_dataset_version  # noqa: PLC0415
+    priv, did = _cle_du_noeud()
+
+    def _publier():
+        with _VERROU_ABONNEMENT:                     # numéro et parent : calculés puis signés sans entrelacement
+            return publish_dataset_version(get_journal(), priv, did, service_id, **req.model_dump(exclude_none=True))
+    try:
+        v = await asyncio.to_thread(_publier)
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from None
+    except ValueError as e:                          # pydantic.ValidationError en hérite (classe, vie privée…)
+        raise HTTPException(409 if "déjà" in str(e) or "inconnu" in str(e) else 422, str(e)) from None
+    _auditer_mirrornet("mirrornet_version_publiee", ident, service_id=service_id, numero=v.numero,
+                       empreinte=v.empreinte, classe=v.classe)
+    await asyncio.to_thread(_exporter_mirrornet)
+    return v.model_dump(exclude={"sig", "signer_did"})
+
+
+@app.post("/self/dataset/{service_id}/retract")
+async def self_dataset_retract(service_id: str, req: SelfDatasetRetractRequest,
+                               ident: Dict[str, Any] = Depends(_require_jwt)):
+    from annuaire.verbs import retract_dataset_version  # noqa: PLC0415
+    priv, did = _cle_du_noeud()
+    res = await asyncio.to_thread(_geste, retract_dataset_version, get_journal(), priv, did, service_id,
+                                  req.empreinte, req.motif)
+    _auditer_mirrornet("mirrornet_version_retiree", ident, service_id=service_id, empreinte=req.empreinte,
+                       motif=req.motif)
     await asyncio.to_thread(_exporter_mirrornet)
     return res
 

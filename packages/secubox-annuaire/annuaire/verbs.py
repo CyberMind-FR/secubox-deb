@@ -58,6 +58,7 @@ from .model import (
     RevocationScope,
     RingAssign,
     RingState,
+    DatasetVersion,
     ServiceOffer,
     Subscription,
     SubscriptionState,
@@ -1609,6 +1610,9 @@ _FORMES = {
     "service_revoke_sub": (("subscription_id", "subscriber", "revoked_at"), "subscriber", True),
     "service_renew": (("subscription_id", "subscriber", "renewed_at", "expire_le"), "subscriber", True),
     "service_revoke_offer_sub": (("subscription_id", "provider", "revoked_at"), "provider", True),
+    "service_dataset_version": (("service_id", "provider", "numero", "empreinte", "taille", "licence", "classe"),
+                                "provider", True),
+    "service_dataset_retract": (("service_id", "provider", "empreinte", "retracted_at"), "provider", True),
 }
 
 
@@ -1761,6 +1765,70 @@ def renew_subscription(journal: Journal, subscriber_priv: bytes, subscriber_did:
                "renewed_at": maintenant.isoformat()}
     _signer_et_ajouter(journal, subscriber_priv, subscriber_did, Op.SERVICE_RENEW, "ServiceRenew", payload)
     return {"status": "renewed", "subscription_id": subscription_id, "expire_le": neuf}
+
+
+# ---------------------------------------------------------------------------
+# MirrorNet 4a (#3653) — versions de jeux de données
+# ---------------------------------------------------------------------------
+
+def dataset_versions(journal: Journal, service_id: str) -> List[Dict[str, Any]]:
+    """Versions publiées par le PROPRIÉTAIRE de l'offre, dans l'ordre du journal, avec `retiree` (retrait signé)."""
+    offre = _find_any_offer(journal, service_id)
+    if offre is None:
+        return []
+    fournisseur = offre.get("provider")
+    versions: List[Dict[str, Any]] = []
+    retraits: set = set()
+    for e in journal.iter_entries(ops=("service_dataset_",)):
+        p = e.payload
+        if p.get("service_id") != service_id or e.author != fournisseur or not forme_valide(e.op, p, e.author):
+            continue
+        if e.op == Op.SERVICE_DATASET_VERSION:
+            versions.append(dict(p))
+        elif e.op == Op.SERVICE_DATASET_RETRACT:
+            retraits.add(p.get("empreinte"))
+    for v in versions:
+        v["retiree"] = v.get("empreinte") in retraits
+    return versions
+
+
+def publish_dataset_version(journal: Journal, provider_priv: bytes, provider_did: str, service_id: str,
+                            **manifeste: Any) -> DatasetVersion:
+    """SERVICE_DATASET_VERSION : nouvelle version d'un jeu de données de CE fournisseur. Numéro et parent sont calculés
+    ici (numéro suivant, empreinte de la dernière version) ; une empreinte déjà publiée est refusée (immutabilité)."""
+    offre = _get_offer(journal, service_id)
+    if offre is None:
+        raise ValueError("jeu de données inconnu ou retiré")
+    if offre.get("provider") != provider_did:
+        raise PermissionError("seul le fournisseur publie une version de son jeu de données")
+    if offre.get("kind") != "dataset":
+        raise ValueError("l'offre n'est pas un jeu de données (kind=dataset)")
+    precedentes = dataset_versions(journal, service_id)
+    if any(v.get("empreinte") == manifeste.get("empreinte") for v in precedentes):
+        raise ValueError("version déjà publiée (même empreinte)")
+    numero = max((int(v.get("numero", 0)) for v in precedentes), default=0) + 1
+    parent = precedentes[-1]["empreinte"] if precedentes else ""
+    v = DatasetVersion(service_id=service_id, provider=provider_did, numero=numero, parent=parent, **manifeste)
+    payload = charge_signee(v)
+    _signer_et_ajouter(journal, provider_priv, provider_did, Op.SERVICE_DATASET_VERSION, "DatasetVersion", payload)
+    return DatasetVersion(**{**payload, "sig": None, "signer_did": provider_did})
+
+
+def retract_dataset_version(journal: Journal, provider_priv: bytes, provider_did: str, service_id: str,
+                            empreinte: str, motif: str = "") -> Dict[str, Any]:
+    """SERVICE_DATASET_RETRACT : retrait signé d'une version ; copies et abonnés la suppriment à réception (§ 6)."""
+    offre = _find_any_offer(journal, service_id)
+    if offre is None or offre.get("provider") != provider_did:
+        raise PermissionError("seul le fournisseur retire une version de son jeu de données")
+    versions = {v["empreinte"]: v for v in dataset_versions(journal, service_id)}
+    if empreinte not in versions:
+        raise ValueError("version inconnue")
+    if versions[empreinte]["retiree"]:
+        raise ValueError("version déjà retirée")
+    payload = {"op": Op.SERVICE_DATASET_RETRACT.value, "service_id": service_id, "provider": provider_did,
+               "empreinte": empreinte, "motif": _motif(motif), "retracted_at": now_rfc3339()}
+    _signer_et_ajouter(journal, provider_priv, provider_did, Op.SERVICE_DATASET_RETRACT, "DatasetRetract", payload)
+    return {"status": "retracted", "service_id": service_id, "empreinte": empreinte}
 
 
 def approve_subscription(

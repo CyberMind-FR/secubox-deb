@@ -8,7 +8,8 @@
   SecuBox — MirrorNet (#3651), profil Aurora (.claude/AURORA-REFERENCE.md).
   DONNÉES RÉELLES : /api/v1/mirrornet/{status,services,subscriptions} de CETTE box. Absent = « — », jamais un zéro inventé.
   Écritures (administrateur, require_jwt côté API) : POST /services/{id}/subscribe, POST /subscriptions/{id}/renew,
-  POST /subscriptions/{id}/approve, POST /subscriptions/{id}/reject, DELETE /subscriptions/{id}?motif=, POST /services/publish — chacune confirmée DANS la page, avec une clé X-Idempotence.
+  POST /subscriptions/{id}/approve, POST /subscriptions/{id}/reject, DELETE /subscriptions/{id}?motif=, POST /services/publish,
+  POST /datasets/{id}/versions (fichier brut), POST /datasets/{id}/retract (#3653) — chacune confirmée DANS la page, avec une clé X-Idempotence.
   ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune écriture.
 -->
 <html lang="fr">
@@ -119,6 +120,7 @@
         <div class="onglets" role="tablist" aria-label="Sections de MirrorNet">
             <button class="onglet" role="tab" type="button" id="o-catalogue" aria-selected="true" aria-controls="v-catalogue">Catalogue<b id="n-catalogue"></b></button>
             <button class="onglet" role="tab" type="button" id="o-abonnements" aria-selected="false" aria-controls="v-abonnements">Abonnements<b id="n-abonnements"></b></button>
+            <button class="onglet" role="tab" type="button" id="o-jeux" aria-selected="false" aria-controls="v-jeux">Jeux de données<b id="n-jeux"></b></button>
             <button class="onglet" role="tab" type="button" id="o-publier" aria-selected="false" aria-controls="v-publier">Publier une offre</button>
             <button class="onglet" role="tab" type="button" id="o-espaces" aria-selected="false" aria-controls="v-espaces">Espaces et répliques</button>
         </div>
@@ -158,11 +160,33 @@
             <p class="note">Renouveler prolonge d'une période, signé avant l'échéance en cours. Résilier clôt l'abonnement (abonné) ou révoque l'abonné (fournisseur) ; la résiliation l'emporte sur un renouvellement. Chaque geste est signé par l'annuaire de cette box et inscrit au journal d'audit.</p>
         </section>
 
+        <section class="pan" id="v-jeux" role="tabpanel" aria-labelledby="o-jeux" hidden>
+            <h3>Jeux de données <i>versions immuables, manifeste signé, objet vérifié par son empreinte BLAKE2b</i></h3>
+            <div class="tab"><table>
+                <thead><tr><th>Jeu</th><th>Fournisseur</th><th>Classe</th><th>Dernière version</th><th>Chez moi</th><th style="text-align:right">Actions</th></tr></thead>
+                <tbody id="jeux"><tr><td colspan="6" class="vide">Chargement…</td></tr></tbody>
+            </table></div>
+            <form class="pub" id="form-depot" autocomplete="off" hidden style="margin-top:12px">
+                <div class="champ large"><b style="font-size:.84rem">Déposer une version d'un de mes jeux</b></div>
+                <div class="champ"><label for="d-jeu">Jeu</label><select id="d-jeu"></select></div>
+                <div class="champ"><label for="d-fichier">Fichier (objet opaque, jamais extrait)</label><input id="d-fichier" type="file" required></div>
+                <div class="champ"><label for="d-format">Format</label><input id="d-format" required maxlength="80" placeholder="application/x-ndjson"></div>
+                <div class="champ"><label for="d-licence">Licence (SPDX)</label><input id="d-licence" required maxlength="64" placeholder="ODbL-1.0"></div>
+                <div class="champ"><label for="d-provenance">Provenance</label><input id="d-provenance" required maxlength="160" placeholder="capteur:bme280"></div>
+                <div class="champ"><label for="d-classe">Classe</label><select id="d-classe"><option value="public">public</option><option value="communaute">communauté</option><option value="specialise">spécialisé</option><option value="professionnel">professionnel</option><option value="prive">privé (jamais servi)</option></select></div>
+                <div class="champ"><label for="d-dp">Données personnelles</label><select id="d-dp"><option value="non">aucune</option><option value="agregees">agrégées / anonymisées</option></select></div>
+                <div class="champ"><label for="d-fraicheur">Fraîcheur attendue (minutes, facultatif)</label><input id="d-fraicheur" type="number" min="1" max="5256000"></div>
+                <div class="large"><button class="btn primary" type="submit">Déposer…</button></div>
+            </form>
+            <ul class="hist" id="versions" hidden></ul>
+            <p class="note">Un abonné Actif reçoit la dernière version non retirée, une à la fois, par le maillage seulement ; il garde les dernières versions et efface les versions retirées. Public : aucune donnée personnelle ; communauté : agrégées seulement ; privé : jamais servi à un pair.</p>
+        </section>
+
         <section class="pan" id="v-publier" role="tabpanel" aria-labelledby="o-publier" hidden>
             <h3>Publier une offre de ce nœud <i>signée par l'annuaire (node.key), visible des pairs à la prochaine synchronisation</i></h3>
             <form class="pub" id="form-pub" autocomplete="off">
                 <div class="champ"><label for="p-nom">Nom</label><input id="p-nom" required maxlength="80" placeholder="Miroir apt trixie"></div>
-                <div class="champ"><label for="p-kind">Type</label><select id="p-kind"><option value="mirror">mirror</option><option value="api">api</option><option value="module">module</option></select></div>
+                <div class="champ"><label for="p-kind">Type</label><select id="p-kind"><option value="mirror">mirror</option><option value="api">api</option><option value="module">module</option><option value="dataset">dataset (jeu de données)</option></select></div>
                 <div class="champ large"><label for="p-endpoint">Point d'accès (adresse du maillage ou chemin)</label><input id="p-endpoint" required maxlength="256" placeholder="http://192.0.2.10/apt"></div>
                 <div class="champ"><label for="p-approbation">Approbation</label><select id="p-approbation"><option value="pending">manuelle (je valide chaque abonné)</option><option value="auto">automatique</option></select></div>
                 <div class="champ"><label for="p-classe">Classe d'accès</label><select id="p-classe"><option value="public">public</option><option value="communaute">communauté</option><option value="prive">privé (jamais présenté)</option></select></div>
@@ -173,7 +197,7 @@
                 <div class="champ large"><label for="p-desc">Description</label><textarea id="p-desc" maxlength="500" rows="2"></textarea></div>
                 <div class="large"><button class="btn primary" type="submit" id="p-envoyer">Publier…</button></div>
             </form>
-            <p class="note">Une offre publiée reste au journal (ajout seul) ; son retrait est une révocation signée (<code>annuairectl revoke-offer</code>). Les jeux de données (type « dataset ») arrivent en phase 4.</p>
+            <p class="note">Une offre publiée reste au journal (ajout seul) ; son retrait est une révocation signée (<code>annuairectl revoke-offer</code>). Un jeu de données (type « dataset ») reçoit ensuite ses versions par l'onglet « Jeux de données ».</p>
         </section>
 
         <section class="pan" id="v-espaces" role="tabpanel" aria-labelledby="o-espaces" hidden>
@@ -235,8 +259,8 @@
         // ------- lecture -------
         async function lire() {
             if (DEMO) return demo();
-            const [st, sv, sb] = await Promise.all([api('/status'), api('/services'), api('/subscriptions')]);
-            return { status: st.ok ? st.json : null, services: sv.ok ? sv.json : null, subs: sb.ok ? sb.json : null,
+            const [st, sv, sb, ds] = await Promise.all([api('/status'), api('/services'), api('/subscriptions'), api('/datasets')]);
+            return { status: st.ok ? st.json : null, services: sv.ok ? sv.json : null, subs: sb.ok ? sb.json : null, jeux: ds.ok ? ds.json : null,
                      sessionRequise: sb.status === 401 || sb.status === 403 || sv.status === 401 };
         }
         function rendre() {
@@ -264,7 +288,8 @@
             $('t-synchro-s').textContent = sy ? (sy.erreur ? sy.erreur : fmt(sy.offres) + ' offres · ' + fmt(sy.rejetees) + ' rejetée(s)') : '—';
             $('n-catalogue').textContent = autres ? autres.length : '';
             $('n-abonnements').textContent = subs ? subs.filter(s => ETATS_EN_COURS.includes(s.etat)).length : '';
-            rendreCatalogue(); rendreAbonnements(); hauteur();
+            $('n-jeux').textContent = donnees.jeux ? donnees.jeux.count : '';
+            rendreCatalogue(); rendreAbonnements(); rendreJeux(); hauteur();
         }
         function rendreCatalogue() {
             const tb = $('catalogue'), sv = donnees.services; tb.replaceChildren();
@@ -324,6 +349,59 @@
                     actions), detail);
             }
         }
+        function octets(n) { if (n == null) return '—'; const u = ['o', 'Kio', 'Mio', 'Gio']; let i = 0; while (n >= 1024 && i < 3) { n /= 1024; i++; } return (i ? n.toFixed(1) : n) + ' ' + u[i]; }
+        function rendreJeux() {
+            const tb = $('jeux'), dj = donnees.jeux; tb.replaceChildren();
+            const miens = dj ? dj.datasets.filter(d => d.mienne) : [];
+            $('form-depot').hidden = !miens.length;
+            $('d-jeu').replaceChildren(...miens.map(d => h('option', { value: d.id, text: d.nom })));
+            if (!dj) { tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: 'Jeux de données illisibles.' }))); return; }
+            if (!dj.datasets.length) { tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: 'Aucun jeu de données présentable. Publier une offre de type « dataset » pour en proposer un.' }))); return; }
+            const enCours = new Set(((donnees.subs || {}).subscriptions || []).filter(s => s.role === 'abonne' && ETATS_EN_COURS.includes(s.etat)).map(s => s.service_id));
+            for (const d of dj.datasets) {
+                const v = d.derniere_version;
+                const actions = h('td', { class: 'act' }, h('button', { class: 'btn sm', type: 'button', text: 'Versions', onclick: () => versionsDe(d) }));
+                if (!d.mienne && !enCours.has(d.id))
+                    actions.append(document.createTextNode(' '), h('button', { class: 'btn sm primary', type: 'button', text: 'S\u2019abonner…', onclick: () => demander(
+                        'S\u2019abonner au jeu « ' + d.nom + ' » de ' + d.fournisseur + ' ? Les versions seront tirées par le maillage.', false,
+                        () => ecrire('POST', '/services/' + encodeURIComponent(d.id) + '/subscribe', null, 'Abonnement demandé.')) }));
+                let chezMoi = '—';
+                if (v) chezMoi = v.present ? (d.mienne ? 'déposée' : 'reçue') : (enCours.has(d.id) ? 'en attente de réception' : '—');
+                tb.append(h('tr', null,
+                    h('td', null, h('b', { text: d.nom }), h('div', { class: 'sous', text: d.description || '' })),
+                    h('td', null, document.createTextNode((d.fournisseur || '—') + ' '), d.mienne ? h('span', { class: 'pill p-moi', text: 'ce nœud' }) : h('span', { class: 'pill p-niv', text: d.fournisseur_niveau || '—' })),
+                    h('td', { text: d.classe }),
+                    h('td', null, v ? document.createTextNode('n° ' + v.numero + ' · ' + octets(v.taille)) : document.createTextNode('aucune'), v ? h('div', { class: 'sous', text: v.format + ' · ' + v.licence + ' · ' + relatif(v.cree_le) }) : null),
+                    h('td', { text: chezMoi }), actions));
+            }
+        }
+        async function versionsDe(d) {
+            const ul = $('versions'); ul.hidden = false; ul.replaceChildren(h('li', { text: 'Lecture des versions de « ' + d.nom + ' »…' }));
+            const r = DEMO ? { ok: true, json: { versions: [{ numero: 2, empreinte: 'b2:' + 'c'.repeat(64), taille: 18234, licence: 'ODbL-1.0', provenance: 'capteur:demo', classe: 'public', cree_le: new Date().toISOString(), retiree: 0, present: 1 }] } } : await api('/datasets/' + encodeURIComponent(d.id) + '/versions');
+            ul.replaceChildren(h('li', null, h('b', { text: d.nom })));
+            if (!r.ok) { ul.append(h('li', { text: 'Versions illisibles.' })); hauteur(); return; }
+            if (!r.json.versions.length) ul.append(h('li', { text: 'Aucune version publiée.' }));
+            for (const v of r.json.versions) {
+                const li = h('li', null, h('b', { text: 'n° ' + v.numero }), document.createTextNode(' · ' + octets(v.taille) + ' · ' + v.licence + ' · ' + v.provenance + ' · ' + v.classe + ' · ' + relatif(v.cree_le) + ' · '),
+                    h('code', { text: v.empreinte.slice(0, 19) + '…', title: v.empreinte }),
+                    document.createTextNode(v.retiree ? ' · retirée' : (v.present ? ' · présente ici' : ' · absente ici')));
+                if (d.mienne && !v.retiree) li.append(document.createTextNode(' '), h('button', { class: 'btn sm danger', type: 'button', text: 'Retirer…', onclick: () => demander(
+                    'Retirer la version n° ' + v.numero + ' de « ' + d.nom + ' » ? Les abonnés et les copies l\u2019effaceront.', true,
+                    motif => ecrire('POST', '/datasets/' + encodeURIComponent(d.id) + '/retract', { empreinte: v.empreinte, motif: motif || '' }, 'Version retirée.')) }));
+                ul.append(li);
+            }
+            hauteur();
+        }
+        $('form-depot').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const f = $('d-fichier').files[0]; if (!f) return;
+            const q = new URLSearchParams({ format: $('d-format').value.trim(), licence: $('d-licence').value.trim(), provenance: $('d-provenance').value.trim(),
+                                            classe: $('d-classe').value, donnees_personnelles: $('d-dp').value });
+            const fr = Number($('d-fraicheur').value); if (fr > 0) q.set('fraicheur_s', String(Math.round(fr * 60)));
+            const jeu = $('d-jeu').value, nom = $('d-jeu').selectedOptions[0] ? $('d-jeu').selectedOptions[0].textContent : jeu;
+            demander('Déposer « ' + f.name + ' » (' + octets(f.size) + ') comme nouvelle version de « ' + nom + ' » ? Le manifeste signé entre au journal du maillage.', false,
+                () => ecrire('POST', '/datasets/' + encodeURIComponent(jeu) + '/versions?' + q.toString(), f, 'Version déposée : les abonnés Actif la recevront à leur prochaine passe.', 'application/octet-stream'));
+        });
         async function historique(id, ligne) {
             if (!ligne.hidden) { ligne.hidden = true; hauteur(); return; }
             const ul = ligne.querySelector('ul'); ul.replaceChildren(h('li', { text: 'Lecture…' })); ligne.hidden = false;
@@ -350,15 +428,16 @@
             if (a) await a(motif);
         });
         function annoncer(ok, texte) { const r = $('resultat'); r.hidden = false; r.className = 'resultat ' + (ok ? 'ok' : 'ko'); r.textContent = texte; hauteur(); }
-        async function ecrire(methode, chemin, corps, succes) {
+        async function ecrire(methode, chemin, corps, succes, brut) {
             if (DEMO) { annoncer(true, 'Démonstration : aucune écriture envoyée.'); return; }
             if (occupe) return;
             occupe = true; annoncer(true, 'Envoi…');
-            try { await envoyer(methode, chemin, corps, succes); } finally { occupe = false; }
+            try { await envoyer(methode, chemin, corps, succes, brut); } finally { occupe = false; }
         }
-        async function envoyer(methode, chemin, corps, succes) {
+        async function envoyer(methode, chemin, corps, succes, brut) {
             const opts = { method: methode, headers: { 'X-Idempotence': cle() } };
-            if (corps) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(corps); }
+            if (brut && corps) { opts.headers['Content-Type'] = brut; opts.body = corps; }        // fichier déposé tel quel
+            else if (corps) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(corps); }
             const r = await api(chemin, opts);
             if (r.ok) annoncer(true, succes);
             else annoncer(false, 'Refusé (' + (r.status || 'réseau') + ') : ' + ((r.json && r.json.detail) ? (typeof r.json.detail === 'string' ? r.json.detail : JSON.stringify(r.json.detail)) : 'sans détail'));
@@ -378,7 +457,7 @@
         });
 
         // ------- onglets, filtres, hauteur -------
-        const ONGLETS = ['catalogue', 'abonnements', 'publier', 'espaces'];
+        const ONGLETS = ['catalogue', 'abonnements', 'jeux', 'publier', 'espaces'];
         function montrer(nom) {
             for (const o of ONGLETS) { $('o-' + o).setAttribute('aria-selected', String(o === nom)); $('v-' + o).hidden = o !== nom; }
             try { history.replaceState(null, '', '#' + nom); } catch (e) { /* sans historique */ }
@@ -419,6 +498,8 @@
                     { id: 'e5'.repeat(32), role: 'abonne', service: 'Miroir apt trixie', service_id: 'a1'.repeat(16), fournisseur: 'noeud-a', abonne: 'ce-noeud', etat: 'Actif', motif: '', demande_le: t(-864e3), echeance: t(158400) },
                     { id: 'f6'.repeat(32), role: 'abonne', service: 'Cache PeerTube', service_id: 'e7'.repeat(16), fournisseur: 'noeud-c', abonne: 'ce-noeud', etat: 'Grace', motif: 'fournisseur injoignable : période de grâce', demande_le: t(-2e6), echeance: t(9e5) },
                     { id: 'a7'.repeat(32), role: 'fournisseur', service: 'Miroir Debian local', service_id: 'd4'.repeat(16), fournisseur: 'ce-noeud', abonne: 'noeud-d', etat: 'Demande', motif: 'en attente d’approbation du fournisseur', demande_le: t(-3600), echeance: null }] },
+                jeux: { count: 1, datasets: [{ id: 'f1'.repeat(16), nom: 'Météo locale', description: 'relevés 10 min', fournisseur: 'noeud-a', fournisseur_niveau: 'LIMITED', classe: 'public', mienne: false,
+                        derniere_version: { numero: 412, taille: 18234, format: 'application/x-ndjson', licence: 'ODbL-1.0', cree_le: t(-600), present: 1 } }] },
                 sessionRequise: false };
         }
         if (DEMO) $('demo').hidden = false;

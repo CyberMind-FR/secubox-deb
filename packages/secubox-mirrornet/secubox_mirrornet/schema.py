@@ -14,7 +14,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-VERSION = 2
+VERSION = 3
 
 # Identifiants : UUID v4 en texte (36 caractères) pour les objets de ce nœud ; did:plc pour les nœuds ;
 # identifiants de l'annuaire (service_id, subscription_id) repris tels quels. Montants : ENTIERS en centièmes de crédit.
@@ -229,6 +229,17 @@ MIGRATIONS = {
             rejetees INTEGER NOT NULL DEFAULT 0,
             erreur TEXT
         )""",
+    ],
+    # Phase 4a (#3653) : objets des jeux de données détenus par CE nœud (fichiers sous config.OBJETS, nommés par leur
+    # empreinte) ; source = did d'où l'objet a été reçu, ou soi pour un dépôt local.
+    3: [
+        """CREATE TABLE IF NOT EXISTS objet (
+            empreinte TEXT PRIMARY KEY CHECK (empreinte GLOB 'b2:*' AND length(empreinte) = 67),
+            taille INTEGER NOT NULL CHECK (typeof(taille) = 'integer' AND taille >= 0),
+            source TEXT NOT NULL,
+            stocke_le TEXT NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS version_empreinte ON dataset_version(empreinte)",
     ],
 }
 

@@ -140,5 +140,25 @@ server {
         proxy_intercept_errors on;
     }
 
+    # MIRRORNET — objets des jeux de données (#3653). Un abonné tire une version par son empreinte BLAKE2b ; MirrorNet
+    # décide (abonnement Actif du pair, classe) d'après l'adresse du pair POSÉE ICI ($remote_addr), jamais celle que le
+    # client annonce. Aucun jeton relayé. Absent (paquet non installé) : 502, sans effet.
+    location ^~ /mirrornet/objets/ {
+        limit_except GET { deny all; }
+        rewrite "^/mirrornet/objets/(b2:[0-9a-f]{64})$" /pair/objets/$1 last;
+        return 404;
+    }
+    location ^~ /pair/objets/ {
+        internal;
+        proxy_pass http://unix:/run/secubox/mirrornet.sock;
+        include /etc/nginx/snippets/secubox-proxy.conf;
+        proxy_set_header Authorization "";
+        proxy_set_header Cookie "";
+        proxy_set_header X-SecuBox-Pair-IP $remote_addr;
+        proxy_buffering off;
+        proxy_max_temp_file_size 0;
+        proxy_read_timeout 300s;
+    }
+
     location / { return 403; }
 }

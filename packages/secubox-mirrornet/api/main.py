@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -35,11 +35,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 
 from secubox_mirrornet import abonnements as A  # noqa: E402
-from secubox_mirrornet import annuaire, catalogue, config, ledger, schema  # noqa: E402
+from secubox_mirrornet import annuaire, catalogue, config, ledger, objets, schema, transfert  # noqa: E402
 
 log = logging.getLogger("secubox-mirrornet")
 router = APIRouter(prefix="/api/v1/mirrornet")
-PHASE = 3
+PHASE = 4
 RANG = {"OBSERVER": 0, "LIMITED": 1, "PARTNER": 2, "TRUSTED": 3}
 _ID = re.compile(r"^[0-9a-f]{16,64}$")
 _CLE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
@@ -104,12 +104,37 @@ def synchroniser_maintenant() -> Dict[str, Any]:
             cx.close()
 
 
+_VERROU_TRANSFERT = threading.Lock()
+
+
+def tirer_maintenant() -> Dict[str, Any]:
+    """Une passe de réception des versions (#3653) : jamais deux à la fois, jamais d'exception vers la boucle."""
+    if not _VERROU_TRANSFERT.acquire(blocking=False):
+        return {"occupe": True}
+    try:
+        cx = schema.ouvrir(config.BASE)
+        try:
+            return transfert.tirer(cx, config.reglages())
+        finally:
+            cx.close()
+    except (sqlite3.Error, OSError) as e:
+        log.warning("mirrornet : passe de réception en échec : %s", e)
+        return {"erreur": str(e)}
+    finally:
+        _VERROU_TRANSFERT.release()
+
+
 async def _boucle_synchro() -> None:
+    try:
+        await asyncio.to_thread(objets.nettoyer_temporaires)
+    except OSError as e:
+        log.warning("mirrornet : dépôt des objets inaccessible : %s", e)
     while True:
         try:
             res = await asyncio.to_thread(synchroniser_maintenant)
             if res.get("transitions"):
                 log.info("mirrornet : %s changement(s) d'état d'abonnement", res["transitions"])
+            await asyncio.to_thread(tirer_maintenant)
         except Exception as e:  # noqa: BLE001 — la boucle ne meurt pas, mais elle le dit
             log.warning("mirrornet : passe de synchronisation en échec : %s", e)
         await asyncio.sleep(config.reglages()["intervalle_s"])
@@ -222,13 +247,43 @@ def service(service_id: str, ident: Dict[str, Any] = Depends(require_lecture)) -
     return _sans_topologie(r, ident)
 
 
-@router.get("/datasets", dependencies=[Depends(require_lecture)])
-def datasets() -> Dict[str, Any]:
-    rows = [_json(r, "tarif") for r in _lignes(
-        "SELECT o.id, o.ref_annuaire, o.fournisseur_did, o.nom, o.classe, o.tarif, o.etat, "
-        "(SELECT MAX(numero) FROM dataset_version v WHERE v.offer_id = o.id AND v.retiree = 0) AS derniere_version "
-        "FROM offer o WHERE o.kind = 'dataset' ORDER BY o.nom")]
+@router.get("/datasets")
+def datasets(ident: Dict[str, Any] = Depends(require_lecture)) -> Dict[str, Any]:
+    """Jeux de données présentables (mêmes règles que le catalogue) et les miens, avec leur dernière version."""
+    confiance_min, soi = config.reglages()["confiance_min"], _soi()
+    rows = []
+    for r in _lignes(_SQL_OFFRE + " WHERE o.kind = 'dataset' ORDER BY o.nom"):
+        r = _json(r, "tarif", "quotas", "compat")
+        r["mienne"] = r["fournisseur_did"] == soi
+        r["presentable"] = _presentable(r, confiance_min)
+        if not (r["mienne"] or r["presentable"]):
+            continue
+        d = _lignes("SELECT v.numero, v.empreinte, v.taille, v.format, v.licence, v.cree_le, v.fraicheur_s, "
+                    "EXISTS (SELECT 1 FROM objet x WHERE x.empreinte = v.empreinte) AS present "
+                    "FROM dataset_version v JOIN offer o ON o.id = v.offer_id WHERE o.ref_annuaire = ? AND v.retiree = 0 "
+                    "ORDER BY v.numero DESC LIMIT 1", (r["id"],))
+        r["derniere_version"] = d[0] if d else None
+        rows.append(_sans_topologie(r, ident))
     return {"datasets": rows, "count": len(rows)}
+
+
+@router.get("/datasets/{service_id}/versions")
+def versions(service_id: str, ident: Dict[str, Any] = Depends(require_lecture)) -> Dict[str, Any]:
+    """Manifestes d'un jeu (provenance, licence, classe, fraîcheur) et présence locale de chaque version."""
+    if not _ID.match(service_id):
+        raise HTTPException(404, "jeu inconnu")
+    offre = _lignes(_SQL_OFFRE + " WHERE o.ref_annuaire = ? AND o.kind = 'dataset'", (service_id,))
+    if not offre:
+        raise HTTPException(404, "jeu inconnu")
+    o = _json(offre[0], "tarif", "quotas", "compat")
+    if not (o["fournisseur_did"] == _soi() or _presentable(o, config.reglages()["confiance_min"])):
+        raise HTTPException(404, "jeu inconnu")
+    rows = _lignes("SELECT v.numero, v.parent, v.empreinte, v.taille, v.format, v.licence, v.provenance, v.classe, "
+                   "v.fraicheur_s, v.donnees_personnelles, v.cree_le, v.retiree, "
+                   "EXISTS (SELECT 1 FROM objet x WHERE x.empreinte = v.empreinte) AS present "
+                   "FROM dataset_version v JOIN offer o ON o.id = v.offer_id WHERE o.ref_annuaire = ? ORDER BY v.numero DESC",
+                   (service_id,))
+    return {"service_id": service_id, "nom": o["nom"], "versions": rows, "count": len(rows)}
 
 
 _SQL_ABO = ("SELECT s.ref_annuaire AS id, s.role, s.abonne_did, na.nom AS abonne, o.ref_annuaire AS service_id, "
@@ -411,12 +466,13 @@ class Publication(BaseModel):
     kind: str = Field(..., pattern=r"^[a-z][a-z0-9_-]{1,23}$")
     endpoint: str = Field(..., min_length=1, max_length=256)
     approval_mode: str = Field("pending", pattern=r"^(auto|pending)$")
+    # kind = « dataset » (#3653) : endpoint = mirrornet://<ce nœud> ; les versions se déposent par /datasets/{id}/versions.
     description: str = Field("", max_length=500)
     version: Optional[str] = Field(None, max_length=64)
     compat: Optional[Dict[str, Any]] = None
     tarif: Optional[Dict[str, Any]] = None
     quotas: Optional[Dict[str, int]] = None
-    classe: Optional[str] = Field(None, pattern=r"^(public|communaute|prive)$")
+    classe: Optional[str] = Field(None, pattern=r"^(public|communaute|specialise|professionnel|prive)$")
     duree_s: Optional[int] = Field(None, gt=0, le=10 * 365 * 86400)
     grace_s: Optional[int] = Field(None, ge=0, le=90 * 86400)
     sonde: Optional[str] = Field(None, max_length=256, pattern=r"^/[A-Za-z0-9._/~-]*$")
@@ -425,8 +481,6 @@ class Publication(BaseModel):
 @router.post("/services/publish", dependencies=[Depends(require_jwt)])
 def publier(req: Publication, request: Request, x_idempotence: Optional[str] = Header(None)):
     """Publie une offre de CE nœud (signée par l'annuaire). `kind = dataset` attend la phase 4."""
-    if req.kind == "dataset":
-        raise HTTPException(422, "les jeux de données arrivent en phase 4")
     corps = req.model_dump(exclude_none=True)
     cible = hashlib.sha256(json.dumps(corps, sort_keys=True).encode()).hexdigest()[:32]
     deja = _idempotent(x_idempotence, "publier", cible)
@@ -557,6 +611,130 @@ def resilier(subscription_id: str, request: Request, motif: str = Query("", max_
         return _relayer(request, f"/self/subscription/{subscription_id}/cancel", {"motif": motif}, x_idempotence)
 
 
-app = FastAPI(title="SecuBox MirrorNet", version="0.2.0", docs_url=None, redoc_url=None, openapi_url=None,
+# --- jeux de données : dépôt, retrait, service aux pairs (#3653) -----------------------------------------------------
+
+_FORMAT = re.compile(r"^[A-Za-z0-9.+/_-]{1,80}$")
+_LICENCE = re.compile(r"^[A-Za-z0-9.+_-]{1,64}$")
+_DP = re.compile(r"^(non|agregees|base_legale:[A-Za-z0-9 ._:/-]{3,120})$")
+
+
+@router.post("/datasets/{service_id}/versions", dependencies=[Depends(require_jwt)])
+async def deposer(service_id: str, request: Request,
+                  format: str = Query(..., max_length=80), licence: str = Query(..., max_length=64),
+                  provenance: str = Query(..., min_length=1, max_length=160),
+                  classe: str = Query(..., pattern=r"^(public|communaute|specialise|professionnel|prive)$"),
+                  donnees_personnelles: str = Query("non", max_length=140),
+                  fraicheur_s: Optional[int] = Query(None, gt=0, le=10 * 365 * 86400),
+                  x_idempotence: Optional[str] = Header(None)):
+    """Dépose une version d'un jeu de CE nœud : corps brut (application/octet-stream), empreinte calculée en flux,
+    plafond `[donnees] taille_max_mo`, garde d'espace ; puis manifeste signé par l'annuaire. Échec : objet effacé."""
+    if not _ID.match(service_id) or not _FORMAT.match(format) or not _LICENCE.match(licence) or not _DP.match(donnees_personnelles):
+        raise HTTPException(422, "paramètres invalides (format, licence, données personnelles)")
+    if any(ord(c) < 32 for c in provenance):
+        raise HTTPException(422, "provenance : texte imprimable")
+    if (classe == "public" and donnees_personnelles != "non") or (classe == "communaute" and donnees_personnelles not in ("non", "agregees")):
+        raise HTTPException(422, "classe incompatible avec des données personnelles (MIRRORNET_DATA_EXCHANGE.md § 6)")
+    offre = await asyncio.to_thread(_lignes, _SQL_OFFRE + " WHERE o.ref_annuaire = ?", (service_id,))
+    if not offre or offre[0]["kind"] != "dataset" or offre[0]["fournisseur_did"] != await asyncio.to_thread(_soi):
+        raise HTTPException(404, "jeu de données de ce nœud inconnu (offre kind=dataset publiée par ce nœud)")
+    deja = await asyncio.to_thread(_idempotent, x_idempotence, "deposer", service_id)
+    if deja is not None:
+        return deja
+    reg = config.reglages()
+    taille_max = reg["taille_max_mo"] * 1024 * 1024
+    annoncee = request.headers.get("content-length")
+    try:
+        if annoncee is not None and int(annoncee) > taille_max:
+            raise HTTPException(413, f"objet trop volumineux (plafond {reg['taille_max_mo']} Mio)")
+        await asyncio.to_thread(objets.verifier_espace, int(annoncee or 0), reg["reserve_mo"])
+        ecrivain = await asyncio.to_thread(objets.Ecrivain, taille_max)
+        try:
+            async for m in request.stream():              # écrit au fil de l'eau : jamais tout le corps en mémoire
+                if m:
+                    await asyncio.to_thread(ecrivain.ajouter, m)
+        except BaseException:
+            await asyncio.to_thread(ecrivain.abandonner)
+            raise
+        empreinte, taille = await asyncio.to_thread(ecrivain.terminer)
+    except objets.RefusObjet as e:
+        await asyncio.to_thread(_liberer, x_idempotence)
+        raise HTTPException(507 if "espace" in str(e) else 413, str(e)) from None
+    except BaseException:
+        await asyncio.to_thread(_liberer, x_idempotence)
+        raise
+    manifeste = {"empreinte": empreinte, "taille": taille, "format": format, "licence": licence,
+                 "provenance": provenance, "classe": classe, "donnees_personnelles": donnees_personnelles}
+    if fraicheur_s:
+        manifeste["fraicheur_s"] = fraicheur_s
+    try:
+        with _geste(x_idempotence, request):
+            rep = await asyncio.to_thread(_relayer, request, f"/self/dataset/{service_id}/version", manifeste, x_idempotence)
+    except BaseException:
+        if not getattr(request.state, "signe", False):
+            await asyncio.to_thread(_effacer_si_orphelin, empreinte)
+        raise
+    await asyncio.to_thread(_noter_objet, empreinte, taille)
+    return rep
+
+
+def _noter_objet(empreinte: str, taille: int) -> None:
+    cx = _base(ecriture=True)
+    try:
+        objets.noter(cx, empreinte, taille, _soi() or "soi")
+    finally:
+        cx.close()
+
+
+def _effacer_si_orphelin(empreinte: str) -> None:
+    """Dépôt refusé par l'annuaire : l'objet n'est gardé que s'il sert déjà une autre version connue."""
+    cx = _base(ecriture=True)
+    try:
+        if cx.execute("SELECT 1 FROM dataset_version WHERE empreinte = ?", (empreinte,)).fetchone() is None:
+            objets.supprimer(cx, empreinte)
+    finally:
+        cx.close()
+
+
+class Retrait(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    empreinte: str = Field(..., pattern=r"^b2:[0-9a-f]{64}$")
+    motif: str = Field("", max_length=200)
+
+
+@router.post("/datasets/{service_id}/retract", dependencies=[Depends(require_jwt)])
+def retirer(service_id: str, req: Retrait, request: Request, x_idempotence: Optional[str] = Header(None)):
+    if not _ID.match(service_id):
+        raise HTTPException(404, "jeu inconnu")
+    deja = _idempotent(x_idempotence, "retirer", service_id + req.empreinte)
+    if deja is not None:
+        return deja
+    with _geste(x_idempotence, request):
+        return _relayer(request, f"/self/dataset/{service_id}/retract", req.model_dump(), x_idempotence)
+
+
+pair = APIRouter()
+
+
+@pair.get("/pair/objets/{empreinte}")
+def servir_objet(empreinte: str, request: Request):
+    """Objet d'une version servi à un PAIR du maillage (#3653), joint seulement par l'écouteur :8799 qui pose
+    X-SecuBox-Pair-IP ($remote_addr) — jamais par l'hôte d'administration (préfixe /api/v1/mirrornet/ seulement).
+    Abonnement Actif du pair à une version non retirée de CE nœud, classe autre que « privé » ; sinon 404 sans détail."""
+    if not objets.EMPREINTE.match(empreinte):
+        raise HTTPException(404, "objet inconnu")
+    ip = request.headers.get("x-secubox-pair-ip")
+    cx = _base()
+    try:
+        refus = transfert.autoriser(cx, ip, empreinte)
+    finally:
+        cx.close()
+    if refus is not None or not objets.present(empreinte):
+        log.info("mirrornet : objet %s refusé à %s : %s", empreinte[:19], ip, refus or "absent du dépôt")
+        raise HTTPException(404, "objet inconnu")
+    return FileResponse(objets.chemin(empreinte), media_type="application/octet-stream")
+
+
+app = FastAPI(title="SecuBox MirrorNet", version="0.3.0", docs_url=None, redoc_url=None, openapi_url=None,
               lifespan=_vie)
 app.include_router(router)
+app.include_router(pair)

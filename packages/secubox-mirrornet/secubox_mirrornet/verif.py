@@ -60,6 +60,9 @@ FORMES = {
     "service_revoke_sub": (("subscription_id", "subscriber", "revoked_at"), "subscriber", True),
     "service_renew": (("subscription_id", "subscriber", "renewed_at", "expire_le"), "subscriber", True),
     "service_revoke_offer_sub": (("subscription_id", "provider", "revoked_at"), "provider", True),
+    "service_dataset_version": (("service_id", "provider", "numero", "empreinte", "taille", "licence", "classe"),
+                                "provider", True),
+    "service_dataset_retract": (("service_id", "provider", "empreinte", "retracted_at"), "provider", True),
 }
 
 

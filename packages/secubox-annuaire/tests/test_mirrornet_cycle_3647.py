@@ -431,3 +431,58 @@ def test_self_approbation_et_refus_3651(api):
     assert tc.post(f"/self/subscription/{s3.subscription_id}/approve").status_code == 403
     actions = [json.loads(x)["action"] for x in (tmp / "audit.log").read_text().splitlines()]
     assert actions.count("mirrornet_approbation") == 1 and actions.count("mirrornet_refus") == 1
+
+
+# --- jeux de données (#3653) ----------------------------------------------------------------------------------------
+
+def _b2(x: bytes) -> str:
+    return "b2:" + hashlib.blake2b(x, digest_size=32).hexdigest()
+
+
+MANIF = {"format": "application/x-ndjson", "licence": "ODbL-1.0", "provenance": "capteur:banc", "classe": "public"}
+
+
+def test_versions_numerotees_chainees_immuables(j):
+    pf, _, df = _membre(j)
+    o = V.offer_service(j, pf, df, name="Météo", kind="dataset", endpoint="mirrornet://gk6")
+    v1 = V.publish_dataset_version(j, pf, df, o.service_id, empreinte=_b2(b"1"), taille=1, **MANIF)
+    v2 = V.publish_dataset_version(j, pf, df, o.service_id, empreinte=_b2(b"2"), taille=1, **MANIF)
+    assert (v1.numero, v1.parent, v2.numero, v2.parent) == (1, "", 2, _b2(b"1"))
+    with pytest.raises(ValueError, match="déjà publiée"):
+        V.publish_dataset_version(j, pf, df, o.service_id, empreinte=_b2(b"1"), taille=1, **MANIF)
+    pa, _, da = _membre(j)
+    with pytest.raises(PermissionError):
+        V.publish_dataset_version(j, pa, da, o.service_id, empreinte=_b2(b"3"), taille=1, **MANIF)
+    s = V.offer_service(j, pf, df, name="Pas un jeu", kind="api", endpoint="http://x")
+    with pytest.raises(ValueError, match="dataset"):
+        V.publish_dataset_version(j, pf, df, s.service_id, empreinte=_b2(b"4"), taille=1, **MANIF)
+    V.retract_dataset_version(j, pf, df, o.service_id, _b2(b"1"), "erreur de capteur")
+    assert [v["retiree"] for v in V.dataset_versions(j, o.service_id)] == [True, False]
+    with pytest.raises(ValueError, match="déjà retirée"):
+        V.retract_dataset_version(j, pf, df, o.service_id, _b2(b"1"))
+
+
+@pytest.mark.parametrize("classe,dp", [("public", "agregees"), ("public", "base_legale:art6"),
+                                       ("communaute", "base_legale:art6")])
+def test_vie_privee_controlee_a_la_source(j, classe, dp):
+    pf, _, df = _membre(j)
+    o = V.offer_service(j, pf, df, name="J", kind="dataset", endpoint="mirrornet://x")
+    with pytest.raises(ValidationError):
+        V.publish_dataset_version(j, pf, df, o.service_id, empreinte=_b2(b"p"), taille=1,
+                                  **dict(MANIF, classe=classe), donnees_personnelles=dp)
+
+
+def test_export_garde_les_versions_et_les_retraits(j):
+    pf, _, df = _membre(j)
+    pa, _, da = _membre(j)
+    o = V.offer_service(j, pf, df, name="J", kind="dataset", endpoint="mirrornet://x")
+    for i in range(20):
+        V.publish_dataset_version(j, pf, df, o.service_id, empreinte=_b2(str(i).encode()), taille=1, **MANIF)
+    V.retract_dataset_version(j, pf, df, o.service_id, _b2(b"0"))
+    ex = MX.construire(j, da, {})
+    versions = [e for e in ex["entrees"] if e["op"] == "service_dataset_version"]
+    assert len(versions) == MX.VERSIONS_PAR_JEU and versions[-1]["payload"]["numero"] == 20
+    assert any(e["op"] == "service_dataset_retract" for e in ex["entrees"])
+    # Réétiquetage d'une version en retrait : forme refusée à l'import.
+    vraie = versions[-1]
+    assert not V.forme_valide("service_dataset_retract", vraie["payload"], vraie["author"])

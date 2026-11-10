@@ -74,6 +74,9 @@ class Op(str, Enum):
     # plus ancien les REJETTE à l'import (Op inconnue, compteur « rejected »), sans casser sa réplication.
     SERVICE_RENEW            = "service_renew"
     SERVICE_REVOKE_OFFER_SUB = "service_revoke_offer_sub"
+    # MirrorNet phase 4a (#3653) : version d'un jeu de données (manifeste signé) et son retrait.
+    SERVICE_DATASET_VERSION  = "service_dataset_version"
+    SERVICE_DATASET_RETRACT  = "service_dataset_retract"
     # Gondwana P1 directory (#768): the annuaire is the distributed directory.
     NODE_PUBLISH         = "node_publish"     # signed mesh peer registry entry
     CONFIG_PUBLISH       = "config_publish"   # signed, versioned config distribution
@@ -517,7 +520,7 @@ class ServiceOffer(BaseModel):
     compat:        Optional[Dict[str, Any]] = None
     tarif:         Optional[Dict[str, Any]] = None
     quotas:        Optional[Dict[str, int]] = None
-    classe:        Optional[Literal["public", "communaute", "prive"]] = None
+    classe:        Optional[Literal["public", "communaute", "specialise", "professionnel", "prive"]] = None
     duree_s:       Optional[int] = Field(default=None, gt=0, le=10 * 365 * 86400)
     grace_s:       Optional[int] = Field(default=None, ge=0, le=90 * 86400)
     sonde:         Optional[str] = Field(default=None, max_length=256, pattern=r"^/[A-Za-z0-9._/~-]*$")
@@ -545,6 +548,56 @@ class ServiceOffer(BaseModel):
     def _quotas_valides(cls, v: Optional[Dict[str, int]]) -> Optional[Dict[str, int]]:
         if v is not None and (len(v) > 8 or any(len(k) > 32 or not 0 <= x <= 10 ** 15 for k, x in v.items())):
             raise ValueError("quotas : 8 clés au plus, entiers de 0 à 10^15")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# DatasetVersion — une version immuable d'un jeu de données (MirrorNet 4a, #3653)
+# ---------------------------------------------------------------------------
+
+CLASSES_DONNEES = ("public", "communaute", "specialise", "professionnel", "prive")
+
+
+class DatasetVersion(BaseModel):
+    """Manifeste SIGNÉ d'une version (docs/MIRRORNET_DATA_EXCHANGE.md § 3) : l'objet lui-même voyage à part, adressé par
+    son empreinte BLAKE2b-256 ; le manifeste dit ce qu'il est, d'où il vient et qui peut le recevoir. `op` est dans la
+    charge signée (une charge réétiquetée par un relais est refusée). Auteur = fournisseur de l'offre `kind=dataset`."""
+    model_config = ConfigDict(extra="forbid")
+
+    op:          Literal["service_dataset_version"] = "service_dataset_version"
+    service_id:  str = Field(..., pattern=r"^[0-9a-f]{16,64}$")
+    provider:    str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    numero:      int = Field(..., ge=1, le=10 ** 9)
+    parent:      str = Field("", pattern=r"^(|b2:[0-9a-f]{64})$")
+    empreinte:   str = Field(..., pattern=r"^b2:[0-9a-f]{64}$")
+    taille:      int = Field(..., ge=0, le=2 ** 40)
+    format:      str = Field(..., min_length=1, max_length=80, pattern=r"^[A-Za-z0-9.+/_-]+$")
+    licence:     str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9.+_-]+$")
+    provenance:  str = Field(..., min_length=1, max_length=160)
+    classe:      Literal["public", "communaute", "specialise", "professionnel", "prive"]
+    donnees_personnelles: str = Field("non", pattern=r"^(non|agregees|base_legale:[A-Za-z0-9 ._:/-]{3,120})$")
+    fraicheur_s: Optional[int] = Field(default=None, gt=0, le=10 * 365 * 86400)
+    cree_le:     str = Field(default_factory=now_rfc3339)
+    sig:         Optional[str] = None
+    signer_did:  Optional[str] = None
+
+    @field_validator("donnees_personnelles")
+    @classmethod
+    def _vie_privee(cls, v: str, info) -> str:
+        """Contrôle À LA SOURCE (§ 6) : public n'en porte jamais ; communauté seulement agrégées ; spécialisé et
+        professionnel seulement avec une base légale déclarée."""
+        classe = info.data.get("classe")
+        if classe == "public" and v != "non":
+            raise ValueError("classe public : aucune donnée personnelle")
+        if classe == "communaute" and v not in ("non", "agregees"):
+            raise ValueError("classe communauté : données personnelles agrégées seulement")
+        return v
+
+    @field_validator("provenance")
+    @classmethod
+    def _provenance(cls, v: str) -> str:
+        if any(ord(c) < 32 for c in v):
+            raise ValueError("provenance : texte imprimable")
         return v
 
 

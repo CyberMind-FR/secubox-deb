@@ -328,7 +328,7 @@ def test_echec_libere_la_cle_d_idempotence(api, monkeypatch):
     assert c.post("/api/v1/mirrornet/services/x/subscribe", headers={"X-Idempotence": "court"}).status_code == 404
 
 
-def test_publication_valide_et_jeux_de_donnees_refuses(api, monkeypatch):
+def test_publication_valide_et_jeux_de_donnees_permis(api, monkeypatch):
     main, tmp = api
     _ecrire(tmp, export(None, [], []))
     appels = []
@@ -341,7 +341,7 @@ def test_publication_valide_et_jeux_de_donnees_refuses(api, monkeypatch):
     assert c.post("/api/v1/mirrornet/services/publish", json=corps, headers={"X-Idempotence": "cle-pub-0001"}).status_code == 200
     assert c.post("/api/v1/mirrornet/services/publish", json=dict(corps, endpoint="http://autre"),
                   headers={"X-Idempotence": "cle-pub-0001"}).status_code == 409   # même clé, autre corps
-    assert c.post("/api/v1/mirrornet/services/publish", json=dict(corps, kind="dataset")).status_code == 422
+    assert c.post("/api/v1/mirrornet/services/publish", json=dict(corps, kind="dataset")).status_code == 200   # #3653
     assert c.post("/api/v1/mirrornet/services/publish", json=dict(corps, inconnu=1)).status_code == 422
 
 
@@ -411,7 +411,8 @@ def test_toml_livre_lisible_et_applique(monkeypatch):
     monkeypatch.setattr(config, "CONF", ICI / "conf" / "mirrornet.toml")
     import tomllib
     tomllib.loads((ICI / "conf" / "mirrornet.toml").read_text())
-    assert config.reglages() == {"confiance_min": "LIMITED", "grace_s": 432000, "intervalle_s": 60}
+    assert config.reglages() == {"confiance_min": "LIMITED", "grace_s": 432000, "intervalle_s": 60,
+                                 "taille_max_mo": 256, "garder": 3, "reserve_mo": 1024}
 
 
 def test_charge_reetiquetee_ou_au_nom_d_un_autre_rejetee(cx):

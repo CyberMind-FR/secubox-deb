@@ -20,6 +20,12 @@ case "$1" in
             apparmor_parser -r /etc/apparmor.d/secubox-mirrornet \
               || echo "secubox-mirrornet : profil AppArmor non chargé (apparmor_parser -r /etc/apparmor.d/secubox-mirrornet)" >&2
         fi
+        # Objets des jeux de données (#3653) : sur /data quand il est monté (jamais la racine d'une MOCHAbin) ; sinon
+        # le service les range sous son état (/var/lib/secubox-mirrornet/objets).
+        if mountpoint -q /data 2>/dev/null && [ ! -L /data/mirrornet ]; then
+            install -d -o secubox-mirrornet -g secubox -m 0750 /data/mirrornet
+            [ -L /data/mirrornet/objets ] || install -d -o secubox-mirrornet -g secubox -m 0750 /data/mirrornet/objets
+        fi
         # Menu du hub : l'entrée MirrorNet (menu.d) apparaît au prochain calcul (#3651).
         rm -f /var/cache/secubox/menu.json 2>/dev/null || true
         if [ -d /run/systemd/system ]; then

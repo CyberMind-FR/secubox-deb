@@ -56,4 +56,11 @@ profile secubox-mirrornet flags=(attach_disconnected) {
   /run/secubox/mirrornet.sock rw,
   /run/secubox/annuaire.sock rw,
   network unix stream,
+
+  # Jeux de données (#3653) : objets opaques sur /data (ou sous l'état du service), versions tirées des pairs du
+  # maillage (l'unité borne les adresses à 10.10.0.0/24).
+  /data/mirrornet/ r,
+  /data/mirrornet/objets/ rw,
+  /data/mirrornet/objets/** rw,
+  network inet stream,
 }

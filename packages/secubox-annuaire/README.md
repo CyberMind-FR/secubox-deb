@@ -5,7 +5,7 @@ SecuBox Annuaire-Miroir — federated self-certifying trust substrate.
 
 The Annuaire-Miroir is the trust directory for SecuBox-DEB, providing a BLAKE2b-chained, CONIKS-style append-only audit journal with four protocols: AUTO-ADD (provisional discovery), INVITE (capability-based membership), PROPOSAL (anti-plutocratic governance), and EMANCIPATE (staged anchor removal). All objects are Ed25519-signed, RFC 3339-timestamped, and access-gated by the can() resolver. Served on /run/secubox/annuaire.sock, JWT-gated.
 
-Paquet Debian : version `0.18.2-1~trixie1`, architecture `all`.
+Paquet Debian : version `0.19.0-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -63,6 +63,7 @@ Socket Unix : `/run/secubox/annuaire.sock`, `/run/secubox/openpgp.sock`.
 | `POST` | `/self/subscription/{subscription_id}/renew` | require_jwt — `SERVICE_RENEW`, avant l'échéance |
 | `POST` | `/self/subscription/{subscription_id}/cancel` | require_jwt — résiliation (abonné) ou révocation de l'abonné (fournisseur) |
 | `POST` | `/self/subscription/{subscription_id}/approve`, `/reject` | require_jwt — décision du fournisseur sur une demande (#3651) |
+| `POST` | `/self/dataset/{service_id}/version`, `/retract` | require_jwt — version d'un jeu de données de CE nœud, ou son retrait (#3653) |
 | `POST` | `/services/pull` | require_jwt |
 | `GET` | `/nodes` | require_lecture |
 | `GET` | `/config` | require_lecture |
@@ -169,3 +170,11 @@ source de l'écouteur wg-mesh, nom et empreinte lus dans `p2p-public/pairs-enrol
   échoue : un export lent n'est pas une absence). Les opérations `service_` suivent la passe complète (300 s).
 - Routes `/self/...` : signées dans le processus propriétaire de `node.key` ; chaque geste écrit dans `audit.log`
   (`mirrornet_*`, avec l'administrateur `par`).
+
+## Jeux de données MirrorNet (#3653)
+
+`service_dataset_version` : manifeste signé d'une version (numéro et parent calculés, empreinte BLAKE2b de l'objet,
+taille, format, licence, provenance, classe, données personnelles : aucune en public, agrégées au plus en communauté) ;
+`service_dataset_retract` : retrait signé. Seul le fournisseur de l'offre `kind=dataset` publie ou retire ; une
+empreinte n'est publiée qu'une fois. L'objet lui-même ne passe jamais par le journal : MirrorNet le sert aux abonnés
+Actif par l'écouteur maillé (`/mirrornet/objets/<empreinte>` sur :8799).

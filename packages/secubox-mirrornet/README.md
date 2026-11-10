@@ -7,7 +7,7 @@ Conception : `docs/MIRRORNET_ARCHITECTURE.md` (et `NETWORK`, `SERVICE_EXCHANGE`,
 
 **Phase 3 (#3647) : cycle de vie des abonnements.** Phase 2 (#3645) : modèle de données et squelette.
 
-Paquet Debian : version `0.2.1-1~trixie1`, architecture `all`. Demande `secubox-annuaire` ≥ 0.18.0 (export, routes
+Paquet Debian : version `0.3.0-1~trixie1`, architecture `all`. Demande `secubox-annuaire` ≥ 0.19.0 (export, routes
 `/self/...`).
 
 ## Principe
@@ -75,6 +75,19 @@ Préfixe `/api/v1/mirrornet/` (nginx `nginx/mirrornet.conf`, jamais de vhost pub
 rejouée telle quelle ensuite, libérée en cas d'échec). Refus d'évaluation (409) : offre retirée, propre offre,
 fournisseur OBSERVER/REVOKED ou sous `confiance_min`, LIMITED autre que gratuit et public, architecture incompatible.
 Niveaux : PARTNER et TRUSTED (grants) arrivent avec le socle A21 ; d'ici là tout membre est LIMITED.
+
+## Jeux de données (#3653)
+
+| Méthode | Route | Garde |
+|---|---|---|
+| `GET` | `/datasets`, `/datasets/{id}/versions` | require_lecture (présentables + les miens ; présence locale) |
+| `POST` | `/datasets/{id}/versions?format=&licence=&provenance=&classe=&donnees_personnelles=&fraicheur_s=` | require_jwt — corps brut, jeu de CE nœud |
+| `POST` | `/datasets/{id}/retract` | require_jwt — `{empreinte, motif}` |
+| `GET` | `/pair/objets/{empreinte}` | pairs du maillage seulement, par l'écouteur :8799 (abonnement Actif) |
+
+Objets opaques nommés par leur empreinte BLAKE2b-256 dans `/data/mirrornet/objets` (ou sous l'état du service),
+jamais extraits. Réception : une version par passe, taille et empreinte vérifiées, `[donnees] garder` versions
+gardées, retirées effacées. Plafonds `[donnees] taille_max_mo`, `reserve_mo`.
 
 ## Interface web (#3651)
 
