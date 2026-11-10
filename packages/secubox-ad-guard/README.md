@@ -376,3 +376,13 @@ La whitelist d'ad-guard et celle de dns-guard ne changent aucune réponse DNS. `
 zones globales : avec `view-first: yes`, ce qu'elle ne définit pas retombe sur elles. Rappel #3224 : une zone de liste présente dans une vue
 TV reste bloquée pour tous. Les primautés entre listes de familles différentes (par exemple adult-exempt contre adblock dans la compilation
 `secubox-dns-listes`, #3205) ne sont pas établies ici.
+
+## Tri Netflix par insistance (#3226, expérimental)
+
+Pour une TV que la box ne route pas (Wi-Fi de l'opérateur), case « Tri Netflix » de TV Privacy (appareils en mode auto),
+`POST /api/v1/ad-guard/adblock-tv/tri-netflix {appareil, actif}` (administrateur). Champ d'état `tri_netflix` :
+`{appareils: [vues], seuil: 3 (2-10), fenetre_s: 20 (5-120), duree_s: 10800 (600-86400)}`. Chaque nouveau serveur
+`*.oca.nflxvideo.net` reçoit NXDOMAIN dans la vue de l'appareil ; redemandé au moins `seuil` secondes distinctes en
+`fenetre_s`, il est autorisé `duree_s` (zone transparente posée à chaud par `secubox-adguard-tv tri-appliquer`,
+unité de chemin sur `/run/secubox/ad-guard-tri`, purge toutes les 10 min, autorisations en cours rendues dans le
+drop-in). Décisions tracées dans `audit.log` (`tri-autorise`, `tri-echec`).

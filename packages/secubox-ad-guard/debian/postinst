@@ -6,8 +6,9 @@ if [ "$1" = "configure" ]; then
     chown -R secubox:secubox /var/lib/secubox/ad-guard
     # Dossier de ROOT du contrôleur du mode auto (#1954) : hors de l'arbre de `secubox`, jamais touché par le chown ci-dessus.
     install -d -m 0700 -o root -g root /var/lib/secubox-adguard-tv
-    # POC « DNS AdBlock TV » (#1943) : inactif tant qu'on ne l'active pas ; une mise à jour relance son démon s'il tourne déjà.
-    systemctl try-restart secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
+    # Tri Netflix (#3226) : dossier des demandes AVANT la relance de dnsfeed (ProtectSystem=strict : il ne l'écrit que s'il
+    # existe au démarrage du service).
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-ad-guard-tri.conf >/dev/null 2>&1 || true
     # Mode auto (#1954) : la minuterie ne fait rien tant qu'aucun appareil n'est en mode auto ; l'activer ne touche pas le DNS.
     systemctl enable --now secubox-ad-guard-auto.timer >/dev/null 2>&1 || true
     # Capteur DNS d'Actor Intelligence (#2240) : ne fait rien sans actord ni magasin (ConditionPathExists) ; ne juge que les domaines malveillants ou anormaux.
@@ -15,7 +16,15 @@ if [ "$1" = "configure" ]; then
     # Instantané des réponses d'Unbound (détournement d'un domaine normal) : lecture seule du cache, étape privilégiée minimale par sudo (exact).
     systemctl enable --now secubox-ad-guard-dnsdump.timer >/dev/null 2>&1 || true
 
+
     systemctl daemon-reload
+    # POC « DNS AdBlock TV » (#1943) : inactif tant qu'on ne l'active pas ; une mise à jour relance son démon s'il tourne déjà
+    # — APRÈS daemon-reload, pour qu'il démarre avec son unité à jour (#3226 : dossier des demandes ouvert en écriture).
+    systemctl try-restart secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
+    # Tri Netflix (#3226) : unité de chemin et purge des autorisations échues. Sans appareil trié (défaut), aucune demande
+    # n'est jamais déposée : sans effet.
+    systemctl enable --now secubox-ad-guard-tri.path >/dev/null 2>&1 || true
+    systemctl enable --now secubox-ad-guard-tri.timer >/dev/null 2>&1 || true
     # #2748 : le module est servi par le groupe des modules declares (groupable.d) ; sans groupe d'operateur on l'active.
     [ -x /usr/sbin/secubox-groupe-declares-activer ] && /usr/sbin/secubox-groupe-declares-activer || true
     # PAS d'enable de secubox-ad-guard.service : le module est servi par

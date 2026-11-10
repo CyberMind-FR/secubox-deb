@@ -382,7 +382,7 @@
             </div>
             <div class="card" style="margin-top:1rem;">
                 <div class="card-header"><h2>📡 Appareils</h2></div>
-                <table><thead><tr><th>Nom</th><th>Adresse</th><th>Mode</th><th></th></tr></thead><tbody id="tv-clients"></tbody></table>
+                <table><thead><tr><th>Nom</th><th>Adresse</th><th>Mode</th><th title="Expérimental (#3226) : chaque nouveau serveur vidéo Netflix est refusé, autorisé 3 h si la TV insiste (épisode) ; les serveurs abandonnés (publicité) restent refusés. Appareils en mode auto seulement.">Tri Netflix</th><th></th></tr></thead><tbody id="tv-clients"></tbody></table>
                 <div style="margin-top:.6rem;display:flex;gap:.5rem;flex-wrap:wrap;">
                     <input type="text" id="tv-new-ip" placeholder="Adresse IP (ex. 192.168.1.50)">
                     <input type="text" id="tv-new-nom" placeholder="Nom (ex. Freebox TV salon)">
@@ -966,13 +966,26 @@
                     '<tr><td>' + tvEsc(t.domaine) + '</td><td>' + tvEsc(t.categorie) + '</td><td>' + tvEsc(t.hits) + '</td></tr>').join('')
                     || '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);">Aucun domaine bloqué (mode OBSERVE, ou rien reçu)</td></tr>';
             }
-            document.getElementById('tv-clients').innerHTML = st.clients.map(c =>
-                '<tr><td>' + tvEsc(c.nom) + '</td><td>' + tvEsc(c.ip) + '</td><td><select onchange="tvModeClient(\'' + tvEsc(c.ip) + '\', this.value)">'
+            const tries = new Set(((st.tri_netflix || {}).appareils) || []);
+            document.getElementById('tv-clients').innerHTML = st.clients.map(c => {
+                const sl = tvSlug(c.nom);
+                const tri = c.mode === 'auto'
+                    ? '<label><input type="checkbox"' + (tries.has(sl) ? ' checked' : '') + ' onchange="tvTri(\'' + tvEsc(sl) + '\', this.checked)"> ' + (tries.has(sl) ? 'actif' : 'non') + '</label>'
+                    : '<span style="color:var(--text-dim);">— (mode auto)</span>';
+                return '<tr><td>' + tvEsc(c.nom) + '</td><td>' + tvEsc(c.ip) + '</td><td><select onchange="tvModeClient(\'' + tvEsc(c.ip) + '\', this.value)">'
                 + ['off', 'observe', 'block', 'auto'].map(m => '<option' + (m === c.mode ? ' selected' : '') + '>' + m + '</option>').join('') + '</select></td>'
-                + '<td><button class="btn" onclick="tvRetirer(\'' + tvEsc(c.ip) + '\')">Retirer</button></td></tr>').join('')
-                || '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);">Aucun appareil : ajoutez la Freebox TV (son adresse IP)</td></tr>';
+                + '<td>' + tri + '</td>'
+                + '<td><button class="btn" onclick="tvRetirer(\'' + tvEsc(c.ip) + '\')">Retirer</button></td></tr>';
+            }).join('')
+                || '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);">Aucun appareil : ajoutez la Freebox TV (son adresse IP)</td></tr>';
             const cu = await api('/adblock-tv/custom');
             document.getElementById('tv-custom').textContent = (cu && cu.domaines || []).join('  ') || 'liste personnalisée vide';
+        }
+        // Même règle que dnstv._slug : identifiant de vue de l'appareil (minuscules, tirets).
+        function tvSlug(n) { return String(n).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'appareil'; }
+        async function tvTri(sl, v) {
+            if (v && !await confirmer('Tri Netflix (expérimental) : chaque nouveau serveur vidéo Netflix sera d\u2019abord refusé, puis autorisé 3 h si la TV insiste. Un épisode peut mettre quelques secondes de plus à démarrer. Activer pour cet appareil ?')) { tvRender(); return; }
+            await api('/adblock-tv/tri-netflix', 'POST', { appareil: sl, actif: !!v }); tvRender();
         }
         async function tvActif(v) { await api('/adblock-tv/etat', 'POST', { actif: v }); tvRender(); }
         async function tvMode(m) { await api('/adblock-tv/mode', 'POST', { mode: m }); tvRender(); }

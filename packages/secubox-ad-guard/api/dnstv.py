@@ -340,6 +340,12 @@ def valider_etat(brut) -> dict:
         etat_valide["schema"] = SCHEMA_ETAT
     if "appareils" in brut:
         etat_valide["appareils"] = _valider_appareils(brut["appareils"])
+    if brut.get("tri_netflix") is not None:                      # #3226 : écrit seulement s'il existe (anciens états inchangés)
+        from . import dnstv_tri  # noqa: PLC0415
+        try:
+            etat_valide["tri_netflix"] = dnstv_tri.valider(brut["tri_netflix"])
+        except dnstv_tri.ErreurTri as e:
+            raise ErreurTV(str(e)) from None
     return etat_valide
 
 
@@ -438,7 +444,8 @@ def vues_protect(etat: dict, regles_actives: Optional[Dict[str, List[str]]] = No
     return out
 
 
-def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[Dict[str, List[str]]] = None) -> str:
+def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[Dict[str, List[str]]] = None,
+                   tri_autorises: Optional[Dict[str, Dict[str, int]]] = None) -> str:
     """Drop-in Unbound du POC. Journalisation par requête + UNE VUE PAR MODE pour les appareils du périmètre.
 
     Pourquoi des vues et pas des listes globales : (1) les autres clients ne sont pas touchés ; (2) l'appareil en OBSERVE échappe au puits
@@ -512,6 +519,9 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
                 if d in exemptes:
                     continue                                       # l'autorisation de l'administrateur l'emporte sur une règle de blocage du même nom
                 L.append(f'    local-zone: "{d}." always_nxdomain')
+            # Tri Netflix par insistance (#3226) : tout serveur vidéo refusé, sauf ceux autorisés (zone plus précise, échéance).
+            from . import dnstv_tri  # noqa: PLC0415
+            L.extend(dnstv_tri.zones_vue(nom, etat, tri_autorises or {}))
             if not puits:
                 L.append('    local-zone: "." transparent')           # puits=faux : l'ancien comportement (appareil hors du puits de production)
     return "\n".join(L) + "\n"

@@ -25,7 +25,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv  # noqa: E402
+from api import dnstv, dnstv_tri  # noqa: E402
 
 LOT = 200                   # événements par écriture
 PERIODE_S = 2.0             # ou toutes les 2 secondes
@@ -47,9 +47,25 @@ def retention() -> int:
         return RETENTION_PAR_DEFAUT
 
 
-def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=classeur, locales=dnstv.adresses_locales) -> int:
+def charger_tri():
+    """Tri Netflix (#3226) : (adresse -> vue auto triée, détecteur d'insistance), ou (vide, None) sans appareil trié."""
+    try:
+        etat, erreur = dnstv.lire_etat()
+    except (OSError, ValueError):
+        return {}, None
+    if erreur or not etat.get("actif"):
+        return {}, None
+    r = dnstv_tri.reglage(etat)
+    carte = {c["ip"]: dnstv._slug(c["nom"]) for c in etat["clients"]
+             if c["mode"] == "auto" and dnstv._slug(c["nom"]) in r["appareils"]}
+    return (carte, dnstv_tri.Insistance(r["seuil"], r["fenetre_s"])) if carte else ({}, None)
+
+
+def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=classeur, locales=dnstv.adresses_locales,
+           tri=charger_tri, deposer=dnstv_tri.deposer_demande) -> int:
     """Consomme `lignes` ; rend le nombre d'événements enregistrés. Sépare la logique du processus : testable sans Unbound."""
     an = dnstv.Analyseur()
+    carte_tri, insistance = tri()
     exclus = locales()                                                 # la box ne journalise pas ses propres requêtes (#1959)
     lot, total = [], 0
     dernier, derniere_purge, derniere_recharge = time.monotonic(), 0.0, time.monotonic()
@@ -58,12 +74,19 @@ def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=clas
         if e is not None:
             cat, _ = cl.classer(e.qname)
             lot.append((e, cat))
+            slug = carte_tri.get(e.client) if insistance is not None else None
+            if slug and insistance.voir(slug, e.qname.rstrip(".").lower(), int(e.ts), e.decision == "BLOCKED"):
+                deposer(slug, e.qname.rstrip(".").lower())       # aussitôt, pas au lot : la TV réessaie en quelques secondes
         maintenant = time.monotonic()
         if lot and (len(lot) >= LOT or maintenant - dernier >= PERIODE_S):
             total += magasin.ajouter(lot, exclus)
             lot, dernier = [], maintenant
         if maintenant - derniere_recharge >= RECHARGE_S:
             exclus = locales()
+            ancienne = insistance
+            carte_tri, insistance = tri()
+            if ancienne is not None and insistance is not None:      # l'historique d'insistance survit au rechargement
+                insistance.vues, insistance.demandes = ancienne.vues, ancienne.demandes
             try:
                 cl = recharger()
             except OSError:
