@@ -4,8 +4,9 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Profil AppArmor ENFORCE de MirrorNet v1 (#3645), nommé par AppArmorProfile= dans secubox-mirrornet.service, chargé par
-# le postinst. Phase 2 : LECTURE du code, de mirrornet.toml et des fichiers des gardes ; ÉCRITURE du seul
-# /var/lib/secubox-mirrornet (base SQLite, WAL) et de la socket. Aucun secret, aucun sudo, aucun réseau IP.
+# le postinst. LECTURE du code, de mirrornet.toml, des fichiers des gardes et de l'export de l'annuaire (#3647) ;
+# ÉCRITURE du seul /var/lib/secubox-mirrornet (base SQLite, WAL) et de la socket ; connexion à la socket de l'annuaire
+# local (gestes signés là-bas). Aucun secret (node.key reste à l'annuaire), aucun sudo, aucun réseau IP.
 
 #include <tunables/global>
 
@@ -47,8 +48,12 @@ profile secubox-mirrornet flags=(attach_disconnected) {
   /var/lib/secubox-mirrornet/ rw,
   /var/lib/secubox-mirrornet/** rwk,
 
-  # API.
+  # Export de l'annuaire (objets signés, revérifiés ici) — #3647.
+  /var/lib/secubox/annuaire/mirrornet-export.json r,
+
+  # API ; routes /self/... de l'annuaire local.
   /run/secubox/ r,
   /run/secubox/mirrornet.sock rw,
+  /run/secubox/annuaire.sock rw,
   network unix stream,
 }

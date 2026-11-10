@@ -17,15 +17,18 @@ Depends: ${misc:Depends},
  python3 (>= 3.11),
  python3-fastapi,
  python3-uvicorn,
+ python3-cryptography,
  secubox-core (>= 1.5.9),
  adduser,
  systemd
-Recommends: secubox-annuaire,
+Recommends: secubox-annuaire (>= 0.18.0),
  secubox-p2p
 Description: SecuBox MirrorNet v1 — plan de contrôle des services, données et contributions
- Phase 2 (#3645) : modèle de données et squelette en lecture seule. Base SQLite
- locale et privée (WAL) : catalogue d'offres et de jeux de données, abonnements,
- relevés d'usage, ledger de crédits en partie double (ajout seul, chaîné,
- contrôle d'intégrité), règles de répartition versionnées. Crédits internes sans
- valeur monétaire. API locale gardée sur /run/secubox/mirrornet.sock, sans
- aucune route d'écriture à ce stade.
+ Phase 3 (#3647) : cycle de vie des abonnements. Synchronisation de l'export de
+ l'annuaire (offres et abonnements signés, revérifiés : liaison did-clé et
+ signature Ed25519), catalogue filtré par niveau de confiance, états dérivés
+ (Demande, Refuse, Actif, Grace, Suspendu, Expire, Resilie) avec historique en
+ ajout seul, et routes d'écriture administrateur (publier, s'abonner,
+ renouveler, résilier) relayées à l'annuaire, qui signe par node.key et audite.
+ Base SQLite locale et privée (WAL) ; ledger de crédits en partie double sans
+ valeur monétaire. API locale gardée sur /run/secubox/mirrornet.sock.

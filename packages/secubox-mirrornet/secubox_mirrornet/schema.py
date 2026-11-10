@@ -14,7 +14,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-VERSION = 1
+VERSION = 2
 
 # Identifiants : UUID v4 en texte (36 caractères) pour les objets de ce nœud ; did:plc pour les nœuds ;
 # identifiants de l'annuaire (service_id, subscription_id) repris tels quels. Montants : ENTIERS en centièmes de crédit.
@@ -195,6 +195,40 @@ MIGRATIONS = {
         "CREATE INDEX IF NOT EXISTS ledger_entry_compte ON ledger_entry(account_id)",
         "CREATE INDEX IF NOT EXISTS usage_abonnement ON usage_record(subscription_id)",
         "CREATE INDEX IF NOT EXISTS evenement_abonnement ON subscription_event(subscription_id, ts)",
+    ],
+    # Phase 3 (#3647) : index local alimenté par l'export de l'annuaire, idempotence des routes d'écriture.
+    # Une migration s'applique UNE fois (user_version) dans une transaction : les ALTER n'ont pas à être rejouables.
+    2: [
+        "ALTER TABLE offer ADD COLUMN endpoint TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE offer ADD COLUMN approval_mode TEXT NOT NULL DEFAULT 'pending'",
+        "ALTER TABLE offer ADD COLUMN description TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE offer ADD COLUMN compat TEXT NOT NULL DEFAULT '{}'",
+        "ALTER TABLE offer ADD COLUMN sonde TEXT",
+        "ALTER TABLE node ADD COLUMN cause TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE node ADD COLUMN ok_le TEXT",
+        "ALTER TABLE node ADD COLUMN echec_depuis TEXT",
+        "ALTER TABLE subscription ADD COLUMN role TEXT NOT NULL DEFAULT 'abonne' CHECK (role IN ('abonne','fournisseur'))",
+        "ALTER TABLE subscription ADD COLUMN demande_le TEXT",
+        "ALTER TABLE subscription ADD COLUMN echeance TEXT",
+        """CREATE TABLE IF NOT EXISTS requete (
+            cle TEXT PRIMARY KEY CHECK (length(cle) BETWEEN 8 AND 64),
+            route TEXT NOT NULL,
+            cible TEXT NOT NULL,
+            statut INTEGER NOT NULL,
+            resultat TEXT NOT NULL,
+            ts TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS synchro (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            le TEXT NOT NULL,
+            soi TEXT,
+            export_le TEXT,
+            hauteur INTEGER,
+            offres INTEGER NOT NULL DEFAULT 0,
+            abonnements INTEGER NOT NULL DEFAULT 0,
+            rejetees INTEGER NOT NULL DEFAULT 0,
+            erreur TEXT
+        )""",
     ],
 }
 

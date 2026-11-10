@@ -717,6 +717,189 @@ async def pull_services(req: PullServicesRequest):
 
 
 # ---------------------------------------------------------------------------
+# MirrorNet v1 (#3647) — gestes signés PAR CE NŒUD, et export pour secubox-mirrornet
+# ---------------------------------------------------------------------------
+# Les routes /service/... historiques reçoivent la clé privée dans la requête. MirrorNet tourne sous un compte dédié
+# qui ne doit JAMAIS lire node.key : ces routes /self/... signent ici, dans le processus propriétaire de la clé
+# (compte secubox), comme _publish_self_node. Garde : administrateur réel (require_jwt) ; MirrorNet relaie le jeton de
+# l'administrateur qui l'appelle. Chaque geste est écrit dans audit.log puis l'export est rafraîchi.
+
+MIRRORNET_EXPORT = Path(os.environ.get("ANNUAIRE_MIRRORNET_EXPORT", "/var/lib/secubox/annuaire/mirrornet-export.json"))
+_JOIGNABILITE: Dict[str, Dict[str, Any]] = {}     # mesh_ip -> {"ok_le", "echec_depuis"}
+_EXPORT_CACHE: Dict[str, Any] = {"hauteur": None, "donnees": None}
+
+
+def _cle_du_noeud():
+    """(clé privée, did) de CE nœud ; 503 tant que `annuairectl init` n'a pas créé la clé."""
+    key_path = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
+    try:
+        from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+        with open(key_path, "r", encoding="ascii") as fh:
+            priv = bytes.fromhex(fh.read().strip())
+        if len(priv) != 32:
+            raise ValueError
+        return priv, did_from_pubkey(public_from_private(priv))
+    except (OSError, ValueError):
+        raise HTTPException(503, "identité du nœud absente (annuairectl init)") from None
+
+
+def _auditer_mirrornet(action: str, ident: Any, **details: Any) -> None:
+    """Le journal d'audit commun appartient à `secubox` : l'annuaire y écrit les gestes MirrorNet, avec l'administrateur
+    qui les a ordonnés (le compte de secubox-mirrornet n'a, lui, aucun droit d'écriture sur ce journal)."""
+    par = ident.get("sub") if isinstance(ident, dict) else None
+    ligne = json.dumps({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "module": "annuaire",
+                        "action": action, "par": par, **details}, ensure_ascii=False)
+    try:
+        with open(AUDIT_DROITS, "a", encoding="utf-8") as f:
+            f.write(ligne + "\n")
+    except OSError:
+        logging.getLogger("secubox.annuaire").warning("audit.log non écrit : %s", ligne)
+
+
+def _noter_joignabilite(suivi: Dict[str, bool]) -> None:
+    maintenant = datetime.now(timezone.utc).isoformat()
+    for ip, joint in suivi.items():
+        e = _JOIGNABILITE.setdefault(ip, {"ok_le": None, "echec_depuis": None})
+        if joint:
+            e["ok_le"], e["echec_depuis"] = maintenant, None
+        elif not e.get("echec_depuis"):
+            e["echec_depuis"] = maintenant
+
+
+def _exporter_mirrornet() -> None:
+    """Dépose l'export MirrorNet ; la partie journal n'est recalculée que si la hauteur du journal a changé. Jamais
+    d'exception vers l'appelant (synchronisation, route)."""
+    try:
+        from annuaire import mirrornet_export as MX  # noqa: PLC0415
+        j = get_journal()
+        tip = j.tip()
+        hauteur = tip.height if tip else 0
+        if _EXPORT_CACHE["hauteur"] != hauteur or _EXPORT_CACHE["donnees"] is None:
+            soi = _self_did_best_effort()
+            _EXPORT_CACHE["donnees"] = MX.construire(j, soi, {})
+            _EXPORT_CACHE["hauteur"] = hauteur
+            _EXPORT_CACHE["ip_vers_did"] = {v.get("mesh_ip"): d for d, v in _EXPORT_CACHE["donnees"]["noeuds"].items()
+                                            if v.get("mesh_ip")}
+        ip_vers_did = _EXPORT_CACHE.get("ip_vers_did", {})
+        donnees = dict(_EXPORT_CACHE["donnees"], hauteur=hauteur,
+                       joignabilite={ip_vers_did[ip]: dict(v) for ip, v in _JOIGNABILITE.items() if ip in ip_vers_did})
+        MX.ecrire(donnees, MIRRORNET_EXPORT)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("secubox.annuaire.sync").warning("export MirrorNet non écrit : %s", e)
+
+
+class SelfOfferRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: str = Field(..., min_length=1, max_length=80)
+    kind: str = Field(..., pattern=r"^[a-z][a-z0-9_-]{1,23}$")
+    endpoint: str = Field(..., min_length=1, max_length=256)
+    approval_mode: str = Field("pending", pattern=r"^(auto|pending)$")
+    description: str = Field("", max_length=500)
+    version: Optional[str] = Field(None, max_length=64)
+    compat: Optional[Dict[str, Any]] = None
+    tarif: Optional[Dict[str, Any]] = None
+    quotas: Optional[Dict[str, int]] = None
+    classe: Optional[str] = Field(None, pattern=r"^(public|communaute|prive)$")
+    duree_s: Optional[int] = Field(None, gt=0, le=10 * 365 * 86400)
+    grace_s: Optional[int] = Field(None, ge=0, le=90 * 86400)
+    sonde: Optional[str] = Field(None, max_length=256)
+
+
+class SelfSubscribeRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    version: Optional[str] = Field(None, max_length=64)
+
+
+class SelfCancelRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    motif: str = Field("", max_length=200)
+
+
+def _geste(fn, *args, **kwargs):
+    """Exécute un verbe signé ; PermissionError → 403, ValueError → 409 (état incompatible) ou 422 (entrée)."""
+    try:
+        return fn(*args, **kwargs)
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from None
+    except ValueError as e:
+        raise HTTPException(409, str(e)) from None
+
+
+@app.post("/self/service/offer")
+async def self_offer(req: SelfOfferRequest, ident: Dict[str, Any] = Depends(_require_jwt)):
+    """Publie une offre de CE nœud (champs MirrorNet facultatifs), signée par node.key."""
+    from annuaire.verbs import offer_service  # noqa: PLC0415
+    priv, did = _cle_du_noeud()
+    champs = req.model_dump(exclude={"name", "kind", "endpoint", "approval_mode", "description"})
+    try:
+        offre = await asyncio.to_thread(offer_service, get_journal(), priv, did, name=req.name, kind=req.kind,
+                                        endpoint=req.endpoint, approval_mode=req.approval_mode,
+                                        description=req.description, **champs)
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from None
+    except ValueError as e:                      # pydantic.ValidationError en hérite : tarif, classe…
+        raise HTTPException(422, str(e)) from None
+    _auditer_mirrornet("mirrornet_offre_publiee", ident, service_id=offre.service_id, nom=req.name, kind=req.kind)
+    await asyncio.to_thread(_exporter_mirrornet)
+    return offre.model_dump()
+
+
+@app.post("/self/service/{service_id}/subscribe")
+async def self_subscribe(service_id: str, req: SelfSubscribeRequest, ident: Dict[str, Any] = Depends(_require_jwt)):
+    """Abonnement de CE nœud : tarif de l'offre accepté tel quel, échéance = maintenant + duree_s de l'offre."""
+    from datetime import timedelta  # noqa: PLC0415
+    from annuaire.verbs import _get_offer, subscribe, subscription_state  # noqa: PLC0415
+    priv, did = _cle_du_noeud()
+    j = get_journal()
+    offre = await asyncio.to_thread(_get_offer, j, service_id)
+    if offre is None:
+        raise HTTPException(404, "offre inconnue ou retirée")
+    if offre.get("provider") == did:
+        raise HTTPException(409, "un nœud ne s'abonne pas à sa propre offre")
+    duree = offre.get("duree_s")
+    expire = ((datetime.now(timezone.utc) + timedelta(seconds=duree)).isoformat()
+              if isinstance(duree, int) and duree > 0 else None)
+    try:
+        sub = await asyncio.to_thread(subscribe, j, priv, did, service_id, version=req.version,
+                                      tarif_accepte=offre.get("tarif"), expire_le=expire)
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from None
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from None
+    etat = await asyncio.to_thread(subscription_state, j, sub.subscription_id)
+    _auditer_mirrornet("mirrornet_abonnement", ident, subscription_id=sub.subscription_id, service_id=service_id,
+                       fournisseur=offre.get("provider"), etat=etat.value)
+    await asyncio.to_thread(_exporter_mirrornet)
+    return dict(sub.model_dump(), state=etat.value)
+
+
+@app.post("/self/subscription/{subscription_id}/renew")
+async def self_renew(subscription_id: str, ident: Dict[str, Any] = Depends(_require_jwt)):
+    from annuaire.verbs import renew_subscription  # noqa: PLC0415
+    priv, did = _cle_du_noeud()
+    res = await asyncio.to_thread(_geste, renew_subscription, get_journal(), priv, did, subscription_id)
+    _auditer_mirrornet("mirrornet_renouvellement", ident, subscription_id=subscription_id, expire_le=res.get("expire_le"))
+    await asyncio.to_thread(_exporter_mirrornet)
+    return res
+
+
+@app.post("/self/subscription/{subscription_id}/cancel")
+async def self_cancel(subscription_id: str, req: SelfCancelRequest, ident: Dict[str, Any] = Depends(_require_jwt)):
+    """Résiliation par l'abonné, ou révocation de l'abonné par le fournisseur : le rôle de CE nœud décide."""
+    from annuaire.verbs import _get_subscription_payload, cancel_subscription, revoke_subscriber  # noqa: PLC0415
+    priv, did = _cle_du_noeud()
+    j = get_journal()
+    sub = await asyncio.to_thread(_get_subscription_payload, j, subscription_id)
+    if sub is None:
+        raise HTTPException(404, "abonnement inconnu")
+    fn = cancel_subscription if sub.get("subscriber") == did else revoke_subscriber
+    res = await asyncio.to_thread(_geste, fn, j, priv, did, subscription_id, req.motif)
+    _auditer_mirrornet("mirrornet_resiliation", ident, subscription_id=subscription_id, par=res.get("par"), motif=req.motif)
+    await asyncio.to_thread(_exporter_mirrornet)
+    return res
+
+
+# ---------------------------------------------------------------------------
 # Directory endpoints — NodeRecord + ConfigBlob + log federation (gondwana P1, #768)
 # ---------------------------------------------------------------------------
 
@@ -1441,12 +1624,17 @@ def _cycle_sync(peers_path: str, ops: Optional[str] = None):
         peers = mesh_sync.completer_pairs(peers, mesh_sync.noeuds_du_repertoire(get_journal()), soi=meta.get("mesh_ip", ""),
                                           reseau=mesh_sync.reseau_maillage(peers_path))
         sync_once = mesh_sync.sync_once
-        res = sync_once(get_journal(), peers, ops=ops) if ops else sync_once(get_journal(), peers)
+        suivi: Dict[str, bool] = {}
+        res = (sync_once(get_journal(), peers, ops=ops, suivi=suivi) if ops
+               else sync_once(get_journal(), peers, suivi=suivi))
+        _noter_joignabilite(suivi)                                   # #3647 : période de grâce MirrorNet
         if not ops:                                                  # #3305 : droits de cette box, relevés au passage complet
             mesh_sync.relever_droits(peers)
     except Exception as e:  # noqa: BLE001 — la boucle ne meurt pas, mais elle le dit
         _sync_log.warning("synchronisation (%s) échouée : %s", voie, e)
         return None
+    finally:
+        _exporter_mirrornet()                                        # #3647 : même sans pair (nœud seul), l'export existe
     if res.get("ingested") or res.get("rejected") or res.get("errors"):
         _sync_log.info("synchronisation (%s) : %s ingéré(s), %s rejeté(s), %s pair(s) injoignable(s) sur %s", voie,
                        res.get("ingested", 0), res.get("rejected", 0), res.get("errors", 0), res.get("peers", 0) + res.get("errors", 0))
@@ -1473,7 +1661,8 @@ async def _assist_sync_loop():
     while True:
         await asyncio.sleep(interval)
         await asyncio.to_thread(_inscrire_si_besoin)
-        await asyncio.to_thread(_cycle_sync, peers_path, "assist_")
+        # #3647 : les gestes d'abonnement (service_*) passent par la voie rapide : 20 s au lieu de 300 s.
+        await asyncio.to_thread(_cycle_sync, peers_path, "assist_,service_")
 
 
 @app.post("/sync/now", dependencies=[Depends(_require_jwt)])

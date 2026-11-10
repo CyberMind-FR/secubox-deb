@@ -62,6 +62,7 @@ from .model import (
     Subscription,
     SubscriptionState,
     now_rfc3339,
+    charge_signee,
     OpenPGPBinding,
     OpenPGPRevocation,
 )
@@ -1320,7 +1321,8 @@ def subscription_state(journal: Journal, subscription_id: str) -> SubscriptionSt
     """Derive the current SubscriptionState for subscription_id from the log.
 
     Rules (in priority order):
-      1. REVOKED  — a SERVICE_REVOKE_SUB entry exists authored by the subscriber.
+      1. REVOKED  — a SERVICE_REVOKE_SUB entry exists authored by the subscriber, or (#3647) a
+                    SERVICE_REVOKE_OFFER_SUB authored by the offer's provider.
       2. REJECTED — a SERVICE_REJECT entry exists authored by the offer's provider.
       3. APPROVED — offer.approval_mode == AUTO, OR a SERVICE_APPROVE entry authored
                     by the offer's provider exists.
@@ -1370,6 +1372,9 @@ def subscription_state(journal: Journal, subscription_id: str) -> SubscriptionSt
 
         if entry.op == Op.SERVICE_REVOKE_SUB and entry.author == subscriber:
             revoked_sub = True
+        # #3647 : le fournisseur révoque un abonné (motif signé).
+        if entry.op == Op.SERVICE_REVOKE_OFFER_SUB and offer_provider and entry.author == offer_provider:
+            revoked_sub = True
 
         if entry.op == Op.SERVICE_APPROVE and offer_provider and entry.author == offer_provider:
             approved = True
@@ -1398,8 +1403,12 @@ def offer_service(
     approval_mode: str = "auto",
     description: str = "",
     macro: Optional[Dict] = None,
+    **etendus: Any,
 ) -> ServiceOffer:
     """SERVICE_OFFER: publish a signed service offer.
+
+    `etendus` (#3647) : champs MirrorNet facultatifs (version, compat, tarif, quotas, classe, duree_s, grace_s, sonde),
+    validés par le modèle ; absents, l'offre est signée exactement comme avant.
 
     Self-certifying: entry.author == provider_did.
 
@@ -1429,11 +1438,9 @@ def offer_service(
         approval_mode=ApprovalMode(approval_mode),
         description=description,
         macro=macro,
+        **{k: v for k, v in etendus.items() if v is not None},
     )
-    full = offer.model_dump()
-    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
-    if payload.get("macro") is None:
-        payload.pop("macro", None)
+    payload = charge_signee(offer)
     sig_hex = sign(provider_priv, canonical_bytes(payload))
 
     provider_pubkey = _get_inviter_pubkey(journal, provider_did)
@@ -1505,8 +1512,14 @@ def subscribe(
     subscriber_priv: bytes,
     subscriber_did: str,
     service_id: str,
+    *,
+    version: Optional[str] = None,
+    tarif_accepte: Optional[Dict[str, Any]] = None,
+    expire_le: Optional[str] = None,
 ) -> Subscription:
     """SERVICE_SUBSCRIBE: request access to a service offer.
+
+    #3647 : `version`, `tarif_accepte`, `expire_le` facultatifs (MirrorNet) ; absents, la charge est celle d'avant.
 
     Preconditions:
       - The offer must exist and not be revoked.
@@ -1540,9 +1553,11 @@ def subscribe(
         subscription_id=subscription_id,
         subscriber=subscriber_did,
         service_id=service_id,
+        version=version,
+        tarif_accepte=tarif_accepte,
+        expire_le=expire_le,
     )
-    full = sub.model_dump()
-    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    payload = charge_signee(sub)
     sig_hex = sign(subscriber_priv, canonical_bytes(payload))
 
     subscriber_pubkey = _get_inviter_pubkey(journal, subscriber_did)
@@ -1556,6 +1571,121 @@ def subscribe(
     )
 
     return Subscription(**{**payload, "sig": sig_hex, "signer_did": subscriber_did})
+
+
+# ---------------------------------------------------------------------------
+# MirrorNet v1 (#3647) — échéance, renouvellement, résiliation, révocation d'un abonné
+# ---------------------------------------------------------------------------
+
+MOTIF_MAX = 200
+
+
+def _instant(ts: Optional[str]) -> Optional[datetime]:
+    """RFC 3339 → datetime UTC conscient ; None si absent ou illisible (jamais d'exception)."""
+    if not ts or not isinstance(ts, str):
+        return None
+    try:
+        d = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def echeance_abonnement(journal: Journal, subscription_id: str) -> Optional[str]:
+    """Échéance courante : `expire_le` de l'abonnement, prolongée par chaque SERVICE_RENEW de l'ABONNÉ signé AVANT
+    l'échéance alors en cours (une période déjà close ne se renouvelle pas, MIRRORNET_SERVICE_EXCHANGE.md § 5).
+    None = abonnement sans échéance (comportement d'avant MirrorNet)."""
+    sub = _get_subscription_payload(journal, subscription_id)
+    if sub is None:
+        return None
+    courant = sub.get("expire_le")
+    if not courant:
+        return None
+    for e in journal.iter_entries(ops=("service_renew",)):
+        p = e.payload
+        if p.get("subscription_id") != subscription_id or e.author != sub.get("subscriber"):
+            continue
+        fait, actuel, neuf = _instant(p.get("renewed_at")), _instant(courant), _instant(p.get("expire_le"))
+        if fait and actuel and neuf and fait <= actuel and neuf > actuel:
+            courant = p["expire_le"]
+    return courant
+
+
+def _offre_de_l_abonnement(journal: Journal, subscription_id: str) -> Tuple[Dict, Optional[Dict]]:
+    sub = _get_subscription_payload(journal, subscription_id)
+    if sub is None:
+        raise ValueError(f"abonnement {subscription_id!r} introuvable")
+    sid = sub.get("service_id", "")
+    return sub, (_get_offer(journal, sid) or _find_any_offer(journal, sid))
+
+
+def _motif(motif: str) -> str:
+    motif = (motif or "").strip()
+    if len(motif) > MOTIF_MAX or any(ord(c) < 32 for c in motif):
+        raise ValueError(f"motif : {MOTIF_MAX} caractères imprimables au plus")
+    return motif
+
+
+def _signer_et_ajouter(journal: Journal, priv: bytes, did: str, op: Op, ptype: str, payload: Dict[str, Any]) -> None:
+    sig_hex = sign(priv, canonical_bytes(payload))
+    journal.append(op=op, payload_type=ptype, payload=payload, author=did, sig=sig_hex,
+                   author_pubkey_hex=_get_inviter_pubkey(journal, did))
+
+
+def cancel_subscription(journal: Journal, subscriber_priv: bytes, subscriber_did: str, subscription_id: str,
+                        motif: str = "") -> Dict[str, Any]:
+    """SERVICE_REVOKE_SUB : l'ABONNÉ résilie (l'opération existait, sans écrivain). Déjà close : ValueError."""
+    sub, _offre = _offre_de_l_abonnement(journal, subscription_id)
+    if sub.get("subscriber") != subscriber_did:
+        raise PermissionError("seul l'abonné résilie son abonnement")
+    if subscription_state(journal, subscription_id) in (SubscriptionState.REVOKED, SubscriptionState.REJECTED):
+        raise ValueError("abonnement déjà clos")
+    payload = {"subscription_id": subscription_id, "service_id": sub.get("service_id"),
+               "subscriber": subscriber_did, "motif": _motif(motif), "revoked_at": now_rfc3339()}
+    _signer_et_ajouter(journal, subscriber_priv, subscriber_did, Op.SERVICE_REVOKE_SUB, "ServiceRevokeSub", payload)
+    return {"status": "revoked", "subscription_id": subscription_id, "par": "abonne"}
+
+
+def revoke_subscriber(journal: Journal, provider_priv: bytes, provider_did: str, subscription_id: str,
+                      motif: str = "") -> Dict[str, Any]:
+    """SERVICE_REVOKE_OFFER_SUB : le FOURNISSEUR révoque un abonné, motif signé."""
+    sub, offre = _offre_de_l_abonnement(journal, subscription_id)
+    if offre is None or offre.get("provider") != provider_did:
+        raise PermissionError("seul le fournisseur de l'offre révoque un abonné")
+    if subscription_state(journal, subscription_id) in (SubscriptionState.REVOKED, SubscriptionState.REJECTED):
+        raise ValueError("abonnement déjà clos")
+    payload = {"subscription_id": subscription_id, "service_id": sub.get("service_id"),
+               "provider": provider_did, "motif": _motif(motif), "revoked_at": now_rfc3339()}
+    _signer_et_ajouter(journal, provider_priv, provider_did, Op.SERVICE_REVOKE_OFFER_SUB, "ServiceRevokeOfferSub",
+                       payload)
+    return {"status": "revoked", "subscription_id": subscription_id, "par": "fournisseur"}
+
+
+def renew_subscription(journal: Journal, subscriber_priv: bytes, subscriber_did: str,
+                       subscription_id: str) -> Dict[str, Any]:
+    """SERVICE_RENEW : l'abonné prolonge d'une période (`duree_s` de l'offre), AVANT l'échéance en cours.
+
+    Refus : pas l'abonné ; abonnement non approuvé ou clos ; offre sans durée ou retirée ; période déjà close."""
+    sub, _offre = _offre_de_l_abonnement(journal, subscription_id)
+    if sub.get("subscriber") != subscriber_did:
+        raise PermissionError("seul l'abonné renouvelle son abonnement")
+    if subscription_state(journal, subscription_id) is not SubscriptionState.APPROVED:
+        raise ValueError("seul un abonnement approuvé se renouvelle")
+    offre = _get_offer(journal, sub.get("service_id", ""))
+    if offre is None:
+        raise ValueError("offre retirée : renouvellement impossible")
+    duree = offre.get("duree_s")
+    if not isinstance(duree, int) or duree <= 0:
+        raise ValueError("offre sans durée : l'abonnement n'expire pas")
+    actuel = _instant(echeance_abonnement(journal, subscription_id))
+    maintenant = datetime.now(timezone.utc)
+    if actuel is None or maintenant > actuel:
+        raise ValueError("période close : un nouvel abonnement est nécessaire")
+    neuf = (actuel + timedelta(seconds=duree)).isoformat()
+    payload = {"subscription_id": subscription_id, "service_id": sub.get("service_id"),
+               "subscriber": subscriber_did, "expire_le": neuf, "renewed_at": maintenant.isoformat()}
+    _signer_et_ajouter(journal, subscriber_priv, subscriber_did, Op.SERVICE_RENEW, "ServiceRenew", payload)
+    return {"status": "renewed", "subscription_id": subscription_id, "expire_le": neuf}
 
 
 def approve_subscription(
@@ -1716,11 +1846,16 @@ def ingest_offer(
             f"but offer claims provider {offer.provider!r}; offer rejected"
         )
 
-    # Reconstruct the canonical payload that was signed: model_dump minus sig/signer_did
-    full = offer.model_dump()
-    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
-    if payload.get("macro") is None:
-        payload.pop("macro", None)
+    # Reconstruct the canonical payload that was signed: model_dump minus sig/signer_did, absent optional fields (#3647).
+    # Variante tolérée : un signataire qui a gardé les champs facultatifs à null (model_dump brut). C'est la charge
+    # VÉRIFIÉE qui est stockée, telle quelle : rien n'est accepté qui n'ait été signé.
+    payload = charge_signee(offer)
+    if not verify(provider_pubkey_hex, canonical_bytes(payload), offer.sig):
+        brute = {k: v for k, v in offer.model_dump().items() if k not in ("sig", "signer_did")}
+        if brute.get("macro") is None:
+            brute.pop("macro", None)
+        if verify(provider_pubkey_hex, canonical_bytes(brute), offer.sig):
+            payload = brute
 
     if not verify(provider_pubkey_hex, canonical_bytes(payload), offer.sig):
         raise ValueError(

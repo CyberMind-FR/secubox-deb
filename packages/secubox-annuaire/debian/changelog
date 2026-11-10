@@ -1,3 +1,16 @@
+secubox-annuaire (0.18.0-1~trixie1) trixie; urgency=medium
+
+  * MirrorNet v1 phase 3 (ref #3647) : offres et abonnements étendus (champs facultatifs,
+    signature des objets anciens inchangée), opérations service_renew et
+    service_revoke_offer_sub, résiliation par l'abonné, échéance des abonnements.
+  * Niveaux de confiance calculés (confiance.py) ; export mirrornet-export.json pour
+    secubox-mirrornet ; joignabilité des pairs suivie à chaque synchronisation ; voie rapide
+    20 s étendue aux opérations service_.
+  * Routes /self/... (require_jwt) signées par node.key dans l'annuaire, auditées avec
+    l'administrateur auteur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:30:00 +0100
+
 secubox-annuaire (0.17.7-1~trixie1) trixie; urgency=medium
 
   * Flotte : badge « à valider » et bouton Valider pour un pair entré par autojoin (ref #3638).

@@ -5,8 +5,8 @@
 # SecuBox MirrorNet v1 — API locale, phase 2 : lecture seule (#3645). Le schéma est créé ou migré au démarrage, sous le
 # compte du service. Compte dédié, aucune capacité, aucun réseau IP (les échanges entre pairs viendront en phase 3+).
 [Unit]
-Description=SecuBox MirrorNet — plan de contrôle (phase 2, lecture seule)
-After=network.target secubox-core.service
+Description=SecuBox MirrorNet — plan de contrôle (phase 3, cycle de vie des abonnements)
+After=network.target secubox-core.service secubox-annuaire.service
 # Filet : au plus 3 démarrages en 5 min, quoi qu'il arrive.
 StartLimitIntervalSec=300
 StartLimitBurst=3

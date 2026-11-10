@@ -5,7 +5,7 @@ SecuBox Annuaire-Miroir — federated self-certifying trust substrate.
 
 The Annuaire-Miroir is the trust directory for SecuBox-DEB, providing a BLAKE2b-chained, CONIKS-style append-only audit journal with four protocols: AUTO-ADD (provisional discovery), INVITE (capability-based membership), PROPOSAL (anti-plutocratic governance), and EMANCIPATE (staged anchor removal). All objects are Ed25519-signed, RFC 3339-timestamped, and access-gated by the can() resolver. Served on /run/secubox/annuaire.sock, JWT-gated.
 
-Paquet Debian : version `0.17.0-1~trixie1`, architecture `all`.
+Paquet Debian : version `0.18.0-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -58,6 +58,10 @@ Socket Unix : `/run/secubox/annuaire.sock`, `/run/secubox/openpgp.sock`.
 | `GET` | `/subscriptions` | require_lecture |
 | `POST` | `/subscription/{subscription_id}/approve` | require_jwt |
 | `POST` | `/subscription/{subscription_id}/reject` | require_jwt |
+| `POST` | `/self/service/offer` | require_jwt — offre de CE nœud signée par node.key (MirrorNet, #3647) |
+| `POST` | `/self/service/{service_id}/subscribe` | require_jwt — abonnement de CE nœud (tarif de l'offre, échéance = maintenant + `duree_s`) |
+| `POST` | `/self/subscription/{subscription_id}/renew` | require_jwt — `SERVICE_RENEW`, avant l'échéance |
+| `POST` | `/self/subscription/{subscription_id}/cancel` | require_jwt — résiliation (abonné) ou révocation de l'abonné (fournisseur) |
 | `POST` | `/services/pull` | require_jwt |
 | `GET` | `/nodes` | require_lecture |
 | `GET` | `/config` | require_lecture |
@@ -146,3 +150,21 @@ source de l'écouteur wg-mesh, nom et empreinte lus dans `p2p-public/pairs-enrol
   « box non liée »), horodatage plausible, séquence croissante (mémoire `status-sequences.json`, monotone ; une
   séquence plus basse n'est acceptée qu'avec un `ts` signé plus récent : box réinitialisée) → `status-pairs.json`
   (0640, écriture atomique), lu par secubox-status.
+
+## MirrorNet v1 — abonnements (#3647)
+
+- `ServiceOffer` : champs **facultatifs** `version`, `compat`, `tarif` (`modele` ∈ gratuit, forfait, usage, palier,
+  reciproque, parraine ; `credits` entier), `quotas`, `classe` (public, communaute, prive), `duree_s`, `grace_s`,
+  `sonde`. `Subscription` : `version`, `tarif_accepte`, `expire_le`. Absents, ils ne figurent pas dans la charge
+  signée (`model.charge_signee`) : une offre ancienne garde sa signature, et un nœud ancien lit les nouvelles par le
+  journal.
+- Opérations `service_renew` (abonné) et `service_revoke_offer_sub` (fournisseur) ; `service_revoke_sub` a enfin un
+  écrivain (`verbs.cancel_subscription`). Un nœud ancien rejette ces opérations à l'import (compteur `rejected`),
+  sans casser sa réplication. Échéance : `verbs.echeance_abonnement` (renouvellement compté s'il est signé avant
+  l'échéance en cours).
+- Niveaux de confiance calculés (`annuaire/confiance.py`) : REVOKED, OBSERVER, LIMITED ; PARTNER/TRUSTED au socle A21.
+- Export `/var/lib/secubox/annuaire/mirrornet-export.json` (0640, atomique, réécrit seulement s'il change) après chaque
+  passe de synchronisation, et joignabilité des pairs (`mesh_sync.sync_once(suivi=…)`). Voie rapide 20 s étendue aux
+  opérations `service_`.
+- Routes `/self/...` : signées dans le processus propriétaire de `node.key` ; chaque geste écrit dans `audit.log`
+  (`mirrornet_*`, avec l'administrateur `par`).

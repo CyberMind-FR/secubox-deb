@@ -30,7 +30,7 @@ def api(tmp_path, monkeypatch):
 def test_sante_publique_et_base_absente(api):
     main, base = api
     c = TestClient(main.app)
-    assert c.get("/api/v1/mirrornet/health").json()["phase"] == 2
+    assert c.get("/api/v1/mirrornet/health").json()["phase"] == 3
     assert c.get("/api/v1/mirrornet/services").status_code == 503
 
 
@@ -39,9 +39,9 @@ def test_lectures_sur_base_vide(api):
     from secubox_mirrornet import ledger, schema
     schema.initialiser(base)
     c = TestClient(main.app)
-    assert c.get("/api/v1/mirrornet/schema").json() == {"version": 1, "attendue": 1}
+    assert c.get("/api/v1/mirrornet/schema").json() == {"version": 2, "attendue": 2}
     st = c.get("/api/v1/mirrornet/status").json()
-    assert st["base"] is True and st["schema"] == 1 and st["ecriture"] is False and st["n_offer"] == 0
+    assert st["base"] is True and st["schema"] == 2 and st["ecriture"] is True and st["n_offer"] == 0
     for chemin, cle in (("services", "services"), ("datasets", "datasets"), ("subscriptions", "subscriptions"),
                         ("economy/distribution-rules", "rules")):
         r = c.get(f"/api/v1/mirrornet/{chemin}")
@@ -56,14 +56,16 @@ def test_lectures_sur_base_vide(api):
     assert compte["valeur_monetaire"] is False and len(compte["comptes"]) == 2
 
 
-def test_gardes_et_aucune_ecriture():
+def test_gardes_et_ecritures_administrateur():
     main = importlib.import_module("api.main")
     for route in main.app.routes:
         chemin = getattr(route, "path", "")
         if not chemin.startswith("/api/v1/mirrornet"):
             continue
-        assert route.methods <= {"GET", "HEAD"}, chemin              # phase 2 : lecture seule
         deps = [d.call for d in route.dependant.dependencies]
+        if not route.methods <= {"GET", "HEAD"}:                     # phase 3 (#3647) : toute écriture = administrateur
+            assert main.require_jwt in deps, chemin
+            continue
         if chemin.endswith("/health"):
             continue
         if any(x in chemin for x in ("/economy/account", "/economy/ledger", "/subscriptions")):

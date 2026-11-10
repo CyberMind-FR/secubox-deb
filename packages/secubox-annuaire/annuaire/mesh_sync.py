@@ -149,10 +149,13 @@ def sync_once(
     fetch: Callable[[str], List[Dict[str, Any]]] = http_fetch,
     port: int = DEFAULT_MESH_PORT,
     ops: Optional[str] = None,
+    suivi: Optional[Dict[str, bool]] = None,
 ) -> Dict[str, int]:
     """Pull /log/export from each peer and merge. Never raises — an unreachable
     or malformed peer is counted in `errors` and skipped. `fetch` is injectable
     for testing. Returns aggregate {peers, ingested, skipped, rejected, errors}.
+
+    `suivi` (#3647) : rempli de {mesh_ip: joint ?} — la joignabilité des pairs que MirrorNet lit (période de grâce).
     """
     from .verbs import import_entries  # noqa: PLC0415
 
@@ -166,7 +169,11 @@ def sync_once(
             entries = fetch(url)
         except Exception:
             totals["errors"] += 1
+            if suivi is not None:
+                suivi[ip] = False
             continue
+        if suivi is not None:
+            suivi[ip] = True
         res = import_entries(journal, entries or [])
         totals["peers"] += 1
         totals["ingested"] += res["ingested"]
