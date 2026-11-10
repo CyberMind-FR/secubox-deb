@@ -419,6 +419,11 @@ def test_self_approbation_et_refus_3651(api):
     assert V.subscription_state(jj, s1.subscription_id) is SubscriptionState.APPROVED
     assert tc.post(f"/self/subscription/{s2.subscription_id}/reject").status_code == 200
     assert V.subscription_state(jj, s2.subscription_id) is SubscriptionState.REJECTED
+    # Refus d'une demande déjà approuvée : 409, l'abonnement actif reste approuvé ; identifiant inconnu : 404.
+    assert tc.post(f"/self/subscription/{s1.subscription_id}/reject").status_code == 409
+    assert V.subscription_state(jj, s1.subscription_id) is SubscriptionState.APPROVED
+    assert tc.post("/self/subscription/" + "0" * 64 + "/approve").status_code == 404
+    assert tc.post("/self/subscription/pas-un-id/approve").status_code == 404
     # Offre d'un autre fournisseur : ce nœud n'a pas autorité.
     pf, _, df = _membre(jj)
     o2 = V.offer_service(jj, pf, df, name="Autre", kind="api", endpoint="http://y", approval_mode="pending")

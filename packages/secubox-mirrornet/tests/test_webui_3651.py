@@ -26,8 +26,8 @@ def test_page_conforme_aurora():
     assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in PAGE
     assert "sbxVue" in PAGE and "onglet: 'mirrornet'" in PAGE
     assert "?demo=1" in PAGE and "DEMO" in PAGE and "?embed=1" in PAGE
-    externes = [s for s in re.findall(r'<script[^>]*src="([^"]+)"', PAGE) if s != "/shared/sidebar.js"]
-    assert externes == []
+    assert re.findall(r'<script[^>]*src="([^"]+)"', PAGE) == []          # menu chargé par le script, hors embed/démo
+    assert "m.src = '/shared/sidebar.js'" in PAGE and "!Q.get('embed') && !DEMO" in PAGE
     for interdit in ("confirm(", "alert(", "prompt(", "lorem", "innerHTML", "document.write", "min-height:100vh"):
         assert interdit not in PAGE, interdit
     assert "sbx_token" in PAGE and "X-Idempotence" in PAGE
@@ -52,7 +52,9 @@ def test_routes_de_la_page_existent_dans_l_api():
 
 def test_aucune_ecriture_en_demonstration():
     corps = PAGE[PAGE.index("async function ecrire("):]
-    assert corps.index("if (DEMO)") < corps.index("await api(chemin, opts)")
+    assert corps.index("if (DEMO)") < corps.index("await envoyer(") < corps.index("await api(chemin, opts)")
+    demo = PAGE[PAGE.index("function demo()"):]
+    assert "'gk" not in demo and "10.10." not in demo
 
 
 def test_menu():

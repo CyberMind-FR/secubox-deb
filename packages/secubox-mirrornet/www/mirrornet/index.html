@@ -163,7 +163,7 @@
             <form class="pub" id="form-pub" autocomplete="off">
                 <div class="champ"><label for="p-nom">Nom</label><input id="p-nom" required maxlength="80" placeholder="Miroir apt trixie"></div>
                 <div class="champ"><label for="p-kind">Type</label><select id="p-kind"><option value="mirror">mirror</option><option value="api">api</option><option value="module">module</option></select></div>
-                <div class="champ large"><label for="p-endpoint">Point d'accès (adresse du maillage ou chemin)</label><input id="p-endpoint" required maxlength="256" placeholder="http://10.10.0.11/apt"></div>
+                <div class="champ large"><label for="p-endpoint">Point d'accès (adresse du maillage ou chemin)</label><input id="p-endpoint" required maxlength="256" placeholder="http://192.0.2.10/apt"></div>
                 <div class="champ"><label for="p-approbation">Approbation</label><select id="p-approbation"><option value="pending">manuelle (je valide chaque abonné)</option><option value="auto">automatique</option></select></div>
                 <div class="champ"><label for="p-classe">Classe d'accès</label><select id="p-classe"><option value="public">public</option><option value="communaute">communauté</option><option value="prive">privé (jamais présenté)</option></select></div>
                 <div class="champ"><label for="p-duree">Durée d'une période (jours, vide = illimitée)</label><input id="p-duree" type="number" min="1" max="3650" placeholder="30"></div>
@@ -187,16 +187,17 @@
         </section>
     </div></div></main>
 
-    <script src="/shared/sidebar.js"></script>
     <script>
         const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
         if (Q.get('embed')) document.body.classList.add('emb');
+        // Menu latéral commun : hors ?embed=1 et hors démonstration seulement (AURORA § 9).
+        if (!Q.get('embed') && !DEMO) { const m = document.createElement('script'); m.src = '/shared/sidebar.js'; document.body.append(m); }
         const $ = id => document.getElementById(id);
         const API = '/api/v1/mirrornet';
         const ETATS_EN_COURS = ['Demande', 'Actif', 'Grace', 'Suspendu'];
         const LIBELLE = { Demande: 'Demande', Refuse: 'Refusé', Actif: 'Actif', Grace: 'Grâce', Suspendu: 'Suspendu', Expire: 'Expiré', Resilie: 'Résilié' };
         let donnees = { status: null, services: null, subs: null, sessionRequise: false };
-        let confirmation = null;
+        let confirmation = null, occupe = false;
 
         function h(tag, attrs, ...enfants) {
             const e = document.createElement(tag);
@@ -307,7 +308,7 @@
                         'Approuver l\u2019abonnement de ' + s.abonne + ' à « ' + s.service + ' » ?', false,
                         () => ecrire('POST', '/subscriptions/' + encodeURIComponent(s.id) + '/approve', null, 'Abonné approuvé.')) }));
                     actions.append(document.createTextNode(' '), h('button', { class: 'btn sm', type: 'button', text: 'Refuser…', onclick: () => demander(
-                        'Refuser l\u2019abonnement de ' + s.abonne + ' à « ' + s.service + ' » ?', true,
+                        'Refuser l\u2019abonnement de ' + s.abonne + ' à « ' + s.service + ' » ? Le refus est définitif pour cette demande.', false,
                         () => ecrire('POST', '/subscriptions/' + encodeURIComponent(s.id) + '/reject', null, 'Demande refusée.')) }));
                 }
                 if (ETATS_EN_COURS.includes(s.etat) && !(s.role === 'fournisseur' && s.etat === 'Demande'))
@@ -335,6 +336,7 @@
 
         // ------- écritures : confirmation dans la page, clé d'idempotence, résultat affiché -------
         function demander(texte, grave, action) {
+            if (occupe) return;                       // une écriture à la fois : pas de double geste par double confirmation
             confirmation = action;
             $('confirm-texte').textContent = texte + (DEMO ? ' (démonstration : rien ne sera envoyé)' : '');
             $('confirm').classList.toggle('grave', !!grave);
@@ -350,6 +352,11 @@
         function annoncer(ok, texte) { const r = $('resultat'); r.hidden = false; r.className = 'resultat ' + (ok ? 'ok' : 'ko'); r.textContent = texte; hauteur(); }
         async function ecrire(methode, chemin, corps, succes) {
             if (DEMO) { annoncer(true, 'Démonstration : aucune écriture envoyée.'); return; }
+            if (occupe) return;
+            occupe = true; annoncer(true, 'Envoi…');
+            try { await envoyer(methode, chemin, corps, succes); } finally { occupe = false; }
+        }
+        async function envoyer(methode, chemin, corps, succes) {
             const opts = { method: methode, headers: { 'X-Idempotence': cle() } };
             if (corps) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(corps); }
             const r = await api(chemin, opts);
@@ -383,10 +390,10 @@
         for (const id of ['f-role', 'f-clos']) $(id).addEventListener('input', () => { rendreAbonnements(); hauteur(); });
         function hauteur() {
             if (window.parent === window) return;
-            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().height), onglet: 'mirrornet' }, location.origin); } catch (e) { /* hors cadre */ }
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().bottom + scrollY), onglet: 'mirrornet' }, location.origin); } catch (e) { /* hors cadre */ }
         }
         window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
-        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.body);
 
         async function charger() {
             donnees = await lire(); rendre();
@@ -404,14 +411,14 @@
             return {
                 status: { phase: 3, synchro: { le: t(-40), offres: 9, rejetees: 0, erreur: null } },
                 services: { confiance_min: 'LIMITED', services: [
-                    { id: 'a1'.repeat(16), nom: 'Miroir apt trixie', kind: 'mirror', version: '2026.11', fournisseur: 'gk6', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: 2592000, grace_s: 432000, approval_mode: 'auto', mienne: false, presentable: true },
-                    { id: 'b2'.repeat(16), nom: 'Listes DNS compilées', kind: 'api', version: '3.4', fournisseur: 'gk2', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: 604800, grace_s: 432000, approval_mode: 'auto', mienne: false, presentable: true },
-                    { id: 'c3'.repeat(16), nom: 'Onion du Hall', kind: 'module', version: null, fournisseur: 'gk2', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: null, grace_s: 432000, approval_mode: 'pending', mienne: false, presentable: true },
+                    { id: 'a1'.repeat(16), nom: 'Miroir apt trixie', kind: 'mirror', version: '2026.11', fournisseur: 'noeud-a', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: 2592000, grace_s: 432000, approval_mode: 'auto', mienne: false, presentable: true },
+                    { id: 'b2'.repeat(16), nom: 'Listes DNS compilées', kind: 'api', version: '3.4', fournisseur: 'noeud-b', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: 604800, grace_s: 432000, approval_mode: 'auto', mienne: false, presentable: true },
+                    { id: 'c3'.repeat(16), nom: 'Onion du Hall', kind: 'module', version: null, fournisseur: 'noeud-b', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: null, grace_s: 432000, approval_mode: 'pending', mienne: false, presentable: true },
                     { id: 'd4'.repeat(16), nom: 'Miroir Debian local', kind: 'mirror', version: '2026.11', fournisseur: 'ce-noeud', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: 2592000, grace_s: 432000, approval_mode: 'pending', mienne: true, presentable: true }] },
                 subs: { subscriptions: [
-                    { id: 'e5'.repeat(32), role: 'abonne', service: 'Miroir apt trixie', service_id: 'a1'.repeat(16), fournisseur: 'gk6', abonne: 'ce-noeud', etat: 'Actif', motif: '', demande_le: t(-864e3), echeance: t(158400) },
-                    { id: 'f6'.repeat(32), role: 'abonne', service: 'Cache PeerTube', service_id: 'e7'.repeat(16), fournisseur: 'gk4', abonne: 'ce-noeud', etat: 'Grace', motif: 'fournisseur injoignable : période de grâce', demande_le: t(-2e6), echeance: t(9e5) },
-                    { id: 'a7'.repeat(32), role: 'fournisseur', service: 'Miroir Debian local', service_id: 'd4'.repeat(16), fournisseur: 'ce-noeud', abonne: 'gk12', etat: 'Demande', motif: 'en attente d’approbation du fournisseur', demande_le: t(-3600), echeance: null }] },
+                    { id: 'e5'.repeat(32), role: 'abonne', service: 'Miroir apt trixie', service_id: 'a1'.repeat(16), fournisseur: 'noeud-a', abonne: 'ce-noeud', etat: 'Actif', motif: '', demande_le: t(-864e3), echeance: t(158400) },
+                    { id: 'f6'.repeat(32), role: 'abonne', service: 'Cache PeerTube', service_id: 'e7'.repeat(16), fournisseur: 'noeud-c', abonne: 'ce-noeud', etat: 'Grace', motif: 'fournisseur injoignable : période de grâce', demande_le: t(-2e6), echeance: t(9e5) },
+                    { id: 'a7'.repeat(32), role: 'fournisseur', service: 'Miroir Debian local', service_id: 'd4'.repeat(16), fournisseur: 'ce-noeud', abonne: 'noeud-d', etat: 'Demande', motif: 'en attente d’approbation du fournisseur', demande_le: t(-3600), echeance: null }] },
                 sessionRequise: false };
         }
         if (DEMO) $('demo').hidden = false;
