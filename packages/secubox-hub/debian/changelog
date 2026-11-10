@@ -1,3 +1,12 @@
+secubox-hub (1.12.54-1~trixie1) trixie; urgency=medium
+
+  * Santé : une unité arrêtée par conception n'est plus « dégradé » (ref #3634, vu sur le RPi4) —
+    désactivée (hors module à veille) : pas surveillée, comme au menu (#3597) ; condition de
+    démarrage non remplie (ConditionResult=no, Result=exec-condition) : en veille, message
+    « En veille (condition de démarrage non remplie) ». Une vraie panne reste en panne.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 04:09:54 +0100
+
 secubox-hub (1.12.53-1~trixie1) trixie; urgency=medium
 
   * Santé : bouton « Réparer » sur un module en panne, avec une session administrateur ;

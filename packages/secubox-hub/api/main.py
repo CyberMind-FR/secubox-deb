@@ -669,7 +669,37 @@ def _unite_active(unite: str) -> bool:
 
 
 _AU_REPOS_TTL = 60
-_au_repos: dict = {"ts": 0.0, "repos": frozenset(), "absents": frozenset()}
+_au_repos: dict = {"ts": 0.0, "repos": frozenset(), "absents": frozenset(), "sautees": frozenset()}
+
+
+def unites_sautees(show_text: str) -> frozenset:
+    """Ids des unités qu'systemd n'a PAS lancées parce que leur condition n'est pas remplie (#3634).
+
+    `ConditionResult=no` (ConditionPathExists… : box déjà provisionnée, Premier Pas fait) ou
+    `Result=exec-condition` (ExecCondition a dit non) : l'arrêt est voulu, ce n'est pas une panne.
+    Seulement à l'état inactive : une unité qui a tourné puis échoué reste en panne."""
+    res = set()
+    for bloc in (show_text or "").strip().split("\n\n"):
+        p = dict(ligne.split("=", 1) for ligne in bloc.splitlines() if "=" in ligne)
+        unite = p.get("Id", "")
+        if not (unite.startswith("secubox-") and unite.endswith(".service")):
+            continue
+        if p.get("ActiveState") != "inactive" or p.get("LoadState", "loaded") != "loaded":
+            continue
+        if p.get("ConditionResult") == "no" or p.get("Result") == "exec-condition":
+            res.add(unite[8:-8])
+    return frozenset(res)
+
+
+def _unites_sautees(noms) -> frozenset:
+    if not noms:
+        return frozenset()
+    try:
+        r = subprocess.run(["systemctl", "show", "--no-pager", "-p", "Id,ActiveState,LoadState,Result,ConditionResult",
+                            *[f"secubox-{n}.service" for n in noms]], capture_output=True, text=True, timeout=10)
+        return unites_sautees(r.stdout)
+    except Exception:  # noqa: BLE001 — sans relevé, rien n'est déclaré sauté
+        return frozenset()
 
 
 def _unites_au_repos_cache() -> tuple:
@@ -686,7 +716,16 @@ def _unites_au_repos_cache() -> tuple:
             if brut and time.time() - _cache.get("units_ts", 0) < CACHE_TTL:
                 noms = [c[0][8:-8] for c in (l.split() for l in brut.splitlines())
                         if c and c[0].startswith("secubox-") and c[0].endswith(".service")]
-            _au_repos["repos"], _au_repos["absents"] = unites_au_repos(noms)
+            repos, absents = unites_au_repos(noms)
+            # #3634 : désactivée (et pas un module à veille, qui garde « Asleep ») = pas surveillée, comme au menu (#3597).
+            absents = frozenset(absents) | frozenset(_unites_desactivees() - _load_sleepable_modules())
+            if noms is None:
+                brut_all = subprocess.run(["systemctl", "list-units", "secubox-*", "--all", "--full", "--no-legend",
+                                           "--plain", "--no-pager"], capture_output=True, text=True, timeout=10).stdout
+                noms = [c[0][8:-8] for c in (ligne.split() for ligne in brut_all.splitlines())
+                        if c and c[0].startswith("secubox-") and c[0].endswith(".service")]
+            sautees = _unites_sautees(noms)
+            _au_repos["repos"], _au_repos["absents"], _au_repos["sautees"] = frozenset(repos) | sautees, absents, sautees
         except Exception as e:  # noqa: BLE001 — garder la valeur précédente
             log.warning("unités au repos indisponibles : %s", e)
         _au_repos["ts"] = time.time()
@@ -826,6 +865,12 @@ def _refresh_health_batch():
     # alors que la protection tourne (secubox-waf-ng active/running).
     if "waf-ng" in modules:
         modules["waf"] = dict(modules["waf-ng"])
+
+    # #3634 : condition de démarrage non remplie = veille voulue, dite comme telle (pas « tâche planifiée »).
+    for ident in _au_repos.get("sautees") or ():
+        m = modules.get(ident)
+        if m and m.get("veille"):
+            modules[ident] = dict(m, msg="En veille (condition de démarrage non remplie)")
 
     superposer_montes(modules, modules_montes())
     superposer_lxc(modules, SONDES_LXC)
