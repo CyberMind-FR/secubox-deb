@@ -33,6 +33,7 @@ class RelaisPilote(Relais):
 case "$*" in
   */public/noms*) [ -e {self.r}/SANS_WEBOS ] || echo '{noms}' ;;
   */public/ports*) echo 404 ;;
+  *"Host: admin."*) if [ -e {self.r}/ADMIN_MUET ]; then echo 000; else echo 200; fi ;;
   *) echo 200 ;;
 esac
 """)
@@ -121,8 +122,16 @@ def test_pilotage_absent_ancien_chemin(rel):
 
 def test_pilotage_absent_et_sans_webos_rien(rel):
     rel.sans_webos()
+    (rel.r / "ADMIN_MUET").write_text("")
     sync(rel)
     assert set(rel.table()) == {"hall.gk2.secubox.in"}
+
+
+def test_pilotage_absent_sans_webos_admin_de_la_jonction_3638(rel):
+    """#3638 : box mobile (ni webos ni pilotage) — admin.<box> du nom de jonction, s'il répond ; rien d'autre."""
+    rel.sans_webos()
+    sync(rel)
+    assert set(rel.table()) == {"hall.gk2.secubox.in", ADMIN}
 
 
 @pytest.mark.parametrize("cas", ["json_invalide", "version", "perime", "futur", "geant_valide", "lien_physique",
@@ -170,7 +179,8 @@ def test_plan_mauvais_ancien_chemin(rel, cas, monkeypatch):
     r = rel.lancer("synchroniser", **({"SBX_RELAIS_UID_PILOTAGE": "4242"} if cas == "proprietaire_etranger" else {}))
     assert r.returncode == 0, r.stdout + r.stderr
     t = rel.table()
-    assert set(t) == {"hall.gk2.secubox.in"}
+    # plan rejeté ou en désaccord : rien ; pilotage qui ne connaît pas ce pair (#3638) : admin.<box> de la jonction seulement
+    assert set(t) == ({"hall.gk2.secubox.in", ADMIN} if cas == "pair_inconnu" else {"hall.gk2.secubox.in"})
     assert "meet.gk4.secubox.in" not in t and "meet.gk7.secubox.in" not in t
 
 

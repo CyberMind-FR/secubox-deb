@@ -479,6 +479,7 @@ def _ml_token_validate(tokens: List[Dict], token_hash: str) -> Dict:
                 "auto_approve": t.get("auto_approve", False),
                 "flash": bool(t.get("flash")),
                 "nom_prevu": t.get("nom_prevu"),
+                "type": t.get("type", "join"),
             }
 
     return {"valid": False, "error": "unknown_token"}
@@ -909,6 +910,10 @@ async def list_peers():
     wg_state, handshakes = get_wg_mesh_config(), mesh.load_handshakes()
     nodes = mesh.peer_nodes(wg_state, handshakes)
     if nodes:
+        a_valider = await asyncio.to_thread(_cles_a_valider)   # lecture du registre sous verrou : hors de la boucle
+        for n in nodes:
+            if isinstance(n, dict) and n.get("public_key") in a_valider:
+                n["a_valider"] = True
         return {"peers": nodes, "count": len(nodes)}
 
     peers_data = load_json(PEERS_FILE, {"peers": []})
@@ -2210,6 +2215,101 @@ def ml_cleanup_local(user: dict = Depends(require_jwt)):
     return ml_cleanup_tokens()
 
 
+# ── Autojoin (#3638) ───────────────────────────────────────────────────────────────────────────────────────────────
+# Une box DERRIÈRE ce maître (sur un réseau qu'il relie directement, autre que celui de sa route par défaut) obtient
+# sans jeton saisi un jeton à usage unique (5 min, approbation auto) ; le pair entre « à valider ». L'adresse vient de
+# l'en-tête posé par le seul écouteur 7331 (X-SecuBox-Enrol-IP), vidé par la route d'administration. Désactivable :
+# `autojoin: false` dans la configuration master-link.
+AUTOJOIN_TTL = 300
+AUTOJOIN_INTERVALLE_S = 30
+_autojoin_dernier: Dict[str, float] = {}
+
+
+def _reseaux_derriere() -> list:
+    """Réseaux IPv4 privés directement reliés, hors interface de la route par défaut et hors tunnels."""
+    try:
+        defaut = json.loads(subprocess.run(["ip", "-j", "-4", "route", "show", "default"], capture_output=True,
+                                           text=True, timeout=5).stdout or "[]")
+        adresses = json.loads(subprocess.run(["ip", "-j", "-4", "addr", "show"], capture_output=True,
+                                             text=True, timeout=5).stdout or "[]")
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return []
+    wan = {r.get("dev") for r in defaut if isinstance(r, dict)}
+    res = []
+    for itf in adresses:
+        nom = itf.get("ifname", "")
+        if nom in wan or nom == "lo" or nom.startswith(("wg", "tun", "tap", "docker", "veth", "lxc", "br-lxc", "eye")):
+            continue
+        for a in itf.get("addr_info") or []:
+            try:
+                net = ipaddress.ip_network(f"{a.get('local')}/{a.get('prefixlen')}", strict=False)
+            except ValueError:
+                continue
+            if net.is_private and net.prefixlen >= 16:
+                res.append(net)
+    return res
+
+
+def autojoin_autorise(adresse: str, reseaux) -> bool:
+    try:
+        ip = ipaddress.ip_address(adresse)
+    except ValueError:
+        return False
+    return ip.version == 4 and not ip.is_loopback and any(ip in n for n in reseaux)
+
+
+@app.post("/master-link/autojoin")
+def ml_autojoin(request: Request):
+    """Jeton d'autojoin pour une box derrière ce maître (#3638). Aucune garde JWT : la preuve est la position réseau
+    (écouteur 7331 seulement, réseau relié autre que le WAN), le jeton est à usage unique et le pair entre « à valider »."""
+    config = get_ml_config()
+    if config.get("role", "master") not in ("master", "sub-master") or config.get("autojoin", True) is False:
+        raise HTTPException(status_code=404, detail="autojoin désactivé")
+    adresse = (request.headers.get("x-secubox-enrol-ip") or "").strip()
+    if not autojoin_autorise(adresse, _reseaux_derriere()):
+        _audit_jonction("autojoin_refuse", adresse=adresse[:45] or "inconnue")
+        raise HTTPException(status_code=403, detail="autojoin réservé aux box derrière ce maître")
+    maintenant = time.time()
+    if maintenant - _autojoin_dernier.get(adresse, 0) < AUTOJOIN_INTERVALLE_S:
+        raise HTTPException(status_code=429, detail="réessayer dans 30 s")
+    _autojoin_dernier[adresse] = maintenant
+    emis = ml_token_generate(ttl=AUTOJOIN_TTL, token_type="autojoin", auto_approve=True)
+    _audit_jonction("autojoin_jeton_emis", adresse=adresse)
+    return {"token": emis["token"], "expires": emis["expires"], "maitre": get_lan_ip()}
+
+
+def _cles_a_valider() -> set:
+    try:
+        return {r.get("wg_public_key") for r in get_ml_requests()
+                if isinstance(r, dict) and r.get("a_valider") is True and r.get("wg_public_key")}
+    except Exception:  # noqa: BLE001 — liste illisible : aucun badge, rien d'autre ne change
+        return set()
+
+
+class ValiderRequest(BaseModel):
+    public_key: str
+
+
+@app.post("/master-link/valider")
+def ml_valider(req: ValiderRequest, user: dict = Depends(require_jwt)):
+    """Garde un pair entré par autojoin : le badge « à valider » disparaît (#3638). Exclure = « Oublier »."""
+    if not mesh.valid_wg_key(req.public_key):
+        raise HTTPException(status_code=400, detail="clé WireGuard invalide")
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        requests = get_ml_requests()
+        cible = [r for r in requests if isinstance(r, dict) and r.get("wg_public_key") == req.public_key and r.get("a_valider")]
+        if not cible:
+            raise HTTPException(status_code=404, detail="aucun pair à valider pour cette clé")
+        for r in cible:
+            r.pop("a_valider", None)
+            r["valide_par"] = str(user.get("sub", "?"))[:64] if isinstance(user, dict) else "?"
+        save_ml_requests(requests)
+    _audit_jonction("autojoin_valide", nom=str(cible[0].get("hostname", ""))[:64],
+                    acteur=str(user.get("sub", "?"))[:64] if isinstance(user, dict) else "?")
+    return {"ok": True, "valides": len(cible)}
+
+
 @app.post("/master-link/join")
 def ml_join(req: JoinRequest, request: Request):
     """Handle join request from new node (token validated).
@@ -2297,6 +2397,10 @@ def _ml_join(req: JoinRequest, request: Request):
         "timestamp": now.isoformat(),
         "status": "pending"
     }
+    if validation.get("type") == "autojoin":
+        # #3638 : entrée sans geste de l'administrateur — marquée « à valider » (Flotte : Valider ou Oublier).
+        join_request["a_valider"] = True
+        _audit_jonction("jonction_autojoin", nom=nom, adresse=str(peer_address))
     _record_wg_identity(join_request, req)
 
     # Check global auto-approve or token auto-approve
@@ -2520,6 +2624,19 @@ def _provision(join_request: Dict) -> None:
             if lp.get("fingerprint") == join_request.get("fingerprint"):
                 lp["mesh_ip"] = join_request["mesh_ip"]
     _maj(PEERS_FILE, maj)
+    _demander_relais()
+
+
+RELAIS_DEMANDE = P2P_DIR / "relais.demande"
+
+
+def _demander_relais() -> None:
+    """Un pair vient d'entrer au maillage (#3638) : la synchronisation du relais est demandée tout de suite
+    (secubox-relais-maillage-demande.path), au lieu d'attendre l'heure. Marqueur vide ; un échec n'empêche rien."""
+    try:
+        RELAIS_DEMANDE.touch(exist_ok=True)
+    except OSError as e:
+        log.warning("demande de synchronisation du relais non posée : %s", e)
 
 
 def _record_wg_identity(join_request: Dict, req: "JoinRequest") -> None:

@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — autojoin : rejoindre le maillage du maître SecuBox qui sert de passerelle (#3638)
+After=network-online.target secubox-p2p.service
+Wants=network-online.target
+ConditionPathExists=!/etc/secubox/p2p/autojoin.off
+ConditionPathExists=!/var/lib/secubox/p2p/automesh.code
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-autojoin
+TimeoutStartSec=60
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox/p2p
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+UMask=0077

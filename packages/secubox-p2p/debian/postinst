@@ -104,6 +104,9 @@ case "$1" in
             || echo "secubox-p2p : projection des pairs enrôlés non publiée (le pilotage ne reconnaîtra aucune box du maillage)" >&2
         systemctl enable secubox-automesh.timer >/dev/null 2>&1 || true
         systemctl start secubox-automesh.timer >/dev/null 2>&1 || true
+        # #3638 : autojoin derrière un maître SecuBox (sans effet sur une box déjà maillée ou maître de ses pairs).
+        systemctl enable secubox-autojoin.timer >/dev/null 2>&1 || true
+        systemctl start secubox-autojoin.timer >/dev/null 2>&1 || true
         systemctl start secubox-p2p.service || true
 
         # ── MIRRORNET : L'ÉTAT DEVIENT UN TUNNEL (#1360) ───────────────────
@@ -118,6 +121,9 @@ case "$1" in
         # ouvre le port au maître ; sur le relais, relaie les noms des pairs.
         systemctl enable secubox-relais-maillage.timer >/dev/null 2>&1 || true
         systemctl start secubox-relais-maillage.timer >/dev/null 2>&1 || true
+        # #3638 : un pair qui entre au maillage est relayé aussitôt (marqueur posé par l'API), pas à l'heure suivante.
+        systemctl enable secubox-relais-maillage-demande.path >/dev/null 2>&1 || true
+        systemctl start secubox-relais-maillage-demande.path >/dev/null 2>&1 || true
         # Liens WireGuard directs entre pairs (#3133) : inactif sur le maître (le script sort aussitôt).
         systemctl enable secubox-maillage-pairs.timer >/dev/null 2>&1 || true
         systemctl start secubox-maillage-pairs.timer >/dev/null 2>&1 || true

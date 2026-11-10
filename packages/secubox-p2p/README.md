@@ -185,6 +185,11 @@ Un nœud sans accès Internet (ex. gk3) est servi par un nœud qui en a un (ex. 
 
 Un nom relayé vers un pair qui, joint avec succès, ne le publie plus est retiré (vhost, route, Hall du parc) ; un pair injoignable garde ses noms (#3132).
 
+Apparitions et disparitions (#3638) :
+- un pair sans webos ni plan du pilotage (box en profil mobile) est exposé par `admin.<box>` (nom de sa jonction dans `wg_mesh.json`), s'il répond ; jamais si le plan du pilotage est rejeté ou désigne une autre box ;
+- un pair sans poignée de main depuis plus de `retrait_disparus_h` heures (72 par défaut, `0` : jamais) perd ses noms et ports relayés ; il reste dans le maillage (l'oublier reste un geste de l'administrateur) et retrouve ses noms à son retour ;
+- chaque jonction pose `/var/lib/secubox/p2p/relais.demande` : `secubox-relais-maillage-demande.path` lance la synchronisation sans attendre l'heure.
+
 Un seul certificat joker `*.<domaine-du-pair>` est émis par DNS-01 (acme.sh + Gandi LiveDNS), renouvelé comme `*.gk2.secubox.in`.
 
 Réglages facultatifs, `/etc/secubox/relais-maillage.toml` :
@@ -193,9 +198,14 @@ Réglages facultatifs, `/etc/secubox/relais-maillage.toml` :
 auto = true                  # false : plus d'exposition automatique
 exclure = ["wpad", "boot"]   # services jamais relayés
 services_des_pairs = "tous"  # "communs" : seulement les services que le relais expose lui-même
+retrait_disparus_h = 72      # pair muet depuis N heures : noms et ports retirés (0 : jamais)
 ```
 
 Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'est ce qui permet à un pair de servir ses services sous son propre domaine.
+
+## Autojoin derrière un maître SecuBox (#3638)
+
+Une box dont la passerelle est un maître SecuBox rejoint son maillage sans saisie : `secubox-autojoin.timer` (toutes les 5 min, rien si la box est déjà maillée, maître de ses propres pairs, ou si `/etc/secubox/p2p/autojoin.off` existe) demande un jeton à `POST http://<passerelle>:7331/api/v1/p2p/master-link/autojoin` et le dépose dans `automesh.code` ; `secubox-automesh` fait la jonction. Le maître ne délivre ce jeton (usage unique, 5 min) qu'à une adresse d'un réseau qu'il relie directement, autre que celui de sa route par défaut (ponts LXC et tunnels exclus) ; `"autojoin": false` dans `master-link/config.json` le coupe. Le pair entre « à valider » : page Flotte, **Valider** (`POST /master-link/valider`, administrateur) ou **Oublier**. Audit : `autojoin_jeton_emis`, `autojoin_refuse`, `jonction_autojoin`, `autojoin_valide`.
 
 ## Association automatique au maillage (#3100)
 

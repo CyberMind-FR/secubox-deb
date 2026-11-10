@@ -1,0 +1,101 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-autojoin (#3638) : une box DERRIÈRE un maître SecuBox rejoint son maillage sans saisie.
+
+Un passage (minuteur secubox-autojoin.timer) : rien si la box est déjà maillée (mesh.json avec upstream), si un code est
+déjà déposé, ou si l'autojoin est coupé (/etc/secubox/p2p/autojoin.off). Sinon, la passerelle par défaut (adresse privée)
+est interrogée : si c'est un maître SecuBox qui accepte l'autojoin, son jeton à usage unique est déposé comme code de
+jonction (automesh.code, 0600) et secubox-automesh fait la jonction éprouvée. Le maître marque le pair « à valider ».
+Le jeton n'est jamais affiché ni journalisé."""
+import ipaddress
+import json
+import os
+import subprocess
+import sys
+import urllib.request
+
+sys.path.insert(0, "/usr/lib/secubox/p2p")
+from api import automesh  # noqa: E402
+
+ENV = os.environ.get
+P2P_DIR = ENV("SBX_P2P_DIR", "/var/lib/secubox/p2p")
+COUPE = ENV("SBX_AUTOJOIN_OFF", "/etc/secubox/p2p/autojoin.off")
+PORT = 7331
+
+
+def deja_maillee() -> bool:
+    """Déjà rattachée à un parent, OU maître de ses propres pairs : jamais d'autojoin (un maître derrière un autre ne
+    s'y rattache pas tout seul)."""
+    for nom, cle in (("mesh.json", "upstream"), ("wg_mesh.json", "peers")):
+        try:
+            with open(os.path.join(P2P_DIR, nom), encoding="utf-8") as f:
+                if json.load(f).get(cle):
+                    return True
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError, AttributeError):
+            return True               # état illisible : dans le doute, ne rien joindre
+    return False
+
+
+def passerelle() -> str | None:
+    try:
+        routes = json.loads(subprocess.run(["ip", "-j", "-4", "route", "show", "default"], capture_output=True,
+                                           text=True, timeout=5).stdout or "[]")
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    for r in routes:
+        gw = r.get("gateway") if isinstance(r, dict) else None
+        try:
+            if gw and ipaddress.ip_address(gw).is_private:
+                return gw
+        except ValueError:
+            continue
+    return None
+
+
+def demander_jeton(gw: str, ouvrir=urllib.request.urlopen) -> str | None:
+    req = urllib.request.Request(f"http://{gw}:{PORT}/api/v1/p2p/master-link/autojoin", data=b"{}", method="POST",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with ouvrir(req, timeout=8) as r:
+            corps = json.loads(r.read(4096).decode())
+    except Exception:  # noqa: BLE001 — passerelle qui n'est pas un maître SecuBox, ou refus : rien
+        return None
+    jeton = corps.get("token") if isinstance(corps, dict) else None
+    return jeton if isinstance(jeton, str) and automesh._JETON.fullmatch(jeton) else None
+
+
+def deposer(gw: str, jeton: str) -> None:
+    code = automesh.encoder(gw, jeton)
+    chemin = automesh.CODE_DEPOSE
+    os.makedirs(os.path.dirname(chemin), exist_ok=True)
+    tmp = chemin + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(code)
+    os.replace(tmp, chemin)
+
+
+def main() -> int:
+    if os.path.exists(COUPE):
+        return 0
+    if deja_maillee() or os.path.exists(automesh.CODE_DEPOSE):
+        return 0
+    gw = passerelle()
+    if not gw:
+        return 0
+    jeton = demander_jeton(gw)
+    if not jeton:
+        return 0
+    deposer(gw, jeton)
+    print(f"secubox-autojoin : maître SecuBox trouvé ({gw}), jonction lancée")
+    subprocess.run(["systemctl", "start", "--no-block", "secubox-automesh.service"], check=False, timeout=30)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
