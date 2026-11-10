@@ -933,6 +933,18 @@ cmd_retirer_port() {   # cmd_retirer_port <proto/port>
 #         domaine, vérifiée dans cmd_relayer).
 #    Le WAF d'ici inspecte tout ; un service réservé au LAN sur le pair y voit un
 #    visiteur WAN (real_ip) et reste fermé.
+# demande_trop_recente <horodatage> <secondes> — 0 si une passe demandée a eu lieu il y a moins de <secondes> ; sinon
+# l'horodatage (root, /run) est posé et 1 est rendu. Un lien ou un fichier non régulier n'est jamais suivi : il est remplacé.
+demande_trop_recente() {
+    local h="$1" s="$2" age
+    if [ -f "$h" ] && [ ! -L "$h" ]; then
+        age=$(( $(date +%s) - $(stat -c %Y "$h") ))
+        [ "$age" -ge 0 ] && [ "$age" -lt "$s" ] && return 0
+    fi
+    rm -f -- "$h"; : > "$h"
+    return 1
+}
+
 # Retrait des NOMS relayés vers un pair disparu (#3638), en lot : la génération HAProxy (--allow-shrink) et le nettoyage
 # des ports (ports_nettoyer_disparus) sont faits à la fin de la synchronisation. 0 si au moins un nom est parti.
 retirer_relais_de_ip() {   # retirer_relais_de_ip <ip>
@@ -1390,5 +1402,12 @@ case "${1:-}" in
     ouvrir)  shift; cmd_ouvrir "$@" ;;
     fermer)  shift; cmd_fermer "$@" ;;
     synchroniser) verrou_commun; cmd_synchroniser ;;
+    synchroniser-demande)
+        # #3638 : passe demandée par une jonction (marqueur inscriptible par le compte partagé secubox) — au plus une
+        # toutes les 5 min ; une demande écartée est rattrapée par le minuteur horaire.
+        if demande_trop_recente "${RELAIS_HORODATAGE:-/run/secubox-relais-demande.horodatage}" 300; then
+            log "passe demandée il y a moins de 5 min : laissée au minuteur horaire"; exit 0
+        fi
+        verrou_commun; cmd_synchroniser ;;
     *) sed -n '8,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

@@ -2228,6 +2228,16 @@ APPAIRAGE_MINUTES_MAX = 60
 NOMS_RESERVES = {"admin", "hall", "www", "apt", "mail", "ai", "api", "secubox", "gk2", "master", "maitre", "relais"}
 _autojoin_dernier: Dict[str, float] = {}
 _autojoin_verrou = threading.Lock()
+_autojoin_refus_audit = {"dernier": 0.0}
+
+
+def _refus_autojoin(raison: str, adresse: str) -> HTTPException:
+    """Refus audité au plus une fois par minute (pas de remplissage du disque), toujours rendu."""
+    maintenant = time.time()
+    if maintenant - _autojoin_refus_audit["dernier"] >= 60:
+        _autojoin_refus_audit["dernier"] = maintenant
+        _audit_jonction("autojoin_refuse", raison=raison, adresse=adresse[:45] or "inconnue")
+    return HTTPException(status_code=403, detail=raison)
 
 
 def _appairage_chemin() -> Path:
@@ -2352,11 +2362,11 @@ def ml_autojoin(request: Request):
     config = get_ml_config()
     if config.get("role", "master") not in ("master", "sub-master"):
         raise HTTPException(status_code=404, detail="ce nœud n'est pas un maître")
-    if not pairs_directs.en_tete_pair_valide(request.headers.get("x-secubox-enrol-cle")):
-        raise HTTPException(status_code=403, detail="autojoin réservé à l'écouteur d'enrôlement")
     adresse = (request.headers.get("x-secubox-enrol-ip") or "").strip()[:45]
+    if not pairs_directs.en_tete_pair_valide(request.headers.get("x-secubox-enrol-cle")):
+        raise _refus_autojoin("autojoin réservé à l'écouteur d'enrôlement", adresse)
     if not autojoin_autorise(adresse, _reseaux_derriere()):
-        raise HTTPException(status_code=403, detail="autojoin réservé aux box derrière ce maître")
+        raise _refus_autojoin("autojoin réservé aux box derrière ce maître", adresse)
     maintenant = time.time()
     with _autojoin_verrou:
         if maintenant - _autojoin_dernier.get(adresse, 0) < AUTOJOIN_INTERVALLE_S:
@@ -2368,7 +2378,7 @@ def ml_autojoin(request: Request):
     with oubli.verrou(P2P_DIR):
         e = _appairage_etat()
         if not _appairage_ouvert(e, maintenant):
-            raise HTTPException(status_code=403, detail="appairage fermé : l'ouvrir sur le maître (Flotte)")
+            raise _refus_autojoin("appairage fermé : l'ouvrir sur le maître (Flotte)", adresse)
         e["emis"] = int(e.get("emis", 0)) + 1
         oubli.ecrire_atomique(_appairage_chemin(), e, 0o600)
         emis = ml_token_generate(ttl=AUTOJOIN_TTL, token_type="autojoin", auto_approve=True)

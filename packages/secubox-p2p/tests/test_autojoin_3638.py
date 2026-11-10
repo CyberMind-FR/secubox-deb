@@ -327,8 +327,40 @@ def test_jonction_demande_le_relais_tout_de_suite(maitre):
     assert (maitre / "p2p/relais.demande").exists()
     u = (ICI / "systemd/secubox-relais-maillage-demande.service").read_text()
     assert "ExecStartPre=/bin/rm -f /var/lib/secubox/p2p/relais.demande" in u
-    assert "-lt 300 ]" in u and "NoNewPrivileges=yes" in u     # au plus une passe déclenchée toutes les 5 min
+    assert "ExecStart=/usr/sbin/secubox-relais-maillage synchroniser-demande" in u and "NoNewPrivileges=yes" in u
+    for ligne in u.splitlines():                              # systemd remplace $x lui-même : jamais de shell ici
+        if ligne.startswith("Exec"):
+            assert "$" not in ligne and "sh -c" not in ligne, ligne
     assert "PathExists=/var/lib/secubox/p2p/relais.demande" in (ICI / "systemd/secubox-relais-maillage-demande.path").read_text()
     rules = (ICI / "debian/rules").read_text()
     for f in ("secubox-relais-maillage-demande.path", "sbin/secubox-autojoin"):
         assert f in rules, f
+
+
+def test_demande_trop_recente_limite_les_passes(tmp_path):
+    fn = RELAIS[RELAIS.index("demande_trop_recente() {"):]
+    fn = fn[:fn.index("\n}\n") + 3]
+    h = tmp_path / "horodatage"
+
+    def run():
+        return subprocess.run(["bash", "-c", fn + f'demande_trop_recente "{h}" 300'], capture_output=True).returncode
+    assert run() == 1 and h.exists()          # première demande : passe autorisée, horodatage posé
+    assert run() == 0                          # seconde dans les 5 min : écartée
+    import os
+    os.utime(h, (time.time() - 400, time.time() - 400))
+    assert run() == 1                          # au-delà de 5 min : autorisée
+    h.unlink()
+    (tmp_path / "ailleurs").write_text("x")
+    h.symlink_to(tmp_path / "ailleurs")
+    assert run() == 1 and not h.is_symlink() and (tmp_path / "ailleurs").read_text() == "x"   # lien jamais suivi
+
+
+def test_pair_a_valider_jamais_publie_aux_liens_directs():
+    from api import pairs_directs
+    maintenant = time.time()
+    etat = {"peers": [
+        {"public_key": K1, "mesh_ip": "10.10.0.7", "allowed_ips": "10.10.0.7/32", "name": "gk12", "a_valider": True},
+        {"public_key": K2, "mesh_ip": "10.10.0.5", "allowed_ips": "10.10.0.5/32", "name": "gk3"}]}
+    poignees = {K1: maintenant - 5, K2: maintenant - 5}
+    publies = [p["mesh_ip"] for p in pairs_directs.liste_publiable(etat, poignees, maintenant)]
+    assert "10.10.0.7" not in publies

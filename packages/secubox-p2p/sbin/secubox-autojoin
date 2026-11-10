@@ -70,7 +70,8 @@ def demander_jeton(gw: str, ouvrir=urllib.request.urlopen) -> tuple:
             detail = json.loads(e.read(2048).decode()).get("detail")
         except (OSError, ValueError, AttributeError):
             detail = None
-        return None, f"refus du maître (HTTP {e.code}){' : ' + str(detail)[:160] if detail else ''}"
+        propre = "".join(c for c in str(detail or "") if c.isprintable())[:160]      # jamais de séquence d'échappement
+        return None, f"refus du maître (HTTP {e.code}){' : ' + propre if propre else ''}"
     except (OSError, ValueError) as e:
         return None, f"passerelle {gw} : pas de maître SecuBox joignable ({e.__class__.__name__})"
     jeton = corps.get("token") if isinstance(corps, dict) else None

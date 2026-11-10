@@ -84,6 +84,8 @@ def liste_publiable(etat: dict, poignees: dict, maintenant: float, age_max_s: in
         return []
     retenus: Dict[str, Dict[str, str]] = {}
     for brut in pairs:
+        if isinstance(brut, dict) and brut.get("a_valider") is True:
+            continue                       # #3638 : pas de lien direct vers le parc avant « Valider »
         p = valider_pair(brut)
         if p is None:
             continue

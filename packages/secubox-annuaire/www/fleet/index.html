@@ -305,7 +305,7 @@
                 const tr = el('tr', 'node-row'), st = el('td'), dot = el('span', 'dot ' + (p.status === 'online' ? 'ok' : 'stale'));
                 st.append(dot, el('span', null, ' ' + (p.status || '—')));
                 const act = el('td');
-                // #3638 : entré par autojoin, sans geste d'un administrateur — Valider le garde, Oublier l'exclut.
+                // #3638 : entré par autojoin pendant une fenêtre d'appairage — Valider l'expose ; Oublier le retire (une fenêtre fermée empêche son retour).
                 if (p.a_valider === true && p.public_key) {
                     st.append(el('span', null, ' '), el('span', 'pill down', 'à valider'));
                     const bv = el('button', 'btn sm', 'Valider'); bv.type = 'button';

@@ -12,10 +12,9 @@ Type=oneshot
 ExecStartPre=/bin/rm -f /var/lib/secubox/p2p/relais.demande
 # Laisser la jonction finir (poignée de main, webos du pair) avant de le sonder.
 ExecStartPre=/bin/sleep 60
-# La même passe que le minuteur horaire ; le verrou commun du script empêche deux passes simultanées. Le marqueur est
-# inscriptible par le compte partagé secubox : au plus une passe ainsi déclenchée toutes les 5 min (le minuteur horaire
-# rattrape une demande écartée) — jamais d'enchaînement de passes root.
-ExecStart=/bin/sh -c 'h=/run/secubox-relais-demande.horodatage; if [ -e "$h" ] && [ $(( $(date +%%s) - $(stat -c %%Y "$h") )) -lt 300 ]; then echo "passe récente : demande laissée au minuteur horaire"; exit 0; fi; touch "$h"; exec /usr/sbin/secubox-relais-maillage synchroniser'
+# La même passe que le minuteur horaire (verrou commun) ; au plus une passe ainsi demandée toutes les 5 min, contrôle
+# fait par le script (verbe synchroniser-demande, horodatage root dans /run), jamais par un shell dans ExecStart.
+ExecStart=/usr/sbin/secubox-relais-maillage synchroniser-demande
 PrivateTmp=yes
 NoNewPrivileges=yes
 TimeoutStartSec=45min
