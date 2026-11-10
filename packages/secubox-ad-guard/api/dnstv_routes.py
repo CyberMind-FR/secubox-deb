@@ -156,7 +156,10 @@ def declarer_client(c: ClientIn):
             # #3226 : changer le mode d'une adresse déjà déclarée GARDE ses autres champs (MAC, origine, date, puits) — la MAC
             # d'une entrée de l'administrateur est l'ancre du suivi des nouvelles adresses de l'appareil (#3438).
             ancienne = next((x for x in etat["clients"] if x["ip"] == ip), None)
-            entree = dict(ancienne or {}, ip=ip, nom=c.nom or (ancienne or {}).get("nom") or ip, mode=mode)
+            nom = c.nom or (ancienne or {}).get("nom") or ip
+            if ancienne is not None and ancienne.get("nom") != nom:
+                ancienne = None                                  # autre appareil sur cette adresse (DHCP) : ni MAC ni origine héritées
+            entree = dict(ancienne or {}, ip=ip, nom=nom, mode=mode)
             etat["clients"] = [x for x in etat["clients"] if x["ip"] != ip] + [entree]
             dnstv.ecrire_etat(etat)
         except dnstv.ErreurTV as e:

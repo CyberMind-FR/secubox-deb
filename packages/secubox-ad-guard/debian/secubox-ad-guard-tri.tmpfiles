@@ -3,4 +3,5 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 # Demandes de déblocage du tri Netflix (#3226) : écrites par dnsfeed (secubox), lues et effacées par le contrôleur root.
-d /run/secubox/ad-guard-tri 0700 secubox secubox -
+# Dossier ROOT, groupe secubox, sticky : secubox y crée ses demandes mais ne peut ni renommer ni remplacer le dossier.
+d /run/secubox/ad-guard-tri 1730 root secubox -

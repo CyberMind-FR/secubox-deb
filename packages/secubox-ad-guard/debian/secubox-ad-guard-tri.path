@@ -10,6 +10,9 @@ Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3226
 # secubox-adguard-dnsfeed (compte secubox) dépose une demande vide `<vue>__<serveur>` ; le contrôleur root la revalide.
 DirectoryNotEmpty=/run/secubox/ad-guard-tri
 Unit=secubox-ad-guard-tri.service
+# Déclenchements bornés : au plus 30 en 10 s (un épisode n'en demande que quelques-uns).
+TriggerLimitIntervalSec=10s
+TriggerLimitBurst=30
 
 [Install]
 WantedBy=paths.target

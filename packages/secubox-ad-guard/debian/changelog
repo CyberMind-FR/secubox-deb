@@ -10,7 +10,10 @@ secubox-ad-guard (1.24.5-1~trixie1) trixie; urgency=medium
     cours sont rendues dans la vue (un rechargement d'Unbound les garde).
   * POST /adblock-tv/clients : redéclarer une adresse existante garde sa MAC, son origine et sa
     date (la MAC d'une entrée de l'administrateur ancre le suivi des nouvelles adresses).
-  * postinst : dnsfeed relancé APRÈS daemon-reload (unité à jour).
+  * postinst : dnsfeed relancé APRÈS daemon-reload (unité à jour) ; prerm : unités du tri désactivées.
+  * Relecture : dossier des demandes root 1730 lu par descripteur (jamais à travers un lien),
+    motifs entiers, fichiers ordinaires, 16 poses par passe sous le verrou des rechargements
+    DNS, déclenchements bornés, unité durcie (exception RULES-CODE § 10).
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 12:59:30 +0100
 

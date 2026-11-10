@@ -12,6 +12,7 @@ Type=oneshot
 # Root : unbound-control (view_local_zone_add / remove). Les demandes sont des NOMS de fichiers revalidés (vue triée en
 # mode auto, serveur *.oca.nflxvideo.net), jamais un contenu lu ; contrôleur occupé : rien n'échoue, la demande attend.
 ExecStart=/usr/sbin/secubox-adguard-tv tri-appliquer
+UMask=0027
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -22,5 +23,12 @@ ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
+ProtectKernelLogs=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+RestrictRealtime=yes
+# unbound-control parle par la socket Unix /run/unbound.ctl : aucun réseau IP.
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
 ReadWritePaths=/var/lib/secubox-adguard-tv /run/secubox/ad-guard-tri -/var/log/secubox/audit.log
 TimeoutStartSec=120

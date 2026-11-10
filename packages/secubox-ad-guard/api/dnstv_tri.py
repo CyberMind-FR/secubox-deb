@@ -25,8 +25,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 ZONE = "oca.nflxvideo.net"
-SERVEUR_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}\.[0-9]{1,3}\.oca\.nflxvideo\.net$")
-SLUG_RE = re.compile(r"^[a-z0-9-]{1,40}$")
+# Motifs ENTIERS (fullmatch partout) : « $ » accepterait un saut de ligne final, qui finirait dans le drop-in Unbound.
+SERVEUR_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}\.[0-9]{1,3}\.oca\.nflxvideo\.net")
+SLUG_RE = re.compile(r"[a-z0-9-]{1,40}")
 DEMANDES = Path(os.environ.get("SECUBOX_ADGUARD_TRI_DEMANDES", "/run/secubox/ad-guard-tri"))
 DEFAUTS = {"seuil": 3, "fenetre_s": 20, "duree_s": 10800}
 BORNES = {"seuil": (2, 10), "fenetre_s": (5, 120), "duree_s": (600, 86400)}
@@ -44,7 +45,7 @@ def valider(brut) -> Optional[dict]:
     if not isinstance(brut, dict) or set(brut) - {"appareils", *DEFAUTS}:
         raise ErreurTri("tri_netflix : clés admises appareils, seuil, fenetre_s, duree_s")
     app = brut.get("appareils", [])
-    if not isinstance(app, list) or len(app) > 8 or any(not isinstance(a, str) or not SLUG_RE.match(a) for a in app):
+    if not isinstance(app, list) or len(app) > 8 or any(not isinstance(a, str) or not SLUG_RE.fullmatch(a) for a in app):
         raise ErreurTri("tri_netflix : appareils = 8 identifiants de vue au plus")
     out = {"appareils": sorted(set(app))}
     for cle, (mini, maxi) in BORNES.items():
@@ -70,7 +71,7 @@ class Insistance:
 
     def voir(self, slug: str, nom: str, ts: int, refuse: bool) -> bool:
         """True quand une demande de déblocage doit partir pour (slug, nom)."""
-        if not refuse or not SERVEUR_RE.match(nom) or not SLUG_RE.match(slug):
+        if not refuse or not SERVEUR_RE.fullmatch(nom) or not SLUG_RE.fullmatch(slug):
             return False
         cle = (slug, nom)
         secondes = [s for s in self.vues.get(cle, []) if ts - s < self.fenetre_s]
@@ -86,12 +87,18 @@ class Insistance:
         if len(self.vues) > 4096:                                # mémoire bornée : on oublie les plus anciens
             for k in sorted(self.vues, key=lambda k: self.vues[k][-1])[:1024]:
                 del self.vues[k]
+        if len(self.demandes) > 4096:
+            for k in sorted(self.demandes, key=self.demandes.get)[:1024]:
+                del self.demandes[k]
         return True
+
+
+MAX_POSES = 16                         # appels unbound-control par passe du contrôleur, au plus
 
 
 def deposer_demande(slug: str, nom: str, dossier: Path = DEMANDES) -> bool:
     """Une demande = un fichier vide `<slug>__<nom>` (création exclusive, jamais suivi de lien) ; le contrôleur root la lit."""
-    if not SLUG_RE.match(slug) or not SERVEUR_RE.match(nom):
+    if not SLUG_RE.fullmatch(slug) or not SERVEUR_RE.fullmatch(nom):
         return False
     try:
         fd = os.open(dossier / f"{slug}__{nom}", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -106,7 +113,7 @@ def deposer_demande(slug: str, nom: str, dossier: Path = DEMANDES) -> bool:
 def lire_demande(nom_fichier: str) -> Optional[Tuple[str, str]]:
     """Nom de fichier → (slug, serveur) revalidés, ou None."""
     slug, sep, nom = nom_fichier.partition("__")
-    if not sep or not SLUG_RE.match(slug) or not SERVEUR_RE.match(nom):
+    if not sep or not SLUG_RE.fullmatch(slug) or not SERVEUR_RE.fullmatch(nom):
         return None
     return slug, nom
 
@@ -119,10 +126,10 @@ def charger_autorises(brut) -> Dict[str, Dict[str, int]]:
     if not isinstance(brut, dict):
         return out
     for slug, noms in brut.items():
-        if not isinstance(slug, str) or not SLUG_RE.match(slug) or not isinstance(noms, dict):
+        if not isinstance(slug, str) or not SLUG_RE.fullmatch(slug) or not isinstance(noms, dict):
             continue
         out[slug] = {n: int(e) for n, e in noms.items()
-                     if isinstance(n, str) and SERVEUR_RE.match(n) and type(e) is int and e > 0}
+                     if isinstance(n, str) and SERVEUR_RE.fullmatch(n) and type(e) is int and e > 0}
     return out
 
 
@@ -157,7 +164,7 @@ def zones_vue(slug: str, etat: dict, autorises: Dict[str, Dict[str, int]], maint
     maintenant = int(maintenant if maintenant is not None else time.time())
     lignes = [f'    local-zone: "{ZONE}." always_nxdomain']
     for nom, e in sorted((autorises.get(slug) or {}).items()):
-        if e > maintenant and SERVEUR_RE.match(nom):
+        if e > maintenant and SERVEUR_RE.fullmatch(nom):
             lignes.append(f'    local-zone: "{nom}." transparent')
     return lignes
 

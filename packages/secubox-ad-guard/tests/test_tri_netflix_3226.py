@@ -55,7 +55,7 @@ def test_validation_du_reglage():
             T.valider(mauvais)
 
 
-@pytest.mark.parametrize("nom", ["tv-banc__../../etc/passwd", "tv-banc__" + S1 + "/x", "../x__" + S1, "tv-banc_" + S1,
+@pytest.mark.parametrize("nom", ["tv-banc__" + S1 + "\n", "tv-banc\n__" + S1, "tv-banc__../../etc/passwd", "tv-banc__" + S1 + "/x", "../x__" + S1, "tv-banc_" + S1,
                                  "tv-banc__logs.netflix.com", "TV__" + S1])
 def test_nom_de_demande_hostile_refuse(nom):
     assert T.lire_demande(nom) is None
@@ -136,6 +136,7 @@ def test_tri_appliquer_pose_revalide_et_purge(tmp_path, monkeypatch):
     T.deposer_demande("tv-banc", S1, demandes)
     T.deposer_demande("autre", S2, demandes)                                  # appareil non trié : refusé
     os.symlink("/etc/passwd", demandes / f"tv-banc__{S2}")                     # lien : retiré, jamais suivi
+    (demandes / "un-dossier").mkdir()                                        # dossier planté : retiré, pas de boucle
     assert ctl.tri_appliquer(demandes) == 0
     appels = (tmp_path / "unbound-control.log").read_text()
     assert f"view_local_zone_add sbx-tv-auto-tv-banc {S1}. transparent" in appels and S2 not in appels
@@ -183,3 +184,48 @@ def test_route_tri_et_mac_gardee(tmp_path, monkeypatch):
     assert c.post("/adblock-tv/clients", json={"ip": "192.168.1.95", "nom": "TV banc", "mode": "auto"}).status_code == 200
     e, _ = dnstv.lire_etat(tmp_path) if "dossier" in dnstv.lire_etat.__code__.co_varnames else dnstv.lire_etat()
     assert next(x for x in e["clients"] if x["ip"] == "192.168.1.95")["mac"] == "38:07:16:93:4e:95"
+
+
+def test_dossier_des_demandes_remplace_par_un_lien_refuse(tmp_path, monkeypatch):
+    control = faux(tmp_path, "unbound-control")
+    ctl = charger_ctl(monkeypatch, tmp_path, control)
+    dnstv.ecrire_etat(ETAT, tmp_path)
+    cible = tmp_path / "precieux"
+    cible.mkdir()
+    (cible / "fichier").write_text("x")
+    os.symlink(cible, tmp_path / "demandes")
+    ctl.tri_appliquer(tmp_path / "demandes")
+    assert (cible / "fichier").exists()                                        # rien effacé à travers le lien
+
+
+def test_plafond_de_poses_par_passe(tmp_path, monkeypatch):
+    control = faux(tmp_path, "unbound-control")
+    ctl = charger_ctl(monkeypatch, tmp_path, control)
+    dnstv.ecrire_etat(ETAT, tmp_path)
+    demandes = tmp_path / "demandes"
+    demandes.mkdir()
+    for i in range(40):
+        T.deposer_demande("tv-banc", f"ipv6-c{i}-cdg001-ix.1.oca.nflxvideo.net", demandes)
+    ctl.tri_appliquer(demandes)
+    appels = (tmp_path / "unbound-control.log").read_text().splitlines()
+    assert len([a for a in appels if "view_local_zone_add" in a]) == T.MAX_POSES and list(demandes.iterdir()) == []
+
+
+def test_etat_illisible_vide_quand_meme_les_demandes(tmp_path, monkeypatch):
+    control = faux(tmp_path, "unbound-control")
+    ctl = charger_ctl(monkeypatch, tmp_path, control)
+    (tmp_path / "etat.json").write_text("{pas du json")
+    demandes = tmp_path / "demandes"
+    demandes.mkdir()
+    T.deposer_demande("tv-banc", S1, demandes)
+    assert ctl.tri_appliquer(demandes) == 0 and list(demandes.iterdir()) == []
+
+
+def test_unite_root_durcie_et_dossier_root():
+    ici = Path(__file__).resolve().parents[1] / "debian"
+    unite = (ici / "secubox-ad-guard-tri.service").read_text()
+    for d in ("UMask=0027", "NoNewPrivileges=yes", "ProtectSystem=strict", "RestrictAddressFamilies=AF_UNIX", "IPAddressDeny=any"):
+        assert d in unite, d
+    assert "d /run/secubox/ad-guard-tri 1730 root secubox -" in (ici / "secubox-ad-guard-tri.tmpfiles").read_text()
+    assert "TriggerLimitBurst" in (ici / "secubox-ad-guard-tri.path").read_text()
+    assert "secubox-ad-guard-tri.path" in (ici / "prerm").read_text()
