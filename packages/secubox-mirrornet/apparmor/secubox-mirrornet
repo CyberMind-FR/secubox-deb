@@ -42,6 +42,9 @@ profile secubox-mirrornet flags=(attach_disconnected) {
   /dev/null rw,
   /proc/sys/net/core/somaxconn r,
   owner @{PROC}/@{pid}/** r,
+  # Python (3.13) lit le quota CPU de son cgroup pour dimensionner ses fils (refus vu au banc, #3653).
+  /sys/fs/cgroup/system.slice/secubox-mirrornet.service/cpu.max r,
+  /sys/fs/cgroup/system.slice/cpu.max r,
   deny /etc/secubox/secrets/** rwklx,
   # Preuve de l'écouteur maillé, transmise par LoadCredential (#3653).
   /run/credentials/secubox-mirrornet.service/ r,

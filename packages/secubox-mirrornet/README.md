@@ -7,7 +7,7 @@ Conception : `docs/MIRRORNET_ARCHITECTURE.md` (et `NETWORK`, `SERVICE_EXCHANGE`,
 
 **Phase 3 (#3647) : cycle de vie des abonnements.** Phase 2 (#3645) : modèle de données et squelette.
 
-Paquet Debian : version `0.3.0-1~trixie1`, architecture `all`. Demande `secubox-annuaire` ≥ 0.19.0 (export, routes
+Paquet Debian : version `0.3.1-1~trixie1`, architecture `all`. Demande `secubox-annuaire` ≥ 0.19.0 (export, routes
 `/self/...`).
 
 ## Principe
