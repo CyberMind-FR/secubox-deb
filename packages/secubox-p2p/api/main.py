@@ -479,6 +479,7 @@ def _ml_token_validate(tokens: List[Dict], token_hash: str) -> Dict:
                 "auto_approve": t.get("auto_approve", False),
                 "flash": bool(t.get("flash")),
                 "nom_prevu": t.get("nom_prevu"),
+                "type": t.get("type", "join"),
             }
 
     return {"valid": False, "error": "unknown_token"}
@@ -909,6 +910,10 @@ async def list_peers():
     wg_state, handshakes = get_wg_mesh_config(), mesh.load_handshakes()
     nodes = mesh.peer_nodes(wg_state, handshakes)
     if nodes:
+        a_valider = await asyncio.to_thread(_cles_a_valider)   # lecture du registre sous verrou : hors de la boucle
+        for n in nodes:
+            if isinstance(n, dict) and n.get("public_key") in a_valider:
+                n["a_valider"] = True
         return {"peers": nodes, "count": len(nodes)}
 
     peers_data = load_json(PEERS_FILE, {"peers": []})
@@ -2210,6 +2215,217 @@ def ml_cleanup_local(user: dict = Depends(require_jwt)):
     return ml_cleanup_tokens()
 
 
+# ── Autojoin (#3638) ───────────────────────────────────────────────────────────────────────────────────────────────
+# Une box DERRIÈRE ce maître obtient, sans jeton saisi, un jeton à usage unique (5 min, approbation auto) — seulement
+# pendant une FENÊTRE D'APPAIRAGE ouverte par un administrateur (fermée par défaut, 5 jetons au plus). Trois preuves :
+# (1) l'en-tête X-SecuBox-Enrol-Cle porte le secret de l'écouteur 7331 (posé par nginx, jamais connu d'un client :
+# un en-tête forgé par une autre route ne vaut rien) ; (2) l'adresse (X-SecuBox-Enrol-IP, $realip_remote_addr) est dans
+# un réseau relié autre que le WAN ; (3) la fenêtre est ouverte. Le pair entre « à valider » : WireGuard seul.
+AUTOJOIN_TTL = 300
+AUTOJOIN_INTERVALLE_S = 30
+APPAIRAGE_JETONS_MAX = 5
+APPAIRAGE_MINUTES_MAX = 60
+NOMS_RESERVES = {"admin", "hall", "www", "apt", "mail", "ai", "api", "secubox", "gk2", "master", "maitre", "relais"}
+_autojoin_dernier: Dict[str, float] = {}
+_autojoin_verrou = threading.Lock()
+_autojoin_refus_audit = {"dernier": 0.0}
+
+
+def _refus_autojoin(raison: str, adresse: str) -> HTTPException:
+    """Refus audité au plus une fois par minute (pas de remplissage du disque), toujours rendu."""
+    maintenant = time.time()
+    if maintenant - _autojoin_refus_audit["dernier"] >= 60:
+        _autojoin_refus_audit["dernier"] = maintenant
+        _audit_jonction("autojoin_refuse", raison=raison, adresse=adresse[:45] or "inconnue")
+    return HTTPException(status_code=403, detail=raison)
+
+
+def _appairage_chemin() -> Path:
+    return ML_DIR / "appairage.json"
+
+
+def _appairage_etat() -> Dict:
+    try:
+        e = json.loads(_appairage_chemin().read_text(encoding="utf-8"))
+        return e if isinstance(e, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as exc:
+        log.warning("fenêtre d'appairage illisible (%s) : considérée fermée", exc.__class__.__name__)
+        return {}
+
+
+def _appairage_ouvert(e: Dict, maintenant: float) -> bool:
+    try:
+        return float(e.get("jusqu_a", 0)) > maintenant and int(e.get("emis", 0)) < int(e.get("max", 0))
+    except (TypeError, ValueError):
+        return False
+
+
+def _reseaux_derriere() -> list:
+    """Réseaux IPv4 privés directement reliés, hors interface de la route par défaut, hors tunnels et ponts de conteneurs."""
+    try:
+        defaut = json.loads(subprocess.run(["ip", "-j", "-4", "route", "show", "default"], capture_output=True,
+                                           text=True, timeout=5, check=True).stdout or "[]")
+        adresses = json.loads(subprocess.run(["ip", "-j", "-4", "addr", "show"], capture_output=True,
+                                             text=True, timeout=5, check=True).stdout or "[]")
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        log.warning("réseaux reliés illisibles (%s) : autojoin refusé", exc.__class__.__name__)
+        return []
+    wan = {r.get("dev") for r in defaut if isinstance(r, dict)}
+    res = []
+    for itf in adresses:
+        nom = itf.get("ifname", "")
+        if nom in wan or nom == "lo" or nom.startswith(("wg", "tun", "tap", "docker", "veth", "lxc", "br-lxc", "eye")):
+            continue
+        for a in itf.get("addr_info") or []:
+            try:
+                net = ipaddress.ip_network(f"{a.get('local')}/{a.get('prefixlen')}", strict=False)
+            except ValueError:
+                continue
+            if net.is_private and not net.is_link_local and net.prefixlen >= 16:
+                res.append(net)
+    return res
+
+
+def autojoin_autorise(adresse: str, reseaux) -> bool:
+    try:
+        ip = ipaddress.ip_address(adresse)
+    except ValueError:
+        return False
+    return ip.version == 4 and not ip.is_loopback and not ip.is_link_local and any(ip in n for n in reseaux)
+
+
+def _autojoin_garde(req: "JoinRequest", token_hash: str) -> None:
+    """Un jeton d'autojoin n'ouvre que l'entrée d'une box NEUVE : jamais la reprise d'une empreinte, d'une clé ou d'un
+    nom déjà inscrits (quel que soit leur statut), jamais un nom par défaut ou réservé. Refus = jeton consommé."""
+    nom = (req.hostname or "").strip().lower()
+    requests = get_ml_requests()
+    raison = None
+    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?", nom) or nom in NOMS_PAR_DEFAUT or nom in NOMS_RESERVES:
+        raison = "nom par défaut, réservé ou invalide"
+    elif any(r.get("fingerprint") == req.fingerprint for r in requests if isinstance(r, dict)):
+        raison = "empreinte déjà inscrite"
+    elif req.wg_public_key and any(r.get("wg_public_key") == req.wg_public_key for r in requests if isinstance(r, dict)):
+        raison = "clé déjà inscrite"
+    elif any(str(r.get("hostname", "")).lower() == nom for r in requests if isinstance(r, dict)):
+        raison = "nom déjà pris"
+    elif any(p.get("name") == nom for p in get_wg_mesh_config().get("peers") or [] if isinstance(p, dict)):
+        raison = "nom déjà pris au maillage"
+    if raison:
+        ml_token_mark_used(token_hash, req.fingerprint)
+        _audit_jonction("jonction_autojoin_refusee", raison=raison, nom=nom[:40])
+        raise HTTPException(status_code=409, detail=f"autojoin refusé : {raison}")
+
+
+class AppairageRequest(BaseModel):
+    minutes: int = 15
+
+
+@app.post("/master-link/appairage")
+def ml_appairage_ouvrir(req: AppairageRequest, user: dict = Depends(require_jwt)):
+    """Ouvre la fenêtre d'appairage (#3638) : pendant `minutes`, au plus 5 box derrière ce maître entrent « à valider »."""
+    if not 1 <= req.minutes <= APPAIRAGE_MINUTES_MAX:
+        raise HTTPException(status_code=400, detail=f"durée entre 1 et {APPAIRAGE_MINUTES_MAX} minutes")
+    acteur = str(user.get("sub", "?"))[:64] if isinstance(user, dict) else "?"
+    etat = {"jusqu_a": time.time() + req.minutes * 60, "emis": 0, "max": APPAIRAGE_JETONS_MAX, "par": acteur}
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        oubli.ecrire_atomique(_appairage_chemin(), etat, 0o600)
+    _audit_jonction("appairage_ouvert", minutes=req.minutes, acteur=acteur)
+    return {"ouvert": True, **etat}
+
+
+@app.delete("/master-link/appairage")
+def ml_appairage_fermer(user: dict = Depends(require_jwt)):
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        try:
+            _appairage_chemin().unlink()
+        except FileNotFoundError:
+            pass
+    _audit_jonction("appairage_ferme", acteur=str(user.get("sub", "?"))[:64] if isinstance(user, dict) else "?")
+    return {"ouvert": False}
+
+
+@app.get("/master-link/appairage")
+def ml_appairage_etat(user: dict = Depends(require_jwt)):
+    e = _appairage_etat()
+    return {"ouvert": _appairage_ouvert(e, time.time()), "jusqu_a": e.get("jusqu_a"), "emis": e.get("emis", 0),
+            "max": e.get("max", APPAIRAGE_JETONS_MAX)}
+
+
+@app.post("/master-link/autojoin")
+def ml_autojoin(request: Request):
+    """Jeton d'autojoin (#3638). Sans garde JWT (exception § 3) : secret de l'écouteur 7331 + position réseau + fenêtre
+    d'appairage ouverte par un administrateur ; jeton à usage unique, pair « à valider »."""
+    config = get_ml_config()
+    if config.get("role", "master") not in ("master", "sub-master"):
+        raise HTTPException(status_code=404, detail="ce nœud n'est pas un maître")
+    adresse = (request.headers.get("x-secubox-enrol-ip") or "").strip()[:45]
+    if not pairs_directs.en_tete_pair_valide(request.headers.get("x-secubox-enrol-cle")):
+        raise _refus_autojoin("autojoin réservé à l'écouteur d'enrôlement", adresse)
+    if not autojoin_autorise(adresse, _reseaux_derriere()):
+        raise _refus_autojoin("autojoin réservé aux box derrière ce maître", adresse)
+    maintenant = time.time()
+    with _autojoin_verrou:
+        if maintenant - _autojoin_dernier.get(adresse, 0) < AUTOJOIN_INTERVALLE_S:
+            raise HTTPException(status_code=429, detail="réessayer dans 30 s")
+        if len(_autojoin_dernier) > 256:
+            _autojoin_dernier.clear()
+        _autojoin_dernier[adresse] = maintenant
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        e = _appairage_etat()
+        if not _appairage_ouvert(e, maintenant):
+            raise _refus_autojoin("appairage fermé : l'ouvrir sur le maître (Flotte)", adresse)
+        e["emis"] = int(e.get("emis", 0)) + 1
+        oubli.ecrire_atomique(_appairage_chemin(), e, 0o600)
+        emis = ml_token_generate(ttl=AUTOJOIN_TTL, token_type="autojoin", auto_approve=True)
+    _audit_jonction("autojoin_jeton_emis", adresse=adresse)
+    return {"token": emis["token"], "expires": emis["expires"], "maitre": get_lan_ip()}
+
+
+def _cles_a_valider() -> set:
+    try:
+        return {r.get("wg_public_key") for r in get_ml_requests()
+                if isinstance(r, dict) and r.get("a_valider") is True and r.get("wg_public_key")}
+    except (HTTPException, OSError, ValueError) as exc:
+        log.warning("registre des jonctions illisible : aucun badge « à valider » (%s)", exc.__class__.__name__)
+        return set()
+
+
+class ValiderRequest(BaseModel):
+    public_key: str
+
+
+@app.post("/master-link/valider")
+def ml_valider(req: ValiderRequest, user: dict = Depends(require_jwt)):
+    """Garde un pair entré par autojoin : le badge « à valider » disparaît (#3638). Exclure = « Oublier »."""
+    if not mesh.valid_wg_key(req.public_key):
+        raise HTTPException(status_code=400, detail="clé WireGuard invalide")
+    init_dirs()
+    with oubli.verrou(P2P_DIR):
+        requests = get_ml_requests()
+        cible = [r for r in requests if isinstance(r, dict) and r.get("wg_public_key") == req.public_key and r.get("a_valider")]
+        if not cible:
+            raise HTTPException(status_code=404, detail="aucun pair à valider pour cette clé")
+        for r in cible:
+            r.pop("a_valider", None)
+            r["valide_par"] = str(user.get("sub", "?"))[:64] if isinstance(user, dict) else "?"
+        save_ml_requests(requests)
+
+        def maj(state):
+            for p in state.get("peers") or []:
+                if isinstance(p, dict) and p.get("public_key") == req.public_key:
+                    p.pop("a_valider", None)
+        _maj(WG_MESH_CONFIG, maj, defaut=_wg_defaut())
+    _demander_relais()                    # exposé maintenant qu'il est validé
+    _audit_jonction("autojoin_valide", nom=str(cible[0].get("hostname", ""))[:64],
+                    acteur=str(user.get("sub", "?"))[:64] if isinstance(user, dict) else "?")
+    return {"ok": True, "valides": len(cible)}
+
+
 @app.post("/master-link/join")
 def ml_join(req: JoinRequest, request: Request):
     """Handle join request from new node (token validated).
@@ -2228,6 +2444,8 @@ def _ml_join(req: JoinRequest, request: Request):
         raise HTTPException(status_code=403, detail=validation.get("error", "Invalid token"))
 
     token_hash = validation.get("token_hash")
+    if validation.get("type") == "autojoin":
+        _autojoin_garde(req, token_hash)
     auto_approve = validation.get("auto_approve", False)
 
     # Get peer address from request if not provided
@@ -2297,6 +2515,11 @@ def _ml_join(req: JoinRequest, request: Request):
         "timestamp": now.isoformat(),
         "status": "pending"
     }
+    if validation.get("type") == "autojoin":
+        # #3638 : entrée pendant une fenêtre d'appairage — marquée « à valider » : WireGuard seul, aucune exposition
+        # publique (noms, ports, certificats) avant « Valider » dans la Flotte.
+        join_request["a_valider"] = True
+        _audit_jonction("jonction_autojoin", nom=nom, adresse=str(peer_address)[:45])
     _record_wg_identity(join_request, req)
 
     # Check global auto-approve or token auto-approve
@@ -2323,6 +2546,8 @@ def _ml_join(req: JoinRequest, request: Request):
 
         requests.append(join_request)
         save_ml_requests(requests)
+        if not join_request.get("a_valider"):
+            _demander_relais()            # pair neuf exposé tout de suite ; « à valider » : à la validation
 
         return {
             "success": True,
@@ -2470,6 +2695,8 @@ def _inscrire_au_transport(state: Dict, join_request: Dict, pk: str, ip: str) ->
         "fingerprint": join_request.get("fingerprint"),
         "added": datetime.utcnow().isoformat(),
     }
+    if join_request.get("a_valider") is True:
+        peer["a_valider"] = True          # #3638 : lu par le relais — rien d'exposé avant « Valider »
     ep = join_request.get("wg_endpoint")
     if ep:
         peer["endpoint"] = ep
@@ -2520,6 +2747,18 @@ def _provision(join_request: Dict) -> None:
             if lp.get("fingerprint") == join_request.get("fingerprint"):
                 lp["mesh_ip"] = join_request["mesh_ip"]
     _maj(PEERS_FILE, maj)
+
+
+RELAIS_DEMANDE = P2P_DIR / "relais.demande"
+
+
+def _demander_relais() -> None:
+    """Un pair vient d'entrer au maillage (#3638) : la synchronisation du relais est demandée tout de suite
+    (secubox-relais-maillage-demande.path), au lieu d'attendre l'heure. Marqueur vide ; un échec n'empêche rien."""
+    try:
+        RELAIS_DEMANDE.touch(exist_ok=True)
+    except OSError as e:
+        log.warning("demande de synchronisation du relais non posée : %s", e)
 
 
 def _record_wg_identity(join_request: Dict, req: "JoinRequest") -> None:

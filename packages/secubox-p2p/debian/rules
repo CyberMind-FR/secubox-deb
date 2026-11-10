@@ -33,6 +33,8 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-p2p/usr/sbin $(CURDIR)/debian/secubox-p2p/lib/systemd/system
 	install -m 755 $(CURDIR)/sbin/secubox-automesh $(CURDIR)/debian/secubox-p2p/usr/sbin/secubox-automesh
 	install -m 644 $(CURDIR)/systemd/secubox-automesh.service $(CURDIR)/systemd/secubox-automesh.timer $(CURDIR)/debian/secubox-p2p/lib/systemd/system/
+	# Autojoin (#3638) : commande de la box derrière un maître SecuBox (fenêtre d'appairage ouverte sur le maître)
+	install -m 755 $(CURDIR)/sbin/secubox-autojoin $(CURDIR)/debian/secubox-p2p/usr/sbin/secubox-autojoin
 	# Install systemd service
 	install -d $(CURDIR)/debian/secubox-p2p/usr/lib/systemd/system
 	install -m 644 $(CURDIR)/debian/secubox-p2p.service $(CURDIR)/debian/secubox-p2p/usr/lib/systemd/system/
@@ -76,6 +78,7 @@ override_dh_auto_install:
 	for u in secubox-p2p-mesh.path secubox-p2p-mesh.service \
 	         secubox-p2p-mesh-liveness.service secubox-p2p-mesh-liveness.timer \
 	         secubox-relais-maillage.service secubox-relais-maillage.timer \
+	         secubox-relais-maillage-demande.path secubox-relais-maillage-demande.service \
 	         secubox-maillage-pairs.service secubox-maillage-pairs.timer; do \
 		install -m 644 $(CURDIR)/systemd/$$u $(CURDIR)/debian/secubox-p2p/lib/systemd/system/; \
 	done

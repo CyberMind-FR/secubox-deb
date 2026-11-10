@@ -12,6 +12,11 @@ case "$1" in
             printf 'map $p2p_pair_maille $p2p_pair_cle {\n    default "";\n}\n' > /etc/nginx/secubox-p2p-pair.conf
             chmod 0600 /etc/nginx/secubox-p2p-pair.conf
         fi
+        # #3638 : le vhost 7331 lit aussi $p2p_enrol_cle ; une map d'avant ne la définit pas — vide en attendant le postinst.
+        if [ -f /etc/nginx/secubox-p2p-pair.conf ] && [ ! -L /etc/nginx/secubox-p2p-pair.conf ] && \
+           ! grep -q 'p2p_enrol_cle' /etc/nginx/secubox-p2p-pair.conf; then
+            printf 'map $p2p_pair_maille $p2p_enrol_cle {\n    default "";\n}\n' >> /etc/nginx/secubox-p2p-pair.conf
+        fi
         ;;
 esac
 exit 0

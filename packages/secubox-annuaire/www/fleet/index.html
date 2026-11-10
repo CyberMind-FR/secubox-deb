@@ -138,6 +138,10 @@
         </div>
         <div class="pan" id="p2p-pan" hidden><h3>Pairs p2p <i><span id="p2p-n">0</span> sur wg-mesh, statut mesuré par poignée de main</i></h3>
             <div class="tw"><table class="matrix"><thead><tr><th>Pair</th><th>Adresse</th><th>Statut</th><th>Dernier vu</th><th></th></tr></thead><tbody id="p2p-body"></tbody></table></div>
+            <p class="pb-detail" id="appairage">Appairage : <span id="appairage-etat">—</span>
+                <button class="btn sm" type="button" id="appairage-ouvrir">Ouvrir l’appairage (15 min)</button>
+                <button class="btn sm" type="button" id="appairage-fermer" hidden>Fermer</button>
+                <span class="pb-detail">puis, sur la box branchée derrière ce maître : <code>secubox-autojoin</code></span></p>
         </div>
         <div class="pan" id="al-pan" hidden><h3>Box Auto-Load <i><span id="al-n">0</span> enrôlée(s), tunnel wg-autoload, sans annuaire</i></h3>
             <div class="tw"><table class="matrix"><thead><tr><th>Client</th><th>Profil</th><th>Statut</th><th>Progression</th><th>Étape</th><th>Dernière activité</th></tr></thead><tbody id="al-body"></tbody></table></div>
@@ -301,6 +305,13 @@
                 const tr = el('tr', 'node-row'), st = el('td'), dot = el('span', 'dot ' + (p.status === 'online' ? 'ok' : 'stale'));
                 st.append(dot, el('span', null, ' ' + (p.status || '—')));
                 const act = el('td');
+                // #3638 : entré par autojoin pendant une fenêtre d'appairage — Valider l'expose ; Oublier le retire (une fenêtre fermée empêche son retour).
+                if (p.a_valider === true && p.public_key) {
+                    st.append(el('span', null, ' '), el('span', 'pill down', 'à valider'));
+                    const bv = el('button', 'btn sm', 'Valider'); bv.type = 'button';
+                    bv.addEventListener('click', () => validerPair(p.public_key, bv));
+                    act.append(bv, el('span', null, ' '));
+                }
                 if (p.name && /^[a-z0-9][a-z0-9-]{0,62}$/.test(p.name)) {
                     const bt = el('button', 'btn sm danger', 'Oublier'); bt.type = 'button';
                     bt.addEventListener('click', () => oublierNoeud(p.name, act, p.public_key));
@@ -756,6 +767,37 @@
         window.addEventListener('pagehide', pbFermerFlux);
         setInterval(() => { if (pbBoite) pbMaj(); }, 15000);      // fin d'une session de support annoncée : le catalogue disparaît sans attendre
         setInterval(() => { if (pbBoite && !pbOpsEnCours && document.visibilityState !== 'hidden') pbOperations(); }, 10000);   // #3308 : journal relu même si la vue en direct est coupée
+        // #3638 : fenêtre d'appairage du maître — fermée par défaut ; pendant qu'elle est ouverte, 5 box au plus entrent « à valider ».
+        async function chargerAppairage() {
+            const etat = $('appairage-etat'), ouvrir = $('appairage-ouvrir'), fermer = $('appairage-fermer');
+            if (DEMO) { etat.textContent = 'fermé'; return; }
+            try {
+                const r = await pbFetch('/api/v1/p2p/master-link/appairage');
+                if (!r.ok) { $('appairage').hidden = true; return; }
+                const d = await r.json();
+                $('appairage').hidden = false;
+                etat.textContent = d.ouvert ? 'ouvert jusqu’à ' + new Date(Number(d.jusqu_a) * 1000).toLocaleTimeString('fr-FR') + ' (' + (d.max - d.emis) + ' box restantes)' : 'fermé';
+                ouvrir.hidden = !!d.ouvert; fermer.hidden = !d.ouvert;
+            } catch (e) { $('appairage').hidden = true; }
+        }
+        async function basculerAppairage(ouvrir) {
+            try {
+                const r = await pbFetch('/api/v1/p2p/master-link/appairage', ouvrir
+                    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: 15 }) }
+                    : { method: 'DELETE' });
+                if (!r.ok) $('appairage-etat').textContent = 'échec : ' + await pbErreur(r);
+            } catch (e) { $('appairage-etat').textContent = 'échec : ' + e.message; }
+            chargerAppairage();
+        }
+        // #3638 : garder un pair entré par autojoin (le badge « à valider » disparaît). Audité côté p2p.
+        async function validerPair(cle, bouton) {
+            bouton.disabled = true;
+            try {
+                const r = await pbFetch('/api/v1/p2p/master-link/valider', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ public_key: cle }) });
+                if (!r.ok) { bouton.textContent = 'Échec'; bouton.title = await pbErreur(r); bouton.disabled = false; return; }
+                chargerP2p(true);
+            } catch (e) { bouton.textContent = 'Échec'; bouton.title = e.message; bouton.disabled = false; }
+        }
         // #3335 : « Oublier ce nœud » — nœud obsolète (réinstallé, retiré) : le registre des pairs et wg-mesh (secubox-p2p), puis la
         // Flotte du pilotage (boites, inventaire). Confirmation dans la ligne : le nom retapé ; un nœud encore actif exige « forcer ».
         function oublierNoeud(nom, td, cle) {
@@ -800,7 +842,7 @@
         // ===== fin pilotage-box =====
 
         async function loadFleet() {
-            chargerAutoload(); chargerP2p();
+            chargerAutoload(); chargerP2p(); chargerAppairage();
             try {
                 const d = await J('/fleet');
                 rendreNoeuds(d.nodes || [], d.erreur ? 'lecture en échec côté nœud' : null);
@@ -816,6 +858,8 @@
         window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
         if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.querySelector('.cadre'));
         $('btn-refresh').addEventListener('click', () => { loadFleet(); chargerPilotage(); });
+        $('appairage-ouvrir').addEventListener('click', () => basculerAppairage(true));
+        $('appairage-fermer').addEventListener('click', () => basculerAppairage(false));
 
         function demo() {
             const t = new Date(Date.now() - 20000).toISOString(), vieux = new Date(Date.now() - 3600 * 1000 * 5).toISOString();

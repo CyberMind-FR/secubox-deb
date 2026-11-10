@@ -185,6 +185,11 @@ Un nœud sans accès Internet (ex. gk3) est servi par un nœud qui en a un (ex. 
 
 Un nom relayé vers un pair qui, joint avec succès, ne le publie plus est retiré (vhost, route, Hall du parc) ; un pair injoignable garde ses noms (#3132).
 
+Apparitions et disparitions (#3638) :
+- un pair sans webos ni plan du pilotage (box en profil mobile) est exposé par `admin.<box>` (nom de sa jonction dans `wg_mesh.json`), s'il répond ; jamais si le plan du pilotage est rejeté ou désigne une autre box ;
+- un pair dont la dernière poignée de main a plus de `retrait_disparus_h` heures (72 par défaut, `0` : jamais ; une poignée à 0 après remontée de l'interface vaut « inconnu ») perd ses noms et ports relayés ; il reste dans le maillage (l'oublier reste un geste de l'administrateur) et retrouve ses noms à son retour ;
+- une jonction d'un pair neuf (ou sa validation) pose `/var/lib/secubox/p2p/relais.demande` : `secubox-relais-maillage-demande.path` lance la synchronisation sans attendre l'heure (au plus une passe ainsi déclenchée toutes les 5 min) ; un pair « à valider » n'est jamais exposé.
+
 Un seul certificat joker `*.<domaine-du-pair>` est émis par DNS-01 (acme.sh + Gandi LiveDNS), renouvelé comme `*.gk2.secubox.in`.
 
 Réglages facultatifs, `/etc/secubox/relais-maillage.toml` :
@@ -193,9 +198,21 @@ Réglages facultatifs, `/etc/secubox/relais-maillage.toml` :
 auto = true                  # false : plus d'exposition automatique
 exclure = ["wpad", "boot"]   # services jamais relayés
 services_des_pairs = "tous"  # "communs" : seulement les services que le relais expose lui-même
+retrait_disparus_h = 72      # pair muet depuis N heures : noms et ports retirés (0 : jamais)
 ```
 
 Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'est ce qui permet à un pair de servir ses services sous son propre domaine.
+
+## Autojoin derrière un maître SecuBox (#3638)
+
+Faire entrer une box branchée DERRIÈRE un maître, sans jeton à recopier :
+
+1. sur le maître, page **Flotte** → « Ouvrir l'appairage (15 min) » (`POST /api/v1/p2p/master-link/appairage`, administrateur ; 1 à 60 min, 5 box au plus) ;
+2. sur la box, en root : `secubox-autojoin` (rien si elle est déjà maillée ou maître de ses propres pairs).
+
+La box demande un jeton à sa passerelle (`POST http://<passerelle>:7331/api/v1/p2p/master-link/autojoin`), le dépose dans `automesh.code` et lance `secubox-automesh`. Le maître ne délivre ce jeton (usage unique, 5 min) que si : l'en-tête `X-SecuBox-Enrol-Cle` porte le secret de son écouteur 7331 (un en-tête forgé par une autre route ne vaut rien), l'adresse est dans un réseau qu'il relie directement hors WAN (ponts de conteneurs et tunnels exclus), et la fenêtre est ouverte. Un jeton d'autojoin n'entre jamais à la place d'une empreinte, d'une clé ou d'un nom déjà inscrits, ni sous un nom réservé.
+
+La box entre **« à valider »** : WireGuard seul, aucun nom public, port ni certificat. Flotte : **Valider** (`POST /master-link/valider`, administrateur) l'expose ; **Oublier** l'exclut. Audit : `appairage_ouvert`, `appairage_ferme`, `autojoin_jeton_emis`, `jonction_autojoin`, `jonction_autojoin_refusee`, `autojoin_valide`.
 
 ## Association automatique au maillage (#3100)
 

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — synchronisation du relais dès qu'un pair entre au maillage (#3638)
+
+[Path]
+# Posé par l'API p2p (compte secubox) à chaque inscription d'un pair ; retiré par l'unité avant la passe.
+PathExists=/var/lib/secubox/p2p/relais.demande
+Unit=secubox-relais-maillage-demande.service
+
+[Install]
+WantedBy=paths.target
