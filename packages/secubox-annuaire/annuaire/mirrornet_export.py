@@ -39,6 +39,7 @@ _OPS_ABONNEMENT = {"service_subscribe", "service_approve", "service_reject", "se
 OFFRES_PAR_FOURNISSEUR = 64          # plafond (déni de service : un pair qui inonde le journal de ses offres)
 ABONNEMENTS_PAR_ABONNE = 32
 VERSIONS_PAR_JEU = 16
+RETRAITS_PAR_JEU = 64
 
 
 def hauteur_pertinente(journal) -> int:
@@ -105,6 +106,21 @@ def construire(journal, soi: Optional[str], joignabilite_ip: Dict[str, Dict[str,
                 and fournisseur.get(p.get("service_id")) == e["author"] and forme_valide(e["op"], p, e["author"])):
             versions.setdefault(p["service_id"], []).append(i)
     versions_gardees = {i for liste in versions.values() for i in liste[-VERSIONS_PAR_JEU:]}
+    # Retraits : UN par (jeu, empreinte), seulement d'une version que le propriétaire a publiée, au plus
+    # RETRAITS_PAR_JEU par jeu (les plus récents) — un pair ne gonfle pas l'export à coups de retraits.
+    publiees = {(entrees[i]["payload"]["service_id"], entrees[i]["payload"].get("empreinte"))
+                for liste in versions.values() for i in liste}
+    vus: Dict[tuple, int] = {}
+    for i, e in enumerate(entrees):
+        p = e["payload"]
+        cle = (p.get("service_id"), p.get("empreinte"))
+        if (e["op"] == "service_dataset_retract" and cle in publiees and fournisseur.get(cle[0]) == e["author"]
+                and forme_valide(e["op"], p, e["author"])):
+            vus.setdefault(cle, i)
+    par_jeu: Dict[str, List[int]] = {}
+    for (sid, _emp), i in vus.items():
+        par_jeu.setdefault(sid, []).append(i)
+    retraits_gardes = {i for liste in par_jeu.values() for i in sorted(liste)[-RETRAITS_PAR_JEU:]}
     gardees = []
     for i, e in enumerate(entrees):
         op, p = e["op"], e["payload"]
@@ -112,8 +128,7 @@ def construire(journal, soi: Optional[str], joignabilite_ip: Dict[str, Dict[str,
             if i in versions_gardees:
                 gardees.append(e)
         elif op == "service_dataset_retract":
-            if (p.get("service_id") in gardes and fournisseur.get(p.get("service_id")) == e["author"]
-                    and forme_valide(op, p, e["author"])):
+            if i in retraits_gardes:
                 gardees.append(e)
         elif op in ("service_offer", "service_revoke_offer"):
             if derniere.get((op, p.get("service_id"))) == i:

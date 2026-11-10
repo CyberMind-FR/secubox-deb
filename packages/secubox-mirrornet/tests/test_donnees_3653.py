@@ -42,6 +42,13 @@ def retrait(n, sid, data):
                                                "empreinte": b2(data), "motif": "", "retracted_at": T0.isoformat()})
 
 
+@pytest.fixture(autouse=True)
+def _reprise_vierge():
+    transfert._REPRISE.clear()
+    yield
+    transfert._REPRISE.clear()
+
+
 @pytest.fixture
 def cx(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "OBJETS", tmp_path / "objets")
@@ -153,6 +160,7 @@ def test_reception_verifiee_et_rangement(cx, monkeypatch):
     catalogue.synchroniser(cx, ex, T0)
     st = transfert.tirer(cx, REG, flux=lambda url: iter([b"v4 falsifie"]))
     assert st["refusees"] == 1 and not objets.present(b2(b"v4"))
+    transfert._REPRISE.clear()                                  # délai de reprise écoulé
     transfert.tirer(cx, REG, flux=flux)
     assert objets.present(b2(b"v4")) and objets.present(b2(b"v3"))
     # Retrait : supprimé chez l'abonné.
@@ -229,8 +237,10 @@ def test_depot_trop_volumineux(api, monkeypatch):
     assert [p for p in objets.dossier().iterdir()] == []
 
 
-def test_service_aux_pairs(api):
+def test_service_aux_pairs(api, monkeypatch):
     main, tmp = api
+    monkeypatch.setattr(main, "_preuve_maillage", lambda: "ab" * 32)
+    P = {"X-SecuBox-Pair-Preuve": "ab" * 32}
     moi, a = Noeud("gk6"), Noeud("gk12")
     sid, _sub, ex = _jeu(moi, a, moi, [b"v1"])
     (tmp / "export.json").write_text(json.dumps(ex))
@@ -238,10 +248,80 @@ def test_service_aux_pairs(api):
     objets.ecrire([b"v1"], 100)
     c = TestClient(main.app)
     url = f"/pair/objets/{b2(b'v1')}"
-    r = c.get(url, headers={"X-SecuBox-Pair-IP": "10.10.0.7"})
+    r = c.get(url, headers=dict(P, **{"X-SecuBox-Pair-IP": "10.10.0.7"}))
     assert r.status_code == 200 and r.content == b"v1"
-    assert c.get(url, headers={"X-SecuBox-Pair-IP": "10.10.0.9"}).status_code == 404
+    # Adresse forgée par un appelant local SANS la preuve posée par nginx : refusée.
+    assert c.get(url, headers={"X-SecuBox-Pair-IP": "10.10.0.7"}).status_code == 404
+    assert c.get(url, headers={"X-SecuBox-Pair-IP": "10.10.0.7", "X-SecuBox-Pair-Preuve": "cd" * 32}).status_code == 404
+    assert c.get(url, headers=dict(P, **{"X-SecuBox-Pair-IP": "10.10.0.9"})).status_code == 404
     assert c.get(url).status_code == 404                                      # sans adresse posée par l'écouteur
-    assert c.get("/pair/objets/..%2F..%2Fetc%2Fpasswd", headers={"X-SecuBox-Pair-IP": "10.10.0.7"}).status_code == 404
+    assert c.get("/pair/objets/..%2F..%2Fetc%2Fpasswd", headers=dict(P, **{"X-SecuBox-Pair-IP": "10.10.0.7"})).status_code == 404
+    monkeypatch.setattr(main, "_preuve_maillage", lambda: "")                  # credential absente : route fermée
+    assert c.get(url, headers=dict(P, **{"X-SecuBox-Pair-IP": "10.10.0.7"})).status_code == 404
     # Jamais joignable par le préfixe d'administration.
     assert c.get(f"/api/v1/mirrornet/pair/objets/{b2(b'v1')}").status_code == 404
+
+
+# --- relecture de sécurité ---------------------------------------------------------------------------------------------
+
+def test_retrait_d_une_version_sortie_de_l_export(cx):
+    f, a = Noeud("gk6"), Noeud("gk12")
+    sid, _sub, ex = _jeu(f, a, a, [b"v1", b"v2"])
+    catalogue.synchroniser(cx, ex, T0)
+    v1 = next(e for e in ex["entrees"] if e["op"] == "service_dataset_version" and e["payload"]["numero"] == 1)
+    ex["entrees"].remove(v1)                                       # sortie du plafond de l'export
+    ex["entrees"].append(retrait(f, sid, b"v1"))
+    catalogue.synchroniser(cx, ex, T0)
+    assert cx.execute("SELECT retiree FROM dataset_version WHERE numero = 1").fetchone()[0] == 1
+
+
+def test_classe_de_version_coherente_avec_l_offre(cx):
+    f, a = Noeud("gk6"), Noeud("gk12")
+    o = offre(f, kind="dataset", classe="communaute")
+    sid = o["payload"]["service_id"]
+    ex = export(a, [o, version(f, sid, 1, b"moins strict", classe="public"),
+                    version(f, sid, 2, b"pro sans approbation", classe="professionnel", dp="base_legale:contrat-12")],
+                [(f, "LIMITED"), (a, "LIMITED")])
+    st = catalogue.synchroniser(cx, ex, T0)
+    assert st.get("versions", 0) == 0 and st["rejetees"] >= 2
+
+
+def test_echec_differe_et_pas_de_reessai_immediat(cx):
+    transfert._REPRISE.clear()
+    f, moi = Noeud("gk6"), Noeud("gk12")
+    _sid, _sub, ex = _jeu(f, moi, moi, [b"v1"])
+    catalogue.synchroniser(cx, ex, T0)
+    appels = []
+
+    def faux(url):
+        appels.append(url)
+        yield b"falsifie"
+    transfert.tirer(cx, REG, flux=faux)
+    transfert.tirer(cx, REG, flux=faux)
+    assert len(appels) == 1 and not transfert._permis(b2(b"v1"))
+    transfert._REPRISE.clear()
+
+
+def test_purge_des_orphelins_anciens(cx):
+    e, t = objets.ecrire([b"orphelin"], 100)
+    cx.execute("INSERT INTO objet(empreinte, taille, source, stocke_le) VALUES (?,?,?,?)",
+               (e, t, "soi", "2026-01-01T00:00:00+00:00"))
+    assert transfert.ranger(cx, 3) == 1 and not objets.present(e)
+
+
+def test_depot_exige_content_length_et_garde_l_objet_si_indetermine(api, monkeypatch):
+    main, tmp = api
+    moi, a = Noeud("gk6"), Noeud("gk12")
+    sid, _sub, ex = _jeu(moi, a, moi, [])
+    (tmp / "export.json").write_text(json.dumps(ex))
+    main.synchroniser_maintenant()
+    c = TestClient(main.app)
+    q = "format=bin&licence=CC0-1.0&provenance=banc&classe=public"
+
+    def blocs():
+        yield b"par blocs"
+    assert c.post(f"/api/v1/mirrornet/datasets/{sid}/versions?{q}", content=blocs()).status_code == 411
+    monkeypatch.setattr(main.annuaire, "appeler", lambda *a, **k: (504, {"detail": "annuaire sans réponse"}))
+    r = c.post(f"/api/v1/mirrornet/datasets/{sid}/versions?{q}", content=b"peut-etre publie",
+               headers={"X-Idempotence": "cle-depot-indet"})
+    assert r.status_code == 504 and objets.present(b2(b"peut-etre publie"))

@@ -9,12 +9,16 @@ case "$1" in
         if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
             apparmor_parser -R /etc/apparmor.d/secubox-mirrornet 2>/dev/null || true
         fi
+        # Routes maillées des objets (#3653) : rendues par le postinst, retirées avec le paquet.
+        rm -f /etc/nginx/secubox-mesh.d/mirrornet.conf
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload || true
             if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
         fi
         ;;
     purge)
+        rm -f /etc/nginx/secubox-mesh.d/mirrornet.conf
+        [ -L /etc/secubox/secrets/mirrornet ] || rm -rf /etc/secubox/secrets/mirrornet
         # La base contient le ledger de ce nœud, qui ne se reconstruit pas : copie datée (0600 root) AVANT retrait, et
         # retrait SEULEMENT si la copie a réussi (disque plein : le dossier reste, l'administrateur est prévenu).
         if [ -d /var/lib/secubox-mirrornet ] && [ ! -L /var/lib/secubox-mirrornet ]; then

@@ -25,6 +25,9 @@ ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/mirrornet
 # Ledger privé (MIRRORNET_ECONOMY.md § 8) : base et WAL lisibles par le seul compte du service, jamais par le groupe
 # secubox (modules, agrégateur). La socket est remise en 0660 explicitement par ExecStartPost.
 UMask=0077
+# Preuve de l'écouteur maillé (#3653) : secret root seul, copié par systemd dans le dossier privé de credentials du
+# service ; le profil AppArmor continue d'interdire tout /etc/secubox/secrets.
+LoadCredential=pair-preuve:/etc/secubox/secrets/mirrornet/pair.preuve
 AppArmorProfile=-secubox-mirrornet
 StateDirectory=secubox-mirrornet
 StateDirectoryMode=0700

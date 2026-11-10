@@ -19,6 +19,7 @@ override_dh_auto_install:
 	install -m 644 secubox_mirrornet/*.py $(P)/usr/lib/secubox/mirrornet/secubox_mirrornet/
 	install -d $(P)/usr/share/secubox/mirrornet
 	install -m 644 conf/mirrornet.toml $(P)/usr/share/secubox/mirrornet/mirrornet.toml.example
+	install -m 644 nginx/mirrornet-maillage.conf.tpl $(P)/usr/share/secubox/mirrornet/
 	install -d $(P)/usr/lib/systemd/system
 	install -m 644 debian/secubox-mirrornet.service $(P)/usr/lib/systemd/system/
 	install -d $(P)/etc/apparmor.d

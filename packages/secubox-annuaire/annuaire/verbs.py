@@ -1803,6 +1803,14 @@ def publish_dataset_version(journal: Journal, provider_priv: bytes, provider_did
         raise PermissionError("seul le fournisseur publie une version de son jeu de données")
     if offre.get("kind") != "dataset":
         raise ValueError("l'offre n'est pas un jeu de données (kind=dataset)")
+    # #3653 (relecture) : la classe d'une version n'est jamais MOINS stricte que celle de l'offre ; spécialisé et
+    # professionnel exigent une offre en approbation manuelle (le fournisseur choisit qui reçoit).
+    rang = {c: i for i, c in enumerate(("public", "communaute", "specialise", "professionnel", "prive"))}
+    classe = manifeste.get("classe")
+    if rang.get(classe, -1) < rang.get(offre.get("classe") or "public", 0):
+        raise ValueError(f"classe de la version ({classe}) moins stricte que celle de l'offre ({offre.get('classe') or 'public'})")
+    if classe in ("specialise", "professionnel") and offre.get("approval_mode") != "pending":
+        raise ValueError("classe spécialisé ou professionnel : l'offre doit être en approbation manuelle")
     precedentes = dataset_versions(journal, service_id)
     if any(v.get("empreinte") == manifeste.get("empreinte") for v in precedentes):
         raise ValueError("version déjà publiée (même empreinte)")

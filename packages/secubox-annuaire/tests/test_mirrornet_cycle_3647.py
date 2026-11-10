@@ -486,3 +486,30 @@ def test_export_garde_les_versions_et_les_retraits(j):
     # Réétiquetage d'une version en retrait : forme refusée à l'import.
     vraie = versions[-1]
     assert not V.forme_valide("service_dataset_retract", vraie["payload"], vraie["author"])
+
+
+def test_classe_de_version_jamais_moins_stricte_3653(j):
+    pf, _, df = _membre(j)
+    o = V.offer_service(j, pf, df, name="J", kind="dataset", endpoint="mirrornet://x", classe="communaute",
+                        approval_mode="auto")
+    with pytest.raises(ValueError, match="moins stricte"):
+        V.publish_dataset_version(j, pf, df, o.service_id, empreinte=_b2(b"a"), taille=1, **MANIF)
+    with pytest.raises(ValueError, match="approbation manuelle"):
+        V.publish_dataset_version(j, pf, df, o.service_id, empreinte=_b2(b"b"), taille=1,
+                                  **dict(MANIF, classe="professionnel"), donnees_personnelles="base_legale:contrat-1")
+    V.publish_dataset_version(j, pf, df, o.service_id, empreinte=_b2(b"c"), taille=1, **dict(MANIF, classe="communaute"))
+
+
+def test_retraits_un_par_version_connue_3653(j):
+    pf, _, df = _membre(j)
+    _pa, _, da = _membre(j)
+    o = V.offer_service(j, pf, df, name="J", kind="dataset", endpoint="mirrornet://x")
+    V.publish_dataset_version(j, pf, df, o.service_id, empreinte=_b2(b"1"), taille=1, **MANIF)
+    V.retract_dataset_version(j, pf, df, o.service_id, _b2(b"1"))
+    for i in range(5):                                                   # retraits répétés ou de versions inconnues
+        V._signer_et_ajouter(j, pf, df, Op.SERVICE_DATASET_RETRACT, "DatasetRetract",
+                             {"op": "service_dataset_retract", "service_id": o.service_id, "provider": df,
+                              "empreinte": _b2(str(i % 2 + 7).encode()) if i else _b2(b"1"), "motif": "",
+                              "retracted_at": f"2026-11-10T00:00:0{i}+00:00"})
+    ex = MX.construire(j, da, {})
+    assert len([e for e in ex["entrees"] if e["op"] == "service_dataset_retract"]) == 1

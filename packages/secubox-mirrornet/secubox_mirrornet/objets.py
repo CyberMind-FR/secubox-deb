@@ -12,6 +12,7 @@ renommage atomique seulement si l'empreinte attendue (quand il y en a une) corre
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 import shutil
@@ -23,6 +24,7 @@ from typing import Iterable, Optional, Tuple
 from . import config
 
 EMPREINTE = re.compile(r"^b2:[0-9a-f]{64}$")
+log = logging.getLogger("secubox-mirrornet")
 
 
 class RefusObjet(Exception):
@@ -117,12 +119,18 @@ def noter(cx: sqlite3.Connection, empreinte: str, taille: int, source: str) -> N
                (empreinte, taille, source, datetime.now(timezone.utc).isoformat()))
 
 
-def supprimer(cx: sqlite3.Connection, empreinte: str) -> None:
+def supprimer(cx: sqlite3.Connection, empreinte: str) -> bool:
+    """Efface l'objet et sa ligne ; un échec (autre que « déjà absent ») est journalisé et la ligne GARDÉE, pour un
+    nouvel essai à la passe suivante. Rend True quand l'objet n'est plus sur disque."""
     try:
         chemin(empreinte).unlink()
-    except (OSError, RefusObjet):
+    except FileNotFoundError:
         pass
+    except (OSError, RefusObjet) as e:
+        log.warning("mirrornet : objet %s non effacé : %s", empreinte[:19], e)
+        return False
     cx.execute("DELETE FROM objet WHERE empreinte = ?", (empreinte,))
+    return True
 
 
 def nettoyer_temporaires() -> None:
@@ -130,5 +138,5 @@ def nettoyer_temporaires() -> None:
     for p in dossier().glob(".recu.*"):
         try:
             p.unlink()
-        except OSError:
-            pass
+        except OSError as e:
+            log.warning("mirrornet : temporaire %s non effacé : %s", p.name, e)

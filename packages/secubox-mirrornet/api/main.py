@@ -15,8 +15,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import hmac
 import json
 import logging
+import os
 import platform
 import re
 import sqlite3
@@ -134,19 +136,30 @@ async def _boucle_synchro() -> None:
             res = await asyncio.to_thread(synchroniser_maintenant)
             if res.get("transitions"):
                 log.info("mirrornet : %s changement(s) d'état d'abonnement", res["transitions"])
-            await asyncio.to_thread(tirer_maintenant)
         except Exception as e:  # noqa: BLE001 — la boucle ne meurt pas, mais elle le dit
             log.warning("mirrornet : passe de synchronisation en échec : %s", e)
         await asyncio.sleep(config.reglages()["intervalle_s"])
 
 
+async def _boucle_reception() -> None:
+    """Réception des versions dans SA tâche (#3653, relecture) : un fournisseur lent ne retarde jamais les transitions
+    d'abonnement (échéance, grâce) de la boucle de synchronisation."""
+    while True:
+        await asyncio.sleep(config.reglages()["intervalle_s"])
+        try:
+            await asyncio.to_thread(tirer_maintenant)
+        except Exception as e:  # noqa: BLE001
+            log.warning("mirrornet : passe de réception en échec : %s", e)
+
+
 @contextlib.asynccontextmanager
 async def _vie(_app: FastAPI):
-    tache = asyncio.create_task(_boucle_synchro())
+    taches = [asyncio.create_task(_boucle_synchro()), asyncio.create_task(_boucle_reception())]
     try:
         yield
     finally:
-        tache.cancel()
+        for t in taches:
+            t.cancel()
 
 
 # --- lecture --------------------------------------------------------------------------------------------------------
@@ -438,6 +451,7 @@ def _relayer(request: Request, chemin: str, corps: Optional[Dict[str, Any]], cle
     la clé d'idempotence : une reprise ne le fait jamais signer une seconde fois, même si la suite échoue."""
     statut, rep = annuaire.appeler(chemin, corps, _jeton(request))
     if statut >= 500 and statut != 503:
+        request.state.signe = True                     # indéterminé : rien ne sera libéré ni effacé
         # 504 (sans réponse) ou toute autre 5xx de l'annuaire : le geste a PU être signé. Seuls 503 (connexion
         # impossible) et les refus 4xx libèrent la clé ; ici la réponse est gardée, jamais rejouée vers l'annuaire.
         detail = (rep.get("detail") if isinstance(rep, dict) else None) or f"annuaire : HTTP {statut}"
@@ -637,16 +651,19 @@ async def deposer(service_id: str, request: Request,
     offre = await asyncio.to_thread(_lignes, _SQL_OFFRE + " WHERE o.ref_annuaire = ?", (service_id,))
     if not offre or offre[0]["kind"] != "dataset" or offre[0]["fournisseur_did"] != await asyncio.to_thread(_soi):
         raise HTTPException(404, "jeu de données de ce nœud inconnu (offre kind=dataset publiée par ce nœud)")
-    deja = await asyncio.to_thread(_idempotent, x_idempotence, "deposer", service_id)
-    if deja is not None:
-        return deja
+    annoncee = request.headers.get("content-length")
+    if annoncee is None or not annoncee.isdigit():
+        raise HTTPException(411, "Content-Length requis (pas d'envoi par blocs) : la place disque est vérifiée d'avance")
     reg = config.reglages()
     taille_max = reg["taille_max_mo"] * 1024 * 1024
-    annoncee = request.headers.get("content-length")
+    if int(annoncee) > taille_max:
+        raise HTTPException(413, f"objet trop volumineux (plafond {reg['taille_max_mo']} Mio)")
+    cible = "|".join((service_id, format, licence, classe, donnees_personnelles, str(fraicheur_s), annoncee, provenance))
+    deja = await asyncio.to_thread(_idempotent, x_idempotence, "deposer", hashlib.sha256(cible.encode()).hexdigest()[:32])
+    if deja is not None:
+        return deja
     try:
-        if annoncee is not None and int(annoncee) > taille_max:
-            raise HTTPException(413, f"objet trop volumineux (plafond {reg['taille_max_mo']} Mio)")
-        await asyncio.to_thread(objets.verifier_espace, int(annoncee or 0), reg["reserve_mo"])
+        await asyncio.to_thread(objets.verifier_espace, int(annoncee), reg["reserve_mo"])
         ecrivain = await asyncio.to_thread(objets.Ecrivain, taille_max)
         try:
             async for m in request.stream():              # écrit au fil de l'eau : jamais tout le corps en mémoire
@@ -655,7 +672,7 @@ async def deposer(service_id: str, request: Request,
         except BaseException:
             await asyncio.to_thread(ecrivain.abandonner)
             raise
-        empreinte, taille = await asyncio.to_thread(ecrivain.terminer)
+        empreinte, taille = await asyncio.to_thread(ecrivain.terminer, None, int(annoncee))
     except objets.RefusObjet as e:
         await asyncio.to_thread(_liberer, x_idempotence)
         raise HTTPException(507 if "espace" in str(e) else 413, str(e)) from None
@@ -667,10 +684,12 @@ async def deposer(service_id: str, request: Request,
     if fraicheur_s:
         manifeste["fraicheur_s"] = fraicheur_s
     try:
-        with _geste(x_idempotence, request):
-            rep = await asyncio.to_thread(_relayer, request, f"/self/dataset/{service_id}/version", manifeste, x_idempotence)
+        rep = await asyncio.to_thread(_relayer, request, f"/self/dataset/{service_id}/version", manifeste, x_idempotence)
     except BaseException:
+        # Réservation libérée et objet effacé SEULEMENT sur un refus certain (rien de signé). Indéterminé (5xx) : l'objet
+        # reste (l'annuaire a peut-être publié la version) ; ranger() l'efface après un jour s'il n'est cité par rien.
         if not getattr(request.state, "signe", False):
+            await asyncio.to_thread(_liberer, x_idempotence)
             await asyncio.to_thread(_effacer_si_orphelin, empreinte)
         raise
     await asyncio.to_thread(_noter_objet, empreinte, taille)
@@ -712,6 +731,18 @@ def retirer(service_id: str, req: Retrait, request: Request, x_idempotence: Opti
         return _relayer(request, f"/self/dataset/{service_id}/retract", req.model_dump(), x_idempotence)
 
 
+def _preuve_maillage() -> str:
+    """Secret de l'écouteur maillé, remis par systemd (LoadCredential=pair-preuve) ; absent : route fermée."""
+    d = os.environ.get("CREDENTIALS_DIRECTORY")
+    if not d:
+        return ""
+    try:
+        v = Path(d, "pair-preuve").read_text(encoding="ascii").strip()
+    except OSError:
+        return ""
+    return v if re.fullmatch(r"[0-9a-f]{64}", v) else ""
+
+
 pair = APIRouter()
 
 
@@ -721,6 +752,10 @@ def servir_objet(empreinte: str, request: Request):
     X-SecuBox-Pair-IP ($remote_addr) — jamais par l'hôte d'administration (préfixe /api/v1/mirrornet/ seulement).
     Abonnement Actif du pair à une version non retirée de CE nœud, classe autre que « privé » ; sinon 404 sans détail."""
     if not objets.EMPREINTE.match(empreinte):
+        raise HTTPException(404, "objet inconnu")
+    preuve, attendue = request.headers.get("x-secubox-pair-preuve", ""), _preuve_maillage()
+    if not attendue or not hmac.compare_digest(preuve.encode(), attendue.encode()):
+        # Sans la preuve posée par nginx, l'adresse annoncée ne vaut rien (un appelant local de la socket la forgerait).
         raise HTTPException(404, "objet inconnu")
     ip = request.headers.get("x-secubox-pair-ip")
     cx = _base()

@@ -114,3 +114,4 @@ secubox-pilotage POST /canal/v1/bonjour      # idem canal des agents : identité
 secubox-pilotage POST /canal/v1/http         # idem canal des agents : HTTP_RESP d'une requête émise par le maître, msg_id attendu
 secubox-pilotage POST /canal/v1/notifs       # idem canal des agents
 secubox-pilotage POST /canal/v1/reponses     # idem canal des agents
+secubox-mirrornet GET /pair/objets/{empreinte} # preuve = secret de l'ecouteur maille :8799 pose par nginx (LoadCredential, compare a temps constant) + adresse du pair + abonnement Actif ; jamais via l'hote d'administration (#3653)

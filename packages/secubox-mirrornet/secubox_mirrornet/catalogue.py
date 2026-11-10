@@ -281,6 +281,11 @@ def synchroniser(cx: sqlite3.Connection, export: Dict[str, Any], maintenant: Opt
             if offre is None or offre["kind"] != "dataset" or auteur != offre["fournisseur"]:
                 stats["rejetees"] += 1          # version d'un autre que le propriétaire, ou d'une offre non « dataset »
                 continue
+            rang = {c: i for i, c in enumerate(CLASSES)}
+            if rang[v["classe"]] < rang.get(offre["classe"], 0) or (
+                    v["classe"] in ("specialise", "professionnel") and offre["approval_mode"] != "pending"):
+                stats["rejetees"] += 1          # classe moins stricte que l'offre, ou réservée sans approbation manuelle
+                continue
             retiree = 1 if (v["service_id"], v["empreinte"], auteur) in idx["retraits"] else 0
             offer_id = str(uuid.uuid5(NS, "offre:" + v["service_id"]))
             pris = cx.execute("SELECT empreinte FROM dataset_version WHERE offer_id = ? AND numero = ?",
@@ -296,6 +301,13 @@ def synchroniser(cx: sqlite3.Connection, export: Dict[str, Any], maintenant: Opt
                  v["empreinte"], v["taille"], v["format"], v["licence"], v["provenance"], v["classe"], v["fraicheur_s"],
                  v["donnees_personnelles"], v["cree_le"], sig, retiree))
             stats["versions"] = stats.get("versions", 0) + 1
+        # Retraits appliqués À PART (#3653, relecture) : une version sortie du plafond de l'export reste connue ici et doit
+        # être retirée quand même. Seul le propriétaire de l'offre retire.
+        for sid, empreinte, auteur in idx["retraits"]:
+            offre = idx["offres"].get(sid)
+            if offre is not None and auteur == offre["fournisseur"]:
+                cx.execute("UPDATE dataset_version SET retiree = 1 WHERE offer_id = ? AND empreinte = ? AND retiree = 0",
+                           (str(uuid.uuid5(NS, "offre:" + sid)), empreinte))
         if soi:
             for sub_id, sub in idx["subs"].items():
                 p = sub["p"]

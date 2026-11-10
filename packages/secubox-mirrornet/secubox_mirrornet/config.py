@@ -55,7 +55,7 @@ def reglages() -> Dict[str, Any]:
     if type(i) is int and 10 <= i <= 3600:
         r["intervalle_s"] = i
     donnees = d.get("donnees") or {}
-    for cle, mini, maxi in (("taille_max_mo", 1, 4096), ("garder", 1, 50), ("reserve_mo", 0, 100000)):
+    for cle, mini, maxi in (("taille_max_mo", 1, 256), ("garder", 1, 50), ("reserve_mo", 0, 100000)):
         v = donnees.get(cle)
         if type(v) is int and mini <= v <= maxi:
             r[cle] = v
