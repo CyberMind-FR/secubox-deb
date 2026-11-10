@@ -5,7 +5,7 @@
 # SecuBox MirrorNet v1 — API locale, phase 2 : lecture seule (#3645). Le schéma est créé ou migré au démarrage, sous le
 # compte du service. Compte dédié, aucune capacité, aucun réseau IP (les échanges entre pairs viendront en phase 3+).
 [Unit]
-Description=SecuBox MirrorNet — plan de contrôle (phase 3, cycle de vie des abonnements)
+Description=SecuBox MirrorNet — plan de contrôle (abonnements, jeux de données)
 After=network.target secubox-core.service secubox-annuaire.service
 # Filet : au plus 3 démarrages en 5 min, quoi qu'il arrive.
 StartLimitIntervalSec=300
@@ -25,6 +25,9 @@ ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/mirrornet
 # Ledger privé (MIRRORNET_ECONOMY.md § 8) : base et WAL lisibles par le seul compte du service, jamais par le groupe
 # secubox (modules, agrégateur). La socket est remise en 0660 explicitement par ExecStartPost.
 UMask=0077
+# Preuve de l'écouteur maillé (#3653) : secret root seul, copié par systemd dans le dossier privé de credentials du
+# service ; le profil AppArmor continue d'interdire tout /etc/secubox/secrets.
+LoadCredential=pair-preuve:/etc/secubox/secrets/mirrornet/pair.preuve
 AppArmorProfile=-secubox-mirrornet
 StateDirectory=secubox-mirrornet
 StateDirectoryMode=0700
@@ -50,9 +53,11 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 SystemCallArchitectures=native
 CapabilityBoundingSet=
-RestrictAddressFamilies=AF_UNIX
+# Réseau : le seul maillage (versions de jeux de données tirées des pairs par :8799, #3653) ; rien d'autre.
+RestrictAddressFamilies=AF_UNIX AF_INET
 IPAddressDeny=any
-ReadWritePaths=/run/secubox -/var/log/secubox/delegation.log
+IPAddressAllow=10.10.0.0/24
+ReadWritePaths=/run/secubox -/var/log/secubox/delegation.log -/data/mirrornet
 
 [Install]
 WantedBy=multi-user.target

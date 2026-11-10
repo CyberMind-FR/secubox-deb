@@ -140,5 +140,9 @@ server {
         proxy_intercept_errors on;
     }
 
+    # Routes maillées déposées par d'autres paquets (#3653 : MirrorNet, objets des jeux de données). Chacune porte sa
+    # propre preuve ; un fichier absent n'ouvre rien (motif sans correspondance).
+    include /etc/nginx/secubox-mesh.d/*.conf;
+
     location / { return 403; }
 }

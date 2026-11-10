@@ -30,7 +30,7 @@ def api(tmp_path, monkeypatch):
 def test_sante_publique_et_base_absente(api):
     main, base = api
     c = TestClient(main.app)
-    assert c.get("/api/v1/mirrornet/health").json()["phase"] == 3
+    assert c.get("/api/v1/mirrornet/health").json()["phase"] == 4
     assert c.get("/api/v1/mirrornet/services").status_code == 503
 
 
@@ -39,9 +39,9 @@ def test_lectures_sur_base_vide(api):
     from secubox_mirrornet import ledger, schema
     schema.initialiser(base)
     c = TestClient(main.app)
-    assert c.get("/api/v1/mirrornet/schema").json() == {"version": 2, "attendue": 2}
+    assert c.get("/api/v1/mirrornet/schema").json() == {"version": 3, "attendue": 3}
     st = c.get("/api/v1/mirrornet/status").json()
-    assert st["base"] is True and st["schema"] == 2 and st["ecriture"] is True and st["n_offer"] == 0
+    assert st["base"] is True and st["schema"] == 3 and st["ecriture"] is True and st["n_offer"] == 0
     for chemin, cle in (("services", "services"), ("datasets", "datasets"), ("subscriptions", "subscriptions"),
                         ("economy/distribution-rules", "rules")):
         r = c.get(f"/api/v1/mirrornet/{chemin}")

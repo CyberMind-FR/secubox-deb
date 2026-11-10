@@ -25,7 +25,7 @@ from .verif import DID, canonical_bytes, entree_valide, forme_valide
 
 TAILLE_MAX = 4 * 1024 * 1024        # l'annuaire plafonne ses offres ; MemoryMax=128M pour tout le service
 NS = uuid.UUID("6d1f0f5e-3647-4d6b-9a8e-6d6972726f72")       # identifiants locaux déterministes (idempotence)
-CLASSES = ("public", "communaute", "prive")
+CLASSES = ("public", "communaute", "specialise", "professionnel", "prive")
 MODELES = ("gratuit", "forfait", "usage", "palier", "reciproque", "parraine")
 NIVEAUX = ("OBSERVER", "LIMITED", "PARTNER", "TRUSTED", "REVOKED")
 _ID = re.compile(r"^[0-9a-f]{16,64}$")
@@ -121,6 +121,29 @@ def _valide(e: Any, vues: set) -> bool:
     return False
 
 
+_EMPREINTE = re.compile(r"^b2:[0-9a-f]{64}$")
+
+
+def version_normalisee(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Manifeste d'une version (#3653), borné et typé, ou None. Vie privée revérifiée À LA RÉCEPTION (§ 6)."""
+    ok_n, numero = _entier(p.get("numero"), 1, 10 ** 9)
+    ok_t, taille = _entier(p.get("taille"), 0, 2 ** 40)
+    ok_f, fraicheur = _entier(p.get("fraicheur_s"), 1, 10 * 365 * 86400)
+    empreinte, parent, classe = p.get("empreinte"), p.get("parent", ""), p.get("classe")
+    dp = p.get("donnees_personnelles", "non")
+    if not (ok_n and numero and ok_t and taille is not None and ok_f and isinstance(empreinte, str)
+            and _EMPREINTE.match(empreinte) and isinstance(parent, str) and (parent == "" or _EMPREINTE.match(parent))
+            and classe in CLASSES and isinstance(p.get("service_id"), str) and _ID.match(p["service_id"])):
+        return None
+    if not isinstance(dp, str) or (classe == "public" and dp != "non") or (classe == "communaute" and dp not in ("non", "agregees")):
+        return None
+    champs = {k: _texte(p.get(k), n, None) for k, n in (("format", 80), ("licence", 64), ("provenance", 160), ("cree_le", 40))}
+    if any(v is None for v in champs.values()):
+        return None
+    return dict(champs, service_id=p["service_id"], fournisseur=p.get("provider"), numero=numero, parent=parent,
+                empreinte=empreinte, taille=taille, classe=classe, fraicheur_s=fraicheur, donnees_personnelles=dp[:140])
+
+
 def _index(entrees: List[Any]) -> Tuple[Dict[str, Any], int]:
     """Entrées vérifiées rangées par objet ; rend (index, nombre d'entrées rejetées)."""
     rejetees = 0
@@ -129,6 +152,8 @@ def _index(entrees: List[Any]) -> Tuple[Dict[str, Any], int]:
     retirees: set = set()
     subs: Dict[str, Dict[str, Any]] = {}
     gestes: List[Dict[str, Any]] = []
+    versions: List[Tuple[Dict[str, Any], str, str]] = []
+    retraits: set = set()
     vues: set = set()
     for e in entrees:
         if not _valide(e, vues):
@@ -155,11 +180,21 @@ def _index(entrees: List[Any]) -> Tuple[Dict[str, Any], int]:
                 rejetees += 1
                 continue
             subs.setdefault(sub_id, {"p": p, "sig": e["sig"]})
+        elif op == "service_dataset_version":
+            v = version_normalisee(p)
+            if v is None:
+                rejetees += 1
+                continue
+            versions.append((v, e["sig"], auteur))
+        elif op == "service_dataset_retract":
+            if isinstance(p.get("empreinte"), str) and isinstance(p.get("service_id"), str):
+                retraits.add((p["service_id"], p["empreinte"], auteur))
         else:
             gestes.append(e)
     _VERIFIEES.clear()
     _VERIFIEES.update(vues)
-    return {"offres": offres, "signatures": signatures, "retirees": retirees, "subs": subs, "gestes": gestes}, rejetees
+    return {"offres": offres, "signatures": signatures, "retirees": retirees, "subs": subs, "gestes": gestes,
+            "versions": versions, "retraits": retraits}, rejetees
 
 
 def _faits(sub_id: str, sub: Dict[str, Any], offre: Dict[str, Any], idx: Dict[str, Any], role: str,
@@ -241,6 +276,38 @@ def synchroniser(cx: sqlite3.Connection, export: Dict[str, Any], maintenant: Opt
                  o["grace_s"] if o["grace_s"] is not None else grace_defaut, etat, idx["signatures"][o["service_id"]],
                  ts, o["endpoint"], o["approval_mode"], o["description"], json.dumps(o["compat"]), o["sonde"]))
             stats["offres"] += 1
+        for v, sig, auteur in idx["versions"]:
+            offre = idx["offres"].get(v["service_id"])
+            if offre is None or offre["kind"] != "dataset" or auteur != offre["fournisseur"]:
+                stats["rejetees"] += 1          # version d'un autre que le propriétaire, ou d'une offre non « dataset »
+                continue
+            rang = {c: i for i, c in enumerate(CLASSES)}
+            if rang[v["classe"]] < rang.get(offre["classe"], 0) or (
+                    v["classe"] in ("specialise", "professionnel") and offre["approval_mode"] != "pending"):
+                stats["rejetees"] += 1          # classe moins stricte que l'offre, ou réservée sans approbation manuelle
+                continue
+            retiree = 1 if (v["service_id"], v["empreinte"], auteur) in idx["retraits"] else 0
+            offer_id = str(uuid.uuid5(NS, "offre:" + v["service_id"]))
+            pris = cx.execute("SELECT empreinte FROM dataset_version WHERE offer_id = ? AND numero = ?",
+                              (offer_id, v["numero"])).fetchone()
+            if pris is not None and pris[0] != v["empreinte"]:
+                stats["rejetees"] += 1          # deux contenus sous le même numéro : le premier reçu fait foi
+                continue
+            cx.execute(
+                "INSERT INTO dataset_version(id, offer_id, numero, parent, empreinte, taille, format, licence, provenance, "
+                "classe, fraicheur_s, donnees_personnelles, cree_le, signature, retiree) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(offer_id, empreinte) DO UPDATE SET retiree = MAX(dataset_version.retiree, excluded.retiree)",
+                (str(uuid.uuid5(NS, "version:" + v["service_id"] + v["empreinte"])), offer_id, v["numero"], v["parent"],
+                 v["empreinte"], v["taille"], v["format"], v["licence"], v["provenance"], v["classe"], v["fraicheur_s"],
+                 v["donnees_personnelles"], v["cree_le"], sig, retiree))
+            stats["versions"] = stats.get("versions", 0) + 1
+        # Retraits appliqués À PART (#3653, relecture) : une version sortie du plafond de l'export reste connue ici et doit
+        # être retirée quand même. Seul le propriétaire de l'offre retire.
+        for sid, empreinte, auteur in idx["retraits"]:
+            offre = idx["offres"].get(sid)
+            if offre is not None and auteur == offre["fournisseur"]:
+                cx.execute("UPDATE dataset_version SET retiree = 1 WHERE offer_id = ? AND empreinte = ? AND retiree = 0",
+                           (str(uuid.uuid5(NS, "offre:" + sid)), empreinte))
         if soi:
             for sub_id, sub in idx["subs"].items():
                 p = sub["p"]

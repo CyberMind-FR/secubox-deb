@@ -1,3 +1,24 @@
+secubox-mirrornet (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * Phase 4a de MirrorNet (ref #3653) : jeux de données.
+  * Dépôt d'une version (POST /datasets/{id}/versions, corps brut écrit en flux, BLAKE2b,
+    plafond [donnees] taille_max_mo, garde d'espace reserve_mo) puis manifeste signé par
+    l'annuaire ; retrait (POST /datasets/{id}/retract) ; GET /datasets, /datasets/{id}/versions.
+  * Index des versions revérifiées (propriétaire de l'offre seulement, numéro unique, vie
+    privée revérifiée à la réception) ; schéma v3 (table objet).
+  * Réception : l'abonné Actif tire la dernière version non retirée par l'écouteur maillé
+    :8799 (une par passe, taille et empreinte vérifiées), garde [donnees] garder versions,
+    efface les retirées. Service des objets (/pair/objets/) aux seuls abonnés Actif, adresse
+    du pair posée par nginx, classe « privé » jamais servie.
+  * Objets sur /data/mirrornet/objets quand /data est monté ; unité ouverte au seul réseau
+    10.10.0.0/24 (AF_INET) ; AppArmor : réseau inet, /data/mirrornet.
+  * Interface web : onglet « Jeux de données » (versions, réception, dépôt, retrait) ; type
+    « dataset » à la publication.
+  * Écarts assumés avec la conception : pas de ConfigBlob (le routeur de configuration en
+    ferait des propositions), pas de nouveau port 8471 (écouteur maillé existant :8799).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 11:30:05 +0100
+
 secubox-mirrornet (0.2.1-1~trixie1) trixie; urgency=medium
 
   * Interface web d'administration /mirrornet/ (ref #3651), profil Aurora : état de

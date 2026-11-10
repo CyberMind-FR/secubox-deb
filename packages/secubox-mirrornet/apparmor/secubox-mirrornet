@@ -43,6 +43,9 @@ profile secubox-mirrornet flags=(attach_disconnected) {
   /proc/sys/net/core/somaxconn r,
   owner @{PROC}/@{pid}/** r,
   deny /etc/secubox/secrets/** rwklx,
+  # Preuve de l'écouteur maillé, transmise par LoadCredential (#3653).
+  /run/credentials/secubox-mirrornet.service/ r,
+  /run/credentials/secubox-mirrornet.service/pair-preuve r,
 
   # Base locale (ledger privé) : SQLite en WAL.
   /var/lib/secubox-mirrornet/ rw,
@@ -56,4 +59,11 @@ profile secubox-mirrornet flags=(attach_disconnected) {
   /run/secubox/mirrornet.sock rw,
   /run/secubox/annuaire.sock rw,
   network unix stream,
+
+  # Jeux de données (#3653) : objets opaques sur /data (ou sous l'état du service), versions tirées des pairs du
+  # maillage (l'unité borne les adresses à 10.10.0.0/24).
+  /data/mirrornet/ r,
+  /data/mirrornet/objets/ rw,
+  /data/mirrornet/objets/** rw,
+  network inet stream,
 }

@@ -38,6 +38,7 @@ case "$1" in
 
         # Écouteur maillage :8799, règle nft wg-mesh, identité du nœud (#1530) :
         # un seul script, rejoué aussi par sbx-mesh-up à chaque jonction.
+        install -d -o root -g root -m 0755 /etc/nginx/secubox-mesh.d   # routes maillées d'autres paquets (#3653)
         /usr/sbin/secubox-annuaire-maillage || true
 
         # Satellite dashboards (#768): the legacy nginx vhost

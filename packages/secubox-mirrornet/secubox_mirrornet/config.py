@@ -17,7 +17,19 @@ CONF = Path(os.environ.get("SBX_MIRRORNET_CONF", "/etc/secubox/mirrornet.toml"))
 EXPORT = Path(os.environ.get("SBX_MIRRORNET_EXPORT", "/var/lib/secubox/annuaire/mirrornet-export.json"))
 ANNUAIRE_SOCK = os.environ.get("SBX_MIRRORNET_ANNUAIRE_SOCK", "/run/secubox/annuaire.sock")
 
-DEFAUTS: Dict[str, Any] = {"confiance_min": "LIMITED", "grace_s": 432000, "intervalle_s": 60}
+
+def _objets_defaut() -> Path:
+    """Objets des jeux de données (#3653) : sur /data quand le paquet y a préparé le dossier (jamais la racine pleine
+    d'une MOCHAbin, R7), sinon sous l'état du service."""
+    donnees = Path("/data/mirrornet/objets")
+    return donnees if donnees.is_dir() else ETAT / "objets"
+
+
+OBJETS = Path(os.environ["SBX_MIRRORNET_OBJETS"]) if os.environ.get("SBX_MIRRORNET_OBJETS") else _objets_defaut()
+PORT_MAILLAGE = int(os.environ.get("SBX_MIRRORNET_PORT_MAILLAGE", "8799"))
+
+DEFAUTS: Dict[str, Any] = {"confiance_min": "LIMITED", "grace_s": 432000, "intervalle_s": 60,
+                           "taille_max_mo": 256, "garder": 3, "reserve_mo": 1024}
 _NIVEAUX = ("OBSERVER", "LIMITED", "PARTNER", "TRUSTED")
 
 
@@ -42,4 +54,9 @@ def reglages() -> Dict[str, Any]:
     i = (d.get("synchro") or {}).get("intervalle_s")
     if type(i) is int and 10 <= i <= 3600:
         r["intervalle_s"] = i
+    donnees = d.get("donnees") or {}
+    for cle, mini, maxi in (("taille_max_mo", 1, 256), ("garder", 1, 50), ("reserve_mo", 0, 100000)):
+        v = donnees.get(cle)
+        if type(v) is int and mini <= v <= maxi:
+            r[cle] = v
     return r

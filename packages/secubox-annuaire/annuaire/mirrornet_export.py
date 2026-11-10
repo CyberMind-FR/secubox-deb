@@ -38,6 +38,8 @@ _OPS_ABONNEMENT = {"service_subscribe", "service_approve", "service_reject", "se
 
 OFFRES_PAR_FOURNISSEUR = 64          # plafond (déni de service : un pair qui inonde le journal de ses offres)
 ABONNEMENTS_PAR_ABONNE = 32
+VERSIONS_PAR_JEU = 16
+RETRAITS_PAR_JEU = 64
 
 
 def hauteur_pertinente(journal) -> int:
@@ -95,10 +97,40 @@ def construire(journal, soi: Optional[str], joignabilite_ip: Dict[str, Dict[str,
                 and forme_valide(e["op"], e["payload"], e["author"]):
             par_abonne.setdefault(e["author"], []).append(e["payload"]["subscription_id"])
     retenus = {sid for liste in par_abonne.values() for sid in liste[-ABONNEMENTS_PAR_ABONNE:]}
+    # Versions de jeux de données (#3653) : celles du propriétaire de l'offre, les VERSIONS_PAR_JEU dernières, et
+    # tous leurs retraits (un retrait doit toujours arriver, même pour une version sortie du plafond).
+    versions: Dict[str, List[int]] = {}
+    for i, e in enumerate(entrees):
+        p = e["payload"]
+        if (e["op"] == "service_dataset_version" and p.get("service_id") in gardes
+                and fournisseur.get(p.get("service_id")) == e["author"] and forme_valide(e["op"], p, e["author"])):
+            versions.setdefault(p["service_id"], []).append(i)
+    versions_gardees = {i for liste in versions.values() for i in liste[-VERSIONS_PAR_JEU:]}
+    # Retraits : UN par (jeu, empreinte), seulement d'une version que le propriétaire a publiée, au plus
+    # RETRAITS_PAR_JEU par jeu (les plus récents) — un pair ne gonfle pas l'export à coups de retraits.
+    publiees = {(entrees[i]["payload"]["service_id"], entrees[i]["payload"].get("empreinte"))
+                for liste in versions.values() for i in liste}
+    vus: Dict[tuple, int] = {}
+    for i, e in enumerate(entrees):
+        p = e["payload"]
+        cle = (p.get("service_id"), p.get("empreinte"))
+        if (e["op"] == "service_dataset_retract" and cle in publiees and fournisseur.get(cle[0]) == e["author"]
+                and forme_valide(e["op"], p, e["author"])):
+            vus.setdefault(cle, i)
+    par_jeu: Dict[str, List[int]] = {}
+    for (sid, _emp), i in vus.items():
+        par_jeu.setdefault(sid, []).append(i)
+    retraits_gardes = {i for liste in par_jeu.values() for i in sorted(liste)[-RETRAITS_PAR_JEU:]}
     gardees = []
     for i, e in enumerate(entrees):
         op, p = e["op"], e["payload"]
-        if op in ("service_offer", "service_revoke_offer"):
+        if op == "service_dataset_version":
+            if i in versions_gardees:
+                gardees.append(e)
+        elif op == "service_dataset_retract":
+            if i in retraits_gardes:
+                gardees.append(e)
+        elif op in ("service_offer", "service_revoke_offer"):
             if derniere.get((op, p.get("service_id"))) == i:
                 gardees.append(e)
         elif p.get("subscription_id") in retenus and forme_valide(op, p, e["author"]):
