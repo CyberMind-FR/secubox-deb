@@ -283,6 +283,10 @@
    "espace": "systeme",
    "objet": "BOX"
   },
+  "mirrornet": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
   "meshname": {
    "espace": "systeme",
    "objet": "BOX"

@@ -1,3 +1,9 @@
+secubox-hub (1.12.55-1~trixie1) trixie; urgency=medium
+
+  * Espaces : MirrorNet (menu.d de secubox-mirrornet, ref #3651) rangé dans « services ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:56:18 +0100
+
 secubox-hub (1.12.54-1~trixie1) trixie; urgency=medium
 
   * Santé : une unité arrêtée par conception n'est plus « dégradé » (ref #3634, vu sur le RPi4) —
