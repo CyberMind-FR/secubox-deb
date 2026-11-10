@@ -1039,14 +1039,16 @@ def tri_appliquer(dossier: Path = dnstv_tri.DEMANDES) -> int:
                 continue
             if nom == dnstv_tri.OUVRIR:
                 # Rafale de serveurs refusés : démarrage d'épisode. Zone ouverte `ouverture_s` (l'épisode démarre).
+                # Échéance fixée SEULEMENT quand la zone est réellement ouverte : une demande pendant une ouverture ne la
+                # prolonge pas (aucun dépôt répété ne la garde ouverte).
                 if libre and ouvertures.get(slug, 0) <= maintenant:
                     try:
                         _control("view_local_zone_remove", f"sbx-tv-auto-{slug}", f"{dnstv_tri.ZONE}.")
+                        ouvertures[slug] = maintenant + r["ouverture_s"]
                         poses += 1
                         audit("tri-ouverture", f"{slug} {r['ouverture_s']}s")
                     except (RuntimeError, OSError, subprocess.SubprocessError) as ex:
                         audit("tri-echec", f"{slug} ouverture {ex}"[:200])
-                ouvertures[slug] = maintenant + r["ouverture_s"]
                 continue
             dnstv_tri.autoriser(autorises, slug, nom, r["duree_s"])
             if not libre:

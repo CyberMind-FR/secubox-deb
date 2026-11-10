@@ -78,6 +78,7 @@ class Insistance:
     ouverture_s: int = DEFAUTS["ouverture_s"]
     refuses: Dict[str, List[Tuple[int, str]]] = field(default_factory=dict)    # slug -> [(ts, serveur)] refusés récents
     ouvert_jusque: Dict[str, int] = field(default_factory=dict)                  # slug -> fin supposée de l'ouverture
+    gardes: Dict[str, set] = field(default_factory=dict)                         # slug -> serveurs déjà demandés (ouverture)
 
     def rafale(self, slug: str, nom: str, ts: int, refuse: bool) -> List[str]:
         """Demandes à déposer pour la règle « par zone » : [OUVRIR] quand `serveurs` serveurs DISTINCTS ont été refusés en
@@ -85,12 +86,19 @@ class Insistance:
         if not SERVEUR_RE.fullmatch(nom) or not SLUG_RE.fullmatch(slug):
             return []
         if not refuse:
-            return [nom] if ts <= self.ouvert_jusque.get(slug, -1) else []
+            if ts > self.ouvert_jusque.get(slug, -1):
+                return []
+            deja = self.gardes.setdefault(slug, set())
+            if nom in deja:
+                return []                                        # un serveur résolu n'est demandé qu'une fois par ouverture
+            deja.add(nom)
+            return [nom]
         recents = [(t, n) for t, n in self.refuses.get(slug, []) if ts - t < self.fenetre_zone_s and n != nom] + [(ts, nom)]
         self.refuses[slug] = recents[-32:]
         if len({n for _t, n in recents}) >= self.serveurs and ts > self.ouvert_jusque.get(slug, -1):
             self.ouvert_jusque[slug] = ts + self.ouverture_s
             self.refuses[slug] = []
+            self.gardes[slug] = set()
             return [OUVRIR]
         return []
 
@@ -184,13 +192,13 @@ def echus(autorises: Dict[str, Dict[str, int]], maintenant: Optional[int] = None
 def zones_vue(slug: str, etat: dict, autorises: Dict[str, Dict[str, int]], maintenant: Optional[int] = None,
               ouvertures: Optional[Dict[str, int]] = None) -> List[str]:
     """Lignes `local-zone` à écrire dans la vue auto de `slug` (rendu complet : un rechargement d'Unbound les garde).
-    Zone ouverte (démarrage d'épisode) : pas de refus de zone tant que l'ouverture court."""
+    Le refus de zone est TOUJOURS rendu : l'ouverture (démarrage d'épisode) n'existe qu'à chaud, un rechargement la referme
+    (échec fermé ; la TV refait une rafale si elle a encore besoin de vidéo). `ouvertures` est ignoré, gardé pour l'appel."""
     r = reglage(etat)
     if slug not in r["appareils"]:
         return []
     maintenant = int(maintenant if maintenant is not None else time.time())
-    ouverte = (ouvertures or {}).get(slug, 0) > maintenant
-    lignes = [] if ouverte else [f'    local-zone: "{ZONE}." always_nxdomain']
+    lignes = [f'    local-zone: "{ZONE}." always_nxdomain']
     for nom, e in sorted((autorises.get(slug) or {}).items()):
         if e > maintenant and SERVEUR_RE.fullmatch(nom):
             lignes.append(f'    local-zone: "{nom}." transparent')

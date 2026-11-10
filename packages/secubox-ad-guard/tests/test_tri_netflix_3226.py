@@ -258,10 +258,29 @@ def test_reglage_par_zone_borne_et_compatible():
     assert T.lire_demande("tv-banc__ouvrir") == ("tv-banc", T.OUVRIR) and T.lire_demande("tv-banc__ouvrirx") is None
 
 
-def test_rendu_sans_refus_de_zone_pendant_l_ouverture():
+def test_rendu_garde_toujours_le_refus_de_zone():
+    """L'ouverture n'existe qu'à chaud : un rendu (puis rechargement) pendant l'ouverture referme la zone (échec fermé)."""
     lignes = T.zones_vue("tv-banc", ETAT, {"tv-banc": {S1: 4_000_000_000}}, maintenant=100, ouvertures={"tv-banc": 200})
-    assert lignes == [f'    local-zone: "{S1}." transparent']
-    assert T.zones_vue("tv-banc", ETAT, {}, maintenant=300, ouvertures={"tv-banc": 200})[0].endswith("always_nxdomain")
+    assert lignes == ['    local-zone: "oca.nflxvideo.net." always_nxdomain', f'    local-zone: "{S1}." transparent']
+
+
+def test_ouverture_ni_prolongee_ni_redemandee(tmp_path, monkeypatch):
+    i = T.Insistance()
+    i.rafale("tv-banc", C.format(1), 100, True)
+    assert i.rafale("tv-banc", C.format(2), 101, True) == [T.OUVRIR]
+    assert i.rafale("tv-banc", C.format(3), 102, False) == [C.format(3)]
+    assert i.rafale("tv-banc", C.format(3), 103, False) == []                  # déjà demandé pendant cette ouverture
+    control = faux(tmp_path, "unbound-control")
+    ctl = charger_ctl(monkeypatch, tmp_path, control)
+    dnstv.ecrire_etat(ETAT, tmp_path)
+    demandes = tmp_path / "demandes"
+    demandes.mkdir()
+    T.deposer_demande("tv-banc", T.OUVRIR, demandes)
+    ctl.tri_appliquer(demandes)
+    fin = ctl._tri_ouvertures()["tv-banc"]
+    T.deposer_demande("tv-banc", T.OUVRIR, demandes)
+    ctl.tri_appliquer(demandes)
+    assert ctl._tri_ouvertures()["tv-banc"] == fin                             # pas de prolongation
 
 
 def test_controleur_ouvre_puis_referme_la_zone(tmp_path, monkeypatch):
