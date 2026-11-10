@@ -12,7 +12,9 @@ StartLimitIntervalSec=300
 StartLimitBurst=3
 
 [Service]
-Type=simple
+# Type=exec et non simple : avec ExecStartPost et LoadCredential, « simple » laisse une course que systemd signale
+# (« could lead to race conditions ») ; vue au banc #3653 (status=243/CREDENTIALS au premier démarrage, gk6).
+Type=exec
 User=secubox-mirrornet
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/mirrornet
