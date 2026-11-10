@@ -1,3 +1,11 @@
+secubox-plymouth (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * Dé et barre recentrés à chaque image : sur RPi400 HDMI, le passage du framebuffer du
+    firmware au mode vc4 les laissait en bas à droite (ref #3636). État partagé des fonctions
+    par `global.` (progression jamais remise en arrière, largeur du message).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 04:15:45 +0100
+
 secubox-plymouth (0.1.1-1~trixie1) trixie; urgency=medium
 
   * Le kiosque Xorg ne restait plus bloqué derrière le dé : tty1 rendu avant chvt (ref #3554).
