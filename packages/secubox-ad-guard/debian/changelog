@@ -1,3 +1,14 @@
+secubox-ad-guard (1.24.6-1~trixie1) trixie; urgency=medium
+
+  * Tri Netflix (ref #3226), règle « par zone » : au banc du 10/11, la TV ne redemande jamais un
+    serveur refusé, elle bascule sur les suivants (c211, c219, c206, c222…) — la règle par nom
+    bloquait le démarrage de l'épisode (tri coupé). Désormais : 2 serveurs nouveaux distincts
+    refusés en 30 s = démarrage d'épisode → zone ouverte 3 min pour l'appareil, chaque serveur
+    résolu pendant l'ouverture reste autorisé 3 h, puis la zone se referme ; un serveur isolé en
+    pleine lecture (la pub) reste refusé. Minuterie du tri chaque minute (fermeture à l'heure).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 13:50:20 +0100
+
 secubox-ad-guard (1.24.5-1~trixie1) trixie; urgency=medium
 
   * Tri Netflix par insistance au niveau DNS (ref #3226), EXPÉRIMENTAL, par appareil en mode

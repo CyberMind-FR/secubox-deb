@@ -58,7 +58,8 @@ def charger_tri():
     r = dnstv_tri.reglage(etat)
     carte = {c["ip"]: dnstv._slug(c["nom"]) for c in etat["clients"]
              if c["mode"] == "auto" and dnstv._slug(c["nom"]) in r["appareils"]}
-    return (carte, dnstv_tri.Insistance(r["seuil"], r["fenetre_s"])) if carte else ({}, None)
+    return (carte, dnstv_tri.Insistance(r["seuil"], r["fenetre_s"], serveurs=r["serveurs"],
+                                        fenetre_zone_s=r["fenetre_zone_s"], ouverture_s=r["ouverture_s"])) if carte else ({}, None)
 
 
 def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=classeur, locales=dnstv.adresses_locales,
@@ -75,8 +76,12 @@ def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=clas
             cat, _ = cl.classer(e.qname)
             lot.append((e, cat))
             slug = carte_tri.get(e.client) if insistance is not None else None
-            if slug and insistance.voir(slug, e.qname.rstrip(".").lower(), int(e.ts), e.decision == "BLOCKED"):
-                deposer(slug, e.qname.rstrip(".").lower())       # aussitôt, pas au lot : la TV réessaie en quelques secondes
+            if slug:
+                nom, refuse = e.qname.rstrip(".").lower(), e.decision == "BLOCKED"
+                if insistance.voir(slug, nom, int(e.ts), refuse):
+                    deposer(slug, nom)                           # aussitôt, pas au lot : la TV réessaie en quelques secondes
+                for d in insistance.rafale(slug, nom, int(e.ts), refuse):
+                    deposer(slug, d)                             # ouverture de zone, ou serveur résolu pendant l'ouverture
         maintenant = time.monotonic()
         if lot and (len(lot) >= LOT or maintenant - dernier >= PERIODE_S):
             total += magasin.ajouter(lot, exclus)
@@ -87,6 +92,7 @@ def suivre(lignes, magasin: dnstv.Magasin, cl: dnstv.Classifieur, recharger=clas
             carte_tri, insistance = tri()
             if ancienne is not None and insistance is not None:      # l'historique d'insistance survit au rechargement
                 insistance.vues, insistance.demandes = ancienne.vues, ancienne.demandes
+                insistance.refuses, insistance.ouvert_jusque = ancienne.refuses, ancienne.ouvert_jusque
             try:
                 cl = recharger()
             except OSError:

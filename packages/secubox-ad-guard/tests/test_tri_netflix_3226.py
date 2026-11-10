@@ -48,7 +48,8 @@ def test_seuls_les_serveurs_video_refuses_comptent():
 
 
 def test_validation_du_reglage():
-    assert T.valider({"appareils": ["tv-banc"]}) == {"appareils": ["tv-banc"], "seuil": 3, "fenetre_s": 20, "duree_s": 10800}
+    assert T.valider({"appareils": ["tv-banc"]}) == {"appareils": ["tv-banc"], "seuil": 3, "fenetre_s": 20, "duree_s": 10800,
+                                                      "serveurs": 2, "fenetre_zone_s": 30, "ouverture_s": 180}
     for mauvais in ({"appareils": ["TV banc"]}, {"appareils": [], "seuil": 1}, {"appareils": [], "duree_s": 10},
                     {"appareils": [], "inconnu": 1}, {"appareils": "tv-banc"}):
         with pytest.raises(T.ErreurTri):
@@ -229,3 +230,52 @@ def test_unite_root_durcie_et_dossier_root():
     assert "d /run/secubox/ad-guard-tri 1730 root secubox -" in (ici / "secubox-ad-guard-tri.tmpfiles").read_text()
     assert "TriggerLimitBurst" in (ici / "secubox-ad-guard-tri.path").read_text()
     assert "secubox-ad-guard-tri.path" in (ici / "prerm").read_text()
+
+
+# --- règle « par zone » : rafale de serveurs nouveaux (relevé réel du 10/11) ---------------------------------------------
+
+C = "ipv6-c{}-cdg001-ix.1.oca.nflxvideo.net"
+
+
+def test_demarrage_d_episode_ouvre_la_zone_pub_isolee_reste_refusee():
+    i = T.Insistance()
+    # Démarrage d'épisode observé à 13:26 : c211, puis c219 9 s plus tard (refusés, une seule demande chacun).
+    assert i.rafale("tv-banc", C.format(211), 1000, True) == []
+    assert i.rafale("tv-banc", C.format(211), 1000, True) == []          # AAAA de la même tentative : même serveur
+    assert i.rafale("tv-banc", C.format(219), 1009, True) == [T.OUVRIR]
+    # Pendant l'ouverture : chaque serveur résolu est demandé (l'épisode reste servi après la fermeture).
+    assert i.rafale("tv-banc", C.format(222), 1053, False) == [C.format(222)]
+    assert i.rafale("tv-banc", C.format(223), 1009 + 181, False) == []   # ouverture finie : rien
+    # En pleine lecture, une pub = UN serveur nouveau isolé : refusé, pas d'ouverture.
+    assert i.rafale("tv-banc", C.format(185), 2000, True) == []
+    assert i.rafale("tv-banc", C.format(164), 2700, True) == []          # la suivante, 12 min plus tard : toujours isolée
+
+
+def test_reglage_par_zone_borne_et_compatible():
+    assert T.reglage({"tri_netflix": {"appareils": ["tv-banc"], "seuil": 3, "fenetre_s": 20, "duree_s": 10800}})["ouverture_s"] == 180
+    with pytest.raises(T.ErreurTri):
+        T.valider({"appareils": [], "serveurs": 1})
+    assert T.lire_demande("tv-banc__ouvrir") == ("tv-banc", T.OUVRIR) and T.lire_demande("tv-banc__ouvrirx") is None
+
+
+def test_rendu_sans_refus_de_zone_pendant_l_ouverture():
+    lignes = T.zones_vue("tv-banc", ETAT, {"tv-banc": {S1: 4_000_000_000}}, maintenant=100, ouvertures={"tv-banc": 200})
+    assert lignes == [f'    local-zone: "{S1}." transparent']
+    assert T.zones_vue("tv-banc", ETAT, {}, maintenant=300, ouvertures={"tv-banc": 200})[0].endswith("always_nxdomain")
+
+
+def test_controleur_ouvre_puis_referme_la_zone(tmp_path, monkeypatch):
+    control = faux(tmp_path, "unbound-control")
+    ctl = charger_ctl(monkeypatch, tmp_path, control)
+    dnstv.ecrire_etat(ETAT, tmp_path)
+    demandes = tmp_path / "demandes"
+    demandes.mkdir()
+    T.deposer_demande("tv-banc", T.OUVRIR, demandes)
+    ctl.tri_appliquer(demandes)
+    log = (tmp_path / "unbound-control.log").read_text()
+    assert "view_local_zone_remove sbx-tv-auto-tv-banc oca.nflxvideo.net." in log
+    assert ctl._tri_ouvertures()["tv-banc"] > 0
+    ctl._tri_sauver_json("tri-ouvertures.json", {"tv-banc": 1})          # ouverture échue
+    ctl.tri_appliquer(demandes)
+    assert "view_local_zone_add sbx-tv-auto-tv-banc oca.nflxvideo.net. always_nxdomain" in (tmp_path / "unbound-control.log").read_text()
+    assert ctl._tri_ouvertures() == {}

@@ -237,7 +237,8 @@ def appliquer() -> int:
     etat, table, actives = charger_avec_regles()
     voulu = instantane(etat, actives, etats_regles())
     avant = lire_instantane()
-    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives, tri_autorises=_tri_autorises()))
+    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives, tri_autorises=_tri_autorises(),
+                                         tri_ouvertures=_tri_ouvertures()))
     recharger()
     ecrire_instantane(voulu)
     audit_appareils(avant, etat)                                         # `apply` trace AUSSI les changements de périmètre (revue #1959)
@@ -318,7 +319,8 @@ def regles_appliquer() -> int:
     etat, table, actives = charger_avec_regles()
     voulu = instantane(etat, actives, etats_regles())
     avant = lire_instantane()
-    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives, tri_autorises=_tri_autorises()))
+    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives, tri_autorises=_tri_autorises(),
+                                         tri_ouvertures=_tri_ouvertures()))
     if etat["actif"]:
         _contournement_au_mieux(etat)                                    # lot 4 : modes, pauses et suspensions suivis à chaque passage
     else:
@@ -893,6 +895,24 @@ def _tri_autorises() -> dict:
     return dnstv_tri.charger_autorises(dnstv_tri.lire_json(_tri_chemin()))
 
 
+def _tri_ouvertures() -> dict:
+    return dnstv_tri.charger_ouvertures(dnstv_tri.lire_json(dossier_root() / "tri-ouvertures.json"))
+
+
+def _tri_sauver_json(nom: str, donnees: dict) -> None:
+    d = dossier_root()
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".tri.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            os.fchmod(h.fileno(), 0o600)
+            h.write(json.dumps(donnees))
+        os.replace(tmp, d / nom)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
 def _tri_sauver(autorises: dict) -> None:
     d = dossier_root()
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".tri.")
@@ -1009,11 +1029,24 @@ def tri_appliquer(dossier: Path = dnstv_tri.DEMANDES) -> int:
     r = dnstv_tri.reglage(etat)
     vues_auto = {dnstv._slug(c["nom"]) for c in etat["clients"] if c["mode"] == "auto"}
     autorises = _tri_autorises()
+    ouvertures = _tri_ouvertures()
+    maintenant = int(time.time())
     poses, refuses = 0, 0
     with _verrou_depot() as libre:
         for slug, nom in demandes:
             if not etat["actif"] or slug not in r["appareils"] or slug not in vues_auto or poses >= dnstv_tri.MAX_POSES:
                 refuses += 1
+                continue
+            if nom == dnstv_tri.OUVRIR:
+                # Rafale de serveurs refusés : démarrage d'épisode. Zone ouverte `ouverture_s` (l'épisode démarre).
+                if libre and ouvertures.get(slug, 0) <= maintenant:
+                    try:
+                        _control("view_local_zone_remove", f"sbx-tv-auto-{slug}", f"{dnstv_tri.ZONE}.")
+                        poses += 1
+                        audit("tri-ouverture", f"{slug} {r['ouverture_s']}s")
+                    except (RuntimeError, OSError, subprocess.SubprocessError) as ex:
+                        audit("tri-echec", f"{slug} ouverture {ex}"[:200])
+                ouvertures[slug] = maintenant + r["ouverture_s"]
                 continue
             dnstv_tri.autoriser(autorises, slug, nom, r["duree_s"])
             if not libre:
@@ -1024,6 +1057,17 @@ def tri_appliquer(dossier: Path = dnstv_tri.DEMANDES) -> int:
                 audit("tri-autorise", f"{slug} {nom} {r['duree_s']}s")
             except (RuntimeError, OSError, subprocess.SubprocessError) as ex:
                 audit("tri-echec", f"{slug} {nom} {ex}"[:200])
+        # Fin d'ouverture : la zone se referme ; les serveurs résolus pendant l'ouverture restent autorisés (zones précises).
+        for slug in [k for k, fin in ouvertures.items() if fin <= maintenant]:
+            if not libre:
+                break
+            try:
+                if slug in r["appareils"] and slug in vues_auto and etat["actif"]:
+                    _control("view_local_zone_add", f"sbx-tv-auto-{slug}", f"{dnstv_tri.ZONE}.", "always_nxdomain")
+                    audit("tri-fermeture", slug)
+                del ouvertures[slug]
+            except (RuntimeError, OSError, subprocess.SubprocessError) as ex:
+                audit("tri-echec", f"{slug} fermeture {ex}"[:200])
         retires = 0
         for slug, nom in dnstv_tri.echus(autorises):
             if not libre:
@@ -1032,7 +1076,9 @@ def tri_appliquer(dossier: Path = dnstv_tri.DEMANDES) -> int:
                 _control("view_local_zone_remove", f"sbx-tv-auto-{slug}", f"{nom}.")
                 retires += 1
     _tri_sauver(autorises)
-    print(json.dumps({"ok": True, "poses": poses, "refuses": refuses, "retires": retires, "depot_libre": libre}))
+    _tri_sauver_json("tri-ouvertures.json", ouvertures)
+    print(json.dumps({"ok": True, "poses": poses, "refuses": refuses, "retires": retires, "depot_libre": libre,
+                      "ouvertures": sorted(ouvertures)}))
     return 0
 
 
