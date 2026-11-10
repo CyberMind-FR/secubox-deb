@@ -1,13 +1,15 @@
 secubox-p2p (1.22.0-1~trixie1) trixie; urgency=medium
 
-  * Autojoin (ref #3638) : une box derrière un maître SecuBox rejoint son maillage sans saisie
-    (secubox-autojoin + minuteur ; POST /master-link/autojoin, réservé aux réseaux reliés hors
-    WAN par l'écouteur 7331, jeton à usage unique de 5 min). Le pair entre « à valider » :
-    POST /master-link/valider (require_jwt) ou « Oublier ». /peers porte `a_valider`.
+  * Autojoin (ref #3638) : fenêtre d'appairage ouverte par un administrateur (Flotte, 15 min,
+    5 box au plus) ; sur la box derrière le maître, `secubox-autojoin` (commande, aucune
+    minuterie). Jeton délivré par l'écouteur 7331 seulement (secret X-SecuBox-Enrol-Cle),
+    jamais pour reprendre un pair existant ni sous un nom réservé. Le pair entre « à valider »
+    sans aucune exposition ; POST /master-link/valider (require_jwt) l'expose.
   * Relais : un pair sans webos ni pilotage (profil mobile) est exposé par admin.<box>, nom de
-    sa jonction, s'il répond ; un pair muet depuis plus de 72 h (réglage retrait_disparus_h)
-    perd ses noms et ports relayés, retrouvés à son retour ; une jonction déclenche la
-    synchronisation aussitôt (secubox-relais-maillage-demande.path).
+    sa jonction, s'il répond et que le pilotage ne le connaît pas ; un pair muet depuis plus
+    de 72 h (réglage retrait_disparus_h) perd ses noms et ports relayés, retrouvés à son
+    retour ; une jonction neuve ou une validation déclenche la synchronisation aussitôt
+    (secubox-relais-maillage-demande.path, au plus une passe toutes les 5 min).
 
  -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 04:56:59 +0100
 

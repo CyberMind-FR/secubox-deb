@@ -25,6 +25,20 @@ RELAIS = (ICI / "sbin" / "secubox-relais-maillage").read_text()
 K1 = "YL8HZjBi/6xmOzU5SCFb28PXy/EPw669XwYIXT87HFM="
 K2 = "MOd1B865CCLYGhjwCtbEHZk+0rqoVaoC6lAr+TsMo0Y="
 DERRIERE = [ipaddress.ip_network("192.168.42.0/24")]
+SECRET = "ab" * 32
+
+
+def _h(ip="192.168.42.191", cle=SECRET):
+    h = {"X-SecuBox-Enrol-IP": ip}
+    if cle is not None:
+        h["X-SecuBox-Enrol-Cle"] = cle
+    return h
+
+
+def _ouvrir(c, minutes=15):
+    r = c.post("/master-link/appairage", json={"minutes": minutes})
+    assert r.status_code == 200, r.text
+    return r
 
 
 @pytest.fixture
@@ -44,6 +58,8 @@ def maitre(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "_reseaux_derriere", lambda: DERRIERE)
     monkeypatch.setattr(main, "_provision", lambda *a, **k: None)
     monkeypatch.setenv("SBX_AUDIT", str(tmp_path / "audit.log"))
+    (tmp_path / "pair.token").write_text(SECRET + "\n")
+    monkeypatch.setenv("SBX_P2P_PAIR_TOKEN", str(tmp_path / "pair.token"))
     main._autojoin_dernier.clear()
     main.app.dependency_overrides[main.require_jwt] = lambda: {"sub": "admin"}
     yield tmp_path
@@ -61,28 +77,55 @@ def test_autojoin_autorise_seulement_derriere_le_maitre(adresse, ok):
     assert main.autojoin_autorise(adresse, DERRIERE) is ok
 
 
-def test_jeton_emis_derriere_puis_refuse_ailleurs_et_sans_en_tete(maitre):
+def test_appairage_ferme_par_defaut(maitre):
     c = TestClient(main.app)
-    r = c.post("/master-link/autojoin", headers={"X-SecuBox-Enrol-IP": "192.168.42.191"})
+    assert c.post("/master-link/autojoin", headers=_h()).status_code == 403
+    assert c.get("/master-link/appairage").json()["ouvert"] is False
+
+
+def test_jeton_emis_seulement_avec_le_secret_de_l_ecouteur(maitre):
+    c = TestClient(main.app)
+    _ouvrir(c)
+    assert c.post("/master-link/autojoin", headers=_h(cle=None)).status_code == 403          # route d'administration
+    assert c.post("/master-link/autojoin", headers=_h(cle="cd" * 32)).status_code == 403     # en-tête forgé
+    r = c.post("/master-link/autojoin", headers=_h())
     assert r.status_code == 200 and re.fullmatch(r"[0-9a-f]{64}", r.json()["token"])
     jetons = json.loads((maitre / "p2p/master-link/tokens.json").read_text())
     assert jetons[-1]["type"] == "autojoin" and jetons[-1]["auto_approve"] is True
-    assert c.post("/master-link/autojoin", headers={"X-SecuBox-Enrol-IP": "192.168.42.191"}).status_code == 429
-    assert c.post("/master-link/autojoin", headers={"X-SecuBox-Enrol-IP": "192.168.1.3"}).status_code == 403   # WAN
-    assert c.post("/master-link/autojoin").status_code == 403          # route d'administration : en-tête vidé par nginx
+    assert c.post("/master-link/autojoin", headers=_h()).status_code == 429
+    assert c.post("/master-link/autojoin", headers=_h(ip="192.168.1.3")).status_code == 403   # WAN
     a = _audit(maitre)
-    assert "autojoin_jeton_emis" in a and "autojoin_refuse" in a and r.json()["token"] not in a
+    assert "autojoin_jeton_emis" in a and "appairage_ouvert" in a and r.json()["token"] not in a
 
 
-def test_autojoin_desactivable(maitre):
-    (maitre / "p2p/master-link/config.json").write_text(json.dumps({"role": "master", "autojoin": False}))
-    r = TestClient(main.app).post("/master-link/autojoin", headers={"X-SecuBox-Enrol-IP": "192.168.42.191"})
-    assert r.status_code == 404
+def test_fenetre_bornee_a_cinq_jetons_puis_fermee(maitre):
+    c = TestClient(main.app)
+    _ouvrir(c)
+    for i in range(5):
+        assert c.post("/master-link/autojoin", headers=_h(ip=f"192.168.42.{10 + i}")).status_code == 200
+    assert c.post("/master-link/autojoin", headers=_h(ip="192.168.42.99")).status_code == 403
+    assert c.post("/master-link/appairage", json={"minutes": 0}).status_code == 400
+    assert c.post("/master-link/appairage", json={"minutes": 61}).status_code == 400
+    _ouvrir(c)
+    assert c.delete("/master-link/appairage").json()["ouvert"] is False
+    assert c.post("/master-link/autojoin", headers=_h(ip="192.168.42.98")).status_code == 403
+
+
+def test_appairage_reserve_aux_administrateurs():
+    for chemin in ("/master-link/appairage", "/master-link/valider"):
+        for route in (r for r in main.app.routes if getattr(r, "path", "") == chemin):
+            assert main.require_jwt in [d.call for d in route.dependant.dependencies], (chemin, route.methods)
+
+
+def _jeton(c, ip="192.168.42.191"):
+    main._autojoin_dernier.clear()
+    return c.post("/master-link/autojoin", headers=_h(ip=ip)).json()["token"]
 
 
 def test_jonction_par_autojoin_marquee_a_valider_puis_validee(maitre):
     c = TestClient(main.app)
-    jeton = c.post("/master-link/autojoin", headers={"X-SecuBox-Enrol-IP": "192.168.42.191"}).json()["token"]
+    _ouvrir(c)
+    jeton = _jeton(c)
     r = c.post("/master-link/join", json={"token": jeton, "fingerprint": "sbx-gk12", "hostname": "gk12",
                                           "wg_public_key": K1})
     assert r.status_code == 200 and r.json()["status"] == "approved", r.text
@@ -90,15 +133,46 @@ def test_jonction_par_autojoin_marquee_a_valider_puis_validee(maitre):
     assert req[0]["a_valider"] is True
     assert main._cles_a_valider() == {K1}
     assert "jonction_autojoin" in _audit(maitre)
-    # le jeton est à usage unique
+    assert not (maitre / "p2p/relais.demande").exists()       # rien d'exposé avant « Valider »
     r2 = c.post("/master-link/join", json={"token": jeton, "fingerprint": "sbx-autre", "hostname": "autre", "wg_public_key": K2})
-    assert r2.status_code == 403
-    # Valider
+    assert r2.status_code == 403                               # usage unique
     assert c.post("/master-link/valider", json={"public_key": K2}).status_code == 404
     assert c.post("/master-link/valider", json={"public_key": "x"}).status_code == 400
+    (maitre / "p2p/wg_mesh.json").write_text(json.dumps({"peers": [{"public_key": K1, "mesh_ip": "10.10.0.7", "a_valider": True}]}))
     v = c.post("/master-link/valider", json={"public_key": K1})
     assert v.status_code == 200 and main._cles_a_valider() == set()
+    assert "a_valider" not in json.loads((maitre / "p2p/wg_mesh.json").read_text())["peers"][0]
+    assert (maitre / "p2p/relais.demande").exists()           # exposé à la validation
     assert "autojoin_valide" in _audit(maitre)
+
+
+@pytest.mark.parametrize("cas", ["empreinte", "cle", "nom", "nom_reserve", "nom_defaut", "nom_maillage"])
+def test_autojoin_ne_reprend_jamais_un_pair_existant(maitre, cas):
+    c = TestClient(main.app)
+    (maitre / "p2p/master-link/requests.json").write_text(json.dumps([
+        {"fingerprint": "sbx-gk3", "hostname": "gk3", "status": "approved", "wg_public_key": K2, "mesh_ip": "10.10.0.5"}]))
+    (maitre / "p2p/wg_mesh.json").write_text(json.dumps({"peers": [{"public_key": "Z" * 43 + "=", "mesh_ip": "10.10.0.9", "name": "gk4"}]}))
+    _ouvrir(c)
+    corps = {"fingerprint": "sbx-neuf", "hostname": "neuf", "wg_public_key": K1}
+    corps.update({"empreinte": {"fingerprint": "sbx-gk3"}, "cle": {"wg_public_key": K2}, "nom": {"hostname": "gk3"},
+                  "nom_reserve": {"hostname": "admin"}, "nom_defaut": {"hostname": "secubox"},
+                  "nom_maillage": {"hostname": "gk4"}}[cas])
+    jeton = _jeton(c)
+    r = c.post("/master-link/join", json={"token": jeton, **corps})
+    assert r.status_code == 409, r.text
+    req = json.loads((maitre / "p2p/master-link/requests.json").read_text())
+    assert req[0]["wg_public_key"] == K2 and len(req) == 1      # gk3 intact
+    assert c.post("/master-link/join", json={"token": jeton, "fingerprint": "sbx-x", "hostname": "x2",
+                                             "wg_public_key": K1}).status_code == 403   # jeton consommé par le refus
+
+
+def test_drapeau_a_valider_recopie_au_transport():
+    state = {"peers": []}
+    main._inscrire_au_transport(state, {"hostname": "gk12", "a_valider": True}, K1, "10.10.0.7")
+    assert state["peers"][0]["a_valider"] is True
+    state = {"peers": []}
+    main._inscrire_au_transport(state, {"hostname": "gk12"}, K1, "10.10.0.7")
+    assert "a_valider" not in state["peers"][0]
 
 
 def test_valider_exige_un_administrateur():
@@ -112,17 +186,21 @@ def test_jonction_ordinaire_pas_a_valider(maitre):
                                                              "wg_public_key": K2})
     assert r.status_code == 200
     assert "a_valider" not in json.loads((maitre / "p2p/master-link/requests.json").read_text())[0]
+    assert (maitre / "p2p/relais.demande").exists()           # pair neuf ordinaire : relayé aussitôt
 
 
-def test_nginx_pose_et_vide_l_adresse_d_enrolement():
-    assert "proxy_set_header X-SecuBox-Enrol-IP $remote_addr;" in (ICI / "nginx/p2p-masterlink.conf").read_text()
-    assert 'proxy_set_header X-SecuBox-Enrol-IP "";' in (ICI / "nginx/p2p.conf").read_text()
+def test_nginx_pose_le_secret_et_l_adresse_que_l_administration_vide():
+    t = (ICI / "nginx/p2p-masterlink.conf").read_text()
+    assert "proxy_set_header X-SecuBox-Enrol-IP $realip_remote_addr;" in t
+    assert "proxy_set_header X-SecuBox-Enrol-Cle $p2p_enrol_cle;" in t
+    a = (ICI / "nginx/p2p.conf").read_text()
+    assert 'proxy_set_header X-SecuBox-Enrol-IP "";' in a and 'proxy_set_header X-SecuBox-Enrol-Cle "";' in a
+    assert "$p2p_enrol_cle" in (ICI / "debian/postinst").read_text() and "p2p_enrol_cle" in (ICI / "debian/preinst").read_text()
 
 
 # ── côté box ────────────────────────────────────────────────────────────────────────────────────────────────────────
 def _autojoin(tmp_path, monkeypatch):
     monkeypatch.setenv("SBX_P2P_DIR", str(tmp_path))
-    monkeypatch.setenv("SBX_AUTOJOIN_OFF", str(tmp_path / "autojoin.off"))
     chargeur = importlib.machinery.SourceFileLoader("secubox_autojoin", str(ICI / "sbin/secubox-autojoin"))
     spec = importlib.util.spec_from_loader("secubox_autojoin", chargeur)
     m = importlib.util.module_from_spec(spec)
@@ -160,23 +238,24 @@ class _Rep:
 def test_box_depose_le_code_de_sa_passerelle(tmp_path, monkeypatch):
     m = _autojoin(tmp_path, monkeypatch)
     jeton = "c" * 64
-    assert m.demander_jeton("192.168.42.1", ouvrir=lambda req, timeout: _Rep(json.dumps({"token": jeton}).encode())) == jeton
-    assert m.demander_jeton("192.168.42.1", ouvrir=lambda req, timeout: _Rep(b'{"token": "court"}')) is None
+    assert m.demander_jeton("192.168.42.1", ouvrir=lambda req, timeout: _Rep(json.dumps({"token": jeton}).encode())) == (jeton, None)
+    j, raison = m.demander_jeton("192.168.42.1", ouvrir=lambda req, timeout: _Rep(b'{"token": "court"}'))
+    assert j is None and raison
 
     def refuse(req, timeout):
         raise OSError("refusé")
-    assert m.demander_jeton("192.168.42.1", ouvrir=refuse) is None
+    j, raison = m.demander_jeton("192.168.42.1", ouvrir=refuse)
+    assert j is None and "192.168.42.1" in raison
     m.deposer("192.168.42.1", jeton)
     code = (tmp_path / "automesh.code").read_text()
     assert m.automesh.decoder(code) == ("192.168.42.1", jeton)
     assert oct((tmp_path / "automesh.code").stat().st_mode & 0o777) == "0o600"
+    assert not [f for f in tmp_path.iterdir() if f.name.startswith(".automesh-")]
 
 
-def test_box_coupee_ne_demande_rien(tmp_path, monkeypatch):
-    m = _autojoin(tmp_path, monkeypatch)
-    (tmp_path / "autojoin.off").write_text("")
-    monkeypatch.setattr(m, "passerelle", lambda: pytest.fail("ne doit pas chercher de passerelle"))
-    assert m.main() == 0
+def test_box_commande_seulement_aucune_minuterie():
+    assert not (ICI / "systemd/secubox-autojoin.timer").exists()
+    assert "secubox-autojoin.timer" not in (ICI / "debian/postinst").read_text()
 
 
 # ── relais : apparition et disparition ─────────────────────────────────────────────────────────────────────────────
@@ -217,11 +296,17 @@ def test_pairs_disparus(tmp_path):
     poignees = f"{K1}\t{maintenant - 6 * 86400}\n{K2}\t{maintenant - 30}\nAAAA\t0\n"
     r = _execute(tmp_path, "pairs_disparus", f, 72 * 3600, maintenant, poignees)
     assert r.returncode == 0
-    # gk4 muet depuis 6 jours : disparu ; gk12 vivant ; « neuf » jamais vu mais ajouté récemment : gardé ;
-    # pairs absents de la mesure (BBBB…) : jamais déclarés disparus
+    # gk4 muet depuis 6 jours : disparu ; gk12 vivant ; poignée à 0 (interface remontée) ou mesure absente : INCONNU, gardé
     assert r.stdout.split() == ["10.10.0.9"]
     (tmp_path / "illisible.json").write_text("{")
     assert _execute(tmp_path, "pairs_disparus", tmp_path / "illisible.json", 1, maintenant, poignees).stdout == ""
+
+
+def test_pairs_a_valider(tmp_path):
+    f = tmp_path / "wg.json"
+    f.write_text(json.dumps({"peers": [{"mesh_ip": "10.10.0.7", "a_valider": True}, {"mesh_ip": "10.10.0.5"},
+                                       {"mesh_ip": "10.10.0.6", "a_valider": "oui"}]}))
+    assert _execute(tmp_path, "pairs_a_valider", f).stdout.split() == ["10.10.0.7"]
 
 
 def test_synchronisation_branche_l_apparition_et_la_disparition():
@@ -230,14 +315,20 @@ def test_synchronisation_branche_l_apparition_et_la_disparition():
     assert 'nom_du_pair_wg "$WG_ETAT" "$ip"' in s and 'source=jonction' in s
     assert '[ "$source" = webos ] || continue' in s       # source jonction : jamais de retrait de noms publiés
     assert 'pairs="${pairs_vivants# }"' in s              # les disparus ne sont plus sondés ; leurs ports partent
+    assert 'pairs_a_valider "$WG_ETAT"' in s and "rien d'exposé avant" in s
+    assert 'nom_exclu_pilotage "$nom" && continue' in RELAIS
 
 
 def test_jonction_demande_le_relais_tout_de_suite(maitre):
+    src = (ICI / "api/main.py").read_text()
+    prov = src[src.index("def _provision("):src.index("RELAIS_DEMANDE = ")]
+    assert "_demander_relais()" not in prov                   # pas à chaque retour d'un pair connu
     main._demander_relais()
     assert (maitre / "p2p/relais.demande").exists()
     u = (ICI / "systemd/secubox-relais-maillage-demande.service").read_text()
     assert "ExecStartPre=/bin/rm -f /var/lib/secubox/p2p/relais.demande" in u
+    assert "-lt 300 ]" in u and "NoNewPrivileges=yes" in u     # au plus une passe déclenchée toutes les 5 min
     assert "PathExists=/var/lib/secubox/p2p/relais.demande" in (ICI / "systemd/secubox-relais-maillage-demande.path").read_text()
     rules = (ICI / "debian/rules").read_text()
-    for f in ("secubox-relais-maillage-demande.path", "secubox-autojoin.timer", "sbin/secubox-autojoin"):
+    for f in ("secubox-relais-maillage-demande.path", "sbin/secubox-autojoin"):
         assert f in rules, f

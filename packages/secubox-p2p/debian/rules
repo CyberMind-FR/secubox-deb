@@ -33,9 +33,8 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-p2p/usr/sbin $(CURDIR)/debian/secubox-p2p/lib/systemd/system
 	install -m 755 $(CURDIR)/sbin/secubox-automesh $(CURDIR)/debian/secubox-p2p/usr/sbin/secubox-automesh
 	install -m 644 $(CURDIR)/systemd/secubox-automesh.service $(CURDIR)/systemd/secubox-automesh.timer $(CURDIR)/debian/secubox-p2p/lib/systemd/system/
-	# Autojoin (#3638) : box derrière un maître SecuBox
+	# Autojoin (#3638) : commande de la box derrière un maître SecuBox (fenêtre d'appairage ouverte sur le maître)
 	install -m 755 $(CURDIR)/sbin/secubox-autojoin $(CURDIR)/debian/secubox-p2p/usr/sbin/secubox-autojoin
-	install -m 644 $(CURDIR)/systemd/secubox-autojoin.service $(CURDIR)/systemd/secubox-autojoin.timer $(CURDIR)/debian/secubox-p2p/lib/systemd/system/
 	# Install systemd service
 	install -d $(CURDIR)/debian/secubox-p2p/usr/lib/systemd/system
 	install -m 644 $(CURDIR)/debian/secubox-p2p.service $(CURDIR)/debian/secubox-p2p/usr/lib/systemd/system/

@@ -104,9 +104,6 @@ case "$1" in
             || echo "secubox-p2p : projection des pairs enrôlés non publiée (le pilotage ne reconnaîtra aucune box du maillage)" >&2
         systemctl enable secubox-automesh.timer >/dev/null 2>&1 || true
         systemctl start secubox-automesh.timer >/dev/null 2>&1 || true
-        # #3638 : autojoin derrière un maître SecuBox (sans effet sur une box déjà maillée ou maître de ses pairs).
-        systemctl enable secubox-autojoin.timer >/dev/null 2>&1 || true
-        systemctl start secubox-autojoin.timer >/dev/null 2>&1 || true
         systemctl start secubox-p2p.service || true
 
         # ── MIRRORNET : L'ÉTAT DEVIENT UN TUNNEL (#1360) ───────────────────
@@ -168,7 +165,7 @@ case "$1" in
             ( umask 077
               rm -f "$_ngx.new"
               set -C
-              printf 'map $p2p_pair_maille $p2p_pair_cle {\n    1 "%s";\n    default "";\n}\n' "$_t" > "$_ngx.new"
+              printf 'map $p2p_pair_maille $p2p_pair_cle {\n    1 "%s";\n    default "";\n}\n# #3638 : secret de l ecouteur 7331, pose dans X-SecuBox-Enrol-Cle (autojoin)\nmap $p2p_pair_maille $p2p_enrol_cle {\n    default "%s";\n}\n' "$_t" "$_t" > "$_ngx.new"
               mv -f "$_ngx.new" "$_ngx" )
             _own root:root "$_ngx"
             chmod 0600 "$_ngx"

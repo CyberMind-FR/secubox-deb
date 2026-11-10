@@ -494,12 +494,13 @@ print(noms[0])
 PY
 }
 
-# PAIRS DISPARUS (#3638) : sans poignée de main depuis <seuil> secondes (ou jamais, et ajoutés depuis plus longtemps), leurs
-# noms et ports relayés sont retirés ; le pair, lui, reste dans le maillage (l'oublier est un geste de l'administrateur).
-# Revenu, il retrouve ses noms à la synchronisation suivante. Entrée : `wg show wg-mesh latest-handshakes`. Rend une IP par ligne.
+# PAIRS DISPARUS (#3638) : dernière poignée de main plus vieille que <seuil> secondes. Une poignée à 0 veut dire « aucune
+# depuis la montée de l'interface » (redémarrage du maître) : INCONNU, jamais disparu. Leurs noms et ports relayés sont
+# retirés ; le pair reste au maillage (l'oublier est un geste de l'administrateur) et retrouve ses noms à son retour.
+# Entrée : `wg show wg-mesh latest-handshakes`. Rend une IP par ligne.
 pairs_disparus() {   # pairs_disparus <wg_mesh.json> <seuil_s> <maintenant> <latest-handshakes>
     python3 - "$1" "$2" "$3" "$4" <<'PY'
-import datetime, json, sys
+import json, sys
 etat, seuil, maintenant, brut = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
 try:
     with open(etat) as f:
@@ -513,16 +514,27 @@ for ligne in brut.splitlines():
         poignee[c[0]] = int(c[1])
 for p in pairs:
     cle, ip = p.get("public_key"), p.get("mesh_ip")
-    if not isinstance(ip, str) or cle not in poignee or p.get("direct") is True:
-        continue                      # pas sur l'interface (mesure absente) : jamais déclaré disparu
-    dernier = poignee[cle]
-    if dernier == 0:
-        try:
-            dernier = int(datetime.datetime.fromisoformat(str(p.get("added"))).timestamp())
-        except ValueError:
-            continue
-    if maintenant - dernier > seuil:
+    if not isinstance(ip, str) or p.get("direct") is True:
+        continue
+    dernier = poignee.get(cle, 0)
+    if dernier and maintenant - dernier > seuil:
         print(ip)
+PY
+}
+
+# PAIRS À VALIDER (#3638) : entrés par autojoin, pas encore validés dans la Flotte — WireGuard seul, jamais exposés
+# (ni noms, ni ports, ni joker). Rend une IP par ligne ; état illisible : aucune.
+pairs_a_valider() {   # pairs_a_valider <wg_mesh.json>
+    python3 - "$1" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        pairs = json.load(f).get("peers") or []
+except (OSError, ValueError, AttributeError, TypeError):
+    sys.exit(0)
+for p in pairs:
+    if isinstance(p, dict) and p.get("a_valider") is True and isinstance(p.get("mesh_ip"), str):
+        print(p["mesh_ip"])
 PY
 }
 
@@ -596,6 +608,15 @@ if not isinstance(d, dict) or d.get("version") != 1 or not isinstance(d.get("box
     sys.exit(1)
 entrees = [b for b in d["boxes"] if isinstance(b, dict) and b.get("adresse") == ip]
 if not entrees:
+    # #3638 : « inconnu du pilotage » seulement si AUCUNE box du plan ne porte le nom de jonction de cette IP ; sinon
+    # (même nom à une autre adresse) c'est un désaccord : rien.
+    try:
+        with open(wg) as f:
+            noms_ip = {p.get("name") for p in json.load(f).get("peers") or [] if isinstance(p, dict) and p.get("mesh_ip") == ip}
+    except (OSError, ValueError, AttributeError):
+        sys.exit(1)
+    if any(isinstance(b, dict) and b.get("box") in noms_ip for b in d["boxes"]):
+        sys.exit(1)
     sys.exit(3)
 if len(entrees) != 1:
     sys.exit(1)
@@ -919,6 +940,7 @@ retirer_relais_de_ip() {   # retirer_relais_de_ip <ip>
     ip_valide "$ip" || return 1
     for nom in $(routes_de_ip "$ROUTES" "$ip"); do
         nom_valide "$nom" || continue
+        nom_exclu_pilotage "$nom" && continue      # R-L5-27 : admin.<box> d'une box distante appartient au pilotage
         if ( RELAIS_EN_LOT=1 cmd_retirer "$nom" ) >/dev/null 2>&1; then
             n=$((n + 1)); log "retiré : $nom (pair $ip disparu)"; audit_relais relais_retire_disparu "$nom" "$ip"
         else
@@ -952,7 +974,8 @@ cmd_synchroniser() {
 
     local ip json dpair nom label ajoutes=0 vus=0 echecs=0 retires=0 publies perime
     # #3638 : pairs disparus d'abord — leurs noms partent, et ils ne sont pas resondés dans cette passe.
-    local seuil_h disparus="" pairs_vivants=""
+    local seuil_h disparus="" pairs_vivants="" a_valider
+    a_valider=" $(pairs_a_valider "$WG_ETAT" | tr '\n' ' ') "
     seuil_h="$(reglage retrait_disparus_h 72)"
     if [[ "$seuil_h" =~ ^[0-9]{1,5}$ ]] && [ "$seuil_h" -gt 0 ]; then
         disparus=" $(pairs_disparus "$WG_ETAT" $((seuil_h * 3600)) "$(date +%s)" "$(wg show wg-mesh latest-handshakes 2>/dev/null || true)" | tr '\n' ' ') "
@@ -963,6 +986,8 @@ cmd_synchroniser() {
                 log "pair $ip muet depuis plus de ${seuil_h} h : ses noms et ports relayés sont retirés"
                 retirer_relais_de_ip "$ip" && retires=$((retires + 1))
             fi
+        elif [[ "$a_valider" == *" $ip "* ]]; then
+            log "pair $ip à valider (autojoin) : rien d'exposé avant « Valider » dans la Flotte"
         else
             pairs_vivants="$pairs_vivants $ip"
         fi
@@ -988,7 +1013,8 @@ except Exception: pass' 2>/dev/null)"
         fi
         # #3638 : ni webos ni pilotage (profil mobile) — admin.<box>, nom de la jonction, s'il répond vraiment ; jamais de retrait.
         # Seulement si le pilotage ne connaît PAS ce pair (code 3) : un plan rejeté ou en désaccord ne laisse rien passer.
-        if [ -z "$dpair" ] && [ "$rc_expo" = 3 ] && bx="$(nom_du_pair_wg "$WG_ETAT" "$ip")"; then
+        if [ -z "$dpair" ] && [ "$rc_expo" = 3 ] && bx="$(nom_du_pair_wg "$WG_ETAT" "$ip")" && \
+           [[ " admin hall www apt mail ai api secubox gk2 master maitre relais unknown localhost secubox-mochabin secubox-espressobin " != *" $bx "* ]]; then
             local c_admin
             c_admin="$(curl -s -o /dev/null --max-time 6 -w '%{http_code}' -H "Host: admin.$bx.${dom#*.}" "http://$ip:$PORT_PAIR/" || true)"
             if [[ "$c_admin" =~ ^[23][0-9][0-9]$ ]]; then
