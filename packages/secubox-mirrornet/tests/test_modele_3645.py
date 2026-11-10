@@ -27,8 +27,8 @@ def cx(tmp_path):
 
 # ── schéma ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 def test_migration_idempotente_et_versionnee(tmp_path):
-    assert schema.initialiser(tmp_path / "m.db") == 1
-    assert schema.initialiser(tmp_path / "m.db") == 1
+    assert schema.initialiser(tmp_path / "m.db") == schema.VERSION == 2
+    assert schema.initialiser(tmp_path / "m.db") == 2
     c = schema.ouvrir(tmp_path / "m.db")
     tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     for t in ("node", "offer", "dataset_version", "subscription", "subscription_event", "usage_record", "account",
@@ -339,3 +339,20 @@ def test_purge_ne_perd_jamais_le_ledger():
     bloc = t[t.index("purge)"):]
     assert bloc.index('if tar -C /var/lib') < bloc.index("rm -rf /var/lib/secubox-mirrornet")
     assert "CONSERVÉ" in bloc
+
+
+def test_montee_v1_vers_v2_garde_les_donnees(tmp_path):
+    """#3647 : une base de la phase 2 (v1, ledger rempli) monte en v2 sans rien perdre ni casser la chaîne."""
+    c = schema.ouvrir(tmp_path / "m.db")
+    c.execute("BEGIN IMMEDIATE")
+    for i in schema.MIGRATIONS[1]:
+        c.execute(i)
+    c.execute("PRAGMA user_version = 1")
+    c.execute("COMMIT")
+    a, b = ledger.compte(c, "credits", "did:plc:" + "a" * 32), ledger.compte(c, "credits", "did:plc:" + "b" * 32)
+    ledger.ecrire_transaction(c, "avant montée", [(a, -5), (b, 5)])
+    assert schema.migrer(c) == 2
+    assert ledger.verifier_integrite(c) == [] and len(ledger.soldes(c)) == 2
+    colonnes = {r[1] for r in c.execute("PRAGMA table_info(subscription)")}
+    assert {"role", "echeance", "demande_le"} <= colonnes
+    c.close()

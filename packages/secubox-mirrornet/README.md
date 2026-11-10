@@ -5,10 +5,24 @@ MirrorNet v1 — plan de contrôle des **services**, des **données** et des **c
 Conception : `docs/MIRRORNET_ARCHITECTURE.md` (et `NETWORK`, `SERVICE_EXCHANGE`, `DATA_EXCHANGE`, `ECONOMY`,
 `SECURITY`, `DATA_MODEL`), audit `docs/MIRRORNET_AUDIT.md`.
 
-**Phase 2 (#3645) : modèle de données et squelette en lecture seule.** Rien n'est encore synchronisé avec l'annuaire,
-aucune route n'écrit ; les tables sont vides tant que la phase 3 (abonnements) n'est pas livrée.
+**Phase 3 (#3647) : cycle de vie des abonnements.** Phase 2 (#3645) : modèle de données et squelette.
 
-Paquet Debian : version `0.1.0-1~trixie1`, architecture `all`.
+Paquet Debian : version `0.2.0-1~trixie1`, architecture `all`. Demande `secubox-annuaire` ≥ 0.18.0 (export, routes
+`/self/...`).
+
+## Principe
+
+MirrorNet ne détient aucune clé. L'annuaire (compte `secubox`, propriétaire du journal et de `node.key`) :
+
+1. dépose après chaque synchronisation (20 s pour les opérations `service_*`, 300 s pour le journal entier)
+   `/var/lib/secubox/annuaire/mirrornet-export.json` : offres de tous, abonnements où CE nœud est abonné ou
+   fournisseur, niveaux de confiance calculés, joignabilité des pairs ;
+2. signe les gestes ordonnés par MirrorNet (`/self/...`, jeton de l'administrateur relayé) et les écrit dans
+   `audit.log` avec l'administrateur auteur (`par`).
+
+MirrorNet relit l'export toutes les 60 s, **revérifie** chaque entrée (liaison did ↔ clé, signature Ed25519, auteur à la
+bonne place, champs bornés ; un `service_id` reste à son premier fournisseur), puis dérive l'état de chaque abonnement
+(`secubox_mirrornet/abonnements.py`, fonction pure) et n'ajoute un événement qu'au changement.
 
 ## Contenu
 
@@ -23,7 +37,11 @@ Paquet Debian : version `0.1.0-1~trixie1`, architecture `all`.
   découpage exact au centième.
 - `secubox_mirrornet/lanceur.py` : migration du schéma puis uvicorn, dans le processus principal de l'unité (code 3
   si la base est plus récente que le code : `RestartPreventExitStatus=3`, pas de boucle).
-- `api/main.py` : API locale.
+- `secubox_mirrornet/verif.py` : sérialisation canonique, did:plc, signature Ed25519 (mêmes règles que l'annuaire).
+- `secubox_mirrornet/catalogue.py` : lecture bornée de l'export, index vérifié, synchronisation en une transaction.
+- `secubox_mirrornet/abonnements.py` : états dérivés (Demande, Refuse, Actif, Grace, Suspendu, Expire, Resilie).
+- `secubox_mirrornet/annuaire.py` : client des routes `/self/...` de l'annuaire local (socket Unix).
+- `api/main.py` : API locale et boucle de synchronisation.
 
 ## Exécution
 
@@ -40,17 +58,28 @@ Préfixe `/api/v1/mirrornet/` (nginx `nginx/mirrornet.conf`, jamais de vhost pub
 | `GET` | `/health` | aucune |
 | `GET` | `/status` | require_lecture |
 | `GET` | `/schema` | require_lecture |
-| `GET` | `/services` | require_lecture |
+| `GET` | `/services` | require_lecture (offres présentables + les miennes) |
+| `GET` | `/services/{service_id}` | require_lecture (404 si non présentable) |
 | `GET` | `/datasets` | require_lecture |
-| `GET` | `/subscriptions` | require_jwt (relations privées entre nœuds) |
+| `GET` | `/subscriptions`, `/subscriptions/{id}` | require_jwt (relations privées ; historique des états) |
+| `POST` | `/services/publish` | require_jwt — offre de CE nœud (`kind=dataset` : phase 4) |
+| `POST` | `/services/{service_id}/subscribe` | require_jwt — évaluation locale puis abonnement signé |
+| `POST` | `/subscriptions/{id}/renew` | require_jwt — abonné, état Actif ou Grace, avant l'échéance |
+| `DELETE` | `/subscriptions/{id}?motif=` | require_jwt — résiliation (abonné) ou révocation (fournisseur) |
 | `GET` | `/economy/distribution-rules` | require_lecture |
 | `GET` | `/economy/account` | require_jwt (ledger privé) |
 | `GET` | `/economy/ledger` | require_jwt (écritures + contrôle d'intégrité) |
 
+Écritures : idempotence par l'en-tête `X-Idempotence` (8 à 64 caractères ; la clé est réservée avant le geste,
+rejouée telle quelle ensuite, libérée en cas d'échec). Refus d'évaluation (409) : offre retirée, propre offre,
+fournisseur OBSERVER/REVOKED ou sous `confiance_min`, LIMITED autre que gratuit et public, architecture incompatible.
+Niveaux : PARTNER et TRUSTED (grants) arrivent avec le socle A21 ; d'ici là tout membre est LIMITED.
+
 ## Configuration
 
 `/etc/secubox/mirrornet.toml` (0640 root:secubox, semé une fois depuis `conf/mirrornet.toml`) : `[catalogue]
-confiance_min`, `[abonnements] grace_s`, `[economie] disponibilite_min`. Phase 2 : aucun réglage n'a encore d'effet.
+confiance_min`, `[abonnements] grace_s` (défaut si l'offre n'en déclare pas), `[synchro] intervalle_s`,
+`[economie] disponibilite_min` (phase 5). Valeur absente ou hors bornes : défaut.
 
 ## Retour arrière
 
@@ -60,5 +89,7 @@ sauvegarde ou réinstaller la version correspondante.
 
 ## Tests
 
-`python3 -m pytest packages/secubox-mirrornet` : schéma, contraintes, ajout seul, partie double, idempotence,
-altération détectée, répartition exacte (2 000 tirages), gardes de l'API.
+`python3 -m pytest packages/secubox-mirrornet` : schéma et montée v1 → v2, contraintes, ajout seul, partie double,
+idempotence, altération détectée, répartition exacte (2 000 tirages), gardes de l'API ; phase 3 : transitions à horloge
+simulée, signature falsifiée, clé d'autrui, vol de `service_id`, gestes de la mauvaise partie, catalogue par niveau,
+relais du jeton, idempotence des écritures.

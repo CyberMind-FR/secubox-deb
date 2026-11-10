@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # /etc/secubox/mirrornet.toml — MirrorNet v1 (#3645). Semé une fois par le postinst (0640 root:secubox) ; la copie
-# modifiée fait autorité. Phase 2 : lu pour information seulement, aucun réglage n'a encore d'effet.
+# modifiée fait autorité. Phase 3 (#3647) : les tables catalogue, abonnements et synchro ont effet ; economie en phase 5.
 # Aucun secret ici. Les règles de répartition vivent dans la base, versionnées (docs/MIRRORNET_ECONOMY.md § 4).
 
 [catalogue]
@@ -14,6 +14,10 @@ confiance_min = "LIMITED"
 [abonnements]
 # Période de grâce par défaut si une offre n'en déclare pas (secondes) : 5 jours, comme autoload.
 grace_s = 432000
+
+[synchro]
+# Intervalle de relecture de l'export de l'annuaire (secondes, 10 à 3600).
+intervalle_s = 60
 
 [economie]
 # Crédits internes sans valeur monétaire (arbitrage 3). Aucun règlement n'est jamais exécuté par le code.

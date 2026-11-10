@@ -1,3 +1,20 @@
+secubox-mirrornet (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Phase 3 de MirrorNet v1 (ref #3647) : cycle de vie des abonnements.
+  * Synchronisation toutes les 60 s de mirrornet-export.json (déposé par l'annuaire) :
+    chaque entrée revérifiée (liaison did-clé, signature Ed25519, auteur à la bonne place,
+    champs bornés), un service_id reste à son premier fournisseur.
+  * États dérivés à l'horloge (Demande, Refuse, Actif, Grace, Suspendu, Expire, Resilie),
+    événements en ajout seul aux seuls changements ; grâce par la joignabilité du fournisseur.
+  * Catalogue filtré (§ 3) : jamais OBSERVER ni REVOKED ; LIMITED : gratuit et public.
+  * Routes administrateur : POST /services/publish, POST /services/{id}/subscribe (évaluation
+    locale), POST /subscriptions/{id}/renew, DELETE /subscriptions/{id} ; relayées à l'annuaire
+    local avec le jeton de l'administrateur (MirrorNet ne lit jamais node.key) ; idempotence
+    par X-Idempotence (clé réservée avant le geste, libérée en cas d'échec).
+  * Schéma v2 (migration depuis v1 sans perte) ; dépend de python3-cryptography.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 09:43:23 +0100
+
 secubox-mirrornet (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Phase 2 de MirrorNet v1 (ref #3645) : modèle de données (docs/MIRRORNET_DATA_MODEL.md),

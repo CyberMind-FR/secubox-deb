@@ -70,6 +70,10 @@ class Op(str, Enum):
     SERVICE_APPROVE      = "service_approve"
     SERVICE_REJECT       = "service_reject"
     SERVICE_REVOKE_SUB   = "service_revoke_sub"
+    # MirrorNet v1 (#3647) : renouvellement signé par l'abonné, révocation d'un abonné par le fournisseur. Un nœud
+    # plus ancien les REJETTE à l'import (Op inconnue, compteur « rejected »), sans casser sa réplication.
+    SERVICE_RENEW            = "service_renew"
+    SERVICE_REVOKE_OFFER_SUB = "service_revoke_offer_sub"
     # Gondwana P1 directory (#768): the annuaire is the distributed directory.
     NODE_PUBLISH         = "node_publish"     # signed mesh peer registry entry
     CONFIG_PUBLISH       = "config_publish"   # signed, versioned config distribution
@@ -447,6 +451,42 @@ class PacDescriptor(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# MirrorNet v1 (#3647) — tarif et charge signée rétrocompatible
+# ---------------------------------------------------------------------------
+
+MODELES_TARIF = ("gratuit", "forfait", "usage", "palier", "reciproque", "parraine")
+# Champs ajoutés après coup aux objets signés : omis de la charge signée quand ils valent None, sinon la signature
+# d'un objet ancien (qui ne les connaissait pas) ne se vérifierait plus après un aller-retour par le modèle.
+CHAMPS_FACULTATIFS = frozenset({
+    "macro", "version", "compat", "tarif", "quotas", "classe", "duree_s", "grace_s", "sonde",
+    "tarif_accepte", "expire_le", "provider",
+})
+
+
+def valider_tarif(v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Tarif d'une offre (MIRRORNET_ECONOMY.md § 4) : crédits internes ENTIERS, sans valeur monétaire."""
+    if v is None:
+        return None
+    if set(v) - {"modele", "credits", "periode_s", "unite"}:
+        raise ValueError("tarif : clés admises modele, credits, periode_s, unite")
+    if v.get("modele") not in MODELES_TARIF:
+        raise ValueError(f"tarif : modele parmi {', '.join(MODELES_TARIF)}")
+    for cle, borne in (("credits", 10 ** 9), ("periode_s", 10 * 365 * 86400)):
+        x = v.get(cle)
+        if x is not None and (type(x) is not int or not 0 <= x <= borne):
+            raise ValueError(f"tarif : {cle} entier entre 0 et {borne}")
+    if v.get("unite") is not None and (not isinstance(v["unite"], str) or len(v["unite"]) > 32):
+        raise ValueError("tarif : unite, texte de 32 caractères au plus")
+    return v
+
+
+def charge_signee(obj: BaseModel) -> Dict[str, Any]:
+    """Charge à signer ou à vérifier : le modèle sans sig/signer_did, ni les champs facultatifs absents."""
+    return {k: v for k, v in obj.model_dump().items()
+            if k not in ("sig", "signer_did") and not (k in CHAMPS_FACULTATIFS and v is None)}
+
+
+# ---------------------------------------------------------------------------
 # ServiceOffer — a provider advertising a service to the trust graph
 # ---------------------------------------------------------------------------
 
@@ -471,11 +511,41 @@ class ServiceOffer(BaseModel):
     macro:         Optional[MacroDescriptor] = None
     pac:           Optional[PacDescriptor] = None
     created_at:    str = Field(default_factory=now_rfc3339)
+    # MirrorNet v1 (#3647, docs/MIRRORNET_SERVICE_EXCHANGE.md § 2) : champs FACULTATIFS. Absents (None), ils ne
+    # figurent pas dans la charge signée (`charge_signee`) : une offre ancienne garde exactement sa signature.
+    version:       Optional[str] = Field(default=None, max_length=64)
+    compat:        Optional[Dict[str, Any]] = None
+    tarif:         Optional[Dict[str, Any]] = None
+    quotas:        Optional[Dict[str, int]] = None
+    classe:        Optional[Literal["public", "communaute", "prive"]] = None
+    duree_s:       Optional[int] = Field(default=None, gt=0, le=10 * 365 * 86400)
+    grace_s:       Optional[int] = Field(default=None, ge=0, le=90 * 86400)
+    sonde:         Optional[str] = Field(default=None, max_length=256, pattern=r"^/[A-Za-z0-9._/~-]*$")
     sig:           Optional[str] = Field(
         default=None,
         description="Ed25519 sig over canonical_bytes(payload_without_sig)",
     )
     signer_did:    Optional[str] = None
+
+    @field_validator("tarif")
+    @classmethod
+    def _tarif_valide(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        return valider_tarif(v)
+
+    @field_validator("compat")
+    @classmethod
+    def _compat_borne(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        import json as _json  # noqa: PLC0415
+        if v is not None and len(_json.dumps(v)) > 1024:
+            raise ValueError("compat : 1 Kio au plus")
+        return v
+
+    @field_validator("quotas")
+    @classmethod
+    def _quotas_valides(cls, v: Optional[Dict[str, int]]) -> Optional[Dict[str, int]]:
+        if v is not None and (len(v) > 8 or any(len(k) > 32 or not 0 <= x <= 10 ** 15 for k, x in v.items())):
+            raise ValueError("quotas : 8 clés au plus, entiers de 0 à 10^15")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -494,8 +564,18 @@ class Subscription(BaseModel):
     subscriber:      str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
     service_id:      str
     requested_at:    str = Field(default_factory=now_rfc3339)
+    # MirrorNet v1 (#3647) : facultatifs, hors charge signée quand absents (rétrocompatibilité).
+    version:         Optional[str] = Field(default=None, max_length=64)
+    tarif_accepte:   Optional[Dict[str, Any]] = None
+    expire_le:       Optional[str] = Field(default=None, max_length=40)
+    provider:        Optional[str] = Field(default=None, pattern=r"^did:plc:[0-9a-f]{32}$")
     sig:             Optional[str] = None
     signer_did:      Optional[str] = None
+
+    @field_validator("tarif_accepte")
+    @classmethod
+    def _tarif_valide(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        return valider_tarif(v)
 
 
 # ---------------------------------------------------------------------------
