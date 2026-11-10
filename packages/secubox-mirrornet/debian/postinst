@@ -20,6 +20,8 @@ case "$1" in
             apparmor_parser -r /etc/apparmor.d/secubox-mirrornet \
               || echo "secubox-mirrornet : profil AppArmor non chargé (apparmor_parser -r /etc/apparmor.d/secubox-mirrornet)" >&2
         fi
+        # Menu du hub : l'entrée MirrorNet (menu.d) apparaît au prochain calcul (#3651).
+        rm -f /var/cache/secubox/menu.json 2>/dev/null || true
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload
             systemctl enable secubox-mirrornet.service >/dev/null 2>&1 || true

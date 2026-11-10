@@ -1,0 +1,11 @@
+{
+  "id": "mirrornet",
+  "name": "MirrorNet",
+  "icon": "🕸️",
+  "path": "/mirrornet/",
+  "category": "mesh",
+  "order": 13,
+  "description": "Services, données et contributions du maillage : catalogue, abonnements, publication",
+  "requires": ["secubox-mirrornet"],
+  "theme": "mesh"
+}

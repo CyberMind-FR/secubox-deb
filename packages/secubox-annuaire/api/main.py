@@ -986,6 +986,28 @@ async def self_cancel(subscription_id: str, req: SelfCancelRequest, ident: Dict[
     return res
 
 
+@app.post("/self/subscription/{subscription_id}/approve")
+async def self_approve(subscription_id: str, ident: Dict[str, Any] = Depends(_require_jwt)):
+    """SERVICE_APPROVE par CE nœud, fournisseur de l'offre (approbation manuelle, #3651)."""
+    from annuaire.verbs import approve_subscription  # noqa: PLC0415
+    priv, did = _cle_du_noeud()
+    res = await asyncio.to_thread(_geste, approve_subscription, get_journal(), priv, did, subscription_id)
+    _auditer_mirrornet("mirrornet_approbation", ident, subscription_id=subscription_id)
+    await asyncio.to_thread(_exporter_mirrornet)
+    return res
+
+
+@app.post("/self/subscription/{subscription_id}/reject")
+async def self_reject(subscription_id: str, ident: Dict[str, Any] = Depends(_require_jwt)):
+    """SERVICE_REJECT par CE nœud, fournisseur de l'offre (#3651)."""
+    from annuaire.verbs import reject_subscription  # noqa: PLC0415
+    priv, did = _cle_du_noeud()
+    res = await asyncio.to_thread(_geste, reject_subscription, get_journal(), priv, did, subscription_id)
+    _auditer_mirrornet("mirrornet_refus", ident, subscription_id=subscription_id)
+    await asyncio.to_thread(_exporter_mirrornet)
+    return res
+
+
 # ---------------------------------------------------------------------------
 # Directory endpoints — NodeRecord + ConfigBlob + log federation (gondwana P1, #768)
 # ---------------------------------------------------------------------------

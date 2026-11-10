@@ -7,7 +7,7 @@ Conception : `docs/MIRRORNET_ARCHITECTURE.md` (et `NETWORK`, `SERVICE_EXCHANGE`,
 
 **Phase 3 (#3647) : cycle de vie des abonnements.** Phase 2 (#3645) : modèle de données et squelette.
 
-Paquet Debian : version `0.2.0-1~trixie1`, architecture `all`. Demande `secubox-annuaire` ≥ 0.18.0 (export, routes
+Paquet Debian : version `0.2.1-1~trixie1`, architecture `all`. Demande `secubox-annuaire` ≥ 0.18.0 (export, routes
 `/self/...`).
 
 ## Principe
@@ -65,6 +65,7 @@ Préfixe `/api/v1/mirrornet/` (nginx `nginx/mirrornet.conf`, jamais de vhost pub
 | `POST` | `/services/publish` | require_jwt — offre de CE nœud (`kind=dataset` : phase 4) |
 | `POST` | `/services/{service_id}/subscribe` | require_jwt — évaluation locale puis abonnement signé |
 | `POST` | `/subscriptions/{id}/renew` | require_jwt — abonné, état Actif ou Grace, avant l'échéance |
+| `POST` | `/subscriptions/{id}/approve`, `/reject` | require_jwt — fournisseur, demande en attente (#3651) |
 | `DELETE` | `/subscriptions/{id}?motif=` | require_jwt — résiliation (abonné) ou révocation (fournisseur) |
 | `GET` | `/economy/distribution-rules` | require_lecture |
 | `GET` | `/economy/account` | require_jwt (ledger privé) |
@@ -74,6 +75,12 @@ Préfixe `/api/v1/mirrornet/` (nginx `nginx/mirrornet.conf`, jamais de vhost pub
 rejouée telle quelle ensuite, libérée en cas d'échec). Refus d'évaluation (409) : offre retirée, propre offre,
 fournisseur OBSERVER/REVOKED ou sous `confiance_min`, LIMITED autre que gratuit et public, architecture incompatible.
 Niveaux : PARTNER et TRUSTED (grants) arrivent avec le socle A21 ; d'ici là tout membre est LIMITED.
+
+## Interface web (#3651)
+
+`/mirrornet/` sur l'hôte d'administration (`www/mirrornet/index.html`, profil Aurora, entrée de menu `menu.d`) :
+synchronisation, catalogue, abonnements et abonnés avec historique, publication ; actions réelles confirmées dans la page,
+une clé `X-Idempotence` par geste ; `?demo=1` (aucune écriture), `?embed=1`. Phase 4 annoncée, aucune donnée inventée.
 
 ## Configuration
 
