@@ -5,7 +5,7 @@ SecuBox Annuaire-Miroir — federated self-certifying trust substrate.
 
 The Annuaire-Miroir is the trust directory for SecuBox-DEB, providing a BLAKE2b-chained, CONIKS-style append-only audit journal with four protocols: AUTO-ADD (provisional discovery), INVITE (capability-based membership), PROPOSAL (anti-plutocratic governance), and EMANCIPATE (staged anchor removal). All objects are Ed25519-signed, RFC 3339-timestamped, and access-gated by the can() resolver. Served on /run/secubox/annuaire.sock, JWT-gated.
 
-Paquet Debian : version `0.18.0-1~trixie1`, architecture `all`.
+Paquet Debian : version `0.18.1-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -164,7 +164,7 @@ source de l'écouteur wg-mesh, nom et empreinte lus dans `p2p-public/pairs-enrol
   l'échéance en cours).
 - Niveaux de confiance calculés (`annuaire/confiance.py`) : REVOKED, OBSERVER, LIMITED ; PARTNER/TRUSTED au socle A21.
 - Export `/var/lib/secubox/annuaire/mirrornet-export.json` (0640, atomique, réécrit seulement s'il change) après chaque
-  passe de synchronisation, et joignabilité des pairs (`mesh_sync.sync_once(suivi=…)`). Voie rapide 20 s étendue aux
-  opérations `service_`.
+  passe de synchronisation, et joignabilité des pairs (`mesh_sync.sync_once(suivi=…)`, sonde `/health` quand l'export
+  échoue : un export lent n'est pas une absence). Les opérations `service_` suivent la passe complète (300 s).
 - Routes `/self/...` : signées dans le processus propriétaire de `node.key` ; chaque geste écrit dans `audit.log`
   (`mirrornet_*`, avec l'administrateur `par`).

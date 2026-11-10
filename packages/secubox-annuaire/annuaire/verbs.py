@@ -2236,6 +2236,24 @@ def banned_ips(journal: Journal) -> List[str]:
 # last-writer-wins at the state layer (_get_nodes/_get_configs/_get_offers).
 # ---------------------------------------------------------------------------
 
+def _cles_publiques(journal: Journal) -> Dict[str, Optional[str]]:
+    """{did: clé publique} de la DERNIÈRE Identity auto-signée de chaque did — exactement _get_inviter_pubkey, pour
+    tous les dids en une requête (filtre SQL sur payload_type, seules les identités sont décodées)."""
+    cles: Dict[str, Optional[str]] = {}
+    con = journal._connect()
+    try:
+        for auteur, charge in con.execute("SELECT author, payload FROM log WHERE payload_type = 'Identity' ORDER BY height"):
+            try:
+                p = json.loads(charge)
+            except ValueError:
+                continue
+            if isinstance(p, dict) and p.get("did") == auteur:
+                cles[auteur] = p.get("pubkey")
+    finally:
+        con.close()
+    return cles
+
+
 def export_entries(journal: Journal, ops: Optional[Tuple[str, ...]] = None) -> List[Dict[str, Any]]:
     """Serialize the local log for a peer to pull.
 
@@ -2252,20 +2270,20 @@ def export_entries(journal: Journal, ops: Optional[Tuple[str, ...]] = None) -> L
     # (5 097 entrées sur gk2 → ~26 M d'itérations) qui figeait l'annuaire
     # plusieurs minutes. Les auteurs sont peu nombreux ; la clé d'un auteur ne
     # change pas le temps d'une lecture.
-    cles: Dict[str, Optional[str]] = {}
+    # #3647 : UNE seule lecture des identités (SQL, sans décoder le reste du journal) au lieu d'un balayage complet
+    # PAR auteur : sur gk2 (5 500 entrées), « ?ops=assist_ » prenait 21 s et dépassait le délai des pairs (5 s).
+    cles = _cles_publiques(journal)
     out: List[Dict[str, Any]] = []
     for entry in journal.iter_entries(tuple(ops) if ops else None):
         nom_op = entry.op.value if hasattr(entry.op, "value") else entry.op
         if ops and not str(nom_op).startswith(tuple(ops)):
             continue
-        if entry.author not in cles:
-            cles[entry.author] = _get_inviter_pubkey(journal, entry.author)
         out.append({
             "op": entry.op.value if hasattr(entry.op, "value") else entry.op,
             "payload_type": entry.payload_type,
             "payload": entry.payload,
             "author": entry.author,
-            "author_pubkey": cles[entry.author],
+            "author_pubkey": cles.get(entry.author),
             "sig": entry.sig,
         })
     return out

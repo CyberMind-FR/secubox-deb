@@ -1749,8 +1749,9 @@ async def _assist_sync_loop():
     while True:
         await asyncio.sleep(interval)
         await asyncio.to_thread(_inscrire_si_besoin)
-        # #3647 : les gestes d'abonnement (service_*) passent par la voie rapide : 20 s au lieu de 300 s.
-        await asyncio.to_thread(_cycle_sync, peers_path, "assist_,service_")
+        # Voie rapide : assistance seulement. Les gestes d'abonnement (service_*) suivent la passe complète (300 s) :
+        # les ajouter ici imposait à chaque pair, toutes les 20 s, un export lourd au maître (#3647, banc).
+        await asyncio.to_thread(_cycle_sync, peers_path, "assist_")
 
 
 @app.post("/sync/now", dependencies=[Depends(_require_jwt)])

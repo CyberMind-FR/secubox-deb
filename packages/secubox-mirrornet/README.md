@@ -14,7 +14,7 @@ Paquet Debian : version `0.2.0-1~trixie1`, architecture `all`. Demande `secubox-
 
 MirrorNet ne détient aucune clé. L'annuaire (compte `secubox`, propriétaire du journal et de `node.key`) :
 
-1. dépose après chaque synchronisation (20 s pour les opérations `service_*`, 300 s pour le journal entier)
+1. dépose après chaque synchronisation (passe complète du journal toutes les 300 s ; voie rapide de 20 s pour l'assistance)
    `/var/lib/secubox/annuaire/mirrornet-export.json` : offres de tous, abonnements où CE nœud est abonné ou
    fournisseur, niveaux de confiance calculés, joignabilité des pairs ;
 2. signe les gestes ordonnés par MirrorNet (`/self/...`, jeton de l'administrateur relayé) et les écrit dans
