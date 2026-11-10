@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+Source: secubox-mirrornet
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-mirrornet
+Architecture: all
+Depends: ${misc:Depends},
+ python3 (>= 3.11),
+ python3-fastapi,
+ python3-uvicorn,
+ secubox-core,
+ adduser,
+ systemd
+Recommends: secubox-annuaire,
+ secubox-p2p
+Description: SecuBox MirrorNet v1 — plan de contrôle des services, données et contributions
+ Phase 2 (#3645) : modèle de données et squelette en lecture seule. Base SQLite
+ locale et privée (WAL) : catalogue d'offres et de jeux de données, abonnements,
+ relevés d'usage, ledger de crédits en partie double (ajout seul, chaîné,
+ contrôle d'intégrité), règles de répartition versionnées. Crédits internes sans
+ valeur monétaire. API locale gardée sur /run/secubox/mirrornet.sock, sans
+ aucune route d'écriture à ce stade.

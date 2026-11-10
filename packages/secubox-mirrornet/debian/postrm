@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+    purge)
+        # La base contient le ledger de ce nœud : retirée seulement à la purge explicite du paquet.
+        rm -rf /var/lib/secubox-mirrornet
+        rm -f /etc/secubox/mirrornet.toml /etc/apparmor.d/secubox-mirrornet
+        if id -u secubox-mirrornet >/dev/null 2>&1; then
+            deluser --system secubox-mirrornet >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

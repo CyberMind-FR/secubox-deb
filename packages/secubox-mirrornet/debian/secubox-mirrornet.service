@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox MirrorNet v1 — API locale, phase 2 : lecture seule (#3645). Le schéma est créé ou migré au démarrage, sous le
+# compte du service. Compte dédié, aucune capacité, aucun réseau IP (les échanges entre pairs viendront en phase 3+).
+[Unit]
+Description=SecuBox MirrorNet — plan de contrôle (phase 2, lecture seule)
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-mirrornet
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/mirrornet
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStartPre=+/bin/rm -f /run/secubox/mirrornet.sock
+ExecStartPre=/usr/bin/python3 -m secubox_mirrornet.schema /var/lib/secubox-mirrornet/mirrornet.db
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/mirrornet.sock --workers 1 --log-level warning
+# uvicorn force sa socket en 0666 : remise en 0660 (groupe secubox, que nginx traverse) dès qu'elle existe.
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/mirrornet.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/mirrornet.sock'
+UMask=0027
+AppArmorProfile=-secubox-mirrornet
+StateDirectory=secubox-mirrornet
+StateDirectoryMode=0750
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ReadWritePaths=/run/secubox -/var/log/secubox/delegation.log
+
+[Install]
+WantedBy=multi-user.target

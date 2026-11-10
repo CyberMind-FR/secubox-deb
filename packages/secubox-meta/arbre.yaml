@@ -353,6 +353,7 @@ suggere:
   - secubox-mesh
   - secubox-daemon
   - secubox-meshtastic
+  - secubox-mirrornet           # MirrorNet v1 (#3645) : plan de contrôle services/données/contributions, phase 2 lecture seule
 
 meta: secubox-service-waf
 niveau: service
