@@ -3,11 +3,13 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 [Unit]
-Description=SecuBox Ad Guard — tri Netflix : retrait des autorisations échues (#3226)
+Description=SecuBox Ad Guard — tri Netflix : fermeture des ouvertures et retrait des autorisations échues (#3226)
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=10min
+OnBootSec=2min
+# Chaque minute : une ouverture de zone (démarrage d'épisode, 3 min) se referme à l'heure.
+OnUnitActiveSec=1min
+AccuracySec=5s
 Unit=secubox-ad-guard-tri.service
 
 [Install]

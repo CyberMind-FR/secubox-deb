@@ -385,4 +385,7 @@ Pour une TV que la box ne route pas (Wi-Fi de l'opérateur), case « Tri Netflix
 `*.oca.nflxvideo.net` reçoit NXDOMAIN dans la vue de l'appareil ; redemandé au moins `seuil` secondes distinctes en
 `fenetre_s`, il est autorisé `duree_s` (zone transparente posée à chaud par `secubox-adguard-tv tri-appliquer`,
 unité de chemin sur `/run/secubox/ad-guard-tri`, purge toutes les 10 min, autorisations en cours rendues dans le
-drop-in). Décisions tracées dans `audit.log` (`tri-autorise`, `tri-echec`).
+drop-in). Règle « par zone » (1.24.6, la TV bascule de serveur au lieu d'insister) : `serveurs` (2) serveurs nouveaux
+refusés en `fenetre_zone_s` (30 s) ouvrent la zone `ouverture_s` (180 s) ; les serveurs résolus pendant l'ouverture
+restent autorisés `duree_s`. Décisions tracées dans `audit.log` (`tri-autorise`, `tri-ouverture`, `tri-fermeture`,
+`tri-echec`).

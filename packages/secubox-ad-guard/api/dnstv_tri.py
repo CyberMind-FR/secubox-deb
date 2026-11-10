@@ -29,8 +29,13 @@ ZONE = "oca.nflxvideo.net"
 SERVEUR_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}\.[0-9]{1,3}\.oca\.nflxvideo\.net")
 SLUG_RE = re.compile(r"[a-z0-9-]{1,40}")
 DEMANDES = Path(os.environ.get("SECUBOX_ADGUARD_TRI_DEMANDES", "/run/secubox/ad-guard-tri"))
-DEFAUTS = {"seuil": 3, "fenetre_s": 20, "duree_s": 10800}
-BORNES = {"seuil": (2, 10), "fenetre_s": (5, 120), "duree_s": (600, 86400)}
+# seuil/fenetre_s : insistance sur UN nom (rarement vue en DNS : la TV bascule de serveur au lieu d'insister).
+# serveurs/fenetre_zone_s : RAFALE de serveurs nouveaux refusés (démarrage d'épisode) → zone ouverte ouverture_s ;
+# chaque serveur résolu pendant l'ouverture reste autorisé duree_s (l'épisode), la zone se referme (pubs isolées).
+DEFAUTS = {"seuil": 3, "fenetre_s": 20, "duree_s": 10800, "serveurs": 2, "fenetre_zone_s": 30, "ouverture_s": 180}
+BORNES = {"seuil": (2, 10), "fenetre_s": (5, 120), "duree_s": (600, 86400), "serveurs": (2, 10),
+          "fenetre_zone_s": (5, 300), "ouverture_s": (30, 1800)}
+OUVRIR = "ouvrir"                      # demande spéciale : ouverture de la zone pour l'appareil
 MAX_AUTORISES = 64                     # par appareil : au-delà, les plus anciens tombent (un épisode n'en demande que quelques-uns)
 
 
@@ -57,7 +62,7 @@ def valider(brut) -> Optional[dict]:
 
 
 def reglage(etat: dict) -> dict:
-    return etat.get("tri_netflix") or {"appareils": [], **DEFAUTS}
+    return {**DEFAUTS, "appareils": [], **(etat.get("tri_netflix") or {})}
 
 
 @dataclass
@@ -68,6 +73,34 @@ class Insistance:
     fenetre_s: int = DEFAUTS["fenetre_s"]
     vues: Dict[Tuple[str, str], List[int]] = field(default_factory=dict)
     demandes: Dict[Tuple[str, str], int] = field(default_factory=dict)
+    serveurs: int = DEFAUTS["serveurs"]
+    fenetre_zone_s: int = DEFAUTS["fenetre_zone_s"]
+    ouverture_s: int = DEFAUTS["ouverture_s"]
+    refuses: Dict[str, List[Tuple[int, str]]] = field(default_factory=dict)    # slug -> [(ts, serveur)] refusés récents
+    ouvert_jusque: Dict[str, int] = field(default_factory=dict)                  # slug -> fin supposée de l'ouverture
+    gardes: Dict[str, set] = field(default_factory=dict)                         # slug -> serveurs déjà demandés (ouverture)
+
+    def rafale(self, slug: str, nom: str, ts: int, refuse: bool) -> List[str]:
+        """Demandes à déposer pour la règle « par zone » : [OUVRIR] quand `serveurs` serveurs DISTINCTS ont été refusés en
+        `fenetre_zone_s` ; pendant l'ouverture supposée, chaque serveur résolu (autorisé) est demandé pour `duree_s`."""
+        if not SERVEUR_RE.fullmatch(nom) or not SLUG_RE.fullmatch(slug):
+            return []
+        if not refuse:
+            if ts > self.ouvert_jusque.get(slug, -1):
+                return []
+            deja = self.gardes.setdefault(slug, set())
+            if nom in deja:
+                return []                                        # un serveur résolu n'est demandé qu'une fois par ouverture
+            deja.add(nom)
+            return [nom]
+        recents = [(t, n) for t, n in self.refuses.get(slug, []) if ts - t < self.fenetre_zone_s and n != nom] + [(ts, nom)]
+        self.refuses[slug] = recents[-32:]
+        if len({n for _t, n in recents}) >= self.serveurs and ts > self.ouvert_jusque.get(slug, -1):
+            self.ouvert_jusque[slug] = ts + self.ouverture_s
+            self.refuses[slug] = []
+            self.gardes[slug] = set()
+            return [OUVRIR]
+        return []
 
     def voir(self, slug: str, nom: str, ts: int, refuse: bool) -> bool:
         """True quand une demande de déblocage doit partir pour (slug, nom)."""
@@ -98,7 +131,7 @@ MAX_POSES = 16                         # appels unbound-control par passe du con
 
 def deposer_demande(slug: str, nom: str, dossier: Path = DEMANDES) -> bool:
     """Une demande = un fichier vide `<slug>__<nom>` (création exclusive, jamais suivi de lien) ; le contrôleur root la lit."""
-    if not SLUG_RE.fullmatch(slug) or not SERVEUR_RE.fullmatch(nom):
+    if not SLUG_RE.fullmatch(slug) or not (nom == OUVRIR or SERVEUR_RE.fullmatch(nom)):
         return False
     try:
         fd = os.open(dossier / f"{slug}__{nom}", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -113,7 +146,7 @@ def deposer_demande(slug: str, nom: str, dossier: Path = DEMANDES) -> bool:
 def lire_demande(nom_fichier: str) -> Optional[Tuple[str, str]]:
     """Nom de fichier → (slug, serveur) revalidés, ou None."""
     slug, sep, nom = nom_fichier.partition("__")
-    if not sep or not SLUG_RE.fullmatch(slug) or not SERVEUR_RE.fullmatch(nom):
+    if not sep or not SLUG_RE.fullmatch(slug) or not (nom == OUVRIR or SERVEUR_RE.fullmatch(nom)):
         return None
     return slug, nom
 
@@ -156,8 +189,11 @@ def echus(autorises: Dict[str, Dict[str, int]], maintenant: Optional[int] = None
     return out
 
 
-def zones_vue(slug: str, etat: dict, autorises: Dict[str, Dict[str, int]], maintenant: Optional[int] = None) -> List[str]:
-    """Lignes `local-zone` à écrire dans la vue auto de `slug` (rendu complet : un rechargement d'Unbound les garde)."""
+def zones_vue(slug: str, etat: dict, autorises: Dict[str, Dict[str, int]], maintenant: Optional[int] = None,
+              ouvertures: Optional[Dict[str, int]] = None) -> List[str]:
+    """Lignes `local-zone` à écrire dans la vue auto de `slug` (rendu complet : un rechargement d'Unbound les garde).
+    Le refus de zone est TOUJOURS rendu : l'ouverture (démarrage d'épisode) n'existe qu'à chaud, un rechargement la referme
+    (échec fermé ; la TV refait une rafale si elle a encore besoin de vidéo). `ouvertures` est ignoré, gardé pour l'appel."""
     r = reglage(etat)
     if slug not in r["appareils"]:
         return []
@@ -179,3 +215,10 @@ def lire_json(chemin: Path) -> dict:
             return json.loads(h.read(1 << 20))
     except (OSError, ValueError):
         return {}
+
+
+def charger_ouvertures(brut) -> Dict[str, int]:
+    """{slug: fin d'ouverture} revalidé."""
+    if not isinstance(brut, dict):
+        return {}
+    return {k: v for k, v in brut.items() if isinstance(k, str) and SLUG_RE.fullmatch(k) and type(v) is int and v > 0}
