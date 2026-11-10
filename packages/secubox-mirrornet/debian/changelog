@@ -1,3 +1,11 @@
+secubox-mirrornet (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * Banc #3653 : le postinst crée /etc/nginx/secubox-mesh.d lui-même (configuré avant
+    secubox-annuaire, il sautait le rendu des routes maillées) ; AppArmor : lecture du
+    quota CPU du cgroup (refus sans effet relevé sur gk12).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 12:08:43 +0100
+
 secubox-mirrornet (0.3.0-1~trixie1) trixie; urgency=medium
 
   * Phase 4a de MirrorNet (ref #3653) : jeux de données.
