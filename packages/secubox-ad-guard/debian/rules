@@ -40,6 +40,10 @@ override_dh_auto_install:
 	install -m 644 debian/secubox-ad-guard-dnsfeed.service debian/secubox-ad-guard-auto.service debian/secubox-ad-guard-auto.timer debian/secubox-ad-guard/lib/systemd/system/
 	# #2240 — capteur DNS d'Actor Intelligence : unité, minuterie et exemple de liste de l'opérateur
 	install -m 644 debian/secubox-ad-guard-dnssensor.service debian/secubox-ad-guard-dnssensor.timer debian/secubox-ad-guard-dnsdump.service debian/secubox-ad-guard-dnsdump.timer debian/secubox-ad-guard/lib/systemd/system/
+	# Tri Netflix par insistance (#3226) : unité de chemin + contrôleur root + purge ; dossier des demandes (tmpfiles).
+	install -m 644 debian/secubox-ad-guard-tri.path debian/secubox-ad-guard-tri.service debian/secubox-ad-guard-tri.timer debian/secubox-ad-guard/lib/systemd/system/
+	install -d debian/secubox-ad-guard/usr/lib/tmpfiles.d
+	install -m 644 debian/secubox-ad-guard-tri.tmpfiles debian/secubox-ad-guard/usr/lib/tmpfiles.d/secubox-ad-guard-tri.conf
 	install -d debian/secubox-ad-guard/usr/share/secubox/ad-guard/config
 	install -m 644 config/dns-malveillants.txt.example debian/secubox-ad-guard/usr/share/secubox/ad-guard/config/
 

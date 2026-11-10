@@ -41,7 +41,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_regles  # noqa: E402
+from api import dnstv, dnstv_regles, dnstv_tri  # noqa: E402
 import secubox_unbound as _unbound  # noqa: E402   # D4 (#2050) : pose, vérification, rechargement — un seul code pour toutes les vues Unbound
 
 CHECKCONF = os.environ.get("SECUBOX_ADGUARD_TV_CHECKCONF", "unbound-checkconf")
@@ -237,7 +237,7 @@ def appliquer() -> int:
     etat, table, actives = charger_avec_regles()
     voulu = instantane(etat, actives, etats_regles())
     avant = lire_instantane()
-    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives))
+    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives, tri_autorises=_tri_autorises()))
     recharger()
     ecrire_instantane(voulu)
     audit_appareils(avant, etat)                                         # `apply` trace AUSSI les changements de périmètre (revue #1959)
@@ -318,7 +318,7 @@ def regles_appliquer() -> int:
     etat, table, actives = charger_avec_regles()
     voulu = instantane(etat, actives, etats_regles())
     avant = lire_instantane()
-    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives))
+    ecrire_verifier(dnstv.rendre_unbound(etat, table, actives, tri_autorises=_tri_autorises()))
     if etat["actif"]:
         _contournement_au_mieux(etat)                                    # lot 4 : modes, pauses et suspensions suivis à chaque passage
     else:
@@ -883,9 +883,95 @@ def _contournement_au_mieux(etat: dict) -> str:
     return r
 
 
+# ── tri Netflix par insistance (#3226) ───────────────────────────────────────────────────────────────────────────
+
+def _tri_chemin() -> Path:
+    return dossier_root() / "tri.json"
+
+
+def _tri_autorises() -> dict:
+    return dnstv_tri.charger_autorises(dnstv_tri.lire_json(_tri_chemin()))
+
+
+def _tri_sauver(autorises: dict) -> None:
+    d = dossier_root()
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".tri.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            os.fchmod(h.fileno(), 0o600)
+            h.write(json.dumps(autorises))
+        os.replace(tmp, _tri_chemin())
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+@contextlib.contextmanager
+def _verrou_court(delai_s: float = 20.0):
+    """Verrou du contrôleur, attendu au plus `delai_s` : un tri qui attendrait la fin d'un long `apply` arriverait après
+    l'épisode. Occupé : rend False, les demandes restent déposées et l'unité de chemin relance le tri."""
+    fd = os.open(dossier_root() / "verrou", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fin = time.monotonic() + delai_s
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() > fin:
+                    yield False                                  # occupé : la demande attend, l'unité ne passe pas en échec
+                    return
+                time.sleep(0.2)
+        yield True
+    finally:
+        os.close(fd)
+
+
+def tri_appliquer(dossier: Path = dnstv_tri.DEMANDES) -> int:
+    """Lit les demandes déposées par dnsfeed (nom de fichier = `<slug>__<serveur>`, revalidé), pose à chaud la zone
+    transparente du serveur dans la vue auto de l'appareil, garde l'échéance ; retire les autorisations échues."""
+    etat, _table = charger()
+    r = dnstv_tri.reglage(etat)
+    vues_auto = {dnstv._slug(c["nom"]) for c in etat["clients"] if c["mode"] == "auto"}
+    autorises = _tri_autorises()
+    poses, refuses = 0, 0
+    try:
+        entrees = list(os.scandir(dossier))
+    except OSError:
+        entrees = []
+    for e in entrees[:256]:
+        cible = dnstv_tri.lire_demande(e.name)
+        with contextlib.suppress(OSError):
+            os.unlink(dossier / e.name)                          # un lien est retiré, jamais suivi
+        if cible is None or not e.is_file(follow_symlinks=False):
+            refuses += 1
+            continue
+        slug, nom = cible
+        if not etat["actif"] or slug not in r["appareils"] or slug not in vues_auto:
+            refuses += 1
+            continue
+        dnstv_tri.autoriser(autorises, slug, nom, r["duree_s"])
+        try:
+            _control("view_local_zone_add", f"sbx-tv-auto-{slug}", f"{nom}.", "transparent")
+            poses += 1
+            audit("tri-autorise", f"{slug} {nom} {r['duree_s']}s")
+        except (RuntimeError, OSError, subprocess.SubprocessError) as ex:
+            audit("tri-echec", f"{slug} {nom} {ex}"[:200])
+    retires = 0
+    for slug, nom in dnstv_tri.echus(autorises):
+        with contextlib.suppress(RuntimeError, OSError, subprocess.SubprocessError):
+            _control("view_local_zone_remove", f"sbx-tv-auto-{slug}", f"{nom}.")
+            retires += 1
+    _tri_sauver(autorises)
+    print(json.dumps({"ok": True, "poses": poses, "refuses": refuses, "retires": retires}))
+    return 0
+
+
 def main(argv: list[str], entree: str | None = None) -> int:
     if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump", "audit-classification",
-                                         "audit-protection", "conntrack-dump", "dpi-cibles", "ndpid-arreter", "ndpid-reprendre", "seuils"):
+                                         "audit-protection", "conntrack-dump", "dpi-cibles", "ndpid-arreter", "ndpid-reprendre", "seuils",
+                                         "tri-appliquer"):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
@@ -901,6 +987,12 @@ def main(argv: list[str], entree: str | None = None) -> int:
         texte = sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree
         with verrou_controleur():                                        # un seul écrivain root de filters.json à la fois
             return seuils(texte)
+    if argv[1] == "tri-appliquer":
+        with _verrou_court() as pris:
+            if not pris:
+                print(json.dumps({"ok": True, "occupe": True}))
+                return 0
+            return tri_appliquer()
     if argv[1] == "cache-dump":
         return cache_dump()                                              # lecture seule : ni verrou, ni écriture
     if argv[1] == "conntrack-dump":

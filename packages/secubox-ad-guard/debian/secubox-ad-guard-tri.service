@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Ad Guard — tri Netflix par insistance : pose ou retrait des serveurs autorisés (#3226)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3226
+After=unbound.service
+
+[Service]
+Type=oneshot
+# Root : unbound-control (view_local_zone_add / remove). Les demandes sont des NOMS de fichiers revalidés (vue triée en
+# mode auto, serveur *.oca.nflxvideo.net), jamais un contenu lu ; contrôleur occupé : rien n'échoue, la demande attend.
+ExecStart=/usr/sbin/secubox-adguard-tv tri-appliquer
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/secubox-adguard-tv /run/secubox/ad-guard-tri -/var/log/secubox/audit.log
+TimeoutStartSec=120

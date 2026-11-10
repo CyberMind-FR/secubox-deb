@@ -19,7 +19,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/secubox/ad-guard
+ReadWritePaths=/var/lib/secubox/ad-guard -/run/secubox/ad-guard-tri
 # `secubox` appartient au groupe systemd-journal : il lit le journal d'Unbound sans privilège.
 
 [Install]

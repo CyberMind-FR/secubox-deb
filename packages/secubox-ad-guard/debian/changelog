@@ -1,3 +1,19 @@
+secubox-ad-guard (1.24.5-1~trixie1) trixie; urgency=medium
+
+  * Tri Netflix par insistance au niveau DNS (ref #3226), EXPÉRIMENTAL, par appareil en mode
+    auto (case « Tri Netflix » de TV Privacy) : pour une TV que la box ne route pas (Wi-Fi de
+    l'opérateur). Chaque nouveau serveur vidéo *.oca.nflxvideo.net reçoit NXDOMAIN dans la vue
+    de l'appareil ; redemandé au moins 3 fois en 20 s (épisode), il est autorisé 3 h ; abandonné
+    (publicité), il reste refusé. dnsfeed détecte l'insistance et dépose une demande ;
+    secubox-adguard-tv tri-appliquer (root, unité de chemin) la revalide et pose la zone à chaud
+    (view_local_zone_add), garde l'échéance, purge (minuterie 10 min) ; les autorisations en
+    cours sont rendues dans la vue (un rechargement d'Unbound les garde).
+  * POST /adblock-tv/clients : redéclarer une adresse existante garde sa MAC, son origine et sa
+    date (la MAC d'une entrée de l'administrateur ancre le suivi des nouvelles adresses).
+  * postinst : dnsfeed relancé APRÈS daemon-reload (unité à jour).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 12:59:30 +0100
+
 secubox-ad-guard (1.24.4-1~trixie1) trixie; urgency=medium
 
   * Carte TV Privacy : état lu sur ad-guard, elle restait « à l'arrêt » faute de service à son nom (ref #3467).
