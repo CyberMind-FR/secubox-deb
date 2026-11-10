@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-10 — Santé : arrêt voulu en veille ; dé Plymouth recentré (RPi400)
+
+- Page Santé : les unités arrêtées par conception ne sont plus « dégradé » (vu sur le RPi4) — désactivées (hors modules à veille) non surveillées, condition de démarrage non remplie (`ConditionResult=no`, `Result=exec-condition`) en veille avec message explicite. `secubox-hub` 1.12.54 (PR #3635), déployé secubox-rpi (RPi4 : plus aucun dégradé) et gk2 (closes #3634). Fait dans le hub : secubox-core ne se reconstruit pas depuis master tant que #3594 est ouverte.
+- Plymouth : dé et barre en tout petit en bas à droite sur le RPi400 HDMI (positions calculées une seule fois, avant le passage firmware → vc4) ; recalculées à chaque image, état partagé par `global.` (`secubox-plymouth` 0.1.2, PR #3637, publié ; ref #3636). Le thème vit dans l'initramfs, non régénéré par le paquet : arrive avec la prochaine image RPi. RPi400 (192.168.42.191, LAN de gk2) : SSH fermé, pas encore dans le maillage — rien déployé dessus.
+
 ## 2026-11-09 — Status Live v2 jalon 1 sur gk2 ; profil mobile réellement appliqué ; majauto ne se tue plus
 
 - Status Live v2 : spécification et arbitrages (page publique statique, paquet `secubox-status` séparé, gk2 seul d'abord) fusionnés (PR #3596, closes #3595). Jalon 1 : `secubox-status` 0.1.0 (collecteur 60 s sur les caches + /proc, fraîcheur, SQLite WAL, projection publique statique, API gardée, AppArmor enforce, socket 0660 ; relu par relecteur-securite) déployé sur gk2 (PR #3608, closes #3605). Premier relevé gk2 : dégradé (CPU 99 %, systemd PID 1 à 70 % ; 23 API de modules muettes dont aggregator selon le prober ; cache des vhosts figé depuis le 5 septembre).
