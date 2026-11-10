@@ -139,7 +139,7 @@ def test_renouvellement_d_un_tiers_ignore(j):
 
 def test_resiliation_par_l_abonne_puis_refus_du_doublon(j):
     _pf, _df, pa, da, _o, s = _abonne(j)
-    assert V.cancel_subscription(j, pa, da, s.subscription_id, "plus besoin")["par"] == "abonne"
+    assert V.cancel_subscription(j, pa, da, s.subscription_id, "plus besoin")["role"] == "abonne"
     assert V.subscription_state(j, s.subscription_id) is SubscriptionState.REVOKED
     with pytest.raises(ValueError):
         V.cancel_subscription(j, pa, da, s.subscription_id)
@@ -221,6 +221,7 @@ def api(tmp_path, monkeypatch):
     monkeypatch.setenv("ANNUAIRE_KEY_PATH", str(cle))
     monkeypatch.setattr(M, "MIRRORNET_EXPORT", tmp_path / "mirrornet-export.json")
     monkeypatch.setattr(M, "AUDIT_DROITS", tmp_path / "audit.log")
+    monkeypatch.setattr(M, "JOIGNABILITE_ETAT", tmp_path / "joignabilite.json")
     tc = TestClient(M.app)
     yield tc, M, jj, did, tmp_path
     M.app.dependency_overrides.clear()
@@ -250,14 +251,18 @@ def test_parcours_self_publier_abonner_renouveler_resilier(api):
     assert r.status_code == 200, r.text
     sub = r.json()
     assert sub["state"] == "approved" and sub["expire_le"] and sub["tarif_accepte"] == {"modele": "gratuit"}
+    assert sub["provider"] == df
+    # Second abonnement en cours à la même offre : refusé par l'annuaire lui-même (course sans clé d'idempotence).
+    assert tc.post(f"/self/service/{o.service_id}/subscribe", json={}).status_code == 409
     r = tc.post(f"/self/subscription/{sub['subscription_id']}/renew")
     assert r.status_code == 200, r.text
     r = tc.post(f"/self/subscription/{sub['subscription_id']}/cancel", json={"motif": "fin"})
-    assert r.status_code == 200 and r.json()["par"] == "abonne"
+    assert r.status_code == 200 and r.json()["role"] == "abonne"
     assert tc.post(f"/self/subscription/{sub['subscription_id']}/cancel", json={}).status_code == 409
-    audit = [json.loads(x)["action"] for x in (tmp / "audit.log").read_text().splitlines()]
-    assert audit == ["mirrornet_offre_publiee", "mirrornet_abonnement", "mirrornet_renouvellement",
-                     "mirrornet_resiliation"]
+    lignes = [json.loads(x) for x in (tmp / "audit.log").read_text().splitlines()]
+    assert [x["action"] for x in lignes] == ["mirrornet_offre_publiee", "mirrornet_abonnement",
+                                             "mirrornet_renouvellement", "mirrornet_resiliation"]
+    assert all(x["par"] == "admin" for x in lignes) and lignes[-1]["role"] == "abonne"
     export = json.loads((tmp / "mirrornet-export.json").read_text())
     assert export["soi"] == did and {e["op"] for e in export["entrees"]} >= {"service_offer", "service_revoke_sub"}
 
@@ -284,3 +289,59 @@ def test_joignabilite_suivie_et_exportee(api):
     assert export["joignabilite"][d2]["echec_depuis"] == premier
     M._noter_joignabilite({"10.10.0.8": True})
     assert M._JOIGNABILITE["10.10.0.8"]["echec_depuis"] is None and M._JOIGNABILITE["10.10.0.8"]["ok_le"]
+
+
+# --- relecture de sécurité ---------------------------------------------------------------------------------------
+
+def test_vol_de_service_id_sans_effet(j):
+    """Un pair signe sous SON did une offre reprenant le service_id d'un autre : ni présentée, ni autorité."""
+    pf, df, pa, da, o, s = _abonne(j, approval="pending")
+    pv, _, dv = _membre(j)
+    charge = dict(o.model_dump(exclude={"sig", "signer_did"}, exclude_none=True), provider=dv, name="Piège")
+    V._signer_et_ajouter(j, pv, dv, Op.SERVICE_OFFER, "ServiceOffer", charge)
+    assert V._get_offer(j, o.service_id)["provider"] == df
+    assert V._find_any_offer(j, o.service_id)["provider"] == df
+    with pytest.raises(PermissionError):
+        V.revoke_subscriber(j, pv, dv, s.subscription_id, "vol")
+    # Même signée directement, la révocation de l'usurpateur ne compte pas.
+    V._signer_et_ajouter(j, pv, dv, Op.SERVICE_REVOKE_OFFER_SUB, "ServiceRevokeOfferSub",
+                         {"subscription_id": s.subscription_id, "provider": dv, "motif": "vol"})
+    V._signer_et_ajouter(j, pv, dv, Op.SERVICE_APPROVE, "ServiceApprove",
+                         {"subscription_id": s.subscription_id, "service_id": o.service_id, "approver": dv})
+    assert V.subscription_state(j, s.subscription_id) is SubscriptionState.PENDING
+
+
+def test_abonnement_lie_au_fournisseur(j):
+    pf, df, pa, da, o, _s = _abonne(j)
+    _px, _, dx = _membre(j)
+    with pytest.raises(ValueError, match="fournisseur"):
+        V.subscribe(j, pa, da, o.service_id, provider=dx)
+    s = V.subscribe(j, pa, da, o.service_id, provider=df)
+    assert s.provider == df and V.subscription_state(j, s.subscription_id) is SubscriptionState.APPROVED
+
+
+def test_echeance_bornee_par_la_duree_de_l_offre(j):
+    pf, df, pa, da, o, _s = _abonne(j, duree_s=3600)
+    loin = (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat()
+    s = V.subscribe(j, pa, da, o.service_id, expire_le=loin)
+    ech = datetime.fromisoformat(V.echeance_abonnement(j, s.subscription_id))
+    assert ech <= datetime.now(timezone.utc) + timedelta(seconds=3601)
+    sans = V.subscribe(j, pa, da, o.service_id)                    # sans expire_le : demande + duree_s
+    assert V.echeance_abonnement(j, sans.subscription_id) is not None
+    # Renouvellement signé avec une échéance démesurée : plafonné à une période.
+    avant = datetime.fromisoformat(V.echeance_abonnement(j, s.subscription_id))
+    V._signer_et_ajouter(j, pa, da, Op.SERVICE_RENEW, "ServiceRenew",
+                         {"subscription_id": s.subscription_id, "service_id": o.service_id, "subscriber": da,
+                          "expire_le": loin, "renewed_at": datetime.now(timezone.utc).isoformat()})
+    apres = datetime.fromisoformat(V.echeance_abonnement(j, s.subscription_id))
+    assert apres - avant == timedelta(seconds=3600)
+
+
+def test_export_exclut_l_usurpateur_et_les_observateurs(j):
+    pf, df, pa, da, o, s = _abonne(j)
+    pv, _, dv = _membre(j)
+    charge = dict(o.model_dump(exclude={"sig", "signer_did"}, exclude_none=True), provider=dv)
+    V._signer_et_ajouter(j, pv, dv, Op.SERVICE_OFFER, "ServiceOffer", charge)
+    ex = MX.construire(j, da, {})
+    auteurs = {e["author"] for e in ex["entrees"] if e["op"] == "service_offer"}
+    assert auteurs == {df}

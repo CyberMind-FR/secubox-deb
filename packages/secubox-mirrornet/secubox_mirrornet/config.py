@@ -5,6 +5,7 @@
 """Chemins et réglages de secubox-mirrornet (#3645, #3647). Chemins surchargeables pour les tests seulement."""
 from __future__ import annotations
 
+import logging
 import os
 import tomllib
 from pathlib import Path
@@ -26,7 +27,11 @@ def reglages() -> Dict[str, Any]:
     try:
         with open(CONF, "rb") as f:
             d = tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError):
+    except FileNotFoundError:
+        return r
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        # Jamais en silence : un seuil de confiance ignoré présenterait des offres que l'administrateur a exclues.
+        logging.getLogger("secubox-mirrornet").warning("%s illisible (%s) : réglages par défaut", CONF, e)
         return r
     c = (d.get("catalogue") or {}).get("confiance_min")
     if c in _NIVEAUX:

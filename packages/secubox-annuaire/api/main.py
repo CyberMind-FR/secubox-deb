@@ -26,6 +26,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -47,7 +48,7 @@ async def lecture_ou_pair(request: Request) -> Dict[str, Any]:
         return {"sub": None, "pair_maillage": True}
     creds = await _auth._bearer(request)
     return await require_lecture(request, creds)
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # ---------------------------------------------------------------------------
 # Optional JWT dependency — gracefully degrade when secubox_core is not installed
@@ -730,7 +731,10 @@ _EXPORT_CACHE: Dict[str, Any] = {"hauteur": None, "donnees": None}
 
 
 def _cle_du_noeud():
-    """(clé privée, did) de CE nœud ; 503 tant que `annuairectl init` n'a pas créé la clé."""
+    """(clé privée, did) de CE nœud ; 503 tant que `annuairectl init` n'a pas créé la clé, ou si la garde
+    d'administrateur est indisponible (secubox_core absent : la garde de repli laisserait tout passer)."""
+    if not _JWT_AVAILABLE:
+        raise HTTPException(503, "garde d'administrateur indisponible : gestes signés refusés")
     key_path = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
     try:
         from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
@@ -756,36 +760,80 @@ def _auditer_mirrornet(action: str, ident: Any, **details: Any) -> None:
         logging.getLogger("secubox.annuaire").warning("audit.log non écrit : %s", ligne)
 
 
+JOIGNABILITE_ETAT = Path(os.environ.get("ANNUAIRE_JOIGNABILITE", "/var/lib/secubox/annuaire/joignabilite.json"))
+_VERROU_JOIGN = threading.Lock()
+
+
+def _charger_joignabilite() -> None:
+    """Au démarrage : `echec_depuis` survit à un redémarrage (sinon la période de grâce repartirait de zéro)."""
+    try:
+        d = json.loads(JOIGNABILITE_ETAT.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if isinstance(d, dict):
+        with _VERROU_JOIGN:
+            for ip, v in d.items():
+                if isinstance(ip, str) and isinstance(v, dict):
+                    _JOIGNABILITE[ip] = {"ok_le": v.get("ok_le"), "echec_depuis": v.get("echec_depuis")}
+
+
 def _noter_joignabilite(suivi: Dict[str, bool]) -> None:
+    """Seules les TRANSITIONS sont notées (`ok_le` = retour à la joignabilité, `echec_depuis` = premier échec) : l'export
+    ne change pas à chaque passe de 20 s, et l'état est persisté pour survivre à un redémarrage."""
     maintenant = datetime.now(timezone.utc).isoformat()
-    for ip, joint in suivi.items():
-        e = _JOIGNABILITE.setdefault(ip, {"ok_le": None, "echec_depuis": None})
-        if joint:
-            e["ok_le"], e["echec_depuis"] = maintenant, None
-        elif not e.get("echec_depuis"):
-            e["echec_depuis"] = maintenant
+    change = False
+    with _VERROU_JOIGN:
+        for ip, joint in suivi.items():
+            e = _JOIGNABILITE.setdefault(ip, {"ok_le": None, "echec_depuis": None})
+            if joint and (e.get("echec_depuis") or not e.get("ok_le")):
+                e["ok_le"], e["echec_depuis"], change = maintenant, None, True
+            elif not joint and not e.get("echec_depuis"):
+                e["echec_depuis"], change = maintenant, True
+        copie = json.dumps(_JOIGNABILITE)
+    if change:
+        try:
+            tmp = JOIGNABILITE_ETAT.with_name(".joignabilite.json.tmp")
+            tmp.write_text(copie, encoding="utf-8")
+            os.replace(tmp, JOIGNABILITE_ETAT)
+        except OSError as e:
+            logging.getLogger("secubox.annuaire.sync").warning("joignabilité non persistée : %s", e)
 
 
 def _exporter_mirrornet() -> None:
-    """Dépose l'export MirrorNet ; la partie journal n'est recalculée que si la hauteur du journal a changé. Jamais
-    d'exception vers l'appelant (synchronisation, route)."""
+    """Dépose l'export MirrorNet ; la partie journal n'est recalculée que si la hauteur PERTINENTE (service_*,
+    identités, nœuds, révocations) a changé. Jamais d'exception vers l'appelant (synchronisation, route)."""
     try:
         from annuaire import mirrornet_export as MX  # noqa: PLC0415
         j = get_journal()
-        tip = j.tip()
-        hauteur = tip.height if tip else 0
+        hauteur = MX.hauteur_pertinente(j)
         if _EXPORT_CACHE["hauteur"] != hauteur or _EXPORT_CACHE["donnees"] is None:
-            soi = _self_did_best_effort()
-            _EXPORT_CACHE["donnees"] = MX.construire(j, soi, {})
+            _EXPORT_CACHE["donnees"] = MX.construire(j, _self_did_best_effort(), {})
             _EXPORT_CACHE["hauteur"] = hauteur
-            _EXPORT_CACHE["ip_vers_did"] = {v.get("mesh_ip"): d for d, v in _EXPORT_CACHE["donnees"]["noeuds"].items()
-                                            if v.get("mesh_ip")}
-        ip_vers_did = _EXPORT_CACHE.get("ip_vers_did", {})
-        donnees = dict(_EXPORT_CACHE["donnees"], hauteur=hauteur,
-                       joignabilite={ip_vers_did[ip]: dict(v) for ip, v in _JOIGNABILITE.items() if ip in ip_vers_did})
-        MX.ecrire(donnees, MIRRORNET_EXPORT)
+        ip_vers_did = _EXPORT_CACHE["donnees"].get("_ip_vers_did", {})
+        with _VERROU_JOIGN:
+            joign = {ip_vers_did[ip]: dict(v) for ip, v in _JOIGNABILITE.items() if ip in ip_vers_did}
+        MX.ecrire(dict(_EXPORT_CACHE["donnees"], hauteur=hauteur, joignabilite=joign), MIRRORNET_EXPORT)
     except Exception as e:  # noqa: BLE001
         logging.getLogger("secubox.annuaire.sync").warning("export MirrorNet non écrit : %s", e)
+
+
+def _abonnement_en_cours(j, abonne: str, service_id: str) -> Optional[str]:
+    """Identifiant d'un abonnement de `abonne` à `service_id` encore en cours (en attente ou approuvé, non échu), ou
+    None : l'annuaire refuse un second abonnement, même sans clé d'idempotence (deux requêtes simultanées)."""
+    from annuaire.model import Op as _Op, SubscriptionState as _SS  # noqa: PLC0415
+    from annuaire.verbs import _instant, echeance_abonnement, subscription_state  # noqa: PLC0415
+    maintenant = datetime.now(timezone.utc)
+    for e in j.iter_entries(ops=("service_subscribe",)):
+        p = e.payload
+        if e.op != _Op.SERVICE_SUBSCRIBE or p.get("subscriber") != abonne or p.get("service_id") != service_id:
+            continue
+        sid = p.get("subscription_id")
+        if subscription_state(j, sid) not in (_SS.PENDING, _SS.APPROVED):
+            continue
+        ech = _instant(echeance_abonnement(j, sid, maintenant))
+        if ech is None or ech > maintenant:
+            return sid
+    return None
 
 
 class SelfOfferRequest(BaseModel):
@@ -802,12 +850,28 @@ class SelfOfferRequest(BaseModel):
     classe: Optional[str] = Field(None, pattern=r"^(public|communaute|prive)$")
     duree_s: Optional[int] = Field(None, gt=0, le=10 * 365 * 86400)
     grace_s: Optional[int] = Field(None, ge=0, le=90 * 86400)
-    sonde: Optional[str] = Field(None, max_length=256)
+    sonde: Optional[str] = Field(None, max_length=256, pattern=r"^/[A-Za-z0-9._/~-]*$")
+
+    @field_validator("quotas")
+    @classmethod
+    def _quotas(cls, v):
+        if v is not None and (len(v) > 8 or any(len(k) > 32 or x < 0 or x > 10 ** 15 for k, x in v.items())):
+            raise ValueError("quotas : 8 clés au plus, entiers de 0 à 10^15")
+        return v
+
+    @field_validator("compat")
+    @classmethod
+    def _compat(cls, v):
+        if v is not None and len(json.dumps(v)) > 1024:
+            raise ValueError("compat : 1 Kio au plus")
+        return v
 
 
 class SelfSubscribeRequest(BaseModel):
     model_config = {"extra": "forbid"}
     version: Optional[str] = Field(None, max_length=64)
+    # Fournisseur évalué par MirrorNet : l'abonnement le porte, signé ; s'il diffère de celui de l'offre, refus.
+    provider: Optional[str] = Field(None, pattern=r"^did:plc:[0-9a-f]{32}$")
 
 
 class SelfCancelRequest(BaseModel):
@@ -856,12 +920,23 @@ async def self_subscribe(service_id: str, req: SelfSubscribeRequest, ident: Dict
         raise HTTPException(404, "offre inconnue ou retirée")
     if offre.get("provider") == did:
         raise HTTPException(409, "un nœud ne s'abonne pas à sa propre offre")
+    if req.provider and req.provider != offre.get("provider"):
+        raise HTTPException(409, "le fournisseur de l'offre n'est pas celui évalué")
+    from annuaire import confiance  # noqa: PLC0415
+    niveau, _cause = await asyncio.to_thread(confiance.niveau, j, offre.get("provider"))
+    if niveau in ("OBSERVER", "REVOKED") or offre.get("classe") == "prive":
+        raise HTTPException(409, f"offre non ouverte à l'abonnement (fournisseur {niveau}, classe "
+                                 f"{offre.get('classe') or 'public'})")
+    en_cours = await asyncio.to_thread(_abonnement_en_cours, j, did, service_id)
+    if en_cours:
+        raise HTTPException(409, f"abonnement déjà en cours : {en_cours}")
     duree = offre.get("duree_s")
     expire = ((datetime.now(timezone.utc) + timedelta(seconds=duree)).isoformat()
               if isinstance(duree, int) and duree > 0 else None)
     try:
         sub = await asyncio.to_thread(subscribe, j, priv, did, service_id, version=req.version,
-                                      tarif_accepte=offre.get("tarif"), expire_le=expire)
+                                      tarif_accepte=offre.get("tarif"), expire_le=expire,
+                                      provider=offre.get("provider"))
     except PermissionError as e:
         raise HTTPException(403, str(e)) from None
     except ValueError as e:
@@ -894,7 +969,8 @@ async def self_cancel(subscription_id: str, req: SelfCancelRequest, ident: Dict[
         raise HTTPException(404, "abonnement inconnu")
     fn = cancel_subscription if sub.get("subscriber") == did else revoke_subscriber
     res = await asyncio.to_thread(_geste, fn, j, priv, did, subscription_id, req.motif)
-    _auditer_mirrornet("mirrornet_resiliation", ident, subscription_id=subscription_id, par=res.get("par"), motif=req.motif)
+    _auditer_mirrornet("mirrornet_resiliation", ident, subscription_id=subscription_id, role=res.get("role"),
+                       motif=req.motif)
     await asyncio.to_thread(_exporter_mirrornet)
     return res
 
@@ -1600,6 +1676,7 @@ async def _start_dir_sync():
     if os.environ.get("ANNUAIRE_DIR_SYNC", "1") != "1":
         return
     await asyncio.to_thread(_publish_self_node)
+    await asyncio.to_thread(_charger_joignabilite)               # #3647
     asyncio.create_task(_dir_sync_loop())
     asyncio.create_task(_assist_sync_loop())
 

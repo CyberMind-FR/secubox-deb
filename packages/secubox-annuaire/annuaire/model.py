@@ -459,7 +459,7 @@ MODELES_TARIF = ("gratuit", "forfait", "usage", "palier", "reciproque", "parrain
 # d'un objet ancien (qui ne les connaissait pas) ne se vérifierait plus après un aller-retour par le modèle.
 CHAMPS_FACULTATIFS = frozenset({
     "macro", "version", "compat", "tarif", "quotas", "classe", "duree_s", "grace_s", "sonde",
-    "tarif_accepte", "expire_le",
+    "tarif_accepte", "expire_le", "provider",
 })
 
 
@@ -532,6 +532,13 @@ class ServiceOffer(BaseModel):
     def _tarif_valide(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return valider_tarif(v)
 
+    @field_validator("quotas")
+    @classmethod
+    def _quotas_valides(cls, v: Optional[Dict[str, int]]) -> Optional[Dict[str, int]]:
+        if v is not None and (len(v) > 8 or any(len(k) > 32 or not 0 <= x <= 10 ** 15 for k, x in v.items())):
+            raise ValueError("quotas : 8 clés au plus, entiers de 0 à 10^15")
+        return v
+
 
 # ---------------------------------------------------------------------------
 # Subscription — a subscriber requesting access to a ServiceOffer
@@ -553,6 +560,7 @@ class Subscription(BaseModel):
     version:         Optional[str] = Field(default=None, max_length=64)
     tarif_accepte:   Optional[Dict[str, Any]] = None
     expire_le:       Optional[str] = Field(default=None, max_length=40)
+    provider:        Optional[str] = Field(default=None, pattern=r"^did:plc:[0-9a-f]{32}$")
     sig:             Optional[str] = None
     signer_did:      Optional[str] = None
 

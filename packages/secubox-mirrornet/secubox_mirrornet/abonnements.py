@@ -41,6 +41,8 @@ class Faits:
     """Faits VÉRIFIÉS (signature, et auteur à la bonne place) d'un abonnement, vus de CE nœud."""
     role: str                                   # « abonne » ou « fournisseur »
     expire_le: Optional[str] = None             # échéance initiale signée par l'abonné (None = sans échéance)
+    demande_le: Optional[str] = None            # requested_at signé par l'abonné
+    duree_s: Optional[int] = None               # durée d'une période selon l'offre (None = illimitée)
     approbation_auto: bool = False              # dernière offre du fournisseur en approval_mode « auto »
     approuve: bool = False
     rejete: bool = False
@@ -53,22 +55,33 @@ class Faits:
     echec_fournisseur_depuis: Optional[str] = None   # premier échec de synchronisation depuis le dernier succès
 
 
-def echeance(expire_le: Optional[str], renouvellements: List[Tuple[str, str]]) -> Optional[datetime]:
-    """Même règle que l'annuaire : un renouvellement compte s'il a été signé AU PLUS TARD à l'échéance en cours et
-    la repousse ; une période close ne se renouvelle pas."""
-    courant = instant(expire_le)
+DERIVE_HORLOGE = timedelta(seconds=300)
+
+
+def echeance(f: "Faits", maintenant: datetime) -> Optional[datetime]:
+    """Même règle que l'annuaire (verbs.echeance_abonnement), BORNÉE par le lecteur : l'abonné signe ses dates, il ne
+    les impose pas. Initiale = min(expire_le, demande + duree_s) ; renouvellements triés par date de signature, comptés
+    s'ils sont signés au plus tard à l'échéance en cours et pas dans le futur, chacun d'au plus `duree_s`."""
+    signee, demande = instant(f.expire_le), instant(f.demande_le)
+    duree = timedelta(seconds=f.duree_s) if f.duree_s else None
+    if duree and demande:
+        courant = min(signee, demande + duree) if signee else demande + duree
+    else:
+        courant = signee
     if courant is None:
         return None
-    for fait, neuf in renouvellements:
-        f, n = instant(fait), instant(neuf)
-        if f and n and f <= courant and n > courant:
-            courant = n
+    limite = maintenant + DERIVE_HORLOGE
+    renouv = sorted(((instant(a), instant(b)) for a, b in f.renouvellements), key=lambda x: x[0] or courant)
+    for fait, neuf in renouv:
+        if not (fait and neuf) or fait > courant or fait > limite or neuf <= courant:
+            continue
+        courant = min(neuf, courant + duree) if duree else neuf
     return courant
 
 
 def deriver(f: Faits, maintenant: datetime) -> Tuple[str, str, Optional[datetime]]:
     """(état, motif, échéance courante)."""
-    ech = echeance(f.expire_le, f.renouvellements)
+    ech = echeance(f, maintenant)
     if f.resilie_par_abonne is not None:
         return "Resilie", ("résilié par l'abonné" + (f" : {f.resilie_par_abonne}" if f.resilie_par_abonne else "")), ech
     if f.revoque_par_fournisseur is not None:
@@ -82,6 +95,9 @@ def deriver(f: Faits, maintenant: datetime) -> Tuple[str, str, Optional[datetime
         return "Refuse", "refusé par le fournisseur", ech
     if not (f.approbation_auto or f.approuve):
         return "Demande", "en attente d'approbation du fournisseur", ech
+    demande = instant(f.demande_le)
+    if demande is not None and demande > maintenant + DERIVE_HORLOGE:
+        return "Demande", "date de demande dans le futur : abonnement pas encore valable", ech
     if ech is not None and maintenant >= ech:
         return "Expire", "échéance atteinte sans renouvellement", ech
     if f.role == "abonne":

@@ -207,7 +207,9 @@ def test_export_absent_ou_invalide(tmp_path):
 @pytest.fixture
 def api(tmp_path, monkeypatch):
     from secubox_mirrornet import config
+    import secubox_core.auth as auth
     main = importlib.import_module("api.main")
+    monkeypatch.setattr(auth, "_validate_token", lambda t: {"sub": "admin"} if t.startswith("jeton") else None)
     monkeypatch.setattr(config, "BASE", tmp_path / "m.db")
     monkeypatch.setattr(config, "EXPORT", tmp_path / "export.json")
     monkeypatch.setattr(config, "CONF", tmp_path / "absent.toml")
@@ -240,11 +242,12 @@ def test_catalogue_filtre_par_niveau(api):
 
 
 def _annuaire_simule(main, tmp, moi, ex, monkeypatch, appels):
-    def appeler(chemin, corps, jetons, socket_chemin=None):
-        appels.append((chemin, corps, list(jetons)))
+    def appeler(chemin, corps, jeton, socket_chemin=None):
+        appels.append((chemin, corps, jeton))
         if chemin.endswith("/subscribe"):
             sid = chemin.split("/")[3]
-            s = abonnement(moi, sid)
+            s = moi.signe("service_subscribe", dict(abonnement(moi, sid)["payload"],
+                                                    requested_at=datetime.now(timezone.utc).isoformat()))
             ex["entrees"].append(s)
             _ecrire(tmp, ex)
             return 200, dict(s["payload"], state="approved")
@@ -269,11 +272,13 @@ def test_abonnement_relaye_idempotent_puis_resiliation(api, monkeypatch):
     _annuaire_simule(main, tmp, moi, ex, monkeypatch, appels)
     c = TestClient(main.app)
     h = {"Authorization": "Bearer jeton-admin", "X-Idempotence": "cle-abonnement-1"}
+    c.headers["Authorization"] = "Bearer jeton-admin"
     r = c.post(f"/api/v1/mirrornet/services/{sid}/subscribe", headers=h)
     assert r.status_code == 200, r.text
     sub = r.json()
     assert sub["etat"] == "Actif" and sub["existant"] is False and sub["role"] == "abonne"
-    assert appels[0][0] == f"/self/service/{sid}/subscribe" and appels[0][2] == ["jeton-admin"]
+    assert appels[0][0] == f"/self/service/{sid}/subscribe" and appels[0][2] == "jeton-admin"
+    assert appels[0][1] == {"provider": f.did}                     # le fournisseur évalué part avec la demande
     # Même clé : réponse rejouée, aucun nouvel appel. Autre clé : l'abonnement en cours est rendu (`existant`).
     assert c.post(f"/api/v1/mirrornet/services/{sid}/subscribe", headers=h).json() == sub
     r2 = c.post(f"/api/v1/mirrornet/services/{sid}/subscribe", headers={"X-Idempotence": "cle-abonnement-2"})
@@ -328,14 +333,77 @@ def test_publication_valide_et_jeux_de_donnees_refuses(api, monkeypatch):
              "duree_s": 86400}
     assert c.post("/api/v1/mirrornet/services/publish", json=corps).status_code == 200
     assert appels == [("/self/service/offer", dict(corps, approval_mode="pending", description=""))]
+    assert c.post("/api/v1/mirrornet/services/publish", json=corps, headers={"X-Idempotence": "cle-pub-0001"}).status_code == 200
+    assert c.post("/api/v1/mirrornet/services/publish", json=dict(corps, endpoint="http://autre"),
+                  headers={"X-Idempotence": "cle-pub-0001"}).status_code == 409   # même clé, autre corps
     assert c.post("/api/v1/mirrornet/services/publish", json=dict(corps, kind="dataset")).status_code == 422
     assert c.post("/api/v1/mirrornet/services/publish", json=dict(corps, inconnu=1)).status_code == 422
 
 
-def test_relais_du_jeton_bearer_puis_cookie(api):
+def test_relais_du_seul_jeton_valide(api):
     main, _tmp = api
     from secubox_core.auth import SESSION_COOKIE
     from starlette.requests import Request
-    req = Request({"type": "http", "headers": [(b"authorization", b"Bearer abc"),
-                                               (b"cookie", f"{SESSION_COOKIE}=def".encode())]})
-    assert main._jetons(req) == ["abc", "def"]
+
+    def req(*h):
+        return Request({"type": "http", "headers": list(h)})
+    cookie = (b"cookie", f"{SESSION_COOKIE}=jeton-cookie".encode())
+    assert main._jeton(req((b"authorization", b"Bearer jeton-a"), cookie)) == "jeton-a"
+    assert main._jeton(req((b"authorization", b"Bearer perime"), cookie)) == "jeton-cookie"   # le validé, pas l'autre
+    assert main._jeton(req((b"authorization", b"Bearer perime"))) is None
+
+
+def test_reponse_indeterminee_jamais_rejouee(api, monkeypatch):
+    main, tmp = api
+    moi, f = Noeud("gk12"), Noeud("gk6")
+    o = offre(f)
+    _ecrire(tmp, export(moi, [o], [(moi, "LIMITED"), (f, "LIMITED")]))
+    appels = []
+    monkeypatch.setattr(main.annuaire, "appeler",
+                        lambda *a, **k: appels.append(a) or (504, {"detail": "annuaire sans réponse"}))
+    c = TestClient(main.app)
+    h = {"X-Idempotence": "cle-indeterminee", "Authorization": "Bearer jeton-admin"}
+    url = f"/api/v1/mirrornet/services/{o['payload']['service_id']}/subscribe"
+    assert c.post(url, headers=h).status_code == 504
+    assert c.post(url, headers=h).status_code == 504 and len(appels) == 1     # pas de seconde signature
+
+
+def test_topologie_masquee_au_lecteur_anonyme(api):
+    main, tmp = api
+    moi, f = Noeud("gk12"), Noeud("gk6")
+    o = offre(f, tarif={"modele": "gratuit"}, classe="public", sonde="/sante")
+    _ecrire(tmp, export(moi, [o], [(moi, "LIMITED"), (f, "LIMITED")]))
+    main.synchroniser_maintenant()
+    c = TestClient(main.app)
+    main.app.dependency_overrides[main.require_lecture] = lambda: {"sub": None, "tableau_de_bord": True}
+    s = c.get("/api/v1/mirrornet/services").json()["services"][0]
+    assert "endpoint" not in s and "sonde" not in s and "fournisseur_echec_depuis" not in s
+    main.app.dependency_overrides[main.require_lecture] = lambda: {"sub": "admin"}
+    assert c.get("/api/v1/mirrornet/services").json()["services"][0]["endpoint"] == "http://10.10.0.2/apt"
+
+
+def test_abonnement_lie_a_un_autre_fournisseur_rejete(cx):
+    f, moi, x = Noeud("gk6"), Noeud("gk12"), Noeud("x")
+    o = offre(f)
+    s = abonnement(moi, o["payload"]["service_id"])
+    s = moi.signe("service_subscribe", dict(s["payload"], provider=x.did))
+    st = catalogue.synchroniser(cx, export(moi, [o, s], [(f, "LIMITED"), (moi, "LIMITED")]), T0)
+    assert st["abonnements"] == 0 and st["rejetees"] == 1
+
+
+def test_echeance_bornee_et_demande_dans_le_futur():
+    f = A.Faits(role="fournisseur", approbation_auto=True, demande_le=T0.isoformat(), duree_s=3600,
+                expire_le=(T0 + timedelta(days=3650)).isoformat())
+    assert A.deriver(f, T0 + timedelta(hours=2))[0] == "Expire"           # échéance plafonnée à demande + durée
+    f.renouvellements = [((T0 + timedelta(minutes=30)).isoformat(), (T0 + timedelta(days=999)).isoformat())]
+    assert A.deriver(f, T0 + timedelta(hours=1))[2] == T0 + timedelta(hours=2)   # une période au plus
+    g = A.Faits(role="fournisseur", approbation_auto=True, demande_le=(T0 + timedelta(days=1)).isoformat())
+    assert A.deriver(g, T0)[0] == "Demande"
+
+
+def test_toml_livre_lisible_et_applique(monkeypatch):
+    from secubox_mirrornet import config
+    monkeypatch.setattr(config, "CONF", ICI / "conf" / "mirrornet.toml")
+    import tomllib
+    tomllib.loads((ICI / "conf" / "mirrornet.toml").read_text())
+    assert config.reglages() == {"confiance_min": "LIMITED", "grace_s": 432000, "intervalle_s": 60}

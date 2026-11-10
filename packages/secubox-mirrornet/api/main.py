@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import logging
 import platform
@@ -21,7 +22,7 @@ import re
 import sqlite3
 import sys
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -89,7 +90,11 @@ def synchroniser_maintenant() -> Dict[str, Any]:
             except catalogue.ExportIllisible as e:
                 catalogue.noter_erreur(cx, str(e))
                 return {"erreur": str(e)}
-            return catalogue.synchroniser(cx, export, grace_defaut=config.reglages()["grace_s"])
+            res = catalogue.synchroniser(cx, export, grace_defaut=config.reglages()["grace_s"])
+            # Clés d'idempotence : 24 h suffisent à une reprise ; une réservation en cours (statut 0) n'est pas touchée.
+            limite = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+            cx.execute("DELETE FROM requete WHERE statut <> 0 AND ts < ?", (limite,))
+            return res
         except sqlite3.Error as e:
             log.warning("synchronisation MirrorNet en échec : %s", e)
             return {"erreur": "base"}
@@ -174,8 +179,19 @@ def status() -> Dict[str, Any]:
     return res
 
 
-@router.get("/services", dependencies=[Depends(require_lecture)])
-def services(tout: bool = Query(False, description="administrateur : aussi les offres non présentables")) -> Dict[str, Any]:
+_TOPOLOGIE = ("endpoint", "sonde", "fournisseur_ok_le", "fournisseur_echec_depuis")
+
+
+def _sans_topologie(r: Dict[str, Any], ident: Dict[str, Any]) -> Dict[str, Any]:
+    """Lecteur anonyme (tableau de bord du LAN) : ni adresses du maillage ni joignabilité (MODULE-COMPLIANCE)."""
+    if ident.get("tableau_de_bord") or not ident.get("sub"):
+        for k in _TOPOLOGIE:
+            r.pop(k, None)
+    return r
+
+
+@router.get("/services")
+def services(ident: Dict[str, Any] = Depends(require_lecture)) -> Dict[str, Any]:
     """Catalogue local : offres présentables (§ 3) des autres nœuds, et celles de CE nœud (`mienne`)."""
     confiance_min = config.reglages()["confiance_min"]
     soi = _soi()
@@ -185,12 +201,12 @@ def services(tout: bool = Query(False, description="administrateur : aussi les o
         r["mienne"] = r["fournisseur_did"] == soi
         r["presentable"] = _presentable(r, confiance_min)
         if r["mienne"] or r["presentable"]:
-            rows.append(r)
+            rows.append(_sans_topologie(r, ident))
     return {"services": rows, "count": len(rows), "confiance_min": confiance_min}
 
 
-@router.get("/services/{service_id}", dependencies=[Depends(require_lecture)])
-def service(service_id: str) -> Dict[str, Any]:
+@router.get("/services/{service_id}")
+def service(service_id: str, ident: Dict[str, Any] = Depends(require_lecture)) -> Dict[str, Any]:
     if not _ID.match(service_id):
         raise HTTPException(404, "offre inconnue")
     rows = _lignes(_SQL_OFFRE + " WHERE o.ref_annuaire = ?", (service_id,))
@@ -201,7 +217,7 @@ def service(service_id: str) -> Dict[str, Any]:
     r["presentable"] = _presentable(r, config.reglages()["confiance_min"])
     if not (r["mienne"] or r["presentable"]):
         raise HTTPException(404, "offre inconnue")       # non présentable = invisible, comme au catalogue
-    return r
+    return _sans_topologie(r, ident)
 
 
 @router.get("/datasets", dependencies=[Depends(require_lecture)])
@@ -281,17 +297,18 @@ def journal(limite: int = Query(100, ge=1, le=1000), avant: int = Query(0, ge=0)
 
 # --- écritures ------------------------------------------------------------------------------------------------------
 
-def _jetons(request: Request) -> List[str]:
-    """Jetons de l'appelant à relayer, dans l'ordre de la garde : Bearer puis cookie de session."""
-    from secubox_core.auth import SESSION_COOKIE  # noqa: PLC0415
-    out = []
+def _jeton(request: Request) -> Optional[str]:
+    """LE justificatif que la garde a accepté (Bearer, sinon cookie de session, dans son ordre) : jamais un autre, pour
+    que l'annuaire agisse et audite au nom de l'appelant réel."""
+    from secubox_core.auth import SESSION_COOKIE, _validate_token  # noqa: PLC0415
     a = request.headers.get("authorization", "")
-    if a[:7].lower() == "bearer " and a[7:].strip():
-        out.append(a[7:].strip())
-    c = request.cookies.get(SESSION_COOKIE)
-    if c:
-        out.append(c)
-    return out
+    candidats = [a[7:].strip()] if a[:7].lower() == "bearer " and a[7:].strip() else []
+    if request.cookies.get(SESSION_COOKIE):
+        candidats.append(request.cookies[SESSION_COOKIE])
+    for c in candidats:
+        if _validate_token(c) is not None:
+            return c
+    return None
 
 
 def _idempotent(cle: Optional[str], route: str, cible: str):
@@ -357,13 +374,22 @@ def _geste(cle: Optional[str]):
         raise
 
 
-def _relayer(request: Request, chemin: str, corps: Optional[Dict[str, Any]]) -> Any:
-    statut, rep = annuaire.appeler(chemin, corps, _jetons(request))
+def _relayer(request: Request, chemin: str, corps: Optional[Dict[str, Any]], cle: Optional[str]) -> Any:
+    """Relaie le geste à l'annuaire. Dès qu'il est SIGNÉ (2xx) ou peut l'avoir été (504), la réponse est mémorisée sous
+    la clé d'idempotence : une reprise ne le fait jamais signer une seconde fois, même si la suite échoue."""
+    statut, rep = annuaire.appeler(chemin, corps, _jeton(request))
+    if statut == 504:
+        _memoriser(cle, 504, rep)
+        raise HTTPException(504, rep.get("detail") + " ; consulter /subscriptions avant de réessayer")
     if statut >= 400:
         detail = rep.get("detail") if isinstance(rep, dict) else None
         raise HTTPException(statut if statut in (401, 403, 404, 409, 422, 503) else 502,
                             detail or f"annuaire : HTTP {statut}")
-    synchroniser_maintenant()          # l'annuaire a réécrit l'export avant de répondre : l'état est déjà visible
+    _memoriser(cle, 200, rep)
+    try:
+        synchroniser_maintenant()      # l'annuaire a réécrit l'export avant de répondre : l'état est déjà visible
+    except Exception as e:  # noqa: BLE001 — le geste est fait ; la boucle de fond rattrapera l'index
+        log.warning("mirrornet : resynchronisation après geste en échec : %s", e)
     return rep
 
 
@@ -389,13 +415,13 @@ def publier(req: Publication, request: Request, x_idempotence: Optional[str] = H
     """Publie une offre de CE nœud (signée par l'annuaire). `kind = dataset` attend la phase 4."""
     if req.kind == "dataset":
         raise HTTPException(422, "les jeux de données arrivent en phase 4")
-    deja = _idempotent(x_idempotence, "publier", req.name)
+    corps = req.model_dump(exclude_none=True)
+    cible = hashlib.sha256(json.dumps(corps, sort_keys=True).encode()).hexdigest()[:32]
+    deja = _idempotent(x_idempotence, "publier", cible)
     if deja is not None:
         return deja
     with _geste(x_idempotence):
-        rep = _relayer(request, "/self/service/offer", req.model_dump(exclude_none=True))
-        _memoriser(x_idempotence, 200, rep)
-    return rep
+        return _relayer(request, "/self/service/offer", corps, x_idempotence)
 
 
 class Abonnement(BaseModel):
@@ -446,7 +472,10 @@ def s_abonner(service_id: str, request: Request, req: Optional[Abonnement] = Non
             res = dict(_json(en_cours[0], "tarif_accepte"), existant=True)
         else:
             version = (req.version if req else None) or offre.get("version")
-            rep = _relayer(request, f"/self/service/{service_id}/subscribe", {"version": version} if version else {})
+            corps = {"provider": offre["fournisseur_did"]}            # le fournisseur ÉVALUÉ, lié à l'abonnement
+            if version:
+                corps["version"] = version
+            rep = _relayer(request, f"/self/service/{service_id}/subscribe", corps, x_idempotence)
             sub_id = rep.get("subscription_id") if isinstance(rep, dict) else None
             lignes = _lignes(_SQL_ABO + " WHERE s.ref_annuaire = ?", (sub_id,)) if sub_id else []
             res = (dict(_json(lignes[0], "tarif_accepte"), existant=False) if lignes
@@ -475,9 +504,7 @@ def renouveler(subscription_id: str, request: Request, x_idempotence: Optional[s
             raise HTTPException(409, "seul l'abonné renouvelle")
         if s["etat"] not in ("Actif", "Grace"):
             raise HTTPException(409, f"abonnement {s['etat']} : renouvellement impossible")
-        rep = _relayer(request, f"/self/subscription/{subscription_id}/renew", None)
-        _memoriser(x_idempotence, 200, rep)
-    return rep
+        return _relayer(request, f"/self/subscription/{subscription_id}/renew", None, x_idempotence)
 
 
 @router.delete("/subscriptions/{subscription_id}", dependencies=[Depends(require_jwt)])
@@ -491,9 +518,7 @@ def resilier(subscription_id: str, request: Request, motif: str = Query("", max_
         s = _abonnement_local(subscription_id)
         if s["etat"] in A.TERMINAUX:
             raise HTTPException(409, f"abonnement déjà clos ({s['etat']})")
-        rep = _relayer(request, f"/self/subscription/{subscription_id}/cancel", {"motif": motif})
-        _memoriser(x_idempotence, 200, rep)
-    return rep
+        return _relayer(request, f"/self/subscription/{subscription_id}/cancel", {"motif": motif}, x_idempotence)
 
 
 app = FastAPI(title="SecuBox MirrorNet", version="0.2.0", docs_url=None, redoc_url=None, openapi_url=None,

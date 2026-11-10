@@ -11,6 +11,7 @@ La base reste un index reconstructible : la vérité est le journal.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
@@ -20,9 +21,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import abonnements as A
-from .verif import DID, entree_valide
+from .verif import DID, canonical_bytes, entree_valide
 
-TAILLE_MAX = 16 * 1024 * 1024
+TAILLE_MAX = 4 * 1024 * 1024        # l'annuaire plafonne ses offres ; MemoryMax=128M pour tout le service
 NS = uuid.UUID("6d1f0f5e-3647-4d6b-9a8e-6d6972726f72")       # identifiants locaux déterministes (idempotence)
 CLASSES = ("public", "communaute", "prive")
 MODELES = ("gratuit", "forfait", "usage", "palier", "reciproque", "parraine")
@@ -95,6 +96,30 @@ def offre_normalisee(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "approval_mode": "auto" if p.get("approval_mode") == "auto" else "pending"}
 
 
+_VERIFIEES: set = set()          # (auteur, sig) déjà vérifiés : chaque passe ne refait pas toutes les signatures
+_VERIFIEES_MAX = 200000
+
+
+def _valide(e: Any) -> bool:
+    """entree_valide avec cache. La clé couvre la CHARGE (empreinte de sa forme canonique) : une signature valide
+    réemployée sur une charge modifiée ne retrouve pas l'entrée du cache, elle est revérifiée — et refusée."""
+    if not isinstance(e, dict) or not isinstance(e.get("payload"), dict):
+        return False
+    try:
+        cle = (e.get("author"), e.get("author_pubkey"), e.get("sig"),
+               hashlib.sha256(canonical_bytes(e["payload"])).hexdigest())
+    except (TypeError, ValueError):
+        return False
+    if cle in _VERIFIEES:
+        return True
+    if not entree_valide(e):
+        return False
+    if len(_VERIFIEES) >= _VERIFIEES_MAX:
+        _VERIFIEES.clear()
+    _VERIFIEES.add(cle)
+    return True
+
+
 def _index(entrees: List[Any]) -> Tuple[Dict[str, Any], int]:
     """Entrées vérifiées rangées par objet ; rend (index, nombre d'entrées rejetées)."""
     rejetees = 0
@@ -104,7 +129,7 @@ def _index(entrees: List[Any]) -> Tuple[Dict[str, Any], int]:
     subs: Dict[str, Dict[str, Any]] = {}
     gestes: List[Dict[str, Any]] = []
     for e in entrees:
-        if not entree_valide(e):
+        if not _valide(e):
             rejetees += 1
             continue
         op, p, auteur = e["op"], e["payload"], e["author"]
@@ -138,6 +163,8 @@ def _faits(sub_id: str, sub: Dict[str, Any], offre: Dict[str, Any], idx: Dict[st
     p = sub["p"]
     abonne, fournisseur = p.get("subscriber"), offre["fournisseur"]
     f = A.Faits(role=role, expire_le=p.get("expire_le") if isinstance(p.get("expire_le"), str) else None,
+                demande_le=p.get("requested_at") if isinstance(p.get("requested_at"), str) else None,
+                duree_s=offre["duree_s"],
                 approbation_auto=offre["approval_mode"] == "auto",
                 offre_retiree=(offre["service_id"], fournisseur) in idx["retirees"],
                 fournisseur_revoque=(noeuds.get(fournisseur) or {}).get("niveau") == "REVOKED",
@@ -221,6 +248,9 @@ def synchroniser(cx: sqlite3.Connection, export: Dict[str, Any], maintenant: Opt
                 elif offre["fournisseur"] == soi:
                     role = "fournisseur"
                 else:
+                    continue
+                if p.get("provider") is not None and p.get("provider") != offre["fournisseur"]:
+                    stats["rejetees"] += 1         # abonnement lié (signé) à un autre fournisseur que le propriétaire
                     continue
                 abonne = p["subscriber"]
                 if abonne not in connus:
