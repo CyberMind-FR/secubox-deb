@@ -5,7 +5,7 @@ SecuBox Annuaire-Miroir — federated self-certifying trust substrate.
 
 The Annuaire-Miroir is the trust directory for SecuBox-DEB, providing a BLAKE2b-chained, CONIKS-style append-only audit journal with four protocols: AUTO-ADD (provisional discovery), INVITE (capability-based membership), PROPOSAL (anti-plutocratic governance), and EMANCIPATE (staged anchor removal). All objects are Ed25519-signed, RFC 3339-timestamped, and access-gated by the can() resolver. Served on /run/secubox/annuaire.sock, JWT-gated.
 
-Paquet Debian : version `0.18.1-1~trixie1`, architecture `all`.
+Paquet Debian : version `0.18.2-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -62,6 +62,7 @@ Socket Unix : `/run/secubox/annuaire.sock`, `/run/secubox/openpgp.sock`.
 | `POST` | `/self/service/{service_id}/subscribe` | require_jwt — abonnement de CE nœud (tarif de l'offre, échéance = maintenant + `duree_s`) |
 | `POST` | `/self/subscription/{subscription_id}/renew` | require_jwt — `SERVICE_RENEW`, avant l'échéance |
 | `POST` | `/self/subscription/{subscription_id}/cancel` | require_jwt — résiliation (abonné) ou révocation de l'abonné (fournisseur) |
+| `POST` | `/self/subscription/{subscription_id}/approve`, `/reject` | require_jwt — décision du fournisseur sur une demande (#3651) |
 | `POST` | `/services/pull` | require_jwt |
 | `GET` | `/nodes` | require_lecture |
 | `GET` | `/config` | require_lecture |

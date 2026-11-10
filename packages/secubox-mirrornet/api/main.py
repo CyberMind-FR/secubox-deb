@@ -519,6 +519,30 @@ def renouveler(subscription_id: str, request: Request, x_idempotence: Optional[s
         return _relayer(request, f"/self/subscription/{subscription_id}/renew", None, x_idempotence)
 
 
+def _decision(subscription_id: str, request: Request, x_idempotence: Optional[str], verbe: str):
+    """Approbation ou refus d'un abonné par CE nœud fournisseur (#3651), seulement tant que la demande est en attente."""
+    deja = _idempotent(x_idempotence, verbe, subscription_id)
+    if deja is not None:
+        return deja
+    with _geste(x_idempotence, request):
+        s = _abonnement_local(subscription_id)
+        if s["role"] != "fournisseur":
+            raise HTTPException(409, "seul le fournisseur approuve ou refuse")
+        if s["etat"] != "Demande":
+            raise HTTPException(409, f"abonnement {s['etat']} : plus de décision à prendre")
+        return _relayer(request, f"/self/subscription/{subscription_id}/{verbe}", None, x_idempotence)
+
+
+@router.post("/subscriptions/{subscription_id}/approve", dependencies=[Depends(require_jwt)])
+def approuver(subscription_id: str, request: Request, x_idempotence: Optional[str] = Header(None)):
+    return _decision(subscription_id, request, x_idempotence, "approve")
+
+
+@router.post("/subscriptions/{subscription_id}/reject", dependencies=[Depends(require_jwt)])
+def refuser(subscription_id: str, request: Request, x_idempotence: Optional[str] = Header(None)):
+    return _decision(subscription_id, request, x_idempotence, "reject")
+
+
 @router.delete("/subscriptions/{subscription_id}", dependencies=[Depends(require_jwt)])
 def resilier(subscription_id: str, request: Request, motif: str = Query("", max_length=200),
              x_idempotence: Optional[str] = Header(None)):

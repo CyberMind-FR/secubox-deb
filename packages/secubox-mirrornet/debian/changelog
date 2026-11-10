@@ -1,3 +1,18 @@
+secubox-mirrornet (0.2.1-1~trixie1) trixie; urgency=medium
+
+  * Interface web d'administration /mirrornet/ (ref #3651), profil Aurora : état de
+    synchronisation, catalogue fédéré (recherche, mes offres), abonnements et abonnés
+    (état dérivé, échéance, historique), publication d'une offre ; actions réelles
+    s'abonner, renouveler, résilier ou révoquer, approuver, refuser — confirmées dans la
+    page, clé X-Idempotence par geste ; ?demo=1 sans écriture, ?embed=1 ; entrée de menu
+    (maillage). Phase 4 annoncée sans données.
+  * Routes POST /subscriptions/{id}/approve et /reject (fournisseur, demande en attente),
+    relayées à l'annuaire : une offre en approbation manuelle était inapprouvable.
+  * Menu : rangé dans l'espace « services » par secubox-hub 1.12.55 ; tant que ce hub n'est
+    pas installé, l'entrée apparaît dans « Autre ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:42:01 +0100
+
 secubox-mirrornet (0.2.0-1~trixie1) trixie; urgency=medium
 
   * Phase 3 de MirrorNet v1 (ref #3647) : cycle de vie des abonnements.

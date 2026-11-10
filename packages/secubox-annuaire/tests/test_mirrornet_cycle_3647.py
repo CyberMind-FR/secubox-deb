@@ -403,3 +403,31 @@ def test_joignabilite_par_sonde_si_l_export_echoue(monkeypatch):
     suivi = {}
     res = mesh_sync.sync_once(None, [{"mesh_ip": "10.10.0.1"}, {"mesh_ip": "10.10.0.9"}], fetch=lent, suivi=suivi)
     assert res["errors"] == 2 and suivi == {"10.10.0.1": True, "10.10.0.9": False}
+
+
+def test_self_approbation_et_refus_3651(api):
+    """#3651 : le fournisseur approuve ou refuse par /self (node.key dans l'annuaire), audité ; un tiers non."""
+    tc, M, jj, did, tmp = api
+    M.app.dependency_overrides[M._require_jwt] = lambda: {"sub": "admin"}
+    o = tc.post("/self/service/offer", json={"name": "Manuel", "kind": "api", "endpoint": "http://x",
+                                             "approval_mode": "pending"}).json()
+    pa, _, da = _membre(jj)
+    s1 = V.subscribe(jj, pa, da, o["service_id"])
+    s2 = V.subscribe(jj, pa, da, o["service_id"])
+    assert V.subscription_state(jj, s1.subscription_id) is SubscriptionState.PENDING
+    assert tc.post(f"/self/subscription/{s1.subscription_id}/approve").status_code == 200
+    assert V.subscription_state(jj, s1.subscription_id) is SubscriptionState.APPROVED
+    assert tc.post(f"/self/subscription/{s2.subscription_id}/reject").status_code == 200
+    assert V.subscription_state(jj, s2.subscription_id) is SubscriptionState.REJECTED
+    # Refus d'une demande déjà approuvée : 409, l'abonnement actif reste approuvé ; identifiant inconnu : 404.
+    assert tc.post(f"/self/subscription/{s1.subscription_id}/reject").status_code == 409
+    assert V.subscription_state(jj, s1.subscription_id) is SubscriptionState.APPROVED
+    assert tc.post("/self/subscription/" + "0" * 64 + "/approve").status_code == 404
+    assert tc.post("/self/subscription/pas-un-id/approve").status_code == 404
+    # Offre d'un autre fournisseur : ce nœud n'a pas autorité.
+    pf, _, df = _membre(jj)
+    o2 = V.offer_service(jj, pf, df, name="Autre", kind="api", endpoint="http://y", approval_mode="pending")
+    s3 = V.subscribe(jj, pa, da, o2.service_id)
+    assert tc.post(f"/self/subscription/{s3.subscription_id}/approve").status_code == 403
+    actions = [json.loads(x)["action"] for x in (tmp / "audit.log").read_text().splitlines()]
+    assert actions.count("mirrornet_approbation") == 1 and actions.count("mirrornet_refus") == 1

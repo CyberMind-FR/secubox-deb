@@ -1,3 +1,11 @@
+secubox-annuaire (0.18.2-1~trixie1) trixie; urgency=medium
+
+  * Routes /self/subscription/{id}/approve et /reject (ref #3651) : le fournisseur
+    approuve ou refuse un abonné, signé par node.key dans l'annuaire, audité
+    (mirrornet_approbation, mirrornet_refus).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:42:01 +0100
+
 secubox-annuaire (0.18.1-1~trixie1) trixie; urgency=medium
 
   * Banc MirrorNet (ref #3647) : export du journal en une lecture des identités au lieu

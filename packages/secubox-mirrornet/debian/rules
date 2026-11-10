@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-# SecuBox-Deb :: mirrornet — MirrorNet v1, phase 2 (#3645).
+# SecuBox-Deb :: mirrornet — MirrorNet v1 (#3645 schéma, #3647 abonnements, #3651 interface web).
 P = $(CURDIR)/debian/secubox-mirrornet
 
 %:
@@ -26,3 +26,7 @@ override_dh_auto_install:
 	install -d $(P)/etc/nginx/secubox.d $(P)/etc/nginx/secubox-routes.d
 	install -m 644 nginx/mirrornet.conf $(P)/etc/nginx/secubox.d/
 	install -m 644 nginx/mirrornet.conf $(P)/etc/nginx/secubox-routes.d/
+	# Interface web (#3651) : page statique servie à /mirrornet/ par la racine de l'hôte d'administration ; entrée de menu.
+	install -d $(P)/usr/share/secubox/www/mirrornet $(P)/usr/share/secubox/menu.d
+	install -m 644 www/mirrornet/index.html $(P)/usr/share/secubox/www/mirrornet/
+	install -m 644 menu.d/576-mirrornet.json $(P)/usr/share/secubox/menu.d/

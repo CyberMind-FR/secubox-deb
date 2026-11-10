@@ -986,6 +986,45 @@ async def self_cancel(subscription_id: str, req: SelfCancelRequest, ident: Dict[
     return res
 
 
+def _decider(verbe, subscription_id: str):
+    """Approbation ou refus d'une demande EN ATTENTE, sous verrou (#3651, relecture) : un refus ne ferme jamais un
+    abonnement déjà approuvé (REJECTED l'emporterait sur APPROVED), deux décisions concurrentes ne passent pas."""
+    import re as _re  # noqa: PLC0415
+    from annuaire.model import SubscriptionState as _SS  # noqa: PLC0415
+    from annuaire.verbs import _get_subscription_payload, subscription_state  # noqa: PLC0415
+    if not _re.fullmatch(r"[0-9a-f]{16,64}", subscription_id or ""):
+        raise HTTPException(404, "abonnement inconnu")
+    priv, did = _cle_du_noeud()
+    j = get_journal()
+    with _VERROU_ABONNEMENT:
+        if _get_subscription_payload(j, subscription_id) is None:
+            raise HTTPException(404, "abonnement inconnu")
+        etat = subscription_state(j, subscription_id)
+        if etat is not _SS.PENDING:
+            raise HTTPException(409, f"demande déjà tranchée ({etat.value})")
+        return _geste(verbe, j, priv, did, subscription_id)
+
+
+@app.post("/self/subscription/{subscription_id}/approve")
+async def self_approve(subscription_id: str, ident: Dict[str, Any] = Depends(_require_jwt)):
+    """SERVICE_APPROVE par CE nœud, fournisseur de l'offre, sur une demande en attente (#3651)."""
+    from annuaire.verbs import approve_subscription  # noqa: PLC0415
+    res = await asyncio.to_thread(_decider, approve_subscription, subscription_id)
+    _auditer_mirrornet("mirrornet_approbation", ident, subscription_id=subscription_id)
+    await asyncio.to_thread(_exporter_mirrornet)
+    return res
+
+
+@app.post("/self/subscription/{subscription_id}/reject")
+async def self_reject(subscription_id: str, ident: Dict[str, Any] = Depends(_require_jwt)):
+    """SERVICE_REJECT par CE nœud, fournisseur de l'offre, sur une demande en attente (#3651)."""
+    from annuaire.verbs import reject_subscription  # noqa: PLC0415
+    res = await asyncio.to_thread(_decider, reject_subscription, subscription_id)
+    _auditer_mirrornet("mirrornet_refus", ident, subscription_id=subscription_id)
+    await asyncio.to_thread(_exporter_mirrornet)
+    return res
+
+
 # ---------------------------------------------------------------------------
 # Directory endpoints — NodeRecord + ConfigBlob + log federation (gondwana P1, #768)
 # ---------------------------------------------------------------------------
