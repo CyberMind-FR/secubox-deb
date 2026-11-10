@@ -9,7 +9,7 @@
 *Mis à jour : 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
-- ⬜ **Next Up (2026-11-09)** : bouton « Réparer » livré (#3628) et relance groupée de l'agrégateur par majauto (#3630), pilotage `synchroniser` corrigé (#3632) ; reste : Status Live jalon 3 (section « Appliances » de live.secubox.in, en attente de l'accord du propriétaire), #3554 (tutoriel). Ensuite : leurres CERT-FR (#3584), WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; SearXNG (#3581).
+- ⬜ **Next Up (2026-11-09)** : bouton « Réparer » livré (#3628) et relance groupée de l'agrégateur par majauto (#3630), pilotage `synchroniser` corrigé (#3632), autojoin par appairage + relais automatique (#3638/#3639) ; **en cours : MirrorNet v1 phase 1, documents d'architecture (#3643)**, puis phase 2 (modèle de données) sur validation ; reste : Status Live jalon 3 (section « Appliances » de live.secubox.in, en attente de l'accord du propriétaire), #3554 (tutoriel). Ensuite : leurres CERT-FR (#3584), WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; SearXNG (#3581).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
 
