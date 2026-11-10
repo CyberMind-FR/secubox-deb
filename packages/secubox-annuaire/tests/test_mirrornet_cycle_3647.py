@@ -384,3 +384,22 @@ def test_export_borne_par_service_id(j):
         V._signer_et_ajouter(j, pf, df, Op.SERVICE_OFFER, "ServiceOffer", dict(charge, description=str(i)))
     ex = MX.construire(j, da, {})
     assert len([e for e in ex["entrees"] if e["op"] == "service_offer"]) == 1
+
+
+def test_cles_publiques_identiques_a_l_ancienne_resolution(j):
+    """Export en une lecture des identités : mêmes clés que _get_inviter_pubkey, auteur par auteur."""
+    _abonne(j)
+    cles = V._cles_publiques(j)
+    for e in V.export_entries(j):
+        assert e["author_pubkey"] == V._get_inviter_pubkey(j, e["author"])
+    assert cles
+
+
+def test_joignabilite_par_sonde_si_l_export_echoue(monkeypatch):
+    from annuaire import mesh_sync
+    def lent(url):
+        raise TimeoutError("export trop lent")
+    monkeypatch.setattr(mesh_sync, "joignable", lambda ip, port=0: ip == "10.10.0.1")
+    suivi = {}
+    res = mesh_sync.sync_once(None, [{"mesh_ip": "10.10.0.1"}, {"mesh_ip": "10.10.0.9"}], fetch=lent, suivi=suivi)
+    assert res["errors"] == 2 and suivi == {"10.10.0.1": True, "10.10.0.9": False}

@@ -1,3 +1,12 @@
+secubox-annuaire (0.18.1-1~trixie1) trixie; urgency=medium
+
+  * Banc MirrorNet (ref #3647) : export du journal en une lecture des identités au lieu
+    d'un balayage complet par auteur (gk2 : « ?ops=assist_ » prenait 21 s, au-delà du délai
+    des pairs) ; voie rapide ramenée à l'assistance seule ; joignabilité par sonde de
+    présence : un export lent n'est plus une absence.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:00:37 +0100
+
 secubox-annuaire (0.18.0-1~trixie1) trixie; urgency=medium
 
   * MirrorNet v1 phase 3 (ref #3647) : offres et abonnements étendus (champs facultatifs,

@@ -17,6 +17,7 @@ layer — convergent regardless of order.
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -143,6 +144,18 @@ def http_fetch(url: str, timeout: int = 5) -> List[Dict[str, Any]]:
     return data.get("entries", []) if isinstance(data, dict) else []
 
 
+def joignable(ip: str, port: int = DEFAULT_MESH_PORT, delai: float = 3.0) -> bool:
+    """Présence d'un pair (#3647) : un export LENT n'est pas une absence. Toute réponse HTTP de son annuaire, même un
+    refus (403 des droits du maillage), prouve qu'il est là ; seuls l'absence de connexion et le silence comptent."""
+    try:
+        urllib.request.urlopen(f"http://{ip}:{port}/api/v1/annuaire/health", timeout=delai)  # noqa: S310 (mesh-local)
+        return True
+    except urllib.error.HTTPError:
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def sync_once(
     journal: Any,
     peers: List[Dict[str, str]],
@@ -170,7 +183,7 @@ def sync_once(
         except Exception:
             totals["errors"] += 1
             if suivi is not None:
-                suivi[ip] = False
+                suivi[ip] = joignable(ip, port)
             continue
         if suivi is not None:
             suivi[ip] = True
