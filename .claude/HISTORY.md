@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-10 — MirrorNet : interface web d'administration
+
+- Page Aurora `/mirrornet/` (`secubox-mirrornet` 0.2.1, PR #3652) sur les routes réelles : synchronisation, catalogue fédéré, abonnements et abonnés avec historique, publication d'une offre ; actions s'abonner, renouveler, résilier/révoquer, approuver, refuser — confirmées dans la page, clé X-Idempotence par geste, `?demo=1` sans écriture, `?embed=1`. Manque comblé : approbation et refus par le fournisseur (`secubox-annuaire` 0.18.2, `/self/subscription/{id}/approve|reject`, demande en attente seulement, sous verrou). Relecture relecteur-securite : 0 bloquant, 2 points + 4 remarques corrigés. Menu : `secubox-hub` 1.12.55 range MirrorNet dans « services » — publié, **non installé sur gk2** (relance de l'agrégateur : à grouper) ; « Autre » d'ici là.
+- Déployé gk2, gk6, gk12 ; `https://admin.gk2.secubox.in/mirrornet/` et `admin.gk12` : 200, rendu vérifié avec les vraies données sur gk2 (45 offres présentables, 68 offres de gk2, synchronisation 17 s, 0 rejet, aucune erreur JS) ; `admin.gk6` toujours 404 par le relais public (closes #3651).
+
 ## 2026-11-10 — MirrorNet v1 phase 3 : cycle de vie des abonnements, déployé gk2 + banc
 
 - `secubox-annuaire` 0.18.0 → 0.18.1 et `secubox-mirrornet` 0.2.0 (PR #3648, correctif de banc PR #3650). Annuaire : offres et abonnements étendus (champs facultatifs hors charge signée : les 412 entrées service_* du journal de gk2 restent valides), `service_renew` / `service_revoke_offer_sub` (op dans la charge signée), résiliation par l'abonné, échéance bornée par la durée de l'offre, service_id au premier fournisseur, abonnement lié à son fournisseur, forme des opérations vérifiée à l'import, niveaux de confiance calculés (`confiance.py`), export `mirrornet-export.json`, routes `/self/...` signées par node.key et auditées (`par`). MirrorNet : synchronisation 60 s revérifiée, états dérivés (Demande, Refuse, Actif, Grace, Suspendu, Expire, Resilie), catalogue filtré par niveau, écritures administrateur relayées (seul jeton validé), idempotence sans double signature, schéma v2. Deux relectures relecteur-securite (1 bloquant + 9 points, puis 3 points) corrigées.
