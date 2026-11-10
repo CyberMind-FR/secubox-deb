@@ -9,7 +9,7 @@ secubox-annuaire (0.18.0-1~trixie1) trixie; urgency=medium
   * Routes /self/... (require_jwt) signées par node.key dans l'annuaire, auditées avec
     l'administrateur auteur.
 
- -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:30:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 09:43:23 +0100
 
 secubox-annuaire (0.17.7-1~trixie1) trixie; urgency=medium
 

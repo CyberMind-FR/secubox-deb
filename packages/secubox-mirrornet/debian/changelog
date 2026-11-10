@@ -13,7 +13,7 @@ secubox-mirrornet (0.2.0-1~trixie1) trixie; urgency=medium
     par X-Idempotence (clé réservée avant le geste, libérée en cas d'échec).
   * Schéma v2 (migration depuis v1 sans perte) ; dépend de python3-cryptography.
 
- -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:30:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 09:43:23 +0100
 
 secubox-mirrornet (0.1.0-1~trixie1) trixie; urgency=medium
 
