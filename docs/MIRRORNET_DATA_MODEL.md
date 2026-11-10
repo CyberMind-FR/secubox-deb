@@ -124,9 +124,11 @@ reconstruit qu'à partir des relevés doublement signés : c'est pourquoi il est
 
 ## 7. Migrations et retour arrière
 
-- Migration `N` = liste d'instructions idempotentes (`IF NOT EXISTS`), appliquée au démarrage du service
-  (`ExecStartPre=python3 -m secubox_mirrornet.schema`) dans une transaction, puis `user_version = N`.
-- Base plus récente que le code (retour arrière du paquet) : refus explicite, aucune écriture.
+- Migration `N` = liste d'instructions idempotentes (`IF NOT EXISTS`), appliquée au démarrage du service par le
+  lanceur (`python3 -m secubox_mirrornet.lanceur`, processus principal de l'unité) dans une transaction, puis
+  `user_version = N`.
+- Base plus récente que le code (retour arrière du paquet) : refus explicite, aucune écriture, code 3 sans redémarrage
+  en boucle (`RestartPreventExitStatus=3`, `StartLimitBurst=3`).
 - Sauvegarde : le fichier de base (avec `-wal`) suit la sauvegarde de `/var/lib` ; une restauration ne doit jamais
   précéder une transaction déjà échangée avec un pair (réconciliation par identifiant en phase 5).
 

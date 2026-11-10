@@ -72,6 +72,8 @@ def ecrire_transaction(cx: sqlite3.Connection, libelle: str, ecritures: Iterable
                        regle_id: Optional[str] = None, detail: Optional[Dict] = None) -> str:
     """Écrit une transaction équilibrée et rend son identifiant. `ecritures` : [(account_id, montant), …].
     Une correction ne passe jamais par ici : `inverser`."""
+    if tx_id is not None and tx_id.startswith("inv:"):
+        raise LedgerErreur("identifiant réservé aux inversions (inv:…)")
     return _ecrire(cx, libelle, ecritures, tx_id=tx_id, usage_record_id=usage_record_id, regle_id=regle_id,
                    detail=detail, inverse_de=None)
 

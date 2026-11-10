@@ -57,8 +57,8 @@ Chaque nœud tient **son** ledger (SQLite, `secubox-mirrornet`), privé, jamais 
 - toute transaction = ≥ 2 écritures dont la somme vaut **0** (contrainte vérifiée à l'écriture et par un test de propriété) ;
 - **ajout seul** : ni UPDATE ni DELETE ; une correction = transaction inverse référencée ;
 - écritures **chaînées** (empreinte de l'écriture précédente et du contenu de la transaction) : toute altération d'une
-  écriture existante se voit au contrôle d'intégrité ; la tête de chaîne est ancrée hors de la base (audit, signature
-  du nœud) pour détecter une troncature ou une chaîne recalculée ;
+  écriture existante se voit au contrôle d'intégrité ; la tête de chaîne sera ancrée hors de la base (audit, signature
+  du nœud, phase 5) pour détecter une troncature ou une chaîne recalculée ;
 - montants en **entiers** (centièmes de crédit), jamais en flottants ;
 - comptes : `credits:<did>` (solde), `reserve:qualite`, `infra:<did-maître>`, `en_attente:<abonnement>` (séquestre
   pendant un litige), `reglement:<did>` (séparé, enregistrements seulement).

@@ -21,6 +21,8 @@ Paquet Debian : version `0.1.0-1~trixie1`, architecture `all`.
   de queue ou une chaîne recalculée ne se voit qu'ainsi).
 - `secubox_mirrornet/repartition.py` : règle versionnée (producteur, relais, infrastructure, réserve ; Σ = 100) et
   découpage exact au centième.
+- `secubox_mirrornet/lanceur.py` : migration du schéma puis uvicorn, dans le processus principal de l'unité (code 3
+  si la base est plus récente que le code : `RestartPreventExitStatus=3`, pas de boucle).
 - `api/main.py` : API locale.
 
 ## Exécution

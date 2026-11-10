@@ -7,6 +7,9 @@
 [Unit]
 Description=SecuBox MirrorNet — plan de contrôle (phase 2, lecture seule)
 After=network.target secubox-core.service
+# Filet : au plus 3 démarrages en 5 min, quoi qu'il arrive.
+StartLimitIntervalSec=300
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -15,8 +18,8 @@ Group=secubox
 WorkingDirectory=/usr/lib/secubox/mirrornet
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStartPre=+/bin/rm -f /run/secubox/mirrornet.sock
-ExecStartPre=/usr/bin/python3 -m secubox_mirrornet.schema /var/lib/secubox-mirrornet/mirrornet.db
-ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/mirrornet.sock --workers 1 --log-level warning
+# Lanceur : migration du schéma puis uvicorn, dans le processus principal (code 3 = base trop récente, sans redémarrage).
+ExecStart=/usr/bin/python3 -m secubox_mirrornet.lanceur /run/secubox/mirrornet.sock
 # uvicorn force sa socket en 0666 : remise en 0660 (groupe secubox, que nginx traverse) dès qu'elle existe.
 ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/mirrornet.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/mirrornet.sock'
 # Ledger privé (MIRRORNET_ECONOMY.md § 8) : base et WAL lisibles par le seul compte du service, jamais par le groupe

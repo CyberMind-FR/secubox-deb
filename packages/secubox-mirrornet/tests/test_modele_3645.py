@@ -313,4 +313,29 @@ def test_montants_entiers_meme_en_sql_direct(cx):
 def test_unite_ledger_prive_et_sans_boucle():
     u = (Path(__file__).resolve().parents[1] / "debian" / "secubox-mirrornet.service").read_text()
     assert "UMask=0077" in u and "StateDirectoryMode=0700" in u and "RestartPreventExitStatus=3" in u
-    assert schema.CODE_BASE_TROP_RECENTE == 3
+    assert "StartLimitBurst=3" in u
+    assert "ExecStart=/usr/bin/python3 -m secubox_mirrornet.lanceur" in u
+    assert "ExecStartPre=/usr/bin/python3" not in u          # la migration est dans le processus principal
+
+
+def test_lanceur_sort_en_3_sur_base_trop_recente(tmp_path, monkeypatch):
+    from secubox_mirrornet import config, lanceur
+    base = tmp_path / "m.db"
+    c = schema.ouvrir(base)
+    c.execute("PRAGMA user_version = 99")
+    c.close()
+    monkeypatch.setattr(config, "BASE", base)
+    assert lanceur.main(["lanceur", str(tmp_path / "s.sock")]) == 3
+
+
+def test_prefixe_inv_reserve(cx):
+    b, a, _, _ = _comptes(cx)
+    with pytest.raises(ledger.LedgerErreur, match="réservé"):
+        ledger.ecrire_transaction(cx, "x", [(b, -1), (a, 1)], tx_id="inv:quelquechose")
+
+
+def test_purge_ne_perd_jamais_le_ledger():
+    t = (Path(__file__).resolve().parents[1] / "debian" / "postrm").read_text()
+    bloc = t[t.index("purge)"):]
+    assert bloc.index('if tar -C /var/lib') < bloc.index("rm -rf /var/lib/secubox-mirrornet")
+    assert "CONSERVÉ" in bloc
