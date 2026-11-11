@@ -1,3 +1,17 @@
+secubox-ad-guard (1.25.3-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy : encart « Pubs bloquées récemment » dans la vue par appareil (ref #3676).
+    Refus des dernières 24 h regroupés par service (lists/services-pub.txt, sinon domaine
+    enregistrable), avec dernier refus, nombre et source du blocage : règle TV Privacy
+    (essai/confirmée, « indice de <box> »), exception de l'administrateur, tri Netflix,
+    liste TV (PROTECT), listes compilées adblock/adulte/filtre web, sinon autre. Cache
+    pubs-bloquees.json calculé par le moteur auto au plus toutes les 10 min (listes lues
+    en flux, attribution gardée avec la signature des fichiers), réécrit seulement s'il
+    change ; route GET /adblock-tv/appareils/{nom}/pubs-bloquees en lecture nominative,
+    qui ne lit que le cache.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 15:24:22 +0100
+
 secubox-ad-guard (1.25.2-1~trixie1) trixie; urgency=medium
 
   * Relecture sécurité de #3674 : le contrôleur n'applique (rechargement d'Unbound) que si

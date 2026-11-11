@@ -393,6 +393,31 @@ protégées restent gardées, un légitime l'emporte toujours (retour à la déc
 une confirmation attend l'échéance, et un essai né d'indice n'est prolongé que 3 fois de suite (champ `prolongations`
 de la règle). Encart de la page SBX TV Privacy ; les règles nées d'un indice nomment leurs box dans ad-guard.
 
+## Pubs bloquées récemment (#3676, 1.25.3)
+
+Encart de la vue par appareil (onglet Applications de la page SBX TV Privacy) : les requêtes REFUSÉES à l'appareil
+ces dernières 24 h, regroupées par service (`lists/services-pub.txt`, `suffixe  service`, plus long suffixe gagnant ;
+sinon le domaine enregistrable), chaque domaine avec son dernier refus, son nombre et QUI l'a bloqué :
+règle TV Privacy (essai / confirmée) de l'appareil sur le domaine ou un parent, « indice de <box> » si elle est née
+d'un indice du maillage ; exception « bloquer » de l'administrateur ; tri Netflix ; liste TV Privacy (appareil en
+PROTECT) ; listes DNS compilées `/var/lib/secubox-dns-listes/sources` (95 adblock, 96 adulte, 93 filtre web : le
+domaine ou un parent y est une `local-zone` qui bloque) ; sinon « autre ». L'attribution suit l'état ACTUEL des règles
+et des listes, pas celui de l'instant du refus.
+
+Route (`require_lecture_nominative`, comme les autres lectures par appareil) :
+`GET /api/v1/ad-guard/adblock-tv/appareils/{nom}/pubs-bloquees` → `{maj, verifie, fenetre_s, listes_lisibles, services: [{service,
+nombre, dernier_ts, domaines: [{domaine, dernier_ts, nombre, source, detail}]}]}` ; 404 pour un appareil inconnu.
+`source` : `regle`, `indice`, `exception`, `tri`, `liste-tv`, `adblock`, `adulte`, `webfilter`, `autre`.
+Elle ne lit QUE le cache `/var/lib/secubox/ad-guard/dnstv/pubs-bloquees.json` (0640, atomique, réécrit seulement
+s'il change ; `maj` = dernier changement, `verifie` = dernière passe), calculé par le moteur auto au plus toutes les
+10 minutes (`.pubs-bloquees.passe`) ; une panne n'arrête jamais le moteur, des règles ou exceptions illisibles
+n'écrivent rien. Les listes compilées sont lues EN FLUX (ligne à ligne, seules les zones cherchées gardées) ;
+`pubs-listes.json` garde leur attribution avec la signature (mtime, taille) des fichiers : relecture seulement pour
+un domaine nouveau ou une liste changée. Plafonds : 50 appareils, 200 domaines par appareil. Une liste présente mais illisible (droits du
+dossier, lien) est journalisée une fois par passe avec son errno et `listes_lisibles` passe à faux (la page le dit :
+ses blocages apparaissent alors en « autre »). Marque et caches ouverts par descripteur, sans suivre de lien
+(`O_NOFOLLOW`) ni bloquer sur une FIFO (`O_NONBLOCK` + fichier ordinaire exigé) ; écriture `fsync` avant `rename`.
+
 ## Tri Netflix par insistance (#3226, expérimental)
 
 Pour une TV que la box ne route pas (Wi-Fi de l'opérateur), case « Tri Netflix » de TV Privacy (appareils en mode auto),
