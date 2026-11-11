@@ -9,6 +9,24 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-11 — MirrorNet phase 4b : espace offert en service, propagation des jeux et lignée, déployée gk2 + banc
+
+- `secubox-annuaire` 0.20.0 et `secubox-mirrornet` 0.4.0 (PR #3660).
+  - **Annuaire** : abonnement à une offre `kind=espace` avec deux champs signés, `jeux` (jeux du producteur confiés) et `compat_acceptee` (compatibilité et capacité de l'espace figées).
+  - **Espace** : tire chez le producteur la dernière version de chaque jeu nommé ; revérifie classe, format, licence, taille, données personnelles, capacité et empreinte ; garde la copie avec sa lignée (origine, parent) ; refait la mise à jour à chaque version ; purge au retrait et à la clôture.
+  - **Producteur** : sert le seul espace choisi, dans la compatibilité figée ET l'offre actuelle.
+  - Schéma v4, routes `/espaces`, `/espaces/gardees`, `/datasets/{id}/lignee`, `POST /espaces/{id}/propager` ; onglet « Espaces et répliques », bouton « Lignée ».
+  - Relecture relecteur-securite : 0 bloquant, 2 points + 6 remarques corrigés. Points corrigés : compatibilité non contrôlée par le producteur, empreinte reprise par un tiers effaçant une copie (corrigé aussi pour les abonnés 4a).
+- **Banc gk6 → gk12** :
+  - gk12 offre 10 Mio (public, 1 Mio par version) ; gk6 y confie un jeu de 300 000 octets (abonnement Actif, `jeux` signé, audité).
+  - gk12 garde la copie (~7 min, empreinte recalculée identique, 0600 `secubox-mirrornet`).
+  - Refus : gk2 non choisi 404, objet inconnu 404.
+  - Version 2 tirée d'elle-même (~5 min, parent = v1), puis retirée.
+  - Abonnement de 2 h arrivé à échéance → copies purgées. Le retrait seul n'a pas été chronométré : la session est tombée, et ce chemin est celui de 4a.
+  - Nettoyé : offres révoquées, sessions de test retirées.
+- **Déployé** gk2, gk6, gk12 : 0.20.0 / 0.4.0 actifs, NRestarts=0, gk2 synchronisé (166 offres, 0 rejet) (closes #3659).
+- Reste : lot 4c (présence certifiée, copies servies aux abonnés, répartition) ; une version neuve peut être refusée pour capacité tant que l'ancienne occupe encore la place.
+
 ## 2026-11-10 — MirrorNet phase 4a : jeux de données, déployée gk2 + banc
 
 - `secubox-annuaire` 0.19.0 et `secubox-mirrornet` 0.3.0 → 0.3.2 (PR #3654, correctifs de banc #3655 #3656). Versions signées `service_dataset_version` (numéro et parent calculés, empreinte BLAKE2b, licence, provenance, classe jamais moins stricte que l'offre, données personnelles contrôlées à la source) et retraits ; dépôt en flux (Content-Length, plafond 256 Mio, garde d'espace), objets sur `/data/mirrornet/objets` ; réception par l'abonné Actif dans sa propre tâche (délai total, reprise différée, sans redirection) ; service aux seuls abonnés Actif par l'écouteur :8799 avec preuve posée par nginx (secret root remis par LoadCredential) — routes livrées dans `/etc/nginx/secubox-mesh.d/` ; onglet « Jeux de données ». Écarts assumés : pas de ConfigBlob, pas de port 8471. Relecture relecteur-securite : 9 points + remarques corrigés ; hub 1.12.55 installé sur gk2 (MirrorNet dans « services », sans relance de l'agrégateur).

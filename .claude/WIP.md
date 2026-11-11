@@ -6,10 +6,10 @@
 -->
 
 # WIP — chantier en cours + Next Up
-*Mis à jour : 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
+*Mis à jour : 2026-11-11 (MirrorNet 4b déployée) ; 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
-- ⬜ **Next Up (2026-11-09)** : bouton « Réparer » livré (#3628) et relance groupée de l'agrégateur par majauto (#3630), pilotage `synchroniser` corrigé (#3632), autojoin par appairage + relais automatique (#3638/#3639) ; **MirrorNet v1 : phases 0-3 + interface web `/mirrornet/` + phase 4a jeux de données déployée (gk2, gk6, gk12 : annuaire 0.19.0, mirrornet 0.3.2 ; #3653) ; suivant : 4b espace offert + propagation + lignée, puis 4c présence certifiée + répartition (#3649) ; à voir : relais public admin.gk6 → 404 sur /mirrornet/** ; reste : Status Live jalon 3 (section « Appliances » de live.secubox.in, en attente de l'accord du propriétaire), #3554 (tutoriel). Ensuite : leurres CERT-FR (#3584), WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; SearXNG (#3581).
+- ⬜ **Next Up (2026-11-09)** : bouton « Réparer » livré (#3628) et relance groupée de l'agrégateur par majauto (#3630), pilotage `synchroniser` corrigé (#3632), autojoin par appairage + relais automatique (#3638/#3639) ; **MirrorNet v1 : phases 0-3 + interface web `/mirrornet/` + phases 4a (jeux de données, #3653) et 4b (espace offert, propagation, lignée, #3659) déployées (gk2, gk6, gk12 : annuaire 0.20.0, mirrornet 0.4.0) ; suivant : 4c présence certifiée + copies servies aux abonnés + répartition (#3649) ; à voir : relais public admin.gk6 → 404 sur /mirrornet/** ; reste : Status Live jalon 3 (section « Appliances » de live.secubox.in, en attente de l'accord du propriétaire), #3554 (tutoriel). Ensuite : leurres CERT-FR (#3584), WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; SearXNG (#3581).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
 
