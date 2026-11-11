@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-UP5GOXwRX+ATPq6U5vU/b0RRyJ1ds2VNlkLHiA3VYKs='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-T2cqGM8+7GArePkKIOu2zDBPXMCxI898YpSkmYZnIgo='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -306,7 +306,7 @@
       <p class="note" id="hors-champ"></p>
     </div>
     <div class="pan espace"><h2>Indices du maillage <small id="ix-note">—</small></h2>
-      <p class="note">Les autres box du maillage signalent des domaines publicitaires vus pendant une coupure ; ils ne déclenchent jamais un blocage seuls. Seuls les domaines (sans appareil) sont partagés.</p>
+      <p class="note">Les autres box du maillage signalent des domaines publicitaires. Un domaine signalé par une autre box et vu ici pendant une coupure publicitaire passe à l’essai automatiquement : c’est réversible (retiré dès que plus aucune box ne le signale ou qu’une le déclare légitime), et jamais pour une catégorie protégée (streaming, CDN, DRM, authentification, mises à jour). Seuls les domaines (sans appareil) sont partagés.</p>
       <div class="actions">
         <label class="guide"><input type="checkbox" id="ix-recevoir"> Recevoir les indices des autres box</label>
         <label class="guide"><input type="checkbox" id="ix-publier"> Publier mes indices confirmés</label>
@@ -715,13 +715,13 @@
         return geste('/protection/exceptions',Object.assign({force:true},corps),'Exception posée (confirmée)').then(function(){el('ex-domaine').value='';});});});});
 
   // ── indices du maillage (#3666) ──
-  var DEMO_INDICES={publier:true,recevoir:true,recus:2,producteurs:[{nom:'gk1',indices:2,legitimes:1},{nom:'gk2',indices:1,legitimes:0}],publies:3};
+  var DEMO_INDICES={publier:true,recevoir:true,recus:2,producteurs:[{nom:'gk1',indices:2,legitimes:1},{nom:'gk2',indices:1,legitimes:0}],publies:3,maj:1762855200};
   function rendreIndices(j){
     var tb=el('ix-producteurs');vider(tb);
     if(!j){el('ix-note').textContent='indisponible';vide(tb,3,'Indices indisponibles.');return;}
     el('ix-recevoir').checked=!!j.recevoir;el('ix-publier').checked=!!j.publier;
     el('ix-recevoir').disabled=el('ix-publier').disabled=DEMO;
-    el('ix-note').textContent=fmt(j.recus)+' domaine'+(j.recus>1?'s':'')+' confirmé'+(j.recus>1?'s':'')+' par d’autres box · '+fmt(j.publies)+' publié'+(j.publies>1?'s':'')+' · mis à jour à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    el('ix-note').textContent=fmt(j.recus)+' domaine'+(j.recus>1?'s':'')+' confirmé'+(j.recus>1?'s':'')+' par d’autres box · '+fmt(j.publies)+' publié'+(j.publies>1?'s':'')+(j.maj?' · mis à jour le '+new Date(j.maj*1000).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):' · aucune réception');
     (j.producteurs||[]).forEach(function(p){var tr=h('tr');tr.appendChild(h('td',null,p.nom));tr.appendChild(h('td',{class:'num'},fmt(p.indices)));tr.appendChild(h('td',{class:'num'},fmt(p.legitimes)));tb.appendChild(tr);});
     if(!tb.firstChild)vide(tb,3,'Aucune box ne partage d’indices pour l’instant.');
   }

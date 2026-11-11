@@ -58,7 +58,7 @@ def test_une_coupure_suffit_et_inconnu_leve(magasin):
     res = M.tick(ETAT, r, magasin, classer, REGLAGE, t, indices=indice(PUB))
     x = regles_de(r)[PUB]
     assert x["score"] == D.SCORE_INDICE == 100 and x["indice"] == ["gk2"]
-    assert x["etat"] == "essai" and x["motif"] == "essai automatique (indice du maillage)"
+    assert x["etat"] == "essai" and x["motif"] == "essai automatique, suggéré par gk2"           # F7 : l'origine est nommée
     assert x["historique"][0]["motif"] == "suggéré par gk2"
     assert res["applique"] is True and PUB in r.actives("tv-banc")
 
@@ -134,7 +134,7 @@ def test_retrait_quand_l_indice_disparait(magasin):
     M.tick(ETAT, r, magasin, classer, REGLAGE, t, indices=indice(PUB))
     assert regles_de(r)[PUB]["etat"] == "essai"
     conf = r.proposer("tv-banc", "confirme.regie-exemple.net", 100, "faible", t, indice=["gk2"])["id"]
-    r.transiter(conf, "essai", "auto", "essai automatique (indice du maillage)", t)
+    r.transiter(conf, "essai", "auto", "essai automatique, suggéré par gk2", t)
     r.transiter(conf, "confirme", "admin", "", t)
     local = r.proposer("tv-banc", "local.regie-exemple.net", 50, "faible", t)["id"]          # essai sans indice : pas concerné
     r.transiter(local, "essai", "admin", "", t)
@@ -282,7 +282,7 @@ def test_echeance_confirme_l_essai_d_indice(magasin):
     charger(magasin, activite(t - 100))
     M.tick(ETAT, r, magasin, classer, REGLAGE, t, indices=indice(PUB))
     x = regles_de(r)[PUB]
-    assert x["etat"] == "confirme" and x["motif"] == "confirmé (indice du maillage)" and x["historique"][-1]["origine"] == "auto"
+    assert x["etat"] == "confirme" and x["motif"] == "confirmé, suggéré par gk2" and x["historique"][-1]["origine"] == "auto"
     assert PUB not in I.contenu(r, [], T.Taxonomie(listes=classer))["indices"]
     M.tick(ETAT, r, magasin, classer, REGLAGE, t + 60, indices=indice(PUB, legitimes={PUB: {"gk1"}}))
     assert regles_de(r)[PUB]["etat"] == "candidat"                       # confirmé par le moteur : oublié, puis candidat
@@ -330,7 +330,7 @@ def test_candidat_existant_passe_en_essai(magasin):
     avant = {d: regles_de(r)[d] for d in autres}
     M.tick(ETAT, r, magasin, classer, REGLAGE, t + 60, indices=indice(PUB, *autres))
     x = regles_de(r)[PUB]
-    assert x["etat"] == "essai" and x["indice"] == ["gk2"] and x["motif"] == "essai automatique (indice du maillage)"
+    assert x["etat"] == "essai" and x["indice"] == ["gk2"] and x["motif"] == "essai automatique, suggéré par gk2"
     assert {d: regles_de(r)[d] for d in autres} == avant
 
 
@@ -368,7 +368,8 @@ def test_legitime_l_emporte_sur_un_producteur_indisponible(magasin):
 
 def test_prolongations_ne_chassent_pas_l_entree_en_essai(magasin):
     """Fix round 3 : une prolongation remplace la précédente dans l'historique (plafonné à 10) ; après 12 prolongations l'entrée
-    à l'essai par le moteur reste lisible : la règle est confirmée à l'échéance, puis oubliée quand l'indice disparaît."""
+    à l'essai par le moteur reste lisible. Correctif final (B1) : au-delà de 3 prolongations consécutives, l'essai né d'un indice
+    n'est plus ni prolongé ni confirmé : l'expiration ordinaire le retire."""
     t = int(time.time())
     t0 = t - R.ESSAI_S - 3600
     r = R.Regles()
@@ -379,12 +380,10 @@ def test_prolongations_ne_chassent_pas_l_entree_en_essai(magasin):
     x = r.get(rid)
     assert M._ne_du_moteur(x) and len(x["historique"]) == 3                 # candidat, essai, UNE prolongation
     assert [h["vers"] for h in x["historique"]] == ["candidat", "essai", "essai"] and x["historique"][-1]["ts"] == t0 + 71
+    assert x["prolongations"] == 12
     charger(magasin, activite(t - 100))
     M.tick(ETAT, r, magasin, classer, REGLAGE, t, indices=indice(PUB))
-    x = r.get(rid)
-    assert x["etat"] == "confirme" and x["motif"] == "confirmé (indice du maillage)" and M._ne_du_moteur(x)
-    M.tick(ETAT, r, magasin, classer, REGLAGE, t + 60, indices=Index())
-    assert PUB not in regles_de(r)
+    assert r.get(rid)["etat"] == "retire"
 
 
 def test_prolongation_sans_precedente_s_ajoute():
@@ -395,3 +394,83 @@ def test_prolongation_sans_precedente_s_ajoute():
     r.prolonger_essai(rid, 4, "autre motif")
     assert [(h["de"], h["vers"], h["ts"], h["motif"]) for h in r.get(rid)["historique"]] == [
         ("", "candidat", 1, "proposé"), ("candidat", "essai", 2, "x"), ("essai", "essai", 4, "autre motif")]
+
+
+# ── correctif final (B1, F2, F7) ─────────────────────────────────────────────────────────────────────────────────
+
+def test_b1_prolongations_plafonnees_a_trois(magasin):
+    """B1 : lecture locale en panne (index illisible) : l'essai né d'un indice est prolongé 3 fois de suite au plus, puis
+    l'expiration ordinaire le retire — une panne (ou un pair) ne fige jamais un blocage."""
+    t = int(time.time())
+    r = R.Regles()
+    essai_d_indice(magasin, r, t)
+    rid = regles_de(r)[PUB]["id"]
+    for k in range(1, 4):
+        echeance = r.get(rid)["fin_essai"] + 10
+        charger(magasin, activite(echeance - 100))
+        M.tick(ETAT, r, magasin, classer, REGLAGE, echeance, indices=Index(lisible=False))
+        x = r.get(rid)
+        assert x["etat"] == "essai" and x["prolongations"] == k and x["motif"] == M.MOTIF_INDICE_INDISPONIBLE
+    echeance = r.get(rid)["fin_essai"] + 10
+    M.tick(ETAT, r, magasin, classer, REGLAGE, echeance, indices=Index(lisible=False))
+    assert r.get(rid)["etat"] == "retire"
+
+
+def test_b1_regression_eprouvee_meme_indices_indisponibles(magasin):
+    """B1 : même quand on prolongerait faute de lecture, la rafale de refus / le contenu disparu sont éprouvés : régression =
+    pas de prolongation, l'expiration retire l'essai."""
+    t = int(time.time())
+    t0 = t - R.ESSAI_S - 60
+    r = R.Regles()
+    essai_d_indice(magasin, r, t0)
+    jours = [evt(t0 - 86400 * j - i, f"habituel{i}.contenu.fr") for j in range(1, 4) for i in range(40)]
+    charger(magasin, jours + [evt(t - 100 - i, "autre.contenu.fr") for i in range(150)])
+    assert M._eprouver(regles_de(r)[PUB], [IP], magasin, REGLAGE, t) == "regression"
+    M.tick(ETAT, r, magasin, classer, REGLAGE, t, indices=Index(lisible=False))
+    assert regles_de(r)[PUB]["etat"] == "retire"
+
+
+def test_b1_une_transition_remet_le_compteur_a_zero():
+    r = R.Regles()
+    rid = r.proposer("tv-banc", PUB, 50, "faible", 1)["id"]
+    r.transiter(rid, "essai", "auto", "x", 2)
+    r.prolonger_essai(rid, 3)
+    r.prolonger_essai(rid, 4)
+    assert r.get(rid)["prolongations"] == 2
+    assert R.Regles.depuis_dict(r.vers_dict()).get(rid)["prolongations"] == 2
+    r.transiter(rid, "confirme", "admin", "", 5)
+    assert "prolongations" not in r.get(rid)
+    for mauvais in (-1, True, "2", R.PROLONGATIONS_LUES_MAX + 1):
+        with pytest.raises(R.ErreurRegle):
+            R.valider_regle({"appareil": "tv-banc", "domaine": PUB, "etat": "essai", "prolongations": mauvais})
+
+
+def test_f2_legitime_ailleurs_revient_a_la_decision_locale(magasin):
+    """F2 : un indice freiné par un légitime ne bloque plus l'essai automatique ORDINAIRE (auto_essai, risque faible, catégorie
+    non protégée) : la règle est alors locale (sans `indice`) et ne suit pas les indices."""
+    t = int(time.time())
+    pub = "7cd78.v.fwmrm.net"                                           # PUBLICITE localement (listes)
+    charger(magasin, coupure(t - 600, pub))
+    cl = dict(CLASSES, **{pub: "advertising"})
+    reglage = M.Reglage(declencheurs=("fwmrm.net",), auto_essai=True)
+    temoin = R.Regles()
+    M.tick(ETAT, temoin, magasin, lambda d: cl.get(d, ""), reglage, t)
+    attendu = regles_de(temoin).get(pub)
+    r = R.Regles()
+    M.tick(ETAT, r, magasin, lambda d: cl.get(d, ""), reglage, t, indices=indice(pub, legitimes={pub: {"gk1"}}))
+    x = regles_de(r).get(pub)
+    assert attendu["etat"] == "essai"                                   # sans indice : essai automatique local
+    assert x["etat"] == "essai" and x["motif"] == "essai automatique" and "indice" not in x
+    M.tick(ETAT, r, magasin, lambda d: cl.get(d, ""), reglage, t + 60, indices=indice(pub, legitimes={pub: {"gk1"}}))
+    assert regles_de(r)[pub]["etat"] == "essai"                         # règle locale : jamais oubliée par les indices
+
+
+def test_f7_motifs_nomment_les_box(magasin):
+    t = int(time.time())
+    charger(magasin, coupure(t - 600, PUB))
+    r = R.Regles()
+    M.tick(ETAT, r, magasin, classer, REGLAGE, t, indices=indice(PUB, par=("gk6", "gk2")))
+    x = regles_de(r)[PUB]
+    assert x["motif"] == "essai automatique, suggéré par gk2, gk6" and len(x["motif"]) <= 120
+    noms = tuple(f"box-{i:02d}-" + "n" * 25 for i in range(8))
+    assert len(M._motif_noms(M.PREFIXE_INDICE, list(noms))) <= 120

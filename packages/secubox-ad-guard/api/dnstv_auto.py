@@ -16,9 +16,12 @@ if TYPE_CHECKING:                                    # pragma: no cover
     from .dnstv_indices import Index
 
 HISTORIQUE_H = 48
-MOTIF_INDICE = "essai automatique (indice du maillage)"
-MOTIF_INDICE_CONFIRME = "confirmé (indice du maillage)"
+# Motifs des règles nées d'un indice (#3666) : l'origine est nommée (« essai automatique, suggéré par gk2, gk6 »), ≤ 120 car.
+PREFIXE_INDICE = "essai automatique, suggéré par "
+PREFIXE_INDICE_CONFIRME = "confirmé, suggéré par "
 MOTIF_INDICE_RETIRE = "indice retiré"
+MOTIF_INDICE_INDISPONIBLE = "essai prolongé : indices indisponibles"
+PROLONGATIONS_INDICE_MAX = 3         # prolongations consécutives d'un essai né d'indice ; au-delà, expiration ordinaire
 
 
 @dataclass
@@ -138,9 +141,11 @@ def _suivre_les_indices(etat, regles, magasin, reglage, maintenant, note, indice
     """Règles nées d'un indice et mises à l'essai (ou confirmées) par le moteur (#3666).
 
     Oubli : indice disparu ou déclaré légitime par une box → la règle est EFFACÉE (reproposable si l'indice revient). Jamais sur une
-    lecture ratée : rien si l'index est illisible, rien pour une règle dont un producteur est indisponible.
+    lecture LOCALE ratée : rien si l'index est illisible, rien pour une règle dont un producteur est indisponible (fichier absent ou
+    illisible ici). Un contenu signé mais invalide n'est pas une lecture ratée : `charger` le traite comme une liste vide.
     Échéance : essai sans régression → confirmé (origine auto, garde `refus_indice`), même `confirmation_auto` désactivé ; appareil
-    peu actif ou indices indisponibles → essai prolongé ; régression ou catégorie protégée → l'expiration ordinaire le retire."""
+    peu actif ou indices indisponibles → essai prolongé, au plus PROLONGATIONS_INDICE_MAX fois de suite ; régression (rafale de refus,
+    contenu habituel disparu), catégorie protégée ou plafond atteint → l'expiration ordinaire le retire."""
     if indices.lisible:
         for r in regles.liste():
             if not _ne_du_moteur(r):
@@ -157,19 +162,23 @@ def _suivre_les_indices(etat, regles, magasin, reglage, maintenant, note, indice
         adresses = adr.get(r["appareil"])
         if not adresses:
             continue                                         # appareil plus en mode auto : l'expiration joue
-        conf, leg = suggestion(r["domaine"])
-        # Restée là faute de lecture (index illisible ou producteur indisponible) : la protection n'est pas retirée ; l'essai est
-        # reconduit de 24 h en 24 h, SANS LIMITE, tant que la réception reste cassée (arbitré : ni confirmé, ni retiré à l'aveugle).
-        if not indices.lisible or not conf or leg:
-            regles.prolonger_essai(r["id"], maintenant, "essai prolongé : indices indisponibles")
-            continue
         if refus_ix(r["appareil"], r["domaine"]):
             continue                                         # catégorie protégée connue ici : l'expiration la retire
+        if r.get("prolongations", 0) >= PROLONGATIONS_INDICE_MAX:
+            continue                                         # plafond : un pair (ou une panne) ne fige jamais un blocage
         bilan = _eprouver(r, adresses, magasin, reglage, maintenant)
-        if bilan == "peu_actif":
+        if bilan == "regression":
+            continue                                         # rafale de refus ou contenu disparu : l'expiration la retire
+        conf, leg = suggestion(r["domaine"])
+        # Restée là faute de lecture locale (index illisible ou producteur indisponible) : la protection n'est pas retirée à
+        # l'aveugle ; l'essai est reconduit de 24 h, dans la limite du plafond ci-dessus.
+        if not indices.lisible or not conf or leg:
+            regles.prolonger_essai(r["id"], maintenant, MOTIF_INDICE_INDISPONIBLE)
+        elif bilan == "peu_actif":
             regles.prolonger_essai(r["id"], maintenant)
-        elif bilan == "ok":
-            note(regles.transiter(r["id"], "confirme", "auto", MOTIF_INDICE_CONFIRME, maintenant), "essai", "confirme", MOTIF_INDICE_CONFIRME)
+        else:
+            motif = _motif_noms(PREFIXE_INDICE_CONFIRME, conf)
+            note(regles.transiter(r["id"], "confirme", "auto", motif, maintenant), "essai", "confirme", motif)
 
 
 def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=None, guides=frozenset(),
@@ -231,11 +240,18 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
                 if not conf or leg or refus_ix(appareil, r["domaine"]):
                     continue
                 regles.poser_indice(r["id"], conf[:dnstv_regles.INDICE_MAX])
-                note(regles.transiter(r["id"], "essai", "auto", MOTIF_INDICE, maintenant), "candidat", "essai", MOTIF_INDICE)
+                motif = _motif_noms(PREFIXE_INDICE, conf)
+                note(regles.transiter(r["id"], "essai", "auto", motif, maintenant), "candidat", "essai", motif)
         exclus = {r["domaine"] for r in regles.liste() if r["appareil"] == appareil}
         for c in dnstv_detect.detecter(evts, declencheur, classer, exclus,
                                        evts_declencheurs=evts if reglage.declencheurs_pub else None, indices=domaines_indice):
             conf, leg = suggestion(c.domaine) if c.risque != "variable" else ([], [])   # un regroupement ne porte jamais l'indice
+            # Décision LOCALE (essai automatique ordinaire) : jamais un appareil guidé, seul le risque « faible », jamais une catégorie
+            # protégée (INCONNU compris). Un indice freiné par un légitime déclaré ailleurs revient à cette décision : la règle est
+            # alors locale (sans `indice`), elle ne suit pas les indices.
+            essai_local = reglage.auto_essai and appareil not in guides and c.risque == "faible" and not refus(appareil, c.domaine)
+            if conf and leg and essai_local:
+                conf = []
             kw = {}
             if conf:                                         # indice du maillage : les box sont nommées, la règle n'est jamais renvoyée (pas d'écho)
                 kw = {"indice": conf[:dnstv_regles.INDICE_MAX],
@@ -248,12 +264,14 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
                 continue
             candidats += 1
             changements.append({"appareil": appareil, "domaine": c.domaine, "de": "", "vers": "candidat", "motif": n["motif"] if conf else c.motif})
-            if conf:
-                # Essai sur indice : ni `auto_essai`, ni le seul risque « faible » ; jamais un appareil guidé, un nom à partie variable,
-                # un légitime déclaré ailleurs ni une catégorie protégée connue ici (INCONNU seul est levé par l'indice).
-                if not leg and appareil not in guides and c.risque in ("faible", "partage") and refus_ix(appareil, c.domaine) is None:
-                    note(regles.transiter(n["id"], "essai", "auto", MOTIF_INDICE, maintenant), "candidat", "essai", MOTIF_INDICE)
-            elif reglage.auto_essai and appareil not in guides and c.risque == "faible" and not refus(appareil, c.domaine):   # « partagé », « variable » ou protégé : humain
+            # Essai sur indice : ni `auto_essai`, ni le seul risque « faible » ; jamais un appareil guidé, un nom à partie variable,
+            # un légitime déclaré ailleurs ni une catégorie protégée connue ici (INCONNU seul est levé par l'indice).
+            essai_indice = (bool(conf) and not leg and appareil not in guides and c.risque in ("faible", "partage")
+                            and refus_ix(appareil, c.domaine) is None)
+            if essai_indice:
+                motif = _motif_noms(PREFIXE_INDICE, conf)
+                note(regles.transiter(n["id"], "essai", "auto", motif, maintenant), "candidat", "essai", motif)
+            if not essai_indice and not conf and essai_local:   # « partagé », « variable » ou protégé : humain
                 r = regles.transiter(n["id"], "essai", "auto", "essai automatique", maintenant)
                 note(r, "candidat", "essai", "essai automatique")
         # Lot 4 (#3374, arbitrage 3) : anti faux repli — un domaine PUB apparu juste après un refus publicitaire est proposé puis mis à

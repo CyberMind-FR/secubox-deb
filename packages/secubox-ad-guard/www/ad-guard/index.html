@@ -891,6 +891,12 @@
         const AUTO_RISQUE = { faible: 'faible', partage: 'peut servir aussi le contenu', variable: 'noms variables regroupés' };   // libellés locaux, jamais ceux de l'API
         const AUTO_ETAT = { rejete: 'rejetée', retire: 'retirée', candidat: 'candidat', essai: 'essai', confirme: 'confirmée' };
         function autoBtn(texte, classe, fn) { const b = tvEl('button', texte, 'btn ' + (classe || '')); b.onclick = fn; return b; }
+        // #3666 : une règle née d'un indice du maillage nomme les box qui l'ont suggérée (texte seulement, jamais du HTML)
+        function autoDomaine(r) {
+            const td = tvEl('td', r.domaine);
+            if (Array.isArray(r.indice) && r.indice.length) td.appendChild(tvEl('div', 'suggéré par ' + r.indice.join(', '), 'auto-indice', 'color:var(--text-dim);font-size:.78rem;'));
+            return td;
+        }
         function autoCell(...noeuds) { const td = document.createElement('td'); noeuds.forEach(n => td.appendChild(n)); return td; }
         function autoReste(fin) {
             const s = fin - Math.floor(Date.now() / 1000);
@@ -923,11 +929,11 @@
                 autoCell(autoBtn('Essayer', '', () => autoAction(r.id, 'essayer')), autoBtn('Rejeter', '', () => autoAction(r.id, 'rejeter')))]));
             if (!par('candidat').length) autoVide(tb, 6, 'Aucun candidat à valider');
             tb = document.getElementById('auto-essai'); tb.textContent = '';
-            par('essai').forEach(r => tvLigne(tb, [r.appareil, r.domaine, autoReste(r.fin_essai),
+            par('essai').forEach(r => tvLigne(tb, [r.appareil, autoDomaine(r), autoReste(r.fin_essai),
                 autoCell(autoBtn('Confirmer', '', () => autoAction(r.id, 'confirmer')), autoBtn('Retirer', '', () => autoAction(r.id, 'retirer')))]));
             if (!par('essai').length) autoVide(tb, 4, 'Aucune règle à l\u2019essai');
             tb = document.getElementById('auto-confirmees'); tb.textContent = '';
-            par('confirme').forEach(r => tvLigne(tb, [r.appareil, r.domaine, autoCell(autoBtn('Retirer', '', () => autoAction(r.id, 'retirer')))]));
+            par('confirme').forEach(r => tvLigne(tb, [r.appareil, autoDomaine(r), autoCell(autoBtn('Retirer', '', () => autoAction(r.id, 'retirer')))]));
             if (!par('confirme').length) autoVide(tb, 3, 'Aucune règle confirmée');
             tb = document.getElementById('auto-ecartees'); tb.textContent = '';
             regles.filter(r => r.etat === 'rejete' || r.etat === 'retire').forEach(r => tvLigne(tb, [r.appareil, r.domaine, AUTO_ETAT[r.etat], r.motif || '—',

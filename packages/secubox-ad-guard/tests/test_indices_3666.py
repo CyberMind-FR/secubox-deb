@@ -35,16 +35,17 @@ def _regle(appareil, domaine, etat="confirme", origine="auto", indice=None):
 
 
 def test_contenu_sans_appareil_ni_date():
-    c = I.contenu(_Regles([_regle("tv-salon", "ads.ex.com"), _regle("tv-chambre", "ads.ex.com")]), [], _Taxo())
+    c = I.contenu(_Regles([_regle("tv-salon", "ads.ex.com"), _regle("tv-chambre", "ads.ex.com")]), [], _Taxo({"ads.ex.com": "PUBLICITE"}))
     assert c["indices"] == {"ads.ex.com": "PUBLICITE"}
     assert b"tv-salon" not in I.octets(c) and b"tv-chambre" not in I.octets(c)
     assert set(c) == {"format", "jeu", "indices", "legitimes"}
 
 
 def test_categorie_taxonomie_gardee_si_autorisee():
-    c = I.contenu(_Regles([_regle("tv", "t.ex.com"), _regle("tv", "s.ex.com")]), [],
-                  _Taxo({"t.ex.com": "TRACKING", "s.ex.com": "STREAMING"}))
-    assert c["indices"] == {"t.ex.com": "TRACKING", "s.ex.com": "PUBLICITE"}
+    """F4 : la catégorie LOCALE décide ; une autre catégorie que pub / pistage / télémétrie n'est jamais publiée."""
+    c = I.contenu(_Regles([_regle("tv", "t.ex.com"), _regle("tv", "s.ex.com"), _regle("tv", "m.ex.com")]), [],
+                  _Taxo({"t.ex.com": "TRACKING", "s.ex.com": "STREAMING", "m.ex.com": "TELEMETRIE"}))
+    assert c["indices"] == {"t.ex.com": "TRACKING", "m.ex.com": "TELEMETRIE"}
 
 
 def test_pas_d_echo():
@@ -56,14 +57,14 @@ def test_pas_d_echo():
 
 def test_legitime_l_emporte():
     exc = [{"appareil": "tv", "domaine": "a.ex.com", "type": "autoriser"}]
-    c = I.contenu(_Regles([_regle("tv", "a.ex.com")]), exc, _Taxo())
+    c = I.contenu(_Regles([_regle("tv", "a.ex.com")]), exc, _Taxo({"a.ex.com": "PUBLICITE"}))
     assert c["indices"] == {} and c["legitimes"] == ["a.ex.com"]
 
 
 def test_exceptions_bloquer_et_rejet_admin():
     exc = [{"appareil": "tv", "domaine": "b.ex.com", "type": "bloquer"}]
     regs = [_regle("tv", "r.ex.com", "rejete", "admin"), _regle("tv", "x.ex.com", "retire", "auto")]
-    c = I.contenu(_Regles(regs), exc, _Taxo())
+    c = I.contenu(_Regles(regs), exc, _Taxo({"b.ex.com": "PUBLICITE"}))
     assert c["indices"] == {"b.ex.com": "PUBLICITE"}
     assert c["legitimes"] == ["r.ex.com"]
 
@@ -225,3 +226,123 @@ def test_categorie_la_plus_frequente_puis_alpha():
     ix = I.Index(confirmes={"a.com": {"g1": "TRACKING", "g2": "PUBLICITE"}, "b.com": {"g1": "TRACKING", "g2": "PUBLICITE", "g3": "PUBLICITE"}})
     assert ix.categorie("a.com") == "PUBLICITE"
     assert ix.categorie("b.com") == "PUBLICITE"
+
+
+# ── correctif final (B1, F2, F4, F5, F6, F18) ──────────────────────────────────────────────────────────────────
+
+def test_f4_jamais_une_autre_categorie_ni_un_inconnu_sans_l_administrateur():
+    """F4 (vie privée) : une exception « bloquer » sur un domaine de contrôle parental ou de streaming n'est jamais publiée ; un
+    INCONNU n'est publié (étiquette PUBLICITE) que confirmé par l'administrateur ; légitimes : pub / pistage / télémétrie / INCONNU."""
+    taxo = _Taxo({"parental.ex.com": "CONTROLE_PARENTAL", "film.ex.com": "STREAMING", "pub.ex.com": "PUBLICITE",
+                  "cdn.ex.com": "CDN", "trk.ex.com": "TRACKING"})
+    exc = [{"appareil": "tv", "domaine": "parental.ex.com", "type": "bloquer"},
+           {"appareil": "tv", "domaine": "film.ex.com", "type": "bloquer"},
+           {"appareil": "tv", "domaine": "inconnu-bloque.ex.com", "type": "bloquer"},
+           {"appareil": "tv", "domaine": "pub.ex.com", "type": "bloquer"},
+           {"appareil": "tv", "domaine": "cdn.ex.com", "type": "autoriser"},
+           {"appareil": "tv", "domaine": "inconnu-ok.ex.com", "type": "autoriser"}]
+    regs = [_regle("tv", "inconnu-auto.ex.com"), _regle("tv", "inconnu-admin.ex.com", origine="admin"),
+            _regle("tv", "film.ex.com", origine="admin"), _regle("tv", "trk.ex.com", "rejete", "admin")]
+    c = I.contenu(_Regles(regs), exc, taxo)
+    assert c["indices"] == {"pub.ex.com": "PUBLICITE", "inconnu-admin.ex.com": "PUBLICITE"}
+    assert c["legitimes"] == ["inconnu-ok.ex.com", "trk.ex.com"]
+
+
+def test_b1_contenu_invalide_n_est_pas_indisponible(tmp_path):
+    """B1 : seule une lecture LOCALE ratée rend un producteur indisponible ; un contenu signé mais invalide (schéma, plafond)
+    = aucun indice de ce producteur (un essai né de lui peut donc être oublié)."""
+    d = tmp_path / "liv"
+    _livraison(d, DID1, {"format": 1, "jeu": "tv-indices", "indices": [], "legitimes": []}, "gk1")
+    _livraison(d, DID2, _c({f"h{i}.ex.com": "TRACKING" for i in range(I.INDICES_MAX + 1)}), "gk2")
+    _livraison(d, "did:plc:" + "c" * 32, {"format": 2}, "gk3")
+    _livraison(d, "did:plc:" + "e" * 32, _c({"a.com": "TRACKING"}), "gk5")
+    idx = json.loads((d / "index.json").read_text())
+    idx["did:plc:" + "f" * 32] = {"nom": "gk4"}                    # listé, fichier absent ici : lecture ratée
+    (d / "index.json").write_text(json.dumps(idx))
+    ix = I.charger(d)
+    assert ix.lisible is True and ix.indisponibles == {"gk4"}
+    assert ix.confirmes == {"a.com": {"gk5": "TRACKING"}}
+
+
+def test_charger_plafond_indices_n_est_pas_indisponible(tmp_path):
+    d = tmp_path / "liv"
+    _livraison(d, DID2, _c({f"h{i}.ex.com": "TRACKING" for i in range(I.INDICES_MAX + 1)}), "gk2")
+    assert I.charger(d).indisponibles == set()
+
+
+def test_f2_un_domaine_indice_et_legitime_rejette_le_producteur(tmp_path):
+    d = tmp_path / "liv"
+    _livraison(d, DID1, _c({"a.com": "TRACKING", "b.com": "PUBLICITE"}, ["A.com."]), "gk1")     # même domaine normalisé
+    _livraison(d, DID2, _c({"c.com": "TRACKING"}, ["d.com"]), "gk2")
+    ix = I.charger(d)
+    assert ix.confirmes == {"c.com": {"gk2": "TRACKING"}} and ix.legitimes == {"d.com": {"gk2"}}
+    assert ix.indisponibles == set()
+
+
+def test_f5_plafond_global_de_domaines(tmp_path, monkeypatch):
+    monkeypatch.setattr(I, "DOMAINES_MAX", 5)
+    d = tmp_path / "liv"
+    _livraison(d, "did:plc:" + "1" * 32, _c({"a.com": "TRACKING", "b.com": "TRACKING"}, ["l.com"]), "gk1")   # 3
+    _livraison(d, "did:plc:" + "2" * 32, _c({"c.com": "TRACKING", "e.com": "TRACKING", "f.com": "TRACKING"}), "gk2")  # 6 > 5
+    _livraison(d, "did:plc:" + "3" * 32, _c({"g.com": "TRACKING"}), "gk3")      # tiendrait, mais suit un dépassement : ignoré
+    ix = I.charger(d)
+    assert set(ix.confirmes) == {"a.com", "b.com"} and ix.legitimes == {"l.com": {"gk1"}}
+    assert ix.indisponibles == set()
+    assert I.DOMAINES_MAX == 5
+
+
+def test_f5_resume_ecrit_si_change_et_relu(tmp_path):
+    d = tmp_path / "liv"
+    _livraison(d, DID1, _c({"a.com": "TRACKING", "b.com": "PUBLICITE"}, ["ok.com"]), "gk1")
+    _livraison(d, DID2, _c({"a.com": "TRACKING"}), "gk2")
+    os.utime(d / "index.json", (1_700_000_000, 1_700_000_000))
+    r = I.resume(I.charger(d), d)
+    assert r == {"format": 1, "recus": 2, "maj": 1_700_000_000, "producteurs": [
+        {"nom": "gk1", "indices": 2, "legitimes": 1}, {"nom": "gk2", "indices": 1, "legitimes": 0}]}
+    assert b"a.com" not in json.dumps(r).encode()
+    f = tmp_path / "resume.json"
+    assert I.ecrire_resume(r, f) is True and I.ecrire_resume(r, f) is False
+    assert (f.stat().st_mode & 0o777) == 0o640
+    assert I.lire_resume(f) == {"recus": 2, "maj": 1_700_000_000, "producteurs": r["producteurs"]}
+    assert I.resume(I.Index(lisible=False), d)["maj"] is None
+    assert I.lire_resume(tmp_path / "absent.json") == {"recus": 0, "producteurs": [], "maj": None}
+    f.write_text(json.dumps({"recus": "x", "maj": 1, "producteurs": []}))
+    assert I.lire_resume(f)["recus"] == 0
+
+
+def test_f6_lecture_ratee_journalisee(tmp_path, caplog, monkeypatch):
+    import logging
+    d = tmp_path / "liv"
+    d.mkdir()
+    (d / "index.json").write_text("[1, 2")
+    with caplog.at_level(logging.INFO, logger=I.log.name):
+        assert I.charger(d).lisible is False
+    assert any("illisible" in r.getMessage() and r.levelno == logging.WARNING for r in caplog.records)
+    caplog.clear()
+
+    def boum(c):
+        raise RuntimeError("boum")
+    monkeypatch.setattr(I, "_lire_json", boum)
+    with caplog.at_level(logging.INFO, logger=I.log.name):
+        assert I.charger(d).lisible is False
+    assert any(r.levelno == logging.ERROR and r.exc_info for r in caplog.records)
+
+
+def test_f18_mode_retabli_si_contenu_inchange(tmp_path):
+    p = tmp_path / "pub.json"
+    c = I.contenu_vide()
+    assert I.ecrire_publication(True, True, c, p) is True
+    os.chmod(p, 0o644)
+    assert I.ecrire_publication(True, True, c, p) is False
+    assert (p.stat().st_mode & 0o777) == 0o640
+
+
+def test_f3_drapeaux_seuls_gardent_le_contenu(tmp_path):
+    p = tmp_path / "pub.json"
+    assert I.ecrire_drapeaux(False, True, p) is True                       # absent : contenu vide
+    assert json.loads(p.read_text()) == {"format": 1, "publier": False, "recevoir": True, "contenu": I.contenu_vide()}
+    c = _c({"a.com": "TRACKING"})
+    I.ecrire_publication(True, True, c, p)
+    assert I.ecrire_drapeaux(True, False, p) is True
+    assert json.loads(p.read_text()) == {"format": 1, "publier": True, "recevoir": False, "contenu": c}
+    assert I.ecrire_drapeaux(True, False, p) is False

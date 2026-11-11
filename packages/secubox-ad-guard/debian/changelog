@@ -5,6 +5,14 @@ secubox-ad-guard (1.25.0-1~trixie1) trixie; urgency=medium
     avec garde des catégories protégées, légitime qui freine, retrait sûr/oubli, confirmation à
     l'échéance. Interrupteurs `indices_publier`/`indices_recevoir`, routes GET/POST
     /adblock-tv/indices, geste d'audit `tv_indices_reglage`, encart de la page TV Privacy.
+  * Relecture finale (ref #3666) : seule une lecture locale ratée protège un essai né d'indice
+    (contenu signé invalide ou contradictoire = aucun indice), 3 prolongations consécutives au
+    plus et rafale/contenu disparu toujours éprouvés ; corrections illisibles = index non lisible ;
+    légitime ailleurs = décision locale ; publication limitée aux catégories pub/pistage/télémétrie
+    (INCONNU confirmé par l'admin) ; plafond global de 50 000 domaines ; résumé indices-resume.json
+    lu par GET /indices (champ `maj`) ; POST et moteur inactif réécrivent la publication ;
+    motifs « suggéré par gk2, gk6 » et origine affichée dans ad-guard ; force refusée et
+    annulation auditée ; mode 0640 rétabli ; texte exact de l'encart.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 12:41:20 +0100
 

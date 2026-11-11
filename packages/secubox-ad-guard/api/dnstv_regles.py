@@ -45,6 +45,7 @@ ORIGINES = ("auto", "admin")
 FICHIER = "regles.json"
 INDICE_MAX = 8                     # noms de box portés par une règle née d'un indice du maillage (#3666)
 NOM_BOX_RE = re.compile(r"^[a-z0-9-]{1,32}$")
+PROLONGATIONS_LUES_MAX = 10000    # compteur de prolongations consécutives d'un essai (#3666) ; au-delà, fichier refusé
 
 
 class ErreurRegle(ValueError):
@@ -108,9 +109,13 @@ def valider_regle(b: dict) -> dict:
         propre.append({"ts": h["ts"], "de": h.get("de") if h.get("de") in ETATS else "", "vers": h["vers"],
                        "origine": h.get("origine") if h.get("origine") in ORIGINES else "auto", "motif": str(h.get("motif", ""))[:120]})
     indice = _indice(b.get("indice"))
+    prol = b.get("prolongations", 0)
+    if not isinstance(prol, int) or isinstance(prol, bool) or not 0 <= prol <= PROLONGATIONS_LUES_MAX:
+        raise ErreurRegle("champ prolongations invalide")
     return {"id": identifiant(appareil, domaine), "appareil": appareil, "domaine": domaine, "etat": b["etat"], "origine": origine,
             "risque": risque, "motif": str(b.get("motif", ""))[:120], "historique": propre, **entiers,
-            **({"indice": indice} if indice else {})}      # champ absent pour une règle locale : fichier inchangé
+            **({"indice": indice} if indice else {}),      # champ absent pour une règle locale : fichier inchangé
+            **({"prolongations": prol} if prol else {})}   # #3666 : prolongations consécutives de l'essai en cours ; absent = 0
 
 
 class Regles:
@@ -165,6 +170,7 @@ class Regles:
         r["historique"] = (r["historique"] + [{"ts": maintenant, "de": r["etat"], "vers": vers, "origine": origine, "motif": str(motif)[:120]}])[-HISTORIQUE_MAX:]
         r["etat"], r["maj"], r["motif"] = vers, maintenant, str(motif)[:120]
         r["fin_essai"] = maintenant + ESSAI_S if vers == "essai" else 0
+        r.pop("prolongations", None)                   # une transition clôt la série de prolongations
         return dict(r)
 
     def oublier(self, rid: str) -> dict:
@@ -200,6 +206,7 @@ class Regles:
             hist = hist[:-1]
         r["historique"] = (hist + [{"ts": maintenant, "de": "essai", "vers": "essai", "origine": "auto", "motif": motif[:120]}])[-HISTORIQUE_MAX:]
         r["maj"], r["motif"] = maintenant, motif[:120]
+        r["prolongations"] = min(int(r.get("prolongations", 0)) + 1, PROLONGATIONS_LUES_MAX)   # #3666 : plafond des essais nés d'indice
         return dict(r)
 
     def expirer(self, maintenant: int) -> List[dict]:

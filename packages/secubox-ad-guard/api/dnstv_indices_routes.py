@@ -5,13 +5,17 @@
 """SecuBox-Deb :: ad-guard :: routes des indices du maillage (#3666) — interrupteurs publier / recevoir et vue des producteurs.
 
 Tout en `require_jwt`. L'écriture se fait sous le verrou des règles (comme le moteur), l'audit passe AVANT par le verbe root
-`audit-protection` (geste `tv_indices_reglage`) : un audit impossible refuse le réglage (502). Aucun nom d'appareil ni domaine n'y circule.
+`audit-protection` (geste `tv_indices_reglage`) : un audit impossible refuse le réglage (502) ; une écriture de l'état ratée après
+l'audit est tracée par un geste `annule` (audit.log ne ment jamais). La publication lue par MirrorNet reçoit aussitôt les nouveaux
+interrupteurs (contenu conservé). GET lit le résumé écrit par le moteur (`indices-resume.json`), jamais les livraisons elles-mêmes.
+Aucun nom d'appareil ni domaine n'y circule.
 """
 from __future__ import annotations
 
 import json
+import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 try:
@@ -24,6 +28,7 @@ except ImportError:                                  # lancé hors paquet
 from secubox_core.auth import require_jwt
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv-indices"])
+logger = logging.getLogger(__name__)
 
 
 class IndicesIn(BaseModel):
@@ -42,17 +47,14 @@ def _publies() -> int:
 @router.get("/indices", dependencies=[Depends(require_jwt)])
 def lire_indices():
     etat = _r._etat()
-    ix = dnstv_indices.charger(dnstv_indices.LIVRAISONS)
-    prod = {}
-    for _d, par in ix.confirmes.items():
-        for nom in par:
-            prod.setdefault(nom, [0, 0])[0] += 1
-    for _d, noms in ix.legitimes.items():
-        for nom in noms:
-            prod.setdefault(nom, [0, 0])[1] += 1
-    return {"publier": etat["indices_publier"], "recevoir": etat["indices_recevoir"], "recus": len(ix.confirmes),
-            "producteurs": [{"nom": n, "indices": v[0], "legitimes": v[1]} for n, v in sorted(prod.items())],
-            "publies": _publies()}
+    r = dnstv_indices.lire_resume(dnstv_indices.RESUME)
+    return {"publier": etat["indices_publier"], "recevoir": etat["indices_recevoir"], "recus": r["recus"],
+            "producteurs": r["producteurs"], "maj": r["maj"], "publies": _publies()}
+
+
+def _audit(acteur: str, geste: str, type_):
+    _r._ctl_entree("audit-protection", json.dumps({"acteur": acteur, "origine": "admin", "geste": geste, "cibles": ["indices"],
+                                                   "minutes": None, "domaine": None, "type": type_, "force": False}))
 
 
 @router.post("/indices")
@@ -60,9 +62,18 @@ def regler_indices(corps: IndicesIn, jeton=Depends(require_jwt)):
     with _r._verrou():
         etat = _r._etat()
         acteur = _r._acteur(jeton)
-        type_ = f"publier={'oui' if corps.publier else 'non'},recevoir={'oui' if corps.recevoir else 'non'}"
-        _r._ctl_entree("audit-protection", json.dumps({"acteur": acteur, "origine": "admin", "geste": "tv_indices_reglage", "cibles": ["indices"],
-                                                       "minutes": None, "domaine": None, "type": type_, "force": False}))
+        _audit(acteur, "tv_indices_reglage", f"publier={'oui' if corps.publier else 'non'},recevoir={'oui' if corps.recevoir else 'non'}")
         etat["indices_publier"], etat["indices_recevoir"] = corps.publier, corps.recevoir
-        dnstv.ecrire_etat(etat)
+        try:
+            dnstv.ecrire_etat(etat)
+        except Exception:
+            try:
+                _audit(acteur, "annule", None)       # le réglage audité n'a pas été écrit : l'annulation est tracée
+            except HTTPException as e:
+                logger.warning("audit de l'annulation impossible : %s", e.detail)
+            raise
+        try:
+            dnstv_indices.ecrire_drapeaux(corps.publier, corps.recevoir, dnstv_indices.PUBLICATION)
+        except OSError as e:                         # le moteur la réécrit à son prochain passage (chaque minute)
+            logger.warning("publication des indices non réécrite : %s", type(e).__name__)
     return {"publier": corps.publier, "recevoir": corps.recevoir}

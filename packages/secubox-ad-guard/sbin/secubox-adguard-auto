@@ -270,23 +270,51 @@ def suspendre_forcage(changements: list, etat: dict, now: int) -> bool:
     return True
 
 
-def indices_du_passage(etat):
-    """#3666 : indices du maillage pour ce passage. Réception coupée = index vide LISIBLE (le moteur retire alors ses règles nées d'indices) ;
-    sinon la lecture des livraisons (non lisible = le moteur ne retire rien). Ne lève jamais."""
+def indices_du_passage(etat, corrections_lisibles=True):
+    """#3666 : indices du maillage pour ce passage. Corrections manuelles illisibles = index NON lisible (aucun nouveau candidat
+    d'indice, aucune confirmation, aucun retrait ; les essais existants seulement prolongés, dans la limite du plafond). Réception
+    coupée = index vide LISIBLE (le moteur retire alors ses règles nées d'indices) ; sinon la lecture des livraisons (non lisible =
+    le moteur ne retire rien). Le résumé lu par GET /indices est réécrit au passage (s'il change). Ne lève jamais."""
+    if not corrections_lisibles:
+        return dnstv_indices.Index(lisible=False)
+    recevoir = etat.get("indices_recevoir", True)
     try:
-        return dnstv_indices.charger(dnstv_indices.LIVRAISONS) if etat.get("indices_recevoir", True) else dnstv_indices.Index()
+        ix = dnstv_indices.charger(dnstv_indices.LIVRAISONS) if recevoir else dnstv_indices.Index()
     except Exception as e:                                           # noqa: BLE001 — jamais de panne du passage par les indices
         print(f"indices du maillage non lus : {type(e).__name__}", file=sys.stderr)
         return dnstv_indices.Index(lisible=False)
+    try:
+        dnstv_indices.ecrire_resume(dnstv_indices.resume(ix if recevoir else dnstv_indices.Index(lisible=False), dnstv_indices.LIVRAISONS),
+                                    dnstv_indices.RESUME)
+    except Exception as e:                                           # noqa: BLE001
+        print(f"résumé des indices non écrit : {type(e).__name__}", file=sys.stderr)
+    return ix
 
 
 def publier_indices(etat, regles, taxo):
-    """#3666 : écrit le fichier lu par MirrorNet (seulement s'il change). Ne lève jamais ; exceptions illisibles = rien n'est écrit."""
+    """#3666 : écrit le fichier lu par MirrorNet (seulement s'il change). Ne lève jamais ; exceptions illisibles = rien n'est écrit.
+    `taxo` None (corrections manuelles illisibles) : seuls les interrupteurs sont réécrits, le contenu publié reste le précédent
+    (la catégorie locale d'un domaine décide de sa publication : jamais sans les corrections)."""
     try:
+        if taxo is None:
+            dnstv_indices.ecrire_drapeaux(etat.get("indices_publier", True), etat.get("indices_recevoir", True), dnstv_indices.PUBLICATION)
+            return
         c = dnstv_indices.contenu(regles, dnstv_protection.charger_exceptions(), taxo)
         dnstv_indices.ecrire_publication(etat.get("indices_publier", True), etat.get("indices_recevoir", True), c, dnstv_indices.PUBLICATION)
     except Exception as e:                                           # noqa: BLE001
         print(f"publication des indices non écrite : {type(e).__name__}", file=sys.stderr)
+
+
+def publier_indices_hors_moteur(etat, cl) -> None:
+    """#3666 : moteur inactif (sortie anticipée) — la publication suit quand même les interrupteurs et les règles. Règles ou
+    corrections illisibles : interrupteurs seuls. Ne lève jamais."""
+    try:
+        regles = dnstv_regles.charger()
+        taxo = dnstv_taxonomie.Taxonomie.depuis_dossier(classer=cl.table, manuelles=dnstv_taxonomie.charger_manuelles(), regles=regles)
+    except Exception as e:                                           # noqa: BLE001
+        print(f"publication des indices : règles ou corrections illisibles ({type(e).__name__}), interrupteurs seuls", file=sys.stderr)
+        regles, taxo = None, None
+    publier_indices(etat, regles, taxo)
 
 
 def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None, dpi=None) -> int:
@@ -311,6 +339,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             if appliquer_assistant(etat, now):                # lot 5b : avant tout, même sans appareil en AUTO (PROTECT reçoit l'exception)
                 etat_modifie = True
             if not etat["actif"] or (not dnstv_auto.appareils(etat) and not etat.get("ajout_auto")):
+                publier_indices_hors_moteur(etat, cl)          # #3666 : interrupteurs suivis même moteur inactif
                 if not etat_modifie:
                     return 0
                 raise _SansMoteur
@@ -360,7 +389,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             # 2. règles : candidats, essais, signaux, agrégation
             replis, a_marquer = replis_du_passage(etat)
             res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now, taxo=taxo, replis=replis,
-                                  guides=guides_du_passage(etat), indices=indices_du_passage(etat))
+                                  guides=guides_du_passage(etat), indices=indices_du_passage(etat, corrections_lisibles))
             marquer_replis(a_marquer)
             if res["changements"]:
                 dnstv_regles.ecrire(regles)
@@ -372,7 +401,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             if res["agrege"] != dnstv_profil.charger_agrege():
                 dnstv_profil.ecrire_agrege(res["agrege"])
             ecrire_cache_classification(etat, taxo, magasin, regles, now)
-            publier_indices(etat, regles, taxo)
+            publier_indices(etat, regles, taxo if corrections_lisibles else None)
             try:
                 dnstv_journal.ajouter(dnstv_journal.depuis_regles(avant_regles, regles.liste(), etat, lambda d: taxo.classer(d)["categorie"]))
             except (OSError, ValueError) as e:
