@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-11 — gk7 (RPi4 kiosque) : renommé, maillé, géré par gk2 ; console sans mot de passe ; menu tactile stable
+
+- **Identité** : « secubox-rpi » (192.168.1.128, réseau Freebox) = RPi4 à écran réinstallé et testé sur un autre site. Renommé **gk7** par `secubox-renommer` (audité).
+- **Maillage** : il n'avait ni interface WireGuard ni pair. Jonction par code `sbx-mesh-invite --code --nom gk7 --flash` (remplace la clé de l'ancienne installation, déposé sans affichage) puis `secubox-automesh` : wg-mesh 10.10.0.2, poignée avec gk2. Ancre posée (`sbx-mesh-ancre rattraper`) ; agent de pilotage relancé : gk2 l'a inscrit (`maillage:gk7`, agent 0.8.1, inventaire reçu).
+- **Mot de passe à la console** : `login.html` ne demandait le jeton de console qu'une fois ; au démarrage l'agrégateur ne répond pas encore → formulaire de mot de passe. Désormais : nouvel essai avec recul tant que le service démarre (5xx/réseau, 3 min), formulaire masqué ; un refus 4xx rend le formulaire. `secubox-portal` 2.5.2 (PR #3671), déployé gk7, tests sous node (closes #3670).
+- **Menu tactile** : barre d'icônes stable sur écran tactile (icônes immobiles replié/déplié, pas d'animation, pas de repli après 4 s). `secubox-hub` 1.12.56 (PR #3673), déployé gk7, tests Playwright avec la vraie feuille de style (closes #3672).
+- **À voir** :
+  - l'annuaire garde d'anciens NodeRecord : « secubox-rpi » 10.10.0.6 (octobre), et « c3box » qui revendique aussi 10.10.0.2 (adresse revendiquée par deux nœuds = refus MirrorNet) ;
+  - gk7 est encore en ad-guard 1.24.6 (mise à jour automatique à venir) ;
+  - le « KO ad-guard auto » signalé sur gk7 n'est pas reproduit : 748 passages réussis aujourd'hui, Santé entièrement verte.
+
 ## 2026-11-11 — TV Privacy : indices de détection partagés entre box par MirrorNet (premier vrai jeu de données)
 
 - `secubox-ad-guard` 1.25.0, `secubox-mirrornet` 0.6.0, `secubox-annuaire` 0.22.0 (PR #3669).
