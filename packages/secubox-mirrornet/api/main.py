@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 
 from secubox_mirrornet import abonnements as A  # noqa: E402
-from secubox_mirrornet import annuaire, catalogue, config, espace, ledger, objets, presence, schema, transfert  # noqa: E402
+from secubox_mirrornet import annuaire, catalogue, config, espace, ledger, locaux, objets, presence, schema, transfert  # noqa: E402
 
 log = logging.getLogger("secubox-mirrornet")
 router = APIRouter(prefix="/api/v1/mirrornet")
@@ -121,6 +121,7 @@ def tirer_maintenant() -> Dict[str, Any]:
             res = transfert.tirer(cx, reg)
             res["espace"] = espace.propager(cx, reg)          # #3659 : copies gardées comme espace, même cadence
             res["presence"] = presence.certifier(cx, reg)     # #3661 : preuves de possession demandées aux espaces
+            res["locaux"] = locaux.passe(cx, reg)             # #3666 : indices TV déposés et livrés (ne lève jamais)
             return res
         finally:
             cx.close()

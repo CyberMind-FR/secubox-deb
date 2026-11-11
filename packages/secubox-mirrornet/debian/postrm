@@ -33,6 +33,8 @@ case "$1" in
                 echo "secubox-mirrornet : copie du ledger impossible — /var/lib/secubox-mirrornet CONSERVÉ" >&2
             fi
         fi
+        # Partage avec les modules (#3666) : demande et livraisons, recalculées à chaque passe.
+        [ -L /var/lib/secubox-mirrornet-partage ] || rm -rf /var/lib/secubox-mirrornet-partage
         rm -f /etc/secubox/mirrornet.toml /etc/apparmor.d/secubox-mirrornet
         if id -u secubox-mirrornet >/dev/null 2>&1; then
             deluser --system secubox-mirrornet >/dev/null 2>&1 || true

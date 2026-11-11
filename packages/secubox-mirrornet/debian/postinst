@@ -29,6 +29,17 @@ case "$1" in
                 install -d -o secubox-mirrornet -g secubox -m 0750 /data/mirrornet/objets
             fi
         fi
+        # Partage avec les modules consommateurs (#3666) : demande de publication lue par l'annuaire, indices TV livrés
+        # à ad-guard. Au compte du service, groupe secubox en lecture seule ; jamais suivi s'il est remplacé par un lien.
+        if [ ! -L /var/lib/secubox-mirrornet-partage ]; then
+            install -d -o secubox-mirrornet -g secubox -m 0750 /var/lib/secubox-mirrornet-partage
+            if [ ! -L /var/lib/secubox-mirrornet-partage/livraisons ]; then
+                install -d -o secubox-mirrornet -g secubox -m 0750 /var/lib/secubox-mirrornet-partage/livraisons
+                if [ ! -L /var/lib/secubox-mirrornet-partage/livraisons/tv-indices ]; then
+                    install -d -o secubox-mirrornet -g secubox -m 0750 /var/lib/secubox-mirrornet-partage/livraisons/tv-indices
+                fi
+            fi
+        fi
         # Preuve de l'écouteur maillé (#3653) : secret root seul, transmis au service par LoadCredential et posé par nginx
         # (en-tête X-SecuBox-Pair-Preuve) ; un appelant local de la socket ne le connaît pas.
         _s=/etc/secubox/secrets/mirrornet
