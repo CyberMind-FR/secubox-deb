@@ -955,7 +955,8 @@
                 document.getElementById('tv-etat').textContent = '⚠ API DNS AdBlock TV indisponible (l\u2019agrégateur sert peut-être une ancienne version du module)';
                 return;
             }
-            document.getElementById('tv-actif').innerHTML = st.actif ? '<b>Toujours actif</b>' : '<b>Activation en cours…</b>';
+            // #3674 : l'état RÉEL — erreur d'état, drop-in absent (application en attente) ou actif.
+            document.getElementById('tv-actif').innerHTML = st.erreur ? '<b>État illisible</b>' : (st.actif && st.dropin_present) ? '<b>Toujours actif</b>' : '<b>Activation en cours…</b>';
             document.getElementById('tv-etat').textContent = st.erreur ? '⚠ ' + st.erreur
                 : (st.actif ? 'actif — ' + st.clients.length + ' appareil(s)' : 'inactif — rien n\u2019est modifié dans Unbound') + ' · listes : ' + st.listes.domaines + ' domaines';
             const modes = [...new Set(st.clients.map(c => c.mode))];

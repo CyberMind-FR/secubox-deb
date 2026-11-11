@@ -86,13 +86,13 @@ Routes (`require_lecture` en lecture, `require_jwt` pour agir) : `status`, `etat
 
 ```
 # activer
-(onglet « DNS AdBlock TV » : ajouter l'appareil, cocher Activé)   puis   systemctl enable --now secubox-ad-guard-dnsfeed
+(#3674 : TOUJOURS ACTIF — le postinst active l'état, applique et lance dnsfeed ; le moteur auto amorce une box d'image)
 # tests
 cd packages/secubox-ad-guard && python3 -m pytest tests          # le banc Unbound se saute si `unbound` est absent
 python3 tools/dns-limits-lab.py --rapport reports/dns-limits.json
 python3 tools/dns-tv-test.py --serveur 192.168.1.200 --reference 1.1.1.1 --list tools/test-domains.txt --rapport reports/dns-test.json
 # retour arrière (le retrait du paquet le fait aussi)
-sudo secubox-adguard-tv disable && sudo systemctl disable --now secubox-ad-guard-dnsfeed
+# #3674 : plus de désactivation — retour arrière par appareil (mode, « Ça ne marche plus ? Je débloque ») ; `disable` reste au seul root
 ```
 
 ### Fichier d'échange pour le DPI (1.6.0, #1960)
@@ -128,7 +128,7 @@ sortait de sa vue au premier changement d'adresse et perdait ses exemptions (cas
 ### Ajout automatique, puits complet et agrégation (1.5.0, #1959)
 
 Un appareil qui interroge des serveurs d'insertion publicitaire ET au moins deux services de contenu est reconnu (« TV/streamer probable »), regroupé par **MAC**, puis ajouté en
-mode par défaut avec le **profil de base** (`lists/profil-tv-base.txt`, 35 domaines validés). `ajout_auto` est **faux par défaut** ; l'administrateur l'active dans le panneau.
+mode par défaut avec le **profil de base** (`lists/profil-tv-base.txt`, 35 domaines validés). `ajout_auto` est **vrai** sur une box sans appareil (#3674 : posé par le postinst selon `ajout_auto_initial`) ; l'administrateur peut le couper.
 Garde-fous : 3 appareils par jour, un changement du périmètre par heure (rechargement d'Unbound ≈ 10 s), 32 adresses, liste `ignores`, audit. En mode `auto` la vue Unbound porte
 `view-first: yes` : l'appareil **garde le puits de production** et ses règles s'y ajoutent (réglage `puits` par appareil ; faux = ancien comportement transparent).
 Le DNS ne distingue pas une TV d'un téléphone qui regarde le même replay : « Retirer et ne plus ajouter » suffit. Seuils : section `[adblock_tv_auto]` (valeurs de départ).
@@ -143,8 +143,8 @@ Routes : `auto/detection`, `auto/detection/reglage`, `auto/appareils/{nom}/ignor
 L'état gagne `mode_defaut`, `ajout_auto`, `ignores` ; chaque appareil `mac`, `origine`, `ajoute`, `preuve`, `puits` (écrits seulement hors défaut).
 
 Le contrôleur root range son instantané, sa marque « désactivé » et son verrou dans `/var/lib/secubox-adguard-tv/` (root, 0700), **hors** de l'arbre de
-`secubox`. `sudo secubox-adguard-tv disable` est **durable** : il retire le drop-in et pose la marque ; la minuterie ne réactive pas le POC (seul `apply` le fait).
-Pour tout arrêter : `sudo secubox-adguard-tv disable && sudo systemctl disable --now secubox-ad-guard-auto.timer`.
+`secubox`. `disable` n'est plus ouvert au compte `secubox` (#3674) : SBX TV Privacy ne se désactive pas ; `POST /adblock-tv/etat` refuse `actif=false` (409).
+Arrêt complet : seulement en root, hors interface (maintenance), et le postinst le réactive à la prochaine configuration (#3674).
 En mode `auto`, l'appareil sort du puits DNS de production (vue transparente propre à lui) : seules ses règles s'appliquent. Le NOM de l'appareil est son
 identité : deux appareils auto ne doivent pas avoir des noms qui ne diffèrent que par la casse ou la ponctuation (refusé).
 
@@ -224,7 +224,7 @@ les pubs que la TV va chercher, pas celles qu'un service insère dans sa propre 
 
 - **Modes** : `OBSERVE`, `PROTECT` (l'ancien `block`), `AUTO`, `OFF`. `POST /adblock-tv/mode` et `/clients` acceptent `protect`
   (toute casse) et `block` ; le stockage garde `block` (aucune migration) ; les réponses ajoutent `mode_nom`. Première installation
-  seulement (postinst `configure` sans version précédente, aucun `etat.json`) : l'état initial est posé avec `mode_defaut = auto` et `ajout_auto` pris dans `[adblock_tv] ajout_auto_initial` (vrai dans le TOML livré) ; un état absent ne l'active jamais.
+  à CHAQUE configuration (#3674) : état absent ou inactif → actif, `mode_defaut = auto`, `ajout_auto` pris dans `[adblock_tv] ajout_auto_initial` si la box n'a aucun appareil ; le contrôleur n'applique que si l'état change ou si le drop-in manque (pas de coupure DNS à chaque mise à jour) ; un état corrompu n'est jamais écrasé.
 - **Suffixe de recherche** : `x.doubleclick.net.home` (ou `.lan`, `.localdomain`) est ramené au domaine réel à l'ingestion, à la
   classification et dans les agrégats. Référence : `license.oqee.net` DRM ; `api.oqee.net`, `img1/img2.oqee.net`,
   `stream.proxad.net` STREAMING (mesure gk2 2026-11-01). Une correction de catégorie qui couvrirait une entrée protégée de

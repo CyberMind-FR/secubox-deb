@@ -439,7 +439,8 @@ def activer_toujours(dossier: Path = None) -> bool:
 
 
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
-    """(état, erreur). Un état absent = POC inactif ; un état CORROMPU = POC inactif ET l'erreur est rendue (jamais d'état deviné)."""
+    """(état, erreur). Un état absent = ACTIF par défaut (#3674, toujours actif) ; un état CORROMPU = inactif ET l'erreur est rendue
+    (jamais d'état deviné)."""
     f = (dossier or DOSSIER_ETAT) / "etat.json"
     if not f.is_file():
         return dict(ETAT_DEFAUT, clients=[], ignores=[]), None    # I2 : un état absent n'active JAMAIS l'ajout automatique

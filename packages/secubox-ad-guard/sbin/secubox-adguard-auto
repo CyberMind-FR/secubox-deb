@@ -317,8 +317,42 @@ def publier_indices_hors_moteur(etat, cl) -> None:
     publier_indices(etat, regles, taxo)
 
 
+AMORCE = dnstv.DOSSIER_ETAT / ".amorce-essai"
+AMORCE_S = 1800
+
+
+def amorcer(now: int, lancer=None) -> bool:
+    """#3674 : SBX TV Privacy toujours actif, même sur une box construite depuis une image (le postinst n'y a pas lancé le
+    contrôleur). Drop-in Unbound absent → état actif posé (activer_toujours) puis `sudo -n … apply`, au plus un essai par
+    AMORCE_S. Rend vrai s'il a appliqué. Ne lève jamais."""
+    try:
+        if dnstv.CONF_UNBOUND.is_file():
+            return False
+        try:
+            dernier = AMORCE.stat().st_mtime
+        except FileNotFoundError:
+            dernier = 0
+        if 0 <= now - dernier < AMORCE_S:
+            return False
+        AMORCE.touch()
+        os.utime(AMORCE, (now, now))
+        with dnstv_regles.verrou():
+            dnstv.activer_toujours()
+        etat, erreur = dnstv.lire_etat()
+        if erreur or not etat["actif"]:
+            return False
+        r = (lancer or (lambda: subprocess.run(["sudo", "-n", CTL, "apply"], capture_output=True, text=True, timeout=300)))()
+        if r.returncode != 0:
+            print(f"amorçage SBX TV Privacy : apply en échec ({(r.stderr or r.stdout or '').strip()[:200]})", file=sys.stderr)
+        return r.returncode == 0
+    except Exception as e:                                   # noqa: BLE001 — jamais de panne du moteur par l'amorçage
+        print(f"amorçage SBX TV Privacy : {type(e).__name__}: {e}", file=sys.stderr)
+        return False
+
+
 def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None, dpi=None) -> int:
     now = maintenant or int(time.time())
+    amorcer(now)
     dnstv_analyse.menage(maintenant=now)                      # lot 3 : ancien JSON de 16 Mo et temporaires orphelins, même moteur inactif
     try:
         rafraichir_feed(now, voisins, locales, passerelles)               # avant toute sortie anticipée : utile même sans appareil en mode auto
