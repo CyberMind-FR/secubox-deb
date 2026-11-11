@@ -72,7 +72,7 @@ def test_depot_cree_objet_et_demande_puis_rien_si_identique(banc):
     c = contenu()
     poser_source(locaux.SOURCE_TV, c, publier=True, recevoir=False)
     d = locaux.deposer(banc, REG)
-    attendu = {"format": 1, "jeux": {"tv-indices": {"publier": True, "recevoir": False, "empreinte": b2(octets(c)),
+    attendu = {"format": 1, "confiance_min": "LIMITED", "jeux": {"tv-indices": {"publier": True, "recevoir": False, "empreinte": b2(octets(c)),
                                                     "taille": len(octets(c))}}}
     assert d == attendu
     assert json.loads(locaux.PUBLICATIONS.read_text()) == attendu
@@ -88,6 +88,17 @@ def test_depot_cree_objet_et_demande_puis_rien_si_identique(banc):
     poser_source(locaux.SOURCE_TV, c2)
     assert locaux.deposer(banc, REG)["jeux"]["tv-indices"]["empreinte"] == b2(octets(c2))
     assert locaux.PUBLICATIONS.stat().st_ino != ino
+
+
+@pytest.mark.parametrize("reglage,attendu", [("PARTNER", "PARTNER"), ("TRUSTED", "TRUSTED"), ("OBSERVER", "LIMITED"),
+                                             (None, "LIMITED"), ("n'importe", "LIMITED")])
+def test_demande_porte_le_seuil_de_confiance(banc, reglage, attendu):
+    """Revue tâche 5 : l'annuaire s'abonne au même seuil que la livraison, jamais en dessous de LIMITED."""
+    moi = Noeud("gk12")
+    soi_connu(banc, moi)
+    poser_source(locaux.SOURCE_TV, contenu())
+    assert locaux.deposer(banc, dict(REG, confiance_min=reglage))["confiance_min"] == attendu
+    assert json.loads(locaux.PUBLICATIONS.read_text())["confiance_min"] == attendu
 
 
 def test_depot_soi_inconnu_rien(banc):
@@ -278,7 +289,7 @@ def test_publier_faux_aucun_objet_demande_sans_empreinte(banc):
     moi = Noeud("gk12")
     soi_connu(banc, moi)
     poser_source(locaux.SOURCE_TV, contenu(), publier=False, recevoir=True)
-    attendu = {"format": 1, "jeux": {"tv-indices": {"publier": False, "recevoir": True, "empreinte": None,
+    attendu = {"format": 1, "confiance_min": "LIMITED", "jeux": {"tv-indices": {"publier": False, "recevoir": True, "empreinte": None,
                                                     "taille": None}}}
     assert locaux.deposer(banc, REG) == attendu
     assert json.loads(locaux.PUBLICATIONS.read_text()) == attendu

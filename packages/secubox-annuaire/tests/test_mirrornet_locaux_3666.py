@@ -114,8 +114,7 @@ def test_une_version_par_heure_au_plus(j):  # noqa: F811
     vs = V.dataset_versions(j, o["service_id"])
     assert [v["numero"] for v in vs] == [1, 2] and vs[1]["parent"] == E1
     h = _hauteur(j)
-    # Même contenu qu'une version passée (immuable) : rien, sans exception ; même contenu que la dernière : rien.
-    assert ML.traiter(j, priv, did, "gk6", _dem(empreinte=E1, recevoir=False), _maintenant(200))["version"] is None
+    # Même contenu que la dernière version : rien (le retour à une version antérieure : test dédié plus bas).
     assert ML.traiter(j, priv, did, "gk6", _dem(empreinte=E2, recevoir=False), _maintenant(200))["version"] is None
     assert _hauteur(j) == h
     assert ML.traiter(j, priv, did, "gk6", _dem(empreinte=E3, recevoir=False), _maintenant(200))["version"] == E3
@@ -200,17 +199,19 @@ def test_recevoir_faux_resilie_puis_vrai_reabonne(j):  # noqa: F811
     h = _hauteur(j)
     assert ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant())["resiliations"] == 0
     assert _hauteur(j) == h
-    # Réception rallumée : la résiliation de fond n'empêche pas le réabonnement.
-    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == 1
+    # Réception rallumée : réabonnement, mais un abonnement par fournisseur et par heure au plus.
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(10))["abonnements"] == 0
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(61))["abonnements"] == 1
     assert len([s for s in _mes_abonnements(j, did) if s["service_id"] == ob.service_id]) == 2
 
 
-def test_resiliation_du_proprietaire_respectee(j):  # noqa: F811
+def test_resiliation_par_ce_noeud_puis_reabonnement_de_fond(j):  # noqa: F811
+    """Arbitrage revue 1 : le choix du propriétaire est l'interrupteur « Recevoir » ; recevoir vrai réabonne."""
     priv, did, _b, _o, _n = _maillage(j)
     ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())
     (s,) = _mes_abonnements(j, did)
     V.cancel_subscription(j, priv, did, s["subscription_id"], "je n'en veux plus")
-    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == 0
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(61))["abonnements"] == 1
 
 
 def test_revocation_par_le_fournisseur_respectee(j):  # noqa: F811
@@ -219,17 +220,39 @@ def test_revocation_par_le_fournisseur_respectee(j):  # noqa: F811
     (s,) = _mes_abonnements(j, did)
     V.revoke_subscriber(j, pb, db, s["subscription_id"], "abus")
     assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == 0
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(200))["abonnements"] == 0
+
+
+def test_refus_par_le_fournisseur_respecte(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    ob = V.offer_service(j, pb, db, name="Indices", kind="dataset", endpoint="mirrornet://b", approval_mode="pending",
+                         classe="communaute", scope={"usage": "tv-indices"})
+    ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())
+    (s,) = _mes_abonnements(j, did)
+    assert s["service_id"] == ob.service_id
+    V.reject_subscription(j, pb, db, s["subscription_id"])
+    for minutes in (0, 61, 600):
+        assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(minutes))["abonnements"] == 0
+    # Un refus forgé par un tiers n'a aucun effet (seul le fournisseur a autorité).
+    priv2, _p2, did2 = _membre(j)
+    ML.traiter(j, priv2, did2, "gk7", _dem(), _maintenant())
+    (s2,) = [x for x in _mes_abonnements(j, did2) if x["service_id"] == ob.service_id]
+    px, _px, dx = _membre(j)
+    V._signer_et_ajouter(j, px, dx, Op.SERVICE_REJECT, "ServiceReject",
+                         {"subscription_id": s2["subscription_id"], "rejecter": dx, "rejected_at": "2026-11-11T00:00:00Z"})
+    assert ML._historique(j, did2, {ob.service_id: V._get_offer(j, ob.service_id)})[db]["refuse"] is False
 
 
 def test_abonnement_echu_renouvele(j):  # noqa: F811
     priv, _pub, did = _membre(j)
     pb, _, db = _membre(j)
-    ob = _tv(j, pb, db, duree_s=60)
+    ob = _tv(j, pb, db, duree_s=3600)
     ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())
     (s,) = _mes_abonnements(j, did)
     assert s["expire_le"]                                        # échéance de l'offre signée par l'abonné
-    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(0.5))["abonnements"] == 0
-    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(5))["abonnements"] == 1
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(30))["abonnements"] == 0
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(61))["abonnements"] == 1
     assert {s["service_id"] for s in _mes_abonnements(j, did)} == {ob.service_id}
 
 
@@ -261,15 +284,23 @@ def _ecrire(chemin, jeu, **dessus):
 
 def test_lire_demandes_valide(tmp_path):
     c = _ecrire(tmp_path / "publications.json", _dem())
-    assert ML.lire_demandes(c) == _dem()
+    assert ML.lire_demandes(c) == {**_dem(), "confiance_min": "LIMITED"}
     c = _ecrire(tmp_path / "publications.json", _dem(publier=False, empreinte=None))
-    assert ML.lire_demandes(c) == _dem(publier=False, empreinte=None)
+    assert ML.lire_demandes(c) == {**_dem(publier=False, empreinte=None), "confiance_min": "LIMITED"}
+    for lu, attendu in (("LIMITED", "LIMITED"), ("PARTNER", "PARTNER"), ("TRUSTED", "TRUSTED"), ("OBSERVER", "LIMITED")):
+        c = _ecrire(tmp_path / "publications.json", _dem(), confiance_min=lu)
+        assert ML.lire_demandes(c)["confiance_min"] == attendu
+    for mauvais in ("REVOKED", "partner", 1, ["LIMITED"]):
+        c = _ecrire(tmp_path / "publications.json", _dem(), confiance_min=mauvais)
+        assert ML.lire_demandes(c) is None
+    c = _ecrire(tmp_path / "publications.json", {**_dem(), "confiance_min": "LIMITED"})   # jamais dans le jeu
+    assert ML.lire_demandes(c) is None
 
 
 def test_lire_demandes_chemin_surchargeable(tmp_path, monkeypatch):
     c = _ecrire(tmp_path / "p.json", _dem())
     monkeypatch.setattr(ML, "PUBLICATIONS", c)
-    assert ML.lire_demandes() == _dem()
+    assert ML.lire_demandes() == {**_dem(), "confiance_min": "LIMITED"}
 
 
 def test_lire_demandes_refuse_lien_gros_invalide(tmp_path):
@@ -359,3 +390,132 @@ def test_boucle_de_synchro_appelle_le_traitement_et_survit(monkeypatch):
     with pytest.raises(_Fin):
         asyncio.run(M._dir_sync_loop())
     assert appels == ["sync", "tv"]
+
+
+# --- revue 1 ------------------------------------------------------------------------------------------------------
+
+def test_une_seule_offre_par_fournisseur_la_derniere(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    offres = []
+    for i in range(5):
+        offres.append(_tv(j, pb, db, created_at=f"2026-11-1{i}T00:00:00+00:00"))
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == 1
+    (s,) = _mes_abonnements(j, did)
+    assert s["service_id"] == offres[-1].service_id
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(5))["abonnements"] == 0
+
+
+def test_offres_courtes_jamais_suivies(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    for _ in range(5):
+        _tv(j, pb, db, duree_s=1)
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == 0
+    h = _hauteur(j)
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(1))["abonnements"] == 0
+    assert _hauteur(j) == h and _mes_abonnements(j, did) == []
+
+
+def test_nouvelle_offre_du_fournisseur_au_plus_une_fois_par_heure(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    o1 = _tv(j, pb, db, created_at="2026-11-01T00:00:00+00:00")
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == 1
+    o2 = _tv(j, pb, db, created_at="2026-11-02T00:00:00+00:00")   # le fournisseur republie aussitôt
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(10))["abonnements"] == 0
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(61))["abonnements"] == 1
+    assert [s["service_id"] for s in _mes_abonnements(j, did)] == [o1.service_id, o2.service_id]
+
+
+def test_plafond_de_fournisseurs(j, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(ML, "PRODUCTEURS_MAX", 2)
+    priv, _pub, did = _membre(j)
+    for _ in range(3):
+        pb, _, db = _membre(j)
+        _tv(j, pb, db)
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == 2
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(61))["abonnements"] == 0
+    assert ML.PRODUCTEURS_MAX == 2 and len(_mes_abonnements(j, did)) == 2
+
+
+@pytest.mark.parametrize("tarif,attendu", [(None, 1), ({"modele": "gratuit"}, 1), ({"modele": "reciproque"}, 1),
+                                           ({"modele": "forfait", "credits": 5}, 0), ({"modele": "usage"}, 0)])
+def test_tarif_gratuit_ou_reciproque_seulement(j, tarif, attendu):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    _tv(j, pb, db, tarif=tarif)
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == attendu
+
+
+def test_seuil_de_confiance_de_mirrornet(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)                                       # LIMITED
+    _tv(j, pb, db)
+    assert ML.traiter(j, priv, did, "gk6", {**_dem(), "confiance_min": "PARTNER"}, _maintenant())["abonnements"] == 0
+    assert ML.traiter(j, priv, did, "gk6", {**_dem(), "confiance_min": "OBSERVER"}, _maintenant())["abonnements"] == 1
+
+
+def test_retour_a_une_version_anterieure(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    gestes = []
+    ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant())
+    ML.traiter(j, priv, did, "gk6", _dem(empreinte=E2, recevoir=False), _maintenant(61))
+    (o,) = _mes_offres(j, did)
+    # A → B → A : B est retirée (A redevient la dernière version non retirée)… mais pas moins d'une heure après B.
+    assert ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant(10))["version"] is None
+    r = ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant(61),
+                   auditer=lambda action, **d: gestes.append((action, d)))
+    assert r["version"] == E1
+    assert [(v["empreinte"], v["retiree"]) for v in V.dataset_versions(j, o["service_id"])] == [(E1, False), (E2, True)]
+    assert gestes == [("mirrornet_tv_indices_version_retiree", {"service_id": o["service_id"], "numero": 2,
+                                                                 "empreinte": E2, "motif": ML.MOTIF_RETOUR})]
+    h = _hauteur(j)
+    assert ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant(300))["version"] is None
+    assert _hauteur(j) == h
+    # Le retrait compte comme le geste de l'heure : une nouvelle empreinte attend.
+    retire_le = max(t for t in ML._retraits_le(j, did, o["service_id"]))
+    juste_apres = retire_le + timedelta(minutes=10)
+    assert ML.traiter(j, priv, did, "gk6", _dem(empreinte=E3, recevoir=False), juste_apres)["version"] is None
+    assert ML.traiter(j, priv, did, "gk6", _dem(empreinte=E3, recevoir=False),
+                      retire_le + timedelta(minutes=61))["version"] == E3
+    # Une empreinte retirée ne peut être republiée (immuable) : aucun geste, aucune exception.
+    h = _hauteur(j)
+    assert ML.traiter(j, priv, did, "gk6", _dem(empreinte=E2, recevoir=False), _maintenant(600))["version"] is None
+    assert _hauteur(j) == h
+
+
+def test_version_datee_dans_le_futur_ne_bloque_pas(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    ML.traiter(j, priv, did, "gk6", _dem(empreinte=None, recevoir=False), _maintenant())
+    (o,) = _mes_offres(j, did)
+    V.publish_dataset_version(j, priv, did, o["service_id"], empreinte=E1, taille=1,
+                              cree_le=_maintenant(600).isoformat(), **ML.MANIFESTE)
+    assert ML.traiter(j, priv, did, "gk6", _dem(empreinte=E2, recevoir=False), _maintenant())["version"] == E2
+
+
+def test_offre_propre_non_conforme_remplacee(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    vieille = V.offer_service(j, priv, did, name="Indices", kind="dataset", endpoint="mirrornet://x",
+                              approval_mode="pending", classe="public", scope={"usage": "tv-indices"})
+    gestes = []
+    r = ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant(),
+                   auditer=lambda action, **d: gestes.append(action))
+    assert r["offre"] == "creee" and r["version"] == E1
+    (o,) = _mes_offres(j, did)
+    assert o["service_id"] != vieille.service_id and ML._conforme(o)
+    assert gestes == ["mirrornet_tv_indices_offre_publiee", "mirrornet_tv_indices_offre_retiree",
+                      "mirrornet_tv_indices_version_publiee"]
+    h = _hauteur(j)
+    assert ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant())["offre"] == "existante"
+    assert _hauteur(j) == h
+
+
+def test_abonnements_en_cours_filtre_par_service(j):  # noqa: F811
+    priv, did, (_pb, _db, ob), _o, (on, _oa) = _maillage(j)
+    ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())
+    s_on = V.subscribe(j, priv, did, on.service_id)
+    tout = ML.abonnements_en_cours(j, did)
+    assert set(tout) == {ob.service_id, on.service_id}
+    assert ML.abonnements_en_cours(j, did, service_ids=[on.service_id]) == {on.service_id: [s_on.subscription_id]}
+    assert ML.abonnements_en_cours(j, did, service_ids=()) == {}

@@ -146,7 +146,8 @@ def deposer(cx: sqlite3.Connection, reglages: Dict[str, Any], source: Optional[P
     if len(data) > TAILLE_MAX:
         return None
     if not d["publier"]:
-        return _demander({"publier": False, "recevoir": d["recevoir"], "empreinte": None, "taille": None})
+        return _demander({"publier": False, "recevoir": d["recevoir"], "empreinte": None, "taille": None},
+                         reglages.get("confiance_min"))
     empreinte = _empreinte(data)
     if not objets.present(empreinte):
         try:
@@ -159,12 +160,18 @@ def deposer(cx: sqlite3.Connection, reglages: Dict[str, Any], source: Optional[P
     objets.noter(cx, empreinte, len(data), soi)
     # Contenu identique à une copie reçue : le dépôt local en reprend la propriété (comme une route de dépôt).
     cx.execute("UPDATE objet SET source = ? WHERE empreinte = ? AND source <> ?", (soi, empreinte, soi))
-    return _demander({"publier": True, "recevoir": d["recevoir"], "empreinte": empreinte, "taille": len(data)})
+    return _demander({"publier": True, "recevoir": d["recevoir"], "empreinte": empreinte, "taille": len(data)},
+                     reglages.get("confiance_min"))
 
 
-def _demander(jeu: Dict[str, Any]) -> Dict[str, Any]:
-    """Écrit `publications.json` (atomique, 0640) seulement si la demande change ; rend la demande."""
-    demande = {"format": 1, "jeux": {JEU: jeu}}
+def _demander(jeu: Dict[str, Any], confiance_min: Any = None) -> Dict[str, Any]:
+    """Écrit `publications.json` (atomique, 0640) seulement si la demande change ; rend la demande.
+
+    `confiance_min` (réglage de MirrorNet, LIMITED par défaut, jamais en dessous) dit à l'annuaire à quels producteurs
+    s'abonner : le même seuil que la livraison."""
+    if confiance_min not in config.RANG or config.RANG[confiance_min] < config.RANG["LIMITED"]:
+        confiance_min = "LIMITED"
+    demande = {"format": 1, "confiance_min": confiance_min, "jeux": {JEU: jeu}}
     if _lire_json(PUBLICATIONS) != demande:
         _ecrire_atomique(PUBLICATIONS, json.dumps(demande, sort_keys=True, indent=1).encode("utf-8"))
         log.info("mirrornet : demande de publication des indices TV (publier=%s, recevoir=%s, %s)", jeu["publier"],

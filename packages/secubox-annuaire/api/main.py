@@ -844,7 +844,7 @@ def _abonnement_en_cours(j, abonne: str, service_id: str) -> Optional[str]:
     None : l'annuaire refuse un second abonnement, même sans clé d'idempotence (deux requêtes simultanées). Règle
     partagée avec la tâche de fond des indices TV (#3666, `annuaire.mirrornet_locaux.abonnements_en_cours`)."""
     from annuaire.mirrornet_locaux import abonnements_en_cours  # noqa: PLC0415
-    return (abonnements_en_cours(j, abonne).get(service_id) or [None])[0]
+    return (abonnements_en_cours(j, abonne, service_ids=(service_id,)).get(service_id) or [None])[0]
 
 
 class SelfOfferRequest(BaseModel):
