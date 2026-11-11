@@ -1,3 +1,14 @@
+secubox-ad-guard (1.25.1-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy TOUJOURS ACTIF (ref #3674, décision du propriétaire : il ne se désactive
+    pas). État par défaut actif ; à chaque configuration du paquet, un état absent ou
+    inactif devient actif, une box sans appareil reçoit l'ajout automatique des TV, puis le
+    contrôleur applique et le collecteur dnsfeed est activé. POST /adblock-tv/etat refuse
+    actif=false (409) ; l'interrupteur ON/OFF de la page est remplacé par « Toujours actif ».
+    Réglages par appareil inchangés ; un état corrompu reste inactif et n'est jamais écrasé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 15:00:34 +0100
+
 secubox-ad-guard (1.25.0-1~trixie1) trixie; urgency=medium
 
   * Indices TV Privacy partagés entre box (ref #3666) : contenu publié sans appareil ni date

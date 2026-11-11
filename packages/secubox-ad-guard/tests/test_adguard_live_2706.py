@@ -40,7 +40,7 @@ def test_routes_lues_par_le_direct_et_anciennes_routes_intactes():
     for r in ("/statut-direct", "/adblock-tv/serie?heures=1&pas=60", "/adblock-tv/status", "/adblock-tv/flux?heures=1"):
         assert r in DIRECT
     for ancien in ("api('/stats')", "'/blocklist/top?limit=30'", "'/blocklist/update', 'POST'", "`/blocklist/add?domain=", "`/blocklist/${encodeURIComponent(domain)}`, 'DELETE'",
-                   "'/delayed/process', 'POST'", "'/learn/run', 'POST'", "'/learn/thresholds', 'POST'", "'/adblock-tv/etat', 'POST'", "'/adblock-tv/mode', 'POST'",
+                   "'/delayed/process', 'POST'", "'/learn/run', 'POST'", "'/learn/thresholds', 'POST'", "'/adblock-tv/mode', 'POST'",
                    "'/adblock-tv/clients', 'POST'", "'/adblock-tv/custom', 'POST'", "'/adblock-tv/sonde', 'POST'", "'/adblock-tv/auto/detection/reglage', 'POST'",
                    "'/adblock-tv/simple/suspects/legitime', 'POST'", "localStorage.getItem('sbx_token')"):
         assert ancien in SRC, ancien

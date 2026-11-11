@@ -92,7 +92,7 @@ def test_onglet_affiche_statistiques_top_et_appareils_sans_executer_de_html(navi
     ctx, p, erreurs = _page(navigateur, appels, etat)
     p.click("button[data-tab=adblocktv]")
     p.wait_for_selector("#tv-stats .stat-card")
-    assert p.is_checked("#tv-actif") and p.is_checked("input[name=tv-mode][value=block]")
+    assert "Toujours actif" in p.inner_text("#tv-actif") and p.is_checked("input[name=tv-mode][value=block]")
     assert "Requêtes DNS" in p.inner_text("#tv-stats") and "Bloqués" in p.inner_text("#tv-stats")
     assert "Freebox TV salon" in p.inner_text("#tv-clients") and "mon-tracker.example" in p.inner_text("#tv-custom")
     assert p.evaluate("window.__pwn === undefined") and p.evaluate("document.querySelectorAll('#tv-top img').length") == 0     # nom piégé : affiché en texte
@@ -110,11 +110,10 @@ def test_bascule_de_mode_et_ajout_de_domaine_appellent_l_api(navigateur):
     p.check("input[name=tv-mode][value=block]")
     p.fill("#tv-new-domaine", "pub.example.org")
     p.click("text=Ajouter >> nth=-1")
-    p.uncheck("#tv-actif")
     p.wait_for_timeout(300)
     assert ("POST", "/adblock-tv/mode", {"mode": "block"}) in appels
     assert ("POST", "/adblock-tv/custom", {"domaine": "pub.example.org"}) in appels
-    assert ("POST", "/adblock-tv/etat", {"actif": False}) in appels
+    assert not any(a[1] == "/adblock-tv/etat" for a in appels)                     # #3674 : plus d'interrupteur
     ctx.close()
 
 

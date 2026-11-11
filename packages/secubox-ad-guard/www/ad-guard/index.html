@@ -357,7 +357,7 @@
                 <p style="color:var(--text-dim);font-size:.85rem;margin:.2rem 0 .8rem;">Mesure la <b>réduction des domaines publicitaires/tracking résolus par DNS</b>
                 pour les appareils déclarés. Ce n'est pas une suppression de publicités : une pub intégrée au flux vidéo n'est pas visible du DNS.</p>
                 <div style="display:flex;gap:1.2rem;align-items:center;flex-wrap:wrap;">
-                    <label><input type="checkbox" id="tv-actif" onchange="tvActif(this.checked)"> <b>Activé</b> (ON/OFF)</label>
+                    <span id="tv-actif" title="SBX TV Privacy ne se désactive pas : régler un appareil (mode, déblocage) à la place"><b>Toujours actif</b></span>
                     <span id="tv-etat" style="color:var(--text-dim);font-size:.85rem;"></span>
                 </div>
                 <div style="margin-top:.8rem;"><b>Mode</b> (tous les appareils déclarés) :
@@ -955,7 +955,7 @@
                 document.getElementById('tv-etat').textContent = '⚠ API DNS AdBlock TV indisponible (l\u2019agrégateur sert peut-être une ancienne version du module)';
                 return;
             }
-            document.getElementById('tv-actif').checked = !!st.actif;
+            document.getElementById('tv-actif').innerHTML = st.actif ? '<b>Toujours actif</b>' : '<b>Activation en cours…</b>';
             document.getElementById('tv-etat').textContent = st.erreur ? '⚠ ' + st.erreur
                 : (st.actif ? 'actif — ' + st.clients.length + ' appareil(s)' : 'inactif — rien n\u2019est modifié dans Unbound') + ' · listes : ' + st.listes.domaines + ' domaines';
             const modes = [...new Set(st.clients.map(c => c.mode))];
@@ -993,7 +993,7 @@
             if (v && !await confirmer('Tri Netflix (expérimental) : chaque nouveau serveur vidéo Netflix sera d\u2019abord refusé, puis autorisé 3 h si la TV insiste. Un épisode peut mettre quelques secondes de plus à démarrer. Activer pour cet appareil ?')) { tvRender(); return; }
             await api('/adblock-tv/tri-netflix', 'POST', { appareil: sl, actif: !!v }); tvRender();
         }
-        async function tvActif(v) { await api('/adblock-tv/etat', 'POST', { actif: v }); tvRender(); }
+        // #3674 : plus d'interrupteur — SBX TV Privacy est toujours actif (le postinst l'active ; la route refuse actif=false).
         async function tvMode(m) { await api('/adblock-tv/mode', 'POST', { mode: m }); tvRender(); }
         async function tvModeClient(ip, m) { if (m === 'auto' && !await confirmer('Le mode auto applique, à l\u2019essai et avec votre accord, des règles apprises sur cet appareil. Continuer ?')) { tvRender(); return; } await api('/adblock-tv/mode', 'POST', { mode: m, ip: ip }); tvRender(); }
         async function tvRetirer(ip) { await api('/adblock-tv/clients/' + encodeURIComponent(ip), 'DELETE'); tvRender(); }

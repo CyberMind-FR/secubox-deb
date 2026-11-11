@@ -35,12 +35,17 @@ if [ "$1" = "configure" ]; then
     # L'unite debian/secubox-ad-guard.service subsiste comme reference du
     # mode autonome ; elle n'est deliberement pas installee (#1362).
 fi
-# SBX TV Privacy (#3374, I2) : PREMIÈRE installation seulement ($2 vide) — état initial AUTO, ajout automatique selon le TOML livré
-# (ajout_auto_initial). Une mise à niveau ne change rien ; un etat.json absent sur une box existante n'active rien.
-if [ "$1" = configure ] && [ -z "$2" ]; then
-    if [ ! -e /var/lib/secubox/ad-guard/dnstv/etat.json ] && [ ! -L /var/lib/secubox/ad-guard/dnstv/etat.json ]; then
-        runuser -u secubox -- python3 -c 'import sys; sys.path.insert(0, "/usr/lib/secubox/ad-guard"); from api import dnstv; dnstv.poser_etat_initial()' \
-            || echo "secubox-ad-guard : état initial SBX TV Privacy non écrit" >&2
+# SBX TV Privacy TOUJOURS ACTIF (#3674, décision du propriétaire : il ne se désactive pas). À CHAQUE configuration : état absent
+# ou inactif → actif ; box sans appareil → ajout automatique des TV (ajout_auto_initial du TOML). Puis le contrôleur root
+# applique (vues Unbound, journal des requêtes) et le collecteur dnsfeed est activé. Les réglages par appareil ne sont jamais
+# touchés ; un état corrompu n'est jamais écrasé.
+if [ "$1" = configure ] && [ -d /run/systemd/system ]; then
+    if runuser -u secubox -- python3 -c 'import sys; sys.path.insert(0, "/usr/lib/secubox/ad-guard"); from api import dnstv, dnstv_regles
+with dnstv_regles.verrou(): dnstv.activer_toujours()'; then
+        /usr/sbin/secubox-adguard-tv apply >/dev/null 2>&1 || echo "secubox-ad-guard : application SBX TV Privacy en échec" >&2
+        systemctl enable --now secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
+    else
+        echo "secubox-ad-guard : activation SBX TV Privacy non faite" >&2
     fi
 fi
 # L'ancien cache de classification (JSON, jusqu'à 16 Mo) est remplacé par une base SQLite (#3374) : il est supprimé ici.
