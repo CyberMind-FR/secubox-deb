@@ -412,7 +412,8 @@ def test_toml_livre_lisible_et_applique(monkeypatch):
     import tomllib
     tomllib.loads((ICI / "conf" / "mirrornet.toml").read_text())
     assert config.reglages() == {"confiance_min": "LIMITED", "grace_s": 432000, "intervalle_s": 60,
-                                 "taille_max_mo": 256, "garder": 3, "reserve_mo": 1024}
+                                 "taille_max_mo": 256, "garder": 3, "reserve_mo": 1024,
+                                 "service_simultane": 4, "certif_s": 900}
 
 
 def test_charge_reetiquetee_ou_au_nom_d_un_autre_rejetee(cx):

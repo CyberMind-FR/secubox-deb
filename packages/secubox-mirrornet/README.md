@@ -106,7 +106,18 @@ classe, format, licence, taille, données personnelles, capacité restante et em
 et son parent ; une nouvelle version est tirée à son tour (`[donnees] garder` versions gardées). Version retirée ou
 abonnement clos (refusé, expiré, résilié) : copie purgée. Le producteur ne sert l'objet qu'à l'espace auquel il a
 confié ce jeu (`transfert.autoriser`). Jamais propagé : professionnel, privé, données personnelles brutes.
-Présence certifiée et service des copies aux abonnés : lot 4c.
+
+### Présence certifiée et répartition (#3661)
+
+- **Preuve de possession** : le producteur défie chaque espace qui garde son jeu, au plus tous les
+  `[espace] certif_s` (900 s) ; l'espace répond BLAKE2b-256 de l'objet, clé = défi aléatoire, par
+  `GET :8799/mirrornet/preuve/<empreinte>?defi=<hex>` — seulement à l'origine de la copie, une fois par minute et par
+  objet. Le résultat (certifiée, ou non avec son motif) s'affiche dans la lignée.
+- **Copies servies** : l'espace sert une copie à un abonné Actif du jeu (l'export de l'annuaire lui donne ces
+  abonnements), si l'abonnement d'espace est Actif et la classe propageable.
+- **Répartition** : l'abonné ordonne le producteur et les répliques Actif par hachage de rendez-vous (abonné,
+  empreinte, source), essaie au plus deux sources par passe ; un transfert vérifié certifie la réplique, un échec la
+  déclasse. `[espace] service_simultane` (4) : au-delà, le nœud répond 503 et l'abonné passe à la source suivante.
 
 ## Interface web (#3651)
 

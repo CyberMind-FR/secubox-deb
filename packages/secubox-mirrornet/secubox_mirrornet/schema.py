@@ -14,7 +14,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-VERSION = 4
+VERSION = 5
 
 # Identifiants : UUID v4 en texte (36 caractères) pour les objets de ce nœud ; did:plc pour les nœuds ;
 # identifiants de l'annuaire (service_id, subscription_id) repris tels quels. Montants : ENTIERS en centièmes de crédit.
@@ -256,6 +256,35 @@ MIGRATIONS = {
             PRIMARY KEY (subscription_id, version_id)
         )""",
         "CREATE INDEX IF NOT EXISTS copie_empreinte ON copie(empreinte)",
+    ],
+    # Phase 4c (#3661) : abonnements d'AUTRES nœuds dont celui-ci a besoin (reconstruits à chaque synchronisation) —
+    # répliques (espaces Actif qui gardent un jeu auquel je suis abonné) et abonnés relayés (abonnés des jeux confiés à
+    # mes espaces) ; présence certifiée par preuve de possession (producteur) ou par transfert vérifié (abonné).
+    5: [
+        """CREATE TABLE IF NOT EXISTS replique (
+            sub_ref TEXT NOT NULL,
+            offer_id TEXT NOT NULL REFERENCES offer(id),
+            gardien_did TEXT NOT NULL,
+            producteur_did TEXT NOT NULL,
+            etat TEXT NOT NULL,
+            PRIMARY KEY (sub_ref, offer_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS abonne_relaye (
+            sub_ref TEXT PRIMARY KEY,
+            abonne_did TEXT NOT NULL,
+            offer_id TEXT NOT NULL REFERENCES offer(id),
+            etat TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS presence (
+            gardien_did TEXT NOT NULL,
+            empreinte TEXT NOT NULL,
+            mode TEXT NOT NULL CHECK (mode IN ('preuve','transfert')),
+            statut TEXT NOT NULL CHECK (statut IN ('ok','echec')),
+            le TEXT NOT NULL,
+            motif TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (gardien_did, empreinte, mode)
+        )""",
+        "CREATE INDEX IF NOT EXISTS relaye_offre ON abonne_relaye(offer_id, abonne_did)",
     ],
 }
 

@@ -13,8 +13,9 @@ que tout pair peut déjà tirer par /log/export — que MirrorNet relit et REVÉ
      "noeuds": {did: {"boxname", "mesh_ip", "niveau", "cause"}},
      "joignabilite": {did: {"ok_le", "echec_depuis"}}}
 
-Seuls les abonnements où CE nœud est abonné ou fournisseur sont exportés : qui est abonné à quoi chez les autres ne
-regarde pas MirrorNet. Écriture atomique (temporaire + rename), 0640, et seulement si le contenu change.
+Seuls les abonnements où CE nœud est abonné ou fournisseur sont exportés — plus, depuis #3661, ceux dont il a besoin
+comme espace (abonnés des jeux qu'on lui confie) ou comme abonné (espaces qui gardent ses jeux) : le reste ne regarde
+pas MirrorNet. Écriture atomique (temporaire + rename), 0640, et seulement si le contenu change.
 """
 from __future__ import annotations
 
@@ -54,6 +55,42 @@ def hauteur_pertinente(journal) -> int:
         con.close()
 
 
+def _abonnements_relayes(entrees: List[Dict[str, Any]], fournisseur: Dict[str, str], soi: Optional[str]) -> set:
+    """MirrorNet 4c (#3661) : abonnements d'autres nœuds dont CE nœud a besoin, tous déjà signés.
+
+    - Espace : abonnements aux jeux que des producteurs ont confiés à MES offres d'espace (`jeux` de leur abonnement)
+      — pour servir une copie au seul abonné Actif du jeu.
+    - Abonné : abonnements d'espace (producteur → espace) qui nomment un jeu auquel JE suis abonné — les répliques
+      entre lesquelles répartir les transferts.
+    Le producteur d'un jeu nommé doit être le signataire de l'abonnement d'espace (revérifié par MirrorNet). Une simple
+    demande d'abonnement suffit à recevoir les abonnements d'espace du jeu : assumé, tout membre lit déjà le journal
+    complet ; ce filtre borne l'export, il ne cache rien."""
+    if not soi:
+        return set()
+    kind: Dict[str, str] = {}
+    for e in entrees:
+        p = e["payload"]
+        if e["op"] == "service_offer" and fournisseur.get(p.get("service_id")) == e["author"]:
+            kind[p.get("service_id")] = p.get("kind")
+    subs = [e["payload"] for e in entrees if e["op"] == "service_subscribe"
+            and forme_valide(e["op"], e["payload"], e["author"])]
+
+    def jeux(p):
+        j = p.get("jeux")
+        return {x for x in j if isinstance(x, str)} if isinstance(j, list) and len(j) <= 32 else set()
+    espace = [p for p in subs if kind.get(p.get("service_id")) == "espace"]
+    confies = set()
+    for p in espace:
+        if fournisseur.get(p.get("service_id")) == soi:
+            confies |= {j for j in jeux(p) if fournisseur.get(j) == p.get("subscriber")}
+    mes_jeux = {p.get("service_id") for p in subs if p.get("subscriber") == soi and kind.get(p.get("service_id")) == "dataset"}
+    res = {p.get("subscription_id") for p in subs
+           if kind.get(p.get("service_id")) == "dataset" and p.get("service_id") in confies}
+    res |= {p.get("subscription_id") for p in espace
+            if {j for j in jeux(p) if fournisseur.get(j) == p.get("subscriber")} & mes_jeux}
+    return res
+
+
 def construire(journal, soi: Optional[str], joignabilite_ip: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     entrees = export_entries(journal, ("service_",))
     niv = confiance.niveaux(journal)
@@ -65,6 +102,7 @@ def construire(journal, soi: Optional[str], joignabilite_ip: Dict[str, Dict[str,
     miens = {e["payload"].get("subscription_id") for e in entrees
              if e["op"] == "service_subscribe"
              and soi in (e["payload"].get("subscriber"), fournisseur.get(e["payload"].get("service_id")))}
+    miens |= _abonnements_relayes(entrees, fournisseur, soi)
     sids_miens = {e["payload"].get("service_id") for e in entrees
                   if e["op"] == "service_subscribe" and e["payload"].get("subscription_id") in miens}
     # Offres gardées : propriétaire légitime, fournisseur ni OBSERVER ni REVOKED (sauf nos propres abonnements, pour

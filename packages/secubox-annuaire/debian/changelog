@@ -1,3 +1,12 @@
+secubox-annuaire (0.21.0-1~trixie1) trixie; urgency=medium
+
+  * MirrorNet 4c (ref #3661) : l'export pour secubox-mirrornet ajoute les abonnements déjà
+    signés dont ce nœud a besoin — comme espace, les abonnés des jeux que des producteurs
+    lui confient ; comme abonné, les abonnements d'espace qui nomment ses jeux (signés par
+    le producteur de ces jeux). Rien d'autre des abonnements d'autrui.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 08:23:09 +0100
+
 secubox-annuaire (0.20.0-1~trixie1) trixie; urgency=medium
 
   * MirrorNet 4b (ref #3659) : abonnement d'un producteur à une offre kind=espace — champ

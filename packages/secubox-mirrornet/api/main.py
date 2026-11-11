@@ -24,12 +24,13 @@ import re
 import sqlite3
 import sys
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -37,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 
 from secubox_mirrornet import abonnements as A  # noqa: E402
-from secubox_mirrornet import annuaire, catalogue, config, espace, ledger, objets, schema, transfert  # noqa: E402
+from secubox_mirrornet import annuaire, catalogue, config, espace, ledger, objets, presence, schema, transfert  # noqa: E402
 
 log = logging.getLogger("secubox-mirrornet")
 router = APIRouter(prefix="/api/v1/mirrornet")
@@ -119,6 +120,7 @@ def tirer_maintenant() -> Dict[str, Any]:
             reg = config.reglages()
             res = transfert.tirer(cx, reg)
             res["espace"] = espace.propager(cx, reg)          # #3659 : copies gardées comme espace, même cadence
+            res["presence"] = presence.certifier(cx, reg)     # #3661 : preuves de possession demandées aux espaces
             return res
         finally:
             cx.close()
@@ -275,10 +277,15 @@ def datasets(ident: Dict[str, Any] = Depends(require_lecture)) -> Dict[str, Any]
         if not (r["mienne"] or r["presentable"]):
             continue
         d = _lignes("SELECT v.numero, v.empreinte, v.taille, v.format, v.licence, v.cree_le, v.fraicheur_s, "
-                    "EXISTS (SELECT 1 FROM objet x WHERE x.empreinte = v.empreinte) AS present "
+                    "EXISTS (SELECT 1 FROM objet x WHERE x.empreinte = v.empreinte) AS present, "
+                    "(SELECT n.nom FROM objet x JOIN node n ON n.did = x.source WHERE x.empreinte = v.empreinte) AS recue_de, "
+                    "(SELECT COUNT(DISTINCT r.gardien_did) FROM replique r WHERE r.offer_id = o.id AND r.etat = 'Actif') AS repliques "
                     "FROM dataset_version v JOIN offer o ON o.id = v.offer_id WHERE o.ref_annuaire = ? AND v.retiree = 0 "
                     "ORDER BY v.numero DESC LIMIT 1", (r["id"],))
         r["derniere_version"] = d[0] if d else None
+        if d and (ident.get("tableau_de_bord") or not ident.get("sub")):
+            for k in ("recue_de", "repliques"):          # qui garde les jeux de qui : relation d'autrui (#3661)
+                d[0].pop(k, None)
         rows.append(_sans_topologie(r, ident))
     return {"datasets": rows, "count": len(rows)}
 
@@ -706,6 +713,17 @@ def lignee(service_id: str) -> Dict[str, Any]:
         if o is None:
             raise HTTPException(404, "jeu inconnu")
         res = espace.lignee(cx, service_id)
+        for e in res["espaces"]:
+            p = cx.execute("SELECT statut, le, motif, empreinte FROM presence WHERE gardien_did = ? AND mode = 'preuve' "
+                           "AND empreinte IN (SELECT v.empreinte FROM dataset_version v JOIN offer o ON o.id = v.offer_id "
+                           "WHERE o.ref_annuaire = ?) ORDER BY le DESC LIMIT 1", (e["gardien_did"], service_id)).fetchone()
+            e["presence"] = dict(p) if p else None
+        res["repliques"] = [dict(r) for r in cx.execute(
+            "SELECT n.nom AS gardien, r.gardien_did, r.etat, p.statut AS transfert, p.le AS transfert_le "
+            "FROM replique r JOIN offer o ON o.id = r.offer_id JOIN node n ON n.did = r.gardien_did "
+            "LEFT JOIN presence p ON p.gardien_did = r.gardien_did AND p.mode = 'transfert' AND p.empreinte = "
+            "(SELECT v.empreinte FROM dataset_version v WHERE v.offer_id = o.id AND v.retiree = 0 ORDER BY v.numero DESC LIMIT 1) "
+            "WHERE o.ref_annuaire = ? ORDER BY n.nom", (service_id,))]
     finally:
         cx.close()
     return dict(res, nom=o["nom"], producteur_did=o["fournisseur_did"], mien=o["fournisseur_did"] == _soi())
@@ -909,10 +927,88 @@ def servir_objet(empreinte: str, request: Request):
     if refus is not None or not objets.present(empreinte):
         log.info("mirrornet : objet %s refusé à %s : %s", empreinte[:19], ip, refus or "absent du dépôt")
         raise HTTPException(404, "objet inconnu")
-    return FileResponse(objets.chemin(empreinte), media_type="application/octet-stream")
+    try:
+        f = open(objets.chemin(empreinte), "rb")       # ouvert AVANT de prendre un emplacement : rien à rendre si absent
+    except (OSError, objets.RefusObjet):
+        raise HTTPException(404, "objet inconnu") from None
+    jeton = _prendre_service(ip or "")
+    if jeton is None:
+        f.close()
+        # Le nœud qui sert décide (#3661) : saturé (globalement ou pour ce pair), il le dit ; l'abonné passe à la suite.
+        raise HTTPException(503, "transferts simultanés au plafond", headers={"Retry-After": "60"})
+    taille = os.fstat(f.fileno()).st_size
+
+    def flux():
+        try:
+            while True:
+                m = f.read(256 * 1024)
+                if not m:
+                    return
+                yield m
+        finally:
+            f.close()
+            _rendre_service(jeton)
+    return StreamingResponse(flux(), media_type="application/octet-stream", headers={"Content-Length": str(taille)})
 
 
-app = FastAPI(title="SecuBox MirrorNet", version="0.4.0", docs_url=None, redoc_url=None, openapi_url=None,
+# Emplacements de transfert : jeton -> (pair, début). Plafond global `[espace] service_simultane`, au plus
+# PAR_PAIR par pair ; un emplacement plus vieux que PERIME_S est réputé perdu (client parti sans que le flux soit
+# refermé) et repris — le compteur ne peut pas rester bloqué au plafond.
+_SERVICE: Dict[int, tuple] = {}
+_VERROU_SERVICE = threading.Lock()
+PAR_PAIR = 2
+PERIME_S = 1800
+_COMPTEUR = {"n": 0}
+
+
+def _prendre_service(pair: str) -> Optional[int]:
+    maintenant = time.monotonic()
+    with _VERROU_SERVICE:
+        for k in [k for k, (_p, t0) in _SERVICE.items() if maintenant - t0 > PERIME_S]:
+            _SERVICE.pop(k, None)
+        if len(_SERVICE) >= config.reglages()["service_simultane"]:
+            return None
+        if sum(1 for p, _t in _SERVICE.values() if p == pair) >= PAR_PAIR:
+            return None
+        _COMPTEUR["n"] += 1
+        _SERVICE[_COMPTEUR["n"]] = (pair, maintenant)
+        return _COMPTEUR["n"]
+
+
+def _rendre_service(jeton: int) -> None:
+    with _VERROU_SERVICE:
+        _SERVICE.pop(jeton, None)
+
+
+@pair.get("/pair/preuve/{empreinte}")
+def servir_preuve(empreinte: str, request: Request, defi: str = Query("", max_length=64)):
+    """Preuve de possession (#3661) : BLAKE2b-256 de l'objet, clé = défi du producteur. Seulement à l'ORIGINE d'une
+    copie gardée ici, par l'écouteur maillé (preuve nginx), une fois par minute et par objet ; sinon 404 sans détail."""
+    if not objets.EMPREINTE.match(empreinte) or not re.fullmatch(r"[0-9a-f]{64}", defi):
+        raise HTTPException(404, "objet inconnu")
+    jeton, attendue = request.headers.get("x-secubox-pair-preuve", ""), _preuve_maillage()
+    if not attendue or not hmac.compare_digest(jeton.encode(), attendue.encode()):
+        raise HTTPException(404, "objet inconnu")
+    ip = request.headers.get("x-secubox-pair-ip")
+    cx = _base()
+    try:
+        refus = presence.autoriser_preuve(cx, ip, empreinte)
+    finally:
+        cx.close()
+    if refus is not None or not objets.present(empreinte):
+        log.info("mirrornet : preuve de %s refusée à %s : %s", empreinte[:19], ip, refus or "absent du dépôt")
+        raise HTTPException(404, "objet inconnu")
+    if not presence.CALCUL.acquire(blocking=False):
+        raise HTTPException(503, "preuve déjà en calcul", headers={"Retry-After": "60"})
+    try:
+        return {"empreinte": empreinte, "preuve": presence.preuve(empreinte, bytes.fromhex(defi))}
+    except OSError:
+        raise HTTPException(404, "objet inconnu") from None
+    finally:
+        presence.CALCUL.release()
+
+
+app = FastAPI(title="SecuBox MirrorNet", version="0.5.0", docs_url=None, redoc_url=None, openapi_url=None,
               lifespan=_vie)
 app.include_router(router)
 app.include_router(pair)

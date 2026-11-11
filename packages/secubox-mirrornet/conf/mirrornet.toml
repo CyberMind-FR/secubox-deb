@@ -30,3 +30,9 @@ reserve_mo = 1024
 # Crédits internes sans valeur monétaire (arbitrage 3). Aucun règlement n'est jamais exécuté par le code.
 # Seuil de disponibilité sous lequel le crédit d'un fournisseur est réduit au prorata (0..1).
 disponibilite_min = 0.95
+
+[espace]
+# Phase 4c (#3661) : transferts servis en même temps par ce nœud (au-delà : 503, l'abonné essaie une autre source) ;
+# intervalle entre deux preuves de possession demandées à un espace qui garde un de mes jeux (secondes).
+service_simultane = 4
+certif_s = 900

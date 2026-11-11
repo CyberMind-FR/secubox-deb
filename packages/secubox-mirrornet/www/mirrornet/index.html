@@ -223,7 +223,7 @@
                 <thead><tr><th>Producteur</th><th>Espace</th><th>État</th><th>Occupé</th><th>Copies (n° · jeu · venue de)</th></tr></thead>
                 <tbody id="gardees"><tr><td colspan="5" class="vide">Chargement…</td></tr></tbody>
             </table></div>
-            <p class="note">Le producteur ne sert l'objet qu'à l'espace auquel il a confié ce jeu ; l'espace revérifie classe, format, licence, taille, données personnelles et capacité restante à chaque version, puis l'empreinte BLAKE2b. Présence certifiée et répartition des accès entre copies : lot 4c.</p>
+            <p class="note">Le producteur ne sert l'objet qu'à l'espace auquel il a confié ce jeu ; l'espace revérifie classe, format, licence, taille, données personnelles et capacité restante à chaque version, puis l'empreinte BLAKE2b. Présence certifiée : le producteur défie l'espace (BLAKE2b de l'objet, clé = défi aléatoire), jamais une présence déclarée. L'espace sert ses copies aux abonnés Actif du jeu ; chaque abonné répartit ses transferts entre le producteur et les répliques (hachage de rendez-vous), vérifie l'empreinte et déclasse une source en échec. Au-delà de <code>[espace] service_simultane</code> transferts, un nœud répond 503 et l'abonné passe à la source suivante.</p>
         </section>
     </div></div></main>
 
@@ -385,7 +385,8 @@
                         'S\u2019abonner au jeu « ' + d.nom + ' » de ' + d.fournisseur + ' ? Les versions seront tirées par le maillage.', false,
                         () => ecrire('POST', '/services/' + encodeURIComponent(d.id) + '/subscribe', null, 'Abonnement demandé.')) }));
                 let chezMoi = '—';
-                if (v) chezMoi = v.present ? (d.mienne ? 'déposée' : 'reçue') : (enCours.has(d.id) ? 'en attente de réception' : '—');
+                if (v) chezMoi = v.present ? (d.mienne ? 'déposée' : 'reçue' + (v.recue_de ? ' via ' + v.recue_de : '')) : (enCours.has(d.id) ? 'en attente de réception' : '—');
+                if (v && v.repliques) chezMoi += ' · ' + v.repliques + ' réplique' + (v.repliques > 1 ? 's' : '');
                 tb.append(h('tr', null,
                     h('td', null, h('b', { text: d.nom }), h('div', { class: 'sous', text: d.description || '' })),
                     h('td', null, document.createTextNode((d.fournisseur || '—') + ' '), d.mienne ? h('span', { class: 'pill p-moi', text: 'ce nœud' }) : h('span', { class: 'pill p-niv', text: d.fournisseur_niveau || '—' })),
@@ -417,7 +418,14 @@
             ul.replaceChildren(h('li', null, h('b', { text: 'Lignée de « ' + d.nom + ' »' })));
             if (!r.ok) { ul.append(h('li', { text: r.status === 401 || r.status === 403 ? 'Session administrateur requise.' : 'Lignée illisible.' })); hauteur(); return; }
             const L = r.json;
-            ul.append(h('li', { text: L.espaces.length ? 'Confié à : ' + L.espaces.map(e => e.espace + ' (' + e.gardien + ', ' + (LIBELLE[e.etat] || e.etat) + ')').join(' · ') : 'Confié à aucun espace.' }));
+            if (!L.espaces.length) ul.append(h('li', { text: 'Confié à aucun espace.' }));
+            for (const e of L.espaces) {
+                const pr = e.presence;
+                ul.append(h('li', null, document.createTextNode('Espace ' + e.espace + ' (' + e.gardien + ') · '), pill(e.etat),
+                    document.createTextNode(' · présence '),
+                    h('b', { text: !pr ? 'pas encore vérifiée' : pr.statut === 'ok' ? 'certifiée ' + relatif(pr.le) : 'NON certifiée ' + relatif(pr.le), title: pr && pr.motif ? pr.motif : 'preuve de possession : BLAKE2b de l\u2019objet, clé = défi aléatoire' })));
+            }
+            for (const r of (L.repliques || [])) ul.append(h('li', { text: 'Réplique chez ' + r.gardien + ' (' + (LIBELLE[r.etat] || r.etat) + ')' + (r.transfert ? ' · dernier transfert ' + (r.transfert === 'ok' ? 'vérifié' : 'en échec') + ' ' + relatif(r.transfert_le) : '') }));
             for (const v of L.versions) ul.append(h('li', null, h('b', { text: 'n° ' + v.numero }), document.createTextNode(' '),
                 h('code', { text: v.empreinte.slice(0, 15) + '…', title: v.empreinte }), document.createTextNode(' ← '),
                 v.parent ? h('code', { text: v.parent.slice(0, 15) + '…', title: v.parent }) : document.createTextNode('origine'),
