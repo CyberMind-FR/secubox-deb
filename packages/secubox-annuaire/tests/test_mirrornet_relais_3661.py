@@ -32,3 +32,22 @@ def test_export_relais_et_repliques(j):  # noqa: F811
     assert s_esp.subscription_id in vu_a and faux.subscription_id not in vu_a
     vu_x = _subs(MX.construire(j, dx, {}))
     assert s_ab.subscription_id not in vu_x and s_esp.subscription_id not in vu_x
+
+
+def test_cache_d_export_expire(tmp_path, monkeypatch):
+    """Banc #3661 : même hauteur, l'export est quand même recalculé une fois le cache expiré."""
+    monkeypatch.setenv("ANNUAIRE_DIR_SYNC", "0")
+    from api import main as M
+    M._journal = None
+    M._DB_PATH = str(tmp_path / "journal.db")
+    M._EXPORT_CACHE.update(hauteur=None, donnees=None, le=0.0)
+    monkeypatch.setattr(M, "MIRRORNET_EXPORT", tmp_path / "mirrornet-export.json")
+    appels = []
+    vrai = MX.construire
+    monkeypatch.setattr(MX, "construire", lambda *a, **k: appels.append(1) or vrai(*a, **k))
+    M._exporter_mirrornet()
+    M._exporter_mirrornet()
+    assert len(appels) == 1                                   # même hauteur, cache frais : pas de recalcul
+    M._EXPORT_CACHE["le"] -= M.EXPORT_CACHE_S + 1
+    M._exporter_mirrornet()
+    assert len(appels) == 2

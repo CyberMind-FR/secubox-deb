@@ -1,3 +1,11 @@
+secubox-annuaire (0.21.1-1~trixie1) trixie; urgency=medium
+
+  * Banc #3661 : le cache de l'export MirrorNet expire aussi après 240 s — sur gk2, un export
+    resté sans un abonnement d'espace pourtant au journal n'était jamais recalculé (même
+    hauteur) ; la passe complète le refait désormais au plus tard une fois sur deux.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 09:06:35 +0100
+
 secubox-annuaire (0.21.0-1~trixie1) trixie; urgency=medium
 
   * MirrorNet 4c (ref #3661) : l'export pour secubox-mirrornet ajoute les abonnements déjà
