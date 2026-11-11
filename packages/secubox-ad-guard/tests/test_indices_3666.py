@@ -106,12 +106,16 @@ def _c(indices=None, legit=()):
 def test_charger_valide_et_plafonne(tmp_path):
     d = tmp_path / "liv"
     _livraison(d, DID1, _c({"ads.ex.com": "PUBLICITE", "ADS.Ex.com.": "TRACKING"}), "gk2")
-    gros = json.dumps({"format": 1, "jeu": "tv-indices", "indices": {}, "legitimes": [], "bourrage": "x" * (3 * 1024 * 1024)})
+    gros = json.dumps({"format": 1, "jeu": "tv-indices", "indices": {"gros.com": "TRACKING"}, "legitimes": [],
+                       "bourrage": "x" * (3 * 1024 * 1024)})
     assert len(gros) > 2 * 1024 * 1024
     _livraison(d, DID2, gros, "gk6")
-    _livraison(d, "did:plc:" + "c" * 32, '{"format": 1, "indices": {"a.com"', "gk7")
-    _livraison(d, "did:plc:" + "d" * 32, _c({"s.ex.com": "STREAMING"}), "gk8")
+    tronque = json.dumps(_c({"tronque.com": "TRACKING"}))[:-5]
+    _livraison(d, "did:plc:" + "c" * 32, tronque, "gk7")
+    _livraison(d, "did:plc:" + "d" * 32, _c({"streaming.com": "STREAMING"}), "gk8")
     ix = I.charger(d)
+    for absent in ("gros.com", "tronque.com", "streaming.com"):
+        assert absent not in ix.confirmes
     # doublon normalisé : clés triées, "ADS.Ex.com." < "ads.ex.com" -> la première gagne
     assert ix.confirmes == {"ads.ex.com": {"gk2": "TRACKING"}}
 
@@ -141,12 +145,26 @@ def test_charger_plafond_producteurs(tmp_path):
     assert len(ix.confirmes["a.com"]) == I.PRODUCTEURS_MAX and "gk64" not in ix.confirmes["a.com"]
 
 
-def test_charger_elements_non_chaines_et_producteur_defectueux(tmp_path):
+def test_charger_elements_non_chaines(tmp_path):
     d = tmp_path / "liv"
     _livraison(d, DID1, {"format": 1, "jeu": "tv-indices", "indices": {"a.com": "TRACKING"}, "legitimes": [1, None, ["x"], "ok.com"]}, "gk1")
-    _livraison(d, DID2, _c({"b.com": "TRACKING"}), "gk2")
     ix = I.charger(d)
-    assert ix.legitime_chez("ok.com") == ["gk1"] and ix.confirmateurs("b.com") == ["gk2"]
+    assert ix.legitime_chez("ok.com") == ["gk1"] and ix.confirmateurs("a.com") == ["gk1"]
+
+
+def test_charger_producteur_qui_leve_n_affecte_pas_les_suivants(tmp_path, monkeypatch):
+    d = tmp_path / "liv"
+    _livraison(d, DID1, _c({"boom.com": "TRACKING"}), "gk1")
+    _livraison(d, DID2, _c({"b.com": "TRACKING"}), "gk2")
+    vrai = I._valider_contenu
+
+    def piege(c):
+        if isinstance(c, dict) and "boom.com" in c.get("indices", {}):
+            raise RuntimeError("producteur défectueux")
+        return vrai(c)
+    monkeypatch.setattr(I, "_valider_contenu", piege)
+    ix = I.charger(d)
+    assert "boom.com" not in ix.confirmes and ix.confirmateurs("b.com") == ["gk2"]
 
 
 def test_charger_refuse_symlink_et_did_ou_nom_invalide(tmp_path):
