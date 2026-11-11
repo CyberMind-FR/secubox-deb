@@ -1,3 +1,13 @@
+secubox-ad-guard (1.25.0-1~trixie1) trixie; urgency=medium
+
+  * Indices TV Privacy partagés entre box (ref #3666) : contenu publié sans appareil ni date
+    (indices-publication.json), livraisons du maillage lues et bornées, poids maximal en mode auto
+    avec garde des catégories protégées, légitime qui freine, retrait sûr/oubli, confirmation à
+    l'échéance. Interrupteurs `indices_publier`/`indices_recevoir`, routes GET/POST
+    /adblock-tv/indices, geste d'audit `tv_indices_reglage`, encart de la page TV Privacy.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 12:41:20 +0100
+
 secubox-ad-guard (1.24.6-1~trixie1) trixie; urgency=medium
 
   * Tri Netflix (ref #3226), règle « par zone » : au banc du 10/11, la TV ne redemande jamais un

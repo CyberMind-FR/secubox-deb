@@ -21,7 +21,7 @@ Depends: ${misc:Depends},
  secubox-core (>= 1.5.9),
  adduser,
  systemd
-Recommends: secubox-annuaire (>= 0.21.0),
+Recommends: secubox-annuaire (>= 0.22.0),
  secubox-p2p
 Description: SecuBox MirrorNet v1 — plan de contrôle des services, données et contributions
  Phase 3 (#3647) : cycle de vie des abonnements. Synchronisation de l'export de
