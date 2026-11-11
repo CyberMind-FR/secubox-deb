@@ -513,11 +513,20 @@ async def droits_self(request: Request):
 
 @app.get("/services")
 async def list_services(request: Request, ident: Dict[str, Any] = Depends(lecture_ou_pair)):
-    """List all non-revoked service offers (public)."""
-    from annuaire.verbs import _get_offers  # noqa: PLC0415
+    """List all non-revoked service offers (public). #3664 : chaque offre porte `provider_nom` (boxname du NodeRecord
+    signé du fournisseur, ou None) et `mienne` (fournisseur = node.key de cette box) — pour afficher un nom et ne pas
+    proposer de s'abonner à sa propre offre. Champs ajoutés hors de la charge signée de l'offre."""
+    from annuaire.verbs import _get_nodes, _get_offers  # noqa: PLC0415
     await exiger_droit(request, ident, "annuaire-offres")
     j = get_journal()
-    return {"services": _get_offers(j)}
+
+    def _lire():
+        noms = {n.get("did"): n.get("boxname") for n in _get_nodes(j) if n.get("did")}
+        soi = _self_did_best_effort()
+        return [dict(o, provider_nom=noms.get(o.get("provider")), mienne=bool(soi) and o.get("provider") == soi)
+                for o in _get_offers(j)], soi
+    offres, soi = await asyncio.to_thread(_lire)
+    return {"services": offres, "soi": soi}
 
 
 @app.post("/service/offer", dependencies=[Depends(_require_jwt)])
