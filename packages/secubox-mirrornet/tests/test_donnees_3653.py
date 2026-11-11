@@ -298,7 +298,7 @@ def test_echec_differe_et_pas_de_reessai_immediat(cx):
         yield b"falsifie"
     transfert.tirer(cx, REG, flux=faux)
     transfert.tirer(cx, REG, flux=faux)
-    assert len(appels) == 1 and not transfert._permis(b2(b"v1"))
+    assert len(appels) == 1 and not transfert._permis(b2(b"v1") + "@" + f.did)     # reprise différée PAR SOURCE (#3661)
     transfert._REPRISE.clear()
 
 

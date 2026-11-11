@@ -13,11 +13,13 @@ CE nœud qui contient cette version non retirée, classe autre que « privé ».
 """
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 import logging
 import sqlite3
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterator, Optional
@@ -51,6 +53,8 @@ def autoriser(cx: sqlite3.Connection, ip: Optional[str], empreinte: str) -> Opti
         "LIMIT 1", (empreinte, soi, dids[0])).fetchone()
     if ligne is None:
         ligne = _espace_autorise(cx, soi, dids[0], empreinte)
+    if ligne is None:
+        ligne = _relais_autorise(cx, soi, dids[0], empreinte)
     return None if ligne else "aucun abonnement Actif de ce pair à une version non retirée contenant cet objet"
 
 
@@ -81,6 +85,56 @@ def _espace_autorise(cx: sqlite3.Connection, soi: Optional[str], pair: str, empr
                 and espace.refus_version(espace.caracteristiques(*actuelle), v) is None):
             return (1,)
     return None
+
+
+_DERNIER = ("(SELECT vers FROM subscription_event x WHERE x.subscription_id = s.id "
+            "ORDER BY x.ts DESC, x.rowid DESC LIMIT 1)")
+
+
+def _relais_autorise(cx: sqlite3.Connection, soi: Optional[str], pair: str, empreinte: str):
+    """Copie servie à un abonné (#3661) : CE nœud garde l'objet comme copie d'un jeu confié à SON espace, REÇUE de son
+    origine (jamais un objet que déclare aussi le jeu d'un autre fournisseur : une empreinte reprise ne vaut pas
+    possession), abonnement d'espace Actif, version non retirée de classe propageable (spécialisé seulement sous
+    approbation manuelle, comme chez le producteur), et le pair est abonné Actif à ce jeu."""
+    return cx.execute(
+        "SELECT 1 FROM copie c JOIN dataset_version v ON v.id = c.version_id JOIN offer o ON o.id = v.offer_id "
+        "JOIN subscription s ON s.id = c.subscription_id JOIN offer e ON e.id = s.offer_id "
+        "JOIN abonne_relaye r ON r.offer_id = v.offer_id "
+        "WHERE c.empreinte = ? AND v.retiree = 0 AND v.classe IN ('public', 'communaute', 'specialise') "
+        "AND (v.classe IN ('public', 'communaute') OR o.approval_mode = 'pending') "
+        "AND c.parent_did = c.origine_did "
+        "AND NOT EXISTS (SELECT 1 FROM dataset_version v2 JOIN offer o2 ON o2.id = v2.offer_id "
+        "                WHERE v2.empreinte = c.empreinte AND o2.fournisseur_did <> c.origine_did) "
+        "AND o.kind = 'dataset' AND o.etat = 'publiee' AND o.fournisseur_did = c.origine_did "
+        "AND s.role = 'fournisseur' AND s.abonne_did = c.origine_did AND e.kind = 'espace' AND e.etat = 'publiee' "
+        f"AND e.fournisseur_did = ? AND {_DERNIER} = 'Actif' AND r.abonne_did = ? AND r.etat = 'Actif' LIMIT 1",
+        (empreinte, soi, pair)).fetchone()
+
+
+def sources(cx: sqlite3.Connection, soi: Optional[str], t: Dict[str, Any]) -> list:
+    """Répartition (#3661) : le fournisseur et les espaces Actif qui gardent ce jeu pour lui, ordonnés par hachage de
+    rendez-vous (abonné, empreinte, source) — chaque abonné a son ordre, la charge se répartit sans coordination.
+    Une source dont le dernier transfert a échoué (contenu faux, injoignable) passe après les autres."""
+    cands = [(t["fournisseur_did"], t["mesh_ip"])]
+    for did, ip in cx.execute(
+            "SELECT DISTINCT r.gardien_did, n.mesh_ip FROM replique r JOIN node n ON n.did = r.gardien_did "
+            "WHERE r.offer_id = (SELECT id FROM offer WHERE ref_annuaire = ?) AND r.etat = 'Actif' "
+            "AND r.producteur_did = ? AND r.gardien_did <> ?", (t["service_id"], t["fournisseur_did"], soi or "")):
+        cands.append((did, ip))
+    echecs = {r[0] for r in cx.execute("SELECT gardien_did FROM presence WHERE empreinte = ? AND mode = 'transfert' "
+                                       "AND statut = 'echec'", (t["empreinte"],))}
+
+    def rang(c):
+        h = hashlib.sha256(f"{soi}|{t['empreinte']}|{c[0]}".encode()).hexdigest()
+        return (c[0] in echecs, h)
+    return sorted(cands, key=rang)
+
+
+def noter_presence(cx: sqlite3.Connection, did: str, empreinte: str, mode: str, ok: bool, motif: str = "") -> None:
+    cx.execute("INSERT INTO presence(gardien_did, empreinte, mode, statut, le, motif) VALUES (?,?,?,?,?,?) "
+               "ON CONFLICT(gardien_did, empreinte, mode) DO UPDATE SET statut=excluded.statut, le=excluded.le, "
+               "motif=excluded.motif", (did, empreinte, mode, "ok" if ok else "echec",
+                                        datetime.now(timezone.utc).isoformat(), motif[:200]))
 
 
 def a_tirer(cx: sqlite3.Connection) -> list:
@@ -139,35 +193,68 @@ def _permis(empreinte: str) -> bool:
     return time.monotonic() >= _REPRISE.get(empreinte, (0, 0.0))[1]
 
 
+SOURCES_PAR_PASSE = 2
+
+
 def tirer(cx: sqlite3.Connection, reglages: Dict[str, Any], flux=_flux) -> Dict[str, int]:
-    """Une passe côté abonné : au plus UNE version reçue (débit modéré), puis rangement des versions gardées."""
+    """Une passe côté abonné : au plus UNE version reçue (débit modéré), essayée chez au plus SOURCES_PAR_PASSE
+    sources dans l'ordre de répartition (#3661) ; chaque source a sa reprise différée. Puis rangement."""
     stats = {"recues": 0, "refusees": 0, "purgees": 0}
+    soi = (cx.execute("SELECT soi FROM synchro WHERE id = 1").fetchone() or [None])[0]
+    recue = False
     for t in a_tirer(cx):
+        if recue:
+            break
         if not _permis(t["empreinte"]):
             continue
-        ip = t.get("mesh_ip")
-        try:
-            if not ip or ipaddress.ip_address(ip) not in MAILLAGE:
-                continue
-        except ValueError:
-            continue
-        try:
+        try:                                                        # refus LOCAUX : ne dépendent d'aucune source
             objets.verifier_espace(t["taille"], reglages["reserve_mo"])
-            url = f"http://{ip}:{config.PORT_MAILLAGE}/mirrornet/objets/{t['empreinte']}"
             if t["taille"] > reglages["taille_max_mo"] * 1024 * 1024:
                 raise objets.RefusObjet(f"version annoncée au-delà du plafond ({reglages['taille_max_mo']} Mio)")
-            empreinte, taille = objets.ecrire(flux(url), t["taille"], attendue=t["empreinte"], taille_attendue=t["taille"])
-            objets.noter(cx, empreinte, taille, t["fournisseur_did"])
-            stats["recues"] += 1
-            log.info("mirrornet : version %s reçue (%s octets) du jeu %s", empreinte[:19], taille, t["service_id"][:12])
-            break                                                   # une version reçue par passe (débit modéré)
         except objets.RefusObjet as e:
             stats["refusees"] += 1
             _differer(t["empreinte"])
-            log.warning("mirrornet : version %s refusée : %s", t["empreinte"][:19], e)
-        except OSError as e:                                        # fournisseur injoignable ou trop lent : jeu suivant
-            _differer(t["empreinte"])
-            log.info("mirrornet : fournisseur %s injoignable pour %s : %s", ip, t["empreinte"][:19], e.__class__.__name__)
+            log.warning("mirrornet : version %s non reçue : %s", t["empreinte"][:19], e)
+            continue
+        essais = 0
+        for did, ip in sources(cx, soi, t):
+            cle = t["empreinte"] + "@" + did
+            if essais >= SOURCES_PAR_PASSE or not _permis(cle):
+                continue
+            try:
+                if not ip or ipaddress.ip_address(ip) not in MAILLAGE:
+                    continue
+            except ValueError:
+                continue
+            essais += 1
+            relais = did != t["fournisseur_did"]
+            try:
+                url = f"http://{ip}:{config.PORT_MAILLAGE}/mirrornet/objets/{t['empreinte']}"
+                empreinte, taille = objets.ecrire(flux(url), t["taille"], attendue=t["empreinte"], taille_attendue=t["taille"])
+                objets.noter(cx, empreinte, taille, did)
+                if relais:
+                    noter_presence(cx, did, empreinte, "transfert", True)
+                stats["recues"] += 1
+                log.info("mirrornet : version %s reçue (%s octets) du jeu %s via %s", empreinte[:19], taille,
+                         t["service_id"][:12], "relais " + did[8:20] if relais else "le fournisseur")
+                recue = True
+                break                                               # une version reçue par passe (débit modéré)
+            except objets.RefusObjet as e:                          # contenu faux : la source a menti
+                stats["refusees"] += 1
+                _differer(cle)
+                if relais:
+                    noter_presence(cx, did, t["empreinte"], "transfert", False, str(e))
+                log.warning("mirrornet : version %s refusée (source %s) : %s", t["empreinte"][:19], did[8:20], e)
+            except urllib.error.HTTPError as e:
+                _differer(cle)
+                if relais and e.code != 503:                        # 503 = saturée, pas absente : pas d'échec noté
+                    noter_presence(cx, did, t["empreinte"], "transfert", False, f"HTTP {e.code}")
+                log.info("mirrornet : source %s : HTTP %s pour %s", ip, e.code, t["empreinte"][:19])
+            except OSError as e:                                    # source injoignable ou trop lente
+                _differer(cle)
+                if relais:
+                    noter_presence(cx, did, t["empreinte"], "transfert", False, e.__class__.__name__)
+                log.info("mirrornet : source %s injoignable pour %s : %s", ip, t["empreinte"][:19], e.__class__.__name__)
     stats["purgees"] = ranger(cx, reglages["garder"])
     return stats
 

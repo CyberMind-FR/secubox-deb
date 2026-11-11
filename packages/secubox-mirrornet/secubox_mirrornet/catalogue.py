@@ -366,6 +366,8 @@ def synchroniser(cx: sqlite3.Connection, export: Dict[str, Any], maintenant: Opt
                                                         etat, motif, ts))
                     stats["transitions"] += 1
                 stats["abonnements"] += 1
+        if soi:
+            stats["relais"] = _relais(cx, idx, soi, noeuds, joign, grace_defaut, maintenant, connus, ts)
         hauteur = export.get("hauteur") if type(export.get("hauteur")) is int else None
         cx.execute("INSERT INTO synchro(id, le, soi, export_le, hauteur, offres, abonnements, rejetees, erreur) "
                    "VALUES (1,?,?,?,?,?,?,?,NULL) ON CONFLICT(id) DO UPDATE SET le=excluded.le, soi=excluded.soi, "
@@ -378,6 +380,44 @@ def synchroniser(cx: sqlite3.Connection, export: Dict[str, Any], maintenant: Opt
         cx.execute("ROLLBACK")
         raise
     return stats
+
+
+def _relais(cx: sqlite3.Connection, idx: Dict[str, Any], soi: str, noeuds: Dict[str, Any], joign: Dict[str, Any],
+            grace_defaut: int, maintenant: datetime, connus: set, ts: str) -> int:
+    """Abonnements d'AUTRES nœuds (#3661), reconstruits à chaque passe dans la transaction de synchronisation :
+    - répliques : abonnement d'un producteur P à l'espace d'un gardien G, nommant un jeu dont P est le fournisseur ;
+    - abonnés relayés : abonnement d'un tiers à un jeu (servi par mes copies si ce jeu est confié à mes espaces).
+    État dérivé vu du fournisseur (pas de grâce : c'est l'abonnement lui-même qui compte)."""
+    cx.execute("DELETE FROM replique")
+    cx.execute("DELETE FROM abonne_relaye")
+    n = 0
+    for sub_id, sub in idx["subs"].items():
+        p = sub["p"]
+        offre = idx["offres"].get(p.get("service_id"))
+        if offre is None or soi in (p.get("subscriber"), offre["fournisseur"]):
+            continue
+        if p.get("provider") is not None and p.get("provider") != offre["fournisseur"]:
+            continue
+        etat, _motif, _ech = A.deriver(_faits(sub_id, sub, offre, idx, "fournisseur", noeuds, joign, grace_defaut),
+                                       maintenant)
+        if offre["kind"] == "espace":
+            for jeu in jeux_normalises(p.get("jeux")):
+                d = idx["offres"].get(jeu)
+                if d is None or d["kind"] != "dataset" or d["fournisseur"] != p["subscriber"]:
+                    continue                    # seul le producteur confie SON jeu
+                for did in (offre["fournisseur"], p["subscriber"]):
+                    if did not in connus:
+                        _noeud(cx, did, {}, joign, ts)
+                        connus.add(did)
+                cx.execute("INSERT OR IGNORE INTO replique(sub_ref, offer_id, gardien_did, producteur_did, etat) "
+                           "VALUES (?,?,?,?,?)", (sub_id, str(uuid.uuid5(NS, "offre:" + jeu)), offre["fournisseur"],
+                                                  p["subscriber"], etat))
+                n += 1
+        elif offre["kind"] == "dataset":
+            cx.execute("INSERT OR IGNORE INTO abonne_relaye(sub_ref, abonne_did, offer_id, etat) VALUES (?,?,?,?)",
+                       (sub_id, p["subscriber"], str(uuid.uuid5(NS, "offre:" + offre["service_id"])), etat))
+            n += 1
+    return n
 
 
 def noter_erreur(cx: sqlite3.Connection, erreur: str) -> None:

@@ -115,3 +115,4 @@ secubox-pilotage POST /canal/v1/http         # idem canal des agents : HTTP_RESP
 secubox-pilotage POST /canal/v1/notifs       # idem canal des agents
 secubox-pilotage POST /canal/v1/reponses     # idem canal des agents
 secubox-mirrornet GET /pair/objets/{empreinte} # preuve = secret de l'ecouteur maille :8799 pose par nginx (LoadCredential, compare a temps constant) + adresse du pair + abonnement Actif ; jamais via l'hote d'administration (#3653)
+secubox-mirrornet GET /pair/preuve/{empreinte} # meme acces que /pair/objets ; seulement l'origine d'une copie recue d'elle, 1/min/objet, un calcul a la fois ; rend un BLAKE2b cle = defi, jamais l'objet (#3661)

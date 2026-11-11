@@ -1,3 +1,24 @@
+secubox-mirrornet (0.5.0-1~trixie1) trixie; urgency=medium
+
+  * MirrorNet 4c (ref #3661) : présence certifiée, copies servies aux abonnés, répartition.
+    Preuve de possession : le producteur défie chaque espace qui garde son jeu (BLAKE2b de
+    l'objet, clé = défi aléatoire de 32 octets, comparé à temps constant sur sa propre
+    copie), au plus tous les `[espace] certif_s` ; l'espace ne répond qu'à l'origine de la
+    copie, une fois par minute et par objet (route maillée /mirrornet/preuve/). L'espace sert
+    ses copies aux abonnés Actif du jeu (abonnement d'espace Actif, classe propageable).
+    L'abonné répartit ses transferts entre le producteur et les répliques Actif (hachage de
+    rendez-vous), essaie au plus deux sources par passe, reprise différée par source ; un
+    transfert vérifié certifie la réplique, un échec la déclasse. Plafond de transferts
+    simultanés `[espace] service_simultane` : au-delà, 503. Schéma v5 (replique,
+    abonne_relaye, presence). Lignée : présence par espace, répliques ; jeux : source et
+    nombre de répliques (masqués au lecteur anonyme). Relecture relecteur-securite :
+    1 bloquant corrigé (un objet déjà détenu n'est réutilisé comme copie que s'il vient du
+    producteur ; l'espace ne sert qu'une copie reçue de son origine, jamais une empreinte
+    déclarée aussi par le jeu d'un autre fournisseur), plafond par pair et emplacements
+    rendus en fin de flux, une preuve calculée à la fois, 503 non compté comme absence.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 08:23:09 +0100
+
 secubox-mirrornet (0.4.0-1~trixie1) trixie; urgency=medium
 
   * MirrorNet 4b (ref #3659) : espace offert en service et propagation des jeux. Offre

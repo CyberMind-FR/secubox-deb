@@ -29,7 +29,8 @@ OBJETS = Path(os.environ["SBX_MIRRORNET_OBJETS"]) if os.environ.get("SBX_MIRRORN
 PORT_MAILLAGE = int(os.environ.get("SBX_MIRRORNET_PORT_MAILLAGE", "8799"))
 
 DEFAUTS: Dict[str, Any] = {"confiance_min": "LIMITED", "grace_s": 432000, "intervalle_s": 60,
-                           "taille_max_mo": 256, "garder": 3, "reserve_mo": 1024}
+                           "taille_max_mo": 256, "garder": 3, "reserve_mo": 1024,
+                           "service_simultane": 4, "certif_s": 900}
 _NIVEAUX = ("OBSERVER", "LIMITED", "PARTNER", "TRUSTED")
 
 
@@ -57,6 +58,11 @@ def reglages() -> Dict[str, Any]:
     donnees = d.get("donnees") or {}
     for cle, mini, maxi in (("taille_max_mo", 1, 256), ("garder", 1, 50), ("reserve_mo", 0, 100000)):
         v = donnees.get(cle)
+        if type(v) is int and mini <= v <= maxi:
+            r[cle] = v
+    espace = d.get("espace") if isinstance(d.get("espace"), dict) else {}
+    for cle, mini, maxi in (("service_simultane", 1, 64), ("certif_s", 60, 86400)):
+        v = espace.get(cle)
         if type(v) is int and mini <= v <= maxi:
             r[cle] = v
     return r

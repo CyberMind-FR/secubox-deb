@@ -159,6 +159,11 @@ def propager(cx: sqlite3.Connection, reglages: Dict[str, Any], flux=None) -> Dic
             continue
         REFUS.pop(cle, None)
         deja = cx.execute("SELECT source, taille FROM objet WHERE empreinte = ?", (t["empreinte"],)).fetchone()
+        # Objet déjà détenu : réutilisé SEULEMENT s'il vient du producteur lui-même (#3661, relecture). Sinon un pair
+        # qui déclare l'empreinte d'un objet d'un autre jeu en deviendrait « l'origine » sans en détenir les octets ;
+        # on le tire chez lui, qui doit donc les posséder (le fichier identique est simplement réécrit).
+        if deja is not None and deja[0] != t["producteur"]:
+            deja = None
         if deja is not None:
             if deja[1] != t["taille"]:              # taille déclarée fausse : ni capacité faussée, ni copie
                 REFUS[cle] = "taille déclarée différente de l'objet détenu"

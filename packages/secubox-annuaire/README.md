@@ -181,3 +181,5 @@ Actif par l'écouteur maillé (`/mirrornet/objets/<empreinte>` sur :8799).
 
 Espace (#3659) : l'abonnement d'un producteur à une offre `kind=espace` porte `jeux`, signé avec lui — les
 `service_id` de ses propres offres `kind=dataset` (1 à 32, jamais professionnelles ni privées) que l'espace gardera.
+L'export MirrorNet (#3661) donne en plus à l'espace les abonnés des jeux qu'on lui confie, et à l'abonné les
+abonnements d'espace qui nomment ses jeux — des faits déjà signés, rien d'autre.

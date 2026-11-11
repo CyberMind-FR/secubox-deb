@@ -26,3 +26,21 @@ location ^~ /pair/objets/ {
     proxy_max_temp_file_size 0;
     proxy_read_timeout 300s;
 }
+# #3661 — preuve de possession demandée par le producteur à l'espace qui garde une copie de son jeu.
+location ^~ /mirrornet/preuve/ {
+    rewrite "^/mirrornet/preuve/(b2:[0-9a-f]{64})$" /pair/preuve/$1 last;
+    return 404;
+}
+location ^~ /pair/preuve/ {
+    internal;
+    limit_except GET { deny all; }
+    proxy_pass http://unix:/run/secubox/mirrornet.sock;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection "";
+    proxy_set_header Authorization "";
+    proxy_set_header Cookie "";
+    proxy_set_header X-SecuBox-Pair-IP $remote_addr;
+    proxy_set_header X-SecuBox-Pair-Preuve "__PREUVE__";
+    proxy_read_timeout 120s;
+}
