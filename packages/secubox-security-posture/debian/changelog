@@ -1,8 +1,9 @@
 secubox-security-posture (2.5.3-1~trixie1) trixie; urgency=medium
 
   * Leurres CERT-FR : un modèle Nuclei en requêtes « raw » donne le chemin de sa
-    première requête distinctive (ligne de requête), avec les garde-fous de largeur
-    (ref #3584).
+    première requête distinctive (ligne de requête), avec les garde-fous de largeur ;
+    motif ancré en tête de chemin, surfaces de la box (racines, modules, vhosts, API
+    des modules installés) jamais visées (ref #3584).
 
  -- Gerald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 17:40:00 +0100
 
