@@ -13,8 +13,10 @@ Deux sens, sans entrée/sortie réseau :
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import stat
 import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
@@ -27,9 +29,12 @@ PUBLICATION = Path("/var/lib/secubox/ad-guard/dnstv/indices-publication.json")
 LIVRAISONS = Path("/var/lib/secubox-mirrornet-partage/livraisons/tv-indices")
 CATEGORIES_INDICE = ("PUBLICITE", "TRACKING", "TELEMETRIE")
 
-TAILLE_MAX = 1024 * 1024            # un fichier de livraison ou l'index
-ENTREES_MAX = 20000                 # domaines par livraison (indices ou légitimes)
-PRODUCTEURS_MAX = 256
+TAILLE_MAX = 2 * 1024 * 1024        # un fichier de livraison ou l'index
+INDICES_MAX = 20000                 # indices par livraison ; au-delà, la livraison est ignorée en entier
+LEGITIMES_MAX = 5000                # légitimes par livraison ; idem
+PRODUCTEURS_MAX = 64                # producteurs lus (ordre de l'index) ; les suivants sont ignorés
+
+log = logging.getLogger(__name__)
 DID_RE = re.compile(r"^did:plc:([0-9a-f]{32})$")
 NOM_RE = re.compile(r"^[a-z0-9-]{1,32}$")
 
@@ -126,7 +131,6 @@ def _lire_json(chemin: Path):
     fd = -1
     try:
         fd = os.open(str(chemin), os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0))
-        import stat
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode) or st.st_size > TAILLE_MAX:
             return None
@@ -148,14 +152,15 @@ def _valider_contenu(c):
     if not isinstance(c, dict) or c.get("format") != 1 or c.get("jeu") != "tv-indices":
         return None
     ind, leg = c.get("indices"), c.get("legitimes")
-    if not isinstance(ind, dict) or not isinstance(leg, list) or len(ind) > ENTREES_MAX or len(leg) > ENTREES_MAX:
+    if not isinstance(ind, dict) or not isinstance(leg, list) or len(ind) > INDICES_MAX or len(leg) > LEGITIMES_MAX:
         return None
     indices: Dict[str, str] = {}
-    for d, cat in ind.items():
+    for d in sorted(k for k in ind if isinstance(k, str)):      # ordre trié : en cas de doublon normalisé, le premier gagne
+        cat = ind[d]
         n = dnstv.valider_domaine(d)
-        if n and cat in CATEGORIES_INDICE:
+        if n and cat in CATEGORIES_INDICE and n not in indices:
             indices[n] = cat
-    legitimes = {n for n in (dnstv.valider_domaine(d) for d in leg) if n}
+    legitimes = {n for n in (dnstv.valider_domaine(d) for d in leg if isinstance(d, str)) if n}
     return indices, legitimes
 
 
@@ -167,18 +172,22 @@ def charger(dossier: Path = LIVRAISONS) -> Index:
         if not isinstance(idx, dict):
             return ix
         for did, meta in list(idx.items())[:PRODUCTEURS_MAX]:
-            m = DID_RE.match(did) if isinstance(did, str) else None
-            nom = meta.get("nom") if isinstance(meta, dict) else None
-            if not m or not isinstance(nom, str) or not NOM_RE.match(nom):
-                continue
-            v = _valider_contenu(_lire_json(Path(dossier) / (m.group(1) + ".json")))
-            if v is None:
-                continue
-            indices, legitimes = v
-            for d, cat in indices.items():
-                ix.confirmes.setdefault(d, {})[nom] = cat
-            for d in legitimes:
-                ix.legitimes.setdefault(d, set()).add(nom)
+            try:
+                m = DID_RE.match(did) if isinstance(did, str) else None
+                nom = meta.get("nom") if isinstance(meta, dict) else None
+                if not m or not isinstance(nom, str) or not NOM_RE.match(nom):
+                    continue
+                v = _valider_contenu(_lire_json(Path(dossier) / (m.group(1) + ".json")))
+                if v is None:
+                    log.warning("indices : livraison de %s ignorée (illisible, trop grosse ou invalide)", nom)
+                    continue
+                indices, legitimes = v
+                for d, cat in indices.items():
+                    ix.confirmes.setdefault(d, {})[nom] = cat
+                for d in legitimes:
+                    ix.legitimes.setdefault(d, set()).add(nom)
+            except Exception:                        # noqa: BLE001 — un producteur défectueux n'affecte pas les autres
+                log.warning("indices : producteur ignoré (erreur inattendue)")
     except Exception:                                # noqa: BLE001 — jamais d'exception vers l'appelant
         pass
     return ix

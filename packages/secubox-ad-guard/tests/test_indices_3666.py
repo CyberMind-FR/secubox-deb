@@ -106,15 +106,47 @@ def _c(indices=None, legit=()):
 def test_charger_valide_et_plafonne(tmp_path):
     d = tmp_path / "liv"
     _livraison(d, DID1, _c({"ads.ex.com": "PUBLICITE", "ADS.Ex.com.": "TRACKING"}), "gk2")
-    _livraison(d, DID2, "x" * (3 * 1024 * 1024), "gk6")
-    b = "did:plc:" + "c" * 32
-    _livraison(d, b, '{"format": 1, "indices": {"a.com"', "gk7")
-    cc = "did:plc:" + "d" * 32
-    _livraison(d, cc, _c({"s.ex.com": "STREAMING"}), "gk8")
+    gros = json.dumps({"format": 1, "jeu": "tv-indices", "indices": {}, "legitimes": [], "bourrage": "x" * (3 * 1024 * 1024)})
+    assert len(gros) > 2 * 1024 * 1024
+    _livraison(d, DID2, gros, "gk6")
+    _livraison(d, "did:plc:" + "c" * 32, '{"format": 1, "indices": {"a.com"', "gk7")
+    _livraison(d, "did:plc:" + "d" * 32, _c({"s.ex.com": "STREAMING"}), "gk8")
     ix = I.charger(d)
-    assert ix.confirmes == {"ads.ex.com": {"gk2": "TRACKING"}} or ix.confirmes == {"ads.ex.com": {"gk2": "PUBLICITE"}}
-    assert "s.ex.com" not in ix.confirmes
-    assert all("gk6" not in v and "gk7" not in v for v in ix.confirmes.values())
+    # doublon normalisé : clés triées, "ADS.Ex.com." < "ads.ex.com" -> la première gagne
+    assert ix.confirmes == {"ads.ex.com": {"gk2": "TRACKING"}}
+
+
+def test_charger_plafond_indices(tmp_path):
+    d = tmp_path / "liv"
+    ok = {f"h{i}.ex.com": "TRACKING" for i in range(I.INDICES_MAX)}
+    _livraison(d, DID1, _c(ok), "gk1")
+    _livraison(d, DID2, _c({**ok, "de.trop.com": "TRACKING"}), "gk2")
+    ix = I.charger(d)
+    assert len(ix.confirmes) == I.INDICES_MAX and set(ix.confirmes["h0.ex.com"]) == {"gk1"}
+
+
+def test_charger_plafond_legitimes(tmp_path):
+    d = tmp_path / "liv"
+    _livraison(d, DID1, _c(None, [f"l{i}.ex.com" for i in range(I.LEGITIMES_MAX)]), "gk1")
+    _livraison(d, DID2, _c(None, [f"l{i}.ex.com" for i in range(I.LEGITIMES_MAX + 1)]), "gk2")
+    ix = I.charger(d)
+    assert ix.legitime_chez("l0.ex.com") == ["gk1"] and len(ix.legitimes) == I.LEGITIMES_MAX
+
+
+def test_charger_plafond_producteurs(tmp_path):
+    d = tmp_path / "liv"
+    for i in range(I.PRODUCTEURS_MAX + 1):
+        _livraison(d, "did:plc:" + f"{i:032x}", _c({"a.com": "TRACKING"}), f"gk{i}")
+    ix = I.charger(d)
+    assert len(ix.confirmes["a.com"]) == I.PRODUCTEURS_MAX and "gk64" not in ix.confirmes["a.com"]
+
+
+def test_charger_elements_non_chaines_et_producteur_defectueux(tmp_path):
+    d = tmp_path / "liv"
+    _livraison(d, DID1, {"format": 1, "jeu": "tv-indices", "indices": {"a.com": "TRACKING"}, "legitimes": [1, None, ["x"], "ok.com"]}, "gk1")
+    _livraison(d, DID2, _c({"b.com": "TRACKING"}), "gk2")
+    ix = I.charger(d)
+    assert ix.legitime_chez("ok.com") == ["gk1"] and ix.confirmateurs("b.com") == ["gk2"]
 
 
 def test_charger_refuse_symlink_et_did_ou_nom_invalide(tmp_path):
