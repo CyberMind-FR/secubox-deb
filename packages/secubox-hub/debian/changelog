@@ -1,3 +1,12 @@
+secubox-hub (1.12.56-1~trixie1) trixie; urgency=medium
+
+  * Menu latéral sur écran tactile (ref #3672, RPi4 kiosque) : barre d'icônes STABLE —
+    icônes à la même place replié ou déplié (plus de recentrage), aucune animation,
+    plus de repli automatique après 4 s ; le menu se referme en touchant ailleurs ou en
+    ouvrant une page. Souris et touchpad inchangés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 14:44:33 +0100
+
 secubox-hub (1.12.55-1~trixie1) trixie; urgency=medium
 
   * Espaces : MirrorNet (menu.d de secubox-mirrornet, ref #3651) rangé dans « services ».
