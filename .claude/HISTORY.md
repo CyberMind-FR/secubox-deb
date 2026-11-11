@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-11 — SBX TV Privacy toujours actif, non désactivable
+
+- **Constat** : sur gk7 réinstallé, TV Privacy était éteint depuis l'installation : `ETAT_DEFAUT` et l'état initial posé par le postinst gardaient `actif: False`, reste du POC #1943 contraire à « protections actives par défaut ». Décision du propriétaire : TV Privacy ne doit pas pouvoir être désactivé.
+- **Correctif** (`secubox-ad-guard` 1.25.2, PR #3675) :
+  - **Activation** : à chaque configuration, un état absent ou inactif devient actif ; une box sans appareil passe en ajout automatique des TV.
+  - **Application** : le contrôleur n'applique que si l'état change, si le drop-in manque ou si une désactivation ancienne est marquée — pas de rechargement DNS à chaque mise à jour. Une box d'image est amorcée par le moteur auto au premier démarrage.
+  - **Désactivation impossible** : `POST /adblock-tv/etat` refuse `actif=false` (409), `disable` est retiré du sudoers du compte secubox, la page affiche l'état réel.
+  - **Garde** : un état corrompu reste inactif et n'est jamais écrasé.
+- **Relecture relecteur-securite** : 0 bloquant, 4 points corrigés. Remarques non retenues, à arbitrer :
+  - `POST /mode {"mode":"off"}` sans adresse passe tous les appareils en OFF ;
+  - le journal des requêtes DNS couvre tous les clients de la box, et le porteur délégué du pilotage peut les lire par appareil.
+- **Déployé** : gk7, gk6 et gk2 en 1.25.2 — actifs, dnsfeed actif ; gk2 sans rechargement d'Unbound (11 appareils) ; gk6 appliqué ; gk7 attend que des appareils l'interrogent (DNS de la Freebox : bail DHCP à renouveler, IPv6 encore vers gk2) (closes #3674).
+
 ## 2026-11-11 — gk7 (RPi4 kiosque) : renommé, maillé, géré par gk2 ; console sans mot de passe ; menu tactile stable
 
 - **Identité** : « secubox-rpi » (192.168.1.128, réseau Freebox) = RPi4 à écran réinstallé et testé sur un autre site. Renommé **gk7** par `secubox-renommer` (audité).
