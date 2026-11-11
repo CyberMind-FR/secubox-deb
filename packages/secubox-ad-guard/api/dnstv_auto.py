@@ -146,7 +146,9 @@ def _suivre_les_indices(etat, regles, magasin, reglage, maintenant, note, indice
             if not _ne_du_moteur(r):
                 continue
             conf, leg = suggestion(r["domaine"])
-            if (conf and not leg) or set(r["indice"]) & indices.indisponibles:
+            # Un légitime déclaré par un producteur lisible l'emporte toujours ; un producteur indisponible ne protège que du cas
+            # « plus aucun confirmateur » (sa confirmation n'a peut-être disparu que faute de lecture).
+            if not leg and (conf or set(r["indice"]) & indices.indisponibles):
                 continue
             regles.oublier(r["id"])
             note(r, r["etat"], "", MOTIF_INDICE_RETIRE)
@@ -156,7 +158,9 @@ def _suivre_les_indices(etat, regles, magasin, reglage, maintenant, note, indice
         if not adresses:
             continue                                         # appareil plus en mode auto : l'expiration joue
         conf, leg = suggestion(r["domaine"])
-        if not indices.lisible or not conf or leg:           # restée là faute de lecture : la protection n'est pas retirée
+        # Restée là faute de lecture (index illisible ou producteur indisponible) : la protection n'est pas retirée ; l'essai est
+        # reconduit de 24 h en 24 h, SANS LIMITE, tant que la réception reste cassée (arbitré : ni confirmé, ni retiré à l'aveugle).
+        if not indices.lisible or not conf or leg:
             regles.prolonger_essai(r["id"], maintenant, "essai prolongé : indices indisponibles")
             continue
         if refus_ix(r["appareil"], r["domaine"]):
@@ -217,6 +221,8 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
         evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
         if indices is not None and appareil not in guides:
             # Candidat AUTO déjà connu (jamais touché par l'administrateur) que d'autres box confirment désormais : il entre à l'essai.
+            # Arbitré : vaut aussi pour un candidat né d'un indice qui porte déjà `indice` (resté candidat « légitime chez … ») une fois
+            # le légitime disparu ; son `indice` est alors remis à jour.
             for r in regles.liste():
                 if (r["appareil"] != appareil or r["etat"] != "candidat" or r.get("origine") != "auto"
                         or r["risque"] not in ("faible", "partage") or any(h.get("origine") != "auto" for h in r.get("historique") or [])):

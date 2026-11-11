@@ -352,3 +352,15 @@ def test_parent_variable_sans_indice(magasin):
     M.tick(ETAT, r, magasin, classer, REGLAGE, t, indices=indice("x.regie-exemple.com"))
     x = regles_de(r)["x.regie-exemple.com"]
     assert x["risque"] == "variable" and x["etat"] == "candidat" and "indice" not in x and not x["motif"].startswith("suggéré")
+
+
+def test_legitime_l_emporte_sur_un_producteur_indisponible(magasin):
+    """Fix round 2 : un légitime déclaré par un producteur lisible fait oublier la règle, même si un producteur de son `indice`
+    est indisponible ; `indisponibles` ne protège que du cas « plus aucun confirmateur »."""
+    t = int(time.time())
+    r = R.Regles()
+    essai_d_indice(magasin, r, t)
+    ix = Index(legitimes={PUB: {"gk1"}}, indisponibles={"gk2"})
+    res = M.tick(ETAT, r, magasin, classer, REGLAGE, t + 60, indices=ix)
+    assert PUB not in regles_de(r)
+    assert {"appareil": "tv-banc", "domaine": PUB, "de": "essai", "vers": "", "motif": "indice retiré"} in res["changements"]
