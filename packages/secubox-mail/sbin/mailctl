@@ -533,6 +533,22 @@ cmd_redis() {
     log "redis-server demarre ; rspamd relance"
 }
 
+# Services du conteneur mail qui réclament un espace de montage (#3667) : dans le LXC sans privilèges, AppArmor le refuse
+# (226/NAMESPACE). Sur gk2 la surcharge avait été posée à la main sur dovecot et clamav-daemon ; une box installée depuis
+# le paquet (gk3) restait sans IMAP. Idempotent ; conteneur arrêté : rien.
+SERVICES_SANS_SANDBOX="dovecot clamav-daemon"
+cmd_services() {
+    local svc
+    lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
+    for svc in $SERVICES_SANS_SANDBOX; do
+        lxc_attach "$CONTAINER" sh -c "systemctl cat ${svc}.service >/dev/null 2>&1" || continue   # service absent du conteneur
+        lxc_service_sans_sandbox "$svc" "$CONTAINER" || return 1
+        lxc_attach "$CONTAINER" sh -c "systemctl reset-failed ${svc} ${svc}.socket 2>/dev/null; systemctl restart ${svc}" >/dev/null 2>&1 \
+            || warn "${svc} n'a pas demarre dans '$CONTAINER'"
+    done
+    log "services du conteneur sans bac a sable : $SERVICES_SANS_SANDBOX (redis-server : mailctl redis)"
+}
+
 cmd_antispam_apprentissage() {
     local wc="$WEBMAIL_CONTAINER"
     lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
@@ -1996,6 +2012,7 @@ case "${1:-}" in
     webmail-pgp) cmd_webmail_pgp ;;
     antispam-apprentissage) cmd_antispam_apprentissage ;;
     redis)       cmd_redis ;;
+    services)    cmd_services ;;
     webmail)     cmd_webmail ;;
     sync)        cmd_sync ;;
     # Help

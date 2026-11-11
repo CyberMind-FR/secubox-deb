@@ -1,3 +1,12 @@
+secubox-mail (2.16.10-1~trixie1) trixie; urgency=medium
+
+  * Conteneur mail sans privilèges (ref #3667) : `mailctl services` pose la surcharge du bac à
+    sable systemd sur dovecot et clamav-daemon (226/NAMESPACE refusé par AppArmor) et les
+    relance ; le postinst l'appelle quand le conteneur tourne. Sur gk2 cette surcharge avait
+    été posée à la main ; gk3, installée depuis le paquet, restait sans IMAP.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 10:34:42 +0100
+
 secubox-mail (2.16.9-1~trixie1) trixie; urgency=medium
 
   * ssl renew : la lignée acme.sh est suivie même si certbot est installé, le certificat émis est déployé (ref #3552).
