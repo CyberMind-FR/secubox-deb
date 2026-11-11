@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-8mv1m8DrAM4yHjO9FMVIhoKNQfUuOMCAgcdVqu0f8xw='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-04l0MDmG61E9olLwwsT+84S5UlJt0DbKKnu2XvLpjoI='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -812,6 +812,7 @@
     var box=el('ap-pubs');vider(box);var l=(r&&r.services)||[];
     el('ap-pubs-note').textContent=r?(r.maj?'calculé à '+heure(r.verifie||r.maj):'pas encore calculé'):'—';
     if(!r){box.appendChild(h('div',{class:'vide'},'—'));return;}
+    if(r.listes_lisibles===false)box.appendChild(h('div',{class:'note',id:'ap-pubs-listes'},'Listes compilées (adblock, adulte, filtre web) illisibles par le moteur : les blocages qu’elles font apparaissent ici en « autre ».'));
     if(!l.length){box.appendChild(h('div',{class:'vide'},r.maj?'Aucun blocage pour cet appareil ces dernières 24 h.':'Le premier calcul arrive dans les 10 minutes.'));return;}
     l.forEach(function(s){var d=s.domaines||[];
       box.appendChild(h('h3',null,s.service+' — '+fmt(d.length)+' domaine'+(d.length>1?'s':'')+', '+fmt(s.nombre)+' blocage'+(s.nombre>1?'s':'')));

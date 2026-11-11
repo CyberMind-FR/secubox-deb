@@ -748,11 +748,14 @@ class Magasin:
 
     def bloques(self, depuis: int, limite: int = RECENTS_MAX) -> List[dict]:
         """Requêtes REFUSÉES depuis `depuis`, regroupées par adresse et domaine (#3676, encart « Pubs bloquées récemment ») :
-        nombre, dernier refus, catégorie du dernier refus. Borné par la table (48 h, 20 000 lignes) et par `limite`."""
+        nombre, dernier refus, catégorie du DERNIER refus (la ligne du MAX(ts), la plus récemment écrite en cas d'égalité ; jamais
+        un MAX() alphabétique). Borné par la table (48 h, 20 000 lignes) et par `limite`."""
         with self._cx() as cx:
             return [{"client": c, "domaine": d, "nombre": n, "dernier_ts": t, "categorie": cat or ""} for c, d, n, t, cat in cx.execute(
-                "SELECT client, domaine, COUNT(*), MAX(ts), MAX(categorie) FROM dnstv_recents WHERE ts>=? AND decision='BLOCKED' "
-                "GROUP BY client, domaine ORDER BY MAX(ts) DESC LIMIT ?", (int(depuis), max(1, min(int(limite), RECENTS_MAX))))]
+                "SELECT g.client, g.domaine, g.n, g.t, (SELECT x.categorie FROM dnstv_recents x WHERE x.client=g.client AND x.domaine=g.domaine "
+                "AND x.decision='BLOCKED' AND x.ts=g.t ORDER BY x.rowid DESC LIMIT 1) FROM (SELECT client, domaine, COUNT(*) n, MAX(ts) t "
+                "FROM dnstv_recents WHERE ts>=? AND decision='BLOCKED' GROUP BY client, domaine) g ORDER BY g.t DESC LIMIT ?",
+                (int(depuis), max(1, min(int(limite), RECENTS_MAX))))]
 
     def evenements(self, clients: List[str], depuis: int, limite: int = 20000) -> List[dict]:
         """Événements d'UNE source (toutes ses adresses), du plus ancien au plus récent : sert à la détection des coupures (#1954)."""

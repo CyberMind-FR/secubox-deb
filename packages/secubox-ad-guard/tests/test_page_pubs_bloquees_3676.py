@@ -65,6 +65,7 @@ def test_demonstration_regroupe_par_service():
     assert re.search(r"adproxy\.example\.com · \d\d:\d\d · ×8 · liste adblock", texte)
     assert "pub.example.com" in texte and "règle TV Privacy (confirmée)" in texte
     assert "example.net — 1 domaine, 2 blocages" in texte and "indice de gk1" in texte
+    assert "illisibles" not in texte                                              # listes lisibles : aucune note
 
 
 def test_sans_dpi_l_appareil_reste_choisissable_et_les_donnees_sont_du_texte():
@@ -72,7 +73,7 @@ def test_sans_dpi_l_appareil_reste_choisissable_et_les_donnees_sont_du_texte():
         if "/protection/dpi/etat" in u:
             return {"disponible": False, "raison": "absent", "appareils": []}
         if "/pubs-bloquees" in u:
-            return {"maj": 1761955200, "verifie": 1761955800, "fenetre_s": 86400, "services": [
+            return {"maj": 1761955200, "verifie": 1761955800, "fenetre_s": 86400, "listes_lisibles": False, "services": [
                 {"service": HOSTILE, "nombre": 3, "dernier_ts": 1761955100,
                  "domaines": [{"domaine": HOSTILE, "dernier_ts": 1761955100, "nombre": 3, "source": "autre", "detail": "autre"}]}]}
         if "/protection/" in u:
@@ -81,4 +82,5 @@ def test_sans_dpi_l_appareil_reste_choisissable_et_les_donnees_sont_du_texte():
     (texte, sur), erreurs, gets = _ouvrir("http://t.test/tv-privacy/", api)
     assert not erreurs and sur
     assert HOSTILE + " — 1 domaine, 3 blocages" in texte and "×3 · autre" in texte
+    assert "Listes compilées (adblock, adulte, filtre web) illisibles par le moteur" in texte
     assert any(u.endswith("/api/v1/ad-guard/adblock-tv/appareils/TV%20salon/pubs-bloquees") for u in gets)

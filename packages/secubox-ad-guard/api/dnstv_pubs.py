@@ -24,8 +24,11 @@ La route ne lit QUE ce cache.
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
+import stat
+import sys
 import tempfile
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -109,23 +112,35 @@ def zones(chemin: Path, candidats: set) -> Dict[str, bool]:
     return out
 
 
-def _signature(dossier: Path) -> Dict[str, Optional[List[int]]]:
+def _nom_errno(e: OSError) -> str:
+    return errno.errorcode.get(e.errno or 0, type(e).__name__)
+
+
+def _signature(dossier: Path, erreurs: List[str]) -> Dict[str, Optional[List[int]]]:
+    """Signature (mtime, taille) de chaque liste ; absente = None (liste non installée, normal). Une liste présente mais
+    inaccessible (droits du dossier…) vaut aussi None et s'ajoute à `erreurs`."""
     sig: Dict[str, Optional[List[int]]] = {}
     for _, nom, _ in LISTES:
         try:
-            st = (dossier / nom).stat()
+            st = os.stat(dossier / nom)
             sig[nom] = [st.st_mtime_ns, st.st_size]
-        except OSError:
+        except FileNotFoundError:
             sig[nom] = None
+        except OSError as e:
+            sig[nom] = None
+            erreurs.append(f"{nom}: {_nom_errno(e)}")
     return sig
 
 
 def attribuer_listes(domaines: Iterable[str], cache: dict, dossier: Optional[Path] = None) -> Tuple[Dict[str, str], dict]:
     """{domaine: clé de la première liste qui le bloque, "" sinon} et le nouveau cache. Les listes ne sont relues que pour les
-    domaines absents du cache, ou pour tous si un fichier a changé (signature mtime + taille) ; chaque fichier une fois au plus."""
+    domaines absents du cache, ou pour tous si un fichier a changé (signature mtime + taille) ; chaque fichier une fois au plus.
+    Une liste présente mais illisible est journalisée (stderr, une ligne par passe, errno) et le cache porte `listes_lisibles: false` :
+    ses blocages s'afficheraient sinon « autre » sans explication."""
     dossier = dossier or DOSSIER_SOURCES
     voulus = set(domaines)
-    sig = _signature(dossier)
+    erreurs: List[str] = []
+    sig = _signature(dossier, erreurs)
     connus = dict(cache.get("domaines") or {}) if isinstance(cache, dict) and cache.get("fichiers") == sig else {}
     nouveaux = voulus - set(connus)
     if nouveaux:
@@ -134,8 +149,9 @@ def attribuer_listes(domaines: Iterable[str], cache: dict, dossier: Optional[Pat
         for cle, nom, _ in LISTES:
             try:
                 par_liste[cle] = zones(dossier / nom, candidats) if sig[nom] is not None else {}
-            except OSError:                                  # illisible (droits, lien) : rien n'en vient, et sa signature
+            except OSError as e:                             # illisible (droits, lien) : rien n'en vient, et sa signature
                 par_liste[cle], sig[nom] = {}, None          # vide forcera une relecture complète dès qu'elle redevient lisible
+                erreurs.append(f"{nom}: {_nom_errno(e)}")
         for d in nouveaux:
             connus[d] = ""
             for cle, _, _ in LISTES:
@@ -144,8 +160,10 @@ def attribuer_listes(domaines: Iterable[str], cache: dict, dossier: Optional[Pat
                 if decide:
                     connus[d] = cle
                     break
+    if erreurs:
+        print("pubs bloquées : listes compilées illisibles (" + ", ".join(erreurs) + ")", file=sys.stderr)
     garde = {d: connus[d] for d in sorted(voulus)}
-    return dict(garde), {"version": 1, "fichiers": sig, "domaines": garde}
+    return dict(garde), {"version": 1, "fichiers": sig, "domaines": garde, "listes_lisibles": not erreurs}
 
 
 # ── attribution ───────────────────────────────────────────────────────────────────────────────────
@@ -214,16 +232,25 @@ def construire(lignes: List[dict], etat: dict, regles, exceptions: list, service
             g["dernier_ts"] = max(g["dernier_ts"], v["dernier_ts"])
             g["domaines"].append({"domaine": v["domaine"], "dernier_ts": v["dernier_ts"], "nombre": v["nombre"], "source": src[0], "detail": src[1]})
         sortie[s] = sorted(groupes.values(), key=lambda g: (-g["dernier_ts"], g["service"]))
-    return {"version": 1, "maj": int(maintenant), "fenetre_s": FENETRE_S, "appareils": sortie}, cache_listes
+    return {"version": 1, "maj": int(maintenant), "fenetre_s": FENETRE_S, "listes_lisibles": bool(cache_listes.get("listes_lisibles", True)),
+            "appareils": sortie}, cache_listes
 
 
 # ── fichiers ──────────────────────────────────────────────────────────────────────────────────────
 
 def _lire_json(chemin: Path):
-    """JSON borné, jamais par un lien symbolique ; None si absent ou illisible."""
+    """JSON borné, jamais par un lien symbolique ni autre chose qu'un fichier ordinaire (une FIFO ne bloque jamais : O_NONBLOCK
+    puis refus) ; None si absent ou illisible."""
     try:
-        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            os.close(fd)
+            return None
+    except OSError:
+        os.close(fd)
         return None
     try:
         with os.fdopen(fd, "r", encoding="utf-8") as h:
@@ -242,6 +269,8 @@ def _ecrire_si_change(chemin: Path, contenu: dict, ignorer: Tuple[str, ...] = ()
         with os.fdopen(fd, "w", encoding="utf-8") as h:
             os.fchmod(h.fileno(), MODE_FICHIER)
             json.dump(contenu, h, ensure_ascii=False, separators=(",", ":"))
+            h.flush()
+            os.fsync(h.fileno())
         os.replace(tmp, chemin)
     except BaseException:
         try:
@@ -259,13 +288,20 @@ def rafraichir(maintenant: int, dossier: Optional[Path] = None, force: bool = Fa
     marque = d / MARQUE
     if not force:
         try:
-            if 0 <= maintenant - marque.stat().st_mtime < PERIODE_S:
+            if 0 <= maintenant - os.lstat(marque).st_mtime < PERIODE_S:
                 return False
         except FileNotFoundError:
             pass
     d.mkdir(parents=True, exist_ok=True)
-    marque.touch()                                           # posée AVANT le calcul : une passe qui échoue n'est pas refaite chaque minute
-    os.utime(marque, (maintenant, maintenant))
+    # Marque posée AVANT le calcul (une passe qui échoue n'est pas refaite chaque minute), par descripteur : jamais à travers un lien
+    # symbolique (O_NOFOLLOW → ELOOP, la passe s'arrête), jamais bloquée par une FIFO (O_NONBLOCK).
+    fd = os.open(marque, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, MODE_FICHIER)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError(errno.EINVAL, "marque des pubs bloquées : pas un fichier ordinaire")
+        os.utime(fd, (maintenant, maintenant))
+    finally:
+        os.close(fd)
     etat, erreur = dnstv.lire_etat(d)
     if erreur:
         raise dnstv.ErreurTV(erreur)
@@ -286,11 +322,12 @@ def vue(slug: str, dossier: Optional[Path] = None) -> dict:
     d = dossier or dnstv.DOSSIER_ETAT
     doc = _lire_json(d / FICHIER)
     try:
-        verifie: Optional[int] = int((d / MARQUE).stat().st_mtime)
+        verifie: Optional[int] = int(os.lstat(d / MARQUE).st_mtime)
     except OSError:
         verifie = None
     if not isinstance(doc, dict) or doc.get("version") != 1 or not isinstance(doc.get("appareils"), dict):
-        return {"maj": None, "verifie": verifie, "fenetre_s": FENETRE_S, "services": []}
+        return {"maj": None, "verifie": verifie, "fenetre_s": FENETRE_S, "listes_lisibles": True, "services": []}
     services = doc["appareils"].get(slug)
-    return {"maj": doc.get("maj"), "verifie": verifie, "fenetre_s": FENETRE_S, "services": services if isinstance(services, list) else []}
+    return {"maj": doc.get("maj"), "verifie": verifie, "fenetre_s": FENETRE_S, "listes_lisibles": doc.get("listes_lisibles") is not False,
+            "services": services if isinstance(services, list) else []}
 

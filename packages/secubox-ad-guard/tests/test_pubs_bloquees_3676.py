@@ -360,3 +360,78 @@ def test_liste_illisible_ignoree_puis_relue_quand_elle_redevient_lisible(monde, 
     monkeypatch.setattr(dnstv_pubs, "_ouvrir_liste", vrai)
     attr, _ = dnstv_pubs.attribuer_listes({"a.tf1.fr"}, cache)
     assert attr == {"a.tf1.fr": "adblock"}
+
+
+# ── relecture sécurité (#3676) ────────────────────────────────────────────────────────────────────
+
+def test_marque_remplacee_par_un_lien_jamais_ecrite_a_travers(monde):
+    cible = monde / "cible"
+    cible.write_text("intact")
+    os.utime(cible, (1000, 1000))
+    (monde / dnstv_pubs.MARQUE).symlink_to(cible)
+    with pytest.raises(OSError):
+        dnstv_pubs.rafraichir(int(time.time()), force=True)
+    assert cible.read_text() == "intact" and cible.stat().st_mtime == 1000
+    assert not (monde / dnstv_pubs.FICHIER).exists()
+
+
+def test_marque_creee_0640(monde):
+    dnstv_pubs.rafraichir(MAINTENANT, force=True)
+    st = os.lstat(monde / dnstv_pubs.MARQUE)
+    assert stat.S_ISREG(st.st_mode) and stat.S_IMODE(st.st_mode) & 0o007 == 0 and st.st_mtime == MAINTENANT
+
+
+def test_liste_illisible_journalisee_et_signalee(monde, monkeypatch, capsys):
+    f = dnstv_pubs.DOSSIER_SOURCES / "95-secubox-adblock.conf"
+    f.write_text('server:\n    local-zone: "tf1.fr." always_nxdomain\n')
+
+    def refuse(p):
+        raise PermissionError(13, "refusé", str(p))
+    monkeypatch.setattr(dnstv_pubs, "_ouvrir_liste", refuse)
+    magasin(monde).ajouter([ev(int(time.time()) - 60, IP, "adproxy.tf1.fr")])
+    dnstv_pubs.rafraichir(int(time.time()), force=True)
+    err = capsys.readouterr().err
+    assert err.count("listes compilées illisibles") == 1 and "95-secubox-adblock.conf: EACCES" in err
+    assert json.loads((monde / dnstv_pubs.FICHIER).read_text())["listes_lisibles"] is False
+    assert dnstv_pubs.vue("tv-salon")["listes_lisibles"] is False
+
+
+def test_liste_absente_n_est_pas_une_erreur(monde, capsys):
+    attr, cache = dnstv_pubs.attribuer_listes({"a.tf1.fr"}, {})
+    assert cache["listes_lisibles"] is True and "illisibles" not in capsys.readouterr().err
+
+
+def test_dossier_des_listes_non_traversable_signale(monde, monkeypatch, capsys):
+    vrai = os.stat
+
+    def stat_refuse(p, *a, **k):
+        if str(p).startswith(str(dnstv_pubs.DOSSIER_SOURCES)):
+            raise PermissionError(13, "refusé", str(p))
+        return vrai(p, *a, **k)
+    monkeypatch.setattr(dnstv_pubs.os, "stat", stat_refuse)
+    _, cache = dnstv_pubs.attribuer_listes({"a.tf1.fr"}, {})
+    assert cache["listes_lisibles"] is False and "EACCES" in capsys.readouterr().err
+
+
+def test_fifo_a_la_place_du_cache_ne_bloque_jamais(monde):
+    os.mkfifo(monde / dnstv_pubs.FICHIER)
+    debut = time.monotonic()
+    assert dnstv_pubs._lire_json(monde / dnstv_pubs.FICHIER) is None
+    assert dnstv_pubs.vue("tv-salon")["services"] == []
+    assert time.monotonic() - debut < 2
+
+
+def test_categorie_du_dernier_blocage_pas_l_ordre_alphabetique(monde):
+    t = int(time.time())
+    magasin(monde).ajouter([ev(t - 300, IP, "x.example.com", cat="tracking"), ev(t - 100, IP, "x.example.com", cat="advertising")])
+    (ligne,) = magasin(monde).bloques(t - 3600)
+    assert ligne["categorie"] == "advertising" and ligne["nombre"] == 2 and ligne["dernier_ts"] == t - 100
+
+
+def test_ecriture_du_cache_synchronisee_avant_remplacement(monde, monkeypatch):
+    ordre = []
+    vrai_fsync, vrai_replace = os.fsync, os.replace
+    monkeypatch.setattr(dnstv_pubs.os, "fsync", lambda fd: ordre.append("fsync") or vrai_fsync(fd))
+    monkeypatch.setattr(dnstv_pubs.os, "replace", lambda a, b: ordre.append("replace") or vrai_replace(a, b))
+    assert dnstv_pubs._ecrire_si_change(monde / "x.json", {"a": 1}) is True
+    assert ordre == ["fsync", "replace"]
