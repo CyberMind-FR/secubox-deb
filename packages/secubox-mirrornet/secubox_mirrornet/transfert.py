@@ -14,6 +14,7 @@ CE nœud qui contient cette version non retirée, classe autre que « privé ».
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import sqlite3
 import time
@@ -48,7 +49,38 @@ def autoriser(cx: sqlite3.Connection, ip: Optional[str], empreinte: str) -> Opti
         "AND s.role = 'fournisseur' AND s.abonne_did = ? "
         "AND (SELECT vers FROM subscription_event e WHERE e.subscription_id = s.id ORDER BY e.ts DESC, e.rowid DESC LIMIT 1) = 'Actif' "
         "LIMIT 1", (empreinte, soi, dids[0])).fetchone()
+    if ligne is None:
+        ligne = _espace_autorise(cx, soi, dids[0], empreinte)
     return None if ligne else "aucun abonnement Actif de ce pair à une version non retirée contenant cet objet"
+
+
+def _espace_autorise(cx: sqlite3.Connection, soi: Optional[str], pair: str, empreinte: str):
+    """Propagation (#3659) : CE nœud, producteur du jeu, est abonné (Actif) à une offre d'espace publiée par ce pair et
+    a nommé ce jeu dans son abonnement signé. La version doit respecter À LA FOIS la compatibilité figée dans
+    l'abonnement (ce que le producteur a accepté) et l'offre actuelle de l'espace (qui peut se restreindre) : classes,
+    formats, licences, taille par objet, données personnelles. Jamais professionnel ni privé."""
+    from . import espace  # noqa: PLC0415 (espace importe ce module)
+    for r in cx.execute(
+            "SELECT v.classe, v.format, v.licence, v.taille, v.donnees_personnelles, s.compat_acceptee, e.compat, e.quotas "
+            "FROM dataset_version v JOIN offer o ON o.id = v.offer_id, subscription s JOIN offer e ON e.id = s.offer_id "
+            "WHERE v.empreinte = ? AND v.retiree = 0 AND v.classe IN ('public', 'communaute', 'specialise') "
+            "AND o.kind = 'dataset' AND o.etat = 'publiee' AND o.fournisseur_did = ? "
+            "AND s.role = 'abonne' AND s.abonne_did = ? AND e.kind = 'espace' AND e.etat = 'publiee' AND e.fournisseur_did = ? "
+            "AND EXISTS (SELECT 1 FROM json_each(s.jeux) WHERE value = o.ref_annuaire) "
+            "AND (SELECT vers FROM subscription_event x WHERE x.subscription_id = s.id ORDER BY x.ts DESC, x.rowid DESC LIMIT 1) = 'Actif'",
+            (empreinte, soi, soi, pair)):
+        v = dict(r)
+        try:
+            figee = json.loads(v.pop("compat_acceptee"))
+            actuelle = (json.loads(v.pop("compat")), json.loads(v.pop("quotas")))
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(figee, dict) or not figee:
+            continue                                   # abonnement sans compatibilité figée : rien n'est servi
+        if (espace.refus_version(espace.caracteristiques(figee.get("compat"), figee.get("quotas")), v) is None
+                and espace.refus_version(espace.caracteristiques(*actuelle), v) is None):
+            return (1,)
+    return None
 
 
 def a_tirer(cx: sqlite3.Connection) -> list:
@@ -149,11 +181,18 @@ def ranger(cx: sqlite3.Connection, garder: int) -> int:
             "SELECT x.empreinte FROM objet x WHERE EXISTS (SELECT 1 FROM dataset_version v WHERE v.empreinte = x.empreinte "
             "AND v.retiree = 1) AND NOT EXISTS (SELECT 1 FROM dataset_version v WHERE v.empreinte = x.empreinte AND v.retiree = 0)"):
         a_supprimer.add(empreinte)
+    # Au-delà des `garder` dernières versions d'un jeu… sauf si la même empreinte est encore gardée par un AUTRE jeu ou
+    # par une copie d'espace (#3659, relecture) : un tiers qui déclare l'empreinte d'un objet utile dans un vieux numéro
+    # de son jeu ne le fait pas effacer.
+    utiles, au_dela = set(), set()
     for (offer_id,) in cx.execute("SELECT DISTINCT offer_id FROM dataset_version"):
         rangs = [r[0] for r in cx.execute(
             "SELECT v.empreinte FROM dataset_version v JOIN objet x ON x.empreinte = v.empreinte "
             "WHERE v.offer_id = ? AND v.retiree = 0 AND x.source <> ? ORDER BY v.numero DESC", (offer_id, soi or ""))]
-        a_supprimer.update(rangs[garder:])
+        utiles.update(rangs[:garder])
+        au_dela.update(rangs[garder:])
+    utiles.update(r[0] for r in cx.execute("SELECT empreinte FROM copie"))
+    a_supprimer.update(au_dela - utiles)
     # Objets déposés ici que l'annuaire n'a jamais publiés (dépôt interrompu, réponse indéterminée) : effacés après un
     # jour, quand aucune version connue ne les cite.
     vieux = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()

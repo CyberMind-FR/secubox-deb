@@ -1,3 +1,14 @@
+secubox-annuaire (0.20.0-1~trixie1) trixie; urgency=medium
+
+  * MirrorNet 4b (ref #3659) : abonnement d'un producteur à une offre kind=espace — champ
+    facultatif signé `jeux` (1 à 32 service_id de ses offres kind=dataset), hors charge
+    signée quand absent (les abonnements anciens gardent leur signature). /self/service/
+    {id}/subscribe : `jeux` obligatoire pour un espace, refusé pour toute autre offre ;
+    seulement des jeux publiés par CE nœud, jamais professionnels ni privés. Champ signé
+    `compat_acceptee` : compatibilité et capacité de l'espace figées à l'abonnement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 03:30:47 +0100
+
 secubox-annuaire (0.19.0-1~trixie1) trixie; urgency=medium
 
   * MirrorNet 4a (ref #3653) : opérations service_dataset_version (manifeste signé : numéro,

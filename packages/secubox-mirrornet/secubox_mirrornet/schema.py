@@ -14,7 +14,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-VERSION = 3
+VERSION = 4
 
 # Identifiants : UUID v4 en texte (36 caractères) pour les objets de ce nœud ; did:plc pour les nœuds ;
 # identifiants de l'annuaire (service_id, subscription_id) repris tels quels. Montants : ENTIERS en centièmes de crédit.
@@ -240,6 +240,22 @@ MIGRATIONS = {
             stocke_le TEXT NOT NULL
         )""",
         "CREATE INDEX IF NOT EXISTS version_empreinte ON dataset_version(empreinte)",
+    ],
+    # Phase 4b (#3659) : jeux nommés (signés) par l'abonnement d'un producteur à un espace, et copies que CE nœud garde
+    # comme espace — avec leur lignée : origine (producteur) et parent (nœud d'où la copie est venue).
+    4: [
+        "ALTER TABLE subscription ADD COLUMN jeux TEXT NOT NULL DEFAULT '[]'",
+        "ALTER TABLE subscription ADD COLUMN compat_acceptee TEXT NOT NULL DEFAULT '{}'",
+        """CREATE TABLE IF NOT EXISTS copie (
+            subscription_id TEXT NOT NULL REFERENCES subscription(id),
+            version_id TEXT NOT NULL REFERENCES dataset_version(id),
+            empreinte TEXT NOT NULL CHECK (empreinte GLOB 'b2:*' AND length(empreinte) = 67),
+            origine_did TEXT NOT NULL,
+            parent_did TEXT NOT NULL,
+            recue_le TEXT NOT NULL,
+            PRIMARY KEY (subscription_id, version_id)
+        )""",
+        "CREATE INDEX IF NOT EXISTS copie_empreinte ON copie(empreinte)",
     ],
 }
 

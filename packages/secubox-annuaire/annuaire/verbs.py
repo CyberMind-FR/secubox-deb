@@ -1531,6 +1531,8 @@ def subscribe(
     tarif_accepte: Optional[Dict[str, Any]] = None,
     expire_le: Optional[str] = None,
     provider: Optional[str] = None,
+    jeux: Optional[List[str]] = None,
+    compat_acceptee: Optional[Dict[str, Any]] = None,
 ) -> Subscription:
     """SERVICE_SUBSCRIBE: request access to a service offer.
 
@@ -1574,6 +1576,8 @@ def subscribe(
         tarif_accepte=tarif_accepte,
         expire_le=expire_le,
         provider=provider,
+        jeux=jeux,
+        compat_acceptee=compat_acceptee,
     )
     payload = charge_signee(sub)
     sig_hex = sign(subscriber_priv, canonical_bytes(payload))
