@@ -44,8 +44,9 @@ Non-objectifs (cette version)
 
 Anti-objectifs — échec même si « ça marche »
 - Un blocage déclenché chez une box par un domaine qu'**elle n'a jamais vu** passer.
-- Un blocage automatique d'une catégorie protégée (streaming, CDN, DRM, authentification, mise à jour, inconnu) parce
-  qu'une autre box la classe pub.
+- Un blocage automatique d'une catégorie protégée (streaming, CDN, DRM, authentification, mise à jour) parce
+  qu'une autre box la classe pub. INCONNU fait exception : un indice le lève (voir § 5.3 bis, décision du propriétaire
+  « auto tout ») ; les cinq autres catégories protégées ne sont jamais levées.
 - Une publication qui révèle un appareil, un horaire, un volume, une MAC, un nom de TV, ou l'existence d'un domaine que
   le propriétaire n'a pas confirmé.
 - Une erreur d'une box recopiée de box en box jusqu'à passer pour une certitude collective (écho).
@@ -77,11 +78,17 @@ Anti-objectifs — échec même si « ça marche »
     admin) ou une exception `bloquer` posée par l'admin, avec leur catégorie parmi PUBLICITE, TRACKING, TELEMETRIE ;
   - `legitimes` : domaines débloqués par l'admin (exception `autoriser`) ou dont une règle a été rejetée / retirée par
     l'admin.
+  - *Relecture finale (vie privée)* : seuls les domaines dont la catégorie LOCALE est PUBLICITE, TRACKING ou TELEMETRIE
+    (étiquette = cette catégorie), ou INCONNU avec une règle confirmée par l'administrateur (étiquette PUBLICITE), sont
+    publiés ; une exception `bloquer` sur un domaine d'une autre catégorie (contrôle parental, streaming…) ne l'est
+    jamais. `legitimes` : seulement les domaines de catégorie pub / pistage / télémétrie ou INCONNU.
   - Rien d'autre : ni appareil, ni slug, ni MAC, ni date par domaine, ni compteur.
 - **Pas d'écho** : un domaine connu seulement par un indice reçu n'est jamais republié. Il l'est seulement après une
   confirmation **locale** (règle confirmée sur cette box).
 - Une offre `kind=dataset` « Indices TV Privacy — <box> » est créée automatiquement au premier besoin ; une version est
-  publiée quand le contenu change, au plus une fois par heure (débit du journal maîtrisé).
+  publiée quand le contenu change, au plus une fois par heure (débit du journal maîtrisé). *Décision assumée (relecture
+  finale) : l'heure d'une version révèle qu'une règle a changé sur la box dans l'heure précédente ; la vitesse de
+  détection prime sur ce signal (une publication quotidienne a été écartée).*
 
 ### 5.2 Réception (chaque box)
 
@@ -124,8 +131,11 @@ Anti-objectifs — échec même si « ça marche »
   confirmée par l'administrateur local, ou détectée localement sans indice ; une confirmation automatique d'un essai né
   d'un indice ne suffit pas. *(Décision de conception, conséquence de l'anti-objectif « écho ».)*
 - **Retrait** : si la box émettrice retire le domaine, le déclare légitime, passe sous le seuil de confiance ou se
-  désabonne, les essais en cours nés de ses seuls indices sont retirés ; les règles confirmées localement restent.
-  *(Décision de conception.)*
+  désabonne, les essais en cours nés de ses seuls indices sont retirés ; les règles confirmées par l'administrateur
+  restent, celles confirmées par le moteur à partir d'un indice suivent l'indice. *(Décision de conception.)*
+  *Relecture finale* : seule une lecture LOCALE ratée (index ou fichier du producteur absent, illisible, tronqué, trop
+  gros sur disque) protège un essai né d'indice ; un contenu signé mais invalide vaut « aucun indice ». Les
+  prolongations d'un tel essai sont plafonnées à 3 consécutives, puis l'expiration ordinaire joue.
 - **Portée** : domaine exact seulement, jamais un suffixe ni un parent ; un « légitime » ne porte aussi que sur le
   domaine exact. *(Décision de conception : borne le pouvoir d'une box distante.)*
 

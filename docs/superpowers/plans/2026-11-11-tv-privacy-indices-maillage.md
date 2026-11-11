@@ -40,7 +40,8 @@ d'administrateur (même principe que `annuaire/offres.py`, #3021).
   AUTHENTIFICATION, MISE_A_JOUR restent refusées.
 - Pas d'écho : une règle née d'un indice n'est publiée que confirmée par l'administrateur local.
 - Retrait : un essai né d'indices est retiré quand plus aucun producteur ne le confirme ou qu'un producteur le déclare
-  légitime ; une règle confirmée reste.
+  légitime ; une règle confirmée par l'administrateur reste ; une règle confirmée par le moteur à partir d'un indice
+  suit l'indice (oubliée quand il disparaît ou qu'un producteur la déclare légitime).
 - Plafonds de lecture : fichier livré ≤ 2 Mio, ≤ 20 000 indices et ≤ 5 000 légitimes par producteur, ≤ 64 producteurs.
 - Interrupteurs `indices_publier` et `indices_recevoir`, vrais par défaut.
 - Règles du dépôt : SPDX CMSD-1.0, versions de paquets montées, comptes dédiés, AppArmor enforce, audit des gestes signés
