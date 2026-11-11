@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-11 — TV Privacy : encart « Pubs bloquées récemment » par appareil (closes #3676)
+
+- **Besoin** : le propriétaire a demandé qui avait protégé de la pub *Cat's Eyes* sur TF1+ (réponse : la liste adblock, `adproxy.tf1.fr`, `metrics-broker`) ; « ces stats devraient apparaître ».
+- **Livré** (`secubox-ad-guard` 1.25.3, PR #3677) : la vue par appareil de `/tv-privacy/` (onglet Applications) montre, par service (TF1+, Netflix, YouTube…), les domaines refusés ces dernières heures et ce qui les a bloqués (règle TV Privacy, liste adblock, liste compilée, « autre »).
+  - Attribution en tâche de fond par le moteur auto (au plus toutes les 10 min), cache `/var/lib/secubox/ad-guard/dnstv/pubs-bloquees.json` ; la route `GET /adblock-tv/appareils/{nom}/pubs-bloquees` (administrateur, donnée personnelle) ne lit que ce cache.
+  - `lists/services-pub.txt` : rattachement domaine → service.
+- **Relecture relecteur-securite** : 0 bloquant ; corrigés : marque posée par descripteur sans suivre de lien, liste illisible journalisée (errno) et signalée sur la page (`listes_lisibles`), FIFO refusée en lecture, fsync avant remplacement, catégorie du dernier refus. Remarque non retenue : le délégué du pilotage ne voit pas l'encart (sélection par MAC).
+- **Déployé** gk2, gk7, gk6 par apt. Agrégateur de gk2 relancé avec l'accord du propriétaire (sert aussi `/adblock-tv/indices` de #3666) : route en ligne (403 sans administrateur, 404 sur une route inconnue), cache rempli (tv-banc : TF1+, Netflix, YouTube, Braze…). gk7 et gk6 : agrégateur à relancer pour la page.
+
 ## 2026-11-11 — SBX TV Privacy toujours actif, non désactivable
 
 - **Constat** : sur gk7 réinstallé, TV Privacy était éteint depuis l'installation : `ETAT_DEFAUT` et l'état initial posé par le postinst gardaient `actif: False`, reste du POC #1943 contraire à « protections actives par défaut ». Décision du propriétaire : TV Privacy ne doit pas pouvoir être désactivé.
