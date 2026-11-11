@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-11 — gk3 : messagerie remise en marche, relais SMTP local
+
+- Page Santé de gk3 : 4 en panne, 9 dégradés.
+  - **Pannes mail-autocrypt et mail-imap-sync** : conteneur `mail` arrêté. Une fois démarré, dovecot échouait en 226/NAMESPACE (AppArmor refuse l'espace de montage du bac à sable systemd dans le LXC sans privilèges). Sur gk2, la surcharge avait été posée à la main sur dovecot, clamav-daemon, apache2 et systemd-resolved ; le paquet ne la posait que pour redis-server et le webmail.
+  - **Correctif** : `mailctl services` (dovecot, clamav-daemon), appelé par le postinst ; `secubox-mail` 2.16.10 (PR #3668). Déployé gk3 : dovecot, postfix, rspamd, redis actifs ; mail-autocrypt et mail-imap-sync repassent sans erreur (closes #3667).
+- **Relais SMTP local par défaut** posé sur gk3 (accord du propriétaire) : `smtp-relay.toml` → 10.100.0.10:25 comme gk2, EHLO 250 depuis l'hôte. `POST /config/local-default` répond `success: false` sur gk2 comme sur gk3 : elle tente d'écrire `/etc/postfix/main.cf` (root) sous le compte `secubox`, Permission denied — le relais n'en dépend pas ; à corriger.
+- **Reste sur gk3** (non touché, accord à demander) :
+  - `cmdline` en échec depuis le démarrage du 07/11 (délai dépassé) ;
+  - `ytsas` installé sans conteneur ni unité ;
+  - hub 1.12.48 : 5 des 9 « dégradés » sont des services désactivés, plus comptés depuis le hub 1.12.54 (#3634), dépôt apt de gk3 en retard (candidat 1.12.52).
+
 ## 2026-11-11 — MirrorNet phase 4c : présence certifiée, copies servies, répartition (banc en cours) ; Annuaire : noms des box
 
 - `secubox-annuaire` 0.21.0 → 0.21.2 et `secubox-mirrornet` 0.5.0 → 0.5.1 (PR #3662, correctifs de banc #3663, #3665).
