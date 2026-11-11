@@ -30,6 +30,7 @@ log = logging.getLogger("secubox-mirrornet")
 DEFI = 32
 MORCEAU = 1024 * 1024
 PAR_PASSE = 4
+RETRY_ECHEC_S = 180
 _DERNIER = ("(SELECT vers FROM subscription_event x WHERE x.subscription_id = s.id "
             "ORDER BY x.ts DESC, x.rowid DESC LIMIT 1)")
 
@@ -92,6 +93,9 @@ def a_certifier(cx: sqlite3.Connection, certif_s: int) -> List[Dict[str, Any]]:
     if not soi:
         return []
     limite = (datetime.now(timezone.utc) - timedelta(seconds=certif_s)).isoformat()
+    # Après un ÉCHEC, nouvel essai plus tôt (#3661, banc) : le premier défi part souvent avant que l'espace ait tiré la
+    # copie ; l'afficher « NON certifiée » pendant tout `certif_s` serait faux.
+    limite_echec = (datetime.now(timezone.utc) - timedelta(seconds=min(certif_s, RETRY_ECHEC_S))).isoformat()
     return [dict(r) for r in cx.execute(
         "SELECT DISTINCT e.fournisseur_did AS gardien, n.mesh_ip, v.empreinte, o.ref_annuaire AS service_id "
         "FROM subscription s JOIN offer e ON e.id = s.offer_id JOIN node n ON n.did = e.fournisseur_did "
@@ -102,7 +106,7 @@ def a_certifier(cx: sqlite3.Connection, certif_s: int) -> List[Dict[str, Any]]:
         "JOIN objet x ON x.empreinte = v.empreinte "
         f"WHERE s.role = 'abonne' AND s.abonne_did = ? AND e.kind = 'espace' AND e.etat = 'publiee' AND {_DERNIER} = 'Actif' "
         "AND NOT EXISTS (SELECT 1 FROM presence p WHERE p.gardien_did = e.fournisseur_did AND p.empreinte = v.empreinte "
-        "AND p.mode = 'preuve' AND p.le > ?)", (soi, soi, limite))]
+        "AND p.mode = 'preuve' AND p.le > CASE p.statut WHEN 'ok' THEN ? ELSE ? END)", (soi, soi, limite, limite_echec))]
 
 
 def _demander(url: str) -> Dict[str, Any]:

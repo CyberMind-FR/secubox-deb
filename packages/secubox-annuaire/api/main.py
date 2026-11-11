@@ -727,7 +727,11 @@ async def pull_services(req: PullServicesRequest):
 
 MIRRORNET_EXPORT = Path(os.environ.get("ANNUAIRE_MIRRORNET_EXPORT", "/var/lib/secubox/annuaire/mirrornet-export.json"))
 _JOIGNABILITE: Dict[str, Dict[str, Any]] = {}     # mesh_ip -> {"ok_le", "echec_depuis"}
-_EXPORT_CACHE: Dict[str, Any] = {"hauteur": None, "donnees": None}
+_EXPORT_CACHE: Dict[str, Any] = {"hauteur": None, "donnees": None, "le": 0.0}
+# Le cache de l'export MirrorNet expire aussi au bout de ce délai (#3661, banc) : sur gk2, un export resté sans un
+# abonnement d'espace pourtant au journal n'était jamais recalculé (même hauteur). Un calcul coûte < 1 s ; la passe
+# complète (300 s) le refait donc au plus tard une fois sur deux.
+EXPORT_CACHE_S = 240
 _VERROU_EXPORT = threading.Lock()                  # deux fils n'écrivent jamais un export ancien après un récent
 _VERROU_ABONNEMENT = threading.Lock()              # vérification « déjà en cours » + signature : atomiques
 
@@ -813,9 +817,11 @@ def _exporter_mirrornet_verrouille() -> None:
         from annuaire import mirrornet_export as MX  # noqa: PLC0415
         j = get_journal()
         hauteur = MX.hauteur_pertinente(j)
-        if _EXPORT_CACHE["hauteur"] != hauteur or _EXPORT_CACHE["donnees"] is None:
+        if (_EXPORT_CACHE["hauteur"] != hauteur or _EXPORT_CACHE["donnees"] is None
+                or time.monotonic() - _EXPORT_CACHE.get("le", 0.0) > EXPORT_CACHE_S):
             _EXPORT_CACHE["donnees"] = MX.construire(j, _self_did_best_effort(), {})
             _EXPORT_CACHE["hauteur"] = hauteur
+            _EXPORT_CACHE["le"] = time.monotonic()
         ip_vers_did = _EXPORT_CACHE["donnees"].get("_ip_vers_did", {})
         with _VERROU_JOIGN:
             joign = {ip_vers_did[ip]: dict(v) for ip, v in _JOIGNABILITE.items() if ip in ip_vers_did}

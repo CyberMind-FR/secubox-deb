@@ -346,3 +346,19 @@ def test_datasets_anonyme_sans_source_ni_repliques(api):
     main.app.dependency_overrides[main.require_lecture] = lambda: {"sub": None}
     d = [x for x in c.get("/api/v1/mirrornet/datasets").json()["datasets"] if x["id"] == sid][0]
     assert "repliques" not in d["derniere_version"] and "recue_de" not in d["derniere_version"]
+
+
+def test_nouvel_essai_plus_tot_apres_un_echec(cx):
+    """Banc #3661 : le premier défi part souvent avant que l'espace ait la copie ; un échec est réessayé après
+    RETRY_ECHEC_S, une réussite seulement après certif_s."""
+    p, g, a, *_r, ex = _trio("p")
+    catalogue.synchroniser(cx, ex, T0)
+    ee, t = objets.ecrire([b"v1"], 100)
+    objets.noter(cx, ee, t, p.did)
+    vieux = (datetime.now(timezone.utc) - timedelta(seconds=presence.RETRY_ECHEC_S + 5)).isoformat()
+    transfert.noter_presence(cx, g.did, ee, "preuve", False, "x")
+    cx.execute("UPDATE presence SET le = ?", (vieux,))
+    assert len(presence.a_certifier(cx, 900)) == 1                     # échec ancien de 3 min : on redemande
+    transfert.noter_presence(cx, g.did, ee, "preuve", True)
+    cx.execute("UPDATE presence SET le = ?", (vieux,))
+    assert presence.a_certifier(cx, 900) == []                         # réussite de 3 min : rien avant 15 min

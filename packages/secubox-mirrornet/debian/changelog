@@ -1,3 +1,10 @@
+secubox-mirrornet (0.5.1-1~trixie1) trixie; urgency=medium
+
+  * Banc #3661 : après un échec de preuve de possession, nouvel essai au bout de 3 min (au
+    lieu de certif_s) — le premier défi part souvent avant que l'espace ait tiré la copie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 09:06:35 +0100
+
 secubox-mirrornet (0.5.0-1~trixie1) trixie; urgency=medium
 
   * MirrorNet 4c (ref #3661) : présence certifiée, copies servies aux abonnés, répartition.
