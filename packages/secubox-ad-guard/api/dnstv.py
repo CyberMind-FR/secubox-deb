@@ -38,7 +38,8 @@ CATEGORIES = ("advertising", "tracking", "telemetry", "social", "custom")
 MODES = ("off", "observe", "block", "auto")
 DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 
-ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": []}
+ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": [],
+              "indices_publier": True, "indices_recevoir": True}      # #3666 : indices du maillage, actifs par défaut
 MODES_DEFAUT = ("off", "auto")      # observe/block sortent un appareil du puits de production : réservés à la déclaration manuelle (revue #1959)
 MAC_RE = re.compile(r"^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$")
 # Lot 3 (#3374) : noms des modes dans l'API et l'interface. PROTECT est l'ancien « block » ; le STOCKAGE ne change pas (aucune migration).
@@ -317,6 +318,11 @@ def valider_etat(brut) -> dict:
     ajout_auto = brut.get("ajout_auto", False)
     if not isinstance(ajout_auto, bool):
         raise ErreurTV("ajout_auto : booléen attendu")
+    indices = {}
+    for cle in ("indices_publier", "indices_recevoir"):           # #3666 : absents d'un ancien état = vrai
+        indices[cle] = brut.get(cle, True)
+        if not isinstance(indices[cle], bool):
+            raise ErreurTV(f"{cle} : booléen attendu")
     mode_defaut = brut.get("mode_defaut", "auto")
     if mode_defaut not in MODES_DEFAUT:
         raise ErreurTV("mode_defaut inconnu (off, observe, auto, block)")
@@ -330,7 +336,7 @@ def valider_etat(brut) -> dict:
         if m not in ignores:
             ignores.append(m)
     etat_valide = {"actif": bool(brut.get("actif", False)), "clients": clients, "auto_essai": auto_essai,
-                   "mode_defaut": mode_defaut, "ajout_auto": ajout_auto, "ignores": ignores}
+                   "mode_defaut": mode_defaut, "ajout_auto": ajout_auto, "ignores": ignores, **indices}
     aut = _valider_autorisations(brut.get("autorisations", {}))
     if aut:                                                       # écrit seulement s'il y en a : les anciens états gardent exactement leur format
         etat_valide["autorisations"] = aut

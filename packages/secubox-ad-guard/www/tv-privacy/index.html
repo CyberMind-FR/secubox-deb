@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qgUZd7vXT1pw4lHQda8SMzaUolzgi7JXjjqeVsPm6fg='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-UP5GOXwRX+ATPq6U5vU/b0RRyJ1ds2VNlkLHiA3VYKs='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -304,6 +304,14 @@
       <div id="ex-confirm"></div>
       <div class="tab espace"><table><thead><tr><th>Appareil</th><th>Domaine</th><th>Type</th><th>Source</th><th>Action</th></tr></thead><tbody id="exceptions"></tbody></table></div>
       <p class="note" id="hors-champ"></p>
+    </div>
+    <div class="pan espace"><h2>Indices du maillage <small id="ix-note">—</small></h2>
+      <p class="note">Les autres box du maillage signalent des domaines publicitaires vus pendant une coupure ; ils ne déclenchent jamais un blocage seuls. Seuls les domaines (sans appareil) sont partagés.</p>
+      <div class="actions">
+        <label class="guide"><input type="checkbox" id="ix-recevoir"> Recevoir les indices des autres box</label>
+        <label class="guide"><input type="checkbox" id="ix-publier"> Publier mes indices confirmés</label>
+      </div>
+      <div class="tab espace"><table><thead><tr><th>Box</th><th class="num">Indices</th><th class="num">Légitimes</th></tr></thead><tbody id="ix-producteurs"></tbody></table></div>
     </div>
     <div class="pan espace"><h2>Journal des décisions <small><label>Fenêtre <select id="j-heures"><option value="24">24 h</option><option value="168">7 j</option><option value="720">30 j</option></select></label></small></h2>
       <div class="actions"><button type="button" id="j-export">Exporter le journal (CSV)</button></div>
@@ -693,7 +701,7 @@
     Promise.all([source('/appareils'),source('/protection/exceptions').catch(function(){return null;}),source('/protection/journal?heures='+el('j-heures').value).catch(function(){return null;}),
       source('/protection/diagnostic').catch(function(){return null;})]).then(function(r){
       etat.pauses={};((r[3]&&r[3].pauses)||[]).forEach(function(p){etat.pauses[p.appareil]=p;});
-      rendreModes(r[0]);rendreExceptions(r[1]);rendreJournal(r[2]);hauteur();}).catch(echec);
+      rendreModes(r[0]);rendreExceptions(r[1]);rendreJournal(r[2]);chargerIndices();hauteur();}).catch(echec);
   }
   el('j-heures').addEventListener('change',chargerProtection);
   el('j-export').addEventListener('click',function(){telecharger('/protection/journal.csv','tv-privacy-journal.csv');});
@@ -705,6 +713,26 @@
       // Catégorie protégée (lecture, DRM…) : le serveur demande une confirmation explicite (force).
       if(e&&/protégée/.test(e.message))confirmer(el('ex-confirm'),e.message+' — bloquer quand même ?',function(){
         return geste('/protection/exceptions',Object.assign({force:true},corps),'Exception posée (confirmée)').then(function(){el('ex-domaine').value='';});});});});
+
+  // ── indices du maillage (#3666) ──
+  var DEMO_INDICES={publier:true,recevoir:true,recus:2,producteurs:[{nom:'gk1',indices:2,legitimes:1},{nom:'gk2',indices:1,legitimes:0}],publies:3};
+  function rendreIndices(j){
+    var tb=el('ix-producteurs');vider(tb);
+    if(!j){el('ix-note').textContent='indisponible';vide(tb,3,'Indices indisponibles.');return;}
+    el('ix-recevoir').checked=!!j.recevoir;el('ix-publier').checked=!!j.publier;
+    el('ix-recevoir').disabled=el('ix-publier').disabled=DEMO;
+    el('ix-note').textContent=fmt(j.recus)+' domaine'+(j.recus>1?'s':'')+' confirmé'+(j.recus>1?'s':'')+' par d’autres box · '+fmt(j.publies)+' publié'+(j.publies>1?'s':'')+' · mis à jour à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    (j.producteurs||[]).forEach(function(p){var tr=h('tr');tr.appendChild(h('td',null,p.nom));tr.appendChild(h('td',{class:'num'},fmt(p.indices)));tr.appendChild(h('td',{class:'num'},fmt(p.legitimes)));tb.appendChild(tr);});
+    if(!tb.firstChild)vide(tb,3,'Aucune box ne partage d’indices pour l’instant.');
+  }
+  function chargerIndices(){(DEMO?Promise.resolve(DEMO_INDICES):lire('/indices')).then(rendreIndices,function(){rendreIndices(null);});}
+  function reglerIndices(cb){
+    cb.disabled=true;
+    ecrire('/indices',{publier:el('ix-publier').checked,recevoir:el('ix-recevoir').checked}).then(function(j){cb.disabled=false;
+      message('Indices du maillage : réception '+(j.recevoir?'activée':'désactivée')+', publication '+(j.publier?'activée':'désactivée')+'.','ok');chargerIndices();},
+      function(e){cb.checked=!cb.checked;cb.disabled=false;message('Refusé : '+e.message,'erreur');});
+  }
+  ['ix-recevoir','ix-publier'].forEach(function(i){var cb=el(i);cb.addEventListener('change',function(){reglerIndices(cb);});});
 
   // ── applications (lot 4 : DPI par appareil) ──
   var BADGES=[['sans_dns','adresse en dur','rouge'],['dns_chiffre','DNS chiffré','rouge']];

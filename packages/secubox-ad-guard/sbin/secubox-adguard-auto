@@ -21,7 +21,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_analyse, dnstv_assistant, dnstv_contournement, dnstv_dpi, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
+from api import dnstv, dnstv_analyse, dnstv_assistant, dnstv_contournement, dnstv_dpi, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_indices, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
 
@@ -270,6 +270,25 @@ def suspendre_forcage(changements: list, etat: dict, now: int) -> bool:
     return True
 
 
+def indices_du_passage(etat):
+    """#3666 : indices du maillage pour ce passage. Réception coupée = index vide LISIBLE (le moteur retire alors ses règles nées d'indices) ;
+    sinon la lecture des livraisons (non lisible = le moteur ne retire rien). Ne lève jamais."""
+    try:
+        return dnstv_indices.charger(dnstv_indices.LIVRAISONS) if etat.get("indices_recevoir", True) else dnstv_indices.Index()
+    except Exception as e:                                           # noqa: BLE001 — jamais de panne du passage par les indices
+        print(f"indices du maillage non lus : {type(e).__name__}", file=sys.stderr)
+        return dnstv_indices.Index(lisible=False)
+
+
+def publier_indices(etat, regles, taxo):
+    """#3666 : écrit le fichier lu par MirrorNet (seulement s'il change). Ne lève jamais ; exceptions illisibles = rien n'est écrit."""
+    try:
+        c = dnstv_indices.contenu(regles, dnstv_protection.charger_exceptions(), taxo)
+        dnstv_indices.ecrire_publication(etat.get("indices_publier", True), etat.get("indices_recevoir", True), c, dnstv_indices.PUBLICATION)
+    except Exception as e:                                           # noqa: BLE001
+        print(f"publication des indices non écrite : {type(e).__name__}", file=sys.stderr)
+
+
 def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None, dpi=None) -> int:
     now = maintenant or int(time.time())
     dnstv_analyse.menage(maintenant=now)                      # lot 3 : ancien JSON de 16 Mo et temporaires orphelins, même moteur inactif
@@ -341,7 +360,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             # 2. règles : candidats, essais, signaux, agrégation
             replis, a_marquer = replis_du_passage(etat)
             res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now, taxo=taxo, replis=replis,
-                                  guides=guides_du_passage(etat))
+                                  guides=guides_du_passage(etat), indices=indices_du_passage(etat))
             marquer_replis(a_marquer)
             if res["changements"]:
                 dnstv_regles.ecrire(regles)
@@ -353,6 +372,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             if res["agrege"] != dnstv_profil.charger_agrege():
                 dnstv_profil.ecrire_agrege(res["agrege"])
             ecrire_cache_classification(etat, taxo, magasin, regles, now)
+            publier_indices(etat, regles, taxo)
             try:
                 dnstv_journal.ajouter(dnstv_journal.depuis_regles(avant_regles, regles.liste(), etat, lambda d: taxo.classer(d)["categorie"]))
             except (OSError, ValueError) as e:

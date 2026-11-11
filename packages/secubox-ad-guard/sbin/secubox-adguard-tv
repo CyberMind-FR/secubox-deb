@@ -436,7 +436,9 @@ def audit_classification(entree: str) -> int:
 # Gestes de protection (#3374 lot 3) : pause, retour en observation, reprise, exception. L'API (ou le moteur) passe UN enregistrement
 # sur l'entrée standard ; root le revalide champ par champ et l'ajoute à audit.log avec l'ORIGINE (usager, admin, auto) et l'ACTEUR.
 GESTES_PROTECTION = ("pause", "observe", "reprise", "exception", "annule",      # annule : retour arrière après un échec
-                     "assistant", "assistant-annule", "guide")                    # lot 5b : file de l'assistant, apprentissage guidé
+                     "assistant", "assistant-annule", "guide",                   # lot 5b : file de l'assistant, apprentissage guidé
+                     "tv_indices_reglage")                                        # #3666 : interrupteurs des indices du maillage
+TYPES_INDICES = tuple(f"publier={p},recevoir={r}" for p in ("oui", "non") for r in ("oui", "non"))
 TYPES_ASSISTANT = ("bloquer", "legitime", "plus-tard")
 TYPE_VU = "vu"                                                           # passe 2 : découverte sans domaine (adresse:port) vue
 TYPES_GUIDE = ("active", "desactive")
@@ -466,6 +468,8 @@ def _enregistrement_protection(r) -> bool:
     if r["geste"] in ("assistant", "assistant-annule"):                  # lot 5b : un choix (ou son annulation) pour UN domaine
         return (isinstance(r["domaine"], str) and dnstv.valider_domaine(r["domaine"]) == r["domaine"] and r["type"] in TYPES_ASSISTANT
                 and m is None)
+    if r["geste"] == "tv_indices_reglage":                              # #3666 : réglage global, sans domaine
+        return r["domaine"] is None and r["type"] in TYPES_INDICES and m is None
     if r["geste"] == "guide":                                           # lot 5b : apprentissage guidé d'un appareil, sans domaine
         return r["domaine"] is None and r["type"] in TYPES_GUIDE and m is None
     if r["geste"] == "annule":                                          # reprend le geste annulé, domaine et type compris s'il y en a
