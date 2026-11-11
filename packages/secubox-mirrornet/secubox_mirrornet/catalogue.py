@@ -29,6 +29,7 @@ CLASSES = ("public", "communaute", "specialise", "professionnel", "prive")
 MODELES = ("gratuit", "forfait", "usage", "palier", "reciproque", "parraine")
 NIVEAUX = ("OBSERVER", "LIMITED", "PARTNER", "TRUSTED", "REVOKED")
 _ID = re.compile(r"^[0-9a-f]{16,64}$")
+_USAGE = re.compile(r"^[a-z0-9-]{0,32}$")
 
 
 class ExportIllisible(Exception):
@@ -93,10 +94,13 @@ def offre_normalisee(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
     if len(json.dumps(compat)) > 1024:
         return None
+    # Usage déclaré (#3666) : texte court et sobre, sinon aucun — une offre sans usage n'est jamais livrée localement.
+    scope = p.get("scope") if isinstance(p.get("scope"), dict) else {}
+    usage = scope.get("usage") if isinstance(scope.get("usage"), str) and _USAGE.fullmatch(scope["usage"]) else ""
     return {"service_id": sid, "fournisseur": fournisseur, "nom": nom, "kind": kind, "endpoint": endpoint,
             "description": desc, "version": version, "classe": classe, "tarif": tarif, "quotas": quotas,
             "compat": compat, "duree_s": duree, "grace_s": grace, "sonde": sonde,
-            "approval_mode": "auto" if p.get("approval_mode") == "auto" else "pending"}
+            "approval_mode": "auto" if p.get("approval_mode") == "auto" else "pending", "usage": usage}
 
 
 JEUX_MAX = 32
@@ -281,17 +285,17 @@ def synchroniser(cx: sqlite3.Connection, export: Dict[str, Any], maintenant: Opt
             etat = "retiree" if (o["service_id"], o["fournisseur"]) in idx["retirees"] else "publiee"
             cx.execute(
                 "INSERT INTO offer(id, ref_annuaire, fournisseur_did, kind, nom, version, classe, tarif, quotas, duree_s, "
-                "grace_s, etat, signature, recu_le, endpoint, approval_mode, description, compat, sonde) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(ref_annuaire) DO UPDATE SET "
+                "grace_s, etat, signature, recu_le, endpoint, approval_mode, description, compat, sonde, usage) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(ref_annuaire) DO UPDATE SET "
                 "kind=excluded.kind, nom=excluded.nom, version=excluded.version, classe=excluded.classe, "
                 "tarif=excluded.tarif, quotas=excluded.quotas, duree_s=excluded.duree_s, grace_s=excluded.grace_s, "
                 "etat=excluded.etat, signature=excluded.signature, endpoint=excluded.endpoint, "
                 "approval_mode=excluded.approval_mode, description=excluded.description, compat=excluded.compat, "
-                "sonde=excluded.sonde WHERE offer.fournisseur_did = excluded.fournisseur_did",
+                "sonde=excluded.sonde, usage=excluded.usage WHERE offer.fournisseur_did = excluded.fournisseur_did",
                 (str(uuid.uuid5(NS, "offre:" + o["service_id"])), o["service_id"], o["fournisseur"], o["kind"],
                  o["nom"], o["version"], o["classe"], json.dumps(o["tarif"]), json.dumps(o["quotas"]), o["duree_s"],
                  o["grace_s"] if o["grace_s"] is not None else grace_defaut, etat, idx["signatures"][o["service_id"]],
-                 ts, o["endpoint"], o["approval_mode"], o["description"], json.dumps(o["compat"]), o["sonde"]))
+                 ts, o["endpoint"], o["approval_mode"], o["description"], json.dumps(o["compat"]), o["sonde"], o["usage"]))
             stats["offres"] += 1
         for v, sig, auteur in idx["versions"]:
             offre = idx["offres"].get(v["service_id"])

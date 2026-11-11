@@ -26,4 +26,6 @@ ProtectHome=true
 PrivateTmp=true
 ProtectControlGroups=yes
 # Lot 4 (#3374) : cibles de sbxdpi (dossier root, tmpfiles de toolbox-ng) et forçage nft ; « - » : absents, ignorés.
+# #3666 : indices reçus des autres box (MirrorNet) ; lecture seule, « - » : absent toléré.
+ReadOnlyPaths=-/var/lib/secubox-mirrornet-partage
 ReadWritePaths=/var/lib/secubox/ad-guard /var/lib/secubox-adguard-tv /etc/unbound/unbound.conf.d /var/log/secubox -/run/secubox/sbxdpi-cibles -/etc/nftables.d

@@ -171,6 +171,14 @@ source de l'écouteur wg-mesh, nom et empreinte lus dans `p2p-public/pairs-enrol
 - Routes `/self/...` : signées dans le processus propriétaire de `node.key` ; chaque geste écrit dans `audit.log`
   (`mirrornet_*`, avec l'administrateur `par`).
 
+## Indices TV du maillage (#3666, 0.22.0)
+
+Tâche de fond (`annuaire/mirrornet_locaux.py`) : lit `publications.json` (dossier partagé de MirrorNet, 64 Kio au
+plus) et signe l'offre `tv-indices` (offre conforme : dataset ; création ou retrait au plus une fois par heure), ses
+versions (une action par heure, retour de contenu possible) et les abonnements aux offres des autres box : gratuites
+seulement, d'un jour au moins, bornés, un seul par fournisseur (l'ancien résilié une fois le nouveau approuvé), sous
+le seuil `confiance_min` de MirrorNet. Chaque geste est audité par « fond » dans `audit.log`.
+
 ## Jeux de données MirrorNet (#3653)
 
 `service_dataset_version` : manifeste signé d'une version (numéro et parent calculés, empreinte BLAKE2b de l'objet,

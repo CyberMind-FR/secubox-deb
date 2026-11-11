@@ -125,6 +125,16 @@ confié ce jeu (`transfert.autoriser`). Jamais propagé : professionnel, privé,
 synchronisation, catalogue, abonnements et abonnés avec historique, publication ; actions réelles confirmées dans la page,
 une clé `X-Idempotence` par geste ; `?demo=1` (aucune écriture), `?embed=1`. Phase 4 annoncée, aucune donnée inventée.
 
+## Indices TV (#3666, 0.6.0)
+
+Schéma v6 : `offer.usage` (ex. `tv-indices`). `secubox_mirrornet/locaux.py` reprend la publication d'ad-guard comme
+dépôt de CE nœud, puis écrit `publications.json` dans le dossier partagé `/var/lib/secubox-mirrornet-partage/`
+(demande pour l'annuaire, avec `confiance_min`). Les objets reçus sont vérifiés (empreinte, taille) avant la livraison
+vers `livraisons/tv-indices/` ; les noms de producteurs y sont uniques. Le postinst crée le dossier sans course.
+Le contenu est revalidé avant dépôt (schéma, catégories, plafonds, listes disjointes ; sinon rien n'est signé) ; une
+publication d'ad-guard absente devient `publier`/`recevoir` faux ; une copie d'espace n'est jamais reprise comme dépôt
+local ; AppArmor n'ouvre que les fichiers nécessaires du dossier partagé.
+
 ## Configuration
 
 `/etc/secubox/mirrornet.toml` (0640 root:secubox, semé une fois depuis `conf/mirrornet.toml`) : `[catalogue]

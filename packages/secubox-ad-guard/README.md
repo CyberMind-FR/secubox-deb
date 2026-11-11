@@ -377,6 +377,22 @@ zones globales : avec `view-first: yes`, ce qu'elle ne définit pas retombe sur 
 TV reste bloquée pour tous. Les primautés entre listes de familles différentes (par exemple adult-exempt contre adblock dans la compilation
 `secubox-dns-listes`, #3205) ne sont pas établies ici.
 
+## Indices du maillage (#3666, 1.25.0)
+
+Les box partagent des indices de détection TV par MirrorNet. Routes (`require_jwt`) :
+`GET /api/v1/ad-guard/adblock-tv/indices` (`{publier, recevoir, recus, producteurs, publies, maj}` ; lu dans le
+résumé `indices-resume.json` écrit par le moteur, `maj` = date d'`index.json`) et
+`POST /adblock-tv/indices {publier, recevoir}` (interrupteurs `indices_publier` / `indices_recevoir` de l'état,
+audités sous le geste `tv_indices_reglage`, échec d'écriture audité `annule` ; la publication est réécrite aussitôt).
+Fichiers : `/var/lib/secubox/ad-guard/dnstv/indices-publication.json` (contenu publié : domaines seuls, jamais
+d'appareil ni de date ; seulement les catégories locales PUBLICITE / TRACKING / TELEMETRIE, ou INCONNU confirmé par
+l'administrateur) ; livraisons lues dans `/var/lib/secubox-mirrornet-partage/livraisons/tv-indices/` (`index.json` +
+un fichier par producteur, bornés, 50 000 domaines en tout ; seule une lecture locale ratée protège un essai, un
+contenu invalide vaut « aucun indice »). En mode auto, le poids maximal des producteurs compte, les catégories
+protégées restent gardées, un légitime l'emporte toujours (retour à la décision locale) ; un retrait est sûr (oubli),
+une confirmation attend l'échéance, et un essai né d'indice n'est prolongé que 3 fois de suite (champ `prolongations`
+de la règle). Encart de la page SBX TV Privacy ; les règles nées d'un indice nomment leurs box dans ad-guard.
+
 ## Tri Netflix par insistance (#3226, expérimental)
 
 Pour une TV que la box ne route pas (Wi-Fi de l'opérateur), case « Tri Netflix » de TV Privacy (appareils en mode auto),

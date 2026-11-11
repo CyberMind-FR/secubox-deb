@@ -59,7 +59,9 @@ CapabilityBoundingSet=
 RestrictAddressFamilies=AF_UNIX AF_INET
 IPAddressDeny=any
 IPAddressAllow=10.10.0.0/24
-ReadWritePaths=/run/secubox -/var/log/secubox/delegation.log -/data/mirrornet
+# #3666 : partage avec les modules (demande de publication, indices livrés) ; la publication d'ad-guard
+# (/var/lib/secubox/ad-guard/dnstv/indices-publication.json) reste lisible sous ProtectSystem=strict.
+ReadWritePaths=/run/secubox -/var/log/secubox/delegation.log -/data/mirrornet -/var/lib/secubox-mirrornet-partage
 
 [Install]
 WantedBy=multi-user.target

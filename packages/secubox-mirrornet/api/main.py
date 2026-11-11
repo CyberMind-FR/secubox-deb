@@ -38,12 +38,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 
 from secubox_mirrornet import abonnements as A  # noqa: E402
-from secubox_mirrornet import annuaire, catalogue, config, espace, ledger, objets, presence, schema, transfert  # noqa: E402
+from secubox_mirrornet import annuaire, catalogue, config, espace, ledger, locaux, objets, presence, schema, transfert  # noqa: E402
 
 log = logging.getLogger("secubox-mirrornet")
 router = APIRouter(prefix="/api/v1/mirrornet")
 PHASE = 4
-RANG = {"OBSERVER": 0, "LIMITED": 1, "PARTNER": 2, "TRUSTED": 3}
+RANG = config.RANG
 _ID = re.compile(r"^[0-9a-f]{16,64}$")
 _CLE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _VERROU_SYNCHRO = threading.Lock()
@@ -118,9 +118,14 @@ def tirer_maintenant() -> Dict[str, Any]:
         cx = schema.ouvrir(config.BASE)
         try:
             reg = config.reglages()
-            res = transfert.tirer(cx, reg)
-            res["espace"] = espace.propager(cx, reg)          # #3659 : copies gardées comme espace, même cadence
-            res["presence"] = presence.certifier(cx, reg)     # #3661 : preuves de possession demandées aux espaces
+            try:
+                res = transfert.tirer(cx, reg)
+                res["espace"] = espace.propager(cx, reg)      # #3659 : copies gardées comme espace, même cadence
+                res["presence"] = presence.certifier(cx, reg)  # #3661 : preuves de possession demandées aux espaces
+            finally:
+                # #3666 : indices TV déposés et livrés même si la réception a levé (ne lève jamais) ; l'erreur suit son cours.
+                loc = locaux.passe(cx, reg)
+            res["locaux"] = loc
             return res
         finally:
             cx.close()

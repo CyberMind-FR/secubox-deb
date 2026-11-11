@@ -29,6 +29,13 @@ case "$1" in
                 install -d -o secubox-mirrornet -g secubox -m 0750 /data/mirrornet/objets
             fi
         fi
+        # Partage avec les modules consommateurs (#3666) : demande de publication lue par l'annuaire, indices TV livrés
+        # à ad-guard. Root ne crée QUE le dossier de tête (parent /var/lib à root) : les sous-dossiers appartiennent au
+        # compte du service, qui les crée lui-même — root n'agit jamais dans un dossier que ce compte contrôle (un lien
+        # substitué pendant une mise à niveau lui ferait changer le propriétaire d'une cible arbitraire).
+        if [ ! -L /var/lib/secubox-mirrornet-partage ]; then
+            install -d -o secubox-mirrornet -g secubox -m 0750 /var/lib/secubox-mirrornet-partage
+        fi
         # Preuve de l'écouteur maillé (#3653) : secret root seul, transmis au service par LoadCredential et posé par nginx
         # (en-tête X-SecuBox-Pair-Preuve) ; un appelant local de la socket ne le connaît pas.
         _s=/etc/secubox/secrets/mirrornet

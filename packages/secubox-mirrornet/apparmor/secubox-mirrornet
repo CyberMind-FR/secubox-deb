@@ -5,7 +5,7 @@
 #
 # Profil AppArmor ENFORCE de MirrorNet v1 (#3645), nommé par AppArmorProfile= dans secubox-mirrornet.service, chargé par
 # le postinst. LECTURE du code, de mirrornet.toml, des fichiers des gardes et de l'export de l'annuaire (#3647) ;
-# ÉCRITURE du seul /var/lib/secubox-mirrornet (base SQLite, WAL) et de la socket ; connexion à la socket de l'annuaire
+# ÉCRITURE de /var/lib/secubox-mirrornet (base SQLite, WAL), du partage avec les modules (#3666) et de la socket ; connexion à la socket de l'annuaire
 # local (gestes signés là-bas). Aucun secret (node.key reste à l'annuaire), aucun sudo, aucun réseau IP.
 
 #include <tunables/global>
@@ -56,6 +56,20 @@ profile secubox-mirrornet flags=(attach_disconnected) {
 
   # Export de l'annuaire (objets signés, revérifiés ici) — #3647.
   /var/lib/secubox/annuaire/mirrornet-export.json r,
+
+  # Indices TV (#3666) : publication d'ad-guard lue (bornée, sans lien) ; partage avec les modules (demande de
+  # publication pour l'annuaire, livraisons pour ad-guard) écrit en atomique — le strict nécessaire : le dossier,
+  # publications.json et ses temporaires, livraisons/ et livraisons/tv-indices/ (créés au besoin), leurs fichiers
+  # (<did-hex32>.json, index.json) et temporaires.
+  /var/lib/secubox/ad-guard/dnstv/indices-publication.json r,
+  /var/lib/secubox-mirrornet-partage/ r,
+  /var/lib/secubox-mirrornet-partage/publications.json rw,
+  /var/lib/secubox-mirrornet-partage/.publications.json.*.tmp rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/ rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/ rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/index.json rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/[0-9a-f]*.json rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/.*.tmp rw,
 
   # API ; routes /self/... de l'annuaire local.
   /run/secubox/ r,

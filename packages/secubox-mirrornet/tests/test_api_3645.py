@@ -39,9 +39,9 @@ def test_lectures_sur_base_vide(api):
     from secubox_mirrornet import ledger, schema
     schema.initialiser(base)
     c = TestClient(main.app)
-    assert c.get("/api/v1/mirrornet/schema").json() == {"version": 5, "attendue": 5}
+    assert c.get("/api/v1/mirrornet/schema").json() == {"version": 6, "attendue": 6}
     st = c.get("/api/v1/mirrornet/status").json()
-    assert st["base"] is True and st["schema"] == 5 and st["ecriture"] is True and st["n_offer"] == 0
+    assert st["base"] is True and st["schema"] == 6 and st["ecriture"] is True and st["n_offer"] == 0
     for chemin, cle in (("services", "services"), ("datasets", "datasets"), ("subscriptions", "subscriptions"),
                         ("economy/distribution-rules", "rules")):
         r = c.get(f"/api/v1/mirrornet/{chemin}")

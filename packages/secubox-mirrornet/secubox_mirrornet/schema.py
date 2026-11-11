@@ -14,7 +14,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-VERSION = 5
+VERSION = 6
 
 # Identifiants : UUID v4 en texte (36 caractères) pour les objets de ce nœud ; did:plc pour les nœuds ;
 # identifiants de l'annuaire (service_id, subscription_id) repris tels quels. Montants : ENTIERS en centièmes de crédit.
@@ -285,6 +285,11 @@ MIGRATIONS = {
             PRIMARY KEY (gardien_did, empreinte, mode)
         )""",
         "CREATE INDEX IF NOT EXISTS relaye_offre ON abonne_relaye(offer_id, abonne_did)",
+    ],
+    # #3666 : usage déclaré par l'offre (`scope.usage`, signé) — p. ex. « tv-indices » : les jeux livrés localement au
+    # module consommateur (ad-guard) sont choisis par cet usage, jamais par le nom de l'offre.
+    6: [
+        "ALTER TABLE offer ADD COLUMN usage TEXT NOT NULL DEFAULT ''",
     ],
 }
 

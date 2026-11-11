@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from annuaire import verbs as V
 from annuaire.crypto import canonical_bytes, verify
 from annuaire.model import Subscription, charge_signee
-from tests.test_mirrornet_cycle_3647 import _membre, api, j  # noqa: F401 (fixtures)
+from conftest import _membre  # fixtures j et api : tests/conftest.py
 
 
 def test_jeux_absents_charge_d_avant(j):  # noqa: F811

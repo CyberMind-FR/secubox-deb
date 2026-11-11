@@ -306,6 +306,16 @@ def refus_auto(taxo: Taxonomie, domaine: str, macs: Iterable[str] = (), confirme
     return f"catégorie {c['categorie']} protégée : décision manuelle requise"
 
 
+def refus_indice(taxo: Taxonomie, domaine: str, macs: Iterable[str] = (), confirmes_admin: Iterable[str] = frozenset()) -> Optional[str]:
+    """Comme `refus_auto`, pour un domaine qu'une autre box du maillage a confirmé publicitaire (#3666) : l'indice lève INCONNU (le
+    domaine n'est simplement pas encore connu ici), JAMAIS une catégorie protégée connue (STREAMING, CDN, DRM, AUTHENTIFICATION,
+    MISE_A_JOUR), sauf décision explicite de l'administrateur comme pour `refus_auto`."""
+    c = taxo.classer(domaine, macs)
+    if c["categorie"] == "INCONNU":
+        return None
+    return refus_auto(taxo, domaine, macs, confirmes_admin)
+
+
 def macs_par_appareil(etat: dict) -> Dict[str, List[str]]:
     """slug d'appareil -> MAC connues (pour les corrections propres à un appareil)."""
     out: Dict[str, List[str]] = {}

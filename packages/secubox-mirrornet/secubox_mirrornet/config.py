@@ -32,6 +32,7 @@ DEFAUTS: Dict[str, Any] = {"confiance_min": "LIMITED", "grace_s": 432000, "inter
                            "taille_max_mo": 256, "garder": 3, "reserve_mo": 1024,
                            "service_simultane": 4, "certif_s": 900}
 _NIVEAUX = ("OBSERVER", "LIMITED", "PARTNER", "TRUSTED")
+RANG = {n: i for i, n in enumerate(_NIVEAUX)}      # rang de confiance ; REVOKED absent (jamais écouté)
 
 
 def reglages() -> Dict[str, Any]:

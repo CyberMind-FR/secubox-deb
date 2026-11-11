@@ -1,3 +1,16 @@
+secubox-mirrornet (0.6.0-1~trixie1) trixie; urgency=medium
+
+  * Indices TV (ref #3666) : schéma v6 `offer.usage` ; `locaux` reprend la publication d'ad-guard
+    comme dépôt de CE nœud, écrit publications.json (avec confiance_min) pour l'annuaire et livre
+    l'objet vérifié vers /var/lib/secubox-mirrornet-partage/livraisons/tv-indices ; noms de
+    producteurs uniques ; postinst sans course.
+  * Relecture finale (ref #3666) : contenu revalidé avant dépôt (schéma, catégories, plafonds,
+    listes disjointes : sinon rien n'est signé) ; publication d'ad-guard absente = publier et
+    recevoir faux ; jamais de reprise de propriété d'une copie d'espace ; dépôt et livraison
+    même si la réception lève ; AppArmor réduit au strict nécessaire du dossier partagé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 12:41:20 +0100
+
 secubox-mirrornet (0.5.1-1~trixie1) trixie; urgency=medium
 
   * Banc #3661 : après un échec de preuve de possession, nouvel essai au bout de 3 min (au

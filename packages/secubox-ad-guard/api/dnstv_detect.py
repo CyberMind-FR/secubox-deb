@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Set
+from typing import AbstractSet, Callable, Dict, List, Set
 
 try:
     from . import dnstv
@@ -26,6 +26,7 @@ LISTE_NOIRE = ("googleapis.com", "gstatic.com", "google.com", "googleusercontent
 CLASSES_PUB = ("advertising", "tracking")
 SCORE_CLASSE = 70
 SCORE_INCONNU = 30
+SCORE_INDICE = 100          # domaine confirmé publicitaire par une autre box du maillage (#3666) : poids maximal, une coupure suffit
 BONUS_COUPURE = 10          # par coupure supplémentaire (plafonné) — valeurs de départ, à calibrer sur plusieurs jours réels
 
 
@@ -55,9 +56,11 @@ def _coupures(evts: List[dict], est_declencheur: Callable[[str], bool], fenetre_
 
 def detecter(evts: List[dict], est_declencheur: Callable[[str], bool], classer: Callable[[str], str], exclus: Set[str],
              fenetre_s: int = 60, pause_s: int = 120, min_coupures: int = 2, min_variantes: int = 3,
-             evts_declencheurs: List[dict] | None = None) -> List[Candidat]:
+             evts_declencheurs: List[dict] | None = None, indices: AbstractSet[str] = frozenset()) -> List[Candidat]:
     # `evts_declencheurs` (#2047) : événements qui ouvrent les fenêtres, bloqués compris. Un hôte de pub DÉJÀ bloqué est un
     # excellent repère de coupure ; les candidats, eux, ne sont jamais tirés d'un événement bloqué.
+    # `indices` (#3666) : domaines EXACTS confirmés publicitaires par d'autres box. Jamais un déclencheur ; un domaine de `indices` vu
+    # localement dans une seule coupure devient candidat (même INCONNU) et n'est jamais regroupé sous son parent.
     valides = lambda L: [e for e in L if dnstv.valider_domaine(e.get("domaine", "")) == e.get("domaine")]  # noqa: E731
     evts = [e for e in valides(evts) if e.get("decision") != "BLOCKED"]
     fenetres = _coupures(valides(evts_declencheurs) if evts_declencheurs is not None else evts, est_declencheur, fenetre_s, pause_s)
@@ -77,7 +80,10 @@ def detecter(evts: List[dict], est_declencheur: Callable[[str], bool], classer: 
             continue
         classe = classer(d) in CLASSES_PUB
         n = len(ks)
-        if classe:
+        if d in indices:
+            risque = "partage" if d in hors else "faible"
+            score, motif = SCORE_INDICE, f"indice du maillage, vu dans {n} coupure(s)"
+        elif classe:
             risque = "partage" if d in hors else "faible"
             score, motif = SCORE_CLASSE + min(20, BONUS_COUPURE * (n - 1)), f"classé {classer(d)} par les listes, vu dans {n} coupure(s)"
         elif d not in hors and n >= min_coupures:
@@ -88,6 +94,8 @@ def detecter(evts: List[dict], est_declencheur: Callable[[str], bool], classer: 
     # regroupement des noms à partie variable sous leur parent (≥ 3 variantes, parent de ≥ 3 libellés, hors liste noire)
     parents: Dict[str, List[str]] = defaultdict(list)
     for d in bruts:
+        if d in indices:
+            continue                                  # domaine exact : un indice ne fait jamais naître ni grossir un parent
         p = d.split(".", 1)[1] if "." in d else ""
         if p.count(".") >= 1 and p not in exclus and not est_liste_noire(p):
             parents[p].append(d)

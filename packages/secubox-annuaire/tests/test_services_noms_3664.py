@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#3664 — GET /services : nom de la box du fournisseur et « mienne » pour les offres de cette box."""
 from annuaire import verbs as V
-from tests.test_mirrornet_cycle_3647 import _membre, api  # noqa: F401 (fixture)
+from conftest import _membre  # fixtures j et api : tests/conftest.py
 
 
 def test_services_nom_et_mienne(api):  # noqa: F811

@@ -50,7 +50,8 @@ def test_routes_appelees_existantes_seulement():
     from api import dnstv_lot3_routes as l3
     from api import dnstv_lot4_routes as l4
     from api import dnstv_lot5_routes as l5
-    existantes = {x.path.replace("/adblock-tv", "", 1) for x in [*r.router.routes, *l3.router.routes, *l4.router.routes, *l5.router.routes]}
+    from api import dnstv_indices_routes as ix       # #3666
+    existantes = {x.path.replace("/adblock-tv", "", 1) for x in [*r.router.routes, *l3.router.routes, *l4.router.routes, *l5.router.routes, *ix.router.routes]}
     citees = {c for c in re.findall(r"(?:lire|ecrire|source|telecharger|geste)\('(/[a-z/.-]+?)(?:\?|')", CODE) if not c.endswith("/")} | {"/appareils/{mac}/profil"}
     assert {"/appareils", "/classification", "/protection/analyse", "/protection/evenements", "/protection/usager/tv", "/protection/usager/debloquer",
             "/protection/pause", "/protection/observe", "/protection/reprendre", "/protection/exceptions", "/protection/journal",
