@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-11 — Leurres CERT-FR : modèles Nuclei « raw » exploités (ref #3584)
+
+- **Constat** : la veille CERT-FR de gk2 téléchargeait 8 modèles Nuclei, `wafgen` n'en retenait aucun (requêtes `raw:` refusées).
+- **Livré** (`secubox-security-posture` 2.5.3, PR #3678, déployé gk2) : le chemin de la première requête distinctive (ligne de requête d'un `raw:` ou `path:`) devient le leurre ; motif **ancré** `(?:^[/.]*|/\.\.)` + chemin échappé, « + » brut ou décodé (sbxwaf : unquote_plus, compilé avec Go regexp). Garde-fous : chaîne de requête ignorée, ≥ 2 segments (3 après marqueur ou requête retirée), ASCII imprimable, ni `%` ni remontée exotique, jamais une racine de la box ni des applis de ses vhosts (`/api/`, `/static/`, `/index.php`, `/wp-admin`…), ni un module ou vhost installé (`sonde_box`).
+- **Relecture relecteur-securite**, trois passes : 0 bloquant, 5 points corrigés. Couverture perdue assumée : leurres sous `/api/` (Ivanti `/api/v1/totp/user-backup`).
+- **gk2** : aperçu 5 leurres (Palo Alto ×4 dont l'existant, Cisco ×1), rien d'écrit — application manuelle par l'administrateur, mode `detect`. Reste l'étape B (`wafctl leurre`, accord du propriétaire).
+
+## 2026-11-11 — MirrorNet : gk7 ne reçoit pas les indices de gk2 (adresse maillée revendiquée trois fois)
+
+- gk7 préparé (mirrornet 0.6.0, annuaire 0.22.0) ; abonné aux indices de gk2 et gk6. gk6 livré en 2 min ; gk2 répond 404 à chaque essai.
+- Cause : 10.10.0.2 est revendiquée par trois NodeRecord (gk7 réinstallé, ancien gk7, ancien c3box) ; `transfert.autoriser` refuse une adresse ambiguë (voulu). Correctif à concevoir : départager par la clé WireGuard réelle du pair (`pubkey_wg` du NodeRecord). DNS de la maison remis sur gk2 seul (v4+v6) par l'API Freebox depuis gk2 (`secubox-freebox` 0.6.4).
+
 ## 2026-11-11 — TV Privacy : encart « Pubs bloquées récemment » par appareil (closes #3676)
 
 - **Besoin** : le propriétaire a demandé qui avait protégé de la pub *Cat's Eyes* sur TF1+ (réponse : la liste adblock, `adproxy.tf1.fr`, `metrics-broker`) ; « ces stats devraient apparaître ».
