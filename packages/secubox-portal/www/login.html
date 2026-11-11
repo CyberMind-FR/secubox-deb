@@ -42,6 +42,7 @@ body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),tra
 .msg{display:none;border-radius:10px;padding:8px 12px;font-size:.82rem;overflow-wrap:anywhere}
 .msg.error{display:block;border:1px solid var(--rouge);background:rgba(255,77,94,.1);color:#ffd3d8}
 .msg.success{display:block;border:1px solid var(--vert);background:rgba(46,204,113,.1);color:#c9f5dc}
+.msg.info{display:block;border:1px solid rgba(120,150,220,.5);background:rgba(120,150,220,.08);color:#d7e2ff}
 .step{display:none;gap:10px;min-width:0} .step.active{display:grid}
 .indice{margin:0;color:var(--doux);font-size:.8rem}
 .champ{display:grid;gap:4px}
@@ -482,15 +483,48 @@ if (_sbxElev) {
     return;
   }
   try { sessionStorage.setItem('sbx_console_essai', String(Date.now())); } catch (e) {}
-  fetch('/__console/jeton', {cache: 'no-store', headers: {'Accept': 'application/json'}})
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (d) {
-      if (!d || !d.access_token) return;
-      _username = d.compte || 'console';
-      finalizeToken(d.access_token);
-      window.location.replace(_sbxRedirect());
-    })
-    .catch(function () {});
+  // #3670 : au démarrage de la box, l'agrégateur peut ne pas répondre encore (5xx, connexion refusée). La console ne doit
+  // jamais demander le mot de passe pour autant : on masque le formulaire et on réessaie avec recul tant que le service
+  // démarre (CONSOLE_ATTENTE_MS au plus). Un REFUS (4xx : connexion étrangère au kiosque, hôte ou port non conformes)
+  // rend le formulaire aussitôt, comme avant.
+  var CONSOLE_ATTENTE_MS = 180000;
+  var debut = Date.now(), recul = 1000;
+  var formulaire = document.getElementById('login-form');
+  function attendre() {
+    if (formulaire) formulaire.style.display = 'none';
+    showMsg('Console locale : démarrage en cours, connexion automatique…', 'info');
+  }
+  function rendreFormulaire(message) {
+    if (formulaire) formulaire.style.display = '';
+    if (message) showMsg(message, 'error');
+  }
+  function reessayer() {
+    if (Date.now() - debut >= CONSOLE_ATTENTE_MS) {
+      rendreFormulaire('Console locale : le service ne répond pas ; rechargez la page dans un instant.');
+      return;
+    }
+    attendre();
+    setTimeout(essayer, recul);
+    recul = Math.min(recul * 2, 15000);
+  }
+  function essayer() {
+    fetch('/__console/jeton', {cache: 'no-store', headers: {'Accept': 'application/json'}})
+      .then(function (r) {
+        if (r.ok) return r.json();
+        if (r.status >= 500) { reessayer(); return undefined; }   // service pas encore prêt
+        rendreFormulaire();                                       // refus : la console n'a pas de session
+        return undefined;
+      })
+      .then(function (d) {
+        if (d === undefined) return;
+        if (!d || !d.access_token) { rendreFormulaire(); return; }
+        _username = d.compte || 'console';
+        finalizeToken(d.access_token);
+        window.location.replace(_sbxRedirect());
+      })
+      .catch(function () { reessayer(); });                       // réseau : nginx ou l'agrégateur redémarrent
+  }
+  essayer();
 })();
 
 loadTheme();
