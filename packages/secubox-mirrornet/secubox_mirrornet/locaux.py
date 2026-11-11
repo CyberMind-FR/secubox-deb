@@ -42,7 +42,6 @@ TAILLE_MAX = 2 * 1024 * 1024         # fichier d'ad-guard lu, et fichier livré 
 PRODUCTEURS_MAX = 64                 # ad-guard n'en lit pas davantage
 NOM = re.compile(r"^[a-z0-9-]{1,32}$")
 _FICHIER = re.compile(r"^[0-9a-f]{32}\.json$")
-RANG = {"OBSERVER": 0, "LIMITED": 1, "PARTNER": 2, "TRUSTED": 3}
 _MOTIF: Dict[str, str] = {}          # dernier motif journalisé par sujet : pas un avertissement par passe
 
 
@@ -113,7 +112,7 @@ def _ecrire_atomique(chemin: Path, data: bytes) -> None:
 
 def _soi(cx: sqlite3.Connection) -> Optional[str]:
     soi = (cx.execute("SELECT soi FROM synchro WHERE id = 1").fetchone() or [None])[0]
-    return soi if isinstance(soi, str) and DID.match(soi) else None
+    return soi if isinstance(soi, str) and DID.fullmatch(soi) else None
 
 
 # --- dépôt ---------------------------------------------------------------------------------------------------------
@@ -135,7 +134,8 @@ def _lire_source(source: Path) -> Optional[Dict[str, Any]]:
 def deposer(cx: sqlite3.Connection, reglages: Dict[str, Any], source: Optional[Path] = None) -> Optional[Dict[str, Any]]:
     """Objet tiré de la publication d'ad-guard, gardé comme dépôt de CE nœud, puis demande `publications.json` pour
     l'annuaire (réécrite seulement si elle change). Rend la demande, ou None (source absente ou invalide, nœud inconnu,
-    objet refusé) — dans ce cas rien n'est écrit."""
+    objet refusé) — dans ce cas rien n'est écrit. `publier` faux : aucun objet déposé, la demande garde les
+    interrupteurs avec `empreinte` et `taille` nulles."""
     soi = _soi(cx)
     if soi is None:
         return None                              # avant la première synchronisation : on ne sait pas qui on est
@@ -145,6 +145,8 @@ def deposer(cx: sqlite3.Connection, reglages: Dict[str, Any], source: Optional[P
     data = octets(d["contenu"])
     if len(data) > TAILLE_MAX:
         return None
+    if not d["publier"]:
+        return _demander({"publier": False, "recevoir": d["recevoir"], "empreinte": None, "taille": None})
     empreinte = _empreinte(data)
     if not objets.present(empreinte):
         try:
@@ -157,11 +159,16 @@ def deposer(cx: sqlite3.Connection, reglages: Dict[str, Any], source: Optional[P
     objets.noter(cx, empreinte, len(data), soi)
     # Contenu identique à une copie reçue : le dépôt local en reprend la propriété (comme une route de dépôt).
     cx.execute("UPDATE objet SET source = ? WHERE empreinte = ? AND source <> ?", (soi, empreinte, soi))
-    demande = {"format": 1, "jeux": {JEU: {"publier": d["publier"], "recevoir": d["recevoir"],
-                                           "empreinte": empreinte, "taille": len(data)}}}
+    return _demander({"publier": True, "recevoir": d["recevoir"], "empreinte": empreinte, "taille": len(data)})
+
+
+def _demander(jeu: Dict[str, Any]) -> Dict[str, Any]:
+    """Écrit `publications.json` (atomique, 0640) seulement si la demande change ; rend la demande."""
+    demande = {"format": 1, "jeux": {JEU: jeu}}
     if _lire_json(PUBLICATIONS) != demande:
         _ecrire_atomique(PUBLICATIONS, json.dumps(demande, sort_keys=True, indent=1).encode("utf-8"))
-        log.info("mirrornet : indices TV déposés (%s, %s octets, publier=%s)", empreinte[:19], len(data), d["publier"])
+        log.info("mirrornet : demande de publication des indices TV (publier=%s, recevoir=%s, %s)", jeu["publier"],
+                 jeu["recevoir"], (jeu["empreinte"] or "sans objet")[:19])
     return demande
 
 
@@ -174,12 +181,12 @@ def _preparer(dossier: Path) -> None:
             continue
         d.mkdir(mode=0o750)
         os.chmod(d, 0o750)
-    if dossier.is_symlink() or not dossier.is_dir():
+    if dossier.parent.is_symlink() or dossier.is_symlink() or not dossier.is_dir():
         raise NotADirectoryError(f"dossier de livraison invalide : {dossier}")
 
 
 def _candidats(cx: sqlite3.Connection, soi: Optional[str], seuil: int):
-    niveaux = [n for n, r in RANG.items() if r >= max(seuil, 1)]      # jamais OBSERVER, jamais REVOKED
+    niveaux = [n for n, r in config.RANG.items() if r >= max(seuil, 1)]      # jamais OBSERVER, jamais REVOKED
     marques = ",".join("?" * len(niveaux))
     return cx.execute(
         "SELECT o.fournisseur_did AS did, n.nom, v.empreinte, v.taille FROM subscription s "
@@ -208,6 +215,42 @@ def _copier(empreinte: str, taille: int, cible: Path) -> bool:
     return True
 
 
+def _noms(livres: Dict[str, str]) -> Dict[str, str]:
+    """Noms uniques et non usurpables pour `index.json` ({did: nom déclaré} → {did: nom livré}).
+
+    Ad-guard range les producteurs par nom ; `node.nom` est déclaré par chaque nœud et n'est pas unique. Un nom non
+    conforme devient `box-<8 hex du did>`. Un nom revendiqué par PLUSIEURS dids est suffixé chez TOUS ses revendicateurs
+    (`<nom>-<4 hex>`, puis `<nom>-<8 hex>`, puis les 32 hex du did) : aucun nœud n'apparaît sous un nom simple qu'un
+    autre revendique aussi. Les niveaux ne font que monter et le dernier est unique par did : la boucle se termine."""
+    base = {did: (n if isinstance(n, str) and NOM.fullmatch(n) else f"box-{did[8:16]}") for did, n in livres.items()}
+    for did, n in livres.items():
+        if base[did] != n:
+            _dire("nom:" + did, f"indices de {did[8:20]} : nom de box « {str(n)[:40]} » non conforme, livré en {base[did]}")
+    niveau = dict.fromkeys(livres, 0)
+
+    def nom(did: str) -> str:
+        b, h = base[did], did[8:]
+        return (b, f"{b[:27]}-{h[:4]}", f"{b[:23]}-{h[:8]}", h)[niveau[did]]
+
+    while True:
+        par_nom: Dict[str, list] = {}
+        for did in livres:
+            par_nom.setdefault(nom(did), []).append(did)
+        doubles = [ds for ds in par_nom.values() if len(ds) > 1]
+        if not doubles:
+            return {did: nom(did) for did in livres}
+        monte = False
+        for ds in doubles:
+            _dire("homonymes:" + ",".join(sorted(ds)),
+                  f"indices TV : nom « {nom(ds[0])} » revendiqué par {len(ds)} box, suffixé par leur identifiant")
+            for did in ds:
+                if niveau[did] < 3:
+                    niveau[did] += 1
+                    monte = True
+        if not monte:                         # impossible (32 hex distincts) ; garde contre une boucle sans fin
+            return {did: did[8:] for did in livres}
+
+
 def livrer(cx: sqlite3.Connection, dossier: Optional[Path] = None, confiance_min: Optional[str] = None) -> int:
     """Livre à ad-guard les indices des producteurs écoutés ; rend le nombre de fichiers livrés.
 
@@ -220,14 +263,9 @@ def livrer(cx: sqlite3.Connection, dossier: Optional[Path] = None, confiance_min
     ancien = _lire_json(dossier / "index.json")
     ancien = ancien if isinstance(ancien, dict) else None
     livres: Dict[str, Dict[str, str]] = {}
-    ecartes = set()
-    for r in _candidats(cx, _soi(cx), RANG.get(confiance_min, 1)):
+    for r in _candidats(cx, _soi(cx), config.RANG.get(confiance_min, 1)):
         did, nom, empreinte, taille = r["did"], r["nom"], r["empreinte"], r["taille"]
-        if did in livres or did in ecartes or not DID.match(did):
-            continue
-        if not (isinstance(nom, str) and NOM.match(nom)):
-            ecartes.add(did)
-            _dire("nom:" + did, f"indices de {did[8:20]} non livrés : nom de box « {str(nom)[:40]} » non conforme")
+        if did in livres or not DID.fullmatch(did):
             continue
         if len(livres) >= PRODUCTEURS_MAX:
             _dire("plafond", f"indices TV : plus de {PRODUCTEURS_MAX} producteurs, les suivants ne sont pas livrés")
@@ -238,17 +276,20 @@ def livrer(cx: sqlite3.Connection, dossier: Optional[Path] = None, confiance_min
             ok = (isinstance(deja, dict) and deja.get("empreinte") == empreinte and not cible.is_symlink()
                   and cible.is_file() and cible.stat().st_size == taille) or _copier(empreinte, taille, cible)
         except OSError as e:
-            log.warning("mirrornet : indices de %s non livrés : %s", nom, e.__class__.__name__)
+            log.warning("mirrornet : indices de %s non livrés : %s", did[8:20], e.__class__.__name__)
             ok = False
         if ok:
             livres[did] = {"nom": nom, "empreinte": empreinte}
         # sinon : version suivante (plus ancienne) de ce producteur, si elle est présente
+    noms = _noms({did: v["nom"] for did, v in livres.items()})
+    for did, v in livres.items():
+        v["nom"] = noms[did]
     if ancien != livres:
         _ecrire_atomique(dossier / "index.json", json.dumps(livres, sort_keys=True, indent=1).encode("utf-8"))
         log.info("mirrornet : indices TV livrés pour %s producteur(s)", len(livres))
     gardes = {did[8:] + ".json" for did in livres}
     for p in dossier.iterdir():
-        perime = (_FICHIER.match(p.name) and p.name not in gardes) or (p.name.startswith(".") and p.name.endswith(".tmp"))
+        perime = (_FICHIER.fullmatch(p.name) and p.name not in gardes) or (p.name.startswith(".") and p.name.endswith(".tmp"))
         if perime:
             try:
                 p.unlink()
@@ -260,14 +301,17 @@ def livrer(cx: sqlite3.Connection, dossier: Optional[Path] = None, confiance_min
 def passe(cx: sqlite3.Connection, reglages: Dict[str, Any]) -> Dict[str, Any]:
     """Dépôt puis livraison, à la cadence de la réception ; ne lève jamais (erreurs journalisées)."""
     res: Dict[str, Any] = {}
+    erreurs = []
     try:
         res["publication"] = deposer(cx, reglages) is not None
     except Exception as e:  # noqa: BLE001 — la passe de réception continue quoi qu'il arrive
         log.warning("mirrornet : dépôt des indices TV en échec : %s", e)
-        res["erreur"] = f"dépôt : {e.__class__.__name__}"
+        erreurs.append(f"dépôt : {e.__class__.__name__}")
     try:
         res["livres"] = livrer(cx, LIVRAISON, reglages.get("confiance_min"))
     except Exception as e:  # noqa: BLE001
         log.warning("mirrornet : livraison des indices TV en échec : %s", e)
-        res["erreur"] = f"livraison : {e.__class__.__name__}"
+        erreurs.append(f"livraison : {e.__class__.__name__}")
+    if erreurs:
+        res["erreur"] = " ; ".join(erreurs)
     return res

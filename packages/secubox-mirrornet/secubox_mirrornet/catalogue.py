@@ -96,7 +96,7 @@ def offre_normalisee(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
     # Usage déclaré (#3666) : texte court et sobre, sinon aucun — une offre sans usage n'est jamais livrée localement.
     scope = p.get("scope") if isinstance(p.get("scope"), dict) else {}
-    usage = scope.get("usage") if isinstance(scope.get("usage"), str) and _USAGE.match(scope["usage"]) else ""
+    usage = scope.get("usage") if isinstance(scope.get("usage"), str) and _USAGE.fullmatch(scope["usage"]) else ""
     return {"service_id": sid, "fournisseur": fournisseur, "nom": nom, "kind": kind, "endpoint": endpoint,
             "description": desc, "version": version, "classe": classe, "tarif": tarif, "quotas": quotas,
             "compat": compat, "duree_s": duree, "grace_s": grace, "sonde": sonde,

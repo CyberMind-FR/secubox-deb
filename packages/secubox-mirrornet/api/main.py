@@ -43,7 +43,7 @@ from secubox_mirrornet import annuaire, catalogue, config, espace, ledger, locau
 log = logging.getLogger("secubox-mirrornet")
 router = APIRouter(prefix="/api/v1/mirrornet")
 PHASE = 4
-RANG = {"OBSERVER": 0, "LIMITED": 1, "PARTNER": 2, "TRUSTED": 3}
+RANG = config.RANG
 _ID = re.compile(r"^[0-9a-f]{16,64}$")
 _CLE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _VERROU_SYNCHRO = threading.Lock()

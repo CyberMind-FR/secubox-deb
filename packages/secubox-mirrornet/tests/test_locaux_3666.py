@@ -208,8 +208,10 @@ def test_nom_invalide_ou_objet_altere_non_livre(banc):
     _recu(banc, v1, f.did)
     ew = _recu(banc, w1, g.did)
     objets.chemin(ew).write_bytes(b"altere")                      # objet modifié sur disque : empreinte fausse
-    assert locaux.livrer(banc, locaux.LIVRAISON, "LIMITED") == 0
-    assert json.loads((locaux.LIVRAISON / "index.json").read_text()) == {}
+    # Nom non conforme : livré sous box-<8 hex du did> ; objet altéré : jamais livré.
+    assert locaux.livrer(banc, locaux.LIVRAISON, "LIMITED") == 1
+    assert json.loads((locaux.LIVRAISON / "index.json").read_text()) == {
+        f.did: {"nom": "box-" + f.did[8:16], "empreinte": b2(v1)}}
 
 
 def test_version_retiree_non_livree(banc):
@@ -226,7 +228,8 @@ def test_version_retiree_non_livree(banc):
 def test_usage_normalise():
     f = Noeud("gk6")
     for scope, attendu in (({"usage": "tv-indices"}, "tv-indices"), ({"usage": "TV!"}, ""), ({"usage": "x" * 33}, ""),
-                           ({"usage": 3}, ""), ("pas un dict", ""), (None, "")):
+                           ({"usage": 3}, ""), ("pas un dict", ""), (None, ""),
+                           ({"usage": "tv-indices\n"}, "")):
         p = offre(f, kind="dataset", scope=scope)["payload"]
         assert catalogue.offre_normalisee(p)["usage"] == attendu, scope
 
@@ -245,8 +248,14 @@ def test_passe_ne_leve_jamais(banc, monkeypatch):
     # Dossier de livraison remplacé par un fichier : erreur journalisée, jamais levée.
     monkeypatch.setattr(locaux, "LIVRAISON", TMP[0] / "indices-publication.json")
     r = locaux.passe(banc, REG)
-    assert "erreur" in r
+    assert r["erreur"].startswith("livraison")
     assert os.path.isfile(TMP[0] / "indices-publication.json")
+    # Dépôt ET livraison en échec : les deux erreurs sont gardées.
+    (TMP[0] / "demande-dossier").mkdir()
+    monkeypatch.setattr(locaux, "PUBLICATIONS", TMP[0] / "demande-dossier")
+    poser_source(locaux.SOURCE_TV, contenu(**{"autre.exemple.com": "TRACKING"}))
+    r = locaux.passe(banc, REG)
+    assert "dépôt" in r["erreur"] and "livraison" in r["erreur"]
 
 
 def test_passe_de_reception_livre_aussi(banc, monkeypatch):
@@ -261,3 +270,86 @@ def test_passe_de_reception_livre_aussi(banc, monkeypatch):
     res = main.tirer_maintenant()
     assert res["locaux"] == {"publication": False, "livres": 1}
     assert (locaux.LIVRAISON / (f.did[8:] + ".json")).read_bytes() == v1
+
+
+# --- revue, tour 1 ---------------------------------------------------------------------------------------------------
+
+def test_publier_faux_aucun_objet_demande_sans_empreinte(banc):
+    moi = Noeud("gk12")
+    soi_connu(banc, moi)
+    poser_source(locaux.SOURCE_TV, contenu(), publier=False, recevoir=True)
+    attendu = {"format": 1, "jeux": {"tv-indices": {"publier": False, "recevoir": True, "empreinte": None,
+                                                    "taille": None}}}
+    assert locaux.deposer(banc, REG) == attendu
+    assert json.loads(locaux.PUBLICATIONS.read_text()) == attendu
+    assert banc.execute("SELECT count(*) FROM objet").fetchone()[0] == 0
+    assert not objets.present(b2(octets(contenu())))
+
+
+def test_homonymes_suffixes_et_nom_invalide(banc):
+    moi, a, b, c, d, e = Noeud("gk12"), Noeud("gk2"), Noeud("gk2"), Noeud("gk4"), Noeud("GK2"), Noeud("gk6\n")
+    entrees, noeuds = [], []
+    for n in (a, b, c, d, e):
+        data = octets(contenu(**{f"{n.did[8:16]}.exemple.com": "PUBLICITE"}))
+        entrees += _jeu_tv(n, moi, [data])[2]
+        noeuds.append((n, "LIMITED"))
+    _synchro(banc, moi, entrees, noeuds)
+    for n in (a, b, c, d, e):
+        _recu(banc, octets(contenu(**{f"{n.did[8:16]}.exemple.com": "PUBLICITE"})), n.did)
+    assert locaux.livrer(banc, locaux.LIVRAISON, "LIMITED") == 5
+    noms = {did: v["nom"] for did, v in json.loads((locaux.LIVRAISON / "index.json").read_text()).items()}
+    assert noms[a.did] == "gk2-" + a.did[8:12] and noms[b.did] == "gk2-" + b.did[8:12]
+    assert noms[c.did] == "gk4"
+    assert noms[d.did] == "box-" + d.did[8:16] and noms[e.did] == "box-" + e.did[8:16]
+    assert len(set(noms.values())) == 5 and all(locaux.NOM.fullmatch(n) for n in noms.values())
+
+
+def test_noms_jamais_usurpables():
+    x, y, z = "did:plc:" + "a" * 32, "did:plc:" + "b" * 32, "did:plc:" + "c" * 32
+    # y se nomme comme le repli de x (nom non conforme) : aucun des deux sous le nom simple.
+    noms = locaux._noms({x: "PAS CONFORME", y: "box-" + "a" * 8})
+    assert "box-" + "a" * 8 not in noms.values() and len(set(noms.values())) == 2
+    # z se nomme comme le suffixe d'un homonyme : on monte jusqu'à l'unicité.
+    noms = locaux._noms({x: "gk2", y: "gk2", z: "gk2-aaaa"})
+    assert len(set(noms.values())) == 3 and "gk2" not in noms.values() and "gk2-aaaa" not in noms.values()
+    assert all(locaux.NOM.fullmatch(n) for n in noms.values())
+    long = "n" * 32
+    noms = locaux._noms({x: long, y: long})
+    assert noms[x] == "n" * 27 + "-aaaa" and len(noms[x]) == 32
+
+
+def test_fournisseur_revoque_jamais_livre(banc):
+    moi, f = Noeud("gk12"), Noeud("gk6")
+    v1 = octets(contenu())
+    _sid, _sub, e = _jeu_tv(f, moi, [v1])
+    _synchro(banc, moi, e, [(f, "LIMITED")])
+    _recu(banc, v1, f.did)
+    assert locaux.livrer(banc, locaux.LIVRAISON, "LIMITED") == 1
+    _synchro(banc, moi, e, [(f, "REVOKED")])
+    for seuil in ("OBSERVER", "LIMITED", "TRUSTED"):
+        assert locaux.livrer(banc, locaux.LIVRAISON, seuil) == 0
+    assert sorted(p.name for p in locaux.LIVRAISON.iterdir()) == ["index.json"]
+
+
+def test_montee_v5_vers_v6_usage_rempli_par_la_synchro(tmp_path, monkeypatch):
+    import uuid
+    monkeypatch.setattr(config, "OBJETS", tmp_path / "objets")
+    c = schema.ouvrir(tmp_path / "v5.db")
+    c.execute("BEGIN IMMEDIATE")
+    for v in range(1, 6):
+        for i in schema.MIGRATIONS[v]:
+            c.execute(i)
+    c.execute("PRAGMA user_version = 5")
+    c.execute("COMMIT")
+    moi, f = Noeud("gk12"), Noeud("gk6")
+    o = offre(f, kind="dataset", tarif={"modele": "gratuit"}, classe="communaute", scope={"usage": "tv-indices"})
+    sid = o["payload"]["service_id"]
+    c.execute("INSERT INTO node(did, nom, niveau) VALUES (?,?,?)", (f.did, "gk6", "LIMITED"))
+    c.execute("INSERT INTO offer(id, ref_annuaire, fournisseur_did, kind, nom, signature, recu_le) VALUES (?,?,?,?,?,?,?)",
+              (str(uuid.uuid5(catalogue.NS, "offre:" + sid)), sid, f.did, "dataset", "Indices", "s", T0.isoformat()))
+    assert schema.migrer(c) == 6
+    assert c.execute("SELECT usage FROM offer WHERE ref_annuaire = ?", (sid,)).fetchone()[0] == ""
+    catalogue.synchroniser(c, export(moi, [o], [(moi, "LIMITED"), (f, "LIMITED")]), T0)
+    assert c.execute("SELECT usage FROM offer WHERE ref_annuaire = ?", (sid,)).fetchone()[0] == "tv-indices"
+    assert c.execute("SELECT count(*) FROM offer").fetchone()[0] == 1
+    c.close()
