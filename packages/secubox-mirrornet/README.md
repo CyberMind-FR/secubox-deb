@@ -131,6 +131,9 @@ Schéma v6 : `offer.usage` (ex. `tv-indices`). `secubox_mirrornet/locaux.py` rep
 dépôt de CE nœud, puis écrit `publications.json` dans le dossier partagé `/var/lib/secubox-mirrornet-partage/`
 (demande pour l'annuaire, avec `confiance_min`). Les objets reçus sont vérifiés (empreinte, taille) avant la livraison
 vers `livraisons/tv-indices/` ; les noms de producteurs y sont uniques. Le postinst crée le dossier sans course.
+Le contenu est revalidé avant dépôt (schéma, catégories, plafonds, listes disjointes ; sinon rien n'est signé) ; une
+publication d'ad-guard absente devient `publier`/`recevoir` faux ; une copie d'espace n'est jamais reprise comme dépôt
+local ; AppArmor n'ouvre que les fichiers nécessaires du dossier partagé.
 
 ## Configuration
 

@@ -118,10 +118,14 @@ def tirer_maintenant() -> Dict[str, Any]:
         cx = schema.ouvrir(config.BASE)
         try:
             reg = config.reglages()
-            res = transfert.tirer(cx, reg)
-            res["espace"] = espace.propager(cx, reg)          # #3659 : copies gardées comme espace, même cadence
-            res["presence"] = presence.certifier(cx, reg)     # #3661 : preuves de possession demandées aux espaces
-            res["locaux"] = locaux.passe(cx, reg)             # #3666 : indices TV déposés et livrés (ne lève jamais)
+            try:
+                res = transfert.tirer(cx, reg)
+                res["espace"] = espace.propager(cx, reg)      # #3659 : copies gardées comme espace, même cadence
+                res["presence"] = presence.certifier(cx, reg)  # #3661 : preuves de possession demandées aux espaces
+            finally:
+                # #3666 : indices TV déposés et livrés même si la réception a levé (ne lève jamais) ; l'erreur suit son cours.
+                loc = locaux.passe(cx, reg)
+            res["locaux"] = loc
             return res
         finally:
             cx.close()

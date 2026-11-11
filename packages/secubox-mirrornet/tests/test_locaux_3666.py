@@ -107,7 +107,7 @@ def test_depot_soi_inconnu_rien(banc):
     assert not locaux.PUBLICATIONS.exists()
 
 
-@pytest.mark.parametrize("cas", ["absente", "trop_grosse", "lien", "dossier", "format", "jeu", "publier", "json"])
+@pytest.mark.parametrize("cas", ["trop_grosse", "lien", "dossier", "format", "jeu", "publier", "json"])
 def test_depot_source_refusee_sans_exception(banc, cas):
     moi = Noeud("gk12")
     soi_connu(banc, moi)
@@ -279,7 +279,8 @@ def test_passe_de_reception_livre_aussi(banc, monkeypatch):
     _synchro(banc, moi, e, [(f, "LIMITED")])
     _recu(banc, v1, f.did)
     res = main.tirer_maintenant()
-    assert res["locaux"] == {"publication": False, "livres": 1}
+    assert res["locaux"] == {"publication": True, "livres": 1}           # source absente : demande « plus de partage »
+    assert json.loads(locaux.PUBLICATIONS.read_text())["jeux"]["tv-indices"]["publier"] is False
     assert (locaux.LIVRAISON / (f.did[8:] + ".json")).read_bytes() == v1
 
 
@@ -364,3 +365,103 @@ def test_montee_v5_vers_v6_usage_rempli_par_la_synchro(tmp_path, monkeypatch):
     assert c.execute("SELECT usage FROM offer WHERE ref_annuaire = ?", (sid,)).fetchone()[0] == "tv-indices"
     assert c.execute("SELECT count(*) FROM offer").fetchone()[0] == 1
     c.close()
+
+
+# --- correctif final (F3, F10, F11, F12, F13) --------------------------------------------------------------------------
+
+def test_f3_source_absente_plus_de_partage(banc):
+    """F3 : ad-guard retiré (publication absente) = plus de partage : la demande dit publier et recevoir faux ; présente
+    mais invalide : la demande précédente reste telle quelle."""
+    moi = Noeud("gk12")
+    soi_connu(banc, moi)
+    attendu = {"format": 1, "confiance_min": "LIMITED", "jeux": {"tv-indices": {"publier": False, "recevoir": False,
+                                                                                "empreinte": None, "taille": None}}}
+    assert locaux.deposer(banc, REG) == attendu
+    assert json.loads(locaux.PUBLICATIONS.read_text()) == attendu
+    assert banc.execute("SELECT count(*) FROM objet").fetchone()[0] == 0
+    poser_source(locaux.SOURCE_TV, contenu())
+    publie = locaux.deposer(banc, REG)
+    assert publie["jeux"]["tv-indices"]["publier"] is True
+    locaux.SOURCE_TV.write_text("{pas du json")
+    assert locaux.deposer(banc, REG) is None
+    assert json.loads(locaux.PUBLICATIONS.read_text()) == publie
+
+
+@pytest.mark.parametrize("c", [
+    {"format": 1, "jeu": "tv-indices", "indices": [], "legitimes": []},
+    {"format": 1, "jeu": "tv-indices", "indices": {"ads.exemple.com": "STREAMING"}, "legitimes": []},
+    {"format": 1, "jeu": "tv-indices", "indices": {"ADS exemple": "PUBLICITE"}, "legitimes": []},
+    {"format": 1, "jeu": "tv-indices", "indices": {"ads.exemple.com": "PUBLICITE"}, "legitimes": ["ads.exemple.com"]},
+    {"format": 1, "jeu": "tv-indices", "indices": {}, "legitimes": "cdn.exemple.com"},
+    {"format": 1, "jeu": "tv-indices", "indices": {}, "legitimes": ["cdn.exemple.com", "cdn.exemple.com"]},
+    {"format": 1, "jeu": "tv-indices", "indices": {}, "legitimes": [3]},
+    {"format": 2, "jeu": "tv-indices", "indices": {}, "legitimes": []},
+    {"format": 1, "jeu": "tv-indices", "indices": {}, "legitimes": [], "appareil": "tv-salon"},
+    {"format": 1, "jeu": "tv-indices", "indices": {f"h{i}.exemple.com": "TRACKING" for i in range(locaux.INDICES_MAX + 1)},
+     "legitimes": []},
+    {"format": 1, "jeu": "tv-indices", "indices": {}, "legitimes": [f"l{i}.exemple.com" for i in range(locaux.LEGITIMES_MAX + 1)]},
+], ids=["indices-liste", "categorie", "domaine", "recoupement", "legitimes-chaine", "doublon", "non-chaine", "format",
+        "champ-en-trop", "trop-d-indices", "trop-de-legitimes"])
+def test_f10_contenu_hors_schema_jamais_depose(banc, c):
+    moi = Noeud("gk12")
+    soi_connu(banc, moi)
+    poser_source(locaux.SOURCE_TV, c)
+    assert locaux.deposer(banc, REG) is None
+    assert not locaux.PUBLICATIONS.exists()
+    assert banc.execute("SELECT count(*) FROM objet").fetchone()[0] == 0
+
+
+def test_f10_contenu_valide_depose():
+    assert locaux._contenu_valide(contenu())
+    assert locaux._contenu_valide({"format": 1, "jeu": "tv-indices", "indices": {}, "legitimes": []})
+
+
+def test_f11_copie_d_espace_jamais_reprise(banc):
+    """F11 : un objet tenu comme copie d'espace (table copie) reste à son producteur, même si le dépôt local a le même
+    contenu ; sans copie, le dépôt local en reprend la propriété (comportement inchangé)."""
+    moi, f = Noeud("gk12"), Noeud("gk6")
+    v1 = octets(contenu())
+    _sid, _sub, e = _jeu_tv(f, moi, [v1])
+    _synchro(banc, moi, e, [(f, "LIMITED")])
+    emp = _recu(banc, v1, f.did)
+    sub_id = banc.execute("SELECT id FROM subscription").fetchone()[0]
+    ver_id = banc.execute("SELECT id FROM dataset_version").fetchone()[0]
+    banc.execute("INSERT INTO copie(subscription_id, version_id, empreinte, origine_did, parent_did, recue_le) "
+                 "VALUES (?,?,?,?,?,?)", (sub_id, ver_id, emp, f.did, f.did, T0.isoformat()))
+    poser_source(locaux.SOURCE_TV, contenu())
+    assert locaux.deposer(banc, REG)["jeux"]["tv-indices"]["empreinte"] == emp
+    assert banc.execute("SELECT source FROM objet WHERE empreinte = ?", (emp,)).fetchone()[0] == f.did
+    banc.execute("DELETE FROM copie")
+    locaux.deposer(banc, REG)
+    assert banc.execute("SELECT source FROM objet WHERE empreinte = ?", (emp,)).fetchone()[0] == moi.did
+
+
+@pytest.mark.parametrize("erreur", [RuntimeError("transfert"), __import__("sqlite3").OperationalError("base")])
+def test_f12_livraison_meme_si_la_reception_leve(banc, monkeypatch, erreur):
+    import importlib
+    main = importlib.import_module("api.main")
+    monkeypatch.setattr(config, "BASE", TMP[0] / "m.db")
+    moi, f = Noeud("gk12"), Noeud("gk6")
+    v1 = octets(contenu())
+    _sid, _sub, e = _jeu_tv(f, moi, [v1])
+    _synchro(banc, moi, e, [(f, "LIMITED")])
+    _recu(banc, v1, f.did)
+
+    def panne(cx, reg):
+        raise erreur
+    monkeypatch.setattr(main.transfert, "tirer", panne)
+    if isinstance(erreur, RuntimeError):
+        with pytest.raises(RuntimeError):
+            main.tirer_maintenant()
+    else:
+        assert "erreur" in main.tirer_maintenant()
+    assert (locaux.LIVRAISON / (f.did[8:] + ".json")).read_bytes() == v1
+
+
+def test_f13_profil_apparmor_strict_necessaire():
+    profil = (ICI / "apparmor" / "secubox-mirrornet").read_text()
+    assert "/var/lib/secubox-mirrornet-partage/** " not in profil
+    for regle in ("/var/lib/secubox-mirrornet-partage/ r,", "/var/lib/secubox-mirrornet-partage/publications.json rw,",
+                  "/var/lib/secubox-mirrornet-partage/livraisons/tv-indices/index.json rw,",
+                  "/var/lib/secubox-mirrornet-partage/livraisons/tv-indices/[0-9a-f]*.json rw,"):
+        assert regle in profil

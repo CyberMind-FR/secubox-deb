@@ -41,6 +41,12 @@ JEU = "tv-indices"
 TAILLE_MAX = 2 * 1024 * 1024         # fichier d'ad-guard lu, et fichier livré : au plus 2 Mio
 PRODUCTEURS_MAX = 64                 # ad-guard n'en lit pas davantage
 NOM = re.compile(r"^[a-z0-9-]{1,32}$")
+# Schéma du contenu déposé (#3666, revalidé ici : rien d'autre n'est signé) — mêmes bornes qu'ad-guard.
+CATEGORIES = ("PUBLICITE", "TRACKING", "TELEMETRIE")
+INDICES_MAX = 20000
+LEGITIMES_MAX = 5000
+_LABEL = r"[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?"
+DOMAINE = re.compile(rf"^(?=.{{1,253}}\Z)(?:{_LABEL}\.)+[a-z0-9-]{{2,63}}\Z")
 _FICHIER = re.compile(r"^[0-9a-f]{32}\.json$")
 _MOTIF: Dict[str, str] = {}          # dernier motif journalisé par sujet : pas un avertissement par passe
 
@@ -117,10 +123,29 @@ def _soi(cx: sqlite3.Connection) -> Optional[str]:
 
 # --- dépôt ---------------------------------------------------------------------------------------------------------
 
-def _lire_source(source: Path) -> Optional[Dict[str, Any]]:
+def _contenu_valide(c: Any) -> bool:
+    """Contenu publiable : exactement {format: 1, jeu, indices, legitimes} ; `indices` = domaine → PUBLICITE / TRACKING /
+    TELEMETRIE (≤ 20 000), `legitimes` = liste de domaines distincts (≤ 5 000), aucun domaine dans les deux."""
+    if not isinstance(c, dict) or set(c) != {"format", "jeu", "indices", "legitimes"} or c["format"] != 1 or c["jeu"] != JEU:
+        return False
+    ind, leg = c["indices"], c["legitimes"]
+    if not isinstance(ind, dict) or not isinstance(leg, list) or len(ind) > INDICES_MAX or len(leg) > LEGITIMES_MAX:
+        return False
+    if not all(isinstance(d, str) and DOMAINE.match(d) and v in CATEGORIES for d, v in ind.items()):
+        return False
+    if not all(isinstance(d, str) and DOMAINE.match(d) for d in leg) or len(set(leg)) != len(leg):
+        return False
+    return not (set(leg) & set(ind))
+
+
+_ABSENTE = object()
+
+
+def _lire_source(source: Path) -> Any:
+    """La publication d'ad-guard ; `_ABSENTE` si le fichier n'existe pas ; None si elle est présente mais invalide."""
     if not os.path.lexists(source):
-        _dire("source", "")                     # ad-guard n'a rien publié (encore) : rien à dire
-        return None
+        _dire("source", "")                     # ad-guard absent ou rien publié : plus de partage (voir deposer)
+        return _ABSENTE
     d = _lire_json(source)
     if not (isinstance(d, dict) and d.get("format") == 1 and type(d.get("publier")) is bool
             and type(d.get("recevoir")) is bool and isinstance(d.get("contenu"), dict)
@@ -133,21 +158,28 @@ def _lire_source(source: Path) -> Optional[Dict[str, Any]]:
 
 def deposer(cx: sqlite3.Connection, reglages: Dict[str, Any], source: Optional[Path] = None) -> Optional[Dict[str, Any]]:
     """Objet tiré de la publication d'ad-guard, gardé comme dépôt de CE nœud, puis demande `publications.json` pour
-    l'annuaire (réécrite seulement si elle change). Rend la demande, ou None (source absente ou invalide, nœud inconnu,
-    objet refusé) — dans ce cas rien n'est écrit. `publier` faux : aucun objet déposé, la demande garde les
-    interrupteurs avec `empreinte` et `taille` nulles."""
+    l'annuaire (réécrite seulement si elle change). Rend la demande, ou None (source invalide, contenu hors schéma, nœud
+    inconnu, objet refusé) — dans ce cas rien n'est écrit. Source ABSENTE (ad-guard retiré) : demande `publier` et
+    `recevoir` faux (plus de partage). `publier` faux : aucun objet déposé, la demande garde les interrupteurs avec
+    `empreinte` et `taille` nulles."""
     soi = _soi(cx)
     if soi is None:
         return None                              # avant la première synchronisation : on ne sait pas qui on est
     d = _lire_source(Path(source) if source is not None else SOURCE_TV)
+    if d is _ABSENTE:
+        return _demander({"publier": False, "recevoir": False, "empreinte": None, "taille": None},
+                         reglages.get("confiance_min"))
     if d is None:
-        return None
-    data = octets(d["contenu"])
-    if len(data) > TAILLE_MAX:
         return None
     if not d["publier"]:
         return _demander({"publier": False, "recevoir": d["recevoir"], "empreinte": None, "taille": None},
                          reglages.get("confiance_min"))
+    if not _contenu_valide(d["contenu"]):
+        _dire("depot", "indices TV non déposés : contenu hors schéma (rien n'est signé)")
+        return None
+    data = octets(d["contenu"])
+    if len(data) > TAILLE_MAX:
+        return None
     empreinte = _empreinte(data)
     if not objets.present(empreinte):
         try:
@@ -158,8 +190,10 @@ def deposer(cx: sqlite3.Connection, reglages: Dict[str, Any], source: Optional[P
             return None
     _dire("depot", "")
     objets.noter(cx, empreinte, len(data), soi)
-    # Contenu identique à une copie reçue : le dépôt local en reprend la propriété (comme une route de dépôt).
-    cx.execute("UPDATE objet SET source = ? WHERE empreinte = ? AND source <> ?", (soi, empreinte, soi))
+    # Contenu identique à une copie reçue : le dépôt local en reprend la propriété (comme une route de dépôt) — jamais
+    # celle d'un objet tenu comme copie d'espace (table copie) : il appartient à son producteur.
+    cx.execute("UPDATE objet SET source = ? WHERE empreinte = ? AND source <> ? "
+               "AND NOT EXISTS (SELECT 1 FROM copie c WHERE c.empreinte = objet.empreinte)", (soi, empreinte, soi))
     return _demander({"publier": True, "recevoir": d["recevoir"], "empreinte": empreinte, "taille": len(data)},
                      reglages.get("confiance_min"))
 
