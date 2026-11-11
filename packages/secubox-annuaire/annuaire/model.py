@@ -17,6 +17,7 @@ No object grants rights by its mere existence.
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
@@ -457,12 +458,13 @@ class PacDescriptor(BaseModel):
 # MirrorNet v1 (#3647) — tarif et charge signée rétrocompatible
 # ---------------------------------------------------------------------------
 
+JEUX_MAX = 32                     # jeux nommés par un abonnement à un espace (#3659)
 MODELES_TARIF = ("gratuit", "forfait", "usage", "palier", "reciproque", "parraine")
 # Champs ajoutés après coup aux objets signés : omis de la charge signée quand ils valent None, sinon la signature
 # d'un objet ancien (qui ne les connaissait pas) ne se vérifierait plus après un aller-retour par le modèle.
 CHAMPS_FACULTATIFS = frozenset({
     "macro", "version", "compat", "tarif", "quotas", "classe", "duree_s", "grace_s", "sonde",
-    "tarif_accepte", "expire_le", "provider",
+    "tarif_accepte", "expire_le", "provider", "jeux", "compat_acceptee",
 })
 
 
@@ -622,6 +624,12 @@ class Subscription(BaseModel):
     tarif_accepte:   Optional[Dict[str, Any]] = None
     expire_le:       Optional[str] = Field(default=None, max_length=40)
     provider:        Optional[str] = Field(default=None, pattern=r"^did:plc:[0-9a-f]{32}$")
+    # MirrorNet 4b (#3659) : abonnement d'un PRODUCTEUR à une offre `kind=espace` — les jeux (service_id de ses offres
+    # `kind=dataset`) que l'espace garde et met à jour. Signé avec l'abonnement : l'espace ne tire rien d'autre.
+    jeux:            Optional[List[str]] = None
+    # Compatibilité et capacité de l'espace AU MOMENT de l'abonnement ({compat, quotas}), figées comme tarif_accepte :
+    # une offre d'espace élargie ensuite n'élargit pas ce que le producteur accepte de servir.
+    compat_acceptee: Optional[Dict[str, Any]] = None
     sig:             Optional[str] = None
     signer_did:      Optional[str] = None
 
@@ -629,6 +637,24 @@ class Subscription(BaseModel):
     @classmethod
     def _tarif_valide(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return valider_tarif(v)
+
+    @field_validator("compat_acceptee")
+    @classmethod
+    def _compat_acceptee(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        import json as _json  # noqa: PLC0415
+        if v is not None and (set(v) - {"compat", "quotas"} or len(_json.dumps(v)) > 2048):
+            raise ValueError("compat_acceptee : {compat, quotas}, 2 Kio au plus")
+        return v
+
+    @field_validator("jeux")
+    @classmethod
+    def _jeux_valides(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        if not 1 <= len(v) <= JEUX_MAX or len(set(v)) != len(v) or any(
+                not isinstance(x, str) or not re.fullmatch(r"[0-9a-f]{16,64}", x) for x in v):
+            raise ValueError(f"jeux : 1 à {JEUX_MAX} identifiants de service distincts")
+        return v
 
 
 # ---------------------------------------------------------------------------

@@ -122,7 +122,7 @@
             <button class="onglet" role="tab" type="button" id="o-abonnements" aria-selected="false" aria-controls="v-abonnements">Abonnements<b id="n-abonnements"></b></button>
             <button class="onglet" role="tab" type="button" id="o-jeux" aria-selected="false" aria-controls="v-jeux">Jeux de données<b id="n-jeux"></b></button>
             <button class="onglet" role="tab" type="button" id="o-publier" aria-selected="false" aria-controls="v-publier">Publier une offre</button>
-            <button class="onglet" role="tab" type="button" id="o-espaces" aria-selected="false" aria-controls="v-espaces">Espaces et répliques</button>
+            <button class="onglet" role="tab" type="button" id="o-espaces" aria-selected="false" aria-controls="v-espaces">Espaces et répliques<b id="n-espaces"></b></button>
         </div>
 
         <div class="confirm" id="confirm" hidden role="alertdialog" aria-live="polite">
@@ -186,7 +186,13 @@
             <h3>Publier une offre de ce nœud <i>signée par l'annuaire (node.key), visible des pairs à la prochaine synchronisation</i></h3>
             <form class="pub" id="form-pub" autocomplete="off">
                 <div class="champ"><label for="p-nom">Nom</label><input id="p-nom" required maxlength="80" placeholder="Miroir apt trixie"></div>
-                <div class="champ"><label for="p-kind">Type</label><select id="p-kind"><option value="mirror">mirror</option><option value="api">api</option><option value="module">module</option><option value="dataset">dataset (jeu de données)</option></select></div>
+                <div class="champ"><label for="p-kind">Type</label><select id="p-kind"><option value="mirror">mirror</option><option value="api">api</option><option value="module">module</option><option value="dataset">dataset (jeu de données)</option><option value="espace">espace (stockage offert aux jeux des pairs)</option></select></div>
+                <div class="champ" data-espace hidden><label for="p-capacite">Capacité offerte (Mio)</label><input id="p-capacite" type="number" min="1" max="10000000" placeholder="2048"></div>
+                <div class="champ" data-espace hidden><label for="p-parobjet">Taille maximale d'une version (Mio, vide = capacité)</label><input id="p-parobjet" type="number" min="1" max="10000000"></div>
+                <div class="champ large" data-espace hidden><label>Classes gardées</label>
+                    <span><label><input type="checkbox" id="p-c-public" checked> public</label> <label><input type="checkbox" id="p-c-communaute"> communauté</label> <label><input type="checkbox" id="p-c-specialise"> spécialisé</label> <label><input type="checkbox" id="p-agregees"> données personnelles agrégées admises</label></span></div>
+                <div class="champ" data-espace hidden><label for="p-formats">Formats admis (virgules, vide = tous)</label><input id="p-formats" maxlength="600" placeholder="application/x-ndjson, application/json"></div>
+                <div class="champ" data-espace hidden><label for="p-licences">Licences admises (SPDX, virgules, vide = toutes)</label><input id="p-licences" maxlength="600" placeholder="ODbL-1.0, CC-BY-4.0"></div>
                 <div class="champ large"><label for="p-endpoint">Point d'accès (adresse du maillage ou chemin)</label><input id="p-endpoint" required maxlength="256" placeholder="http://192.0.2.10/apt"></div>
                 <div class="champ"><label for="p-approbation">Approbation</label><select id="p-approbation"><option value="pending">manuelle (je valide chaque abonné)</option><option value="auto">automatique</option></select></div>
                 <div class="champ"><label for="p-classe">Classe d'accès</label><select id="p-classe"><option value="public">public</option><option value="communaute">communauté</option><option value="prive">privé (jamais présenté)</option></select></div>
@@ -197,17 +203,27 @@
                 <div class="champ large"><label for="p-desc">Description</label><textarea id="p-desc" maxlength="500" rows="2"></textarea></div>
                 <div class="large"><button class="btn primary" type="submit" id="p-envoyer">Publier…</button></div>
             </form>
-            <p class="note">Une offre publiée reste au journal (ajout seul) ; son retrait est une révocation signée (<code>annuairectl revoke-offer</code>). Un jeu de données (type « dataset ») reçoit ensuite ses versions par l'onglet « Jeux de données ».</p>
+            <p class="note">Une offre publiée reste au journal (ajout seul) ; son retrait est une révocation signée (<code>annuairectl revoke-offer</code>). Un jeu de données (type « dataset ») reçoit ensuite ses versions par l'onglet « Jeux de données ». Un espace (type « espace ») garde les jeux que les producteurs lui confient : jamais professionnel, privé, ni données personnelles brutes.</p>
         </section>
 
         <section class="pan" id="v-espaces" role="tabpanel" aria-labelledby="o-espaces" hidden>
-            <h3>Espaces et répliques <i>phase 4 — en développement (#3649), aucune donnée encore</i></h3>
-            <div class="phase">
-                <div><b>Espace offert</b>Un pair offre sa capacité de stockage et de relais comme un service, avec sa compatibilité (classes, formats, licences, taille). Les producteurs s'y abonnent ; les données se propagent selon les abonnements.</div>
-                <div><b>Lignée parent → fils</b>Chaque réplique remonte à l'offre racine ; une version descend de parent en fils, empreinte et filiation vérifiées. Chaîne rompue : jamais présentée.</div>
-                <div><b>Présence certifiée</b>La réplique signe sa présence, une sonde réussie la contresigne. Une présence auto-déclarée ne compte pas, ni pour la répartition ni pour les crédits.</div>
-                <div><b>Répartition de charge</b>Seules les répliques présentes, à jour et compatibles reçoivent des accès ; le nœud qui sert décide, aucun pair n'impose sa part.</div>
-            </div>
+            <h3>Espaces offerts <i>capacité et compatibilité signées par le gardien ; les jeux s'y propagent selon les abonnements</i></h3>
+            <div class="tab"><table>
+                <thead><tr><th>Espace</th><th>Gardien</th><th>Classes</th><th>Formats · licences</th><th>Capacité</th><th style="text-align:right">Action</th></tr></thead>
+                <tbody id="espaces"><tr><td colspan="6" class="vide">Chargement…</td></tr></tbody>
+            </table></div>
+            <form class="pub" id="form-propager" autocomplete="off" hidden style="margin-top:12px">
+                <div class="champ large"><b style="font-size:.84rem" id="pr-titre">Confier mes jeux à un espace</b></div>
+                <div class="champ"><label for="pr-espace">Espace</label><select id="pr-espace"></select></div>
+                <div class="champ large"><label>Jeux confiés (signés avec l'abonnement : pour en changer, résilier puis recommencer)</label><span id="pr-jeux"></span></div>
+                <div class="large"><button class="btn primary" type="submit">Confier…</button></div>
+            </form>
+            <h3 style="margin-top:18px">Ce que je garde <i>copies des jeux confiés à mes espaces : lignée, mise à jour à chaque nouvelle version, purge à la résiliation</i></h3>
+            <div class="tab"><table>
+                <thead><tr><th>Producteur</th><th>Espace</th><th>État</th><th>Occupé</th><th>Copies (n° · jeu · venue de)</th></tr></thead>
+                <tbody id="gardees"><tr><td colspan="5" class="vide">Chargement…</td></tr></tbody>
+            </table></div>
+            <p class="note">Le producteur ne sert l'objet qu'à l'espace auquel il a confié ce jeu ; l'espace revérifie classe, format, licence, taille, données personnelles et capacité restante à chaque version, puis l'empreinte BLAKE2b. Présence certifiée et répartition des accès entre copies : lot 4c.</p>
         </section>
     </div></div></main>
 
@@ -259,8 +275,9 @@
         // ------- lecture -------
         async function lire() {
             if (DEMO) return demo();
-            const [st, sv, sb, ds] = await Promise.all([api('/status'), api('/services'), api('/subscriptions'), api('/datasets')]);
+            const [st, sv, sb, ds, es, ga] = await Promise.all([api('/status'), api('/services'), api('/subscriptions'), api('/datasets'), api('/espaces'), api('/espaces/gardees')]);
             return { status: st.ok ? st.json : null, services: sv.ok ? sv.json : null, subs: sb.ok ? sb.json : null, jeux: ds.ok ? ds.json : null,
+                     espaces: es.ok ? es.json : null, gardees: ga.ok ? ga.json : null,
                      sessionRequise: sb.status === 401 || sb.status === 403 || sv.status === 401 };
         }
         function rendre() {
@@ -289,7 +306,8 @@
             $('n-catalogue').textContent = autres ? autres.length : '';
             $('n-abonnements').textContent = subs ? subs.filter(s => ETATS_EN_COURS.includes(s.etat)).length : '';
             $('n-jeux').textContent = donnees.jeux ? donnees.jeux.count : '';
-            rendreCatalogue(); rendreAbonnements(); rendreJeux(); hauteur();
+            $('n-espaces').textContent = donnees.espaces ? donnees.espaces.count : '';
+            rendreCatalogue(); rendreAbonnements(); rendreJeux(); rendreEspaces(); hauteur();
         }
         function rendreCatalogue() {
             const tb = $('catalogue'), sv = donnees.services; tb.replaceChildren();
@@ -361,6 +379,7 @@
             for (const d of dj.datasets) {
                 const v = d.derniere_version;
                 const actions = h('td', { class: 'act' }, h('button', { class: 'btn sm', type: 'button', text: 'Versions', onclick: () => versionsDe(d) }));
+                if (d.mienne) actions.append(document.createTextNode(' '), h('button', { class: 'btn sm', type: 'button', text: 'Lignée', onclick: () => ligneeDe(d) }));
                 if (!d.mienne && !enCours.has(d.id))
                     actions.append(document.createTextNode(' '), h('button', { class: 'btn sm primary', type: 'button', text: 'S\u2019abonner…', onclick: () => demander(
                         'S\u2019abonner au jeu « ' + d.nom + ' » de ' + d.fournisseur + ' ? Les versions seront tirées par le maillage.', false,
@@ -392,6 +411,70 @@
             }
             hauteur();
         }
+        async function ligneeDe(d) {
+            const ul = $('versions'); ul.hidden = false; ul.replaceChildren(h('li', { text: 'Lecture de la lignée de « ' + d.nom + ' »…' }));
+            const r = DEMO ? { ok: true, json: { versions: [{ numero: 2, parent: 'b2:' + 'a'.repeat(64), empreinte: 'b2:' + 'c'.repeat(64), retiree: 0 }], espaces: [{ espace: 'Espace communautaire', gardien: 'noeud-b', etat: 'Actif' }], copies: [] } } : await api('/datasets/' + encodeURIComponent(d.id) + '/lignee');
+            ul.replaceChildren(h('li', null, h('b', { text: 'Lignée de « ' + d.nom + ' »' })));
+            if (!r.ok) { ul.append(h('li', { text: r.status === 401 || r.status === 403 ? 'Session administrateur requise.' : 'Lignée illisible.' })); hauteur(); return; }
+            const L = r.json;
+            ul.append(h('li', { text: L.espaces.length ? 'Confié à : ' + L.espaces.map(e => e.espace + ' (' + e.gardien + ', ' + (LIBELLE[e.etat] || e.etat) + ')').join(' · ') : 'Confié à aucun espace.' }));
+            for (const v of L.versions) ul.append(h('li', null, h('b', { text: 'n° ' + v.numero }), document.createTextNode(' '),
+                h('code', { text: v.empreinte.slice(0, 15) + '…', title: v.empreinte }), document.createTextNode(' ← '),
+                v.parent ? h('code', { text: v.parent.slice(0, 15) + '…', title: v.parent }) : document.createTextNode('origine'),
+                document.createTextNode(v.retiree ? ' · retirée' : '')));
+            for (const c of L.copies) ul.append(h('li', { text: 'Copie gardée ici : n° ' + c.numero + ', origine ' + (c.origine || '—') + ', venue de ' + (c.parent || '—') + ', ' + relatif(c.recue_le) }));
+            hauteur();
+        }
+        function rendreEspaces() {
+            const tb = $('espaces'), de = donnees.espaces; tb.replaceChildren();
+            const propageables = ['public', 'communaute', 'specialise'];
+            const miensJeux = ((donnees.jeux || {}).datasets || []).filter(d => d.mienne && propageables.includes(d.classe));
+            const confies = new Set(((donnees.subs || {}).subscriptions || []).filter(s => s.role === 'abonne' && s.kind === 'espace' && ETATS_EN_COURS.includes(s.etat)).map(s => s.service_id));
+            if (!de) tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: 'Espaces illisibles.' })));
+            else if (!de.espaces.length) tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: 'Aucun espace offert. Publier une offre de type « espace » pour proposer le sien.' })));
+            const cibles = [];
+            for (const e of (de ? de.espaces : [])) {
+                const c = e.espace || {};
+                let action;
+                if (e.mienne) action = h('span', { class: 'pill p-moi', text: 'mon espace' });
+                else if (confies.has(e.id)) action = h('span', { class: 'pill p-Actif', text: 'jeux confiés' });
+                else if (!miensJeux.length) action = h('span', { class: 'sous', text: 'aucun jeu à confier' });
+                else { cibles.push(e); action = h('button', { class: 'btn sm primary', type: 'button', text: 'Confier…', onclick: () => { $('pr-espace').value = e.id; $('form-propager').scrollIntoView({ block: 'nearest' }); } }); }
+                tb.append(h('tr', null,
+                    h('td', null, h('b', { text: e.nom }), h('div', { class: 'sous', text: e.description || '' })),
+                    h('td', null, document.createTextNode((e.fournisseur || '—') + ' '), e.mienne ? h('span', { class: 'pill p-moi', text: 'ce nœud' }) : h('span', { class: 'pill p-niv', text: e.fournisseur_niveau || '—' })),
+                    h('td', { text: (c.classes || []).join(', ') + (c.agregees ? ' · agrégées admises' : '') }),
+                    h('td', { text: ((c.formats || []).join(', ') || 'tous formats') + ' · ' + ((c.licences || []).join(', ') || 'toutes licences') }),
+                    h('td', { text: (e.occupe != null ? octets(e.occupe) + ' / ' : '') + octets(c.octets) + (c.octets_objet && c.octets_objet !== c.octets ? ' (≤ ' + octets(c.octets_objet) + ' par version)' : '') }),
+                    h('td', { class: 'act' }, action)));
+            }
+            $('form-propager').hidden = !cibles.length;
+            const choix = $('pr-espace').value;
+            $('pr-espace').replaceChildren(...cibles.map(e => h('option', { value: e.id, text: e.nom + ' — ' + e.fournisseur })));
+            if (cibles.some(e => e.id === choix)) $('pr-espace').value = choix;
+            const coches = new Set([...document.querySelectorAll('#pr-jeux input:checked')].map(i => i.value));
+            $('pr-jeux').replaceChildren(...miensJeux.map(d => h('label', null, h('input', Object.assign({ type: 'checkbox', value: d.id }, coches.has(d.id) ? { checked: '' } : {})), document.createTextNode(' ' + d.nom + ' (' + d.classe + ')  '))));
+            const tg = $('gardees'), ga = donnees.gardees; tg.replaceChildren();
+            if (!ga) { tg.append(h('tr', null, h('td', { colspan: '5', class: 'vide', text: donnees.sessionRequise ? 'Session administrateur requise.' : 'Copies illisibles.' }))); return; }
+            if (!ga.gardees.length) { tg.append(h('tr', null, h('td', { colspan: '5', class: 'vide', text: 'Aucun producteur ne m’a confié de jeu.' }))); return; }
+            for (const g of ga.gardees) {
+                const copies = h('td', null);
+                for (const c of g.copies) copies.append(h('div', { class: 'sous', text: 'n° ' + c.numero + ' · ' + c.jeu + ' · ' + octets(c.taille) + ' · ' + relatif(c.recue_le) }));
+                for (const r of g.refus) copies.append(h('div', { class: 'sous', style: 'color:var(--orange,#d97706)', text: 'refusée : ' + r.motif }));
+                if (!g.copies.length && !g.refus.length) copies.append(document.createTextNode(g.etat === 'Actif' ? 'en attente de la prochaine passe' : '—'));
+                tg.append(h('tr', null, h('td', { text: g.producteur }), h('td', { text: g.espace }), h('td', null, pill(g.etat)),
+                    h('td', { text: octets(g.occupe) + ' / ' + octets(g.capacite) }), copies));
+            }
+        }
+        $('form-propager').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const esp = $('pr-espace').value, nom = $('pr-espace').selectedOptions[0] ? $('pr-espace').selectedOptions[0].textContent : esp;
+            const jeux = [...document.querySelectorAll('#pr-jeux input:checked')].map(i => i.value);
+            if (!esp || !jeux.length) { annoncer(false, 'Choisir un espace et au moins un jeu.'); return; }
+            demander('Confier ' + jeux.length + ' jeu(x) à « ' + nom + ' » ? Abonnement signé nommant ces jeux ; l\u2019espace tirera chaque nouvelle version par le maillage.', false,
+                () => ecrire('POST', '/espaces/' + encodeURIComponent(esp) + '/propager', { jeux }, 'Jeux confiés : l\u2019espace les tirera à sa prochaine passe.'));
+        });
+        $('p-kind').addEventListener('input', () => { for (const e of document.querySelectorAll('[data-espace]')) e.hidden = $('p-kind').value !== 'espace'; hauteur(); });
         $('form-depot').addEventListener('submit', ev => {
             ev.preventDefault();
             const f = $('d-fichier').files[0]; if (!f) return;
@@ -452,6 +535,14 @@
             if (d) corps.duree_s = Math.round(d * 86400);
             if (g != null) corps.grace_s = Math.round(g * 86400);
             if (v) corps.version = v;
+            if (corps.kind === 'espace') {
+                const mio = x => Math.round(Number(x) * 1048576), liste = x => x.split(',').map(t => t.trim()).filter(Boolean);
+                if (!(Number($('p-capacite').value) > 0)) { annoncer(false, 'Espace : indiquer la capacité offerte.'); return; }
+                corps.quotas = { octets: mio($('p-capacite').value) };
+                if (Number($('p-parobjet').value) > 0) corps.quotas.octets_objet = mio($('p-parobjet').value);
+                corps.compat = { classes: ['public', 'communaute', 'specialise'].filter(c => $('p-c-' + c).checked), agregees: $('p-agregees').checked,
+                                 formats: liste($('p-formats').value), licences: liste($('p-licences').value) };
+            }
             demander('Publier « ' + corps.name + ' » (' + corps.kind + ', ' + corps.classe + ', ' + duree(corps.duree_s) + ') ? L’offre signée entre au journal du maillage.', false,
                 async () => { await ecrire('POST', '/services/publish', corps, 'Offre publiée : visible des pairs à leur prochaine synchronisation.'); });
         });
@@ -499,7 +590,16 @@
                     { id: 'f6'.repeat(32), role: 'abonne', service: 'Cache PeerTube', service_id: 'e7'.repeat(16), fournisseur: 'noeud-c', abonne: 'ce-noeud', etat: 'Grace', motif: 'fournisseur injoignable : période de grâce', demande_le: t(-2e6), echeance: t(9e5) },
                     { id: 'a7'.repeat(32), role: 'fournisseur', service: 'Miroir Debian local', service_id: 'd4'.repeat(16), fournisseur: 'ce-noeud', abonne: 'noeud-d', etat: 'Demande', motif: 'en attente d’approbation du fournisseur', demande_le: t(-3600), echeance: null }] },
                 jeux: { count: 1, datasets: [{ id: 'f1'.repeat(16), nom: 'Météo locale', description: 'relevés 10 min', fournisseur: 'noeud-a', fournisseur_niveau: 'LIMITED', classe: 'public', mienne: false,
-                        derniere_version: { numero: 412, taille: 18234, format: 'application/x-ndjson', licence: 'ODbL-1.0', cree_le: t(-600), present: 1 } }] },
+                        derniere_version: { numero: 412, taille: 18234, format: 'application/x-ndjson', licence: 'ODbL-1.0', cree_le: t(-600), present: 1 } },
+                        { id: 'f2'.repeat(16), nom: 'Relevés du capteur', description: 'qualité de l’air', fournisseur: 'ce-noeud', fournisseur_niveau: 'LIMITED', classe: 'public', mienne: true,
+                        derniere_version: { numero: 7, taille: 5120, format: 'application/json', licence: 'CC-BY-4.0', cree_le: t(-3600), present: 1 } }] },
+                espaces: { count: 2, espaces: [
+                    { id: 'e1'.repeat(16), nom: 'Espace communautaire', description: '/data, 2 Gio', fournisseur: 'noeud-b', fournisseur_niveau: 'LIMITED', mienne: false,
+                      espace: { classes: ['public', 'communaute'], formats: [], licences: ['ODbL-1.0', 'CC-BY-4.0'], agregees: false, octets: 2147483648, octets_objet: 268435456 } },
+                    { id: 'e2'.repeat(16), nom: 'Mon espace', description: '', fournisseur: 'ce-noeud', fournisseur_niveau: 'LIMITED', mienne: true, occupe: 18234,
+                      espace: { classes: ['public'], formats: [], licences: [], agregees: false, octets: 1073741824, octets_objet: 1073741824 } }] },
+                gardees: { count: 1, gardees: [{ subscription_id: 'b8'.repeat(32), producteur: 'noeud-a', espace: 'Mon espace', etat: 'Actif', jeux: ['f1'.repeat(16)], capacite: 1073741824, occupe: 18234,
+                    copies: [{ jeu: 'Météo locale', numero: 412, taille: 18234, recue_le: t(-500) }], refus: [] }] },
                 sessionRequise: false };
         }
         if (DEMO) $('demo').hidden = false;

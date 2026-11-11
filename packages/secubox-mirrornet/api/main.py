@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 
 from secubox_mirrornet import abonnements as A  # noqa: E402
-from secubox_mirrornet import annuaire, catalogue, config, ledger, objets, schema, transfert  # noqa: E402
+from secubox_mirrornet import annuaire, catalogue, config, espace, ledger, objets, schema, transfert  # noqa: E402
 
 log = logging.getLogger("secubox-mirrornet")
 router = APIRouter(prefix="/api/v1/mirrornet")
@@ -116,7 +116,10 @@ def tirer_maintenant() -> Dict[str, Any]:
     try:
         cx = schema.ouvrir(config.BASE)
         try:
-            return transfert.tirer(cx, config.reglages())
+            reg = config.reglages()
+            res = transfert.tirer(cx, reg)
+            res["espace"] = espace.propager(cx, reg)          # #3659 : copies gardées comme espace, même cadence
+            return res
         finally:
             cx.close()
     except (sqlite3.Error, OSError) as e:
@@ -236,7 +239,7 @@ def services(ident: Dict[str, Any] = Depends(require_lecture)) -> Dict[str, Any]
     confiance_min = config.reglages()["confiance_min"]
     soi = _soi()
     rows = []
-    for r in _lignes(_SQL_OFFRE + " WHERE o.kind <> 'dataset' ORDER BY o.nom"):
+    for r in _lignes(_SQL_OFFRE + " WHERE o.kind NOT IN ('dataset', 'espace') ORDER BY o.nom"):
         r = _json(r, "tarif", "quotas", "compat")
         r["mienne"] = r["fournisseur_did"] == soi
         r["presentable"] = _presentable(r, confiance_min)
@@ -301,7 +304,7 @@ def versions(service_id: str, ident: Dict[str, Any] = Depends(require_lecture)) 
 
 _SQL_ABO = ("SELECT s.ref_annuaire AS id, s.role, s.abonne_did, na.nom AS abonne, o.ref_annuaire AS service_id, "
             "o.nom AS service, o.fournisseur_did, nf.nom AS fournisseur, s.version, s.tarif_accepte, s.renouvellement, "
-            "s.demande_le, s.expire_le, s.echeance, s.grace_s, "
+            "s.demande_le, s.expire_le, s.echeance, s.grace_s, s.jeux, o.kind, "
             "(SELECT vers FROM subscription_event e WHERE e.subscription_id = s.id ORDER BY e.ts DESC, e.rowid DESC LIMIT 1) AS etat, "
             "(SELECT motif FROM subscription_event e WHERE e.subscription_id = s.id ORDER BY e.ts DESC, e.rowid DESC LIMIT 1) AS motif "
             "FROM subscription s JOIN offer o ON o.id = s.offer_id JOIN node na ON na.did = s.abonne_did "
@@ -311,7 +314,7 @@ _SQL_ABO = ("SELECT s.ref_annuaire AS id, s.role, s.abonne_did, na.nom AS abonne
 @router.get("/subscriptions", dependencies=[Depends(require_jwt)])
 def subscriptions() -> Dict[str, Any]:
     """Abonnements de ce nœud (abonné ou fournisseur) et leur état dérivé. Administrateur : relation privée entre nœuds."""
-    rows = [_json(r, "tarif_accepte") for r in _lignes(_SQL_ABO + " ORDER BY s.demande_le DESC")]
+    rows = [_json(r, "tarif_accepte", "jeux") for r in _lignes(_SQL_ABO + " ORDER BY s.demande_le DESC")]
     return {"subscriptions": rows, "count": len(rows)}
 
 
@@ -322,7 +325,7 @@ def subscription(subscription_id: str) -> Dict[str, Any]:
     rows = _lignes(_SQL_ABO + " WHERE s.ref_annuaire = ?", (subscription_id,))
     if not rows:
         raise HTTPException(404, "abonnement inconnu")
-    r = _json(rows[0], "tarif_accepte")
+    r = _json(rows[0], "tarif_accepte", "jeux")
     r["historique"] = _lignes("SELECT de, vers, motif, ts FROM subscription_event WHERE subscription_id = "
                               "(SELECT id FROM subscription WHERE ref_annuaire = ?) ORDER BY ts, rowid", (subscription_id,))
     return r
@@ -492,9 +495,33 @@ class Publication(BaseModel):
     sonde: Optional[str] = Field(None, max_length=256, pattern=r"^/[A-Za-z0-9._/~-]*$")
 
 
+def _espace_valide(req: "Publication") -> None:
+    """Offre d'espace (#3659) : capacité obligatoire, classes propageables seulement, listes bornées et typées."""
+    q, c = req.quotas or {}, req.compat or {}
+    if type(q.get("octets")) is not int or q["octets"] <= 0:
+        raise HTTPException(422, "espace : quotas.octets (capacité offerte, en octets) obligatoire")
+    if "octets_objet" in q and not (type(q["octets_objet"]) is int and 0 < q["octets_objet"] <= q["octets"]):
+        raise HTTPException(422, "espace : quotas.octets_objet entre 1 et quotas.octets")
+    if set(c) - {"classes", "formats", "licences", "agregees", "arch"}:
+        raise HTTPException(422, "espace : compat admet classes, formats, licences, agregees, arch")
+    classes = c.get("classes", ["public"])
+    if not (isinstance(classes, list) and classes and all(x in espace.PROPAGEABLES for x in classes)):
+        raise HTTPException(422, f"espace : compat.classes parmi {', '.join(espace.PROPAGEABLES)}")
+    for cle, motif in (("formats", _FORMAT), ("licences", _LICENCE)):
+        v = c.get(cle, [])
+        if not (isinstance(v, list) and len(v) <= 16 and all(isinstance(x, str) and motif.match(x) for x in v)):
+            raise HTTPException(422, f"espace : compat.{cle}, 16 valeurs au plus")
+    if "agregees" in c and not isinstance(c["agregees"], bool):
+        raise HTTPException(422, "espace : compat.agregees, vrai ou faux")
+    if req.classe in ("professionnel", "prive"):
+        raise HTTPException(422, "espace : une offre d'espace n'est ni professionnelle ni privée")
+
+
 @router.post("/services/publish", dependencies=[Depends(require_jwt)])
 def publier(req: Publication, request: Request, x_idempotence: Optional[str] = Header(None)):
-    """Publie une offre de CE nœud (signée par l'annuaire). `kind = dataset` attend la phase 4."""
+    """Publie une offre de CE nœud (signée par l'annuaire) : service, jeu (`dataset`) ou espace (`espace`, #3659)."""
+    if req.kind == "espace":
+        _espace_valide(req)
     corps = req.model_dump(exclude_none=True)
     cible = hashlib.sha256(json.dumps(corps, sort_keys=True).encode()).hexdigest()[:32]
     deja = _idempotent(x_idempotence, "publier", cible)
@@ -543,13 +570,15 @@ def s_abonner(service_id: str, request: Request, req: Optional[Abonnement] = Non
         if not rows:
             raise HTTPException(404, "offre inconnue")
         offre = _json(rows[0], "tarif", "quotas", "compat")
+        if offre.get("kind") == "espace":
+            raise HTTPException(409, "offre d'espace : y confier des jeux par /espaces/{id}/propager")
         motif = evaluer(offre, _soi(), config.reglages()["confiance_min"])
         if motif:
             raise HTTPException(409, f"abonnement refusé : {motif}")
         en_cours = [r for r in _lignes(_SQL_ABO + " WHERE o.ref_annuaire = ? AND s.role = 'abonne'", (service_id,))
                     if r["etat"] in A.EN_COURS]
         if en_cours:
-            res = dict(_json(en_cours[0], "tarif_accepte"), existant=True)
+            res = dict(_json(en_cours[0], "tarif_accepte", "jeux"), existant=True)
         else:
             version = (req.version if req else None) or offre.get("version")
             corps = {"provider": offre["fournisseur_did"]}            # le fournisseur ÉVALUÉ, lié à l'abonnement
@@ -558,7 +587,7 @@ def s_abonner(service_id: str, request: Request, req: Optional[Abonnement] = Non
             rep = _relayer(request, f"/self/service/{service_id}/subscribe", corps, x_idempotence)
             sub_id = rep.get("subscription_id") if isinstance(rep, dict) else None
             lignes = _lignes(_SQL_ABO + " WHERE s.ref_annuaire = ?", (sub_id,)) if sub_id else []
-            res = (dict(_json(lignes[0], "tarif_accepte"), existant=False) if lignes
+            res = (dict(_json(lignes[0], "tarif_accepte", "jeux"), existant=False) if lignes
                    else {"id": sub_id, "existant": False})
         _memoriser(x_idempotence, 200, res)
     return res
@@ -623,6 +652,117 @@ def resilier(subscription_id: str, request: Request, motif: str = Query("", max_
         if s["etat"] in A.TERMINAUX:
             raise HTTPException(409, f"abonnement déjà clos ({s['etat']})")
         return _relayer(request, f"/self/subscription/{subscription_id}/cancel", {"motif": motif}, x_idempotence)
+
+
+# --- espace offert et propagation (#3659) ----------------------------------------------------------------------------
+
+@router.get("/espaces")
+def espaces(ident: Dict[str, Any] = Depends(require_lecture)) -> Dict[str, Any]:
+    """Offres d'espace présentables et les miennes : compatibilité et capacité déclarées (et occupée, pour les miennes)."""
+    confiance_min, soi = config.reglages()["confiance_min"], _soi()
+    rows = []
+    cx = _base()
+    try:
+        for r in cx.execute(_SQL_OFFRE.replace("SELECT ", "SELECT o.id AS lid, ", 1)
+                            + " WHERE o.kind = 'espace' ORDER BY o.nom"):
+            r = _json(dict(r), "tarif", "quotas", "compat")
+            r["mienne"] = r["fournisseur_did"] == soi
+            r["presentable"] = _presentable(r, confiance_min)
+            lid = r.pop("lid")
+            if not (r["mienne"] or r["presentable"]):
+                continue
+            r["espace"] = espace.caracteristiques(r.get("compat"), r.get("quotas"))
+            if r["mienne"] and ident.get("sub") and not ident.get("tableau_de_bord"):
+                r["occupe"] = espace.occupe(cx, lid)
+            rows.append(_sans_topologie(r, ident))
+    except sqlite3.Error as e:
+        log.warning("lecture MirrorNet en échec : %s", e.__class__.__name__)
+        raise HTTPException(500, "lecture de la base en échec") from None
+    finally:
+        cx.close()
+    return {"espaces": rows, "count": len(rows)}
+
+
+@router.get("/espaces/gardees", dependencies=[Depends(require_jwt)])
+def espaces_gardees() -> Dict[str, Any]:
+    """Ce que CE nœud garde comme espace : producteurs, jeux nommés, copies (lignée), capacité, refus en cours."""
+    cx = _base()
+    try:
+        rows = espace.gardees(cx)
+    finally:
+        cx.close()
+    return {"gardees": rows, "count": len(rows)}
+
+
+@router.get("/datasets/{service_id}/lignee", dependencies=[Depends(require_jwt)])
+def lignee(service_id: str) -> Dict[str, Any]:
+    """Où vit un jeu : versions (chaîne parent), espaces où ce nœud l'a confié, copies gardées ici."""
+    if not _ID.match(service_id):
+        raise HTTPException(404, "jeu inconnu")
+    cx = _base()
+    try:
+        o = cx.execute("SELECT nom, fournisseur_did FROM offer WHERE ref_annuaire = ? AND kind = 'dataset'",
+                       (service_id,)).fetchone()
+        if o is None:
+            raise HTTPException(404, "jeu inconnu")
+        res = espace.lignee(cx, service_id)
+    finally:
+        cx.close()
+    return dict(res, nom=o["nom"], producteur_did=o["fournisseur_did"], mien=o["fournisseur_did"] == _soi())
+
+
+class Propagation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    jeux: List[str] = Field(..., min_length=1, max_length=32)
+
+
+@router.post("/espaces/{service_id}/propager", dependencies=[Depends(require_jwt)])
+def propager(service_id: str, req: Propagation, request: Request, x_idempotence: Optional[str] = Header(None)):
+    """Confier des jeux de CE nœud à l'espace d'un pair : évaluation (offre, niveau du pair), compatibilité de la
+    dernière version de chaque jeu, puis abonnement signé qui NOMME les jeux. Un abonnement en cours à cet espace est
+    rendu tel quel (`existant`) : pour changer de jeux, le résilier puis recommencer."""
+    if not _ID.match(service_id) or len(set(req.jeux)) != len(req.jeux) or not all(_ID.match(j) for j in req.jeux):
+        raise HTTPException(422, "espace ou jeux invalides")
+    deja = _idempotent(x_idempotence, "propager", service_id + ",".join(sorted(req.jeux)))
+    if deja is not None:
+        return deja
+    with _geste(x_idempotence, request):
+        synchroniser_maintenant()
+        rows = _lignes(_SQL_OFFRE + " WHERE o.ref_annuaire = ? AND o.kind = 'espace'", (service_id,))
+        if not rows:
+            raise HTTPException(404, "espace inconnu")
+        offre = _json(rows[0], "tarif", "quotas", "compat")
+        motif = evaluer(offre, _soi(), config.reglages()["confiance_min"])
+        if motif:
+            raise HTTPException(409, f"propagation refusée : {motif}")
+        car = espace.caracteristiques(offre.get("compat"), offre.get("quotas"))
+        soi = _soi()
+        for sid in req.jeux:
+            jeu = _lignes("SELECT o.nom, o.classe, o.fournisseur_did, o.etat FROM offer o "
+                          "WHERE o.ref_annuaire = ? AND o.kind = 'dataset'", (sid,))
+            if not jeu or jeu[0]["fournisseur_did"] != soi or jeu[0]["etat"] != "publiee":
+                raise HTTPException(409, f"jeu {sid[:16]} : aucun jeu publié par ce nœud")
+            if jeu[0]["classe"] not in espace.PROPAGEABLES:
+                raise HTTPException(409, f"jeu « {jeu[0]['nom']} » : classe {jeu[0]['classe']} jamais propagée")
+            v = _lignes("SELECT v.classe, v.format, v.licence, v.taille, v.donnees_personnelles FROM dataset_version v "
+                        "JOIN offer o ON o.id = v.offer_id WHERE o.ref_annuaire = ? AND v.retiree = 0 "
+                        "ORDER BY v.numero DESC LIMIT 1", (sid,))
+            refus = espace.refus_version(car, v[0]) if v else None
+            if refus:
+                raise HTTPException(409, f"jeu « {jeu[0]['nom']} » : {refus}")
+        en_cours = [r for r in _lignes(_SQL_ABO + " WHERE o.ref_annuaire = ? AND s.role = 'abonne'", (service_id,))
+                    if r["etat"] in A.EN_COURS]
+        if en_cours:
+            res = dict(_json(en_cours[0], "tarif_accepte", "jeux"), existant=True)
+        else:
+            rep = _relayer(request, f"/self/service/{service_id}/subscribe",
+                           {"provider": offre["fournisseur_did"], "jeux": req.jeux}, x_idempotence)
+            sub_id = rep.get("subscription_id") if isinstance(rep, dict) else None
+            lignes = _lignes(_SQL_ABO + " WHERE s.ref_annuaire = ?", (sub_id,)) if sub_id else []
+            res = (dict(_json(lignes[0], "tarif_accepte", "jeux"), existant=False) if lignes
+                   else {"id": sub_id, "existant": False})
+        _memoriser(x_idempotence, 200, res)
+    return res
 
 
 # --- jeux de données : dépôt, retrait, service aux pairs (#3653) -----------------------------------------------------
@@ -699,7 +839,10 @@ async def deposer(service_id: str, request: Request,
 def _noter_objet(empreinte: str, taille: int) -> None:
     cx = _base(ecriture=True)
     try:
-        objets.noter(cx, empreinte, taille, _soi() or "soi")
+        soi = _soi() or "soi"
+        objets.noter(cx, empreinte, taille, soi)
+        # Contenu identique à une copie déjà gardée : le dépôt local en reprend la propriété (#3659, relecture).
+        cx.execute("UPDATE objet SET source = ? WHERE empreinte = ?", (soi, empreinte))
     finally:
         cx.close()
 
@@ -769,7 +912,7 @@ def servir_objet(empreinte: str, request: Request):
     return FileResponse(objets.chemin(empreinte), media_type="application/octet-stream")
 
 
-app = FastAPI(title="SecuBox MirrorNet", version="0.3.0", docs_url=None, redoc_url=None, openapi_url=None,
+app = FastAPI(title="SecuBox MirrorNet", version="0.4.0", docs_url=None, redoc_url=None, openapi_url=None,
               lifespan=_vie)
 app.include_router(router)
 app.include_router(pair)

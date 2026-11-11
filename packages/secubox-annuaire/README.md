@@ -59,7 +59,7 @@ Socket Unix : `/run/secubox/annuaire.sock`, `/run/secubox/openpgp.sock`.
 | `POST` | `/subscription/{subscription_id}/approve` | require_jwt |
 | `POST` | `/subscription/{subscription_id}/reject` | require_jwt |
 | `POST` | `/self/service/offer` | require_jwt — offre de CE nœud signée par node.key (MirrorNet, #3647) |
-| `POST` | `/self/service/{service_id}/subscribe` | require_jwt — abonnement de CE nœud (tarif de l'offre, échéance = maintenant + `duree_s`) |
+| `POST` | `/self/service/{service_id}/subscribe` | require_jwt — abonnement de CE nœud (tarif de l'offre, échéance = maintenant + `duree_s`) ; `jeux` obligatoire pour une offre `kind=espace` (#3659) |
 | `POST` | `/self/subscription/{subscription_id}/renew` | require_jwt — `SERVICE_RENEW`, avant l'échéance |
 | `POST` | `/self/subscription/{subscription_id}/cancel` | require_jwt — résiliation (abonné) ou révocation de l'abonné (fournisseur) |
 | `POST` | `/self/subscription/{subscription_id}/approve`, `/reject` | require_jwt — décision du fournisseur sur une demande (#3651) |
@@ -178,3 +178,6 @@ taille, format, licence, provenance, classe, données personnelles : aucune en p
 `service_dataset_retract` : retrait signé. Seul le fournisseur de l'offre `kind=dataset` publie ou retire ; une
 empreinte n'est publiée qu'une fois. L'objet lui-même ne passe jamais par le journal : MirrorNet le sert aux abonnés
 Actif par l'écouteur maillé (`/mirrornet/objets/<empreinte>` sur :8799).
+
+Espace (#3659) : l'abonnement d'un producteur à une offre `kind=espace` porte `jeux`, signé avec lui — les
+`service_id` de ses propres offres `kind=dataset` (1 à 32, jamais professionnelles ni privées) que l'espace gardera.

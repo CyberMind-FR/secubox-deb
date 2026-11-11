@@ -880,6 +880,9 @@ class SelfSubscribeRequest(BaseModel):
     version: Optional[str] = Field(None, max_length=64)
     # Fournisseur évalué par MirrorNet : l'abonnement le porte, signé ; s'il diffère de celui de l'offre, refus.
     provider: Optional[str] = Field(None, pattern=r"^did:plc:[0-9a-f]{32}$")
+    # MirrorNet 4b (#3659) : jeux de CE nœud que l'espace gardera ; obligatoire pour une offre `kind=espace`, refusé
+    # pour toute autre.
+    jeux: Optional[List[str]] = None
 
 
 class SelfCancelRequest(BaseModel):
@@ -916,6 +919,27 @@ async def self_offer(req: SelfOfferRequest, ident: Dict[str, Any] = Depends(_req
     return offre.model_dump()
 
 
+def _jeux_propagation(j, did: str, offre: Dict[str, Any], jeux: Optional[List[str]]) -> Optional[List[str]]:
+    """Jeux nommés par un abonnement à un espace (#3659) : seulement pour `kind=espace`, et seulement des offres
+    `kind=dataset` publiées (non retirées) par CE nœud, de classe propageable (ni professionnel ni privé)."""
+    from annuaire.model import JEUX_MAX  # noqa: PLC0415
+    from annuaire.verbs import _get_offers  # noqa: PLC0415
+    if offre.get("kind") != "espace":
+        if jeux is not None:
+            raise HTTPException(422, "jeux : seulement pour une offre d'espace")
+        return None
+    if not jeux or len(jeux) > JEUX_MAX or len(set(jeux)) != len(jeux):
+        raise HTTPException(422, f"jeux : 1 à {JEUX_MAX} jeux distincts à propager vers cet espace")
+    miens = {o.get("service_id"): o for o in _get_offers(j) if o.get("provider") == did and o.get("kind") == "dataset"}
+    for sid in jeux:
+        o = miens.get(sid)
+        if o is None:
+            raise HTTPException(409, f"jeu {sid[:16]} : aucune offre de jeu de données publiée par ce nœud")
+        if (o.get("classe") or "public") in ("professionnel", "prive"):
+            raise HTTPException(409, f"jeu {sid[:16]} : classe {o.get('classe')} jamais propagée vers un espace tiers")
+    return list(jeux)
+
+
 @app.post("/self/service/{service_id}/subscribe")
 async def self_subscribe(service_id: str, req: SelfSubscribeRequest, ident: Dict[str, Any] = Depends(_require_jwt)):
     """Abonnement de CE nœud : tarif de l'offre accepté tel quel, échéance = maintenant + duree_s de l'offre."""
@@ -938,6 +962,7 @@ async def self_subscribe(service_id: str, req: SelfSubscribeRequest, ident: Dict
     duree = offre.get("duree_s")
     expire = ((datetime.now(timezone.utc) + timedelta(seconds=duree)).isoformat()
               if isinstance(duree, int) and duree > 0 else None)
+    jeux = await asyncio.to_thread(_jeux_propagation, j, did, offre, req.jeux)
 
     def _verifier_puis_signer():
         with _VERROU_ABONNEMENT:
@@ -945,7 +970,9 @@ async def self_subscribe(service_id: str, req: SelfSubscribeRequest, ident: Dict
             if en_cours:
                 raise HTTPException(409, f"abonnement déjà en cours : {en_cours}")
             return subscribe(j, priv, did, service_id, version=req.version, tarif_accepte=offre.get("tarif"),
-                             expire_le=expire, provider=offre.get("provider"))
+                             expire_le=expire, provider=offre.get("provider"), jeux=jeux,
+                             compat_acceptee=({"compat": offre.get("compat") or {}, "quotas": offre.get("quotas") or {}}
+                                              if jeux is not None else None))
     try:
         sub = await asyncio.to_thread(_verifier_puis_signer)
     except PermissionError as e:

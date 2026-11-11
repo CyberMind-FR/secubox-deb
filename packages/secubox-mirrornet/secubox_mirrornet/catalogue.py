@@ -99,6 +99,23 @@ def offre_normalisee(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "approval_mode": "auto" if p.get("approval_mode") == "auto" else "pending"}
 
 
+JEUX_MAX = 32
+
+
+def jeux_normalises(v: Any) -> List[str]:
+    """Jeux nommés par un abonnement à un espace (#3659), tels que signés ; toute forme inattendue = aucun jeu."""
+    if not isinstance(v, list) or not 1 <= len(v) <= JEUX_MAX or len(set(map(str, v))) != len(v):
+        return []
+    return list(v) if all(isinstance(x, str) and _ID.match(x) for x in v) else []
+
+
+def _acceptee(v: Any) -> Dict[str, Any]:
+    """Compatibilité figée dans l'abonnement à un espace (#3659) ; forme inattendue = {} (rien n'est servi)."""
+    if not isinstance(v, dict) or set(v) - {"compat", "quotas"} or len(json.dumps(v)) > 2048:
+        return {}
+    return v if isinstance(v.get("compat", {}), dict) and isinstance(v.get("quotas", {}), dict) else {}
+
+
 _VERIFIEES: set = set()          # (auteur, clé, sig, empreinte de la charge) vérifiés à la passe précédente
 
 
@@ -333,11 +350,14 @@ def synchroniser(cx: sqlite3.Connection, export: Dict[str, Any], maintenant: Opt
                 tarif = p.get("tarif_accepte") if isinstance(p.get("tarif_accepte"), dict) else {"modele": "gratuit"}
                 cx.execute(
                     "INSERT INTO subscription(id, ref_annuaire, abonne_did, offer_id, version, tarif_accepte, expire_le, "
-                    "grace_s, role, demande_le, echeance) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(ref_annuaire) DO UPDATE "
-                    "SET echeance=excluded.echeance, grace_s=excluded.grace_s",
+                    "grace_s, role, demande_le, echeance, jeux, compat_acceptee) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                    "ON CONFLICT(ref_annuaire) DO UPDATE SET echeance=excluded.echeance, grace_s=excluded.grace_s, "
+                    "jeux=excluded.jeux, compat_acceptee=excluded.compat_acceptee",
                     (local, sub_id, abonne, str(uuid.uuid5(NS, "offre:" + offre["service_id"])),
                      _texte(p.get("version"), 64, None), json.dumps(tarif)[:1024], f.expire_le, f.grace_s, role,
-                     _texte(p.get("requested_at"), 40, None), ech.isoformat() if ech else None))
+                     _texte(p.get("requested_at"), 40, None), ech.isoformat() if ech else None,
+                     json.dumps(jeux_normalises(p.get("jeux")) if offre["kind"] == "espace" else []),
+                     json.dumps(_acceptee(p.get("compat_acceptee")) if offre["kind"] == "espace" else {})))
                 dernier = cx.execute("SELECT vers FROM subscription_event WHERE subscription_id = ? "
                                      "ORDER BY ts DESC, rowid DESC LIMIT 1", (local,)).fetchone()
                 if dernier is None or dernier[0] != etat:

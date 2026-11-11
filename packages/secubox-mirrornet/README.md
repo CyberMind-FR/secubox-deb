@@ -89,6 +89,25 @@ Objets opaques nommés par leur empreinte BLAKE2b-256 dans `/data/mirrornet/obje
 jamais extraits. Réception : une version par passe, taille et empreinte vérifiées, `[donnees] garder` versions
 gardées, retirées effacées. Plafonds `[donnees] taille_max_mo`, `reserve_mo`.
 
+## Espace offert et propagation (#3659)
+
+| Méthode | Route | Garde |
+|---|---|---|
+| `GET` | `/espaces` | require_lecture — offres `kind=espace` présentables + les miennes (capacité occupée pour les miennes) |
+| `GET` | `/espaces/gardees` | require_jwt — copies que CE nœud garde comme espace (producteur, jeux, lignée, refus) |
+| `GET` | `/datasets/{id}/lignee` | require_jwt — chaîne des versions, espaces où le jeu est confié, copies gardées ici |
+| `POST` | `/espaces/{id}/propager` | require_jwt — `{jeux: [service_id…]}` : compatibilité évaluée, puis abonnement signé nommant les jeux |
+
+Offre d'espace : `quotas.octets` (capacité, obligatoire), `quotas.octets_objet` (taille maximale d'une version),
+`compat.classes` (public, communaute, specialise), `compat.formats`, `compat.licences` (vides = tous),
+`compat.agregees` (données personnelles agrégées admises). L'espace tire, à la cadence de réception, la dernière
+version non retirée de chaque jeu nommé par un abonnement Actif, chez le producteur abonné lui-même ; il revérifie
+classe, format, licence, taille, données personnelles, capacité restante et empreinte. Chaque copie garde son origine
+et son parent ; une nouvelle version est tirée à son tour (`[donnees] garder` versions gardées). Version retirée ou
+abonnement clos (refusé, expiré, résilié) : copie purgée. Le producteur ne sert l'objet qu'à l'espace auquel il a
+confié ce jeu (`transfert.autoriser`). Jamais propagé : professionnel, privé, données personnelles brutes.
+Présence certifiée et service des copies aux abonnés : lot 4c.
+
 ## Interface web (#3651)
 
 `/mirrornet/` sur l'hôte d'administration (`www/mirrornet/index.html`, profil Aurora, entrée de menu `menu.d`) :

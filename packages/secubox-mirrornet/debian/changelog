@@ -1,3 +1,22 @@
+secubox-mirrornet (0.4.0-1~trixie1) trixie; urgency=medium
+
+  * MirrorNet 4b (ref #3659) : espace offert en service et propagation des jeux. Offre
+    kind=espace (capacité quotas.octets / octets_objet, compatibilité compat.classes,
+    formats, licences, agregees) validée à la publication. POST /espaces/{id}/propager :
+    compatibilité de la dernière version de chaque jeu évaluée, puis abonnement signé
+    nommant les jeux. Côté espace : dernière version non retirée de chaque jeu nommé tirée
+    chez le producteur (abonnement Actif), revérifiée (classe, format, licence, taille,
+    données personnelles, capacité restante, empreinte), gardée avec sa lignée (origine,
+    parent) ; nouvelle version tirée à son tour ; purge au retrait ou à la clôture de
+    l'abonnement. Côté producteur : objet servi seulement à l'espace auquel il a confié
+    ce jeu, et seulement si la version respecte la compatibilité figée à l'abonnement ET
+    l'offre actuelle. Rangement : une empreinte reprise par le vieux numéro d'un autre jeu
+    n'efface plus un objet encore gardé. Schéma v4 (subscription.jeux, compat_acceptee,
+    table copie). Routes /espaces,
+    /espaces/gardees, /datasets/{id}/lignee ; onglet « Espaces et répliques ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 03:30:47 +0100
+
 secubox-mirrornet (0.3.2-1~trixie1) trixie; urgency=medium
 
   * Unité en Type=exec : la combinaison Type=simple + ExecStartPost + LoadCredential est
