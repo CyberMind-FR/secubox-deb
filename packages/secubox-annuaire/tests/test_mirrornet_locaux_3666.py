@@ -428,6 +428,81 @@ def test_nouvelle_offre_du_fournisseur_au_plus_une_fois_par_heure(j):  # noqa: F
     assert [s["service_id"] for s in _mes_abonnements(j, did)] == [o1.service_id, o2.service_id]
 
 
+def test_abonnement_a_l_offre_remplacee_resilie(j):  # noqa: F811
+    """Revue 2 : un seul abonnement actif par fournisseur ; l'abonnement à l'offre plus ancienne est résilié dans la
+    passe qui s'abonne à la dernière (pas avant)."""
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    o1 = _tv(j, pb, db)
+    ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())
+    (s1,) = _mes_abonnements(j, did)
+    o2 = _tv(j, pb, db)
+    r = ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(10))      # rythme : pas encore d'abonnement à o2…
+    assert r["abonnements"] == 0 and r["resiliations"] == 0         # … donc o1 reste suivie
+    assert V.subscription_state(j, s1["subscription_id"]) is SubscriptionState.APPROVED
+    gestes = []
+    r = ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(61), auditer=lambda action, **d: gestes.append((action, d)))
+    assert r["abonnements"] == 1 and r["resiliations"] == 1
+    assert V.subscription_state(j, s1["subscription_id"]) is SubscriptionState.REVOKED
+    assert ML.abonnements_en_cours(j, did, _maintenant(61)).keys() == {o2.service_id}
+    assert [g[0] for g in gestes] == ["mirrornet_tv_indices_abonnement", "mirrornet_tv_indices_resiliation"]
+    assert gestes[1][1]["service_id"] == o1.service_id and gestes[1][1]["motif"] == ML.MOTIF_REMPLACE
+    h = _hauteur(j)
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(200)) == {"offre": "existante", "version": None,
+                                                                         "abonnements": 0, "resiliations": 0}
+    assert _hauteur(j) == h
+
+
+def test_derniere_offre_selon_le_journal_pas_la_date_signee(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    _tv(j, pb, db, created_at="2030-01-01T00:00:00+00:00")          # date signée dans le futur : sans effet
+    o2 = _tv(j, pb, db, created_at="2020-01-01T00:00:00+00:00")
+    ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())
+    assert [s["service_id"] for s in _mes_abonnements(j, did)] == [o2.service_id]
+
+
+def _offre_brute(j, priv, did, **champs):  # noqa: F811
+    """Offre signée hors modèle (un pair peut signer n'importe quelle charge)."""
+    charge = {"service_id": os.urandom(16).hex(), "provider": did, "name": "Indices", "kind": "dataset",
+              "endpoint": "mirrornet://b", "scope": {"usage": "tv-indices"}, "approval_mode": "auto",
+              "description": "", "created_at": "2026-11-11T00:00:00+00:00", "classe": "communaute", **champs}
+    V._signer_et_ajouter(j, priv, did, Op.SERVICE_OFFER, "ServiceOffer", charge)
+    return charge["service_id"]
+
+
+def test_duree_demesuree_n_arrete_pas_la_passe(j, monkeypatch):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    enorme = _offre_brute(j, pb, db, duree_s=10 ** 12)
+    pc, _, dc = _membre(j)
+    bonne = _tv(j, pc, dc)
+    r = ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())
+    assert r["abonnements"] == 1
+    assert [s["service_id"] for s in _mes_abonnements(j, did)] == [bonne.service_id]
+    # Un abonnement (manuel) à l'offre démesurée ne fait pas lever le calcul d'échéance.
+    V.subscribe(j, priv, did, enorme)
+    assert enorme in ML.abonnements_en_cours(j, did, _maintenant())
+    assert ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant())["resiliations"] == 2
+
+
+def test_une_offre_qui_leve_n_arrete_pas_les_autres(j, monkeypatch):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    _tv(j, pb, db)
+    pc, _, dc = _membre(j)
+    bonne = _tv(j, pc, dc)
+    vrai = ML._tarif_accepte
+
+    def piege(o):
+        if o.get("provider") == db:
+            raise RuntimeError("offre piégée")
+        return vrai(o)
+    monkeypatch.setattr(ML, "_tarif_accepte", piege)
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == 1
+    assert [s["service_id"] for s in _mes_abonnements(j, did)] == [bonne.service_id]
+
+
 def test_plafond_de_fournisseurs(j, monkeypatch):  # noqa: F811
     monkeypatch.setattr(ML, "PRODUCTEURS_MAX", 2)
     priv, _pub, did = _membre(j)

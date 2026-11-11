@@ -33,7 +33,7 @@ import re
 import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 # Surchargeable pour les tests (variable d'environnement, comme les autres chemins de l'annuaire).
 PUBLICATIONS = Path(os.environ.get("ANNUAIRE_MIRRORNET_PUBLICATIONS",
@@ -48,6 +48,8 @@ TARIFS_ACCEPTES = ("gratuit", "reciproque")
 RANG = {"OBSERVER": 0, "LIMITED": 1, "PARTNER": 2, "TRUSTED": 3}   # REVOKED absent : jamais écouté
 MOTIF_FOND = "réception des indices TV coupée (tâche de fond)"
 MOTIF_RETOUR = "contenu revenu à une version antérieure"
+MOTIF_REMPLACE = "remplacé par l'abonnement à la dernière offre du fournisseur"
+DUREE_MAX_S = 10 * 365 * 86400            # maximum du modèle (ServiceOffer.duree_s)
 
 OFFRE = {"kind": "dataset", "approval_mode": "auto", "classe": "communaute", "scope": {"usage": USAGE},
          "description": "Domaines publicité, pistage et télémétrie confirmés par TV Privacy, et domaines légitimes "
@@ -128,13 +130,6 @@ def _recent(instants: Iterable[Optional[datetime]], maintenant: datetime) -> boo
     return any(t is not None and timedelta(0) <= maintenant - t < INTERVALLE for t in instants)
 
 
-_EPOQUE = datetime(1970, 1, 1, tzinfo=timezone.utc)
-
-
-def _cree(o: Dict[str, Any]) -> datetime:
-    return _instant(o.get("created_at")) or _EPOQUE
-
-
 def _usage_tv(o: Dict[str, Any]) -> bool:
     scope = o.get("scope")
     return isinstance(scope, dict) and scope.get("usage") == USAGE
@@ -156,13 +151,16 @@ def _tarif_accepte(o: Dict[str, Any]) -> bool:
 
 def _duree_acceptee(o: Dict[str, Any]) -> bool:
     d = o.get("duree_s")
-    return d is None or (type(d) is int and d >= DUREE_MIN_S)
+    return d is None or (type(d) is int and DUREE_MIN_S <= d <= DUREE_MAX_S)
 
 
-def _toutes_offres(journal) -> Dict[str, Dict[str, Any]]:
-    """service_id → dernière offre auto-signée de son PREMIER fournisseur, retirée ou non (un seul balayage)."""
+def _toutes_offres(journal) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, int]]:
+    """(service_id → dernière offre auto-signée de son PREMIER fournisseur, retirée ou non ; service_id → hauteur de sa
+    PREMIÈRE entrée dans le journal local, qui ordonne les offres d'un fournisseur sans dépendre de dates qu'il signe).
+    Un seul balayage."""
     from annuaire.model import Op  # noqa: PLC0415
     offres: Dict[str, Dict[str, Any]] = {}
+    hauteurs: Dict[str, int] = {}
     proprio: Dict[str, str] = {}
     for e in journal.iter_entries(ops=(Op.SERVICE_OFFER.value,)):
         p = e.payload
@@ -171,7 +169,8 @@ def _toutes_offres(journal) -> Dict[str, Dict[str, Any]]:
             continue
         if proprio.setdefault(sid, prov) == prov:
             offres[sid] = p
-    return offres
+            hauteurs.setdefault(sid, e.height)
+    return offres, hauteurs
 
 
 def abonnements_en_cours(journal, abonne: str, maintenant: Optional[datetime] = None,
@@ -191,10 +190,13 @@ def abonnements_en_cours(journal, abonne: str, maintenant: Optional[datetime] = 
         if filtre is not None and p.get("service_id") not in filtre:
             continue
         sub_id = p.get("subscription_id")
-        if subscription_state(journal, sub_id) not in (SubscriptionState.PENDING, SubscriptionState.APPROVED):
-            continue
-        ech = _instant(echeance_abonnement(journal, sub_id, maintenant))
-        if ech is None or ech > maintenant:
+        try:
+            ech = _instant(echeance_abonnement(journal, sub_id, maintenant))
+        except (OverflowError, ValueError):              # durée signée hors bornes : échéance incalculable, sans fin
+            ech = None
+        if ech is not None and ech <= maintenant:
+            continue                                     # échu : l'état (trois balayages) n'est même pas calculé
+        if subscription_state(journal, sub_id) in (SubscriptionState.PENDING, SubscriptionState.APPROVED):
             res.setdefault(p.get("service_id"), []).append(sub_id)
     return res
 
@@ -301,48 +303,64 @@ def traiter(journal, priv: Optional[bytes], did: Optional[str], boxname: str, de
             retirer_offre(o)
 
     # --- réception : abonnements aux offres tv-indices des AUTRES nœuds, ou leur résiliation ---------------------
-    offres_tv = {sid: o for sid, o in _toutes_offres(journal).items() if o.get("provider") != did and _est_tv(o)}
+    toutes, hauteurs = _toutes_offres(journal)
+    offres_tv = {sid: o for sid, o in toutes.items() if o.get("provider") != did and _est_tv(o)}
     en_cours = abonnements_en_cours(journal, did, maintenant, service_ids=offres_tv)
+
+    def resilier(sid: str, sub_id: str, motif: str) -> None:
+        if geste("résiliation", cancel_subscription, journal, priv, did, sub_id, motif) is not None:
+            res["resiliations"] += 1
+            noter("mirrornet_tv_indices_resiliation", subscription_id=sub_id, service_id=sid,
+                  fournisseur=offres_tv[sid].get("provider"), motif=motif)
+
     if d["recevoir"]:
         seuil = RANG[d["confiance_min"]]
         niveaux = confiance.niveaux(journal)
         hist = _historique(journal, did, offres_tv)
         dernieres: Dict[str, Dict[str, Any]] = {}       # fournisseur → sa DERNIÈRE offre tv-indices acceptable
         for o in vivantes:
-            prov = o.get("provider")
-            if (not o.get("service_id") or not prov or prov == did or not _est_tv(o) or o.get("classe") == "prive"
-                    or not _tarif_accepte(o) or not _duree_acceptee(o)):
-                continue
-            if RANG.get(niveaux.get(prov, ("OBSERVER", ""))[0], -1) < seuil or hist.get(prov, {}).get("refuse"):
-                continue
-            prec = dernieres.get(prov)
-            if prec is None or _cree(o) >= _cree(prec):          # à égalité : la plus loin dans le journal
-                dernieres[prov] = o
-        suivis = {offres_tv[sid]["provider"] for sid in en_cours if sid in offres_tv}
+            try:                                         # une offre mal formée n'arrête jamais les autres
+                sid, prov = o.get("service_id"), o.get("provider")
+                if (sid not in offres_tv or not prov or prov == did or o.get("classe") == "prive"
+                        or not _tarif_accepte(o) or not _duree_acceptee(o)):
+                    continue
+                if RANG.get(niveaux.get(prov, ("OBSERVER", ""))[0], -1) < seuil or hist.get(prov, {}).get("refuse"):
+                    continue
+                prec = dernieres.get(prov)
+                if prec is None or hauteurs[sid] > hauteurs[prec["service_id"]]:   # ordre du journal local
+                    dernieres[prov] = o
+            except Exception as e:  # noqa: BLE001
+                _log.warning("indices TV : offre ignorée : %s", e)
+        suivis = {offres_tv[sid]["provider"] for sid in en_cours}
         # Plafond : les fournisseurs déjà suivis d'abord, puis les autres dans un ordre stable.
         for prov in sorted(dernieres, key=lambda p: (p not in suivis, p))[:PRODUCTEURS_MAX]:
-            o = dernieres[prov]
-            sid = o["service_id"]
-            if sid in en_cours or _recent([hist.get(prov, {}).get("dernier_le")], maintenant):
-                continue
-            duree = o.get("duree_s")
-            expire = (maintenant + timedelta(seconds=duree)).isoformat() if type(duree) is int else None
-            s = geste("abonnement", subscribe, journal, priv, did, sid, tarif_accepte=o.get("tarif"),
-                      expire_le=expire, provider=prov)
-            if s is not None:
-                res["abonnements"] += 1
-                noter("mirrornet_tv_indices_abonnement", subscription_id=s.subscription_id, service_id=sid,
-                      fournisseur=prov)
+            try:
+                o = dernieres[prov]
+                sid = o["service_id"]
+                if sid not in en_cours and not _recent([hist.get(prov, {}).get("dernier_le")], maintenant):
+                    duree = o.get("duree_s")
+                    expire = (maintenant + timedelta(seconds=duree)).isoformat() if type(duree) is int else None
+                    s = geste("abonnement", subscribe, journal, priv, did, sid, tarif_accepte=o.get("tarif"),
+                              expire_le=expire, provider=prov)
+                    if s is not None:
+                        en_cours[sid] = [s.subscription_id]
+                        res["abonnements"] += 1
+                        noter("mirrornet_tv_indices_abonnement", subscription_id=s.subscription_id, service_id=sid,
+                              fournisseur=prov)
+                if sid in en_cours:
+                    # Suivi de la dernière offre : les abonnements aux offres PLUS ANCIENNES du fournisseur sont résiliés
+                    # (un seul abonnement actif par fournisseur). Sans abonnement à la dernière, l'ancien reste.
+                    for autre, subs in list(en_cours.items()):
+                        if autre != sid and offres_tv[autre].get("provider") == prov:
+                            for sub_id in subs:
+                                resilier(autre, sub_id, MOTIF_REMPLACE)
+                            del en_cours[autre]
+            except Exception as e:  # noqa: BLE001
+                _log.warning("indices TV : abonnement à %s non traité : %s", prov[8:20], e)
     else:
         for sid, subs in en_cours.items():
-            o = offres_tv.get(sid)
-            if o is None:
-                continue
             for sub_id in subs:
-                if geste("résiliation", cancel_subscription, journal, priv, did, sub_id, MOTIF_FOND) is not None:
-                    res["resiliations"] += 1
-                    noter("mirrornet_tv_indices_resiliation", subscription_id=sub_id, service_id=sid,
-                          fournisseur=o.get("provider"))
+                resilier(sid, sub_id, MOTIF_FOND)
     return res
 
 
