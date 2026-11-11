@@ -1,3 +1,12 @@
+secubox-annuaire (0.21.2-1~trixie1) trixie; urgency=medium
+
+  * Onglet Services (ref #3664) : GET /services ajoute provider_nom (boxname du NodeRecord
+    signé) et mienne (fournisseur = node.key de cette box), lus hors de la boucle ; la page
+    affiche le nom de la box (did en infobulle) et « MON OFFRE » au lieu de « S'abonner »
+    pour les offres de la box elle-même.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 09:20:29 +0100
+
 secubox-annuaire (0.21.1-1~trixie1) trixie; urgency=medium
 
   * Banc #3661 : le cache de l'export MirrorNet expire aussi après 240 s — sur gk2, un export
