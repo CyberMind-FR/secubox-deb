@@ -193,7 +193,12 @@ class Regles:
         if r is None or r["etat"] != "essai":
             raise ErreurRegle("seul un essai peut être prolongé")
         r["fin_essai"] = maintenant + ESSAI_S
-        r["historique"] = (r["historique"] + [{"ts": maintenant, "de": "essai", "vers": "essai", "origine": "auto", "motif": motif[:120]}])[-HISTORIQUE_MAX:]
+        # Une prolongation REMPLACE la précédente (#3666) : l'historique est plafonné à 10 entrées, des prolongations successives
+        # en chasseraient l'entrée à l'essai, dont dépend le suivi des indices (`dnstv_auto._ne_du_moteur`).
+        hist = r["historique"]
+        if hist and hist[-1].get("de") == "essai" and hist[-1].get("vers") == "essai":
+            hist = hist[:-1]
+        r["historique"] = (hist + [{"ts": maintenant, "de": "essai", "vers": "essai", "origine": "auto", "motif": motif[:120]}])[-HISTORIQUE_MAX:]
         r["maj"], r["motif"] = maintenant, motif[:120]
         return dict(r)
 

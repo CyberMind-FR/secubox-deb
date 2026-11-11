@@ -364,3 +364,34 @@ def test_legitime_l_emporte_sur_un_producteur_indisponible(magasin):
     res = M.tick(ETAT, r, magasin, classer, REGLAGE, t + 60, indices=ix)
     assert PUB not in regles_de(r)
     assert {"appareil": "tv-banc", "domaine": PUB, "de": "essai", "vers": "", "motif": "indice retiré"} in res["changements"]
+
+
+def test_prolongations_ne_chassent_pas_l_entree_en_essai(magasin):
+    """Fix round 3 : une prolongation remplace la précédente dans l'historique (plafonné à 10) ; après 12 prolongations l'entrée
+    à l'essai par le moteur reste lisible : la règle est confirmée à l'échéance, puis oubliée quand l'indice disparaît."""
+    t = int(time.time())
+    t0 = t - R.ESSAI_S - 3600
+    r = R.Regles()
+    essai_d_indice(magasin, r, t0)
+    rid = regles_de(r)[PUB]["id"]
+    for k in range(12):
+        r.prolonger_essai(rid, t0 + 60 + k)
+    x = r.get(rid)
+    assert M._ne_du_moteur(x) and len(x["historique"]) == 3                 # candidat, essai, UNE prolongation
+    assert [h["vers"] for h in x["historique"]] == ["candidat", "essai", "essai"] and x["historique"][-1]["ts"] == t0 + 71
+    charger(magasin, activite(t - 100))
+    M.tick(ETAT, r, magasin, classer, REGLAGE, t, indices=indice(PUB))
+    x = r.get(rid)
+    assert x["etat"] == "confirme" and x["motif"] == "confirmé (indice du maillage)" and M._ne_du_moteur(x)
+    M.tick(ETAT, r, magasin, classer, REGLAGE, t + 60, indices=Index())
+    assert PUB not in regles_de(r)
+
+
+def test_prolongation_sans_precedente_s_ajoute():
+    r = R.Regles()
+    rid = r.proposer("tv-banc", PUB, 50, "faible", 1)["id"]
+    r.transiter(rid, "essai", "auto", "x", 2)
+    r.prolonger_essai(rid, 3)
+    r.prolonger_essai(rid, 4, "autre motif")
+    assert [(h["de"], h["vers"], h["ts"], h["motif"]) for h in r.get(rid)["historique"]] == [
+        ("", "candidat", 1, "proposé"), ("candidat", "essai", 2, "x"), ("essai", "essai", 4, "autre motif")]
