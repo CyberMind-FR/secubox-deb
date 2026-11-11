@@ -112,6 +112,10 @@ def ecrire_publication(publier: bool, recevoir: bool, c: dict, chemin: Path = PU
 class Index:
     confirmes: Dict[str, Dict[str, str]] = field(default_factory=dict)    # domaine -> {nom_box: catégorie}
     legitimes: Dict[str, Set[str]] = field(default_factory=dict)          # domaine -> {nom_box}
+    # Lecture ratée = jamais un retrait de protection : `lisible` faux si le dossier ou index.json manque ou est illisible ;
+    # `indisponibles` : producteurs listés dont le fichier a été écarté (illisible, trop gros, invalide).
+    lisible: bool = True
+    indisponibles: Set[str] = field(default_factory=set)
 
     def confirmateurs(self, d: str) -> List[str]:
         return sorted(self.confirmes.get(d, {}))
@@ -165,21 +169,25 @@ def _valider_contenu(c):
 
 
 def charger(dossier: Path = LIVRAISONS) -> Index:
-    """Lit `index.json` puis le fichier de chaque producteur. Ne lève jamais ; dossier absent = index vide."""
+    """Lit `index.json` puis le fichier de chaque producteur. Ne lève jamais ; dossier ou index.json absent ou illisible =
+    index vide NON lisible (réception pas encore en place ou lecture ratée : le moteur ne retire alors rien)."""
     ix = Index()
     try:
         idx = _lire_json(Path(dossier) / "index.json")
         if not isinstance(idx, dict):
-            return ix
+            return Index(lisible=False)
         for did, meta in list(idx.items())[:PRODUCTEURS_MAX]:
+            valide = None
             try:
                 m = DID_RE.match(did) if isinstance(did, str) else None
                 nom = meta.get("nom") if isinstance(meta, dict) else None
                 if not m or not isinstance(nom, str) or not NOM_RE.match(nom):
                     continue
+                valide = nom
                 v = _valider_contenu(_lire_json(Path(dossier) / (m.group(1) + ".json")))
                 if v is None:
                     log.warning("indices : livraison de %s ignorée (illisible, trop grosse ou invalide)", nom)
+                    ix.indisponibles.add(nom)
                     continue
                 indices, legitimes = v
                 for d, cat in indices.items():
@@ -188,6 +196,8 @@ def charger(dossier: Path = LIVRAISONS) -> Index:
                     ix.legitimes.setdefault(d, set()).add(nom)
             except Exception:                        # noqa: BLE001 — un producteur défectueux n'affecte pas les autres
                 log.warning("indices : producteur ignoré (erreur inattendue)")
+                if valide:
+                    ix.indisponibles.add(valide)
     except Exception:                                # noqa: BLE001 — jamais d'exception vers l'appelant
-        pass
+        return Index(lisible=False)
     return ix

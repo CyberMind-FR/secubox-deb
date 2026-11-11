@@ -17,6 +17,8 @@ if TYPE_CHECKING:                                    # pragma: no cover
 
 HISTORIQUE_H = 48
 MOTIF_INDICE = "essai automatique (indice du maillage)"
+MOTIF_INDICE_CONFIRME = "confirmé (indice du maillage)"
+MOTIF_INDICE_RETIRE = "indice retiré"
 
 
 @dataclass
@@ -71,26 +73,50 @@ def appareils(etat: dict) -> Dict[str, List[str]]:
     return out
 
 
-def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note, refus=lambda app, d: None) -> None:
+def _eprouver(r: dict, adresses: List[str], magasin, reglage, maintenant: int) -> str:
+    """Bilan d'un essai échu : « regression » (rafale de refus, contenu habituel disparu), « peu_actif » (trop peu d'activité pour
+    l'éprouver) ou « ok »."""
+    evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
+    if dnstv_signaux.rafale(evts, {r["domaine"]}, maintenant, reglage.seuil_refus_min, reglage.duree_rafale_min):
+        return "regression"
+    depuis = [e for e in evts if e["ts"] >= r["maj"] and e["decision"] != "BLOCKED"]
+    if len(depuis) < reglage.min_requetes_actif:
+        return "peu_actif"
+    jours = magasin.jours_vus(adresses, dnstv._jour(r["maj"]), dnstv._jour(r["maj"] - 7 * 86400))
+    if dnstv_signaux.contenu_disparu(jours, {e["domaine"] for e in depuis}, len(depuis), min_requetes=reglage.min_requetes_actif):
+        return "regression"
+    return "ok"
+
+
+def _ne_du_moteur(r: dict) -> bool:
+    """Règle née d'un indice (#3666) que le MOTEUR a mise à l'essai (et, si confirmée, confirmée lui-même) : seule celle-là suit
+    l'indice. Un essai lancé ou une règle confirmée par l'administrateur ne bouge jamais au gré des indices."""
+    if not r.get("indice") or r.get("etat") not in ("essai", "confirme"):
+        return False
+    hist = r.get("historique") or []
+    entree = next((h for h in reversed(hist) if h.get("vers") == "essai" and h.get("de") != "essai"), None)
+    if entree is None or entree.get("origine") != "auto":
+        return False
+    return r["etat"] == "essai" or hist[-1].get("origine") == "auto"
+
+
+def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note, refus=lambda app, d: None,
+                                ignorer=lambda r: False) -> None:
     """Essais arrivés à échéance (#2047) : sans régression, la règle est CONFIRMÉE automatiquement ; si l'appareil a été trop peu
     actif pour l'éprouver, l'essai est prolongé d'une période ; en cas de régression (rafale de refus, contenu habituel disparu),
     on ne touche à rien : l'expiration normale retire la règle."""
     adr = appareils(etat)
-    for r in [x for x in regles.liste() if x["etat"] == "essai" and maintenant > x["fin_essai"]]:
+    for r in [x for x in regles.liste() if x["etat"] == "essai" and maintenant > x["fin_essai"] and not ignorer(x)]:
         adresses = adr.get(r["appareil"])
         if not adresses:
             continue                                         # appareil plus en mode auto : l'expiration joue
         if refus(r["appareil"], r["domaine"]):
             continue                                         # catégorie protégée (#3374) : jamais confirmée seule, l'expiration la retire
-        evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
-        if dnstv_signaux.rafale(evts, {r["domaine"]}, maintenant, reglage.seuil_refus_min, reglage.duree_rafale_min):
+        bilan = _eprouver(r, adresses, magasin, reglage, maintenant)
+        if bilan == "regression":
             continue
-        depuis = [e for e in evts if e["ts"] >= r["maj"] and e["decision"] != "BLOCKED"]
-        if len(depuis) < reglage.min_requetes_actif:
+        if bilan == "peu_actif":
             regles.prolonger_essai(r["id"], maintenant)
-            continue
-        jours = magasin.jours_vus(adresses, dnstv._jour(r["maj"]), dnstv._jour(r["maj"] - 7 * 86400))
-        if dnstv_signaux.contenu_disparu(jours, {e["domaine"] for e in depuis}, len(depuis), min_requetes=reglage.min_requetes_actif):
             continue
         note(regles.transiter(r["id"], "confirme", "auto", "essai sans régression", maintenant), "essai", "confirme", "essai sans régression")
 
@@ -106,6 +132,40 @@ def _motif_noms(prefixe: str, noms: List[str], plafond: int = 120) -> str:
         if len(texte) <= plafond:
             return texte
     return (prefixe + (noms[0] if noms else ""))[:plafond]
+
+
+def _suivre_les_indices(etat, regles, magasin, reglage, maintenant, note, indices, suggestion, refus_ix) -> None:
+    """Règles nées d'un indice et mises à l'essai (ou confirmées) par le moteur (#3666).
+
+    Oubli : indice disparu ou déclaré légitime par une box → la règle est EFFACÉE (reproposable si l'indice revient). Jamais sur une
+    lecture ratée : rien si l'index est illisible, rien pour une règle dont un producteur est indisponible.
+    Échéance : essai sans régression → confirmé (origine auto, garde `refus_indice`), même `confirmation_auto` désactivé ; appareil
+    peu actif ou indices indisponibles → essai prolongé ; régression ou catégorie protégée → l'expiration ordinaire le retire."""
+    if indices.lisible:
+        for r in regles.liste():
+            if not _ne_du_moteur(r):
+                continue
+            conf, leg = suggestion(r["domaine"])
+            if (conf and not leg) or set(r["indice"]) & indices.indisponibles:
+                continue
+            regles.oublier(r["id"])
+            note(r, r["etat"], "", MOTIF_INDICE_RETIRE)
+    adr = appareils(etat)
+    for r in [x for x in regles.liste() if x["etat"] == "essai" and maintenant > x["fin_essai"] and _ne_du_moteur(x)]:
+        adresses = adr.get(r["appareil"])
+        if not adresses:
+            continue                                         # appareil plus en mode auto : l'expiration joue
+        conf, leg = suggestion(r["domaine"])
+        if not indices.lisible or not conf or leg:           # restée là faute de lecture : la protection n'est pas retirée
+            regles.prolonger_essai(r["id"], maintenant, "essai prolongé : indices indisponibles")
+            continue
+        if refus_ix(r["appareil"], r["domaine"]):
+            continue                                         # catégorie protégée connue ici : l'expiration la retire
+        bilan = _eprouver(r, adresses, magasin, reglage, maintenant)
+        if bilan == "peu_actif":
+            regles.prolonger_essai(r["id"], maintenant)
+        elif bilan == "ok":
+            note(regles.transiter(r["id"], "confirme", "auto", MOTIF_INDICE_CONFIRME, maintenant), "essai", "confirme", MOTIF_INDICE_CONFIRME)
 
 
 def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=None, guides=frozenset(),
@@ -131,25 +191,23 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
         changements.append({"appareil": r["appareil"], "domaine": r["domaine"], "de": de, "vers": vers, "motif": motif})
         if (de in ("essai", "confirme")) != (vers in ("essai", "confirme")):
             applique = True
-    avant = {r["id"]: r["etat"] for r in regles.liste()}
-    if reglage.confirmation_auto:
-        _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note, refus)
-    avant = {r["id"]: r["etat"] for r in regles.liste()}
-    for r in regles.expirer(maintenant):
-        note(r, avant[r["id"]], r["etat"], r["motif"])
-
     def suggestion(d: str):
         """(confirmateurs aux noms valides, box qui le déclarent légitime) d'un domaine exact ; vides sans indices."""
         if indices is None:
             return [], []
         return _noms_valides(indices.confirmateurs(d)), indices.legitime_chez(d)
+    def refus_ix(appareil: str, domaine: str):
+        return dnstv_taxonomie.refus_indice(taxo, domaine, macs.get(appareil, ()), admin)
     domaines_indice = frozenset(d for d, par in indices.confirmes.items() if _noms_valides(par)) if indices is not None else frozenset()
-    if indices is not None:                                  # retrait : seul un ESSAI né d'indices ; une règle confirmée reste
-        for r in regles.liste():
-            if r["etat"] == "essai" and r.get("indice"):
-                conf, leg = suggestion(r["domaine"])
-                if not conf or leg:
-                    note(regles.transiter(r["id"], "retire", "auto", "indice retiré", maintenant), "essai", "retire", "indice retiré")
+    if indices is not None:
+        _suivre_les_indices(etat, regles, magasin, reglage, maintenant, note, indices, suggestion, refus_ix)
+    avant = {r["id"]: r["etat"] for r in regles.liste()}
+    if reglage.confirmation_auto:
+        _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note, refus,
+                                    ignorer=_ne_du_moteur if indices is not None else (lambda r: False))
+    avant = {r["id"]: r["etat"] for r in regles.liste()}
+    for r in regles.expirer(maintenant):
+        note(r, avant[r["id"]], r["etat"], r["motif"])
     def declencheur(d: str) -> bool:
         if any(d == s or d.endswith("." + s) for s in reglage.declencheurs):
             return True
@@ -157,10 +215,21 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
 
     for appareil, adresses in appareils(etat).items():
         evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
+        if indices is not None and appareil not in guides:
+            # Candidat AUTO déjà connu (jamais touché par l'administrateur) que d'autres box confirment désormais : il entre à l'essai.
+            for r in regles.liste():
+                if (r["appareil"] != appareil or r["etat"] != "candidat" or r.get("origine") != "auto"
+                        or r["risque"] not in ("faible", "partage") or any(h.get("origine") != "auto" for h in r.get("historique") or [])):
+                    continue
+                conf, leg = suggestion(r["domaine"])
+                if not conf or leg or refus_ix(appareil, r["domaine"]):
+                    continue
+                regles.poser_indice(r["id"], conf[:dnstv_regles.INDICE_MAX])
+                note(regles.transiter(r["id"], "essai", "auto", MOTIF_INDICE, maintenant), "candidat", "essai", MOTIF_INDICE)
         exclus = {r["domaine"] for r in regles.liste() if r["appareil"] == appareil}
         for c in dnstv_detect.detecter(evts, declencheur, classer, exclus,
                                        evts_declencheurs=evts if reglage.declencheurs_pub else None, indices=domaines_indice):
-            conf, leg = suggestion(c.domaine)
+            conf, leg = suggestion(c.domaine) if c.risque != "variable" else ([], [])   # un regroupement ne porte jamais l'indice
             kw = {}
             if conf:                                         # indice du maillage : les box sont nommées, la règle n'est jamais renvoyée (pas d'écho)
                 kw = {"indice": conf[:dnstv_regles.INDICE_MAX],
@@ -176,8 +245,7 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
             if conf:
                 # Essai sur indice : ni `auto_essai`, ni le seul risque « faible » ; jamais un appareil guidé, un nom à partie variable,
                 # un légitime déclaré ailleurs ni une catégorie protégée connue ici (INCONNU seul est levé par l'indice).
-                if (not leg and appareil not in guides and c.risque in ("faible", "partage")
-                        and dnstv_taxonomie.refus_indice(taxo, c.domaine, macs.get(appareil, ()), admin) is None):
+                if not leg and appareil not in guides and c.risque in ("faible", "partage") and refus_ix(appareil, c.domaine) is None:
                     note(regles.transiter(n["id"], "essai", "auto", MOTIF_INDICE, maintenant), "candidat", "essai", MOTIF_INDICE)
             elif reglage.auto_essai and appareil not in guides and c.risque == "faible" and not refus(appareil, c.domaine):   # « partagé », « variable » ou protégé : humain
                 r = regles.transiter(n["id"], "essai", "auto", "essai automatique", maintenant)

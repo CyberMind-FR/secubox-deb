@@ -164,7 +164,7 @@ def test_charger_producteur_qui_leve_n_affecte_pas_les_suivants(tmp_path, monkey
         return vrai(c)
     monkeypatch.setattr(I, "_valider_contenu", piege)
     ix = I.charger(d)
-    assert "boom.com" not in ix.confirmes and ix.confirmateurs("b.com") == ["gk2"]
+    assert "boom.com" not in ix.confirmes and ix.confirmateurs("b.com") == ["gk2"] and ix.indisponibles == {"gk1"}
 
 
 def test_charger_refuse_symlink_et_did_ou_nom_invalide(tmp_path):
@@ -185,7 +185,28 @@ def test_charger_refuse_symlink_et_did_ou_nom_invalide(tmp_path):
 
 def test_charger_dossier_absent(tmp_path):
     ix = I.charger(tmp_path / "rien")
-    assert ix.confirmes == {} and ix.legitimes == {}
+    assert ix.confirmes == {} and ix.legitimes == {} and ix.lisible is False
+
+
+def test_charger_index_illisible_ou_vide(tmp_path):
+    d = tmp_path / "liv"
+    d.mkdir()
+    (d / "index.json").write_text("[1, 2")
+    assert I.charger(d).lisible is False
+    (d / "index.json").write_text("[]")
+    assert I.charger(d).lisible is False
+    (d / "index.json").write_text("{}")
+    ix = I.charger(d)
+    assert ix.lisible is True and ix.indisponibles == set() and ix.confirmes == {}
+
+
+def test_charger_producteur_illisible_est_indisponible(tmp_path):
+    d = tmp_path / "liv"
+    _livraison(d, DID1, _c({"a.com": "TRACKING"}), "gk2")
+    _livraison(d, DID2, "{tronqué", "gk6")
+    ix = I.charger(d)
+    assert ix.lisible is True and ix.indisponibles == {"gk6"} and ix.confirmateurs("a.com") == ["gk2"]
+    assert I.Index().lisible is True and I.Index().indisponibles == set()
 
 
 def test_index_confirmateurs_et_legitimes(tmp_path):

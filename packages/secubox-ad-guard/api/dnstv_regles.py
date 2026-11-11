@@ -167,6 +167,26 @@ class Regles:
         r["fin_essai"] = maintenant + ESSAI_S if vers == "essai" else 0
         return dict(r)
 
+    def oublier(self, rid: str) -> dict:
+        """Efface la règle (#3666) : un essai né d'un indice disparu ou déclaré légitime ailleurs peut être reproposé si l'indice
+        revient (un « retiré » ne le serait pas avant 30 jours). Rend la règle effacée."""
+        r = self._r.pop(rid, None)
+        if r is None:
+            raise ErreurRegle("règle inconnue")
+        return dict(r)
+
+    def poser_indice(self, rid: str, indice: List[str]) -> dict:
+        """Noms des box qui suggèrent une règle existante (#3666), validés comme à la lecture."""
+        r = self._r.get(rid)
+        if r is None:
+            raise ErreurRegle("règle inconnue")
+        noms = _indice(indice)
+        if noms:
+            r["indice"] = noms
+        else:
+            r.pop("indice", None)
+        return dict(r)
+
     def prolonger_essai(self, rid: str, maintenant: int, motif: str = "essai prolongé : appareil peu actif") -> dict:
         """Reconduit l'essai d'une période (#2047) : une règle qu'aucune activité n'a éprouvée n'est ni confirmée à l'aveugle, ni retirée."""
         r = self._r.get(rid)
