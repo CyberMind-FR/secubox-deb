@@ -841,22 +841,10 @@ def _exporter_mirrornet_verrouille() -> None:
 
 def _abonnement_en_cours(j, abonne: str, service_id: str) -> Optional[str]:
     """Identifiant d'un abonnement de `abonne` à `service_id` encore en cours (en attente ou approuvé, non échu), ou
-    None : l'annuaire refuse un second abonnement, même sans clé d'idempotence (deux requêtes simultanées)."""
-    from annuaire.model import Op as _Op, SubscriptionState as _SS  # noqa: PLC0415
-    from annuaire.verbs import _instant, echeance_abonnement, subscription_state  # noqa: PLC0415
-    maintenant = datetime.now(timezone.utc)
-    for e in j.iter_entries(ops=("service_subscribe",)):
-        p = e.payload
-        if (e.op != _Op.SERVICE_SUBSCRIBE or e.author != abonne or p.get("subscriber") != abonne
-                or p.get("service_id") != service_id):
-            continue
-        sid = p.get("subscription_id")
-        if subscription_state(j, sid) not in (_SS.PENDING, _SS.APPROVED):
-            continue
-        ech = _instant(echeance_abonnement(j, sid, maintenant))
-        if ech is None or ech > maintenant:
-            return sid
-    return None
+    None : l'annuaire refuse un second abonnement, même sans clé d'idempotence (deux requêtes simultanées). Règle
+    partagée avec la tâche de fond des indices TV (#3666, `annuaire.mirrornet_locaux.abonnements_en_cours`)."""
+    from annuaire.mirrornet_locaux import abonnements_en_cours  # noqa: PLC0415
+    return (abonnements_en_cours(j, abonne).get(service_id) or [None])[0]
 
 
 class SelfOfferRequest(BaseModel):
@@ -1864,6 +1852,39 @@ def _cycle_sync(peers_path: str, ops: Optional[str] = None):
     return res
 
 
+def _tv_indices_fond() -> Optional[Dict[str, Any]]:
+    """Indices TV Privacy (#3666) : offre, versions et abonnements « tv-indices » signés en tâche de fond, d'après la
+    demande `publications.json` de secubox-mirrornet. Aucune demande ou aucune clé (`annuairectl init` pas fait) :
+    aucun geste. Chaque geste signé est audité avec `par = "fond"`, puis l'export MirrorNet est rafraîchi. Jamais
+    d'exception vers la boucle de synchronisation."""
+    from annuaire import mirrornet_locaux as ML  # noqa: PLC0415
+    from annuaire.verbs import _get_nodes  # noqa: PLC0415
+    try:
+        demandes = ML.lire_demandes()
+        if demandes is None:
+            return None
+        try:
+            priv, did = _cle_du_noeud()
+        except HTTPException:
+            return None
+        j = get_journal()
+        boxname = next((n.get("boxname") for n in _get_nodes(j) if n.get("did") == did), "") or ""
+
+        def auditer(action: str, **details: Any) -> None:
+            _auditer_mirrornet(action, {"sub": "fond"}, **details)
+
+        with _VERROU_ABONNEMENT:                    # même verrou que les routes /self : « déjà en cours » + signature
+            res = ML.traiter(j, priv, did, boxname, demandes, datetime.now(timezone.utc), auditer=auditer)
+        if res["offre"] in ("creee", "retiree") or res["version"] or res["abonnements"] or res["resiliations"]:
+            _sync_log.info("indices TV : offre %s, version %s, %s abonnement(s), %s résiliation(s)", res["offre"],
+                           (res["version"] or "inchangée")[:19], res["abonnements"], res["resiliations"])
+            _exporter_mirrornet()
+        return res
+    except Exception as e:  # noqa: BLE001 — la boucle ne meurt pas, mais elle le dit
+        _sync_log.warning("indices TV : traitement de fond échoué : %s", e)
+        return None
+
+
 async def _dir_sync_loop():
     import asyncio  # noqa: PLC0415
 
@@ -1872,6 +1893,10 @@ async def _dir_sync_loop():
     while True:
         await asyncio.to_thread(_inscrire_si_besoin)
         await asyncio.to_thread(_cycle_sync, peers_path)
+        try:                                                         # #3666 : jamais la mort de la boucle
+            await asyncio.to_thread(_tv_indices_fond)
+        except Exception as e:  # noqa: BLE001
+            _sync_log.warning("indices TV : traitement de fond échoué : %s", e)
         await asyncio.sleep(interval)
 
 
