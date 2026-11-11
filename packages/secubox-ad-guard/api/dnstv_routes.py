@@ -27,9 +27,9 @@ from secubox_core import auth as _auth
 from secubox_core.auth import est_admin_reel, require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from . import dnstv, dnstv_analyse, dnstv_pubs, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from api import dnstv, dnstv_analyse, dnstv_pubs, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 logger = logging.getLogger("secubox.ad-guard.adblock-tv")
@@ -919,6 +919,14 @@ def refus_appareil(nom: str, minutes: int = 60):
     for x in refus:
         x["autorise"] = x["domaine"] in autorises
     return {"nom": nom, "minutes": minutes, "refus": refus}
+
+
+@router.get("/appareils/{nom}/pubs-bloquees", dependencies=[Depends(require_lecture_nominative)])
+def pubs_bloquees(nom: str):
+    """#3676 : encart « Pubs bloquées récemment » — refus des dernières 24 h de l'appareil, par service, avec QUI a bloqué. Lit SEULEMENT
+    le cache écrit par le moteur auto (au plus toutes les 10 min) ; jamais les listes compilées ni la base dans la requête."""
+    _clients_du_nom(_etat(), nom)
+    return dnstv_pubs.vue(dnstv_regles.slug(nom))
 
 
 

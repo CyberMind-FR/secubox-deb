@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SBX TV Privacy (#3676) — regroupement par SERVICE de l'encart « Pubs bloquées récemment ».
+# Format : suffixe  service      (`_` dans le service = espace ; le plus long suffixe gagne ; frontière d'étiquette seulement)
+# Un domaine absent d'ici est regroupé sous son domaine enregistrable (deux étiquettes, trois pour un suffixe public à deux niveaux).
+# Simple libellé d'affichage : aucun effet sur le filtrage.
+# version: 2026.11.11-1
+tf1.fr                    TF1+
+tf1info.fr                TF1+
+mytf1.fr                  TF1+
+netflix.com               Netflix
+netflix.net               Netflix
+nflxvideo.net             Netflix
+nflxso.net                Netflix
+nflxext.com               Netflix
+nflximg.net               Netflix
+nflximg.com               Netflix
+youtube.com               YouTube_/_Google
+youtube-nocookie.com      YouTube_/_Google
+ytimg.com                 YouTube_/_Google
+googlevideo.com           YouTube_/_Google
+google.com                YouTube_/_Google
+google.fr                 YouTube_/_Google
+googleapis.com            YouTube_/_Google
+googleusercontent.com     YouTube_/_Google
+gstatic.com               YouTube_/_Google
+doubleclick.net           YouTube_/_Google
+googlesyndication.com     YouTube_/_Google
+googleadservices.com      YouTube_/_Google
+google-analytics.com      YouTube_/_Google
+googletagmanager.com      YouTube_/_Google
+googletagservices.com     YouTube_/_Google
+2mdn.net                  YouTube_/_Google
+app-measurement.com       YouTube_/_Google
+amazon-adsystem.com       Amazon
+amazonvideo.com           Amazon
+primevideo.com            Amazon
+aiv-cdn.net               Amazon
+aiv-delivery.net          Amazon
+media-amazon.com          Amazon
+amazon.com                Amazon
+amazon.fr                 Amazon
+proxad.net                Freebox
+fbx-mgt.fr                Freebox
+free.fr                   Freebox
+freebox.fr                Freebox
+oqee.net                  Freebox
+disneyplus.com            Disney+
+disney-plus.net           Disney+
+bamgrid.com               Disney+
+dssott.com                Disney+
+canalplus.com             Canal+
+canal-plus.com            Canal+
+mycanal.fr                Canal+
+francetv.fr               France_TV
+france.tv                 France_TV
+ftven.fr                  France_TV
+francetelevisions.fr      France_TV
+ftv-publicite.fr          France_TV
+6play.fr                  M6
+m6.fr                     M6
+m6web.fr                  M6
+facebook.com              Facebook_/_Meta
+facebook.net              Facebook_/_Meta
+fbcdn.net                 Facebook_/_Meta
+instagram.com             Facebook_/_Meta
+cdninstagram.com          Facebook_/_Meta
+microsoft.com             Microsoft
+msn.com                   Microsoft
+live.com                  Microsoft
+bing.com                  Microsoft
+windows.com               Microsoft
+xboxlive.com              Microsoft
+apple.com                 Apple
+icloud.com                Apple
+mzstatic.com              Apple
+aaplimg.com               Apple
+roku.com                  Roku
+samsung.com               Samsung
+samsungads.com            Samsung
+samsungcloud.com          Samsung
+samsungcloudsolution.com  Samsung
+samsungcloudsolution.net  Samsung
+samsungotn.net            Samsung
+lge.com                   LG
+lgtvsdp.com               LG
+lgsmartad.com             LG
+lgappstv.com              LG
+brightline.tv             Brightline
+braze.eu                  Braze
+braze.com                 Braze
+appboy.com                Braze
+fwmrm.net                 FreeWheel

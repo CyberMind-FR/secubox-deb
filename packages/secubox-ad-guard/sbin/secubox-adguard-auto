@@ -21,7 +21,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_analyse, dnstv_assistant, dnstv_contournement, dnstv_dpi, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_indices, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
+from api import dnstv, dnstv_analyse, dnstv_assistant, dnstv_contournement, dnstv_dpi, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_indices, dnstv_profil, dnstv_pubs, dnstv_regles, dnstv_taxonomie  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
 
@@ -192,6 +192,15 @@ def rafraichir_feed(now: int, voisins=None, locales=None, passerelles=None) -> b
     return True
 
 
+def rafraichir_pubs(now: int) -> None:
+    """#3676 : cache de l'encart « Pubs bloquées récemment » (au plus toutes les 10 min, listes lues en flux). Hors verrou des règles :
+    lecture seule de la base, des règles et des listes, écriture de SES propres fichiers. Une erreur ne fait JAMAIS échouer le moteur."""
+    try:
+        dnstv_pubs.rafraichir(now)
+    except Exception as e:                                   # noqa: BLE001 — jamais de panne du moteur par l'encart
+        print(f"cache des pubs bloquées non écrit : {type(e).__name__}: {e}", file=sys.stderr)
+
+
 class _Echec:
     returncode, stdout, stderr = 1, "", "contrôleur absent"
 
@@ -359,6 +368,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
     except Exception as e:                                           # noqa: BLE001 — ceinture et bretelles : jamais de panne du moteur par le fichier d'échange
         print(f"fichier d'échange dpi-feed : {type(e).__name__}: {e}", file=sys.stderr)
     rafraichir_dpi(now, voisins, dpi)
+    rafraichir_pubs(now)
     cl = classeur()
     magasin = dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db")
     etat_modifie, ajouts, res = False, [], {"changements": [], "applique": False}

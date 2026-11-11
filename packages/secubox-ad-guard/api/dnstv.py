@@ -119,7 +119,7 @@ def verifier_manifeste(dossier: Path) -> List[str]:
             except ImportError:
                 from api import dnstv_taxonomie
             problemes += [f"ligne invalide {m}" for m in dnstv_taxonomie.charger_reference_detail(f)[1]]
-        elif nom not in ("services.txt", "ssai.txt", "resolveurs-doh.txt"):   # formats propres, validés par leur chargeur (dnstv_dpi, lot 4)
+        elif nom not in ("services.txt", "ssai.txt", "resolveurs-doh.txt", "services-pub.txt"):   # formats propres, validés par leur chargeur (dnstv_dpi, lot 4, #3676)
             _, mauvaises, _ = lire_liste(f)
             problemes += [f"ligne invalide {m}" for m in mauvaises]
     return problemes
@@ -745,6 +745,14 @@ class Magasin:
             return [{"domaine": d, "categorie": c, "requetes": n, "bloquees": b, "derniere": t} for d, c, n, b, t in cx.execute(
                 f"SELECT domaine, MAX(categorie), COUNT(*), SUM(decision='BLOCKED'), MAX(ts) FROM dnstv_recents WHERE {' AND '.join(w)} "
                 "GROUP BY domaine ORDER BY COUNT(*) DESC LIMIT 500", a)]
+
+    def bloques(self, depuis: int, limite: int = RECENTS_MAX) -> List[dict]:
+        """Requêtes REFUSÉES depuis `depuis`, regroupées par adresse et domaine (#3676, encart « Pubs bloquées récemment ») :
+        nombre, dernier refus, catégorie du dernier refus. Borné par la table (48 h, 20 000 lignes) et par `limite`."""
+        with self._cx() as cx:
+            return [{"client": c, "domaine": d, "nombre": n, "dernier_ts": t, "categorie": cat or ""} for c, d, n, t, cat in cx.execute(
+                "SELECT client, domaine, COUNT(*), MAX(ts), MAX(categorie) FROM dnstv_recents WHERE ts>=? AND decision='BLOCKED' "
+                "GROUP BY client, domaine ORDER BY MAX(ts) DESC LIMIT ?", (int(depuis), max(1, min(int(limite), RECENTS_MAX))))]
 
     def evenements(self, clients: List[str], depuis: int, limite: int = 20000) -> List[dict]:
         """Événements d'UNE source (toutes ses adresses), du plus ancien au plus récent : sert à la détection des coupures (#1954)."""

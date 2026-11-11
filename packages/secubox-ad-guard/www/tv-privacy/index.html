@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-T2cqGM8+7GArePkKIOu2zDBPXMCxI898YpSkmYZnIgo='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-8mv1m8DrAM4yHjO9FMVIhoKNQfUuOMCAgcdVqu0f8xw='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -112,6 +112,7 @@
   .espace{margin-top:10px}
   .suite{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   td.choix{white-space:normal;min-width:12rem}
+  .pubs h3{margin:10px 0 4px;font-size:.8rem;overflow-wrap:anywhere}
   td.raison{white-space:normal;min-width:10rem;max-width:22rem}
   tr.neuf td{background:rgba(41,182,246,.10)}
   .guide{display:flex;align-items:center;gap:6px;font-size:.8rem;padding:3px 0}
@@ -227,6 +228,10 @@
       <p class="note" id="ap-explication">DNS seulement : la box voit les noms que l’appareil demande, pas ses flux (ils vont directement à la box opérateur sur un réseau plat). DNS + DPI : ses flux traversent la box et sont classés par nDPI.</p>
       <p class="note" id="ap-forcage"></p>
       <div id="ap-cartes" class="grille espace"><div class="vide">—</div></div>
+    </div>
+    <div class="pan espace pubs"><h2>Pubs bloquées récemment <small id="ap-pubs-note">—</small></h2>
+      <p class="note">Ce que la box a refusé à cet appareil ces dernières 24 h, regroupé par service, et qui l’a bloqué : règle TV Privacy, indice du maillage, exception de l’administrateur, listes (adblock, adulte, filtre web). Recalculé toutes les 10 minutes.</p>
+      <div id="ap-pubs"><div class="vide">—</div></div>
     </div>
     <div class="grille espace">
       <div class="pan"><h2>Coupures publicitaires <small>ce qui apparaît dans les 30 s après un blocage</small></h2><div id="ap-frise"><div class="vide">—</div></div></div>
@@ -411,6 +416,10 @@
     diagnostic:{erreurs_dns:[{appareil:'Lecteur box',domaine:'api.example.net',erreurs:3,dernier:1761955000}],pauses:[],retours_arriere:[{ts:1761950000,appareil:'Téléviseur salon',domaine:'cdn.example.org',action:'retrait',origine:'auto'}],
       exceptions:[{appareil:'televiseur-salon',nom:'Téléviseur salon',domaine:'cdn.example.org',type:'autoriser',source:'exception'}],modes:[]},
     exceptions:{exceptions:[{appareil:'televiseur-salon',nom:'Téléviseur salon',domaine:'cdn.example.org',type:'autoriser',source:'exception'}],hors_champ:[{mecanisme:'adult-exempt',raison:'autre finalité'}]},
+    pubs:{maj:1761955200,verifie:1761955200,fenetre_s:86400,services:[
+      {service:'Exemple TV',nombre:12,dernier_ts:1761955100,domaines:[{domaine:'adproxy.example.com',dernier_ts:1761955100,nombre:8,source:'adblock',detail:'liste adblock'},
+        {domaine:'pub.example.com',dernier_ts:1761954000,nombre:4,source:'regle',detail:'règle TV Privacy (confirmée)'}]},
+      {service:'example.net',nombre:2,dernier_ts:1761950000,domaines:[{domaine:'track.example.net',dernier_ts:1761950000,nombre:2,source:'indice',detail:'indice de gk1'}]}]},
     dpi:{disponible:true,age_s:30,sources:{sbxdpi:'absent',conntrack:'absent'},pause_charge:null,appareils:[
       {mac:'02:00:5e:00:00:01',nom:'Téléviseur salon',mode:'auto',couverture:'dns+dpi',forcage:{pose:true,suspendu:false,note:'forçage DNS posé, effectif seulement si les flux de l’appareil traversent la box (mode LAN)'}},
       {mac:'02:00:5e:00:00:02',nom:'Lecteur box',mode:'observe',couverture:'dns',forcage:{pose:false,suspendu:false,note:''}}]},
@@ -432,6 +441,7 @@
     journal:{heures:24,total:1,agregats:[{appareil:'Téléviseur salon',domaine:'cdn.example.org',action:'retrait',occurrences:1,premier:1761950000,dernier:1761950000,origines:['auto']}]}};
   function source(chemin){
     if(!DEMO)return lire(chemin);
+    if(/\/pubs-bloquees$/.test(chemin))return Promise.resolve(D.pubs);
     if(chemin.indexOf('/protection/dpi/')===0){var n=chemin.split('?')[0].split('/')[3];return Promise.resolve(D[n==='etat'?'dpi':n]);}
     if(chemin.indexOf('/protection/direct')===0)return Promise.resolve(chemin.indexOf('depuis=0')>0?D.direct:{decouvertes:[],dernier_id:2,file:[],candidats:D.direct.candidats,appareils:D.direct.appareils});
     var k=chemin.indexOf('/protection/analyse')===0?'analyse':chemin.indexOf('/protection/evenements')===0?'evenements':chemin.indexOf('/protection/usager/tv')===0?'usager':
@@ -743,6 +753,7 @@
     else el('ap-sources').textContent='sources : sbxdpi '+(e.sources.sbxdpi||'—')+', conntrack '+(e.sources.conntrack||'—')+(e.pause_charge?' — DPI ARRÊTÉ pour toute la box (Hall, /ndpid/ compris) : charge élevée plus de 5 min ; relance manuelle':'')+(!e.pause_charge&&e.charge_signal?' — '+e.charge_signal:'');
     el('ap-reprendre').hidden=!(e&&e.pause_charge);
     ((e&&e.appareils)||[]).forEach(function(a){if(a.mac)sel.appendChild(h('option',{value:a.mac},a.nom||a.mac));});
+    if(!sel.options.length)(etat.appareils||[]).forEach(function(a){if(a.mac)sel.appendChild(h('option',{value:a.mac},a.nom||a.mac));});
     if(garde)sel.value=garde;
     var a=((e&&e.appareils)||[]).filter(function(x){return x.mac===sel.value;})[0];
     var c=el('ap-couverture');c.textContent=a?(a.couverture==='dns+dpi'?'DNS + DPI':'DNS seulement'):'—';c.className='pastille '+(a&&a.couverture==='dns+dpi'?'vert':'gris');
@@ -795,8 +806,30 @@
       tr.appendChild(h('td',{class:'mono coupe'},x.domaine));tr.appendChild(h('td',{class:'num'},fmt(x.confiance)));tr.appendChild(h('td',null,x.raison||''));tb.appendChild(tr);});
     if(!tb.firstChild)vide(tb,5,'Aucune découverte.');
   }
+  // #3676 : pubs bloquées récemment (cache du moteur, 10 min) ; une réponse d'un appareil précédent est ignorée.
+  var pubsDemande=0;
+  function rendrePubs(r){
+    var box=el('ap-pubs');vider(box);var l=(r&&r.services)||[];
+    el('ap-pubs-note').textContent=r?(r.maj?'calculé à '+heure(r.verifie||r.maj):'pas encore calculé'):'—';
+    if(!r){box.appendChild(h('div',{class:'vide'},'—'));return;}
+    if(!l.length){box.appendChild(h('div',{class:'vide'},r.maj?'Aucun blocage pour cet appareil ces dernières 24 h.':'Le premier calcul arrive dans les 10 minutes.'));return;}
+    l.forEach(function(s){var d=s.domaines||[];
+      box.appendChild(h('h3',null,s.service+' — '+fmt(d.length)+' domaine'+(d.length>1?'s':'')+', '+fmt(s.nombre)+' blocage'+(s.nombre>1?'s':'')));
+      d.forEach(function(x){box.appendChild(h('div',{class:'mono coupe'},x.domaine+' · '+heure(x.dernier_ts)+' · ×'+fmt(x.nombre)+' · '+(x.detail||x.source||'autre')));});});
+  }
+  function chargerPubs(nom){
+    var g=++pubsDemande;
+    if(!nom){rendrePubs(null);return;}
+    source('/appareils/'+encodeURIComponent(nom)+'/pubs-bloquees').then(function(r){if(g===pubsDemande){rendrePubs(r);hauteur();}})
+      .catch(function(e){if(g!==pubsDemande)return;rendrePubs(null);if(e&&e.session)echec(e);});
+  }
+  function nomChoisi(e){
+    var m=el('ap-mac').value,l=((e&&e.appareils)||[]).concat(etat.appareils||[]);
+    for(var i=0;i<l.length;i++)if(l[i].mac&&l[i].mac===m&&l[i].nom)return l[i].nom;
+    return '';
+  }
   function chargerApplications(){
-    source('/protection/dpi/etat').then(function(e){var a=rendreEtatDpi(e);if(!a){rendreApplications(null);rendreFrise(null);rendreDecouvertes(null);hauteur();return;}
+    source('/protection/dpi/etat').then(function(e){var a=rendreEtatDpi(e);chargerPubs(nomChoisi(e));if(!a){rendreApplications(null);rendreFrise(null);rendreDecouvertes(null);hauteur();return;}
       var m=encodeURIComponent(a.mac),f=el('ap-fenetre').value;
       return Promise.all([source('/protection/dpi/applications?mac='+m+'&fenetre='+f),source('/protection/dpi/coupures?mac='+m+'&fenetre='+(f==='1h'?'1h':'24h')),
         source('/protection/dpi/decouvertes?recentes=1&mac='+m+'&limite=50')]).then(function(r){rendreApplications(r[0]);rendreFrise(r[1]);rendreDecouvertes(r[2]);hauteur();});
