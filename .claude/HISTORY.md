@@ -9,6 +9,25 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-11 — TV Privacy : indices de détection partagés entre box par MirrorNet (premier vrai jeu de données)
+
+- `secubox-ad-guard` 1.25.0, `secubox-mirrornet` 0.6.0, `secubox-annuaire` 0.22.0 (PR #3669).
+  - Conception : `docs/superpowers/specs/2026-11-11-tv-privacy-indices-maillage-design.md` ; plan exécuté par sous-agents, chaque tâche relue puis corrigée ; relecture finale + `relecteur-securite` (1 bloquant : un pair pouvait figer un blocage par un contenu signé invalide ; 5 points, dont la vie privée — un blocage de contrôle parental aurait été publié comme « pub ») ; tous corrigés.
+- Fonctionnement :
+  - **Publication** : chaque box publie ses domaines pub/pistage/télémétrie confirmés et ses légitimes, sans appareil, date ni MAC (`/var/lib/secubox/ad-guard/dnstv/indices-publication.json` → MirrorNet → `/var/lib/secubox-mirrornet-partage/publications.json`).
+  - **Signature de fond** : l'annuaire signe l'offre (`scope.usage = tv-indices`, classe communauté), les versions (une par heure au plus) et les abonnements aux autres box (bornés, gratuits, ≥ LIMITED).
+  - **Livraison** : MirrorNet livre dans `/var/lib/secubox-mirrornet-partage/livraisons/tv-indices/`.
+  - **Détection** : le moteur auto met à l'essai, poids maximal, un domaine vu localement en coupure pub et confirmé ailleurs (même INCONNU, même `auto_essai` coupé) ; jamais une catégorie protégée ; un légitime d'une autre box freine ; retrait sûr et réversible.
+  - **Interrupteurs** `indices_publier` / `indices_recevoir` (actifs par défaut), routes `GET/POST /adblock-tv/indices`.
+- Déployé gk2 et gk6 :
+  - gk2 publie 38 domaines (21 pub, 14 pistage, 3 télémétrie) + 1 légitime.
+  - **De bout en bout en 17 min** : offres signées, abonnements croisés, livraison à 13:43. Sur gk6, le lecteur d'ad-guard voit les 38 domaines de gk2 (même empreinte b2:18c616f3…).
+  - gk6 n'a pas TV Privacy configuré (pas d'état) : il reçoit sans appliquer.
+- **Reste** :
+  - la page (encart, interrupteurs) attend une relance de l'agrégateur de gk2, à grouper (accord du propriétaire) ;
+  - le résumé ne compte pas un producteur qui ne publie aucun domaine ;
+  - publication dans apt = mise à jour automatique du parc (partage actif par défaut) (closes #3666).
+
 ## 2026-11-11 — gk3 : messagerie remise en marche, relais SMTP local
 
 - Page Santé de gk3 : 4 en panne, 9 dégradés.
