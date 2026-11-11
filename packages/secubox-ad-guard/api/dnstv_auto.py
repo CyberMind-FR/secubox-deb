@@ -5,14 +5,18 @@
 """SecuBox-Deb :: ad-guard :: moteur du mode « auto » (#1954) — pur : aucune entrée/sortie hors Magasin et Regles."""
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional
 
 try:
     from . import dnstv, dnstv_detect, dnstv_dpi, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
 except ImportError:
     from api import dnstv, dnstv_detect, dnstv_dpi, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
 
+if TYPE_CHECKING:                                    # pragma: no cover
+    from .dnstv_indices import Index
+
 HISTORIQUE_H = 48
+MOTIF_INDICE = "essai automatique (indice du maillage)"
 
 
 @dataclass
@@ -91,11 +95,30 @@ def _confirmer_les_essais_echus(etat, regles, magasin, reglage, maintenant, note
         note(regles.transiter(r["id"], "confirme", "auto", "essai sans régression", maintenant), "essai", "confirme", "essai sans régression")
 
 
-def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=None, guides=frozenset()) -> dict:
+def _noms_valides(noms: Iterable[str]) -> List[str]:
+    return [n for n in noms if isinstance(n, str) and dnstv_regles.NOM_BOX_RE.match(n)]
+
+
+def _motif_noms(prefixe: str, noms: List[str], plafond: int = 120) -> str:
+    """« <préfixe>gk1, gk2 (+3) » tenu sous le plafond des motifs de règle (`valider_regle` tronque à 120)."""
+    for k in range(len(noms), 0, -1):
+        texte = prefixe + ", ".join(noms[:k]) + ("" if k == len(noms) else f" (+{len(noms) - k})")
+        if len(texte) <= plafond:
+            return texte
+    return (prefixe + (noms[0] if noms else ""))[:plafond]
+
+
+def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=None, guides=frozenset(),
+         indices: Optional["Index"] = None) -> dict:
     """Un passage du moteur. `taxo` (#3374) : taxonomie complète (corrections manuelles comprises) ; à défaut, celle des listes du paquet
     avec le classeur `classer`. Garde : un domaine de catégorie protégée n'entre jamais SEUL en essai ni en confirmation.
     `guides` (lot 5b) : slugs des appareils en apprentissage guidé ; leurs candidats n'entrent JAMAIS seuls en essai, ils attendent la
-    validation de l'administrateur dans l'assistant. Vide par défaut : AUTO pur inchangé."""
+    validation de l'administrateur dans l'assistant. Vide par défaut : AUTO pur inchangé.
+    `indices` (#3666) : domaines confirmés publicitaires par d'autres box du maillage. N'agit que sur un domaine EXACT vu localement
+    pendant une coupure d'un appareil en mode auto : candidat dès une coupure, puis essai automatique (même `auto_essai` désactivé,
+    même risque « partage ») si l'appareil n'est pas guidé et que `refus_indice` le permet ; un légitime déclaré par une box le
+    laisse candidat. Un essai né d'indices est retiré quand plus aucune box ne le confirme ou qu'une le déclare légitime.
+    None (défaut) : comportement inchangé, aucun retrait."""
     changements, applique, candidats = [], False, 0
     taxo = taxo or dnstv_taxonomie.Taxonomie.depuis_dossier(classer=classer, regles=regles)
     macs = dnstv_taxonomie.macs_par_appareil(etat)
@@ -114,6 +137,19 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
     avant = {r["id"]: r["etat"] for r in regles.liste()}
     for r in regles.expirer(maintenant):
         note(r, avant[r["id"]], r["etat"], r["motif"])
+
+    def suggestion(d: str):
+        """(confirmateurs aux noms valides, box qui le déclarent légitime) d'un domaine exact ; vides sans indices."""
+        if indices is None:
+            return [], []
+        return _noms_valides(indices.confirmateurs(d)), indices.legitime_chez(d)
+    domaines_indice = frozenset(d for d, par in indices.confirmes.items() if _noms_valides(par)) if indices is not None else frozenset()
+    if indices is not None:                                  # retrait : seul un ESSAI né d'indices ; une règle confirmée reste
+        for r in regles.liste():
+            if r["etat"] == "essai" and r.get("indice"):
+                conf, leg = suggestion(r["domaine"])
+                if not conf or leg:
+                    note(regles.transiter(r["id"], "retire", "auto", "indice retiré", maintenant), "essai", "retire", "indice retiré")
     def declencheur(d: str) -> bool:
         if any(d == s or d.endswith("." + s) for s in reglage.declencheurs):
             return True
@@ -123,16 +159,27 @@ def tick(etat, regles, magasin, classer, reglage, maintenant, taxo=None, replis=
         evts = magasin.evenements(adresses, maintenant - HISTORIQUE_H * 3600)
         exclus = {r["domaine"] for r in regles.liste() if r["appareil"] == appareil}
         for c in dnstv_detect.detecter(evts, declencheur, classer, exclus,
-                                       evts_declencheurs=evts if reglage.declencheurs_pub else None):
+                                       evts_declencheurs=evts if reglage.declencheurs_pub else None, indices=domaines_indice):
+            conf, leg = suggestion(c.domaine)
+            kw = {}
+            if conf:                                         # indice du maillage : les box sont nommées, la règle n'est jamais renvoyée (pas d'écho)
+                kw = {"indice": conf[:dnstv_regles.INDICE_MAX],
+                      "motif": _motif_noms("légitime chez ", _noms_valides(leg) or ["une autre box"]) if leg else _motif_noms("suggéré par ", conf)}
             try:
-                n = regles.proposer(appareil, c.domaine, c.score, c.risque, maintenant)
+                n = regles.proposer(appareil, c.domaine, c.score, c.risque, maintenant, **kw)
             except dnstv_regles.ErreurRegle:
                 break                                        # plafond atteint : on cesse de proposer, mais l'expiration et les signaux continuent
             if n is None:
                 continue
             candidats += 1
-            changements.append({"appareil": appareil, "domaine": c.domaine, "de": "", "vers": "candidat", "motif": c.motif})
-            if reglage.auto_essai and appareil not in guides and c.risque == "faible" and not refus(appareil, c.domaine):   # « partagé », « variable » ou protégé : humain
+            changements.append({"appareil": appareil, "domaine": c.domaine, "de": "", "vers": "candidat", "motif": n["motif"] if conf else c.motif})
+            if conf:
+                # Essai sur indice : ni `auto_essai`, ni le seul risque « faible » ; jamais un appareil guidé, un nom à partie variable,
+                # un légitime déclaré ailleurs ni une catégorie protégée connue ici (INCONNU seul est levé par l'indice).
+                if (not leg and appareil not in guides and c.risque in ("faible", "partage")
+                        and dnstv_taxonomie.refus_indice(taxo, c.domaine, macs.get(appareil, ()), admin) is None):
+                    note(regles.transiter(n["id"], "essai", "auto", MOTIF_INDICE, maintenant), "candidat", "essai", MOTIF_INDICE)
+            elif reglage.auto_essai and appareil not in guides and c.risque == "faible" and not refus(appareil, c.domaine):   # « partagé », « variable » ou protégé : humain
                 r = regles.transiter(n["id"], "essai", "auto", "essai automatique", maintenant)
                 note(r, "candidat", "essai", "essai automatique")
         # Lot 4 (#3374, arbitrage 3) : anti faux repli — un domaine PUB apparu juste après un refus publicitaire est proposé puis mis à
