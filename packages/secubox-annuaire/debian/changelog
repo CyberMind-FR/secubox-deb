@@ -4,6 +4,10 @@ secubox-annuaire (0.22.0-1~trixie1) trixie; urgency=medium
     tv-indices (offre conforme, une action de version par heure, retour de contenu, abonnements
     bornés et un par fournisseur, seuil de confiance de MirrorNet, tarif gratuit ou réciproque),
     audit par « fond ».
+  * Relecture finale (ref #3666) : tarif « gratuit » seul en tâche de fond (phase 5 à venir) ;
+    un geste d'offre (création ou retrait) au plus par heure ; offre de pair d'un jour au moins ;
+    l'ancien abonnement n'est résilié qu'une fois le nouveau approuvé ; fixtures partagées dans
+    tests/conftest.py.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 12:41:20 +0100
 

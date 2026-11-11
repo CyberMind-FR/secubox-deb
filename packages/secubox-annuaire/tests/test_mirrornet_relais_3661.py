@@ -6,7 +6,7 @@
 qui gardent ses jeux — rien de plus."""
 from annuaire import mirrornet_export as MX
 from annuaire import verbs as V
-from tests.test_mirrornet_cycle_3647 import _membre, j  # noqa: F401 (fixture)
+from conftest import _membre  # fixtures j et api : tests/conftest.py
 
 
 def _subs(export):

@@ -17,7 +17,7 @@ from annuaire import mirrornet_locaux as ML
 from annuaire import verbs as V
 from annuaire.crypto import canonical_bytes, did_from_pubkey, generate_keypair, sign
 from annuaire.model import Identity, MemberState, Op, SubscriptionState
-from tests.test_mirrornet_cycle_3647 import _membre, j  # noqa: F401 (fixture)
+from conftest import _membre  # fixtures j et api : tests/conftest.py
 
 E1 = "b2:" + "1" * 64
 E2 = "b2:" + "2" * 64
@@ -124,12 +124,16 @@ def test_publier_faux_retire_l_offre(j):  # noqa: F811
     priv, _pub, did = _membre(j)
     ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant())
     gestes = []
-    r = ML.traiter(j, priv, did, "gk6", _dem(publier=False, empreinte=None, recevoir=False), _maintenant(),
+    # F15 : un geste d'offre au plus par heure — le retrait attend l'heure qui suit la création.
+    h = _hauteur(j)
+    assert ML.traiter(j, priv, did, "gk6", _dem(publier=False, empreinte=None, recevoir=False), _maintenant(10))["offre"] is None
+    assert _hauteur(j) == h and len(_mes_offres(j, did)) == 1
+    r = ML.traiter(j, priv, did, "gk6", _dem(publier=False, empreinte=None, recevoir=False), _maintenant(61),
                    auditer=lambda action, **d: gestes.append(action))
     assert r["offre"] == "retiree" and r["version"] is None
     assert _mes_offres(j, did) == [] and gestes == ["mirrornet_tv_indices_offre_retiree"]
     h = _hauteur(j)
-    r = ML.traiter(j, priv, did, "gk6", _dem(publier=False, empreinte=None, recevoir=False), _maintenant())
+    r = ML.traiter(j, priv, did, "gk6", _dem(publier=False, empreinte=None, recevoir=False), _maintenant(200))
     assert r["offre"] is None and _hauteur(j) == h
 
 
@@ -247,12 +251,13 @@ def test_refus_par_le_fournisseur_respecte(j):  # noqa: F811
 def test_abonnement_echu_renouvele(j):  # noqa: F811
     priv, _pub, did = _membre(j)
     pb, _, db = _membre(j)
-    ob = _tv(j, pb, db, duree_s=3600)
+    ob = _tv(j, pb, db, duree_s=86400)
     ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())
     (s,) = _mes_abonnements(j, did)
     assert s["expire_le"]                                        # échéance de l'offre signée par l'abonné
     assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(30))["abonnements"] == 0
-    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(61))["abonnements"] == 1
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(600))["abonnements"] == 0
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(1441))["abonnements"] == 1
     assert {s["service_id"] for s in _mes_abonnements(j, did)} == {ob.service_id}
 
 
@@ -514,9 +519,10 @@ def test_plafond_de_fournisseurs(j, monkeypatch):  # noqa: F811
     assert ML.PRODUCTEURS_MAX == 2 and len(_mes_abonnements(j, did)) == 2
 
 
-@pytest.mark.parametrize("tarif,attendu", [(None, 1), ({"modele": "gratuit"}, 1), ({"modele": "reciproque"}, 1),
+@pytest.mark.parametrize("tarif,attendu", [(None, 1), ({"modele": "gratuit"}, 1), ({"modele": "reciproque"}, 0),
                                            ({"modele": "forfait", "credits": 5}, 0), ({"modele": "usage"}, 0)])
-def test_tarif_gratuit_ou_reciproque_seulement(j, tarif, attendu):  # noqa: F811
+def test_tarif_gratuit_seulement(j, tarif, attendu):  # noqa: F811
+    """F14 : en tâche de fond, `gratuit` (ou tarif absent) seulement, tant que la phase 5 n'existe pas."""
     priv, _pub, did = _membre(j)
     pb, _, db = _membre(j)
     _tv(j, pb, db, tarif=tarif)
@@ -572,7 +578,8 @@ def test_version_datee_dans_le_futur_ne_bloque_pas(j):  # noqa: F811
 def test_offre_propre_non_conforme_remplacee(j):  # noqa: F811
     priv, _pub, did = _membre(j)
     vieille = V.offer_service(j, priv, did, name="Indices", kind="dataset", endpoint="mirrornet://x",
-                              approval_mode="pending", classe="public", scope={"usage": "tv-indices"})
+                              approval_mode="pending", classe="public", scope={"usage": "tv-indices"},
+                              created_at=_maintenant(-120).isoformat())
     gestes = []
     r = ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant(),
                    auditer=lambda action, **d: gestes.append(action))
@@ -594,3 +601,64 @@ def test_abonnements_en_cours_filtre_par_service(j):  # noqa: F811
     assert set(tout) == {ob.service_id, on.service_id}
     assert ML.abonnements_en_cours(j, did, service_ids=[on.service_id]) == {on.service_id: [s_on.subscription_id]}
     assert ML.abonnements_en_cours(j, did, service_ids=()) == {}
+
+
+# --- correctif final (F14, F15, F16, F17) -------------------------------------------------------------------------
+
+def test_f15_creation_de_l_offre_au_plus_une_fois_par_heure(j):  # noqa: F811
+    """F15 : création ou retrait de l'offre propre — un geste d'offre au plus par heure (publier basculé sans cesse ne fait
+    pas signer une offre par minute)."""
+    priv, _pub, did = _membre(j)
+    assert ML.traiter(j, priv, did, "gk6", _dem(recevoir=False), _maintenant())["offre"] == "creee"
+    assert ML.traiter(j, priv, did, "gk6", _dem(publier=False, empreinte=None, recevoir=False), _maintenant(61))["offre"] == "retiree"
+    # L'heure se compte depuis le retrait (`revoked_at`, signé à l'instant réel du geste).
+    retire = max(t for t in ML._gestes_offre_le(j, did, ML._toutes_offres(j)[0]) if t is not None)
+    h = _hauteur(j)
+    for minutes in (0, 10, 59):
+        r = ML.traiter(j, priv, did, "gk6", _dem(empreinte=None, recevoir=False), retire + timedelta(minutes=minutes))
+        assert r["offre"] is None
+    assert _hauteur(j) == h and _mes_offres(j, did) == []
+    assert ML.traiter(j, priv, did, "gk6", _dem(empreinte=None, recevoir=False), retire + timedelta(minutes=61))["offre"] == "creee"
+
+
+def test_f15_offre_de_pair_d_un_jour_au_moins(j):  # noqa: F811
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    _tv(j, pb, db, duree_s=3600)                                 # suivie avant le correctif final
+    pc, _, dc = _membre(j)
+    jour = _tv(j, pc, dc, duree_s=86400)
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())["abonnements"] == 1
+    assert [s["service_id"] for s in _mes_abonnements(j, did)] == [jour.service_id]
+    assert ML.DUREE_MIN_S == 86400
+
+
+def test_f16_ancien_abonnement_garde_tant_que_le_nouveau_attend(j):  # noqa: F811
+    """F16 : la nouvelle offre du fournisseur est à approbation manuelle ; tant que l'abonnement est EN ATTENTE, l'ancien
+    (approuvé) n'est pas résilié — pas de trou de réception ; il l'est à la passe qui suit l'approbation."""
+    priv, _pub, did = _membre(j)
+    pb, _, db = _membre(j)
+    o1 = _tv(j, pb, db)
+    ML.traiter(j, priv, did, "gk6", _dem(), _maintenant())
+    (s1,) = _mes_abonnements(j, did)
+    o2 = V.offer_service(j, pb, db, name="Indices v2", kind="dataset", endpoint="mirrornet://b", approval_mode="pending",
+                         classe="communaute", scope={"usage": "tv-indices"})
+    r = ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(61))
+    assert r["abonnements"] == 1 and r["resiliations"] == 0
+    s2 = next(s for s in _mes_abonnements(j, did) if s["service_id"] == o2.service_id)
+    assert V.subscription_state(j, s2["subscription_id"]) is SubscriptionState.PENDING
+    assert V.subscription_state(j, s1["subscription_id"]) is SubscriptionState.APPROVED
+    assert ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(70))["resiliations"] == 0
+    V.approve_subscription(j, pb, db, s2["subscription_id"])
+    gestes = []
+    r = ML.traiter(j, priv, did, "gk6", _dem(), _maintenant(80), auditer=lambda action, **d: gestes.append((action, d)))
+    assert r["resiliations"] == 1 and r["abonnements"] == 0
+    assert V.subscription_state(j, s1["subscription_id"]) is SubscriptionState.REVOKED
+    assert gestes[0][1]["service_id"] == o1.service_id and gestes[0][1]["motif"] == ML.MOTIF_REMPLACE
+
+
+def test_f17_aucun_import_entre_modules_de_test():
+    import pathlib
+    import re
+    ici = pathlib.Path(__file__).resolve().parent
+    for f in [*ici.glob("test_mirrornet_*.py"), ici / "test_services_noms_3664.py"]:
+        assert not re.search(r"^from tests\.test_\w+ import|^from test_\w+ import", f.read_text(encoding="utf-8"), re.M), f.name

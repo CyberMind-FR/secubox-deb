@@ -18,8 +18,11 @@ L'annuaire (compte `secubox`, seul détenteur de la clé) le lit après chaque p
     change, ou le retrait des versions plus récentes quand le contenu revient à une version antérieure — un geste de
     version au plus par heure ;
   · un abonnement à la DERNIÈRE offre `tv-indices` de chaque AUTRE nœud au niveau de confiance de MirrorNet
-    (`confiance_min`, jamais sous LIMITED), gratuite ou réciproque, de durée ≥ 1 h, 64 fournisseurs au plus, un
-    abonnement par fournisseur et par heure au plus ; ou, `recevoir` faux, la résiliation de ces abonnements.
+    (`confiance_min`, jamais sous LIMITED), gratuite (aucun autre tarif tant que la phase 5 n'existe pas), de durée
+    ≥ 1 jour, 64 fournisseurs au plus, un abonnement par fournisseur et par heure au plus ; l'abonnement à une offre plus
+    ancienne du même fournisseur n'est résilié qu'une fois le nouveau APPROUVÉ ; ou, `recevoir` faux, la résiliation de
+    ces abonnements.
+La création ou le retrait de son offre : un geste d'offre au plus par heure (comme les versions).
 Une demande absente, illisible ou invalide, ou une clé absente : aucun geste. Deux passes de suite avec la même demande :
 la seconde ne signe rien. L'interrupteur « Recevoir » est le choix du propriétaire ; un refus ou une révocation signés par
 le FOURNISSEUR ne sont jamais contournés par un réabonnement de fond.
@@ -41,10 +44,10 @@ PUBLICATIONS = Path(os.environ.get("ANNUAIRE_MIRRORNET_PUBLICATIONS",
 USAGE = "tv-indices"
 TAILLE_MAX = 64 * 1024                    # publications.json : quelques centaines d'octets en pratique
 OBJET_MAX = 2 * 1024 * 1024               # même plafond que MirrorNet (TAILLE_MAX de locaux.py)
-INTERVALLE = timedelta(seconds=3600)      # un geste de version, et un abonnement par fournisseur, au plus par heure
-DUREE_MIN_S = 3600                        # offre plus courte : un abonnement par passe, jamais suivie
+INTERVALLE = timedelta(seconds=3600)      # un geste d'offre, un geste de version, un abonnement par fournisseur : au plus par heure
+DUREE_MIN_S = 86400                       # offre de pair plus courte qu'un jour : jamais suivie (débit du journal)
 PRODUCTEURS_MAX = 64                      # même plafond qu'ad-guard (dnstv_indices.PRODUCTEURS_MAX)
-TARIFS_ACCEPTES = ("gratuit", "reciproque")
+TARIFS_ACCEPTES = ("gratuit",)            # tâche de fond : rien d'autre tant que la phase 5 (tarifs) n'existe pas
 RANG = {"OBSERVER": 0, "LIMITED": 1, "PARTNER": 2, "TRUSTED": 3}   # REVOKED absent : jamais écouté
 MOTIF_FOND = "réception des indices TV coupée (tâche de fond)"
 MOTIF_RETOUR = "contenu revenu à une version antérieure"
@@ -238,6 +241,18 @@ def _retraits_le(journal, did: str, sid: str) -> List[Optional[datetime]]:
             if e.author == did and e.payload.get("service_id") == sid and forme_valide(e.op, e.payload, e.author)]
 
 
+def _gestes_offre_le(journal, did: str, toutes: Dict[str, Dict[str, Any]]) -> List[Optional[datetime]]:
+    """Instants des gestes d'offre `tv-indices` de ce nœud : créations (`created_at`) et retraits (`revoked_at`)."""
+    from annuaire.model import Op  # noqa: PLC0415
+    miennes = {sid for sid, o in toutes.items() if o.get("provider") == did and _usage_tv(o)}
+    instants = [_instant(toutes[sid].get("created_at")) for sid in miennes]
+    for e in journal.iter_entries(ops=(Op.SERVICE_REVOKE_OFFER.value,)):
+        p = e.payload
+        if e.op == Op.SERVICE_REVOKE_OFFER and e.author == did and p.get("provider") == did and p.get("service_id") in miennes:
+            instants.append(_instant(p.get("revoked_at")))
+    return instants
+
+
 def _nom(boxname: Any, did: str) -> str:
     nom = "".join(c for c in boxname if c.isprintable()).strip()[:48] if isinstance(boxname, str) else ""
     return f"Indices TV Privacy — {nom or 'box-' + did[8:16]}"
@@ -253,9 +268,10 @@ def traiter(journal, priv: Optional[bytes], did: Optional[str], boxname: str, de
     Aucune exception vers l'appelant pour un geste refusé (journalisé, les autres gestes continuent) ; l'appelant tient
     le verrou des abonnements (vérification « déjà en cours » puis signature, sans entrelacement)."""
     from annuaire import confiance  # noqa: PLC0415
+    from annuaire.model import SubscriptionState  # noqa: PLC0415
     from annuaire.verbs import (_get_offers, cancel_subscription, dataset_versions,  # noqa: PLC0415
                                 offer_service, publish_dataset_version, retract_dataset_version, revoke_offer,
-                                subscribe)
+                                subscribe, subscription_state)
     res: Dict[str, Any] = {"offre": None, "version": None, "abonnements": 0, "resiliations": 0}
     d = valider(demandes)
     if not priv or not did or d is None:
@@ -277,33 +293,35 @@ def traiter(journal, priv: Optional[bytes], did: Optional[str], boxname: str, de
 
     vivantes = _get_offers(journal)
     miennes = [o for o in vivantes if o.get("provider") == did and _usage_tv(o)]
+    toutes, hauteurs = _toutes_offres(journal)
+    # Un geste d'offre (création, avec le retrait des offres propres déviantes qui l'accompagne, ou retrait) au plus par heure.
+    offre_libre = not _recent(_gestes_offre_le(journal, did, toutes), maintenant)
 
     # --- publication : l'offre, puis la version ---------------------------------------------------------------
     if d["publier"]:
         conformes = [o for o in miennes if _conforme(o)]
-        sid = None
+        sid, cree = None, False
         if conformes:
             sid, res["offre"] = conformes[0]["service_id"], "existante"
-        else:
+        elif offre_libre:
             nom = _nom(boxname, did)
             o = geste("offre", offer_service, journal, priv, did, name=nom, endpoint=f"mirrornet://{did}/{USAGE}",
                       **{**OFFRE, "scope": dict(OFFRE["scope"])})
             if o is not None:
-                sid, res["offre"] = o.service_id, "creee"
+                sid, res["offre"], cree = o.service_id, "creee", True
                 noter("mirrornet_tv_indices_offre_publiee", service_id=sid, nom=nom)
-        if sid:
+        if sid and (cree or offre_libre):
             for o in miennes:                            # une offre propre déviante ne reste pas à côté de la conforme
                 if not _conforme(o):
                     retirer_offre(o, marquer=False)
         if sid and d["empreinte"]:
             _version(journal, priv, did, sid, d, maintenant, res, geste, noter, dataset_versions,
                      publish_dataset_version, retract_dataset_version)
-    else:
+    elif offre_libre:
         for o in miennes:
             retirer_offre(o)
 
     # --- réception : abonnements aux offres tv-indices des AUTRES nœuds, ou leur résiliation ---------------------
-    toutes, hauteurs = _toutes_offres(journal)
     offres_tv = {sid: o for sid, o in toutes.items() if o.get("provider") != did and _est_tv(o)}
     en_cours = abonnements_en_cours(journal, did, maintenant, service_ids=offres_tv)
 
@@ -347,9 +365,10 @@ def traiter(journal, priv: Optional[bytes], did: Optional[str], boxname: str, de
                         res["abonnements"] += 1
                         noter("mirrornet_tv_indices_abonnement", subscription_id=s.subscription_id, service_id=sid,
                               fournisseur=prov)
-                if sid in en_cours:
+                if any(subscription_state(journal, x) == SubscriptionState.APPROVED for x in en_cours.get(sid, ())):
                     # Suivi de la dernière offre : les abonnements aux offres PLUS ANCIENNES du fournisseur sont résiliés
-                    # (un seul abonnement actif par fournisseur). Sans abonnement à la dernière, l'ancien reste.
+                    # (un seul abonnement actif par fournisseur). Sans abonnement APPROUVÉ à la dernière (absent ou encore en
+                    # attente), l'ancien reste : pas de trou de réception.
                     for autre, subs in list(en_cours.items()):
                         if autre != sid and offres_tv[autre].get("provider") == prov:
                             for sub_id in subs:
