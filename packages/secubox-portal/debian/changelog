@@ -1,3 +1,12 @@
+secubox-portal (2.5.2-1~trixie1) trixie; urgency=medium
+
+  * Console du kiosque (ref #3670) : le jeton de console est redemandé avec recul tant que
+    l'agrégateur démarre (5xx ou pas de réponse, 3 min au plus), formulaire masqué et
+    « démarrage en cours » affiché ; un refus (4xx) rend le formulaire aussitôt. Après un
+    redémarrage du RPi, la console ne demande plus le mot de passe.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 14:34:55 +0100
+
 secubox-portal (2.5.1-1~trixie1) trixie; urgency=medium
 
   * Écran de changement imposé (ref #3401) : bouton « Plus tard » qui échange le setup_token contre une session pour cette connexion seulement (POST /api/v1/auth/plus-tard ; admin au mot de passe par défaut, LAN/kiosque/maillage ; le jeton est oublié aussitôt).
