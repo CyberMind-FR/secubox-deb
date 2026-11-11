@@ -9,6 +9,30 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-11 — MirrorNet phase 4c : présence certifiée, copies servies, répartition (banc en cours) ; Annuaire : noms des box
+
+- `secubox-annuaire` 0.21.0 → 0.21.2 et `secubox-mirrornet` 0.5.0 → 0.5.1 (PR #3662, correctifs de banc #3663, #3665).
+  - **Annuaire** : l'export ajoute les abonnements déjà signés utiles — abonnés des jeux confiés à mes espaces, abonnements d'espace qui nomment mes jeux.
+  - **Preuve de possession** : défi aléatoire, BLAKE2b clé = défi, route maillée `/mirrornet/preuve/`, réservée à l'origine d'une copie reçue d'elle.
+  - **Copies servies** aux abonnés Actif du jeu.
+  - **Répartition** de l'abonné : hachage de rendez-vous, 2 sources par passe, reprise par source.
+  - **Plafonds de service** global et par pair (503).
+- Relecture relecteur-securite : 1 bloquant corrigé — empreinte d'un autre jeu servie via une copie dédoublonnée ; test + mutation vérifiée. 5 points corrigés.
+- Banc gk6 (producteur) → gk12 (espace) → gk2 (abonné). **Vérifié** :
+  - gk12 sert la copie à gk2 abonné (200) ;
+  - gk12 refuse gk2 avant son abonnement (404) ;
+  - l'export relaie l'abonnement d'espace jusqu'à gk2 (réplique gk12 Actif connue).
+- **Trouvé au banc** :
+  - l'export de l'annuaire restait figé (cache sur la seule hauteur, alors que les niveaux de confiance évoluent avec le temps) → expiration 240 s ;
+  - le premier défi part avant la copie → nouvel essai après 3 min ;
+  - propagation lente : passe complète 300 s + export, ~15 min de bout en bout.
+- **Non vérifié** :
+  - preuve de possession réussie ;
+  - transfert réparti vers la réplique.
+  - **gk12 (RPi400) hors ligne depuis 09:11:32** : lien `lan2` de gk2 perdu juste après l'installation de 0.5.1, cause inconnue, à remettre sous tension sur place.
+  - Restes du banc à nettoyer : offres « Espace banc 3661 » (gk12) et « Jeu banc 3661 » (gk6), sessions `banc3661` sur gk2, gk6, gk12.
+- **Annuaire, onglet Services** : nom de la box au lieu du did, « MON OFFRE » au lieu de S'abonner pour ses propres offres (`/services` : `provider_nom`, `mienne`), déployé gk2 et gk6 (closes #3664). Constat : gk2 voit 5 offres Boutique, dont une de gk4 (ancienne identité du RPi400) pointant vers la boutique de gk2 — relique non révocable sans sa clé.
+
 ## 2026-11-11 — MirrorNet phase 4b : espace offert en service, propagation des jeux et lignée, déployée gk2 + banc
 
 - `secubox-annuaire` 0.20.0 et `secubox-mirrornet` 0.4.0 (PR #3660).
