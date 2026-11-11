@@ -38,7 +38,7 @@ CATEGORIES = ("advertising", "tracking", "telemetry", "social", "custom")
 MODES = ("off", "observe", "block", "auto")
 DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 
-ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": [],
+ETAT_DEFAUT = {"actif": True, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": [],
               "indices_publier": True, "indices_recevoir": True}      # #3666 : indices du maillage, actifs par défaut
 MODES_DEFAUT = ("off", "auto")      # observe/block sortent un appareil du puits de production : réservés à la déclaration manuelle (revue #1959)
 MAC_RE = re.compile(r"^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$")
@@ -411,15 +411,44 @@ def poser_etat_initial(dossier: Path = None) -> bool:
     return True
 
 
+def activer_toujours(dossier: Path = None) -> bool:
+    """#3674 (décision du propriétaire) : SBX TV Privacy est TOUJOURS actif — il ne se désactive pas. Appelé par le postinst
+    à chaque configuration : un état absent ou inactif devient actif ; une box sans aucun appareil et sans ajout automatique
+    reçoit aussi l'ajout automatique des TV selon `ajout_auto_initial` du TOML (sinon elle ne détecterait rien). Les réglages
+    par appareil (modes, exceptions, pauses) ne sont jamais touchés. Rend vrai s'il a écrit."""
+    d = dossier or DOSSIER_ETAT
+    f = d / "etat.json"
+    if f.is_symlink():
+        return False
+    if not f.exists():
+        ecrire_etat(etat_initial(_conf_paquet()), d)
+        return True
+    etat, erreur = lire_etat(d)
+    if erreur:
+        return False                                  # état corrompu : jamais deviné ni écrasé
+    change = False
+    if not etat["actif"]:
+        etat["actif"], change = True, True
+    if not etat["clients"] and not etat.get("ajout_auto"):
+        conf = _conf_paquet().get("adblock_tv", {})
+        if isinstance(conf, dict) and conf.get("ajout_auto_initial") is True:
+            etat["ajout_auto"], change = True, True
+    if change:
+        ecrire_etat(etat, d)
+    return change
+
+
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
-    """(état, erreur). Un état absent = POC inactif ; un état CORROMPU = POC inactif ET l'erreur est rendue (jamais d'état deviné)."""
+    """(état, erreur). Un état absent = ACTIF par défaut (#3674, toujours actif) ; un état CORROMPU = inactif ET l'erreur est rendue
+    (jamais d'état deviné)."""
     f = (dossier or DOSSIER_ETAT) / "etat.json"
     if not f.is_file():
         return dict(ETAT_DEFAUT, clients=[], ignores=[]), None    # I2 : un état absent n'active JAMAIS l'ajout automatique
     try:
         return valider_etat(json.loads(f.read_text())), None
     except (ValueError, OSError) as e:
-        return dict(ETAT_DEFAUT, clients=[]), f"état invalide, POC laissé inactif ({e})"
+        # État CORROMPU : jamais deviné — inactif avec son erreur (fermé par défaut), même si TV Privacy est toujours actif (#3674).
+        return dict(ETAT_DEFAUT, actif=False, clients=[]), f"état invalide, POC laissé inactif ({e})"
 
 
 def ecrire_etat(etat: dict, dossier: Path = None) -> dict:

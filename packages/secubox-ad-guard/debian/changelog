@@ -1,3 +1,24 @@
+secubox-ad-guard (1.25.2-1~trixie1) trixie; urgency=medium
+
+  * Relecture sécurité de #3674 : le contrôleur n'applique (rechargement d'Unbound) que si
+    l'état change, si le drop-in manque ou si une désactivation ancienne est marquée — plus
+    de coupure DNS à chaque mise à jour ; état écrit même hors systemd et amorçage par le
+    moteur auto au premier démarrage (box d'image) ; `disable` retiré du sudoers du compte
+    secubox ; la page affiche l'état réel ; README à jour (ref #3674).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 15:08:25 +0100
+
+secubox-ad-guard (1.25.1-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy TOUJOURS ACTIF (ref #3674, décision du propriétaire : il ne se désactive
+    pas). État par défaut actif ; à chaque configuration du paquet, un état absent ou
+    inactif devient actif, une box sans appareil reçoit l'ajout automatique des TV, puis le
+    contrôleur applique et le collecteur dnsfeed est activé. POST /adblock-tv/etat refuse
+    actif=false (409) ; l'interrupteur ON/OFF de la page est remplacé par « Toujours actif ».
+    Réglages par appareil inchangés ; un état corrompu reste inactif et n'est jamais écrasé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 15:00:34 +0100
+
 secubox-ad-guard (1.25.0-1~trixie1) trixie; urgency=medium
 
   * Indices TV Privacy partagés entre box (ref #3666) : contenu publié sans appareil ni date

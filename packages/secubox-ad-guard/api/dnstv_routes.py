@@ -139,6 +139,10 @@ async def statut(lecteur=Depends(require_lecture)):
 # écrasée par un passage de la minuterie qui aurait lu l'état avant elle, et le sudo du contrôleur ne gèle pas la boucle du groupe.
 @router.post("/etat", dependencies=[Depends(require_jwt)])
 def activer(corps: EtatIn):
+    if not corps.actif:
+        # #3674 : SBX TV Privacy ne se désactive pas (protections actives par défaut, décision du propriétaire) ; un appareil
+        # se règle à part (mode, « Ça ne marche plus ? Je débloque »).
+        raise HTTPException(409, "SBX TV Privacy ne se désactive pas : régler l'appareil concerné (mode, déblocage) à la place")
     with _verrou():
         etat = _etat()
         etat["actif"] = corps.actif

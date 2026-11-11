@@ -69,8 +69,9 @@ def test_l_etat_est_conserve_apres_redemarrage(tmp_path):
     assert erreur is None and relu == dict(e, auto_essai=False, mode_defaut="auto", ajout_auto=False, ignores=[], indices_publier=True, indices_recevoir=True)    # #1954/#1959 : champs ajoutés, à leur défaut
 
 
-def test_un_etat_absent_est_inactif_et_un_etat_corrompu_aussi_avec_son_erreur(tmp_path):
-    assert dnstv.lire_etat(tmp_path) == ({"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": [],
+def test_un_etat_absent_est_actif_et_un_etat_corrompu_inactif_avec_son_erreur(tmp_path):
+    # #3674 : TV Privacy est toujours actif — un état absent est ACTIF ; un état corrompu reste inactif (jamais deviné).
+    assert dnstv.lire_etat(tmp_path) == ({"actif": True, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": [],
                                                       "indices_publier": True, "indices_recevoir": True}, None)
     (tmp_path / "etat.json").write_text('{"actif": true, "clients": [{"ip": "pas une ip"}]}')
     etat, erreur = dnstv.lire_etat(tmp_path)
