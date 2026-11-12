@@ -9,14 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
-## 2026-11-12 — Leurres du WAF : apprentissage, promotion vers le bannissement, retrait (ref #3584, étape B)
+## 2026-11-12 — Leurres du WAF : apprentissage, promotion vers le bannissement, retrait (closes #3584, étape B)
 
 - Option 1 du propriétaire (sans toucher au moteur Go ni à secubox-waf-ng) : `secubox-security-posture` 2.6.0 (PR #3681).
   - `product_absent_probes` (`detect`, apprentissage) ← `generate --apply` ; `product_absent_probes_ban` (`escalate` : ban après 3 touches/24 h) ← seule une promotion y écrit ; retirés dans `/etc/secubox/waf/leurres-retires.json` (root 0600).
   - `secubox-cvectl leurre lister|promouvoir|retirer|retablir --apply --json` (id et acteur sur stdin, sudoers exact) ; écriture 4R unique de `waf-rules.json`, verrou, audit nominatif à chaque issue.
   - Touches comptées toutes les 10 min par `secubox-cve-leurres.timer`, compte dédié `secubox-cve-leurres` (ACL lecture du journal du WAF, AppArmor enforce) ; page CVE : tableau « Leurres en place » (promouvoir, retirer, rétablir, confirmation avec le motif).
-- Relecture relecteur-securite, trois passes : 0 bloquant, tous les « à corriger » traités. Restent : `waf-rules-sync` ne prend pas le verrou ; deux leurres d'une même CVE partagent un id (CVE-2024-3400 : `/global-protect/portal/images/` écarté comme doublon) — id à rendre unique.
-- Déployé gk6 (banc, vérifié) puis gk2 : 4 leurres en apprentissage (Palo Alto ×3, Cisco), sbxwaf rechargé à chaud (158 motifs), audit `leurre_appliquer`. Page et routes `/leurres` : relance de l'agrégateur de gk2 à faire (accord).
+- Relecture relecteur-securite, trois passes : 0 bloquant, tous les « à corriger » traités. Restent : `waf-rules-sync` ne prend pas le verrou ; deux leurres d'une même CVE partagent un id (CVE-2024-3400 : `/global-protect/portal/images/` écarté comme doublon) — id à rendre unique ; les deux suivis dans #3682.
+- Déployé gk6 (banc, vérifié) puis gk2 : 4 leurres en apprentissage (Palo Alto ×3, Cisco), sbxwaf rechargé à chaud (158 motifs), audit `leurre_appliquer`. Agrégateur de gk2 relancé le 12/11 (accord) : routes `/leurres` en ligne (401 sans jeton), `leurre lister` par sudo depuis `secubox` OK, minuterie de comptage en succès.
 
 ## 2026-11-12 — sbx-authwatch réécrit ses bannissements dans waf-threats.log (closes #3679)
 
