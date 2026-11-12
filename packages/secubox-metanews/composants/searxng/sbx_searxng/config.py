@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import copy
 import ipaddress
+import os
 import re
+import stat
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -141,15 +143,42 @@ def fusionner(brut: dict) -> dict:
     return valider(cfg)
 
 
-def charger(chemin: Path | str | None = None) -> dict:
-    """Lit le TOML (absent = défauts) ; lève ConfigInvalide si illisible ou refusé."""
+TAILLE_MAX = 64 * 1024
+
+
+def _lire_toml_protege(p: Path, proprietaire: int) -> bytes:
+    """Contenu du TOML lu par un contrôleur root : ouvert sans suivre de lien ni bloquer, fichier ordinaire appartenant
+    à `proprietaire`, inscriptible ni par le groupe ni par les autres, taille bornée. FileNotFoundError si absent."""
+    fd = os.open(p, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise ConfigInvalide(f"{p} : fichier ordinaire attendu")
+        if st.st_uid != proprietaire:
+            raise ConfigInvalide(f"{p} : doit appartenir à root")
+        if st.st_mode & 0o022:
+            raise ConfigInvalide(f"{p} : inscriptible par le groupe ou les autres (chmod go-w)")
+        if st.st_size > TAILLE_MAX:
+            raise ConfigInvalide(f"{p} : plus de {TAILLE_MAX} octets")
+        return os.read(fd, TAILLE_MAX + 1)
+    finally:
+        os.close(fd)
+
+
+def charger(chemin: Path | str | None = None, *, proprietaire: int | None = None) -> dict:
+    """Lit le TOML (absent = défauts) ; lève ConfigInvalide si illisible ou refusé. `proprietaire` (uid, 0 pour
+    searxngctl) : le fichier est en plus ouvert en O_NOFOLLOW et refusé s'il n'appartient pas à cet uid ou s'il est
+    inscriptible par le groupe ou les autres."""
     p = Path(chemin) if chemin else CHEMIN_DEFAUT
     try:
-        with open(p, "rb") as f:
-            brut = tomllib.load(f)
+        if proprietaire is None:
+            with open(p, "rb") as f:
+                brut = tomllib.load(f)
+        else:
+            brut = tomllib.loads(_lire_toml_protege(p, proprietaire).decode("utf-8"))
     except FileNotFoundError:
         brut = {}
-    except (OSError, tomllib.TOMLDecodeError) as e:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
         raise ConfigInvalide(f"{p} illisible : {e.__class__.__name__}") from e
     return fusionner(brut)
 

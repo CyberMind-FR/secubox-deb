@@ -15,9 +15,10 @@ LXC et **n'est exposé nulle part** : ni vhost, ni nom public, ni route WAF. La 
 
 | Couche | Où | Qui |
 |---|---|---|
-| Conteneur LXC `searxng` | `/data/lxc/searxng` (`lxc.path` du TOML), non privilégié (idmap 0 → 100000), Debian de l'hôte (trixie), `lxc.start.auto = 1`, mémoire 384 Mio | root |
+| Conteneur LXC `searxng` | `/data/lxc/searxng` (`lxc.path` du TOML, dossier root:root 0755, `rootfs` à l'idmap), non privilégié (idmap 0 → 100000), Debian de l'hôte (trixie), `lxc.start.auto = 1`, mémoire 384 Mio | root |
 | SearXNG | commit figé `3e95f6cd2a68` (2026.11.5+3e95f6c), venv `/usr/local/searxng/venv`, unité `searxng.service`, écoute **10.100.0.85:8888** seulement | utilisateur `searxng` du conteneur |
-| API hôte | `secubox-searxng.service`, socket `/run/secubox/searxng.sock`, AppArmor `secubox-searxng-api` (enforce) | `secubox-searxng` (dédié) |
+| API hôte | `secubox-searxng.service` (`NoNewPrivileges`, socle de durcissement complet, aucune capacité), socket `/run/secubox/searxng.sock`, AppArmor `secubox-searxng-api` (enforce) | `secubox-searxng` (dédié, groupe `secubox-searxng` en plus) |
+| Reload | `secubox-searxng-reload.path` → `secubox-searxng-reload.service` (oneshot, `searxngctl reload --demandes`) | root |
 | Contrôleur | `/usr/sbin/searxngctl` | root (lectures : n'importe qui) |
 
 Serveur d'application : celui que fournit `requirements-server.txt` (granian, sinon uwsgi), à défaut `python -m searx.webapp`
@@ -36,7 +37,9 @@ searxngctl status                         # sans privilège
 
 ## Configuration — `/etc/secubox/searxng.toml`
 
-Modèle : `/usr/share/secubox/searxng/searxng.toml.example` (copié au premier passage). Sections `[lxc]` (nom, adresse,
+Modèle : `/usr/share/secubox/searxng/searxng.toml.example` (copié au premier passage, root:secubox 0640). `searxngctl`
+l'ouvre sans suivre de lien et le refuse s'il n'appartient pas à root ou s'il est inscriptible par le groupe ou les autres.
+Sections `[lxc]` (nom, adresse,
 passerelle, pont, chemin, mémoire, DNS) et `[searxng]` (port, nom de l'instance, langue, safe_search, délais sortants,
 suspension des moteurs en échec, `moteurs_desactives`). Une clé inconnue est refusée.
 
@@ -52,6 +55,13 @@ Après une modification : `searxngctl reload` ou le bouton « Recharger la confi
 `settings.yml.nouveau` écrit, relu et validé (YAML, clés attendues, aucun secret), l'ancien gardé en `settings.yml.precedent`,
 remplacement atomique, relance, sonde `/healthz` (30 s) ; si SearXNG ne répond plus, l'ancien fichier revient. Chaque issue
 (`applique`, `refuse`, `retour-arriere`, `echec`, `conteneur-arrete`) est une ligne JSON de `/var/log/secubox/audit.log`.
+Si la relance échoue ou dépasse son délai après le remplacement, le même retour arrière s'applique.
+
+Depuis la page, aucun sudo : l'API dépose `<id>.demande` (`{"acteur": …}`) dans `/run/secubox/searxng-reload`
+(root:secubox-searxng 1770) ; `secubox-searxng-reload.path` démarre le contrôleur root, qui revalide la demande (sans suivre de
+lien, fichier du compte de l'API, 512 octets au plus, JSON strict) et pose `<id>.json` dans
+`/run/secubox/searxng-reload-resultats` (root:secubox-searxng 0750). L'API attend ce résultat 30 s ; au-delà elle répond 202
+et l'issue est au journal d'audit.
 
 ## API — `/api/v1/searxng/`
 
@@ -62,7 +72,7 @@ remplacement atomique, relance, sonde `/healthz` (30 s) ; si SearXNG ne répond 
 | `GET /components` | `require_lecture` | `lxc`, `searxng`, `host-api` |
 | `GET /engines` | `require_lecture` | moteurs actifs (`/config` de SearXNG), désactivés (TOML), sans réponse à la dernière recherche |
 | `GET /rechercher?q=&page=` | `require_jwt` | `q` 1-256 caractères, `page` 1-50 ; au plus 20 `{titre, url, extrait, moteur}`, URL http(s) seulement |
-| `POST /reload` | `require_jwt` | `searxngctl reload` (sudo + systemd-run, argv exact) ; 409 refusé/défait/occupé, 504 délai |
+| `POST /reload` | `require_jwt` | demande déposée pour le contrôleur root ; 200 appliqué, 409 refusé/défait/occupé, 202 toujours en cours après 30 s (issue à l'audit), 503 dépôt impossible |
 
 Les sondes ne demandent aucun privilège (connexion TCP vers le conteneur, `/healthz`), partent en parallèle et sont bornées
 (< 5 s au total) ; une sonde en retard vaut `unknown`, jamais une 500. Le relevé est gardé 10 s (`/var/cache/secubox-searxng`).

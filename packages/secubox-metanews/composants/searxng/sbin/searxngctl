@@ -9,11 +9,17 @@
   searxngctl components [--json]      conteneur, SearXNG, API hôte (sans privilège)
   searxngctl engines    [--json]      moteurs actifs (SearXNG /config) et désactivés (TOML)
   searxngctl install                  crée ou complète le conteneur LXC et SearXNG (root, idempotent)
-  searxngctl reload     [--json] [--acteur-stdin]
-                                      régénère settings.yml en double tampon (root), audité
+  searxngctl reload     [--json]      régénère settings.yml en double tampon (root), audité
+  searxngctl reload --demandes        traite UNE demande déposée par l'API (secubox-searxng-reload.service, root)
+  searxngctl preparer                 crée les dossiers de demandes et de résultats (root ; postinst, ExecStartPre)
 
 Codes de sortie : 0 fait ; 1 échec ; 2 usage ou configuration refusée ; 3 reload refusé ou défait (ancien settings.yml
 rétabli) ; 4 conteneur absent ou arrêté ; 5 un autre reload ou install en cours.
+
+L'API (secubox-searxng, NoNewPrivileges) ne lance rien en root : POST /reload DÉPOSE <id>.demande ({"acteur": …}) dans
+/run/secubox/searxng-reload (root:secubox-searxng 1770) ; secubox-searxng-reload.path démarre secubox-searxng-reload.service
+(oneshot root), qui exécute « searxngctl reload --demandes » et pose <id>.json dans /run/secubox/searxng-reload-resultats
+(root:secubox-searxng 0750, l'API lit seulement). Ni sudo ni systemd-run.
 
 Le conteneur (Pattern 11 : LXC, jamais Docker ni Podman) est NON PRIVILÉGIÉ (idmap 0 -> 100000), en dernière Debian
 (celle de l'hôte, repli trixie, #3285), sous lxc.path du TOML. SearXNG y est installé au COMMIT FIGÉ ci-dessous ; seule une
@@ -24,12 +30,15 @@ jamais dans settings.yml, jamais sur une ligne de commande.
 from __future__ import annotations
 
 import fcntl
+import grp
 import hashlib
 import json
 import os
+import pwd
 import re
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -48,8 +57,19 @@ DEPOT = "https://github.com/searxng/searxng"
 COMMIT = "3e95f6cd2a68add0329cb162907b49289e2bc1fd"
 
 CONFIG = os.environ.get("SECUBOX_SEARXNG_CONFIG", str(C.CHEMIN_DEFAUT))
+# Le TOML pilote un contrôleur root : il doit appartenir à root et n'être inscriptible ni par le groupe ni par les autres.
+PROPRIETAIRE_CONFIG = 0
 AUDIT = Path(os.environ.get("SECUBOX_SEARXNG_AUDIT", "/var/log/secubox/audit.log"))
 SECRETS = Path("/etc/secubox/secrets/searxng")
+# Dépôt des demandes de l'API (root:secubox-searxng 1770 : l'API y crée, ne retire que ses fichiers) et résultats
+# (root:secubox-searxng 0750 : l'API lit seulement). Créés par « searxngctl preparer », jamais suivis s'ils sont des liens.
+DEMANDES = Path("/run/secubox/searxng-reload")
+RESULTATS = Path("/run/secubox/searxng-reload-resultats")
+COMPTE_API = GROUPE_API = "secubox-searxng"
+TAILLE_DEMANDE = 512
+_NOM_DEMANDE = re.compile(r"^[0-9a-f]{16}\.demande$")
+DUREE_RESULTAT = 300          # un résultat non relu par l'API est retiré après 5 min
+DUREE_TMP = 60                # un « .tmp.* » de l'API resté plus d'une minute est abandonné
 # Arbre ROOT seul, hors de /var/lib/secubox (compte partagé, qui pourrait y substituer un lien) : verrou et marque.
 ETAT_ROOT = Path("/var/lib/secubox-searxng")
 INSTALLEUR = Path("/usr/share/secubox/lib/searxng/installer-searxng.sh")
@@ -230,23 +250,8 @@ class Verrou:
             os.close(self.fd)
 
 
-def lire_acteur(flux) -> str:
-    """{"acteur": "<sub>"} sur l'entrée standard (argv exact dans sudoers : l'acteur ne peut pas y figurer)."""
-    try:
-        d = json.loads(flux.read(512) or "{}")
-    except (ValueError, OSError):
-        return "?"
-    a = d.get("acteur") if isinstance(d, dict) else None
-    return a if isinstance(a, str) and _ACTEUR.match(a) else "?"
-
-
-def cmd_reload(cfg: dict, args: list[str]) -> int:
-    if os.geteuid() != 0:
-        journal("reload demande root")
-        return 2
-    acteur = lire_acteur(sys.stdin) if "--acteur-stdin" in args else (os.environ.get("SUDO_USER") or "root")
-    if not _ACTEUR.match(acteur):
-        acteur = "?"
+def executer_reload(cfg: dict, acteur: str) -> tuple[int, dict]:
+    """Un reload complet sous le verrou : conteneur en marche exigé, puis double tampon (appliquer_settings)."""
     try:
         with Verrou(ETAT_ROOT / "verrou"):
             ct = Conteneur(cfg)
@@ -254,13 +259,192 @@ def cmd_reload(cfg: dict, args: list[str]) -> int:
             if etat != "running":
                 sortie = {"issue": "conteneur-arrete", "detail": f"conteneur {cfg['lxc']['name']} : {etat}", "acteur": acteur}
                 audit("reload", sortie)
-                code = 4
-            else:
-                code, sortie = appliquer_settings(cfg, ct, acteur=acteur)
+                return 4, sortie
+            return appliquer_settings(cfg, ct, acteur=acteur)
     except BlockingIOError:
-        sortie, code = {"issue": "occupe", "detail": "un autre reload ou install est en cours"}, 5
+        return 5, {"issue": "occupe", "detail": "un autre reload ou install est en cours", "acteur": acteur}
+
+
+def cmd_reload(cfg: dict, args: list[str]) -> int:
+    if os.geteuid() != 0:
+        journal("reload demande root")
+        return 2
+    acteur = os.environ.get("SUDO_USER") or "root"
+    if not _ACTEUR.fullmatch(acteur):
+        acteur = "?"
+    code, sortie = executer_reload(cfg, acteur)
     _sortie(sortie, "--json" in args)
     return code
+
+
+# ── demandes de l'API : dépôt par fichier, traitées par secubox-searxng-reload.service (root) ──
+
+def _identites() -> tuple[int, int, int]:
+    """(propriétaire exigé des dossiers = root, uid du compte de l'API, gid de son groupe dédié)."""
+    return 0, pwd.getpwnam(COMPTE_API).pw_uid, grp.getgrnam(GROUPE_API).gr_gid
+
+
+def _ouvrir_dossier(chemin: Path, proprietaire: int) -> int:
+    """Descripteur du dossier, sans suivre de lien, propriétaire et type vérifiés sur le descripteur même."""
+    fd = os.open(chemin, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    st = os.fstat(fd)
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != proprietaire:
+        os.close(fd)
+        raise PermissionError(f"{chemin} : dossier de {proprietaire} attendu")
+    return fd
+
+
+def preparer_depot() -> None:
+    """Dépôt 1770 et résultats 0750, root:secubox-searxng. Ce qui occupe leur place sans être un dossier root (lien,
+    fichier, dossier d'un autre compte : /run/secubox est 1777) est ÉCARTÉ, jamais suivi ni réutilisé."""
+    racine, _, gid = _identites()
+    for chemin, mode in ((DEMANDES, 0o1770), (RESULTATS, 0o750)):
+        try:
+            st = os.lstat(chemin)
+        except FileNotFoundError:
+            st = None
+        if st is not None and (not stat.S_ISDIR(st.st_mode) or st.st_uid != racine):
+            ecarte = chemin.with_name(f".{chemin.name}.ecarte-{int(time.time())}-{os.getpid()}")
+            os.rename(chemin, ecarte)
+            journal(f"{chemin} n'était pas un dossier root : écarté en {ecarte}")
+            audit("depot", {"issue": "ecarte", "detail": f"{chemin} remplacé (lien, fichier ou autre propriétaire)"})
+            st = None
+        if st is None:
+            os.mkdir(chemin, 0o700)
+        fd = _ouvrir_dossier(chemin, racine)
+        try:
+            os.fchown(fd, racine, gid)
+            os.fchmod(fd, mode)
+        finally:
+            os.close(fd)
+
+
+def lire_demande(dfd: int, nom: str, uid_api: int) -> tuple[str | None, str]:
+    """(acteur, "") ou (None, motif). Une lecture par descripteur relatif au dossier, sans suivre de lien ni bloquer
+    (FIFO), fichier ordinaire du compte de l'API à lien unique, taille bornée, JSON {"acteur": "<sub>"} strict."""
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+    except OSError as e:
+        return None, f"illisible ({e.__class__.__name__})"
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            return None, "pas un fichier ordinaire"
+        if st.st_uid != uid_api:
+            return None, "propriétaire inattendu"
+        if st.st_nlink != 1:
+            return None, "fichier à liens multiples"
+        if st.st_size > TAILLE_DEMANDE:
+            return None, "trop grande"
+        brut = os.read(fd, TAILLE_DEMANDE + 1)
+    finally:
+        os.close(fd)
+    if len(brut) > TAILLE_DEMANDE:
+        return None, "trop grande"
+    try:
+        d = json.loads(brut.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None, "JSON invalide"
+    if not isinstance(d, dict) or set(d) != {"acteur"}:
+        return None, "objet {\"acteur\": …} attendu"
+    acteur = d["acteur"]
+    if not isinstance(acteur, str) or not _ACTEUR.fullmatch(acteur):
+        return None, "acteur refusé"
+    return acteur, ""
+
+
+def ecrire_resultat(ident: str, code: int, resultat: dict) -> None:
+    """<id>.json (0640, root:secubox-searxng) posé atomiquement dans le dossier des résultats, que seul root écrit."""
+    racine, _, gid = _identites()
+    rfd = _ouvrir_dossier(RESULTATS, racine)
+    tmp = f".r.{ident}.{os.getpid()}"
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640, dir_fd=rfd)
+        try:
+            os.fchown(fd, racine, gid)
+            os.fchmod(fd, 0o640)
+            os.write(fd, json.dumps({"code": code, "resultat": resultat}, ensure_ascii=True).encode())
+        finally:
+            os.close(fd)
+        os.replace(tmp, f"{ident}.json", src_dir_fd=rfd, dst_dir_fd=rfd)
+    finally:
+        os.close(rfd)
+
+
+def _purger(dfd: int, garder, age: float) -> None:
+    """Retire les entrées (non gardées) plus vieilles que `age` secondes, sans suivre de lien."""
+    maintenant = time.time()
+    for nom in os.listdir(dfd):
+        if garder(nom):
+            continue
+        try:
+            st = os.stat(nom, dir_fd=dfd, follow_symlinks=False)
+            if maintenant - st.st_mtime > age and not stat.S_ISDIR(st.st_mode):
+                os.unlink(nom, dir_fd=dfd)
+        except FileNotFoundError:
+            pass
+
+
+def _retirer(dfd: int, nom: str) -> None:
+    """Retire une entrée du dépôt ; un dossier (vide ou non) est mis de côté sous un nom pointé, que l'unité .path ne voit
+    pas : rien ne doit la relancer en boucle."""
+    try:
+        os.unlink(nom, dir_fd=dfd)
+    except FileNotFoundError:
+        pass
+    except IsADirectoryError:
+        os.rename(nom, f".ecarte.{nom}.{int(time.time())}", src_dir_fd=dfd, dst_dir_fd=dfd)
+        journal(f"dossier {nom!r} dans le dépôt des demandes : mis de côté")
+
+
+def traiter_demandes(cfg: dict | None, refus: str = "") -> int:
+    """UNE demande valide par passage (le délai de l'unité borne un seul reload) : l'unité .path relance le service tant
+    qu'il reste des *.demande. Les noms inattendus et les demandes refusées sont retirés et audités au même passage.
+    `cfg` None : configuration refusée (`refus`), chaque demande reçoit ce refus."""
+    if os.geteuid() != 0:
+        journal("reload --demandes demande root")
+        return 2
+    preparer_depot()
+    racine, uid_api, _ = _identites()
+    rfd = _ouvrir_dossier(RESULTATS, racine)
+    try:
+        _purger(rfd, lambda n: False, DUREE_RESULTAT)
+    finally:
+        os.close(rfd)
+    dfd = _ouvrir_dossier(DEMANDES, racine)
+    try:
+        _purger(dfd, lambda n: not n.startswith(".tmp."), DUREE_TMP)
+        retenue = None                        # (ident, acteur) : la seule demande valide traitée à ce passage
+        for nom in sorted(os.listdir(dfd)):
+            if nom.startswith(".tmp."):
+                continue                      # en cours d'écriture par l'API
+            if not _NOM_DEMANDE.fullmatch(nom):
+                _retirer(dfd, nom)
+                continue
+            ident = nom[: -len(".demande")]
+            acteur, motif = lire_demande(dfd, nom, uid_api)
+            if acteur is not None and retenue is not None:
+                continue                      # valide : laissée au passage suivant (l'unité .path relance)
+            _retirer(dfd, nom)                # consommée AVANT le reload : une nouvelle demande relancera l'unité
+            if acteur is None:
+                sortie = {"issue": "refuse", "detail": f"demande refusée : {motif}", "acteur": "?"}
+                audit("reload", sortie)
+                ecrire_resultat(ident, 2, sortie)
+                continue
+            retenue = (ident, acteur)
+    finally:
+        os.close(dfd)
+    if retenue is not None:
+        ident, acteur = retenue
+        if cfg is None:
+            code, sortie = 3, {"issue": "refuse", "detail": refus, "acteur": acteur}
+            audit("reload", sortie)
+        else:
+            code, sortie = executer_reload(cfg, acteur)
+        ecrire_resultat(ident, code, sortie)
+    # Demandes traitées : leur issue est dans le résultat et l'audit. Le service réussit (un échec répété du reload ne
+    # doit pas épuiser la limite de démarrages et désarmer l'unité .path).
+    return 0
 
 
 # ── install : idempotent, rien n'est refait qui soit déjà en place ──
@@ -315,7 +499,14 @@ def config_lxc(cfg: dict, existante: str = "") -> str:
 
 
 def secret_cle() -> str:
-    """Le secret de SearXNG : créé UNE fois (O_EXCL), jamais régénéré, root 0600 dans un dossier root 0700."""
+    """Le secret de SearXNG : créé UNE fois (O_EXCL), jamais régénéré, root 0600 dans un dossier root 0700.
+    /etc/secubox/secrets est créé root 0700 s'il manque ; s'il existe (dossier partagé), il n'est jamais retouché."""
+    try:
+        os.mkdir(SECRETS.parent, 0o700)
+        os.chown(SECRETS.parent, 0, 0)
+        os.chmod(SECRETS.parent, 0o700)
+    except FileExistsError:
+        pass
     SECRETS.mkdir(mode=0o700, parents=False, exist_ok=True)
     os.chown(SECRETS, 0, 0)
     os.chmod(SECRETS, 0o700)
@@ -354,21 +545,44 @@ def creer_conteneur(cfg: dict) -> None:
         arch = executer(["dpkg", "--print-architecture"], delai=10).stdout.strip()
         executer(["lxc-create", "-n", lxc["name"], "-t", "download", "-P", lxc["path"], "--",
                   "--dist", "debian", "--release", suite, "--arch", arch], delai=1800)
+    # Le dossier du conteneur RESTE root:root 0755 (traversable par l'uid 100000 de l'idmap) : jamais au root du conteneur,
+    # qui pourrait y poser un lien sous un nom que root écrit ensuite (config, fichier temporaire).
+    fd = os.open(racine, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        os.fchown(fd, 0, 0)
+        os.fchmod(fd, 0o755)
+    finally:
+        os.close(fd)
     cfg_lxc = racine / "config"
-    ancienne = cfg_lxc.read_text(encoding="utf-8") if cfg_lxc.is_file() else ""
+    ancienne = cfg_lxc.read_text(encoding="utf-8") if cfg_lxc.is_file() and not cfg_lxc.is_symlink() else ""
     nouvelle = config_lxc(cfg, ancienne)
     if nouvelle != ancienne:
-        tmp = racine / "config.secubox.tmp"
-        tmp.write_text(nouvelle, encoding="utf-8")
-        os.chmod(tmp, 0o640)
-        os.replace(tmp, cfg_lxc)
+        ecrire_config_lxc(racine, nouvelle)
         journal("configuration LXC écrite")
     # lxc-create -t download déballe en uid 0 de l'HÔTE ; l'idmap veut 100000 (sinon « Failed to setup rootfs »).
-    # Décalé une seule fois (racine encore en 0), sans suivre les liens (-h).
-    if (racine / "rootfs").stat().st_uid == 0:
+    # Décalé une seule fois (rootfs encore en 0), sans suivre les liens (-h). Le dossier parent, lui, reste root.
+    if os.stat(racine / "rootfs", follow_symlinks=False).st_uid == 0:
         journal(f"propriété du rootfs décalée sur l'idmap (0 -> {UID_RACINE}) …")
         executer(["chown", "-R", "-h", f"{UID_RACINE}:{UID_RACINE}", str(racine / "rootfs")], delai=1800)
-        os.chown(racine, UID_RACINE, UID_RACINE)
+
+
+def ecrire_config_lxc(racine: Path, contenu: str) -> None:
+    """config du conteneur remplacée atomiquement : temporaire créé O_CREAT|O_EXCL|O_NOFOLLOW (jamais à travers une
+    entrée déjà posée), 0640, puis rename dans le même dossier root."""
+    tmp = racine / "config.secubox.tmp"
+    try:
+        os.unlink(tmp)                        # reste d'un passage interrompu (dossier root : rien d'autre ne l'y pose)
+    except FileNotFoundError:
+        pass
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as h:
+            fd = -1
+            h.write(contenu)
+    finally:
+        if fd != -1:
+            os.close(fd)
+    os.replace(tmp, racine / "config")
 
 
 def demarrer_et_reseau(cfg: dict, ct: Conteneur) -> None:
@@ -522,8 +736,14 @@ def aide() -> int:
 
 
 COMMANDES = {"status": cmd_status, "components": cmd_components, "engines": cmd_engines,
-             "install": cmd_install, "reload": cmd_reload}
-OPTIONS = {"--json", "--acteur-stdin"}
+             "install": cmd_install, "reload": cmd_reload, "preparer": None}
+OPTIONS = {"--json", "--demandes"}
+
+
+def charger_config() -> dict:
+    """Le TOML, ouvert sans suivre de lien et refusé s'il n'appartient pas à root ou s'il est inscriptible par le groupe
+    ou les autres (C.ConfigInvalide)."""
+    return C.charger(CONFIG, proprietaire=PROPRIETAIRE_CONFIG)
 
 
 def main(argv: list[str]) -> int:
@@ -533,18 +753,28 @@ def main(argv: list[str]) -> int:
         print(f"searxngctl {VERSION} (SearXNG {COMMIT[:7]})")
         return 0
     verbe, args = argv[0], argv[1:]
-    if verbe not in COMMANDES or any(a not in OPTIONS for a in args):
-        journal(f"usage : searxngctl {{{'|'.join(COMMANDES)}}} [--json]")
+    if verbe not in COMMANDES or any(a not in OPTIONS for a in args) or ("--demandes" in args and verbe != "reload"):
+        journal(f"usage : searxngctl {{{'|'.join(COMMANDES)}}} [--json] (reload --demandes)")
         return 2
+    if verbe == "preparer":
+        if os.geteuid() != 0:
+            journal("preparer demande root")
+            return 2
+        preparer_depot()
+        return 0
     try:
-        cfg = C.charger(CONFIG)
+        cfg = charger_config()
     except C.ConfigInvalide as e:
         journal(f"configuration refusée : {e}")
+        if verbe == "reload" and "--demandes" in args:
+            return traiter_demandes(None, f"configuration refusée : {e}")
         if verbe == "reload":
             audit("reload", {"issue": "refuse", "detail": f"configuration refusée : {e}"})
             _sortie({"issue": "refuse", "detail": f"configuration refusée : {e}"}, "--json" in args)
             return 3
         return 2
+    if verbe == "reload" and "--demandes" in args:
+        return traiter_demandes(cfg)
     return COMMANDES[verbe](cfg, args)
 
 

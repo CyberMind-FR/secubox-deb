@@ -271,15 +271,16 @@
         function fermerConf() { CONF = null; $('conf').hidden = true; annoncer(); }
         $('confNon').addEventListener('click', fermerConf);
         $('confOui').addEventListener('click', async () => { const fn = CONF; fermerConf(); if (fn) await fn(); });
-        const ISSUES = { applique: 'Configuration rechargée : SearXNG répond.', refuse: 'Configuration refusée, rien n’a changé : ', 'retour-arriere': 'SearXNG ne répondait plus : ancienne configuration rétablie. ', 'conteneur-arrete': 'Conteneur arrêté : rien n’a été fait. ', occupe: 'Un autre rechargement est en cours. ', echec: 'Échec : ' };
+        const ISSUES = { applique: 'Configuration rechargée : SearXNG répond.', refuse: 'Configuration refusée, rien n’a changé : ', 'retour-arriere': 'SearXNG ne répondait plus : ancienne configuration rétablie. ', 'conteneur-arrete': 'Conteneur arrêté : rien n’a été fait. ', occupe: 'Un autre rechargement est en cours. ', 'en-cours': 'Rechargement toujours en cours : son issue sera consignée au journal d’audit. ', echec: 'Échec : ' };
         $('bRecharger').addEventListener('click', () => {
             confirmer('Recharger la configuration de SearXNG ? settings.yml est régénéré depuis /etc/secubox/searxng.toml, puis SearXNG redémarre (quelques secondes sans recherche). S’il ne répond plus, l’ancienne configuration est rétablie.', async () => {
                 if (DEMO) { retour('cRetour', 'Démonstration : aucune action envoyée.', null); return; }
-                OCCUPE = true; $('bRecharger').disabled = true; retour('cRetour', 'Rechargement en cours (jusqu’à une minute)…');
+                OCCUPE = true; $('bRecharger').disabled = true; retour('cRetour', 'Rechargement en cours (jusqu’à 30 secondes)…');
                 const r = await appel('/reload', 'POST');
                 OCCUPE = false; $('bRecharger').disabled = false;
                 const d = r.data && typeof r.data.detail === 'object' && r.data.detail ? r.data.detail : (r.data || {});
                 if (r.ok && d.issue === 'applique') retour('cRetour', ISSUES.applique, false);
+                else if (r.statut === 202) retour('cRetour', ISSUES['en-cours'].trim(), null);
                 else if (r.statut === 401 || r.statut === 403) retour('cRetour', 'Action réservée à un administrateur connecté.', true);
                 else retour('cRetour', ((ISSUES[d.issue] || 'Échec (' + r.statut + ') : ') + (typeof d.detail === 'string' ? d.detail : '')).trim(), true);
                 charger();

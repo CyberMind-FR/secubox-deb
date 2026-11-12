@@ -10,12 +10,15 @@ set -e
 case "$1" in
   remove)
     deb-systemd-helper mask secubox-searxng.service >/dev/null 2>&1 || true
+    deb-systemd-helper mask secubox-searxng-reload.path >/dev/null 2>&1 || true
     ;;
   purge)
     deb-systemd-helper purge secubox-searxng.service >/dev/null 2>&1 || true
     deb-systemd-helper unmask secubox-searxng.service >/dev/null 2>&1 || true
+    deb-systemd-helper purge secubox-searxng-reload.path >/dev/null 2>&1 || true
+    deb-systemd-helper unmask secubox-searxng-reload.path >/dev/null 2>&1 || true
     rm -f /etc/secubox/searxng.toml
-    rm -rf /var/lib/secubox-searxng /var/cache/secubox-searxng
+    rm -rf /var/lib/secubox-searxng /var/cache/secubox-searxng /run/secubox/searxng-reload /run/secubox/searxng-reload-resultats
     ;;
 esac
 exit 0

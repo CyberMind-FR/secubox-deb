@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox SearXNG — demandes de rechargement de la configuration (#3581). Patron « oneshot root déclenché par fichier »
+# (secubox-ssh #3401, secubox-reparer #3628) : l'API (secubox-searxng, NoNewPrivileges) dépose <id>.demande dans
+# /run/secubox/searxng-reload ; cette unité démarre le contrôleur root. Ni sudo ni systemd-run.
+[Unit]
+Description=SecuBox SearXNG : demandes de rechargement de la configuration (#3581)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3581
+
+[Path]
+# Seuls les *.demande déclenchent : le temporaire « .tmp.<id> » de l'API (renommé aussitôt) n'est pas vu, et le service
+# est relancé tant qu'il en reste (une demande valide par passage).
+PathExistsGlob=/run/secubox/searxng-reload/*.demande
+Unit=secubox-searxng-reload.service
+TriggerLimitIntervalSec=10s
+TriggerLimitBurst=30
+
+[Install]
+WantedBy=paths.target

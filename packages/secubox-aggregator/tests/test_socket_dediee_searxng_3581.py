@@ -2,8 +2,8 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""#3581 — `searxng` (composant de secubox-metanews) est à socket dédiée : son /reload appelle searxngctl par sudo sous le
-compte secubox-searxng, impossible sous l'utilisateur de l'agrégateur ; ses sondes sont des E/S réseau bloquantes."""
+"""#3581 — `searxng` (composant de secubox-metanews) est à socket dédiée : son /reload dépose une demande dans un dossier du
+groupe secubox-searxng, que l'utilisateur de l'agrégateur n'a pas ; ses sondes sont des E/S réseau bloquantes."""
 import importlib
 from pathlib import Path
 

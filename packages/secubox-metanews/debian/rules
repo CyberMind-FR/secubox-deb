@@ -70,9 +70,10 @@ override_dh_auto_install:
 	install -D -m 644 composants/searxng/menu.d/60-searxng.json debian/secubox-metanews/usr/share/secubox/menu.d/60-searxng.json
 	install -D -m 644 composants/searxng/nginx/searxng.conf debian/secubox-metanews/etc/nginx/secubox-routes.d/searxng.conf
 	install -D -m 644 composants/searxng/nginx/searxng.conf debian/secubox-metanews/etc/nginx/secubox.d/searxng.conf
-	install -D -m 440 composants/searxng/sudoers.d/secubox-searxng debian/secubox-metanews/etc/sudoers.d/secubox-searxng
 	install -D -m 644 composants/searxng/apparmor/secubox-searxng-api debian/secubox-metanews/etc/apparmor.d/secubox-searxng-api
 	install -D -m 644 composants/searxng/debian/secubox-searxng.service debian/secubox-metanews/usr/lib/systemd/system/secubox-searxng.service
+	install -D -m 644 composants/searxng/debian/secubox-searxng-reload.service debian/secubox-metanews/usr/lib/systemd/system/secubox-searxng-reload.service
+	install -D -m 644 composants/searxng/debian/secubox-searxng-reload.path debian/secubox-metanews/usr/lib/systemd/system/secubox-searxng-reload.path
 	install -D -m 755 composants/searxng/debian/postinst debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/searxng.postinst
 	install -D -m 755 composants/searxng/debian/prerm debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/searxng.prerm
 	install -D -m 755 composants/searxng/debian/postrm debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/searxng.postrm

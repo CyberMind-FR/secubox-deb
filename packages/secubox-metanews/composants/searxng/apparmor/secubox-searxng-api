@@ -4,8 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Profil AppArmor ENFORCE de l'API hôte SearXNG (#3581). Posé dans /etc/apparmor.d/secubox-searxng-api, chargé par le
-# postinst AVANT le (re)démarrage de l'unité, qui le nomme par AppArmorProfile=. Le contrôleur root (searxngctl) tourne
-# hors confinement via sudo -> systemd-run ; ce qu'il peut faire est borné par le sudoers (argv exact).
+# postinst AVANT le (re)démarrage de l'unité, qui le nomme par AppArmorProfile=. L'API n'exécute rien : le reload passe
+# par un fichier de demande que traite secubox-searxng-reload.service (contrôleur root, hors de ce profil).
 
 #include <tunables/global>
 
@@ -34,7 +34,11 @@ profile secubox-searxng-api {
   # Registre des sessions (sans lui toute garde d'API refuse), traces de délégation et d'origine.
   /var/lib/secubox/auth/ r,
   /var/lib/secubox/auth/** r,
-  /var/log/secubox/*.log w,
+  # Journaux que secubox_core écrit (traces de délégation, relevé de la garde d'origine) ; à défaut, le journal système.
+  # Jamais le journal d'audit : seul le contrôleur root y consigne les rechargements.
+  /var/log/secubox/delegation.log w,
+  /var/log/secubox/garde-origine.log w,
+  deny /var/log/secubox/audit.log w,
   owner @{PROC}/@{pid}/cgroup r,
 
   # Cache court du relevé d'état et des moteurs (CacheDirectory=secubox-searxng).
@@ -47,12 +51,15 @@ profile secubox-searxng-api {
   /run/secubox/ r,
   /run/secubox/searxng.sock rwk,
 
-  # Le SEUL passage privilégié : sudo -> systemd-run -> searxngctl reload (sudoers à argv exact), hors confinement.
-  /usr/bin/sudo Ux,
+  # Reload : dépôt d'une demande (créée puis renommée par l'API elle-même), lecture du résultat posé par root.
+  /run/secubox/searxng-reload/ r,
+  owner /run/secubox/searxng-reload/* rw,
+  /run/secubox/searxng-reload-resultats/ r,
+  /run/secubox/searxng-reload-resultats/*.json r,
 
   network unix stream,
   network unix dgram,
-  # Sondes et recherche vers le conteneur (10.100.0.0/24, borné aussi par IPAddressAllow de l'unité).
+  # Sondes et recherche vers le conteneur (10.100.0.85, borné aussi par IPAddressAllow de l'unité).
   network inet stream,
   /proc/sys/net/core/somaxconn r,
 }

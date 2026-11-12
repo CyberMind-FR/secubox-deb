@@ -18,6 +18,8 @@ case "$1" in
     id -u secubox-searxng >/dev/null 2>&1 || \
       adduser --system --ingroup secubox --no-create-home --home /nonexistent \
         --shell /usr/sbin/nologin secubox-searxng >/dev/null
+    # Groupe DÉDIÉ du dépôt des demandes de reload (root:secubox-searxng) : l'unité le donne à l'API (SupplementaryGroups).
+    getent group secubox-searxng >/dev/null 2>&1 || addgroup --system secubox-searxng >/dev/null
 
     # Parents PARTAGÉS : créés seulement s'ils manquent, jamais resserrés ni réattribués.
     [ -d /run/secubox ] || install -d -o root -g root -m 1777 /run/secubox
@@ -31,12 +33,9 @@ case "$1" in
       install -m 0640 -o root -g secubox /usr/share/secubox/searxng/searxng.toml.example /etc/secubox/searxng.toml
     fi
 
-    # Jamais de sudoers cassé laissé en place.
-    if [ -f /etc/sudoers.d/secubox-searxng ]; then
-      visudo -cf /etc/sudoers.d/secubox-searxng >/dev/null 2>&1 || {
-        rm -f /etc/sudoers.d/secubox-searxng
-        echo "secubox-searxng : sudoers refusé par visudo et retiré : « Recharger la configuration » est inutilisable" >&2
-      }
+    # Reload par fichier de demande (aucun sudo) : dépôt root:secubox-searxng 1770, résultats 0750, créés en root.
+    if [ -d /run/secubox ]; then
+      /usr/sbin/searxngctl preparer || echo "secubox-searxng : dossiers de demandes de reload non préparés" >&2
     fi
 
     # Profil AppArmor (enforce), chargé AVANT de (re)démarrer l'unité qui le nomme. Sans AppArmor actif, l'unité démarre
@@ -54,8 +53,7 @@ case "$1" in
     fi
 
     # #3411 : activation HORS du test systemd (chroot d'une image) ; motif debhelper : un disable manuel survit.
-    # shellcheck disable=SC2043  # motif debhelper commun (#3411), une seule unité ici
-    for _u in secubox-searxng.service; do
+    for _u in secubox-searxng.service secubox-searxng-reload.path; do
       if deb-systemd-helper --quiet was-enabled "$_u"; then
         deb-systemd-helper enable "$_u" >/dev/null || true
       else
@@ -65,6 +63,10 @@ case "$1" in
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload || true
       # Service dédié (sa propre socket) : redémarré pour prendre le nouveau code, le compte et le profil — s'il est activé.
+      # L'unité .path (sans état) est (re)démarrée si elle est activée : elle seule déclenche le contrôleur root.
+      if systemctl is-enabled --quiet secubox-searxng-reload.path 2>/dev/null; then
+        systemctl restart secubox-searxng-reload.path || true
+      fi
       if [ "$PROFIL_API" = 1 ] && systemctl is-enabled --quiet secubox-searxng.service 2>/dev/null; then
         systemctl restart secubox-searxng.service || true
       elif [ "$PROFIL_API" = 0 ]; then

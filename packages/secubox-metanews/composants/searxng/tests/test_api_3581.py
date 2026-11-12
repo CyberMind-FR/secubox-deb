@@ -2,12 +2,13 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""#3581 — routes de l'API : gardes, validation de q, sortie bornée et nettoyée, /reload par sudo à argv exact."""
+"""#3581 — routes de l'API : gardes, validation de q, sortie bornée et nettoyée, /reload par fichier de demande (aucun sudo,
+aucun sous-processus)."""
 import io
 import json
 import socket
-import subprocess
 import urllib.error
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -141,67 +142,104 @@ def test_moteurs_de_searxng_puis_repli(client, monkeypatch, api_mod, tmp_path):
     assert d["source"] == "configuration" and d["actifs"] is None and d["desactives"] == []
 
 
-# ── /reload ──
+# ── /reload : dépôt d'une demande, résultat posé par le contrôleur root ──
 
-def test_argv_identique_au_sudoers(api_mod):
-    from pathlib import Path
-
-    ligne = [x for x in (Path(__file__).resolve().parents[1] / "sudoers.d" / "secubox-searxng").read_text().splitlines()
-             if x and not x.startswith("#")]
-    assert len(ligne) == 1
-    assert ligne[0] == "secubox-searxng ALL=(root) NOPASSWD: " + " ".join(api_mod.ARGV_RELOAD[2:])
-    assert api_mod.ARGV_RELOAD[:2] == ["sudo", "-n"]
-
-
-def _faux_run(code=0, sortie="", exc=None, appels=None):
-    def run(argv, **kw):
-        if appels is not None:
-            appels.append((argv, kw))
-        if exc is not None:
-            raise exc
-        if code:
-            raise subprocess.CalledProcessError(code, argv, output=sortie, stderr="")
-        return subprocess.CompletedProcess(argv, 0, stdout=sortie, stderr="")
-    return run
+@pytest.fixture
+def depot(api_mod, monkeypatch, tmp_path):
+    d, r = tmp_path / "searxng-reload", tmp_path / "searxng-reload-resultats"
+    d.mkdir()
+    r.mkdir()
+    monkeypatch.setattr(api_mod, "DEMANDES", d)
+    monkeypatch.setattr(api_mod, "RESULTATS", r)
+    return d, r
 
 
-def test_reload_applique(client, api_mod, monkeypatch):
-    appels = []
-    monkeypatch.setattr(api_mod.subprocess, "run", _faux_run(sortie='{"issue": "applique", "sha256": "ab"}\n', appels=appels))
+def controleur(api_mod, monkeypatch, depot, code=0, resultat=None, vues=None):
+    """Joue secubox-searxng-reload.service à la première attente de l'API : consomme la demande, pose le résultat."""
+    d, r = depot
+
+    def dormir(_pause):
+        for f in sorted(d.glob("*.demande")):
+            if vues is not None:
+                vues.append((f.name, json.loads(f.read_text())))
+            f.unlink()
+            (r / (f.name[: -len(".demande")] + ".json")).write_text(json.dumps({"code": code, "resultat": resultat}))
+    monkeypatch.setattr(api_mod, "_dormir", dormir)
+
+
+def test_api_sans_sudo_ni_sous_processus():
+    src = (Path(__file__).resolve().parents[1] / "api" / "main.py").read_text(encoding="utf-8")
+    code = "\n".join(x for x in src.splitlines() if not x.lstrip().startswith("#"))
+    assert "subprocess" not in code and "sudo" not in code.replace("pseudo", "") and "systemd-run" not in code
+    assert not (Path(__file__).resolve().parents[1] / "sudoers.d").exists()
+
+
+def test_reload_applique(client, api_mod, monkeypatch, depot):
+    vues = []
+    controleur(api_mod, monkeypatch, depot, 0, {"issue": "applique", "sha256": "ab"}, vues)
     r = client.post("/reload")
     assert r.status_code == 200 and r.json()["issue"] == "applique"
-    argv, kw = appels[0]
-    assert argv == api_mod.ARGV_RELOAD and kw["timeout"] == api_mod.DELAI_RELOAD and kw["check"] is True
-    assert json.loads(kw["input"]) == {"acteur": "alice"}
+    assert len(vues) == 1 and vues[0][1] == {"acteur": "alice"}
+    assert api_mod._NOM_DEMANDE.fullmatch(vues[0][0])
+    assert list(depot[0].iterdir()) == []                      # aucun temporaire laissé
+    assert api_mod.DELAI_RELOAD == 30.0
 
 
 @pytest.mark.parametrize("code,issue,attendu", [(3, "retour-arriere", 409), (3, "refuse", 409), (4, "conteneur-arrete", 409),
-                                                (5, "occupe", 409), (1, "echec", 502)])
-def test_reload_issues(client, api_mod, monkeypatch, code, issue, attendu):
-    monkeypatch.setattr(api_mod.subprocess, "run", _faux_run(code, json.dumps({"issue": issue, "detail": "d"})))
+                                                (5, "occupe", 409), (1, "echec", 502), (2, "refuse", 502)])
+def test_reload_issues(client, api_mod, monkeypatch, depot, code, issue, attendu):
+    controleur(api_mod, monkeypatch, depot, code, {"issue": issue, "detail": "d"})
     r = client.post("/reload")
     assert r.status_code == attendu and r.json()["detail"]["issue"] == issue
 
 
-def test_reload_delai_depasse_504(client, api_mod, monkeypatch):
-    monkeypatch.setattr(api_mod.subprocess, "run", _faux_run(exc=subprocess.TimeoutExpired(["sudo"], 120)))
-    assert client.post("/reload").status_code == 504
+def test_reload_sans_resultat_dans_le_delai_202(client, api_mod, monkeypatch, depot):
+    monkeypatch.setattr(api_mod, "DELAI_RELOAD", 0.05)
+    monkeypatch.setattr(api_mod, "_dormir", lambda _p: None)
+    r = client.post("/reload")
+    assert r.status_code == 202
+    d = r.json()
+    assert d["issue"] == "en-cours" and "audit" in d["detail"] and (depot[0] / f"{d['demande']}.demande").is_file()
 
 
-def test_reload_sans_sudo_503(client, api_mod, monkeypatch):
-    monkeypatch.setattr(api_mod.subprocess, "run", _faux_run(exc=FileNotFoundError("sudo")))
-    assert client.post("/reload").status_code == 503
+def test_reload_deja_demande_409(client, api_mod, depot):
+    (depot[0] / ("0" * 16 + ".demande")).write_text('{"acteur": "bob"}')
+    r = client.post("/reload")
+    assert r.status_code == 409 and r.json()["detail"]["issue"] == "occupe"
+    assert [x.name for x in depot[0].iterdir()] == ["0" * 16 + ".demande"]
 
 
-def test_reload_acteur_non_conforme_neutralise(api_mod, monkeypatch, tmp_path):
+def test_reload_sans_depot_503(client, api_mod, monkeypatch, tmp_path):
+    monkeypatch.setattr(api_mod, "DEMANDES", tmp_path / "absent")
+    r = client.post("/reload")
+    assert r.status_code == 503 and "secubox-searxng-reload.path" in r.json()["detail"]["detail"]
+
+
+def test_reload_resultat_lien_ignore(client, api_mod, monkeypatch, depot, tmp_path):
+    d, r = depot
+    leurre = tmp_path / "leurre.json"
+    leurre.write_text(json.dumps({"code": 0, "resultat": {"issue": "applique"}}))
+
+    def dormir(_pause):
+        for f in d.glob("*.demande"):
+            lien = r / (f.name[: -len(".demande")] + ".json")
+            if not lien.is_symlink():
+                lien.symlink_to(leurre)
+    monkeypatch.setattr(api_mod, "_dormir", dormir)
+    monkeypatch.setattr(api_mod, "DELAI_RELOAD", 0.05)
+    assert client.post("/reload").status_code == 202
+
+
+@pytest.mark.parametrize("sub", ["x\n;reboot", "alice\n", "a b", ""])
+def test_reload_acteur_non_conforme_neutralise(api_mod, monkeypatch, depot, tmp_path, sub):
     from secubox_core.auth import require_jwt
 
-    appels = []
+    vues = []
     monkeypatch.setattr(api_mod, "CONFIG", str(tmp_path / "absent.toml"))
-    monkeypatch.setattr(api_mod.subprocess, "run", _faux_run(sortie='{"issue": "applique"}', appels=appels))
-    api_mod.app.dependency_overrides[require_jwt] = lambda: {"sub": "x\n;reboot"}
+    controleur(api_mod, monkeypatch, depot, 0, {"issue": "applique"}, vues)
+    api_mod.app.dependency_overrides[require_jwt] = lambda: {"sub": sub}
     try:
         TestClient(api_mod.app).post("/reload")
     finally:
         api_mod.app.dependency_overrides.clear()
-    assert json.loads(appels[0][1]["input"]) == {"acteur": "?"}
+    assert vues[0][1] == {"acteur": "?"}

@@ -2,10 +2,12 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""#3581 — paquet : conteneur LXC en trixie non privilégié, SearXNG au commit figé, sudoers sans joker, unité durcie et son
-exception écrite, AppArmor, aucune exposition publique, installation par debian/rules, postinst sans création du LXC."""
+"""#3581 — paquet : conteneur LXC en trixie non privilégié, SearXNG au commit figé et dépendances à empreintes, aucun
+sudoers, API au socle de durcissement complet, reload par unité .path + oneshot root (exception écrite), AppArmor, aucune
+exposition publique, installation par debian/rules, postinst sans création du LXC."""
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -18,10 +20,21 @@ COMMIT = "3e95f6cd2a68add0329cb162907b49289e2bc1fd"
 CTL = (COMPOSANT / "sbin" / "searxngctl").read_text(encoding="utf-8")
 INSTALLEUR = (COMPOSANT / "lib" / "searxng" / "installer-searxng.sh").read_text(encoding="utf-8")
 UNITE = (COMPOSANT / "debian" / "secubox-searxng.service").read_text(encoding="utf-8")
+UNITE_RELOAD = (COMPOSANT / "debian" / "secubox-searxng-reload.service").read_text(encoding="utf-8")
+PATH_RELOAD = (COMPOSANT / "debian" / "secubox-searxng-reload.path").read_text(encoding="utf-8")
 
 
 def _code(texte):
     return [x for x in texte.splitlines() if not x.lstrip().startswith("#")]
+
+
+def _unite(texte):
+    u = {}
+    for x in texte.splitlines():
+        if "=" in x and not x.startswith("#"):
+            k, v = x.split("=", 1)
+            u.setdefault(k, []).append(v)
+    return u
 
 
 # ── LXC : Pattern 11, dernière Debian, non privilégié ──
@@ -101,45 +114,73 @@ def test_scripts_syntaxe():
     assert CTL.startswith("#!/usr/bin/python3 -I\n")
 
 
-# ── sudoers, unité, AppArmor ──
+# ── Aucun sudoers ; API au socle complet ; reload par unité .path + oneshot root ──
 
-def test_sudoers_sans_joker_ni_shell():
-    lignes = [x for x in (COMPOSANT / "sudoers.d" / "secubox-searxng").read_text().splitlines() if x and not x.startswith("#")]
-    assert lignes == ["secubox-searxng ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet "
-                      "/usr/sbin/searxngctl reload --json --acteur-stdin"]
-    for interdit in ("*", "?", "[", "ALL=(ALL)", "sh ", "bash", "lxc-", "NOPASSWD: ALL", "!"):
-        assert interdit not in lignes[0].split("NOPASSWD:", 1)[1], interdit
+def test_aucun_sudoers():
+    assert not (COMPOSANT / "sudoers.d").exists()
+    for f in (PAQUET / "debian" / "rules", COMPOSANT / "debian" / "postinst"):
+        assert "sudoers.d/secubox-searxng" not in "\n".join(_code(f.read_text())), f
+    assert '"--acteur-stdin"' not in CTL and '"sudo"' not in CTL and '"/usr/bin/systemd-run"' not in CTL
 
 
-def test_unite_durcie_et_exception_ecrite():
-    u = {}
-    for x in UNITE.splitlines():
-        if "=" in x and not x.startswith("#"):
-            k, v = x.split("=", 1)
-            u.setdefault(k, []).append(v)
+def test_unite_api_socle_complet_sans_exception():
+    u = _unite(UNITE)
     assert u["User"] == ["secubox-searxng"] and u["Group"] == ["secubox"] and u["UMask"] == ["0027"]
-    assert u["NoNewPrivileges"] == ["no"] and u["ProtectSystem"] == ["strict"] and u["ProtectHome"] == ["yes"]
-    assert u["PrivateTmp"] == ["yes"] and u["ProtectControlGroups"] == ["yes"]
+    assert u["SupplementaryGroups"] == ["secubox-searxng"]
+    for k in ("NoNewPrivileges", "ProtectHome", "PrivateTmp", "PrivateDevices", "ProtectKernelTunables", "ProtectKernelModules",
+              "ProtectKernelLogs", "ProtectControlGroups", "ProtectClock", "ProtectHostname", "RestrictSUIDSGID",
+              "RestrictNamespaces", "RestrictRealtime", "LockPersonality"):
+        assert u[k] == ["yes"], k
+    assert u["ProtectSystem"] == ["strict"] and u["SystemCallArchitectures"] == ["native"]
+    assert u["CapabilityBoundingSet"] == [""] and u["AmbientCapabilities"] == [""]
+    assert u["RestrictAddressFamilies"] == ["AF_UNIX AF_INET"]
     assert u["AppArmorProfile"] == ["secubox-searxng-api"] and u["ReadWritePaths"] == ["/run/secubox /var/log/secubox"]
-    assert u["IPAddressDeny"] == ["any"] and u["IPAddressAllow"] == ["10.100.0.0/24"]
-    assert "+/bin/rm -f /run/secubox/searxng.sock" in u["ExecStartPre"]
+    assert u["IPAddressDeny"] == ["any"] and u["IPAddressAllow"] == ["10.100.0.85/32"]
+    assert u["ExecStartPre"] == ["+/bin/rm -f /run/secubox/searxng.sock", "+/usr/sbin/searxngctl preparer"]
     assert "--uds /run/secubox/searxng.sock" in u["ExecStart"][0]
     assert "RuntimeDirectory" not in u
-    # Options à filtre seccomp : elles imposeraient NoNewPrivileges et neutraliseraient sudo.
-    for k in ("ProtectKernelTunables", "ProtectKernelModules", "LockPersonality", "RestrictSUIDSGID", "SystemCallFilter",
-              "RestrictNamespaces", "RestrictAddressFamilies", "PrivateDevices", "MemoryDenyWriteExecute"):
+    regles = (RACINE / ".claude" / "RULES-CODE.md").read_text(encoding="utf-8")
+    assert not [x for x in regles.splitlines() if x.startswith("| § 10 durcissement | `secubox-searxng.service`")]
+
+
+def test_unite_reload_root_et_exception_ecrite():
+    p = _unite(PATH_RELOAD)
+    assert p["PathExistsGlob"] == ["/run/secubox/searxng-reload/*.demande"]
+    assert p["Unit"] == ["secubox-searxng-reload.service"] and p["WantedBy"] == ["paths.target"]
+    u = _unite(UNITE_RELOAD)
+    assert u["Type"] == ["oneshot"] and "User" not in u
+    assert u["ExecStart"] == ["/usr/sbin/searxngctl reload --demandes"]
+    assert u["UMask"] == ["0027"] and u["PrivateTmp"] == ["yes"] and u["ProtectHome"] == ["yes"]
+    assert u["IPAddressDeny"] == ["any"] and u["IPAddressAllow"] == ["10.100.0.85/32"]
+    assert u["TimeoutStartSec"] == ["10min"]
+    # lxc-attach (setns, cgroup du conteneur, personnalité, profil AppArmor à l'exécution) : options absentes, écrites.
+    for k in ("NoNewPrivileges", "ProtectSystem", "ProtectKernelTunables", "ProtectControlGroups", "RestrictNamespaces",
+              "RestrictSUIDSGID", "LockPersonality"):
         assert k not in u, k
     regles = (RACINE / ".claude" / "RULES-CODE.md").read_text(encoding="utf-8")
-    ligne = [x for x in regles.splitlines() if "`secubox-searxng.service`" in x]
-    assert len(ligne) == 1 and "§ 10" in ligne[0] and "test_unite_durcie_et_exception_ecrite" in ligne[0]
+    ligne = [x for x in regles.splitlines() if "`secubox-searxng-reload.service`" in x]
+    assert len(ligne) == 1 and "§ 10" in ligne[0] and "test_unite_reload_root_et_exception_ecrite" in ligne[0]
 
 
 def test_profil_apparmor():
     p = (COMPOSANT / "apparmor" / "secubox-searxng-api").read_text()
-    assert "profile secubox-searxng-api {" in p and "/usr/bin/sudo Ux," in p
+    code = "\n".join(_code(p))
+    assert "profile secubox-searxng-api {" in p and "sudo" not in code and " Ux," not in code and " ux," not in code
     assert "deny /etc/secubox/secrets/** rwklx," in p and "/run/secubox/searxng.sock rwk," in p
     assert "/etc/secubox/searxng.toml r," in p and "/var/cache/secubox-searxng/** rwk," in p
     assert not re.search(r"^\s*/etc/secubox/\*\*", p, re.M) and " ix," not in p.replace("rix,", "")
+    # Journaux : seulement ceux de secubox_core, jamais audit.log.
+    assert "deny /var/log/secubox/audit.log w," in p and "/var/log/secubox/*.log" not in code
+    ecrits = re.findall(r"^\s*(/var/log/secubox/\S+) \w*w\w*,", code, re.M)
+    assert sorted(ecrits) == ["/var/log/secubox/delegation.log", "/var/log/secubox/garde-origine.log"]
+    assert "owner /run/secubox/searxng-reload/* rw," in p and "/run/secubox/searxng-reload-resultats/*.json r," in p
+
+
+def test_profil_apparmor_compile():
+    if not shutil.which("apparmor_parser") or not Path("/etc/apparmor.d/tunables/global").exists():
+        pytest.skip("apparmor_parser absent")
+    subprocess.run(["apparmor_parser", "-QT", str(COMPOSANT / "apparmor" / "secubox-searxng-api")], check=True, timeout=60,
+                   capture_output=True)
 
 
 # ── Exposition : interne seulement ──
@@ -173,11 +214,13 @@ def test_debian_rules_installe_le_composant():
     for cible in ("usr/lib/secubox/searxng/", "usr/sbin/searxngctl", "usr/share/secubox/lib/searxng/installer-searxng.sh",
                   "usr/share/secubox/searxng/searxng.toml.example", "usr/share/secubox/www/searxng/index.html",
                   "usr/share/secubox/menu.d/60-searxng.json", "etc/nginx/secubox-routes.d/searxng.conf",
-                  "etc/sudoers.d/secubox-searxng", "etc/apparmor.d/secubox-searxng-api",
-                  "usr/lib/systemd/system/secubox-searxng.service", "maintscripts/searxng.postinst",
+                  "etc/apparmor.d/secubox-searxng-api",
+                  "usr/lib/systemd/system/secubox-searxng.service",
+                  "usr/lib/systemd/system/secubox-searxng-reload.service",
+                  "usr/lib/systemd/system/secubox-searxng-reload.path", "maintscripts/searxng.postinst",
                   "maintscripts/searxng.prerm", "maintscripts/searxng.postrm"):
         assert cible in rules, cible
-    assert "install -D -m 440 composants/searxng/sudoers.d/secubox-searxng" in rules
+    assert "sudoers" not in "\n".join(x for x in rules.splitlines() if "searxng" in x)
     assert "dh_installsystemd --name=secubox-searxng" not in rules      # le postinst du composant l'active, après le compte
     assert "python3-yaml" in (PAQUET / "debian" / "control").read_text()
 
@@ -187,9 +230,51 @@ def test_postinst_ne_cree_pas_le_conteneur():
     code = "\n".join(_code(p))
     assert "lxc-create" not in code and "searxngctl install" not in code
     assert "adduser --system --ingroup secubox --no-create-home --home /nonexistent" in code and "secubox-searxng" in code
-    assert "apparmor_parser -r /etc/apparmor.d/secubox-searxng-api" in code and "visudo -cf" in code
+    assert "apparmor_parser -r /etc/apparmor.d/secubox-searxng-api" in code and "visudo" not in code
     assert 'deb-systemd-helper --quiet was-enabled "$_u"' in code and "systemctl restart secubox-searxng.service" in code
+    assert "for _u in secubox-searxng.service secubox-searxng-reload.path; do" in code
+    assert "systemctl restart secubox-searxng-reload.path" in code
+    assert "addgroup --system secubox-searxng" in code and "/usr/sbin/searxngctl preparer" in code
     assert "install -d -m 0700 -o root -g root /var/lib/secubox-searxng" in code
+    # Le TOML : root propriétaire, jamais inscriptible par le groupe (searxngctl le refuserait).
+    assert "install -m 0640 -o root -g secubox /usr/share/secubox/searxng/searxng.toml.example /etc/secubox/searxng.toml" in code
+    prerm = (COMPOSANT / "debian" / "prerm").read_text()
+    assert "systemctl stop secubox-searxng-reload.path secubox-searxng.service" in prerm
+
+
+def test_dossier_du_conteneur_reste_root(ctl, cfg, tmp_path, monkeypatch):
+    assert "os.chown(racine, UID_RACINE" not in CTL
+    racine = tmp_path / "lxc" / "searxng"
+    (racine / "rootfs").mkdir(parents=True)
+    cfg = {"lxc": {**cfg["lxc"], "path": str(tmp_path / "lxc")}, "searxng": cfg["searxng"]}
+    vus = []
+    monkeypatch.setattr(ctl.os, "fchown", lambda fd, u, g: vus.append((u, g)))
+    monkeypatch.setattr(ctl, "executer", lambda argv, **kw: vus.append(tuple(argv[:2])))
+    # Un lien laissé sous le nom du temporaire n'est jamais suivi : la cible reste intacte.
+    cible = tmp_path / "cible"
+    cible.write_text("intact\n")
+    (racine / "config.secubox.tmp").symlink_to(cible)
+    ctl.creer_conteneur(cfg)
+    assert cible.read_text() == "intact\n" and not (racine / "config.secubox.tmp").exists()
+    assert "lxc.idmap = u 0 100000 65536" in (racine / "config").read_text()
+    assert (racine / "config").stat().st_mode & 0o777 == 0o640 and racine.stat().st_mode & 0o777 == 0o755
+    assert vus == [(0, 0)]                                # dossier du conteneur : root:root, jamais l'idmap
+    # Le rootfs seul est décalé sur l'idmap (une fois, sans suivre les liens).
+    assert '["chown", "-R", "-h", f"{UID_RACINE}:{UID_RACINE}", str(racine / "rootfs")]' in CTL
+
+
+def test_tmp_de_config_en_o_excl_nofollow(ctl):
+    assert "os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640" in CTL
+
+
+def test_dossier_des_secrets_cree_root_0700(ctl, tmp_path, monkeypatch):
+    monkeypatch.setattr(ctl, "SECRETS", tmp_path / "secrets" / "searxng")
+    monkeypatch.setattr(ctl.os, "chown", lambda *a: None)
+    ctl.secret_cle()
+    assert (tmp_path / "secrets").stat().st_mode & 0o777 == 0o700
+    (tmp_path / "secrets").chmod(0o750)                   # existant (partagé) : jamais retouché
+    ctl.secret_cle()
+    assert (tmp_path / "secrets").stat().st_mode & 0o777 == 0o750
 
 
 def test_version_et_changelog():
