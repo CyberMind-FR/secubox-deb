@@ -204,3 +204,25 @@ def test_csp_et_aucune_ressource_externe():
     assert "default-src 'self'; connect-src https:; img-src 'self' data:" in src
     assert not re.search(r'(src|href)="https?://', src)
     assert "<script>" not in src
+
+
+def test_hashchange_appli_deja_ouverte(navigateur, serveur):
+    """onNewIntent (tâche 3) recharge https://localhost/#associer=… dans une page déjà ouverte : seul hashchange arrive."""
+    ctx, p, err = ouvre(navigateur, serveur)
+    assert "Mes box" in p.inner_text("#app") or "/companion/" in p.inner_text("#app")
+    p.evaluate("(h) => { location.hash = h; }", "#associer=" + LIEN)
+    p.wait_for_selector("text=Ajouter admin.gk12.secubox.in à vos box ?")
+    assert sans_debordement(p)
+    p.evaluate("(h) => { location.hash = h; }", "#injoignable=https%3A%2F%2Fadmin.gk12.secubox.in")
+    p.wait_for_selector("text=Box injoignable")
+    assert sans_debordement(p) and not err
+    ctx.close()
+
+
+def test_largeur_420_liste_pleine(navigateur, serveur):
+    boites = [{"origine": "https://admin.gk%d.secubox.in" % i, "nom": "admin.gk%d.secubox.in" % i, "vu": i} for i in range(20)]
+    boites[0] = {"origine": "https://admin.une-box-au-nom-vraiment-tres-long-pour-tester.secubox.in",
+                 "nom": "admin.une-box-au-nom-vraiment-tres-long-pour-tester.secubox.in", "vu": 0}
+    ctx, p, err = ouvre(navigateur, serveur, stockage={"sbx.boites": json.dumps(boites)})
+    assert "Mes box" in p.inner_text("#app") and sans_debordement(p) and not err
+    ctx.close()
