@@ -148,6 +148,12 @@ def appliquer_settings(cfg: dict, conteneur, *, sante=None, acteur: str = "?", r
     empreinte = hashlib.sha256(texte.encode()).hexdigest()[:16]
     base = {"acteur": acteur, "sha256": empreinte}
     nouveau, precedent = SETTINGS + ".nouveau", SETTINGS + ".precedent"
+    ancien = None
+    # Vrai dès que le remplacement a PU avoir lieu (y compris un mv dont lxc-attach n'a pas rendu la main) : à partir de là,
+    # toute erreur, quelle qu'elle soit, défait (ancien fichier remis, relance, audit) au lieu de laisser SearXNG arrêté
+    # sur un fichier qui n'a jamais répondu.
+    remplace = False
+    detail = "SearXNG ne répond pas avec la nouvelle configuration"
     try:
         ancien = conteneur.lire(SETTINGS)
         if ancien == texte and not relancer_si_identique:
@@ -163,18 +169,25 @@ def appliquer_settings(cfg: dict, conteneur, *, sante=None, acteur: str = "?", r
             return 3, sortie
         if ancien is not None:
             conteneur.ecrire(precedent, ancien)
+        remplace = True
         conteneur.renommer(nouveau, SETTINGS)
         conteneur.relancer()
-    except (subprocess.SubprocessError, OSError) as e:
-        sortie = {"issue": "echec", "detail": f"opération dans le conteneur en échec : {e.__class__.__name__}", **base}
-        audit_fn("reload", sortie)
-        return 1, sortie
-    if sante():
+        repond = bool(sante())
+    except Exception as e:  # noqa: BLE001 — après le remplacement, TOUTE erreur défait ; avant, seules les attendues
+        if not remplace:
+            if not isinstance(e, (subprocess.SubprocessError, OSError)):
+                raise
+            sortie = {"issue": "echec", "detail": f"opération dans le conteneur en échec : {e.__class__.__name__}", **base}
+            audit_fn("reload", sortie)
+            return 1, sortie
+        journal(f"relance avec la nouvelle configuration en échec : {e.__class__.__name__}")
+        detail = f"relance avec la nouvelle configuration en échec ({e.__class__.__name__})"
+        repond = False
+    if repond:
         sortie = {"issue": "applique", **base}
         audit_fn("reload", sortie)
         return 0, sortie
-    # SearXNG ne répond plus avec le nouveau fichier : l'ancien revient, et le service avec lui.
-    detail = "SearXNG ne répond pas avec la nouvelle configuration"
+    # SearXNG ne répond plus avec le nouveau fichier (ou sa relance a échoué) : l'ancien revient, et le service avec lui.
     if ancien is None:
         sortie = {"issue": "echec", "detail": detail + " (aucun ancien fichier à rétablir)", **base}
         audit_fn("reload", sortie)
@@ -183,8 +196,8 @@ def appliquer_settings(cfg: dict, conteneur, *, sante=None, acteur: str = "?", r
         conteneur.ecrire(nouveau, ancien)
         conteneur.renommer(nouveau, SETTINGS)
         conteneur.relancer()
-        retabli = sante()
-    except (subprocess.SubprocessError, OSError) as e:
+        retabli = bool(sante())
+    except Exception as e:  # noqa: BLE001 — le retour arrière en échec est journalisé et audité (retabli: false)
         journal(f"retour arrière en échec : {e.__class__.__name__}")
         retabli = False
     sortie = {"issue": "retour-arriere", "detail": detail + (" ; ancienne configuration rétablie" if retabli

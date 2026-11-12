@@ -3,10 +3,13 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """#3581 — reload en double tampon : écrit à côté, relu et validé, remplacé atomiquement, relancé, sondé ; sinon l'ancien
-settings.yml revient. Chaque issue est une ligne d'audit. Conteneur simulé (aucun lxc-attach)."""
+settings.yml revient (y compris quand la relance échoue après le remplacement). Chaque issue est une ligne d'audit.
+Conteneur simulé (aucun lxc-attach)."""
 import io
 import json
 import subprocess
+
+import pytest
 
 from sbx_searxng import config as C
 
@@ -17,15 +20,19 @@ ANCIEN = "# ancien\nuse_default_settings: true\n"
 class Conteneur:
     """Système de fichiers du conteneur en mémoire ; journal des opérations."""
 
-    def __init__(self, fichiers=None, corrompre=False, echec_relance=False):
+    def __init__(self, fichiers=None, corrompre=False, echec_relance=False, echec_ecriture=False):
         self.f = dict(fichiers or {})
-        self.ops, self.corrompre, self.echec_relance = [], corrompre, echec_relance
+        self.ops, self.corrompre, self.echec_ecriture = [], corrompre, echec_ecriture
+        # echec_relance : True (toujours), un entier (les n premières), ou une exception à lever.
+        self.echec_relance = echec_relance
 
     def lire(self, chemin):
         return self.f.get(chemin)
 
     def ecrire(self, chemin, contenu, mode="0644"):
         self.ops.append(("ecrire", chemin))
+        if self.echec_ecriture:
+            raise subprocess.TimeoutExpired(["lxc-attach"], 30)
         self.f[chemin] = contenu[: len(contenu) // 3] if self.corrompre and chemin.endswith(".nouveau") else contenu
 
     def renommer(self, source, cible):
@@ -38,7 +45,12 @@ class Conteneur:
 
     def relancer(self):
         self.ops.append(("relancer",))
-        if self.echec_relance:
+        e = self.echec_relance
+        if isinstance(e, BaseException):
+            raise e
+        if e is True or (isinstance(e, int) and not isinstance(e, bool) and e > 0):
+            if not isinstance(e, bool):
+                self.echec_relance = e - 1
             raise subprocess.CalledProcessError(1, ["systemctl"])
 
 
@@ -85,10 +97,58 @@ def test_premier_passage_sans_ancien_fichier(ctl, cfg):
     assert audit[0][1]["issue"] == "echec"
 
 
-def test_operation_du_conteneur_en_echec_auditee(ctl, cfg):
+def test_relance_en_echec_apres_remplacement_ancien_fichier_remis(ctl, cfg):
+    # La relance échoue toujours (même celle du retour arrière) : l'ancien settings.yml est quand même remis.
     ct, audit = Conteneur({SETTINGS: ANCIEN}, echec_relance=True), Audit()
     code, sortie = ctl.appliquer_settings(cfg, ct, sante=lambda: True, audit_fn=audit)
+    assert ct.f[SETTINGS] == ANCIEN
+    assert code == 3 and sortie["issue"] == "retour-arriere" and sortie["retabli"] is False
+    assert "relance" in sortie["detail"] and [a[1]["issue"] for a in audit] == ["retour-arriere"]
+
+
+@pytest.mark.parametrize("exc", [subprocess.TimeoutExpired(["lxc-attach"], 90), RuntimeError("inattendue")])
+def test_relance_en_echec_puis_retablie(ctl, cfg, exc):
+    # Délai dépassé (ou toute autre erreur) à la relance avec le nouveau fichier : même chemin que la sonde muette.
+    ct, audit = Conteneur({SETTINGS: ANCIEN}), Audit()
+    appels = []
+
+    def relancer():
+        appels.append(1)
+        ct.ops.append(("relancer",))
+        if len(appels) == 1:
+            raise exc
+    ct.relancer = relancer
+    code, sortie = ctl.appliquer_settings(cfg, ct, sante=lambda: True, audit_fn=audit)
+    assert ct.f[SETTINGS] == ANCIEN and len(appels) == 2
+    assert code == 3 and sortie["issue"] == "retour-arriere" and sortie["retabli"] is True
+    assert audit == [("reload", sortie)]
+
+
+def test_sonde_qui_leve_apres_remplacement_defait(ctl, cfg):
+    ct, audit = Conteneur({SETTINGS: ANCIEN}), Audit()
+    etats = iter([ValueError("sonde"), True])
+
+    def sante():
+        e = next(etats)
+        if isinstance(e, BaseException):
+            raise e
+        return e
+    code, sortie = ctl.appliquer_settings(cfg, ct, sante=sante, audit_fn=audit)
+    assert (code, sortie["issue"], sortie["retabli"], ct.f[SETTINGS]) == (3, "retour-arriere", True, ANCIEN)
+
+
+def test_echec_avant_remplacement_rien_ne_change(ctl, cfg):
+    ct, audit = Conteneur({SETTINGS: ANCIEN}, echec_ecriture=True), Audit()
+    code, sortie = ctl.appliquer_settings(cfg, ct, sante=lambda: True, audit_fn=audit)
     assert code == 1 and sortie["issue"] == "echec" and audit[0][1]["issue"] == "echec"
+    assert ct.f[SETTINGS] == ANCIEN and ("relancer",) not in ct.ops and not any(o[0] == "renommer" for o in ct.ops)
+
+
+def test_erreur_imprevue_avant_remplacement_propagee(ctl, cfg):
+    ct = Conteneur({SETTINGS: ANCIEN})
+    ct.lire = lambda chemin: (_ for _ in ()).throw(KeyError("bogue"))
+    with pytest.raises(KeyError):
+        ctl.appliquer_settings(cfg, ct, sante=lambda: True, audit_fn=Audit())
 
 
 def test_install_n_ecrit_rien_si_identique(ctl, cfg):
