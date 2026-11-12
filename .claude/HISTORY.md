@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-12 — Leurres du WAF : apprentissage, promotion vers le bannissement, retrait (ref #3584, étape B)
+
+- Option 1 du propriétaire (sans toucher au moteur Go ni à secubox-waf-ng) : `secubox-security-posture` 2.6.0 (PR #3681).
+  - `product_absent_probes` (`detect`, apprentissage) ← `generate --apply` ; `product_absent_probes_ban` (`escalate` : ban après 3 touches/24 h) ← seule une promotion y écrit ; retirés dans `/etc/secubox/waf/leurres-retires.json` (root 0600).
+  - `secubox-cvectl leurre lister|promouvoir|retirer|retablir --apply --json` (id et acteur sur stdin, sudoers exact) ; écriture 4R unique de `waf-rules.json`, verrou, audit nominatif à chaque issue.
+  - Touches comptées toutes les 10 min par `secubox-cve-leurres.timer`, compte dédié `secubox-cve-leurres` (ACL lecture du journal du WAF, AppArmor enforce) ; page CVE : tableau « Leurres en place » (promouvoir, retirer, rétablir, confirmation avec le motif).
+- Relecture relecteur-securite, trois passes : 0 bloquant, tous les « à corriger » traités. Restent : `waf-rules-sync` ne prend pas le verrou ; deux leurres d'une même CVE partagent un id (CVE-2024-3400 : `/global-protect/portal/images/` écarté comme doublon) — id à rendre unique.
+- Déployé gk6 (banc, vérifié) puis gk2 : 4 leurres en apprentissage (Palo Alto ×3, Cisco), sbxwaf rechargé à chaud (158 motifs), audit `leurre_appliquer`. Page et routes `/leurres` : relance de l'agrégateur de gk2 à faire (accord).
+
 ## 2026-11-12 — sbx-authwatch réécrit ses bannissements dans waf-threats.log (closes #3679)
 
 - Depuis le 1er novembre sur gk2 : « permission denied » à chaque ban d'authwatch, absent du journal des menaces et du tableau de bord. Cause : `secubox-live-acl` (#3351) posait une ACL par défaut héritant `group::r-x` sur /var/log/secubox/waf ; le journal recréé par logrotate (`create 0660`, #1318) perdait l'écriture de groupe.
