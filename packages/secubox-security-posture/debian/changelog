@@ -15,7 +15,8 @@ secubox-security-posture (2.6.0-1~trixie1) trixie; urgency=medium
     0600, écrite par descripteur de dossier, ancien emplacement repris une
     fois) ; audit nominatif (sujet du jeton passé sur stdin) ; JSON et audit
     à toute issue non nulle ; --apply obligatoire pour décider (sinon
-    simulation) ; touches comptées en tâche de fond (secubox-cve-leurres.timer,
+    simulation) ; touches comptées en tâche de fond sous secubox, sans privilège
+    (secubox-cve-leurres.timer,
     cache lu par le panneau, « touches indisponibles » sinon) ; audit sans
     création ni lien ; syntaxe hors RE2 élargie ; erreurs de l API sans trace ;
     confirmation de promotion avec le motif (ref #3584).
