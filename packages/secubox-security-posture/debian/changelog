@@ -1,3 +1,30 @@
+secubox-security-posture (2.6.0-1~trixie1) trixie; urgency=medium
+
+  * Leurres du WAF : apprentissage (product_absent_probes, detect) → promotion
+    par l administrateur vers product_absent_probes_ban (escalate : bannissement
+    après 3 touches en 24 h) → retrait et rétablissement. « Générer » ne
+    réécrit jamais le bannissement ni un leurre retiré (ref #3584).
+  * Écriture de waf-rules.json en 4R (lecture, validation des motifs RE2 et des
+    autres catégories, copie de retour, swap atomique, relecture, rollback),
+    verrou fcntl, une ligne d audit par issue (ref #3584).
+  * secubox-cvectl leurre lister|promouvoir|retirer|retablir --json (id sur
+    stdin) ; quatre lignes de sudoers exactes ; routes GET /leurres et
+    POST /leurres/{promouvoir,retirer,retablir} (confirmation requise) ;
+    tableau « Leurres en place » dans l onglet Sondes WAF (ref #3584).
+  * Relecture de sécurité : liste des retirés à côté de waf-rules.json (root,
+    0600, écrite par descripteur de dossier) ; audit nominatif (sujet du jeton
+    passé sur stdin) ; JSON et audit à toute issue non nulle ; --apply
+    obligatoire pour décider (sinon simulation) ; audit sans création ni lien ;
+    syntaxe hors RE2 élargie ; erreurs de l API sans trace ; confirmation de
+    promotion avec le motif (ref #3584).
+  * Touches comptées en tâche de fond (secubox-cve-leurres.timer) sous le
+    compte dédié secubox-cve-leurres (sans privilège, AppArmor enforce, ACL
+    nommée sur /var/log/secubox/waf, StateDirectory pour le cache), sans
+    audit ; cache relu en liste blanche par le panneau, « touches
+    indisponibles » sinon ; dépendance acl (ref #3584).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:00:00 +0100
+
 secubox-security-posture (2.5.3-1~trixie1) trixie; urgency=medium
 
   * Leurres CERT-FR : un modèle Nuclei en requêtes « raw » donne le chemin de sa
