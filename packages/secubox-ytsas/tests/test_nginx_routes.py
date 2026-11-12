@@ -11,7 +11,7 @@ container), so /api/v1/ytsas/ was 404 from the admin vhost. These tests
 check the shipped route snippet (nginx/ytsas-routes.conf), its packaging
 (debian/rules + postinst + prerm), and — with a real, ephemeral nginx
 binary — that dropping it into secubox-routes.d/ does not collide with
-anything the companion PWA vhost already declares.
+anything a companion-style vhost (own server_name) declares.
 """
 
 import re
@@ -26,7 +26,7 @@ REPO_ROOT = ROOT.parent.parent
 
 ROUTE_FILE = ROOT / "nginx" / "ytsas-routes.conf"
 PROXY_SNIPPET = REPO_ROOT / "common" / "nginx" / "secubox-proxy.conf"
-COMPANION_CONF = REPO_ROOT / "secubox-companion" / "deploy" / "nginx-companion.conf"
+COMPANION_CONF = REPO_ROOT / "deploy" / "gk2" / "nginx-sites" / "companion.conf"
 
 NGINX_BIN = shutil.which("nginx")
 
@@ -54,12 +54,10 @@ def test_route_file_ip_matches_the_toml_source_of_truth():
 
 
 def test_companion_vhost_has_no_conflicting_ytsas_location():
-    # Unlike torrent, the companion PWA vhost does not (yet) special-case
-    # /api/v1/ytsas/ — it falls through to the generic /api/v1/ catch-all
-    # (proxied to the aggregator, which has no ytsas module either; a
-    # separate, pre-existing gap outside this ticket's scope). Documented
-    # here so a future companion route for ytsas is a deliberate change,
-    # not a silent duplicate of this admin-vhost snippet.
+    # The companion vhost (companion.gk2) is now only a 301 redirect to the
+    # admin vhost: it proxies no API. Documented here so a future route for
+    # ytsas there is a deliberate change, not a silent duplicate of this
+    # admin-vhost snippet.
     assert "/api/v1/ytsas/" not in _read(COMPANION_CONF)
 
 
@@ -134,9 +132,9 @@ def _run_nginx_t(tmp_path, http_server_blocks: str) -> subprocess.CompletedProce
 def test_admin_vhost_with_route_and_companion_vhost_coexist(tmp_path):
     # Mirrors production: the admin vhost (common/nginx/webui.conf) has no
     # server_name and blanket-includes secubox-routes.d/*.conf; the
-    # companion vhost (secubox-companion/deploy/nginx-companion.conf) is a
-    # separate server{} disambiguated by server_name, with its own generic
-    # /api/v1/ catch-all. Different server{} blocks on the same listen port
+    # companion vhost (deploy/gk2/nginx-sites/companion.conf, now a redirect
+    # only) is a separate server{} disambiguated by server_name; the block
+    # below keeps a generic /api/v1/ catch-all as a worst case. Different server{} blocks on the same listen port
     # never collide in nginx — this proves it against the real shipped
     # files rather than assuming it.
     blocks = f"""

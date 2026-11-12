@@ -36,6 +36,7 @@ def test_la_cle_unite_designe_le_module_qui_porte_la_page(monkeypatch):
 def test_les_pages_de_annuaire_et_de_release_portent_la_cle():
     attendu = {"570-centers.json": ("secubox-annuaire/menu.d", "annuaire"),
                "595-fleet.json": ("secubox-annuaire/menu.d", "annuaire"),
+               "companion.json": ("secubox-companion/menu.d", "aggregator"),
                "590-releases.json": ("secubox-repo/composants/release/menu.d", "release")}
     for nom, (dossier, unite) in attendu.items():
         d = json.loads((PAQUETS / dossier / nom).read_text())

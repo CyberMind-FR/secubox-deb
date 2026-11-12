@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: LicenseRef-CMSD-1.0 */
+/* Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> */
+/* Écrans locaux de la Companion 2.0 (liste, confirmation, injoignable). */
+#app { max-width: 420px; overflow-x: hidden; }
+#app p, #app h1, #app h2 { overflow-wrap: anywhere; }
+.bandeau { display: block; width: 100%; text-align: left; margin-bottom: 12px; border-color: var(--wall); color: var(--wall); white-space: normal; }
+.refus { border-left: 3px solid var(--boot); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.item .meta { overflow: hidden; }
+.item { flex-wrap: wrap; }
+.aide { font-size: .85rem; color: var(--muted); }

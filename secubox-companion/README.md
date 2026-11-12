@@ -1,81 +1,78 @@
-<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
-# SecuBox Companion
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+-->
+# SecuBox Companion 2.0
 
-Remote, modular companion for **SecuBox-Deb** — use and administer each box
-component **module by module**, from a phone or a browser. The Companion
-reimplements nothing server-side: it **consumes** the box's existing FastAPI
-endpoints, organised along the canonical path **AUTH → WALL → BOOT → MIND →
-ROOT → MESH**.
+Coquille Android de l'administration de SecuBox (`in.secubox.companion`, versionName 2.0). L'appli ne réimplémente rien :
+elle **associe** une ou plusieurs box (adresse `https://admin.<box>`), puis charge l'administration de la box dans un WebView.
+La connexion est celle de la page de connexion habituelle de la box (mot de passe, 2FA) ; la session vit dans le stockage
+du WebView, comme dans un navigateur. Pas de pont natif exposé à l'origine distante.
 
-## Design
+## Fonctionnement
 
-- **Buildless.** Vanilla JS ES modules, no bundler. `www/` is deployable as-is
-  (static PWA) and is the Capacitor `webDir`. "Add a module" = drop a folder.
-- **Minimal core** (`www/core/`): shell/router, a generic API client (bearer
-  token + GET cache + offline write-queue), and a runtime module registry.
-- **Module registry.** Each module is a folder `www/modules/<id>/` with a
-  `module.json` manifest + a `view.js` (`export default async mount(ctx)`).
-  `www/modules/index.json` lists the ids. The core never changes.
-- **Offline-first.** The service worker caches the app shell; reads are cached
-  in IndexedDB; writes are queued and replayed on reconnect — always through the
-  box's real, journalled endpoints (OPAD-safe, no admin bypass).
+- **Écrans locaux** (`www/`, Capacitor `webDir`) : « Associer une box », « Box injoignable » (réessayer, changer de box),
+  sélecteur des box associées. JavaScript sans bundler, modules ES (`www/core/app.js`, `www/core/boites.js`).
+- **Navigation** limitée à l'origine associée ; tout autre lien s'ouvre dans le navigateur du téléphone.
+- **Lien d'association** : `secubox://associer?box=<origine https encodée>` (https obligatoire, ni identifiant ni chemin,
+  confirmation affichant le nom d'hôte, aucun secret dans le lien).
+- **Mises à jour** : au lancement, l'écran local lit `https://<box associée>/companion/version.json` et, si son champ
+  `version` dépasse « 2.0 », propose d'ouvrir `/companion/` dans le navigateur. Pas d'installation par l'appli.
+- Le WebView ajoute `SecuBoxCompanion/2.0` à son User-Agent.
 
-## Security
+## Côté box : paquet `secubox-companion`
 
-- **Outbound-only.** HTTPS + token to the box, obtained from the AUTH API. No
-  inbound port on the phone, no third-party relay. Works over LAN/WAN or
-  **WireGuard/MESH** when the box isn't publicly exposed.
-- **Sealed token.** Credentials are exchanged once for a bearer token, then
-  sealed with **AES-GCM under a local PIN** (PBKDF2). No bare-localStorage
-  token; no SecuBox data kept in clear beyond the read cache.
-- License **CMSD-1.0** (`LicenseRef-CMSD-1.0`).
+Le paquet Debian `packages/secubox-companion/` sert, sur le vhost d'administration existant (aucun vhost ni route WAF
+nouveaux), `/companion/` : page de téléchargement (version, empreinte SHA-256), lien et QR code d'association,
+`version.json` et l'APK. Voir `packages/secubox-companion/README.md`.
 
-## Run (PWA)
+L'ancien vhost `companion.gk2.secubox.in` (PWA 1.x) n'existe plus : `deploy/gk2/nginx-sites/companion.conf` (à la racine du
+dépôt, source de vérité des vhosts box-locaux de gk2) le redirige vers `https://admin.gk2.secubox.in/companion/` pendant la
+période de transition.
 
-```bash
-cd secubox-companion
-npm run serve        # → http://localhost:8080  (or serve www/ with any static host)
-```
+## Construire l'APK
 
-Open it, **Pair** with the box URL + credentials + a local PIN, and the
-dashboard shows one card per module. Installable from the browser (Android/iOS)
-as a standalone PWA. Serve over HTTPS for install + service worker in production.
-
-## Build the Android APK
+L'APK n'est jamais commité (`dist/` est ignoré) : il se construit sur le poste de développement, puis se dépose dans
+`dist/` pour la construction du paquet. Signature : clé de débogage du poste (`~/.android/debug.keystore`), comme les
+versions 1.x, pour que la mise à jour par-dessus reste possible ; sauvegarder cette clé avec les secrets du propriétaire.
 
 ```bash
 cd secubox-companion
-npm install
-npx cap add android      # first time only
-npm run apk              # → android/app/build/outputs/apk/debug/app-debug.apk
+npm install                                        # @capacitor/* 6.x
+npx cap copy android                               # génère les fichiers Capacitor ignorés par git
+echo "sdk.dir=$HOME/Android/Sdk" > android/local.properties
+cd android
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ANDROID_HOME=$HOME/Android/Sdk
+./gradlew assembleRelease --no-daemon              # signé avec la clé de débogage
+mkdir -p ../dist
+cp app/build/outputs/apk/release/app-release.apk ../dist/secubox-companion-2.0.apk
+apksigner verify --print-certs ../dist/secubox-companion-2.0.apk
 ```
 
-iOS uses the same project: `npx cap add ios && npx cap open ios` (build deferred).
+Une nouvelle version : monter ensemble, à quatre endroits, `versionCode` et `versionName` dans `android/app/build.gradle`,
+`VERSION_LOCALE` dans `www/core/app.js`, `SUFFIXE_UA` (`SecuBoxCompanion/<version>`) dans `BoxActivity.java`, et `VERSION` /
+`VERSION_CODE` dans `packages/secubox-companion/debian/rules` (puis la version du paquet et le nom de l'APK dans `dist/`).
+`packages/secubox-companion/tests/test_paquet.py` échoue si ces valeurs divergent.
 
-## Reference modules
+Companion s'installe à la demande (`apt-get install secubox-companion`) sur les box à certificat Let's Encrypt ; il n'est pas
+dans l'image de la clé mobile (pas de certificat valide, l'association y échouerait).
 
-- **`billets`** (MIND) — write/publish billets, edit, moderate comments.
-- **`podcasteur`** (MIND) — containers → episodes, publish/download, add feed,
-  import from URL.
-- **`_template`** — copy to build a new module in < 30 min (see
-  [docs/NEW-MODULE.md](docs/NEW-MODULE.md)).
+## Tests
 
-## Layout
+```bash
+npm test                                           # tests Node des listes de box
+python -m pytest -q -p no:cacheprovider secubox-companion/tests   # écrans locaux (Playwright) et sources Android
+```
+
+## Disposition
 
 ```
 secubox-companion/
-├── www/                     # the PWA (Capacitor webDir)
-│   ├── index.html · manifest.webmanifest · sw.js
-│   ├── styles/charte.css    # SecuBox_Charte_Light_3
-│   ├── core/                # app · api · store · registry · auth · ui
-│   ├── modules/             # index.json + one folder per module
-│   └── assets/
+├── www/                 # écrans locaux (index.html, core/, styles/, assets/)
+├── android/             # projet Capacitor : BoxActivity, plugin Boite, manifeste
+├── dist/                # APK construit (ignoré par git)
 ├── capacitor.config.json
-├── package.json             # serve + apk scripts
-└── docs/NEW-MODULE.md
+└── package.json
 ```
 
-> Some write endpoints are marked `TODO(api)` in the modules where the exact
-> JWT-authed box route/shape still needs confirming (e.g. billets admin, which
-> is session-based server-side). Reads work today; wiring a write is a one-line
-> path change once the box route is known.
+Licence CMSD-1.0 (`LicenseRef-CMSD-1.0`).

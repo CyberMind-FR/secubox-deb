@@ -290,6 +290,7 @@ recommande:
   - secubox-backup
   - secubox-config-advisor
   - secubox-pilotage-agent      # agent sortant du pilotage : inerte sans maillage, s'ignore sur le maître (#3405)
+  - secubox-companion           # appli Android Companion 2.0 : APK et page d'association /companion/ (#3683)
 suggere:
 
 meta: secubox-service-routage

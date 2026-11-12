@@ -1,3 +1,9 @@
+secubox-meta (0.1.56-1~trixie1) trixie; urgency=medium
+
+  * secubox-service-administration : secubox-companion en Recommends, l'appli Android et sa page d'association /companion/ (ref #3683).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:20:00 +0100
+
 secubox-meta (0.1.55-1~trixie1) trixie; urgency=medium
 
   * secubox-service-mesh : secubox-mirrornet en Suggests (MirrorNet v1, phase 2, ref #3645).

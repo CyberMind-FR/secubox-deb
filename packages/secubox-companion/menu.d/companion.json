@@ -1,0 +1,11 @@
+{
+  "id": "companion",
+  "unite": "aggregator",
+  "name": "Companion",
+  "category": "root",
+  "icon": "📱",
+  "path": "/companion/",
+  "order": 2,
+  "description": "Appli Android : télécharger l'APK, l'associer à cette box (lien et QR code)",
+  "theme": "reseau"
+}

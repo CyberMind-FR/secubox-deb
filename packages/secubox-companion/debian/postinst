@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+if [ "$1" = configure ]; then
+  # La route (type MIME de l'APK) n'est prise en compte qu'après un rechargement, et seulement si la configuration est valide.
+  if command -v nginx >/dev/null 2>&1; then
+    if NT=$(nginx -t 2>&1); then
+      systemctl reload nginx 2>/dev/null || true
+    else
+      echo "secubox-companion : nginx -t a échoué, nginx NON rechargé : $NT" >&2
+    fi
+  fi
+fi
+#DEBHELPER#
+exit 0

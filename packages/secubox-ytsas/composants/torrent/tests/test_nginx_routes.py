@@ -8,7 +8,7 @@ SecuBox-Deb :: secubox-torrent :: admin-panel nginx route (ref #979)
 
 torrent is LXC-native (the WebTorrent engine runs entirely inside its own
 container), so /api/v1/torrent/ was 404 from the admin vhost — only the
-companion PWA vhost had a matching proxy_pass. These tests check the shipped
+companion PWA vhost (since reduced to a redirect) had a matching proxy_pass. These tests check the shipped
 route snippet (nginx/torrent-routes.conf), its packaging (debian/rules +
 postinst + prerm), and — with a real, ephemeral nginx binary — that dropping
 it into secubox-routes.d/ does not collide with the companion vhost's own
@@ -28,7 +28,7 @@ REPO_ROOT = PKG.parent.parent
 
 ROUTE_FILE = ROOT / "nginx" / "torrent-routes.conf"
 PROXY_SNIPPET = REPO_ROOT / "common" / "nginx" / "secubox-proxy.conf"
-COMPANION_CONF = REPO_ROOT / "secubox-companion" / "deploy" / "nginx-companion.conf"
+COMPANION_CONF = REPO_ROOT / "deploy" / "gk2" / "nginx-sites" / "companion.conf"
 
 NGINX_BIN = shutil.which("nginx")
 
@@ -126,9 +126,9 @@ def _run_nginx_t(tmp_path, http_server_blocks: str) -> subprocess.CompletedProce
 def test_admin_vhost_with_route_and_companion_vhost_coexist(tmp_path):
     # Mirrors production: the admin vhost (common/nginx/webui.conf) has no
     # server_name and blanket-includes secubox-routes.d/*.conf; the
-    # companion vhost (secubox-companion/deploy/nginx-companion.conf) is a
-    # separate server{} disambiguated by server_name, with its own
-    # hand-written /api/v1/torrent/ location. Different server{} blocks on
+    # companion vhost (deploy/gk2/nginx-sites/companion.conf, now only a
+    # redirect) is a separate server{} disambiguated by server_name; the
+    # block below keeps a hand-written /api/v1/torrent/ location as a worst case. Different server{} blocks on
     # the same listen port never collide in nginx regardless of shared
     # location paths — this proves it against the real shipped files rather
     # than assuming it.
