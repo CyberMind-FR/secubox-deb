@@ -85,6 +85,23 @@ override_dh_auto_install:
 	install -D -m 755 composants/yacy/debian/prerm debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/yacy.prerm
 	install -D -m 755 composants/yacy/debian/postrm debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/yacy.postrm
 	install -D -m 644 composants/yacy/debian/secubox-yacy.service debian/secubox-metanews/usr/lib/systemd/system/secubox-yacy.service
+	# Composant searxng (#3581) : métamoteur SearXNG en LXC, API hôte dédiée (secubox-searxng, son postinst l'active).
+	install -d debian/secubox-metanews/usr/lib/secubox/searxng
+	cp -r composants/searxng/api composants/searxng/sbx_searxng debian/secubox-metanews/usr/lib/secubox/searxng/
+	find debian/secubox-metanews/usr/lib/secubox/searxng -name __pycache__ -type d -prune -exec rm -rf {} +
+	install -D -m 755 composants/searxng/sbin/searxngctl debian/secubox-metanews/usr/sbin/searxngctl
+	install -D -m 644 composants/searxng/lib/searxng/installer-searxng.sh debian/secubox-metanews/usr/share/secubox/lib/searxng/installer-searxng.sh
+	install -D -m 644 composants/searxng/conf/searxng.toml.example debian/secubox-metanews/usr/share/secubox/searxng/searxng.toml.example
+	install -D -m 644 composants/searxng/www/searxng/index.html debian/secubox-metanews/usr/share/secubox/www/searxng/index.html
+	install -D -m 644 composants/searxng/menu.d/60-searxng.json debian/secubox-metanews/usr/share/secubox/menu.d/60-searxng.json
+	install -D -m 644 composants/searxng/nginx/searxng.conf debian/secubox-metanews/etc/nginx/secubox-routes.d/searxng.conf
+	install -D -m 644 composants/searxng/nginx/searxng.conf debian/secubox-metanews/etc/nginx/secubox.d/searxng.conf
+	install -D -m 440 composants/searxng/sudoers.d/secubox-searxng debian/secubox-metanews/etc/sudoers.d/secubox-searxng
+	install -D -m 644 composants/searxng/apparmor/secubox-searxng-api debian/secubox-metanews/etc/apparmor.d/secubox-searxng-api
+	install -D -m 644 composants/searxng/debian/secubox-searxng.service debian/secubox-metanews/usr/lib/systemd/system/secubox-searxng.service
+	install -D -m 755 composants/searxng/debian/postinst debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/searxng.postinst
+	install -D -m 755 composants/searxng/debian/prerm debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/searxng.prerm
+	install -D -m 755 composants/searxng/debian/postrm debian/secubox-metanews/usr/lib/secubox/metanews/maintscripts/searxng.postrm
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-metanews

@@ -1,3 +1,20 @@
+secubox-metanews (0.6.0-1~trixie1) trixie; urgency=medium
+
+  * Nouveau composant searxng : métamoteur SearXNG, interne, qui remplace YaCy (ref #3581).
+    Conteneur LXC non privilégié « searxng » (Debian de l'hôte, trixie ; 10.100.0.85 sur br-lxc ;
+    mémoire bornée à 384 Mio), SearXNG au commit figé 3e95f6c (2026.11.5) dans un venv, écoute
+    sur l'adresse du conteneur seulement (port 8888). settings.yml généré depuis
+    /etc/secubox/searxng.toml ; secret dans /etc/secubox/secrets/searxng/, remis par SEARXNG_SECRET.
+  * searxngctl : install (idempotent), reload en double tampon (relu, validé, remplacé, relancé,
+    sondé ; sinon ancien fichier rétabli), audité ; status, components, engines sans privilège.
+  * API secubox-searxng (utilisateur dédié, AppArmor enforce) : /status, /components, /engines,
+    /rechercher, /reload. Sondes bornées (< 5 s) et gardées 10 s : plus de 500 sur délai dépassé.
+  * Page /searxng/ au profil Aurora. Aucune exposition publique (ni vhost, ni route WAF).
+  * Non repris ici : le retrait de YaCy (tâche suivante) ; la création du conteneur reste
+    manuelle (« searxngctl install »), comme pour YaCy.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:00:00 +0100
+
 secubox-metanews (0.5.5-1~trixie1) trixie; urgency=medium
 
   * devwatch : pas de miroir git sur un live, il s'écrirait en RAM (ref #3554).

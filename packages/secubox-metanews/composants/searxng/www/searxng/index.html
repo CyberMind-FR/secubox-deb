@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SearXNG (métamoteur interne, #3581) au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome.
+  Lectures : /status, /components, /engines (require_lecture). Recherche : /rechercher (require_jwt).
+  Seule écriture : POST /reload, après confirmation dans la page. Mesure absente = « — ».
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, aucun appel à l'API.
+  Données de SearXNG = pages tierces : tout passe par textContent, un lien n'est posé que pour une URL http(s).
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — SearXNG</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque h1{margin:0;font-size:1.35rem;font-weight:800} .marque small{color:var(--cyan);font-size:.72rem;display:block}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)} .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;text-decoration:none;display:inline-block}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .info a{color:var(--cyan)}
+        #erreur{border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        [hidden]{display:none!important}
+        .conf{border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:9px 12px;font-size:.82rem;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+        .conf span{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .tuile.ok .v{color:var(--vert)} .tuile.att .v{color:var(--orange)} .tuile.hors .v{color:var(--rouge)} .tuile.cy .v{color:var(--cyan)}
+        .tuile .v.petit{font-size:1.05rem}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+        .grille{display:grid;gap:10px;grid-template-columns:1fr}
+        @container a (min-width:900px){.grille{grid-template-columns:1fr 1fr}}
+        .large{grid-column:1/-1}
+        .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+        .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+        .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)} .pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+        .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)} .pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+        .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem}
+        .ligne{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:7px 0;border-top:1px solid rgba(86,150,255,.12)} .ligne:first-of-type{border-top:0}
+        .ligne .n{flex:0 0 90px;font-weight:600} .ligne .d{flex:1 1 200px;min-width:0;color:var(--doux);overflow-wrap:anywhere;font-size:.78rem}
+        .nuage{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 6px}
+        .sous{font-size:.7rem;color:var(--doux);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+        form.saisie{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:0 0 10px}
+        form.saisie label{display:grid;gap:3px;font-size:.7rem;color:var(--doux);min-width:0;flex:1 1 220px}
+        form.saisie input{font:inherit;font-size:.86rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:7px 10px;min-width:0;width:100%}
+        form.saisie input:focus{outline:none;border-color:var(--cyan)}
+        .retour{font-size:.78rem;margin:0 0 8px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7);overflow-wrap:anywhere} .retour.ko{border-color:var(--rouge)} .retour.ok{border-color:var(--vert)}
+        ol.resultats{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+        ol.resultats li{border-top:1px solid rgba(86,150,255,.12);padding:8px 0 2px;min-width:0}
+        ol.resultats li:first-child{border-top:0}
+        ol.resultats a{color:var(--cyan);font-weight:600;font-size:.9rem;overflow-wrap:anywhere;text-decoration:none} ol.resultats a:hover{text-decoration:underline}
+        ol.resultats .u{display:block;color:var(--vert);font-size:.7rem;overflow-wrap:anywhere;margin:2px 0;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+        ol.resultats p{margin:3px 0 0;color:var(--doux);font-size:.8rem;overflow-wrap:anywhere}
+        ol.resultats .pill{margin-left:6px;vertical-align:middle}
+        .pages{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;font-size:.76rem;color:var(--doux)}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="M14.5 14.5L21 21"/><path d="M7.5 10h5M10 7.5v5"/></svg>
+                <div><h1>SearXNG</h1><small>métamoteur de recherche interne, en conteneur LXC</small></div>
+            </div>
+            <span class="actif neutre" id="etat" aria-live="polite">Chargement…</span>
+            <div class="droite"><span id="maj">—</span><a class="btn" href="/" title="Retour au hub SecuBox">← Hub</a><button class="btn" id="rafraichir" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle, aucune action envoyée</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div id="erreur" role="alert" hidden></div>
+        <div id="conf" class="conf" role="alertdialog" aria-live="assertive" hidden><span id="confTexte"></span><button class="btn prim" id="confOui" type="button">Confirmer</button><button class="btn" id="confNon" type="button">Annuler</button></div>
+
+        <section class="tuiles" aria-label="Indicateurs">
+            <div class="tuile" id="cGlobal" title="Synthèse : vert si le conteneur, SearXNG et l'API hôte tournent ; orange si le conteneur tourne sans SearXNG, ou si une sonde n'a pas répondu à temps ; rouge sinon."><span class="l">État global</span><span class="v petit" id="tGlobal">—</span><span class="s" id="sGlobal">—</span></div>
+            <div class="tuile" id="cConteneur" title="Conteneur LXC searxng, jugé par le réseau br-lxc sans privilège : une connexion refusée prouve qu'il tourne, un délai dépassé qu'il est arrêté."><span class="l">Conteneur</span><span class="v petit" id="tConteneur">—</span><span class="s" id="sConteneur">—</span></div>
+            <div class="tuile" id="cService" title="SearXNG dans le conteneur : sa sonde /healthz répond « OK »."><span class="l">SearXNG</span><span class="v petit" id="tService">—</span><span class="s" id="sService">—</span></div>
+            <div class="tuile cy" id="cMoteurs" title="Moteurs actifs d'après la configuration publiée par SearXNG (/config). « — » si SearXNG ne répond pas."><span class="l">Moteurs actifs</span><span class="v" id="tMoteurs">—</span><span class="s" id="sMoteurs">—</span></div>
+        </section>
+
+        <section class="grille">
+            <div class="pan large"><h3>Recherche <i>au plus 20 résultats par page, liens ouverts dans un nouvel onglet</i></h3>
+                <form class="saisie" id="fRecherche" autocomplete="off">
+                    <label>Termes recherchés<input id="q" name="q" type="search" maxlength="256" required placeholder="ex. vulnérabilité OpenSSH"></label>
+                    <button class="btn prim" id="bChercher" type="submit">Rechercher</button>
+                </form>
+                <div class="retour" id="rRetour" role="status" hidden></div>
+                <ol class="resultats" id="lResultats"></ol>
+                <div class="pages" id="pages" hidden><button class="btn" id="pPrec" type="button">← Page précédente</button><span id="pNum">—</span><button class="btn" id="pSuiv" type="button">Page suivante →</button></div>
+                <p class="note">La recherche passe par SearXNG dans le conteneur ; réservée à un administrateur connecté. Aucune page tierce n'est chargée ici : seuls titres, adresses et extraits sont affichés.</p>
+            </div>
+            <div class="pan"><h3>Composants <i>un par couche, jamais agrégés</i></h3><div id="lComp"></div>
+                <p class="note">Le conteneur porte SearXNG ; l'API hôte est le service secubox-searxng. Relevé gardé 10 s.</p></div>
+            <div class="pan"><h3>Moteurs <i>actifs, désactivés, sans réponse</i></h3>
+                <div class="sous">Actifs</div><div class="nuage" id="lActifs"></div>
+                <div class="sous">Désactivés par la configuration</div><div class="nuage" id="lDesactives"></div>
+                <div class="sous">Sans réponse à la dernière recherche</div><div class="nuage" id="lSansReponse"></div>
+                <p class="note" id="nMoteurs">SearXNG ne publie pas ses suspensions (métriques désactivées) : un moteur « sans réponse » vient de la dernière recherche faite ici.</p></div>
+            <div class="pan large"><h3>Configuration <i>/etc/secubox/searxng.toml</i></h3>
+                <div class="retour" id="cRetour" role="status" hidden></div>
+                <div class="ligne"><span class="d">Régénère settings.yml depuis le TOML, le valide, le remplace puis relance SearXNG. S'il ne répond plus, l'ancienne configuration est rétablie. Chaque issue est consignée au journal d'audit.</span><button class="btn prim" id="bRecharger" type="button">Recharger la configuration</button></div>
+            </div>
+        </section>
+    </div></div></main>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const API = '/api/v1/searxng';
+        const $ = id => document.getElementById(id);
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
+        // Seules les adresses http(s) deviennent des liens.
+        const adresse = u => { if (typeof u !== 'string' || !/^https?:\/\//i.test(u)) return null; try { const x = new URL(u); return (x.protocol === 'http:' || x.protocol === 'https:') ? x.href : null; } catch (e) { return null; } };
+        const detail = d => (d && typeof d.detail === 'string') ? d.detail : (d && d.detail && typeof d.detail.detail === 'string') ? d.detail.detail : '';
+
+        let STAT = null, COMP = null, MOT = null, SESSION_OK = true, INJOIGNABLE = false, CONF = null, OCCUPE = false, Q_COURANTE = '', PAGE = 1;
+
+        function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes() { const h = { Accept: 'application/json' }; const t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        async function appel(chemin, methode) {
+            try {
+                const r = await fetch(API + chemin, { method: methode || 'GET', credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                let data = null; try { data = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, statut: r.status, data };
+            } catch (e) { return { ok: false, statut: 0, data: null }; }
+        }
+        const lire = chemin => appel(chemin, 'GET');
+
+        function demoData() {
+            STAT = { module: 'searxng', version: '0.6.0', overall: 'green', conteneur: 'running', service: 'running', api: 'running', adresse: '192.0.2.85:8888' };
+            COMP = { components: [{ name: 'lxc', state: 'running', detail: 'searxng @ 192.0.2.85 sur br-lxc' }, { name: 'searxng', state: 'running', detail: 'SearXNG, port 8888 (adresse du conteneur seulement)' }, { name: 'host-api', state: 'running', detail: 'secubox-searxng.service' }] };
+            MOT = { source: 'searxng', actifs: [{ nom: 'bing' }, { nom: 'duckduckgo' }, { nom: 'mojeek' }, { nom: 'qwant' }, { nom: 'wikipedia' }], desactives: ['brave'], sans_reponse_recente: { moteurs: [{ moteur: 'qwant', raison: 'trop de requêtes' }] } };
+        }
+        function demoResultats(q, page) {
+            const r = [];
+            for (let i = 1; i <= 6; i++) r.push({ titre: 'Résultat fictif ' + ((page - 1) * 6 + i) + ' pour « ' + q + ' »', url: 'https://exemple.example/page-' + i, extrait: 'Extrait de démonstration : aucune recherche n’a été envoyée.', moteur: i % 2 ? 'wikipedia' : 'mojeek' });
+            return { q, page, nombre: r.length, resultats: r, moteurs_sans_reponse: [] };
+        }
+
+        async function charger() {
+            if (CONF !== null) return;                       // jamais pendant une confirmation ouverte
+            if (DEMO) { demoData(); SESSION_OK = true; INJOIGNABLE = false; rendre(); return; }
+            const [s, c, m] = await Promise.all([lire('/status'), lire('/components'), lire('/engines')]);
+            const tous = [s, c, m], refus = tous.some(r => r.statut === 401 || r.statut === 403);
+            STAT = s.ok ? s.data : null; COMP = c.ok ? c.data : null; MOT = m.ok ? m.data : null;
+            SESSION_OK = !refus; INJOIGNABLE = !refus && tous.every(r => !r.ok);
+            rendre();
+        }
+
+        const OK_ETATS = ['running'];
+        const LIBELLES = { running: 'EN MARCHE', stopped: 'ARRÊTÉ', absent: 'ABSENT', degraded: 'DÉGRADÉ', unknown: 'INCONNU' };
+        function tuileEtat(id, etat) {
+            $('t' + id).textContent = etat ? (LIBELLES[etat] || String(etat).toUpperCase()) : '—';
+            $('c' + id).className = 'tuile ' + (!etat ? '' : etat === 'running' ? 'ok' : (etat === 'unknown' || etat === 'degraded') ? 'att' : 'hors');
+        }
+        function rendre() {
+            $('demo').hidden = !DEMO; $('session').hidden = SESSION_OK; $('erreur').hidden = !INJOIGNABLE;
+            if (INJOIGNABLE) $('erreur').textContent = 'Impossible de lire l’état de SearXNG (API arrêtée ou injoignable).';
+            const ov = STAT && STAT.overall, etat = $('etat');
+            const lib = ov === 'green' ? ['', 'EN MARCHE'] : ov === 'yellow' ? [' att', 'DÉGRADÉ'] : ov === 'red' ? [' hors', 'HORS SERVICE'] : null;
+            if (!SESSION_OK) { etat.className = 'actif neutre'; etat.textContent = 'SESSION REQUISE'; }
+            else if (!lib) { etat.className = 'actif ' + (INJOIGNABLE ? 'hors' : 'neutre'); etat.textContent = INJOIGNABLE ? 'HORS LIGNE' : '—'; }
+            else { etat.className = 'actif' + lib[0]; etat.textContent = lib[1]; }
+            $('tGlobal').textContent = lib ? lib[1] : '—'; $('cGlobal').className = 'tuile ' + (ov === 'green' ? 'ok' : ov === 'yellow' ? 'att' : ov === 'red' ? 'hors' : '');
+            $('sGlobal').textContent = STAT && STAT.erreur ? STAT.erreur : STAT && STAT.version ? 'composant ' + STAT.version : '—';
+            tuileEtat('Conteneur', STAT && STAT.conteneur); $('sConteneur').textContent = STAT && STAT.adresse ? STAT.adresse : '—';
+            tuileEtat('Service', STAT && STAT.service); $('sService').textContent = STAT && STAT.api ? 'API hôte : ' + (LIBELLES[STAT.api] || STAT.api).toLowerCase() : '—';
+            const actifs = MOT && Array.isArray(MOT.actifs) ? MOT.actifs : null;
+            $('tMoteurs').textContent = actifs ? String(actifs.length) : '—';
+            $('sMoteurs').textContent = MOT ? (MOT.source === 'searxng' ? 'publiés par SearXNG' : 'SearXNG muet : configuration seule') : '—';
+
+            const comps = (COMP && COMP.components) || [], lc = $('lComp'); lc.replaceChildren();
+            if (!COMP || !comps.length) lc.appendChild(el('div', 'vide', COMP ? 'Aucun composant rapporté' : '—'));
+            for (const x of comps) {
+                const l = el('div', 'ligne'); l.appendChild(el('span', 'n', tiret(x.name)));
+                l.appendChild(el('span', 'pill ' + (OK_ETATS.includes(x.state) ? 'ok' : x.state === 'unknown' || x.state === 'degraded' ? 'att' : 'hors'), LIBELLES[x.state] || tiret(x.state).toUpperCase()));
+                l.appendChild(el('span', 'd', tiret(x.detail))); lc.appendChild(l);
+            }
+            nuage('lActifs', actifs ? actifs.map(a => a && a.nom) : null, 'ok', 'Aucun moteur actif publié');
+            nuage('lDesactives', MOT && Array.isArray(MOT.desactives) ? MOT.desactives : null, 'hors', 'Aucun');
+            const sr = MOT && MOT.sans_reponse_recente && Array.isArray(MOT.sans_reponse_recente.moteurs) ? MOT.sans_reponse_recente.moteurs : null;
+            nuage('lSansReponse', sr ? sr.map(x => x && x.moteur + (x.raison ? ' — ' + x.raison : '')) : null, 'att', 'Aucun');
+            $('bRecharger').disabled = OCCUPE || !SESSION_OK;
+            $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
+            annoncer();
+        }
+        function nuage(id, liste, cls, vide) {
+            const z = $(id); z.replaceChildren();
+            if (!liste) { z.appendChild(el('span', 'pill', '—')); return; }
+            if (!liste.length) { z.appendChild(el('span', 'note', vide)); return; }
+            for (const n of liste) z.appendChild(el('span', 'pill ' + cls, tiret(n)));
+        }
+
+        // ── Recherche ──
+        function retour(id, texte, ko) { const r = $(id); r.hidden = !texte; r.textContent = texte || ''; r.className = 'retour' + (ko === true ? ' ko' : ko === false ? ' ok' : ''); annoncer(); }
+        async function chercher(q, page) {
+            if (OCCUPE) return;
+            OCCUPE = true; $('bChercher').disabled = true; retour('rRetour', 'Recherche en cours…');
+            let rep;
+            if (DEMO) rep = { ok: true, statut: 200, data: demoResultats(q, page) };
+            else rep = await lire('/rechercher?q=' + encodeURIComponent(q) + '&page=' + page);
+            OCCUPE = false; $('bChercher').disabled = false;
+            const l = $('lResultats'); l.replaceChildren(); $('pages').hidden = true;
+            if (!rep.ok) {
+                const msg = rep.statut === 401 || rep.statut === 403 ? 'Recherche réservée à un administrateur connecté.'
+                    : rep.statut === 422 ? 'Termes refusés : 1 à 256 caractères imprimables.'
+                    : rep.statut === 504 ? 'SearXNG n’a pas répondu à temps. ' + detail(rep.data)
+                    : rep.statut === 0 ? 'API injoignable.' : 'Recherche impossible (' + rep.statut + '). ' + detail(rep.data);
+                retour('rRetour', msg.trim(), true); return;
+            }
+            const d = rep.data || {}, res = Array.isArray(d.resultats) ? d.resultats : [];
+            Q_COURANTE = q; PAGE = page;
+            const sr = Array.isArray(d.moteurs_sans_reponse) ? d.moteurs_sans_reponse : [];
+            retour('rRetour', res.length + ' résultat' + (res.length > 1 ? 's' : '') + ' — page ' + page + (sr.length ? ' — sans réponse : ' + sr.map(x => x && x.moteur).join(', ') : ''), false);
+            if (!res.length) l.appendChild(el('li', 'vide', 'Aucun résultat.'));
+            for (const r of res) {
+                const li = el('li'), u = adresse(r && r.url);
+                if (u) {
+                    const a = el('a', '', tiret(r.titre) === '—' ? u : r.titre); a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.referrerPolicy = 'no-referrer'; li.appendChild(a);
+                } else li.appendChild(el('span', '', tiret(r && r.titre)));
+                if (r && r.moteur) li.appendChild(el('span', 'pill cy', r.moteur));
+                li.appendChild(el('span', 'u', u || tiret(r && r.url)));
+                if (r && r.extrait) li.appendChild(el('p', '', r.extrait));
+                l.appendChild(li);
+            }
+            if (MOT && !DEMO) { MOT.sans_reponse_recente = { moteurs: sr }; rendre(); }
+            $('pages').hidden = false; $('pNum').textContent = 'Page ' + page;
+            $('pPrec').disabled = page <= 1; $('pSuiv').disabled = res.length === 0 || page >= 50;
+            annoncer();
+        }
+        $('fRecherche').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const q = $('q').value.trim();
+            if (!q || q.length > 256) { retour('rRetour', 'Termes refusés : 1 à 256 caractères.', true); return; }
+            chercher(q, 1);
+        });
+        $('pPrec').addEventListener('click', () => { if (Q_COURANTE && PAGE > 1) chercher(Q_COURANTE, PAGE - 1); });
+        $('pSuiv').addEventListener('click', () => { if (Q_COURANTE) chercher(Q_COURANTE, PAGE + 1); });
+
+        // ── Recharger la configuration : confirmation dans la page, jamais un dialogue du navigateur ──
+        function confirmer(texte, fn) { CONF = fn; $('confTexte').textContent = texte; $('conf').hidden = false; annoncer(); $('confOui').focus(); }
+        function fermerConf() { CONF = null; $('conf').hidden = true; annoncer(); }
+        $('confNon').addEventListener('click', fermerConf);
+        $('confOui').addEventListener('click', async () => { const fn = CONF; fermerConf(); if (fn) await fn(); });
+        const ISSUES = { applique: 'Configuration rechargée : SearXNG répond.', refuse: 'Configuration refusée, rien n’a changé : ', 'retour-arriere': 'SearXNG ne répondait plus : ancienne configuration rétablie. ', 'conteneur-arrete': 'Conteneur arrêté : rien n’a été fait. ', occupe: 'Un autre rechargement est en cours. ', echec: 'Échec : ' };
+        $('bRecharger').addEventListener('click', () => {
+            confirmer('Recharger la configuration de SearXNG ? settings.yml est régénéré depuis /etc/secubox/searxng.toml, puis SearXNG redémarre (quelques secondes sans recherche). S’il ne répond plus, l’ancienne configuration est rétablie.', async () => {
+                if (DEMO) { retour('cRetour', 'Démonstration : aucune action envoyée.', null); return; }
+                OCCUPE = true; $('bRecharger').disabled = true; retour('cRetour', 'Rechargement en cours (jusqu’à une minute)…');
+                const r = await appel('/reload', 'POST');
+                OCCUPE = false; $('bRecharger').disabled = false;
+                const d = r.data && typeof r.data.detail === 'object' && r.data.detail ? r.data.detail : (r.data || {});
+                if (r.ok && d.issue === 'applique') retour('cRetour', ISSUES.applique, false);
+                else if (r.statut === 401 || r.statut === 403) retour('cRetour', 'Action réservée à un administrateur connecté.', true);
+                else retour('cRetour', ((ISSUES[d.issue] || 'Échec (' + r.statut + ') : ') + (typeof d.detail === 'string' ? d.detail : '')).trim(), true);
+                charger();
+            });
+        });
+
+        $('rafraichir').addEventListener('click', charger);
+        function annoncer() {
+            try { parent.postMessage({ sbxVue: Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom + scrollY), onglet: 'searxng' }, location.origin); } catch (e) { /* hors iframe */ }
+        }
+        if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
+        addEventListener('resize', annoncer);
+        charger();
+        setInterval(() => { if (!document.hidden && !DEMO && !OCCUPE && CONF === null && document.activeElement !== $('q')) charger(); }, 30000);
+    </script>
+</body>
+</html>

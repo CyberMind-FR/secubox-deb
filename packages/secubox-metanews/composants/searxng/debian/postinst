@@ -1,0 +1,80 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Composant searxng de secubox-metanews (#3581) — appelé par le postinst du paquet, mêmes arguments.
+# Le conteneur n'est PAS créé ici (comme yacy) : « searxngctl install » le fait, en root, à la main ou par l'exploitant.
+set -e
+
+case "$1" in
+  configure)
+    getent group secubox >/dev/null 2>&1 || addgroup --system secubox >/dev/null
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox >/dev/null
+    # Compte DÉDIÉ de l'API, sans shell ni dossier ; groupe secubox pour la socket (nginx) et la lecture du TOML.
+    id -u secubox-searxng >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox --no-create-home --home /nonexistent \
+        --shell /usr/sbin/nologin secubox-searxng >/dev/null
+
+    # Parents PARTAGÉS : créés seulement s'ils manquent, jamais resserrés ni réattribués.
+    [ -d /run/secubox ] || install -d -o root -g root -m 1777 /run/secubox
+    [ -d /var/log/secubox ] || install -d -m 0755 /var/log/secubox
+    [ -d /etc/secubox ] || install -d -m 0755 /etc/secubox
+    # Arbre root seul du contrôleur (verrou, marque d'installation), hors de /var/lib/secubox (compte partagé).
+    install -d -m 0700 -o root -g root /var/lib/secubox-searxng
+
+    # Configuration au premier passage seulement : les réglages de l'exploitant survivent aux mises à jour.
+    if [ ! -f /etc/secubox/searxng.toml ] && [ -f /usr/share/secubox/searxng/searxng.toml.example ]; then
+      install -m 0640 -o root -g secubox /usr/share/secubox/searxng/searxng.toml.example /etc/secubox/searxng.toml
+    fi
+
+    # Jamais de sudoers cassé laissé en place.
+    if [ -f /etc/sudoers.d/secubox-searxng ]; then
+      visudo -cf /etc/sudoers.d/secubox-searxng >/dev/null 2>&1 || {
+        rm -f /etc/sudoers.d/secubox-searxng
+        echo "secubox-searxng : sudoers refusé par visudo et retiré : « Recharger la configuration » est inutilisable" >&2
+      }
+    fi
+
+    # Profil AppArmor (enforce), chargé AVANT de (re)démarrer l'unité qui le nomme. Sans AppArmor actif, l'unité démarre
+    # sans profil ; avec AppArmor actif et un profil non chargé, elle échouerait. Dans le chroot d'une image, /sys est
+    # celui de l'hôte : apparmor.service le chargera au premier démarrage depuis /etc/apparmor.d.
+    PROFIL_API=1
+    if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ]; then
+      if command -v apparmor_parser >/dev/null 2>&1 && [ -f /etc/apparmor.d/secubox-searxng-api ] \
+         && apparmor_parser -r /etc/apparmor.d/secubox-searxng-api; then
+        :
+      else
+        PROFIL_API=0
+        echo "secubox-searxng : profil AppArmor secubox-searxng-api non chargé : l'API ne démarrera pas tant qu'il ne l'est pas (apparmor_parser -r /etc/apparmor.d/secubox-searxng-api)" >&2
+      fi
+    fi
+
+    # #3411 : activation HORS du test systemd (chroot d'une image) ; motif debhelper : un disable manuel survit.
+    # shellcheck disable=SC2043  # motif debhelper commun (#3411), une seule unité ici
+    for _u in secubox-searxng.service; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      # Service dédié (sa propre socket) : redémarré pour prendre le nouveau code, le compte et le profil — s'il est activé.
+      if [ "$PROFIL_API" = 1 ] && systemctl is-enabled --quiet secubox-searxng.service 2>/dev/null; then
+        systemctl restart secubox-searxng.service || true
+      elif [ "$PROFIL_API" = 0 ]; then
+        echo "secubox-searxng : API activée mais NON démarrée (profil AppArmor absent)" >&2
+      fi
+      if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx 2>/dev/null || true
+      fi
+    fi
+    ;;
+esac
+
+exit 0

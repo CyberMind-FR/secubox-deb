@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de l'API hôte SearXNG (#3581). Posé dans /etc/apparmor.d/secubox-searxng-api, chargé par le
+# postinst AVANT le (re)démarrage de l'unité, qui le nomme par AppArmorProfile=. Le contrôleur root (searxngctl) tourne
+# hors confinement via sudo -> systemd-run ; ce qu'il peut faire est borné par le sudoers (argv exact).
+
+#include <tunables/global>
+
+profile secubox-searxng-api {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/openssl>
+
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/ r,
+  /usr/lib/secubox/searxng/ r,
+  /usr/lib/secubox/searxng/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # Configuration et authentification (secubox_core) : fichiers nommés, jamais /etc/secubox/** (les secrets y sont).
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/auth.toml r,
+  /etc/secubox/users.json r,
+  /etc/secubox/appareils.json r,
+  /etc/secubox/searxng.toml r,
+  deny /etc/secubox/secrets/** rwklx,
+  /etc/nsswitch.conf r,
+  # Registre des sessions (sans lui toute garde d'API refuse), traces de délégation et d'origine.
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/** r,
+  /var/log/secubox/*.log w,
+  owner @{PROC}/@{pid}/cgroup r,
+
+  # Cache court du relevé d'état et des moteurs (CacheDirectory=secubox-searxng).
+  /var/cache/secubox-searxng/ r,
+  /var/cache/secubox-searxng/** rwk,
+
+  # Sonde « le conteneur existe-t-il » : un stat du dossier, jamais son contenu.
+  /data/lxc/ r,
+
+  /run/secubox/ r,
+  /run/secubox/searxng.sock rwk,
+
+  # Le SEUL passage privilégié : sudo -> systemd-run -> searxngctl reload (sudoers à argv exact), hors confinement.
+  /usr/bin/sudo Ux,
+
+  network unix stream,
+  network unix dgram,
+  # Sondes et recherche vers le conteneur (10.100.0.0/24, borné aussi par IPAddressAllow de l'unité).
+  network inet stream,
+  /proc/sys/net/core/somaxconn r,
+}

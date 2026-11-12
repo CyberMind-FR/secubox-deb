@@ -1,0 +1,539 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""searxngctl — contrôleur du composant SearXNG de secubox-metanews (#3581).
+
+  searxngctl status     [--json]      état global          (sans privilège, sondes bornées < 5 s)
+  searxngctl components [--json]      conteneur, SearXNG, API hôte (sans privilège)
+  searxngctl engines    [--json]      moteurs actifs (SearXNG /config) et désactivés (TOML)
+  searxngctl install                  crée ou complète le conteneur LXC et SearXNG (root, idempotent)
+  searxngctl reload     [--json] [--acteur-stdin]
+                                      régénère settings.yml en double tampon (root), audité
+
+Codes de sortie : 0 fait ; 1 échec ; 2 usage ou configuration refusée ; 3 reload refusé ou défait (ancien settings.yml
+rétabli) ; 4 conteneur absent ou arrêté ; 5 un autre reload ou install en cours.
+
+Le conteneur (Pattern 11 : LXC, jamais Docker ni Podman) est NON PRIVILÉGIÉ (idmap 0 -> 100000), en dernière Debian
+(celle de l'hôte, repli trixie, #3285), sous lxc.path du TOML. SearXNG y est installé au COMMIT FIGÉ ci-dessous ; seule une
+nouvelle version de ce fichier le change. Le secret (server.secret_key) est généré ici, dans /etc/secubox/secrets/searxng/,
+et remis au service du conteneur par la variable SEARXNG_SECRET (fichier d'environnement 0600) : jamais dans le TOML,
+jamais dans settings.yml, jamais sur une ligne de commande.
+"""
+from __future__ import annotations
+
+import fcntl
+import hashlib
+import json
+import os
+import re
+import secrets
+import shutil
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/secubox/searxng")
+
+from sbx_searxng import VERSION  # noqa: E402
+from sbx_searxng import config as C  # noqa: E402
+from sbx_searxng import recherche as R  # noqa: E402
+from sbx_searxng import sondes as S  # noqa: E402
+
+DEPOT = "https://github.com/searxng/searxng"
+# Version 2026.11.5+3e95f6c, celle du POC de gk0.
+COMMIT = "3e95f6cd2a68add0329cb162907b49289e2bc1fd"
+
+CONFIG = os.environ.get("SECUBOX_SEARXNG_CONFIG", str(C.CHEMIN_DEFAUT))
+AUDIT = Path(os.environ.get("SECUBOX_SEARXNG_AUDIT", "/var/log/secubox/audit.log"))
+SECRETS = Path("/etc/secubox/secrets/searxng")
+# Arbre ROOT seul, hors de /var/lib/secubox (compte partagé, qui pourrait y substituer un lien) : verrou et marque.
+ETAT_ROOT = Path("/var/lib/secubox-searxng")
+INSTALLEUR = Path("/usr/share/secubox/lib/searxng/installer-searxng.sh")
+SETTINGS = "/etc/searxng/settings.yml"
+ENVIRONNEMENT = "/etc/searxng/searxng.env"
+UNITE_CONTENEUR = "searxng.service"
+UID_RACINE = 100000          # lxc.idmap = u 0 100000 65536 : root du conteneur = uid 100000 de l'hôte
+DELAI_SANTE_RELOAD = 30.0
+_SECRET = re.compile(r"^[0-9a-f]{64}$")
+_ACTEUR = re.compile(r"^[A-Za-z0-9._@-]{1,64}$")
+
+
+def journal(msg: str) -> None:
+    print(f"[searxng] {msg}", file=sys.stderr, flush=True)
+
+
+def audit(evenement: str, details: dict, chemin: Path | None = None) -> None:
+    """Une ligne JSON en ajout seul dans /var/log/secubox/audit.log (jamais un secret). Échec = signalé, pas silencieux."""
+    entree = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "type": "searxng", "evenement": evenement, **details}
+    ligne = json.dumps(entree, ensure_ascii=True) + "\n"
+    try:
+        fd = os.open(chemin or AUDIT, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        try:
+            os.write(fd, ligne.encode())
+        finally:
+            os.close(fd)
+    except OSError as e:
+        journal(f"audit non écrit ({e.__class__.__name__}) : {ligne.strip()}")
+
+
+def executer(argv: list[str], *, entree: str | None = None, delai: float = 60) -> subprocess.CompletedProcess:
+    return subprocess.run(argv, input=entree, capture_output=True, text=True, timeout=delai, check=True)
+
+
+class Conteneur:
+    """Opérations DANS le conteneur, par lxc-attach : jamais d'écriture par le chemin du rootfs depuis l'hôte (un lien
+    posé par le conteneur y serait suivi en root). Les fichiers passent par l'entrée standard, jamais par argv."""
+
+    def __init__(self, cfg: dict):
+        self.nom, self.chemin = cfg["lxc"]["name"], cfg["lxc"]["path"]
+
+    def _attache(self) -> list[str]:
+        return ["lxc-attach", "-n", self.nom, "-P", self.chemin, "--"]
+
+    def etat(self) -> str:
+        try:
+            p = executer(["lxc-info", "-n", self.nom, "-P", self.chemin, "-s", "-H"], delai=10)
+        except (subprocess.SubprocessError, OSError):
+            return "absent" if not (Path(self.chemin) / self.nom / "rootfs").is_dir() else "inconnu"
+        return p.stdout.strip().lower() or "inconnu"
+
+    def lire(self, chemin: str) -> str | None:
+        """Contenu du fichier, ou None s'il n'existe pas (code 44 : absent, distingué d'un échec de lxc-attach)."""
+        try:
+            p = executer(self._attache() + ["sh", "-c", 'if [ -f "$1" ]; then cat -- "$1"; else exit 44; fi', "sh", chemin], delai=30)
+        except subprocess.CalledProcessError as e:
+            if e.returncode == 44:
+                return None
+            raise
+        return p.stdout
+
+    def ecrire(self, chemin: str, contenu: str, mode: str = "0644") -> None:
+        """Écriture atomique dans le conteneur : fichier temporaire à côté, droits posés, puis mv."""
+        script = 'umask 077; t="$1.ecriture.$$"; cat > "$t" && chmod "$2" "$t" && mv -f -- "$t" "$1"'
+        executer(self._attache() + ["sh", "-c", script, "sh", chemin, mode], entree=contenu, delai=30)
+
+    def renommer(self, source: str, cible: str) -> None:
+        executer(self._attache() + ["mv", "-f", "--", source, cible], delai=30)
+
+    def supprimer(self, chemin: str) -> None:
+        executer(self._attache() + ["rm", "-f", "--", chemin], delai=30)
+
+    def relancer(self) -> None:
+        executer(self._attache() + ["systemctl", "restart", UNITE_CONTENEUR], delai=90)
+
+    def executer(self, argv: list[str], **kw) -> subprocess.CompletedProcess:
+        return executer(self._attache() + argv, **kw)
+
+
+def attendre_sante(cfg: dict, delai: float = DELAI_SANTE_RELOAD, *, sante=S.sonde_sante, pause: float = 1.0) -> bool:
+    fin = time.monotonic() + delai
+    while True:
+        if sante(cfg["lxc"]["ip"], cfg["searxng"]["port"]):
+            return True
+        if time.monotonic() >= fin:
+            return False
+        time.sleep(pause)
+
+
+# ── reload : double tampon (écrit à côté → relu et validé → remplacé atomiquement → relance → sonde ; sinon retour) ──
+
+def appliquer_settings(cfg: dict, conteneur, *, sante=None, acteur: str = "?", relancer_si_identique: bool = True,
+                       audit_fn=audit) -> tuple[int, dict]:
+    sante = sante or (lambda: attendre_sante(cfg))
+    texte = C.rendre_yaml(C.generer_settings(cfg))
+    empreinte = hashlib.sha256(texte.encode()).hexdigest()[:16]
+    base = {"acteur": acteur, "sha256": empreinte}
+    nouveau, precedent = SETTINGS + ".nouveau", SETTINGS + ".precedent"
+    try:
+        ancien = conteneur.lire(SETTINGS)
+        if ancien == texte and not relancer_si_identique:
+            return 0, {"issue": "inchange", **base}
+        conteneur.ecrire(nouveau, texte)
+        relu = conteneur.lire(nouveau)
+        try:
+            C.valider_settings(relu or "", cfg)
+        except C.ConfigInvalide as e:
+            conteneur.supprimer(nouveau)
+            sortie = {"issue": "refuse", "detail": str(e), **base}
+            audit_fn("reload", sortie)
+            return 3, sortie
+        if ancien is not None:
+            conteneur.ecrire(precedent, ancien)
+        conteneur.renommer(nouveau, SETTINGS)
+        conteneur.relancer()
+    except (subprocess.SubprocessError, OSError) as e:
+        sortie = {"issue": "echec", "detail": f"opération dans le conteneur en échec : {e.__class__.__name__}", **base}
+        audit_fn("reload", sortie)
+        return 1, sortie
+    if sante():
+        sortie = {"issue": "applique", **base}
+        audit_fn("reload", sortie)
+        return 0, sortie
+    # SearXNG ne répond plus avec le nouveau fichier : l'ancien revient, et le service avec lui.
+    detail = "SearXNG ne répond pas avec la nouvelle configuration"
+    if ancien is None:
+        sortie = {"issue": "echec", "detail": detail + " (aucun ancien fichier à rétablir)", **base}
+        audit_fn("reload", sortie)
+        return 3, sortie
+    try:
+        conteneur.ecrire(nouveau, ancien)
+        conteneur.renommer(nouveau, SETTINGS)
+        conteneur.relancer()
+        retabli = sante()
+    except (subprocess.SubprocessError, OSError) as e:
+        journal(f"retour arrière en échec : {e.__class__.__name__}")
+        retabli = False
+    sortie = {"issue": "retour-arriere", "detail": detail + (" ; ancienne configuration rétablie" if retabli
+                                                              else " ; ancienne configuration remise, SearXNG toujours muet"),
+              "retabli": retabli, **base}
+    audit_fn("reload", sortie)
+    return 3, sortie
+
+
+class Verrou:
+    """Un seul reload ou install à la fois (fichier root dans l'arbre root seul)."""
+
+    def __init__(self, chemin: Path):
+        self.chemin, self.fd = chemin, None
+
+    def __enter__(self):
+        self.chemin.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.fd = os.open(self.chemin, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        try:
+            fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(self.fd)
+            self.fd = None
+            raise
+        return self
+
+    def __exit__(self, *_):
+        if self.fd is not None:
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            os.close(self.fd)
+
+
+def lire_acteur(flux) -> str:
+    """{"acteur": "<sub>"} sur l'entrée standard (argv exact dans sudoers : l'acteur ne peut pas y figurer)."""
+    try:
+        d = json.loads(flux.read(512) or "{}")
+    except (ValueError, OSError):
+        return "?"
+    a = d.get("acteur") if isinstance(d, dict) else None
+    return a if isinstance(a, str) and _ACTEUR.match(a) else "?"
+
+
+def cmd_reload(cfg: dict, args: list[str]) -> int:
+    if os.geteuid() != 0:
+        journal("reload demande root")
+        return 2
+    acteur = lire_acteur(sys.stdin) if "--acteur-stdin" in args else (os.environ.get("SUDO_USER") or "root")
+    if not _ACTEUR.match(acteur):
+        acteur = "?"
+    try:
+        with Verrou(ETAT_ROOT / "verrou"):
+            ct = Conteneur(cfg)
+            etat = ct.etat()
+            if etat != "running":
+                sortie = {"issue": "conteneur-arrete", "detail": f"conteneur {cfg['lxc']['name']} : {etat}", "acteur": acteur}
+                audit("reload", sortie)
+                code = 4
+            else:
+                code, sortie = appliquer_settings(cfg, ct, acteur=acteur)
+    except BlockingIOError:
+        sortie, code = {"issue": "occupe", "detail": "un autre reload ou install est en cours"}, 5
+    _sortie(sortie, "--json" in args)
+    return code
+
+
+# ── install : idempotent, rien n'est refait qui soit déjà en place ──
+
+def suite_debian(os_release: str = "/etc/os-release") -> str:
+    """La dernière stable = celle de l'hôte (une box est installée sur la stable courante) ; repli trixie (#3285)."""
+    forcee = os.environ.get("SECUBOX_DEBIAN_SUITE", "")
+    if re.fullmatch(r"[a-z]{3,20}", forcee):
+        return forcee
+    ident, code = "", ""
+    try:
+        for ligne in Path(os_release).read_text(encoding="utf-8").splitlines():
+            cle, _, val = ligne.partition("=")
+            val = val.strip().strip('"')
+            if cle == "ID":
+                ident = val
+            elif cle == "VERSION_CODENAME":
+                code = val
+    except OSError:
+        pass
+    return code if ident == "debian" and re.fullmatch(r"[a-z]{3,20}", code or "") else "trixie"
+
+
+def config_lxc(cfg: dict, existante: str = "") -> str:
+    """Fichier de configuration du conteneur, RÉÉCRIT en entier (jamais d'ajout : un second lxc.net.0 casse le réseau).
+    Seuls les plafonds CPU posés par secubox-tuning-apply (lxc.cgroup2.cpu.*) sont repris de l'ancien fichier."""
+    lxc = cfg["lxc"]
+    racine = f"{lxc['path']}/{lxc['name']}"
+    lignes = [
+        "# SecuBox — composant searxng de secubox-metanews (#3581). RÉÉCRIT par « searxngctl install » :",
+        "# réglages dans /etc/secubox/searxng.toml.",
+        f"lxc.uts.name = {lxc['name']}",
+        f"lxc.rootfs.path = dir:{racine}/rootfs",
+        "lxc.include = /usr/share/lxc/config/common.conf",
+        # Non privilégié : root du conteneur = uid 100000 de l'hôte.
+        f"lxc.idmap = u 0 {UID_RACINE} 65536",
+        f"lxc.idmap = g 0 {UID_RACINE} 65536",
+        "lxc.net.0.type = veth",
+        f"lxc.net.0.link = {lxc['bridge']}",
+        "lxc.net.0.flags = up",
+        "lxc.net.0.name = eth0",
+        f"lxc.net.0.ipv4.address = {lxc['ip']}/24",
+        f"lxc.net.0.ipv4.gateway = {lxc['gateway']}",
+        "lxc.apparmor.profile = generated",
+        f"lxc.cgroup2.memory.high = {lxc['memoire_haute']}",
+        f"lxc.cgroup2.memory.max = {lxc['memoire_max']}",
+        "lxc.start.auto = 1",
+        "lxc.start.delay = 5",
+    ]
+    lignes += [x.strip() for x in existante.splitlines() if re.match(r"^\s*lxc\.cgroup2\.cpu\.[a-z.]+\s*=\s*[0-9a-z ]+$", x)]
+    return "\n".join(lignes) + "\n"
+
+
+def secret_cle() -> str:
+    """Le secret de SearXNG : créé UNE fois (O_EXCL), jamais régénéré, root 0600 dans un dossier root 0700."""
+    SECRETS.mkdir(mode=0o700, parents=False, exist_ok=True)
+    os.chown(SECRETS, 0, 0)
+    os.chmod(SECRETS, 0o700)
+    f = SECRETS / "secret_key"
+    try:
+        fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "w", encoding="ascii") as h:
+            h.write(secrets.token_hex(32) + "\n")
+        journal(f"secret créé : {f}")
+    except FileExistsError:
+        pass
+    fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, encoding="ascii") as h:
+        valeur = h.read(200).strip()
+    if not _SECRET.match(valeur):
+        raise RuntimeError(f"{f} : secret illisible (64 caractères hexadécimaux attendus)")
+    return valeur
+
+
+def _ip_lien(pont: str) -> bool:
+    try:
+        executer(["ip", "link", "show", "dev", pont], delai=10)
+        return True
+    except (subprocess.SubprocessError, OSError):
+        return False
+
+
+def creer_conteneur(cfg: dict) -> None:
+    lxc = cfg["lxc"]
+    racine = Path(lxc["path"]) / lxc["name"]
+    if (racine / "rootfs").is_dir():
+        journal(f"conteneur {lxc['name']} déjà créé")
+    else:
+        suite = suite_debian()
+        journal(f"création du conteneur {lxc['name']} (debian {suite}, non privilégié) …")
+        arch = executer(["dpkg", "--print-architecture"], delai=10).stdout.strip()
+        executer(["lxc-create", "-n", lxc["name"], "-t", "download", "-P", lxc["path"], "--",
+                  "--dist", "debian", "--release", suite, "--arch", arch], delai=1800)
+    cfg_lxc = racine / "config"
+    ancienne = cfg_lxc.read_text(encoding="utf-8") if cfg_lxc.is_file() else ""
+    nouvelle = config_lxc(cfg, ancienne)
+    if nouvelle != ancienne:
+        tmp = racine / "config.secubox.tmp"
+        tmp.write_text(nouvelle, encoding="utf-8")
+        os.chmod(tmp, 0o640)
+        os.replace(tmp, cfg_lxc)
+        journal("configuration LXC écrite")
+    # lxc-create -t download déballe en uid 0 de l'HÔTE ; l'idmap veut 100000 (sinon « Failed to setup rootfs »).
+    # Décalé une seule fois (racine encore en 0), sans suivre les liens (-h).
+    if (racine / "rootfs").stat().st_uid == 0:
+        journal(f"propriété du rootfs décalée sur l'idmap (0 -> {UID_RACINE}) …")
+        executer(["chown", "-R", "-h", f"{UID_RACINE}:{UID_RACINE}", str(racine / "rootfs")], delai=1800)
+        os.chown(racine, UID_RACINE, UID_RACINE)
+
+
+def demarrer_et_reseau(cfg: dict, ct: Conteneur) -> None:
+    lxc = cfg["lxc"]
+    if ct.etat() != "running":
+        journal("démarrage du conteneur …")
+        executer(["lxc-start", "-n", lxc["name"], "-P", lxc["path"]], delai=120)
+    for _ in range(30):
+        try:
+            ct.executer(["ping", "-c1", "-W1", lxc["gateway"]], delai=5)
+            return
+        except subprocess.CalledProcessError as e:
+            if e.returncode == 127:          # pas de ping dans l'image : l'adresse statique suffit
+                p = ct.executer(["ip", "-4", "-o", "addr", "show", "dev", "eth0"], delai=5)
+                if f" {lxc['ip']}/" in p.stdout:
+                    return
+        except subprocess.TimeoutExpired:
+            pass
+        time.sleep(1)
+    raise RuntimeError(f"le conteneur n'atteint pas {lxc['gateway']} en 30 s")
+
+
+def preparer_systeme(cfg: dict, ct: Conteneur) -> None:
+    resolv = "".join(f"nameserver {d}\n" for d in cfg["lxc"]["dns"])
+    if ct.lire("/etc/resolv.conf") != resolv:
+        ct.executer(["rm", "-f", "/etc/resolv.conf"], delai=10)
+        ct.ecrire("/etc/resolv.conf", resolv)
+    # systemd >= 257 (trixie) en LXC non privilégié : ImportCredential= échoue (243/CREDENTIALS) ; vidé par drop-in (#3274).
+    script = r'''
+v=$(systemctl --version 2>/dev/null | awk 'NR==1{print $2}')
+case "$v" in ""|*[!0-9]*) exit 0 ;; esac
+[ "$v" -ge 257 ] || exit 0
+fait=0
+for u in systemd-journald systemd-sysctl systemd-tmpfiles-setup systemd-tmpfiles-clean; do
+  f="/etc/systemd/system/$u.service.d/secubox-lxc.conf"
+  [ -f "$f" ] && continue
+  mkdir -p "/etc/systemd/system/$u.service.d"
+  printf '%s\n' "# SecuBox #3274 : LXC non privilégié, pas de credentials systemd" "[Service]" "ImportCredential=" > "$f"
+  fait=1
+done
+[ "$fait" = 1 ] || exit 0
+systemctl daemon-reload
+systemctl restart systemd-journald.service systemd-sysctl.service systemd-tmpfiles-setup.service 2>/dev/null || true
+'''
+    ct.executer(["sh", "-c", script], delai=120)
+
+
+def installer_searxng(cfg: dict, ct: Conteneur) -> None:
+    if not INSTALLEUR.is_file():
+        raise RuntimeError(f"{INSTALLEUR} absent")
+    env = ["env", f"SEARXNG_DEPOT={DEPOT}", f"SEARXNG_COMMIT={COMMIT}", f"SEARXNG_IP={cfg['lxc']['ip']}",
+           f"SEARXNG_PORT={cfg['searxng']['port']}"]
+    journal(f"SearXNG au commit {COMMIT[:12]} dans le conteneur (long au premier passage) …")
+    p = subprocess.run(ct._attache() + env + ["bash", "-s"], input=INSTALLEUR.read_text(encoding="utf-8"),
+                       text=True, timeout=3600, check=False)
+    if p.returncode != 0:
+        raise RuntimeError(f"installation de SearXNG dans le conteneur en échec (code {p.returncode})")
+
+
+def remettre_secret(ct: Conteneur, cle: str) -> bool:
+    contenu = f"SEARXNG_SECRET={cle}\n"
+    if ct.lire(ENVIRONNEMENT) == contenu:
+        return False
+    ct.executer(["install", "-d", "-m", "0755", "/etc/searxng"], delai=10)
+    ct.ecrire(ENVIRONNEMENT, contenu, mode="0600")
+    return True
+
+
+def cmd_install(cfg: dict, args: list[str]) -> int:
+    if os.geteuid() != 0:
+        journal("install demande root")
+        return 2
+    for c in ("lxc-create", "lxc-attach", "lxc-info", "lxc-start", "ip"):
+        if shutil.which(c) is None:
+            journal(f"{c} absent")
+            return 1
+    if not _ip_lien(cfg["lxc"]["bridge"]):
+        journal(f"pont {cfg['lxc']['bridge']} absent (créé par secubox-netmodes / secubox-core) : rien n'est fait")
+        return 1
+    try:
+        with Verrou(ETAT_ROOT / "verrou"):
+            Path(cfg["lxc"]["path"]).mkdir(mode=0o755, parents=True, exist_ok=True)
+            ct = Conteneur(cfg)
+            creer_conteneur(cfg)
+            demarrer_et_reseau(cfg, ct)
+            preparer_systeme(cfg, ct)
+            installer_searxng(cfg, ct)
+            secret_change = remettre_secret(ct, secret_cle())
+            code, sortie = appliquer_settings(cfg, ct, acteur="install", relancer_si_identique=False,
+                                              sante=lambda: True)
+            if code != 0:
+                raise RuntimeError(f"settings.yml : {sortie.get('issue')} — {sortie.get('detail', '')}")
+            ct.executer(["systemctl", "enable", UNITE_CONTENEUR], delai=30)
+            # settings.yml changé : déjà relancé par appliquer_settings ; secret changé : relance ; sinon « start » (sans effet s'il tourne).
+            ct.executer(["systemctl", "restart" if secret_change else "start", UNITE_CONTENEUR], delai=90)
+            if not attendre_sante(cfg, 90):
+                raise RuntimeError("SearXNG ne répond pas sur /healthz après 90 s (journalctl -u searxng dans le conteneur)")
+            marque = ETAT_ROOT / ".provisioned"
+            marque.write_text(f"{COMMIT} {datetime.now(timezone.utc).isoformat(timespec='seconds')}\n", encoding="utf-8")
+    except BlockingIOError:
+        journal("un autre reload ou install est en cours")
+        return 5
+    except (RuntimeError, subprocess.SubprocessError, OSError) as e:
+        detail = e.stderr.strip()[-300:] if isinstance(e, subprocess.CalledProcessError) and e.stderr else str(e)
+        journal(f"ERREUR : {detail} — rien n'est « fait »")
+        audit("install", {"issue": "echec", "detail": detail[:300], "commit": COMMIT})
+        return 1
+    audit("install", {"issue": "fait", "commit": COMMIT, "conteneur": cfg["lxc"]["name"], "ip": cfg["lxc"]["ip"]})
+    journal(f"fait : SearXNG {COMMIT[:7]} sur {cfg['lxc']['ip']}:{cfg['searxng']['port']} (interne, aucune exposition)")
+    return 0
+
+
+# ── lectures sans privilège ──
+
+def _api_hote() -> str:
+    return S.sonde_unite()
+
+
+def _sortie(d: dict, en_json: bool) -> None:
+    if en_json:
+        print(json.dumps(d, ensure_ascii=False))
+    else:
+        for k, v in d.items():
+            print(f"{k:<12} {v if not isinstance(v, (dict, list)) else json.dumps(v, ensure_ascii=False)}")
+
+
+def cmd_status(cfg: dict, args: list[str]) -> int:
+    _sortie(S.vue_status(S.releve(cfg, api=_api_hote)), "--json" in args)
+    return 0
+
+
+def cmd_components(cfg: dict, args: list[str]) -> int:
+    vue = S.vue_components(S.releve(cfg, api=_api_hote), cfg)
+    if "--json" in args:
+        print(json.dumps(vue, ensure_ascii=False))
+    else:
+        print(f"{'COMPOSANT':<10} {'ÉTAT':<10} DÉTAIL")
+        for c in vue["components"]:
+            print(f"{c['name']:<10} {c['state']:<10} {c['detail']}")
+    return 0
+
+
+def cmd_engines(cfg: dict, args: list[str]) -> int:
+    _sortie(R.moteurs(cfg), "--json" in args)
+    return 0
+
+
+def aide() -> int:
+    print(__doc__.strip())
+    return 0
+
+
+COMMANDES = {"status": cmd_status, "components": cmd_components, "engines": cmd_engines,
+             "install": cmd_install, "reload": cmd_reload}
+OPTIONS = {"--json", "--acteur-stdin"}
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in ("help", "-h", "--help"):
+        return aide()
+    if argv[0] in ("--version", "-V"):
+        print(f"searxngctl {VERSION} (SearXNG {COMMIT[:7]})")
+        return 0
+    verbe, args = argv[0], argv[1:]
+    if verbe not in COMMANDES or any(a not in OPTIONS for a in args):
+        journal(f"usage : searxngctl {{{'|'.join(COMMANDES)}}} [--json]")
+        return 2
+    try:
+        cfg = C.charger(CONFIG)
+    except C.ConfigInvalide as e:
+        journal(f"configuration refusée : {e}")
+        if verbe == "reload":
+            audit("reload", {"issue": "refuse", "detail": f"configuration refusée : {e}"})
+            _sortie({"issue": "refuse", "detail": f"configuration refusée : {e}"}, "--json" in args)
+            return 3
+        return 2
+    return COMMANDES[verbe](cfg, args)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

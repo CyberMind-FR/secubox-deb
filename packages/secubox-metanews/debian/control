@@ -22,6 +22,7 @@ Depends: ${shlibs:Depends},
  debootstrap,
  python3-fastapi,
  python3-toml,
+ python3-yaml,
  openssl,
  curl,
  jq

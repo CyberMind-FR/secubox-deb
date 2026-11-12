@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox SearXNG — API hôte du composant searxng de secubox-metanews (#3581). Utilisateur dédié, sans capacité utile ;
+# la seule surface privilégiée est « searxngctl reload » (root), appelé par sudo -n + systemd-run à argv EXACT
+# (/etc/sudoers.d/secubox-searxng). Exception écrite dans .claude/RULES-CODE.md (§ Exceptions), figée par
+# composants/searxng/tests/test_paquet_3581.py::test_unite_durcie_et_exception_ecrite.
+[Unit]
+Description=SecuBox SearXNG — API hôte (métamoteur interne)
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-searxng
+Group=secubox
+UMask=0027
+WorkingDirectory=/usr/lib/secubox/searxng
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+# Profil chargé par le postinst avant le démarrage (apparmor/secubox-searxng-api).
+AppArmorProfile=secubox-searxng-api
+# /run/secubox est PARTAGÉ et collant (1777) : on n'y délie que ce qu'on possède. « + » : en root et hors profil.
+# Jamais RuntimeDirectory=secubox (#1022) : il effacerait les sockets des autres modules.
+ExecStartPre=+/bin/rm -f /run/secubox/searxng.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/searxng.sock --workers 1 --log-level warning
+# uvicorn pose la socket en 0666 après le bind : 660, groupe secubox (nginx). « + » : hors profil (aucun shell pour l'API).
+ExecStartPost=+/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/searxng.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/searxng.sock'
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=5
+MemoryMax=160M
+# Relevé d'état et liste des moteurs, gardés quelques secondes (/var/cache/secubox-searxng).
+CacheDirectory=secubox-searxng
+CacheDirectoryMode=0750
+
+# Durcissement. NoNewPrivileges=no est requis : sudo -> systemd-run -> searxngctl reload. ATTENTION — NE PAS AJOUTER
+# ProtectKernelTunables, ProtectKernelModules, LockPersonality, RestrictSUIDSGID, SystemCallFilter, RestrictNamespaces,
+# RestrictAddressFamilies, PrivateDevices, MemoryDenyWriteExecute… : chacun pose un filtre seccomp, donc NoNewPrivileges
+# d'office pour un User= non root, et sudo répond « no new privileges flag is set » (précédents netmodes, autoload).
+# Le confinement de l'API passe par le profil AppArmor (enforce), ces chemins et le filtre d'adresses IP.
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_AUDIT_WRITE CAP_DAC_READ_SEARCH
+AmbientCapabilities=
+# Le contrôleur ne tourne PAS dans cet espace de montage (systemd-run : contexte de PID 1) : rien d'autre à ouvrir.
+ReadWritePaths=/run/secubox /var/log/secubox
+# L'API ne parle qu'au conteneur (réseau br-lxc) ; les sockets Unix ne sont pas concernées.
+IPAddressDeny=any
+IPAddressAllow=10.100.0.0/24
+
+[Install]
+WantedBy=multi-user.target
