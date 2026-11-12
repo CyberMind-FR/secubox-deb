@@ -143,6 +143,12 @@ jobs:
           # amd64 estampilles arm64 — un mensonge silencieux, pire que l'absence.
           # Il se construit desormais EN NATIF dans un conteneur arm64 emule.
           SKIP_ARM64="secubox-zia-llm"
+
+          # Paquets jamais construits dans le CI : leur binaire est produit hors-CI sur le poste de developpement
+          # (dist/ est ignore par git, l'APK est absent du checkout) et depose a la construction du paquet.
+          #  - secubox-companion : APK Android de Companion 2.0 (secubox-companion/README.md, #3683) ->
+          #    debian/rules echoue franchement sans lui ; le .deb est construit localement puis publie.
+          SKIP_CI="secubox-companion"
           arm64_ok() { case " $SKIP_ARM64 " in *" $1 "*) return 1;; *) return 0;; esac; }
 
           # PAQUETS MODIFIES (#1991). Un push de branche ou une PR ne reconstruit que ce qui a change ; une etiquette,
@@ -173,6 +179,7 @@ jobs:
               if [ -n "$requested_pkg" ] && ! echo " $requested_pkg " | grep -q " $pkg "; then
                 continue
               fi
+              case " $SKIP_CI " in *" $pkg "*) echo "::notice::$pkg : binaire construit hors-CI, exclu des builds" >&2; continue ;; esac
               # Une version ~aurora est un APERCU en developpement (pre-alpha) : jamais dans un build, quel que soit
               # l'evenement (push, PR, release). Seule une demande explicite du paquet (workflow_dispatch) la construit.
               if [ -z "$requested_pkg" ]; then

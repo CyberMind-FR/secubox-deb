@@ -1,0 +1,5 @@
+secubox-companion (2.0.0-1~trixie1) trixie; urgency=medium
+
+  * Nouveau paquet : sert l'APK de Companion 2.0, /companion/version.json (version, empreinte, taille, calculées à la construction) et la page /companion/ (téléchargement, lien et QR d'association) sur le vhost d'administration (ref #3683).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:15:00 +0100

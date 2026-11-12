@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Companion : télécharger l'appli Android et l'associer à cette box (profil Aurora, .claude/AURORA-REFERENCE.md).
+  Page statique, sans connexion requise, sans secret : version et empreinte de l'APK, lien et QR d'association.
+  ?embed=1 : sans menu. Le texte est écrit par textContent ou par création d'éléments, jamais par innerHTML.
+-->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Companion</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+:root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f83a8;--cyan:#29b6f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}
+body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),var(--fond);color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px}
+body.emb #sidebar{display:none}body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+@media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+body.mobile-mode:not(.emb) .principal{margin-left:0}
+.cadre{max-width:820px;margin:auto;padding:16px}h1{font-size:1.35rem;margin:0}small{color:var(--doux)}
+.pan{background:rgba(10,22,44,.72);border:1px solid var(--trait);border-radius:14px;padding:16px;margin-top:14px;min-width:0}.pan h2{font-size:1rem;margin:0 0 10px}
+.lig{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid var(--trait);min-width:0}.lig span:first-child{color:var(--doux);flex:none}.lig span:last-child{text-align:right;overflow-wrap:anywhere;min-width:0}
+.mono{font-family:ui-monospace,monospace;font-size:.82rem}ol{margin:8px 0 12px 20px;padding:0;line-height:1.6}
+.btn{display:inline-block;font:inherit;text-decoration:none;text-align:center;padding:9px 16px;border-radius:9px;border:1px solid var(--trait2);background:rgba(20,40,75,.7);color:var(--texte);cursor:pointer;min-height:40px}.btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.att{color:var(--orange)}.ko{color:var(--rouge)}#qr{margin-top:12px;max-width:100%}#qr svg{display:block;width:240px;max-width:100%;height:auto;border-radius:8px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="principal"><div class="cadre">
+  <h1>📱 Companion</h1><small>L'appli Android qui ouvre l'administration de cette box, associée à son adresse.</small>
+  <section class="pan" aria-live="polite"><h2>1. Télécharger l'appli</h2>
+    <div id="infos"></div>
+    <div class="actions"><a class="btn prim" id="telecharger" href="secubox-companion.apk" download>Télécharger l'appli</a></div>
+    <p><small>Installation : autorisez une fois les sources inconnues pour votre navigateur. L'empreinte SHA-256 permet de vérifier le fichier reçu.</small></p>
+    <div id="etatVersion" role="status"></div></section>
+  <section class="pan"><h2>2. Associer cette box</h2>
+    <div id="associer" hidden>
+      <p>Une fois l'appli installée, ouvrez-la sur cette box. L'appli demandera de confirmer l'ajout de <b id="nomBox"></b>.</p>
+      <div class="actions"><a class="btn prim" id="ouvrir" href="#">Ouvrir dans l'appli</a></div>
+      <p><small>Depuis un autre téléphone : lisez ce QR code avec l'appareil photo.</small></p>
+      <div id="qr"></div></div>
+    <p id="adresseRequise" class="att" hidden>Ouvrez cette page à l'adresse https de la box (par exemple https://admin.nom-de-la-box), pas par son adresse IP ni en http : le lien d'association n'est proposé que pour une adresse https nommée.</p>
+  </section>
+</div></main>
+<script src="/shared/sidebar.js"></script>
+<script type="module">
+"use strict";
+import {matriceQR} from './qrcode.js';
+if(new URLSearchParams(location.search).has('embed'))document.body.classList.add('emb');
+const $=i=>document.getElementById(i);
+function ligne(a,b){const d=document.createElement('div');d.className='lig';const x=document.createElement('span');x.textContent=a;const y=document.createElement('span');y.textContent=b;d.append(x,y);return d}
+function tailleLisible(o){return typeof o==='number'&&o>=0?(o/1048576).toLocaleString('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1})+' Mo':'—'}
+async function version(){
+  let v=null;
+  try{const r=await fetch('version.json',{headers:{Accept:'application/json'},credentials:'same-origin',cache:'no-store'});
+    if(!r.ok)throw 0;v=await r.json()}
+  catch(e){$('etatVersion').textContent='Informations de version indisponibles.';$('etatVersion').className='att'}
+  const sha=v&&typeof v.sha256==='string'&&/^[0-9a-f]{64}$/.test(v.sha256)?v.sha256:'—';
+  const info=$('infos'),mono=ligne('Empreinte SHA-256',sha);mono.lastChild.classList.add('mono');
+  info.replaceChildren(ligne('Version',v&&v.version?String(v.version):'—'),ligne('Taille',tailleLisible(v&&v.taille)),mono);
+}
+function adresseIP(h){return /^\d{1,3}(\.\d{1,3}){3}$/.test(h)||h.includes(':')||h.startsWith('[')}
+function dessinerQR(texte){
+  const {matrix,size}=matriceQR(texte),marge=4,total=size+marge*2,NS='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 '+total+' '+total);svg.setAttribute('role','img');
+  svg.setAttribute('aria-label','QR code du lien d’association');svg.setAttribute('shape-rendering','crispEdges');
+  const fond=document.createElementNS(NS,'rect');fond.setAttribute('width',total);fond.setAttribute('height',total);fond.setAttribute('fill','#fff');svg.appendChild(fond);
+  for(let r=0;r<size;r++)for(let c=0;c<size;c++)if(matrix[r][c]===1){
+    const m=document.createElementNS(NS,'rect');m.setAttribute('x',c+marge);m.setAttribute('y',r+marge);m.setAttribute('width',1);m.setAttribute('height',1);m.setAttribute('fill','#000');svg.appendChild(m)}
+  $('qr').replaceChildren(svg);
+}
+function association(){
+  if(location.protocol==='https:'&&!adresseIP(location.hostname)){
+    const lien='secubox://associer?box='+encodeURIComponent(location.origin);
+    $('ouvrir').setAttribute('href',lien);$('nomBox').textContent=location.hostname;$('associer').hidden=false;
+    try{dessinerQR(lien)}catch(e){$('qr').textContent='QR code indisponible.'}
+  }else $('adresseRequise').hidden=false;
+}
+association();version();
+</script>
+</body>
+</html>

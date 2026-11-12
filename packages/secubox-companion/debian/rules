@@ -1,0 +1,29 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# L'APK n'est jamais commité (dist/ est ignoré) : il est construit sur le poste de développement
+# (secubox-companion/README.md) puis déposé ici à la construction. Le paquet ne compile rien.
+P = debian/secubox-companion
+VERSION = 2.0
+VERSION_CODE = 7
+APK ?= ../../secubox-companion/dist/secubox-companion-$(VERSION).apk
+WWW = $(P)/usr/share/secubox/www/companion
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	@test -f "$(APK)" || { echo "secubox-companion : APK introuvable ($(APK)) — le construire d'abord (secubox-companion/README.md)" >&2; exit 1; }
+	install -d $(WWW) $(P)/usr/share/secubox/menu.d
+	install -m 644 www/companion/index.html www/companion/qrcode.js $(WWW)/
+	install -m 644 "$(APK)" $(WWW)/secubox-companion.apk
+	sh build/version-json.sh $(WWW)/secubox-companion.apk $(VERSION) $(VERSION_CODE) > $(WWW)/version.json
+	chmod 644 $(WWW)/version.json
+	install -m 644 menu.d/companion.json $(P)/usr/share/secubox/menu.d/companion.json
+
+# L'APK est signé : le réécrire (dh_strip_nondeterminism) changerait son empreinte et romprait sa signature.
+override_dh_strip_nondeterminism:
+	true

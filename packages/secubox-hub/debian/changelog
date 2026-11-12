@@ -1,3 +1,9 @@
+secubox-hub (1.12.57-1~trixie1) trixie; urgency=medium
+
+  * espaces.json : l'entrée de menu companion (appli Android, secubox-companion) rejoint l'espace Système (ref #3683).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:20:00 +0100
+
 secubox-hub (1.12.56-1~trixie1) trixie; urgency=medium
 
   * Menu latéral sur écran tactile (ref #3672, RPi4 kiosque) : barre d'icônes STABLE —

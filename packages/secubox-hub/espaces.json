@@ -131,6 +131,10 @@
    "espace": "systeme",
    "objet": "BACKUP"
   },
+  "companion": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
   "config-advisor": {
    "espace": "systeme",
    "objet": "BOX"

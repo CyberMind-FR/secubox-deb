@@ -30,4 +30,5 @@ on = [
   "vm", "vortex-dns", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",
   "watchdog", "wireguard", "yacy", "zigbee",
   "console", "kiosk",
+  "companion",
 ]
