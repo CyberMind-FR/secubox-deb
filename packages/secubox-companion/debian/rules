@@ -23,7 +23,8 @@ override_dh_auto_install:
 	sh build/version-json.sh $(WWW)/secubox-companion.apk $(VERSION) $(VERSION_CODE) > $(WWW)/version.json
 	chmod 644 $(WWW)/version.json
 	install -m 644 menu.d/companion.json $(P)/usr/share/secubox/menu.d/companion.json
+	install -D -m 644 nginx/companion.conf $(P)/etc/nginx/secubox-routes.d/companion.conf
 
 # L'APK est signé : le réécrire (dh_strip_nondeterminism) changerait son empreinte et romprait sa signature.
 override_dh_strip_nondeterminism:
-	true
+	dh_strip_nondeterminism -X.apk

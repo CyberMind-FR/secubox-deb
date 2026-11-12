@@ -11,7 +11,7 @@ Rules-Requires-Root: no
 
 Package: secubox-companion
 Architecture: all
-Depends: ${misc:Depends}, secubox-hub
+Depends: ${misc:Depends}, secubox-hub, nginx
 Description: SecuBox Companion — appli Android et page d'association de la box
  Sert l'APK de Companion 2.0, son empreinte (version.json) et la page /companion/
  (version, empreinte SHA-256, téléchargement, lien et QR code d'association)

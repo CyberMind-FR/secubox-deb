@@ -38,16 +38,17 @@ body.mobile-mode:not(.emb) .principal{margin-left:0}
   <h1>📱 Companion</h1><small>L'appli Android qui ouvre l'administration de cette box, associée à son adresse.</small>
   <section class="pan" aria-live="polite"><h2>1. Télécharger l'appli</h2>
     <div id="infos"></div>
-    <div class="actions"><a class="btn prim" id="telecharger" href="secubox-companion.apk" download>Télécharger l'appli</a></div>
-    <p><small>Installation : autorisez une fois les sources inconnues pour votre navigateur. L'empreinte SHA-256 permet de vérifier le fichier reçu.</small></p>
+    <div class="actions" id="actionsTelecharger"><a class="btn prim" id="telecharger" href="secubox-companion.apk" download>Télécharger l'appli</a></div>
+    <p id="noteInstall"><small>Installation : autorisez une fois les sources inconnues pour votre navigateur. L'empreinte SHA-256 permet de vérifier le fichier reçu.</small></p>
     <div id="etatVersion" role="status"></div></section>
   <section class="pan"><h2>2. Associer cette box</h2>
+    <p id="dansAppli" class="att" hidden>Vous êtes dans l'appli. Pour la mettre à jour, ouvrez cette page dans le navigateur du téléphone.</p>
     <div id="associer" hidden>
       <p>Une fois l'appli installée, ouvrez-la sur cette box. L'appli demandera de confirmer l'ajout de <b id="nomBox"></b>.</p>
       <div class="actions"><a class="btn prim" id="ouvrir" href="#">Ouvrir dans l'appli</a></div>
-      <p><small>Depuis un autre téléphone : lisez ce QR code avec l'appareil photo.</small></p>
+      <p><small>Depuis un autre téléphone où l'appli est déjà installée : lisez ce QR code.</small></p>
       <div id="qr"></div></div>
-    <p id="adresseRequise" class="att" hidden>Ouvrez cette page à l'adresse https de la box (par exemple https://admin.nom-de-la-box), pas par son adresse IP ni en http : le lien d'association n'est proposé que pour une adresse https nommée.</p>
+    <p id="adresseRequise" class="att" hidden>Ouvrez cette page à l'adresse https de la box (par exemple https://admin.nom-de-la-box), pas par son adresse IP, un nom local (localhost, .local) ni en http : le lien d'association n'est proposé que pour une adresse https avec un nom de domaine.</p>
   </section>
 </div></main>
 <script src="/shared/sidebar.js"></script>
@@ -67,7 +68,7 @@ async function version(){
   const info=$('infos'),mono=ligne('Empreinte SHA-256',sha);mono.lastChild.classList.add('mono');
   info.replaceChildren(ligne('Version',v&&v.version?String(v.version):'—'),ligne('Taille',tailleLisible(v&&v.taille)),mono);
 }
-function adresseIP(h){return /^\d{1,3}(\.\d{1,3}){3}$/.test(h)||h.includes(':')||h.startsWith('[')}
+function nomDeDomaine(h){h=h.toLowerCase();return h.includes('.')&&!/^\d{1,3}(\.\d{1,3}){3}$/.test(h)&&!h.includes(':')&&!h.startsWith('[')&&h!=='localhost'&&!h.endsWith('.localhost')&&!h.endsWith('.local')}
 function dessinerQR(texte){
   const {matrix,size}=matriceQR(texte),marge=4,total=size+marge*2,NS='http://www.w3.org/2000/svg';
   const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 '+total+' '+total);svg.setAttribute('role','img');
@@ -78,7 +79,10 @@ function dessinerQR(texte){
   $('qr').replaceChildren(svg);
 }
 function association(){
-  if(location.protocol==='https:'&&!adresseIP(location.hostname)){
+  if(navigator.userAgent.includes('SecuBoxCompanion/')){
+    // Déjà dans l'appli : rien à télécharger ni à associer.
+    $('actionsTelecharger').hidden=true;$('noteInstall').hidden=true;$('dansAppli').hidden=false;return}
+  if(location.protocol==='https:'&&nomDeDomaine(location.hostname)){
     const lien='secubox://associer?box='+encodeURIComponent(location.origin);
     $('ouvrir').setAttribute('href',lien);$('nomBox').textContent=location.hostname;$('associer').hidden=false;
     try{dessinerQR(lien)}catch(e){$('qr').textContent='QR code indisponible.'}

@@ -1,7 +1,7 @@
 {
   "name": "secubox-companion",
   "version": "2.0.0",
-  "description": "Remote modular companion for SecuBox-Deb (PWA + Capacitor).",
+  "description": "Coquille Android de l'administration SecuBox : associe des box et charge leur admin (Capacitor 6).",
   "license": "LicenseRef-CMSD-1.0",
   "private": true,
   "author": "Gerald KERMA <devel@cybermind.fr>",

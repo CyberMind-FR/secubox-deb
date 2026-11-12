@@ -1,5 +1,6 @@
 {
   "id": "companion",
+  "unite": "aggregator",
   "name": "Companion",
   "category": "root",
   "icon": "📱",

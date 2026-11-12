@@ -26,8 +26,9 @@ def navigateur():
         b.close()
 
 
-def ouvre(navigateur, url, version=VERSION, largeur=420):
-    ctx = navigateur.new_context(viewport={"width": largeur, "height": 800}, ignore_https_errors=True)
+def ouvre(navigateur, url, version=VERSION, largeur=420, ua=None):
+    options = {"user_agent": ua} if ua else {}
+    ctx = navigateur.new_context(viewport={"width": largeur, "height": 800}, ignore_https_errors=True, **options)
     p = ctx.new_page()
     erreurs = []
     p.on("pageerror", lambda e: erreurs.append(str(e)))
@@ -103,7 +104,40 @@ def test_pas_d_innerhtml_ni_donnee_en_html():
             assert interdit not in src.replace("jamais par innerHTML", ""), (f, interdit)
 
 
-def test_tient_dans_420_px_avec_menu(navigateur):
+def test_page_complete_sans_embed_tient_dans_420_px(navigateur):
+    # Sans ?embed=1 : le menu latéral de l'hôte n'est pas chargé ici (/shared/ vide), seul le cadre de la page est rendu.
     ctx, p, _ = ouvre(navigateur, "https://admin.gk12.secubox.in/companion/")
+    assert not p.evaluate("document.body.classList.contains('emb')")
     assert p.evaluate("document.documentElement.scrollWidth") <= 420
+    ctx.close()
+
+
+@pytest.mark.parametrize("hote", ["localhost", "box.local", "admin.gk12.local", "intranet", "[::1]"])
+def test_noms_locaux_sans_lien(navigateur, hote):
+    ctx, p, _ = ouvre(navigateur, "https://%s/companion/" % hote)
+    assert p.locator("a[href^='secubox://']").count() == 0 and p.is_visible("#adresseRequise")
+    assert p.locator("#qr svg").count() == 0
+    ctx.close()
+
+
+def test_nom_de_domaine_avec_point_a_un_lien(navigateur):
+    ctx, p, _ = ouvre(navigateur, "https://gk12.secubox.in/companion/")
+    assert p.get_attribute("#ouvrir", "href") == "secubox://associer?box=https%3A%2F%2Fgk12.secubox.in"
+    ctx.close()
+
+
+def test_dans_l_appli_ni_telechargement_ni_association(navigateur):
+    ctx, p, err = ouvre(navigateur, "https://admin.gk12.secubox.in/companion/",
+                        ua="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36 SecuBoxCompanion/2.0")
+    assert p.is_hidden("#telecharger") and p.is_hidden("#ouvrir") and p.is_hidden("#associer") and p.is_hidden("#adresseRequise")
+    assert p.locator("#qr svg").count() == 0
+    assert "Vous êtes dans l'appli. Pour la mettre à jour, ouvrez cette page dans le navigateur du téléphone." in p.inner_text("#dansAppli")
+    assert "2.0" in p.inner_text("#infos")                  # la version reste affichée
+    assert not err
+    ctx.close()
+
+
+def test_hors_appli_le_message_est_cache(navigateur):
+    ctx, p, _ = ouvre(navigateur, "https://admin.gk12.secubox.in/companion/")
+    assert p.is_hidden("#dansAppli") and p.is_visible("#telecharger")
     ctx.close()

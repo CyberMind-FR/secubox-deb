@@ -42,6 +42,4 @@ on = [
   "kiosk", "console",
   # Activation sur le réseau local et retrait à l'extinction (#3467).
   "mobile", "mobile-api",
-  # Appli Android : APK et page d'association servis par l'administration (#3683).
-  "companion",
 ]

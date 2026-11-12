@@ -26,8 +26,9 @@ Le paquet Debian `packages/secubox-companion/` sert, sur le vhost d'administrati
 nouveaux), `/companion/` : page de téléchargement (version, empreinte SHA-256), lien et QR code d'association,
 `version.json` et l'APK. Voir `packages/secubox-companion/README.md`.
 
-L'ancien vhost `companion.gk2.secubox.in` (PWA 1.x) n'existe plus : `deploy/nginx-companion.conf` le redirige vers
-`https://admin.gk2.secubox.in/companion/` pendant la période de transition.
+L'ancien vhost `companion.gk2.secubox.in` (PWA 1.x) n'existe plus : `deploy/gk2/nginx-sites/companion.conf` (à la racine du
+dépôt, source de vérité des vhosts box-locaux de gk2) le redirige vers `https://admin.gk2.secubox.in/companion/` pendant la
+période de transition.
 
 ## Construire l'APK
 
@@ -48,8 +49,13 @@ cp app/build/outputs/apk/release/app-release.apk ../dist/secubox-companion-2.0.a
 apksigner verify --print-certs ../dist/secubox-companion-2.0.apk
 ```
 
-Une nouvelle version : monter `versionCode` et `versionName` dans `android/app/build.gradle`, puis `VERSION` et
-`VERSION_CODE` dans `packages/secubox-companion/debian/rules` et la version du paquet.
+Une nouvelle version : monter ensemble, à quatre endroits, `versionCode` et `versionName` dans `android/app/build.gradle`,
+`VERSION_LOCALE` dans `www/core/app.js`, `SUFFIXE_UA` (`SecuBoxCompanion/<version>`) dans `BoxActivity.java`, et `VERSION` /
+`VERSION_CODE` dans `packages/secubox-companion/debian/rules` (puis la version du paquet et le nom de l'APK dans `dist/`).
+`packages/secubox-companion/tests/test_paquet.py` échoue si ces valeurs divergent.
+
+Companion s'installe à la demande (`apt-get install secubox-companion`) sur les box à certificat Let's Encrypt ; il n'est pas
+dans l'image de la clé mobile (pas de certificat valide, l'association y échouerait).
 
 ## Tests
 
@@ -64,7 +70,6 @@ python -m pytest -q -p no:cacheprovider secubox-companion/tests   # écrans loca
 secubox-companion/
 ├── www/                 # écrans locaux (index.html, core/, styles/, assets/)
 ├── android/             # projet Capacitor : BoxActivity, plugin Boite, manifeste
-├── deploy/              # redirection de l'ancien vhost companion.gk2
 ├── dist/                # APK construit (ignoré par git)
 ├── capacitor.config.json
 └── package.json
