@@ -40,14 +40,14 @@ export function lireBoites(stockage) {
   const liste = [];
   for (const e of brut) {
     const origine = e && normaliserOrigine(e.origine);
-    if (!origine) continue;
+    if (!origine || liste.some((b) => b.origine === origine)) continue;
     liste.push({
       origine,
       nom: typeof e.nom === "string" && e.nom ? e.nom : new URL(origine).hostname,
       vu: Number.isFinite(e.vu) ? e.vu : 0,
     });
   }
-  return liste;
+  return liste.slice(0, MAX_BOITES);
 }
 
 export function ecrireBoites(stockage, liste) {
@@ -67,8 +67,11 @@ export function migrerDepuis1x(stockage, maintenant) {
   if (lireBoites(stockage).length) return false;
   let meta;
   try { meta = JSON.parse(stockage.getItem(CLE_META) || "null"); } catch { return false; }
-  const origine = meta && normaliserOrigine(meta.url);
+  let origine = meta && normaliserOrigine(meta.url);
   if (!origine) return false;
+  // La 1.x proposait l'origine de sa page (companion.<box>), qui renvoie désormais vers admin.<box>/companion/.
+  const u = new URL(origine);
+  if (u.hostname.startsWith("companion.")) origine = "https://admin." + u.hostname.slice("companion.".length) + (u.port ? ":" + u.port : "");
   ecrireBoites(stockage, ajouterBoite([], origine, maintenant));
   return true;
 }

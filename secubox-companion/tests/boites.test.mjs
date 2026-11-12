@@ -101,3 +101,18 @@ test("versionPlusRecente", () => {
   assert.equal(versionPlusRecente("2.0", "2.0"), false);
   assert.equal(versionPlusRecente("1.9", "2.0"), false);
 });
+
+test("migration 1.x : companion.<box> devient admin.<box>", () => {
+  const s = faux({ "sbx.meta": JSON.stringify({ url: "https://companion.gk2.secubox.in" }) });
+  assert.equal(migrerDepuis1x(s, 1), true);
+  assert.equal(lireBoites(s)[0].origine, "https://admin.gk2.secubox.in");
+});
+
+test("lireBoites dédoublonne et borne à 20", () => {
+  const e = (i) => ({ origine: `https://admin.gk${i}.secubox.in`, nom: "x", vu: 0 });
+  const brut = [e(1), e(1), ...Array.from({ length: 30 }, (_, i) => e(i + 2))];
+  const s = faux({ "sbx.boites": JSON.stringify(brut) });
+  const l = lireBoites(s);
+  assert.equal(l.length, 20);
+  assert.equal(new Set(l.map((b) => b.origine)).size, 20);
+});
