@@ -24,6 +24,13 @@ LXC et **n'est exposé nulle part** : ni vhost, ni nom public, ni route WAF. La 
 Serveur d'application : celui que fournit `requirements-server.txt` (granian, sinon uwsgi), à défaut `python -m searx.webapp`
 — choisi à l'installation, noté dans `/usr/local/searxng/.serveur` du conteneur.
 
+Dépendances Python **figées avec empreintes** : `/usr/share/secubox/lib/searxng/exigences-searxng.txt` (requirements.txt et
+requirements-server.txt du commit, dépendances transitives comprises ; roues CPython 3.13 arm64 et amd64), installées par
+`pip install --require-hashes --only-binary :all:` ; pip, setuptools et wheel restent ceux du venv Debian. Une seconde passe
+`pip install --no-index -r requirements*.txt` vérifie que le fichier couvre bien les exigences du commit. Dans le conteneur,
+`/usr/local/searxng` est root:root 0755 : seuls `searxng-src` et `venv` appartiennent à `searxng`, les marques `.commit` et
+`.serveur` sont écrites par root.
+
 ## Installation sur une box
 
 ```bash

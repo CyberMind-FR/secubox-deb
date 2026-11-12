@@ -70,6 +70,8 @@ TAILLE_DEMANDE = 512
 _NOM_DEMANDE = re.compile(r"^[0-9a-f]{16}\.demande$")
 DUREE_RESULTAT = 300          # un résultat non relu par l'API est retiré après 5 min
 DUREE_TMP = 60                # un « .tmp.* » de l'API resté plus d'une minute est abandonné
+EXIGENCES = Path("/usr/share/secubox/lib/searxng/exigences-searxng.txt")
+EXIGENCES_CONTENEUR = "/etc/searxng/exigences.txt"
 # Arbre ROOT seul, hors de /var/lib/secubox (compte partagé, qui pourrait y substituer un lien) : verrou et marque.
 ETAT_ROOT = Path("/var/lib/secubox-searxng")
 INSTALLEUR = Path("/usr/share/secubox/lib/searxng/installer-searxng.sh")
@@ -633,8 +635,14 @@ systemctl restart systemd-journald.service systemd-sysctl.service systemd-tmpfil
 def installer_searxng(cfg: dict, ct: Conteneur) -> None:
     if not INSTALLEUR.is_file():
         raise RuntimeError(f"{INSTALLEUR} absent")
+    # Dépendances Python FIGÉES avec empreintes (pip --require-hashes) : posées par l'entrée standard dans /etc/searxng
+    # (root du conteneur), leur empreinte passée à l'installeur qui la revérifie avant pip.
+    exigences = EXIGENCES.read_text(encoding="utf-8")
+    ct.executer(["install", "-d", "-m", "0755", "-o", "root", "-g", "root", "/etc/searxng"], delai=10)
+    ct.ecrire(EXIGENCES_CONTENEUR, exigences, mode="0644")
     env = ["env", f"SEARXNG_DEPOT={DEPOT}", f"SEARXNG_COMMIT={COMMIT}", f"SEARXNG_IP={cfg['lxc']['ip']}",
-           f"SEARXNG_PORT={cfg['searxng']['port']}"]
+           f"SEARXNG_PORT={cfg['searxng']['port']}", f"SEARXNG_EXIGENCES={EXIGENCES_CONTENEUR}",
+           f"SEARXNG_EXIGENCES_SHA256={hashlib.sha256(exigences.encode()).hexdigest()}"]
     journal(f"SearXNG au commit {COMMIT[:12]} dans le conteneur (long au premier passage) …")
     p = subprocess.run(ct._attache() + env + ["bash", "-s"], input=INSTALLEUR.read_text(encoding="utf-8"),
                        text=True, timeout=3600, check=False)
@@ -659,6 +667,9 @@ def cmd_install(cfg: dict, args: list[str]) -> int:
         if shutil.which(c) is None:
             journal(f"{c} absent")
             return 1
+    if not EXIGENCES.is_file():
+        journal(f"{EXIGENCES} absent")
+        return 1
     if not _ip_lien(cfg["lxc"]["bridge"]):
         journal(f"pont {cfg['lxc']['bridge']} absent (créé par secubox-netmodes / secubox-core) : rien n'est fait")
         return 1

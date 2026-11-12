@@ -12,15 +12,26 @@
 #   SEARXNG_COMMIT  commit FIGÉ (40 caractères hexadécimaux), vérifié après récupération
 #   SEARXNG_IP      adresse du conteneur : SearXNG n'écoute que là
 #   SEARXNG_PORT    port d'écoute
+#   SEARXNG_EXIGENCES         dépendances Python FIGÉES avec empreintes (/etc/searxng/exigences.txt, root, posé par
+#                             searxngctl depuis /usr/share/secubox/lib/searxng/exigences-searxng.txt)
+#   SEARXNG_EXIGENCES_SHA256  empreinte attendue de ce fichier, revérifiée ici avant pip
 # Le secret n'arrive jamais ici : searxngctl écrit /etc/searxng/searxng.env (0600) par l'entrée standard.
+#
+# Droits : $RACINE est root:root 0755 ; seuls searxng-src et venv appartiennent à searxng. Les marques .commit et .serveur
+# sont écrites par root (temporaire puis mv) : le compte searxng ne peut ni les modifier ni les remplacer.
 
 set -euo pipefail
 
 : "${SEARXNG_DEPOT:?}" "${SEARXNG_COMMIT:?}" "${SEARXNG_IP:?}" "${SEARXNG_PORT:?}"
+: "${SEARXNG_EXIGENCES:?}" "${SEARXNG_EXIGENCES_SHA256:?}"
 [[ "$SEARXNG_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "commit refusé : $SEARXNG_COMMIT" >&2; exit 2; }
 [[ "$SEARXNG_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { echo "adresse refusée" >&2; exit 2; }
 [[ "$SEARXNG_PORT" =~ ^[0-9]{4,5}$ ]] || { echo "port refusé" >&2; exit 2; }
 [[ "$SEARXNG_DEPOT" =~ ^https://[A-Za-z0-9./_-]+$ ]] || { echo "dépôt refusé" >&2; exit 2; }
+[[ "$SEARXNG_EXIGENCES_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "empreinte des exigences refusée" >&2; exit 2; }
+[[ -f "$SEARXNG_EXIGENCES" && ! -L "$SEARXNG_EXIGENCES" ]] || { echo "exigences absentes : $SEARXNG_EXIGENCES" >&2; exit 2; }
+obtenue="$(sha256sum < "$SEARXNG_EXIGENCES")"
+[[ "${obtenue%% *}" == "$SEARXNG_EXIGENCES_SHA256" ]] || { echo "exigences altérées (empreinte inattendue)" >&2; exit 2; }
 
 readonly RACINE=/usr/local/searxng
 readonly SRC="$RACINE/searxng-src"
@@ -29,10 +40,13 @@ readonly UNITE=/etc/systemd/system/searxng.service
 export DEBIAN_FRONTEND=noninteractive
 
 log() { printf '[searxng-conteneur] %s\n' "$*"; }
+# Marque écrite par root : temporaire dans $RACINE (root), puis mv (nouvel inode root, jamais à travers un fichier existant).
+marque() { local t; t="$(mktemp "$RACINE/.marque.XXXXXX")"; printf '%s\n' "$2" > "$t"; chmod 0644 "$t"; mv -f -- "$t" "$RACINE/$1"; }
 comme_searxng() { runuser -u searxng -- env HOME="$RACINE" PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 "$@"; }
 
-# Paquets : ceux de l'installation officielle de SearXNG (compilation de secours si une roue manque pour l'architecture).
-paquets=(python3 python3-venv python3-dev git ca-certificates build-essential libxslt1-dev zlib1g-dev libffi-dev libssl-dev)
+# Paquets : Python et son venv, git. Aucune chaîne de compilation : les dépendances ne s'installent qu'en roues
+# (--only-binary), dont les empreintes couvrent arm64 et amd64 (exigences-searxng.txt).
+paquets=(python3 python3-venv git ca-certificates)
 manquants=()
 for p in "${paquets[@]}"; do
     dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q 'install ok installed' || manquants+=("$p")
@@ -47,11 +61,12 @@ fi
 if ! id -u searxng >/dev/null 2>&1; then
     useradd --system --user-group --home-dir "$RACINE" --no-create-home --shell /usr/sbin/nologin searxng
 fi
-install -d -m 0755 -o searxng -g searxng "$RACINE"
+install -d -m 0755 -o root -g root "$RACINE"
 install -d -m 0755 -o root -g root /etc/searxng
 
-# Sources au commit figé, puis environnement Python. Rien n'est refait si la marque porte déjà ce commit.
-if [[ "$(cat "$RACINE/.commit" 2>/dev/null || true)" != "$SEARXNG_COMMIT" ]]; then
+# Sources au commit figé, puis environnement Python. Rien n'est refait si la marque porte déjà ce commit ET ces exigences.
+attendu="$SEARXNG_COMMIT $SEARXNG_EXIGENCES_SHA256"
+if [[ "$(cat "$RACINE/.commit" 2>/dev/null || true)" != "$attendu" ]]; then
     log "récupération de SearXNG ${SEARXNG_COMMIT:0:12} …"
     rm -rf "$SRC.nouveau"
     install -d -m 0755 -o searxng -g searxng "$SRC.nouveau"
@@ -62,13 +77,17 @@ if [[ "$(cat "$RACINE/.commit" 2>/dev/null || true)" != "$SEARXNG_COMMIT" ]]; th
     [[ "$obtenu" == "$SEARXNG_COMMIT" ]] || { echo "commit obtenu $obtenu, attendu $SEARXNG_COMMIT" >&2; exit 1; }
     rm -rf "$SRC" "$VENV" "$RACINE/.commit"
     mv "$SRC.nouveau" "$SRC"
-    log "environnement Python (requirements.txt + requirements-server.txt) …"
+    log "environnement Python (dépendances figées avec empreintes) …"
+    install -d -m 0755 -o searxng -g searxng "$VENV"
     comme_searxng python3 -m venv "$VENV"
-    comme_searxng "$VENV/bin/pip" install -q -U pip setuptools wheel
+    # pip, setuptools, wheel : ceux du venv Debian (python3-venv), jamais mis à jour ici. Roues seulement (aucune
+    # compilation, donc aucune dépendance de construction hors empreintes), chaque fichier vérifié par son empreinte.
+    comme_searxng "$VENV/bin/pip" install -q --require-hashes --only-binary :all: -r "$SEARXNG_EXIGENCES"
+    # Les exigences du commit doivent être couvertes par le fichier figé : sans index, rien ne peut être ajouté ici.
     exigences=(-r "$SRC/requirements.txt")
     [[ -f "$SRC/requirements-server.txt" ]] && exigences+=(-r "$SRC/requirements-server.txt")
-    comme_searxng "$VENV/bin/pip" install -q "${exigences[@]}"
-    printf '%s\n' "$SEARXNG_COMMIT" > "$RACINE/.commit"
+    comme_searxng "$VENV/bin/pip" install -q --no-index "${exigences[@]}"
+    marque .commit "$attendu"
 fi
 
 # Serveur d'application : celui que fournit requirements-server.txt (granian, sinon uwsgi), sinon le serveur intégré.
@@ -83,7 +102,7 @@ else
     serveur=searx.webapp
     lancer="$VENV/bin/python -m searx.webapp"
 fi
-printf '%s\n' "$serveur" > "$RACINE/.serveur"
+marque .serveur "$serveur"
 
 # Unité du conteneur. Pas d'options à espace de noms de montage (ProtectSystem, PrivateTmp…) : en LXC non privilégié elles
 # échouent en 226/NAMESPACE. Le confinement est celui du conteneur (idmap, AppArmor « generated », cgroup mémoire).

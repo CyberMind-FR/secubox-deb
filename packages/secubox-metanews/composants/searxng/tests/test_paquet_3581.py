@@ -22,6 +22,7 @@ INSTALLEUR = (COMPOSANT / "lib" / "searxng" / "installer-searxng.sh").read_text(
 UNITE = (COMPOSANT / "debian" / "secubox-searxng.service").read_text(encoding="utf-8")
 UNITE_RELOAD = (COMPOSANT / "debian" / "secubox-searxng-reload.service").read_text(encoding="utf-8")
 PATH_RELOAD = (COMPOSANT / "debian" / "secubox-searxng-reload.path").read_text(encoding="utf-8")
+EXIGENCES = (COMPOSANT / "lib" / "searxng" / "exigences-searxng.txt").read_text(encoding="utf-8")
 
 
 def _code(texte):
@@ -84,7 +85,9 @@ def test_searxng_au_commit_fige_dans_un_venv():
     assert '"$SEARXNG_COMMIT" =~ ^[0-9a-f]{40}$' in INSTALLEUR
     assert 'fetch -q --depth 1 "$SEARXNG_DEPOT" "$SEARXNG_COMMIT"' in INSTALLEUR
     assert 'rev-parse HEAD' in INSTALLEUR and '[[ "$obtenu" == "$SEARXNG_COMMIT" ]]' in INSTALLEUR
+    # Les exigences du commit, vérifiées SANS index après l'installation figée.
     assert '-r "$SRC/requirements.txt"' in INSTALLEUR and '-r "$SRC/requirements-server.txt"' in INSTALLEUR
+    assert 'pip" install -q --no-index "${exigences[@]}"' in INSTALLEUR
     assert "python3 -m venv" in INSTALLEUR and "useradd --system" in INSTALLEUR and "User=searxng" in INSTALLEUR
     assert "--host $SEARXNG_IP --port $SEARXNG_PORT" in INSTALLEUR and not [x for x in _code(INSTALLEUR) if "0.0.0.0" in x]
     assert "EnvironmentFile=/etc/searxng/searxng.env" in INSTALLEUR and "SEARXNG_SECRET=" not in INSTALLEUR
@@ -104,6 +107,61 @@ def test_secret_cree_une_fois(ctl, tmp_path, monkeypatch):
     assert re.fullmatch(r"[0-9a-f]{64}", a) and ctl.secret_cle() == a
     f = tmp_path / "searxng" / "secret_key"
     assert f.stat().st_mode & 0o777 == 0o600 and (tmp_path / "searxng").stat().st_mode & 0o777 == 0o700
+
+
+# ── Dépendances Python : figées, empreintes, aucune mise à jour flottante ──
+
+# requirements.txt + requirements-server.txt de SearXNG au commit 3e95f6c (copie : le test reste hors réseau).
+EXIGENCES_DU_COMMIT = {
+    "certifi": "2026.10.23", "babel": "2.18.0", "flask-babel": "4.0.0", "flask": "3.1.3", "jinja2": "3.1.6",
+    "lxml": "6.1.3", "pygments": "2.21.0", "python-dateutil": "3.0.0", "pyyaml": "6.0.3", "curl-cffi": "0.17.0",
+    "valkey": "6.1.1", "markdown-it-py": "4.2.0", "msgspec": "0.22.0", "typer": "0.27.3", "isodate": "0.7.2",
+    "whitenoise": "6.12.0", "typing-extensions": "4.16.0", "granian": "2.8.5"}
+
+
+def test_installeur_par_empreintes_sans_mise_a_jour_flottante():
+    code = "\n".join(_code(INSTALLEUR))
+    assert 'pip" install -q --require-hashes --only-binary :all: -r "$SEARXNG_EXIGENCES"' in code
+    assert not re.search(r"pip\"?\s+install[^\n]*\s(-U|--upgrade)\b", code)
+    assert "setuptools" not in code and " wheel" not in code
+    # Empreinte du fichier revérifiée dans le conteneur avant pip ; changée = réinstallation (marque .commit).
+    assert '"${obtenue%% *}" == "$SEARXNG_EXIGENCES_SHA256"' in code and 'attendu="$SEARXNG_COMMIT $SEARXNG_EXIGENCES_SHA256"' in code
+    assert "SEARXNG_EXIGENCES_SHA256={hashlib.sha256(exigences.encode()).hexdigest()}" in CTL
+    assert 'EXIGENCES = Path("/usr/share/secubox/lib/searxng/exigences-searxng.txt")' in CTL
+    assert "build-essential" not in code and "python3-dev" not in code      # aucune compilation
+
+
+def test_exigences_figees_avec_empreintes():
+    lignes = [x for x in EXIGENCES.splitlines() if x and not x.startswith("#")]
+    paquets, courant = {}, None
+    for x in lignes:
+        if not x.startswith(" "):
+            m = re.fullmatch(r"([a-z0-9][a-z0-9._-]*)==([0-9][0-9A-Za-z.+-]*)( ; [^\\]+)? \\", x)
+            assert m, x
+            courant = m.group(1)
+            paquets[courant] = (m.group(2), [])
+        else:
+            m = re.fullmatch(r"    --hash=sha256:([0-9a-f]{64})( \\)?", x)
+            assert m and courant, x
+            paquets[courant][1].append(m.group(1))
+    assert all(h for _, h in paquets.values())                              # chaque paquet a au moins une empreinte
+    for nom, version in EXIGENCES_DU_COMMIT.items():
+        assert paquets[nom][0] == version, nom
+    # Paquets compilés : une roue par architecture au moins (aarch64 et x86_64), sinon pip ne trouverait rien.
+    for nom in ("lxml", "pyyaml", "msgspec", "curl-cffi", "granian", "markupsafe", "cffi", "setproctitle"):
+        assert len(paquets[nom][1]) >= 2, nom
+    assert "colorama" not in paquets                                        # Windows seulement
+    assert f"commit {COMMIT}" in EXIGENCES
+
+
+def test_droits_de_la_racine_dans_le_conteneur():
+    code = "\n".join(_code(INSTALLEUR))
+    assert 'install -d -m 0755 -o root -g root "$RACINE"' in code
+    assert 'install -d -m 0755 -o searxng -g searxng "$RACINE"' not in code
+    assert 'install -d -m 0755 -o searxng -g searxng "$VENV"' in code
+    assert 'install -d -m 0755 -o searxng -g searxng "$SRC.nouveau"' in code
+    assert 'marque .commit "$attendu"' in code and 'marque .serveur "$serveur"' in code
+    assert not re.search(r'>\s*"\$RACINE/\.(commit|serveur)"', code)        # jamais d'écriture à travers l'existant
 
 
 def test_scripts_syntaxe():
@@ -214,7 +272,7 @@ def test_debian_rules_installe_le_composant():
     for cible in ("usr/lib/secubox/searxng/", "usr/sbin/searxngctl", "usr/share/secubox/lib/searxng/installer-searxng.sh",
                   "usr/share/secubox/searxng/searxng.toml.example", "usr/share/secubox/www/searxng/index.html",
                   "usr/share/secubox/menu.d/60-searxng.json", "etc/nginx/secubox-routes.d/searxng.conf",
-                  "etc/apparmor.d/secubox-searxng-api",
+                  "etc/apparmor.d/secubox-searxng-api", "usr/share/secubox/lib/searxng/exigences-searxng.txt",
                   "usr/lib/systemd/system/secubox-searxng.service",
                   "usr/lib/systemd/system/secubox-searxng-reload.service",
                   "usr/lib/systemd/system/secubox-searxng-reload.path", "maintscripts/searxng.postinst",

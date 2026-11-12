@@ -65,6 +65,7 @@ override_dh_auto_install:
 	find debian/secubox-metanews/usr/lib/secubox/searxng -name __pycache__ -type d -prune -exec rm -rf {} +
 	install -D -m 755 composants/searxng/sbin/searxngctl debian/secubox-metanews/usr/sbin/searxngctl
 	install -D -m 644 composants/searxng/lib/searxng/installer-searxng.sh debian/secubox-metanews/usr/share/secubox/lib/searxng/installer-searxng.sh
+	install -D -m 644 composants/searxng/lib/searxng/exigences-searxng.txt debian/secubox-metanews/usr/share/secubox/lib/searxng/exigences-searxng.txt
 	install -D -m 644 composants/searxng/conf/searxng.toml.example debian/secubox-metanews/usr/share/secubox/searxng/searxng.toml.example
 	install -D -m 644 composants/searxng/www/searxng/index.html debian/secubox-metanews/usr/share/secubox/www/searxng/index.html
 	install -D -m 644 composants/searxng/menu.d/60-searxng.json debian/secubox-metanews/usr/share/secubox/menu.d/60-searxng.json
