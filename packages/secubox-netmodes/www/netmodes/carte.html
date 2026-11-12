@@ -17,6 +17,11 @@
     GET /api/v1/p2p/peers                noms des pairs du maillage
     GET /api/v1/wireguard/peers/status   état et volumes des pairs (jointure par clé publique complète)
     GET /api/v1/wireguard/summary        autres tunnels (port, pairs, en ligne)
+  Matériel réel (#3688, champ `materiel` de /reseau/carte, lu dans sysfs par l'API, jamais un nom de carte) : sur une carte SANS
+  switch DSA, SANS WAN dédié et sans br-lan (un Raspberry Pi), le schéma ne montre que le matériel réel — interfaces physiques
+  (état, adresses, route par défaut), maillage, autres tunnels, br-lxc et conteneurs — sans passerelle WAN, voisins WAN, switch
+  ni ports, et sans les sources Ports, Clients et Mode routeur. Jamais si le mode routeur est actif, à confirmer, invalide ou en
+  bascule, ni si le matériel est illisible (vue complète, comme avant). MOCHAbin, ESPRESSObin : rien ne change.
   Chaque source a sa pastille ; une source en 401/503 affiche « session requise » ou « source en panne » sur SON bloc, jamais « aucun ».
   ?embed=1 : sans menu ; ?demo=1 : données de démonstration (adresses de documentation RFC 5737, noms fictifs), aucun appel.
 -->
@@ -105,7 +110,14 @@
   <div class="pan schema-pan">
     <h3>Schéma du réseau <i id="schemaNote">lu sur la box</i></h3>
     <div class="defile" id="defile"><svg class="schema" id="schema" role="img" aria-labelledby="schemaTitre"><title id="schemaTitre">Schéma du réseau de la box</title></svg></div>
-    <div class="legende" aria-hidden="true">
+    <div class="legende" id="legendeSR" aria-hidden="true" hidden>
+      <span><em style="border-color:var(--cyan)"></em>route par défaut</span>
+      <span><em style="border-color:var(--violet)"></em>maillage wg-mesh</span>
+      <span><em style="border-color:var(--faible);border-top-style:dashed"></em>autres tunnels</span>
+      <span><em style="border-color:var(--vert)"></em>interface avec lien</span>
+      <span><em style="border-color:var(--n-bord);border-top-style:dashed"></em>descendue ou sans lien</span>
+    </div>
+    <div class="legende" id="legende" aria-hidden="true">
       <span><em style="border-color:var(--cyan)"></em>WAN</span>
       <span><em style="border-color:var(--violet)"></em>maillage wg-mesh</span>
       <span><em style="border-color:var(--faible);border-top-style:dashed"></em>autres tunnels</span>
@@ -376,6 +388,52 @@
         : S("Hubs et switchs détectés : aucun · au plus une adresse MAC par port (table de br-lan)", "c-doux");
     }
     M.hubs = { style: "n-barre", t: th };
+    return sansRouteur(R) ? modeleSansRouteur(R, M, hoteNom, nT) : M;
+  }
+
+  // ── Matériel réel (#3688) : carte sans switch DSA, sans WAN dédié et sans br-lan ──────────────────────────────────────────────
+  function materielDe(R) {
+    var d = R.carte.ok ? R.carte.d : null;
+    return d && d.materiel && typeof d.materiel === "object" ? d.materiel : null;
+  }
+  // Seulement sur un « non » lu par l'API, et jamais quand le mode routeur est actif, à confirmer, invalide ou en bascule.
+  function sansRouteur(R) {
+    var m = materielDe(R);
+    if (!m || m.vue_routeur !== false || !Array.isArray(m.interfaces)) { return false; }
+    var e = R.routeur.ok ? R.routeur.d : null;
+    return !(e && (e.bascule_en_cours === true || ["actif", "en_attente", "config_invalide"].indexOf(e.etat) >= 0));
+  }
+  var GENRES = { filaire: "Ethernet", wifi: "wifi", conduit_switch: "conduit du switch", port_switch: "port du switch", autre: "interface" };
+  var MAX_INTERFACES = 6;
+  function modeleSansRouteur(R, base, hoteNom, nT) {
+    var m = materielDe(R), pannes = Array.isArray(m.pannes) ? m.pannes : [];
+    var M = { sans: true, maillage: base.maillage, tunnels: base.tunnels, lxc: base.lxc };
+    var noms = m.interfaces.map(function (i) { return i && i.nom; }).filter(Boolean);
+    M.box = { style: "n-central", l: [L("grand", S("Cette box", "g")), L("normal", S(hoteNom || "—", "c-cyan", true)),
+      L("petit", S(m.modele || "carte sans switch ni WAN dédié", "c-doux", true)),
+      L("petit", S((noms.length ? noms.join(" · ") + " · " : "") + "br-lxc · " + (nT == null ? "tunnels —" : nT + " tunnel" + (nT > 1 ? "s" : "") + " WireGuard"), "c-doux", true))] };
+    M.ifaces = m.interfaces.filter(function (i) { return i && i.nom; }).map(function (i) {
+      var lien = i.etat === "up" && i.porteuse === true, l1, l3, l4 = null;
+      var t1 = L("moyen", S(i.nom, "g"), S(" · " + (GENRES[i.genre] || "interface") + (lien && debit(i.vitesse_mbps) ? " · " + debit(i.vitesse_mbps) : ""), "c-doux"));
+      if (lien) { l1 = L("normal", S("● lien actif", "c-vert")); }
+      else if (i.etat === "down") { l1 = L("normal", S("○ descendue", "c-eteint")); }
+      else if (i.porteuse === false) { l1 = L("normal", S("○ pas de lien", "c-eteint")); }
+      else { l1 = L("normal", S("état " + (i.etat || "—"), "c-doux")); }
+      var a = i.adresses;
+      if (!Array.isArray(a)) { l3 = L("normal", S("adresses : source en panne", "c-rouge")); }
+      else if (!a.length) { l3 = L("normal", S("aucune adresse", "c-doux")); }
+      else { l3 = L("normal", S(a[0], "mono", true), S(a.length > 1 ? " +" + (a.length - 1) : "", "c-doux")); }
+      if (i.passerelle) { l4 = L("petit", S("route par défaut · passerelle " + i.passerelle, "c-cyan", true)); }
+      else if (pannes.indexOf("route_defaut") >= 0) { l4 = L("petit", S("route par défaut : source en panne", "c-rouge")); }
+      var titre = Array.isArray(a) && a.length > 1 ? a.join(" · ") : "";
+      return { style: lien ? "n-port-ok" : "n-port-off", fil: i.passerelle ? "f-cyan" : lien ? "f-vert" : "f-eteint",
+        l: [t1, l1, l3].concat(l4 ? [l4] : []), titre: titre };
+    });
+    if (!M.ifaces.length) { M.ifaces = [{ style: "n-port-off", fil: "f-eteint", l: [L("moyen", S("Interfaces", "g")), L("normal", S("aucune interface physique lue", "c-doux"))] }]; }
+    if (M.ifaces.length > MAX_INTERFACES) {
+      var reste = M.ifaces.length - MAX_INTERFACES + 1;
+      M.ifaces = M.ifaces.slice(0, MAX_INTERFACES - 1).concat([{ style: "n-sombre", fil: "f-neutre", l: [L("normal", S("… et " + reste + " interfaces de plus", "c-doux"))] }]);
+    }
     return M;
   }
 
@@ -502,6 +560,60 @@
     svg.setAttribute("viewBox", "0 0 340 " + Math.ceil(y));
   }
 
+  // Un groupe par interface : toutes ses adresses en infobulle quand elle en a plusieurs.
+  function groupe(g, titre) {
+    var gi = el("g", {}, g);
+    if (titre) { el("title", {}, gi).textContent = titre; }
+    return gi;
+  }
+
+  // Vue sans routeur (#3688), disposition large : interfaces à gauche, la box au centre, br-lxc dessous, maillage et tunnels à droite.
+  function dessinerSansRouteurLarge(svg, M) {
+    svg.classList.remove("etroit");
+    var g = el("g", {}, svg), hI = 104, pas = 124, y0 = 140, n = M.ifaces.length;
+    var hautI = n * pas - (pas - hI), bY = Math.max(y0, y0 + hautI / 2 - 80), bas;
+    M.ifaces.forEach(function (it, k) {
+      var y = y0 + k * pas, yc = y + hI / 2, yb = Math.min(bY + 136, Math.max(bY + 24, yc));
+      fil(g, "M394 " + yc + " L455 " + yc + " L455 " + yb + " L515 " + yb, it.fil, it.fil !== "f-eteint");
+    });
+    var a1 = bY + 60, ym = Math.min(a1, y0 + 280), a2 = bY + 130, yt = y0 + 380;
+    fil(g, "M880 " + a1 + " L940 " + a1 + " L940 " + ym + " L995 " + ym, "f-violet", true);
+    fil(g, "M880 " + a2 + " L965 " + a2 + " L965 " + yt + " L995 " + yt, "f-faible", true);
+    fil(g, "M700 " + (bY + 160) + " L700 " + (bY + 215), "f-neutre", true);
+    M.ifaces.forEach(function (it, k) { boite(groupe(g, it.titre), { x: 64, y: y0 + k * pas, w: 330, h: hI }, it.style, it.l); });
+    boite(g, { x: 520, y: bY, w: 360, h: 160 }, M.box.style, M.box.l, { rx: 16 });
+    boite(g, { x: 520, y: bY + 220, w: 360, h: 80 }, M.lxc.style, M.lxc.l);
+    boite(g, { x: 1000, y: y0, w: 380, h: 300 }, M.maillage.style, plafonne(M.maillage.l, M.maillage.notes, 10, "pairs"), { gauche: true, titre: M.maillage.titre, pad: 12 });
+    boite(g, { x: 1000, y: y0 + 320, w: 380, h: 120 }, M.tunnels.style, plafonne(M.tunnels.l, M.tunnels.notes, 3, "tunnels"), { gauche: true, titre: M.tunnels.titre, pad: 12 });
+    ligne(g, 937, ym - 10, L("normal", S("maillage", "c-violet")), "middle", 110);
+    bas = Math.max(y0 + hautI, bY + 300, y0 + 440) + 14;
+    svg.setAttribute("viewBox", "50 128 1345 " + Math.ceil(bas - 128));
+  }
+
+  // Vue sans routeur, disposition étroite : la box, puis chaque branche (interfaces, maillage, tunnels, br-lxc) empilée.
+  function dessinerSansRouteurEtroit(svg, M) {
+    svg.classList.add("etroit");
+    var g = el("g", {}, svg), X = 18, W = 312, y = 8, branches = [];
+    boite(g, { x: X, y: y, w: W, h: 100 }, M.box.style, M.box.l, { rx: 16 });
+    var haut = y + 50; y += 100 + 26;
+    M.ifaces.forEach(function (it) {
+      var lignes = it.l.map(function (ln) { return ln.f === "moyen" ? ln : { f: ln.f === "normal" ? "normal" : "petit", s: ln.s }; });
+      boite(groupe(g, it.titre), { x: X, y: y, w: W, h: 92 }, it.style, lignes);
+      branches.push([y + 46, it.fil]); y += 92 + 16;
+    });
+    function liste(bloc, n, quoi, classe) {
+      var lignes = plafonne(bloc.l, bloc.notes, n, quoi), h = 44 + 22 * lignes.length;
+      boite(g, { x: X, y: y, w: W, h: h }, bloc.style, lignes, { gauche: true, titre: bloc.titre, pad: 10 });
+      branches.push([y + 22, classe]); y += h + 16;
+    }
+    liste(M.maillage, 10, "pairs", "f-violet");
+    liste(M.tunnels, 4, "tunnels", "f-faible");
+    boite(g, { x: X, y: y, w: W, h: 56 }, M.lxc.style, M.lxc.l); branches.push([y + 28, "f-neutre"]); y += 56 + 8;
+    fil(g, "M" + X + " " + haut + " L8 " + haut + " L8 " + branches[branches.length - 1][0], "f-neutre", false);
+    branches.forEach(function (b) { fil(g, "M8 " + b[0] + " L" + (X - 4) + " " + b[0], b[1], b[1] !== "f-eteint"); });
+    svg.setAttribute("viewBox", "0 0 340 " + Math.ceil(y));
+  }
+
   var dernier = null, disposition = null;
   function dessiner() {
     if (!dernier) { return; }
@@ -510,7 +622,10 @@
     [].slice.call(svg.childNodes).forEach(function (n) { if (n.nodeName !== "title") { svg.removeChild(n); } });
     defs(svg);
     var M = modele(dernier, DEMO ? "admin.gk2-demo.example" : location.hostname);
-    if (large) { dessinerLarge(svg, M); } else { dessinerEtroit(svg, M); }
+    if (M.sans) { if (large) { dessinerSansRouteurLarge(svg, M); } else { dessinerSansRouteurEtroit(svg, M); } }
+    else if (large) { dessinerLarge(svg, M); } else { dessinerEtroit(svg, M); }
+    $("legende").hidden = !!M.sans; $("legendeSR").hidden = !M.sans;
+    $("notes").textContent = M.sans ? NOTE_SR : NOTE;
     hauteur();
   }
 
@@ -518,9 +633,13 @@
   function sources(R) {
     var z = $("sources");
     while (z.childNodes.length > 1) { z.removeChild(z.lastChild); }
-    var nPanne = 0, nSession = 0, nPartiel = 0;
-    SOURCES.forEach(function (s) {
+    var nPanne = 0, nSession = 0, nPartiel = 0, sr = sansRouteur(R);
+    // Vue sans routeur (#3688) : les sources du switch, des clients et du mode routeur n'ont pas d'objet ; celles du matériel
+    // comptent avec la carte.
+    var liste = sr ? SOURCES.filter(function (s) { return ["ports", "clients", "routeur"].indexOf(s.cle) < 0; }) : SOURCES;
+    liste.forEach(function (s) {
       var r = R[s.cle], p = document.createElement("span"), pannes = r.ok && Array.isArray(r.d.pannes) ? r.d.pannes : [];
+      if (sr && s.cle === "carte") { pannes = pannes.concat(materielDe(R).pannes || []); }
       if (DEMO) { p.className = "src demo"; p.textContent = s.nom + " · démo"; }
       else if (r.ok && pannes.length) { nPartiel++; p.className = "src partiel"; p.textContent = s.nom + " · partielle"; }
       else if (r.ok) { p.className = "src ok"; p.textContent = s.nom + " · lue"; }
@@ -536,7 +655,7 @@
     else if (nPartiel) { e.className = "etat att"; e.textContent = "LECTURE PARTIELLE"; }
     else { e.className = "etat ok"; e.textContent = "TOUTES LES SOURCES LUES"; }
     $("session").hidden = DEMO || !nSession;
-    $("sessionTexte").textContent = nSession === SOURCES.length ? "Aucune mesure : session requise." : "Mesures partielles : session requise pour " + nSession + " source" + (nSession > 1 ? "s" : "") + ".";
+    $("sessionTexte").textContent = nSession === liste.length ? "Aucune mesure : session requise." : "Mesures partielles : session requise pour " + nSession + " source" + (nSession > 1 ? "s" : "") + ".";
   }
 
   // ── Démonstration : adresses de documentation (RFC 5737), noms fictifs, aucune requête ──────────────────────────────────────────
@@ -574,6 +693,8 @@
   }
 
   // ── Hauteur annoncée à l'hôte (la page mesure son cadre, pas le document) ──────────────────────────────────────────────────────
+  var NOTE = $("notes").textContent;
+  var NOTE_SR = "Carte sans switch DSA ni WAN dédié : seules ses interfaces réelles sont dessinées (état, adresses globales, route par défaut, lus sur la box). Les noms des pairs viennent du registre p2p ; l’état et les volumes, de WireGuard (jointure par clé publique). « Conteneurs actifs » compte les interfaces rattachées au pont br-lxc.";
   function hauteur() {
     if (window.parent === window) { return; }
     try { window.parent.postMessage({ sbxVue: Math.ceil($("cadre").getBoundingClientRect().bottom + window.scrollY), onglet: ONGLET }, location.origin); }
@@ -589,7 +710,8 @@
       dernier = R; sources(R); dessiner();
       $("heure").textContent = "Relevé " + new Date().toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
       var lanTemp = R.routeur.ok && R.routeur.d.etat !== "actif";
-      $("sous").textContent = "WAN, maillage, tunnels, conteneurs, switch et clients" + (lanTemp ? " · LAN temporaire, mode routeur non actif" : "");
+      $("sous").textContent = sansRouteur(R) ? "Interfaces de la carte, maillage, tunnels et conteneurs"
+        : "WAN, maillage, tunnels, conteneurs, switch et clients" + (lanTemp ? " · LAN temporaire, mode routeur non actif" : "");
       hauteur();
     });
   }

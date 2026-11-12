@@ -15,6 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "common"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 REGISTRE = {
     "alice": {"username": "alice", "role": "admin", "enabled": True},
@@ -30,3 +31,17 @@ def registre(monkeypatch):
     monkeypatch.setattr(user_store, "get_user", lambda sub: REGISTRE.get(sub))
     monkeypatch.setattr(user_store, "is_enabled", lambda sub: bool((REGISTRE.get(sub) or {}).get("enabled")))
     return REGISTRE
+
+
+@pytest.fixture(autouse=True)
+def materiel_mochabin(tmp_path_factory, monkeypatch):
+    """#3688 : lire_systeme lit le matériel dans sysfs. Un test ne lit jamais celui de la machine qui le lance (un portable
+    sans switch prendrait la vue « sans routeur ») : sysfs d'un MOCHAbin simulé par défaut ; un test le remplace au besoin."""
+    mod = sys.modules.get("api.reseau_api")
+    if mod is None:
+        return None
+    import sysfs_simule
+    racine = sysfs_simule.mochabin(tmp_path_factory.mktemp("sys"))
+    monkeypatch.setattr(mod, "SYS_MATERIEL", racine)
+    monkeypatch.setattr(mod, "MODELES", ())
+    return racine
