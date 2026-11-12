@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<!-- Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> -->
+<!-- Source-Disclosed License — All rights reserved except as expressly granted. -->
+<!-- See LICENCE-CMSD-1.0.md for terms. -->
+<!-- Companion 2.0 : rien ne sort de l'appli, ni sauvegarde ni transfert d'appareil à appareil
+     (sessions de l'admin dans app_webview, liste des box dans le stockage du WebView local). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

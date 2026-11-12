@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebResourceError;
@@ -23,15 +24,18 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
-import java.util.Locale;
+import java.io.ByteArrayInputStream;
+import java.util.Collections;
 
 /**
  * Companion 2.0 : l'admin web d'une box, dans un WebView nu.
  *
  * Aucun pont natif : ni interface JavaScript, ni Capacitor. Le WebView ne connaît qu'une
  * origine (schéma, hôte, port) ; toute autre adresse http(s) part dans le navigateur du
- * téléphone, tout autre schéma est ignoré. Si la frame principale échoue au premier
- * chargement, l'activité se ferme et MainActivity affiche l'écran « injoignable ».
+ * téléphone, tout autre schéma est ignoré ; une navigation de la frame principale qui
+ * échappe à shouldOverrideUrlLoading (POST d'un formulaire) est refusée en 403. Si la frame
+ * principale échoue au premier chargement (erreur, HTTP >= 500, TLS, redirection vers une
+ * autre origine), l'activité se ferme et MainActivity affiche l'écran « injoignable ».
  */
 public class BoxActivity extends AppCompatActivity {
 
@@ -39,7 +43,7 @@ public class BoxActivity extends AppCompatActivity {
     private static final String SUFFIXE_UA = " SecuBoxCompanion/2.0";
 
     private WebView vue;
-    private Uri origine;
+    private volatile String origine;
     private boolean premierChargementFait = false;
     private boolean enEchec = false;
 
@@ -47,13 +51,15 @@ public class BoxActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle etat) {
         super.onCreate(etat);
-        String o = BoitePlugin.origineHttps(getIntent().getStringExtra(EXTRA_ORIGINE));
+        String o = Origines.origineHttps(getIntent().getStringExtra(EXTRA_ORIGINE));
         if (o == null) {
             finish();
             return;
         }
-        origine = Uri.parse(o);
+        origine = o;
 
+        // Réglage global du processus : jamais d'inspection à distance de l'admin.
+        WebView.setWebContentsDebuggingEnabled(false);
         vue = new WebView(this);
         WebSettings s = vue.getSettings();
         s.setJavaScriptEnabled(true);
@@ -102,36 +108,32 @@ public class BoxActivity extends AppCompatActivity {
     protected void onDestroy() {
         if (vue != null) {
             vue.stopLoading();
+            if (vue.getParent() instanceof ViewGroup) ((ViewGroup) vue.getParent()).removeView(vue);
             vue.destroy();
             vue = null;
         }
         super.onDestroy();
     }
 
-    private static int portEffectif(Uri u) {
-        if (u.getPort() != -1) return u.getPort();
-        if ("https".equalsIgnoreCase(u.getScheme())) return 443;
-        if ("http".equalsIgnoreCase(u.getScheme())) return 80;
-        return -1;
-    }
-
-    private boolean memeOrigine(Uri u) {
-        if (u == null || u.getScheme() == null || u.getHost() == null) return false;
-        return u.getScheme().equalsIgnoreCase(origine.getScheme())
-            && u.getHost().toLowerCase(Locale.ROOT).equals(origine.getHost().toLowerCase(Locale.ROOT))
-            && portEffectif(u) == portEffectif(origine);
+    private boolean memeOrigine(String url) {
+        return Origines.memeOrigine(origine, url);
     }
 
     /** true : la navigation est prise en charge ici (le WebView ne la suit pas). */
     private boolean intercepter(Uri u, boolean framePrincipale) {
-        if (memeOrigine(u)) return false;
-        String schema = u == null || u.getScheme() == null ? "" : u.getScheme().toLowerCase(Locale.ROOT);
-        boolean web = "https".equals(schema) || "http".equals(schema);
+        String url = u == null ? null : u.toString();
+        if (memeOrigine(url)) return false;
+        if (framePrincipale && !premierChargementFait) {
+            // Redirection (ou clic) vers une autre origine avant que l'admin ait chargé.
+            echec();
+            return true;
+        }
+        String schema = Origines.schema(url);
         if (!framePrincipale) {
             // Sous-cadre d'une autre origine : https seulement, jamais de sortie de l'appli.
             return !"https".equals(schema);
         }
-        if (web) {
+        if ("https".equals(schema) || "http".equals(schema)) {
             Intent intent = new Intent(Intent.ACTION_VIEW, u);
             intent.addCategory(Intent.CATEGORY_BROWSABLE);
             try {
@@ -140,7 +142,9 @@ public class BoxActivity extends AppCompatActivity {
                 // Aucun navigateur : on reste sur la page courante.
             }
         }
-        // Tout autre schéma (intent:, file:, javascript:, content:, secubox:…) : ignoré.
+        // Tout autre schéma qui arrive ici (intent:, file:, content:, data:, secubox:…) : ignoré.
+        // Les URL javascript: ne passent pas par shouldOverrideUrlLoading : elles s'exécutent
+        // dans la page courante, de la même origine, sans pont natif à atteindre.
         return true;
     }
 
@@ -148,7 +152,7 @@ public class BoxActivity extends AppCompatActivity {
         if (premierChargementFait || enEchec) return;
         enEchec = true;
         if (vue != null) vue.stopLoading();
-        BoitePlugin.signalerInjoignable(origine.toString());
+        BoitePlugin.signalerInjoignable(origine);
         finish();
     }
 
@@ -167,19 +171,41 @@ public class BoxActivity extends AppCompatActivity {
         }
 
         @Override
+        public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest req) {
+            // Fil d'arrière-plan. Une navigation de la frame principale vers une autre origine
+            // qui arrive ici a échappé à shouldOverrideUrlLoading (POST) : réponse vide 403.
+            if (req.isForMainFrame() && !memeOrigine(req.getUrl().toString())) {
+                return new WebResourceResponse("text/plain", "utf-8", 403, "Forbidden",
+                    Collections.<String, String>emptyMap(), new ByteArrayInputStream(new byte[0]));
+            }
+            return null;
+        }
+
+        @Override
         public void onPageStarted(WebView v, String url, Bitmap favicon) {
             super.onPageStarted(v, url, favicon);
-            // Une redirection vers une autre origine au premier chargement n'est pas l'admin.
-            if (!premierChargementFait && !memeOrigine(Uri.parse(url))) {
-                v.stopLoading();
+            if (memeOrigine(url)) return;
+            v.stopLoading();
+            if (!premierChargementFait) {
+                // Une redirection vers une autre origine au premier chargement n'est pas l'admin.
                 echec();
+            } else if (v.canGoBack()) {
+                v.goBack();
+            } else {
+                finish();
             }
+        }
+
+        @Override
+        public void onPageCommitVisible(WebView v, String url) {
+            super.onPageCommitVisible(v, url);
+            if (!enEchec && memeOrigine(url)) premierChargementFait = true;
         }
 
         @Override
         public void onPageFinished(WebView v, String url) {
             super.onPageFinished(v, url);
-            if (!enEchec && memeOrigine(Uri.parse(url))) premierChargementFait = true;
+            if (!enEchec && memeOrigine(url)) premierChargementFait = true;
         }
 
         @Override
@@ -204,7 +230,7 @@ public class BoxActivity extends AppCompatActivity {
         public void onReceivedSslError(WebView v, SslErrorHandler handler, SslError err) {
             // Certificat refusé, toujours ; au premier chargement de l'origine, c'est un échec.
             handler.cancel();
-            if (err != null && memeOrigine(Uri.parse(err.getUrl()))) echec();
+            if (err != null && memeOrigine(err.getUrl())) echec();
         }
     }
 }

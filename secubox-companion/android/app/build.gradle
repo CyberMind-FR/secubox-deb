@@ -16,8 +16,16 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    lint {
+        // lintVital de la variante release exige junit, mockito et les jars de lint, absents
+        // du cache hors ligne du poste de construction : contrôle à part, `./gradlew lintRelease`.
+        checkReleaseBuilds false
+    }
     buildTypes {
         release {
+            // Même clé que les versions 1.x (clé de débogage, décision du propriétaire) : la mise
+            // à jour en place reste possible, mais l'APK n'est plus « debuggable ».
+            signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

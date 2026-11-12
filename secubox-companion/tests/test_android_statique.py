@@ -74,6 +74,60 @@ def test_box_activity_garde_l_origine_et_n_ouvre_que_http_https():
     assert "setAllowFileAccess(false)" in code
     assert "isForMainFrame" in code
     assert "finish()" in code
+    assert "Origines.memeOrigine(" in code
+
+
+def test_box_activity_refuse_les_post_vers_une_autre_origine():
+    code = _sans_commentaires(_source("BoxActivity.java"))
+    m = re.search(r"public WebResourceResponse shouldInterceptRequest\(WebView \w+, WebResourceRequest \w+\) \{(.*?)\n        \}", code, re.S)
+    assert m, "shouldInterceptRequest(WebView, WebResourceRequest) absent"
+    corps = m.group(1)
+    assert "isForMainFrame()" in corps and "memeOrigine(" in corps and "403" in corps
+
+
+def test_box_activity_redirection_au_premier_chargement_est_un_echec():
+    code = _sans_commentaires(_source("BoxActivity.java"))
+    m = re.search(r"private boolean intercepter\(.*?\n    \}", code, re.S)
+    corps = m.group(0)
+    i_meme = corps.index("memeOrigine(")
+    i_garde = corps.index("framePrincipale && !premierChargementFait")
+    i_vue = corps.index("ACTION_VIEW")
+    assert i_meme < i_garde < i_vue
+    assert "echec();" in corps[i_garde:i_vue]
+    # Après un échec, aucun rappel ne marque le premier chargement comme réussi.
+    for rappel in ("onPageFinished", "onPageCommitVisible"):
+        r = re.search(rappel + r"\(WebView.*?\n        \}", code, re.S).group(0)
+        assert "!enEchec && memeOrigine(" in r, rappel
+
+
+def test_box_activity_detruit_une_vue_detachee():
+    code = _sans_commentaires(_source("BoxActivity.java"))
+    corps = re.search(r"protected void onDestroy\(\) \{.*?\n    \}", code, re.S).group(0)
+    assert corps.index("removeView(vue)") < corps.index("vue.destroy()")
+
+
+def test_sessions_hors_sauvegarde_et_hors_debogage():
+    app = ET.parse(MANIFESTE).getroot().find("application")
+    assert app.get(NS + "allowBackup") == "false"
+    regles = app.get(NS + "dataExtractionRules")
+    assert regles == "@xml/data_extraction_rules"
+    xml = ET.parse(APP / "src" / "main" / "res" / "xml" / "data_extraction_rules.xml").getroot()
+    for section in ("cloud-backup", "device-transfer"):
+        exclus = {(e.get("domain"), e.get("path")) for e in xml.find(section).iter("exclude")}
+        assert ("root", ".") in exclus, section
+        assert not list(xml.find(section).iter("include")), section
+    cfg = json.loads((RACINE / "capacitor.config.json").read_text(encoding="utf-8"))
+    assert cfg["android"]["webContentsDebuggingEnabled"] is False
+    assert "setWebContentsDebuggingEnabled(false)" in _sans_commentaires(_source("BoxActivity.java"))
+
+
+def test_variante_release_signee_avec_la_cle_des_1x():
+    gradle = (APP / "build.gradle").read_text(encoding="utf-8")
+    release = re.search(r"release \{(.*?)\n        \}", gradle, re.S).group(1)
+    assert re.search(r"^\s*signingConfig signingConfigs\.debug\s*$", release, re.M)
+    assert "debuggable true" not in gradle
+    pkg = json.loads((RACINE / "package.json").read_text(encoding="utf-8"))
+    assert "assembleRelease" in pkg["scripts"]["apk"]
 
 
 def test_version_android_2_0():
@@ -112,9 +166,10 @@ def test_plugin_boite():
     assert "BoxActivity.class" in code
     assert '"joignable", true' in code
     assert "#injoignable=" in code
+    assert "Origines.origineHttps(" in code
     assert "addJavascriptInterface" not in code
 
 
 def test_en_tetes_spdx():
-    for nom in ("MainActivity.java", "BoitePlugin.java", "BoxActivity.java"):
+    for nom in ("MainActivity.java", "BoitePlugin.java", "BoxActivity.java", "Origines.java"):
         assert _source(nom).startswith("// SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"), nom

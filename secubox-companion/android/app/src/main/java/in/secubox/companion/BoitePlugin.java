@@ -45,26 +45,9 @@ public class BoitePlugin extends Plugin {
         }
     }
 
-    /** Origine https stricte (schéma, hôte, port), sans identifiants, chemin, requête ni fragment. */
-    static String origineHttps(String brut) {
-        if (brut == null || brut.isEmpty()) return null;
-        Uri u = Uri.parse(brut);
-        if (!"https".equalsIgnoreCase(u.getScheme())) return null;
-        String hote = u.getHost();
-        if (hote == null || hote.isEmpty()) return null;
-        if (u.getUserInfo() != null) return null;
-        String chemin = u.getPath();
-        if (chemin != null && !chemin.isEmpty() && !"/".equals(chemin)) return null;
-        if (u.getQuery() != null || u.getFragment() != null) return null;
-        int port = u.getPort();
-        String origine = "https://" + hote.toLowerCase(java.util.Locale.ROOT);
-        if (port != -1 && port != 443) origine += ":" + port;
-        return origine;
-    }
-
     @PluginMethod
     public void ouvrir(PluginCall call) {
-        String origine = origineHttps(call.getString("origine"));
+        String origine = Origines.origineHttps(call.getString("origine"));
         if (origine == null) {
             call.reject("origine https invalide");
             return;
