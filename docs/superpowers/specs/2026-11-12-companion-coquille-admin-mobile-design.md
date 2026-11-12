@@ -7,7 +7,7 @@
 
 # Companion 2.0 — coquille Android de l'admin mobile, associée à sa box — conception
 
-**Date :** 2026-11-12 · **Issue :** #3683 · **Statut :** à valider par le propriétaire
+**Date :** 2026-11-12 · **Issue :** #3683 · **Statut :** questions tranchées le 2026-11-12, à valider par le propriétaire
 **Remplace en partie :** `2026-07-30-companion-qr-and-wireguard-design.md` (l'appairage par QR y reste une piste, cf. § 7).
 
 ## 1. Intention
@@ -28,7 +28,9 @@ actifs). Des **comportements embarqués** (natifs) viendront ensuite, **choisis 
 - Depuis la page de la box, l'appli s'ouvre **déjà réglée sur cette box** : rien à taper.
 - L'appli affiche l'admin de la box tel que la box le sert (menu, pages, gardes) ; tout pilotage passe par l'API de la box
   (gardes `require_*`, journal d'audit), exactement comme depuis un navigateur.
-- Changer de box associée reste possible (box remplacée, plusieurs box).
+- **Plusieurs box** (décision du propriétaire, 2026-11-12) : l'appli retient une **liste** de box ; chaque lien
+  « Associer » ajoute la sienne (ou la remet en tête si elle y est déjà) ; un sélecteur local permet de passer de l'une à
+  l'autre et d'en retirer une. Chaque box garde sa propre session (stockage du WebView par origine).
 
 **Non-buts (v1)**
 - Pas d'écrans propres à l'appli (les vues `www/modules/*` de la Companion 1.x disparaissent).
@@ -49,10 +51,11 @@ actifs). Des **comportements embarqués** (natifs) viendront ensuite, **choisis 
    certificat de la box ; page accessible sans connexion, elle ne contient rien de secret).
 2. « Télécharger l'appli » → APK servi par la box → installation (sources inconnues autorisées une fois).
 3. Retour sur la page → « Ouvrir dans l'appli » → lien `secubox://associer?box=https%3A%2F%2Fadmin.<box>` →
-   l'appli demande « Associer cette appli à admin.<box> ? » → oui → l'adresse est enregistrée.
+   l'appli demande « Ajouter admin.<box> à vos box ? » → oui → l'adresse rejoint la liste et devient la box courante.
 4. L'appli charge `https://admin.<box>/` : la personne se connecte avec **la page de connexion habituelle de la box**
    (mot de passe, 2FA) ; la session vit dans le stockage du WebView comme dans un navigateur (`sbx_token`, cookie SSO).
-5. Lancements suivants : l'appli rouvre directement l'admin de la box associée.
+5. Lancements suivants : l'appli rouvre l'admin de la dernière box utilisée ; le sélecteur (écran local, accessible
+   aussi depuis l'écran « injoignable ») liste les box associées.
 6. La même page affiche un **QR code** du lien de l'étape 3 (lisible par l'appareil photo d'un autre téléphone).
 
 Premier lancement sans lien (APK reçu autrement) : écran local « Associer une box » → champ d'adresse (https seulement) +
@@ -86,9 +89,9 @@ explication « ouvrez la page /companion/ de votre box ».
 
 ## 5. Construction et signature
 
-- L'APK actuel est signé avec la clé de **débogage** de ce poste. La 2.0 passe à une **clé de publication dédiée**, générée
-  une fois, conservée hors du dépôt (secrets du propriétaire, sauvegardée) ; les installations 1.x devront être
-  désinstallées une fois (changement de clé). *(Choix de Claude, à confirmer.)*
+- **Signature** (décision du propriétaire, 2026-11-12) : la 2.0 reste signée avec la **clé de débogage** de ce poste,
+  comme la 1.x : les 1.x se mettent à jour par-dessus, sans désinstallation. Limite connue : la clé est liée au poste
+  (sa perte empêcherait les mises à jour par-dessus) ; à sauvegarder avec les secrets du propriétaire.
 - L'APK est construit sur le poste de développement (recette existante), puis déposé dans le paquet `secubox-companion`
   à la construction de celui-ci ; le paquet ne compile rien.
 
