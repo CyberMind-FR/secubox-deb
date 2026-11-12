@@ -46,8 +46,11 @@ def _rendu(tmp_path, etat):
 def test_ports_du_pair_rejette_une_liste_illisible(tmp_path):
     def ports(corps):
         return _execute(tmp_path, "ports_du_pair", entree=corps)
-    for corps in ('{"ports": "x"}', "pas du json", "{}", '{"ports": null}'):
+    for corps in ('{"ports": "x"}', "{}", '{"ports": null}', "[]"):
         assert ports(corps).returncode == 1, corps
+    # #3686 : échec qualifié pour un journal exact — vide 2, pas du JSON 3, page HTML (pair sans webos) 4
+    for corps, code in (("", 2), ("  \n", 2), ("pas du json", 3), ("<!DOCTYPE html><html></html>", 4)):
+        assert ports(corps).returncode == code, corps
     ok = ports(json.dumps({"domaine": "gk1.x.test", "ports": [
         {"proto": "tcp", "port": 7881, "module": "meet"}, {"proto": "udp", "port": 7882, "module": "meet"},
         {"proto": "icmp", "port": 5000, "module": "meet"}, {"proto": "tcp", "port": 22, "module": "meet"},

@@ -1,3 +1,17 @@
+secubox-p2p (1.22.1-1~trixie1) trixie; urgency=medium
+
+  * Relais (ref #3686) : admin.<box> d'un pair vivant (ni muet ni à valider) est exposé
+    d'office s'il répond (Host admin.<box> sur 9080, 2xx ou 3xx), quelle que soit la source
+    des autres noms (webos, plan du pilotage, jonction) ; jamais retiré par une
+    synchronisation suivante. Gardes inchangées : domaine du relais, domaine tenu par un
+    autre (vhost de pilotage du maître compris), box distante, exclusions du pilotage, noms
+    de box réservés, plan rejeté ou en désaccord.
+  * Relais : un pair sans webos répond à /public/ports par la page HTML du serveur nginx par
+    défaut ; le journal le dit (page HTML, réponse vide, pas du JSON) au lieu de « liste de
+    ports illisible ». Toujours rien ajouté ni retiré.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 11:42:00 +0100
+
 secubox-p2p (1.22.0-1~trixie1) trixie; urgency=medium
 
   * Autojoin (ref #3638) : fenêtre d'appairage ouverte par un administrateur (Flotte, 15 min,
