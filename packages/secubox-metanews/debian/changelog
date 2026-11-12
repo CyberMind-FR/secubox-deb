@@ -1,3 +1,12 @@
+secubox-metanews (0.6.1-1~trixie1) trixie; urgency=medium
+
+  * searxng : eth0 statique dans le conteneur (/etc/systemd/network/eth0.network,
+    sur le modèle de secubox-meet) ; l'image Debian livrait DHCP=true et
+    systemd-networkd effaçait l'adresse posée par LXC (banc gk6 : apt-get 100).
+    L'installation n'avance que si l'adresse est présente et stable (ref #3581).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 13:20:00 +0100
+
 secubox-metanews (0.6.0-1~trixie1) trixie; urgency=medium
 
   * Nouveau composant searxng : métamoteur SearXNG, interne, qui remplace YaCy (ref #3581).

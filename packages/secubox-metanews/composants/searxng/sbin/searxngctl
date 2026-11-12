@@ -587,24 +587,48 @@ def ecrire_config_lxc(racine: Path, contenu: str) -> None:
     os.replace(tmp, racine / "config")
 
 
+CHEMIN_RESEAU_CONTENEUR = "/etc/systemd/network/eth0.network"
+
+
+def reseau_conteneur(cfg: dict) -> str:
+    """eth0 statique dans le conteneur, sur le modèle de secubox-meet (rendu.sh). L'image Debian livre un eth0.network
+    en DHCP=true : systemd-networkd efface alors l'adresse posée par LXC (personne ne sert de DHCP sur br-lxc) et le
+    conteneur reste sans IP (vécu sur gk6 le 2026-11-12, apt-get en échec 100)."""
+    lxc = cfg["lxc"]
+    dns = "".join(f"DNS={d}\n" for d in lxc["dns"])
+    return ("# SecuBox-managed - voir searxngctl (#3581)\n[Match]\nName=eth0\n\n[Network]\n"
+            f"Address={lxc['ip']}/24\nGateway={lxc['gateway']}\n{dns}LinkLocalAddressing=no\nIPv6AcceptRA=no\n")
+
+
+def adresse_presente(cfg: dict, ct: Conteneur) -> bool:
+    try:
+        p = ct.executer(["ip", "-4", "-o", "addr", "show", "dev", "eth0"], delai=5)
+    except (subprocess.SubprocessError, OSError):
+        return False
+    return f" {cfg['lxc']['ip']}/" in p.stdout
+
+
 def demarrer_et_reseau(cfg: dict, ct: Conteneur) -> None:
     lxc = cfg["lxc"]
     if ct.etat() != "running":
         journal("démarrage du conteneur …")
         executer(["lxc-start", "-n", lxc["name"], "-P", lxc["path"]], delai=120)
-    for _ in range(30):
+    voulu = reseau_conteneur(cfg)
+    if ct.lire(CHEMIN_RESEAU_CONTENEUR) != voulu:
+        journal("réseau statique du conteneur (eth0) …")
+        ct.ecrire(CHEMIN_RESEAU_CONTENEUR, voulu)
         try:
-            ct.executer(["ping", "-c1", "-W1", lxc["gateway"]], delai=5)
+            ct.executer(["systemctl", "restart", "systemd-networkd"], delai=30)
+        except subprocess.CalledProcessError:
+            pass                              # sans networkd, l'adresse posée par LXC reste en place
+    # L'adresse doit être là ET le rester : networkd peut l'effacer juste après le démarrage.
+    stable = 0
+    for _ in range(40):
+        stable = stable + 1 if adresse_presente(cfg, ct) else 0
+        if stable >= 3:
             return
-        except subprocess.CalledProcessError as e:
-            if e.returncode == 127:          # pas de ping dans l'image : l'adresse statique suffit
-                p = ct.executer(["ip", "-4", "-o", "addr", "show", "dev", "eth0"], delai=5)
-                if f" {lxc['ip']}/" in p.stdout:
-                    return
-        except subprocess.TimeoutExpired:
-            pass
         time.sleep(1)
-    raise RuntimeError(f"le conteneur n'atteint pas {lxc['gateway']} en 30 s")
+    raise RuntimeError(f"le conteneur n'a pas son adresse {lxc['ip']} sur eth0 en 40 s")
 
 
 def preparer_systeme(cfg: dict, ct: Conteneur) -> None:
