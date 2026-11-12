@@ -2,7 +2,7 @@ secubox-ytsas (0.8.12-1~trixie1) trixie; urgency=medium
 
   * Commentaires de ytsas-routes.conf : le vhost companion n'est plus un proxy d'API mais une redirection (ref #3683). Aucun changement de comportement.
 
- -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 14:00:00 +0100
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:25:00 +0100
 
 secubox-ytsas (0.8.11-1~trixie1) trixie; urgency=medium
 
