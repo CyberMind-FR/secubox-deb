@@ -244,8 +244,11 @@ RETIRED_MODULES = frozenset({
 # #3189 : netmodes appelle netmodesctl par sudo, impossible sous l'utilisateur de l'agrégateur (secubox, pas de sudo) — son service root le fait.
 # #3254 : system démarre des unités root (kiosque…) par polkit, accordé au seul secubox-system.service ; monté ici, l'appel venait de
 # secubox-aggregator.service et systemd répondait « Interactive authentication required » (gk2).
+# #3581 : searxng (composant de metanews) appelle searxngctl reload par sudo sous son compte dédié, et ses sondes vers le
+# conteneur sont des E/S réseau bloquantes — jamais sur la boucle partagée.
 DEDICATED_MODULES = frozenset({"lyrion", "exposure", "nettweak", "traffic", "qos",
-                               "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac", "netmodes", "system", "pilotage"})
+                               "admin", "cloner", "netdiag", "certs", "cookies", "mail", "nac", "netmodes", "system", "pilotage",
+                               "searxng"})
 
 # Délai du relais vers une socket dédiée : DELAI_RELAIS, sauf pour un module dont une action dure davantage.
 # #3189 : netmodes — une application du mode routeur (Unbound, nginx -t, networkd, DHCP vérifié actif) peut prendre

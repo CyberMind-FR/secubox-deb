@@ -435,6 +435,10 @@
    "espace": "services",
    "objet": "SERVICE"
   },
+  "searxng": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
   "security-posture": {
    "espace": "surveillance",
    "objet": "BOX"
