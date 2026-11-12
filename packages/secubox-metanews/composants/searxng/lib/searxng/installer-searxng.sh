@@ -128,6 +128,8 @@ EnvironmentFile=/etc/searxng/searxng.env
 ExecStart=$lancer
 Restart=on-failure
 RestartSec=5
+# granian tardait plus de 90 s à s'arrêter (banc gk6, #3581) : la relance du contrôleur expirait.
+TimeoutStopSec=15
 NoNewPrivileges=yes
 UMask=0027
 

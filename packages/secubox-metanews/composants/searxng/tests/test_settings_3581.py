@@ -27,7 +27,8 @@ def test_cles_du_poc_et_bornes(cfg):
     assert d["ui"]["default_locale"] == "fr"
     assert d["outgoing"] == {"request_timeout": 3.0, "max_request_timeout": 6.0}
     assert d["search"]["ban_time_on_fail"] == 5 and d["search"]["max_ban_time_on_fail"] == 120
-    assert "engines" not in d
+    # Moteurs .onion toujours désactivés (pas de mandataire Tor dans le conteneur, banc gk6).
+    assert d["engines"] == [{"name": "ahmia", "disabled": True}, {"name": "torch", "disabled": True}]
 
 
 def test_aucun_secret_dans_le_fichier(cfg):
@@ -52,7 +53,7 @@ def test_moteurs_desactives_pilotes_par_le_toml(tmp_path, cfg):
     f.write_text('[searxng]\nmoteurs_desactives = ["brave", "google", "brave"]\n')
     c = C.charger(f)
     d = yaml.safe_load(C.rendre_yaml(C.generer_settings(c)))
-    assert d["engines"] == [{"name": "brave", "disabled": True}, {"name": "google", "disabled": True}]
+    assert d["engines"] == [{"name": n, "disabled": True} for n in ("ahmia", "brave", "google", "torch")]
     C.valider_settings(C.rendre_yaml(C.generer_settings(c)), c)
 
 

@@ -337,8 +337,10 @@ def test_dossier_des_secrets_cree_root_0700(ctl, tmp_path, monkeypatch):
 
 def test_version_et_changelog():
     tete, signature = (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").split("\n -- ", 1)
-    assert tete.startswith("secubox-metanews (0.6.0-1~trixie1) trixie;") and "(ref #3581)" in tete
-    assert signature.splitlines()[0].endswith("Thu, 12 Nov 2026 12:00:00 +0100")
+    from sbx_searxng import VERSION
+    # La version du composant suit l'entrée de tête du paquet (0.6.1 : réseau du conteneur ; 0.6.2 : arrêt, moteurs Tor).
+    assert tete.startswith(f"secubox-metanews ({VERSION}-1~trixie1) trixie;") and "(ref #3581)" in tete
+    assert signature.splitlines()[0].startswith("Gérald Kerma <devel@cybermind.fr>  ")
 
 
 def test_en_tetes_spdx():

@@ -61,6 +61,9 @@ class ConfigInvalide(ValueError):
     """Configuration (TOML) ou settings.yml refusés : le message dit quelle clé et pourquoi, jamais une valeur secrète."""
 
 
+MOTEURS_TOR = ("ahmia", "torch")
+
+
 def _ipv4(valeur: Any, cle: str) -> ipaddress.IPv4Address:
     try:
         return ipaddress.IPv4Address(str(valeur))
@@ -208,9 +211,9 @@ def generer_settings(cfg: dict) -> dict:
             "max_request_timeout": sx["max_request_timeout"],
         },
     }
-    if sx["moteurs_desactives"]:
-        # use_default_settings: true fusionne la liste par nom avec les moteurs par défaut.
-        reglages["engines"] = [{"name": m, "disabled": True} for m in sx["moteurs_desactives"]]
+    # use_default_settings: true fusionne la liste par nom avec les moteurs par défaut. Les moteurs .onion (ahmia, torch)
+    # exigent un mandataire Tor que le conteneur n'a pas : toujours désactivés (sinon « can't register engine » au démarrage).
+    reglages["engines"] = [{"name": m, "disabled": True} for m in sorted(set(sx["moteurs_desactives"]) | set(MOTEURS_TOR))]
     return reglages
 
 
