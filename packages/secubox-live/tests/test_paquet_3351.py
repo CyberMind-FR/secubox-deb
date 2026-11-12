@@ -102,7 +102,10 @@ def test_acl_reposees_a_chaque_collecte_liste_figee():
     assert re.search(r"^ExecStartPre=\+/usr/sbin/secubox-live-acl$", u, re.M)
     acl = lire("sbin/secubox-live-acl")
     assert "$1" not in acl and "$@" not in acl and "live.toml" not in acl      # aucun chemin venu de l'extérieur
-    assert "u:secubox-live:rx" in acl and "u:secubox-live:w" not in acl and ":rw" not in acl
+    assert "u:secubox-live:rx" in acl and "u:secubox-live:w" not in acl
+    # secubox-live n'a JAMAIS l'écriture ; le seul « rw » permis est celui du groupe propriétaire (#3679).
+    assert not re.search(r"u:secubox-live:[r-]?w", acl)
+    assert all(m in ("g::rw", "m::rw", "g::rwx", "m::rwx") for m in re.findall(r"[a-z]?:[a-z-]*:rwx?", acl))
     assert "/usr/sbin/secubox-live-acl" in lire("debian/postinst")
     assert "sbin/secubox-live-acl" in lire("debian/rules")
 
