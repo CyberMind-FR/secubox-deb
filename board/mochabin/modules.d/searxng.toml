@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Écrit à la main (motif #999), composant searxng de secubox-metanews (#3581), qui remplace yacy.
+#
+# Conteneur LXC « searxng » (10.100.0.85, créé par « searxngctl install », jamais par le paquet) et API hôte
+# secubox-searxng.service. Interne : ni vhost public, ni route WAF, ni domaine de portail, donc rien à réveiller.
+# lifecycle « manual » : la création et le démarrage du conteneur restent un geste de l'exploitant (panneau /profiles/).
+id        = "searxng"
+category  = "network"
+runtime   = "lxc"
+lxc       = "searxng"
+exposure  = "internal"
+units     = ["secubox-searxng.service"]
+lifecycle = "manual"
+priority  = 40

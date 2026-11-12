@@ -132,6 +132,7 @@
 | 📡 **SENTINELLE-GSM** | Security | Capteur passif de fausse BTS (couche MIND) |
 | 🧰 **ToolBoX (Cabine)** | Security | AP captif + analyseur MITM de vie privée consenti |
 | 💻 **VM Manager** | System | Gestion de la virtualisation |
+| 🔎 **SearXNG** | Network | Métamoteur de recherche privé et interne (composant de MetaNews, remplace YaCy) |
 
 ---
 
@@ -721,6 +722,12 @@ Relais proxy SaaS / API
 **Fonctionnalités:** Proxy API, Limitation de débit, Routage, Coffre identifiants
 
 ![SaaS Relay](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/saas-relay.png)
+
+#### 🔎 SearXNG
+
+Métamoteur de recherche privé et interne (composant de MetaNews, remplace YaCy)
+
+**Fonctionnalités:** LXC non privilégié, SearXNG au commit figé, Rechargement audité avec retour arrière, Aucune exposition publique
 
 ---
 

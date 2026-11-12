@@ -1845,6 +1845,21 @@ MODULES = {
             "zh": ["虚拟机生命周期", "控制台", "快照", "资源限制"]
         }
     },
+    "searxng": {
+        "name": "SearXNG", "icon": "🔎", "category": "Network",
+        "description": {
+            "en": "Internal private metasearch engine (MetaNews component, replaces YaCy)",
+            "fr": "Métamoteur de recherche privé et interne (composant de MetaNews, remplace YaCy)",
+            "de": "Interne private Metasuchmaschine (MetaNews-Komponente, ersetzt YaCy)",
+            "zh": "内部私有元搜索引擎（MetaNews 组件，取代 YaCy）"
+        },
+        "features": {
+            "en": ["Unprivileged LXC", "Pinned SearXNG commit", "Audited reload with rollback", "No public exposure"],
+            "fr": ["LXC non privilégié", "SearXNG au commit figé", "Rechargement audité avec retour arrière", "Aucune exposition publique"],
+            "de": ["Unprivilegierter LXC", "Fixierter SearXNG-Commit", "Auditiertes Neuladen mit Rückfall", "Keine öffentliche Freigabe"],
+            "zh": ["非特权 LXC", "固定的 SearXNG 提交", "可审计的重载与回滚", "不对外公开"]
+        }
+    },
 }
 
 LANGUAGES = {

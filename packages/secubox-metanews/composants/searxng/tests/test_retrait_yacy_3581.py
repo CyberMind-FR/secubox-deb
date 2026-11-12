@@ -140,3 +140,19 @@ def test_copie_posee_a_la_main_mise_de_cote_et_lien_de_config_ignore(tmp_path):
 def test_postinst_syntaxe():
     subprocess.run(["sh", "-n", str(PAQUET / "debian" / "postinst")], check=True, timeout=10)
 
+
+def test_manifeste_searxng_manuel():
+    racine = PAQUET.parents[1]
+    m = (racine / "board" / "mochabin" / "modules.d" / "searxng.toml").read_text(encoding="utf-8")
+    assert 'id        = "searxng"' in m and 'lifecycle = "manual"' in m and 'lxc       = "searxng"' in m
+    assert 'exposure  = "internal"' in m and "portal" not in "\n".join(x for x in m.splitlines() if not x.startswith("#"))
+    assert not (racine / "board" / "mochabin" / "modules.d" / "yacy.toml").exists()
+
+
+def test_wiki_searxng_a_la_place_de_yacy():
+    racine = PAQUET.parents[1]
+    for d in ("wiki", "docs/wiki"):
+        for langue in ("EN", "FR", "DE", "ZH"):
+            t = (racine / d / f"MODULES-{langue}.md").read_text(encoding="utf-8")
+            assert "| 🔎 **SearXNG** | Network |" in t and "#### 🔎 SearXNG" in t, (d, langue)
+            assert "**YaCy**" not in t and "#### 🔎 YaCy" not in t, (d, langue)
