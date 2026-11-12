@@ -16,8 +16,16 @@ done
 for d in /var/log/secubox/waf /var/cache/secubox/metrics /var/lib/secubox/waf; do
   [ -d "$d" ] || continue
   setfacl -m u:secubox-live:rx "$d" 2>/dev/null || true
-  setfacl -d -m u:secubox-live:r "$d" 2>/dev/null || true
+  # Défaut du GROUPE en rwx et masque rwx (#3679) : sans eux, l'ACL par défaut héritait `group::r-x` et un fichier recréé
+  # par son producteur perdait l'écriture de groupe que son mode demandait (waf-threats.log en 0660 : sbx-authwatch,
+  # groupe secubox-waf, y écrit ses bannissements, #1318). Le mode de création reste le seul juge : 0640 → groupe en
+  # lecture, 0660 → groupe en écriture.
+  setfacl -d -m u:secubox-live:r,g::rwx,m::rwx "$d" 2>/dev/null || true
 done
+# Journal courant déjà recréé sous l'ancienne ACL : on lui rend l'écriture de groupe que logrotate demande (create 0660),
+# jamais davantage (ni autres, ni exécution).
+f=/var/log/secubox/waf/waf-threats.log
+[ -f "$f" ] && [ ! -L "$f" ] && setfacl -m g::rw,m::rw "$f" 2>/dev/null || true
 for f in /var/log/secubox/waf/waf-threats.log /var/log/secubox/waf/waf-threats.log.1 /var/log/secubox/waf/waf-threats.log.*.gz \
          /var/lib/secubox/waf/bans.jsonl \
          /var/cache/secubox/metrics/vhost_stats.json /etc/secubox/haproxy.toml; do
