@@ -5,4 +5,32 @@ set -e
 for _s in /usr/lib/secubox/security-posture/maintscripts/*.postrm; do
   [ -f "$_s" ] && { sh "$_s" "$@" || echo "security-posture : postrm de $(basename "$_s") en échec" >&2; }
 done
+
+# cve-triage, leurres du WAF (#3584) : écrit ICI et non dans maintscripts/cve-triage.postrm, que dpkg a déjà
+# supprimé quand la purge s'exécute. Retire SEULEMENT les entrées nommées du compte dédié (`-n` : masque intact ;
+# jamais g:: ni m::, #3679), sans suivre de lien, puis le cache, le profil AppArmor et le compte.
+if [ "$1" = "purge" ]; then
+    _u=secubox-cve-leurres
+    _w=/var/log/secubox/waf
+    if command -v setfacl >/dev/null 2>&1 && [ -d "$_w" ] && [ ! -L "$_w" ]; then
+        setfacl -n -x "u:$_u" "$_w" 2>/dev/null || true
+        setfacl -n -x "d:u:$_u" "$_w" 2>/dev/null || true
+        for _f in "$_w"/waf-threats.log*; do
+            if [ -f "$_f" ] && [ ! -L "$_f" ]; then
+                setfacl -n -x "u:$_u" "$_f" 2>/dev/null || true
+            fi
+        done
+    fi
+    rm -rf /var/lib/secubox-cve-leurres
+    if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+        apparmor_parser -R /etc/apparmor.d/secubox-cve-leurres >/dev/null 2>&1 || true
+    fi
+    rm -f /etc/apparmor.d/secubox-cve-leurres
+    if getent passwd "$_u" >/dev/null 2>&1; then
+        deluser --system "$_u" >/dev/null 2>&1 || true
+    fi
+    if getent group "$_u" >/dev/null 2>&1; then
+        delgroup --system "$_u" >/dev/null 2>&1 || true
+    fi
+fi
 exit 0
