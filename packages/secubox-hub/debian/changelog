@@ -2,6 +2,8 @@ secubox-hub (1.12.57-1~trixie1) trixie; urgency=medium
 
   * espaces.json : la nouvelle entrée de menu searxng (métamoteur interne, composant de
     secubox-metanews) rangée dans « services », comme yacy (ref #3581).
+  * espaces.json : entrée yacy retirée (module retiré, ref #3581) ; l'icône du menu latéral
+    de /yacy/ passe à /searxng/.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:00:00 +0100
 

@@ -1,3 +1,10 @@
+secubox-profiles (0.28.5-1~trixie1) trixie; urgency=low
+
+  * YaCy retiré (ref #3581) : sorti des profils full et media-lab (searxng y entre à sa place) et de la
+    politique de cycle de vie (searxng = manual) ; exemples des tests et commentaires sans yacy.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 14:00:00 +0100
+
 secubox-profiles (0.28.4-1~trixie1) trixie; urgency=medium
 
   * scan : LXC non installé (ni lxc-ls ni lxc-start) = aucun conteneur, le

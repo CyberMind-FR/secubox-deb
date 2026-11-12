@@ -157,13 +157,13 @@ def test_aucune_exposition_publique():
     assert "sites-available/searxng" not in rules and "searxng-vhost" not in rules
 
 
-def test_menu_dans_la_section_de_yacy():
+def test_menu_dans_la_section_des_services():
     m = json.loads((COMPOSANT / "menu.d" / "60-searxng.json").read_text())
-    yacy = json.loads((PAQUET / "composants" / "yacy" / "menu.d" / "60-yacy.json").read_text())
     assert m["id"] == "searxng" and m["path"] == "/searxng/"
-    assert (m["category"], m["theme"]) == (yacy["category"], yacy["theme"])
+    assert (m["category"], m["theme"]) == ("mesh", "veille")
     espaces = json.loads((RACINE / "packages" / "secubox-hub" / "espaces.json").read_text())
-    assert espaces["modules"]["searxng"] == espaces["modules"].get("yacy", {"espace": "services", "objet": "SERVICE"})
+    assert espaces["modules"]["searxng"] == {"espace": "services", "objet": "SERVICE"}
+    assert "yacy" not in espaces["modules"]
 
 
 # ── debian/rules, postinst, version ──

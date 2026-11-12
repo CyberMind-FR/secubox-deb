@@ -24,7 +24,7 @@ def test_mesh_nft_line():
 
 def test_mesh_endpoint_and_offer_argv():
     assert mesh_endpoint("10.10.0.1", 8090) == "http://10.10.0.1:8090/"
-    argv = offer_argv("yacy", "http://10.10.0.1:8090/", {"channel": "mesh", "port": 8090})
+    argv = offer_argv("searxng", "http://10.10.0.1:8090/", {"channel": "mesh", "port": 8090})
     assert argv[:3] == ["annuairectl", "offer", "--name"]
     assert "emancipated" in argv and "channel=mesh" in argv
     assert "http://10.10.0.1:8090/" in argv and "port=8090" in argv

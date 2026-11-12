@@ -132,7 +132,6 @@
 | 📡 **SENTINELLE-GSM** | Security | 被动式伪基站传感器（MIND 层） |
 | 🧰 **ToolBoX (Cabine)** | Security | 强制门户 AP + 知情同意的 MITM 隐私分析器 |
 | 💻 **VM Manager** | System | 虚拟化管理 |
-| 🔎 **YaCy** | Network | 点对点搜索引擎 |
 
 ---
 
@@ -722,14 +721,6 @@ SaaS / API 代理中继
 **功能:** API 代理, 限流, 路由, 凭据保险库
 
 ![SaaS Relay](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/saas-relay.png)
-
-#### 🔎 YaCy
-
-点对点搜索引擎
-
-**功能:** P2P 索引, 爬虫, 私密搜索, 联邦
-
-![YaCy](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/yacy.png)
 
 ---
 

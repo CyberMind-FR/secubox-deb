@@ -132,7 +132,6 @@
 | 📡 **SENTINELLE-GSM** | Security | Passiver Rogue-BTS-Sensor (MIND-Schicht) |
 | 🧰 **ToolBoX (Cabine)** | Security | Captive-AP + einvernehmlicher MITM-Datenschutz-Analysator |
 | 💻 **VM Manager** | System | Virtualisierungsverwaltung |
-| 🔎 **YaCy** | Network | Peer-to-Peer-Suchmaschine |
 | 🥾 **Netzwerk-Boot** | System | HTTP/TFTP-Netboot-Provisionierung + signierter FIT-Installer (Tow-Boot) |
 
 ---
@@ -718,14 +717,6 @@ SaaS-/API-Proxy-Relay
 **Funktionen:** API-Proxy, Ratenbegrenzung, Routing, Anmeldedaten-Tresor
 
 ![SaaS Relay](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/saas-relay.png)
-
-#### 🔎 YaCy
-
-Peer-to-Peer-Suchmaschine
-
-**Funktionen:** P2P-Index, Crawler, Private Suche, Föderation
-
-![YaCy](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/yacy.png)
 
 ---
 

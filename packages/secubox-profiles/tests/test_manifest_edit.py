@@ -14,12 +14,12 @@ import stat
 import pytest
 
 _MANIFEST = (
-    'id        = "yacy"\n'
+    'id        = "searxng"\n'
     'category  = "infra"\n'
     'runtime   = "lxc"\n'
-    'units     = ["secubox-yacy.service"]\n'
-    'lxc       = "yacy"\n'
-    'portal    = { domain = "yacy.gk2.secubox.in" }\n'
+    'units     = ["secubox-searxng.service"]\n'
+    'lxc       = "searxng"\n'
+    'portal    = { domain = "searxng.gk2.secubox.in" }\n'
     'priority  = 50\n'
     'exposure  = "public"\n'
     'protected = false\n'
@@ -35,15 +35,15 @@ def _load(path):
 
 def test_replaces_existing_lifecycle_and_appends_missing_wake_class(tmp_path):
     from api.manifest_edit import set_lifecycle
-    p = tmp_path / "yacy.toml"
+    p = tmp_path / "searxng.toml"
     p.write_text(_MANIFEST)
     set_lifecycle(p, lifecycle="always-on", wake_class="urgent")
     m = _load(p)
     assert m.lifecycle == "always-on"
     assert m.wake_class == "urgent"
     # everything else preserved
-    assert m.id == "yacy" and m.lxc == "yacy" and m.priority == 50
-    assert m.portal_domain == "yacy.gk2.secubox.in"
+    assert m.id == "searxng" and m.lxc == "searxng" and m.priority == 50
+    assert m.portal_domain == "searxng.gk2.secubox.in"
 
 
 def test_preserves_comments_and_other_lines(tmp_path):

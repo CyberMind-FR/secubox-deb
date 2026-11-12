@@ -1845,21 +1845,6 @@ MODULES = {
             "zh": ["虚拟机生命周期", "控制台", "快照", "资源限制"]
         }
     },
-    "yacy": {
-        "name": "YaCy", "icon": "🔎", "category": "Network",
-        "description": {
-            "en": "Peer-to-peer search engine",
-            "fr": "Moteur de recherche pair-à-pair",
-            "de": "Peer-to-Peer-Suchmaschine",
-            "zh": "点对点搜索引擎"
-        },
-        "features": {
-            "en": ["P2P index", "Crawler", "Private search", "Federation"],
-            "fr": ["Index P2P", "Crawler", "Recherche privée", "Fédération"],
-            "de": ["P2P-Index", "Crawler", "Private Suche", "Föderation"],
-            "zh": ["P2P 索引", "爬虫", "私密搜索", "联邦"]
-        }
-    },
 }
 
 LANGUAGES = {

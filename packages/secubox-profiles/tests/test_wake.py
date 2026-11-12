@@ -70,23 +70,23 @@ def test_wake_restores_remembered_portal_route(tmp_path, monkeypatch):
     from api.observe import Actual
     root = tmp_path
     (root / "modules.d").mkdir()
-    (root / "modules.d" / "yacy.toml").write_text(
-        'id="yacy"\ncategory="infra"\nruntime="native"\nexposure="public"\n'
-        'units=["yacy.service"]\nlifecycle="on-demand"\n[portal]\ndomain="yacy.gk2"\n')
+    (root / "modules.d" / "searxng.toml").write_text(
+        'id="searxng"\ncategory="infra"\nruntime="native"\nexposure="public"\n'
+        'units=["searxng.service"]\nlifecycle="on-demand"\n[portal]\ndomain="searxng.gk2"\n')
     # module is asleep: its route is ABSENT from the live WAF routes file,
     # but the value was durably remembered at sleep time.
     routes_file = root / "routes.json"
     routes_file.write_text("{}")
     monkeypatch.setitem(_actuate.actuate.__kwdefaults__, "routes_path", routes_file)
     remembered = root / "profiles" / "portal-routes.json"
-    pr.remember("yacy.gk2", ["192.168.1.200", 9080], path=remembered)
+    pr.remember("searxng.gk2", ["192.168.1.200", 9080], path=remembered)
 
     seq = iter([Actual(enabled=False, active=False)] + [Actual(enabled=True, active=True)] * 5)
-    r = wake("yacy", root=root, run=lambda a: (0, ""), observe=lambda m: next(seq), now="t")
+    r = wake("searxng", root=root, run=lambda a: (0, ""), observe=lambda m: next(seq), now="t")
     assert r["status"] == "woken"
     # the remembered route is back in the live WAF routes file
     import json
-    assert json.loads(routes_file.read_text())["yacy.gk2"] == ["192.168.1.200", 9080]
+    assert json.loads(routes_file.read_text())["searxng.gk2"] == ["192.168.1.200", 9080]
 
 
 def test_wake_dry_run_reports_planned_not_failed(tmp_path):

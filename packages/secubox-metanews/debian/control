@@ -28,9 +28,9 @@ Depends: ${shlibs:Depends},
  jq
 Recommends: secubox-bbs
 Replaces: secubox-devwatch (<< 1.1.3~),
- secubox-yacy (<< 1.0.23~)
-Breaks: secubox-devwatch (<< 1.1.3~),
- secubox-yacy (<< 1.0.23~)
+ secubox-yacy
+Breaks: secubox-devwatch (<< 1.1.3~)
+Conflicts: secubox-yacy
 Description: SecuBox — radar d'actualite multi-sources (MetaNews)
  MetaNews agrege des flux RSS/Atom, detecte quand plusieurs sources parlent du
  meme evenement et les regroupe en UN sujet : un resume court et factuel, les

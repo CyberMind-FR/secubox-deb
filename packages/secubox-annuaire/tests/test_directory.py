@@ -173,13 +173,13 @@ def test_config_blob_constructable_inline():
     blob = ConfigBlob(
         config_id="cfg-abc123",
         publisher=did,
-        scope="yacy",
+        scope="searxng",
         version=3,
         content_hash="b" * 64,
         payload={"peer": {"mode": "freeworld"}},
         valid_from=now_rfc3339(),
     )
-    assert blob.scope == "yacy"
+    assert blob.scope == "searxng"
     assert blob.version == 3
     assert blob.payload == {"peer": {"mode": "freeworld"}}
     assert blob.payload_uri is None
@@ -259,7 +259,7 @@ def test_publish_node_latest_supersedes(tmp_journal):
 
 def test_publish_config_appears(tmp_journal):
     priv, pub, did = _make_member(tmp_journal)
-    blob = publish_config(tmp_journal, priv, did, scope="yacy", version=1,
+    blob = publish_config(tmp_journal, priv, did, scope="searxng", version=1,
                           content_hash=_h("v1"), payload={"peer": {"mode": "freeworld"}})
     assert blob.sig is not None
     got = _get_config(tmp_journal, blob.config_id)
@@ -303,7 +303,7 @@ def test_ingest_config_valid_sig(tmp_journal, tmp_path):
     # Producer journal publishes; a separate consumer journal ingests the blob.
     prod = tmp_journal
     priv, pub, did = _make_member(prod)
-    blob = publish_config(prod, priv, did, scope="yacy", version=3, content_hash=_h("v3"),
+    blob = publish_config(prod, priv, did, scope="searxng", version=3, content_hash=_h("v3"),
                           payload={"a": 1})
 
     consumer = Journal(str(tmp_path / "consumer.db"))
@@ -314,7 +314,7 @@ def test_ingest_config_valid_sig(tmp_journal, tmp_path):
 
 def test_ingest_config_forged_sig_rejected(tmp_journal):
     priv, pub, did = _make_member(tmp_journal)
-    blob = publish_config(tmp_journal, priv, did, scope="yacy", version=1, content_hash=_h("v1"))
+    blob = publish_config(tmp_journal, priv, did, scope="searxng", version=1, content_hash=_h("v1"))
     # tamper: flip the payload after signing
     forged = blob.model_copy(update={"version": 999})
     consumer = Journal(":memory:")
@@ -347,7 +347,7 @@ def test_export_import_round_trip(tmp_journal, tmp_path):
     priv, pub, did = _make_member(prod)
     publish_node(prod, priv, did, node_id="sb-x", boxname="gk2",
                  pubkey_wg="W" * 44, mesh_ip="10.10.0.1", ddns="gk2.secubox.in")
-    publish_config(prod, priv, did, scope="yacy", version=2, content_hash=_h("v2"),
+    publish_config(prod, priv, did, scope="searxng", version=2, content_hash=_h("v2"),
                    payload={"k": "v"})
 
     consumer = Journal(str(tmp_path / "consumer.db"))
@@ -357,7 +357,7 @@ def test_export_import_round_trip(tmp_journal, tmp_path):
     # State converges: consumer sees the same node + config
     cnodes = _get_nodes(consumer)
     assert any(n["did"] == did and n["mesh_ip"] == "10.10.0.1" for n in cnodes)
-    cfg = _get_config(consumer, "cfg-yacy")
+    cfg = _get_config(consumer, "cfg-searxng")
     assert cfg is not None and cfg["version"] == 2
 
 

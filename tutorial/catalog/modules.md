@@ -11,7 +11,7 @@
 > Ne pas éditer à la main — corriger la source, le plus souvent
 > `packages/<module>/debian/secubox.yaml`, puis relancer le script.
 
-**172 modules** recensés.
+**171 modules** recensés.
 
 `À documenter` signale une donnée **absente du dépôt**. C'est une tâche,
 pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
@@ -180,7 +180,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-webmail` | email | lite | — | — | — | — | — | — | oui |
 | `secubox-webos` | dashboard | lite | oui | 22 | — | 1 | — | 9 | oui |
 | `secubox-wireguard` | network | lite | oui | 28 | 1 | 1 | — | — | oui |
-| `secubox-yacy` | network | lite | oui | 5 | 1 | 1 | oui | — | oui |
 | `secubox-ytsas` | mind | lite | oui | — | 2 | — | oui | 4 | — |
 | `secubox-zia` | ai | lite | oui | 7 | 1 | — | — | 4 | oui |
 | `secubox-zia-llm` | ai | lite | — | — | 1 | — | — | — | — |
@@ -2802,23 +2801,6 @@ SecuBox WireGuard VPN Dashboard
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-wireguard/`
-
-### `secubox-yacy`
-
-SecuBox YaCy — peer-to-peer search engine
-
-- **Catégorie** : network · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 5 route(s), socket `À documenter`, authentification À documenter
-- **Interface web** : oui, À documenter
-- **Vhosts livrés** : `yacy.gk2.secubox.in`
-- **CLI** : `yacyctl`
-- **Units systemd** : `secubox-yacy.service`
-- **Ports** : 9080
-- **Conteneur LXC** : oui
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-yacy/`
 
 ### `secubox-ytsas`
 

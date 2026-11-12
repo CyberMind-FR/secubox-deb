@@ -135,7 +135,7 @@ eye-network_at_              = "eager"
 "frigate"                    = "manual"
 "picobrew"                   = "manual"
 xray_at_                     = "manual"
-"yacy"                       = "manual"
+"searxng"                    = "manual"
 
 # ── Classe de réveil ──────────────────────────────────────────────────────
 # `urgent` dort plus difficilement (seuil d'inactivité multiplié par 4) et

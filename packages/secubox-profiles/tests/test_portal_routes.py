@@ -15,8 +15,8 @@ import json
 def test_remember_then_recall_roundtrips(tmp_path):
     from api import portal_routes as pr
     store = tmp_path / "portal-routes.json"
-    pr.remember("yacy.gk2.secubox.in", ["192.168.1.200", 9080], path=store)
-    assert pr.recall("yacy.gk2.secubox.in", path=store) == ["192.168.1.200", 9080]
+    pr.remember("searxng.gk2.secubox.in", ["192.168.1.200", 9080], path=store)
+    assert pr.recall("searxng.gk2.secubox.in", path=store) == ["192.168.1.200", 9080]
 
 
 def test_recall_unknown_domain_is_none(tmp_path):

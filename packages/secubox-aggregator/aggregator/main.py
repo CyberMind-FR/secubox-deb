@@ -228,6 +228,7 @@ RETIRED_MODULES = frozenset({
     "reality", "ai-insights",   # #3017 : façades sans données, retirées
     "zkp",                      # #3019 : tableau de bord ZKP hors arbre, retiré
     "socialrelay",              # #3052, #3256 : décommissionné, retiré de toutes les box
+    "yacy",                     # #3581 : remplacé par SearXNG (socket dédiée), retiré
 })
 
 # Modules À SOCKET DÉDIÉE, jamais montés en processus même si un aggregator.toml les cite (#3013) :

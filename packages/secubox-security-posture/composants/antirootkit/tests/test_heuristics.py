@@ -14,6 +14,6 @@ def test_strong_notwork_profile():
 
 
 def test_legit_dpkg_zero():
-    e = ExecEvent(pid=1, ppid=1, uid=0, exe="/usr/bin/yacy", argv=[], success=True)
-    s, reasons = score(e, pkg="secubox-yacy", unit_flags={"restart_always": False, "logs_silenced": False}, failed_count=0)
+    e = ExecEvent(pid=1, ppid=1, uid=0, exe="/usr/bin/searxng", argv=[], success=True)
+    s, reasons = score(e, pkg="secubox-searxng", unit_flags={"restart_always": False, "logs_silenced": False}, failed_count=0)
     assert s == 0

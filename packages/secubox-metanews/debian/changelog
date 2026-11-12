@@ -10,8 +10,11 @@ secubox-metanews (0.6.0-1~trixie1) trixie; urgency=medium
   * API secubox-searxng (utilisateur dédié, AppArmor enforce) : /status, /components, /engines,
     /rechercher, /reload. Sondes bornées (< 5 s) et gardées 10 s : plus de 500 sur délai dépassé.
   * Page /searxng/ au profil Aurora. Aucune exposition publique (ni vhost, ni route WAF).
-  * Non repris ici : le retrait de YaCy (tâche suivante) ; la création du conteneur reste
-    manuelle (« searxngctl install »), comme pour YaCy.
+  * La création du conteneur reste manuelle (« searxngctl install »), comme elle l'était pour YaCy.
+  * Retrait de YaCy (ref #3581) : composant yacy supprimé (API, yacyctl, LXC, page /yacy/, menu, vhost,
+    sudoers, unité secubox-yacy) ; remplacé par searxng. Replaces/Conflicts secubox-yacy sans borne de
+    version : un ancien paquet secubox-yacy installé est retiré par apt à la mise à jour. Aucune donnée de box
+    touchée : le conteneur yacy, ses fichiers et ses extraits nginx se nettoient à la main.
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:00:00 +0100
 

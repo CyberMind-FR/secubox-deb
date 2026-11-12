@@ -2,6 +2,7 @@ secubox-aggregator (0.5.7-1~trixie1) trixie; urgency=medium
 
   * searxng (composant de secubox-metanews) à socket dédiée : jamais monté ici, même cité dans
     aggregator.toml, et exclu de secubox-aggregator-migrate — son /reload passe par sudo (ref #3581).
+  * yacy rejoint RETIRED_MODULES : ignoré en silence s'il reste cité dans aggregator.toml (retrait, ref #3581).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:00:00 +0100
 
