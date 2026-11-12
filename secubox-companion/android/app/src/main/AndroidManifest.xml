@@ -25,7 +25,22 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
 
+            <!-- Lien d'association secubox://associer?box=<origine encodée> (sans secret) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="secubox" android:host="associer" />
+            </intent-filter>
+
         </activity>
+
+        <!-- Admin web d'une box : WebView sans pont natif, jamais lancée de l'extérieur -->
+        <activity
+            android:name=".BoxActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
