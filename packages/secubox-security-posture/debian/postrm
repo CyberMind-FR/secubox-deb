@@ -13,11 +13,11 @@ if [ "$1" = "purge" ]; then
     _u=secubox-cve-leurres
     _w=/var/log/secubox/waf
     if command -v setfacl >/dev/null 2>&1 && [ -d "$_w" ] && [ ! -L "$_w" ]; then
-        setfacl -n -x "u:$_u" "$_w" 2>/dev/null || true
-        setfacl -n -x "d:u:$_u" "$_w" 2>/dev/null || true
+        setfacl -P -n -x "u:$_u" "$_w" 2>/dev/null || true
+        setfacl -P -n -x "d:u:$_u" "$_w" 2>/dev/null || true
         for _f in "$_w"/waf-threats.log*; do
             if [ -f "$_f" ] && [ ! -L "$_f" ]; then
-                setfacl -n -x "u:$_u" "$_f" 2>/dev/null || true
+                setfacl -P -n -x "u:$_u" "$_f" 2>/dev/null || true
             fi
         done
     fi
