@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-12 — sbx-authwatch réécrit ses bannissements dans waf-threats.log (closes #3679)
+
+- Depuis le 1er novembre sur gk2 : « permission denied » à chaque ban d'authwatch, absent du journal des menaces et du tableau de bord. Cause : `secubox-live-acl` (#3351) posait une ACL par défaut héritant `group::r-x` sur /var/log/secubox/waf ; le journal recréé par logrotate (`create 0660`, #1318) perdait l'écriture de groupe.
+- `secubox-live` 0.1.7 (PR #3680) : défaut `g::rwx,m::rwx` (le mode de création décide), écriture de groupe rendue au journal courant, secubox-live toujours en lecture seule. Déployé gk2 : bans SMTP de 07:10 consignés.
+- Constat annexe : `sbx-authwatch` n'est activé que sur gk2 (choix #1220 : un service qui bannit ne s'active pas seul) ; gk1 et gk6 affichent « Leurres de service · inactive » — décision du propriétaire attendue (activer gk1, et/ou activer d'office sur le parc).
+
 ## 2026-11-11 — Leurres CERT-FR : modèles Nuclei « raw » exploités (ref #3584)
 
 - **Constat** : la veille CERT-FR de gk2 téléchargeait 8 modèles Nuclei, `wafgen` n'en retenait aucun (requêtes `raw:` refusées).
