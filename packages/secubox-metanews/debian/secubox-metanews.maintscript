@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Composant yacy retiré (#3581, remplacé par searxng) : ses anciens fichiers de configuration, livrés par
+# secubox-metanews jusqu'à 0.5.x (ancien debian/rules), partent à la mise à jour ; une copie modifiée localement est
+# gardée en .dpkg-bak (ignorée par sudo et par les include nginx *.conf). Le reste du nettoyage : postinst (retrait-yacy).
+rm_conffile /etc/sudoers.d/secubox-yacy 0.6.0-1~
+rm_conffile /etc/nginx/secubox-routes.d/yacy.conf 0.6.0-1~
+rm_conffile /etc/nginx/secubox.d/yacy.conf 0.6.0-1~
+rm_conffile /etc/nginx/sites-available/yacy.conf 0.6.0-1~
+rm_conffile /etc/secubox/yacy.toml.example 0.6.0-1~

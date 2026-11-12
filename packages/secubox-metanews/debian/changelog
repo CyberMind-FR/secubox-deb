@@ -6,15 +6,38 @@ secubox-metanews (0.6.0-1~trixie1) trixie; urgency=medium
     sur l'adresse du conteneur seulement (port 8888). settings.yml généré depuis
     /etc/secubox/searxng.toml ; secret dans /etc/secubox/secrets/searxng/, remis par SEARXNG_SECRET.
   * searxngctl : install (idempotent), reload en double tampon (relu, validé, remplacé, relancé,
-    sondé ; sinon ancien fichier rétabli), audité ; status, components, engines sans privilège.
-  * API secubox-searxng (utilisateur dédié, AppArmor enforce) : /status, /components, /engines,
-    /rechercher, /reload. Sondes bornées (< 5 s) et gardées 10 s : plus de 500 sur délai dépassé.
+    sondé ; sinon ancien fichier rétabli, y compris quand la relance échoue ou dépasse son délai
+    après le remplacement), audité ; status, components, engines sans privilège. Le TOML est
+    refusé s'il n'appartient pas à root ou s'il est inscriptible par le groupe ou les autres (lu
+    en O_NOFOLLOW) ; le dossier du conteneur reste root:root 0755 (rootfs seul à l'idmap), sa
+    config est écrite par un temporaire O_CREAT|O_EXCL|O_NOFOLLOW ; /etc/secubox/secrets créé
+    root 0700 s'il manque.
+  * Dépendances Python de SearXNG figées avec empreintes (exigences-searxng.txt : roues CPython
+    3.13 arm64 et amd64), installées par pip --require-hashes --only-binary :all: ; pip,
+    setuptools et wheel restent ceux du venv Debian. Dans le conteneur, /usr/local/searxng est
+    root:root 0755, seuls searxng-src et venv appartiennent à searxng, marques écrites par root.
+  * API secubox-searxng (utilisateur dédié, NoNewPrivileges et socle de durcissement complet,
+    aucune capacité, IPAddressAllow=10.100.0.85/32, AppArmor enforce sans sudo ni audit.log en
+    écriture) : /status, /components, /engines, /rechercher, /reload. Sondes bornées (< 5 s) et
+    gardées 10 s : plus de 500 sur délai dépassé.
+  * Reload sans sudo : l'API dépose une demande dans /run/secubox/searxng-reload
+    (root:secubox-searxng 1770) ; secubox-searxng-reload.path démarre le oneshot root
+    secubox-searxng-reload.service (searxngctl reload --demandes : demande revalidée, résultat
+    posé pour l'API). Au-delà de 30 s d'attente, POST /reload répond 202 (issue à l'audit).
+    Plus de sudoers ni de systemd-run.
   * Page /searxng/ au profil Aurora. Aucune exposition publique (ni vhost, ni route WAF).
   * La création du conteneur reste manuelle (« searxngctl install »), comme elle l'était pour YaCy.
   * Retrait de YaCy (ref #3581) : composant yacy supprimé (API, yacyctl, LXC, page /yacy/, menu, vhost,
     sudoers, unité secubox-yacy) ; remplacé par searxng. Replaces/Conflicts secubox-yacy sans borne de
     version : un ancien paquet secubox-yacy installé est retiré par apt à la mise à jour. Aucune donnée de box
-    touchée : le conteneur yacy, ses fichiers et ses extraits nginx se nettoient à la main.
+    touchée.
+  * Mise à jour depuis une version << 0.6.0 (ref #3581) : anciens fichiers de configuration de YaCy
+    retirés par rm_conffile (sudoers, extraits nginx, vhost sites-available, yacy.toml.example) ;
+    le postinst retire le lien sites-enabled/yacy.conf (une copie posée à la main est mise de
+    côté), recharge nginx seulement si nginx -t passe et pose lxc.start.auto = 0 dans la config
+    du conteneur yacy, sans l'arrêter ni le supprimer, ni toucher ses données, HAProxy ou le WAF
+    (une ligne dit de retirer le vhost yacy.* par haproxyctl vhost remove puis generate
+    --allow-shrink).
 
  -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:00:00 +0100
 
