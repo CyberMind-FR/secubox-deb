@@ -1,3 +1,12 @@
+secubox-profiles (0.28.5-1~trixie1) trixie; urgency=medium
+
+  * sleeper : un fichier de verrous de réveil plus vieux que 90 s ne
+    verrouille plus rien. Le waker ne purgeait ses entrées qu'au réveil
+    suivant : sur gk2, torrent, peertube et billets sont restés éveillés
+    7 jours (WebTorrent à 71 % de CPU, charge ~24) (ref #3700).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 05:14:53 +0100
+
 secubox-profiles (0.28.4-1~trixie1) trixie; urgency=medium
 
   * scan : LXC non installé (ni lxc-ls ni lxc-start) = aucun conteneur, le

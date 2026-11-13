@@ -39,6 +39,11 @@ _LOG = logging.getLogger(__name__)
 # (liste JSON d'ids de module) — lecture au mieux-effort : absent/illisible
 # ne bloque jamais la boucle, ça revient juste à "rien n'est verrouillé".
 WAKE_LOCK_FILE = Path("/run/secubox/waker-active.json")
+# UN VERROU DE RÉVEIL N'A QU'UNE VIE COURTE (#3700). Le waker ne purge ses entrées de plus de 90 s
+# (_WAKE_ACTIVE_TTL_S) qu'au moment d'ÉCRIRE, donc au réveil suivant : sans nouveau réveil, le fichier gardait sa
+# liste pour toujours, et gk2 a tenu torrent, peertube et billets éveillés 7 jours (WebTorrent à 71 % de CPU). Le
+# lecteur juge donc l'âge lui-même : un fichier plus vieux que le TTL ne verrouille plus rien.
+WAKE_LOCK_TTL_S = 90.0
 # VERROUS DE MAINTIEN (#1458) : un outil qui TRAVAILLE dans un module on-demand
 # (création de comptes par le helper de secubox-users, maintenance) pose
 # /run/secubox/sleeper-hold/<id> et le rafraîchit ; tant qu'il est frais, le
@@ -86,11 +91,16 @@ def run_once(*, root: Path, manifests, actuals, signals, hints, run, observe, no
     return stopped
 
 
-def _read_wake_locked(path: Path = WAKE_LOCK_FILE) -> frozenset[str]:
+def _read_wake_locked(path: Path = WAKE_LOCK_FILE, now: float | None = None,
+                      ttl: float = WAKE_LOCK_TTL_S) -> frozenset[str]:
     """Lit l'ensemble des ids en cours de réveil, au mieux-effort. Le waker
     écrit ce fichier ; absent/corrompu/illisible => aucun verrou (jamais une
-    exception qui ferait mourir la boucle)."""
+    exception qui ferait mourir la boucle). Écrit il y a plus de `ttl` secondes
+    => aucun verrou (#3700) : un réveil se compte en secondes, pas en jours."""
+    now = time.time() if now is None else now
     try:
+        if now - path.stat().st_mtime >= ttl:
+            return frozenset()
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return frozenset()
