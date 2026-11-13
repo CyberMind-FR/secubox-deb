@@ -47,8 +47,9 @@ Menaces, Code, Générateur, Documents, Agents, Mémoire, Historique, Modèles, 
   `instantanes-menaces.json`. Chaque décision de sécurité tracée dans `/var/log/secubox/audit.log`.
 - Journal du module : **ni question, ni réponse, ni titre de document, ni adresse lue** (vie privée, comme le POC).
 - Cycle de vie `on-demand` (manifeste `modules.d`) : le moteur local s'arrête après inactivité (réglage existant).
-- **Ne pas gêner VoiceStudio sur gk3** : budget mémoire du moteur local plafonné (MemoryMax), contexte automatique
-  calculé sur la mémoire **réellement disponible** moins une réserve.
+- **Mémoire de gk3** (7,8 Go, ~3,2 Go disponibles avec le conteneur `mail` et le kiosque) : budget du moteur local
+  plafonné (MemoryMax), contexte automatique calculé sur la mémoire **réellement disponible** moins une réserve.
+  VoiceStudio a été retiré de gk3 par le propriétaire le 2026-11-13.
 - Pas de Docker, pas de LXC pour ce module (llama-server est un binaire, comme dans le POC).
 
 ## Ce qui se porte (le comportement fait foi : le code du POC est la référence)
@@ -115,8 +116,8 @@ Du propriétaire :
   pause pour les images, changement de modèle). Le service d'entrée de gk0 réveille le moteur par le relais POC
   (`/moteur/demarrer` en local), jamais en pilotant l'unité lui-même.
 - **Mémoire de gk3** : si la mémoire disponible moins la réserve ne suffit pas au moteur local, il **refuse de
-  démarrer** ; la page le dit et propose le moteur distant. **VoiceStudio n'est jamais touché.** Mais « VoiceStudio
-  moins urgent » (propriétaire, 2026-11-13) : secubox-ai passe avant lui sur gk3. Réserve : 512 Mo ;
+  démarrer** ; la page le dit et propose le moteur distant ; il n'arrête jamais un autre service. (VoiceStudio, d'abord
+  cité ici, a été retiré de gk3 par le propriétaire le 2026-11-13.) Réserve : 512 Mo ;
   `MemoryMax` du moteur local = taille du modèle + cache du contexte automatique + 300 Mo.
 
 Choix du constructeur (vérifiés le 2026-11-13) :
@@ -159,4 +160,4 @@ Choix du constructeur (vérifiés le 2026-11-13) :
   dit lequel.
 - Les tests portés du POC passent (propositions, contrôles du résumé, découpage, contexte automatique, garde SSRF,
   mémoire, historique) ; `relecteur-securite` ne relève aucun constat bloquant.
-- VoiceStudio continue de répondre pendant une génération longue sur gk3.
+- Le conteneur `mail` et le kiosque de gk3 continuent de répondre pendant une génération longue.
