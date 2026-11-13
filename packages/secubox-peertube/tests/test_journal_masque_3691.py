@@ -18,4 +18,4 @@ def test_journaux_du_site_au_format_masque():
 
 
 def test_depend_du_core_qui_definit_le_format():
-    assert "secubox-core (>= 1.8.25~)" in (PAQUET / "debian/control").read_text()
+    assert "secubox-core (>= 1.8.29~)" in (PAQUET / "debian/control").read_text()
