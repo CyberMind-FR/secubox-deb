@@ -205,6 +205,8 @@ override_dh_auto_install:
 	               debian/secubox-core/usr/lib/systemd/system/
 	install -m 644 systemd/secubox-dirs-guard.timer \
 	               debian/secubox-core/usr/lib/systemd/system/
+	install -m 644 systemd/secubox-masquer-jetons-journaux.service systemd/secubox-masquer-jetons-journaux.timer \
+	               debian/secubox-core/usr/lib/systemd/system/
 
 	# LED scripts and services
 	install -d debian/secubox-core/usr/sbin
