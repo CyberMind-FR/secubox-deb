@@ -1,3 +1,13 @@
+secubox-core (1.8.31-1~trixie1) trixie; urgency=medium
+
+  * secubox-masquer-jetons-journaux suit le lien /var/log/nginx -> /data/log/nginx
+    quand le lien et sa cible appartiennent à root et que la cible n'est
+    inscriptible par personne d'autre. Sur gk2, l'ouverture avec O_NOFOLLOW
+    échouait et le programme sortait avec 0 sans rien masquer ; un dossier
+    présent mais inutilisable est désormais une erreur signalée (ref #3691).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 11:02:40 +0100
+
 secubox-core (1.8.30-1~trixie1) trixie; urgency=medium
 
   * Garde des minuteries : secubox-minuteries-garde relance toute minuterie

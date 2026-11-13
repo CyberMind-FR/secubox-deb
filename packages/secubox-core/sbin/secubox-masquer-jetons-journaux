@@ -153,10 +153,44 @@ def ecrire_etat(chemin, etat):
         print(f"secubox-masquer-jetons-journaux : état non écrit ({e.__class__.__name__})", file=sys.stderr)
 
 
-def main(dossier: str = DOSSIER, etat_chemin: str = ETAT) -> int:
+def ouvrir_dossier(dossier: str, proprietaire: int = 0):
+    """Descripteur du dossier des journaux ; None s'il n'existe pas.
+
+    Sur gk2, /var/log/nginx est un LIEN vers /data/log/nginx : l'ouvrir avec O_NOFOLLOW échouait (ELOOP) et le
+    programme sortait en silence avec 0, sans jamais rien masquer (#3691). Un lien n'est suivi que s'il appartient à
+    root (`proprietaire`), comme sa cible, et que personne d'autre ne peut écrire dans cette cible ; la cible est
+    ensuite ouverte sans suivre de lien et doit être celle que l'on a vérifiée.
+    Lève OSError (refus compris) : un dossier présent mais inutilisable est une ERREUR, jamais un succès muet."""
     try:
-        dfd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
-    except OSError:
+        st = os.lstat(dossier)
+    except FileNotFoundError:
+        return None
+    chemin = dossier
+    if stat.S_ISLNK(st.st_mode):
+        if st.st_uid != proprietaire:
+            raise PermissionError(errno.EPERM, "lien vers le dossier des journaux d'un autre propriétaire", dossier)
+        chemin = os.path.realpath(dossier)
+        try:
+            st = os.lstat(chemin)
+        except FileNotFoundError:
+            return None
+        if st.st_uid != proprietaire or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            raise PermissionError(errno.EPERM, "cible du lien inscriptible par un autre que root", chemin)
+    dfd = os.open(chemin, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    vu = os.fstat(dfd)
+    if (vu.st_dev, vu.st_ino) != (st.st_dev, st.st_ino):
+        os.close(dfd)
+        raise PermissionError(errno.EPERM, "le dossier a changé pendant la vérification", chemin)
+    return dfd
+
+
+def main(dossier: str = DOSSIER, etat_chemin: str = ETAT, proprietaire: int = 0) -> int:
+    try:
+        dfd = ouvrir_dossier(dossier, proprietaire)
+    except OSError as e:
+        print(f"secubox-masquer-jetons-journaux : {dossier} : {e.__class__.__name__} : {e.strerror}", file=sys.stderr)
+        return 1
+    if dfd is None:
         return 0
     etat_avant, etat = lire_etat(etat_chemin), {}
     traites, erreurs = 0, 0

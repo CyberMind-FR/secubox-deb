@@ -123,6 +123,42 @@ def test_dossier_absent(m, tmp_path):
     assert lancer(m, tmp_path / "absent", tmp_path) == 0
 
 
+def _dossier_lie(tmp_path):
+    vrai = tmp_path / "data-log-nginx"
+    vrai.mkdir(mode=0o755)
+    (vrai / "access.log").write_bytes(LIGNE)
+    lien = tmp_path / "var-log-nginx"
+    lien.symlink_to(vrai)
+    return vrai, lien
+
+
+def test_dossier_lien_de_confiance_suivi(m, tmp_path):
+    # gk2 : /var/log/nginx -> /data/log/nginx ; le programme sortait avec 0 sans rien masquer.
+    vrai, lien = _dossier_lie(tmp_path)
+    assert m.main(str(lien), str(tmp_path / "etat.json"), os.getuid()) == 0
+    assert b"abc123DEF" not in (vrai / "access.log").read_bytes()
+
+
+def test_lien_d_un_autre_proprietaire_refuse_et_signale(m, tmp_path, capsys):
+    vrai, lien = _dossier_lie(tmp_path)
+    assert m.main(str(lien), str(tmp_path / "etat.json"), os.getuid() + 1) == 1
+    assert (vrai / "access.log").read_bytes() == LIGNE
+    assert "PermissionError" in capsys.readouterr().err
+
+
+def test_cible_inscriptible_par_tous_refusee(m, tmp_path):
+    vrai, lien = _dossier_lie(tmp_path)
+    vrai.chmod(0o777)
+    assert m.main(str(lien), str(tmp_path / "etat.json"), os.getuid()) == 1
+    assert (vrai / "access.log").read_bytes() == LIGNE
+
+
+def test_dossier_inutilisable_est_une_erreur(m, tmp_path):
+    f = tmp_path / "pas-un-dossier"
+    f.write_bytes(b"")
+    assert m.main(str(f), str(tmp_path / "etat.json"), os.getuid()) == 1
+
+
 def _regex_nginx():
     motifs = re.findall(r'"~\*(\^.*?\$)"\s+"\$1MASQUE\$2";', CONF.read_text())
     assert len(motifs) == 5 and len(set(motifs)) == 1     # trois passes sur la requête, deux sur le référent
