@@ -275,6 +275,12 @@ PY
       fi
     fi
 
+    # JETONS DÉJÀ ÉCRITS DANS LES JOURNAUX (#3691) : le format masque les jetons à partir du rechargement ci-dessus ;
+    # ce qui a été journalisé avant est masqué ici, à longueur égale (idempotent, sans effet sur un journal propre).
+    /usr/sbin/secubox-masquer-jetons-journaux || echo "secubox-core : masquage des jetons des journaux nginx incomplet (voir ci-dessus)" >&2
+    # puis toutes les heures : journaux d'erreurs et sites au format « combined », hors de portée du format masqué
+    systemctl enable --now secubox-masquer-jetons-journaux.timer 2>/dev/null || true
+
     systemctl daemon-reload
 
     # Enable runtime directory service (ensures /run/secubox exists before other services)

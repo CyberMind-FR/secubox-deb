@@ -100,6 +100,8 @@ if [ "$1" = "configure" ]; then
     if nginx -t 2>/dev/null; then
       systemctl reload nginx 2>/dev/null || true
     fi
+    # Le jeton d'accès de socket.io n'est plus journalisé (format sbx_masque, #3691) ; ceux déjà écrits sont masqués.
+    [ -x /usr/sbin/secubox-masquer-jetons-journaux ] && /usr/sbin/secubox-masquer-jetons-journaux || true
 
     # Entrée sans mot de passe par la session SecuBox (#1562) : greffon +
     # comptes liés ordinaires. N'installe rien sans la garde du vhost actif,
