@@ -115,7 +115,8 @@ Du propriétaire :
   pause pour les images, changement de modèle). Le service d'entrée de gk0 réveille le moteur par le relais POC
   (`/moteur/demarrer` en local), jamais en pilotant l'unité lui-même.
 - **Mémoire de gk3** : si la mémoire disponible moins la réserve ne suffit pas au moteur local, il **refuse de
-  démarrer** ; la page le dit et propose le moteur distant. **VoiceStudio n'est jamais touché.** Réserve : 1 Go ;
+  démarrer** ; la page le dit et propose le moteur distant. **VoiceStudio n'est jamais touché.** Mais « VoiceStudio
+  moins urgent » (propriétaire, 2026-11-13) : secubox-ai passe avant lui sur gk3. Réserve : 512 Mo ;
   `MemoryMax` du moteur local = taille du modèle + cache du contexte automatique + 300 Mo.
 
 Choix du constructeur (vérifiés le 2026-11-13) :
@@ -134,9 +135,10 @@ Choix du constructeur (vérifiés le 2026-11-13) :
 - **Recherche web** : sources SecuBox (ZIA `/objets` de gk2) et Wikipédia en direct dès l'étape 1 ; SearXNG de gk0 par
   le service d'entrée quand gk0 répond.
 - **Voix** (« Écouter », rapport audio des Menaces) : par l'API de `secubox-voice` déjà installé sur gk3 (Piper ou
-  VoiceStudio selon son réglage) ; le bouton est masqué si le module ne répond pas. Étape 1.
+  VoiceStudio selon son réglage) ; le bouton est masqué si le module ne répond pas. **Étape 2** (VoiceStudio moins
+  urgent).
 - **Périmètre de l'étape 1** : Essai, Menaces, Code, Documents, Mémoire, Historique, Modèles, Préférences, Médias,
-  Journal, bandeau « En cours », Écouter / Mémoriser / Copier. Étape 2 : Générateur et Agents.
+  Journal, bandeau « En cours », Mémoriser / Copier. Étape 2 : Générateur, Agents, Écouter et rapport audio.
 - **Aspect** : la page du POC est reprise telle quelle (mêmes couleurs, même structure), servie sous `/ai/` dans la
   coque SecuBox (entrée `menu.d`, carte du Hall), jeton `sbx_token` comme les autres pages.
 - **Entrée ZIA** (modèle servi au ZIA du Hall de gk2) : reste sur gk0, comme le dialogue public.
