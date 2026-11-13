@@ -298,6 +298,12 @@ PY
     # Shared-dir traversal guard (#630): self-heals the recurring 0750 clobber
     # (from this and other module postinsts) that breaks kbin/toolbox.
     systemctl enable --now secubox-dirs-guard.timer 2>/dev/null || true
+
+    # GARDE DES MINUTERIES (#3692) : dh_installsystemd --no-start arrête les unités d'un paquet pendant sa mise à jour et
+    # ne les relance pas ; trois minuteries de gk2 sont restées mortes des jours sans un mot. Le garde relance toute
+    # minuterie SecuBox ACTIVÉE restée arrêtée (audit), maintenant puis toutes les 10 min.
+    systemctl enable --now secubox-minuteries-garde.timer 2>/dev/null || true
+    /usr/sbin/secubox-minuteries-garde || echo "secubox-core : garde des minuteries : relance incomplète (voir ci-dessus)" >&2
     systemctl start secubox-dirs-guard.service 2>/dev/null || true
 
     # Listes DNS compilees par etiquettes (#3205). Le profil AppArmor AVANT le service ; la premiere passe (adoption des

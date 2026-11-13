@@ -219,6 +219,14 @@ def reparer(module: str, acteur_brut: str = "") -> tuple[bool, str]:
 
     _systemctl("reset-failed", "--", unite)
     etapes.append("échec effacé (reset-failed)")
+    # LA MINUTERIE QUI LE DÉCLENCHE (#3692). Une unité de minuterie en échec laisse souvent sa minuterie arrêtée
+    # (mail-imap-sync sur gk2 : minuterie morte depuis 6 jours) ; relancer le service seul ne la remettait pas en route.
+    # Seulement une minuterie ACTIVÉE (enabled) : une minuterie désactivée l'a été volontairement.
+    for m in _prop(unite, "TriggeredBy").split():
+        if m.endswith(".timer") and _prop(m, "UnitFileState") == "enabled" \
+                and _prop(m, "ActiveState") in ("inactive", "failed"):
+            _systemctl("reset-failed", "--", m)
+            etapes.append(f"minuterie {m} relancée" if _systemctl("start", "--", m) else f"minuterie {m} : relance refusée")
     if not _systemctl("start", "--no-block", "--", unite):
         etapes.append("démarrage refusé par systemd")
         return fin(False, f"systemd a refusé de démarrer {unite}")

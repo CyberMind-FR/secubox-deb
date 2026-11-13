@@ -1,3 +1,15 @@
+secubox-core (1.8.26-1~trixie1) trixie; urgency=medium
+
+  * Garde des minuteries : secubox-minuteries-garde relance toute minuterie
+    secubox-*, sbx-* ou peertube-* ACTIVÉE restée arrêtée (audit
+    minuterie_relancee) et efface les restes d'unités retirées ; au postinst
+    puis toutes les 10 min (minuterie sur l'horloge). Sur gk2,
+    mail-imap-sync, premier-pas-decouverte et sentinel-feeds étaient morts
+    depuis des jours : dh_installsystemd --no-start les arrête à la mise à
+    jour de leur paquet sans les relancer (ref #3692).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 05:28:40 +0100
+
 secubox-core (1.8.24-1~trixie1) trixie; urgency=medium
 
   * dns-listes : un changement du seul contexte (vue TV Privacy réécrite) ne
