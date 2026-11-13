@@ -15,6 +15,14 @@
     {{if .T.Published}}<span class="pill p-billet">✦ publié en billet</span>{{end}}
     ouvert par {{.T.Author}}
   </p>
+</div>
+<button class="btn sm partager" type="button" hidden data-titre="{{.T.Title}}">↗ Partager</button>
+{{/* ACTIONS DU FIL (#3713) : portée, billet, modération, Mastodon, dans un
+     <details> ouvert d'office. Au bureau le résumé est masqué et tout reste
+     visible comme avant ; sur téléphone, coquille.js le referme au chargement :
+     l'article passe avant les outils. Sans JavaScript, il reste ouvert. */}}
+{{if .V.Connecte}}<details class="actions-fil" open>
+<summary class="btn sm" aria-label="Actions du fil">⋯ Actions</summary>
   {{/* Bouton RAPIDE local ↔ public (#1131h). À l'auteur et au sysop : chacun
        peut choisir la portée de SON fil sans repasser par la base. Rendre
        public expose hors du LAN — le libellé le dit franchement. */}}
@@ -28,7 +36,6 @@
     {{end}}
   </form>
   {{end}}
-</div>
 {{if .V.Sysop}}<div class="row sca6fc03">
   {{if eq .T.Visibility "public"}}
     {{if .T.Published}}
@@ -131,6 +138,7 @@
   </div>
 </details>
 {{end}}{{end}}{{end}}
+</details>{{end}}
 </div>
 
 {{if .T.MediaURL}}
@@ -156,14 +164,17 @@
 
 <div class="card">
 {{range .Posts}}
-  <article class="post{{if eq .Visibility "local"}} localnote{{end}}">
+  {{/* #3713 : .suite = même auteur, moins de 30 min après le précédent. Sur
+       téléphone, la série n'a qu'un en-tête (.hd-auteur) ; la pastille de
+       portée ne s'affiche que si elle diffère de celle du fil. */}}
+  <article class="post{{if eq .Visibility "local"}} localnote{{end}}{{if .Suite}} suite{{end}}">
     <div class="who">{{template "vignette" (vignette .Avatar .Initiales)}}<small>{{.Author}}</small></div>
     <div class="bd">
-      <div class="hd">{{date .CreatedAt}}
-        {{if eq .Visibility "public"}}<span class="pill p-pub">public</span>
-        {{else}}<span class="pill p-local">local — ne sort pas</span>{{end}}
+      <div class="hd"><span class="hd-auteur">{{.Author}} · </span><span class="hd-date">{{date .CreatedAt}}</span>
+        {{if .PorteeDiffere}}{{if eq .Visibility "public"}}<span class="pill p-pub">public</span>
+        {{else}}<span class="pill p-local">local — ne sort pas</span>{{end}}{{end}}
         {{if .EditedAt}}<span class="pill" title="Édité le {{date .EditedAt}}">{{if .CorrigeMod}}✎ corrigé par la modération{{else}}✎ édité{{end}}</span>{{end}}
-        {{if .Editable}}<a class="edit sedit1091" href="/p/{{.ID}}/edit" title="Éditer ce message">✎ éditer</a>{{end}}</div>
+        {{if .Editable}}<a class="edit sedit1091" href="/p/{{.ID}}/edit" title="Éditer ce message" aria-label="Éditer ce message">✎<span class="edit-mot"> éditer</span></a>{{end}}</div>
       {{rendu .Body}}
     </div>
   </article>
@@ -171,7 +182,7 @@
 </div>
 
 {{if .V.Connecte}}
-<h3 class="sab2784b">Répondre</h3>
+<h3 class="sab2784b" id="repondre">Répondre</h3>
 <form method="post" action="/t/{{.T.ID}}/reply">
 <input type="hidden" name="csrf" value="{{.V.CSRF}}">
 <div class="editor">
@@ -215,6 +226,8 @@
   Le message part sur le disque en Markdown ; la base ne fait que l'indexer.
 </div>
 <script src="/static/editeur.js?v={{.VCSS}}" defer></script>
+{{/* Barre « Répondre… » collée en bas, téléphone seulement (#3713). */}}
+<a class="repondre-flottant" href="#repondre">Répondre…</a>
 {{else}}
 <div class="note v s2bdf8e4"><b>Connectez-vous pour répondre.</b> L'inscription se fait sur invitation.</div>
 {{end}}

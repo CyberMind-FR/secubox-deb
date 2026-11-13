@@ -947,3 +947,56 @@ audio.jointe{width:100%}
 :root.sbx-embed .embed-entree{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;
   margin:10px 14px 0;padding:10px 12px;border:1px solid var(--line,#1e3a4a);border-radius:12px;font-size:13px}
 :root.sbx-embed .embed-entree span{flex:1 1 12rem;opacity:.75}
+
+/* ── Cartes de liens (#3713) — même bloc dans newsroom.css (article.html ne
+   charge que celle-là) : toute retouche se fait aux deux endroits. ── */
+.carte-lien{display:flex;align-items:center;gap:12px;margin:0 0 9px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:12px;background:var(--panel);color:var(--ink);text-decoration:none;min-width:0;max-width:560px}
+.carte-lien:hover{border-color:var(--dim)}
+.carte-ico{flex:none;width:36px;height:36px;border-radius:8px;display:grid;place-items:center;font-weight:700;
+  font-size:14px;color:#fff;background:#4a5a66}
+.carte-li .carte-ico{background:#0a66c2}.carte-fb .carte-ico{background:#1877f2}
+.carte-x .carte-ico,.carte-gh .carte-ico{background:#17232d}
+.carte-txt{display:flex;flex-direction:column;min-width:0}
+.carte-txt b{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.carte-txt small{color:var(--dim);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Fil sur téléphone (#3713) ─────────────────────────────────────────── */
+.post .hd-auteur{display:none}
+.actions-fil>summary{display:none;list-style:none}
+.actions-fil>summary::-webkit-details-marker{display:none}
+.repondre-flottant{display:none}
+@media(max-width:720px){
+  /* Pas de colonne d'avatar : le texte prend toute la largeur. */
+  .post{grid-template-columns:minmax(0,1fr);gap:0;padding:12px 14px}
+  .post .who{display:none}
+  .post .hd{margin-bottom:6px}
+  .post .hd-auteur{display:inline;color:var(--ink);font-weight:600}
+  .post .bd{font-size:16px;min-width:0;overflow-wrap:anywhere}
+  .post .bd img,.post .bd video{max-width:100%;height:auto}
+  /* Une série du même auteur : un seul en-tête, pas de filet entre ses messages. */
+  .post:has(+ .post.suite){border-bottom:0;padding-bottom:2px}
+  .post.suite{padding-top:2px}
+  .post.suite .hd-auteur,.post.suite .hd-date{display:none}
+  .post.suite .hd:not(:has(.pill,.edit)){display:none}
+  /* Dans une série, « ✎ » passe à droite du message au lieu d'ouvrir une ligne. */
+  .post.suite .bd{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:6px;align-items:start}
+  .post.suite .bd>*{grid-column:1}
+  .post.suite .bd>.hd{grid-column:2;grid-row:1;margin:0}
+  .post.suite .edit-mot{display:none}
+  .post.suite .edit{display:grid;place-items:center;min-width:36px;min-height:36px}
+  /* Tête du fil : titre sur sa ligne, puis Partager et « ⋯ » côte à côte. */
+  .ph{align-items:center;gap:8px}
+  .ph>div:first-child{flex-basis:100%}
+  /* Actions du fil repliées derrière « ⋯ ». */
+  .actions-fil>summary{display:inline-flex;cursor:pointer;margin:6px 0}
+  .actions-fil[open]>summary{margin-bottom:8px}
+  .carte-lien{max-width:none}
+  /* Barre « Répondre… » collée en bas, masquée quand le formulaire est à l'écran. */
+  .repondre-flottant{display:flex;align-items:center;position:fixed;z-index:30;left:12px;right:12px;
+    bottom:calc(10px + env(safe-area-inset-bottom,0px));min-height:46px;padding:0 18px;border-radius:23px;
+    border:1px solid var(--line);background:var(--panel);color:var(--dim);text-decoration:none;
+    box-shadow:0 6px 22px rgba(20,45,60,.18);font-size:15px}
+  body.repondre-visible .repondre-flottant{display:none}
+  .lecture{padding-bottom:76px}
+}
