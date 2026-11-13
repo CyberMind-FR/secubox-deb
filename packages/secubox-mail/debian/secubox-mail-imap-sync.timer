@@ -7,9 +7,8 @@ Description=SecuBox Mail — rapatriement des boîtes IMAP distantes toutes les 
 
 [Timer]
 OnBootSec=3min
-# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redéclenche pas après une réactivation.
-OnActiveSec=3min
-OnUnitActiveSec=15min
+# Sur l horloge (#3692, #3693) : relative à la dernière exécution, la minuterie s est arrêtée le 06/11 sur gk2.
+OnCalendar=*:0/15
 RandomizedDelaySec=2min
 Persistent=true
 
