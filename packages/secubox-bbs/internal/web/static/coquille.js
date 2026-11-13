@@ -463,3 +463,126 @@
     document.body.appendChild(box);
   }, false);
 })();
+
+// ── Téléphone (#3713) ─────────────────────────────────────────────────────
+//
+// 1. Les colonnes (<aside class="rail">) passent dans un TIROIR ouvert par ☰ :
+//    sous 1120 px elles s'empilaient AU-DESSUS de l'article. On les DÉPLACE
+//    (sans les copier : un seul exemplaire de la radio, des liens, des
+//    formulaires) et on les remet en place si l'écran s'élargit.
+// 2. L'en-tête se cache quand on descend, revient quand on remonte.
+// 3. Les actions du fil (« ⋯ ») sont refermées au chargement.
+// 4. La barre « Répondre… » disparaît quand le formulaire est à l'écran.
+// 5. « Partager » n'apparaît que si le navigateur sait partager.
+//
+// SANS JAVASCRIPT, rien n'est perdu : les colonnes restent dans la page, les
+// actions restent ouvertes, la barre de réponse reste un lien vers le formulaire.
+(function () {
+  var etroit = window.matchMedia('(max-width: 720px)');
+  var racine = document.documentElement;
+  var corps = document.body;
+  if (!corps || racine.classList.contains('sbx-embed')) return;
+
+  // ── 1. tiroir ──
+  var wrap = document.querySelector('.wrap');
+  var rails = wrap ? Array.prototype.slice.call(wrap.querySelectorAll(':scope > .rail')) : [];
+  var bouton = document.querySelector('.tiroir-btn');
+  if (rails.length && bouton) {
+    racine.classList.add('a-tiroir');
+    var places = rails.map(function (r) { return { rail: r, suivant: r.nextSibling }; });
+    var tiroir = document.createElement('div');
+    tiroir.className = 'tiroir';
+    tiroir.id = 'tiroir';
+    tiroir.setAttribute('role', 'dialog');
+    tiroir.setAttribute('aria-modal', 'true');
+    tiroir.setAttribute('aria-label', 'Menu');
+    var tete = document.createElement('div');
+    tete.className = 'tiroir-tete';
+    var titre = document.createElement('b');
+    titre.textContent = 'Menu';
+    var fermer = document.createElement('button');
+    fermer.type = 'button';
+    fermer.className = 'ibtn';
+    fermer.setAttribute('aria-label', 'Fermer le menu');
+    fermer.textContent = '✕';
+    tete.appendChild(titre);
+    tete.appendChild(fermer);
+    tiroir.appendChild(tete);
+    var voile = document.createElement('div');
+    voile.className = 'tiroir-voile';
+    corps.appendChild(voile);
+    corps.appendChild(tiroir);
+
+    var poser = function (ouvert) {
+      corps.classList.toggle('tiroir-ouvert', ouvert);
+      bouton.setAttribute('aria-expanded', String(ouvert));
+      if (ouvert) fermer.focus();
+    };
+    var ranger = function () {
+      if (etroit.matches) {
+        rails.forEach(function (r) { tiroir.appendChild(r); });
+      } else {
+        poser(false);
+        places.forEach(function (p) { wrap.insertBefore(p.rail, p.suivant); });
+      }
+    };
+    ranger();
+    if (etroit.addEventListener) etroit.addEventListener('change', ranger);
+    bouton.addEventListener('click', function () { poser(!corps.classList.contains('tiroir-ouvert')); });
+    fermer.addEventListener('click', function () { poser(false); bouton.focus(); });
+    voile.addEventListener('click', function () { poser(false); });
+    tiroir.addEventListener('click', function (e) { if (e.target.closest('a[href]')) poser(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && corps.classList.contains('tiroir-ouvert')) { poser(false); bouton.focus(); }
+    });
+  }
+
+  // ── 2. en-tête qui se cache ──
+  var dernier = window.scrollY, attente = false;
+  window.addEventListener('scroll', function () {
+    if (attente) return;
+    attente = true;
+    window.requestAnimationFrame(function () {
+      attente = false;
+      var y = window.scrollY;
+      if (!etroit.matches || corps.classList.contains('tiroir-ouvert')) {
+        corps.classList.remove('mast-cache');
+      } else if (y > 80 && y - dernier > 6) {
+        corps.classList.add('mast-cache');
+      } else if (dernier - y > 6 || y <= 80) {
+        corps.classList.remove('mast-cache');
+      }
+      dernier = y;
+    });
+  }, { passive: true });
+
+  // ── 3. actions du fil ──
+  var actions = document.querySelector('details.actions-fil');
+  if (actions && etroit.matches) actions.open = false;
+
+  // ── 4. barre « Répondre… » ──
+  var flottant = document.querySelector('.repondre-flottant');
+  var ancre = document.getElementById('repondre');
+  if (flottant && ancre) {
+    var formulaire = ancre.nextElementSibling || ancre;
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (es) {
+        corps.classList.toggle('repondre-visible', es[0].isIntersecting);
+      }).observe(formulaire);
+    }
+    flottant.addEventListener('click', function () {
+      var zone = formulaire.querySelector && formulaire.querySelector('textarea');
+      if (zone) window.setTimeout(function () { zone.focus(); }, 250);
+    });
+  }
+
+  // ── 5. partager ──
+  var partager = document.querySelector('.partager');
+  if (partager && navigator.share) {
+    partager.hidden = false;
+    partager.addEventListener('click', function () {
+      navigator.share({ title: partager.getAttribute('data-titre') || document.title, url: location.href })
+        .catch(function () {});
+    });
+  }
+})();
