@@ -12,6 +12,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -123,4 +124,59 @@ func (a *Auth) Oublie(userID int64) error {
 	delete(a.m, userID)
 	a.mu.Unlock()
 	return a.flush()
+}
+
+// ChangerRole change le role d'un compte actif (sysop, member ou guest).
+//
+// Gardes : role inconnu refuse ; compte inconnu ou desactive refuse (un compte
+// desactive ne se promeut pas en douce) ; le DERNIER sysop actif ne se
+// retrograde pas, pour la meme raison que DeleteUser. Le geste et sa trace
+// d'audit partagent une transaction ; l'acteur est NULL car l'appelant est la
+// ligne de commande, sans session.
+func (s *Store) ChangerRole(id int64, role Role) error {
+	switch role {
+	case RoleSysop, RoleMember, RoleGuest:
+	default:
+		return errors.New("role inconnu : " + string(role))
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var ancien string
+	var desactive bool
+	if err := tx.QueryRow(
+		`SELECT role, disabled_at IS NOT NULL FROM users WHERE id = ?`, id,
+	).Scan(&ancien, &desactive); err != nil {
+		return err
+	}
+	if desactive {
+		return errors.New("compte desactive : changement de role refuse")
+	}
+	if ancien == string(role) {
+		return nil
+	}
+	if ancien == string(RoleSysop) {
+		var sysops int
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM users WHERE role = 'sysop' AND disabled_at IS NULL`,
+		).Scan(&sysops); err != nil {
+			return err
+		}
+		if sysops <= 1 {
+			return errors.New("dernier sysop : retrogradation refusee")
+		}
+	}
+	if _, err := tx.Exec(`UPDATE users SET role = ? WHERE id = ?`, string(role), id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO audit(at, actor_id, action, target, detail)
+		VALUES(unixepoch(), NULL, 'user.role', ?, ?)`,
+		fmt.Sprintf("user:%d", id), ancien+" -> "+string(role)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
