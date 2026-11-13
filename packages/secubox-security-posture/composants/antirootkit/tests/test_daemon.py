@@ -103,7 +103,7 @@ def test_make_log_fn_does_not_alert_on_allow(tmp_path):
     astore = AlertStore(str(tmp_path / "alerts.db"))
     log_fn = make_log_fn(log, astore)
 
-    ev = execwatch.ExecEvent(pid=1, ppid=1, uid=0, exe="/usr/bin/yacy", argv=[], success=True)
+    ev = execwatch.ExecEvent(pid=1, ppid=1, uid=0, exe="/usr/bin/searxng", argv=[], success=True)
     log_fn(ev, "allow")
 
     # new policy: allow (dpkg/allowlisted) is NOT persisted — ExecLog is the

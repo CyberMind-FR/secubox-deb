@@ -41,7 +41,7 @@
 peertube   = "100000 100000"  # 1,0 — transcodage, #1010 (charge 113 -> 63)
 matrix     = "60000 100000"   # 0,6 — voir la note sur le doublon, plus bas
 photoprism = "60000 100000"   # 0,6 — indexation photo
-yacy       = "40000 100000"   # 0,4 — moteur d'indexation
+searxng    = "40000 100000"   # 0,4 — métamoteur de recherche (remplace yacy, #3581)
 streamlit  = "30000 100000"   # 0,3 — applis a la demande, reveil ponctuel
 
 # ── Transcodage : meme cas que PeerTube, meme plafond ──────────────────────

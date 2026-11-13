@@ -24,6 +24,54 @@ for _s in /usr/lib/secubox/metanews/maintscripts/*.postinst; do
   [ -f "$_s" ] && { sh "$_s" "$@" || echo "metanews : postinst de $(basename "$_s") en échec" >&2; }
 done
 
+# >>> retrait-yacy (#3581)
+# ── YaCy retiré du paquet (remplacé par le composant searxng) : nettoyage d'une box qui l'avait ──
+# Mise à jour depuis une version << 0.6.0 SEULEMENT. Les anciens fichiers de configuration partent par rm_conffile
+# (debian/secubox-metanews.maintscript) ; l'unité secubox-yacy a été arrêtée et désactivée par l'ancien prerm. Ici :
+# le lien du vhost public, nginx (testé avant tout rechargement) et le démarrage automatique du conteneur. AUCUNE donnée
+# n'est supprimée : ni le conteneur (ni arrêté ni détruit), ni son rootfs, ni /etc/secubox/yacy.toml, ni
+# /var/lib/secubox/yacy, ni les secrets. HAProxy et le WAF ne sont pas touchés : une ligne dit quoi faire.
+if [ "$1" = configure ] && [ -n "${2:-}" ] && dpkg --compare-versions "$2" lt "0.6.0-1~"; then
+  _y_lien=/etc/nginx/sites-enabled/yacy.conf
+  if [ -L "$_y_lien" ]; then
+    rm -f "$_y_lien"
+    echo "secubox-metanews : lien $_y_lien retiré (YaCy, #3581)"
+  elif [ -f "$_y_lien" ]; then
+    # Copie posée à la main : mise de côté, jamais effacée.
+    install -d -m 0755 /var/backups/secubox-vhosts
+    mv -f "$_y_lien" /var/backups/secubox-vhosts/yacy.conf.avant-retrait
+    echo "secubox-metanews : $_y_lien mis de côté dans /var/backups/secubox-vhosts/yacy.conf.avant-retrait (YaCy, #3581)"
+  fi
+  if [ -d /run/systemd/system ] && command -v nginx >/dev/null 2>&1; then
+    if nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx >/dev/null 2>&1 || true
+    else
+      echo "secubox-metanews : nginx -t en échec après le retrait de YaCy : nginx NON rechargé" >&2
+    fi
+  fi
+  # Conteneur : lxc.path et nom lus comme le faisait yacyctl (/etc/secubox/yacy.toml, sinon /data/lxc et yacy).
+  _y_lire() {
+    [ -f /etc/secubox/yacy.toml ] || return 0
+    grep -E "^[[:space:]]*$1[[:space:]]*=" /etc/secubox/yacy.toml 2>/dev/null | head -n 1 | cut -d= -f2- \
+      | sed 's/[[:space:]]*#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//' | tr -d "\"'"
+  }
+  _y_chemin=$(_y_lire path); _y_nom=$(_y_lire name)
+  case "$_y_chemin" in /*) ;; *) _y_chemin=/data/lxc ;; esac
+  case "$_y_chemin" in *..*|*[!A-Za-z0-9_./-]*) _y_chemin=/data/lxc ;; esac
+  case "$_y_nom" in ""|*[!a-z0-9-]*) _y_nom=yacy ;; esac
+  _y_conf="$_y_chemin/$_y_nom/config"
+  if [ -f "$_y_conf" ] && [ ! -L "$_y_conf" ]; then
+    # sed -i réécrit par un fichier neuf renommé (jamais à travers un lien) ; un seul lxc.start.auto, à 0.
+    if grep -qE '^[[:space:]]*lxc\.start\.auto[[:space:]]*=' "$_y_conf"; then
+      sed -i -E 's/^[[:space:]]*lxc\.start\.auto[[:space:]]*=.*$/lxc.start.auto = 0/' "$_y_conf"
+    else
+      sed -i '$a lxc.start.auto = 0' "$_y_conf"
+    fi
+    echo "secubox-metanews : conteneur $_y_nom ($_y_chemin) : lxc.start.auto = 0 ; ni arrêté ni supprimé, ses données restent"
+  fi
+  echo "secubox-metanews : YaCy retiré (#3581). S'il existe un vhost public yacy.* : haproxyctl vhost remove <yacy.domaine>, puis haproxyctl generate --allow-shrink (rien n'est fait ici sur HAProxy ni le WAF)."
+fi
+# <<< retrait-yacy
 
 # ── Le vhost public : le PAQUET fait foi (#1727, motif de la radio #1430) ──
 # Il était livré dans nginx-available sans jamais être installé : gk2 servait

@@ -54,7 +54,7 @@ def test_config_publish_then_get(client):
     r = tc.post("/config/publish", json={
         "publisher_did": did,
         "publisher_priv_hex": priv.hex(),
-        "scope": "yacy",
+        "scope": "searxng",
         "version": 2,
         "content_hash": "b" * 64,
         "payload": {"peer": {"mode": "freeworld"}},
@@ -65,7 +65,7 @@ def test_config_publish_then_get(client):
     g = tc.get("/config")
     assert g.status_code == 200
     configs = g.json()["configs"]
-    assert any(c["config_id"] == "cfg-yacy" and c["version"] == 2 for c in configs)
+    assert any(c["config_id"] == "cfg-searxng" and c["version"] == 2 for c in configs)
 
 
 def test_node_publish_then_get(client):

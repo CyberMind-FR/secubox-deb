@@ -711,7 +711,7 @@ class ConfigBlob(BaseModel):
     scope:        str = Field(
         ...,
         pattern=r"^[a-z0-9][a-z0-9._:-]*$",
-        description="what this configures, e.g. a module name 'yacy' or 'mitm-exclusion:gk2' — becomes a bare "
+        description="what this configures, e.g. a module name 'searxng' or 'mitm-exclusion:gk2' — becomes a bare "
                     "filename component on disk (config_apply.py), so no '/' or '..' (':' is not a path separator, #2776)",
     )
     version:      int = Field(..., ge=0, description="monotonic; higher wins (last-writer-wins)")

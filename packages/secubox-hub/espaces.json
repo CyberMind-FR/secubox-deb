@@ -435,6 +435,10 @@
    "espace": "services",
    "objet": "SERVICE"
   },
+  "searxng": {
+   "espace": "services",
+   "objet": "SERVICE"
+  },
   "security-posture": {
    "espace": "surveillance",
    "objet": "BOX"
@@ -542,10 +546,6 @@
   "wireguard": {
    "espace": "protection",
    "objet": "DEVICE"
-  },
-  "yacy": {
-   "espace": "services",
-   "objet": "SERVICE"
   },
   "ytsas": {
    "espace": "services",

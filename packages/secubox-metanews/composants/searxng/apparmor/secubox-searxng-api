@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de l'API hôte SearXNG (#3581). Posé dans /etc/apparmor.d/secubox-searxng-api, chargé par le
+# postinst AVANT le (re)démarrage de l'unité, qui le nomme par AppArmorProfile=. L'API n'exécute rien : le reload passe
+# par un fichier de demande que traite secubox-searxng-reload.service (contrôleur root, hors de ce profil).
+
+#include <tunables/global>
+
+profile secubox-searxng-api {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/openssl>
+
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/ r,
+  /usr/lib/secubox/searxng/ r,
+  /usr/lib/secubox/searxng/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # Configuration et authentification (secubox_core) : fichiers nommés, jamais /etc/secubox/** (les secrets y sont).
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/auth.toml r,
+  /etc/secubox/users.json r,
+  /etc/secubox/appareils.json r,
+  /etc/secubox/searxng.toml r,
+  deny /etc/secubox/secrets/** rwklx,
+  /etc/nsswitch.conf r,
+  # Registre des sessions (sans lui toute garde d'API refuse), traces de délégation et d'origine.
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/** r,
+  # Journaux que secubox_core écrit (traces de délégation, relevé de la garde d'origine) ; à défaut, le journal système.
+  # Jamais le journal d'audit : seul le contrôleur root y consigne les rechargements.
+  /var/log/secubox/delegation.log w,
+  /var/log/secubox/garde-origine.log w,
+  deny /var/log/secubox/audit.log w,
+  owner @{PROC}/@{pid}/cgroup r,
+
+  # Cache court du relevé d'état et des moteurs (CacheDirectory=secubox-searxng).
+  /var/cache/secubox-searxng/ r,
+  /var/cache/secubox-searxng/** rwk,
+
+  # Sonde « le conteneur existe-t-il » : un stat du dossier, jamais son contenu.
+  /data/lxc/ r,
+
+  /run/secubox/ r,
+  /run/secubox/searxng.sock rwk,
+
+  # Reload : dépôt d'une demande (créée puis renommée par l'API elle-même), lecture du résultat posé par root.
+  /run/secubox/searxng-reload/ r,
+  owner /run/secubox/searxng-reload/* rw,
+  /run/secubox/searxng-reload-resultats/ r,
+  /run/secubox/searxng-reload-resultats/*.json r,
+
+  network unix stream,
+  network unix dgram,
+  # Sondes et recherche vers le conteneur (10.100.0.85, borné aussi par IPAddressAllow de l'unité).
+  network inet stream,
+  /proc/sys/net/core/somaxconn r,
+}

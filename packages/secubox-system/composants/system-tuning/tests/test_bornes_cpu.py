@@ -81,14 +81,14 @@ def test_le_doublon_de_matrix_est_replie_sur_une_seule_ligne(tmp_path):
 
 def test_repasser_ne_cree_pas_de_doublon(tmp_path):
     # Le postinst repasse a chaque mise a jour : le cas arrive vraiment.
-    r = prepare(tmp_path, {"yacy": CONFIG_NUE}, '[max]\nyacy = "40000 100000"\n')
+    r = prepare(tmp_path, {"searxng": CONFIG_NUE}, '[max]\nsearxng = "40000 100000"\n')
     assert r.returncode == 0, r.stderr
     # Deux passages de plus sur le MEME arbre, avec l'outil deja reecrit.
     for _ in range(2):
         again = subprocess.run(["bash", str(tmp_path / "outil"), "cpu"],
                                capture_output=True, text=True)
         assert again.returncode == 0, again.stderr
-    assert len(lignes(tmp_path, "yacy")) == 1
+    assert len(lignes(tmp_path, "searxng")) == 1
 
 
 def test_une_borne_commentee_n_est_pas_ressuscitee_ni_dupliquee(tmp_path):

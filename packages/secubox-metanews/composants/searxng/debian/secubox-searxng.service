@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox SearXNG — API hôte du composant searxng de secubox-metanews (#3581). Utilisateur dédié, sans aucune capacité,
+# socle de durcissement complet (RULES-CODE § 10). Elle ne lance rien en root : POST /reload DÉPOSE une demande dans
+# /run/secubox/searxng-reload, que secubox-searxng-reload.path fait traiter par le contrôleur root (oneshot).
+[Unit]
+Description=SecuBox SearXNG — API hôte (métamoteur interne)
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-searxng
+Group=secubox
+UMask=0027
+# Groupe dédié : celui du dépôt des demandes et des résultats du reload (root:secubox-searxng).
+SupplementaryGroups=secubox-searxng
+WorkingDirectory=/usr/lib/secubox/searxng
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+# Profil chargé par le postinst avant le démarrage (apparmor/secubox-searxng-api).
+AppArmorProfile=secubox-searxng-api
+# /run/secubox est PARTAGÉ et collant (1777) : on n'y délie que ce qu'on possède. « + » : en root et hors profil.
+# Jamais RuntimeDirectory=secubox (#1022) : il effacerait les sockets des autres modules.
+ExecStartPre=+/bin/rm -f /run/secubox/searxng.sock
+# Dépôt des demandes et dossier des résultats du reload, créés en root (jamais par tmpfiles ni par ce compte) ; un lien
+# ou un dossier étranger à leur place est écarté, jamais suivi. « + » : en root et hors bac à sable.
+ExecStartPre=+/usr/sbin/searxngctl preparer
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/searxng.sock --workers 1 --log-level warning
+# uvicorn pose la socket en 0666 après le bind : 660, groupe secubox (nginx). « + » : hors profil (aucun shell pour l'API).
+ExecStartPost=+/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/searxng.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/searxng.sock'
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=5
+MemoryMax=160M
+# Relevé d'état et liste des moteurs, gardés quelques secondes (/var/cache/secubox-searxng).
+CacheDirectory=secubox-searxng
+CacheDirectoryMode=0750
+
+# Durcissement : socle commun (RULES-CODE § 10, modèle secubox-vault), aucune exception. Le profil AppArmor (enforce)
+# borne en plus les fichiers lus et écrits.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+# AF_UNIX : sa socket et le journal système ; AF_INET : SearXNG dans le conteneur, rien d'autre.
+RestrictAddressFamilies=AF_UNIX AF_INET
+# /run/secubox : sa socket et le dépôt des demandes ; /var/log/secubox : traces de secubox_core (pas audit.log, refusé
+# par le profil AppArmor).
+ReadWritePaths=/run/secubox /var/log/secubox
+# L'API ne parle qu'au conteneur searxng (lxc.ip du TOML, 10.100.0.85 par défaut : à changer ici avec lui).
+IPAddressDeny=any
+IPAddressAllow=10.100.0.85/32
+
+[Install]
+WantedBy=multi-user.target

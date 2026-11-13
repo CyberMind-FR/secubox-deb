@@ -108,7 +108,7 @@
 | App Store (`appstore`) | `/appstore/` oui | SERVICE | `packages/secubox-appstore/www` + sidebar.js | non | faible |  |
 | Profiles (`profiles`) | `/profiles/` oui | SERVICE | `packages/secubox-profiles/www` + sidebar.js | non | faible |  |
 | MetaNews (`metanews`) | `/metanews/` oui | SERVICE | `packages/secubox-metanews/www` + sidebar.js | non | faible | entrée de menu sans page à son nom : écartée par le hub |
-| YaCy (`yacy`) | `/yacy/` oui | SERVICE | `packages/secubox-metanews/www` + sidebar.js | non | faible |  |
+| SearXNG (`searxng`) | `/searxng/` oui | SERVICE | `packages/secubox-metanews/composants/searxng/www` + sidebar.js | non | faible |  |
 
 ## 👤 5 — Identité & accès (11)
 

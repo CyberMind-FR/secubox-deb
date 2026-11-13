@@ -24,10 +24,10 @@ on = [
   "nextcloud", "p2p", "peertube", "photoprism", "podcaster", "portal",
   "proxypac", "publish", "qos", "repo", "reporter",
   "roadmap", "routes", "rtty", "runtime",
-  "saas-relay", "security-posture", "soc", "streamforge", "streamlit", "streamlit-routes",
+  "saas-relay", "searxng", "security-posture", "soc", "streamforge", "streamlit", "streamlit-routes",
   "system", "threatmesh", "threats", "toolbox", "toolbox-mitm",
   "tor", "traffic", "turn", "users", "vault", "vhost",
   "vm", "vortex-dns", "vortex-firewall", "waf", "waf-ng", "waf-ratelimit",
-  "watchdog", "wireguard", "yacy", "zigbee",
+  "watchdog", "wireguard", "zigbee",
   "console", "kiosk",
 ]

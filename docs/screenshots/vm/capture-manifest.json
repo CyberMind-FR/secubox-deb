@@ -1,8 +1,8 @@
 {
   "generated": "2026-06-26T10:11:32.453975",
   "base_url": "https://192.168.1.200",
-  "total_modules": 123,
-  "successful": 123,
+  "total_modules": 122,
+  "successful": 122,
   "failed": 0,
   "modules": [
     {
@@ -1384,18 +1384,6 @@
       "status_code": 200,
       "error": null,
       "timestamp": "2026-06-26T10:10:31.850690"
-    },
-    {
-      "module_id": "yacy",
-      "module_name": "Yacy",
-      "category": "Other",
-      "path": "/yacy/",
-      "screenshot_path": "docs/screenshots/vm/yacy.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/yacy-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-06-26T10:10:50.994127"
     },
     {
       "module_id": "zigbee",

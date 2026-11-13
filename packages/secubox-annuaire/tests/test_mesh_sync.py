@@ -85,7 +85,7 @@ def test_sync_once_converges(tmp_path):
     # Producer journal has a config; consumer pulls it via injected fetch.
     prod = Journal(str(tmp_path / "prod.db"))
     priv, pub, did = _make_member(prod)
-    publish_config(prod, priv, did, scope="yacy", version=7, content_hash="a" * 64,
+    publish_config(prod, priv, did, scope="searxng", version=7, content_hash="a" * 64,
                    payload={"k": "v"})
     prod_entries = export_entries(prod)
 
@@ -97,7 +97,7 @@ def test_sync_once_converges(tmp_path):
 
     totals = sync_once(consumer, [{"mesh_ip": "10.10.0.2", "name": "c3box"}], fetch=fake_fetch)
     assert totals["peers"] == 1 and totals["ingested"] >= 2 and totals["rejected"] == 0
-    cfg = _get_config(consumer, "cfg-yacy")
+    cfg = _get_config(consumer, "cfg-searxng")
     assert cfg is not None and cfg["version"] == 7
 
 

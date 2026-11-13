@@ -3048,7 +3048,6 @@ INCOMPLETE_MODULES=(
   # install to provision the container, then `secubox-lxc-modules
   # enable <name>` to lift the mask.
   secubox-grafana
-  secubox-yacy
   secubox-lyrion
   secubox-mail
   secubox-gitea

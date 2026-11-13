@@ -1,3 +1,11 @@
+secubox-profiles (0.28.7-1~trixie1) trixie; urgency=medium
+
+  * Réunit le retrait de YaCy (0.28.5, branche #3581) et le verrou de réveil
+    périmé (0.28.6, master #3700) : chaque version publiée n'avait que l'un
+    des deux (ref #3581).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 10:29:13 +0100
+
 secubox-profiles (0.28.6-1~trixie1) trixie; urgency=medium
 
   * (0.28.5 déjà publié depuis la branche #3581 : numéro suivant.)
@@ -7,6 +15,13 @@ secubox-profiles (0.28.6-1~trixie1) trixie; urgency=medium
     7 jours (WebTorrent à 71 % de CPU, charge ~24) (ref #3700).
 
  -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 05:14:53 +0100
+
+secubox-profiles (0.28.5-1~trixie1) trixie; urgency=low
+
+  * YaCy retiré (ref #3581) : sorti des profils full et media-lab (searxng y entre à sa place) et de la
+    politique de cycle de vie (searxng = manual) ; exemples des tests et commentaires sans yacy.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 11:30:00 +0100
 
 secubox-profiles (0.28.4-1~trixie1) trixie; urgency=medium
 

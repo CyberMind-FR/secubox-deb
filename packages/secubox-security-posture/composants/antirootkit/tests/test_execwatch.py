@@ -23,7 +23,7 @@ def test_decide_jails_unknown():
 
 
 def test_decide_allows_dpkg():
-    e = ew.ExecEvent(pid=1, ppid=1, uid=0, exe="/usr/bin/yacy", argv=[], success=True)
+    e = ew.ExecEvent(pid=1, ppid=1, uid=0, exe="/usr/bin/searxng", argv=[], success=True)
     assert ew.decide(e, allow=set(), is_backed_fn=lambda p: True) == "allow"
 
 
