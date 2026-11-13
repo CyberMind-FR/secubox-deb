@@ -1,5 +1,6 @@
-secubox-profiles (0.28.5-1~trixie1) trixie; urgency=medium
+secubox-profiles (0.28.6-1~trixie1) trixie; urgency=medium
 
+  * (0.28.5 déjà publié depuis la branche #3581 : numéro suivant.)
   * sleeper : un fichier de verrous de réveil plus vieux que 90 s ne
     verrouille plus rien. Le waker ne purgeait ses entrées qu'au réveil
     suivant : sur gk2, torrent, peertube et billets sont restés éveillés

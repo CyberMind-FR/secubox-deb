@@ -108,6 +108,7 @@ apt install secubox-bbs
 
 printf '%s' 'une phrase de passe assez longue' | bbsctl user-add gk2 sysop
 bbsctl salon atelier 'Atelier' 'Ce qui se répare le samedi'
+bbsctl user-role alice sysop   # changer le rôle (sysop|member|guest) ; le dernier sysop ne se rétrograde pas
 systemctl enable --now secubox-bbs
 ```
 

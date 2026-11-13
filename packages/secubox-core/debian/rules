@@ -76,6 +76,8 @@ override_dh_auto_install:
 	# Secrets generes SUR la box (#3243) : constat, creation au premier demarrage, renouvellement d'une box issue d'une image publiee.
 	install -D -m 0755 sbin/secubox-renouvelle-secrets debian/secubox-core/usr/sbin/secubox-renouvelle-secrets
 	install -D -m 0755 sbin/secubox-secrets-paquets debian/secubox-core/usr/sbin/secubox-secrets-paquets
+	# Jetons masqués dans les journaux nginx déjà écrits (#3691).
+	install -D -m 0755 sbin/secubox-masquer-jetons-journaux debian/secubox-core/usr/sbin/secubox-masquer-jetons-journaux
 
 	# Renommage unique d'une box (#3126 L2 tache 5, #3242) : hosts, secubox.conf, hostnamectl, Avahi, audit.
 	install -D -m 0755 sbin/secubox-renommer debian/secubox-core/usr/sbin/secubox-renommer
@@ -85,7 +87,6 @@ override_dh_auto_install:
 	install -D -m 0644 systemd/secubox-dns-listes.service debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.service
 	install -D -m 0644 systemd/secubox-dns-listes.path debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.path
 	install -D -m 0644 systemd/secubox-dns-listes.timer debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes.timer
-	install -D -m 0644 systemd/secubox-dns-listes-contexte.timer debian/secubox-core/usr/lib/systemd/system/secubox-dns-listes-contexte.timer
 	install -D -m 0644 apparmor/secubox-dns-listes debian/secubox-core/etc/apparmor.d/secubox-dns-listes
 
 	# SSH : root par mot de passe depuis le reseau local seulement (#2528). Fichier de configuration (conffile) :
@@ -202,6 +203,8 @@ override_dh_auto_install:
 	install -m 644 systemd/secubox-dirs-guard.service \
 	               debian/secubox-core/usr/lib/systemd/system/
 	install -m 644 systemd/secubox-dirs-guard.timer \
+	               debian/secubox-core/usr/lib/systemd/system/
+	install -m 644 systemd/secubox-masquer-jetons-journaux.service systemd/secubox-masquer-jetons-journaux.timer \
 	               debian/secubox-core/usr/lib/systemd/system/
 	# Garde des minuteries (#3692) : une minuterie SecuBox activée ne reste jamais arrêtée.
 	install -m 644 systemd/secubox-minuteries-garde.service systemd/secubox-minuteries-garde.timer \

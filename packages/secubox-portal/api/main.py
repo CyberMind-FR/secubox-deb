@@ -37,6 +37,12 @@ from secubox_core.kiosk import (
     detect_board_type, get_board_profile, get_board_capabilities, get_board_model
 )
 from secubox_core.auth import require_lecture
+# LA SESSION DE LA BOX, PAS UNE COPIE (#3704). Le portail tenait sa propre connexion (cookie secubox_token, sessions en
+# mémoire) : un administrateur connecté à l'admin y lisait « No token » et une liste de sessions vide. Vérification,
+# liste et révocation passent désormais par secubox_core.auth et le registre partagé de secubox-auth.
+from secubox_core import sessions as _registre
+from secubox_core import user_store as _comptes
+from secubox_core.auth import SESSION_COOKIE, _emit_session_event, _validate_token, est_admin_reel, require_jwt
 from secubox_core.crypto.empreinte import ident
 
 app = FastAPI(title="secubox-portal", version="2.1.0", root_path="/api/v1/portal")
@@ -296,6 +302,48 @@ def require_auth(secubox_token: Optional[str] = Cookie(None)):
     return payload
 
 
+def _sessions_partagees() -> List[Dict[str, Any]]:
+    """Sessions ouvertes du registre partagé de secubox-auth (#3704), sans leur identifiant (jti) : nom, type, adresse,
+    ouverture, échéance. Illisible ou absent : liste vide."""
+    try:
+        lignes = json.loads(_registre._path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    maintenant, res = time.time(), []
+    for r in lignes if isinstance(lignes, list) else []:
+        if not isinstance(r, dict) or not isinstance(r.get("username"), str):
+            continue
+        fin = r.get("expires")
+        if isinstance(fin, (int, float)) and fin < maintenant:
+            continue
+        res.append({"username": r["username"], "type": r.get("type"), "ip": r.get("ip"),
+                    "login_time": r.get("created"), "expires": fin,
+                    "user_agent": str(r.get("user_agent") or "")[:120]})
+    return res
+
+
+def _role_du_compte(nom: str) -> str:
+    """Rôle d'un compte SecuBox (registre des utilisateurs) ; inconnu (appareil, compte retiré) : « user »."""
+    try:
+        u = _comptes.get_user(nom) or {}
+    except Exception:  # noqa: BLE001 — un registre illisible ne casse pas la liste
+        return "user"
+    return u.get("role") or "user" if isinstance(u, dict) else "user"
+
+
+def _payload_requete(request: Request) -> Optional[Dict[str, Any]]:
+    """La session de la requête : jeton de l'admin (Bearer), sinon cookie de session SecuBox, sinon l'ancien cookie du
+    portail — chacun validé en entier (signature, registre, compte actif) par secubox_core.auth."""
+    entete = request.headers.get("authorization", "")
+    for jeton in (entete[7:] if entete.lower().startswith("bearer ") else None,
+                  request.cookies.get(SESSION_COOKIE), request.cookies.get("secubox_token")):
+        if jeton:
+            payload = _validate_token(jeton)
+            if payload:
+                return payload
+    return None
+
+
 async def _cleanup_expired_sessions():
     """Background task to clean up expired sessions."""
     while True:
@@ -549,7 +597,7 @@ async def status():
         "module": "portal",
         "version": "2.0.0",
         "auth_required": True,
-        "active_sessions": len(_sessions),
+        "active_sessions": len(_sessions_partagees()),
         "total_users": len(users),
         "timestamp": datetime.now().isoformat()
     }
@@ -632,27 +680,19 @@ async def logout(response: Response, secubox_token: Optional[str] = Cookie(None)
 
 
 @router.get("/verify", dependencies=[Depends(require_lecture)])
-async def verify(secubox_token: Optional[str] = Cookie(None)):
-    """Verify current session."""
-    if not secubox_token:
-        return {"valid": False, "error": "No token"}
-
-    payload = _verify_token(secubox_token)
+async def verify(request: Request):
+    """La session de la requête, telle que la box la reconnaît (#3704)."""
+    payload = _payload_requete(request)
     if not payload:
-        return {"valid": False, "error": "Invalid or expired token"}
-
+        return {"valid": False, "error": "Aucune session SecuBox sur cette requête"}
     username = payload.get("sub")
-    session = _sessions.get(username, {})
-
+    ouverte = next((x for x in _sessions_partagees() if x["username"] == username), {})
     return {
         "valid": True,
         "username": username,
-        "role": payload.get("role"),
+        "role": "admin" if est_admin_reel(payload) else (payload.get("role") or "user"),
         "expires": payload.get("exp"),
-        "session": {
-            "login_time": session.get("login_time"),
-            "ip": session.get("ip")
-        }
+        "session": {"login_time": ouverte.get("login_time"), "ip": ouverte.get("ip")},
     }
 
 
@@ -669,17 +709,11 @@ async def recover(req: RecoverRequest):
 
 # Protected endpoints
 @router.get("/sessions")
-async def sessions(user=Depends(require_auth)):
-    """List active sessions (admin only)."""
-    if user.get("role") != "admin":
-        raise HTTPException(403, "Admin requis")
-
-    session_list = []
-    for username, session in _sessions.items():
-        session_list.append({
-            "username": username,
-            **session
-        })
+async def sessions(user=Depends(require_jwt)):
+    """Sessions ouvertes sur la box (administrateur réel), lues dans le registre partagé (#3704)."""
+    session_list = _sessions_partagees()
+    for x in session_list:
+        x["role"] = _role_du_compte(x["username"])
 
     return {
         "sessions": session_list,
@@ -688,18 +722,17 @@ async def sessions(user=Depends(require_auth)):
 
 
 @router.delete("/sessions/{username}")
-async def revoke_session(username: str, user=Depends(require_auth)):
-    """Revoke a user's session (admin only)."""
-    if user.get("role") != "admin":
-        raise HTTPException(403, "Admin requis")
-
-    if username in _sessions:
-        del _sessions[username]
-        _record_event("session_revoked", {"username": username, "by": user.get("sub")})
-        stats_cache.clear()
-        return {"success": True, "revoked": username}
-
-    return {"success": False, "error": "Session not found"}
+async def revoke_session(username: str, user=Depends(require_jwt)):
+    """Coupe toutes les sessions d'un compte (administrateur réel), par l'événement de secubox-auth (#3704)."""
+    jtis = _registre.jtis_du_compte(username)
+    _sessions.pop(username, None)
+    if not jtis:
+        return {"success": False, "error": "Session not found"}
+    _emit_session_event("sessions_coupees", username, {"jtis": jtis, "motif": "revocation_portail",
+                                                        "par": user.get("sub")})
+    _record_event("session_revoked", {"username": username, "by": user.get("sub"), "count": len(jtis)})
+    stats_cache.clear()
+    return {"success": True, "revoked": username, "count": len(jtis)}
 
 
 @router.get("/users")
@@ -716,7 +749,7 @@ async def list_users(user=Depends(require_auth)):
                 "email": d.get("email"),
                 "role": d.get("role", "user"),
                 "created": d.get("created"),
-                "active": u in _sessions
+                "active": u in {x["username"] for x in _sessions_partagees()}
             }
             for u, d in users.items()
         ],
@@ -841,7 +874,7 @@ async def get_stats(user=Depends(require_auth)):
 
     return {
         "total_users": len(users),
-        "active_sessions": len(_sessions),
+        "active_sessions": len(_sessions_partagees()),
         "events_24h": len(recent),
         "by_event_24h": by_event,
         "logins_24h": by_event.get("login", 0),
@@ -907,8 +940,8 @@ async def summary():
             "regular": sum(1 for u in users.values() if u.get("role") != "admin")
         },
         "sessions": {
-            "active": len(_sessions),
-            "users_online": list(_sessions.keys())[:10]
+            "active": len(ouvertes := _sessions_partagees()),
+            "users_online": sorted({x["username"] for x in ouvertes})[:10]
         },
         "activity_24h": {
             "logins": recent_logins

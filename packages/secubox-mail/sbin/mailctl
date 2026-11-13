@@ -785,7 +785,10 @@ cmd_webmail_comptes() {
 }
 
 # ── Rapatriement d'une boîte IMAP distante (#3033) ───────────────────────────
-# `doveadm sync -R` avec le backend imapc de Dovecot, DANS le conteneur mail : rien à installer. Les identifiants de la
+# `doveadm sync -1 -R` avec le backend imapc de Dovecot, DANS le conteneur mail : rien à installer. À SENS UNIQUE (#3693),
+# de la boîte distante vers la boîte locale : en double sens, dsync voulait accorder le GUID des dossiers créés des deux
+# côtés (Sent), ce que imapc ne sait pas faire — « Backend didn't update mailbox Sent GUID », échec à chaque passage
+# depuis le 06/11 sur gk2. `-1` ne supprime rien en local et ne renvoie rien vers la boîte distante. Les identifiants de la
 # boîte distante sont gardés par la box (root, 0600) — c'est le prix d'une synchronisation sans la personne devant son
 # écran, et le volet de la page le dit. Le mot de passe ne passe jamais en argument de mailctl : stdin ou MAILCTL_PASSWORD.
 IMAP_SYNC_DIR="/etc/secubox/secrets/mail/imap-sync"
@@ -860,7 +863,7 @@ PY
                 # imapc_password en option de doveadm : visible le temps de la commande dans le ps DU CONTENEUR, pas sur l'hôte.
                 if sortie=$(lxc_attach "$CONTAINER" doveadm -o mail_fsync=never -o "imapc_host=$host" -o "imapc_port=$port" -o "imapc_user=$user" \
                         -o "imapc_password=$mdp" -o imapc_ssl=imaps -o ssl_client_ca_dir=/etc/ssl/certs -o "imapc_features=rfc822.size fetch-headers" \
-                        sync -R -u "$lu" imapc: 2>&1); then ok=true; else ok=false; rc=1; fi
+                        sync -1 -R -u "$lu" imapc: 2>&1); then ok=true; else ok=false; rc=1; fi
                 fin=$(date +%s)
                 python3 - "$IMAP_SYNC_ETAT/$lu.json" "$ok" "$((fin-debut))" "$(printf '%s' "$sortie" | tail -c 600)" <<'PY'
 import datetime, json, sys

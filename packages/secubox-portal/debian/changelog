@@ -1,3 +1,14 @@
+secubox-portal (2.6.1-1~trixie1) trixie; urgency=medium
+
+  * Session et identité : /portal/verify reconnaît la session SecuBox
+    (jeton de l'admin ou cookie secubox_session, validés par
+    secubox_core.auth) au lieu du seul ancien cookie du portail ; la liste
+    des sessions vient du registre partagé de secubox-auth (sans
+    identifiant), garde require_jwt ; la révocation coupe les sessions du
+    compte par l'événement de session (ref #3704).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 05:27:31 +0100
+
 secubox-portal (2.6.0-1~trixie1) trixie; urgency=medium
 
   * Cadres selon les modules installés (ref #3688) : la présence est lue dans le menu public du hub

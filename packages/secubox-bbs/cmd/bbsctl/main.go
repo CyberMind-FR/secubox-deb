@@ -73,6 +73,7 @@ func cmdHelp() {
   salon <slug> <titre> [desc]
   user-add <pseudo> [sysop]  MOT DE PASSE SUR STDIN
   user-disable <id>          Désactive, ne supprime jamais
+  user-role <pseudo> <sysop|member|guest>  Change le rôle d'un compte
   user-passwd <pseudo>       Réinitialise — MOT DE PASSE SUR STDIN
   user-local <pseudo>        Reprend un compte délégué en local — MOT DE PASSE SUR STDIN
   ingest [source|all]        Passerelles : billets, peertube, podcaster
@@ -190,6 +191,23 @@ func main() {
 		}
 		verifie(st.DisableUser(id))
 		sortie(map[string]any{"ok": true, "id": id, "desactive": true})
+
+	case "user-role":
+		handle, role := arg(args, 1), store.Role(arg(args, 2))
+		if handle == "" || role == "" {
+			sortie(map[string]any{"ok": false, "error": "pseudonyme et rôle attendus (sysop|member|guest)"})
+			os.Exit(2)
+		}
+		id, err := st.UserByHandle(handle)
+		if err != nil {
+			sortie(map[string]any{"ok": false, "error": "compte inconnu : " + handle})
+			os.Exit(2)
+		}
+		if err := st.ChangerRole(id, role); err != nil {
+			sortie(map[string]any{"ok": false, "error": err.Error()})
+			os.Exit(2)
+		}
+		sortie(map[string]any{"ok": true, "id": id, "handle": handle, "role": role})
 
 	case "user-passwd":
 		// LE CHEMIN DE SECOURS. La console sysop reinitialise deja les mots de
