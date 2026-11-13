@@ -206,6 +206,10 @@ override_dh_auto_install:
 	               debian/secubox-core/usr/lib/systemd/system/
 	install -m 644 systemd/secubox-masquer-jetons-journaux.service systemd/secubox-masquer-jetons-journaux.timer \
 	               debian/secubox-core/usr/lib/systemd/system/
+	# Garde des minuteries (#3692) : une minuterie SecuBox activée ne reste jamais arrêtée.
+	install -m 644 systemd/secubox-minuteries-garde.service systemd/secubox-minuteries-garde.timer \
+	               debian/secubox-core/usr/lib/systemd/system/
+	install -D -m 0755 sbin/secubox-minuteries-garde debian/secubox-core/usr/sbin/secubox-minuteries-garde
 
 	# LED scripts and services
 	install -d debian/secubox-core/usr/sbin

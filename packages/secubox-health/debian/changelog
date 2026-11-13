@@ -1,3 +1,11 @@
+secubox-health (1.4.1-1~trixie1) trixie; urgency=medium
+
+  * Réparer : relance aussi la minuterie qui déclenche l'unité si elle est
+    activée mais arrêtée (mail-imap-sync : minuterie morte depuis 6 jours) ;
+    une minuterie désactivée n'est jamais touchée (ref #3692).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 05:28:40 +0100
+
 secubox-health (1.4.0-1~trixie1) trixie; urgency=medium
 
   * Bouton « Réparer » de la page Santé (ref #3628) : POST /api/v1/health-doctor/reparer/{id}

@@ -1,0 +1,137 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-minuteries-garde — une minuterie SecuBox ACTIVÉE ne reste jamais arrêtée (#3692).
+
+Constat sur gk2 (2026-11-13) : trois minuteries activées sans prochain déclenchement, depuis des jours, sans un mot.
+`dh_installsystemd --no-start` arrête les unités d'un paquet pendant sa mise à jour et ne les relance pas ; les postinst
+relançaient les SERVICES activés, pas les minuteries (premier-pas-decouverte le 31/10, sentinel-feeds le 01/11) ; une
+troisième (mail-imap-sync) s'est arrêtée sans trace. Plutôt que de compter sur chaque postinst, ce garde pose la règle :
+
+- une minuterie `secubox-*`, `sbx-*` ou `peertube-*` dont le fichier d'unité est ACTIVÉ (enabled) et qui est arrêtée
+  (inactive ou failed) est relancée ; la relance est écrite dans /var/log/secubox/audit.log. Pour arrêter une
+  minuterie pour de bon, on la DÉSACTIVE (disable) : le garde ne touche jamais une unité désactivée, masquée, statique
+  ou transitoire (les gardes de pilotage, le retour de netmodes) ;
+- une unité SecuBox dont le fichier a disparu mais qui reste « failed » (reste d'une unité retirée) est effacée
+  (reset-failed), pour qu'elle cesse d'apparaître en panne.
+
+`--verifier` : n'agit pas, imprime le constat en JSON (lu par le diagnostic de santé). Lancé toutes les 10 min par
+secubox-minuteries-garde.timer et à chaque postinst de secubox-core.
+"""
+import datetime
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+
+SYSTEMCTL = "/usr/bin/systemctl"
+AUDIT_DOSSIER = "/var/log/secubox"
+NOMS = re.compile(r"(?:secubox|sbx|peertube)-[A-Za-z0-9_.@-]{1,120}\.timer")
+NOMS_UNITE = re.compile(r"(?:secubox|sbx|peertube)-[A-Za-z0-9_.@-]{1,120}\.(?:timer|service|path|socket)")
+
+
+def systemctl(*args, delai=60):
+    return subprocess.run([SYSTEMCTL, *args], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=delai,
+                          check=False)
+
+
+def minuteries_activees():
+    r = systemctl("list-unit-files", "--type=timer", "--state=enabled", "--no-legend", "--plain")
+    return sorted({ligne.split()[0] for ligne in r.stdout.splitlines() if ligne.split() and NOMS.fullmatch(ligne.split()[0])})
+
+
+def etats(unites):
+    """{unité: {ActiveState, UnitFileState, LoadState}} en un seul appel."""
+    if not unites:
+        return {}
+    r = systemctl("show", "-p", "Id", "-p", "ActiveState", "-p", "UnitFileState", "-p", "LoadState", "--", *unites)
+    res, cur = {}, {}
+    for ligne in [*r.stdout.splitlines(), ""]:
+        if not ligne.strip():
+            if cur.get("Id"):
+                res[cur["Id"]] = cur
+            cur = {}
+            continue
+        cle, _, val = ligne.partition("=")
+        cur[cle] = val
+    return res
+
+
+def unites_absentes_en_echec():
+    r = systemctl("list-units", "--all", "--state=not-found", "--no-legend", "--plain")
+    res = []
+    for ligne in r.stdout.splitlines():
+        champs = ligne.split()
+        if len(champs) >= 4 and NOMS_UNITE.fullmatch(champs[0]) and champs[3] == "failed":
+            res.append(champs[0])
+    return sorted(res)
+
+
+def constat():
+    arretees = [u for u, e in etats(minuteries_activees()).items()
+                if e.get("UnitFileState") == "enabled" and e.get("ActiveState") in ("inactive", "failed")]
+    return {"minuteries_arretees": sorted(arretees), "unites_absentes": unites_absentes_en_echec()}
+
+
+def auditer(evenement, **champs):
+    ligne = {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+             "module": "minuteries-garde", "evenement": evenement, "acteur": "systeme"}
+    ligne.update(champs)
+    donnees = (json.dumps(ligne, ensure_ascii=False) + "\n").encode("utf-8")
+    try:
+        dfd = os.open(AUDIT_DOSSIER, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        return
+    try:
+        fd = os.open("audit.log", os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+        try:
+            st = os.fstat(fd)
+            if stat.S_ISREG(st.st_mode) and st.st_nlink == 1:
+                os.write(fd, donnees)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(dfd)
+
+
+def reparer(c):
+    bilan = {"relancees": [], "echecs": [], "effacees": []}
+    for u in c["minuteries_arretees"]:
+        systemctl("reset-failed", "--", u)
+        r = systemctl("start", "--", u)
+        if r.returncode == 0:
+            bilan["relancees"].append(u)
+            auditer("minuterie_relancee", unite=u, resultat="ok")
+        else:
+            bilan["echecs"].append(u)
+            auditer("minuterie_relancee", unite=u, resultat="erreur", motif=(r.stderr or "").strip()[:200])
+    for u in c["unites_absentes"]:
+        if systemctl("reset-failed", "--", u).returncode == 0:
+            bilan["effacees"].append(u)
+            auditer("unite_absente_effacee", unite=u, resultat="ok")
+    return bilan
+
+
+def main(argv):
+    try:
+        c = constat()
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(json.dumps({"ok": False, "erreur": e.__class__.__name__}))
+        return 1
+    if "--verifier" in argv:
+        print(json.dumps({"ok": not (c["minuteries_arretees"] or c["unites_absentes"]), **c}))
+        return 0
+    bilan = reparer(c)
+    if bilan["relancees"] or bilan["effacees"] or bilan["echecs"]:
+        print(json.dumps({"ok": not bilan["echecs"], **bilan}))
+    return 1 if bilan["echecs"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
