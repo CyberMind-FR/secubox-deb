@@ -1,4 +1,4 @@
-secubox-core (1.8.25-1~trixie1) trixie; urgency=medium
+secubox-core (1.8.29-1~trixie1) trixie; urgency=medium
 
   * Journaux nginx : les jetons passés dans l'URL (accessToken de PeerTube,
     jeton du Hall, token, api_key) sont masqués dans la requête et le
@@ -9,9 +9,44 @@ secubox-core (1.8.25-1~trixie1) trixie; urgency=medium
     (minuterie sur l'horloge). Programme root sans lien suivi : dossier
     ouvert par descripteur, O_NOFOLLOW, fichier ordinaire à un seul lien.
     Limite connue : un nom de paramètre encodé en %XX n'est pas reconnu
-    (ref #3691).
+    (ref #3691). Numéro 1.8.29 : 1.8.25 à 1.8.28 sont ceux de #3548.
 
  -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 04:56:40 +0100
+
+secubox-core (1.8.28-1~trixie1) trixie; urgency=medium
+
+  * dns-listes : une autorisation TV sur un nom qu aucune liste ne bloque
+    (api.oqee.net sur gk2) faisait refuser toute la configuration par
+    unbound-checkconf ; le 92 déclare ces noms en zone transparente
+    (ref #3548).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 14:42:10 +0100
+
+secubox-core (1.8.27-1~trixie1) trixie; urgency=medium
+
+  * dns-listes : la passe de rattrapage (adresse TV changée pendant une
+    compilation) repose aussi les adresses sans recompiler (ref #3548).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 14:30:20 +0100
+
+secubox-core (1.8.26-1~trixie1) trixie; urgency=medium
+
+  * dns-listes : une TV qui change d adresse ne relance plus de compilation.
+    Sources inchangées et contexte qui ne diffère que par des adresses : les
+    lignes d adresses du 92 sont reposées d après les étiquettes de leur profil
+    (0,2 s contre plusieurs minutes), fichier identique à une compilation
+    complète (mesuré sur la configuration de gk2). Tout autre cas recompile
+    (ref #3548, ref #3592).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 14:07:46 +0100
+
+secubox-core (1.8.25-1~trixie1) trixie; urgency=medium
+
+  * dns-listes : retrait du report de 15 min d un contexte seul (1.8.24) ; il
+    retardait l application des nouvelles adresses des TV (ref #3592,
+    ref #3548).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 08 Nov 2026 13:54:05 +0100
 
 secubox-core (1.8.24-1~trixie1) trixie; urgency=medium
 
