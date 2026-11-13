@@ -55,8 +55,8 @@ def lieux(tmp_path):
             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
 
 
-def _appliquer(lieux, s=None, **kw):
-    return D.appliquer(systeme=s or Faux(), **lieux, **kw)
+def _appliquer(lieux, s=None):
+    return D.appliquer(systeme=s or Faux(), **lieux)
 
 
 # ── transaction sur plusieurs fichiers ───────────────────────────────────────
@@ -348,35 +348,8 @@ def test_un_reseau_nouveau_dans_le_contexte_recompile(lieux, compilations):
     D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
     _appliquer(lieux)
     (lieux["conf_d"] / "94-tv.conf").write_text("server:\n    access-control-view: 192.168.1.95/32 tv\nview:\n    name: \"tv\"\n")
-    _appliquer(lieux, maintenant=lambda: _T0 + D.CONTEXTE_DELAI_S + 1)
+    _appliquer(lieux)
     assert len(compilations) == 2
-
-
-_T0 = 1_800_000_000
-TV = "server:\n    access-control-view: 192.168.1.95/32 tv\nview:\n    name: \"tv\"\n"
-
-
-def test_un_contexte_reecrit_souvent_est_differe_puis_repris_3592(lieux, compilations):
-    """#3592 : TV Privacy réécrit sa vue toutes les quelques minutes ; une seule compilation par délai, reprise ensuite."""
-    D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
-    _appliquer(lieux, maintenant=lambda: _T0)
-    (lieux["conf_d"] / "94-tv.conf").write_text(TV)
-    r = _appliquer(lieux, maintenant=lambda: _T0 + 60)
-    assert r["etat"] == "differe" and len(compilations) == 1
-    r = _appliquer(lieux, maintenant=lambda: _T0 + 120)                      # second déclenchement : toujours différé
-    assert r["etat"] == "differe" and len(compilations) == 1
-    r = _appliquer(lieux, maintenant=lambda: _T0 + D.CONTEXTE_DELAI_S + 1)    # la minuterie reprend
-    assert r["etat"] in ("applique", "inchange") and len(compilations) == 2  # compilé ; le 92 peut être identique
-    assert _appliquer(lieux, maintenant=lambda: _T0 + D.CONTEXTE_DELAI_S + 60)["etat"] == "inchange"
-    assert len(compilations) == 2
-
-
-def test_une_source_deposee_n_est_jamais_differee_3592(lieux, compilations):
-    D.deposer_source("95-secubox-adblock.conf", ADBLOCK, lieux["sources"])
-    _appliquer(lieux, maintenant=lambda: _T0)
-    (lieux["conf_d"] / "94-tv.conf").write_text(TV)
-    D.deposer_source("96-secubox-adult.conf", ADULT, lieux["sources"])
-    assert _appliquer(lieux, maintenant=lambda: _T0 + 60)["etat"] != "differe" and len(compilations) == 2
 
 
 def test_une_source_deposee_pendant_la_compilation_est_reprise(lieux, monkeypatch):

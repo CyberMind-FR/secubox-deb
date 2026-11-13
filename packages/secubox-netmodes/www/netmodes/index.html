@@ -11,6 +11,11 @@
   En-tête : pastille du mode routeur lue sur GET /api/v1/netmodes/routeur/etat ; bandeau « LAN temporaire / mode routeur
   non actif » quand l'état n'est pas « actif ». Lien direct vers un onglet : #carte, #switch, #clients, #maillage, #routeur, #modes.
 
+  Matériel réel (#3688) : GET /api/v1/netmodes/reseau/materiel (sysfs lu par l'API, jamais un nom de carte). Sur une carte SANS
+  switch DSA, SANS WAN dédié et sans br-lan (un Raspberry Pi : eth0, wlan0), les onglets Switch, Clients LAN et Mode routeur et
+  le bandeau du mode routeur sont masqués ; jamais si le mode routeur est actif, à confirmer, invalide ou en bascule, ni si le
+  matériel est illisible (vue complète, comme avant). MOCHAbin, ESPRESSObin : rien ne change.
+
   Onglet « Modes (hérité) » : l'ANCIENNE page, conservée dans le DOM avec tous ses identifiants (#2457).
   DONNÉES RÉELLES : GET /api/v1/netmodes/status, /get_available_modes, /preview_changes?mode=, /validate_config, /detect.
   Actions (confirmation INTÉGRÉE, jamais confirm()) : POST /apply_mode, /rollback. Le mode n'est jamais inventé : sans état enregistré, « inconnu ».
@@ -240,7 +245,43 @@
             }
             tx.append(titre, suite); bd.hidden = false;
         }
-        async function chargerRouteur() { rendreRouteur(await lireRouteur()); releve(); hauteur(); }
+        // ── Matériel réel (#3688) : sans switch DSA, sans WAN dédié et sans br-lan, la vue routeur n'a pas d'objet ──────────────
+        let materiel = null;
+        const ONGLETS_ROUTEUR = ['switch', 'clients', 'routeur'];
+        async function lireMateriel() {
+            if (DEMO) return { ok: true, d: { materiel: { vue_routeur: true } } };
+            try {
+                const r = await fetch(API + '/reseau/materiel', { headers: entetes({ Accept: 'application/json' }), credentials: 'same-origin', cache: 'no-store' });
+                let j = null; try { j = await r.json(); } catch (e) { /* pas de JSON */ }
+                return r.ok && j && typeof j === 'object' ? { ok: true, d: j } : { ok: false };
+            } catch (e) { return { ok: false }; }
+        }
+        // Vue adaptée SEULEMENT sur un « non » lu par l'API, et jamais quand le mode routeur est actif, à confirmer, invalide
+        // ou en bascule. Matériel illisible, ancienne API sans le champ : vue complète, comme avant.
+        function sansRouteur() {
+            const m = materiel && materiel.ok && materiel.d ? materiel.d.materiel : null;
+            if (!m || typeof m !== 'object' || m.vue_routeur !== false) return false;
+            const e = routeur && routeur.ok ? routeur.d : null;
+            return !(e && (e.bascule_en_cours === true || ['actif', 'en_attente', 'config_invalide'].includes(e.etat)));
+        }
+        function appliquerMateriel() {
+            const sr = sansRouteur();
+            onglets.forEach(o => { o.hidden = sr && ONGLETS_ROUTEUR.includes(o.dataset.onglet); });
+            $('sousTitre').textContent = sr ? 'cartographie, maillage et interfaces de la carte' : 'cartographie, switch, clients, maillage et mode routeur';
+            if (sr) {
+                const m = materiel.d.materiel, pa = $('pastilleRouteur');
+                $('bandeauLan').hidden = true; clearInterval(tCompte); tCompte = null;
+                if (!routeur || routeur.ok) {
+                    pa.className = 'actif neutre'; pa.textContent = 'SANS SWITCH NI WAN DÉDIÉ';
+                    pa.title = (m.modele ? m.modele + ' : ' : '') + 'carte sans switch DSA ni WAN dédié (lu par /api/v1/netmodes/reseau/materiel). Les onglets Switch, Clients LAN et Mode routeur sont masqués.';
+                }
+            }
+            if (courant && ONGLETS_ROUTEUR.includes(courant) && sr) choisir('carte');
+        }
+        async function chargerRouteur() {
+            const [r, m] = await Promise.all([lireRouteur(), lireMateriel()]);
+            materiel = m; rendreRouteur(r); appliquerMateriel(); releve(); hauteur();
+        }
 
         // ── Onglets : une iframe, ?embed=1 et ?demo=1 propagés ; « Modes (hérité) » = l'ancien contenu ─────────────────────────────────
         const onglets = [...document.querySelectorAll('.onglet')], vue = $('vue');
@@ -248,7 +289,7 @@
         const HAUTEUR_DEFAUT = 1000;
         function adresse(page) { return page + '?embed=1' + (DEMO ? '&demo=1' : ''); }
         function choisir(nom, focus) {
-            const o = onglets.find(x => x.dataset.onglet === nom) || onglets[0];
+            const o = onglets.find(x => x.dataset.onglet === nom && !x.hidden) || onglets[0];
             courant = o.dataset.onglet;
             onglets.forEach(x => { const sel = x === o; x.setAttribute('aria-selected', String(sel)); x.tabIndex = sel ? 0 : -1; });
             const page = o.dataset.vue;
@@ -261,12 +302,13 @@
             if (focus) o.focus();
             hauteur();
         }
-        onglets.forEach((o, i) => {
+        onglets.forEach(o => {
             o.addEventListener('click', () => choisir(o.dataset.onglet));
             o.addEventListener('keydown', ev => {
+                const vis = onglets.filter(x => !x.hidden), i = vis.indexOf(o);   // onglets masqués (#3688) : sautés
                 const n = ev.key === 'ArrowRight' ? 1 : ev.key === 'ArrowLeft' ? -1 : 0;
-                if (ev.key === 'Home' || ev.key === 'End') { ev.preventDefault(); choisir(onglets[ev.key === 'Home' ? 0 : onglets.length - 1].dataset.onglet, true); }
-                else if (n) { ev.preventDefault(); choisir(onglets[(i + n + onglets.length) % onglets.length].dataset.onglet, true); }
+                if (ev.key === 'Home' || ev.key === 'End') { ev.preventDefault(); choisir(vis[ev.key === 'Home' ? 0 : vis.length - 1].dataset.onglet, true); }
+                else if (n) { ev.preventDefault(); choisir(vis[(i + n + vis.length) % vis.length].dataset.onglet, true); }
             });
         });
         window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (h && h !== courant) choisir(h); });

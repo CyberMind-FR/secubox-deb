@@ -23,7 +23,9 @@ Les vues et fichiers qui ne sont pas des sources (TV d'ad-guard, dns-lan, routeu
 qu'au calcul. STDLIB SEULEMENT, aucun effet de bord : appelé par un service root sous AppArmor."""
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import json
 import io
 import ipaddress
 import os
@@ -371,6 +373,10 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
         if reste == 0:
             elagues.add(d)
 
+    # Une dérogation du contexte (autorisation TV, #3548) sur un nom qu'AUCUNE liste ne bloque : Unbound refuse un
+    # local-zone-override sans zone (« no local-zone for local-zone-override », toute la configuration tombe, constaté
+    # sur gk2 avec api.oqee.net). Une zone transparente le rend valide sans rien changer : le nom n'était bloqué nulle part.
+    orphelines = sorted(z for z in references if z not in cfg.zones and z != "." and _NOM_ZONE.fullmatch(z))
     nb_candidats, nb_elagues, nb_exceptions = len(S), len(elagues), len(X)
     emis = sorted(d for d, sd in S.items() if d not in elagues and (sd or d in X or d in references))
     del elagues
@@ -400,6 +406,22 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
             continue                                  # existe déjà dans la nouvelle configuration
         vue = cfg.acv[n][0] if n in cfg.acv and cfg.acv[n][0] in vues_gardees else None
         acl_rendu[c] = (action, vue)
+    # RETOUCHE (#3548) : ce qu'il faut pour reposer les seules lignes d'adresses quand une TV change d'adresse. Les
+    # étiquettes d'une classe ne dépendent que de son profil (vue, CONTENU des dérogations, portée) : on les note par profil.
+    ov_h = {b: _hash_ov(zs) for b, zs in cfg.ov_par_bloc.items()}
+    ov_ctx = _blocs_ov_contexte(contexte, noms_sources)
+    meta_profils: Dict[str, dict] = {}
+    for c in classes:
+        if c in sans_element:
+            continue
+        i = idx[c]
+        meta_profils.setdefault(_cle_profil(m, c, ov_h, vues_gardees), {
+            "tags": [t for (s_, x_), t in groupes.items() if ((s_ | x_) >> i) & 1],
+            "x": [t for (s_, x_), t in groupes.items() if (x_ >> i) & 1]})
+    meta = {"version": 1, "tags": list(groupes.values()), "profils": meta_profils,
+            "src_acv": {b: v for b, (v, f) in cfg.acv.items() if f in noms_sources},
+            "src_ov": {b: h for b, h in ov_h.items() if b not in ov_ctx},
+            "squelette": squelette([p for p in contexte if p.name not in noms_sources])}
     for grand in (cfg.zones, cfg.vues, cfg.ov_par_bloc, cfg.zones_sources):   # libéré avant le rendu (pic mesuré sur gk2)
         grand.clear()
     sortie = io.StringIO()                       # pas de liste d'1,5 million de lignes : un seul tampon
@@ -428,8 +450,116 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
         sortie.write(f'    local-zone: "{d}." always_nxdomain\n')
         if d in etiquette:
             sortie.write(f'    local-zone-tag: "{d}." "{etiquette[d]}"\n')
-    stats = {"sources": sorted(noms_sources), "classes": len(classes), "profils": len(profils),
+    for d in orphelines:
+        sortie.write(f'    local-zone: "{d}." transparent\n')
+    stats = {"sources": sorted(noms_sources), "classes": len(classes), "orphelines": len(orphelines), "profils": len(profils),
              "zones_chargees_avant": avant, "candidats": nb_candidats, "elagues": nb_elagues, "emis": len(emis),
              "etiquettes": len(groupes), "exceptions": nb_exceptions, "conflits_vue": len(cfg.conflits_vue),
-             "duree_s": round(time.monotonic() - debut, 1)}
+             "duree_s": round(time.monotonic() - debut, 1), "retouche": meta}
     return sortie.getvalue(), stats
+
+
+# ── retouche : une TV change d'adresse, on ne recompile pas (#3548) ──────────────────────────────────────────────────
+
+_ADRESSES = ("access-control-view:", "local-zone-override:")
+
+
+def _hash_ov(zones: Dict[str, str]) -> str:
+    return hashlib.sha256("\n".join(f"{z} {t}" for z, t in sorted(zones.items())).encode()).hexdigest()[:16]
+
+
+def _cle_profil(m: "_Modele", c: str, ov_h: Dict[str, str], vues_gardees: set) -> str:
+    """Profil d'une classe SANS ses adresses : sa vue, le contenu (empreinte) des dérogations qui la couvrent, la portée."""
+    vue, blocs = m.profil(ipaddress.ip_network(c))
+    return json.dumps([vue, [ov_h.get(b, "?") for b in blocs], vue in vues_gardees])
+
+
+def _blocs_ov_contexte(fichiers: Iterable[Path], sources: set) -> set:
+    out = set()
+    for f in fichiers:
+        if Path(f).name in sources:
+            continue
+        with Path(f).open(encoding="utf-8", errors="replace") as fh:
+            for ligne in fh:
+                mm = _OV.match(ligne.strip())
+                if mm:
+                    with contextlib.suppress(ValueError):
+                        out.add(bloc(mm.group(2)))
+    return out
+
+
+def squelette(fichiers: Iterable[Path]) -> str:
+    """Empreinte du contexte SANS les adresses des vues et des dérogations : égale tant que seules des adresses de TV
+    changent (mêmes vues, mêmes zones, mêmes access-control)."""
+    h = hashlib.sha256()
+    for f in sorted(fichiers, key=lambda p: Path(p).name):
+        f = Path(f)
+        ordre, ensemble, section = [], set(), ""
+        with f.open(encoding="utf-8", errors="replace") as fh:
+            for ligne in fh:
+                st = ligne.strip()
+                if not ligne[:1].isspace() and re.fullmatch(r"[a-z-]+:", st):
+                    section = st
+                    continue
+                if not st.startswith(_DECISIFS):
+                    continue
+                if (mm := _ACV.match(st)) and section == "server:":
+                    ensemble.add("acv " + mm.group(2))
+                elif (mm := _OV.match(st)) and section == "server:":
+                    ensemble.add(f"ov {_nom(mm.group(1))} {mm.group(3)}")
+                else:
+                    ordre.append(section + " " + " ".join(st.split()))
+        if ordre or ensemble:
+            h.update(b"\0F" + f.name.encode() + b"\0" + "\n".join(ordre).encode() + b"\0" + "\n".join(sorted(ensemble)).encode())
+    return h.hexdigest()
+
+
+def retoucher(ancien: str, meta: dict, contexte: Iterable[Path]) -> Optional[Tuple[str, dict]]:
+    """Le 92 avec les seules lignes d'adresses reposées, ou None s'il faut recompiler (contexte autre que des adresses,
+    profil inconnu, méta absente). Les zones (l'essentiel du fichier) sont reprises octet pour octet."""
+    debut = time.monotonic()
+    contexte = [Path(p) for p in contexte]
+    if not isinstance(meta, dict) or meta.get("version") != 1 or squelette(contexte) != meta.get("squelette"):
+        return None
+    coupe = ancien.find('\n    local-zone: "')
+    if coupe < 0 or not ancien.startswith("# SPDX"):
+        return None
+    cfg = lire(contexte, sources=())
+    vues_gardees = set(cfg.vues)
+    for b, v in (meta.get("src_acv") or {}).items():
+        cfg.acv.setdefault(b, (v, "source"))
+    ov_h = {b: _hash_ov(zs) for b, zs in cfg.ov_par_bloc.items()}
+    for b, h in (meta.get("src_ov") or {}).items():
+        cfg.ov_par_bloc.setdefault(b, {})
+        ov_h.setdefault(b, h)
+    m = _Modele(cfg, vues_gardees)
+    classes = sorted({*cfg.acl, *cfg.acv, *cfg.ov_par_bloc, *DEFAUTS_UNBOUND},
+                     key=lambda b: (ipaddress.ip_network(b).version, ipaddress.ip_network(b).prefixlen, b))
+    profils = meta.get("profils") or {}
+    sortie = io.StringIO()
+    sortie.write("# SPDX-License-Identifier: LicenseRef-CMSD-1.0\n"
+                 "# GÉNÉRÉ par secubox-dns-listes — ne pas éditer : les sources sont dans /var/lib/secubox-dns-listes/sources (#3205).\n"
+                 "server:\n")
+    if meta.get("tags"):
+        sortie.write('    define-tag: "' + " ".join(meta["tags"]) + '"\n')
+    lignes_tags = []
+    for c in classes:
+        n = m.noeud(ipaddress.ip_network(c))
+        action = m.action(n)
+        if action is None or action in _ACTIONS_FERMEES:
+            continue
+        p = profils.get(_cle_profil(m, c, ov_h, vues_gardees))
+        if p is None:
+            return None                                # profil jamais compilé : ses étiquettes sont inconnues
+        if not (c in cfg.acl or c in DEFAUTS_UNBOUND or (c in cfg.acv and cfg.acv[c][1] != "source")):
+            vue = cfg.acv[n][0] if n in cfg.acv and cfg.acv[n][0] in vues_gardees else None
+            sortie.write(f"    access-control: {c} {action}\n")
+            if vue:
+                sortie.write(f"    access-control-view: {c} {vue}\n")
+        if p["tags"]:
+            lignes_tags.append(f'    access-control-tag: {c} "' + " ".join(p["tags"]) + '"\n')
+        for t in p["x"]:
+            lignes_tags.append(f"    access-control-tag-action: {c} {t} always_transparent\n")
+    sortie.writelines(lignes_tags)
+    sortie.write(ancien[coupe + 1:])
+    return sortie.getvalue(), {"retouche": True, "classes": len(classes), "duree_s": round(time.monotonic() - debut, 1)}

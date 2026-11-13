@@ -48,7 +48,7 @@ def test_mailctl_imap_sync_sans_mot_de_passe_en_argument():
     assert 'imap-sync)   shift; cmd_imap_sync "$@" ;;' in CTL
     corps = CTL.split("cmd_imap_sync() {", 1)[1].split("\ncmd_fix_ports() {", 1)[0]
     assert "MAILCTL_PASSWORD" in corps and "IFS= read -r mdp" in corps          # stdin ou environnement, jamais argv
-    assert "doveadm" in corps and "sync -R -u" in corps and "imapc:" in corps and "imapc_ssl=imaps" in corps
+    assert "doveadm" in corps and "sync -1 -R -u" in corps and "imapc:" in corps and "imapc_ssl=imaps" in corps
     assert "chmod 0600" in corps and "/etc/secubox/secrets/mail/imap-sync" in CTL
     assert '"password"' not in corps.split("list|status)", 1)[1].split("run)", 1)[0].replace('"password"', "") or True
     liste = corps.split("list|status)", 1)[1].split("run)", 1)[0]
@@ -67,7 +67,7 @@ def test_routes_imap_sync_jwt_et_mot_de_passe_par_l_environnement():
 def test_unite_et_minuterie_du_rapatriement():
     assert "ExecStart=/usr/sbin/mailctl imap-sync run" in (PKG / "debian" / "secubox-mail-imap-sync.service").read_text(encoding="utf-8")
     minuterie = (PKG / "debian" / "secubox-mail-imap-sync.timer").read_text(encoding="utf-8")
-    assert "OnActiveSec=" in minuterie and "OnUnitActiveSec=15min" in minuterie
+    assert "OnCalendar=*:0/15" in minuterie and "OnUnitActiveSec" not in minuterie   # #3693 : sur l'horloge
     rules = (PKG / "debian" / "rules").read_text(encoding="utf-8")
     assert "secubox-mail-imap-sync.service" in rules and "secubox-mail-imap-sync.timer" in rules
     assert "secubox-mail-imap-sync.timer" in (PKG / "debian" / "postinst").read_text(encoding="utf-8")

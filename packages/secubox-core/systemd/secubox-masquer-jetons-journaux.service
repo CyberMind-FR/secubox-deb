@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# Jetons masqués dans les journaux nginx (#3691) : journaux d'erreurs et sites au format « combined », que le format
+# sbx_masque ne couvre pas. Réécriture à longueur égale, par descripteur, sans suivre de lien.
+[Unit]
+Description=SecuBox — masquer les jetons écrits dans les journaux nginx (#3691)
+ConditionPathIsDirectory=/var/log/nginx
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-masquer-jetons-journaux
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/log/nginx
+StateDirectory=secubox-core
+StateDirectoryMode=0750
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE
+LockPersonality=yes
+MemoryMax=256M

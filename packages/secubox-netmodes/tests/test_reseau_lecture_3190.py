@@ -201,10 +201,11 @@ def test_routes_gardees_require_lecture():
     arbre = ast.parse(src)
     routes = [f for f in arbre.body if isinstance(f, ast.FunctionDef)
               and any(isinstance(d, ast.Call) and getattr(d.func, "attr", "") == "get" for d in f.decorator_list)]
-    assert len(routes) == 3
+    assert len(routes) == 4
     garde = {f.name: ("require_jwt" if "require_jwt" in ast.unparse(f.args) else
                       "require_lecture" if "require_lecture" in ast.unparse(f.args) else None) for f in routes}
-    assert garde == {"lire_ports": "require_lecture", "lire_clients": "require_jwt", "lire_carte": "require_lecture"}
+    assert garde == {"lire_ports": "require_lecture", "lire_clients": "require_jwt", "lire_carte": "require_lecture",
+                     "lire_materiel": "require_lecture"}                 # #3688
 
 
 def test_pas_de_subprocess_dans_async_def():

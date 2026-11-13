@@ -65,7 +65,8 @@ def test_box_sans_webos_noms_relayes_depuis_le_pilotage(rel):
     r = sync(rel)
     t = rel.table()
     assert t[HALL] == [IP5, 9080] and t[MEET] == [IP5, 9080]
-    assert ADMIN not in t
+    # #3686 : le plan ne déclare pas admin.<box>, mais il répond — exposé d'office
+    assert t[ADMIN] == [IP5, 9080]
     assert "pilotage" in r.stdout
 
 
@@ -186,6 +187,7 @@ def test_plan_mauvais_ancien_chemin(rel, cas, monkeypatch):
 
 def test_noms_invalides_ou_hors_domaine_ignores(rel):
     rel.sans_webos()
+    (rel.r / "ADMIN_MUET").write_text("")   # admin.<box> d'office (#3686) hors sujet ici : seules les déclarations
     rel.ecrire_plan(noms=(MEET, "hall.gk2.secubox.in", "hub.gk4.secubox.in", "evil.com", "a.b.gk5.secubox.in",
                           "HUB.gk5.secubox.in", "x" * 41 + ".gk5.secubox.in", "-x.gk5.secubox.in", "gk5.secubox.in",
                           "wpad.gk5.secubox.in", "*.gk5.secubox.in", 7, None, "a b.gk5.secubox.in", "z.gk5.secubox.in;rm"))
@@ -195,6 +197,7 @@ def test_noms_invalides_ou_hors_domaine_ignores(rel):
 
 def test_plan_trop_de_noms_borne(rel):
     rel.sans_webos()
+    (rel.r / "ADMIN_MUET").write_text("")   # borne des déclarations seules (admin.<box> d'office : #3686)
     (rel.r / "etc/secubox/relais-maillage.toml").write_text("nouveaux_noms_max = 500\n")
     rel.ecrire_plan(noms=[f"s{i}.gk5.secubox.in" for i in range(200)])
     sync(rel)
@@ -213,6 +216,7 @@ def test_box_distante_admin_jamais_publie(rel):
 
 def test_joker_seul_jamais_relaye(rel):
     rel.sans_webos()
+    (rel.r / "ADMIN_MUET").write_text("")   # admin.<box> d'office (#3686) hors sujet ici
     rel.ecrire_plan(noms=("*.gk5.secubox.in",))
     sync(rel)
     assert set(rel.table()) == {"hall.gk2.secubox.in"}
