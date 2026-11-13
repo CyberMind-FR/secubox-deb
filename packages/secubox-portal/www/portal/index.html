@@ -10,6 +10,11 @@
   LECTURE SEULE, comme l'ancienne page : aucune action d'écriture, aucune route d'authentification touchée.
   DONNÉES RÉELLES UNIQUEMENT (/api/v1/portal/* et /api/v1/metrics/*, /api/v1/cookie-audit/*). Mesure absente = « — », jamais 0.
   Chaque tuile porte sa définition en infobulle. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
+  Modules présents (#3688) : lus dans le menu public du hub (/api/v1/hub/public/menu, celui du menu latéral). Un cadre dont le
+  module n'est pas au menu DISPARAÎT (santé, services, ressources, protection, certificats, cookies, sites et origines :
+  secubox-metrics, qui sert aussi /api/v1/cookie-audit/), et ses routes ne sont pas appelées ; un accès rapide ou un service
+  ne mène qu'à une page au menu. Jamais déduit d'un 502 ou d'un 404 : un module présent mais en panne garde son cadre et son
+  état d'erreur (« — », « indisponible ») ; menu illisible ou en préchauffage : tous les cadres, comme avant.
 -->
 <html lang="fr">
 <head>
@@ -87,8 +92,9 @@
   td.r,th.r{text-align:right} .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
   .scroll{overflow-x:auto}
   [hidden]{display:none!important}
+  .grille.n1{grid-template-columns:1fr} .tuiles.t2{grid-template-columns:repeat(2,1fr)}
   @container a (min-width:560px){.tuiles{grid-template-columns:repeat(3,1fr)}}
-  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .g2{grid-template-columns:1fr 1fr} .g3{grid-template-columns:1fr 1fr 1fr} .g1{grid-template-columns:1.4fr 1fr}}
+  @container a (min-width:900px){.tuiles{grid-template-columns:repeat(6,1fr)} .g2{grid-template-columns:1fr 1fr} .g3{grid-template-columns:1fr 1fr 1fr} .g1{grid-template-columns:1.4fr 1fr} .grille.n2{grid-template-columns:1fr 1fr} .tuiles.t2{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -107,22 +113,22 @@
   <div class="tuiles" id="tuiles"></div>
   <div class="recherche"><input type="search" id="rech" placeholder="Rechercher un service, un lien, un site…" aria-label="Rechercher un service, un lien ou un site" autocomplete="off"><span class="sous" id="rechN"></span></div>
   <div class="grille g1">
-    <div class="pan"><h3>Services <i id="svcNote"></i></h3><div class="svcs" id="svcs"></div><div class="note">Les quatre services suivis par le relevé de santé de la box ; un lien n’est proposé que vers une page existante.</div></div>
+    <div class="pan" id="panSvc"><h3>Services <i id="svcNote"></i></h3><div class="svcs" id="svcs"></div><div class="note">Les quatre services suivis par le relevé de santé de la box ; un lien n’est proposé que vers une page existante.</div></div>
     <div class="pan"><h3>Accès rapides</h3><div class="liens" id="liens"></div>
-      <h3 style="margin-top:12px">Ressources <i id="sysNote"></i></h3><div id="sys"></div></div>
+      <div id="blocSys"><h3 style="margin-top:12px">Ressources <i id="sysNote"></i></h3><div id="sys"></div></div></div>
   </div>
   <div class="grille g2">
     <div class="pan"><h3>Session et identité <i id="sesNote"></i></h3><div id="ses"></div></div>
     <div class="pan"><h3>Sessions ouvertes <i id="sesListeNote">administrateur</i></h3><div class="scroll" id="sesListe"></div></div>
   </div>
   <div class="grille g3">
-    <div class="pan"><h3>Protection <i>aujourd’hui</i></h3><div id="waf"></div></div>
-    <div class="pan"><h3>Certificats <i id="certNote"></i></h3><div id="certs"></div></div>
-    <div class="pan"><h3>Cookies · RGPD <i id="cookNote"></i></h3><div id="cook"></div></div>
+    <div class="pan" id="panWaf"><h3>Protection <i>aujourd’hui</i></h3><div id="waf"></div></div>
+    <div class="pan" id="panCert"><h3>Certificats <i id="certNote"></i></h3><div id="certs"></div></div>
+    <div class="pan" id="panCook"><h3>Cookies · RGPD <i id="cookNote"></i></h3><div id="cook"></div></div>
   </div>
   <div class="grille g3">
-    <div class="pan"><h3>Sites les plus visités <i>60 dernières minutes</i></h3><div class="scroll" id="hotes"></div></div>
-    <div class="pan"><h3>Réseaux d’origine des visiteurs <i>AS</i></h3><div class="scroll" id="asn"></div></div>
+    <div class="pan" id="panHotes"><h3>Sites les plus visités <i>60 dernières minutes</i></h3><div class="scroll" id="hotes"></div></div>
+    <div class="pan" id="panAsn"><h3>Réseaux d’origine des visiteurs <i>AS</i></h3><div class="scroll" id="asn"></div></div>
     <div class="pan"><h3>Derniers événements du portail <i>5 derniers</i></h3><div class="scroll" id="evts"></div></div>
   </div>
   <div class="note">Page en lecture seule : aucune action n’est possible depuis le portail. Mesures relevées sur la box, actualisées toutes les 30 s lorsque la page est visible.</div>
@@ -180,9 +186,30 @@
     sessions:{count:2,sessions:[{username:'admin',role:'admin',ip:'192.0.2.10',login_time:'2026-10-11T08:12:00'},{username:'demo',role:'user',ip:'198.51.100.7',login_time:'2026-10-11T09:03:00'}]}
   };
 
+  // Modules présents (#3688) : identifiants et chemins du menu public du hub ; null = inconnu (menu illisible, en
+  // préchauffage ou vide), et alors rien n'est masqué. Jamais déduit de l'échec d'une route.
+  function presents(menu){
+    if(!menu||typeof menu!=='object'||menu.warming||!Array.isArray(menu.categories))return null;
+    var ids={},chemins={},n=0;
+    menu.categories.forEach(function(c){(c&&Array.isArray(c.items)?c.items:[]).forEach(function(it){
+      if(!it||!it.id)return;ids[it.id]=true;n++;if(it.path)chemins[it.path]=true;});});
+    return n?{ids:ids,chemins:chemins}:null;
+  }
+  function auMenu(pr,chemin){return !pr||!!pr.chemins[chemin];}
+  // Cadres servis par secubox-metrics (qui sert aussi /api/v1/cookie-audit/).
+  var CADRES_METRICS=['panSvc','blocSys','panWaf','panCert','panCook','panHotes','panAsn'];
+  function disposer(){
+    Array.prototype.forEach.call(document.querySelectorAll('.app>.grille'),function(g){
+      // colonnes recalculées seulement quand un cadre manque : une page complète garde sa grille d'origine
+      var vis=Array.prototype.filter.call(g.children,function(x){return !x.hidden;}).length,manque=vis<g.children.length;
+      g.hidden=!vis;g.classList.toggle('n1',manque&&vis===1);g.classList.toggle('n2',manque&&vis===2);
+    });
+  }
+
   var D=null;
   function rend(d){
-    D=d;var h=d.sante,v=d.verif,st=d.statut,rs=d.resume;
+    D=d;var h=d.sante,v=d.verif,st=d.statut,rs=d.resume,pr=d.presents||null,met=!pr||!!pr.ids.metrics;
+    CADRES_METRICS.forEach(function(i){el(i).hidden=!met;});
     var rien=!(h||d.certs||d.cook||d.hotes||v||st||rs);
     el('session').hidden=DEMO||!rien;
     el('demo').hidden=!DEMO;
@@ -190,6 +217,7 @@
     var a=el('actif');
     if(h&&has(h.score)){var sc=num(h.score);a.textContent='SANTÉ '+Math.round(sc)+' %';a.className='actif'+(sc<70?' hors':sc<85?' warn':'');}
     else{a.textContent='SANS MESURE';a.className='actif na';}
+    a.hidden=!met;
     // identité
     var idn=el('ident');
     if(v&&v.valid){idn.textContent='👤 '+(v.username||'—')+' · '+(v.role||'—');idn.hidden=false;}
@@ -201,23 +229,26 @@
     var logins=rs&&rs.activity_24h&&has(rs.activity_24h.logins)?rs.activity_24h.logins:null;
     var bans=h&&h.waf&&has(h.waf.active_bans)?h.waf.active_bans:null;
     var cs=d.certs&&d.certs.summary?d.certs.summary:null;
+    // tuiles de secubox-metrics seulement s'il est au menu (#3688) ; celles du portail toujours
     el('tuiles').innerHTML=
-      tuile(IC.sante,h&&has(h.score)?Math.round(num(h.score))+' %':'—','Santé','uptime '+(h&&h.system?duree(h.system.uptime):'—'),'Score de santé global de la box, calculé par le relevé /metrics/health/summary.')+
-      tuile(IC.svc,nTot==null?'—':nOk+' / '+nTot,'Services en ligne','WAF, HAProxy, nginx, système','Services dont l’état est « ok » parmi les quatre suivis par le relevé de santé.')+
+      (met?tuile(IC.sante,h&&has(h.score)?Math.round(num(h.score))+' %':'—','Santé','uptime '+(h&&h.system?duree(h.system.uptime):'—'),'Score de santé global de la box, calculé par le relevé /metrics/health/summary.')+
+      tuile(IC.svc,nTot==null?'—':nOk+' / '+nTot,'Services en ligne','WAF, HAProxy, nginx, système','Services dont l’état est « ok » parmi les quatre suivis par le relevé de santé.'):'')+
       tuile(IC.ses,N(sess),'Sessions actives',rs&&rs.users?N(rs.users.total)+' comptes':'','Sessions de connexion ouvertes sur le portail (/portal/status). Les comptes sont ceux de /portal/summary.')+
       tuile(IC.conn,N(logins),'Connexions 24 h',rs?'webhooks : '+N(rs.webhooks_configured):'','Connexions réussies sur les dernières 24 heures (/portal/summary, historique du portail).')+
-      tuile(IC.ban,N(bans),'Bans actifs',h&&h.waf&&has(h.waf.alerts_today)?N(h.waf.alerts_today)+' alertes aujourd’hui':'','Adresses actuellement bannies par le WAF (/metrics/health/summary).')+
-      tuile(IC.cert,cs?N(cs.valid)+' / '+N(cs.total):'—','Certificats valides',cs&&num(cs.expired)>0?N(cs.expired)+' expiré(s)':(d.certs&&d.certs.next_renewal?'prochain : '+d.certs.next_renewal.days+' j':''),'Certificats valides sur le total suivi (/metrics/cert-status).');
+      (met?tuile(IC.ban,N(bans),'Bans actifs',h&&h.waf&&has(h.waf.alerts_today)?N(h.waf.alerts_today)+' alertes aujourd’hui':'','Adresses actuellement bannies par le WAF (/metrics/health/summary).')+
+      tuile(IC.cert,cs?N(cs.valid)+' / '+N(cs.total):'—','Certificats valides',cs&&num(cs.expired)>0?N(cs.expired)+' expiré(s)':(d.certs&&d.certs.next_renewal?'prochain : '+d.certs.next_renewal.days+' j':''),'Certificats valides sur le total suivi (/metrics/cert-status).'):'');
+    el('tuiles').classList.toggle('t2',!met);
     // services
     var htm='',vus=0;
     ids.forEach(function(k){var s=SVC[k],m=mods&&mods[k],stt=m?(m.status||'off'):null;
       var cls=stt==='ok'?'ok':stt==='warn'?'warn':stt==='error'?'err':'',lib=stt==null?'—':stt==='ok'?'EN LIGNE':stt==='warn'?'DÉGRADÉ':stt==='error'?'EN ERREUR':'ARRÊTÉ';
       var pc=cls||'na';if(stt!=null)vus++;
       var inner=s[1]+'<span class="n">'+esc(s[0])+'</span><span><i class="led '+cls+'"></i><span class="puce '+pc+'">'+lib+'</span></span><span class="d">'+esc(s[3])+'</span>';
-      htm+=s[2]?'<a class="svc" data-q="'+esc((s[0]+' '+s[3]+' '+k).toLowerCase())+'" href="'+s[2]+'" target="_top" title="Ouvrir '+esc(s[0])+'">'+inner+'</a>':'<div class="svc" data-q="'+esc((s[0]+' '+s[3]+' '+k).toLowerCase())+'">'+inner+'</div>';});
+      htm+=s[2]&&auMenu(pr,s[2])?'<a class="svc" data-q="'+esc((s[0]+' '+s[3]+' '+k).toLowerCase())+'" href="'+s[2]+'" target="_top" title="Ouvrir '+esc(s[0])+'">'+inner+'</a>':'<div class="svc" data-q="'+esc((s[0]+' '+s[3]+' '+k).toLowerCase())+'">'+inner+'</div>';});
     el('svcs').innerHTML=htm;
     el('svcNote').textContent=nTot==null?'état inconnu':nOk+' en ligne sur '+nTot;
-    el('liens').innerHTML=LIENS.map(function(l){return '<a data-q="'+esc(l[0].toLowerCase()+' '+l[1])+'" href="'+l[1]+'" target="_top">'+esc(l[0])+'</a>';}).join('');
+    var liens=LIENS.filter(function(l){return auMenu(pr,l[1]);});
+    el('liens').innerHTML=liens.length?liens.map(function(l){return '<a data-q="'+esc(l[0].toLowerCase()+' '+l[1])+'" href="'+l[1]+'" target="_top">'+esc(l[0])+'</a>';}).join(''):'<span class="sous">Aucune des pages d’accès rapide n’est installée sur cette box.</span>';
     // ressources
     var s=h&&h.system;
     el('sys').innerHTML=s?jauge('Processeur',s.cpu)+jauge('Mémoire',has(s.memory)?s.memory:s.mem_pct)+jauge('Disque',s.disk)+ligne('Charge',esc(s.load||'—'))+ligne('Conteneurs LXC actifs',N(h.services&&h.services.lxc_running))+ligne('Sites (vhosts)',N(h.counts&&h.counts.vhosts))+ligne('SSL',h.ssl&&has(h.ssl.days_remaining)?h.ssl.days_remaining+' j ('+esc(h.ssl.status||'?')+')':'—'):'<div class="vide">Aucune mesure de ressources.</div>';
@@ -256,7 +287,7 @@
     el('asn').innerHTML=as?'<table><thead><tr><th>AS</th><th>Organisation</th><th class="r">Requêtes</th></tr></thead><tbody>'+as.map(function(e){return '<tr data-q="'+esc(('as'+e.asn+' '+(e.org||'')).toLowerCase())+'"><td>AS'+esc(e.asn)+'</td><td>'+esc(e.org||'—')+'</td><td class="r">'+N(e.count)+'</td></tr>';}).join('')+'</tbody></table>':'<div class="vide">Origine des visiteurs indisponible (base GeoLite2-ASN absente ?).</div>';
     var ev=rs&&rs.recent_events&&rs.recent_events.length?rs.recent_events:null;
     el('evts').innerHTML=ev?'<table><thead><tr><th>Quand</th><th>Événement</th></tr></thead><tbody>'+ev.slice().reverse().map(function(e){return '<tr><td>'+quand(e.timestamp)+'</td><td>'+esc(e.event)+'</td></tr>';}).join('')+'</tbody></table>':'<div class="vide">Aucun événement récent.</div>';
-    filtre();hauteur();
+    disposer();filtre();hauteur();
   }
 
   // recherche côté client
@@ -284,8 +315,13 @@
     return fetch(u,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
   function charge(){
     bouton.disabled=true;
-    Promise.all([api('/api/v1/metrics/health/summary'),api('/api/v1/metrics/cert-status'),api('/api/v1/cookie-audit/summary'),api('/api/v1/metrics/live-hosts'),api('/api/v1/metrics/visitor-origin'),api('/api/v1/portal/verify'),api('/api/v1/portal/status'),api('/api/v1/portal/summary'),api('/api/v1/portal/sessions')]).then(function(r){
-      maj();rend({sante:r[0],certs:r[1],cook:r[2],hotes:r[3],asn:r[4],verif:r[5],statut:r[6],resume:r[7],sessions:r[8]});
+    // Le menu du hub d'abord (#3688) : les routes d'un module absent ne sont pas appelées.
+    api('/api/v1/hub/public/menu').then(function(menu){
+      var pr=presents(menu),met=!pr||!!pr.ids.metrics,rien=Promise.resolve(null);
+      function m(u){return met?api(u):rien;}
+      return Promise.all([m('/api/v1/metrics/health/summary'),m('/api/v1/metrics/cert-status'),m('/api/v1/cookie-audit/summary'),m('/api/v1/metrics/live-hosts'),m('/api/v1/metrics/visitor-origin'),api('/api/v1/portal/verify'),api('/api/v1/portal/status'),api('/api/v1/portal/summary'),api('/api/v1/portal/sessions')]).then(function(r){
+        maj();rend({sante:r[0],certs:r[1],cook:r[2],hotes:r[3],asn:r[4],verif:r[5],statut:r[6],resume:r[7],sessions:r[8],presents:pr});
+      });
     }).then(function(){bouton.disabled=false;},function(){bouton.disabled=false;});
   }
   bouton.addEventListener('click',charge);
