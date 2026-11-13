@@ -1,3 +1,14 @@
+secubox-mail (2.16.11-1~trixie1) trixie; urgency=medium
+
+  * Rapatriement IMAP à sens unique (doveadm sync -1 -R) : en double sens,
+    dsync voulait accorder le GUID des dossiers créés des deux côtés
+    (« Backend didn't update mailbox Sent GUID »), échec à chaque passage
+    depuis le 06/11 sur gk2. Rien n'est supprimé en local ni renvoyé vers
+    la boîte distante. Minuterie sur l'horloge (OnCalendar=*:0/15) : elle
+    ne peut plus s'arrêter après un échec (ref #3693, ref #3692).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 05:31:02 +0100
+
 secubox-mail (2.16.10-1~trixie1) trixie; urgency=medium
 
   * Conteneur mail sans privilèges (ref #3667) : `mailctl services` pose la surcharge du bac à
