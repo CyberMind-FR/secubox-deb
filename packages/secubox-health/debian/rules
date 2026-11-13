@@ -21,6 +21,11 @@ override_dh_auto_install:
 	    debian/secubox-health/lib/systemd/system/secubox-health-doctor-runner.service
 	install -D -m 0644 composants/health-doctor/systemd/secubox-health-doctor-runner.timer \
 	    debian/secubox-health/lib/systemd/system/secubox-health-doctor-runner.timer
+	# Bouton « Réparer » (#3628) : ctl root, unités .path/.service, dossier de demandes
+	install -D -m 0755 composants/health-doctor/sbin/secubox-reparerctl debian/secubox-health/usr/sbin/secubox-reparerctl
+	install -D -m 0644 composants/health-doctor/systemd/secubox-reparer.path debian/secubox-health/lib/systemd/system/secubox-reparer.path
+	install -D -m 0644 composants/health-doctor/systemd/secubox-reparer.service debian/secubox-health/lib/systemd/system/secubox-reparer.service
+	install -D -m 0644 composants/health-doctor/systemd/secubox-reparer.tmpfiles debian/secubox-health/usr/lib/tmpfiles.d/secubox-reparer.conf
 	install -D -m 755 composants/health-doctor/debian/postinst debian/secubox-health/usr/lib/secubox/health/maintscripts/health-doctor.postinst
 	install -D -m 755 composants/health-doctor/debian/prerm debian/secubox-health/usr/lib/secubox/health/maintscripts/health-doctor.prerm
 	# Composant absorbé : watchdog (#2050)

@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox Status Live v2 — /etc/secubox/status.toml (#3605). Valeurs absentes = défauts du paquet.
+
+[status]
+# Identifiant d'affichage (vide = nom court de la machine). L'identité réelle viendra du DID (jalon 2).
+node_id = ""
+node_role = "agent"        # « aggregator » sur la seule box qui rassemble la flotte (gk2)
+
+[history]
+retention_days = 90
+
+[sources.vhosts]
+enabled = true
+path = "/var/cache/secubox/health/status.json"
+stale_after_seconds = 300
+
+[sources.modules]
+enabled = true
+path = "/var/cache/secubox/health/modules.json"
+stale_after_seconds = 300
+
+[sources.profiles]
+enabled = true
+path = "/var/lib/secubox/profiles/validation/releve.json"
+stale_after_seconds = 900
+
+[public]
+expose_resources = false
+expose_module_inventory = false

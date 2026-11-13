@@ -25,6 +25,9 @@ port       = 8091
 max_active = 3          # bounded concurrent yt-dlp workers
 
 # ── Ephemeral retention (purge sweep) ──────────────────────────────────
+# Case « via Tor » (#3618) : proxy SOCKS de Tor. Vide = détecté (SocksPort LAN du Tor de la box).
+tor_proxy = ""          # ex. "socks5h://192.168.1.200:9050"
+
 [retention]
 ephemeral_ttl_hours = 6
 disk_floor_gb        = 5

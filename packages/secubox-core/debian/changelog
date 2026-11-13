@@ -1,3 +1,18 @@
+secubox-core (1.8.29-1~trixie1) trixie; urgency=medium
+
+  * Journaux nginx : les jetons passés dans l'URL (accessToken de PeerTube,
+    jeton du Hall, token, api_key) sont masqués dans la requête et le
+    référent (formats sbx_host et nouveau sbx_masque), casse indifférente,
+    trois jetons par URL ; les journaux déjà écrits, les journaux d'erreurs
+    et les sites au format « combined » sont masqués à longueur égale par
+    secubox-masquer-jetons-journaux, au postinst puis toutes les heures
+    (minuterie sur l'horloge). Programme root sans lien suivi : dossier
+    ouvert par descripteur, O_NOFOLLOW, fichier ordinaire à un seul lien.
+    Limite connue : un nom de paramètre encodé en %XX n'est pas reconnu
+    (ref #3691). Numéro 1.8.29 : 1.8.25 à 1.8.28 sont ceux de #3548.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 04:56:40 +0100
+
 secubox-core (1.8.28-1~trixie1) trixie; urgency=medium
 
   * dns-listes : une autorisation TV sur un nom qu aucune liste ne bloque

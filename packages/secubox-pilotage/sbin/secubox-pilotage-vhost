@@ -18,7 +18,7 @@ Root, verbes fermés :
                                 (`generate --allow-shrink`). Certificat et DNS inchangés. Audité (pilotage_vhost_retirer).
   synchroniser                  lit le plan du service /var/lib/secubox/pilotage/vhosts.json (chemin FIXE, sans lien, ≤ 1 Mio,
                                 validé en entier) : extrait les pages (secubox-pilotage-www), pose chaque vhost, retire ceux
-                                des box sorties du plan, purge les versions plus déclarées. Lancé par secubox-pilotage-vhost.path
+                                des box sorties du plan (vhost posé OU entrée du registre seule, #3632), purge les versions plus déclarées. Lancé par secubox-pilotage-vhost.path
                                 (et son minuteur), jamais par le service : celui-ci tourne sans sudo (NoNewPrivileges).
   lister                        vhosts posés. Non audité.
 
@@ -999,7 +999,11 @@ def synchroniser(ctx):
         except Erreur as e:
             bilan["erreurs"].append({"box": box, "erreur": str(e)})
     dans_plan = {b for b, _ in plan}
-    for box in poses(ctx):
+    # Box à retirer : celles dont le vhost est posé, ET celles encore inscrites au registre sans fichier nginx (#3632) —
+    # sans cela, une box revenue en interface locale gardait son nom `admin.<box>` exclu du relais (421), pour toujours.
+    inscrites = {e.get("box") for e in lire_registre(ctx)["domaines"].values()
+                 if isinstance(e, dict) and isinstance(e.get("box"), str) and V.RE_BOX.fullmatch(e["box"])}
+    for box in sorted(set(poses(ctx)) | inscrites):
         if box not in dans_plan and box not in en_attente:
             try:
                 retirer(ctx, box)

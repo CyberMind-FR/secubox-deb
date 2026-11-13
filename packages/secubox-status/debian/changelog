@@ -1,0 +1,35 @@
+secubox-status (0.1.3-1~trixie1) trixie; urgency=medium
+
+  * Jalon 2 (#3626) : pairs vérifiés par l'Annuaire dans la vue de flotte
+    (agrégateur), box absentes affichées avec leur raison ; rôle par défaut
+    « agent ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:00:00 +0100
+
+secubox-status (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * AppArmor : l'API lit ce qu'exigent les gardes de secubox_core (secret des
+    sessions dans secubox.conf, comptes, réglages d'auth, sessions, journal
+    de délégation ; /dev/null, somaxconn). Toute route gardée rendait 500
+    sur gk2 (« jwt_secret is not configured ») (#3623).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 14:30:00 +0100
+
+secubox-status (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Page « Status Live » dans l'administration (/status/, #3623) : état de la
+    flotte, carte par appliance (composants, âge du relevé, modules,
+    disponibilité, signature, sonde externe, frise 24 h), lecture seule,
+    rafraîchie toutes les 30 s ; entrée de menu.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 14:00:00 +0100
+
+secubox-status (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Status Live v2, jalon 1 (#3605, spec #3595) : collecteur local (caches de
+    santé des vhosts et des modules, relevé des profils, /proc), relevé v2
+    avec fraîcheur des sources (inconnu jamais compté en panne ni en succès),
+    historique SQLite WAL, projection publique en fichier statique, API
+    locale gardée sur /run/secubox/status.sock. Compte dédié, unités durcies.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 11:00:00 +0100

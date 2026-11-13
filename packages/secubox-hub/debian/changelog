@@ -1,3 +1,56 @@
+secubox-hub (1.12.56-1~trixie1) trixie; urgency=medium
+
+  * Menu latéral sur écran tactile (ref #3672, RPi4 kiosque) : barre d'icônes STABLE —
+    icônes à la même place replié ou déplié (plus de recentrage), aucune animation,
+    plus de repli automatique après 4 s ; le menu se referme en touchant ailleurs ou en
+    ouvrant une page. Souris et touchpad inchangés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 14:44:33 +0100
+
+secubox-hub (1.12.55-1~trixie1) trixie; urgency=medium
+
+  * Espaces : MirrorNet (menu.d de secubox-mirrornet, ref #3651) rangé dans « services ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:56:18 +0100
+
+secubox-hub (1.12.54-1~trixie1) trixie; urgency=medium
+
+  * Santé : une unité arrêtée par conception n'est plus « dégradé » (ref #3634, vu sur le RPi4) —
+    désactivée (hors module à veille) : pas surveillée, comme au menu (#3597) ; condition de
+    démarrage non remplie (ConditionResult=no, Result=exec-condition) : en veille, message
+    « En veille (condition de démarrage non remplie) ». Une vraie panne reste en panne.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 04:09:54 +0100
+
+secubox-hub (1.12.53-1~trixie1) trixie; urgency=medium
+
+  * Santé : bouton « Réparer » sur un module en panne, avec une session administrateur ;
+    suit la réparation et affiche ses étapes (ref #3628). Côté serveur : secubox-health 1.4.0
+    (sans lui, la demande est refusée et la page le dit).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:57:00 +0100
+
+secubox-hub (1.12.52-1~trixie1) trixie; urgency=medium
+
+  * Espaces : status (Status Live) dans Surveillance (#3623).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 14:00:00 +0100
+
+secubox-hub (1.12.51-1~trixie1) trixie; urgency=medium
+
+  * Menu : Vue d'ensemble et Santé jugées sur l'agrégateur qui les sert
+    (clé unite), plus marquées inactives faute d'unité à leur nom (#3597).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 05:00:00 +0100
+
+secubox-hub (1.12.50-1~trixie1) trixie; urgency=medium
+
+  * Menu et Vue d'ensemble : un module installé par un méta-paquet mais dont
+    le service (et le socket éventuel) est désactivé ou masqué, et qui ne
+    tourne pas, n'est plus affiché ni compté « à l'arrêt » (#3597).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 04:00:00 +0100
+
 secubox-hub (1.12.49-1~trixie1) trixie; urgency=medium
 
   * Dashboard : sur la console du kiosque (admin.localhost:9078), passer par

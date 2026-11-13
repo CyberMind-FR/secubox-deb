@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de MirrorNet v1 (#3645), nommé par AppArmorProfile= dans secubox-mirrornet.service, chargé par
+# le postinst. LECTURE du code, de mirrornet.toml, des fichiers des gardes et de l'export de l'annuaire (#3647) ;
+# ÉCRITURE de /var/lib/secubox-mirrornet (base SQLite, WAL), du partage avec les modules (#3666) et de la socket ; connexion à la socket de l'annuaire
+# local (gestes signés là-bas). Aucun secret (node.key reste à l'annuaire), aucun sudo, aucun réseau IP.
+
+#include <tunables/global>
+
+profile secubox-mirrornet flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/mirrornet/ r,
+  /usr/lib/secubox/mirrornet/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # ExecStartPost : remettre la socket en 0660.
+  /{usr/,}bin/sh ix,
+  /{usr/,}bin/dash ix,
+  /{usr/,}bin/seq ix,
+  /{usr/,}bin/sleep ix,
+  /{usr/,}bin/chmod ix,
+
+  # Configuration ; jamais les secrets.
+  /etc/secubox/mirrornet.toml r,
+  # Gardes de l'API (require_lecture / require_jwt de secubox_core) : même liste que secubox-status (#3623).
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/users.json r,
+  /etc/secubox/auth.toml r,
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/sessions.json r,
+  /var/log/secubox/delegation.log w,
+  /dev/null rw,
+  /proc/sys/net/core/somaxconn r,
+  owner @{PROC}/@{pid}/** r,
+  # Python (3.13) lit le quota CPU de son cgroup pour dimensionner ses fils (refus vu au banc, #3653).
+  /sys/fs/cgroup/system.slice/secubox-mirrornet.service/cpu.max r,
+  /sys/fs/cgroup/system.slice/cpu.max r,
+  deny /etc/secubox/secrets/** rwklx,
+  # Preuve de l'écouteur maillé, transmise par LoadCredential (#3653).
+  /run/credentials/secubox-mirrornet.service/ r,
+  /run/credentials/secubox-mirrornet.service/pair-preuve r,
+
+  # Base locale (ledger privé) : SQLite en WAL.
+  /var/lib/secubox-mirrornet/ rw,
+  /var/lib/secubox-mirrornet/** rwk,
+
+  # Export de l'annuaire (objets signés, revérifiés ici) — #3647.
+  /var/lib/secubox/annuaire/mirrornet-export.json r,
+
+  # Indices TV (#3666) : publication d'ad-guard lue (bornée, sans lien) ; partage avec les modules (demande de
+  # publication pour l'annuaire, livraisons pour ad-guard) écrit en atomique — le strict nécessaire : le dossier,
+  # publications.json et ses temporaires, livraisons/ et livraisons/tv-indices/ (créés au besoin), leurs fichiers
+  # (<did-hex32>.json, index.json) et temporaires.
+  /var/lib/secubox/ad-guard/dnstv/indices-publication.json r,
+  /var/lib/secubox-mirrornet-partage/ r,
+  /var/lib/secubox-mirrornet-partage/publications.json rw,
+  /var/lib/secubox-mirrornet-partage/.publications.json.*.tmp rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/ rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/ rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/index.json rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/[0-9a-f]*.json rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/.*.tmp rw,
+
+  # API ; routes /self/... de l'annuaire local.
+  /run/secubox/ r,
+  /run/secubox/mirrornet.sock rw,
+  /run/secubox/annuaire.sock rw,
+  network unix stream,
+
+  # Jeux de données (#3653) : objets opaques sur /data (ou sous l'état du service), versions tirées des pairs du
+  # maillage (l'unité borne les adresses à 10.10.0.0/24).
+  /data/mirrornet/ r,
+  /data/mirrornet/objets/ rw,
+  /data/mirrornet/objets/** rw,
+  network inet stream,
+}

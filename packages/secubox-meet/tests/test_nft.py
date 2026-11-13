@@ -113,3 +113,37 @@ def test_apply_ne_touche_pas_le_dossier_partage_des_publications(tmp_path):
     d.chmod(0o751)
     run_ctl(tmp_path, "media-expose", "--apply", nft_ok=True)
     assert (d / "meet.json").exists() and d.stat().st_mode & 0o777 == 0o751
+
+
+# ── #3615 : une box par adresse publique et par port — les ports de meet.toml sont suivis ─────────────────────────────
+def _ports(tmp_path, tcp, udp):
+    conf = tmp_path / "meet.toml"
+    texte = conf.read_text() if conf.exists() else ""
+    conf.write_text(texte + f"\ntcp_port = {tcp}\nudp_port = {udp}\n")
+
+
+def test_apply_avec_ports_de_la_configuration(tmp_path):
+    dst = _prepare(tmp_path)
+    run_ctl_rc(tmp_path, "help")                          # crée l'arbre et meet.toml de test
+    _ports(tmp_path, 7883, 7884)
+    d = json.loads(run_ctl(tmp_path, "media-expose", "--apply", nft_ok=True))
+    assert d["tcp_port"] == 7883 and d["udp_port"] == 7884
+    t = dst.read_text()
+    assert "tcp dport 7883 counter dnat ip to 10.100.0.195:7883 " in t and "udp dport 7884 counter dnat ip to 10.100.0.195:7884 " in t
+    assert "7881" not in t.split("table inet")[1] and "7882" not in t.split("table inet")[1]
+    publies = json.loads((tmp_path / "ports-publics.d" / "meet.json").read_text())["ports"]
+    assert publies == [{"proto": "tcp", "port": 7883}, {"proto": "udp", "port": 7884}]
+
+
+def test_port_douteux_retombe_sur_le_defaut(tmp_path):
+    dst = _prepare(tmp_path)
+    run_ctl_rc(tmp_path, "help")
+    _ports(tmp_path, '"7883; flush ruleset"', 99)
+    d = json.loads(run_ctl(tmp_path, "media-expose", "--apply", nft_ok=True))
+    assert d["tcp_port"] == 7881 and d["udp_port"] == 7882
+    assert "flush" not in dst.read_text()
+
+
+def test_rendu_livekit_suit_les_ports():
+    rendu = (Path(__file__).resolve().parents[1] / "lib" / "meet" / "rendu.sh").read_text()
+    assert "tcp_port: ${MEET_TCP_PORT:-7881}" in rendu and "udp_port: ${MEET_UDP_PORT:-7882}" in rendu

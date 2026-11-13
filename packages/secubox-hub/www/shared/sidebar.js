@@ -2350,6 +2350,9 @@
     // Barre d'icônes (#3533) : le menu se replie sur le logo et les icônes, se déplie au survol, au focus ou au toucher, et
     // se replie seul. Par-dessus la page : le contenu ne bouge pas. Pas sur téléphone (hamburger) ni en cadre. Désactivable :
     // localStorage sbx_menu_rail = "0".
+    // Écran TACTILE (#3672, choix du propriétaire « barre d'icônes stable ») : rien ne bouge sous le doigt — les icônes
+    // gardent la même place replié ou déplié (pas de recentrage), pas d'animation, pas de repli automatique : le menu se
+    // referme en touchant ailleurs ou en ouvrant une page. La souris garde le comportement ci-dessus.
     var RAIL_LARGEUR = 76, RAIL_DELAI = 4000, RAIL_SORTIE = 900, _railMinuteur = null;
     function railVoulu() {
         if (EMBARQUE || window.innerWidth <= 768) return false;
@@ -2370,9 +2373,13 @@
         var nav = document.getElementById('sidebar');
         if (nav) nav.classList.remove('rail-ouvert');
     }
+    function railTactile() {
+        return !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+    }
     function railAppliquer() {
         var actif = railVoulu();
         document.documentElement.classList.toggle('sbx-rail', actif);
+        document.documentElement.classList.toggle('sbx-tactile', actif && railTactile());
         railMarges(actif);
         if (!actif) railReplier();
     }
@@ -2383,9 +2390,12 @@
             'html.sbx-rail .sidebar{width:' + RAIL_LARGEUR + 'px!important;overflow:hidden;transition:width .22s ease;z-index:1200}' +
             'html.sbx-rail .sidebar:focus-within,html.sbx-rail .sidebar.rail-ouvert{width:220px!important;box-shadow:12px 0 30px rgba(0,0,0,.45)}' +
             'html.sbx-rail .sidebar:not(:focus-within):not(.rail-ouvert) :is(.logo-sbx,.sidebar-footer,.toggle-icon,.nav-mode,.nav-mode-link,#sbx-recherche,#sbx-recherche-vide,.nav-section-title>span:not(.cat-icon),.nav-item>span:not(.icon)){display:none!important}' +
-            'html.sbx-rail .sidebar:not(:focus-within):not(.rail-ouvert) :is(.nav-item,.nav-section-title){justify-content:center;padding-left:0;padding-right:0}' +
-            'html.sbx-rail .sidebar:not(:focus-within):not(.rail-ouvert) .sidebar-header{padding:.75rem 0}' +
-            'html.sbx-rail .sidebar:not(:focus-within):not(.rail-ouvert) .sidebar-header sbx-dice{transform:scale(.72);transform-origin:center}' +
+            'html.sbx-rail:not(.sbx-tactile) .sidebar:not(:focus-within):not(.rail-ouvert) :is(.nav-item,.nav-section-title){justify-content:center;padding-left:0;padding-right:0}' +
+            'html.sbx-rail:not(.sbx-tactile) .sidebar:not(:focus-within):not(.rail-ouvert) .sidebar-header{padding:.75rem 0}' +
+            'html.sbx-rail:not(.sbx-tactile) .sidebar:not(:focus-within):not(.rail-ouvert) .sidebar-header sbx-dice{transform:scale(.72);transform-origin:center}' +
+            // #3672 tactile : mêmes positions replié/déplié (les icônes ne bougent pas), aucune animation.
+            'html.sbx-rail.sbx-tactile .sidebar{transition:none!important}' +
+            'html.sbx-rail.sbx-tactile .sidebar:not(:focus-within):not(.rail-ouvert) .nav-section-title{justify-content:flex-start}' +
             '@media (prefers-reduced-motion:reduce){html.sbx-rail .sidebar{transition:none}}';
         document.head.appendChild(st);
         var nav = document.getElementById('sidebar');
@@ -2395,7 +2405,8 @@
             if (!window.matchMedia('(hover: none)').matches) return;
             if (!nav.classList.contains('rail-ouvert')) { e.preventDefault(); e.stopPropagation(); nav.classList.add('rail-ouvert'); }
             clearTimeout(_railMinuteur);
-            _railMinuteur = setTimeout(railReplier, RAIL_DELAI);
+            // #3672 : au toucher, pas de repli automatique pendant qu'on choisit (repli en touchant ailleurs ou en naviguant).
+            if (!railTactile()) _railMinuteur = setTimeout(railReplier, RAIL_DELAI);
         }, true);
         // Souris et touchpad (#3556) : un trajet lent ou une pause ne replie plus le menu, et le pointeur qui revient pendant le
         // sursis le retrouve à la même place : le clic ne tombe plus sur un élément en mouvement.

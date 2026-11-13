@@ -9,6 +9,178 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-12 — Leurres du WAF : apprentissage, promotion vers le bannissement, retrait (closes #3584, étape B)
+
+- Option 1 du propriétaire (sans toucher au moteur Go ni à secubox-waf-ng) : `secubox-security-posture` 2.6.0 (PR #3681).
+  - `product_absent_probes` (`detect`, apprentissage) ← `generate --apply` ; `product_absent_probes_ban` (`escalate` : ban après 3 touches/24 h) ← seule une promotion y écrit ; retirés dans `/etc/secubox/waf/leurres-retires.json` (root 0600).
+  - `secubox-cvectl leurre lister|promouvoir|retirer|retablir --apply --json` (id et acteur sur stdin, sudoers exact) ; écriture 4R unique de `waf-rules.json`, verrou, audit nominatif à chaque issue.
+  - Touches comptées toutes les 10 min par `secubox-cve-leurres.timer`, compte dédié `secubox-cve-leurres` (ACL lecture du journal du WAF, AppArmor enforce) ; page CVE : tableau « Leurres en place » (promouvoir, retirer, rétablir, confirmation avec le motif).
+- Relecture relecteur-securite, trois passes : 0 bloquant, tous les « à corriger » traités. Restent : `waf-rules-sync` ne prend pas le verrou ; deux leurres d'une même CVE partagent un id (CVE-2024-3400 : `/global-protect/portal/images/` écarté comme doublon) — id à rendre unique ; les deux suivis dans #3682.
+- Déployé gk6 (banc, vérifié) puis gk2 : 4 leurres en apprentissage (Palo Alto ×3, Cisco), sbxwaf rechargé à chaud (158 motifs), audit `leurre_appliquer`. Agrégateur de gk2 relancé le 12/11 (accord) : routes `/leurres` en ligne (401 sans jeton), `leurre lister` par sudo depuis `secubox` OK, minuterie de comptage en succès.
+
+## 2026-11-12 — sbx-authwatch réécrit ses bannissements dans waf-threats.log (closes #3679)
+
+- Depuis le 1er novembre sur gk2 : « permission denied » à chaque ban d'authwatch, absent du journal des menaces et du tableau de bord. Cause : `secubox-live-acl` (#3351) posait une ACL par défaut héritant `group::r-x` sur /var/log/secubox/waf ; le journal recréé par logrotate (`create 0660`, #1318) perdait l'écriture de groupe.
+- `secubox-live` 0.1.7 (PR #3680) : défaut `g::rwx,m::rwx` (le mode de création décide), écriture de groupe rendue au journal courant, secubox-live toujours en lecture seule. Déployé gk2 : bans SMTP de 07:10 consignés.
+- Constat annexe : `sbx-authwatch` n'est activé que sur gk2 (choix #1220 : un service qui bannit ne s'active pas seul) ; gk1 et gk6 affichent « Leurres de service · inactive » — décision du propriétaire attendue (activer gk1, et/ou activer d'office sur le parc).
+
+## 2026-11-11 — Leurres CERT-FR : modèles Nuclei « raw » exploités (ref #3584)
+
+- **Constat** : la veille CERT-FR de gk2 téléchargeait 8 modèles Nuclei, `wafgen` n'en retenait aucun (requêtes `raw:` refusées).
+- **Livré** (`secubox-security-posture` 2.5.3, PR #3678, déployé gk2) : le chemin de la première requête distinctive (ligne de requête d'un `raw:` ou `path:`) devient le leurre ; motif **ancré** `(?:^[/.]*|/\.\.)` + chemin échappé, « + » brut ou décodé (sbxwaf : unquote_plus, compilé avec Go regexp). Garde-fous : chaîne de requête ignorée, ≥ 2 segments (3 après marqueur ou requête retirée), ASCII imprimable, ni `%` ni remontée exotique, jamais une racine de la box ni des applis de ses vhosts (`/api/`, `/static/`, `/index.php`, `/wp-admin`…), ni un module ou vhost installé (`sonde_box`).
+- **Relecture relecteur-securite**, trois passes : 0 bloquant, 5 points corrigés. Couverture perdue assumée : leurres sous `/api/` (Ivanti `/api/v1/totp/user-backup`).
+- **gk2** : aperçu 5 leurres (Palo Alto ×4 dont l'existant, Cisco ×1), rien d'écrit — application manuelle par l'administrateur, mode `detect`. Reste l'étape B (`wafctl leurre`, accord du propriétaire).
+
+## 2026-11-11 — MirrorNet : gk7 ne reçoit pas les indices de gk2 (adresse maillée revendiquée trois fois)
+
+- gk7 préparé (mirrornet 0.6.0, annuaire 0.22.0) ; abonné aux indices de gk2 et gk6. gk6 livré en 2 min ; gk2 répond 404 à chaque essai.
+- Cause : 10.10.0.2 est revendiquée par trois NodeRecord (gk7 réinstallé, ancien gk7, ancien c3box) ; `transfert.autoriser` refuse une adresse ambiguë (voulu). Correctif à concevoir : départager par la clé WireGuard réelle du pair (`pubkey_wg` du NodeRecord). DNS de la maison remis sur gk2 seul (v4+v6) par l'API Freebox depuis gk2 (`secubox-freebox` 0.6.4).
+
+## 2026-11-11 — TV Privacy : encart « Pubs bloquées récemment » par appareil (closes #3676)
+
+- **Besoin** : le propriétaire a demandé qui avait protégé de la pub *Cat's Eyes* sur TF1+ (réponse : la liste adblock, `adproxy.tf1.fr`, `metrics-broker`) ; « ces stats devraient apparaître ».
+- **Livré** (`secubox-ad-guard` 1.25.3, PR #3677) : la vue par appareil de `/tv-privacy/` (onglet Applications) montre, par service (TF1+, Netflix, YouTube…), les domaines refusés ces dernières heures et ce qui les a bloqués (règle TV Privacy, liste adblock, liste compilée, « autre »).
+  - Attribution en tâche de fond par le moteur auto (au plus toutes les 10 min), cache `/var/lib/secubox/ad-guard/dnstv/pubs-bloquees.json` ; la route `GET /adblock-tv/appareils/{nom}/pubs-bloquees` (administrateur, donnée personnelle) ne lit que ce cache.
+  - `lists/services-pub.txt` : rattachement domaine → service.
+- **Relecture relecteur-securite** : 0 bloquant ; corrigés : marque posée par descripteur sans suivre de lien, liste illisible journalisée (errno) et signalée sur la page (`listes_lisibles`), FIFO refusée en lecture, fsync avant remplacement, catégorie du dernier refus. Remarque non retenue : le délégué du pilotage ne voit pas l'encart (sélection par MAC).
+- **Déployé** gk2, gk7, gk6 par apt. Agrégateur de gk2 relancé avec l'accord du propriétaire (sert aussi `/adblock-tv/indices` de #3666) : route en ligne (403 sans administrateur, 404 sur une route inconnue), cache rempli (tv-banc : TF1+, Netflix, YouTube, Braze…). gk7 et gk6 : agrégateur à relancer pour la page.
+
+## 2026-11-11 — SBX TV Privacy toujours actif, non désactivable
+
+- **Constat** : sur gk7 réinstallé, TV Privacy était éteint depuis l'installation : `ETAT_DEFAUT` et l'état initial posé par le postinst gardaient `actif: False`, reste du POC #1943 contraire à « protections actives par défaut ». Décision du propriétaire : TV Privacy ne doit pas pouvoir être désactivé.
+- **Correctif** (`secubox-ad-guard` 1.25.2, PR #3675) :
+  - **Activation** : à chaque configuration, un état absent ou inactif devient actif ; une box sans appareil passe en ajout automatique des TV.
+  - **Application** : le contrôleur n'applique que si l'état change, si le drop-in manque ou si une désactivation ancienne est marquée — pas de rechargement DNS à chaque mise à jour. Une box d'image est amorcée par le moteur auto au premier démarrage.
+  - **Désactivation impossible** : `POST /adblock-tv/etat` refuse `actif=false` (409), `disable` est retiré du sudoers du compte secubox, la page affiche l'état réel.
+  - **Garde** : un état corrompu reste inactif et n'est jamais écrasé.
+- **Relecture relecteur-securite** : 0 bloquant, 4 points corrigés. Remarques non retenues, à arbitrer :
+  - `POST /mode {"mode":"off"}` sans adresse passe tous les appareils en OFF ;
+  - le journal des requêtes DNS couvre tous les clients de la box, et le porteur délégué du pilotage peut les lire par appareil.
+- **Déployé** : gk7, gk6 et gk2 en 1.25.2 — actifs, dnsfeed actif ; gk2 sans rechargement d'Unbound (11 appareils) ; gk6 appliqué ; gk7 attend que des appareils l'interrogent (DNS de la Freebox : bail DHCP à renouveler, IPv6 encore vers gk2) (closes #3674).
+
+## 2026-11-11 — gk7 (RPi4 kiosque) : renommé, maillé, géré par gk2 ; console sans mot de passe ; menu tactile stable
+
+- **Identité** : « secubox-rpi » (192.168.1.128, réseau Freebox) = RPi4 à écran réinstallé et testé sur un autre site. Renommé **gk7** par `secubox-renommer` (audité).
+- **Maillage** : il n'avait ni interface WireGuard ni pair. Jonction par code `sbx-mesh-invite --code --nom gk7 --flash` (remplace la clé de l'ancienne installation, déposé sans affichage) puis `secubox-automesh` : wg-mesh 10.10.0.2, poignée avec gk2. Ancre posée (`sbx-mesh-ancre rattraper`) ; agent de pilotage relancé : gk2 l'a inscrit (`maillage:gk7`, agent 0.8.1, inventaire reçu).
+- **Mot de passe à la console** : `login.html` ne demandait le jeton de console qu'une fois ; au démarrage l'agrégateur ne répond pas encore → formulaire de mot de passe. Désormais : nouvel essai avec recul tant que le service démarre (5xx/réseau, 3 min), formulaire masqué ; un refus 4xx rend le formulaire. `secubox-portal` 2.5.2 (PR #3671), déployé gk7, tests sous node (closes #3670).
+- **Menu tactile** : barre d'icônes stable sur écran tactile (icônes immobiles replié/déplié, pas d'animation, pas de repli après 4 s). `secubox-hub` 1.12.56 (PR #3673), déployé gk7, tests Playwright avec la vraie feuille de style (closes #3672).
+- **À voir** :
+  - l'annuaire garde d'anciens NodeRecord : « secubox-rpi » 10.10.0.6 (octobre), et « c3box » qui revendique aussi 10.10.0.2 (adresse revendiquée par deux nœuds = refus MirrorNet) ;
+  - gk7 est encore en ad-guard 1.24.6 (mise à jour automatique à venir) ;
+  - le « KO ad-guard auto » signalé sur gk7 n'est pas reproduit : 748 passages réussis aujourd'hui, Santé entièrement verte.
+
+## 2026-11-11 — TV Privacy : indices de détection partagés entre box par MirrorNet (premier vrai jeu de données)
+
+- `secubox-ad-guard` 1.25.0, `secubox-mirrornet` 0.6.0, `secubox-annuaire` 0.22.0 (PR #3669).
+  - Conception : `docs/superpowers/specs/2026-11-11-tv-privacy-indices-maillage-design.md` ; plan exécuté par sous-agents, chaque tâche relue puis corrigée ; relecture finale + `relecteur-securite` (1 bloquant : un pair pouvait figer un blocage par un contenu signé invalide ; 5 points, dont la vie privée — un blocage de contrôle parental aurait été publié comme « pub ») ; tous corrigés.
+- Fonctionnement :
+  - **Publication** : chaque box publie ses domaines pub/pistage/télémétrie confirmés et ses légitimes, sans appareil, date ni MAC (`/var/lib/secubox/ad-guard/dnstv/indices-publication.json` → MirrorNet → `/var/lib/secubox-mirrornet-partage/publications.json`).
+  - **Signature de fond** : l'annuaire signe l'offre (`scope.usage = tv-indices`, classe communauté), les versions (une par heure au plus) et les abonnements aux autres box (bornés, gratuits, ≥ LIMITED).
+  - **Livraison** : MirrorNet livre dans `/var/lib/secubox-mirrornet-partage/livraisons/tv-indices/`.
+  - **Détection** : le moteur auto met à l'essai, poids maximal, un domaine vu localement en coupure pub et confirmé ailleurs (même INCONNU, même `auto_essai` coupé) ; jamais une catégorie protégée ; un légitime d'une autre box freine ; retrait sûr et réversible.
+  - **Interrupteurs** `indices_publier` / `indices_recevoir` (actifs par défaut), routes `GET/POST /adblock-tv/indices`.
+- Déployé gk2 et gk6 :
+  - gk2 publie 38 domaines (21 pub, 14 pistage, 3 télémétrie) + 1 légitime.
+  - **De bout en bout en 17 min** : offres signées, abonnements croisés, livraison à 13:43. Sur gk6, le lecteur d'ad-guard voit les 38 domaines de gk2 (même empreinte b2:18c616f3…).
+  - gk6 n'a pas TV Privacy configuré (pas d'état) : il reçoit sans appliquer.
+- **Reste** :
+  - la page (encart, interrupteurs) attend une relance de l'agrégateur de gk2, à grouper (accord du propriétaire) ;
+  - le résumé ne compte pas un producteur qui ne publie aucun domaine ;
+  - publication dans apt = mise à jour automatique du parc (partage actif par défaut) (closes #3666).
+
+## 2026-11-11 — gk3 : messagerie remise en marche, relais SMTP local
+
+- Page Santé de gk3 : 4 en panne, 9 dégradés.
+  - **Pannes mail-autocrypt et mail-imap-sync** : conteneur `mail` arrêté. Une fois démarré, dovecot échouait en 226/NAMESPACE (AppArmor refuse l'espace de montage du bac à sable systemd dans le LXC sans privilèges). Sur gk2, la surcharge avait été posée à la main sur dovecot, clamav-daemon, apache2 et systemd-resolved ; le paquet ne la posait que pour redis-server et le webmail.
+  - **Correctif** : `mailctl services` (dovecot, clamav-daemon), appelé par le postinst ; `secubox-mail` 2.16.10 (PR #3668). Déployé gk3 : dovecot, postfix, rspamd, redis actifs ; mail-autocrypt et mail-imap-sync repassent sans erreur (closes #3667).
+- **Relais SMTP local par défaut** posé sur gk3 (accord du propriétaire) : `smtp-relay.toml` → 10.100.0.10:25 comme gk2, EHLO 250 depuis l'hôte. `POST /config/local-default` répond `success: false` sur gk2 comme sur gk3 : elle tente d'écrire `/etc/postfix/main.cf` (root) sous le compte `secubox`, Permission denied — le relais n'en dépend pas ; à corriger.
+- **Reste sur gk3** (non touché, accord à demander) :
+  - `cmdline` en échec depuis le démarrage du 07/11 (délai dépassé) ;
+  - `ytsas` installé sans conteneur ni unité ;
+  - hub 1.12.48 : 5 des 9 « dégradés » sont des services désactivés, plus comptés depuis le hub 1.12.54 (#3634), dépôt apt de gk3 en retard (candidat 1.12.52).
+
+## 2026-11-11 — MirrorNet phase 4c : présence certifiée, copies servies, répartition (banc en cours) ; Annuaire : noms des box
+
+- `secubox-annuaire` 0.21.0 → 0.21.2 et `secubox-mirrornet` 0.5.0 → 0.5.1 (PR #3662, correctifs de banc #3663, #3665).
+  - **Annuaire** : l'export ajoute les abonnements déjà signés utiles — abonnés des jeux confiés à mes espaces, abonnements d'espace qui nomment mes jeux.
+  - **Preuve de possession** : défi aléatoire, BLAKE2b clé = défi, route maillée `/mirrornet/preuve/`, réservée à l'origine d'une copie reçue d'elle.
+  - **Copies servies** aux abonnés Actif du jeu.
+  - **Répartition** de l'abonné : hachage de rendez-vous, 2 sources par passe, reprise par source.
+  - **Plafonds de service** global et par pair (503).
+- Relecture relecteur-securite : 1 bloquant corrigé — empreinte d'un autre jeu servie via une copie dédoublonnée ; test + mutation vérifiée. 5 points corrigés.
+- Banc gk6 (producteur) → gk12 (espace) → gk2 (abonné). **Vérifié** :
+  - gk12 sert la copie à gk2 abonné (200) ;
+  - gk12 refuse gk2 avant son abonnement (404) ;
+  - l'export relaie l'abonnement d'espace jusqu'à gk2 (réplique gk12 Actif connue).
+- **Trouvé au banc** :
+  - l'export de l'annuaire restait figé (cache sur la seule hauteur, alors que les niveaux de confiance évoluent avec le temps) → expiration 240 s ;
+  - le premier défi part avant la copie → nouvel essai après 3 min ;
+  - propagation lente : passe complète 300 s + export, ~15 min de bout en bout.
+- **Non vérifié** :
+  - preuve de possession réussie ;
+  - transfert réparti vers la réplique.
+  - **gk12 (RPi400) hors ligne depuis 09:11:32** : lien `lan2` de gk2 perdu juste après l'installation de 0.5.1, cause inconnue, à remettre sous tension sur place.
+  - Restes du banc à nettoyer : offres « Espace banc 3661 » (gk12) et « Jeu banc 3661 » (gk6), sessions `banc3661` sur gk2, gk6, gk12.
+- **Annuaire, onglet Services** : nom de la box au lieu du did, « MON OFFRE » au lieu de S'abonner pour ses propres offres (`/services` : `provider_nom`, `mienne`), déployé gk2 et gk6 (closes #3664). Constat : gk2 voit 5 offres Boutique, dont une de gk4 (ancienne identité du RPi400) pointant vers la boutique de gk2 — relique non révocable sans sa clé.
+
+## 2026-11-11 — MirrorNet phase 4b : espace offert en service, propagation des jeux et lignée, déployée gk2 + banc
+
+- `secubox-annuaire` 0.20.0 et `secubox-mirrornet` 0.4.0 (PR #3660).
+  - **Annuaire** : abonnement à une offre `kind=espace` avec deux champs signés, `jeux` (jeux du producteur confiés) et `compat_acceptee` (compatibilité et capacité de l'espace figées).
+  - **Espace** : tire chez le producteur la dernière version de chaque jeu nommé ; revérifie classe, format, licence, taille, données personnelles, capacité et empreinte ; garde la copie avec sa lignée (origine, parent) ; refait la mise à jour à chaque version ; purge au retrait et à la clôture.
+  - **Producteur** : sert le seul espace choisi, dans la compatibilité figée ET l'offre actuelle.
+  - Schéma v4, routes `/espaces`, `/espaces/gardees`, `/datasets/{id}/lignee`, `POST /espaces/{id}/propager` ; onglet « Espaces et répliques », bouton « Lignée ».
+  - Relecture relecteur-securite : 0 bloquant, 2 points + 6 remarques corrigés. Points corrigés : compatibilité non contrôlée par le producteur, empreinte reprise par un tiers effaçant une copie (corrigé aussi pour les abonnés 4a).
+- **Banc gk6 → gk12** :
+  - gk12 offre 10 Mio (public, 1 Mio par version) ; gk6 y confie un jeu de 300 000 octets (abonnement Actif, `jeux` signé, audité).
+  - gk12 garde la copie (~7 min, empreinte recalculée identique, 0600 `secubox-mirrornet`).
+  - Refus : gk2 non choisi 404, objet inconnu 404.
+  - Version 2 tirée d'elle-même (~5 min, parent = v1), puis retirée.
+  - Abonnement de 2 h arrivé à échéance → copies purgées. Le retrait seul n'a pas été chronométré : la session est tombée, et ce chemin est celui de 4a.
+  - Nettoyé : offres révoquées, sessions de test retirées.
+- **Déployé** gk2, gk6, gk12 : 0.20.0 / 0.4.0 actifs, NRestarts=0, gk2 synchronisé (166 offres, 0 rejet) (closes #3659).
+- Reste : lot 4c (présence certifiée, copies servies aux abonnés, répartition) ; une version neuve peut être refusée pour capacité tant que l'ancienne occupe encore la place.
+
+## 2026-11-10 — MirrorNet phase 4a : jeux de données, déployée gk2 + banc
+
+- `secubox-annuaire` 0.19.0 et `secubox-mirrornet` 0.3.0 → 0.3.2 (PR #3654, correctifs de banc #3655 #3656). Versions signées `service_dataset_version` (numéro et parent calculés, empreinte BLAKE2b, licence, provenance, classe jamais moins stricte que l'offre, données personnelles contrôlées à la source) et retraits ; dépôt en flux (Content-Length, plafond 256 Mio, garde d'espace), objets sur `/data/mirrornet/objets` ; réception par l'abonné Actif dans sa propre tâche (délai total, reprise différée, sans redirection) ; service aux seuls abonnés Actif par l'écouteur :8799 avec preuve posée par nginx (secret root remis par LoadCredential) — routes livrées dans `/etc/nginx/secubox-mesh.d/` ; onglet « Jeux de données ». Écarts assumés : pas de ConfigBlob, pas de port 8471. Relecture relecteur-securite : 9 points + remarques corrigés ; hub 1.12.55 installé sur gk2 (MirrorNet dans « services », sans relance de l'agrégateur).
+- Banc réel : gk6 publie un jeu et dépose 300 018 octets (empreinte = b2sum) → gk12 le voit (~5 min 30), s'abonne, le reçoit par le maillage (~7 min, empreinte recalculée identique) ; retrait → gk12 l'efface (~5 min 30). Refus : gk2 non abonné 404, chemin interne 404, POST 403, IP forgée sans preuve sur la socket 404, hôte d'administration 404. Nettoyé (offre retirée, sessions de test retirées). Trouvé au banc : rendu des routes dépendant de l'ordre d'installation (corrigé), refus AppArmor cgroup (corrigé), course credentials au démarrage avec Type=simple (Type=exec). Déployé gk2, gk6, gk12 : 0.3.2 actif, NRestarts=0 (closes #3653).
+
+## 2026-11-10 — MirrorNet : interface web d'administration
+
+- Page Aurora `/mirrornet/` (`secubox-mirrornet` 0.2.1, PR #3652) sur les routes réelles : synchronisation, catalogue fédéré, abonnements et abonnés avec historique, publication d'une offre ; actions s'abonner, renouveler, résilier/révoquer, approuver, refuser — confirmées dans la page, clé X-Idempotence par geste, `?demo=1` sans écriture, `?embed=1`. Manque comblé : approbation et refus par le fournisseur (`secubox-annuaire` 0.18.2, `/self/subscription/{id}/approve|reject`, demande en attente seulement, sous verrou). Relecture relecteur-securite : 0 bloquant, 2 points + 4 remarques corrigés. Menu : `secubox-hub` 1.12.55 range MirrorNet dans « services » — publié, **non installé sur gk2** (relance de l'agrégateur : à grouper) ; « Autre » d'ici là.
+- Déployé gk2, gk6, gk12 ; `https://admin.gk2.secubox.in/mirrornet/` et `admin.gk12` : 200, rendu vérifié avec les vraies données sur gk2 (45 offres présentables, 68 offres de gk2, synchronisation 17 s, 0 rejet, aucune erreur JS) ; `admin.gk6` toujours 404 par le relais public (closes #3651).
+
+## 2026-11-10 — MirrorNet v1 phase 3 : cycle de vie des abonnements, déployé gk2 + banc
+
+- `secubox-annuaire` 0.18.0 → 0.18.1 et `secubox-mirrornet` 0.2.0 (PR #3648, correctif de banc PR #3650). Annuaire : offres et abonnements étendus (champs facultatifs hors charge signée : les 412 entrées service_* du journal de gk2 restent valides), `service_renew` / `service_revoke_offer_sub` (op dans la charge signée), résiliation par l'abonné, échéance bornée par la durée de l'offre, service_id au premier fournisseur, abonnement lié à son fournisseur, forme des opérations vérifiée à l'import, niveaux de confiance calculés (`confiance.py`), export `mirrornet-export.json`, routes `/self/...` signées par node.key et auditées (`par`). MirrorNet : synchronisation 60 s revérifiée, états dérivés (Demande, Refuse, Actif, Grace, Suspendu, Expire, Resilie), catalogue filtré par niveau, écritures administrateur relayées (seul jeton validé), idempotence sans double signature, schéma v2. Deux relectures relecteur-securite (1 bloquant + 9 points, puis 3 points) corrigées.
+- Banc : l'export du journal résolvait la clé de chaque auteur par un balayage complet — gk2 servait `?ops=assist_` en 21 s (délai des pairs : 5 s) ; une lecture SQL des identités → **0,39 s** (assist_) et 1,2 s (service_). Voie rapide ramenée à l'assistance ; un export lent n'est plus une absence (sonde /health).
+- Parcours validé sur trois nœuds : gk6 publie (offre gratuite, 15 min) → gk2 la présente (lecteur anonyme sans adresse interne) → gk12 s'abonne (Actif, rejeu de la clé identique, autre clé → `existant`), renouvelle (+1 période exactement), résilie (motif, second DELETE 409) ; gk6 voit l'abonnement en fournisseur (même échéance) en ~4 min puis la résiliation ; audit `mirrornet_*` avec `par=admin` des deux côtés ; offre de test retirée (`annuairectl revoke-offer`), sessions de test retirées. Non testé en réel : grâce/suspension (fournisseur coupé) — couvert par les tests à horloge simulée.
+- Écarts relevés : `admin.gk6.secubox.in/api/v1/mirrornet/` répond 404 par le relais public (200 en local sur :9080) ; gk2 ne sert pas les offres à gk12 (droits du maillage #3305 de son abonnement) ; une session de test sans `expires` est purgée par secubox-auth. Phase 4 (espace offert, propagation, lignée, présence certifiée, répartition de charge) : issue #3649 ; maquette https://claude.ai/artifact/2BxeoGjEEH2v3qSSqtDTVz (closes #3647).
+
+## 2026-11-10 — Santé : arrêt voulu en veille ; dé Plymouth recentré (RPi400)
+
+- RPi400 = **gk12** (192.168.42.191, LAN de gk2) : maillé (10.10.0.7, jeton servi par une ligne `curl … | sh`), clé SSH posée (mot de passe d'usine, accord), `ROOTPART=UUID=…` posé dans `/etc/default/raspi-firmware` (sauvegardes `/root/*.avant-3636`), hub 1.12.54 + plymouth 0.1.2 installés, initramfs régénéré à la main (mkinitramfs, sans le crochet raspi-firmware : /boot/firmware à 53 Mo libres) ; Santé sans dégradé ; `admin.gk12.secubox.in` relayé (200). Les noms *.gk4 visaient l'ancienne installation de ce même RPi400.
+- MirrorNet : **autojoin par fenêtre d'appairage** (choix du propriétaire) — Flotte « Ouvrir l'appairage (15 min) », `secubox-autojoin` sur la box derrière le maître ; secret de l'écouteur 7331, aucun jeton pour reprendre un pair ou un nom réservé, pair « à valider » jamais exposé avant Valider. **Relais automatique** : `admin.<box>` d'un pair sans webos ni pilotage, retrait des noms d'un pair muet > 72 h (20 noms gk4/gk7/gk8 retirés sur gk2), passe dès une jonction (≤ 1 / 5 min). Deux relectures relecteur-securite (3 bloquants corrigés). `secubox-p2p` 1.22.0, `secubox-annuaire` 0.17.7, PR #3640, déployés gk2 ; refus vérifiés (fenêtre fermée depuis le LAN, secret absent depuis Internet) (closes #3638, closes #3639).
+- MirrorNet v1 phase 0 : `docs/MIRRORNET_AUDIT.md` (PR #3642, closes #3641) ; arbitrages validés (« go »). Phase 1 : six documents d'architecture `docs/MIRRORNET_{ARCHITECTURE,NETWORK,SERVICE_EXCHANGE,DATA_EXCHANGE,ECONOMY,SECURITY}.md` (PR #3644, closes #3643), validés (« go »).
+- MirrorNet v1 phase 2 : `docs/MIRRORNET_DATA_MODEL.md` + nouveau paquet `secubox-mirrornet` 0.1.0 (schéma SQLite versionné, ledger en partie double en ajout seul et chaîné, répartition exacte, API `/api/v1/mirrornet/` en lecture seule, compte dédié, AppArmor enforce) ; `secubox-meta` 0.1.55 (suggéré par secubox-service-mesh). Deux relectures relecteur-securite (8 + 2 points corrigés : INSERT OR REPLACE, inverse détournable, chaîne incomplète, ledger lisible par le groupe, boucle de redémarrage depuis ExecStartPre, purge sans copie). PR #3646, publié ; installé sur gk6 (banc) : service actif, 0600/0700, 401 sans jeton, base trop récente → code 3 sans redémarrage (NRestarts=0) ; gk2 sur accord (closes #3645).
+
+- Page Santé : les unités arrêtées par conception ne sont plus « dégradé » (vu sur le RPi4) — désactivées (hors modules à veille) non surveillées, condition de démarrage non remplie (`ConditionResult=no`, `Result=exec-condition`) en veille avec message explicite. `secubox-hub` 1.12.54 (PR #3635), déployé secubox-rpi (RPi4 : plus aucun dégradé) et gk2 (closes #3634). Fait dans le hub : secubox-core ne se reconstruit pas depuis master tant que #3594 est ouverte.
+- Plymouth : dé et barre en tout petit en bas à droite sur le RPi400 HDMI (positions calculées une seule fois, avant le passage firmware → vc4) ; recalculées à chaque image, état partagé par `global.` (`secubox-plymouth` 0.1.2, PR #3637, publié ; ref #3636). Le thème vit dans l'initramfs, non régénéré par le paquet : arrive avec la prochaine image RPi. RPi400 (192.168.42.191, LAN de gk2) : SSH fermé, pas encore dans le maillage — rien déployé dessus.
+
+## 2026-11-09 — Status Live v2 jalon 1 sur gk2 ; profil mobile réellement appliqué ; majauto ne se tue plus
+
+- Status Live v2 : spécification et arbitrages (page publique statique, paquet `secubox-status` séparé, gk2 seul d'abord) fusionnés (PR #3596, closes #3595). Jalon 1 : `secubox-status` 0.1.0 (collecteur 60 s sur les caches + /proc, fraîcheur, SQLite WAL, projection publique statique, API gardée, AppArmor enforce, socket 0660 ; relu par relecteur-securite) déployé sur gk2 (PR #3608, closes #3605). Premier relevé gk2 : dégradé (CPU 99 %, systemd PID 1 à 70 % ; 23 API de modules muettes dont aggregator selon le prober ; cache des vhosts figé depuis le 5 septembre).
+- Profil mobile : modules installés mais désactivés masqués du menu (hub 1.12.50/1.12.51, auth 1.8.19, PRs #3598 #3600) ; installateur sans `secubox-webos` (en Conflicts de minimal), slipstream filtré par profil, Chromium et unités d'auto-install dans le live (PRs #3599 #3601 #3602) ; `secubox-mobile` 0.3.5 enfin publié sur apt. Validé en VM gk13, pas encore sur gk2 (ref #3597).
+- `profilectl scan` refusait sans LXC installé : modules.d vide, profil sans effet (auth arrêté, console refusée). `secubox-profiles` 0.28.4 (PR #3604), validé VM gk13 (ref #3603).
+- `secubox-majauto` se tuait en mettant à jour `secubox-premier-pas` (preinst dh_installsystemd) ; `premier-pas` 0.9.17 `--no-stop-on-upgrade` (PR #3607), validé par une vraie passe majauto sur secubox-rpi (RPi4), réparé à la main avant. closes #3606.
+- Supports : micro-SD RPi400 (image live bêta 1) et clé live amd64 flashées. Images RPi pas encore sur la release (contrôle des clés privées à faire).
+- Visio gk3 (La Suite Meet), validée par le propriétaire : un administrateur réel entre en son nom (opt-in par client OIDC, audité ; auth 1.8.20, PR #3613, closes #3612) ; salle créée depuis l'administration au format de code de Meet (meet 0.2.8, PRs #3611 #3617, closes #3610) ; ports médias réglables, gk3 en 7883/7884 relayés par gk2 (gk1 garde 7881/7882 ; meet 0.2.7, PR #3616, closes #3615). Reste : redirections Freebox 7883/7884 vers gk2 pour les participants extérieurs.
+- Status Live : page d'administration `admin.gk2.secubox.in/status/` (status 0.1.1-0.1.2, hub 1.12.52 ; profil AppArmor élargi aux gardes JWT, plus de 500 ; closes #3623). Jalon 2 : relevés signés des pairs agrégés par gk2 (annuaire 0.17.6, status 0.1.3, PR #3627, relu par relecteur-securite : nom lié à la fiche signée, box non liée refusée, anti-rejeu persistant, lecture bornée, unité durcie) ; déployé gk2 (agrégateur), gk1, gk3, gk6 : 3 pairs signés et vérifiés ; gk4/gk8/secubox-live/secubox-rpi injoignables, gk5 à mettre à jour (mot de passe), 2 adresses sans fiche unique (closes #3626). gk1 relevé « indisponible » : module critique mail, API muette (timed out).
+- `secubox-auth` 1.8.21 : python-multipart explicite, users ne boucle plus sur l'image mobile (PR #3622, validé VM, ref #3621). Installateur : unité d'auto-install réellement activée (PR #3620), validé en VM par l'entrée « Headless Auto-Install » ; installateur et ISO de la release bêta 1 remplacés, images RPi (rpi, rpi4-dsi) publiées après contrôle des secrets (closes #3587). ytsas 0.8.11 : case « via Tor » (PR #3619, déployé gk2, closes #3618).
+- Page Santé : bouton « Réparer » sur un module en panne (administrateur) — `secubox-health` 1.4.0 (API `POST /health-doctor/reparer/{id}` → `secubox-reparer.path/.service` root sans sudo, `secubox-reparerctl` : unité `secubox-*` chargée et en échec seulement, hors refus ; dpkg interrompu terminé ou « réessayer » si occupé ; reset-failed, démarrage, relecture ; audit `sante_reparation`), `secubox-hub` 1.12.53. Deux passes de relecteur-securite (2 bloquants corrigés : lecture root par lien, FIFO) ; exceptions § 7 et § 10 écrites. Validé de bout en bout sur gk6 (unité de test en panne réparée, service sain refusé), déployé gk2 (PR #3629, closes #3628). La mise à jour d'un module monté ne relançait pas l'agrégateur (relancé à la main sur gk2) : `secubox-premier-pas` 0.9.18, `secubox-majauto-agregateur` relance l'agrégateur UNE fois en fin de passe majauto si un paquet mis à jour livre du code qu'il sert (module monté ou secubox_core), sauf s'il a déjà redémarré (PR #3631, publié, installé gk6 et gk2, simulation juste sur les deux ; closes #3630).
+- `admin.gk3.secubox.in` rendu au relais (registre du pilotage resté sur une box revenue en interface locale ; `secubox-pilotage-vhost retirer gk3`). Défaut de fond corrigé : `synchroniser` ne retirait que les box ayant encore leur fichier nginx ; il retire désormais aussi celles restées au seul registre (`secubox-pilotage` 0.6.20, PR #3633, déployé gk2 : admin.gk4 sorti du registre et rendu au relais vers 10.10.0.9:9080, audité ; gk4 injoignable pour l'instant ; closes #3632). `secubox-meta` 0.1.54 : secubox-status dans l'arbre, catalogue App Store regénérable (PR #3609, ref #3605).
+
 ## 2026-11-08 — Kiosque sur l'administration, Hall facultatif ; fermeture des issues déployées
 
 - PR #3591 : la racine ne renvoie au Hall que si `/etc/secubox/hall-accueil` existe (posé sur gk2) ; installateur en profil mobile + webos ; Dashboard (`secubox-hub` 1.12.49) obtient la session de console du kiosque. Validé en VM amd64 (ref #3554).

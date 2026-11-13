@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from . import crypto
-from .model import MetricSnapshot, ModulesSnapshot
+from .model import MetricSnapshot, ModulesSnapshot, StatusSnapshot
 
 _EXCLUDED_FROM_PAYLOAD = ("sig", "signer_did", "signer_pub")
 
@@ -95,6 +95,25 @@ def sign_modules(priv: bytes, fields: Dict[str, Any]) -> Dict[str, Any]:
     payload = ModulesSnapshot(**payload).model_dump(exclude={"sig", "signer_did", "signer_pub"})
     sig = crypto.sign(priv, crypto.canonical_bytes(payload))
     return {**payload, "sig": sig, "signer_did": crypto.did_from_pubkey(pub), "signer_pub": pub.hex()}
+
+
+def sign_status(priv: bytes, fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Signe le relevé Status Live de cette box (#3626), validé par StatusSnapshot (borné). Même chaîne de confiance."""
+    pub = crypto.public_from_private(priv)
+    payload = {k: v for k, v in fields.items() if k not in _EXCLUDED_FROM_PAYLOAD}
+    payload = StatusSnapshot(**payload).model_dump(exclude={"sig", "signer_did", "signer_pub"})
+    sig = crypto.sign(priv, crypto.canonical_bytes(payload))
+    return {**payload, "sig": sig, "signer_did": crypto.did_from_pubkey(pub), "signer_pub": pub.hex()}
+
+
+def normaliser_status(rec: Any) -> Optional[Dict[str, Any]]:
+    """Relevé Status d'un pair VÉRIFIÉ (signature ET forme), rendu selon le modèle — jamais l'objet brut. FAIL-CLOSED."""
+    try:
+        if not isinstance(rec, dict) or not verify_snapshot(rec):
+            return None
+        return StatusSnapshot(**rec).model_dump()
+    except Exception:
+        return None
 
 
 def charger_json(texte: Any) -> Any:

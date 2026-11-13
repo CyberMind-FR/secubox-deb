@@ -33,6 +33,7 @@ class RelaisPilote(Relais):
 case "$*" in
   */public/noms*) [ -e {self.r}/SANS_WEBOS ] || echo '{noms}' ;;
   */public/ports*) echo 404 ;;
+  *"Host: admin."*) if [ -e {self.r}/ADMIN_MUET ]; then echo 000; else echo 200; fi ;;
   *) echo 200 ;;
 esac
 """)
@@ -64,7 +65,8 @@ def test_box_sans_webos_noms_relayes_depuis_le_pilotage(rel):
     r = sync(rel)
     t = rel.table()
     assert t[HALL] == [IP5, 9080] and t[MEET] == [IP5, 9080]
-    assert ADMIN not in t
+    # #3686 : le plan ne déclare pas admin.<box>, mais il répond — exposé d'office
+    assert t[ADMIN] == [IP5, 9080]
     assert "pilotage" in r.stdout
 
 
@@ -121,8 +123,16 @@ def test_pilotage_absent_ancien_chemin(rel):
 
 def test_pilotage_absent_et_sans_webos_rien(rel):
     rel.sans_webos()
+    (rel.r / "ADMIN_MUET").write_text("")
     sync(rel)
     assert set(rel.table()) == {"hall.gk2.secubox.in"}
+
+
+def test_pilotage_absent_sans_webos_admin_de_la_jonction_3638(rel):
+    """#3638 : box mobile (ni webos ni pilotage) — admin.<box> du nom de jonction, s'il répond ; rien d'autre."""
+    rel.sans_webos()
+    sync(rel)
+    assert set(rel.table()) == {"hall.gk2.secubox.in", ADMIN}
 
 
 @pytest.mark.parametrize("cas", ["json_invalide", "version", "perime", "futur", "geant_valide", "lien_physique",
@@ -170,12 +180,14 @@ def test_plan_mauvais_ancien_chemin(rel, cas, monkeypatch):
     r = rel.lancer("synchroniser", **({"SBX_RELAIS_UID_PILOTAGE": "4242"} if cas == "proprietaire_etranger" else {}))
     assert r.returncode == 0, r.stdout + r.stderr
     t = rel.table()
-    assert set(t) == {"hall.gk2.secubox.in"}
+    # plan rejeté ou en désaccord : rien ; pilotage qui ne connaît pas ce pair (#3638) : admin.<box> de la jonction seulement
+    assert set(t) == ({"hall.gk2.secubox.in", ADMIN} if cas == "pair_inconnu" else {"hall.gk2.secubox.in"})
     assert "meet.gk4.secubox.in" not in t and "meet.gk7.secubox.in" not in t
 
 
 def test_noms_invalides_ou_hors_domaine_ignores(rel):
     rel.sans_webos()
+    (rel.r / "ADMIN_MUET").write_text("")   # admin.<box> d'office (#3686) hors sujet ici : seules les déclarations
     rel.ecrire_plan(noms=(MEET, "hall.gk2.secubox.in", "hub.gk4.secubox.in", "evil.com", "a.b.gk5.secubox.in",
                           "HUB.gk5.secubox.in", "x" * 41 + ".gk5.secubox.in", "-x.gk5.secubox.in", "gk5.secubox.in",
                           "wpad.gk5.secubox.in", "*.gk5.secubox.in", 7, None, "a b.gk5.secubox.in", "z.gk5.secubox.in;rm"))
@@ -185,6 +197,7 @@ def test_noms_invalides_ou_hors_domaine_ignores(rel):
 
 def test_plan_trop_de_noms_borne(rel):
     rel.sans_webos()
+    (rel.r / "ADMIN_MUET").write_text("")   # borne des déclarations seules (admin.<box> d'office : #3686)
     (rel.r / "etc/secubox/relais-maillage.toml").write_text("nouveaux_noms_max = 500\n")
     rel.ecrire_plan(noms=[f"s{i}.gk5.secubox.in" for i in range(200)])
     sync(rel)
@@ -203,6 +216,7 @@ def test_box_distante_admin_jamais_publie(rel):
 
 def test_joker_seul_jamais_relaye(rel):
     rel.sans_webos()
+    (rel.r / "ADMIN_MUET").write_text("")   # admin.<box> d'office (#3686) hors sujet ici
     rel.ecrire_plan(noms=("*.gk5.secubox.in",))
     sync(rel)
     assert set(rel.table()) == {"hall.gk2.secubox.in"}

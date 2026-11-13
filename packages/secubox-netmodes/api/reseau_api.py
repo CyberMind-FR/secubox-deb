@@ -2,9 +2,14 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""Routes de lecture du réseau (#3190) : GET /reseau/{ports,clients,carte}. Lecture seule, aucune action sur une interface.
+"""Routes de lecture du réseau (#3190) : GET /reseau/{ports,clients,carte,materiel}. Lecture seule, aucune action sur une
+interface.
 
-Routes `def` (pool de threads) : lire_systeme() appelle subprocess, seul endroit du module à le faire."""
+Routes `def` (pool de threads) : lire_systeme() appelle subprocess, seul endroit du module à le faire.
+
+#3688 : le matériel réel (materiel.lire, sysfs) décide d'abord. Sur une carte sans switch DSA, sans WAN dédié et sans br-lan
+(un Raspberry Pi : eth0 et wlan0), les lectures du WAN eth2 et de br-lan ne sont pas lancées : elles sont « sans objet »
+(`sans_objet`), jamais comptées « en panne ». Sur une carte routeur (MOCHAbin, ESPRESSObin), rien ne change."""
 from __future__ import annotations
 
 import json
@@ -20,6 +25,7 @@ from fastapi import APIRouter, Depends
 
 from secubox_core.auth import est_admin_reel, require_jwt, require_lecture
 
+from . import materiel
 from . import reseau_lecture as lect
 
 router = APIRouter(prefix="/reseau")
@@ -29,6 +35,8 @@ TTL_CACHE = 5.0
 SYS_NET = Path("/sys/class/net")
 BAUX = Path("/var/lib/misc/dnsmasq.leases")
 RESEAU_D = Path("/etc/systemd/network")
+SYS_MATERIEL = SYS_NET                          # sysfs lu pour le matériel (#3688) ; une arborescence simulée en test
+MODELES = (Path("/proc/device-tree/model"), Path("/sys/firmware/devicetree/base/model"))
 
 SOURCES = {          # clé -> argv (lecture seule : ip/bridge en mode show)
     "ip_link": ["ip", "-j", "link"],
@@ -39,7 +47,10 @@ SOURCES = {          # clé -> argv (lecture seule : ip/bridge en mode show)
     "voisins_wan": ["ip", "-j", "neigh", "show", "dev", lect.WAN],
     "membres_lxc": ["ip", "-j", "link", "show", "master", lect.PONT_LXC],
     "liens_wg": ["ip", "-j", "link", "show", "type", "wireguard"],
+    "adresses": ["ip", "-j", "addr", "show"],          # adresses des interfaces physiques (#3688)
 }
+# Lectures du matériel routeur (WAN eth2, pont br-lan, baux du DHCP du LAN) : sans objet sur une carte qui n'en a pas (#3688).
+SOURCES_ROUTEUR = ("fdb", "voisins_lan", "wan_addr", "voisins_wan", "baux")
 
 _cache: dict[str, Any] = {}
 _verrou = threading.Lock()                      # une lecture du système à la fois
@@ -96,7 +107,13 @@ def lire_systeme() -> dict:
             generation = _generation
         res: dict[str, Any] = {}
         pannes: list[str] = []
+        mat = materiel.lire(SYS_MATERIEL, MODELES)
+        # Seul un « non » lu dans sysfs retire les lectures du routeur ; sysfs illisible (None) : tout est lu, comme avant.
+        sans_objet = list(SOURCES_ROUTEUR) if mat["vue_routeur"] is False else []
         for cle, argv in SOURCES.items():
+            if cle in sans_objet:
+                res[cle] = None
+                continue
             try:
                 res[cle] = _json(argv)
             except (OSError, ValueError, subprocess.SubprocessError):
@@ -104,7 +121,7 @@ def lire_systeme() -> dict:
                 pannes.append(cle)
         res["sysfs"] = {p: {f: _sys(p, f) for f in ("carrier", "speed", "operstate")} for p in lect.ROLES}
         try:
-            res["baux"] = BAUX.read_text()
+            res["baux"] = None if "baux" in sans_objet else BAUX.read_text()
         except OSError:
             res["baux"] = None
             pannes.append("baux")
@@ -115,6 +132,8 @@ def lire_systeme() -> dict:
             res["coupes"] = res["isoles"] = None
             pannes += ["coupes", "isoles"]
         res["pannes"] = pannes
+        res["sans_objet"] = sans_objet
+        res["materiel"] = materiel.completer(mat, res["adresses"], res["route_defaut"])
         with _verrou_generation:
             if generation == _generation:          # aucune invalidation pendant la lecture : elle est à jour
                 _cache.update(t=time.monotonic(), valeur=res)
@@ -135,6 +154,10 @@ def _pannes(s: dict, cles: tuple[str, ...]) -> list[str]:
     return [p for p in s["pannes"] if p in cles]
 
 
+def _sans_objet(s: dict, cles: tuple[str, ...]) -> list[str]:
+    return [p for p in s.get("sans_objet") or [] if p in cles]
+
+
 @router.get("/ports")
 def lire_ports(user: Any = Depends(require_lecture)) -> dict:
     s = lire_systeme()
@@ -146,14 +169,15 @@ def lire_ports(user: Any = Depends(require_lecture)) -> dict:
             for p in liste:
                 p["nb_appareils"] = None if p["macs"] is None else len(p["macs"])
                 del p["macs"]
-    return {"ports": liste, "pannes": _pannes(s, ("ip_link", "fdb", "coupes", "isoles"))}
+    return {"ports": liste, "pannes": _pannes(s, ("ip_link", "fdb", "coupes", "isoles")),
+            "sans_objet": _sans_objet(s, ("ip_link", "fdb", "coupes", "isoles"))}
 
 
 @router.get("/clients")
 def lire_clients(_user: Any = Depends(require_jwt)) -> dict:
     s = lire_systeme()
     return {"clients": lect.clients(s["baux"], s["fdb"], s["voisins_lan"]),
-            "pannes": _pannes(s, ("baux", "voisins_lan", "fdb"))}
+            "pannes": _pannes(s, ("baux", "voisins_lan", "fdb")), "sans_objet": _sans_objet(s, ("baux", "voisins_lan", "fdb"))}
 
 
 @router.get("/carte")
@@ -163,4 +187,11 @@ def lire_carte(user: Any = Depends(require_lecture)) -> dict:
     if _restreint(user) and c["wan"] and c["wan"]["voisins"] is not None:
         c["wan"]["nb_voisins"] = len(c["wan"]["voisins"])
         del c["wan"]["voisins"]
-    return {"carte": c, "pannes": _pannes(s, ("wan_addr", "route_defaut", "voisins_wan", "membres_lxc", "liens_wg"))}
+    cles = ("wan_addr", "route_defaut", "voisins_wan", "membres_lxc", "liens_wg")
+    return {"carte": c, "pannes": _pannes(s, cles), "sans_objet": _sans_objet(s, cles), "materiel": s.get("materiel")}
+
+
+@router.get("/materiel")
+def lire_materiel(_user: Any = Depends(require_lecture)) -> dict:
+    """Matériel réel (#3688) : l'hôte du panneau Réseau choisit ses onglets ; None si la lecture n'a pas eu lieu."""
+    return {"materiel": lire_systeme().get("materiel")}

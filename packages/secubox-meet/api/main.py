@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import logging
 import subprocess
 import time
@@ -48,7 +49,7 @@ from secubox_core.auth import require_jwt, require_lecture
 
 from api import activite
 
-VERSION = "0.2.2"
+VERSION = "0.2.8"
 
 CTL = "/usr/sbin/meetctl"
 
@@ -186,6 +187,16 @@ class ControlRequest(BaseModel):
 class MediaRequest(BaseModel):
     action: str = ""
     confirmer: str = ""
+
+
+class SalleRequest(BaseModel):
+    nom: str = ""
+    acces: Literal["public", "trusted", "restricted"] = "trusted"
+    proprietaire: str = ""
+
+
+CODE_RE = re.compile(r"[a-z]{3}-[a-z]{4}-[a-z]{3}")
+SUB_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._@:-]{0,254}")
 
 
 class ClotureRequest(BaseModel):
@@ -326,5 +337,34 @@ async def clore(req: ClotureRequest, payload: Any = Depends(require_jwt)) -> Dic
     if not activite.SALLE_RE.fullmatch(req.salle):
         raise HTTPException(status_code=400, detail="nom de salle invalide")
     res = await asyncio.to_thread(lambda: _ctl_json("clore", req.salle, _acteur(payload)))
+    _activite_cache.clear()
+    return res
+
+
+# ── Création d'une salle depuis l'administration (#3610) ────────────────────
+@app.get("/comptes")
+def comptes(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    """Comptes de Meet pouvant posséder une salle : ceux qui s'y sont déjà connectés (sub, pseudo)."""
+    rc, out, err = _run_ctl("comptes")
+    try:
+        liste = json.loads(out) if rc == 0 else None
+    except ValueError:
+        liste = None
+    if not isinstance(liste, list):
+        raise HTTPException(status_code=502, detail=_detail_echec(out, err, rc))
+    return {"comptes": [{"sub": str(c.get("sub")), "pseudo": str(c.get("pseudo") or "compte")}
+                        for c in liste if isinstance(c, dict) and c.get("sub")]}
+
+
+@app.post("/salles")
+async def creer_salle(req: SalleRequest, payload: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    # Le code EST le nom et l'adresse : le front de Meet n'ouvre que xxx-yyyy-zzz (#3610). Vide : généré par meetctl.
+    nom = req.nom.strip().lower()
+    if nom and not CODE_RE.fullmatch(nom):
+        raise HTTPException(status_code=400, detail="code de salle : format xxx-yyyy-zzz (lettres), ou vide pour en générer un")
+    if not SUB_RE.fullmatch(req.proprietaire):
+        raise HTTPException(status_code=400, detail="propriétaire invalide")
+    res = await asyncio.to_thread(lambda: _ctl_json("salle-creer", nom or "-", req.acces, req.proprietaire, _acteur(payload),
+                                                    timeout=60))
     _activite_cache.clear()
     return res

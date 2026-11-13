@@ -38,7 +38,8 @@ CATEGORIES = ("advertising", "tracking", "telemetry", "social", "custom")
 MODES = ("off", "observe", "block", "auto")
 DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 
-ETAT_DEFAUT = {"actif": False, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": []}
+ETAT_DEFAUT = {"actif": True, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": [],
+              "indices_publier": True, "indices_recevoir": True}      # #3666 : indices du maillage, actifs par défaut
 MODES_DEFAUT = ("off", "auto")      # observe/block sortent un appareil du puits de production : réservés à la déclaration manuelle (revue #1959)
 MAC_RE = re.compile(r"^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$")
 # Lot 3 (#3374) : noms des modes dans l'API et l'interface. PROTECT est l'ancien « block » ; le STOCKAGE ne change pas (aucune migration).
@@ -118,7 +119,7 @@ def verifier_manifeste(dossier: Path) -> List[str]:
             except ImportError:
                 from api import dnstv_taxonomie
             problemes += [f"ligne invalide {m}" for m in dnstv_taxonomie.charger_reference_detail(f)[1]]
-        elif nom not in ("services.txt", "ssai.txt", "resolveurs-doh.txt"):   # formats propres, validés par leur chargeur (dnstv_dpi, lot 4)
+        elif nom not in ("services.txt", "ssai.txt", "resolveurs-doh.txt", "services-pub.txt"):   # formats propres, validés par leur chargeur (dnstv_dpi, lot 4, #3676)
             _, mauvaises, _ = lire_liste(f)
             problemes += [f"ligne invalide {m}" for m in mauvaises]
     return problemes
@@ -317,6 +318,11 @@ def valider_etat(brut) -> dict:
     ajout_auto = brut.get("ajout_auto", False)
     if not isinstance(ajout_auto, bool):
         raise ErreurTV("ajout_auto : booléen attendu")
+    indices = {}
+    for cle in ("indices_publier", "indices_recevoir"):           # #3666 : absents d'un ancien état = vrai
+        indices[cle] = brut.get(cle, True)
+        if not isinstance(indices[cle], bool):
+            raise ErreurTV(f"{cle} : booléen attendu")
     mode_defaut = brut.get("mode_defaut", "auto")
     if mode_defaut not in MODES_DEFAUT:
         raise ErreurTV("mode_defaut inconnu (off, observe, auto, block)")
@@ -330,7 +336,7 @@ def valider_etat(brut) -> dict:
         if m not in ignores:
             ignores.append(m)
     etat_valide = {"actif": bool(brut.get("actif", False)), "clients": clients, "auto_essai": auto_essai,
-                   "mode_defaut": mode_defaut, "ajout_auto": ajout_auto, "ignores": ignores}
+                   "mode_defaut": mode_defaut, "ajout_auto": ajout_auto, "ignores": ignores, **indices}
     aut = _valider_autorisations(brut.get("autorisations", {}))
     if aut:                                                       # écrit seulement s'il y en a : les anciens états gardent exactement leur format
         etat_valide["autorisations"] = aut
@@ -340,6 +346,12 @@ def valider_etat(brut) -> dict:
         etat_valide["schema"] = SCHEMA_ETAT
     if "appareils" in brut:
         etat_valide["appareils"] = _valider_appareils(brut["appareils"])
+    if brut.get("tri_netflix") is not None:                      # #3226 : écrit seulement s'il existe (anciens états inchangés)
+        from . import dnstv_tri  # noqa: PLC0415
+        try:
+            etat_valide["tri_netflix"] = dnstv_tri.valider(brut["tri_netflix"])
+        except dnstv_tri.ErreurTri as e:
+            raise ErreurTV(str(e)) from None
     return etat_valide
 
 
@@ -399,15 +411,44 @@ def poser_etat_initial(dossier: Path = None) -> bool:
     return True
 
 
+def activer_toujours(dossier: Path = None) -> bool:
+    """#3674 (décision du propriétaire) : SBX TV Privacy est TOUJOURS actif — il ne se désactive pas. Appelé par le postinst
+    à chaque configuration : un état absent ou inactif devient actif ; une box sans aucun appareil et sans ajout automatique
+    reçoit aussi l'ajout automatique des TV selon `ajout_auto_initial` du TOML (sinon elle ne détecterait rien). Les réglages
+    par appareil (modes, exceptions, pauses) ne sont jamais touchés. Rend vrai s'il a écrit."""
+    d = dossier or DOSSIER_ETAT
+    f = d / "etat.json"
+    if f.is_symlink():
+        return False
+    if not f.exists():
+        ecrire_etat(etat_initial(_conf_paquet()), d)
+        return True
+    etat, erreur = lire_etat(d)
+    if erreur:
+        return False                                  # état corrompu : jamais deviné ni écrasé
+    change = False
+    if not etat["actif"]:
+        etat["actif"], change = True, True
+    if not etat["clients"] and not etat.get("ajout_auto"):
+        conf = _conf_paquet().get("adblock_tv", {})
+        if isinstance(conf, dict) and conf.get("ajout_auto_initial") is True:
+            etat["ajout_auto"], change = True, True
+    if change:
+        ecrire_etat(etat, d)
+    return change
+
+
 def lire_etat(dossier: Path = None) -> Tuple[dict, Optional[str]]:
-    """(état, erreur). Un état absent = POC inactif ; un état CORROMPU = POC inactif ET l'erreur est rendue (jamais d'état deviné)."""
+    """(état, erreur). Un état absent = ACTIF par défaut (#3674, toujours actif) ; un état CORROMPU = inactif ET l'erreur est rendue
+    (jamais d'état deviné)."""
     f = (dossier or DOSSIER_ETAT) / "etat.json"
     if not f.is_file():
         return dict(ETAT_DEFAUT, clients=[], ignores=[]), None    # I2 : un état absent n'active JAMAIS l'ajout automatique
     try:
         return valider_etat(json.loads(f.read_text())), None
     except (ValueError, OSError) as e:
-        return dict(ETAT_DEFAUT, clients=[]), f"état invalide, POC laissé inactif ({e})"
+        # État CORROMPU : jamais deviné — inactif avec son erreur (fermé par défaut), même si TV Privacy est toujours actif (#3674).
+        return dict(ETAT_DEFAUT, actif=False, clients=[]), f"état invalide, POC laissé inactif ({e})"
 
 
 def ecrire_etat(etat: dict, dossier: Path = None) -> dict:
@@ -438,7 +479,9 @@ def vues_protect(etat: dict, regles_actives: Optional[Dict[str, List[str]]] = No
     return out
 
 
-def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[Dict[str, List[str]]] = None) -> str:
+def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[Dict[str, List[str]]] = None,
+                   tri_autorises: Optional[Dict[str, Dict[str, int]]] = None,
+                   tri_ouvertures: Optional[Dict[str, int]] = None) -> str:
     """Drop-in Unbound du POC. Journalisation par requête + UNE VUE PAR MODE pour les appareils du périmètre.
 
     Pourquoi des vues et pas des listes globales : (1) les autres clients ne sont pas touchés ; (2) l'appareil en OBSERVE échappe au puits
@@ -512,6 +555,9 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
                 if d in exemptes:
                     continue                                       # l'autorisation de l'administrateur l'emporte sur une règle de blocage du même nom
                 L.append(f'    local-zone: "{d}." always_nxdomain')
+            # Tri Netflix par insistance (#3226) : tout serveur vidéo refusé, sauf ceux autorisés (zone plus précise, échéance).
+            from . import dnstv_tri  # noqa: PLC0415
+            L.extend(dnstv_tri.zones_vue(nom, etat, tri_autorises or {}, ouvertures=tri_ouvertures or {}))
             if not puits:
                 L.append('    local-zone: "." transparent')           # puits=faux : l'ancien comportement (appareil hors du puits de production)
     return "\n".join(L) + "\n"
@@ -699,6 +745,17 @@ class Magasin:
             return [{"domaine": d, "categorie": c, "requetes": n, "bloquees": b, "derniere": t} for d, c, n, b, t in cx.execute(
                 f"SELECT domaine, MAX(categorie), COUNT(*), SUM(decision='BLOCKED'), MAX(ts) FROM dnstv_recents WHERE {' AND '.join(w)} "
                 "GROUP BY domaine ORDER BY COUNT(*) DESC LIMIT 500", a)]
+
+    def bloques(self, depuis: int, limite: int = RECENTS_MAX) -> List[dict]:
+        """Requêtes REFUSÉES depuis `depuis`, regroupées par adresse et domaine (#3676, encart « Pubs bloquées récemment ») :
+        nombre, dernier refus, catégorie du DERNIER refus (la ligne du MAX(ts), la plus récemment écrite en cas d'égalité ; jamais
+        un MAX() alphabétique). Borné par la table (48 h, 20 000 lignes) et par `limite`."""
+        with self._cx() as cx:
+            return [{"client": c, "domaine": d, "nombre": n, "dernier_ts": t, "categorie": cat or ""} for c, d, n, t, cat in cx.execute(
+                "SELECT g.client, g.domaine, g.n, g.t, (SELECT x.categorie FROM dnstv_recents x WHERE x.client=g.client AND x.domaine=g.domaine "
+                "AND x.decision='BLOCKED' AND x.ts=g.t ORDER BY x.rowid DESC LIMIT 1) FROM (SELECT client, domaine, COUNT(*) n, MAX(ts) t "
+                "FROM dnstv_recents WHERE ts>=? AND decision='BLOCKED' GROUP BY client, domaine) g ORDER BY g.t DESC LIMIT ?",
+                (int(depuis), max(1, min(int(limite), RECENTS_MAX))))]
 
     def evenements(self, clients: List[str], depuis: int, limite: int = 20000) -> List[dict]:
         """Événements d'UNE source (toutes ses adresses), du plus ancien au plus récent : sert à la détection des coupures (#1954)."""

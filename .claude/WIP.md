@@ -6,10 +6,10 @@
 -->
 
 # WIP — chantier en cours + Next Up
-*Mis à jour : 2026-11-08 (bêta 1 publiée en pré-version ; images RPi #3587 et essai d'installation complet à finir ; ZIA 0.4.4 et veille CERT-FR déployées gk2).* Moins de 200 lignes, par construction : l'historique du
+*Mis à jour : 2026-11-11 (MirrorNet 4b déployée) ; 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
-- ⬜ **Next Up (bêta 1 publiée le 2026-11-08, pré-version)** : images RPi (#3587, puis compilation et ajout à la release) ; installation complète de l'image finale sur VM (dé, Premier Pas, connexion, heure) ; puis fermeture de #3554. Ensuite : leurres CERT-FR exploitables (chemin des requêtes raw, #3584) et WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; module SearXNG (#3581) ; moteur VoiceStudio de gk3 muet (à diagnostiquer avec accord).
+- ⬜ **Next Up (2026-11-09)** : bouton « Réparer » livré (#3628) et relance groupée de l'agrégateur par majauto (#3630), pilotage `synchroniser` corrigé (#3632), autojoin par appairage + relais automatique (#3638/#3639) ; **MirrorNet v1 : phases 0-3 + interface web `/mirrornet/` + phases 4a (#3653) et 4b (#3659) déployées ; **4c (#3661) déployée gk2, gk6, gk12 (annuaire 0.21.x, mirrornet 0.5.1), banc à finir au retour de gk12 (hors ligne depuis 09:11 le 11/11) : preuve de possession réussie + transfert depuis la réplique ; puis retirer sur gk12 l'offre « Espace banc 3661 » et la session `banc3661`** (gk6/gk2 déjà nettoyés) ; premier vrai jeu FAIT : indices TV Privacy partagés entre box (#3666, déployé gk2+gk6, livraison vérifiée) — agrégateur de gk2 relancé le 11/11 (page en ligne) ; encart « Pubs bloquées récemment » livré (#3676, 1.25.3, gk2/gk7/gk6 ; agrégateur gk7/gk6 à relancer) ; à voir : relais public admin.gk6 → 404 sur /mirrornet/** ; leurres CERT-FR livrés et fermés (#3584 : étape B 2.6.0 en ligne sur gk2 ; suite : id unique par leurre et verrou partagé, #3682) ; **MirrorNet : adresse maillée revendiquée par plusieurs identités (réinstallation) → gk7 sans indices de gk2, départager par clé WireGuard** ; reste : Status Live jalon 3 (section « Appliances » de live.secubox.in, en attente de l'accord du propriétaire), #3554 (tutoriel). Ensuite : WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; SearXNG (#3581).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
 
@@ -462,3 +462,33 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - Endpoints: 1988
 - Migration: 64%
 - Commits: 7465
+
+## CI Sync 2026-11-09
+- Packages: 120
+- Endpoints: 1993
+- Migration: 64%
+- Commits: 7491
+
+## CI Sync 2026-11-10
+- Packages: 121
+- Endpoints: 2002
+- Migration: 64%
+- Commits: 7522
+
+## CI Sync 2026-11-11
+- Packages: 122
+- Endpoints: 2040
+- Migration: 64%
+- Commits: 7543
+
+## CI Sync 2026-11-12
+- Packages: 122
+- Endpoints: 2043
+- Migration: 64%
+- Commits: 7564
+
+## CI Sync 2026-11-13
+- Packages: 122
+- Endpoints: 2043
+- Migration: 64%
+- Commits: 7570

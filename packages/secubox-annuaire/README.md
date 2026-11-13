@@ -5,7 +5,7 @@ SecuBox Annuaire-Miroir — federated self-certifying trust substrate.
 
 The Annuaire-Miroir is the trust directory for SecuBox-DEB, providing a BLAKE2b-chained, CONIKS-style append-only audit journal with four protocols: AUTO-ADD (provisional discovery), INVITE (capability-based membership), PROPOSAL (anti-plutocratic governance), and EMANCIPATE (staged anchor removal). All objects are Ed25519-signed, RFC 3339-timestamped, and access-gated by the can() resolver. Served on /run/secubox/annuaire.sock, JWT-gated.
 
-Paquet Debian : version `0.17.0-1~trixie1`, architecture `all`.
+Paquet Debian : version `0.19.0-1~trixie1`, architecture `all`.
 
 ## Contenu
 
@@ -58,6 +58,12 @@ Socket Unix : `/run/secubox/annuaire.sock`, `/run/secubox/openpgp.sock`.
 | `GET` | `/subscriptions` | require_lecture |
 | `POST` | `/subscription/{subscription_id}/approve` | require_jwt |
 | `POST` | `/subscription/{subscription_id}/reject` | require_jwt |
+| `POST` | `/self/service/offer` | require_jwt — offre de CE nœud signée par node.key (MirrorNet, #3647) |
+| `POST` | `/self/service/{service_id}/subscribe` | require_jwt — abonnement de CE nœud (tarif de l'offre, échéance = maintenant + `duree_s`) ; `jeux` obligatoire pour une offre `kind=espace` (#3659) |
+| `POST` | `/self/subscription/{subscription_id}/renew` | require_jwt — `SERVICE_RENEW`, avant l'échéance |
+| `POST` | `/self/subscription/{subscription_id}/cancel` | require_jwt — résiliation (abonné) ou révocation de l'abonné (fournisseur) |
+| `POST` | `/self/subscription/{subscription_id}/approve`, `/reject` | require_jwt — décision du fournisseur sur une demande (#3651) |
+| `POST` | `/self/dataset/{service_id}/version`, `/retract` | require_jwt — version d'un jeu de données de CE nœud, ou son retrait (#3653) |
 | `POST` | `/services/pull` | require_jwt |
 | `GET` | `/nodes` | require_lecture |
 | `GET` | `/config` | require_lecture |
@@ -132,3 +138,56 @@ source de l'écouteur wg-mesh, nom et empreinte lus dans `p2p-public/pairs-enrol
   (`/var/lib/secubox/annuaire/droits-self.json`, écriture atomique sans suivre de lien) ; `annuairectl bans-apply` n'applique
   l'union fédérée que si le dernier droit connu inclut `bans-waf`, sinon les seules bans publiées par la box. Une réponse de
   plus de 48 h reste valable (audit `droits_self_perimes`). Jamais de réponse : comme avant.
+
+
+## Status Live v2 — relevé d'état signé (#3626)
+
+- `StatusSnapshot` (annuaire/model.py) : contrat distinct de `ModulesSnapshot`, `extra="forbid"`, borné — états,
+  compteurs de modules, disponibilité 30 j, frise 24 h ; jamais de ressources, d'adresses ni de détail interne.
+- `sbx-fleetctl publish-status` (minuterie `secubox-metrics-publish`, 60 s) : signe le relevé de secubox-status avec
+  `node.key` → `/var/lib/secubox/annuaire/fleet/status.json`, servi aux pairs sur l'écoute du maillage
+  `GET /api/v1/annuaire/fleet/status/self` (`lecture_ou_pair`).
+- `sbx-fleetctl collect-status` (agrégateur seul, `status.toml`) : lit chaque pair (sans proxy ni redirection,
+  256 Kio et 5 s au plus), exige signature, forme, fiche signée UNIQUE pour l'adresse et DID correspondant (sinon
+  « box non liée »), horodatage plausible, séquence croissante (mémoire `status-sequences.json`, monotone ; une
+  séquence plus basse n'est acceptée qu'avec un `ts` signé plus récent : box réinitialisée) → `status-pairs.json`
+  (0640, écriture atomique), lu par secubox-status.
+
+## MirrorNet v1 — abonnements (#3647)
+
+- `ServiceOffer` : champs **facultatifs** `version`, `compat`, `tarif` (`modele` ∈ gratuit, forfait, usage, palier,
+  reciproque, parraine ; `credits` entier), `quotas`, `classe` (public, communaute, prive), `duree_s`, `grace_s`,
+  `sonde`. `Subscription` : `version`, `tarif_accepte`, `expire_le`. Absents, ils ne figurent pas dans la charge
+  signée (`model.charge_signee`) : une offre ancienne garde sa signature, et un nœud ancien lit les nouvelles par le
+  journal.
+- Opérations `service_renew` (abonné) et `service_revoke_offer_sub` (fournisseur) ; `service_revoke_sub` a enfin un
+  écrivain (`verbs.cancel_subscription`). Un nœud ancien rejette ces opérations à l'import (compteur `rejected`),
+  sans casser sa réplication. Échéance : `verbs.echeance_abonnement` (renouvellement compté s'il est signé avant
+  l'échéance en cours).
+- Niveaux de confiance calculés (`annuaire/confiance.py`) : REVOKED, OBSERVER, LIMITED ; PARTNER/TRUSTED au socle A21.
+- Export `/var/lib/secubox/annuaire/mirrornet-export.json` (0640, atomique, réécrit seulement s'il change) après chaque
+  passe de synchronisation, et joignabilité des pairs (`mesh_sync.sync_once(suivi=…)`, sonde `/health` quand l'export
+  échoue : un export lent n'est pas une absence). Les opérations `service_` suivent la passe complète (300 s).
+- Routes `/self/...` : signées dans le processus propriétaire de `node.key` ; chaque geste écrit dans `audit.log`
+  (`mirrornet_*`, avec l'administrateur `par`).
+
+## Indices TV du maillage (#3666, 0.22.0)
+
+Tâche de fond (`annuaire/mirrornet_locaux.py`) : lit `publications.json` (dossier partagé de MirrorNet, 64 Kio au
+plus) et signe l'offre `tv-indices` (offre conforme : dataset ; création ou retrait au plus une fois par heure), ses
+versions (une action par heure, retour de contenu possible) et les abonnements aux offres des autres box : gratuites
+seulement, d'un jour au moins, bornés, un seul par fournisseur (l'ancien résilié une fois le nouveau approuvé), sous
+le seuil `confiance_min` de MirrorNet. Chaque geste est audité par « fond » dans `audit.log`.
+
+## Jeux de données MirrorNet (#3653)
+
+`service_dataset_version` : manifeste signé d'une version (numéro et parent calculés, empreinte BLAKE2b de l'objet,
+taille, format, licence, provenance, classe, données personnelles : aucune en public, agrégées au plus en communauté) ;
+`service_dataset_retract` : retrait signé. Seul le fournisseur de l'offre `kind=dataset` publie ou retire ; une
+empreinte n'est publiée qu'une fois. L'objet lui-même ne passe jamais par le journal : MirrorNet le sert aux abonnés
+Actif par l'écouteur maillé (`/mirrornet/objets/<empreinte>` sur :8799).
+
+Espace (#3659) : l'abonnement d'un producteur à une offre `kind=espace` porte `jeux`, signé avec lui — les
+`service_id` de ses propres offres `kind=dataset` (1 à 32, jamais professionnelles ni privées) que l'espace gardera.
+L'export MirrorNet (#3661) donne en plus à l'espace les abonnés des jeux qu'on lui confie, et à l'abonné les
+abonnements d'espace qui nomment ses jeux — des faits déjà signés, rien d'autre.

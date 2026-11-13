@@ -7,5 +7,6 @@
   "telemetry.txt": "b0abe745d82752752b5e49d699e4ad2a31862d02220c3529bc755c214b0b4b46",
   "tracking.txt": "ba3f9cee686e3c6d63d150832ca6f30b39fa938029a32827e563a3341d35c08b",
   "ssai.txt": "c03df3b2ab4d0ead81f1df28c7c8be84fa822ebf378637b2123d49397d7590ac",
-  "resolveurs-doh.txt": "65603a768ba507d9e0687fed1218d986c86a94bbb1db7c9dba5a1b7920d0012f"
+  "resolveurs-doh.txt": "65603a768ba507d9e0687fed1218d986c86a94bbb1db7c9dba5a1b7920d0012f",
+  "services-pub.txt": "3673035cf925846d4d577365b42549af86ae2f6bd4cbabbbbe1c2008dc6764bb"
 }

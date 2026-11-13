@@ -36,7 +36,7 @@ enabled = false
 unbound_blocklist = "/var/lib/unbound/blocklist.conf"
 
 [adblock_tv]
-# POC « DNS AdBlock TV » (#1943) : mesure du filtrage DNS par appareil (OBSERVE / BLOCK). INACTIF par défaut ; l'état (appareils, modes)
+# POC « DNS AdBlock TV » (#1943) : mesure du filtrage DNS par appareil (OBSERVE / BLOCK). TOUJOURS ACTIF (#3674 : il ne se désactive pas) ; l'état (appareils, modes)
 # vit dans /var/lib/secubox/ad-guard/dnstv/etat.json, géré par l'API et l'interface — pas ici.
 # Les compteurs de plus de `retention_jours` jours sont purgés chaque jour.
 retention_jours = 30

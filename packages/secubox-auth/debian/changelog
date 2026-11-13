@@ -1,3 +1,29 @@
+secubox-auth (1.8.21-1~trixie1) trixie; urgency=medium
+
+  * Dépendance explicite à python-multipart (python3-python-multipart |
+    python3-multipart) : sur l'image mobile, secubox-users tournait en boucle
+    (« Form data requires python-multipart ») car l'alternative de
+    secubox-core était satisfaite par python3-pip (#3621).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 13:30:00 +0100
+
+secubox-auth (1.8.20-1~trixie1) trixie; urgency=medium
+
+  * OIDC : un administrateur réel (session de compte, ni appareil, ni
+    porteur du pilotage, ni plafond) entre en son nom dans un service qui
+    l'accepte (« administrateurs » du client, posé par
+    secubox-oidcctl client-admins <id> on|off) ; identité stable dérivée du
+    compte, distincte des personnes ; chaque entrée auditée (#3612).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 14:30:00 +0100
+
+secubox-auth (1.8.19-1~trixie1) trixie; urgency=medium
+
+  * Menu : Identité et Accès jugés sur l'agrégateur qui les sert (clé
+    unite), plus marqués inactifs faute d'unité à leur nom (#3597).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 05:00:00 +0100
+
 secubox-auth (1.8.18-1~trixie1) trixie; urgency=medium
 
   * postinst : une unite masquee par l image ne fait plus echouer dpkg

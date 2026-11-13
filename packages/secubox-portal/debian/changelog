@@ -1,3 +1,24 @@
+secubox-portal (2.6.0-1~trixie1) trixie; urgency=medium
+
+  * Cadres selon les modules installés (ref #3688) : la présence est lue dans le menu public du hub
+    (/api/v1/hub/public/menu, celui du menu latéral). Sans secubox-metrics (qui sert aussi
+    /api/v1/cookie-audit/), ses cadres disparaissent (santé, services, ressources, protection,
+    certificats, cookies, sites, origines) et ses routes ne sont plus appelées ; un accès rapide ou
+    un service ne mène qu'à une page au menu. Jamais déduit d'un 502 ou d'un 404 : un module au
+    menu mais en panne garde ses cadres et son état d'erreur ; menu illisible ou en préchauffage :
+    tous les cadres, comme avant. Le tiret reste pour une mesure absente d'un module présent.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:35:00 +0100
+
+secubox-portal (2.5.2-1~trixie1) trixie; urgency=medium
+
+  * Console du kiosque (ref #3670) : le jeton de console est redemandé avec recul tant que
+    l'agrégateur démarre (5xx ou pas de réponse, 3 min au plus), formulaire masqué et
+    « démarrage en cours » affiché ; un refus (4xx) rend le formulaire aussitôt. Après un
+    redémarrage du RPi, la console ne demande plus le mot de passe.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 14:34:55 +0100
+
 secubox-portal (2.5.1-1~trixie1) trixie; urgency=medium
 
   * Écran de changement imposé (ref #3401) : bouton « Plus tard » qui échange le setup_token contre une session pour cette connexion seulement (POST /api/v1/auth/plus-tard ; admin au mot de passe par défaut, LAN/kiosque/maillage ; le jeton est oublié aussitôt).

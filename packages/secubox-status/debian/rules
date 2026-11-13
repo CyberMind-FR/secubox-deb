@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: status — Status Live v2, jalon 1 (#3605).
+P = $(CURDIR)/debian/secubox-status
+
+%:
+	dh $@
+
+override_dh_auto_build:
+
+override_dh_auto_test:
+
+override_dh_installsystemd:
+
+override_dh_auto_install:
+	install -d $(P)/usr/lib/secubox/status/api $(P)/usr/lib/secubox/status/secubox_status
+	install -m 644 api/*.py $(P)/usr/lib/secubox/status/api/
+	install -m 644 secubox_status/*.py $(P)/usr/lib/secubox/status/secubox_status/
+	install -d $(P)/usr/share/secubox/status
+	install -m 644 conf/status.toml $(P)/usr/share/secubox/status/status.toml.example
+	install -d $(P)/usr/lib/systemd/system
+	install -m 644 debian/secubox-status.service debian/secubox-status-collect.service \
+	  debian/secubox-status-collect.timer $(P)/usr/lib/systemd/system/
+	install -d $(P)/usr/share/secubox/www $(P)/usr/share/secubox/menu.d
+	cp -r www/. $(P)/usr/share/secubox/www/
+	cp -r menu.d/. $(P)/usr/share/secubox/menu.d/
+	install -d $(P)/etc/apparmor.d
+	install -m 644 apparmor/secubox-status $(P)/etc/apparmor.d/secubox-status
+	install -d $(P)/etc/nginx/secubox.d $(P)/etc/nginx/secubox-routes.d
+	install -m 644 nginx/status.conf $(P)/etc/nginx/secubox.d/
+	install -m 644 nginx/status.conf $(P)/etc/nginx/secubox-routes.d/

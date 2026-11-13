@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LicenseRef-CMSD-1.0
 // Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 // SecuBox-Deb :: dé du logo du Hall, rotation précalculée par le moteur sbx-dice.js (#3525).
+//
+// POSITIONS RECALCULÉES À CHAQUE IMAGE (#3636). Sur Raspberry Pi, Plymouth démarre sur le framebuffer du
+// firmware, puis vc4 (KMS) le remplace avec le mode réel de l'écran : un centre calculé une seule fois au
+// chargement tombait en bas à droite (RPi400, HDMI). Window.GetX/GetWidth suivent l'écran du moment.
+// Dans une fonction, une variable est locale : l'état partagé passe par `global.`.
 Window.SetBackgroundTopColor(0.024, 0.051, 0.106);
 Window.SetBackgroundBottomColor(0.024, 0.051, 0.106);
 N = 90;
@@ -10,38 +15,55 @@ for (i = 0; i < N; i++) {
     images[i] = Image(nom);
 }
 de = Sprite(images[0]);
-de.SetX(Window.GetX() + Window.GetWidth() / 2 - images[0].GetWidth() / 2);
-de.SetY(Window.GetY() + Window.GetHeight() / 2 - images[0].GetHeight() / 2 - 20);
-n = 0;
-fun rafraichir() {
-    n++;
-    de.SetImage(images[Math.Int(n / 3) % N]);   // 50 Hz / 3 : environ 16 images par seconde, un tour en 5,4 s
-}
-Plymouth.SetRefreshFunction(rafraichir);
+
 // Barre de chargement Aurora : progression estimée par Plymouth, jamais remise en arrière.
 fond_image = Image("barre-fond.png");
 plein_image = Image("barre.png");
-barre_x = Window.GetX() + Window.GetWidth() / 2 - fond_image.GetWidth() / 2;
-barre_y = de.GetY() + images[0].GetHeight() + 26;
 fond = Sprite(fond_image);
-fond.SetPosition(barre_x, barre_y, 1);
+fond.SetZ(1);
 plein = Sprite();
-plein.SetPosition(barre_x, barre_y, 2);
+plein.SetZ(2);
+message = Sprite();
+message_largeur = 0;
+
+fun placer() {
+    cx = Window.GetX() + Window.GetWidth() / 2;
+    cy = Window.GetY() + Window.GetHeight() / 2;
+    de.SetX(cx - images[0].GetWidth() / 2);
+    de.SetY(cy - images[0].GetHeight() / 2 - 20);
+    barre_x = cx - fond_image.GetWidth() / 2;
+    barre_y = de.GetY() + images[0].GetHeight() + 26;
+    fond.SetX(barre_x);
+    fond.SetY(barre_y);
+    plein.SetX(barre_x);
+    plein.SetY(barre_y);
+    message.SetX(cx - global.message_largeur / 2);
+    message.SetY(barre_y + 24);
+}
+
+n = 0;
+fun rafraichir() {
+    global.n = global.n + 1;
+    de.SetImage(images[Math.Int(global.n / 3) % N]);   // 50 Hz / 3 : environ 16 images par seconde, un tour en 5,4 s
+    placer();
+}
+Plymouth.SetRefreshFunction(rafraichir);
+
 plus_loin = 0;
 fun progression(duree, avance) {
-    if (avance > plus_loin) plus_loin = avance;
-    largeur = Math.Int(fond_image.GetWidth() * plus_loin);
+    if (avance > global.plus_loin) global.plus_loin = avance;
+    largeur = Math.Int(fond_image.GetWidth() * global.plus_loin);
     if (largeur < 8) largeur = 8;
     plein.SetImage(plein_image.Scale(largeur, plein_image.GetHeight()));
 }
 Plymouth.SetBootProgressFunction(progression);
 progression(0, 0);
 
-message = Sprite();
-message.SetY(barre_y + 24);
 fun afficher(texte) {
     im = Image.Text(texte, 0.62, 0.70, 0.84);
     message.SetImage(im);
-    message.SetX(Window.GetX() + Window.GetWidth() / 2 - im.GetWidth() / 2);
+    global.message_largeur = im.GetWidth();
+    placer();
 }
 Plymouth.SetMessageFunction(afficher);
+placer();

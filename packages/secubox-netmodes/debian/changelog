@@ -1,3 +1,17 @@
+secubox-netmodes (1.9.0-1~trixie1) trixie; urgency=medium
+
+  * Panneau Réseau selon le matériel réel (ref #3688) : GET /reseau/materiel (et champ materiel de /reseau/carte), lu
+    dans sysfs sans aucun nom de carte : interfaces physiques, switch DSA (dossier dsa/ du conduit, DEVTYPE=dsa des
+    ports), WAN dédié (port wan* du switch ou deux prises Ethernet), br-lan, adresses globales et route par défaut.
+  * Carte sans switch DSA, sans WAN dédié et sans br-lan (Raspberry Pi) : les lectures du WAN eth2, de br-lan et des
+    baux ne sont plus lancées (sans_objet, jamais « en panne ») ; onglets Switch, Clients LAN et Mode routeur et bandeau
+    du mode routeur masqués ; la Cartographie dessine eth0, wlan0 (état, adresse, route par défaut), le maillage, les
+    tunnels et br-lxc, sans passerelle ni voisins WAN. Rien n'est masqué si le mode routeur est actif, à confirmer,
+    invalide ou en bascule, ni si le matériel est illisible.
+  * MOCHAbin et ESPRESSObin : mêmes lectures, mêmes onglets, même schéma (testé). Pas de gestion du wifi.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 12:30:00 +0100
+
 secubox-netmodes (1.8.0-1~trixie1) trixie; urgency=medium
 
   * Une seule interface ne mène jamais au mode routeur : secubox-net-detect choisit le mode effectif (single sans

@@ -96,6 +96,12 @@ try:
 except ImportError:                                  # lancé hors paquet
     from api.dnstv_lot5_routes import router as _tv_lot5_router
 app.include_router(_tv_lot5_router)
+# #3666 : indices du maillage (interrupteurs publier / recevoir), même préfixe /adblock-tv
+try:
+    from .dnstv_indices_routes import router as _tv_indices_router
+except ImportError:                                  # lancé hors paquet
+    from api.dnstv_indices_routes import router as _tv_indices_router
+app.include_router(_tv_indices_router)
 
 
 class DeviceType(str, Enum):

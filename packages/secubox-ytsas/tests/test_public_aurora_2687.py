@@ -27,7 +27,7 @@ def test_memes_appels_et_rien_de_plus():
     for r in ("API + '/list'", "API + '/add'", "'/conserve/'", "'/stream/'"):
         assert r in CODE
     assert "var API = '/api/v1/ytsas'" in CODE
-    assert "JSON.stringify({ url: val })" in CODE
+    assert "JSON.stringify({ url: val, tor: !!(torBox && torBox.checked) })" in CODE      # case « via Tor » (#3618)
     # page publique : ni jeton, ni stockage, ni action destructrice, ni dépôt de cookies
     for absent in ("sbx_token", "localStorage", "sessionStorage", "Authorization", "/remove", "/purge", "/cookies", "DELETE"):
         assert absent not in CODE, absent
@@ -102,7 +102,7 @@ def test_ajout_envoie_le_meme_corps_sans_jeton(navigateur):
     p.click("#btnAdd")
     p.wait_for_function("document.getElementById('toast').textContent.includes('Ajouté')")
     post = [a for a in appels if a[0] == "POST" and a[1] == "/api/v1/ytsas/add"][0]
-    assert json.loads(post[2]) == {"url": "https://example.org/v?id=1"}
+    assert json.loads(post[2]) == {"url": "https://example.org/v?id=1", "tor": False}
     assert post[3]["content-type"] == "application/json" and "authorization" not in post[3]
     assert p.input_value("#urlInput") == "" and err == []
     ctx.close()

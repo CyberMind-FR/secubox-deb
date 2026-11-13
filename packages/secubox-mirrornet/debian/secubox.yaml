@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+name: secubox-mirrornet
+category: network
+tier: lite
+description: "SecuBox MirrorNet v1 — plan de contrôle des services, données et contributions (phase 2, lecture seule)"
+
+depends:
+  - secubox-core
+
+api:
+  socket: /run/secubox/mirrornet.sock
+  health: /api/v1/mirrornet/health

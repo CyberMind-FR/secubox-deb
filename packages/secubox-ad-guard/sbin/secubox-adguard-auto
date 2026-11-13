@@ -21,7 +21,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_analyse, dnstv_assistant, dnstv_contournement, dnstv_dpi, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_profil, dnstv_regles, dnstv_taxonomie  # noqa: E402
+from api import dnstv, dnstv_analyse, dnstv_assistant, dnstv_contournement, dnstv_dpi, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_detecteur, dnstv_dpifeed, dnstv_indices, dnstv_profil, dnstv_pubs, dnstv_regles, dnstv_taxonomie  # noqa: E402
 
 CTL = "/usr/sbin/secubox-adguard-tv"
 
@@ -192,6 +192,15 @@ def rafraichir_feed(now: int, voisins=None, locales=None, passerelles=None) -> b
     return True
 
 
+def rafraichir_pubs(now: int) -> None:
+    """#3676 : cache de l'encart « Pubs bloquées récemment » (au plus toutes les 10 min, listes lues en flux). Hors verrou des règles :
+    lecture seule de la base, des règles et des listes, écriture de SES propres fichiers. Une erreur ne fait JAMAIS échouer le moteur."""
+    try:
+        dnstv_pubs.rafraichir(now)
+    except Exception as e:                                   # noqa: BLE001 — jamais de panne du moteur par l'encart
+        print(f"cache des pubs bloquées non écrit : {type(e).__name__}: {e}", file=sys.stderr)
+
+
 class _Echec:
     returncode, stdout, stderr = 1, "", "contrôleur absent"
 
@@ -270,14 +279,96 @@ def suspendre_forcage(changements: list, etat: dict, now: int) -> bool:
     return True
 
 
+def indices_du_passage(etat, corrections_lisibles=True):
+    """#3666 : indices du maillage pour ce passage. Corrections manuelles illisibles = index NON lisible (aucun nouveau candidat
+    d'indice, aucune confirmation, aucun retrait ; les essais existants seulement prolongés, dans la limite du plafond). Réception
+    coupée = index vide LISIBLE (le moteur retire alors ses règles nées d'indices) ; sinon la lecture des livraisons (non lisible =
+    le moteur ne retire rien). Le résumé lu par GET /indices est réécrit au passage (s'il change). Ne lève jamais."""
+    if not corrections_lisibles:
+        return dnstv_indices.Index(lisible=False)
+    recevoir = etat.get("indices_recevoir", True)
+    try:
+        ix = dnstv_indices.charger(dnstv_indices.LIVRAISONS) if recevoir else dnstv_indices.Index()
+    except Exception as e:                                           # noqa: BLE001 — jamais de panne du passage par les indices
+        print(f"indices du maillage non lus : {type(e).__name__}", file=sys.stderr)
+        return dnstv_indices.Index(lisible=False)
+    try:
+        dnstv_indices.ecrire_resume(dnstv_indices.resume(ix if recevoir else dnstv_indices.Index(lisible=False), dnstv_indices.LIVRAISONS),
+                                    dnstv_indices.RESUME)
+    except Exception as e:                                           # noqa: BLE001
+        print(f"résumé des indices non écrit : {type(e).__name__}", file=sys.stderr)
+    return ix
+
+
+def publier_indices(etat, regles, taxo):
+    """#3666 : écrit le fichier lu par MirrorNet (seulement s'il change). Ne lève jamais ; exceptions illisibles = rien n'est écrit.
+    `taxo` None (corrections manuelles illisibles) : seuls les interrupteurs sont réécrits, le contenu publié reste le précédent
+    (la catégorie locale d'un domaine décide de sa publication : jamais sans les corrections)."""
+    try:
+        if taxo is None:
+            dnstv_indices.ecrire_drapeaux(etat.get("indices_publier", True), etat.get("indices_recevoir", True), dnstv_indices.PUBLICATION)
+            return
+        c = dnstv_indices.contenu(regles, dnstv_protection.charger_exceptions(), taxo)
+        dnstv_indices.ecrire_publication(etat.get("indices_publier", True), etat.get("indices_recevoir", True), c, dnstv_indices.PUBLICATION)
+    except Exception as e:                                           # noqa: BLE001
+        print(f"publication des indices non écrite : {type(e).__name__}", file=sys.stderr)
+
+
+def publier_indices_hors_moteur(etat, cl) -> None:
+    """#3666 : moteur inactif (sortie anticipée) — la publication suit quand même les interrupteurs et les règles. Règles ou
+    corrections illisibles : interrupteurs seuls. Ne lève jamais."""
+    try:
+        regles = dnstv_regles.charger()
+        taxo = dnstv_taxonomie.Taxonomie.depuis_dossier(classer=cl.table, manuelles=dnstv_taxonomie.charger_manuelles(), regles=regles)
+    except Exception as e:                                           # noqa: BLE001
+        print(f"publication des indices : règles ou corrections illisibles ({type(e).__name__}), interrupteurs seuls", file=sys.stderr)
+        regles, taxo = None, None
+    publier_indices(etat, regles, taxo)
+
+
+AMORCE = dnstv.DOSSIER_ETAT / ".amorce-essai"
+AMORCE_S = 1800
+
+
+def amorcer(now: int, lancer=None) -> bool:
+    """#3674 : SBX TV Privacy toujours actif, même sur une box construite depuis une image (le postinst n'y a pas lancé le
+    contrôleur). Drop-in Unbound absent → état actif posé (activer_toujours) puis `sudo -n … apply`, au plus un essai par
+    AMORCE_S. Rend vrai s'il a appliqué. Ne lève jamais."""
+    try:
+        if dnstv.CONF_UNBOUND.is_file():
+            return False
+        try:
+            dernier = AMORCE.stat().st_mtime
+        except FileNotFoundError:
+            dernier = 0
+        if 0 <= now - dernier < AMORCE_S:
+            return False
+        AMORCE.touch()
+        os.utime(AMORCE, (now, now))
+        with dnstv_regles.verrou():
+            dnstv.activer_toujours()
+        etat, erreur = dnstv.lire_etat()
+        if erreur or not etat["actif"]:
+            return False
+        r = (lancer or (lambda: subprocess.run(["sudo", "-n", CTL, "apply"], capture_output=True, text=True, timeout=300)))()
+        if r.returncode != 0:
+            print(f"amorçage SBX TV Privacy : apply en échec ({(r.stderr or r.stdout or '').strip()[:200]})", file=sys.stderr)
+        return r.returncode == 0
+    except Exception as e:                                   # noqa: BLE001 — jamais de panne du moteur par l'amorçage
+        print(f"amorçage SBX TV Privacy : {type(e).__name__}: {e}", file=sys.stderr)
+        return False
+
+
 def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=None, dpi=None) -> int:
     now = maintenant or int(time.time())
+    amorcer(now)
     dnstv_analyse.menage(maintenant=now)                      # lot 3 : ancien JSON de 16 Mo et temporaires orphelins, même moteur inactif
     try:
         rafraichir_feed(now, voisins, locales, passerelles)               # avant toute sortie anticipée : utile même sans appareil en mode auto
     except Exception as e:                                           # noqa: BLE001 — ceinture et bretelles : jamais de panne du moteur par le fichier d'échange
         print(f"fichier d'échange dpi-feed : {type(e).__name__}: {e}", file=sys.stderr)
     rafraichir_dpi(now, voisins, dpi)
+    rafraichir_pubs(now)
     cl = classeur()
     magasin = dnstv.Magasin(dnstv.DOSSIER_ETAT / "dnstv.db")
     etat_modifie, ajouts, res = False, [], {"changements": [], "applique": False}
@@ -292,6 +383,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             if appliquer_assistant(etat, now):                # lot 5b : avant tout, même sans appareil en AUTO (PROTECT reçoit l'exception)
                 etat_modifie = True
             if not etat["actif"] or (not dnstv_auto.appareils(etat) and not etat.get("ajout_auto")):
+                publier_indices_hors_moteur(etat, cl)          # #3666 : interrupteurs suivis même moteur inactif
                 if not etat_modifie:
                     return 0
                 raise _SansMoteur
@@ -341,7 +433,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             # 2. règles : candidats, essais, signaux, agrégation
             replis, a_marquer = replis_du_passage(etat)
             res = dnstv_auto.tick(etat, regles, magasin, lambda d: cl.classer(d)[0] or "", reglage, now, taxo=taxo, replis=replis,
-                                  guides=guides_du_passage(etat))
+                                  guides=guides_du_passage(etat), indices=indices_du_passage(etat, corrections_lisibles))
             marquer_replis(a_marquer)
             if res["changements"]:
                 dnstv_regles.ecrire(regles)
@@ -353,6 +445,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
             if res["agrege"] != dnstv_profil.charger_agrege():
                 dnstv_profil.ecrire_agrege(res["agrege"])
             ecrire_cache_classification(etat, taxo, magasin, regles, now)
+            publier_indices(etat, regles, taxo if corrections_lisibles else None)
             try:
                 dnstv_journal.ajouter(dnstv_journal.depuis_regles(avant_regles, regles.liste(), etat, lambda d: taxo.classer(d)["categorie"]))
             except (OSError, ValueError) as e:

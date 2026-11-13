@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Dossier de demandes du bouton « Réparer » (#3628) : root le possède (rien ne peut le
+# remplacer dans /run/secubox, collant), le groupe secubox y dépose.
+d /run/secubox/health-reparer 0770 root secubox -

@@ -18,10 +18,15 @@ from __future__ import annotations
 
 import base64
 import html
+import json
+import logging
 import os
+import re
 import sys
 import time
 import tomllib
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit, parse_qsl
@@ -79,6 +84,51 @@ def personne(request: Request) -> Optional[dict]:
     if not per:
         return None
     return {"payload": payload, "per": per}
+
+
+log = logging.getLogger("secubox-oidc")
+AUDIT = Path("/var/log/secubox/audit.log")
+COMPTE_RE = re.compile(r"[a-z_][a-z0-9_.-]{0,63}")
+#: Espace de noms des identités de COMPTE (#3612) : distinctes de toute personne du Hall (uuid aléatoires), stables.
+NS_COMPTE = uuid.UUID("6f0c3c2e-6c1d-4b8e-9a7e-5ec0b0c0a612")
+
+
+def _auditer(evenement: str, **details) -> None:
+    """Une ligne JSON en ajout seul, sans suivre de lien ; un échec reste au journal du service."""
+    ligne = json.dumps({"ts": datetime.now(timezone.utc).isoformat(), "module": "oidc", "evenement": evenement,
+                        **details}, ensure_ascii=True)
+    try:
+        fd = os.open(str(AUDIT), os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        try:
+            os.write(fd, (ligne + "\n").encode())
+        finally:
+            os.close(fd)
+    except OSError as e:
+        log.warning("audit.log non écrit (%s) : %s", e.__class__.__name__, ligne)
+
+
+def administrateur(request: Request, c: dict) -> Optional[dict]:
+    """Un ADMINISTRATEUR RÉEL entre en son nom (#3612, arbitrage du propriétaire) dans un client qui l'accepte.
+
+    Seulement si le client porte `administrateurs: true` (opt-in par service, `secubox-oidcctl client-admins`), et
+    seulement une session de COMPTE d'administrateur réel : jamais un appareil (sbx-…), un porteur délégué du pilotage,
+    une session plafonnée ni le compte de la console. Identité stable dérivée du compte, distincte des personnes."""
+    if c.get("administrateurs") is not True:
+        return None
+    try:
+        from secubox_core import auth  # noqa: PLC0415
+    except ImportError:
+        return None
+    tok = request.cookies.get(auth.SESSION_COOKIE)
+    payload = auth._validate_token(tok) if tok else None
+    if not payload:
+        return None
+    sub = str(payload.get("sub") or "")
+    if (not COMPTE_RE.fullmatch(sub) or sub.startswith("sbx-") or sub.startswith(auth.PREFIXE_PILOTAGE)
+            or payload.get("plafond") not in (None, "admin") or not auth.est_admin_reel(payload)):
+        return None
+    return {"payload": payload, "compte": sub,
+            "per": {"user_uuid": str(uuid.uuid5(NS_COMPTE, emetteur() + "|" + sub)), "pseudo": sub}}
 
 
 def session_ouverte(request: Request) -> bool:
@@ -186,6 +236,10 @@ async def autorise(request: Request):
         return RedirectResponse(_avec_params(redirect_uri, {"error": "invalid_scope", "state": state}), 302)
 
     ident = personne(request)
+    if not ident:
+        ident = administrateur(request, c)
+        if ident:
+            _auditer("oidc_entree_administrateur", compte=ident["compte"], client=str(client_id)[:64])
     if not ident:
         if q.get("prompt") == "none":
             return RedirectResponse(_avec_params(redirect_uri, {"error": "login_required", "state": state}), 302)

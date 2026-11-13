@@ -8,6 +8,10 @@ case "$1" in
     # API daemon + periodic timer
     systemctl enable --now secubox-health-doctor.service || true
     systemctl enable --now secubox-health-doctor-runner.timer || true
+    # Bouton « Réparer » (#3628) : dossier de demandes (tmpfiles) + unité root qui le draine.
+    # Jamais `restart` du .service : il peut être en train de terminer ce dpkg même.
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-reparer.conf || true
+    systemctl enable --now secubox-reparer.path || true
     ;;
 esac
 

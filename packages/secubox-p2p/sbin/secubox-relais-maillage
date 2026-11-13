@@ -76,6 +76,8 @@ RELAIS_PORTS_NFT="${SECUBOX_RELAIS_PORTS_NFT:-$R/etc/nftables.d/secubox-relais-p
 # écoute 51820 et 51822 : un pair qui les publierait couperait tout le maillage). Même liste dans les Python ci-dessous.
 PORTS_RESERVES=" 22 53 80 443 7331 8085 9080 51820 51822 "
 PORTS_PUBLICS_LOCAL="${SECUBOX_PORTS_PUBLICS_DIR:-$R/var/lib/secubox/ports-publics.d}"
+# Noms de box jamais exposés par admin.<box> d'office (#3638, #3686) : noms de service, du relais, ou noms par défaut.
+readonly NOMS_BOX_RESERVES=" admin hall www apt mail ai api secubox gk2 master maitre relais unknown localhost secubox-mochabin secubox-espressobin "
 
 # VERROU COMMUN avec secubox-pilotage-vhost (#3126, R-L5-30) : flock exclusif sur un fichier root dédié du dossier root des
 # exclusions. Tenu par CE script pendant toute une passe relayer/retirer/synchroniser (lecture des exclusions comprise,
@@ -475,7 +477,76 @@ d = json.load(open(sys.argv[1])); v = d.get(sys.argv[2])
 sys.exit(0 if isinstance(v, list) and v and v[0] != sys.argv[3] else 1)' "$ROUTES" "$1" "$2" 2>/dev/null
 }
 
+# La route de <nom> vise-t-elle exactement <ip> ? (0 : oui) Routes illisibles ou nom absent : non.
+route_vers_ip() {   # route_vers_ip <nom> <ip>
+    python3 -c 'import json,sys
+d = json.load(open(sys.argv[1])); v = d.get(sys.argv[2])
+sys.exit(0 if isinstance(v, list) and v and v[0] == sys.argv[3] else 1)' "$ROUTES" "$1" "$2" 2>/dev/null
+}
+
 # Noms d'un pair (JSON de /public/noms sur l'entrée) ; liste absente ou mal formée : échec, rien n'est ajouté ni retiré.
+# PAIR SANS WEBOS NI PILOTAGE (#3638) : une box en profil mobile n'a pas de webos, donc pas de /public/noms ; sans plan du
+# pilotage, elle n'était jamais exposée. Son nom de box vient alors de wg_mesh.json (celui de la jonction, un seul par IP) :
+# rend « <nom> », ou échoue (nom absent, invalide, ou IP en double).
+nom_du_pair_wg() {   # nom_du_pair_wg <wg_mesh.json> <ip>
+    python3 - "$1" "$2" <<'PY'
+import json, re, sys
+try:
+    with open(sys.argv[1]) as f:
+        d = json.load(f)
+    noms = [p.get("name") for p in d.get("peers") or [] if isinstance(p, dict) and p.get("mesh_ip") == sys.argv[2]]
+except (OSError, ValueError, AttributeError, TypeError):
+    sys.exit(1)
+if len(noms) != 1 or not isinstance(noms[0], str) or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?", noms[0]):
+    sys.exit(1)
+print(noms[0])
+PY
+}
+
+# PAIRS DISPARUS (#3638) : dernière poignée de main plus vieille que <seuil> secondes. Une poignée à 0 veut dire « aucune
+# depuis la montée de l'interface » (redémarrage du maître) : INCONNU, jamais disparu. Leurs noms et ports relayés sont
+# retirés ; le pair reste au maillage (l'oublier est un geste de l'administrateur) et retrouve ses noms à son retour.
+# Entrée : `wg show wg-mesh latest-handshakes`. Rend une IP par ligne.
+pairs_disparus() {   # pairs_disparus <wg_mesh.json> <seuil_s> <maintenant> <latest-handshakes>
+    python3 - "$1" "$2" "$3" "$4" <<'PY'
+import json, sys
+etat, seuil, maintenant, brut = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
+try:
+    with open(etat) as f:
+        pairs = [p for p in (json.load(f).get("peers") or []) if isinstance(p, dict)]
+except (OSError, ValueError, AttributeError, TypeError):
+    sys.exit(0)                       # état illisible : rien n'est déclaré disparu
+poignee = {}
+for ligne in brut.splitlines():
+    c = ligne.split()
+    if len(c) == 2 and c[1].isdigit():
+        poignee[c[0]] = int(c[1])
+for p in pairs:
+    cle, ip = p.get("public_key"), p.get("mesh_ip")
+    if not isinstance(ip, str) or p.get("direct") is True:
+        continue
+    dernier = poignee.get(cle, 0)
+    if dernier and maintenant - dernier > seuil:
+        print(ip)
+PY
+}
+
+# PAIRS À VALIDER (#3638) : entrés par autojoin, pas encore validés dans la Flotte — WireGuard seul, jamais exposés
+# (ni noms, ni ports, ni joker). Rend une IP par ligne ; état illisible : aucune.
+pairs_a_valider() {   # pairs_a_valider <wg_mesh.json>
+    python3 - "$1" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        pairs = json.load(f).get("peers") or []
+except (OSError, ValueError, AttributeError, TypeError):
+    sys.exit(0)
+for p in pairs:
+    if isinstance(p, dict) and p.get("a_valider") is True and isinstance(p.get("mesh_ip"), str):
+        print(p["mesh_ip"])
+PY
+}
+
 noms_du_pair() {
     python3 -c 'import json,sys
 try:
@@ -514,11 +585,18 @@ def sur(st):
 MAX = 1 << 20
 RE_BOX = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?")
 def lire():
-    dfd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    # #3638 : code 3 = le pilotage ne connaît pas ce pair (pas de plan, ou adresse absente d'un plan sain) ; 1 = plan rejeté.
+    try:
+        dfd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        sys.exit(3)
     try:
         if not sur(os.fstat(dfd)):
             sys.exit(1)
-        fd = os.open("exposition.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+        try:
+            fd = os.open("exposition.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+        except FileNotFoundError:
+            sys.exit(3)
     finally:
         os.close(dfd)
     try:
@@ -538,6 +616,17 @@ except (OSError, ValueError):
 if not isinstance(d, dict) or d.get("version") != 1 or not isinstance(d.get("boxes"), list) or len(d["boxes"]) > 256:
     sys.exit(1)
 entrees = [b for b in d["boxes"] if isinstance(b, dict) and b.get("adresse") == ip]
+if not entrees:
+    # #3638 : « inconnu du pilotage » seulement si AUCUNE box du plan ne porte le nom de jonction de cette IP ; sinon
+    # (même nom à une autre adresse) c'est un désaccord : rien.
+    try:
+        with open(wg) as f:
+            noms_ip = {p.get("name") for p in json.load(f).get("peers") or [] if isinstance(p, dict) and p.get("mesh_ip") == ip}
+    except (OSError, ValueError, AttributeError):
+        sys.exit(1)
+    if any(isinstance(b, dict) and b.get("box") in noms_ip for b in d["boxes"]):
+        sys.exit(1)
+    sys.exit(3)
 if len(entrees) != 1:
     sys.exit(1)
 b = entrees[0]
@@ -604,14 +693,21 @@ PY
 # ── ports bruts relayés (#3154) ──────────────────────────────────────────────
 # Ports d'un pair (JSON de /public/ports sur l'entrée) → lignes « tcp/7881 meet ». Liste absente ou mal formée : échec,
 # rien n'est ajouté ni retiré. Entrée non fiable : tout est revalidé ici.
+# Codes d'échec (#3686, pour un journal exact) : 1 JSON sans liste « ports » valable ; 2 réponse vide ; 3 pas du JSON ;
+# 4 page HTML — un pair SANS webos répond 200 par la page « mauvais domaine » du serveur nginx par défaut (hall.localhost
+# n'y est déclaré par personne), ce n'est pas une liste de ports.
 ports_du_pair() {   # ports_du_pair [--tous] — --tous : garde aussi les ports réservés (l'appelant les refuse et les audite)
     python3 -c 'import json, re, sys
 RESERVES = {22, 53, 80, 443, 7331, 8085, 9080, 51820, 51822}
 tous = "--tous" in sys.argv[1:]
+brut = sys.stdin.read(1 << 20)
+if not brut.strip():
+    sys.exit(2)
 try:
-    liste = json.load(sys.stdin)["ports"]
-except Exception:
-    sys.exit(1)
+    d = json.loads(brut)
+except ValueError:
+    sys.exit(4 if brut.lstrip().startswith("<") else 3)
+liste = d.get("ports") if isinstance(d, dict) else None
 if not isinstance(liste, list):
     sys.exit(1)
 vus = []
@@ -853,6 +949,35 @@ cmd_retirer_port() {   # cmd_retirer_port <proto/port>
 #         domaine, vérifiée dans cmd_relayer).
 #    Le WAF d'ici inspecte tout ; un service réservé au LAN sur le pair y voit un
 #    visiteur WAN (real_ip) et reste fermé.
+# demande_trop_recente <horodatage> <secondes> — 0 si une passe demandée a eu lieu il y a moins de <secondes> ; sinon
+# l'horodatage (root, /run) est posé et 1 est rendu. Un lien ou un fichier non régulier n'est jamais suivi : il est remplacé.
+demande_trop_recente() {
+    local h="$1" s="$2" age
+    if [ -f "$h" ] && [ ! -L "$h" ]; then
+        age=$(( $(date +%s) - $(stat -c %Y "$h") ))
+        [ "$age" -ge 0 ] && [ "$age" -lt "$s" ] && return 0
+    fi
+    rm -f -- "$h"; : > "$h"
+    return 1
+}
+
+# Retrait des NOMS relayés vers un pair disparu (#3638), en lot : la génération HAProxy (--allow-shrink) et le nettoyage
+# des ports (ports_nettoyer_disparus) sont faits à la fin de la synchronisation. 0 si au moins un nom est parti.
+retirer_relais_de_ip() {   # retirer_relais_de_ip <ip>
+    local ip="$1" nom n=0
+    ip_valide "$ip" || return 1
+    for nom in $(routes_de_ip "$ROUTES" "$ip"); do
+        nom_valide "$nom" || continue
+        nom_exclu_pilotage "$nom" && continue      # R-L5-27 : admin.<box> d'une box distante appartient au pilotage
+        if ( RELAIS_EN_LOT=1 cmd_retirer "$nom" ) >/dev/null 2>&1; then
+            n=$((n + 1)); log "retiré : $nom (pair $ip disparu)"; audit_relais relais_retire_disparu "$nom" "$ip"
+        else
+            log "non retiré : $nom (pair $ip disparu)"
+        fi
+    done
+    [ "$n" -gt 0 ]
+}
+
 cmd_synchroniser() {
     local maitre
     maitre="$(maitre_du_satellite)"
@@ -876,6 +1001,26 @@ cmd_synchroniser() {
     [[ "$nouveaux_max" =~ ^[0-9]{1,3}$ ]] || nouveaux_max=3
 
     local ip json dpair nom label ajoutes=0 vus=0 echecs=0 retires=0 publies perime
+    # #3638 : pairs disparus d'abord — leurs noms partent, et ils ne sont pas resondés dans cette passe.
+    local seuil_h disparus="" pairs_vivants="" a_valider
+    a_valider=" $(pairs_a_valider "$WG_ETAT" | tr '\n' ' ') "
+    seuil_h="$(reglage retrait_disparus_h 72)"
+    if [[ "$seuil_h" =~ ^[0-9]{1,5}$ ]] && [ "$seuil_h" -gt 0 ]; then
+        disparus=" $(pairs_disparus "$WG_ETAT" $((seuil_h * 3600)) "$(date +%s)" "$(wg show wg-mesh latest-handshakes 2>/dev/null || true)" | tr '\n' ' ') "
+    fi
+    for ip in $pairs; do
+        if [[ "$disparus" == *" $ip "* ]]; then
+            if [ -n "$(routes_de_ip "$ROUTES" "$ip")$(ports_de_ip "$RELAIS_PORTS_ETAT" "$ip")" ]; then
+                log "pair $ip muet depuis plus de ${seuil_h} h : ses noms et ports relayés sont retirés"
+                retirer_relais_de_ip "$ip" && retires=$((retires + 1))
+            fi
+        elif [[ "$a_valider" == *" $ip "* ]]; then
+            log "pair $ip à valider (autojoin) : rien d'exposé avant « Valider » dans la Flotte"
+        else
+            pairs_vivants="$pairs_vivants $ip"
+        fi
+    done
+    pairs="${pairs_vivants# }"
     for ip in $pairs; do
         # Source des noms (#3126 L5 tâche 6) : le plan d'exposition du pilotage pour un pair qu'il connaît, sinon webos.
         # R-L5-33 I1 : webos d'abord ; le plan ne sert qu'à un pair SANS webos joignable, et alors rien n'est jamais retiré
@@ -885,10 +1030,20 @@ cmd_synchroniser() {
         dpair="$(printf '%s' "$json" | python3 -c 'import json,sys
 try: print(json.load(sys.stdin).get("domaine",""))
 except Exception: pass' 2>/dev/null)"
-        if [ -z "$dpair" ] && expo="$(exposition_pilotage "$ip" "${dom#*.}")"; then
-            IFS=$'\t' read -r bx distante liste <<<"$expo"
-            source=pilotage; dpair="$bx.${dom#*.}"
-            log "pair $ip sans webos : noms déclarés par l'agent au pilotage (box $bx), sans retrait"
+        local rc_expo=1
+        if [ -z "$dpair" ]; then
+            expo="$(exposition_pilotage "$ip" "${dom#*.}")" && rc_expo=0 || rc_expo=$?
+            if [ "$rc_expo" = 0 ]; then
+                IFS=$'\t' read -r bx distante liste <<<"$expo"
+                source=pilotage; dpair="$bx.${dom#*.}"
+                log "pair $ip sans webos : noms déclarés par l'agent au pilotage (box $bx), sans retrait"
+            fi
+        fi
+        # #3638 : ni webos ni pilotage (profil mobile) — le nom de box vient de la jonction ; seul admin.<box> sera exposé
+        # (bloc #3686 ci-dessous, s'il répond vraiment) ; jamais de retrait.
+        # Seulement si le pilotage ne connaît PAS ce pair (code 3) : un plan rejeté ou en désaccord ne laisse rien passer.
+        if [ -z "$dpair" ] && [ "$rc_expo" = 3 ] && bx="$(nom_du_pair_wg "$WG_ETAT" "$ip")" && [[ "$NOMS_BOX_RESERVES" != *" $bx "* ]]; then
+            source=jonction; dpair="$bx.${dom#*.}"
         fi
         [ -n "$dpair" ] && nom_valide "$dpair" || continue
         if [ "$dpair" = "$dom" ] || [[ "$dpair" == *".$dom" ]] || [[ "$dom" == *".$dpair" ]]; then
@@ -901,6 +1056,39 @@ except Exception: pass' 2>/dev/null)"
         if [ "$source" = webos ] && ! liste="$(printf '%s' "$json" | noms_du_pair)"; then
             log "pair $ip : liste de noms illisible — rien ajouté ni retiré"; continue
         fi
+        # #3686 — ADMIN.<BOX> D'OFFICE, pour tout pair vivant (ni muet ni à valider : filtrés plus haut) et quelle que soit la
+        # source des autres noms (webos, plan du pilotage, jonction). admin.<box>.<zone> rejoint la liste s'il répond vraiment
+        # (sonde de la jonction : Host admin.<box> sur $PORT_PAIR, 2xx ou 3xx), ou s'il est déjà relayé vers CE pair : il est
+        # alors compté publié et aucune synchronisation ne le retire. Gardes : domaine du pair de la forme <box>.<zone du
+        # relais>, <box> hors des noms réservés ; domaine du relais et domaine tenu par un autre déjà refusés plus haut ; box
+        # « distante » ou exclusion du pilotage (R-L5-27) et route vers une autre cible : rien touché ; libellé admin exclu ou
+        # hors des communs : rien sondé. Quota, certificat et DNS public restent ceux de la boucle ordinaire. Un plan rejeté
+        # ou en désaccord (code 1) n'arrive jamais ici : ni webos, ni pilotage, ni jonction, donc pas de domaine.
+        local adm="admin.$dpair" bxp="${dpair%%.*}" c_admin
+        if [ "$dpair" = "$bxp.${dom#*.}" ] && [[ "$bxp" =~ ^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$ ]] \
+           && [[ "$NOMS_BOX_RESERVES" != *" $bxp "* ]] && [[ " $liste " != *" $adm "* ]] && [[ "$exclus" != *" admin "* ]] \
+           && { [ "$mode" != communs ] || [[ "$labels" == *" admin "* ]]; }; then
+            if route_vers_ip "$adm" "$ip"; then
+                liste="$adm $liste"
+            elif [ "$distante" = 1 ] || nom_exclu_pilotage "$adm"; then
+                log "pair $ip : $adm servi par le pilotage du maître (box distante) — rien touché"
+            elif route_etrangere "$adm" "$ip"; then
+                log "pair $ip : $adm déjà servi ailleurs — rien touché"
+                audit_relais relais_nom_refuse "$adm" "$ip"
+            else
+                c_admin="$(curl -s -o /dev/null --max-time 6 -w '%{http_code}' -H "Host: $adm" "http://$ip:$PORT_PAIR/" || true)"
+                if [[ "$c_admin" =~ ^[23][0-9][0-9]$ ]]; then
+                    liste="$adm $liste"
+                    if [ "$source" = jonction ]; then
+                        log "pair $ip sans webos ni pilotage : $adm (nom de la jonction), sans retrait"
+                    else
+                        log "pair $ip : $adm répond (HTTP $c_admin) — ajouté d'office ($source), sans retrait"
+                    fi
+                fi
+            fi
+        fi
+        # jonction : admin.<box> est son seul nom ; muet, rien à exposer (ni joker DNS, ni certificat)
+        [ "$source" != jonction ] || [ -n "${liste// /}" ] || continue
         # ÉMETTRE UN JOKER PEUT MASQUER LE DNS. Si les noms du pair résolvent
         # par un joker PARENT (*.secubox.in), le défi DNS-01 crée
         # _acme-challenge.<domaine> : le domaine devient un nœud existant et le
@@ -994,8 +1182,16 @@ except Exception: pass' 2>/dev/null)"
         elif [ "$code" != 200 ]; then
             continue
         fi
-        if ! lignes="$(printf '%s' "$corps" | ports_du_pair --tous)"; then
-            log "pair $ip : liste de ports illisible — rien ajouté ni retiré"; continue
+        local rc_ports=0
+        lignes="$(printf '%s' "$corps" | ports_du_pair --tous)" || rc_ports=$?
+        if [ "$rc_ports" != 0 ]; then
+            case "$rc_ports" in
+                2) log "pair $ip : réponse vide à /public/ports (HTTP $code) — rien ajouté ni retiré" ;;
+                4) log "pair $ip : page HTML au lieu de la liste de ports (pas de webos sur ce pair) — rien ajouté ni retiré" ;;
+                3) log "pair $ip : réponse de /public/ports qui n'est pas du JSON — rien ajouté ni retiré" ;;
+                *) log "pair $ip : liste de ports illisible — rien ajouté ni retiré" ;;
+            esac
+            continue
         fi
         tenus=" "
         while read -r cle mod; do
@@ -1258,5 +1454,12 @@ case "${1:-}" in
     ouvrir)  shift; cmd_ouvrir "$@" ;;
     fermer)  shift; cmd_fermer "$@" ;;
     synchroniser) verrou_commun; cmd_synchroniser ;;
+    synchroniser-demande)
+        # #3638 : passe demandée par une jonction (marqueur inscriptible par le compte partagé secubox) — au plus une
+        # toutes les 5 min ; une demande écartée est rattrapée par le minuteur horaire.
+        if demande_trop_recente "${RELAIS_HORODATAGE:-/run/secubox-relais-demande.horodatage}" 300; then
+            log "passe demandée il y a moins de 5 min : laissée au minuteur horaire"; exit 0
+        fi
+        verrou_commun; cmd_synchroniser ;;
     *) sed -n '8,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

@@ -10,7 +10,7 @@ User=secubox
 Group=secubox
 # Lit le journal d'Unbound (#3446) : sans ce groupe, « No journal files were opened » et redémarrage en boucle sur une box neuve.
 SupplementaryGroups=systemd-journal
-# Le POC n'est PAS activé à l'installation : `systemctl enable --now secubox-ad-guard-dnsfeed` après `secubox-adguard-tv apply`.
+# SBX TV Privacy est toujours actif (#3674) : le postinst applique puis active ce collecteur à chaque configuration.
 ExecStart=/usr/sbin/secubox-adguard-dnsfeed
 Restart=on-failure
 RestartSec=10
@@ -19,7 +19,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/secubox/ad-guard
+ReadWritePaths=/var/lib/secubox/ad-guard -/run/secubox/ad-guard-tri
 # `secubox` appartient au groupe systemd-journal : il lit le journal d'Unbound sans privilège.
 
 [Install]

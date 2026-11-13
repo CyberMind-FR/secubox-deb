@@ -1,3 +1,48 @@
+secubox-meet (0.2.8-1~trixie1) trixie; urgency=medium
+
+  * Salle créée depuis l'administration : le code EST le nom et l'adresse,
+    au format de Meet xxx-yyyy-zzz (le front n'ouvre que celui-ci) ; généré
+    s'il est laissé vide. Un nom libre (« Gk-Public ») donnait une salle que
+    Meet refusait d'ouvrir (#3610).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 16:00:00 +0100
+
+secubox-meet (0.2.7-1~trixie1) trixie; urgency=medium
+
+  * Ports médias de LiveKit réglables (#3615) : tcp_port et udp_port de
+    meet.toml sont suivis par le rendu de livekit.yaml et par la règle DNAT
+    de media-expose (ils étaient écrits en dur en 7881/7882). Deux box
+    derrière le même maître et la même adresse publique ne se disputent plus
+    les médias (gk1 en 7881/7882, gk3 en 7883/7884). Port douteux : défaut.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:30:00 +0100
+
+secubox-meet (0.2.6-1~trixie1) trixie; urgency=medium
+
+  * oidc-enregistrer : l'opt-in administrateurs (#3612) est aussi posé quand
+    le client est déjà enregistré et appliqué (cas courant, retour anticipé).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:00:00 +0100
+
+secubox-meet (0.2.5-1~trixie1) trixie; urgency=medium
+
+  * Visio : un administrateur réel de la box y entre en son nom (#3612,
+    arbitrage du propriétaire) ; meetctl oidc-enregistrer pose l'opt-in
+    du client « meet » (secubox-oidcctl client-admins meet on).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 14:30:00 +0100
+
+secubox-meet (0.2.4-1~trixie1) trixie; urgency=medium
+
+  * Créer une salle depuis l'administration (#3610) : meetctl comptes et
+    salle-creer <nom> <public|trusted|restricted> <sub> [acteur] (ORM de Meet
+    dans le conteneur, transaction, valeurs en JSON sur l'entrée standard,
+    audité réussite comme échec) ; API GET /comptes et POST /salles
+    (administrateur) ; sudoers étendu à ces deux verbes exacts.
+  * meetctl et l'API annoncent de nouveau la version du paquet.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 13:30:00 +0100
+
 secubox-meet (0.2.3-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

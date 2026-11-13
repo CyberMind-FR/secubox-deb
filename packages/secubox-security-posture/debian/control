@@ -18,7 +18,9 @@ Depends: ${misc:Depends},
  auditd,
  debsums,
  sudo,
- nftables
+ nftables,
+ acl,
+ adduser
 Replaces: secubox-cve-triage (<< 1.2.5~),
  secubox-antirootkit (<< 0.1.7~)
 Breaks: secubox-cve-triage (<< 1.2.5~),

@@ -16,6 +16,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -42,6 +43,9 @@ PURGE_RETIRE_S = 30 * 86400        # une règle retirée depuis plus de 30 jours
 RISQUES = ("faible", "partage", "variable")
 ORIGINES = ("auto", "admin")
 FICHIER = "regles.json"
+INDICE_MAX = 8                     # noms de box portés par une règle née d'un indice du maillage (#3666)
+NOM_BOX_RE = re.compile(r"^[a-z0-9-]{1,32}$")
+PROLONGATIONS_LUES_MAX = 10000    # compteur de prolongations consécutives d'un essai (#3666) ; au-delà, fichier refusé
 
 
 class ErreurRegle(ValueError):
@@ -70,6 +74,15 @@ def _appareil(brut: str) -> str:
     return brut
 
 
+def _indice(brut) -> List[str]:
+    """Noms des box qui ont suggéré la règle (#3666) : liste bornée de noms `[a-z0-9-]{1,32}` ; absente = règle locale."""
+    if brut is None:
+        return []
+    if not isinstance(brut, list) or len(brut) > INDICE_MAX or not all(isinstance(n, str) and NOM_BOX_RE.match(n) for n in brut):
+        raise ErreurRegle("indice invalide (au plus 8 noms de box : minuscules, chiffres, tirets)")
+    return list(brut)
+
+
 def valider_regle(b: dict) -> dict:
     if not isinstance(b, dict):
         raise ErreurRegle("règle invalide")
@@ -95,8 +108,14 @@ def valider_regle(b: dict) -> dict:
             raise ErreurRegle("historique invalide")
         propre.append({"ts": h["ts"], "de": h.get("de") if h.get("de") in ETATS else "", "vers": h["vers"],
                        "origine": h.get("origine") if h.get("origine") in ORIGINES else "auto", "motif": str(h.get("motif", ""))[:120]})
+    indice = _indice(b.get("indice"))
+    prol = b.get("prolongations", 0)
+    if not isinstance(prol, int) or isinstance(prol, bool) or not 0 <= prol <= PROLONGATIONS_LUES_MAX:
+        raise ErreurRegle("champ prolongations invalide")
     return {"id": identifiant(appareil, domaine), "appareil": appareil, "domaine": domaine, "etat": b["etat"], "origine": origine,
-            "risque": risque, "motif": str(b.get("motif", ""))[:120], "historique": propre, **entiers}
+            "risque": risque, "motif": str(b.get("motif", ""))[:120], "historique": propre, **entiers,
+            **({"indice": indice} if indice else {}),      # champ absent pour une règle locale : fichier inchangé
+            **({"prolongations": prol} if prol else {})}   # #3666 : prolongations consécutives de l'essai en cours ; absent = 0
 
 
 class Regles:
@@ -125,7 +144,8 @@ class Regles:
             raise ErreurRegle("règle inconnue")
         return dict(self._r[rid])
 
-    def proposer(self, appareil: str, domaine: str, score: int, risque: str, maintenant: int, origine: str = "auto", motif: str = "proposé") -> Optional[dict]:
+    def proposer(self, appareil: str, domaine: str, score: int, risque: str, maintenant: int, origine: str = "auto", motif: str = "proposé",
+                indice: Optional[List[str]] = None) -> Optional[dict]:
         appareil, domaine = _appareil(appareil), _domaine(domaine)
         rid = identifiant(appareil, domaine)
         if rid in self._r:
@@ -134,7 +154,8 @@ class Regles:
             raise ErreurRegle("trop de règles")
         regle = valider_regle({"appareil": appareil, "domaine": domaine, "etat": "candidat", "origine": origine, "risque": risque,
                                "score": max(0, int(score)), "cree": maintenant, "maj": maintenant, "fin_essai": 0,
-                               "motif": motif, "historique": [{"ts": maintenant, "de": "", "vers": "candidat", "origine": origine, "motif": motif}]})
+                               "motif": motif, "historique": [{"ts": maintenant, "de": "", "vers": "candidat", "origine": origine, "motif": motif}],
+                               "indice": indice})
         self._r[rid] = regle
         return dict(regle)
 
@@ -149,6 +170,27 @@ class Regles:
         r["historique"] = (r["historique"] + [{"ts": maintenant, "de": r["etat"], "vers": vers, "origine": origine, "motif": str(motif)[:120]}])[-HISTORIQUE_MAX:]
         r["etat"], r["maj"], r["motif"] = vers, maintenant, str(motif)[:120]
         r["fin_essai"] = maintenant + ESSAI_S if vers == "essai" else 0
+        r.pop("prolongations", None)                   # une transition clôt la série de prolongations
+        return dict(r)
+
+    def oublier(self, rid: str) -> dict:
+        """Efface la règle (#3666) : un essai né d'un indice disparu ou déclaré légitime ailleurs peut être reproposé si l'indice
+        revient (un « retiré » ne le serait pas avant 30 jours). Rend la règle effacée."""
+        r = self._r.pop(rid, None)
+        if r is None:
+            raise ErreurRegle("règle inconnue")
+        return dict(r)
+
+    def poser_indice(self, rid: str, indice: List[str]) -> dict:
+        """Noms des box qui suggèrent une règle existante (#3666), validés comme à la lecture."""
+        r = self._r.get(rid)
+        if r is None:
+            raise ErreurRegle("règle inconnue")
+        noms = _indice(indice)
+        if noms:
+            r["indice"] = noms
+        else:
+            r.pop("indice", None)
         return dict(r)
 
     def prolonger_essai(self, rid: str, maintenant: int, motif: str = "essai prolongé : appareil peu actif") -> dict:
@@ -157,8 +199,14 @@ class Regles:
         if r is None or r["etat"] != "essai":
             raise ErreurRegle("seul un essai peut être prolongé")
         r["fin_essai"] = maintenant + ESSAI_S
-        r["historique"] = (r["historique"] + [{"ts": maintenant, "de": "essai", "vers": "essai", "origine": "auto", "motif": motif[:120]}])[-HISTORIQUE_MAX:]
+        # Une prolongation REMPLACE la précédente (#3666) : l'historique est plafonné à 10 entrées, des prolongations successives
+        # en chasseraient l'entrée à l'essai, dont dépend le suivi des indices (`dnstv_auto._ne_du_moteur`).
+        hist = r["historique"]
+        if hist and hist[-1].get("de") == "essai" and hist[-1].get("vers") == "essai":
+            hist = hist[:-1]
+        r["historique"] = (hist + [{"ts": maintenant, "de": "essai", "vers": "essai", "origine": "auto", "motif": motif[:120]}])[-HISTORIQUE_MAX:]
         r["maj"], r["motif"] = maintenant, motif[:120]
+        r["prolongations"] = min(int(r.get("prolongations", 0)) + 1, PROLONGATIONS_LUES_MAX)   # #3666 : plafond des essais nés d'indice
         return dict(r)
 
     def expirer(self, maintenant: int) -> List[dict]:

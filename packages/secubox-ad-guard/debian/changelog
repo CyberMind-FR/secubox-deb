@@ -1,3 +1,86 @@
+secubox-ad-guard (1.25.3-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy : encart « Pubs bloquées récemment » dans la vue par appareil (ref #3676).
+    Refus des dernières 24 h regroupés par service (lists/services-pub.txt, sinon domaine
+    enregistrable), avec dernier refus, nombre et source du blocage : règle TV Privacy
+    (essai/confirmée, « indice de <box> »), exception de l'administrateur, tri Netflix,
+    liste TV (PROTECT), listes compilées adblock/adulte/filtre web, sinon autre. Cache
+    pubs-bloquees.json calculé par le moteur auto au plus toutes les 10 min (listes lues
+    en flux, attribution gardée avec la signature des fichiers), réécrit seulement s'il
+    change ; route GET /adblock-tv/appareils/{nom}/pubs-bloquees en lecture nominative,
+    qui ne lit que le cache.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 15:24:22 +0100
+
+secubox-ad-guard (1.25.2-1~trixie1) trixie; urgency=medium
+
+  * Relecture sécurité de #3674 : le contrôleur n'applique (rechargement d'Unbound) que si
+    l'état change, si le drop-in manque ou si une désactivation ancienne est marquée — plus
+    de coupure DNS à chaque mise à jour ; état écrit même hors systemd et amorçage par le
+    moteur auto au premier démarrage (box d'image) ; `disable` retiré du sudoers du compte
+    secubox ; la page affiche l'état réel ; README à jour (ref #3674).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 15:08:25 +0100
+
+secubox-ad-guard (1.25.1-1~trixie1) trixie; urgency=medium
+
+  * SBX TV Privacy TOUJOURS ACTIF (ref #3674, décision du propriétaire : il ne se désactive
+    pas). État par défaut actif ; à chaque configuration du paquet, un état absent ou
+    inactif devient actif, une box sans appareil reçoit l'ajout automatique des TV, puis le
+    contrôleur applique et le collecteur dnsfeed est activé. POST /adblock-tv/etat refuse
+    actif=false (409) ; l'interrupteur ON/OFF de la page est remplacé par « Toujours actif ».
+    Réglages par appareil inchangés ; un état corrompu reste inactif et n'est jamais écrasé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 15:00:34 +0100
+
+secubox-ad-guard (1.25.0-1~trixie1) trixie; urgency=medium
+
+  * Indices TV Privacy partagés entre box (ref #3666) : contenu publié sans appareil ni date
+    (indices-publication.json), livraisons du maillage lues et bornées, poids maximal en mode auto
+    avec garde des catégories protégées, légitime qui freine, retrait sûr/oubli, confirmation à
+    l'échéance. Interrupteurs `indices_publier`/`indices_recevoir`, routes GET/POST
+    /adblock-tv/indices, geste d'audit `tv_indices_reglage`, encart de la page TV Privacy.
+  * Relecture finale (ref #3666) : seule une lecture locale ratée protège un essai né d'indice
+    (contenu signé invalide ou contradictoire = aucun indice), 3 prolongations consécutives au
+    plus et rafale/contenu disparu toujours éprouvés ; corrections illisibles = index non lisible ;
+    légitime ailleurs = décision locale ; publication limitée aux catégories pub/pistage/télémétrie
+    (INCONNU confirmé par l'admin) ; plafond global de 50 000 domaines ; résumé indices-resume.json
+    lu par GET /indices (champ `maj`) ; POST et moteur inactif réécrivent la publication ;
+    motifs « suggéré par gk2, gk6 » et origine affichée dans ad-guard ; force refusée et
+    annulation auditée ; mode 0640 rétabli ; texte exact de l'encart.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 12:41:20 +0100
+
+secubox-ad-guard (1.24.6-1~trixie1) trixie; urgency=medium
+
+  * Tri Netflix (ref #3226), règle « par zone » : au banc du 10/11, la TV ne redemande jamais un
+    serveur refusé, elle bascule sur les suivants (c211, c219, c206, c222…) — la règle par nom
+    bloquait le démarrage de l'épisode (tri coupé). Désormais : 2 serveurs nouveaux distincts
+    refusés en 30 s = démarrage d'épisode → zone ouverte 3 min pour l'appareil, chaque serveur
+    résolu pendant l'ouverture reste autorisé 3 h, puis la zone se referme ; un serveur isolé en
+    pleine lecture (la pub) reste refusé. Minuterie du tri chaque minute (fermeture à l'heure).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 13:50:20 +0100
+
+secubox-ad-guard (1.24.5-1~trixie1) trixie; urgency=medium
+
+  * Tri Netflix par insistance au niveau DNS (ref #3226), EXPÉRIMENTAL, par appareil en mode
+    auto (case « Tri Netflix » de TV Privacy) : pour une TV que la box ne route pas (Wi-Fi de
+    l'opérateur). Chaque nouveau serveur vidéo *.oca.nflxvideo.net reçoit NXDOMAIN dans la vue
+    de l'appareil ; redemandé au moins 3 fois en 20 s (épisode), il est autorisé 3 h ; abandonné
+    (publicité), il reste refusé. dnsfeed détecte l'insistance et dépose une demande ;
+    secubox-adguard-tv tri-appliquer (root, unité de chemin) la revalide et pose la zone à chaud
+    (view_local_zone_add), garde l'échéance, purge (minuterie 10 min) ; les autorisations en
+    cours sont rendues dans la vue (un rechargement d'Unbound les garde).
+  * POST /adblock-tv/clients : redéclarer une adresse existante garde sa MAC, son origine et sa
+    date (la MAC d'une entrée de l'administrateur ancre le suivi des nouvelles adresses).
+  * postinst : dnsfeed relancé APRÈS daemon-reload (unité à jour) ; prerm : unités du tri désactivées.
+  * Relecture : dossier des demandes root 1730 lu par descripteur (jamais à travers un lien),
+    motifs entiers, fichiers ordinaires, 16 poses par passe sous le verrou des rechargements
+    DNS, déclenchements bornés, unité durcie (exception RULES-CODE § 10).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 12:59:30 +0100
+
 secubox-ad-guard (1.24.4-1~trixie1) trixie; urgency=medium
 
   * Carte TV Privacy : état lu sur ad-guard, elle restait « à l'arrêt » faute de service à son nom (ref #3467).

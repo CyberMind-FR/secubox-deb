@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox — synchronisation du relais demandée par une jonction (#3638)
+After=network-online.target wg-quick@wg-mesh.service nginx.service
+
+[Service]
+Type=oneshot
+# Le marqueur part AVANT la passe : une jonction pendant la passe en redemande une autre ; il ne tourne jamais en boucle.
+ExecStartPre=/bin/rm -f /var/lib/secubox/p2p/relais.demande
+# Laisser la jonction finir (poignée de main, webos du pair) avant de le sonder.
+ExecStartPre=/bin/sleep 60
+# La même passe que le minuteur horaire (verrou commun) ; au plus une passe ainsi demandée toutes les 5 min, contrôle
+# fait par le script (verbe synchroniser-demande, horodatage root dans /run), jamais par un shell dans ExecStart.
+ExecStart=/usr/sbin/secubox-relais-maillage synchroniser-demande
+PrivateTmp=yes
+NoNewPrivileges=yes
+TimeoutStartSec=45min

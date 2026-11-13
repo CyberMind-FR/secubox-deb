@@ -370,6 +370,12 @@ def _cmd_export(args) -> int:
     return 0
 
 
+def _lxc_installe() -> bool:
+    """Vrai si un outil LXC est présent : alors seulement un échec de lxc-ls est indéterminé (#3603)."""
+    import shutil
+    return any(shutil.which(o) for o in ("lxc-ls", "lxc-start"))
+
+
 def _running_as_root() -> bool:
     return os.geteuid() == 0
 
@@ -408,7 +414,12 @@ def _cmd_scan(args) -> int:
               "`scan` en root (sudo).", file=sys.stderr)
         return 1
 
-    rc, out = _run(["lxc-ls", "-1"])
+    # #3603 : LXC NON INSTALLÉ (ni lxc-ls ni lxc-start, profil mobile/minimal) = aucun conteneur ne peut tourner :
+    # l'inventaire « aucun LXC » est alors exact, pas un repli. Un lxc-ls présent qui échoue reste un refus (ci-dessous).
+    if not _lxc_installe():
+        rc, out = 0, ""
+    else:
+        rc, out = _run(["lxc-ls", "-1"])
     # Même raisonnement que ci-dessus pour list-unit-files : rc=None ou
     # rc!=0 est indéterminé, jamais silencieusement traité comme "aucun
     # conteneur". La conséquence d'un mauvais repli ici est sévère (tous les

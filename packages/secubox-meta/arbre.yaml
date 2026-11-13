@@ -264,6 +264,7 @@ suggere:
   - secubox-console
   - secubox-kiosk               # kiosque graphique : jamais installé sans le demander (#2504)
   - secubox-plymouth            # thème de démarrage : tiré par le kiosque, jamais installé seul
+  - secubox-status              # Status Live v2 (#3605) : supervision locale, gk2 d'abord
 
 meta: secubox-service-identite
 niveau: service
@@ -352,6 +353,7 @@ suggere:
   - secubox-mesh
   - secubox-daemon
   - secubox-meshtastic
+  - secubox-mirrornet           # MirrorNet v1 (#3645) : plan de contrôle services/données/contributions, phase 2 lecture seule
 
 meta: secubox-service-waf
 niveau: service

@@ -27,9 +27,9 @@ from secubox_core import auth as _auth
 from secubox_core.auth import est_admin_reel, require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from . import dnstv, dnstv_analyse, dnstv_pubs, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_analyse, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from api import dnstv, dnstv_analyse, dnstv_pubs, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 logger = logging.getLogger("secubox.ad-guard.adblock-tv")
@@ -128,6 +128,7 @@ async def statut(lecteur=Depends(require_lecture)):
     vue = [] if anonyme else await asyncio.to_thread(_vue_appareils, etat)
     clients = [] if anonyme else _clients_enrichis(etat["clients"], vue)       # tableau de bord : les compteurs, aucune MAC ni adresse
     return {"actif": etat["actif"], "clients": clients, "appareils": vue, "erreur": bool(erreur) if anonyme else erreur, "dropin_present": dnstv.CONF_UNBOUND.is_file(),
+            "tri_netflix": None if anonyme else etat.get("tri_netflix"),
             "listes": {"domaines": len(table), "problemes": dnstv.verifier_manifeste(dnstv.DOSSIER_LISTES),
                        "par_categorie": {c: sum(1 for v in table.values() if v == c) for c in dnstv.CATEGORIES}},
             "compteurs": {"requetes": stats["requetes"], "domaines_uniques": stats["domaines_uniques"],
@@ -138,6 +139,10 @@ async def statut(lecteur=Depends(require_lecture)):
 # écrasée par un passage de la minuterie qui aurait lu l'état avant elle, et le sudo du contrôleur ne gèle pas la boucle du groupe.
 @router.post("/etat", dependencies=[Depends(require_jwt)])
 def activer(corps: EtatIn):
+    if not corps.actif:
+        # #3674 : SBX TV Privacy ne se désactive pas (protections actives par défaut, décision du propriétaire) ; un appareil
+        # se règle à part (mode, « Ça ne marche plus ? Je débloque »).
+        raise HTTPException(409, "SBX TV Privacy ne se désactive pas : régler l'appareil concerné (mode, déblocage) à la place")
     with _verrou():
         etat = _etat()
         etat["actif"] = corps.actif
@@ -152,11 +157,44 @@ def declarer_client(c: ClientIn):
         try:
             ip = dnstv._ip(c.ip)
             mode = dnstv.normaliser_mode(c.mode)
-            etat["clients"] = [x for x in etat["clients"] if x["ip"] != ip] + [{"ip": ip, "nom": c.nom or ip, "mode": mode}]
+            # #3226 : changer le mode d'une adresse déjà déclarée GARDE ses autres champs (MAC, origine, date, puits) — la MAC
+            # d'une entrée de l'administrateur est l'ancre du suivi des nouvelles adresses de l'appareil (#3438).
+            ancienne = next((x for x in etat["clients"] if x["ip"] == ip), None)
+            nom = c.nom or (ancienne or {}).get("nom") or ip
+            if ancienne is not None and ancienne.get("nom") != nom:
+                ancienne = None                                  # autre appareil sur cette adresse (DHCP) : ni MAC ni origine héritées
+            entree = dict(ancienne or {}, ip=ip, nom=nom, mode=mode)
+            etat["clients"] = [x for x in etat["clients"] if x["ip"] != ip] + [entree]
             dnstv.ecrire_etat(etat)
         except dnstv.ErreurTV as e:
             _refuse(e)
         return {"etat": etat, "application": _ctl("apply")}
+
+
+class TriIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    appareil: str = Field(..., pattern=r"^[a-z0-9-]{1,40}$")     # identifiant de vue (nom de l'appareil normalisé)
+    actif: bool
+
+
+@router.post("/tri-netflix", dependencies=[Depends(require_jwt)])
+def tri_netflix(t: TriIn):
+    """Tri Netflix par insistance (#3226), EXPÉRIMENTAL, par appareil en mode auto : chaque nouveau serveur vidéo Netflix est
+    refusé, autorisé 3 h si la TV insiste. Désactiver retire toutes ses zones au prochain rechargement d'Unbound."""
+    with _verrou():
+        etat = _etat()
+        if t.actif and t.appareil not in {dnstv._slug(c["nom"]) for c in etat["clients"] if c["mode"] == "auto"}:
+            raise HTTPException(409, "appareil inconnu ou pas en mode auto : le tri vit dans sa vue auto")
+        r = dict(etat.get("tri_netflix") or {"appareils": []})
+        app = set(r.get("appareils", []))
+        (app.add if t.actif else app.discard)(t.appareil)
+        r["appareils"] = sorted(app)
+        etat["tri_netflix"] = r
+        try:
+            dnstv.ecrire_etat(etat)
+        except dnstv.ErreurTV as e:
+            _refuse(e)
+        return {"tri_netflix": dnstv.lire_etat()[0].get("tri_netflix"), "application": _ctl("apply")}
 
 
 @router.delete("/clients/{ip}", dependencies=[Depends(require_jwt)])
@@ -881,6 +919,14 @@ def refus_appareil(nom: str, minutes: int = 60):
     for x in refus:
         x["autorise"] = x["domaine"] in autorises
     return {"nom": nom, "minutes": minutes, "refus": refus}
+
+
+@router.get("/appareils/{nom}/pubs-bloquees", dependencies=[Depends(require_lecture_nominative)])
+def pubs_bloquees(nom: str):
+    """#3676 : encart « Pubs bloquées récemment » — refus des dernières 24 h de l'appareil, par service, avec QUI a bloqué. Lit SEULEMENT
+    le cache écrit par le moteur auto (au plus toutes les 10 min) ; jamais les listes compilées ni la base dans la requête."""
+    _clients_du_nom(_etat(), nom)
+    return dnstv_pubs.vue(dnstv_regles.slug(nom))
 
 
 

@@ -7,7 +7,7 @@ One engine, one profile (profil.toml), four faces: kiosk, console, master panel 
 
 Renommage (0.8.1, #3126 D3, #3242) : l'étape « nom » appelle `/usr/sbin/secubox-renommer <nom>` (secubox-core >= 1.8.10) — ligne 127.0.1.1 de /etc/hosts, `[global] hostname` de secubox.conf, hostnamectl, relance d'Avahi et audit `box_renommee`, défaits ensemble à tout échec. premier-pas n'a plus sa propre copie (`_renomme`, `_avahi_nouveau_nom` retirés). Les noms réservés (`admin`, `www`, `secubox`, `localhost`) sont refusés dès le profil.
 
-Also ships secubox-majauto: nightly unattended upgrade of the SecuBox packages only, from the signed apt.secubox.in repository.
+Also ships secubox-majauto: nightly unattended upgrade of the SecuBox packages only, from the signed apt.secubox.in repository. At the end of a pass it restarts secubox-aggregator once (`secubox-majauto-agregateur`, #3630) when an upgraded package ships code the aggregator serves.
 
 Paquet Debian : version `0.4.9-1~bookworm1`, architecture `all`.
 

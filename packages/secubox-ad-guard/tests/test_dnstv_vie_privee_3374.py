@@ -14,7 +14,7 @@ PERSONNELLES = [
     "/adblock-tv/appareils", "/adblock-tv/classification", "/adblock-tv/stats", "/adblock-tv/export", "/adblock-tv/clients/vus",
     "/adblock-tv/path-test?ip=192.168.1.50", "/adblock-tv/bypass", "/adblock-tv/sources", "/adblock-tv/live", "/adblock-tv/flux",
     "/adblock-tv/serie", "/adblock-tv/auto/regles", "/adblock-tv/auto/reglage", "/adblock-tv/auto/detection",
-    "/adblock-tv/auto/appareils/TV/refus", "/adblock-tv/simple", "/adblock-tv/simple/suspects", "/adblock-tv/gardien", "/adblock-tv/dns-box",
+    "/adblock-tv/auto/appareils/TV/refus", "/adblock-tv/appareils/TV/pubs-bloquees", "/adblock-tv/simple", "/adblock-tv/simple/suspects", "/adblock-tv/gardien", "/adblock-tv/dns-box",
 ]
 
 

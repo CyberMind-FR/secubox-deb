@@ -6,8 +6,9 @@ if [ "$1" = "configure" ]; then
     chown -R secubox:secubox /var/lib/secubox/ad-guard
     # Dossier de ROOT du contrôleur du mode auto (#1954) : hors de l'arbre de `secubox`, jamais touché par le chown ci-dessus.
     install -d -m 0700 -o root -g root /var/lib/secubox-adguard-tv
-    # POC « DNS AdBlock TV » (#1943) : inactif tant qu'on ne l'active pas ; une mise à jour relance son démon s'il tourne déjà.
-    systemctl try-restart secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
+    # Tri Netflix (#3226) : dossier des demandes AVANT la relance de dnsfeed (ProtectSystem=strict : il ne l'écrit que s'il
+    # existe au démarrage du service).
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-ad-guard-tri.conf >/dev/null 2>&1 || true
     # Mode auto (#1954) : la minuterie ne fait rien tant qu'aucun appareil n'est en mode auto ; l'activer ne touche pas le DNS.
     systemctl enable --now secubox-ad-guard-auto.timer >/dev/null 2>&1 || true
     # Capteur DNS d'Actor Intelligence (#2240) : ne fait rien sans actord ni magasin (ConditionPathExists) ; ne juge que les domaines malveillants ou anormaux.
@@ -15,7 +16,15 @@ if [ "$1" = "configure" ]; then
     # Instantané des réponses d'Unbound (détournement d'un domaine normal) : lecture seule du cache, étape privilégiée minimale par sudo (exact).
     systemctl enable --now secubox-ad-guard-dnsdump.timer >/dev/null 2>&1 || true
 
+
     systemctl daemon-reload
+    # POC « DNS AdBlock TV » (#1943) : inactif tant qu'on ne l'active pas ; une mise à jour relance son démon s'il tourne déjà
+    # — APRÈS daemon-reload, pour qu'il démarre avec son unité à jour (#3226 : dossier des demandes ouvert en écriture).
+    systemctl try-restart secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
+    # Tri Netflix (#3226) : unité de chemin et purge des autorisations échues. Sans appareil trié (défaut), aucune demande
+    # n'est jamais déposée : sans effet.
+    systemctl enable --now secubox-ad-guard-tri.path >/dev/null 2>&1 || true
+    systemctl enable --now secubox-ad-guard-tri.timer >/dev/null 2>&1 || true
     # #2748 : le module est servi par le groupe des modules declares (groupable.d) ; sans groupe d'operateur on l'active.
     [ -x /usr/sbin/secubox-groupe-declares-activer ] && /usr/sbin/secubox-groupe-declares-activer || true
     # PAS d'enable de secubox-ad-guard.service : le module est servi par
@@ -26,12 +35,33 @@ if [ "$1" = "configure" ]; then
     # L'unite debian/secubox-ad-guard.service subsiste comme reference du
     # mode autonome ; elle n'est deliberement pas installee (#1362).
 fi
-# SBX TV Privacy (#3374, I2) : PREMIÈRE installation seulement ($2 vide) — état initial AUTO, ajout automatique selon le TOML livré
-# (ajout_auto_initial). Une mise à niveau ne change rien ; un etat.json absent sur une box existante n'active rien.
-if [ "$1" = configure ] && [ -z "$2" ]; then
-    if [ ! -e /var/lib/secubox/ad-guard/dnstv/etat.json ] && [ ! -L /var/lib/secubox/ad-guard/dnstv/etat.json ]; then
-        runuser -u secubox -- python3 -c 'import sys; sys.path.insert(0, "/usr/lib/secubox/ad-guard"); from api import dnstv; dnstv.poser_etat_initial()' \
-            || echo "secubox-ad-guard : état initial SBX TV Privacy non écrit" >&2
+# SBX TV Privacy TOUJOURS ACTIF (#3674, décision du propriétaire : il ne se désactive pas). À CHAQUE configuration, sous le
+# compte secubox et le verrou des règles : état absent ou inactif → actif ; box sans appareil → ajout automatique des TV
+# (ajout_auto_initial). Code 0 : écrit ; 10 : rien à changer ; 3 : état CORROMPU (jamais écrasé, rien n'est appliqué).
+# Le contrôleur root n'applique (rechargement d'Unbound, ~10 s sans DNS) QUE si l'état a changé, si le drop-in manque ou si
+# une désactivation ancienne est marquée : une mise à jour ordinaire de gk2 ne coupe pas le DNS. Hors systemd (construction
+# d'image) : l'état est écrit, dnsfeed seulement activé ; le moteur auto applique au premier démarrage.
+if [ "$1" = configure ]; then
+    tv=0
+    runuser -u secubox -- python3 -c 'import sys; sys.path.insert(0, "/usr/lib/secubox/ad-guard")
+from api import dnstv, dnstv_regles
+with dnstv_regles.verrou():
+    if (dnstv.DOSSIER_ETAT / "etat.json").exists() and dnstv.lire_etat()[1]:
+        sys.exit(3)
+    sys.exit(0 if dnstv.activer_toujours() else 10)' || tv=$?
+    case "$tv" in
+        0|10) ;;
+        *) echo "secubox-ad-guard : SBX TV Privacy non activé (état illisible ou erreur $tv) — voir /var/lib/secubox/ad-guard/dnstv/etat.json" >&2 ;;
+    esac
+    if [ -d /run/systemd/system ]; then
+        if [ "$tv" = 0 ] || { [ "$tv" = 10 ] && { [ ! -f /etc/unbound/unbound.conf.d/94-secubox-adguard-tv.conf ] || [ -e /var/lib/secubox-adguard-tv/desactive ]; }; }; then
+            /usr/sbin/secubox-adguard-tv apply >/dev/null 2>&1 || echo "secubox-ad-guard : application SBX TV Privacy en échec" >&2
+        fi
+        if [ "$tv" = 0 ] || [ "$tv" = 10 ]; then
+            systemctl enable --now secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
+        fi
+    else
+        systemctl enable secubox-ad-guard-dnsfeed.service >/dev/null 2>&1 || true
     fi
 fi
 # L'ancien cache de classification (JSON, jusqu'à 16 Mo) est remplacé par une base SQLite (#3374) : il est supprimé ici.

@@ -91,6 +91,16 @@ server {
         proxy_set_header X-SecuBox-Maillage 1;
         proxy_intercept_errors on;
     }
+    # Relevé Status Live de CETTE box (#3626), signé par sbx-fleetctl publish-status : même posture que
+    # /fleet/modules/self (public sur le maillage, auto-certifié ; l'agrégateur vérifie signature, forme et séquence).
+    location = /api/v1/annuaire/fleet/status/self {
+        limit_except GET { deny all; }
+        rewrite ^/api/v1/annuaire/(.*)$ /$1 break;
+        proxy_pass http://unix:/run/secubox/annuaire.sock;
+        include /etc/nginx/snippets/secubox-proxy.conf;
+        proxy_set_header X-SecuBox-Maillage 1;
+        proxy_intercept_errors on;
+    }
     # Adresses de CETTE box pour les noms <box>.lan/.mesh.<zone> (#1556) : un
     # fichier statique écrit par secubox-annuaire-noms ({boxname, node_id,
     # mesh_ip, lan_ip}). Non signé — la confiance vient de WireGuard : seule la
@@ -129,6 +139,10 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_intercept_errors on;
     }
+
+    # Routes maillées déposées par d'autres paquets (#3653 : MirrorNet, objets des jeux de données). Chacune porte sa
+    # propre preuve ; un fichier absent n'ouvre rien (motif sans correspondance).
+    include /etc/nginx/secubox-mesh.d/*.conf;
 
     location / { return 403; }
 }

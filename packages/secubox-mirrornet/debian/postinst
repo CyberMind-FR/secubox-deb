@@ -1,0 +1,81 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+    configure)
+        getent group secubox >/dev/null || groupadd --system secubox
+        # Compte dédié, sans shell ; groupe secubox pour servir la socket à nginx.
+        id -u secubox-mirrornet >/dev/null 2>&1 || \
+          adduser --system --ingroup secubox --no-create-home --home /nonexistent \
+            --shell /usr/sbin/nologin secubox-mirrornet >/dev/null
+        # Configuration semée une seule fois : une copie modifiée fait autorité.
+        if [ ! -e /etc/secubox/mirrornet.toml ] && [ ! -L /etc/secubox/mirrornet.toml ] && [ -d /etc/secubox ] && [ ! -L /etc/secubox ]; then
+            install -m 0640 -o root -g secubox /usr/share/secubox/mirrornet/mirrornet.toml.example /etc/secubox/mirrornet.toml
+        fi
+        # Profil AppArmor AVANT tout démarrage (« - » dans l'unité : ignoré là où AppArmor est absent).
+        if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] \
+           && command -v apparmor_parser >/dev/null 2>&1; then
+            apparmor_parser -r /etc/apparmor.d/secubox-mirrornet \
+              || echo "secubox-mirrornet : profil AppArmor non chargé (apparmor_parser -r /etc/apparmor.d/secubox-mirrornet)" >&2
+        fi
+        # Objets des jeux de données (#3653) : sur /data quand il est monté (jamais la racine d'une MOCHAbin) ; sinon
+        # le service les range sous son état. /data/mirrornet reste à root : le compte du service ne peut pas y
+        # substituer un lien que root suivrait ; seul « objets » lui appartient.
+        if mountpoint -q /data 2>/dev/null && [ ! -L /data/mirrornet ]; then
+            install -d -o root -g root -m 0755 /data/mirrornet
+            if [ ! -L /data/mirrornet/objets ]; then
+                install -d -o secubox-mirrornet -g secubox -m 0750 /data/mirrornet/objets
+            fi
+        fi
+        # Partage avec les modules consommateurs (#3666) : demande de publication lue par l'annuaire, indices TV livrés
+        # à ad-guard. Root ne crée QUE le dossier de tête (parent /var/lib à root) : les sous-dossiers appartiennent au
+        # compte du service, qui les crée lui-même — root n'agit jamais dans un dossier que ce compte contrôle (un lien
+        # substitué pendant une mise à niveau lui ferait changer le propriétaire d'une cible arbitraire).
+        if [ ! -L /var/lib/secubox-mirrornet-partage ]; then
+            install -d -o secubox-mirrornet -g secubox -m 0750 /var/lib/secubox-mirrornet-partage
+        fi
+        # Preuve de l'écouteur maillé (#3653) : secret root seul, transmis au service par LoadCredential et posé par nginx
+        # (en-tête X-SecuBox-Pair-Preuve) ; un appelant local de la socket ne le connaît pas.
+        _s=/etc/secubox/secrets/mirrornet
+        # LoadCredential exige le fichier : sans lui le service ne démarre pas. Le dossier parent est créé s'il manque.
+        [ -e /etc/secubox/secrets ] || install -d -o root -g secubox -m 0750 /etc/secubox/secrets
+        if [ -d /etc/secubox/secrets ] && [ ! -L /etc/secubox/secrets ] && [ ! -L "$_s" ]; then
+            install -d -o root -g root -m 0700 "$_s"
+            _p=""
+            if [ -f "$_s/pair.preuve" ] && [ ! -L "$_s/pair.preuve" ]; then _p=$(head -c 65 "$_s/pair.preuve" | tr -d '\n'); fi
+            case "$_p" in *[!0-9a-f]*) _p="" ;; esac
+            if [ "${#_p}" -ne 64 ]; then
+                rm -f "$_s/pair.preuve.new"
+                ( umask 077; set -C; openssl rand -hex 32 > "$_s/pair.preuve.new" ) && mv -f "$_s/pair.preuve.new" "$_s/pair.preuve"
+                _p=$(head -c 64 "$_s/pair.preuve")
+            fi
+            chown root:root "$_s/pair.preuve"; chmod 0600 "$_s/pair.preuve"
+            _ngx=/etc/nginx/secubox-mesh.d/mirrornet.conf
+            # Le dossier est aussi créé par secubox-annuaire (qui l'inclut dans l'écouteur :8799) ; configuré AVANT lui
+            # dans la même transaction, MirrorNet ne doit pas sauter le rendu (vu au banc, #3653).
+            [ -L /etc/nginx/secubox-mesh.d ] || install -d -o root -g root -m 0755 /etc/nginx/secubox-mesh.d
+            if [ -d /etc/nginx/secubox-mesh.d ] && [ "${#_p}" -eq 64 ]; then
+                ( umask 077; rm -f "$_ngx.new"; set -C
+                  sed "s/__PREUVE__/$_p/" /usr/share/secubox/mirrornet/mirrornet-maillage.conf.tpl > "$_ngx.new" ) \
+                  && mv -f "$_ngx.new" "$_ngx" && chown root:root "$_ngx" && chmod 0600 "$_ngx"
+                if command -v nginx >/dev/null 2>&1 && ! nginx -t >/dev/null 2>&1; then
+                    rm -f "$_ngx"
+                    echo "secubox-mirrornet : routes maillées refusées par nginx -t, retirées" >&2
+                fi
+            fi
+        fi
+        # Menu du hub : l'entrée MirrorNet (menu.d) apparaît au prochain calcul (#3651).
+        rm -f /var/cache/secubox/menu.json 2>/dev/null || true
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+            systemctl enable secubox-mirrornet.service >/dev/null 2>&1 || true
+            systemctl restart secubox-mirrornet.service || true
+            if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

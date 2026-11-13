@@ -1,3 +1,112 @@
+secubox-annuaire (0.22.0-1~trixie1) trixie; urgency=medium
+
+  * Indices TV (ref #3666) : signature de fond de l'offre, des versions et des abonnements
+    tv-indices (offre conforme, une action de version par heure, retour de contenu, abonnements
+    bornés et un par fournisseur, seuil de confiance de MirrorNet, tarif gratuit ou réciproque),
+    audit par « fond ».
+  * Relecture finale (ref #3666) : tarif « gratuit » seul en tâche de fond (phase 5 à venir) ;
+    un geste d'offre (création ou retrait) au plus par heure ; offre de pair d'un jour au moins ;
+    l'ancien abonnement n'est résilié qu'une fois le nouveau approuvé ; fixtures partagées dans
+    tests/conftest.py.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 12:41:20 +0100
+
+secubox-annuaire (0.21.2-1~trixie1) trixie; urgency=medium
+
+  * Onglet Services (ref #3664) : GET /services ajoute provider_nom (boxname du NodeRecord
+    signé) et mienne (fournisseur = node.key de cette box), lus hors de la boucle ; la page
+    affiche le nom de la box (did en infobulle) et « MON OFFRE » au lieu de « S'abonner »
+    pour les offres de la box elle-même.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 09:20:29 +0100
+
+secubox-annuaire (0.21.1-1~trixie1) trixie; urgency=medium
+
+  * Banc #3661 : le cache de l'export MirrorNet expire aussi après 240 s — sur gk2, un export
+    resté sans un abonnement d'espace pourtant au journal n'était jamais recalculé (même
+    hauteur) ; la passe complète le refait désormais au plus tard une fois sur deux.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 09:06:35 +0100
+
+secubox-annuaire (0.21.0-1~trixie1) trixie; urgency=medium
+
+  * MirrorNet 4c (ref #3661) : l'export pour secubox-mirrornet ajoute les abonnements déjà
+    signés dont ce nœud a besoin — comme espace, les abonnés des jeux que des producteurs
+    lui confient ; comme abonné, les abonnements d'espace qui nomment ses jeux (signés par
+    le producteur de ces jeux). Rien d'autre des abonnements d'autrui.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 08:23:09 +0100
+
+secubox-annuaire (0.20.0-1~trixie1) trixie; urgency=medium
+
+  * MirrorNet 4b (ref #3659) : abonnement d'un producteur à une offre kind=espace — champ
+    facultatif signé `jeux` (1 à 32 service_id de ses offres kind=dataset), hors charge
+    signée quand absent (les abonnements anciens gardent leur signature). /self/service/
+    {id}/subscribe : `jeux` obligatoire pour un espace, refusé pour toute autre offre ;
+    seulement des jeux publiés par CE nœud, jamais professionnels ni privés. Champ signé
+    `compat_acceptee` : compatibilité et capacité de l'espace figées à l'abonnement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 11 Nov 2026 03:30:47 +0100
+
+secubox-annuaire (0.19.0-1~trixie1) trixie; urgency=medium
+
+  * MirrorNet 4a (ref #3653) : opérations service_dataset_version (manifeste signé : numéro,
+    parent, empreinte BLAKE2b, taille, format, licence, provenance, classe, données
+    personnelles contrôlées à la source) et service_dataset_retract, op dans la charge signée,
+    forme vérifiée à l'import ; routes /self/dataset/{id}/version|retract ; classes
+    spécialisé et professionnel ; export : 16 dernières versions par jeu et tous les retraits.
+  * Écouteur maillé :8799 : /mirrornet/objets/<empreinte> vers MirrorNet, adresse du pair
+    posée par nginx, ni jeton ni cookie relayés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 11:30:05 +0100
+
+secubox-annuaire (0.18.2-1~trixie1) trixie; urgency=medium
+
+  * Routes /self/subscription/{id}/approve et /reject (ref #3651) : le fournisseur
+    approuve ou refuse un abonné, signé par node.key dans l'annuaire, audité
+    (mirrornet_approbation, mirrornet_refus).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:42:01 +0100
+
+secubox-annuaire (0.18.1-1~trixie1) trixie; urgency=medium
+
+  * Banc MirrorNet (ref #3647) : export du journal en une lecture des identités au lieu
+    d'un balayage complet par auteur (gk2 : « ?ops=assist_ » prenait 21 s, au-delà du délai
+    des pairs) ; voie rapide ramenée à l'assistance seule ; joignabilité par sonde de
+    présence : un export lent n'est plus une absence.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 10:00:37 +0100
+
+secubox-annuaire (0.18.0-1~trixie1) trixie; urgency=medium
+
+  * MirrorNet v1 phase 3 (ref #3647) : offres et abonnements étendus (champs facultatifs,
+    signature des objets anciens inchangée), opérations service_renew et
+    service_revoke_offer_sub, résiliation par l'abonné, échéance des abonnements.
+  * Niveaux de confiance calculés (confiance.py) ; export mirrornet-export.json pour
+    secubox-mirrornet ; joignabilité des pairs suivie à chaque synchronisation ; voie rapide
+    20 s étendue aux opérations service_.
+  * Routes /self/... (require_jwt) signées par node.key dans l'annuaire, auditées avec
+    l'administrateur auteur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 09:43:23 +0100
+
+secubox-annuaire (0.17.7-1~trixie1) trixie; urgency=medium
+
+  * Flotte : badge « à valider » et bouton Valider pour un pair entré par autojoin (ref #3638).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 10 Nov 2026 04:56:59 +0100
+
+secubox-annuaire (0.17.6-1~trixie1) trixie; urgency=medium
+
+  * Status Live v2, jalon 2 (#3626) : StatusSnapshot (contrat distinct, borné,
+    sans détail interne), fleet.sign_status / normaliser_status, sbx-fleetctl
+    publish-status (minuterie secubox-metrics-publish) et collect-status sur
+    l'agrégateur (signature, forme, DID attendu par adresse, horodatage,
+    séquence croissante = anti-rejeu, box absentes nommées) ;
+    /fleet/status/self sur l'écoute du maillage.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 15:00:00 +0100
+
 secubox-annuaire (0.17.5-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images

@@ -53,6 +53,8 @@ if [ "$1" = "configure" ]; then
     # WEBMAIL SANS MOT DE PASSE (#1562) : idempotent, chaque etape verifiee avec
     # retour arriere ; conteneurs absents ou arretes : ne fait rien.
     if [ -x /usr/sbin/mailctl ] && [ -d /run/systemd/system ]; then
+        # Services du conteneur sans bac à sable systemd (#3667) : dovecot, clamav-daemon (redis-server : mailctl redis).
+        /usr/sbin/mailctl services >/dev/null 2>&1 || true
         /usr/sbin/mailctl webmail-sso >/dev/null 2>&1 || true
         # OpenPGP par Mailvelope (#1738) : la clé reste dans le navigateur.
         /usr/sbin/mailctl webmail-openpgp >/dev/null 2>&1 || true

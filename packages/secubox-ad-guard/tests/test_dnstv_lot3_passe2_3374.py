@@ -227,9 +227,9 @@ def test_i2_premiere_installation_pose_l_etat_initial_une_seule_fois(monde, monk
     assert dnstv.poser_etat_initial(monde["etat"]) is False and dnstv.lire_etat()[0]["ajout_auto"] is False
 
 
-def test_i2_postinst_seulement_sur_premiere_installation():
+def test_postinst_active_toujours_tv_privacy_3674():
     p = (RACINE / "debian" / "postinst").read_text()
-    assert 'if [ "$1" = configure ] && [ -z "$2" ]; then' in p and "poser_etat_initial" in p
+    assert "activer_toujours" in p and "secubox-adguard-tv apply" in p and "enable --now secubox-ad-guard-dnsfeed" in p
 
 
 # ── I3 : « nouveaux » masqué sous un jour ────────────────────────────────────────────────────────────

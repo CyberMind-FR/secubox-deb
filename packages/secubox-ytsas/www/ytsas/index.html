@@ -133,6 +133,7 @@
           <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=… (tout site supporté par yt-dlp)" aria-label="Adresse de la vidéo ou de la playlist" autocomplete="off">
           <button class="btn prim" id="btnAdd" type="button">➕ Récupérer</button>
         </div>
+        <label class="note"><input type="checkbox" id="viaTor"> 🧅 via Tor — anonyme, sans les cookies du compte (plus lent ; YouTube refuse parfois les sorties Tor)</label>
         <p class="note">Une playlist ajoute toutes ses vidéos. Le téléchargement apparaît dans la médiathèque.</p>
       </div>
       <div class="pan"><h3>🔒 Authentification (cookies) <i>POST /cookies</i></h3>
@@ -442,10 +443,11 @@
     if (!val) { erreur('Lien requis'); return; }
     if (DEMO) { toast('Démonstration : action inerte, rien n’est envoyé.'); return; }
     b.disabled = true; OCCUPE = true;
-    api(API + '/add', { method: 'POST', body: JSON.stringify({ url: val }) })
+    var tor = !!($('viaTor') && $('viaTor').checked);
+    api(API + '/add', { method: 'POST', body: JSON.stringify({ url: val, tor: tor }) })
       .then(function (meta) {
         input.value = '';
-        toast(meta && meta.playlist ? '🎞️ Playlist : ' + (meta.count || 0) + ' vidéo(s) ajoutée(s)' : '➕ Ajouté : ' + ((meta && (meta.title || meta.id)) || 'ok'));
+        toast((tor ? '🧅 ' : '') + (meta && meta.playlist ? '🎞️ Playlist : ' + (meta.count || 0) + ' vidéo(s) ajoutée(s)' : '➕ Ajouté : ' + ((meta && (meta.title || meta.id)) || 'ok')));
         charger();
       })
       .catch(function (e) { erreur('Échec de l’ajout : ' + (e.message === 'unauthorized' ? 'session requise' : e.message)); })

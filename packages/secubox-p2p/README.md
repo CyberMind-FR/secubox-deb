@@ -185,6 +185,15 @@ Un nœud sans accès Internet (ex. gk3) est servi par un nœud qui en a un (ex. 
 
 Un nom relayé vers un pair qui, joint avec succès, ne le publie plus est retiré (vhost, route, Hall du parc) ; un pair injoignable garde ses noms (#3132).
 
+**`admin.<box>` d'office (#3686).** Pour tout pair vivant (ni muet, ni « à valider »), quelle que soit la source de ses autres noms (webos, plan du pilotage, jonction), `admin.<box>.<zone-du-relais>` est ajouté s'il répond vraiment (`Host: admin.<box>…` sur le port 9080 du pair, code 2xx ou 3xx), puis relayé par la chaîne ordinaire (DNS public, certificat, vhost, route). Il n'est jamais retiré par une synchronisation suivante, même si le pair ne le publie pas ou ne répond plus un moment (seul le retrait d'un pair disparu, ci-dessous, l'emporte). Rien n'est sondé ni touché si : le domaine du pair n'est pas `<box>.<zone-du-relais>` ou `<box>` est un nom réservé (`admin`, `hall`, `www`, `secubox`…) ; le domaine est celui du relais ou déjà relayé vers une autre cible (dont le vhost de pilotage d'une box légère sur le maître : refus audité `relais_domaine_refuse`) ; la box est « distante » ou `admin.<box>` figure dans les exclusions du pilotage ; `admin` est exclu (`exclure`) ou hors des communs ; le plan du pilotage est rejeté ou en désaccord avec `wg_mesh.json`.
+
+Ports d'un pair sans webos : `GET /api/v1/webos/public/ports` y tombe sur le serveur nginx par défaut, qui répond 200 avec la page HTML « mauvais domaine ». Le journal le dit tel quel (« page HTML au lieu de la liste de ports (pas de webos sur ce pair) ») ; réponse vide ou corps non JSON ont aussi leur message. Dans tous ces cas, aucun port n'est ajouté ni retiré.
+
+Apparitions et disparitions (#3638) :
+- un pair sans webos ni plan du pilotage (box en profil mobile) est exposé par `admin.<box>` (nom de sa jonction dans `wg_mesh.json`), s'il répond ; jamais si le plan du pilotage est rejeté ou désigne une autre box (voir aussi `admin.<box>` d'office, #3686) ;
+- un pair dont la dernière poignée de main a plus de `retrait_disparus_h` heures (72 par défaut, `0` : jamais ; une poignée à 0 après remontée de l'interface vaut « inconnu ») perd ses noms et ports relayés ; il reste dans le maillage (l'oublier reste un geste de l'administrateur) et retrouve ses noms à son retour ;
+- une jonction d'un pair neuf (ou sa validation) pose `/var/lib/secubox/p2p/relais.demande` : `secubox-relais-maillage-demande.path` lance la synchronisation sans attendre l'heure (au plus une passe ainsi déclenchée toutes les 5 min) ; un pair « à valider » n'est jamais exposé.
+
 Un seul certificat joker `*.<domaine-du-pair>` est émis par DNS-01 (acme.sh + Gandi LiveDNS), renouvelé comme `*.gk2.secubox.in`.
 
 Réglages facultatifs, `/etc/secubox/relais-maillage.toml` :
@@ -193,9 +202,21 @@ Réglages facultatifs, `/etc/secubox/relais-maillage.toml` :
 auto = true                  # false : plus d'exposition automatique
 exclure = ["wpad", "boot"]   # services jamais relayés
 services_des_pairs = "tous"  # "communs" : seulement les services que le relais expose lui-même
+retrait_disparus_h = 72      # pair muet depuis N heures : noms et ports retirés (0 : jamais)
 ```
 
 Les vhosts des services répondent à `<service>.*` en plus de leur nom gk2 : c'est ce qui permet à un pair de servir ses services sous son propre domaine.
+
+## Autojoin derrière un maître SecuBox (#3638)
+
+Faire entrer une box branchée DERRIÈRE un maître, sans jeton à recopier :
+
+1. sur le maître, page **Flotte** → « Ouvrir l'appairage (15 min) » (`POST /api/v1/p2p/master-link/appairage`, administrateur ; 1 à 60 min, 5 box au plus) ;
+2. sur la box, en root : `secubox-autojoin` (rien si elle est déjà maillée ou maître de ses propres pairs).
+
+La box demande un jeton à sa passerelle (`POST http://<passerelle>:7331/api/v1/p2p/master-link/autojoin`), le dépose dans `automesh.code` et lance `secubox-automesh`. Le maître ne délivre ce jeton (usage unique, 5 min) que si : l'en-tête `X-SecuBox-Enrol-Cle` porte le secret de son écouteur 7331 (un en-tête forgé par une autre route ne vaut rien), l'adresse est dans un réseau qu'il relie directement hors WAN (ponts de conteneurs et tunnels exclus), et la fenêtre est ouverte. Un jeton d'autojoin n'entre jamais à la place d'une empreinte, d'une clé ou d'un nom déjà inscrits, ni sous un nom réservé.
+
+La box entre **« à valider »** : WireGuard seul, aucun nom public, port ni certificat. Flotte : **Valider** (`POST /master-link/valider`, administrateur) l'expose ; **Oublier** l'exclut. Audit : `appairage_ouvert`, `appairage_ferme`, `autojoin_jeton_emis`, `jonction_autojoin`, `jonction_autojoin_refusee`, `autojoin_valide`.
 
 ## Association automatique au maillage (#3100)
 

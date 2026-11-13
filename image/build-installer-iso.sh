@@ -401,17 +401,31 @@ if [[ $SECUBOX_REPO_OK -eq 1 ]]; then
   # Profil « mobile » (#3554, choix du propriétaire) et non secubox-full : full embarquait tout gk2, Hall compris (webos,
   # sbxos renvoyant vers hall.gk2, mood.gk2). webos reste pour le dé 3D, jamais comme accueil. Sans les « Recommends »,
   # qui ramèneraient le Hall et ses compagnons ; les applications se rajoutent ensuite à la demande.
-  chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends secubox-mobile secubox-webos 2>/dev/null \
-    || warn "secubox-mobile not available"
+  # #3597 : sans secubox-webos — secubox-minimal (base de mobile) le met en Conflicts ; les demander ensemble faisait
+  # échouer cette étape à chaque fois (avertissement seulement), l'image gardant ce que le slipstream avait posé.
+  chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends secubox-mobile secubox-kiosk \
+    || err "secubox-mobile : installation impossible depuis le dépôt — image non produite"
 fi
 
 # Slipstream: integrate local .deb files
 if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
   DEBS_DIR="${REPO_DIR}/output/debs"
-  if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/*.deb >/dev/null 2>&1; then
+  if [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/*.deb >/dev/null 2>&1 && ! ls "${DEBS_DIR}"/secubox-mobile_*.deb >/dev/null 2>&1; then
+    # Même règle que build-live-usb.sh : lot partiel sans le méta-paquet = ignoré, le profil vient du dépôt (étape apt ci-dessus).
+    warn "Slipstream: lot local partiel ($(ls "${DEBS_DIR}"/*.deb | wc -l) .deb, sans secubox-mobile) : ignoré, profil installé depuis le dépôt"
+  elif [[ -d "${DEBS_DIR}" ]] && ls "${DEBS_DIR}"/*.deb >/dev/null 2>&1; then
     log "Slipstream: installing local packages..."
     install -d "${ROOTFS}/tmp/secubox-debs"
-    cp "${DEBS_DIR}"/*.deb "${ROOTFS}/tmp/secubox-debs/"
+    # #3597 : le lot complet (~180 .deb) entrait tel quel (dpkg -i *.deb) : secubox-lite, appstore, peertube…
+    # installés mais désactivés par le profil mobile, affichés « à l'arrêt ». Même sélecteur que build-live-usb.sh :
+    # fermeture Depends de secubox-mobile, plus le kiosque (webos est en Conflicts de minimal) ; méta-paquet absent = échec franc, jamais « tout ».
+    install -d "${ROOTFS}/tmp/secubox-debs-tous"
+    cp "${DEBS_DIR}"/*.deb "${ROOTFS}/tmp/secubox-debs-tous/"
+    for _p in mobile kiosk; do
+      python3 "${SCRIPT_DIR}/select-profile-debs.py" "${ROOTFS}/tmp/secubox-debs-tous" "${_p}" "${ROOTFS}/tmp/secubox-debs" amd64 \
+        || err "slipstream : sélection du profil ${_p} impossible (méta-paquet secubox-${_p} absent ?)"
+    done
+    rm -rf "${ROOTFS}/tmp/secubox-debs-tous"
 
     # Install secubox-core first
     if ls "${ROOTFS}/tmp/secubox-debs/secubox-core_"*.deb >/dev/null 2>&1; then
@@ -423,7 +437,7 @@ if [[ $SLIPSTREAM_DEBS -eq 1 ]]; then
     chroot "${ROOTFS}" apt-get install -f -y -q 2>/dev/null || true
 
     rm -rf "${ROOTFS}/tmp/secubox-debs"
-    ok "Slipstream: $(ls "${DEBS_DIR}"/*.deb 2>/dev/null | wc -l) packages installed"
+    ok "Slipstream: profil mobile, sélection installée"
   else
     warn "Slipstream: no .deb files in ${DEBS_DIR}"
   fi
@@ -447,6 +461,8 @@ bash "${SCRIPT_DIR}/apply-service-policy.sh" "${ROOTFS}"
 chroot "${ROOTFS}" apt-get install -y -q secubox-plymouth || err "secubox-plymouth non installé"
 # Le kiosque de la box installée a besoin de son serveur graphique : le disque reçoit le squashfs, pas ce que le live ajoute.
 chroot "${ROOTFS}" apt-get install -y -q --no-install-recommends xorg xinit x11-xserver-utils || err "Xorg non installé"
+# #3597 : le kiosque (secubox-kiosk-launcher) lance Chromium ; sans lui il sortait en 127 au premier démarrage du système installé.
+chroot "${ROOTFS}" apt-get install -y -q chromium || err "Chromium non installé (kiosque)"
 # Le disque démarre aussi sur le dé : update-grub de l'installateur reprend cette ligne.
 sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' "${ROOTFS}/etc/default/grub"
 grep -q '^GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"' "${ROOTFS}/etc/default/grub" || err "GRUB sans splash"
@@ -946,6 +962,49 @@ bash "${SCRIPT_DIR}/apply-apt-source.sh" "${ROOTFS}" "${SUITE}"
 log "7/9 Creating SquashFS filesystem..."
 mkdir -p "${ISO_DIR}/live"
 
+# Create installer target (systemd) — AVANT mksquashfs (#3597) : écrites après, ces unités manquaient au live
+# et l'entrée « Headless Auto-Install » démarrait sans rien installer.
+if [[ $INCLUDE_INSTALLER -eq 1 ]]; then
+  mkdir -p "${ROOTFS}/etc/systemd/system"
+  cat > "${ROOTFS}/etc/systemd/system/secubox-installer.target" <<EOF
+[Unit]
+Description=SecuBox Auto-Installer Target
+Requires=basic.target
+# Réseau et SSH (#3597) : une installation bloquée reste diagnosticable à distance (la cible isolée n'a sinon rien).
+Wants=systemd-networkd.service ssh.service secubox-autoinstall.service
+After=basic.target network-online.target
+AllowIsolate=yes
+
+[Install]
+Also=secubox-autoinstall.service
+EOF
+
+  cat > "${ROOTFS}/etc/systemd/system/secubox-autoinstall.service" <<EOF
+[Unit]
+Description=SecuBox Automatic Installation
+After=network-online.target
+Wants=network-online.target
+ConditionKernelCommandLine=systemd.unit=secubox-installer.target
+
+[Service]
+Type=oneshot
+# L'écran de démarrage cachait toute la progression (console figée sur la barre pleine).
+ExecStartPre=-/usr/bin/plymouth quit
+ExecStart=/usr/bin/secubox-installer
+StandardInput=null
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=secubox-installer.target
+EOF
+  # ACTIVATION (#3597) : écrite mais jamais activée, l'unité ne partait pas — la cible démarrait vide (VM : disque
+  # intact après 30 min). Lien posé ET vérifié : sans lui, image non produite.
+  chroot "${ROOTFS}" systemctl enable secubox-autoinstall.service 2>/dev/null || true
+  [[ -L "${ROOTFS}/etc/systemd/system/secubox-installer.target.wants/secubox-autoinstall.service" ]] \
+    || err "secubox-autoinstall.service non activée dans le live — l'installation automatique ne partirait pas"
+fi
+
 mksquashfs "${ROOTFS}" "${ISO_DIR}/live/filesystem.squashfs" \
   -comp xz -b 1M -Xdict-size 100% \
   -e boot/grub -e boot/efi
@@ -1067,38 +1126,6 @@ menuentry "System Shutdown" {
 EOF
 fi
 
-# Create installer target (systemd)
-if [[ $INCLUDE_INSTALLER -eq 1 ]]; then
-  mkdir -p "${ROOTFS}/etc/systemd/system"
-  cat > "${ROOTFS}/etc/systemd/system/secubox-installer.target" <<EOF
-[Unit]
-Description=SecuBox Auto-Installer Target
-Requires=basic.target
-After=basic.target network-online.target
-AllowIsolate=yes
-
-[Install]
-Also=secubox-autoinstall.service
-EOF
-
-  cat > "${ROOTFS}/etc/systemd/system/secubox-autoinstall.service" <<EOF
-[Unit]
-Description=SecuBox Automatic Installation
-After=network-online.target
-Wants=network-online.target
-ConditionKernelCommandLine=systemd.unit=secubox-installer.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/secubox-installer
-StandardInput=null
-StandardOutput=journal+console
-StandardError=journal+console
-
-[Install]
-WantedBy=secubox-installer.target
-EOF
-fi
 
 # Build GRUB EFI image
 mkdir -p "${ISO_DIR}/EFI/BOOT"

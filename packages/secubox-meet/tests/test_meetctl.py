@@ -18,7 +18,7 @@ def test_status_rapporte_les_cinq_services_separement(tmp_path):
 
 def test_status_domaines_et_adresse(tmp_path):
     d = json.loads(run_ctl(tmp_path, "status"))
-    assert d["module"] == "meet" and d["version"] == "0.2.2" and d["installed"] is True
+    assert d["module"] == "meet" and d["version"] == "0.2.8" and d["installed"] is True
     assert d["domain"] == "visio.exemple.test" and d["livekit_domain"] == "livekit.exemple.test"
     assert d["lxc_ip"] == "10.100.0.195" and d["web_reachable"] is False
 
@@ -98,7 +98,9 @@ def test_oidc_enregistrer_est_idempotent(tmp_path):
     run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="A")
     d = json.loads(run_ctl(tmp_path, "oidc-enregistrer", oidcctl_secret="B"))
     assert d["already"] is True and (tmp_path / "secrets" / "oidc-client-secret").read_text().strip() == "A"
-    assert len((tmp_path / "appels").read_text().splitlines()) == 1
+    appels = (tmp_path / "appels").read_text().splitlines()
+    assert sum(a.startswith("client-add ") for a in appels) == 1          # le client n'est pas réenregistré
+    assert appels.count("client-admins meet on") == 2                      # opt-in administrateurs (#3612), idempotent
 
 
 def test_oidc_enregistrer_renouveler_reenregistre(tmp_path):

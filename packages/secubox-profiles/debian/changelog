@@ -1,3 +1,22 @@
+secubox-profiles (0.28.6-1~trixie1) trixie; urgency=medium
+
+  * (0.28.5 déjà publié depuis la branche #3581 : numéro suivant.)
+  * sleeper : un fichier de verrous de réveil plus vieux que 90 s ne
+    verrouille plus rien. Le waker ne purgeait ses entrées qu'au réveil
+    suivant : sur gk2, torrent, peertube et billets sont restés éveillés
+    7 jours (WebTorrent à 71 % de CPU, charge ~24) (ref #3700).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 05:14:53 +0100
+
+secubox-profiles (0.28.4-1~trixie1) trixie; urgency=medium
+
+  * scan : LXC non installé (ni lxc-ls ni lxc-start) = aucun conteneur, le
+    scan dérive ses manifestes au lieu de refuser. Sur une installation
+    mobile neuve, modules.d restait vide et le profil ne s'appliquait pas
+    (auth arrêté, console locale refusée) (#3603).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 09 Nov 2026 10:00:00 +0100
+
 secubox-profiles (0.28.3-1~trixie1) trixie; urgency=medium
 
   * apply en ligne de commande : profil actif enregistré, menu_off effectif ; profil mobile : Administration active (ref #3467).

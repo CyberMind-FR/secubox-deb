@@ -14,6 +14,10 @@ Depends: ${misc:Depends},
  python3-aiosqlite,
  python3-fastapi,
  python3-uvicorn,
+# Formulaires FastAPI de users et du login (#3621) : la bibliothèque elle-même, SANS repli « python3-pip » — pip
+# déjà présent satisfaisait l'alternative de secubox-core et rien n'était installé (users en boucle, profil mobile).
+# Debian 13 : python3-python-multipart ; Debian 12 : python3-multipart.
+ python3-python-multipart | python3-multipart,
  python3-argon2,
  python3-pyotp,
  python3-jwt,

@@ -327,3 +327,29 @@ def test_verrou_de_maintien_1458(tmp_path):
     os.utime(vieux, (1, 1))                                    # outil mort il y a longtemps
     assert SL._read_holds(tmp_path) == frozenset({"nextcloud"})
     assert SL._read_holds(tmp_path / "absent") == frozenset()
+
+
+# ── #3700 : un verrou de réveil périmé ne tient plus un module éveillé ───────────────────────────────────────────
+
+def test_verrou_de_reveil_frais_respecte(tmp_path):
+    import os
+    from api import sleeper as s
+    f = tmp_path / "waker-active.json"
+    f.write_text('["torrent"]', encoding="utf-8")
+    t = f.stat().st_mtime
+    assert s._read_wake_locked(f, now=t + 30) == frozenset({"torrent"})
+
+
+def test_verrou_de_reveil_perime_ignore(tmp_path):
+    from api import sleeper as s
+    f = tmp_path / "waker-active.json"
+    f.write_text('["billets", "peertube", "torrent"]', encoding="utf-8")
+    t = f.stat().st_mtime
+    assert s._read_wake_locked(f, now=t + 7 * 86400) == frozenset()    # gk2 : 7 jours, rien ne dormait plus
+    assert s._read_wake_locked(f, now=t + s.WAKE_LOCK_TTL_S) == frozenset()
+
+
+def test_ttl_du_lecteur_egal_a_celui_du_waker():
+    from api import sleeper as s
+    from api import waker as w
+    assert s.WAKE_LOCK_TTL_S == w._WAKE_ACTIVE_TTL_S

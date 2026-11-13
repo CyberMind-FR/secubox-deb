@@ -17,6 +17,7 @@ layer — convergent regardless of order.
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -143,16 +144,31 @@ def http_fetch(url: str, timeout: int = 5) -> List[Dict[str, Any]]:
     return data.get("entries", []) if isinstance(data, dict) else []
 
 
+def joignable(ip: str, port: int = DEFAULT_MESH_PORT, delai: float = 3.0) -> bool:
+    """Présence d'un pair (#3647) : un export LENT n'est pas une absence. Toute réponse HTTP de son annuaire, même un
+    refus (403 des droits du maillage), prouve qu'il est là ; seuls l'absence de connexion et le silence comptent."""
+    try:
+        urllib.request.urlopen(f"http://{ip}:{port}/api/v1/annuaire/health", timeout=delai)  # noqa: S310 (mesh-local)
+        return True
+    except urllib.error.HTTPError:
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def sync_once(
     journal: Any,
     peers: List[Dict[str, str]],
     fetch: Callable[[str], List[Dict[str, Any]]] = http_fetch,
     port: int = DEFAULT_MESH_PORT,
     ops: Optional[str] = None,
+    suivi: Optional[Dict[str, bool]] = None,
 ) -> Dict[str, int]:
     """Pull /log/export from each peer and merge. Never raises — an unreachable
     or malformed peer is counted in `errors` and skipped. `fetch` is injectable
     for testing. Returns aggregate {peers, ingested, skipped, rejected, errors}.
+
+    `suivi` (#3647) : rempli de {mesh_ip: joint ?} — la joignabilité des pairs que MirrorNet lit (période de grâce).
     """
     from .verbs import import_entries  # noqa: PLC0415
 
@@ -166,7 +182,11 @@ def sync_once(
             entries = fetch(url)
         except Exception:
             totals["errors"] += 1
+            if suivi is not None:
+                suivi[ip] = joignable(ip, port)
             continue
+        if suivi is not None:
+            suivi[ip] = True
         res = import_entries(journal, entries or [])
         totals["peers"] += 1
         totals["ingested"] += res["ingested"]

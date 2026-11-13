@@ -17,6 +17,7 @@ No object grants rights by its mere existence.
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
@@ -70,6 +71,13 @@ class Op(str, Enum):
     SERVICE_APPROVE      = "service_approve"
     SERVICE_REJECT       = "service_reject"
     SERVICE_REVOKE_SUB   = "service_revoke_sub"
+    # MirrorNet v1 (#3647) : renouvellement signé par l'abonné, révocation d'un abonné par le fournisseur. Un nœud
+    # plus ancien les REJETTE à l'import (Op inconnue, compteur « rejected »), sans casser sa réplication.
+    SERVICE_RENEW            = "service_renew"
+    SERVICE_REVOKE_OFFER_SUB = "service_revoke_offer_sub"
+    # MirrorNet phase 4a (#3653) : version d'un jeu de données (manifeste signé) et son retrait.
+    SERVICE_DATASET_VERSION  = "service_dataset_version"
+    SERVICE_DATASET_RETRACT  = "service_dataset_retract"
     # Gondwana P1 directory (#768): the annuaire is the distributed directory.
     NODE_PUBLISH         = "node_publish"     # signed mesh peer registry entry
     CONFIG_PUBLISH       = "config_publish"   # signed, versioned config distribution
@@ -447,6 +455,43 @@ class PacDescriptor(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# MirrorNet v1 (#3647) — tarif et charge signée rétrocompatible
+# ---------------------------------------------------------------------------
+
+JEUX_MAX = 32                     # jeux nommés par un abonnement à un espace (#3659)
+MODELES_TARIF = ("gratuit", "forfait", "usage", "palier", "reciproque", "parraine")
+# Champs ajoutés après coup aux objets signés : omis de la charge signée quand ils valent None, sinon la signature
+# d'un objet ancien (qui ne les connaissait pas) ne se vérifierait plus après un aller-retour par le modèle.
+CHAMPS_FACULTATIFS = frozenset({
+    "macro", "version", "compat", "tarif", "quotas", "classe", "duree_s", "grace_s", "sonde",
+    "tarif_accepte", "expire_le", "provider", "jeux", "compat_acceptee",
+})
+
+
+def valider_tarif(v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Tarif d'une offre (MIRRORNET_ECONOMY.md § 4) : crédits internes ENTIERS, sans valeur monétaire."""
+    if v is None:
+        return None
+    if set(v) - {"modele", "credits", "periode_s", "unite"}:
+        raise ValueError("tarif : clés admises modele, credits, periode_s, unite")
+    if v.get("modele") not in MODELES_TARIF:
+        raise ValueError(f"tarif : modele parmi {', '.join(MODELES_TARIF)}")
+    for cle, borne in (("credits", 10 ** 9), ("periode_s", 10 * 365 * 86400)):
+        x = v.get(cle)
+        if x is not None and (type(x) is not int or not 0 <= x <= borne):
+            raise ValueError(f"tarif : {cle} entier entre 0 et {borne}")
+    if v.get("unite") is not None and (not isinstance(v["unite"], str) or len(v["unite"]) > 32):
+        raise ValueError("tarif : unite, texte de 32 caractères au plus")
+    return v
+
+
+def charge_signee(obj: BaseModel) -> Dict[str, Any]:
+    """Charge à signer ou à vérifier : le modèle sans sig/signer_did, ni les champs facultatifs absents."""
+    return {k: v for k, v in obj.model_dump().items()
+            if k not in ("sig", "signer_did") and not (k in CHAMPS_FACULTATIFS and v is None)}
+
+
+# ---------------------------------------------------------------------------
 # ServiceOffer — a provider advertising a service to the trust graph
 # ---------------------------------------------------------------------------
 
@@ -471,11 +516,91 @@ class ServiceOffer(BaseModel):
     macro:         Optional[MacroDescriptor] = None
     pac:           Optional[PacDescriptor] = None
     created_at:    str = Field(default_factory=now_rfc3339)
+    # MirrorNet v1 (#3647, docs/MIRRORNET_SERVICE_EXCHANGE.md § 2) : champs FACULTATIFS. Absents (None), ils ne
+    # figurent pas dans la charge signée (`charge_signee`) : une offre ancienne garde exactement sa signature.
+    version:       Optional[str] = Field(default=None, max_length=64)
+    compat:        Optional[Dict[str, Any]] = None
+    tarif:         Optional[Dict[str, Any]] = None
+    quotas:        Optional[Dict[str, int]] = None
+    classe:        Optional[Literal["public", "communaute", "specialise", "professionnel", "prive"]] = None
+    duree_s:       Optional[int] = Field(default=None, gt=0, le=10 * 365 * 86400)
+    grace_s:       Optional[int] = Field(default=None, ge=0, le=90 * 86400)
+    sonde:         Optional[str] = Field(default=None, max_length=256, pattern=r"^/[A-Za-z0-9._/~-]*$")
     sig:           Optional[str] = Field(
         default=None,
         description="Ed25519 sig over canonical_bytes(payload_without_sig)",
     )
     signer_did:    Optional[str] = None
+
+    @field_validator("tarif")
+    @classmethod
+    def _tarif_valide(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        return valider_tarif(v)
+
+    @field_validator("compat")
+    @classmethod
+    def _compat_borne(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        import json as _json  # noqa: PLC0415
+        if v is not None and len(_json.dumps(v)) > 1024:
+            raise ValueError("compat : 1 Kio au plus")
+        return v
+
+    @field_validator("quotas")
+    @classmethod
+    def _quotas_valides(cls, v: Optional[Dict[str, int]]) -> Optional[Dict[str, int]]:
+        if v is not None and (len(v) > 8 or any(len(k) > 32 or not 0 <= x <= 10 ** 15 for k, x in v.items())):
+            raise ValueError("quotas : 8 clés au plus, entiers de 0 à 10^15")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# DatasetVersion — une version immuable d'un jeu de données (MirrorNet 4a, #3653)
+# ---------------------------------------------------------------------------
+
+CLASSES_DONNEES = ("public", "communaute", "specialise", "professionnel", "prive")
+
+
+class DatasetVersion(BaseModel):
+    """Manifeste SIGNÉ d'une version (docs/MIRRORNET_DATA_EXCHANGE.md § 3) : l'objet lui-même voyage à part, adressé par
+    son empreinte BLAKE2b-256 ; le manifeste dit ce qu'il est, d'où il vient et qui peut le recevoir. `op` est dans la
+    charge signée (une charge réétiquetée par un relais est refusée). Auteur = fournisseur de l'offre `kind=dataset`."""
+    model_config = ConfigDict(extra="forbid")
+
+    op:          Literal["service_dataset_version"] = "service_dataset_version"
+    service_id:  str = Field(..., pattern=r"^[0-9a-f]{16,64}$")
+    provider:    str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    numero:      int = Field(..., ge=1, le=10 ** 9)
+    parent:      str = Field("", pattern=r"^(|b2:[0-9a-f]{64})$")
+    empreinte:   str = Field(..., pattern=r"^b2:[0-9a-f]{64}$")
+    taille:      int = Field(..., ge=0, le=2 ** 40)
+    format:      str = Field(..., min_length=1, max_length=80, pattern=r"^[A-Za-z0-9.+/_-]+$")
+    licence:     str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9.+_-]+$")
+    provenance:  str = Field(..., min_length=1, max_length=160)
+    classe:      Literal["public", "communaute", "specialise", "professionnel", "prive"]
+    donnees_personnelles: str = Field("non", pattern=r"^(non|agregees|base_legale:[A-Za-z0-9 ._:/-]{3,120})$")
+    fraicheur_s: Optional[int] = Field(default=None, gt=0, le=10 * 365 * 86400)
+    cree_le:     str = Field(default_factory=now_rfc3339)
+    sig:         Optional[str] = None
+    signer_did:  Optional[str] = None
+
+    @field_validator("donnees_personnelles")
+    @classmethod
+    def _vie_privee(cls, v: str, info) -> str:
+        """Contrôle À LA SOURCE (§ 6) : public n'en porte jamais ; communauté seulement agrégées ; spécialisé et
+        professionnel seulement avec une base légale déclarée."""
+        classe = info.data.get("classe")
+        if classe == "public" and v != "non":
+            raise ValueError("classe public : aucune donnée personnelle")
+        if classe == "communaute" and v not in ("non", "agregees"):
+            raise ValueError("classe communauté : données personnelles agrégées seulement")
+        return v
+
+    @field_validator("provenance")
+    @classmethod
+    def _provenance(cls, v: str) -> str:
+        if any(ord(c) < 32 for c in v):
+            raise ValueError("provenance : texte imprimable")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -494,8 +619,42 @@ class Subscription(BaseModel):
     subscriber:      str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
     service_id:      str
     requested_at:    str = Field(default_factory=now_rfc3339)
+    # MirrorNet v1 (#3647) : facultatifs, hors charge signée quand absents (rétrocompatibilité).
+    version:         Optional[str] = Field(default=None, max_length=64)
+    tarif_accepte:   Optional[Dict[str, Any]] = None
+    expire_le:       Optional[str] = Field(default=None, max_length=40)
+    provider:        Optional[str] = Field(default=None, pattern=r"^did:plc:[0-9a-f]{32}$")
+    # MirrorNet 4b (#3659) : abonnement d'un PRODUCTEUR à une offre `kind=espace` — les jeux (service_id de ses offres
+    # `kind=dataset`) que l'espace garde et met à jour. Signé avec l'abonnement : l'espace ne tire rien d'autre.
+    jeux:            Optional[List[str]] = None
+    # Compatibilité et capacité de l'espace AU MOMENT de l'abonnement ({compat, quotas}), figées comme tarif_accepte :
+    # une offre d'espace élargie ensuite n'élargit pas ce que le producteur accepte de servir.
+    compat_acceptee: Optional[Dict[str, Any]] = None
     sig:             Optional[str] = None
     signer_did:      Optional[str] = None
+
+    @field_validator("tarif_accepte")
+    @classmethod
+    def _tarif_valide(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        return valider_tarif(v)
+
+    @field_validator("compat_acceptee")
+    @classmethod
+    def _compat_acceptee(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        import json as _json  # noqa: PLC0415
+        if v is not None and (set(v) - {"compat", "quotas"} or len(_json.dumps(v)) > 2048):
+            raise ValueError("compat_acceptee : {compat, quotas}, 2 Kio au plus")
+        return v
+
+    @field_validator("jeux")
+    @classmethod
+    def _jeux_valides(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return None
+        if not 1 <= len(v) <= JEUX_MAX or len(set(v)) != len(v) or any(
+                not isinstance(x, str) or not re.fullmatch(r"[0-9a-f]{16,64}", x) for x in v):
+            raise ValueError(f"jeux : 1 à {JEUX_MAX} identifiants de service distincts")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -875,6 +1034,50 @@ class ModulesSnapshot(BaseModel):
         if any(not isinstance(e, str) or len(e) > 80 for e in v):
             raise ValueError("motif de relevé partiel de plus de 80 caractères")
         return v
+
+
+# ---------------------------------------------------------------------------
+# Status Live v2 (#3595, jalon 2 #3626) — relevé d'état signé d'une box, contrat DISTINCT de ModulesSnapshot.
+# Seulement des états, des compteurs et une frise : jamais de ressources, d'adresses, de noyau ni de détail interne.
+# ---------------------------------------------------------------------------
+
+_ETAT_STATUS = Literal["operational", "degraded", "outage", "maintenance", "unknown"]
+_ETAT_SOURCE = Literal["fresh", "partial", "stale", "absent", "invalid"]
+
+
+class StatusHeure(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hour:   str = Field(..., max_length=40, pattern=_RFC3339)
+    status: _ETAT_STATUS
+
+
+class StatusComptes(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    modules_total:    Optional[int] = Field(default=None, ge=0, le=10000)
+    modules_ok:       Optional[int] = Field(default=None, ge=0, le=10000)
+    modules_degraded: Optional[int] = Field(default=None, ge=0, le=10000)
+    modules_down:     Optional[int] = Field(default=None, ge=0, le=10000)
+
+
+class StatusSnapshot(BaseModel):
+    """Relevé Status Live signé d'une box (#3626) : vérifié par l'agrégateur avant toute agrégation."""
+    model_config = ConfigDict(extra="forbid")
+
+    node_did:         str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    issued_by:        str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    hostname:         str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9.-]{0,62}$")
+    ts:               str = Field(..., max_length=40, pattern=_RFC3339, description="RFC 3339, signature")
+    collected_at:     str = Field(..., max_length=40, pattern=_RFC3339, description="RFC 3339, relevé")
+    sequence:         int = Field(..., ge=1, le=2**62, description="strictement croissante par box : anti-rejeu")
+    overall:          _ETAT_STATUS
+    components:       Dict[Literal["services", "web", "system", "validation"], _ETAT_STATUS] = Field(default_factory=dict)
+    sources:          Dict[Literal["modules", "vhosts", "profiles", "system"], _ETAT_SOURCE] = Field(default_factory=dict)
+    counts:           StatusComptes = Field(default_factory=StatusComptes)
+    availability_30d: Optional[float] = Field(default=None, ge=0, le=100)
+    hours:            List[StatusHeure] = Field(default_factory=list, max_length=24)
+    sig:              Optional[str] = Field(default=None, max_length=200)
+    signer_did:       Optional[str] = Field(default=None, pattern=r"^did:plc:[0-9a-f]{32}$")
+    signer_pub:       Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 # ---------------------------------------------------------------------------

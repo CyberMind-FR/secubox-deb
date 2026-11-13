@@ -72,7 +72,9 @@ _MIME = {
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 library = Library(DB_PATH)
-engine = Engine(DOWNLOAD_DIR, library, COOKIE_PATH, max_active=MAX_ACTIVE)
+# Proxy SOCKS du Tor de la box (#3618), écrit par install-lxc.sh ; vide = case « via Tor » refusée proprement.
+TOR_PROXY = os.environ.get("YTSAS_TOR_PROXY", "").strip()
+engine = Engine(DOWNLOAD_DIR, library, COOKIE_PATH, max_active=MAX_ACTIVE, tor_proxy=TOR_PROXY or None)
 # Flux du compte YouTube (à regarder plus tard, propositions, abonnements, historique, chaînes, playlists) : lecture seule, avec les cookies du
 # coffre. Le moteur reçoit le chemin des cookies À CHAQUE appel (un dépôt de cookies prend effet sans redémarrage).
 flux_moteur = _flux.Flux(DOWNLOAD_DIR, COOKIE_PATH, ttl=int(os.environ.get("YTSAS_FLUX_TTL", "900")))
@@ -171,19 +173,20 @@ async def add(request: Request):
            or b.get("value") or "").strip()
     if not url:
         return JSONResponse({"error": "url required"}, status_code=400)
+    tor = b.get("tor") is True          # case « via Tor » (#3618) : booléen strict
     # Une URL de PLAYLIST pure (`playlist?list=…`) : on la déplie et on enfile
     # TOUTES ses vidéos (bornées), au lieu de n'en prendre que la première —
     # `engine.add` force `--no-playlist` (#1099). `watch?v=X&list=Y` n'est PAS
     # une playlist ici : la vidéo X est isolée par la voie normale ci-dessous.
     if _is_playlist(url):
         try:
-            return await engine.add_playlist(url, limit=PLAYLIST_ADD_MAX)
+            return await engine.add_playlist(url, limit=PLAYLIST_ADD_MAX, tor=tor)
         except AuthRequired as e:
             return JSONResponse({"error": str(e), "auth_required": True}, status_code=401)
         except EngineError as e:
             return JSONResponse({"error": str(e)}, status_code=502)
     try:
-        return await engine.add(url)
+        return await engine.add(url, tor=tor)
     except AuthRequired as e:
         return JSONResponse({"error": str(e), "auth_required": True}, status_code=401)
     except EngineError as e:
@@ -191,7 +194,7 @@ async def add(request: Request):
 
 
 @app.post(API + "/retry/{id}")
-async def retry(id: str):
+async def retry(id: str, request: Request):
     """Réessaie un téléchargement en échec : on relit l'URL de l'item et on
     ré-enfile le job (engine.add relance yt-dlp depuis zéro). L'erreur ANALYSÉE
     (cookies périmés / auth requise / queue de stderr yt-dlp) est remontée telle
@@ -200,8 +203,9 @@ async def retry(id: str):
     if not row or not row.get("url"):
         return JSONResponse({"error": "item introuvable ou sans URL enregistrée"},
                             status_code=404)
+    b = await _read_body(request)          # {"tor": true} : réessai par Tor (#3618)
     try:
-        return await engine.add(row["url"])
+        return await engine.add(row["url"], tor=b.get("tor") is True)
     except AuthRequired as e:
         return JSONResponse({"error": str(e), "auth_required": True}, status_code=401)
     except EngineError as e:

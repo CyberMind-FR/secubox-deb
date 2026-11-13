@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — MirrorNet (#3651), profil Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES : /api/v1/mirrornet/{status,services,subscriptions} de CETTE box. Absent = « — », jamais un zéro inventé.
+  Écritures (administrateur, require_jwt côté API) : POST /services/{id}/subscribe, POST /subscriptions/{id}/renew,
+  POST /subscriptions/{id}/approve, POST /subscriptions/{id}/reject, DELETE /subscriptions/{id}?motif=, POST /services/publish,
+  POST /datasets/{id}/versions (fichier brut), POST /datasets/{id}/retract (#3653) — chacune confirmée DANS la page, avec une clé X-Idempotence.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, aucune écriture.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — MirrorNet</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+        .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+        .btn{font:inherit;font-size:.76rem;padding:6px 12px;min-height:32px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.onglet:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primary{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff} .btn.danger{background:rgba(255,77,94,.16);border-color:var(--rouge);color:#ffd9de} .btn.good{background:rgba(46,204,113,.16);border-color:var(--vert);color:#d6f7e3}
+        .btn.sm{padding:3px 9px;min-height:28px;font-size:.72rem}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info a{color:#04202a}
+        .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+        @container a (min-width:700px){.tuiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        @container a (min-width:1000px){.tuiles{grid-template-columns:repeat(6,minmax(0,1fr))}}
+        .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap} .tuile .l{color:var(--doux);font-size:.74rem} .tuile .s{color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+        .v.vert{color:var(--vert)} .v.orange{color:var(--orange)}
+        .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:6px}
+        .onglet{font:inherit;font-size:.8rem;padding:7px 14px;min-height:34px;border-radius:9px;border:1px solid transparent;background:none;color:var(--doux);cursor:pointer}
+        .onglet[aria-selected="true"]{background:rgba(41,182,246,.16);border-color:rgba(41,182,246,.5);color:var(--texte)}
+        .onglet b{font-variant-numeric:tabular-nums;margin-left:4px;color:var(--cyan)}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan h3{margin:0 0 8px;font-size:.88rem} .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:6px}
+        .outils{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:8px}
+        .outils label{display:flex;gap:6px;align-items:center;color:var(--doux);font-size:.74rem}
+        input,select,textarea{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:6px 9px;min-width:0}
+        input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan)}
+        .tab{overflow-x:auto}
+        table{width:100%;border-collapse:collapse;font-size:.78rem}
+        th{text-align:left;color:var(--faible);font-size:.66rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:6px 8px;white-space:nowrap}
+        td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:top}
+        tbody tr:hover{background:rgba(41,182,246,.07)}
+        td .sous{color:var(--faible);font-size:.7rem}
+        td.act{text-align:right;white-space:nowrap}
+        .pill{display:inline-block;border:1px solid;border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;white-space:nowrap}
+        .p-Actif{color:var(--vert);border-color:var(--vert);background:rgba(46,204,113,.12)}
+        .p-Grace{color:var(--orange);border-color:var(--orange);background:rgba(255,159,28,.12)}
+        .p-Suspendu{color:var(--rouge);border-color:var(--rouge);background:rgba(255,77,94,.12)}
+        .p-Demande{color:var(--jaune);border-color:var(--jaune);background:rgba(255,210,63,.12)}
+        .p-Refuse,.p-Expire,.p-Resilie,.p-neutre{color:var(--doux);border-color:var(--faible);background:rgba(159,179,214,.1)}
+        .p-niv{color:#93c5fd;border-color:var(--bleu);background:rgba(59,130,246,.12)} .p-moi{color:#c4b5fd;border-color:var(--violet);background:rgba(167,139,250,.12)}
+        .vide{color:var(--faible);font-size:.78rem;padding:8px 0}
+        .note{color:var(--faible);font-size:.72rem;margin:8px 0 0}
+        .confirm{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--orange);background:rgba(255,159,28,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+        .confirm.grave{border-color:var(--rouge);background:rgba(255,77,94,.1)} .confirm[hidden]{display:none} .confirm span{flex:1 1 260px}
+        .hist{margin:6px 0 0;padding:0;list-style:none;display:grid;gap:3px;font-size:.74rem;color:var(--doux)}
+        .hist b{color:var(--texte)}
+        form.pub{display:grid;gap:10px;grid-template-columns:repeat(1,minmax(0,1fr))}
+        @container a (min-width:760px){form.pub{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        form.pub .champ{display:grid;gap:4px} form.pub .champ label{color:var(--doux);font-size:.74rem} form.pub .large{grid-column:1/-1}
+        .resultat{font-size:.78rem;border-radius:8px;padding:6px 10px} .resultat.ok{background:rgba(46,204,113,.12);border:1px solid var(--vert)} .resultat.ko{background:rgba(255,77,94,.12);border:1px solid var(--rouge)}
+        .resultat[hidden]{display:none}
+        .phase{display:grid;gap:8px;grid-template-columns:repeat(1,minmax(0,1fr))}
+        @container a (min-width:800px){.phase{grid-template-columns:repeat(2,minmax(0,1fr))}}
+        .phase div{border:1px dashed var(--trait2);border-radius:10px;padding:10px;font-size:.78rem;color:var(--doux)} .phase b{color:var(--texte);display:block;margin-bottom:4px}
+        code{font-family:ui-monospace,Menlo,monospace;font-size:.72rem;overflow-wrap:anywhere}
+        [hidden]{display:none !important}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.4" fill="rgba(41,182,246,.18)"/><circle cx="5" cy="18" r="2.4" fill="rgba(41,182,246,.18)"/><circle cx="19" cy="18" r="2.4" fill="rgba(41,182,246,.18)"/><path d="M10.8 7.1 6.2 15.9M13.2 7.1l4.6 8.8M7.4 18h9.2"/></svg>
+                <div><b>MirrorNet</b><small>Services, données et contributions du maillage</small></div>
+            </div>
+            <span class="actif neutre" id="pastille" title="État de la synchronisation entre l'annuaire de cette box et MirrorNet">LECTURE…</span>
+            <div class="droite"><span id="heure"></span><button class="btn" id="btn-refresh" type="button">⟳ Actualiser</button></div>
+        </header>
+        <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — aucune mesure réelle, aucune écriture</div>
+        <div class="info" id="session" hidden>Abonnements et actions : session administrateur requise. <a href="/login.html">Se connecter</a></div>
+
+        <div class="tuiles">
+            <div class="tuile" title="Offres d'autres nœuds, signatures vérifiées, fournisseur au niveau de confiance requis"><div class="l">Offres présentables</div><div class="v" id="t-offres">—</div><div class="s" id="t-offres-s">catalogue fédéré</div></div>
+            <div class="tuile" title="Offres publiées par cette box"><div class="l">Mes offres</div><div class="v" id="t-miennes">—</div><div class="s">publiées par ce nœud</div></div>
+            <div class="tuile" title="Abonnements de cette box à l'état Actif"><div class="l">Abonnements actifs</div><div class="v vert" id="t-actifs">—</div><div class="s" id="t-actifs-s">ce nœud abonné</div></div>
+            <div class="tuile" title="Fournisseur injoignable : grâce, puis suspension au-delà de la période de grâce"><div class="l">En grâce / suspendus</div><div class="v orange" id="t-grace">—</div><div class="s">fournisseur injoignable</div></div>
+            <div class="tuile" title="Abonnements en cours à mes offres (en attente, actifs, en grâce)"><div class="l">Mes abonnés</div><div class="v" id="t-abonnes">—</div><div class="s" id="t-abonnes-s">à mes offres</div></div>
+            <div class="tuile" title="Dernière relecture de l'export de l'annuaire par MirrorNet ; entrées dont la signature ou la forme est refusée"><div class="l">Synchronisation</div><div class="v" id="t-synchro">—</div><div class="s" id="t-synchro-s">—</div></div>
+        </div>
+
+        <div class="onglets" role="tablist" aria-label="Sections de MirrorNet">
+            <button class="onglet" role="tab" type="button" id="o-catalogue" aria-selected="true" aria-controls="v-catalogue">Catalogue<b id="n-catalogue"></b></button>
+            <button class="onglet" role="tab" type="button" id="o-abonnements" aria-selected="false" aria-controls="v-abonnements">Abonnements<b id="n-abonnements"></b></button>
+            <button class="onglet" role="tab" type="button" id="o-jeux" aria-selected="false" aria-controls="v-jeux">Jeux de données<b id="n-jeux"></b></button>
+            <button class="onglet" role="tab" type="button" id="o-publier" aria-selected="false" aria-controls="v-publier">Publier une offre</button>
+            <button class="onglet" role="tab" type="button" id="o-espaces" aria-selected="false" aria-controls="v-espaces">Espaces et répliques<b id="n-espaces"></b></button>
+        </div>
+
+        <div class="confirm" id="confirm" hidden role="alertdialog" aria-live="polite">
+            <span id="confirm-texte"></span>
+            <input id="confirm-motif" type="text" maxlength="200" placeholder="motif (facultatif)" aria-label="Motif" hidden>
+            <button class="btn primary" id="confirm-oui" type="button">Confirmer</button>
+            <button class="btn" id="confirm-non" type="button">Annuler</button>
+        </div>
+        <div class="resultat" id="resultat" hidden role="status"></div>
+
+        <section class="pan" id="v-catalogue" role="tabpanel" aria-labelledby="o-catalogue">
+            <h3>Catalogue fédéré <i>offres signées, revérifiées par ce nœud ; jamais un fournisseur OBSERVER ou REVOKED</i></h3>
+            <div class="outils">
+                <label>Chercher <input type="search" id="f-texte" placeholder="nom, fournisseur, type" size="22"></label>
+                <label>Fournisseur <select id="f-quoi"><option value="autres">autres nœuds</option><option value="miennes">mes offres</option><option value="tout">tout</option></select></label>
+                <span class="sous" id="seuil" style="color:var(--faible);font-size:.72rem"></span>
+            </div>
+            <div class="tab"><table>
+                <thead><tr><th>Service</th><th>Fournisseur</th><th>Classe</th><th>Tarif</th><th>Période</th><th>Grâce</th><th style="text-align:right">Action</th></tr></thead>
+                <tbody id="catalogue"><tr><td colspan="7" class="vide">Chargement…</td></tr></tbody>
+            </table></div>
+            <p class="note">Un fournisseur LIMITED n'est présenté que pour des offres gratuites et publiques ; PARTNER et TRUSTED arrivent avec le socle A21. Les offres payantes attendent le moteur de crédits (phase 5) : aucun débit n'est fait aujourd'hui.</p>
+        </section>
+
+        <section class="pan" id="v-abonnements" role="tabpanel" aria-labelledby="o-abonnements" hidden>
+            <h3>Abonnements <i>état dérivé des faits signés et de l'horloge ; historique en ajout seul</i></h3>
+            <div class="outils">
+                <label>Rôle <select id="f-role"><option value="tout">tous</option><option value="abonne">ce nœud abonné</option><option value="fournisseur">mes abonnés</option></select></label>
+                <label><input type="checkbox" id="f-clos"> afficher les abonnements clos</label>
+            </div>
+            <div class="tab"><table>
+                <thead><tr><th>Service</th><th>Rôle</th><th>Contrepartie</th><th>État</th><th>Échéance</th><th style="text-align:right">Actions</th></tr></thead>
+                <tbody id="abonnements"><tr><td colspan="6" class="vide">Chargement…</td></tr></tbody>
+            </table></div>
+            <p class="note">Renouveler prolonge d'une période, signé avant l'échéance en cours. Résilier clôt l'abonnement (abonné) ou révoque l'abonné (fournisseur) ; la résiliation l'emporte sur un renouvellement. Chaque geste est signé par l'annuaire de cette box et inscrit au journal d'audit.</p>
+        </section>
+
+        <section class="pan" id="v-jeux" role="tabpanel" aria-labelledby="o-jeux" hidden>
+            <h3>Jeux de données <i>versions immuables, manifeste signé, objet vérifié par son empreinte BLAKE2b</i></h3>
+            <div class="tab"><table>
+                <thead><tr><th>Jeu</th><th>Fournisseur</th><th>Classe</th><th>Dernière version</th><th>Chez moi</th><th style="text-align:right">Actions</th></tr></thead>
+                <tbody id="jeux"><tr><td colspan="6" class="vide">Chargement…</td></tr></tbody>
+            </table></div>
+            <form class="pub" id="form-depot" autocomplete="off" hidden style="margin-top:12px">
+                <div class="champ large"><b style="font-size:.84rem">Déposer une version d'un de mes jeux</b></div>
+                <div class="champ"><label for="d-jeu">Jeu</label><select id="d-jeu"></select></div>
+                <div class="champ"><label for="d-fichier">Fichier (objet opaque, jamais extrait)</label><input id="d-fichier" type="file" required></div>
+                <div class="champ"><label for="d-format">Format</label><input id="d-format" required maxlength="80" placeholder="application/x-ndjson"></div>
+                <div class="champ"><label for="d-licence">Licence (SPDX)</label><input id="d-licence" required maxlength="64" placeholder="ODbL-1.0"></div>
+                <div class="champ"><label for="d-provenance">Provenance</label><input id="d-provenance" required maxlength="160" placeholder="capteur:bme280"></div>
+                <div class="champ"><label for="d-classe">Classe</label><select id="d-classe"><option value="public">public</option><option value="communaute">communauté</option><option value="specialise">spécialisé</option><option value="professionnel">professionnel</option><option value="prive">privé (jamais servi)</option></select></div>
+                <div class="champ"><label for="d-dp">Données personnelles</label><select id="d-dp"><option value="non">aucune</option><option value="agregees">agrégées / anonymisées</option></select></div>
+                <div class="champ"><label for="d-fraicheur">Fraîcheur attendue (minutes, facultatif)</label><input id="d-fraicheur" type="number" min="1" max="5256000"></div>
+                <div class="large"><button class="btn primary" type="submit">Déposer…</button></div>
+            </form>
+            <ul class="hist" id="versions" hidden></ul>
+            <p class="note">Un abonné Actif reçoit la dernière version non retirée, une à la fois, par le maillage seulement ; il garde les dernières versions et efface les versions retirées. Public : aucune donnée personnelle ; communauté : agrégées seulement ; privé : jamais servi à un pair.</p>
+        </section>
+
+        <section class="pan" id="v-publier" role="tabpanel" aria-labelledby="o-publier" hidden>
+            <h3>Publier une offre de ce nœud <i>signée par l'annuaire (node.key), visible des pairs à la prochaine synchronisation</i></h3>
+            <form class="pub" id="form-pub" autocomplete="off">
+                <div class="champ"><label for="p-nom">Nom</label><input id="p-nom" required maxlength="80" placeholder="Miroir apt trixie"></div>
+                <div class="champ"><label for="p-kind">Type</label><select id="p-kind"><option value="mirror">mirror</option><option value="api">api</option><option value="module">module</option><option value="dataset">dataset (jeu de données)</option><option value="espace">espace (stockage offert aux jeux des pairs)</option></select></div>
+                <div class="champ" data-espace hidden><label for="p-capacite">Capacité offerte (Mio)</label><input id="p-capacite" type="number" min="1" max="10000000" placeholder="2048"></div>
+                <div class="champ" data-espace hidden><label for="p-parobjet">Taille maximale d'une version (Mio, vide = capacité)</label><input id="p-parobjet" type="number" min="1" max="10000000"></div>
+                <div class="champ large" data-espace hidden><label>Classes gardées</label>
+                    <span><label><input type="checkbox" id="p-c-public" checked> public</label> <label><input type="checkbox" id="p-c-communaute"> communauté</label> <label><input type="checkbox" id="p-c-specialise"> spécialisé</label> <label><input type="checkbox" id="p-agregees"> données personnelles agrégées admises</label></span></div>
+                <div class="champ" data-espace hidden><label for="p-formats">Formats admis (virgules, vide = tous)</label><input id="p-formats" maxlength="600" placeholder="application/x-ndjson, application/json"></div>
+                <div class="champ" data-espace hidden><label for="p-licences">Licences admises (SPDX, virgules, vide = toutes)</label><input id="p-licences" maxlength="600" placeholder="ODbL-1.0, CC-BY-4.0"></div>
+                <div class="champ large"><label for="p-endpoint">Point d'accès (adresse du maillage ou chemin)</label><input id="p-endpoint" required maxlength="256" placeholder="http://192.0.2.10/apt"></div>
+                <div class="champ"><label for="p-approbation">Approbation</label><select id="p-approbation"><option value="pending">manuelle (je valide chaque abonné)</option><option value="auto">automatique</option></select></div>
+                <div class="champ"><label for="p-classe">Classe d'accès</label><select id="p-classe"><option value="public">public</option><option value="communaute">communauté</option><option value="prive">privé (jamais présenté)</option></select></div>
+                <div class="champ"><label for="p-duree">Durée d'une période (jours, vide = illimitée)</label><input id="p-duree" type="number" min="1" max="3650" placeholder="30"></div>
+                <div class="champ"><label for="p-grace">Grâce si injoignable (jours)</label><input id="p-grace" type="number" min="0" max="90" placeholder="5"></div>
+                <div class="champ"><label for="p-version">Version</label><input id="p-version" maxlength="64" placeholder="2026.11"></div>
+                <div class="champ"><label for="p-tarif">Tarif</label><select id="p-tarif"><option value="gratuit">gratuit</option><option value="reciproque">réciproque (phase 5)</option></select></div>
+                <div class="champ large"><label for="p-desc">Description</label><textarea id="p-desc" maxlength="500" rows="2"></textarea></div>
+                <div class="large"><button class="btn primary" type="submit" id="p-envoyer">Publier…</button></div>
+            </form>
+            <p class="note">Une offre publiée reste au journal (ajout seul) ; son retrait est une révocation signée (<code>annuairectl revoke-offer</code>). Un jeu de données (type « dataset ») reçoit ensuite ses versions par l'onglet « Jeux de données ». Un espace (type « espace ») garde les jeux que les producteurs lui confient : jamais professionnel, privé, ni données personnelles brutes.</p>
+        </section>
+
+        <section class="pan" id="v-espaces" role="tabpanel" aria-labelledby="o-espaces" hidden>
+            <h3>Espaces offerts <i>capacité et compatibilité signées par le gardien ; les jeux s'y propagent selon les abonnements</i></h3>
+            <div class="tab"><table>
+                <thead><tr><th>Espace</th><th>Gardien</th><th>Classes</th><th>Formats · licences</th><th>Capacité</th><th style="text-align:right">Action</th></tr></thead>
+                <tbody id="espaces"><tr><td colspan="6" class="vide">Chargement…</td></tr></tbody>
+            </table></div>
+            <form class="pub" id="form-propager" autocomplete="off" hidden style="margin-top:12px">
+                <div class="champ large"><b style="font-size:.84rem" id="pr-titre">Confier mes jeux à un espace</b></div>
+                <div class="champ"><label for="pr-espace">Espace</label><select id="pr-espace"></select></div>
+                <div class="champ large"><label>Jeux confiés (signés avec l'abonnement : pour en changer, résilier puis recommencer)</label><span id="pr-jeux"></span></div>
+                <div class="large"><button class="btn primary" type="submit">Confier…</button></div>
+            </form>
+            <h3 style="margin-top:18px">Ce que je garde <i>copies des jeux confiés à mes espaces : lignée, mise à jour à chaque nouvelle version, purge à la résiliation</i></h3>
+            <div class="tab"><table>
+                <thead><tr><th>Producteur</th><th>Espace</th><th>État</th><th>Occupé</th><th>Copies (n° · jeu · venue de)</th></tr></thead>
+                <tbody id="gardees"><tr><td colspan="5" class="vide">Chargement…</td></tr></tbody>
+            </table></div>
+            <p class="note">Le producteur ne sert l'objet qu'à l'espace auquel il a confié ce jeu ; l'espace revérifie classe, format, licence, taille, données personnelles et capacité restante à chaque version, puis l'empreinte BLAKE2b. Présence certifiée : le producteur défie l'espace (BLAKE2b de l'objet, clé = défi aléatoire), jamais une présence déclarée. L'espace sert ses copies aux abonnés Actif du jeu ; chaque abonné répartit ses transferts entre le producteur et les répliques (hachage de rendez-vous), vérifie l'empreinte et déclasse une source en échec. Au-delà de <code>[espace] service_simultane</code> transferts, un nœud répond 503 et l'abonné passe à la source suivante.</p>
+        </section>
+    </div></div></main>
+
+    <script>
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        // Menu latéral commun : hors ?embed=1 et hors démonstration seulement (AURORA § 9).
+        if (!Q.get('embed') && !DEMO) { const m = document.createElement('script'); m.src = '/shared/sidebar.js'; document.body.append(m); }
+        const $ = id => document.getElementById(id);
+        const API = '/api/v1/mirrornet';
+        const ETATS_EN_COURS = ['Demande', 'Actif', 'Grace', 'Suspendu'];
+        const LIBELLE = { Demande: 'Demande', Refuse: 'Refusé', Actif: 'Actif', Grace: 'Grâce', Suspendu: 'Suspendu', Expire: 'Expiré', Resilie: 'Résilié' };
+        let donnees = { status: null, services: null, subs: null, sessionRequise: false };
+        let confirmation = null, occupe = false;
+
+        function h(tag, attrs, ...enfants) {
+            const e = document.createElement(tag);
+            for (const k in (attrs || {})) { if (k === 'class') e.className = attrs[k]; else if (k === 'text') e.textContent = attrs[k]; else if (k.startsWith('on')) e.addEventListener(k.slice(2), attrs[k]); else e.setAttribute(k, attrs[k]); }
+            for (const c of enfants) if (c != null) e.append(c);
+            return e;
+        }
+        function jeton() { try { return localStorage.getItem('sbx_token'); } catch (e) { return null; } }
+        function cle() { try { return 'web-' + crypto.randomUUID(); } catch (e) { return 'web-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); } }
+        async function api(chemin, opts) {
+            const o = Object.assign({ headers: {}, credentials: 'same-origin', cache: 'no-store' }, opts || {});
+            o.headers = Object.assign({ Accept: 'application/json' }, o.headers);
+            const t = jeton(); if (t) o.headers.Authorization = 'Bearer ' + t;
+            try {
+                const r = await fetch(API + chemin, o);
+                let j = null; try { j = await r.json(); } catch (e) { /* corps vide */ }
+                return { ok: r.ok, status: r.status, json: j };
+            } catch (e) { return { ok: false, status: 0, json: null }; }
+        }
+        const fmt = n => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
+        function duree(s) {
+            if (s == null) return 'illimitée';
+            if (s < 60) return Math.max(0, Math.round(s)) + ' s';
+            const j = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+            return j ? j + ' j' + (hh ? ' ' + hh + ' h' : '') : hh ? hh + ' h' + (m ? ' ' + m : '') : m + ' min';
+        }
+        function relatif(iso) {
+            if (!iso) return '—';
+            const d = (new Date(iso).getTime() - Date.now()) / 1000;
+            if (isNaN(d)) return '—';
+            return d >= 0 ? 'dans ' + duree(Math.round(d)) : 'il y a ' + duree(Math.round(-d));
+        }
+        function pill(etat) { return h('span', { class: 'pill p-' + (LIBELLE[etat] ? etat : 'neutre'), text: LIBELLE[etat] || etat || '—' }); }
+
+        // ------- lecture -------
+        async function lire() {
+            if (DEMO) return demo();
+            const [st, sv, sb, ds, es, ga] = await Promise.all([api('/status'), api('/services'), api('/subscriptions'), api('/datasets'), api('/espaces'), api('/espaces/gardees')]);
+            return { status: st.ok ? st.json : null, services: sv.ok ? sv.json : null, subs: sb.ok ? sb.json : null, jeux: ds.ok ? ds.json : null,
+                     espaces: es.ok ? es.json : null, gardees: ga.ok ? ga.json : null,
+                     sessionRequise: sb.status === 401 || sb.status === 403 || sv.status === 401 };
+        }
+        function rendre() {
+            const st = donnees.status, sv = donnees.services, sb = donnees.subs;
+            $('session').hidden = DEMO || !donnees.sessionRequise;
+            const pa = $('pastille'), sy = st && st.synchro;
+            if (!st) { pa.textContent = 'MIRRORNET INJOIGNABLE'; pa.className = 'actif hors'; }
+            else if (sy && sy.erreur) { pa.textContent = 'SYNCHRONISATION EN ÉCHEC'; pa.className = 'actif att'; pa.title = sy.erreur; }
+            else if (sy && sy.le && Date.now() - new Date(sy.le).getTime() > 300000) { pa.textContent = 'DONNÉES PÉRIMÉES — SERVICE ARRÊTÉ ?'; pa.className = 'actif att'; }
+            else if (sy) { pa.textContent = 'SYNCHRONISÉ · PHASE ' + st.phase; pa.className = 'actif'; }
+            else { pa.textContent = 'EN ATTENTE DE SYNCHRONISATION'; pa.className = 'actif neutre'; }
+            const offres = sv ? sv.services : null;
+            const autres = offres ? offres.filter(o => !o.mienne && o.presentable) : null;
+            $('t-offres').textContent = autres ? fmt(autres.length) : '—';
+            $('t-miennes').textContent = offres ? fmt(offres.filter(o => o.mienne).length) : '—';
+            $('seuil').textContent = sv ? 'seuil de confiance : ' + sv.confiance_min : '';
+            const subs = sb ? sb.subscriptions : null;
+            const ab = subs ? subs.filter(s => s.role === 'abonne') : null, fo = subs ? subs.filter(s => s.role === 'fournisseur') : null;
+            $('t-actifs').textContent = ab ? fmt(ab.filter(s => s.etat === 'Actif').length) : '—';
+            $('t-grace').textContent = ab ? fmt(ab.filter(s => s.etat === 'Grace' || s.etat === 'Suspendu').length) : '—';
+            $('t-abonnes').textContent = fo ? fmt(fo.filter(s => ETATS_EN_COURS.includes(s.etat)).length) : '—';
+            const att = fo ? fo.filter(s => s.etat === 'Demande').length : 0;
+            $('t-abonnes-s').textContent = att ? att + ' en attente d’approbation' : 'à mes offres';
+            $('t-synchro').textContent = sy && sy.le ? relatif(sy.le).replace('il y a ', '') : '—';
+            $('t-synchro-s').textContent = sy ? (sy.erreur ? sy.erreur : fmt(sy.offres) + ' offres · ' + fmt(sy.rejetees) + ' rejetée(s)') : '—';
+            $('n-catalogue').textContent = autres ? autres.length : '';
+            $('n-abonnements').textContent = subs ? subs.filter(s => ETATS_EN_COURS.includes(s.etat)).length : '';
+            $('n-jeux').textContent = donnees.jeux ? donnees.jeux.count : '';
+            $('n-espaces').textContent = donnees.espaces ? donnees.espaces.count : '';
+            rendreCatalogue(); rendreAbonnements(); rendreJeux(); rendreEspaces(); hauteur();
+        }
+        function rendreCatalogue() {
+            const tb = $('catalogue'), sv = donnees.services; tb.replaceChildren();
+            if (!sv) { tb.append(h('tr', null, h('td', { colspan: '7', class: 'vide', text: 'Catalogue illisible (MirrorNet injoignable ou session requise).' }))); return; }
+            const q = $('f-texte').value.trim().toLowerCase(), quoi = $('f-quoi').value;
+            const enCours = new Set(((donnees.subs || {}).subscriptions || []).filter(s => s.role === 'abonne' && ETATS_EN_COURS.includes(s.etat)).map(s => s.service_id));
+            const lignes = sv.services.filter(o => (quoi === 'tout' || (quoi === 'miennes') === !!o.mienne)
+                && (!q || [o.nom, o.fournisseur, o.kind, o.version].join(' ').toLowerCase().includes(q)));
+            if (!lignes.length) { tb.append(h('tr', null, h('td', { colspan: '7', class: 'vide', text: quoi === 'miennes' ? 'Aucune offre publiée par ce nœud.' : 'Aucune offre présentable pour l’instant.' }))); return; }
+            for (const o of lignes) {
+                const tarif = (o.tarif && o.tarif.modele) || 'gratuit';
+                let action;
+                if (o.mienne) action = h('span', { class: 'pill p-moi', text: 'mon offre' });
+                else if (enCours.has(o.id)) action = h('span', { class: 'pill p-Actif', text: 'abonné' });
+                else action = h('button', { class: 'btn sm primary', type: 'button', text: 'S’abonner…', onclick: () => demander(
+                    'S’abonner à « ' + o.nom + ' » de ' + o.fournisseur + ' (' + tarif + ', ' + duree(o.duree_s) + ') ?', false,
+                    () => ecrire('POST', '/services/' + encodeURIComponent(o.id) + '/subscribe', null, 'Abonnement demandé.')) });
+                tb.append(h('tr', null,
+                    h('td', null, h('b', { text: o.nom }), h('div', { class: 'sous', text: o.kind + (o.version ? ' · v' + o.version : '') + (o.approval_mode === 'pending' ? ' · approbation manuelle' : '') })),
+                    h('td', null, document.createTextNode((o.fournisseur || '—') + ' '), o.mienne ? h('span', { class: 'pill p-moi', text: 'ce nœud' }) : h('span', { class: 'pill p-niv', text: o.fournisseur_niveau || '—', title: o.fournisseur_cause || '' })),
+                    h('td', { text: o.classe }), h('td', { text: tarif }), h('td', { text: duree(o.duree_s) }), h('td', { text: duree(o.grace_s) }),
+                    h('td', { class: 'act' }, action)));
+            }
+        }
+        function rendreAbonnements() {
+            const tb = $('abonnements'), sb = donnees.subs; tb.replaceChildren();
+            if (!sb) { tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: donnees.sessionRequise ? 'Session administrateur requise.' : 'Abonnements illisibles.' }))); return; }
+            const role = $('f-role').value, clos = $('f-clos').checked;
+            const lignes = sb.subscriptions.filter(s => (role === 'tout' || s.role === role) && (clos || ETATS_EN_COURS.includes(s.etat)));
+            if (!lignes.length) { tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: 'Aucun abonnement en cours.' }))); return; }
+            for (const s of lignes) {
+                const actions = h('td', { class: 'act' });
+                const detail = h('tr', { hidden: '' }, h('td', { colspan: '6' }, h('ul', { class: 'hist' })));
+                actions.append(h('button', { class: 'btn sm', type: 'button', text: 'Historique', onclick: () => historique(s.id, detail) }));
+                if (s.role === 'abonne' && (s.etat === 'Actif' || s.etat === 'Grace') && s.echeance)
+                    actions.append(document.createTextNode(' '), h('button', { class: 'btn sm good', type: 'button', text: 'Renouveler…', onclick: () => demander(
+                        'Renouveler « ' + s.service + ' » d’une période ? Nouvelle échéance calculée par l’annuaire.', false,
+                        () => ecrire('POST', '/subscriptions/' + encodeURIComponent(s.id) + '/renew', null, 'Abonnement renouvelé.')) }));
+                if (s.role === 'fournisseur' && s.etat === 'Demande') {
+                    actions.append(document.createTextNode(' '), h('button', { class: 'btn sm good', type: 'button', text: 'Approuver…', onclick: () => demander(
+                        'Approuver l\u2019abonnement de ' + s.abonne + ' à « ' + s.service + ' » ?', false,
+                        () => ecrire('POST', '/subscriptions/' + encodeURIComponent(s.id) + '/approve', null, 'Abonné approuvé.')) }));
+                    actions.append(document.createTextNode(' '), h('button', { class: 'btn sm', type: 'button', text: 'Refuser…', onclick: () => demander(
+                        'Refuser l\u2019abonnement de ' + s.abonne + ' à « ' + s.service + ' » ? Le refus est définitif pour cette demande.', false,
+                        () => ecrire('POST', '/subscriptions/' + encodeURIComponent(s.id) + '/reject', null, 'Demande refusée.')) }));
+                }
+                if (ETATS_EN_COURS.includes(s.etat) && !(s.role === 'fournisseur' && s.etat === 'Demande'))
+                    actions.append(document.createTextNode(' '), h('button', { class: 'btn sm danger', type: 'button', text: s.role === 'abonne' ? 'Résilier…' : 'Révoquer…', onclick: () => demander(
+                        (s.role === 'abonne' ? 'Résilier votre abonnement à « ' : 'Révoquer l’abonné ' + s.abonne + ' de « ') + s.service + ' » ? Geste signé, sans retour arrière.', true,
+                        motif => ecrire('DELETE', '/subscriptions/' + encodeURIComponent(s.id) + '?motif=' + encodeURIComponent(motif || ''), null, s.role === 'abonne' ? 'Abonnement résilié.' : 'Abonné révoqué.')) }));
+                tb.append(h('tr', null,
+                    h('td', null, h('b', { text: s.service }), h('div', { class: 'sous', text: 'demandé ' + relatif(s.demande_le) })),
+                    h('td', { text: s.role === 'abonne' ? 'abonné' : 'fournisseur' }),
+                    h('td', { text: s.role === 'abonne' ? s.fournisseur : s.abonne }),
+                    h('td', null, pill(s.etat), s.motif ? h('div', { class: 'sous', text: s.motif }) : null),
+                    h('td', { text: s.echeance ? relatif(s.echeance) : 'aucune', title: s.echeance || '' }),
+                    actions), detail);
+            }
+        }
+        function octets(n) { if (n == null) return '—'; const u = ['o', 'Kio', 'Mio', 'Gio']; let i = 0; while (n >= 1024 && i < 3) { n /= 1024; i++; } return (i ? n.toFixed(1) : n) + ' ' + u[i]; }
+        function rendreJeux() {
+            const tb = $('jeux'), dj = donnees.jeux; tb.replaceChildren();
+            const miens = dj ? dj.datasets.filter(d => d.mienne) : [];
+            $('form-depot').hidden = !miens.length;
+            $('d-jeu').replaceChildren(...miens.map(d => h('option', { value: d.id, text: d.nom })));
+            if (!dj) { tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: 'Jeux de données illisibles.' }))); return; }
+            if (!dj.datasets.length) { tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: 'Aucun jeu de données présentable. Publier une offre de type « dataset » pour en proposer un.' }))); return; }
+            const enCours = new Set(((donnees.subs || {}).subscriptions || []).filter(s => s.role === 'abonne' && ETATS_EN_COURS.includes(s.etat)).map(s => s.service_id));
+            for (const d of dj.datasets) {
+                const v = d.derniere_version;
+                const actions = h('td', { class: 'act' }, h('button', { class: 'btn sm', type: 'button', text: 'Versions', onclick: () => versionsDe(d) }));
+                if (d.mienne) actions.append(document.createTextNode(' '), h('button', { class: 'btn sm', type: 'button', text: 'Lignée', onclick: () => ligneeDe(d) }));
+                if (!d.mienne && !enCours.has(d.id))
+                    actions.append(document.createTextNode(' '), h('button', { class: 'btn sm primary', type: 'button', text: 'S\u2019abonner…', onclick: () => demander(
+                        'S\u2019abonner au jeu « ' + d.nom + ' » de ' + d.fournisseur + ' ? Les versions seront tirées par le maillage.', false,
+                        () => ecrire('POST', '/services/' + encodeURIComponent(d.id) + '/subscribe', null, 'Abonnement demandé.')) }));
+                let chezMoi = '—';
+                if (v) chezMoi = v.present ? (d.mienne ? 'déposée' : 'reçue' + (v.recue_de ? ' via ' + v.recue_de : '')) : (enCours.has(d.id) ? 'en attente de réception' : '—');
+                if (v && v.repliques) chezMoi += ' · ' + v.repliques + ' réplique' + (v.repliques > 1 ? 's' : '');
+                tb.append(h('tr', null,
+                    h('td', null, h('b', { text: d.nom }), h('div', { class: 'sous', text: d.description || '' })),
+                    h('td', null, document.createTextNode((d.fournisseur || '—') + ' '), d.mienne ? h('span', { class: 'pill p-moi', text: 'ce nœud' }) : h('span', { class: 'pill p-niv', text: d.fournisseur_niveau || '—' })),
+                    h('td', { text: d.classe }),
+                    h('td', null, v ? document.createTextNode('n° ' + v.numero + ' · ' + octets(v.taille)) : document.createTextNode('aucune'), v ? h('div', { class: 'sous', text: v.format + ' · ' + v.licence + ' · ' + relatif(v.cree_le) }) : null),
+                    h('td', { text: chezMoi }), actions));
+            }
+        }
+        async function versionsDe(d) {
+            const ul = $('versions'); ul.hidden = false; ul.replaceChildren(h('li', { text: 'Lecture des versions de « ' + d.nom + ' »…' }));
+            const r = DEMO ? { ok: true, json: { versions: [{ numero: 2, empreinte: 'b2:' + 'c'.repeat(64), taille: 18234, licence: 'ODbL-1.0', provenance: 'capteur:demo', classe: 'public', cree_le: new Date().toISOString(), retiree: 0, present: 1 }] } } : await api('/datasets/' + encodeURIComponent(d.id) + '/versions');
+            ul.replaceChildren(h('li', null, h('b', { text: d.nom })));
+            if (!r.ok) { ul.append(h('li', { text: 'Versions illisibles.' })); hauteur(); return; }
+            if (!r.json.versions.length) ul.append(h('li', { text: 'Aucune version publiée.' }));
+            for (const v of r.json.versions) {
+                const li = h('li', null, h('b', { text: 'n° ' + v.numero }), document.createTextNode(' · ' + octets(v.taille) + ' · ' + v.licence + ' · ' + v.provenance + ' · ' + v.classe + ' · ' + relatif(v.cree_le) + ' · '),
+                    h('code', { text: v.empreinte.slice(0, 19) + '…', title: v.empreinte }),
+                    document.createTextNode(v.retiree ? ' · retirée' : (v.present ? ' · présente ici' : ' · absente ici')));
+                if (d.mienne && !v.retiree) li.append(document.createTextNode(' '), h('button', { class: 'btn sm danger', type: 'button', text: 'Retirer…', onclick: () => demander(
+                    'Retirer la version n° ' + v.numero + ' de « ' + d.nom + ' » ? Les abonnés et les copies l\u2019effaceront.', true,
+                    motif => ecrire('POST', '/datasets/' + encodeURIComponent(d.id) + '/retract', { empreinte: v.empreinte, motif: motif || '' }, 'Version retirée.')) }));
+                ul.append(li);
+            }
+            hauteur();
+        }
+        async function ligneeDe(d) {
+            const ul = $('versions'); ul.hidden = false; ul.replaceChildren(h('li', { text: 'Lecture de la lignée de « ' + d.nom + ' »…' }));
+            const r = DEMO ? { ok: true, json: { versions: [{ numero: 2, parent: 'b2:' + 'a'.repeat(64), empreinte: 'b2:' + 'c'.repeat(64), retiree: 0 }], espaces: [{ espace: 'Espace communautaire', gardien: 'noeud-b', etat: 'Actif' }], copies: [] } } : await api('/datasets/' + encodeURIComponent(d.id) + '/lignee');
+            ul.replaceChildren(h('li', null, h('b', { text: 'Lignée de « ' + d.nom + ' »' })));
+            if (!r.ok) { ul.append(h('li', { text: r.status === 401 || r.status === 403 ? 'Session administrateur requise.' : 'Lignée illisible.' })); hauteur(); return; }
+            const L = r.json;
+            if (!L.espaces.length) ul.append(h('li', { text: 'Confié à aucun espace.' }));
+            for (const e of L.espaces) {
+                const pr = e.presence;
+                ul.append(h('li', null, document.createTextNode('Espace ' + e.espace + ' (' + e.gardien + ') · '), pill(e.etat),
+                    document.createTextNode(' · présence '),
+                    h('b', { text: !pr ? 'pas encore vérifiée' : pr.statut === 'ok' ? 'certifiée ' + relatif(pr.le) : 'NON certifiée ' + relatif(pr.le), title: pr && pr.motif ? pr.motif : 'preuve de possession : BLAKE2b de l\u2019objet, clé = défi aléatoire' })));
+            }
+            for (const r of (L.repliques || [])) ul.append(h('li', { text: 'Réplique chez ' + r.gardien + ' (' + (LIBELLE[r.etat] || r.etat) + ')' + (r.transfert ? ' · dernier transfert ' + (r.transfert === 'ok' ? 'vérifié' : 'en échec') + ' ' + relatif(r.transfert_le) : '') }));
+            for (const v of L.versions) ul.append(h('li', null, h('b', { text: 'n° ' + v.numero }), document.createTextNode(' '),
+                h('code', { text: v.empreinte.slice(0, 15) + '…', title: v.empreinte }), document.createTextNode(' ← '),
+                v.parent ? h('code', { text: v.parent.slice(0, 15) + '…', title: v.parent }) : document.createTextNode('origine'),
+                document.createTextNode(v.retiree ? ' · retirée' : '')));
+            for (const c of L.copies) ul.append(h('li', { text: 'Copie gardée ici : n° ' + c.numero + ', origine ' + (c.origine || '—') + ', venue de ' + (c.parent || '—') + ', ' + relatif(c.recue_le) }));
+            hauteur();
+        }
+        function rendreEspaces() {
+            const tb = $('espaces'), de = donnees.espaces; tb.replaceChildren();
+            const propageables = ['public', 'communaute', 'specialise'];
+            const miensJeux = ((donnees.jeux || {}).datasets || []).filter(d => d.mienne && propageables.includes(d.classe));
+            const confies = new Set(((donnees.subs || {}).subscriptions || []).filter(s => s.role === 'abonne' && s.kind === 'espace' && ETATS_EN_COURS.includes(s.etat)).map(s => s.service_id));
+            if (!de) tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: 'Espaces illisibles.' })));
+            else if (!de.espaces.length) tb.append(h('tr', null, h('td', { colspan: '6', class: 'vide', text: 'Aucun espace offert. Publier une offre de type « espace » pour proposer le sien.' })));
+            const cibles = [];
+            for (const e of (de ? de.espaces : [])) {
+                const c = e.espace || {};
+                let action;
+                if (e.mienne) action = h('span', { class: 'pill p-moi', text: 'mon espace' });
+                else if (confies.has(e.id)) action = h('span', { class: 'pill p-Actif', text: 'jeux confiés' });
+                else if (!miensJeux.length) action = h('span', { class: 'sous', text: 'aucun jeu à confier' });
+                else { cibles.push(e); action = h('button', { class: 'btn sm primary', type: 'button', text: 'Confier…', onclick: () => { $('pr-espace').value = e.id; $('form-propager').scrollIntoView({ block: 'nearest' }); } }); }
+                tb.append(h('tr', null,
+                    h('td', null, h('b', { text: e.nom }), h('div', { class: 'sous', text: e.description || '' })),
+                    h('td', null, document.createTextNode((e.fournisseur || '—') + ' '), e.mienne ? h('span', { class: 'pill p-moi', text: 'ce nœud' }) : h('span', { class: 'pill p-niv', text: e.fournisseur_niveau || '—' })),
+                    h('td', { text: (c.classes || []).join(', ') + (c.agregees ? ' · agrégées admises' : '') }),
+                    h('td', { text: ((c.formats || []).join(', ') || 'tous formats') + ' · ' + ((c.licences || []).join(', ') || 'toutes licences') }),
+                    h('td', { text: (e.occupe != null ? octets(e.occupe) + ' / ' : '') + octets(c.octets) + (c.octets_objet && c.octets_objet !== c.octets ? ' (≤ ' + octets(c.octets_objet) + ' par version)' : '') }),
+                    h('td', { class: 'act' }, action)));
+            }
+            $('form-propager').hidden = !cibles.length;
+            const choix = $('pr-espace').value;
+            $('pr-espace').replaceChildren(...cibles.map(e => h('option', { value: e.id, text: e.nom + ' — ' + e.fournisseur })));
+            if (cibles.some(e => e.id === choix)) $('pr-espace').value = choix;
+            const coches = new Set([...document.querySelectorAll('#pr-jeux input:checked')].map(i => i.value));
+            $('pr-jeux').replaceChildren(...miensJeux.map(d => h('label', null, h('input', Object.assign({ type: 'checkbox', value: d.id }, coches.has(d.id) ? { checked: '' } : {})), document.createTextNode(' ' + d.nom + ' (' + d.classe + ')  '))));
+            const tg = $('gardees'), ga = donnees.gardees; tg.replaceChildren();
+            if (!ga) { tg.append(h('tr', null, h('td', { colspan: '5', class: 'vide', text: donnees.sessionRequise ? 'Session administrateur requise.' : 'Copies illisibles.' }))); return; }
+            if (!ga.gardees.length) { tg.append(h('tr', null, h('td', { colspan: '5', class: 'vide', text: 'Aucun producteur ne m’a confié de jeu.' }))); return; }
+            for (const g of ga.gardees) {
+                const copies = h('td', null);
+                for (const c of g.copies) copies.append(h('div', { class: 'sous', text: 'n° ' + c.numero + ' · ' + c.jeu + ' · ' + octets(c.taille) + ' · ' + relatif(c.recue_le) }));
+                for (const r of g.refus) copies.append(h('div', { class: 'sous', style: 'color:var(--orange,#d97706)', text: 'refusée : ' + r.motif }));
+                if (!g.copies.length && !g.refus.length) copies.append(document.createTextNode(g.etat === 'Actif' ? 'en attente de la prochaine passe' : '—'));
+                tg.append(h('tr', null, h('td', { text: g.producteur }), h('td', { text: g.espace }), h('td', null, pill(g.etat)),
+                    h('td', { text: octets(g.occupe) + ' / ' + octets(g.capacite) }), copies));
+            }
+        }
+        $('form-propager').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const esp = $('pr-espace').value, nom = $('pr-espace').selectedOptions[0] ? $('pr-espace').selectedOptions[0].textContent : esp;
+            const jeux = [...document.querySelectorAll('#pr-jeux input:checked')].map(i => i.value);
+            if (!esp || !jeux.length) { annoncer(false, 'Choisir un espace et au moins un jeu.'); return; }
+            demander('Confier ' + jeux.length + ' jeu(x) à « ' + nom + ' » ? Abonnement signé nommant ces jeux ; l\u2019espace tirera chaque nouvelle version par le maillage.', false,
+                () => ecrire('POST', '/espaces/' + encodeURIComponent(esp) + '/propager', { jeux }, 'Jeux confiés : l\u2019espace les tirera à sa prochaine passe.'));
+        });
+        $('p-kind').addEventListener('input', () => { for (const e of document.querySelectorAll('[data-espace]')) e.hidden = $('p-kind').value !== 'espace'; hauteur(); });
+        $('form-depot').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const f = $('d-fichier').files[0]; if (!f) return;
+            const q = new URLSearchParams({ format: $('d-format').value.trim(), licence: $('d-licence').value.trim(), provenance: $('d-provenance').value.trim(),
+                                            classe: $('d-classe').value, donnees_personnelles: $('d-dp').value });
+            const fr = Number($('d-fraicheur').value); if (fr > 0) q.set('fraicheur_s', String(Math.round(fr * 60)));
+            const jeu = $('d-jeu').value, nom = $('d-jeu').selectedOptions[0] ? $('d-jeu').selectedOptions[0].textContent : jeu;
+            demander('Déposer « ' + f.name + ' » (' + octets(f.size) + ') comme nouvelle version de « ' + nom + ' » ? Le manifeste signé entre au journal du maillage.', false,
+                () => ecrire('POST', '/datasets/' + encodeURIComponent(jeu) + '/versions?' + q.toString(), f, 'Version déposée : les abonnés Actif la recevront à leur prochaine passe.', 'application/octet-stream'));
+        });
+        async function historique(id, ligne) {
+            if (!ligne.hidden) { ligne.hidden = true; hauteur(); return; }
+            const ul = ligne.querySelector('ul'); ul.replaceChildren(h('li', { text: 'Lecture…' })); ligne.hidden = false;
+            const r = DEMO ? { ok: true, json: { historique: [{ de: null, vers: 'Actif', motif: '', ts: new Date(Date.now() - 864e5 * 5).toISOString() }] } } : await api('/subscriptions/' + encodeURIComponent(id));
+            ul.replaceChildren();
+            if (!r.ok) ul.append(h('li', { text: 'Historique illisible.' }));
+            else for (const e of r.json.historique) ul.append(h('li', null, document.createTextNode(new Date(e.ts).toLocaleString('fr-FR') + ' — ' + (LIBELLE[e.de] || '∅') + ' → '), h('b', { text: LIBELLE[e.vers] || e.vers }), document.createTextNode(e.motif ? ' · ' + e.motif : '')));
+            hauteur();
+        }
+
+        // ------- écritures : confirmation dans la page, clé d'idempotence, résultat affiché -------
+        function demander(texte, grave, action) {
+            if (occupe) return;                       // une écriture à la fois : pas de double geste par double confirmation
+            confirmation = action;
+            $('confirm-texte').textContent = texte + (DEMO ? ' (démonstration : rien ne sera envoyé)' : '');
+            $('confirm').classList.toggle('grave', !!grave);
+            $('confirm-motif').hidden = !grave; $('confirm-motif').value = '';
+            $('confirm').hidden = false; $('confirm-oui').focus(); hauteur();
+        }
+        function fermer() { confirmation = null; $('confirm').hidden = true; hauteur(); }
+        $('confirm-non').addEventListener('click', fermer);
+        $('confirm-oui').addEventListener('click', async () => {
+            const a = confirmation, motif = $('confirm-motif').value.trim(); fermer();
+            if (a) await a(motif);
+        });
+        function annoncer(ok, texte) { const r = $('resultat'); r.hidden = false; r.className = 'resultat ' + (ok ? 'ok' : 'ko'); r.textContent = texte; hauteur(); }
+        async function ecrire(methode, chemin, corps, succes, brut) {
+            if (DEMO) { annoncer(true, 'Démonstration : aucune écriture envoyée.'); return; }
+            if (occupe) return;
+            occupe = true; annoncer(true, 'Envoi…');
+            try { await envoyer(methode, chemin, corps, succes, brut); } finally { occupe = false; }
+        }
+        async function envoyer(methode, chemin, corps, succes, brut) {
+            const opts = { method: methode, headers: { 'X-Idempotence': cle() } };
+            if (brut && corps) { opts.headers['Content-Type'] = brut; opts.body = corps; }        // fichier déposé tel quel
+            else if (corps) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(corps); }
+            const r = await api(chemin, opts);
+            if (r.ok) annoncer(true, succes);
+            else annoncer(false, 'Refusé (' + (r.status || 'réseau') + ') : ' + ((r.json && r.json.detail) ? (typeof r.json.detail === 'string' ? r.json.detail : JSON.stringify(r.json.detail)) : 'sans détail'));
+            await charger();
+        }
+        $('form-pub').addEventListener('submit', ev => {
+            ev.preventDefault();
+            const n = v => (v === '' ? null : Number(v));
+            const corps = { name: $('p-nom').value.trim(), kind: $('p-kind').value, endpoint: $('p-endpoint').value.trim(), approval_mode: $('p-approbation').value,
+                            classe: $('p-classe').value, tarif: { modele: $('p-tarif').value }, description: $('p-desc').value.trim() };
+            const d = n($('p-duree').value), g = n($('p-grace').value), v = $('p-version').value.trim();
+            if (d) corps.duree_s = Math.round(d * 86400);
+            if (g != null) corps.grace_s = Math.round(g * 86400);
+            if (v) corps.version = v;
+            if (corps.kind === 'espace') {
+                const mio = x => Math.round(Number(x) * 1048576), liste = x => x.split(',').map(t => t.trim()).filter(Boolean);
+                if (!(Number($('p-capacite').value) > 0)) { annoncer(false, 'Espace : indiquer la capacité offerte.'); return; }
+                corps.quotas = { octets: mio($('p-capacite').value) };
+                if (Number($('p-parobjet').value) > 0) corps.quotas.octets_objet = mio($('p-parobjet').value);
+                corps.compat = { classes: ['public', 'communaute', 'specialise'].filter(c => $('p-c-' + c).checked), agregees: $('p-agregees').checked,
+                                 formats: liste($('p-formats').value), licences: liste($('p-licences').value) };
+            }
+            demander('Publier « ' + corps.name + ' » (' + corps.kind + ', ' + corps.classe + ', ' + duree(corps.duree_s) + ') ? L’offre signée entre au journal du maillage.', false,
+                async () => { await ecrire('POST', '/services/publish', corps, 'Offre publiée : visible des pairs à leur prochaine synchronisation.'); });
+        });
+
+        // ------- onglets, filtres, hauteur -------
+        const ONGLETS = ['catalogue', 'abonnements', 'jeux', 'publier', 'espaces'];
+        function montrer(nom) {
+            for (const o of ONGLETS) { $('o-' + o).setAttribute('aria-selected', String(o === nom)); $('v-' + o).hidden = o !== nom; }
+            try { history.replaceState(null, '', '#' + nom); } catch (e) { /* sans historique */ }
+            hauteur();
+        }
+        for (const o of ONGLETS) $('o-' + o).addEventListener('click', () => montrer(o));
+        if (ONGLETS.includes(location.hash.slice(1))) montrer(location.hash.slice(1));
+        for (const id of ['f-texte', 'f-quoi']) $(id).addEventListener('input', () => { rendreCatalogue(); hauteur(); });
+        for (const id of ['f-role', 'f-clos']) $(id).addEventListener('input', () => { rendreAbonnements(); hauteur(); });
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().bottom + scrollY), onglet: 'mirrornet' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.body);
+
+        async function charger() {
+            donnees = await lire(); rendre();
+            $('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+        $('btn-refresh').addEventListener('click', charger);
+        // Actualisation 30 s, jamais pendant une confirmation ouverte ou une saisie, ni onglet caché.
+        setInterval(() => {
+            const saisie = document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+            if (!document.hidden && $('confirm').hidden && !saisie) charger();
+        }, 30000);
+
+        function demo() {
+            const t = s => new Date(Date.now() + s * 1000).toISOString();
+            return {
+                status: { phase: 3, synchro: { le: t(-40), offres: 9, rejetees: 0, erreur: null } },
+                services: { confiance_min: 'LIMITED', services: [
+                    { id: 'a1'.repeat(16), nom: 'Miroir apt trixie', kind: 'mirror', version: '2026.11', fournisseur: 'noeud-a', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: 2592000, grace_s: 432000, approval_mode: 'auto', mienne: false, presentable: true },
+                    { id: 'b2'.repeat(16), nom: 'Listes DNS compilées', kind: 'api', version: '3.4', fournisseur: 'noeud-b', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: 604800, grace_s: 432000, approval_mode: 'auto', mienne: false, presentable: true },
+                    { id: 'c3'.repeat(16), nom: 'Onion du Hall', kind: 'module', version: null, fournisseur: 'noeud-b', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: null, grace_s: 432000, approval_mode: 'pending', mienne: false, presentable: true },
+                    { id: 'd4'.repeat(16), nom: 'Miroir Debian local', kind: 'mirror', version: '2026.11', fournisseur: 'ce-noeud', fournisseur_niveau: 'LIMITED', classe: 'public', tarif: { modele: 'gratuit' }, duree_s: 2592000, grace_s: 432000, approval_mode: 'pending', mienne: true, presentable: true }] },
+                subs: { subscriptions: [
+                    { id: 'e5'.repeat(32), role: 'abonne', service: 'Miroir apt trixie', service_id: 'a1'.repeat(16), fournisseur: 'noeud-a', abonne: 'ce-noeud', etat: 'Actif', motif: '', demande_le: t(-864e3), echeance: t(158400) },
+                    { id: 'f6'.repeat(32), role: 'abonne', service: 'Cache PeerTube', service_id: 'e7'.repeat(16), fournisseur: 'noeud-c', abonne: 'ce-noeud', etat: 'Grace', motif: 'fournisseur injoignable : période de grâce', demande_le: t(-2e6), echeance: t(9e5) },
+                    { id: 'a7'.repeat(32), role: 'fournisseur', service: 'Miroir Debian local', service_id: 'd4'.repeat(16), fournisseur: 'ce-noeud', abonne: 'noeud-d', etat: 'Demande', motif: 'en attente d’approbation du fournisseur', demande_le: t(-3600), echeance: null }] },
+                jeux: { count: 1, datasets: [{ id: 'f1'.repeat(16), nom: 'Météo locale', description: 'relevés 10 min', fournisseur: 'noeud-a', fournisseur_niveau: 'LIMITED', classe: 'public', mienne: false,
+                        derniere_version: { numero: 412, taille: 18234, format: 'application/x-ndjson', licence: 'ODbL-1.0', cree_le: t(-600), present: 1 } },
+                        { id: 'f2'.repeat(16), nom: 'Relevés du capteur', description: 'qualité de l’air', fournisseur: 'ce-noeud', fournisseur_niveau: 'LIMITED', classe: 'public', mienne: true,
+                        derniere_version: { numero: 7, taille: 5120, format: 'application/json', licence: 'CC-BY-4.0', cree_le: t(-3600), present: 1 } }] },
+                espaces: { count: 2, espaces: [
+                    { id: 'e1'.repeat(16), nom: 'Espace communautaire', description: '/data, 2 Gio', fournisseur: 'noeud-b', fournisseur_niveau: 'LIMITED', mienne: false,
+                      espace: { classes: ['public', 'communaute'], formats: [], licences: ['ODbL-1.0', 'CC-BY-4.0'], agregees: false, octets: 2147483648, octets_objet: 268435456 } },
+                    { id: 'e2'.repeat(16), nom: 'Mon espace', description: '', fournisseur: 'ce-noeud', fournisseur_niveau: 'LIMITED', mienne: true, occupe: 18234,
+                      espace: { classes: ['public'], formats: [], licences: [], agregees: false, octets: 1073741824, octets_objet: 1073741824 } }] },
+                gardees: { count: 1, gardees: [{ subscription_id: 'b8'.repeat(32), producteur: 'noeud-a', espace: 'Mon espace', etat: 'Actif', jeux: ['f1'.repeat(16)], capacite: 1073741824, occupe: 18234,
+                    copies: [{ jeu: 'Météo locale', numero: 412, taille: 18234, recue_le: t(-500) }], refus: [] }] },
+                sessionRequise: false };
+        }
+        if (DEMO) $('demo').hidden = false;
+        charger();
+    </script>
+</body>
+</html>

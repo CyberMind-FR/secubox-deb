@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Ad Guard — tri Netflix : fermeture des ouvertures et retrait des autorisations échues (#3226)
+
+[Timer]
+OnBootSec=2min
+# Chaque minute : une ouverture de zone (démarrage d'épisode, 3 min) se referme à l'heure.
+OnUnitActiveSec=1min
+AccuracySec=5s
+Unit=secubox-ad-guard-tri.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+Source: secubox-mirrornet
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-mirrornet
+Architecture: all
+Depends: ${misc:Depends},
+ python3 (>= 3.11),
+ python3-fastapi,
+ python3-uvicorn,
+ python3-cryptography,
+ secubox-core (>= 1.5.9),
+ adduser,
+ systemd
+Recommends: secubox-annuaire (>= 0.22.0),
+ secubox-p2p
+Description: SecuBox MirrorNet v1 — plan de contrôle des services, données et contributions
+ Phase 3 (#3647) : cycle de vie des abonnements. Synchronisation de l'export de
+ l'annuaire (offres et abonnements signés, revérifiés : liaison did-clé et
+ signature Ed25519), catalogue filtré par niveau de confiance, états dérivés
+ (Demande, Refuse, Actif, Grace, Suspendu, Expire, Resilie) avec historique en
+ ajout seul, et routes d'écriture administrateur (publier, s'abonner,
+ renouveler, résilier) relayées à l'annuaire, qui signe par node.key et audite.
+ Base SQLite locale et privée (WAL) ; ledger de crédits en partie double sans
+ valeur monétaire. API locale gardée sur /run/secubox/mirrornet.sock.

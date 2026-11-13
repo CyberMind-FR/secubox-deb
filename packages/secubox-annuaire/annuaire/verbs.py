@@ -58,10 +58,12 @@ from .model import (
     RevocationScope,
     RingAssign,
     RingState,
+    DatasetVersion,
     ServiceOffer,
     Subscription,
     SubscriptionState,
     now_rfc3339,
+    charge_signee,
     OpenPGPBinding,
     OpenPGPRevocation,
 )
@@ -1246,6 +1248,7 @@ def _get_offers(journal: Journal) -> List[Dict]:
     # signature to verify the offer. See _enrich_offer below.
     offer_entries: Dict[str, "object"] = {}   # service_id -> LogEntry
     offer_heights: Dict[str, int] = {}
+    proprietaire: Dict[str, str] = {}
     revoked_ids: set = set()
     # UN SEUL BALAYAGE (#3021) : la clé publique de chaque fournisseur se relève au passage (dernière Identity
     # auto-signée). Avant, _enrich_offer rebalayait tout le journal PAR OFFRE : 17 offres × 5 000 entrées,
@@ -1263,6 +1266,10 @@ def _get_offers(journal: Journal) -> List[Dict]:
             sid = entry.payload.get("service_id")
             provider = entry.payload.get("provider")
             if sid and provider and entry.author == provider:
+                # #3647 : un service_id appartient au PREMIER fournisseur qui l'a signé ; une offre d'un autre
+                # did sur le même identifiant (vol) est ignorée.
+                if proprietaire.setdefault(sid, provider) != provider:
+                    continue
                 if entry.height > offer_heights.get(sid, -1):
                     offer_entries[sid] = entry
                     offer_heights[sid] = entry.height
@@ -1320,7 +1327,8 @@ def subscription_state(journal: Journal, subscription_id: str) -> SubscriptionSt
     """Derive the current SubscriptionState for subscription_id from the log.
 
     Rules (in priority order):
-      1. REVOKED  — a SERVICE_REVOKE_SUB entry exists authored by the subscriber.
+      1. REVOKED  — a SERVICE_REVOKE_SUB entry exists authored by the subscriber, or (#3647) a
+                    SERVICE_REVOKE_OFFER_SUB authored by the offer's provider.
       2. REJECTED — a SERVICE_REJECT entry exists authored by the offer's provider.
       3. APPROVED — offer.approval_mode == AUTO, OR a SERVICE_APPROVE entry authored
                     by the offer's provider exists.
@@ -1333,7 +1341,8 @@ def subscription_state(journal: Journal, subscription_id: str) -> SubscriptionSt
     for entry in journal.iter_entries():
         if (entry.op == Op.SERVICE_SUBSCRIBE
                 and entry.payload_type == "Subscription"
-                and entry.payload.get("subscription_id") == subscription_id):
+                and entry.payload.get("subscription_id") == subscription_id
+                and entry.author == entry.payload.get("subscriber")):
             sub_payload = entry.payload
             break
 
@@ -1351,11 +1360,16 @@ def subscription_state(journal: Journal, subscription_id: str) -> SubscriptionSt
                 and entry.payload_type == "ServiceOffer"
                 and entry.payload.get("service_id") == service_id):
             provider = entry.payload.get("provider")
-            if provider and entry.author == provider:
+            # #3647 : le PREMIER fournisseur possède le service_id ; un autre did ne peut ni approuver ni révoquer.
+            if provider and entry.author == provider and offer_provider in (None, provider):
                 offer_provider = provider
                 offer_approval_mode = entry.payload.get(
                     "approval_mode", ApprovalMode.PENDING.value
                 )
+    # Abonnement lié à son fournisseur (champ signé, #3647) : s'il ne correspond pas, personne n'a autorité dessus.
+    if sub_payload.get("provider") and sub_payload.get("provider") != offer_provider:
+        offer_provider = None
+        offer_approval_mode = ApprovalMode.PENDING.value
     # (Use the latest found — could be overridden by a newer offer for same service_id;
     #  iterate the full log so the last match wins.)
 
@@ -1367,8 +1381,13 @@ def subscription_state(journal: Journal, subscription_id: str) -> SubscriptionSt
         payload = entry.payload
         if payload.get("subscription_id") != subscription_id:
             continue
+        if not forme_valide(entry.op, payload, entry.author):
+            continue
 
         if entry.op == Op.SERVICE_REVOKE_SUB and entry.author == subscriber:
+            revoked_sub = True
+        # #3647 : le fournisseur révoque un abonné (motif signé).
+        if entry.op == Op.SERVICE_REVOKE_OFFER_SUB and offer_provider and entry.author == offer_provider:
             revoked_sub = True
 
         if entry.op == Op.SERVICE_APPROVE and offer_provider and entry.author == offer_provider:
@@ -1398,8 +1417,12 @@ def offer_service(
     approval_mode: str = "auto",
     description: str = "",
     macro: Optional[Dict] = None,
+    **etendus: Any,
 ) -> ServiceOffer:
     """SERVICE_OFFER: publish a signed service offer.
+
+    `etendus` (#3647) : champs MirrorNet facultatifs (version, compat, tarif, quotas, classe, duree_s, grace_s, sonde),
+    validés par le modèle ; absents, l'offre est signée exactement comme avant.
 
     Self-certifying: entry.author == provider_did.
 
@@ -1429,11 +1452,9 @@ def offer_service(
         approval_mode=ApprovalMode(approval_mode),
         description=description,
         macro=macro,
+        **{k: v for k, v in etendus.items() if v is not None},
     )
-    full = offer.model_dump()
-    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
-    if payload.get("macro") is None:
-        payload.pop("macro", None)
+    payload = charge_signee(offer)
     sig_hex = sign(provider_priv, canonical_bytes(payload))
 
     provider_pubkey = _get_inviter_pubkey(journal, provider_did)
@@ -1505,8 +1526,17 @@ def subscribe(
     subscriber_priv: bytes,
     subscriber_did: str,
     service_id: str,
+    *,
+    version: Optional[str] = None,
+    tarif_accepte: Optional[Dict[str, Any]] = None,
+    expire_le: Optional[str] = None,
+    provider: Optional[str] = None,
+    jeux: Optional[List[str]] = None,
+    compat_acceptee: Optional[Dict[str, Any]] = None,
 ) -> Subscription:
     """SERVICE_SUBSCRIBE: request access to a service offer.
+
+    #3647 : `version`, `tarif_accepte`, `expire_le` facultatifs (MirrorNet) ; absents, la charge est celle d'avant.
 
     Preconditions:
       - The offer must exist and not be revoked.
@@ -1528,6 +1558,8 @@ def subscribe(
     offer = _get_offer(journal, service_id)
     if offer is None:
         raise ValueError(f"subscribe: service {service_id!r} does not exist or has been revoked")
+    if provider is not None and offer.get("provider") != provider:
+        raise ValueError("subscribe: le fournisseur de l'offre n'est pas celui attendu")
 
     if not _is_non_revoked_member(journal, subscriber_did):
         raise PermissionError(
@@ -1540,9 +1572,14 @@ def subscribe(
         subscription_id=subscription_id,
         subscriber=subscriber_did,
         service_id=service_id,
+        version=version,
+        tarif_accepte=tarif_accepte,
+        expire_le=expire_le,
+        provider=provider,
+        jeux=jeux,
+        compat_acceptee=compat_acceptee,
     )
-    full = sub.model_dump()
-    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    payload = charge_signee(sub)
     sig_hex = sign(subscriber_priv, canonical_bytes(payload))
 
     subscriber_pubkey = _get_inviter_pubkey(journal, subscriber_did)
@@ -1556,6 +1593,254 @@ def subscribe(
     )
 
     return Subscription(**{**payload, "sig": sig_hex, "signer_did": subscriber_did})
+
+
+# ---------------------------------------------------------------------------
+# MirrorNet v1 (#3647) — échéance, renouvellement, résiliation, révocation d'un abonné
+# ---------------------------------------------------------------------------
+
+MOTIF_MAX = 200
+
+# #3647 (relecture) : `op` et `payload_type` ne sont pas signés ; un pair qui relaie pourrait réétiqueter la charge
+# signée d'un autre (un renouvellement en résiliation, une approbation en refus) et, arrivé le premier, bloquer la vraie
+# (dédoublonnage sur (auteur, signature)). Chaque opération service_* a donc une FORME (clés présentes, rôle de l'auteur)
+# vérifiée à l'import et par les lecteurs ; les gestes ajoutés par MirrorNet portent en plus `op` dans la charge signée.
+_FORMES = {
+    "service_offer": (("service_id", "provider", "name"), "provider", False),
+    "service_revoke_offer": (("service_id", "provider", "revoked_at"), "provider", False),
+    "service_subscribe": (("subscription_id", "subscriber", "service_id", "requested_at"), "subscriber", False),
+    "service_approve": (("subscription_id", "approver", "approved_at"), "approver", False),
+    "service_reject": (("subscription_id", "rejecter", "rejected_at"), "rejecter", False),
+    "service_revoke_sub": (("subscription_id", "subscriber", "revoked_at"), "subscriber", True),
+    "service_renew": (("subscription_id", "subscriber", "renewed_at", "expire_le"), "subscriber", True),
+    "service_revoke_offer_sub": (("subscription_id", "provider", "revoked_at"), "provider", True),
+    "service_dataset_version": (("service_id", "provider", "numero", "empreinte", "taille", "licence", "classe"),
+                                "provider", True),
+    "service_dataset_retract": (("service_id", "provider", "empreinte", "retracted_at"), "provider", True),
+}
+
+
+def forme_valide(op: Any, payload: Any, author: Any) -> bool:
+    """Charge d'une opération service_* bien formée et signée par la bonne partie. Autres opérations : True."""
+    op = op.value if hasattr(op, "value") else op
+    forme = _FORMES.get(op)
+    if forme is None:
+        return True
+    cles, role, op_signee = forme
+    if not isinstance(payload, dict) or any(k not in payload for k in cles) or payload.get(role) != author:
+        return False
+    if "op" in payload or op_signee:
+        return payload.get("op") == op
+    return True
+
+
+def _instant(ts: Optional[str]) -> Optional[datetime]:
+    """RFC 3339 → datetime UTC conscient ; None si absent ou illisible (jamais d'exception)."""
+    if not ts or not isinstance(ts, str):
+        return None
+    try:
+        d = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+DERIVE_HORLOGE_S = 300
+
+
+def echeance_abonnement(journal: Journal, subscription_id: str,
+                        maintenant: Optional[datetime] = None) -> Optional[str]:
+    """Échéance courante, BORNÉE par le lecteur (#3647, relecture) : l'abonné signe ses dates, il ne les impose pas.
+
+    - offre avec `duree_s` : échéance initiale = min(expire_le signé, requested_at + duree_s) ; sans expire_le :
+      requested_at + duree_s ;
+    - offre sans durée : expire_le signé s'il existe, sinon aucune échéance ;
+    - renouvellements de l'ABONNÉ triés par `renewed_at` : comptés s'ils sont signés au plus tard à l'échéance en cours
+      et pas dans le futur (dérive d'horloge 5 min), chacun d'au plus `duree_s`.
+    Même règle dans secubox_mirrornet/abonnements.py."""
+    maintenant = maintenant or datetime.now(timezone.utc)
+    sub = _get_subscription_payload(journal, subscription_id)
+    if sub is None:
+        return None
+    offre = _find_any_offer(journal, sub.get("service_id", "")) or {}
+    duree = offre.get("duree_s") if isinstance(offre.get("duree_s"), int) and offre["duree_s"] > 0 else None
+    signee, demande = _instant(sub.get("expire_le")), _instant(sub.get("requested_at"))
+    if duree and demande:
+        plafond = demande + timedelta(seconds=duree)
+        courant = min(signee, plafond) if signee else plafond
+    else:
+        courant = signee
+    if courant is None:
+        return None
+    limite = maintenant + timedelta(seconds=DERIVE_HORLOGE_S)
+    renouv = []
+    for e in journal.iter_entries(ops=("service_renew",)):
+        p = e.payload
+        if (p.get("subscription_id") == subscription_id and e.author == sub.get("subscriber")
+                and forme_valide(e.op, p, e.author)):
+            fait, neuf = _instant(p.get("renewed_at")), _instant(p.get("expire_le"))
+            if fait and neuf:
+                renouv.append((fait, neuf))
+    for fait, neuf in sorted(renouv, key=lambda x: x[0]):
+        if fait > courant or fait > limite or neuf <= courant:
+            continue
+        courant = min(neuf, courant + timedelta(seconds=duree)) if duree else neuf
+    return courant.isoformat()
+
+
+def _offre_de_l_abonnement(journal: Journal, subscription_id: str) -> Tuple[Dict, Optional[Dict]]:
+    sub = _get_subscription_payload(journal, subscription_id)
+    if sub is None:
+        raise ValueError(f"abonnement {subscription_id!r} introuvable")
+    sid = sub.get("service_id", "")
+    offre = _get_offer(journal, sid) or _find_any_offer(journal, sid)
+    if offre is not None and sub.get("provider") and offre.get("provider") != sub["provider"]:
+        offre = None                    # abonnement lié à un autre fournisseur : aucune autorité ici
+    return sub, offre
+
+
+def _motif(motif: str) -> str:
+    motif = (motif or "").strip()
+    if len(motif) > MOTIF_MAX or any(ord(c) < 32 for c in motif):
+        raise ValueError(f"motif : {MOTIF_MAX} caractères imprimables au plus")
+    return motif
+
+
+def _signer_et_ajouter(journal: Journal, priv: bytes, did: str, op: Op, ptype: str, payload: Dict[str, Any]) -> None:
+    sig_hex = sign(priv, canonical_bytes(payload))
+    journal.append(op=op, payload_type=ptype, payload=payload, author=did, sig=sig_hex,
+                   author_pubkey_hex=_get_inviter_pubkey(journal, did))
+
+
+def cancel_subscription(journal: Journal, subscriber_priv: bytes, subscriber_did: str, subscription_id: str,
+                        motif: str = "") -> Dict[str, Any]:
+    """SERVICE_REVOKE_SUB : l'ABONNÉ résilie (l'opération existait, sans écrivain). Déjà close : ValueError."""
+    sub, _offre = _offre_de_l_abonnement(journal, subscription_id)
+    if sub.get("subscriber") != subscriber_did:
+        raise PermissionError("seul l'abonné résilie son abonnement")
+    if subscription_state(journal, subscription_id) in (SubscriptionState.REVOKED, SubscriptionState.REJECTED):
+        raise ValueError("abonnement déjà clos")
+    payload = {"op": Op.SERVICE_REVOKE_SUB.value, "subscription_id": subscription_id,
+               "service_id": sub.get("service_id"), "subscriber": subscriber_did, "motif": _motif(motif),
+               "revoked_at": now_rfc3339()}
+    _signer_et_ajouter(journal, subscriber_priv, subscriber_did, Op.SERVICE_REVOKE_SUB, "ServiceRevokeSub", payload)
+    return {"status": "revoked", "subscription_id": subscription_id, "role": "abonne"}
+
+
+def revoke_subscriber(journal: Journal, provider_priv: bytes, provider_did: str, subscription_id: str,
+                      motif: str = "") -> Dict[str, Any]:
+    """SERVICE_REVOKE_OFFER_SUB : le FOURNISSEUR révoque un abonné, motif signé."""
+    sub, offre = _offre_de_l_abonnement(journal, subscription_id)
+    if offre is None or offre.get("provider") != provider_did:
+        raise PermissionError("seul le fournisseur de l'offre révoque un abonné")
+    if subscription_state(journal, subscription_id) in (SubscriptionState.REVOKED, SubscriptionState.REJECTED):
+        raise ValueError("abonnement déjà clos")
+    payload = {"op": Op.SERVICE_REVOKE_OFFER_SUB.value, "subscription_id": subscription_id,
+               "service_id": sub.get("service_id"), "provider": provider_did, "motif": _motif(motif),
+               "revoked_at": now_rfc3339()}
+    _signer_et_ajouter(journal, provider_priv, provider_did, Op.SERVICE_REVOKE_OFFER_SUB, "ServiceRevokeOfferSub",
+                       payload)
+    return {"status": "revoked", "subscription_id": subscription_id, "role": "fournisseur"}
+
+
+def renew_subscription(journal: Journal, subscriber_priv: bytes, subscriber_did: str,
+                       subscription_id: str) -> Dict[str, Any]:
+    """SERVICE_RENEW : l'abonné prolonge d'une période (`duree_s` de l'offre), AVANT l'échéance en cours.
+
+    Refus : pas l'abonné ; abonnement non approuvé ou clos ; offre sans durée ou retirée ; période déjà close."""
+    sub, _offre = _offre_de_l_abonnement(journal, subscription_id)
+    if sub.get("subscriber") != subscriber_did:
+        raise PermissionError("seul l'abonné renouvelle son abonnement")
+    if subscription_state(journal, subscription_id) is not SubscriptionState.APPROVED:
+        raise ValueError("seul un abonnement approuvé se renouvelle")
+    offre = _get_offer(journal, sub.get("service_id", ""))
+    if offre is None:
+        raise ValueError("offre retirée : renouvellement impossible")
+    duree = offre.get("duree_s")
+    if not isinstance(duree, int) or duree <= 0:
+        raise ValueError("offre sans durée : l'abonnement n'expire pas")
+    actuel = _instant(echeance_abonnement(journal, subscription_id))
+    maintenant = datetime.now(timezone.utc)
+    if actuel is None or maintenant > actuel:
+        raise ValueError("période close : un nouvel abonnement est nécessaire")
+    neuf = (actuel + timedelta(seconds=duree)).isoformat()
+    payload = {"op": Op.SERVICE_RENEW.value, "subscription_id": subscription_id,
+               "service_id": sub.get("service_id"), "subscriber": subscriber_did, "expire_le": neuf,
+               "renewed_at": maintenant.isoformat()}
+    _signer_et_ajouter(journal, subscriber_priv, subscriber_did, Op.SERVICE_RENEW, "ServiceRenew", payload)
+    return {"status": "renewed", "subscription_id": subscription_id, "expire_le": neuf}
+
+
+# ---------------------------------------------------------------------------
+# MirrorNet 4a (#3653) — versions de jeux de données
+# ---------------------------------------------------------------------------
+
+def dataset_versions(journal: Journal, service_id: str) -> List[Dict[str, Any]]:
+    """Versions publiées par le PROPRIÉTAIRE de l'offre, dans l'ordre du journal, avec `retiree` (retrait signé)."""
+    offre = _find_any_offer(journal, service_id)
+    if offre is None:
+        return []
+    fournisseur = offre.get("provider")
+    versions: List[Dict[str, Any]] = []
+    retraits: set = set()
+    for e in journal.iter_entries(ops=("service_dataset_",)):
+        p = e.payload
+        if p.get("service_id") != service_id or e.author != fournisseur or not forme_valide(e.op, p, e.author):
+            continue
+        if e.op == Op.SERVICE_DATASET_VERSION:
+            versions.append(dict(p))
+        elif e.op == Op.SERVICE_DATASET_RETRACT:
+            retraits.add(p.get("empreinte"))
+    for v in versions:
+        v["retiree"] = v.get("empreinte") in retraits
+    return versions
+
+
+def publish_dataset_version(journal: Journal, provider_priv: bytes, provider_did: str, service_id: str,
+                            **manifeste: Any) -> DatasetVersion:
+    """SERVICE_DATASET_VERSION : nouvelle version d'un jeu de données de CE fournisseur. Numéro et parent sont calculés
+    ici (numéro suivant, empreinte de la dernière version) ; une empreinte déjà publiée est refusée (immutabilité)."""
+    offre = _get_offer(journal, service_id)
+    if offre is None:
+        raise ValueError("jeu de données inconnu ou retiré")
+    if offre.get("provider") != provider_did:
+        raise PermissionError("seul le fournisseur publie une version de son jeu de données")
+    if offre.get("kind") != "dataset":
+        raise ValueError("l'offre n'est pas un jeu de données (kind=dataset)")
+    # #3653 (relecture) : la classe d'une version n'est jamais MOINS stricte que celle de l'offre ; spécialisé et
+    # professionnel exigent une offre en approbation manuelle (le fournisseur choisit qui reçoit).
+    rang = {c: i for i, c in enumerate(("public", "communaute", "specialise", "professionnel", "prive"))}
+    classe = manifeste.get("classe")
+    if rang.get(classe, -1) < rang.get(offre.get("classe") or "public", 0):
+        raise ValueError(f"classe de la version ({classe}) moins stricte que celle de l'offre ({offre.get('classe') or 'public'})")
+    if classe in ("specialise", "professionnel") and offre.get("approval_mode") != "pending":
+        raise ValueError("classe spécialisé ou professionnel : l'offre doit être en approbation manuelle")
+    precedentes = dataset_versions(journal, service_id)
+    if any(v.get("empreinte") == manifeste.get("empreinte") for v in precedentes):
+        raise ValueError("version déjà publiée (même empreinte)")
+    numero = max((int(v.get("numero", 0)) for v in precedentes), default=0) + 1
+    parent = precedentes[-1]["empreinte"] if precedentes else ""
+    v = DatasetVersion(service_id=service_id, provider=provider_did, numero=numero, parent=parent, **manifeste)
+    payload = charge_signee(v)
+    _signer_et_ajouter(journal, provider_priv, provider_did, Op.SERVICE_DATASET_VERSION, "DatasetVersion", payload)
+    return DatasetVersion(**{**payload, "sig": None, "signer_did": provider_did})
+
+
+def retract_dataset_version(journal: Journal, provider_priv: bytes, provider_did: str, service_id: str,
+                            empreinte: str, motif: str = "") -> Dict[str, Any]:
+    """SERVICE_DATASET_RETRACT : retrait signé d'une version ; copies et abonnés la suppriment à réception (§ 6)."""
+    offre = _find_any_offer(journal, service_id)
+    if offre is None or offre.get("provider") != provider_did:
+        raise PermissionError("seul le fournisseur retire une version de son jeu de données")
+    versions = {v["empreinte"]: v for v in dataset_versions(journal, service_id)}
+    if empreinte not in versions:
+        raise ValueError("version inconnue")
+    if versions[empreinte]["retiree"]:
+        raise ValueError("version déjà retirée")
+    payload = {"op": Op.SERVICE_DATASET_RETRACT.value, "service_id": service_id, "provider": provider_did,
+               "empreinte": empreinte, "motif": _motif(motif), "retracted_at": now_rfc3339()}
+    _signer_et_ajouter(journal, provider_priv, provider_did, Op.SERVICE_DATASET_RETRACT, "DatasetRetract", payload)
+    return {"status": "retracted", "service_id": service_id, "empreinte": empreinte}
 
 
 def approve_subscription(
@@ -1716,11 +2001,16 @@ def ingest_offer(
             f"but offer claims provider {offer.provider!r}; offer rejected"
         )
 
-    # Reconstruct the canonical payload that was signed: model_dump minus sig/signer_did
-    full = offer.model_dump()
-    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
-    if payload.get("macro") is None:
-        payload.pop("macro", None)
+    # Reconstruct the canonical payload that was signed: model_dump minus sig/signer_did, absent optional fields (#3647).
+    # Variante tolérée : un signataire qui a gardé les champs facultatifs à null (model_dump brut). C'est la charge
+    # VÉRIFIÉE qui est stockée, telle quelle : rien n'est accepté qui n'ait été signé.
+    payload = charge_signee(offer)
+    if not verify(provider_pubkey_hex, canonical_bytes(payload), offer.sig):
+        brute = {k: v for k, v in offer.model_dump().items() if k not in ("sig", "signer_did")}
+        if brute.get("macro") is None:
+            brute.pop("macro", None)
+        if verify(provider_pubkey_hex, canonical_bytes(brute), offer.sig):
+            payload = brute
 
     if not verify(provider_pubkey_hex, canonical_bytes(payload), offer.sig):
         raise ValueError(
@@ -2026,6 +2316,24 @@ def banned_ips(journal: Journal) -> List[str]:
 # last-writer-wins at the state layer (_get_nodes/_get_configs/_get_offers).
 # ---------------------------------------------------------------------------
 
+def _cles_publiques(journal: Journal) -> Dict[str, Optional[str]]:
+    """{did: clé publique} de la DERNIÈRE Identity auto-signée de chaque did — exactement _get_inviter_pubkey, pour
+    tous les dids en une requête (filtre SQL sur payload_type, seules les identités sont décodées)."""
+    cles: Dict[str, Optional[str]] = {}
+    con = journal._connect()
+    try:
+        for auteur, charge in con.execute("SELECT author, payload FROM log WHERE payload_type = 'Identity' ORDER BY height"):
+            try:
+                p = json.loads(charge)
+            except ValueError:
+                continue
+            if isinstance(p, dict) and p.get("did") == auteur:
+                cles[auteur] = p.get("pubkey")
+    finally:
+        con.close()
+    return cles
+
+
 def export_entries(journal: Journal, ops: Optional[Tuple[str, ...]] = None) -> List[Dict[str, Any]]:
     """Serialize the local log for a peer to pull.
 
@@ -2042,20 +2350,20 @@ def export_entries(journal: Journal, ops: Optional[Tuple[str, ...]] = None) -> L
     # (5 097 entrées sur gk2 → ~26 M d'itérations) qui figeait l'annuaire
     # plusieurs minutes. Les auteurs sont peu nombreux ; la clé d'un auteur ne
     # change pas le temps d'une lecture.
-    cles: Dict[str, Optional[str]] = {}
+    # #3647 : UNE seule lecture des identités (SQL, sans décoder le reste du journal) au lieu d'un balayage complet
+    # PAR auteur : sur gk2 (5 500 entrées), « ?ops=assist_ » prenait 21 s et dépassait le délai des pairs (5 s).
+    cles = _cles_publiques(journal)
     out: List[Dict[str, Any]] = []
     for entry in journal.iter_entries(tuple(ops) if ops else None):
         nom_op = entry.op.value if hasattr(entry.op, "value") else entry.op
         if ops and not str(nom_op).startswith(tuple(ops)):
             continue
-        if entry.author not in cles:
-            cles[entry.author] = _get_inviter_pubkey(journal, entry.author)
         out.append({
             "op": entry.op.value if hasattr(entry.op, "value") else entry.op,
             "payload_type": entry.payload_type,
             "payload": entry.payload,
             "author": entry.author,
-            "author_pubkey": cles[entry.author],
+            "author_pubkey": cles.get(entry.author),
             "sig": entry.sig,
         })
     return out
@@ -2107,6 +2415,9 @@ def import_entries(journal: Journal, entries: List[Dict[str, Any]]) -> Dict[str,
         except ValueError:
             rejected += 1
             continue
+        if not forme_valide(op, payload, author):        # #3647 : charge réétiquetée ou forgée au nom d'un autre
+            rejected += 1
+            continue
         journal.append(
             op=op_enum, payload_type=ptype, payload=payload,
             author=author, sig=sig, author_pubkey_hex=pub,
@@ -2125,7 +2436,8 @@ def _get_subscription_payload(journal: Journal, subscription_id: str) -> Optiona
     for entry in journal.iter_entries():
         if (entry.op == Op.SERVICE_SUBSCRIBE
                 and entry.payload_type == "Subscription"
-                and entry.payload.get("subscription_id") == subscription_id):
+                and entry.payload.get("subscription_id") == subscription_id
+                and entry.author == entry.payload.get("subscriber")):       # #3647 : jamais au nom d'un autre
             return entry.payload
     return None
 
@@ -2137,12 +2449,16 @@ def _find_any_offer(journal: Journal, service_id: str) -> Optional[Dict]:
     """
     best: Optional[Dict] = None
     best_height = -1
+    proprietaire: Optional[str] = None
     for entry in journal.iter_entries():
         if (entry.op == Op.SERVICE_OFFER
                 and entry.payload_type == "ServiceOffer"
                 and entry.payload.get("service_id") == service_id):
             provider = entry.payload.get("provider")
             if provider and entry.author == provider:
+                proprietaire = proprietaire or provider          # #3647 : premier fournisseur seulement
+                if provider != proprietaire:
+                    continue
                 if entry.height > best_height:
                     best_height = entry.height
                     best = entry.payload

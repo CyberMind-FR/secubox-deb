@@ -6,8 +6,8 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   Visioconférence La Suite Meet au profil Aurora (.claude/AURORA-REFERENCE.md) : page autonome, aucune dépendance.
-  Routes lues : /status, /media-expose, /oidc, /logs, /reunions, /connexions, /stats (#3182).
-  Écritures : /control, /media-expose, /oidc/enregistrer, /clore (#3182).
+  Routes lues : /status, /media-expose, /oidc, /logs, /reunions, /connexions, /stats (#3182), /comptes (#3610).
+  Écritures : /control, /media-expose, /oidc/enregistrer, /clore (#3182), /salles (#3610).
   Mesure absente = « — ». ?embed=1 : sans menu ; ?demo=1 : données fictives, actions inertes.
 -->
 <html lang="fr">
@@ -167,6 +167,14 @@
                 <div class="tuile ok" title="Réunions ouvertes en ce moment (LiveKit)."><span class="l">En cours</span><span class="v" id="tEnCours">—</span><span class="s">réunions ouvertes</span></div>
                 <div class="tuile" title="Participants connectés en ce moment."><span class="l">Participants</span><span class="v" id="tPresents">—</span><span class="s">connectés maintenant</span></div>
             </section>
+            <div class="pan"><h3>Créer une salle <i>code au format de Meet (xxx-yyyy-zzz), généré si vide · propriétaire : un compte déjà connecté</i></h3>
+                <form id="formSalle" class="outils" autocomplete="off">
+                    <label>Code (facultatif)<input id="sNom" type="text" maxlength="12" pattern="[a-z]{3}-[a-z]{4}-[a-z]{3}" placeholder="généré : xxx-yyyy-zzz"></label>
+                    <label>Accès<select id="sAcces"><option value="public">public (le lien suffit)</option><option value="trusted" selected>confiance (comptes de la box)</option><option value="restricted">restreint (membres invités)</option></select></label>
+                    <label>Propriétaire<select id="sProprio" required><option value="">chargement…</option></select></label>
+                    <button type="submit" class="btn" id="bCreer">Créer la salle</button>
+                </form>
+                <div id="rSalle" class="retour" hidden></div></div>
             <div class="pan"><h3>Salles <i>base de Meet · état en direct par LiveKit</i></h3>
                 <div id="rReunions" class="retour" hidden></div>
                 <div id="lReunions" class="tab"><div class="vide">Chargement…</div></div>
@@ -505,7 +513,37 @@
             return d;
         }
 
+        // Création d'une salle (#3610) : propriétaires possibles = comptes déjà connectés à Meet ; tout passe par textContent.
+        let COMPTES_LUS = false;
+        async function chargerComptes() {
+            if (COMPTES_LUS) return;
+            const sel = $('sProprio');
+            let d;
+            try { d = DEMO ? { comptes: [{ sub: 'demo', pseudo: 'Gandalf' }] } : await lire('/comptes'); }
+            catch (e) { sel.replaceChildren(el('option', '', 'comptes illisibles')); sel.firstChild.value = ''; return; }
+            const cs = d.comptes || [];
+            if (!cs.length) { sel.replaceChildren(el('option', '', 'aucun compte : connectez-vous une fois à la visio')); sel.firstChild.value = ''; return; }
+            sel.replaceChildren(...cs.map(c => { const o = el('option', '', c.pseudo || 'compte'); o.value = c.sub; return o; }));
+            COMPTES_LUS = true;
+        }
+        $('formSalle').addEventListener('submit', async (ev) => {
+            ev.preventDefault();
+            const nom = $('sNom').value.trim(), proprietaire = $('sProprio').value, acces = $('sAcces').value;
+            if (!proprietaire) { retour('rSalle', false, 'Propriétaire requis.'); return; }
+            if (nom && !/^[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(nom)) { retour('rSalle', false, 'Code : format xxx-yyyy-zzz (lettres minuscules), ou laisser vide.'); return; }
+            const res = await occupe(['bCreer'], () => ecrire('POST', '/salles', { nom, acces, proprietaire }));
+            if (res.ok && res.data && res.data.slug) {
+                const dom = ETAT && domaineValide(ETAT.domain) ? ETAT.domain : null;
+                retour('rSalle', true, 'Salle créée' + (dom ? ' : ' + location.protocol + '//' + dom + '/' + res.data.slug : ' (' + res.data.slug + ')'));
+                $('sNom').value = '';
+                reunions();
+            } else {
+                retour('rSalle', false, res.demo ? detail(res) : 'Création refusée : ' + detail(res));
+            }
+        });
+
         async function reunions() {
+            chargerComptes();
             const box = $('lReunions');
             let d;
             try { d = await chargerSalles(true); } catch (e) { refus(box, e); ['tSalles', 'tEnCours', 'tPresents'].forEach(i => { $(i).textContent = '—'; }); annoncer(); return; }

@@ -173,7 +173,7 @@ def api(monde, monkeypatch):
 
 
 def test_activer_declarer_un_appareil_et_basculer_observe_block_dynamiquement(api, monde):
-    assert api.get("/adblock-tv/status").json()["actif"] is False
+    assert api.get("/adblock-tv/status").json()["actif"] is True                    # #3674 : toujours actif
     assert api.post("/adblock-tv/clients", json={"ip": "192.168.1.50", "nom": "Freebox TV salon", "mode": "observe"}).status_code == 200
     assert api.post("/adblock-tv/etat", json={"actif": True}).json()["application"]["ok"] is True
     assert "sbx-tv-observe" in monde["conf"].read_text() and "always_nxdomain" in monde["conf"].read_text()   # zones seulement dans la vue block
@@ -184,11 +184,13 @@ def test_activer_declarer_un_appareil_et_basculer_observe_block_dynamiquement(ap
     assert "access-control-view: 192.168.1.50/32 sbx-tv-observe" in monde["conf"].read_text()
 
 
-def test_le_poc_se_desactive_et_se_retire_sans_trace(api, monde):
+def test_tv_privacy_ne_se_desactive_pas_3674(api, monde):
     api.post("/adblock-tv/clients", json={"ip": "192.168.1.50", "mode": "block"})
     api.post("/adblock-tv/etat", json={"actif": True})
-    api.post("/adblock-tv/etat", json={"actif": False})
-    assert "access-control-view" not in monde["conf"].read_text()                   # actif=false : plus aucune vue
+    r = api.post("/adblock-tv/etat", json={"actif": False})
+    assert r.status_code == 409 and "ne se désactive pas" in r.json()["detail"]
+    assert api.get("/adblock-tv/status").json()["actif"] is True
+    assert "access-control-view: 192.168.1.50/32 sbx-tv-block" in monde["conf"].read_text()   # la vue reste posée
     assert api.delete("/adblock-tv/clients/192.168.1.50").status_code == 200
     assert api.delete("/adblock-tv/clients/192.168.1.50").status_code == 404
 

@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# /etc/secubox/mirrornet.toml — MirrorNet v1 (#3645). Semé une fois par le postinst (0640 root:secubox) ; la copie
+# modifiée fait autorité. Phase 3 (#3647) : les tables catalogue, abonnements, synchro et donnees ont effet ; economie en phase 5.
+# Aucun secret ici. Les règles de répartition vivent dans la base, versionnées (docs/MIRRORNET_ECONOMY.md § 4).
+
+[catalogue]
+# Niveau de confiance minimal d'un fournisseur pour qu'une offre soit présentée (MIRRORNET_SERVICE_EXCHANGE.md § 3).
+confiance_min = "LIMITED"
+
+[abonnements]
+# Période de grâce par défaut si une offre n'en déclare pas (secondes) : 5 jours, comme autoload.
+grace_s = 432000
+
+[synchro]
+# Intervalle de relecture de l'export de l'annuaire (secondes, 10 à 3600).
+intervalle_s = 60
+
+[donnees]
+# Jeux de données (#3653) : plafond d'un objet déposé ou reçu (Mio), versions gardées par jeu reçu, espace disque laissé
+# libre en dessous duquel aucun objet n'est écrit (Mio).
+taille_max_mo = 256
+garder = 3
+reserve_mo = 1024
+
+[economie]
+# Crédits internes sans valeur monétaire (arbitrage 3). Aucun règlement n'est jamais exécuté par le code.
+# Seuil de disponibilité sous lequel le crédit d'un fournisseur est réduit au prorata (0..1).
+disponibilite_min = 0.95
+
+[espace]
+# Phase 4c (#3661) : transferts servis en même temps par ce nœud (au-delà : 503, l'abonné essaie une autre source) ;
+# intervalle entre deux preuves de possession demandées à un espace qui garde un de mes jeux (secondes).
+service_simultane = 4
+certif_s = 900
