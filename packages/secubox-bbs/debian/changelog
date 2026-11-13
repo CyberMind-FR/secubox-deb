@@ -1,3 +1,9 @@
+secubox-bbs (0.37.15-1~trixie1) trixie; urgency=medium
+
+  * bbsctl user-role <pseudo> <sysop|member|guest> : changer le rôle d'un compte (Store.ChangerRole) ; refus d'un rôle inconnu, d'un compte désactivé et de la rétrogradation du dernier sysop, trace dans l'audit (ref #3709).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 07:55:09 +0100
+
 secubox-bbs (0.37.14-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).
