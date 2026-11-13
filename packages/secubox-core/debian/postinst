@@ -354,9 +354,11 @@ REPRISE
     # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
     # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
     # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
-    for _u in secubox-dns-listes.path secubox-dns-listes.timer secubox-dns-listes-contexte.timer; do
-      # #3592 : la minuterie de reprise, nouvelle, est activée à sa première installation.
-      if deb-systemd-helper --quiet was-enabled "$_u" || ! deb-systemd-helper --quiet debian-installed "$_u"; then
+    # #3592 : la minuterie de reprise de 1.8.24 est retirée ; on l'arrête et on efface son activation.
+    if [ -d /run/systemd/system ]; then systemctl stop secubox-dns-listes-contexte.timer 2>/dev/null || true; fi
+    deb-systemd-helper purge secubox-dns-listes-contexte.timer >/dev/null 2>&1 || true
+    for _u in secubox-dns-listes.path secubox-dns-listes.timer; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
         deb-systemd-helper enable "$_u" >/dev/null || true
       else
         deb-systemd-helper update-state "$_u" >/dev/null || true
@@ -364,7 +366,7 @@ REPRISE
     done
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload 2>/dev/null || true
-        systemctl start secubox-dns-listes.path secubox-dns-listes.timer secubox-dns-listes-contexte.timer 2>/dev/null || true
+        systemctl start secubox-dns-listes.path secubox-dns-listes.timer 2>/dev/null || true
         [ -d /etc/unbound/unbound.conf.d ] && systemctl start --no-block secubox-dns-listes.service 2>/dev/null || true
     fi
 
