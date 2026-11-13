@@ -1,0 +1,87 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-masquer-jetons-journaux — efface les jetons déjà écrits dans les journaux nginx (#3691).
+
+Le format de journal masque désormais les jetons passés dans l'URL (`?accessToken=` de PeerTube, `?jeton=` du Hall…) ;
+ce qui a été écrit AVANT reste en clair. Ce programme remplace, dans /var/log/nginx, la valeur de ces paramètres par des
+« X » de MÊME LONGUEUR : la taille du fichier et la position de chaque ligne ne changent pas, un lecteur qui suit le
+journal par décalage (secubox-metrics) ne voit rien bouger. Les archives .gz sont réécrites (fichier temporaire puis
+renommage, propriétaire et droits conservés). Idempotent : un jeton déjà masqué n'est plus reconnu.
+"""
+import gzip
+import os
+import re
+import sys
+
+DOSSIER = os.environ.get("SECUBOX_JOURNAUX_NGINX", "/var/log/nginx")
+# la valeur d'un jeton : jamais vide, jamais déjà masquée (MASQUE du nouveau format, ou des X de ce programme)
+MOTIF = re.compile(rb"([?&](?:accessToken|access_token|token|jeton|api_key|apikey)=)(?!MASQUE)(?!X+(?:[&\s\"]|$))([^&\s\"]+)")
+
+
+def masquer(contenu: bytes) -> bytes:
+    return MOTIF.sub(lambda m: m.group(1) + b"X" * len(m.group(2)), contenu)
+
+
+def traiter_clair(chemin: str) -> bool:
+    """Réécrit EN PLACE, à longueur égale, bloc par ligne : l'inode et la taille restent."""
+    change = False
+    with open(chemin, "r+b") as f:
+        pos = 0
+        for ligne in iter(f.readline, b""):
+            nouvelle = masquer(ligne)
+            if nouvelle != ligne:
+                fin = f.tell()
+                f.seek(pos)
+                f.write(nouvelle)
+                f.seek(fin)
+                change = True
+            pos += len(ligne)
+    return change
+
+
+def traiter_gz(chemin: str) -> bool:
+    with gzip.open(chemin, "rb") as f:
+        contenu = f.read()
+    nouveau = masquer(contenu)
+    if nouveau == contenu:
+        return False
+    st = os.stat(chemin)
+    tmp = f"{chemin}.masque-{os.getpid()}"
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, st.st_mode & 0o7777)
+        with os.fdopen(fd, "wb") as brut, gzip.GzipFile(fileobj=brut, mode="wb") as z:
+            z.write(nouveau)
+        os.chown(tmp, st.st_uid, st.st_gid)
+        os.replace(tmp, chemin)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    return True
+
+
+def main() -> int:
+    if not os.path.isdir(DOSSIER):
+        return 0
+    traites, erreurs = 0, 0
+    for nom in sorted(os.listdir(DOSSIER)):
+        chemin = os.path.join(DOSSIER, nom)
+        if os.path.islink(chemin) or not os.path.isfile(chemin):
+            continue
+        try:
+            if re.fullmatch(r".+\.log(?:\.\d+)?", nom):
+                traites += traiter_clair(chemin)
+            elif re.fullmatch(r".+\.log\.\d+\.gz", nom):
+                traites += traiter_gz(chemin)
+        except (OSError, EOFError, gzip.BadGzipFile) as e:
+            erreurs += 1
+            print(f"secubox-masquer-jetons-journaux : {nom} : {e.__class__.__name__}", file=sys.stderr)
+    if traites:
+        print(f"secubox-masquer-jetons-journaux : jetons masqués dans {traites} journal(aux) nginx")
+    return 1 if erreurs else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

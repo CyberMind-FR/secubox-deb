@@ -275,6 +275,10 @@ PY
       fi
     fi
 
+    # JETONS DÉJÀ ÉCRITS DANS LES JOURNAUX (#3691) : le format masque les jetons à partir du rechargement ci-dessus ;
+    # ce qui a été journalisé avant est masqué ici, à longueur égale (idempotent, sans effet sur un journal propre).
+    /usr/sbin/secubox-masquer-jetons-journaux || true
+
     systemctl daemon-reload
 
     # Enable runtime directory service (ensures /run/secubox exists before other services)

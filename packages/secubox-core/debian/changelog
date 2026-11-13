@@ -1,3 +1,13 @@
+secubox-core (1.8.25-1~trixie1) trixie; urgency=medium
+
+  * Journaux nginx : les jetons passés dans l'URL (accessToken de PeerTube,
+    jeton du Hall, token, api_key) sont masqués dans la requête et le
+    référent (formats sbx_host et nouveau sbx_masque) ; les journaux déjà
+    écrits sont masqués à longueur égale par
+    secubox-masquer-jetons-journaux au postinst (ref #3691).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 04:56:40 +0100
+
 secubox-core (1.8.24-1~trixie1) trixie; urgency=medium
 
   * dns-listes : un changement du seul contexte (vue TV Privacy réécrite) ne
