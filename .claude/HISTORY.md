@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-14 — Bans de l'IA retirés aussitôt posés sur gk2 : journal fermé au groupe (ref #3716)
+
+- Symptôme : depuis 13:33, chaque geste du relais gk0 sur 51.8.102.0/24 refusé « gk2 injoignable » ; gk2 répondait 503
+  motif `journal` (ban posé puis retiré, audit `ai-ban-echec`).
+- Cause : `secubox-waf-ng.service` fait `chown -R secubox-waf /var/lib/secubox/waf` à chaque démarrage ; `ai-ban.jsonl`,
+  créé en 0640 par l'API (compte secubox), lui devenait fermé en écriture après le redémarrage de 11:38 (install 1.35.2).
+- Correctif : `secubox-waf-ng` 1.35.3 (PR #3731) — création en 0660 malgré l'umask, postinst répare le fichier existant.
+  Déployé gk2 (apt), journal inscriptible par `secubox` vérifié après redémarrage du moteur.
+
 ## 2026-11-14 — Console de pilotage du maître : actions, macros, journal en direct, zoom des panneaux (ref #3702)
 
 - `secubox-pilotage` 0.7.1 + `secubox-hub` 1.12.58 sur gk2 (apt) : page `/pilotage/console/` au menu « Console de pilotage » (catégorie de la Flotte) ; flotte et barre de commande (Ctrl K), un bouton par action du catalogue, journal en direct (flux authentifié, borné), macros livrées et programmées (« chaque nuit HH:MM »), éditeur et écran de lancement, `<box> · maintenant` (sans ligne disque), zoom « Agrandir » par panneau (Échap, agrandi d'office sous 720 px).
