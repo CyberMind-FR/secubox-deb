@@ -23,6 +23,7 @@ from typing import Awaitable, Callable
 from urllib.parse import urljoin, urlsplit
 
 import httpx
+from fastapi import HTTPException
 
 from api import moteurs, reglages
 
@@ -218,32 +219,42 @@ def pertinent(resultat, mots):
     return cites == len(mots) if len(mots) <= 2 else cites * 3 >= len(mots) * 2
 
 
+async def _cible_gardee(url):
+    """La garde SSRF, seule copie : (adresse épinglée, en-têtes, extensions) ou None au moindre refus.
+    Une seule résolution : l'adresse validée est celle utilisée (anti-rebinding) ; le nom reste dans Host et le SNI.
+    Lève ValueError/httpx.HTTPError/OSError sur une adresse illisible : l'appelant les traite comme un refus."""
+    p = urlsplit(url)
+    hote = p.hostname
+    if (p.scheme not in ("http", "https") or not hote or p.port not in (None, 80, 443)
+            or p.username is not None or p.password is not None or "@" in p.netloc):
+        return None
+    try:
+        ipaddress.ip_address(hote)
+        adresses, nom = [hote], None   # adresse littérale : contrôlée telle quelle, sans résolution
+    except ValueError:
+        nom = httpx.URL(url).raw_host.decode("ascii")   # forme IDNA (ASCII) : résolution, Host et SNI
+        adresses = await _resoudre(nom)
+    if not adresses or not all(_publique(a) for a in adresses):
+        return None
+    ip = ipaddress.ip_address(adresses[0].split("%")[0])
+    cible_ip = f"[{ip}]" if ip.version == 6 else str(ip)
+    netloc = cible_ip + (f":{p.port}" if p.port else "")
+    epingle = p._replace(netloc=netloc).geturl()
+    extensions = {"sni_hostname": nom} if nom else {}
+    host_http = (nom + (f":{p.port}" if p.port else "")) if nom else p.netloc
+    return epingle, {"Host": host_http}, extensions
+
+
 async def telecharger(url):
     """Page tirée des résultats, jamais une adresse choisie par le modèle. Hôte public seulement, taille bornée.
     Rend "" au moindre refus : le motif n'est ni journalisé ni exposé."""
     try:
-        p = urlsplit(url)
-        hote = p.hostname
-        if (p.scheme not in ("http", "https") or not hote or p.port not in (None, 80, 443)
-                or p.username is not None or p.password is not None or "@" in p.netloc):
+        cible = await _cible_gardee(url)
+        if cible is None:
             return ""
-        try:
-            ipaddress.ip_address(hote)
-            adresses, nom = [hote], None   # adresse littérale : contrôlée telle quelle, sans résolution
-        except ValueError:
-            nom = httpx.URL(url).raw_host.decode("ascii")   # forme IDNA (ASCII) : résolution, Host et SNI
-            adresses = await _resoudre(nom)   # une seule résolution : l'adresse validée est celle utilisée
-        if not adresses or not all(_publique(a) for a in adresses):
-            return ""
-        # Connexion épinglée sur l'adresse validée (anti-rebinding) ; le nom reste dans Host et dans le SNI.
-        ip = ipaddress.ip_address(adresses[0].split("%")[0])
-        cible_ip = f"[{ip}]" if ip.version == 6 else str(ip)
-        netloc = cible_ip + (f":{p.port}" if p.port else "")
-        epingle = p._replace(netloc=netloc).geturl()
-        extensions = {"sni_hostname": nom} if nom else {}
-        host_http = (nom + (f":{p.port}" if p.port else "")) if nom else p.netloc
+        epingle, entetes, extensions = cible
         async with _client("page", 10, follow_redirects=False) as c:
-            async with c.stream("GET", epingle, headers={"Host": host_http}, extensions=extensions) as r:
+            async with c.stream("GET", epingle, headers=entetes, extensions=extensions) as r:
                 if r.status_code != 200 or "html" not in r.headers.get("content-type", ""):
                     return ""
                 brut = b""
@@ -258,6 +269,47 @@ async def telecharger(url):
                     return brut.decode("latin-1")
     except (httpx.HTTPError, OSError, ValueError):
         return ""
+
+
+REDIRECTIONS = (301, 302, 303, 307, 308)
+SAUTS_MAX = 4          # requêtes successives au plus (redirections suivies à la main, comme le POC)
+
+
+async def telecharger_fichier(url, chemin, max_octets, delai=30):
+    """Lien de document (PDF, HTML, texte) écrit dans `chemin` au fil de l'eau, `max_octets` au plus.
+    Même garde que `telecharger` à CHAQUE saut (résolution, adresses publiques, connexion épinglée, Host/SNI).
+    Rend (adresse finale, content-type) ; lève HTTPException (422 refus, 413 trop gros, 502 le reste).
+    Le fichier partiel n'est pas effacé ici : l'appelant s'en charge."""
+    for _ in range(SAUTS_MAX):
+        try:
+            cible = await _cible_gardee(url)
+        except (httpx.HTTPError, OSError, ValueError):
+            cible = None
+        if cible is None:
+            raise HTTPException(422, "adresse refusée (http ou https, port standard, hôte public)")
+        epingle, entetes, extensions = cible
+        try:
+            async with _client("document", delai, follow_redirects=False) as c:
+                async with c.stream("GET", epingle, headers=entetes, extensions=extensions) as r:
+                    if r.status_code in REDIRECTIONS and r.headers.get("location"):
+                        url = urljoin(url, r.headers["location"])
+                        continue
+                    if r.status_code != 200:
+                        raise HTTPException(502, f"la page répond {r.status_code}")
+                    annonce = r.headers.get("content-length", "")
+                    if annonce.isdigit() and int(annonce) > max_octets:
+                        raise HTTPException(413, f"document trop gros ({max_octets // 1024 ** 2} Mo au plus)")
+                    taille = 0
+                    with open(chemin, "wb") as f:
+                        async for bloc in r.aiter_bytes():
+                            taille += len(bloc)
+                            if taille > max_octets:
+                                raise HTTPException(413, f"document trop gros ({max_octets // 1024 ** 2} Mo au plus)")
+                            f.write(bloc)
+                    return url, r.headers.get("content-type", "").lower()
+        except (httpx.HTTPError, OSError):
+            raise HTTPException(502, "la page ne répond pas") from None
+    raise HTTPException(502, "trop de redirections")
 
 
 def _visible(html):
