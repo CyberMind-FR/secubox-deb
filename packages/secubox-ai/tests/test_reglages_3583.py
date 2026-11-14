@@ -95,3 +95,17 @@ def test_routes_preferences_gardees_et_fonctionnelles():
         assert c.get("/preferences").json()["preferences"]["moteur"]["contexte"] == 8192
     finally:
         app.dependency_overrides.clear()
+
+
+def test_valeurs_invalides_du_fichier_retombent_sur_les_defauts(etat):
+    (etat / "preferences.toml").write_text(
+        '[moteur]\nthreads = "x"\ncontexte = 999999\nbackend = "x"\nnice = 5\n[memoire]\ncaracteres = 2000\n',
+        encoding="utf-8")
+    prefs = reglages.lire_prefs()
+    assert prefs["moteur"]["threads"] == reglages.DEFAUTS["moteur"]["threads"]
+    assert prefs["moteur"]["contexte"] == reglages.DEFAUTS["moteur"]["contexte"]
+    assert prefs["moteur"]["backend"] == "cpu"
+    assert prefs["moteur"]["nice"] == 5 and prefs["memoire"]["caracteres"] == 2000
+    erreur = reglages.etat_prefs()["erreur"]
+    assert "moteur.threads" in erreur and "moteur.contexte" in erreur and "moteur.backend" in erreur
+    assert "moteur.nice" not in erreur and "999999" not in erreur

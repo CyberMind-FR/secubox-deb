@@ -63,6 +63,24 @@ def _fichier() -> Path:
     return etat_dir() / "preferences.toml"
 
 
+def _refus(section: str, cle: str, v) -> str | None:
+    """Motif de refus d'une valeur pour `section.cle` (clé connue), ou None si elle est valide."""
+    attendu = DEFAUTS[section][cle]
+    if isinstance(attendu, bool) != isinstance(v, bool) or (isinstance(attendu, str) and not isinstance(v, str)):
+        return f"type invalide : {section}.{cle}"
+    if (section, cle) in BORNES:
+        bas, haut = BORNES[section, cle]
+        if not isinstance(v, (int, float)) or not bas <= v <= haut:
+            return f"{section}.{cle} doit être entre {bas} et {haut}"
+    if (section, cle) in CHOIX and v not in CHOIX[section, cle]:
+        return f"valeur refusée : {section}.{cle}"
+    if cle == "modele" and not NOM_MODELE.match(v):
+        return "nom de modèle invalide"
+    if cle == "consigne" and len(v) > 8000:
+        return "consigne trop longue"
+    return None
+
+
 def _lire() -> tuple[dict, str | None]:
     prefs = copy.deepcopy(DEFAUTS)
     fichier = _fichier()
@@ -72,9 +90,19 @@ def _lire() -> tuple[dict, str | None]:
         lues = tomllib.loads(fichier.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
         return copy.deepcopy(DEFAUTS), f"preferences.toml illisible, défauts utilisés : {type(e).__name__}"
+    invalides = []
     for section, valeurs in lues.items():
-        if section in prefs and isinstance(valeurs, dict):
-            prefs[section].update({c: v for c, v in valeurs.items() if c in prefs[section]})
+        if section not in prefs or not isinstance(valeurs, dict):
+            continue
+        for cle, v in valeurs.items():
+            if cle not in prefs[section]:
+                continue
+            if _refus(section, cle, v):
+                invalides.append(f"{section}.{cle}")
+            else:
+                prefs[section][cle] = v
+    if invalides:
+        return prefs, "valeurs invalides dans preferences.toml, défauts utilisés pour : " + ", ".join(invalides)
     return prefs, None
 
 
@@ -113,19 +141,9 @@ def valider(entree: dict) -> dict:
         for cle, v in valeurs.items():
             if cle not in DEFAUTS[section]:
                 raise HTTPException(422, f"réglage inconnu : {section}.{cle}")
-            attendu = DEFAUTS[section][cle]
-            if isinstance(attendu, bool) != isinstance(v, bool) or (isinstance(attendu, str) and not isinstance(v, str)):
-                raise HTTPException(422, f"type invalide : {section}.{cle}")
-            if (section, cle) in BORNES:
-                bas, haut = BORNES[section, cle]
-                if not isinstance(v, (int, float)) or not bas <= v <= haut:
-                    raise HTTPException(422, f"{section}.{cle} doit être entre {bas} et {haut}")
-            if (section, cle) in CHOIX and v not in CHOIX[section, cle]:
-                raise HTTPException(422, f"valeur refusée : {section}.{cle}")
-            if cle == "modele" and not NOM_MODELE.match(v):
-                raise HTTPException(422, "nom de modèle invalide")
-            if cle == "consigne" and len(v) > 8000:
-                raise HTTPException(422, "consigne trop longue")
+            refus = _refus(section, cle, v)
+            if refus:
+                raise HTTPException(422, refus)
             prefs[section][cle] = v
     return prefs
 
