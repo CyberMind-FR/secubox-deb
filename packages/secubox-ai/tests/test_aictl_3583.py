@@ -660,3 +660,33 @@ def test_delai_de_chargement_depasse_le_moteur_est_arrete(ctl, env, monkeypatch)
     assert appels.index("stop secubox-ai-moteur.service") < appels.index("ETAT erreur")
     assert env.etat_unite() == "inactive"
     assert "ne répond pas" in env.etat_publie()["message"] and "arrêté" in env.etat_publie()["message"]
+
+
+# ── revue finale : aucun cycle d'ordre à l'amorçage (C1) ──
+
+def test_path_des_demandes_sans_ordre_sur_preparer(ctl):
+    # .path (Before=paths.target) après preparer (After=basic.target, qui suit paths.target) : cycle à l'amorçage.
+    p = _unite("secubox-ai-demandes.path")
+    assert "secubox-ai-preparer.service" not in " ".join(p.get("After", []))
+    r = _unite("secubox-ai-preparer.service")
+    assert "secubox-ai-demandes.path" not in " ".join(r.get("Before", []))
+    # Le service des demandes reste ordonné après la préparation (dossiers d'exécution créés).
+    assert "secubox-ai-preparer.service" in " ".join(_unite("secubox-ai-demandes.service")["After"])
+
+
+def test_systemd_analyze_sans_cycle_d_ordre(ctl, tmp_path):
+    import re
+    import shutil
+    import subprocess
+    if not shutil.which("systemd-analyze"):
+        pytest.skip("systemd-analyze absent")
+    for f in SYSTEMD.iterdir():
+        # Binaires absents du poste de test : remplacés par /bin/true (seul l'ordre est vérifié ici).
+        texte = re.sub(r"^(ExecStart(?:Pre|Post)?=[+-]*)\S+", r"\1/bin/true", f.read_text(), flags=re.M)
+        (tmp_path / f.name).write_text(texte)
+    noms = " ".join(f.name for f in SYSTEMD.iterdir())
+    (tmp_path / "test-ai.target").write_text(f"[Unit]\nDescription=t\nWants=basic.target paths.target {noms}\n")
+    sortie = subprocess.run(["systemd-analyze", "verify", "--man=no", "./test-ai.target"], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=60)
+    texte = sortie.stdout + sortie.stderr
+    assert "ordering cycle" not in texte, texte

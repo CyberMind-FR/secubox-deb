@@ -9,7 +9,9 @@
 [Unit]
 Description=SecuBox IA : demandes de démarrage et d'arrêt du moteur local (#3583)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3583
-After=secubox-ai-preparer.service
+# Jamais d'ordre sur secubox-ai-preparer.service : une unité .path est avant paths.target, lui-même avant basic.target,
+# que preparer (service ordinaire) suit ; un After= ici fermait une boucle à l'amorçage. Le dossier surveillé peut
+# manquer : systemd surveille alors le parent existant le plus proche. Le service déclenché, lui, suit preparer.
 
 [Path]
 # Seuls les *.demande déclenchent : le temporaire « .<action>.*.tmp » de l'API (renommé aussitôt) n'est pas vu, et le

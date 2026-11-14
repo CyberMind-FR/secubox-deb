@@ -15,7 +15,8 @@ Description=SecuBox IA : préparation (dossiers d'exécution, adresses LAN de l'
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3583
 After=network-online.target nss-lookup.target unbound.service
 Wants=network-online.target
-Before=secubox-ai.service secubox-ai-demandes.path secubox-ai-moteur.service
+# Ni secubox-ai-demandes.path (boucle avec paths.target et basic.target) : secubox-ai-demandes.service le suit.
+Before=secubox-ai.service secubox-ai-moteur.service
 
 [Service]
 Type=oneshot
