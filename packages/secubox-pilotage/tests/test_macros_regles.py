@@ -43,7 +43,7 @@ def test_bornes_des_etapes(etape):
         valider_etapes([etape])
 
 
-@pytest.mark.parametrize("seuil", [True, "3", float("nan"), float("inf"), 1e6 + 1, None])
+@pytest.mark.parametrize("seuil", [True, "3", float("nan"), float("inf"), 1e6 + 1, None, 10**400, -10**400])
 def test_seuil_refuse(seuil):
     with pytest.raises(MacroInvalide):
         valider_etapes([RELEVE, {**COND, "seuil": seuil}])
@@ -60,8 +60,24 @@ def test_defauts_poses():
     (e,) = valider_etapes([{"type": "action", "action": "maj-paquets"}])
     assert e["delai_s"] == 900 and e["args"] == {}
     assert valider_etapes([{"type": "attendre"}])[0]["delai_s"] == 300
-    assert valider_etapes([RELEVE, {**CMP, "avant": "avant", "apres": "avant"}])[1]["seuil"] == 0
-    assert valider_etapes([RELEVE, {k: v for k, v in COND.items()}])[1]["seuil"] == 0
+    assert valider_etapes([RELEVE, {"type": "releve", "duree_s": 60, "nom": "apres"},
+                           {k: v for k, v in CMP.items() if k != "seuil"}])[2]["seuil"] == 0
+
+
+def test_comparer_deux_relevés_identiques_refuse():
+    with pytest.raises(MacroInvalide):
+        valider_etapes([RELEVE, {**CMP, "apres": "avant"}])
+
+
+def test_condition_sans_seuil_refusee():
+    with pytest.raises(MacroInvalide):
+        valider_etapes([RELEVE, {k: v for k, v in COND.items() if k != "seuil"}])
+
+
+def test_message_borne_sur_cles_utilisateur():
+    with pytest.raises(MacroInvalide) as e:
+        valider_etapes([{"type": "attendre", **{"k" * 500 + str(i): 1 for i in range(50)}}])
+    assert len(str(e.value)) < 400
 
 
 @pytest.mark.parametrize("etape", [

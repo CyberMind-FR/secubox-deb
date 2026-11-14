@@ -54,7 +54,7 @@ def _entier(v, bas: int, haut: int, nom: str) -> int:
 
 
 def _seuil(v) -> float:
-    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or abs(v) > SEUIL_MAX:
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not abs(v) <= SEUIL_MAX:   # NaN et inf échouent ici ; sûr pour tout entier
         raise MacroInvalide("le seuil doit être un nombre fini d'au plus un million en valeur absolue")
     return v
 
@@ -71,13 +71,19 @@ def _nom_releve(v, nom: str) -> str:
     return v
 
 
+def _liste(cles) -> str:
+    """Noms de clés pour un message : bornés (5 noms de 40 caractères), les clés viennent de l'utilisateur."""
+    noms = sorted(str(c)[:40] for c in cles)
+    return ", ".join(noms[:5]) + (" …" if len(noms) > 5 else "")
+
+
 def _champs(e: dict, obligatoires: set, facultatifs: set, type_: str) -> None:
     cles = set(e)
     manque, trop = obligatoires - cles, cles - obligatoires - facultatifs
     if manque:
-        raise MacroInvalide(f"étape « {type_} » : champ manquant : {', '.join(sorted(manque))}")
+        raise MacroInvalide(f"étape « {type_} » : champ manquant : {_liste(manque)}")
     if trop:
-        raise MacroInvalide(f"étape « {type_} » : champ non permis : {', '.join(sorted(str(c) for c in trop))}")
+        raise MacroInvalide(f"étape « {type_} » : champ non permis : {_liste(trop)}")
 
 
 def valider_nom(nom) -> str:
@@ -127,6 +133,8 @@ def valider_etapes(etapes) -> list:
             elif t == "comparer":
                 _champs(e, {"type", "avant", "apres", "regle"}, {"seuil"}, t)
                 av, ap = _nom_releve(e["avant"], "avant"), _nom_releve(e["apres"], "apres")
+                if av == ap:
+                    raise MacroInvalide("avant et apres doivent nommer deux relevés différents")
                 for ref in (av, ap):
                     if ref not in releves:
                         raise MacroInvalide(f"le relevé « {ref} » doit être produit par une étape antérieure")
@@ -207,7 +215,12 @@ def instantane(resume: dict, valeurs: dict) -> dict:
 
 
 def _nombre(v) -> Optional[float]:
-    return v if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    try:
+        return v if math.isfinite(v) else None
+    except OverflowError:
+        return None
 
 
 def evaluer_condition(etape: dict, instantanes: dict) -> dict:
