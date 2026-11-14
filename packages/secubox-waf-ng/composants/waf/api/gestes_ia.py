@@ -17,11 +17,20 @@ Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
   (`plafond_compte`) ; un ban annulé reste compté ;
 - d'office : bloc seulement, et le CAS SÛR RECONTRÔLÉ sur gk2 (≥ `SEUIL_BLOC` adresses du bloc dans `waf_ban`,
   toutes de catégories ⊆ `CATEGORIES_SURES`) ; `pas_sur` sinon ;
-- une cible déjà bannie (au journal, par le WAF, ou un bloc de l'administrateur) est refusée (`deja_actif`) : sans
-  cela, « bannir ce qui l'est déjà puis annuler son id » lèverait un ban qu'ai-ban n'a pas posé ;
+- une cible déjà bannie (au journal, par le WAF dans `waf_ban`, ou un bloc de l'administrateur) est refusée
+  (`deja_actif`) ; `waf_ban` ou la liste des blocs illisibles ⇒ 503 `etat` (jamais « libre » par défaut) ;
 - les gardes root de `wafctl` / `waf-blocs` (privé, plages protégées, box, pairs) ; leur motif rendu en 409 ;
-- débannir : un `id` du journal seulement, jamais une adresse ;
-- chaque geste est audité (`audit.log`, `by = ai-ban`, jamais le jeton) ; un ban dont l'audit échoue est retiré.
+- débannir : un `id` du journal seulement, jamais une adresse ; et JAMAIS une cible qu'une autre source couvre
+  désormais (ruling P12) : adresse dont le dernier enregistrement de `bans.jsonl` (sbxwaf) est un `ban` non échu,
+  bloc dont la fin enregistrée par waf-blocs dépasse celle du journal ai-ban de plus de 5 s. Le ban ai-ban est alors
+  clos sans rien lever : état `couvert` ;
+- chaque geste est audité (`audit.log`, `by = ai-ban`, empreinte `cle` de la clé, jamais le jeton) : une ligne
+  `ai-ban-demande` AVANT wafctl (sans elle, rien n'est fait), `ai-ban` après ; un ban dont l'audit échoue est retiré.
+  Les refus (`ai-ban-refus`) et pannes (`ai-ban-echec`) répétés sont regroupés : une ligne par (motif, mode) toutes les
+  `INTERVALLE_AUDIT_S`, avec le `nombre` qu'elle résume.
+
+Réponses pour le relais (Tâches 6-7) : `/ai/ban` 200 `{id, cible, fin, audit}`, 409/5xx `{"detail": {"motif"}}` ;
+`/ai/unban` 200 `{id, etat}` avec `etat ∈ {annule, echu, deja_annule, couvert}`, 404 `{"detail": {"motif": "inconnu"}}`.
 
 CONTRAINTE P9 : le jeton lie le corps, pas la route. Chaque corps porte un `geste` obligatoire propre à sa route
 (`ban`, `unban`) ; `GET /ai/etat` n'accepte aucun corps. CONTRAINTE P11 : aucune route ne déclare de modèle de corps
@@ -43,7 +52,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError, field_validator
@@ -56,8 +65,11 @@ router = APIRouter(prefix="/ai")
 
 #: Journal des gestes (ajout seul) : `ban` et `annule`. Il fait foi pour les plafonds et pour « ses propres bans ».
 JOURNAL_AI = Path("/var/lib/secubox/waf/ai-ban.jsonl")
-#: Fin du journal relue à chaque geste : à 100 bans par jour au plus, des mois de gestes, bien plus que 7 j de ban.
+#: Journal des bans de sbxwaf (BanRecord `ip`, `at`, `exp`, `action`) : qui d'autre couvre une adresse.
+BANS_WAF = Path("/var/lib/secubox/waf/bans.jsonl")
+#: Fin d'un journal relue à chaque geste : à 100 bans par jour au plus, des mois de gestes, bien plus que 7 j de ban.
 _TAILLE_LECTURE = 4 * 1024 * 1024
+_TAILLE_LECTURE_BANS_WAF = 16 * 1024 * 1024
 
 DUREE_MIN_S, DUREE_MAX_S = 3600, 604_800
 DUREE_AUTO_MAX_S = 86_400
@@ -66,11 +78,16 @@ SEUIL_BLOC = 20
 CATEGORIES_SURES = frozenset({"scanners", "recon_crawler"})
 HEURE, JOUR = 3600, 86_400
 PLAFONDS = {"auto_heure": 5, "auto_jour": 20, "compte_heure": 30, "compte_jour": 100}
+#: Un bloc dont la fin enregistrée dépasse la nôtre de plus que ceci a été rebanni par quelqu'un d'autre.
+MARGE_BLOC_S = 5
+INTERVALLE_AUDIT_S = 10
 
 WAFCTL = "/usr/sbin/wafctl"
 _SUDO = ["sudo", "-n"]
 #: Les bans de bloc passent par systemd-run : l'état root des blocs est hors des ReadWritePaths de l'agrégateur.
 _SYSTEMD_RUN = ["/usr/bin/systemd-run", "--wait", "--pipe", "--collect", "--quiet"]
+#: Lecture de l'ensemble du WAF : argv EXACT du sudoers (SBX_WAF_NFTLIST).
+NFT_LISTE_WAF_BAN = ["/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban"]
 _DELAI_WAFCTL_S = 30
 
 #: Non globales, refusées dès la forme. PAS `ipaddress.is_global` : les plages de DOCUMENTATION (192.0.2.0/24,
@@ -94,9 +111,14 @@ _config: Dict[str, Callable[..., Any]] = {}
 _verrou = threading.Lock()
 
 
+class Illisible(Exception):
+    """Une source dont dépend une garde n'a pas pu être lue : on refuse (503 `etat`), jamais « libre » par défaut."""
+
+
 def configurer(bans: Callable[[], List[dict]], audit: Callable[[str, str, dict], None]) -> None:
-    """`bans()` : bannissements actifs du WAF, lus dans nft (`ip`, `reason`) ; `audit(action, detail, user)` : une
-    ligne d'`audit.log`, qui LÈVE si elle n'a pas pu être écrite (un geste non audité est défait)."""
+    """`bans()` : bannissements actifs de `waf_ban` (`ip`, `reason`), lecture STRICTE (lève si nft ne répond pas) et
+    légère (sans GeoIP) ; `audit(action, detail, user)` : une ligne d'`audit.log`, qui LÈVE si elle n'a pas pu être
+    écrite (un geste non audité n'est pas fait, ou est défait)."""
     _config["bans"] = bans
     _config["audit"] = audit
 
@@ -161,7 +183,7 @@ async def _corps(request: Request, _user: dict = Depends(require_ai_ban)) -> byt
     return corps
 
 
-# ── Journal ────────────────────────────────────────────────────────────
+# ── Journaux ───────────────────────────────────────────────────────────
 def _maintenant() -> float:
     return time.time()
 
@@ -180,30 +202,34 @@ def _entree_valide(e: Any) -> bool:
     return True
 
 
-def _lire_journal() -> List[dict]:
-    """Entrées valides de la fin du journal ; [] s'il n'existe pas encore. Lève OSError s'il est illisible (lien,
-    dossier, droits) : sans journal, ni plafond ni « ses propres bans » ne peuvent être vérifiés."""
+def _lire_fin_jsonl(chemin: Path, taille_max: int) -> Optional[List[Any]]:
+    """Objets JSON des lignes de la fin d'un fichier (première ligne coupée ignorée) ; None s'il n'existe pas. Lève
+    OSError s'il est illisible (lien, dossier, droits)."""
     try:
-        fd = os.open(JOURNAL_AI, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     except FileNotFoundError:
-        return []
+        return None
     with os.fdopen(fd, "rb") as f:
         taille = os.fstat(f.fileno()).st_size
-        debut = max(0, taille - _TAILLE_LECTURE)
+        debut = max(0, taille - taille_max)
         f.seek(debut)
-        donnees = f.read(_TAILLE_LECTURE)
+        donnees = f.read(taille_max)
     lignes = donnees.split(b"\n")
     if debut:
-        lignes = lignes[1:]   # première ligne coupée
-    entrees = []
+        lignes = lignes[1:]
+    objets = []
     for ligne in lignes:
         try:
-            e = json.loads(ligne)
+            objets.append(json.loads(ligne))
         except ValueError:
             continue
-        if _entree_valide(e):
-            entrees.append(e)
-    return entrees
+    return objets
+
+
+def _lire_journal() -> List[dict]:
+    """Entrées valides de la fin du journal ai-ban ; [] s'il n'existe pas encore. Lève OSError s'il est illisible :
+    sans journal, ni plafond ni « ses propres bans » ne peuvent être vérifiés."""
+    return [e for e in (_lire_fin_jsonl(JOURNAL_AI, _TAILLE_LECTURE) or []) if _entree_valide(e)]
 
 
 def _ecrire_journal(entree: dict) -> None:
@@ -222,7 +248,8 @@ def _horodatage() -> str:
 
 
 def _bilan(entrees: List[dict], maintenant: int) -> Tuple[Dict[str, dict], set, List[dict], Dict[str, int]]:
-    """(bans par id, ids annulés, bans actifs, compteurs des fenêtres glissantes)."""
+    """(bans par id, ids annulés, bans actifs, compteurs des fenêtres glissantes). Un ban daté du futur (horloge
+    reculée) compte pour un âge nul : un retour de l'horloge ne fait jamais sauter un plafond."""
     bans: Dict[str, dict] = {}
     annules = set()
     for e in entrees:
@@ -233,8 +260,8 @@ def _bilan(entrees: List[dict], maintenant: int) -> Tuple[Dict[str, dict], set, 
     actifs = [b for i, b in bans.items() if i not in annules and b["fin"] > maintenant]
     compteurs = {"auto_heure": 0, "auto_jour": 0, "compte_heure": 0, "compte_jour": 0}
     for b in bans.values():
-        age = maintenant - b["at"]
-        if not 0 <= age < JOUR:
+        age = max(0, maintenant - b["at"])
+        if age >= JOUR:
             continue
         compteurs["compte_jour"] += 1
         if age < HEURE:
@@ -246,7 +273,28 @@ def _bilan(entrees: List[dict], maintenant: int) -> Tuple[Dict[str, dict], set, 
     return bans, annules, actifs, compteurs
 
 
-# ── wafctl ─────────────────────────────────────────────────────────────
+def adresse_couverte_par_le_waf(ip: str, maintenant: int) -> bool:
+    """Le DERNIER enregistrement de sbxwaf pour cette adresse est-il un `ban` non échu (`exp` 0 : jusqu'à un unban
+    explicite) ? Fichier absent : sbxwaf n'a jamais rien banni. Lève Illisible s'il ne peut pas être lu."""
+    try:
+        objets = _lire_fin_jsonl(BANS_WAF, _TAILLE_LECTURE_BANS_WAF)
+    except OSError as e:
+        raise Illisible(f"bans.jsonl : {type(e).__name__}") from None
+    dernier = None
+    for r in objets or []:
+        if isinstance(r, dict) and r.get("ip") == ip:
+            dernier = r
+    if dernier is None or dernier.get("action") != "ban":
+        return False
+    exp = dernier.get("exp")
+    if exp is None:
+        exp = 0
+    if not _entier(exp):
+        raise Illisible("bans.jsonl : échéance illisible")
+    return exp == 0 or exp > maintenant
+
+
+# ── wafctl, nft ────────────────────────────────────────────────────────
 def _executer(argv: List[str]) -> subprocess.CompletedProcess:
     return subprocess.run(argv, check=False, timeout=_DELAI_WAFCTL_S, capture_output=True, text=True)
 
@@ -291,7 +339,7 @@ def _statut_motif(motif: Optional[str]) -> Tuple[int, str]:
 
 
 def _lancer(argv: List[str]) -> Tuple[Optional[subprocess.CompletedProcess], Optional[str]]:
-    """(résultat, None) ou (None, raison) si wafctl n'a pas pu être lancé ou n'a pas répondu dans le délai."""
+    """(résultat, None) ou (None, raison) si la commande n'a pas pu être lancée ou n'a pas répondu dans le délai."""
     try:
         return _executer(argv), None
     except subprocess.TimeoutExpired:
@@ -301,7 +349,8 @@ def _lancer(argv: List[str]) -> Tuple[Optional[subprocess.CompletedProcess], Opt
 
 
 def _defaire(cible: Cible) -> bool:
-    """Retire le ban qu'on vient de poser (audit ou journal impossibles, wafctl muet). False s'il reste peut-être."""
+    """Retire le ban qu'on vient de poser (audit ou journal impossibles, wafctl muet). False s'il reste peut-être
+    (`wafctl unban` d'une adresse absente rend 0 : l'absence n'est pas un échec)."""
     r, _ = _lancer(_argv("unban", cible))
     if r is None or r.returncode != 0:
         log.error("ai-ban : retour arrière impossible pour %s", cible)
@@ -309,31 +358,60 @@ def _defaire(cible: Cible) -> bool:
     return True
 
 
-def _deja_banni_ailleurs(cible: Cible, bans_waf: Optional[List[dict]]) -> Optional[Tuple[int, str]]:
-    """(statut, motif) si la cible est déjà bannie hors du journal ai-ban (WAF, administrateur), ou si on ne peut pas
-    le savoir pour un bloc ; None si elle est libre."""
-    if isinstance(cible, ipaddress.IPv4Network):
-        r, _ = _lancer(_SUDO + [WAFCTL, "blocs"])
-        if r is None or r.returncode != 0:
-            return 503, "etat"
-        try:
-            blocs = json.loads(r.stdout)["blocs"]
-            actifs = {b["bloc"] for b in blocs if _entier(b.get("reste")) and b["reste"] > 0}
-        except (ValueError, KeyError, TypeError):
-            return 503, "etat"
-        return (409, "deja_actif") if str(cible) in actifs else None
-    if bans_waf is None:
-        bans_waf = _bans_waf()
-    return (409, "deja_actif") if str(cible) in {b.get("ip") for b in bans_waf} else None
+def lire_waf_ban() -> Set[str]:
+    """Adresses de l'ensemble nft `waf_ban`, lecture STRICTE et légère (ni GeoIP, ni journal) : lève Illisible si nft
+    ne répond pas, si la table ou l'ensemble manquent (un pare-feu rechargé n'est pas « aucun ban ») ou si la
+    réponse est illisible."""
+    r, panne = _lancer(_SUDO + NFT_LISTE_WAF_BAN)
+    if r is None:
+        raise Illisible(f"nft : {panne}")
+    if r.returncode != 0 or not r.stdout:
+        raise Illisible(f"nft : code {r.returncode}")
+    try:
+        doc = json.loads(r.stdout)
+        jeux = [b["set"] for b in doc["nftables"] if isinstance(b, dict) and "set" in b]
+    except (ValueError, KeyError, TypeError):
+        raise Illisible("nft : réponse illisible") from None
+    if len(jeux) != 1 or not isinstance(jeux[0], dict) or jeux[0].get("name") != "waf_ban":
+        raise Illisible("nft : ensemble waf_ban absent")
+    adresses = set()
+    for elem in jeux[0].get("elem", []) or []:
+        e = elem.get("elem") if isinstance(elem, dict) else None
+        val = e.get("val") if isinstance(e, dict) else elem
+        if isinstance(val, str):
+            adresses.add(val)
+    return adresses
 
 
 def _bans_waf() -> List[dict]:
+    """`bans()` de main.py : lève Illisible (ou toute erreur) si `waf_ban` ne peut pas être lu."""
+    bans = _config["bans"]()
+    if not isinstance(bans, list):
+        raise Illisible("bans : réponse illisible")
+    return [b for b in bans if isinstance(b, dict)]
+
+
+def _blocs_enregistres() -> Dict[str, dict]:
+    """Blocs de l'état de waf-blocs (`wafctl blocs`, lecture) par bloc ; lève Illisible."""
+    r, _ = _lancer(_SUDO + [WAFCTL, "blocs"])
+    if r is None or r.returncode != 0:
+        raise Illisible("wafctl blocs")
     try:
-        bans = _config["bans"]()
-    except Exception as e:  # noqa: BLE001 — illisible : aucune adresse connue, le cas sûr échoue (fail closed)
-        log.warning("ai-ban : bans du WAF illisibles : %s", type(e).__name__)
-        return []
-    return [b for b in bans if isinstance(b, dict)] if isinstance(bans, list) else []
+        blocs = json.loads(r.stdout)["blocs"]
+        return {b["bloc"]: b for b in blocs if isinstance(b, dict) and isinstance(b.get("bloc"), str)
+                and _entier(b.get("fin")) and _entier(b.get("reste"))}
+    except (ValueError, KeyError, TypeError):
+        raise Illisible("wafctl blocs : réponse illisible") from None
+
+
+def _deja_banni_ailleurs(cible: Cible, bans_waf: Optional[List[dict]]) -> bool:
+    """La cible est-elle déjà bannie hors du journal ai-ban (WAF, administrateur) ? Lève Illisible."""
+    if isinstance(cible, ipaddress.IPv4Network):
+        b = _blocs_enregistres().get(str(cible))
+        return b is not None and b["reste"] > 0
+    if bans_waf is None:
+        bans_waf = _bans_waf()
+    return str(cible) in {b.get("ip") for b in bans_waf}
 
 
 def cas_sur(bloc: ipaddress.IPv4Network, bans_waf: List[dict]) -> bool:
@@ -350,9 +428,17 @@ def cas_sur(bloc: ipaddress.IPv4Network, bans_waf: List[dict]) -> bool:
 
 
 # ── Audit ──────────────────────────────────────────────────────────────
+def _usager(user: dict) -> dict:
+    return {"sub": str((user or {}).get("sub") or "ai-ban")}
+
+
+def _cle(user: dict) -> str:
+    return str((user or {}).get("cle") or "")[:64]
+
+
 def _auditer(action: str, detail: str, user: dict) -> None:
-    """Lève si la ligne n'a pas pu être écrite."""
-    _config["audit"](action, detail, {"sub": str((user or {}).get("sub") or "ai-ban")})
+    """Lève si la ligne n'a pas pu être écrite. L'empreinte de la clé qui a signé est ajoutée."""
+    _config["audit"](action, f"{detail} cle {_cle(user)}", _usager(user))
 
 
 def _auditer_sans_lever(action: str, detail: str, user: dict) -> None:
@@ -362,9 +448,72 @@ def _auditer_sans_lever(action: str, detail: str, user: dict) -> None:
         log.warning("ai-ban : audit %s non écrit : %s", action, type(e).__name__)
 
 
+#: (action, motif, mode) → [instant de la dernière ligne, refus non encore écrits, dernier détail, usager].
+_derniers_refus: Dict[Tuple[str, str, str], list] = {}
+_verrou_refus = threading.Lock()
+_minuterie: Dict[str, Any] = {"active": None}
+
+
+def _horloge() -> float:
+    return time.monotonic()
+
+
+def _echus(instant: float) -> list:
+    """Sous `_verrou_refus` : les lignes des refus en attente dont la fenêtre est passée (et les remet à zéro)."""
+    lignes = []
+    for (action, _m, _mode), etat in _derniers_refus.items():
+        if etat[1] and instant - etat[0] >= INTERVALLE_AUDIT_S:
+            lignes.append((action, f"{etat[2]} nombre {etat[1]}", etat[3]))
+            etat[0], etat[1] = instant, 0
+    return lignes
+
+
+def _armer_minuterie() -> None:
+    """Sous `_verrou_refus` : une minuterie (fil démon) écrira les refus en attente, même sans nouveau refus."""
+    if _minuterie["active"] is not None:
+        return
+    m = threading.Timer(INTERVALLE_AUDIT_S, _vider_en_attente)
+    m.daemon = True
+    _minuterie["active"] = m
+    m.start()
+
+
+def _vider_en_attente() -> None:
+    with _verrou_refus:
+        _minuterie["active"] = None
+        lignes = _echus(_horloge())
+        if any(e[1] for e in _derniers_refus.values()):
+            _armer_minuterie()
+    for action, detail, user in lignes:
+        _auditer_sans_lever(action, detail, user)
+
+
+def _auditer_regroupe(action: str, motif: str, mode: str, detail: str, user: dict) -> None:
+    """Une ligne par (action, motif, mode) toutes les `INTERVALLE_AUDIT_S` au plus, avec le `nombre` qu'elle
+    résume ; les refus retenus sont écrits au refus suivant ou par la minuterie : chacun est compté (gk2 : disque
+    plein à 91 %, un relais qui réessaie en boucle ne doit pas remplir `audit.log`)."""
+    instant = _horloge()
+    with _verrou_refus:
+        cle = (action, motif, mode)
+        etat = _derniers_refus.get(cle)
+        if etat is None:
+            _derniers_refus[cle] = [instant, 0, detail, user]
+            lignes = [(action, f"{detail} nombre 1", user)]
+        else:
+            etat[1] += 1
+            etat[2], etat[3] = detail, user
+            lignes = []
+        lignes += _echus(instant)
+        if any(e[1] for e in _derniers_refus.values()):
+            _armer_minuterie()
+    for a, d, u in lignes:
+        _auditer_sans_lever(a, d, u)
+
+
 def _refus(statut: int, motif: str, geste: GesteBan, user: dict) -> HTTPException:
     action = "ai-ban-refus" if statut == 409 else "ai-ban-echec"
-    _auditer_sans_lever(action, f"motif {motif} cible {geste.cible} mode {geste.mode} conseil {geste.conseil}", user)
+    _auditer_regroupe(action, motif, geste.mode,
+                      f"motif {motif} cible {geste.cible} mode {geste.mode} conseil {geste.conseil}", user)
     return HTTPException(statut, detail={"motif": motif})
 
 
@@ -390,16 +539,29 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
         if geste.mode == "auto" and (compteurs["auto_heure"] >= PLAFONDS["auto_heure"]
                                      or compteurs["auto_jour"] >= PLAFONDS["auto_jour"]):
             raise _refus(409, "plafond_auto", geste, user)
-        bans_waf = None
-        if geste.mode == "auto":
-            if not bloc:
-                raise _refus(409, "pas_sur", geste, user)
-            bans_waf = _bans_waf()
-            if not cas_sur(cible, bans_waf):
-                raise _refus(409, "pas_sur", geste, user)
-        ailleurs = _deja_banni_ailleurs(cible, bans_waf)
-        if ailleurs:
-            raise _refus(*ailleurs, geste, user)
+        try:
+            bans_waf = None
+            if geste.mode == "auto":
+                if not bloc:
+                    raise _refus(409, "pas_sur", geste, user)
+                bans_waf = _bans_waf()
+                if not cas_sur(cible, bans_waf):
+                    raise _refus(409, "pas_sur", geste, user)
+            if _deja_banni_ailleurs(cible, bans_waf):
+                raise _refus(409, "deja_actif", geste, user)
+        except HTTPException:
+            raise
+        except Exception as e:  # noqa: BLE001 — waf_ban ou blocs illisibles : jamais « libre » par défaut
+            log.warning("ai-ban : garde illisible : %s", e)
+            raise _refus(503, "etat", geste, user) from None
+
+        ident = secrets.token_hex(16)
+        fin = maintenant + geste.duree_s
+        resume = f"id {ident} cible {geste.cible} {geste.duree_s}s fin {fin} mode {geste.mode} conseil {geste.conseil}"
+        try:
+            _auditer("ai-ban-demande", resume, user)
+        except Exception:  # noqa: BLE001 — sans trace de la demande, rien n'est fait
+            raise _refus(503, "audit", geste, user) from None
 
         r, panne = _lancer(_argv("ban", cible, geste.duree_s))
         if r is None:
@@ -410,11 +572,9 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
         if r.returncode != 0:
             raise _refus(*_statut_motif(_motif_sortie(r)), geste, user)
 
-        ident = secrets.token_hex(16)
-        fin = maintenant + geste.duree_s
         entree = {"ts": _horodatage(), "at": maintenant, "type": "ban", "id": ident, "cible": geste.cible,
                   "fin": fin, "mode": geste.mode, "conseil": geste.conseil, "motif": geste.motif,
-                  "jti": str((user or {}).get("jti") or ""), "duree_s": geste.duree_s}
+                  "jti": str((user or {}).get("jti") or ""), "cle": _cle(user), "duree_s": geste.duree_s}
         try:
             _ecrire_journal(entree)
         except OSError:
@@ -423,8 +583,7 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
                 raise _refus(503, "journal", geste, user) from None
             raise _refus(500, "incoherent", geste, user) from None
         try:
-            _auditer("ai-ban", f"id {ident} cible {geste.cible} {geste.duree_s}s fin {fin} mode {geste.mode} "
-                               f"conseil {geste.conseil}", user)
+            _auditer("ai-ban", resume, user)
         except Exception:  # noqa: BLE001 — un ban non audité n'existe pas : il est retiré
             defait = _defaire(cible)
             try:
@@ -434,6 +593,23 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
                 log.error("ai-ban : annulation %s non journalisée", ident)
             raise HTTPException(500, detail={"motif": "audit" if defait else "incoherent"}) from None
     return {"id": ident, "cible": geste.cible, "fin": fin, "audit": ident}
+
+
+def _couverte(cible: Cible, ban: dict, maintenant: int) -> bool:
+    """Ruling P12 : une autre source couvre-t-elle désormais la cible ? Lève Illisible."""
+    if isinstance(cible, ipaddress.IPv4Network):
+        b = _blocs_enregistres().get(str(cible))
+        return b is not None and b["fin"] > ban["fin"] + MARGE_BLOC_S
+    return adresse_couverte_par_le_waf(str(cible), maintenant)
+
+
+def _clore(ident: str, ban: dict, maintenant: int, cause: str) -> None:
+    """Ligne `annule` au journal ; 503 `journal` si elle ne peut pas être écrite."""
+    try:
+        _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "annule", "id": ident,
+                         "cible": ban["cible"], "cause": cause})
+    except OSError:
+        raise HTTPException(503, detail={"motif": "journal"}) from None
 
 
 @router.post("/unban")
@@ -456,6 +632,19 @@ def ai_unban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps
             cible = forme_cible(ban["cible"])
         except ValueError:
             raise HTTPException(500, detail={"motif": "journal"}) from None
+        try:
+            couverte = _couverte(cible, ban, maintenant)
+        except Exception as e:  # noqa: BLE001 — sans savoir qui d'autre couvre la cible, on ne lève rien
+            log.warning("ai-unban : couverture illisible : %s", e)
+            raise HTTPException(503, detail={"motif": "etat"}) from None
+        if couverte:
+            # Une autre source (WAF, administrateur) a banni la cible depuis : ai-ban clôt SON ban sans rien lever.
+            try:
+                _auditer("ai-unban-couvert", f"id {geste.id} cible {ban['cible']}", user)
+            except Exception:  # noqa: BLE001
+                raise HTTPException(503, detail={"motif": "audit"}) from None
+            _clore(geste.id, ban, maintenant, "couvert")
+            return {"id": geste.id, "etat": "couvert"}
         # Audit AVANT le geste : lever un ban sans trace serait pire que ne pas le lever.
         try:
             _auditer("ai-unban", f"id {geste.id} cible {ban['cible']}", user)
@@ -466,12 +655,8 @@ def ai_unban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps
             statut, motif = (503, "wafctl") if r is None else _statut_motif(_motif_sortie(r))
             _auditer_sans_lever("ai-unban-echec", f"id {geste.id} cible {ban['cible']} motif {motif}", user)
             raise HTTPException(statut, detail={"motif": motif})
-        try:
-            _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "annule", "id": geste.id,
-                             "cible": ban["cible"], "cause": "unban"})
-        except OSError:
-            # le ban est levé et audité ; un nouvel essai refera un retrait idempotent puis la ligne
-            raise HTTPException(503, detail={"motif": "journal"}) from None
+        # le ban est levé et audité ; si la ligne manque, un nouvel essai refera un retrait idempotent puis la ligne
+        _clore(geste.id, ban, maintenant, "unban")
     return {"id": geste.id, "etat": "annule"}
 
 

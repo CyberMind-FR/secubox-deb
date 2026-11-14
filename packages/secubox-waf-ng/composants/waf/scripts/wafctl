@@ -455,8 +455,16 @@ cmd_unban() {
     local ensemble="waf_ban"
     [ "$version" = "6" ] && ensemble="waf_ban6"
     # Retirer une adresse absente n'est pas une erreur : l'operateur veut
-    # qu'elle ne soit plus bannie, et c'est deja le cas.
-    nft delete element inet "$NFT_TABLE" "$ensemble" "{ $ip }" 2>/dev/null
+    # qu'elle ne soit plus bannie, et c'est deja le cas. Sous `set -e`, un
+    # `nft delete` nu d'un element absent sortait en 1 AVANT ce constat (#3716) :
+    # l'echec n'en est un que si l'element est TOUJOURS la apres le retrait.
+    command -v nft >/dev/null 2>&1 || { error "nft introuvable"; return 1; }
+    if ! nft delete element inet "$NFT_TABLE" "$ensemble" "{ $ip }" 2>/dev/null; then
+        if nft get element inet "$NFT_TABLE" "$ensemble" "{ $ip }" >/dev/null 2>&1; then
+            error "nft a refusé le retrait de $ip"
+            return 1
+        fi
+    fi
     log "unban $ip"
 }
 

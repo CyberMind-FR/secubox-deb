@@ -36,7 +36,7 @@ USAGER_AI = {"sub": "ai-ban", "compte_service": "ai-ban", "jti": "a" * 32, "cle"
 
 
 def _importer_waf():
-    """api.main exige geoip2 (absent de x'environnement de test) : un faux module suffit."""
+    """api.main exige geoip2 (absent de l'environnement de test) : un faux module suffit."""
     import types
     try:
         import geoip2  # noqa: F401
@@ -60,16 +60,17 @@ class FauxWafctl:
             "ban-bloc": (0, '{"ok": true, "motif": null}\n', ""),
             "unban-bloc": (0, '{"ok": true, "motif": null}\n', ""),
             "blocs": (0, '{"ok": true, "motif": null, "blocs": []}\n', ""),
+            "nft": (0, json.dumps({"nftables": [{"metainfo": {}}, {"set": {"name": "waf_ban", "elem": []}}]}), ""),
         }
 
     def __call__(self, argv):
         self.appels.append(list(argv))
-        verbe = argv[argv.index("/usr/sbin/wafctl") + 1]
+        verbe = "nft" if "/usr/sbin/nft" in argv else argv[argv.index("/usr/sbin/wafctl") + 1]
         code, sortie, erreur = self.reponses[verbe]
         return subprocess.CompletedProcess(argv, code, sortie, erreur)
 
     def verbes(self):
-        return [a[a.index("/usr/sbin/wafctl") + 1] for a in self.appels]
+        return ["nft" if "/usr/sbin/nft" in a else a[a.index("/usr/sbin/wafctl") + 1] for a in self.appels]
 
     def appel(self, verbe):
         return next(a for a in self.appels if a[a.index("/usr/sbin/wafctl") + 1] == verbe)
@@ -98,6 +99,23 @@ class Banc:
                                             "conseil": conseil, **extra})
 
 
+def _regroupement_neuf(monkeypatch, g):
+    monkeypatch.setattr(g, "_derniers_refus", {})
+    monkeypatch.setattr(g, "_minuterie", {"active": None})
+    monkeypatch.setattr(g, "_armer_minuterie", lambda: g._minuterie.update(active="armee"))
+
+
+def _audit_qui_echoue(c, monkeypatch, *actions):
+    """L'audit réel, sauf pour `actions`, qui lèvent OSError."""
+    vrai = c.g._config["audit"]
+
+    def audit(action, detail, user):
+        if action in actions:
+            raise OSError("disque plein")
+        vrai(action, detail, user)
+    monkeypatch.setitem(c.g._config, "audit", audit)
+
+
 @pytest.fixture
 def c(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
@@ -106,6 +124,8 @@ def c(monkeypatch, tmp_path):
     from secubox_core.compte_service import require_ai_ban
     monkeypatch.setattr(waf, "AUDIT_LOG", tmp_path / "audit.log")
     monkeypatch.setattr(g, "JOURNAL_AI", tmp_path / "ai-ban.jsonl")
+    monkeypatch.setattr(g, "BANS_WAF", tmp_path / "bans.jsonl")
+    _regroupement_neuf(monkeypatch, g)
     faux = FauxWafctl()
     monkeypatch.setattr(g, "_executer", faux)
     banc = Banc(TestClient(waf.app), waf, g, faux, tmp_path)
@@ -137,6 +157,10 @@ def test_ban_clic_adresse_appelle_wafctl_et_audite(c):
     audit = [x for x in c.audit() if x["action"] == "ai-ban"]
     assert len(audit) == 1 and audit[0]["by"] == "ai-ban" and audit[0]["module"] == "waf"
     assert corps["id"] in audit[0]["detail"] and "198.51.100.7" in audit[0]["detail"]
+    assert f"cle {USAGER_AI['cle']}" in audit[0]["detail"]
+    # la demande est écrite AVANT wafctl, l'issue après
+    assert [x["action"] for x in c.audit()] == ["ai-ban-demande", "ai-ban"]
+    assert corps["id"] in c.audit()[0]["detail"]
     ligne = c.lignes_journal()[-1]
     assert ligne["type"] == "ban" and ligne["id"] == corps["id"] and ligne["mode"] == "clic"
     assert ligne["conseil"] == "c-1" and ligne["jti"] == USAGER_AI["jti"] and ligne["fin"] == corps["fin"]
@@ -148,7 +172,7 @@ def test_ban_bloc_clic_passe_par_systemd_run(c):
     argv = c.faux.appel("ban-bloc")
     assert argv[2] == "/usr/bin/systemd-run"
     assert argv == ADMIN_SYSTEMD_RUN + ["ban-bloc", "203.0.113.0/24", "14400s"]
-    # le bloc déjà banni par x'administrateur est vérifié avant (wafctl blocs, lecture)
+    # le bloc déjà banni par l'administrateur est vérifié avant (wafctl blocs, lecture)
     assert c.faux.verbes() == ["blocs", "ban-bloc"]
 
 
@@ -159,7 +183,8 @@ def test_auto_refuse_une_adresse_seule(c):
     assert "ban" not in c.faux.verbes()
     refus = [x for x in c.audit() if x["action"] == "ai-ban-refus"]
     assert len(refus) == 1 and "pas_sur" in refus[0]["detail"] and "203.0.113.5" in refus[0]["detail"]
-    assert "auto" in refus[0]["detail"] and refus[0]["by"] == "ai-ban"
+    assert "auto" in refus[0]["detail"] and refus[0]["by"] == "ai-ban" and "nombre 1" in refus[0]["detail"]
+    assert f"cle {USAGER_AI['cle']}" in refus[0]["detail"]
 
 
 def test_auto_bloc_19_adresses_refuse(c):
@@ -289,8 +314,8 @@ def test_deja_actif_annule_ou_echu_ne_compte_pas(c):
 
 
 def test_deja_banni_par_le_waf_ou_l_administrateur_refuse(c):
-    """Sans cette garde, « bannir ce qui x'est déjà, puis annuler son id » xèverait un ban du WAF ou de
-    x'administrateur : ai-ban ne débannit que ce qu'il a posé."""
+    """Sans cette garde, « bannir ce qui l'est déjà, puis annuler son id » lèverait un ban du WAF ou de
+    l'administrateur : ai-ban ne débannit que ce qu'il a posé."""
     c.bans = [{"ip": "198.51.100.7", "reason": "sqli"}]
     r = c.ban("198.51.100.7")
     assert r.status_code == 409 and r.json()["detail"]["motif"] == "deja_actif"
@@ -312,7 +337,7 @@ def test_refus_wafctl_protegee_rend_409_motif(c):
     r = c.ban("203.0.113.0/24")
     assert r.status_code == 409 and r.json()["detail"]["motif"] == "protegee"
     assert c.lignes_journal() == []
-    assert [x["action"] for x in c.audit()] == ["ai-ban-refus"]
+    assert [x["action"] for x in c.audit()] == ["ai-ban-demande", "ai-ban-refus"]
     c.faux.reponses["ban"] = (1, "", "refus:box\n[..] ERROR: x\n")
     r = c.ban("198.51.100.7")
     assert r.status_code == 409 and r.json()["detail"]["motif"] == "box"
@@ -353,8 +378,8 @@ def test_wafctl_injoignable_ou_delai_503_et_retour_arriere(c, monkeypatch):
     assert c.lignes_journal() == []
 
 
-def test_audit_echoue_le_ban_est_retire_et_500(c, monkeypatch, tmp_path):
-    monkeypatch.setattr(c.waf, "AUDIT_LOG", tmp_path / "absent" / "audit.log")
+def test_audit_echoue_le_ban_est_retire_et_500(c, monkeypatch):
+    _audit_qui_echoue(c, monkeypatch, "ai-ban")
     r = c.ban("198.51.100.7")
     assert r.status_code == 500 and r.json()["detail"]["motif"] == "audit"
     assert c.faux.verbes()[-2:] == ["ban", "unban"]
@@ -365,12 +390,12 @@ def test_audit_echoue_le_ban_est_retire_et_500(c, monkeypatch, tmp_path):
     r = c.ban("203.0.113.0/24")
     assert r.status_code == 500
     assert c.faux.appels[-1] == ADMIN_SYSTEMD_RUN + ["unban-bloc", "203.0.113.0/24"]
-    # rien n'est resté actif : x'état ne montre aucun ban
+    # rien n'est resté actif : l'état ne montre aucun ban
     assert c.c.get("/ai/etat").json()["actifs"] == []
 
 
-def test_audit_et_retour_arriere_echouent_incoherent(c, monkeypatch, tmp_path):
-    monkeypatch.setattr(c.waf, "AUDIT_LOG", tmp_path / "absent" / "audit.log")
+def test_audit_et_retour_arriere_echouent_incoherent(c, monkeypatch):
+    _audit_qui_echoue(c, monkeypatch, "ai-ban")
     c.faux.reponses["unban"] = (1, "", "nft: erreur")
     r = c.ban("198.51.100.7")
     assert r.status_code == 500 and r.json()["detail"]["motif"] == "incoherent"
@@ -521,6 +546,8 @@ def c_garde(monkeypatch, tmp_path):
     monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")
     monkeypatch.setattr(waf, "AUDIT_LOG", tmp_path / "audit.log")
     monkeypatch.setattr(g, "JOURNAL_AI", tmp_path / "ai-ban.jsonl")
+    monkeypatch.setattr(g, "BANS_WAF", tmp_path / "bans.jsonl")
+    _regroupement_neuf(monkeypatch, g)
     faux = FauxWafctl()
     monkeypatch.setattr(g, "_executer", faux)
     monkeypatch.setitem(g._config, "bans", lambda: [])
@@ -591,7 +618,7 @@ def test_jeton_ai_ban_reel_bout_en_bout(c_garde):
     e = client.get("/ai/etat", headers=etat)
     assert e.status_code == 200 and e.json()["actifs"][0]["cible"] == "198.51.100.7"
     audit = [json.loads(x) for x in (tmp_path / "audit.log").read_text().splitlines()]
-    assert audit[0]["action"] == "ai-ban" and audit[0]["by"] == "ai-ban"
+    assert [x["action"] for x in audit] == ["ai-ban-demande", "ai-ban"] and audit[1]["by"] == "ai-ban"
     assert all("Bearer" not in json.dumps(x) and "eyJ" not in json.dumps(x) for x in audit)
 
 
@@ -601,6 +628,7 @@ def test_exception_rules_code_ecrite():
     assert "#3716" in t and "require_ai_ban" in t and "test_gestes_ia_3716.py" in t
     ligne = next(x for x in t.splitlines() if "require_ai_ban" in x)
     assert ligne.startswith("| § 3 garde |") and "/ai/ban" in ligne and "/ai/unban" in ligne and "/ai/etat" in ligne
+    assert "198.51.100.0/24" in ligne and "Reste ouvert" in ligne and "bans.jsonl" in ligne
 
 
 def test_routes_branchees_sur_l_application():
@@ -625,7 +653,7 @@ def test_postinst_cree_le_dossier_des_cles_root():
 
 @pytest.fixture
 def wafctl_cles(tmp_path):
-    """Une copie de wafctl dont la racine des clés et x'audit sont dans `tmp_path` ; `install` sans -o/-g (on n'est
+    """Une copie de wafctl dont la racine des clés et l'audit sont dans `tmp_path` ; `install` sans -o/-g (on n'est
     pas root)."""
     if not shutil.which("openssl") or not shutil.which("jq"):
         pytest.skip("openssl et jq requis")
@@ -709,7 +737,7 @@ def test_wafctl_cle_ai_ban_refuse_ce_qui_n_est_pas_ed25519(wafctl_cles, tmp_path
 
 def test_wafctl_cle_ai_ban_audit_impossible_retire_la_cle(wafctl_cles, tmp_path):
     lancer, dossier, audit = wafctl_cles
-    audit.mkdir()                                       # un dossier : x'ajout seul ne peut pas x'écrire
+    audit.mkdir()                                       # un dossier : l'ajout seul ne peut pas l'écrire
     f1, _ = _pub_pem(tmp_path, "un.pub")
     assert lancer("ajouter", str(f1)).returncode != 0
     assert list(dossier.iterdir()) == []
@@ -718,3 +746,225 @@ def test_wafctl_cle_ai_ban_audit_impossible_retire_la_cle(wafctl_cles, tmp_path)
 def test_wafctl_cle_ai_ban_hors_sudoers():
     sudoers = (COMPOSANT / "sudoers" / "secubox-waf").read_text()
     assert not [x for x in sudoers.splitlines() if "cle-ai-ban" in x and not x.lstrip().startswith("#")]
+
+
+# ── Revue 1 : couverture par une autre source (P12), lecture stricte, regroupement, demande ─────────────────────
+def _bans_waf_journal(c, *records):
+    with open(c.g.BANS_WAF, "a", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r) + "\n")
+
+
+def _rec(ip, at, exp, action="ban"):
+    return {"ip": ip, "cat": "sqli", "sev": "high", "at": at, "exp": exp, "action": action}
+
+
+def _unban(c, ident):
+    return c.c.post("/ai/unban", json={"geste": "unban", "id": ident})
+
+
+@pytest.mark.parametrize("dernier", ["ban_futur", "ban_permanent"])
+def test_unban_adresse_couverte_par_le_waf_n_est_pas_levee(c, dernier):
+    now = int(time.time())
+    ident = c.ban("198.51.100.7").json()["id"]
+    exp = now + 7200 if dernier == "ban_futur" else 0
+    _bans_waf_journal(c, _rec("198.51.100.9", now, now + 9000), _rec("198.51.100.7", now - 50, exp))
+    r = _unban(c, ident)
+    assert r.status_code == 200 and r.json() == {"id": ident, "etat": "couvert"}
+    assert "unban" not in c.faux.verbes()
+    assert c.lignes_journal()[-1]["type"] == "annule" and c.lignes_journal()[-1]["cause"] == "couvert"
+    couvert = [x for x in c.audit() if x["action"] == "ai-unban-couvert"]
+    assert len(couvert) == 1 and ident in couvert[0]["detail"] and couvert[0]["by"] == "ai-ban"
+    assert _unban(c, ident).json()["etat"] == "deja_annule"
+
+
+@pytest.mark.parametrize("records", [
+    [],                                                                    # sbxwaf n'a jamais banni l'adresse
+    [("198.51.100.7", -9000, -10, "ban")],                                 # échu
+    [("198.51.100.7", -100, 7200, "ban"), ("198.51.100.7", -10, 0, "unban")],   # levé depuis
+    [("198.51.100.8", -10, 7200, "ban")],                                  # une autre adresse
+])
+def test_unban_adresse_non_couverte_est_levee(c, records):
+    now = int(time.time())
+    ident = c.ban("198.51.100.7").json()["id"]
+    _bans_waf_journal(c, *[_rec(ip, now + at, (now + exp) if exp else 0, action) for ip, at, exp, action in records])
+    r = _unban(c, ident)
+    assert r.json()["etat"] == "annule" and c.faux.appels[-1][-2:] == ["unban", "198.51.100.7"]
+
+
+def test_unban_bans_waf_illisible_503_rien_n_est_leve(c, monkeypatch, tmp_path):
+    ident = c.ban("198.51.100.7").json()["id"]
+    dossier = tmp_path / "bans-dossier"
+    dossier.mkdir()
+    monkeypatch.setattr(c.g, "BANS_WAF", dossier)
+    r = _unban(c, ident)
+    assert r.status_code == 503 and r.json()["detail"]["motif"] == "etat"
+    assert "unban" not in c.faux.verbes() and c.lignes_journal()[-1]["type"] == "ban"
+    lien = tmp_path / "lien.jsonl"
+    lien.symlink_to(tmp_path / "ailleurs.jsonl")
+    monkeypatch.setattr(c.g, "BANS_WAF", lien)
+    assert _unban(c, ident).status_code == 503
+
+
+def test_unban_echeance_illisible_503(c):
+    now = int(time.time())
+    ident = c.ban("198.51.100.7").json()["id"]
+    _bans_waf_journal(c, {"ip": "198.51.100.7", "at": now, "exp": "demain", "action": "ban"})
+    assert _unban(c, ident).status_code == 503 and "unban" not in c.faux.verbes()
+
+
+def _blocs(c, bloc, fin):
+    c.faux.reponses["blocs"] = (0, json.dumps({"ok": True, "motif": None, "blocs": [
+        {"bloc": bloc, "debut": 1, "fin": fin, "reste": max(0, fin - int(time.time())), "actif": True}]}), "")
+
+
+def test_unban_bloc_repris_plus_tard_par_l_administrateur_n_est_pas_leve(c):
+    r = c.ban("203.0.113.0/24", duree_s=3600)
+    ident, fin = r.json()["id"], r.json()["fin"]
+    _blocs(c, "203.0.113.0/24", fin + 6)
+    r = _unban(c, ident)
+    assert r.json() == {"id": ident, "etat": "couvert"} and "unban-bloc" not in c.faux.verbes()
+
+
+def test_unban_bloc_a_sa_propre_fin_est_leve(c):
+    r = c.ban("203.0.113.0/24", duree_s=3600)
+    ident, fin = r.json()["id"], r.json()["fin"]
+    _blocs(c, "203.0.113.0/24", fin + 5)                    # marge : la même fin, à l'arrondi près
+    assert _unban(c, ident).json()["etat"] == "annule"
+    assert c.faux.appels[-1] == ADMIN_SYSTEMD_RUN + ["unban-bloc", "203.0.113.0/24"]
+
+
+def test_unban_bloc_liste_illisible_503(c):
+    ident = c.ban("203.0.113.0/24").json()["id"]
+    c.faux.reponses["blocs"] = (9, '{"ok": false, "motif": "etat"}', "")
+    r = _unban(c, ident)
+    assert r.status_code == 503 and r.json()["detail"]["motif"] == "etat"
+    assert "unban-bloc" not in c.faux.verbes()
+
+
+def test_unban_couvert_audit_impossible_rien_n_est_clos(c, monkeypatch):
+    now = int(time.time())
+    ident = c.ban("198.51.100.7").json()["id"]
+    _bans_waf_journal(c, _rec("198.51.100.7", now, now + 7200))
+    _audit_qui_echoue(c, monkeypatch, "ai-unban-couvert")
+    r = _unban(c, ident)
+    assert r.status_code == 503 and r.json()["detail"]["motif"] == "audit"
+    assert c.lignes_journal()[-1]["type"] == "ban"
+
+
+@pytest.mark.parametrize("mode,cible", [("clic", "198.51.100.7"), ("auto", "203.0.113.0/24")])
+def test_waf_ban_illisible_refuse_503_sans_ban(c, monkeypatch, mode, cible):
+    def illisible():
+        raise c.g.Illisible("nft : code 1")
+    monkeypatch.setitem(c.g._config, "bans", illisible)
+    r = c.ban(cible, mode=mode)
+    assert r.status_code == 503 and r.json()["detail"]["motif"] == "etat"
+    assert "ban" not in c.faux.verbes() and "ban-bloc" not in c.faux.verbes()
+    assert [x["action"] for x in c.audit()] == ["ai-ban-echec"]
+
+
+@pytest.mark.parametrize("reponse", [
+    (1, "", "Error: No such file or directory; did you mean table 'secubox' in family inet?"),
+    (0, "", ""),
+    (0, "pas du json", ""),
+    (0, json.dumps({"nftables": [{"metainfo": {}}]}), ""),
+    (0, json.dumps({"nftables": [{"set": {"name": "autre", "elem": []}}]}), ""),
+])
+def test_lire_waf_ban_strict(c, reponse):
+    c.faux.reponses["nft"] = reponse
+    with pytest.raises(c.g.Illisible):
+        c.g.lire_waf_ban()
+
+
+def test_lire_waf_ban_et_bans_stricts_sans_geoip(c, monkeypatch):
+    c.faux.reponses["nft"] = (0, json.dumps({"nftables": [{"metainfo": {}}, {"set": {"name": "waf_ban", "elem": [
+        {"elem": {"val": "203.0.113.1", "timeout": 3600, "expires": 100}}, "203.0.113.2",
+        {"elem": {"val": {"prefix": {}}}}]}}]}), "")
+    assert c.g.lire_waf_ban() == {"203.0.113.1", "203.0.113.2"}
+    assert c.faux.appels[-1] == ["sudo", "-n", "/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban"]
+    monkeypatch.setattr(c.waf, "_raisons_recentes", lambda: {"203.0.113.1": "scanners"})
+    monkeypatch.setattr(c.waf, "_get_geoip_reader", lambda: (_ for _ in ()).throw(AssertionError("GeoIP")))
+    assert c.waf._bans_stricts() == [{"ip": "203.0.113.1", "reason": "scanners"}, {"ip": "203.0.113.2", "reason": "waf"}]
+
+
+def test_main_branche_le_lecteur_strict():
+    waf = _importer_waf()
+    from api import gestes_ia as g
+    assert g._config["bans"] is waf._bans_stricts
+
+
+def test_refus_repetes_regroupes(c, monkeypatch):
+    instant = [1000.0]
+    monkeypatch.setattr(c.g, "_horloge", lambda: instant[0])
+    for _ in range(3):
+        assert c.ban("203.0.113.5", mode="auto").status_code == 409            # pas_sur
+    refus = [x for x in c.audit() if x["action"] == "ai-ban-refus"]
+    assert len(refus) == 1 and "nombre 1" in refus[0]["detail"]
+    assert c.g._minuterie["active"] == "armee"
+    assert c.ban("203.0.113.6", mode="clic", duree_s=604800).status_code == 200   # autre chose : pas de ligne
+    instant[0] += c.g.INTERVALLE_AUDIT_S + 1
+    assert c.ban("203.0.113.7", mode="auto").status_code == 409
+    refus = [x for x in c.audit() if x["action"] == "ai-ban-refus"]
+    assert len(refus) == 2 and "nombre 3" in refus[1]["detail"] and "203.0.113.7" in refus[1]["detail"]
+    # la minuterie écrit les refus restés en attente
+    assert c.ban("203.0.113.8", mode="auto").status_code == 409
+    instant[0] += c.g.INTERVALLE_AUDIT_S + 1
+    c.g._vider_en_attente()
+    refus = [x for x in c.audit() if x["action"] == "ai-ban-refus"]
+    assert len(refus) == 3 and "nombre 1" in refus[2]["detail"] and "203.0.113.8" in refus[2]["detail"]
+
+
+def test_pannes_repetees_regroupees(c):
+    c.faux.reponses["ban"] = (1, "", "sudo: a password is required")
+    for _ in range(4):
+        assert c.ban("198.51.100.7").status_code == 503
+    echecs = [x for x in c.audit() if x["action"] == "ai-ban-echec"]
+    assert len(echecs) == 1 and "nombre 1" in echecs[0]["detail"]
+
+
+def test_demande_non_auditee_rien_n_est_fait(c, monkeypatch):
+    _audit_qui_echoue(c, monkeypatch, "ai-ban-demande")
+    r = c.ban("198.51.100.7")
+    assert r.status_code == 503 and r.json()["detail"]["motif"] == "audit"
+    assert "ban" not in c.faux.verbes() and c.lignes_journal() == []
+
+
+def test_horloge_reculee_ne_fait_pas_sauter_le_plafond(c):
+    now = int(time.time())
+    c.journal(*[_ban_journal(f"192.0.2.{i}", now + 5000, now + 90000) for i in range(30)])
+    assert c.ban("198.51.100.7").json()["detail"]["motif"] == "plafond_compte"
+    e = c.c.get("/ai/etat").json()
+    assert e["compteurs"]["compte_heure"] == 30
+
+
+@pytest.fixture
+def wafctl_unban(tmp_path):
+    """wafctl réel (cmd_unban), avec un faux `nft` : `delete` et `get` rendent les codes demandés."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+
+    def lancer(code_delete, code_get):
+        nft = bin_ / "nft"
+        nft.write_text(f'#!/bin/bash\necho "$*" >> {tmp_path}/nft.log\ncase "$1" in\n  delete) exit {code_delete} ;;\n'
+                       f'  get) exit {code_get} ;;\nesac\nexit 0\n')
+        nft.chmod(0o755)
+        env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}
+        return subprocess.run(["bash", str(WAFCTL), "unban", "198.51.100.7"], check=False, timeout=30,
+                              capture_output=True, text=True, env=env)
+    return lancer
+
+
+def test_wafctl_unban_absent_n_est_pas_une_erreur(wafctl_unban, tmp_path):
+    r = wafctl_unban(1, 1)            # retrait refusé, élément introuvable : déjà levé
+    assert r.returncode == 0, r.stderr
+    assert "delete element inet secubox waf_ban { 198.51.100.7 }" in (tmp_path / "nft.log").read_text()
+    assert wafctl_unban(0, 0).returncode == 0
+    r = wafctl_unban(1, 0)            # retrait refusé, élément toujours là : échec
+    assert r.returncode == 1 and "refusé" in r.stderr
+
+
+def test_defaire_d_un_ban_deja_absent_n_est_pas_incoherent(c, monkeypatch):
+    """wafctl unban d'une adresse absente rend 0 : le retour arrière d'un ban jamais posé n'est pas une incohérence."""
+    _audit_qui_echoue(c, monkeypatch, "ai-ban")
+    c.faux.reponses["unban"] = (0, "[..] unban 198.51.100.7\n", "")
+    assert c.ban("198.51.100.7").json()["detail"]["motif"] == "audit"

@@ -2204,11 +2204,20 @@ async def get_geoip(ip: str):
 
 # ── Gestes d'une box d'IA, compte de service ai-ban (#3716) ─────────────
 # Exception écrite à RULES-CODE § 3 : `require_ai_ban`, pas `require_jwt`. Bans lus FRAIS dans nft (recontrôle du
-# cas sûr) ; audit qui lève (un ban non audité est retiré).
+# cas sûr, cible déjà bannie) ; audit qui lève (un geste non audité n'est pas fait, ou est défait).
 try:
     from api import gestes_ia as _gestes_ia
 except ImportError:  # standalone
     import gestes_ia as _gestes_ia
 
-_gestes_ia.configurer(bans=lambda: _get_bans(), audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
+
+def _bans_stricts() -> List[dict]:
+    """`waf_ban` lu dans nft, motif du journal des menaces : lecture STRICTE (lève si nft ne répond pas ou si la
+    table manque — `_get_bans` rend alors une liste vide) et LÉGÈRE (sans GeoIP), pour les gardes de `/ai/ban`."""
+    adresses = _gestes_ia.lire_waf_ban()
+    raisons = _raisons_recentes()
+    return [{"ip": ip, "reason": _raison_du_ban(ip, raisons)} for ip in sorted(adresses)]
+
+
+_gestes_ia.configurer(bans=_bans_stricts, audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
 app.include_router(_gestes_ia.router)
