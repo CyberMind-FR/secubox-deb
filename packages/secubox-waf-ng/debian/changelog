@@ -1,3 +1,13 @@
+secubox-waf-ng (1.35.3-1~trixie1) trixie; urgency=medium
+
+  * Journal des gestes de l'IA (/var/lib/secubox/waf/ai-ban.jsonl) ouvert au
+    groupe secubox-waf (0660, quel que soit l'umask ; réparé par le postinst).
+    secubox-waf-ng.service le rend à secubox-waf (chown -R) à chaque démarrage :
+    créé en 0640 par l'API (compte secubox), il lui devenait fermé en écriture
+    et chaque ban était posé puis retiré, motif « journal » (gk2, 14/11) (ref #3716).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 15:45:00 +0100
+
 secubox-waf-ng (1.35.2-1~trixie1) trixie; urgency=medium
 
   * Profil AppArmor de waf-blocs : audit.log en `w` (patron du dépôt) ; `a` seul

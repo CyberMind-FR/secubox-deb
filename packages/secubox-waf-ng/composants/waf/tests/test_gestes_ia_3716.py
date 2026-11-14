@@ -1242,3 +1242,36 @@ def test_familles_reconstruction_si_le_fichier_depasse_deux_fois_la_borne(c, mon
                       _rec_cat("192.0.2.1", "xss"))
     f = c.g.familles_bans_waf()
     assert "203.0.113.1" not in f and f["192.0.2.1"] == "xss"
+
+
+# ── Journal ouvert au groupe (régression du 14/11 sur gk2) ─────────────
+# secubox-waf-ng.service fait `chown -R secubox-waf` sur /var/lib/secubox/waf à chaque démarrage : un journal créé en
+# 0640 par l'API (compte secubox, membre du groupe secubox-waf) lui devenait illisible en écriture, et chaque ban était
+# posé puis retiré (motif « journal »).
+def test_journal_cree_avec_ecriture_de_groupe_malgre_l_umask(monkeypatch, tmp_path):
+    _importer_waf()
+    from api import gestes_ia as g
+    monkeypatch.setattr(g, "JOURNAL_AI", tmp_path / "ai-ban.jsonl")
+    ancien = os.umask(0o027)
+    try:
+        g._ecrire_journal({"type": "ban"})
+    finally:
+        os.umask(ancien)
+    assert (tmp_path / "ai-ban.jsonl").stat().st_mode & 0o777 == 0o660
+
+
+def test_journal_existant_en_0640_repare_par_son_proprietaire(monkeypatch, tmp_path):
+    _importer_waf()
+    from api import gestes_ia as g
+    j = tmp_path / "ai-ban.jsonl"
+    j.write_text("")
+    j.chmod(0o640)
+    monkeypatch.setattr(g, "JOURNAL_AI", j)
+    g._ecrire_journal({"type": "ban"})
+    assert j.stat().st_mode & 0o777 == 0o660
+
+
+def test_postinst_rouvre_le_journal_au_groupe():
+    s = (Path(__file__).resolve().parents[3] / "debian" / "postinst").read_text(encoding="utf-8")
+    assert re.search(r'\[ -f "\$_jai" \] && \[ ! -L "\$_jai" \] && chmod 0660 "\$_jai"', s)
+    assert "_jai=/var/lib/secubox/waf/ai-ban.jsonl" in s
