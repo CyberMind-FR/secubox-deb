@@ -236,14 +236,14 @@ async def test_rebinding_une_seule_resolution(web, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ipv6_du_prefixe_local_refuse(web):
-    # 2001:db8 serait « global » pour ipaddress ; ici la box a un /64 SLAAC dessus
-    web["inet6"].write_text("20010db8000000010000000000000002 02 40 00 00 eth1\n"
+    # préfixe global (2a01:e0a0:1:1::/64) : seule la table des interfaces peut le refuser
+    web["inet6"].write_text("2a01e0a0000100010000000000000002 02 40 00 00 eth1\n"
                             "00000000000000000000000000000001 01 80 10 80 lo\n", encoding="ascii")
-    web["dns"]["voisin.test"] = ["2001:db8:0:1::99"]
+    web["dns"]["voisin.test"] = ["2a01:e0a0:1:1::99"]
     assert await recherche.telecharger("http://voisin.test/") == ""
-    assert await recherche.telecharger("http://[2001:db8:0:1::5]/") == ""
+    assert await recherche.telecharger("http://[2a01:e0a0:1:1::5]/") == ""
     assert web["vues"] == []
-    web["dns"]["ailleurs.test"] = ["2606:2800:220:1::1"]       # hors du préfixe : autorisée
+    web["dns"]["ailleurs.test"] = ["2a01:e0a0:1:2::99"]       # hors du préfixe : autorisée
     assert "Michel Murty" in await recherche.telecharger("http://ailleurs.test/")
 
 
@@ -251,6 +251,8 @@ async def test_ipv6_du_prefixe_local_refuse(web):
 async def test_nat64_et_ipv4_mappe_refuses(web):
     web["dns"]["nat.test"] = ["64:ff9b::a00:1"]
     web["dns"]["map.test"] = ["::ffff:10.0.0.1"]
+    web["dns"]["compat.test"] = ["::a00:1"]
+    assert await recherche.telecharger("http://compat.test/") == ""
     assert await recherche.telecharger("http://nat.test/") == ""
     assert await recherche.telecharger("http://map.test/") == ""
     assert await recherche.telecharger("http://[64:ff9b::a00:1]/") == ""
@@ -323,3 +325,13 @@ async def test_searxng_erreur_reseau_remonte(distant, monkeypatch):
     monkeypatch.setattr(moteurs, "FABRIQUE_TRANSPORT", tombe)
     with pytest.raises(httpx.ConnectError):
         await r.outil_searxng("x")
+
+
+@pytest.mark.asyncio
+async def test_idn_host_et_sni_en_ascii(web):
+    web["dns"]["xn--lyse-9oad.fr"] = ["93.184.216.34"]
+    assert "Michel Murty" in await recherche.telecharger("https://élysée.fr:443/")
+    req = web["reqs"][0]
+    assert req["host"] == "xn--lyse-9oad.fr:443" and req["sni"] == "xn--lyse-9oad.fr"
+    assert req["url"] == "https://93.184.216.34/"
+    assert web["appels_dns"] == ["xn--lyse-9oad.fr"]

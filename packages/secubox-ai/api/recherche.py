@@ -58,6 +58,7 @@ async def _resoudre(hote: str) -> list[str]:
 # adresses SLAAC du LAN lui-même, que la garde doit refuser (R14).
 SOURCE_IF_INET6 = "/proc/net/if_inet6"
 NAT64 = ipaddress.ip_network("64:ff9b::/96")
+COMPATIBLE_V4 = ipaddress.ip_network("::/96")   # plage « IPv4-compatible » obsolète
 
 
 def _prefixes_locaux() -> list:
@@ -88,7 +89,7 @@ def _publique(adresse: str) -> bool:
     if ip.version == 6:
         if ip.ipv4_mapped is not None:
             return _publique(str(ip.ipv4_mapped))
-        if ip in NAT64 or any(ip in r for r in _prefixes_locaux()):
+        if ip in NAT64 or ip in COMPATIBLE_V4 or any(ip in r for r in _prefixes_locaux()):
             return False
     return ip.is_global
 
@@ -177,7 +178,8 @@ async def telecharger(url):
             ipaddress.ip_address(hote)
             adresses, nom = [hote], None   # adresse littérale : contrôlée telle quelle, sans résolution
         except ValueError:
-            adresses, nom = await _resoudre(hote), hote   # une seule résolution : l'adresse validée est celle utilisée
+            nom = httpx.URL(url).raw_host.decode("ascii")   # forme IDNA (ASCII) : résolution, Host et SNI
+            adresses = await _resoudre(nom)   # une seule résolution : l'adresse validée est celle utilisée
         if not adresses or not all(_publique(a) for a in adresses):
             return ""
         # Connexion épinglée sur l'adresse validée (anti-rebinding) ; le nom reste dans Host et dans le SNI.
@@ -186,8 +188,9 @@ async def telecharger(url):
         netloc = cible_ip + (f":{p.port}" if p.port else "")
         epingle = p._replace(netloc=netloc).geturl()
         extensions = {"sni_hostname": nom} if nom else {}
+        host_http = (nom + (f":{p.port}" if p.port else "")) if nom else p.netloc
         async with _client("page", 10, follow_redirects=False) as c:
-            async with c.stream("GET", epingle, headers={"Host": p.netloc}, extensions=extensions) as r:
+            async with c.stream("GET", epingle, headers={"Host": host_http}, extensions=extensions) as r:
                 if r.status_code != 200 or "html" not in r.headers.get("content-type", ""):
                     return ""
                 brut = b""
