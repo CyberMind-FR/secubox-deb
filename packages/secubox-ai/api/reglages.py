@@ -57,6 +57,16 @@ CONFIG_DEFAUT = {
 }
 
 
+# Formats ARM entrelacés retirés de llama.cpp (le moteur les refuse : « use Q4_0 with runtime repacking »).
+FORMAT_RETIRE = re.compile(r"Q4_0_(?:4_4|4_8|8_8)(?![0-9])", re.I)
+MESSAGE_FORMAT_RETIRE = "format ARM retiré de llama.cpp : prenez la variante Q4_0 ou Q4_K_M"
+
+
+def format_retire(nom) -> bool:
+    """Le nom désigne-t-il un format de quantification que llama.cpp ne lit plus (Q4_0_4_4, Q4_0_4_8, Q4_0_8_8) ?"""
+    return isinstance(nom, str) and bool(FORMAT_RETIRE.search(nom))
+
+
 def etat_dir() -> Path:
     """Dossier de données, lu à l'appel."""
     return Path(os.environ.get("SECUBOX_AI_ETAT", ETAT_DEFAUT))
@@ -78,7 +88,8 @@ def modeles_dir() -> Path:
 
 def modele_installe(nom: str) -> bool:
     """Le modèle `nom` est-il un fichier régulier du dossier des modèles (jamais un lien symbolique) ?"""
-    if not isinstance(nom, str) or not NOM_MODELE.match(nom) or ".." in nom or genre_fichier(nom) != "modele":
+    if not isinstance(nom, str) or not NOM_MODELE.match(nom) or ".." in nom or genre_fichier(nom) != "modele" \
+            or format_retire(nom):
         return False
     f = modeles_dir() / nom
     return f.is_file() and not f.is_symlink()
@@ -101,6 +112,8 @@ def _refus(section: str, cle: str, v) -> str | None:
         return f"valeur refusée : {section}.{cle}"
     if cle == "modele" and not NOM_MODELE.match(v):
         return "nom de modèle invalide"
+    if cle == "modele" and format_retire(v):
+        return MESSAGE_FORMAT_RETIRE
     if cle == "consigne" and len(v) > 8000:
         return "consigne trop longue"
     return None
@@ -171,6 +184,8 @@ def valider(entree: dict) -> dict:
                 raise HTTPException(422, refus)
             # R6 : à l'écriture, le modèle actif doit exister dans le dossier des modèles (fichier régulier).
             # La lecture des préférences ne l'exige pas : un modèle retiré à la main ne casse pas le module.
+            if (section, cle) == ("moteur", "modele") and format_retire(v):
+                raise HTTPException(422, MESSAGE_FORMAT_RETIRE)
             if (section, cle) == ("moteur", "modele") and not modele_installe(v):
                 raise HTTPException(422, "modèle absent du dossier des modèles")
             prefs[section][cle] = v

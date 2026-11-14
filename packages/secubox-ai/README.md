@@ -143,7 +143,7 @@ Toute route porte `require_jwt` (administrateur réel), sauf `GET /health` (test
 | `GET /modeles/catalogue` | modèles proposés |
 | `GET /modeles` | modèles présents et actif |
 | `GET /modeles/depot` | fichiers d'un dépôt Hugging Face |
-| `POST /modeles` | télécharge un modèle |
+| `POST /modeles` | télécharge un modèle : un à la fois (409 sinon), reprise Range et 3 reprises automatiques ; 422 pour Q4_0_4_4, Q4_0_4_8, Q4_0_8_8 (retirés de llama.cpp) |
 | `POST /modeles/{nom}/activer` | active un modèle (redémarre le moteur local s'il tourne) |
 | `DELETE /modeles/{nom}` | supprime un modèle |
 | `GET /medias/gguf` | fichiers GGUF présents (actif, métadonnées), partiels compris |

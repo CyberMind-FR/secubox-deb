@@ -51,6 +51,7 @@ def hf(env, monkeypatch):
             return httpx.Response(200, json={"cardData": {"license": "mit"}, "gated": etat["gated"], "siblings": [
                 {"rfilename": NOM, "size": etat["taille"], "lfs": {"sha256": etat["sha"]}},
                 {"rfilename": "mmproj-petit.gguf", "size": 10, "lfs": {"sha256": "0" * 64}},
+                {"rfilename": "Llama-3.2-3B-Instruct-Q4_0_8_8.gguf", "size": 10, "lfs": {"sha256": "1" * 64}},
                 {"rfilename": "README.md"}]})
         if origine == f"https://huggingface.co/{DEPOT}/resolve/main/{NOM}":
             return httpx.Response(302, headers={"location": etat["cdn"]})
@@ -603,3 +604,181 @@ async def test_modele_telecharge_lisible_par_le_moteur(env, hf):
     assert stat.S_IMODE(st.st_mode) == 0o640
     # Le moteur n'est pas « autre » : seule la lecture par le groupe secubox-ai (groupe principal de l'API) compte.
     assert _aictl().lisible_par_moteur(st, {"gid_ai": st.st_gid})
+
+
+# ---------------- correctif 0.1.1 : formats retirés, un téléchargement à la fois, reprise ----------------
+RETIRE = "Llama-3.2-3B-Instruct-Q4_0_8_8.gguf"
+
+
+@pytest.mark.parametrize("nom", ["x-Q4_0_4_4.gguf", "x-Q4_0_4_8.gguf", "x.q4_0_8_8.gguf", "X-Q4_0_8_8.GGUF"])
+def test_format_retire_reconnu(nom):
+    assert reglages.format_retire(nom)
+
+
+@pytest.mark.parametrize("nom", ["x-Q4_0.gguf", "x-Q4_K_M.gguf", "x-Q4_0_8_80.gguf", "x-Q8_0.gguf"])
+def test_format_retire_pas_les_autres(nom):
+    assert not reglages.format_retire(nom)
+
+
+@pytest.mark.asyncio
+async def test_format_retire_refuse_au_telechargement_sans_reseau(env, hf):
+    async with client() as c:
+        r = await c.post("/modeles", json={"depot": DEPOT, "fichier": RETIRE})
+    assert r.status_code == 422 and "Q4_0 ou Q4_K_M" in r.json()["detail"]
+    assert hf["vues"] == [] and modeles.telechargements == {}
+
+
+@pytest.mark.asyncio
+async def test_format_retire_signale_dans_la_liste_du_depot(env, hf):
+    async with client() as c:
+        f = {x["nom"]: x for x in (await c.get(f"/modeles/depot?depot={DEPOT}")).json()["fichiers"]}
+    assert "Q4_0 ou Q4_K_M" in f[RETIRE]["refuse"] and f[NOM]["refuse"] is None
+
+
+@pytest.mark.asyncio
+async def test_format_retire_refuse_a_l_activation_et_a_la_validation(env):
+    installer(env, RETIRE)
+    assert not reglages.modele_installe(RETIRE)
+    with pytest.raises(HTTPException) as e:
+        reglages.valider({"moteur": {"modele": RETIRE}})
+    assert e.value.status_code == 422 and "retiré" in e.value.detail
+    async with client() as c:
+        r = await c.post(f"/modeles/{RETIRE}/activer")
+        assert r.status_code == 422 and "retiré" in r.json()["detail"]
+        assert (await c.put("/preferences", json={"moteur": {"modele": RETIRE}})).status_code == 422
+        assert [x["id"] for x in (await c.get("/modeles")).json()["modeles"]] == [RETIRE]   # listé : on peut le supprimer
+    assert reglages.lire_prefs()["moteur"]["modele"] == reglages.DEFAUTS["moteur"]["modele"]
+
+
+def test_preference_deja_ecrite_sur_un_format_retire_retombe_au_defaut(env):
+    d = env / "etat"
+    d.mkdir(parents=True)
+    (d / "preferences.toml").write_text(f'[moteur]\nmodele = "{RETIRE}"\n', encoding="utf-8")
+    assert reglages.lire_prefs()["moteur"]["modele"] == reglages.DEFAUTS["moteur"]["modele"]
+    assert "moteur.modele" in reglages.etat_prefs()["erreur"]
+
+
+@pytest.mark.asyncio
+async def test_un_seul_telechargement_a_la_fois(env, hf):
+    modeles.telechargements["autre.gguf"] = {"recu": 0, "total": 5}
+    async with client() as c:
+        r = await c.post("/modeles", json={"depot": DEPOT, "fichier": NOM})
+        assert r.status_code == 409 and "déjà en cours" in r.json()["detail"] and "autre.gguf" in r.json()["detail"]
+        assert hf["vues"] == [] and NOM not in modeles.telechargements
+        modeles.telechargements["autre.gguf"]["erreur"] = "échec"       # un échec ne bloque pas la suite
+        assert (await c.post("/modeles", json={"depot": DEPOT, "fichier": NOM})).status_code == 200
+
+
+class _Coupe(httpx.AsyncByteStream):
+    """Sert `blocs` puis lève ReadError : coupure réseau en plein flux."""
+    def __init__(self, blocs):
+        self.blocs = blocs
+
+    async def __aiter__(self):
+        for b in self.blocs:
+            yield b
+        raise httpx.ReadError("coupure")
+
+
+@pytest.fixture
+def hf_coupe(env, monkeypatch):
+    """CDN qui coupe les premières réponses après `coupe` octets, puis sert (ou ignore) Range."""
+    contenu = b"GGUF" + bytes(range(256)) * 40
+    etat = {"contenu": contenu, "sha": hashlib.sha256(contenu).hexdigest(), "coupures": 2, "coupe": 3000,
+            "range_ok": True, "plages": [], "resolve": 0}
+
+    def handler(req):
+        origine = f"{req.url.scheme}://{req.headers['host']}{req.url.raw_path.decode()}"
+        if origine == f"https://huggingface.co/{DEPOT}/resolve/main/{NOM}":
+            etat["resolve"] += 1
+            return httpx.Response(302, headers={"location": "https://cdn.exemple.test/blob/abc"})
+        assert origine == "https://cdn.exemple.test/blob/abc"
+        plage = req.headers.get("range")
+        etat["plages"].append(plage)
+        debut = int(plage.split("=")[1].rstrip("-")) if plage and etat["range_ok"] else 0
+        corps = etat["contenu"][debut:]
+        if etat["coupures"]:
+            etat["coupures"] -= 1
+            morceaux = [corps[i:i + 500] for i in range(0, etat["coupe"], 500)]
+            return httpx.Response(206 if debut else 200, stream=_Coupe(morceaux),
+                                  headers={"content-range": f"bytes {debut}-{len(contenu) - 1}/{len(contenu)}"} if debut else {})
+        if plage and etat["range_ok"]:
+            return httpx.Response(206, content=corps, headers={"content-range": f"bytes {debut}-{len(contenu) - 1}/{len(contenu)}"})
+        return httpx.Response(200, content=etat["contenu"])
+
+    async def resolveur(hote):
+        return ["93.184.216.34"]
+
+    inet6 = env / "if_inet6"
+    inet6.write_text("", encoding="ascii")
+    monkeypatch.setattr(recherche, "SOURCE_IF_INET6", str(inet6))
+    monkeypatch.setattr(recherche, "FABRIQUE_TRANSPORT_WEB", lambda nom: httpx.MockTransport(handler))
+    monkeypatch.setattr(recherche, "RESOLVEUR", resolveur)
+    monkeypatch.setattr(recherche, "BLOC_ECRITURE", 500)
+    monkeypatch.setattr(modeles, "ATTENTES_S", (0, 0, 0))
+    return etat
+
+
+@pytest.mark.asyncio
+async def test_reprise_apres_coupure_avec_range(env, hf_coupe):
+    d = env / "etat" / "modeles"
+    await modeles.telecharger(DEPOT, NOM, hf_coupe["sha"], len(hf_coupe["contenu"]), "mit")
+    assert (d / NOM).read_bytes() == hf_coupe["contenu"]
+    assert hf_coupe["plages"][0] is None and all(p and p.startswith("bytes=") for p in hf_coupe["plages"][1:])
+    assert len(hf_coupe["plages"]) == 3 and hf_coupe["resolve"] == 3        # chaque tentative repasse par la garde, saut compris
+    assert hf_coupe["plages"][1] != "bytes=0-"                               # on a bien repris au milieu
+    assert not list(d.glob("*.part"))
+    jr = [x for x in jrn.lire() if x["action"] == "modele.reprise"]
+    assert len(jr) == 2 and "http" not in json.dumps(jr) and DEPOT not in json.dumps(jr)
+
+
+@pytest.mark.asyncio
+async def test_reprise_sans_range_recommence_et_reste_valide(env, hf_coupe):
+    hf_coupe["range_ok"] = False
+    d = env / "etat" / "modeles"
+    await modeles.telecharger(DEPOT, NOM, hf_coupe["sha"], len(hf_coupe["contenu"]), "mit")
+    assert (d / NOM).read_bytes() == hf_coupe["contenu"]
+
+
+@pytest.mark.asyncio
+async def test_reprise_empreinte_fausse_reste_refusee(env, hf_coupe):
+    with pytest.raises(HTTPException) as e:
+        await modeles.telecharger(DEPOT, NOM, "0" * 64, len(hf_coupe["contenu"]), "mit")
+    assert e.value.status_code == 409
+    assert (env / "etat" / "modeles" / (NOM + ".faux")).read_bytes() == hf_coupe["contenu"]
+
+
+@pytest.mark.asyncio
+async def test_reprise_fichier_incoherent_repart_de_zero(env, hf_coupe, monkeypatch):
+    # Le .part est tronqué entre deux tentatives : la taille ne correspond plus, on repart de zéro (sans Range).
+    def doute(chemin, n):
+        return None
+    monkeypatch.setattr(modeles, "_empreinte_de", doute)
+    await modeles.telecharger(DEPOT, NOM, hf_coupe["sha"], len(hf_coupe["contenu"]), "mit")
+    assert hf_coupe["plages"] == [None, None, None]
+    assert (env / "etat" / "modeles" / NOM).read_bytes() == hf_coupe["contenu"]
+
+
+@pytest.mark.asyncio
+async def test_retentatives_epuisees(env, hf_coupe):
+    hf_coupe["coupures"] = 99
+    with pytest.raises(HTTPException) as e:
+        await modeles.telecharger(DEPOT, NOM, hf_coupe["sha"], len(hf_coupe["contenu"]), "mit")
+    assert e.value.status_code == 502
+    assert len(hf_coupe["plages"]) == modeles.RETENTATIVES + 1
+    d = env / "etat" / "modeles"
+    assert not (d / NOM).exists() and not list(d.glob("*.part"))
+
+
+@pytest.mark.asyncio
+async def test_delais_de_telechargement(env, hf_coupe, monkeypatch):
+    vus = []
+    vrai = recherche._client
+
+    def espion(nom, delai, **kw):
+        vus.append(delai)
+        return vrai(nom, delai, **kw)
+    monkeypatch.setattr(recherche, "_client", espion)
+    hf_coupe["coupures"] = 0
+    await modeles.telecharger(DEPOT, NOM, hf_coupe["sha"], len(hf_coupe["contenu"]), "mit")
+    assert vus and all(isinstance(t, httpx.Timeout) and t.read == 120 and t.connect == 10 for t in vus)

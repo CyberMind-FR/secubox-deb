@@ -340,8 +340,8 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
       z.appendChild(el('p', 'note', 'Licence annoncée : ' + (r.licence || 'non indiquée') + (r.restreint ? ' · dépôt réservé, téléchargement refusé' : '')));
       var w = el('div', 'tab'), tb = el('table'), b = el('tbody'); tb.appendChild(b); w.appendChild(tb); z.appendChild(w);
       r.fichiers.slice().sort(function (x, y) { return (x.taille || 0) - (y.taille || 0); }).forEach(function (f) {
-        var tr = el('tr'), c = el('td'), a = el('button', 'btn sec', 'Ajouter'), v = f.genre === 'annexe' ? ['fichier annexe', 'neutre'] : f.genre === 'decoupe' ? ['découpé, non pris en charge', 'neutre'] : tient(), dv = el('td');
-        dv.appendChild(el('span', 'pill ' + v[1], v[0])); a.type = 'button'; a.disabled = r.restreint || !f.sha256 || f.genre !== 'modele' || INSTALLES.indexOf(f.nom) >= 0;
+        var tr = el('tr'), c = el('td'), a = el('button', 'btn sec', 'Ajouter'), v = f.refuse ? [f.refuse, 'neutre'] : f.genre === 'annexe' ? ['fichier annexe', 'neutre'] : f.genre === 'decoupe' ? ['découpé, non pris en charge', 'neutre'] : tient(), dv = el('td');
+        dv.appendChild(el('span', 'pill ' + v[1], v[0])); a.type = 'button'; a.disabled = r.restreint || !!f.refuse || !f.sha256 || f.genre !== 'modele' || INSTALLES.indexOf(f.nom) >= 0;
         if (INSTALLES.indexOf(f.nom) >= 0) a.textContent = 'Installé'; else if (TELECHARGEMENTS[f.nom] && !TELECHARGEMENTS[f.nom].erreur) { a.textContent = 'En cours'; a.disabled = true; }
         a.addEventListener('click', function () { api(API + '/modeles', 'POST', { depot: d, fichier: f.nom }).then(function () { msg('mDepot', 'Téléchargement lancé.', true); chargerModeles(); }).catch(function (e) { msg('mDepot', e.message); }); });
         c.appendChild(a); tr.appendChild(el('td', 'mono', f.nom)); tr.appendChild(el('td', '', octets(f.taille))); tr.appendChild(dv); tr.appendChild(c); b.appendChild(tr);

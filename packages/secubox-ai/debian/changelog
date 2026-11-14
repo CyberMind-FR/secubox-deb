@@ -1,3 +1,19 @@
+secubox-ai (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Formats ARM retirés de llama.cpp (Q4_0_4_4, Q4_0_4_8, Q4_0_8_8) : refusés
+    avec un message clair au téléchargement (422 avant tout accès réseau),
+    signalés « refuse » dans la liste du dépôt (grisés dans la page), refusés à
+    l'activation et à la validation des réglages, ignorés par secubox-aictl
+    (constaté sur gk3 : le moteur rejetait Q4_0_8_8) (ref #3583).
+  * Téléchargements de modèles : un seul à la fois (409 avec le nom de celui
+    en cours), délai de lecture de 120 s et de connexion de 10 s, reprise HTTP
+    Range depuis le .part après une erreur réseau (empreinte recalculée sur
+    les octets présents, repart de zéro au moindre doute), 3 reprises
+    automatiques avec attente croissante, chaque tentative repassant par la
+    garde SSRF ; journal sans adresse (ref #3583).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 14:00:00 +0100
+
 secubox-ai (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Squelette du paquet : application FastAPI, GET /health, GET /status,

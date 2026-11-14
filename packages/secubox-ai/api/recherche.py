@@ -293,13 +293,25 @@ def _vider(f, blocs, empreinte):
             empreinte.update(b)
 
 
-async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None, progres=None):
+class ErreurReseau(HTTPException):
+    """502 dû au réseau (délai, coupure, refus de connexion) : seule erreur qu'un appelant peut raisonnablement retenter."""
+
+
+class RepriseRefusee(Exception):
+    """Le serveur n'honore pas la reprise (Range) : l'appelant recommence le fichier depuis zéro."""
+
+
+async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None, progres=None, connexion=None, reprise=0):
     """Lien de document (PDF, HTML, texte) écrit dans `chemin` au fil de l'eau, `max_octets` au plus.
     Même garde que `telecharger` à CHAQUE saut (résolution, adresses publiques, connexion épinglée, Host/SNI).
     Rend (adresse finale, content-type) ; lève HTTPException (422 refus, 413 trop gros, 502 le reste).
     `empreinte` (objet hashlib) reçoit chaque bloc au fil de l'eau ; `progres(n)` est appelé avec la taille écrite
     (téléchargements de plusieurs Go : jamais le fichier en mémoire, `max_octets` fixé par l'appelant).
-    Le fichier partiel n'est pas effacé ici : l'appelant s'en charge."""
+    `connexion` : délai de connexion distinct (le délai `delai` vaut alors pour chaque lecture).
+    `reprise` > 0 : `chemin` contient déjà ce nombre d'octets valides (déjà passés dans `empreinte` par l'appelant) ;
+    la requête porte `Range` à chaque saut, la réponse doit être 206 avec un `Content-Range` qui commence à `reprise`,
+    sinon RepriseRefusee (rien n'est écrit). Le fichier partiel n'est pas effacé ici : l'appelant s'en charge."""
+    tempo = delai if connexion is None else httpx.Timeout(delai, connect=connexion)
     for _ in range(SAUTS_MAX):
         try:
             cible = await _cible_gardee(url)
@@ -308,19 +320,25 @@ async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None,
         if cible is None:
             raise HTTPException(422, "adresse refusée (http ou https, port standard, hôte public)")
         epingle, entetes, extensions = cible
+        if reprise:
+            entetes = {**entetes, "Range": f"bytes={reprise}-"}
         try:
-            async with _client("document", delai, follow_redirects=False) as c:
+            async with _client("document", tempo, follow_redirects=False) as c:
                 async with c.stream("GET", epingle, headers=entetes, extensions=extensions) as r:
                     if r.status_code in REDIRECTIONS and r.headers.get("location"):
                         url = urljoin(url, r.headers["location"])
                         continue
-                    if r.status_code != 200:
+                    if reprise:
+                        debut = re.match(r"bytes (\d+)-\d+/", r.headers.get("content-range", ""))
+                        if r.status_code != 206 or not debut or int(debut[1]) != reprise:
+                            raise RepriseRefusee()
+                    elif r.status_code != 200:
                         raise HTTPException(502, f"la page répond {r.status_code}")
                     annonce = r.headers.get("content-length", "")
-                    if annonce.isdigit() and int(annonce) > max_octets:
+                    if annonce.isdigit() and reprise + int(annonce) > max_octets:
                         raise HTTPException(413, f"document trop gros ({max_octets // 1024 ** 2} Mo au plus)")
-                    taille, tampon, en_tampon = 0, [], 0
-                    with open(chemin, "wb") as f:
+                    taille, tampon, en_tampon = reprise, [], 0
+                    with open(chemin, "ab" if reprise else "wb") as f:
                         async for bloc in r.aiter_bytes():
                             taille += len(bloc)
                             if taille > max_octets:
@@ -340,9 +358,9 @@ async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None,
             # httpx refuse lui-même un Location illisible (IDNA invalide…) : c'est un refus d'adresse, pas une panne.
             if "location header" in str(e).lower():
                 raise HTTPException(422, "adresse refusée (redirection illisible)") from None
-            raise HTTPException(502, "la page ne répond pas") from None
+            raise ErreurReseau(502, "la page ne répond pas") from None
         except (httpx.HTTPError, OSError):
-            raise HTTPException(502, "la page ne répond pas") from None
+            raise ErreurReseau(502, "la page ne répond pas") from None
     raise HTTPException(502, "trop de redirections")
 
 

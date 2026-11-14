@@ -52,7 +52,7 @@ sys.path.insert(0, os.environ.get("SECUBOX_AI_LIB", "/usr/lib/secubox/ai"))
 
 from api import contexte_auto as CA  # noqa: E402
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 # ── chemins (R2 : lus à l'appel, redirigeables par l'environnement) ──
 ETAT_DEFAUT = "/var/lib/secubox/ai"
@@ -278,8 +278,12 @@ def _genre_modele(nom: str) -> bool:
     return not re.search(r"-\d{5}-of-\d{5}\.gguf$", nom)
 
 
+FORMAT_RETIRE = re.compile(r"Q4_0_(?:4_4|4_8|8_8)(?![0-9])", re.I)    # comme reglages.format_retire : llama.cpp ne les lit plus
+
+
 def nom_modele_valide(nom) -> bool:
-    return isinstance(nom, str) and bool(NOM_MODELE.fullmatch(nom)) and ".." not in nom and _genre_modele(nom)
+    return isinstance(nom, str) and bool(NOM_MODELE.fullmatch(nom)) and ".." not in nom and _genre_modele(nom) \
+        and not FORMAT_RETIRE.search(nom)
 
 
 def lire_prefs(efd: int, ids: dict) -> dict:

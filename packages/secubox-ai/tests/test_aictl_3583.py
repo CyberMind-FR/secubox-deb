@@ -767,3 +767,9 @@ def test_preparer_sans_resolv_conf(ctl, env, monkeypatch):
 def test_controleur_sans_cache_ecrit_par_root():
     # -B : root n'écrit jamais de __pycache__ (ni à côté du script, ni dans /usr/lib/secubox/ai) ; -I : isolé.
     assert SCRIPT.read_text().splitlines()[0] == "#!/usr/bin/python3 -IB"
+
+
+def test_format_retire_jamais_servi_par_le_controleur(ctl):
+    assert not ctl.nom_modele_valide("Llama-3.2-3B-Instruct-Q4_0_8_8.gguf")
+    assert not ctl.nom_modele_valide("x.q4_0_4_4.gguf")
+    assert ctl.nom_modele_valide("Llama-3.2-3B-Instruct-Q4_0.gguf")

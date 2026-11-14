@@ -28,6 +28,9 @@ from secubox_core.auth import require_jwt
 PLANCHER_DISQUE = 5 * 1024**3
 DEPOT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,100}$")
 DELAI_TELECHARGEMENT_S = 120       # délai de lecture entre deux blocs (pas durée totale)
+DELAI_CONNEXION_S = 10             # délai de connexion (distinct du délai de lecture)
+RETENTATIVES = 3                   # reprises automatiques après une erreur réseau
+ATTENTES_S = (2, 5, 15)            # attente avant chaque reprise
 API_HF_MAX = 5 * 1024**2           # réponse JSON de l'API Hugging Face
 telechargements: dict = {}         # nom -> {"recu", "total"[, "erreur"]} : suivi en mémoire, exposé par GET /modeles
 
@@ -177,9 +180,64 @@ async def infos_depot(depot: str) -> dict:
         nom = s.get("rfilename") if isinstance(s, dict) else None
         if isinstance(nom, str) and nom.endswith(".gguf") and "/" not in nom:
             lfs = s.get("lfs") if isinstance(s.get("lfs"), dict) else {}
-            fichiers.append({"nom": nom, "taille": s.get("size"), "sha256": lfs.get("sha256"), "genre": genre_fichier(nom)})
+            fichiers.append({"nom": nom, "taille": s.get("size"), "sha256": lfs.get("sha256"), "genre": genre_fichier(nom),
+                             "refuse": reglages.MESSAGE_FORMAT_RETIRE if reglages.format_retire(nom) else None})
     carte = d.get("cardData") if isinstance(d.get("cardData"), dict) else {}
     return {"depot": depot, "licence": carte.get("license"), "restreint": bool(d.get("gated")), "fichiers": fichiers}
+
+
+def _empreinte_de(chemin, n):
+    """SHA-256 des `n` premiers octets de `chemin`, ou None si le fichier n'a pas exactement `n` octets au moins."""
+    h, reste = hashlib.sha256(), n
+    with open(chemin, "rb") as f:
+        while reste:
+            bloc = f.read(min(reste, 1024 * 1024))
+            if not bloc:
+                return None
+            h.update(bloc)
+            reste -= len(bloc)
+    return h
+
+
+async def _recevoir(url, part, nom, taille, progres):
+    """Reçoit le fichier dans `part` ; rend l'empreinte SHA-256 du contenu complet. Après une erreur réseau, reprise
+    (HTTP Range) depuis les octets déjà écrits, au plus `RETENTATIVES` fois avec attente croissante. La reprise
+    recalcule d'abord l'empreinte des octets présents et ne vaut que pour ce même fichier (nom, taille attendue) ;
+    au moindre doute (fichier incohérent, serveur sans Range) on repart de zéro. Chaque tentative repasse par la
+    garde SSRF ; le journal ne reçoit ni adresse ni dépôt."""
+    recu = 0
+    for essai in range(RETENTATIVES + 1):
+        empreinte = None
+        if recu:
+            try:
+                ok = part.is_file() and not part.is_symlink() and part.stat().st_size == recu
+                empreinte = await asyncio.to_thread(_empreinte_de, part, recu) if ok else None
+            except OSError:
+                empreinte = None
+            if empreinte is None:
+                recu = 0
+        if recu >= taille > 0:
+            return empreinte             # déjà complet : plus rien à recevoir
+        if empreinte is None:
+            empreinte = hashlib.sha256()
+        progres(recu)
+        try:
+            await recherche.telecharger_fichier(url, part, taille, delai=DELAI_TELECHARGEMENT_S, empreinte=empreinte,
+                                                progres=progres, connexion=DELAI_CONNEXION_S, reprise=recu)
+            return empreinte
+        except recherche.RepriseRefusee:
+            journal("modele.reprise", modele=nom, tentative=essai + 1, issue="repart_de_zero")
+            recu = 0
+        except recherche.ErreurReseau:
+            if essai >= RETENTATIVES:
+                raise
+            try:
+                recu = part.stat().st_size
+            except OSError:
+                recu = 0
+            journal("modele.reprise", modele=nom, tentative=essai + 1, octets=recu, issue="reseau")
+            await asyncio.sleep(ATTENTES_S[min(essai, len(ATTENTES_S) - 1)])
+    raise HTTPException(502, "la page ne répond pas")
 
 
 async def telecharger(depot, nom, sha, taille, licence):
@@ -192,7 +250,6 @@ async def telecharger(depot, nom, sha, taille, licence):
     part = d / f"{nom}.{secrets.token_hex(4)}.part"
     suivi = telechargements.setdefault(nom, {"recu": 0, "total": taille})
     suivi["part"] = part.name
-    empreinte = hashlib.sha256()
 
     def progres(n):
         suivi["recu"] = n
@@ -205,8 +262,7 @@ async def telecharger(depot, nom, sha, taille, licence):
             os.fchmod(fd, 0o640)
         finally:
             os.close(fd)
-        await recherche.telecharger_fichier(f"https://huggingface.co/{depot}/resolve/main/{nom}", part, taille,
-                                            delai=DELAI_TELECHARGEMENT_S, empreinte=empreinte, progres=progres)
+        empreinte = await _recevoir(f"https://huggingface.co/{depot}/resolve/main/{nom}", part, nom, taille, progres)
         if empreinte.hexdigest() != str(sha).lower():
             faux.unlink(missing_ok=True)
             os.replace(part, faux)          # gardé pour examen, jamais listé comme modèle ni activable
@@ -279,8 +335,13 @@ async def post_modele(taches: BackgroundTasks, corps: dict = Body(...)):
     depot, nom = str(corps.get("depot", "")), str(corps.get("fichier", ""))
     if not DEPOT.match(depot) or not nom_valide(nom):
         raise HTTPException(422, "dépôt ou fichier invalide")
+    if reglages.format_retire(nom):
+        raise HTTPException(422, reglages.MESSAGE_FORMAT_RETIRE)       # avant tout accès réseau
     if (_dossier() / nom).exists() or _en_cours(nom):
         raise HTTPException(409, "déjà présent ou en cours")
+    autres = sorted(n for n in telechargements if _en_cours(n))
+    if autres:
+        raise HTTPException(409, "un téléchargement est déjà en cours : " + ", ".join(autres))
     # Réservation AVANT tout await : deux demandes simultanées du même nom ne passent pas toutes les deux.
     telechargements[nom] = {"recu": 0, "total": 0}
     lancee = False
@@ -313,6 +374,8 @@ async def activer(nom: str):
     Refus mémoire ou erreur du contrôleur : retour arrière (ancien modèle réécrit, démarrage de l'ancien demandé),
     503 avec le message du contrôleur."""
     _modele(nom)
+    if reglages.format_retire(nom):
+        raise HTTPException(422, reglages.MESSAGE_FORMAT_RETIRE)
     avant = reglages.lire_prefs()["moteur"]["modele"]
     reglages.ecrire_prefs(reglages.valider({"moteur": {"modele": nom}}))
     if await moteurs._sonde(moteurs._local(), 2):
