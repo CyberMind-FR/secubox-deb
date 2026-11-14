@@ -278,7 +278,7 @@ def _genre_modele(nom: str) -> bool:
     return not re.search(r"-\d{5}-of-\d{5}\.gguf$", nom)
 
 
-FORMAT_RETIRE = re.compile(r"Q4_0_(?:4_4|4_8|8_8)(?![0-9])", re.I)    # comme reglages.format_retire : llama.cpp ne les lit plus
+FORMAT_RETIRE = re.compile(r"Q4[-_.]?0[-_.]?(?:4[-_.]?4|4[-_.]?8|8[-_.]?8)(?![0-9])", re.I)    # comme reglages.format_retire : llama.cpp ne les lit plus
 
 
 def nom_modele_valide(nom) -> bool:

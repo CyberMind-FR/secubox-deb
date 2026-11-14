@@ -11,6 +11,13 @@ secubox-ai (0.1.1-1~trixie1) trixie; urgency=medium
     les octets présents, repart de zéro au moindre doute), 3 reprises
     automatiques avec attente croissante, chaque tentative repassant par la
     garde SSRF ; journal sans adresse (ref #3583).
+  * Reprise durcie : Content-Range 206 vérifié en entier (début, fin, total),
+    Accept-Encoding identity, 5xx/429 retentés en gardant l'avance, reprise
+    refusée sans consommer de tentative, empreinte fausse après reprise =
+    une seule réception complète depuis zéro avant .faux ; motif des formats
+    retirés tolérant aux séparateurs (Q4-0-8-8, q4.0.8.8), identique dans
+    l'API et le contrôleur ; bouton Ajouter grisé pendant un téléchargement
+    (ref #3583).
 
  -- Gerald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 14:00:00 +0100
 

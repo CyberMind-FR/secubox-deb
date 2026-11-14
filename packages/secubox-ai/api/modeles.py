@@ -199,14 +199,30 @@ def _empreinte_de(chemin, n):
     return h
 
 
+async def _attendre(secondes):
+    await asyncio.sleep(secondes)
+
+
+def _creer_part(part):
+    # 0640 quel que soit l'umask (os.replace garde le mode) : le moteur, du groupe secubox-ai, doit pouvoir le lire
+    # (secubox-aictl refuse un modèle illisible par le groupe).
+    fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+    try:
+        os.fchmod(fd, 0o640)
+    finally:
+        os.close(fd)
+
+
 async def _recevoir(url, part, nom, taille, progres):
-    """Reçoit le fichier dans `part` ; rend l'empreinte SHA-256 du contenu complet. Après une erreur réseau, reprise
-    (HTTP Range) depuis les octets déjà écrits, au plus `RETENTATIVES` fois avec attente croissante. La reprise
-    recalcule d'abord l'empreinte des octets présents et ne vaut que pour ce même fichier (nom, taille attendue) ;
-    au moindre doute (fichier incohérent, serveur sans Range) on repart de zéro. Chaque tentative repasse par la
-    garde SSRF ; le journal ne reçoit ni adresse ni dépôt."""
-    recu = 0
-    for essai in range(RETENTATIVES + 1):
+    """Reçoit le fichier dans `part` ; rend (empreinte SHA-256 du contenu complet, `repris`) où `repris` dit que ce
+    contenu mêle des octets reçus lors d'une tentative précédente. Après une erreur réseau, reprise (HTTP Range) depuis
+    les octets déjà écrits, au plus `RETENTATIVES` fois avec attente croissante. La reprise recalcule d'abord
+    l'empreinte des octets présents et ne vaut que pour ce même fichier (nom, taille attendue) ; au moindre doute
+    (`.part` modifié entre deux tentatives, serveur sans Range, Content-Range incohérent) on repart de zéro, sans
+    compter cette tentative parmi les reprises. Une panne 5xx/429 pendant une reprise garde l'avance. Chaque tentative
+    repasse par la garde SSRF ; le journal ne reçoit ni adresse ni dépôt."""
+    recu, echecs = 0, 0
+    while True:
         empreinte = None
         if recu:
             try:
@@ -217,27 +233,27 @@ async def _recevoir(url, part, nom, taille, progres):
             if empreinte is None:
                 recu = 0
         if recu >= taille > 0:
-            return empreinte             # déjà complet : plus rien à recevoir
+            return empreinte, True            # déjà complet : plus rien à recevoir
         if empreinte is None:
             empreinte = hashlib.sha256()
         progres(recu)
         try:
             await recherche.telecharger_fichier(url, part, taille, delai=DELAI_TELECHARGEMENT_S, empreinte=empreinte,
                                                 progres=progres, connexion=DELAI_CONNEXION_S, reprise=recu)
-            return empreinte
+            return empreinte, recu > 0
         except recherche.RepriseRefusee:
-            journal("modele.reprise", modele=nom, tentative=essai + 1, issue="repart_de_zero")
+            journal("modele.reprise", modele=nom, tentative=echecs + 1, issue="repart_de_zero")
             recu = 0
         except recherche.ErreurReseau:
-            if essai >= RETENTATIVES:
+            if echecs >= RETENTATIVES:
                 raise
             try:
                 recu = part.stat().st_size
             except OSError:
                 recu = 0
-            journal("modele.reprise", modele=nom, tentative=essai + 1, octets=recu, issue="reseau")
-            await asyncio.sleep(ATTENTES_S[min(essai, len(ATTENTES_S) - 1)])
-    raise HTTPException(502, "la page ne répond pas")
+            journal("modele.reprise", modele=nom, tentative=echecs + 1, octets=recu, issue="reseau")
+            await _attendre(ATTENTES_S[min(echecs, len(ATTENTES_S) - 1)])
+            echecs += 1
 
 
 async def telecharger(depot, nom, sha, taille, licence):
@@ -255,14 +271,16 @@ async def telecharger(depot, nom, sha, taille, licence):
         suivi["recu"] = n
 
     try:
-        # 0640 quel que soit l'umask (os.replace garde le mode) : le moteur, du groupe secubox-ai, doit pouvoir le lire
-        # (secubox-aictl refuse un modèle illisible par le groupe).
-        fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
-        try:
-            os.fchmod(fd, 0o640)
-        finally:
-            os.close(fd)
-        empreinte = await _recevoir(f"https://huggingface.co/{depot}/resolve/main/{nom}", part, nom, taille, progres)
+        _creer_part(part)
+        url = f"https://huggingface.co/{depot}/resolve/main/{nom}"
+        empreinte, repris = await _recevoir(url, part, nom, taille, progres)
+        if repris and empreinte.hexdigest() != str(sha).lower():
+            # Un fichier mêlant plusieurs tentatives a une empreinte fausse : avant de le mettre de côté (plusieurs Go),
+            # une seule nouvelle réception complète, depuis zéro.
+            journal("modele.reprise", modele=nom, issue="empreinte_repart_de_zero")
+            part.unlink(missing_ok=True)
+            _creer_part(part)
+            empreinte, _ = await _recevoir(url, part, nom, taille, progres)
         if empreinte.hexdigest() != str(sha).lower():
             faux.unlink(missing_ok=True)
             os.replace(part, faux)          # gardé pour examen, jamais listé comme modèle ni activable

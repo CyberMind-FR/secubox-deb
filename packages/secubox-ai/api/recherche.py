@@ -309,8 +309,8 @@ async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None,
     (téléchargements de plusieurs Go : jamais le fichier en mémoire, `max_octets` fixé par l'appelant).
     `connexion` : délai de connexion distinct (le délai `delai` vaut alors pour chaque lecture).
     `reprise` > 0 : `chemin` contient déjà ce nombre d'octets valides (déjà passés dans `empreinte` par l'appelant) ;
-    la requête porte `Range` à chaque saut, la réponse doit être 206 avec un `Content-Range` qui commence à `reprise`,
-    sinon RepriseRefusee (rien n'est écrit). Le fichier partiel n'est pas effacé ici : l'appelant s'en charge."""
+    la requête porte `Range` à chaque saut, la réponse doit être 206 avec un `Content-Range` complet (début = `reprise`, fin = `max_octets` - 1, total = `max_octets`),
+    sinon RepriseRefusee (rien n'est écrit) ; 5xx ou 429 : ErreurReseau (on retente en gardant l'avance). Le fichier partiel n'est pas effacé ici : l'appelant s'en charge."""
     tempo = delai if connexion is None else httpx.Timeout(delai, connect=connexion)
     for _ in range(SAUTS_MAX):
         try:
@@ -321,7 +321,7 @@ async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None,
             raise HTTPException(422, "adresse refusée (http ou https, port standard, hôte public)")
         epingle, entetes, extensions = cible
         if reprise:
-            entetes = {**entetes, "Range": f"bytes={reprise}-"}
+            entetes = {**entetes, "Range": f"bytes={reprise}-", "Accept-Encoding": "identity"}
         try:
             async with _client("document", tempo, follow_redirects=False) as c:
                 async with c.stream("GET", epingle, headers=entetes, extensions=extensions) as r:
@@ -329,8 +329,12 @@ async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None,
                         url = urljoin(url, r.headers["location"])
                         continue
                     if reprise:
-                        debut = re.match(r"bytes (\d+)-\d+/", r.headers.get("content-range", ""))
-                        if r.status_code != 206 or not debut or int(debut[1]) != reprise:
+                        if r.status_code >= 500 or r.status_code == 429:
+                            raise ErreurReseau(502, f"la page répond {r.status_code}")     # panne passagère : on retente
+                        plage = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", r.headers.get("content-range", ""))
+                        # Reprise valable : 206 dont la plage va exactement de `reprise` à la fin du fichier attendu.
+                        if (r.status_code != 206 or not plage or int(plage[1]) != reprise
+                                or int(plage[3]) != max_octets or int(plage[2]) != max_octets - 1):
                             raise RepriseRefusee()
                     elif r.status_code != 200:
                         raise HTTPException(502, f"la page répond {r.status_code}")

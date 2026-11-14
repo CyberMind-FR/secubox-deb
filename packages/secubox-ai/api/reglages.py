@@ -58,7 +58,7 @@ CONFIG_DEFAUT = {
 
 
 # Formats ARM entrelacés retirés de llama.cpp (le moteur les refuse : « use Q4_0 with runtime repacking »).
-FORMAT_RETIRE = re.compile(r"Q4_0_(?:4_4|4_8|8_8)(?![0-9])", re.I)
+FORMAT_RETIRE = re.compile(r"Q4[-_.]?0[-_.]?(?:4[-_.]?4|4[-_.]?8|8[-_.]?8)(?![0-9])", re.I)
 MESSAGE_FORMAT_RETIRE = "format ARM retiré de llama.cpp : prenez la variante Q4_0 ou Q4_K_M"
 
 

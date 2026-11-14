@@ -682,10 +682,20 @@ class _Coupe(httpx.AsyncByteStream):
 
 @pytest.fixture
 def hf_coupe(env, monkeypatch):
-    """CDN qui coupe les premières réponses après `coupe` octets, puis sert (ou ignore) Range."""
+    """CDN qui coupe les premières réponses après `coupe` octets, puis sert (ou ignore) Range.
+    Réglages : `cr` (plage annoncée par les 206 : ok|debut|fin|total|absent), `erreurs_reprise` (nombre de 503 sur les
+    requêtes Range), `corrompu_reprise` (les 206 portent des octets faux), `sans_range_apres` (Range ignoré après n
+    requêtes), `prive_des` (le CDN résout vers une adresse privée à partir du n-ième appel)."""
     contenu = b"GGUF" + bytes(range(256)) * 40
     etat = {"contenu": contenu, "sha": hashlib.sha256(contenu).hexdigest(), "coupures": 2, "coupe": 3000,
-            "range_ok": True, "plages": [], "resolve": 0}
+            "range_ok": True, "plages": [], "resolve": 0, "cr": "ok", "erreurs_reprise": 0, "corrompu_reprise": False,
+            "sans_range_apres": 10**6, "prive_des": 10**6, "encodages": [], "dns_cdn": 0}
+    n = len(contenu)
+
+    def plage_annoncee(debut):
+        d, f, t = {"ok": (debut, n - 1, n), "debut": (debut + 1, n - 1, n), "fin": (debut, n - 2, n),
+                   "total": (debut, n - 1, n + 1)}.get(etat["cr"], (None, None, None))
+        return {} if d is None else {"content-range": f"bytes {d}-{f}/{t}"}
 
     def handler(req):
         origine = f"{req.url.scheme}://{req.headers['host']}{req.url.raw_path.decode()}"
@@ -695,18 +705,30 @@ def hf_coupe(env, monkeypatch):
         assert origine == "https://cdn.exemple.test/blob/abc"
         plage = req.headers.get("range")
         etat["plages"].append(plage)
-        debut = int(plage.split("=")[1].rstrip("-")) if plage and etat["range_ok"] else 0
+        if plage:
+            etat["encodages"].append(req.headers.get("accept-encoding"))
+        honore = bool(plage) and etat["range_ok"] and len(etat["plages"]) <= etat["sans_range_apres"]
+        if honore and etat["erreurs_reprise"]:
+            etat["erreurs_reprise"] -= 1
+            return httpx.Response(503)
+        debut = int(plage.split("=")[1].rstrip("-")) if honore else 0
         corps = etat["contenu"][debut:]
+        if honore and etat["corrompu_reprise"]:
+            corps = bytes(b ^ 0xFF for b in corps)
         if etat["coupures"]:
             etat["coupures"] -= 1
             morceaux = [corps[i:i + 500] for i in range(0, etat["coupe"], 500)]
-            return httpx.Response(206 if debut else 200, stream=_Coupe(morceaux),
-                                  headers={"content-range": f"bytes {debut}-{len(contenu) - 1}/{len(contenu)}"} if debut else {})
-        if plage and etat["range_ok"]:
-            return httpx.Response(206, content=corps, headers={"content-range": f"bytes {debut}-{len(contenu) - 1}/{len(contenu)}"})
+            return httpx.Response(206 if honore else 200, stream=_Coupe(morceaux),
+                                  headers=plage_annoncee(debut) if honore else {})
+        if honore:
+            return httpx.Response(206, content=corps, headers=plage_annoncee(debut))
         return httpx.Response(200, content=etat["contenu"])
 
     async def resolveur(hote):
+        if hote == "cdn.exemple.test":
+            etat["dns_cdn"] += 1
+            if etat["dns_cdn"] >= etat["prive_des"]:
+                return ["10.0.0.5"]
         return ["93.184.216.34"]
 
     inet6 = env / "if_inet6"
@@ -717,6 +739,14 @@ def hf_coupe(env, monkeypatch):
     monkeypatch.setattr(recherche, "BLOC_ECRITURE", 500)
     monkeypatch.setattr(modeles, "ATTENTES_S", (0, 0, 0))
     return etat
+
+
+async def _telecharger(etat, sha=None):
+    await modeles.telecharger(DEPOT, NOM, sha or etat["sha"], len(etat["contenu"]), "mit")
+
+
+def _fichier_final(env):
+    return (env / "etat" / "modeles" / NOM).read_bytes()
 
 
 @pytest.mark.asyncio
@@ -749,14 +779,134 @@ async def test_reprise_empreinte_fausse_reste_refusee(env, hf_coupe):
 
 
 @pytest.mark.asyncio
-async def test_reprise_fichier_incoherent_repart_de_zero(env, hf_coupe, monkeypatch):
-    # Le .part est tronqué entre deux tentatives : la taille ne correspond plus, on repart de zéro (sans Range).
-    def doute(chemin, n):
-        return None
-    monkeypatch.setattr(modeles, "_empreinte_de", doute)
-    await modeles.telecharger(DEPOT, NOM, hf_coupe["sha"], len(hf_coupe["contenu"]), "mit")
-    assert hf_coupe["plages"] == [None, None, None]
-    assert (env / "etat" / "modeles" / NOM).read_bytes() == hf_coupe["contenu"]
+@pytest.mark.parametrize("changement", ["tronque", "grandi"])
+async def test_reprise_part_modifie_entre_deux_tentatives_repart_de_zero(env, hf_coupe, monkeypatch, changement):
+    # Vrai fichier .part tronqué (ou allongé) pendant l'attente : la taille ne colle plus, on repart de zéro (sans Range).
+    hf_coupe["coupures"] = 1
+
+    async def attendre(_s):
+        f = env / "etat" / "modeles" / modeles.telechargements[NOM]["part"]
+        if changement == "tronque":
+            with open(f, "r+b") as h:
+                h.truncate(f.stat().st_size - 100)
+        else:
+            with open(f, "ab") as h:
+                h.write(b"intrus")
+    monkeypatch.setattr(modeles, "_attendre", attendre)
+    await _telecharger(hf_coupe)
+    assert hf_coupe["plages"] == [None, None]
+    assert _fichier_final(env) == hf_coupe["contenu"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cr", ["debut", "fin", "total", "absent"])
+async def test_reprise_content_range_incoherent_repart_de_zero(env, hf_coupe, cr):
+    hf_coupe["coupures"], hf_coupe["cr"] = 1, cr
+    await _telecharger(hf_coupe)
+    assert len(hf_coupe["plages"]) == 3 and hf_coupe["plages"][1].startswith("bytes=") and hf_coupe["plages"][2] is None
+    assert _fichier_final(env) == hf_coupe["contenu"]
+
+
+@pytest.mark.asyncio
+async def test_reprise_octets_faux_un_seul_nouvel_essai_depuis_zero(env, hf_coupe):
+    hf_coupe["coupures"], hf_coupe["corrompu_reprise"] = 1, True
+    await _telecharger(hf_coupe)
+    assert len(hf_coupe["plages"]) == 3 and hf_coupe["plages"][2] is None     # reprise, puis réception complète
+    assert _fichier_final(env) == hf_coupe["contenu"]
+    assert any(x.get("issue") == "empreinte_repart_de_zero" for x in jrn.lire() if x["action"] == "modele.reprise")
+
+
+@pytest.mark.asyncio
+async def test_empreinte_fausse_apres_reprise_un_essai_puis_faux(env, hf_coupe):
+    hf_coupe["coupures"] = 1
+    with pytest.raises(HTTPException) as e:
+        await _telecharger(hf_coupe, sha="0" * 64)
+    assert e.value.status_code == 409
+    assert len(hf_coupe["plages"]) == 3 and hf_coupe["plages"][2] is None      # un seul nouvel essai
+    d = env / "etat" / "modeles"
+    assert (d / (NOM + ".faux")).read_bytes() == hf_coupe["contenu"] and not list(d.glob("*.part"))
+
+
+@pytest.mark.asyncio
+async def test_reprise_saut_vers_adresse_privee_refuse(env, hf_coupe):
+    hf_coupe["coupures"], hf_coupe["prive_des"] = 1, 2          # la 2e résolution du CDN (la reprise) est privée
+    with pytest.raises(HTTPException) as e:
+        await _telecharger(hf_coupe)
+    assert e.value.status_code == 422
+    assert len(hf_coupe["plages"]) == 1                          # aucune requête de reprise n'a atteint le CDN
+    d = env / "etat" / "modeles"
+    assert not (d / NOM).exists() and not list(d.glob("*.part"))
+
+
+@pytest.mark.asyncio
+async def test_reprise_5xx_garde_l_avance_et_retente(env, hf_coupe):
+    hf_coupe["coupures"], hf_coupe["erreurs_reprise"] = 1, 1
+    await _telecharger(hf_coupe)
+    p = hf_coupe["plages"]
+    assert len(p) == 3 and p[1] == p[2] and p[1].startswith("bytes=")       # même reprise retentée, avance conservée
+    assert _fichier_final(env) == hf_coupe["contenu"]
+
+
+@pytest.mark.asyncio
+async def test_reprise_refusee_ne_brule_pas_la_derniere_tentative(env, hf_coupe):
+    # 3 coupures (toutes les reprises permises), puis le serveur ignore Range : repart de zéro et réussit.
+    hf_coupe["coupures"], hf_coupe["sans_range_apres"] = 3, 3
+    await _telecharger(hf_coupe)
+    assert hf_coupe["plages"][-1] is None and len(hf_coupe["plages"]) == 5
+    assert _fichier_final(env) == hf_coupe["contenu"]
+
+
+@pytest.mark.asyncio
+async def test_reprise_demande_sans_compression(env, hf_coupe):
+    await _telecharger(hf_coupe)
+    assert hf_coupe["encodages"] and set(hf_coupe["encodages"]) == {"identity"}
+
+
+@pytest.mark.asyncio
+async def test_annulation_libere_la_reservation_et_le_part(env, hf_coupe, monkeypatch):
+    bloque = asyncio.Event()
+
+    async def lent(*a, **k):
+        (env / "etat" / "modeles" / modeles.telechargements[NOM]["part"]).write_bytes(b"GGUF")
+        bloque.set()
+        await asyncio.sleep(3600)
+    monkeypatch.setattr(recherche, "telecharger_fichier", lent)
+    modeles.telechargements[NOM] = {"recu": 0, "total": len(hf_coupe["contenu"])}
+    tache = asyncio.create_task(modeles._lancer(DEPOT, NOM, hf_coupe["sha"], len(hf_coupe["contenu"]), "mit"))
+    await bloque.wait()
+    assert modeles._en_cours(NOM)
+    tache.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await tache
+    assert not modeles._en_cours(NOM) and modeles.telechargements[NOM]["erreur"]
+    assert not list((env / "etat" / "modeles").glob("*.part"))
+    assert not [n for n in modeles.telechargements if modeles._en_cours(n)]    # plus rien ne bloque un nouveau téléchargement
+
+
+@pytest.mark.parametrize("nom", ["x-Q4-0-8-8.gguf", "x.q4.0.8.8.gguf", "x-Q4_0-4.4.gguf"])
+def test_format_retire_separateurs(nom):
+    assert reglages.format_retire(nom)
+
+
+@pytest.mark.asyncio
+async def test_format_retire_variantes_refusees_partout(env, hf):
+    installer(env, "m-Q4-0-8-8.gguf")
+    async with client() as c:
+        assert (await c.post("/modeles", json={"depot": DEPOT, "fichier": "m.q4.0.8.8.gguf"})).status_code == 422
+        assert (await c.post("/modeles/m-Q4-0-8-8.gguf/activer")).status_code == 422
+    assert hf["vues"] == []
+
+
+def test_motif_format_retire_identique_dans_le_controleur():
+    import importlib.machinery
+    import importlib.util
+    from pathlib import Path
+    script = Path(__file__).resolve().parents[1] / "sbin" / "secubox-aictl"
+    chargeur = importlib.machinery.SourceFileLoader("secubox_aictl_parite", str(script))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("secubox_aictl_parite", chargeur))
+    chargeur.exec_module(mod)
+    assert mod.FORMAT_RETIRE.pattern == reglages.FORMAT_RETIRE.pattern
+    assert mod.FORMAT_RETIRE.flags == reglages.FORMAT_RETIRE.flags
 
 
 @pytest.mark.asyncio
