@@ -173,6 +173,21 @@ def test_nginx_100_mo_seulement_pour_les_depots():
     grands = {m.group(1) for m in re.finditer(r"location = (\S+) \{[^}]*client_max_body_size 100m;", code, re.S)}
     assert grands == {"/api/v1/ai/documents/fichier", "/api/v1/ai/medias/entree"}
     assert code.count("client_max_body_size 100m;") == 2
+    assert "client_max_body_size 64m;" in _bloc("/api/v1/ai/memoire-import")
+
+
+def _bloc(chemin):
+    return re.search(r"location = " + re.escape(chemin) + r" \{(.*?)\}", _code(NGINX), re.S).group(1)
+
+
+def test_nginx_lectures_de_document_plus_longues_que_pdftotext():
+    """Lien (POST /documents) comme dépôt : pdfinfo puis pdftotext tournent DANS la requête (relecture 1)."""
+    texte = (PAQUET / "api" / "documents.py").read_text(encoding="utf-8")
+    pdf = sum(int(re.search(rf"^{n} = (\d+)$", texte, re.M).group(1)) for n in ("DELAI_PDFINFO_S", "DELAI_PDFTOTEXT_S"))
+    for chemin in ("/api/v1/ai/documents", "/api/v1/ai/documents/fichier"):
+        bloc = _bloc(chemin)
+        assert "rewrite ^/api/v1/ai/(.*)$ /$1 break;" in bloc and "proxy_pass http://unix:/run/secubox/ai.sock;" in bloc
+        assert int(re.search(r"proxy_read_timeout (\d+)s;", bloc).group(1)) >= pdf + 200, chemin
 
 
 def test_nginx_syntaxe(tmp_path):
@@ -209,7 +224,7 @@ def test_postinst_comptes():
 
 def test_postinst_dossiers_par_descripteur_sans_tmpfiles():
     code = _code(POSTINST)
-    assert "python3 -I - /var/lib/secubox secubox-ai secubox-ai <<'DOSSIERS'" in code
+    assert "python3 -I - /var/lib/secubox ai secubox-ai secubox-ai <<'DOSSIERS'" in code
     assert "tmpfiles" not in code
     assert not re.search(r"\bch(own|mod|grp)\b", code.replace("os.fchown", "").replace("os.fchmod", ""))  # par chemin
     # L'état d'exécution n'est jamais remis à zéro.
@@ -221,10 +236,10 @@ def _dossiers():
     return re.search(r"<<'DOSSIERS'(?:[^\n]*\\\n)*[^\n]*\n(.*?)\nDOSSIERS\n", POSTINST, re.S).group(1)
 
 
-def _lancer(racine):
+def _lancer(racine, nom="ai"):
     compte = pwd.getpwuid(os.getuid()).pw_name
     groupe = grp.getgrgid(os.getgid()).gr_name
-    return subprocess.run([sys.executable, "-I", "-", str(racine), compte, groupe], input=_dossiers(),
+    return subprocess.run([sys.executable, "-I", "-", str(racine), nom, compte, groupe], input=_dossiers(),
                           capture_output=True, text=True, timeout=30)
 
 
@@ -233,6 +248,7 @@ def test_dossiers_crees_0750_et_etat_garde(tmp_path):
     assert r.returncode == 0, r.stderr
     assert (tmp_path / "ai").stat().st_mode & 0o7777 == 0o750
     assert (tmp_path / "ai" / "modeles").stat().st_mode & 0o7777 == 0o750
+    assert (tmp_path / "ai" / "tmp").stat().st_mode & 0o7777 == 0o700
     (tmp_path / "ai" / "memoire.db").write_text("garde")
     (tmp_path / "ai" / "modeles" / "m.gguf").write_text("garde")
     os.chmod(tmp_path / "ai", 0o755)
@@ -257,6 +273,33 @@ def test_dossiers_lien_jamais_suivi(tmp_path, piege):
     r = _lancer(racine)
     assert r.returncode != 0
     assert cible.stat().st_mode & 0o7777 == 0o755
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="jamais en root : le dossier visé est /etc")
+def test_dossier_root_non_vide_refuse():
+    r = _lancer(Path("/"), "etc")              # dossier root non vide : refusé AVANT tout fchown/fchmod
+    assert r.returncode != 0 and "dossier root non vide" in r.stderr
+
+
+@pytest.mark.skipif(os.getuid() == 0, reason="jamais en root")
+def test_dossier_root_vide_accepte():
+    vides = [d for d in ("srv", "mnt", "opt") if Path("/", d).is_dir() and Path("/", d).stat().st_uid == 0
+             and not Path("/", d).is_symlink() and not any(Path("/", d).iterdir())]
+    if not vides:
+        pytest.skip("aucun dossier root vide sur ce poste")
+    r = _lancer(Path("/"), vides[0])           # passe la garde ; seul le fchown échoue hors root
+    assert "dossier root non vide" not in r.stderr and "PermissionError" in r.stderr
+
+
+def test_temporaires_de_sqlite_dans_l_etat_du_module():
+    """Relecture 1 : sans SQLITE_TMPDIR, SQLite irait vers /var/tmp, refusé par le profil."""
+    env = _unite("secubox-ai.service")["Environment"]
+    assert "SQLITE_TMPDIR=/var/lib/secubox/ai/tmp" in env
+    code = _code(PROFIL_API)
+    assert "/var/lib/secubox/ai/** rwk," in code and "/tmp" not in code
+    assert not re.search(r"^\s*deny /var/lib/secubox/ai", code, re.M)
+    assert 'dossier(ai, "tmp", 0o700)' in POSTINST
+    assert "/var/lib/secubox/ai" in " ".join(_unite("secubox-ai.service")["ReadWritePaths"])
 
 
 def test_postinst_ordre():
@@ -290,6 +333,8 @@ def test_prerm_et_postrm():
     post = _code(POSTRM)
     assert post.count("for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service; do") == 2
     assert 'deb-systemd-helper purge "$_u"' in post and 'deb-systemd-helper mask "$_u"' in post
+    assert post.count("    decharger_profils\n") == 2
+    assert 'apparmor_parser -R "/etc/apparmor.d/$_p"' in post and "/sys/kernel/security/apparmor/.remove" in post
     assert "rm -f /etc/secubox/ai.toml" in post and "/var/lib/secubox/ai" not in post   # données gardées
 
 

@@ -51,7 +51,8 @@ profile secubox-ai-api {
   /var/log/secubox/garde-origine.log w,
   deny /var/log/secubox/audit.log w,
 
-  # Données du module : préférences (double tampon), mémoire SQLite (WAL), journal, documents, médias, modèles.
+  # Données du module : préférences (double tampon), mémoire SQLite (WAL), journal, documents, médias, modèles, et
+  # tmp/ : temporaires de SQLite (SQLITE_TMPDIR de l'unité ; ni /tmp ni /var/tmp ne sont ouverts).
   /var/lib/secubox/ai/ r,
   /var/lib/secubox/ai/** rwk,
 

@@ -38,24 +38,25 @@ case "$1" in
     [ -d /var/lib/secubox ] || install -d -m 0755 /var/lib/secubox
 
     # Données du module : /var/lib/secubox/ai et modeles/ 0750 secubox-ai:secubox-ai (le moteur lit par le groupe ;
-    # BindReadOnlyPaths de son unité exige que modeles/ existe). PAR DESCRIPTEUR, jamais par chemin ni par tmpfiles :
-    # /var/lib/secubox appartient au compte partagé secubox, qui pourrait substituer un lien entre la création et le
-    # chown (systemd-tmpfiles refuse d'ailleurs cette transition). Un lien n'est jamais suivi ; un dossier d'un autre
-    # compte est refusé. Le contenu n'est jamais parcouru ni modifié.
-    python3 -I - /var/lib/secubox secubox-ai secubox-ai <<'DOSSIERS' || \
-      echo "secubox-ai : /var/lib/secubox/ai non préparé (lien ou propriétaire inattendu) : l'API ne démarrera pas" >&2
+    # BindReadOnlyPaths de son unité exige que modeles/ existe), tmp/ 0700 (SQLITE_TMPDIR de l'API). PAR DESCRIPTEUR,
+    # jamais par chemin ni par tmpfiles : /var/lib/secubox appartient au compte partagé secubox, qui pourrait substituer
+    # un lien entre la création et le chown (systemd-tmpfiles refuse d'ailleurs cette transition). Un lien n'est jamais
+    # suivi ; un dossier d'un autre compte est refusé, un dossier root seulement s'il est vide (créé à la main avant
+    # l'installation : son contenu n'est pas celui du module). Le contenu n'est jamais modifié.
+    python3 -I - /var/lib/secubox ai secubox-ai secubox-ai <<'DOSSIERS' || \
+      echo "secubox-ai : /var/lib/secubox/ai non préparé (lien, propriétaire inattendu ou dossier root non vide) : l'API ne démarrera pas" >&2
 import grp
 import os
 import pwd
 import stat
 import sys
 
-racine, compte, groupe = sys.argv[1:4]
+racine, nom, compte, groupe = sys.argv[1:5]
 uid, gid = pwd.getpwnam(compte).pw_uid, grp.getgrnam(groupe).gr_gid
 OUVRIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
 
-def dossier(dfd, nom):
+def dossier(dfd, nom, mode):
     try:
         os.mkdir(nom, 0o700, dir_fd=dfd)
     except FileExistsError:
@@ -64,13 +65,16 @@ def dossier(dfd, nom):
     st = os.fstat(fd)
     if not stat.S_ISDIR(st.st_mode) or st.st_uid not in (0, uid):
         sys.exit(f"{nom} : propriétaire inattendu ({st.st_uid}), laissé tel quel")
+    if st.st_uid != uid and os.listdir(fd):
+        sys.exit(f"{nom} : dossier root non vide, laissé tel quel (à vider ou à rendre à {compte} à la main)")
     os.fchown(fd, uid, gid)
-    os.fchmod(fd, 0o750)
+    os.fchmod(fd, mode)
     return fd
 
 
-ai = dossier(os.open(racine, OUVRIR), "ai")
-dossier(ai, "modeles")
+ai = dossier(os.open(racine, OUVRIR), nom, 0o750)
+dossier(ai, "modeles", 0o750)
+dossier(ai, "tmp", 0o700)
 DOSSIERS
 
     # Configuration fixe au premier passage seulement : les réglages de l'exploitant survivent aux mises à jour.

@@ -59,7 +59,7 @@ Aucun sudo, aucun `systemd-run` : l'API ne lance rien en root.
 | `/etc/secubox/ai.toml` | root 0644 | configuration fixe, copiée de `/usr/share/secubox/ai/ai.toml.example` au premier passage seulement |
 | `/etc/secubox/secrets/ai/distant.key` | root:secubox-ai 0640 | clé du moteur distant, posée par `secubox-aictl cle-distante` (lue sur l'entrée standard) |
 | `/var/lib/secubox/ai/preferences.toml` | secubox-ai | préférences modifiables depuis la page (écriture atomique, double tampon) |
-| `/var/lib/secubox/ai/` | secubox-ai 0750 | `memoire.db`, `journal.jsonl`, `documents/`, `medias/`, `modeles/` (0750, modèles 0640) |
+| `/var/lib/secubox/ai/` | secubox-ai 0750 | `memoire.db`, `journal.jsonl`, `documents/`, `medias/`, `modeles/` (0750, modèles 0640), `tmp/` (0700, temporaires de SQLite) |
 
 `ai.toml` (sections) :
 
@@ -152,7 +152,8 @@ Toute route porte `require_jwt` (administrateur réel), sauf `GET /health` (test
 | `GET /journal` | fin du journal du module |
 
 nginx : flux du dialogue sans tampon (lecture jusqu'à 2 h), corps de 100 Mo pour les deux seuls dépôts de fichier,
-8 Mo pour le dialogue (image jointe), 32 Mo pour l'import de mémoire, 2 Mo ailleurs.
+8 Mo pour le dialogue (image jointe), 64 Mo pour l'import de mémoire, 2 Mo ailleurs ; 900 s pour les lectures de
+document (lien ou dépôt : pdftotext dans la requête).
 
 ## Journal
 

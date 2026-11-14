@@ -8,6 +8,20 @@
 # La purge retire la configuration fixe et les fichiers d'exécution ; les DONNÉES (/var/lib/secubox/ai : mémoire,
 # historique, modèles) et la clé du moteur distant restent : elles ne se retirent qu'à la main, jamais par apt.
 set -e
+
+# Profils AppArmor déchargés au retrait comme à la purge (tolérant : AppArmor absent, profil jamais chargé). Au retrait
+# le fichier est encore là (conffile) : apparmor_parser -R ; à la purge dpkg l'a déjà effacé : par le nom du profil.
+decharger_profils() {
+  for _p in secubox-ai-api secubox-ai-moteur; do
+    if [ -f "/etc/apparmor.d/$_p" ] && command -v apparmor_parser >/dev/null 2>&1; then
+      apparmor_parser -R "/etc/apparmor.d/$_p" >/dev/null 2>&1 || true
+    elif [ -w /sys/kernel/security/apparmor/.remove ] \
+         && grep -q "^$_p " /sys/kernel/security/apparmor/profiles 2>/dev/null; then
+      printf '%s' "$_p" > /sys/kernel/security/apparmor/.remove 2>/dev/null || true
+    fi
+  done
+}
+
 case "$1" in
   remove)
     for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service; do
@@ -15,6 +29,7 @@ case "$1" in
     done
     rm -f /run/systemd/system/secubox-ai.service.d/50-adresses.conf
     rmdir /run/systemd/system/secubox-ai.service.d 2>/dev/null || true
+    decharger_profils
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload >/dev/null 2>&1 || true
     fi
@@ -24,6 +39,7 @@ case "$1" in
       deb-systemd-helper purge "$_u" >/dev/null 2>&1 || true
       deb-systemd-helper unmask "$_u" >/dev/null 2>&1 || true
     done
+    decharger_profils
     rm -f /etc/secubox/ai.toml
     rm -rf /run/secubox-ai
     ;;

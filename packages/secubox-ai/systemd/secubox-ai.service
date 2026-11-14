@@ -23,6 +23,9 @@ UMask=0027
 WorkingDirectory=/usr/lib/secubox/ai
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
+# Temporaires de SQLite (journal d'instruction, tris de l'import, de FTS5 et des grosses suppressions) : dans l'état du
+# module, créé 0700 par le postinst ; sans lui SQLite irait vers /var/tmp, refusé par le profil AppArmor.
+Environment=SQLITE_TMPDIR=/var/lib/secubox/ai/tmp
 # Profil chargé par le postinst avant le démarrage (apparmor/secubox-ai-api).
 AppArmorProfile=secubox-ai-api
 # /run/secubox est PARTAGÉ et collant (1777) : on n'y délie que ce qu'on possède. « + » : en root et hors profil.
