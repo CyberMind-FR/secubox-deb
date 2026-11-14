@@ -557,6 +557,14 @@ Critères d'acceptation : voir le fichier des phases (corps des issues) ; résum
 
 ## 15. Questions ouvertes
 
+### Tranchées par le propriétaire (2026-11-14)
+
+- **Q1** : pas de RBAC fin en V2 ; `require_jwt` sur toute route, comme le reste du dépôt.
+- **Q2** : gk3 lit gk2 par un **compte de service en lecture seule** (même mécanisme que `ai-ban`, portée lecture), pas
+  par le lecteur anonyme du LAN — à créer en phase 2.
+- **Q3** : la clé ai-ban du POC gk0 est **retirée** (`wafctl cle-ai-ban retirer`) le jour où la V2 signe depuis gk3.
+
+
 - **Q1 — RBAC fin** (`lecture`, `analyser`, `approuver`, `administrer`) : utile si un second opérateur apparaît ;
   aujourd'hui `require_jwt` seul. À reprendre avec `secubox-auth`, plus tard.
 - **Q2 — Lecteur de gk2** : le lecteur anonyme du LAN suffit-il (champs tus) ? Sinon, un compte de service de
