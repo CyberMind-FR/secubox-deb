@@ -1,3 +1,11 @@
+secubox-waf-ng (1.35.1-1~trixie1) trixie; urgency=medium
+
+  * waf-blocs : une interface WireGuard sans pair (« interface<TAB> ») n'est plus
+    une garde illisible ; sans quoi tout ban de bloc rendait garde_illisible sur
+    gk2 (wg-ephemeral). Une clé sans endpoint reste refusée (ref #3716).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 11:12:28 +0100
+
 secubox-waf-ng (1.35.0-1~trixie1) trixie; urgency=medium
 
   * Bans de bloc /24 dans une table nft à part (inet secubox_waf_blocs) : waf-blocs
