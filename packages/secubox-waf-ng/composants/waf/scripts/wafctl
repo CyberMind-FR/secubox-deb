@@ -488,6 +488,153 @@ cmd_blocs() {
     exec /usr/sbin/waf-blocs lister
 }
 
+# cmd_cle_ai_ban — clés publiques du compte de service ai-ban (#3716).
+#
+# La box de l'IA signe chaque geste avec sa clé PRIVÉE Ed25519 ; gk2 ne garde
+# que la clé publique, dans un arbre root lu par secubox_core.compte_service :
+# /etc/secubox-comptes-service/ai-ban/<empreinte>.pub, où l'empreinte est le
+# SHA-256 hex du DER de la clé (le `kid` des jetons). Ces verbes sont réservés au
+# propriétaire, en root : ils ne sont PAS dans le sudoers de `secubox`.
+#
+#   ajouter <fichier.pub>   pose la clé sous son empreinte calculée (forme PEM
+#                           canonique, root:root 0644) ; refuse au-delà de deux
+#                           clés : compte_service n'en reconnaîtrait plus AUCUNE
+#   retirer <empreinte>     révoque une clé (effet à la requête suivante)
+#   retirer --toutes        révoque toutes les clés
+#   lister                  empreintes posées, et si le nom est la vraie empreinte
+#
+# Chaque ajout ou retrait est une ligne de l'audit ; un ajout non audité est
+# défait.
+CLES_RACINE="/etc/secubox-comptes-service"
+CLES_MAX_AI_BAN=2
+AUDIT_LOG="/var/log/secubox/audit.log"
+# DER SubjectPublicKeyInfo d'une clé Ed25519 : 12 octets d'en-tête puis 32 de clé.
+_DER_ED25519="302a300506032b6570032100"
+
+_auditer_cle() {
+    local ligne
+    ligne=$(jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg a "$1" --arg d "$2" \
+        '{ts: $ts, module: "waf", action: $a, detail: $d, by: "wafctl"}') || return 1
+    printf '%s\n' "$ligne" >> "$AUDIT_LOG" 2>/dev/null
+}
+
+# Empreintes des fichiers <64 hex>.pub du dossier (liens compris : ils comptent).
+_cles_posees() {
+    local f nom
+    for f in "$1"/*.pub; do
+        [ -e "$f" ] || [ -L "$f" ] || continue
+        nom=$(basename "$f" .pub)
+        [[ "$nom" =~ ^[0-9a-f]{64}$ ]] && printf '%s\n' "$nom"
+    done
+    return 0
+}
+
+# _der_ed25519 <fichier> <der> — écrit dans <der> le DER SubjectPublicKeyInfo
+# de la clé publique ; rend 1 si ce n'est pas une clé Ed25519. Tout le reste
+# (empreinte, PEM posé) part de CET instantané : un fichier source modifié
+# entre deux lectures ne peut pas faire poser une clé sous le nom d'une autre.
+_der_ed25519() {
+    local der
+    openssl pkey -pubin -in "$1" -outform DER -out "$2" 2>/dev/null || return 1
+    der=$(od -An -v -tx1 "$2" | tr -d ' \n')
+    [ "${#der}" -eq 88 ] && [ "${der:0:24}" = "$_DER_ED25519" ]
+}
+
+# _empreinte_der <der> — SHA-256 hex du DER (`openssl pkey -pubin -outform DER | sha256sum`).
+_empreinte_der() {
+    local kid
+    kid=$(sha256sum "$1" | cut -d' ' -f1)
+    [[ "$kid" =~ ^[0-9a-f]{64}$ ]] && printf '%s\n' "$kid"
+}
+
+_cle_ai_ban_ajouter() {
+    local source="$1" dossier="$2" kid nb tmp
+    if [ ! -f "$source" ] || [ -L "$source" ]; then
+        error "Fichier de clé absent (ou lien) : $source"; return 1
+    fi
+    tmp=$(mktemp -d)
+    if ! _der_ed25519 "$source" "$tmp/cle.der" || ! kid=$(_empreinte_der "$tmp/cle.der"); then
+        rm -rf "$tmp"; error "Pas une clé publique Ed25519 (PEM) : $source"; return 1
+    fi
+    install -d -m 0755 -o root -g root "$CLES_RACINE" "$dossier"
+    if [ -e "$dossier/$kid.pub" ]; then
+        rm -rf "$tmp"; log "clé ai-ban déjà présente : $kid"; return 0
+    fi
+    nb=$(_cles_posees "$dossier" | wc -l)
+    if [ "$nb" -ge "$CLES_MAX_AI_BAN" ]; then
+        rm -rf "$tmp"
+        error "Déjà $nb clés ai-ban (au plus $CLES_MAX_AI_BAN) : retirer l'ancienne d'abord (wafctl cle-ai-ban retirer <empreinte>)"
+        return 1
+    fi
+    # PEM canonique tiré du DER vérifié, posé root:root 0644.
+    if ! openssl pkey -pubin -inform DER -in "$tmp/cle.der" -out "$tmp/cle.pem" 2>/dev/null \
+       || ! install -m 0644 -o root -g root "$tmp/cle.pem" "$dossier/$kid.pub"; then
+        rm -rf "$tmp"; error "Pose de la clé échouée"; return 1
+    fi
+    rm -rf "$tmp"
+    if ! _auditer_cle "cle-ai-ban-ajout" "$kid"; then
+        rm -f "$dossier/$kid.pub"
+        error "Audit impossible ($AUDIT_LOG) : clé retirée"; return 1
+    fi
+    log "clé ai-ban ajoutée : $kid"
+}
+
+_cle_ai_ban_retirer() {
+    local quoi="$1" dossier="$2" kid n=0
+    if [ "$quoi" = "--toutes" ]; then
+        for kid in $(_cles_posees "$dossier"); do
+            rm -f "$dossier/$kid.pub"; n=$((n + 1))
+        done
+        _auditer_cle "cle-ai-ban-retrait" "toutes ($n)" || { error "Clés retirées, audit impossible"; return 1; }
+        log "clés ai-ban retirées : $n"
+        return 0
+    fi
+    if ! [[ "$quoi" =~ ^[0-9a-f]{64}$ ]]; then
+        error "Empreinte invalide (64 hex attendus) : $quoi"; return 1
+    fi
+    if [ ! -e "$dossier/$quoi.pub" ] && [ ! -L "$dossier/$quoi.pub" ]; then
+        log "clé ai-ban absente : $quoi"; return 0
+    fi
+    rm -f "$dossier/$quoi.pub"
+    _auditer_cle "cle-ai-ban-retrait" "$quoi" || { error "Clé retirée, audit impossible"; return 1; }
+    log "clé ai-ban retirée : $quoi"
+}
+
+_cle_ai_ban_lister() {
+    local dossier="$1" kid reel nb tmp
+    nb=0
+    tmp=$(mktemp)
+    for kid in $(_cles_posees "$dossier"); do
+        nb=$((nb + 1))
+        if [ -L "$dossier/$kid.pub" ]; then
+            printf '%s  refusée (lien)\n' "$kid"
+        elif _der_ed25519 "$dossier/$kid.pub" "$tmp" && reel=$(_empreinte_der "$tmp") && [ "$reel" = "$kid" ]; then
+            printf '%s  valide\n' "$kid"
+        else
+            printf '%s  refusée (nom ≠ empreinte, ou pas Ed25519)\n' "$kid"
+        fi
+    done
+    rm -f "$tmp"
+    if [ "$nb" -gt "$CLES_MAX_AI_BAN" ]; then
+        error "$nb clés (> $CLES_MAX_AI_BAN) : AUCUNE n'est reconnue"
+    fi
+    return 0
+}
+
+cmd_cle_ai_ban() {
+    local dossier="$CLES_RACINE/ai-ban"
+    case "${1:-}" in
+        ajouter) [ "$#" -eq 2 ] || { error "Usage: wafctl cle-ai-ban ajouter <fichier.pub>"; return 1; }
+                 _cle_ai_ban_ajouter "$2" "$dossier" ;;
+        retirer) [ "$#" -eq 2 ] || { error "Usage: wafctl cle-ai-ban retirer <empreinte>|--toutes"; return 1; }
+                 _cle_ai_ban_retirer "$2" "$dossier" ;;
+        lister)  [ "$#" -eq 1 ] || { error "Usage: wafctl cle-ai-ban lister"; return 1; }
+                 _cle_ai_ban_lister "$dossier" ;;
+        *)       error "Usage: wafctl cle-ai-ban ajouter <fichier.pub> | retirer <empreinte>|--toutes | lister"
+                 return 1 ;;
+    esac
+}
+
 case "${1:-}" in
     status)     cmd_status ;;
     components) cmd_components ;;
@@ -506,6 +653,7 @@ case "${1:-}" in
     ban-bloc)   shift; cmd_ban_bloc "$@" ;;
     unban-bloc) shift; cmd_unban_bloc "$@" ;;
     blocs)      shift; cmd_blocs "$@" ;;
+    cle-ai-ban) shift; cmd_cle_ai_ban "$@" ;;
     test)       cmd_test "$2" ;;
     *)
         cat << EOF
@@ -536,6 +684,11 @@ Bans (garde waf-blocs : jamais le privé, une plage protégée, la box ni un pai
                              rechargement du pare-feu (secubox-waf-blocs)
   unban-bloc <a.b.c.0/24>    Retire le ban d'un bloc
   blocs                      Liste les blocs bannis (JSON)
+
+Compte de service ai-ban (root seulement, hors sudoers ; deux clés au plus) :
+  cle-ai-ban ajouter <fichier.pub>   Pose une clé publique Ed25519 sous son empreinte
+  cle-ai-ban retirer <empreinte>|--toutes   Révoque une clé, ou toutes
+  cle-ai-ban lister                  Empreintes posées et leur validité
 
 Operations:
   logs [n]      Show last n log lines (default 50)

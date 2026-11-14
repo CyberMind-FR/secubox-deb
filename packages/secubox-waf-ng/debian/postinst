@@ -80,6 +80,19 @@ case "$1" in
     # /etc/secubox must stay 0755 (traversal constraint above).
     mkdir -p /etc/secubox/secrets
 
+    # ── 2a. Clés publiques des comptes de service (#3716) ────────────────────
+    # Arbre ROOT, hors de /etc/secubox (qui appartient au compte secubox) :
+    # compte_service refuse un dossier qui n'est pas à root ou qui est
+    # inscriptible par le groupe ou les autres. Les clés n'y sont posées que
+    # par le propriétaire (`wafctl cle-ai-ban ajouter`, root). Le paquet ne les
+    # vide JAMAIS : une mise à jour ne révoque pas la box de l'IA.
+    mkdir -p /etc/secubox-comptes-service
+    chown root:root /etc/secubox-comptes-service
+    chmod 0755 /etc/secubox-comptes-service
+    mkdir -p /etc/secubox-comptes-service/ai-ban
+    chown root:root /etc/secubox-comptes-service/ai-ban
+    chmod 0755 /etc/secubox-comptes-service/ai-ban
+
       # ── Secret HMAC des identifiants (#1240, corrélation multi-couche) ────────
       # authwatch apporte au graphe d'acteurs le COMPTE VISÉ — l'axe le plus
       # lourd du barème de similarité, et le seul qui était totalement mort. Ce

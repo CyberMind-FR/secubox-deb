@@ -9,6 +9,7 @@ Threat detection with in-engine nft ban enforcement (sbxwaf).
 300+ rules across 14+ categories (SQLi, XSS, RCE, VoIP, router botnets, etc.)
 """
 import asyncio
+import logging
 import os
 import json
 import re
@@ -27,6 +28,9 @@ from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 import geoip2.database
 import geoip2.errors
+
+# `_audit` s'en servait sans qu'il soit défini : un audit impossible levait NameError (#3716).
+log = logging.getLogger("secubox.waf")
 
 # Paths
 RULES_PATH = "/usr/share/secubox/waf/waf-rules.json"
@@ -1831,14 +1835,18 @@ def _ips_bannies_actives() -> set:
     return {b["ip"] for b in bans}
 
 
-def _audit(action: str, detail: str, user) -> None:
-    """Toute décision de sécurité est une ligne de /var/log/secubox/audit.log (ajout seul)."""
+def _audit(action: str, detail: str, user, lever: bool = False) -> None:
+    """Toute décision de sécurité est une ligne de /var/log/secubox/audit.log (ajout seul). `lever` : l'échec
+    d'écriture est propagé (OSError) au lieu d'être seulement journalisé — pour un geste qui doit être défait s'il
+    n'est pas audité (#3716)."""
     try:
         with open(AUDIT_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "waf", "action": action,
                                 "detail": detail[:300], "by": str((user or {}).get("sub") or "")}, ensure_ascii=False) + "\n")
     except OSError as e:
         log.warning("audit non écrit (%s) : %s", action, e)
+        if lever:
+            raise
 
 
 @app.get("/enforcement", dependencies=[Depends(require_lecture)])
@@ -2192,3 +2200,15 @@ async def get_geoip(ip: str):
             pass
     
     return {"ip": ip, "country": ""}
+
+
+# ── Gestes d'une box d'IA, compte de service ai-ban (#3716) ─────────────
+# Exception écrite à RULES-CODE § 3 : `require_ai_ban`, pas `require_jwt`. Bans lus FRAIS dans nft (recontrôle du
+# cas sûr) ; audit qui lève (un ban non audité est retiré).
+try:
+    from api import gestes_ia as _gestes_ia
+except ImportError:  # standalone
+    import gestes_ia as _gestes_ia
+
+_gestes_ia.configurer(bans=lambda: _get_bans(), audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
+app.include_router(_gestes_ia.router)
