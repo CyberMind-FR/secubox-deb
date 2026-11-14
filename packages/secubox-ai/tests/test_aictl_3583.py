@@ -690,3 +690,36 @@ def test_systemd_analyze_sans_cycle_d_ordre(ctl, tmp_path):
                             capture_output=True, text=True, timeout=60)
     texte = sortie.stdout + sortie.stderr
     assert "ordering cycle" not in texte, texte
+
+
+# ── revue finale : premier modèle (I3) ──
+
+def test_modele_par_defaut_du_catalogue(ctl):
+    import tomllib
+    from api import modeles, reglages
+    fichiers = {m["fichier"] for m in modeles.CATALOGUE}
+    conf = tomllib.loads((PAQUET / "conf" / "ai.toml.example").read_text())
+    assert conf["moteur_local"]["modele"] == "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+    assert conf["moteur_local"]["modele"] in fichiers
+    assert ctl.MODELE_DEFAUT == reglages.DEFAUTS["moteur"]["modele"] == conf["moteur_local"]["modele"]
+
+
+def test_aucun_modele_installe(ctl, env):
+    env.prefs("")
+    with pytest.raises(ctl.Echec, match="aucun modèle local installé : téléchargez-en un"):
+        ctl.choisir_modele(env.ids, ctl.CONFIG_DEFAUT)
+
+
+def test_modele_installe_mais_pas_active(ctl, env):
+    env.prefs("")
+    env.modele("Qwen_Qwen3-0.6B-Q4_K_M.gguf")       # téléchargé, jamais activé, ni défaut ni préférence
+    (env.modeles / "mmproj-x-f16.gguf").write_bytes(b"GGUF")
+    with pytest.raises(ctl.Echec, match="modèle installé mais pas activé : activez-le dans l'onglet Modèles"):
+        ctl.choisir_modele(env.ids, ctl.CONFIG_DEFAUT)
+
+
+def test_seule_une_annexe_n_est_pas_un_modele_installe(ctl, env):
+    env.prefs("")
+    (env.modeles / "mmproj-x-f16.gguf").write_bytes(b"GGUF")
+    with pytest.raises(ctl.Echec, match="aucun modèle local installé"):
+        ctl.choisir_modele(env.ids, ctl.CONFIG_DEFAUT)

@@ -25,7 +25,7 @@ CONF_DEFAUT = "/etc/secubox/ai.toml"
 ETAT = Path(os.environ.get("SECUBOX_AI_ETAT", ETAT_DEFAUT))  # valeur à l'import ; préférer etat_dir()
 
 DEFAUTS = {
-    "moteur": {"modele": "qwen2.5-1.5b-instruct-q4_k_m.gguf", "backend": "cpu", "threads": 6, "contexte": 4096,
+    "moteur": {"modele": "Llama-3.2-3B-Instruct-Q4_K_M.gguf", "backend": "cpu", "threads": 6, "contexte": 4096,
                "paralleles": 1, "couches_gpu": 99, "nice": 10, "arret_inactivite_min": 30,
                "force": "auto"},
     "generation": {"temperature": 0.3, "top_p": 0.9, "max_tokens": 512},

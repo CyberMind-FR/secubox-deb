@@ -75,7 +75,7 @@ sources_url = "https://hall.gk2.secubox.in/api/v1/zia/objets"
 # url = "http://10.100.0.85:8888"   # SearXNG local de la box, essayé avant celui de gk0
 
 [moteur_local]
-modele = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+modele = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
 ```
 
 Un changement d'adresse dans `ai.toml` (ou de DNS) demande `secubox-aictl preparer` puis
