@@ -54,11 +54,43 @@ async def _resoudre(hote: str) -> list[str]:
     return [i[4][0] for i in infos]
 
 
+# Table des adresses IPv6 des interfaces de la box (injectable en test) : `is_global` est vrai pour les
+# adresses SLAAC du LAN lui-même, que la garde doit refuser (R14).
+SOURCE_IF_INET6 = "/proc/net/if_inet6"
+NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _prefixes_locaux() -> list:
+    reseaux = []
+    try:
+        with open(SOURCE_IF_INET6, encoding="ascii") as f:
+            for ligne in f:
+                champs = ligne.split()
+                if len(champs) < 4:
+                    continue
+                try:
+                    adr = ipaddress.IPv6Address(int(champs[0], 16))
+                    longueur = int(champs[2], 16)
+                except ValueError:
+                    continue
+                if longueur > 0:
+                    reseaux.append(ipaddress.ip_network((adr, longueur), strict=False))
+    except OSError:
+        pass
+    return reseaux
+
+
 def _publique(adresse: str) -> bool:
     try:
-        return ipaddress.ip_address(adresse.split("%")[0]).is_global
+        ip = ipaddress.ip_address(adresse.split("%")[0])
     except ValueError:
         return False
+    if ip.version == 6:
+        if ip.ipv4_mapped is not None:
+            return _publique(str(ip.ipv4_mapped))
+        if ip in NAT64 or any(ip in r for r in _prefixes_locaux()):
+            return False
+    return ip.is_global
 
 
 # ---- Outils : liste fermée. Aucun outil ne lit une URL choisie par le modèle. ----
@@ -77,16 +109,14 @@ async def outil_wikipedia(requete):
 
 
 async def outil_searxng(requete):
-    """Méta-moteur de gk0 par le moteur distant (`/search`). Distant absent ou injoignable : pas d'outil."""
+    """Méta-moteur de gk0 par le moteur distant (`/search`). Distant non configuré : pas d'outil.
+    Les erreurs réseau remontent : l'appelant les compte comme panne."""
     m = moteurs._distant()
     if m is None:
         return []
-    try:
-        async with m.client(20) as c:
-            r = await c.get("/search", params={"q": requete, "format": "json", "language": "fr"})
-            r.raise_for_status()
-    except httpx.TransportError:
-        return []
+    async with m.client(20) as c:
+        r = await c.get("/search", params={"q": requete, "format": "json", "language": "fr"})
+        r.raise_for_status()
     return [{"titre": x.get("title", ""), "extrait": x.get("content", ""), "url": x["url"]}
             for x in r.json().get("results", [])[:10] if x.get("url")]
 
@@ -145,13 +175,19 @@ async def telecharger(url):
             return ""
         try:
             ipaddress.ip_address(hote)
-            adresses = [hote]            # adresse littérale : contrôlée telle quelle, sans résolution
+            adresses, nom = [hote], None   # adresse littérale : contrôlée telle quelle, sans résolution
         except ValueError:
-            adresses = await _resoudre(hote)
+            adresses, nom = await _resoudre(hote), hote   # une seule résolution : l'adresse validée est celle utilisée
         if not adresses or not all(_publique(a) for a in adresses):
             return ""
+        # Connexion épinglée sur l'adresse validée (anti-rebinding) ; le nom reste dans Host et dans le SNI.
+        ip = ipaddress.ip_address(adresses[0].split("%")[0])
+        cible_ip = f"[{ip}]" if ip.version == 6 else str(ip)
+        netloc = cible_ip + (f":{p.port}" if p.port else "")
+        epingle = p._replace(netloc=netloc).geturl()
+        extensions = {"sni_hostname": nom} if nom else {}
         async with _client("page", 10, follow_redirects=False) as c:
-            async with c.stream("GET", url) as r:
+            async with c.stream("GET", epingle, headers={"Host": p.netloc}, extensions=extensions) as r:
                 if r.status_code != 200 or "html" not in r.headers.get("content-type", ""):
                     return ""
                 brut = b""
@@ -282,9 +318,17 @@ async def recherche_fiable(question, prefs, sources, suivi=None):
     for nom, outil in outils.items():
         if not prefs["outils"].get(nom):
             continue
-        # searxng passe par le moteur distant : sans lui, l'outil est simplement absent.
-        if nom == "searxng" and moteurs._distant() is None:
-            continue
+        # searxng passe par le moteur distant : non configuré, l'outil est absent ; sonde (cache 10 s, R10)
+        # ni prête ni endormie, il est sauté sans attendre le délai de connexion, et compté comme panne.
+        if nom == "searxng":
+            distant = moteurs._distant()
+            if distant is None:
+                continue
+            statut = await moteurs._statut_distant(distant)
+            if statut not in ("pret", "endormi"):
+                panne += 1
+                await dire(etape="moteur", moteur=nom, echec=statut)
+                continue
         try:
             trouves = await outil(requete)
             log.info("outil.appel outil=%s resultats=%d", nom, len(trouves))

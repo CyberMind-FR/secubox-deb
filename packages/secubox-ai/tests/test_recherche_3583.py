@@ -20,14 +20,24 @@ def web(monkeypatch, tmp_path):
     monkeypatch.setenv("SECUBOX_AI_CONF", str(tmp_path / "absent.toml"))
     monkeypatch.setenv("SECUBOX_AI_CLE", str(tmp_path / "absente.key"))
     monkeypatch.setenv("SECUBOX_AI_RUN", str(tmp_path / "run"))
-    etat = {"vues": [], "reponses": {}, "dns": {}}
+    etat = {"vues": [], "reqs": [], "reponses": {}, "dns": {}, "appels_dns": []}
 
     def handler(req):
-        etat["vues"].append(str(req.url))
-        return etat["reponses"].get(str(req.url), httpx.Response(200, html=HTML))
+        # La connexion est épinglée sur l'adresse validée : l'adresse d'origine se lit dans l'en-tête Host.
+        origine = f"{req.url.scheme}://{req.headers['host']}{req.url.raw_path.decode()}"
+        etat["vues"].append(origine)
+        etat["reqs"].append({"url": str(req.url), "host": req.headers["host"],
+                             "sni": req.extensions.get("sni_hostname")})
+        return etat["reponses"].get(origine, httpx.Response(200, html=HTML))
 
     async def resolveur(hote):
+        etat["appels_dns"].append(hote)
         return etat["dns"].get(hote, ["93.184.216.34"])
+
+    inet6 = tmp_path / "if_inet6"
+    inet6.write_text("", encoding="ascii")
+    etat["inet6"] = inet6
+    monkeypatch.setattr(recherche, "SOURCE_IF_INET6", str(inet6))
 
     monkeypatch.setattr(recherche, "FABRIQUE_TRANSPORT_WEB", lambda nom: httpx.MockTransport(handler))
     monkeypatch.setattr(recherche, "RESOLVEUR", resolveur)
@@ -80,15 +90,24 @@ async def test_lire_page_garde_a_chaque_saut(web):
         200, html="<p>court</p><a href='/a.html'>a</a><a href='http://10.0.0.1/x.html'>b</a>"
                   "<iframe src='/cadre.html'></iframe>")
     web["reponses"]["http://site.test/cadre.html"] = httpx.Response(200, html=HTML)
-    web["dns"]["site.test"] = ["93.184.216.34"]
     texte = await recherche.lire_page("http://site.test/")
     assert "Michel Murty" in texte
     assert not any("10.0.0.1" in v for v in web["vues"])      # autre hôte : jamais suivi
-    # un saut vers un hôte devenu privé est refusé par la garde, pas par le filtre d'hôte
-    web["dns"]["site.test"] = ["10.0.0.9"]
-    web["vues"].clear()
-    assert await recherche.lire_page("http://site.test/") == ""
-    assert web["vues"] == []
+
+
+@pytest.mark.asyncio
+async def test_lire_page_saut_vers_hote_prive_refuse(web, monkeypatch):
+    """Première page publique avec un lien du même hôte ; le saut suivant se résout en privé : refusé."""
+    web["reponses"]["http://site.test/"] = httpx.Response(200, html=HTML + "<a href='/suite.html'>suite</a>")
+    suites = iter([["93.184.216.34"], ["10.0.0.9"]])
+    web["dns"] = {}
+
+    async def resolveur(hote):
+        return next(suites)
+    monkeypatch.setattr(recherche, "RESOLVEUR", resolveur)
+    texte = await recherche.lire_page("http://site.test/")
+    assert "Michel Murty" in texte
+    assert web["vues"] == ["http://site.test/"]               # aucune requête vers /suite.html
 
 
 def test_controler_reponse_retire_adresse_absente():
@@ -141,8 +160,8 @@ async def test_budget_respecte_sources_max_jetons(web, monkeypatch):
             evts.append(e)
     etat, bloc = await recherche.recherche_fiable("lis officiel.fr/", prefs, sources, Suivi())
     assert etat == "ok" and sources[0]["url"] == "https://officiel.fr/"
-    fixe = next(e for e in evts if e["etape"] == "budget")["tokens_consigne"]
-    assert len(bloc) // 4 <= fixe + 1000 + 50
+    tokens = next(e for e in evts if e['etape'] == 'budget')['tokens_sources']
+    assert tokens <= 1000
     assert len(bloc) < len(gros)
 
 
@@ -181,3 +200,126 @@ async def test_aucun_contenu_dans_le_journal(web, caplog):
     await recherche.telecharger("https://secret-adresse.test/page")
     await recherche.recherche_fiable("Qui est Michel Murty confidentiel ?", {**reglages.lire_prefs(), "outils": {"secubox": False}}, [], None)
     assert "secret-adresse" not in caplog.text and "confidentiel" not in caplog.text
+
+
+# ---- R14 : épinglage de l'adresse validée, IPv6 local, NAT64 ----
+@pytest.mark.asyncio
+async def test_connexion_epinglee_sur_ladresse_validee(web):
+    web["dns"]["exemple.test"] = ["93.184.216.34", "93.184.216.35"]
+    assert "Michel Murty" in await recherche.telecharger("https://exemple.test/p?x=1")
+    req = web["reqs"][0]
+    assert req["url"] == "https://93.184.216.34/p?x=1"
+    assert req["host"] == "exemple.test" and req["sni"] == "exemple.test"
+
+
+@pytest.mark.asyncio
+async def test_epinglage_ipv6_et_port(web):
+    web["dns"]["v6.test"] = ["2606:2800:220:1::1"]
+    await recherche.telecharger("http://v6.test:80/")
+    assert web["reqs"][0]["url"] == "http://[2606:2800:220:1::1]/"   # httpx omet le port par défaut
+    assert web["reqs"][0]["host"] == "v6.test:80"
+
+
+@pytest.mark.asyncio
+async def test_rebinding_une_seule_resolution(web, monkeypatch):
+    """Une seconde résolution donnerait une adresse privée : la connexion part quand même sur la première."""
+    reponses = iter([["93.184.216.34"], ["10.0.0.9"]])
+
+    async def resolveur(hote):
+        web["appels_dns"].append(hote)
+        return next(reponses)
+    monkeypatch.setattr(recherche, "RESOLVEUR", resolveur)
+    assert "Michel Murty" in await recherche.telecharger("http://rebind.test/")
+    assert web["appels_dns"] == ["rebind.test"]
+    assert web["reqs"][0]["url"].startswith("http://93.184.216.34/")
+
+
+@pytest.mark.asyncio
+async def test_ipv6_du_prefixe_local_refuse(web):
+    # 2001:db8 serait « global » pour ipaddress ; ici la box a un /64 SLAAC dessus
+    web["inet6"].write_text("20010db8000000010000000000000002 02 40 00 00 eth1\n"
+                            "00000000000000000000000000000001 01 80 10 80 lo\n", encoding="ascii")
+    web["dns"]["voisin.test"] = ["2001:db8:0:1::99"]
+    assert await recherche.telecharger("http://voisin.test/") == ""
+    assert await recherche.telecharger("http://[2001:db8:0:1::5]/") == ""
+    assert web["vues"] == []
+    web["dns"]["ailleurs.test"] = ["2606:2800:220:1::1"]       # hors du préfixe : autorisée
+    assert "Michel Murty" in await recherche.telecharger("http://ailleurs.test/")
+
+
+@pytest.mark.asyncio
+async def test_nat64_et_ipv4_mappe_refuses(web):
+    web["dns"]["nat.test"] = ["64:ff9b::a00:1"]
+    web["dns"]["map.test"] = ["::ffff:10.0.0.1"]
+    assert await recherche.telecharger("http://nat.test/") == ""
+    assert await recherche.telecharger("http://map.test/") == ""
+    assert await recherche.telecharger("http://[64:ff9b::a00:1]/") == ""
+    assert web["vues"] == []
+
+
+# ---- I1 : searxng par le moteur distant ----
+CLE = "sk-secret-tres-longue-9f8e7d"
+
+
+@pytest.fixture
+def distant(web, tmp_path, monkeypatch):
+    conf, cle = tmp_path / "ai.toml", tmp_path / "distant.key"
+    conf.write_text('[distant]\nurl = "https://ia.distante.test"\n', encoding="utf-8")
+    cle.write_text(CLE + "\n", encoding="utf-8")
+    monkeypatch.setenv("SECUBOX_AI_CONF", str(conf))
+    monkeypatch.setenv("SECUBOX_AI_CLE", str(cle))
+    moteurs._cache_sonde.clear()
+    vues = []
+    comportement = {"sante": 200, "recherche": None}
+
+    def h(req):
+        vues.append((req.method, req.url.path, dict(req.url.params), req.headers.get("authorization")))
+        if req.url.path == "/health":
+            if comportement["sante"] == "tombe":
+                raise httpx.ConnectError("injoignable", request=req)
+            return httpx.Response(comportement["sante"], json={})
+        if req.url.path == "/search":
+            return httpx.Response(200, json={"results": [
+                {"title": "Michel Murty", "content": "chanteur", "url": "https://michelmurty.fr/"},
+                {"title": "sans url"}]})
+        return httpx.Response(404)
+    monkeypatch.setattr(moteurs, "FABRIQUE_TRANSPORT", lambda nom: httpx.MockTransport(h))
+    return vues, comportement
+
+
+@pytest.mark.asyncio
+async def test_searxng_requete_distante_avec_cle(distant):
+    vues, _ = distant
+    r = await recherche.outil_searxng("michel murty")
+    assert r == [{"titre": "Michel Murty", "extrait": "chanteur", "url": "https://michelmurty.fr/"}]
+    assert vues == [("GET", "/search", {"q": "michel murty", "format": "json", "language": "fr"}, f"Bearer {CLE}")]
+
+
+@pytest.mark.asyncio
+async def test_searxng_distant_injoignable_saute_sans_attente(distant):
+    vues, comportement = distant
+    comportement["sante"] = "tombe"
+    prefs = reglages.lire_prefs()
+    prefs["outils"].update(secubox=False, wikipedia=False)
+    evts = []
+
+    class Suivi:
+        async def put(self, e):
+            evts.append(e)
+    etat, bloc = await recherche.recherche_fiable("Michel Murty", prefs, [], Suivi())
+    assert (etat, bloc) == ("indisponible", "")               # état du POC : un outil en panne
+    assert [v[1] for v in vues] == ["/health"]                # jamais de /search
+    assert any(e.get("moteur") == "searxng" and e.get("echec") == "injoignable" for e in evts)
+
+
+@pytest.mark.asyncio
+async def test_searxng_erreur_reseau_remonte(distant, monkeypatch):
+    _, comportement = distant
+    comportement["sante"] = 200
+    import api.recherche as r
+
+    def tombe(nom):
+        return httpx.MockTransport(lambda req: (_ for _ in ()).throw(httpx.ConnectError("x", request=req)))
+    monkeypatch.setattr(moteurs, "FABRIQUE_TRANSPORT", tombe)
+    with pytest.raises(httpx.ConnectError):
+        await r.outil_searxng("x")
