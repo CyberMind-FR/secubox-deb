@@ -20,15 +20,27 @@ CE N'EST PAS UN COMPTE DE SECUBOX-AUTH, NI UNE SESSION. Sur le modèle du porteu
   `require_session`, `require_lecture`, `require_personne` le refusent (`_validate_token` n'admet que HS256 ; le
   chemin du pilotage exige `sub = pilotage:…` et une `cible`) ; et `require_ai_ban` refuse toute session.
 
-Refus : 401 (jeton absent, illisible, signature, clé inconnue, échéance, durée, rejeu, corps), 403 (audience d'une
-autre box, sujet, portée), 503 (nom de box illisible, mémoire de rejeu pleine). Chaque refus est audité
-(`audit.log`, motif, jamais le jeton), une ligne par (compte, motif) toutes les `INTERVALLE_AUDIT_S` au plus.
+Refus : 401 (jeton absent, illisible, signature, clé inconnue, échéance, durée, frappé avant le démarrage, rejeu,
+corps), 403 (audience d'une autre box, sujet, portée), 400/413 (corps de longueur illisible ou de plus de
+`TAILLE_MAX_CORPS`, lu SEULEMENT après la signature), 503 (nom de box illisible, mémoire de rejeu pleine). Chaque
+refus est audité (`audit.log`, motif, jamais le jeton), une ligne par (compte, motif) toutes les
+`INTERVALLE_AUDIT_S` au plus, qui compte les refus retenus entre-temps (écrits au refus suivant ou par une minuterie).
+
+CONTRAINTE SUR LES ROUTES (P9) : le jeton lie le CORPS, pas la méthode ni le chemin. Toute route gardée par un même
+compte de service doit donc exiger dans son corps un champ OBLIGATOIRE qui la distingue de toutes les autres (et une
+route sans corps, comme `GET /ai/etat`, n'avoir aucun effet) : sinon un jeton frappé pour une route vaudrait pour une
+autre. À défaut, le jeton doit gagner des réclamations `methode` et `chemin`, vérifiées par la garde.
 
 MÉMOIRE DE REJEU : en mémoire du processus, chaque `jti` gardé jusqu'à `exp + DERIVE_S`, `REJEU_MAX` au plus ; pleine,
 elle REFUSE (503) au lieu d'oublier un `jti` encore valide. Un `jti` oublié l'est parce que son échéance est passée ;
 l'horizon (plus haute échéance oubliée) refuse tout jeton qui n'est pas plus récent, même si l'horloge recule. Elle
-suppose UN SEUL processus pour les routes gardées (agrégateur `--workers 1`) ; un redémarrage la vide, sans risque
-au-delà de `DUREE_MAX_S + DERIVE_S` secondes.
+suppose UN SEUL processus pour les routes gardées (agrégateur `--workers 1`). Un redémarrage la vide : tout jeton
+dont l'`iat` précède le démarrage du processus (plus la dérive) est refusé (« avant_demarrage »).
+
+CORPS LU AVANT LA GARDE : pour une route qui déclare un modèle de corps, FastAPI lit le corps AVANT de résoudre les
+dépendances ; la garde le refuse ensuite au-delà de `TAILLE_MAX_CORPS`, mais la borne de lecture effective est alors
+celle de l'amont (nginx `client_max_body_size`, sbxwaf). Une route sans modèle de corps n'est lue qu'après la
+signature.
 """
 from __future__ import annotations
 
@@ -61,6 +73,8 @@ ALGORITHME = "EdDSA"
 CLES_MAX = 2
 REJEU_MAX = 10_000
 INTERVALLE_AUDIT_S = 10
+#: Corps d'une requête gardée, au plus (413 au-delà) ; les gestes `ai-ban` tiennent en quelques centaines d'octets.
+TAILLE_MAX_CORPS = 16 * 1024
 
 _TAILLE_MAX_CLE = 4096
 _TAILLE_MAX_JETON = 8192
@@ -238,6 +252,8 @@ class _Rejeu:
 
 
 _rejeu = _Rejeu()
+#: Démarrage du processus : un jeton frappé avant (à la dérive près) est refusé, la mémoire de rejeu étant neuve.
+_DEMARRAGE = time.time()
 
 
 # ── Jetons ─────────────────────────────────────────────────────────────
@@ -261,13 +277,9 @@ def frapper_jeton(cle_privee_pem: bytes, compte: str, aud: str, corps: bytes, ma
     return jwt.encode(reclamations, cle, algorithm=ALGORITHME, headers={"kid": _empreinte_cle(cle.public_key())})
 
 
-def verifier_jeton(compte: str, jeton: str, corps: bytes, maintenant: float) -> Dict[str, Any]:
-    """`{"sub", "compte_service", "jti", "cle"}` d'un jeton valide pour `compte` et ce `corps` exact, à l'instant
-    `maintenant` (secondes UNIX) ; consomme son `jti`. Lève `RefusCompteService` sinon.
-
-    Ordre : en-tête non vérifié (`alg`, `kid` connu) → signature et audience → sujet → portée → durée, `iat`, échéance
-    → `jti` (forme, non vu) → empreinte du corps → inscription atomique du `jti`. Un corps refusé ne consomme pas le
-    `jti` : rejouer un jeton capturé avec un autre corps ne brûle pas le geste légitime."""
+def _verifier_avant_corps(compte: str, jeton: str, maintenant: float) -> Tuple[str, str, float, str]:
+    """Tout ce qui ne dépend pas du corps : en-tête, clé, signature, réclamations, `jti` non vu. Rend
+    `(kid, jti, fin, empreinte du corps signée)`. Lève `RefusCompteService`."""
     portee_attendue = COMPTES_SERVICE.get(compte)
     if portee_attendue is None:
         raise RefusCompteService(401, "compte")
@@ -295,11 +307,11 @@ def verifier_jeton(compte: str, jeton: str, corps: bytes, maintenant: float) -> 
     if not box:
         raise RefusCompteService(503, "box_inconnue")
     try:
-        # Les instants sont vérifiés ci-dessous contre `maintenant` (une seule horloge, celle de l'appelant).
+        # Signature et audience par PyJWT ; les instants (exp, iat, nbf) sont vérifiés À LA MAIN ci-dessous, dérive
+        # `DERIVE_S` comprise, contre `maintenant` : une seule horloge, celle de l'appelant (pas de `leeway`).
         p = jwt.decode(jeton, cle, algorithms=[ALGORITHME], audience=box,
                        options={"require": list(_RECLAMATIONS), "verify_exp": False, "verify_iat": False,
-                                "verify_nbf": False},
-                       leeway=DERIVE_S)
+                                "verify_nbf": False})
     except jwt.InvalidSignatureError:
         raise RefusCompteService(401, "signature") from None
     except jwt.MissingRequiredClaimError:
@@ -323,6 +335,9 @@ def verifier_jeton(compte: str, jeton: str, corps: bytes, maintenant: float) -> 
         raise RefusCompteService(401, "duree")
     if iat > maintenant + DERIVE_S or (nbf is not None and nbf > maintenant + DERIVE_S):
         raise RefusCompteService(401, "iat_futur")
+    if iat < _DEMARRAGE + DERIVE_S:
+        # Frappé avant ce processus (à la dérive près) : sa mémoire de rejeu, neuve, ne peut pas dire s'il a servi.
+        raise RefusCompteService(401, "avant_demarrage")
     fin = exp + DERIVE_S
     if fin <= maintenant:
         raise RefusCompteService(401, "echu")
@@ -334,43 +349,131 @@ def verifier_jeton(compte: str, jeton: str, corps: bytes, maintenant: float) -> 
     empreinte_corps = p.get("corps")
     if not isinstance(empreinte_corps, str) or not _RE_HEX64.fullmatch(empreinte_corps):
         raise RefusCompteService(401, "reclamations")
+    return kid, jti, fin, empreinte_corps
+
+
+def _verifier_corps(compte: str, verifie: Tuple[str, str, float, str], corps: bytes,
+                    maintenant: float) -> Dict[str, Any]:
+    """Empreinte du corps, puis inscription atomique du `jti`. Lève `RefusCompteService`."""
+    kid, jti, fin, empreinte_corps = verifie
     if not _egal(empreinte_corps, hashlib.sha256(corps).hexdigest()):
         raise RefusCompteService(401, "corps")
     _rejeu.consommer(jti, fin, maintenant)
     return {"sub": compte, "compte_service": compte, "jti": jti, "cle": kid}
 
 
+def verifier_jeton(compte: str, jeton: str, corps: bytes, maintenant: float) -> Dict[str, Any]:
+    """`{"sub", "compte_service", "jti", "cle"}` d'un jeton valide pour `compte` et ce `corps` exact, à l'instant
+    `maintenant` (secondes UNIX) ; consomme son `jti`. Lève `RefusCompteService` sinon.
+
+    Ordre : en-tête non vérifié (`alg`, `kid` connu) → signature et audience → sujet → portée → durée, `iat`, frappé
+    après le démarrage, échéance → `jti` (forme, non vu) → empreinte du corps → inscription atomique du `jti`. Un
+    corps refusé ne consomme pas le `jti` : rejouer un jeton capturé avec un autre corps ne brûle pas le geste
+    légitime."""
+    return _verifier_corps(compte, _verifier_avant_corps(compte, jeton, maintenant), corps, maintenant)
+
+
+async def _lire_corps_borne(request: Request) -> bytes:
+    """Le corps brut, `TAILLE_MAX_CORPS` au plus : 413 sur `Content-Length` annoncé trop grand, et sur la longueur
+    réellement lue (lecture arrêtée au dépassement) ; 400 sur un `Content-Length` illisible. Le corps lu est remis en
+    cache (`request._body`, comme le fait `Request.body()` de Starlette) pour la route."""
+    longueur = request.headers.get("content-length")
+    if longueur is not None:
+        if not longueur.strip().isdigit():
+            raise RefusCompteService(400, "longueur")
+        if int(longueur) > TAILLE_MAX_CORPS:
+            raise RefusCompteService(413, "corps_trop_grand")
+    if hasattr(request, "_body"):   # déjà lu (route à modèle de corps : FastAPI le lit avant les dépendances)
+        corps = request._body
+        if len(corps) > TAILLE_MAX_CORPS:
+            raise RefusCompteService(413, "corps_trop_grand")
+        return corps
+    morceaux, total = [], 0
+    async for morceau in request.stream():
+        total += len(morceau)
+        if total > TAILLE_MAX_CORPS:
+            raise RefusCompteService(413, "corps_trop_grand")
+        morceaux.append(morceau)
+    corps = b"".join(morceaux)
+    request._body = corps
+    return corps
+
+
 # ── Audit des refus ────────────────────────────────────────────────────
-#: (compte, motif) → [instant de la dernière ligne, refus depuis] ; borné : compte et motif sont des ensembles fermés.
+#: (compte, motif) → [instant de la dernière ligne, refus non encore écrits, dernière adresse] ; borné : compte et
+#: motif sont des ensembles fermés.
 _derniers_refus: Dict[Tuple[str, str], list] = {}
 _verrou_audit = threading.Lock()
+#: La minuterie qui écrit les refus restés en attente (fin d'une rafale), armée tant qu'il en reste.
+_minuterie: Dict[str, Any] = {"active": None}
 
 
 def _horloge() -> float:
     return time.monotonic()
 
 
+def _ligne_refus(compte: str, motif: str, ip: str, nombre: int) -> Dict[str, Any]:
+    return {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "compte-service", "action": "refus",
+            "compte": compte, "motif": motif, "ip": str(ip)[:64], "nombre": nombre}
+
+
+def _ecrire_lignes(lignes: list) -> None:
+    for ligne in lignes:
+        try:
+            auth._ecrire_audit(ligne)
+        except Exception as e:  # noqa: BLE001 — un audit impossible ne change pas le refus, mais se dit
+            auth._avertir_une_fois(("compte-service", "audit", type(e).__name__),
+                                   "compte de service : audit impossible : %r", type(e).__name__)
+
+
+def _echues(instant: float) -> list:
+    """Sous `_verrou_audit` : les lignes des refus en attente dont la fenêtre est passée (et les remet à zéro)."""
+    lignes = []
+    for (compte, motif), etat in _derniers_refus.items():
+        if etat[1] and instant - etat[0] >= INTERVALLE_AUDIT_S:
+            lignes.append(_ligne_refus(compte, motif, etat[2], etat[1]))
+            etat[0], etat[1] = instant, 0
+    return lignes
+
+
+def _armer_minuterie() -> None:
+    """Sous `_verrou_audit` : une minuterie (fil démon) écrira les refus en attente, même sans nouveau refus."""
+    if _minuterie["active"] is not None:
+        return
+    m = threading.Timer(INTERVALLE_AUDIT_S, _vider_en_attente)
+    m.daemon = True
+    _minuterie["active"] = m
+    m.start()
+
+
+def _vider_en_attente() -> None:
+    """Écrit les refus en attente dont la fenêtre est passée ; se réarme s'il en reste."""
+    with _verrou_audit:
+        _minuterie["active"] = None
+        lignes = _echues(_horloge())
+        if any(etat[1] for etat in _derniers_refus.values()):
+            _armer_minuterie()
+    _ecrire_lignes(lignes)
+
+
 def _auditer_refus(compte: str, motif: str, ip: str) -> None:
     """Une ligne `audit.log` par (compte, motif) toutes les `INTERVALLE_AUDIT_S` au plus, avec le nombre de refus
-    qu'elle résume. Jamais le jeton, ni le corps."""
+    qu'elle résume. Les refus retenus pendant la fenêtre sont écrits au refus suivant (de tout motif) ou par la
+    minuterie : chaque refus est compté. Jamais le jeton, ni le corps."""
     instant = _horloge()
     with _verrou_audit:
         etat = _derniers_refus.get((compte, motif))
-        if etat is not None:
-            etat[1] += 1
-            if instant - etat[0] < INTERVALLE_AUDIT_S:
-                return
-            nombre = etat[1]
+        if etat is None:
+            _derniers_refus[(compte, motif)] = [instant, 0, ip]
+            lignes = [_ligne_refus(compte, motif, ip, 1)]
         else:
-            nombre = 1
-        _derniers_refus[(compte, motif)] = [instant, 0]
-    try:
-        auth._ecrire_audit({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "compte-service",
-                            "action": "refus", "compte": compte, "motif": motif, "ip": str(ip)[:64],
-                            "nombre": nombre})
-    except Exception as e:  # noqa: BLE001 — un audit impossible ne change pas le refus, mais se dit
-        auth._avertir_une_fois(("compte-service", "audit", type(e).__name__),
-                               "compte de service : audit impossible : %r", type(e).__name__)
+            etat[1] += 1
+            etat[2] = ip
+            lignes = []
+        lignes += _echues(instant)
+        if any(e[1] for e in _derniers_refus.values()):
+            _armer_minuterie()
+    _ecrire_lignes(lignes)
 
 
 def _refus_http(compte: str, refus: RefusCompteService, request: Request) -> HTTPException:
@@ -386,20 +489,22 @@ def _refus_http(compte: str, refus: RefusCompteService, request: Request) -> HTT
 
 def garde_compte_service(compte: str) -> Callable[..., Any]:
     """La dépendance FastAPI d'un compte de service de la liste fermée (ValueError sinon). Bearer SEULEMENT (jamais le
-    cookie de session) ; lit le corps brut (`await request.body()`, mis en cache par Starlette pour la route)."""
+    cookie de session). Vérifie en-tête, clé, signature et réclamations AVANT de lire le corps, puis le lit borné
+    (`TAILLE_MAX_CORPS`), puis compare son empreinte et consomme le `jti`."""
     if compte not in COMPTES_SERVICE:
         raise ValueError(f"compte de service inconnu : {compte!r}")
 
     async def garde(request: Request,
                     creds: Optional[HTTPAuthorizationCredentials] = Depends(auth._bearer)) -> Dict[str, Any]:
         jeton = creds.credentials if creds is not None and creds.credentials else ""
-        if not jeton:
-            exc = await run_in_threadpool(_refus_http, compte, RefusCompteService(401, "absent"), request)
-            raise exc
-        corps = await request.body()
+        maintenant = time.time()
         try:
+            if not jeton:
+                raise RefusCompteService(401, "absent")
             # Lecture des clés et vérification Ed25519 hors de la boucle (RULES-CODE § 6).
-            return await run_in_threadpool(verifier_jeton, compte, jeton, corps, time.time())
+            verifie = await run_in_threadpool(_verifier_avant_corps, compte, jeton, maintenant)
+            corps = await _lire_corps_borne(request)
+            return await run_in_threadpool(_verifier_corps, compte, verifie, corps, maintenant)
         except RefusCompteService as refus:
             exc = await run_in_threadpool(_refus_http, compte, refus, request)
         raise exc
@@ -411,5 +516,5 @@ def garde_compte_service(compte: str) -> Callable[..., Any]:
 require_ai_ban = garde_compte_service("ai-ban")
 
 __all__ = ["DOSSIER_COMPTES_SERVICE", "COMPTES_SERVICE", "DUREE_MAX_S", "DERIVE_S", "ALGORITHME", "CLES_MAX",
-           "REJEU_MAX", "RefusCompteService", "empreinte", "cles_publiques", "verifier_jeton", "frapper_jeton",
+           "REJEU_MAX", "TAILLE_MAX_CORPS", "RefusCompteService", "empreinte", "cles_publiques", "verifier_jeton", "frapper_jeton",
            "garde_compte_service", "require_ai_ban"]

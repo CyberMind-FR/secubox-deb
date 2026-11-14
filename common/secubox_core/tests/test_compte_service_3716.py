@@ -15,7 +15,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import asyncio
 import secrets
+import threading
 import time
 from collections import namedtuple
 
@@ -23,7 +25,8 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
@@ -70,6 +73,9 @@ def cs(monkeypatch, tmp_path):
     monkeypatch.setattr(_cs, "_rejeu", _cs._Rejeu())
     monkeypatch.setattr(_cs, "_cache_cles", {})
     monkeypatch.setattr(_cs, "_derniers_refus", {})
+    monkeypatch.setattr(_cs, "_minuterie", {"active": None})
+    monkeypatch.setattr(_cs, "_armer_minuterie", lambda: _cs._minuterie.update(active="armee"))
+    monkeypatch.setattr(_cs, "_DEMARRAGE", 0.0)
     monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")
     return _cs
 
@@ -96,6 +102,8 @@ def _jeton(cle: Cle, brut=b"", maintenant=T, alg="EdDSA", kid=None, cle_signatur
         else:
             p[k] = v
     h = {"kid": cle.kid if kid is None else kid}
+    if kid is _SANS:
+        del h["kid"]
     h.update(entetes or {})
     if alg.startswith("HS"):
         return jwt.encode(p, SECRET, algorithm=alg, headers=h)
@@ -167,6 +175,8 @@ def test_refus(cs, cle, cas, statut):
     (lambda c: _jeton(c, nbf=int(T) + 30), 401, "iat_futur"),
     (lambda c: _jeton(c, kid="0" * 63), 401, "cle_inconnue"),
     (lambda c: _jeton(c, entetes={"jwk": {"kty": "OKP"}}), 401, "entete"),
+    (lambda c: _jeton(c, entetes={"typ": "at+jwt"}), 401, "entete"),
+    (lambda c: _jeton(c, kid=_SANS), 401, "cle_inconnue"),
     (lambda c: "x" * 9000, 401, "illisible"),
     (lambda c: "pas.un.jeton", 401, "illisible"),
 ])
@@ -272,8 +282,14 @@ def test_deux_cles_au_plus(cs, cle, tmp_path):
     deuxieme = _nouvelle_cle()
     _poser(d, deuxieme)
     assert set(cs.cles_publiques("ai-ban")) == {cle.kid, deuxieme.kid}
-    _poser(d, _nouvelle_cle())
+    troisieme = _nouvelle_cle()
+    _poser(d, troisieme)
     assert cs.cles_publiques("ai-ban") == {}
+    with pytest.raises(cs.RefusCompteService):
+        cs.verifier_jeton("ai-ban", cs.frapper_jeton(cle.prive, "ai-ban", "gk2", b"", T), b"", T)
+    (d / f"{troisieme.kid}.pub").unlink()   # la troisième retirée : les deux autres reviennent
+    for c in (cle, deuxieme):
+        cs.verifier_jeton("ai-ban", cs.frapper_jeton(c.prive, "ai-ban", "gk2", b"", T), b"", T)
 
 
 def test_cle_retiree_refus_immediat(cs, cle, tmp_path):
@@ -417,3 +433,107 @@ def test_require_ai_ban_avec_un_modele_de_corps(cs, cle):
     r = TestClient(app).post("/ai/ban", content=corps, headers={"Authorization": f"Bearer {j}",
                                                                  "Content-Type": "application/json"})
     assert r.status_code == 200 and r.json()["cible"] == "203.0.113.0/24" and len(r.json()["jti"]) == 32
+
+
+# ── Ronde de corrections (P10) ─────────────────────────────────────────
+def test_jeton_frappe_avant_le_demarrage_refuse(cs, cle, monkeypatch):
+    """La mémoire de rejeu naît vide avec le processus : un jeton antérieur (à la dérive près) a pu servir."""
+    monkeypatch.setattr(cs, "_DEMARRAGE", T)
+    for iat in (int(T) - 30, int(T) + 4):
+        with pytest.raises(cs.RefusCompteService) as e:
+            cs.verifier_jeton("ai-ban", cs.frapper_jeton(cle.prive, "ai-ban", "gk2", b"", iat), b"", iat)
+        assert (e.value.statut, e.value.motif) == (401, "avant_demarrage")
+    cs.verifier_jeton("ai-ban", cs.frapper_jeton(cle.prive, "ai-ban", "gk2", b"", T + 5), b"", T + 5)
+
+
+def _app_corps(cs):
+    app = FastAPI()
+
+    @app.post("/brut")
+    async def brut(request: Request, p=Depends(cs.require_ai_ban)):
+        return {"lu": len(await request.body())}   # la route relit le corps après la garde
+
+    return app
+
+
+def test_corps_borne_413(cs, cle):
+    client = TestClient(_app_corps(cs))
+    juste = b"a" * cs.TAILLE_MAX_CORPS
+    j = cs.frapper_jeton(cle.prive, "ai-ban", "gk2", juste, time.time())
+    r = client.post("/brut", content=juste, headers={"Authorization": f"Bearer {j}"})
+    assert r.status_code == 200 and r.json() == {"lu": cs.TAILLE_MAX_CORPS}
+    trop = juste + b"a"
+    j = cs.frapper_jeton(cle.prive, "ai-ban", "gk2", trop, time.time())
+    r = client.post("/brut", content=trop, headers={"Authorization": f"Bearer {j}"})   # Content-Length annoncé
+    assert r.status_code == 413
+    j = cs.frapper_jeton(cle.prive, "ai-ban", "gk2", trop, time.time())
+    r = client.post("/brut", content=iter([juste, b"a"]), headers={"Authorization": f"Bearer {j}"})   # en flux
+    assert r.status_code == 413 and "content-length" not in r.request.headers
+    j = cs.frapper_jeton(cle.prive, "ai-ban", "gk2", b"", time.time())
+    r = client.post("/brut", content=b"x", headers={"Authorization": f"Bearer {j}", "Content-Length": "abc"})
+    assert r.status_code == 400 and "longueur" in r.json()["detail"]
+
+
+def _requete_brute(longueur=None):
+    """Une requête ASGI (`Content-Length` seulement si donné) dont le corps, trop grand, note s'il a été lu."""
+    etat = {"lu": False}
+
+    async def recevoir():
+        etat["lu"] = True
+        return {"type": "http.request", "body": b"x" * (_cs.TAILLE_MAX_CORPS + 1), "more_body": False}
+
+    scope = {"type": "http", "method": "POST", "path": "/ai/ban", "query_string": b"", "client": None,
+             "headers": [] if longueur is None else [(b"content-length", str(longueur).encode())]}
+    return Request(scope, recevoir), etat
+
+
+def test_corps_lu_seulement_apres_la_signature(cs, cle):
+    autre = _nouvelle_cle()
+    faux = cs.frapper_jeton(autre.prive, "ai-ban", "gk2", b"", time.time())   # kid inconnu
+    requete, etat = _requete_brute()
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(cs.require_ai_ban(requete, HTTPAuthorizationCredentials(scheme="Bearer", credentials=faux)))
+    assert e.value.status_code == 401 and etat["lu"] is False
+    bon = cs.frapper_jeton(cle.prive, "ai-ban", "gk2", b"", time.time())
+    requete, etat = _requete_brute()
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(cs.require_ai_ban(requete, HTTPAuthorizationCredentials(scheme="Bearer", credentials=bon)))
+    assert e.value.status_code == 413 and etat["lu"] is True
+    bon = cs.frapper_jeton(cle.prive, "ai-ban", "gk2", b"", time.time())
+    requete, etat = _requete_brute(longueur=_cs.TAILLE_MAX_CORPS + 1)   # annoncé trop grand : jamais lu
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(cs.require_ai_ban(requete, HTTPAuthorizationCredentials(scheme="Bearer", credentials=bon)))
+    assert e.value.status_code == 413 and etat["lu"] is False
+
+
+def test_audit_fin_de_rafale_ecrite_au_refus_suivant(cs, cle, tmp_path, monkeypatch):
+    horloge = [1000.0]
+    monkeypatch.setattr(cs, "_horloge", lambda: horloge[0])
+    for _ in range(3):
+        cs._auditer_refus("ai-ban", "corps", "198.51.100.7")
+    assert cs._minuterie["active"] == "armee"   # la fin de rafale est en attente
+    horloge[0] += 11
+    cs._auditer_refus("ai-ban", "absent", "198.51.100.8")   # un AUTRE motif vide l'attente échue
+    lignes = [json.loads(x) for x in (tmp_path / "audit.log").read_text(encoding="utf-8").splitlines()]
+    assert [(x["motif"], x["nombre"]) for x in lignes] == [("corps", 1), ("absent", 1), ("corps", 2)]
+    assert sum(x["nombre"] for x in lignes) == 4
+
+
+def test_audit_fin_de_rafale_ecrite_par_la_minuterie(cs, cle, tmp_path, monkeypatch):
+    monkeypatch.setattr(cs, "_armer_minuterie", _ARMER_REEL)
+    monkeypatch.setattr(cs, "INTERVALLE_AUDIT_S", 0.05)
+    for _ in range(3):
+        cs._auditer_refus("ai-ban", "corps", "198.51.100.7")
+    journal = tmp_path / "audit.log"
+    limite = time.monotonic() + 5
+    while time.monotonic() < limite and len(journal.read_text(encoding="utf-8").splitlines()) < 2:
+        threading.Event().wait(0.02)
+    lignes = [json.loads(x) for x in journal.read_text(encoding="utf-8").splitlines()]
+    assert [(x["motif"], x["nombre"]) for x in lignes] == [("corps", 1), ("corps", 2)]
+    limite = time.monotonic() + 2
+    while time.monotonic() < limite and cs._minuterie["active"] is not None:
+        threading.Event().wait(0.02)
+    assert cs._minuterie["active"] is None   # plus rien en attente : la minuterie ne se réarme pas
+
+
+_ARMER_REEL = _cs._armer_minuterie
