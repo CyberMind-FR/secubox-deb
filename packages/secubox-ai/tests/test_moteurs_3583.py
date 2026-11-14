@@ -3,7 +3,10 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Moteurs local et distant de secubox-ai (#3583) : choix, clé, demandes au contrôleur, routes."""
+import json
 import logging
+import threading
+import time
 
 import httpx
 import pytest
@@ -30,6 +33,10 @@ def env(tmp_path, monkeypatch):
     moteurs._cache_sonde.clear()
     yield tmp_path
     monkeypatch.setattr(moteurs, "FABRIQUE_TRANSPORT", None)
+
+
+def tombe(req):
+    raise httpx.ConnectError("injoignable", request=req)
 
 
 def transports(monkeypatch, distant=None, local=None):
@@ -69,7 +76,7 @@ async def test_distant_muet_bascule_local(env, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_distant_en_erreur_bascule_local(env, monkeypatch):
-    transports(monkeypatch, distant=lambda req: httpx.Response(503))
+    transports(monkeypatch, distant=tombe)
     assert (await moteurs.choisir()).nom == "local"
 
 
@@ -91,7 +98,7 @@ async def test_forcage_local_ne_touche_pas_au_distant(env, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_forcage_distant_et_prefs(env, monkeypatch):
-    transports(monkeypatch, distant=lambda req: httpx.Response(503))
+    transports(monkeypatch, distant=tombe)
     assert (await moteurs.choisir("distant")).nom == "distant"
     reglages.ecrire_prefs(reglages.valider({"moteur": {"force": "local"}}))
     assert (await moteurs.choisir()).nom == "local"
@@ -106,7 +113,7 @@ async def test_cle_absente_aucun_appel(env, monkeypatch):
         await moteurs.choisir("distant")
     assert e.value.status_code == 503 and "non configuré" in e.value.detail
     d = (await moteurs.etat())["distant"]
-    assert d == {"declare": True, "configure": False, "joignable": False}
+    assert d == {"declare": True, "configure": False, "statut": None, "joignable": False}
     assert not [v for v in vues if v[0] == "distant"]
 
 
@@ -138,15 +145,24 @@ async def test_url_non_declaree_local(env, monkeypatch):
 @pytest.mark.asyncio
 async def test_la_cle_ne_fuit_pas(env, monkeypatch, caplog):
     caplog.set_level(logging.DEBUG)
-    transports(monkeypatch)
+    # Un 401 et une panne réseau produisent de vraies lignes de journal.
+    transports(monkeypatch, distant=lambda req: httpx.Response(401))
     m = await moteurs.choisir()
+    assert m.nom == "local"
+    moteurs._cache_sonde.clear()
+    transports(monkeypatch, distant=tombe)
+    await moteurs.choisir()
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"force": "distant"}}))
+    with pytest.raises(HTTPException) as exc:
+        await moteurs.assurer_moteur(delai=0.05, pas=0.01)
     e = await moteurs.etat()
-    assert CLE not in repr(m) and CLE not in str(e) and CLE not in caplog.text
+    assert caplog.records, "aucune ligne de journal exercée"
+    assert CLE not in caplog.text and CLE not in repr(m) and CLE not in str(e) and CLE not in str(exc.value.detail)
+    assert "clé refusée" in caplog.text and "injoignable" in caplog.text
     (env / "distant.key").unlink()
     with pytest.raises(HTTPException) as exc:
         await moteurs.choisir("distant")
     assert CLE not in str(exc.value.detail)
-    assert CLE not in caplog.text
 
 
 def test_deposer_demande(env):
@@ -154,6 +170,7 @@ def test_deposer_demande(env):
         moteurs.deposer_demande(a)
         assert (env / "run" / "demandes" / f"{a}.demande").exists()
     assert not list((env / "run" / "demandes").glob("*.tmp"))
+    assert not [f for f in (env / "run" / "demandes").iterdir() if f.suffix != ".demande"]
     for mauvais in ("../x", "stop", ""):
         with pytest.raises(ValueError):
             moteurs.deposer_demande(mauvais)
@@ -168,7 +185,7 @@ async def test_assurer_local_depose_et_attend(env, monkeypatch):
         if e:
             raise e
         return httpx.Response(200)
-    transports(monkeypatch, distant=lambda req: httpx.Response(503), local=local)
+    transports(monkeypatch, distant=tombe, local=local)
     m = await moteurs.assurer_moteur(delai=5, pas=0)
     assert m.nom == "local"
     assert (env / "run" / "demandes" / "demarrer.demande").exists()
@@ -176,7 +193,7 @@ async def test_assurer_local_depose_et_attend(env, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_assurer_local_ne_demarre_pas_si_deja_pret(env, monkeypatch):
-    transports(monkeypatch, distant=lambda req: httpx.Response(503))
+    transports(monkeypatch, distant=tombe)
     await moteurs.assurer_moteur(delai=5, pas=0)
     assert not (env / "run" / "demandes" / "demarrer.demande").exists()
 
@@ -185,7 +202,7 @@ async def test_assurer_local_ne_demarre_pas_si_deja_pret(env, monkeypatch):
 async def test_assurer_local_echec_503(env, monkeypatch):
     def mort(req):
         raise httpx.ConnectError("non", request=req)
-    transports(monkeypatch, distant=lambda req: httpx.Response(503), local=mort)
+    transports(monkeypatch, distant=tombe, local=mort)
     with pytest.raises(HTTPException) as e:
         await moteurs.assurer_moteur(delai=0.05, pas=0.01)
     assert e.value.status_code == 503
@@ -234,7 +251,7 @@ async def test_etat_dit_quel_moteur_repond(env, monkeypatch):
     transports(monkeypatch)
     e = await moteurs.etat()
     assert e["actif"] == "distant" and e["force"] == "auto" and e["local"]["pret"] is True
-    transports(monkeypatch, distant=lambda req: httpx.Response(503))
+    transports(monkeypatch, distant=tombe)
     moteurs._cache_sonde.clear()
     assert (await moteurs.etat())["actif"] == "local"
 
@@ -259,3 +276,185 @@ def test_force_invalide_refuse():
     with pytest.raises(HTTPException) as e:
         reglages.valider({"moteur": {"force": "cloud"}})
     assert e.value.status_code == 422
+
+
+def test_deposer_demande_concurrent(env):
+    erreurs = []
+
+    def tache():
+        try:
+            for _ in range(300):
+                moteurs.deposer_demande("demarrer")
+        except Exception as e:  # noqa: BLE001
+            erreurs.append(e)
+    fils = [threading.Thread(target=tache) for _ in range(4)]
+    [f.start() for f in fils]
+    [f.join() for f in fils]
+    assert not erreurs
+    assert sorted(f.name for f in (env / "run" / "demandes").iterdir()) == ["demarrer.demande"]
+
+
+# --- R10 : sémantique de la sonde ---
+@pytest.mark.asyncio
+async def test_sonde_503_endormi_choisit_distant_et_reveille(env, monkeypatch):
+    etat = {"debout": False}
+
+    def distant(req):
+        if req.method == "POST" and req.url.path == "/moteur/demarrer":
+            etat["debout"] = True
+            return httpx.Response(202)
+        return httpx.Response(200 if etat["debout"] else 503)
+    vues = transports(monkeypatch, distant=distant)
+    assert (await moteurs.choisir()).nom == "distant"
+    m = await moteurs.assurer_moteur(delai=5, pas=0)
+    assert m.nom == "distant"
+    assert ("distant", "POST", "/moteur/demarrer") in [v[:3] for v in vues]
+    assert not (env / "run" / "demandes").exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code", [401, 403])
+async def test_sonde_cle_refusee_local_et_journal(env, monkeypatch, caplog, code):
+    caplog.set_level(logging.WARNING)
+    transports(monkeypatch, distant=lambda req: httpx.Response(code))
+    assert (await moteurs.choisir()).nom == "local"
+    assert "clé refusée" in caplog.text and CLE not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_sonde_delai_arrive_a_la_requete(env, monkeypatch):
+    delais = []
+
+    def distant(req):
+        delais.append(req.extensions["timeout"])
+        return httpx.Response(200)
+    transports(monkeypatch, distant=distant)
+    await moteurs.choisir()
+    assert delais[0]["read"] == 2.0 and delais[0]["connect"] == 2.0
+
+
+@pytest.mark.asyncio
+async def test_reseau_ou_delai_injoignable_local(env, monkeypatch):
+    def delai(req):
+        raise httpx.ConnectTimeout("délai", request=req)
+    transports(monkeypatch, distant=delai)
+    assert (await moteurs.choisir()).nom == "local"
+    assert (await moteurs.etat())["distant"]["statut"] == "injoignable"
+
+
+# --- auto : repli local, plus de cache périmé ---
+@pytest.mark.asyncio
+async def test_cache_perime_puis_distant_tombe_repli_local(env, monkeypatch):
+    haut = {"ok": True}
+
+    def distant(req):
+        return httpx.Response(200) if haut["ok"] else tombe(req)
+    vues = transports(monkeypatch, distant=distant)
+    assert (await moteurs.choisir()).nom == "distant"   # sonde mise en cache
+    haut["ok"] = False
+    debut = time.monotonic()
+    m = await moteurs.assurer_moteur(delai=0.05, pas=0.01)
+    assert m.nom == "local" and time.monotonic() - debut < 2
+    assert not (env / "run" / "demandes" / "demarrer.demande").exists()  # local déjà prêt
+
+
+@pytest.mark.asyncio
+async def test_reveil_refuse_en_auto_repli_local(env, monkeypatch):
+    def distant(req):
+        return httpx.Response(401) if req.method == "POST" else httpx.Response(503)
+    transports(monkeypatch, distant=distant)
+    m = await moteurs.assurer_moteur(delai=0.05, pas=0.01)
+    assert m.nom == "local"
+    assert moteurs._cache_sonde == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reponse,motif", [(lambda req: httpx.Response(401), "clé refusée"), (tombe, "injoignable")])
+async def test_distant_force_echoue_vite_sans_cle_dans_le_message(env, monkeypatch, reponse, motif):
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"force": "distant"}}))
+    transports(monkeypatch, distant=reponse)
+    debut = time.monotonic()
+    with pytest.raises(HTTPException) as e:
+        await moteurs.assurer_moteur(delai=30, pas=1)
+    assert e.value.status_code == 503 and motif in e.value.detail and CLE not in e.value.detail
+    assert time.monotonic() - debut < 2
+
+
+@pytest.mark.asyncio
+async def test_reveil_distant_401_force_echoue_vite(env, monkeypatch):
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"force": "distant"}}))
+    transports(monkeypatch, distant=lambda req: httpx.Response(401) if req.method == "POST" else httpx.Response(503))
+    with pytest.raises(HTTPException) as e:
+        await moteurs.assurer_moteur(delai=30, pas=1)
+    assert e.value.status_code == 503 and "clé refusée" in e.value.detail
+
+
+# --- R9 : état du contrôleur ---
+def _ecrire_etat(env, etat, message, horodatage):
+    (env / "run").mkdir(exist_ok=True)
+    (env / "run" / "moteur-etat.json").write_text(
+        json.dumps({"etat": etat, "message": message, "horodatage": horodatage}), encoding="utf-8")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("etat_", ["refus_memoire", "erreur"])
+async def test_refus_controleur_echec_immediat(env, monkeypatch, etat_):
+    transports(monkeypatch, distant=tombe, local=tombe)
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"force": "local"}}))
+    _ecrire_etat(env, etat_, "mémoire insuffisante : 300 Mo libres", time.time() + 60)
+    debut = time.monotonic()
+    with pytest.raises(HTTPException) as e:
+        await moteurs.assurer_moteur(delai=30, pas=1)
+    assert e.value.status_code == 503 and e.value.detail == "mémoire insuffisante : 300 Mo libres"
+    assert time.monotonic() - debut < 2
+
+
+@pytest.mark.asyncio
+async def test_refus_ancien_ignore(env, monkeypatch):
+    transports(monkeypatch, distant=tombe, local=tombe)
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"force": "local"}}))
+    _ecrire_etat(env, "refus_memoire", "ancien refus", time.time() - 3600)
+    with pytest.raises(HTTPException) as e:
+        await moteurs.assurer_moteur(delai=0.1, pas=0.02)
+    assert e.value.detail == "le moteur local n'a pas démarré"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("contenu", [None, "pas du json", "[1]"])
+async def test_etat_controleur_illisible_on_continue(env, monkeypatch, contenu):
+    transports(monkeypatch, distant=tombe, local=tombe)
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"force": "local"}}))
+    if contenu is not None:
+        (env / "run").mkdir(exist_ok=True)
+        (env / "run" / "moteur-etat.json").write_text(contenu)
+    with pytest.raises(HTTPException) as e:
+        await moteurs.assurer_moteur(delai=0.1, pas=0.02)
+    assert e.value.detail == "le moteur local n'a pas démarré"
+
+
+# --- R11 ---
+@pytest.mark.asyncio
+async def test_distant_ignore_le_proxy_de_l_environnement(env, monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.test:3128")
+    monkeypatch.setenv("ALL_PROXY", "http://proxy.test:3128")
+    m = moteurs.Moteur("distant", URL, CLE)
+    async with m.client(2) as c:
+        assert c._trust_env is False
+        assert c._transport_for_url(httpx.URL(URL + "/health")) is c._transport
+
+
+@pytest.mark.asyncio
+async def test_etat_actif_est_le_moteur_qui_repond(env, monkeypatch):
+    transports(monkeypatch)
+    e = await moteurs.etat()
+    assert (e["choisi"], e["actif"]) == ("distant", "distant")
+    # distant endormi : choisi mais ne répond pas encore
+    moteurs._cache_sonde.clear()
+    transports(monkeypatch, distant=lambda req: httpx.Response(503))
+    e = await moteurs.etat()
+    assert (e["choisi"], e["actif"]) == ("distant", None)
+    # local forcé et muet
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"force": "local"}}))
+    transports(monkeypatch, local=tombe)
+    e = await moteurs.etat()
+    assert (e["choisi"], e["actif"]) == ("local", None)

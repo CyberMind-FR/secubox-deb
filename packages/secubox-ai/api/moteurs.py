@@ -11,8 +11,10 @@ aucune requête n'est émise vers l'adresse distante. La clé n'apparaît ni dan
 exceptions, ni dans `etat()`, ni dans `repr(Moteur)`.
 """
 import asyncio
+import json
 import logging
 import os
+import tempfile
 import time
 from pathlib import Path
 from typing import Callable, Literal
@@ -58,15 +60,22 @@ def _url_distante() -> str:
 
 
 def deposer_demande(action: str) -> None:
-    """Dépose une demande au contrôleur root (écriture .tmp puis os.replace)."""
+    """Dépose une demande au contrôleur root. Idempotent et sûr en concurrence : fichier temporaire
+    unique dans le même dossier, puis os.replace (la dernière écriture gagne, un seul fichier reste)."""
     if action not in ACTIONS:
         raise ValueError(f"action inconnue : {action}")
     dossier = run_dir() / "demandes"
     dossier.mkdir(parents=True, exist_ok=True)
-    cible = dossier / f"{action}.demande"
-    tmp = dossier / f"{action}.demande.tmp"
-    tmp.write_text("", encoding="utf-8")
-    os.replace(tmp, cible)
+    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=f".{action}.", suffix=".tmp")
+    try:
+        os.close(fd)
+        os.replace(tmp, dossier / f"{action}.demande")
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 class Moteur:
@@ -85,10 +94,11 @@ class Moteur:
         if self.nom == "local":
             if transport is None:
                 transport = httpx.AsyncHTTPTransport(uds=str(run_dir() / "moteur.sock"))
-            return httpx.AsyncClient(transport=transport, base_url="http://moteur", timeout=delai)
+            return httpx.AsyncClient(transport=transport, base_url="http://moteur", timeout=delai,
+                                     trust_env=False)
         if not self._cle:
             raise HTTPException(503, "moteur distant non configuré")
-        return httpx.AsyncClient(transport=transport, base_url=self._url, timeout=delai,
+        return httpx.AsyncClient(transport=transport, base_url=self._url, timeout=delai, trust_env=False,
                                  headers={"Authorization": f"Bearer {self._cle}"})
 
 
@@ -103,6 +113,7 @@ def _distant() -> Moteur | None:
 
 
 async def _sonde(m: Moteur, delai: float) -> bool:
+    """/health = 200 ? Utilisé pour le moteur local et pour l'attente du démarrage."""
     try:
         async with m.client(delai) as c:
             return (await c.get("/health")).status_code == 200
@@ -110,58 +121,142 @@ async def _sonde(m: Moteur, delai: float) -> bool:
         return False
 
 
-async def _distant_joignable(m: Moteur) -> bool:
-    """Sonde /health (2 s), résultat gardé 10 s."""
+async def _statut_distant(m: Moteur, contourner_cache: bool = False) -> str:
+    """Sonde `GET /health` (2 s) : "pret" (200), "endormi" (503 : entrée vivante, moteur endormi ou en
+    chargement), "refuse" (401/403 : clé refusée), "injoignable" (réseau, délai, autre code).
+    Résultat gardé 10 s, sauf si `contourner_cache`."""
     maintenant = time.monotonic()
     vu = _cache_sonde.get(m._url)
-    if vu and maintenant - vu[0] < CACHE_SONDE_S:
+    if vu and not contourner_cache and maintenant - vu[0] < CACHE_SONDE_S:
         return vu[1]
-    ok = await _sonde(m, DELAI_SONDE_S)
-    _cache_sonde[m._url] = (maintenant, ok)
-    return ok
+    try:
+        async with m.client(DELAI_SONDE_S) as c:
+            code = (await c.get("/health")).status_code
+        statut = {200: "pret", 503: "endormi", 401: "refuse", 403: "refuse"}.get(code, "injoignable")
+        if statut == "refuse":
+            log.warning("moteur distant : clé refusée (HTTP %s)", code)
+    except httpx.HTTPError as e:
+        statut = "injoignable"
+        log.warning("moteur distant injoignable (%s)", type(e).__name__)
+    _cache_sonde[m._url] = (maintenant, statut)
+    return statut
 
 
-async def choisir(force: str | None = None) -> Moteur:
-    """Moteur à utiliser. `force` : auto/local/distant, sinon la préférence `moteur.force`."""
+def _invalider(m: Moteur) -> None:
+    _cache_sonde.pop(m._url, None)
+
+
+async def _selection(force: str | None, contourner_cache: bool = False) -> tuple[Moteur, str | None]:
+    """(moteur choisi, statut distant sondé ou None si le local est retenu sans sonde)."""
     force = force or reglages.lire_prefs()["moteur"]["force"]
     if force == "local":
-        return _local()
+        return _local(), None
     distant = _distant()
     if force == "distant":
         if distant is None:
             raise HTTPException(503, "moteur distant non configuré")
-        return distant
-    if distant is not None and await _distant_joignable(distant):
-        return distant
-    return _local()
+        return distant, await _statut_distant(distant, contourner_cache)
+    if distant is not None:
+        statut = await _statut_distant(distant, contourner_cache)
+        if statut in ("pret", "endormi"):
+            return distant, statut
+    return _local(), None
 
 
-async def attendre_moteur(m: Moteur, delai: float = DELAI_DEMARRAGE_S, pas: float = 1.0) -> bool:
+async def choisir(force: str | None = None) -> Moteur:
+    """Moteur à utiliser. `force` : auto/local/distant, sinon la préférence `moteur.force`.
+    Auto : distant si sa sonde répond 200 (prêt) ou 503 (endormi, à réveiller), sinon local."""
+    return (await _selection(force))[0]
+
+
+def _etat_local() -> dict | None:
+    try:
+        d = json.loads((run_dir() / "moteur-etat.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return d if isinstance(d, dict) else None
+
+
+def _echec_controleur(depuis: float) -> str | None:
+    """Message d'échec du contrôleur (refus mémoire, erreur) postérieur à `depuis`, sinon None."""
+    d = _etat_local()
+    if not d or d.get("etat") not in ("refus_memoire", "erreur"):
+        return None
+    h = d.get("horodatage")
+    if isinstance(h, bool) or not isinstance(h, (int, float)) or h <= depuis:
+        return None
+    return str(d.get("message") or "le moteur local a refusé de démarrer")[:300]
+
+
+async def attendre_moteur(m: Moteur, delai: float = DELAI_DEMARRAGE_S, pas: float = 1.0,
+                          depuis: float | None = None) -> bool:
+    """Attend /health 200. Local : échoue aussitôt (503 + message) si le contrôleur signale un refus
+    ou une erreur postérieurs à `depuis`."""
     limite = time.monotonic() + delai
     while True:
         if await _sonde(m, 5):
             return True
+        if m.nom == "local" and depuis is not None:
+            message = _echec_controleur(depuis)
+            if message:
+                raise HTTPException(503, message)
         if time.monotonic() >= limite:
             return False
         await asyncio.sleep(pas)
 
 
-async def assurer_moteur(delai: float = DELAI_DEMARRAGE_S, pas: float = 1.0) -> Moteur:
-    """Choisit le moteur, le démarre au besoin et attend qu'il réponde."""
-    m = await choisir()
+async def _assurer_local(delai: float, pas: float) -> Moteur:
+    m = _local()
     if await _sonde(m, 5):
         return m
-    if m.nom == "local":
-        await asyncio.to_thread(deposer_demande, "demarrer")
-    else:
-        try:
-            async with m.client(10) as c:
-                await c.post("/moteur/demarrer")
-        except httpx.HTTPError:
-            pass
-    if not await attendre_moteur(m, delai, pas):
-        raise HTTPException(503, f"le moteur {m.nom} n'a pas démarré")
+    depuis = time.time()
+    await asyncio.to_thread(deposer_demande, "demarrer")
+    if not await attendre_moteur(m, delai, pas, depuis):
+        raise HTTPException(503, "le moteur local n'a pas démarré")
     return m
+
+
+async def _reveiller_distant(m: Moteur) -> str | None:
+    """Demande le démarrage du moteur distant. None si accepté, sinon un motif sans clé."""
+    try:
+        async with m.client(10) as c:
+            r = await c.post("/moteur/demarrer")
+    except httpx.HTTPError as e:
+        log.warning("moteur distant : démarrage impossible, injoignable (%s)", type(e).__name__)
+        return "moteur distant injoignable"
+    if r.status_code in (401, 403):
+        log.warning("moteur distant : démarrage refusé, clé refusée (HTTP %s)", r.status_code)
+        return "moteur distant : clé refusée"
+    if r.status_code >= 400:
+        log.warning("moteur distant : démarrage refusé (HTTP %s)", r.status_code)
+        return f"moteur distant : démarrage refusé (HTTP {r.status_code})"
+    return None
+
+
+async def assurer_moteur(delai: float = DELAI_DEMARRAGE_S, pas: float = 1.0) -> Moteur:
+    """Choisit le moteur (sonde fraîche, jamais le cache), le démarre au besoin et attend qu'il réponde.
+    En auto, un distant en échec (sonde, réveil) est écarté et on se rabat sur le local."""
+    force = reglages.lire_prefs()["moteur"]["force"]
+    m, statut = await _selection(force, contourner_cache=True)
+    if m.nom == "local":
+        return await _assurer_local(delai, pas)
+    if statut == "pret":
+        return m
+    motif = {"refuse": "moteur distant : clé refusée", "injoignable": "moteur distant injoignable"}.get(statut)
+    if motif is None:  # endormi : on le réveille
+        motif = await _reveiller_distant(m)
+        if motif is None:
+            if await attendre_moteur(m, delai, pas):
+                return m
+            motif = "le moteur distant n'a pas démarré"
+            if force == "distant":
+                raise HTTPException(503, motif)
+            _invalider(m)
+            return await _assurer_local(delai, pas)
+    _invalider(m)
+    if force == "distant":
+        raise HTTPException(503, motif)
+    return await _assurer_local(delai, pas)
 
 
 async def contexte_reel(m: Moteur | None = None) -> int:
@@ -183,21 +278,23 @@ async def compter_tokens(texte: str, m: Moteur | None = None) -> int:
 
 
 async def etat() -> dict:
-    """Résumé sans secret : quel moteur répondrait, et l'état de chacun. Ne lève jamais."""
+    """Résumé sans secret. `choisi` : moteur retenu ; `actif` : le moteur qui répond réellement
+    (None si le moteur retenu ne répond pas). Ne lève jamais."""
     force = reglages.lire_prefs()["moteur"]["force"]
     url, cle = _url_distante(), _lire_cle()
     distant = _distant()
-    joignable = await _distant_joignable(distant) if distant else False
+    statut = await _statut_distant(distant) if distant else None
     local_pret = await _sonde(_local(), 2)
-    if force == "local" or (force == "auto" and not joignable):
-        actif = "local"
+    if force == "local" or (force == "auto" and statut not in ("pret", "endormi")):
+        choisi, actif = "local", ("local" if local_pret else None)
     elif force == "distant" and distant is None:
-        actif = None
+        choisi, actif = None, None
     else:
-        actif = "distant"
-    return {"force": force, "actif": actif,
+        choisi, actif = "distant", ("distant" if statut == "pret" else None)
+    return {"force": force, "choisi": choisi, "actif": actif,
             "local": {"pret": local_pret},
-            "distant": {"declare": bool(url), "configure": bool(url and cle), "joignable": joignable}}
+            "distant": {"declare": bool(url), "configure": bool(url and cle), "statut": statut,
+                        "joignable": statut in ("pret", "endormi")}}
 
 
 routeur = APIRouter(prefix="")
