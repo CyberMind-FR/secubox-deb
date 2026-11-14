@@ -1,0 +1,879 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-aictl — contrôleur root du module secubox-ai (#3583).
+
+  secubox-aictl preparer         dossiers d'exécution et adresses LAN permises à l'API (root ; postinst, amorçage)
+  secubox-aictl demarrer         démarre le moteur local (llama-server) si la mémoire le permet (root)
+  secubox-aictl arreter          arrête le moteur local (root)
+  secubox-aictl redemarrer       arrête PUIS redémarre le moteur local sur le modèle des préférences (root)
+  secubox-aictl etat [--json]    état du moteur local (sans privilège : groupe secubox-ai)
+  secubox-aictl cle-distante     pose la clé du moteur distant, lue sur l'entrée standard, jamais affichée (root)
+  secubox-aictl demandes         traite UNE demande déposée par l'API (secubox-ai-demandes.service, root)
+
+Codes de sortie : 0 fait ; 1 échec (modèle absent, en-tête illisible, moteur tombé) ; 2 refus d'usage (commande,
+droits, configuration, clé refusée) ; 4 mémoire insuffisante ; 5 occupé (un autre démarrage ou arrêt en cours).
+
+L'API (secubox-ai, NoNewPrivileges) ne lance rien en root : elle DÉPOSE `<action>.demande` (action ∈ demarrer,
+arreter, redemarrer ; fichier vide) dans `$SECUBOX_AI_RUN/demandes` (root:secubox-ai 1770) ;
+secubox-ai-demandes.path démarre secubox-ai-demandes.service (oneshot root), qui exécute « secubox-aictl demandes ».
+L'issue est publiée dans `$SECUBOX_AI_RUN/moteur-etat.json` (R9), que l'API lit. Ni sudo ni systemd-run.
+
+Rien de ce qu'écrit le compte de l'API n'est suivi ni cru : demandes, préférences et modèles sont ouverts sans suivre
+de lien, par descripteur, type et propriétaire vérifiés ; le nom du modèle est revalidé ici.
+"""
+from __future__ import annotations
+
+import fcntl
+import grp
+import ipaddress
+import json
+import math
+import os
+import pwd
+import re
+import secrets
+import socket
+import stat
+import subprocess
+import sys
+import time
+import tomllib
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlsplit
+
+# R4 : code de l'API installé dans /usr/lib/secubox/ai/api/ ; seul le module autonome du contexte est importé ici
+# (bibliothèque standard seulement, ni FastAPI ni httpx).
+sys.path.insert(0, os.environ.get("SECUBOX_AI_LIB", "/usr/lib/secubox/ai"))
+
+from api import contexte_auto as CA  # noqa: E402
+
+VERSION = "0.1.0"
+
+# ── chemins (R2 : lus à l'appel, redirigeables par l'environnement) ──
+ETAT_DEFAUT = "/var/lib/secubox/ai"
+CONF_DEFAUT = "/etc/secubox/ai.toml"
+CLE_DEFAUT = "/etc/secubox/secrets/ai/distant.key"
+RUN_DEFAUT = "/run/secubox-ai"
+AUDIT_DEFAUT = "/var/log/secubox/audit.log"
+MEMINFO = "/proc/meminfo"
+SYSTEMCTL = "/usr/bin/systemctl"
+# Drop-in des adresses permises à l'API, régénéré par « preparer » (perdu au redémarrage : refait à l'amorçage).
+DROPIN_API = Path("/run/systemd/system/secubox-ai.service.d")
+NOM_DROPIN = "50-adresses.conf"
+
+UNITE_MOTEUR = "secubox-ai-moteur.service"
+COMPTE_API = "secubox-ai"
+GROUPE_AI = "secubox-ai"
+GROUPE_MOTEUR = "secubox-ai-moteur"
+# La configuration pilote un contrôleur root : elle doit appartenir à root, sans écriture du groupe ni des autres.
+PROPRIETAIRE_CONFIG = 0
+
+ACTIONS = ("demarrer", "arreter", "redemarrer")
+_NOM_DEMANDE = re.compile(r"^(demarrer|arreter|redemarrer)\.demande$")
+# Temporaire de l'API (moteurs.deposer_demande : mkstemp(prefix=".<action>.", suffix=".tmp")).
+_TMP_API = re.compile(r"^\.(demarrer|arreter|redemarrer)\..+\.tmp$")
+TAILLE_DEMANDE = 64           # l'API dépose un fichier vide
+DUREE_TMP = 60                # un temporaire de l'API resté plus d'une minute est abandonné
+TAILLE_TOML = 64 * 1024
+TAILLE_CLE = 4096
+_CLE = re.compile(r"^[\x21-\x7e]{1,4096}$")   # jeton Bearer : ASCII visible, jamais d'espace ni de saut de ligne
+
+# Mêmes règles que api/reglages.py (NOM_MODELE, genre_fichier) : revalidées ici, le fichier vient du compte de l'API.
+NOM_MODELE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.gguf$")
+MODELE_DEFAUT = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+CONFIG_DEFAUT = {
+    "distant": {"url": ""},
+    "gk2": {"menaces_url": "https://admin.gk2.secubox.in/api/v1",
+            "sources_url": "https://hall.gk2.secubox.in/api/v1/zia/objets"},
+    "moteur_local": {"modele": MODELE_DEFAUT},
+    "searxng": {"url": ""},
+}
+# Hôtes de la configuration que l'API doit pouvoir joindre sur le LAN (R13).
+HOTES_CONFIG = (("gk2", "menaces_url"), ("gk2", "sources_url"), ("distant", "url"), ("searxng", "url"))
+# Plages fermées par secubox-ai.service (IPAddressDeny) qu'une adresse de la configuration peut rouvrir, une à une.
+PLAGES_LAN = tuple(ipaddress.ip_network(p) for p in
+                   ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7"))
+
+# ── moteur local : règles de mémoire (contraintes globales du module) ──
+RESERVE_MO = 512              # air laissé au poste
+SURCOUT_MO = 300              # tampons de calcul du moteur, ajoutés au MemoryMax
+CTX_MIN = CA.CTX_AUTO_MIN     # 4 096
+DELAI_PRET = 170.0            # attente de /health après le démarrage (l'API attend 180 s)
+PAS_PRET = 1.0
+DELAI_SYSTEMCTL = 60
+
+
+class Refus(Exception):
+    """Refus d'usage ou de configuration (code 2)."""
+
+
+class Echec(Exception):
+    """Échec du démarrage (code 1) ; le message est publié dans moteur-etat.json."""
+
+
+# ── utilitaires ──
+
+def etat_dir() -> Path:
+    return Path(os.environ.get("SECUBOX_AI_ETAT", ETAT_DEFAUT))
+
+
+def run_dir() -> Path:
+    return Path(os.environ.get("SECUBOX_AI_RUN", RUN_DEFAUT))
+
+
+def journal(msg: str) -> None:
+    print(f"[secubox-ai] {msg}", file=sys.stderr, flush=True)
+
+
+def audit(evenement: str, details: dict) -> None:
+    """Une ligne JSON en ajout seul dans audit.log (jamais un secret). Échec = signalé, pas silencieux."""
+    entree = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "type": "ai", "evenement": evenement,
+              **details}
+    ligne = json.dumps(entree, ensure_ascii=True) + "\n"
+    try:
+        fd = os.open(os.environ.get("SECUBOX_AI_AUDIT", AUDIT_DEFAUT),
+                     os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
+        try:
+            os.write(fd, ligne.encode())
+        finally:
+            os.close(fd)
+    except OSError as e:
+        journal(f"audit non écrit ({e.__class__.__name__}) : {ligne.strip()}")
+
+
+def _root() -> bool:
+    return os.geteuid() == 0
+
+
+def _identites() -> dict:
+    """uid et gid exigés des fichiers root, uid du compte de l'API, gid des groupes secubox-ai et secubox-ai-moteur."""
+    return {"racine": 0, "gid_racine": 0, "api": pwd.getpwnam(COMPTE_API).pw_uid,
+            "gid_ai": grp.getgrnam(GROUPE_AI).gr_gid, "gid_moteur": grp.getgrnam(GROUPE_MOTEUR).gr_gid}
+
+
+def systemctl(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run([SYSTEMCTL, *args], check=True, timeout=DELAI_SYSTEMCTL, capture_output=True, text=True)
+
+
+def etat_unite() -> str:
+    """ActiveState de l'unité du moteur (active, activating, inactive, failed…), « inconnu » si systemctl échoue."""
+    try:
+        return systemctl("show", "--property=ActiveState", "--value", UNITE_MOTEUR).stdout.strip() or "inconnu"
+    except (subprocess.SubprocessError, OSError) as e:
+        journal(f"état de {UNITE_MOTEUR} illisible ({e.__class__.__name__})")
+        return "inconnu"
+
+
+def _ouvrir_dossier(chemin, proprietaires, dir_fd: int | None = None) -> int:
+    """Descripteur du dossier, sans suivre de lien, type et propriétaire vérifiés sur le descripteur même."""
+    fd = os.open(chemin, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=dir_fd)
+    st = os.fstat(fd)
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid not in proprietaires:
+        os.close(fd)
+        raise PermissionError(f"{chemin} : propriétaire inattendu")
+    return fd
+
+
+def _lire_fichier(nom, dir_fd: int | None, proprietaires, taille: int) -> bytes:
+    """Contenu d'un fichier ordinaire (sans lien, sans blocage sur une FIFO), propriétaire vérifié, taille bornée."""
+    fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dir_fd)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise PermissionError(f"{nom} : pas un fichier ordinaire")
+        if st.st_uid not in proprietaires:
+            raise PermissionError(f"{nom} : propriétaire inattendu")
+        if st.st_size > taille:
+            raise PermissionError(f"{nom} : trop grand")
+        brut = os.read(fd, taille + 1)
+    finally:
+        os.close(fd)
+    if len(brut) > taille:
+        raise PermissionError(f"{nom} : trop grand")
+    return brut
+
+
+def ecrire_atomique(dfd: int, nom: str, contenu: bytes, mode: int, uid: int, gid: int) -> None:
+    """Écrit `nom` dans le dossier `dfd` : temporaire au nom aléatoire créé en exclusif (un nom posé à l'avance par
+    un compte du groupe n'est jamais réutilisé), propriétaire et mode posés AVANT le contenu, puis os.replace."""
+    for _ in range(8):
+        tmp = f".{nom}.{secrets.token_hex(6)}.tmp"
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dfd)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise FileExistsError(f"temporaire de {nom} impossible à créer")
+    try:
+        try:
+            os.fchown(fd, uid, gid)
+            os.fchmod(fd, mode)
+            vue = memoryview(contenu)
+            while vue:
+                vue = vue[os.write(fd, vue):]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, nom, src_dir_fd=dfd, dst_dir_fd=dfd)
+    except BaseException:
+        try:
+            os.unlink(tmp, dir_fd=dfd)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+# ── configuration fixe et préférences ──
+
+def charger_conf() -> dict:
+    """/etc/secubox/ai.toml (absent = défauts) : sans suivre de lien, propriétaire root, ni groupe ni autres en
+    écriture ; seules les clés connues, chaînes seulement. Lève Refus sinon."""
+    cfg = json.loads(json.dumps(CONFIG_DEFAUT))
+    chemin = os.environ.get("SECUBOX_AI_CONF", CONF_DEFAUT)
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return cfg
+    except OSError as e:
+        raise Refus(f"{chemin} illisible ({e.__class__.__name__})") from e
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != PROPRIETAIRE_CONFIG or st.st_mode & 0o022:
+            raise Refus(f"{chemin} : fichier root non inscriptible par le groupe ou les autres attendu")
+        brut = os.read(fd, TAILLE_TOML + 1)
+    finally:
+        os.close(fd)
+    if len(brut) > TAILLE_TOML:
+        raise Refus(f"{chemin} trop grand")
+    try:
+        lue = tomllib.loads(brut.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        raise Refus(f"{chemin} illisible ({e.__class__.__name__})") from e
+    for section, valeurs in lue.items():
+        if section in cfg and isinstance(valeurs, dict):
+            cfg[section].update({c: v for c, v in valeurs.items() if c in cfg[section] and isinstance(v, str)})
+    return cfg
+
+
+def _genre_modele(nom: str) -> bool:
+    """Un modèle à charger seul (ni annexe, ni morceau d'une découpe) : mêmes règles que reglages.genre_fichier."""
+    if re.search(r"(^|[-_])(mmproj|mtp|dflash|eagle\d*|lilicorr|draft)[-_]", nom, re.I):
+        return False
+    return not re.search(r"-\d{5}-of-\d{5}\.gguf$", nom)
+
+
+def nom_modele_valide(nom) -> bool:
+    return isinstance(nom, str) and bool(NOM_MODELE.fullmatch(nom)) and ".." not in nom and _genre_modele(nom)
+
+
+def lire_prefs(efd: int, ids: dict) -> dict:
+    """Section [moteur] de preferences.toml (fichier du compte de l'API), {} si absent ou refusé."""
+    try:
+        brut = _lire_fichier("preferences.toml", efd, {ids["api"], ids["racine"]}, TAILLE_TOML)
+        moteur = tomllib.loads(brut.decode("utf-8")).get("moteur", {})
+    except FileNotFoundError:
+        return {}
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        journal(f"préférences ignorées ({e.__class__.__name__})")
+        return {}
+    return moteur if isinstance(moteur, dict) else {}
+
+
+def _verifier_modele(mfd: int, nom: str, ids: dict) -> os.stat_result | None:
+    """stat du modèle s'il est un fichier ordinaire (jamais un lien), non vide, du compte de l'API ou de root."""
+    try:
+        st = os.stat(nom, dir_fd=mfd, follow_symlinks=False)
+    except OSError:
+        return None
+    if not stat.S_ISREG(st.st_mode) or st.st_uid not in (ids["api"], ids["racine"]) or st.st_size == 0:
+        return None
+    return st
+
+
+def choisir_modele(ids: dict, cfg: dict) -> dict:
+    """Modèle à servir : la préférence moteur.modele si elle est valide et installée, sinon [moteur_local] modele.
+    Renvoie {"nom", "source", "poids_mo", "lecture" (chemin par le descripteur vérifié, pour l'en-tête), "chemin"
+    (pour llama-server), "contexte" (préférence 0..32768, 0 = auto), "_fd" (à fermer)}. Lève Echec si aucun ne
+    convient."""
+    proprietaires = {ids["api"], ids["racine"]}
+    try:
+        efd = _ouvrir_dossier(etat_dir(), proprietaires)
+    except OSError as e:
+        raise Echec(f"dossier de données du module illisible ({e.__class__.__name__})") from e
+    try:
+        prefs = lire_prefs(efd, ids)
+        try:
+            mfd = _ouvrir_dossier("modeles", proprietaires, dir_fd=efd)
+        except OSError as e:
+            raise Echec(f"dossier des modèles illisible ({e.__class__.__name__})") from e
+    finally:
+        os.close(efd)
+    candidats = []
+    if "modele" in prefs:
+        candidats.append((prefs["modele"], "preferences"))
+    candidats.append((cfg["moteur_local"]["modele"], "configuration"))
+    for nom, source in candidats:
+        if not nom_modele_valide(nom):
+            journal(f"modèle refusé ({source}) : nom invalide")
+            continue
+        st = _verifier_modele(mfd, nom, ids)
+        if st is None:
+            journal(f"modèle {nom} ({source}) : absent, lien ou propriétaire inattendu")
+            continue
+        if not (st.st_mode & 0o004 or (st.st_gid == ids["gid_ai"] and st.st_mode & 0o040)):
+            os.close(mfd)
+            raise Echec(f"le modèle {nom} n'est pas lisible par le moteur (groupe {GROUPE_AI}, mode 0640 attendus)")
+        ctx = prefs.get("contexte", 0)
+        if isinstance(ctx, bool) or not isinstance(ctx, int) or not 0 <= ctx <= CA.CTX_AUTO_MAX:
+            ctx = 0
+        return {"nom": nom, "source": source, "poids_mo": st.st_size / 1024 ** 2, "contexte": ctx,
+                "lecture": f"/proc/self/fd/{mfd}/{nom}", "chemin": str(etat_dir() / "modeles" / nom), "_fd": mfd}
+    os.close(mfd)
+    raise Echec("aucun modèle local installé : téléchargez-en un depuis l'onglet Modèles")
+
+
+def memoire_disponible_mo() -> float:
+    for ligne in Path(MEMINFO).read_text(encoding="ascii").splitlines():
+        if ligne.startswith("MemAvailable:"):
+            return int(ligne.split()[1]) / 1024
+    raise Echec("MemAvailable absent de /proc/meminfo")
+
+
+def plan_memoire(modele: dict, dispo_mo: float) -> dict:
+    """Contexte et MemoryMax du moteur, ou Refus mémoire (clé "refus").
+
+    Refus si MemAvailable − 512 Mo < poids + cache du contexte minimal (4 096). Le contexte automatique est calculé
+    pour que poids + cache + 300 Mo tienne dans MemAvailable − 512 Mo (plafond passé à contexte_auto) ; un contexte
+    réglé à la main est honoré sans jamais dépasser l'automatique. MemoryMax = poids + cache(ctx) + 300 Mo."""
+    par_jeton, _ = CA.kv_par_jeton(modele["lecture"])
+    if not par_jeton:
+        raise Echec(f"en-tête GGUF de {modele['nom']} illisible : mémoire du moteur impossible à estimer")
+    poids = modele["poids_mo"]
+    cache_min = par_jeton * CTX_MIN / 1024 ** 2
+    besoin = poids + cache_min
+    if dispo_mo - RESERVE_MO < besoin:
+        return {"refus": (f"mémoire insuffisante pour le moteur local : {int(dispo_mo)} Mo disponibles, il en faut "
+                          f"{math.ceil(besoin + RESERVE_MO)} (modèle {math.ceil(poids)} Mo + contexte minimal "
+                          f"{math.ceil(cache_min)} Mo + réserve {RESERVE_MO} Mo) ; choisissez le moteur distant (gk0) "
+                          f"ou un modèle plus petit")}
+    auto = CA.contexte_auto(modele["lecture"], int(dispo_mo), int(dispo_mo) - RESERVE_MO - SURCOUT_MO, RESERVE_MO)
+    ctx = auto if not modele["contexte"] else max(512, min(modele["contexte"], auto))
+    memmax = math.ceil(poids + par_jeton * ctx / 1024 ** 2 + SURCOUT_MO)
+    return {"ctx": ctx, "memmax_mo": memmax}
+
+
+# ── état publié pour l'API (R9) ──
+
+def ecrire_etat(etat: str, message: str = "") -> None:
+    """$RUN/moteur-etat.json (0640 root:secubox-ai), en temporaire + os.replace."""
+    ids = _identites()
+    rfd = _ouvrir_dossier(run_dir(), {ids["racine"]})
+    try:
+        corps = {"etat": etat, "message": message, "horodatage": time.time()}
+        ecrire_atomique(rfd, "moteur-etat.json", json.dumps(corps, ensure_ascii=False).encode(), 0o640,
+                        ids["racine"], ids["gid_ai"])
+    finally:
+        os.close(rfd)
+
+
+def lire_etat() -> dict | None:
+    try:
+        d = json.loads((run_dir() / "moteur-etat.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return d if isinstance(d, dict) else None
+
+
+# ── moteur local ──
+
+class Verrou:
+    """Un seul démarrage ou arrêt à la fois : $RUN/ctl/verrou (dossier root 0700, jamais un fichier du groupe)."""
+
+    def __init__(self, attendre: bool = False):
+        self.attendre, self.fd = attendre, None
+
+    def __enter__(self):
+        ids = _identites()
+        cfd = _ouvrir_dossier(run_dir() / "ctl", {ids["racine"]})
+        try:
+            self.fd = os.open("verrou", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=cfd)
+        finally:
+            os.close(cfd)
+        try:
+            fcntl.flock(self.fd, fcntl.LOCK_EX if self.attendre else fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(self.fd)
+            self.fd = None
+            raise
+        return self
+
+    def __exit__(self, *_):
+        if self.fd is not None:
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            os.close(self.fd)
+
+
+def sante_moteur(delai: float = 2.0) -> bool:
+    """GET /health du moteur par sa socket Unix : 200 ?"""
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(delai)
+            s.connect(str(run_dir() / "moteur.sock"))
+            s.sendall(b"GET /health HTTP/1.0\r\nHost: moteur\r\n\r\n")
+            ligne = s.recv(64).split(b"\r\n", 1)[0].split()
+    except OSError:
+        return False
+    return len(ligne) >= 2 and ligne[1] == b"200"
+
+
+def _retirer_socket() -> None:
+    try:
+        os.unlink(run_dir() / "moteur.sock")
+    except FileNotFoundError:
+        pass
+
+
+def _arreter_unite() -> None:
+    """Unité arrêtée (TimeoutStopSec=8 dans l'unité) et socket retirée."""
+    systemctl("stop", UNITE_MOTEUR)
+    try:
+        systemctl("reset-failed", UNITE_MOTEUR)
+    except subprocess.CalledProcessError:
+        pass          # l'unité n'était pas en échec : rien à effacer
+    _retirer_socket()
+
+
+def _attendre_pret() -> None:
+    limite = time.monotonic() + DELAI_PRET
+    while True:
+        if sante_moteur():
+            return
+        etat = etat_unite()
+        if etat in ("failed", "inactive"):
+            raise Echec(f"le moteur local s'est arrêté au chargement du modèle (journalctl -u {UNITE_MOTEUR})")
+        if time.monotonic() >= limite:
+            raise Echec(f"le moteur local ne répond pas après {int(DELAI_PRET)} s")
+        time.sleep(PAS_PRET)
+
+
+def _demarrer(acteur: str) -> int:
+    """Sous le verrou, moteur arrêté. Publie « demarrage » puis « pret », « refus_memoire » ou « erreur »."""
+    ecrire_etat("demarrage", "démarrage du moteur local")
+    ids = _identites()
+    try:
+        cfg = charger_conf()
+    except Refus as e:
+        journal(f"configuration refusée, défauts utilisés : {e}")
+        audit("moteur", {"action": "demarrer", "issue": "configuration-refusee", "detail": str(e), "acteur": acteur})
+        cfg = json.loads(json.dumps(CONFIG_DEFAUT))
+    modele = None
+    try:
+        modele = choisir_modele(ids, cfg)
+        dispo = memoire_disponible_mo()
+        plan = plan_memoire(modele, dispo)
+        if "refus" in plan:
+            ecrire_etat("refus_memoire", plan["refus"])
+            audit("moteur", {"action": "demarrer", "issue": "refus_memoire", "modele": modele["nom"],
+                             "disponible_mo": int(dispo), "acteur": acteur})
+            journal(plan["refus"])
+            return 4
+        env = f"MODELE={modele['chemin']}\nCTX={plan['ctx']}\nMEMMAX={plan['memmax_mo']}M\n"
+        rfd = _ouvrir_dossier(run_dir(), {ids["racine"]})
+        try:
+            ecrire_atomique(rfd, "moteur.env", env.encode(), 0o640, ids["racine"], ids["gid_moteur"])
+        finally:
+            os.close(rfd)
+        try:
+            systemctl("reset-failed", UNITE_MOTEUR)
+        except subprocess.CalledProcessError:
+            pass
+        _retirer_socket()
+        # MemoryMax ne lit pas l'environnement : posé par set-property --runtime (drop-in de /run/systemd/system.control,
+        # appliqué sans daemon-reload, perdu au redémarrage de la machine), AVANT le démarrage.
+        systemctl("set-property", "--runtime", UNITE_MOTEUR, f"MemoryMax={plan['memmax_mo']}M")
+        systemctl("start", UNITE_MOTEUR)
+        _attendre_pret()
+    except (Echec, OSError, subprocess.SubprocessError) as e:
+        message = str(e) if isinstance(e, Echec) else f"démarrage du moteur local impossible ({e.__class__.__name__})"
+        ecrire_etat("erreur", message)
+        audit("moteur", {"action": "demarrer", "issue": "erreur", "detail": message, "acteur": acteur,
+                         **({"modele": modele["nom"]} if modele else {})})
+        journal(message)
+        return 1
+    finally:
+        if modele:
+            os.close(modele["_fd"])
+    ecrire_etat("pret", f"modèle {modele['nom']}, contexte {plan['ctx']}")
+    audit("moteur", {"action": "demarrer", "issue": "pret", "modele": modele["nom"], "source": modele["source"],
+                     "contexte": plan["ctx"], "memoire_max_mo": plan["memmax_mo"], "acteur": acteur})
+    return 0
+
+
+def executer_action(action: str, acteur: str, attendre: bool = False) -> int:
+    """demarrer | arreter | redemarrer sous le verrou ; 5 si un autre est en cours (sauf `attendre`)."""
+    try:
+        with Verrou(attendre):
+            if action == "demarrer":
+                if etat_unite() in ("active", "activating"):
+                    journal("moteur local déjà en marche")
+                    return 0
+                return _demarrer(acteur)
+            # R18 : l'ancien moteur est ARRÊTÉ (unité stoppée, socket retirée) AVANT toute publication d'état.
+            try:
+                _arreter_unite()
+            except (OSError, subprocess.SubprocessError) as e:
+                message = f"arrêt du moteur local impossible ({e.__class__.__name__})"
+                ecrire_etat("erreur", message)
+                audit("moteur", {"action": action, "issue": "erreur", "detail": message, "acteur": acteur})
+                return 1
+            if action == "arreter":
+                ecrire_etat("arrete", "moteur local arrêté")
+                audit("moteur", {"action": "arreter", "issue": "arrete", "acteur": acteur})
+                return 0
+            return _demarrer(acteur)
+    except BlockingIOError:
+        journal("un autre démarrage ou arrêt du moteur est en cours")
+        return 5
+
+
+# ── demandes de l'API ──
+
+def lire_demande(dfd: int, nom: str, uid_api: int) -> str:
+    """"" si la demande est recevable, sinon le motif du refus : fichier ordinaire du compte de l'API, à lien unique,
+    taille bornée (le contenu n'est pas interprété)."""
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+    except OSError as e:
+        return f"illisible ({e.__class__.__name__})"
+    try:
+        st = os.fstat(fd)
+    finally:
+        os.close(fd)
+    if not stat.S_ISREG(st.st_mode):
+        return "pas un fichier ordinaire"
+    if st.st_uid != uid_api:
+        return "propriétaire inattendu"
+    if st.st_nlink != 1:
+        return "fichier à liens multiples"
+    if st.st_size > TAILLE_DEMANDE:
+        return "trop grande"
+    return ""
+
+
+def _retirer(dfd: int, nom: str) -> None:
+    """Retire une entrée du dépôt ; un dossier est mis de côté sous un nom pointé que l'unité .path ne voit pas."""
+    try:
+        os.unlink(nom, dir_fd=dfd)
+    except FileNotFoundError:
+        pass
+    except IsADirectoryError:
+        os.rename(nom, f".ecarte.{secrets.token_hex(4)}", src_dir_fd=dfd, dst_dir_fd=dfd)
+        journal("dossier dans le dépôt des demandes : mis de côté")
+
+
+def traiter_demandes() -> int:
+    """UNE demande valide par passage, la plus ancienne (la dernière intention s'applique en dernier) : l'unité
+    .path relance le service tant qu'il reste des *.demande. Noms inattendus et demandes refusées : retirés et
+    tracés au même passage. Réussit toujours (un échec répété ne doit pas désarmer l'unité .path)."""
+    if not _root():
+        journal("demandes : root exigé")
+        return 2
+    preparer_dossiers()
+    ids = _identites()
+    dfd = _ouvrir_dossier(run_dir() / "demandes", {ids["racine"]})
+    retenue = None
+    try:
+        valides = []
+        maintenant = time.time()
+        for nom in os.listdir(dfd):
+            if _TMP_API.fullmatch(nom):
+                try:
+                    st = os.stat(nom, dir_fd=dfd, follow_symlinks=False)
+                    if maintenant - st.st_mtime > DUREE_TMP and not stat.S_ISDIR(st.st_mode):
+                        os.unlink(nom, dir_fd=dfd)
+                except FileNotFoundError:
+                    pass
+                continue                      # en cours d'écriture par l'API
+            if nom.startswith(".ecarte."):
+                continue
+            if not _NOM_DEMANDE.fullmatch(nom):
+                _retirer(dfd, nom)
+                journal(f"demande au nom invalide ignorée : {nom[:64]!r}")
+                audit("demande", {"issue": "ignoree", "detail": "nom invalide", "nom": nom[:64]})
+                continue
+            motif = lire_demande(dfd, nom, ids["api"])
+            if motif:
+                _retirer(dfd, nom)
+                journal(f"demande {nom} refusée : {motif}")
+                audit("demande", {"issue": "refusee", "detail": motif, "nom": nom})
+                continue
+            try:
+                valides.append((os.stat(nom, dir_fd=dfd, follow_symlinks=False).st_mtime_ns, nom))
+            except FileNotFoundError:
+                continue                      # retirée entre-temps (l'API la remplace par os.replace)
+        if valides:
+            retenue = min(valides)[1]
+            _retirer(dfd, retenue)            # consommée AVANT l'action : une nouvelle demande relancera l'unité
+    finally:
+        os.close(dfd)
+    if retenue is not None:
+        try:
+            executer_action(retenue[: -len(".demande")], "api", attendre=True)
+        except (OSError, subprocess.SubprocessError) as e:
+            journal(f"demande {retenue} non exécutée ({e.__class__.__name__})")
+            audit("demande", {"issue": "erreur", "nom": retenue, "detail": e.__class__.__name__})
+    return 0
+
+
+# ── preparer : dossiers d'exécution et adresses LAN de l'API ──
+
+def _dossier_root(chemin: Path, mode: int, gid: int) -> None:
+    """Dossier root:gid au mode voulu. Ce qui occupe sa place sans être un dossier root (lien, fichier, dossier
+    d'un autre compte) est ÉCARTÉ, jamais suivi ni réutilisé."""
+    ids = _identites()
+    try:
+        st = os.lstat(chemin)
+    except FileNotFoundError:
+        st = None
+    if st is not None and (not stat.S_ISDIR(st.st_mode) or st.st_uid != ids["racine"]):
+        ecarte = chemin.with_name(f".{chemin.name}.ecarte-{int(time.time())}-{secrets.token_hex(3)}")
+        os.rename(chemin, ecarte)
+        journal(f"{chemin} n'était pas un dossier root : écarté en {ecarte}")
+        audit("preparer", {"issue": "ecarte", "detail": f"{chemin} remplacé (lien, fichier ou autre propriétaire)"})
+        st = None
+    if st is None:
+        os.mkdir(chemin, 0o700)
+    fd = _ouvrir_dossier(chemin, {ids["racine"]})
+    try:
+        os.fchown(fd, ids["racine"], gid)
+        os.fchmod(fd, mode)
+    finally:
+        os.close(fd)
+
+
+def preparer_dossiers() -> None:
+    """$RUN root:secubox-ai 1770 (le moteur y crée sa socket ; collant : nul ne retire le fichier d'un autre),
+    $RUN/demandes root:secubox-ai 1770 (dépôt de l'API), $RUN/ctl root 0700 (verrou)."""
+    ids = _identites()
+    run = run_dir()
+    _dossier_root(run, 0o1770, ids["gid_ai"])
+    _dossier_root(run / "demandes", 0o1770, ids["gid_ai"])
+    _dossier_root(run / "ctl", 0o700, ids["gid_racine"])
+
+
+def resoudre(hote: str) -> set[str]:
+    """Adresses de `hote` au moment de l'appel (résolveur de la box)."""
+    return {info[4][0] for info in socket.getaddrinfo(hote, None, proto=socket.IPPROTO_TCP)}
+
+
+def adresses_permises(cfg: dict) -> tuple[list[str], list[str]]:
+    """(adresses LAN à rouvrir pour l'API, refus tracés). Seules les adresses des plages privées fermées par l'unité
+    sont rouvertes, une à une (/32, /128) ; une adresse publique est déjà joignable ; boucle, lien local,
+    multidiffusion ou réservée : jamais (même si un nom y résout)."""
+    permises, refus = set(), []
+    for section, cle in HOTES_CONFIG:
+        url = cfg.get(section, {}).get(cle, "")
+        if not url:
+            continue
+        try:
+            p = urlsplit(url)
+            hote = p.hostname if p.scheme in ("http", "https") else None
+        except ValueError:
+            hote = None
+        if not hote:
+            refus.append(f"{section}.{cle} : adresse invalide")
+            continue
+        try:
+            adresses = {hote} if _est_ip(hote) else resoudre(hote)
+        except (OSError, UnicodeError) as e:
+            refus.append(f"{section}.{cle} : {hote} non résolu ({e.__class__.__name__})")
+            continue
+        for a in sorted(adresses):
+            try:
+                ip = ipaddress.ip_address(a.split("%", 1)[0])
+            except ValueError:
+                refus.append(f"{section}.{cle} : adresse {a!r} illisible")
+                continue
+            if getattr(ip, "ipv4_mapped", None):
+                ip = ip.ipv4_mapped
+            if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+                refus.append(f"{section}.{cle} : {ip} refusée (boucle, lien local ou multidiffusion)")
+            elif any(ip in plage for plage in PLAGES_LAN):
+                permises.add(f"{ip}/{ip.max_prefixlen}")
+    return sorted(permises, key=lambda s: (":" in s, s)), refus
+
+
+def _est_ip(hote: str) -> bool:
+    try:
+        ipaddress.ip_address(hote)
+    except ValueError:
+        return False
+    return True
+
+
+def texte_dropin(permises: list[str]) -> str:
+    """Drop-in de secubox-ai.service. Jamais de « IPAddressAllow= » vide : il remettrait à zéro la liste de l'unité
+    (127.0.0.1/32, le résolveur de la box)."""
+    lignes = ["# Généré par « secubox-aictl preparer » (#3583) depuis /etc/secubox/ai.toml : adresses LAN de gk2, gk0",
+              "# et du SearXNG local, résolues au moment de l'appel. Un changement de DNS ou de configuration demande un",
+              "# nouveau « secubox-aictl preparer » puis la relance de secubox-ai.", "[Service]"]
+    if permises:
+        lignes.append("IPAddressAllow=" + " ".join(permises))
+    return "\n".join(lignes) + "\n"
+
+
+def ecrire_dropin(texte: str) -> bool:
+    """Écrit le drop-in s'il a changé ; True si systemd doit relire ses unités."""
+    DROPIN_API.mkdir(mode=0o755, parents=True, exist_ok=True)
+    cible = DROPIN_API / NOM_DROPIN
+    try:
+        if cible.read_text(encoding="utf-8") == texte:
+            return False
+    except FileNotFoundError:
+        pass
+    ids = _identites()
+    fd = _ouvrir_dossier(DROPIN_API, {ids["racine"]})
+    try:
+        ecrire_atomique(fd, NOM_DROPIN, texte.encode(), 0o644, ids["racine"], ids["gid_racine"])
+    finally:
+        os.close(fd)
+    return True
+
+
+def cmd_preparer() -> int:
+    if not _root():
+        journal("preparer : root exigé")
+        return 2
+    preparer_dossiers()
+    code = 0
+    try:
+        cfg = charger_conf()
+        permises, refus = adresses_permises(cfg)
+    except Refus as e:
+        journal(f"configuration refusée : {e} ; aucune adresse LAN permise à l'API")
+        audit("preparer", {"issue": "configuration-refusee", "detail": str(e)})
+        permises, refus, code = [], [], 2
+    for r in refus:
+        journal(r)
+    try:
+        if ecrire_dropin(texte_dropin(permises)):
+            systemctl("daemon-reload")
+            audit("preparer", {"issue": "adresses", "permises": permises, "refus": refus})
+    except (OSError, subprocess.SubprocessError) as e:
+        journal(f"adresses de l'API non appliquées ({e.__class__.__name__})")
+        audit("preparer", {"issue": "erreur", "detail": f"drop-in non appliqué ({e.__class__.__name__})"})
+        return 1
+    return code
+
+
+# ── clé du moteur distant ──
+
+def lire_cle_entree() -> bytes:
+    """Lit la clé sur l'entrée standard ; sur un terminal, l'écho est coupé pendant la saisie."""
+    entree = sys.stdin.buffer
+    if not sys.stdin.isatty():
+        return entree.read(TAILLE_CLE + 3)
+    import termios
+
+    fd = sys.stdin.fileno()
+    ancien = termios.tcgetattr(fd)
+    nouveau = list(ancien)
+    nouveau[3] &= ~termios.ECHO
+    print("Clé du moteur distant (saisie masquée) : ", end="", file=sys.stderr, flush=True)
+    termios.tcsetattr(fd, termios.TCSAFLUSH, nouveau)
+    try:
+        return entree.readline(TAILLE_CLE + 3)
+    finally:
+        termios.tcsetattr(fd, termios.TCSAFLUSH, ancien)
+        print(file=sys.stderr)
+
+
+def cmd_cle_distante() -> int:
+    """Pose $SECUBOX_AI_CLE (0640 root:secubox-ai) en temporaire + os.replace. La clé n'est jamais affichée ni
+    tracée ; une clé vide, trop longue ou hors ASCII visible est refusée (elle partirait dans un en-tête HTTP)."""
+    if not _root():
+        journal("cle-distante : root exigé")
+        return 2
+    brut = lire_cle_entree()
+    try:
+        cle = brut.decode("ascii").strip()
+    except UnicodeDecodeError:
+        cle = None
+    if len(brut) > TAILLE_CLE + 2 or not cle or not _CLE.fullmatch(cle):
+        journal("clé refusée : vide, trop longue ou hors ASCII visible (rien n'a été écrit)")
+        audit("cle-distante", {"issue": "refusee"})
+        return 2
+    ids = _identites()
+    chemin = Path(os.environ.get("SECUBOX_AI_CLE", CLE_DEFAUT))
+    if chemin.parent.name != "ai":
+        # Le dossier de la clé est repris root:secubox-ai 0750 : jamais un parent partagé (RULES-CODE § 2).
+        journal(f"{chemin} : dossier dédié « …/ai/ » attendu")
+        return 2
+    _dossier_root(chemin.parent, 0o750, ids["gid_ai"])
+    dfd = _ouvrir_dossier(chemin.parent, {ids["racine"]})
+    try:
+        ecrire_atomique(dfd, chemin.name, (cle + "\n").encode("ascii"), 0o640, ids["racine"], ids["gid_ai"])
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
+    audit("cle-distante", {"issue": "posee"})
+    print("clé du moteur distant posée")
+    return 0
+
+
+# ── état ──
+
+def cmd_etat(en_json: bool) -> int:
+    vue = {"unite": etat_unite(), "socket": (run_dir() / "moteur.sock").is_socket(), "etat": lire_etat()}
+    if en_json:
+        print(json.dumps(vue, ensure_ascii=False))
+    else:
+        e = vue["etat"] or {}
+        print(f"unité   {vue['unite']}\nsocket  {'présente' if vue['socket'] else 'absente'}\n"
+              f"état    {e.get('etat', '?')}  {e.get('message', '')}")
+    return 0
+
+
+def aide() -> int:
+    print(__doc__.strip())
+    return 0
+
+
+VERBES = {"preparer", "demarrer", "arreter", "redemarrer", "etat", "cle-distante", "demandes"}
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in ("help", "-h", "--help"):
+        return aide()
+    if argv[0] in ("--version", "-V"):
+        print(f"secubox-aictl {VERSION}")
+        return 0
+    verbe, args = argv[0], argv[1:]
+    if verbe not in VERBES or (args and (verbe != "etat" or args != ["--json"])):
+        journal(f"usage : secubox-aictl {{{'|'.join(sorted(VERBES))}}} (etat --json)")
+        return 2
+    if verbe == "etat":
+        return cmd_etat(bool(args))
+    if verbe == "preparer":
+        return cmd_preparer()
+    if verbe == "cle-distante":
+        return cmd_cle_distante()
+    if verbe == "demandes":
+        return traiter_demandes()
+    if not _root():
+        journal(f"{verbe} : root exigé")
+        return 2
+    preparer_dossiers()
+    acteur = os.environ.get("SUDO_USER") or "root"
+    if not re.fullmatch(r"[A-Za-z0-9._@-]{1,64}", acteur):
+        acteur = "?"
+    return executer_action(verbe, acteur)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

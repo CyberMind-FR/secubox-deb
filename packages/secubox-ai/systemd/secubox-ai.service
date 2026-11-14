@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox IA — API du module secubox-ai (#3583). Utilisateur dédié, sans aucune capacité, socle de durcissement
+# complet (RULES-CODE § 10). Elle ne lance rien en root : le moteur local se pilote en DÉPOSANT une demande dans
+# /run/secubox-ai/demandes, que secubox-ai-demandes.path fait traiter par le contrôleur root (oneshot).
+[Unit]
+Description=SecuBox IA — API (assistant, moteurs local et distant)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3583
+After=network.target secubox-core.service secubox-ai-preparer.service
+Wants=secubox-core.service secubox-ai-preparer.service
+
+[Service]
+Type=simple
+User=secubox-ai
+# Groupe principal secubox-ai : les modèles téléchargés (0640) sont lisibles par le moteur (groupe secubox-ai) ;
+# groupe secubox : traces de secubox_core et socket servie à nginx.
+Group=secubox-ai
+SupplementaryGroups=secubox
+UMask=0027
+WorkingDirectory=/usr/lib/secubox/ai
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+# Profil chargé par le postinst avant le démarrage (apparmor/secubox-ai-api).
+AppArmorProfile=secubox-ai-api
+# /run/secubox est PARTAGÉ et collant (1777) : on n'y délie que ce qu'on possède. « + » : en root et hors profil.
+# Jamais RuntimeDirectory=secubox (#1022) : il effacerait les sockets des autres modules.
+ExecStartPre=+/bin/rm -f /run/secubox/ai.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/ai.sock --workers 1 --log-level warning
+# uvicorn pose la socket en 0666 après le bind : 660, groupe secubox (nginx). « + » : hors profil (aucun shell pour l'API).
+ExecStartPost=+/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/ai.sock ] && break; sleep 0.1; done; chgrp secubox /run/secubox/ai.sock; chmod 660 /run/secubox/ai.sock'
+TimeoutStartSec=180
+Restart=on-failure
+RestartSec=5
+# Documents jusqu'à 100 Mo et pdftotext (dans ce cgroup) : borné, sans prendre la place du moteur local.
+MemoryMax=768M
+
+# Durcissement : socle commun (RULES-CODE § 10, modèle secubox-vault), aucune exception. Le profil AppArmor (enforce)
+# borne en plus les fichiers lus et écrits (ni /etc/secubox/** ni les secrets des autres modules).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+# AF_UNIX : sa socket, celle du moteur local et le journal ; AF_INET/AF_INET6 : moteur distant (gk0), gk2, SearXNG,
+# Wikipédia, Hugging Face (gk3 sort sur Internet en direct).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# /run/secubox : sa socket ; /run/secubox-ai/demandes : dépôt des demandes au contrôleur (créé par preparer ; le
+# reste de /run/secubox-ai, dont moteur.env, reste en lecture seule) ; /var/log/secubox : traces de secubox_core.
+ReadWritePaths=/run/secubox /var/lib/secubox/ai /var/log/secubox -/run/secubox-ai/demandes
+
+# R13 : garde SSRF dans le noyau, en plus du contrôle applicatif (api/recherche.py). Boucle, lien local
+# (169.254.169.254), multidiffusion et plages privées fermés ; Internet reste ouvert.
+# EXCEPTION 127.0.0.1/32 : /etc/resolv.conf des box donne d'abord 127.0.0.1 (Unbound de la box,
+# image/build-image.sh) et IPAddressAllow= ne connaît pas les ports : fermer la boucle ferait passer chaque
+# résolution par le filet public (9.9.9.9, 1.1.1.1), hors des listes de la box et hors des noms LAN que seul Unbound
+# connaît. Les services de la boucle restent donc joignables par le noyau ; le contrôle applicatif les refuse
+# (127.0.0.0/8 et ::1 sont refusés par la garde). ::1 et le reste de 127.0.0.0/8 restent fermés.
+# Les adresses LAN de gk2, gk0 et du SearXNG local sont rouvertes UNE À UNE par le drop-in
+# /run/systemd/system/secubox-ai.service.d/50-adresses.conf, écrit par « secubox-aictl preparer »
+# (secubox-ai-preparer.service) depuis /etc/secubox/ai.toml, noms résolus à ce moment-là.
+IPAddressDeny=localhost link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
+IPAddressAllow=127.0.0.1/32
+
+[Install]
+WantedBy=multi-user.target

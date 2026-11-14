@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox IA — demandes de l'API au contrôleur root (#3583). Patron « oneshot root déclenché par fichier »
+# (secubox-searxng-reload #3581) : l'API (secubox-ai, NoNewPrivileges) dépose <action>.demande dans
+# /run/secubox-ai/demandes ; cette unité démarre le contrôleur. Ni sudo ni systemd-run.
+[Unit]
+Description=SecuBox IA : demandes de démarrage et d'arrêt du moteur local (#3583)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3583
+After=secubox-ai-preparer.service
+
+[Path]
+# Seuls les *.demande déclenchent : le temporaire « .<action>.*.tmp » de l'API (renommé aussitôt) n'est pas vu, et le
+# service est relancé tant qu'il en reste (une demande par passage).
+PathExistsGlob=/run/secubox-ai/demandes/*.demande
+Unit=secubox-ai-demandes.service
+TriggerLimitIntervalSec=10s
+TriggerLimitBurst=30
+
+[Install]
+WantedBy=paths.target

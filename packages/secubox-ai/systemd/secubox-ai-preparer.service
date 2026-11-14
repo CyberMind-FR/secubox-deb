@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox IA — préparation à l'amorçage (#3583), oneshot ROOT avant l'API : « secubox-aictl preparer » crée
+# /run/secubox-ai (root:secubox-ai 1770, collant), son dépôt de demandes et le dossier du verrou (jamais par tmpfiles
+# ni par un compte du module : un lien posé à leur place est écarté, jamais suivi), puis écrit le drop-in
+# /run/systemd/system/secubox-ai.service.d/50-adresses.conf (adresses LAN de gk2, gk0 et du SearXNG local, résolues
+# MAINTENANT depuis /etc/secubox/ai.toml) et relit les unités. Unité séparée plutôt qu'ExecStartPre de l'API : un
+# daemon-reload pendant le démarrage même de l'unité concernée ne s'appliquerait pas à ce démarrage.
+# LIMITE : un changement de DNS ou de configuration demande « secubox-aictl preparer » puis la relance de secubox-ai.
+[Unit]
+Description=SecuBox IA : préparation (dossiers d'exécution, adresses LAN de l'API)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3583
+After=network-online.target nss-lookup.target unbound.service
+Wants=network-online.target
+Before=secubox-ai.service secubox-ai-demandes.path secubox-ai-moteur.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/secubox-aictl preparer
+# Résolution des noms bornée par resolv.conf (délais × serveurs) : largement sous 90 s.
+TimeoutStartSec=90
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH
+# AF_INET/AF_INET6 : résolution des noms de la configuration (sans filtre IP : seul le résolveur est joint) ;
+# AF_UNIX : systemctl daemon-reload.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# /run : /run/secubox-ai à créer (absent au démarrage, il ne peut pas être nommé seul) et le drop-in de l'API sous
+# /run/systemd/system ; /var/log/secubox : audit.
+ReadWritePaths=/run /var/log/secubox
+
+[Install]
+WantedBy=multi-user.target
