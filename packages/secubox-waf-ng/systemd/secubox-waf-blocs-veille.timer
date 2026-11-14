@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Cadence de la veille des bans de bloc (#3716) : une table effacée hors de
+# nftables.service est rétablie en une minute au plus.
+[Unit]
+Description=SecuBox WAF — veille des bans de bloc toutes les 60 s (#3716)
+
+[Timer]
+OnBootSec=60s
+# #2919 : depuis l'activation de la minuterie ; OnUnitActiveSec seul ne se redéclenche pas après une réactivation.
+OnActiveSec=60s
+OnUnitActiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

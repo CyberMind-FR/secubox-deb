@@ -80,6 +80,72 @@ case "$1" in
     # /etc/secubox must stay 0755 (traversal constraint above).
     mkdir -p /etc/secubox/secrets
 
+    # ── 2a. Clés publiques des comptes de service (#3716) ────────────────────
+    # Arbre ROOT, hors de /etc/secubox (qui appartient au compte secubox) :
+    # compte_service refuse un dossier qui n'est pas à root ou qui est
+    # inscriptible par le groupe ou les autres. Les clés n'y sont posées que
+    # par le propriétaire (`wafctl cle-ai-ban ajouter`, root). Le paquet ne les
+    # vide JAMAIS : une mise à jour ne révoque pas la box de l'IA.
+    mkdir -p /etc/secubox-comptes-service
+    chown root:root /etc/secubox-comptes-service
+    chmod 0755 /etc/secubox-comptes-service
+    mkdir -p /etc/secubox-comptes-service/ai-ban
+    chown root:root /etc/secubox-comptes-service/ai-ban
+    chmod 0755 /etc/secubox-comptes-service/ai-ban
+
+    # ── 2b. Plages protégées de la box (#3450, #3716 ruling P2) ───────────────
+    # waf-blocs REFUSE tout ban de bloc /24 tant que protegees.env ne déclare pas
+    # les plages de la box : derrière un NAT, son adresse publique n'est sur
+    # aucune interface et la garde « box » ne la voit pas. Aucune source LOCALE
+    # fiable ne la donne (DNS public, ipify… : appels réseau, hors d'un postinst
+    # et hors de confiance). On sème donc un fichier COMMENTÉ qui dit quoi écrire
+    # et laisse les blocs refusés jusqu'à ce que l'administrateur pose sa ligne.
+    # Un fichier présent (repris par le preinst #3450, ou écrit à la main), même
+    # vide, n'est JAMAIS touché ; un lien n'est jamais suivi ni remplacé.
+    # >>> plages protégées (#3716)
+    _penv="${WAF_PROTEGEES_ENV:-/etc/secubox/waf/protegees.env}"
+    if [ ! -e "$_penv" ] && [ ! -L "$_penv" ]; then
+      _ptmp=$(mktemp "$_penv.XXXXXX")
+      cat > "$_ptmp" <<'PROTEGEES'
+# Plages protégées de cette box (#3450, #3716) : jamais bannies, ni par sbxwaf
+# (--actor-ban-protegees) ni par waf-blocs (ban d'adresse ou de bloc /24).
+#
+# À COMPLÉTER PAR L'ADMINISTRATEUR. Semé sans valeur par secubox-waf-ng : derrière
+# un NAT, l'adresse publique de la box n'est sur aucune interface et le paquet ne
+# la devine pas. Tant qu'aucune ligne SECUBOX_WAF_PROTEGEES n'est écrite ici,
+# tout ban de bloc /24 est REFUSÉ (garde_illisible) ; les bans d'adresse restent
+# possibles (les adresses des interfaces et les pairs WireGuard restent gardés).
+#
+# Une seule ligne (systemd ne garde que la dernière), plages séparées par des
+# virgules : l'adresse publique IPv4 de la box en /32, son préfixe IPv6, et tout
+# ce qui ne doit jamais être banni. Exemple (plages de documentation) :
+#   SECUBOX_WAF_PROTEGEES=203.0.113.7/32,2001:db8:1234::/56
+# Rien de plus à protéger : écrire la ligne vide SECUBOX_WAF_PROTEGEES=
+#
+# Pris en compte par waf-blocs à l'appel suivant, par sbxwaf au redémarrage de
+# secubox-waf-ng.
+PROTEGEES
+      chmod 0644 "$_ptmp"
+      mv -f "$_ptmp" "$_penv"
+    fi
+    # <<< plages protégées (#3716)
+
+    # ── 2c. Dossiers tmpfiles, AVANT tout démarrage d'unité (#3716) ───────────
+    # secubox-waf-blocs (rejeu) et sa veille déclarent
+    # ReadWritePaths=/var/lib/secubox-waf-blocs : absent, systemd ne monte pas
+    # leur espace de noms (226/NAMESPACE) ; et waf-blocs refuse un dossier d'état
+    # qui n'est pas root 0700. dh_installtmpfiles le crée aussi, mais plus tard,
+    # dans le bloc debhelper. Une AUTRE ligne du fichier peut échouer (sous
+    # /var/lib/secubox, « unsafe path transition », #3172) : on vérifie donc le
+    # seul dossier dont dépendent ces unités, et on le dit s'il manque.
+    if command -v systemd-tmpfiles >/dev/null 2>&1; then
+      systemd-tmpfiles --create secubox-waf-ng.conf >/dev/null || true
+    fi
+    if [ ! -d /var/lib/secubox-waf-blocs ] || [ -L /var/lib/secubox-waf-blocs ] \
+       || [ "$(stat -c '%u %a' /var/lib/secubox-waf-blocs)" != "0 700" ]; then
+      echo "secubox-waf-ng: ATTENTION — /var/lib/secubox-waf-blocs absent ou pas root 0700 : bans de bloc refusés, secubox-waf-blocs ne démarrera pas (systemd-tmpfiles --create secubox-waf-ng.conf)" >&2
+    fi
+
       # ── Secret HMAC des identifiants (#1240, corrélation multi-couche) ────────
       # authwatch apporte au graphe d'acteurs le COMPTE VISÉ — l'axe le plus
       # lourd du barème de similarité, et le seul qui était totalement mort. Ce
@@ -156,6 +222,13 @@ case "$1" in
       # robots d'indexation refusé en silence). Rechargement à chaud, sans redémarrer le démon.
       apparmor_parser -r /etc/apparmor.d/usr.sbin.sbxwaf 2>/dev/null || true
     fi
+    # waf-blocs (#3716, P8) : profil livré en COMPLAIN (drapeau dans le fichier),
+    # chargé tel quel — jamais aa-enforce ici : il passe en enforce après le banc gk6.
+    if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
+       && [ -f /etc/apparmor.d/usr.sbin.waf-blocs ]; then
+      apparmor_parser -r /etc/apparmor.d/usr.sbin.waf-blocs \
+        || echo "secubox-waf-ng: profil AppArmor waf-blocs non chargé (apparmor_parser -r /etc/apparmor.d/usr.sbin.waf-blocs)" >&2
+    fi
 
     # ── 5b. Profils de vhost : services et vhosts livrés absents (#3193) ──────
     # /etc/secubox/waf/vhost_profiles.json est un conffile MODIFIÉ à l'exécution
@@ -184,7 +257,10 @@ case "$1" in
     # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
     # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
     # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
-    for _u in secubox-waf-ng.service secubox-waf-campaigns.timer; do
+    # #3716 : rejeu des bans de bloc (suit nftables.service ; démarré par le bloc debhelper) et veille de 60 s
+    # (minuterie : dh_installsystemd n'en génère rien, démarrée plus bas comme celle des campagnes).
+    for _u in secubox-waf-ng.service secubox-waf-campaigns.timer \
+              secubox-waf-blocs.service secubox-waf-blocs-veille.timer; do
       if deb-systemd-helper --quiet was-enabled "$_u"; then
         deb-systemd-helper enable "$_u" >/dev/null || true
       else
@@ -234,6 +310,8 @@ case "$1" in
       # passe immédiate pour que le tableau de bord ait des données tout de suite.
       systemctl start secubox-waf-campaigns.timer 2>/dev/null || true
       systemctl start secubox-waf-campaigns.service 2>/dev/null || true
+      # #3716 : veille des bans de bloc (60 s) ; le dossier d'état existe déjà (2c).
+      systemctl start secubox-waf-blocs-veille.timer 2>/dev/null || true
     fi
 
     # ── 7. #1240 : vhost dédié actor.<domaine> (Renseignement) ─────────────────

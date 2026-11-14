@@ -9,6 +9,7 @@ Threat detection with in-engine nft ban enforcement (sbxwaf).
 300+ rules across 14+ categories (SQLi, XSS, RCE, VoIP, router botnets, etc.)
 """
 import asyncio
+import logging
 import os
 import json
 import re
@@ -27,6 +28,9 @@ from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 import geoip2.database
 import geoip2.errors
+
+# `_audit` s'en servait sans qu'il soit défini : un audit impossible levait NameError (#3716).
+log = logging.getLogger("secubox.waf")
 
 # Paths
 RULES_PATH = "/usr/share/secubox/waf/waf-rules.json"
@@ -391,9 +395,18 @@ def _get_bans() -> List[dict]:
 
     L'echeance vient de nft (`expires`), le motif du journal de menaces, le pays
     de la base GeoIP. Rien n'est invente : un champ inconnu reste vide.
+
+    `famille` (#3716, I4) : famille du dernier ban de l'adresse dans bans.jsonl,
+    a defaut celle du motif — la meme que celle que recontrole `/ai/ban` (le
+    relais du POC la lit ici). Lecture non stricte : bans.jsonl illisible, on
+    se rabat sur le motif (la garde de `/ai/ban`, elle, refuse).
     """
     bans: List[dict] = []
     raisons = _raisons_recentes()
+    try:
+        familles = _gestes_ia.familles_bans_waf()
+    except Exception:  # noqa: BLE001 — affichage : repli sur le motif
+        familles = {}
     reader = _get_geoip_reader()
     maintenant = int(time.time())
 
@@ -433,6 +446,7 @@ def _get_bans() -> List[dict]:
                     "value": ip,
                     "scenario": categorie,
                     "reason": categorie,
+                    "famille": familles[ip] if ip in familles else _gestes_ia.famille(categorie),
                     "duration": f"{int(expire)}s" if isinstance(expire, int) else "",
                     "expires_in": int(expire) if isinstance(expire, int) else None,
                     "type": "ban",
@@ -1831,14 +1845,18 @@ def _ips_bannies_actives() -> set:
     return {b["ip"] for b in bans}
 
 
-def _audit(action: str, detail: str, user) -> None:
-    """Toute décision de sécurité est une ligne de /var/log/secubox/audit.log (ajout seul)."""
+def _audit(action: str, detail: str, user, lever: bool = False) -> None:
+    """Toute décision de sécurité est une ligne de /var/log/secubox/audit.log (ajout seul). `lever` : l'échec
+    d'écriture est propagé (OSError) au lieu d'être seulement journalisé — pour un geste qui doit être défait s'il
+    n'est pas audité (#3716)."""
     try:
         with open(AUDIT_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "waf", "action": action,
                                 "detail": detail[:300], "by": str((user or {}).get("sub") or "")}, ensure_ascii=False) + "\n")
     except OSError as e:
         log.warning("audit non écrit (%s) : %s", action, e)
+        if lever:
+            raise
 
 
 @app.get("/enforcement", dependencies=[Depends(require_lecture)])
@@ -2192,3 +2210,26 @@ async def get_geoip(ip: str):
             pass
     
     return {"ip": ip, "country": ""}
+
+
+# ── Gestes d'une box d'IA, compte de service ai-ban (#3716) ─────────────
+# Exception écrite à RULES-CODE § 3 : `require_ai_ban`, pas `require_jwt`. Bans lus FRAIS dans nft (recontrôle du
+# cas sûr, cible déjà bannie) ; audit qui lève (un geste non audité n'est pas fait, ou est défait).
+try:
+    from api import gestes_ia as _gestes_ia
+except ImportError:  # standalone
+    import gestes_ia as _gestes_ia
+
+
+def _bans_stricts() -> List[dict]:
+    """`waf_ban` lu dans nft, motif du journal des menaces : lecture STRICTE (lève si nft ne répond pas ou si la
+    table manque — `_get_bans` rend alors une liste vide) et LÉGÈRE (sans GeoIP), pour les gardes de `/ai/ban`. Le
+    motif ne couvre que la fin du journal des menaces (4000 lignes, ≈ 6 h) : ce n'est que le REPLI du cas sûr, dont la
+    famille vient d'abord de bans.jsonl (`gestes_ia.familles_bans_waf`, I4)."""
+    adresses = _gestes_ia.lire_waf_ban()
+    raisons = _raisons_recentes()
+    return [{"ip": ip, "reason": _raison_du_ban(ip, raisons)} for ip in sorted(adresses)]
+
+
+_gestes_ia.configurer(bans=_bans_stricts, audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
+app.include_router(_gestes_ia.router)
