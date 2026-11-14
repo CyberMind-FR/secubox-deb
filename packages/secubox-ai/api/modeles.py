@@ -9,10 +9,12 @@ passe par la garde SSRF de `recherche` (connexion épinglée, adresses publiques
 le CDN de Hugging Face est atteint par redirection). Le fichier est écrit en flux dans `<nom>.part`, empreinte SHA-256
 calculée au fil de l'eau, jamais chargé en mémoire. Le journal ne reçoit ni adresse ni dépôt.
 """
+import asyncio
 import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import tempfile
 from datetime import date
@@ -80,21 +82,16 @@ def nom_valide(nom) -> bool:
     return isinstance(nom, str) and bool(reglages.NOM_MODELE.match(nom)) and ".." not in nom
 
 
-def genre_fichier(nom) -> str:
-    """Dans un dépôt, tout .gguf n'est pas un modèle à charger seul."""
-    if re.search(r"(^|[-_])(mmproj|mtp|dflash|eagle\d*|lilicorr|draft)[-_]", nom, re.I):
-        return "annexe"
-    if re.search(r"-\d{5}-of-\d{5}\.gguf$", nom):
-        return "decoupe"
-    return "modele"
+genre_fichier = reglages.genre_fichier
 
 
-def _fichiers() -> dict:
-    """Liste blanche : les modèles réellement présents (fichiers réguliers, ni lien ni nom douteux)."""
+def _fichiers(tous=False) -> dict:
+    """Liste blanche : les modèles réellement présents (fichiers réguliers, ni lien ni nom douteux).
+    `tous` : annexes et découpes comprises (gestionnaire de fichiers)."""
     sortie = {}
     try:
         for f in sorted(reglages.modeles_dir().glob("*.gguf")):
-            if nom_valide(f.name) and not f.is_symlink() and f.is_file() and genre_fichier(f.name) == "modele":
+            if nom_valide(f.name) and not f.is_symlink() and f.is_file() and (tous or genre_fichier(f.name) == "modele"):
                 sortie[f.name] = f
     except OSError:
         pass
@@ -113,6 +110,22 @@ def _fiche(f) -> dict:
         pass
     # Étape 1 : texte seulement (aucun projecteur `--mmproj` n'est chargé par le contrôleur).
     return {**infos, "id": f.name, "taille": f.stat().st_size, "medias": ["texte"]}
+
+
+RE_PART = re.compile(r"^(?P<nom>[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.gguf)(?:\.[0-9a-f]{8})?\.(?P<ext>part|faux)$")
+
+
+def _restes() -> dict:
+    """`.part` (téléchargements, y compris abandonnés) et `.faux` (empreinte fausse) : liste blanche nom -> (fichier, nom du modèle, ext)."""
+    sortie = {}
+    try:
+        for f in sorted(reglages.modeles_dir().iterdir()):
+            m = RE_PART.match(f.name)
+            if m and ".." not in f.name and not f.is_symlink() and f.is_file():
+                sortie[f.name] = (f, m["nom"], m["ext"])
+    except OSError:
+        pass
+    return sortie
 
 
 def _en_cours(nom) -> bool:
@@ -170,23 +183,27 @@ async def infos_depot(depot: str) -> dict:
 
 
 async def telecharger(depot, nom, sha, taille, licence):
-    """Télécharge `nom` dans `<nom>.part` (flux, empreinte au fil de l'eau) puis le renomme.
-    Empreinte différente : le fichier devient `<nom>.faux` et la fonction lève HTTPException(409).
-    Autre échec (GGUF invalide, garde SSRF, réseau, taille) : le `.part` est effacé, HTTPException levée."""
+    """Télécharge `nom` dans un fichier temporaire propre à ce téléchargement (O_EXCL, `<nom>.<aléa>.part`), flux et
+    empreinte au fil de l'eau hors de la boucle, puis le renomme. Empreinte différente : le fichier devient
+    `<nom>.faux` et la fonction lève HTTPException(409). Autre échec (GGUF invalide, garde SSRF, réseau, taille) :
+    le temporaire est effacé, HTTPException levée."""
     d = _dossier(creer=True)
-    final, part, faux = d / nom, d / (nom + ".part"), d / (nom + ".faux")
+    final, faux = d / nom, d / (nom + ".faux")
+    part = d / f"{nom}.{secrets.token_hex(4)}.part"
     suivi = telechargements.setdefault(nom, {"recu": 0, "total": taille})
+    suivi["part"] = part.name
     empreinte = hashlib.sha256()
 
     def progres(n):
         suivi["recu"] = n
 
     try:
+        os.close(os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
         await recherche.telecharger_fichier(f"https://huggingface.co/{depot}/resolve/main/{nom}", part, taille,
                                             delai=DELAI_TELECHARGEMENT_S, empreinte=empreinte, progres=progres)
         if empreinte.hexdigest() != str(sha).lower():
             faux.unlink(missing_ok=True)
-            os.replace(part, faux)          # gardé pour examen, jamais listé ni activable
+            os.replace(part, faux)          # gardé pour examen, jamais listé comme modèle ni activable
             raise HTTPException(409, "empreinte SHA-256 différente : fichier mis de côté (.faux)")
         with open(part, "rb") as f:
             if f.read(4) != b"GGUF":
@@ -205,15 +222,24 @@ async def telecharger(depot, nom, sha, taille, licence):
     except OSError:
         part.unlink(missing_ok=True)
         raise HTTPException(500, "écriture impossible") from None
+    except BaseException:
+        part.unlink(missing_ok=True)
+        raise
 
 
 async def _lancer(depot, nom, sha, taille, licence):
-    """Tâche de fond : l'échec est consigné dans le suivi (affiché par la page) et au journal, sans adresse."""
+    """Tâche de fond : toute fin anormale (même annulation) est consignée dans le suivi, jamais un nom « en cours »
+    pour toujours ; journal sans adresse ni dépôt."""
     try:
         await telecharger(depot, nom, sha, taille, licence)
     except HTTPException as e:
         telechargements.setdefault(nom, {"recu": 0, "total": taille})["erreur"] = str(e.detail)[:200]
         journal("modele.echec", modele=nom, code=e.status_code, cause=str(e.detail)[:200])
+    except BaseException as e:  # noqa: BLE001 — y compris CancelledError
+        telechargements.setdefault(nom, {"recu": 0, "total": taille})["erreur"] = "téléchargement interrompu"
+        journal("modele.echec", modele=nom, cause=type(e).__name__)
+        if not isinstance(e, Exception):
+            raise
 
 
 def _modele(nom) -> object:
@@ -249,31 +275,51 @@ async def post_modele(taches: BackgroundTasks, corps: dict = Body(...)):
         raise HTTPException(422, "dépôt ou fichier invalide")
     if (_dossier() / nom).exists() or _en_cours(nom):
         raise HTTPException(409, "déjà présent ou en cours")
-    infos = await infos_depot(depot)
-    choix = next((f for f in infos["fichiers"] if f["nom"] == nom), None)
-    if choix and choix["genre"] != "modele":
-        raise HTTPException(422, "fichier annexe ou modèle découpé : non installable seul")
-    if (not choix or not isinstance(choix["sha256"], str) or not re.fullmatch(r"[0-9a-fA-F]{64}", choix["sha256"])
-            or not isinstance(choix["taille"], int) or isinstance(choix["taille"], bool) or choix["taille"] <= 0):
-        raise HTTPException(422, "fichier absent du dépôt, ou sans empreinte vérifiable")
-    if infos["restreint"]:
-        raise HTTPException(403, "dépôt réservé : conditions à accepter chez l'éditeur")
-    if shutil.disk_usage(_dossier(creer=True)).free - choix["taille"] < PLANCHER_DISQUE:
-        raise HTTPException(507, "place insuffisante : 5 Gio doivent rester libres")
-    telechargements[nom] = {"recu": 0, "total": choix["taille"]}
-    taches.add_task(_lancer, depot, nom, choix["sha256"], choix["taille"], infos["licence"])
+    # Réservation AVANT tout await : deux demandes simultanées du même nom ne passent pas toutes les deux.
+    telechargements[nom] = {"recu": 0, "total": 0}
+    lancee = False
+    try:
+        infos = await infos_depot(depot)
+        choix = next((f for f in infos["fichiers"] if f["nom"] == nom), None)
+        if choix and choix["genre"] != "modele":
+            raise HTTPException(422, "fichier annexe ou modèle découpé : non installable seul")
+        if (not choix or not isinstance(choix["sha256"], str) or not re.fullmatch(r"[0-9a-fA-F]{64}", choix["sha256"])
+                or not isinstance(choix["taille"], int) or isinstance(choix["taille"], bool) or choix["taille"] <= 0):
+            raise HTTPException(422, "fichier absent du dépôt, ou sans empreinte vérifiable")
+        if infos["restreint"]:
+            raise HTTPException(403, "dépôt réservé : conditions à accepter chez l'éditeur")
+        if shutil.disk_usage(_dossier(creer=True)).free - choix["taille"] < PLANCHER_DISQUE:
+            raise HTTPException(507, "place insuffisante : 5 Gio doivent rester libres")
+        if (_dossier() / nom).exists():
+            raise HTTPException(409, "déjà présent ou en cours")
+        telechargements[nom]["total"] = choix["taille"]
+        taches.add_task(_lancer, depot, nom, choix["sha256"], choix["taille"], infos["licence"])
+        lancee = True
+    finally:
+        if not lancee:
+            telechargements.pop(nom, None)       # refus : le nom est libéré
     return {"ok": True}
 
 
 @routeur.post("/modeles/{nom}/activer", dependencies=[Depends(require_jwt)])
 async def activer(nom: str):
     """Écrit la préférence, puis, si le moteur local tourne, le redémarre sur ce modèle et attend qu'il réponde.
-    Refus mémoire ou erreur du contrôleur : 503 avec son message (la préférence reste écrite)."""
+    Refus mémoire ou erreur du contrôleur : retour arrière (ancien modèle réécrit, démarrage de l'ancien demandé),
+    503 avec le message du contrôleur."""
     _modele(nom)
+    avant = reglages.lire_prefs()["moteur"]["modele"]
     reglages.ecrire_prefs(reglages.valider({"moteur": {"modele": nom}}))
-    journal("modele.activer", modele=nom)
     if await moteurs._sonde(moteurs._local(), 2):
-        await moteurs.changer_modele_local()
+        try:
+            await moteurs.changer_modele_local()
+        except HTTPException:
+            prefs = reglages.lire_prefs()
+            prefs["moteur"]["modele"] = avant
+            reglages.ecrire_prefs(prefs)
+            journal("modele.activer", modele=nom, issue="refus")
+            await asyncio.to_thread(moteurs.deposer_demande, "demarrer")   # l'ancien moteur revient
+            raise
+    journal("modele.activer", modele=nom, issue="ok")
     return {"ok": True}
 
 
@@ -285,4 +331,121 @@ async def supprimer(nom: str):
     f.unlink()
     f.with_suffix(".json").unlink(missing_ok=True)
     journal("modele.suppression", modele=nom)
+    return {"ok": True}
+
+
+# ---- gestionnaire de fichiers GGUF (dossier des modèles) : déclaré avant `/medias/{dossier}` (main.py inclut ce routeur le premier)
+def _refus_suppression(nom, actif):
+    return "modèle actif : en activer un autre d'abord" if nom == actif else None
+
+
+@routeur.get("/medias/gguf", dependencies=[Depends(require_jwt)])
+async def get_gguf():
+    moteur_actif = await moteurs._sonde(moteurs._local(), 2)
+
+    def lire():
+        actif = reglages.lire_prefs()["moteur"]["modele"]
+        sortie = []
+        for nom, f in _fichiers(tous=True).items():
+            meta = {}
+            try:
+                mj = f.with_suffix(".json")
+                if mj.is_file() and not mj.is_symlink():
+                    lu = json.loads(mj.read_text(encoding="utf-8"))
+                    meta = lu if isinstance(lu, dict) else {}
+            except (OSError, ValueError):
+                pass
+            sortie.append({"nom": nom, "genre": genre_fichier(nom), "taille": f.stat().st_size, "associes": [],
+                           "provenance": {c: meta.get(c) for c in ("depot", "licence", "sha256", "ajoute") if meta.get(c)},
+                           "actif": nom == actif, "refus": _refus_suppression(nom, actif)})
+        parts = [{"nom": n, "taille": f.stat().st_size, "en_cours": _en_cours(modele) and telechargements[modele].get("part") == n,
+                  "genre": "faux" if ext == "faux" else "part"} for n, (f, modele, ext) in _restes().items()]
+        return {"fichiers": sortie, "parts": parts, "actif": actif, "moteur_actif": moteur_actif,
+                "disque_libre": shutil.disk_usage(_dossier(creer=True)).free}
+    return await asyncio.to_thread(lire)
+
+
+@routeur.delete("/medias/gguf/{nom}", dependencies=[Depends(require_jwt)])
+async def supprimer_gguf(nom: str):
+    f = _fichiers(tous=True).get(nom) if nom_valide(nom) else None     # liste blanche : aucun chemin du client n'est suivi
+    if f is None:
+        raise HTTPException(404, "fichier inconnu")
+    genre, taille = genre_fichier(nom), f.stat().st_size
+    raison = _refus_suppression(nom, reglages.lire_prefs()["moteur"]["modele"])
+    if raison:
+        journal("modele.fichier_suppression", genre=genre, taille=taille, issue="refuse")
+        raise HTTPException(409, raison)
+    f.unlink()
+    f.with_suffix(".json").unlink(missing_ok=True)
+    journal("modele.fichier_suppression", genre=genre, taille=taille, modele=nom, issue="ok")
+    return {"ok": True}
+
+
+@routeur.delete("/medias/gguf-part/{nom}", dependencies=[Depends(require_jwt)])
+async def supprimer_part(nom: str):
+    reste = _restes().get(nom)
+    if reste is None:
+        raise HTTPException(404, "fichier inconnu")
+    f, modele, _ext = reste
+    taille = f.stat().st_size
+    if _en_cours(modele) and telechargements[modele].get("part") == nom:
+        journal("modele.part_suppression", taille=taille, issue="refuse")
+        raise HTTPException(409, "téléchargement en cours")
+    f.unlink()
+    journal("modele.part_suppression", taille=taille, issue="ok")
+    return {"ok": True}
+
+
+# ---- dépôts Hugging Face favoris (liste de la page) ----
+DEPOTS_MAX = 200
+
+
+def _fichier_depots():
+    return reglages.etat_dir() / "depots.json"
+
+
+def lire_depots() -> list:
+    try:
+        d = json.loads(_fichier_depots().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [x for x in d if isinstance(x, str) and DEPOT.match(x)] if isinstance(d, list) else []
+
+
+def _ecrire_depots(liste):
+    f = _fichier_depots()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps(liste, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, f)
+
+
+@routeur.get("/depots", dependencies=[Depends(require_jwt)])
+async def get_depots():
+    return {"depots": lire_depots()}
+
+
+@routeur.post("/depots", dependencies=[Depends(require_jwt)])
+async def post_depot(corps: dict = Body(...)):
+    depot = str(corps.get("depot", "")).strip()
+    if not DEPOT.match(depot):
+        raise HTTPException(422, "dépôt invalide (éditeur/nom)")
+    liste = lire_depots()
+    if depot not in liste:
+        if len(liste) >= DEPOTS_MAX:
+            raise HTTPException(422, "trop de dépôts dans la liste")
+        _ecrire_depots([*liste, depot])
+        journal("depot.ajout")                  # jamais le nom du dépôt
+    return {"ok": True}
+
+
+@routeur.delete("/depots/{editeur}/{nom}", dependencies=[Depends(require_jwt)])
+async def delete_depot(editeur: str, nom: str):
+    depot = f"{editeur}/{nom}"
+    if not DEPOT.match(depot):
+        raise HTTPException(422, "dépôt invalide (éditeur/nom)")
+    liste = lire_depots()
+    if depot in liste:
+        _ecrire_depots([d for d in liste if d != depot])
+        journal("depot.retrait")
     return {"ok": True}

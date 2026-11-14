@@ -283,6 +283,16 @@ REDIRECTIONS = (301, 302, 303, 307, 308)
 SAUTS_MAX = 4          # requêtes successives au plus (redirections suivies à la main, comme le POC)
 
 
+BLOC_ECRITURE = 1024 * 1024
+
+
+def _vider(f, blocs, empreinte):
+    for b in blocs:
+        f.write(b)
+        if empreinte is not None:
+            empreinte.update(b)
+
+
 async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None, progres=None):
     """Lien de document (PDF, HTML, texte) écrit dans `chemin` au fil de l'eau, `max_octets` au plus.
     Même garde que `telecharger` à CHAQUE saut (résolution, adresses publiques, connexion épinglée, Host/SNI).
@@ -309,17 +319,22 @@ async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None,
                     annonce = r.headers.get("content-length", "")
                     if annonce.isdigit() and int(annonce) > max_octets:
                         raise HTTPException(413, f"document trop gros ({max_octets // 1024 ** 2} Mo au plus)")
-                    taille = 0
+                    taille, tampon, en_tampon = 0, [], 0
                     with open(chemin, "wb") as f:
                         async for bloc in r.aiter_bytes():
                             taille += len(bloc)
                             if taille > max_octets:
                                 raise HTTPException(413, f"document trop gros ({max_octets // 1024 ** 2} Mo au plus)")
-                            f.write(bloc)
-                            if empreinte is not None:
-                                empreinte.update(bloc)
-                            if progres is not None:
-                                progres(taille)
+                            tampon.append(bloc)
+                            en_tampon += len(bloc)
+                            if en_tampon >= BLOC_ECRITURE:     # écriture et empreinte hors de la boucle d'événements
+                                await asyncio.to_thread(_vider, f, tampon, empreinte)
+                                tampon, en_tampon = [], 0
+                                if progres is not None:
+                                    progres(taille)
+                        await asyncio.to_thread(_vider, f, tampon, empreinte)
+                        if progres is not None:
+                            progres(taille)
                     return url, r.headers.get("content-type", "").lower()
         except httpx.RemoteProtocolError as e:
             # httpx refuse lui-même un Location illisible (IDNA invalide…) : c'est un refus d'adresse, pas une panne.

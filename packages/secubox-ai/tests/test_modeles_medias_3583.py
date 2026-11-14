@@ -3,6 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Modèles, médias, journal (#3583, tâche 12). Aucun réseau réel : Hugging Face simulé par un transport httpx."""
+import asyncio
 import hashlib
 import json
 
@@ -430,10 +431,142 @@ async def test_toute_route_demande_un_jeton(env):
     app.dependency_overrides.pop(require_jwt, None)
     ident = "20260101T000000000000-deadbeef"
     appels = [("GET", "/modeles"), ("GET", "/modeles/catalogue"), ("GET", f"/modeles/depot?depot={DEPOT}"),
-              ("POST", "/modeles"), ("POST", f"/modeles/{NOM}/activer"), ("DELETE", f"/modeles/{NOM}"),
+              ("POST", "/modeles"), ("POST", f"/modeles/{NOM}/activer"), ("DELETE", f"/modeles/{NOM}"), ("GET", "/medias/gguf"), ("DELETE", f"/medias/gguf/{NOM}"), ("DELETE", "/medias/gguf-part/x.gguf.part"), ("GET", "/depots"), ("POST", "/depots"), ("DELETE", "/depots/a/b"),
               ("GET", "/medias/entree"), ("GET", f"/medias/entree/{ident}/fichier"),
               ("DELETE", f"/medias/entree/{ident}"), ("POST", "/medias/entree"), ("GET", "/journal")]
     async with client() as c:
         for methode, chemin in appels:
             r = await c.request(methode, chemin, json={} if methode == "POST" else None)
             assert r.status_code in (401, 403), (methode, chemin, r.status_code)
+
+
+# ---------------- correctifs, tour 1 ----------------
+@pytest.mark.asyncio
+async def test_gestionnaire_gguf_liste_et_supprime(env):
+    d = installer(env).parent
+    (d / "mmproj-x-f16.gguf").write_bytes(b"GGUF")
+    (d / "x.gguf.faux").write_bytes(b"GG")
+    (d / "y.gguf.ab12cd34.part").write_bytes(b"G")
+    (d / "z.gguf.part").write_bytes(b"G")
+    (d / "lien.gguf.part").symlink_to(env)
+    async with client() as c:
+        await c.post(f"/modeles/{NOM}/activer")
+        r = (await c.get("/medias/gguf")).json()         # déclaré avant /medias/{dossier}
+        assert {f["nom"]: f["genre"] for f in r["fichiers"]} == {NOM: "modele", "mmproj-x-f16.gguf": "annexe"}
+        assert next(f for f in r["fichiers"] if f["nom"] == NOM)["refus"] and r["disque_libre"] > 0
+        assert {p["nom"]: p["genre"] for p in r["parts"]} == {"x.gguf.faux": "faux", "y.gguf.ab12cd34.part": "part", "z.gguf.part": "part"}
+        assert (await c.delete(f"/medias/gguf/{NOM}")).status_code == 409           # actif
+        assert (await c.delete("/medias/gguf/mmproj-x-f16.gguf")).status_code == 200
+        assert (await c.delete("/medias/gguf/../x.gguf")).status_code in (404, 405)
+        assert (await c.delete("/medias/gguf-part/x.gguf.faux")).status_code == 200
+        assert (await c.delete("/medias/gguf-part/y.gguf.ab12cd34.part")).status_code == 200
+        assert (await c.delete("/medias/gguf-part/lien.gguf.part")).status_code == 404
+        modeles.telechargements["z.gguf"] = {"recu": 0, "total": 1, "part": "z.gguf.part"}
+        assert (await c.delete("/medias/gguf-part/z.gguf.part")).status_code == 409   # en cours
+        modeles.telechargements.clear()
+        assert (await c.delete("/medias/gguf-part/z.gguf.part")).status_code == 200
+    assert (d / NOM).exists() and not (d / "mmproj-x-f16.gguf").exists()
+
+
+@pytest.mark.asyncio
+async def test_depots(env):
+    async with client() as c:
+        assert (await c.get("/depots")).json() == {"depots": []}
+        assert (await c.post("/depots", json={"depot": "../x"})).status_code == 422
+        assert (await c.post("/depots", json={"depot": DEPOT})).status_code == 200
+        assert (await c.post("/depots", json={"depot": DEPOT})).status_code == 200
+        assert (await c.get("/depots")).json() == {"depots": [DEPOT]}
+        assert (await c.delete("/depots/editeur/petit-GGUF")).status_code == 200
+        assert (await c.get("/depots")).json() == {"depots": []}
+    brut = (env / "etat" / "journal.jsonl").read_text(encoding="utf-8")
+    assert "depot.ajout" in brut and "depot.retrait" in brut and "editeur" not in brut
+
+
+@pytest.mark.asyncio
+async def test_deux_demandes_simultanees_une_seule_telechargement(env, hf):
+    import asyncio
+    lancees = []
+    vrai = modeles.telecharger
+
+    async def compte(*a):
+        lancees.append(1)
+        await vrai(*a)
+
+    modeles.telecharger, ancien = compte, modeles.telecharger
+    try:
+        async with client() as c:
+            r = await asyncio.gather(*[c.post("/modeles", json={"depot": DEPOT, "fichier": NOM}) for _ in range(2)])
+    finally:
+        modeles.telecharger = ancien
+    assert sorted(x.status_code for x in r) == [200, 409] and lancees == [1]
+    assert (env / "etat" / "modeles" / NOM).read_bytes() == CONTENU
+    assert modeles.telechargements == {}
+
+
+@pytest.mark.asyncio
+async def test_refus_libere_la_reservation(env, hf):
+    async with client() as c:
+        assert (await c.post("/modeles", json={"depot": DEPOT, "fichier": "absent.gguf"})).status_code == 422
+        assert modeles.telechargements == {}
+        hf["gated"] = True
+        assert (await c.post("/modeles", json={"depot": DEPOT, "fichier": NOM})).status_code == 403
+        assert modeles.telechargements == {}
+
+
+@pytest.mark.asyncio
+async def test_temporaire_propre_a_chaque_telechargement(env, hf):
+    d = env / "etat" / "modeles"
+    d.mkdir(parents=True)
+    (d / (NOM + ".part")).write_bytes(b"reste d'un ancien telechargement")
+    await modeles.telecharger(DEPOT, NOM, SHA, len(CONTENU), "mit")
+    assert (d / NOM).read_bytes() == CONTENU and (d / (NOM + ".part")).exists()     # le reste n'est pas touché
+
+
+@pytest.mark.asyncio
+async def test_lancer_marque_l_erreur_sur_toute_exception(env, monkeypatch):
+    async def boum(*a):
+        raise RuntimeError("inattendu")
+
+    monkeypatch.setattr(modeles, "telecharger", boum)
+    modeles.telechargements[NOM] = {"recu": 0, "total": 1}
+    await modeles._lancer(DEPOT, NOM, SHA, 1, None)
+    assert modeles.telechargements[NOM]["erreur"] and not modeles._en_cours(NOM)
+
+    async def annule(*a):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(modeles, "telecharger", annule)
+    modeles.telechargements[NOM] = {"recu": 0, "total": 1}
+    with pytest.raises(asyncio.CancelledError):
+        await modeles._lancer(DEPOT, NOM, SHA, 1, None)
+    assert modeles.telechargements[NOM]["erreur"]
+
+
+@pytest.mark.asyncio
+async def test_activation_refusee_retour_arriere(env, monkeypatch):
+    installer(env, "ancien.gguf")
+    installer(env)
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"modele": "ancien.gguf"}}))
+
+    async def pret(m, delai):
+        return True
+
+    async def refus(*a, **k):
+        raise HTTPException(503, "mémoire insuffisante")
+
+    monkeypatch.setattr(moteurs, "_sonde", pret)
+    monkeypatch.setattr(moteurs, "changer_modele_local", refus)
+    async with client() as c:
+        r = await c.post(f"/modeles/{NOM}/activer")
+    assert r.status_code == 503 and "mémoire insuffisante" in r.json()["detail"]
+    assert reglages.lire_prefs()["moteur"]["modele"] == "ancien.gguf"
+    assert (env / "run" / "demandes" / "demarrer.demande").exists()
+    assert [x.get("issue") for x in jrn.lire() if x["action"] == "modele.activer"] == ["refus"]
+
+
+def test_valider_refuse_annexe_et_decoupe(env):
+    d = installer(env).parent
+    for n in ("mmproj-x-f16.gguf", "gros-00001-of-00002.gguf"):
+        (d / n).write_bytes(b"GGUF")
+        with pytest.raises(HTTPException):
+            reglages.valider({"moteur": {"modele": n}})

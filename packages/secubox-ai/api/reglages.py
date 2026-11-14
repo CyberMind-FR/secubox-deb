@@ -62,6 +62,15 @@ def etat_dir() -> Path:
     return Path(os.environ.get("SECUBOX_AI_ETAT", ETAT_DEFAUT))
 
 
+def genre_fichier(nom) -> str:
+    """Dans un dépôt, tout .gguf n'est pas un modèle à charger seul : annexe (projecteur…), découpe, ou modèle."""
+    if re.search(r"(^|[-_])(mmproj|mtp|dflash|eagle\d*|lilicorr|draft)[-_]", nom, re.I):
+        return "annexe"
+    if re.search(r"-\d{5}-of-\d{5}\.gguf$", nom):
+        return "decoupe"
+    return "modele"
+
+
 def modeles_dir() -> Path:
     """Dossier des modèles GGUF (`<etat>/modeles`), lu à l'appel."""
     return etat_dir() / "modeles"
@@ -69,7 +78,7 @@ def modeles_dir() -> Path:
 
 def modele_installe(nom: str) -> bool:
     """Le modèle `nom` est-il un fichier régulier du dossier des modèles (jamais un lien symbolique) ?"""
-    if not isinstance(nom, str) or not NOM_MODELE.match(nom) or ".." in nom:
+    if not isinstance(nom, str) or not NOM_MODELE.match(nom) or ".." in nom or genre_fichier(nom) != "modele":
         return False
     f = modeles_dir() / nom
     return f.is_file() and not f.is_symlink()
