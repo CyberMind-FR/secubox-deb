@@ -38,6 +38,8 @@ L2 « Agir » (tâche 7) :
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import math
 import re
@@ -208,28 +210,32 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
     async def macro_lire(ident: str):
         return await _macro(ident)
 
+    def _champs_macro(ident: str, nom: str, etapes: list, cibles: list, prog: Optional[dict], acteur: str) -> dict:
+        canon = json.dumps(etapes, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return {"evenement": "enregistrement", "macro": ident, "nom": nom, "cibles": ",".join(cibles), "acteur": acteur,
+                "etapes": len(etapes), "empreinte": hashlib.sha256(canon.encode()).hexdigest(),
+                "programmation": json.dumps(prog, sort_keys=True) if prog else None}
+
+    async def _enregistrer(nom: str, etapes: list, cibles: list, prog: Optional[dict], acteur: str) -> str:
+        """Plafond, identifiant tiré, audit (503 et rien d'écrit s'il échoue), puis seulement l'écriture."""
+        if await asyncio.to_thread(stockage.macros_pleines):
+            raise HTTPException(409, "trop de macros enregistrées : en supprimer avant d'en ajouter")
+        ident = stockage.macro_id_nouveau()
+        await auditer_ou_503("pilotage_macro", _champs_macro(ident, nom, etapes, cibles, prog, acteur))
+        if await asyncio.to_thread(stockage.macro_creer, nom, etapes, cibles, prog, acteur, ident) is None:
+            raise HTTPException(409, "trop de macros enregistrées : en supprimer avant d'en ajouter")
+        return ident
+
     @app.post("/macros", status_code=201)
     async def macro_creer(corps: MacroIn, jwt: dict = Depends(require_jwt)):
         nom, etapes, cibles, prog = await _preparer(corps)
-        acteur = acteur_de(jwt)
-        ident = await asyncio.to_thread(stockage.macro_creer, nom, etapes, cibles, prog, acteur)
-        if ident is None:
-            raise HTTPException(409, "trop de macros enregistrées : en supprimer avant d'en ajouter")
-        try:
-            await auditer_ou_503("pilotage_macro", {"evenement": "enregistrement", "macro": ident, "nom": nom, "cibles": ",".join(cibles),
-                                                    "acteur": acteur})
-        except HTTPException:
-            await asyncio.to_thread(stockage.macro_supprimer, ident)   # pas d'audit, pas de macro
-            raise
-        return {"id": ident}
+        return {"id": await _enregistrer(nom, etapes, cibles, prog, acteur_de(jwt))}
 
     @app.put("/macros/{ident}")
     async def macro_modifier(ident: str, corps: MacroIn, jwt: dict = Depends(require_jwt)):
         await _macro(ident, modifiable=True)
         nom, etapes, cibles, prog = await _preparer(corps)
-        acteur = acteur_de(jwt)
-        await auditer_ou_503("pilotage_macro", {"evenement": "enregistrement", "macro": ident, "nom": nom, "cibles": ",".join(cibles),
-                                                "acteur": acteur})
+        await auditer_ou_503("pilotage_macro", _champs_macro(ident, nom, etapes, cibles, prog, acteur_de(jwt)))
         if not await asyncio.to_thread(stockage.macro_maj, ident, nom, etapes, cibles, prog):
             raise HTTPException(404, "macro inconnue")
         return {"id": ident}
@@ -245,17 +251,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
     @app.post("/macros/{ident}/copier", status_code=201)
     async def macro_copier(ident: str, jwt: dict = Depends(require_jwt)):
         m = await _macro(ident)
-        nom, acteur = (m["nom"] + " copie")[:60], acteur_de(jwt)
-        nouveau = await asyncio.to_thread(stockage.macro_creer, nom, m["etapes"], m["cibles"], None, acteur)
-        if nouveau is None:
-            raise HTTPException(409, "trop de macros enregistrées : en supprimer avant d'en ajouter")
-        try:
-            await auditer_ou_503("pilotage_macro", {"evenement": "enregistrement", "macro": nouveau, "nom": nom,
-                                                    "cibles": ",".join(m["cibles"]), "acteur": acteur})
-        except HTTPException:
-            await asyncio.to_thread(stockage.macro_supprimer, nouveau)
-            raise
-        return {"id": nouveau}
+        return {"id": await _enregistrer((m["nom"] + " copie")[:60], m["etapes"], m["cibles"], None, acteur_de(jwt))}
 
     @app.post("/macros/{ident}/simuler", dependencies=garde)
     async def macro_simuler(ident: str, corps: dict = Body(...)):

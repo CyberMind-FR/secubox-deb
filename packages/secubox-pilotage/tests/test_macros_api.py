@@ -186,3 +186,39 @@ def test_box_porte_les_noms_des_services_en_echec(m):
     m.s.inventaire_enregistrer(GK5, rel)
     b = TestClient(m.app).get("/boxes/gk5").json()
     assert b["services_en_echec_noms"] == ["secubox-hub.service"]
+
+
+def test_simuler_box_cliente_exige_le_support(m):
+    client = type(GK5)("lgm", "10.64.0.9", "autoload", "acme", "actif")
+    m.s.vu(client, {})
+    c = TestClient(m.app)
+    mid = c.post("/macros", json={"nom": "Essai", "etapes": ETAPES[:1]}).json()["id"]
+    r = c.post(f"/macros/{mid}/simuler", json={"box": client.cle}).json()
+    assert r["cliente"] is True and r["support_requis"] is True and r["forte_requise"] is False
+
+
+def test_simuler_macro_inconnue_404(m):
+    assert TestClient(m.app).post("/macros/m-inconnu/simuler", json={"box": "gk5"}).status_code == 404
+
+
+def test_plafond_des_macros_409_sans_audit(m, monkeypatch):
+    import pilotage.stockage as st
+    monkeypatch.setattr(st, "MACROS_MAX", 1)
+    c = TestClient(m.app)
+    assert c.post("/macros", json={"nom": "Une", "etapes": ETAPES[:1]}).status_code == 201
+    n = len(m.lignes)
+    assert c.post("/macros", json={"nom": "Deux", "etapes": ETAPES[:1]}).status_code == 409
+    assert c.post("/macros/livree:diagnostic-complet/copier").status_code == 409
+    assert len(m.lignes) == n and len([x for x in m.s.macros() if not x["livree"]]) == 1
+
+
+def test_audit_d_abord_avec_identifiant_etapes_et_empreinte(m):
+    c = TestClient(m.app)
+    prog = {"quotidien": "03:00"}
+    mid = c.post("/macros", json={"nom": "Essai", "etapes": ETAPES[:1], "programmation": prog}).json()["id"]
+    (_, champs), = m.lignes
+    assert champs["macro"] == mid and champs["etapes"] == 1 and len(champs["empreinte"]) == 64 and "03:00" in champs["programmation"]
+    # PUT/DELETE d'une macro inconnue : 404 avant tout audit
+    assert c.put("/macros/m-inconnu", json={"nom": "X", "etapes": ETAPES[:1]}).status_code == 404
+    assert c.delete("/macros/m-inconnu").status_code == 404
+    assert len(m.lignes) == 1

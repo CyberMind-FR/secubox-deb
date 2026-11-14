@@ -757,15 +757,24 @@ class StockageSqlite:
             marques = ",".join("?" * len(lignes))
             cx.execute(f"DELETE FROM macros WHERE livree=1 AND id NOT IN ({marques})", [x[0] for x in lignes])
 
-    def macro_creer(self, nom: str, etapes: list, cibles: list, programmation: Optional[dict], auteur: Optional[str]) -> Optional[str]:
-        """Crée une macro ordinaire, rend son identifiant `m-` + 12 hexadécimaux ; None au-delà de MACROS_MAX."""
+    @staticmethod
+    def macro_id_nouveau() -> str:
+        return "m-" + os.urandom(6).hex()
+
+    def macros_pleines(self) -> bool:
+        with self._cx() as cx:
+            return cx.execute("SELECT COUNT(*) FROM macros WHERE livree=0").fetchone()[0] >= MACROS_MAX
+
+    def macro_creer(self, nom: str, etapes: list, cibles: list, programmation: Optional[dict], auteur: Optional[str],
+                    ident: Optional[str] = None) -> Optional[str]:
+        """Crée une macro ordinaire, rend son identifiant `m-` + 12 hexadécimaux (`ident` si l'appelant l'a déjà tiré) ; None au-delà de MACROS_MAX."""
         e, c = _json(etapes), _json(cibles)
         p = _json(programmation) if programmation is not None else None
         maintenant = self._maintenant()
         with self._tx() as cx:
             if cx.execute("SELECT COUNT(*) FROM macros WHERE livree=0").fetchone()[0] >= MACROS_MAX:
                 return None
-            ident = "m-" + os.urandom(6).hex()
+            ident = ident or self.macro_id_nouveau()
             cx.execute("INSERT INTO macros(id,nom,etapes_json,cibles_json,programmation_json,livree,cree_le,maj_le,auteur) "
                        "VALUES(?,?,?,?,?,0,?,?,?)", (ident, nom, e, c, p, maintenant, maintenant, auteur))
         return ident
