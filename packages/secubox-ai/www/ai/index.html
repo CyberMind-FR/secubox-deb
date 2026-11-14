@@ -222,7 +222,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
   function msg(id, t, ok) { var e = $(id); e.textContent = t || ''; e.className = 'msg ' + (ok ? 'b' : 'e'); }
   function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
   function entetes(h) { var t = jeton(); if (t) h.Authorization = 'Bearer ' + t; return h; }
-  function lireReponse(r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Erreur ' + r.status); return d; }); }
+  function lireReponse(r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) { var e = new Error(r.status === 401 || r.status === 403 ? 'Session expirée : reconnectez-vous' : typeof d.detail === 'string' ? d.detail : 'Erreur ' + r.status); e.status = r.status; throw e; } return d; }); }
   function api(chemin, methode, corps) {
     var h = entetes({ Accept: 'application/json' }), o = { headers: h, credentials: 'same-origin', cache: 'no-store' };
     if (methode) o.method = methode;
@@ -260,7 +260,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
   }
   function chargerEtat() {
     return api(API + '/status').then(function (s) { $('bErr').hidden = true; rendreEtat(s); })
-      .catch(function () { $('bErr').hidden = false; $('bErr').textContent = 'Aucune mesure : le module ne répond pas.'; $('pEtat').textContent = 'INJOIGNABLE'; $('pEtat').className = 'pill hors'; });
+      .catch(function (e) { var session = e && (e.status === 401 || e.status === 403); $('bErr').hidden = false; $('bErr').textContent = session ? 'Session expirée : reconnectez-vous.' : 'Aucune mesure : le module ne répond pas.'; $('pEtat').textContent = session ? 'SESSION EXPIRÉE' : 'INJOIGNABLE'; $('pEtat').className = 'pill hors'; });
   }
   function fixerMoteur(choix) {
     msg('mMoteur', 'Changement…', true);

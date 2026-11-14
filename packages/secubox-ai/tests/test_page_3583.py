@@ -79,3 +79,33 @@ def test_la_page_n_appelle_que_des_routes_existantes(html):
     appeles = set(re.findall(r"API \+ '/([a-z-]+)", script(html)))
     assert appeles
     assert not appeles - existants, appeles - existants
+
+
+# ---- revue finale : session expirée distinguée d'un module injoignable ----
+def _fonction(source, nom):
+    debut = source.index(f"function {nom}(")
+    profondeur, i = 0, source.index("{", debut)
+    while True:
+        profondeur += {"{": 1, "}": -1}.get(source[i], 0)
+        if profondeur == 0:
+            return source[debut:i + 1]
+        i += 1
+
+
+@pytest.mark.parametrize("code", [401, 403])
+def test_session_expiree_et_non_module_injoignable(html, tmp_path, code):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node absent")
+    f = tmp_path / "t.js"
+    f.write_text(_fonction(script(html), "lireReponse") + f"""
+lireReponse({{ ok: false, status: {code}, json: function () {{ return Promise.resolve({{ detail: 'Not authenticated' }}); }} }})
+  .then(function () {{ process.exit(3); }}, function (e) {{ console.log(e.status + '|' + e.message); }});
+""", encoding="utf-8")
+    r = subprocess.run([node, str(f)], capture_output=True, text=True, timeout=30)
+    assert r.stdout.strip() == f"{code}|Session expirée : reconnectez-vous", r.stdout + r.stderr
+
+
+def test_bandeau_d_etat_session_expiree(html):
+    corps = _fonction(script(html), "chargerEtat")
+    assert "e.status === 401 || e.status === 403" in corps and "Session expirée : reconnectez-vous" in corps

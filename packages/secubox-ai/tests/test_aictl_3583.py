@@ -558,8 +558,9 @@ def test_unite_moteur(ctl):
     for k, v in SOCLE.items():
         assert u[k] == [v], k
     assert u["User"] == ["secubox-ai-moteur"] and u["Group"] == ["secubox-ai"] and u["UMask"] == ["0007"]
-    assert u["ExecStart"] == ["/usr/lib/secubox/zia-llm/llama-server -m ${MODELE} -c ${CTX} -t 4 --jinja --no-webui "
-                              "--host /run/secubox-ai/moteur.sock"]
+    # -np 1 : une seule place, le budget mémoire (cache du contexte) est calculé pour une.
+    assert u["ExecStart"] == ["/usr/lib/secubox/zia-llm/llama-server -m ${MODELE} -c ${CTX} -np 1 -t 4 --jinja "
+                              "--no-webui --host /run/secubox-ai/moteur.sock"]
     assert u["EnvironmentFile"] == ["/run/secubox-ai/moteur.env"]
     assert u["IPAddressDeny"] == ["any"] and u["PrivateNetwork"] == ["yes"]
     assert u["RestrictAddressFamilies"] == ["AF_UNIX"] and u["CapabilityBoundingSet"] == [""]
@@ -761,3 +762,8 @@ def test_preparer_sans_resolv_conf(ctl, env, monkeypatch):
     env.conf.chmod(0o644)
     assert ctl.cmd_preparer() == 0
     assert "IPAddressAllow=192.168.1.20/32\n" in (ctl.DROPIN_API / "50-adresses.conf").read_text()
+
+
+def test_controleur_sans_cache_ecrit_par_root():
+    # -B : root n'écrit jamais de __pycache__ (ni à côté du script, ni dans /usr/lib/secubox/ai) ; -I : isolé.
+    assert SCRIPT.read_text().splitlines()[0] == "#!/usr/bin/python3 -IB"

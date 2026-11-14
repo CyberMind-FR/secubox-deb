@@ -62,12 +62,17 @@ def _url_distante() -> str:
 
 def deposer_demande(action: str) -> None:
     """Dépose une demande au contrôleur root. Idempotent et sûr en concurrence : fichier temporaire
-    unique dans le même dossier, puis os.replace (la dernière écriture gagne, un seul fichier reste)."""
+    unique dans le même dossier, puis os.replace (la dernière écriture gagne, un seul fichier reste).
+    Dépôt absent : HTTPException(503) « contrôleur non préparé »."""
     if action not in ACTIONS:
         raise ValueError(f"action inconnue : {action}")
     dossier = run_dir() / "demandes"
-    dossier.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=f".{action}.", suffix=".tmp")
+    # Jamais créé ici : c'est secubox-aictl preparer (root:secubox-ai 1770) ; absent = 503 clair, pas une erreur 500.
+    try:
+        fd, tmp = tempfile.mkstemp(dir=dossier, prefix=f".{action}.", suffix=".tmp")
+    except FileNotFoundError:
+        log.warning("dépôt des demandes absent : contrôleur non préparé")
+        raise HTTPException(503, "contrôleur non préparé : lancer secubox-ai-preparer.service") from None
     try:
         os.close(fd)
         os.replace(tmp, dossier / f"{action}.demande")

@@ -22,6 +22,7 @@ def web(monkeypatch, tmp_path):
     monkeypatch.setenv("SECUBOX_AI_CONF", str(tmp_path / "absent.toml"))
     monkeypatch.setenv("SECUBOX_AI_CLE", str(tmp_path / "absente.key"))
     monkeypatch.setenv("SECUBOX_AI_RUN", str(tmp_path / "run"))
+    (tmp_path / "run" / "demandes").mkdir(parents=True)       # créé par secubox-aictl preparer en production
     etat = {"vues": [], "reqs": [], "reponses": {}, "dns": {}, "appels_dns": []}
 
     def handler(req):

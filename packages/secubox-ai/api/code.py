@@ -66,7 +66,7 @@ async def travail_code(t, action, code, langue, consigne_perso):
     if regles:
         systeme += "\nRègles de code de l'utilisateur (sa mémoire, à respecter) :\n" + bloc_memoire(regles)
     taches.etape(t, "lire et " + ETAPES[action])
-    lignes = "\n".join(f"{i + 1:>4} {l}" for i, l in enumerate(code.splitlines()))
+    lignes = "\n".join(f"{i + 1:>4} {ligne}" for i, ligne in enumerate(code.splitlines()))
     texte = await taches.demander_modele(
         systeme, consigne + (f"\nConsigne en plus : {consigne_perso}" if consigne_perso else "")
         + f"\nLangage : {langue or 'à deviner'}\n<donnees>\n{lignes}\n</donnees>", jetons, t)

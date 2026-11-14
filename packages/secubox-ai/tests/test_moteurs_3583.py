@@ -30,6 +30,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("SECUBOX_AI_CONF", str(conf))
     monkeypatch.setenv("SECUBOX_AI_CLE", str(cle))
     monkeypatch.setenv("SECUBOX_AI_RUN", str(tmp_path / "run"))
+    (tmp_path / "run" / "demandes").mkdir(parents=True)       # créé par secubox-aictl preparer en production
     moteurs._cache_sonde.clear()
     yield tmp_path
     monkeypatch.setattr(moteurs, "FABRIQUE_TRANSPORT", None)
@@ -309,7 +310,7 @@ async def test_sonde_503_endormi_choisit_distant_et_reveille(env, monkeypatch):
     m = await moteurs.assurer_moteur(delai=5, pas=0)
     assert m.nom == "distant"
     assert ("distant", "POST", "/moteur/demarrer") in [v[:3] for v in vues]
-    assert not (env / "run" / "demandes").exists()
+    assert not list((env / "run" / "demandes").iterdir())
 
 
 @pytest.mark.asyncio
@@ -349,7 +350,7 @@ async def test_cache_perime_puis_distant_tombe_repli_local(env, monkeypatch):
 
     def distant(req):
         return httpx.Response(200) if haut["ok"] else tombe(req)
-    vues = transports(monkeypatch, distant=distant)
+    transports(monkeypatch, distant=distant)
     assert (await moteurs.choisir()).nom == "distant"   # sonde mise en cache
     haut["ok"] = False
     debut = time.monotonic()
@@ -458,3 +459,23 @@ async def test_etat_actif_est_le_moteur_qui_repond(env, monkeypatch):
     transports(monkeypatch, local=tombe)
     e = await moteurs.etat()
     assert (e["choisi"], e["actif"]) == ("local", None)
+
+
+# ---- revue finale : dépôt absent = contrôleur non préparé (503, pas 500) ----
+def test_depot_absent_503_controleur_non_prepare(env):
+    import shutil as _shutil
+    _shutil.rmtree(env / "run" / "demandes", ignore_errors=True)
+    with pytest.raises(HTTPException) as e:
+        moteurs.deposer_demande("demarrer")
+    assert e.value.status_code == 503 and "contrôleur non préparé" in e.value.detail
+    assert not (env / "run" / "demandes").exists()     # jamais créé par l'API (c'est le rôle de preparer)
+
+
+@pytest.mark.asyncio
+async def test_depot_absent_route_503(env, monkeypatch):
+    import shutil as _shutil
+    _shutil.rmtree(env / "run" / "demandes", ignore_errors=True)
+    transports(monkeypatch, distant=tombe, local=tombe)
+    with pytest.raises(HTTPException) as e:
+        await moteurs.assurer_moteur(delai=1, pas=0, force="local")
+    assert e.value.status_code == 503 and "contrôleur non préparé" in e.value.detail

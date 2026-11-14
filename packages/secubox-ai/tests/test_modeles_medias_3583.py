@@ -30,6 +30,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("SECUBOX_AI_CONF", str(tmp_path / "ai.toml"))
     monkeypatch.setenv("SECUBOX_AI_CLE", str(tmp_path / "cle"))
     monkeypatch.setenv("SECUBOX_AI_RUN", str(tmp_path / "run"))
+    (tmp_path / "run" / "demandes").mkdir(parents=True)       # créé par secubox-aictl preparer en production
     modeles.telechargements.clear()
     app.dependency_overrides[require_jwt] = lambda: {"sub": "admin"}
     yield tmp_path

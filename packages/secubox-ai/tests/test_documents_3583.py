@@ -31,6 +31,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("SECUBOX_AI_CONF", str(tmp_path / "ai.toml"))
     monkeypatch.setenv("SECUBOX_AI_CLE", str(tmp_path / "cle"))
     monkeypatch.setenv("SECUBOX_AI_RUN", str(tmp_path / "run"))
+    (tmp_path / "run" / "demandes").mkdir(parents=True)       # créé par secubox-aictl preparer en production
     monkeypatch.setattr(recherche, "SOURCE_IF_INET6", str(tmp_path / "if_inet6"))
     (tmp_path / "if_inet6").write_text("", encoding="ascii")
     documents.DOCS.clear()

@@ -43,3 +43,11 @@ def test_status_garde_et_forme(monkeypatch):
     assert rep.status_code == 200
     corps = rep.json()
     assert corps["module"] == "ai" and "version" in corps and "moteur" in corps
+
+
+def test_documentation_automatique_fermee():
+    # Ni /docs, ni /redoc, ni /openapi.json : la carte de l'API n'est pas servie (même derrière require_jwt de nginx).
+    assert app.docs_url is None and app.redoc_url is None and app.openapi_url is None
+    client = TestClient(app)
+    for chemin in ("/docs", "/redoc", "/openapi.json"):
+        assert client.get(chemin).status_code == 404, chemin

@@ -46,7 +46,9 @@ async def cycle_de_vie(_app):
         await menaces.arreter_veille()
 
 
-app = FastAPI(title="SecuBox AI", version=VERSION, lifespan=cycle_de_vie)
+# Ni /docs, ni /redoc, ni /openapi.json : la carte de l'API n'est pas servie.
+app = FastAPI(title="SecuBox AI", version=VERSION, lifespan=cycle_de_vie, docs_url=None, redoc_url=None,
+              openapi_url=None)
 app.include_router(ROUTEUR)
 app.include_router(reglages.routeur)
 app.include_router(moteurs.routeur)

@@ -26,6 +26,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("SECUBOX_AI_CONF", str(tmp_path / "ai.toml"))
     monkeypatch.setenv("SECUBOX_AI_CLE", str(tmp_path / "cle"))
     monkeypatch.setenv("SECUBOX_AI_RUN", str(tmp_path / "run"))
+    (tmp_path / "run" / "demandes").mkdir(parents=True)       # créé par secubox-aictl preparer en production
     moteurs._cache_sonde.clear()
     taches.TRAVAUX.clear()
     dialogue.SUITES.clear()
@@ -324,7 +325,7 @@ async def test_image_refusee_sans_demarrer_le_local(env, monkeypatch, force):
     _, evts = await essai({"image": IMAGE})
     assert evts[-1]["etape"] == "erreur" and evts[-1]["message"] == dialogue.REFUS_IMAGE_LOCAL
     assert vus == []                                       # aucun appel, ni local ni distant
-    assert not (env / "run" / "demandes").exists()         # aucune demande de démarrage
+    assert not list((env / "run" / "demandes").iterdir())         # aucune demande de démarrage
     assert taches.TRAVAUX[evts[0]["id"]]["fini"] is True
 
 
@@ -450,7 +451,7 @@ async def test_changement_de_modele_sans_redemarrage_si_le_distant_repond(env, m
     vus = moteur_simule(monkeypatch, lambda req: reponse_simple("ok"))
     _, evts = await essai({"question": QUESTION, "reglages": {"modele": "autre-modele.gguf"}})
     assert evts[-1]["etape"] == "bilan"
-    assert not (env / "run" / "demandes").exists()
+    assert not list((env / "run" / "demandes").iterdir())
     assert [nom for nom, p, _ in vus if p == "/v1/chat/completions"] == ["distant"]
     assert reglages.lire_prefs()["moteur"]["modele"] == "autre-modele.gguf"
 

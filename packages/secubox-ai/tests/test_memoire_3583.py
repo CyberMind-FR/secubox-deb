@@ -3,7 +3,6 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Mémoire et Historique (#3583)."""
-import json
 import sqlite3
 
 import pytest

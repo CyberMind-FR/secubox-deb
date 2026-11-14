@@ -175,6 +175,8 @@ refus, adresses permises) vont dans `/var/log/secubox/audit.log`.
   `/usr/lib/secubox/zia-llm/llama-server`), `python3 (>= 3.11)`, `python3-fastapi`, `python3-httpx`, `uvicorn`,
   `poppler-utils` (`pdfinfo`, `pdftotext`), `sqlite3`, `adduser` ; recommandés : `apparmor`, `logrotate`.
 - Python : FastAPI, httpx, uvicorn, bibliothèque standard (`sqlite3` avec FTS5, `tomllib`).
+- À savoir : `secubox-zia-llm` dépend lui-même de `secubox-zia` (le Hall ZIA) ; installer secubox-ai tire donc
+  secubox-zia. Gardé tel quel à l'étape 1 (gk3 l'a déjà) ; à revoir si le moteur doit vivre sans le Hall.
 
 ## Installation
 

@@ -63,6 +63,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("SECUBOX_AI_CONF", str(tmp_path / "ai.toml"))
     monkeypatch.setenv("SECUBOX_AI_CLE", str(tmp_path / "cle"))
     monkeypatch.setenv("SECUBOX_AI_RUN", str(tmp_path / "run"))
+    (tmp_path / "run" / "demandes").mkdir(parents=True)       # créé par secubox-aictl preparer en production
     menaces._reinitialiser()
     taches.TACHES.clear()
     moteurs._cache_sonde.clear()
@@ -192,7 +193,7 @@ async def test_gk2_injoignable_releve_avec_erreurs_et_resume_refuse_sans_modele(
     r = await appeler("POST", "/menaces/demander", json={"question": "Que se passe-t-il ?"})
     assert r.status_code == 503
     assert vus == [] and taches.TACHES == {}
-    assert not (env / "run" / "demandes").exists()
+    assert not list((env / "run" / "demandes").iterdir())
 
 
 @pytest.mark.asyncio
@@ -516,7 +517,7 @@ async def test_veille_ne_demarre_jamais_le_moteur(gk2, monkeypatch, env):
     vus = moteur_simule(monkeypatch, "x", sante=503)
     await menaces.releve_menaces()
     assert await menaces.tour_veille() is None and taches.TACHES == {} and vus == []
-    assert not (env / "run" / "demandes").exists()
+    assert not list((env / "run" / "demandes").iterdir())
 
 
 @pytest.mark.asyncio
