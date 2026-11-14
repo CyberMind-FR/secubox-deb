@@ -14,6 +14,15 @@ from pathlib import Path
 
 CTX_AUTO_MIN, CTX_AUTO_MAX = 4096, 32768
 
+# Surcoût du moteur hors poids et cache : tampons de calcul + exécution. Mesuré sur gk3 (llama-server, Llama 3.2 1B
+# Q4_K_M, contexte 4096) : environ 600 Mo (arrondi à 640 Mo de plancher) ; il croît avec le modèle, d'où max(640 Mo, 0,35 × poids).
+SURCOUT_MIN_MO, SURCOUT_RATIO = 640, 0.35
+
+
+def surcout_mo(poids_mo: float) -> float:
+    """Surcoût mémoire (Mo) du moteur pour un modèle de `poids_mo` Mo : max(640, 0,35 × poids)."""
+    return max(SURCOUT_MIN_MO, SURCOUT_RATIO * poids_mo)
+
 # Bornes de lecture : un fichier mal formé ne doit pas pouvoir épuiser la mémoire.
 _MAX_KV = 100_000
 _MAX_CLE = 1024
@@ -187,8 +196,9 @@ def contexte_auto(chemin, dispo_mo: int, memoire_max_mo: int, reserve_mo: int = 
     """Plus grande taille de contexte (en jetons, multiple de 1024) qui tient en mémoire, entre 4 096 et 32 768.
 
     `dispo_mo` : mémoire vive disponible (MemAvailable) en Mo, mesurée moteur arrêté ; on en retranche
-    `reserve_mo` (air laissé au poste) puis le poids du modèle (taille du fichier). `memoire_max_mo` : plafond
-    mémoire du moteur (MemoryMax) en Mo, dont on retranche aussi le poids. Le budget du cache est le plus petit
+    `reserve_mo` (air laissé au poste), le poids du modèle (taille du fichier) puis le surcoût du moteur
+    (`surcout_mo`). `memoire_max_mo` : plafond mémoire du moteur (MemoryMax) en Mo, dont on retranche aussi le
+    poids et le surcoût. Le budget du cache est le plus petit
     des deux, le résultat est plafonné par le contexte maximal du modèle. En-tête illisible, fichier non
     régulier ou absent : 4 096. Ne lève jamais."""
     chemin = Path(chemin)
@@ -197,6 +207,7 @@ def contexte_auto(chemin, dispo_mo: int, memoire_max_mo: int, reserve_mo: int = 
     if not par_jeton or st is None:
         return CTX_AUTO_MIN
     poids_mo = st.st_size / 1024 ** 2
-    budget_mo = min(dispo_mo - reserve_mo - poids_mo, memoire_max_mo - poids_mo)
+    fixe_mo = poids_mo + surcout_mo(poids_mo)
+    budget_mo = min(dispo_mo - reserve_mo - fixe_mo, memoire_max_mo - fixe_mo)
     ctx = int(budget_mo * 1024 ** 2 // par_jeton) // 1024 * 1024 if budget_mo > 0 else 0
     return max(CTX_AUTO_MIN, min(ctx, CTX_AUTO_MAX, ctx_modele or CTX_AUTO_MAX))

@@ -69,19 +69,19 @@ def test_contexte_borne_haut_et_bas(tmp_path):
 
 def test_contexte_intermediaire_arrondi_au_millier(tmp_path):
     f = ecrire_gguf(tmp_path / "l.gguf", LLAMA)  # 114 688 o/jeton, poids ~ 0 Mo
-    # budget = min(1912 - 512, ...) = 1400 Mo -> 1400 Mo / 112 Kio = 12800 jetons
-    assert ca.contexte_auto(f, 1912, 10**6) == 12288
+    # budget = 2552 - 512 - 640 (surcoût) = 1400 Mo -> 1400 Mo / 112 Kio = 12800 jetons
+    assert ca.contexte_auto(f, 2552, 10**6) == 12288
 
 
 def test_poids_retranche_cote_disponible(tmp_path):
-    # fichier creux de 1000 Mo : dispo 2412 - 512 - 1000 = 900 Mo -> 900 Mo / 112 Kio = 8228 -> 8192 jetons
+    # fichier creux de 1000 Mo (surcoût 640 Mo) : dispo 3052 - 512 - 1000 - 640 = 900 Mo -> 8228 -> 8192 jetons
     f = ecrire_gguf(tmp_path / "l.gguf", LLAMA)
     os.truncate(f, 1000 * 1024 ** 2)
-    assert ca.contexte_auto(f, 2412, 10**6) == 8192
+    assert ca.contexte_auto(f, 3052, 10**6) == 8192
     # côté plafond : 1000 + 900 Mo de MemoryMax laisse le même budget
-    assert ca.contexte_auto(f, 10**6, 1900) == 8192
+    assert ca.contexte_auto(f, 10**6, 2540) == 8192
     # le poids seul épuise la mémoire : contexte minimal
-    assert ca.contexte_auto(f, 1400, 10**6) == 4096
+    assert ca.contexte_auto(f, 2000, 10**6) == 4096
 
 
 def _brut_f32(x):
@@ -168,3 +168,21 @@ def test_chaine_geante_sautee_sans_lecture(tmp_path):
     f.write_bytes(b"GGUF" + struct.pack("<IQQ", 3, 0, 1) + corps)
     with pytest.raises(ValueError):
         ca.lire_meta_gguf(f, {"grosse"})
+
+
+def test_surcout_calibre_mesure_gk3():
+    assert ca.surcout_mo(770) == 640                    # 1B mesuré : ~600 Mo, plancher 640
+    assert ca.surcout_mo(1900) == 665    # 0,35 × poids au-delà
+    assert ca.surcout_mo(0) == 640
+
+
+def test_contexte_auto_1b_sur_2_5_go_disponibles(tmp_path):
+    # Llama 3.2 1B (770 Mo, 32 768 o/jeton) sur 2,5 Go : au-dessus de 4096, dans les bornes.
+    f = ecrire_gguf(tmp_path / "1b.gguf", {**LLAMA, "llama.block_count": 16, "llama.attention.key_length": 64,
+                                           "llama.attention.value_length": 64})
+    os.truncate(f, 770 * 1024 ** 2)
+    assert ca.kv_par_jeton(f)[0] == 32768
+    ctx = ca.contexte_auto(f, 2560, 2560 - 512)
+    assert 4096 < ctx <= 32768
+    # poids + cache + surcoût tiennent dans MemAvailable − 512 Mo
+    assert 770 + 32768 * ctx / 1024 ** 2 + 640 <= 2560 - 512

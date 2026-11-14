@@ -1,3 +1,19 @@
+secubox-ai (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * Moteur local : surcoût mémoire calibré sur gk3 (Llama 3.2 1B, contexte 4096 :
+    tampons de calcul + exécution environ 600 Mo, l'ancien 300 Mo laissait le
+    cgroup à son plafond et évinçait les pages du modèle). MemoryMax = poids +
+    cache(contexte) + max(640 Mo, 0,35 × poids) ; même surcoût dans la règle de
+    refus mémoire et dans le contexte automatique (contexte_auto le retranche
+    avant de dimensionner le cache) (ref #3583).
+  * Défauts : moteur.contexte = 0 (automatique, jamais utilisé avec l'ancien 4096)
+    et moteur.threads = 0 (tous les coeurs disponibles, validé 0..64) ; le
+    contrôleur passe -t <n> au moteur (THREADS dans moteur.env). Les valeurs déjà
+    enregistrées, dont l'ancien 4096, sont conservées (donnée de l'usager) :
+    0 signifie automatique, voir le README.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 18:00:00 +0100
+
 secubox-ai (0.1.1-1~trixie1) trixie; urgency=medium
 
   * Formats ARM retirés de llama.cpp (Q4_0_4_4, Q4_0_4_8, Q4_0_8_8) : refusés

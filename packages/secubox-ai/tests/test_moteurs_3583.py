@@ -244,7 +244,7 @@ async def test_contexte_zero_retombe_sur_prefs(env, monkeypatch):
     transports(monkeypatch, local=lambda req: httpx.Response(
         200, json={"default_generation_settings": {"n_ctx": 0}}))
     m = await moteurs.choisir("local")
-    assert await moteurs.contexte_reel(m) == reglages.DEFAUTS["moteur"]["contexte"]
+    assert await moteurs.contexte_reel(m) == moteurs.CTX_AUTO_MIN  # défaut 0 (auto) : repli sur le minimum
 
 
 @pytest.mark.asyncio

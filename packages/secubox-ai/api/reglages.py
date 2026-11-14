@@ -25,7 +25,7 @@ CONF_DEFAUT = "/etc/secubox/ai.toml"
 ETAT = Path(os.environ.get("SECUBOX_AI_ETAT", ETAT_DEFAUT))  # valeur à l'import ; préférer etat_dir()
 
 DEFAUTS = {
-    "moteur": {"modele": "Llama-3.2-3B-Instruct-Q4_K_M.gguf", "backend": "cpu", "threads": 6, "contexte": 4096,
+    "moteur": {"modele": "Llama-3.2-3B-Instruct-Q4_K_M.gguf", "backend": "cpu", "threads": 0, "contexte": 0,
                "paralleles": 1, "couches_gpu": 99, "nice": 10, "arret_inactivite_min": 30,
                "force": "auto"},
     "generation": {"temperature": 0.3, "top_p": 0.9, "max_tokens": 512},
@@ -38,8 +38,9 @@ DEFAUTS = {
     "memoire": {"actif": True, "caracteres": 7000},
     "menaces": {"resume_auto_min": 15},
 }
-# contexte : 0 = automatique ; sinon jusqu'à 32 768 (bornes automatiques 4 096 - 32 768).
-BORNES = {("moteur", "threads"): (1, 64), ("moteur", "contexte"): (0, 32768), ("moteur", "paralleles"): (1, 8),
+# threads : 0 = tous les coeurs disponibles ; sinon 1..64. Une valeur enregistrée (même l'ancien défaut 6) est conservée.
+# contexte : 0 = automatique (ancien défaut 4096 d'une installation existante : conservé, donnée de l'usager) ; sinon jusqu'à 32 768 (bornes automatiques 4 096 - 32 768).
+BORNES = {("moteur", "threads"): (0, 64), ("moteur", "contexte"): (0, 32768), ("moteur", "paralleles"): (1, 8),
           ("moteur", "couches_gpu"): (0, 999), ("moteur", "nice"): (0, 19),
           ("moteur", "arret_inactivite_min"): (0, 1440), ("generation", "temperature"): (0, 2),
           ("generation", "top_p"): (0, 1), ("generation", "max_tokens"): (16, 8192),

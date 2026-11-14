@@ -86,8 +86,16 @@ privés de `/etc/resolv.conf` (gk3 résout par gk2, 192.168.1.200) sont rouverts
 **La clé du moteur distant circule en clair sur le LAN** : l'appel à gk0 se fait en HTTP (`Authorization: Bearer`).
 Elle ne protège que d'un appel par erreur ; quiconque écoute le LAN peut la lire. Ne pas réutiliser cette clé ailleurs.
 
+**Moteur local, mémoire et fils (0.1.2)** : `moteur.contexte = 0` (défaut) = contexte automatique, calculé sur la
+mémoire disponible (4 096 à 32 768 jetons). Une installation existante qui a enregistré l'ancien défaut `4096`
+le garde (donnée de l'usager, jamais réécrite) : remettre `0` pour l'automatique. `moteur.threads = 0` (défaut) =
+tous les coeurs disponibles (`-t`) ; un nombre 1..64 enregistré reste honoré. MemoryMax = poids + cache(contexte) +
+surcoût, surcoût = max(640 Mo, 0,35 × poids) (mesuré sur gk3 : environ 600 Mo pour un 1B à 4 096 ; l'ancien
+300 Mo laissait le cgroup à son plafond, qui évince les pages du modèle). La même valeur sert au refus mémoire et au
+contexte automatique.
+
 **Clés de préférences inertes** (arbitrage R15) : gardées pour que la page du POC ne reçoive pas de 422, mais sans
-aucun effet dans ce paquet — `moteur.backend`, `moteur.threads`, `moteur.paralleles`, `moteur.couches_gpu`,
+aucun effet dans ce paquet — `moteur.backend`, `moteur.paralleles`, `moteur.couches_gpu`,
 `moteur.nice`, `outils.recherche_web`, `outils.heure`, `outils.appels_max`. Pour
 `outils.mode`, seule la valeur `jamais` agit (aucune recherche). L'appel de fonctions et la recherche web du POC sont
 restés sur gk0.

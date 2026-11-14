@@ -52,7 +52,7 @@ sys.path.insert(0, os.environ.get("SECUBOX_AI_LIB", "/usr/lib/secubox/ai"))
 
 from api import contexte_auto as CA  # noqa: E402
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 # ── chemins (R2 : lus à l'appel, redirigeables par l'environnement) ──
 ETAT_DEFAUT = "/var/lib/secubox/ai"
@@ -106,7 +106,7 @@ PLAGES_LAN = tuple(ipaddress.ip_network(p) for p in
 
 # ── moteur local : règles de mémoire (contraintes globales du module) ──
 RESERVE_MO = 512              # air laissé au poste
-SURCOUT_MO = 300              # tampons de calcul du moteur, ajoutés au MemoryMax
+# Surcoût du moteur (tampons de calcul + exécution) : CA.surcout_mo(poids) = max(640 Mo, 0,35 × poids), mesuré sur gk3.
 CTX_MIN = CA.CTX_AUTO_MIN     # 4 096
 DELAI_PRET = 170.0            # attente de /health après le démarrage (l'API attend 180 s)
 PAS_PRET = 1.0
@@ -352,7 +352,10 @@ def choisir_modele(ids: dict, cfg: dict) -> dict:
         ctx = prefs.get("contexte", 0)
         if isinstance(ctx, bool) or not isinstance(ctx, int) or not 0 <= ctx <= CA.CTX_AUTO_MAX:
             ctx = 0
-        return {"nom": nom, "source": source, "poids_mo": st.st_size / 1024 ** 2, "contexte": ctx,
+        thr = prefs.get("threads", 0)
+        if isinstance(thr, bool) or not isinstance(thr, int) or not 0 <= thr <= 64:
+            thr = 0
+        return {"nom": nom, "source": source, "poids_mo": st.st_size / 1024 ** 2, "contexte": ctx, "threads": thr,
                 "lecture": f"/proc/self/fd/{mfd}/{nom}", "chemin": str(etat_dir() / "modeles" / nom), "_fd": mfd}
     try:
         installes = [n for n in os.listdir(mfd) if nom_modele_valide(n) and _verifier_modele(mfd, n, ids) is not None]
@@ -373,26 +376,38 @@ def memoire_disponible_mo() -> float:
     raise Echec("MemAvailable absent de /proc/meminfo")
 
 
+def threads_moteur(pref: int) -> int:
+    """Fils du moteur : la préférence (1..64), ou 0 = tous les coeurs disponibles (affinité du processus)."""
+    if pref:
+        return pref
+    try:
+        return len(os.sched_getaffinity(0)) or 1
+    except (AttributeError, OSError):
+        return os.cpu_count() or 1
+
+
 def plan_memoire(modele: dict, dispo_mo: float) -> dict:
     """Contexte et MemoryMax du moteur, ou Refus mémoire (clé "refus").
 
-    Refus si MemAvailable − 512 Mo < poids + cache du contexte minimal (4 096). Le contexte automatique est calculé
-    pour que poids + cache + 300 Mo tienne dans MemAvailable − 512 Mo (plafond passé à contexte_auto) ; un contexte
-    réglé à la main est honoré sans jamais dépasser l'automatique. MemoryMax = poids + cache(ctx) + 300 Mo."""
+    Refus si MemAvailable − 512 Mo < poids + cache du contexte minimal (4 096) + surcoût. Le contexte automatique est
+    calculé pour que poids + cache + surcoût tienne dans MemAvailable − 512 Mo (contexte_auto retranche lui-même le
+    surcoût) ; un contexte réglé à la main est honoré sans jamais dépasser l'automatique.
+    MemoryMax = poids + cache(ctx) + surcoût (surcoût = max(640 Mo, 0,35 × poids), mesuré sur gk3)."""
     par_jeton, _ = CA.kv_par_jeton(modele["lecture"])
     if not par_jeton:
         raise Echec(f"en-tête GGUF de {modele['nom']} illisible : mémoire du moteur impossible à estimer")
     poids = modele["poids_mo"]
     cache_min = par_jeton * CTX_MIN / 1024 ** 2
-    besoin = poids + cache_min
+    surcout = CA.surcout_mo(poids)
+    besoin = poids + cache_min + surcout
     if dispo_mo - RESERVE_MO < besoin:
         return {"refus": (f"mémoire insuffisante pour le moteur local : {int(dispo_mo)} Mo disponibles, il en faut "
                           f"{math.ceil(besoin + RESERVE_MO)} (modèle {math.ceil(poids)} Mo + contexte minimal "
-                          f"{math.ceil(cache_min)} Mo + réserve {RESERVE_MO} Mo) ; choisissez le moteur distant (gk0) "
+                          f"{math.ceil(cache_min)} Mo + surcoût du moteur {math.ceil(surcout)} Mo + réserve {RESERVE_MO} Mo) ; choisissez le moteur distant (gk0) "
                           f"ou un modèle plus petit")}
-    auto = CA.contexte_auto(modele["lecture"], int(dispo_mo), int(dispo_mo) - RESERVE_MO - SURCOUT_MO, RESERVE_MO)
+    auto = CA.contexte_auto(modele["lecture"], int(dispo_mo), int(dispo_mo) - RESERVE_MO, RESERVE_MO)
     ctx = auto if not modele["contexte"] else max(512, min(modele["contexte"], auto))
-    memmax = math.ceil(poids + par_jeton * ctx / 1024 ** 2 + SURCOUT_MO)
+    memmax = math.ceil(poids + par_jeton * ctx / 1024 ** 2 + surcout)
     return {"ctx": ctx, "memmax_mo": memmax}
 
 
@@ -518,7 +533,7 @@ def _demarrer(acteur: str) -> int:
                              "disponible_mo": int(dispo), "acteur": acteur})
             journal(plan["refus"])
             return 4
-        env = f"MODELE={modele['chemin']}\nCTX={plan['ctx']}\nMEMMAX={plan['memmax_mo']}M\n"
+        env = f"MODELE={modele['chemin']}\nCTX={plan['ctx']}\nMEMMAX={plan['memmax_mo']}M\nTHREADS={threads_moteur(modele['threads'])}\n"
         rfd = _ouvrir_dossier(run_dir(), {ids["racine"]})
         try:
             ecrire_atomique(rfd, "moteur.env", env.encode(), 0o640, ids["racine"], ids["gid_moteur"])

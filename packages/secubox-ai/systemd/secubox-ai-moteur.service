@@ -25,7 +25,7 @@ AppArmorProfile=secubox-ai-moteur
 EnvironmentFile=/run/secubox-ai/moteur.env
 # Socket laissée par un moteur tombé (ou posée par un autre compte du groupe) : retirée en root.
 ExecStartPre=+/bin/rm -f /run/secubox-ai/moteur.sock
-ExecStart=/usr/lib/secubox/zia-llm/llama-server -m ${MODELE} -c ${CTX} -np 1 -t 4 --jinja --no-webui --host /run/secubox-ai/moteur.sock
+ExecStart=/usr/lib/secubox/zia-llm/llama-server -m ${MODELE} -c ${CTX} -np 1 -t ${THREADS} --jinja --no-webui --host /run/secubox-ai/moteur.sock
 # -np 1 : une seule place ; le budget mémoire de secubox-aictl (cache du contexte) est calculé pour une.
 # llama-server peut ignorer SIGTERM en pleine génération : tué au bout de 8 s (comme le POC).
 TimeoutStopSec=8

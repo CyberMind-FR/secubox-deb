@@ -155,7 +155,7 @@ def env(ctl, tmp_path, monkeypatch):
 def test_memoire_insuffisante_code_4_et_aucune_unite_demarree(ctl, env, capsys):
     env.modele()
     env.prefs('[moteur]\nmodele = "m.gguf"\n')
-    env.memoire(900)                       # 900 − 512 = 388 Mo < 448 Mo (cache du contexte minimal) + poids
+    env.memoire(900)                       # 900 − 512 = 388 Mo < 448 Mo (cache du contexte minimal) + 640 Mo de surcoût
     assert ctl.executer_action("demarrer", "root") == 4
     appels = env.appels()
     assert not any(a.startswith(("start", "set-property", "restart")) for a in appels)
@@ -169,7 +169,7 @@ def test_memoire_insuffisante_code_4_et_aucune_unite_demarree(ctl, env, capsys):
 
 def test_seuil_de_refus_exact(ctl, env):
     f = env.modele()
-    besoin = f.stat().st_size / 1024 ** 2 + PAR_JETON * 4096 / 1024 ** 2
+    besoin = f.stat().st_size / 1024 ** 2 + PAR_JETON * 4096 / 1024 ** 2 + 640   # + surcoût du moteur
     env.memoire(512 + besoin - 1)
     assert ctl.executer_action("demarrer", "root") == 4
     env.memoire(512 + besoin + 1)
@@ -182,12 +182,12 @@ def test_demarrer_env_memorymax_puis_start_et_pret(ctl, env):
     env.memoire(2000)
     assert ctl.executer_action("demarrer", "root") == 0
     poids = f.stat().st_size / 1024 ** 2
-    # Contexte automatique : poids + cache + 300 Mo tiennent dans MemAvailable − 512 Mo.
-    ctx = int((2000 - 512 - 300 - poids) * 1024 ** 2 // PAR_JETON) // 1024 * 1024
-    memmax = math.ceil(poids + PAR_JETON * ctx / 1024 ** 2 + 300)
-    assert ctx == 10240 and memmax <= 2000 - 512
+    # Contexte automatique : poids + cache + 640 Mo (surcoût mesuré ~600) tiennent dans MemAvailable − 512 Mo.
+    ctx = int((2000 - 512 - 640 - poids) * 1024 ** 2 // PAR_JETON) // 1024 * 1024
+    memmax = math.ceil(poids + PAR_JETON * ctx / 1024 ** 2 + 640)
+    assert ctx == 7168 and memmax <= 2000 - 512
     env_txt = (env.run / "moteur.env").read_text()
-    assert env_txt == f"MODELE={env.modeles / 'm.gguf'}\nCTX={ctx}\nMEMMAX={memmax}M\n"
+    assert env_txt == f"MODELE={env.modeles / 'm.gguf'}\nCTX={ctx}\nMEMMAX={memmax}M\nTHREADS={len(os.sched_getaffinity(0))}\n"
     assert stat.S_IMODE((env.run / "moteur.env").stat().st_mode) == 0o640
     appels = env.appels()
     i_prop = appels.index(f"set-property --runtime secubox-ai-moteur.service MemoryMax={memmax}M")
@@ -211,7 +211,7 @@ def test_contexte_borne_a_32768_et_contexte_manuel_jamais_au_dela_de_l_auto(ctl,
     env.memoire(2000)                      # l'automatique tombe à 10 240 : le réglage manuel 16 384 est ramené
     env.prefs('[moteur]\nmodele = "m.gguf"\ncontexte = 16384\n')
     assert ctl.executer_action("demarrer", "root") == 0
-    assert "CTX=10240\n" in (env.run / "moteur.env").read_text()
+    assert "CTX=7168\n" in (env.run / "moteur.env").read_text()
 
 
 def test_redemarrer_arrete_l_ancien_moteur_avant_de_publier_demarrage(ctl, env):
@@ -559,7 +559,7 @@ def test_unite_moteur(ctl):
         assert u[k] == [v], k
     assert u["User"] == ["secubox-ai-moteur"] and u["Group"] == ["secubox-ai"] and u["UMask"] == ["0007"]
     # -np 1 : une seule place, le budget mémoire (cache du contexte) est calculé pour une.
-    assert u["ExecStart"] == ["/usr/lib/secubox/zia-llm/llama-server -m ${MODELE} -c ${CTX} -np 1 -t 4 --jinja "
+    assert u["ExecStart"] == ["/usr/lib/secubox/zia-llm/llama-server -m ${MODELE} -c ${CTX} -np 1 -t ${THREADS} --jinja "
                               "--no-webui --host /run/secubox-ai/moteur.sock"]
     assert u["EnvironmentFile"] == ["/run/secubox-ai/moteur.env"]
     assert u["IPAddressDeny"] == ["any"] and u["PrivateNetwork"] == ["yes"]
@@ -773,3 +773,39 @@ def test_format_retire_jamais_servi_par_le_controleur(ctl):
     assert not ctl.nom_modele_valide("Llama-3.2-3B-Instruct-Q4_0_8_8.gguf")
     assert not ctl.nom_modele_valide("x.q4_0_4_4.gguf")
     assert ctl.nom_modele_valide("Llama-3.2-3B-Instruct-Q4_0.gguf")
+
+
+# ── 0.1.2 : surcoût calibré (mesures gk3), fils du moteur ──
+
+
+
+def test_memmax_au_moins_1500_mo_pour_un_1b_a_4096(ctl, env):
+    # Mesuré sur gk3 : 1B Q4_K_M (770 Mo), contexte 4096, 32 768 o/jeton -> RssAnon 728 + fichier 790 : l'ancien
+    # MemoryMax de 1199 Mo plafonnait le moteur. Surcoût attendu max(640, 0,35 × 770) = 640 Mo.
+    plan = ctl.plan_memoire({"lecture": str(_gguf_1b(env)), "nom": "1b.gguf", "poids_mo": 770.0, "contexte": 4096},
+                            2560)
+    assert plan["ctx"] == 4096 and plan["memmax_mo"] >= 1500
+
+
+def test_3b_sur_2_5_go_refuse_avec_message_memoire(ctl, env):
+    plan = ctl.plan_memoire({"lecture": str(_gguf_1b(env)), "nom": "3b.gguf", "poids_mo": 1945.6, "contexte": 0},
+                            2560)
+    assert "refus" in plan and "mémoire insuffisante" in plan["refus"] and "surcoût" in plan["refus"]
+
+
+def test_threads_zero_tous_les_coeurs_et_valeur_utilisateur_gardee(ctl, env):
+    assert ctl.threads_moteur(0) == len(os.sched_getaffinity(0))
+    assert ctl.threads_moteur(3) == 3
+    env.modele()
+    env.memoire(4000)
+    env.prefs('[moteur]\nmodele = "m.gguf"\nthreads = 3\n')
+    assert ctl.executer_action("demarrer", "root") == 0
+    assert (env.run / "moteur.env").read_text().endswith("THREADS=3\n")
+
+
+def _gguf_1b(env):
+    # 16 couches, 8 têtes KV, 64 + 64 : 32 768 octets de cache par jeton (mesuré sur le vrai 1B)
+    meta = {**LLAMA, "llama.block_count": 16, "llama.attention.key_length": 64, "llama.attention.value_length": 64}
+    f = env.modeles / "1b.gguf"
+    ecrire_gguf(f, meta)
+    return f
