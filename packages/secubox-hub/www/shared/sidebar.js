@@ -571,7 +571,7 @@
         '/auth/': '🔑', '/cdn/': '💾', '/mediaflow/': '🎬', '/portal/': '🚪',
         '/metrics/': '📈', '/certs/': '📜', '/vortex-dns/': '🌀', '/eye-remote/': '👁️',
         '/sentinelle/': '📡', '/lyrion/': '🎵', '/grafana/': '📈',
-        '/zigbee/': '🐝', '/yacy/': '🔍', '/mqtt/': '📡'
+        '/zigbee/': '🐝', '/searxng/': '🔍', '/mqtt/': '📡'
     };
 
     // window._menuDataCache is populated by buildMenu() after the

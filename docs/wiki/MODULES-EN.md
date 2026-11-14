@@ -132,7 +132,7 @@
 | 📡 **SENTINELLE-GSM** | Security | Passive rogue-BTS sensor (MIND layer) |
 | 🧰 **ToolBoX (Cabine)** | Security | Captive AP + consented MITM privacy analyzer |
 | 💻 **VM Manager** | System | Virtualization management |
-| 🔎 **YaCy** | Network | Peer-to-peer search engine |
+| 🔎 **SearXNG** | Network | Internal private metasearch engine (MetaNews component, replaces YaCy) |
 
 ---
 
@@ -723,13 +723,11 @@ SaaS / API proxy relay
 
 ![SaaS Relay](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/saas-relay.png)
 
-#### 🔎 YaCy
+#### 🔎 SearXNG
 
-Peer-to-peer search engine
+Internal private metasearch engine (MetaNews component, replaces YaCy)
 
-**Features:** P2P index, Crawler, Private search, Federation
-
-![YaCy](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/yacy.png)
+**Features:** Unprivileged LXC, Pinned SearXNG commit, Audited reload with rollback, No public exposure
 
 ---
 

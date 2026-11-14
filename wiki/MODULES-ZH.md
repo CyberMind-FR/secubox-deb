@@ -132,7 +132,7 @@
 | 📡 **SENTINELLE-GSM** | Security | 被动式伪基站传感器（MIND 层） |
 | 🧰 **ToolBoX (Cabine)** | Security | 强制门户 AP + 知情同意的 MITM 隐私分析器 |
 | 💻 **VM Manager** | System | 虚拟化管理 |
-| 🔎 **YaCy** | Network | 点对点搜索引擎 |
+| 🔎 **SearXNG** | Network | 内部私有元搜索引擎（MetaNews 组件，取代 YaCy） |
 | 🥾 **网络启动** | System | HTTP/TFTP网络启动配置 + 签名FIT安装程序（Tow-Boot） |
 
 ---
@@ -719,13 +719,11 @@ SaaS / API 代理中继
 
 ![SaaS Relay](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/saas-relay.png)
 
-#### 🔎 YaCy
+#### 🔎 SearXNG
 
-点对点搜索引擎
+内部私有元搜索引擎（MetaNews 组件，取代 YaCy）
 
-**功能:** P2P 索引, 爬虫, 私密搜索, 联邦
-
-![YaCy](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/yacy.png)
+**功能:** 非特权 LXC, 固定的 SearXNG 提交, 可审计的重载与回滚, 不对外公开
 
 ---
 

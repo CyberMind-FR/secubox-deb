@@ -76,6 +76,8 @@ RELAIS_PORTS_NFT="${SECUBOX_RELAIS_PORTS_NFT:-$R/etc/nftables.d/secubox-relais-p
 # écoute 51820 et 51822 : un pair qui les publierait couperait tout le maillage). Même liste dans les Python ci-dessous.
 PORTS_RESERVES=" 22 53 80 443 7331 8085 9080 51820 51822 "
 PORTS_PUBLICS_LOCAL="${SECUBOX_PORTS_PUBLICS_DIR:-$R/var/lib/secubox/ports-publics.d}"
+# Noms de box jamais exposés par admin.<box> d'office (#3638, #3686) : noms de service, du relais, ou noms par défaut.
+readonly NOMS_BOX_RESERVES=" admin hall www apt mail ai api secubox gk2 master maitre relais unknown localhost secubox-mochabin secubox-espressobin "
 
 # VERROU COMMUN avec secubox-pilotage-vhost (#3126, R-L5-30) : flock exclusif sur un fichier root dédié du dossier root des
 # exclusions. Tenu par CE script pendant toute une passe relayer/retirer/synchroniser (lecture des exclusions comprise,
@@ -475,6 +477,13 @@ d = json.load(open(sys.argv[1])); v = d.get(sys.argv[2])
 sys.exit(0 if isinstance(v, list) and v and v[0] != sys.argv[3] else 1)' "$ROUTES" "$1" "$2" 2>/dev/null
 }
 
+# La route de <nom> vise-t-elle exactement <ip> ? (0 : oui) Routes illisibles ou nom absent : non.
+route_vers_ip() {   # route_vers_ip <nom> <ip>
+    python3 -c 'import json,sys
+d = json.load(open(sys.argv[1])); v = d.get(sys.argv[2])
+sys.exit(0 if isinstance(v, list) and v and v[0] == sys.argv[3] else 1)' "$ROUTES" "$1" "$2" 2>/dev/null
+}
+
 # Noms d'un pair (JSON de /public/noms sur l'entrée) ; liste absente ou mal formée : échec, rien n'est ajouté ni retiré.
 # PAIR SANS WEBOS NI PILOTAGE (#3638) : une box en profil mobile n'a pas de webos, donc pas de /public/noms ; sans plan du
 # pilotage, elle n'était jamais exposée. Son nom de box vient alors de wg_mesh.json (celui de la jonction, un seul par IP) :
@@ -684,14 +693,21 @@ PY
 # ── ports bruts relayés (#3154) ──────────────────────────────────────────────
 # Ports d'un pair (JSON de /public/ports sur l'entrée) → lignes « tcp/7881 meet ». Liste absente ou mal formée : échec,
 # rien n'est ajouté ni retiré. Entrée non fiable : tout est revalidé ici.
+# Codes d'échec (#3686, pour un journal exact) : 1 JSON sans liste « ports » valable ; 2 réponse vide ; 3 pas du JSON ;
+# 4 page HTML — un pair SANS webos répond 200 par la page « mauvais domaine » du serveur nginx par défaut (hall.localhost
+# n'y est déclaré par personne), ce n'est pas une liste de ports.
 ports_du_pair() {   # ports_du_pair [--tous] — --tous : garde aussi les ports réservés (l'appelant les refuse et les audite)
     python3 -c 'import json, re, sys
 RESERVES = {22, 53, 80, 443, 7331, 8085, 9080, 51820, 51822}
 tous = "--tous" in sys.argv[1:]
+brut = sys.stdin.read(1 << 20)
+if not brut.strip():
+    sys.exit(2)
 try:
-    liste = json.load(sys.stdin)["ports"]
-except Exception:
-    sys.exit(1)
+    d = json.loads(brut)
+except ValueError:
+    sys.exit(4 if brut.lstrip().startswith("<") else 3)
+liste = d.get("ports") if isinstance(d, dict) else None
 if not isinstance(liste, list):
     sys.exit(1)
 vus = []
@@ -1023,16 +1039,11 @@ except Exception: pass' 2>/dev/null)"
                 log "pair $ip sans webos : noms déclarés par l'agent au pilotage (box $bx), sans retrait"
             fi
         fi
-        # #3638 : ni webos ni pilotage (profil mobile) — admin.<box>, nom de la jonction, s'il répond vraiment ; jamais de retrait.
+        # #3638 : ni webos ni pilotage (profil mobile) — le nom de box vient de la jonction ; seul admin.<box> sera exposé
+        # (bloc #3686 ci-dessous, s'il répond vraiment) ; jamais de retrait.
         # Seulement si le pilotage ne connaît PAS ce pair (code 3) : un plan rejeté ou en désaccord ne laisse rien passer.
-        if [ -z "$dpair" ] && [ "$rc_expo" = 3 ] && bx="$(nom_du_pair_wg "$WG_ETAT" "$ip")" && \
-           [[ " admin hall www apt mail ai api secubox gk2 master maitre relais unknown localhost secubox-mochabin secubox-espressobin " != *" $bx "* ]]; then
-            local c_admin
-            c_admin="$(curl -s -o /dev/null --max-time 6 -w '%{http_code}' -H "Host: admin.$bx.${dom#*.}" "http://$ip:$PORT_PAIR/" || true)"
-            if [[ "$c_admin" =~ ^[23][0-9][0-9]$ ]]; then
-                source=jonction; dpair="$bx.${dom#*.}"; liste="admin.$dpair"
-                log "pair $ip sans webos ni pilotage : admin.$dpair (nom de la jonction), sans retrait"
-            fi
+        if [ -z "$dpair" ] && [ "$rc_expo" = 3 ] && bx="$(nom_du_pair_wg "$WG_ETAT" "$ip")" && [[ "$NOMS_BOX_RESERVES" != *" $bx "* ]]; then
+            source=jonction; dpair="$bx.${dom#*.}"
         fi
         [ -n "$dpair" ] && nom_valide "$dpair" || continue
         if [ "$dpair" = "$dom" ] || [[ "$dpair" == *".$dom" ]] || [[ "$dom" == *".$dpair" ]]; then
@@ -1045,6 +1056,39 @@ except Exception: pass' 2>/dev/null)"
         if [ "$source" = webos ] && ! liste="$(printf '%s' "$json" | noms_du_pair)"; then
             log "pair $ip : liste de noms illisible — rien ajouté ni retiré"; continue
         fi
+        # #3686 — ADMIN.<BOX> D'OFFICE, pour tout pair vivant (ni muet ni à valider : filtrés plus haut) et quelle que soit la
+        # source des autres noms (webos, plan du pilotage, jonction). admin.<box>.<zone> rejoint la liste s'il répond vraiment
+        # (sonde de la jonction : Host admin.<box> sur $PORT_PAIR, 2xx ou 3xx), ou s'il est déjà relayé vers CE pair : il est
+        # alors compté publié et aucune synchronisation ne le retire. Gardes : domaine du pair de la forme <box>.<zone du
+        # relais>, <box> hors des noms réservés ; domaine du relais et domaine tenu par un autre déjà refusés plus haut ; box
+        # « distante » ou exclusion du pilotage (R-L5-27) et route vers une autre cible : rien touché ; libellé admin exclu ou
+        # hors des communs : rien sondé. Quota, certificat et DNS public restent ceux de la boucle ordinaire. Un plan rejeté
+        # ou en désaccord (code 1) n'arrive jamais ici : ni webos, ni pilotage, ni jonction, donc pas de domaine.
+        local adm="admin.$dpair" bxp="${dpair%%.*}" c_admin
+        if [ "$dpair" = "$bxp.${dom#*.}" ] && [[ "$bxp" =~ ^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$ ]] \
+           && [[ "$NOMS_BOX_RESERVES" != *" $bxp "* ]] && [[ " $liste " != *" $adm "* ]] && [[ "$exclus" != *" admin "* ]] \
+           && { [ "$mode" != communs ] || [[ "$labels" == *" admin "* ]]; }; then
+            if route_vers_ip "$adm" "$ip"; then
+                liste="$adm $liste"
+            elif [ "$distante" = 1 ] || nom_exclu_pilotage "$adm"; then
+                log "pair $ip : $adm servi par le pilotage du maître (box distante) — rien touché"
+            elif route_etrangere "$adm" "$ip"; then
+                log "pair $ip : $adm déjà servi ailleurs — rien touché"
+                audit_relais relais_nom_refuse "$adm" "$ip"
+            else
+                c_admin="$(curl -s -o /dev/null --max-time 6 -w '%{http_code}' -H "Host: $adm" "http://$ip:$PORT_PAIR/" || true)"
+                if [[ "$c_admin" =~ ^[23][0-9][0-9]$ ]]; then
+                    liste="$adm $liste"
+                    if [ "$source" = jonction ]; then
+                        log "pair $ip sans webos ni pilotage : $adm (nom de la jonction), sans retrait"
+                    else
+                        log "pair $ip : $adm répond (HTTP $c_admin) — ajouté d'office ($source), sans retrait"
+                    fi
+                fi
+            fi
+        fi
+        # jonction : admin.<box> est son seul nom ; muet, rien à exposer (ni joker DNS, ni certificat)
+        [ "$source" != jonction ] || [ -n "${liste// /}" ] || continue
         # ÉMETTRE UN JOKER PEUT MASQUER LE DNS. Si les noms du pair résolvent
         # par un joker PARENT (*.secubox.in), le défi DNS-01 crée
         # _acme-challenge.<domaine> : le domaine devient un nœud existant et le
@@ -1138,8 +1182,16 @@ except Exception: pass' 2>/dev/null)"
         elif [ "$code" != 200 ]; then
             continue
         fi
-        if ! lignes="$(printf '%s' "$corps" | ports_du_pair --tous)"; then
-            log "pair $ip : liste de ports illisible — rien ajouté ni retiré"; continue
+        local rc_ports=0
+        lignes="$(printf '%s' "$corps" | ports_du_pair --tous)" || rc_ports=$?
+        if [ "$rc_ports" != 0 ]; then
+            case "$rc_ports" in
+                2) log "pair $ip : réponse vide à /public/ports (HTTP $code) — rien ajouté ni retiré" ;;
+                4) log "pair $ip : page HTML au lieu de la liste de ports (pas de webos sur ce pair) — rien ajouté ni retiré" ;;
+                3) log "pair $ip : réponse de /public/ports qui n'est pas du JSON — rien ajouté ni retiré" ;;
+                *) log "pair $ip : liste de ports illisible — rien ajouté ni retiré" ;;
+            esac
+            continue
         fi
         tenus=" "
         while read -r cle mod; do

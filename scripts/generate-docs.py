@@ -1845,19 +1845,19 @@ MODULES = {
             "zh": ["虚拟机生命周期", "控制台", "快照", "资源限制"]
         }
     },
-    "yacy": {
-        "name": "YaCy", "icon": "🔎", "category": "Network",
+    "searxng": {
+        "name": "SearXNG", "icon": "🔎", "category": "Network",
         "description": {
-            "en": "Peer-to-peer search engine",
-            "fr": "Moteur de recherche pair-à-pair",
-            "de": "Peer-to-Peer-Suchmaschine",
-            "zh": "点对点搜索引擎"
+            "en": "Internal private metasearch engine (MetaNews component, replaces YaCy)",
+            "fr": "Métamoteur de recherche privé et interne (composant de MetaNews, remplace YaCy)",
+            "de": "Interne private Metasuchmaschine (MetaNews-Komponente, ersetzt YaCy)",
+            "zh": "内部私有元搜索引擎（MetaNews 组件，取代 YaCy）"
         },
         "features": {
-            "en": ["P2P index", "Crawler", "Private search", "Federation"],
-            "fr": ["Index P2P", "Crawler", "Recherche privée", "Fédération"],
-            "de": ["P2P-Index", "Crawler", "Private Suche", "Föderation"],
-            "zh": ["P2P 索引", "爬虫", "私密搜索", "联邦"]
+            "en": ["Unprivileged LXC", "Pinned SearXNG commit", "Audited reload with rollback", "No public exposure"],
+            "fr": ["LXC non privilégié", "SearXNG au commit figé", "Rechargement audité avec retour arrière", "Aucune exposition publique"],
+            "de": ["Unprivilegierter LXC", "Fixierter SearXNG-Commit", "Auditiertes Neuladen mit Rückfall", "Keine öffentliche Freigabe"],
+            "zh": ["非特权 LXC", "固定的 SearXNG 提交", "可审计的重载与回滚", "不对外公开"]
         }
     },
 }

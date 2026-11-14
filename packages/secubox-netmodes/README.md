@@ -139,6 +139,7 @@ Chaque décision est écrite dans `/var/log/secubox/audit.log` (une ligne JSON, 
 | GET | `/api/v1/netmodes/reseau/ports` | `require_lecture` | aucun : `ip -j link`, `bridge -j fdb`, sysfs |
 | GET | `/api/v1/netmodes/reseau/clients` | `require_jwt` | aucun : baux dnsmasq, table du pont, voisins |
 | GET | `/api/v1/netmodes/reseau/carte` | `require_lecture` | aucun : WAN, `br-lxc`, tunnels WireGuard |
+| GET | `/api/v1/netmodes/reseau/materiel` | `require_lecture` | aucun : sysfs, `ip -j addr`, route par défaut (#3688) |
 
 Corps de `/apercu` et `/appliquer` : `adresse`, `dhcp_debut`, `dhcp_fin`, `bail` (facultatif, 12h), `ports`
 (facultatif, les quatre). La clé `wan` est **refusée** (400) : le WAN reste `eth2`, jamais relancé à distance. Les
@@ -209,6 +210,17 @@ son cadre), l'hôte vérifie l'origine, la fenêtre source et l'onglet. L'en-tê
 qu'il n'est pas actif, un bandeau « LAN temporaire » qui mène à l'onglet Mode routeur. Lien direct : `#carte`,
 `#switch`, `#clients`, `#maillage`, `#routeur`, `#modes`. `?demo=1` (propagé aux onglets) : données de documentation,
 aucune écriture.
+
+**Selon le matériel réel (1.9.0, #3688).** `GET /reseau/materiel` (et le champ `materiel` de `/reseau/carte`) rend ce
+que le noyau expose, sans aucun nom de carte : interfaces physiques (lien `device`), leur genre (`filaire`, `wifi`,
+`conduit_switch` = dossier `dsa/`, `port_switch` = `DEVTYPE=dsa`), état, porteuse, débit, adresses globales et
+passerelle de la route par défaut ; `switch_dsa`, `wan_dedie` (port du switch étiqueté `wan*` ou deux prises Ethernet
+hors switch), `pont_lan` (br-lan présent) et `vue_routeur` (l'un des trois), `modele` du device tree pour l'affichage
+seul. Sur une carte où `vue_routeur` est faux (un Raspberry Pi : eth0 et wlan0), l'API ne lance pas les lectures du WAN
+eth2, de br-lan ni des baux (`sans_objet`, jamais « en panne ») ; l'hôte masque les onglets Switch, Clients LAN et Mode
+routeur et le bandeau du mode routeur, et la Cartographie ne dessine que les interfaces réelles, le maillage, les autres
+tunnels et br-lxc. Rien n'est masqué si le mode routeur est actif, à confirmer, invalide ou en bascule, ni si le
+matériel est illisible (`vue_routeur` null : vue complète). Sur MOCHAbin et ESPRESSObin, rien ne change.
 
 | Onglet | Page | Lit | Agit |
 |---|---|---|---|

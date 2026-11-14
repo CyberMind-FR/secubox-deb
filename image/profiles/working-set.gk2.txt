@@ -149,7 +149,6 @@ watchdog
 webfilter
 webmail
 wireguard
-yacy
 ytsas
 zigbee
 # --- AJOUT MANUEL 2026-10-09 (#2146) : modules des profils lite / isp / full refondus. Chacun est INSTALLE sur gk2 ET gk3 (dpkg) ;

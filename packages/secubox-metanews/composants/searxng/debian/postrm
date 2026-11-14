@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Composant searxng (#3581). La purge retire la configuration, l'état root et l'activation de l'unité ; le conteneur
+# (/data/lxc/searxng) et le secret restent : ils ne se retirent qu'à la main (lxc-destroy, rm), jamais par apt.
+set -e
+case "$1" in
+  remove)
+    deb-systemd-helper mask secubox-searxng.service >/dev/null 2>&1 || true
+    deb-systemd-helper mask secubox-searxng-reload.path >/dev/null 2>&1 || true
+    ;;
+  purge)
+    deb-systemd-helper purge secubox-searxng.service >/dev/null 2>&1 || true
+    deb-systemd-helper unmask secubox-searxng.service >/dev/null 2>&1 || true
+    deb-systemd-helper purge secubox-searxng-reload.path >/dev/null 2>&1 || true
+    deb-systemd-helper unmask secubox-searxng-reload.path >/dev/null 2>&1 || true
+    rm -f /etc/secubox/searxng.toml
+    rm -rf /var/lib/secubox-searxng /var/cache/secubox-searxng /run/secubox/searxng-reload /run/secubox/searxng-reload-resultats
+    ;;
+esac
+exit 0

@@ -106,7 +106,9 @@ func Render(src string) template.HTML {
 	// UNE SEULE FOIS, SUR LE MESSAGE ENTIER (#1328). Le plafond de lecteurs et
 	// le dedoublonnage n'ont de sens qu'a cette echelle : c'est un message qui
 	// cite trois fois la meme video, pas un paragraphe.
-	return template.HTML(lecteursDeLiens(b.String()))
+	// Les cartes de liens (#3713) APRÈS les lecteurs : un lien vidéo devenu
+	// lecteur n'a plus le balisage d'un lien nu et n'est pas touché.
+	return template.HTML(cartesDeLiens(lecteursDeLiens(b.String())))
 }
 
 // inline echappe D'ABORD, puis reintroduit les seules balises produites ici.

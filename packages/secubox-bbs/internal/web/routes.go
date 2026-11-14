@@ -181,7 +181,18 @@ type postView struct {
 	// quand il aboutira. CorrigeMod : edite par quelqu'un d'autre que l'auteur.
 	Editable   bool
 	CorrigeMod bool
+	// Suite (#3713) : même auteur que le message précédent, à moins de
+	// SuiteMax d'écart. Sur téléphone, la série n'a qu'un en-tête : 12 liens
+	// collés par gek en 15 minutes répétaient 12 fois avatar, nom et pastille.
+	Suite bool
+	// PorteeDiffere : la portée du message n'est pas celle du fil. La pastille
+	// « public » sur chaque message d'un fil public n'apprend rien ; seule
+	// l'exception mérite d'être dite.
+	PorteeDiffere bool
 }
+
+// SuiteMax : écart au-delà duquel un message ouvre une nouvelle série (#3713).
+const SuiteMax = 30 * 60
 
 // editForm porte le formulaire d'edition d'un message (#1091) ; nil hors de
 // cette page. Moderation = l'editeur n'est pas l'auteur (correction de sysop),
@@ -1301,9 +1312,11 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 		a, av := s.st.AuteurEtAvatar(po.AuthorID)
 		p.Posts = append(p.Posts, postView{Post: po, Author: a,
 			Initiales: initiales(a), Body: body, Avatar: av,
-			Editable:   store.PeutEditer(p.V.ID, p.V.Role, po.AuthorID),
-			CorrigeMod: po.EditedAt > 0 && po.EditedBy != po.AuthorID})
+			Editable:      store.PeutEditer(p.V.ID, p.V.Role, po.AuthorID),
+			CorrigeMod:    po.EditedAt > 0 && po.EditedBy != po.AuthorID,
+			PorteeDiffere: po.Visibility != t.Visibility})
 	}
+	marquerSuites(p.Posts)
 	for _, c := range p.Cats {
 		if c.ID == t.CategoryID {
 			p.Cat = c
@@ -2484,4 +2497,14 @@ func (s *Server) verifie(handle string, id int64, motDePasse string) bool {
 		return s.authAmont(handle, motDePasse)
 	}
 	return s.auth.Verify(id, motDePasse)
+}
+
+// marquerSuites pose Suite sur chaque message qui prolonge la série du
+// précédent : même auteur, moins de SuiteMax d'écart (#3713).
+func marquerSuites(posts []postView) {
+	for i := 1; i < len(posts); i++ {
+		prec, cur := posts[i-1], posts[i]
+		posts[i].Suite = cur.AuthorID == prec.AuthorID &&
+			cur.CreatedAt >= prec.CreatedAt && cur.CreatedAt-prec.CreatedAt <= SuiteMax
+	}
 }

@@ -1,3 +1,18 @@
+secubox-peertube (1.6.8-1~trixie1) trixie; urgency=medium
+
+  * Dépend de secubox-core >= 1.8.29 : le format de journal sbx_masque
+    n'existe qu'à partir de cette version (1.8.25 à 1.8.28 sont ceux de
+    #3548, sans ce format) ; 1.6.7 retiré du dépôt (ref #3691).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 08:03:52 +0100
+
+secubox-peertube (1.6.7-1~trixie1) trixie; urgency=medium
+
+  * Journal du site au format sbx_masque : le jeton d'accès de socket.io
+    n'est plus écrit en clair ; dépend de secubox-core >= 1.8.25 (ref #3691).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 04:56:40 +0100
+
 secubox-peertube (1.6.6-1~trixie1) trixie; urgency=medium
 
   * /data rendu optionnel dans le bac a sable systemd : sans disque de

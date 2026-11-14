@@ -1,3 +1,9 @@
+secubox-lyrion (1.7.11-1~trixie1) trixie; urgency=low
+
+  * Commentaires : YaCy (retiré) n'est plus cité comme exemple de backend sans SSO (ref #3581).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 12 Nov 2026 11:30:00 +0100
+
 secubox-lyrion (1.7.10-1~trixie1) trixie; urgency=medium
 
   * La page ouverte ne sature plus la box : groupe entier tué au délai, médiathèque mémorisée, pas de lecture par-dessus la précédente, secubox-domaine à la demande (ref #3546).

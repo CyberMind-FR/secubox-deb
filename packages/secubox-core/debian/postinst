@@ -275,6 +275,12 @@ PY
       fi
     fi
 
+    # JETONS DÉJÀ ÉCRITS DANS LES JOURNAUX (#3691) : le format masque les jetons à partir du rechargement ci-dessus ;
+    # ce qui a été journalisé avant est masqué ici, à longueur égale (idempotent, sans effet sur un journal propre).
+    /usr/sbin/secubox-masquer-jetons-journaux || echo "secubox-core : masquage des jetons des journaux nginx incomplet (voir ci-dessus)" >&2
+    # puis toutes les heures : journaux d'erreurs et sites au format « combined », hors de portée du format masqué
+    systemctl enable --now secubox-masquer-jetons-journaux.timer 2>/dev/null || true
+
     systemctl daemon-reload
 
     # Enable runtime directory service (ensures /run/secubox exists before other services)
@@ -298,6 +304,12 @@ PY
     # Shared-dir traversal guard (#630): self-heals the recurring 0750 clobber
     # (from this and other module postinsts) that breaks kbin/toolbox.
     systemctl enable --now secubox-dirs-guard.timer 2>/dev/null || true
+
+    # GARDE DES MINUTERIES (#3692) : dh_installsystemd --no-start arrête les unités d'un paquet pendant sa mise à jour et
+    # ne les relance pas ; trois minuteries de gk2 sont restées mortes des jours sans un mot. Le garde relance toute
+    # minuterie SecuBox ACTIVÉE restée arrêtée (audit), maintenant puis toutes les 10 min.
+    systemctl enable --now secubox-minuteries-garde.timer 2>/dev/null || true
+    /usr/sbin/secubox-minuteries-garde || echo "secubox-core : garde des minuteries : relance incomplète (voir ci-dessus)" >&2
     systemctl start secubox-dirs-guard.service 2>/dev/null || true
 
     # Listes DNS compilees par etiquettes (#3205). Le profil AppArmor AVANT le service ; la premiere passe (adoption des
@@ -348,9 +360,11 @@ REPRISE
     # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
     # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
     # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
-    for _u in secubox-dns-listes.path secubox-dns-listes.timer secubox-dns-listes-contexte.timer; do
-      # #3592 : la minuterie de reprise, nouvelle, est activée à sa première installation.
-      if deb-systemd-helper --quiet was-enabled "$_u" || ! deb-systemd-helper --quiet debian-installed "$_u"; then
+    # #3592 : la minuterie de reprise de 1.8.24 est retirée ; on l'arrête et on efface son activation.
+    if [ -d /run/systemd/system ]; then systemctl stop secubox-dns-listes-contexte.timer 2>/dev/null || true; fi
+    deb-systemd-helper purge secubox-dns-listes-contexte.timer >/dev/null 2>&1 || true
+    for _u in secubox-dns-listes.path secubox-dns-listes.timer; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
         deb-systemd-helper enable "$_u" >/dev/null || true
       else
         deb-systemd-helper update-state "$_u" >/dev/null || true
@@ -358,7 +372,7 @@ REPRISE
     done
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload 2>/dev/null || true
-        systemctl start secubox-dns-listes.path secubox-dns-listes.timer secubox-dns-listes-contexte.timer 2>/dev/null || true
+        systemctl start secubox-dns-listes.path secubox-dns-listes.timer 2>/dev/null || true
         [ -d /etc/unbound/unbound.conf.d ] && systemctl start --no-block secubox-dns-listes.service 2>/dev/null || true
     fi
 

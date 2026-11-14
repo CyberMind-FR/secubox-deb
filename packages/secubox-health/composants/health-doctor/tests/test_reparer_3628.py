@@ -19,6 +19,8 @@ FAUX_SYSTEMCTL = r"""#!/usr/bin/env bash
 echo "$*" >> "$FAUX/appels"
 case "$1" in
   show) prop=$3; unite=${@: -1}
+        case $prop in TriggeredBy) cat "$FAUX/$unite.declencheur" 2>/dev/null; exit 0;;
+                      UnitFileState) cat "$FAUX/$unite.fichier" 2>/dev/null || echo static; exit 0;; esac
         f="$FAUX/$unite.etat"; [ -f "$f" ] || { case $prop in LoadState) echo not-found;; *) echo inactive;; esac; exit 0; }
         read -r l a s r < "$f"
         case $prop in LoadState) echo "$l";; ActiveState) echo "$a";; SubState) echo "$s";; Result) echo "$r";; esac ;;
@@ -302,3 +304,28 @@ def test_entree_cachee_datee_du_futur_retiree(tmp_path):
     os.utime(f, (4102444800, 4102444800))    # 2100
     assert _run(env, "process-ops").returncode == 0
     assert not f.exists()
+
+
+def test_minuterie_activee_arretee_relancee_avec_son_service(tmp_path):
+    """#3692 : mail-imap-sync en panne, sa minuterie activée était morte depuis 6 jours ; « Réparer » la relance aussi."""
+    env = _env(tmp_path)
+    _unite(tmp_path, "mail-imap-sync", "loaded failed failed exit-code", apres="loaded inactive dead success")
+    faux = tmp_path / "faux"
+    (faux / "secubox-mail-imap-sync.service.declencheur").write_text("secubox-mail-imap-sync.timer\n")
+    (faux / "secubox-mail-imap-sync.timer.fichier").write_text("enabled\n")
+    (faux / "secubox-mail-imap-sync.timer.etat").write_text("loaded inactive dead success\n")
+    r = _run(env, "reparer", "mail-imap-sync", "gk2")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "start -- secubox-mail-imap-sync.timer" in _appels(tmp_path)
+    assert any("minuterie secubox-mail-imap-sync.timer relancée" in x
+               for x in _etat(tmp_path)["modules"]["mail-imap-sync"]["etapes"])
+
+
+def test_minuterie_desactivee_jamais_relancee(tmp_path):
+    env = _env(tmp_path)
+    _unite(tmp_path, "healthbump", "loaded failed failed exit-code", apres="loaded inactive dead success")
+    faux = tmp_path / "faux"
+    (faux / "secubox-healthbump.service.declencheur").write_text("secubox-healthbump.timer\n")
+    (faux / "secubox-healthbump.timer.fichier").write_text("disabled\n")
+    _run(env, "reparer", "healthbump", "gk2")
+    assert "secubox-healthbump.timer" not in _appels(tmp_path).replace("show -p UnitFileState --value -- secubox-healthbump.timer", "")

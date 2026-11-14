@@ -1,3 +1,22 @@
+secubox-bbs (0.37.16-1~trixie1) trixie; urgency=medium
+
+  * Fil lisible sur smartphone (ref #3713) : en-tête de 52 px qui se cache en
+    descendant ; les colonnes passent dans un tiroir ouvert par ☰ (elles
+    s'empilaient au-dessus de l'article) ; messages d'un même auteur à moins
+    de 30 min regroupés sous un seul en-tête ; pastille de portée affichée
+    seulement si elle diffère du fil ; actions du fil repliées dans « ⋯ » ;
+    barre « Répondre… » en bas ; « Partager » si le navigateur sait partager.
+  * Un lien seul dans son paragraphe devient une carte (service, titre,
+    domaine), déduite de l'adresse sans requête vers le site distant.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 10:44:30 +0100
+
+secubox-bbs (0.37.15-1~trixie1) trixie; urgency=medium
+
+  * bbsctl user-role <pseudo> <sysop|member|guest> : changer le rôle d'un compte (Store.ChangerRole) ; refus d'un rôle inconnu, d'un compte désactivé et de la rétrogradation du dernier sysop, trace dans l'audit (ref #3709).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 13 Nov 2026 07:55:09 +0100
+
 secubox-bbs (0.37.14-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

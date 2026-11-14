@@ -1,0 +1,11 @@
+{
+  "subtitle": "Métamoteur de recherche interne",
+  "icon": "🔎",
+  "order": 61,
+  "id": "searxng",
+  "name": "SearXNG",
+  "path": "/searxng/",
+  "category": "mesh",
+  "description": "Recherche agrégée par SearXNG, en conteneur LXC, sans exposition publique",
+  "theme": "veille"
+}

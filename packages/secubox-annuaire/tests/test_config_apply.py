@@ -30,17 +30,17 @@ def _blob(scope, version, text, publisher="did:plc:" + "a" * 32):
 def test_apply_writes_target_and_keeps_rollback(tmp_path):
     state = {}
     text1 = '[peer]\nmode = "freeworld"\n'
-    r = apply_blob(_blob("yacy", 1, text1), str(tmp_path), state)
+    r = apply_blob(_blob("searxng", 1, text1), str(tmp_path), state)
     assert r["status"] == "applied" and r["version"] == 1
-    active = tmp_path / "yacy.toml"
+    active = tmp_path / "searxng.toml"
     assert active.read_text() == text1
-    assert state["yacy"]["version"] == 1
+    assert state["searxng"]["version"] == 1
     # a newer version supersedes and snapshots the previous active to rollback
     text2 = '[peer]\nmode = "intranet"\n'
-    r2 = apply_blob(_blob("yacy", 2, text2), str(tmp_path), state)
+    r2 = apply_blob(_blob("searxng", 2, text2), str(tmp_path), state)
     assert r2["status"] == "applied"
     assert active.read_text() == text2
-    assert (tmp_path / "yacy.toml.sbx-rollback").read_text() == text1
+    assert (tmp_path / "searxng.toml.sbx-rollback").read_text() == text1
 
 
 def test_apply_idempotent_by_version(tmp_path):
@@ -111,23 +111,23 @@ def test_apply_pending_allowlist_and_self_skip(tmp_path):
     state_path = str(tmp_path / "applied.json")
     me = "did:plc:" + "f" * 32
     configs = [
-        _blob("yacy", 1, "a = 1\n"),                       # allowed, other publisher
+        _blob("searxng", 1, "a = 1\n"),                       # allowed, other publisher
         _blob("dns", 1, "b = 2\n"),                        # NOT allowed
         _blob("waf", 1, "c = 3\n", publisher=me),          # allowed scope but self-published
     ]
     results = apply_pending(
-        configs, allow_scopes={"yacy", "waf"}, self_did=me,
+        configs, allow_scopes={"searxng", "waf"}, self_did=me,
         target_dir=str(tmp_path), state_path=state_path,
     )
     by = {r["scope"]: r for r in results}
-    assert by["yacy"]["status"] == "applied"
+    assert by["searxng"]["status"] == "applied"
     assert by["dns"]["status"] == "skip" and by["dns"]["reason"] == "not-allowed"
     assert by["waf"]["status"] == "skip" and by["waf"]["reason"] == "self-published"
-    assert (tmp_path / "yacy.toml").exists()
+    assert (tmp_path / "searxng.toml").exists()
     assert not (tmp_path / "dns.toml").exists()
     assert not (tmp_path / "waf.toml").exists()
     # state persisted for the applied scope
-    assert load_state(state_path)["yacy"]["version"] == 1
+    assert load_state(state_path)["searxng"]["version"] == 1
 
 
 def test_apply_pending_wildcard_allows_all(tmp_path):

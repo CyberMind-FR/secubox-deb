@@ -40,7 +40,6 @@ CONF_D = Path("/etc/unbound/unbound.conf.d")
 REGLAGES = Path("/etc/secubox/dns-listes.toml")
 MODES = ("compile", "direct")
 REESSAI_S = 3600          # un échec sur les MÊMES entrées n'est retenté qu'après ce délai (minuterie quotidienne, ou entrée nouvelle)
-CONTEXTE_DELAI_S = 900    # contexte seul changé (vue TV, réseau) : pas plus d'une compilation par délai (#3592)
 PASSES_MAX = 3            # une source déposée PENDANT la compilation est reprise (systemd ne relance pas une unité active)
 _CODE = (Path(listes.__file__), Path(__file__))     # une mise à jour du compilateur impose de recompiler
 
@@ -215,10 +214,19 @@ def _adopter(sources: Path, conf_d: Path) -> list:
     return adoptes
 
 
-def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bool = False) -> tuple:
+def _lire_meta(meta: Optional[Path]) -> Optional[dict]:
+    try:
+        return json.loads(Path(meta).read_text(encoding="utf-8")) if meta else None
+    except (OSError, ValueError):
+        return None
+
+
+def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bool = False,
+           meta: Optional[Path] = None, contexte_seul: bool = False) -> tuple:
     presentes = [sources / n for n in listes.SOURCES_CONNUES if (sources / n).is_file()]
     stats: dict = {}
     changements: dict = {}
+    nouvelle_meta = None
     if mode == "direct":
         for p in presentes:                       # retour arrière, mais pas un passe-droit : mêmes directives permises qu'à la compilation
             listes.lire([p], sources=[p.name])
@@ -227,13 +235,30 @@ def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bo
         changements[conf_d / listes.SORTIE] = None
     else:
         if presentes:
-            texte, stats = listes.compiler(presentes, fichiers_contexte(conf_d))
+            r = None
+            # RETOUCHE (#3548) : sources inchangées, seul le contexte bouge (une TV change d'adresse) : on repose les
+            # lignes d'adresses du 92 en place, sans recompiler. Tout autre cas, ou un doute : compilation complète.
+            if contexte_seul and meta and (conf_d / listes.SORTIE).is_file():
+                with contextlib.suppress(OSError, ValueError, listes.ErreurListes):
+                    r = listes.retoucher((conf_d / listes.SORTIE).read_text(encoding="utf-8"), _lire_meta(meta),
+                                         fichiers_contexte(conf_d))
+            if r is None:
+                texte, stats = listes.compiler(presentes, fichiers_contexte(conf_d))
+                nouvelle_meta = stats.pop("retouche", None)
+            else:
+                texte, stats = r
             changements[conf_d / listes.SORTIE] = texte
         else:
             changements[conf_d / listes.SORTIE] = None
         for n in listes.SOURCES_CONNUES:
             changements[conf_d / n] = None
-    return poser_vues(changements, s, forcer=forcer), stats, len(presentes)
+    if meta and mode == "direct":
+        with contextlib.suppress(OSError):
+            Path(meta).unlink()
+    r = poser_vues(changements, s, forcer=forcer)
+    if meta and nouvelle_meta is not None:              # après une pose réussie seulement : la méta décrit le 92 en place
+        ecrire_atomique(Path(meta), json.dumps(nouvelle_meta, ensure_ascii=False), 0o644, erreur=ErreurDepot)
+    return r, stats, len(presentes)
 
 
 def appliquer(systeme: Optional[SystemeUnbound] = None, sources: Path = SOURCES, conf_d: Path = CONF_D, etat: Path = ETAT,
@@ -271,29 +296,27 @@ def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, 
         adoptes = _adopter(sources, conf_d)
         sig = _signature(sources, conf_d, mode)
         if not interrompu and precedent.get("signature") == sig:
-            if precedent.get("etat") in ("applique", "inchange", "differe"):
-                return _noter(etat, {**{k: precedent[k] for k in ("stats", "passes", "t_compile") if k in precedent},
+            if precedent.get("etat") in ("applique", "inchange"):
+                return _noter(etat, {**{k: precedent[k] for k in ("stats", "passes") if k in precedent},
                                      "etat": "inchange", "mode": mode, "adoptes": [], "signature": sig,
                                      "t": int(maintenant())})
             t_echec = precedent.get("t_echec")
             if precedent.get("etat") == "erreur" and isinstance(t_echec, int) and maintenant() - t_echec < REESSAI_S:
                 return _noter(etat, {**precedent, "t": int(maintenant())})       # mêmes entrées, même échec : pas avant REESSAI_S
-        # CONTEXTE SEUL (#3592) : TV Privacy réécrit sa vue toutes les quelques minutes ; chaque écriture relançait une
-        # compilation complète (5 à 8 min de CPU sur gk2). Sources, mode et code inchangés, dernière compilation récente :
-        # on diffère sans toucher la signature notée, la minuterie (secubox-dns-listes-contexte.timer) reprend plus tard.
-        anc = precedent.get("signature") or {}
-        t_compil = precedent.get("t_compile", precedent.get("t"))
-        if (not interrompu and precedent.get("etat") in ("applique", "inchange", "differe")
-                and all(anc.get(k) == sig.get(k) for k in ("mode", "code", "sources", "poses"))
-                and anc.get("contexte") != sig.get("contexte")
-                and isinstance(t_compil, int) and maintenant() - t_compil < CONTEXTE_DELAI_S):
-            return _noter(etat, {**precedent, "etat": "differe", "t": int(maintenant())})
         _noter(etat, {"etat": "en-cours", "mode": mode, "adoptes": adoptes, "t": int(maintenant())})
-        applique, stats, nb, passes = False, {}, 0, 0
+        applique, stats, nb, passes, entrees_prec = False, {}, 0, 0, None
         while True:
             passes += 1
             avant = _entrees(sources, conf_d, mode)
-            r, stats, nb = _passe(s, mode, sources, conf_d, forcer=interrompu)
+            # Passe 1 : comparée à la signature notée. Passes suivantes (le contexte a bougé PENDANT la compilation, une TV
+            # a changé d'adresse) : comparée aux entrées de la passe d'avant, dont la méta décrit le 92 qu'elle vient de poser.
+            anc = (precedent.get("signature") or {}) if passes == 1 else (entrees_prec or {})
+            seul = (not interrompu and isinstance(anc, dict)
+                    and all(anc.get(k) == avant.get(k) for k in ("mode", "code", "sources"))
+                    and (passes > 1 or anc.get("poses") == _poses(conf_d)))
+            entrees_prec = avant
+            r, stats, nb = _passe(s, mode, sources, conf_d, forcer=interrompu,
+                                  meta=Path(etat).with_name("retouche.json"), contexte_seul=seul)
             interrompu = False
             applique = applique or r == "applique"
             if passes >= PASSES_MAX or _entrees(sources, conf_d, mode) == avant:
@@ -312,5 +335,4 @@ def _appliquer_tenu(s: SystemeUnbound, sources: Path, conf_d: Path, etat: Path, 
         s.audit("listes", f"mode={mode} sources={nb} emis={stats.get('emis', '-')} "
                           f"avant={stats.get('zones_chargees_avant', '-')} adoptes={','.join(adoptes) or '-'} passes={passes}")
     return _noter(etat, {"etat": "applique" if applique else "inchange", "mode": mode, "stats": stats, "adoptes": adoptes,
-                         "passes": passes, "signature": {**avant, "poses": _poses(conf_d)}, "t": int(maintenant()),
-                         "t_compile": int(maintenant())})
+                         "passes": passes, "signature": {**avant, "poses": _poses(conf_d)}, "t": int(maintenant())})

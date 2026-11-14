@@ -451,7 +451,7 @@ def main(argv=None) -> int:
     pp.set_defaults(fn=cmd_pull)
 
     pc = sub.add_parser("publish-config", help="publish a signed config blob (primary/home node)")
-    pc.add_argument("--scope", required=True, help="module name the config configures, e.g. yacy")
+    pc.add_argument("--scope", required=True, help="module name the config configures, e.g. searxng")
     pc.add_argument("--version", type=int, required=True, help="monotonic; higher wins")
     pc.add_argument("--file", help="TOML file to publish (default: read stdin)")
     pc.set_defaults(fn=cmd_publish_config)

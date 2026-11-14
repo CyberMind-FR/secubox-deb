@@ -12,7 +12,7 @@
 # `À documenter` signifie que la donnee est absente du depot, jamais
 # qu'elle est inconnue de l'auteur : c'est une tache, pas une lacune de
 # redaction.
-# modules: 172
+# modules: 171
 
 modules:
   - id: secubox-acces
@@ -7034,40 +7034,6 @@ modules:
       presente: true
       chemin: "/srv/secubox/www/wireguard"
       vhosts: []
-  - id: secubox-yacy
-    nom: "secubox-yacy"
-    categorie: "network"
-    tier: "lite"
-    description: "SecuBox YaCy — peer-to-peer search engine"
-    manifeste: true
-    lxc: true
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli:
-      - "yacyctl"
-    systemd:
-      - "secubox-yacy.service"
-    ports:
-      - "9080"
-    documentation:
-      - "README.md"
-    api:
-      socket: "À documenter"
-      health: "À documenter"
-      authentifie: false
-      nb_routes: 5
-      routes:
-        - "GET /access"
-        - "GET /components"
-        - "GET /healthz"
-        - "GET /status"
-        - "GET /version"
-    interface_web:
-      presente: true
-      chemin: "À documenter"
-      vhosts:
-        - "yacy.gk2.secubox.in"
   - id: secubox-ytsas
     nom: "secubox-ytsas"
     categorie: "mind"

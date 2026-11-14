@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# /etc/secubox/searxng.toml — composant SearXNG de secubox-metanews (#3581).
+# Après modification : « searxngctl reload » (ou le bouton de la page /searxng/) régénère settings.yml en double tampon.
+# Une clé inconnue est REFUSÉE (une faute de frappe ne passe pas en silence). Le secret de SearXNG n'est jamais ici :
+# il est généré par « searxngctl install » dans /etc/secubox/secrets/searxng/.
+
+# ── Conteneur LXC (non privilégié, Debian de l'hôte : trixie aujourd'hui) ──────────────────────────────
+[lxc]
+name          = "searxng"
+ip            = "10.100.0.85"     # réseau br-lxc 10.100.0.0/24 ; yacy = .80
+gateway       = "10.100.0.1"
+bridge        = "br-lxc"
+path          = "/data/lxc"
+memoire_max   = "384M"            # plafond dur (cgroup) ; gk2 n'a qu'environ 900 Mio disponibles
+memoire_haute = "320M"            # au-delà, le noyau récupère la mémoire du conteneur avant le plafond
+dns           = ["1.1.1.1", "9.9.9.9"]
+# Suite Debian du conteneur : celle de l'hôte (dernière stable), jamais figée ici (#3285). Surcharge ponctuelle :
+# SECUBOX_DEBIAN_SUITE dans l'environnement de « searxngctl install ».
+
+# ── SearXNG (dans le conteneur) ───────────────────────────────────────────────────────────────────────
+[searxng]
+port                 = 8888       # sur l'adresse du conteneur seulement ; aucune exposition publique
+instance_name        = "SecuBox"
+langue               = "fr"       # ui.default_locale et langue des recherches de l'API
+safe_search          = 0          # 0 aucun, 1 modéré, 2 strict
+request_timeout      = 3.0        # délai d'un moteur (s)
+max_request_timeout  = 6.0        # délai maximal d'une recherche (s)
+ban_time_on_fail     = 5          # suspension d'un moteur en échec (s), doublée à chaque échec…
+max_ban_time_on_fail = 120        # … jusqu'à ce plafond (s) : on n'insiste pas auprès d'un moteur qui répond « trop de requêtes »
+# Moteurs désactivés (noms SearXNG, ex. "brave", "google") ; les autres gardent le réglage par défaut de SearXNG.
+moteurs_desactives   = []

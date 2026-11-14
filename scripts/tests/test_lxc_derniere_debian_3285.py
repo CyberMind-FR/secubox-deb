@@ -35,7 +35,6 @@ CREATEURS_SHELL = [
     "packages/secubox-jellyfin/lib/jellyfin/install-lxc.sh",
     "packages/secubox-jitsi/lib/jitsi/install-lxc.sh",
     "packages/secubox-lyrion/lib/lyrion/install-lxc.sh",
-    "packages/secubox-metanews/composants/yacy/lib/yacy/install-lxc.sh",
     "packages/secubox-metrics/composants/grafana/lib/grafana/install-lxc.sh",
     "packages/secubox-mqtt/composants/zigbee/lib/zigbee/install-lxc.sh",
     "packages/secubox-mqtt/lib/mqtt/install-lxc.sh",
@@ -63,6 +62,9 @@ HORS_CHAMP = {
     "packages/secubox-mail/lib/mail/install.sh",
     # La Suite Meet : déjà créée en trixie (pas de bookworm), hors de ce lot.
     "packages/secubox-meet/lib/meet/install-lxc.sh",
+    # SearXNG (#3581) : créateur Python avec sa propre suite_debian() (os-release, repli trixie,
+    # SECUBOX_DEBIAN_SUITE), vérifiée par composants/searxng/tests ; pas le helper shell commun.
+    "packages/secubox-metanews/composants/searxng/sbin/searxngctl",
     # Image du live netboot, pas un conteneur.
     "packages/secubox-netboot/scripts/build-live-leger.sh",
 }

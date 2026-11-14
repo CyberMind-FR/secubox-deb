@@ -31,7 +31,7 @@ Examples:
 | Add a module | Don't add a module |
 |---|---|
 | Grafana dashboards backed by a Grafana LXC | A new dashboard JSON for the existing `secubox-metrics` module |
-| YaCy peer search engine | A YaCy crawl-result viewer that lives in `secubox-hub` |
+| SearXNG metasearch engine | A search-result viewer that lives in `secubox-hub` |
 | RustDesk relay | A `wireguard add peer rustdesk-relay` verb on the existing VPN module |
 
 ---
@@ -113,7 +113,7 @@ The SecuBox LXC bridge is `br-lxc` on `10.100.0.0/24`. Allocations:
 | `.30` | (reserved) |
 | `.40` | gitea |
 | `.70` | grafana (planned, #229) |
-| `.80` | yacy (planned, #230) |
+| `.85` | searxng (#3581) |
 | `.90` | rustdesk (planned, #231) |
 
 Pick the next free `.X` above the current high-water mark. Reserve the IP in
@@ -180,7 +180,7 @@ touch /var/lib/secubox/<module>/.lxc-provisioned
 Ship configuration that the operator expects out-of-the-box:
 
 - Grafana dashboards (`.json`), datasource yaml.
-- YaCy peer seed list, blacklist, default crawl profile.
+- SearXNG `settings.yml` (generated from `/etc/secubox/searxng.toml`).
 - RustDesk key material is generated, not shipped — but a `key generate` wrapper goes here.
 
 Provisioned content is read-only after install; user customisation lives in
@@ -193,7 +193,7 @@ SecuBox system image. The package ships only the install script; the
 operator runs `<module>ctl install` post-firstboot.
 
 This keeps the v2.10.x image at ~8 GB. Modules requiring large daemons
-(grafana, yacy, rustdesk) follow this rule. Compact LXCs (≤ ~50 MB)
+(grafana, rustdesk) follow this rule. Compact LXCs (≤ ~50 MB)
 can pre-build during image construction.
 
 ---
@@ -620,7 +620,7 @@ beyond the mandatory lifecycle above. Examples in flight:
 
 ```text
 grafanactl   dashboard list/add/remove/export        # OPS MONITORING (#230)
-yacyctl      index     status/build/clear/optimize   # SEARCH (#232)
+searxngctl   engines   list/status                   # SEARCH (#3581)
 rustdeskctl  peer      add/remove/list               # REMOTE-ACCESS (#234)
 ```
 
