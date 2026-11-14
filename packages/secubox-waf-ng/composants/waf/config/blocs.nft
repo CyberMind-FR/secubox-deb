@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Bans de bloc /24 du WAF (#3716) : table À PART, hors de `inet secubox`.
+#
+# Les ensembles waf_ban{,6} de sbxwaf n'ont pas le drapeau `interval` et leurs
+# lecteurs attendent des adresses ; sbxwaf vide et recrée sa chaîne waf_drop à
+# chaque démarrage. Une table séparée ne touche à rien de cela et ne peut pas
+# être effacée par lui.
+#
+# Priorité -101 : juste avant waf_drop (-100), même crochet `input` (HAProxy sur
+# l'hôte). Les éléments sont posés par `waf-blocs ajouter` et rejoués avec leur
+# temps restant par `waf-blocs reappliquer` (unité secubox-waf-blocs, qui suit
+# les rechargements de nftables.service).
+#
+# Fichier REJOUABLE (idiome du rate-limit, #1362) : `table` crée la table si
+# absente, `delete` la retire, la définition la repose neuve et VIDE.
+table inet secubox_waf_blocs
+delete table inet secubox_waf_blocs
+
+table inet secubox_waf_blocs {
+    set blocs4 {
+        type ipv4_addr
+        flags interval, timeout
+        counter
+    }
+
+    chain entree {
+        type filter hook input priority -101; policy accept;
+        ip saddr @blocs4 counter drop
+    }
+}

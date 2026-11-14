@@ -1,6 +1,6 @@
 # /etc/sudoers.d/secubox-waf — droits délégués au compte de service `secubox`.
 #
-# Deux capacités, chacune limitée à un jeu de verbes précis. Ni accès root, ni
+# Chaque capacité est limitée à un jeu de verbes précis. Ni accès root, ni
 # contrôle des services.
 #
 # ── 1. Purge du cache média du WAF ───────────────────────────────────────────
@@ -48,10 +48,25 @@ Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
                             /usr/sbin/wafctl anti-robots on *, \
                             /usr/sbin/wafctl anti-robots off *
 
+# ── 5. Bans de bloc /24 (#3716) ─────────────────────────────────────────────
+#
+# Poser et retirer un ban de bloc (table nft à part inet secubox_waf_blocs),
+# lister les blocs. `wafctl` exige le nombre exact d'arguments et la forme de la
+# durée ; `waf-blocs`, en root, refuse tout ce qui n'est pas un /24 canonique,
+# le privé, les plages de protegees.env, les adresses de la box et les pairs
+# WireGuard, et borne la durée de 1 h à 7 j. Passage par systemd-run : l'état
+# /var/lib/secubox-waf-blocs est hors des ReadWritePaths de l'agrégateur (même
+# raison que secubox-profiles). La gestion des clés du compte ai-ban, elle,
+# n'est PAS ici : elle reste au propriétaire, en root.
+Cmnd_Alias SBX_WAF_BLOCS = /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/wafctl ban-bloc *, \
+                           /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/wafctl unban-bloc *, \
+                           /usr/sbin/wafctl blocs
+
 secubox ALL=(root) NOPASSWD: SBX_WAF_PURGE
 secubox ALL=(root) NOPASSWD: SBX_WAF_ROBOTS
 secubox ALL=(root) NOPASSWD: SBX_WAF_NFTLIST
 secubox ALL=(root) NOPASSWD: SBX_WAF_BANMANUEL
+secubox ALL=(root) NOPASSWD: SBX_WAF_BLOCS
 
 # Déclenché depuis une minuterie (pas de terminal) et tracé.
 Defaults!SBX_WAF_PURGE !requiretty
@@ -60,3 +75,7 @@ Defaults!SBX_WAF_PURGE log_output
 # Action d'opérateur passant par une API : on trace la sortie.
 Defaults!SBX_WAF_ROBOTS !requiretty
 Defaults!SBX_WAF_ROBOTS log_output
+
+# Geste de sécurité passant par une API : sans terminal, sortie tracée.
+Defaults!SBX_WAF_BLOCS !requiretty
+Defaults!SBX_WAF_BLOCS log_output

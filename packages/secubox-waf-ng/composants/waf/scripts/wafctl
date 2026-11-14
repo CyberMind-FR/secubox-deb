@@ -142,7 +142,7 @@ lxc.net.0.ipv4.gateway = 10.100.0.1
 # Routes: bind-mount the host-maintained haproxy routes DIRECTORY into the
 # container; the addon reads /etc/secubox/waf/haproxy-routes.json via a symlink
 # into it (created below). A *directory* mount (not a file mount) is required
-# so route tools that edit via `jq > tmp && mv` (new inode) stay visible — a
+# so route tools that edit via « jq > tmp && mv » (new inode) stay visible — a
 # file mount binds one inode and goes stale on mv (#609, was #603). Combined
 # with the addon's mtime live-reload, route edits apply with no restart.
 lxc.mount.entry = /srv/mitmproxy var/lib/secubox-waf-routes none bind,ro,create=dir 0 0
@@ -324,8 +324,10 @@ cmd_anti_robots() {
     local filtre tmp
     if [ "$action" = "on" ]; then
         # unique : cocher deux fois ne doit pas dupliquer la ligne.
+        # shellcheck disable=SC2016  # $h est une variable jq, pas du shell
         filtre='.anti_robots = ((.anti_robots // []) + [$h] | unique)'
     else
+        # shellcheck disable=SC2016  # $h est une variable jq, pas du shell
         filtre='.anti_robots = ((.anti_robots // []) - [$h])'
     fi
 
@@ -392,8 +394,40 @@ print(6 if a.version == 6 else 4)
 PY
 }
 
+# _secondes <durée> — 30m, 4h, 1d… en secondes sur la sortie ; rend 1 si la forme
+# est fausse. Base 10 forcée (« 08h » n'est pas de l'octal) et 7 chiffres au plus
+# (pas de dépassement de l'arithmétique du shell).
+_secondes() {
+    local duree="$1" nombre
+    [[ "$duree" =~ ^[0-9]+[smhd]$ ]] || return 1
+    nombre="${duree%[smhd]}"
+    [ "${#nombre}" -le 7 ] || return 1
+    case "${duree: -1}" in
+        s) echo $((10#$nombre)) ;;
+        m) echo $((10#$nombre * 60)) ;;
+        h) echo $((10#$nombre * 3600)) ;;
+        d) echo $((10#$nombre * 86400)) ;;
+    esac
+}
+
+# _garde <cible> — `waf-blocs verifier` en root (#3716) : jamais le privé, une
+# plage protégée, une adresse de la box ni un pair WireGuard, pour TOUT ban.
+# Toute sortie non nulle refuse, y compris un script absent ou une réponse
+# illisible (garde_illisible) ; le motif part sur stderr en « refus:<motif> ».
+_garde() {
+    local sortie="" motif=""
+    if sortie=$(/usr/sbin/waf-blocs verifier "$1" 2>/dev/null); then
+        return 0
+    fi
+    motif=$(printf '%s' "$sortie" | jq -r '.motif // empty' 2>/dev/null) || motif=""
+    [[ "$motif" =~ ^[a-z_]{1,32}$ ]] || motif="garde_illisible"
+    printf 'refus:%s\n' "$motif" >&2
+    return 1
+}
+
 cmd_ban() {
-    local ip="$1" duree="${2:-4h}" version
+    local ip="$1" duree="${2:-4h}" version secondes
+    _garde "$ip" || return 1
     version=$(_valide_ip "$ip") || {
         case $? in
             2) error "Adresse privée refusée : $ip" ;;
@@ -401,18 +435,10 @@ cmd_ban() {
         esac
         return 1
     }
-    if ! [[ "$duree" =~ ^[0-9]+[smhd]$ ]]; then
+    if ! secondes=$(_secondes "$duree"); then
         error "Durée invalide : $duree (attendu 30m, 4h, 1d…)"
         return 1
     fi
-    local secondes unite nombre
-    nombre="${duree%[smhd]}"; unite="${duree: -1}"
-    case "$unite" in
-        s) secondes=$nombre ;;
-        m) secondes=$((nombre * 60)) ;;
-        h) secondes=$((nombre * 3600)) ;;
-        d) secondes=$((nombre * 86400)) ;;
-    esac
     local ensemble="waf_ban"
     [ "$version" = "6" ] && ensemble="waf_ban6"
     if nft add element inet "$NFT_TABLE" "$ensemble" "{ $ip timeout ${secondes}s }" 2>/dev/null; then
@@ -434,6 +460,34 @@ cmd_unban() {
     log "unban $ip"
 }
 
+# cmd_ban_bloc / cmd_unban_bloc / cmd_blocs — bans de bloc /24 (#3716).
+#
+# Délégués à waf-blocs (root), qui tient la table nft à part
+# inet secubox_waf_blocs, son état et l'audit. Ici, seulement ce que le droit
+# sudo (« ban-bloc * ») ne borne pas : le NOMBRE d'arguments et la forme de la
+# durée. Réponse : une ligne JSON {"ok", "motif", …}, comme waf-blocs.
+_json_refus() {
+    printf '{"ok": false, "motif": "%s"}\n' "$1"
+    exit "$2"
+}
+
+cmd_ban_bloc() {
+    [ "$#" -eq 2 ] || _json_refus usage 64
+    local secondes
+    secondes=$(_secondes "$2") || _json_refus duree 8
+    exec /usr/sbin/waf-blocs ajouter "$1" "$secondes"
+}
+
+cmd_unban_bloc() {
+    [ "$#" -eq 1 ] || _json_refus usage 64
+    exec /usr/sbin/waf-blocs retirer "$1"
+}
+
+cmd_blocs() {
+    [ "$#" -eq 0 ] || _json_refus usage 64
+    exec /usr/sbin/waf-blocs lister
+}
+
 case "${1:-}" in
     status)     cmd_status ;;
     components) cmd_components ;;
@@ -449,6 +503,9 @@ case "${1:-}" in
     anti-robots) cmd_anti_robots "${2:-}" "${3:-}" ;;
     ban)        cmd_ban "${2:-}" "${3:-}" ;;
     unban)      cmd_unban "${2:-}" ;;
+    ban-bloc)   shift; cmd_ban_bloc "$@" ;;
+    unban-bloc) shift; cmd_unban_bloc "$@" ;;
+    blocs)      shift; cmd_blocs "$@" ;;
     test)       cmd_test "$2" ;;
     *)
         cat << EOF
@@ -471,6 +528,14 @@ Routes:
 Cache:
   purge-cache   Vide le cache média du WAF (SIGUSR1) — fraîcheur immédiate
                 après un déploiement d'assets (TTL 1 h sinon)
+
+Bans (garde waf-blocs : jamais le privé, une plage protégée, la box ni un pair):
+  ban <ip> [durée]           Bannit une adresse (30m, 4h, 1d… ; 4h par défaut)
+  unban <ip>                 Retire le ban d'une adresse
+  ban-bloc <a.b.c.0/24> <durée>  Bannit un bloc /24 (1h à 7d), rejoué après un
+                             rechargement du pare-feu (secubox-waf-blocs)
+  unban-bloc <a.b.c.0/24>    Retire le ban d'un bloc
+  blocs                      Liste les blocs bannis (JSON)
 
 Operations:
   logs [n]      Show last n log lines (default 50)
