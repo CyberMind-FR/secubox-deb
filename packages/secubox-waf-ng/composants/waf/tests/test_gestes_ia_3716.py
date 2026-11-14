@@ -1037,3 +1037,97 @@ def test_bloc_fin_illisible_ignoree(c, monkeypatch, sortie):
     c.faux.reponses["ban-bloc"] = (0, sortie, "")
     r = c.ban("203.0.113.0/24", duree_s=3600)
     assert r.status_code == 200 and r.json()["fin"] == t0 + 7 + 3600
+
+
+# ── I4 (décision du propriétaire, 14/11) : cas sûrs plus fréquents ──────────────────────────────────────────────
+# Catégorie d'une adresse bannie = famille de son DERNIER enregistrement `ban` de bans.jsonl (historique complet de
+# sbxwaf), repli sur le motif du journal des menaces (~6 h) puis « waf » ; familles de reconnaissance sûres.
+def _rec_cat(ip, cat, action="ban"):
+    now = int(time.time())
+    return {"ip": ip, "cat": cat, "sev": "low", "at": now - 60, "exp": now + 7200, "action": action}
+
+
+@pytest.mark.parametrize("cat, famille", [
+    ("host_anomaly:unrouted", "host_anomaly"), ("scanners|prolonge", "scanners"),
+    ("leurre:piege|prolonge", "leurre"), ("xss", "xss"), ("a|b:c", "a"), ("", ""), (None, ""), (12, ""),
+])
+def test_famille_d_une_categorie(c, cat, famille):
+    assert c.g.famille(cat) == famille
+
+
+def test_categories_sures_i4(c):
+    assert c.g.CATEGORIES_SURES == frozenset({"scanners", "recon_crawler", "host_anomaly", "leurre",
+                                              "product_absent_probes", "honeypot", "waf_fingerprint"})
+    assert c.g.SEUIL_BLOC == 20 and c.g.DUREE_AUTO_MAX_S == 86_400
+    assert c.g.PLAFONDS["auto_heure"] == 5 and c.g.PLAFONDS["auto_jour"] == 20
+
+
+def test_auto_bloc_categorie_tiree_de_bans_jsonl(c):
+    # le journal des menaces ne sait plus rien (« waf ») ; bans.jsonl garde leurre / host_anomaly
+    c.bans = _bloc_peuple(20, categories=("waf",))
+    cats = ("leurre:piege", "host_anomaly:unrouted|prolonge")
+    _bans_waf_journal(c, *[_rec_cat(f"203.0.113.{i + 1}", cats[i % 2]) for i in range(20)])
+    r = c.ban("203.0.113.0/24", mode="auto")
+    assert r.status_code == 200, r.text
+    assert c.faux.appel("ban-bloc")[-2:] == ["203.0.113.0/24", "86400s"]
+
+
+def test_auto_bloc_un_xss_dans_bans_jsonl_refuse(c):
+    # bans.jsonl l'emporte sur le journal des menaces, qui dit « scanners » pour toutes
+    c.bans = _bloc_peuple(21, categories=("scanners",))
+    _bans_waf_journal(c, *[_rec_cat(f"203.0.113.{i + 1}", "leurre") for i in range(20)],
+                      _rec_cat("203.0.113.21", "xss:reflechi"))
+    assert c.ban("203.0.113.0/24", mode="auto").json()["detail"]["motif"] == "pas_sur"
+    assert "ban-bloc" not in c.faux.verbes()
+
+
+def test_auto_bloc_dernier_enregistrement_ban_fait_foi(c):
+    c.bans = _bloc_peuple(20, categories=("waf",))
+    _bans_waf_journal(c, _rec_cat("203.0.113.1", "leurre"), _rec_cat("203.0.113.1", "sqli"),
+                      *[_rec_cat(f"203.0.113.{i + 1}", "scanners") for i in range(1, 20)])
+    assert c.ban("203.0.113.0/24", mode="auto").json()["detail"]["motif"] == "pas_sur"
+    # un enregistrement `unban` postérieur ne change pas la catégorie : seul le dernier `ban` compte
+    _bans_waf_journal(c, _rec_cat("203.0.113.1", "honeypot"), _rec_cat("203.0.113.1", "xss", action="unban"))
+    assert c.ban("203.0.113.0/24", mode="auto").status_code == 200
+
+
+@pytest.mark.parametrize("motif_menaces, statut", [("scanners", 200), ("waf", 409), ("", 409)])
+def test_auto_bloc_adresse_absente_de_bans_jsonl_repli(c, motif_menaces, statut):
+    c.bans = _bloc_peuple(19, categories=("waf",)) + [{"ip": "203.0.113.20", "reason": motif_menaces}]
+    _bans_waf_journal(c, *[_rec_cat(f"203.0.113.{i + 1}", "product_absent_probes") for i in range(19)])
+    assert c.ban("203.0.113.0/24", mode="auto").status_code == statut
+
+
+def test_auto_bloc_bans_jsonl_illisible_refuse_503(c, monkeypatch, tmp_path):
+    c.bans = _bloc_peuple(20)
+    dossier = tmp_path / "bans-dossier"
+    dossier.mkdir()
+    monkeypatch.setattr(c.g, "BANS_WAF", dossier)
+    r = c.ban("203.0.113.0/24", mode="auto")
+    assert r.status_code == 503 and r.json()["detail"]["motif"] == "etat"
+    assert "ban-bloc" not in c.faux.verbes()
+    # un clic ne dépend pas des catégories : il n'est pas bloqué par bans.jsonl
+    assert c.ban("198.51.100.7").status_code == 200
+
+
+def test_familles_suivent_les_ajouts_a_bans_jsonl(c):
+    _bans_waf_journal(c, _rec_cat("203.0.113.1", "leurre"))
+    assert c.g.familles_bans_waf() == {"203.0.113.1": "leurre"}
+    _bans_waf_journal(c, _rec_cat("203.0.113.1", "xss"), _rec_cat("203.0.113.2", "scanners|prolonge"))
+    assert c.g.familles_bans_waf() == {"203.0.113.1": "xss", "203.0.113.2": "scanners"}
+
+
+def test_get_bans_porte_la_famille(c, monkeypatch):
+    """`GET /waf/bans` (lu par le relais du POC) donne la même famille que la garde de gk2."""
+    _bans_waf_journal(c, _rec_cat("203.0.113.1", "host_anomaly:unrouted"))
+    doc = {"nftables": [{"set": {"name": "waf_ban", "elem": ["203.0.113.1", "203.0.113.2"]}}]}
+
+    def faux_run(argv, **_):
+        sortie = json.dumps(doc) if argv[-1] == "waf_ban" else json.dumps({"nftables": []})
+        return subprocess.CompletedProcess(argv, 0, sortie, "")
+    monkeypatch.setattr(c.waf.subprocess, "run", faux_run)
+    monkeypatch.setattr(c.waf, "_get_geoip_reader", lambda: None)
+    monkeypatch.setattr(c.waf, "_raisons_recentes", lambda: {"203.0.113.2": "scanners|prolonge"})
+    par_ip = {b["ip"]: b for b in c.waf._get_bans()}
+    assert par_ip["203.0.113.1"]["famille"] == "host_anomaly"
+    assert par_ip["203.0.113.2"]["famille"] == "scanners" and par_ip["203.0.113.2"]["reason"] == "scanners|prolonge"

@@ -16,7 +16,9 @@ Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
 - plafonds en fenêtres glissantes sur le journal : d'office 5/h et 20/j (`plafond_auto`), compte 30/h et 100/j
   (`plafond_compte`) ; un ban annulé reste compté ;
 - d'office : bloc seulement, et le CAS SÛR RECONTRÔLÉ sur gk2 (≥ `SEUIL_BLOC` adresses du bloc dans `waf_ban`,
-  toutes de catégories ⊆ `CATEGORIES_SURES`) ; `pas_sur` sinon ;
+  toutes de familles ⊆ `CATEGORIES_SURES`) ; `pas_sur` sinon. Famille d'une adresse (I4) : celle de son DERNIER
+  enregistrement `ban` de `bans.jsonl` (historique de sbxwaf), à défaut le motif du journal des menaces (~6 h), à
+  défaut « waf » ; `bans.jsonl` illisible ⇒ 503 `etat` ;
 - une cible déjà bannie (au journal, par le WAF dans `waf_ban`, ou un bloc de l'administrateur) est refusée
   (`deja_actif`) ; `waf_ban` ou la liste des blocs illisibles ⇒ 503 `etat` (jamais « libre » par défaut) ;
 - les gardes root de `wafctl` / `waf-blocs` (privé, plages protégées, box, pairs) ; leur motif rendu en 409 ;
@@ -82,7 +84,9 @@ router = APIRouter(prefix="/ai", dependencies=[Depends(processus_designe)])
 
 #: Journal des gestes (ajout seul) : `ban` et `annule`. Il fait foi pour les plafonds et pour « ses propres bans ».
 JOURNAL_AI = Path("/var/lib/secubox/waf/ai-ban.jsonl")
-#: Journal des bans de sbxwaf (BanRecord `ip`, `at`, `exp`, `action`) : qui d'autre couvre une adresse.
+#: Journal des bans de sbxwaf (BanRecord `ip`, `cat`, `at`, `exp`, `action`) : qui d'autre couvre une adresse, et la
+#: catégorie de chaque ban (cas sûr). Lu par sa FIN, 16 Mio au plus : au-delà, les enregistrements les plus anciens
+#: ne sont plus lus (une adresse bannie il y a longtemps retombe alors sur le journal des menaces).
 BANS_WAF = Path("/var/lib/secubox/waf/bans.jsonl")
 #: Fin d'un journal relue à chaque geste : à 100 bans par jour au plus, des mois de gestes, bien plus que 7 j de ban.
 _TAILLE_LECTURE = 4 * 1024 * 1024
@@ -91,8 +95,11 @@ _TAILLE_LECTURE_BANS_WAF = 16 * 1024 * 1024
 DUREE_MIN_S, DUREE_MAX_S = 3600, 604_800
 DUREE_AUTO_MAX_S = 86_400
 SEUIL_BLOC = 20
-#: Ruling P1 : catégories sûres au départ (waf_fingerprint, product_absent_probes en attente d'arbitrage).
-CATEGORIES_SURES = frozenset({"scanners", "recon_crawler"})
+#: Familles sûres (I4, décision du propriétaire du 14/11) : reconnaissance, sondes, leurres. Les familles d'attaque
+#: (xss, lfi, sqli, rce, api_abuse, campagne, mesure…), toute autre, et « waf » (inconnue) restent en un clic.
+#: MÊME ENSEMBLE côté relais du POC (`gestes.py`) : la règle effective est relais ∧ gk2.
+CATEGORIES_SURES = frozenset({"scanners", "recon_crawler", "host_anomaly", "leurre", "product_absent_probes",
+                              "honeypot", "waf_fingerprint"})
 HEURE, JOUR = 3600, 86_400
 PLAFONDS = {"auto_heure": 5, "auto_jour": 20, "compte_heure": 30, "compte_jour": 100}
 #: Un bloc dont la fin enregistrée dépasse la nôtre de plus que ceci a été rebanni par quelqu'un d'autre.
@@ -290,6 +297,44 @@ def _bilan(entrees: List[dict], maintenant: int) -> Tuple[Dict[str, dict], set, 
     return bans, annules, actifs, compteurs
 
 
+def famille(categorie: Any) -> str:
+    """Famille d'une catégorie de sbxwaf : coupée au premier « | » (suffixe `|prolonge`), puis au premier « : »
+    (sous-catégorie). `host_anomaly:unrouted` → `host_anomaly` ; `scanners|prolonge` → `scanners` ; non-chaîne → ""."""
+    if not isinstance(categorie, str):
+        return ""
+    return categorie.split("|", 1)[0].split(":", 1)[0].strip()
+
+
+#: (clé du fichier, familles) remplacé d'un bloc : lu à la fois par le fil de fond de `_get_bans` et par `/ai/ban`.
+_cache_familles: Dict[str, Any] = {"v": (None, {})}
+
+
+def familles_bans_waf() -> Dict[str, str]:
+    """Famille du DERNIER enregistrement `ban` de chaque adresse dans `bans.jsonl` (les `unban` ne changent pas la
+    catégorie). Fichier absent : {}. Lecture STRICTE : lève Illisible s'il ne peut pas être lu (jamais « aucune
+    catégorie »). Bornée à la fin du fichier (`_TAILLE_LECTURE_BANS_WAF`) ; relue seulement s'il a changé."""
+    try:
+        st = os.stat(BANS_WAF, follow_symlinks=False)
+    except FileNotFoundError:
+        return {}
+    except OSError as e:
+        raise Illisible(f"bans.jsonl : {type(e).__name__}") from None
+    cle = (str(BANS_WAF), st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+    cle_cache, familles_cache = _cache_familles["v"]
+    if cle_cache == cle:
+        return dict(familles_cache)
+    try:
+        objets = _lire_fin_jsonl(BANS_WAF, _TAILLE_LECTURE_BANS_WAF)
+    except OSError as e:
+        raise Illisible(f"bans.jsonl : {type(e).__name__}") from None
+    familles: Dict[str, str] = {}
+    for r in objets or []:
+        if isinstance(r, dict) and r.get("action") == "ban" and isinstance(r.get("ip"), str):
+            familles[r["ip"]] = famille(r.get("cat"))
+    _cache_familles["v"] = (cle, familles)
+    return dict(familles)
+
+
 def adresse_couverte_par_le_waf(ip: str, maintenant: int) -> bool:
     """Le DERNIER enregistrement de sbxwaf pour cette adresse est-il un `ban` non échu (`exp` 0 : jusqu'à un unban
     explicite) ? Fichier absent : sbxwaf n'a jamais rien banni. Lève Illisible s'il ne peut pas être lu."""
@@ -444,8 +489,9 @@ def _deja_banni_ailleurs(cible: Cible, bans_waf: Optional[List[dict]]) -> bool:
     return str(cible) in {b.get("ip") for b in bans_waf}
 
 
-def cas_sur(bloc: ipaddress.IPv4Network, bans_waf: List[dict]) -> bool:
-    """≥ `SEUIL_BLOC` adresses distinctes du bloc déjà bannies par le WAF, TOUTES de catégories sûres."""
+def cas_sur(bloc: ipaddress.IPv4Network, bans_waf: List[dict], familles: Dict[str, str]) -> bool:
+    """≥ `SEUIL_BLOC` adresses distinctes du bloc déjà bannies par le WAF, TOUTES de familles sûres. Famille d'une
+    adresse : `familles` (dernier `ban` de bans.jsonl), à défaut celle de son motif `reason` (journal des menaces)."""
     categories: Dict[str, set] = {}
     for b in bans_waf:
         try:
@@ -453,7 +499,9 @@ def cas_sur(bloc: ipaddress.IPv4Network, bans_waf: List[dict]) -> bool:
         except (ValueError, TypeError):
             continue
         if adresse in bloc:
-            categories.setdefault(str(adresse), set()).add(str(b.get("reason") or ""))
+            ip = str(adresse)
+            fam = familles[ip] if ip in familles else famille(b.get("reason"))
+            categories.setdefault(ip, set()).add(fam)
     return len(categories) >= SEUIL_BLOC and all(c <= CATEGORIES_SURES for c in categories.values())
 
 
@@ -575,7 +623,7 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
                 if not bloc:
                     raise _refus(409, "pas_sur", geste, user)
                 bans_waf = _bans_waf()
-                if not cas_sur(cible, bans_waf):
+                if not cas_sur(cible, bans_waf, familles_bans_waf()):
                     raise _refus(409, "pas_sur", geste, user)
             if _deja_banni_ailleurs(cible, bans_waf):
                 raise _refus(409, "deja_actif", geste, user)

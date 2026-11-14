@@ -23,6 +23,12 @@ secubox-waf-ng (1.35.0-1~trixie1) trixie; urgency=medium
     est refusé tant qu'aucune ligne SECUBOX_WAF_PROTEGEES n'est déclarée ;
     systemd-tmpfiles avant les unités ; rejeu et veille activés ; profil AppArmor
     de waf-blocs livré en complain (enforce après le banc) (ref #3716).
+  * Cas sûr d'un ban d'office plus fréquent (I4) : famille d'une adresse bannie tirée
+    de son dernier ban dans bans.jsonl (catégorie coupée à « | » puis à « : »), repli
+    sur le journal des menaces (~6 h) ; bans.jsonl illisible = refus 503 etat ;
+    familles sûres scanners, recon_crawler, host_anomaly, leurre,
+    product_absent_probes, honeypot, waf_fingerprint (attaques : un clic) ;
+    GET /bans porte le champ famille, lu par le relais (ref #3716).
   * Dépend de secubox-core (>= 1.8.32~) (secubox_core.compte_service) (ref #3716).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 08:56:33 +0100

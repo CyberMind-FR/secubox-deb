@@ -395,9 +395,18 @@ def _get_bans() -> List[dict]:
 
     L'echeance vient de nft (`expires`), le motif du journal de menaces, le pays
     de la base GeoIP. Rien n'est invente : un champ inconnu reste vide.
+
+    `famille` (#3716, I4) : famille du dernier ban de l'adresse dans bans.jsonl,
+    a defaut celle du motif — la meme que celle que recontrole `/ai/ban` (le
+    relais du POC la lit ici). Lecture non stricte : bans.jsonl illisible, on
+    se rabat sur le motif (la garde de `/ai/ban`, elle, refuse).
     """
     bans: List[dict] = []
     raisons = _raisons_recentes()
+    try:
+        familles = _gestes_ia.familles_bans_waf()
+    except Exception:  # noqa: BLE001 — affichage : repli sur le motif
+        familles = {}
     reader = _get_geoip_reader()
     maintenant = int(time.time())
 
@@ -437,6 +446,7 @@ def _get_bans() -> List[dict]:
                     "value": ip,
                     "scenario": categorie,
                     "reason": categorie,
+                    "famille": familles[ip] if ip in familles else _gestes_ia.famille(categorie),
                     "duration": f"{int(expire)}s" if isinstance(expire, int) else "",
                     "expires_in": int(expire) if isinstance(expire, int) else None,
                     "type": "ban",
@@ -2213,7 +2223,9 @@ except ImportError:  # standalone
 
 def _bans_stricts() -> List[dict]:
     """`waf_ban` lu dans nft, motif du journal des menaces : lecture STRICTE (lève si nft ne répond pas ou si la
-    table manque — `_get_bans` rend alors une liste vide) et LÉGÈRE (sans GeoIP), pour les gardes de `/ai/ban`."""
+    table manque — `_get_bans` rend alors une liste vide) et LÉGÈRE (sans GeoIP), pour les gardes de `/ai/ban`. Le
+    motif ne couvre que la fin du journal des menaces (4000 lignes, ≈ 6 h) : ce n'est que le REPLI du cas sûr, dont la
+    famille vient d'abord de bans.jsonl (`gestes_ia.familles_bans_waf`, I4)."""
     adresses = _gestes_ia.lire_waf_ban()
     raisons = _raisons_recentes()
     return [{"ip": ip, "reason": _raison_du_ban(ip, raisons)} for ip in sorted(adresses)]

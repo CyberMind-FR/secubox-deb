@@ -135,7 +135,14 @@ Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet
 | `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds}` |
 
 Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,
-**cas sûr recontrôlé** (≥ 20 adresses du bloc dans `waf_ban`, catégories `scanners`, `recon_crawler` seulement) ;
+**cas sûr recontrôlé** (≥ 20 adresses du bloc dans `waf_ban`, toutes de familles sûres : `scanners`,
+`recon_crawler`, `host_anomaly`, `leurre`, `product_absent_probes`, `honeypot`, `waf_fingerprint` ; les attaques — `xss`,
+`lfi`, `sqli`, `rce`, `api_abuse`, `campagne`, `mesure`, toute autre, et `waf` inconnue — restent en un clic). Famille
+d'une adresse : celle de son **dernier** enregistrement `ban` de `/var/lib/secubox/waf/bans.jsonl` (`cat` coupé au
+premier `|` puis au premier `:` : `host_anomaly:unrouted` → `host_anomaly`, `scanners|prolonge` → `scanners`), lu par
+sa fin (16 Mio au plus : au-delà, les plus anciens ne sont plus lus) ; à défaut, le motif du journal des menaces
+(≈ 6 h), puis `waf`. `bans.jsonl` illisible : 503 `etat`, jamais « sans catégorie ». `GET /bans` porte la même
+`famille` par ban (lue par le relais du POC, qui applique le même ensemble) ;
 plafonds glissants d'office 5/h et 20/j, du compte 30/h et 100/j. Refus 409 `{"detail": {"motif"}}` : `deja_actif`,
 `duree`, `plafond_compte`, `plafond_auto`, `pas_sur`, et les gardes `privee`, `protegee`, `box`, `pair`,
 `garde_illisible`, `nft` ; 503 `etat`, `journal`, `audit`, `wafctl`, `processus` ; 500 `incoherent`. Un débannissement
