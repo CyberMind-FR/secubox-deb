@@ -83,3 +83,19 @@ def test_pas_de_ligne_disque_dans_le_panneau_de_la_box():
 
 def test_cadre_sans_min_height():
     assert not re.search(r"\.cadre\{[^}]*min-height", _src())
+
+
+def test_routes_d_ecriture_des_macros():
+    """#3702 tâche 8 : enregistrer (POST/PUT), supprimer, copier, simuler, lancer."""
+    src = _src()
+    for r in ("'/macros'", "/copier", "/simuler", "/lancer", "method: 'PUT'", "method: 'DELETE'", "method: 'POST'"):
+        assert r in src, r
+
+
+def test_ecran_de_lancement_et_editeur_accessibles():
+    src = _src()
+    assert re.search(r'id="lancement"[^>]*>\s*<div class="fenetre[^"]*" role="dialog"', src)
+    assert 'aria-label="Nom de la macro"' in src
+    # ordre au clavier : « Monter / Descendre / Supprimer l'étape N » ; ajout par glisser
+    for f in ("function ouvrirEditeur(", "'Monter'", "'Descendre'", "'Supprimer'", "' l\\'étape '", "draggable"):
+        assert f in src, f

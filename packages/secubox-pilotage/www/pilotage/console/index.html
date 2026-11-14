@@ -11,6 +11,8 @@
   posée par createElement/textContent, jamais en HTML ; aucun attribut d'événement en ligne.
   Flux : fetch + ReadableStream avec Authorization ; la page s'abonne au flux de l'exécution AVANT de la relire (rien de perdu entre
   les deux) ; reprise après coupure seulement si l'exécution est encore en cours. Zoom des panneaux : mise en page seule, aucun appel.
+  Éditeur de macro (liste fermée, ordre au clavier ou par glisser ; le 400 de l'API affiché tel quel) et écran de lancement (plan
+  simulé par box et par étape, noms retapés).
   ?embed=1 : sans menu ; ?demo=1 : données fictives, rien n'est envoyé.
 -->
 <html lang="fr">
@@ -81,7 +83,7 @@
         .console.zoom .agrandir{display:none}
         .zoomable.agrandi{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(41,182,246,.12)}
         /* flotte */
-        .puces{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+        .puces{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px} .puces[hidden]{display:none}
         .puce{font:inherit;font-size:.72rem;min-height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--trait2);background:transparent;color:var(--texte);cursor:pointer}
         .puce[aria-pressed="true"]{background:var(--cyan);border-color:var(--cyan);color:#04202a;font-weight:600}
         .flotte-liste{display:grid;gap:4px;max-height:430px;overflow:auto}
@@ -139,6 +141,81 @@
         .plan-box{display:grid;gap:4px;border:1px solid var(--trait);border-radius:10px;padding:8px} .plan-box b{overflow-wrap:anywhere}
         .fen-msg{font-size:.8rem;color:#ffd9de;overflow-wrap:anywhere} .fen-msg:empty{display:none}
         @container a (max-width:719px){kbd{display:none}}
+        /* écran de lancement : plan simulé par box et par étape */
+        .fenetre>*{min-width:0}
+        #lancement .fenetre{max-width:780px}
+        .fenetre.risque{border-color:var(--rouge);box-shadow:0 0 40px rgba(255,77,94,.18)}
+        .fen-tete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px}
+        .fen-tete small{display:block;color:var(--violet);font-size:.7rem;letter-spacing:.06em;overflow-wrap:anywhere}
+        .badge-rouge{font-size:.72rem;color:var(--rouge);border:1px solid var(--rouge);background:rgba(255,77,94,.12);border-radius:999px;padding:3px 10px} .badge-rouge[hidden]{display:none}
+        .plan-defile{overflow-x:auto;border:1px solid var(--trait);border-radius:12px;background:rgba(10,22,46,.6);padding:2px 10px}
+        table.plan{border-collapse:collapse;width:100%;font-size:.8rem}
+        table.plan th,table.plan td{text-align:left;padding:7px 8px 7px 0;vertical-align:top;border-top:1px solid rgba(86,150,255,.12)}
+        table.plan thead th{border-top:0;font-size:.64rem;letter-spacing:.06em;color:var(--faible);font-weight:600;min-width:64px}
+        table.plan td{color:var(--doux);white-space:nowrap} table.plan tbody th small{display:block;font-weight:400;font-size:.68rem}
+        .coupure{color:var(--rouge);white-space:normal}
+        /* téléphone : une box = un bloc, une ligne par étape (libellé de l'étape repris de l'en-tête) */
+        @media (max-width:600px){
+            table.plan thead{display:none} table.plan,table.plan tbody,table.plan tr{display:block}
+            table.plan tr{border-top:1px solid rgba(86,150,255,.12);padding:6px 0} table.plan tr:first-child{border-top:0}
+            table.plan th,table.plan td{display:flex;justify-content:space-between;gap:10px;border-top:0;padding:3px 0;white-space:normal}
+            table.plan td::before{content:attr(data-etape);color:var(--faible);font-size:.72rem;overflow-wrap:anywhere;min-width:0}
+            table.plan td>*{text-align:right;flex:none;max-width:60%}
+        }
+        .rappel{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem;line-height:1.45;overflow-wrap:anywhere}
+        .noms{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))}
+        .noms input{font-family:ui-monospace,"IBM Plex Mono",Menlo,monospace;min-height:40px}
+        .noms input.exact{border-color:var(--vert)}
+        /* éditeur de macro : la console laisse la place à l'éditeur */
+        .console.edition .grille,.console.edition .suggestions,.console.edition #panneaux,.console.edition #reduire,.console.edition .commande{display:none}
+        .editeur{display:grid;gap:10px;min-width:0} .editeur[hidden]{display:none}
+        .ed-tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+        .ed-nom{flex:1 1 200px;min-width:0;display:flex;flex-direction:column}
+        .ed-nom small{color:var(--violet);font-size:.7rem;letter-spacing:.06em}
+        .ed-nom input{background:transparent;border:0;border-bottom:1px dashed var(--trait2);color:var(--texte);font-family:inherit;font-weight:800;font-size:1.3rem;line-height:1.3;padding:2px 0;min-width:0;width:100%;outline:none}
+        .ed-nom input:focus{border-bottom-color:var(--cyan)} .ed-nom input:disabled{border-bottom-color:transparent;opacity:1}
+        .ed-grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);align-items:start}
+        @container a (min-width:760px){.ed-grille{grid-template-columns:260px minmax(0,1fr)} .editeur.lecture .ed-grille{grid-template-columns:minmax(0,1fr)}}
+        .ed-grille>*{min-width:0}
+        .ed-catalogue h3{margin:0;font-size:.88rem} .ed-catalogue h3+.note{display:block;margin:2px 0 8px}
+        .cat-liste{display:grid;gap:6px;margin-bottom:10px}
+        .cat{font:inherit;font-family:ui-monospace,"IBM Plex Mono",Menlo,monospace;font-size:.76rem;text-align:left;min-height:36px;padding:6px 10px;border-radius:8px;border:1px solid var(--trait);background:rgba(18,40,78,.5);color:var(--texte);cursor:grab;overflow-wrap:anywhere}
+        .cat:hover{border-color:var(--trait2)} .cat:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .cat:disabled{opacity:.45;cursor:default}
+        .cat.forte{border-color:rgba(255,159,28,.5);background:rgba(255,159,28,.06)} .cat.danger{border-color:rgba(255,77,94,.5);background:rgba(255,77,94,.06)}
+        .cat.ctl{border-color:rgba(167,139,250,.5);background:rgba(167,139,250,.08)}
+        .ed-centre{display:grid;gap:8px;min-width:0}
+        .etapes{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+        .etape{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px;border-radius:12px;border:1px solid var(--trait2);background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+        .etape.ctl{border-color:rgba(167,139,250,.6);background:rgba(167,139,250,.08)} .etape.forte{border-color:rgba(255,159,28,.6)} .etape.danger{border-color:rgba(255,77,94,.6)}
+        .etape.survol{box-shadow:0 -3px 0 var(--cyan)}
+        .etape[draggable="true"]{cursor:grab}
+        .num{width:28px;height:28px;border-radius:50%;border:1px solid var(--cyan);display:flex;align-items:center;justify-content:center;font-weight:700}
+        .etape.ctl .num{border-color:var(--violet)}
+        .et-corps{min-width:0} .et-titre{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px} .et-titre b{overflow-wrap:anywhere} .mono{font-family:ui-monospace,"IBM Plex Mono",Menlo,monospace}
+        .et-champs{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px}
+        .et-champs label{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:.74rem;color:var(--doux);min-width:0;max-width:100%}
+        .et-champs input,.et-champs select{font:inherit;font-size:.8rem;color:var(--texte);background:rgba(6,13,27,.8);border:1px solid var(--trait2);border-radius:8px;min-height:34px;padding:0 8px;min-width:0;max-width:100%}
+        .et-champs input[type="number"]{width:86px} .et-champs input[type="text"]{width:170px}
+        .et-champs input:focus,.et-champs select:focus{outline:none;border-color:var(--cyan)} .et-champs :disabled{opacity:1;color:var(--doux)}
+        .et-ordre{display:flex;gap:4px;justify-content:flex-end}
+        @container a (max-width:559px){.etape{grid-template-columns:28px minmax(0,1fr)} .et-ordre{grid-column:1/-1}}
+        .depot{padding:14px;border-radius:12px;border:1px dashed var(--trait2);color:var(--faible);text-align:center;font-size:.8rem} .depot[hidden]{display:none}
+        .depot.survol{border-color:var(--cyan);color:var(--cyan)}
+        .ed-cartes{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+        @container a (min-width:900px){.ed-cartes{grid-template-columns:repeat(3,minmax(0,1fr))}}
+        .carte{border:1px solid var(--trait);border-radius:12px;background:rgba(10,22,46,.6);padding:10px;display:flex;flex-direction:column;gap:6px;min-width:0}
+        .carte .k{font-size:.66rem;color:var(--faible);letter-spacing:.08em} .carte small{color:var(--doux);font-size:.74rem;overflow-wrap:anywhere}
+        .ed-cibles{display:flex;flex-wrap:wrap;gap:4px 12px}
+        .ed-cibles label,.radio{display:flex;align-items:center;gap:6px;min-height:32px;font-size:.8rem;min-width:0;overflow-wrap:anywhere}
+        .ed-cibles input,.radio input{width:16px;height:16px;accent-color:var(--cyan);flex:none}
+        .radio input:disabled+span{color:var(--faible)}
+        .quand-ligne{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+        .quand-ligne input[type="time"]{font:inherit;font-size:.8rem;color:var(--texte);background:rgba(6,13,27,.8);border:1px solid var(--trait2);border-radius:8px;min-height:34px;padding:0 8px;color-scheme:dark}
+        .ed-pied{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+        .ed-pied .note{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
+        .ed-pied .btn{min-height:44px;padding:0 16px}
+        .ed-pied select{min-height:44px;max-width:100%}
+        .ed-sim{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
     </style>
 </head>
 <body>
@@ -220,6 +297,52 @@
                 </section>
             </div>
         </div>
+
+        <!-- éditeur de macro (maquette « Macro ») : liste fermée, ajout par clic ou par glisser, ordre au clavier -->
+        <section class="editeur" id="editeur" hidden aria-labelledby="ed-sur">
+            <div class="ed-tete">
+                <button type="button" class="btn icone" id="ed-retour" aria-label="Retour à la console" title="Retour à la console"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+                <div class="ed-nom"><small id="ed-sur">MACRO</small><input type="text" id="ed-nom" aria-label="Nom de la macro" maxlength="60" autocomplete="off" spellcheck="false" placeholder="Nom de la macro"></div>
+                <span class="actif">liste fermée respectée</span>
+                <span class="note" id="ed-compte">0 / 20 étapes</span>
+            </div>
+            <div class="ed-grille">
+                <aside class="pan ed-catalogue" id="ed-catalogue" aria-label="Étapes possibles">
+                    <h3>Catalogue de l'agent</h3><span class="note">cliquer, ou glisser dans la macro</span>
+                    <div class="cat-liste" id="ed-actions"></div>
+                    <h3>Contrôles du maître</h3><span class="note">faits par le maître, rien n'est envoyé à la box</span>
+                    <div class="cat-liste">
+                        <button type="button" class="cat ctl" draggable="true" data-ajout="releve">relevé nommé (10 à 300 s)</button>
+                        <button type="button" class="cat ctl" draggable="true" data-ajout="condition">si … alors arrêter ou passer</button>
+                        <button type="button" class="cat ctl" draggable="true" data-ajout="comparer">comparer deux relevés</button>
+                        <button type="button" class="cat ctl" draggable="true" data-ajout="attendre">attendre la box (en ligne)</button>
+                    </div>
+                </aside>
+                <div class="ed-centre">
+                    <ol class="etapes" id="ed-etapes" aria-label="Étapes de la macro"></ol>
+                    <div class="depot" id="ed-depot">Déposer une étape ici</div>
+                    <div class="ed-cartes">
+                        <div class="carte"><span class="k">CIBLES</span><div class="puces" id="ed-groupes" role="group" aria-label="Cocher un groupe"></div><div class="ed-cibles" id="ed-cibles"></div><small id="ed-cibles-note"></small></div>
+                        <div class="carte"><span class="k">DÉROULEMENT</span><span>Une box après l'autre</span><small>arrêt de toute la série au premier écart</small></div>
+                        <div class="carte" role="radiogroup" aria-label="Quand lancer la macro"><span class="k">QUAND</span>
+                            <label class="radio"><input type="radio" name="ed-quand" id="ed-demande" value="demande"><span>À la demande</span></label>
+                            <div class="quand-ligne"><label class="radio"><input type="radio" name="ed-quand" id="ed-nuit" value="nuit"><span>Chaque nuit à</span></label><input type="time" id="ed-heure" value="03:00" aria-label="Heure du lancement de chaque nuit"></div>
+                            <small id="ed-quand-raison"></small>
+                        </div>
+                    </div>
+                    <section class="pan" id="ed-plan-pan" aria-label="Simulation" hidden><div id="ed-plan"></div></section>
+                </div>
+            </div>
+            <div class="message" id="ed-msg" role="status" aria-live="polite"></div>
+            <div class="ed-pied">
+                <span class="note" id="ed-note"></span>
+                <span class="ed-sim"><select id="ed-sim-box" aria-label="Box de la simulation"></select><button type="button" class="btn" id="ed-simuler">Simuler sur…</button></span>
+                <button type="button" class="btn danger" id="ed-supprimer">Supprimer</button>
+                <button type="button" class="btn" id="ed-copier">Copier</button>
+                <button type="button" class="btn" id="ed-enregistrer">Enregistrer</button>
+                <button type="button" class="btn primaire" id="ed-enregistrer-lancer">Enregistrer et lancer</button>
+            </div>
+        </section>
     </div></div></main>
 
     <!-- petite fenêtre intégrée : paramètre d'une action (unité, paquet, nom) -->
@@ -231,10 +354,10 @@
             <div class="boutons"><button type="button" class="btn" id="fenetre-annuler">Annuler</button></div>
         </div>
     </div>
-    <!-- écran de lancement (rempli par ouvrirLancement ; plan détaillé : tâche 8) -->
+    <!-- écran de lancement (maquette « Confirmer ») : plan simulé par box et par étape, rappel de la série, noms retapés -->
     <div class="fond" id="lancement" hidden>
         <div class="fenetre" role="dialog" aria-modal="true" aria-labelledby="lancement-titre">
-            <h3 id="lancement-titre"></h3>
+            <div class="fen-tete"><div><small id="lancement-sur"></small><h3 id="lancement-titre"></h3></div><span class="badge-rouge" id="lancement-badge" hidden></span></div>
             <div id="lancement-corps"></div>
             <div class="fen-msg" id="lancement-msg"></div>
             <div class="boutons"><button type="button" class="btn" id="lancement-annuler">Annuler</button><button type="button" class="btn primaire" id="lancement-ok">Lancer</button></div>
@@ -277,7 +400,7 @@
             let d = null;
             try { d = await r.json(); } catch (e) { d = null; }
             if (r.status === 401) sessionRequise();
-            if (!r.ok) { const err = new Error('refusé (HTTP ' + r.status + ')' + (detail(d) ? ' : ' + String(detail(d)).slice(0, 300) : '')); err.statut = r.status; throw err; }
+            if (!r.ok) { const err = new Error('refusé (HTTP ' + r.status + ')' + (detail(d) ? ' : ' + String(detail(d)).slice(0, 300) : '')); err.statut = r.status; err.detail = String(detail(d) || '').slice(0, 300); throw err; }
             return d;
         }
         function sessionRequise() { $('session').hidden = false; pastille('SESSION REQUISE', 'neutre'); }
@@ -454,8 +577,8 @@
             ouvrirLancement({ titre: titre, chemin: '/executions/action', corps: { action: cle, args: args }, cibles: cib, forte: a.forte });
         }
         function macroForte(m) { return (m.etapes || []).some(e => e && e.type === 'action' && action(e.action) && action(e.action).forte); }
-        function lancerMacro(m) {
-            let cib = ciblesCochees();
+        function lancerMacro(m, cibles) {
+            let cib = cibles && cibles.length ? cibles : ciblesCochees();
             if (!cib.length) cib = (m.cibles || []).map(boxDe).filter(b => b && b.cochable);
             if (!cib.length) return message('Cochez au moins une box en ligne pour lancer « ' + m.nom + ' ».', true);
             const chemin = '/macros/' + enc(m.id) + '/lancer', forte = macroForte(m);
@@ -502,33 +625,114 @@
             } catch (e) { message(e.message, true); return e.message; }
         }
 
-        // écran de lancement (la tâche 8 y ajoute le plan simulé par box et par étape)
+        // ---- plan d'un lancement : `simuler` du maître pour une macro enregistrée, estimation locale sinon (action seule, démonstration) ----
+        const ESTIMATION_S = { 'reboot': 120, 'maj-paquets': 300, 'installer': 180, 'service-demarrer': 15, 'service-arreter': 15,
+            'service-redemarrer': 15, 'renommer': 60, 'renouveler': 30, 'interface-distante': 60, 'interface-locale': 60 };   // pilotage/macros.py
+        const COUPURES = { 'reboot': 'redémarrage', 'interface-distante': 'bascule d\'interface', 'interface-locale': 'bascule d\'interface', 'renommer': 'changement de nom' };
+        const fini = v => { const n = Number(v); return v !== '' && v != null && Number.isFinite(n) ? n : null; };
+        function coupureLocale(e) { return e && e.type === 'action' ? COUPURES[e.action] || null : null; }
+        function estimerLocal(e) {
+            if (!e) return null;
+            if (e.type === 'releve') { const d = fini(e.duree_s); return d == null ? null : d + 10; }
+            if (e.type === 'action') { const d = fini(e.delai_s == null ? 900 : e.delai_s); return d == null ? null : Math.min(d, ESTIMATION_S[e.action] != null ? ESTIMATION_S[e.action] : d); }
+            if (e.type === 'attendre') return fini(e.delai_s == null ? 300 : e.delai_s);
+            return 0;
+        }
+        function simulationLocale(etapes, b) {
+            const et = etapes.map((e, i) => ({ rang: i + 1, type: e.type, resume: resumeEtape(e), forte: !!(e.type === 'action' && action(e.action) && action(e.action).forte),
+                coupure: coupureLocale(e), duree_estimee_s: estimerLocal(e) }));
+            return { box: b.nom, cle: b.cle, en_ligne: !!b.en_ligne, cliente: cliente(b), support_requis: cliente(b), etapes: et, locale: true,
+                duree_totale_s: et.reduce((t, x) => t + (x.duree_estimee_s || 0), 0) };
+        }
+        async function simulerBox(id, b) {
+            try { const d = await api('/macros/' + enc(id) + '/simuler', { method: 'POST', corps: { box: b.cle } }); return d && typeof d === 'object' ? d : { box: b.nom, erreur: 'plan illisible' }; }
+            catch (e) { return { box: b.nom, cle: b.cle, erreur: e.detail || e.message }; }
+        }
+        function duree(s) {
+            const n = nb(s); if (n == null) return '—';
+            if (n === 0) return 'immédiat';
+            return n < 120 ? n + ' s' : '~' + Math.round(n / 60) + ' min';
+        }
+        // tableau : une ligne par box, une colonne par étape ; coupure prévue en rouge ; défilement dans son cadre, jamais la page
+        function rendrePlan(zone, sims) {
+            clear(zone);
+            const ref = sims.find(x => x && Array.isArray(x.etapes)), n = ref ? ref.etapes.length : 0;
+            const def = el('div', 'plan-defile'), t = el('table', 'plan'), th = el('thead'), tr = el('tr'), tb = el('tbody');
+            tr.append(el('th', null, 'BOX'));
+            if (ref) ref.etapes.forEach(x => tr.append(el('th', null, x.rang + ' · ' + x.resume)));
+            tr.append(el('th', null, 'TOTAL'));
+            th.append(tr); t.append(th);
+            sims.forEach(x => {
+                const r = el('tr'), h = el('th'); h.scope = 'row'; h.append(el('b', null, x.box || '?'));
+                if (x.en_ligne === false) h.append(el('small', 'e-orange', 'hors ligne : refusée au lancement'));
+                if (x.cliente) h.append(el('small', 'note', 'support requis'));
+                r.append(h);
+                if (x.erreur || !Array.isArray(x.etapes)) { const c = el('td', 'e-rouge', x.erreur || 'plan illisible'); c.colSpan = n + 1; c.style.whiteSpace = 'normal'; r.append(c); }
+                else {
+                    x.etapes.forEach(y => {
+                        const c = el('td'); c.dataset.etape = y ? y.rang + ' · ' + y.resume : '';
+                        c.append(y && y.coupure ? el('span', 'coupure', 'coupure : ' + y.coupure + ' · ' + duree(y.duree_estimee_s)) : el('span', null, duree(y && y.duree_estimee_s)));
+                        r.append(c);
+                    });
+                    const tot = el('td'); tot.dataset.etape = 'TOTAL'; tot.append(el('span', null, duree(x.duree_totale_s))); r.append(tot);
+                }
+                tb.append(r);
+            });
+            t.append(tb); def.append(t); zone.append(def);
+            if (sims.some(x => x && x.locale)) zone.append(el('p', 'note', 'Durées estimées par la console.'));
+        }
+        function etapesDuPlan(p) {
+            if (p.macro) return Array.isArray(p.macro.etapes) ? p.macro.etapes : [];
+            return [{ type: 'action', action: p.action || (p.corps && p.corps.action), args: p.args || (p.corps && p.corps.args) || {}, delai_s: 900 }];
+        }
+        async function plansDe(p) {
+            const et = etapesDuPlan(p);
+            if (DEMO || !p.macro || !p.macro.id || p.macro.locale) return p.cibles.map(b => simulationLocale(et, b));
+            const r = [];
+            for (const b of p.cibles) r.push(await simulerBox(p.macro.id, b));   // une box après l'autre, dans l'ordre du lancement
+            return r;
+        }
+
+        // écran de lancement : plan, rappel de la série, un nom à retaper par box du maillage si une étape est forte
         let planLancement = null;
         function ouvrirLancement(plan) {
             planLancement = plan;
-            $('lancement-titre').textContent = 'Lancer « ' + plan.titre + ' »';
+            const coupures = [...new Set(etapesDuPlan(plan).map(coupureLocale).filter(Boolean))];
+            $('lancement-sur').textContent = (plan.macro ? 'MACRO · ' : 'ACTION · ') + String(plan.titre).toUpperCase();
+            $('lancement-titre').textContent = 'Lancer sur ' + (plan.cibles.length > 1 ? plan.cibles.length + ' box' : plan.cibles[0].nom) + ' ?';
+            const badge = $('lancement-badge');
+            badge.hidden = !coupures.length;
+            badge.textContent = coupures.length === 1 && coupures[0] === 'redémarrage' ? 'contient un redémarrage' : 'coupure prévue : ' + coupures.join(', ');
+            $('lancement').querySelector('.fenetre').classList.toggle('risque', !!(plan.forte || coupures.length));
             const corps = $('lancement-corps'); clear(corps); $('lancement-msg').textContent = '';
+            const zone = el('div'); zone.id = 'lancement-plan'; zone.append(el('p', 'note', 'Plan en préparation…'));
+            corps.append(zone);
             if (plan.cibles.length > 1)
-                corps.append(el('p', 'note', 'Une box après l\'autre : ' + plan.cibles[1].nom + ' ne commence qu\'une fois ' + plan.cibles[0].nom + ' revenue et son relevé sain.'));
-            plan.cibles.forEach(b => {
-                const bloc = el('div', 'plan-box'); bloc.append(el('b', null, b.nom));
-                if (cliente(b)) bloc.append(el('small', 'note', 'box cliente : la session de support ouverte par son détenteur tient lieu de confirmation'));
-                else if (plan.forte) {
+                corps.append(el('p', 'rappel', 'Une box après l\'autre : ' + plan.cibles[1].nom + ' ne commence qu\'une fois ' + plan.cibles[0].nom +
+                    ' revenue et son relevé sain. Au premier écart, la série s\'arrête et les box suivantes ne sont pas touchées.'));
+            plan.cibles.filter(cliente).forEach(b => corps.append(el('p', 'note', b.nom + ' : box cliente, la session de support ouverte par son détenteur tient lieu de confirmation.')));
+            const maillage = plan.forte ? plan.cibles.filter(b => !cliente(b)) : [];
+            if (maillage.length) {
+                corps.append(el('p', 'note', 'Confirmation forte : retapez le nom de chaque box.'));
+                const g = el('div', 'noms');
+                maillage.forEach(b => {
                     const c = el('div', 'champ'), id = 'conf-' + b.cle.replace(/[^A-Za-z0-9_-]/g, '_'), l = el('label', null, 'Retapez « ' + b.nom + ' »'), i = el('input');
-                    l.htmlFor = id; i.id = id; i.type = 'text'; i.autocomplete = 'off'; i.spellcheck = false; i.dataset.cle = b.cle; i.dataset.nom = b.nom;
-                    c.append(l, i); bloc.append(c);
-                }
-                corps.append(bloc);
-            });
+                    l.htmlFor = id; i.id = id; i.type = 'text'; i.autocomplete = 'off'; i.spellcheck = false; i.placeholder = b.nom; i.dataset.cle = b.cle; i.dataset.nom = b.nom;
+                    c.append(l, i); g.append(c);
+                });
+                corps.append(g);
+            }
             majLancer();
             $('lancement').hidden = false;
             const f = corps.querySelector('input') || $('lancement-ok'); f.focus();
+            plansDe(plan).then(s => { if (planLancement === plan) rendrePlan(zone, s); }).catch(e => { if (planLancement === plan) { clear(zone); zone.append(el('p', 'e-rouge', String(e && e.message || e))); } });
         }
         function majLancer() {
             const champs = [...$('lancement-corps').querySelectorAll('input[data-cle]')];
+            champs.forEach(i => i.classList.toggle('exact', i.value === i.dataset.nom));
             const k = champs.filter(i => i.value === i.dataset.nom).length;
             $('lancement-ok').disabled = k < champs.length;
-            $('lancement-ok').textContent = champs.length ? 'Lancer (' + k + ' noms sur ' + champs.length + ')' : 'Lancer';
+            $('lancement-ok').textContent = champs.length ? 'Lancer (' + k + (k > 1 ? ' noms' : ' nom') + ' sur ' + champs.length + ')' : 'Lancer';
         }
         function fermerLancement() { $('lancement').hidden = true; planLancement = null; }
         $('lancement-corps').addEventListener('input', majLancer);
@@ -584,7 +788,8 @@
                 const d = el('div', 'macro' + (enCours ? ' en-cours' : '')), l1 = el('div', 'l1'), l2 = el('div', 'l2');
                 const b = el('button', 'btn sm' + (macroForte(m) ? ' forte' : ''), 'Lancer'); b.type = 'button'; b.dataset.macro = m.id;
                 b.setAttribute('aria-label', 'Lancer ' + m.nom);
-                l1.append(el('b', null, m.nom), b); d.append(l1);
+                const o = el('button', 'btn sm', 'Ouvrir'); o.type = 'button'; o.dataset.editer = m.id; o.setAttribute('aria-label', 'Ouvrir ' + m.nom);
+                l1.append(el('b', null, m.nom), o, b); d.append(l1);
                 if (enCours) l2.append(el('span', 'badge cyan', 'en cours'));
                 else if (m.programmation && m.programmation.quotidien) l2.append(el('span', 'badge violet', 'chaque nuit ' + m.programmation.quotidien));
                 if (m.livree) l2.append(el('span', 'badge', 'livrée'));
@@ -594,9 +799,373 @@
                 zone.append(d);
             });
         }
-        $('macros-liste').addEventListener('click', e => { const b = e.target.closest('[data-macro]'); if (!b) return; const m = macros.find(x => x.id === b.dataset.macro); if (m) lancerMacro(m); });
-        function ouvrirEditeur() { message('L\'éditeur de macro n\'est pas encore disponible sur cette console.'); }
+        $('macros-liste').addEventListener('click', e => {
+            const o = e.target.closest('[data-editer]'); if (o) { const m = macros.find(x => x.id === o.dataset.editer); if (m) ouvrirEditeur(m); return; }
+            const b = e.target.closest('[data-macro]'); if (!b) return; const m = macros.find(x => x.id === b.dataset.macro); if (m) lancerMacro(m);
+        });
         $('macro-nouvelle').addEventListener('click', () => ouvrirEditeur());
+
+        // ---- éditeur de macro : liste fermée (5 types d'étape), bornes de pilotage/macros.py, l'API reste juge (400 affiché tel quel) ----
+        const ETAPES_MAX = 20;
+        const BORNES = { action: [60, 3600], releve: [10, 300], attendre: [30, 900] };
+        const REGLES = { nouveau_service_en_echec: 'nouveau service en échec', memoire_dispo_baisse_mo: 'baisse de la mémoire dispo (Mo)' };
+        const ALORS = { arreter: 'arrêter la macro sur cette box', passer: 'passer l\'étape suivante' };
+        const TITRES = { releve: 'relevé', condition: 'condition', comparer: 'comparer', attendre: 'attendre la box' };
+        let ed = null, glisse = null;
+        const etapeForte = e => !!(e && e.type === 'action' && action(e.action) && action(e.action).forte);
+        const entierOu = v => (typeof v === 'number' ? v : /^\s*-?\d+\s*$/.test(String(v)) ? parseInt(v, 10) : v);
+        const nombreOu = v => { if (typeof v === 'number') return v; const t = String(v).trim().replace(',', '.'); return t !== '' && Number.isFinite(Number(t)) ? Number(t) : v; };
+        function msgEd(texte, grave) { const m = $('ed-msg'); m.textContent = texte || ''; m.className = 'message' + (grave ? ' grave' : ''); hauteur(); }
+
+        function ouvrirEditeur(m) {
+            const c = m ? JSON.parse(JSON.stringify(m)) : null, prog = c && c.programmation && typeof c.programmation.quotidien === 'string' ? c.programmation.quotidien : null;
+            ed = { id: c ? c.id : null, livree: !!(c && c.livree), nom: c ? String(c.nom || '') : '',
+                etapes: c && Array.isArray(c.etapes) ? c.etapes.filter(e => e && typeof e === 'object') : [],
+                cibles: c ? (Array.isArray(c.cibles) ? c.cibles.filter(x => typeof x === 'string') : []) : ciblesCochees().map(b => b.cle),
+                quand: prog ? 'nuit' : 'demande', heure: prog || '03:00', sale: false, quitter: false, supprimer: false };
+            fermerFenetre(); $('commande').value = ''; rendreSuggestions();
+            $('console').classList.add('edition'); $('editeur').hidden = false;
+            $('ed-plan-pan').hidden = true; clear($('ed-plan')); msgEd('');
+            rendreEditeur();
+            window.scrollTo(0, 0);
+            (ed.livree ? $('ed-retour') : $('ed-nom')).focus();
+        }
+        function fermerEditeur(force) {
+            if (!ed) return true;
+            if (ed.sale && !force && !ed.quitter) { ed.quitter = true; msgEd('Modifications non enregistrées : Échap ou « Retour » encore une fois pour quitter sans enregistrer.', true); return false; }
+            ed = null; $('editeur').hidden = true; $('console').classList.remove('edition'); msgEd('');
+            rendreMacros(); hauteur();
+            return true;
+        }
+        function sale() { ed.sale = true; ed.quitter = false; if (ed.supprimer) { ed.supprimer = false; rendrePied(); } }
+        function rendreEditeur() {
+            $('editeur').classList.toggle('lecture', ed.livree);
+            $('ed-sur').textContent = ed.livree ? 'MACRO LIVRÉE · LECTURE SEULE' : ed.id ? 'MACRO' : 'NOUVELLE MACRO';
+            $('ed-nom').value = ed.nom; $('ed-nom').disabled = ed.livree;
+            $('ed-catalogue').hidden = ed.livree;
+            rendreCatalogueEd(); rendreEtapes(); rendreCibles(); rendrePied();
+        }
+        function rendreCatalogueEd() {
+            const z = $('ed-actions'); clear(z);
+            catalogue.forEach(a => {
+                const b = el('button', 'cat' + (a.cle === 'reboot' ? ' danger' : a.forte ? ' forte' : ''), a.cle + a.parametres.map(p => ' <' + (p === 'unite' ? 'unité' : p) + '>').join(''));
+                b.type = 'button'; b.dataset.ajout = 'action:' + a.cle; b.title = (LIBELLES[a.cle] || a.cle) + (a.forte ? ' · confirmation forte' : '');
+                if (a.macro === false) { b.dataset.horsMacro = '1'; b.title = 'action seule de la console : pas dans une macro'; } else b.draggable = true;
+                z.append(b);
+            });
+            majAjouts();
+        }
+        function majAjouts() {
+            const plein = ed.etapes.length >= ETAPES_MAX;
+            $('ed-catalogue').querySelectorAll('[data-ajout]').forEach(b => { b.disabled = plein || b.dataset.horsMacro === '1'; });
+        }
+        // noms des relevés produits AVANT l'étape i (les seuls qu'une condition ou une comparaison peut lire)
+        function relevesAvant(i) { return ed.etapes.slice(0, i).filter(e => e.type === 'releve' && typeof e.nom === 'string' && e.nom).map(e => e.nom); }
+        function nomReleveLibre() {
+            const pris = new Set(ed.etapes.filter(e => e.type === 'releve').map(e => e.nom));
+            for (const n of ['avant', 'apres']) if (!pris.has(n)) return n;
+            for (let k = 1; ; k++) if (!pris.has('r' + k)) return 'r' + k;
+        }
+        function nouvelleEtape(ajout, i) {
+            const noms = relevesAvant(i);
+            if (ajout.startsWith('action:')) {
+                const a = action(ajout.slice(7)); if (!a || a.macro === false) return null;
+                const args = {}; a.parametres.forEach(p => { args[p] = ''; });
+                return { type: 'action', action: a.cle, args: args, delai_s: 900 };
+            }
+            if (ajout === 'releve') return { type: 'releve', duree_s: 60, nom: nomReleveLibre() };
+            if (ajout === 'condition') return { type: 'condition', mesure: 'services_en_echec', releve: noms.length ? noms[noms.length - 1] : '', op: '>', seuil: 0, alors: 'arreter' };
+            if (ajout === 'comparer') return { type: 'comparer', avant: noms[0] || '', apres: noms.length > 1 ? noms[noms.length - 1] : '', regle: 'nouveau_service_en_echec', seuil: 0 };
+            if (ajout === 'attendre') return { type: 'attendre', delai_s: 300 };
+            return null;
+        }
+        function ajouterEtape(ajout, i) {
+            if (!ed || ed.livree) return;
+            if (ed.etapes.length >= ETAPES_MAX) return msgEd('Une macro compte ' + ETAPES_MAX + ' étapes au plus.', true);
+            const at = i == null ? ed.etapes.length : Math.max(0, Math.min(i, ed.etapes.length)), e = nouvelleEtape(ajout, at);
+            if (!e) return;
+            ed.etapes.splice(at, 0, e); sale(); rendreEtapes();
+        }
+        function deplacerEtape(de, vers, focus) {
+            const n = ed.etapes.length; if (de < 0 || de >= n || vers < 0 || vers >= n || de === vers) return;
+            const [e] = ed.etapes.splice(de, 1); ed.etapes.splice(vers, 0, e); sale(); rendreEtapes(focus);
+        }
+        function titreEtape(e) { return e.type === 'action' ? String(e.action) : TITRES[e.type] || String(e.type); }
+        function sousEtape(e) {
+            if (e.type === 'action') return (LIBELLES[e.action] || '') + (etapeForte(e) ? ' · confirmation forte' : '') + (coupureLocale(e) ? ' · coupure : ' + coupureLocale(e) : '');
+            if (e.type === 'releve') return 'mesures de la box, mémorisées sous un nom';
+            if (e.type === 'condition') return 'lit un relevé antérieur';
+            if (e.type === 'comparer') return 'écart → arrêt de la série, relance proposée';
+            if (e.type === 'attendre') return 'la box revient en ligne (nouveau démarrage après un redémarrage)';
+            return '';
+        }
+        function champ(i, nom, libelle, ctrl, lecture) {
+            ctrl.dataset.i = String(i); ctrl.dataset.champ = nom; ctrl.dataset.focus = 'c:' + i + ':' + nom; ctrl.disabled = lecture;
+            const l = el('label'); l.append(el('span', null, libelle), ctrl); return l;
+        }
+        function nombre(v, bornes, pas) { const i = el('input'); i.type = 'number'; i.value = v == null ? '' : String(v); if (bornes) { i.min = String(bornes[0]); i.max = String(bornes[1]); } i.step = pas || '1'; i.inputMode = 'numeric'; return i; }
+        function texte(v, max) { const i = el('input'); i.type = 'text'; i.value = v == null ? '' : String(v); i.maxLength = max; i.autocomplete = 'off'; i.spellcheck = false; return i; }
+        function liste(v, options) {
+            const s = el('select'), vals = options.map(o => o[0]);
+            if (v != null && vals.indexOf(v) < 0) options = [[v, v === '' ? '— aucun relevé avant' : v + ' (non produit avant)']].concat(options);
+            options.forEach(([val, txt]) => { const o = el('option', null, txt); o.value = val; s.append(o); });
+            s.value = v == null ? '' : v; return s;
+        }
+        function champsEtape(e, i, lecture) {
+            const z = el('div', 'et-champs'), noms = relevesAvant(i).map(n => [n, '« ' + n + ' »']);
+            if (e.type === 'action') {
+                const a = action(e.action);
+                (a ? a.parametres : Object.keys(e.args || {})).forEach(p => z.append(champ(i, 'arg:' + p, PARAMS[p] || p, texte((e.args || {})[p], 120), lecture)));
+                z.append(champ(i, 'delai_s', 'délai (s)', nombre(e.delai_s == null ? 900 : e.delai_s, BORNES.action), lecture));
+            } else if (e.type === 'releve') {
+                z.append(champ(i, 'duree_s', 'durée (s)', nombre(e.duree_s, BORNES.releve), lecture));
+                const n = texte(e.nom, 20); n.pattern = '(avant|apres|[a-z0-9-]{1,20})'; n.title = 'avant, apres ou 1 à 20 caractères a-z, 0-9, tiret';
+                z.append(champ(i, 'nom', 'mémorisé sous', n, lecture));
+            } else if (e.type === 'condition') {
+                z.append(champ(i, 'mesure', 'si', liste(e.mesure, Object.keys(MESURES).map(k => [k, MESURES[k]])), lecture),
+                    champ(i, 'releve', 'du relevé', liste(e.releve, noms), lecture),
+                    champ(i, 'op', 'est', liste(e.op, [['>', 'supérieure à (>)'], ['<', 'inférieure à (<)']]), lecture),
+                    champ(i, 'seuil', 'seuil', nombre(e.seuil, null, 'any'), lecture),
+                    champ(i, 'alors', 'alors', liste(e.alors, Object.keys(ALORS).map(k => [k, ALORS[k]])), lecture));
+            } else if (e.type === 'comparer') {
+                z.append(champ(i, 'avant', 'avant', liste(e.avant, noms), lecture), champ(i, 'apres', 'après', liste(e.apres, noms), lecture),
+                    champ(i, 'regle', 'règle', liste(e.regle, Object.keys(REGLES).map(k => [k, REGLES[k]])), lecture),
+                    champ(i, 'seuil', 'seuil', nombre(e.seuil == null ? 0 : e.seuil, null, 'any'), lecture));
+            } else if (e.type === 'attendre') {
+                z.append(champ(i, 'delai_s', 'délai (s)', nombre(e.delai_s == null ? 300 : e.delai_s, BORNES.attendre), lecture));
+            }
+            return z;
+        }
+        const FLECHES = { monter: 'm18 15-6-6-6 6', descendre: 'm6 9 6 6 6-6', supprimer: 'M18 6 6 18M6 6l12 12' };
+        function boutonOrdre(geste, libelle, i, inactif) {
+            const b = el('button', 'btn icone' + (geste === 'supprimer' ? ' danger' : '')); b.type = 'button';
+            b.dataset.geste = geste; b.dataset.i = String(i); b.dataset.focus = geste + ':' + i; b.disabled = inactif;
+            b.setAttribute('aria-label', libelle + ' l\'étape ' + (i + 1)); b.title = libelle + ' l\'étape ' + (i + 1);
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            ['width', 'height'].forEach(a => svg.setAttribute(a, '15')); svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2'); svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('aria-hidden', 'true');
+            path.setAttribute('d', FLECHES[geste]); svg.append(path); b.append(svg);
+            return b;
+        }
+        // focus : rendu explicite (après Monter/Descendre) ou gardé sur le champ actif ; jamais perdu par un nouveau rendu
+        function rendreEtapes(focus) {
+            const a = document.activeElement, garde = focus || (a && a.closest && a.closest('#ed-etapes') ? a.dataset.focus : null);
+            const ol = $('ed-etapes'), lecture = ed.livree, n = ed.etapes.length; clear(ol);
+            ed.etapes.forEach((e, i) => {
+                const li = el('li', 'etape' + (e.type === 'action' ? (e.action === 'reboot' ? ' danger' : etapeForte(e) ? ' forte' : '') : ' ctl'));
+                li.dataset.i = String(i); li.dataset.type = String(e.type); li.draggable = !lecture;
+                const corps = el('div', 'et-corps'), t = el('div', 'et-titre');
+                t.append(el('b', e.type === 'action' ? 'mono' : null, titreEtape(e)), el('span', 'note', sousEtape(e)));
+                corps.append(t, champsEtape(e, i, lecture));
+                li.append(el('span', 'num', i + 1), corps);
+                if (!lecture) {
+                    const o = el('div', 'et-ordre');
+                    o.append(boutonOrdre('monter', 'Monter', i, i === 0), boutonOrdre('descendre', 'Descendre', i, i === n - 1), boutonOrdre('supprimer', 'Supprimer', i, false));
+                    li.append(o);
+                }
+                ol.append(li);
+            });
+            if (!n) ol.append(el('li', 'vide', lecture ? 'Aucune étape.' : 'Aucune étape : cliquez ou glissez une action du catalogue ou un contrôle du maître.'));
+            $('ed-depot').hidden = lecture || n >= ETAPES_MAX;
+            $('ed-compte').textContent = n + ' / ' + ETAPES_MAX + ' étapes';
+            majAjouts(); majQuand(); majNote();
+            if (garde) { const f = [...ol.querySelectorAll('[data-focus]')].find(x => x.dataset.focus === garde); if (f && !f.disabled) f.focus(); }
+            hauteur();
+        }
+        $('ed-etapes').addEventListener('click', e => {
+            const b = e.target.closest('[data-geste]'); if (!b || !ed || ed.livree) return;
+            const i = Number(b.dataset.i), n = ed.etapes.length;
+            if (b.dataset.geste === 'monter') deplacerEtape(i, i - 1, i - 1 === 0 ? 'descendre:0' : 'monter:' + (i - 1));
+            else if (b.dataset.geste === 'descendre') deplacerEtape(i, i + 1, i + 1 === n - 1 ? 'monter:' + (i + 1) : 'descendre:' + (i + 1));
+            else if (b.dataset.geste === 'supprimer') {
+                ed.etapes.splice(i, 1); sale();
+                rendreEtapes(ed.etapes.length ? 'supprimer:' + Math.min(i, ed.etapes.length - 1) : null);
+                if (!ed.etapes.length) $('ed-nom').focus();
+            }
+        });
+        function saisirChamp(t, fin) {
+            if (!ed || ed.livree || !t.dataset || t.dataset.champ == null) return;
+            const e = ed.etapes[Number(t.dataset.i)], c = t.dataset.champ; if (!e) return;
+            if (c.startsWith('arg:')) { e.args = Object.assign({}, e.args); e.args[c.slice(4)] = t.value; } else e[c] = t.value;
+            sale();
+            if (fin && e.type === 'releve' && c === 'nom') rendreEtapes();   // les listes de relevés des étapes suivantes changent
+            else if (fin) { majQuand(); majNote(); }
+        }
+        $('ed-etapes').addEventListener('input', e => saisirChamp(e.target, false));
+        $('ed-etapes').addEventListener('change', e => saisirChamp(e.target, true));
+        $('ed-nom').addEventListener('input', () => { if (ed && !ed.livree) { ed.nom = $('ed-nom').value; sale(); } });
+        $('ed-catalogue').addEventListener('click', e => { const b = e.target.closest('[data-ajout]'); if (b && !b.disabled) ajouterEtape(b.dataset.ajout); });
+
+        // glisser : du catalogue vers la macro (ajout), ou une étape vers une autre place ; dépôt avant l'étape survolée, sinon à la fin
+        $('ed-catalogue').addEventListener('dragstart', e => {
+            const b = e.target.closest('[data-ajout]'); if (!b || b.disabled || !ed || ed.livree) { e.preventDefault(); return; }
+            glisse = { ajout: b.dataset.ajout }; e.dataTransfer.setData('text/plain', b.dataset.ajout); e.dataTransfer.effectAllowed = 'copy';
+        });
+        $('ed-etapes').addEventListener('dragstart', e => {
+            const li = e.target.closest && e.target.closest('.etape'); if (!li || !ed || ed.livree || e.target.closest('input, select, button')) { e.preventDefault(); return; }
+            glisse = { de: Number(li.dataset.i) }; e.dataTransfer.setData('text/plain', 'etape ' + li.dataset.i); e.dataTransfer.effectAllowed = 'move';
+        });
+        function survols(off) { document.querySelectorAll('#editeur .survol').forEach(x => x.classList.remove('survol')); return off; }
+        ['ed-etapes', 'ed-depot'].forEach(id => {
+            $(id).addEventListener('dragover', e => {
+                if (!glisse) return; e.preventDefault(); survols();
+                const li = e.target.closest && e.target.closest('.etape'); (li || $('ed-depot')).classList.add('survol');
+            });
+            $(id).addEventListener('dragleave', () => survols());
+            $(id).addEventListener('drop', e => {
+                if (!glisse || !ed) return; e.preventDefault(); survols();
+                const li = e.target.closest && e.target.closest('.etape'), vers = li ? Number(li.dataset.i) : ed.etapes.length, g = glisse; glisse = null;
+                if (g.ajout) ajouterEtape(g.ajout, vers);
+                else if (g.de != null) deplacerEtape(g.de, g.de < vers ? vers - 1 : vers);
+            });
+        });
+        document.addEventListener('dragend', () => { glisse = null; survols(); });
+
+        // cibles : box cochées une à une, ou un groupe de la flotte d'un coup
+        function rendreCibles() {
+            const g = $('ed-groupes'), z = $('ed-cibles'); clear(g); clear(z);
+            g.hidden = ed.livree;
+            if (!ed.livree) {
+                filtresFlotte().filter(f => f[0] !== 'toutes' && f[0] !== 'muettes').forEach(([id, lib, cles]) => {
+                    const p = el('button', 'puce', 'Groupe « ' + lib + ' »'); p.type = 'button'; p.dataset.cles = JSON.stringify(cles || []); g.append(p);
+                });
+                const aucune = el('button', 'puce', 'Aucune'); aucune.type = 'button'; aucune.dataset.cles = '[]'; aucune.dataset.vider = '1'; g.append(aucune);
+            }
+            const connues = new Set(boxes.map(b => b.cle));
+            boxes.forEach(b => {
+                const coche = ed.cibles.indexOf(b.cle) >= 0, l = el('label'), c = el('input');
+                c.type = 'checkbox'; c.dataset.cle = b.cle; c.checked = coche; c.disabled = ed.livree || (!b.cochable && !coche);
+                l.append(c, el('span', null, b.nom + (cliente(b) ? ' · cliente' : '') + (b.en_ligne ? '' : ' · muette')));
+                z.append(l);
+            });
+            ed.cibles.filter(c => !connues.has(c)).forEach(c => { const l = el('label'); l.append(el('span', 'e-orange', c + ' · inconnue de la flotte')); z.append(l); });
+            const n = ed.cibles.length, cl = ed.cibles.map(boxDe).filter(b => b && cliente(b)).length;
+            $('ed-cibles-note').textContent = n ? n + (n > 1 ? ' cibles' : ' cible') + (cl ? ' dont ' + cl + ' cliente' + (cl > 1 ? 's' : '') : ' · box du propriétaire')
+                : 'Aucune cible enregistrée : la macro vise les box cochées dans la Flotte au lancement.';
+            const s = $('ed-sim-box'), avant = s.value; clear(s);
+            boxes.filter(b => b.cochable).forEach(b => { const o = el('option', null, b.nom); o.value = b.cle; s.append(o); });
+            const pref = ed.cibles.find(c => boxDe(c) && boxDe(c).cochable);
+            s.value = [...s.options].some(o => o.value === avant) ? avant : pref || (s.options[0] ? s.options[0].value : '');
+            majSimuler(); majQuand();
+        }
+        $('ed-cibles').addEventListener('change', e => {
+            const c = e.target.closest('input[data-cle]'); if (!c || !ed || ed.livree) return;
+            ed.cibles = ed.cibles.filter(x => x !== c.dataset.cle); if (c.checked) ed.cibles.push(c.dataset.cle);
+            sale(); rendreCibles();
+        });
+        $('ed-groupes').addEventListener('click', e => {
+            const p = e.target.closest('[data-cles]'); if (!p || !ed || ed.livree) return;
+            if (p.dataset.vider) ed.cibles = [];
+            else JSON.parse(p.dataset.cles).forEach(c => { const b = boxDe(c); if (b && b.cochable && ed.cibles.indexOf(c) < 0) ed.cibles.push(c); });
+            sale(); rendreCibles();
+        });
+
+        // quand : chaque nuit HH:MM, refusé (comme l'API) si une étape est forte ou une cible cliente ; la raison est dite
+        function blocageNuit() {
+            const i = ed.etapes.findIndex(etapeForte);
+            if (i >= 0) return 'Chaque nuit : indisponible, l\'étape ' + (i + 1) + ' (' + ed.etapes[i].action + ') demande une confirmation forte — personne pour retaper les noms la nuit.';
+            const cl = ed.cibles.map(boxDe).filter(b => b && cliente(b));
+            if (cl.length) return 'Chaque nuit : indisponible, ' + cl.map(b => b.nom).join(', ') + (cl.length > 1 ? ' sont des box clientes' : ' est une box cliente') + ' (session de support requise à chaque lancement).';
+            return '';
+        }
+        function majQuand() {
+            if (!ed) return;
+            const r = blocageNuit();
+            if (r && ed.quand === 'nuit') ed.quand = 'demande';
+            $('ed-demande').disabled = ed.livree; $('ed-nuit').disabled = ed.livree || !!r;
+            $('ed-demande').checked = ed.quand === 'demande'; $('ed-nuit').checked = ed.quand === 'nuit';
+            $('ed-heure').value = ed.heure; $('ed-heure').disabled = ed.livree || !!r || ed.quand !== 'nuit';
+            $('ed-quand-raison').textContent = r;
+        }
+        ['ed-demande', 'ed-nuit'].forEach(id => $(id).addEventListener('change', () => { if (!ed || ed.livree) return; ed.quand = $('ed-nuit').checked ? 'nuit' : 'demande'; sale(); majQuand(); }));
+        $('ed-heure').addEventListener('input', () => { if (!ed || ed.livree) return; ed.heure = $('ed-heure').value; sale(); });
+        function majNote() {
+            $('ed-note').textContent = ed.etapes.some(etapeForte)
+                ? 'Contient une étape à confirmation forte : le nom de chaque box du maillage sera retapé au lancement.'
+                : 'Aucune étape à risque : lancement sans confirmation forte. Chaque étape est écrite dans le journal d\'audit du maître.';
+        }
+        function majSimuler() { const b = boxDe($('ed-sim-box').value); $('ed-simuler').textContent = b ? 'Simuler sur ' + b.nom : 'Simuler sur…'; $('ed-simuler').disabled = !b; }
+        $('ed-sim-box').addEventListener('change', majSimuler);
+        function rendrePied() {
+            $('ed-enregistrer').hidden = $('ed-enregistrer-lancer').hidden = ed.livree;
+            $('ed-supprimer').hidden = ed.livree || !ed.id;
+            $('ed-supprimer').textContent = ed.supprimer ? 'Confirmer la suppression' : 'Supprimer';
+            $('ed-copier').hidden = !ed.id;
+            majSimuler();
+        }
+
+        function corpsEtape(e) {
+            if (e.type === 'action') {
+                const a = action(e.action), args = {};
+                (a ? a.parametres : Object.keys(e.args || {})).forEach(p => { args[p] = String((e.args || {})[p] == null ? '' : e.args[p]).trim(); });
+                return { type: 'action', action: e.action, args: args, delai_s: entierOu(e.delai_s == null ? 900 : e.delai_s) };
+            }
+            if (e.type === 'releve') return { type: 'releve', duree_s: entierOu(e.duree_s), nom: String(e.nom == null ? '' : e.nom).trim() };
+            if (e.type === 'condition') return { type: 'condition', mesure: e.mesure, releve: e.releve, op: e.op, seuil: nombreOu(e.seuil), alors: e.alors };
+            if (e.type === 'comparer') return { type: 'comparer', avant: e.avant, apres: e.apres, regle: e.regle, seuil: nombreOu(e.seuil == null ? 0 : e.seuil) };
+            if (e.type === 'attendre') return { type: 'attendre', delai_s: entierOu(e.delai_s == null ? 300 : e.delai_s) };
+            return Object.assign({}, e);
+        }
+        function corpsMacro() {
+            return { nom: ed.nom.trim(), etapes: ed.etapes.map(corpsEtape), cibles: ed.cibles.slice(),
+                programmation: ed.quand === 'nuit' && !blocageNuit() ? { quotidien: ed.heure } : null };
+        }
+        function ciblesEd() { const c = ed.cibles.map(boxDe).filter(b => b && b.cochable); return c.length ? c : ciblesCochees(); }
+        async function enregistrerEd(lancer) {
+            if (!ed || ed.livree) return;
+            const corps = corpsMacro(), cur = ed;
+            if (!corps.nom) { msgEd('Donnez un nom à la macro.', true); $('ed-nom').focus(); return; }
+            if (!corps.etapes.length) return msgEd('Ajoutez au moins une étape.', true);
+            if (DEMO) {
+                msgEd('Démonstration : la macro n\'est pas enregistrée.');
+                if (lancer) lancerMacro(Object.assign({ livree: false }, corps, { id: ed.id || 'demo-nouvelle', locale: true }), ciblesEd());
+                return;
+            }
+            $('ed-enregistrer').disabled = $('ed-enregistrer-lancer').disabled = true;
+            try {
+                const d = ed.id ? await api('/macros/' + enc(ed.id), { method: 'PUT', corps: corps }) : await api('/macros', { method: 'POST', corps: corps });
+                if (ed !== cur) return;
+                ed.id = d && typeof d.id === 'string' ? d.id : ed.id; ed.sale = false; ed.quitter = false;
+                msgEd('Macro « ' + corps.nom + ' » enregistrée.');
+                rendreEditeur();
+                charger().catch(() => { /* relu au prochain tour */ });
+                if (lancer) lancerMacro(Object.assign({ livree: false }, corps, { id: ed.id }), ciblesEd());
+            } catch (e) { if (ed === cur) msgEd(e.detail || e.message, true); }
+            finally { $('ed-enregistrer').disabled = $('ed-enregistrer-lancer').disabled = false; }
+        }
+        $('ed-enregistrer').addEventListener('click', () => enregistrerEd(false));
+        $('ed-enregistrer-lancer').addEventListener('click', () => enregistrerEd(true));
+        $('ed-retour').addEventListener('click', () => fermerEditeur(false));
+        $('ed-simuler').addEventListener('click', async () => {
+            if (!ed) return;
+            const b = boxDe($('ed-sim-box').value), cur = ed;
+            if (!b) return msgEd('Aucune box en ligne à simuler.', true);
+            if (!ed.etapes.length) return msgEd('Ajoutez au moins une étape.', true);
+            if (!DEMO && (!ed.id || ed.sale)) return msgEd('Enregistrez d\'abord : la simulation porte sur la macro enregistrée.', true);
+            const s = DEMO ? simulationLocale(ed.etapes, b) : await simulerBox(ed.id, b);
+            if (ed !== cur) return;
+            $('ed-plan-pan').hidden = false; rendrePlan($('ed-plan'), [s]); msgEd('Simulation sur ' + b.nom + ' : rien n\'est envoyé.');
+        });
+        $('ed-copier').addEventListener('click', async () => {
+            if (!ed || !ed.id) return;
+            if (DEMO) return msgEd('Démonstration : aucune copie enregistrée.');
+            const cur = ed;
+            try {
+                const d = await api('/macros/' + enc(ed.id) + '/copier', { method: 'POST' });
+                await charger();
+                const m = macros.find(x => d && x.id === d.id);
+                if (ed !== cur) return;
+                if (m) { ed.sale = false; ouvrirEditeur(m); msgEd('Copie modifiable : « ' + m.nom + ' ».'); } else msgEd('Copie enregistrée.');
+            } catch (e) { if (ed === cur) msgEd(e.detail || e.message, true); }
+        });
+        $('ed-supprimer').addEventListener('click', async () => {
+            if (!ed || !ed.id || ed.livree) return;
+            if (!ed.supprimer) { ed.supprimer = true; rendrePied(); msgEd('Cliquez encore sur « Confirmer la suppression » pour supprimer « ' + ed.nom + ' ».', true); return; }
+            if (DEMO) { ed.supprimer = false; rendrePied(); return msgEd('Démonstration : rien n\'est supprimé.'); }
+            const cur = ed;
+            try { await api('/macros/' + enc(ed.id), { method: 'DELETE' }); if (ed === cur) { fermerEditeur(true); message('Macro « ' + cur.nom + ' » supprimée.'); charger().catch(() => {}); } }
+            catch (e) { if (ed === cur) msgEd(e.detail || e.message, true); }
+        });
 
         // ---- la box choisie, maintenant ----
         function choisirBox(cle) {
@@ -914,18 +1483,19 @@
         }
         window.addEventListener('resize', () => { if (!zoom && window.innerWidth < 720 && !sessionLire(ZOOM_CLE)) appliquerZoom('pan-flotte', false); });
 
-        // Échap (sur la page seulement) : d'abord une fenêtre ouverte, puis les suggestions, puis le zoom ; Ctrl K : la barre de commande
+        // Échap (sur la page seulement) : d'abord une fenêtre ouverte, puis les suggestions, puis l'éditeur, puis le zoom ; Ctrl K : la barre de commande
         document.addEventListener('keydown', e => {
-            if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); $('commande').focus(); $('commande').select(); return; }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { if (ed) return; e.preventDefault(); $('commande').focus(); $('commande').select(); return; }
             if (e.key !== 'Escape') return;
             if (!$('lancement').hidden) { e.preventDefault(); fermerLancement(); return; }
             if (!$('fenetre').hidden) { e.preventDefault(); fermerFenetre(); return; }
             if (!$('suggestions').hidden) { e.preventDefault(); $('commande').value = ''; rendreSuggestions(); return; }
+            if (ed) { e.preventDefault(); fermerEditeur(false); return; }
             if (zoom) { e.preventDefault(); appliquerZoom(null, true); }
         });
 
         // ---- chargement et actualisation ----
-        function fenetreOuverte() { return !$('lancement').hidden || !$('fenetre').hidden; }
+        function fenetreOuverte() { return !$('lancement').hidden || !$('fenetre').hidden || !!ed; }
         function saisieEnCours() { const a = document.activeElement; return !!a && (a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || (a.tagName === 'INPUT' && a.type === 'text')); }
         function appliquerFlotte(d) {
             boxes = Array.isArray(d && d.boxes) ? d.boxes.filter(b => b && typeof b.cle === 'string' && typeof b.nom === 'string') : [];
@@ -994,6 +1564,10 @@
                     { type: 'releve', duree_s: 60, nom: 'apres' }, { type: 'comparer', avant: 'avant', apres: 'apres', regle: 'nouveau_service_en_echec', seuil: 0 }] },
                 { id: 'livree:remise-en-route', nom: 'Remise en route', livree: true, cibles: [], programmation: null, etapes: [{ type: 'releve', duree_s: 60, nom: 'avant' }] },
                 { id: 'livree:retour-en-local', nom: 'Retour en local', livree: true, cibles: [], programmation: null, etapes: [{ type: 'action', action: 'interface-locale', args: {} }] },
+                { id: 'demo-2', nom: 'Mise à jour + redémarrage', livree: false, cibles: ['maillage:atelier', 'maillage:salon'], programmation: null, etapes: [
+                    { type: 'releve', duree_s: 60, nom: 'avant' }, { type: 'action', action: 'maj-paquets', args: {}, delai_s: 900 }, { type: 'action', action: 'reboot', args: {}, delai_s: 900 },
+                    { type: 'attendre', delai_s: 300 }, { type: 'releve', duree_s: 60, nom: 'apres' },
+                    { type: 'comparer', avant: 'avant', apres: 'apres', regle: 'nouveau_service_en_echec', seuil: 0 }] },
                 { id: 'demo-1', nom: 'Nuit tranquille', livree: false, cibles: ['maillage:salon'], programmation: { quotidien: '03:00' }, etapes: [{ type: 'releve', duree_s: 60, nom: 'diag' }] }];
             rendreMacros();
             cochees = ['maillage:atelier']; rendreFlotte();

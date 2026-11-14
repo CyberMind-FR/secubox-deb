@@ -12,6 +12,10 @@ import urllib.parse
 
 import pytest
 
+from api.main import _resume_etape
+from pilotage import macros as MAC
+from pilotage.operations import CATALOGUE
+
 sync_api = pytest.importorskip("playwright.sync_api")
 PAGE = pathlib.Path(__file__).resolve().parents[1] / "www" / "pilotage" / "console" / "index.html"
 BASE = "http://t.test"
@@ -57,6 +61,23 @@ MACROS = [
 ]
 
 
+# #3702 tâche 8 : macro à confirmation forte (redémarrage), étapes normalisées comme l'API les rend
+MACRO_REBOOT = {"id": "m2", "nom": "Redémarrage contrôlé", "livree": False, "cibles": [], "programmation": None, "cree_le": 1,
+                "maj_le": 1, "auteur": "admin",
+                "etapes": MAC.valider_etapes([{"type": "releve", "duree_s": 60, "nom": "avant"}, {"type": "action", "action": "reboot"},
+                                              {"type": "attendre", "delai_s": 300}, {"type": "releve", "duree_s": 60, "nom": "apres"},
+                                              {"type": "comparer", "avant": "avant", "apres": "apres", "regle": "nouveau_service_en_echec"}])}
+
+
+def _simulation(m, b):
+    """Réponse de POST /macros/{id}/simuler, construite par les fonctions mêmes de l'API (api/main.py)."""
+    etapes = [{"rang": i, "type": e["type"], "resume": _resume_etape(e), "forte": bool(e["type"] == "action" and CATALOGUE[e["action"]].forte),
+               "coupure": MAC.coupure(e), "duree_estimee_s": MAC.estimer_s(e)} for i, e in enumerate(m["etapes"], 1)]
+    cliente = b["reseau"] != "maillage"
+    return {"box": b["nom"], "cle": b["cle"], "en_ligne": b["en_ligne"], "cliente": cliente, "forte_requise": MAC.contient_forte(m["etapes"]),
+            "support_requis": cliente, "etapes": etapes, "duree_totale_s": sum(e["duree_estimee_s"] for e in etapes)}
+
+
 def _execution(ident=7, etat="en_cours", unite="secubox-portal"):
     return {"id": ident, "macro_id": "livree:mise-a-jour-sure", "macro_nom": "Mise à jour sûre",
             "cibles": [{"cle": "maillage:gk7", "nom": "gk7"}], "etat": etat, "acteur": "admin", "debut": MAINTENANT - 120, "fin": None,
@@ -74,17 +95,29 @@ def _sse(nom, data):
     return f"event: {nom}\ndata: {json.dumps(data)}\n\n"
 
 
-def _api_simulee(executions=None, detail=None, flux=None, ecritures=None):
+def _api_simulee(executions=None, detail=None, flux=None, ecritures=None, flotte=None, macros=None):
     """Répondeur des routes /api/v1/pilotage/… : (statut, corps) ; `ecritures` : réponse des POST (statut, corps) par motif de chemin."""
     executions = executions if executions is not None else []
+    flotte = flotte or _flotte()
+    macros = macros if macros is not None else MACROS
 
     def repondre(methode, chemin, requete):
         if methode == "GET" and chemin == "/catalogue":
             return 200, _catalogue()
         if methode == "GET" and chemin == "/flotte":
-            return 200, _flotte()
+            return 200, flotte
         if methode == "GET" and chemin == "/macros":
-            return 200, MACROS
+            return 200, macros
+        if methode == "GET" and chemin.startswith("/macros/"):
+            m = next((x for x in macros if x["id"] == urllib.parse.unquote(chemin.split("/")[2])), None)
+            return (200, m) if m else (404, {"detail": "macro inconnue"})
+        if methode == "POST" and chemin.startswith("/macros/") and chemin.endswith("/simuler"):
+            m = next((x for x in macros if x["id"] == urllib.parse.unquote(chemin.split("/")[2])), None)
+            cible = (requete.post_data_json or {}).get("box")
+            b = next((x for x in flotte["boxes"] if cible in (x["cle"], x["nom"])), None)
+            if m is None or b is None:
+                return 404, {"detail": "macro inconnue" if m is None else "box inconnue"}
+            return 200, _simulation(m, b)
         if methode == "GET" and chemin == "/executions":
             return 200, [{k: v for k, v in e.items() if k != "etapes"} for e in executions]
         if methode == "GET" and chemin.startswith("/executions/") and chemin.endswith("/flux"):
@@ -98,7 +131,7 @@ def _api_simulee(executions=None, detail=None, flux=None, ecritures=None):
             return 200, []
         if methode == "GET" and chemin.startswith("/boxes/"):
             nom = urllib.parse.unquote(chemin.split("/")[2]).split(":")[-1]
-            b = next(x for x in _flotte()["boxes"] if x["nom"] == nom)
+            b = next(x for x in flotte["boxes"] if x["nom"] == nom)
             return 200, {**b, "inventaire": {}, "inventaire_tronques": 0, "services_en_echec_noms": ["secubox-portal"] if nom == "gk7" else []}
         return 404, {"detail": "route inconnue du simulateur"}
     return repondre
@@ -420,3 +453,191 @@ def test_releve_ligne_resolue_ok_puis_echec():
     lignes, erreurs, _, _ = _nav(sc, api=api)
     assert len(lignes) == 2 and "… en cours" not in " ".join(lignes)
     assert "relevé 60 s" in lignes[0] and "ok" in lignes[0] and "échec" in lignes[1] and "déjà en cours" in lignes[1] and erreurs == []
+
+
+# ---- #3702 tâche 8 : écran de lancement (plan simulé, noms retapés) et éditeur de macro ----
+
+def _ecrits(pg):
+    """Corps JSON des requêtes d'écriture, dans l'ordre : [(méthode, chemin, corps)]."""
+    corps = []
+    pg.on("request", lambda r: corps.append((r.method, urllib.parse.urlsplit(r.url).path[len("/api/v1/pilotage"):], r.post_data_json))
+          if r.method != "GET" and "/api/" in r.url else None)
+    return corps
+
+
+def test_lancer_inactif_tant_qu_un_nom_manque():
+    api = _api_simulee(macros=MACROS + [MACRO_REBOOT], ecritures={"/lancer": (202, {"execution": 11})})
+
+    def sc(pg, _):
+        ecrits = _ecrits(pg)
+        pg.check("#flotte-liste label:has-text('gk7') input")
+        pg.check("#flotte-liste label:has-text('gk6') input")
+        pg.click("#macros-liste button[aria-label='Lancer Redémarrage contrôlé']")
+        pg.wait_for_selector("#lancement-plan table")
+        dlg = pg.locator("#lancement [role='dialog']")
+        plan, coupures = pg.inner_text("#lancement-plan"), pg.locator("#lancement-plan .coupure").count()
+        rappel = pg.inner_text("#lancement-corps")
+        etats = []
+        pg.fill("#lancement-corps input[data-cle='maillage:gk7']", "gk7")
+        etats.append((pg.is_disabled("#lancement-ok"), pg.inner_text("#lancement-ok")))
+        pg.fill("#lancement-corps input[data-cle='maillage:gk6']", "gk6")
+        etats.append((pg.is_disabled("#lancement-ok"), pg.inner_text("#lancement-ok")))
+        pg.fill("#lancement-corps input[data-cle='maillage:gk6']", "GK6")
+        etats.append((pg.is_disabled("#lancement-ok"), pg.inner_text("#lancement-ok")))
+        pg.fill("#lancement-corps input[data-cle='maillage:gk6']", "gk6")
+        pg.click("#lancement-ok")
+        pg.wait_for_timeout(300)
+        return dlg.count(), plan, coupures, rappel, etats, ecrits, pg.is_visible("#lancement")
+    (n_dlg, plan, coupures, rappel, etats, ecrits, ouvert), erreurs, natifs, _ = _nav(sc, api=api)
+    assert n_dlg == 1
+    assert "gk7" in plan and "gk6" in plan and "reboot" in plan and "redémarrage" in plan and coupures == 2
+    assert "Une box après l'autre : gk6 ne commence qu'une fois gk7 revenue et son relevé sain" in rappel
+    assert etats == [(True, "Lancer (1 nom sur 2)"), (False, "Lancer (2 noms sur 2)"), (True, "Lancer (1 nom sur 2)")]
+    assert ecrits == [("POST", "/macros/m2/simuler", {"box": "maillage:gk7"}), ("POST", "/macros/m2/simuler", {"box": "maillage:gk6"}),
+                      ("POST", "/macros/m2/lancer", {"cibles": ["maillage:gk7", "maillage:gk6"],
+                                                     "confirmations": {"maillage:gk7": "gk7", "maillage:gk6": "gk6"}, "support": {}})]
+    assert not ouvert and erreurs == [] and natifs == []
+
+
+def test_programmation_desactivee_si_reboot():
+    fl = _flotte()
+    fl["boxes"].append(_box("cabane", reseau="clients"))
+
+    def sc(pg, _):
+        pg.click("#macro-nouvelle")
+        pg.fill("[aria-label='Nom de la macro']", "Nuit et redémarrage")
+        pg.click("#ed-catalogue [data-ajout='releve']")
+        avant = pg.is_disabled("#ed-nuit")
+        pg.check("#ed-nuit")
+        pg.click("#ed-catalogue [data-ajout='action:reboot']")
+        apres = (pg.is_disabled("#ed-nuit"), pg.is_checked("#ed-demande"), pg.inner_text("#ed-quand-raison"))
+        pg.click("[aria-label='Supprimer l\\'étape 2']")
+        retire = pg.is_disabled("#ed-nuit")
+        pg.check("#ed-cibles input[data-cle='clients:cabane']")
+        client = (pg.is_disabled("#ed-nuit"), pg.inner_text("#ed-quand-raison"))
+        return avant, apres, retire, client
+    (avant, (bloque, demande, raison), retire, (bloque_client, raison_client)), erreurs, natifs, _ = _nav(sc, api=_api_simulee(flotte=fl))
+    assert not avant and bloque and demande and "confirmation forte" in raison and "reboot" in raison
+    assert not retire and bloque_client and "cliente" in raison_client and erreurs == [] and natifs == []
+
+
+def test_editeur_ordre_au_clavier():
+    api = _api_simulee(ecritures={"/macros": (201, {"id": "m9"})})
+
+    def sc(pg, _):
+        ecrits = _ecrits(pg)
+        pg.click("#macro-nouvelle")
+        pg.fill("[aria-label='Nom de la macro']", "Ordre test")
+        pg.click("#ed-catalogue [data-ajout='action:maj-paquets']")
+        pg.click("#ed-catalogue [data-ajout='attendre']")
+        types = lambda: pg.evaluate("[...document.querySelectorAll('#ed-etapes .etape')].map(e => e.dataset.type)")
+        debut = types()
+        pg.focus("[aria-label='Monter l\\'étape 2']")
+        pg.keyboard.press("Enter")
+        monte, focus1 = types(), pg.evaluate("document.activeElement.getAttribute('aria-label')")
+        pg.keyboard.press(" ")
+        descend, focus2 = types(), pg.evaluate("document.activeElement.getAttribute('aria-label')")
+        pg.focus("[aria-label='Monter l\\'étape 2']")
+        pg.keyboard.press("Enter")
+        numeros = pg.evaluate("[...document.querySelectorAll('#ed-etapes .num')].map(e => e.textContent)")
+        pg.click("#ed-enregistrer")
+        pg.wait_for_timeout(300)
+        return debut, monte, focus1, descend, focus2, numeros, ecrits, pg.inner_text("#ed-msg")
+    (debut, monte, focus1, descend, focus2, numeros, ecrits, msg), erreurs, natifs, _ = _nav(sc, api=api)
+    assert debut == ["action", "attendre"] and monte == ["attendre", "action"] and descend == ["action", "attendre"]
+    assert focus1 == "Descendre l'étape 1" and focus2 == "Monter l'étape 2" and numeros == ["1", "2"]
+    assert ecrits == [("POST", "/macros", {"nom": "Ordre test", "cibles": [], "programmation": None,
+                                           "etapes": [{"type": "attendre", "delai_s": 300},
+                                                      {"type": "action", "action": "maj-paquets", "args": {}, "delai_s": 900}]})]
+    assert "enregistrée" in msg and erreurs == [] and natifs == []
+
+
+def test_echap_ferme_d_abord_le_dialogue():
+    api = _api_simulee(macros=MACROS + [MACRO_REBOOT], ecritures={"/macros/m2": (200, {"id": "m2"})})
+
+    def sc(pg, _):
+        ecrits = _ecrits(pg)
+        pg.check("#flotte-liste label:has-text('gk7') input")
+        pg.click("#macros-liste button[aria-label='Ouvrir Redémarrage contrôlé']")
+        nom = pg.input_value("[aria-label='Nom de la macro']")
+        pg.click("#ed-enregistrer-lancer")
+        pg.wait_for_selector("#lancement:not([hidden])")
+        vus = [(pg.is_visible("#lancement"), pg.is_visible("#editeur"))]
+        pg.keyboard.press("Escape")
+        vus.append((pg.is_visible("#lancement"), pg.is_visible("#editeur")))
+        pg.keyboard.press("Escape")
+        vus.append((pg.is_visible("#lancement"), pg.is_visible("#editeur"), pg.is_visible("#pan-macros")))
+        return nom, vus, [(m, c) for m, c, _ in ecrits]
+    (nom, vus, ecrits), erreurs, natifs, _ = _nav(sc, api=api)
+    assert nom == "Redémarrage contrôlé"
+    assert vus == [(True, True), (False, True), (False, False, True)]
+    assert ecrits[0] == ("PUT", "/macros/m2") and not any(c.endswith("/lancer") for _, c in ecrits) and erreurs == [] and natifs == []
+
+
+def test_erreur_400_affichee():
+    msg = "étape 1 : le relevé « avant » doit être produit par une étape antérieure"
+    api = _api_simulee(ecritures={"/macros": (400, {"detail": msg})})
+
+    def sc(pg, _):
+        pg.click("#macro-nouvelle")
+        pg.fill("[aria-label='Nom de la macro']", "Condition seule")
+        pg.click("#ed-catalogue [data-ajout='condition']")
+        pg.click("#ed-enregistrer")
+        pg.wait_for_timeout(300)
+        return pg.inner_text("#ed-msg"), pg.is_visible("#editeur")
+    (texte, ouvert), erreurs, natifs, _ = _nav(sc, api=api)
+    assert texte.strip() == msg and ouvert and erreurs == [] and natifs == []
+
+
+def test_livree_lecture_seule_puis_copier():
+    api = _api_simulee(ecritures={"/copier": (201, {"id": "m5"})})
+
+    def sc(pg, _):
+        ecrits = _ecrits(pg)
+        pg.click("#macros-liste button[aria-label='Ouvrir Mise à jour sûre']")
+        lecture = (pg.is_disabled("[aria-label='Nom de la macro']"), pg.locator("#ed-etapes [aria-label^='Monter']").count(),
+                   pg.is_visible("#ed-enregistrer"), pg.is_visible("#ed-copier"))
+        pg.click("#ed-copier")
+        pg.wait_for_timeout(300)
+        return lecture, [(m, c) for m, c, _ in ecrits]
+    ((nom_bloque, monter, enregistrer, copier), ecrits), erreurs, natifs, _ = _nav(sc, api=api)
+    assert nom_bloque and monter == 0 and not enregistrer and copier
+    assert ecrits == [("POST", "/macros/livree%3Amise-a-jour-sure/copier")] and erreurs == [] and natifs == []
+
+
+def _taille_et_debordants(pg):
+    return pg.evaluate("""[document.documentElement.scrollWidth, innerWidth,
+        [...document.querySelectorAll('#editeur *, #lancement *')].filter(e => e.offsetParent !== null && !e.closest('.plan-defile')
+          && e.getBoundingClientRect().right > innerWidth + 1).map(e => e.tagName + '.' + e.className).slice(0, 5)]""")
+
+
+def test_editeur_420_sans_debordement():
+    def sc(pg, _):
+        pg.click("#panneaux [data-panneau='pan-macros']")
+        pg.click("#macros-liste button[aria-label='Ouvrir Mise à jour + redémarrage']")
+        livree = _taille_et_debordants(pg)
+        pg.click("#ed-retour")
+        pg.click("#macro-nouvelle")
+        for a in ("releve", "action:service-redemarrer", "condition", "comparer", "attendre"):
+            pg.click(f"#ed-catalogue [data-ajout='{a}']")
+        nouvelle = _taille_et_debordants(pg)
+        return livree, nouvelle, pg.is_visible("#editeur")
+    ((sw1, iw1, deb1), (sw2, iw2, deb2), ouvert), erreurs, natifs, _ = _nav(sc, largeur=420)
+    assert sw1 <= iw1 and sw2 <= iw2 and deb1 == [] and deb2 == [] and ouvert and erreurs == [] and natifs == []
+
+
+def test_editeur_ajout_et_ordre_par_glisser():
+    def sc(pg, _):
+        pg.click("#macro-nouvelle")
+        types = lambda: pg.evaluate("[...document.querySelectorAll('#ed-etapes .etape')].map(e => e.dataset.type)")
+        pg.locator("#ed-catalogue [data-ajout='action:maj-paquets']").drag_to(pg.locator("#ed-depot"))
+        un = types()
+        pg.locator("#ed-catalogue [data-ajout='releve']").drag_to(pg.locator("#ed-etapes .etape >> nth=0"))
+        deux = types()
+        pg.locator("#ed-etapes .etape >> nth=1 >> .num").drag_to(pg.locator("#ed-etapes .etape >> nth=0"))
+        trois = types()
+        renommer = pg.is_disabled("#ed-catalogue [data-ajout='action:renommer']")
+        return un, deux, trois, renommer
+    (un, deux, trois, renommer), erreurs, natifs, _ = _nav(sc)
+    assert un == ["action"] and deux == ["releve", "action"] and trois == ["action", "releve"]
+    assert renommer and erreurs == [] and natifs == []
