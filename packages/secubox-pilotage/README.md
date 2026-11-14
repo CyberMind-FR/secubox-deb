@@ -81,6 +81,10 @@ Toutes les routes portent `require_jwt` (administrateur réel), aucune route d'u
 |---|---|---|
 | `POST /boxes/{x}/actions/{action}` | `{"args": {...}, "confirmation"?: "<nom>", "support"?: "<id>"}` | Operate de l'agent ; réponse `{operation, box, cle, action, etat, job, raison, operation_etat}`, où `etat`/`job`/`raison` sont l'`OPERATE_RESP` **tel quel** (`accepte`, `consentement`, `refuse`) |
 | `POST /boxes/{x}/oublier` | `{"confirmation": "<nom>", "force"?: true}` | #3335 « Oublier ce nœud » : retire la box de la Flotte (boites, inventaire, événements, relevé) ; 400 si le nom retapé diffère, 409 si vue depuis moins de 10 min sans `force` ; audit `pilotage_box_oubliee` |
+| `GET /catalogue` | | #3702 liste fermée des actions : `[{cle, parametres, forte, macro}]` (`macro` faux : `renommer`, refusée dans une macro) |
+| `GET /flotte` | | #3702 `{boxes: [résumé + materiel + cochable], groupes: {materiel, interface, etat}}` |
+| `GET\|POST /macros`, `GET\|PUT\|DELETE /macros/{id}` | `{nom, etapes, cibles?, programmation?}` | #3702 400 si une étape sort de la liste fermée ou si la programmation est refusée, 403 sur une macro livrée, 409 au plafond ; audit `pilotage_macro` (`enregistrement`, `suppression`) |
+| `POST /macros/{id}/copier`, `POST /macros/{id}/simuler` | `{"box": "<nom ou clé>"}` (simuler) | #3702 copie modifiable ; simulation : étapes, coupures, durée estimée, rien d'envoyé ni d'écrit |
 | `GET /operations?nom=&limite=` | | journal des opérations (200 par défaut, 1 000 au plus), le plus récent d'abord |
 | `POST /boxes/{x}/support` | `{"duree_min": 1..240}` (30 par défaut) | `Device.X_SECUBOX_Support.Ouvrir() {id, duree_min}` ; réponse `{id, etat, job, raison, …}` (la box rend `consentement` : accord du détenteur en local) |
 | `GET /boxes/{x}/support` | | sessions de la box |

@@ -30,6 +30,10 @@ L2 « Agir » (tâche 7) :
   GET    /boxes/{x}/flux            temps réel (text/event-stream) : événements notify | operation | etat, battement toutes les 15 s ;
                                     4 flux au plus par administrateur (le plus ancien est clos, #3308) ; box cliente : seulement pendant une session de support
                                     ouverte et non échue (403 sinon, flux clos à son terme), box du propriétaire : toujours (R-L2-31)
+#3702 console de pilotage (toutes `require_jwt`) :
+  GET /catalogue ; GET /flotte                       actions de la liste fermée ; box + matériel + groupes de sélection
+  GET|POST /macros ; GET|PUT|DELETE /macros/{id}     macros (400 si une étape sort de la liste fermée, 403 sur une livrée, audit pilotage_macro)
+  POST /macros/{id}/copier ; POST /macros/{id}/simuler {box}   copie modifiable ; simulation (rien d'envoyé, rien d'écrit)
 """
 from __future__ import annotations
 
@@ -55,12 +59,14 @@ from api import actions
 from api.actions import DELAI_ACTION_S, ERREUR_MAX, ETATS_REPONSE, IDENT_MAX, ActionIn, Contexte, ReleveIn, borne as _borne  # noqa: F401  (ré-exportés)
 from api.vhost import ajouter_routes_vhost
 from pilotage import exposition as EXPO
+from pilotage import flotte as FLOTTE
+from pilotage import macros as MACROS
 from pilotage import vhosts as V
 
 from pilotage.diffusion import FIN, Diffusion, LimiteAtteinte, formater
 from pilotage.files import FileDeBoxPleine, Files
 from pilotage.inventaire import Inventaire, box_de_ligne
-from pilotage.operations import (COMMANDE_SUPPORT_FERMER, COMMANDE_SUPPORT_OUVRIR, RE_IDENT, Suivi, corps_operate)
+from pilotage.operations import (CATALOGUE, COMMANDE_SUPPORT_FERMER, COMMANDE_SUPPORT_OUVRIR, RE_IDENT, Suivi, corps_operate)
 from pilotage.stockage import SUPPORT_DUREE_MAX_MIN, StockageSqlite
 
 OUBLI_EN_LIGNE_S = 600     # #3335 : une box vue depuis moins de 10 min ne s'oublie qu'avec `force`
@@ -89,6 +95,32 @@ class ReponseFlux(StreamingResponse):
                 await self._corps.aclose()
             finally:
                 self._liberer()
+
+
+class MacroIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nom: str
+    etapes: list
+    cibles: list[str] = Field(default_factory=list, max_length=32)
+    programmation: Optional[dict] = None
+
+
+_MESURES_FR = {"memoire_dispo_mo": "mémoire disponible (Mo)", "cpu_pct": "CPU (%)", "swap_utilise_pct": "swap utilisé (%)",
+               "services_en_echec": "services en échec"}
+_REGLES_FR = {"nouveau_service_en_echec": "nouveau service en échec", "memoire_dispo_baisse_mo": "baisse de la mémoire disponible (Mo)"}
+
+
+def _resume_etape(e: dict) -> str:
+    t = e["type"]
+    if t == "releve":
+        return f"relevé {e['duree_s']} s « {e['nom']} »"
+    if t == "action":
+        return e["action"] + "".join(f" {v}" for _, v in sorted(e["args"].items()))
+    if t == "condition":
+        return f"si {_MESURES_FR[e['mesure']]} ({e['releve']}) {e['op']} {e['seuil']:g} alors " + ("arrêter" if e["alors"] == "arreter" else "passer")
+    if t == "comparer":
+        return f"comparer « {e['avant']} » et « {e['apres']} » : {_REGLES_FR[e['regle']]} (seuil {e['seuil']:g})"
+    return f"attendre {e['delai_s']} s"
 
 
 class SupportIn(BaseModel):
@@ -136,6 +168,109 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
     auditer_ou_503, auditer, operer = (partial(f, ctx) for f in (actions.auditer_ou_503, actions.auditer, actions.operer))
     acteur_de = actions.acteur_de
 
+    # --- #3702 : catalogue, flotte, macros, simulation ---
+
+    @app.get("/catalogue", dependencies=garde)
+    async def catalogue():
+        """Liste fermée des actions ; `macro` faux : action seule de la console, refusée dans une macro."""
+        return [{"cle": k, "parametres": list(a.parametres), "forte": a.forte, "macro": k not in MACROS.HORS_MACRO}
+                for k, a in sorted(CATALOGUE.items())]
+
+    @app.get("/flotte", dependencies=garde)
+    async def flotte():
+        resumes = await asyncio.to_thread(stockage.resumes)
+        return {"boxes": [{**r, "materiel": FLOTTE.materiel(r["modele"]), "cochable": bool(r["en_ligne"])} for r in resumes],
+                "groupes": FLOTTE.groupes(resumes)}
+
+    async def _preparer(corps: MacroIn):
+        """(nom, étapes, clés des cibles, programmation) validés ; MacroInvalide → 400, cible inconnue ou ambiguë → 404/409."""
+        try:
+            nom, etapes = MACROS.valider_nom(corps.nom), MACROS.valider_etapes(corps.etapes)
+            lignes = [await trouver(x) for x in corps.cibles]
+            prog = MACROS.valider_programmation(corps.programmation, etapes, any(b["reseau"] != "maillage" for b in lignes))
+        except MACROS.MacroInvalide as e:
+            raise HTTPException(400, str(e)) from None
+        return nom, etapes, sorted({b["cle"] for b in lignes}), prog
+
+    async def _macro(ident: str, modifiable: bool = False) -> dict:
+        m = await asyncio.to_thread(stockage.macro_lire, ident) if 0 < len(ident) <= IDENT_MAX else None
+        if m is None:
+            raise HTTPException(404, "macro inconnue")
+        if modifiable and m["livree"]:
+            raise HTTPException(403, "macro livrée : copiez-la pour la modifier")
+        return m
+
+    @app.get("/macros", dependencies=garde)
+    async def macros_liste():
+        return await asyncio.to_thread(stockage.macros)
+
+    @app.get("/macros/{ident}", dependencies=garde)
+    async def macro_lire(ident: str):
+        return await _macro(ident)
+
+    @app.post("/macros", status_code=201)
+    async def macro_creer(corps: MacroIn, jwt: dict = Depends(require_jwt)):
+        nom, etapes, cibles, prog = await _preparer(corps)
+        acteur = acteur_de(jwt)
+        ident = await asyncio.to_thread(stockage.macro_creer, nom, etapes, cibles, prog, acteur)
+        if ident is None:
+            raise HTTPException(409, "trop de macros enregistrées : en supprimer avant d'en ajouter")
+        try:
+            await auditer_ou_503("pilotage_macro", {"evenement": "enregistrement", "macro": ident, "nom": nom, "cibles": ",".join(cibles),
+                                                    "acteur": acteur})
+        except HTTPException:
+            await asyncio.to_thread(stockage.macro_supprimer, ident)   # pas d'audit, pas de macro
+            raise
+        return {"id": ident}
+
+    @app.put("/macros/{ident}")
+    async def macro_modifier(ident: str, corps: MacroIn, jwt: dict = Depends(require_jwt)):
+        await _macro(ident, modifiable=True)
+        nom, etapes, cibles, prog = await _preparer(corps)
+        acteur = acteur_de(jwt)
+        await auditer_ou_503("pilotage_macro", {"evenement": "enregistrement", "macro": ident, "nom": nom, "cibles": ",".join(cibles),
+                                                "acteur": acteur})
+        if not await asyncio.to_thread(stockage.macro_maj, ident, nom, etapes, cibles, prog):
+            raise HTTPException(404, "macro inconnue")
+        return {"id": ident}
+
+    @app.delete("/macros/{ident}")
+    async def macro_supprimer(ident: str, jwt: dict = Depends(require_jwt)):
+        m = await _macro(ident, modifiable=True)
+        await auditer_ou_503("pilotage_macro", {"evenement": "suppression", "macro": ident, "nom": m["nom"], "acteur": acteur_de(jwt)})
+        if not await asyncio.to_thread(stockage.macro_supprimer, ident):
+            raise HTTPException(404, "macro inconnue")
+        return {"supprime": ident}
+
+    @app.post("/macros/{ident}/copier", status_code=201)
+    async def macro_copier(ident: str, jwt: dict = Depends(require_jwt)):
+        m = await _macro(ident)
+        nom, acteur = (m["nom"] + " copie")[:60], acteur_de(jwt)
+        nouveau = await asyncio.to_thread(stockage.macro_creer, nom, m["etapes"], m["cibles"], None, acteur)
+        if nouveau is None:
+            raise HTTPException(409, "trop de macros enregistrées : en supprimer avant d'en ajouter")
+        try:
+            await auditer_ou_503("pilotage_macro", {"evenement": "enregistrement", "macro": nouveau, "nom": nom,
+                                                    "cibles": ",".join(m["cibles"]), "acteur": acteur})
+        except HTTPException:
+            await asyncio.to_thread(stockage.macro_supprimer, nouveau)
+            raise
+        return {"id": nouveau}
+
+    @app.post("/macros/{ident}/simuler", dependencies=garde)
+    async def macro_simuler(ident: str, corps: dict = Body(...)):
+        """Ce que la macro ferait sur une box : rien n'est envoyé, rien n'est écrit (ni base, ni audit)."""
+        if not isinstance(corps, dict) or set(corps) != {"box"} or not isinstance(corps["box"], str):
+            raise HTTPException(422, "corps attendu : {\"box\": \"<nom ou clé>\"}")
+        m = await _macro(ident)
+        b = await trouver(corps["box"])
+        etapes = [{"rang": i, "type": e["type"], "resume": _resume_etape(e), "forte": bool(e["type"] == "action" and CATALOGUE[e["action"]].forte),
+                   "coupure": MACROS.coupure(e), "duree_estimee_s": MACROS.estimer_s(e)} for i, e in enumerate(m["etapes"], 1)]
+        cliente = b["reseau"] != "maillage"
+        return {"box": b["nom"], "cle": b["cle"], "en_ligne": en_ligne(b), "cliente": cliente,
+                "forte_requise": MACROS.contient_forte(m["etapes"]), "support_requis": cliente, "etapes": etapes,
+                "duree_totale_s": sum(e["duree_estimee_s"] for e in etapes)}
+
     @app.get("/boxes", dependencies=garde)
     async def boxes():
         return await asyncio.to_thread(stockage.resumes)
@@ -162,7 +297,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         return {"cle": b["cle"], "nom": b["nom"], "reseau": b["reseau"], "client": b["client"], "adresse": b["adresse"],
                 "agent_version": b["agent_version"] or None, "vu_le": b["vu_le"], "en_ligne": en_ligne(b),
                 "inventaire_le": inv["releve_le"], "inventaire_partiel": inv["partiel"], "inventaire_tronques": inv["tronques"],
-                "inventaire": inv["valeurs"]}
+                "inventaire": inv["valeurs"], "services_en_echec_noms": MACROS.services_en_echec(inv["valeurs"])}
 
     @app.get("/boxes/{ident}/lire", dependencies=garde)
     async def lire(ident: str, chemin: str = Query("", max_length=1024)):
