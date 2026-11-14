@@ -55,8 +55,9 @@ Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
 # durée ; `waf-blocs`, en root, refuse tout ce qui n'est pas un /24 canonique,
 # le privé, les plages de protegees.env, les adresses de la box et les pairs
 # WireGuard, et borne la durée de 1 h à 7 j. Passage par systemd-run : l'état
-# /var/lib/secubox-waf-blocs est hors des ReadWritePaths de l'agrégateur (même
-# raison que secubox-profiles). La gestion des clés du compte ai-ban, elle,
+# root /var/lib/secubox-waf-blocs s'écrit dans une unité transitoire root, hors
+# du bac à sable de l'appelant (secubox-waf.service, qui sert les gestes /ai/*)
+# — même raison que secubox-profiles. La gestion des clés du compte ai-ban, elle,
 # n'est PAS ici : elle reste au propriétaire, en root.
 Cmnd_Alias SBX_WAF_BLOCS = /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/wafctl ban-bloc *, \
                            /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/wafctl unban-bloc *, \

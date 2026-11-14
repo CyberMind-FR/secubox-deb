@@ -9,12 +9,14 @@ secubox-waf-ng (1.35.0-1~trixie1) trixie; urgency=medium
   * Compte de service ai-ban : POST /ai/ban, POST /ai/unban, GET /ai/etat, gardés par
     require_ai_ban (jeton EdDSA à usage unique, clé publique seule sur la box) ; clés
     gérées en root par wafctl cle-ai-ban ajouter|retirer|lister (ref #3716).
-  * /ai/* servi par le seul agrégateur : drapeau SECUBOX_WAF_GESTES_IA=1 posé par un
-    drop-in de secubox-aggregator.service ; secubox-waf.service (waf.sock) rend 503
-    « processus » (ref #3716).
-  * /etc/nginx/secubox-routes.d/waf-ai.conf : location ^~ /api/v1/waf/ai/ vers
-    aggregator.sock (le webui envoie /api/v1/waf/ à waf.sock) ; le postinst ne
-    recharge nginx que si nginx -t passe (ref #3716).
+  * /ai/* servi par secubox-waf.service seul (uvicorn mono-processus sur waf.sock,
+    où le webui envoie déjà /api/v1/waf/) : drapeau SECUBOX_WAF_GESTES_IA=1 posé par
+    un drop-in secubox-waf.service.d ; tout autre importateur (un agrégateur qui
+    monterait waf) rend 503 « processus ». L'agrégateur n'est jamais relancé ;
+    la route nginx waf-ai.conf et le drop-in de l'agrégateur des premières 1.35.0
+    sont retirés (rm_conffile) (ref #3716).
+  * secubox-waf.service : NoNewPrivileges=false, sudo -n des gestes et du bouton
+    Ban (gk2 tenait par un drop-in posé à la main) (ref #3716).
   * La fin journalisée d'un ban de bloc est celle que waf-blocs a enregistrée : une
     annulation n'est plus prise pour « couvert » (ref #3716).
   * postinst : protegees.env semé COMMENTÉ s'il est absent (jamais écrasé) ; un bloc

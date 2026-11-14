@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#3716, tâche 5 : paquets (versions, dépendance), installation de waf-blocs et de ses unités, postinst (plages
 protégées semées sans rien écraser, tmpfiles avant les unités, rejeu et veille activés, profil AppArmor en complain),
-routes /ai/* servies par le seul agrégateur, documentation."""
+routes /ai/* servies par le seul secubox-waf.service (waf.sock), documentation."""
 import importlib.machinery
 import importlib.util
 import re
@@ -26,7 +26,11 @@ README = PAQUET / "README.md"
 README_COMPOSANT = PAQUET / "composants" / "waf" / "README.md"
 WIKI = DEPOT / "wiki" / "WAF-FR.md"
 PROFIL = PAQUET / "apparmor" / "usr.sbin.waf-blocs"
-DROPIN = PAQUET / "systemd" / "secubox-aggregator-gestes-ia.conf"
+DROPIN = PAQUET / "systemd" / "secubox-waf-gestes-ia.conf"
+ANCIEN_DROPIN = PAQUET / "systemd" / "secubox-aggregator-gestes-ia.conf"
+MAINTSCRIPT = PAQUET / "debian" / "maintscript"
+POSTINST_API = PAQUET / "composants" / "waf" / "debian" / "postinst"
+SUDOERS_API = PAQUET / "composants" / "waf" / "sudoers" / "secubox-waf"
 UNITE_API = PAQUET / "composants" / "waf" / "debian" / "secubox-waf.service"
 UNITE_AGREGATEUR = DEPOT / "packages" / "secubox-aggregator" / "systemd" / "secubox-aggregator.service"
 WAF_BLOCS = PAQUET / "composants" / "waf" / "scripts" / "waf-blocs"
@@ -62,8 +66,10 @@ def test_rules_installe_profil_et_dropin():
     r = RULES.read_text()
     assert re.search(r"install -D -m 0644 apparmor/usr\.sbin\.waf-blocs\s+\\\s*\n\s*"
                      r"debian/secubox-waf-ng/etc/apparmor\.d/usr\.sbin\.waf-blocs", r)
-    assert re.search(r"install -D -m 0644 systemd/secubox-aggregator-gestes-ia\.conf\s+\\\s*\n\s*debian/secubox-waf-ng/"
-                     r"usr/lib/systemd/system/secubox-aggregator\.service\.d/secubox-waf-gestes-ia\.conf", r)
+    assert re.search(r"install -D -m 0644 systemd/secubox-waf-gestes-ia\.conf\s+\\\s*\n\s*debian/secubox-waf-ng/"
+                     r"usr/lib/systemd/system/secubox-waf\.service\.d/secubox-waf-gestes-ia\.conf", r)
+    # L'unité de base est installée au même endroit : le drop-in la complète.
+    assert "debian/secubox-waf-ng/usr/lib/systemd/system/secubox-waf.service" in r
 
 
 # ── documentation ──────────────────────────────────────────────────────
@@ -203,160 +209,105 @@ def test_profil_waf_blocs_compile():
     assert r.returncode == 0, r.stderr
 
 
-# ── /ai/* : UN seul processus, l'agrégateur ────────────────────────────
-def test_seul_l_agregateur_porte_le_drapeau_des_gestes_ia():
+# ── /ai/* : UN seul processus, secubox-waf.service (waf.sock) ─────────
+# Sur gk2 l'agrégateur NE monte PAS le module waf (son entrée « secubox-waf » est une vieille API orpheline) ; le
+# module réel (/usr/lib/secubox/waf) ne tourne que dans secubox-waf.service, uvicorn mono-processus sur waf.sock, où
+# webui.conf envoie déjà /api/v1/waf/. Le drapeau est donc posé sur CETTE unité.
+def test_seul_secubox_waf_service_porte_le_drapeau_des_gestes_ia():
     d = DROPIN.read_text()
     assert d.startswith("# SPDX-License-Identifier: LicenseRef-CMSD-1.0")
     assert re.search(r"^\[Service\]\nEnvironment=SECUBOX_WAF_GESTES_IA=1$", d, re.M)
-    assert "SECUBOX_WAF_GESTES_IA" not in UNITE_API.read_text()   # l'unité de waf.sock les refuse
-    assert re.search(r"--workers 1\b", UNITE_AGREGATEUR.read_text())   # une mémoire de rejeu, un processus
+    assert "secubox-waf.service.d" in d
+    assert "SECUBOX_WAF_GESTES_IA" not in UNITE_AGREGATEUR.read_text()
 
 
-# ── C1 : admin.<box> envoie /api/v1/waf/ à waf.sock (webui.conf) ; /ai/* doit aller à l'agrégateur ──
-ROUTE_IA = PAQUET / "nginx" / "waf-ai.conf"
-WEBUI = DEPOT / "packages" / "secubox-hub" / "nginx" / "webui.conf"
+def test_unite_api_un_seul_processus_sur_waf_sock():
+    u = UNITE_API.read_text()
+    m = re.search(r"^ExecStart=(.*)$", u, re.M)
+    assert m and "--uds /run/secubox/waf.sock" in m.group(1)
+    assert "--workers" not in m.group(1)                       # une mémoire de rejeu, un processus
+    assert re.search(r"^User=secubox$", u, re.M)             # même compte que les droits sudo de /etc/sudoers.d/secubox-waf
 
 
-def test_route_ia_vers_l_agregateur():
-    t = ROUTE_IA.read_text()
-    assert t.startswith("# SPDX-License-Identifier: LicenseRef-CMSD-1.0")
-    m = re.search(r"location\s+\^~\s+/api/v1/waf/ai/\s*\{(.*?)\}", t, re.S)
-    assert m, "location ^~ /api/v1/waf/ai/ absente"
-    corps = m.group(1)
-    # L'agrégateur monte le WAF sous /api/v1/waf (Mount : le sous-routeur voit /ai/…) : le chemin complet est gardé.
-    assert re.search(r"proxy_pass\s+http://unix:/run/secubox/aggregator\.sock:/api/v1/waf/ai/;", corps)
-    assert "include /etc/nginx/snippets/secubox-proxy.conf;" in corps
-    assert "waf.sock" not in corps and "rewrite" not in corps
-    # Les motifs JSON (409/503) doivent parvenir au relais tels quels.
-    assert re.search(r"proxy_intercept_errors\s+off;", corps)
+def test_unite_api_permet_sudo():
+    """Les gestes (et le bouton Ban du panneau) passent par `sudo -n` : NoNewPrivileges=true l'interdit (gk2 tenait
+    par un drop-in posé à la main, allow-sudo.conf). L'unité livrée le dit elle-même."""
+    u = UNITE_API.read_text()
+    assert re.search(r"^NoNewPrivileges=false$", u, re.M)
+    assert not re.search(r"^NoNewPrivileges=true$", u, re.M)
+    assert not re.search(r"^(ProtectSystem=strict|PrivateDevices=|RestrictSUIDSGID=true)", u, re.M)
 
 
-def test_route_ia_gagne_sur_la_route_waf_du_webui():
-    w = WEBUI.read_text()
-    # La route générale du webui va à waf.sock (processus sans drapeau → 503 « processus » sur /ai/*).
-    assert re.search(r"location\s+/api/v1/waf/\s*\{[^}]*waf\.sock", w)
-    # Le webui inclut secubox-routes.d dans le même serveur : la location préfixe la plus longue gagne,
-    # et ^~ coupe court aux regex.
-    assert "include /etc/nginx/secubox-routes.d/*.conf;" in w
-    assert not re.search(r"location\s+(\^~\s+|=\s*)?/api/v1/waf/ai", w)   # pas de doublon (nginx -t échouerait)
-    assert len("/api/v1/waf/ai/") > len("/api/v1/waf/")
+def test_ecritures_des_gestes_dans_les_readwritepaths_de_l_api():
+    """Journal des gestes (/var/lib/secubox/waf) et audit.log (/var/log/secubox) : écrits par le processus lui-même."""
+    rw = re.search(r"^ReadWritePaths=(.*)$", UNITE_API.read_text(), re.M).group(1).split()
+    assert "/var/lib/secubox" in rw and "/var/log/secubox" in rw
 
 
-def test_rules_installe_la_route_ia_dans_secubox_routes_d():
-    r = RULES.read_text()
-    assert re.search(r"install -D -m 0644 nginx/waf-ai\.conf \\\n\s+debian/secubox-waf-ng/etc/nginx/secubox-routes\.d/waf-ai\.conf", r)
-
-
-def test_postinst_recharge_nginx_seulement_si_le_test_passe():
-    c = _configure()
-    i = c.index("secubox-routes.d/waf-ai.conf")
-    bloc = c[i:i + 900]
-    assert re.search(r"if\s+\S*=?\$\(nginx -t 2>&1\)|if nginx -t", bloc)
-    assert bloc.index("nginx -t") < bloc.index("systemctl reload nginx")
-    assert "restart nginx" not in bloc
-
-
-def test_commentaires_disent_la_vraie_route():
-    d = DROPIN.read_text()
-    assert "waf-ai.conf" in d and "comme sur gk2" not in d
+def test_sudoers_couvre_chaque_argv_des_gestes():
+    """L'argv exact lancé par gestes_ia, sous `secubox`, doit être permis par /etc/sudoers.d/secubox-waf."""
+    s = SUDOERS_API.read_text()
     g = (PAQUET / "composants" / "waf" / "api" / "gestes_ia.py").read_text()
-    assert "waf-ai.conf" in g.split('"""', 2)[1]
+    assert '_SUDO = ["sudo", "-n"]' in g
+    assert '["/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban"]' in g
+    assert "/usr/sbin/nft -j list set inet secubox waf_ban," in s
+    assert '_SYSTEMD_RUN = ["/usr/bin/systemd-run", "--wait", "--pipe", "--collect", "--quiet"]' in g
+    for verbe in ("ban-bloc", "unban-bloc"):
+        assert f"/usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/wafctl {verbe} *" in s
+    assert "/usr/sbin/wafctl blocs" in s
+    assert "/usr/sbin/wafctl ban *" in s and "/usr/sbin/wafctl unban *" in s
+    assert "secubox ALL=(root) NOPASSWD: SBX_WAF_BLOCS" in s and "secubox ALL=(root) NOPASSWD: SBX_WAF_BANMANUEL" in s
+    assert "secubox ALL=(root) NOPASSWD: SBX_WAF_NFTLIST" in s
+    assert "agrégateur" not in s
 
 
-@pytest.mark.skipif(shutil.which("nginx") is None and not Path("/usr/sbin/nginx").exists(), reason="nginx requis")
-def test_nginx_envoie_ai_a_l_agregateur_et_le_reste_a_waf_sock(tmp_path):
-    """nginx réel : la location de webui.conf + la route livrée ; chaque socket note le chemin reçu."""
-    import http.server
-    import socket
-    import socketserver
-    import threading
-    import time
-    import urllib.request
+def test_postinst_api_relance_secubox_waf_a_la_mise_a_jour():
+    """Le drapeau est pris au redémarrage de secubox-waf.service, que le postinst du composant fait déjà à chaque
+    mise à jour (#3176), après daemon-reload (sans lui, le drop-in neuf ne serait pas lu)."""
+    p = POSTINST_API.read_text()
+    assert p.index("systemctl daemon-reload") < p.index("systemctl restart secubox-waf.service")
+    assert re.search(r'if \[ -n "\$2" \]; then\n\s+systemctl restart secubox-waf\.service', p)
+    assert "aggregator" not in p
 
-    recus = {}
 
-    class Serveur(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
-        daemon_threads = True
+def test_plus_de_drop_in_agregateur_ni_de_route_nginx_ia():
+    assert not ANCIEN_DROPIN.exists()
+    assert not (PAQUET / "nginx" / "waf-ai.conf").exists()
+    r = RULES.read_text()
+    assert "secubox-aggregator.service.d" not in r and "waf-ai.conf" not in r
+    assert "waf-ai.conf" not in POSTINST.read_text()
 
-    def lancer(nom):
-        chemin = tmp_path / f"{nom}.sock"
 
-        class H(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                recus.setdefault(nom, []).append(self.path)
-                self.send_response(200)
-                self.send_header("Content-Length", "2")
-                self.end_headers()
-                self.wfile.write(b"ok")
+def test_maintscript_retire_l_ancienne_route_nginx():
+    """La route waf-ai.conf (conffile des premières 1.35.0) part proprement à la mise à niveau."""
+    m = MAINTSCRIPT.read_text()
+    assert m.startswith("# SPDX-License-Identifier: LicenseRef-CMSD-1.0")
+    lignes = [ligne.split() for ligne in m.splitlines() if ligne.strip() and not ligne.startswith("#")]
+    assert ["rm_conffile", "/etc/nginx/secubox-routes.d/waf-ai.conf", "1.35.0-1~trixie1"] in lignes
+    for script in ("postinst", "preinst", "prerm"):
+        assert "#DEBHELPER#" in (PAQUET / "debian" / script).read_text(), script
 
-            def address_string(self):
-                return nom
 
-            def log_message(self, *a):
-                pass
+def test_webui_envoie_ai_a_waf_sock():
+    """Pas de route à part : la location /api/v1/waf/ du webui (waf.sock) porte aussi /ai/*."""
+    w = WEBUI.read_text()
+    assert re.search(r"location\s+/api/v1/waf/\s*\{[^}]*waf\.sock", w)
+    assert not re.search(r"location\s+(\^~\s+|=\s*)?/api/v1/waf/ai", w)
 
-        s = Serveur(str(chemin), H)
-        threading.Thread(target=s.serve_forever, daemon=True).start()
-        return s
 
-    serveurs = [lancer("waf"), lancer("aggregator")]
-    proxy = (DEPOT / "common" / "nginx" / "secubox-proxy.conf").read_text()
-    (tmp_path / "proxy.conf").write_text(proxy)
-    route = ROUTE_IA.read_text().replace("/run/secubox/", f"{tmp_path}/").replace(
-        "/etc/nginx/snippets/secubox-proxy.conf", str(tmp_path / "proxy.conf"))
-    (tmp_path / "routes.d").mkdir()
-    (tmp_path / "routes.d" / "waf-ai.conf").write_text(route)
-    bloc_waf = re.search(r"    location /api/v1/waf/ \{.*?\n    \}\n", WEBUI.read_text(), re.S).group(0)
-    bloc_waf = bloc_waf.replace("/run/secubox/", f"{tmp_path}/").replace(
-        "/etc/nginx/snippets/secubox-proxy.conf", str(tmp_path / "proxy.conf"))
-    with socket.socket() as so:
-        so.bind(("127.0.0.1", 0))
-        port = so.getsockname()[1]
-    conf = tmp_path / "nginx.conf"
-    conf.write_text(f"""daemon off; pid {tmp_path}/nginx.pid; error_log {tmp_path}/err.log;
-events {{}}
-http {{
-  access_log off; client_body_temp_path {tmp_path}; proxy_temp_path {tmp_path};
-  fastcgi_temp_path {tmp_path}; uwsgi_temp_path {tmp_path}; scgi_temp_path {tmp_path};
-  server {{
-    listen 127.0.0.1:{port};
-{bloc_waf}
-    location ~ /ai/ {{ return 418; }}   # une regex qui happerait /ai/ : ^~ doit la court-circuiter
-    include {tmp_path}/routes.d/*.conf;
-  }}
-}}
-""")
-    nginx = shutil.which("nginx") or "/usr/sbin/nginx"
-    t = subprocess.run([nginx, "-t", "-p", str(tmp_path), "-c", str(conf)], capture_output=True, text=True, timeout=10)
-    if t.returncode != 0 and "Permission denied" in t.stderr:
-        pytest.skip(t.stderr)
-    assert t.returncode == 0, t.stderr
-    p = subprocess.Popen([nginx, "-p", str(tmp_path), "-c", str(conf)], stderr=subprocess.PIPE)
-    try:
-        def get(chemin):
-            for _ in range(50):
-                try:
-                    with urllib.request.urlopen(f"http://127.0.0.1:{port}{chemin}", timeout=5) as r:
-                        return r.status
-                except (ConnectionRefusedError, urllib.error.URLError) as e:
-                    if isinstance(e, urllib.error.HTTPError):
-                        return e.code
-                    time.sleep(0.1)
-            raise AssertionError("nginx injoignable")
+def test_commentaires_disent_la_vraie_topologie():
+    d = DROPIN.read_text()
+    assert "waf.sock" in d and "aggregator.sock" not in d and "waf-ai.conf" not in d
+    doc = (PAQUET / "composants" / "waf" / "api" / "gestes_ia.py").read_text().split('"""', 2)[1]
+    assert "secubox-waf.service" in doc and "waf.sock" in doc and "waf-ai.conf" not in doc
+    assert "--workers 1" not in doc
 
-        assert get("/api/v1/waf/ai/etat") == 200
-        assert get("/api/v1/waf/status") == 200
-    finally:
-        p.terminate()
-        p.wait(timeout=10)
-        for s in serveurs:
-            s.shutdown()
-    assert recus.get("aggregator") == ["/api/v1/waf/ai/etat"]
-    assert recus.get("waf") == ["/status"]
+
+WEBUI = DEPOT / "packages" / "secubox-hub" / "nginx" / "webui.conf"
 
 
 def test_readme_regle_effective_et_pairs_hors_site():
     r = README.read_text()
     assert "relais ∧ gk2" in r and "**dernière**" in r
     assert "hors site" in r and "itinérants" in r and "protegees.env" in r
-    assert "secubox-routes.d/waf-ai.conf" in r
+    assert "aggregator.sock" not in r and "secubox-waf.service.d/secubox-waf-gestes-ia.conf" in r

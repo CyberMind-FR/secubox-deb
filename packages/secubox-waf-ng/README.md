@@ -149,14 +149,16 @@ catégorie de ban de cette adresse (journal des menaces), pas son historique. Ni
 hors site ou itinérants (box en déplacement, postes nomades, adresse publique d'un pair derrière un autre FAI) : leurs
 adresses ou blocs **doivent** être écrits dans `protegees.env`, sinon rien n'empêche leur /24 d'être banni.
 
-**Un seul processus sert `/ai/*`** : la mémoire des jetons vus, le verrou et les plafonds sont par processus. Le
-paquet pose `SECUBOX_WAF_GESTES_IA=1` sur l'agrégateur seul (drop-in
-`/usr/lib/systemd/system/secubox-aggregator.service.d/secubox-waf-gestes-ia.conf`, pris au redémarrage suivant de
-l'agrégateur, que le paquet ne fait pas) ; `secubox-waf.service` (waf.sock) rend 503 `processus` avant de lire le
-jeton. Le serveur d'administration (`webui.conf` de secubox-hub) envoie `/api/v1/waf/` à `waf.sock` : le paquet livre
-donc `/etc/nginx/secubox-routes.d/waf-ai.conf` (`location ^~ /api/v1/waf/ai/` → `aggregator.sock`, préfixe plus long,
-il gagne), et son postinst ne recharge nginx que si `nginx -t` passe. Sans le WAF monté dans l'agrégateur
-(`/etc/secubox/aggregator.toml`), `/ai/*` rend encore 503.
+**Un seul processus sert `/ai/*`** : la mémoire des jetons vus, le verrou et les plafonds sont par processus. C'est
+`secubox-waf.service` : uvicorn mono-processus (sans `--workers`, `User=secubox`) sur `/run/secubox/waf.sock`, où le
+serveur d'administration (`webui.conf` de secubox-hub) envoie déjà `/api/v1/waf/` — aucune route nginx à part. Le
+paquet y pose `SECUBOX_WAF_GESTES_IA=1` (drop-in `/usr/lib/systemd/system/secubox-waf.service.d/secubox-waf-gestes-ia.conf`),
+pris au redémarrage de `secubox-waf.service` que le postinst fait à chaque mise à jour ; l'agrégateur n'est jamais
+relancé. Tout autre importateur du module (un agrégateur qui monterait `waf`) rend 503 `processus` avant de lire le
+jeton. L'unité livrée porte `NoNewPrivileges=false` : les gestes passent par `sudo -n` (droits exacts de
+`/etc/sudoers.d/secubox-waf`, compte `secubox`). Les premières 1.35.0 livraient une route
+`/etc/nginx/secubox-routes.d/waf-ai.conf` et un drop-in de l'agrégateur : la mise à niveau les retire
+(`debian/maintscript`, `rm_conffile`).
 
 **AppArmor** : `/etc/apparmor.d/usr.sbin.waf-blocs` est livré en **complain** ; il passe en enforce après relecture
 des journaux au banc gk6.

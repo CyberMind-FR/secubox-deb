@@ -38,13 +38,12 @@ FastAPI (FastAPI lirait le corps AVANT la garde) ; le corps brut, déjà lu et b
 par `model_validate_json`.
 
 Les gestes sont sérialisés par un verrou de processus (contrôle du journal → wafctl → journal → audit) : les routes
-sont servies par UN seul processus (l'agrégateur, `--workers 1`), comme l'exige la mémoire de rejeu de la garde. Ce
-module est aussi importé par `secubox-waf.service` (uvicorn sur waf.sock) : seul le processus qui porte
-`SECUBOX_WAF_GESTES_IA=1` (drop-in de secubox-aggregator.service livré par ce paquet) sert `/ai/*` ; tout autre rend
-503 `processus` avant la garde (`processus_designe`) — aucun jeton n'y est lu, aucun jti consommé. Le serveur
-d'administration (webui.conf de secubox-hub) envoie `/api/v1/waf/` à waf.sock : c'est la route
-`/etc/nginx/secubox-routes.d/waf-ai.conf` (`location ^~ /api/v1/waf/ai/`, livrée par ce paquet) qui envoie `/ai/*`
-à l'agrégateur.
+sont servies par UN seul processus, comme l'exige la mémoire de rejeu de la garde : `secubox-waf.service` (uvicorn
+mono-processus, sans `--workers`, `User=secubox`, sur /run/secubox/waf.sock), seul processus qui porte
+`SECUBOX_WAF_GESTES_IA=1` (drop-in `secubox-waf.service.d/secubox-waf-gestes-ia.conf` livré par ce paquet). Le
+serveur d'administration (webui.conf de secubox-hub) envoie `/api/v1/waf/` à waf.sock : `/api/v1/waf/ai/*` y arrive
+sans route à part. Tout autre importateur de ce module (un agrégateur qui monterait `waf`, groupd) rend 503
+`processus` avant la garde (`processus_designe`) — aucun jeton n'y est lu, aucun jti consommé.
 """
 from __future__ import annotations
 
@@ -67,7 +66,7 @@ from secubox_core.compte_service import TAILLE_MAX_CORPS, require_ai_ban
 
 log = logging.getLogger("secubox.waf.gestes_ia")
 
-#: Posé à « 1 » par le seul drop-in de secubox-aggregator.service : mémoire de rejeu, verrou et plafonds sont PAR
+#: Posé à « 1 » par le seul drop-in de secubox-waf.service (waf.sock) : mémoire de rejeu, verrou et plafonds sont PAR
 #: PROCESSUS, deux processus serviraient deux fois le même jeton.
 DRAPEAU_PROCESSUS = "SECUBOX_WAF_GESTES_IA"
 
@@ -102,7 +101,7 @@ INTERVALLE_AUDIT_S = 10
 
 WAFCTL = "/usr/sbin/wafctl"
 _SUDO = ["sudo", "-n"]
-#: Les bans de bloc passent par systemd-run : l'état root des blocs est hors des ReadWritePaths de l'agrégateur.
+#: Les bans de bloc passent par systemd-run : l'état root des blocs s'écrit dans une unité root, hors du bac à sable.
 _SYSTEMD_RUN = ["/usr/bin/systemd-run", "--wait", "--pipe", "--collect", "--quiet"]
 #: Lecture de l'ensemble du WAF : argv EXACT du sudoers (SBX_WAF_NFTLIST).
 NFT_LISTE_WAF_BAN = ["/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban"]

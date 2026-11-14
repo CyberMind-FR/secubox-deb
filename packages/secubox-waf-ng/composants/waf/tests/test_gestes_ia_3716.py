@@ -122,7 +122,7 @@ def c(monkeypatch, tmp_path):
     waf = _importer_waf()
     from api import gestes_ia as g
     from secubox_core.compte_service import require_ai_ban
-    monkeypatch.setenv("SECUBOX_WAF_GESTES_IA", "1")          # le processus désigné (agrégateur, tâche 5)
+    monkeypatch.setenv("SECUBOX_WAF_GESTES_IA", "1")          # le processus désigné (secubox-waf.service)
     monkeypatch.setattr(waf, "AUDIT_LOG", tmp_path / "audit.log")
     monkeypatch.setattr(g, "JOURNAL_AI", tmp_path / "ai-ban.jsonl")
     monkeypatch.setattr(g, "BANS_WAF", tmp_path / "bans.jsonl")
@@ -545,7 +545,7 @@ def c_garde(monkeypatch, tmp_path):
     monkeypatch.setattr(cs, "_armer_minuterie", lambda: None)
     monkeypatch.setattr(cs, "_DEMARRAGE", 0.0)
     monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")
-    monkeypatch.setenv("SECUBOX_WAF_GESTES_IA", "1")          # le processus désigné (agrégateur, tâche 5)
+    monkeypatch.setenv("SECUBOX_WAF_GESTES_IA", "1")          # le processus désigné (secubox-waf.service)
     monkeypatch.setattr(waf, "AUDIT_LOG", tmp_path / "audit.log")
     monkeypatch.setattr(g, "JOURNAL_AI", tmp_path / "ai-ban.jsonl")
     monkeypatch.setattr(g, "BANS_WAF", tmp_path / "bans.jsonl")
@@ -646,9 +646,9 @@ def test_routes_branchees_sur_l_application():
 
 # ── UN seul processus sert /ai/* (tâche 5) ─────────────────────────────
 def test_processus_non_designe_refuse_avant_le_jeton(c, monkeypatch):
-    """La mémoire de rejeu, le verrou et les plafonds sont PAR PROCESSUS : seul l'agrégateur (drapeau posé par son
-    drop-in) sert /ai/*. Ailleurs (secubox-waf.service sur waf.sock, groupd), 503 `processus` AVANT toute lecture du
-    jeton ou du corps : aucun jti n'y est consommé, aucun wafctl lancé, aucune ligne d'audit."""
+    """La mémoire de rejeu, le verrou et les plafonds sont PAR PROCESSUS : seul secubox-waf.service (waf.sock, drapeau
+    posé par son drop-in) sert /ai/*. Tout autre importateur (un agrégateur qui monterait waf, groupd), 503 `processus`
+    AVANT toute lecture du jeton ou du corps : aucun jti n'y est consommé, aucun wafctl lancé, aucune ligne d'audit."""
     c.waf.app.dependency_overrides.clear()                      # la vraie garde : sans drapeau, elle n'est pas atteinte
     for valeur in (None, "", "0", "oui", " 1"):
         if valeur is None:

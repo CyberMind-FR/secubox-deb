@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# #3716 : route nginx /api/v1/waf/ai/ -> aggregator.sock des premières 1.35.0, retirée (les gestes IA sont servis
+# par secubox-waf.service sur waf.sock, où webui.conf envoie déjà /api/v1/waf/).
+rm_conffile /etc/nginx/secubox-routes.d/waf-ai.conf 1.35.0-1~trixie1

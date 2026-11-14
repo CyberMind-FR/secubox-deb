@@ -50,7 +50,7 @@ Les trois lectures (`require_lecture`) relisent les fichiers de sbxwaf (`bans.js
 
 ### Compte de service `ai-ban` (#3716)
 
-Garde `require_ai_ban` (jeton EdDSA par requête, usage unique, lié au corps), **pas** `require_jwt` : exception écrite à `RULES-CODE` § 3. Servies par l'agrégateur seul (`SECUBOX_WAF_GESTES_IA=1`) ; ailleurs 503 `processus`. Détail des corps, motifs, clés et rotation : [`README.md` du paquet](../../README.md).
+Garde `require_ai_ban` (jeton EdDSA par requête, usage unique, lié au corps), **pas** `require_jwt` : exception écrite à `RULES-CODE` § 3. Servies par `secubox-waf.service` seul (waf.sock, `SECUBOX_WAF_GESTES_IA=1`) ; ailleurs 503 `processus`. Détail des corps, motifs, clés et rotation : [`README.md` du paquet](../../README.md).
 
 - `POST /api/v1/waf/ai/ban` - `{geste: "ban", cible, duree_s, mode: clic|auto, conseil, motif}` → `{id, cible, fin, audit}` ; IPv4 publique ou /24 exact, 1 h à 7 j, `auto` : bloc, 24 h au plus, cas sûr recontrôlé ; plafonds d'office 5/h et 20/j, du compte 30/h et 100/j ; refus 409 `{"detail": {"motif"}}`.
 - `POST /api/v1/waf/ai/unban` - `{geste: "unban", id}` → `{id, etat}` (`annule`, `echu`, `deja_annule`, `couvert`) ; seulement un ban posé par `ai-ban`, jamais un ban qu'une autre source couvre.
