@@ -10,7 +10,7 @@ Architecture: arm64 amd64
 Depends: ${misc:Depends}, secubox-zia
 Description: ZIA Hall — local llama.cpp runtime (prebuilt static arm64 and amd64)
  Ships a statically-linked llama.cpp (llama-server + llama-cli; aarch64, or x86-64 AVX2),
- cross-compiled OFF the box (building on the MOCHAbin exhausts RAM). No glibc
+ built OFF the box (arm64 is cross-compiled, since building on the MOCHAbin exhausts RAM). No glibc
  dependency, so it runs as-is on Debian bookworm or trixie. With a GGUF model under
  /data/models, ZIA switches from its heuristic responder to real local generation
  over the same tools — the objects still come from the bus, never from the model.

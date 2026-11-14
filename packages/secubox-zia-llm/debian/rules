@@ -1,8 +1,12 @@
 #!/usr/bin/make -f
+include /usr/share/dpkg/architecture.mk
+
 %:
 	dh $@
 
 override_dh_auto_install:
+	@test -n "$(DEB_HOST_ARCH)" || { echo 'DEB_HOST_ARCH vide' >&2; exit 1; }
+	@test -f bin/$(DEB_HOST_ARCH)/llama-server || { echo 'bin/$(DEB_HOST_ARCH)/llama-server absent (voir README)' >&2; exit 1; }
 	install -d debian/secubox-zia-llm/usr/lib/secubox/zia-llm
 	install -m0755 bin/$(DEB_HOST_ARCH)/llama-server bin/$(DEB_HOST_ARCH)/llama-cli debian/secubox-zia-llm/usr/lib/secubox/zia-llm/
 	install -d debian/secubox-zia-llm/usr/lib/systemd/system
