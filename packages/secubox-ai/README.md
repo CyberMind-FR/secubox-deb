@@ -86,9 +86,14 @@ Elle ne protège que d'un appel par erreur ; quiconque écoute le LAN peut la li
 
 **Clés de préférences inertes** (arbitrage R15) : gardées pour que la page du POC ne reçoive pas de 422, mais sans
 aucun effet dans ce paquet — `moteur.backend`, `moteur.threads`, `moteur.paralleles`, `moteur.couches_gpu`,
-`moteur.nice`, `moteur.arret_inactivite_min`, `outils.recherche_web`, `outils.heure`, `outils.appels_max`. Pour
+`moteur.nice`, `outils.recherche_web`, `outils.heure`, `outils.appels_max`. Pour
 `outils.mode`, seule la valeur `jamais` agit (aucune recherche). L'appel de fonctions et la recherche web du POC sont
 restés sur gk0.
+
+**Arrêt du moteur local après inactivité** (`moteur.arret_inactivite_min`, 30 par défaut, 0 = jamais) : toutes les
+30 s, l'API dépose `arreter` au contrôleur si le moteur local répond, que rien n'est en cours et qu'aucune demande de
+l'administrateur n'a eu lieu depuis ce délai (compté aussi depuis le démarrage de l'API et le dernier « prêt » du
+contrôleur). Le résumé automatique des menaces et les sondes du moteur ne comptent pas comme une activité.
 
 ## API — `/api/v1/ai/`
 

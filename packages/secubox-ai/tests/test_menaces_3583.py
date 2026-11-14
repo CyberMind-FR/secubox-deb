@@ -694,3 +694,25 @@ async def test_demander_controle_pct(gk2, monkeypatch):
     r = await appeler("POST", "/menaces/demander", json={"question": "Que se passe-t-il ?"})
     t = await attendre(r.json()["tache"])
     assert NOTE_PCT + " : 77 %" in t["resultat"]
+
+
+# ---- revue finale : le résumé automatique n'est pas une activité (I1) ----
+@pytest.mark.asyncio
+async def test_resume_automatique_ne_retient_pas_le_moteur(gk2, monkeypatch):
+    moteur_simule(monkeypatch, deux_passes)
+    ancienne = time.time() - 7200
+    monkeypatch.setitem(taches.COMPTEURS, "derniere_activite", ancienne)
+    await menaces.releve_menaces()
+    t = await menaces.tour_veille()
+    assert t
+    await attendre(t)
+    assert taches.COMPTEURS["derniere_activite"] == ancienne
+
+
+@pytest.mark.asyncio
+async def test_resume_demande_par_l_administrateur_est_une_activite(gk2, monkeypatch):
+    moteur_simule(monkeypatch, deux_passes)
+    monkeypatch.setitem(taches.COMPTEURS, "derniere_activite", time.time() - 7200)
+    r = await appeler("POST", "/menaces/resumer")
+    await attendre(r.json()["tache"])
+    assert time.time() - taches.COMPTEURS["derniere_activite"] < 60

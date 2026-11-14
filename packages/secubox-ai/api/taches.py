@@ -8,6 +8,7 @@ Tout reste en mémoire (rien sur disque). Le journal ne reçoit jamais ni questi
 La génération d'image n'existe pas à l'étape 1 : `tout_arreter` ne connaît que les tâches et les travaux.
 """
 import asyncio
+import contextvars
 import json
 import logging
 import re
@@ -20,6 +21,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from secubox_core.auth import require_jwt
 
+from api import moteurs, reglages
+from api.journal import journal
 from api.moteurs import assurer_moteur
 
 log = logging.getLogger("secubox.ai.taches")
@@ -34,11 +37,79 @@ TRAVAUX_TTL, TRAVAUX_MAX = 1800, 20
 TACHES: dict = {}
 TACHES_MAX = 30
 
-# Le moteur ne se met pas en veille tant que `en_cours` > 0 (lu par la veille, tâche suivante).
+# Le moteur ne se met pas en veille tant que `en_cours` > 0 ; `derniere_activite` : dernière demande de
+# l'ADMINISTRATEUR (jamais le résumé automatique des menaces ni une sonde), lue par l'arrêt après inactivité.
 COMPTEURS = {"en_cours": 0, "derniere_activite": 0.0}
+
+# Vrai dans le contexte d'un travail lancé par la veille (résumé automatique des menaces) : il ne compte pas comme une
+# activité, sinon le moteur local ne s'arrêterait jamais (copié dans la tâche asyncio créée sous ce contexte).
+AUTOMATIQUE: contextvars.ContextVar[bool] = contextvars.ContextVar("secubox_ai_automatique", default=False)
+
+# Arrêt du moteur local après inactivité (préférence moteur.arret_inactivite_min, 0 = jamais), comme le POC.
+PERIODE_ARRET_S = 30
+RENOUVELER_DEMANDE_S = 300     # une demande « arreter » déjà déposée n'est pas redéposée avant ce délai
+_ARRET: dict = {"boucle": None, "depart": 0.0, "demande": 0.0}
 
 # Crochet vers l'historique (tâche suivante) : `f(genre, titre, texte, sources=())`. Sans lui, rien n'est gardé.
 HISTORIQUE_AJOUTER: Callable | None = None
+
+
+def marquer_activite() -> None:
+    """Une demande de l'administrateur vient de se terminer (ignoré sous `AUTOMATIQUE`)."""
+    if not AUTOMATIQUE.get():
+        COMPTEURS["derniere_activite"] = time.time()
+
+
+def _moteur_pret_depuis() -> float:
+    """Horodatage du dernier « pret » publié par le contrôleur (R9), 0 sinon : un moteur tout juste (re)démarré,
+    par exemple à l'activation d'un modèle, n'est pas arrêté aussitôt."""
+    d = moteurs._etat_local()
+    h = d.get("horodatage") if d and d.get("etat") == "pret" else None
+    return float(h) if isinstance(h, (int, float)) and not isinstance(h, bool) else 0.0
+
+
+async def tour_arret_inactivite() -> bool:
+    """Un tour : dépose « arreter » si le moteur LOCAL répond, que rien n'est en cours et qu'aucune activité de
+    l'administrateur n'a eu lieu depuis `arret_inactivite_min` minutes. Rend True si la demande est déposée."""
+    minutes = reglages.lire_prefs()["moteur"]["arret_inactivite_min"]
+    if not minutes or COMPTEURS["en_cours"]:
+        return False
+    reference = max(COMPTEURS["derniere_activite"], _ARRET["depart"], _moteur_pret_depuis())
+    maintenant = time.time()
+    if maintenant - reference < minutes * 60:
+        return False
+    if _ARRET["demande"] > reference and maintenant - _ARRET["demande"] < RENOUVELER_DEMANDE_S:
+        return False
+    if not await moteurs._sonde(moteurs._local(), 2):
+        return False
+    await asyncio.to_thread(moteurs.deposer_demande, "arreter")
+    _ARRET["demande"] = maintenant
+    journal("moteur.veille", apres_min=minutes)
+    log.info("moteur local : arrêt demandé après %d min d'inactivité", minutes)
+    return True
+
+
+async def _boucle_arret() -> None:
+    while True:
+        await asyncio.sleep(PERIODE_ARRET_S)
+        try:
+            await tour_arret_inactivite()
+        except Exception as e:  # noqa: BLE001 — la boucle ne meurt jamais d'un tour raté (dépôt absent…)
+            log.warning("moteur.veille tour en échec (%s)", type(e).__name__)
+
+
+def demarrer_arret_inactivite() -> None:
+    """Appelé au démarrage de l'application ; l'inactivité se compte à partir de ce moment."""
+    if _ARRET["boucle"] is None:
+        _ARRET["depart"] = time.time()
+        _ARRET["boucle"] = asyncio.create_task(_boucle_arret())
+
+
+async def arreter_arret_inactivite() -> None:
+    boucle, _ARRET["boucle"] = _ARRET["boucle"], None
+    if boucle is not None:
+        boucle.cancel()
+        await asyncio.gather(boucle, return_exceptions=True)
 
 
 def historique_ajouter(genre, titre, texte, sources=()):
@@ -166,7 +237,7 @@ async def demander_modele(systeme, utilisateur, max_tokens=400, t=None):
         return re.sub(r"(?s)<think>.*?</think>", "", "".join(morceaux)).strip()
     finally:
         COMPTEURS["en_cours"] -= 1
-        COMPTEURS["derniere_activite"] = time.time()
+        marquer_activite()
 
 
 routeur = APIRouter(prefix="", dependencies=[Depends(require_jwt)])

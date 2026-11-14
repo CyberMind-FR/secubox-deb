@@ -517,10 +517,16 @@ async def _garde(t: str, coro) -> None:
         taches.finir(t, "echec", f"Échec ({type(e).__name__}).")
 
 
-def _lancer_resume(r: dict, titre: str) -> str:
+def _lancer_resume(r: dict, titre: str, automatique: bool = False) -> str:
+    """`automatique` : lancé par la veille ; ses appels au moteur ne comptent pas comme une activité de
+    l'administrateur (le moteur local s'arrête quand même après inactivité)."""
     t = taches.nouvelle_tache("menaces", titre)
     DERNIER_RESUME["en_cours"] = t
-    taches.lancer_tache(t, _garde(t, resumer_menaces(t, r)), DUREE_TACHE_S)
+    jeton = taches.AUTOMATIQUE.set(automatique)
+    try:
+        taches.lancer_tache(t, _garde(t, resumer_menaces(t, r)), DUREE_TACHE_S)     # la tâche copie ce contexte
+    finally:
+        taches.AUTOMATIQUE.reset(jeton)
     return t
 
 
@@ -606,7 +612,7 @@ async def tour_veille() -> str | None:
     r = await releve_menaces(force=True)
     if motif_inutilisable(r) or _resume_en_cours() or taches.COMPTEURS["en_cours"]:
         return None
-    return _lancer_resume(r, "Résumé automatique des menaces de gk2")
+    return _lancer_resume(r, "Résumé automatique des menaces de gk2", automatique=True)
 
 
 async def _boucle_releves() -> None:

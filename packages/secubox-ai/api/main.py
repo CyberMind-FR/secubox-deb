@@ -8,8 +8,8 @@ Les routes sont servies à la racine du socket `/run/secubox/ai.sock` ; nginx re
 `/api/v1/ai` (même convention que secubox-ai-gateway), les URL de la page restent donc celles du POC.
 Les tâches suivantes ajoutent leurs routes par `app.include_router(<module>.routeur)`.
 Toute route est gardée par `require_jwt`, sauf `GET /health`.
-La veille des menaces (relevés de fond, résumé automatique) vit avec l'application : lancée au démarrage, annulée à
-l'arrêt. Les tests par `httpx.ASGITransport` ne la lancent pas (pas d'événements de cycle de vie).
+La veille des menaces (relevés de fond, résumé automatique) et l'arrêt du moteur local après inactivité vivent avec
+l'application : lancés au démarrage, annulés à l'arrêt. Les tests par `httpx.ASGITransport` ne la lancent pas (pas d'événements de cycle de vie).
 """
 from contextlib import asynccontextmanager
 
@@ -38,9 +38,11 @@ async def status():
 async def cycle_de_vie(_app):
     menaces.charger_instantanes()
     menaces.demarrer_veille()
+    taches.demarrer_arret_inactivite()
     try:
         yield
     finally:
+        await taches.arreter_arret_inactivite()
         await menaces.arreter_veille()
 
 

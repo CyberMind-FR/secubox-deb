@@ -28,7 +28,8 @@ from secubox_core.auth import require_jwt
 from api import memoire, moteurs, reglages
 from api.recherche import (LUCIDITE_DEFAUT, consigne_sources, controler_reponse, nom_lucidite, recherche_fiable,
                            regler_lucidite)
-from api.taches import COMPTEURS, SANS_RAISONNEMENT, TRAVAUX, FilSuivi, _un_seul_systeme, purger_travaux
+from api.taches import (COMPTEURS, SANS_RAISONNEMENT, TRAVAUX, FilSuivi, _un_seul_systeme, marquer_activite,
+                        purger_travaux)
 
 log = logging.getLogger("secubox.ai.dialogue")
 
@@ -300,7 +301,7 @@ async def essai_flux(corps: dict = Body(...)):
             await file.put({"etape": "erreur", "message": f"échec du dialogue ({type(e).__name__})"})
         finally:
             COMPTEURS["en_cours"] -= 1
-            COMPTEURS["derniere_activite"] = time.time()
+            marquer_activite()
             await file.put(None)
 
     async def flux():

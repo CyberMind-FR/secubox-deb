@@ -5,6 +5,7 @@
 """Tâches de fond, travaux en cours, Tout arrêter (#3583)."""
 import asyncio
 import json
+import os
 import time
 
 import httpx
@@ -256,3 +257,104 @@ async def test_arreter_une_tache_et_un_travail():
         assert taches.TACHES[t]["etat"] == "arrete" and taches.TRAVAUX["w"]["fini"]
     finally:
         app.dependency_overrides.pop(require_jwt, None)
+
+
+# ---------------- revue finale : arrêt du moteur local après inactivité (I1) ----------------
+@pytest.fixture
+def inactif(tmp_path, monkeypatch):
+    """Préférences et dépôt redirigés, moteur local en marche (sonde simulée), dernière activité il y a 2 h."""
+    from api import reglages
+    for nom, sous in (("SECUBOX_AI_ETAT", "etat"), ("SECUBOX_AI_CONF", "ai.toml"), ("SECUBOX_AI_CLE", "cle"),
+                      ("SECUBOX_AI_RUN", "run")):
+        monkeypatch.setenv(nom, str(tmp_path / sous))
+    (tmp_path / "run" / "demandes").mkdir(parents=True)
+    etat = {"local": True}
+
+    async def sonde(m, delai):
+        return m.nom == "local" and etat["local"]
+    monkeypatch.setattr(moteurs, "_sonde", sonde)
+    monkeypatch.setitem(taches.COMPTEURS, "en_cours", 0)
+    monkeypatch.setitem(taches.COMPTEURS, "derniere_activite", time.time() - 7200)
+    monkeypatch.setitem(taches._ARRET, "depart", time.time() - 7200)
+    monkeypatch.setitem(taches._ARRET, "demande", 0.0)
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"arret_inactivite_min": 30}}))
+    etat["demandes"] = tmp_path / "run" / "demandes"
+    return etat
+
+
+@pytest.mark.asyncio
+async def test_inactif_une_demande_arreter(inactif):
+    assert await taches.tour_arret_inactivite() is True
+    assert os.listdir(inactif["demandes"]) == ["arreter.demande"]
+    (inactif["demandes"] / "arreter.demande").unlink()          # traitée par le contrôleur
+    assert await taches.tour_arret_inactivite() is False         # jamais redéposée au tour suivant
+    assert os.listdir(inactif["demandes"]) == []
+
+
+@pytest.mark.asyncio
+async def test_activite_recente_garde_le_moteur(inactif):
+    taches.marquer_activite()
+    assert await taches.tour_arret_inactivite() is False and os.listdir(inactif["demandes"]) == []
+
+
+@pytest.mark.asyncio
+async def test_activite_automatique_ne_compte_pas(inactif):
+    jeton = taches.AUTOMATIQUE.set(True)
+    try:
+        taches.marquer_activite()
+    finally:
+        taches.AUTOMATIQUE.reset(jeton)
+    assert await taches.tour_arret_inactivite() is True
+    assert os.listdir(inactif["demandes"]) == ["arreter.demande"]
+
+
+@pytest.mark.asyncio
+async def test_zero_jamais(inactif):
+    from api import reglages
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"arret_inactivite_min": 0}}))
+    assert await taches.tour_arret_inactivite() is False and os.listdir(inactif["demandes"]) == []
+
+
+@pytest.mark.asyncio
+async def test_moteur_arrete_ou_occupe_rien(inactif, monkeypatch):
+    monkeypatch.setitem(taches.COMPTEURS, "en_cours", 1)
+    assert await taches.tour_arret_inactivite() is False
+    monkeypatch.setitem(taches.COMPTEURS, "en_cours", 0)
+    inactif["local"] = False
+    assert await taches.tour_arret_inactivite() is False and os.listdir(inactif["demandes"]) == []
+
+
+@pytest.mark.asyncio
+async def test_moteur_juste_demarre_compte_comme_activite(inactif, tmp_path):
+    # Un modèle activé après une longue pause : le moteur relancé n'est pas arrêté aussitôt.
+    (tmp_path / "run" / "moteur-etat.json").write_text(json.dumps(
+        {"etat": "pret", "message": "", "horodatage": time.time() - 5}))
+    assert await taches.tour_arret_inactivite() is False
+
+
+@pytest.mark.asyncio
+async def test_boucle_d_arret_dans_le_cycle_de_vie(inactif, monkeypatch):
+    from api import menaces
+
+    async def rien():
+        pass
+    tours = []
+
+    async def tour():
+        tours.append(1)
+        if len(tours) == 1:
+            raise OSError("dépôt absent")      # un tour raté ne tue pas la boucle
+        return False
+    monkeypatch.setattr(taches, "PERIODE_ARRET_S", 0.01)
+    monkeypatch.setattr(taches, "tour_arret_inactivite", tour)
+    monkeypatch.setattr(menaces, "demarrer_veille", lambda: None)      # aucune requête vers gk2 ici
+    monkeypatch.setattr(menaces, "arreter_veille", rien)
+    async with app.router.lifespan_context(app):
+        for _ in range(200):
+            if len(tours) >= 3:
+                break
+            await asyncio.sleep(0.01)
+        boucle = taches._ARRET["boucle"]
+        assert len(tours) >= 3 and not boucle.done()
+        assert time.time() - taches._ARRET["depart"] < 60      # l'inactivité se compte depuis le démarrage
+    assert boucle.done() and taches._ARRET["boucle"] is None
