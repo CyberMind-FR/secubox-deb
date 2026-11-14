@@ -233,10 +233,11 @@ async def _reveiller_distant(m: Moteur) -> str | None:
     return None
 
 
-async def assurer_moteur(delai: float = DELAI_DEMARRAGE_S, pas: float = 1.0) -> Moteur:
+async def assurer_moteur(delai: float = DELAI_DEMARRAGE_S, pas: float = 1.0, force: str | None = None) -> Moteur:
     """Choisit le moteur (sonde fraîche, jamais le cache), le démarre au besoin et attend qu'il réponde.
-    En auto, un distant en échec (sonde, réveil) est écarté et on se rabat sur le local."""
-    force = reglages.lire_prefs()["moteur"]["force"]
+    En auto, un distant en échec (sonde, réveil) est écarté et on se rabat sur le local.
+    `force` (auto/local/distant) remplace la préférence `moteur.force` pour cet appel."""
+    force = force or reglages.lire_prefs()["moteur"]["force"]
     m, statut = await _selection(force, contourner_cache=True)
     if m.nom == "local":
         return await _assurer_local(delai, pas)
