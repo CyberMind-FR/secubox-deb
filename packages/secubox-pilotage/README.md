@@ -21,7 +21,7 @@ du catalogue fermé, le journal des opérations et les sessions de support (voir
 | Identité | adresse source du tunnel : `10.10.0.0/24` → projection `/var/lib/secubox/p2p-public/pairs-enroles.json` publiée par secubox-p2p (pairs enrôlés seulement ; `/var/lib/secubox/p2p` est 0700 et n'est jamais lu) ; `10.64.0.0/16` → `/var/lib/secubox/autoload-public/pairs-publics.json`. Fichier absent ou illisible : aucune box identifiée (403), une ligne de journal par changement d'état |
 | Audit | `/var/log/secubox/audit.log` (propriétaire et droits inchangés) ; AppArmor `w` (pas `a` seul, qui refuse `write()` après l'ouverture `O_APPEND`, banc gk2) et ajout seul tenu par le code (ni création ni troncature) ; ACL `u:secubox-pilotage:rw-` posée par `secubox-pilotage-audit-acl` (reposée après chaque rotation par l'unité de l'écouteur), retirée par le postrm au `remove` et au `purge` (journal courant et journaux tournés, jamais à travers un lien ; rien à l'`upgrade`) |
 | AppArmor | `secubox-pilotage-api` et `secubox-pilotage-invite` (assistant de jonction), enforce ; déchargés par le postrm au `remove` |
-| Menu | aucune entrée propre : le panneau « Pilotage » est dans la page Flotte de secubox-annuaire ; paquet `hors-arbre` des méta-paquets (installé à la demande) |
+| Menu | `596-pilotage-console` (« Console de pilotage », catégorie `mesh`, `/pilotage/console/`, #3702) ; le panneau « Pilotage » reste dans la page Flotte de secubox-annuaire ; paquet porté par la fonction « Maître du parc » |
 
 ## Écouteurs de tunnel
 `secubox-pilotage-ecoute` (root) rend `/etc/nginx/conf.d/secubox-pilotage-canal.conf` : un `server` par IP de tunnel présente,
@@ -368,6 +368,27 @@ HAProxy TLS 1.3 → sbxwaf → nginx.
   portée de la box.
 - **Reste à T6/T7** : T6 pose `Interface = "distante"` (profil léger) et le DNS public `admin.<box>` (joker du pair) ; T7 : lien vers
   `https://admin.<box>.secubox.in/` dans la page Flotte, message « passez par les actions du pilotage » (R-L5-15), déconnexion.
+
+## Console (#3702)
+Page `/pilotage/console/` (`www/pilotage/console/index.html`, installée dans `/usr/share/secubox/www/pilotage/console/`), entrée de menu
+`menu.d/596-pilotage-console.json` (`requires: secubox-pilotage`, `www`/`unite: pilotage` : jugée sur le maître). Hub : `espaces.json`
+`pilotage-console` → `systeme` / `BOX`. Profil `full` : rien à changer (entrée non masquée, paquet installé par « Maître du parc » seulement).
+
+Routes (toutes `require_jwt`) sous `/api/v1/pilotage/` :
+
+| Route | Effet |
+|---|---|
+| `GET /catalogue`, `GET /flotte` | liste fermée des actions ; box cochables avec matériel et groupes |
+| `GET\|POST /macros`, `GET\|PUT\|DELETE /macros/{id}`, `POST /macros/{id}/copier`, `/simuler` | macros (livrées en lecture seule), copie, simulation |
+| `POST /macros/{id}/lancer`, `POST /executions/action` | lancement d'une macro ou d'une action seule (`cibles`, `confirmations`, `support`) ; 202 `{execution}` |
+| `GET /executions`, `GET /executions/{id}`, `POST /executions/{id}/arreter`, `GET /executions/{id}/flux` | journal, détail, arrêt, temps réel (SSE) |
+
+Tables SQLite : `macros`, `executions`, `execution_etapes`, `execution_releves`. Macros livrées : Diagnostic complet, Mise à jour sûre,
+Remise en route, Retour en local. Étapes : `action`, `releve`, `condition`, `comparer`, `attendre` (aucune commande libre).
+Planificateur : `programmation: {"quotidien": "HH:MM"}` (heure locale, refusée si une étape est forte ou une cible cliente) ; lancé dans les
+120 s qui suivent l'heure, une heure manquée n'est jamais rattrapée ; acteur `planificateur`. États d'une exécution : `en_cours`, `terminee`,
+`ecart`, `echec`, `arretee`, `interrompue` (service arrêté en cours de route, sans reprise). Non repris : pas d'état du disque, pas de zoom
+sur l'interface d'une box, agent inchangé.
 
 ## Modèle de confiance : un seul propriétaire
 

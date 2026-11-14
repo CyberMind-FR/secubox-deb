@@ -3,9 +3,11 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Task 10 (#3126) : le paquet secubox-pilotage — unité durcie, AppArmor, postinst, nginx, menu, agrégateur, CI."""
+import json
 import os
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -142,7 +144,7 @@ def test_controle_debian():
     assert "Package: secubox-pilotage\n" in c and "Architecture: all" in c and "Standards-Version: 4.6.2" in c
     assert lire("debian/compat").strip() == "13"
     ch = lire("debian/changelog").splitlines()[0]
-    assert ch.startswith("secubox-pilotage (0.6.20-1~trixie1) trixie;")
+    assert ch.startswith("secubox-pilotage (0.7.0-1~trixie1) trixie;")
     assert "Recommends: apparmor, secubox-p2p (>= 1.20.2~)" in c          # banc gk2 : projection p2p-public des pairs enrôlés
     depends = re.search(r"^Depends:(.*)$", c, re.M).group(1)
     assert "sudo" not in depends                                          # Final : plus aucune règle sudoers
@@ -187,8 +189,8 @@ def test_pas_d_entree_de_menu_et_hors_arbre():
     """R29 : 595-fleet (annuaire) existe ; l'agent est recommandé par le socle (secubox-service-administration, #3405 :
     installé par défaut, inerte sans maillage) et n'est plus hors de l'arbre des méta-paquets ; le maître
     (secubox-pilotage) est porté par la fonction « Maître du parc » (secubox-fonction-maitre, #3337), jamais par une box ordinaire."""
-    assert not (ICI / "menu.d").exists()
-    assert "menu.d" not in lire("debian/rules")
+    # #3702 : R29 levée pour la seule entrée « Console de pilotage » (596) ; l'arbre ne change pas.
+    assert sorted(p.name for p in (ICI / "menu.d").iterdir()) == ["596-pilotage-console.json"]
     arbre = lire("secubox-meta/arbre.yaml", DEPOT / "packages")
     debut = arbre.index("\nhors-arbre:") + len("\nhors-arbre:\n")
     hors = re.match(r"(?:  - .*\n|\s*#.*\n)*", arbre[debut:]).group(0)      # la seule liste hors-arbre
@@ -405,3 +407,25 @@ def test_unite_vhost_root_bornee_et_exception_ecrite():
     for mot in ("haproxyctl", "secubox-waf-route", "certbot", "nginx", "systemd-run", "CAP_CHOWN",
                 "packages/secubox-pilotage/tests/test_paquet.py::test_unite_vhost_root_bornee_et_exception_ecrite"):
         assert mot in lignes[0], mot
+
+
+def test_console_installee_et_au_menu():
+    """#3702 : la console est installée avec le paquet et au menu de la Flotte (catégorie mesh), jugée sur le maître."""
+    rules = lire("debian/rules")
+    assert "www/pilotage/console/index.html" in rules and "/usr/share/secubox/www/pilotage/console/" in rules
+    assert "menu.d/596-pilotage-console.json" in rules and "/usr/share/secubox/menu.d/" in rules
+    assert sorted(p.name for p in (ICI / "menu.d").iterdir()) == ["596-pilotage-console.json"]
+    m = json.loads(lire("menu.d/596-pilotage-console.json"))
+    assert m["id"] == "pilotage-console" and m["path"] == "/pilotage/console/" and m["order"] == 596
+    assert m["requires"] == ["secubox-pilotage"] and m["category"] == "mesh" and m["theme"] == "mesh"
+    assert (m["www"], m["unite"]) == ("pilotage", "pilotage")
+    assert (ICI / "www/pilotage/console/index.html").is_file()
+    esp = json.loads(lire("secubox-hub/espaces.json", DEPOT / "packages"))
+    assert esp["modules"]["pilotage-console"] == {"espace": "systeme", "objet": "BOX"}
+
+
+def test_console_visible_au_profil_full():
+    """Le profil full ne masque pas la console et n'installe pas le maître : seule la fonction « Maître du parc » le fait."""
+    full = tomllib.loads(lire("secubox-profiles/profiles/full.toml", DEPOT / "packages"))
+    assert "pilotage-console" not in full["menu_off"]
+    assert "pilotage" not in full["on"]
