@@ -414,6 +414,7 @@
             cles.forEach(k => {
                 const a = action(k), b = el('button', 'btn' + (k === 'reboot' ? ' danger' : a.forte ? ' forte' : ''), LIBELLES[k] ? LIBELLES[k][0].toUpperCase() + LIBELLES[k].slice(1) : k);
                 b.type = 'button'; b.dataset.action = k; if (a.forte) b.title = 'confirmation forte : nom de chaque box retapé';
+                if (a.macro === false && ciblesCochees().length !== 1) { b.disabled = true; b.title = 'action seule : cochez une seule box'; }
                 choix.append(b);
             });
             corps.append(choix);
@@ -444,6 +445,11 @@
             if (!a) return message('Action inconnue du catalogue : ' + cle, true);
             if (!cib.length) return message('Cochez au moins une box en ligne dans la Flotte.', true);
             const titre = cle + Object.keys(args).sort().map(k => ' ' + args[k]).join('');
+            if (a.macro === false) {   // action seule de la console (renommer) : sa route, une seule box, jamais le moteur
+                if (cib.length !== 1) return message('« ' + cle + ' » ne vise qu\'une box : cochez-en une seule.', true);
+                if (!a.forte) return envoyerManuelle({ titre: titre, action: cle, args: args, cibles: cib }, {});
+                return ouvrirLancement({ titre: titre, manuelle: true, action: cle, args: args, cibles: cib, forte: true });
+            }
             if (!a.forte && cib.length === 1) return envoyer('/executions/action', { action: cle, args: args }, cib, {}, titre);
             ouvrirLancement({ titre: titre, chemin: '/executions/action', corps: { action: cle, args: args }, cibles: cib, forte: a.forte });
         }
@@ -476,6 +482,22 @@
                 const d = await api(chemin, { method: 'POST', corps: Object.assign({}, corps, { cibles: cibles.map(b => b.cle), confirmations: confirmations, support: support }) });
                 message('« ' + titre + ' » lancé sur ' + cibles.map(b => b.nom).join(', ') + '.');
                 if (d && nb(d.execution) != null) suivreExecution(d.execution);
+                return '';
+            } catch (e) { message(e.message, true); return e.message; }
+        }
+
+        // action seule : POST /boxes/{x}/actions/{action} {args, confirmation | support} ; le résultat est une opération (ligne locale)
+        async function envoyerManuelle(p, confirmations) {
+            const b = p.cibles[0];
+            if (DEMO) { message('Démonstration : « ' + p.titre + ' » n\'est pas envoyé.'); return ''; }
+            const corps = { args: p.args };
+            if (cliente(b)) { const s = (await supportsOuverts([b]))[b.cle]; if (s) corps.support = s; }
+            else if (action(p.action).forte) corps.confirmation = confirmations[b.cle] || '';
+            try {
+                const d = await api('/boxes/' + enc(b.cle) + '/actions/' + enc(p.action), { method: 'POST', corps: corps });
+                const etat = d && typeof d.etat === 'string' ? d.etat : null;
+                message('« ' + p.titre + ' » sur ' + b.nom + ' : ' + (etat ? libelleEtat(etat)[0] : 'envoyé') + '.');
+                journalLocal(b, p.titre, etat, d && d.raison);
                 return '';
             } catch (e) { message(e.message, true); return e.message; }
         }
@@ -516,7 +538,7 @@
             const conf = {};
             $('lancement-corps').querySelectorAll('input[data-cle]').forEach(i => { conf[i.dataset.cle] = i.value; });
             $('lancement-ok').disabled = true;
-            const err = await envoyer(p.chemin, p.corps, p.cibles, conf, p.titre);
+            const err = p.manuelle ? await envoyerManuelle(p, conf) : await envoyer(p.chemin, p.corps, p.cibles, conf, p.titre);
             if (planLancement !== p) return;
             if (err) { $('lancement-msg').textContent = err; majLancer(); } else fermerLancement();
         });
@@ -527,8 +549,8 @@
             if (DEMO) return message('Démonstration : le relevé n\'est pas demandé.');
             const faits = [], refus = [];
             for (const b of cib) {
-                try { await api('/boxes/' + enc(b.cle) + '/releve', { method: 'POST', corps: { duree_s: 60 } }); faits.push(b.nom); journalLocal(b, 'relevé 60 s', 'en_cours', 'demandé'); }
-                catch (e) { refus.push(b.nom + ' : ' + e.message); }
+                try { await api('/boxes/' + enc(b.cle) + '/releve', { method: 'POST', corps: { duree_s: 60 } }); faits.push(b.nom); journalLocal(b, 'relevé 60 s', 'ok', 'demandé : mesures à l\'inventaire suivant'); }
+                catch (e) { refus.push(b.nom + ' : ' + e.message); journalLocal(b, 'relevé 60 s', 'echec', e.message); }
             }
             message((faits.length ? 'Relevé de 60 s demandé sur ' + faits.join(', ') + '. ' : '') + refus.join(' · '), refus.length > 0);
         }
@@ -719,7 +741,8 @@
             cur.fini = true;
             journaliser({ t: t, qui: 'macro', macro: true, libelle: (cur.nom || 'exécution ' + cur.id) + ' · fin', etat: etat, details: [raison] });
             if (courant === cur) { $('arreter').hidden = true; etatFlux('exécution finie', ''); }
-            rendreMacros(); if (!DEMO) charger();
+            rendreMacros();
+            if (!DEMO && !document.hidden && !fenetreOuverte() && !saisieEnCours()) charger().catch(() => { /* relu au prochain tour */ });
         }
         function evenementMacro(cur, d) {
             if (d.execution !== cur.id) return;
@@ -794,23 +817,32 @@
             if (DEMO) { cur.stop = true; etatFlux('démonstration : pas de flux', ''); return; }
             let delai = 3000;
             while (!cur.stop) {
+                const cx = new AbortController(), relais = () => cx.abort();   // une connexion = un contrôleur, abandonné à sa sortie
+                cur.ctl.signal.addEventListener('abort', relais);
+                let rd = null, lu_fin = false;
                 try {
-                    const r = await fetch(API + '/executions/' + cur.id + '/flux', { headers: entetes({ Accept: 'text/event-stream' }), credentials: 'same-origin', cache: 'no-store', signal: cur.ctl.signal });
+                    const r = await fetch(API + '/executions/' + cur.id + '/flux', { headers: entetes({ Accept: 'text/event-stream' }), credentials: 'same-origin', cache: 'no-store', signal: cx.signal });
                     if (r.status === 401) { cur.stop = true; sessionRequise(); return; }
                     if (r.status === 403 || r.status === 404) { cur.stop = true; etatFlux('flux indisponible (HTTP ' + r.status + ')', 'coupe'); return; }
                     if (!r.ok || !r.body) throw new Error('HTTP ' + r.status);
                     if (courant === cur) etatFlux('● flux ouvert', 'ok');
-                    const rd = r.body.getReader(), dec = new TextDecoder('utf-8'); let tampon = '';
+                    rd = r.body.getReader(); const dec = new TextDecoder('utf-8'); let tampon = '';
                     for (;;) {
                         const lu = await rd.read();
-                        if (lu.done) break;
+                        if (lu.done) { lu_fin = true; break; }
                         tampon = normaliser(tampon, dec.decode(lu.value, { stream: true }));
                         if (tampon.length > TAMPON_MAX) throw new Error('flux trop volumineux');
                         let i;
                         while ((i = tampon.indexOf('\n\n')) >= 0) { const b = tampon.slice(0, i); tampon = tampon.slice(i + 2); if (bloc(cur, b)) delai = 3000; if (cur.stop) break; }
-                        if (cur.stop) { try { await rd.cancel(); } catch (e) { /* clos */ } break; }
+                        if (cur.stop) break;
                     }
                 } catch (e) { if (cur.stop || cur.ctl.signal.aborted) return; }
+                finally {
+                    // sortie anticipée (dépassement, arrêt, erreur) : lecteur annulé et connexion abandonnée, sinon elle tiendrait une
+                    // des 4 places de flux de l'administrateur jusqu'au ramasse-miettes
+                    if (rd && !lu_fin) { try { rd.cancel(); } catch (e) { /* clos */ } }
+                    cx.abort(); cur.ctl.signal.removeEventListener('abort', relais);
+                }
                 if (cur.stop) return;
                 // coupure : reprise seulement si l'exécution est encore en cours
                 const e = await relire(cur);

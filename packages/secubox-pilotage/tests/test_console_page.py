@@ -55,7 +55,7 @@ def test_ni_boite_native_ni_innerhtml_ni_eval():
 def test_routes_de_l_api_citees():
     src = _src()
     for r in ("/flotte", "/catalogue", "/macros", "/executions?limite=20", "/executions/action", "/lancer", "/arreter", "/flux",
-              "/support", "/boxes/"):
+              "/support", "/boxes/", "/actions/", "/releve"):
         assert r in src, r
     assert "const API = '/api/v1/pilotage'" in src
 

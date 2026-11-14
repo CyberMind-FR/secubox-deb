@@ -4,9 +4,9 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#3702 tâche 7 : la console de pilotage dans un vrai navigateur (Playwright). L'API est simulée par `page.route`, aux formes réelles
 de api/main.py (catalogue, flotte, macros, exécutions, flux SSE) ; `?demo=1` sous file:// pour les captures et la démonstration."""
-import concurrent.futures
 import json
 import pathlib
+import threading
 import time
 import urllib.parse
 
@@ -91,15 +91,15 @@ def _api_simulee(executions=None, detail=None, flux=None, ecritures=None):
             return 200, flux or ""
         if methode == "GET" and chemin.startswith("/executions/"):
             return (200, detail) if detail is not None else (404, {"detail": "exécution inconnue"})
+        for motif, rep in (ecritures or {}).items():
+            if methode != "GET" and motif in chemin:
+                return rep
         if methode == "GET" and chemin.startswith("/boxes/") and chemin.endswith("/support"):
             return 200, []
         if methode == "GET" and chemin.startswith("/boxes/"):
             nom = urllib.parse.unquote(chemin.split("/")[2]).split(":")[-1]
             b = next(x for x in _flotte()["boxes"] if x["nom"] == nom)
             return 200, {**b, "inventaire": {}, "inventaire_tronques": 0, "services_en_echec_noms": ["secubox-portal"] if nom == "gk7" else []}
-        for motif, rep in (ecritures or {}).items():
-            if methode != "GET" and motif in chemin:
-                return rep
         return 404, {"detail": "route inconnue du simulateur"}
     return repondre
 
@@ -136,12 +136,28 @@ def _nav(scenario, *, api=None, largeur=1440, hauteur=900, query="?demo=1", avan
                 pg.goto(BASE + "/pilotage/console/" + (query if query != "?demo=1" else ""))
             else:
                 pg.goto("file://" + str(PAGE) + query)
-            pg.wait_for_timeout(700)
-            r = scenario(pg, requetes)
-            nav.close()
+            try:
+                pg.wait_for_timeout(700)
+                r = scenario(pg, requetes)
+            finally:
+                nav.close()
             return ("ok", r, erreurs, natifs, requetes)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-        res = ex.submit(tache).result(timeout=90)
+    # fil démon borné : un navigateur bloqué fait échouer le test, jamais bloquer pytest (ni sa sortie)
+    sortie = []
+
+    def fil():
+        try:
+            sortie.append(tache())
+        except BaseException as e:   # rendu au fil de pytest
+            sortie.append(("exc", e))
+    t = threading.Thread(target=fil, daemon=True)
+    t.start()
+    t.join(90)
+    if not sortie:
+        pytest.fail("navigateur bloqué : scénario non fini en 90 s")
+    res = sortie[0]
+    if res[0] == "exc":
+        raise res[1]
     if res[0] == "skip":
         pytest.skip(res[1])
     return res[1], res[2], res[3], res[4]
@@ -306,3 +322,101 @@ def test_action_forte_ouvre_l_ecran_de_lancement():
         return ouvert, pg.is_visible("#lancement"), [m for m, u in requetes if m != "GET"]
     (ouvert, encore, ecritures), erreurs, _, _ = _nav(sc, api=_api_simulee())
     assert ouvert and not encore and ecritures == [] and erreurs == []
+
+
+def test_renommer_par_sa_route_une_seule_box():
+    """renommer (`macro` faux au catalogue) : POST /boxes/{x}/actions/renommer {args, confirmation}, une seule box ; jamais /executions."""
+    api = _api_simulee(ecritures={"/actions/renommer": (200, {"operation": 4, "box": "gk7", "cle": "maillage:gk7", "action": "renommer",
+                                                                "etat": "accepte", "job": "j1", "raison": "", "operation_etat": "en_cours"})})
+    corps = []
+
+    def sc(pg, requetes):
+        pg.on("request", lambda r: corps.append((r.url, r.post_data_json)) if r.method == "POST" else None)
+        pg.check("#flotte-liste label:has-text('gk7') input")
+        pg.check("#flotte-liste label:has-text('gk6') input")
+        pg.click("#actions button:has-text('Secrets')")
+        deux = pg.locator("#fenetre-corps [data-action='renommer']").is_disabled()
+        pg.keyboard.press("Escape")
+        pg.uncheck("#flotte-liste label:has-text('gk6') input")
+        pg.click("#actions button:has-text('Secrets')")
+        une = pg.locator("#fenetre-corps [data-action='renommer']").is_disabled()
+        pg.fill("#param-nom", "gk9")
+        pg.click("#fenetre-corps [data-action='renommer']")
+        pg.fill("#lancement-corps input", "gk7")
+        pg.click("#lancement-ok")
+        pg.wait_for_timeout(300)
+        return deux, une, pg.inner_text("#message"), pg.inner_text("#journal"), pg.is_visible("#lancement")
+    (deux, une, msg, journal, ouvert), erreurs, natifs, requetes = _nav(sc, api=api)
+    assert deux and not une and not ouvert
+    assert corps == [(BASE + "/api/v1/pilotage/boxes/maillage%3Agk7/actions/renommer", {"args": {"nom": "gk9"}, "confirmation": "gk7"})]
+    assert not any("/executions/" in u for m, u in requetes if "/api/" in u and "limite" not in u)
+    assert "renommer gk9" in journal and "acceptée" in journal and erreurs == [] and natifs == []
+
+
+def test_renommer_refus_de_l_api_affiche():
+    msg = "box tenue par une exécution de macro en cours : l'arrêter ou attendre sa fin"
+    api = _api_simulee(ecritures={"/actions/renommer": (409, {"detail": msg})})
+
+    def sc(pg, _):
+        pg.check("#flotte-liste label:has-text('gk7') input")
+        pg.fill("#commande", "renommer")
+        pg.keyboard.press("Enter")
+        pg.fill("#param-nom", "gk9")
+        pg.click("#fenetre-corps [data-action='renommer']")
+        pg.fill("#lancement-corps input", "gk7")
+        pg.click("#lancement-ok")
+        pg.wait_for_timeout(300)
+        return pg.inner_text("#lancement-msg"), pg.is_visible("#lancement")
+    (texte, ouvert), erreurs, natifs, _ = _nav(sc, api=api)
+    assert msg in texte and ouvert and erreurs == [] and natifs == []
+
+
+def test_flux_trop_volumineux_annule_le_lecteur():
+    ex = _execution()
+    flux = _sse("etat", {"execution": 7, "connecte": True, "etat": "en_cours"}) + ": " + "x" * (1 << 20) + "\n"
+
+    def avant(pg):
+        pg.add_init_script("""window.__annule = 0; window.__abandon = 0;
+            const c = ReadableStreamDefaultReader.prototype.cancel;
+            ReadableStreamDefaultReader.prototype.cancel = function () { window.__annule++; return c.apply(this, arguments); };
+            const a = AbortController.prototype.abort;
+            AbortController.prototype.abort = function () { window.__abandon++; return a.apply(this, arguments); };""")
+
+    def sc(pg, _):
+        pg.wait_for_timeout(300)
+        return pg.evaluate("[window.__annule, window.__abandon]"), pg.inner_text("#flux-etat")
+    ((annule, abandon), etat), erreurs, _, _ = _nav(sc, api=_api_simulee([ex], ex, flux), avant=avant)
+    assert annule >= 1 and abandon >= 1 and "reconnexion" in etat and erreurs == []
+
+
+def test_flux_normal_ne_force_pas_d_annulation():
+    ex = _execution()
+    flux = _sse("etat", {"execution": 7, "connecte": True, "etat": "en_cours"})
+
+    def avant(pg):
+        pg.add_init_script("""window.__annule = 0; const c = ReadableStreamDefaultReader.prototype.cancel;
+            ReadableStreamDefaultReader.prototype.cancel = function () { window.__annule++; return c.apply(this, arguments); };""")
+    annule, erreurs, _, _ = _nav(lambda pg, _: pg.evaluate("window.__annule"), api=_api_simulee([ex], ex, flux), avant=avant)
+    assert annule == 0 and erreurs == []
+
+
+def test_releve_ligne_resolue_ok_puis_echec():
+    reponses = iter([(202, {"cle": "maillage:gk7", "nom": "gk7", "duree_s": 60, "statut": "demande"}),
+                     (409, {"detail": "un relevé est déjà en cours pour cette box"})])
+    base = _api_simulee()
+
+    def api(methode, chemin, requete):
+        if methode == "POST" and chemin.endswith("/releve"):
+            return next(reponses)
+        return base(methode, chemin, requete)
+
+    def sc(pg, _):
+        pg.check("#flotte-liste label:has-text('gk7') input")
+        pg.click("#actions button:has-text('Relevé')")
+        pg.wait_for_timeout(200)
+        pg.click("#actions button:has-text('Relevé')")
+        pg.wait_for_timeout(200)
+        return [x.inner_text() for x in pg.locator("#journal .ligne").all()]
+    lignes, erreurs, _, _ = _nav(sc, api=api)
+    assert len(lignes) == 2 and "… en cours" not in " ".join(lignes)
+    assert "relevé 60 s" in lignes[0] and "ok" in lignes[0] and "échec" in lignes[1] and "déjà en cours" in lignes[1] and erreurs == []
