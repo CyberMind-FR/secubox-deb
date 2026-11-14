@@ -298,12 +298,29 @@ async def test_box_qui_ne_revient_pas_arrete_la_serie(w):
     assert not [a for a in w.x.appels if a[0] == "gk6"]
 
 
+@pytest.mark.asyncio
+async def test_attendre_exige_un_contact_apres_le_debut_de_l_etape(w):
+    """Sans reboot : une vue d'AVANT la coupure (moins de 90 s) ne suffit pas, la box suivante n'est pas touchée."""
+    w.x.pendant = lambda b, a: w.eteindre(GK7)        # coupure pendant l'action, horloge non avancée : gk7 vue il y a 0 s
+    ex = await w.derouler([A_HUB, {"type": "attendre", "delai_s": 30}])
+    assert ex["etat"] == "echec" and "la box n'est pas revenue" in ex["raison"]
+    assert etats(ex, "gk7") == ["ok", "echec"] and etats(ex, "gk6") == ["non_lancee", "non_lancee"]
+    assert not [a for a in w.x.appels if a[0] == "gk6"]
+
+
+@pytest.mark.asyncio
+async def test_attendre_sans_reboot_box_qui_parle_encore(w):
+    ex = await w.derouler([A_HUB, {"type": "attendre", "delai_s": 30}])
+    assert ex["etat"] == "terminee" and etats(ex, "gk7") == etats(ex, "gk6") == ["ok", "ok"]
+    assert ex["etapes"][1]["resultat"]["vu_le"] > ex["etapes"][1]["debut"]
+
+
 # --- arrêt ---
 
 @pytest.mark.asyncio
 async def test_arreter_apres_l_etape_en_cours(w):
     arrets = []
-    w.x.pendant = lambda b, a: arrets.append(w.m.arreter(ident))
+    w.x.pendant = lambda b, a: arrets.append(w.m.arreter(ident, "bob"))      # bob arrête l'exécution lancée par alice
     ident = await w.lancer([A_MAJ, R_AVANT])
     await w.m.taches[ident]
     ex = w.s.execution(ident)
@@ -312,7 +329,17 @@ async def test_arreter_apres_l_etape_en_cours(w):
     assert ex["etat"] == "arretee"
     assert [c["evenement"] for c in w.macro_audits()] == ["lancement", "arret", "fin"]
     assert w.macro_audits("fin")[0]["etat"] == "arretee"
-    assert w.m.arreter(ident) is False and w.m.arreter(99999) is False
+    (arret,) = w.macro_audits("arret")
+    assert arret["par"] == "bob" and arret["acteur"] == "alice"
+    assert w.m.arreter(ident, "bob") is False and w.m.arreter(99999) is False
+    assert w.m._arrets == {}                                                   # aucun arrêt périmé gardé
+
+
+@pytest.mark.asyncio
+async def test_arreter_une_execution_finie_refuse(w):
+    ident = await w.lancer([R_AVANT], boites=(GK7,))
+    await w.m.taches[ident]
+    assert w.m.arreter(ident) is False and w.m._arrets == {}
 
 
 # --- refus au lancement ---
@@ -333,6 +360,7 @@ async def test_refus_au_lancement(tmp_path):
     await refus(400, [A_REBOOT], confirmations={"maillage:gk7": "GK7", "maillage:gk6": "gk6"})
     await refus(400, [A_REBOOT], confirmations={"maillage:gk7": "gk7 ", "maillage:gk6": "gk6"})
     await refus(400, [{"type": "shell", "cmd": "id"}])                            # liste fermée
+    await refus(400, [{"type": "action", "action": "renommer", "args": {"nom": "gk9"}}])   # renommer : action seule
     await refus(400, [R_AVANT], boites=())
     await refus(400, [R_AVANT], boites=(GK7, GK7))
     assert "support" in await refus(409, [R_AVANT], boites=(GK7, CLIENTE))        # cliente sans session de support
@@ -402,6 +430,9 @@ async def test_fermer_laisse_l_execution_en_cours_puis_interrompue(tmp_path):
     await w.m.fermer()
     assert w.s.execution(ident)["etat"] == "en_cours" and w.m.occupees() == set()
     assert w.d._relais == {}
+    with pytest.raises(RefusLancement) as e:                                     # service en cours d'arrêt
+        await w.lancer([R_AVANT], boites=(GK6,))
+    assert e.value.statut == 503 and len(w.s.executions()) == 1
     assert await w.m.interrompre_au_demarrage() == [ident]
 
 
@@ -482,6 +513,8 @@ async def test_planificateur_cible_disparue_sautee_et_boucle_vivante(tmp_path, c
     assert "gk6" in w.macro_audits("lancement")[0]["raison"]
     assert [c["nom"] for c in troisieme["cibles"]] == ["gk7", "gk6"]
     assert "stockage indisponible" in caplog.text
+    (refus,) = w.macro_audits("refus_programme")                                 # la nuit de la panne est auditée
+    assert refus["raison"] == "erreur interne du planificateur" and refus["acteur"] == "planificateur"
 
 
 @pytest.mark.asyncio

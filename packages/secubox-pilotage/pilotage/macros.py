@@ -35,6 +35,7 @@ RELEVE_DUREE = (10, 300)
 ATTENDRE_DELAI = (30, 900)
 ATTENDRE_DEFAUT = 300
 SEUIL_MAX = 1e6
+HORS_MACRO = ("renommer",)   # change la clé de la box : les étapes suivantes viseraient une box disparue
 SERVICES_MAX = 200
 
 ESTIMATION_S = {"reboot": 120, "maj-paquets": 300, "installer": 180, "service-demarrer": 15, "service-arreter": 15,
@@ -111,6 +112,8 @@ def valider_etapes(etapes) -> list:
                 act = CATALOGUE.get(nom) if isinstance(nom, str) else None
                 if act is None:
                     raise MacroInvalide("action inconnue du catalogue")
+                if nom in HORS_MACRO:
+                    raise MacroInvalide(f"l'action {nom} ne se met pas dans une macro (action seule de la console)")
                 args = e.get("args", {})
                 if arguments(act, args) is None:
                     raise MacroInvalide(f"paramètres invalides pour l'action {nom}")

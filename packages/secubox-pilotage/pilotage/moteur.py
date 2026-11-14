@@ -116,7 +116,9 @@ class Moteur:
         self.horloge, self.attente, self.sonde_s, self.frais_s, self.resoudre = horloge, attente, sonde_s, frais_s, resoudre
         self.taches: dict = {}          # id d'exécution -> tâche de déroulement
         self._reservees: dict = {}      # Box.cle -> id d'exécution (None pendant le lancement)
-        self._arrets: set = set()
+        self._actives: set = set()      # exécutions en déroulement (jusqu'à leur fin rangée)
+        self._arrets: dict = {}         # id d'exécution -> qui a demandé l'arrêt
+        self._ferme = False
         self._tentes: dict = {}         # macro programmée -> instant de l'heure déjà tentée (une tentative par heure)
 
     # --- outils ---
@@ -151,6 +153,8 @@ class Moteur:
                      programme: bool = False, absentes: tuple = ()) -> int:
         """`confirmations` et `support` sont indexés par `Box.cle`. `absentes` : noms de cibles introuvables (planificateur), notés à
         l'audit du lancement."""
+        if self._ferme:
+            raise RefusLancement(503, "service en cours d'arrêt")
         try:
             etapes = valider_etapes(macro.get("etapes"))
         except MacroInvalide as exc:
@@ -199,16 +203,22 @@ class Moteur:
             raise
         for c in cles:
             self._reservees[c] = x.ident
+        self._actives.add(x.ident)
         tache = asyncio.create_task(self._derouler(x))
         self.taches[x.ident] = tache
-        tache.add_done_callback(lambda _t, i=x.ident: self.taches.pop(i, None))
+        tache.add_done_callback(lambda _t, i=x.ident: self._oublier(i))
         return x.ident
 
-    def arreter(self, ident: int) -> bool:
-        """Demande l'arrêt après l'étape en cours. Faux si l'exécution est inconnue ou finie."""
-        if ident not in self.taches:
+    def _oublier(self, ident: int) -> None:
+        self.taches.pop(ident, None)
+        self._actives.discard(ident)
+        self._arrets.pop(ident, None)
+
+    def arreter(self, ident: int, acteur: Optional[str] = None) -> bool:
+        """Demande l'arrêt après l'étape en cours ; `acteur` (qui arrête) est audité. Faux si l'exécution est inconnue ou finie."""
+        if ident not in self._actives:
             return False
-        self._arrets.add(ident)
+        self._arrets.setdefault(ident, _borne(acteur, 64) if acteur is not None else None)
         return True
 
     def occupees(self) -> set:
@@ -229,7 +239,7 @@ class Moteur:
                     etat, raison = issue, motif
                     break
             if etat == "arretee":
-                await self._auditer(self._champs(x, "arret", etat, raison))
+                await self._auditer(self._champs(x, "arret", etat, raison, par=self._arrets.get(x.ident)))
             if etat == "terminee" and x.sautees:
                 raison = "box sautées (hors ligne) : " + ", ".join(x.sautees)
             await asyncio.to_thread(self.stockage.etapes_clore, x.ident, "non_lancee")
@@ -248,7 +258,7 @@ class Moteur:
             for b in x.boxes:
                 if self._reservees.get(b["cle"]) == x.ident:
                     del self._reservees[b["cle"]]
-            self._arrets.discard(x.ident)
+            self._actives.discard(x.ident)   # plus d'arrêt possible : l'exécution est finie (ou abandonnée à l'arrêt du service)
         await self._auditer(self._champs(x, "fin", etat, raison))
         self._publier(x, "fin", etat=etat, raison=raison)
 
@@ -389,13 +399,19 @@ class Moteur:
         return inst
 
     async def _attendre(self, b: dict, e: dict, reboots: list) -> dict:
-        """Box vue depuis moins de HORS_LIGNE_S ET tout reboot de cette box dans cette exécution terminé (clos par vu() au nouveau
-        boot_id)."""
-        limite = self.horloge() + e["delai_s"]
+        """Après un reboot de cette exécution : box vue depuis moins de HORS_LIGNE_S ET chaque reboot terminé (clos par vu() au
+        nouveau boot_id). Sans reboot : un contact de la box APRÈS le début de l'étape (une vue d'avant une coupure ne compte pas ;
+        un délai court peut échouer, c'est le côté sûr)."""
+        debut = self.horloge()
+        limite = debut + e["delai_s"]
         while True:
             vue = await asyncio.to_thread(self.stockage.boite, b["cle"])
-            ops = [await asyncio.to_thread(self.stockage.operation_lire, op) for op in reboots]
-            if self._en_ligne(vue) and all(o is not None and o["etat"] == "termine" for o in ops):
+            if reboots:
+                ops = [await asyncio.to_thread(self.stockage.operation_lire, op) for op in reboots]
+                revenue = self._en_ligne(vue) and all(o is not None and o["etat"] == "termine" for o in ops)
+            else:
+                revenue = vue is not None and vue["vu_le"] > int(debut)
+            if revenue:
                 return {"vu_le": vue["vu_le"]}
             if self.horloge() >= limite:
                 raise EchecEtape("la box n'est pas revenue")
@@ -414,6 +430,7 @@ class Moteur:
 
     async def fermer(self) -> None:
         """Annule les déroulements ; leurs exécutions restent `en_cours` et passeront `interrompue` au démarrage suivant."""
+        self._ferme = True
         taches = list(self.taches.values())
         for t in taches:
             t.cancel()
@@ -452,16 +469,22 @@ class Moteur:
             self._tentes.pop(next(iter(self._tentes)))
         self._tentes[m["id"]] = depuis
         x = _Execution(None, m["id"], m["nom"], m["etapes"], [], {}, {}, ACTEUR_PLANIFICATEUR, True)
-        refus = "une étape exige la confirmation forte" if contient_forte(m["etapes"]) else None
         absentes = []
-        for c in m.get("cibles") or []:
-            b = await asyncio.to_thread(self.resoudre, c["cle"])
-            if b is None:                  # renommée ou oubliée depuis l'enregistrement
-                absentes.append(c.get("nom") or c["cle"])
-                continue
-            if b["reseau"] != "maillage":
-                refus = refus or f"box cliente {b['nom']} : une macro programmée ne vise pas une box cliente"
-            x.boxes.append(b)
+        try:
+            refus = "une étape exige la confirmation forte" if contient_forte(m["etapes"]) else None
+            for c in m.get("cibles") or []:
+                b = await asyncio.to_thread(self.resoudre, c["cle"])
+                if b is None:              # renommée ou oubliée depuis l'enregistrement
+                    absentes.append(c.get("nom") or c["cle"])
+                    continue
+                if b["reseau"] != "maillage":
+                    refus = refus or f"box cliente {b['nom']} : une macro programmée ne vise pas une box cliente"
+                x.boxes.append(b)
+        except Exception:
+            log.exception("planificateur : macro %s, cibles illisibles", m.get("id"))
+            x.boxes = [c for c in m.get("cibles") or [] if isinstance(c, dict) and "nom" in c]
+            await self._auditer(self._champs(x, "refus_programme", "refuse", "erreur interne du planificateur"))
+            return None
         if refus is None and not x.boxes:
             refus = "aucune cible connue"
         if refus is None:

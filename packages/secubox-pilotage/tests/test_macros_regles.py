@@ -191,3 +191,10 @@ def test_estimation_et_coupure():
     assert coupure({"type": "action", "action": "interface-locale"}) == "bascule d'interface"
     assert coupure({"type": "action", "action": "renommer"}) == "changement de nom"
     assert coupure({"type": "action", "action": "maj-paquets"}) is None and coupure(RELEVE) is None
+
+
+def test_renommer_refuse_dans_une_macro():
+    """Le renommage change la clé de la box en cours de macro : refusé à l'enregistrement comme au lancement (action seule)."""
+    with pytest.raises(MacroInvalide, match="renommer"):
+        valider_etapes([{"type": "action", "action": "renommer", "args": {"nom": "gk9"}}])
+    assert all(e.get("action") != "renommer" for m in LIVREES for e in m["etapes"])
