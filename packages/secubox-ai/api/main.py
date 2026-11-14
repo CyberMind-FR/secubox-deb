@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, FastAPI
 
 from secubox_core.auth import require_jwt
 
-from api import moteurs, reglages, taches
+from api import memoire, moteurs, reglages, taches
 
 VERSION = "0.1.0"
 
@@ -35,3 +35,4 @@ app.include_router(ROUTEUR)
 app.include_router(reglages.routeur)
 app.include_router(moteurs.routeur)
 app.include_router(taches.routeur)
+app.include_router(memoire.routeur)
