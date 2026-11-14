@@ -140,14 +140,23 @@ plafonds glissants d'office 5/h et 20/j, du compte 30/h et 100/j. Refus 409 `{"d
 `duree`, `plafond_compte`, `plafond_auto`, `pas_sur`, et les gardes `privee`, `protegee`, `box`, `pair`,
 `garde_illisible`, `nft` ; 503 `etat`, `journal`, `audit`, `wafctl`, `processus` ; 500 `incoherent`. Un débannissement
 ne lève jamais un ban qu'une autre source couvre (sbxwaf, administrateur) : état `couvert`. Journal des gestes :
-`/var/lib/secubox/waf/ai-ban.jsonl`.
+`/var/lib/secubox/waf/ai-ban.jsonl`. La `fin` d'un ban de bloc (réponse et journal) est celle que `waf-blocs` a
+enregistrée.
+
+**Le cas sûr, deux contrôles** : la règle effective est **relais ∧ gk2**. Le relais vérifie chaque adresse du bloc
+dans ses propres relevés ; le recontrôle de la box ne regarde, pour chaque adresse de `waf_ban`, que la **dernière**
+catégorie de ban de cette adresse (journal des menaces), pas son historique. Ni l'un ni l'autre ne connaît les pairs
+hors site ou itinérants (box en déplacement, postes nomades, adresse publique d'un pair derrière un autre FAI) : leurs
+adresses ou blocs **doivent** être écrits dans `protegees.env`, sinon rien n'empêche leur /24 d'être banni.
 
 **Un seul processus sert `/ai/*`** : la mémoire des jetons vus, le verrou et les plafonds sont par processus. Le
 paquet pose `SECUBOX_WAF_GESTES_IA=1` sur l'agrégateur seul (drop-in
 `/usr/lib/systemd/system/secubox-aggregator.service.d/secubox-waf-gestes-ia.conf`, pris au redémarrage suivant de
 l'agrégateur, que le paquet ne fait pas) ; `secubox-waf.service` (waf.sock) rend 503 `processus` avant de lire le
-jeton. Une box dont nginx envoie encore `/api/v1/waf/` à `waf.sock` (sans `secubox-aggregator-migrate`) rend donc 503
-sur `/ai/*`.
+jeton. Le serveur d'administration (`webui.conf` de secubox-hub) envoie `/api/v1/waf/` à `waf.sock` : le paquet livre
+donc `/etc/nginx/secubox-routes.d/waf-ai.conf` (`location ^~ /api/v1/waf/ai/` → `aggregator.sock`, préfixe plus long,
+il gagne), et son postinst ne recharge nginx que si `nginx -t` passe. Sans le WAF monté dans l'agrégateur
+(`/etc/secubox/aggregator.toml`), `/ai/*` rend encore 503.
 
 **AppArmor** : `/etc/apparmor.d/usr.sbin.waf-blocs` est livré en **complain** ; il passe en enforce après relecture
 des journaux au banc gk6.

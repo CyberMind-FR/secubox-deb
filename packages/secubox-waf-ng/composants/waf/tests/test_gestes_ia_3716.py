@@ -1003,3 +1003,37 @@ def test_defaire_d_un_ban_deja_absent_n_est_pas_incoherent(c, monkeypatch):
     _audit_qui_echoue(c, monkeypatch, "ai-ban")
     c.faux.reponses["unban"] = (0, "[..] unban 198.51.100.7\n", "")
     assert c.ban("198.51.100.7").json()["detail"]["motif"] == "audit"
+
+
+# ── Revue finale I1 : la fin journalisée d'un bloc est celle que waf-blocs a enregistrée ─────────────────────────
+def test_bloc_fin_journalisee_est_celle_de_waf_blocs_et_l_annulation_leve(c):
+    fin_waf = int(time.time()) + 3600 + 30            # waf-blocs a pris sa date 30 s après la nôtre (systemd-run lent)
+    c.faux.reponses["ban-bloc"] = (0, json.dumps({"ok": True, "motif": None, "bloc": "203.0.113.0/24",
+                                                  "debut": fin_waf - 3600, "fin": fin_waf}) + "\n", "")
+    r = c.ban("203.0.113.0/24", duree_s=3600)
+    assert r.status_code == 200, r.text
+    ident = r.json()["id"]
+    assert r.json()["fin"] == fin_waf and c.lignes_journal()[-1]["fin"] == fin_waf
+    assert f"fin {fin_waf}" in [x for x in c.audit() if x["action"] == "ai-ban"][0]["detail"]
+    _blocs(c, "203.0.113.0/24", fin_waf)            # la liste de waf-blocs : sa propre fin, celle de l'IA
+    assert _unban(c, ident).json() == {"id": ident, "etat": "annule"}
+    assert c.faux.appels[-1] == ADMIN_SYSTEMD_RUN + ["unban-bloc", "203.0.113.0/24"]
+
+
+def test_bloc_sans_fin_lisible_la_fin_est_prise_apres_waf_blocs(c, monkeypatch):
+    t0 = int(time.time())
+    horloge = iter([t0] + [t0 + 30] * 50)
+    monkeypatch.setattr(c.g, "_maintenant", lambda: next(horloge))
+    r = c.ban("203.0.113.0/24", duree_s=3600)          # réponse sans « fin » (ancien waf-blocs)
+    assert r.status_code == 200, r.text
+    assert r.json()["fin"] == t0 + 30 + 3600 == c.lignes_journal()[-1]["fin"]
+
+
+@pytest.mark.parametrize("sortie", ['{"ok": true, "fin": "demain"}\n', '{"ok": true, "fin": true}\n', "pas du json\n"])
+def test_bloc_fin_illisible_ignoree(c, monkeypatch, sortie):
+    t0 = int(time.time())
+    horloge = iter([t0] + [t0 + 7] * 50)
+    monkeypatch.setattr(c.g, "_maintenant", lambda: next(horloge))
+    c.faux.reponses["ban-bloc"] = (0, sortie, "")
+    r = c.ban("203.0.113.0/24", duree_s=3600)
+    assert r.status_code == 200 and r.json()["fin"] == t0 + 7 + 3600

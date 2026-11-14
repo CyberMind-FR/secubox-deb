@@ -400,6 +400,18 @@ EXPO
       fi
     fi
 
+    # #3716 : /etc/nginx/secubox-routes.d/waf-ai.conf (conffile) envoie /api/v1/waf/ai/* à l'agrégateur.
+    # Rechargement de nginx SEULEMENT si la configuration passe le test ; jamais de redémarrage de nginx ni de
+    # l'agrégateur (celui-ci sur le go du propriétaire). En échec, rien n'est rechargé : le prochain rechargement
+    # réussi prendra la route.
+    if [ -f /etc/nginx/secubox-routes.d/waf-ai.conf ] && command -v nginx >/dev/null 2>&1; then
+      if IA_NT=$(nginx -t 2>&1); then
+        systemctl reload nginx >/dev/null 2>&1 || true
+      else
+        echo "secubox-waf-ng: nginx -t a echoue, route /api/v1/waf/ai/ deposee mais nginx non recharge : ${IA_NT}" >&2
+      fi
+    fi
+
     ;;
 
   abort-upgrade|abort-remove|abort-deconfigure)

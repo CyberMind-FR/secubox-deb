@@ -210,3 +210,153 @@ def test_seul_l_agregateur_porte_le_drapeau_des_gestes_ia():
     assert re.search(r"^\[Service\]\nEnvironment=SECUBOX_WAF_GESTES_IA=1$", d, re.M)
     assert "SECUBOX_WAF_GESTES_IA" not in UNITE_API.read_text()   # l'unité de waf.sock les refuse
     assert re.search(r"--workers 1\b", UNITE_AGREGATEUR.read_text())   # une mémoire de rejeu, un processus
+
+
+# ── C1 : admin.<box> envoie /api/v1/waf/ à waf.sock (webui.conf) ; /ai/* doit aller à l'agrégateur ──
+ROUTE_IA = PAQUET / "nginx" / "waf-ai.conf"
+WEBUI = DEPOT / "packages" / "secubox-hub" / "nginx" / "webui.conf"
+
+
+def test_route_ia_vers_l_agregateur():
+    t = ROUTE_IA.read_text()
+    assert t.startswith("# SPDX-License-Identifier: LicenseRef-CMSD-1.0")
+    m = re.search(r"location\s+\^~\s+/api/v1/waf/ai/\s*\{(.*?)\}", t, re.S)
+    assert m, "location ^~ /api/v1/waf/ai/ absente"
+    corps = m.group(1)
+    # L'agrégateur monte le WAF sous /api/v1/waf (Mount : le sous-routeur voit /ai/…) : le chemin complet est gardé.
+    assert re.search(r"proxy_pass\s+http://unix:/run/secubox/aggregator\.sock:/api/v1/waf/ai/;", corps)
+    assert "include /etc/nginx/snippets/secubox-proxy.conf;" in corps
+    assert "waf.sock" not in corps and "rewrite" not in corps
+    # Les motifs JSON (409/503) doivent parvenir au relais tels quels.
+    assert re.search(r"proxy_intercept_errors\s+off;", corps)
+
+
+def test_route_ia_gagne_sur_la_route_waf_du_webui():
+    w = WEBUI.read_text()
+    # La route générale du webui va à waf.sock (processus sans drapeau → 503 « processus » sur /ai/*).
+    assert re.search(r"location\s+/api/v1/waf/\s*\{[^}]*waf\.sock", w)
+    # Le webui inclut secubox-routes.d dans le même serveur : la location préfixe la plus longue gagne,
+    # et ^~ coupe court aux regex.
+    assert "include /etc/nginx/secubox-routes.d/*.conf;" in w
+    assert not re.search(r"location\s+(\^~\s+|=\s*)?/api/v1/waf/ai", w)   # pas de doublon (nginx -t échouerait)
+    assert len("/api/v1/waf/ai/") > len("/api/v1/waf/")
+
+
+def test_rules_installe_la_route_ia_dans_secubox_routes_d():
+    r = RULES.read_text()
+    assert re.search(r"install -D -m 0644 nginx/waf-ai\.conf \\\n\s+debian/secubox-waf-ng/etc/nginx/secubox-routes\.d/waf-ai\.conf", r)
+
+
+def test_postinst_recharge_nginx_seulement_si_le_test_passe():
+    c = _configure()
+    i = c.index("secubox-routes.d/waf-ai.conf")
+    bloc = c[i:i + 900]
+    assert re.search(r"if\s+\S*=?\$\(nginx -t 2>&1\)|if nginx -t", bloc)
+    assert bloc.index("nginx -t") < bloc.index("systemctl reload nginx")
+    assert "restart nginx" not in bloc
+
+
+def test_commentaires_disent_la_vraie_route():
+    d = DROPIN.read_text()
+    assert "waf-ai.conf" in d and "comme sur gk2" not in d
+    g = (PAQUET / "composants" / "waf" / "api" / "gestes_ia.py").read_text()
+    assert "waf-ai.conf" in g.split('"""', 2)[1]
+
+
+@pytest.mark.skipif(shutil.which("nginx") is None and not Path("/usr/sbin/nginx").exists(), reason="nginx requis")
+def test_nginx_envoie_ai_a_l_agregateur_et_le_reste_a_waf_sock(tmp_path):
+    """nginx réel : la location de webui.conf + la route livrée ; chaque socket note le chemin reçu."""
+    import http.server
+    import socket
+    import socketserver
+    import threading
+    import time
+    import urllib.request
+
+    recus = {}
+
+    class Serveur(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+        daemon_threads = True
+
+    def lancer(nom):
+        chemin = tmp_path / f"{nom}.sock"
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                recus.setdefault(nom, []).append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"ok")
+
+            def address_string(self):
+                return nom
+
+            def log_message(self, *a):
+                pass
+
+        s = Serveur(str(chemin), H)
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+        return s
+
+    serveurs = [lancer("waf"), lancer("aggregator")]
+    proxy = (DEPOT / "common" / "nginx" / "secubox-proxy.conf").read_text()
+    (tmp_path / "proxy.conf").write_text(proxy)
+    route = ROUTE_IA.read_text().replace("/run/secubox/", f"{tmp_path}/").replace(
+        "/etc/nginx/snippets/secubox-proxy.conf", str(tmp_path / "proxy.conf"))
+    (tmp_path / "routes.d").mkdir()
+    (tmp_path / "routes.d" / "waf-ai.conf").write_text(route)
+    bloc_waf = re.search(r"    location /api/v1/waf/ \{.*?\n    \}\n", WEBUI.read_text(), re.S).group(0)
+    bloc_waf = bloc_waf.replace("/run/secubox/", f"{tmp_path}/").replace(
+        "/etc/nginx/snippets/secubox-proxy.conf", str(tmp_path / "proxy.conf"))
+    with socket.socket() as so:
+        so.bind(("127.0.0.1", 0))
+        port = so.getsockname()[1]
+    conf = tmp_path / "nginx.conf"
+    conf.write_text(f"""daemon off; pid {tmp_path}/nginx.pid; error_log {tmp_path}/err.log;
+events {{}}
+http {{
+  access_log off; client_body_temp_path {tmp_path}; proxy_temp_path {tmp_path};
+  fastcgi_temp_path {tmp_path}; uwsgi_temp_path {tmp_path}; scgi_temp_path {tmp_path};
+  server {{
+    listen 127.0.0.1:{port};
+{bloc_waf}
+    location ~ /ai/ {{ return 418; }}   # une regex qui happerait /ai/ : ^~ doit la court-circuiter
+    include {tmp_path}/routes.d/*.conf;
+  }}
+}}
+""")
+    nginx = shutil.which("nginx") or "/usr/sbin/nginx"
+    t = subprocess.run([nginx, "-t", "-p", str(tmp_path), "-c", str(conf)], capture_output=True, text=True, timeout=10)
+    if t.returncode != 0 and "Permission denied" in t.stderr:
+        pytest.skip(t.stderr)
+    assert t.returncode == 0, t.stderr
+    p = subprocess.Popen([nginx, "-p", str(tmp_path), "-c", str(conf)], stderr=subprocess.PIPE)
+    try:
+        def get(chemin):
+            for _ in range(50):
+                try:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{port}{chemin}", timeout=5) as r:
+                        return r.status
+                except (ConnectionRefusedError, urllib.error.URLError) as e:
+                    if isinstance(e, urllib.error.HTTPError):
+                        return e.code
+                    time.sleep(0.1)
+            raise AssertionError("nginx injoignable")
+
+        assert get("/api/v1/waf/ai/etat") == 200
+        assert get("/api/v1/waf/status") == 200
+    finally:
+        p.terminate()
+        p.wait(timeout=10)
+        for s in serveurs:
+            s.shutdown()
+    assert recus.get("aggregator") == ["/api/v1/waf/ai/etat"]
+    assert recus.get("waf") == ["/status"]
+
+
+def test_readme_regle_effective_et_pairs_hors_site():
+    r = README.read_text()
+    assert "relais ∧ gk2" in r and "**dernière**" in r
+    assert "hors site" in r and "itinérants" in r and "protegees.env" in r
+    assert "secubox-routes.d/waf-ai.conf" in r

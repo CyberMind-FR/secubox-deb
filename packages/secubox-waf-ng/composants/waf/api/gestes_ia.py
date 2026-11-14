@@ -41,7 +41,10 @@ Les gestes sont sérialisés par un verrou de processus (contrôle du journal �
 sont servies par UN seul processus (l'agrégateur, `--workers 1`), comme l'exige la mémoire de rejeu de la garde. Ce
 module est aussi importé par `secubox-waf.service` (uvicorn sur waf.sock) : seul le processus qui porte
 `SECUBOX_WAF_GESTES_IA=1` (drop-in de secubox-aggregator.service livré par ce paquet) sert `/ai/*` ; tout autre rend
-503 `processus` avant la garde (`processus_designe`) — aucun jeton n'y est lu, aucun jti consommé.
+503 `processus` avant la garde (`processus_designe`) — aucun jeton n'y est lu, aucun jti consommé. Le serveur
+d'administration (webui.conf de secubox-hub) envoie `/api/v1/waf/` à waf.sock : c'est la route
+`/etc/nginx/secubox-routes.d/waf-ai.conf` (`location ^~ /api/v1/waf/ai/`, livrée par ce paquet) qui envoie `/ai/*`
+à l'agrégateur.
 """
 from __future__ import annotations
 
@@ -363,6 +366,19 @@ def _lancer(argv: List[str]) -> Tuple[Optional[subprocess.CompletedProcess], Opt
         return None, type(e).__name__
 
 
+def _fin_enregistree(r: subprocess.CompletedProcess, repli: int) -> int:
+    """La `fin` de la ligne JSON `{"ok": true, …, "fin"}` rendue par `waf-blocs ajouter` (l'entrée qu'il a
+    enregistrée) ; `repli` (date prise APRÈS l'appel + durée, jamais avant la sienne) si elle manque ou est illisible."""
+    for ligne in (r.stdout or "").splitlines():
+        try:
+            d = json.loads(ligne)
+        except ValueError:
+            continue
+        if isinstance(d, dict) and d.get("ok") is True and _entier(d.get("fin")) and d["fin"] > 0:
+            return d["fin"]
+    return repli
+
+
 def _defaire(cible: Cible) -> bool:
     """Retire le ban qu'on vient de poser (audit ou journal impossibles, wafctl muet). False s'il reste peut-être
     (`wafctl unban` d'une adresse absente rend 0 : l'absence n'est pas un échec)."""
@@ -586,6 +602,12 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
             raise _refus(503, "wafctl", geste, user)
         if r.returncode != 0:
             raise _refus(*_statut_motif(_motif_sortie(r)), geste, user)
+        if bloc:
+            # Revue finale I1 : la fin qui fait foi est celle que waf-blocs a ENREGISTRÉE (sa date est prise après
+            # nos lectures, l'audit et systemd-run) ; `_couverte` la compare à la nôtre à MARGE_BLOC_S près.
+            fin = _fin_enregistree(r, int(_maintenant()) + geste.duree_s)
+            resume = (f"id {ident} cible {geste.cible} {geste.duree_s}s fin {fin} mode {geste.mode} "
+                      f"conseil {geste.conseil}")
 
         entree = {"ts": _horodatage(), "at": maintenant, "type": "ban", "id": ident, "cible": geste.cible,
                   "fin": fin, "mode": geste.mode, "conseil": geste.conseil, "motif": geste.motif,
