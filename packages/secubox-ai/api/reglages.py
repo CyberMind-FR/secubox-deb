@@ -14,6 +14,7 @@ import os
 import re
 import tomllib
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
@@ -52,6 +53,7 @@ CONFIG_DEFAUT = {
     "gk2": {"menaces_url": "https://admin.gk2.secubox.in/api/v1",
             "sources_url": "https://hall.gk2.secubox.in/api/v1/zia/objets"},
     "moteur_local": {"modele": DEFAUTS["moteur"]["modele"]},
+    "searxng": {"url": ""},   # SearXNG local de la box (conteneur LXC interne) ; vide = aucun
 }
 
 
@@ -149,6 +151,18 @@ def valider(entree: dict) -> dict:
     return prefs
 
 
+def _url_locale_valide(url) -> bool:
+    """URL http/https avec un hôte, sans identifiants ni fragment (la valeur vient de la configuration root)."""
+    if not isinstance(url, str) or not url:
+        return False
+    try:
+        p = urlsplit(url)
+        return p.scheme in ("http", "https") and bool(p.hostname) and p.username is None \
+            and p.password is None and "@" not in p.netloc and not p.fragment
+    except ValueError:
+        return False
+
+
 def config() -> dict:
     """Configuration fixe (lecture seule) ; défauts si le fichier manque ou est illisible."""
     cfg = copy.deepcopy(CONFIG_DEFAUT)
@@ -159,6 +173,8 @@ def config() -> dict:
     for section, valeurs in lue.items():
         if section in cfg and isinstance(valeurs, dict):
             cfg[section].update({c: v for c, v in valeurs.items() if c in cfg[section]})
+    if not _url_locale_valide(cfg["searxng"]["url"]):
+        cfg["searxng"]["url"] = ""
     return cfg
 
 

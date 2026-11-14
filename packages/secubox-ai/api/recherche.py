@@ -109,17 +109,52 @@ async def outil_wikipedia(requete):
             for x in r.json()["query"]["search"]]
 
 
+class SearxngIndisponible(httpx.HTTPError):
+    """Aucune source SearXNG utilisable ; le message est l'état de la sonde (compté comme panne)."""
+
+
+async def _searxng_local(url, requete):
+    """SearXNG local : adresse de conteneur privée voulue (configuration root), donc hors garde « publique ».
+    Délai de connexion 2 s, pas de redirection, réponse bornée. Rend la liste JSON brute ou lève."""
+    delai = httpx.Timeout(20, connect=2)
+    async with _client("searxng_local", delai, follow_redirects=False) as c:
+        async with c.stream("GET", url.rstrip("/") + "/search",
+                            params={"q": requete, "format": "json", "language": "fr"}) as r:
+            if r.status_code != 200:
+                raise SearxngIndisponible(str(r.status_code))
+            brut = b""
+            async for bloc in r.aiter_bytes():
+                brut += bloc
+                if len(brut) > TAILLE_PAGE_MAX:
+                    raise SearxngIndisponible("trop gros")
+    return json.loads(brut).get("results", [])
+
+
 async def outil_searxng(requete):
-    """Méta-moteur de gk0 par le moteur distant (`/search`). Distant non configuré : pas d'outil.
-    Les erreurs réseau remontent : l'appelant les compte comme panne."""
-    m = moteurs._distant()
-    if m is None:
-        return []
-    async with m.client(20) as c:
-        r = await c.get("/search", params={"q": requete, "format": "json", "language": "fr"})
-        r.raise_for_status()
+    """SearXNG de la box d'abord, puis celui de gk0 par le moteur distant (`/search`, sonde R10).
+    Rien de configuré : pas d'outil ([]). Configuré mais indisponible : SearxngIndisponible (panne)."""
+    resultats = None
+    url = reglages.config()["searxng"]["url"]
+    if url:
+        try:
+            resultats = await _searxng_local(url, requete)
+        except (httpx.HTTPError, ValueError, AttributeError):
+            log.warning("searxng local indisponible, repli sur le distant")
+    if resultats is None:
+        m = moteurs._distant()
+        if m is None:
+            if url:
+                raise SearxngIndisponible("injoignable")
+            return []
+        statut = await moteurs._statut_distant(m)
+        if statut not in ("pret", "endormi"):
+            raise SearxngIndisponible(statut)
+        async with m.client(20) as c:
+            r = await c.get("/search", params={"q": requete, "format": "json", "language": "fr"})
+            r.raise_for_status()
+        resultats = r.json().get("results", [])
     return [{"titre": x.get("title", ""), "extrait": x.get("content", ""), "url": x["url"]}
-            for x in r.json().get("results", [])[:10] if x.get("url")]
+            for x in resultats[:10] if isinstance(x, dict) and x.get("url")]
 
 
 async def outil_secubox(requete):
@@ -321,24 +356,16 @@ async def recherche_fiable(question, prefs, sources, suivi=None):
     for nom, outil in outils.items():
         if not prefs["outils"].get(nom):
             continue
-        # searxng passe par le moteur distant : non configuré, l'outil est absent ; sonde (cache 10 s, R10)
-        # ni prête ni endormie, il est sauté sans attendre le délai de connexion, et compté comme panne.
-        if nom == "searxng":
-            distant = moteurs._distant()
-            if distant is None:
-                continue
-            statut = await moteurs._statut_distant(distant)
-            if statut not in ("pret", "endormi"):
-                panne += 1
-                await dire(etape="moteur", moteur=nom, echec=statut)
-                continue
+        # searxng sans aucune source configurée (ni local ni distant) : l'outil est absent, pas en panne.
+        if nom == "searxng" and not reglages.config()["searxng"]["url"] and moteurs._distant() is None:
+            continue
         try:
             trouves = await outil(requete)
             log.info("outil.appel outil=%s resultats=%d", nom, len(trouves))
         except (httpx.HTTPError, KeyError, ValueError) as e:
             panne += 1
             log.warning("outil.echec outil=%s cause=%s", nom, type(e).__name__)
-            await dire(etape="moteur", moteur=nom, echec=type(e).__name__)
+            await dire(etape="moteur", moteur=nom, echec=str(e) if isinstance(e, SearxngIndisponible) else type(e).__name__)
             continue
         # Les objets SecuBox sont déjà choisis par ZIA : ils ne repassent pas le filtre de mots.
         deja = {x["url"] for x in retenus}

@@ -14,6 +14,11 @@ url = ""
 menaces_url = "https://admin.gk2.secubox.in/api/v1"
 sources_url = "https://hall.gk2.secubox.in/api/v1/zia/objets"
 
+# [searxng]
+# SearXNG local de la box, essayé avant celui de gk0 (vide = aucun). Adresse du conteneur créé par
+# `searxngctl install` ; à ajouter aussi à IPAddressAllow — fait par l'empaquetage.
+# url = "http://10.100.0.85:8888"
+
 [moteur_local]
 # Modèle GGUF servi par le moteur local (llama-server de secubox-zia-llm).
 modele = "qwen2.5-1.5b-instruct-q4_k_m.gguf"

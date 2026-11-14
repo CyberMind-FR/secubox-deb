@@ -5,6 +5,8 @@
 """Recherche et lecture de pages (#3583, tâche 6) : garde SSRF, contrôle de réponse, budget. Aucun réseau réel."""
 import logging
 
+import json
+
 import httpx
 import pytest
 
@@ -294,7 +296,8 @@ async def test_searxng_requete_distante_avec_cle(distant):
     vues, _ = distant
     r = await recherche.outil_searxng("michel murty")
     assert r == [{"titre": "Michel Murty", "extrait": "chanteur", "url": "https://michelmurty.fr/"}]
-    assert vues == [("GET", "/search", {"q": "michel murty", "format": "json", "language": "fr"}, f"Bearer {CLE}")]
+    assert [v[1] for v in vues] == ["/health", "/search"]       # sonde R10 puis recherche
+    assert vues[1] == ("GET", "/search", {"q": "michel murty", "format": "json", "language": "fr"}, f"Bearer {CLE}")
 
 
 @pytest.mark.asyncio
@@ -320,9 +323,11 @@ async def test_searxng_erreur_reseau_remonte(distant, monkeypatch):
     comportement["sante"] = 200
     import api.recherche as r
 
-    def tombe(nom):
-        return httpx.MockTransport(lambda req: (_ for _ in ()).throw(httpx.ConnectError("x", request=req)))
-    monkeypatch.setattr(moteurs, "FABRIQUE_TRANSPORT", tombe)
+    def h(req):
+        if req.url.path == "/health":
+            return httpx.Response(200, json={})
+        raise httpx.ConnectError("x", request=req)
+    monkeypatch.setattr(moteurs, "FABRIQUE_TRANSPORT", lambda nom: httpx.MockTransport(h))
     with pytest.raises(httpx.ConnectError):
         await r.outil_searxng("x")
 
@@ -335,3 +340,118 @@ async def test_idn_host_et_sni_en_ascii(web):
     assert req["host"] == "xn--lyse-9oad.fr:443" and req["sni"] == "xn--lyse-9oad.fr"
     assert req["url"] == "https://93.184.216.34/"
     assert web["appels_dns"] == ["xn--lyse-9oad.fr"]
+
+
+# ---- Tâche 6b : SearXNG local de la box, gk0 en repli ----
+LOCAL = "http://10.100.0.85:8888"
+
+
+@pytest.fixture
+def local(distant, tmp_path, monkeypatch):
+    """SearXNG local configuré ; transport « searxng_local » enregistré à part du distant."""
+    conf = tmp_path / "ai.toml"
+    conf.write_text(f'[distant]\nurl = "https://ia.distante.test"\n[searxng]\nurl = "{LOCAL}"\n', encoding="utf-8")
+    monkeypatch.setenv("SECUBOX_AI_CONF", str(conf))
+    vues, etat = [], {"mode": "ok", "contenu": None}
+
+    def h(req):
+        vues.append((str(req.url.copy_with(query=None)), dict(req.url.params), req.headers.get("authorization")))
+        if etat["mode"] == "tombe":
+            raise httpx.ConnectError("injoignable", request=req)
+        if etat["mode"] == "5xx":
+            return httpx.Response(503)
+        if etat["mode"] == "redir":
+            return httpx.Response(302, headers={"location": "http://10.0.0.1/"})
+        return httpx.Response(200, content=etat["contenu"] or json.dumps({"results": [
+            {"title": "Local", "content": "c", "url": "https://l.fr/"}, {"title": "sans url"}]}).encode())
+    monkeypatch.setattr(recherche, "FABRIQUE_TRANSPORT_WEB",
+                        lambda nom: httpx.MockTransport(h) if nom == "searxng_local" else None)
+    return vues, etat, distant
+
+
+@pytest.mark.asyncio
+async def test_local_repond_distant_non_sollicite(local):
+    vues, _, (vues_distant, _) = local
+    r = await recherche.outil_searxng("zia")
+    assert r == [{"titre": "Local", "extrait": "c", "url": "https://l.fr/"}]
+    assert vues == [(f"{LOCAL}/search", {"q": "zia", "format": "json", "language": "fr"}, None)]
+    assert vues_distant == []                                  # ni sonde ni recherche vers gk0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["tombe", "5xx", "redir"])
+async def test_local_en_echec_repli_distant(local, mode):
+    vues, etat, (vues_distant, _) = local
+    etat["mode"] = mode
+    r = await recherche.outil_searxng("zia")
+    assert r[0]["titre"] == "Michel Murty"                      # réponse du distant
+    assert [v[1] for v in vues_distant] == ["/health", "/search"] and len(vues) == 1
+
+
+@pytest.mark.asyncio
+async def test_local_json_invalide_ou_trop_gros_repli(local):
+    vues, etat, (vues_distant, _) = local
+    etat["contenu"] = b"pas du json"
+    assert (await recherche.outil_searxng("zia"))[0]["titre"] == "Michel Murty"
+    etat["contenu"] = b" " * (recherche.TAILLE_PAGE_MAX + 10)
+    moteurs._cache_sonde.clear()
+    assert (await recherche.outil_searxng("zia"))[0]["titre"] == "Michel Murty"
+
+
+@pytest.mark.asyncio
+async def test_local_et_distant_indisponibles_panne(local):
+    _, etat, (_, comportement) = local
+    etat["mode"], comportement["sante"] = "tombe", "tombe"
+    prefs = reglages.lire_prefs()
+    prefs["outils"].update(secubox=False, wikipedia=False)
+    assert await recherche.recherche_fiable("Michel Murty", prefs, [], None) == ("indisponible", "")
+
+
+@pytest.mark.asyncio
+async def test_local_seul_sans_distant(local, tmp_path, monkeypatch):
+    vues, etat, _ = local
+    (tmp_path / "distant.key").unlink()                          # distant non configuré
+    assert (await recherche.outil_searxng("zia"))[0]["titre"] == "Local"
+    etat["mode"] = "tombe"
+    with pytest.raises(httpx.HTTPError):
+        await recherche.outil_searxng("zia")
+
+
+@pytest.mark.asyncio
+async def test_url_locale_vide_comportement_inchange(distant):
+    vues, _ = distant
+    assert reglages.config()["searxng"]["url"] == ""
+    assert (await recherche.outil_searxng("zia"))[0]["titre"] == "Michel Murty"
+    assert [v[1] for v in vues] == ["/health", "/search"]
+
+
+@pytest.mark.parametrize("url", ["ftp://10.100.0.85/", "http://user@10.100.0.85:8888", "http://u:p@h/", "10.100.0.85:8888",
+                                 "file:///x", "http://", 42])
+def test_config_refuse_url_locale_invalide(tmp_path, monkeypatch, url):
+    conf = tmp_path / "ai.toml"
+    conf.write_text(f"[searxng]\nurl = {json.dumps(url)}\n", encoding="utf-8")
+    monkeypatch.setenv("SECUBOX_AI_CONF", str(conf))
+    assert reglages.config()["searxng"]["url"] == ""
+
+
+def test_config_accepte_url_locale(tmp_path, monkeypatch):
+    conf = tmp_path / "ai.toml"
+    conf.write_text(f'[searxng]\nurl = "{LOCAL}"\n', encoding="utf-8")
+    monkeypatch.setenv("SECUBOX_AI_CONF", str(conf))
+    assert reglages.config()["searxng"]["url"] == LOCAL
+
+
+@pytest.mark.asyncio
+async def test_client_local_sans_env_ni_redirection_ni_journal(local, monkeypatch, caplog):
+    caplog.set_level(logging.DEBUG)
+    clients = []
+    vrai = httpx.AsyncClient
+
+    class Espion(vrai):
+        def __init__(self, *a, **kw):
+            clients.append(kw)
+            super().__init__(*a, **kw)
+    monkeypatch.setattr(recherche.httpx, "AsyncClient", Espion)
+    await recherche.outil_searxng("secret-question")
+    assert clients[0]["trust_env"] is False and clients[0]["follow_redirects"] is False
+    assert "secret-question" not in caplog.text and "l.fr" not in caplog.text
