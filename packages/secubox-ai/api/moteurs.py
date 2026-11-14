@@ -35,6 +35,7 @@ CTX_AUTO_MIN = 4096
 DELAI_SONDE_S = 2.0       # sonde /health du moteur distant
 CACHE_SONDE_S = 10.0      # une sonde récente évite de re-sonder à chaque requête
 DELAI_DEMARRAGE_S = 180
+PAS_ATTENTE_S = 1.0       # pas d'attente du redémarrage (réduit par les tests)
 
 # Point d'injection des tests : fabrique(nom) -> transport httpx (ou None = transport réel).
 FABRIQUE_TRANSPORT: Callable[[str], httpx.AsyncBaseTransport | None] | None = None
@@ -216,6 +217,44 @@ async def _assurer_local(delai: float, pas: float) -> Moteur:
     return m
 
 
+def local_lit_images() -> bool:
+    """Le moteur local lit-il les images ? Non à l'étape 1 (aucun projecteur `--mmproj` configuré) ;
+    crochet pour les tâches suivantes."""
+    return False
+
+
+def _redemarrage_vu(depuis: float) -> bool:
+    """Le contrôleur a-t-il signalé (R9) un démarrage ou un moteur prêt postérieur à `depuis` ?"""
+    d = _etat_local()
+    if not d or d.get("etat") not in ("demarrage", "pret"):
+        return False
+    h = d.get("horodatage")
+    return not isinstance(h, bool) and isinstance(h, (int, float)) and h > depuis
+
+
+async def changer_modele_local(delai: float = DELAI_DEMARRAGE_S, pas: float | None = None) -> Moteur:
+    """Redémarre le moteur local sur le modèle des préférences et attend qu'il réponde : tant que le contrôleur n'a
+    pas signalé le redémarrage (ou que l'ancien moteur répond encore), rien ne part vers l'ancien modèle.
+    Échoue aussitôt (503 + message du contrôleur) sur refus mémoire ou erreur."""
+    pas = PAS_ATTENTE_S if pas is None else pas
+    m = _local()
+    depuis = time.time()
+    await asyncio.to_thread(deposer_demande, "redemarrer")
+    limite = time.monotonic() + delai
+    while not _redemarrage_vu(depuis):
+        message = _echec_controleur(depuis)
+        if message:
+            raise HTTPException(503, message)
+        if not await _sonde(m, 2):          # l'ancien moteur ne répond plus : le redémarrage est en cours
+            break
+        if time.monotonic() >= limite:
+            raise HTTPException(503, "le moteur local n'a pas redémarré")
+        await asyncio.sleep(pas)
+    if not await attendre_moteur(m, max(0.0, limite - time.monotonic()), pas, depuis):
+        raise HTTPException(503, "le moteur local n'a pas démarré")
+    return m
+
+
 async def _reveiller_distant(m: Moteur) -> str | None:
     """Demande le démarrage du moteur distant. None si accepté, sinon un motif sans clé."""
     try:
@@ -260,14 +299,30 @@ async def assurer_moteur(delai: float = DELAI_DEMARRAGE_S, pas: float = 1.0, for
     return await _assurer_local(delai, pas)
 
 
-async def contexte_reel(m: Moteur | None = None) -> int:
-    """Le contexte du moteur EN MARCHE : des préférences changées ne s'appliquent qu'à son redémarrage."""
-    m = m or await choisir()
+async def props(m: Moteur) -> dict:
+    """`GET /props` du moteur en marche (llama-server)."""
     async with m.client(10) as c:
         r = await c.get("/props")
         r.raise_for_status()
-    return int(r.json()["default_generation_settings"]["n_ctx"]) or \
-        reglages.lire_prefs()["moteur"]["contexte"] or CTX_AUTO_MIN
+    return r.json()
+
+
+def contexte_de(p: dict) -> int:
+    """Le contexte lu dans `/props`, sinon la préférence, sinon le minimum automatique."""
+    return int(p["default_generation_settings"]["n_ctx"]) or reglages.lire_prefs()["moteur"]["contexte"] or CTX_AUTO_MIN
+
+
+def modele_de(m: Moteur, p: dict) -> str:
+    """Nom du modèle qui répond : la préférence pour le local, le `model_path` de `/props` pour le distant."""
+    if m.nom == "local":
+        return reglages.lire_prefs()["moteur"]["modele"]
+    chemin = p.get("model_path") if isinstance(p, dict) else None
+    return chemin.replace("\\", "/").rsplit("/", 1)[-1] if isinstance(chemin, str) and chemin.strip() else "distant (gk0)"
+
+
+async def contexte_reel(m: Moteur | None = None) -> int:
+    """Le contexte du moteur EN MARCHE : des préférences changées ne s'appliquent qu'à son redémarrage."""
+    return contexte_de(await props(m or await choisir()))
 
 
 async def compter_tokens(texte: str, m: Moteur | None = None) -> int:

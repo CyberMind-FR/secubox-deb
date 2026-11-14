@@ -7,7 +7,8 @@
 Porté du POC gk0 (`essai_flux`) pour l'administration seule : le dialogue public reste sur gk0 (étape 3).
 Les noms, l'ordre et les champs des événements NDJSON sont ceux du POC : la page est portée telle quelle.
 Chaque dialogue crée un travail (`taches.TRAVAUX`) : une page rechargée s'y raccroche par `/travaux/{id}`.
-Une image jointe ne quitte pas la box : elle part au moteur local, sauf choix explicite du moteur distant.
+Une image jointe ne quitte pas la box sans choix explicite du moteur distant ; le moteur local ne lit pas les images
+à l'étape 1 (`moteurs.local_lit_images`) : la question est alors refusée aussitôt, sans démarrer de moteur.
 Le journal ne reçoit jamais ni la question, ni la réponse, ni les adresses des sources.
 """
 import asyncio
@@ -15,6 +16,7 @@ import json
 import logging
 import re
 import secrets
+import sqlite3
 import time
 
 import httpx
@@ -37,6 +39,7 @@ CONSIGNE_DELIRE = ("Mode imagination, choisi par l'utilisateur : réponds librem
 IMAGE_ENTREE = re.compile(r"^data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$")
 IMAGE_MAX = 4 * 1024 * 1024
 QUESTION_MAX = 4000
+REFUS_IMAGE_LOCAL = "le modèle local ne lit pas les images : choisissez le moteur distant (gk0) pour cette question"
 # Outils de recherche portés (R15 : l'appel de fonctions reste sur gk0) : la recherche préalable n'a lieu que si
 # l'un d'eux est actif, comme `schemas_outils(prefs)` non vide dans le POC.
 OUTILS_RECHERCHE = ("secubox", "searxng", "wikipedia")
@@ -93,9 +96,9 @@ async def essai_flux(corps: dict = Body(...)):
         question = question or "Décris cette image."
     if not question:
         raise HTTPException(422, "question requise")
-    # Réglages par question : appliqués à cette question seulement ; un autre modèle est activé (préférences +
-    # demande de redémarrage au contrôleur).
-    temperature_forcee = None
+    # Réglages par question : appliqués à cette question seulement ; un autre modèle est enregistré dans les
+    # préférences, et le moteur local redémarré dessus seulement s'il répond à la question.
+    temperature_forcee, modele_change = None, False
     if isinstance(corps.get("reglages"), dict):
         r = corps["reglages"]
         valeurs = {k: r[k] for k in ("max_tokens", "temperature") if r.get(k) is not None}
@@ -105,13 +108,17 @@ async def essai_flux(corps: dict = Body(...)):
             prefs["moteur"]["modele"] = reglages.valider({"moteur": {"modele": r["modele"]}})["moteur"]["modele"]
             reglages.ecrire_prefs({**reglages.lire_prefs(), "moteur": prefs["moteur"]})
             log.info("modele.activer origine=essai")
-            await asyncio.to_thread(moteurs.deposer_demande, "redemarrer")
+            modele_change = True
     lucidite = suite["lucidite"] if suite else regler_lucidite(corps.get("lucidite", LUCIDITE_DEFAUT))
     if suite and suite["temperature_forcee"] is not None:
         temperature_forcee = suite["temperature_forcee"]
     # Média joint (ou suite d'une réponse sur un média) : moteur local, sauf moteur distant explicitement forcé.
+    # Le choix est lu une fois et passé tel quel : une préférence changée entre-temps n'envoie rien au distant.
     sur_la_box = bool(image) or bool(suite and suite.get("sur_la_box"))
-    force = "local" if sur_la_box and prefs["moteur"]["force"] != "distant" else None
+    force = prefs["moteur"]["force"]
+    image_au_local = sur_la_box and force != "distant"
+    if image_au_local:
+        force = "local"
     log.info("essai lucidite=%s (%d) modele=%s", nom_lucidite(lucidite["niveau"]), lucidite["niveau"],
              prefs["moteur"]["modele"])
     purger_travaux()
@@ -128,6 +135,9 @@ async def essai_flux(corps: dict = Body(...)):
         messages = [{"role": "system", "content": prefs["comportement"]["consigne"]}, {"role": "user", "content": contenu}]
         if image:
             await file.put({"etape": "image", "octets": len(image) * 3 // 4})
+        if image_au_local and not moteurs.local_lit_images():
+            # Aucun démarrage du moteur pour une question qu'il ne saurait pas lire.
+            raise HTTPException(409, REFUS_IMAGE_LOCAL)
         temperature = lucidite["temperature"]
         if lucidite["mode"] == "delire":
             messages[0]["content"] += "\n\n" + CONSIGNE_DELIRE
@@ -175,13 +185,12 @@ async def essai_flux(corps: dict = Body(...)):
         base = suite["messages"] if suite else list(messages)
         if suite:
             messages = base + [{"role": "assistant", "content": suite["reponse"]}, {"role": "user", "content": CONSIGNE_SUITE}]
-        if await _moteur_a_demarrer(force):
-            await file.put({"etape": "moteur", "etat": "démarrage"})
-        moteur = await moteurs.assurer_moteur(force=force)
+        moteur = await choisir_moteur(force, modele_change)
         COMPTEURS["requetes"] = COMPTEURS.get("requetes", 0) + 1
-        contexte = await moteurs.contexte_reel(moteur)
-        await file.put({"etape": "generation", "modele": prefs["moteur"]["modele"], "contexte": contexte,
-                        "max_tokens": g["max_tokens"]})
+        p = await moteurs.props(moteur)
+        contexte = moteurs.contexte_de(p)
+        await file.put({"etape": "generation", "modele": moteurs.modele_de(moteur, p), "moteur": moteur.nom,
+                        "contexte": contexte, "max_tokens": g["max_tokens"]})
         charge = {"chat_template_kwargs": SANS_RAISONNEMENT, "messages": _un_seul_systeme(messages), "stream": True,
                   "stream_options": {"include_usage": True}, "temperature": temperature, "top_p": lucidite["top_p"],
                   "max_tokens": g["max_tokens"], "return_progress": True}
@@ -199,7 +208,8 @@ async def essai_flux(corps: dict = Body(...)):
         try:
             async with moteur.client() as c, c.stream("POST", "/v1/chat/completions", json=charge) as r:
                 if r.status_code != 200:
-                    raise HTTPException(502, "le moteur a refusé la requête")
+                    raise HTTPException(502, REFUS_IMAGE_LOCAL if sur_la_box and moteur.nom == "local"
+                                        else "le moteur a refusé la requête")
                 async for ligne in r.aiter_lines():
                     if not ligne.startswith("data: ") or ligne == "data: [DONE]":
                         continue
@@ -249,14 +259,31 @@ async def essai_flux(corps: dict = Body(...)):
         elif suite_id:
             SUITES.pop(suite_id, None)
         if morceaux:
-            await asyncio.to_thread(memoire.historique_ajouter, "dialogue", question, propre,
-                                    [s["url"] for s in sources if s.get("url")])
+            try:
+                await asyncio.to_thread(memoire.historique_ajouter, "dialogue", question, propre,
+                                        [s["url"] for s in sources if s.get("url")])
+            except (sqlite3.Error, OSError) as e:     # l'historique manqué ne prive jamais du bilan (ni de la suite)
+                log.warning("historique.echec cause=%s", type(e).__name__)
         await file.put({"etape": "bilan", "modele_appele": True, "recherche": recherche,
                         "tokens_question": usage.get("prompt_tokens"), "tokens_reponse": usage.get("completion_tokens"),
                         "tokens_total": usage.get("total_tokens"), "contexte": contexte, "max_tokens": g["max_tokens"],
                         "vitesse": COMPTEURS["derniere_vitesse"], "fin": fin, "suite": nouvelle,
                         "premier_token_s": round(premier - debut, 1) if premier else None,
                         "duree_s": round(time.time() - debut, 1)})
+
+    async def choisir_moteur(force, modele_change):
+        """Le moteur qui répond, prêt ; « démarrage » annoncé s'il faut l'attendre. Un modèle changé redémarre le
+        moteur local seulement s'il répond à la question, et rien ne part avant que le nouveau modèle réponde."""
+        if modele_change and (await moteurs.choisir(force)).nom == "local":
+            await file.put({"etape": "moteur", "etat": "démarrage"})
+            return await moteurs.changer_modele_local()
+        if await _moteur_a_demarrer(force):
+            await file.put({"etape": "moteur", "etat": "démarrage"})
+        moteur = await moteurs.assurer_moteur(force=force)
+        if modele_change and moteur.nom == "local":       # distant écarté en route : repli sur le local
+            await file.put({"etape": "moteur", "etat": "démarrage"})
+            moteur = await moteurs.changer_modele_local()
+        return moteur
 
     async def mener():
         COMPTEURS["en_cours"] += 1

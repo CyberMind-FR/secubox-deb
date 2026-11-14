@@ -3,8 +3,10 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Dialogue en flux (Essai), Continuer, reprise (#3583). Moteur simulé : aucun réseau réel."""
+import asyncio
 import json
 import logging
+import sqlite3
 import time
 
 import httpx
@@ -49,8 +51,8 @@ def reponse_simple(*bouts, fin="stop", total=40):
     return sse(*msgs)
 
 
-def moteur_simule(monkeypatch, chat, n_ctx=4096, vus=None, local_seul=True):
-    """Moteur local simulé : /health, /props, /tokenize, /v1/chat/completions (délégué à `chat`)."""
+def moteur_simule(monkeypatch, chat, n_ctx=4096, vus=None, props_distant=None):
+    """Moteurs simulés (local et distant) : /health, /props, /tokenize, /v1/chat/completions (délégué à `chat`)."""
     vus = vus if vus is not None else []
 
     def fabrique(nom):
@@ -59,7 +61,8 @@ def moteur_simule(monkeypatch, chat, n_ctx=4096, vus=None, local_seul=True):
             if req.url.path == "/health":
                 return httpx.Response(200)
             if req.url.path == "/props":
-                return httpx.Response(200, json={"default_generation_settings": {"n_ctx": n_ctx}})
+                extra = (props_distant or {}) if nom == "distant" else {"model_path": "/x/ancien-local.gguf"}
+                return httpx.Response(200, json={"default_generation_settings": {"n_ctx": n_ctx}, **extra})
             if req.url.path == "/tokenize":
                 return httpx.Response(200, json={"tokens": [1] * 10})
             if req.url.path == "/v1/chat/completions":
@@ -304,36 +307,159 @@ async def test_question_requise_et_image_invalide(env):
     assert (await essai({"image": "data:image/png;base64," + "A" * (6 * 1024 * 1024)}))[0] == 413
 
 
-@pytest.mark.asyncio
-async def test_image_reste_sur_la_box_en_auto(env, monkeypatch):
+def distant_declare(env):
     (env / "ai.toml").write_text('[distant]\nurl = "http://gk0.lan:8090"\n', encoding="utf-8")
     (env / "cle").write_text("cle-de-test", encoding="utf-8")
+
+
+IMAGE = "data:image/png;base64,iVBORw0KGgo="
+
+
+@pytest.mark.parametrize("force", ["auto", "local"])
+@pytest.mark.asyncio
+async def test_image_refusee_sans_demarrer_le_local(env, monkeypatch, force):
+    distant_declare(env)
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"force": force}}))
     vus = moteur_simule(monkeypatch, lambda req: reponse_simple("Un chat."))
-    _, evts = await essai({"image": "data:image/png;base64,iVBORw0KGgo="})
+    _, evts = await essai({"image": IMAGE})
+    assert evts[-1]["etape"] == "erreur" and evts[-1]["message"] == dialogue.REFUS_IMAGE_LOCAL
+    assert vus == []                                       # aucun appel, ni local ni distant
+    assert not (env / "run" / "demandes").exists()         # aucune demande de démarrage
+    assert taches.TRAVAUX[evts[0]["id"]]["fini"] is True
+
+
+@pytest.mark.asyncio
+async def test_image_avec_distant_force(env, monkeypatch):
+    distant_declare(env)
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"force": "distant"}}))
+    vus = moteur_simule(monkeypatch, lambda req: reponse_simple("Un chat."))
+    _, evts = await essai({"image": IMAGE})
     e = etapes(evts)
     assert "image" in e and "recherche" not in e and e[-1] == "bilan"
     chats = [(nom, c) for nom, p, c in vus if p == "/v1/chat/completions"]
-    assert [nom for nom, _ in chats] == ["local"]
+    assert [nom for nom, _ in chats] == ["distant"]
     contenu = chats[0][1]["messages"][-1]["content"]
     assert contenu[0] == {"type": "text", "text": "Décris cette image."}
-    assert contenu[1]["image_url"]["url"].startswith("data:image/png;base64,")
-    assert not [p for nom, p, _ in vus if nom == "distant" and p in ("/v1/chat/completions", "/props", "/tokenize")]
+    assert contenu[1]["image_url"]["url"] == IMAGE
+    assert not [p for nom, p, _ in vus if nom == "local" and p != "/health"]     # sonde sans corps seulement
+
+
+@pytest.mark.asyncio
+async def test_image_et_local_qui_lit_les_images(env, monkeypatch):
+    """Crochet des tâches suivantes : un local qui lit les images reçoit l'image et sa suite ; un refus du moteur
+    sur une image donne le message clair."""
+    distant_declare(env)
+    monkeypatch.setattr(moteurs, "local_lit_images", lambda: True)
+    moteur_simule(monkeypatch, lambda req: reponse_simple("Un chat", fin="length", total=100))
+    _, evts = await essai({"image": IMAGE})
+    vus = moteur_simule(monkeypatch, lambda req: reponse_simple(" roux."))
+    _, evts2 = await essai({"suite": evts[-1]["suite"]})
+    assert evts2[-1]["etape"] == "bilan"
+    assert [nom for nom, p, _ in vus if p == "/v1/chat/completions"] == ["local"]
+    moteur_simule(monkeypatch, lambda req: httpx.Response(500))
+    _, evts3 = await essai({"image": IMAGE})
+    assert evts3[-1]["etape"] == "erreur" and evts3[-1]["message"] == dialogue.REFUS_IMAGE_LOCAL
+
+
+@pytest.mark.asyncio
+async def test_generation_dit_quel_moteur_repond(env, monkeypatch):
+    sans_recherche()
+    moteur_simule(monkeypatch, lambda req: reponse_simple("ok"))
+    _, evts = await essai({"question": QUESTION})
+    gen = next(x for x in evts if x["etape"] == "generation")
+    assert gen["moteur"] == "local" and gen["modele"] == reglages.lire_prefs()["moteur"]["modele"]
+    distant_declare(env)
+    moteurs._cache_sonde.clear()
+    moteur_simule(monkeypatch, lambda req: reponse_simple("ok"), props_distant={"model_path": "/data/modeles/qwen-9b.gguf"})
+    _, evts = await essai({"question": QUESTION})
+    gen = next(x for x in evts if x["etape"] == "generation")
+    assert gen["moteur"] == "distant" and gen["modele"] == "qwen-9b.gguf"
+    moteurs._cache_sonde.clear()
+    moteur_simule(monkeypatch, lambda req: reponse_simple("ok"))
+    _, evts = await essai({"question": QUESTION})
+    gen = next(x for x in evts if x["etape"] == "generation")
+    assert gen["moteur"] == "distant" and gen["modele"] == "distant (gk0)"
+
+
+def ecrire_etat(env, etat, message=""):
+    f = env / "run" / "moteur-etat.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps({"etat": etat, "message": message, "horodatage": time.time()}), encoding="utf-8")
 
 
 @pytest.mark.asyncio
 async def test_reglages_par_question(env, monkeypatch):
+    """Ancien moteur encore sain : la génération ne part qu'après le redémarrage signalé par le contrôleur (R9)."""
     sans_recherche()
-    vus = moteur_simule(monkeypatch, lambda req: reponse_simple("ok"))
-    _, evts = await essai({"question": QUESTION, "reglages": {"temperature": 1.5, "max_tokens": 64,
-                                                              "modele": "autre-modele.gguf"}})
+    monkeypatch.setattr(moteurs, "PAS_ATTENTE_S", 0.01)
+    signale = {"fait": False}
+
+    def chat(req):
+        assert signale["fait"], "génération lancée sur l'ancien modèle"
+        return reponse_simple("ok")
+    vus = moteur_simule(monkeypatch, chat)
+
+    async def controleur():
+        while not (env / "run" / "demandes" / "redemarrer.demande").exists():
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.1)
+        signale["fait"] = True
+        ecrire_etat(env, "pret")
+
+    _, (_, evts) = await asyncio.gather(controleur(), essai({"question": QUESTION, "reglages": {
+        "temperature": 1.5, "max_tokens": 64, "modele": "autre-modele.gguf"}}))
+    e = etapes(evts)
+    assert e[-1] == "bilan" and e.index("moteur") < e.index("generation")
     charge = next(c for _, p, c in vus if p == "/v1/chat/completions")
     assert charge["temperature"] == 1.5 and charge["max_tokens"] == 64
     prefs = reglages.lire_prefs()
     assert prefs["moteur"]["modele"] == "autre-modele.gguf"
     assert prefs["generation"]["max_tokens"] == 512          # réglage d'une question : jamais enregistré
-    assert (env / "run" / "demandes" / "redemarrer.demande").exists()
+    assert next(x for x in evts if x["etape"] == "generation")["modele"] == "autre-modele.gguf"
     assert (await essai({"question": "x", "reglages": {"max_tokens": 1}}))[0] == 422
     assert (await essai({"question": "x", "reglages": {"modele": "../x.gguf"}}))[0] == 422
+
+
+@pytest.mark.asyncio
+async def test_changement_de_modele_refuse_par_le_controleur(env, monkeypatch):
+    sans_recherche()
+    monkeypatch.setattr(moteurs, "PAS_ATTENTE_S", 0.01)
+    vus = moteur_simule(monkeypatch, lambda req: reponse_simple("ok"))
+
+    async def controleur():
+        while not (env / "run" / "demandes" / "redemarrer.demande").exists():
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.05)
+        ecrire_etat(env, "refus_memoire", "mémoire insuffisante pour autre-modele.gguf")
+
+    _, (_, evts) = await asyncio.gather(controleur(), essai({"question": QUESTION, "reglages": {"modele": "autre-modele.gguf"}}))
+    assert evts[-1] == {**evts[-1], "etape": "erreur", "message": "mémoire insuffisante pour autre-modele.gguf"}
+    assert not [p for _, p, _ in vus if p == "/v1/chat/completions"]
+
+
+@pytest.mark.asyncio
+async def test_changement_de_modele_sans_redemarrage_si_le_distant_repond(env, monkeypatch):
+    sans_recherche()
+    distant_declare(env)
+    vus = moteur_simule(monkeypatch, lambda req: reponse_simple("ok"))
+    _, evts = await essai({"question": QUESTION, "reglages": {"modele": "autre-modele.gguf"}})
+    assert evts[-1]["etape"] == "bilan"
+    assert not (env / "run" / "demandes").exists()
+    assert [nom for nom, p, _ in vus if p == "/v1/chat/completions"] == ["distant"]
+    assert reglages.lire_prefs()["moteur"]["modele"] == "autre-modele.gguf"
+
+
+@pytest.mark.asyncio
+async def test_historique_en_panne_garde_le_bilan(env, monkeypatch, caplog):
+    sans_recherche()
+
+    def panne(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(memoire, "historique_ajouter", panne)
+    moteur_simule(monkeypatch, lambda req: reponse_simple("x", fin="length", total=100))
+    _, evts = await essai({"question": QUESTION})
+    assert evts[-1]["etape"] == "bilan" and evts[-1]["suite"] in dialogue.SUITES
+    assert "historique.echec cause=OperationalError" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -354,14 +480,3 @@ async def test_delire_sans_recherche(env, monkeypatch):
 def test_route_exige_jwt():
     assert TestClient(app).post("/essai/flux", json={"question": "x"}).status_code in (401, 403)
 
-
-@pytest.mark.asyncio
-async def test_suite_d_une_reponse_sur_image_reste_sur_la_box(env, monkeypatch):
-    (env / "ai.toml").write_text('[distant]\nurl = "http://gk0.lan:8090"\n', encoding="utf-8")
-    (env / "cle").write_text("cle-de-test", encoding="utf-8")
-    moteur_simule(monkeypatch, lambda req: reponse_simple("Un chat", fin="length", total=100))
-    _, evts = await essai({"image": "data:image/png;base64,iVBORw0KGgo="})
-    vus = moteur_simule(monkeypatch, lambda req: reponse_simple(" roux."))
-    _, evts2 = await essai({"suite": evts[-1]["suite"]})
-    assert evts2[-1]["etape"] == "bilan"
-    assert [nom for nom, p, _ in vus if p == "/v1/chat/completions"] == ["local"]
