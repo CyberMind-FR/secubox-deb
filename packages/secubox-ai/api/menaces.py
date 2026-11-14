@@ -38,6 +38,7 @@ PERIODE_RELEVE_S = 120                            # relevé de fond : tendances 
 PERIODE_VEILLE_S = 60
 DUREE_TACHE_S = 900
 GARDE_INSTANTANES_S = 3 * 3600
+AVANCE_MAX_S = 300                                # un instantané « du futur » (horloge, fichier forgé) est écarté
 CHEMINS = ("/waf/stats", "/waf/bans", "/waf/campaigns", "/waf/alerts", "/security-posture/overview")
 # Sans ces quatre sources, le relevé dirait « 0 ban » ou « aucune alerte » faute de les avoir lues : pas de résumé.
 ESSENTIELS = CHEMINS[:4]
@@ -45,7 +46,8 @@ ESSENTIELS = CHEMINS[:4]
 # Point d'injection des tests : fabrique() -> transport httpx (None = transport réel).
 FABRIQUE_TRANSPORT_GK2: Callable[[], httpx.AsyncBaseTransport | None] | None = None
 
-_cache: dict = {"quand": 0.0, "releve": None, "ips": set()}
+_cache: dict = {"quand": 0.0, "releve": None}
+_panne_gk2: dict = {"chemins": ()}   # dernier état journalisé (on ne trace que les changements)
 DERNIER_RESUME: dict = {"texte": "", "quand": 0.0, "en_cours": None, "propositions": []}
 INSTANTANES: deque = deque(maxlen=90)   # un relevé chiffré toutes les ~2 min : 3 h d'historique, de VRAIES tendances
 _instantanes_charges = [False]
@@ -56,7 +58,8 @@ IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 def _reinitialiser() -> None:
     """État en mémoire remis à zéro (tests ; équivaut à un redémarrage du module)."""
-    _cache.update(quand=0.0, releve=None, ips=set())
+    _cache.update(quand=0.0, releve=None)
+    _panne_gk2["chemins"] = ()
     DERNIER_RESUME.update(texte="", quand=0.0, en_cours=None, propositions=[])
     INSTANTANES.clear()
     _instantanes_charges[0] = False
@@ -80,6 +83,16 @@ def _compteurs(x) -> dict:
     return {str(k): v for k, v in x.items() if _nombre(v)} if isinstance(x, dict) else {}
 
 
+def _scalaire(v):
+    """Valeur simple venue de gk2 (texte, nombre, None) ; une liste ou un objet ne passe pas (ensembles, comparaisons)."""
+    return v if v is None or isinstance(v, (str, int, float)) else None
+
+
+def _visible(r: dict) -> dict:
+    """Le relevé sans ses clés internes (`_bannies`) : ni pour la page, ni pour le modèle, ni pour les contrôles."""
+    return {k: v for k, v in r.items() if not k.startswith("_")}
+
+
 def _liste(x) -> list:
     return [e for e in x if isinstance(e, dict)] if isinstance(x, list) else []
 
@@ -92,7 +105,7 @@ def _fichier_instantanes():
 def _instantane_valide(x, maintenant: float) -> bool:
     return (isinstance(x, dict) and all(_nombre(x.get(k)) for k in ("quand", "menaces_jour", "bans"))
             and isinstance(x.get("categories"), dict) and all(_nombre(v) for v in x["categories"].values())
-            and maintenant - x["quand"] < GARDE_INSTANTANES_S)
+            and -AVANCE_MAX_S <= maintenant - x["quand"] < GARDE_INSTANTANES_S)
 
 
 def charger_instantanes() -> None:
@@ -158,9 +171,13 @@ async def releve_menaces(force: bool = False) -> dict:
             return _cache["releve"]
         res = await asyncio.gather(*(_gk2(c) for c in CHEMINS), return_exceptions=True)
         erreurs = [CHEMINS[i] for i, x in enumerate(res) if not isinstance(x, dict)]
-        if erreurs:
-            log.warning("menaces.gk2 en erreur : %s", ", ".join(
-                f"{CHEMINS[i]} ({type(x).__name__})" for i, x in enumerate(res) if not isinstance(x, dict)))
+        if tuple(erreurs) != _panne_gk2["chemins"]:     # une trace au changement d'état, pas une par relevé
+            if erreurs:
+                log.warning("menaces.gk2 en erreur : %s", ", ".join(
+                    f"{CHEMINS[i]} ({type(x).__name__})" for i, x in enumerate(res) if not isinstance(x, dict)))
+            else:
+                log.info("menaces.gk2 rétabli")
+            _panne_gk2["chemins"] = tuple(erreurs)
         stats, bans, camp, alertes, posture = [x if isinstance(x, dict) else {} for x in res]
         maintenant = time.time()
         liste = _liste(bans.get("bans"))
@@ -188,7 +205,7 @@ async def releve_menaces(force: bool = False) -> dict:
             except (TypeError, ValueError, OverflowError):
                 pass
         sature = bool(toutes) and recents == len(toutes)
-        flux = [{k: a.get(k) for k in ("timestamp", "client_ip", "host", "path", "category", "severity", "action", "tool",
+        flux = [{k: _scalaire(a.get(k)) for k in ("timestamp", "client_ip", "host", "path", "category", "severity", "action", "tool",
                                        "country")}
                 for a in _liste(alertes.get("alerts"))[:25]]
         categories = _compteurs(stats.get("by_category"))
@@ -220,7 +237,9 @@ async def releve_menaces(force: bool = False) -> dict:
                                 "categories": categories})
             _ecrire_instantanes()
         releve["evolution_1h"] = evolution(maintenant)
-        _cache.update(quand=maintenant, releve=releve, ips={str(b.get("ip")) for b in liste if b.get("ip")})
+        # Adresses déjà bannies, portées PAR ce relevé (pas par le cache, qu'un relevé suivant en erreur remplacerait).
+        releve["_bannies"] = frozenset(str(b["ip"]) for b in liste if isinstance(b.get("ip"), str) and b["ip"])
+        _cache.update(quand=maintenant, releve=releve)
         return releve
 
 
@@ -259,7 +278,7 @@ PAYS_NOMS = {"CN": r"chin", "US": r"usa|[ée]tats[- ]unis|am[ée]ric", "RU": r"r
 def controler_resume(texte: str, releve: dict) -> str:
     """Contrôle SANS modèle : chiffres absents du relevé, tendance affirmée sans mesure, pays absents.
     Le reste n'est pas prouvé."""
-    nombres = set(re.findall(r"\d+(?:[.,]\d+)?", json.dumps(releve, ensure_ascii=False, default=str)))
+    nombres = set(re.findall(r"\d+(?:[.,]\d+)?", json.dumps(_visible(releve), ensure_ascii=False, default=str)))
     propre = IPV4.sub(" ", re.sub(r"`[^`]*`|\b[0-9a-f]{12,64}\b|\b\d+(?:\.\d+){1,3}/\d+\b", " ", texte))
     valeurs = [float(v.replace(",", ".")) for v in nombres]
 
@@ -285,7 +304,8 @@ def controler_resume(texte: str, releve: dict) -> str:
 
 def compact_releve(r: dict, sans_alertes: bool = False) -> str:
     """Le relevé tel que le modèle le lit : chiffres, sans les listes brutes."""
-    return json.dumps({k: v for k, v in r.items() if k not in ("quand", "erreurs") and not (sans_alertes and k == "alertes")},
+    return json.dumps({k: v for k, v in _visible(r).items()
+                       if k not in ("quand", "erreurs") and not (sans_alertes and k == "alertes")},
                       ensure_ascii=False, default=str)
 
 
@@ -309,8 +329,9 @@ FORMES_PROPOSITION = ("« Proposition : bannir le bloc A.B.C.0/24 pour N jours �
 
 def cibles_connues(releve: dict, extra: dict | None = None) -> dict:
     alertes_l = [a for a in releve.get("alertes") or [] if isinstance(a, dict)]
-    ips = set(_cache.get("ips") or ()) | {a.get("client_ip") for a in alertes_l}
-    hotes = {a.get("host") for a in alertes_l} | {str(v.get("vhost") or v.get("host") or v) if isinstance(v, dict)
+    alertes = {a["client_ip"] for a in alertes_l if isinstance(a.get("client_ip"), str)}
+    deja = set(releve.get("_bannies") or ())
+    hotes = {a["host"] for a in alertes_l if isinstance(a.get("host"), str)} | {str(v.get("vhost") or v.get("host") or v) if isinstance(v, dict)
                                                   else str(v) for v in releve.get("vhosts") or []}
     # Jamais une adresse de la box elle-même (un vhost en IP nue est l'adresse publique de gk2), ni une adresse non publique.
     propres = {h for h in hotes if IPV4.fullmatch(str(h))}
@@ -320,13 +341,11 @@ def cibles_connues(releve: dict, extra: dict | None = None) -> dict:
             return ipaddress.ip_address(x).is_global and x not in propres
         except ValueError:
             return False
-    ips = {x for x in ips if isinstance(x, str) and x and publique(x)}
+    ips = {x for x in alertes | deja if x and publique(x)}
     outils = defaultdict(set)
     for c in releve.get("campagnes") or []:
         outils[str(c.get("outil", "")).lower()].add(c["signature"])
     # Bannir : seulement une adresse vue en alerte et pas déjà bannie (bannir une adresse déjà bannie ne sert à rien).
-    deja = {x for x in (_cache.get("ips") or ()) if x}
-    alertes = {a.get("client_ip") for a in alertes_l}
     return {"bloc": {b["bloc"] for b in releve.get("blocs") or []}, "ip": {x for x in ips if x in alertes and x not in deja},
             "campagne_outil": {o: next(iter(s)) for o, s in outils.items() if len(s) == 1},
             "campagne": {c["signature"] for c in releve.get("campagnes") or []} | set((extra or {}).get("campagnes", ())),
@@ -466,10 +485,22 @@ def _resume_en_cours() -> str | None:
     return en_cours if en_cours in taches.TACHES and taches.TACHES[en_cours]["etat"] == "en_cours" else None
 
 
+async def _garde(t: str, coro) -> None:
+    """Une exception imprévue (donnée de gk2 d'un type inattendu…) finit la tâche en échec au lieu de la laisser
+    « en cours » pour toujours ; les erreurs prévues restent traitées par `lancer_tache`."""
+    try:
+        await coro
+    except (HTTPException, httpx.HTTPError, KeyError, ValueError, OSError):
+        raise
+    except Exception as e:  # noqa: BLE001
+        log.warning("menaces.tache en échec (%s)", type(e).__name__)
+        taches.finir(t, "echec", f"Échec ({type(e).__name__}).")
+
+
 def _lancer_resume(r: dict, titre: str) -> str:
     t = taches.nouvelle_tache("menaces", titre)
     DERNIER_RESUME["en_cours"] = t
-    taches.lancer_tache(t, resumer_menaces(t, r), DUREE_TACHE_S)
+    taches.lancer_tache(t, _garde(t, resumer_menaces(t, r)), DUREE_TACHE_S)
     return t
 
 
@@ -482,8 +513,8 @@ async def repondre_menaces(t: str, question: str, r: dict) -> None:
         bans = _liste((await _gk2("/waf/bans")).get("bans"))
         alertes = _liste((await _gk2("/waf/alerts")).get("alerts"))
         camp = _liste((await _gk2("/waf/campaigns")).get("campagnes"))
-        contexte["bans"] = [b for b in bans if b.get("ip") in ips][:20]
-        contexte["alertes"] = [a for a in alertes if a.get("client_ip") in ips][:20]
+        contexte["bans"] = [b for b in bans if isinstance(b.get("ip"), str) and b["ip"] in ips][:20]
+        contexte["alertes"] = [a for a in alertes if isinstance(a.get("client_ip"), str) and a["client_ip"] in ips][:20]
         contexte["campagnes"] = [{"signature": c.get("signature"), "outil": c.get("outil"),
                                   "attaquants": len(c.get("attaquants") or [])}
                                  for c in camp if isinstance(c.get("attaquants"), list)
@@ -507,7 +538,7 @@ routeur = APIRouter(prefix="", dependencies=[Depends(require_jwt)])
 @routeur.get("/menaces/releve")
 async def menaces_releve():
     r = await releve_menaces()
-    return {**r, "resume": DERNIER_RESUME["texte"], "resume_quand": DERNIER_RESUME["quand"],
+    return {**_visible(r), "resume": DERNIER_RESUME["texte"], "resume_quand": DERNIER_RESUME["quand"],
             "resume_propositions": DERNIER_RESUME.get("propositions") or [],
             "resume_en_cours": DERNIER_RESUME["en_cours"]}
 
@@ -537,7 +568,7 @@ async def menaces_demander(corps: dict = Body(...)):
     if motif:
         raise HTTPException(503, motif)
     t = taches.nouvelle_tache("menaces", f"Menaces — {question[:100]}")
-    taches.lancer_tache(t, repondre_menaces(t, question, r), DUREE_TACHE_S)
+    taches.lancer_tache(t, _garde(t, repondre_menaces(t, question, r)), DUREE_TACHE_S)
     return {"tache": t}
 
 

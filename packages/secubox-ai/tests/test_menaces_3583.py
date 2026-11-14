@@ -550,3 +550,111 @@ async def test_releve_incomplet_sans_instantane(gk2, env):
     gk2["pannes"].add("/waf/bans")
     await menaces.releve_menaces()
     assert list(menaces.INSTANTANES) == [] and not fichier_instantanes(env).exists()
+
+
+# ---- Reprise 1 de la relecture ----
+@pytest.mark.asyncio
+async def test_demander_reponse_controlee(gk2, monkeypatch):
+    moteur_simule(monkeypatch, "Il y a 950 bans venus de Chine, en hausse.")
+    r = await appeler("POST", "/menaces/demander", json={"question": "Quoi de neuf ?"})
+    t = await attendre(r.json()["tache"])
+    assert t["etat"] == "fini"
+    note = t["resultat"].split("⚠ Contrôle du relais — ", 1)[1]
+    assert "chiffres absents du relevé : 950" in note and "CN" in note and "tendance" in note
+
+
+@pytest.mark.asyncio
+async def test_deja_bannie_portee_par_le_releve_pas_par_le_cache(gk2):
+    a = await menaces.releve_menaces()
+    gk2["pannes"].add("/waf/bans")
+    b = await menaces.releve_menaces(force=True)          # le cache porte maintenant un relevé sans bans
+    assert menaces._cache["releve"] is b and b["erreurs"] == ["/waf/bans"]
+    _, gardees, retirees = menaces.filtrer_propositions(f"Proposition : bannir l'adresse {BANNIE}", a)
+    assert gardees == [] and retirees == [f"bannir l'adresse {BANNIE}"]
+    # la liste des bannies ne sort jamais : ni page, ni modèle, ni contrôle des chiffres
+    assert "_bannies" not in (await appeler("GET", "/menaces/releve")).json()
+    assert "_bannies" not in menaces.compact_releve(a) and BANNIE not in menaces.compact_releve(a, sans_alertes=True)
+    # 160.76.3.4 est bannie : « 160,76 » ne doit pas devenir un chiffre « connu » du relevé
+    assert "chiffres absents du relevé : 160,76" in menaces.controler_resume("Score 160,76.", a)
+
+
+@pytest.mark.asyncio
+async def test_champ_gk2_de_type_inattendu_resume_fini(gk2, monkeypatch):
+    gk2["donnees"]["/waf/alerts"]["alerts"].append(
+        {"timestamp": None, "client_ip": ["1.2.3.4"], "host": {"x": 1}, "path": "/", "category": "waf:scan"})
+    moteur_simule(monkeypatch, deux_passes)
+    t = await attendre((await appeler("POST", "/menaces/resumer")).json()["tache"])
+    assert t["etat"] == "fini" and [p["cible"] for p in t["propositions"]] == [ALERTE_SEULE]
+    t = await attendre((await appeler("POST", "/menaces/demander", json={"question": "Et 1.2.3.4 ?"})).json()["tache"])
+    assert t["etat"] == "fini"
+
+
+@pytest.mark.asyncio
+async def test_exception_imprevue_finit_la_tache_en_echec(gk2, monkeypatch):
+    def casse(r):
+        raise TypeError("imprévu")
+    monkeypatch.setattr(menaces, "faits_menaces", casse)
+    r = await appeler("POST", "/menaces/resumer")
+    t = await attendre(r.json()["tache"])
+    assert t["etat"] == "echec" and "TypeError" in t["resultat"]
+    assert menaces._resume_en_cours() is None
+
+
+@pytest.mark.asyncio
+async def test_panne_gk2_journalisee_au_changement_seulement(gk2, caplog):
+    caplog.set_level(logging.INFO, logger="secubox.ai.menaces")
+
+    def traces():
+        return [x.getMessage() for x in caplog.records if x.name == "secubox.ai.menaces"]
+    await menaces.releve_menaces()
+    assert traces() == []
+    gk2["pannes"].add("tout")
+    for _ in range(3):
+        await menaces.releve_menaces(force=True)
+    assert len(traces()) == 1 and traces()[0].startswith("menaces.gk2 en erreur")
+    gk2["pannes"].clear()
+    await menaces.releve_menaces(force=True)
+    await menaces.releve_menaces(force=True)
+    assert traces()[1:] == ["menaces.gk2 rétabli"]
+    gk2["pannes"].add("/waf/bans")
+    await menaces.releve_menaces(force=True)
+    assert len(traces()) == 3
+
+
+@pytest.mark.asyncio
+async def test_boucles_survivent_a_une_exception(env, monkeypatch):
+    compte = {"releve": 0, "tour": 0}
+
+    async def releve(force=False):
+        compte["releve"] += 1
+        if compte["releve"] == 1:
+            raise RuntimeError("tour raté")
+
+    async def tour():
+        compte["tour"] += 1
+        if compte["tour"] == 1:
+            raise RuntimeError("tour raté")
+    monkeypatch.setattr(menaces, "releve_menaces", releve)
+    monkeypatch.setattr(menaces, "tour_veille", tour)
+    monkeypatch.setattr(menaces, "PERIODE_RELEVE_S", 0)
+    monkeypatch.setattr(menaces, "PERIODE_VEILLE_S", 0)
+    menaces.demarrer_veille()
+    try:
+        for _ in range(200):
+            if compte["releve"] >= 3 and compte["tour"] >= 3:
+                break
+            await asyncio.sleep(0.005)
+        assert compte["releve"] >= 3 and compte["tour"] >= 3
+        assert not any(b.done() for b in menaces._VEILLE)
+    finally:
+        await menaces.arreter_veille()
+
+
+def test_instantane_du_futur_ecarte(env):
+    fichier_instantanes(env).parent.mkdir(parents=True)
+    maintenant = time.time()
+    fichier_instantanes(env).write_text(json.dumps(
+        [{"quand": maintenant + 3600, "menaces_jour": 1, "bans": 1, "categories": {}},
+         {"quand": maintenant + 60, "menaces_jour": 2, "bans": 2, "categories": {}}]))
+    menaces.charger_instantanes()
+    assert [x["bans"] for x in menaces.INSTANTANES] == [2]
