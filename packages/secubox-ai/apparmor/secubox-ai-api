@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de l'API secubox-ai (#3583). Posé dans /etc/apparmor.d/secubox-ai-api, chargé par le postinst
+# AVANT le (re)démarrage de secubox-ai.service, qui le nomme par AppArmorProfile=. Tout ce qui n'est pas listé est refusé.
+# L'API ne lance rien en root : le moteur local se pilote par un fichier de demande que traite secubox-ai-demandes.service
+# (contrôleur root, hors de ce profil). Elle n'exécute que pdfinfo et pdftotext (lecture des PDF).
+
+#include <tunables/global>
+
+profile secubox-ai-api {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/openssl>
+  #include <abstractions/ssl_certs>
+
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/ r,
+  /usr/lib/secubox/ai/ r,
+  /usr/lib/secubox/ai/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # Lecture des PDF (poppler-utils), sans shell, bornée en durée et en taille par l'API. « ix » et non un profil enfant :
+  # sous NoNewPrivileges (unité), le noyau refuse toute transition qui n'est pas un sous-ensemble du profil courant.
+  # pdftotext hérite donc de ce profil ; un empilement (&) sera envisagé à la mesure sur gk3 (Tâche 18).
+  /usr/bin/pdfinfo rix,
+  /usr/bin/pdftotext rix,
+  /usr/share/poppler/ r,
+  /usr/share/poppler/** r,
+  #include <abstractions/fonts>
+
+  # Configuration et authentification (secubox_core) : fichiers NOMMÉS, jamais /etc/secubox/** (les secrets des autres
+  # modules y sont). Le seul secret lisible : la clé du moteur distant (0640 root:secubox-ai).
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/auth.toml r,
+  /etc/secubox/users.json r,
+  /etc/secubox/appareils.json r,
+  /etc/secubox/ai.toml r,
+  /etc/secubox/secrets/ai/distant.key r,
+  # Registre des sessions (sans lui toute garde d'API refuse), traces de délégation et d'origine.
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/** r,
+  # Journaux que secubox_core écrit ; jamais le journal d'audit (seul le contrôleur root y consigne).
+  /var/log/secubox/delegation.log w,
+  /var/log/secubox/garde-origine.log w,
+  deny /var/log/secubox/audit.log w,
+
+  # Données du module : préférences (double tampon), mémoire SQLite (WAL), journal, documents, médias, modèles.
+  /var/lib/secubox/ai/ r,
+  /var/lib/secubox/ai/** rwk,
+
+  # Sa socket (servie à nginx).
+  /run/secubox/ r,
+  /run/secubox/ai.sock rwk,
+
+  # Moteur local : état publié par le contrôleur (R9), socket de llama-server, dépôt des demandes (R1 : .tmp créé puis
+  # renommé par l'API elle-même). Ni moteur.env, ni le verrou du contrôleur.
+  /run/secubox-ai/ r,
+  /run/secubox-ai/moteur-etat.json r,
+  /run/secubox-ai/moteur.sock rw,
+  /run/secubox-ai/demandes/ r,
+  owner /run/secubox-ai/demandes/* rw,
+
+  # Garde SSRF (api/recherche.py) : adresses IPv6 locales de la box ; /proc/net est un lien vers /proc/self/net.
+  @{PROC}/@{pid}/net/if_inet6 r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/fd/ r,
+  @{PROC}/sys/net/core/somaxconn r,
+
+  network unix stream,
+  network unix dgram,
+  # Moteur distant (gk0), gk2, SearXNG, Wikipédia, Hugging Face ; DNS. Borné aussi par IPAddressDeny/Allow de l'unité.
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+}

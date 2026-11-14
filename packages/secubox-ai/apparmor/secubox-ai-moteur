@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor du moteur local secubox-ai (#3583) : llama-server de secubox-zia-llm, nommé par
+# AppArmorProfile=secubox-ai-moteur dans secubox-ai-moteur.service. Posé dans /etc/apparmor.d/secubox-ai-moteur, chargé
+# par le postinst avant tout démarrage.
+#
+# MODE COMPLAIN, VOLONTAIREMENT : la liste exacte de /proc et /sys que lit ggml (détection des cœurs et des jeux
+# d'instructions, limite mémoire du cgroup) dépend de la version épinglée de llama.cpp. Elle se MESURE sur gk3
+# (aa-logprof sur les refus journalisés en complain) avant de passer ce profil en enforce : Tâche 18. D'ici là, la
+# barrière effective est la vue du système de fichiers de l'unité (TemporaryFileSystem, BindReadOnlyPaths des seuls
+# modèles, InaccessiblePaths des secrets, des sockets et des journaux), PrivateNetwork et l'absence de capacités.
+
+#include <tunables/global>
+
+profile secubox-ai-moteur flags=(complain) {
+  #include <abstractions/base>
+
+  # Binaire statique (build-arm64.sh : -static) : aucune bibliothèque partagée à lui ouvrir.
+  /usr/lib/secubox/zia-llm/llama-server mr,
+
+  # Modèles en lecture et en mmap, rien d'autre de l'état du module (ni mémoire, ni préférences, ni journal).
+  /var/lib/secubox/ai/modeles/ r,
+  /var/lib/secubox/ai/modeles/*.gguf mr,
+
+  # Sa socket, seule écriture ; ni le dépôt des demandes ni le verrou du contrôleur.
+  /run/secubox-ai/ r,
+  /run/secubox-ai/moteur.sock rw,
+  network unix stream,
+
+  # Détection du processeur et de la mémoire par ggml (liste à confirmer par la mesure).
+  @{PROC}/cpuinfo r,
+  @{PROC}/meminfo r,
+  @{sys}/devices/system/cpu/ r,
+  @{sys}/devices/system/cpu/** r,
+  @{sys}/fs/cgroup/** r,
+  owner @{PROC}/@{pid}/stat r,
+  owner @{PROC}/@{pid}/status r,
+  owner @{PROC}/@{pid}/maps r,
+
+  deny /etc/secubox/** rwklx,
+  deny /run/secubox/** rwklx,
+  deny network inet,
+  deny network inet6,
+  deny capability,
+}

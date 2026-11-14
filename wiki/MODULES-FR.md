@@ -9,7 +9,7 @@
 
 *Documentation complète des modules*
 
-**Total des modules:** 124
+**Total des modules:** 125
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -80,6 +80,7 @@
 | 💡 **AI Insights** | AI | Aperçus sécurité assistés par IA |
 | 🧠 **LocalRecall** | AI | Système mémoire RAG local |
 | 🔌 **MCP Server** | AI | Serveur Model Context Protocol |
+| 🧠 **SecuBox IA** | AI | Assistant IA de la box : moteur local (llama-server) ou distant, documents, menaces, mémoire |
 | 📧 **Mail Server** | Email | Serveur mail Postfix/Dovecot |
 | 💌 **Webmail** | Email | Webmail Roundcube/SOGo |
 | 📤 **SMTP Relay** | Email | Relais SMTP et smarthost |
@@ -181,6 +182,14 @@ Serveur Model Context Protocol
 **Fonctionnalités:** Intégration outils, Gestion contexte, Multi-modèle, API
 
 ![MCP Server](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/mcp-server.png)
+
+#### 🧠 SecuBox IA
+
+Assistant IA de la box (`secubox-ai`, #3583), porté du POC de gk0 : page `/ai/`, API sur `/run/secubox/ai.sock`.
+
+**Fonctionnalités:** Dialogue en flux avec sources (SecuBox, SearXNG, Wikipédia), Moteur local llama-server démarré à la demande selon la mémoire disponible, Moteur distant compatible OpenAI (gk0), Analyse de documents et de code, Relevé et résumé des menaces de gk2, Mémoire locale SQLite, Aucune question ni réponse journalisée, Aucune exposition publique
+
+**Modules liés:** ZIA LLM (`secubox-zia-llm`, llama-server), SearXNG, AI Gateway
 
 ---
 

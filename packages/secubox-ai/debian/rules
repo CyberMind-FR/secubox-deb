@@ -1,9 +1,39 @@
 #!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
 %:
 	dh $@
 
+# Les unités sont activées par le postinst, APRÈS les comptes, les dossiers et le chargement des profils AppArmor
+# (une unité qui nomme un profil absent ne démarre pas) : aucun extrait systemd de debhelper.
+override_dh_installsystemd:
+
 override_dh_auto_install:
+	# API (R4 : /usr/lib/secubox/ai/api/, WorkingDirectory de secubox-ai.service), sans cache Python.
 	install -d debian/secubox-ai/usr/lib/secubox/ai
 	cp -r api debian/secubox-ai/usr/lib/secubox/ai/
+	find debian/secubox-ai/usr/lib/secubox/ai -name __pycache__ -type d -prune -exec rm -rf {} +
+	# Contrôleur root (moteur local, préparation, clé distante).
+	install -D -m 0755 sbin/secubox-aictl debian/secubox-ai/usr/sbin/secubox-aictl
+	# Unités : API, moteur (sans [Install]), préparation, demandes (.path + oneshot root).
+	install -D -m 0644 systemd/secubox-ai.service debian/secubox-ai/usr/lib/systemd/system/secubox-ai.service
+	install -D -m 0644 systemd/secubox-ai-moteur.service debian/secubox-ai/usr/lib/systemd/system/secubox-ai-moteur.service
+	install -D -m 0644 systemd/secubox-ai-preparer.service debian/secubox-ai/usr/lib/systemd/system/secubox-ai-preparer.service
+	install -D -m 0644 systemd/secubox-ai-demandes.path debian/secubox-ai/usr/lib/systemd/system/secubox-ai-demandes.path
+	install -D -m 0644 systemd/secubox-ai-demandes.service debian/secubox-ai/usr/lib/systemd/system/secubox-ai-demandes.service
+	# Page /ai/ (racine statique du vhost d'administration) et entrée de menu.
+	install -D -m 0644 www/ai/index.html debian/secubox-ai/usr/share/secubox/www/ai/index.html
 	install -d debian/secubox-ai/usr/share/secubox/menu.d
 	cp -r menu.d/. debian/secubox-ai/usr/share/secubox/menu.d/
+	# Modèle de configuration, copié dans /etc/secubox/ai.toml au premier passage seulement (postinst).
+	install -D -m 0644 conf/ai.toml.example debian/secubox-ai/usr/share/secubox/ai/ai.toml.example
+	# Route d'API : secubox-routes.d (lu par le vhost) et secubox.d (vhosts anciens), MODULE-COMPLIANCE.
+	install -D -m 0644 nginx/ai.conf debian/secubox-ai/etc/nginx/secubox-routes.d/ai.conf
+	install -D -m 0644 nginx/ai.conf debian/secubox-ai/etc/nginx/secubox.d/ai.conf
+	# Profils AppArmor, chargés par le postinst avant tout démarrage.
+	install -D -m 0644 apparmor/secubox-ai-api debian/secubox-ai/etc/apparmor.d/secubox-ai-api
+	install -D -m 0644 apparmor/secubox-ai-moteur debian/secubox-ai/etc/apparmor.d/secubox-ai-moteur
+	# Rotation du journal du module (/var/lib/secubox/ai/journal.jsonl).
+	install -D -m 0644 logrotate/secubox-ai debian/secubox-ai/etc/logrotate.d/secubox-ai

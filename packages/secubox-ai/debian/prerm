@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-ai (#3583) : au retrait, plus aucune demande (unité .path d'abord), puis l'API et le moteur local. En mise à
+# jour, rien n'est arrêté ici : le postinst relance l'API après preparer, le moteur reprend au besoin.
+set -e
+case "$1" in
+  remove|deconfigure)
+    if [ -d /run/systemd/system ]; then
+      systemctl stop secubox-ai-demandes.path secubox-ai-demandes.service secubox-ai.service secubox-ai-moteur.service >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+exit 0

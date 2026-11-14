@@ -9,7 +9,7 @@
 
 *Complete module documentation*
 
-**Total modules:** 125
+**Total modules:** 126
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 
@@ -80,6 +80,7 @@
 | 💡 **AI Insights** | AI | AI-powered security insights |
 | 🧠 **LocalRecall** | AI | Local RAG memory system |
 | 🔌 **MCP Server** | AI | Model Context Protocol server |
+| 🧠 **SecuBox IA** | AI | Box AI assistant: local (llama-server) or remote engine, documents, threats, memory |
 | 📧 **Mail Server** | Email | Postfix/Dovecot mail server |
 | 💌 **Webmail** | Email | Roundcube/SOGo webmail |
 | 📤 **SMTP Relay** | Email | SMTP relay and smarthost |
@@ -181,6 +182,14 @@ Model Context Protocol server
 **Features:** Tool integration, Context management, Multi-model, API
 
 ![MCP Server](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/mcp-server.png)
+
+#### 🧠 SecuBox IA
+
+Box AI assistant (`secubox-ai`, #3583), ported from the gk0 POC: `/ai/` page, API on `/run/secubox/ai.sock`.
+
+**Features:** Streamed chat with sources (SecuBox, SearXNG, Wikipedia), On-demand local llama-server engine sized to available memory, OpenAI-compatible remote engine (gk0), Document and code analysis, gk2 threat report and summary, Local SQLite memory, No question or answer logged, No public exposure
+
+**Related modules:** ZIA LLM (`secubox-zia-llm`, llama-server), SearXNG, AI Gateway
 
 ---
 

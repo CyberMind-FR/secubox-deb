@@ -1,0 +1,130 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# secubox-ai (#3583). Ordre : comptes, dossiers, configuration au premier passage, profils AppArmor, activation, puis
+# « secubox-aictl preparer » (dossiers d'exécution, adresses LAN de l'API) et SEULEMENT ENSUITE la relance de l'API :
+# le filtrage IP de systemd ne s'applique qu'au démarrage de l'unité. L'état d'exécution (préférences, mémoire, journal,
+# modèles) n'est jamais touché.
+set -e
+
+case "$1" in
+  configure)
+    # Comptes. secubox : partagé (socket servie à nginx, traces de secubox_core).
+    getent group secubox >/dev/null 2>&1 || addgroup --system secubox >/dev/null
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox >/dev/null
+    # API : compte dédié, groupe principal secubox-ai (les modèles téléchargés, 0640, sont lisibles par le moteur).
+    getent group secubox-ai >/dev/null 2>&1 || addgroup --system secubox-ai >/dev/null
+    id -u secubox-ai >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox-ai --no-create-home --home /nonexistent \
+        --shell /usr/sbin/nologin secubox-ai >/dev/null
+    id -nG secubox-ai | tr ' ' '\n' | grep -qx secubox || adduser secubox-ai secubox >/dev/null
+    # Moteur (llama-server) : compte dédié, groupe principal secubox-ai-moteur (moteur.env 0640 root:secubox-ai-moteur),
+    # membre de secubox-ai (lecture des modèles ; l'unité l'exécute avec Group=secubox-ai).
+    getent group secubox-ai-moteur >/dev/null 2>&1 || addgroup --system secubox-ai-moteur >/dev/null
+    id -u secubox-ai-moteur >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox-ai-moteur --no-create-home --home /nonexistent \
+        --shell /usr/sbin/nologin secubox-ai-moteur >/dev/null
+    id -nG secubox-ai-moteur | tr ' ' '\n' | grep -qx secubox-ai || adduser secubox-ai-moteur secubox-ai >/dev/null
+
+    # Parents PARTAGÉS : créés seulement s'ils manquent, jamais resserrés ni réattribués.
+    [ -d /run/secubox ] || install -d -o root -g root -m 1777 /run/secubox
+    [ -d /var/log/secubox ] || install -d -m 0755 /var/log/secubox
+    [ -d /etc/secubox ] || install -d -m 0755 /etc/secubox
+    [ -d /var/lib/secubox ] || install -d -m 0755 /var/lib/secubox
+
+    # Données du module : /var/lib/secubox/ai et modeles/ 0750 secubox-ai:secubox-ai (le moteur lit par le groupe ;
+    # BindReadOnlyPaths de son unité exige que modeles/ existe). PAR DESCRIPTEUR, jamais par chemin ni par tmpfiles :
+    # /var/lib/secubox appartient au compte partagé secubox, qui pourrait substituer un lien entre la création et le
+    # chown (systemd-tmpfiles refuse d'ailleurs cette transition). Un lien n'est jamais suivi ; un dossier d'un autre
+    # compte est refusé. Le contenu n'est jamais parcouru ni modifié.
+    python3 -I - /var/lib/secubox secubox-ai secubox-ai <<'DOSSIERS' || \
+      echo "secubox-ai : /var/lib/secubox/ai non préparé (lien ou propriétaire inattendu) : l'API ne démarrera pas" >&2
+import grp
+import os
+import pwd
+import stat
+import sys
+
+racine, compte, groupe = sys.argv[1:4]
+uid, gid = pwd.getpwnam(compte).pw_uid, grp.getgrnam(groupe).gr_gid
+OUVRIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+def dossier(dfd, nom):
+    try:
+        os.mkdir(nom, 0o700, dir_fd=dfd)
+    except FileExistsError:
+        pass
+    fd = os.open(nom, OUVRIR, dir_fd=dfd)
+    st = os.fstat(fd)
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid not in (0, uid):
+        sys.exit(f"{nom} : propriétaire inattendu ({st.st_uid}), laissé tel quel")
+    os.fchown(fd, uid, gid)
+    os.fchmod(fd, 0o750)
+    return fd
+
+
+ai = dossier(os.open(racine, OUVRIR), "ai")
+dossier(ai, "modeles")
+DOSSIERS
+
+    # Configuration fixe au premier passage seulement : les réglages de l'exploitant survivent aux mises à jour.
+    # root, lisible, jamais inscriptible par le groupe (secubox-aictl la refuserait).
+    if [ ! -e /etc/secubox/ai.toml ] && [ -f /usr/share/secubox/ai/ai.toml.example ]; then
+      install -m 0644 -o root -g root /usr/share/secubox/ai/ai.toml.example /etc/secubox/ai.toml
+    fi
+
+    # Profils AppArmor (API en enforce, moteur en complain), chargés AVANT tout démarrage : avec AppArmor actif, une
+    # unité qui nomme un profil non chargé échoue. Sans AppArmor, l'unité démarre sans profil. Dans le chroot d'une
+    # image, /sys est celui de l'hôte : apparmor.service les chargera au premier démarrage depuis /etc/apparmor.d.
+    PROFILS=1
+    if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ]; then
+      for _p in secubox-ai-api secubox-ai-moteur; do
+        if ! command -v apparmor_parser >/dev/null 2>&1 || [ ! -f "/etc/apparmor.d/$_p" ] \
+           || ! apparmor_parser -r "/etc/apparmor.d/$_p"; then
+          PROFILS=0
+          echo "secubox-ai : profil AppArmor $_p non chargé (apparmor_parser -r /etc/apparmor.d/$_p)" >&2
+        fi
+      done
+    fi
+
+    # #3411 : activation HORS du test systemd (chroot d'une image) ; motif debhelper : un disable manuel survit.
+    # Le moteur n'a pas de [Install] : seul secubox-aictl le démarre.
+    for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
+
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+      # /run/secubox-ai (root:secubox-ai 1770), dépôt des demandes, verrou, drop-in des adresses LAN de l'API.
+      /usr/sbin/secubox-aictl preparer || \
+        echo "secubox-ai : préparation incomplète (voir /var/log/secubox/audit.log) ; « secubox-aictl preparer »" >&2
+      # secubox-ai-preparer.service (Wants= de l'API) la refait à chaque démarrage de la machine.
+      if [ "$PROFILS" = 1 ]; then
+        if systemctl is-enabled --quiet secubox-ai-demandes.path 2>/dev/null; then
+          systemctl restart secubox-ai-demandes.path || true
+        fi
+        # Premier passage comme mise à jour : relancée APRÈS preparer, pour le nouveau code et le filtrage IP.
+        if systemctl is-enabled --quiet secubox-ai.service 2>/dev/null; then
+          systemctl restart secubox-ai.service || true
+        fi
+      else
+        echo "secubox-ai : unités activées mais NON démarrées (profil AppArmor absent)" >&2
+      fi
+      if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx 2>/dev/null || true
+      fi
+    fi
+    ;;
+esac
+
+exit 0

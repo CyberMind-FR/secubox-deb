@@ -19,6 +19,8 @@ User=secubox-ai-moteur
 # secubox-ai:secubox-ai, dossier 0750) sont lisibles par le moteur.
 Group=secubox-ai
 UMask=0007
+# Profil chargé par le postinst avant tout démarrage (apparmor/secubox-ai-moteur, complain jusqu'à la mesure sur gk3).
+AppArmorProfile=secubox-ai-moteur
 # Absent si le démarrage ne vient pas de secubox-aictl : l'unité refuse alors de partir.
 EnvironmentFile=/run/secubox-ai/moteur.env
 # Socket laissée par un moteur tombé (ou posée par un autre compte du groupe) : retirée en root.
