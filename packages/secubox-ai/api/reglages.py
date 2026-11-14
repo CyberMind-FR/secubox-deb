@@ -25,7 +25,8 @@ ETAT = Path(os.environ.get("SECUBOX_AI_ETAT", ETAT_DEFAUT))  # valeur à l'impor
 
 DEFAUTS = {
     "moteur": {"modele": "qwen2.5-1.5b-instruct-q4_k_m.gguf", "backend": "cpu", "threads": 6, "contexte": 4096,
-               "paralleles": 1, "couches_gpu": 99, "nice": 10, "arret_inactivite_min": 30},
+               "paralleles": 1, "couches_gpu": 99, "nice": 10, "arret_inactivite_min": 30,
+               "force": "auto"},
     "generation": {"temperature": 0.3, "top_p": 0.9, "max_tokens": 512},
     "comportement": {"consigne": "Tu es l'assistant de SecuBox. Réponds en français, avec précision. "
                                  "Si l'information manque, dis que tu ne sais pas et n'invente jamais un fait, "
@@ -43,7 +44,7 @@ BORNES = {("moteur", "threads"): (1, 64), ("moteur", "contexte"): (0, 32768), ("
           ("generation", "top_p"): (0, 1), ("generation", "max_tokens"): (16, 8192),
           ("outils", "appels_max"): (0, 5), ("outils", "sources_max_jetons"): (1000, 120000),
           ("memoire", "caracteres"): (1000, 60000), ("menaces", "resume_auto_min"): (0, 240)}
-CHOIX = {("moteur", "backend"): {"cpu", "vulkan", "mixte"}, ("outils", "mode"): {"jamais", "modele", "toujours"}}
+CHOIX = {("moteur", "backend"): {"cpu", "vulkan", "mixte"}, ("moteur", "force"): {"auto", "local", "distant"}, ("outils", "mode"): {"jamais", "modele", "toujours"}}
 NOM_MODELE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.gguf$")
 
 CONFIG_DEFAUT = {

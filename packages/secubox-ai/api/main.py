@@ -13,18 +13,11 @@ from fastapi import APIRouter, Depends, FastAPI
 
 from secubox_core.auth import require_jwt
 
-from api import reglages
+from api import moteurs, reglages
 
 VERSION = "0.1.0"
 
-# Valeur provisoire, remplacée quand le moteur local existe (tâche 4).
-MOTEUR_INCONNU = "inconnu"
-
 ROUTEUR = APIRouter(prefix="")
-
-
-def etat_moteur() -> str:
-    return MOTEUR_INCONNU
 
 
 @ROUTEUR.get("/health")
@@ -34,9 +27,10 @@ async def health():
 
 @ROUTEUR.get("/status", dependencies=[Depends(require_jwt)])
 async def status():
-    return {"module": "ai", "version": VERSION, "moteur": etat_moteur(), "preferences": reglages.etat_prefs()}
+    return {"module": "ai", "version": VERSION, "moteur": await moteurs.etat(), "preferences": reglages.etat_prefs()}
 
 
 app = FastAPI(title="SecuBox AI", version=VERSION)
 app.include_router(ROUTEUR)
 app.include_router(reglages.routeur)
+app.include_router(moteurs.routeur)
