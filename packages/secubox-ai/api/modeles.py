@@ -198,7 +198,13 @@ async def telecharger(depot, nom, sha, taille, licence):
         suivi["recu"] = n
 
     try:
-        os.close(os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+        # 0640 quel que soit l'umask (os.replace garde le mode) : le moteur, du groupe secubox-ai, doit pouvoir le lire
+        # (secubox-aictl refuse un modèle illisible par le groupe).
+        fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+        try:
+            os.fchmod(fd, 0o640)
+        finally:
+            os.close(fd)
         await recherche.telecharger_fichier(f"https://huggingface.co/{depot}/resolve/main/{nom}", part, taille,
                                             delai=DELAI_TELECHARGEMENT_S, empreinte=empreinte, progres=progres)
         if empreinte.hexdigest() != str(sha).lower():

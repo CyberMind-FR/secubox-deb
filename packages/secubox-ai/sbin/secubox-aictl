@@ -303,6 +303,12 @@ def _verifier_modele(mfd: int, nom: str, ids: dict) -> os.stat_result | None:
     return st
 
 
+def lisible_par_moteur(st: os.stat_result, ids: dict) -> bool:
+    """Le moteur (compte secubox-ai-moteur, groupe secubox-ai) peut lire ce modèle : lisible par tous, ou du groupe
+    secubox-ai et lisible par le groupe (0640, mode des téléchargements de l'API)."""
+    return bool(st.st_mode & 0o004 or (st.st_gid == ids["gid_ai"] and st.st_mode & 0o040))
+
+
 def choisir_modele(ids: dict, cfg: dict) -> dict:
     """Modèle à servir : la préférence moteur.modele si elle est valide et installée, sinon [moteur_local] modele.
     Renvoie {"nom", "source", "poids_mo", "lecture" (chemin par le descripteur vérifié, pour l'en-tête), "chemin"
@@ -333,7 +339,7 @@ def choisir_modele(ids: dict, cfg: dict) -> dict:
         if st is None:
             journal(f"modèle {nom} ({source}) : absent, lien ou propriétaire inattendu")
             continue
-        if not (st.st_mode & 0o004 or (st.st_gid == ids["gid_ai"] and st.st_mode & 0o040)):
+        if not lisible_par_moteur(st, ids):
             os.close(mfd)
             raise Echec(f"le modèle {nom} n'est pas lisible par le moteur (groupe {GROUPE_AI}, mode 0640 attendus)")
         ctx = prefs.get("contexte", 0)

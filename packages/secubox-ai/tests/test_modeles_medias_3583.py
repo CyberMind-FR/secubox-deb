@@ -570,3 +570,35 @@ def test_valider_refuse_annexe_et_decoupe(env):
         (d / n).write_bytes(b"GGUF")
         with pytest.raises(HTTPException):
             reglages.valider({"moteur": {"modele": n}})
+
+
+# ---------------- revue finale : modèle téléchargé lisible par le moteur (C2) ----------------
+def _aictl():
+    import importlib.machinery
+    import importlib.util
+    import sys
+    from pathlib import Path
+    if "secubox_aictl_teste" in sys.modules:
+        return sys.modules["secubox_aictl_teste"]
+    script = Path(__file__).resolve().parents[1] / "sbin" / "secubox-aictl"
+    chargeur = importlib.machinery.SourceFileLoader("secubox_aictl_teste", str(script))
+    spec = importlib.util.spec_from_loader("secubox_aictl_teste", chargeur)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["secubox_aictl_teste"] = mod
+    chargeur.exec_module(mod)
+    return mod
+
+
+@pytest.mark.asyncio
+async def test_modele_telecharge_lisible_par_le_moteur(env, hf):
+    import os
+    import stat
+    ancien = os.umask(0o027)              # UMask de secubox-ai.service
+    try:
+        await modeles.telecharger(DEPOT, NOM, SHA, len(CONTENU), "mit")
+    finally:
+        os.umask(ancien)
+    st = os.stat(env / "etat" / "modeles" / NOM)
+    assert stat.S_IMODE(st.st_mode) == 0o640
+    # Le moteur n'est pas « autre » : seule la lecture par le groupe secubox-ai (groupe principal de l'API) compte.
+    assert _aictl().lisible_par_moteur(st, {"gid_ai": st.st_gid})
