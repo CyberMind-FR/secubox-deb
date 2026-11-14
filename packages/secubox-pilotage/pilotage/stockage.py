@@ -636,6 +636,12 @@ class StockageSqlite:
         with self._cx() as cx:
             return [_operation(r) for r in cx.execute(sql, args)]
 
+    def operation_lire(self, ident: int) -> Optional[dict]:
+        """Une opération par son identifiant (même forme que `operations()`), None si inconnue."""
+        with self._cx() as cx:
+            r = cx.execute("SELECT o.*, b.nom FROM operations o LEFT JOIN boites b ON b.cle=o.cle WHERE o.id=?", (ident,)).fetchone()
+            return _operation(r) if r else None
+
     # --- sessions de support (L2 tâche 6, R-L2-31, R-L2-33) ---
     # Le maître borne lui-même une session ouverte : fin = la plus proche de la fin annoncée par la box et de la réception
     # de « ouvert » plus la durée demandée (4 h pour une session qu'il n'a pas demandée). Passée cette fin, la session est
