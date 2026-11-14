@@ -9,6 +9,8 @@
 # journal ne bloquerait plus rien. Chaque bloc revient avec son temps RESTANT
 # (fin enregistrée dans /var/lib/secubox-waf-blocs/blocs.json), jamais remis à
 # sa durée d'origine ; un bloc échu, forgé ou désormais protégé n'est pas rejoué.
+# Un `nft -f /etc/nftables.conf` DIRECT ne passe pas par nftables.service : c'est
+# la minuterie secubox-waf-blocs-veille (waf-blocs reparer) qui le rattrape.
 [Unit]
 Description=SecuBox WAF — bans de bloc /24, table nft rejouée (#3716)
 After=nftables.service
@@ -32,3 +34,5 @@ UMask=0027
 
 [Install]
 WantedBy=multi-user.target
+# Démarré avec le pare-feu, pas seulement au démarrage de la box.
+WantedBy=nftables.service

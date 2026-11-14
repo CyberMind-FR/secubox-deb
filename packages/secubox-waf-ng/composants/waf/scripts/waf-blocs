@@ -9,7 +9,8 @@ de protection illisible ferme la porte (GardeIllisible) : jamais d'ouverture par
 
 Les blocs vivent dans une table nft à part (`inet secubox_waf_blocs`, #3716) ; l'état root
 (`/var/lib/secubox-waf-blocs/blocs.json`) les rejoue avec leur temps restant après un
-rechargement du pare-feu (`reappliquer`, unité secubox-waf-blocs).
+rechargement du pare-feu (`reappliquer`, unité secubox-waf-blocs) et après tout effacement
+direct de la table (`reparer`, minuterie secubox-waf-blocs-veille).
 Stdlib seule ; aucun appel shell, arguments passés en liste.
 """
 import contextlib
@@ -41,7 +42,7 @@ WG = "/usr/bin/wg"
 
 CODES = {None: 0, "invalide": 1, "privee": 2, "protegee": 3,
          "box": 4, "pair": 5, "garde_illisible": 6, "nft": 7, "duree": 8,
-         "etat": 9, "audit": 10, "usage": 64}
+         "etat": 9, "audit": 10, "incoherent": 11, "usage": 64}
 
 # IPv6 qui encapsulent ou traduisent de l'IPv4 : refusées, sbxwaf les traiterait en IPv4.
 # 6to4, NAT64 bien connu, NAT64 d'usage local (RFC 8215), SIIT « IPv4-translated » (RFC 2765).
@@ -76,9 +77,9 @@ class ErreurNft(Exception):
     """nft a refusé une opération sur la table des blocs."""
 
 
-def executer(argv):
-    """Exécute argv (liste, sans shell, PATH fixe) et rend la sortie standard."""
-    return subprocess.run(argv, check=True, timeout=10, capture_output=True, text=True,
+def executer(argv, entree=None):
+    """Exécute argv (liste, sans shell, PATH fixe ; `entree` sur stdin) et rend la sortie standard."""
+    return subprocess.run(argv, check=True, timeout=10, capture_output=True, text=True, input=entree,
                           env={"PATH": PATH_FIXE, "LC_ALL": "C"}).stdout
 
 
@@ -360,51 +361,106 @@ def _verrou(dossier):
 
 
 # --- nft ----------------------------------------------------------------------
+#
+# Chaque geste est UNE transaction nft (`nft -f -`) : tout passe ou rien ne change.
+# Un `add element {X}` sans timeout, seul, rendrait PERMANENT un élément d'intervalle
+# existant (constaté, nft 1.0.9) : il n'apparaît que dans un lot, suivi de `delete`.
 
-def _nft(lancer, *args):
-    lancer([NFT, *args])
+_CIBLE = " ".join(TABLE)
+CHAINE = "entree"
+_DEF_ENSEMBLE = "{ type ipv4_addr; flags interval, timeout; counter; }"
+_DEF_CHAINE = "{ type filter hook input priority -101; policy accept; }"
+# Seuls les flux ouverts PAR le bloc banni sont jetés : les réponses aux connexions que la box ouvre vers lui passent.
+_REGLE = f"ct direction original ip saddr @{ENSEMBLE} counter drop"
+_EXPR_REGLE = [
+    {"match": {"op": "==", "left": {"ct": {"key": "direction"}}, "right": "original"}},
+    {"match": {"op": "==", "left": {"payload": {"protocol": "ip", "field": "saddr"}}, "right": f"@{ENSEMBLE}"}},
+    {"drop": None},
+]
 
 
-def _element(bloc, secondes=None):
-    return f"{{ {bloc} timeout {secondes}s }}" if secondes is not None else f"{{ {bloc} }}"
+def _lot(lancer, lignes):
+    """Une transaction nft ; ErreurNft si elle est refusée (rien n'a alors changé)."""
+    try:
+        lancer([NFT, "-f", "-"], entree="".join(ligne + "\n" for ligne in lignes))
+    except Exception as e:
+        raise ErreurNft(f"transaction nft refusée : {e}") from e
+
+
+def _l_element(bloc, secondes=None):
+    corps = f"{bloc} timeout {secondes}s" if secondes is not None else bloc
+    return f"add element {_CIBLE} {ENSEMBLE} {{ {corps} }}"
+
+
+def _l_poser(bloc, secondes):
+    """Pose ou remplace l'élément : un `add` seul ne changerait pas le timeout d'un élément présent."""
+    return [_l_element(bloc), f"delete element {_CIBLE} {ENSEMBLE} {{ {bloc} }}", _l_element(bloc, secondes)]
+
+
+def _l_enlever(bloc):
+    """Retrait idempotent : présent ou absent, le lot réussit et l'élément n'y est plus."""
+    return [_l_element(bloc), f"delete element {_CIBLE} {ENSEMBLE} {{ {bloc} }}"]
 
 
 def _charger_table(lancer):
+    """Table neuve et VIDE depuis le fichier livré (réapplication seulement)."""
     try:
-        _nft(lancer, "-f", str(FICHIER_TABLE))
+        lancer([NFT, "-f", str(FICHIER_TABLE)])
     except Exception as e:
         raise ErreurNft(f"table des blocs non chargée : {e}") from e
 
 
-def _poser(lancer, bloc, secondes):
-    """Supprime puis ajoute : un `add` ne change pas le timeout d'un élément déjà présent."""
-    with contextlib.suppress(Exception):
-        _nft(lancer, "delete", "element", *TABLE, ENSEMBLE, _element(bloc))
+def _est_notre_regle(expr):
+    return [x for x in expr if "counter" not in x] == _EXPR_REGLE
+
+
+def _inspecter(lancer):
+    """None si la table manque ; sinon {"ensemble": blocs présents | None, "chaine": bool, "regle": bool}.
+    ErreurNft si nft ne répond pas clairement (jamais confondu avec « absente »)."""
     try:
-        _nft(lancer, "add", "element", *TABLE, ENSEMBLE, _element(bloc, secondes))
+        sortie = lancer([NFT, "-j", "list", "table", *TABLE])
+    except subprocess.CalledProcessError as e:
+        if "No such file or directory" in (e.stderr if e.stderr is not None else "No such file or directory"):
+            return None
+        raise ErreurNft(f"nft list table : {e}") from e
     except Exception as e:
-        raise ErreurNft(f"bloc {bloc} non posé : {e}") from e
-
-
-def _enlever(lancer, bloc):
-    """Retire le bloc ; absent (ou table absente) n'est pas une erreur, encore présent en est une."""
+        raise ErreurNft(f"nft list table : {e}") from e
+    etat = {"ensemble": None, "chaine": False, "regle": False}
     try:
-        _nft(lancer, "delete", "element", *TABLE, ENSEMBLE, _element(bloc))
-        return
-    except Exception:
-        pass
-    try:
-        _nft(lancer, "get", "element", *TABLE, ENSEMBLE, _element(bloc))
-    except subprocess.CalledProcessError:
-        return  # nft répond « introuvable » : c'est déjà le cas voulu
-    except Exception as e:
-        raise ErreurNft(f"présence du bloc {bloc} invérifiable : {e}") from e
-    raise ErreurNft(f"bloc {bloc} toujours présent")
+        for objet in json.loads(sortie)["nftables"]:
+            if objet.get("set", {}).get("name") == ENSEMBLE:
+                etat["ensemble"] = set()
+                for element in objet["set"].get("elem") or []:
+                    valeur = element.get("elem", {}).get("val") if isinstance(element, dict) else None
+                    if isinstance(valeur, dict) and "prefix" in valeur:
+                        etat["ensemble"].add(f"{valeur['prefix']['addr']}/{valeur['prefix']['len']}")
+            elif objet.get("chain", {}).get("name") == CHAINE:
+                etat["chaine"] = True
+            elif objet.get("rule", {}).get("chain") == CHAINE and _est_notre_regle(objet["rule"].get("expr") or []):
+                etat["regle"] = True
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        raise ErreurNft(f"sortie nft illisible : {e}") from e
+    return etat
 
 
-def _auditer(action, detail):
+def _l_structure(inspection):
+    """Lignes qui ajoutent SEULEMENT ce qui manque (table, ensemble, chaîne, règle) ; [] si rien."""
+    lignes = []
+    if inspection is None:
+        lignes.append(f"add table {_CIBLE}")
+        inspection = {"ensemble": None, "chaine": False, "regle": False}
+    if inspection["ensemble"] is None:
+        lignes.append(f"add set {_CIBLE} {ENSEMBLE} {_DEF_ENSEMBLE}")
+    if not inspection["chaine"]:
+        lignes.append(f"add chain {_CIBLE} {CHAINE} {_DEF_CHAINE}")
+    if not inspection["regle"]:
+        lignes.append(f"add rule {_CIBLE} {CHAINE} {_REGLE}")
+    return lignes
+
+
+def _auditer(action, detail, par="wafctl"):
     ligne = json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "waf",
-                        "action": action, "detail": detail[:300], "by": "wafctl"}, ensure_ascii=False)
+                        "action": action, "detail": detail[:300], "by": par}, ensure_ascii=False)
     f = os.open(AUDIT_LOG, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
     try:
         os.write(f, (ligne + "\n").encode("utf-8"))
@@ -412,24 +468,34 @@ def _auditer(action, detail):
         os.close(f)
 
 
-def _retablir(lancer, bloc, ancien, avant, maintenant):
-    """Geste non audité : la table et l'état reviennent où ils étaient (au mieux, sans masquer le refus)."""
+def _retablir(lancer, bloc, ancien, avant, maintenant, etat=True):
+    """Geste non tenu : l'élément revient à l'`ancien` ban (temps restant) ou disparaît, et l'état à `avant`
+    si `etat`. Rend False si ce retour arrière échoue lui-même (table et état peut-être en désaccord)."""
     try:
         if ancien and ancien["fin"] > maintenant:
-            _poser(lancer, bloc, ancien["fin"] - maintenant)
+            _lot(lancer, _l_poser(bloc, ancien["fin"] - maintenant))
         else:
-            _enlever(lancer, bloc)
-        ecrire_etat(ETAT_DOSSIER, avant)
+            _lot(lancer, _l_enlever(bloc))
+        if etat:
+            ecrire_etat(ETAT_DOSSIER, avant)
+        return True
     except Exception as e:
-        print(f"waf-blocs : retour arrière incomplet pour {bloc} : {e}", file=sys.stderr)
+        print(f"waf-blocs : retour arrière impossible pour {bloc} : {e}", file=sys.stderr)
+        return False
 
 
 def _refus(motif):
     return {"ok": False, "motif": motif}
 
 
+def _ban_en_cours(blocs, bloc, maintenant):
+    """Entrée active (et plausible) du bloc dans l'état, ou None."""
+    return next((e for e in blocs if e["bloc"] == bloc and 0 < e["fin"] - maintenant <= DUREE_MAX), None)
+
+
 def ajouter(bloc, secondes, executer, maintenant):
-    """Bannit un /24 pour `secondes` : forme, gardes, durée, table, élément, état, audit."""
+    """Bannit un /24 pour `secondes` : forme, gardes, durée, une transaction nft, état, audit.
+    Un ban en cours plus long n'est jamais raccourci (on garde la fin la plus tardive)."""
     try:
         cible = normaliser_bloc(bloc)
     except ValueError:
@@ -446,24 +512,22 @@ def ajouter(bloc, secondes, executer, maintenant):
     try:
         with _verrou(ETAT_DOSSIER):
             avant = lire_etat(ETAT_DOSSIER)
-            ancien = next((e for e in avant if e["bloc"] == bloc), None)
-            try:
-                executer([NFT, "list", "table", *TABLE])
-            except Exception:
-                _charger_table(executer)
-            _poser(executer, bloc, secondes)
-            entree = {"bloc": bloc, "debut": debut, "fin": debut + secondes}
+            ancien = _ban_en_cours(avant, bloc, debut)
+            if ancien and ancien["fin"] >= debut + secondes:
+                entree = ancien
+            else:
+                entree = {"bloc": bloc, "debut": debut, "fin": debut + secondes}
+            _lot(executer, _l_structure(_inspecter(executer)) + _l_poser(bloc, entree["fin"] - debut))
             apres = [e for e in avant if e["bloc"] != bloc and e["fin"] > debut] + [entree]
             try:
                 ecrire_etat(ETAT_DOSSIER, apres)
             except GardeIllisible:
-                _retablir(executer, bloc, ancien, avant, debut)
-                return _refus("etat")
+                # l'état n'a pas été remplacé : seule la table revient en arrière
+                return _refus("etat" if _retablir(executer, bloc, ancien, avant, debut, etat=False) else "incoherent")
             try:
-                _auditer("ban-bloc", f"{bloc} {secondes}s")
+                _auditer("ban-bloc", f"{bloc} {secondes}s fin {entree['fin']}")
             except OSError:
-                _retablir(executer, bloc, ancien, avant, debut)
-                return _refus("audit")
+                return _refus("audit" if _retablir(executer, bloc, ancien, avant, debut) else "incoherent")
     except GardeIllisible:
         return _refus("etat")
     except ErreurNft:
@@ -472,7 +536,7 @@ def ajouter(bloc, secondes, executer, maintenant):
 
 
 def retirer(bloc, executer):
-    """Débannit un /24 : élément nft retiré (absent = déjà fait), état, audit."""
+    """Débannit un /24 : retrait idempotent en une transaction, état, audit."""
     try:
         normaliser_bloc(bloc)
     except ValueError:
@@ -481,18 +545,19 @@ def retirer(bloc, executer):
     try:
         with _verrou(ETAT_DOSSIER):
             avant = lire_etat(ETAT_DOSSIER)
-            ancien = next((e for e in avant if e["bloc"] == bloc), None)
-            _enlever(executer, bloc)
+            ancien = _ban_en_cours(avant, bloc, maintenant)
+            inspection = _inspecter(executer)
+            if inspection is not None and inspection["ensemble"] is not None:
+                _lot(executer, _l_enlever(bloc))
             try:
                 ecrire_etat(ETAT_DOSSIER, [e for e in avant if e["bloc"] != bloc])
             except GardeIllisible:
-                _retablir(executer, bloc, ancien, avant, maintenant)
-                return _refus("etat")
+                return _refus("etat" if _retablir(executer, bloc, ancien, avant, maintenant, etat=False)
+                              else "incoherent")
             try:
                 _auditer("unban-bloc", bloc)
             except OSError:
-                _retablir(executer, bloc, ancien, avant, maintenant)
-                return _refus("audit")
+                return _refus("audit" if _retablir(executer, bloc, ancien, avant, maintenant) else "incoherent")
     except GardeIllisible:
         return _refus("etat")
     except ErreurNft:
@@ -500,28 +565,34 @@ def retirer(bloc, executer):
     return {"ok": True, "motif": None, "bloc": bloc}
 
 
-def _presents(executer):
-    """Blocs présents dans l'ensemble nft, ou None si nft ne répond pas."""
-    try:
-        donnees = json.loads(executer([NFT, "-j", "list", "set", *TABLE, ENSEMBLE]))
-        presents = set()
-        for objet in donnees.get("nftables", []):
-            for element in (objet.get("set") or {}).get("elem") or []:
-                valeur = element.get("elem", {}).get("val") if isinstance(element, dict) else None
-                if isinstance(valeur, dict) and "prefix" in valeur:
-                    presents.add(f"{valeur['prefix']['addr']}/{valeur['prefix']['len']}")
-        return presents
-    except Exception:
-        return None
-
-
 def lister(executer, maintenant):
     """Blocs non échus de l'état, avec le temps restant et leur présence dans nft (None : inconnue)."""
     maintenant = int(maintenant)
     blocs = [e for e in lire_etat(ETAT_DOSSIER) if e["fin"] > maintenant]
-    presents = _presents(executer)
+    try:
+        inspection = _inspecter(executer)
+        presents = set() if inspection is None else (inspection["ensemble"] or set())
+    except ErreurNft:
+        presents = None
     return [{**e, "reste": e["fin"] - maintenant, "actif": None if presents is None else e["bloc"] in presents}
             for e in sorted(blocs, key=lambda e: (e["fin"], e["bloc"]))]
+
+
+def _a_rejouer(blocs, maintenant, executer):
+    """(bloc, reste) des entrées encore valides : non échues, reste ≤ 7 j, forme canonique, gardes (fail closed)."""
+    candidats = []
+    for e in blocs:
+        reste = e["fin"] - maintenant
+        if not 0 < reste <= DUREE_MAX:
+            continue
+        try:
+            candidats.append((normaliser_bloc(e["bloc"]), reste))
+        except ValueError:
+            continue
+    if not candidats:
+        return []
+    listes = _gardes(candidats[0][0], executer)   # illisibles : GardeIllisible, rien n'est rejoué
+    return [(str(c), reste) for c, reste in candidats if motif_refus(c, *listes) is None]
 
 
 def reappliquer(executer, maintenant):
@@ -535,28 +606,51 @@ def reappliquer(executer, maintenant):
             _charger_table(executer)   # la table existe même sans état : ajouter la retrouvera
             raise
         _charger_table(executer)
-        listes = None
         rejoues, echecs = 0, []
-        for e in lire_etat(ETAT_DOSSIER):
-            reste = e["fin"] - maintenant
-            if not 0 < reste <= DUREE_MAX:
-                continue
+        for bloc, reste in _a_rejouer(lire_etat(ETAT_DOSSIER), maintenant, executer):
             try:
-                cible = normaliser_bloc(e["bloc"])
-            except ValueError:
-                continue
-            if listes is None:
-                listes = _gardes(cible, executer)   # illisibles : rien n'est rejoué (fail closed)
-            if motif_refus(cible, *listes) is not None:
-                continue
-            try:
-                _poser(executer, e["bloc"], reste)
+                _lot(executer, [_l_element(bloc, reste)])
                 rejoues += 1
             except ErreurNft as err:
                 echecs.append(str(err))
         if echecs:
             raise ErreurNft("; ".join(echecs))
         return rejoues
+
+
+def reparer(executer, maintenant):
+    """Veille (minuterie, 60 s) : un `nft -f /etc/nftables.conf` direct (flush ruleset) efface la table sans
+    passer par nftables.service. Ne rajoute QUE ce qui manque — structure, puis blocs actifs absents avec leur
+    temps restant — en une transaction ; ne reconstruit jamais une table vide par-dessus des éléments vivants.
+    Rien ne manque : aucune écriture nft, aucun audit. Rend {"structure": [...], "elements": [...], "audite": bool|None}."""
+    maintenant = int(maintenant)
+    with _verrou(ETAT_DOSSIER):
+        blocs = lire_etat(ETAT_DOSSIER)
+        inspection = _inspecter(executer)
+        structure = _l_structure(inspection)
+        presents = (inspection or {}).get("ensemble") or set()
+        manquants = [e for e in blocs if e["bloc"] not in presents]
+        garde_ko = None
+        try:
+            a_poser = _a_rejouer(manquants, maintenant, executer)
+        except GardeIllisible as e:
+            garde_ko, a_poser = e, []      # la structure est rétablie quand même ; aucun ban sans gardes
+        if not structure and not a_poser:
+            if garde_ko:
+                raise garde_ko
+            return {"structure": [], "elements": [], "audite": None}
+        _lot(executer, structure + [_l_element(bloc, reste) for bloc, reste in a_poser])
+        resume = {"structure": [ligne.split()[1] for ligne in structure], "elements": [b for b, _ in a_poser]}
+        try:
+            _auditer("reparation", f"structure {','.join(resume['structure']) or '-'} ; "
+                                   f"{len(a_poser)} bloc(s) {' '.join(resume['elements'])}", par="waf-blocs reparer")
+            resume["audite"] = True
+        except OSError:
+            resume["audite"] = False
+        print(f"waf-blocs : réparation {resume}", file=sys.stderr)
+        if garde_ko:
+            raise garde_ko
+        return resume
 
 
 # --- ligne de commande ------------------------------------------------------
@@ -569,7 +663,7 @@ def _imprimer(resultat):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     verbe, args = (argv[0], argv[1:]) if argv else ("", [])
-    attendus = {"verifier": 1, "ajouter": 2, "retirer": 1, "lister": 0, "reappliquer": 0}
+    attendus = {"verifier": 1, "ajouter": 2, "retirer": 1, "lister": 0, "reappliquer": 0, "reparer": 0}
     if attendus.get(verbe) != len(args):
         return _imprimer(_refus("usage"))
     if verbe == "verifier":
@@ -584,6 +678,10 @@ def main(argv=None):
     try:
         if verbe == "lister":
             return _imprimer({"ok": True, "motif": None, "blocs": lister(executer, time.time())})
+        if verbe == "reparer":
+            r = reparer(executer, time.time())
+            audit_ok = r["audite"] is not False
+            return _imprimer({"ok": audit_ok, "motif": None if audit_ok else "audit", **r})
         return _imprimer({"ok": True, "motif": None, "rejoues": reappliquer(executer, time.time())})
     except GardeIllisible as e:
         print(f"waf-blocs : {e}", file=sys.stderr)

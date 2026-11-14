@@ -13,7 +13,10 @@
 # Priorité -101 : juste avant waf_drop (-100), même crochet `input` (HAProxy sur
 # l'hôte). Les éléments sont posés par `waf-blocs ajouter` et rejoués avec leur
 # temps restant par `waf-blocs reappliquer` (unité secubox-waf-blocs, qui suit
-# les rechargements de nftables.service).
+# les rechargements de nftables.service) ; un effacement direct (`nft -f
+# /etc/nftables.conf`, flush ruleset) est réparé par `waf-blocs reparer`
+# (minuterie secubox-waf-blocs-veille, 60 s). Définition reprise À L'IDENTIQUE
+# par waf-blocs (_DEF_ENSEMBLE, _DEF_CHAINE, _REGLE) : un essai le vérifie.
 #
 # Fichier REJOUABLE (idiome du rate-limit, #1362) : `table` crée la table si
 # absente, `delete` la retire, la définition la repose neuve et VIDE.
@@ -29,6 +32,8 @@ table inet secubox_waf_blocs {
 
     chain entree {
         type filter hook input priority -101; policy accept;
-        ip saddr @blocs4 counter drop
+        # Seuls les flux OUVERTS par le bloc banni : les réponses aux connexions
+        # que la box ouvre vers lui passent (P7). Même règle que waf-blocs reparer.
+        ct direction original ip saddr @blocs4 counter drop
     }
 }
