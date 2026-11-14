@@ -305,34 +305,90 @@ def famille(categorie: Any) -> str:
     return categorie.split("|", 1)[0].split(":", 1)[0].strip()
 
 
-#: (clé du fichier, familles) remplacé d'un bloc : lu à la fois par le fil de fond de `_get_bans` et par `/ai/ban`.
-_cache_familles: Dict[str, Any] = {"v": (None, {})}
+#: État de la lecture incrémentale de `bans.jsonl` : fichier (chemin, dev, ino), `lu` (octets déjà consommés),
+#: `reste` (fin de ligne sans « \n » encore), `base` (début de la lecture de départ), `familles`. Lu à la fois par le
+#: fil de fond de `_get_bans` et par `/ai/ban` : tout passe par `_verrou_familles`.
+_verrou_familles = threading.Lock()
+_cache_familles: Dict[str, Any] = {"etat": None}
+#: Une fin de ligne en attente plus longue que ceci n'est plus un enregistrement : abandonnée.
+_RESTE_MAX = 1024 * 1024
+
+
+def _appliquer_familles(familles: Dict[str, str], donnees: bytes) -> None:
+    for ligne in donnees.split(b"\n"):
+        try:
+            r = json.loads(ligne)
+        except ValueError:
+            continue
+        if isinstance(r, dict) and r.get("action") == "ban" and isinstance(r.get("ip"), str):
+            familles[r["ip"]] = famille(r.get("cat"))
 
 
 def familles_bans_waf() -> Dict[str, str]:
     """Famille du DERNIER enregistrement `ban` de chaque adresse dans `bans.jsonl` (les `unban` ne changent pas la
     catégorie). Fichier absent : {}. Lecture STRICTE : lève Illisible s'il ne peut pas être lu (jamais « aucune
-    catégorie »). Bornée à la fin du fichier (`_TAILLE_LECTURE_BANS_WAF`) ; relue seulement s'il a changé."""
+    catégorie »). Lecture INCRÉMENTALE : même fichier (dev, ino) et taille ≥ octets déjà lus ⇒ seuls les octets
+    ajoutés sont analysés (lignes entières ; la fin sans « \n » attend le tour suivant, mais est comptée si c'est
+    déjà un JSON entier, comme une lecture complète). Sinon (rotation, troncature, nouvel inode) ou si le fichier a
+    grandi de plus de deux bornes depuis la lecture de départ : reconstruit depuis la FIN du fichier, au plus
+    `_TAILLE_LECTURE_BANS_WAF` (mémoire bornée)."""
     try:
         st = os.stat(BANS_WAF, follow_symlinks=False)
     except FileNotFoundError:
+        with _verrou_familles:
+            _cache_familles["etat"] = None
         return {}
     except OSError as e:
         raise Illisible(f"bans.jsonl : {type(e).__name__}") from None
-    cle = (str(BANS_WAF), st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
-    cle_cache, familles_cache = _cache_familles["v"]
-    if cle_cache == cle:
-        return dict(familles_cache)
-    try:
-        objets = _lire_fin_jsonl(BANS_WAF, _TAILLE_LECTURE_BANS_WAF)
-    except OSError as e:
-        raise Illisible(f"bans.jsonl : {type(e).__name__}") from None
-    familles: Dict[str, str] = {}
-    for r in objets or []:
-        if isinstance(r, dict) and r.get("action") == "ban" and isinstance(r.get("ip"), str):
-            familles[r["ip"]] = famille(r.get("cat"))
-    _cache_familles["v"] = (cle, familles)
-    return dict(familles)
+    cle = (str(BANS_WAF), st.st_dev, st.st_ino)
+    with _verrou_familles:
+        etat = _cache_familles["etat"]
+        if etat is not None and etat["cle"] == cle and etat["taille"] == st.st_size \
+                and etat["mtime"] == st.st_mtime_ns:
+            return _vue_familles(etat)
+        try:
+            fd = os.open(BANS_WAF, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+            with os.fdopen(fd, "rb") as f:
+                etat = _lire_familles(f, os.fstat(f.fileno()), etat)
+        except FileNotFoundError:
+            _cache_familles["etat"] = None
+            return {}
+        except OSError as e:
+            raise Illisible(f"bans.jsonl : {type(e).__name__}") from None
+        _cache_familles["etat"] = etat
+        return _vue_familles(etat)
+
+
+def _vue_familles(etat: dict) -> Dict[str, str]:
+    """Copie des familles, plus la fin sans « \n » si c'est déjà un enregistrement entier (sans la retenir)."""
+    familles = dict(etat["familles"])
+    if etat["reste"]:
+        _appliquer_familles(familles, etat["reste"])
+    return familles
+
+
+def _lire_familles(f, st: os.stat_result, etat: Optional[dict]) -> dict:
+    """Prolonge `etat` des octets ajoutés, ou le reconstruit depuis la fin du fichier ouvert `f` (état `st`)."""
+    taille = st.st_size
+    cle = (str(BANS_WAF), st.st_dev, st.st_ino)
+    borne = _TAILLE_LECTURE_BANS_WAF
+    if (etat is not None and etat["cle"] == cle and taille >= etat["lu"] and taille - etat["base"] <= 2 * borne):
+        f.seek(etat["lu"])
+        donnees = etat["reste"] + f.read(taille - etat["lu"])
+        familles, base = etat["familles"], etat["base"]
+    else:
+        debut = max(0, taille - borne)
+        f.seek(debut)
+        donnees = f.read(taille - debut)
+        if debut:  # première ligne probablement coupée
+            donnees = donnees.split(b"\n", 1)[1] if b"\n" in donnees else b""
+        familles, base = {}, debut
+    complet, _, reste = donnees.rpartition(b"\n")
+    _appliquer_familles(familles, complet)
+    if len(reste) > _RESTE_MAX:
+        reste = b""
+    return {"cle": cle, "lu": taille, "reste": reste, "base": base, "familles": familles,
+            "taille": taille, "mtime": st.st_mtime_ns}
 
 
 def adresse_couverte_par_le_waf(ip: str, maintenant: int) -> bool:

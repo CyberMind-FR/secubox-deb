@@ -1131,3 +1131,114 @@ def test_get_bans_porte_la_famille(c, monkeypatch):
     par_ip = {b["ip"]: b for b in c.waf._get_bans()}
     assert par_ip["203.0.113.1"]["famille"] == "host_anomaly"
     assert par_ip["203.0.113.2"]["famille"] == "scanners" and par_ip["203.0.113.2"]["reason"] == "scanners|prolonge"
+
+
+# ── Perf (#3716) : lecture incrémentale de bans.jsonl pour les familles ─────────────────────────────────────────
+def _espion_octets(monkeypatch, g):
+    """Compte les octets réellement lus dans bans.jsonl par `familles_bans_waf` (via os.fdopen)."""
+    lus = []
+    reel = os.fdopen
+
+    def fdopen(fd, *a, **k):
+        f = reel(fd, *a, **k)
+        lire = f.read
+
+        class Espion:
+            def __getattr__(self, n):
+                return getattr(f, n)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *e):
+                return f.__exit__(*e)
+
+            def read(self, *x):
+                d = lire(*x)
+                lus.append(len(d))
+                return d
+        return Espion()
+    monkeypatch.setattr(g.os, "fdopen", fdopen)
+    return lus
+
+
+def test_familles_lecture_incrementale_ne_relit_pas_le_debut(c, monkeypatch):
+    _bans_waf_journal(c, *[_rec_cat(f"203.0.113.{i}", "scanners") for i in range(1, 200)])
+    assert len(c.g.familles_bans_waf()) == 199
+    lus = _espion_octets(monkeypatch, c.g)
+    _bans_waf_journal(c, _rec_cat("203.0.113.1", "xss"), _rec_cat("198.51.100.9", "leurre"))
+    taille_ajout = len(json.dumps(_rec_cat("203.0.113.1", "xss"))) + len(json.dumps(_rec_cat("198.51.100.9", "leurre"))) + 2
+    f = c.g.familles_bans_waf()
+    assert f["203.0.113.1"] == "xss" and f["198.51.100.9"] == "leurre" and len(f) == 200
+    assert sum(lus) == taille_ajout
+
+
+def test_familles_ligne_partielle_completee_a_l_ajout_suivant(c):
+    _bans_waf_journal(c, _rec_cat("203.0.113.1", "leurre"))
+    ligne = json.dumps(_rec_cat("203.0.113.2", "scanners"))
+    with open(c.g.BANS_WAF, "a", encoding="utf-8") as fh:
+        fh.write(ligne[:20])
+    assert c.g.familles_bans_waf() == {"203.0.113.1": "leurre"}
+    with open(c.g.BANS_WAF, "a", encoding="utf-8") as fh:
+        fh.write(ligne[20:] + "\n")
+    assert c.g.familles_bans_waf() == {"203.0.113.1": "leurre", "203.0.113.2": "scanners"}
+
+
+def test_familles_derniere_ligne_complete_sans_saut_de_ligne_comptee(c):
+    """Comme une lecture complète : une dernière ligne JSON entière sans « \\n » est prise en compte."""
+    _bans_waf_journal(c, _rec_cat("203.0.113.1", "leurre"))
+    with open(c.g.BANS_WAF, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(_rec_cat("203.0.113.2", "scanners")))
+    assert c.g.familles_bans_waf() == {"203.0.113.1": "leurre", "203.0.113.2": "scanners"}
+    with open(c.g.BANS_WAF, "a", encoding="utf-8") as fh:
+        fh.write("\n")
+    assert c.g.familles_bans_waf() == {"203.0.113.1": "leurre", "203.0.113.2": "scanners"}
+
+
+def test_familles_troncature_et_rotation_reconstruisent(c):
+    _bans_waf_journal(c, *[_rec_cat(f"203.0.113.{i}", "scanners") for i in range(1, 30)])
+    assert len(c.g.familles_bans_waf()) == 29
+    # troncature en place (même inode, plus petit)
+    with open(c.g.BANS_WAF, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(_rec_cat("198.51.100.1", "xss")) + "\n")
+    assert c.g.familles_bans_waf() == {"198.51.100.1": "xss"}
+    # rotation : nouveau fichier (nouvel inode), même plus grand
+    ancien = c.g.BANS_WAF.with_name("ancien")
+    os.rename(c.g.BANS_WAF, ancien)
+    _bans_waf_journal(c, *[_rec_cat(f"192.0.2.{i}", "leurre") for i in range(1, 60)])
+    assert set(c.g.familles_bans_waf()) == {f"192.0.2.{i}" for i in range(1, 60)}
+    # disparition : {}
+    os.unlink(c.g.BANS_WAF)
+    assert c.g.familles_bans_waf() == {}
+
+
+def test_familles_incrementales_egales_a_une_lecture_complete(c):
+    import random
+    rng = random.Random(3716)
+    cats = ["scanners", "xss", "leurre|prolonge", "host_anomaly:unrouted", None, "sqli"]
+    for _ in range(120):
+        lignes = []
+        for _ in range(rng.randint(0, 6)):
+            r = _rec_cat(f"203.0.113.{rng.randint(1, 40)}", rng.choice(cats), action=rng.choice(["ban", "ban", "unban"]))
+            lignes.append(json.dumps(r) if rng.random() > 0.05 else "pas du json")
+        brut = "\n".join(lignes) + ("\n" if lignes else "")
+        # écriture en morceaux coupés n'importe où, lecture entre deux morceaux
+        coupe = rng.randint(0, len(brut))
+        for morceau in (brut[:coupe], brut[coupe:]):
+            with open(c.g.BANS_WAF, "a", encoding="utf-8") as fh:
+                fh.write(morceau)
+            attendu = {}
+            for o in c.g._lire_fin_jsonl(c.g.BANS_WAF, 1 << 30) or []:
+                if isinstance(o, dict) and o.get("action") == "ban" and isinstance(o.get("ip"), str):
+                    attendu[o["ip"]] = c.g.famille(o.get("cat"))
+            assert c.g.familles_bans_waf() == attendu
+
+
+def test_familles_reconstruction_si_le_fichier_depasse_deux_fois_la_borne(c, monkeypatch):
+    monkeypatch.setattr(c.g, "_TAILLE_LECTURE_BANS_WAF", 2000)
+    _bans_waf_journal(c, _rec_cat("203.0.113.1", "leurre"))
+    c.g.familles_bans_waf()
+    _bans_waf_journal(c, *[_rec_cat(f"198.51.100.{i % 250}", "scanners") for i in range(200)],
+                      _rec_cat("192.0.2.1", "xss"))
+    f = c.g.familles_bans_waf()
+    assert "203.0.113.1" not in f and f["192.0.2.1"] == "xss"
