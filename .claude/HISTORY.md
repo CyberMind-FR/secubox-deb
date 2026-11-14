@@ -9,6 +9,13 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-14 — Console de pilotage du maître : actions, macros, journal en direct, zoom des panneaux (ref #3702)
+
+- `secubox-pilotage` 0.7.1 + `secubox-hub` 1.12.58 sur gk2 (apt) : page `/pilotage/console/` au menu « Console de pilotage » (catégorie de la Flotte) ; flotte et barre de commande (Ctrl K), un bouton par action du catalogue, journal en direct (flux authentifié, borné), macros livrées et programmées (« chaque nuit HH:MM »), éditeur et écran de lancement, `<box> · maintenant` (sans ligne disque), zoom « Agrandir » par panneau (Échap, agrandi d'office sous 720 px).
+- API : `/api/v1/pilotage/{flotte,catalogue,macros,executions…}` sous `require_jwt` ; moteur à une exécution par box (409), arrêt après l'étape en cours, exécution coupée → `interrompue` au redémarrage ; actions fortes : nom de chaque box retapé, vérifié par le serveur ; box cliente : session de support ouverte ; renommer jamais dans une macro.
+- Revue finale : entrée de menu filtrée par le hub (`www` sans index.html à la racine) → `"www": "pilotage/console"` (0.7.1, constaté sur gk2 puis corrigé). Agrégateur non relancé (service dédié, nginx direct). Banc gk6/gk7 non fait : déploiement direct demandé par le propriétaire.
+- Suivis (mineurs parqués) : demande d'arrêt non auditée ; course check-then-act de l'action manuelle ; nom du maître depuis `location.hostname` ; blocage intermittent de `test_renommage_reussi` (préexistant) ; 3 tests Playwright de secubox-hub déjà rouges sur master.
+
 ## 2026-11-14 — Conseils de l'IA applicables : bans d'office des cas sûrs, un clic sinon (ref #3716)
 
 - gk2 (`secubox-waf-ng` 1.35.2, `secubox-core` 1.8.32) : bans de bloc /24 dans une table nft à part (`inet secubox_waf_blocs`, `waf-blocs` root : privé, `protegees.env`, adresses de la box, pairs WireGuard ; rejoué au rechargement) ; compte de service `ai-ban` (jeton Ed25519 d'une requête, 30 s, rejeu et audience refusés ; `wafctl cle-ai-ban`) ; routes `/api/v1/waf/ai/{ban,unban,etat}` servies par `secubox-waf.service` seul (drapeau `SECUBOX_WAF_GESTES_IA=1`, plus de relance d'agrégateur), plafonds 5/h et 20/j d'office, 30/h et 100/j au total, audit `ai-ban`/`ai-unban`/`ai-ban-refus`.
