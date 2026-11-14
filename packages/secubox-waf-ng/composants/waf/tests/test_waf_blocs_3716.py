@@ -283,3 +283,17 @@ def test_pairs_suivants_sans_nom_d_interface(wb):
 def test_pair_sans_interface_avant_toute_interface_ferme(wb):
     with pytest.raises(wb.GardeIllisible):
         wb.adresses_pairs(lambda argv: "4M2A=\t198.51.100.9:51822\n")
+
+
+def test_interface_sans_pair(wb):
+    """gk2 : une interface sans aucun pair s'écrit « interface<TAB> » (deuxième colonne vide)."""
+    sortie = ("wg-mesh\tyM8=\t192.0.2.5:51822\n"
+              "4M2A=\t(none)\n"
+              "wg-ephemeral\t\n"
+              "wg0\tAbC=\t203.0.113.4:1\n")
+    assert wb.adresses_pairs(lambda argv: sortie) == {ipaddress.ip_address(a) for a in ("192.0.2.5", "203.0.113.4")}
+
+
+def test_cle_sans_endpoint_ferme(wb):
+    with pytest.raises(wb.GardeIllisible):
+        wb.adresses_pairs(lambda argv: "wg0\tAbC=\t192.0.2.5:1\n" + "D" * 43 + "=\t\n")

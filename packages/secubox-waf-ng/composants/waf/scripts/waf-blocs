@@ -221,7 +221,12 @@ def adresses_pairs(executer):
                 continue
             champs = ligne.split("\t")
             # « interface<TAB>clé<TAB>endpoint » ouvre une interface ; wireguard-tools n'écrit le nom que sur la
-            # première ligne de chaque interface : les pairs suivants n'ont que « clé<TAB>endpoint ».
+            # première ligne de chaque interface : les pairs suivants n'ont que « clé<TAB>endpoint ». Une interface
+            # sans aucun pair s'écrit « interface<TAB> » (deuxième colonne vide) : rien à protéger. Un nom d'interface
+            # tient en 15 caractères (IFNAMSIZ), une clé en 44 : une clé sans endpoint reste illisible.
+            if len(champs) == 2 and 0 < len(champs[0].strip()) <= 15 and not champs[1].strip():
+                interface = champs[0]
+                continue
             if len(champs) == 3:
                 interface = champs[0]
                 endpoint = champs[2].strip()
