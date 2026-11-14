@@ -392,6 +392,8 @@ async def test_reglages_par_question(env, monkeypatch):
     """Ancien moteur encore sain : la génération ne part qu'après le redémarrage signalé par le contrôleur (R9)."""
     sans_recherche()
     monkeypatch.setattr(moteurs, "PAS_ATTENTE_S", 0.01)
+    (env / "etat" / "modeles").mkdir(parents=True, exist_ok=True)       # R6 : le modèle doit être installé
+    (env / "etat" / "modeles" / "autre-modele.gguf").write_bytes(b"GGUF")
     signale = {"fait": False}
 
     def chat(req):
@@ -423,6 +425,8 @@ async def test_reglages_par_question(env, monkeypatch):
 @pytest.mark.asyncio
 async def test_changement_de_modele_refuse_par_le_controleur(env, monkeypatch):
     sans_recherche()
+    (env / "etat" / "modeles").mkdir(parents=True, exist_ok=True)       # R6 : le modèle doit être installé
+    (env / "etat" / "modeles" / "autre-modele.gguf").write_bytes(b"GGUF")
     monkeypatch.setattr(moteurs, "PAS_ATTENTE_S", 0.01)
     vus = moteur_simule(monkeypatch, lambda req: reponse_simple("ok"))
 
@@ -440,6 +444,8 @@ async def test_changement_de_modele_refuse_par_le_controleur(env, monkeypatch):
 @pytest.mark.asyncio
 async def test_changement_de_modele_sans_redemarrage_si_le_distant_repond(env, monkeypatch):
     sans_recherche()
+    (env / "etat" / "modeles").mkdir(parents=True, exist_ok=True)       # R6 : le modèle doit être installé
+    (env / "etat" / "modeles" / "autre-modele.gguf").write_bytes(b"GGUF")
     distant_declare(env)
     vus = moteur_simule(monkeypatch, lambda req: reponse_simple("ok"))
     _, evts = await essai({"question": QUESTION, "reglages": {"modele": "autre-modele.gguf"}})

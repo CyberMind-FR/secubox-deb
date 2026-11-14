@@ -283,10 +283,12 @@ REDIRECTIONS = (301, 302, 303, 307, 308)
 SAUTS_MAX = 4          # requêtes successives au plus (redirections suivies à la main, comme le POC)
 
 
-async def telecharger_fichier(url, chemin, max_octets, delai=30):
+async def telecharger_fichier(url, chemin, max_octets, delai=30, empreinte=None, progres=None):
     """Lien de document (PDF, HTML, texte) écrit dans `chemin` au fil de l'eau, `max_octets` au plus.
     Même garde que `telecharger` à CHAQUE saut (résolution, adresses publiques, connexion épinglée, Host/SNI).
     Rend (adresse finale, content-type) ; lève HTTPException (422 refus, 413 trop gros, 502 le reste).
+    `empreinte` (objet hashlib) reçoit chaque bloc au fil de l'eau ; `progres(n)` est appelé avec la taille écrite
+    (téléchargements de plusieurs Go : jamais le fichier en mémoire, `max_octets` fixé par l'appelant).
     Le fichier partiel n'est pas effacé ici : l'appelant s'en charge."""
     for _ in range(SAUTS_MAX):
         try:
@@ -314,6 +316,10 @@ async def telecharger_fichier(url, chemin, max_octets, delai=30):
                             if taille > max_octets:
                                 raise HTTPException(413, f"document trop gros ({max_octets // 1024 ** 2} Mo au plus)")
                             f.write(bloc)
+                            if empreinte is not None:
+                                empreinte.update(bloc)
+                            if progres is not None:
+                                progres(taille)
                     return url, r.headers.get("content-type", "").lower()
         except httpx.RemoteProtocolError as e:
             # httpx refuse lui-même un Location illisible (IDNA invalide…) : c'est un refus d'adresse, pas une panne.

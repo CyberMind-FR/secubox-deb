@@ -62,6 +62,19 @@ def etat_dir() -> Path:
     return Path(os.environ.get("SECUBOX_AI_ETAT", ETAT_DEFAUT))
 
 
+def modeles_dir() -> Path:
+    """Dossier des modèles GGUF (`<etat>/modeles`), lu à l'appel."""
+    return etat_dir() / "modeles"
+
+
+def modele_installe(nom: str) -> bool:
+    """Le modèle `nom` est-il un fichier régulier du dossier des modèles (jamais un lien symbolique) ?"""
+    if not isinstance(nom, str) or not NOM_MODELE.match(nom) or ".." in nom:
+        return False
+    f = modeles_dir() / nom
+    return f.is_file() and not f.is_symlink()
+
+
 def _fichier() -> Path:
     return etat_dir() / "preferences.toml"
 
@@ -147,6 +160,10 @@ def valider(entree: dict) -> dict:
             refus = _refus(section, cle, v)
             if refus:
                 raise HTTPException(422, refus)
+            # R6 : à l'écriture, le modèle actif doit exister dans le dossier des modèles (fichier régulier).
+            # La lecture des préférences ne l'exige pas : un modèle retiré à la main ne casse pas le module.
+            if (section, cle) == ("moteur", "modele") and not modele_installe(v):
+                raise HTTPException(422, "modèle absent du dossier des modèles")
             prefs[section][cle] = v
     return prefs
 
