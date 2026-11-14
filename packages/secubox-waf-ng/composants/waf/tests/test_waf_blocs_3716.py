@@ -266,3 +266,20 @@ def test_bloc_refuse_sans_ligne_declaree(wb, tmp_path):
     assert wb.lire_protegees(f, exiger=True) == []
     f.write_text("SECUBOX_WAF_PROTEGEES=203.0.113.7/32\n")
     assert wb.lire_protegees(f, exiger=True) == [ipaddress.ip_network("203.0.113.7/32")]
+
+
+def test_pairs_suivants_sans_nom_d_interface(wb):
+    """wireguard-tools 1.0.20210914 (banc gk6) : le nom de l'interface n'est écrit que sur la PREMIÈRE ligne de
+    chaque interface ; les pairs suivants n'ont que « clé<TAB>endpoint »."""
+    sortie = ("wg-mesh\tyM8=\t192.0.2.5:51822\n"
+              "4M2A=\t198.51.100.9:51822\n"
+              "k/Ce=\t(none)\n"
+              "wg0\tMOd1=\t[2001:db8::7]:22768\n"
+              "AbC=\t203.0.113.4:1\n")
+    assert wb.adresses_pairs(lambda argv: sortie) == {ipaddress.ip_address(a) for a in (
+        "192.0.2.5", "198.51.100.9", "2001:db8::7", "203.0.113.4")}
+
+
+def test_pair_sans_interface_avant_toute_interface_ferme(wb):
+    with pytest.raises(wb.GardeIllisible):
+        wb.adresses_pairs(lambda argv: "4M2A=\t198.51.100.9:51822\n")

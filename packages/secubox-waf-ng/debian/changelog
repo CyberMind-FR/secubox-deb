@@ -30,6 +30,9 @@ secubox-waf-ng (1.35.0-1~trixie1) trixie; urgency=medium
     product_absent_probes, honeypot, waf_fingerprint (attaques : un clic) ;
     GET /bans porte le champ famille, lu par le relais (ref #3716).
   * Dépend de secubox-core (>= 1.8.32~) (secubox_core.compte_service) (ref #3716).
+  * waf-blocs : pairs WireGuard lus aussi sur les lignes sans nom d'interface
+    (wireguard-tools n'écrit le nom qu'en tête d'interface) ; sans quoi tout ban
+    de bloc rendait « garde_illisible » dès deux pairs (banc gk6, ref #3716).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 08:56:33 +0100
 

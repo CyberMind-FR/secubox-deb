@@ -214,16 +214,24 @@ def adresses_pairs(executer):
     except Exception as e:
         raise GardeIllisible(f"pairs WireGuard illisibles : {e}") from e
     pairs = set()
+    interface = None
     try:
         for ligne in sortie.splitlines():
             if not ligne.strip():
                 continue
             champs = ligne.split("\t")
-            if len(champs) < 3:
+            # « interface<TAB>clé<TAB>endpoint » ouvre une interface ; wireguard-tools n'écrit le nom que sur la
+            # première ligne de chaque interface : les pairs suivants n'ont que « clé<TAB>endpoint ».
+            if len(champs) == 3:
+                interface = champs[0]
+                endpoint = champs[2].strip()
+            elif len(champs) == 2 and interface is not None:
+                endpoint = champs[1].strip()
+            else:
                 raise ValueError(f"ligne wg illisible : {ligne!r}")
-            if champs[2].strip() == "(none)":
+            if endpoint == "(none)":
                 continue
-            pairs.add(_depli(ipaddress.ip_address(_hote_endpoint(champs[2].strip()))))
+            pairs.add(_depli(ipaddress.ip_address(_hote_endpoint(endpoint))))
     except ValueError as e:
         raise GardeIllisible(f"endpoint WireGuard illisible : {e}") from e
     return pairs
