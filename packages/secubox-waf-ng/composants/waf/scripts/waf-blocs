@@ -1,0 +1,187 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma
+"""waf-blocs : forme des cibles de bannissement (blocs /24) et gardes de protection.
+
+Un bloc ou une adresse n'est jamais banni s'il recoupe le privé/loopback/lien-local,
+une plage protégée déclarée, une adresse de la box ou un pair WireGuard. Toute source
+de protection illisible ferme la porte (GardeIllisible) : jamais d'ouverture par défaut.
+Stdlib seule ; aucun appel shell, arguments passés en liste.
+"""
+import ipaddress
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+# Même liste que `_valide_ip` de wafctl : ni plus, ni moins (pas `is_private`).
+INTERDITS = tuple(ipaddress.ip_network(r) for r in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+    "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/8",
+    "::1/128", "fe80::/10", "fc00::/7", "::/128",
+))
+
+PROTEGEES_ENV = Path("/etc/secubox/waf/protegees.env")
+CLE_PROTEGEES = "SECUBOX_WAF_PROTEGEES"
+
+CODES = {None: 0, "invalide": 1, "privee": 2, "protegee": 3,
+         "box": 4, "pair": 5, "garde_illisible": 6}
+
+
+class GardeIllisible(Exception):
+    """Une source de protection n'a pas pu être lue : on refuse (fail closed)."""
+
+
+def executer(argv):
+    """Exécute argv (liste, sans shell) et rend la sortie standard."""
+    return subprocess.run(argv, check=True, timeout=10,
+                          capture_output=True, text=True).stdout
+
+
+def normaliser_bloc(texte):
+    """IPv4 /24 strict (bits d'hôte nuls) ; ValueError sinon."""
+    if not isinstance(texte, str) or "/" not in texte:
+        raise ValueError("bloc attendu au format a.b.c.0/24")
+    reseau = ipaddress.ip_network(texte.strip(), strict=True)
+    if reseau.version != 4 or reseau.prefixlen != 24:
+        raise ValueError("seul un bloc IPv4 /24 est accepté")
+    return reseau
+
+
+def normaliser_cible(texte):
+    """Bloc /24 si « / » présent, sinon adresse IPv4 ou IPv6 ; ValueError sinon."""
+    if not isinstance(texte, str):
+        raise ValueError("cible invalide")
+    texte = texte.strip()
+    if "/" in texte:
+        return normaliser_bloc(texte)
+    return ipaddress.ip_address(texte)
+
+
+def _recoupe(cible, reseau):
+    if cible.version != reseau.version:
+        return False
+    if isinstance(cible, (ipaddress.IPv4Network, ipaddress.IPv6Network)):
+        return cible.overlaps(reseau)
+    return cible in reseau
+
+
+def _contient(cible, adresse):
+    if cible.version != adresse.version:
+        return False
+    if isinstance(cible, (ipaddress.IPv4Network, ipaddress.IPv6Network)):
+        return adresse in cible
+    return cible == adresse
+
+
+def lire_protegees(chemin):
+    """Plages protégées du fichier env ; absent => [] ; illisible => GardeIllisible."""
+    try:
+        contenu = Path(chemin).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return []
+    except (OSError, UnicodeError) as e:
+        raise GardeIllisible(f"protégées illisibles : {e}") from e
+    reseaux = []
+    for ligne in contenu.splitlines():
+        ligne = ligne.strip()
+        if not ligne or ligne.startswith("#"):
+            continue
+        cle, sep, valeur = ligne.partition("=")
+        if not sep:
+            raise GardeIllisible(f"ligne illisible : {ligne!r}")
+        if cle.strip() != CLE_PROTEGEES:
+            continue
+        valeur = valeur.strip().strip("'\"")
+        for morceau in valeur.split(","):
+            morceau = morceau.strip()
+            if not morceau:
+                continue
+            try:
+                reseaux.append(ipaddress.ip_network(morceau, strict=False))
+            except ValueError as e:
+                raise GardeIllisible(f"plage protégée invalide : {morceau!r}") from e
+    return reseaux
+
+
+def adresses_locales(executer):
+    """Adresses de la box d'après `ip -j addr` ; échec => GardeIllisible."""
+    try:
+        donnees = json.loads(executer(["ip", "-j", "addr"]))
+        adresses = set()
+        for interface in donnees:
+            for info in interface.get("addr_info", []):
+                local = info.get("local")
+                if local:
+                    adresses.add(ipaddress.ip_address(local.split("%")[0]))
+        return adresses
+    except Exception as e:  # toute défaillance : la garde est aveugle
+        raise GardeIllisible(f"adresses locales illisibles : {e}") from e
+
+
+def _hote_endpoint(endpoint):
+    if endpoint.startswith("["):
+        return endpoint[1:endpoint.index("]")]
+    return endpoint.rsplit(":", 1)[0]
+
+
+def adresses_pairs(executer):
+    """Adresses des pairs WireGuard ; `wg` absent => set() ; autre échec => GardeIllisible."""
+    try:
+        sortie = executer(["wg", "show", "all", "endpoints"])
+    except FileNotFoundError:
+        return set()
+    except Exception as e:
+        raise GardeIllisible(f"pairs WireGuard illisibles : {e}") from e
+    pairs = set()
+    try:
+        for ligne in sortie.splitlines():
+            champs = ligne.split("\t")
+            if len(champs) < 3 or champs[2].strip() in ("", "(none)"):
+                continue
+            pairs.add(ipaddress.ip_address(_hote_endpoint(champs[2].strip())))
+    except ValueError as e:
+        raise GardeIllisible(f"endpoint WireGuard illisible : {e}") from e
+    return pairs
+
+
+def motif_refus(cible, protegees, locales, pairs):
+    """"privee" | "protegee" | "box" | "pair" | None, dans cet ordre."""
+    if any(_recoupe(cible, r) for r in INTERDITS):
+        return "privee"
+    if any(_recoupe(cible, r) for r in protegees):
+        return "protegee"
+    if any(_contient(cible, a) for a in locales):
+        return "box"
+    if any(_contient(cible, a) for a in pairs):
+        return "pair"
+    return None
+
+
+def verifier(texte):
+    """Motif de refus d'une cible (texte), ou None ; les trois listes sont relues à chaque appel."""
+    try:
+        cible = normaliser_cible(texte)
+    except ValueError:
+        return "invalide"
+    try:
+        protegees = lire_protegees(PROTEGEES_ENV)
+        locales = adresses_locales(executer)
+        pairs = adresses_pairs(executer)
+    except GardeIllisible:
+        return "garde_illisible"
+    return motif_refus(cible, protegees, locales, pairs)
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 2 or argv[0] != "verifier":
+        print("usage : waf-blocs verifier <cible>", file=sys.stderr)
+        return 1
+    motif = verifier(argv[1])
+    print(json.dumps({"ok": motif is None, "motif": motif}))
+    return CODES[motif]
+
+
+if __name__ == "__main__":
+    sys.exit(main())
