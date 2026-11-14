@@ -45,7 +45,7 @@ def _configure():
 
 # ── versions, dépendance, installation ─────────────────────────────────
 def test_versions_et_dependance():
-    assert CHANGELOG_WAF.read_text().startswith("secubox-waf-ng (1.35.0-1~trixie1) trixie;")
+    assert CHANGELOG_WAF.read_text().startswith("secubox-waf-ng (1.35.3-1~trixie1) trixie;")
     assert "secubox-core (>= 1.8.32~)" in CONTROL_WAF.read_text()
     assert CHANGELOG_CORE.read_text().startswith("secubox-core (1.8.32-1~trixie1) trixie;")
 
@@ -190,7 +190,7 @@ def test_profil_waf_blocs_en_complain_jusqu_au_banc():
     assert "enforce" in p and "gk6" in p                         # la bascule est écrite, avec sa condition
     for regle in ("/usr/sbin/nft ix,", "/usr/bin/ip ix,", "/usr/bin/wg ix,", "/etc/secubox/waf/protegees.env r,",
                   "/usr/share/secubox/waf/blocs.nft r,", "/var/lib/secubox-waf-blocs/ rk,",
-                  "/var/log/secubox/audit.log a,", "capability net_admin,", "network netlink raw,",
+                  "/var/log/secubox/audit.log w,", "capability net_admin,", "network netlink raw,",
                   "deny /etc/secubox/secrets/** rwklx,"):
         assert regle in p, regle
     assert "Ux" not in p and "/bin/sh" not in p and "/usr/bin/bash" not in p

@@ -259,8 +259,13 @@ def _lire_journal() -> List[dict]:
 def _ecrire_journal(entree: dict) -> None:
     """Une ligne ajoutée, écrite et synchronisée. Lève OSError (jamais à travers un lien)."""
     ligne = (json.dumps(entree, ensure_ascii=False) + "\n").encode("utf-8")
-    fd = os.open(JOURNAL_AI, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
+    fd = os.open(JOURNAL_AI, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o660)
     try:
+        # Ouvert au GROUPE secubox-waf, quel que soit l'umask : secubox-waf-ng.service fait `chown -R secubox-waf`
+        # sur ce répertoire à chaque démarrage, et ce service (compte secubox) n'écrit plus alors que par le groupe.
+        st = os.fstat(fd)
+        if st.st_uid == os.geteuid() and st.st_mode & 0o060 != 0o060:
+            os.fchmod(fd, 0o660)
         os.write(fd, ligne)
         os.fsync(fd)
     finally:

@@ -145,6 +145,11 @@ PROTEGEES
        || [ "$(stat -c '%u %a' /var/lib/secubox-waf-blocs)" != "0 700" ]; then
       echo "secubox-waf-ng: ATTENTION — /var/lib/secubox-waf-blocs absent ou pas root 0700 : bans de bloc refusés, secubox-waf-blocs ne démarrera pas (systemd-tmpfiles --create secubox-waf-ng.conf)" >&2
     fi
+    # Journal des gestes de l'IA : écrit par secubox-waf.service (compte secubox) PAR LE GROUPE secubox-waf, puisque
+    # secubox-waf-ng.service le rend à secubox-waf (chown -R) à chaque démarrage. Un journal créé en 0640 faisait
+    # retirer chaque ban aussitôt posé (motif « journal », gk2 le 14/11).
+    _jai=/var/lib/secubox/waf/ai-ban.jsonl
+    [ -f "$_jai" ] && [ ! -L "$_jai" ] && chmod 0660 "$_jai" || true
 
       # ── Secret HMAC des identifiants (#1240, corrélation multi-couche) ────────
       # authwatch apporte au graphe d'acteurs le COMPTE VISÉ — l'axe le plus
