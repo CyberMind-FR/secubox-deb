@@ -7,6 +7,8 @@
 Module autonome (bibliothèque standard seulement) : importé par l'API et par le contrôleur root
 (`demarrer`), il ne doit dépendre ni de FastAPI, ni de httpx, ni de `reglages`.
 """
+import os
+import stat
 import struct
 from pathlib import Path
 
@@ -79,8 +81,17 @@ def lire_meta_gguf(chemin: Path, cles: set[str]) -> dict:
     Renvoie {clé: valeur} pour les clés présentes. Lève ValueError (ou OSError) si le fichier n'est pas
     un GGUF lisible ou dépasse les bornes de lecture."""
     trouve: dict = {}
-    with open(chemin, "rb") as f:
-        taille = Path(chemin).stat().st_size
+    # Jamais bloquant ni suivi de lien : le contrôleur root peut être appelé sur un chemin choisi par autrui.
+    fd = os.open(chemin, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise ValueError("pas un fichier régulier")
+    except BaseException:
+        os.close(fd)
+        raise
+    with os.fdopen(fd, "rb") as f:
+        taille = st.st_size
         lec = _Lecteur(f, taille)
         if lec.lire(4) != b"GGUF":
             raise ValueError("signature GGUF absente")
@@ -108,36 +119,64 @@ def lire_meta_gguf(chemin: Path, cles: set[str]) -> dict:
 _kv_connus: dict = {}
 
 
+def _entier(x):
+    """Entier strictement positif (ni booléen, ni flottant, ni chaîne), sinon None."""
+    return x if isinstance(x, int) and not isinstance(x, bool) and x > 0 else None
+
+
+def _entier_max(x):
+    """Entier positif, ou le plus grand d'une liste d'entiers positifs ; sinon None."""
+    if isinstance(x, list):
+        vals = [_entier(e) for e in x]
+        return max(vals) if vals and None not in vals else None
+    return _entier(x)
+
+
+def _stat_regulier(chemin: Path):
+    """lstat d'un fichier régulier (pas de lien, jamais d'ouverture), sinon None."""
+    try:
+        st = os.lstat(chemin)
+    except OSError:
+        return None
+    return st if stat.S_ISREG(st.st_mode) else None
+
+
 def kv_par_jeton(chemin) -> tuple[int | None, int | None]:
     """(octets de cache par jeton en f16, contexte maximal du modèle), lus dans l'en-tête GGUF ; (None, None) sinon.
-    Modèles hybrides (qwen35…) : seule une couche sur `full_attention_interval` garde un cache d'attention."""
+    Modèles hybrides (qwen35…) : seule une couche sur `full_attention_interval` garde un cache d'attention.
+    Toute métadonnée qui n'est pas un entier positif rend l'en-tête illisible (le contexte maximal seul est ignoré)."""
     chemin = Path(chemin)
-    try:
-        cle = (str(chemin), chemin.stat().st_mtime)
-    except OSError:
+    st = _stat_regulier(chemin)
+    if st is None:
         return None, None
+    cle = (str(chemin), st.st_mtime_ns, st.st_size)
     if cle in _kv_connus:
         return _kv_connus[cle]
     try:
         arch = lire_meta_gguf(chemin, {"general.architecture"})["general.architecture"]
+        if not isinstance(arch, str):
+            raise ValueError("architecture illisible")
         noms = {f"{arch}.{s}" for s in ("block_count", "attention.head_count", "attention.head_count_kv",
                                         "embedding_length", "attention.key_length", "attention.value_length",
                                         "full_attention_interval", "context_length")}
         m = lire_meta_gguf(chemin, noms)
 
         def val(s):
-            v = m.get(f"{arch}.{s}")
-            return max(v) if isinstance(v, list) and v else v
+            return m.get(f"{arch}.{s}")
 
-        couches = int(m[f"{arch}.block_count"])
-        tetes = val("attention.head_count") or 1
-        kv = val("attention.head_count_kv") or tetes
-        emb = val("embedding_length") or 0
-        k = val("attention.key_length") or emb // tetes
-        v = val("attention.value_length") or emb // tetes
-        intervalle = val("full_attention_interval") or 1
+        couches = _entier(val("block_count"))
+        tetes = _entier_max(val("attention.head_count")) if val("attention.head_count") is not None else 1
+        kv = _entier_max(val("attention.head_count_kv")) if val("attention.head_count_kv") is not None else tetes
+        emb = _entier(val("embedding_length")) if val("embedding_length") is not None else 0
+        kl, vl = val("attention.key_length"), val("attention.value_length")
+        k = _entier(kl) if kl is not None else (emb // tetes if tetes and emb is not None else None)
+        v = _entier(vl) if vl is not None else (emb // tetes if tetes and emb is not None else None)
+        iv = val("full_attention_interval")
+        intervalle = _entier(iv) if iv is not None else 1
+        if None in (couches, tetes, kv, k, v, intervalle):
+            raise ValueError("métadonnées inexploitables")
         attention = couches // intervalle if intervalle > 1 else couches
-        res = (attention * kv * (k + v) * 2 or None, val("context_length"))
+        res = (attention * kv * (k + v) * 2 or None, _entier(val("context_length")))
     except Exception:  # noqa: BLE001 — un en-tête illisible ramène au contexte minimal, jamais une panne
         res = (None, None)
     _kv_connus[cle] = res
@@ -147,15 +186,17 @@ def kv_par_jeton(chemin) -> tuple[int | None, int | None]:
 def contexte_auto(chemin, dispo_mo: int, memoire_max_mo: int, reserve_mo: int = 512) -> int:
     """Plus grande taille de contexte (en jetons, multiple de 1024) qui tient en mémoire, entre 4 096 et 32 768.
 
-    `dispo_mo` : mémoire vive disponible sur la machine (MemAvailable), en Mo ; `reserve_mo` en est retranché
-    pour garder de l'air au poste. `memoire_max_mo` : plafond mémoire du moteur (MemoryMax), en Mo, dont le
-    poids du modèle (taille du fichier) est retranché. Le budget du cache est le plus petit des deux ; le
-    résultat est aussi plafonné par le contexte maximal du modèle. En-tête illisible : 4 096."""
+    `dispo_mo` : mémoire vive disponible (MemAvailable) en Mo, mesurée moteur arrêté ; on en retranche
+    `reserve_mo` (air laissé au poste) puis le poids du modèle (taille du fichier). `memoire_max_mo` : plafond
+    mémoire du moteur (MemoryMax) en Mo, dont on retranche aussi le poids. Le budget du cache est le plus petit
+    des deux, le résultat est plafonné par le contexte maximal du modèle. En-tête illisible, fichier non
+    régulier ou absent : 4 096. Ne lève jamais."""
     chemin = Path(chemin)
     par_jeton, ctx_modele = kv_par_jeton(chemin)
-    if not par_jeton:
+    st = _stat_regulier(chemin)
+    if not par_jeton or st is None:
         return CTX_AUTO_MIN
-    poids_mo = chemin.stat().st_size / 1024 ** 2
-    budget_mo = min(dispo_mo - reserve_mo, memoire_max_mo - poids_mo)
+    poids_mo = st.st_size / 1024 ** 2
+    budget_mo = min(dispo_mo - reserve_mo - poids_mo, memoire_max_mo - poids_mo)
     ctx = int(budget_mo * 1024 ** 2 // par_jeton) // 1024 * 1024 if budget_mo > 0 else 0
     return max(CTX_AUTO_MIN, min(ctx, CTX_AUTO_MAX, ctx_modele or CTX_AUTO_MAX))
