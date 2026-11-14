@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-14 — Conseils de l'IA applicables : bans d'office des cas sûrs, un clic sinon (ref #3716)
+
+- gk2 (`secubox-waf-ng` 1.35.1, `secubox-core` 1.8.32) : bans de bloc /24 dans une table nft à part (`inet secubox_waf_blocs`, `waf-blocs` root : privé, `protegees.env`, adresses de la box, pairs WireGuard ; rejoué au rechargement) ; compte de service `ai-ban` (jeton Ed25519 d'une requête, 30 s, rejeu et audience refusés ; `wafctl cle-ai-ban`) ; routes `/api/v1/waf/ai/{ban,unban,etat}` servies par `secubox-waf.service` seul (drapeau `SECUBOX_WAF_GESTES_IA=1`, plus de relance d'agrégateur), plafonds 5/h et 20/j d'office, 30/h et 100/j au total, audit `ai-ban`/`ai-unban`/`ai-ban-refus`.
+- Décision du propriétaire « automatisme plus fréquent » : catégorie d'un ban tirée de `bans.jsonl` (historique depuis le 20/08, lu par incréments) au lieu des 6 h du journal des menaces ; cas sûr = ≥ 20 adresses du bloc bannies, toutes de familles de reconnaissance (scanners, recon_crawler, host_anomaly, leurre, product_absent_probes, honeypot, waf_fingerprint) ; attaques en un clic. Mesuré le 14/11 : 5 blocs gk2 le deviendraient (0 avant).
+- Relais du POC gk0 : catalogue fermé vérifié par le relais, cas sûr décidé par le relais ET recontrôlé par gk2, journal des gestes, page Menaces (conseils, Réglages, graphiques). Clé `~/.config/secubox-ai/ai-ban/` (gk0 ne laisse pas traverser `/etc/secubox/secrets`), `gestes.toml` : 82.67.100.75/32, 2a01:e0a:dec:c4e0::/60, pair itinérant 176.149.248.27/32.
+- Revue finale : le WAF de gk2 n'est pas monté par l'agrégateur (entrée `secubox-waf` orpheline) → gestes servis par `secubox-waf.service` ; `NoNewPrivileges=false` dans l'unité (gk2 ne marchait que par un `allow-sudo.conf` posé à la main).
+- Banc gk6 vert (paquets non publiés) : persistance du bloc, refus, clic, annulation, auto hors cas sûr, plafond, rejeu/audience, relais en copie jetable (`SECUBOX_AI_BANC=1`), AppArmor 0 refus. Deux défauts de `waf-blocs` trouvés sur le vrai `wg show all endpoints` (nom d'interface absent des pairs suivants, au banc ; interface sans pair, au premier essai sur gk2) → tout ban de bloc rendait `garde_illisible` ; corrigés (1.35.0, 1.35.1).
+- Déployé gk2 le 14/11 : essai unique 203.0.113.0/24 1 h posé puis annulé, lignes d'audit. Relais relancé : mode auto **suspendu** — c'est le propriétaire qui lève la suspension ; `closes` après une journée sans anomalie.
+- Suivis : relais lit `/waf/bans` en cache ~1 min (gk2 tranche) ; mode tableau de bord relu seulement au redémarrage ; API WAF sans profil AppArmor ; `wafctl ban` manuel hérite de la famille du dernier ban sbxwaf ; POC : 503 `wafctl` compté refus certain ; gk6 : /boot plein, initramfs-tools à demi configuré (démarrage intact).
+
 ## 2026-11-12 — Leurres du WAF : apprentissage, promotion vers le bannissement, retrait (closes #3584, étape B)
 
 - Option 1 du propriétaire (sans toucher au moteur Go ni à secubox-waf-ng) : `secubox-security-posture` 2.6.0 (PR #3681).
