@@ -557,8 +557,8 @@ def test_echap_ferme_d_abord_le_dialogue():
 
     def sc(pg, _):
         ecrits = _ecrits(pg)
-        pg.check("#flotte-liste label:has-text('gk7') input")
         pg.click("#macros-liste button[aria-label='Ouvrir Redémarrage contrôlé']")
+        pg.check("#ed-cibles input[data-cle='maillage:gk7']")
         nom = pg.input_value("[aria-label='Nom de la macro']")
         pg.click("#ed-enregistrer-lancer")
         pg.wait_for_selector("#lancement:not([hidden])")
@@ -641,3 +641,62 @@ def test_editeur_ajout_et_ordre_par_glisser():
     (un, deux, trois, renommer), erreurs, natifs, _ = _nav(sc)
     assert un == ["action"] and deux == ["releve", "action"] and trois == ["action", "releve"]
     assert renommer and erreurs == [] and natifs == []
+
+
+# ---- #3702 tâche 8, correction 1 : « Enregistrer et lancer » ne vise que les cibles de la macro ----
+MACRO_MUETTE = {"id": "m3", "nom": "Veille gk12", "livree": False, "cibles": ["maillage:gk12"], "programmation": None, "cree_le": 1,
+                "maj_le": 1, "auteur": "admin", "etapes": [{"type": "releve", "duree_s": 60, "nom": "diag"}]}
+
+
+def test_enregistrer_et_lancer_jamais_hors_cibles():
+    api = _api_simulee(macros=MACROS + [MACRO_MUETTE], ecritures={"/lancer": (202, {"execution": 3}), "/macros/m3": (200, {"id": "m3"})})
+
+    def sc(pg, _):
+        ecrits = _ecrits(pg)
+        pg.check("#flotte-liste label:has-text('gk7') input")
+        pg.click("#macros-liste button[aria-label='Ouvrir Veille gk12']")
+        pg.click("#ed-enregistrer-lancer")
+        pg.wait_for_timeout(300)
+        muette = (pg.inner_text("#ed-msg"), pg.is_visible("#editeur"), pg.is_visible("#lancement"))
+        pg.click("#ed-groupes [data-vider]")
+        pg.click("#ed-enregistrer-lancer")
+        pg.wait_for_timeout(300)
+        vide = (pg.inner_text("#ed-msg"), pg.is_visible("#editeur"))
+        return muette, vide, [(m, c) for m, c, _ in ecrits]
+    ((msg1, ouvert1, dlg), (msg2, ouvert2), ecrits), erreurs, natifs, _ = _nav(sc, api=api)
+    assert "gk12" in msg1 and "hors ligne" in msg1 and ouvert1 and not dlg
+    assert "aucune cible" in msg2.lower() and ouvert2
+    assert not any(c.endswith("/lancer") for _, c in ecrits) and ecrits[0] == ("PUT", "/macros/m3") and erreurs == [] and natifs == []
+
+
+def test_lancement_depuis_l_editeur_ferme_l_editeur():
+    api = _api_simulee(flux=_sse("etat", {"execution": 9, "connecte": True, "etat": "en_cours"}),
+                       ecritures={"/macros/m1/lancer": (202, {"execution": 9}), "/macros/m1": (200, {"id": "m1"})})
+
+    def sc(pg, _):
+        ecrits = _ecrits(pg)
+        pg.check("#flotte-liste label:has-text('gk7') input")
+        pg.click("#macros-liste button[aria-label='Ouvrir Nuit tranquille']")
+        pg.click("#ed-enregistrer-lancer")
+        pg.wait_for_timeout(400)
+        return pg.is_visible("#editeur"), pg.is_visible("#pan-journal"), ecrits
+    (ouvert, journal, ecrits), erreurs, natifs, _ = _nav(sc, api=api)
+    assert ecrits[-1] == ("POST", "/macros/m1/lancer", {"cibles": ["maillage:gk6"], "confirmations": {}, "support": {}})
+    assert not ouvert and journal and erreurs == [] and natifs == []
+
+
+def test_copier_avertit_des_modifications_non_enregistrees():
+    api = _api_simulee(ecritures={"/copier": (201, {"id": "m5"})})
+
+    def sc(pg, _):
+        ecrits = _ecrits(pg)
+        pg.click("#macros-liste button[aria-label='Ouvrir Nuit tranquille']")
+        pg.fill("[aria-label='Nom de la macro']", "Nuit modifiée")
+        pg.click("#ed-copier")
+        pg.wait_for_timeout(200)
+        avant = ([c for _, c, _ in ecrits], pg.inner_text("#ed-msg"))
+        pg.click("#ed-copier")
+        pg.wait_for_timeout(300)
+        return avant, [c for _, c, _ in ecrits]
+    ((avant, msg), apres), erreurs, natifs, _ = _nav(sc, api=api)
+    assert avant == [] and "non enregistrées" in msg and apres == ["/macros/m1/copier"] and erreurs == [] and natifs == []

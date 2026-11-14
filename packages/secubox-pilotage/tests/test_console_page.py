@@ -99,3 +99,17 @@ def test_ecran_de_lancement_et_editeur_accessibles():
     # ordre au clavier : « Monter / Descendre / Supprimer l'étape N » ; ajout par glisser
     for f in ("function ouvrirEditeur(", "'Monter'", "'Descendre'", "'Supprimer'", "' l\\'étape '", "draggable"):
         assert f in src, f
+
+
+def _objet_js(nom: str) -> dict:
+    """Objet littéral `const NOM = { 'clé': valeur, … };` de la page : chaînes entre apostrophes ou entiers."""
+    corps = re.search(r"const " + nom + r" = \{(.*?)\};", _src(), flags=re.S).group(1)
+    paires = re.findall(r"'((?:[^'\\]|\\.)*)'\s*:\s*('(?:[^'\\]|\\.)*'|\d+)", corps)
+    return {k: (int(v) if v.isdigit() else v[1:-1].replace("\\'", "'")) for k, v in paires}
+
+
+def test_estimations_locales_identiques_a_l_api():
+    """Le plan local (action seule, démonstration) reprend les constantes de pilotage/macros.py : toute dérive échoue ici."""
+    from pilotage import macros as MAC
+    assert _objet_js("ESTIMATION_S") == MAC.ESTIMATION_S
+    assert _objet_js("COUPURES") == MAC._COUPURES

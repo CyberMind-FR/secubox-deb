@@ -577,13 +577,19 @@
             ouvrirLancement({ titre: titre, chemin: '/executions/action', corps: { action: cle, args: args }, cibles: cib, forte: a.forte });
         }
         function macroForte(m) { return (m.etapes || []).some(e => e && e.type === 'action' && action(e.action) && action(e.action).forte); }
-        function lancerMacro(m, cibles) {
+        // `cibles` imposées (éditeur : les cibles enregistrées de la macro, jamais d'autres) ; `depuisEditeur` : l'éditeur se ferme une fois
+        // le lancement accepté (l'exécution est suivie dans le journal)
+        function lancerMacro(m, cibles, depuisEditeur) {
             let cib = cibles && cibles.length ? cibles : ciblesCochees();
             if (!cib.length) cib = (m.cibles || []).map(boxDe).filter(b => b && b.cochable);
             if (!cib.length) return message('Cochez au moins une box en ligne pour lancer « ' + m.nom + ' ».', true);
             const chemin = '/macros/' + enc(m.id) + '/lancer', forte = macroForte(m);
-            if (!forte && cib.length === 1) return envoyer(chemin, {}, cib, {}, m.nom);
-            ouvrirLancement({ titre: m.nom, chemin: chemin, corps: {}, cibles: cib, forte: forte, macro: m });
+            if (!forte && cib.length === 1) return envoyer(chemin, {}, cib, {}, m.nom).then(err => { apresLancementEditeur(depuisEditeur, err); return err; });
+            ouvrirLancement({ titre: m.nom, chemin: chemin, corps: {}, cibles: cib, forte: forte, macro: m, depuisEditeur: !!depuisEditeur });
+        }
+        function apresLancementEditeur(depuisEditeur, err) {
+            if (!depuisEditeur || !ed) return;
+            if (err) msgEd(err, true); else fermerEditeur(true);
         }
         // box cliente : la session de support ouverte est jointe ; sans elle, l'API refuse et son message est affiché
         async function supportsOuverts(cibles) {
@@ -744,7 +750,7 @@
             $('lancement-ok').disabled = true;
             const err = p.manuelle ? await envoyerManuelle(p, conf) : await envoyer(p.chemin, p.corps, p.cibles, conf, p.titre);
             if (planLancement !== p) return;
-            if (err) { $('lancement-msg').textContent = err; majLancer(); } else fermerLancement();
+            if (err) { $('lancement-msg').textContent = err; majLancer(); } else { fermerLancement(); apresLancementEditeur(p.depuisEditeur, ''); }
         });
 
         async function releve() {
@@ -837,7 +843,7 @@
             rendreMacros(); hauteur();
             return true;
         }
-        function sale() { ed.sale = true; ed.quitter = false; if (ed.supprimer) { ed.supprimer = false; rendrePied(); } }
+        function sale() { ed.sale = true; ed.quitter = false; ed.copier = false; if (ed.supprimer) { ed.supprimer = false; rendrePied(); } }
         function rendreEditeur() {
             $('editeur').classList.toggle('lecture', ed.livree);
             $('ed-sur').textContent = ed.livree ? 'MACRO LIVRÉE · LECTURE SEULE' : ed.id ? 'MACRO' : 'NOUVELLE MACRO';
@@ -1041,7 +1047,7 @@
             ed.cibles.filter(c => !connues.has(c)).forEach(c => { const l = el('label'); l.append(el('span', 'e-orange', c + ' · inconnue de la flotte')); z.append(l); });
             const n = ed.cibles.length, cl = ed.cibles.map(boxDe).filter(b => b && cliente(b)).length;
             $('ed-cibles-note').textContent = n ? n + (n > 1 ? ' cibles' : ' cible') + (cl ? ' dont ' + cl + ' cliente' + (cl > 1 ? 's' : '') : ' · box du propriétaire')
-                : 'Aucune cible enregistrée : la macro vise les box cochées dans la Flotte au lancement.';
+                : 'Aucune cible : à cocher ici pour « Enregistrer et lancer » (depuis la liste des macros, « Lancer » vise les box cochées dans la Flotte).';
             const s = $('ed-sim-box'), avant = s.value; clear(s);
             boxes.filter(b => b.cochable).forEach(b => { const o = el('option', null, b.nom); o.value = b.cle; s.append(o); });
             const pref = ed.cibles.find(c => boxDe(c) && boxDe(c).cochable);
@@ -1110,7 +1116,19 @@
             return { nom: ed.nom.trim(), etapes: ed.etapes.map(corpsEtape), cibles: ed.cibles.slice(),
                 programmation: ed.quand === 'nuit' && !blocageNuit() ? { quotidien: ed.heure } : null };
         }
-        function ciblesEd() { const c = ed.cibles.map(boxDe).filter(b => b && b.cochable); return c.length ? c : ciblesCochees(); }
+        // cibles du lancement depuis l'éditeur : celles de la macro, toutes, ou rien ; jamais les box cochées dans la Flotte (cachée ici)
+        function ciblesEd() {
+            if (!ed.cibles.length) return { refus: 'Aucune cible enregistrée : cochez les box visées dans « Cibles », puis enregistrez et lancez.' };
+            const inconnues = ed.cibles.filter(c => !boxDe(c)), muettes = ed.cibles.map(boxDe).filter(b => b && !b.cochable);
+            if (inconnues.length) return { refus: 'Lancement refusé : ' + inconnues.join(', ') + ' inconnue(s) de la flotte.' };
+            if (muettes.length) return { refus: 'Lancement refusé : ' + muettes.map(b => b.nom).join(', ') + (muettes.length > 1 ? ' hors ligne' : ' hors ligne (muette)') + ' ; aucune box n\'est touchée.' };
+            return { boites: ed.cibles.map(boxDe) };
+        }
+        function lancerDepuisEditeur(m) {
+            const c = ciblesEd();
+            if (c.refus) return msgEd(c.refus, true);
+            lancerMacro(m, c.boites, true);
+        }
         async function enregistrerEd(lancer) {
             if (!ed || ed.livree) return;
             const corps = corpsMacro(), cur = ed;
@@ -1118,7 +1136,7 @@
             if (!corps.etapes.length) return msgEd('Ajoutez au moins une étape.', true);
             if (DEMO) {
                 msgEd('Démonstration : la macro n\'est pas enregistrée.');
-                if (lancer) lancerMacro(Object.assign({ livree: false }, corps, { id: ed.id || 'demo-nouvelle', locale: true }), ciblesEd());
+                if (lancer) lancerDepuisEditeur(Object.assign({ livree: false }, corps, { id: ed.id || 'demo-nouvelle', locale: true }));
                 return;
             }
             $('ed-enregistrer').disabled = $('ed-enregistrer-lancer').disabled = true;
@@ -1129,7 +1147,7 @@
                 msgEd('Macro « ' + corps.nom + ' » enregistrée.');
                 rendreEditeur();
                 charger().catch(() => { /* relu au prochain tour */ });
-                if (lancer) lancerMacro(Object.assign({ livree: false }, corps, { id: ed.id }), ciblesEd());
+                if (lancer) lancerDepuisEditeur(Object.assign({ livree: false }, corps, { id: ed.id }));
             } catch (e) { if (ed === cur) msgEd(e.detail || e.message, true); }
             finally { $('ed-enregistrer').disabled = $('ed-enregistrer-lancer').disabled = false; }
         }
@@ -1148,6 +1166,10 @@
         });
         $('ed-copier').addEventListener('click', async () => {
             if (!ed || !ed.id) return;
+            if (ed.sale && !ed.copier) {   // même règle que « Retour » : un second geste avant d'abandonner le brouillon
+                ed.copier = true;
+                return msgEd('Modifications non enregistrées : « Copier » copie la version enregistrée et les abandonne. Cliquez encore sur « Copier » pour confirmer.', true);
+            }
             if (DEMO) return msgEd('Démonstration : aucune copie enregistrée.');
             const cur = ed;
             try {
