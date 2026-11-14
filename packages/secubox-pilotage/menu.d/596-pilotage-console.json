@@ -8,6 +8,6 @@
   "description": "Actions, macros et journal en direct sur plusieurs box du parc",
   "requires": ["secubox-pilotage"],
   "theme": "mesh",
-  "www": "pilotage",
+  "www": "pilotage/console",
   "unite": "pilotage"
 }

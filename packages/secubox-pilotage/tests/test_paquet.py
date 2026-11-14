@@ -418,8 +418,10 @@ def test_console_installee_et_au_menu():
     m = json.loads(lire("menu.d/596-pilotage-console.json"))
     assert m["id"] == "pilotage-console" and m["path"] == "/pilotage/console/" and m["order"] == 596
     assert m["requires"] == ["secubox-pilotage"] and m["category"] == "mesh" and m["theme"] == "mesh"
-    assert (m["www"], m["unite"]) == ("pilotage", "pilotage")
-    assert (ICI / "www/pilotage/console/index.html").is_file()
+    assert (m["www"], m["unite"]) == ("pilotage/console", "pilotage")
+    # Le hub ne met une entrée au menu que si www/<www>/index.html existe (_check_module_installed) :
+    # www/pilotage/ n'a pas de page à sa racine, l'entrée disparaissait (constaté sur gk2, 0.7.0).
+    assert (ICI / "www" / m["www"] / "index.html").is_file()
     esp = json.loads(lire("secubox-hub/espaces.json", DEPOT / "packages"))
     assert esp["modules"]["pilotage-console"] == {"espace": "systeme", "objet": "BOX"}
 

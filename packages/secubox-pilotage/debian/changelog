@@ -1,3 +1,11 @@
+secubox-pilotage (0.7.1-1~trixie1) trixie; urgency=medium
+
+  * Menu : l'entrée « Console de pilotage » nomme www/pilotage/console ; le hub
+    ne garde une entrée que si son dossier www a un index.html à la racine, et
+    www/pilotage/ n'en a pas — l'entrée manquait sur gk2 en 0.7.0 (ref #3702).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 12:33:05 +0100
+
 secubox-pilotage (0.7.0-1~trixie1) trixie; urgency=medium
 
   * Console de pilotage (#3702) : actions, macros et journal en direct sur plusieurs box du parc, à l'entrée de menu
