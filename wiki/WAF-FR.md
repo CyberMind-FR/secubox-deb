@@ -80,6 +80,40 @@ reconstruite localement.
   un service sans motif vérifié y reste `"actif": false`, avec la raison écrite,
   plutôt qu'avec un motif deviné.
 
+## Bans de bloc et compte ai-ban
+
+Quand une même plage /24 envoie des dizaines de scanners, bannir adresse par
+adresse ne suit pas. Depuis `secubox-waf-ng` 1.35.0, un bloc /24 se bannit en
+une fois, dans une table nft **à part**, `inet secubox_waf_blocs` : sbxwaf vide
+et recrée la sienne à chaque démarrage, celle-ci n'est touchée que par
+`waf-blocs`, en root.
+
+- **Jamais un bloc qui touche la box** : ni le privé, ni une plage de
+  `/etc/secubox/waf/protegees.env`, ni une adresse d'interface, ni un pair
+  WireGuard. Derrière un NAT, l'adresse publique n'est sur aucune interface :
+  tant que l'administrateur ne l'a pas écrite dans `protegees.env`, **aucun bloc
+  n'est banni**. Le paquet sème un fichier commenté qui dit quoi écrire.
+- **Un rechargement du pare-feu ne perd rien** : `secubox-waf-blocs` rejoue les
+  blocs avec leur temps restant, et une veille de 60 s répare un `nft -f` direct.
+- **Seuls les flux ouverts par le bloc sont coupés** : les réponses aux
+  connexions que la box ouvre elle-même (DNS, mises à jour, certificats) passent.
+- À la main : `wafctl ban-bloc 203.0.113.0/24 4h`, `wafctl unban-bloc …`,
+  `wafctl blocs`.
+
+Une box d'IA peut aussi **proposer** ces bans. Elle ne touche au pare-feu que
+par trois routes (`/api/v1/waf/ai/ban`, `/ai/unban`, `/ai/etat`) et un compte
+de service, `ai-ban`, qui n'a pas de mot de passe : chaque requête porte un jeton
+signé par sa clé privée, valable une minute, une seule fois, et lié au contenu
+exact de la demande. La box ne garde que la clé publique, posée par le
+propriétaire (`sudo wafctl cle-ai-ban ajouter`). La révoquer tient en une
+commande : `sudo wafctl cle-ai-ban retirer --toutes`.
+
+Les bornes sont vérifiées sur la box, pas chez l'IA : un bloc d'office n'est
+posé que si au moins 20 de ses adresses sont déjà bannies pour du balayage, pour
+24 h au plus, et jamais plus de 5 par heure ; l'IA ne peut lever que ses propres
+bans, et jamais un ban que le WAF ou l'administrateur a posé ensuite. Chaque
+geste est une ligne du journal d'audit.
+
 ## Voir ce qui se passe
 
 `https://waf.<box>/` — LAN uniquement. Attaquants, pays, noms non résolus par
