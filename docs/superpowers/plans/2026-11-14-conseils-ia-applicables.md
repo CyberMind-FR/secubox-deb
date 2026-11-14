@@ -711,7 +711,7 @@ sur gk6, sans `timeout`) — publier dans `apt.secubox.in` mettrait le code deva
   usage ; jamais dans un TOML. Rotation : nouvelle paire sur gk3, `cle-ai-ban ajouter` sur gk2, bascule, retrait de l'ancienne
   (celle de gk0 est retirée le jour où gk3 prend le relais).
 - Routes : celles de la Task 7 sous `/api/v1/ai/menaces/*`, gardées par `require_jwt` (administrateur réel) au lieu de `_local`
-  + `X-SBX-Geste` ; réglages `mode`/`suspendu` dans le TOML de secubox-ai par double tampon ; journal des gestes dans
+  et `X-SBX-Geste` ; réglages `mode`/`suspendu` dans le TOML de secubox-ai par double tampon ; journal des gestes dans
   `/var/lib/secubox-ai/gestes.jsonl` et chaque geste aussi dans l'`audit.log` local.
 - Appels à gk2 : `httpx.AsyncClient` avec la CA normale ; `aud` lu de la configuration (nom de la box cible), pas en dur.
 - Profil AppArmor de l'API secubox-ai : lecture de la clé, réseau sortant vers gk2 seulement.
