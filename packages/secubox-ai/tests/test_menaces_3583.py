@@ -658,3 +658,39 @@ def test_instantane_du_futur_ecarte(env):
          {"quand": maintenant + 60, "menaces_jour": 2, "bans": 2, "categories": {}}]))
     menaces.charger_instantanes()
     assert [x["bans"] for x in menaces.INSTANTANES] == [2]
+
+
+# ---- Pourcentages : une part du relevé, jamais un compte (#3583, vu le 14/11/2026) ----
+def _releve_pct(**extra):
+    return {"parts_alertes_pct": {"sasl_failed": 46.6}, "evolution_1h": {"disponible": True},
+            "par_categorie": {"sasl_failed": 60, "scanners": 48}, **extra}
+
+
+NOTE_PCT = "pourcentages absents du relevé (des comptes donnés pour des parts ?)"
+
+
+def test_controle_pct_compte_pris_pour_part():
+    r = {"evolution_1h": {"disponible": True, "par_categorie": {"sasl_failed": 60, "scanners": 48}}}
+    t = menaces.controler_resume("Une hausse de +60 % sur les échecs SASL et de +48 % sur les scanners.", r)
+    assert NOTE_PCT + " : 48 %, 60 %" in t
+    assert "chiffres absents" not in t
+
+
+def test_controle_pct_part_acceptee_virgule_et_arrondi():
+    r = _releve_pct()
+    assert menaces.controler_resume("Les échecs SASL pèsent 46,6 % des alertes.", r).count("⚠") == 0
+    assert menaces.controler_resume("Environ 47 % des alertes.", r).count("⚠") == 0
+    assert menaces.controler_resume("Environ 47% des alertes.", r).count("⚠") == 0
+
+
+def test_controle_pct_valeur_seulement_comptee():
+    r = {"par_categorie": {"x": 46.6}, "evolution_1h": {"disponible": True}}
+    assert NOTE_PCT + " : 46,6 %" in menaces.controler_resume("Soit 46,6 % des alertes.", r)
+
+
+@pytest.mark.asyncio
+async def test_demander_controle_pct(gk2, monkeypatch):
+    moteur_simule(monkeypatch, "Une hausse de +77 % des alertes.")
+    r = await appeler("POST", "/menaces/demander", json={"question": "Que se passe-t-il ?"})
+    t = await attendre(r.json()["tache"])
+    assert NOTE_PCT + " : 77 %" in t["resultat"]

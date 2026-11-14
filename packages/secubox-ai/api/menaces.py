@@ -290,6 +290,26 @@ def controler_resume(texte: str, releve: dict) -> str:
     notes = []
     if absents:
         notes.append("chiffres absents du relevé : " + ", ".join(absents[:8]))
+    # Un nombre suivi de « % » doit être une PART du relevé (clés en pct / part*), pas un compte : « +60 % » pour
+    # « sasl_failed +60 » (60 alertes de plus) est une invention d'unité (vu le 14/11/2026).
+    parts: list[float] = []
+
+    def _parts(x, part=False):   # `part` : une clé ancêtre en pct / part* (les sous-clés sont des catégories)
+        if isinstance(x, dict):
+            for k, v in x.items():
+                _parts(v, part or "pct" in str(k) or str(k).startswith("part"))
+        elif isinstance(x, list):
+            for v in x:
+                _parts(v, part)
+        elif part and isinstance(x, (int, float)) and not isinstance(x, bool):
+            parts.append(float(x))
+    _parts(_visible(releve))
+    faux_pct = sorted({m.group(1) for m in re.finditer(r"(\d+(?:[.,]\d+)?)\s*%", propre)
+                       if not any(abs(float(m.group(1).replace(",", ".")) - v) <= 0.5 for v in parts)},
+                      key=lambda n: float(n.replace(",", ".")))
+    if faux_pct:
+        notes.append("pourcentages absents du relevé (des comptes donnés pour des parts ?) : "
+                     + ", ".join(f + " %" for f in faux_pct[:8]))
     if not (releve.get("evolution_1h") or {}).get("disponible") and re.search(
             r"hausse|baisse|augment|diminu|recul|progress|explos|en forte|r[ée]cemment|nouve(?:au|lle|aux)s?\b|r[ée]cent",
             texte, re.I):
