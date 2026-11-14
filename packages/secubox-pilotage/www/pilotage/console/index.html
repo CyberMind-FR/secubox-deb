@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — Console de pilotage du maître (#3702), profil Aurora (.claude/AURORA-REFERENCE.md).
+  DONNÉES RÉELLES : /api/v1/pilotage (flotte, catalogue, macros, exécutions, flux d'une exécution) ; toutes les routes exigent un
+  administrateur réel. Liste fermée : un bouton par action du catalogue, aucune commande libre. XSS-strict : toute valeur de l'API est
+  posée par createElement/textContent, jamais en HTML ; aucun attribut d'événement en ligne.
+  Flux : fetch + ReadableStream avec Authorization ; la page s'abonne au flux de l'exécution AVANT de la relire (rien de perdu entre
+  les deux) ; reprise après coupure seulement si l'exécution est encore en cours. Zoom des panneaux : mise en page seule, aucun appel.
+  ?embed=1 : sans menu ; ?demo=1 : données fictives, rien n'est envoyé.
+-->
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Console de pilotage</title>
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
+    <style>
+        :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+          --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+        *{box-sizing:border-box}
+        html,body{margin:0;min-height:100%}
+        body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+             color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35;font-variant-numeric:tabular-nums}
+        body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+        .principal{min-width:0}
+        body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+        @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+        body.mobile-mode:not(.emb) .principal{margin-left:0}
+        .cadre{container-type:inline-size;container-name:a;padding:10px}
+        .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;align-content:start}
+        .app>*{min-width:0}
+        .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+        .marque{display:flex;gap:10px;align-items:center;min-width:0} .marque b{font-size:1.35rem;font-weight:800;display:block} .marque small{color:var(--cyan);font-size:.72rem;letter-spacing:.06em;overflow-wrap:anywhere}
+        .commande{flex:1 1 220px;min-width:0;display:flex;align-items:center;gap:8px;min-height:42px;padding:0 10px;border-radius:10px;border:1px solid var(--trait2);background:rgba(6,13,27,.8)}
+        .commande:focus-within{border-color:var(--cyan)}
+        .commande input{flex:1;min-width:0;background:transparent;border:0;color:var(--texte);font:inherit;outline:none}
+        kbd{font:inherit;font-size:.68rem;color:var(--doux);border:1px solid var(--trait2);border-radius:5px;padding:1px 5px;white-space:nowrap}
+        .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.72rem;font-weight:700;white-space:nowrap}
+        .actif.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)} .actif.neutre{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+        .btn{font:inherit;font-size:.78rem;min-height:34px;padding:4px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer}
+        .btn:hover{border-color:var(--cyan)} .btn:focus-visible,.tuile:focus-visible,.lien:focus-visible,.puce:focus-visible{outline:2px solid var(--cyan);outline-offset:2px} .btn:disabled{opacity:.5;cursor:default}
+        .btn.primaire{background:rgba(41,182,246,.18);border-color:var(--cyan);color:#d9f2ff}
+        .btn.forte{border-color:rgba(255,159,28,.7);background:rgba(255,159,28,.10)} .btn.danger{border-color:rgba(255,77,94,.7);background:rgba(255,77,94,.10)}
+        .btn.sm{min-height:30px;padding:2px 9px;font-size:.72rem}
+        .icone{min-width:34px;display:inline-flex;align-items:center;justify-content:center;padding:4px}
+        .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+        .info{background:var(--cyan);color:#04202a;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem} .info a{color:#04202a}
+        .message{font-size:.82rem;min-height:0;overflow-wrap:anywhere} .message:empty{display:none}
+        .message{border:1px solid var(--trait2);border-radius:10px;padding:7px 12px;background:rgba(41,182,246,.08)} .message.grave{border-color:var(--rouge);background:rgba(255,77,94,.10);color:#ffd9de}
+        #panneaux{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 100%} #panneaux[hidden]{display:none}
+        #panneaux .btn[aria-current="true"]{background:var(--cyan);border-color:var(--cyan);color:#04202a;font-weight:600}
+        /* suggestions de la barre de commande */
+        .suggestions{border:1px solid var(--trait2);border-radius:12px;background:rgba(4,10,21,.92);padding:8px}
+        .suggestions[hidden]{display:none}
+        .sugg-titre{font-size:.68rem;letter-spacing:.06em;color:var(--faible);margin:0 0 6px;overflow-wrap:anywhere}
+        .sugg-liste{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+        .sugg{width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;text-align:left;font:inherit;color:var(--texte);background:transparent;border:1px solid transparent;border-radius:9px;padding:6px 8px;cursor:pointer;min-height:40px}
+        .sugg:hover,.sugg:focus-visible,.sugg.premiere{border-color:var(--trait2);background:rgba(41,182,246,.08);outline:none}
+        .sugg .type{font-size:.66rem;border:1px solid var(--trait2);border-radius:999px;padding:0 7px;color:var(--doux)} .sugg .type.macro{color:var(--violet);border-color:var(--violet)}
+        .sugg .sous{color:var(--doux);font-size:.74rem;flex:1 1 160px;min-width:0;overflow-wrap:anywhere}
+        /* grille de la console */
+        .grille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);align-items:start}
+        .colonne{display:grid;gap:10px;min-width:0;align-content:start}
+        @container a (min-width:760px){.grille{grid-template-columns:240px minmax(0,1fr)} .colonne.droite{grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @container a (min-width:1100px){.grille{grid-template-columns:250px minmax(0,1fr) 290px} .colonne.droite{grid-column:auto;grid-template-columns:minmax(0,1fr)}}
+        .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+        .pan-tete{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:8px}
+        .pan-tete h3{margin:0;font-size:.88rem;flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+        .note{color:var(--faible);font-size:.72rem}
+        .vide{color:var(--faible);font-size:.78rem;padding:4px 0}
+        /* zoom des panneaux */
+        .console.zoom .grille{grid-template-columns:minmax(0,1fr)}
+        .console.zoom .colonne{display:contents}
+        .console.zoom .zoomable:not(.agrandi),.console.zoom .hors-zoom{display:none}
+        .console.zoom[data-zoom="pan-flotte"] #actions-pan{display:block}
+        .console.zoom .agrandir{display:none}
+        .zoomable.agrandi{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(41,182,246,.12)}
+        /* flotte */
+        .puces{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+        .puce{font:inherit;font-size:.72rem;min-height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--trait2);background:transparent;color:var(--texte);cursor:pointer}
+        .puce[aria-pressed="true"]{background:var(--cyan);border-color:var(--cyan);color:#04202a;font-weight:600}
+        .flotte-liste{display:grid;gap:4px;max-height:430px;overflow:auto}
+        .console.zoom .flotte-liste{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));max-height:none}
+        .boite{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 8px;border-radius:10px;border:1px solid var(--trait);cursor:pointer;min-width:0}
+        .boite:hover{border-color:var(--trait2)} .boite.cochee{border-color:var(--cyan);background:rgba(41,182,246,.10)} .boite.muette{opacity:.7;cursor:default}
+        .boite input{width:16px;height:16px;accent-color:var(--cyan);flex:none}
+        .boite .pt{width:8px;height:8px;border-radius:50%;background:var(--vert);flex:none} .boite.muette .pt{background:var(--rouge)}
+        .boite b{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .boite small{font-size:.68rem;color:var(--doux);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%} .boite.muette small{color:#ff8a95}
+        /* actions */
+        .actions{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+        @container a (min-width:560px){.actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
+        .tuile{font:inherit;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:9px 10px;border-radius:12px;border:1px solid var(--trait);background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));color:var(--texte);text-align:left;cursor:pointer;min-width:0;min-height:56px}
+        .tuile:hover{border-color:var(--trait2)} .tuile span{font-size:.7rem;color:var(--doux);overflow-wrap:anywhere}
+        .tuile.forte{border-color:rgba(255,159,28,.6);background:rgba(255,159,28,.08)} .tuile.forte span{color:var(--orange)}
+        .tuile.danger{border-color:rgba(255,77,94,.6);background:rgba(255,77,94,.08)} .tuile.danger span{color:var(--rouge)}
+        /* journal en direct */
+        .flux-etat{font-size:.74rem;color:var(--faible)} .flux-etat.ok{color:var(--vert)} .flux-etat.coupe{color:var(--orange)}
+        .filtres{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:8px} .filtres[hidden]{display:none}
+        .filtres label{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--doux)}
+        select,.filtres input,.champ input{font:inherit;font-size:.8rem;color:var(--texte);background:rgba(6,13,27,.8);border:1px solid var(--trait2);border-radius:8px;min-height:34px;padding:0 8px;min-width:0}
+        select:focus,.filtres input:focus,.champ input:focus{outline:none;border-color:var(--cyan)}
+        .terminal{background:#040a15;border:1px solid var(--trait);border-radius:10px;padding:8px 12px;font-family:ui-monospace,"IBM Plex Mono",Menlo,monospace;font-size:.8rem;line-height:1.65;height:320px;overflow:auto}
+        .console.zoom .terminal{height:560px}
+        @container a (max-width:719px){.console.zoom .terminal{height:420px}}
+        .ligne{overflow-wrap:anywhere} .ligne .h{color:var(--faible)} .ligne .qui{color:var(--cyan)} .ligne .qui.qui-macro{color:var(--violet)}
+        .ligne .pts{color:var(--faible)} .ligne .det{color:var(--doux)}
+        .e-vert{color:var(--vert)} .e-cyan{color:var(--cyan)} .e-orange{color:var(--orange)} .e-rouge{color:var(--rouge)} .e-faible{color:var(--faible)}
+        .lien{font:inherit;color:var(--cyan);background:none;border:0;padding:0 2px;text-decoration:underline;cursor:pointer;text-align:left}
+        .lien:hover{color:#7fd3fb}
+        /* macros */
+        .macros-liste{display:grid;gap:6px}
+        .macro{border:1px solid var(--trait);border-radius:10px;padding:7px 9px;display:grid;gap:3px;min-width:0}
+        .macro.en-cours{border-color:var(--cyan);background:rgba(41,182,246,.08)}
+        .macro .l1{display:flex;align-items:center;gap:8px} .macro .l1 b{flex:1 1 auto;min-width:0;overflow-wrap:anywhere} .macro .l2{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
+        .macro small{color:var(--doux);font-size:.7rem;overflow-wrap:anywhere}
+        .badge{font-size:.66rem;border:1px solid var(--trait2);border-radius:999px;padding:0 7px;color:var(--doux);white-space:nowrap}
+        .badge.cyan{color:var(--cyan);border-color:var(--cyan)} .badge.violet{color:var(--violet);border-color:var(--violet)}
+        /* box maintenant */
+        .mesures{display:grid;gap:6px}
+        .mes{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;font-size:.8rem} .mes .k{color:var(--doux)}
+        .barre{grid-column:1/-1;height:6px;border-radius:3px;background:rgba(159,179,214,.16);overflow:hidden} .barre i{display:block;height:100%;background:var(--vert)} .barre i.haut{background:var(--orange)} .barre i.crit{background:var(--rouge)}
+        .services{margin-top:10px;display:grid;gap:5px} .services .titre{font-size:.66rem;letter-spacing:.06em;color:var(--faible)}
+        .service{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 4px 0 8px;border:1px solid rgba(255,77,94,.4);border-radius:9px;min-width:0}
+        .service span{flex:1;min-width:0;overflow-wrap:anywhere;font-size:.8rem}
+        /* fenêtres intégrées (jamais de boîte native) */
+        .fond{position:fixed;inset:0;background:rgba(2,6,16,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:100}
+        .fond[hidden]{display:none}
+        .fenetre{background:#0b1830;border:1px solid var(--trait2);border-radius:14px;padding:14px 16px;max-width:520px;width:100%;max-height:90vh;overflow:auto;display:grid;gap:10px}
+        .fenetre h3{margin:0;font-size:1rem;overflow-wrap:anywhere}
+        .champ{display:grid;gap:4px} .champ label{color:var(--doux);font-size:.76rem} .champ input{width:100%}
+        .boutons{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+        .choix{display:flex;flex-wrap:wrap;gap:6px}
+        .plan-box{display:grid;gap:4px;border:1px solid var(--trait);border-radius:10px;padding:8px} .plan-box b{overflow-wrap:anywhere}
+        .fen-msg{font-size:.8rem;color:#ffd9de;overflow-wrap:anywhere} .fen-msg:empty{display:none}
+        @container a (max-width:719px){kbd{display:none}}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="principal"><div class="cadre"><div class="app console" id="console">
+        <header class="tete">
+            <div class="marque">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2" fill="rgba(41,182,246,.14)"/><path d="m7 9 3 2.5L7 14M12 14h5"/><path d="M8 21h8"/></svg>
+                <div><b>Pilotage</b><small id="sous-titre">TR-369 · MAÎTRE</small></div>
+            </div>
+            <label class="commande">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9fb3d6" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="commande" autocomplete="off" spellcheck="false" aria-label="Chercher une action, une macro ou une box" aria-controls="suggestions" placeholder="Action, macro ou box…">
+                <kbd>Ctrl K</kbd>
+            </label>
+            <span class="actif neutre" id="pastille">LECTURE…</span>
+            <button type="button" class="btn" id="reduire" hidden>Réduire <kbd>Échap</kbd></button>
+            <nav id="panneaux" aria-label="Panneaux de la console" hidden>
+                <button type="button" class="btn" data-panneau="pan-flotte">Flotte</button>
+                <button type="button" class="btn" data-panneau="pan-journal">Journal en direct</button>
+                <button type="button" class="btn" data-panneau="pan-macros">Macros</button>
+                <button type="button" class="btn" data-panneau="pan-box" id="nav-box">Box · maintenant</button>
+            </nav>
+        </header>
+        <div class="demo" id="demo" hidden>DÉMONSTRATION — données fictives, rien n'est envoyé aux box</div>
+        <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html">Se connecter</a></div>
+        <div class="message" id="message" role="status" aria-live="polite"></div>
+        <div class="suggestions" id="suggestions" hidden>
+            <p class="sugg-titre" id="sugg-titre"></p>
+            <ul class="sugg-liste" id="sugg-liste"></ul>
+        </div>
+
+        <div class="grille">
+            <section class="pan zoomable" id="pan-flotte" aria-labelledby="t-flotte">
+                <div class="pan-tete">
+                    <h3 id="t-flotte">Flotte</h3><span class="note" id="n-cibles">0 cible</span>
+                    <button type="button" class="btn icone agrandir" data-panneau="pan-flotte" aria-label="Agrandir le panneau Flotte" title="Agrandir"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+                </div>
+                <div class="puces" id="filtres" role="group" aria-label="Filtrer la flotte"></div>
+                <div class="flotte-liste" id="flotte-liste"></div>
+            </section>
+
+            <div class="colonne centre">
+                <section class="hors-zoom" id="actions-pan" aria-label="Actions du catalogue">
+                    <div class="actions" id="actions"></div>
+                </section>
+                <section class="pan zoomable" id="pan-journal" aria-labelledby="t-journal">
+                    <div class="pan-tete">
+                        <h3 id="t-journal">Journal en direct</h3>
+                        <span class="flux-etat" id="flux-etat">aucune exécution suivie</span>
+                        <button type="button" class="btn sm" id="arreter" hidden>Arrêter</button>
+                        <button type="button" class="btn sm" id="pause" aria-pressed="false">Pause</button>
+                        <button type="button" class="btn icone agrandir" data-panneau="pan-journal" aria-label="Agrandir le panneau Journal en direct" title="Agrandir"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+                    </div>
+                    <div class="filtres" id="journal-filtres" hidden>
+                        <label>Box <select id="f-box"><option value="">toutes</option></select></label>
+                        <label>Niveau <select id="f-niveau"><option value="">tout</option><option value="grave">écarts et échecs</option></select></label>
+                        <input type="text" id="f-texte" aria-label="Filtrer le journal" placeholder="Filtrer le journal">
+                    </div>
+                    <div class="terminal" id="journal" role="log" aria-live="polite"></div>
+                </section>
+            </div>
+
+            <div class="colonne droite">
+                <section class="pan zoomable" id="pan-macros" aria-labelledby="t-macros">
+                    <div class="pan-tete">
+                        <h3 id="t-macros">Macros</h3>
+                        <button type="button" class="btn sm" id="macro-nouvelle">Nouvelle</button>
+                        <button type="button" class="btn icone agrandir" data-panneau="pan-macros" aria-label="Agrandir le panneau Macros" title="Agrandir"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+                    </div>
+                    <div class="macros-liste" id="macros-liste"></div>
+                </section>
+                <section class="pan zoomable" id="pan-box" aria-labelledby="box-titre">
+                    <div class="pan-tete">
+                        <h3 id="box-titre">Box · maintenant</h3>
+                        <button type="button" class="btn icone agrandir" data-panneau="pan-box" aria-label="Agrandir le panneau de la box" title="Agrandir"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+                    </div>
+                    <div id="box-corps"><p class="vide">Cochez une box dans la Flotte.</p></div>
+                </section>
+            </div>
+        </div>
+    </div></div></main>
+
+    <!-- petite fenêtre intégrée : paramètre d'une action (unité, paquet, nom) -->
+    <div class="fond" id="fenetre" hidden>
+        <div class="fenetre" role="dialog" aria-modal="true" aria-labelledby="fenetre-titre">
+            <h3 id="fenetre-titre"></h3>
+            <div id="fenetre-corps"></div>
+            <div class="fen-msg" id="fenetre-msg"></div>
+            <div class="boutons"><button type="button" class="btn" id="fenetre-annuler">Annuler</button></div>
+        </div>
+    </div>
+    <!-- écran de lancement (rempli par ouvrirLancement ; plan détaillé : tâche 8) -->
+    <div class="fond" id="lancement" hidden>
+        <div class="fenetre" role="dialog" aria-modal="true" aria-labelledby="lancement-titre">
+            <h3 id="lancement-titre"></h3>
+            <div id="lancement-corps"></div>
+            <div class="fen-msg" id="lancement-msg"></div>
+            <div class="boutons"><button type="button" class="btn" id="lancement-annuler">Annuler</button><button type="button" class="btn primaire" id="lancement-ok">Lancer</button></div>
+        </div>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script>
+        const API = '/api/v1/pilotage';
+        const Q = new URLSearchParams(location.search), DEMO = !!Q.get('demo');
+        if (Q.get('embed')) document.body.classList.add('emb');
+        const $ = id => document.getElementById(id);
+        const ZOOM_CLE = 'pilotage.console.zoom', JOURNAL_MAX = 500, TAMPON_MAX = 1 << 20, ATTENTE_MAX = 500, ACTUALISER_MS = 30000;
+
+        function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = String(txt); return e; }
+        function clear(e) { while (e.firstChild) e.removeChild(e.firstChild); }
+        function token() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+        function entetes(extra) { const h = Object.assign({}, extra || {}), t = token(); if (t) h.Authorization = 'Bearer ' + t; return h; }
+        function sessionLire(cle) { try { return sessionStorage.getItem(cle); } catch (e) { return null; } }
+        function sessionEcrire(cle, v) { try { sessionStorage.setItem(cle, v); } catch (e) { /* page utilisable sans */ } }
+        const enc = s => encodeURIComponent(String(s));
+        const nb = v => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+        const tiret = (v, unite) => (nb(v) == null ? '—' : v.toLocaleString('fr-FR') + (unite ? ' ' + unite : ''));
+        const heure = ms => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const sans = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+        // ---- accès à l'API (même origine, jeton en Authorization) ----
+        function detail(d) {
+            const x = d && d.detail != null ? d.detail : d;
+            if (typeof x === 'string') return x;
+            if (Array.isArray(x)) return x.map(e => (e && e.msg) || '').filter(Boolean).join(' ; ');
+            return x ? JSON.stringify(x) : '';
+        }
+        async function api(chemin, options) {
+            if (DEMO) throw new Error('démonstration : aucune requête envoyée');
+            const opt = options || {};
+            const o = { method: opt.method || 'GET', headers: entetes({ Accept: 'application/json' }), credentials: 'same-origin', cache: 'no-store' };
+            if (opt.corps !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opt.corps); }
+            const r = await fetch(API + chemin, o);
+            let d = null;
+            try { d = await r.json(); } catch (e) { d = null; }
+            if (r.status === 401) sessionRequise();
+            if (!r.ok) { const err = new Error('refusé (HTTP ' + r.status + ')' + (detail(d) ? ' : ' + String(detail(d)).slice(0, 300) : '')); err.statut = r.status; throw err; }
+            return d;
+        }
+        function sessionRequise() { $('session').hidden = false; pastille('SESSION REQUISE', 'neutre'); }
+        function message(texte, grave) { const m = $('message'); m.textContent = texte || ''; m.className = 'message' + (grave ? ' grave' : ''); hauteur(); }
+        function pastille(texte, cls) { const p = $('pastille'); p.textContent = texte; p.className = 'actif' + (cls ? ' ' + cls : ''); }
+
+        // ---- état de la page ----
+        let catalogue = [], boxes = [], groupes = {}, macros = [], executionsEnCours = new Set();
+        let filtre = 'toutes', cochees = [], boxCourante = null, boxDetail = null, zoom = null;
+        let courant = null, enPause = false, attente = [];
+
+        const LIBELLES = {
+            'reboot': 'redémarrer la box', 'maj-paquets': 'mettre à jour les paquets SecuBox', 'installer': 'installer une appli de la boutique',
+            'service-demarrer': 'démarrer un service', 'service-arreter': 'arrêter un service', 'service-redemarrer': 'relancer un service',
+            'renommer': 'renommer la box', 'renouveler': 'renouveler les secrets', 'interface-distante': 'passer en interface distante',
+            'interface-locale': 'revenir en interface locale' };
+        const PARAMS = { unite: 'Unité (service systemd)', paquet: 'Paquet (secubox-…)', nom: 'Nouveau nom' };
+        const GROUPES = [
+            { id: 'releve', titre: 'Relevé', sous: 'CPU, mémoire, services · 60 s', special: 'releve' },
+            { id: 'maj', titre: 'Mettre à jour', sous: 'paquets SecuBox', actions: ['maj-paquets'] },
+            { id: 'service', titre: 'Service…', sous: 'démarrer, arrêter, relancer', actions: ['service-demarrer', 'service-arreter', 'service-redemarrer'] },
+            { id: 'installer', titre: 'Installer…', sous: 'appli de la boutique', actions: ['installer'] },
+            { id: 'interface', titre: 'Interface…', sous: 'locale ou distante', actions: ['interface-locale', 'interface-distante'] },
+            { id: 'support', titre: 'Support', sous: 'session limitée · box cliente', special: 'support' },
+            { id: 'secrets', titre: 'Secrets / Renommer', sous: 'confirmation forte', actions: ['renouveler', 'renommer'] },
+            { id: 'reboot', titre: 'Redémarrer', sous: 'confirmation forte', actions: ['reboot'] }];
+        const ETATS = { ok: ['ok', 'vert'], terminee: ['terminée', 'vert'], en_cours: ['en cours', 'cyan'], en_attente: ['en attente', 'faible'],
+            passee: ['passée', 'faible'], ecart: ['écart', 'orange'], echec: ['échec', 'rouge'], non_lancee: ['non lancée', 'faible'],
+            sautee: ['sautée', 'faible'], interrompue: ['interrompue', 'orange'], arretee: ['arrêtée', 'orange'], accepte: ['acceptée', 'cyan'],
+            consentement: ['accord du détenteur attendu', 'orange'], refuse: ['refusée', 'rouge'], sans_reponse: ['sans réponse', 'rouge'] };
+        const GRAVES = ['ecart', 'echec', 'refuse', 'sans_reponse'];
+        const MESURES = { memoire_dispo_mo: 'mémoire dispo', cpu_pct: 'CPU', swap_utilise_pct: 'swap', services_en_echec: 'services en échec' };
+
+        const action = cle => catalogue.find(a => a.cle === cle);
+        const boxDe = cle => boxes.find(b => b.cle === cle);
+        const cliente = b => b.reseau !== 'maillage';
+        const ciblesCochees = () => cochees.map(boxDe).filter(b => b && b.cochable);
+
+        function nomMaitre() {
+            if (DEMO) return 'DÉMO';
+            const l = String(location.hostname || '').split('.').filter(x => x && !/^\d+$/.test(x) && x !== 'admin' && x !== 'www');
+            return l.length ? l[0].toUpperCase() : '—';
+        }
+
+        // ---- flotte ----
+        function sousTexte(b) {
+            if (!b.en_ligne) { const j = nb(b.vu_le) != null ? Math.max(0, Math.floor((Date.now() / 1000 - b.vu_le) / 86400)) : null; return j == null ? 'muette' : 'muette ' + j + ' j'; }
+            return [b.materiel && b.materiel !== 'autre' ? b.materiel : null, b.interface === 'distante' ? 'légère' : null, cliente(b) ? 'cliente' : null,
+                b.agent_version || null].filter(Boolean).join(' · ') || '—';
+        }
+        function filtresFlotte() {
+            const f = [['toutes', 'Toutes', null]];
+            Object.keys(groupes.materiel || {}).sort().forEach(m => { if ((groupes.materiel[m] || []).length) f.push(['m:' + m, m === 'autre' ? 'Autres' : m, groupes.materiel[m]]); });
+            const it = groupes.interface || {}, et = groupes.etat || {};
+            if ((it.legeres || []).length) f.push(['legeres', 'Légères', it.legeres]);
+            if ((et.en_ligne || []).length) f.push(['en_ligne', 'En ligne', et.en_ligne]);
+            if ((et.muettes || []).length) f.push(['muettes', 'Muettes', et.muettes]);
+            return f;
+        }
+        function rendreFlotte() {
+            const f = filtresFlotte(), zone = $('filtres');
+            if (!f.some(x => x[0] === filtre)) filtre = 'toutes';
+            clear(zone);
+            f.forEach(([id, lib]) => { const p = el('button', 'puce', lib); p.type = 'button'; p.dataset.filtre = id; p.setAttribute('aria-pressed', String(id === filtre)); zone.append(p); });
+            const garde = (f.find(x => x[0] === filtre) || [])[2];
+            const liste = $('flotte-liste'); clear(liste);
+            cochees = cochees.filter(c => { const b = boxDe(c); return b && b.cochable; });
+            const visibles = boxes.filter(b => !garde || garde.indexOf(b.cle) >= 0);
+            if (!visibles.length) liste.append(el('p', 'vide', boxes.length ? 'Aucune box dans ce groupe.' : 'Aucune box connue du maître.'));
+            visibles.forEach(b => {
+                const l = el('label', 'boite' + (b.cochable ? '' : ' muette') + (cochees.indexOf(b.cle) >= 0 ? ' cochee' : ''));
+                const c = el('input'); c.type = 'checkbox'; c.dataset.cle = b.cle; c.checked = cochees.indexOf(b.cle) >= 0; c.disabled = !b.cochable;
+                c.setAttribute('aria-label', 'Cibler ' + b.nom);
+                l.append(c, el('span', 'pt'), el('b', null, b.nom), el('small', null, sousTexte(b)));
+                if (!b.cochable) l.title = 'box muette : jamais cochable';
+                liste.append(l);
+            });
+            const n = ciblesCochees().length;
+            $('n-cibles').textContent = n + (n > 1 ? ' cibles' : ' cible');
+        }
+        $('filtres').addEventListener('click', e => { const p = e.target.closest('[data-filtre]'); if (!p) return; filtre = p.dataset.filtre; rendreFlotte(); });
+        $('flotte-liste').addEventListener('change', e => {
+            const c = e.target.closest('input[data-cle]'); if (!c) return;
+            cochees = cochees.filter(x => x !== c.dataset.cle);
+            if (c.checked) { cochees.push(c.dataset.cle); choisirBox(c.dataset.cle); }
+            else if (boxCourante === c.dataset.cle) choisirBox(cochees.length ? cochees[cochees.length - 1] : null);
+            rendreFlotte();
+        });
+
+        // ---- actions du catalogue ----
+        function rendreActions() {
+            const zone = $('actions'); clear(zone);
+            const rangees = new Set();
+            const groupesVus = GROUPES.map(g => Object.assign({}, g, { actions: (g.actions || []).filter(k => action(k)) }))
+                .filter(g => g.special || g.actions.length);
+            groupesVus.forEach(g => g.actions.forEach(k => rangees.add(k)));
+            const autres = catalogue.map(a => a.cle).filter(k => !rangees.has(k));
+            if (autres.length) groupesVus.push({ id: 'autres', titre: 'Autres…', sous: 'actions du catalogue', actions: autres });
+            groupesVus.forEach(g => {
+                const fortes = g.actions.filter(k => action(k).forte);
+                const t = el('button', 'tuile' + (g.actions.indexOf('reboot') >= 0 ? ' danger' : (fortes.length && fortes.length === g.actions.length ? ' forte' : '')));
+                t.type = 'button'; t.dataset.groupe = g.id;
+                t.append(el('b', null, g.titre), el('span', null, g.sous));
+                zone.append(t);
+            });
+            zone.groupes = groupesVus;
+        }
+        $('actions').addEventListener('click', e => {
+            const t = e.target.closest('[data-groupe]'); if (!t) return;
+            const g = ($('actions').groupes || []).find(x => x.id === t.dataset.groupe); if (!g) return;
+            if (g.special === 'releve') return releve();
+            if (g.special === 'support') return support();
+            if (g.actions.length === 1) return declencher(g.actions[0]);
+            ouvrirFenetre(g.titre, g.actions);
+        });
+        function declencher(cle) {
+            const a = action(cle); if (!a) return;
+            if (a.parametres.length) return ouvrirFenetre(a.cle, [a.cle]);
+            lancerAction(a.cle, {});
+        }
+
+        // petite fenêtre intégrée : un champ par paramètre, un bouton par action
+        function ouvrirFenetre(titre, cles) {
+            $('fenetre-titre').textContent = titre + (ciblesCochees().length ? ' · ' + ciblesCochees().map(b => b.nom).join(', ') : '');
+            const corps = $('fenetre-corps'); clear(corps); $('fenetre-msg').textContent = '';
+            const params = [];
+            cles.forEach(k => action(k).parametres.forEach(p => { if (params.indexOf(p) < 0) params.push(p); }));
+            params.forEach(p => {
+                const c = el('div', 'champ'), id = 'param-' + p, l = el('label', null, PARAMS[p] || p), i = el('input');
+                l.htmlFor = id; i.id = id; i.type = 'text'; i.autocomplete = 'off'; i.spellcheck = false; i.maxLength = 120; i.dataset.param = p;
+                c.append(l, i); corps.append(c);
+            });
+            const choix = el('div', 'choix');
+            cles.forEach(k => {
+                const a = action(k), b = el('button', 'btn' + (k === 'reboot' ? ' danger' : a.forte ? ' forte' : ''), LIBELLES[k] ? LIBELLES[k][0].toUpperCase() + LIBELLES[k].slice(1) : k);
+                b.type = 'button'; b.dataset.action = k; if (a.forte) b.title = 'confirmation forte : nom de chaque box retapé';
+                choix.append(b);
+            });
+            corps.append(choix);
+            $('fenetre').hidden = false;
+            const premier = corps.querySelector('input, button'); if (premier) premier.focus();
+        }
+        function fermerFenetre() { $('fenetre').hidden = true; }
+        $('fenetre-annuler').addEventListener('click', fermerFenetre);
+        $('fenetre-corps').addEventListener('click', e => {
+            const b = e.target.closest('[data-action]'); if (!b) return;
+            const a = action(b.dataset.action), args = {};
+            for (const p of a.parametres) {
+                const i = $('fenetre-corps').querySelector('[data-param="' + p + '"]'), v = i ? i.value.trim() : '';
+                if (!v) { $('fenetre-msg').textContent = 'Renseignez : ' + (PARAMS[p] || p) + '.'; if (i) i.focus(); return; }
+                args[p] = v;
+            }
+            fermerFenetre();
+            lancerAction(a.cle, args);
+        });
+        $('fenetre-corps').addEventListener('keydown', e => {
+            if (e.key !== 'Enter' || !e.target.matches('input')) return;
+            const b = $('fenetre-corps').querySelectorAll('[data-action]'); if (b.length === 1) { e.preventDefault(); b[0].click(); }
+        });
+
+        // ---- lancement : direct (une box, rien de fort) ou écran de lancement ----
+        function lancerAction(cle, args, cibles) {
+            const a = action(cle), cib = cibles || ciblesCochees();
+            if (!a) return message('Action inconnue du catalogue : ' + cle, true);
+            if (!cib.length) return message('Cochez au moins une box en ligne dans la Flotte.', true);
+            const titre = cle + Object.keys(args).sort().map(k => ' ' + args[k]).join('');
+            if (!a.forte && cib.length === 1) return envoyer('/executions/action', { action: cle, args: args }, cib, {}, titre);
+            ouvrirLancement({ titre: titre, chemin: '/executions/action', corps: { action: cle, args: args }, cibles: cib, forte: a.forte });
+        }
+        function macroForte(m) { return (m.etapes || []).some(e => e && e.type === 'action' && action(e.action) && action(e.action).forte); }
+        function lancerMacro(m) {
+            let cib = ciblesCochees();
+            if (!cib.length) cib = (m.cibles || []).map(boxDe).filter(b => b && b.cochable);
+            if (!cib.length) return message('Cochez au moins une box en ligne pour lancer « ' + m.nom + ' ».', true);
+            const chemin = '/macros/' + enc(m.id) + '/lancer', forte = macroForte(m);
+            if (!forte && cib.length === 1) return envoyer(chemin, {}, cib, {}, m.nom);
+            ouvrirLancement({ titre: m.nom, chemin: chemin, corps: {}, cibles: cib, forte: forte, macro: m });
+        }
+        // box cliente : la session de support ouverte est jointe ; sans elle, l'API refuse et son message est affiché
+        async function supportsOuverts(cibles) {
+            const s = {}, maintenant = Date.now() / 1000;
+            for (const b of cibles.filter(cliente)) {
+                try {
+                    const l = await api('/boxes/' + enc(b.cle) + '/support');
+                    const o = (Array.isArray(l) ? l : []).find(x => x && x.etat === 'ouvert' && (nb(x.fin) == null || x.fin > maintenant));
+                    if (o) s[b.cle] = o.id;
+                } catch (e) { /* refus rendu par le lancement */ }
+            }
+            return s;
+        }
+        // rend un message d'erreur (dans la page) ou '' si l'exécution est lancée et suivie
+        async function envoyer(chemin, corps, cibles, confirmations, titre) {
+            if (DEMO) { message('Démonstration : « ' + titre + ' » n\'est pas envoyé.'); return ''; }
+            const support = await supportsOuverts(cibles);
+            try {
+                const d = await api(chemin, { method: 'POST', corps: Object.assign({}, corps, { cibles: cibles.map(b => b.cle), confirmations: confirmations, support: support }) });
+                message('« ' + titre + ' » lancé sur ' + cibles.map(b => b.nom).join(', ') + '.');
+                if (d && nb(d.execution) != null) suivreExecution(d.execution);
+                return '';
+            } catch (e) { message(e.message, true); return e.message; }
+        }
+
+        // écran de lancement (la tâche 8 y ajoute le plan simulé par box et par étape)
+        let planLancement = null;
+        function ouvrirLancement(plan) {
+            planLancement = plan;
+            $('lancement-titre').textContent = 'Lancer « ' + plan.titre + ' »';
+            const corps = $('lancement-corps'); clear(corps); $('lancement-msg').textContent = '';
+            if (plan.cibles.length > 1)
+                corps.append(el('p', 'note', 'Une box après l\'autre : ' + plan.cibles[1].nom + ' ne commence qu\'une fois ' + plan.cibles[0].nom + ' revenue et son relevé sain.'));
+            plan.cibles.forEach(b => {
+                const bloc = el('div', 'plan-box'); bloc.append(el('b', null, b.nom));
+                if (cliente(b)) bloc.append(el('small', 'note', 'box cliente : la session de support ouverte par son détenteur tient lieu de confirmation'));
+                else if (plan.forte) {
+                    const c = el('div', 'champ'), id = 'conf-' + b.cle.replace(/[^A-Za-z0-9_-]/g, '_'), l = el('label', null, 'Retapez « ' + b.nom + ' »'), i = el('input');
+                    l.htmlFor = id; i.id = id; i.type = 'text'; i.autocomplete = 'off'; i.spellcheck = false; i.dataset.cle = b.cle; i.dataset.nom = b.nom;
+                    c.append(l, i); bloc.append(c);
+                }
+                corps.append(bloc);
+            });
+            majLancer();
+            $('lancement').hidden = false;
+            const f = corps.querySelector('input') || $('lancement-ok'); f.focus();
+        }
+        function majLancer() {
+            const champs = [...$('lancement-corps').querySelectorAll('input[data-cle]')];
+            const k = champs.filter(i => i.value === i.dataset.nom).length;
+            $('lancement-ok').disabled = k < champs.length;
+            $('lancement-ok').textContent = champs.length ? 'Lancer (' + k + ' noms sur ' + champs.length + ')' : 'Lancer';
+        }
+        function fermerLancement() { $('lancement').hidden = true; planLancement = null; }
+        $('lancement-corps').addEventListener('input', majLancer);
+        $('lancement-annuler').addEventListener('click', fermerLancement);
+        $('lancement-ok').addEventListener('click', async () => {
+            const p = planLancement; if (!p) return;
+            const conf = {};
+            $('lancement-corps').querySelectorAll('input[data-cle]').forEach(i => { conf[i.dataset.cle] = i.value; });
+            $('lancement-ok').disabled = true;
+            const err = await envoyer(p.chemin, p.corps, p.cibles, conf, p.titre);
+            if (planLancement !== p) return;
+            if (err) { $('lancement-msg').textContent = err; majLancer(); } else fermerLancement();
+        });
+
+        async function releve() {
+            const cib = ciblesCochees();
+            if (!cib.length) return message('Cochez au moins une box en ligne dans la Flotte.', true);
+            if (DEMO) return message('Démonstration : le relevé n\'est pas demandé.');
+            const faits = [], refus = [];
+            for (const b of cib) {
+                try { await api('/boxes/' + enc(b.cle) + '/releve', { method: 'POST', corps: { duree_s: 60 } }); faits.push(b.nom); journalLocal(b, 'relevé 60 s', 'en_cours', 'demandé'); }
+                catch (e) { refus.push(b.nom + ' : ' + e.message); }
+            }
+            message((faits.length ? 'Relevé de 60 s demandé sur ' + faits.join(', ') + '. ' : '') + refus.join(' · '), refus.length > 0);
+        }
+        async function support() {
+            const cib = ciblesCochees().filter(cliente);
+            if (!cib.length) return message('Le support concerne une box cliente : cochez-en une.', true);
+            if (DEMO) return message('Démonstration : aucune session de support demandée.');
+            const lignes = [];
+            for (const b of cib) {
+                try { const d = await api('/boxes/' + enc(b.cle) + '/support', { method: 'POST', corps: { duree_min: 30 } }); lignes.push(b.nom + ' : ' + ((ETATS[d && d.etat] || [d && d.etat])[0] || 'demandée')); }
+                catch (e) { lignes.push(b.nom + ' : ' + e.message); }
+            }
+            message('Session de support (30 min) — ' + lignes.join(' · '));
+        }
+
+        // ---- macros ----
+        function resumeEtape(e) {
+            if (!e || typeof e !== 'object') return '?';
+            if (e.type === 'releve') return 'relevé ' + e.duree_s + ' s';
+            if (e.type === 'action') return String(e.action) + Object.keys(e.args || {}).sort().map(k => ' ' + e.args[k]).join('');
+            if (e.type === 'condition') return 'si ' + (MESURES[e.mesure] || e.mesure) + ' ' + e.op + ' ' + e.seuil;
+            if (e.type === 'comparer') return 'comparer ' + e.avant + '/' + e.apres;
+            if (e.type === 'attendre') return 'attendre ' + e.delai_s + ' s';
+            return String(e.type);
+        }
+        function rendreMacros() {
+            const zone = $('macros-liste'); clear(zone);
+            if (!macros.length) { zone.append(el('p', 'vide', 'Aucune macro.')); return; }
+            macros.forEach(m => {
+                const enCours = executionsEnCours.has(m.id) || (courant && courant.macroId === m.id && !courant.fini);
+                const d = el('div', 'macro' + (enCours ? ' en-cours' : '')), l1 = el('div', 'l1'), l2 = el('div', 'l2');
+                const b = el('button', 'btn sm' + (macroForte(m) ? ' forte' : ''), 'Lancer'); b.type = 'button'; b.dataset.macro = m.id;
+                b.setAttribute('aria-label', 'Lancer ' + m.nom);
+                l1.append(el('b', null, m.nom), b); d.append(l1);
+                if (enCours) l2.append(el('span', 'badge cyan', 'en cours'));
+                else if (m.programmation && m.programmation.quotidien) l2.append(el('span', 'badge violet', 'chaque nuit ' + m.programmation.quotidien));
+                if (m.livree) l2.append(el('span', 'badge', 'livrée'));
+                const et = m.etapes || [];
+                l2.append(el('small', null, et.length + (et.length > 1 ? ' étapes · ' : ' étape · ') + et.map(resumeEtape).join(' → ')));
+                d.append(l2);
+                zone.append(d);
+            });
+        }
+        $('macros-liste').addEventListener('click', e => { const b = e.target.closest('[data-macro]'); if (!b) return; const m = macros.find(x => x.id === b.dataset.macro); if (m) lancerMacro(m); });
+        function ouvrirEditeur() { message('L\'éditeur de macro n\'est pas encore disponible sur cette console.'); }
+        $('macro-nouvelle').addEventListener('click', () => ouvrirEditeur());
+
+        // ---- la box choisie, maintenant ----
+        function choisirBox(cle) {
+            boxCourante = cle; boxDetail = null;
+            rendreBox();
+            if (cle && !DEMO) lireBox(cle);
+        }
+        async function lireBox(cle) {
+            try { const d = await api('/boxes/' + enc(cle)); if (boxCourante === cle) { boxDetail = d; rendreBox(); } }
+            catch (e) { if (boxCourante === cle) { boxDetail = { erreur: e.message }; rendreBox(); } }
+        }
+        function mesure(k, v, pct) {
+            const d = el('div', 'mes'); d.append(el('span', 'k', k), el('span', null, v));
+            if (pct != null) { const br = el('div', 'barre'), i = el('i', pct >= 90 ? 'crit' : pct >= 70 ? 'haut' : ''); i.style.width = Math.max(0, Math.min(100, pct)) + '%'; br.append(i); d.append(br); }
+            return d;
+        }
+        function rendreBox() {
+            const b = boxCourante ? boxDe(boxCourante) : null, corps = $('box-corps'); clear(corps);
+            $('box-titre').textContent = (b ? b.nom : 'Box') + ' · maintenant';
+            $('nav-box').textContent = (b ? b.nom : 'Box') + ' · maintenant';
+            if (!b) { corps.append(el('p', 'vide', 'Cochez une box dans la Flotte.')); return; }
+            const m = el('div', 'mesures');
+            m.append(mesure('Mémoire disponible', tiret(b.memoire_dispo_mo, 'Mo')),
+                mesure('CPU', tiret(b.cpu_pct, '%'), nb(b.cpu_pct)),
+                mesure('Swap utilisé', tiret(b.swap_utilise_pct, '%'), nb(b.swap_utilise_pct)));
+            corps.append(m);
+            if (!b.en_ligne) corps.append(el('p', 'note', 'Box muette : dernières mesures connues.'));
+            const s = el('div', 'services'); s.append(el('span', 'titre', 'SERVICES EN ÉCHEC'));
+            const noms = boxDetail && Array.isArray(boxDetail.services_en_echec_noms) ? boxDetail.services_en_echec_noms : null;
+            if (boxDetail && boxDetail.erreur) s.append(el('span', 'note', 'inventaire illisible : ' + boxDetail.erreur));
+            else if (noms == null) s.append(el('span', 'note', nb(b.services_en_echec) != null ? b.services_en_echec + ' (noms en lecture…)' : '—'));
+            else if (!noms.length) s.append(el('span', 'note', nb(b.services_en_echec) ? b.services_en_echec + ' (noms absents de l\'inventaire)' : 'aucun'));
+            else noms.forEach(u => {
+                const r = el('div', 'service'), bt = el('button', 'btn sm', 'Relancer'); bt.type = 'button'; bt.dataset.unite = u; bt.disabled = !b.cochable;
+                bt.setAttribute('aria-label', 'Relancer ' + u + ' sur ' + b.nom);
+                r.append(el('span', null, u), bt); s.append(r);
+            });
+            corps.append(s);
+        }
+        $('box-corps').addEventListener('click', e => { const bt = e.target.closest('[data-unite]'); const b = boxDe(boxCourante); if (bt && b) lancerAction('service-redemarrer', { unite: bt.dataset.unite }, [b]); });
+
+        // ---- journal en direct ----
+        function libelleEtat(etat) { return ETATS[etat] || [String(etat == null ? '' : etat), 'cyan']; }
+        // une ligne : heure, box ou « macro », libellé, état coloré, détails ; propositions « relancer <unité> sur <box> ? »
+        function ligne(o) {
+            const d = el('div', 'ligne'), t = nb(o.t) != null ? o.t : Date.now();
+            d.dataset.t = String(t); d.dataset.box = o.cle || ''; d.dataset.niveau = GRAVES.indexOf(o.etat) >= 0 ? 'grave' : '';
+            d.append(el('span', 'h', heure(t)), ' ', el('span', 'qui' + (o.macro ? ' qui-macro' : ''), o.qui), ' ', el('span', null, o.libelle));
+            if (o.etat != null || o.etatTexte) { const [txt, cls] = o.etatTexte ? [o.etatTexte, o.etatCls || 'cyan'] : libelleEtat(o.etat); d.append(' ', el('span', 'pts', '…'), ' ', el('span', 'e-' + cls, txt)); }
+            (o.details || []).filter(x => x != null && x !== '').forEach(x => d.append(el('span', 'det', ' · ' + x)));
+            (o.propositions || []).forEach(p => {
+                const b = el('button', 'lien', 'relancer ' + p.unite + ' sur ' + p.nom + ' ?'); b.type = 'button'; b.dataset.unite = p.unite; b.dataset.cle = p.cle;
+                d.append(' ', b);
+            });
+            d.dataset.texte = sans(d.textContent);
+            return d;
+        }
+        function journaliser(o) {
+            if (enPause) { attente.push(o); if (attente.length > ATTENTE_MAX) attente.shift(); $('pause').textContent = 'Reprendre (' + attente.length + ')'; return; }
+            const j = $('journal'), d = ligne(o), bas = j.scrollHeight - j.scrollTop - j.clientHeight < 30;
+            let avant = null;
+            for (let x = j.lastElementChild; x; x = x.previousElementSibling) { if (Number(x.dataset.t) <= Number(d.dataset.t)) break; avant = x; }
+            j.insertBefore(d, avant);
+            while (j.children.length > JOURNAL_MAX) j.removeChild(j.firstElementChild);
+            ajouterBoxFiltre(o.cle, o.qui);
+            filtrerLigne(d);
+            if (bas) j.scrollTop = j.scrollHeight;
+        }
+        function journalLocal(b, libelle, etat, det) { journaliser({ qui: b.nom, cle: b.cle, libelle: libelle, etat: etat, details: [det] }); }
+        $('journal').addEventListener('click', e => {
+            const l = e.target.closest('.lien[data-unite]'); if (!l) return;
+            const b = boxDe(l.dataset.cle);
+            if (!b) return message('Box inconnue de la flotte : relance impossible depuis la console.', true);
+            lancerAction('service-redemarrer', { unite: l.dataset.unite }, [b]);
+        });
+        $('pause').addEventListener('click', () => {
+            enPause = !enPause; $('pause').setAttribute('aria-pressed', String(enPause));
+            if (!enPause) { const a = attente; attente = []; a.forEach(journaliser); $('pause').textContent = 'Pause'; } else $('pause').textContent = 'Reprendre (0)';
+        });
+        // filtres du journal agrandi (côté client, aucun appel)
+        function ajouterBoxFiltre(cle, nom) {
+            if (!cle) return;
+            const s = $('f-box'); if ([...s.options].some(o => o.value === cle)) return;
+            const o = el('option', null, nom || cle); o.value = cle; s.append(o);
+        }
+        function filtrerLigne(d) {
+            if (zoom !== 'pan-journal') { d.hidden = false; return; }
+            const b = $('f-box').value, n = $('f-niveau').value, t = sans($('f-texte').value.trim());
+            d.hidden = (b && d.dataset.box !== b) || (n && d.dataset.niveau !== n) || (t && d.dataset.texte.indexOf(t) < 0);
+        }
+        function filtrerJournal() { [...$('journal').children].forEach(filtrerLigne); }
+        ['f-box', 'f-niveau'].forEach(id => $(id).addEventListener('change', filtrerJournal));
+        $('f-texte').addEventListener('input', filtrerJournal);
+
+        function nomBox(cle, defaut) { const b = cle ? boxDe(cle) : null; return b ? b.nom : (defaut || cle || '?'); }
+        function propositionsDe(cle, nom, res) {
+            const u = [];
+            if (res && Array.isArray(res.propositions)) res.propositions.forEach(p => { if (p && p.action === 'service-redemarrer' && p.args && typeof p.args.unite === 'string') u.push(p.args.unite); });
+            if (res && Array.isArray(res.services)) res.services.forEach(s => { if (typeof s === 'string') u.push(s); });
+            return [...new Set(u)].slice(0, 20).map(x => ({ unite: x, cle: cle, nom: nom }));
+        }
+        function detailsDe(type, res, raison) {
+            const d = [];
+            if (res && typeof res === 'object') {
+                if (type === 'releve' && ('memoire_dispo_mo' in res || 'cpu_pct' in res))
+                    d.push('mém ' + tiret(res.memoire_dispo_mo, 'Mo') + ' · CPU ' + tiret(res.cpu_pct, '%') + ' · swap ' + tiret(res.swap_utilise_pct, '%') + ' · services en échec : ' + tiret(res.services_en_echec));
+                if (type === 'comparer') {
+                    if (Array.isArray(res.nouveaux) && res.nouveaux.length) d.push('nouveau service en échec : ' + res.nouveaux.join(', '));
+                    if (nb(res.hausse) != null && res.hausse > 0 && !(res.nouveaux || []).length) d.push(res.hausse + ' service(s) en plus en échec');
+                    if (nb(res.baisse_mo) != null) d.push('mémoire dispo : ' + (res.baisse_mo >= 0 ? '−' : '+') + Math.abs(res.baisse_mo) + ' Mo');
+                }
+                if (type === 'condition' && res.valeur != null) d.push('valeur ' + res.valeur + (res.vrai ? ' : condition vraie' : ''));
+                if (res.mesure_absente) d.push('mesure absente');
+                if (type === 'action' && nb(res.rc) != null) d.push('rc ' + res.rc);
+                if (type === 'action' && res.resume) d.push(String(res.resume).slice(0, 200));
+                if (res.note) d.push(String(res.note).slice(0, 200));
+                if (res.raison && res.raison !== raison) d.push(String(res.raison).slice(0, 200));
+            }
+            if (raison) d.push(String(raison).slice(0, 300));
+            return d;
+        }
+        function libelleEtape(cur, rang, type) {
+            const m = cur.macroId ? macros.find(x => x.id === cur.macroId) : null;
+            const e = m && Array.isArray(m.etapes) ? m.etapes[rang] : null;
+            if (e) return resumeEtape(e);
+            if (type === 'action' && !cur.macroId && cur.nom) return cur.nom;
+            return ({ releve: 'relevé', action: 'action', condition: 'condition', comparer: 'comparer', attendre: 'attendre' })[type] || String(type || 'étape');
+        }
+        function cleVue(cur, k) { if (cur.vus.has(k)) return false; cur.vus.add(k); return true; }
+        function journalEtape(cur, ev, t) {
+            if (!cleVue(cur, 'etape|' + ev.cle + '|' + ev.rang + '|' + ev.etat)) return;
+            const nom = nomBox(ev.cle, ev.box);
+            journaliser({ t: t, qui: nom, cle: ev.cle, libelle: libelleEtape(cur, ev.rang, ev.type), etat: ev.etat,
+                details: detailsDe(ev.type, ev.resultat, ev.raison), propositions: GRAVES.indexOf(ev.etat) >= 0 || ev.type === 'releve' ? propositionsDe(ev.cle, nom, ev.resultat) : [] });
+        }
+        function journalLancement(cur, t) {
+            if (!cur.nom || !cleVue(cur, 'lancement')) return;
+            journaliser({ t: t, qui: 'macro', macro: true, libelle: cur.nom + ' · lancée' + (cur.acteur ? ' par ' + cur.acteur : '') + (cur.cibles.length ? ' sur ' + cur.cibles.map(c => c.nom).join(', ') : ''), etat: 'en_cours' });
+        }
+        function journalFin(cur, etat, raison, t) {
+            if (!cleVue(cur, 'fin')) return;
+            cur.fini = true;
+            journaliser({ t: t, qui: 'macro', macro: true, libelle: (cur.nom || 'exécution ' + cur.id) + ' · fin', etat: etat, details: [raison] });
+            if (courant === cur) { $('arreter').hidden = true; etatFlux('exécution finie', ''); }
+            rendreMacros(); if (!DEMO) charger();
+        }
+        function evenementMacro(cur, d) {
+            if (d.execution !== cur.id) return;
+            if (d.evenement === 'lancement') return journalLancement(cur);
+            if (d.evenement === 'etape') return journalEtape(cur, d);
+            if (d.evenement === 'box') {
+                if (!cleVue(cur, 'box|' + d.cle + '|' + d.etat)) return;
+                return journaliser({ qui: nomBox(d.cle, d.box), cle: d.cle, libelle: d.etat === 'en_cours' ? 'début sur la box' : 'fin sur la box', etat: d.etat, details: [d.raison] });
+            }
+            if (d.evenement === 'fin') { cur.stop = true; journalFin(cur, d.etat, d.raison); }
+        }
+        function evenementOperation(d) {
+            const cle = typeof d.cle === 'string' ? d.cle : null, nom = nomBox(cle, d.box);
+            if (d.type === 'X_SECUBOX_OperationProgress')
+                return journaliser({ qui: nom, cle: cle, libelle: d.etape ? String(d.etape) : 'opération', etatTexte: nb(d.pct) != null ? d.pct + ' %' : 'en cours', etatCls: 'cyan', details: [d.resume] });
+            if (d.type === 'X_SECUBOX_OperationDone')
+                return journaliser({ qui: nom, cle: cle, libelle: 'opération finie', etatTexte: nb(d.rc) === 0 ? 'ok' : 'rc ' + tiret(d.rc), etatCls: nb(d.rc) === 0 ? 'vert' : 'rouge', details: [d.resume] });
+            if (d.action) journaliser({ qui: nom, cle: cle, libelle: String(d.action) + Object.keys(d.args || {}).sort().map(k => ' ' + d.args[k]).join(''), etat: d.etat, details: [d.raison] });
+        }
+
+        // ---- suivre une exécution : flux d'abord, puis relecture ----
+        function etatFlux(texte, cls) { const e = $('flux-etat'); e.textContent = texte; e.className = 'flux-etat' + (cls ? ' ' + cls : ''); }
+        function fermerFlux() { if (courant) { courant.stop = true; try { courant.ctl.abort(); } catch (e) { /* déjà clos */ } } }
+        function suivreExecution(id) {
+            fermerFlux();
+            const cur = { id: Number(id), nom: '', macroId: null, acteur: null, cibles: [], vus: new Set(), stop: false, fini: false, ctl: new AbortController() };
+            courant = cur;
+            $('arreter').hidden = false;
+            etatFlux('connexion au flux…', '');
+            ouvrirFlux(cur);
+            return cur;
+        }
+        async function relire(cur) {
+            let e;
+            try { e = await api('/executions/' + cur.id); } catch (err) { if (err.statut === 404) { cur.stop = true; etatFlux('exécution inconnue', 'coupe'); } return null; }
+            if (!e || typeof e !== 'object') return null;
+            cur.nom = String(e.macro_nom || ''); cur.macroId = e.macro_id || null; cur.acteur = e.acteur || null;
+            cur.cibles = Array.isArray(e.cibles) ? e.cibles.filter(c => c && typeof c.nom === 'string') : [];
+            journalLancement(cur, nb(e.debut) != null ? e.debut * 1000 : undefined);
+            (Array.isArray(e.etapes) ? e.etapes : []).forEach(x => {
+                if (!x || x.etat === 'en_attente') return;
+                const nom = (cur.cibles.find(c => c.cle === x.box) || {}).nom;
+                const t = nb(x.fin) != null ? x.fin * 1000 : nb(x.debut) != null ? x.debut * 1000 : undefined;
+                journalEtape(cur, { cle: x.box, box: nom, rang: x.rang, type: x.type, etat: x.etat, resultat: x.resultat, raison: null }, t);
+            });
+            if (e.etat !== 'en_cours') { cur.stop = true; journalFin(cur, e.etat, e.raison, nb(e.fin) != null ? e.fin * 1000 : undefined); }
+            rendreMacros();
+            return e;
+        }
+        function normaliser(tampon, morceau) {
+            const brut = tampon + morceau, fin = brut.endsWith('\r') ? '\r' : '';
+            return brut.slice(0, brut.length - fin.length).replace(/\r\n?/g, '\n') + fin;
+        }
+        function bloc(cur, texte) {
+            let nom = 'message'; const data = [];
+            texte.split('\n').forEach(l => {
+                if (!l || l[0] === ':') return;           // battement ou commentaire
+                const i = l.indexOf(':'), champ = i < 0 ? l : l.slice(0, i), val = i < 0 ? '' : l.slice(i + 1).replace(/^ /, '');
+                if (champ === 'event') nom = val; else if (champ === 'data') data.push(val);
+            });
+            if (!data.length || ['etat', 'macro', 'operation'].indexOf(nom) < 0) return false;
+            let d; try { d = JSON.parse(data.join('\n')); } catch (e) { return false; }
+            if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
+            if (nom === 'etat') {
+                if (d.session === 'expiree') { cur.stop = true; etatFlux('session expirée : flux clos', 'coupe'); sessionRequise(); return true; }
+                if (d.connecte) relire(cur);           // premier `etat` : l'instantané ; relu APRÈS l'abonnement, rien n'est perdu
+            } else if (nom === 'macro') evenementMacro(cur, d);
+            else evenementOperation(d);
+            return true;
+        }
+        async function ouvrirFlux(cur) {
+            if (DEMO) { cur.stop = true; etatFlux('démonstration : pas de flux', ''); return; }
+            let delai = 3000;
+            while (!cur.stop) {
+                try {
+                    const r = await fetch(API + '/executions/' + cur.id + '/flux', { headers: entetes({ Accept: 'text/event-stream' }), credentials: 'same-origin', cache: 'no-store', signal: cur.ctl.signal });
+                    if (r.status === 401) { cur.stop = true; sessionRequise(); return; }
+                    if (r.status === 403 || r.status === 404) { cur.stop = true; etatFlux('flux indisponible (HTTP ' + r.status + ')', 'coupe'); return; }
+                    if (!r.ok || !r.body) throw new Error('HTTP ' + r.status);
+                    if (courant === cur) etatFlux('● flux ouvert', 'ok');
+                    const rd = r.body.getReader(), dec = new TextDecoder('utf-8'); let tampon = '';
+                    for (;;) {
+                        const lu = await rd.read();
+                        if (lu.done) break;
+                        tampon = normaliser(tampon, dec.decode(lu.value, { stream: true }));
+                        if (tampon.length > TAMPON_MAX) throw new Error('flux trop volumineux');
+                        let i;
+                        while ((i = tampon.indexOf('\n\n')) >= 0) { const b = tampon.slice(0, i); tampon = tampon.slice(i + 2); if (bloc(cur, b)) delai = 3000; if (cur.stop) break; }
+                        if (cur.stop) { try { await rd.cancel(); } catch (e) { /* clos */ } break; }
+                    }
+                } catch (e) { if (cur.stop || cur.ctl.signal.aborted) return; }
+                if (cur.stop) return;
+                // coupure : reprise seulement si l'exécution est encore en cours
+                const e = await relire(cur);
+                if (cur.stop || !e || e.etat !== 'en_cours') { cur.stop = true; return; }
+                if (courant === cur) etatFlux('flux interrompu, reconnexion…', 'coupe');
+                await new Promise(res => setTimeout(res, delai)); delai = Math.min(delai * 2, 30000);
+            }
+        }
+        $('arreter').addEventListener('click', async () => {
+            const cur = courant; if (!cur) return;
+            if (DEMO) return message('Démonstration : aucun arrêt envoyé.');
+            try { await api('/executions/' + cur.id + '/arreter', { method: 'POST' }); message('Arrêt demandé : il prend effet après l\'étape en cours.'); }
+            catch (e) { message(e.message, true); }
+        });
+        window.addEventListener('pagehide', fermerFlux);
+
+        // ---- barre de commande (Ctrl K) : actions, macros, box ; Entrée = première suggestion ----
+        let suggestions = [];
+        function chercher(q) {
+            const s = sans(q.trim()); if (!s) return [];
+            const r = [];
+            macros.forEach(m => { if (sans(m.nom).indexOf(s) >= 0 || (m.etapes || []).some(e => e && e.type === 'action' && sans(e.action).indexOf(s) >= 0))
+                r.push({ type: 'macro', titre: m.nom, sous: (m.etapes || []).map(resumeEtape).join(' → ') + (macroForte(m) ? ' · confirmation forte' : ''), faire: () => lancerMacro(m) }); });
+            catalogue.forEach(a => { if (sans(a.cle).indexOf(s) >= 0 || sans(LIBELLES[a.cle]).indexOf(s) >= 0)
+                r.push({ type: 'action', titre: a.cle, sous: (LIBELLES[a.cle] || '') + (a.forte ? ' · confirmation forte' : ''), faire: () => declencher(a.cle) }); });
+            boxes.forEach(b => { if (sans(b.nom).indexOf(s) >= 0)
+                r.push({ type: 'box', titre: b.nom, sous: sousTexte(b), faire: () => { if (b.cochable && cochees.indexOf(b.cle) < 0) cochees.push(b.cle); choisirBox(b.cle); rendreFlotte(); } }); });
+            return r.slice(0, 8);
+        }
+        function rendreSuggestions() {
+            const q = $('commande').value; suggestions = chercher(q);
+            const z = $('suggestions'), l = $('sugg-liste'); clear(l);
+            if (!q.trim()) { z.hidden = true; hauteur(); return; }
+            const noms = ciblesCochees().map(b => b.nom);
+            $('sugg-titre').textContent = 'SUGGESTIONS POUR « ' + q.trim().toUpperCase() + ' » · CIBLES : ' + (noms.length ? noms.join(', ').toUpperCase() : 'AUCUNE');
+            if (!suggestions.length) l.append(el('li', 'vide', 'Rien ne correspond.'));
+            suggestions.forEach((x, i) => {
+                const li = el('li'), b = el('button', 'sugg' + (i === 0 ? ' premiere' : '')); b.type = 'button'; b.dataset.i = String(i);
+                b.append(el('span', 'type' + (x.type === 'macro' ? ' macro' : ''), x.type), el('b', null, x.titre), el('span', 'sous', x.sous));
+                if (i === 0) b.append(el('kbd', null, 'Entrée'));
+                li.append(b); l.append(li);
+            });
+            z.hidden = false; hauteur();
+        }
+        function choisirSuggestion(i) { const x = suggestions[i]; if (!x) return; $('commande').value = ''; rendreSuggestions(); x.faire(); }
+        $('commande').addEventListener('input', rendreSuggestions);
+        $('commande').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); choisirSuggestion(0); } });
+        $('sugg-liste').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) choisirSuggestion(Number(b.dataset.i)); });
+
+        // ---- zoom des panneaux : mise en page seule, gardée pour la session ----
+        function appliquerZoom(id, garder) {
+            zoom = id && $(id) && $(id).classList.contains('zoomable') ? id : null;
+            const c = $('console');
+            c.classList.toggle('zoom', !!zoom); c.dataset.zoom = zoom || '';
+            document.querySelectorAll('.zoomable').forEach(p => p.classList.toggle('agrandi', p.id === zoom));
+            $('panneaux').hidden = !zoom; $('reduire').hidden = !zoom;
+            $('panneaux').querySelectorAll('[data-panneau]').forEach(b => b.setAttribute('aria-current', String(b.dataset.panneau === zoom)));
+            $('journal-filtres').hidden = zoom !== 'pan-journal';
+            filtrerJournal();
+            if (garder) sessionEcrire(ZOOM_CLE, zoom || 'entier');
+            hauteur();
+        }
+        document.querySelectorAll('[data-panneau]').forEach(b => b.addEventListener('click', () => appliquerZoom(b.dataset.panneau, true)));
+        $('reduire').addEventListener('click', () => appliquerZoom(null, true));
+        function zoomInitial() {
+            const s = sessionLire(ZOOM_CLE);
+            if (s && s !== 'entier') appliquerZoom(s, false);
+            else if (!s && window.innerWidth < 720) appliquerZoom('pan-flotte', false);   // téléphone : un panneau ouvert, agrandi d'office
+        }
+        window.addEventListener('resize', () => { if (!zoom && window.innerWidth < 720 && !sessionLire(ZOOM_CLE)) appliquerZoom('pan-flotte', false); });
+
+        // Échap (sur la page seulement) : d'abord une fenêtre ouverte, puis les suggestions, puis le zoom ; Ctrl K : la barre de commande
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); $('commande').focus(); $('commande').select(); return; }
+            if (e.key !== 'Escape') return;
+            if (!$('lancement').hidden) { e.preventDefault(); fermerLancement(); return; }
+            if (!$('fenetre').hidden) { e.preventDefault(); fermerFenetre(); return; }
+            if (!$('suggestions').hidden) { e.preventDefault(); $('commande').value = ''; rendreSuggestions(); return; }
+            if (zoom) { e.preventDefault(); appliquerZoom(null, true); }
+        });
+
+        // ---- chargement et actualisation ----
+        function fenetreOuverte() { return !$('lancement').hidden || !$('fenetre').hidden; }
+        function saisieEnCours() { const a = document.activeElement; return !!a && (a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || (a.tagName === 'INPUT' && a.type === 'text')); }
+        function appliquerFlotte(d) {
+            boxes = Array.isArray(d && d.boxes) ? d.boxes.filter(b => b && typeof b.cle === 'string' && typeof b.nom === 'string') : [];
+            groupes = d && d.groupes && typeof d.groupes === 'object' ? d.groupes : {};
+            const n = boxes.filter(b => b.en_ligne).length;
+            pastille(n + ' box en ligne', n ? '' : 'neutre');
+            rendreFlotte();
+            if (boxCourante && !boxDe(boxCourante)) choisirBox(null); else rendreBox();
+        }
+        async function charger() {
+            try { appliquerFlotte(await api('/flotte')); $('session').hidden = true; }
+            catch (e) { if (e.statut !== 401) pastille('FLOTTE ILLISIBLE', 'hors'); }
+            try { const m = await api('/macros'); macros = Array.isArray(m) ? m.filter(x => x && typeof x.id === 'string') : []; } catch (e) { /* liste gardée */ }
+            try {
+                const l = await api('/executions?limite=20');
+                executionsEnCours = new Set((Array.isArray(l) ? l : []).filter(x => x && x.etat === 'en_cours' && x.macro_id).map(x => x.macro_id));
+            } catch (e) { /* badges gardés */ }
+            rendreMacros();
+            if (boxCourante) lireBox(boxCourante);
+            hauteur();
+        }
+        async function demarrer() {
+            $('sous-titre').textContent = 'TR-369 · MAÎTRE ' + nomMaitre();
+            zoomInitial();
+            if (DEMO) { $('demo').hidden = false; demo(); return; }
+            try { const c = await api('/catalogue'); catalogue = Array.isArray(c) ? c.filter(a => a && typeof a.cle === 'string' && Array.isArray(a.parametres)) : []; }
+            catch (e) { catalogue = []; }
+            rendreActions();
+            await charger();
+            // rechargement de la page : la dernière exécution en cours est relue puis suivie
+            try {
+                const l = await api('/executions?limite=20');
+                const x = (Array.isArray(l) ? l : []).find(e => e && e.etat === 'en_cours');
+                if (x && !courant) suivreExecution(x.id);
+            } catch (e) { /* rien à suivre */ }
+        }
+        setInterval(() => { if (!DEMO && !document.hidden && !fenetreOuverte() && !saisieEnCours()) charger(); }, ACTUALISER_MS);
+
+        function hauteur() {
+            if (window.parent === window) return;
+            try { const c = document.querySelector('.cadre'); parent.postMessage({ sbxVue: Math.ceil(c.getBoundingClientRect().bottom + scrollY), onglet: 'pilotage-console' }, location.origin); } catch (e) { /* hors cadre */ }
+        }
+        window.addEventListener('load', hauteur); window.addEventListener('resize', hauteur);
+        if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.body);
+
+        // ---- démonstration : données fictives, rien n'est envoyé ----
+        function demo() {
+            const t = Math.floor(Date.now() / 1000);
+            const b = (nom, o) => Object.assign({ cle: 'maillage:' + nom, nom: nom, reseau: 'maillage', client: null, adresse: '192.0.2.' + (nom.length + 10), en_ligne: true,
+                vu_le: t - 4, agent_version: '0.8.1', memoire_dispo_mo: 742, swap_utilise_pct: 3, cpu_pct: 12, services_en_echec: 0, interface: 'locale',
+                modele: 'Raspberry Pi 4 Model B', materiel: 'RPi', cochable: true }, o || {});
+            catalogue = [['installer', ['paquet'], true], ['interface-distante', [], true], ['interface-locale', [], true], ['maj-paquets', [], false],
+                ['reboot', [], true], ['renommer', ['nom'], true], ['renouveler', [], true], ['service-arreter', ['unite'], true],
+                ['service-demarrer', ['unite'], false], ['service-redemarrer', ['unite'], false]].map(([cle, p, f]) => ({ cle: cle, parametres: p, forte: f, macro: cle !== 'renommer' }));
+            rendreActions();
+            const l = [b('atelier', { services_en_echec: 1 }), b('salon', { interface: 'distante', agent_version: '0.8.0', cpu_pct: 7, memoire_dispo_mo: 1210 }),
+                b('bureau', { modele: 'MOCHAbin', materiel: 'MOCHAbin', cpu_pct: 21, swap_utilise_pct: 0, memoire_dispo_mo: 5120 }),
+                b('cabane', { reseau: 'clients', cle: 'clients:cabane', client: 'client-exemple', materiel: 'autre', modele: null, memoire_dispo_mo: null, cpu_pct: null, swap_utilise_pct: null, services_en_echec: null }),
+                b('garage', { en_ligne: false, cochable: false, vu_le: t - 2 * 86400 - 3600 })];
+            appliquerFlotte({ boxes: l, groupes: { materiel: { RPi: ['maillage:atelier', 'maillage:salon', 'maillage:garage'], MOCHAbin: ['maillage:bureau'], autre: ['clients:cabane'] },
+                interface: { legeres: ['maillage:salon'] }, etat: { en_ligne: l.filter(x => x.en_ligne).map(x => x.cle), muettes: ['maillage:garage'] } } });
+            macros = [
+                { id: 'livree:diagnostic-complet', nom: 'Diagnostic complet', livree: true, cibles: [], programmation: null, etapes: [{ type: 'releve', duree_s: 300, nom: 'diag' }] },
+                { id: 'livree:mise-a-jour-sure', nom: 'Mise à jour sûre', livree: true, cibles: [], programmation: null, etapes: [{ type: 'releve', duree_s: 60, nom: 'avant' },
+                    { type: 'condition', mesure: 'services_en_echec', releve: 'avant', op: '>', seuil: 0, alors: 'arreter' }, { type: 'action', action: 'maj-paquets', args: {} },
+                    { type: 'releve', duree_s: 60, nom: 'apres' }, { type: 'comparer', avant: 'avant', apres: 'apres', regle: 'nouveau_service_en_echec', seuil: 0 }] },
+                { id: 'livree:remise-en-route', nom: 'Remise en route', livree: true, cibles: [], programmation: null, etapes: [{ type: 'releve', duree_s: 60, nom: 'avant' }] },
+                { id: 'livree:retour-en-local', nom: 'Retour en local', livree: true, cibles: [], programmation: null, etapes: [{ type: 'action', action: 'interface-locale', args: {} }] },
+                { id: 'demo-1', nom: 'Nuit tranquille', livree: false, cibles: ['maillage:salon'], programmation: { quotidien: '03:00' }, etapes: [{ type: 'releve', duree_s: 60, nom: 'diag' }] }];
+            rendreMacros();
+            cochees = ['maillage:atelier']; rendreFlotte();
+            boxDetail = { services_en_echec_noms: ['secubox-portal'] }; boxCourante = 'maillage:atelier'; rendreBox();
+            const cur = { id: 1, nom: 'Mise à jour sûre', macroId: 'livree:mise-a-jour-sure', acteur: 'admin', cibles: [{ cle: 'maillage:atelier', nom: 'atelier' }, { cle: 'maillage:salon', nom: 'salon' }], vus: new Set(), fini: false };
+            const t0 = Date.now() - 300000;
+            journalLancement(cur, t0);
+            journalEtape(cur, { cle: 'maillage:atelier', rang: 0, type: 'releve', etat: 'ok', resultat: { memoire_dispo_mo: 760, cpu_pct: 12, swap_utilise_pct: 3, services_en_echec: 0, services: [] } }, t0 + 62000);
+            journalEtape(cur, { cle: 'maillage:atelier', rang: 1, type: 'condition', etat: 'ok', resultat: { vrai: false, valeur: 0 } }, t0 + 63000);
+            journaliser({ t: t0 + 90000, qui: 'atelier', cle: 'maillage:atelier', libelle: 'maj-paquets', etatTexte: '42 %', etatCls: 'cyan', details: ['secubox-portal'] });
+            journalEtape(cur, { cle: 'maillage:atelier', rang: 2, type: 'action', etat: 'ok', resultat: { rc: 0, resume: '2 paquets mis à jour' } }, t0 + 128000);
+            journalEtape(cur, { cle: 'maillage:atelier', rang: 3, type: 'releve', etat: 'ok', resultat: { memoire_dispo_mo: 742, cpu_pct: 14, swap_utilise_pct: 3, services_en_echec: 1, services: ['secubox-portal'] } }, t0 + 190000);
+            journalEtape(cur, { cle: 'maillage:atelier', rang: 4, type: 'comparer', etat: 'ecart', resultat: { ecart: true, nouveaux: ['secubox-portal'], hausse: 1, propositions: [{ action: 'service-redemarrer', args: { unite: 'secubox-portal' } }] } }, t0 + 191000);
+            journalFin(cur, 'ecart', 'atelier : écart — salon non lancée', t0 + 191500);
+            courant = null;
+            etatFlux('démonstration : pas de flux', '');
+        }
+
+        demarrer();
+    </script>
+</body>
+</html>
