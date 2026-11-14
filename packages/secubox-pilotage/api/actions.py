@@ -7,7 +7,8 @@
 SecuBox-Deb :: pilotage :: action et relevé (#3702)
 
 Le corps de `POST /boxes/{x}/actions/{action}` et du relevé, extrait de `creer_app_admin` : la route HTTP, le vhost d'une box légère
-et le moteur de macros appellent les mêmes fonctions (mêmes gardes, même audit). Tout passe par un `Contexte`.
+et le moteur de macros appellent les mêmes fonctions (mêmes gardes, même audit). Tout passe par un `Contexte`. `ExecutantApi` est
+l'exécutant du moteur en service : une étape `action` passe par `executer_action`, une étape `releve` par `lancer_releve`.
 """
 from __future__ import annotations
 
@@ -19,13 +20,15 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
 from pilotage.files import COMMANDE_MESURE, DUREE_DEFAUT_S, DUREE_MAX_S, DUREE_MIN_S, FileDeBoxPleine
 from pilotage.inventaire import box_de_ligne
+from pilotage.moteur import EchecEtape
 from pilotage.operations import CATALOGUE, RE_IDENT, arguments, corps_operate
 from pilotage.stockage import HORS_LIGNE_S
 
+ATTENTE_RELEVE_S = 60.0        # une étape `releve` attend au plus ce délai qu'un relevé manuel en cours finisse
 DELAI_ACTION_S = 90.0          # OPERATE_RESP d'une action : plus que l'agent n'attend le ctl (60 s, delaiCtl), moins que la file (120 s)
 ETATS_REPONSE = ("accepte", "consentement", "refuse")
 IDENT_MAX = 128
@@ -215,3 +218,47 @@ async def suivre_releve(ctx: Contexte, cle: str, duree_s: int, futur: asyncio.Fu
         log.exception("relevé de %s non rangé", cle)
     finally:
         ctx.releves_en_cours.discard(cle)
+
+
+def _motif(e: HTTPException) -> str:
+    d = e.detail
+    if isinstance(d, dict):
+        d = d.get("erreur") or "refus"
+    return borne(d)
+
+
+class ExecutantApi:
+    """L'`Executant` du moteur en service. Tout refus (HTTPException des gardes, corps invalide) devient un `EchecEtape` lisible :
+    l'étape échoue, jamais « erreur interne du moteur ». `attente`/`sonde_s` : sonde de l'attente d'un relevé manuel en cours."""
+
+    def __init__(self, ctx: Contexte, *, attente=asyncio.sleep, sonde_s: float = 1.0, attente_releve_s: float = ATTENTE_RELEVE_S) -> None:
+        self.ctx, self.attente, self.sonde_s, self.attente_releve_s = ctx, attente, sonde_s, attente_releve_s
+
+    async def action(self, b: dict, action: str, args: dict, *, confirmation: Optional[str], support: Optional[str],
+                     acteur: str) -> dict:
+        try:
+            corps = ActionIn(args=args, confirmation=confirmation, support=support)
+        except ValidationError:
+            raise EchecEtape("paramètres de l'étape invalides (confirmation ou session de support)") from None
+        try:
+            return await executer_action(self.ctx, b["cle"], action, corps, {"sub": acteur})
+        except HTTPException as e:
+            raise EchecEtape(_motif(e)) from None
+
+    async def releve(self, b: dict, duree_s: int, acteur: str) -> str:
+        ctx, cle = self.ctx, b["cle"]
+        ligne = await asyncio.to_thread(ctx.stockage.boite, cle)
+        if ligne is None or not en_ligne(ctx, ligne):
+            raise EchecEtape("box hors ligne")
+        limite = ctx.horloge() + self.attente_releve_s
+        while cle in ctx.releves_en_cours:          # un relevé manuel en cours : le laisser finir, au plus attente_releve_s
+            if ctx.horloge() >= limite:
+                raise EchecEtape(f"relevé déjà en cours depuis plus de {int(self.attente_releve_s)} s")
+            await self.attente(self.sonde_s)
+        try:                                        # aucun await entre la sortie de l'attente et la réservation de lancer_releve
+            tache = await lancer_releve(ctx, ligne, duree_s, acteur)
+        except HTTPException as e:
+            raise EchecEtape(_motif(e)) from None
+        await tache
+        r = await asyncio.to_thread(ctx.stockage.releve_lire, cle)
+        return r["statut"] if r else "erreur"
