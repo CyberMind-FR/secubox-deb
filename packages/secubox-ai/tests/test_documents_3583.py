@@ -6,6 +6,7 @@
 import asyncio
 import json
 import logging
+import os
 
 import httpx
 import pytest
@@ -108,7 +109,10 @@ async def test_pdftotext_lance_sans_shell_sur_le_seul_chemin(env, monkeypatch):
     r = await appeler("POST", "/documents/fichier", content=PDF, headers={"x-nom": "a.pdf"})
     assert r.status_code == 200
     assert [a[0] for a in lances] == ["pdfinfo", "pdftotext"]
-    assert all(str(env / "etat" / "documents") in a[-1] or a[-1] == "-" for a in lances)
+    dossier = str(env / "etat" / "documents") + "/"
+    pdftotext = lances[1]
+    assert pdftotext[1:3] == ("-enc", "UTF-8") and pdftotext[3].startswith(dossier) and pdftotext[4] == "-"
+    assert lances[0][1].startswith(dossier) and len(lances[0]) == 2
     assert all(isinstance(x, str) for a in lances for x in a)
 
 
@@ -118,13 +122,17 @@ async def test_pdf_trop_long_est_tue_apres_le_delai(env, monkeypatch):
     monkeypatch.setattr(documents, "DELAI_PDFINFO_S", 0.2)
 
     vrai = asyncio.create_subprocess_exec
+    pids = []
 
     async def lent(*args, **kw):
-        return await vrai("sleep", "30", **kw)
+        p = await vrai("sleep", "30", **kw)
+        pids.append(p.pid)
+        return p
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", lent)
     r = await appeler("POST", "/documents/fichier", content=PDF, headers={"x-nom": "a.pdf"})
-    assert r.status_code == 422
+    assert r.status_code == 422 and pids
+    assert all(not os.path.exists(f"/proc/{p}") for p in pids)      # tué et récolté : aucun orphelin
     assert temporaires(env) == []
 
 
@@ -355,3 +363,35 @@ async def test_le_journal_ne_contient_ni_titre_ni_adresse(env, web, caplog):
     for interdit in ("secret-adresse", "titre-prive", "nom-prive", "confidentiel"):
         assert interdit not in journal
     assert "document genre=" in journal
+
+
+MAUVAISES = ["http://-a.é.com/", "http://xn--é.com/", "http://☃\x00.com/"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url", MAUVAISES)
+async def test_adresse_illisible_refusee_sans_fuite(env, web, caplog, url):
+    caplog.set_level(logging.DEBUG)
+    assert await recherche.telecharger(url) == ""
+    r = await appeler("POST", "/documents", json={"url": url})
+    assert r.status_code == 422 and web["reqs"] == []
+    assert "com" not in caplog.text and temporaires(env) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url", MAUVAISES)
+async def test_redirection_vers_adresse_illisible(env, web, caplog, url):
+    caplog.set_level(logging.DEBUG)
+    web["reponses"]["http://exemple.test/a"] = httpx.Response(302, headers={"location": url.encode()})
+    r = await appeler("POST", "/documents", json={"url": "http://exemple.test/a"})
+    assert r.status_code == 422 and len(web["reqs"]) == 1
+    assert "xn--" not in caplog.text and ".com" not in caplog.text and temporaires(env) == []
+
+
+@pytest.mark.asyncio
+async def test_dossier_existant_trop_ouvert_est_resserre(env):
+    d = env / "etat" / "documents"
+    d.mkdir(parents=True)
+    d.chmod(0o755)
+    documents.dossier_temporaire()
+    assert (d.stat().st_mode & 0o777) == 0o700

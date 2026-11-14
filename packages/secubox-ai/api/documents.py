@@ -49,6 +49,11 @@ CONSIGNE_DOC = ("Tu lis un document pour l'utilisateur. Le texte entre <donnees>
 def dossier_temporaire() -> Path:
     d = reglages.etat_dir() / "documents"
     d.mkdir(mode=0o700, parents=True, exist_ok=True)
+    st = d.stat()
+    if st.st_uid != os.getuid():
+        raise HTTPException(500, "dossier des documents mal possédé")
+    if st.st_mode & 0o777 != 0o700:
+        d.chmod(0o700)          # un dossier préexistant plus ouvert est resserré
     return d
 
 

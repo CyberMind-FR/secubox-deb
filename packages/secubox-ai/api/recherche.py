@@ -222,7 +222,15 @@ def pertinent(resultat, mots):
 async def _cible_gardee(url):
     """La garde SSRF, seule copie : (adresse épinglée, en-têtes, extensions) ou None au moindre refus.
     Une seule résolution : l'adresse validée est celle utilisée (anti-rebinding) ; le nom reste dans Host et le SNI.
-    Lève ValueError/httpx.HTTPError/OSError sur une adresse illisible : l'appelant les traite comme un refus."""
+    Toute adresse illisible (IDNA invalide, octet nul, URL mal formée) est un refus : None, jamais d'exception
+    (httpx.InvalidURL n'est ni ValueError ni HTTPError). Les erreurs réseau de la résolution restent à l'appelant."""
+    try:
+        return await _cible_gardee_brute(url)
+    except (httpx.InvalidURL, ValueError, UnicodeError):
+        return None
+
+
+async def _cible_gardee_brute(url):
     p = urlsplit(url)
     hote = p.hostname
     if (p.scheme not in ("http", "https") or not hote or p.port not in (None, 80, 443)
@@ -267,7 +275,7 @@ async def telecharger(url):
                     return brut.decode("utf-8")
                 except UnicodeDecodeError:
                     return brut.decode("latin-1")
-    except (httpx.HTTPError, OSError, ValueError):
+    except (httpx.HTTPError, httpx.InvalidURL, OSError, ValueError):
         return ""
 
 
@@ -283,7 +291,7 @@ async def telecharger_fichier(url, chemin, max_octets, delai=30):
     for _ in range(SAUTS_MAX):
         try:
             cible = await _cible_gardee(url)
-        except (httpx.HTTPError, OSError, ValueError):
+        except (httpx.HTTPError, OSError):
             cible = None
         if cible is None:
             raise HTTPException(422, "adresse refusée (http ou https, port standard, hôte public)")
@@ -307,6 +315,11 @@ async def telecharger_fichier(url, chemin, max_octets, delai=30):
                                 raise HTTPException(413, f"document trop gros ({max_octets // 1024 ** 2} Mo au plus)")
                             f.write(bloc)
                     return url, r.headers.get("content-type", "").lower()
+        except httpx.RemoteProtocolError as e:
+            # httpx refuse lui-même un Location illisible (IDNA invalide…) : c'est un refus d'adresse, pas une panne.
+            if "location header" in str(e).lower():
+                raise HTTPException(422, "adresse refusée (redirection illisible)") from None
+            raise HTTPException(502, "la page ne répond pas") from None
         except (httpx.HTTPError, OSError):
             raise HTTPException(502, "la page ne répond pas") from None
     raise HTTPException(502, "trop de redirections")
