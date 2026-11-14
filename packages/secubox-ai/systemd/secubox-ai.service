@@ -76,7 +76,8 @@ ReadWritePaths=/run/secubox /var/lib/secubox/ai /var/log/secubox -/run/secubox-a
 # (127.0.0.0/8 et ::1 sont refusés par la garde). ::1 et le reste de 127.0.0.0/8 restent fermés.
 # Les adresses LAN de gk2, gk0 et du SearXNG local sont rouvertes UNE À UNE par le drop-in
 # /run/systemd/system/secubox-ai.service.d/50-adresses.conf, écrit par « secubox-aictl preparer »
-# (secubox-ai-preparer.service) depuis /etc/secubox/ai.toml, noms résolus à ce moment-là.
+# (secubox-ai-preparer.service) depuis /etc/secubox/ai.toml, noms résolus à ce moment-là, ainsi que les résolveurs
+# privés de /etc/resolv.conf (gk3 résout par gk2).
 IPAddressDeny=localhost link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
 IPAddressAllow=127.0.0.1/32
 

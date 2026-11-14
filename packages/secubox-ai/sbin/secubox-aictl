@@ -64,6 +64,9 @@ MEMINFO = "/proc/meminfo"
 SYSTEMCTL = "/usr/bin/systemctl"
 # Drop-in des adresses permises à l'API, régénéré par « preparer » (perdu au redémarrage : refait à l'amorçage).
 DROPIN_API = Path("/run/systemd/system/secubox-ai.service.d")
+# Résolveurs de la box : 127.0.0.1 (Unbound) déjà permis par l'unité ; un résolveur du LAN (gk3 résout par gk2) est
+# rouvert à l'API comme les adresses de la configuration.
+RESOLV = Path("/etc/resolv.conf")
 NOM_DROPIN = "50-adresses.conf"
 
 UNITE_MOTEUR = "secubox-ai-moteur.service"
@@ -793,18 +796,45 @@ def adresses_permises(cfg: dict) -> tuple[list[str], list[str]]:
             refus.append(f"{section}.{cle} : {hote} non résolu ({e.__class__.__name__})")
             continue
         for a in sorted(adresses):
-            try:
-                ip = ipaddress.ip_address(a.split("%", 1)[0])
-            except ValueError:
-                refus.append(f"{section}.{cle} : adresse {a!r} illisible")
+            _classer(a, f"{section}.{cle}", permises, refus)
+    return _trier(permises), refus
+
+
+def _trier(permises) -> list[str]:
+    return sorted(permises, key=lambda s: (":" in s, s))
+
+
+def _classer(a: str, origine: str, permises: set, refus: list) -> None:
+    """Ajoute `a` (/32, /128) à `permises` si elle est dans une plage privée fermée par l'unité ; boucle, lien local,
+    multidiffusion, non spécifiée ou illisible : tracée dans `refus` ; publique : rien (déjà joignable)."""
+    try:
+        ip = ipaddress.ip_address(a.split("%", 1)[0])
+    except ValueError:
+        refus.append(f"{origine} : adresse {a!r} illisible")
+        return
+    if getattr(ip, "ipv4_mapped", None):
+        ip = ip.ipv4_mapped
+    if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+        refus.append(f"{origine} : {ip} refusée (boucle, lien local ou multidiffusion)")
+    elif any(ip in plage for plage in PLAGES_LAN):
+        permises.add(f"{ip}/{ip.max_prefixlen}")
+
+
+def resolveurs_permis() -> tuple[list[str], list[str]]:
+    """(résolveurs privés de /etc/resolv.conf à rouvrir pour l'API, refus tracés). La boucle (127.0.0.1, Unbound de la
+    box) n'est pas tracée : l'unité la permet déjà. Fichier absent ou illisible : aucun."""
+    permises, refus = set(), []
+    try:
+        lignes = RESOLV.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return [], []
+    for ligne in lignes:
+        mots = ligne.split("#", 1)[0].split(";", 1)[0].split()
+        if len(mots) >= 2 and mots[0] == "nameserver":
+            if mots[1] == "127.0.0.1":
                 continue
-            if getattr(ip, "ipv4_mapped", None):
-                ip = ip.ipv4_mapped
-            if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
-                refus.append(f"{section}.{cle} : {ip} refusée (boucle, lien local ou multidiffusion)")
-            elif any(ip in plage for plage in PLAGES_LAN):
-                permises.add(f"{ip}/{ip.max_prefixlen}")
-    return sorted(permises, key=lambda s: (":" in s, s)), refus
+            _classer(mots[1], "resolv.conf", permises, refus)
+    return _trier(permises), refus
 
 
 def _est_ip(hote: str) -> bool:
@@ -819,8 +849,9 @@ def texte_dropin(permises: list[str]) -> str:
     """Drop-in de secubox-ai.service. Jamais de « IPAddressAllow= » vide : il remettrait à zéro la liste de l'unité
     (127.0.0.1/32, le résolveur de la box)."""
     lignes = ["# Généré par « secubox-aictl preparer » (#3583) depuis /etc/secubox/ai.toml : adresses LAN de gk2, gk0",
-              "# et du SearXNG local, résolues au moment de l'appel. Un changement de DNS ou de configuration demande un",
-              "# nouveau « secubox-aictl preparer » puis la relance de secubox-ai.", "[Service]"]
+              "# et du SearXNG local, résolues au moment de l'appel, et résolveurs privés de /etc/resolv.conf. Un",
+              "# changement de DNS ou de configuration demande un nouveau « secubox-aictl preparer » puis la relance de",
+              "# secubox-ai.", "[Service]"]
     if permises:
         lignes.append("IPAddressAllow=" + " ".join(permises))
     return "\n".join(lignes) + "\n"
@@ -857,6 +888,8 @@ def cmd_preparer() -> int:
         journal(f"configuration refusée : {e} ; aucune adresse LAN permise à l'API")
         audit("preparer", {"issue": "configuration-refusee", "detail": str(e)})
         permises, refus, code = [], [], 2
+    dns, refus_dns = resolveurs_permis()      # indépendants de ai.toml : gardés même si elle est refusée
+    permises, refus = _trier(set(permises) | set(dns)), refus + refus_dns
     for r in refus:
         journal(r)
     try:

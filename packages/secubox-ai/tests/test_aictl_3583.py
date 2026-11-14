@@ -87,6 +87,7 @@ class Env:
         monkeypatch.setattr(ctl, "PROPRIETAIRE_CONFIG", uid)
         monkeypatch.setattr(ctl, "MEMINFO", str(self.meminfo))
         monkeypatch.setattr(ctl, "DROPIN_API", tmp_path / "secubox-ai.service.d")
+        monkeypatch.setattr(ctl, "RESOLV", tmp_path / "resolv.conf")     # absent : jamais celui du poste de test
         monkeypatch.setattr(ctl, "PAS_PRET", 0.01)
         monkeypatch.setattr(ctl, "DELAI_PRET", 0.5)
         faux = tmp_path / "systemctl"
@@ -723,3 +724,40 @@ def test_seule_une_annexe_n_est_pas_un_modele_installe(ctl, env):
     (env.modeles / "mmproj-x-f16.gguf").write_bytes(b"GGUF")
     with pytest.raises(ctl.Echec, match="aucun modèle local installé"):
         ctl.choisir_modele(env.ids, ctl.CONFIG_DEFAUT)
+
+
+# ── revue finale : résolveurs de /etc/resolv.conf rouverts à l'API (gk3 résout par gk2) ──
+
+def test_preparer_rouvre_les_resolveurs_prives_de_resolv_conf(ctl, env, monkeypatch):
+    resolv = env.tmp / "resolv.conf"
+    resolv.write_text("# généré\nsearch lan\nnameserver 192.168.1.200 # gk2\nnameserver 127.0.0.1\n"
+                      "nameserver 9.9.9.9\nnameserver fd00::53\nnameserver fe80::1%eth0\nnameserver pas-une-ip\n"
+                      "options edns0\n")
+    monkeypatch.setattr(ctl, "RESOLV", resolv)
+    env.conf.write_text('[gk2]\nmenaces_url = "http://192.168.1.20/api/v1"\nsources_url = ""\n')
+    env.conf.chmod(0o644)
+    assert ctl.cmd_preparer() == 0
+    texte = (ctl.DROPIN_API / "50-adresses.conf").read_text()
+    lignes = [x for x in texte.splitlines() if x.startswith("IPAddressAllow")]
+    # Publique (9.9.9.9) déjà joignable, boucle déjà permise par l'unité, lien local jamais.
+    assert lignes == ["IPAddressAllow=192.168.1.20/32 192.168.1.200/32 fd00::53/128"]
+    refus = [a for a in env.audits() if a["evenement"] == "preparer"][-1]["refus"]
+    assert any("fe80::1" in r for r in refus) and any("pas-une-ip" in r for r in refus)
+
+
+def test_preparer_resolveurs_meme_si_la_configuration_est_refusee(ctl, env, monkeypatch):
+    resolv = env.tmp / "resolv.conf"
+    resolv.write_text("nameserver 192.168.1.200\n")
+    monkeypatch.setattr(ctl, "RESOLV", resolv)
+    env.conf.write_text('[gk2]\nmenaces_url = "http://192.168.1.20/api/v1"\n')
+    env.conf.chmod(0o666)                                  # inscriptible par tous : configuration refusée
+    assert ctl.cmd_preparer() == 2
+    assert "IPAddressAllow=192.168.1.200/32\n" in (ctl.DROPIN_API / "50-adresses.conf").read_text()
+
+
+def test_preparer_sans_resolv_conf(ctl, env, monkeypatch):
+    monkeypatch.setattr(ctl, "RESOLV", env.tmp / "absent")
+    env.conf.write_text('[gk2]\nmenaces_url = "http://192.168.1.20/api/v1"\nsources_url = ""\n')
+    env.conf.chmod(0o644)
+    assert ctl.cmd_preparer() == 0
+    assert "IPAddressAllow=192.168.1.20/32\n" in (ctl.DROPIN_API / "50-adresses.conf").read_text()

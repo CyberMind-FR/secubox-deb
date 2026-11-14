@@ -7,7 +7,7 @@
 # /run/secubox-ai (root:secubox-ai 1770, collant), son dépôt de demandes et le dossier du verrou (jamais par tmpfiles
 # ni par un compte du module : un lien posé à leur place est écarté, jamais suivi), puis écrit le drop-in
 # /run/systemd/system/secubox-ai.service.d/50-adresses.conf (adresses LAN de gk2, gk0 et du SearXNG local, résolues
-# MAINTENANT depuis /etc/secubox/ai.toml) et relit les unités. Unité séparée plutôt qu'ExecStartPre de l'API : un
+# MAINTENANT depuis /etc/secubox/ai.toml, et résolveurs privés de /etc/resolv.conf) et relit les unités. Unité séparée plutôt qu'ExecStartPre de l'API : un
 # daemon-reload pendant le démarrage même de l'unité concernée ne s'appliquerait pas à ce démarrage.
 # LIMITE : un changement de DNS ou de configuration demande « secubox-aictl preparer » puis la relance de secubox-ai.
 [Unit]

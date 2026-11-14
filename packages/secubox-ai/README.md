@@ -79,7 +79,9 @@ modele = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
 ```
 
 Un changement d'adresse dans `ai.toml` (ou de DNS) demande `secubox-aictl preparer` puis
-`systemctl restart secubox-ai` : les adresses LAN rouvertes à l'API sont résolues à ce moment-là.
+`systemctl restart secubox-ai` : les adresses LAN rouvertes à l'API sont résolues à ce moment-là. Les résolveurs
+privés de `/etc/resolv.conf` (gk3 résout par gk2, 192.168.1.200) sont rouverts de la même façon ; 127.0.0.1
+(Unbound de la box) l'est déjà par l'unité.
 
 **La clé du moteur distant circule en clair sur le LAN** : l'appel à gk0 se fait en HTTP (`Authorization: Bearer`).
 Elle ne protège que d'un appel par erreur ; quiconque écoute le LAN peut la lire. Ne pas réutiliser cette clé ailleurs.
