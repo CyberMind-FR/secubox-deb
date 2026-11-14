@@ -116,6 +116,13 @@ Calculés à chaque lecture depuis l'inventaire : par **matériel** (MOCHAbin, R
   retaper son nom ; « Lancer » inactif tant qu'un nom manque.
 - Éditeur : catalogue à gauche, étapes au centre (ajout par clic et par glisser, ordre modifiable), cibles, programmation,
   « Simuler sur… », « Enregistrer ».
+- **Zoom des panneaux** (validé par le propriétaire le 2026-11-14, plan de travail « Panneau agrandi » de la maquette) :
+  chaque panneau (Flotte, Journal en direct, Macros, panneau de la box) porte un bouton « Agrandir » (`aria-label`
+  explicite) ; agrandi, il occupe toute la console en gardant ses commandes et son flux (le journal y gagne un filtre par
+  box et par niveau et une recherche, côté client) ; une barre en tête passe d'un panneau agrandi à l'autre ; « Réduire »
+  et la touche Échap (écouteur limité à la page de la console, jamais global à l'hôte) rendent la console entière ; le
+  choix est gardé dans `sessionStorage` (essais enveloppés : la page marche sans). Aucun appel réseau en plus : le zoom
+  ne change que la mise en page. Sous 720 px de large, un panneau ouvert est d'office agrandi.
 
 ## 4 bis. Réponses à la relecture « constructeur » (2026-11-13) — choix de Claude, à contester
 
@@ -161,7 +168,7 @@ fausse file d'opérations, API, page en Playwright à 1440 et 420 px).
 
 ## 6. Essais
 
-Banc : gk6 et gk7 depuis gk2 (box du propriétaire). Vérifier : Diagnostic complet sur 2 box ; Mise à jour sûre avec un
+Banc : gk6 et gk7 depuis gk2 (box du propriétaire) ; le lien TR-369 gk2 → gk7 est vérifié le 2026-11-14 (maj-paquets accepté, terminé rc 0 en 16 s, audit demande/accepte/succes). Vérifier : Diagnostic complet sur 2 box ; Mise à jour sûre avec un
 écart provoqué (service arrêté entre les deux relevés) → arrêt avant la 2e box ; refus d'un `reboot` sans nom retapé ;
-refus d'une programmation contenant `reboot` ; maître relancé pendant une exécution → `interrompue` ; une box muette non
+refus d'une programmation contenant `reboot` ; zoom de chaque panneau puis Échap (console entière, flux du journal non coupé) ; maître relancé pendant une exécution → `interrompue` ; une box muette non
 cochable.
