@@ -113,10 +113,26 @@ class SearxngIndisponible(httpx.HTTPError):
     """Aucune source SearXNG utilisable ; le message est l'état de la sonde (compté comme panne)."""
 
 
+def _extraire_resultats(corps):
+    """Corps JSON d'un SearXNG : dict avec `results` liste, sinon SearxngIndisponible("format").
+    Ne garde que les entrées dont url, title et content (s'ils existent) sont des chaînes."""
+    if not isinstance(corps, dict) or not isinstance(corps.get("results"), list):
+        raise SearxngIndisponible("format")
+    sortie = []
+    for x in corps["results"]:
+        if not isinstance(x, dict) or not isinstance(x.get("url"), str) or not x["url"]:
+            continue
+        titre, extrait = x.get("title", ""), x.get("content", "")
+        if not isinstance(titre, str) or not isinstance(extrait, str):
+            continue
+        sortie.append({"titre": titre, "extrait": extrait, "url": x["url"]})
+    return sortie[:10]
+
+
 async def _searxng_local(url, requete):
     """SearXNG local : adresse de conteneur privée voulue (configuration root), donc hors garde « publique ».
     Délai de connexion 2 s, pas de redirection, réponse bornée. Rend la liste JSON brute ou lève."""
-    delai = httpx.Timeout(20, connect=2)
+    delai = httpx.Timeout(8, connect=2)
     async with _client("searxng_local", delai, follow_redirects=False) as c:
         async with c.stream("GET", url.rstrip("/") + "/search",
                             params={"q": requete, "format": "json", "language": "fr"}) as r:
@@ -127,7 +143,7 @@ async def _searxng_local(url, requete):
                 brut += bloc
                 if len(brut) > TAILLE_PAGE_MAX:
                     raise SearxngIndisponible("trop gros")
-    return json.loads(brut).get("results", [])
+    return _extraire_resultats(json.loads(brut))
 
 
 async def outil_searxng(requete):
@@ -138,7 +154,7 @@ async def outil_searxng(requete):
     if url:
         try:
             resultats = await _searxng_local(url, requete)
-        except (httpx.HTTPError, ValueError, AttributeError):
+        except (httpx.HTTPError, ValueError):
             log.warning("searxng local indisponible, repli sur le distant")
     if resultats is None:
         m = moteurs._distant()
@@ -152,9 +168,11 @@ async def outil_searxng(requete):
         async with m.client(20) as c:
             r = await c.get("/search", params={"q": requete, "format": "json", "language": "fr"})
             r.raise_for_status()
-        resultats = r.json().get("results", [])
-    return [{"titre": x.get("title", ""), "extrait": x.get("content", ""), "url": x["url"]}
-            for x in resultats[:10] if isinstance(x, dict) and x.get("url")]
+        try:
+            resultats = _extraire_resultats(r.json())
+        except ValueError:
+            raise SearxngIndisponible("format") from None
+    return resultats
 
 
 async def outil_secubox(requete):

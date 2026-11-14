@@ -283,6 +283,8 @@ def distant(web, tmp_path, monkeypatch):
                 raise httpx.ConnectError("injoignable", request=req)
             return httpx.Response(comportement["sante"], json={})
         if req.url.path == "/search":
+            if comportement["recherche"] is not None:
+                return httpx.Response(200, json=comportement["recherche"])
             return httpx.Response(200, json={"results": [
                 {"title": "Michel Murty", "content": "chanteur", "url": "https://michelmurty.fr/"},
                 {"title": "sans url"}]})
@@ -455,3 +457,31 @@ async def test_client_local_sans_env_ni_redirection_ni_journal(local, monkeypatc
     await recherche.outil_searxng("secret-question")
     assert clients[0]["trust_env"] is False and clients[0]["follow_redirects"] is False
     assert "secret-question" not in caplog.text and "l.fr" not in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("corps", [{"results": {"a": 1}}, [], {"results": None}, {"x": 1}])
+async def test_local_results_mal_forme_repli_distant(local, corps):
+    _, etat, _ = local
+    etat["contenu"] = json.dumps(corps).encode()
+    assert (await recherche.outil_searxng("zia"))[0]["titre"] == "Michel Murty"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("corps", [{"results": {"a": 1}}, ["x"], {"results": "texte"}])
+async def test_distant_results_mal_forme_panne_sans_exception(distant, corps):
+    _, comportement = distant
+    comportement["recherche"] = corps
+    prefs = reglages.lire_prefs()
+    prefs["outils"].update(secubox=False, wikipedia=False)
+    assert await recherche.recherche_fiable("Michel Murty", prefs, [], None) == ("indisponible", "")
+
+
+@pytest.mark.asyncio
+async def test_entrees_non_chaines_ignorees(distant):
+    _, comportement = distant
+    comportement["recherche"] = {"results": [
+        {"title": "ok", "content": "c", "url": "https://a.fr/"},
+        {"title": "x", "url": 42}, {"title": ["liste"], "url": "https://b.fr/"},
+        {"title": "x", "content": 5, "url": "https://c.fr/"}, "chaine", {"url": ""}]}
+    assert await recherche.outil_searxng("zia") == [{"titre": "ok", "extrait": "c", "url": "https://a.fr/"}]
