@@ -250,3 +250,19 @@ def test_usage_json_et_code_distinct(wb, capsys):
     assert wb.main([]) == 64
     assert json.loads(capsys.readouterr().out) == {"ok": False, "motif": "usage"}
     assert wb.main(["autre", "x"]) == 64
+
+
+def test_bloc_refuse_sans_ligne_declaree(wb, tmp_path):
+    """#3716, tâche 5 : le postinst sème un fichier COMMENTÉ quand l'adresse publique de la box est inconnue (NAT).
+    Tant que l'administrateur n'a écrit aucune ligne SECUBOX_WAF_PROTEGEES, un bloc est refusé (P2) ; une ligne vide
+    (`SECUBOX_WAF_PROTEGEES=`) est une déclaration explicite « rien de plus à protéger »."""
+    f = tmp_path / "p.env"
+    for contenu in ("", "# SECUBOX_WAF_PROTEGEES=203.0.113.7/32\n", "\n  \n# note\n"):
+        f.write_text(contenu)
+        assert wb.lire_protegees(f) == []
+        with pytest.raises(wb.GardeIllisible):
+            wb.lire_protegees(f, exiger=True)
+    f.write_text("# note\nSECUBOX_WAF_PROTEGEES=\n")
+    assert wb.lire_protegees(f, exiger=True) == []
+    f.write_text("SECUBOX_WAF_PROTEGEES=203.0.113.7/32\n")
+    assert wb.lire_protegees(f, exiger=True) == [ipaddress.ip_network("203.0.113.7/32")]

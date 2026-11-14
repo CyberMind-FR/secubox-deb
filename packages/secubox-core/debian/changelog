@@ -1,3 +1,14 @@
+secubox-core (1.8.32-1~trixie1) trixie; urgency=medium
+
+  * secubox_core.compte_service : comptes de service par clé publique Ed25519
+    (/etc/secubox-comptes-service/<compte>/<empreinte>.pub, arbre root), garde
+    require_ai_ban : jeton EdDSA par requête, audience = nom court de la box,
+    portée waf-ban, durée de 60 s au plus, jti à usage unique, empreinte SHA-256
+    du corps brut, corps lu borné après la signature ; refus audités sans perte
+    (ref #3716).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 08:56:33 +0100
+
 secubox-core (1.8.31-1~trixie1) trixie; urgency=medium
 
   * secubox-masquer-jetons-journaux suit le lien /var/log/nginx -> /data/log/nginx

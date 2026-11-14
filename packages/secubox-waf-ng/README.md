@@ -79,6 +79,79 @@ sudo apt install secubox-waf-ng
 - Logs: `/var/log/secubox/waf/waf-threats.log`, `/var/log/secubox/cookie-audit/server.jsonl`
 - Cache: `/var/cache/secubox/waf/media`
 
+## Bans de bloc /24 et compte de service `ai-ban` (#3716, 1.35.0)
+
+Une box d'IA (POC sur gk0) propose des bans à partir des alertes ; elle n'écrit dans le pare-feu de la box que par
+trois routes gardées, et un bloc /24 ne se bannit que par `waf-blocs`, en root.
+
+**Table `inet secubox_waf_blocs`** (à part de `inet secubox`, que sbxwaf vide et recrée) : ensemble `blocs4`
+(`ipv4_addr`, `interval, timeout`, compteur), chaîne `entree` (crochet `input`, priorité -101, juste avant `waf_drop`),
+règle `ct direction original ip saddr @blocs4 counter drop` : seuls les flux ouverts par le bloc sont coupés, les
+réponses aux connexions que la box ouvre (DNS, apt, ACME) passent. Fichier livré : `/usr/share/secubox/waf/blocs.nft`.
+État root : `/var/lib/secubox-waf-blocs/blocs.json` (dossier root 0700, fichier 0600), fin de chaque bloc. L'unité
+`secubox-waf-blocs` rejoue la table et ses blocs (temps **restant**) au démarrage et à chaque rechargement de
+`nftables.service` ; la minuterie `secubox-waf-blocs-veille` (60 s, `waf-blocs reparer`) remet ce qui manque après
+un `nft -f` direct. IPv4 seulement.
+
+**Gardes de `waf-blocs`** (pour tout ban, adresse ou bloc) : jamais le privé, une plage de
+`/etc/secubox/waf/protegees.env` (`SECUBOX_WAF_PROTEGEES=…`, une ligne, virgules), une adresse d'une interface de la
+box, ni un point de terminaison WireGuard. Une source illisible refuse (`garde_illisible`). **Un bloc est refusé tant
+que `protegees.env` n'a aucune ligne `SECUBOX_WAF_PROTEGEES`** : derrière un NAT l'adresse publique n'est sur aucune
+interface, et le paquet ne la devine pas. Le postinst sème un fichier **commenté** s'il est absent (jamais écrasé) ;
+l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (ou la ligne vide
+`SECUBOX_WAF_PROTEGEES=` s'il n'y a rien de plus à protéger), puis redémarre `secubox-waf-ng` pour sbxwaf.
+
+**Verbes `wafctl`** (le compte `secubox` les a par sudo ; `ban-bloc` et `unban-bloc` passent par `systemd-run`) :
+
+| Verbe | Effet |
+|---|---|
+| `wafctl ban-bloc <a.b.c.0/24> <durée>` | bannit un /24 canonique, 1 h à 7 j ; un rebannissement ne raccourcit jamais |
+| `wafctl unban-bloc <a.b.c.0/24>` | retire le bloc (table et état) |
+| `wafctl blocs` | liste JSON des blocs non échus, temps restant, présence dans nft |
+| `wafctl cle-ai-ban ajouter <fichier.pub>` | **root seul**, hors sudoers : pose une clé publique Ed25519 sous `/etc/secubox-comptes-service/ai-ban/<empreinte>.pub` (root 0644 ; empreinte = SHA-256 hex du DER, le `kid` des jetons) ; deux clés au plus |
+| `wafctl cle-ai-ban retirer <empreinte>` / `retirer --toutes` | **root seul** : révoque une clé, ou toutes (effet à la requête suivante) |
+| `wafctl cle-ai-ban lister` | empreintes posées, et si le nom de fichier est la vraie empreinte |
+
+Réponse : une ligne JSON `{"ok", "motif", …}` ; codes de sortie `invalide` 1, `privee` 2, `protegee` 3, `box` 4,
+`pair` 5, `garde_illisible` 6, `nft` 7, `duree` 8, `etat` 9, `audit` 10, `incoherent` 11, `usage` 64. Chaque geste
+est une ligne de `/var/log/secubox/audit.log`.
+
+**Rotation de la clé** : générer la nouvelle paire **sur la box de l'IA** (la privée ne la quitte jamais), copier la
+`.pub` sur la box, `sudo wafctl cle-ai-ban ajouter /tmp/nouvelle.pub` (deux clés valent le temps de la bascule),
+basculer le relais sur la nouvelle privée, puis `sudo wafctl cle-ai-ban retirer <ancienne empreinte>`. Une troisième
+clé est refusée. **Révocation d'urgence** : `sudo wafctl cle-ai-ban retirer --toutes` — plus aucun jeton `ai-ban`
+n'est accepté. Une mise à jour du paquet ne vide jamais ce dossier.
+
+**Routes `/api/v1/waf/ai/*`** — garde `require_ai_ban` (`secubox_core.compte_service`), exception écrite à
+`RULES-CODE` § 3 : en-tête `Authorization: Bearer <jeton EdDSA>` (`kid`, `sub="ai-ban"`, `aud` = nom court de la box,
+`portee="waf-ban"`, `exp - iat` ≤ 60 s, `jti` à usage unique, `corps` = SHA-256 hex du corps brut, `b""` pour un GET).
+Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet ou portée : 403 ; corps de plus de
+16 Kio : 413.
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /ai/ban` | `{"geste": "ban", "cible": "198.51.100.7" ou "203.0.113.0/24", "duree_s": 3600…604800, "mode": "clic"\|"auto", "conseil": "<id>", "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` |
+| `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` |
+| `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds}` |
+
+Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,
+**cas sûr recontrôlé** (≥ 20 adresses du bloc dans `waf_ban`, catégories `scanners`, `recon_crawler` seulement) ;
+plafonds glissants d'office 5/h et 20/j, du compte 30/h et 100/j. Refus 409 `{"detail": {"motif"}}` : `deja_actif`,
+`duree`, `plafond_compte`, `plafond_auto`, `pas_sur`, et les gardes `privee`, `protegee`, `box`, `pair`,
+`garde_illisible`, `nft` ; 503 `etat`, `journal`, `audit`, `wafctl`, `processus` ; 500 `incoherent`. Un débannissement
+ne lève jamais un ban qu'une autre source couvre (sbxwaf, administrateur) : état `couvert`. Journal des gestes :
+`/var/lib/secubox/waf/ai-ban.jsonl`.
+
+**Un seul processus sert `/ai/*`** : la mémoire des jetons vus, le verrou et les plafonds sont par processus. Le
+paquet pose `SECUBOX_WAF_GESTES_IA=1` sur l'agrégateur seul (drop-in
+`/usr/lib/systemd/system/secubox-aggregator.service.d/secubox-waf-gestes-ia.conf`, pris au redémarrage suivant de
+l'agrégateur, que le paquet ne fait pas) ; `secubox-waf.service` (waf.sock) rend 503 `processus` avant de lire le
+jeton. Une box dont nginx envoie encore `/api/v1/waf/` à `waf.sock` (sans `secubox-aggregator-migrate`) rend donc 503
+sur `/ai/*`.
+
+**AppArmor** : `/etc/apparmor.d/usr.sbin.waf-blocs` est livré en **complain** ; il passe en enforce après relecture
+des journaux au banc gk6.
+
 ## Migration / cutover
 
 Shadow → parity → **go/no-go gate** (bench `>5×` req/s·core, `p99 < ⅓`, `RSS < ¼`;

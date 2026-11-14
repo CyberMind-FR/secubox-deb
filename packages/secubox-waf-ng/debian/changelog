@@ -1,3 +1,25 @@
+secubox-waf-ng (1.35.0-1~trixie1) trixie; urgency=medium
+
+  * Bans de bloc /24 dans une table nft à part (inet secubox_waf_blocs) : waf-blocs
+    (root) garde le privé, les plages de protegees.env, les adresses de la box et les
+    pairs WireGuard ; wafctl ban-bloc, unban-bloc, blocs ; état root
+    /var/lib/secubox-waf-blocs ; unité secubox-waf-blocs (rejeu au rechargement du
+    pare-feu, temps restant) et minuterie secubox-waf-blocs-veille (60 s, réparation
+    après un nft -f direct) (ref #3716).
+  * Compte de service ai-ban : POST /ai/ban, POST /ai/unban, GET /ai/etat, gardés par
+    require_ai_ban (jeton EdDSA à usage unique, clé publique seule sur la box) ; clés
+    gérées en root par wafctl cle-ai-ban ajouter|retirer|lister (ref #3716).
+  * /ai/* servi par le seul agrégateur : drapeau SECUBOX_WAF_GESTES_IA=1 posé par un
+    drop-in de secubox-aggregator.service ; secubox-waf.service (waf.sock) rend 503
+    « processus » (ref #3716).
+  * postinst : protegees.env semé COMMENTÉ s'il est absent (jamais écrasé) ; un bloc
+    est refusé tant qu'aucune ligne SECUBOX_WAF_PROTEGEES n'est déclarée ;
+    systemd-tmpfiles avant les unités ; rejeu et veille activés ; profil AppArmor
+    de waf-blocs livré en complain (enforce après le banc) (ref #3716).
+  * Dépend de secubox-core (>= 1.8.32~) (secubox_core.compte_service) (ref #3716).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 08:56:33 +0100
+
 secubox-waf-ng (1.34.1-1~trixie1) trixie; urgency=medium
 
   * Ligne d'alerte en direct : heure façon console [HH:MM:SS] (ref #3545).

@@ -146,7 +146,9 @@ def _contient(cible, adresse):
 
 def lire_protegees(chemin, exiger=False):
     """Plages protégées du fichier env ; absent => [] (GardeIllisible si `exiger`) ;
-    illisible, clé inconnue ou ligne `export` => GardeIllisible."""
+    illisible, clé inconnue ou ligne `export` => GardeIllisible. Avec `exiger`, il faut aussi une ligne
+    SECUBOX_WAF_PROTEGEES (même vide : « rien de plus à protéger ») : le fichier COMMENTÉ semé par le postinst
+    quand l'adresse publique de la box est inconnue (NAT) ne déclare rien, et un bloc reste refusé (P2)."""
     try:
         contenu = Path(chemin).read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -155,7 +157,7 @@ def lire_protegees(chemin, exiger=False):
         return []
     except (OSError, UnicodeError) as e:
         raise GardeIllisible(f"protégées illisibles : {e}") from e
-    reseaux = []
+    reseaux, declaree = [], False
     for ligne in contenu.splitlines():
         ligne = ligne.strip()
         if not ligne or ligne.startswith("#"):
@@ -165,6 +167,7 @@ def lire_protegees(chemin, exiger=False):
             raise GardeIllisible(f"ligne illisible : {ligne!r}")
         if cle.strip() != CLE_PROTEGEES:
             raise GardeIllisible(f"clé inconnue : {cle.strip()!r}")
+        declaree = True
         valeur = valeur.strip().strip("'\"")
         for morceau in valeur.split(","):
             morceau = morceau.strip()
@@ -174,6 +177,8 @@ def lire_protegees(chemin, exiger=False):
                 reseaux.append(ipaddress.ip_network(morceau, strict=False))
             except ValueError as e:
                 raise GardeIllisible(f"plage protégée invalide : {morceau!r}") from e
+    if exiger and not declaree:
+        raise GardeIllisible(f"aucune ligne {CLE_PROTEGEES} : plages protégées non déclarées")
     return reseaux
 
 

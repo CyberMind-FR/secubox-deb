@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor de waf-blocs (#3716, ruling P8), attaché au chemin de la commande. waf-blocs tourne en root
+# (nft, état root) : lancé par wafctl (sudo depuis l'API du WAF dans l'agrégateur, par systemd-run pour les bans
+# de bloc), par l'unité secubox-waf-blocs (rejeu) et par la minuterie secubox-waf-blocs-veille (réparation).
+#
+# LIVRÉ EN COMPLAIN : rien n'est refusé, chaque écart est journalisé (audit, « apparmor="ALLOWED" »). Il passe en
+# ENFORCE (flags=(enforce), puis apparmor_parser -r) seulement après le banc gk6 (Tâche 9 du plan #3716), une fois
+# les journaux AppArmor relus sur ban-bloc, unban-bloc, blocs, verifier, le rejeu après `systemctl reload nftables`
+# et la réparation après un `nft -f` direct. Un profil enforce faux couperait les bans en silence.
+#
+# Ce qu'il fait : LIT les plages protégées et la table livrée, LIT et ÉCRIT l'état des blocs (dossier root 0700,
+# verrou flock sur le dossier, remplacement atomique par un temporaire « .blocs.json.<hex> »), AJOUTE à l'audit.
+# N'exécute que nft, ip (lecture : `ip -j addr`) et wg (lecture : `wg show all endpoints`), dans ce profil :
+# AppArmor ne borne pas leurs arguments, le code les passe en liste et à chemin fixe. Aucun shell, aucun secret.
+
+#include <tunables/global>
+
+profile waf-blocs /usr/sbin/waf-blocs flags=(complain) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+
+  /usr/sbin/waf-blocs r,
+  /usr/bin/python3* rix,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+
+  deny /etc/secubox/secrets/** rwklx,
+
+  # Gardes et table
+  /etc/secubox/waf/protegees.env r,
+  /usr/share/secubox/waf/blocs.nft r,
+
+  # État root des blocs
+  /var/lib/secubox-waf-blocs/ rk,
+  /var/lib/secubox-waf-blocs/blocs.json rw,
+  /var/lib/secubox-waf-blocs/.blocs.json.* rw,
+
+  # Audit, ajout seul
+  /var/log/secubox/audit.log a,
+
+  # Binaires, dans ce profil
+  /usr/sbin/nft ix,
+  /usr/bin/ip ix,
+  /usr/bin/wg ix,
+  /etc/iproute2/** r,
+  /usr/share/iproute2/** r,
+
+  capability net_admin,                     # nft : table inet secubox_waf_blocs
+  capability dac_override,                  # audit.log partagé, écrit aussi par les comptes des modules
+  network netlink raw,                      # nft, ip, wg (genetlink)
+}

@@ -104,6 +104,12 @@ override_dh_auto_install:
 	install -m 755 composants/waf/scripts/waf-rules-sync debian/secubox-waf-ng/usr/sbin/waf-rules-sync
 	# #3716 : gardes et bans de bloc /24 (table nft inet secubox_waf_blocs), appelé par wafctl et l'unité secubox-waf-blocs.
 	install -m 755 composants/waf/scripts/waf-blocs debian/secubox-waf-ng/usr/sbin/waf-blocs
+	# #3716 (P8) : profil AppArmor de waf-blocs, livré en complain ; enforce après le banc gk6. Chargé par le postinst.
+	install -D -m 0644 apparmor/usr.sbin.waf-blocs \
+	  debian/secubox-waf-ng/etc/apparmor.d/usr.sbin.waf-blocs
+	# #3716 : /ai/* servi par l'agrégateur SEUL (mémoire de rejeu par processus) — drapeau posé par ce drop-in.
+	install -D -m 0644 systemd/secubox-aggregator-gestes-ia.conf \
+	  debian/secubox-waf-ng/usr/lib/systemd/system/secubox-aggregator.service.d/secubox-waf-gestes-ia.conf
 	# #3193 : vhost_profiles.json est un conffile MODIFIÉ à l'exécution (anti-robots, vhosts de l'opérateur) :
 	# --force-confold n'installe jamais la version livrée. Le postinst complète la copie de la box avec les
 	# services et vhosts livrés absents, depuis la copie de référence /usr/share/secubox/waf/vhost_profiles.json.

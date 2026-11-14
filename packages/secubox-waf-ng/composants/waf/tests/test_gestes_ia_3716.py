@@ -122,6 +122,7 @@ def c(monkeypatch, tmp_path):
     waf = _importer_waf()
     from api import gestes_ia as g
     from secubox_core.compte_service import require_ai_ban
+    monkeypatch.setenv("SECUBOX_WAF_GESTES_IA", "1")          # le processus désigné (agrégateur, tâche 5)
     monkeypatch.setattr(waf, "AUDIT_LOG", tmp_path / "audit.log")
     monkeypatch.setattr(g, "JOURNAL_AI", tmp_path / "ai-ban.jsonl")
     monkeypatch.setattr(g, "BANS_WAF", tmp_path / "bans.jsonl")
@@ -544,6 +545,7 @@ def c_garde(monkeypatch, tmp_path):
     monkeypatch.setattr(cs, "_armer_minuterie", lambda: None)
     monkeypatch.setattr(cs, "_DEMARRAGE", 0.0)
     monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")
+    monkeypatch.setenv("SECUBOX_WAF_GESTES_IA", "1")          # le processus désigné (agrégateur, tâche 5)
     monkeypatch.setattr(waf, "AUDIT_LOG", tmp_path / "audit.log")
     monkeypatch.setattr(g, "JOURNAL_AI", tmp_path / "ai-ban.jsonl")
     monkeypatch.setattr(g, "BANS_WAF", tmp_path / "bans.jsonl")
@@ -640,6 +642,39 @@ def test_routes_branchees_sur_l_application():
         assert require_ai_ban in [d.call for d in route.dependant.dependencies]
         assert route.body_field is None                     # P11 : aucun modèle de corps FastAPI
         assert not __import__("asyncio").iscoroutinefunction(route.endpoint)   # § 6 : pool de fils
+
+
+# ── UN seul processus sert /ai/* (tâche 5) ─────────────────────────────
+def test_processus_non_designe_refuse_avant_le_jeton(c, monkeypatch):
+    """La mémoire de rejeu, le verrou et les plafonds sont PAR PROCESSUS : seul l'agrégateur (drapeau posé par son
+    drop-in) sert /ai/*. Ailleurs (secubox-waf.service sur waf.sock, groupd), 503 `processus` AVANT toute lecture du
+    jeton ou du corps : aucun jti n'y est consommé, aucun wafctl lancé, aucune ligne d'audit."""
+    c.waf.app.dependency_overrides.clear()                      # la vraie garde : sans drapeau, elle n'est pas atteinte
+    for valeur in (None, "", "0", "oui", " 1"):
+        if valeur is None:
+            monkeypatch.delenv("SECUBOX_WAF_GESTES_IA", raising=False)
+        else:
+            monkeypatch.setenv("SECUBOX_WAF_GESTES_IA", valeur)
+        for r in (c.ban("198.51.100.7"), c.c.post("/ai/unban", json={"geste": "unban", "id": "a" * 32}),
+                  c.c.get("/ai/etat")):
+            assert r.status_code == 503, (valeur, r.text)
+            assert r.json() == {"detail": {"motif": "processus"}}
+    assert c.faux.appels == [] and c.audit() == [] and c.lignes_journal() == []
+
+
+def test_processus_designe_atteint_la_garde(c, monkeypatch):
+    c.waf.app.dependency_overrides.clear()
+    monkeypatch.setenv("SECUBOX_WAF_GESTES_IA", "1")
+    assert c.c.get("/ai/etat").status_code == 401             # le drapeau ouvre la route, pas la garde
+
+
+def test_le_drapeau_passe_avant_la_garde():
+    waf = _importer_waf()
+    from api import gestes_ia as g
+    from secubox_core.compte_service import require_ai_ban
+    for route in (r for r in waf.app.routes if getattr(r, "path", "").startswith("/ai/")):
+        appels = [d.call for d in route.dependant.dependencies]
+        assert appels.index(g.processus_designe) < appels.index(require_ai_ban)
 
 
 def test_postinst_cree_le_dossier_des_cles_root():

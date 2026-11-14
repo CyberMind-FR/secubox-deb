@@ -38,7 +38,10 @@ FastAPI (FastAPI lirait le corps AVANT la garde) ; le corps brut, déjà lu et b
 par `model_validate_json`.
 
 Les gestes sont sérialisés par un verrou de processus (contrôle du journal → wafctl → journal → audit) : les routes
-sont servies par UN seul processus (l'agrégateur, `--workers 1`), comme l'exige la mémoire de rejeu de la garde.
+sont servies par UN seul processus (l'agrégateur, `--workers 1`), comme l'exige la mémoire de rejeu de la garde. Ce
+module est aussi importé par `secubox-waf.service` (uvicorn sur waf.sock) : seul le processus qui porte
+`SECUBOX_WAF_GESTES_IA=1` (drop-in de secubox-aggregator.service livré par ce paquet) sert `/ai/*` ; tout autre rend
+503 `processus` avant la garde (`processus_designe`) — aucun jeton n'y est lu, aucun jti consommé.
 """
 from __future__ import annotations
 
@@ -61,7 +64,19 @@ from secubox_core.compte_service import TAILLE_MAX_CORPS, require_ai_ban
 
 log = logging.getLogger("secubox.waf.gestes_ia")
 
-router = APIRouter(prefix="/ai")
+#: Posé à « 1 » par le seul drop-in de secubox-aggregator.service : mémoire de rejeu, verrou et plafonds sont PAR
+#: PROCESSUS, deux processus serviraient deux fois le même jeton.
+DRAPEAU_PROCESSUS = "SECUBOX_WAF_GESTES_IA"
+
+
+def processus_designe() -> None:
+    """503 `processus` hors du processus désigné, AVANT la garde (la route n'existe pas ici, le jeton n'est pas lu)."""
+    if os.environ.get(DRAPEAU_PROCESSUS) != "1":
+        raise HTTPException(503, detail={"motif": "processus"})
+
+
+# Dépendance de routeur : FastAPI la place avant celles de chaque route (require_ai_ban, _corps).
+router = APIRouter(prefix="/ai", dependencies=[Depends(processus_designe)])
 
 #: Journal des gestes (ajout seul) : `ban` et `annule`. Il fait foi pour les plafonds et pour « ses propres bans ».
 JOURNAL_AI = Path("/var/lib/secubox/waf/ai-ban.jsonl")
