@@ -35,6 +35,7 @@ import os
 import pwd
 import re
 import secrets
+import shutil
 import socket
 import stat
 import subprocess
@@ -78,6 +79,8 @@ _NOM_DEMANDE = re.compile(r"^(demarrer|arreter|redemarrer)\.demande$")
 _TMP_API = re.compile(r"^\.(demarrer|arreter|redemarrer)\..+\.tmp$")
 TAILLE_DEMANDE = 64           # l'API dépose un fichier vide
 DUREE_TMP = 60                # un temporaire de l'API resté plus d'une minute est abandonné
+DUREE_ECARTE = 3600           # une entrée mise de côté (« .ecarte.* ») est purgée après une heure
+AUDIT_MAX_PASSAGE = 20        # lignes d'audit détaillées par passage ; au-delà, un seul résumé chiffré
 TAILLE_TOML = 64 * 1024
 TAILLE_CLE = 4096
 _CLE = re.compile(r"^[\x21-\x7e]{1,4096}$")   # jeton Bearer : ASCII visible, jamais d'espace ni de saut de ligne
@@ -150,9 +153,14 @@ def _root() -> bool:
 
 
 def _identites() -> dict:
-    """uid et gid exigés des fichiers root, uid du compte de l'API, gid des groupes secubox-ai et secubox-ai-moteur."""
-    return {"racine": 0, "gid_racine": 0, "api": pwd.getpwnam(COMPTE_API).pw_uid,
-            "gid_ai": grp.getgrnam(GROUPE_AI).gr_gid, "gid_moteur": grp.getgrnam(GROUPE_MOTEUR).gr_gid}
+    """uid et gid exigés des fichiers root, uid du compte de l'API, gid des groupes secubox-ai et secubox-ai-moteur.
+    Lève Echec (message clair) si un compte ou un groupe du module manque."""
+    try:
+        return {"racine": 0, "gid_racine": 0, "api": pwd.getpwnam(COMPTE_API).pw_uid,
+                "gid_ai": grp.getgrnam(GROUPE_AI).gr_gid, "gid_moteur": grp.getgrnam(GROUPE_MOTEUR).gr_gid}
+    except KeyError as e:
+        raise Echec(f"compte ou groupe {COMPTE_API}/{GROUPE_AI}/{GROUPE_MOTEUR} absent : paquet secubox-ai non "
+                    f"configuré (dpkg --configure secubox-ai)") from e
 
 
 def systemctl(*args: str) -> subprocess.CompletedProcess:
@@ -457,7 +465,14 @@ def _attendre_pret() -> None:
         if etat in ("failed", "inactive"):
             raise Echec(f"le moteur local s'est arrêté au chargement du modèle (journalctl -u {UNITE_MOTEUR})")
         if time.monotonic() >= limite:
-            raise Echec(f"le moteur local ne répond pas après {int(DELAI_PRET)} s")
+            # Arrêté AVANT de publier « erreur » : un moteur prêt plus tard contredirait l'état publié.
+            try:
+                _arreter_unite()
+            except (OSError, subprocess.SubprocessError) as e:
+                raise Echec(f"le moteur local ne répond pas après {int(DELAI_PRET)} s et n'a pas pu être arrêté "
+                            f"({e.__class__.__name__})") from e
+            raise Echec(f"le moteur local ne répond pas après {int(DELAI_PRET)} s : arrêté "
+                        f"(journalctl -u {UNITE_MOTEUR})")
         time.sleep(PAS_PRET)
 
 
@@ -576,17 +591,48 @@ def _retirer(dfd: int, nom: str) -> None:
         journal("dossier dans le dépôt des demandes : mis de côté")
 
 
-def traiter_demandes() -> int:
-    """UNE demande valide par passage, la plus ancienne (la dernière intention s'applique en dernier) : l'unité
-    .path relance le service tant qu'il reste des *.demande. Noms inattendus et demandes refusées : retirés et
-    tracés au même passage. Réussit toujours (un échec répété ne doit pas désarmer l'unité .path)."""
-    if not _root():
-        journal("demandes : root exigé")
-        return 2
+class _Traces:
+    """Journal et audit d'un passage, bornés : AUDIT_MAX_PASSAGE lignes détaillées, puis un résumé chiffré (un
+    compte du groupe qui remplirait le dépôt ne fait pas écrire root sans fin)."""
+
+    def __init__(self):
+        self.n = 0
+
+    def __call__(self, issue: str, detail: str, nom: str) -> None:
+        self.n += 1
+        if self.n <= AUDIT_MAX_PASSAGE:
+            journal(f"demande {nom[:64]!r} {issue} : {detail}")
+            audit("demande", {"issue": issue, "detail": detail, "nom": nom[:64]})
+
+    def resumer(self) -> None:
+        if self.n > AUDIT_MAX_PASSAGE:
+            journal(f"{self.n} entrées écartées du dépôt des demandes à ce passage")
+            audit("demande", {"issue": "ignorees", "nombre": self.n})
+
+
+def _purger_ecarte(dfd: int, nom: str, maintenant: float) -> None:
+    """Entrée mise de côté plus vieille que DUREE_ECARTE : retirée sans jamais suivre de lien (rmtree par descripteur)."""
+    try:
+        st = os.stat(nom, dir_fd=dfd, follow_symlinks=False)
+        if maintenant - st.st_mtime <= DUREE_ECARTE:
+            return
+        if stat.S_ISDIR(st.st_mode):
+            shutil.rmtree(nom, dir_fd=dfd)
+        else:
+            os.unlink(nom, dir_fd=dfd)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        journal(f"entrée mise de côté non purgée ({e.__class__.__name__})")
+
+
+def _consommer_demande() -> str | None:
+    """Parcourt le dépôt : retire et trace ce qui n'est pas une demande recevable, purge les restes, puis retire et
+    renvoie la plus ancienne demande valide (None s'il n'y en a pas)."""
     preparer_dossiers()
     ids = _identites()
     dfd = _ouvrir_dossier(run_dir() / "demandes", {ids["racine"]})
-    retenue = None
+    tracer = _Traces()
     try:
         valides = []
         maintenant = time.time()
@@ -600,31 +646,70 @@ def traiter_demandes() -> int:
                     pass
                 continue                      # en cours d'écriture par l'API
             if nom.startswith(".ecarte."):
+                _purger_ecarte(dfd, nom, maintenant)
                 continue
             if not _NOM_DEMANDE.fullmatch(nom):
                 _retirer(dfd, nom)
-                journal(f"demande au nom invalide ignorée : {nom[:64]!r}")
-                audit("demande", {"issue": "ignoree", "detail": "nom invalide", "nom": nom[:64]})
+                tracer("ignoree", "nom invalide", nom)
                 continue
             motif = lire_demande(dfd, nom, ids["api"])
             if motif:
                 _retirer(dfd, nom)
-                journal(f"demande {nom} refusée : {motif}")
-                audit("demande", {"issue": "refusee", "detail": motif, "nom": nom})
+                tracer("refusee", motif, nom)
                 continue
             try:
                 valides.append((os.stat(nom, dir_fd=dfd, follow_symlinks=False).st_mtime_ns, nom))
             except FileNotFoundError:
                 continue                      # retirée entre-temps (l'API la remplace par os.replace)
-        if valides:
-            retenue = min(valides)[1]
-            _retirer(dfd, retenue)            # consommée AVANT l'action : une nouvelle demande relancera l'unité
+        tracer.resumer()
+        if not valides:
+            return None
+        retenue = min(valides)[1]
+        _retirer(dfd, retenue)                # consommée AVANT l'action : une nouvelle demande relancera l'unité
+        return retenue
     finally:
         os.close(dfd)
+
+
+def _vider_depot() -> None:
+    """Repli quand le dépôt n'a pas pu être parcouru normalement : retire les *.demande (sans suivre de lien) pour
+    que l'unité .path ne relance pas le service en boucle jusqu'à se désarmer."""
+    try:
+        dfd = os.open(run_dir() / "demandes", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError as e:
+        journal(f"dépôt des demandes inaccessible ({e.__class__.__name__})")
+        return
+    try:
+        for nom in os.listdir(dfd):
+            if nom.endswith(".demande"):
+                try:
+                    _retirer(dfd, nom)
+                except OSError as e:
+                    journal(f"demande non retirée ({e.__class__.__name__})")
+    finally:
+        os.close(dfd)
+
+
+def traiter_demandes() -> int:
+    """UNE demande valide par passage, la plus ancienne (la dernière intention s'applique en dernier) : l'unité
+    .path relance le service tant qu'il reste des *.demande. Noms inattendus et demandes refusées : retirés et
+    tracés (borné) au même passage. Réussit toujours, et ne laisse jamais une demande en place sur une erreur (un
+    échec répété ne doit pas désarmer l'unité .path)."""
+    if not _root():
+        journal("demandes : root exigé")
+        return 2
+    try:
+        retenue = _consommer_demande()
+    except (Echec, OSError, KeyError) as e:
+        motif = str(e) if isinstance(e, Echec) else e.__class__.__name__
+        journal(f"dépôt des demandes inutilisable ({motif}) : demandes retirées sans suite")
+        audit("demande", {"issue": "erreur", "detail": f"dépôt inutilisable : {motif}"})
+        _vider_depot()
+        return 0
     if retenue is not None:
         try:
             executer_action(retenue[: -len(".demande")], "api", attendre=True)
-        except (OSError, subprocess.SubprocessError) as e:
+        except (Echec, OSError, subprocess.SubprocessError) as e:
             journal(f"demande {retenue} non exécutée ({e.__class__.__name__})")
             audit("demande", {"issue": "erreur", "nom": retenue, "detail": e.__class__.__name__})
     return 0
@@ -808,19 +893,27 @@ def cmd_cle_distante() -> int:
         journal("clé refusée : vide, trop longue ou hors ASCII visible (rien n'a été écrit)")
         audit("cle-distante", {"issue": "refusee"})
         return 2
-    ids = _identites()
     chemin = Path(os.environ.get("SECUBOX_AI_CLE", CLE_DEFAUT))
     if chemin.parent.name != "ai":
         # Le dossier de la clé est repris root:secubox-ai 0750 : jamais un parent partagé (RULES-CODE § 2).
         journal(f"{chemin} : dossier dédié « …/ai/ » attendu")
         return 2
-    _dossier_root(chemin.parent, 0o750, ids["gid_ai"])
-    dfd = _ouvrir_dossier(chemin.parent, {ids["racine"]})
+    if not chemin.parent.parent.is_dir():
+        journal(f"{chemin.parent.parent} absent : dossier des secrets de la box à créer (root) ; rien n'a été écrit")
+        return 1
     try:
-        ecrire_atomique(dfd, chemin.name, (cle + "\n").encode("ascii"), 0o640, ids["racine"], ids["gid_ai"])
-        os.fsync(dfd)
-    finally:
-        os.close(dfd)
+        ids = _identites()
+        _dossier_root(chemin.parent, 0o750, ids["gid_ai"])
+        dfd = _ouvrir_dossier(chemin.parent, {ids["racine"]})
+        try:
+            ecrire_atomique(dfd, chemin.name, (cle + "\n").encode("ascii"), 0o640, ids["racine"], ids["gid_ai"])
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except (Echec, OSError) as e:
+        journal(f"clé non posée : {e if isinstance(e, Echec) else e.__class__.__name__} ; rien n'a été écrit")
+        audit("cle-distante", {"issue": "erreur"})
+        return 1
     audit("cle-distante", {"issue": "posee"})
     print("clé du moteur distant posée")
     return 0
@@ -859,8 +952,6 @@ def main(argv: list[str]) -> int:
         return 2
     if verbe == "etat":
         return cmd_etat(bool(args))
-    if verbe == "preparer":
-        return cmd_preparer()
     if verbe == "cle-distante":
         return cmd_cle_distante()
     if verbe == "demandes":
@@ -868,11 +959,17 @@ def main(argv: list[str]) -> int:
     if not _root():
         journal(f"{verbe} : root exigé")
         return 2
-    preparer_dossiers()
-    acteur = os.environ.get("SUDO_USER") or "root"
-    if not re.fullmatch(r"[A-Za-z0-9._@-]{1,64}", acteur):
-        acteur = "?"
-    return executer_action(verbe, acteur)
+    try:
+        if verbe == "preparer":
+            return cmd_preparer()
+        preparer_dossiers()
+        acteur = os.environ.get("SUDO_USER") or "root"
+        if not re.fullmatch(r"[A-Za-z0-9._@-]{1,64}", acteur):
+            acteur = "?"
+        return executer_action(verbe, acteur)
+    except (Echec, OSError) as e:
+        journal(f"{verbe} impossible : {e if isinstance(e, Echec) else e.__class__.__name__}")
+        return 1
 
 
 if __name__ == "__main__":

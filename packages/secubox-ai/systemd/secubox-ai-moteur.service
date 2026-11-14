@@ -62,5 +62,9 @@ IPAddressDeny=any
 TemporaryFileSystem=/var/lib/secubox:ro
 BindReadOnlyPaths=/var/lib/secubox/ai/modeles
 InaccessiblePaths=-/etc/secubox/secrets -/run/secubox -/var/log/secubox
-# Seule écriture : sa socket.
+# Seule écriture : sa socket dans /run/secubox-ai (moteur.env est lu par systemd, pas par le moteur ; moteur-etat.json
+# ne le concerne pas : collants, ni l'un ni l'autre ne lui est remplaçable). Le dépôt des demandes et le verrou du
+# contrôleur root lui sont INVISIBLES : un moteur compromis (il analyse des modèles et des invites venus d'ailleurs)
+# ne peut ni déposer de demande ni faire écrire root dans l'audit. Créés par secubox-aictl avant chaque démarrage.
 ReadWritePaths=/run/secubox-ai
+InaccessiblePaths=/run/secubox-ai/demandes /run/secubox-ai/ctl

@@ -81,6 +81,7 @@ class Env:
             monkeypatch.setenv(nom, str(val))
         uid, gid = os.getuid(), os.getgid()
         self.ids = {"racine": uid, "gid_racine": gid, "api": uid, "gid_ai": gid, "gid_moteur": gid}
+        self.identites_reelles = ctl._identites
         monkeypatch.setattr(ctl, "_identites", lambda: dict(self.ids))
         monkeypatch.setattr(ctl, "_root", lambda: True)
         monkeypatch.setattr(ctl, "PROPRIETAIRE_CONFIG", uid)
@@ -577,3 +578,85 @@ def test_unites_demandes_et_preparer(ctl):
     r = _unite("secubox-ai-preparer.service")
     assert r["Type"] == ["oneshot"] and r["ExecStart"] == ["/usr/sbin/secubox-aictl preparer"]
     assert "secubox-ai.service" in " ".join(r["Before"])
+
+
+# ── relecture de la Tâche 13 : borne d'audit, dépôt jamais bloqué, délai de chargement ──
+
+def test_rafale_de_noms_invalides_audit_borne_et_resume(ctl, env, executees):
+    for i in range(50):
+        _deposer(env, f"x{i:02d}.demande")
+    assert ctl.traiter_demandes() == 0
+    assert os.listdir(env.run / "demandes") == [] and executees == []
+    traces = [a for a in env.audits() if a["evenement"] == "demande"]
+    detail = [a for a in traces if a["issue"] in ("ignoree", "refusee")]
+    resume = [a for a in traces if a["issue"] == "ignorees"]
+    assert len(detail) == ctl.AUDIT_MAX_PASSAGE == 20
+    assert len(resume) == 1 and resume[0]["nombre"] == 50
+
+
+def test_ecartes_purges_apres_une_heure(ctl, env, executees):
+    d = env.run / "demandes"
+    for nom, age in ((".ecarte.vieux", 7200), (".ecarte.recent", 10)):
+        (d / nom).mkdir()
+        (d / nom / "dedans").write_text("x")
+        t = time.time() - age
+        os.utime(d / nom, (t, t))
+    lien = d / ".ecarte.lien"
+    cible = env.tmp / "a-garder"
+    cible.mkdir()
+    (cible / "f").write_text("x")
+    lien.symlink_to(cible)
+    t = time.time() - 7200
+    os.utime(lien, (t, t), follow_symlinks=False)
+    assert ctl.traiter_demandes() == 0
+    assert sorted(os.listdir(d)) == [".ecarte.recent"]
+    assert (cible / "f").exists()                 # jamais suivi
+
+
+def test_moteur_ne_voit_ni_le_depot_ni_le_verrou(ctl):
+    u = _unite("secubox-ai-moteur.service")
+    masques = " ".join(u["InaccessiblePaths"]).split()
+    assert "/run/secubox-ai/demandes" in masques and "/run/secubox-ai/ctl" in masques
+
+
+def test_erreur_avant_consommation_la_demande_est_retiree(ctl, env, executees, monkeypatch, capsys):
+    _deposer(env, "demarrer.demande")
+
+    def casse():
+        raise KeyError("secubox-ai")              # compte absent : paquet mal configuré
+
+    monkeypatch.setattr(ctl, "preparer_dossiers", casse)
+    assert ctl.traiter_demandes() == 0
+    assert os.listdir(env.run / "demandes") == [] and executees == []
+    assert env.audits()[-1].items() >= {"evenement": "demande", "issue": "erreur"}.items()
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_cle_distante_dossier_des_secrets_absent_message_clair(ctl, env, monkeypatch, capsys):
+    (env.tmp / "secrets").rmdir()
+    monkeypatch.setattr(sys, "stdin", _Entree(b"une-cle-valide\n"))
+    assert ctl.cmd_cle_distante() == 1
+    err = capsys.readouterr().err
+    assert "absent" in err and "une-cle-valide" not in err
+    assert not env.cle.exists()
+
+
+def test_main_compte_absent_message_clair(ctl, env, monkeypatch, capsys):
+    monkeypatch.setattr(ctl, "_identites", env.identites_reelles)
+    monkeypatch.setattr(ctl, "COMPTE_API", "compte-inexistant-3583")
+    for verbe in ("demarrer", "preparer"):
+        assert ctl.main([verbe]) == 1
+        err = capsys.readouterr().err
+        assert "compte" in err and "non configuré" in err and "Traceback" not in err
+
+
+def test_delai_de_chargement_depasse_le_moteur_est_arrete(ctl, env, monkeypatch):
+    env.modele()
+    monkeypatch.setattr(ctl, "sante_moteur", lambda delai=2.0: False)    # ne répond jamais
+    monkeypatch.setattr(ctl, "DELAI_PRET", 0.1)
+    assert ctl.executer_action("demarrer", "root") == 1
+    appels = env.appels()
+    assert appels.index("start secubox-ai-moteur.service") < appels.index("stop secubox-ai-moteur.service")
+    assert appels.index("stop secubox-ai-moteur.service") < appels.index("ETAT erreur")
+    assert env.etat_unite() == "inactive"
+    assert "ne répond pas" in env.etat_publie()["message"] and "arrêté" in env.etat_publie()["message"]
