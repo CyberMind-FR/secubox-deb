@@ -12,7 +12,12 @@ de ses flux est clos (#3308 : une page rechargée laisse un flux fantôme que le
 échec d'écriture) ; seul le plafond global rend LimiteAtteinte.
 
 Événements (noms fermés) : `notify` (toute notification de la box, forme épurée du canal), `operation` (progression, fin, demande d'action),
-`etat` (mains liées, consentement, support, connexion du flux, perte). Aucun secret : seules passent les clés déjà épurées par le canal."""
+`etat` (mains liées, consentement, support, connexion du flux, perte), `macro` (déroulement d'une exécution de macro, #3702). Aucun secret :
+seules passent les clés déjà épurées par le canal.
+
+Relais (#3702) : tant qu'une exécution de macro touche une box, `relayer(cle_box, cle_flux)` fait aussi poser chaque événement `operation` de
+cette box chez les abonnés du flux de l'exécution (`exec:<id>`) ; aucun autre nom n'est relayé. Borné : RELAIS_MAX box, RELAIS_PAR_BOX flux
+par box (une box n'est que dans une exécution à la fois)."""
 from __future__ import annotations
 
 import asyncio
@@ -23,7 +28,9 @@ from collections import deque
 PLAFOND_PAR_LOGIN = 4
 PLAFOND_GLOBAL = 32      # tous administrateurs confondus : borne les files et les fils de lecture du service
 FILE_MAX = 64
-NOMS = ("notify", "operation", "etat")
+NOMS = ("notify", "operation", "etat", "macro")
+RELAIS_MAX = 256         # box relayées à la fois (une exécution compte 32 box au plus)
+RELAIS_PAR_BOX = 4
 TYPES_OPERATION = ("X_SECUBOX_OperationProgress", "X_SECUBOX_OperationDone")
 TYPES_ETAT = ("X_SECUBOX_HandsTied", "X_SECUBOX_Consent", "X_SECUBOX_Support")
 
@@ -93,6 +100,7 @@ class Diffusion:
         self.plafond, self.file_max, self.plafond_global = plafond_par_login, file_max, plafond_global
         self._abonnes: dict = {}     # dict : ordre d'abonnement conservé (éviction du plus ancien d'un login)
         self._par_login: dict = {}
+        self._relais: dict = {}      # Box.cle -> set(cle de flux d'exécution)
 
     def abonner(self, login: str, cle: str) -> Abonnement:
         if self._par_login.get(login, 0) >= self.plafond:
@@ -124,10 +132,39 @@ class Diffusion:
     def total(self) -> int:
         return len(self._abonnes)
 
-    def publier(self, cle: str, nom: str, data: dict) -> None:
+    def _poser(self, cle: str, nom: str, data: dict) -> None:
         for ab in list(self._abonnes):
             if ab.cle == cle:
                 ab.poser(nom, data)
+
+    def publier(self, cle: str, nom: str, data: dict) -> None:
+        self._poser(cle, nom, data)
+        if nom == "operation":
+            for flux in list(self._relais.get(cle, ())):
+                self._poser(flux, nom, data)
+
+    def relayer(self, cle_box: str, cle_flux: str) -> None:
+        """Les `operation` de `cle_box` vont aussi au flux `cle_flux` jusqu'à `cesser`. Au plafond, le relais n'est pas posé (journalisé) :
+        la page se resynchronise par GET /executions/{id}."""
+        flux = self._relais.get(cle_box)
+        if flux is None:
+            if len(self._relais) >= RELAIS_MAX:
+                log.warning("relais de %s vers %s refusé : %d box déjà relayées", cle_box, cle_flux, RELAIS_MAX)
+                return
+            flux = self._relais[cle_box] = set()
+        if cle_flux not in flux and len(flux) >= RELAIS_PAR_BOX:
+            log.warning("relais de %s vers %s refusé : %d flux déjà relayés pour cette box", cle_box, cle_flux, RELAIS_PAR_BOX)
+            return
+        flux.add(cle_flux)
+
+    def cesser(self, cle_box: str, cle_flux: str) -> None:
+        """Idempotent."""
+        flux = self._relais.get(cle_box)
+        if flux is None:
+            return
+        flux.discard(cle_flux)
+        if not flux:
+            del self._relais[cle_box]
 
     def fermer(self) -> None:
         """Arrêt du service : chaque flux se termine après avoir vidé sa file."""
