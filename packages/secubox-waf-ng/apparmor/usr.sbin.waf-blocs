@@ -40,7 +40,7 @@ profile waf-blocs /usr/sbin/waf-blocs flags=(complain) {
   /var/lib/secubox-waf-blocs/.blocs.json.* rw,
 
   # Audit, ajout seul
-  /var/log/secubox/audit.log a,
+  /var/log/secubox/audit.log w,
 
   # Binaires, dans ce profil
   /usr/sbin/nft ix,

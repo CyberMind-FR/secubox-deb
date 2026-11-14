@@ -1,3 +1,10 @@
+secubox-waf-ng (1.35.2-1~trixie1) trixie; urgency=medium
+
+  * Profil AppArmor de waf-blocs : audit.log en `w` (patron du dépôt) ; `a` seul
+    casse write() sur un descripteur O_WRONLY|O_APPEND en enforce (ref #3716).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 11:36:32 +0100
+
 secubox-waf-ng (1.35.1-1~trixie1) trixie; urgency=medium
 
   * waf-blocs : une interface WireGuard sans pair (« interface<TAB> ») n'est plus
