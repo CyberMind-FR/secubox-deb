@@ -126,14 +126,17 @@ def test_adresse_seule_verifiee_pareil(wb):
     assert wb.motif_refus(wb.normaliser_cible("fd00::1"), [], set(), set()) == "privee"
 
 
-def _cli(wb, monkeypatch, tmp_path, cible, env=None, ip="[]", wg=""):
+HOTE = json.dumps([{"addr_info": [{"local": "198.18.0.1"}]}])
+
+
+def _cli(wb, monkeypatch, tmp_path, cible, env="SECUBOX_WAF_PROTEGEES=\n", ip=HOTE, wg=""):
     f = tmp_path / "protegees.env"
     if env is not None:
         f.write_text(env)
     monkeypatch.setattr(wb, "PROTEGEES_ENV", f)
 
     def faux(argv):
-        if argv[0] == "ip":
+        if argv[0] == wb.IP:
             return ip
         return wg
     monkeypatch.setattr(wb, "executer", faux)
@@ -162,3 +165,88 @@ def test_cli_ip_en_echec_donne_6(wb, monkeypatch, tmp_path):
     monkeypatch.setattr(wb, "PROTEGEES_ENV", tmp_path / "absent.env")
     monkeypatch.setattr(wb, "executer", lambda argv: (_ for _ in ()).throw(FileNotFoundError("ip")))
     assert wb.main(["verifier", "203.0.113.0/24"]) == 6
+
+
+# --- ronde de correction 1 -------------------------------------------------
+
+def test_ipv6_portant_de_l_ipv4_refusee(wb, monkeypatch, tmp_path, capsys):
+    for x in ("::ffff:10.0.0.1", "::ffff:198.51.100.10", "::10.0.0.1", "2002:c000:204::1", "64:ff9b::c000:201"):
+        with pytest.raises(ValueError):
+            wb.normaliser_cible(x)
+        assert _cli(wb, monkeypatch, tmp_path, x) == 1
+        assert json.loads(capsys.readouterr().out)["motif"] == "invalide"
+    assert wb.normaliser_cible("2001:db8::1")  # IPv6 ordinaire : acceptée
+
+
+def test_mappees_depliees_avant_comparaison(wb):
+    mappe = ipaddress.ip_address("::ffff:198.51.100.10")
+    assert wb.motif_refus(wb.normaliser_bloc("198.51.100.0/24"), [], {mappe}, set()) == "box"
+    assert wb.motif_refus(wb.normaliser_bloc("198.51.100.0/24"), [], set(), {mappe}) == "pair"
+    p = [ipaddress.ip_network("::ffff:203.0.113.0/120")]
+    assert wb.motif_refus(wb.normaliser_bloc("203.0.113.0/24"), p, set(), set()) == "protegee"
+    assert wb.motif_refus(wb.normaliser_cible("203.0.113.9"), p, set(), set()) == "protegee"
+    assert wb.motif_refus(wb.normaliser_bloc("192.0.2.0/24"), p, set(), set()) is None
+    assert wb.adresses_pairs(lambda a: "wg0\tK=\t[::ffff:192.0.2.5]:1\n") == {ipaddress.ip_address("192.0.2.5")}
+
+
+def test_cles_inconnues_et_export_ferment(wb, tmp_path):
+    f = tmp_path / "p.env"
+    for contenu in ("AUTRE=1\n", "export SECUBOX_WAF_PROTEGEES=203.0.113.0/24\n"):
+        f.write_text(contenu)
+        with pytest.raises(wb.GardeIllisible):
+            wb.lire_protegees(f)
+
+
+def test_ligne_wg_illisible_ferme(wb):
+    with pytest.raises(wb.GardeIllisible):
+        wb.adresses_pairs(lambda a: "n'importe quoi\n")
+
+
+def test_ip_vide_ferme(wb):
+    with pytest.raises(wb.GardeIllisible):
+        wb.adresses_locales(lambda a: "[]")
+    with pytest.raises(wb.GardeIllisible):
+        wb.adresses_locales(lambda a: json.dumps([{"addr_info": []}]))
+
+
+def test_binaires_en_chemin_absolu(wb):
+    vus = []
+    wb.adresses_pairs(lambda a: vus.append(a[0]) or "")
+    wb.adresses_locales(lambda a: vus.append(a[0]) or HOTE)
+    assert vus == ["/usr/bin/wg", "/usr/bin/ip"]
+
+
+def test_fichier_absent_selon_la_cible(wb, monkeypatch, tmp_path, capsys):
+    with pytest.raises(wb.GardeIllisible):
+        wb.lire_protegees(tmp_path / "absent.env", exiger=True)
+    assert _cli(wb, monkeypatch, tmp_path, "203.0.113.0/24", env=None) == 6
+    assert json.loads(capsys.readouterr().out) == {"ok": False, "motif": "garde_illisible"}
+    assert _cli(wb, monkeypatch, tmp_path, "203.0.113.7", env=None) == 0
+
+
+def test_forme_canonique_seule(wb):
+    for faux in ("203.0.113.0/024", "203.0.113.0/255.255.255.0", " 203.0.113.0/24", "203.0.113.0/24 ", "203.0.113.0/24\n",
+                 "203.000.113.0/24"):
+        with pytest.raises(ValueError):
+            wb.normaliser_bloc(faux)
+        with pytest.raises(ValueError):
+            wb.normaliser_cible(faux)
+    for faux in (" 203.0.113.7", "203.0.113.7\n", "2001:DB8::1"):
+        with pytest.raises(ValueError):
+            wb.normaliser_cible(faux)
+
+
+def test_precedence_des_motifs(wb):
+    b = wb.normaliser_bloc("10.1.2.0/24")
+    loc = {ipaddress.ip_address("10.1.2.3")}
+    assert wb.motif_refus(b, [ipaddress.ip_network("10.0.0.0/8")], loc, loc) == "privee"
+    c = wb.normaliser_bloc("203.0.113.0/24")
+    l2 = {ipaddress.ip_address("203.0.113.3")}
+    assert wb.motif_refus(c, [ipaddress.ip_network("203.0.113.0/25")], l2, l2) == "protegee"
+    assert wb.motif_refus(c, [], l2, l2) == "box"
+
+
+def test_usage_json_et_code_distinct(wb, capsys):
+    assert wb.main([]) == 64
+    assert json.loads(capsys.readouterr().out) == {"ok": False, "motif": "usage"}
+    assert wb.main(["autre", "x"]) == 64

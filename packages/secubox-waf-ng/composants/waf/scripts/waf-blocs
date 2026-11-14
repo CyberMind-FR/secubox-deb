@@ -24,8 +24,15 @@ INTERDITS = tuple(ipaddress.ip_network(r) for r in (
 PROTEGEES_ENV = Path("/etc/secubox/waf/protegees.env")
 CLE_PROTEGEES = "SECUBOX_WAF_PROTEGEES"
 
+# Chemins absolus (Debian trixie, /usr fusionné) : « absent » veut dire binaire absent.
+IP = "/usr/bin/ip"
+WG = "/usr/bin/wg"
+
 CODES = {None: 0, "invalide": 1, "privee": 2, "protegee": 3,
-         "box": 4, "pair": 5, "garde_illisible": 6}
+         "box": 4, "pair": 5, "garde_illisible": 6, "usage": 64}
+
+# IPv6 qui encapsulent ou traduisent de l'IPv4 : refusées, sbxwaf les traiterait en IPv4.
+_ENCAPSULES = tuple(ipaddress.ip_network(r) for r in ("2002::/16", "64:ff9b::/96"))
 
 
 class GardeIllisible(Exception):
@@ -42,9 +49,11 @@ def normaliser_bloc(texte):
     """IPv4 /24 strict (bits d'hôte nuls) ; ValueError sinon."""
     if not isinstance(texte, str) or "/" not in texte:
         raise ValueError("bloc attendu au format a.b.c.0/24")
-    reseau = ipaddress.ip_network(texte.strip(), strict=True)
+    reseau = ipaddress.ip_network(texte, strict=True)
     if reseau.version != 4 or reseau.prefixlen != 24:
         raise ValueError("seul un bloc IPv4 /24 est accepté")
+    if str(reseau) != texte:
+        raise ValueError("forme canonique exigée")
     return reseau
 
 
@@ -52,13 +61,35 @@ def normaliser_cible(texte):
     """Bloc /24 si « / » présent, sinon adresse IPv4 ou IPv6 ; ValueError sinon."""
     if not isinstance(texte, str):
         raise ValueError("cible invalide")
-    texte = texte.strip()
     if "/" in texte:
         return normaliser_bloc(texte)
-    return ipaddress.ip_address(texte)
+    adresse = ipaddress.ip_address(texte)
+    if str(adresse) != texte:
+        raise ValueError("forme canonique exigée")
+    if adresse.version == 6:
+        if (adresse.ipv4_mapped is not None or int(adresse) > 1 and adresse in ipaddress.ip_network("::/96")
+                or any(adresse in r for r in _ENCAPSULES)):
+            raise ValueError("IPv6 portant de l'IPv4 refusée")
+    return adresse
+
+
+def _mappe(cible):
+    """Forme IPv4-mappée IPv6 d'une cible IPv4 (adresse ou bloc)."""
+    if isinstance(cible, ipaddress.IPv4Network):
+        return ipaddress.IPv6Network(
+            (int(ipaddress.IPv6Address("::ffff:0:0")) | int(cible.network_address), 96 + cible.prefixlen))
+    return ipaddress.IPv6Address("::ffff:" + str(cible))
+
+
+def _depli(adresse):
+    if adresse.version == 6 and adresse.ipv4_mapped is not None:
+        return adresse.ipv4_mapped
+    return adresse
 
 
 def _recoupe(cible, reseau):
+    if cible.version == 4 and reseau.version == 6:
+        cible = _mappe(cible)  # plage ::ffff:x/120 ou ::/0 : protège aussi l'IPv4
     if cible.version != reseau.version:
         return False
     if isinstance(cible, (ipaddress.IPv4Network, ipaddress.IPv6Network)):
@@ -67,6 +98,7 @@ def _recoupe(cible, reseau):
 
 
 def _contient(cible, adresse):
+    adresse = _depli(adresse)
     if cible.version != adresse.version:
         return False
     if isinstance(cible, (ipaddress.IPv4Network, ipaddress.IPv6Network)):
@@ -74,11 +106,14 @@ def _contient(cible, adresse):
     return cible == adresse
 
 
-def lire_protegees(chemin):
-    """Plages protégées du fichier env ; absent => [] ; illisible => GardeIllisible."""
+def lire_protegees(chemin, exiger=False):
+    """Plages protégées du fichier env ; absent => [] (GardeIllisible si `exiger`) ;
+    illisible, clé inconnue ou ligne `export` => GardeIllisible."""
     try:
         contenu = Path(chemin).read_text(encoding="utf-8")
     except FileNotFoundError:
+        if exiger:
+            raise GardeIllisible("fichier des protégées absent") from None
         return []
     except (OSError, UnicodeError) as e:
         raise GardeIllisible(f"protégées illisibles : {e}") from e
@@ -91,7 +126,7 @@ def lire_protegees(chemin):
         if not sep:
             raise GardeIllisible(f"ligne illisible : {ligne!r}")
         if cle.strip() != CLE_PROTEGEES:
-            continue
+            raise GardeIllisible(f"clé inconnue : {cle.strip()!r}")
         valeur = valeur.strip().strip("'\"")
         for morceau in valeur.split(","):
             morceau = morceau.strip()
@@ -107,13 +142,15 @@ def lire_protegees(chemin):
 def adresses_locales(executer):
     """Adresses de la box d'après `ip -j addr` ; échec => GardeIllisible."""
     try:
-        donnees = json.loads(executer(["ip", "-j", "addr"]))
+        donnees = json.loads(executer([IP, "-j", "addr"]))
         adresses = set()
         for interface in donnees:
             for info in interface.get("addr_info", []):
                 local = info.get("local")
                 if local:
-                    adresses.add(ipaddress.ip_address(local.split("%")[0]))
+                    adresses.add(_depli(ipaddress.ip_address(local.split("%")[0])))
+        if not adresses:
+            raise ValueError("aucune adresse : la sortie est inutilisable")
         return adresses
     except Exception as e:  # toute défaillance : la garde est aveugle
         raise GardeIllisible(f"adresses locales illisibles : {e}") from e
@@ -128,7 +165,7 @@ def _hote_endpoint(endpoint):
 def adresses_pairs(executer):
     """Adresses des pairs WireGuard ; `wg` absent => set() ; autre échec => GardeIllisible."""
     try:
-        sortie = executer(["wg", "show", "all", "endpoints"])
+        sortie = executer([WG, "show", "all", "endpoints"])
     except FileNotFoundError:
         return set()
     except Exception as e:
@@ -136,10 +173,14 @@ def adresses_pairs(executer):
     pairs = set()
     try:
         for ligne in sortie.splitlines():
-            champs = ligne.split("\t")
-            if len(champs) < 3 or champs[2].strip() in ("", "(none)"):
+            if not ligne.strip():
                 continue
-            pairs.add(ipaddress.ip_address(_hote_endpoint(champs[2].strip())))
+            champs = ligne.split("\t")
+            if len(champs) < 3:
+                raise ValueError(f"ligne wg illisible : {ligne!r}")
+            if champs[2].strip() == "(none)":
+                continue
+            pairs.add(_depli(ipaddress.ip_address(_hote_endpoint(champs[2].strip()))))
     except ValueError as e:
         raise GardeIllisible(f"endpoint WireGuard illisible : {e}") from e
     return pairs
@@ -165,7 +206,8 @@ def verifier(texte):
     except ValueError:
         return "invalide"
     try:
-        protegees = lire_protegees(PROTEGEES_ENV)
+        bloc = isinstance(cible, ipaddress.IPv4Network)
+        protegees = lire_protegees(PROTEGEES_ENV, exiger=bloc)
         locales = adresses_locales(executer)
         pairs = adresses_pairs(executer)
     except GardeIllisible:
@@ -176,8 +218,8 @@ def verifier(texte):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) != 2 or argv[0] != "verifier":
-        print("usage : waf-blocs verifier <cible>", file=sys.stderr)
-        return 1
+        print(json.dumps({"ok": False, "motif": "usage"}))
+        return CODES["usage"]
     motif = verifier(argv[1])
     print(json.dumps({"ok": motif is None, "motif": motif}))
     return CODES[motif]
