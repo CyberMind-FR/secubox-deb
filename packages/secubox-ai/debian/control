@@ -1,0 +1,22 @@
+Source: secubox-ai
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-ai
+Architecture: all
+Depends: ${misc:Depends},
+ secubox-core (>= 1.8.30~),
+ python3-fastapi,
+ python3-httpx,
+ uvicorn,
+ poppler-utils,
+ sqlite3,
+ secubox-zia-llm (>= 0.3.0~)
+Description: SecuBox IA — assistant, analyses et moteurs local ou distant
+ Module IA de la box : API FastAPI sur socket Unix, moteur local
+ (llama-server fourni par secubox-zia-llm) ou distant, analyses de
+ documents, d'adresses et de menaces. Ni questions, ni réponses ne sont
+ journalisées.

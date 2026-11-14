@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-ai/usr/lib/secubox/ai
+	cp -r api debian/secubox-ai/usr/lib/secubox/ai/
+	install -d debian/secubox-ai/usr/share/secubox/menu.d
+	cp -r menu.d/. debian/secubox-ai/usr/share/secubox/menu.d/
