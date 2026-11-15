@@ -78,6 +78,8 @@ def load_p2p_config(path: pathlib.Path) -> dict:
         "network": MESH_NETWORK,
         "role": "satellite",
         "master_endpoint": None,
+        # Point d'accès PUBLIC du rendez-vous (#3742), remis aux seuls nœuds distants (hors LAN) : « gk2.secubox.in:51822 ».
+        "public_endpoint": None,
     }
     try:
         with open(path, "rb") as f:
@@ -111,6 +113,39 @@ def load_p2p_config(path: pathlib.Path) -> dict:
             out_masterlink[k] = masterlink[k]
     out["masterlink"] = out_masterlink
     return out
+
+
+_NOM_HOTE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$", re.I)
+
+
+def public_endpoint_valide(valeur) -> str | None:
+    """« hôte:port » normalisé (nom DNS, IPv4, ou [IPv6]), ou None. Il finit dans un fichier lu en root par wg-quick (#1360) :
+    tout ce qui n'est pas strictement une adresse est refusé, jamais nettoyé."""
+    if not isinstance(valeur, str) or not valeur or len(valeur) > 270:
+        return None
+    hote, sep, port = valeur.strip().rpartition(":")
+    if not sep or not port.isdigit() or not 1 <= int(port) <= 65535:
+        return None
+    if hote.startswith("[") and hote.endswith("]"):
+        try:
+            return f"[{ipaddress.IPv6Address(hote[1:-1])}]:{int(port)}"
+        except ValueError:
+            return None
+    try:
+        ad = ipaddress.ip_address(hote)
+        return None if ad.version == 6 else f"{ad}:{int(port)}"     # une IPv6 nue est ambiguë : crochets exigés
+    except ValueError:
+        pass
+    return f"{hote.lower()}:{int(port)}" if _NOM_HOTE.match(hote) else None
+
+
+def endpoint_vers_maitre(offre: dict, adresse_jointe: str) -> str:
+    """Endpoint du maître côté pair : l'annonce publique si le maître l'a remise (nœud distant, #3742), sinon l'adresse
+    que le pair vient lui-même de joindre (comportement LAN inchangé)."""
+    annonce = public_endpoint_valide((offre or {}).get("master_endpoint"))
+    if annonce:
+        return annonce
+    return "%s:%d" % (adresse_jointe, int(offre["master_port"]))
 
 
 def allocate_mesh_ip(network: str, taken: list[str]) -> str:
@@ -182,7 +217,7 @@ def render_wg_conf(state: dict) -> str:
                 lines.append(f"AllowedIPs = {_une_ligne(peer['allowed_ips'])}")
         else:
             lines.append(f"AllowedIPs = {_une_ligne(peer.get('allowed_ips', MESH_NETWORK))}")
-        lines.append("PersistentKeepalive = 25")
+        lines.append("PersistentKeepalive = %d" % int(peer.get("persistent_keepalive") or 25))
     return "\n".join(lines) + "\n"
 
 

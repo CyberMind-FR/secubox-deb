@@ -18,6 +18,11 @@ role           = "satellite"
 # handshake, so the rendezvous can change IP without reconfiguring peers).
 master_endpoint = "82.67.100.75:51822"
 
+# Rendez-vous seulement (#3742) : point d'accès PUBLIC remis aux nœuds DISTANTS (hors LAN, derrière une autre box), qui
+# appellent avec PersistentKeepalive = 25. Les nœuds du LAN n'en reçoivent rien. Nom DNS, IPv4 ou [IPv6], puis « :port ».
+# Côté Freebox : `freeboxctl maillage-appliquer <ip_box>` (ou l'item « maillage distant » de l'autoconfiguration) ouvre le port.
+# public_endpoint = "gk2.secubox.in:51822"
+
 # ---------------------------------------------------------------------------
 # [mesh] — distributed directory placement (gondwana P1, #768)
 #

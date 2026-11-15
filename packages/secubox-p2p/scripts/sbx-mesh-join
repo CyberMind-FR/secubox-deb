@@ -329,9 +329,13 @@ PY2
 fi
 
 # Build join request
+# NŒUD DISTANT (#3742) : parent joint par Internet -> le maître ne fait pas un endpoint de notre adresse LAN et nous remet son
+# annonce publique ; un parent local ne voit aucun changement.
+DISTANT=false
+es_adresse_locale "$MASTER_IP" || DISTANT=true
 if [ -n "$WG_PUB" ]; then
 JSON_DATA=$(cat <<EOF
-{"token":"$TOKEN","fingerprint":"$FINGERPRINT","hostname":"$HOSTNAME","address":"$ADDRESS","wg_public_key":"$WG_PUB","wg_port":$WG_PORT}
+{"token":"$TOKEN","fingerprint":"$FINGERPRINT","hostname":"$HOSTNAME","address":"$ADDRESS","wg_public_key":"$WG_PUB","wg_port":$WG_PORT,"distant":$DISTANT}
 EOF
 )
 else
@@ -418,21 +422,30 @@ if echo "$RESPONSE" | grep -q '"status":"approved"' || \
     if [ -n "$WG_PUB" ] && echo "$RESPONSE" | grep -q '"master_public_key"'; then
         MESH_IP=$(printf '%s' "$RESPONSE" | python3 -c '
 import json, sys, os
-path, master_ip = sys.argv[1], sys.argv[2]
+path, master_ip, lib = sys.argv[1], sys.argv[2], sys.argv[3]
+sys.path.insert(0, lib)
 wg = json.load(sys.stdin)["wg"]
 st = json.load(open(path))
+try:
+    from api import mesh
+    endpoint = mesh.endpoint_vers_maitre(wg, master_ip)     # annonce publique remise à un nœud distant (#3742)
+except ImportError:
+    endpoint = "%s:%d" % (master_ip, int(wg["master_port"]))
+maitre = {
+    "public_key": wg["master_public_key"],
+    "endpoint": endpoint,
+    "allowed_ips": wg["network"],
+    "mesh_ip": wg["master_mesh_ip"],
+    "name": "master",
+}
+if wg.get("persistent_keepalive"):
+    maitre["persistent_keepalive"] = int(wg["persistent_keepalive"])
 st.update({
     "address": wg["address"],
     "network": wg["network"],
     "role": "peer",
     "enabled": True,
-    "peers": [{
-        "public_key": wg["master_public_key"],
-        "endpoint": "%s:%d" % (master_ip, int(wg["master_port"])),
-        "allowed_ips": wg["network"],
-        "mesh_ip": wg["master_mesh_ip"],
-        "name": "master",
-    }],
+    "peers": [maitre],
 })
 old = os.umask(0o077)
 tmp = path + ".tmp"
@@ -440,7 +453,7 @@ json.dump(st, open(tmp, "w"), indent=2)
 os.umask(old)
 os.replace(tmp, path)
 print(wg["master_mesh_ip"])
-' "$WG_STATE" "$MASTER_IP") || MESH_IP=""
+' "$WG_STATE" "$MASTER_IP" "$P2P_LIB") || MESH_IP=""
         chown secubox:secubox "$WG_STATE" 2>/dev/null || true
         if [ -n "$MESH_IP" ] && command -v sbx-mesh-up >/dev/null 2>&1; then
             echo "  Mesh address: $(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["address"])' "$WG_STATE")"

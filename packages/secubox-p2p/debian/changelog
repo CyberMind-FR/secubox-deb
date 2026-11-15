@@ -1,3 +1,14 @@
+secubox-p2p (1.23.0-1~trixie1) trixie; urgency=medium
+
+  * Nœud distant hors du LAN (ref #3742) : champ déclaratif [wireguard] public_endpoint de
+    p2p.toml (validé strictement) ; un nœud qui joint le maître par Internet se déclare
+    « distant », reçoit cet Endpoint et PersistentKeepalive = 25 ; son adresse LAN n'est plus
+    prise pour un endpoint côté maître. Nœuds du LAN inchangés.
+  * postinst : migration non destructive, p2p.toml existant jamais modifié ; un rendez-vous sans
+    annonce publique est signalé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 12:00:00 +0100
+
 secubox-p2p (1.22.1-1~trixie1) trixie; urgency=medium
 
   * Relais (ref #3686) : admin.<box> d'un pair vivant (ni muet ni à valider) est exposé
