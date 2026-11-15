@@ -96,10 +96,77 @@ def test_conf_rendue_du_noeud_distant():
 def test_le_script_de_jonction_se_declare_distant_hors_lan():
     s = (Path(__file__).resolve().parents[1] / "scripts" / "sbx-mesh-join").read_text()
     assert 'es_adresse_locale "$MASTER_IP" || DISTANT=true' in s and '"distant":$DISTANT' in s
-    assert "mesh.endpoint_vers_maitre(wg, master_ip)" in s
+    assert "mesh.endpoint_distant(wg)" in s and "mesh.endpoint_vers_maitre(wg, master_ip)" in s
 
 
 def test_postinst_ne_reecrit_jamais_p2p_toml():
     s = (Path(__file__).resolve().parents[1] / "debian" / "postinst").read_text()
     bloc = s[s.index("#3742"):s.index("Create secubox user")]
     assert ">> /etc/secubox/p2p.toml" not in bloc and "> /etc/secubox/p2p.toml" not in bloc and "sed -i" not in bloc
+
+
+# ── relecture de sécurité : keepalive borné, pas de repli silencieux d'un nœud distant ──────────────
+@pytest.mark.parametrize("ka", [-1, 65536, "25", True, 2.5])
+def test_keepalive_hors_bornes_refuse_au_rendu(ka):
+    etat = {"private_key": CLE, "address": "10.10.0.9/24",
+            "peers": [{"public_key": CLE_MAITRE, "allowed_ips": "10.10.0.0/24", "persistent_keepalive": ka}]}
+    with pytest.raises(ValueError):
+        mesh.render_wg_conf(etat)
+
+
+def test_keepalive_bornes_acceptees():
+    assert mesh.keepalive_valide(None) == 25 and mesh.keepalive_valide(0) == 0 and mesh.keepalive_valide(65535) == 65535
+
+
+RACINE = Path(__file__).resolve().parents[1]
+
+
+def _snippet():
+    s = (RACINE / "scripts" / "sbx-mesh-join").read_text()
+    debut = s.index("import json, sys, os\npath, master_ip, lib, distant")
+    return s[debut:s.index("\n' \"$WG_STATE\"", debut)]
+
+
+def _joindre(tmp_path, wg, distant, lib=None):
+    import json
+    import subprocess
+    import sys
+    etat = tmp_path / "wg_mesh.json"
+    etat.write_text("{}")
+    r = subprocess.run([sys.executable, "-c", _snippet(), str(etat), "192.168.1.200", str(lib or RACINE), "true" if distant else "false"],
+                       input=json.dumps({"wg": wg}), capture_output=True, text=True, timeout=30, cwd=tmp_path)
+    return r, (json.loads(etat.read_text()) if r.returncode == 0 else None)
+
+
+OFFRE = {"master_public_key": CLE_MAITRE, "master_port": 51822, "master_mesh_ip": "10.10.0.1", "address": "10.10.0.9/24",
+         "network": "10.10.0.0/24"}
+
+
+def test_jonction_distante_ecrit_l_annonce_et_le_keepalive(tmp_path):
+    r, st = _joindre(tmp_path, {**OFFRE, "master_endpoint": "gk2.secubox.in:51822", "persistent_keepalive": 25}, True)
+    assert r.returncode == 0 and st["peers"][0]["endpoint"] == "gk2.secubox.in:51822" and st["peers"][0]["persistent_keepalive"] == 25
+
+
+def test_jonction_distante_sans_annonce_echoue_sans_repli(tmp_path):
+    r, st = _joindre(tmp_path, OFFRE, True)
+    assert r.returncode == 3 and st is None and "annonce publique" in r.stderr
+
+
+def test_jonction_distante_sans_module_echoue(tmp_path):
+    r, _ = _joindre(tmp_path, {**OFFRE, "master_endpoint": "gk2.secubox.in:51822"}, True, lib=tmp_path / "rien")
+    assert r.returncode == 3 and "introuvable" in r.stderr
+
+
+def test_jonction_distante_keepalive_hors_bornes_refuse(tmp_path):
+    r, _ = _joindre(tmp_path, {**OFFRE, "master_endpoint": "gk2.secubox.in:51822", "persistent_keepalive": 70000}, True)
+    assert r.returncode == 3
+
+
+def test_jonction_lan_inchangee(tmp_path):
+    r, st = _joindre(tmp_path, OFFRE, False)
+    assert r.returncode == 0 and st["peers"][0]["endpoint"] == "192.168.1.200:51822" and "persistent_keepalive" not in st["peers"][0]
+
+
+def test_le_script_sort_en_echec_clair():
+    s = (RACINE / "scripts" / "sbx-mesh-join").read_text()
+    assert 'if [ "$rc" -eq 3 ]; then' in s and "exit 5" in s

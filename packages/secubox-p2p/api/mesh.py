@@ -139,6 +139,23 @@ def public_endpoint_valide(valeur) -> str | None:
     return f"{hote.lower()}:{int(port)}" if _NOM_HOTE.match(hote) else None
 
 
+def keepalive_valide(valeur) -> int:
+    """PersistentKeepalive borné à 0..65535 (#3742) ; absent = 25. Hors bornes ou non entier : refus, jamais d'arrondi."""
+    if valeur is None:
+        return 25
+    if isinstance(valeur, bool) or not isinstance(valeur, int) or not 0 <= valeur <= 65535:
+        raise ValueError("PersistentKeepalive hors de 0..65535")
+    return valeur
+
+
+def endpoint_distant(offre: dict) -> str:
+    """Endpoint d'un nœud DISTANT : l'annonce publique validée, sinon ValueError (jamais de repli sur une adresse LAN)."""
+    annonce = public_endpoint_valide((offre or {}).get("master_endpoint"))
+    if not annonce:
+        raise ValueError("le maître n'a remis aucune annonce publique valide (p2p.toml : [wireguard] public_endpoint)")
+    return annonce
+
+
 def endpoint_vers_maitre(offre: dict, adresse_jointe: str) -> str:
     """Endpoint du maître côté pair : l'annonce publique si le maître l'a remise (nœud distant, #3742), sinon l'adresse
     que le pair vient lui-même de joindre (comportement LAN inchangé)."""
@@ -217,7 +234,7 @@ def render_wg_conf(state: dict) -> str:
                 lines.append(f"AllowedIPs = {_une_ligne(peer['allowed_ips'])}")
         else:
             lines.append(f"AllowedIPs = {_une_ligne(peer.get('allowed_ips', MESH_NETWORK))}")
-        lines.append("PersistentKeepalive = %d" % int(peer.get("persistent_keepalive") or 25))
+        lines.append("PersistentKeepalive = %d" % keepalive_valide(peer.get("persistent_keepalive")))
     return "\n".join(lines) + "\n"
 
 

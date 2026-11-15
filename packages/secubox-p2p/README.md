@@ -287,7 +287,9 @@ Un nœud placé dans une autre maison (derrière une autre box) joint le maître
 - Si le rendez-vous déclare `[wireguard] public_endpoint = "gk2.secubox.in:51822"` dans `/etc/secubox/p2p.toml` (nom DNS,
   IPv4 ou `[IPv6]`, validé strictement : ce texte finit dans un fichier lu en root par wg-quick), l'offre WireGuard remise au
   nœud distant porte `master_endpoint` et `persistent_keepalive = 25` ; le nœud écrit cet Endpoint et
-  `PersistentKeepalive = 25` (c'est lui qui appelle).
+  `PersistentKeepalive = 25` (c'est lui qui appelle). Sans annonce valide remise (ou module p2p introuvable pour la
+  valider), la jonction distante **échoue** (code 5, message clair) : jamais de repli silencieux sur l'adresse jointe.
+  `PersistentKeepalive` est borné à 0..65535 (refus au-delà) dans `sbx-mesh-join` comme au rendu de la configuration.
 - Les nœuds du LAN ne reçoivent rien de plus : offre et configuration inchangées.
 - Migration : le postinst ne modifie jamais un `p2p.toml` existant (clé absente = aucune annonce, comportement d'avant) ; un
   rendez-vous (`role = "master"`) sans annonce est seulement signalé.
