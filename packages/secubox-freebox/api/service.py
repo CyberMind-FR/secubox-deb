@@ -26,6 +26,9 @@ AIDE_DROITS = {
 # Où la Freebox publie les ouvertures IPv6 selon sa version : on essaie dans l'ordre, la première qui répond fait foi.
 CHEMINS_EXCEPTIONS_IPV6 = ("fw/ipv6/", "fw/ipv6/redir/", "fw/pinhole/")
 
+# Maillage distant (#3742) : la règle que SecuBox pose et reconnaît comme sienne.
+COMMENTAIRE_MAILLAGE = "SecuBox maillage distant (wg-mesh)"
+
 
 class Freebox:
     def __init__(self, client, magasin, horloge=time.time, nom_appareil=None, ttl=TTL_LECTURE_S):
@@ -218,7 +221,7 @@ class Freebox:
         return {"actif": etat, "change": change}
 
     # ── autoconfiguration : état → cible recommandée, écart par écart ─────────────
-    ITEMS_AUTOCONFIG = ("pare_feu_ipv6", "dns", "ip_fixe", "dmz")
+    ITEMS_AUTOCONFIG = ("pare_feu_ipv6", "dns", "ip_fixe", "dmz", "maillage_distant")
 
     def _lire_autoconfig(self):
         fw = N.pare_feu_ipv6(self.client.lire("connection/ipv6/config/") or {})
@@ -243,7 +246,7 @@ class Freebox:
         d = self.client.lire("fw/dmz/") or {}
         return {"enabled": bool(d.get("enabled")), "ip": d.get("ip") or ""}
 
-    def autoconfig(self, ip_box):
+    def autoconfig(self, ip_box, maillage=None):
         """Ce que SecuBox recommande pour la Freebox, comparé à l'état réel. Lecture seule. La DMZ est marquée sensible : elle expose TOUTE la
         machine visée à Internet, elle ne s'applique jamais avec le reste."""
         cur = self._lire_autoconfig()
@@ -258,6 +261,14 @@ class Freebox:
             {"id": "dmz", "titre": "DMZ", "actuel": cur["dmz"], "cible": {"enabled": True, "ip": ip_box}, "sensible": True,
              "pourquoi": "Envoie à la box tout le trafic IPv4 entrant qui n'a pas de redirection. Nécessaire si la box publie des services ; expose toute la machine."},
         ]
+        if maillage:          # seulement sur un rendez-vous qui déclare une annonce publique (p2p.toml)
+            m = self.etat_maillage_distant(ip_box, maillage.get("ipv6", ""), maillage["port"], maillage.get("port_local"))
+            items.append({"id": "maillage_distant", "titre": "Maillage distant (UDP %d)" % maillage["port"], "sensible": False,
+                          "actuel": {"redirection": m["redirection"]["conforme"], "exception_ipv6": m["ipv6"]["etat"]},
+                          "cible": {"redirection": True, "exception_ipv6": m["ipv6"]["cible"]},
+                          "pourquoi": "Les nœuds du maillage placés hors du réseau local (autre maison) joignent la box par Internet : redirection "
+                                      "IPv4 UDP vers la box et, si la Freebox le permet, exception IPv6 ciblée vers son IPv6 fixe. "
+                                      "Le pare-feu IPv6 global n'est jamais désactivé pour cela." + (" " + m["ipv6"]["message"] if m["ipv6"]["message"] else "")})
         for i in items:
             i["conforme"] = i["actuel"] == i["cible"]
         return {"items": items, "ecarts": sum(1 for i in items if not i["conforme"]), "ip_box": ip_box}
@@ -323,11 +334,13 @@ class Freebox:
         self.journal({"action": "ip_fixe_retiree", "mac": mac})
         return {"retire": mac}
 
-    def appliquer_autoconfig(self, ids, ip_box, confirme_dmz=False):
+    def appliquer_autoconfig(self, ids, ip_box, confirme_dmz=False, maillage=None):
         """Applique les éléments demandés (pas plus), relit avant ET après, journalise. La DMZ exige `confirme_dmz`."""
         ids = list(dict.fromkeys(ids or []))
         if not ids or any(i not in self.ITEMS_AUTOCONFIG for i in ids):
             raise ValueError("éléments inconnus ou absents")
+        if "maillage_distant" in ids and not maillage:
+            raise ValueError("aucune annonce publique du maillage (p2p.toml : public_endpoint)")
         if "dmz" in ids and not confirme_dmz:
             raise ValueError("la DMZ demande une confirmation dédiée")
         if not self.client.session:
@@ -343,6 +356,11 @@ class Freebox:
             cle6[0] = N.cle_pare_feu_ipv6(cfg)
             return N.pare_feu_ipv6(cfg)
         for ident in ids:
+            if ident == "maillage_distant":
+                r = self.appliquer_maillage_distant(ip_box, maillage.get("ipv6", ""), maillage["port"], maillage.get("port_local"))
+                if r["change"]:
+                    appliques.append(ident)
+                continue
             chemin, corps, lire, voulu = {
                 "pare_feu_ipv6": ("connection/ipv6/config/", None, lire6, True),
                 "dns": ("dhcp/config/", {"dns": [ip_box, "", "", "", "", ""]},
@@ -375,6 +393,140 @@ class Freebox:
                 raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement de « %s »." % ident)
             appliques.append(ident)
         return {"appliques": appliques}
+
+    # ── maillage distant (#3742) : redirection IPv4 + exception IPv6 ciblée ─────────
+    @staticmethod
+    def redir_voulue(ip_box, port, port_local=None):
+        return {"enabled": True, "comment": COMMENTAIRE_MAILLAGE, "lan_port": int(port_local or port), "wan_port_start": int(port),
+                "wan_port_end": int(port), "lan_ip": ip_box, "ip_proto": "udp", "src_ip": "0.0.0.0"}
+
+    @staticmethod
+    def _redir_conforme(r, voulu):
+        vu = dict(r)
+        vu.setdefault("wan_port_end", vu.get("wan_port_start"))
+        if vu.get("src_ip") in (None, ""):
+            vu["src_ip"] = "0.0.0.0"
+        return all(vu.get(k) == v for k, v in voulu.items())
+
+    @staticmethod
+    def _couvre(r, port, cle_debut="wan_port_start", cle_fin="wan_port_end"):
+        try:
+            debut = int(r.get(cle_debut))
+            fin = int(r.get(cle_fin) or debut)
+        except (TypeError, ValueError):
+            return False
+        return debut <= port <= fin
+
+    def _redirs_maillage(self, port):
+        """Règles qui prennent déjà UDP <port> côté WAN (une seule peut exister), plus celles que SecuBox a posées."""
+        return [r for r in (self.client.lire("fw/redir/") or [])
+                if (r.get("ip_proto") or "tcp") in ("udp", "tcp_udp") and self._couvre(r, port) or r.get("comment") == COMMENTAIRE_MAILLAGE]
+
+    def _exceptions6(self):
+        """(chemin, liste) de la première voie d'exceptions IPv6 que la Freebox expose, sinon (None, None)."""
+        for chemin in CHEMINS_EXCEPTIONS_IPV6:
+            try:
+                brut = self.client.lire(chemin)
+            except C.DroitManquant:
+                raise
+            except C.ErreurFreebox:
+                continue
+            if isinstance(brut, list):
+                return chemin, brut
+        return None, None
+
+    @staticmethod
+    def _style6(liste):
+        """Noms des champs selon le firmware : les entrées existantes font foi (style des redirections IPv4 ou style « pinhole »)."""
+        if any("lan_ip" in e or "wan_port_start" in e for e in liste):
+            return "ip_proto", "lan_ip", "wan_port_start", "wan_port_end"
+        return "ip_proto", "ip", "port_start", "port_end"
+
+    def _exception6_voulue(self, liste, ipv6, port):
+        proto, cle_ip, debut, fin = self._style6(liste)
+        return {"enabled": True, "comment": COMMENTAIRE_MAILLAGE, proto: "udp", cle_ip: ipv6, debut: int(port), fin: int(port)}
+
+    def _exceptions6_maillage(self, liste, ipv6, port):
+        _, cle_ip, debut, fin = self._style6(liste)
+        return [e for e in liste if (e.get(cle_ip) == ipv6 and self._couvre(e, port, debut, fin)) or e.get("comment") == COMMENTAIRE_MAILLAGE]
+
+    def etat_maillage_distant(self, ip_box, ipv6, port, port_local=None):
+        """Lecture seule : la redirection IPv4 et l'exception IPv6 sont-elles en place ?"""
+        voulu = self.redir_voulue(ip_box, port, port_local)
+        trouvees = self._redirs_maillage(port)
+        redir = {"conforme": len(trouvees) == 1 and self._redir_conforme(trouvees[0], voulu), "voulue": voulu,
+                 "actuelles": N.redirections(trouvees), "doublons": len(trouvees) > 1}
+        chemin6, liste6 = self._exceptions6()
+        if not ipv6:
+            v6 = {"etat": "sans_ipv6", "cible": "sans_ipv6", "chemin": chemin6,
+                  "message": "Aucune IPv6 fixe connue pour la box : seule la redirection IPv4 est posée."}
+        elif chemin6 is None:
+            fw = N.pare_feu_ipv6(self.client.lire("connection/ipv6/config/") or {})
+            v6 = {"etat": "indisponible", "cible": "indisponible", "chemin": None, "pare_feu_actif": fw,
+                  "message": ("Cette Freebox n'expose pas d'exception IPv6 par port : le pare-feu IPv6 global n'est PAS désactivé "
+                              "d'office. Les nœuds distants passent par l'IPv4 (redirection)." if fw else
+                              "Le pare-feu IPv6 de la Freebox est déjà désactivé : l'IPv6 fixe de la box est joignable sans exception.")}
+        else:
+            ex = self._exceptions6_maillage(liste6, ipv6, port)
+            voulue6 = self._exception6_voulue(liste6, ipv6, port)
+            ok6 = len(ex) == 1 and all(ex[0].get(k) == v for k, v in voulue6.items())
+            v6 = {"etat": "conforme" if ok6 else ("a_corriger" if ex else "absente"), "cible": "conforme", "chemin": chemin6,
+                  "voulue": voulue6, "message": ""}
+        return {"port": int(port), "ip_box": ip_box, "ipv6_fixe": ipv6 or "", "redirection": redir, "ipv6": v6}
+
+    def appliquer_maillage_distant(self, ip_box, ipv6, port, port_local=None):
+        """Idempotent : lit d'abord, crée seulement si absente, corrige si différente, jamais de doublon ; relit et journalise.
+        Sans voie d'exception IPv6, rien n'est touché côté IPv6 (le pare-feu global n'est jamais désactivé ici)."""
+        if not ip_box:
+            raise ValueError("adresse de la box inconnue")
+        if not self.client.session:
+            self.client.ouvrir_session()
+        if not self.client.droits.get("settings"):
+            raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox » : réglez-le dans "
+                                  "Paramètres → Gestion des accès → Applications.")
+        change = False
+        voulu = self.redir_voulue(ip_box, port, port_local)
+        trouvees = self._redirs_maillage(port)
+        if not trouvees:
+            self.client.ecrire("POST", "fw/redir/", voulu)
+            change, geste = True, "creee"
+        elif not self._redir_conforme(trouvees[0], voulu):
+            self.client.ecrire("PUT", "fw/redir/%d" % int(trouvees[0]["id"]), voulu)
+            change, geste = True, "corrigee"
+        else:
+            geste = "inchangee"
+        if change:
+            apres = self._redirs_maillage(port)
+            self._cache.clear()
+            self.journal({"action": "maillage_redirection", "geste": geste, "avant": N.redirections(trouvees),
+                          "apres": N.redirections(apres), "voulu": voulu})
+            if not any(self._redir_conforme(r, voulu) for r in apres):
+                raise C.ErreurFreebox("La Freebox n'a pas pris en compte la redirection du maillage.")
+        r6 = "sans_ipv6"
+        if ipv6:
+            chemin6, liste6 = self._exceptions6()
+            if chemin6 is None:
+                r6 = "indisponible"
+                self.journal({"action": "maillage_exception_ipv6", "geste": "indisponible", "ipv6": ipv6})
+            else:
+                voulue6 = self._exception6_voulue(liste6, ipv6, port)
+                ex = self._exceptions6_maillage(liste6, ipv6, port)
+                if ex and all(ex[0].get(k) == v for k, v in voulue6.items()):
+                    r6 = "inchangee"
+                else:
+                    if ex:
+                        self.client.ecrire("PUT", "%s%d" % (chemin6, int(ex[0]["id"])), voulue6)
+                        r6 = "corrigee"
+                    else:
+                        self.client.ecrire("POST", chemin6, voulue6)
+                        r6 = "creee"
+                    apres6 = self.client.lire(chemin6) or []
+                    self._cache.clear()
+                    self.journal({"action": "maillage_exception_ipv6", "geste": r6, "avant": ex, "voulu": voulue6})
+                    change = True
+                    if not any(all(e.get(k) == v for k, v in voulue6.items()) for e in apres6 if isinstance(e, dict)):
+                        raise C.ErreurFreebox("La Freebox n'a pas pris en compte l'exception IPv6 du maillage.")
+        return {"change": change, "redirection": geste, "exception_ipv6": r6}
 
     def redirections(self):
         return self._lu("redirections", lambda: N.redirections(self.client.lire("fw/redir/")))

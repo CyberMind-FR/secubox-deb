@@ -14,7 +14,7 @@ override_dh_auto_install:
 	install -d debian/secubox-freebox/etc/nginx/secubox-routes.d
 	install -m 644 nginx/freebox.conf debian/secubox-freebox/etc/nginx/secubox-routes.d/freebox.conf
 	install -d debian/secubox-freebox/lib/systemd/system
-	install -m 644 systemd/secubox-freebox.service debian/secubox-freebox/lib/systemd/system/
+	install -m 644 systemd/secubox-freebox.service systemd/secubox-freebox-maillage.service systemd/secubox-freebox-maillage.timer debian/secubox-freebox/lib/systemd/system/
 
 override_dh_installsystemd:
 	dh_installsystemd --no-enable --no-start
