@@ -188,3 +188,21 @@ log4shell, `\u0000→\x00` null-byte fix, goform false-positive fix,
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+## Mémoire des leurres de service (#3734)
+
+`sbx-authwatch` écrit une ligne `leurre:<service>` par connexion à un leurre (#3728). L'API du WAF les range dans
+`/var/lib/secubox-waf-leurres/leurres.db` (SQLite, répertoire 0700 `secubox`, 30 jours, ingestion à curseur toutes les 60 s et avant chaque lecture).
+Toutes les routes sont en `require_jwt` : les mots de passe tentés par les robots y sont **en clair**.
+
+| Route | Rend |
+|---|---|
+| `GET /api/v1/waf/leurres/resume` | `attaquants`, `couples`, `rejeux`, `touches`, `bans_actifs`, `par_leurre`, `premiere` |
+| `GET /api/v1/waf/leurres/attaquants?filtre=&profil=&limite=` | une ligne par adresse : `services`, `profil`, `client`, `essais` (5 premiers), `nb_essais`, `rejeu`, `visites`, `premiere`, `derniere`, `ban` |
+| `GET /api/v1/waf/leurres/attaquant/<ip>` | chaque visite de l'adresse et ses couples |
+| `GET /api/v1/waf/leurres/dictionnaire` | `mots_de_passe` (essais, comptes, adresses), `comptes`, `couples` |
+| `GET /api/v1/waf/leurres/rejeux` | `mot_de_passe_plusieurs_comptes`, `couple_plusieurs_adresses`, `client_plusieurs_leurres` |
+| `POST /api/v1/waf/leurres/ban` | `{"ip", "duree": "4h"\|"24h"\|"7d"}` — adresse vue par un leurre seulement, jamais interne ; audit `leurre-ban` |
+| `POST /api/v1/waf/leurres/unban` | `{"ip"}` ; audit `leurre-unban` |
+
+Page : `/waf/leurres.html` (onglet « Leurres » de `/waf/`).

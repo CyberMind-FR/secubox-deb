@@ -45,14 +45,16 @@ def _configure():
 
 # ── versions, dépendance, installation ─────────────────────────────────
 def test_versions_et_dependance():
-    assert CHANGELOG_WAF.read_text().startswith("secubox-waf-ng (1.35.3-1~trixie1) trixie;")
+    # l'entrée de #3716, où qu'elle soit : ce test ne doit pas casser à chaque montée de version suivante
+    assert "\nsecubox-waf-ng (1.35.0-1~trixie1) trixie;" in CHANGELOG_WAF.read_text()
     assert "secubox-core (>= 1.8.32~)" in CONTROL_WAF.read_text()
     assert CHANGELOG_CORE.read_text().startswith("secubox-core (1.8.32-1~trixie1) trixie;")
 
 
 def test_changelogs_dates_du_jour_et_issue():
-    for chemin in (CHANGELOG_WAF, CHANGELOG_CORE):
-        entree = chemin.read_text().split("\n\n -- ", 1)
+    for chemin, version in ((CHANGELOG_WAF, "secubox-waf-ng (1.35.3-1~trixie1)"), (CHANGELOG_CORE, "secubox-core (1.8.32-1~trixie1)")):
+        texte = chemin.read_text()
+        entree = texte[texte.index(version):].split("\n\n -- ", 1)
         assert "(ref #3716)" in entree[0] and "closes" not in entree[0].lower()
         assert re.match(r"Gérald Kerma <devel@cybermind\.fr>  Sat, 14 Nov 2026 \d\d:\d\d:\d\d \+0100\n", entree[1])
 

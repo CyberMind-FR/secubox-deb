@@ -84,6 +84,7 @@ HISTORY_CACHE = "/var/lib/secubox/waf/waf-history.json"
 # Profils de vhost déclaratifs (lus aussi par sbxwaf) et relevé des signaux PHP (#3273), calculé en tâche de fond.
 VHOST_PROFILES = Path("/etc/secubox/waf/vhost_profiles.json")
 PHP_SIGNAUX_CACHE = Path("/var/lib/secubox/waf/php-signaux.json")
+LEURRES_PERIODE = 60  # s : ingestion de la mémoire des leurres (#3734)
 PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requête
 _history_lock = threading.Lock()
 
@@ -1009,13 +1010,27 @@ async def _warm_loop():
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
-    dernier_php = 0.0
+    dernier_php = dernier_leurres = derniere_purge = 0.0
+    _leurres_panne = ""
     while True:
         try:
             await asyncio.to_thread(_refresh_warm_caches)
         except Exception:
             # Swallow — next tick will retry. Logging would spam.
             pass
+        if time.time() - dernier_leurres >= LEURRES_PERIODE:
+            try:
+                await asyncio.to_thread(_leurres.ingerer)       # la mémoire se remplit même sans visiteur
+                if time.time() - derniere_purge >= 86400:
+                    await asyncio.to_thread(_leurres.purger)
+                    derniere_purge = time.time()
+            except Exception as e:  # noqa: BLE001 — repris au tour suivant, le curseur n'a pas avancé
+                if str(e) != _leurres_panne:        # une trace par motif : une mémoire figée ne doit pas être muette
+                    log.warning("mémoire des leurres : ingestion en échec : %s", e)
+                    _leurres_panne = str(e)
+            else:
+                _leurres_panne = ""
+            dernier_leurres = time.time()
         if time.time() - dernier_php >= PHP_SIGNAUX_PERIODE:
             try:
                 await asyncio.to_thread(_rafraichir_php_signaux)
@@ -2233,3 +2248,29 @@ def _bans_stricts() -> List[dict]:
 
 _gestes_ia.configurer(bans=_bans_stricts, audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
 app.include_router(_gestes_ia.router)
+
+
+# ── Mémoire des leurres de service (#3734) ──────────────────────────────
+try:
+    from api import leurres as _leurres
+except ImportError:  # standalone
+    import leurres as _leurres
+
+
+def _bans_chauds() -> List[dict]:
+    with _warm_lock:
+        bans = _warm["bans"]
+    return bans if bans is not None else _get_bans()
+
+
+def _vider_bans_chauds(resultat: tuple) -> tuple:
+    stats_cache.invalidate()
+    with _warm_lock:
+        _warm["bans"] = None
+    return resultat
+
+
+_leurres.configurer(bans=_bans_chauds, audit=_audit,
+                    ban=lambda ip, duree: _vider_bans_chauds(_ban_ip(ip, duree, "leurre")),
+                    unban=lambda ip: _vider_bans_chauds(_unban_ip(ip)))
+app.include_router(_leurres.router)
