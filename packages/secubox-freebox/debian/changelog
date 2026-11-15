@@ -1,3 +1,46 @@
+secubox-freebox (0.7.3-1~trixie1) trixie; urgency=medium
+
+  * Profil AppArmor de freeboxctl : attach_disconnected (/dev/null sous PrivateDevices)
+    et lecture du dossier /usr/sbin/ par Python ; refus relevés au banc gk6 (ref #3742).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 15:07:00 +0100
+
+secubox-freebox (0.7.2-1~trixie1) trixie; urgency=medium
+
+  * Maillage distant (ref #3742) : une règle tierce active sur le port l'emporte sur la DMZ
+    (port_pris testé avant couvert_par_dmz) ; exception IPv6 tierce vers une autre IPv6
+    signalée, jamais écrite.
+  * Profil AppArmor de freeboxctl : shebang env, interpréteur (mmap des .so), conf python3,
+    ip et ses fichiers iproute2 ; déchargé par le postrm (remove, purge).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 16:00:00 +0100
+
+secubox-freebox (0.7.1-1~trixie1) trixie; urgency=medium
+
+  * Maillage distant (ref #3742), relecture de sécurité : seule la règle SecuBox (commentaire) est
+    corrigée ; une règle tierce qui prend le port vers un autre appareil est refusée (port_pris),
+    journalisée, jamais réécrite ; une règle tierce identique compte comme conforme ; doublons
+    signalés sans suppression, idem côté IPv6. DMZ active vers la box : couvert_par_dmz, rien créé.
+  * Sans voie d'exception IPv6 (cas de la Freebox de gk2) : aucune écriture IPv6 tentée.
+  * Contrôle : interface WAN prise par la route IPv6 par défaut ; sans elle ni ipv6_fixe déclarée,
+    aucune ouverture IPv6.
+  * Unité du contrôle durcie (ProtectProc, ProcSubset, MemoryDenyWriteExecute) ; profil AppArmor
+    enforce de freeboxctl installé et chargé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 14:00:00 +0100
+
+secubox-freebox (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * Maillage distant (ref #3742) : redirection IPv4 UDP du port annoncé par p2p.toml vers la box
+    (fw/redir/, lecture d'abord, création si absente, correction si différente, jamais de doublon,
+    relecture, audit) ; exception IPv6 ciblée vers l'IPv6 fixe quand la Freebox l'expose, sinon
+    signalée sans jamais désactiver le pare-feu IPv6 global. Item d'autoconfiguration
+    « maillage_distant », routes GET/POST /maillage-distant, verbes freeboxctl.
+  * Contrôle périodique de l'IPv6 fixe du WAN contre l'AAAA publiée (secubox-freebox-maillage.timer,
+    lecture seule, alerte au journal).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 12:00:00 +0100
+
 secubox-freebox (0.6.4-1~trixie1) trixie; urgency=medium
 
   * Ouverture de session : la validation faite sur l'écran de la Freebox est détectée partout (ref #3482).

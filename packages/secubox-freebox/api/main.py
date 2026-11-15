@@ -13,6 +13,8 @@
   POST /autoriser       demande d'autorisation       (administrateur : require_jwt)
   POST /revoquer        oublier l'autorisation       (administrateur)
   GET  /explorer        lecture brute d'un chemin    (administrateur)
+  GET  /maillage-distant  redirection UDP du maillage, exception IPv6, contrôle de l'IPv6 fixe (lecture)
+  POST /maillage-distant  pose/corrige la redirection et l'exception IPv6 {confirme:true} (administrateur, #3742)
   GET  /health          vivacité (publique)
 
 Le jeton d'application ne sort jamais de la box : aucune route ne le rend.
@@ -28,6 +30,7 @@ from fastapi.responses import JSONResponse
 from secubox_core.auth import require_jwt, require_lecture
 
 from . import client as C
+from . import maillage as MA
 from . import magasin as M
 from . import service as S
 
@@ -136,12 +139,48 @@ def _ip_box():
         s.close()
 
 
+def _maillage():
+    """Paramètres du maillage distant (#3742) : annonce publique de p2p.toml + IPv6 fixe (déclarée, sinon relevée par le contrôle).
+    None si ce nœud n'annonce aucun point d'accès public : l'item n'a alors pas lieu d'être."""
+    an = MA.annonce()
+    if not an:
+        return None
+    ipv6 = MA.ipv6_configuree() or ((MA.lire_controle() or {}).get("ipv6_attendue") or "")
+    return {"port": an["port"], "port_local": an["port_local"], "ipv6": ipv6}
+
+
 @app.get("/autoconfig", dependencies=[Depends(require_lecture)])
 def autoconfig():
     ip = _ip_box()
     if not ip:
         return JSONResponse({"erreur": "adresse de la box introuvable"}, status_code=503)
-    return _repondre(lambda: _service.autoconfig(ip))
+    return _repondre(lambda: _service.autoconfig(ip, _maillage()))
+
+
+@app.get("/maillage-distant", dependencies=[Depends(require_lecture)])
+def maillage_distant():
+    m = _maillage()
+    controle = MA.lire_controle()
+    if not m:
+        return {"annonce": None, "controle": controle, "message": "Aucune annonce publique (p2p.toml : [wireguard] public_endpoint)."}
+    ip = _ip_box()
+    if not ip:
+        return JSONResponse({"erreur": "adresse de la box introuvable"}, status_code=503)
+    return _repondre(lambda: {**_service.etat_maillage_distant(ip, m["ipv6"], m["port"], m["port_local"]),
+                              "annonce": MA.annonce(), "controle": controle})
+
+
+@app.post("/maillage-distant", dependencies=[Depends(require_jwt)])
+def appliquer_maillage_distant(corps: dict):
+    if corps.get("confirme") is not True:
+        return JSONResponse({"erreur": "Confirmation explicite requise."}, status_code=400)
+    m = _maillage()
+    if not m:
+        return JSONResponse({"erreur": "Aucune annonce publique du maillage (p2p.toml : [wireguard] public_endpoint)."}, status_code=409)
+    ip = _ip_box()
+    if not ip:
+        return JSONResponse({"erreur": "adresse de la box introuvable"}, status_code=503)
+    return _repondre(lambda: _service.appliquer_maillage_distant(ip, m["ipv6"], m["port"], m["port_local"]))
 
 
 @app.post("/autoconfig", dependencies=[Depends(require_jwt)])
@@ -154,7 +193,7 @@ def appliquer_autoconfig(corps: dict):
     ip = _ip_box()
     if not ip:
         return JSONResponse({"erreur": "adresse de la box introuvable"}, status_code=503)
-    return _repondre(lambda: _service.appliquer_autoconfig(ids, ip, corps.get("confirme_dmz") is True))
+    return _repondre(lambda: _service.appliquer_autoconfig(ids, ip, corps.get("confirme_dmz") is True, _maillage()))
 
 
 @app.get("/upnp", dependencies=[Depends(require_lecture)])

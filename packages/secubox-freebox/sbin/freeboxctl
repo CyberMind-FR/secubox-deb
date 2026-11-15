@@ -11,6 +11,9 @@ l'utilisateur secubox-freebox (sudo -u, cote appelant).
 
   passerelle-dhcp <ip>   regle la passerelle DHCP, affiche le JSON du resultat
   lire-passerelle        affiche la passerelle DHCP actuelle (lecture seule)
+  maillage-lire <ip_box> état de la redirection UDP du maillage et de l'exception IPv6 (lecture seule, #3742)
+  maillage-appliquer <ip_box>  pose/corrige la redirection et l'exception IPv6 (idempotent, audité)
+  maillage-controle      relève l'IPv6 fixe du WAN et l'AAAA publiée, écrit l'état, alerte au journal (minuteur)
   dns-lire, dns-regler, dns6-lire, dns6-regler, ip-fixe-lire, ip-fixe-poser, ip-fixe-retirer, bail-poser : clé mobile (#3467)
 """
 import ipaddress
@@ -24,6 +27,7 @@ _lib = _lib_installe if os.path.isdir(os.path.join(_lib_installe, "api")) else o
 sys.path.insert(0, _lib)
 
 from api import client as C  # noqa: E402
+from api import maillage as MA  # noqa: E402
 from api import magasin as M  # noqa: E402
 from api import service as S  # noqa: E402
 
@@ -50,7 +54,27 @@ def _fabriquer():
     return S.Freebox(C.Client(C.transport_http, mag, hote=HOTE), mag)
 
 
+def _maillage():
+    an = MA.annonce()
+    if not an:
+        raise ValueError("aucune annonce publique du maillage (p2p.toml : [wireguard] public_endpoint)")
+    ipv6 = MA.ipv6_configuree() or ((MA.lire_controle() or {}).get("ipv6_attendue") or "")
+    return an, ipv6
+
+
+def controle_maillage(relever=MA.relever, ecrire=MA.ecrire_controle, sortie=sys.stderr):
+    """Contrôle périodique (#3742) : n'écrit QUE le fichier d'état ; une alerte part au journal en avertissement (<4>)."""
+    etat = relever()
+    ecrire(etat)
+    for a in etat["alertes"]:
+        print("<4>maillage distant : " + a, file=sortie)
+    return etat
+
+
 def main(argv):
+    if argv and argv[0] == "maillage-controle" and len(argv) == 1:
+        print(json.dumps(controle_maillage(), ensure_ascii=False))     # sans session Freebox : rien ne lui est demandé
+        return 0
     if not argv:
         print("usage : freeboxctl passerelle-dhcp <ip>|lire-passerelle", file=sys.stderr)
         return 2
@@ -80,11 +104,18 @@ def main(argv):
             print(json.dumps(svc._etat_ip_fixe(ip)))
         elif verbe == "ip-fixe-retirer" and len(args) == 1:
             print(json.dumps(svc.retirer_ip_fixe(_mac(args[0]))))
+        elif verbe == "maillage-lire" and len(args) == 1:
+            an, ipv6 = _maillage()
+            print(json.dumps(svc.etat_maillage_distant(_liste_ip(args[0], 4)[0], ipv6, an["port"], an["port_local"])))
+        elif verbe == "maillage-appliquer" and len(args) == 1:
+            an, ipv6 = _maillage()
+            print(json.dumps(svc.appliquer_maillage_distant(_liste_ip(args[0], 4)[0], ipv6, an["port"], an["port_local"])))
         elif verbe == "bail-poser" and len(args) == 2:
             print(json.dumps(svc.poser_bail(_mac(args[0]), _liste_ip(args[1], 4)[0])))
         else:
             print("usage : freeboxctl passerelle-dhcp <ip>|lire-passerelle|dns-lire|dns-regler <ip,...>|dns6-lire|"
-                  "dns6-regler <0|1> [ip,...]|ip-fixe-lire <ip>|ip-fixe-poser <ip>|ip-fixe-retirer <mac>|bail-poser <mac> <ip>", file=sys.stderr)
+                  "dns6-regler <0|1> [ip,...]|ip-fixe-lire <ip>|ip-fixe-poser <ip>|ip-fixe-retirer <mac>|bail-poser <mac> <ip>|"
+                  "maillage-lire <ip_box>|maillage-appliquer <ip_box>|maillage-controle", file=sys.stderr)
             return 2
     except (C.ErreurFreebox, ValueError, IndexError) as e:
         print(json.dumps({"erreur": str(e)[:200]}))

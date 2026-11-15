@@ -20,6 +20,12 @@ case "$1" in
            && ! nft list chain inet secubox_filter input 2>/dev/null | grep -q "dport 51822"; then
             nft insert rule inet secubox_filter input udp dport 51822 accept 2>/dev/null || true
         fi
+        # #3742 : annonce publique du maillage distant. Migration NON destructive : un p2p.toml existant n'est JAMAIS
+        # modifié (clé absente = aucune annonce, comportement d'avant) ; un rendez-vous sans annonce est seulement signalé.
+        if [ -f /etc/secubox/p2p.toml ] && grep -Eq '^[[:space:]]*role[[:space:]]*=[[:space:]]*"master"' /etc/secubox/p2p.toml \
+           && ! grep -Eq '^[[:space:]]*public_endpoint[[:space:]]*=' /etc/secubox/p2p.toml; then
+            echo "secubox-p2p : aucune annonce publique ([wireguard] public_endpoint) : les noeuds distants ne joindront pas ce rendez-vous (#3742)."
+        fi
         # Create secubox user if it doesn't exist
         if ! getent passwd secubox > /dev/null 2>&1; then
             adduser --system --group --home /var/lib/secubox --no-create-home secubox

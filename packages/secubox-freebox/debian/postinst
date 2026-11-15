@@ -8,10 +8,18 @@ case "$1" in
         --shell /usr/sbin/nologin secubox-freebox >/dev/null
     # Le magasin du jeton : propre au service, fermé aux autres.
     install -d -m 0750 -o secubox-freebox -g secubox /var/lib/secubox/freebox
+    # Profil AppArmor enforce de freeboxctl (#3742), chargé AVANT de (re)démarrer le minuteur qui le lance.
+    if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
+       && [ -f /etc/apparmor.d/usr.sbin.freeboxctl ]; then
+        apparmor_parser -r /etc/apparmor.d/usr.sbin.freeboxctl \
+          || { echo "secubox-freebox : profil AppArmor secubox-freeboxctl non chargé (apparmor_parser -r /etc/apparmor.d/usr.sbin.freeboxctl)" >&2
+               printf '{"ts":"%s","module":"freebox","evenement":"apparmor_profil_non_charge","profil":"secubox-freeboxctl"}\n' \
+                   "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /var/log/secubox/audit.log 2>/dev/null || true; }
+    fi
     # #3411 : activation HORS du test systemd — dans le chroot d'une image il est faux et l'unite restait
     # desactivee sur la box flashee ; deb-systemd-helper travaille sur le systeme de fichiers. Le demarrage reste conditionne.
     # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
-    for _u in secubox-freebox.service; do
+    for _u in secubox-freebox.service secubox-freebox-maillage.timer; do
       if deb-systemd-helper --quiet was-enabled "$_u"; then
         deb-systemd-helper enable "$_u" >/dev/null || true
       else
@@ -25,6 +33,10 @@ case "$1" in
         systemctl try-restart secubox-freebox.service || true
       else
         systemctl start secubox-freebox.service || true
+      fi
+      # #3742 : contrôle léger de l'IPv6 fixe du maillage distant (lecture seule) ; un arrêt de l'opérateur est respecté.
+      if deb-systemd-helper --quiet is-enabled secubox-freebox-maillage.timer; then
+        systemctl start secubox-freebox-maillage.timer || true
       fi
       if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
         systemctl reload nginx >/dev/null 2>&1 || true
