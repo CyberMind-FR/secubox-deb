@@ -1,3 +1,19 @@
+secubox-waf-ng (1.37.0-1~trixie1) trixie; urgency=medium
+
+  * Compte de service ai-filtres : POST /ai/filtres (1 à 50 filtres),
+    DELETE /ai/filtres/{id}, GET /ai/filtres, gardés par require_ai_filtres
+    et servis par le seul processus désigné ; écriture par sudo -n
+    secubox-cvectl filtres-ia (entrée sur STDIN, acteur ai-filtres:<kid>),
+    chaque appel audité (ai-filtres-appliquer|retirer|lister). Clés gérées en
+    root par wafctl cle-ai-filtres ajouter|retirer|lister (même code que
+    cle-ai-ban) ; le postinst crée le dossier root (ref #3732).
+  * Revue finale (ref #3732) : l'audit de POST /ai/filtres porte les ids
+    appliqués et inchangés (listes de chaînes de cvectl) ; code 5 de cvectl
+    (erreur interne) documenté en 503 ctl ; Depends secubox-security-posture
+    (>= 2.7.0~) pour le verbe filtres-ia et son sudoers.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 14:00:00 +0100
+
 secubox-waf-ng (1.36.2-1~trixie1) trixie; urgency=medium
 
   * Mémoire des leurres déplacée dans /var/lib/secubox-waf-leurres (0700

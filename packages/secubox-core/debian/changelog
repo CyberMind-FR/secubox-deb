@@ -1,3 +1,12 @@
+secubox-core (1.8.33-1~trixie1) trixie; urgency=medium
+
+  * secubox_core.compte_service : second compte de service ai-filtres
+    (portée waf-filtres, clés sous /etc/secubox-comptes-service/ai-filtres),
+    garde require_ai_filtres ; un jeton ai-ban n'y vaut rien, et inversement
+    (ref #3732).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 14:00:00 +0100
+
 secubox-core (1.8.32-1~trixie1) trixie; urgency=medium
 
   * secubox_core.compte_service : comptes de service par clé publique Ed25519

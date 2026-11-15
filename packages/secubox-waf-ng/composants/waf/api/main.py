@@ -2249,6 +2249,16 @@ def _bans_stricts() -> List[dict]:
 _gestes_ia.configurer(bans=_bans_stricts, audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
 app.include_router(_gestes_ia.router)
 
+# ── Filtres du WAF proposés par une box d'IA, compte de service ai-filtres (#3732) ──
+# Même exception à RULES-CODE § 3 (`require_ai_filtres`), même processus désigné ; écriture par secubox-cvectl (root).
+try:
+    from api import filtres_ia as _filtres_ia
+except ImportError:  # standalone
+    import filtres_ia as _filtres_ia
+
+_filtres_ia.configurer(audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
+app.include_router(_filtres_ia.router)
+
 
 # ── Mémoire des leurres de service (#3734) ──────────────────────────────
 try:

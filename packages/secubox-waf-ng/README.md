@@ -111,6 +111,7 @@ l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (
 | `wafctl cle-ai-ban ajouter <fichier.pub>` | **root seul**, hors sudoers : pose une clé publique Ed25519 sous `/etc/secubox-comptes-service/ai-ban/<empreinte>.pub` (root 0644 ; empreinte = SHA-256 hex du DER, le `kid` des jetons) ; deux clés au plus |
 | `wafctl cle-ai-ban retirer <empreinte>` / `retirer --toutes` | **root seul** : révoque une clé, ou toutes (effet à la requête suivante) |
 | `wafctl cle-ai-ban lister` | empreintes posées, et si le nom de fichier est la vraie empreinte |
+| `wafctl cle-ai-filtres ajouter\|retirer\|lister` | **root seul**, même code pour le compte `ai-filtres` (#3732, 1.37.0) : `/etc/secubox-comptes-service/ai-filtres/` |
 
 Réponse : une ligne JSON `{"ok", "motif", …}` ; codes de sortie `invalide` 1, `privee` 2, `protegee` 3, `box` 4,
 `pair` 5, `garde_illisible` 6, `nft` 7, `duree` 8, `etat` 9, `audit` 10, `incoherent` 11, `usage` 64. Chaque geste
@@ -133,6 +134,25 @@ Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet
 | `POST /ai/ban` | `{"geste": "ban", "cible": "198.51.100.7" ou "203.0.113.0/24", "duree_s": 3600…604800, "mode": "clic"\|"auto", "conseil": "<id>", "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` |
 | `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` |
 | `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds}` |
+
+**Compte de service `ai-filtres` (#3732, 1.37.0)** — garde `require_ai_filtres` : même jeton que ci-dessus avec
+`sub="ai-filtres"` et `portee="waf-filtres"`, clés à part (un jeton `ai-ban` y est refusé, et inversement), même
+processus désigné. Écriture par `sudo -n /usr/sbin/secubox-cvectl filtres-ia appliquer|retirer --apply --json`
+(entrée sur STDIN, acteur `ai-filtres:<kid>`), lecture par `filtres-ia lister --json` ; délai de 60 s. Chaque appel
+est audité (`ai-filtres-appliquer`, `ai-filtres-retirer`, `ai-filtres-lister`) ; un changement fait dont l'audit ne
+s'écrit pas rend 500.
+Code 5 de cvectl (erreur interne) → 503 `ctl` (le relais le retente après 24 h ; 3 → 409 est un refus définitif).
+Les catégories `ia_filtres_*` (mode `escalate`, `ban_seuil`/`ban_duree` propres) ne bannissent que si le compteur
+escalate global de sbxwaf existe : `-escalate-threshold`/`-escalate-window` actifs (défauts 3 et 24 h) ; sans lui,
+elles observent seulement, comme `detect`.
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /ai/filtres` | `{"filtres": [1 à 50 objets]}` (tri et bornes par cvectl) | 200 `{appliques, rejets, inchanges, …}` ; 409 `rejete` si rien n'est appliqué ni inchangé |
+| `DELETE /ai/filtres/{id}` | aucun ; `id` = `ia-…` | 200 bilan de cvectl ; 404 id inconnu |
+| `GET /ai/filtres` | aucun | 200 `{filtres}` |
+
+Codes de cvectl : 2 → 422, 3 → 409, 4 → 404 ; autre code, délai dépassé ou binaire absent → 503 `ctl`.
 
 Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,
 **cas sûr recontrôlé** (≥ 20 adresses du bloc dans `waf_ban`, toutes de familles sûres : `scanners`,

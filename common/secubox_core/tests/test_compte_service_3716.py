@@ -537,3 +537,35 @@ def test_audit_fin_de_rafale_ecrite_par_la_minuterie(cs, cle, tmp_path, monkeypa
 
 
 _ARMER_REEL = _cs._armer_minuterie
+
+
+# ── #3732 : compte de service ai-filtres, audience distincte ───────────
+def test_compte_ai_filtres_porte_waf_filtres(cs):
+    assert cs.COMPTES_SERVICE["ai-filtres"] == "waf-filtres"
+    assert cs.COMPTES_SERVICE["ai-ban"] == "waf-ban"
+    assert cs.require_ai_filtres.__name__ == "require_ai_filtres"
+
+
+def test_jetons_ai_ban_et_ai_filtres_non_interchangeables(cs, cle, tmp_path):
+    dossier = tmp_path / "ai-filtres"
+    dossier.mkdir(mode=0o755)
+    os.chmod(dossier, 0o755)
+    cf = _nouvelle_cle()
+    _poser(dossier, cf)
+    app = FastAPI()
+    for nom, garde in (("ban", cs.require_ai_ban), ("filtres", cs.require_ai_filtres)):
+        def route(p=Depends(garde)):
+            return {"sub": p.get("sub"), "cle": p.get("cle")}
+        app.add_api_route(f"/{nom}", route, methods=["POST"])
+    client = TestClient(app)
+
+    def post(chemin, cle_, compte):
+        j = cs.frapper_jeton(cle_.prive, compte, "gk2", b"{}", time.time())
+        return client.post(chemin, content=b"{}", headers={"Authorization": f"Bearer {j}"})
+
+    r = post("/filtres", cf, "ai-filtres")
+    assert r.status_code == 200 and r.json() == {"sub": "ai-filtres", "cle": cf.kid}
+    assert post("/filtres", cle, "ai-ban").status_code == 401           # jeton ai-ban refusé sur ai-filtres
+    assert post("/ban", cf, "ai-filtres").status_code == 401            # et inversement
+    # la clé ai-ban ne vaut rien pour ai-filtres, même en se disant ai-filtres
+    assert post("/filtres", cle, "ai-filtres").status_code == 401

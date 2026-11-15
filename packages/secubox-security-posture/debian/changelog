@@ -1,3 +1,18 @@
+secubox-security-posture (2.7.0-1~trixie1) trixie; urgency=medium
+
+  * Filtres du WAF proposés par l IA : module filtres_ia (forme, gravité,
+    motif littéral échappé, vérifications, plafonds, catégories
+    ia_filtres_critique|haute|moyenne) et verbe
+    secubox-cvectl filtres-ia appliquer|retirer|lister --json (acteur et
+    filtres sur stdin, 256 Kio au plus pour appliquer, simulation sans
+    --apply) ; trois lignes de sudoers exactes (ref #3732, tâches 2 et 3).
+  * Revue finale (ref #3732) : motifs alignés sur le texte comparé par sbxwaf
+    (chemin suivi d'un espace, premier paramètre sans « ? », « + » en
+    [ +]) ; filtres-ia sort en code 5 sur erreur interne (retentée par le
+    relais), jamais 3.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 12:00:00 +0100
+
 secubox-security-posture (2.6.0-1~trixie1) trixie; urgency=medium
 
   * Leurres du WAF : apprentissage (product_absent_probes, detect) → promotion
