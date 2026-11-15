@@ -6,6 +6,8 @@ secubox-toolbox-ng (0.16.0-1~trixie1) trixie; urgency=medium
     nft choisie. Absents, illisibles ou hors bornes (avertissement au
     chargement) : comportement inchangé (-escalate-threshold,
     -nft-ban-duration).
+  * Test de bout en bout des catégories ia_filtres_* telles que cvectl les
+    écrit (ref #3732).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 11:30:00 +0100
 

@@ -136,3 +136,57 @@ func TestEscalate_SansChampsInchange(t *testing.T) {
 		t.Fatalf("3e hit : %d, attendu 403", rec.Code)
 	}
 }
+
+// Bout en bout (#3732) : catégories EXACTEMENT telles que `secubox-cvectl filtres-ia appliquer` les écrit
+// (sortie réelle de filtres_ia.appliquer_filtres, copiée telle quelle), passées au vrai moteur et au vrai
+// chemin escalate. Garde le contrat du texte comparé (chemin, ESPACE, requête sans « ? », corps, UA).
+const filtresIAFixture = `{"ia_filtres_critique": {"name": "Filtres de l'IA — critique (generated)", "severity": "critical", "mode": "escalate", "generated": true, "ban_seuil": 1, "ban_duree": "168h", "patterns": [{"id": "ia-crit", "pattern": "(?:^[/.]*|/\\.\\.)/x/yyyyyyyy(?:$|[\\s?#])", "desc": "fortiweb CVE-2024-1234 (autre)", "cve": "CVE-2024-1234", "version": 1, "famille": "autre", "produit": "fortiweb", "motif_type": "chemin_exact", "source": "ia"}]}, "ia_filtres_haute": {"name": "Filtres de l'IA — haute (generated)", "severity": "high", "mode": "escalate", "generated": true, "ban_seuil": 1, "ban_duree": "24h", "patterns": [{"id": "ia-haute", "pattern": "(?:^|[\\s&?])action=exec_cmd", "desc": "fortiweb CVE-2024-2222 (autre)", "cve": "CVE-2024-2222", "version": 1, "famille": "autre", "produit": "fortiweb", "motif_type": "parametre_egal", "source": "ia"}]}, "ia_filtres_moyenne": {"name": "Filtres de l'IA — moyenne (generated)", "severity": "medium", "mode": "escalate", "generated": true, "ban_seuil": 3, "ban_duree": "4h", "patterns": [{"id": "ia-moy", "pattern": "foo[ +]barbazqux", "desc": "zzprod CVE-2024-3333 (autre)", "cve": "CVE-2024-3333", "version": 1, "famille": "autre", "produit": "zzprod", "motif_type": "corps_contient", "source": "ia"}]}}`
+
+func TestFiltresIA_FixtureCvectl_Match(t *testing.T) {
+	r := LoadRules(writeRulesFile(t, filtresIAFixture))
+	cas := []struct {
+		chemin, requete, corps string
+		touche                 bool
+		id                     string
+	}{
+		{"/x/yyyyyyyy", "", "", true, "ia-crit"},
+		{"/x/yyyyyyyy", "a=1", "", true, "ia-crit"},
+		{"/x/yyyyyyyyz", "", "", false, ""},
+		{"/index.php", "action=exec_cmd", "", true, "ia-haute"},
+		{"/index.php", "b=1&action=exec_cmd", "", true, "ia-haute"},
+		{"/index.php", "xaction=exec_cmd", "", false, ""},
+		{"/p", "", "foo+barbazqux", true, "ia-moy"},
+	}
+	for _, c := range cas {
+		_, _, _, id, hit := r.MatchDetail("GET", c.chemin, c.requete, c.corps, "curl/8", true, nil)
+		if hit != c.touche || id != c.id {
+			t.Errorf("%s?%s [%s] : hit=%v id=%q, attendu %v %q", c.chemin, c.requete, c.corps, hit, id, c.touche, c.id)
+		}
+	}
+}
+
+func TestFiltresIA_FixtureCvectl_BanAuPremierHit(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(backend.Close)
+	s := newDetectTestServer(t, backend.URL, writeRulesFile(t, filtresIAFixture))
+	s.escalateBan = NewBan(24*time.Hour, 3)
+	fx := &fauxNft{}
+	b := banneurTest(t, fx)
+	if err := b.Ensure(); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+	s.nftBan = b
+	req := httptest.NewRequest(http.MethodGet, "http://app.example.com/x/yyyyyyyy?a=1", nil)
+	req.Host = "app.example.com"
+	req.RemoteAddr = "203.0.113.90:12345"
+	rec := httptest.NewRecorder()
+	s.handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("1er hit ia_filtres_critique : %d, attendu 403 (ban_seuil 1)", rec.Code)
+	}
+	if a := ajoutsNft(fx, 1); len(a) != 1 || !strings.Contains(a[0], "timeout 604800s") {
+		t.Fatalf("ban attendu de 168h (604800s), obtenu %v", a)
+	}
+}
