@@ -19,7 +19,7 @@ def test_regle_livree_lue():
     iface, ports = wg.ports_gardes(LIVREE.read_text())
     assert iface == "eth2"
     assert {8088, 8900, 9080, 8910} <= set(ports)
-    assert {23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017} <= set(ports)   # leurres
+    assert not set(ports) & wg.LEURRES            # leurres OUVERTS (#3728) : ils doivent pouvoir être touchés
     assert 445 not in ports                       # vrai SMB, cantonné par secubox-smb
     assert not set(ports) & wg.FRONTAUX          # jamais couper SSH / HAProxy
 
@@ -87,3 +87,12 @@ def test_lan_route_meme_garde_que_eth2():
     assert listes["br-lan"] == listes["eth2"]                      # une seule liste, jamais deux qui divergent
     assert 9080 in listes["br-lan"] and 8404 in listes["br-lan"]
     assert re.search(r'iifname "br-lan" meta nfproto ipv6 tcp dport 7331 counter drop', texte)
+
+
+def test_leurres_ouverts_et_reconnus_comme_voulus():
+    """#3728 : les écoutes de leurre de sbx-authwatch ne sont plus coupées (102 123 paquets jetés sur gk2, 0 touche) et
+    la page ne les signale pas comme backends exposés : elles sont listées à part."""
+    assert wg.LEURRES == {23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017}
+    ss = "LISTEN 0 8192 *:3389 *:*\nLISTEN 0 511 0.0.0.0:8123 0.0.0.0:*\n"
+    expose, leurres = wg.classer(wg.ports_en_ecoute(ss), gardes=[8088], )
+    assert list(expose) == [8123] and leurres == [3389]

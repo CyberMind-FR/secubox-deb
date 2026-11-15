@@ -83,22 +83,29 @@ var bannieres = map[string][]byte{
 // d'autres visites, désignera l'outil. Extrait VIDE si le client n'a rien dit :
 // beaucoup de balayeurs ne font que tester l'ouverture du port.
 func Echange(conn net.Conn, service string) (extrait string, octets int) {
+	extrait, octets, _ = echangeBrut(conn, service)
+	return extrait, octets
+}
+
+// echangeBrut — Echange, en rendant aussi les octets lus (bornés), pour les
+// analyses de première trame d'identifiants.go (RDP, VNC, Mongo).
+func echangeBrut(conn net.Conn, service string) (extrait string, octets int, brut []byte) {
 	_ = conn.SetDeadline(time.Now().Add(banniereEcheance))
 
 	if b := bannieres[service]; len(b) > 0 {
 		// Écriture d'une CONSTANTE. Pas de formatage, donc pas d'injection
 		// possible de quoi que ce soit venu du client.
 		if _, err := conn.Write(b); err != nil {
-			return "", 0
+			return "", 0, nil
 		}
 	}
 
 	tampon := make([]byte, banniereLectureMax)
 	n, _ := conn.Read(tampon)
 	if n <= 0 {
-		return "", 0
+		return "", 0, nil
 	}
-	return resumeTrame(tampon[:n]), n
+	return resumeTrame(tampon[:n]), n, tampon[:n]
 }
 
 // resumeTrame rend une représentation SÛRE de ce qu'on a lu.

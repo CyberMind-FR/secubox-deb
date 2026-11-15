@@ -45,6 +45,9 @@ type entreeMenace struct {
 	UserAgent string `json:"user_agent"`
 	Tool      string `json:"tool,omitempty"`
 	JA4       string `json:"ja4,omitempty"`
+	// Leurres de service (#3728) : profil du visiteur et identifiants tentés.
+	Agent  string  `json:"agent,omitempty"`
+	Essais []Essai `json:"essais,omitempty"`
 }
 
 type JournalMenaces struct {
@@ -86,7 +89,10 @@ func (j *JournalMenaces) Inscrit(s Signal, action string, total int) {
 		Severity:  s.Severite,
 		RuleID:    fmt.Sprintf("%s/%d", s.Detail, total),
 		Action:    action,
+		UserAgent: s.Client,
 		Tool:      "authwatch",
+		Agent:     s.Agent,
+		Essais:    s.Essais,
 	}
 	data, err := json.Marshal(e)
 	if err != nil {
