@@ -1,3 +1,16 @@
+secubox-waf-ng (1.36.0-1~trixie1) trixie; urgency=medium
+
+  * Mémoire des leurres de service (#3734, lot 1) : base SQLite
+    /var/lib/secubox/waf/leurres.db alimentée à curseur depuis le journal des
+    menaces (lignes leurre:*, 30 jours, rotation suivie), routes
+    /api/v1/waf/leurres/{resume,attaquants,attaquant/<ip>,dictionnaire,rejeux}
+    et gestes {ban,unban} (4 h, 24 h, 7 j ; jamais le LAN ; audités), toutes en
+    require_jwt : les mots de passe tentés par les robots y sont en clair.
+    Page /waf/leurres.html et onglet « Leurres » : attaquants regroupés par
+    adresse avec leur fiche, dictionnaire des robots (export), rejeux.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 11:30:00 +0100
+
 secubox-waf-ng (1.35.3-1~trixie1) trixie; urgency=medium
 
   * Journal des gestes de l'IA (/var/lib/secubox/waf/ai-ban.jsonl) ouvert au

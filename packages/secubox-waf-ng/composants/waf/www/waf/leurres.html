@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « SBXWAF », mémoire des leurres de service (#3734, maquette approuvée le 2026-11-15).
+  DONNÉES RÉELLES UNIQUEMENT : GET /api/v1/waf/leurres/{resume,attaquants,attaquant/<ip>,dictionnaire,rejeux}, en session
+  d'administrateur (les mots de passe tentés par les robots sont affichés EN CLAIR : aucun compte réel derrière un leurre).
+  Gestes : POST /api/v1/waf/leurres/{ban,unban}. Une mesure absente s'affiche « — », jamais 0.
+  TOUT texte venu du journal (compte, mot de passe, client) est choisi par un attaquant : posé en textContent, jamais en HTML.
+-->
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBXWAF — leurres</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#8296b8;
+    --cyan:#29b6f6;--vert:#a5e0a9;--corail:#ffb199;--ambre:#ffa726}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(900px 520px at 50% 0%,rgba(41,182,246,.13),transparent 70%),var(--fond);color:var(--texte);
+       font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35;font-variant-numeric:tabular-nums}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .cadre{padding:14px;display:flex;flex-direction:column;gap:12px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .tete b{font-size:1.3rem;font-weight:800} .tete small{color:var(--doux)}
+  .tete .droite{margin-left:auto;color:var(--doux);font-size:.78rem;text-align:right}
+  .bandeau{border-radius:10px;padding:8px 14px;font-size:.85rem;border:1px solid var(--cyan);color:var(--texte);background:rgba(41,182,246,.12)}
+  .bandeau.err{border-color:var(--corail);background:rgba(255,138,101,.12)}
+  .tuiles{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .tuile{border:1px solid var(--trait2);border-radius:14px;padding:11px 14px;background:rgba(12,24,48,.7);min-width:0}
+  .tuile .l{color:var(--doux);font-size:.76rem} .tuile .v{font-size:1.7rem;font-weight:800;line-height:1.15} .tuile .s{color:var(--doux);font-size:.74rem}
+  .tuile.chaud{border-color:rgba(255,138,101,.45);background:rgba(48,20,12,.5)} .tuile.chaud .v{color:var(--corail)}
+  .tuile.calme{border-color:rgba(102,187,106,.4);background:rgba(12,40,24,.5)} .tuile.calme .v{color:var(--vert)}
+  .pan{border:1px solid var(--trait2);border-radius:14px;padding:13px 15px;background:rgba(12,24,48,.7);min-width:0;display:flex;flex-direction:column;gap:9px}
+  .pan h2{margin:0;font-size:.98rem;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap} .pan h2 i{font-style:normal;font-weight:400;color:var(--doux);font-size:.76rem}
+  .pan.chaud{border-color:rgba(255,138,101,.4);background:rgba(48,20,12,.35)}
+  .leurres{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(135px,1fr))}
+  .leurre{border:1px solid var(--trait);border-radius:10px;padding:7px 10px} .leurre.partiel{border-style:dashed}
+  .leurre b{display:flex;justify-content:space-between;gap:8px} .leurre span{color:var(--doux);font-size:.74rem}
+  .deux{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+  .deux>.large{flex:999 1 700px} .deux>.etroit{flex:1 1 330px}
+  .filtres{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto}
+  input,select,button{font:inherit;color:var(--texte)}
+  input,select{min-height:36px;border-radius:8px;border:1px solid var(--trait2);background:#0a1630;padding:0 9px;max-width:100%}
+  label{color:var(--doux);font-size:.76rem}
+  button{min-height:36px;padding:0 11px;border-radius:8px;border:1px solid var(--trait2);background:transparent;cursor:pointer}
+  button:hover{border-color:var(--cyan)} button:disabled{opacity:.5;cursor:default}
+  button.fort{border-color:rgba(255,138,101,.6);background:rgba(255,138,101,.14);color:#ffd3c5}
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+  .table{overflow-x:auto} table{width:100%;min-width:780px;border-collapse:collapse;font-size:.84rem}
+  th{color:var(--doux);font-weight:500;text-align:left;padding:5px 8px} td{padding:7px 8px;vertical-align:top;border-top:1px solid rgba(86,150,255,.18)}
+  tr.rejeu>td{background:rgba(255,138,101,.07)}
+  code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem;overflow-wrap:anywhere}
+  .sous{color:var(--doux);font-size:.76rem} .rj{color:var(--corail);font-size:.76rem}
+  .pastille{display:inline-block;padding:1px 8px;border-radius:6px;border:1px solid rgba(102,187,106,.5);background:rgba(102,187,106,.16);color:var(--vert);white-space:nowrap}
+  .pastille.non{border-color:var(--trait2);background:transparent;color:var(--doux)}
+  .gestes{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .lien{background:none;border:0;padding:0;min-height:0;color:var(--cyan);text-decoration:underline;cursor:pointer}
+  .fiche td{background:rgba(6,13,27,.6)} .fiche .v{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:3px 14px;font-size:.8rem}
+  .dico{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:5px 12px;font-size:.84rem;align-items:baseline}
+  .dico .t{color:var(--doux);font-size:.74rem}
+  .puces{display:flex;gap:6px;flex-wrap:wrap} .puce{padding:2px 9px;border-radius:8px;border:1px solid var(--trait2)}
+  .cartes{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .carte{border:1px solid rgba(255,138,101,.35);border-radius:12px;padding:10px 13px;display:flex;flex-direction:column;gap:5px;min-width:0}
+  .vide{color:var(--faible);font-size:.84rem;padding:6px 0}
+</style>
+<body>
+<div class="cadre" id="cadre">
+  <div class="tete">
+    <div><b>Leurres</b><br><small>Mémoire des attaquants · faux services ouverts sur Internet</small></div>
+    <div class="droite" id="releve">—</div>
+  </div>
+  <div class="bandeau" id="session" hidden>Session d'administrateur requise. <a href="/login.html" target="_top" style="color:var(--cyan)">Se connecter</a></div>
+  <div class="bandeau err" id="erreur" hidden role="alert"></div>
+
+  <div class="tuiles">
+    <div class="tuile"><div class="l">Attaquants en mémoire</div><div class="v" id="tA">—</div><div class="s" id="tAs">adresses distinctes</div></div>
+    <div class="tuile"><div class="l">Couples tentés</div><div class="v" id="tC">—</div><div class="s">compte / mot de passe distincts</div></div>
+    <div class="tuile chaud"><div class="l">Rejeux repérés</div><div class="v" id="tR">—</div><div class="s">même mot de passe, plusieurs comptes ou adresses</div></div>
+    <div class="tuile"><div class="l">Touches</div><div class="v" id="tT">—</div><div class="s">connexions à un leurre</div></div>
+    <div class="tuile calme"><div class="l">Bans actifs</div><div class="v" id="tB">—</div><div class="s">attaquants de la mémoire encore bannis</div></div>
+  </div>
+
+  <div class="pan"><h2>Par leurre <i>touches · ce que le leurre sait capter</i></h2><div class="leurres" id="leurres"></div></div>
+
+  <div class="deux">
+    <div class="pan large">
+      <h2>Attaquants mémorisés
+        <span class="filtres">
+          <label for="fq">Filtrer</label><input id="fq" type="search" placeholder="adresse, compte, mot de passe, client" style="width:250px">
+          <label for="fp">Profil</label><select id="fp"><option value="">tous</option><option value="force-brute">force brute</option><option value="sondeur">sondeur</option><option value="balayeur">balayeur</option></select>
+        </span>
+      </h2>
+      <div class="table"><table>
+        <thead><tr><th>Adresse</th><th>Leurres</th><th>Profil · client</th><th>Essais</th><th>Vu</th><th>Ban</th><th>Geste</th></tr></thead>
+        <tbody id="att"></tbody>
+      </table></div>
+      <div class="vide" id="attVide" hidden>Aucun attaquant en mémoire pour ce filtre.</div>
+      <div class="sous">Une ligne par adresse, toutes ses visites regroupées. L'adresse ouvre sa fiche : chaque connexion, chaque couple tenté.</div>
+    </div>
+
+    <div class="pan etroit">
+      <h2>Dictionnaire des robots <i>en clair</i></h2>
+      <div class="dico" id="dico"></div>
+      <div class="vide" id="dicoVide" hidden>Aucun identifiant tenté pour l'instant.</div>
+      <div class="sous">Comptes les plus visés</div>
+      <div class="puces" id="comptes"></div>
+      <div><button type="button" id="export">Exporter le dictionnaire</button></div>
+    </div>
+  </div>
+
+  <div class="pan chaud"><h2>Rejeux <i>ce qui relie les attaquants</i></h2>
+    <div class="cartes" id="rejeux"></div>
+    <div class="vide" id="rejVide" hidden>Aucun rejeu repéré pour l'instant.</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var API='/api/v1/waf/leurres/';
+  var LEURRES=[['telnet','Telnet 23','compte + mot de passe, 5 essais'],['rdp','RDP 3389','compte, protocoles'],['vnc','VNC 5900','version du client'],
+    ['redis','Redis 6379','AUTH, commandes'],['postgres','Postgres 5432','compte + mot de passe, appli'],['elasticsearch','Elastic 9200','Basic, User-Agent'],
+    ['mongodb','Mongo 27017','pilote, version'],['mysql','MySQL 3306','première trame seulement',1],['mssql','MSSQL 1433','première trame seulement',1]];
+  var PROFIL={'force-brute':'force brute','sondeur':'sondeur','balayeur':'balayeur'};
+  var DICO=null, OUVERTE='';
+  function el(i){return document.getElementById(i);}
+  function cree(tag,cls,texte){var e=document.createElement(tag);if(cls)e.className=cls;if(texte!==undefined&&texte!==null)e.textContent=texte;return e;}
+  function vide(n){while(n.firstChild)n.removeChild(n.firstChild);}
+  function nb(v){return typeof v==='number'?v.toLocaleString('fr-FR'):'—';}
+  function quand(t){if(!t)return '—';var d=new Date(t*1000);return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+  function duree(s){if(typeof s!=='number')return 'actif';if(s>=86400)return Math.round(s/86400)+' j';if(s>=3600)return Math.round(s/3600)+' h';return Math.max(1,Math.round(s/60))+' min';}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function entetes(json){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;if(json)h['Content-Type']='application/json';return h;}
+  function jget(chemin){return fetch(API+chemin,{headers:entetes(),credentials:'same-origin',cache:'no-store'}).then(function(r){
+    if(r.status===401||r.status===403){el('session').hidden=false;return null;} return r.ok?r.json():null;}).catch(function(){return null;});}
+  function jpost(chemin,corps){return fetch(API+chemin,{method:'POST',headers:entetes(true),credentials:'same-origin',body:JSON.stringify(corps)}).then(function(r){
+    return r.json().catch(function(){return {};}).then(function(j){return {ok:r.ok,statut:r.status,corps:j};});}).catch(function(){return {ok:false,statut:0,corps:{}};});}
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'leurres'},location.origin);}catch(e){}}}
+  function erreur(msg){var e=el('erreur');e.textContent=msg||'';e.hidden=!msg;hauteur();}
+  function couple(x){return (x.compte||'(sans compte)')+' / '+(x.mot_de_passe===''?'(vide)':x.mot_de_passe);}
+
+  function resume(r){
+    if(!r)return;
+    el('tA').textContent=nb(r.attaquants);el('tC').textContent=nb(r.couples);el('tR').textContent=nb(r.rejeux);el('tT').textContent=nb(r.touches);el('tB').textContent=nb(r.bans_actifs);
+    el('tAs').textContent='adresses distinctes, '+(r.fenetre_jours||30)+' jours';
+    el('releve').textContent=r.premiere?'mémoire depuis le '+quand(r.premiere):'aucune touche en mémoire';
+    var z=el('leurres');vide(z);
+    LEURRES.forEach(function(l){var d=cree('div','leurre'+(l[3]?' partiel':''));var b=cree('b');b.appendChild(cree('span','',l[1])).style.color='inherit';
+      b.lastChild.style.fontSize='inherit';b.appendChild(document.createTextNode(nb((r.par_leurre||{})[l[0]]||0)));d.appendChild(b);d.appendChild(cree('span','',l[2]));z.appendChild(d);});
+  }
+
+  function geste(ip,chemin,corps,bouton){
+    bouton.disabled=true;erreur('');
+    jpost(chemin,corps).then(function(r){
+      if(!r.ok){var d=(r.corps&&r.corps.detail)||{};erreur('Geste refusé pour '+ip+' : '+(d.message||d.motif||('erreur '+r.statut)));bouton.disabled=false;return;}
+      charger();
+    });
+  }
+
+  function ligneFiche(tr,ip){
+    var f=cree('tr','fiche');var td=cree('td');td.colSpan=7;td.textContent='Lecture de la fiche…';f.appendChild(td);tr.parentNode.insertBefore(f,tr.nextSibling);
+    jget('attaquant/'+encodeURIComponent(ip)).then(function(d){
+      vide(td);if(!d||!d.visites||!d.visites.length){td.textContent='Fiche indisponible.';hauteur();return;}
+      var g=cree('div','v');
+      d.visites.forEach(function(v){g.appendChild(cree('span','',quand(v.ts)));g.appendChild(cree('span','',v.service+' · '+(PROFIL[v.profil]||v.profil)+(v.action==='banned'?' · banni':'')));
+        var c=cree('span','mono');c.textContent=(v.client||'')+(v.essais.length?(v.client?' — ':'')+v.essais.map(couple).join(', '):'');g.appendChild(c);});
+      td.appendChild(g);hauteur();
+    });
+  }
+
+  function attaquants(d){
+    var tb=el('att');vide(tb);var liste=(d&&d.attaquants)||[];el('attVide').hidden=liste.length>0||!d;
+    liste.forEach(function(a){
+      var tr=cree('tr',a.rejeu?'rejeu':'');
+      var td=cree('td');var lien=cree('button','lien mono',a.ip==='local'?'LAN':a.ip);lien.type='button';lien.setAttribute('aria-expanded','false');
+      lien.addEventListener('click',function(){var s=tr.nextSibling;if(s&&s.className==='fiche'){s.parentNode.removeChild(s);OUVERTE='';lien.setAttribute('aria-expanded','false');hauteur();return;}
+        OUVERTE=a.ip;lien.setAttribute('aria-expanded','true');ligneFiche(tr,a.ip);});
+      td.appendChild(lien);tr.appendChild(td);
+      tr.appendChild(cree('td','',a.services.join(', ')));
+      td=cree('td','',PROFIL[a.profil]||a.profil);if(a.client)td.appendChild(cree('div','sous mono',a.client));tr.appendChild(td);
+      td=cree('td');if(!a.nb_essais)td.appendChild(cree('span','sous','aucun'));
+      a.essais.forEach(function(x){td.appendChild(cree('div','mono',couple(x)));});
+      if(a.nb_essais>a.essais.length)td.appendChild(cree('div','sous','+ '+(a.nb_essais-a.essais.length)+' autres'));
+      if(a.rejeu)td.appendChild(cree('div','rj','rejeu : un mot de passe sur plusieurs comptes'));tr.appendChild(td);
+      td=cree('td','',quand(a.derniere));td.appendChild(cree('div','sous',a.visites+(a.visites>1?' visites':' visite')));tr.appendChild(td);
+      td=cree('td');if(!a.ban)td.appendChild(cree('span','sous','jamais (LAN)'));
+      else td.appendChild(cree('span','pastille'+(a.ban.actif?'':' non'),a.ban.actif?duree(a.ban.expire_dans):'non banni'));tr.appendChild(td);
+      td=cree('td');
+      if(a.ban){var g=cree('div','gestes');var sel=cree('select');sel.setAttribute('aria-label','Durée du ban pour '+a.ip);
+        [['4h','4 h'],['24h','24 h'],['7d','7 j']].forEach(function(o){var op=cree('option','',o[1]);op.value=o[0];if(o[0]==='24h')op.selected=true;sel.appendChild(op);});
+        var b=cree('button',a.ban.actif?'':'fort',a.ban.actif?'Prolonger':'Bannir');b.type='button';b.addEventListener('click',function(){geste(a.ip,'ban',{ip:a.ip,duree:sel.value},b);});
+        g.appendChild(sel);g.appendChild(b);
+        if(a.ban.actif){var l=cree('button','','Lever');l.type='button';l.addEventListener('click',function(){geste(a.ip,'unban',{ip:a.ip},l);});g.appendChild(l);}
+        td.appendChild(g);}
+      tr.appendChild(td);tb.appendChild(tr);
+      if(a.ip===OUVERTE){lien.setAttribute('aria-expanded','true');ligneFiche(tr,a.ip);}
+    });
+  }
+
+  function dictionnaire(d){
+    DICO=d;var z=el('dico');vide(z);var m=(d&&d.mots_de_passe)||[];el('dicoVide').hidden=m.length>0||!d;
+    if(m.length){['mot de passe','essais','comptes','adresses'].forEach(function(t){z.appendChild(cree('span','t',t));});}
+    m.slice(0,15).forEach(function(x){z.appendChild(cree('span','mono',x.mot_de_passe===''?'(vide)':x.mot_de_passe));z.appendChild(cree('span','',nb(x.essais)));z.appendChild(cree('span','',nb(x.comptes)));z.appendChild(cree('span','',nb(x.adresses)));});
+    var c=el('comptes');vide(c);((d&&d.comptes)||[]).slice(0,12).forEach(function(x){c.appendChild(cree('span','puce mono',x.compte));});
+    el('export').disabled=!m.length;
+  }
+
+  function rejeux(r){
+    var z=el('rejeux');vide(z);var n=0;
+    function carte(titre,ligne,note){var c=cree('div','carte');c.appendChild(cree('b','',titre));c.appendChild(cree('div','mono',ligne));c.appendChild(cree('div','sous',note));z.appendChild(c);n++;}
+    if(r){
+      (r.mot_de_passe_plusieurs_comptes||[]).slice(0,6).forEach(function(x){carte('Un mot de passe, plusieurs comptes',x.mot_de_passe+' → '+x.comptes.join(', '),x.adresses+(x.adresses>1?' adresses':' adresse'));});
+      (r.couple_plusieurs_adresses||[]).slice(0,6).forEach(function(x){carte('Un même couple, plusieurs adresses',couple(x)+' ← '+x.adresses.length+' adresses',x.blocs+(x.blocs>1?' blocs /24':' bloc /24')+' : même outil, même liste');});
+      (r.client_plusieurs_leurres||[]).slice(0,6).forEach(function(x){carte('Un même client, plusieurs leurres',x.client+' → '+x.services.join(', '),x.adresses+(x.adresses>1?' adresses':' adresse'));});
+    }
+    el('rejVide').hidden=n>0||!r;
+  }
+
+  function charger(){
+    var q='attaquants?filtre='+encodeURIComponent(el('fq').value)+'&profil='+encodeURIComponent(el('fp').value);
+    return Promise.all([jget('resume'),jget(q),jget('dictionnaire'),jget('rejeux')]).then(function(t){resume(t[0]);attaquants(t[1]);dictionnaire(t[2]);rejeux(t[3]);hauteur();});
+  }
+
+  var minuterie=null;
+  el('fq').addEventListener('input',function(){clearTimeout(minuterie);minuterie=setTimeout(charger,300);});
+  el('fp').addEventListener('change',charger);
+  el('export').addEventListener('click',function(){
+    if(!DICO)return;var lignes=DICO.mots_de_passe.map(function(x){return x.mot_de_passe;}).join('\n')+'\n';
+    var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([lignes],{type:'text/plain'}));a.download='dictionnaire-des-robots.txt';document.body.appendChild(a);a.click();a.remove();});
+  if(/[?&]embed=1/.test(location.search))document.body.className='emb';
+  charger();setInterval(function(){if(!document.hidden&&!OUVERTE)charger();},60000);
+})();
+</script>
+</body>
+</html>
