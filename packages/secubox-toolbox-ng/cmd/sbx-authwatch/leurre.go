@@ -178,7 +178,8 @@ func emet(ctx context.Context, signaux chan<- Signal, l Leurre, ip string, c Cap
 	}
 	switch {
 	case len(c.Essais) > 0:
-		detail += " — " + resumeEssais(c.Essais)
+		// Le NOMBRE seulement : rule_id reste groupable et journald ne reçoit pas les couples, portés par `essais`.
+		detail += fmt.Sprintf(" — %d essai(s) d'identifiants", len(c.Essais))
 	case c.Octets > 0 && c.Extrait != "":
 		detail += fmt.Sprintf(" — première trame %d o : %s", c.Octets, c.Extrait)
 	case c.Octets > 0:
@@ -194,9 +195,8 @@ func emet(ctx context.Context, signaux chan<- Signal, l Leurre, ip string, c Cap
 		Client:    c.Client,
 		Agent:     c.Agent,
 	}
-	if len(c.Essais) > 0 {
-		sig.Cible = c.Essais[0].Compte
-	}
+	// Pas de `Cible` : le compte d'un leurre est choisi par le robot (root, admin…) ; haché vers sbx-actord, il relierait
+	// en un seul acteur tous les robots qui tentent « root ». Le journal le lit dans `essais`.
 	select {
 	case signaux <- sig:
 	case <-ctx.Done():

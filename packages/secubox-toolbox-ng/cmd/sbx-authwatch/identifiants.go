@@ -32,7 +32,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -41,10 +40,15 @@ import (
 )
 
 const (
-	dialogueEcheance = 20 * time.Second // un robot enchaîne vite ; au-delà, il ne dira plus rien
-	essaisMax        = 5                // essais gardés par connexion
-	champMax         = 64               // caractères gardés par compte, mot de passe, client
-	octetsMax        = 4096             // octets lus par connexion, tous échanges confondus
+	// LE BAN ATTEND LA FIN DU DIALOGUE : le ban nft (waf_drop, priorité -100) jette AUSSI la connexion établie, bannir
+	// à l'ouverture tuerait la capture. La fenêtre est donc courte : 3 s pour dire un premier octet (un balayeur muet
+	// est clos et banni à 3 s), 10 s au total pour qui parle.
+	premierOctetEcheance = 3 * time.Second
+	dialogueEcheance     = 10 * time.Second
+	essaisMax            = 5    // essais gardés par connexion
+	champMax             = 64   // caractères gardés par compte, mot de passe, client
+	octetsMax            = 4096 // octets lus par connexion, tous échanges confondus
+	reveilsMax           = 3    // lignes vides tolérées en telnet avant de fermer
 )
 
 // Essai — un couple tenté. L'un des deux peut manquer (RDP ne livre que le
@@ -79,7 +83,7 @@ func agentDe(c Capture) string {
 // Dialogue tient l'échange propre au service et rend la capture. Les services
 // sans dialogue connu retombent sur Echange (une bannière, une trame).
 func Dialogue(conn net.Conn, service string) (c Capture) {
-	_ = conn.SetDeadline(time.Now().Add(dialogueEcheance))
+	_ = conn.SetDeadline(time.Now().Add(premierOctetEcheance))
 	defer func() { c.Agent = agentDe(c) }()
 	switch service {
 	case "telnet":
@@ -124,10 +128,24 @@ func propreN(b []byte, max int) string {
 	return sb.String()
 }
 
-// lecteur borné : compte les octets lus et refuse d'aller au-delà d'octetsMax.
+// lecteur borné : compte les octets lus et refuse d'aller au-delà d'octetsMax. Au
+// premier octet reçu, l'échéance passe de premierOctetEcheance à `fin`.
 type lecteur struct {
-	r *bufio.Reader
-	n *int
+	r    *bufio.Reader
+	n    *int
+	conn net.Conn
+	fin  time.Time
+}
+
+func nouveauLecteur(conn net.Conn, taille int, n *int) lecteur {
+	return lecteur{bufio.NewReaderSize(conn, taille), n, conn, time.Now().Add(dialogueEcheance)}
+}
+
+func (l lecteur) compte(k int) {
+	if *l.n == 0 && k > 0 && l.conn != nil {
+		_ = l.conn.SetDeadline(l.fin)
+	}
+	*l.n += k
 }
 
 func (l lecteur) octet() (byte, error) {
@@ -136,7 +154,7 @@ func (l lecteur) octet() (byte, error) {
 	}
 	b, err := l.r.ReadByte()
 	if err == nil {
-		*l.n++
+		l.compte(1)
 	}
 	return b, err
 }
@@ -147,7 +165,7 @@ func (l lecteur) plein(n int) ([]byte, error) {
 	}
 	b := make([]byte, n)
 	k, err := io.ReadFull(l.r, b)
-	*l.n += k
+	l.compte(k)
 	return b, err
 }
 
@@ -246,17 +264,21 @@ func (tl *telnet) ligne() (string, bool) {
 }
 
 func dialogueTelnet(conn net.Conn) (c Capture) {
-	tl := &telnet{l: lecteur{bufio.NewReaderSize(conn, 256), &c.Octets}}
+	tl := &telnet{l: nouveauLecteur(conn, 256, &c.Octets)}
 	defer func() { c.Client = clientTelnet(tl.iac) }()
 	if _, err := conn.Write(bannieres["telnet"]); err != nil {
 		return c
 	}
+	reveils := 0
 	for len(c.Essais) < essaisMax {
 		compte, ok := tl.ligne()
 		if compte == "" && !ok {
 			return c
 		}
-		if compte == "" { // ligne vide : le robot « réveille » l'invite
+		if compte == "" { // ligne vide : le robot « réveille » l'invite, quelques fois au plus
+			if reveils++; reveils > reveilsMax {
+				return c
+			}
 			if _, err := conn.Write(bannieres["telnet"]); err != nil {
 				return c
 			}
@@ -318,7 +340,7 @@ func startupPG(l lecteur) ([]byte, bool) {
 }
 
 func dialoguePostgres(conn net.Conn) (c Capture) {
-	l := lecteur{bufio.NewReaderSize(conn, 1024), &c.Octets}
+	l := nouveauLecteur(conn, 1024, &c.Octets)
 	corps, ok := startupPG(l)
 	for i := 0; ok && i < 2 && len(corps) == 4; i++ {
 		code := binary.BigEndian.Uint32(corps)
@@ -353,7 +375,9 @@ func dialoguePostgres(conn net.Conn) (c Capture) {
 		c.Client += " base=" + d
 	}
 	if _, err := conn.Write(pgDemandeEnClair); err != nil {
-		c.Essais = append(c.Essais, Essai{Compte: p["user"]})
+		if p["user"] != "" {
+			c.Essais = append(c.Essais, Essai{Compte: p["user"]})
+		}
 		return c
 	}
 	e := Essai{Compte: p["user"]}
@@ -367,7 +391,9 @@ func dialoguePostgres(conn net.Conn) (c Capture) {
 			}
 		}
 	}
-	c.Essais = append(c.Essais, e)
+	if e.Compte != "" || e.MotDePasse != "" {
+		c.Essais = append(c.Essais, e)
+	}
 	_, _ = conn.Write(pgRefus)
 	return c
 }
@@ -416,7 +442,7 @@ func commandeRedis(l lecteur) ([]string, bool) {
 }
 
 func dialogueRedis(conn net.Conn) (c Capture) {
-	l := lecteur{bufio.NewReaderSize(conn, 1024), &c.Octets}
+	l := nouveauLecteur(conn, 1024, &c.Octets)
 	var vues []string
 	defer func() {
 		if len(vues) > 0 {
@@ -498,7 +524,7 @@ func basic(v string) (Essai, bool) {
 }
 
 func dialogueHTTP(conn net.Conn) (c Capture) {
-	l := lecteur{bufio.NewReaderSize(conn, 2048), &c.Octets}
+	l := nouveauLecteur(conn, 2048, &c.Octets)
 	for i := 0; i < essaisMax; i++ {
 		premiere, entetes, ok := requeteHTTP(l)
 		if premiere == "" {
@@ -631,24 +657,4 @@ func analyseMongo(b []byte) string {
 		return "mongo sans pilote déclaré"
 	}
 	return "mongo " + strings.Join(traits, " ")
-}
-
-// resumeEssais — la phrase du journal : chaque couple, dans l'ordre.
-func resumeEssais(es []Essai) string {
-	var parts []string
-	for _, e := range es {
-		switch {
-		case e.Compte != "" && e.MotDePasse != "":
-			parts = append(parts, fmt.Sprintf("« %s » / « %s »", e.Compte, e.MotDePasse))
-		case e.Compte != "":
-			parts = append(parts, fmt.Sprintf("« %s »", e.Compte))
-		default:
-			parts = append(parts, fmt.Sprintf("mot de passe « %s »", e.MotDePasse))
-		}
-	}
-	s := "s"
-	if len(es) == 1 {
-		s = ""
-	}
-	return fmt.Sprintf("%d essai%s : %s", len(es), s, strings.Join(parts, ", "))
 }

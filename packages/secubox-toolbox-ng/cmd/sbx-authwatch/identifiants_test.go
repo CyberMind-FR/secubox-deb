@@ -230,8 +230,8 @@ func TestEmet_JournalPorteEssaisEnClairClientEtAgent(t *testing.T) {
 		Capture{Essais: []Essai{{"root", "xc3511"}, {"admin", "xc3511"}}, Client: "telnet sans négociation",
 			Agent: "force-brute", Octets: 40})
 	sig := <-signaux
-	if sig.Cible != "root" || !strings.Contains(sig.Detail, "force-brute") ||
-		!strings.Contains(sig.Detail, "2 essais : « root » / « xc3511 », « admin » / « xc3511 »") {
+	if sig.Cible != "" || !strings.Contains(sig.Detail, "force-brute") || !strings.Contains(sig.Detail, "2 essai(s)") ||
+		strings.Contains(sig.Detail, "xc3511") {
 		t.Fatalf("signal : %+v", sig)
 	}
 	chemin := filepath.Join(t.TempDir(), "menaces.log")
@@ -258,5 +258,44 @@ func TestTelnet_MotDePasseVideGarde(t *testing.T) {
 	c, _ := joue(t, "telnet", []byte("root\r\n\r\nadmin\r\x00admin\n"))
 	if len(c.Essais) != 2 || c.Essais[0] != (Essai{"root", ""}) || c.Essais[1] != (Essai{"admin", "admin"}) {
 		t.Fatalf("essais : %+v", c.Essais)
+	}
+}
+
+func TestTelnet_ReveilsPlafonnes(t *testing.T) {
+	c, sortie := joue(t, "telnet", bytes.Repeat([]byte("\r\n"), 2000))
+	if len(c.Essais) != 0 || strings.Count(sortie, "login: ") > 1+reveilsMax {
+		t.Errorf("essais %+v, %d invites", c.Essais, strings.Count(sortie, "login: "))
+	}
+}
+
+func TestRedis_HelloAuth(t *testing.T) {
+	c, _ := joue(t, "redis", []byte("*5\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$4\r\npass\r\n"),
+		[]byte("*9\r\n"), []byte("*2\r\n$513\r\n"))
+	if len(c.Essais) != 1 || c.Essais[0] != (Essai{"default", "pass"}) {
+		t.Errorf("essais : %+v", c.Essais)
+	}
+}
+
+func TestPostgres_SansCompteNiMotDePasseAucunEssai(t *testing.T) {
+	c, _ := joue(t, "postgres", startupPGTest("database", "x"))
+	if len(c.Essais) != 0 || c.Agent != "sondeur" {
+		t.Errorf("capture : %+v", c)
+	}
+}
+
+func TestHTTP_CorpsAnnonceArreteLaConversation(t *testing.T) {
+	c, sortie := joue(t, "elasticsearch", []byte("POST /_search HTTP/1.1\r\nContent-Length: 10\r\n\r\n0123456789"),
+		[]byte("GET / HTTP/1.1\r\nAuthorization: Basic YTpi\r\n\r\n"))
+	if len(c.Essais) != 0 || strings.Count(sortie, "401") != 1 {
+		t.Errorf("essais %+v, réponses %q", c.Essais, sortie)
+	}
+}
+
+func TestMuetCloSansAttendreLeDialogueEntier(t *testing.T) {
+	srv, _ := duo(t)
+	debut := time.Now()
+	c := Dialogue(srv, "telnet")
+	if d := time.Since(debut); d > premierOctetEcheance+time.Second || c.Agent != "balayeur" {
+		t.Errorf("muet tenu %v, agent %q", d, c.Agent)
 	}
 }

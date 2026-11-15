@@ -4,8 +4,10 @@ secubox-hardening (1.6.5-1~trixie1) trixie; urgency=medium
     23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017 sortent de la garde
     WAN. Fermés, ils ne pouvaient jamais être touchés (102 123 paquets jetés
     sur gk2, zéro touche). Les vrais backends (8088, 8404, 8880, 8900, 8910,
-    9080) restent fermés ; IPv6 inchangé. La page de garde liste les leurres
-    à part (`leurres_ouverts`) au lieu de les signaler comme exposés.
+    9080) restent fermés ; leurres fermés en IPv6. L'ouverture suppose eth2
+    déclarée de confiance (nft-input-trust.d, cas de gk2). La page de garde
+    liste les leurres à part (`leurres_ouverts`) au lieu de les signaler
+    comme exposés.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 10:00:00 +0100
 

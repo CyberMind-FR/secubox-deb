@@ -2,14 +2,18 @@ secubox-toolbox-ng (0.15.0-1~trixie1) trixie; urgency=medium
 
   * sbx-authwatch : les leurres de service captent les identifiants des
     robots (#3728). Régime bannière activé dans l'unité ; dialogue borné par
-    protocole (20 s, 4 Kio, 5 essais, 64 caractères par champ) : telnet
+    protocole (3 s pour un premier octet, 10 s au total : le ban attend la fin
+    du dialogue car il coupe aussi la connexion établie ; 4 Kio, 5 essais,
+    64 caractères par champ) : telnet
     (plusieurs couples par connexion, négociation gardée comme signature),
     redis (AUTH et HELLO AUTH, RESP et en ligne), postgres (demande du mot
     de passe en clair, application_name, base), HTTP Basic sur 9200
     (User-Agent), compte et protocoles du cookie RDP, version VNC, pilote
     Mongo. Mots de passe journalisés EN CLAIR (décision du propriétaire :
     aucun service ni compte derrière ces ports). Journal des menaces :
-    `essais`, `agent` (balayeur, sondeur, force-brute), `user_agent` = client.
+    `essais`, `agent` (balayeur, sondeur, force-brute), `user_agent` = client ;
+    `rule_id` ne porte que le nombre d'essais, et le compte tenté n'est pas
+    émis vers sbx-actord (il relierait tous les robots qui tentent root).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 10:00:00 +0100
 

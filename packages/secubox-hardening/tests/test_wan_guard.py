@@ -96,3 +96,12 @@ def test_leurres_ouverts_et_reconnus_comme_voulus():
     ss = "LISTEN 0 8192 *:3389 *:*\nLISTEN 0 511 0.0.0.0:8123 0.0.0.0:*\n"
     expose, leurres = wg.classer(wg.ports_en_ecoute(ss), gardes=[8088], )
     assert list(expose) == [8123] and leurres == [3389]
+
+
+def test_leurres_fermes_en_ipv6():
+    """#3728 (relecture) : la table est `inet` ; sans règle v6, ouvrir les leurres les ouvrait aussi en IPv6."""
+    import re
+    texte = LIVREE.read_text()
+    for iface in ("eth2", "br-lan"):
+        m = re.search(rf'iifname "{iface}" meta nfproto ipv6 tcp dport \{{ ([\d, ]+) \}} counter drop', texte)
+        assert m and set(int(p) for p in m.group(1).split(",")) == wg.LEURRES, iface
