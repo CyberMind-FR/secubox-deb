@@ -25,8 +25,6 @@ CHEMIN_P2P = os.environ.get("SECUBOX_P2P_TOML", "/etc/secubox/p2p.toml")
 CHEMIN_CONF = os.environ.get("SECUBOX_FREEBOX_TOML", "/etc/secubox/freebox.toml")
 CHEMIN_CONTROLE = os.environ.get("SECUBOX_FREEBOX_CONTROLE", "/var/lib/secubox/freebox/maillage-controle.json")
 PORT_DEFAUT = 51822
-# Interfaces qui ne sont jamais le WAN : tunnels et ponts internes.
-_PAS_WAN = ("lo", "wg", "br-lxc", "lxc", "eye", "veth", "docker", "tor")
 
 
 def _lire_toml(chemin):
@@ -68,12 +66,19 @@ def ipv6_configuree(chemin_conf=None):
     return str(a) if a.is_global else ""
 
 
-def ipv6_fixes(doc_ip):
-    """Adresses IPv6 globales STATIQUES (durée de vie illimitée, ni dynamiques ni temporaires) d'après `ip -j -6 addr show scope global`."""
+def interfaces_wan(doc_routes):
+    """Interfaces portant la route IPv6 par défaut (`ip -j -6 route show default`) : le WAN, et lui seul."""
+    return {str(r.get("dev")) for r in doc_routes if isinstance(r, dict) and r.get("dev")} if isinstance(doc_routes, list) else set()
+
+
+def ipv6_fixes(doc_ip, doc_routes):
+    """Adresses IPv6 globales STATIQUES (durée de vie illimitée, ni dynamiques ni temporaires) de l'interface WAN, d'après
+    `ip -j -6 addr show scope global`. Sans route par défaut : aucune (jamais de devinette sur une autre interface)."""
+    wan = interfaces_wan(doc_routes)
     sortie = []
     for iface in doc_ip if isinstance(doc_ip, list) else []:
         nom = str(iface.get("ifname") or "")
-        if not nom or nom.startswith(_PAS_WAN):
+        if nom not in wan:
             continue
         for a in iface.get("addr_info") or []:
             if a.get("family") != "inet6" or a.get("scope") != "global":
@@ -114,6 +119,11 @@ def _ip_json():
     return json.loads(r.stdout or "[]")
 
 
+def _routes_json():
+    r = subprocess.run(["ip", "-j", "-6", "route", "show", "default"], check=True, timeout=10, capture_output=True, text=True)
+    return json.loads(r.stdout or "[]")
+
+
 def _aaaa(nom):
     try:
         return [i[4][0] for i in socket.getaddrinfo(nom, None, socket.AF_INET6, socket.SOCK_DGRAM)]
@@ -121,20 +131,24 @@ def _aaaa(nom):
         return []
 
 
-def relever(chemin_p2p=None, chemin_conf=None, ip_json=_ip_json, resoudre=_aaaa, horloge=time.time):
+def relever(chemin_p2p=None, chemin_conf=None, ip_json=_ip_json, resoudre=_aaaa, horloge=time.time, routes_json=_routes_json):
     """Relève les adresses et l'AAAA, rend le verdict (rien n'est modifié)."""
     an = annonce(chemin_p2p)
     try:
         doc = ip_json()
     except (OSError, subprocess.SubprocessError, ValueError):
         doc = []
+    try:
+        routes = routes_json()
+    except (OSError, subprocess.SubprocessError, ValueError):
+        routes = []
     hote = (an or {}).get("hote", "")
     try:
         ipaddress.ip_address(hote)
         aaaa = []                          # annonce par adresse littérale : pas de nom à résoudre
     except ValueError:
         aaaa = resoudre(hote) if hote else []
-    r = controler(ipv6_fixes(doc), aaaa, ipv6_configuree(chemin_conf), horloge)
+    r = controler(ipv6_fixes(doc, routes), aaaa, ipv6_configuree(chemin_conf), horloge)
     r["annonce"] = an
     return r
 

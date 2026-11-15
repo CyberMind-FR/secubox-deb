@@ -1,3 +1,17 @@
+secubox-freebox (0.7.1-1~trixie1) trixie; urgency=medium
+
+  * Maillage distant (ref #3742), relecture de sécurité : seule la règle SecuBox (commentaire) est
+    corrigée ; une règle tierce qui prend le port vers un autre appareil est refusée (port_pris),
+    journalisée, jamais réécrite ; une règle tierce identique compte comme conforme ; doublons
+    signalés sans suppression, idem côté IPv6. DMZ active vers la box : couvert_par_dmz, rien créé.
+  * Sans voie d'exception IPv6 (cas de la Freebox de gk2) : aucune écriture IPv6 tentée.
+  * Contrôle : interface WAN prise par la route IPv6 par défaut ; sans elle ni ipv6_fixe déclarée,
+    aucune ouverture IPv6.
+  * Unité du contrôle durcie (ProtectProc, ProcSubset, MemoryDenyWriteExecute) ; profil AppArmor
+    enforce de freeboxctl installé et chargé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 14:00:00 +0100
+
 secubox-freebox (0.7.0-1~trixie1) trixie; urgency=medium
 
   * Maillage distant (ref #3742) : redirection IPv4 UDP du port annoncé par p2p.toml vers la box
