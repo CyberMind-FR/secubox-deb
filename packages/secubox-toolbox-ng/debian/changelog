@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.16.0-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf : seuil et durée de ban par catégorie escalate (ref #3732).
+    Champs facultatifs "ban_seuil" (entier 1 à 10) et "ban_duree" (durée Go,
+    1h à 168h) : compteur escalate propre à la catégorie et durée de ban
+    nft choisie. Absents, illisibles ou hors bornes (avertissement au
+    chargement) : comportement inchangé (-escalate-threshold,
+    -nft-ban-duration).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 11:30:00 +0100
+
 secubox-toolbox-ng (0.15.0-1~trixie1) trixie; urgency=medium
 
   * sbx-authwatch : les leurres de service captent les identifiants des
