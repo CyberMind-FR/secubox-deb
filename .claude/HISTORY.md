@@ -9,6 +9,22 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-15 — Mémoire des leurres (ref #3734) et protection contre l'épuisement d'états TCP (ref #3735)
+
+- **#3734 lot 1 (PR #3737, waf-ng 1.36.2)** : base SQLite `/var/lib/secubox-waf-leurres/leurres.db` (0700 secubox, hors
+  de /var/lib/secubox/waf : chown -R du moteur + ACL secubox-live), ingestion à curseur des lignes `leurre:*`, 30 jours ;
+  routes `/waf/leurres/*` en require_jwt ; gestes ban/unban (prolonger = lever puis reposer) ; page + onglet Leurres
+  (maquette approuvée). Relecture : 5 importants corrigés. Restent : règles de ban, /24 et groupes, SYN sans état,
+  comparer aux comptes.
+- **Incident gk2 10:15-10:35** : mémoire épuisée (metrics 662 Mo, synchro IMAP OVH, sbx-actord relancé par 3
+  installations de waf-ng en 30 min) → hub muet. Résolu : synchro IMAP arrêtée, secubox-metrics redémarré seul.
+  Leçons : grouper les installations de waf-ng ; fuite mémoire de metrics à ouvrir ; mot de passe IMAP visible dans la
+  ligne de commande de doveadm (à passer par fichier, et à changer chez OVH).
+- **#3735 (PR #3736, hardening 1.7.0)** : Sockstress / MS13-018 / STOMP / SYN porteurs de données. sysctl (fin 20 s,
+  orphelins 8192/2, conntrack clôtures 30 s, établies 1 j), nft (SYN porteurs de données refusés v4/v6, 256 connexions
+  par adresse publique), détecteur `secubox-tcp-etats` (minute ; fenêtre nulle / clôture bloquée sur nos ports serveur,
+  jamais CLOSE_WAIT ni LAN ; ban 24 h, journal, audit, impact). Déployé gk2, aucun faux positif, routage intact.
+
 ## 2026-11-15 — Leurres de service ouverts sur le WAN, identifiants des robots captés (ref #3728)
 
 - PR #3733 : `secubox-hardening` 1.6.5 (9 ports leurres sortis de la garde WAN/br-lan, IPv4 seulement, backends
