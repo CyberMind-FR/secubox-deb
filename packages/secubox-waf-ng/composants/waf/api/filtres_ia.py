@@ -13,7 +13,7 @@ Aucun modèle de corps FastAPI (P11) : le corps brut, lu et borné par la garde,
 Le tri, les bornes et l'écriture des règles appartiennent à la commande root `secubox-cvectl filtres-ia` (lignes
 exactes du sudoers de secubox-security-posture), appelée par `sudo -n` avec l'entrée sur STDIN :
 `{"acteur": "ai-filtres:<kid>", "filtres": [...]}` ou `{"acteur": …, "id": "ia-…"}`. Codes : 0 → 200 (409 `rejete`
-si rien n'est appliqué ni inchangé), 2 → 422, 3 → 409, 4 → 404, autre → 503 `ctl` ; délai dépassé ou binaire absent
+si rien n'est appliqué ni inchangé), 2 → 422, 3 → 409, 4 → 404, 5 (erreur interne du ctl) et autre → 503 `ctl` ; délai dépassé ou binaire absent
 → 503 `ctl`. Chaque appel est audité (`ai-filtres-appliquer|retirer|lister`) ; un changement fait dont l'audit ne
 peut pas être écrit rend 500 (jamais caché).
 """
@@ -130,7 +130,8 @@ def ai_filtres_appliquer(user: dict = Depends(require_ai_filtres), corps: bytes 
         _auditer("ai-filtres-appliquer", f"tout rejete ({len(rejets)})", user, lever=False)
         raise HTTPException(409, detail={"motif": "rejete", "rejets": rejets})
     # Changement fait : son audit DOIT être écrit, sinon 500 (jamais caché).
-    ids = ",".join(str(a.get("id")) for a in appliques if isinstance(a, dict))[:200]
+    # cvectl rend des listes d'ids (chaînes) ; un dict {"id": …} reste accepté.
+    ids = ",".join(str(a.get("id") if isinstance(a, dict) else a) for a in appliques + inchanges)[:200]
     _auditer("ai-filtres-appliquer",
              f"appliques {len(appliques)} inchanges {len(inchanges)} rejets {len(rejets)} ids {ids}", user, lever=True)
     return sortie

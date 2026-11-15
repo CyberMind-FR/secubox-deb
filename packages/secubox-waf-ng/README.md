@@ -141,6 +141,10 @@ processus désigné. Écriture par `sudo -n /usr/sbin/secubox-cvectl filtres-ia 
 (entrée sur STDIN, acteur `ai-filtres:<kid>`), lecture par `filtres-ia lister --json` ; délai de 60 s. Chaque appel
 est audité (`ai-filtres-appliquer`, `ai-filtres-retirer`, `ai-filtres-lister`) ; un changement fait dont l'audit ne
 s'écrit pas rend 500.
+Code 5 de cvectl (erreur interne) → 503 `ctl` (le relais le retente après 24 h ; 3 → 409 est un refus définitif).
+Les catégories `ia_filtres_*` (mode `escalate`, `ban_seuil`/`ban_duree` propres) ne bannissent que si le compteur
+escalate global de sbxwaf existe : `-escalate-threshold`/`-escalate-window` actifs (défauts 3 et 24 h) ; sans lui,
+elles observent seulement, comme `detect`.
 
 | Route | Corps | Réponse |
 |---|---|---|

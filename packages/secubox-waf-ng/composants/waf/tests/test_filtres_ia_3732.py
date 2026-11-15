@@ -94,10 +94,25 @@ def test_tout_rejete_409(c):
     assert r.status_code == 409 and r.json()["detail"]["motif"] == "rejete"
 
 
-@pytest.mark.parametrize("code,statut", [(2, 422), (3, 409), (4, 404), (1, 503)])
+@pytest.mark.parametrize("code,statut", [(2, 422), (3, 409), (4, 404), (5, 503), (1, 503)])
 def test_codes_du_ctl(c, code, statut):
     c.faux.reponse = (code, json.dumps({"ok": False, "erreur": "x"}), "")
-    assert c.c.post("/ai/filtres", json={"filtres": [FILTRE]}).status_code == statut
+    r = c.c.post("/ai/filtres", json={"filtres": [FILTRE]})
+    assert r.status_code == statut
+    if code == 5:                      # erreur interne du ctl : 503 `ctl`, le relais la retentera
+        assert r.json() == {"detail": {"motif": "ctl"}}
+
+
+def test_audit_porte_les_ids_appliques(c):
+    # Forme réelle de cvectl : listes de chaînes.
+    c.faux.reponse = (0, json.dumps({"ok": True, "appliques": ["ia-a", "ia-b"], "rejets": [],
+                                     "inchanges": ["ia-c"]}), "")
+    assert c.c.post("/ai/filtres", json={"filtres": [FILTRE]}).status_code == 200
+    detail = c.audit()[-1]["detail"]
+    assert "ids ia-a,ia-b,ia-c" in detail, detail
+    c.faux.reponse = (0, json.dumps({"ok": True, "appliques": [{"id": "ia-d"}], "rejets": [], "inchanges": []}), "")
+    c.c.post("/ai/filtres", json={"filtres": [FILTRE]})
+    assert "ids ia-d" in c.audit()[-1]["detail"]
 
 
 @pytest.mark.parametrize("exc", [subprocess.TimeoutExpired("x", 60), FileNotFoundError("x")])
@@ -241,3 +256,9 @@ def test_exception_rules_code_ecrite():
     for route in ("GET /api/v1/waf/ai/filtres", "POST /api/v1/waf/ai/filtres", "DELETE /api/v1/waf/ai/filtres/{id}"):
         assert route in ligne
     assert "test_filtres_ia_3732.py" in ligne
+
+
+def test_depend_de_security_posture_270():
+    # La route appelle `secubox-cvectl filtres-ia` (et son sudoers) apparus dans secubox-security-posture 2.7.0.
+    control = (COMPOSANT.parents[1] / "debian" / "control").read_text()
+    assert "secubox-security-posture (>= 2.7.0~)" in control
