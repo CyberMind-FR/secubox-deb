@@ -106,12 +106,21 @@ def test_postinst_ne_reecrit_jamais_p2p_toml():
 
 
 # ── relecture de sécurité : keepalive borné, pas de repli silencieux d'un nœud distant ──────────────
-@pytest.mark.parametrize("ka", [-1, 65536, "25", True, 2.5])
+@pytest.mark.parametrize("ka", [-1, 65536, "70000", "abc", "", True, 2.5])
 def test_keepalive_hors_bornes_refuse_au_rendu(ka):
     etat = {"private_key": CLE, "address": "10.10.0.9/24",
             "peers": [{"public_key": CLE_MAITRE, "allowed_ips": "10.10.0.0/24", "persistent_keepalive": ka}]}
     with pytest.raises(ValueError):
         mesh.render_wg_conf(etat)
+
+
+def test_keepalive_en_chaine_d_un_etat_existant_normalise():
+    assert mesh.keepalive_valide("25") == 25 and mesh.keepalive_valide(" 0 ") == 0
+    etat = {"private_key": CLE, "address": "10.10.0.9/24",
+            "peers": [{"public_key": CLE_MAITRE, "allowed_ips": "10.10.0.0/24", "persistent_keepalive": "25"}]}
+    assert "PersistentKeepalive = 25" in mesh.render_wg_conf(etat)
+    with pytest.raises(ValueError, match="entier"):
+        mesh.keepalive_valide("abc")
 
 
 def test_keepalive_bornes_acceptees():

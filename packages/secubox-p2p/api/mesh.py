@@ -140,11 +140,16 @@ def public_endpoint_valide(valeur) -> str | None:
 
 
 def keepalive_valide(valeur) -> int:
-    """PersistentKeepalive borné à 0..65535 (#3742) ; absent = 25. Hors bornes ou non entier : refus, jamais d'arrondi."""
+    """PersistentKeepalive borné à 0..65535 (#3742) ; absent = 25. Une chaîne numérique d'un état existant (« 25 ») est
+    normalisée en entier ; non numérique, flottant, booléen ou hors bornes : refus avec un message clair, jamais d'arrondi."""
     if valeur is None:
         return 25
-    if isinstance(valeur, bool) or not isinstance(valeur, int) or not 0 <= valeur <= 65535:
-        raise ValueError("PersistentKeepalive hors de 0..65535")
+    if isinstance(valeur, str) and valeur.strip().isdigit():
+        valeur = int(valeur.strip())
+    if isinstance(valeur, bool) or not isinstance(valeur, int):
+        raise ValueError("PersistentKeepalive doit être un entier de 0 à 65535, reçu %r" % (valeur,))
+    if not 0 <= valeur <= 65535:
+        raise ValueError("PersistentKeepalive hors de 0..65535 : %d" % valeur)
     return valeur
 
 

@@ -289,7 +289,8 @@ Un nœud placé dans une autre maison (derrière une autre box) joint le maître
   nœud distant porte `master_endpoint` et `persistent_keepalive = 25` ; le nœud écrit cet Endpoint et
   `PersistentKeepalive = 25` (c'est lui qui appelle). Sans annonce valide remise (ou module p2p introuvable pour la
   valider), la jonction distante **échoue** (code 5, message clair) : jamais de repli silencieux sur l'adresse jointe.
-  `PersistentKeepalive` est borné à 0..65535 (refus au-delà) dans `sbx-mesh-join` comme au rendu de la configuration.
+  `PersistentKeepalive` est borné à 0..65535 (refus au-delà) dans `sbx-mesh-join` comme au rendu de la configuration ;
+  au rendu, une chaîne numérique d'un état existant est normalisée en entier.
 - Les nœuds du LAN ne reçoivent rien de plus : offre et configuration inchangées.
 - Migration : le postinst ne modifie jamais un `p2p.toml` existant (clé absente = aucune annonce, comportement d'avant) ; un
   rendez-vous (`role = "master"`) sans annonce est seulement signalé.

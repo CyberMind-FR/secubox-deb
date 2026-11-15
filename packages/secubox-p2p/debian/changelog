@@ -1,3 +1,11 @@
+secubox-p2p (1.23.2-1~trixie1) trixie; urgency=medium
+
+  * Nœud distant (ref #3742) : un PersistentKeepalive en chaîne numérique (« 25 ») dans un état
+    existant est normalisé en entier borné au rendu de wg-mesh.conf au lieu de bloquer ; une valeur
+    non numérique est refusée avec un message clair.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 16:00:00 +0100
+
 secubox-p2p (1.23.1-1~trixie1) trixie; urgency=medium
 
   * Nœud distant (ref #3742), relecture de sécurité : PersistentKeepalive borné à 0..65535
