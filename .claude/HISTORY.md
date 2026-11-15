@@ -9,6 +9,22 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-15 — Maillage distant : nœud hors du LAN vers le WAN de gk2, Freebox réglée par secubox-freebox (ref #3742)
+
+- Constat : gk7 (autre maison) sans tunnel `wg-mesh` ; tous les pairs déclarés avec un Endpoint LAN, aucune adresse
+  publique annoncée. Freebox de gk2 lue en direct : DMZ → 192.168.1.200 (l'UDP 51822 arrive déjà), aucune
+  redirection 51822, pare-feu IPv6 actif, `fw/ipv6/`, `fw/ipv6/redir/`, `fw/pinhole/` refusés (pas d'exception IPv6
+  ciblée sur ce modèle).
+- `secubox-p2p` 1.23.2 : `[wireguard] public_endpoint` (validé strictement) ; nœud qui joint par nom → `distant`,
+  reçoit `master_endpoint` + `PersistentKeepalive = 25` ; sans annonce valide, la jonction distante échoue (code 5).
+- `secubox-freebox` 0.7.3 : redirection UDP 51822 idempotente (seule la règle SecuBox est corrigée, règle tierce →
+  `port_pris`, DMZ vers la box → `couvert_par_dmz`), exception IPv6 seulement si l'API l'offre (jamais de pare-feu
+  coupé), contrôle de l'IPv6 fixe toutes les 15 min (`secubox-freebox-maillage.timer`), profil AppArmor enforce
+  pour `freeboxctl` (banc gk6 : `attach_disconnected` et `/usr/sbin/` ajoutés après refus relevés).
+- Déployé sur gk2 le 15/11 ; `p2p.toml` : `public_endpoint = "gk2.secubox.in:51822"` (copie `p2p.toml.avant-3742`) ;
+  contrôle : `::200` présente sur eth2, conforme ; AAAA de `gk2.secubox.in` à poser à la main. Reste : gk7 à mettre
+  à jour puis `sbx-mesh-join admin.gk2.secubox.in <jeton>` quand il sera à sa place.
+
 ## 2026-11-15 — Filtres WAF conçus par l'IA depuis les preuves de concept, lot 1 (ref #3732)
 
 - Chaîne : relais du POC (gk0) → modèles Nuclei enrichis KEV/EPSS, motif copié tel quel du modèle → compte de service
