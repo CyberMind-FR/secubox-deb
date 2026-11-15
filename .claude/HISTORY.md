@@ -9,6 +9,23 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-15 — Filtres WAF conçus par l'IA depuis les preuves de concept, lot 1 (ref #3732)
+
+- Chaîne : relais du POC (gk0) → modèles Nuclei enrichis KEV/EPSS, motif copié tel quel du modèle → compte de service
+  `ai-filtres` (jeton Ed25519 d'une requête) → `POST /api/v1/waf/ai/filtres` → `secubox-cvectl filtres-ia appliquer`
+  (root, sudoers exact) qui revérifie tout : forme fermée, gravité calculée par le code, motif échappé, spécificité,
+  chemins fréquents, produit absent (inventaire ET vhosts, un doute vaut présent), plafonds 10/h et 50/j.
+- Catégories `ia_filtres_critique` (1 touche, 168 h), `ia_filtres_haute` (1, 24 h), `ia_filtres_moyenne` (3, 4 h) ;
+  sbxwaf lit `ban_seuil`/`ban_duree` par catégorie. Paquets : toolbox-ng 0.16.0, security-posture 2.7.0,
+  core 1.8.33, waf-ng 1.37.0 (dépend de security-posture ≥ 2.7.0).
+- Banc gk6 : 10 filtres critiques appliqués ; une requête `/storfs-asup` → 403 puis ban nft 7 j, ligne de menace avec
+  `rule_id` = id du filtre ; `waf-rules generate --apply` les garde. Pièges vus au banc : `haproxy-routes.json` vide
+  (0 octet) sur gk6 → inventaire incomplet → tout « présent » (comportement voulu) ; `product_absent_probes` en
+  `escalate` sur gk6 refusé par la validation partagée (à revoir pour #3741) ; `/boot` de gk6 plein
+  (`initramfs-tools` à moitié configuré, ancien noyau 6.12.107 à retirer).
+- Déployé sur gk2 le 15/11 (quatre paquets ensemble) ; clé `ai-filtres` non posée, automatique du relais coupé
+  (`SECUBOX_AI_FILTRES_AUTO`) jusqu'à l'accord du propriétaire.
+
 ## 2026-11-15 — Mémoire des leurres (ref #3734) et protection contre l'épuisement d'états TCP (ref #3735)
 
 - **#3734 lot 1 (PR #3737, waf-ng 1.36.2)** : base SQLite `/var/lib/secubox-waf-leurres/leurres.db` (0700 secubox, hors
