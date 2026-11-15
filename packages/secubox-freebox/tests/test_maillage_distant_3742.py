@@ -260,7 +260,7 @@ def test_profil_apparmor_enforce_installe_et_charge():
     prof = (RACINE / "apparmor" / "usr.sbin.freeboxctl").read_text()
     assert "profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce, attach_disconnected)" in prof
     ecritures = [x.strip() for x in prof.splitlines() if x.strip().endswith((" rw,", " w,")) and not x.strip().startswith("deny")]
-    assert ecritures == ["/var/lib/secubox/freebox/** rw,"]
+    assert ecritures == ["/dev/null rw,", "/var/lib/secubox/freebox/** rw,"]   # /dev/null : seule autre écriture
     assert "/usr/bin/ip mrix," in prof and "network netlink raw," in prof and "deny /etc/secubox/secrets/** rw," in prof
     assert "etc/apparmor.d/usr.sbin.freeboxctl" in (RACINE / "debian" / "rules").read_text()
     assert "apparmor_parser -r /etc/apparmor.d/usr.sbin.freeboxctl" in (RACINE / "debian" / "postinst").read_text()
