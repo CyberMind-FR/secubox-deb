@@ -1,0 +1,92 @@
+{
+ "appliques_derniere_heure": 5,
+ "candidats": [
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 213,
+   "ip": "192.0.2.136",
+   "signature": "cea8627e6f2c5244",
+   "sondes": 277
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 213,
+   "ip": "192.0.2.232",
+   "signature": "cea8627e6f2c5244",
+   "sondes": 277
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 213,
+   "ip": "192.0.2.155",
+   "signature": "cea8627e6f2c5244",
+   "sondes": 277
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 135,
+   "ip": "192.0.2.233",
+   "signature": "25989ed2737e1dbd",
+   "sondes": 170
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 135,
+   "ip": "192.0.2.234",
+   "signature": "25989ed2737e1dbd",
+   "sondes": 170
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 135,
+   "ip": "192.0.2.138",
+   "signature": "25989ed2737e1dbd",
+   "sondes": 170
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 135,
+   "ip": "192.0.2.235",
+   "signature": "25989ed2737e1dbd",
+   "sondes": 170
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 153,
+   "ip": "192.0.2.142",
+   "signature": "bd2b35140f3328cb",
+   "sondes": 158
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 166,
+   "ip": "192.0.2.236",
+   "signature": "bd2b35140f3328cb",
+   "sondes": 171
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 43,
+   "ip": "192.0.2.145",
+   "signature": "82f0cd0377898ebb",
+   "sondes": 161
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 43,
+   "ip": "192.0.2.237",
+   "signature": "82f0cd0377898ebb",
+   "sondes": 161
+  },
+  {
+   "decision": "ecarte:deja_banni",
+   "haute_valeur": 43,
+   "ip": "192.0.2.238",
+   "signature": "82f0cd0377898ebb",
+   "sondes": 161
+  }
+ ],
+ "genere_le": 1794729873,
+ "mode": "auto",
+ "plafond_atteint": false
+}

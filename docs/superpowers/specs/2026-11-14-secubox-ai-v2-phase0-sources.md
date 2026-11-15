@@ -307,8 +307,13 @@ occupés) ; `/var/lib/secubox/ai` = 771 Mo ; mémoire 7,6 Gio, **3,5 Gio disponi
 4 cœurs. Estimation de `veille.db` : ≈ 18 000 événements/jour × ≈ 1 Ko (ligne + index) ≈ 18 Mo/jour, **≈ 550 Mo pour
 30 jours** : Q9 tient largement ; le seuil de garde de 1 Gio libre est sans risque.
 
-## 8. Reste à faire en phase 0
+## 8. Bilan de la phase 0 (2026-11-15)
 
-- ≥ 200 événements de référence anonymisés dans `packages/secubox-ai/tests/donnees/` (familles vues : les 13 de § 3.1,
-  bans `leurre`/`mesure`/`campagne`/`|prolonge`, réévaluations RELEASE/EXTEND, une campagne, un état `ai-ban`).
-- Ouvrir les issues des routes manquantes (§ 6, points 1 à 4 et 6) dans les paquets propriétaires.
+- **Jeu de référence** : 399 événements anonymisés dans `packages/secubox-ai/tests/donnees/` (`LISEZMOI.md`,
+  `anonymiser.py`, garde `tests/test_donnees_reference_3718.py`) : les dix familles du journal des menaces, le LAN,
+  des doublons exacts réels, les bans `leurre`/`mesure`/`campagne`/`|prolonge`, un bloc « cas sûr » réel (≥ 20
+  adresses, 203.0.113.0/24), 20 réévaluations, l'état des campagnes, des gestes `ai-ban`.
+- **Routes manquantes** : § 6 points 1, 2, 4 et 6 → #3726 ; point 7 → #3727 ; point 8 (leurres de service) → #3728.
+  Point 3 (bans d'authwatch hors `bans.jsonl`) : **documenté**, la V2 lit ces bans dans le journal des menaces
+  (`action = banned`) ; pas de changement demandé à secubox-toolbox-ng tant que le corrélateur n'en a pas besoin.
+- Q2 : décision proposée au § 4 (compte `ai-lecture`), à trancher par le propriétaire avec #3726.
