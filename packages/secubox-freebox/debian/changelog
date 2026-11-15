@@ -1,3 +1,13 @@
+secubox-freebox (0.7.2-1~trixie1) trixie; urgency=medium
+
+  * Maillage distant (ref #3742) : une règle tierce active sur le port l'emporte sur la DMZ
+    (port_pris testé avant couvert_par_dmz) ; exception IPv6 tierce vers une autre IPv6
+    signalée, jamais écrite.
+  * Profil AppArmor de freeboxctl : shebang env, interpréteur (mmap des .so), conf python3,
+    ip et ses fichiers iproute2 ; déchargé par le postrm (remove, purge).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 16:00:00 +0100
+
 secubox-freebox (0.7.1-1~trixie1) trixie; urgency=medium
 
   * Maillage distant (ref #3742), relecture de sécurité : seule la règle SecuBox (commentaire) est

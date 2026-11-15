@@ -440,13 +440,14 @@ class Freebox:
                   and (r.get("ip_proto") or "tcp") in ("udp", "tcp_udp") and self._couvre(r, port)]
         base = {"voulue": voulu, "regle": a_nous[0] if a_nous else None, "doublons": [r.get("id") for r in a_nous[1:]],
                 "occupant": None, "actuelles": N.redirections(a_nous + autres)}
-        if dmz.get("enabled") and dmz.get("ip") == ip_box:
-            return {**base, "etat": "couvert_par_dmz", "conforme": True}
+        # Une redirection explicite l'emporte sur la DMZ côté Freebox : règle tierce d'abord, DMZ ensuite.
         if any(self._redir_conforme(r, voulu, commentaire=False) for r in autres):
             return {**base, "etat": "conforme", "conforme": True}
         if autres:
             return {**base, "etat": "port_pris", "conforme": False, "occupant": autres[0].get("lan_ip") or "",
                     "occupant_id": autres[0].get("id")}
+        if dmz.get("enabled") and dmz.get("ip") == ip_box:
+            return {**base, "etat": "couvert_par_dmz", "conforme": True}
         if not a_nous:
             return {**base, "etat": "absente", "conforme": False}
         ok = self._redir_conforme(a_nous[0], voulu)
@@ -493,6 +494,13 @@ class Freebox:
             etat = "a_corriger" if retenue is not None else "absente"
         return etat, retenue, [e.get("id") for e in a_nous[1:]], voulue
 
+    def _occupants6(self, liste, ipv6, port):
+        """Exceptions tierces actives qui ouvrent déjà ce port vers une AUTRE IPv6 : signalées, jamais touchées."""
+        _, cle_ip, debut, fin = self._style6([e for e in liste if isinstance(e, dict)])
+        return [{"id": e.get("id"), "ip": e.get(cle_ip)} for e in liste if isinstance(e, dict)
+                and e.get("comment") != COMMENTAIRE_MAILLAGE and e.get("enabled", True) and e.get(cle_ip) != ipv6
+                and (e.get("ip_proto") or "tcp") in ("udp", "tcp_udp") and self._couvre(e, port, debut, fin)]
+
     def etat_maillage_distant(self, ip_box, ipv6, port, port_local=None):
         """Lecture seule : la redirection IPv4 et l'exception IPv6 sont-elles en place ?"""
         redir = self._lire_redir(ip_box, port, port_local)
@@ -509,7 +517,10 @@ class Freebox:
                                   "Le pare-feu IPv6 de la Freebox est déjà désactivé : l'IPv6 fixe de la box est joignable sans exception.")}
             else:
                 etat, retenue, doublons, voulue = self._analyse6(liste6, ipv6, port)
-                v6 = {"etat": etat, "cible": "conforme", "chemin": chemin6, "voulue": voulue, "doublons": doublons, "message": ""}
+                occ = self._occupants6(liste6, ipv6, port)
+                v6 = {"etat": etat, "cible": "conforme", "chemin": chemin6, "voulue": voulue, "doublons": doublons, "occupants": occ,
+                      "message": ("Exception IPv6 tierce sur ce port vers une autre adresse : %s (non modifiée)."
+                                  % ", ".join(str(o["ip"]) for o in occ)) if occ else ""}
         return {"port": int(port), "ip_box": ip_box, "ipv6_fixe": ipv6 or "", "redirection": redir, "ipv6": v6}
 
     def appliquer_maillage_distant(self, ip_box, ipv6, port, port_local=None):
@@ -544,7 +555,7 @@ class Freebox:
                           "voulu": voulu, "doublons": a["doublons"]})
             if not apres["conforme"]:
                 raise C.ErreurFreebox("La Freebox n'a pas pris en compte la redirection du maillage.")
-        r6 = "sans_ipv6"
+        r6, occ6 = "sans_ipv6", []
         if ipv6:
             chemin6, liste6 = self._exceptions6()
             if chemin6 is None:
@@ -552,6 +563,9 @@ class Freebox:
                 self.journal({"action": "maillage_exception_ipv6", "geste": "indisponible", "ipv6": ipv6})
             else:
                 etat, retenue, doublons, voulue6 = self._analyse6(liste6, ipv6, port)
+                occ6 = self._occupants6(liste6, ipv6, port)
+                if occ6:
+                    self.journal({"action": "maillage_exception_ipv6", "geste": "occupant_signale", "occupants": occ6})
                 if etat == "conforme":
                     r6 = "inchangee"
                 else:
@@ -567,7 +581,7 @@ class Freebox:
                     change = True
                     if self._analyse6(apres6 if isinstance(apres6, list) else [], ipv6, port)[0] != "conforme":
                         raise C.ErreurFreebox("La Freebox n'a pas pris en compte l'exception IPv6 du maillage.")
-        return {"change": change, "redirection": geste, "exception_ipv6": r6, "doublons": a["doublons"]}
+        return {"change": change, "redirection": geste, "exception_ipv6": r6, "doublons": a["doublons"], "occupants_ipv6": occ6}
 
     def redirections(self):
         return self._lu("redirections", lambda: N.redirections(self.client.lire("fw/redir/")))

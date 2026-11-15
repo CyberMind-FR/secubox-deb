@@ -7,6 +7,8 @@
 # appels sudo -u secubox-freebox d'autres modules). Il LIT sa conf (/etc/secubox/p2p.toml, /etc/secubox/freebox.toml) et
 # son code, n'ÉCRIT que sous /var/lib/secubox/freebox/ (magasin du jeton, état du contrôle) ; seule exception : l'AJOUT en
 # fin de /var/log/secubox/audit.log (append-only, exigence CSPN : chaque décision de sécurité y est écrite).
+# Verbes passerelle-dhcp / lire-passerelle (pseudo-routeurctl, sudo -u secubox-freebox) : magasin, HTTP vers la Freebox,
+# résolution de mafreebox.freebox.fr, audit — rien d'autre.
 # N'exécute que `ip` (lecture des adresses et routes IPv6). Réseau : inet/inet6 (API Freebox, résolution DNS), netlink (ip).
 # Aucun shell, aucun secret.
 
@@ -17,10 +19,13 @@ profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce) {
   #include <abstractions/python>
   #include <abstractions/nameservice>      # résolution de l'AAAA annoncée, nom de la Freebox
 
+  # Shebang « #!/usr/bin/env python3 » : env puis l'interpréteur, dans ce profil ; .so des modules en mmap (mr).
   /usr/sbin/freeboxctl r,
-  /usr/bin/python3* rix,
-  /usr/lib/python3/dist-packages/** r,
-  /usr/lib/python3.*/** r,
+  /usr/bin/env rix,
+  /usr/bin/python3* mrix,
+  /usr/lib/python3*/** mr,
+  /usr/lib/python3/dist-packages/** mr,
+  /etc/python3*/** r,
   /usr/lib/secubox/freebox/ r,
   /usr/lib/secubox/freebox/** r,
 
@@ -32,9 +37,11 @@ profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce) {
   /var/lib/secubox/freebox/** rw,
   /var/log/secubox/audit.log a,
 
-  /usr/bin/ip ix,
-  /usr/sbin/ip ix,
-  /bin/ip ix,
+  /usr/bin/ip mrix,
+  /usr/sbin/ip mrix,
+  /bin/ip mrix,
+  /etc/iproute2/** r,
+  /usr/share/iproute2/** r,
 
   network inet stream,
   network inet dgram,

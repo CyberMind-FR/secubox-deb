@@ -261,6 +261,54 @@ def test_profil_apparmor_enforce_installe_et_charge():
     assert "profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce)" in prof
     ecritures = [x.strip() for x in prof.splitlines() if x.strip().endswith((" rw,", " w,")) and not x.strip().startswith("deny")]
     assert ecritures == ["/var/lib/secubox/freebox/** rw,"]
-    assert "/usr/bin/ip ix," in prof and "network netlink raw," in prof and "deny /etc/secubox/secrets/** rw," in prof
+    assert "/usr/bin/ip mrix," in prof and "network netlink raw," in prof and "deny /etc/secubox/secrets/** rw," in prof
     assert "etc/apparmor.d/usr.sbin.freeboxctl" in (RACINE / "debian" / "rules").read_text()
     assert "apparmor_parser -r /etc/apparmor.d/usr.sbin.freeboxctl" in (RACINE / "debian" / "postinst").read_text()
+
+
+def _regles_profil():
+    prof = (RACINE / "apparmor" / "usr.sbin.freeboxctl").read_text()
+    return {x.split("#")[0].strip() for x in prof.splitlines() if x.split("#")[0].strip()}
+
+
+def test_profil_couvre_le_shebang_l_interpreteur_et_ip():
+    r = _regles_profil()
+    for regle in ("/usr/bin/env rix,", "/usr/bin/python3* mrix,", "/usr/lib/python3*/** mr,", "/usr/lib/python3/dist-packages/** mr,",
+                  "/etc/python3*/** r,", "/usr/bin/ip mrix,", "/etc/iproute2/** r,", "/usr/share/iproute2/** r,",
+                  "/usr/lib/secubox/freebox/** r,", "/var/lib/secubox/freebox/** rw,", "network inet stream,"):
+        assert regle in r, regle
+    assert (RACINE / "sbin" / "freeboxctl").read_text().startswith("#!/usr/bin/env python3\n")
+
+
+def test_postrm_decharge_le_profil():
+    s = (RACINE / "debian" / "postrm").read_text()
+    assert "apparmor_parser -R /etc/apparmor.d/usr.sbin.freeboxctl" in s and "remove|purge" in s
+
+
+def test_port_pris_l_emporte_sur_la_dmz(tmp_path):
+    occupante = _regle(9, 51822, 51822, 51822, lan_ip="192.168.1.50")
+    svc, f, journal = _pret(tmp_path, [ok(REELLES + [occupante]), DMZ_BOX])
+    e = svc.etat_maillage_distant(IP, "", 51822)
+    assert e["redirection"]["etat"] == "port_pris" and e["redirection"]["occupant"] == "192.168.1.50"
+    svc, f, journal = _pret(tmp_path, [ok(REELLES + [occupante]), DMZ_BOX])
+    with pytest.raises(c.ErreurFreebox):
+        svc.appliquer_maillage_distant(IP, "", 51822)
+    assert not _ecritures(f)
+
+
+def test_regle_tierce_inactive_n_occupe_pas_le_port(tmp_path):
+    inactive = _regle(9, 51822, 51822, 51822, lan_ip="192.168.1.50", enabled=False)
+    svc, f, _ = _pret(tmp_path, [ok(REELLES + [inactive]), DMZ_BOX])
+    assert svc.etat_maillage_distant(IP, "", 51822)["redirection"]["etat"] == "couvert_par_dmz"
+
+
+def test_exception_ipv6_tierce_vers_une_autre_ipv6_signalee_sans_ecriture(tmp_path):
+    e6 = {"id": 3, "enabled": True, "comment": VOULU["comment"], "ip_proto": "udp", "ip": V6, "port_start": 51822, "port_end": 51822}
+    tierce = {"id": 5, "enabled": True, "comment": "", "ip_proto": "udp", "ip": "2a01:e0a:dec:c4e0::9", "port_start": 51800, "port_end": 51900}
+    svc, f, _ = _pret(tmp_path, [ok(REELLES + [NOTRE]), DMZ_OFF, ok([tierce, e6])])
+    e = svc.etat_maillage_distant(IP, V6, 51822)
+    assert e["ipv6"]["etat"] == "conforme" and e["ipv6"]["occupants"] == [{"id": 5, "ip": "2a01:e0a:dec:c4e0::9"}]
+    svc, f, journal = _pret(tmp_path, [ok(REELLES + [NOTRE]), DMZ_OFF, ok([tierce, e6])])
+    r = svc.appliquer_maillage_distant(IP, V6, 51822)
+    assert not _ecritures(f) and r["occupants_ipv6"] == [{"id": 5, "ip": "2a01:e0a:dec:c4e0::9"}]
+    assert any(j.get("geste") == "occupant_signale" for j in journal)
