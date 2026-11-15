@@ -210,3 +210,34 @@ def test_wafctl_cle_ai_filtres(tmp_path):
     assert lancer("retirer", kid).returncode == 0
     assert list((racine / "ai-filtres").iterdir()) == []
     assert json.loads(audit.read_text().splitlines()[-1])["action"] == "cle-ai-filtres-retrait"
+
+
+def test_refus_de_route_audites(c):
+    """#3732 revue : chaque appel est audité, refus de forme compris (sans lever)."""
+    assert c.c.post("/ai/filtres", json={"filtres": [FILTRE] * 51}).status_code == 422
+    a = c.audit()
+    assert len(a) == 1 and a[0]["action"] == "ai-filtres-appliquer" and a[0]["detail"].startswith("refus ")
+    assert c.c.delete("/ai/filtres/pasia").status_code == 422
+    a = c.audit()
+    assert len(a) == 2 and a[1]["action"] == "ai-filtres-retirer" and a[1]["detail"].startswith("refus ")
+    assert c.c.request("GET", "/ai/filtres", content=b"{}").status_code == 422
+    a = c.audit()
+    assert len(a) == 3 and a[2]["action"] == "ai-filtres-lister" and a[2]["detail"].startswith("refus ")
+    assert c.faux.appels == []
+
+
+def test_refus_de_route_audit_impossible_reste_422(c, monkeypatch):
+    def audit(*a):
+        raise OSError("plein")
+    monkeypatch.setitem(c.f._config, "audit", audit)
+    assert c.c.post("/ai/filtres", json={"filtres": []}).status_code == 422
+    assert c.c.delete("/ai/filtres/pasia").status_code == 422
+
+
+def test_exception_rules_code_ecrite():
+    t = (COMPOSANT.parents[3] / ".claude" / "RULES-CODE.md").read_text()
+    ligne = next(x for x in t.splitlines() if "require_ai_filtres" in x)
+    assert ligne.startswith("| § 3 garde |") and "#3732" in ligne
+    for route in ("GET /api/v1/waf/ai/filtres", "POST /api/v1/waf/ai/filtres", "DELETE /api/v1/waf/ai/filtres/{id}"):
+        assert route in ligne
+    assert "test_filtres_ia_3732.py" in ligne

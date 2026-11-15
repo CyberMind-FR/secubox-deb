@@ -116,7 +116,11 @@ def _ctl(verbe: str, action: str, user: dict, entree: bytes) -> dict:
 
 @router.post("")
 def ai_filtres_appliquer(user: dict = Depends(require_ai_filtres), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
-    prop = _valider(Proposition, corps)
+    try:
+        prop = _valider(Proposition, corps)
+    except HTTPException:
+        _auditer("ai-filtres-appliquer", "refus forme", user, lever=False)
+        raise
     entree = json.dumps({"acteur": _acteur(user), "filtres": prop.filtres}, ensure_ascii=False).encode()
     sortie = _ctl("appliquer", "ai-filtres-appliquer", user, entree)
     appliques = sortie.get("appliques") or []
@@ -136,8 +140,10 @@ def ai_filtres_appliquer(user: dict = Depends(require_ai_filtres), corps: bytes 
 def ai_filtres_retirer(fid: str, user: dict = Depends(require_ai_filtres),
                        corps: bytes = Depends(_corps)) -> Dict[str, Any]:
     if corps:
+        _auditer("ai-filtres-retirer", "refus corps", user, lever=False)
         raise HTTPException(422, detail={"motif": "corps"})
     if not _RE_ID.fullmatch(fid):
+        _auditer("ai-filtres-retirer", "refus id", user, lever=False)
         raise HTTPException(422, detail={"motif": "id"})
     entree = json.dumps({"acteur": _acteur(user), "id": fid}).encode()
     sortie = _ctl("retirer", "ai-filtres-retirer", user, entree)
@@ -148,6 +154,7 @@ def ai_filtres_retirer(fid: str, user: dict = Depends(require_ai_filtres),
 @router.get("")
 def ai_filtres_lister(user: dict = Depends(require_ai_filtres), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
     if corps:
+        _auditer("ai-filtres-lister", "refus corps", user, lever=False)
         raise HTTPException(422, detail={"motif": "corps"})
     sortie = _ctl("lister", "ai-filtres-lister", user, b"")
     _auditer("ai-filtres-lister", f"lister {len(sortie.get('filtres') or [])}", user, lever=False)
