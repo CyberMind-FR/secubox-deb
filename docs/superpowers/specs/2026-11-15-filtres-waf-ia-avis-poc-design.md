@@ -25,8 +25,15 @@ le filtre, suivi des versions) sans lui retirer ses garde-fous.
   (requêtes et identifiants captés, #3728/#3734).
 - **Application** : **automatique sur les leurres** (HTTP de sbxwaf, de service de sbx-authwatch) ; **manuelle sur
   les services hébergés** (Nextcloud, PeerTube, mail…) : proposé, appliqué sur clic du propriétaire.
-- **Ban dès la première touche** sur un filtre `leurre`, comme les leurres de service (#3728) ; les leurres existants
-  de `cve-triage` (3 touches en 24 h) ne changent pas.
+- **Ban selon la gravité** sur un filtre `leurre` (gravité calculée par le CODE depuis KEV, EPSS, CVSS et la famille,
+  jamais par le modèle ; récidive après un ban : un cran au-dessus) ; les leurres existants de `cve-triage`
+  (3 touches en 24 h) ne changent pas :
+
+  | Gravité | Ban | Durée |
+  |---|---|---|
+  | critique : dans KEV, ou exécution de code à distance, ou EPSS ≥ 0,5 | dès la 1re touche | 7 j |
+  | haute : CVSS ≥ 7, ou EPSS ≥ 0,1 | dès la 1re touche | 24 h |
+  | moyenne ou inconnue | 3 touches en 24 h | 4 h |
 - **Suivi des évolutions** de chaque filtre : naissance (source), versions, attrapes jour par jour, retrait et motif.
 
 ## Buts
@@ -66,7 +73,7 @@ Un filtre est un objet JSON borné, dans un catalogue de formes **fermé** :
 | `motif` | **une** des formes fermées : `chemin_exact`, `chemin_prefixe`, `parametre_egal`, `entete_contient`, `corps_contient` (HTTP) ; `trame_contient`, `compte_egal` (service). Chaînes littérales bornées, **jamais d'expression régulière libre** |
 | `famille` | famille d'attaque (rce, lfi, sqli, auth_bypass, ssrf, deserialisation, credentials…) |
 | `action` | `leurre` (produit absent) ou `proposition` (produit présent) |
-| `ban` | durée bornée (1 h à 7 j) |
+| `gravite`, `ban` | gravité (critique, haute, moyenne) calculée par le code ; seuil et durée qui en découlent (tableau ci-dessus) |
 
 ## La chaîne (POC sur gk0)
 
@@ -115,7 +122,7 @@ historique des versions par filtre ; les rejets du vérificateur et leur motif.
   par le code** (jamais rédigée par le modèle), ancrée sur le texte que sbxwaf inspecte (chemin, requête, corps,
   agent). `entete_contient` est reporté (sbxwaf n'inspecte pas les en-têtes) ; `parametre_egal` se traduit en
   `[?&]nom=valeur` échappé.
-- **Catégorie dédiée** `ia_filtres` dans `waf-rules.json` (action ban, seuil 1), distincte de
+- **Catégorie dédiée** `ia_filtres` dans `waf-rules.json` (une par gravité si le moteur l'exige : seuil et durée du tableau), distincte de
   `product_absent_probes` et `product_absent_probes_ban` : la régénération de `cve-triage` ne l'écrase jamais.
   Une collision de motif avec `cve-triage` : le filtre IA est rejeté (`deja_couvert`), l'existant fait foi.
 - **Écriture** : nouveau verbe de `secubox-cvectl` (root, verrou, double tampon, audit), appelé par la route du
