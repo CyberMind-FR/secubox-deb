@@ -108,3 +108,14 @@ def test_relayhost_vide_ne_donne_pas_un_smarthost_fantome(tmp_path, monkeypatch)
 
 def test_l_introduction_du_volet_ne_promet_pas_le_greffon_absent():
     assert "seulement si le greffon est actif" in HTML and "rapatrier" in HTML
+
+
+
+def test_mot_de_passe_imap_jamais_dans_les_arguments_3739():
+    """#3739 : `-o imapc_password=…` était lisible par tout compte de l'HÔTE (`ps` voit les processus des conteneurs).
+    Le mot de passe passe par l'entrée standard vers un fichier 0600 du conteneur, inclus par `doveadm -c`, effacé après."""
+    corps = CTL.split("cmd_imap_sync() {", 1)[1].split("\ncmd_fix_ports() {", 1)[0]
+    code = "\n".join(l for l in corps.splitlines() if not l.lstrip().startswith("#"))
+    assert "imapc_password=" not in code
+    assert "doveadm -c" in code and "umask 077" in code and "!include /etc/dovecot/dovecot.conf" in code
+    assert code.count("rm -f") >= 1
