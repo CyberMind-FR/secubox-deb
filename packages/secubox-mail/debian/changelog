@@ -1,3 +1,13 @@
+secubox-mail (2.16.12-1~trixie1) trixie; urgency=medium
+
+  * Rapatriement IMAP distant : le mot de passe ne passe plus en argument de
+    doveadm (`-o imapc_password=…` était lisible par tout compte de l'HÔTE,
+    `ps` voit les processus des conteneurs). Réglages imapc écrits par
+    l'entrée standard dans un fichier 0600 du conteneur (umask 077), inclus
+    par `doveadm -c`, effacé après chaque synchronisation (ref #3739).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 12:10:00 +0100
+
 secubox-mail (2.16.11-1~trixie1) trixie; urgency=medium
 
   * Rapatriement IMAP à sens unique (doveadm sync -1 -R) : en double sens,
