@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Literal
+from typing import Any, Callable, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
@@ -34,6 +35,7 @@ _memoire = Memoire(BASE, JOURNAL)
 _config: Dict[str, Callable[..., Any]] = {}
 _INTERNES = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10",
                                                "fc00::/7")]
+log = logging.getLogger("secubox.waf.leurres")
 router = APIRouter(prefix="/leurres", dependencies=[Depends(require_jwt)])
 
 
@@ -50,11 +52,13 @@ def purger() -> int:
     return _memoire.purger(int(time.time()))
 
 
-def _bans() -> Dict[str, Any]:
+def _bans() -> Optional[Dict[str, Any]]:
+    """Bans actifs par adresse, ou None s'ils sont ILLISIBLES : la page affiche alors « — », jamais « non banni »."""
     try:
         return {b["ip"]: b.get("expires_in") for b in _config["bans"]()}
-    except Exception:  # noqa: BLE001 — nft muet : l'état du ban est « inconnu », la mémoire reste lisible
-        return {}
+    except Exception as e:  # noqa: BLE001 — nft muet ou table absente : état inconnu, la mémoire reste lisible
+        log.warning("leurres : bans illisibles : %s", e)
+        return None
 
 
 def _lu(fonction: Callable[..., Any], *args: Any, **kw: Any) -> Any:
@@ -67,7 +71,7 @@ async def resume() -> Dict[str, Any]:
     def faire() -> Dict[str, Any]:
         r = _lu(_memoire.resume)
         bans = _bans()
-        r["bans_actifs"] = sum(1 for a in _memoire.attaquants(int(time.time()), limite=10**6) if a["ip"] in bans)
+        r["bans_actifs"] = None if bans is None else sum(1 for ip in _memoire.adresses(int(time.time())) if ip in bans)
         return r
     return await asyncio.to_thread(faire)
 
@@ -78,7 +82,12 @@ async def attaquants(filtre: str = "", profil: str = "", limite: int = 200) -> D
         lignes = _lu(_memoire.attaquants, filtre=filtre[:128], profil=profil[:16], limite=max(1, min(limite, 1000)))
         bans = _bans()
         for a in lignes:
-            a["ban"] = None if a["ip"] == "local" else {"actif": a["ip"] in bans, "expire_dans": bans.get(a["ip"])}
+            if a["ip"] == "local":
+                a["ban"] = None                                   # LAN : jamais bannissable
+            elif bans is None:
+                a["ban"] = {"actif": None, "expire_dans": None}   # inconnu
+            else:
+                a["ban"] = {"actif": a["ip"] in bans, "expire_dans": bans.get(a["ip"])}
         return {"attaquants": lignes, "total": len(lignes)}
     return await asyncio.to_thread(faire)
 
@@ -90,7 +99,7 @@ async def attaquant(ip: str) -> Dict[str, Any]:
 
 @router.get("/dictionnaire")
 async def dictionnaire(limite: int = 50) -> Dict[str, Any]:
-    return await asyncio.to_thread(lambda: _lu(_memoire.dictionnaire, limite=max(1, min(limite, 500))))
+    return await asyncio.to_thread(lambda: _lu(_memoire.dictionnaire, limite=max(1, min(limite, 100_000))))
 
 
 @router.get("/rejeux")
@@ -130,10 +139,18 @@ def _geste(action: str, ip: str, detail: str, user: dict, appel: Callable[[], tu
 
 @router.post("/ban")
 def ban(corps: Ban, user: dict = Depends(require_jwt)) -> Dict[str, Any]:
-    """Pose ou prolonge le ban d'une adresse vue par un leurre."""
+    """Pose ou prolonge le ban d'une adresse vue par un leurre. `nft add element` ne change pas l'échéance d'un élément
+    déjà présent : pour PROLONGER, le ban est levé puis reposé (sinon le geste répondrait « fait » sans rien faire)."""
     _en_memoire(corps.ip)
-    return _geste("leurre-ban", corps.ip, f"{corps.ip} {corps.duree}", user,
-                  lambda: _config["ban"](corps.ip, corps.duree))
+
+    def appel() -> tuple:
+        bans = _bans()
+        if bans is None or corps.ip in bans:
+            ok, message = _config["unban"](corps.ip)
+            if not ok and bans is not None:
+                return False, f"levée avant prolongation refusée : {message}"
+        return _config["ban"](corps.ip, corps.duree)
+    return _geste("leurre-ban", corps.ip, f"{corps.ip} {corps.duree}", user, appel)
 
 
 @router.post("/unban")

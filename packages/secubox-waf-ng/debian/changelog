@@ -1,3 +1,15 @@
+secubox-waf-ng (1.36.1-1~trixie1) trixie; urgency=medium
+
+  * Mémoire des leurres, relecture de sécurité (ref #3734) : agrégats servis
+    depuis un instantané recalculé seulement quand la base change (plus de
+    relecture de 30 jours par requête) ; « Prolonger » lève puis repose le
+    ban (nft ne change pas l'échéance d'un élément présent) ; base sans ACL
+    nommée (secubox-live ne la lit pas) ; bans illisibles affichés « — »,
+    jamais « non banni » ; ingestion par tranches, pannes journalisées ;
+    connexions SQLite fermées ; export du dictionnaire complet.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 12:00:00 +0100
+
 secubox-waf-ng (1.36.0-1~trixie1) trixie; urgency=medium
 
   * Mémoire des leurres de service (#3734, lot 1) : base SQLite

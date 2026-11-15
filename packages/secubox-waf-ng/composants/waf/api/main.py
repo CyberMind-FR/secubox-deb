@@ -1011,6 +1011,7 @@ async def _warm_loop():
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
     dernier_php = dernier_leurres = derniere_purge = 0.0
+    _leurres_panne = ""
     while True:
         try:
             await asyncio.to_thread(_refresh_warm_caches)
@@ -1023,9 +1024,13 @@ async def _warm_loop():
                 if time.time() - derniere_purge >= 86400:
                     await asyncio.to_thread(_leurres.purger)
                     derniere_purge = time.time()
-                dernier_leurres = time.time()
-            except Exception:
-                pass  # journal ou base indisponible : repris au tour suivant, le curseur n'a pas avancé
+            except Exception as e:  # noqa: BLE001 — repris au tour suivant, le curseur n'a pas avancé
+                if str(e) != _leurres_panne:        # une trace par motif : une mémoire figée ne doit pas être muette
+                    log.warning("mémoire des leurres : ingestion en échec : %s", e)
+                    _leurres_panne = str(e)
+            else:
+                _leurres_panne = ""
+            dernier_leurres = time.time()
         if time.time() - dernier_php >= PHP_SIGNAUX_PERIODE:
             try:
                 await asyncio.to_thread(_rafraichir_php_signaux)

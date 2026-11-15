@@ -100,3 +100,30 @@ def test_page_et_onglet():
     assert "/api/v1/waf/leurres/" in page and "sbx_token" in page
     index = (www / "index.html").read_text(encoding="utf-8")
     assert 'data-tab="decoys">Leurres<' in index and "decoys: 'leurres'" in index
+
+
+def test_prolonger_leve_puis_repose(c):
+    """`nft add element` ne change pas l'échéance d'un élément présent : prolonger = lever puis bannir."""
+    assert c.post("/leurres/ban", json={"ip": "198.51.100.7", "duree": "7d"}).status_code == 200
+    assert c.gestes == [("unban", "198.51.100.7"), ("ban", "198.51.100.7", "7d")]
+
+
+def test_bans_illisibles_inconnu_jamais_non_banni(c, monkeypatch):
+    from api import leurres as lr
+
+    def muet():
+        raise RuntimeError("nft muet")
+    monkeypatch.setitem(lr._config, "bans", muet)
+    assert c.get("/leurres/resume").json()["bans_actifs"] is None
+    a = {x["ip"]: x for x in c.get("/leurres/attaquants").json()["attaquants"]}
+    assert a["203.0.113.24"]["ban"] == {"actif": None, "expire_dans": None}
+
+
+def test_base_sans_entree_d_acl_nommee(c, tmp_path):
+    import os
+    c.get("/leurres/resume")
+    try:
+        os.getxattr(tmp_path / "leurres.db", "system.posix_acl_access")
+    except OSError:
+        return
+    raise AssertionError("la base porte une ACL d'accès")

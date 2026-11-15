@@ -168,7 +168,7 @@
       var g=cree('div','v');
       d.visites.forEach(function(v){g.appendChild(cree('span','',quand(v.ts)));g.appendChild(cree('span','',v.service+' · '+(PROFIL[v.profil]||v.profil)+(v.action==='banned'?' · banni':'')));
         var c=cree('span','mono');c.textContent=(v.client||'')+(v.essais.length?(v.client?' — ':'')+v.essais.map(couple).join(', '):'');g.appendChild(c);});
-      td.appendChild(g);hauteur();
+      td.appendChild(g);if(d.tronquee)td.appendChild(cree('div','sous','Fiche limitée aux 500 dernières visites.'));hauteur();
     });
   }
 
@@ -188,11 +188,11 @@
       if(a.rejeu)td.appendChild(cree('div','rj','rejeu : un mot de passe sur plusieurs comptes'));tr.appendChild(td);
       td=cree('td','',quand(a.derniere));td.appendChild(cree('div','sous',a.visites+(a.visites>1?' visites':' visite')));tr.appendChild(td);
       td=cree('td');if(!a.ban)td.appendChild(cree('span','sous','jamais (LAN)'));
-      else td.appendChild(cree('span','pastille'+(a.ban.actif?'':' non'),a.ban.actif?duree(a.ban.expire_dans):'non banni'));tr.appendChild(td);
+      else td.appendChild(cree('span','pastille'+(a.ban.actif?'':' non'),a.ban.actif===null?'—':a.ban.actif?duree(a.ban.expire_dans):'non banni'));tr.appendChild(td);
       td=cree('td');
       if(a.ban){var g=cree('div','gestes');var sel=cree('select');sel.setAttribute('aria-label','Durée du ban pour '+a.ip);
         [['4h','4 h'],['24h','24 h'],['7d','7 j']].forEach(function(o){var op=cree('option','',o[1]);op.value=o[0];if(o[0]==='24h')op.selected=true;sel.appendChild(op);});
-        var b=cree('button',a.ban.actif?'':'fort',a.ban.actif?'Prolonger':'Bannir');b.type='button';b.addEventListener('click',function(){geste(a.ip,'ban',{ip:a.ip,duree:sel.value},b);});
+        var b=cree('button',a.ban.actif===false?'fort':'',a.ban.actif===false?'Bannir':'Prolonger');b.type='button';b.addEventListener('click',function(){geste(a.ip,'ban',{ip:a.ip,duree:sel.value},b);});
         g.appendChild(sel);g.appendChild(b);
         if(a.ban.actif){var l=cree('button','','Lever');l.type='button';l.addEventListener('click',function(){geste(a.ip,'unban',{ip:a.ip},l);});g.appendChild(l);}
         td.appendChild(g);}
@@ -206,7 +206,7 @@
     if(m.length){['mot de passe','essais','comptes','adresses'].forEach(function(t){z.appendChild(cree('span','t',t));});}
     m.slice(0,15).forEach(function(x){z.appendChild(cree('span','mono',x.mot_de_passe===''?'(vide)':x.mot_de_passe));z.appendChild(cree('span','',nb(x.essais)));z.appendChild(cree('span','',nb(x.comptes)));z.appendChild(cree('span','',nb(x.adresses)));});
     var c=el('comptes');vide(c);((d&&d.comptes)||[]).slice(0,12).forEach(function(x){c.appendChild(cree('span','puce mono',x.compte));});
-    el('export').disabled=!m.length;
+    el('export').disabled=!m.length;el('export').textContent='Exporter le dictionnaire'+(d&&d.total_mots_de_passe?' ('+nb(d.total_mots_de_passe)+')':'');
   }
 
   function rejeux(r){
@@ -229,8 +229,8 @@
   el('fq').addEventListener('input',function(){clearTimeout(minuterie);minuterie=setTimeout(charger,300);});
   el('fp').addEventListener('change',charger);
   el('export').addEventListener('click',function(){
-    if(!DICO)return;var lignes=DICO.mots_de_passe.map(function(x){return x.mot_de_passe;}).join('\n')+'\n';
-    var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([lignes],{type:'text/plain'}));a.download='dictionnaire-des-robots.txt';document.body.appendChild(a);a.click();a.remove();});
+    jget('dictionnaire?limite=100000').then(function(d){if(!d)return;var lignes=d.mots_de_passe.map(function(x){return x.mot_de_passe;}).join('\n')+'\n';
+      var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([lignes],{type:'text/plain'}));a.download='dictionnaire-des-robots.txt';document.body.appendChild(a);a.click();a.remove();});});
   if(/[?&]embed=1/.test(location.search))document.body.className='emb';
   charger();setInterval(function(){if(!document.hidden&&!OUVERTE)charger();},60000);
 })();
