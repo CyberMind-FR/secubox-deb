@@ -1,3 +1,19 @@
+secubox-hardening (1.7.0-1~trixie1) trixie; urgency=medium
+
+  * Protection contre l'épuisement d'états TCP (#3735) : famille Sockstress
+    (fenêtre nulle), clôtures bloquées (MS13-018 côté Windows), TCP STOMP de
+    Mirai, SYN porteurs de données. Noyau : tcp_fin_timeout 20, orphelins
+    plafonnés (8192, 2 relances), suivi des clôtures 30 s, établies 1 jour.
+    Pare-feu (eth2, br-lan) : SYN porteurs de données refusés en IPv4 et
+    IPv6 ; au plus 256 connexions TCP simultanées par adresse publique.
+    Détecteur secubox-tcp-etats (minuterie, 1 min) : par adresse externe, nos
+    connexions serveur à fenêtre nulle ou en clôture bloquée (jamais
+    CLOSE_WAIT, jamais le LAN) ; au-delà de 20, ban 24 h par wafctl, ligne
+    tcp_etats:* au journal des menaces, audit ; relevé d'impact (orphelins,
+    mémoire TCP, table de suivi) dans /var/lib/secubox-tcp-etats/etat.json.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 11:30:00 +0100
+
 secubox-hardening (1.6.5-1~trixie1) trixie; urgency=medium
 
   * Leurres de service de sbx-authwatch OUVERTS sur eth2 et br-lan (#3728) :

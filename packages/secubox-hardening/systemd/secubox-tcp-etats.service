@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+[Unit]
+Description=SecuBox — détecteur d'épuisement d'états TCP (fenêtre nulle, clôtures bloquées) (#3735)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3735
+After=network-online.target nftables.service
+
+[Service]
+Type=oneshot
+# root : lit les connexions de tous les comptes (ss) et appelle wafctl ban (qui refuse le privé et les protégées).
+ExecStart=/usr/sbin/secubox-tcp-etats
+StateDirectory=secubox-tcp-etats
+StateDirectoryMode=0755
+Nice=10
+TimeoutStartSec=50
+MemoryMax=96M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/log/secubox -/var/lib/secubox -/run/secubox
