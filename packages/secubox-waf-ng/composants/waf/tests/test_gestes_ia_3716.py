@@ -636,7 +636,8 @@ def test_exception_rules_code_ecrite():
 def test_routes_branchees_sur_l_application():
     waf = _importer_waf()
     from secubox_core.compte_service import require_ai_ban
-    routes = {(r.path, tuple(sorted(r.methods))): r for r in waf.app.routes if getattr(r, "path", "").startswith("/ai/")}
+    routes = {(r.path, tuple(sorted(r.methods))): r for r in waf.app.routes if getattr(r, "path", "").startswith("/ai/")
+              and not r.path.startswith("/ai/filtres")}   # #3732 : compte ai-filtres, test_filtres_ia_3732
     assert set(routes) == {("/ai/ban", ("POST",)), ("/ai/unban", ("POST",)), ("/ai/etat", ("GET",))}
     for route in routes.values():
         assert require_ai_ban in [d.call for d in route.dependant.dependencies]
@@ -672,7 +673,8 @@ def test_le_drapeau_passe_avant_la_garde():
     waf = _importer_waf()
     from api import gestes_ia as g
     from secubox_core.compte_service import require_ai_ban
-    for route in (r for r in waf.app.routes if getattr(r, "path", "").startswith("/ai/")):
+    for route in (r for r in waf.app.routes if getattr(r, "path", "").startswith("/ai/")
+                  and not r.path.startswith("/ai/filtres")):
         appels = [d.call for d in route.dependant.dependencies]
         assert appels.index(g.processus_designe) < appels.index(require_ai_ban)
 

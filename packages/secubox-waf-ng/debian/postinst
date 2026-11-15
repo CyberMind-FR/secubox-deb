@@ -92,6 +92,10 @@ case "$1" in
     mkdir -p /etc/secubox-comptes-service/ai-ban
     chown root:root /etc/secubox-comptes-service/ai-ban
     chmod 0755 /etc/secubox-comptes-service/ai-ban
+    # Compte ai-filtres (#3732, `wafctl cle-ai-filtres ajouter`) : même règle.
+    mkdir -p /etc/secubox-comptes-service/ai-filtres
+    chown root:root /etc/secubox-comptes-service/ai-filtres
+    chmod 0755 /etc/secubox-comptes-service/ai-filtres
 
     # ── 2b. Plages protégées de la box (#3450, #3716 ruling P2) ───────────────
     # waf-blocs REFUSE tout ban de bloc /24 tant que protegees.env ne déclare pas

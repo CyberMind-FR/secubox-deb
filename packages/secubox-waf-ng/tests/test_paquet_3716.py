@@ -47,8 +47,8 @@ def _configure():
 def test_versions_et_dependance():
     # l'entrée de #3716, où qu'elle soit : ce test ne doit pas casser à chaque montée de version suivante
     assert "\nsecubox-waf-ng (1.35.0-1~trixie1) trixie;" in CHANGELOG_WAF.read_text()
-    assert "secubox-core (>= 1.8.32~)" in CONTROL_WAF.read_text()
-    assert CHANGELOG_CORE.read_text().startswith("secubox-core (1.8.32-1~trixie1) trixie;")
+    assert re.search(r"secubox-core \(>= 1\.8\.(3[2-9]|[4-9]\d)~\)", CONTROL_WAF.read_text())
+    assert "secubox-core (1.8.32-1~trixie1) trixie;" in CHANGELOG_CORE.read_text()
 
 
 def test_changelogs_dates_du_jour_et_issue():
