@@ -9,6 +9,20 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-15 — Leurres de service ouverts sur le WAN, identifiants des robots captés (ref #3728)
+
+- PR #3733 : `secubox-hardening` 1.6.5 (9 ports leurres sortis de la garde WAN/br-lan, IPv4 seulement, backends
+  toujours fermés, `leurres_ouverts` à part dans la page) ; `secubox-toolbox-ng` 0.15.0 (sbx-authwatch en régime
+  bannière, dialogue borné 3 s / 10 s / 4 Kio / 5 essais : telnet multi-essais, redis AUTH, postgres en clair,
+  HTTP Basic 9200, cookie RDP, version VNC, pilote Mongo ; journal : `essais` en clair, `agent`
+  balayeur/sondeur/force-brute, `user_agent` = client). Relecture `relecteur-securite` : 0 bloquant, 3 importants
+  corrigés (fenêtre courte car le ban nft coupe la connexion établie, IPv6 fermé, compte hors du graphe d'acteurs).
+- Déployé gk2 par apt (le postinst toolbox attend `secubox-sentinel-feeds`, oneshot de ~10 min quand abuse.ch
+  traîne). Vérifié : session telnet du poste captée (2 couples) ; 1re touche Internet `142.93.82.193` → leurre:vnc,
+  sondeur « RFB 003.003 », banni. Les balayages SYN sans état (fenêtre 1025) n'achèvent jamais la connexion :
+  invisibles des leurres, à voir côté nft (suite « mémorisation »).
+- Ouvert : #3732 (leurres filtrables par vulnérabilité, avis de sécurité, IA locale).
+
 ## 2026-11-14 — Bans de l'IA retirés aussitôt posés sur gk2 : journal fermé au groupe (ref #3716)
 
 - Symptôme : depuis 13:33, chaque geste du relais gk0 sur 51.8.102.0/24 refusé « gk2 injoignable » ; gk2 répondait 503
