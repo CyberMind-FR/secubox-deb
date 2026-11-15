@@ -258,7 +258,7 @@ def test_unite_du_controle_durcie():
 
 def test_profil_apparmor_enforce_installe_et_charge():
     prof = (RACINE / "apparmor" / "usr.sbin.freeboxctl").read_text()
-    assert "profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce)" in prof
+    assert "profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce, attach_disconnected)" in prof
     ecritures = [x.strip() for x in prof.splitlines() if x.strip().endswith((" rw,", " w,")) and not x.strip().startswith("deny")]
     assert ecritures == ["/var/lib/secubox/freebox/** rw,"]
     assert "/usr/bin/ip mrix," in prof and "network netlink raw," in prof and "deny /etc/secubox/secrets/** rw," in prof

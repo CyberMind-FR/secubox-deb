@@ -14,13 +14,16 @@
 
 #include <tunables/global>
 
-profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce) {
+profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce, attach_disconnected) {
   #include <abstractions/base>
   #include <abstractions/python>
   #include <abstractions/nameservice>      # résolution de l'AAAA annoncée, nom de la Freebox
 
   # Shebang « #!/usr/bin/env python3 » : env puis l'interpréteur, dans ce profil ; .so des modules en mmap (mr).
   /usr/sbin/freeboxctl r,
+  # Python lit le dossier du script (sys.path[0]) ; /dev/null sous PrivateDevices = chemin déconnecté.
+  /usr/sbin/ r,
+  /dev/null rw,
   /usr/bin/env rix,
   /usr/bin/python3* mrix,
   /usr/lib/python3*/** mr,
