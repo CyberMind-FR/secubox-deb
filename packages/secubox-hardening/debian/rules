@@ -14,6 +14,10 @@ override_dh_auto_install:
 
 	# Install hardeningctl
 	install -m 755 sbin/hardeningctl $(CURDIR)/debian/secubox-hardening/usr/sbin/
+	# Détecteur d'épuisement d'états TCP (#3735)
+	install -m 755 sbin/secubox-tcp-etats $(CURDIR)/debian/secubox-hardening/usr/sbin/
+	install -D -m 644 systemd/secubox-tcp-etats.service $(CURDIR)/debian/secubox-hardening/lib/systemd/system/secubox-tcp-etats.service
+	install -D -m 644 systemd/secubox-tcp-etats.timer $(CURDIR)/debian/secubox-hardening/lib/systemd/system/secubox-tcp-etats.timer
 
 	# Install API
 	cp -r api/* $(CURDIR)/debian/secubox-hardening/usr/lib/secubox/hardening/api/
@@ -44,3 +48,4 @@ override_dh_auto_install:
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-hardening
+	dh_installsystemd --name=secubox-tcp-etats secubox-tcp-etats.timer

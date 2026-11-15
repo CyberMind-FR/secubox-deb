@@ -1,0 +1,203 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+secubox-tcp-etats — détecteur d'épuisement d'états TCP (#3735), lancé chaque minute (root, minuterie).
+
+Une attaque de la famille Sockstress ouvre de vraies connexions puis ne les laisse jamais finir : l'autre bout annonce
+une fenêtre NULLE (nos données restent en mémoire noyau, sondées sans fin) ou n'achève pas la clôture (FIN_WAIT_1,
+FIN_WAIT_2, LAST_ACK, CLOSING ; côté Windows, MS13-018 : FIN_WAIT_2 jusqu'à vider le pool non paginé). Le pare-feu
+plafonne déjà le nombre de connexions par source ; ce détecteur voit CE QUE FONT les connexions ouvertes.
+
+Ce qui compte, et ce qui ne compte jamais :
+  * seules nos connexions SERVEUR (port local en écoute) : une connexion que gk2 ouvre vers l'extérieur n'est jamais
+    une preuve contre le distant ;
+  * CLOSE_WAIT n'est PAS compté : c'est notre application qui n'a pas fermé, pas l'autre bout ;
+  * LAN, maillage et boucle locale ne sont jamais comptés ni bannis (wafctl refuse aussi le privé et les protégées).
+
+Au-delà du seuil (connexions bloquées d'une même adresse, au même instant) : ban 24 h par wafctl, une ligne au journal
+des menaces (catégorie `tcp_etats:<motif>`), une ligne d'audit. Relevé écrit à chaque tour (suspects, impact : sockets
+orphelines, mémoire TCP, remplissage du suivi de connexions) dans /var/lib/secubox-tcp-etats/etat.json.
+"""
+from __future__ import annotations
+
+import argparse
+import ipaddress
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Callable, Dict, Optional, Set
+
+CLOTURE = {"FIN-WAIT-1", "FIN-WAIT-2", "LAST-ACK", "CLOSING"}
+ETATS = CLOTURE | {"ESTAB", "SYN-RECV", "CLOSE-WAIT", "TIME-WAIT"}
+INTERNES = [ipaddress.ip_network(n) for n in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+    "::1/128", "fc00::/7", "fe80::/10")]
+SEUIL = 20
+BAN = "24h"
+REBAN_S = 86400
+ETAT = Path("/var/lib/secubox-tcp-etats/etat.json")
+JOURNAL = Path("/var/log/secubox/waf/waf-threats.log")
+AUDIT = Path("/var/log/secubox/audit.log")
+
+
+def _adresse(champ: str) -> tuple:
+    """« 203.0.113.9:443 », « [2001:db8::7]:443 », « ::ffff:203.0.113.9:443 » → (adresse, port)."""
+    hote, _, port = champ.rpartition(":")
+    hote = hote.strip("[]")
+    if hote.startswith("::ffff:") and "." in hote:
+        hote = hote[7:]
+    if "%" in hote:
+        hote = hote.split("%", 1)[0]
+    return hote, int(port) if port.isdigit() else -1
+
+
+def interne(ip: str) -> bool:
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return True                       # illisible : jamais une cible
+    return any(a in n for n in INTERNES)
+
+
+def par_adresse(sortie_ss: str, ports_serveur: Optional[Set[int]] = None) -> Dict[str, dict]:
+    """Lit `ss -tanio` : par adresse distante externe, connexions totales, en clôture bloquée, à fenêtre nulle."""
+    res: Dict[str, dict] = {}
+    courant = None
+    for ligne in sortie_ss.splitlines():
+        champs = ligne.split()
+        if not champs:
+            continue
+        if champs[0] in ETATS and len(champs) >= 5:
+            courant = None
+            _, port_local = _adresse(champs[3])
+            distant, _ = _adresse(champs[4])
+            if interne(distant) or (ports_serveur is not None and port_local not in ports_serveur):
+                continue
+            courant = res.setdefault(distant, {"fenetre_nulle": 0, "cloture": 0, "total": 0})
+            courant["total"] += 1
+            if champs[0] in CLOTURE:
+                courant["cloture"] += 1
+        elif courant is not None and ligne[:1] in (" ", "\t"):
+            if "snd_wnd:0" in champs:
+                courant["fenetre_nulle"] += 1
+            courant = None                     # une seule ligne d'informations par connexion
+    return res
+
+
+def suspects(compte: Dict[str, dict], seuil: int = SEUIL) -> list:
+    sortie = []
+    for ip, c in compte.items():
+        if c["fenetre_nulle"] >= seuil:
+            sortie.append({"ip": ip, "motif": "fenetre_nulle", "nombre": c["fenetre_nulle"], **c})
+        elif c["cloture"] >= seuil:
+            sortie.append({"ip": ip, "motif": "cloture", "nombre": c["cloture"], **c})
+    return sorted(sortie, key=lambda x: (-x["nombre"], x["ip"]))
+
+
+def impact(sockstat: Path = Path("/proc/net/sockstat"),
+           compte: Path = Path("/proc/sys/net/netfilter/nf_conntrack_count"),
+           maxi: Path = Path("/proc/sys/net/netfilter/nf_conntrack_max")) -> dict:
+    """Ce que coûte l'instant : sockets orphelines, mémoire TCP (pages), remplissage du suivi de connexions."""
+    r: dict = {}
+    try:
+        for ligne in sockstat.read_text().splitlines():
+            if ligne.startswith("TCP:"):
+                v = ligne.split()[1:]
+                d = dict(zip(v[::2], (int(x) for x in v[1::2])))
+                r.update(orphelins=d.get("orphan"), tcp_memoire_pages=d.get("mem"), tcp_en_usage=d.get("inuse"))
+    except OSError:
+        pass
+    try:
+        n, m = int(compte.read_text()), int(maxi.read_text())
+        r.update(conntrack=n, conntrack_max=m, conntrack_pct=round(100 * n / m, 1) if m else None)
+    except (OSError, ValueError):
+        pass
+    return r
+
+
+def _ajouter(chemin: Path, objet: dict) -> None:
+    with open(chemin, "a", encoding="utf-8") as f:
+        f.write(json.dumps(objet, ensure_ascii=False) + "\n")
+
+
+def _bannir_wafctl(ip: str) -> tuple:
+    try:
+        r = subprocess.run(["/usr/sbin/wafctl", "ban", ip, BAN], capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError) as e:
+        return False, f"wafctl injoignable : {e}"
+    return r.returncode == 0, (r.stdout or r.stderr or "").strip()[:200]
+
+
+def tour(sortie_ss: str, *, etat: Path, journal: Path, seuil: int, bannir: Callable[[str], tuple],
+         impact_fn: Callable[[], dict], maintenant: int, ports_serveur: Optional[Set[int]] = None,
+         audit: Optional[Path] = None, observer: bool = False) -> dict:
+    try:
+        avant = json.loads(etat.read_text())
+    except (OSError, ValueError):
+        avant = {}
+    bannis = {ip: t for ip, t in (avant.get("bannis") or {}).items() if maintenant - t < REBAN_S}
+    trouves = suspects(par_adresse(sortie_ss, ports_serveur), seuil)
+    for s in trouves:
+        if s["ip"] in bannis:
+            s["etat"] = "deja_banni"
+            continue
+        detail = (f"{s['nombre']} connexions {'à fenêtre nulle' if s['motif'] == 'fenetre_nulle' else 'en clôture bloquée'}"
+                  f" sur {s['total']} ouvertes (seuil {seuil})")
+        if observer:
+            ok, message = False, "mode observation"
+        else:
+            ok, message = bannir(s["ip"])
+        s["etat"] = "banni" if ok else "non_banni"
+        if ok:
+            bannis[s["ip"]] = maintenant
+        try:
+            _ajouter(journal, {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(maintenant)),
+                               "client_ip": s["ip"], "host": "tcp", "method": "", "path": "",
+                               "category": "tcp_etats:" + s["motif"], "severity": "high",
+                               "rule_id": detail + ("" if ok else f" — non banni : {message}"),
+                               "action": "banned" if ok else "detect", "user_agent": "", "tool": "secubox-tcp-etats"})
+            if audit is not None and ok:
+                _ajouter(audit, {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(maintenant)),
+                                 "module": "hardening", "action": "tcp-etats-ban",
+                                 "detail": f"{s['ip']} {BAN} — {detail}", "by": "secubox-tcp-etats"})
+        except OSError as e:
+            print(f"secubox-tcp-etats : journal non écrit : {e}", file=sys.stderr)
+    releve = {"genere_le": maintenant, "seuil": seuil, "observation": observer, "suspects": trouves,
+              "impact": impact_fn(), "bannis": bannis}
+    etat.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=etat.parent, prefix=".etat-")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(releve, f, ensure_ascii=False)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, etat)
+    return releve
+
+
+def ports_en_ecoute() -> Set[int]:
+    sortie = subprocess.run(["ss", "-tlnH"], capture_output=True, text=True, timeout=20).stdout
+    return {p for ligne in sortie.splitlines() if len(ligne.split()) >= 4
+            for p in [_adresse(ligne.split()[3])[1]] if p > 0}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--seuil", type=int, default=SEUIL)
+    ap.add_argument("--observer", action="store_true", help="relever et journaliser sans bannir")
+    a = ap.parse_args()
+    ss = subprocess.run(["ss", "-tanio"], capture_output=True, text=True, timeout=30).stdout
+    r = tour(ss, etat=ETAT, journal=JOURNAL, seuil=max(5, a.seuil), bannir=_bannir_wafctl, impact_fn=impact,
+             maintenant=int(time.time()), ports_serveur=ports_en_ecoute(), audit=AUDIT, observer=a.observer)
+    for s in r["suspects"]:
+        print(f"secubox-tcp-etats : {s['ip']} {s['motif']} {s['nombre']}/{s['total']} → {s['etat']}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
