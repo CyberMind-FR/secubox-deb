@@ -192,7 +192,7 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 ## Mémoire des leurres de service (#3734)
 
 `sbx-authwatch` écrit une ligne `leurre:<service>` par connexion à un leurre (#3728). L'API du WAF les range dans
-`/var/lib/secubox/waf/leurres.db` (SQLite, 30 jours, ingestion à curseur toutes les 60 s et avant chaque lecture).
+`/var/lib/secubox-waf-leurres/leurres.db` (SQLite, répertoire 0700 `secubox`, 30 jours, ingestion à curseur toutes les 60 s et avant chaque lecture).
 Toutes les routes sont en `require_jwt` : les mots de passe tentés par les robots y sont **en clair**.
 
 | Route | Rend |

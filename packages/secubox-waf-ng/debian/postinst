@@ -150,6 +150,13 @@ PROTEGEES
     # retirer chaque ban aussitôt posé (motif « journal », gk2 le 14/11).
     _jai=/var/lib/secubox/waf/ai-ban.jsonl
     [ -f "$_jai" ] && [ ! -L "$_jai" ] && chmod 0660 "$_jai" || true
+    # Mémoire des leurres (#3734) : la 1.36.0/1.36.1 la posait dans /var/lib/secubox/waf, lisible par secubox-live.
+    # Elle vit désormais dans /var/lib/secubox-waf-leurres (0700 secubox, créé par tmpfiles ci-dessus) et se
+    # reconstruit depuis le journal des menaces.
+    rm -f /var/lib/secubox/waf/leurres.db /var/lib/secubox/waf/leurres.db-journal
+    if [ ! -d /var/lib/secubox-waf-leurres ] || [ -L /var/lib/secubox-waf-leurres ]; then
+      echo "secubox-waf-ng: ATTENTION — /var/lib/secubox-waf-leurres absent : la mémoire des leurres restera vide (systemd-tmpfiles --create secubox-waf-ng.conf)" >&2
+    fi
 
       # ── Secret HMAC des identifiants (#1240, corrélation multi-couche) ────────
       # authwatch apporte au graphe d'acteurs le COMPTE VISÉ — l'axe le plus

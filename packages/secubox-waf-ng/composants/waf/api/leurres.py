@@ -28,7 +28,7 @@ try:
 except ImportError:  # standalone
     from leurres_memoire import Memoire
 
-BASE = Path("/var/lib/secubox/waf/leurres.db")
+BASE = Path("/var/lib/secubox-waf-leurres/leurres.db")
 JOURNAL = Path(os.environ.get("SECUBOX_WAF_THREATS_LOG") or "/var/log/secubox/waf/waf-threats.log")
 _memoire = Memoire(BASE, JOURNAL)
 # Branchés par api.main : bans actifs (cache chaud), ban/levée par wafctl, audit.

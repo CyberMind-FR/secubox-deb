@@ -1,3 +1,13 @@
+secubox-waf-ng (1.36.2-1~trixie1) trixie; urgency=medium
+
+  * Mémoire des leurres déplacée dans /var/lib/secubox-waf-leurres (0700
+    secubox, tmpfiles) : dans /var/lib/secubox/waf, le chown -R du moteur la
+    rendait à secubox-waf et l'ACL du répertoire la laissait lisible par
+    secubox-live. L'ancienne base est retirée ; la mémoire se reconstruit
+    depuis le journal des menaces (ref #3734).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 12:20:00 +0100
+
 secubox-waf-ng (1.36.1-1~trixie1) trixie; urgency=medium
 
   * Mémoire des leurres, relecture de sécurité (ref #3734) : agrégats servis

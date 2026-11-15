@@ -127,3 +127,12 @@ def test_base_sans_entree_d_acl_nommee(c, tmp_path):
     except OSError:
         return
     raise AssertionError("la base porte une ACL d'accès")
+
+
+def test_base_dans_un_repertoire_propre_au_service():
+    from pathlib import Path
+    from api import leurres as lr
+    paquet = Path(__file__).resolve().parents[3]
+    assert str(lr.BASE) == "/var/lib/secubox-waf-leurres/leurres.db"
+    assert "d /var/lib/secubox-waf-leurres 0700 secubox secubox -" in (paquet / "tmpfiles.d" / "secubox-waf-ng.conf").read_text()
+    assert "rm -f /var/lib/secubox/waf/leurres.db" in (paquet / "debian" / "postinst").read_text()
