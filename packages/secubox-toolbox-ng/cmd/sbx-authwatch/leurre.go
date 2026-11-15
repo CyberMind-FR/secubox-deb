@@ -145,7 +145,7 @@ func EcouteLeurreAvecBanniere(ctx context.Context, l Leurre, signaux chan<- Sign
 		if !bannieres {
 			// Régime d'origine : on accepte, on note, on ferme.
 			_ = conn.Close()
-			emet(ctx, signaux, l, hote, "", 0)
+			emet(ctx, signaux, l, hote, Capture{})
 			continue
 		}
 
@@ -158,13 +158,12 @@ func EcouteLeurreAvecBanniere(ctx context.Context, l Leurre, signaux chan<- Sign
 			// Plafond atteint : on retombe sur le régime d'origine plutôt que
 			// de refuser le signal. Mieux vaut savoir moins que ne rien savoir.
 			_ = conn.Close()
-			emet(ctx, signaux, l, hote, "", 0)
+			emet(ctx, signaux, l, hote, Capture{})
 			continue
 		}
 		go func(c net.Conn, ip string) {
 			defer func() { <-jetons; _ = c.Close() }()
-			extrait, n := Echange(c, l.Service)
-			emet(ctx, signaux, l, ip, extrait, n)
+			emet(ctx, signaux, l, ip, Dialogue(c, l.Service))
 		}(conn, hote)
 	}
 }
@@ -172,20 +171,34 @@ func EcouteLeurreAvecBanniere(ctx context.Context, l Leurre, signaux chan<- Sign
 // emet pousse le signal, en y joignant ce que le client a dit s'il a dit
 // quelque chose. Le détail reste une PHRASE : l'extrait est déjà assaini par
 // resumeTrame, jamais des octets bruts.
-func emet(ctx context.Context, signaux chan<- Signal, l Leurre, ip, extrait string, n int) {
+func emet(ctx context.Context, signaux chan<- Signal, l Leurre, ip string, c Capture) {
 	detail := fmt.Sprintf("connexion sur un service inexistant (port %d)", l.Port)
-	if n > 0 {
-		detail = fmt.Sprintf("connexion sur un service inexistant (port %d) — "+
-			"première trame %d o : %s", l.Port, n, extrait)
+	if c.Agent != "" {
+		detail = fmt.Sprintf("%s sur un service inexistant (port %d)", c.Agent, l.Port)
 	}
-	select {
-	case signaux <- Signal{
+	switch {
+	case len(c.Essais) > 0:
+		// Le NOMBRE seulement : rule_id reste groupable et journald ne reçoit pas les couples, portés par `essais`.
+		detail += fmt.Sprintf(" — %d essai(s) d'identifiants", len(c.Essais))
+	case c.Octets > 0 && c.Extrait != "":
+		detail += fmt.Sprintf(" — première trame %d o : %s", c.Octets, c.Extrait)
+	case c.Octets > 0:
+		detail += fmt.Sprintf(" — %d o reçus", c.Octets)
+	}
+	sig := Signal{
 		IP:        ip,
 		Service:   l.Service,
 		Categorie: "leurre:" + l.Service,
 		Severite:  "high",
 		Detail:    detail,
-	}:
+		Essais:    c.Essais,
+		Client:    c.Client,
+		Agent:     c.Agent,
+	}
+	// Pas de `Cible` : le compte d'un leurre est choisi par le robot (root, admin…) ; haché vers sbx-actord, il relierait
+	// en un seul acteur tous les robots qui tentent « root ». Le journal le lit dans `essais`.
+	select {
+	case signaux <- sig:
 	case <-ctx.Done():
 	}
 }

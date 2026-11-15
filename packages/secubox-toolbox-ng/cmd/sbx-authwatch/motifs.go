@@ -35,6 +35,11 @@ type Signal struct {
 	Severite  string // "high" | "medium"
 	Detail    string // ce qui a ete reconnu, pour l'audit
 	Cible     string // compte vise, quand la ligne le porte (#1220)
+	// Leurres (#3728) : identifiants tentés (EN CLAIR, aucun service derrière),
+	// logiciel client déduit du protocole, profil du visiteur.
+	Essais []Essai
+	Client string
+	Agent  string
 }
 
 type motif struct {

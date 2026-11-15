@@ -13,12 +13,16 @@ Type=simple
 ExecStart=/usr/sbin/sbx-authwatch \
     --journaux hote,mail:/data/lxc/mail/rootfs/var/log/journal \
     --leurres defaut \
+    --leurre-bannieres \
     --comptes /data/volumes/mail/config/users \
     --services /etc/secubox/authwatch/services.json \
     --seuil 6 \
     --fenetre 10m \
     --duree-ban 4h \
     --liste-blanche-fichier /etc/secubox/authwatch/liste-blanche
+# #3728 : les leurres sont ouverts sur le WAN (secubox-hardening) ; le régime bannière tient la conversation juste
+# assez pour recevoir les identifiants des robots (telnet, redis, postgres, HTTP Basic, compte RDP), journalisés EN
+# CLAIR avec le client et le profil du visiteur : aucun service ni compte réel derrière ces ports.
 Restart=always
 RestartSec=10
 
