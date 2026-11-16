@@ -10,6 +10,11 @@ secubox-waf-ng (1.38.0-1~trixie1) trixie; urgency=medium
     (sélecteur 3 états, seuil et durée en après-N), changements en attente
     avec Appliquer/Annuler, leurres de service, hôtes PHP ; ?demo=1 sans
     écriture. Le panneau des catégories affiche le mode et le vrai total.
+  * Revue de sécurité (ref #3741) : wafctl audite chaque issue des
+    écritures (ok, refus, échec), ne crée plus /etc/secubox/authwatch ;
+    l'API audite l'intention avant et l'issue après ; touches 7 j par
+    tâche de fond (15 min), cache écrit atomiquement, la requête ne fait
+    que lire. Une bascule ne change jamais « enabled ».
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 06:00:00 +0100
 

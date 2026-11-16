@@ -12,6 +12,7 @@ secubox-toolbox-ng (0.17.0-1~trixie1) trixie; urgency=medium
     /etc/secubox/authwatch/leurres-modes.json (--leurres-modes), relu à
     chaud ; absent, illisible ou valeur inconnue : bannir (comportement
     d'origine). Un leurre observé est journalisé « detect » sans ban.
+  * postinst : /etc/secubox/authwatch en 0750 root:secubox (ref #3741).
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 06:00:00 +0100
 

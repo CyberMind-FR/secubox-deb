@@ -77,8 +77,10 @@ def test_lot_appel_exact_et_audit(c):
     argv, entree = c.ctl.appels[-1]
     assert argv == ["sudo", "-n", "/usr/sbin/secubox-cvectl", "waf-modes", "appliquer", "--apply", "--json"]
     assert entree == {"acteur": "admin", **lot}
-    a = json.loads(c.audit.read_text().splitlines()[-1])
-    assert a["action"] == "waf-modes" and "php2shell=escalate/3/24h" in a["detail"]
+    a = [json.loads(x) for x in c.audit.read_text().splitlines()]
+    assert [x["action"] for x in a] == ["waf-modes", "waf-modes"]
+    assert a[0]["detail"].startswith("intention ") and a[1]["detail"].startswith("ok ")
+    assert "php2shell=escalate/3/24h" in a[1]["detail"]
 
 
 @pytest.mark.parametrize("corps", [{"changements": []}, {"changements": [{"categorie": "x", "mode": "monitor"}]},
@@ -88,10 +90,44 @@ def test_lot_forme_refusee(c, corps):
     assert c.post("/categories/modes", json=corps).status_code == 422 and c.ctl.appels == []
 
 
-def test_mode_fixe_409_sans_audit_ok(c):
+def test_mode_fixe_409_intention_et_refus_audites(c):
     c.ctl.reponses[("secubox-cvectl", "waf-modes", "appliquer")] = (3, {"ok": False, "erreur": "mode fixé"})
     r = c.post("/category/product_absent_probes/mode", json={"mode": "block"})
-    assert r.status_code == 409 and not c.audit.exists()
+    assert r.status_code == 409
+    d = [json.loads(x)["detail"] for x in c.audit.read_text().splitlines()]
+    assert d[0].startswith("intention ") and d[1].startswith("refus 409")
+
+
+def test_audit_d_intention_impossible_rien_n_est_ecrit(c, monkeypatch):
+    def refuse(*a, **k):
+        raise OSError("disque plein")
+    monkeypatch.setitem(c.m._config, "audit", refuse)
+    r = c.post("/categories/modes", json={"changements": [{"categorie": "sqli", "mode": "detect"}]})
+    assert r.status_code == 500 and c.ctl.appels == []
+
+
+def test_audit_d_issue_impossible_ne_cache_pas_le_changement(c, monkeypatch):
+    vus = []
+
+    def audit(action, detail, user, lever=False):
+        vus.append(detail)
+        if detail.startswith("ok "):
+            raise OSError("disque plein")
+    monkeypatch.setitem(c.m._config, "audit", audit)
+    r = c.post("/categories/modes", json={"changements": [{"categorie": "sqli", "mode": "detect"}]})
+    assert r.status_code == 200 and vus[0].startswith("intention ")
+
+
+def test_stats7j_requete_lit_seulement_le_cache(c, monkeypatch, tmp_path):
+    assert c.get("/categories/stats7j").json() == {"categories": None, "robots_verifies": None, "etat": "calcul en cours"}
+    j = tmp_path / "waf-threats.log"
+    j.write_text(json.dumps({"timestamp": datetime.now(timezone.utc).isoformat(), "category": "sqli",
+                             "client_ip": "203.0.113.1", "action": "banned"}) + "\n")
+    monkeypatch.setitem(c.m._config, "journal", str(j))
+    monkeypatch.setitem(c.m._config, "liste_blanche", lambda: [])
+    c.m.rafraichir_stats7j()
+    assert c.get("/categories/stats7j").json()["categories"]["sqli"]["touches"] == 1
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".stats7j.")] == []
 
 
 def test_stats7j_faux_positifs_et_absence(c, tmp_path):
@@ -114,7 +150,8 @@ def test_leurres_modes(c):
     assert c.post("/leurres-service/modes", json={"modes": {"inconnu": "observer"}}).status_code == 422
     c.ctl.reponses[("wafctl", "leurres-modes", "ecrire")] = (0, {"ok": True, "modes": {"vnc": "observer"}})
     assert c.post("/leurres-service/modes", json={"modes": {"vnc": "observer"}}).status_code == 200
-    assert c.ctl.appels[-1] == (["sudo", "-n", "/usr/sbin/wafctl", "leurres-modes", "ecrire"], {"modes": {"vnc": "observer"}})
+    assert c.ctl.appels[-1] == (["sudo", "-n", "/usr/sbin/wafctl", "leurres-modes", "ecrire"],
+                                {"acteur": "admin", "modes": {"vnc": "observer"}})
 
 
 def test_php_hotes(c):
@@ -127,7 +164,7 @@ def test_php_hotes(c):
     assert not h["web.ex.fr"]["couvert"] and not h["web.ex.fr"]["explicite"]
     assert c.post("/php-hotes", json={"hotes": ["a;b"]}).status_code == 422
     assert c.post("/php-hotes", json={"hotes": ["Web.ex.fr"]}).status_code == 200
-    assert (["sudo", "-n", "/usr/sbin/wafctl", "php-hotes", "ecrire"], {"hotes": ["web.ex.fr"]}) in c.ctl.appels
+    assert (["sudo", "-n", "/usr/sbin/wafctl", "php-hotes", "ecrire"], {"acteur": "admin", "hotes": ["web.ex.fr"]}) in c.ctl.appels
 
 
 def test_sudoers_lignes_exactes():

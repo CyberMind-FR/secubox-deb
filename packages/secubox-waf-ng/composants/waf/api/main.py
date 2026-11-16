@@ -1010,7 +1010,7 @@ async def _warm_loop():
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
-    dernier_php = dernier_leurres = derniere_purge = 0.0
+    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = 0.0
     _leurres_panne = ""
     while True:
         try:
@@ -1037,6 +1037,12 @@ async def _warm_loop():
                 dernier_php = time.time()
             except Exception:
                 pass  # le relevé précédent reste servi ; la route annonce son âge
+        if time.time() - dernier_stats7j >= _modes.STATS7J_TTL:      # #3741 : touches 7 j par catégorie
+            try:
+                await asyncio.to_thread(_modes.rafraichir_stats7j)
+            except Exception as e:  # noqa: BLE001 — le cache précédent reste servi, repris au tour suivant
+                log.warning("stats7j : calcul en échec : %s", e)
+            dernier_stats7j = time.time()
         await asyncio.sleep(WAF_WARM_INTERVAL)
 
 

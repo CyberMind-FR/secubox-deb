@@ -31,6 +31,13 @@ case "$1" in
     if getent group actord-ingest >/dev/null 2>&1 && id secubox-toolbox >/dev/null 2>&1; then
       usermod -aG actord-ingest secubox-toolbox >/dev/null 2>&1 || true
     fi
+    # #3741 : /etc/secubox/authwatch porte leurres-modes.json (écrit par `wafctl leurres-modes`, root ; lu par
+    # sbx-authwatch, root sans CAP_DAC_OVERRIDE mais propriétaire). 0750 root:secubox, jamais ouvert à tous.
+    install -d -m 0750 -o root -g root /etc/secubox/authwatch
+    if getent group secubox >/dev/null 2>&1; then
+      chgrp secubox /etc/secubox/authwatch
+    fi
+    chmod 0750 /etc/secubox/authwatch
     # Intentionally NO `systemctl enable --now`. See the unit header and
     # debian/changelog: enabled only at the Phase 6 cutover.
 

@@ -19,14 +19,16 @@ est auditée avec `lever=True` : un changement fait dont l'audit manque rend 500
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import gzip
 import ipaddress
 import json
 import logging
+import os
 import re
 import subprocess
+import tempfile
 import threading
-import time
 from datetime import datetime, timedelta, timezone
 from glob import glob
 from pathlib import Path
@@ -47,7 +49,7 @@ _DELAI_S = 30
 _STATUTS = {2: 422, 3: 409, 4: 404}
 
 STATS7J_CACHE = Path("/var/lib/secubox/waf/stats7j-categories.json")
-STATS7J_TTL = 900                     # s : 15 min, recalcul sous verrou, en thread
+STATS7J_TTL = 900                     # s : période de la tâche de fond (main._warm_loop)
 MAILLAGE = ipaddress.ip_network("10.10.0.0/24")
 #: RFC 1918 + ULA (pas `is_private`, qui compte aussi les plages de documentation).
 PRIVES = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"))
@@ -96,10 +98,31 @@ def _acteur(user: dict) -> str:
 
 
 def _auditer(action: str, detail: str, user: dict) -> None:
+    """INTENTION, avant l'écriture : si elle n'est pas écrite, rien n'est fait (500)."""
     try:
         _config["audit"](action, detail, user, lever=True)
     except OSError:
         raise HTTPException(500, detail={"motif": "audit"}) from None
+
+
+def _auditer_issue(action: str, detail: str, user: dict) -> None:
+    """ISSUE, après l'écriture : l'intention est déjà tracée, un échec ici est journalisé sans défaire."""
+    try:
+        _config["audit"](action, detail, user, lever=True)
+    except OSError as e:
+        log.warning("modes : issue de %s non auditée : %s", action, e)
+
+
+def _ecrire(argv: List[str], entree: dict, action: str, detail: str, user: dict) -> dict:
+    """Écriture tracée : intention auditée, commande, puis issue (ok ou refus) auditée."""
+    _auditer(action, "intention " + detail, user)
+    try:
+        sortie = _ctl(argv, entree)
+    except HTTPException as e:
+        _auditer_issue(action, f"refus {e.status_code} {detail}", user)
+        raise
+    _auditer_issue(action, "ok " + detail, user)
+    return sortie
 
 
 # ── catégories ────────────────────────────────────────────────────────────
@@ -165,11 +188,9 @@ class UnMode(BaseModel):
 
 def _appliquer(lot: List[Changement], user: dict) -> dict:
     entree = {"acteur": _acteur(user), "changements": [c.model_dump(exclude_none=True) for c in lot]}
-    sortie = _ctl([CVECTL, "waf-modes", "appliquer", "--apply", "--json"], entree)
     detail = " ".join(f"{c.categorie}={c.mode}" + (f"/{c.ban_seuil}" if c.ban_seuil else "")
                       + (f"/{c.ban_duree}" if c.ban_duree else "") for c in lot)
-    _auditer("waf-modes", detail, user)
-    return sortie
+    return _ecrire([CVECTL, "waf-modes", "appliquer", "--apply", "--json"], entree, "waf-modes", detail, user)
 
 
 @router.post("/categories/modes")
@@ -241,27 +262,33 @@ def calculer_stats7j(chemins: List[str], maintenant: datetime, blanche: set) -> 
                     "privées ou de la liste blanche ; les robots vérifiés ne sont pas écrits au journal"}
 
 
-def stats7j() -> dict:
-    def frais():
-        try:
-            return time.time() - STATS7J_CACHE.stat().st_mtime < STATS7J_TTL
-        except OSError:
-            return False
+def rafraichir_stats7j() -> None:
+    """Appelé par la tâche de fond de main.py (toutes les STATS7J_TTL s) : calcul puis écriture atomique du cache."""
     with _verrou_stats:
-        if frais():
-            try:
-                return json.loads(STATS7J_CACHE.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                pass
         journal = _config.get("journal", "")
         blanche = {x.strip() for x in (_config.get("liste_blanche") or (lambda: []))() if x.strip()}
         data = calculer_stats7j(sorted(glob(journal + "*")), datetime.now(timezone.utc), blanche)
+        STATS7J_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=STATS7J_CACHE.parent, prefix=".stats7j.", suffix=".tmp")
         try:
-            STATS7J_CACHE.parent.mkdir(parents=True, exist_ok=True)
-            STATS7J_CACHE.write_text(json.dumps(data), encoding="utf-8")
-        except OSError as e:
-            log.warning("stats7j : cache non écrit : %s", e)
-        return data
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            os.replace(tmp, STATS7J_CACHE)
+        except BaseException:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp)
+            raise
+
+
+def stats7j() -> dict:
+    """Lecture SEULE du cache : la requête ne balaie jamais le journal."""
+    try:
+        return json.loads(STATS7J_CACHE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {"categories": None, "robots_verifies": None, "etat": "calcul en cours"}
+    except (OSError, ValueError) as e:
+        log.warning("stats7j : cache illisible : %s", e)
+        return {"categories": None, "robots_verifies": None, "etat": "calcul en cours"}
 
 
 @router.get("/categories/stats7j", dependencies=[Depends(require_lecture)])
@@ -288,8 +315,9 @@ def leurres_modes():
 
 @router.post("/leurres-service/modes")
 def leurres_modes_ecrire(corps: ModesLeurres, user: dict = Depends(require_jwt)):
-    sortie = _ctl([WAFCTL, "leurres-modes", "ecrire"], {"modes": dict(corps.modes)})
-    _auditer("waf-leurres-modes", " ".join(f"{k}={v}" for k, v in sorted(corps.modes.items())), user)
+    detail = " ".join(f"{k}={v}" for k, v in sorted(corps.modes.items()))
+    sortie = _ecrire([WAFCTL, "leurres-modes", "ecrire"], {"acteur": _acteur(user), "modes": dict(corps.modes)},
+                     "waf-leurres-modes", detail, user)
     return _leurres(sortie.get("modes") or {})
 
 
@@ -336,6 +364,6 @@ def php_hotes_ecrire(corps: HotesPHP, user: dict = Depends(require_jwt)):
     hotes = sorted({h.strip().lower() for h in corps.hotes})
     if any(not _HOTE.fullmatch(h) for h in hotes):
         raise HTTPException(422, detail={"motif": "hote"})
-    _ctl([WAFCTL, "php-hotes", "ecrire"], {"hotes": hotes})
-    _auditer("waf-php-hotes", "explicites " + (",".join(hotes) or "aucun"), user)
+    _ecrire([WAFCTL, "php-hotes", "ecrire"], {"acteur": _acteur(user), "hotes": hotes}, "waf-php-hotes",
+            "explicites " + (",".join(hotes) or "aucun"), user)
     return _hotes(_ctl([WAFCTL, "php-hotes", "lister"]))

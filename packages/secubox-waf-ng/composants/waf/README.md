@@ -68,11 +68,11 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 | `GET /api/v1/waf/categories` | `require_lecture` | mode, `ban_seuil`, `ban_duree`, `motifs`, `structurels`, `rules_count` (= motifs + structurels), `verrouille` ; `source` = `box` (cvectl) ou `paquet` (repli) |
 | `POST /api/v1/waf/categories/modes` | `require_jwt` | lot `{changements: [{categorie, mode, ban_seuil?, ban_duree?}]}` (1–40) → `secubox-cvectl waf-modes appliquer` ; 409 sur une catégorie générée (mode fixé) |
 | `POST /api/v1/waf/category/{cat}/mode` | `require_jwt` | un seul changement |
-| `GET /api/v1/waf/categories/stats7j` | `require_lecture` | touches 7 j par catégorie, faux positifs estimés (« local » = LAN + maillage, adresses privées, liste blanche) ; `robots_verifies: null` (absent du journal) ; journal absent → `categories: null` ; cache disque 15 min |
+| `GET /api/v1/waf/categories/stats7j` | `require_lecture` | touches 7 j par catégorie, faux positifs estimés (« local » = LAN + maillage, adresses privées, liste blanche) ; `robots_verifies: null` (absent du journal) ; journal absent → `categories: null` ; tâche de fond toutes les 15 min, cache écrit atomiquement, la requête lit seulement (`etat: calcul en cours` avant le premier passage) |
 | `GET/POST /api/v1/waf/leurres-service/modes` | lecture / `require_jwt` | `observer` ou `bannir` par leurre → `wafctl leurres-modes`, relu à chaud par sbx-authwatch |
 | `GET/POST /api/v1/waf/php-hotes` | lecture / `require_jwt` | vhosts, « conteneur PHP » `oui` (service PHP déclaré) ou `inconnu`, couvert, explicite ; l'écriture pose des motifs `^nom\.domaine$` dans `php_hotes` (`wafctl php-hotes`), jamais de cochage automatique |
 
-Le mode choisi est marqué `mode_choisi: true` : `waf-rules-sync` le garde aux mises à jour du paquet. Un contrôle
+Écritures : l'API audite l'intention avant et l'issue après ; `wafctl leurres-modes|php-hotes ecrire` audite lui-même chaque issue (ok, refus, échec), appel sudo direct compris. Une bascule ne touche jamais `enabled`. Le mode choisi est marqué `mode_choisi: true` : `waf-rules-sync` le garde aux mises à jour du paquet. Un contrôle
 structurel en `block` bannit l'adresse au premier constat (analyse après relais : ban immédiat, requêtes suivantes
 bloquées) ; en `escalate` il nourrit le compteur de la catégorie. Pas de fenêtre par catégorie (fenêtre escalate
 globale). sbxwaf relit à chaud tout `vhost_profiles.json` (pas seulement `php_hotes`) ; un fichier illisible au

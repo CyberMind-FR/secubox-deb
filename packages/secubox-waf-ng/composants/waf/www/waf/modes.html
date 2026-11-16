@@ -263,7 +263,7 @@
     Promise.all([jget('/categories'),jget('/categories/stats7j'),jget('/leurres-service/modes'),jget('/php-hotes')]).then(function(r){
       CATS=r[0]&&r[0].categories?r[0]:null;STATS=r[1];LEURRES=r[2]&&r[2].leurres?r[2]:null;HOTES=r[3]&&r[3].hotes?r[3]:null;
       Object.keys(ATTENTE).forEach(function(id){if(!CATS||!CATS.categories[id])delete ATTENTE[id];});
-      el('releve').textContent=(CATS&&CATS.source==='paquet'?'règles du paquet (état de la box indisponible) · ':'')+'relevé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+      el('releve').textContent=(CATS&&CATS.source==='paquet'?'règles du paquet (état de la box indisponible) · ':'')+(STATS&&STATS.etat?'touches 7 j : '+STATS.etat+' · ':'')+'relevé '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
       rendre();});
   }
 
