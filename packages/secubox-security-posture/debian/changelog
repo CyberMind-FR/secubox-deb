@@ -1,3 +1,11 @@
+secubox-security-posture (2.9.1-1~trixie1) trixie; urgency=medium
+
+  * cve-triage : « Synchroniser les flux » en tâche de fond (202 puis
+    GET /feeds/sync-status suivi par la page) ; le relais HTTP coupait à 504
+    alors que la synchronisation aboutissait (ref #3754).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 08:00:00 +0100
+
 secubox-security-posture (2.9.0-1~trixie1) trixie; urgency=medium
 
   * cve-triage : couverture WAF par CVE (ref #3751). GET /couverture-waf
