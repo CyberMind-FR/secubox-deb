@@ -22,6 +22,9 @@ secubox-security-posture (2.10.0-1~trixie1) trixie; urgency=medium
     descripteur de dossier, cache lu O_NOFOLLOW borné ; réponses CERT-FR et
     Nuclei bornées, un client par hôte ; routes réseau de l'API sur brouillon
     puis fusion courte (ref #3758).
+  * cve-triage : le brouillon des routes réseau copie (en profondeur)
+    l'inventaire des paquets, « Rechercher les vulnérabilités » retrouve ses
+    CVE ; le classement root lit au plus 500 avis de forme validée (ref #3758).
   * Dépend de python3-ijson et python3-defusedxml.
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 14:00:00 +0100
