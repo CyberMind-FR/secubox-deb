@@ -178,6 +178,13 @@
         async function refresh() {
             try {
                 const res = await http('/status');
+                if (res.status === 401) {   // #3762 : session absente (kiosque limité à la console, #3488) — pas une panne
+                    $('pastille').textContent = 'CONNEXION REQUISE'; $('pastille').className = 'actif hors';
+                    const retour = encodeURIComponent(location.pathname + location.search);
+                    $('ifaceList').innerHTML = '<div class="peer-note">🔒 Connexion requise pour lire l’état de WireGuard. <a href="/login.html?redirect=' + retour + '">Se connecter</a></div>';
+                    hauteur();
+                    return;
+                }
                 if (!res.ok) throw new Error('état ' + res.status);
                 statusData = await res.json();
                 renderStatus();
