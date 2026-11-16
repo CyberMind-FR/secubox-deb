@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-16 — Kiosque gk7 : « Connexion requise » au lieu d'« état illisible » ; gk6 hors ligne (ref #3762)
+
+- secubox-wireguard 1.3.2 (PR #3763) : un 401 sur /status (kiosque limité à la console, #3488) affiche « CONNEXION REQUISE » + lien de connexion. Installé sur gk7, tunnels intacts.
+- gk6 : /boot nettoyé (6.12.107 purgé, 39 %), passé en `MODULES=dep` (initrd 12,9 Mo, sauvegarde `initramfs.conf.avant-dep`) puis redémarré SANS initrd de secours → ne revient pas. Pas de console : récupération sur place (netboot, remettre MODULES=most). Généralisation suspendue ; agrandir /boot reste la piste sûre.
+
 ## 2026-11-16 — Rapatriement IMAP du conteneur mail : plus d'OOM (ref #3760)
 
 - `doveadm sync -1 -R imapc:` (INBOX distante ~307 000 messages) tué par le plafond 384M du conteneur mail à chaque passage (116 OOM, aucun succès en 3 jours).
