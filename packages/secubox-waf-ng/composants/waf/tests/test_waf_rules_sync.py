@@ -187,3 +187,18 @@ def test_sync_true_de_la_box_suit_le_livre_sur_nextcloud():
     vivant = {"categories": {**_livre_reel()["categories"]}}   # la box la porte active
     assert vivant["categories"]["nextcloud"]["enabled"] is True
     assert sync.fusionne(livre, vivant)["categories"]["nextcloud"]["enabled"] is False
+
+
+def test_le_mode_choisi_sur_la_box_est_garde_3741():
+    livre = {"categories": {"php2shell": cat("p-1", mode="detect"), "sqli": cat("s-1")}}
+    vivant = {"categories": {"php2shell": cat("p-0", mode="escalate", ban_seuil=3, ban_duree="24h", mode_choisi=True),
+                             "sqli": cat("s-0", mode="detect")}}
+    cats = sync.fusionne(livre, vivant)["categories"]
+    assert cats["php2shell"] == cat("p-1", mode="escalate", ban_seuil=3, ban_duree="24h", mode_choisi=True)
+    assert cats["sqli"] == cat("s-1")          # sans mode_choisi : la copie livrée fait foi
+
+
+def test_mode_choisi_et_enabled_false_cumules_3741():
+    livre = {"categories": {"x": cat("x-1", mode="detect", ban_seuil=2)}}
+    vivant = {"categories": {"x": cat("x-0", mode="block", mode_choisi=True, enabled=False)}}
+    assert sync.fusionne(livre, vivant)["categories"]["x"] == cat("x-1", mode="block", mode_choisi=True, enabled=False)

@@ -291,6 +291,7 @@
             });
         }
 
+        const MODE_LIB = { detect: 'détection', escalate: 'après N', block: 'immédiat' };
         function rendreCats() {
             const z = $('categoriesList'); z.replaceChildren();
             const c = CATS && CATS.categories ? Object.entries(CATS.categories) : [];
@@ -299,7 +300,7 @@
             c.forEach(([id, cat]) => {
                 const on = !!cat.enabled, b = el('button', 'cat ' + (on ? 'on' : 'off')); b.type = 'button'; b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on));
                 b.appendChild(el('b', '', cat.name || id));
-                const sp = el('span'); sp.append(tiret(cat.rules_count) + ' règles' + (cat.severity ? ' · ' + cat.severity : '') + (cat.owasp ? ' · ' + cat.owasp : '') + ' · ', el('i', '', on ? '✓ ACTIVE' : '✗ DÉSACTIVÉE')); b.appendChild(sp);
+                const sp = el('span'); sp.append(tiret(cat.rules_count) + ' règles' + (cat.structurels ? ' (dont ' + cat.structurels + ' structurels)' : '') + (cat.severity ? ' · ' + cat.severity : '') + (cat.owasp ? ' · ' + cat.owasp : '') + ' · ', el('i', '', on ? '✓ ACTIVE' + (cat.mode ? ' · ' + (MODE_LIB[cat.mode] || cat.mode) : '') : '✗ DÉSACTIVÉE')); b.appendChild(sp);
                 b.addEventListener('click', () => on ? demander('cat-off', id, 'Désactiver la catégorie « ' + (cat.name || id) + ' » ? Ses règles cesseront de s’appliquer.') : basculer(id, true));
                 z.appendChild(b);
             });

@@ -1,3 +1,11 @@
+secubox-security-posture (2.8.0-1~trixie1) trixie; urgency=medium
+
+  * cvectl waf-modes lister|appliquer : bascule du mode des catégories du
+    WAF par lot (ref #3741). valider() accepte un changement de mode,
+    ban_seuil ou ban_duree (jamais enabled) d'une catégorie non générée ; les
+    catégories générées restent à mode fixé. Lignes sudoers exactes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 06:00:00 +0100
 secubox-security-posture (2.7.1-1~trixie1) trixie; urgency=medium
 
   * Filtres du WAF proposés par l IA : plafonds réglables dans

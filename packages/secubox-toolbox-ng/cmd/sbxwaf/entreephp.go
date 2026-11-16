@@ -312,8 +312,10 @@ func (e *EntreePHP) Signaux() map[string]int {
 // capture-concurrence est écrite ici, après la réponse (passe finale M1),
 // même pour une requête non relayée, comme avant.
 //
-// MODE DETECT SEULEMENT : aucun appel au ban, à nft ni à l'escalade. La
-// gravité journalisée est celle de la signature ; elle part vers actord comme
+// SANCTION SELON LE MODE (#3741) : detect n'appelle ni le ban, ni nft, ni
+// l'escalade ; escalate nourrit le compteur de la catégorie (même seuil que
+// les motifs) ; block bannit l'adresse. La requête analysée est déjà relayée :
+// seul le ban protège des suivantes. La gravité journalisée est celle de la signature ; elle part vers actord comme
 // toute ligne du journal (une adresse privée reste « local », R12). Une ligne
 // d'état (tronque, malforme, limite) est d'une gravité « audit », qui ne
 // compte pas comme hostile.
@@ -403,17 +405,59 @@ func (s *Server) analyserRequetePHP(capt *captureCorps, genre genreCorps, e *Ent
 		}
 	}
 	for _, d := range detections {
+		action := s.sanctionStructurelle(rm.ip, d)
+		mode := d.Mode
+		if mode == "" {
+			mode = modeDetect
+		}
 		s.journaliserMultipart(rmp, ThreatRecord{
 			Category: d.Categorie, Severity: d.Severity, RuleID: d.RuleID,
-			Action: "detect", Mode: modeDetect, Signaux: signaux, Traits: traits,
+			Action: action, Mode: mode, Signaux: signaux, Traits: traits,
 		})
-		log.Printf("sbxwaf: DETECT %s rule=%s host=%s path=%s ip=%s",
-			d.Categorie, d.RuleID, rm.host, rm.path, rm.ip)
+		log.Printf("sbxwaf: %s %s rule=%s mode=%s host=%s path=%s ip=%s",
+			strings.ToUpper(action), d.Categorie, d.RuleID, mode, rm.host, rm.path, rm.ip)
 	}
 	if statutMultipart {
 		statut := "multipart-" + string(e.Multipart.Statut)
 		s.journaliserMultipart(rmp, ThreatRecord{
 			Category: statut, Severity: "audit", Action: statut, Signaux: signaux,
 		})
+	}
+}
+
+// sanctionStructurelle applique le mode de la catégorie d'une détection
+// structurelle et rend l'action journalisée (#3741) :
+//
+//	detect   → "detect", rien d'autre ;
+//	escalate → compteur de la catégorie (ban_seuil, sinon -escalate-threshold),
+//	           "banned" au franchissement du seuil, "detect" avant ;
+//	block    → ban immédiat de l'adresse, "banned". La requête est déjà
+//	           relayée (analyse après la réponse) : un 403 n'est plus possible,
+//	           le ban couvre les requêtes suivantes.
+//
+// Sans moteur de ban (tests, nftBan nil), l'action reste écrite telle quelle :
+// appliquerBan est un no-op.
+func (s *Server) sanctionStructurelle(ip string, d DetectionStructurelle) string {
+	switch d.Mode {
+	case modeBlock:
+		_, duree := s.rules.ParamsBan(d.Categorie)
+		s.appliquerBan(ip, d.Categorie, d.Severity, duree)
+		return "banned"
+	case modeEscalate:
+		seuil, duree := s.rules.ParamsBan(d.Categorie)
+		compteur := s.escalateBan
+		if compteur != nil && seuil > 0 {
+			compteur = s.compteurEscalate(d.Categorie, seuil)
+		}
+		if compteur == nil {
+			return "detect"
+		}
+		if _, banni := compteur.Record(ip, time.Now().Unix()); banni {
+			s.appliquerBan(ip, d.Categorie, d.Severity, duree)
+			return "banned"
+		}
+		return "detect"
+	default:
+		return "detect"
 	}
 }

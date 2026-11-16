@@ -1010,7 +1010,7 @@ async def _warm_loop():
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
-    dernier_php = dernier_leurres = derniere_purge = 0.0
+    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = 0.0
     _leurres_panne = ""
     while True:
         try:
@@ -1037,6 +1037,12 @@ async def _warm_loop():
                 dernier_php = time.time()
             except Exception:
                 pass  # le relevé précédent reste servi ; la route annonce son âge
+        if time.time() - dernier_stats7j >= _modes.STATS7J_TTL:      # #3741 : touches 7 j par catégorie
+            try:
+                await asyncio.to_thread(_modes.rafraichir_stats7j)
+            except Exception as e:  # noqa: BLE001 — le cache précédent reste servi, repris au tour suivant
+                log.warning("stats7j : calcul en échec : %s", e)
+            dernier_stats7j = time.time()
         await asyncio.sleep(WAF_WARM_INTERVAL)
 
 
@@ -1332,13 +1338,7 @@ def _ports_leurres() -> List[str]:
     return [p for p in candidats if p in ouverts and p not in echoues]
 
 
-@app.get("/categories", dependencies=[Depends(require_lecture)])
-async def get_categories():
-    """List all WAF categories with stats (public)."""
-    return {
-        "categories": _category_stats,
-        "total_rules": sum(c["rules_count"] for c in _category_stats.values()),
-    }
+# GET /categories : servi par api/modes.py (#3741) — mode, seuil, durée, motifs + structurels.
 
 
 @app.get("/rules", dependencies=[Depends(require_jwt)])
@@ -2284,3 +2284,14 @@ _leurres.configurer(bans=_bans_chauds, audit=_audit,
                     ban=lambda ip, duree: _vider_bans_chauds(_ban_ip(ip, duree, "leurre")),
                     unban=lambda ip: _vider_bans_chauds(_unban_ip(ip)))
 app.include_router(_leurres.router)
+
+
+# ── Page Modes (#3741) : mode par catégorie, touches 7 j, leurres de service, hôtes PHP ──
+try:
+    from api import modes as _modes
+except ImportError:  # standalone
+    import modes as _modes
+
+_modes.configurer(audit=_audit, journal=THREATS_LOG, regles_livrees=RULES_PATH,
+                  liste_blanche=lambda: (_cfg() or {}).get("whitelist", "127.0.0.1").split(","))
+app.include_router(_modes.router)

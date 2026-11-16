@@ -355,6 +355,167 @@ cmd_anti_robots() {
     fi
 }
 
+# ── Page Modes du WAF (#3741) ───────────────────────────────────────────
+# Deux réglages que l'API (User=secubox) ne peut pas écrire elle-même : le mode
+# des leurres de service (lu à chaud par sbx-authwatch) et les hôtes PHP cochés
+# (php_hotes de vhost_profiles.json, relu à chaud par sbxwaf). L'entrée vient
+# sur STDIN (JSON, 16 Kio au plus), jamais en argument : les lignes sudoers
+# restent exactes. Validation par liste blanche, écriture atomique (fichier
+# temporaire du même dossier, mode et propriétaire repris, os.replace).
+LEURRES_MODES="/etc/secubox/authwatch/leurres-modes.json"
+ROUTES_HAPROXY="/etc/secubox/waf/haproxy-routes.json"
+
+AUDIT_SECUBOX="/var/log/secubox/audit.log"
+
+# Préambule Python commun : audit de CHAQUE issue d'écriture (ok, refus, échec), écrit par wafctl lui-même pour
+# qu'un appel sudo direct soit tracé aussi. Ajout seul, jamais créé ici, jamais au travers d'un lien.
+# shellcheck disable=SC2016
+WAFCTL_PY_AUDIT='
+import json, os, stat, sys, time
+def auditer(action, resultat, detail, acteur):
+    ligne = json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "waf", "action": action,
+                        "result": resultat, "detail": str(detail)[:300], "acteur": acteur,
+                        "par": os.environ.get("SUDO_USER") or "root"}, ensure_ascii=False)
+    try:
+        fd = os.open(os.environ["WAFCTL_AUDIT"], os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError("pas un fichier régulier")
+            os.write(fd, (ligne + "\n").encode())
+        finally:
+            os.close(fd)
+    except OSError as e:
+        print(f"audit non écrit ({e}) : {ligne}", file=sys.stderr)
+def acteur_de(entree):
+    a = entree.get("acteur") if isinstance(entree, dict) else None
+    return a if isinstance(a, str) and 0 < len(a) <= 64 and all(c.isalnum() or c in "_.@-" for c in a) else "local"
+def sortir(action, code, message, acteur, detail=""):
+    auditer(action, "ok" if code == 0 else ("refus" if code == 2 else "echec"), message + (" " + detail if detail else ""), acteur)
+    print(json.dumps({"ok": code == 0, "code": code, "erreur": None if code == 0 else message}, ensure_ascii=False))
+    sys.exit(code)
+'
+
+cmd_leurres_modes() {
+    case "${1:-}" in
+        lister|ecrire) ;;
+        *) error "Usage: wafctl leurres-modes <lister|ecrire>  (ecrire : JSON sur stdin)"; return 1 ;;
+    esac
+    WAFCTL_AUDIT="$AUDIT_SECUBOX" python3 -I - "$1" "$LEURRES_MODES" "$WAFCTL_PY_AUDIT" 3<&0 <<'PY'
+import json, os, sys, tempfile
+verbe, chemin = sys.argv[1], sys.argv[2]
+exec(sys.argv[3])
+SERVICES = {"rdp", "vnc", "telnet", "smb", "mysql", "postgres", "redis", "mongodb", "elasticsearch", "mssql"}
+def lire():
+    try:
+        with open(chemin, encoding="utf-8") as f:
+            d = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        print(json.dumps({"ok": False, "code": 3, "erreur": f"illisible : {e}"})); sys.exit(3)
+    m = d.get("modes") if isinstance(d, dict) else None
+    return {k: v for k, v in (m or {}).items() if k in SERVICES and v in ("observer", "bannir")}
+if verbe == "lister":
+    print(json.dumps({"ok": True, "modes": lire(), "present": os.path.exists(chemin)})); sys.exit(0)
+brut = os.fdopen(3, "rb").read(16385)
+try:
+    entree = json.loads(brut.decode("utf-8")) if len(brut) <= 16384 else None
+except (UnicodeDecodeError, ValueError):
+    entree = None
+acteur = acteur_de(entree)
+modes = entree.get("modes") if isinstance(entree, dict) else None
+if not isinstance(modes, dict) or any(k not in SERVICES or v not in ("observer", "bannir") for k, v in modes.items()):
+    sortir("waf-leurres-modes", 2, "modes : {service connu: observer|bannir} attendu", acteur)
+detail = " ".join(f"{k}={v}" for k, v in sorted(modes.items()))
+dossier = os.path.dirname(chemin)
+if not os.path.isdir(dossier):
+    sortir("waf-leurres-modes", 3, f"dossier {dossier} absent (posé par secubox-toolbox-ng)", acteur, detail)
+tmp = None
+try:
+    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".leurres-modes.", suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump({"modes": dict(sorted(modes.items()))}, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+        f.flush()
+        os.fchmod(f.fileno(), 0o644)
+        os.fsync(f.fileno())
+    os.replace(tmp, chemin)
+except OSError as e:
+    if tmp and os.path.exists(tmp):
+        os.unlink(tmp)
+    sortir("waf-leurres-modes", 3, f"écriture impossible : {e}", acteur, detail)
+auditer("waf-leurres-modes", "ok", detail, acteur)
+print(json.dumps({"ok": True, "modes": lire()}))
+PY
+}
+
+cmd_php_hotes() {
+    case "${1:-}" in
+        lister|ecrire) ;;
+        *) error "Usage: wafctl php-hotes <lister|ecrire>  (ecrire : JSON sur stdin)"; return 1 ;;
+    esac
+    WAFCTL_AUDIT="$AUDIT_SECUBOX" python3 -I - "$1" "$PROFILS_VHOST" "$ROUTES_HAPROXY" "$WAFCTL_PY_AUDIT" 3<&0 <<'PY'
+import json, os, re, stat, sys, tempfile
+verbe, chemin, routes = sys.argv[1], sys.argv[2], sys.argv[3]
+exec(sys.argv[4])
+HOTE = re.compile(r"^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)+$")
+# Motif « explicite » : ^nom\.domaine$ exact, posé par ce verbe ; les autres motifs ne sont jamais touchés.
+EXPLICITE = re.compile(r"^\^[a-z0-9_-]+(\\\.[a-z0-9_-]+)+\$$")
+def motif(h):
+    return "^" + h.replace(".", "\\.") + "$"
+entree = None
+if verbe == "ecrire":
+    brut = os.fdopen(3, "rb").read(16385)
+    try:
+        entree = json.loads(brut.decode("utf-8")) if len(brut) <= 16384 else None
+    except (UnicodeDecodeError, ValueError):
+        entree = None
+acteur = acteur_de(entree)
+try:
+    with open(chemin, encoding="utf-8") as f:
+        profils = json.load(f)
+except (OSError, ValueError) as e:
+    if verbe == "lister":
+        print(json.dumps({"ok": False, "code": 3, "erreur": f"profils illisibles : {e}"})); sys.exit(3)
+    sortir("waf-php-hotes", 3, f"profils illisibles : {e}", acteur)
+if verbe == "lister":
+    try:
+        with open(routes, encoding="utf-8") as f:
+            r = json.load(f)
+        vhosts = sorted(k for k in r if isinstance(k, str)) if isinstance(r, dict) else []
+    except (OSError, ValueError):
+        vhosts = None
+    print(json.dumps({"ok": True, "vhosts": vhosts, "profils_vhosts": profils.get("vhosts") or {},
+                      "php_services": profils.get("php_services") or [],
+                      "php_hotes": [m for m in profils.get("php_hotes") or [] if isinstance(m, str)]}))
+    sys.exit(0)
+hotes = entree.get("hotes") if isinstance(entree, dict) else None
+if not isinstance(hotes, list) or len(hotes) > 200 or any(not isinstance(h, str) or not HOTE.fullmatch(h) for h in hotes):
+    sortir("waf-php-hotes", 2, "hotes : liste de noms d'hôte (200 au plus) attendue", acteur)
+detail = "explicites " + (",".join(sorted(set(hotes))) or "aucun")
+gardes = [m for m in profils.get("php_hotes") or [] if not (isinstance(m, str) and EXPLICITE.fullmatch(m))]
+profils["php_hotes"] = gardes + [motif(h) for h in sorted(set(hotes))]
+tmp = None
+try:
+    st = os.stat(chemin)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(chemin), prefix=".vhost_profiles.", suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(profils, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+        f.flush()
+        os.fchmod(f.fileno(), stat.S_IMODE(st.st_mode))
+        os.fchown(f.fileno(), st.st_uid, st.st_gid)
+        os.fsync(f.fileno())
+    os.replace(tmp, chemin)
+except OSError as e:
+    if tmp and os.path.exists(tmp):
+        os.unlink(tmp)
+    sortir("waf-php-hotes", 3, f"écriture impossible : {e}", acteur, detail)
+auditer("waf-php-hotes", "ok", detail, acteur)
+print(json.dumps({"ok": True, "explicites": sorted(set(hotes)), "php_hotes": profils["php_hotes"]}))
+PY
+}
+
 NFT_TABLE="secubox"
 
 # cmd_ban / cmd_unban — bannissement MANUEL depuis le tableau de bord (#1225).
@@ -662,6 +823,8 @@ case "${1:-}" in
     reload)     cmd_reload ;;
     purge-cache) cmd_purge_cache ;;
     anti-robots) cmd_anti_robots "${2:-}" "${3:-}" ;;
+    leurres-modes) cmd_leurres_modes "${2:-}" ;;
+    php-hotes)  cmd_php_hotes "${2:-}" ;;
     ban)        cmd_ban "${2:-}" "${3:-}" ;;
     unban)      cmd_unban "${2:-}" ;;
     ban-bloc)   shift; cmd_ban_bloc "$@" ;;
@@ -706,6 +869,10 @@ Compte de service ai-ban (root seulement, hors sudoers ; deux clés au plus) :
   cle-ai-ban lister                  Empreintes posées et leur validité
   cle-ai-filtres ajouter|retirer|lister   Idem pour le compte ai-filtres (#3732,
                                      /etc/secubox-comptes-service/ai-filtres)
+
+Page Modes (#3741, JSON sur stdin pour ecrire) :
+  leurres-modes lister|ecrire  Mode observer|bannir des leurres de service
+  php-hotes lister|ecrire      Hôtes PHP cochés (motifs ^nom\.domaine$ de php_hotes)
 
 Operations:
   logs [n]      Show last n log lines (default 50)

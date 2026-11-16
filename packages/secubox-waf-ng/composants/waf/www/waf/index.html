@@ -131,6 +131,7 @@
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="history">Historique</button>
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="campaigns">Campagnes</button>
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="decoys">Leurres</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="modes">Modes</button>
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="config">Configuration</button>
         </div>
 
@@ -303,6 +304,7 @@
             });
         }
 
+        const MODE_LIB = { detect: 'détection', escalate: 'après N', block: 'immédiat' };
         function rendreCats() {
             const z = $('categoryPills'); z.replaceChildren();
             const c = CATS && CATS.categories ? Object.entries(CATS.categories).sort((a, b) => (b[1].rules_count || 0) - (a[1].rules_count || 0)) : [];
@@ -311,7 +313,7 @@
             c.forEach(([id, cat]) => {
                 const on = cat.enabled !== false, b = el('button', 'cat ' + (on ? 'on' : 'off')); b.type = 'button'; b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on));
                 b.appendChild(el('b', '', cat.name || id));
-                const sp = el('span'); sp.append((cat.rules_count != null ? cat.rules_count : '—') + ' règles · ', el('i', '', on ? '✓ ACTIVE' : '✗ DÉSACTIVÉE')); b.appendChild(sp);
+                const sp = el('span'); sp.append((cat.rules_count != null ? cat.rules_count : '—') + ' règles' + (cat.structurels ? ' (dont ' + cat.structurels + ' structurels)' : '') + ' · ', el('i', '', on ? '✓ ACTIVE' + (cat.mode ? ' · ' + (MODE_LIB[cat.mode] || cat.mode) : '') : '✗ DÉSACTIVÉE')); b.appendChild(sp);
                 b.addEventListener('click', () => on ? demander('cat-off', id, 'Désactiver la catégorie « ' + (cat.name || id) + ' » ? Ses règles cesseront de s’appliquer.') : basculer(id, true));
                 z.appendChild(b);
             });
@@ -392,7 +394,7 @@
         $('rafraichir').addEventListener('click', () => { charger(); rechargerCadre(); });
 
         // ----- Onglets : pages autonomes encadrées (même origine) -----
-        const WAF_PAGES = { overview: 'menaces', attackers: 'attaquants', visits: 'visites', recon: 'surfaces', history: 'historique', campaigns: 'campagnes', decoys: 'leurres' };
+        const WAF_PAGES = { overview: 'menaces', attackers: 'attaquants', visits: 'visites', recon: 'surfaces', history: 'historique', campaigns: 'campagnes', decoys: 'leurres', modes: 'modes' };
         const ONGLETS = ['vue', 'config'].concat(Object.keys(WAF_PAGES));
         const suffixe = (embed) => (embed ? '?embed=1' : '') + (DEMO ? (embed ? '&' : '?') + 'demo=1' : '');
         function rechargerCadre() { const f = ONGLET === 'vue' ? $('vueFrame') : WAF_PAGES[ONGLET] ? $('pageFrame') : null; if (f && !DEMO) { try { f.contentWindow.location.reload(); } catch (e) { /* sans objet */ } } }

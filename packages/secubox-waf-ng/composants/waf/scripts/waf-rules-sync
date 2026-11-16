@@ -47,6 +47,21 @@ def _desactivee_box(cat) -> bool:
     return isinstance(cat, dict) and cat.get("enabled") is False
 
 
+#: Champs du mode choisi par l'opérateur depuis la page Modes (#3741, `mode_choisi: true`).
+CHAMPS_MODE = ("mode", "ban_seuil", "ban_duree", "mode_choisi")
+
+
+def _mode_choisi_box(cat) -> bool:
+    return isinstance(cat, dict) and cat.get("mode_choisi") is True
+
+
+def _avec_mode_box(livree: dict, box: dict) -> dict:
+    """La catégorie livrée, avec le mode, le seuil et la durée choisis sur la box (absents = retirés)."""
+    out = {k: v for k, v in livree.items() if k not in CHAMPS_MODE}
+    out.update({k: box[k] for k in CHAMPS_MODE if k in box})
+    return out
+
+
 def ecarts_enabled(livre: dict, vivant: dict) -> list:
     """Catégories livrées (non générées), actives dans la copie livrée, que la
     box a désactivées : le « false » gardé, à auditer. [(nom, False, True)]."""
@@ -71,10 +86,12 @@ def fusionne(livre: dict, vivant: dict) -> dict:
     for nom, cat in livre.get("categories", {}).items():
         if isinstance(cat, dict) and cat.get("generated") and nom in cats_v:
             cats[nom] = cats_v[nom]          # tenue à chaud par wafgen
-        elif isinstance(cat, dict) and _desactivee_box(cats_v.get(nom)):
-            cats[nom] = {**cat, "enabled": False}    # désactivée par l'opérateur (R14, R16)
         else:
             cats[nom] = cat
+            if isinstance(cat, dict) and _desactivee_box(cats_v.get(nom)):
+                cats[nom] = {**cat, "enabled": False}    # désactivée par l'opérateur (R14, R16)
+            if isinstance(cat, dict) and _mode_choisi_box(cats_v.get(nom)):
+                cats[nom] = _avec_mode_box(cats[nom], cats_v[nom])   # mode basculé depuis la page (#3741)
     for nom, cat in cats_v.items():
         if nom not in cats and isinstance(cat, dict) and cat.get("generated"):
             cats[nom] = cat                  # générée, absente du paquet

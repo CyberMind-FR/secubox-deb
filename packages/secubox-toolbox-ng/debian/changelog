@@ -1,3 +1,21 @@
+secubox-toolbox-ng (0.17.0-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf : contrôles structurels dans les trois modes (ref #3741). En
+    escalate, une touche nourrit le compteur de la catégorie (ban_seuil,
+    sinon -escalate-threshold) ; en block, elle bannit l'adresse (la requête
+    analysée est déjà relayée, le ban couvre les suivantes). Chaque touche
+    est écrite au journal des menaces avec son action et son mode.
+  * sbxwaf : vhost_profiles.json relu à chaud (mtime) : un hôte coché dans
+    php_hotes est couvert sans redémarrer ; un fichier illisible garde les
+    profils précédents.
+  * sbx-authwatch : réglage observer|bannir par leurre de service dans
+    /etc/secubox/authwatch/leurres-modes.json (--leurres-modes), relu à
+    chaud ; absent, illisible ou valeur inconnue : bannir (comportement
+    d'origine). Un leurre observé est journalisé « detect » sans ban.
+  * postinst : /etc/secubox/authwatch en 0750 root:secubox (ref #3741).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 06:00:00 +0100
+
 secubox-toolbox-ng (0.16.0-1~trixie1) trixie; urgency=medium
 
   * sbxwaf : seuil et durée de ban par catégorie escalate (ref #3732).
