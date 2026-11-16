@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-16 — Veille CVE : profils AppArmor des relevés, lot 1 en complain (ref #3766)
+
+- security-posture 2.10.2 : `secubox-cve-releves` (certfr, certfr-nuclei, flux, paquets) et `secubox-cve-certfr-classer`, complain, chargés au postinst. Chaîne CERT-FR en succès sur gk2, profils attachés.
+- **Lot 2 (après le 17/11)** : relire `audit.log` (événements ALLOWED : menu.d, nsswitch, …), compléter, passer en enforce.
+
 ## 2026-11-16 — Filtres IA : plus jamais de filtre sur nos propres pages (ref #3764)
 
 - Faux positif latent : ia-cve-2021-20021-58165c (chemin_exact `/login.html`) bannissait 7 j toute visite de la page de connexion. Retiré sur gk2 (`cvectl filtres-ia retirer`, audit) ; les 571 restants confrontés à 2 237 chemins servis : aucun autre.
