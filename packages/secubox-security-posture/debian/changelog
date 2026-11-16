@@ -1,3 +1,34 @@
+secubox-security-posture (2.10.0-1~trixie1) trixie; urgency=medium
+
+  * cve-triage : relevés planifiés par minuteries systemd (compte secubox,
+    sans sudo) : veille CERT-FR toutes les heures, KEV + NVD 7 j + EPSS et
+    « vos paquets » toutes les 6 h ; verrou partagé avec l'API (un clic et
+    un relevé ne tournent jamais ensemble), écritures atomiques, une source
+    en panne garde ses données (ref #3758).
+  * cve-triage : nouvelles sources sans clé, Debian Security Tracker (JSON
+    téléchargé borné et conditionnel, lu en flux par python3-ijson, suite
+    trixie) et OSV.dev (querybatch, détails en cache) : CVE encore ouvertes
+    pour la version installée dans paquets-vulns.json, GET
+    /paquets/vulnerables, section « Vos paquets » de l'onglet Paquets ;
+    la tuile « Vous concernent » de la couverture les compte (ref #3758).
+  * cve-triage : les relevés font tout le réseau hors verrou de la base et ne
+    la verrouillent que pour relire, fusionner, écrire ; toute route qui écrit
+    la base attend ce verrou 10 s au plus (409 seulement au-delà) et relit
+    les fichiers changés avant de modifier ;
+    pagination OSV suivie (10 pages par requête) ; taille du JSON du
+    tracker journalisée ; flux CERT-FR lu par defusedxml (ref #3758).
+  * cve-triage : classement CERT-FR root dans sa propre unité sans réseau
+    (OnSuccess=), état écrit par temporaire aléatoire O_EXCL|O_NOFOLLOW sous
+    descripteur de dossier, cache lu O_NOFOLLOW borné ; réponses CERT-FR et
+    Nuclei bornées, un client par hôte ; routes réseau de l'API sur brouillon
+    puis fusion courte (ref #3758).
+  * cve-triage : le brouillon des routes réseau copie (en profondeur)
+    l'inventaire des paquets, « Rechercher les vulnérabilités » retrouve ses
+    CVE ; le classement root lit au plus 500 avis de forme validée (ref #3758).
+  * Dépend de python3-ijson et python3-defusedxml.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 14:00:00 +0100
+
 secubox-security-posture (2.9.1-1~trixie1) trixie; urgency=medium
 
   * cve-triage : « Synchroniser les flux » en tâche de fond (202 puis
