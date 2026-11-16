@@ -1,3 +1,12 @@
+secubox-security-posture (2.10.2-1~trixie1) trixie; urgency=medium
+
+  * Veille CVE : profils AppArmor des relevés planifiés, en mode complain
+    (journalisent sans bloquer) — secubox-cve-releves (certfr, certfr-nuclei,
+    flux, paquets) et secubox-cve-certfr-classer. Enforce au lot suivant,
+    d'après le journal d'audit (#3766).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 12:53:24 +0100
+
 secubox-security-posture (2.10.1-1~trixie1) trixie; urgency=medium
 
   * Filtres IA : nouveau motif de rejet « secubox » — un filtre qui touche une

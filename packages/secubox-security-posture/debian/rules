@@ -60,6 +60,8 @@ override_dh_auto_install:
 	install -D -m 644 composants/cve-triage/debian/secubox-cve-paquets.service debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-paquets.service
 	install -D -m 644 composants/cve-triage/debian/secubox-cve-paquets.timer debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-paquets.timer
 	install -D -m 644 composants/cve-triage/apparmor/secubox-cve-leurres debian/secubox-security-posture/etc/apparmor.d/secubox-cve-leurres
+	install -D -m 644 composants/cve-triage/apparmor/secubox-cve-releves debian/secubox-security-posture/etc/apparmor.d/secubox-cve-releves
+	install -D -m 644 composants/cve-triage/apparmor/secubox-cve-certfr-classer debian/secubox-security-posture/etc/apparmor.d/secubox-cve-certfr-classer
 	# Composant absorbé : antirootkit (#2050)
 	# Install API module (as composants/antirootkit/api/ subdirectory for uvicorn api.main:app)
 	install -d $(CURDIR)/debian/secubox-security-posture/usr/lib/secubox/antirootkit/api
