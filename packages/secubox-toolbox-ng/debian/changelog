@@ -8,6 +8,10 @@ secubox-toolbox-ng (0.17.0-1~trixie1) trixie; urgency=medium
   * sbxwaf : vhost_profiles.json relu à chaud (mtime) : un hôte coché dans
     php_hotes est couvert sans redémarrer ; un fichier illisible garde les
     profils précédents.
+  * sbx-authwatch : réglage observer|bannir par leurre de service dans
+    /etc/secubox/authwatch/leurres-modes.json (--leurres-modes), relu à
+    chaud ; absent, illisible ou valeur inconnue : bannir (comportement
+    d'origine). Un leurre observé est journalisé « detect » sans ban.
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 06:00:00 +0100
 

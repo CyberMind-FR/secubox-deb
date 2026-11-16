@@ -83,7 +83,9 @@ func main() {
 				"fire-and-forget (\"\" = désactivée)")
 		acteurSecret = flag.String("credential-secret", "/etc/secubox/secrets/actor-credential",
 			"secret HMAC des identifiants : le compte visé est haché, jamais émis en clair")
-		simule    = flag.Bool("simulation", false, "détecter et journaliser sans jamais bannir")
+		simule = flag.Bool("simulation", false, "détecter et journaliser sans jamais bannir")
+		modesF = flag.String("leurres-modes", "/etc/secubox/authwatch/leurres-modes.json",
+			"réglage observer|bannir par leurre (#3741), relu à chaud ; absent = tous bannissent")
 		sansGarde = flag.Bool("sans-verification-nft", false,
 			"démarrer même si aucune règle ne consulte l'ensemble (DANGEREUX : les bannissements seraient sans effet)")
 	)
@@ -202,6 +204,7 @@ func main() {
 	}()
 
 	// ── leurres ────────────────────────────────────────────────────────────
+	modesLeurres = NewModesLeurres(*modesF)
 	listeLeurres, err := AnalyseLeurres(*leurres)
 	if err != nil {
 		log.Fatalf("sbx-authwatch: %v", err)
@@ -289,6 +292,12 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 			// Un leurre est un signal CERTAIN : pas de compteur, pas de
 			// patience — personne ne se connecte a un service inexistant.
 			if strings.HasPrefix(sig.Categorie, "leurre:") {
+				// #3741 : un leurre réglé « observer » journalise sans bannir.
+				if modesLeurres.Observe(sig.Service) {
+					journal.Inscrit(sig, "detect", 1)
+					acteur.Emet(sig, false)
+					continue
+				}
 				appliquer(ctx, sig, 1, banneur, journal, simule)
 				acteur.Emet(sig, !simule) // signal certain : sanction, sauf simulation
 				continue
