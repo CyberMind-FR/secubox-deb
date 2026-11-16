@@ -134,6 +134,8 @@ type DetectionStructurelle struct {
 	RuleID    string
 	Severity  string
 	CVE       string
+	// Mode (#3741) : mode de la catégorie (detect, escalate, block).
+	Mode string
 }
 
 // parametreRequis donne, par controle connu, le parametre entier obligatoire
@@ -213,9 +215,10 @@ func compileStructurel(brut json.RawMessage, mode string) (signatureStructurelle
 	if sj.ID == "" {
 		return signatureStructurelle{}, "", errStructurel("id vide")
 	}
-	if mode != modeDetect {
-		return signatureStructurelle{}, sj.ID, errStructurel("categorie en mode " + mode + " : l'analyse en flux ne peut que detecter")
-	}
+	// #3741 : une signature structurelle se charge dans les trois modes. Elle
+	// est évaluée APRÈS le relais (la requête a déjà atteint le backend) : en
+	// escalate elle nourrit le compteur de la catégorie, en block elle bannit
+	// l'adresse (analyserRequetePHP). Le mode n'est plus un motif de rejet.
 	requis, connu := parametreRequis[sj.Check]
 	if !connu {
 		return signatureStructurelle{}, sj.ID, errStructurel("controle inconnu " + strconv.Quote(sj.Check))
@@ -954,8 +957,8 @@ func (r *Rules) EvaluerStructurel(res ResultatMultipart) []DetectionStructurelle
 
 // EvaluerPHP rend toutes les signatures structurelles qui declenchent sur
 // l'entree : categories activees dans l'ordre du fichier, puis signatures dans
-// l'ordre, filtrees par service. Pur et sans effet de bord ; ne bloque rien
-// (mode detect seulement).
+// l'ordre, filtrees par service. Pur et sans effet de bord ; la sanction selon
+// le mode porté par chaque détection est décidée par l'appelant (#3741).
 func (r *Rules) EvaluerPHP(e *EntreePHP) []DetectionStructurelle {
 	r.mu.RLock()
 	cur := r.current
@@ -969,6 +972,7 @@ func (r *Rules) EvaluerPHP(e *EntreePHP) []DetectionStructurelle {
 			if s.visePHP(e.Service) && s.declenche(e) {
 				out = append(out, DetectionStructurelle{
 					Categorie: c.id, RuleID: s.id, Severity: s.severity, CVE: s.cve,
+					Mode: c.data.mode,
 				})
 			}
 		}

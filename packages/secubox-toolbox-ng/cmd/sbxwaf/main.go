@@ -51,6 +51,7 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/emit"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reload"
 	"golang.org/x/net/http/httpguts"
 )
 
@@ -163,6 +164,9 @@ type Server struct {
 	// supprimée POUR ce vhost seulement. Nil = phase G désactivée (opt-in via
 	// --vhost-profiles) ; la détection Phase F reste alors strictement inchangée.
 	vhostProfiles *VhostProfiles
+	// vhostProfilesWatch (#3741) : relecture à chaud de vhost_profiles.json
+	// (php_hotes coché depuis la page Modes). Nil = pas de fichier.
+	vhostProfilesWatch *reload.Watcher
 
 	// maxBodyInspect is the per-request body inspection cap in bytes.
 	// Only the first maxBodyInspect bytes of the request body are passed to
@@ -348,6 +352,9 @@ func (s *Server) handler() http.Handler {
 		// swap is race-safe (go test -race clean). Same one-stat cost as routes.
 		if s.rules != nil {
 			s.rules.Maybe()
+		}
+		if s.vhostProfilesWatch != nil {
+			s.vhostProfilesWatch.Maybe()
 		}
 		// #896: same hot-reload check for the on-demand vhosts set — an operator
 		// flipping a service to/from on-demand must take effect without
@@ -1475,6 +1482,9 @@ func main() {
 			log.Printf("sbxwaf: vhost-profiles chargé → %s (phase G active)", *vhostProfiles)
 		}
 	}
+	// #3741 : relecture à chaud, seulement si le premier chargement a réussi
+	// (sinon la phase G reste désactivée jusqu'au redémarrage, comme avant).
+	profilsWatch := surveillerVhostProfiles(*vhostProfiles, profils)
 	// #3257 (I3) : ce que couvre la capture PHP2Shell, dit une fois au démarrage.
 	log.Print(ligneArmementPHP(profils))
 
@@ -1511,7 +1521,8 @@ func main() {
 		leurre:      construitLeurre(*honeypot, *honeypotSecret),
 		ja4Header:   *ja4Header,
 		// #1080 phase G: profils de service par vhost (nil = désactivé).
-		vhostProfiles: profils,
+		vhostProfiles:      profils,
+		vhostProfilesWatch: profilsWatch,
 		// Task 5.1: RGPD cookie-audit ledger.
 		cookieAudit: cookieAudit,
 		// Task 6.1: response media cache.
