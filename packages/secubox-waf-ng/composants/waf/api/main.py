@@ -1010,7 +1010,7 @@ async def _warm_loop():
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
-    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = 0.0
+    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = 0.0
     _leurres_panne = ""
     while True:
         try:
@@ -1043,6 +1043,12 @@ async def _warm_loop():
             except Exception as e:  # noqa: BLE001 — le cache précédent reste servi, repris au tour suivant
                 log.warning("stats7j : calcul en échec : %s", e)
             dernier_stats7j = time.time()
+        if time.time() - dernier_filtres_ia >= _filtres_ia_vue.CACHE_TTL:   # #3748 : onglet Filtres IA
+            try:
+                await asyncio.to_thread(_filtres_ia_vue.rafraichir)
+            except Exception as e:  # noqa: BLE001 — le cache précédent reste servi, repris au tour suivant
+                log.warning("filtres-ia : calcul en échec : %s", e)
+            dernier_filtres_ia = time.time()
         await asyncio.sleep(WAF_WARM_INTERVAL)
 
 
@@ -2295,3 +2301,20 @@ except ImportError:  # standalone
 _modes.configurer(audit=_audit, journal=THREATS_LOG, regles_livrees=RULES_PATH,
                   liste_blanche=lambda: (_cfg() or {}).get("whitelist", "127.0.0.1").split(","))
 app.include_router(_modes.router)
+
+
+# ── Onglet Filtres IA (#3748) : filtres de l'IA en vigueur, touches, bans, recoupement avec les leurres ──
+try:
+    from api import filtres_ia_vue as _filtres_ia_vue
+except ImportError:  # standalone
+    import filtres_ia_vue as _filtres_ia_vue
+
+
+def _leurres_par_adresse() -> Dict[str, List[str]]:
+    _leurres.ingerer()
+    return {a["ip"]: a["services"] for a in _leurres._memoire.attaquants(int(time.time()), limite=1_000_000)}
+
+
+_filtres_ia_vue.configurer(audit=_audit, journal=THREATS_LOG, bans=_bans_chauds, leurres=_leurres_par_adresse,
+                           liste_blanche=lambda: (_cfg() or {}).get("whitelist", "127.0.0.1").split(","))
+app.include_router(_filtres_ia_vue.router)

@@ -1,3 +1,11 @@
+secubox-security-posture (2.8.1-1~trixie1) trixie; urgency=medium
+
+  * cvectl filtres-ia retirer accepte un administrateur pour acteur (motif
+    ACTEUR_RE) : retrait depuis l'onglet Filtres IA du WAF (ref #3748).
+    appliquer reste réservé au compte de service ai-filtres.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 12:00:00 +0100
+
 secubox-security-posture (2.8.0-1~trixie1) trixie; urgency=medium
 
   * cvectl waf-modes lister|appliquer : bascule du mode des catégories du
