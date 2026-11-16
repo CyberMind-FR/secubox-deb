@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-16 — Filtres IA chargés en grand, bascule des modes du WAF, pages Filtres IA et Couverture, réveil de Gitea (ref #3741, #3745, #3747, #3748, #3751)
+
+- **Filtres IA (#3732, #3745)** : clé `ai-filtres` enregistrée sur gk2 (empreinte 0af440ac…), onglet « Filtres WAF » dans le relais gk0 (tour à la demande, interrupteur horaire `filtres-auto.json`, journal descriptif). Plafonds réglables `[filtres_ia]` de `/etc/secubox/cve-triage.toml` (security-posture 2.7.1) : amorçage à 700/h puis retour à 10/50 ; **572 filtres appliqués** (256 critiques, 223 hautes, 93 moyennes, 102 KEV), 105 écartés (100 déjà couverts, 5 présents). Tour horaire allumé.
+- **#3741 — page « Modes »** (security-posture 2.8.0, toolbox-ng 0.17.0, waf-ng 1.38.0, PR #3749) : mode par catégorie avec `mode_choisi` gardé aux mises à jour, contrôles structurels en escalate/block et au journal des menaces, leurres de service observer/bannir, hôtes PHP cochés à la main. Catégories PHP laissées en détection : bascule par le propriétaire après une semaine de mesure (Nextcloud 3 touches/24 h, les autres immédiat).
+- **#3748 — onglet « Filtres IA » du WAF** (waf-ng 1.39.0, security-posture 2.8.1, PR #3752) : tuiles, chaîne, filtres touchés, radar commun avec les leurres, retrait d'un filtre par l'administrateur (cvectl : retrait seulement).
+- **#3751 — couverture WAF par CVE dans cve-triage** (security-posture 2.9.0, PR #3753) : colonne Protection WAF et onglet Couverture ; agrégateur relancé une fois (route servie en processus). Premier relevé : 618 CVE couvertes, 114/1769 KEV.
+- **#3747 — Gitea en veille réveillé toutes les 4 h** pour ses miroirs (secubox-gitea 1.8.0, PR #3750).
+- couture.gk2 : planning du créneau choisi (prénoms, réservés seulement), ZIP `atelier-partage-5.zip`. DMARC `_dmarc.cybermind.fr` posé par le propriétaire chez Gandi.
+- Constats : `wg-quick@wg-mesh` en échec depuis le 30/10 (maillage actif par ailleurs) ; sonde locale `/health` en 301.
+
 ## 2026-11-15 — Maillage distant : nœud hors du LAN vers le WAN de gk2, Freebox réglée par secubox-freebox (ref #3742)
 
 - Constat : gk7 (autre maison) sans tunnel `wg-mesh` ; tous les pairs déclarés avec un Endpoint LAN, aucune adresse
