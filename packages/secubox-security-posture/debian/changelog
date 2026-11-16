@@ -1,3 +1,12 @@
+secubox-security-posture (2.7.1-1~trixie1) trixie; urgency=medium
+
+  * Filtres du WAF proposés par l IA : plafonds réglables dans
+    /etc/secubox/cve-triage.toml [filtres_ia] plafond_heure (1..1000) et
+    plafond_jour (1..5000), défauts 10 et 50 ; valeur invalide = défaut
+    (ref #3745).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 07:00:00 +0100
+
 secubox-security-posture (2.7.0-1~trixie1) trixie; urgency=medium
 
   * Filtres du WAF proposés par l IA : module filtres_ia (forme, gravité,
