@@ -53,6 +53,8 @@ override_dh_auto_install:
 	install -D -m 644 composants/cve-triage/debian/secubox-cve-leurres.timer debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-leurres.timer
 	install -D -m 644 composants/cve-triage/debian/secubox-cve-certfr.service debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-certfr.service
 	install -D -m 644 composants/cve-triage/debian/secubox-cve-certfr.timer debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-certfr.timer
+	install -D -m 644 composants/cve-triage/debian/secubox-cve-certfr-classer.service debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-certfr-classer.service
+	install -D -m 644 composants/cve-triage/debian/secubox-cve-certfr-nuclei.service debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-certfr-nuclei.service
 	install -D -m 644 composants/cve-triage/debian/secubox-cve-flux.service debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-flux.service
 	install -D -m 644 composants/cve-triage/debian/secubox-cve-flux.timer debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-flux.timer
 	install -D -m 644 composants/cve-triage/debian/secubox-cve-paquets.service debian/secubox-security-posture/usr/lib/systemd/system/secubox-cve-paquets.service
