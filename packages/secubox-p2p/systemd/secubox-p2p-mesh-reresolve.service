@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+[Unit]
+Description=SecuBox P2P — re-résout le nom d'un pair wg-mesh muet (nœud mobile, #3755)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/sbx-mesh-reresolve

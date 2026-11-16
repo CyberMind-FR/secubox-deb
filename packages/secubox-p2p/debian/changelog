@@ -1,3 +1,13 @@
+secubox-p2p (1.24.0-1~trixie1) trixie; urgency=medium
+
+  * Nœud mobile (#3755) : sbx-mesh-reresolve + minuterie (chaque minute)
+    re-résout l'endpoint NOMMÉ d'un pair muet depuis plus de 150 s (WireGuard
+    ne le fait qu'au chargement) ; postinst désactive wg-quick@wg-mesh resté
+    activé (course au démarrage avec secubox-p2p-mesh) ; commentaire de
+    p2p.toml.example corrigé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 08:30:00 +0100
+
 secubox-p2p (1.23.2-1~trixie1) trixie; urgency=medium
 
   * Nœud distant (ref #3742) : un PersistentKeepalive en chaîne numérique (« 25 ») dans un état

@@ -14,8 +14,9 @@ network        = "10.10.0.0/24"
 role           = "satellite"
 
 # Satellite only: where to reach the active rendezvous. Free-form host:port —
-# a literal IP (pinned now) or a DDNS name (WireGuard re-resolves per
-# handshake, so the rendezvous can change IP without reconfiguring peers).
+# a literal IP (pinned now) or a DDNS name. WireGuard resolves a name only when the
+# config is loaded: sbx-mesh-reresolve (timer, every minute) re-resolves it when the
+# peer is silent for > 150 s, so the rendezvous can change IP (#3755).
 master_endpoint = "82.67.100.75:51822"
 
 # Rendez-vous seulement (#3742) : point d'accès PUBLIC remis aux nœuds DISTANTS (hors LAN, derrière une autre box), qui
