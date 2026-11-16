@@ -877,6 +877,11 @@ except (OSError, ValueError, KeyError, TypeError):
     print(maintenant - 14 * 86400)
 PY
 )
+                # #3760 : index imapc SUR DISQUE. Avec la destination nue `imapc:`, l'index de la boîte distante est
+                # tenu en mémoire et reconstruit à chaque passage (FETCH de tous les UID) : la fenêtre seule ne suffit pas.
+                # Sur disque, il est persistant et chaque passage ne demande que ce qui a changé.
+                local index="/var/vmail/.imapc-index/$lu"
+                lxc_attach "$CONTAINER" install -d -o vmail -g mail -m 0700 /var/vmail/.imapc-index "$index"
                 local -a fenetre=()
                 [[ "$depuis" =~ ^[0-9]+$ ]] && [ "$depuis" -gt 0 ] && fenetre=(-t "$depuis")
                 # #3739 : JAMAIS le mot de passe en argument. `ps` sur l'HÔTE voit les processus des conteneurs : un
@@ -892,7 +897,7 @@ for k, cle in (("host", "imapc_host"), ("port", "imapc_port"), ("user", "imapc_u
     print(cle, "=", q(c.get(k, "")))
 ' "$f" | lxc_attach "$CONTAINER" sh -c "umask 077; cat > '$conf'"
                 if sortie=$(lxc_attach "$CONTAINER" doveadm -c "$conf" -o mail_fsync=never -o imapc_ssl=imaps -o ssl_client_ca_dir=/etc/ssl/certs \
-                        -o "imapc_features=rfc822.size fetch-headers" sync -1 -R "${fenetre[@]}" -u "$lu" imapc: 2>&1); then ok=true; else ok=false; rc=1; fi
+                        -o "imapc_features=rfc822.size fetch-headers" sync -1 -R "${fenetre[@]}" -u "$lu" "imapc:$index" 2>&1); then ok=true; else ok=false; rc=1; fi
                 lxc_attach "$CONTAINER" rm -f "$conf" || true
                 fin=$(date +%s)
                 python3 - "$IMAP_SYNC_ETAT/$lu.json" "$ok" "$((fin-debut))" "$(printf '%s' "$sortie" | tail -c 600)" "$depuis" <<'PY'
