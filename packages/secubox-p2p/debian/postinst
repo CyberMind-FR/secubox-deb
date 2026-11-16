@@ -120,6 +120,15 @@ case "$1" in
                          secubox-p2p-mesh-liveness.timer >/dev/null 2>&1 || true
         systemctl start secubox-p2p-mesh.path secubox-p2p-mesh-liveness.timer || true
         systemctl start secubox-p2p-mesh-liveness.service || true
+        # Nœud mobile (#3755) : un endpoint NOMMÉ muet est re-résolu chaque minute (WireGuard ne le refait jamais seul).
+        systemctl enable secubox-p2p-mesh-reresolve.timer >/dev/null 2>&1 || true
+        systemctl start secubox-p2p-mesh-reresolve.timer || true
+        # wg-mesh est monté par secubox-p2p-mesh (sbx-mesh-up) : un wg-quick@wg-mesh resté activé d'une ancienne
+        # installation fait la course au démarrage et finit en échec (#3755). On le désactive, sans toucher au tunnel.
+        if systemctl is-enabled --quiet wg-quick@wg-mesh.service 2>/dev/null; then
+            systemctl disable wg-quick@wg-mesh.service >/dev/null 2>&1 || true
+            systemctl reset-failed wg-quick@wg-mesh.service >/dev/null 2>&1 || true
+        fi
         # Exposition par défaut des nœuds relayés (#1682) : sur un satellite,
         # ouvre le port au maître ; sur le relais, relaie les noms des pairs.
         systemctl enable secubox-relais-maillage.timer >/dev/null 2>&1 || true

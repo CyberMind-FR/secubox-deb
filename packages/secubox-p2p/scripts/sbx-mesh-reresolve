@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""sbx-mesh-reresolve — re-résout le NOM d'un pair wg-mesh muet (#3755).
+
+WireGuard ne résout un endpoint nommé (gk2.secubox.in:51822) qu'au chargement de la configuration, jamais ensuite.
+Un nœud déplacé (autre réseau, autre box) ou un maître dont l'adresse publique change resterait donc muet jusqu'au
+prochain redémarrage. Lancé chaque minute (secubox-p2p-mesh-reresolve.timer), ce script relit wg_mesh.json et, pour
+chaque pair dont l'endpoint est un NOM et dont la dernière poignée de main a plus de SEUIL secondes (ou n'a jamais
+eu lieu), refait `wg set wg-mesh peer <clé> endpoint <nom:port>` : wg résout le nom à cet instant.
+
+Rien ne vient du réseau : clé et nom sont lus dans l'état local, validés, passés en liste d'arguments (pas de shell).
+Un endpoint en adresse IP littérale n'est jamais touché (le roaming WireGuard s'en charge)."""
+import ipaddress
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+ETAT = os.environ.get("SBX_RERESOLVE_ETAT") or "/var/lib/secubox/p2p/wg_mesh.json"
+IFACE = "wg-mesh"
+SEUIL = 150                    # s : au-delà de 2 rekey (120 s) + marge, le pair est muet
+CLE_RE = re.compile(r"^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw480]=$")
+NOM_RE = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$")
+
+
+def nom_et_port(endpoint):
+    """(nom, port) si l'endpoint est un NOM DNS valide suivi d'un port ; None sinon (IP littérale, forme invalide)."""
+    if not isinstance(endpoint, str) or endpoint.startswith("[") or endpoint.count(":") != 1:
+        return None
+    hote, _, port = endpoint.rpartition(":")
+    if not port.isdigit() or not 1 <= int(port) <= 65535:
+        return None
+    try:
+        ipaddress.ip_address(hote)
+        return None
+    except ValueError:
+        pass
+    return (hote, int(port)) if NOM_RE.match(hote) else None
+
+
+def poignees(executer=subprocess.run):
+    r = executer(["wg", "show", IFACE, "latest-handshakes"], capture_output=True, text=True, timeout=10)
+    if r.returncode != 0:
+        return None
+    out = {}
+    for ligne in r.stdout.splitlines():
+        parts = ligne.split()
+        if len(parts) == 2 and parts[1].isdigit():
+            out[parts[0]] = int(parts[1])
+    return out
+
+
+def a_reresoudre(etat, vues, maintenant, seuil=SEUIL):
+    """[(clé, 'nom:port')] des pairs nommés, connus de l'interface, muets depuis plus de `seuil` s."""
+    res = []
+    for p in (etat or {}).get("peers") or []:
+        if not isinstance(p, dict):
+            continue
+        cle, np = p.get("public_key"), nom_et_port(p.get("endpoint"))
+        if not np or not isinstance(cle, str) or not CLE_RE.match(cle) or cle not in vues:
+            continue
+        t = vues[cle]
+        if t == 0 or maintenant - t > seuil:
+            res.append((cle, "%s:%d" % np))
+    return res
+
+
+def main(executer=subprocess.run, maintenant=None):
+    try:
+        with open(ETAT, encoding="utf-8") as f:
+            etat = json.load(f)
+    except (OSError, ValueError):
+        return 0                                   # pas d'état : rien à faire
+    vues = poignees(executer)
+    if vues is None:
+        return 0                                   # interface absente : sbx-mesh-up s'en occupe
+    maintenant = time.time() if maintenant is None else maintenant
+    rc = 0
+    for cle, endpoint in a_reresoudre(etat, vues, maintenant):
+        r = executer(["wg", "set", IFACE, "peer", cle, "endpoint", endpoint], capture_output=True, text=True, timeout=15)
+        if r.returncode == 0:
+            print("sbx-mesh-reresolve: %s… -> %s re-résolu" % (cle[:8], endpoint))
+        else:
+            print("sbx-mesh-reresolve: %s… -> %s : échec (%s)" % (cle[:8], endpoint, (r.stderr or "").strip()[:120]),
+                  file=sys.stderr)
+            rc = 1
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

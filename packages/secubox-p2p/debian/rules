@@ -54,6 +54,7 @@ override_dh_auto_install:
 	install -m 755 $(CURDIR)/scripts/sbx-mesh-up $(CURDIR)/debian/secubox-p2p/usr/bin/
 	# Publication des poignées de main pour l'API non privilégiée (#1360)
 	install -m 755 $(CURDIR)/scripts/sbx-mesh-liveness $(CURDIR)/debian/secubox-p2p/usr/bin/
+	install -m 755 $(CURDIR)/scripts/sbx-mesh-reresolve $(CURDIR)/debian/secubox-p2p/usr/bin/
 
 	# Create runtime directory
 	install -d $(CURDIR)/debian/secubox-p2p/run/secubox
@@ -77,6 +78,7 @@ override_dh_auto_install:
 	# Pont état -> wg-mesh, sans surface sudo supplémentaire (#1360)
 	for u in secubox-p2p-mesh.path secubox-p2p-mesh.service \
 	         secubox-p2p-mesh-liveness.service secubox-p2p-mesh-liveness.timer \
+	         secubox-p2p-mesh-reresolve.service secubox-p2p-mesh-reresolve.timer \
 	         secubox-relais-maillage.service secubox-relais-maillage.timer \
 	         secubox-relais-maillage-demande.path secubox-relais-maillage-demande.service \
 	         secubox-maillage-pairs.service secubox-maillage-pairs.timer; do \
