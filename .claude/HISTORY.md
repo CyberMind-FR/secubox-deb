@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-16 — Rapatriement IMAP du conteneur mail : plus d'OOM (ref #3760)
+
+- `doveadm sync -1 -R imapc:` (INBOX distante ~307 000 messages) tué par le plafond 384M du conteneur mail à chaque passage (116 OOM, aucun succès en 3 jours).
+- secubox-mail 2.16.14 (PR #3761) : fenêtre `-t` (dernier succès − 3 j ; 14 j sans succès), index imapc sur disque `/var/vmail/.imapc-index/<adresse>`.
+- Mesure : doveadm ~253 Mo anonymes + ~185 Mo au repos (rspamd). Plafond live gk2 relevé 384M → 512M (`/data/lxc/mail/config.avant-3760`, audit). Passages ok : 130 s puis 33 s.
+
 ## 2026-11-16 — Veille CVE planifiée, OSV et Debian Security Tracker ; gk7 nœud mobile ; plus de 504 (ref #3754, #3755, #3758)
 
 - **#3758** (security-posture 2.10.0) : minuteries CERT-FR (horaire, classement root isolé sans réseau), KEV/EPSS/NVD et paquets (6 h) ; OSV.dev + Debian Security Tracker → « Vos paquets » : 1561 paquets, 269 touchés, 4231 CVE ouvertes sur gk2 (tracker 90 Mo, pic 245 Mo). Relecture : écriture root qui suivait les liens corrigée.
