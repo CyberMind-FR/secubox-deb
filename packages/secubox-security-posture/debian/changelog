@@ -11,8 +11,10 @@ secubox-security-posture (2.10.0-1~trixie1) trixie; urgency=medium
     pour la version installée dans paquets-vulns.json, GET
     /paquets/vulnerables, section « Vos paquets » de l'onglet Paquets ;
     la tuile « Vous concernent » de la couverture les compte (ref #3758).
-  * cve-triage : toute route qui écrit la base prend le verrou des relevés
-    et relit les fichiers changés avant de modifier (409 si un relevé tourne) ;
+  * cve-triage : les relevés font tout le réseau hors verrou de la base et ne
+    la verrouillent que pour relire, fusionner, écrire ; toute route qui écrit
+    la base attend ce verrou 10 s au plus (409 seulement au-delà) et relit
+    les fichiers changés avant de modifier ;
     pagination OSV suivie (10 pages par requête) ; taille du JSON du
     tracker journalisée ; flux CERT-FR lu par defusedxml (ref #3758).
   * Dépend de python3-ijson et python3-defusedxml.
