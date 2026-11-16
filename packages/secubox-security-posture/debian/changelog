@@ -1,3 +1,10 @@
+secubox-security-posture (2.10.3-1~trixie1) trixie; urgency=medium
+
+  * Veille CVE : profils AppArmor des relevés planifiés passés en enforce,
+    complétés d'après le journal (menu.d, nameservice, /dev/tty refusé) (#3766).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 15:46:59 +0100
+
 secubox-security-posture (2.10.2-1~trixie1) trixie; urgency=medium
 
   * Veille CVE : profils AppArmor des relevés planifiés, en mode complain
