@@ -1332,13 +1332,7 @@ def _ports_leurres() -> List[str]:
     return [p for p in candidats if p in ouverts and p not in echoues]
 
 
-@app.get("/categories", dependencies=[Depends(require_lecture)])
-async def get_categories():
-    """List all WAF categories with stats (public)."""
-    return {
-        "categories": _category_stats,
-        "total_rules": sum(c["rules_count"] for c in _category_stats.values()),
-    }
+# GET /categories : servi par api/modes.py (#3741) — mode, seuil, durée, motifs + structurels.
 
 
 @app.get("/rules", dependencies=[Depends(require_jwt)])
@@ -2284,3 +2278,14 @@ _leurres.configurer(bans=_bans_chauds, audit=_audit,
                     ban=lambda ip, duree: _vider_bans_chauds(_ban_ip(ip, duree, "leurre")),
                     unban=lambda ip: _vider_bans_chauds(_unban_ip(ip)))
 app.include_router(_leurres.router)
+
+
+# ── Page Modes (#3741) : mode par catégorie, touches 7 j, leurres de service, hôtes PHP ──
+try:
+    from api import modes as _modes
+except ImportError:  # standalone
+    import modes as _modes
+
+_modes.configurer(audit=_audit, journal=THREATS_LOG, regles_livrees=RULES_PATH,
+                  liste_blanche=lambda: (_cfg() or {}).get("whitelist", "127.0.0.1").split(","))
+app.include_router(_modes.router)
