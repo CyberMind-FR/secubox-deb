@@ -1,3 +1,20 @@
+secubox-security-posture (2.10.0-1~trixie1) trixie; urgency=medium
+
+  * cve-triage : relevés planifiés par minuteries systemd (compte secubox,
+    sans sudo) : veille CERT-FR toutes les heures, KEV + NVD 7 j + EPSS et
+    « vos paquets » toutes les 6 h ; verrou partagé avec l'API (un clic et
+    un relevé ne tournent jamais ensemble), écritures atomiques, une source
+    en panne garde ses données (ref #3758).
+  * cve-triage : nouvelles sources sans clé, Debian Security Tracker (JSON
+    téléchargé borné et conditionnel, lu en flux par python3-ijson, suite
+    trixie) et OSV.dev (querybatch, détails en cache) : CVE encore ouvertes
+    pour la version installée dans paquets-vulns.json, GET
+    /paquets/vulnerables, section « Vos paquets » de l'onglet Paquets ;
+    la tuile « Vous concernent » de la couverture les compte (ref #3758).
+  * Dépend de python3-ijson.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 14:00:00 +0100
+
 secubox-security-posture (2.9.1-1~trixie1) trixie; urgency=medium
 
   * cve-triage : « Synchroniser les flux » en tâche de fond (202 puis
