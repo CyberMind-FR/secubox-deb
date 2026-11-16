@@ -9,6 +9,11 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-16 — Filtres IA : plus jamais de filtre sur nos propres pages (ref #3764)
+
+- Faux positif latent : ia-cve-2021-20021-58165c (chemin_exact `/login.html`) bannissait 7 j toute visite de la page de connexion. Retiré sur gk2 (`cvectl filtres-ia retirer`, audit) ; les 571 restants confrontés à 2 237 chemins servis : aucun autre.
+- security-posture 2.10.1 (PR #3765) : motif de rejet `secubox` (chemins fixes + /usr/share/secubox/www). Installé gk2, vérifié avec les chemins réels.
+
 ## 2026-11-16 — Kiosque gk7 : « Connexion requise » au lieu d'« état illisible » ; gk6 hors ligne (ref #3762)
 
 - secubox-wireguard 1.3.2 (PR #3763) : un 401 sur /status (kiosque limité à la console, #3488) affiche « CONNEXION REQUISE » + lien de connexion. Installé sur gk7, tunnels intacts.
