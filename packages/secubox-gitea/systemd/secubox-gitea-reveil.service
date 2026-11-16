@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+[Unit]
+Description=SecuBox Gitea — réveil planifié pour synchroniser les miroirs (#3747)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-gitea-reveil
+TimeoutStartSec=30min
+Nice=10
