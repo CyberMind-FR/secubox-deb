@@ -226,3 +226,20 @@ Toutes les routes sont en `require_jwt` : les mots de passe tentés par les robo
 | `POST /api/v1/waf/leurres/unban` | `{"ip"}` ; audit `leurre-unban` |
 
 Page : `/waf/leurres.html` (onglet « Leurres » de `/waf/`).
+
+## Onglet Filtres IA (#3748)
+
+Filtres de l'IA en vigueur sur la box (catégories `ia_filtres_critique|haute|moyenne`), leurs touches, les bans et
+le recoupement avec la mémoire des leurres. Une tâche de fond (toutes les 5 min) lit `secubox-cvectl filtres-ia
+lister --json`, le journal des menaces (7 j), les bans nft, la mémoire des leurres et les rejets audités de cvectl,
+puis écrit `/var/lib/secubox/waf/filtres-ia.json` par remplacement atomique ; les routes ne lisent que ce cache.
+Ce que la box ne sait pas (vulnérabilités connues, candidats du relais gk0, KEV quand il n'est pas gardé) vaut `null`.
+
+| Route | Garde | Rend |
+|---|---|---|
+| `GET /api/v1/waf/filtres-ia/resume` | `require_lecture` | `resume` (`actifs`, `par_gravite`, `kev`, `ecartes`, `touches_24h`, `filtres_touches_24h`, `faux_positifs_24h`, `bans_actifs`, `bans_aussi_leurre`, `vulnerabilites_connues`, `candidats_relais`), `leurres_communs`, `genere_le`, `etat` |
+| `GET /api/v1/waf/filtres-ia/touches` | `require_lecture` | `filtres` : `id`, `cve`, `produit`, `famille`, `gravite`, `motif`, `kev`, `epss`, `touches_24h`, `touches_7j`, `adresses_24h`, `bannies`, `faux_positifs`, `leurres`, `derniere` |
+| `GET /api/v1/waf/filtres-ia/radar` | `require_lecture` | `points` : `ip`, `ia`, `touches`, `filtres`, `leurres`, `banni` (300 au plus) |
+| `POST /api/v1/waf/filtres-ia/{id}/retirer` | `require_jwt` | bilan de `cvectl filtres-ia retirer --apply` (acteur = l'administrateur) ; audit `waf-filtres-ia-retirer` intention puis issue ; 404 id inconnu, 422 id invalide |
+
+Page : `/waf/filtres-ia.html` (onglet « Filtres IA » de `/waf/`), `?demo=1` : adresses de documentation, aucune écriture.

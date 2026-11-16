@@ -131,6 +131,7 @@
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="history">Historique</button>
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="campaigns">Campagnes</button>
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="decoys">Leurres</button>
+            <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="filtresia">Filtres IA</button>
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="modes">Modes</button>
             <button class="waf-tab" type="button" role="tab" aria-selected="false" data-tab="config">Configuration</button>
         </div>
@@ -394,7 +395,7 @@
         $('rafraichir').addEventListener('click', () => { charger(); rechargerCadre(); });
 
         // ----- Onglets : pages autonomes encadrées (même origine) -----
-        const WAF_PAGES = { overview: 'menaces', attackers: 'attaquants', visits: 'visites', recon: 'surfaces', history: 'historique', campaigns: 'campagnes', decoys: 'leurres', modes: 'modes' };
+        const WAF_PAGES = { overview: 'menaces', attackers: 'attaquants', visits: 'visites', recon: 'surfaces', history: 'historique', campaigns: 'campagnes', decoys: 'leurres', filtresia: 'filtres-ia', modes: 'modes' };
         const ONGLETS = ['vue', 'config'].concat(Object.keys(WAF_PAGES));
         const suffixe = (embed) => (embed ? '?embed=1' : '') + (DEMO ? (embed ? '&' : '?') + 'demo=1' : '');
         function rechargerCadre() { const f = ONGLET === 'vue' ? $('vueFrame') : WAF_PAGES[ONGLET] ? $('pageFrame') : null; if (f && !DEMO) { try { f.contentWindow.location.reload(); } catch (e) { /* sans objet */ } } }

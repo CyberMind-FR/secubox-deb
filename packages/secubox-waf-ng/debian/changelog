@@ -1,3 +1,20 @@
+secubox-waf-ng (1.39.0-1~trixie1) trixie; urgency=medium
+
+  * Onglet Filtres IA (ref #3748) : GET /filtres-ia/resume|touches|radar
+    (require_lecture, cache /var/lib/secubox/waf/filtres-ia.json recalculé
+    toutes les 5 min par la tâche de fond), POST /filtres-ia/{id}/retirer
+    (require_jwt, cvectl filtres-ia retirer, audit intention puis issue).
+    Touches 24 h/7 j par filtre, faux positifs LAN/maillage, bans actifs,
+    adresses communes avec les leurres, écartés lus dans l'audit de cvectl ;
+    ce que gk2 ne sait pas (relais gk0) vaut null, affiché « — ».
+  * Page /waf/filtres-ia.html : tuiles, chaîne, tableau filtrable et trié,
+    radar SVG partagé avec les leurres, leurres ↔ filtres, sources ;
+    ?demo=1 sans écriture. Onglet ajouté à /waf/.
+  * Depends: secubox-security-posture (>= 2.8.1~) (retrait par
+    l'administrateur, waf-modes de #3741).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 12:00:00 +0100
+
 secubox-waf-ng (1.38.0-1~trixie1) trixie; urgency=medium
 
   * Page Modes (ref #3741) : bascule du mode de chaque catégorie par lot
