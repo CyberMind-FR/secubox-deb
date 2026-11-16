@@ -1,3 +1,12 @@
+secubox-security-posture (2.10.1-1~trixie1) trixie; urgency=medium
+
+  * Filtres IA : nouveau motif de rejet « secubox » — un filtre qui touche une
+    page servie par SecuBox (/login.html, /api/v1/, arborescence
+    /usr/share/secubox/www) n'est jamais appliqué. ia-cve-2021-20021 visait
+    /login.html : ban 7 j de nos propres usagers (#3764).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 12:29:52 +0100
+
 secubox-security-posture (2.10.0-1~trixie1) trixie; urgency=medium
 
   * cve-triage : relevés planifiés par minuteries systemd (compte secubox,
