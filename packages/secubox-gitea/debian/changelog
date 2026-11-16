@@ -1,3 +1,12 @@
+secubox-gitea (1.8.0-1~trixie1) trixie; urgency=medium
+
+  * Gitea en veille : réveil planifié toutes les 4 h (secubox-gitea-reveil.timer)
+    pour synchroniser les miroirs ; RUN_AT_START sous [cron.update_mirrors],
+    verrou sleeper-hold tenu jusqu'à ce qu'aucun miroir ne soit échu (20 min au
+    plus), puis retour au sleeper (ref #3747).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 07:30:00 +0100
+
 secubox-gitea (1.7.4-1~trixie1) trixie; urgency=medium
 
   * Charge de gk2 : minuteries étalées (RandomizedDelaySec, FixedRandomDelay, AccuracySec), périodes allongées pour les tâches non critiques (ref #3355).

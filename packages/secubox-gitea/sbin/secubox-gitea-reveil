@@ -1,0 +1,100 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: gitea — réveil planifié pour la synchronisation des miroirs (#3747).
+#
+# Gitea est « on-demand » : le sleeper l'arrête après 15 min sans trafic, et ses tâches planifiées
+# (cron.update_mirrors) ne tournent jamais pendant la veille. Cette tâche, lancée par
+# secubox-gitea-reveil.timer :
+#   1. pose `RUN_AT_START = true` sous [cron.update_mirrors] (une fois, idempotent) : au démarrage,
+#      Gitea synchronise aussitôt les miroirs échus ;
+#   2. tient Gitea éveillé (verrou /run/secubox/sleeper-hold/gitea, rafraîchi) ;
+#   3. le réveille par secubox-wakectl (même chemin que le réveil à la demande, audité) ;
+#   4. attend qu'aucun miroir ne soit plus échu (borné), puis rend le verrou : le sleeper le
+#      rendormira à son rythme habituel, faute de trafic.
+set -euo pipefail
+
+INI="${GITEA_INI:-/data/volumes/gitea/data/custom/conf/app.ini}"
+DB="${GITEA_DB:-/data/volumes/gitea/data/gitea.db}"
+ATTENTE_MAX="${GITEA_REVEIL_ATTENTE_MAX:-1200}"     # 20 min au plus pour les miroirs
+HOLD=/run/secubox/sleeper-hold
+GARDE=""
+
+log() { echo "secubox-gitea-reveil: $*"; }
+
+# shellcheck disable=SC2317  # appelée par trap EXIT
+liberer() {
+    if [ -n "$GARDE" ]; then kill "$GARDE" 2>/dev/null || true; fi
+    rm -f "$HOLD/gitea"
+}
+trap liberer EXIT
+
+# 1. RUN_AT_START sous [cron.update_mirrors], sans toucher au reste du fichier (propriétaire et mode gardés).
+assurer_run_at_start() {
+    [ -f "$INI" ] || { log "app.ini absent ($INI) : réglage non posé"; return 0; }
+    python3 -I - "$INI" <<'PY'
+import os, re, sys, tempfile
+chemin = sys.argv[1]
+lignes = open(chemin, encoding="utf-8").read().splitlines(keepends=True)
+debut = next((i for i, l in enumerate(lignes) if l.strip() == "[cron.update_mirrors]"), None)
+if debut is None:
+    lignes += ["\n", "[cron.update_mirrors]\n", "RUN_AT_START = true\n"]
+else:
+    fin = next((i for i in range(debut + 1, len(lignes)) if lignes[i].lstrip().startswith("[")), len(lignes))
+    cles = [i for i in range(debut + 1, fin) if re.match(r"\s*RUN_AT_START\s*=", lignes[i])]
+    if cles:
+        if re.match(r"\s*RUN_AT_START\s*=\s*true\s*$", lignes[cles[0]], re.I):
+            sys.exit(0)
+        lignes[cles[0]] = "RUN_AT_START = true\n"
+    else:
+        lignes.insert(debut + 1, "RUN_AT_START = true\n")
+st = os.stat(chemin)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(chemin), prefix=".app.ini.")
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    f.writelines(lignes)
+    f.flush()
+    os.fsync(f.fileno())
+os.chown(tmp, st.st_uid, st.st_gid)
+os.chmod(tmp, st.st_mode & 0o7777)
+os.replace(tmp, chemin)
+print("RUN_AT_START posé sous [cron.update_mirrors]")
+PY
+}
+
+# Miroirs encore échus (next_update_unix passé) ; -1 si la base est illisible.
+miroirs_echus() {
+    python3 -I - "$DB" <<'PY' 2>/dev/null || echo -1
+import sqlite3, sys, time
+c = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True, timeout=5)
+print(c.execute("SELECT COUNT(*) FROM mirror WHERE next_update_unix > 0 AND next_update_unix <= ?",
+                (int(time.time()),)).fetchone()[0])
+PY
+}
+
+assurer_run_at_start
+
+mkdir -p "$HOLD"
+touch "$HOLD/gitea"
+( while sleep 300; do touch "$HOLD/gitea"; done ) & GARDE=$!
+
+avant=$(miroirs_echus)
+log "réveil de gitea ($avant miroir(s) échu(s))"
+/usr/sbin/secubox-wakectl wake gitea || { log "réveil refusé ou en échec"; exit 1; }
+
+debut=$(date +%s)
+while :; do
+    n=$(miroirs_echus)
+    if [ "$n" = "0" ]; then
+        log "miroirs à jour en $(( $(date +%s) - debut )) s"
+        break
+    fi
+    if [ $(( $(date +%s) - debut )) -ge "$ATTENTE_MAX" ]; then
+        log "délai de ${ATTENTE_MAX} s atteint, $n miroir(s) encore échu(s) : Gitea reste à la charge du sleeper"
+        break
+    fi
+    sleep 30
+done
+exit 0
