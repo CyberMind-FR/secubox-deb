@@ -135,3 +135,15 @@ def test_sudoers_lignes_exactes():
     for ligne in ("/usr/sbin/wafctl leurres-modes lister", "/usr/sbin/wafctl leurres-modes ecrire",
               "/usr/sbin/wafctl php-hotes lister", "/usr/sbin/wafctl php-hotes ecrire"):
         assert ligne in t
+
+
+def test_page_modes_et_onglet():
+    www = Path(__file__).resolve().parents[1] / "www" / "waf"
+    page = (www / "modes.html").read_text(encoding="utf-8")
+    assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in page and "sbx_token" in page and "demo=1" in page
+    for route in ("/categories/modes", "/categories/stats7j", "/leurres-service/modes", "/php-hotes"):
+        assert route in page
+    assert "ban immédiat, requêtes suivantes bloquées" in page and "innerHTML" not in page
+    assert "fenetre" not in page                      # pas de fenêtre par catégorie (fenêtre escalate globale)
+    onglets = (www / "index.html").read_text(encoding="utf-8")
+    assert 'data-tab="modes"' in onglets and "modes: 'modes'" in onglets
