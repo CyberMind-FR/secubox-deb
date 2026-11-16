@@ -9,6 +9,13 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-16 — Veille CVE planifiée, OSV et Debian Security Tracker ; gk7 nœud mobile ; plus de 504 (ref #3754, #3755, #3758)
+
+- **#3758** (security-posture 2.10.0) : minuteries CERT-FR (horaire, classement root isolé sans réseau), KEV/EPSS/NVD et paquets (6 h) ; OSV.dev + Debian Security Tracker → « Vos paquets » : 1561 paquets, 269 touchés, 4231 CVE ouvertes sur gk2 (tracker 90 Mo, pic 245 Mo). Relecture : écriture root qui suivait les liens corrigée.
+- **#3755** (p2p 1.24.0, gk2 + gk7) : sbx-mesh-reresolve ; gk7 joint gk2 par `gk2.secubox.in:51822` (WAN, DMZ ; rebouclage Freebox vérifié) ; `wg-quick@wg-mesh` en double désactivé.
+- **#3754** (2.9.1) : « Synchroniser les flux » en tâche de fond (504 du relais HTTP).
+- Constat : `doveadm` (rapatriement IMAP) tué par le cgroup mémoire du LXC mail (07:03, 07:32).
+
 ## 2026-11-16 — Filtres IA chargés en grand, bascule des modes du WAF, pages Filtres IA et Couverture, réveil de Gitea (ref #3741, #3745, #3747, #3748, #3751)
 
 - **Filtres IA (#3732, #3745)** : clé `ai-filtres` enregistrée sur gk2 (empreinte 0af440ac…), onglet « Filtres WAF » dans le relais gk0 (tour à la demande, interrupteur horaire `filtres-auto.json`, journal descriptif). Plafonds réglables `[filtres_ia]` de `/etc/secubox/cve-triage.toml` (security-posture 2.7.1) : amorçage à 700/h puis retour à 10/50 ; **572 filtres appliqués** (256 critiques, 223 hautes, 93 moyennes, 102 KEV), 105 écartés (100 déjà couverts, 5 présents). Tour horaire allumé.
