@@ -1,3 +1,20 @@
+secubox-security-posture (2.9.0-1~trixie1) trixie; urgency=medium
+
+  * cve-triage : couverture WAF par CVE (ref #3751). GET /couverture-waf
+    (require_lecture, lecture seule) sert un cache tenu par une tâche de fond
+    (thread démarré à la première requête, toutes les 5 min, écriture
+    atomique) : filtres IA, sondes, contrôles structurels et signatures qui
+    citent une CVE, en attente (plafond) et écartés lus dans l'audit, KEV et
+    EPSS joints depuis la base locale, veille CERT-FR, touches 24 h du
+    journal des menaces. Source absente : null, jamais 0.
+  * cvectl waf-modes lister : `regles_cve` par catégorie (CVE citées par
+    chaque règle, champ cve, name ou desc ; jamais déduites d'un motif).
+  * Page : colonne « Protection WAF » (CISA KEV, Toutes, Récentes, Veille
+    CERT-FR) et onglet « Couverture WAF » (tuiles, tableau, qui protège
+    quoi, synchronisation, sans protection), ?demo=1 compris.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 18:00:00 +0100
+
 secubox-security-posture (2.8.1-1~trixie1) trixie; urgency=medium
 
   * cvectl filtres-ia retirer accepte un administrateur pour acteur (motif
