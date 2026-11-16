@@ -9,6 +9,12 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-16 — Veille CVE : profils AppArmor des relevés en enforce, lot 2 (closes #3766)
+
+- Journal relevé sur les 5 relevés (audit.log de gk2 tourne en ~5 min : capturer juste après chaque passage).
+- `secubox-cve-releves` : aucun accès hors profil ; `secubox-cve-certfr-classer` complété (menu.d, nameservice, `deny /dev/tty`).
+- security-posture 2.10.3 publiée et installée sur gk2 (PR #3768) ; 3 profils cve en enforce, 5 relevés « success », zéro refus.
+
 ## 2026-11-16 — Veille CVE : profils AppArmor des relevés, lot 1 en complain (ref #3766)
 
 - security-posture 2.10.2 : `secubox-cve-releves` (certfr, certfr-nuclei, flux, paquets) et `secubox-cve-certfr-classer`, complain, chargés au postinst. Chaîne CERT-FR en succès sur gk2, profils attachés.
