@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-17 — TV Privacy : tous les filtrages en automatique par défaut (ref #3774) ; IPv6 auto du contrôle DNS (ref #3769)
+
+- ad-guard 1.27.0 (PR #3775) : essai et confirmation automatiques, déclencheurs pub, tri Netflix d'office pour chaque TV en mode
+  auto ; migration unique au postinst (marque `dnstv/.politique-auto-3774`). Déployé gk7 (tri Netflix sur `tv-4e95`) ; gk2 non
+  mis à jour (réglé à la main, TV passées sur gk7). Maquette de l'onglet « Filtrages automatiques » en attente d'accord.
+- freebox 0.8.1 (PR #3773) : DNS IPv6 « auto » = IPv6 stable relevée par le minuteur quand dns-lan.toml n'en déclare pas
+  (gk7 couvert) ; un DNS IPv6 non contrôlé est signalé. Déployé gk7 et gk2.
+
 ## 2026-11-17 — TV Privacy : TV de la maison basculées sur gk7, détection par système TV (ref #3771)
 
 - Freebox (DHCP + DHCPv6) annonce gk7 (192.168.1.128 / `…dea6:32ff:fe64:f596`), maintenu par le contrôle DNS de gk2
