@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse
 from secubox_core.auth import require_jwt, require_lecture
 
 from . import client as C
+from . import dnscontrole as DC
 from . import maillage as MA
 from . import magasin as M
 from . import service as S
@@ -194,6 +195,43 @@ def appliquer_autoconfig(corps: dict):
     if not ip:
         return JSONResponse({"erreur": "adresse de la box introuvable"}, status_code=503)
     return _repondre(lambda: _service.appliquer_autoconfig(ids, ip, corps.get("confirme_dmz") is True, _maillage()))
+
+
+# ── Contrôle des DNS distribués par la Freebox (#3769) ─────────────────────────────────────────────────────────────────
+@app.get("/dns", dependencies=[Depends(require_lecture)])
+def dns_etat():
+    """Réglage, attendus et dernier contrôle (fichier du minuteur) : aucune requête à la Freebox."""
+    r = DC.lire_reglage()
+    v4, v6 = DC.attendus(r, _ip_box(), DC.ipv6_stable())
+    return {"reglage": r, "attendu": {"ipv4": v4, "ipv6": v6}, "controle": DC.lire_etat()}
+
+
+@app.post("/dns/reglage", dependencies=[Depends(require_jwt)])
+def dns_reglage(corps: dict):
+    try:
+        r = DC.ecrire_reglage(corps.get("reglage"))
+    except ValueError as e:
+        return JSONResponse({"erreur": str(e)}, status_code=400)
+    _service.journal({"action": "dns_controle_reglage", "reglage": r})
+    return {"reglage": r}
+
+
+@app.post("/dns/appliquer", dependencies=[Depends(require_jwt)])
+def dns_appliquer(corps: dict):
+    """Contrôle immédiat ; avec `corriger: true`, pose les DNS attendus quel que soit le mode (geste « Appliquer maintenant »)."""
+    if corps.get("confirme") is not True:
+        return JSONResponse({"erreur": "Confirmation explicite requise."}, status_code=400)
+    ip = _ip_box()
+    if not ip:
+        return JSONResponse({"erreur": "adresse de la box introuvable"}, status_code=503)
+    return _repondre(lambda: DC.controler(_service, ip, corriger_force=corps.get("corriger") is True))
+
+
+@app.post("/dns/reinitialiser", dependencies=[Depends(require_jwt)])
+def dns_reinitialiser(corps: dict):
+    if corps.get("confirme") is not True:
+        return JSONResponse({"erreur": "Confirmation explicite requise : TV Privacy et le blocage cesseront pour tout le réseau."}, status_code=400)
+    return _repondre(lambda: DC.reinitialiser(_service))
 
 
 @app.get("/upnp", dependencies=[Depends(require_lecture)])

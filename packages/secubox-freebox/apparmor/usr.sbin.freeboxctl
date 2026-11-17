@@ -35,6 +35,7 @@ profile secubox-freeboxctl /usr/sbin/freeboxctl flags=(enforce, attach_disconnec
   deny /etc/secubox/secrets/** rw,
   /etc/secubox/p2p.toml r,
   /etc/secubox/freebox.toml r,
+  /etc/secubox/dns-lan.toml r,          # IPv6 stable de la box, DNS IPv6 attendu (#3769)
 
   /var/lib/secubox/freebox/ r,
   /var/lib/secubox/freebox/** rw,

@@ -60,6 +60,7 @@
         @container a (min-width:900px){.grille.deux{grid-template-columns:1fr 1fr}}
         .kv{display:grid;grid-template-columns:minmax(90px,max-content) 1fr;gap:5px 14px;font-size:.8rem;margin:0}
         .kv dt{color:var(--doux)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+        #t-dns select,#t-dns input{font:inherit;font-size:.8rem;background:rgba(0,0,0,.25);border:1px solid var(--trait2);border-radius:8px;padding:4px 8px;color:var(--texte);max-width:100%}
         .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
         .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
         .tab{overflow-x:auto}
@@ -124,6 +125,7 @@
             <button type="button" role="tab" id="o-pare-feu" data-tab="pare-feu" aria-selected="false" aria-controls="t-pare-feu">Pare-feu IPv6</button>
             <button type="button" role="tab" id="o-redirections" data-tab="redirections" aria-selected="false" aria-controls="t-redirections">Redirections</button>
             <button type="button" role="tab" id="o-autoconfig" data-tab="autoconfig" aria-selected="false" aria-controls="t-autoconfig">Auto-config</button>
+            <button type="button" role="tab" id="o-dns" data-tab="dns" aria-selected="false" aria-controls="t-dns">DNS du réseau</button>
         </div>
 
         <section id="t-appareils" role="tabpanel" aria-labelledby="o-appareils" class="grille">
@@ -168,6 +170,22 @@
                 <div class="actions" id="autoAct"></div></div>
         </section>
 
+        <section id="t-dns" role="tabpanel" aria-labelledby="o-dns" class="grille" hidden>
+            <div class="pan"><h3>DNS annoncés par la Freebox <i id="nDns"></i></h3>
+                <dl class="kv"><dt>DNS IPv4</dt><dd class="mono" id="dV4">—</dd><dt>DNS IPv6</dt><dd class="mono" id="dV6">—</dd><dt>Contrôle</dt><dd id="dCtl">—</dd></dl>
+                <div id="dAlertes"></div>
+                <p class="note">TV Privacy, le blocage publicitaire et les noms internes ne marchent que si les appareils interrogent la box. Pas de DNS secondaire : un appareil l’utiliserait pour contourner le filtrage.</p></div>
+            <div class="pan"><h3>Réglage du contrôle (#3769)</h3>
+                <dl class="kv">
+                    <dt><label for="dActif">Contrôle</label></dt><dd><select id="dActif"><option value="1">Activé (toutes les 15 min)</option><option value="0">Désactivé</option></select></dd>
+                    <dt><label for="dMode">En cas d’écart</label></dt><dd><select id="dMode"><option value="corriger">Corriger automatiquement</option><option value="alerter">Alerter seulement</option></select></dd>
+                    <dt><label for="dAtt4">DNS IPv4 attendu</label></dt><dd><input id="dAtt4" class="recherche" placeholder="auto"> <span class="note" id="dAuto4"></span></dd>
+                    <dt><label for="dAtt6">DNS IPv6 attendu</label></dt><dd><input id="dAtt6" class="recherche" placeholder="auto"> <span class="note" id="dAuto6"></span></dd>
+                </dl>
+                <p class="note">« auto » suit l’adresse de la box et son IPv6 stable (dns-lan.toml) : un changement de préfixe Free est suivi. La correction n’a jamais lieu vers un serveur qui ne répond pas.</p>
+                <div class="actions"><button class="btn prim" type="button" id="dEnr">Enregistrer</button><button class="btn" type="button" id="dApp">Appliquer maintenant</button><button class="btn danger" type="button" id="dRaz">Remettre les DNS d’origine…</button></div></div>
+        </section>
+
         <section class="grille deux" id="connexionFb">
             <div class="pan"><h3>Connexion à la Freebox</h3>
                 <dl class="kv"><dt>État</dt><dd id="fbEtat">—</dd><dt>Message</dt><dd id="fbMsg">—</dd></dl>
@@ -193,7 +211,7 @@
         const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
         const tiret = v => (v === null || v === undefined || v === '') ? '—' : String(v);
 
-        let STATUT = null, APP = null, CNX = null, PF = null, RED = null, UP = null, AUTO = null;
+        let DNS = null, STATUT = null, APP = null, CNX = null, PF = null, RED = null, UP = null, AUTO = null;
         let SESSION_OK = true, ERREURS = {}, ONGLET = 'appareils', CONF = null, RETOUR = null;
 
         function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
@@ -235,6 +253,8 @@
 
         // ----- Démonstration : adresses RFC 5737, noms fictifs -----
         function demoData() {
+            DNS = { reglage: { actif: true, mode: 'corriger', ipv4: 'auto', ipv6: 'auto' }, attendu: { ipv4: '192.0.2.10', ipv6: '2001:db8::10' },
+                    controle: { conforme: true, verifie_le: 1794885799, alertes: [], corrections: [], annonce: { ipv4: ['192.0.2.10'], ipv6: ['2001:db8::10'], ipv6_personnalise: true } } };
             STATUT = { etat: 'autorise', message: 'Connecté à la Freebox.', freebox: { modele: 'Freebox Delta (démo)', version: '10.0', nom: 'freebox-demo' },
                        droits: { settings: false }, droits_manquants: ['settings'], aide_droits: { settings: 'Modification des réglages de la Freebox : nécessaire pour créer ou supprimer des redirections de ports.' } };
             APP = { appareils: [
@@ -261,6 +281,7 @@
             if (s.st && s.st !== 200 && SESSION_OK) ERREURS.statut = 'Freebox : erreur ' + s.st;
             if (!s.st) ERREURS.statut = 'Impossible de lire le connecteur Freebox (service arrêté ou injoignable).';
             APP = CNX = PF = RED = UP = null;
+            const dn = await lire('/dns'); DNS = dn.st === 200 ? dn.d : null;
             if (STATUT && STATUT.etat === 'autorise') {
                 const [a, c, p, r, u] = await Promise.all([lire('/appareils'), lire('/connexion'), lire('/pare-feu'), lire('/redirections'), lire('/upnp')]);
                 const prendre = (nom, x) => { if (refus(x)) { SESSION_OK = false; return null; } if (x.st === 200) return x.d; ERREURS[nom] = (x.d && x.d.erreur) || (x.st ? 'Erreur ' + x.st : 'Injoignable'); return null; };
@@ -281,7 +302,40 @@
         const TITRES = { autorise: 'Connectée', attente_validation: 'En attente de validation sur la Freebox', non_configure: 'Pas encore connectée', refusee: 'Demande refusée',
                          expiree: 'Demande expirée', retiree: 'Autorisation retirée', injoignable: 'Freebox injoignable', erreur: 'Erreur' };
 
+        function rendreDns() {
+            const d = DNS, c = d && d.controle, r = d && d.reglage;
+            const liste = v => (v && v.length) ? v.join(', ') : 'la Freebox elle-même';
+            $('dV4').textContent = c && c.annonce ? liste(c.annonce.ipv4) : '—';
+            $('dV6').textContent = c && c.annonce ? (c.annonce.ipv6_personnalise ? liste(c.annonce.ipv6) : 'résolveur de la Freebox') : '—';
+            const n = $('nDns'); n.replaceChildren();
+            if (c && c.conforme === true) n.appendChild(pastille('ok', 'LA BOX ✓')); else if (c && c.conforme === false) n.appendChild(pastille('hors', 'ÉCART'));
+            else if (c && c.erreur) n.appendChild(pastille('att', 'ILLISIBLE'));
+            const quand = c && c.verifie_le ? new Date(c.verifie_le * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null;
+            $('dCtl').textContent = !r ? '—' : (r.actif ? 'actif, ' + (r.mode === 'corriger' ? 'corrige' : 'alerte seulement') : 'désactivé') + (quand ? ' · dernier passage ' + quand : '');
+            const a = $('dAlertes'); a.replaceChildren();
+            ((c && c.alertes) || []).concat(c && c.erreur ? ['Lecture impossible : ' + c.erreur] : []).forEach(t => a.appendChild(el('p', 'retour ko', t)));
+            if (c && c.corrections && c.corrections.length) a.appendChild(el('p', 'retour ok', 'Corrigé : DNS ' + c.corrections.map(x => x.toUpperCase()).join(' et ') + ' remis sur la box.'));
+            if (r && document.activeElement !== $('dAtt4') && document.activeElement !== $('dAtt6')) {
+                $('dActif').value = r.actif ? '1' : '0'; $('dMode').value = r.mode;
+                $('dAtt4').value = r.ipv4 === 'auto' ? '' : r.ipv4; $('dAtt6').value = r.ipv6 === 'auto' ? '' : r.ipv6;
+            }
+            $('dAuto4').textContent = d && d.attendu ? 'auto : ' + (d.attendu.ipv4 || 'inconnue') : '';
+            $('dAuto6').textContent = d && d.attendu ? 'auto : ' + (d.attendu.ipv6 || 'non déclarée, IPv6 non contrôlée') : '';
+        }
+        function reglageDns() {
+            return { actif: $('dActif').value === '1', mode: $('dMode').value, ipv4: $('dAtt4').value.trim() || 'auto', ipv6: $('dAtt6').value.trim() || 'auto' };
+        }
+        $('dEnr').addEventListener('click', () => envoyerReglage('/dns/reglage', { reglage: reglageDns() }, 'Réglage du contrôle DNS enregistré.'));
+        $('dApp').addEventListener('click', () => demanderConfirmation('Poser maintenant les DNS de la box sur la Freebox ?',
+            ['La Freebox annoncera la box comme seul DNS, en IPv4 et en IPv6. Un serveur qui ne répond pas n’est jamais posé. L’état est relu et l’action journalisée.'],
+            null, false, 'Appliquer', () => envoyerReglage('/dns/appliquer', { confirme: true, corriger: true },
+                r => r.d && r.d.conforme ? 'DNS conformes : la Freebox annonce la box.' : 'Écart restant : ' + ((r.d && r.d.alertes) || []).join(' '))));
+        $('dRaz').addEventListener('click', () => demanderConfirmation('Rendre à la Freebox ses DNS d’origine ?',
+            ['TV Privacy, le blocage publicitaire et les noms internes cesseront pour TOUT le réseau : les appareils interrogeront la Freebox. Le contrôle sera désactivé.'],
+            null, true, 'Remettre les DNS d’origine', () => envoyerReglage('/dns/reinitialiser', { confirme: true }, 'DNS d’origine rendus à la Freebox ; contrôle désactivé.')));
+
         function rendre() {
+            rendreDns();
             $('demo').hidden = !DEMO;
             $('session').hidden = SESSION_OK;
             const er = $('erreur'); er.hidden = !(ERREURS.statut && SESSION_OK); er.textContent = ERREURS.statut || '';
@@ -512,7 +566,7 @@
         function onglet(nom) {
             ONGLET = nom;
             document.querySelectorAll('.onglets [role=tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === nom)));
-            ['appareils', 'connexion', 'pare-feu', 'redirections', 'autoconfig'].forEach(t => { $('t-' + t).hidden = t !== nom; });
+            ['appareils', 'connexion', 'pare-feu', 'redirections', 'autoconfig', 'dns'].forEach(t => { $('t-' + t).hidden = t !== nom; });
             if (nom === 'autoconfig' && !DEMO && STATUT && STATUT.etat === 'autorise') chargerAuto().then(rendre); else annoncer();
         }
         document.querySelectorAll('.onglets [role=tab]').forEach(b => b.addEventListener('click', () => onglet(b.dataset.tab)));
@@ -536,7 +590,7 @@
         (function boucle() {
             const delai = STATUT && STATUT.etat === 'attente_validation' ? 15000 : 30000;
             setTimeout(() => {
-                if (!(document.hidden || DEMO || CONF || document.activeElement === $('rechApp'))) charger();
+                if (!(document.hidden || DEMO || CONF || document.activeElement === $('rechApp') || ['dAtt4', 'dAtt6', 'dActif', 'dMode'].includes(document.activeElement && document.activeElement.id))) charger();
                 boucle();
             }, delai);
         })();

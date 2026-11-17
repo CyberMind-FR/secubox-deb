@@ -15,6 +15,11 @@ Connecteur de l'API Freebox OS (v0.1, lecture). Conception : `docs/dossiers/conn
 - **Lecture** (`require_lecture`) : `/status`, `/appareils`, `/connexion`, `/pare-feu`, `/redirections`, `/autoriser/etat`.
 - **Admin** (`require_jwt`) : `/autoriser`, `/revoquer`, `/explorer` (liste blanche de chemins).
 - Panneau : `/freebox/` (menu Réseau). Socket `/run/secubox/freebox.sock`, utilisateur `secubox-freebox`, sans capacité.
+- Contrôle des DNS annoncés (#3769) : `GET /dns` (réglage, attendus, dernier contrôle, sans requête Freebox),
+  `POST /dns/reglage` {reglage:{actif, mode: alerter|corriger, ipv4, ipv6 ("auto" ou adresse)}}, `POST /dns/appliquer`
+  {confirme, corriger}, `POST /dns/reinitialiser` {confirme} (admin). Réglage `/var/lib/secubox/freebox/dns-reglage.json`,
+  état `dns-controle.json`. Passage toutes les 15 min (`freeboxctl dns-controle`, unité `secubox-freebox-maillage`).
+  Jamais de DNS secondaire ; jamais de correction vers un serveur qui ne répond pas. Défaut : actif, corriger.
 - Autoconfiguration : `GET /autoconfig` (écarts), `POST /autoconfig` {ids, confirme, confirme_dmz} (admin, droit « settings », audit ; la DMZ exige `confirme_dmz`).
 - Écriture : `POST /pare-feu/ipv6` {actif, confirme:true} (réglage `ipv6_prefix_firewall` de la Freebox, `ipv6_firewall` sur les anciens firmwares ; un interrupteur global : le désactiver laisse entrer l'IPv6 vers tout le réseau) (admin, droit « settings », relecture, audit). Redirections de ports : celle du maillage distant (ci-dessous).
 - **Maillage distant (#3742)** : sur un rendez-vous qui déclare `[wireguard] public_endpoint` dans `/etc/secubox/p2p.toml`,

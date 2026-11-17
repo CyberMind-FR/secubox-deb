@@ -1,3 +1,12 @@
+secubox-freebox (0.8.0-1~trixie1) trixie; urgency=medium
+
+  * Contrôle des DNS IPv4 et IPv6 annoncés par la Freebox (#3769) : onglet
+    « DNS du réseau », activable, alerte ou correction automatique (jamais vers
+    un serveur muet, jamais de secondaire), remise aux DNS d'origine ; passage
+    toutes les 15 min dans l'unité de contrôle du maillage.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 04:34:09 +0100
+
 secubox-freebox (0.7.3-1~trixie1) trixie; urgency=medium
 
   * Profil AppArmor de freeboxctl : attach_disconnected (/dev/null sous PrivateDevices)
