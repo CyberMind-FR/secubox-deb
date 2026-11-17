@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-17 — TV Privacy : pubs M6+ bloquées en relais seul (ref #3783)
+
+- Test devant la TV avec le propriétaire (gk7, Freebox Pop, 11:34-11:38) : FreeWheel `7cbf2` + `stickyadstv`, `2mdn.net`,
+  smartclip, adform, realytics, everesttech, `ups.analytics.yahoo.com` bloqués → « plus de pubs et stream ok ».
+- ad-guard 1.29.0 (PR #3784) : profil de base complété + `migrer_graine()` (chaque nouveau profil posé une fois aux TV déjà
+  en mode auto). gk7 (tv-4e95, tv-fb5b) et gk2 (5 appareils) équipés ; `tv-banc` de gk2 garde `7cbf2` retiré le 16/11
+  (une règle retirée n'est jamais reproposée automatiquement).
+- Pièges : les requêtes `…​.home` (suffixe de recherche) comptent « autorisées » dans les relevés — aucune fuite réelle
+  (journal Unbound : NXDOMAIN) ; la vue TV n'hérite pas des listes globales (fwmrm.net, stickyadstv.com y sont).
+
 ## 2026-11-17 — Relais seul (bêta 1) : garde des deux box, clé mobile, fiche DNS, posture pare-feu (ref #3769, #3780)
 
 - freebox 0.8.2 (PR #3777) : en « auto », jamais de remplacement d'un autre résolveur du réseau qui répond (état « délégué »).
