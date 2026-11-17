@@ -4,9 +4,9 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Contrôle du maillage distant (#3742) : l'IPv6 fixe est-elle toujours sur le WAN, et égale à l'AAAA publiée ? Lecture seule
-# (ip -j addr, résolution DNS) ; écrit l'état lu par l'API, alerte au journal sinon. Aucune modification réseau ni DNS.
+# (ip -j addr, résolution DNS) ; écrit l’état lu par l’API, alerte au journal sinon. Puis contrôle des DNS de la Freebox (#3769).
 [Unit]
-Description=SecuBox Freebox — contrôle de l'IPv6 fixe du maillage distant
+Description=SecuBox Freebox — contrôle de l’IPv6 fixe du maillage et des DNS annoncés
 After=network-online.target
 
 [Service]
@@ -14,6 +14,8 @@ Type=oneshot
 User=secubox-freebox
 Group=secubox
 ExecStart=/usr/sbin/freeboxctl maillage-controle
+# Contrôle des DNS annoncés par la Freebox (#3769) : seule écriture possible, vers la box, selon le réglage (dns-reglage.json).
+ExecStart=/usr/sbin/freeboxctl dns-controle
 SyslogLevelPrefix=yes
 NoNewPrivileges=yes
 ProtectSystem=strict

@@ -14,6 +14,7 @@ l'utilisateur secubox-freebox (sudo -u, cote appelant).
   maillage-lire <ip_box> état de la redirection UDP du maillage et de l'exception IPv6 (lecture seule, #3742)
   maillage-appliquer <ip_box>  pose/corrige la redirection et l'exception IPv6 (idempotent, audité)
   maillage-controle      relève l'IPv6 fixe du WAN et l'AAAA publiée, écrit l'état, alerte au journal (minuteur)
+  dns-controle           contrôle des DNS IPv4/IPv6 annoncés par la Freebox, corrige selon le réglage (minuteur, #3769)
   dns-lire, dns-regler, dns6-lire, dns6-regler, ip-fixe-lire, ip-fixe-poser, ip-fixe-retirer, bail-poser : clé mobile (#3467)
 """
 import ipaddress
@@ -27,6 +28,7 @@ _lib = _lib_installe if os.path.isdir(os.path.join(_lib_installe, "api")) else o
 sys.path.insert(0, _lib)
 
 from api import client as C  # noqa: E402
+from api import dnscontrole as DC  # noqa: E402
 from api import maillage as MA  # noqa: E402
 from api import magasin as M  # noqa: E402
 from api import service as S  # noqa: E402
@@ -71,9 +73,47 @@ def controle_maillage(relever=MA.relever, ecrire=MA.ecrire_controle, sortie=sys.
     return etat
 
 
+def _ip_box():
+    """Adresse de la box sur le LAN : celle que le noyau choisit pour joindre la Freebox (comme l'API)."""
+    env = os.environ.get("SECUBOX_FREEBOX_IP_BOX")
+    if env:
+        return env
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect((HOTE.split("://")[-1].split("/")[0].split(":")[0], 80))
+        return s.getsockname()[0]
+    except OSError:
+        return ""
+    finally:
+        s.close()
+
+
+def controle_dns(fabriquer=None, sortie=sys.stderr):
+    """Passage du minuteur (#3769) : rien si désactivé ; Freebox non autorisée = état écrit, pas d'échec de l'unité."""
+    r = DC.lire_reglage()
+    if not r["actif"]:
+        return {"actif": False}
+    try:
+        etat = DC.controler((fabriquer or _fabriquer)(), _ip_box(), r)
+    except (C.ErreurFreebox, OSError) as e:
+        etat = {"actif": True, "conforme": None, "erreur": str(e)[:200], "verifie_le": int(__import__("time").time())}
+        DC._ecrire_json(DC.CHEMIN_ETAT, etat)
+        print("<4>contrôle DNS Freebox : " + etat["erreur"], file=sortie)
+        return etat
+    for c in etat["corrections"]:
+        print("<4>contrôle DNS Freebox : DNS %s remis sur la box" % c.upper(), file=sortie)
+    for a in etat["alertes"]:
+        print("<4>contrôle DNS Freebox : " + a, file=sortie)
+    return etat
+
+
 def main(argv):
     if argv and argv[0] == "maillage-controle" and len(argv) == 1:
         print(json.dumps(controle_maillage(), ensure_ascii=False))     # sans session Freebox : rien ne lui est demandé
+        return 0
+    if argv and argv[0] == "dns-controle" and len(argv) == 1:
+        print(json.dumps(controle_dns(), ensure_ascii=False))
         return 0
     if not argv:
         print("usage : freeboxctl passerelle-dhcp <ip>|lire-passerelle", file=sys.stderr)
@@ -115,7 +155,7 @@ def main(argv):
         else:
             print("usage : freeboxctl passerelle-dhcp <ip>|lire-passerelle|dns-lire|dns-regler <ip,...>|dns6-lire|"
                   "dns6-regler <0|1> [ip,...]|ip-fixe-lire <ip>|ip-fixe-poser <ip>|ip-fixe-retirer <mac>|bail-poser <mac> <ip>|"
-                  "maillage-lire <ip_box>|maillage-appliquer <ip_box>|maillage-controle", file=sys.stderr)
+                  "maillage-lire <ip_box>|maillage-appliquer <ip_box>|maillage-controle|dns-controle", file=sys.stderr)
             return 2
     except (C.ErreurFreebox, ValueError, IndexError) as e:
         print(json.dumps({"erreur": str(e)[:200]}))
