@@ -140,7 +140,7 @@ def test_puits_inconnu_ou_hors_mode_auto(api, donnees):
 def test_profil_graine_agrege_et_effectif(api, donnees):
     dnstv_profil.ecrire_agrege({"pub.example.com": {"appareils": ["tv-a", "tv-b"], "maj": T}}, donnees["etat"])
     j = api.get("/adblock-tv/auto/profil").json()
-    assert j["min_appareils"] == 2 and len(j["graine"]) == 35 and j["agrege"]["pub.example.com"]["appareils"] == ["tv-a", "tv-b"]
+    assert j["min_appareils"] == 2 and len(j["graine"]) == 43 and j["agrege"]["pub.example.com"]["appareils"] == ["tv-a", "tv-b"]
     eff = {x["domaine"]: x["motif"] for x in j["effectif"]}
     assert eff["c.2mdn.net"] == "profil de base" and eff["pub.example.com"] == "profil agrégé (2 appareils)"
 

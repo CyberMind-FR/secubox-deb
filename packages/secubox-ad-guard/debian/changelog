@@ -1,3 +1,13 @@
+secubox-ad-guard (1.29.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (#3783) : pubs M6+ bloquées en relais seul (validé devant la TV
+    le 17/11 : plus de pubs, lecture OK) ; profil de base complété (FreeWheel
+    7cbf2, stickyadstv, 2mdn.net, smartclip, adform, realytics, everesttech,
+    ups.analytics.yahoo.com). Migration : chaque nouveau profil de base est
+    posé une fois aux TV déjà en mode auto (garde des catégories protégées).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 11:50:28 +0100
+
 secubox-ad-guard (1.28.2-1~trixie1) trixie; urgency=medium
 
   * Légendes des graphiques : chaque libellé prend la couleur de sa courbe
