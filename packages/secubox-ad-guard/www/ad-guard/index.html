@@ -114,6 +114,17 @@
         .tab{font:inherit;font-size:.74rem;background:rgba(10,22,46,.6);border:1px solid var(--trait);border-radius:999px;color:var(--doux);padding:4px 14px;cursor:pointer}
         .tab:hover{border-color:var(--cyan)} .tab.active{background:rgba(41,182,246,.28);border-color:var(--cyan);color:#fff;font-weight:600}
         .tab-content{display:none} .tab-content.active{display:block}
+        /* #3774 : filtrages automatiques */
+        .fa-bandeau{display:flex;flex-wrap:wrap;gap:10px;align-items:center;border:1px solid var(--trait);border-radius:12px;padding:10px 14px;margin-bottom:10px}
+        .fa-bandeau.ok{border-color:rgba(46,204,113,.5);background:rgba(46,204,113,.08)} .fa-bandeau.part{border-color:rgba(255,159,28,.6);background:rgba(255,159,28,.08)}
+        .fa-bandeau b{font-size:1rem} .fa-bandeau span{color:var(--text-dim);font-size:.82rem} .fa-bandeau .btn{margin-left:auto}
+        .fa-grille{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+        .fa-reg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;border:1px solid var(--trait);border-radius:10px;padding:10px 12px}
+        .fa-reg label{font-weight:600;cursor:pointer} .fa-reg small{grid-column:1/-1;color:var(--text-muted);font-size:.74rem}
+        .fa-inter{appearance:none;-webkit-appearance:none;width:42px;height:24px;border-radius:12px;background:rgba(111,132,168,.4);position:relative;cursor:pointer;margin:0;flex:none}
+        .fa-inter::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
+        .fa-inter:checked{background:#2ecc71} .fa-inter:checked::after{left:21px} .fa-inter:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .fa-inter:disabled{opacity:.5;cursor:default}
         .defile{overflow-x:auto} table{width:100%;border-collapse:collapse}
         th,td{text-align:left;padding:5px 6px;border-bottom:1px solid rgba(86,150,255,.12);font-size:.78rem}
         th{color:var(--faible);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;background:transparent;white-space:nowrap} tbody tr:hover{background:rgba(41,182,246,.07)}
@@ -238,6 +249,7 @@
             <button class="tab" data-tab="blocklist">Liste de blocage</button>
             <button class="tab" data-tab="delayed">Différés</button>
             <button class="tab" data-tab="adblocktv">DNS AdBlock TV</button>
+            <button class="tab" data-tab="filtrages">Filtrages automatiques</button>
         </div>
 
         <!-- Overview Tab -->
@@ -460,6 +472,16 @@
             </div>
         </div>
         </details>
+
+        <!-- Filtrages automatiques (#3774) -->
+        <div id="filtrages" class="tab-content">
+            <div class="fa-bandeau" id="fa-bandeau"><b id="fa-titre">Chargement…</b><span id="fa-sous"></span><button class="btn" type="button" id="fa-defaut">Revenir aux réglages par défaut</button></div>
+            <div class="card"><div class="card-header"><h2>Filtrages de la box <small style="font-weight:400;color:var(--text-dim);">— s’appliquent à toutes les TV en mode auto</small></h2></div>
+                <div class="fa-grille" id="fa-grille"></div></div>
+            <div class="card"><div class="card-header"><h2>Par TV <small style="font-weight:400;color:var(--text-dim);">— le tri Netflix se règle ici, TV par TV</small></h2></div>
+                <div style="overflow-x:auto"><table><thead><tr><th>TV</th><th>Adresses</th><th>Mode</th><th>Tri Netflix</th><th></th></tr></thead><tbody id="fa-tv"></tbody></table></div>
+                <p style="font-size:.76rem;color:var(--text-muted);margin:.5rem 0 0;">« Ça ne marche plus » retire les règles à l’essai de cette TV. Aucun réglage n’éteint TV Privacy : il reste toujours actif.</p></div>
+        </div>
     
     </div></div></main>
 
@@ -1383,6 +1405,62 @@
         document.getElementById('heure').textContent = new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
         // ── Démonstration : lectures fictives (noms de documentation), écritures inertes ─────────────────────────────
+
+        // ----- Filtrages automatiques (#3774) -----
+        const FA = [
+            ['ajout_auto', 'Ajout automatique des TV', 'Une TV est reconnue à sa pub (FreeWheel) ou à son système (Android TV, Freebox Player, webOS, Tizen…), puis ajoutée en mode auto.'],
+            ['auto_essai', 'Essai automatique des règles', 'Un domaine de pub repéré est bloqué à l’essai 24 h ; retiré tout seul si la lecture casse.'],
+            ['confirmation_auto', 'Confirmation automatique', 'Un essai de 24 h sans souci devient une règle définitive.'],
+            ['declencheurs_pub', 'Repérer les pubs déjà bloquées', 'Une pub connue des listes, même déjà bloquée, sert de repère pour trouver les serveurs de pub voisins.'],
+            ['tri_nouvelles', 'Tri Netflix des nouvelles TV', 'Chaque nouvelle TV en mode auto reçoit le tri Netflix (8 TV au plus). Un épisode peut démarrer quelques secondes plus tard.'],
+            ['indices', 'Indices partagés du maillage', 'Les box du maillage s’échangent les pubs trouvées (environ 17 min de délai).'],
+        ];
+        let FA_OCCUPE = false;
+        async function faRender() {
+            if (FA_OCCUPE) return;
+            const [f, st] = await Promise.all([api('/adblock-tv/auto/filtrages'), api('/adblock-tv/status')]);
+            if (!f || !f.filtrages) { document.getElementById('fa-titre').textContent = 'Réglages illisibles'; return; }
+            const actifs = FA.filter(([k]) => f.filtrages[k]).length;
+            const tvs = {};
+            ((st && st.clients) || []).forEach(c => { const sl = tvSlug(c.nom); (tvs[sl] = tvs[sl] || { nom: c.nom, mode: c.mode, n: 0 }).n++; });
+            const auto = Object.entries(tvs).filter(([, t]) => t.mode === 'auto');
+            const ban = document.getElementById('fa-bandeau');
+            ban.className = 'fa-bandeau ' + (actifs === FA.length ? 'ok' : 'part');
+            document.getElementById('fa-titre').textContent = actifs === FA.length ? 'Tout est en automatique' : actifs + ' filtrages sur ' + FA.length + ' actifs';
+            document.getElementById('fa-sous').textContent = auto.length + (auto.length > 1 ? ' TV protégées' : ' TV protégée') + ' en mode auto · tri Netflix : ' + (f.tri_netflix || []).length + '/' + f.tri_max;
+            const g = document.getElementById('fa-grille'); g.replaceChildren();
+            FA.forEach(([k, titre, aide]) => {
+                const d = tvEl('div', null, 'fa-reg'), id = 'fa-' + k;
+                const l = tvEl('label', titre); l.htmlFor = id;
+                const i = document.createElement('input'); i.type = 'checkbox'; i.id = id; i.className = 'fa-inter'; i.setAttribute('role', 'switch'); i.checked = !!f.filtrages[k];
+                i.addEventListener('change', () => faRegler(k, i.checked, titre, i));
+                d.append(l, i, tvEl('small', aide)); g.appendChild(d);
+            });
+            const tb = document.getElementById('fa-tv'); tb.replaceChildren();
+            if (!Object.keys(tvs).length) { tvLigne(tb, [Object.assign(tvEl('td', 'Aucune TV pour l’instant : elles apparaissent ici dès qu’elles sont reconnues.', null, 'color:var(--text-dim);text-align:center;'), { colSpan: 5 })]); return; }
+            Object.entries(tvs).sort((a, b) => a[1].nom.localeCompare(b[1].nom)).forEach(([sl, t]) => {
+                const i = document.createElement('input'); i.type = 'checkbox'; i.className = 'fa-inter'; i.setAttribute('role', 'switch');
+                i.setAttribute('aria-label', 'Tri Netflix pour ' + t.nom); i.checked = (f.tri_netflix || []).includes(sl); i.disabled = t.mode !== 'auto';
+                i.addEventListener('change', async () => { FA_OCCUPE = true; try { await tvTri(sl, i.checked); } finally { FA_OCCUPE = false; faRender(); } });
+                const b = tvEl('button', 'Ça ne marche plus', 'btn'); b.type = 'button'; b.disabled = t.mode !== 'auto';
+                b.addEventListener('click', async () => { await autoCaNeMarchePlus(sl); faRender(); });
+                const td = (x) => { const c = document.createElement('td'); c.appendChild(x); return c; };
+                tvLigne(tb, [tvEl('td', t.nom), tvEl('td', String(t.n)), tvEl('td', t.mode), td(i), td(b)]);
+            });
+        }
+        async function faRegler(cle, actif, titre, i) {
+            if (!actif && !await confirmer('Couper « ' + titre + ' » ? Les TV seront moins protégées. Vous pourrez le rétablir ici à tout moment.')) { i.checked = true; return; }
+            FA_OCCUPE = true; i.disabled = true;
+            try { const r = await api('/adblock-tv/auto/filtrages', 'POST', { cle, actif }); if (!r || !r.filtrages) i.checked = !actif; }
+            finally { FA_OCCUPE = false; faRender(); }
+        }
+        document.getElementById('fa-defaut').addEventListener('click', async () => {
+            if (!await confirmer('Revenir aux réglages par défaut : tous les filtrages actifs, et le tri Netflix posé pour les TV en mode auto. Le DNS de la box peut s’interrompre une dizaine de secondes.')) return;
+            FA_OCCUPE = true; try { await api('/adblock-tv/auto/filtrages/defaut', 'POST'); } finally { FA_OCCUPE = false; faRender(); }
+        });
+        document.querySelector('.tab[data-tab="filtrages"]').addEventListener('click', faRender);
+        setInterval(() => { if (document.getElementById('filtrages').classList.contains('active')) faRender(); }, 15000);
+
         function demoApi(endpoint, methode) {
             if (methode !== 'GET') return Promise.resolve({ detail: 'démonstration : action inerte' });
             const e = endpoint.split('?')[0];

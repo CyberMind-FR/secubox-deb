@@ -57,7 +57,16 @@ def reglage_depuis(etat: dict, toml: Path = TOML) -> Reglage:
         with open(toml, "rb") as h:
             c = tomllib.load(h).get("adblock_tv_auto", {})
     except (OSError, ValueError, ImportError):
-        return r
+        c = {}
+    _lire_toml(r, c)
+    for k in ("confirmation_auto", "declencheurs_pub"):          # #3774 : un réglage fait dans la page prime sur le TOML
+        v = (etat.get("filtrages") or {}).get(k)
+        if isinstance(v, bool):
+            setattr(r, k, v)
+    return r
+
+
+def _lire_toml(r: "Reglage", c: dict) -> None:
     for k in ("confirmation_auto", "declencheurs_pub"):
         if isinstance(c.get(k), bool):
             setattr(r, k, c[k])
@@ -71,7 +80,6 @@ def reglage_depuis(etat: dict, toml: Path = TOML) -> Reglage:
         v = c.get(k)
         if isinstance(v, int) and not isinstance(v, bool) and v > 0:
             setattr(r, k, v)
-    return r
 
 
 def appareils(etat: dict) -> Dict[str, List[str]]:

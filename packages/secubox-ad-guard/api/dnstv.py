@@ -338,6 +338,11 @@ def valider_etat(brut) -> dict:
             ignores.append(m)
     etat_valide = {"actif": bool(brut.get("actif", False)), "clients": clients, "auto_essai": auto_essai,
                    "mode_defaut": mode_defaut, "ajout_auto": ajout_auto, "ignores": ignores, **indices}
+    filt = brut.get("filtrages")                                   # #3774 : réglages des filtrages faits dans la page (priment sur le TOML)
+    if filt is not None:
+        if not isinstance(filt, dict) or set(filt) - set(FILTRAGES_ETAT) or any(not isinstance(v, bool) for v in filt.values()):
+            raise ErreurTV("filtrages : " + ", ".join(FILTRAGES_ETAT) + " (booléens)")
+        etat_valide["filtrages"] = dict(filt)
     aut = _valider_autorisations(brut.get("autorisations", {}))
     if aut:                                                       # écrit seulement s'il y en a : les anciens états gardent exactement leur format
         etat_valide["autorisations"] = aut
@@ -458,6 +463,11 @@ def migrer_politique_auto(dossier: Path = None) -> bool:
 
 
 MARQUE_POLITIQUE_AUTO = ".politique-auto-3774"
+FILTRAGES_ETAT = ("confirmation_auto", "declencheurs_pub", "tri_nouvelles")      # réglés dans la page ; absents = défaut (vrai)
+
+
+def filtrage(etat: dict, cle: str) -> bool:
+    return bool((etat.get("filtrages") or {}).get(cle, True))
 
 
 def politique_auto(etat: dict) -> bool:
@@ -470,7 +480,7 @@ def politique_auto(etat: dict) -> bool:
     if not etat.get("auto_essai"):
         etat["auto_essai"], change = True, True
     tri = dnstv_tri.reglage(etat)
-    slugs = sorted({_slug(c["nom"]) for c in etat.get("clients", []) if c.get("mode") == "auto"})
+    slugs = sorted({_slug(c["nom"]) for c in etat.get("clients", []) if c.get("mode") == "auto"}) if filtrage(etat, "tri_nouvelles") else []
     for sl in slugs:
         if sl not in tri["appareils"] and len(tri["appareils"]) < 8:
             tri["appareils"].append(sl)
