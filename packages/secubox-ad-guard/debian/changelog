@@ -1,3 +1,13 @@
+secubox-ad-guard (1.30.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (#3785) : pubs RTL9+ (OQEE) bloquées en relais seul (validé devant
+    la TV le 17/11 : pubs zappées, lecture OK) ; profil de base complété
+    (vizchoice.viznet.tv, ads-canalplus.akamaized.net), posé aux TV en mode auto ;
+    ads-canalplus.akamaized.net classé PUBLICITE (entrée exacte), akamaized.net
+    reste CDN protégé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 14:15:23 +0100
+
 secubox-ad-guard (1.29.0-1~trixie1) trixie; urgency=medium
 
   * TV Privacy (#3783) : pubs M6+ bloquées en relais seul (validé devant la TV
