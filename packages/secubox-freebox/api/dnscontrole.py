@@ -28,6 +28,13 @@ CHEMIN_REGLAGE = os.path.join(DOSSIER, "dns-reglage.json")
 CHEMIN_ETAT = os.path.join(DOSSIER, "dns-controle.json")
 CHEMIN_DNS_LAN = os.environ.get("SECUBOX_DNS_LAN_TOML", "/etc/secubox/dns-lan.toml")
 MODES = ("alerter", "corriger")
+# Sur une clé mobile (#3467), secubox-mobile POSSÈDE le DNS de la Freebox : il le pose, le rend au retrait et ne réécrit
+# jamais un réglage changé par l'utilisateur. Le contrôle ne fait alors que surveiller : aucune correction (#3769).
+MOBILECTL = os.environ.get("SECUBOX_MOBILECTL", "/usr/sbin/secubox-mobilectl")
+
+
+def gere_par_mobile():
+    return os.path.exists(MOBILECTL)
 DEFAUT = {"actif": True, "mode": "corriger", "ipv4": "auto", "ipv6": "auto"}
 
 
@@ -184,19 +191,20 @@ def resolveurs_tiers(annonce, attendu, ip_freebox, sonde):
     return [a for a in annonce if a and a != attendu and a != ip_freebox and sonde(a)]
 
 
-def controler(svc, ip_box, reglage=None, stable=None, sonde=repond, horloge=time.time, ecrire=None, corriger_force=False):
+def controler(svc, ip_box, reglage=None, stable=None, sonde=repond, horloge=time.time, ecrire=None, corriger_force=False, mobile=None):
     """Un passage : lit les deux DNS, compare, corrige si le mode le demande (ou `corriger_force`, geste « Appliquer »).
     Écrit l'état et le rend. Les erreurs Freebox remontent (l'appelant les traduit)."""
     reglage = reglage or lire_reglage()
+    mobile = gere_par_mobile() if mobile is None else mobile
     stable = (ipv6_stable() or ipv6_auto_relevee()) if stable is None else stable
     v4, v6 = attendus(reglage, ip_box, stable)
     etat = {"verifie_le": int(horloge()), "actif": reglage["actif"], "mode": reglage["mode"], "ipv6_auto": stable,
-            "attendu": {"ipv4": v4, "ipv6": v6}, "corrections": [], "refus": [], "delegue": [], "alertes": []}
+            "attendu": {"ipv4": v4, "ipv6": v6}, "corrections": [], "refus": [], "delegue": [], "alertes": [], "mobile": mobile}
     dns4 = svc.lire_dns()
     dns6 = svc.lire_dns6()
     etat["annonce"] = {"ipv4": dns4, "ipv6": dns6.get("dns") if dns6.get("use_custom_dns") else [], "ipv6_personnalise": bool(dns6.get("use_custom_dns"))}
     ecarts = comparer(dns4, dns6, v4, v6)
-    if ecarts and (corriger_force or (reglage["actif"] and reglage["mode"] == "corriger")):
+    if ecarts and not mobile and (corriger_force or (reglage["actif"] and reglage["mode"] == "corriger")):
         ip_fb = getattr(svc, "ip_freebox", lambda: "")()
         for e in ecarts:
             tiers = [] if corriger_force or reglage[e["famille"]] != "auto" else resolveurs_tiers(e["annonce"], e["attendu"], ip_fb, sonde)
@@ -218,6 +226,9 @@ def controler(svc, ip_box, reglage=None, stable=None, sonde=repond, horloge=time
     etat["ecarts"] = [e for e in ecarts if e["famille"] not in delegues]
     etat["conforme"] = not etat["ecarts"]
     etat["alertes"] = [e["message"] + " " + IMPACT for e in etat["ecarts"]] + etat["refus"]
+    if mobile and ecarts:
+        etat["alertes"].append("Clé mobile : le DNS de la Freebox est géré par la page « Mobile » (retrait, réglage changé à la main) ; "
+                               "ce contrôle ne le corrige pas.")
     for d in etat["delegue"]:
         etat["alertes"].append("DNS %s : la Freebox annonce %s, un autre résolveur du réseau qui répond (autre SecuBox ?). "
                                "Pas de correction automatique ; « Appliquer maintenant » ou une adresse saisie reprend la main."

@@ -35,6 +35,7 @@ class FauxSvc:
 
 
 def _ctl(svc, reglage=R, sonde=lambda s: True, **kw):
+    kw.setdefault("mobile", False)
     return DC.controler(svc, "192.168.1.200", reglage, "2a01::200", sonde=sonde, horloge=lambda: 1, ecrire=lambda d: None, **kw)
 
 
@@ -75,7 +76,7 @@ def test_appliquer_force_meme_en_mode_alerter():
 
 def test_ipv6_inconnue_n_est_pas_controlee():
     svc = FauxSvc(["192.168.1.200"], False, [])
-    e = DC.controler(svc, "192.168.1.200", R, "", sonde=lambda s: True, horloge=lambda: 1, ecrire=lambda d: None)
+    e = DC.controler(svc, "192.168.1.200", R, "", sonde=lambda s: True, horloge=lambda: 1, ecrire=lambda d: None, mobile=False)
     assert e["conforme"] and not svc.ecritures and "IPv6 non contrôlé" in e["alertes"][0]
 
 
@@ -137,9 +138,9 @@ def test_ipv6_relevee_sert_l_api(tmp_path, monkeypatch):
     monkeypatch.setattr(DC, "CHEMIN_ETAT", str(tmp_path / "e.json"))
     monkeypatch.setattr(DC, "CHEMIN_DNS_LAN", str(tmp_path / "absent.toml"))
     svc = FauxSvc(["192.168.1.128"], True, ["2a01::7"])
-    DC.controler(svc, "192.168.1.128", R, "2a01::7", sonde=lambda s: True, horloge=lambda: 1)       # passage du minuteur
+    DC.controler(svc, "192.168.1.128", R, "2a01::7", sonde=lambda s: True, horloge=lambda: 1, mobile=False)       # passage du minuteur
     assert DC.ipv6_auto_relevee() == "2a01::7"
-    e = DC.controler(svc, "192.168.1.128", R, sonde=lambda s: True, horloge=lambda: 2)              # API : sans netlink
+    e = DC.controler(svc, "192.168.1.128", R, sonde=lambda s: True, horloge=lambda: 2, mobile=False)              # API : sans netlink
     assert e["attendu"]["ipv6"] == "2a01::7" and e["conforme"]
 
 
@@ -147,7 +148,7 @@ def test_ipv6_relevee_sert_l_api(tmp_path, monkeypatch):
 def test_autre_secubox_annoncee_et_vivante_pas_de_correction():
     # cas gk2/gk7 du 17/11 : gk2 (auto) voit la Freebox annoncer gk7, qui répond
     svc = FauxSvc(["192.168.1.128"], True, ["2a01::7"])
-    e = DC.controler(svc, "192.168.1.200", R, "2a01::200", sonde=lambda s: True, horloge=lambda: 1, ecrire=lambda d: None)
+    e = DC.controler(svc, "192.168.1.200", R, "2a01::200", sonde=lambda s: True, horloge=lambda: 1, ecrire=lambda d: None, mobile=False)
     assert not svc.ecritures and e["conforme"] and {d["famille"] for d in e["delegue"]} == {"ipv4", "ipv6"}
     assert "autre résolveur" in e["alertes"][0]
 
@@ -169,3 +170,15 @@ def test_adresse_saisie_ou_geste_appliquer_reprend_la_main():
     assert _ctl(svc, dict(R, ipv4="192.168.1.200"))["corrections"] == ["ipv4"]
     svc = FauxSvc(["192.168.1.128"], True, ["2a01::200"])
     assert _ctl(svc, corriger_force=True)["corrections"] == ["ipv4"]
+
+
+# ── clé mobile : secubox-mobile possède le DNS de la Freebox (retrait, réglage de l'utilisateur) ─────────────────────────
+def test_cle_mobile_jamais_de_correction_meme_apres_retrait():
+    svc = FauxSvc([], False, [])                                   # « retirer » a rendu à la Freebox ses DNS d'origine
+    e = _ctl(svc, mobile=True)
+    assert not svc.ecritures and not e["conforme"] and any("Clé mobile" in a for a in e["alertes"])
+
+
+def test_cle_mobile_meme_le_geste_appliquer_ne_corrige_pas():
+    svc = FauxSvc([], False, [])
+    assert not _ctl(svc, mobile=True, corriger_force=True)["corrections"] and not svc.ecritures

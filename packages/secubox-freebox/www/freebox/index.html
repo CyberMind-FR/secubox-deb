@@ -308,13 +308,14 @@
             $('dV4').textContent = c && c.annonce ? liste(c.annonce.ipv4) : '—';
             $('dV6').textContent = c && c.annonce ? (c.annonce.ipv6_personnalise ? liste(c.annonce.ipv6) : 'résolveur de la Freebox') : '—';
             const n = $('nDns'); n.replaceChildren();
+            if (c && c.mobile) n.appendChild(pastille('cy', 'CLÉ MOBILE', 'Le DNS de la Freebox est géré par la page Mobile : ce contrôle surveille sans corriger.'));
             if (c && c.delegue && c.delegue.length) n.appendChild(pastille('cy', 'DÉLÉGUÉ', 'Un autre résolveur du réseau (autre SecuBox ?) est annoncé : cette box ne le remplace pas.'));
             if (c && c.conforme === true) n.appendChild(pastille('ok', 'LA BOX ✓')); else if (c && c.conforme === false) n.appendChild(pastille('hors', 'ÉCART'));
             else if (c && c.erreur) n.appendChild(pastille('att', 'ILLISIBLE'));
             const quand = c && c.verifie_le ? new Date(c.verifie_le * 1000).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null;
             $('dCtl').textContent = !r ? '—' : (r.actif ? 'actif, ' + (r.mode === 'corriger' ? 'corrige' : 'alerte seulement') : 'désactivé') + (quand ? ' · dernier passage ' + quand : '');
             const a = $('dAlertes'); a.replaceChildren();
-            ((c && c.alertes) || []).concat(c && c.erreur ? ['Lecture impossible : ' + c.erreur] : []).forEach(t => a.appendChild(el('p', 'retour ' + (/autre résolveur/.test(t) ? 'ok' : 'ko'), t)));
+            ((c && c.alertes) || []).concat(c && c.erreur ? ['Lecture impossible : ' + c.erreur] : []).forEach(t => a.appendChild(el('p', 'retour ' + (/autre résolveur|Clé mobile/.test(t) ? 'ok' : 'ko'), t)));
             if (c && c.corrections && c.corrections.length) a.appendChild(el('p', 'retour ok', 'Corrigé : DNS ' + c.corrections.map(x => x.toUpperCase()).join(' et ') + ' remis sur la box.'));
             if (r && document.activeElement !== $('dAtt4') && document.activeElement !== $('dAtt6')) {
                 $('dActif').value = r.actif ? '1' : '0'; $('dMode').value = r.mode;

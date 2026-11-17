@@ -1,3 +1,11 @@
+secubox-freebox (0.8.3-1~trixie1) trixie; urgency=medium
+
+  * Contrôle DNS (#3769) : sur une clé mobile, secubox-mobile possède le DNS
+    de la Freebox (retrait, réglage changé par l'utilisateur) ; le contrôle
+    surveille et alerte sans jamais corriger (pastille « CLÉ MOBILE »).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 06:21:20 +0100
+
 secubox-freebox (0.8.2-1~trixie1) trixie; urgency=medium
 
   * Contrôle DNS (#3769) : deux box sur la même Freebox ne se disputent plus
