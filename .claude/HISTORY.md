@@ -16,8 +16,8 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   possède le DNS de la Freebox (pose, retrait, réglage de l'utilisateur ; c'est lui qui avait posé gk7 le 17/11). gk7 + gk2.
 - ad-guard 1.28.1 (PR #3779) : fiche « DNS de la box » sans « gk2 » en dur, IPv6 dérivée de la MAC = durable. gk7.
 - system 1.13.0 (PR #3781) : posture « Pare-feu » mesurée (unité root lecture seule `secubox-systeme-pare-feu-releve`, 5 min)
-  au lieu de « Active » en dur. gk7 (64 règles, entrée fermée par inet filter input) ; **gk2 à installer au prochain
-  redémarrage groupé de l'agrégateur**.
+  au lieu de « Active » en dur. gk7 (64 règles, entrée fermée par inet filter input) ; installé sur gk2 aussi (agrégateur relancé, 21 s ; migration #3774 : tri Netflix sur 5 appareils auto de gk2).
+- Légendes des graphiques aux couleurs de leurs courbes (PR #3782 : ad-guard 1.28.2, status 0.1.4, webos 1.20.8), gk7 + gk2.
 - Consigne du propriétaire : le produit doit marcher tel quel, surtout en relais seul (= bêta 1) ; mise en routeur écartée.
   Limite connue en relais seul : pubs dans les vidéos Netflix (TV jointe hors DNS).
 
