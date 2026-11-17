@@ -21,6 +21,19 @@ except ImportError:                                  # lancé hors paquet
 
 TYPES_CONTENU = ("contenu", "qualite_video")
 
+# Seconde voie (#3771) : le service propre au SYSTÈME d'une TV connectée ou d'un boîtier TV. Seuls ces appareils l'interrogent (ni téléphone ni
+# ordinateur), un direct sans insertion publicitaire suffit donc à reconnaître la TV. Liste réglable (`plateformes_tv` du TOML).
+PLATEFORMES_TV = (
+    "androidtvchannels-pa.googleapis.com",          # accueil Android TV / Google TV (Freebox Pop, Mini 4K, TV Sony, TCL, Philips…)
+    "androidtv.prod.cloud.netflix.com",             # application Netflix d'Android TV
+    "freebox.itc.proxad.net",                       # télémétrie des Freebox Player
+    "lgtvsdp.com", "lgsmartad.com", "lgappstv.com",  # LG webOS
+    "samsungcloudsolution.com", "samsungcloudsolution.net", "samsungotn.net", "samsungacr.com",  # Samsung Tizen
+    "vidaahub.com",                                 # Hisense VIDAA
+    "roku.com",                                     # Roku
+)
+MIN_PLATEFORME = 3
+
 
 @dataclass
 class Detection:
@@ -35,8 +48,10 @@ def _suffixe(domaine: str, suffixes) -> bool:
     return any(domaine == s or domaine.endswith("." + s) for s in suffixes)
 
 
-def detecter(compteurs, voisins, services, declencheurs, exclus: Set[str], min_declencheurs: int = 5, min_services: int = 2) -> List[Detection]:
-    """`compteurs` : client -> domaine -> requêtes ; `voisins` : adresse -> MAC. Une source sans MAC connue n'est JAMAIS détectée (identité inconnue)."""
+def detecter(compteurs, voisins, services, declencheurs, exclus: Set[str], min_declencheurs: int = 5, min_services: int = 2,
+             plateformes=(), min_plateforme: int = MIN_PLATEFORME) -> List[Detection]:
+    """`compteurs` : client -> domaine -> requêtes ; `voisins` : adresse -> MAC. Une source sans MAC connue n'est JAMAIS détectée (identité inconnue).
+    Deux voies : insertion publicitaire + services vidéo (#1959), ou service du système d'une TV connectée (`plateformes`, #3771)."""
     par_mac: Dict[str, Dict[str, int]] = {}
     adresses: Dict[str, List[str]] = {}
     for client, doms in compteurs.items():
@@ -56,4 +71,10 @@ def detecter(compteurs, voisins, services, declencheurs, exclus: Set[str], min_d
             vus = sorted({s for d in doms for s in declencheurs if d == s or d.endswith("." + s)})
             preuve = f"{dec} requêtes vers {', '.join(vus)} ; services : {', '.join(orgs)}"[:120]
             out.append(Detection(mac, mac, sorted(adresses[mac]), min(100, dec + 10 * len(orgs)), preuve))
+            continue
+        cumul_tv = sum(n for d, n in doms.items() if _suffixe(d, plateformes))
+        if plateformes and cumul_tv >= min_plateforme:
+            vus = sorted({s for d in doms for s in plateformes if d == s or d.endswith("." + s)})
+            preuve = f"système TV : {cumul_tv} requêtes vers {', '.join(vus)}"[:120]
+            out.append(Detection(mac, mac, sorted(adresses[mac]), min(100, 40 + cumul_tv), preuve))
     return sorted(out, key=lambda x: (-x.score, x.mac))

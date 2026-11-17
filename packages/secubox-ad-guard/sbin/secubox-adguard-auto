@@ -417,7 +417,7 @@ def main(sudo=None, maintenant=None, voisins=None, locales=None, passerelles=Non
                     vois = (voisins or voisins_du_lan)()
                     exclus = (locales or dnstv.adresses_locales)() | (passerelles or dnstv.passerelles)()
                     detections = dnstv_detecteur.detecter(magasin.compteurs_clients(dnstv._jour(now - 86400)), vois, services(), reglage.declencheurs, exclus,
-                                                          reglage.min_declencheurs, reglage.min_services)
+                                                          reglage.min_declencheurs, reglage.min_services, reglage.plateformes_tv, reglage.min_plateforme)
                     vues = {c["client"]: c["derniere_vue"] for c in magasin.par_client()}
                     suivi = dnstv_ajout.charger_suivi()
                     res_a = dnstv_ajout.appliquer(etat, regles, detections, vois, vues, dnstv_profil.profil_effectif(dnstv_profil.graine(), dnstv_profil.charger_agrege()),
