@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-17 — TV Privacy : TV de la maison basculées sur gk7, détection par système TV (ref #3771)
+
+- Freebox (DHCP + DHCPv6) annonce gk7 (192.168.1.128 / `…dea6:32ff:fe64:f596`), maintenu par le contrôle DNS de gk2
+  (réglage sauvegardé `dns-reglage.json.avant-gk7`) ; contrôle DNS de gk7 désactivé (même Freebox que gk2 : pas de bascule
+  entre deux box). gk7 et gk2 sont sur le MÊME réseau 192.168.1.x (gk7 n'est pas distant).
+- Freebox Pop (`…4e:95`) ajouté en auto sur gk7 (`TV 4e95`), stream france.tv sans pub (npaw, firebase bloqués).
+- ad-guard 1.26.0 (PR #3772) : seconde voie de détection par service du système TV (Android TV, Freebox Player, webOS, Tizen,
+  VIDAA, Roku), sans condition FreeWheel ; déployé gk7 et gk2.
+- Pièges : gk7 n'avait pas tcpdump (installé) ; dans `dnstv/etat.json`, les appareils sont sous `clients`, pas `appareils`.
+
 ## 2026-11-17 — Freebox : contrôle des DNS IPv4 et IPv6 annoncés (ref #3769)
 
 - Onglet « DNS du réseau » (maquette approuvée) : contrôle activable, alerte ou correction (défaut), attendus auto/saisis,
