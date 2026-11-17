@@ -38,9 +38,9 @@ class Reglage:
     min_declencheurs: int = 5
     min_services: int = 2
     min_appareils_agreg: int = 2
-    # Détection permanente (#2047), faux par défaut : l'administrateur les active dans ad-guard.toml
-    confirmation_auto: bool = False      # un essai sans régression devient règle confirmée à l'échéance (au lieu d'être retiré)
-    declencheurs_pub: bool = False       # un hôte de pub connu (listes), même déjà bloqué, ouvre la fenêtre de détection
+    # Détection permanente (#2047), vraie par défaut depuis #3774 ; ad-guard.toml peut la couper
+    confirmation_auto: bool = True      # un essai sans régression devient règle confirmée à l'échéance (au lieu d'être retiré)
+    declencheurs_pub: bool = True        # un hôte de pub connu (listes), même déjà bloqué, ouvre la fenêtre de détection
     # Seconde voie de détection (#3771) : service du système d'une TV connectée (liste et seuil réglables)
     plateformes_tv: tuple = dnstv_detecteur.PLATEFORMES_TV
     min_plateforme: int = dnstv_detecteur.MIN_PLATEFORME

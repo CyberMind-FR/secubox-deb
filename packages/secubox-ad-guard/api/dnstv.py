@@ -38,7 +38,8 @@ CATEGORIES = ("advertising", "tracking", "telemetry", "social", "custom")
 MODES = ("off", "observe", "block", "auto")
 DECISIONS = ("ALLOWED", "BLOCKED", "UPSTREAM_ERROR")
 
-ETAT_DEFAUT = {"actif": True, "clients": [], "auto_essai": False, "mode_defaut": "auto", "ajout_auto": False, "ignores": [],
+# #3774 : en mode auto, tout est actif par défaut (essai automatique compris).
+ETAT_DEFAUT = {"actif": True, "clients": [], "auto_essai": True, "mode_defaut": "auto", "ajout_auto": False, "ignores": [],
               "indices_publier": True, "indices_recevoir": True}      # #3666 : indices du maillage, actifs par défaut
 MODES_DEFAUT = ("off", "auto")      # observe/block sortent un appareil du puits de production : réservés à la déclaration manuelle (revue #1959)
 MAC_RE = re.compile(r"^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$")
@@ -312,7 +313,7 @@ def valider_etat(brut) -> dict:
         raise ErreurTV("deux appareils en mode auto donnent la même vue : leurs noms doivent différer par plus que la casse ou la ponctuation")
     if any(len(p) > 1 for p in puits_par_nom.values()):
         raise ErreurTV("les adresses d'un même appareil doivent avoir le même réglage « puits »")
-    auto_essai = brut.get("auto_essai", False)
+    auto_essai = brut.get("auto_essai", False)      # clé absente = faux ; #3774 pose la valeur explicitement (installation, migration)
     if not isinstance(auto_essai, bool):
         raise ErreurTV("auto_essai : booléen attendu")
     ajout_auto = brut.get("ajout_auto", False)
@@ -435,6 +436,47 @@ def activer_toujours(dossier: Path = None) -> bool:
             etat["ajout_auto"], change = True, True
     if change:
         ecrire_etat(etat, d)
+    return change
+
+
+def migrer_politique_auto(dossier: Path = None) -> bool:
+    """#3774 : migration UNIQUE des box existantes, appelée par le postinst seulement (jamais par le moteur) : applique
+    `politique_auto` une fois puis pose la marque. Un état corrompu n'est jamais touché. Rend vrai s'il a écrit l'état."""
+    d = dossier or DOSSIER_ETAT
+    marque = d / MARQUE_POLITIQUE_AUTO
+    if marque.exists() or marque.is_symlink() or (d / "etat.json").is_symlink():
+        return False
+    etat, erreur = lire_etat(d)
+    if erreur:
+        return False
+    change = etat.get("mode_defaut", "auto") == "auto" and politique_auto(etat)
+    if change:
+        ecrire_etat(etat, d)
+    d.mkdir(parents=True, exist_ok=True)
+    marque.write_text("1\n")
+    return change
+
+
+MARQUE_POLITIQUE_AUTO = ".politique-auto-3774"
+
+
+def politique_auto(etat: dict) -> bool:
+    """#3774 (décision du propriétaire) : en mode auto, TOUS les filtrages sont actifs, Netflix compris. Essai automatique des
+    règles, et tri Netflix pour chaque appareil en mode auto (8 au plus, plafond du tri). Modifie `etat` en place ; rend vrai s'il a
+    changé quelque chose. Appelée une seule fois par box (marque), puis à chaque ajout automatique : un retrait ultérieur par
+    l'administrateur n'est jamais réécrit par la migration."""
+    from . import dnstv_tri  # noqa: PLC0415
+    change = False
+    if not etat.get("auto_essai"):
+        etat["auto_essai"], change = True, True
+    tri = dnstv_tri.reglage(etat)
+    slugs = sorted({_slug(c["nom"]) for c in etat.get("clients", []) if c.get("mode") == "auto"})
+    for sl in slugs:
+        if sl not in tri["appareils"] and len(tri["appareils"]) < 8:
+            tri["appareils"].append(sl)
+            change = True
+    if change:
+        etat["tri_netflix"] = tri
     return change
 
 

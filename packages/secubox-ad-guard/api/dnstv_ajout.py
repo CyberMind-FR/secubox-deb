@@ -209,6 +209,8 @@ def appliquer(etat: dict, regles, detections: List, voisins: Dict[str, str], vue
     if etat.get("mode_defaut", "auto") == "auto":
         for nom, _ in nouveaux:
             dnstv_profil.equiper(regles, dnstv._slug(nom), profil, maintenant, taxo=taxo)   # garde #3374 : catégories protégées jamais posées
+        if nouveaux:
+            dnstv.politique_auto(etat)          # #3774 : essai automatique et tri Netflix d'office pour la TV ajoutée
     suivi["ajouts"] = (suivi["ajouts"] + [maintenant] * len(nouveaux))[-AJOUTS_MAX:]
     suivi["dernier_changement"] = maintenant
     return {"changements": changements, "etat_modifie": True}
