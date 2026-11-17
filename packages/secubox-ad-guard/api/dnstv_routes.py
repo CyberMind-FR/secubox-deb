@@ -27,9 +27,9 @@ from secubox_core import auth as _auth
 from secubox_core.auth import est_admin_reel, require_jwt, require_lecture
 
 try:
-    from . import dnstv, dnstv_analyse, dnstv_pubs, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from . import dnstv, dnstv_analyse, dnstv_pubs, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie, dnstv_tri
 except ImportError:                                  # lancé hors paquet
-    from api import dnstv, dnstv_analyse, dnstv_pubs, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie
+    from api import dnstv, dnstv_analyse, dnstv_pubs, dnstv_journal, dnstv_protection, dnstv_ajout, dnstv_appareils, dnstv_auto, dnstv_dnsbox, dnstv_profil, dnstv_regles, dnstv_simple, dnstv_taxonomie, dnstv_tri
 
 router = APIRouter(prefix="/adblock-tv", tags=["adblock-tv"])
 logger = logging.getLogger("secubox.ad-guard.adblock-tv")
@@ -793,6 +793,74 @@ def detection_reglage(corps: ReglageDetectionIn):
             dnstv.ecrire_etat(ancien)
             raise
         return {"ajout_auto": etat["ajout_auto"], "mode_defaut": etat["mode_defaut"], "application": application}
+
+
+# ── Filtrages automatiques (#3774) : un écran, six interrupteurs, et le retour aux réglages par défaut (tout actif) ─────────
+FILTRAGES = ("ajout_auto", "auto_essai", "confirmation_auto", "declencheurs_pub", "tri_nouvelles", "indices")
+
+
+def _filtrages(etat: dict) -> dict:
+    r = dnstv_auto.reglage_depuis(etat)
+    return {"ajout_auto": bool(etat.get("ajout_auto")), "auto_essai": bool(etat.get("auto_essai")),
+            "confirmation_auto": r.confirmation_auto, "declencheurs_pub": r.declencheurs_pub,
+            "tri_nouvelles": dnstv.filtrage(etat, "tri_nouvelles"),
+            "indices": bool(etat.get("indices_publier", True) and etat.get("indices_recevoir", True))}
+
+
+def _poser_filtrage(etat: dict, cle: str, actif: bool) -> None:
+    if cle in ("ajout_auto", "auto_essai"):
+        etat[cle] = actif
+    elif cle == "indices":
+        etat["indices_publier"] = etat["indices_recevoir"] = actif
+    else:
+        etat["filtrages"] = dict(etat.get("filtrages") or {}, **{cle: actif})
+
+
+@router.get("/auto/filtrages")
+def filtrages_lire(lecteur=Depends(require_lecture)):
+    etat = _etat()
+    tri = dnstv_tri.reglage(etat)
+    return {"filtrages": _filtrages(etat), "tri_netflix": tri["appareils"], "tri_max": 8}
+
+
+class FiltrageIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cle: str = Field(..., pattern="^(" + "|".join(FILTRAGES) + ")$")
+    actif: bool
+
+
+def _ecrire_et_appliquer(etat: dict, ancien: dict, action: str = "regles-appliquer") -> dict:
+    try:
+        dnstv.ecrire_etat(etat)
+    except dnstv.ErreurTV as e:
+        _refuse(e)
+    try:
+        return _ctl(action)                                            # le contrôleur audite ce changement (décision de sécurité)
+    except HTTPException:
+        dnstv.ecrire_etat(ancien)
+        raise
+
+
+@router.post("/auto/filtrages", dependencies=[Depends(require_jwt)])
+def filtrage_regler(corps: FiltrageIn):
+    with _verrou():
+        etat, ancien = _etat_et_copie()
+        _poser_filtrage(etat, corps.cle, corps.actif)
+        application = _ecrire_et_appliquer(etat, ancien)
+        return {"filtrages": _filtrages(etat), "application": application}
+
+
+@router.post("/auto/filtrages/defaut", dependencies=[Depends(require_jwt)])
+def filtrages_defaut():
+    """Retour aux réglages par défaut : TOUT actif, et le tri Netflix posé pour les TV en mode auto (8 au plus)."""
+    with _verrou():
+        etat, ancien = _etat_et_copie()
+        for cle in FILTRAGES:
+            _poser_filtrage(etat, cle, True)
+        dnstv.politique_auto(etat)
+        tri_change = dnstv_tri.reglage(etat)["appareils"] != dnstv_tri.reglage(ancien)["appareils"]
+        application = _ecrire_et_appliquer(etat, ancien, "apply" if tri_change else "regles-appliquer")     # zones du tri : rechargement
+        return {"filtrages": _filtrages(etat), "tri_netflix": dnstv_tri.reglage(etat)["appareils"], "application": application}
 
 
 @router.post("/auto/appareils/{nom}/ignorer", dependencies=[Depends(require_jwt)])
