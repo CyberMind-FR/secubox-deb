@@ -10,6 +10,8 @@ override_dh_auto_install:
 	# #3242 — renommage par une unite root a instance (secubox-renommer, secubox-core), jamais demarree a l'installation
 	install -m 0644 systemd/secubox-systeme-renommer@.service debian/secubox-system/usr/lib/systemd/system/
 	install -D -m 0755 sbin/secubox-majctl debian/secubox-system/usr/sbin/secubox-majctl
+	install -D -m 0755 sbin/secubox-pare-feu-releve debian/secubox-system/usr/sbin/secubox-pare-feu-releve
+	install -m 0644 systemd/secubox-systeme-pare-feu-releve.service systemd/secubox-systeme-pare-feu-releve.timer debian/secubox-system/usr/lib/systemd/system/
 	# #3401 — acces SSH (webui Systeme) et garde du mot de passe par defaut, par un ctl root
 	install -D -m 0755 sbin/secubox-sshctl debian/secubox-system/usr/sbin/secubox-sshctl
 	install -D -m 0755 sbin/secubox-ssh-defaut debian/secubox-system/usr/sbin/secubox-ssh-defaut

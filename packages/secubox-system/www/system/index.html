@@ -130,7 +130,7 @@
 
             <div class="pan"><h3>Sécurité <i>posture</i></h3>
                 <dl class="kv"><dt>Pare-feu</dt><dd id="sFw">—</dd><dt>SSH</dt><dd id="sSsh">—</dd><dt>AppArmor</dt><dd id="sAa">—</dd></dl>
-                <p class="note">Le pare-feu est annoncé « actif » par l’API sans interroger nftables : c’est une affirmation, pas une mesure.</p></div>
+                <p class="note" id="sFwNote">Pare-feu : relevé de nftables par la box toutes les 5 min.</p></div>
 
             <div class="pan"><h3>Mode kiosque</h3>
                 <div id="cKiosk" class="conf"></div><div id="rKiosk" class="retour" hidden></div>
@@ -326,7 +326,15 @@
             $('rLoad').textContent = charge ? charge.map(x => nb(x) === null ? '—' : x.toFixed(2).replace('.', ',')).join(' · ') : '—';
             // Sécurité
             const pos = (id, v, bon, mauvais) => { const c = $(id); c.replaceChildren(); if (!v) { c.textContent = '—'; return; } c.appendChild(pastille(bon.includes(v) ? 'ok' : mauvais.includes(v) ? 'hors' : '', v.toUpperCase())); };
-            pos('sFw', SEC && SEC.firewall, ['Active'], ['Inactive']);
+            {   // #3780 : mesure datée de nftables, jamais une affirmation
+                const pf = SEC && SEC.pare_feu, c = $('sFw'); c.replaceChildren();
+                const cl = { actif: 'ok', inactif: 'hors', ouvert: 'hors', perime: 'att', inconnu: '' };
+                if (!pf) c.textContent = '—'; else c.appendChild(pastille(cl[pf.etat] || '', String(pf.libelle || '—').toUpperCase()));
+                const n = $('sFwNote');
+                n.textContent = pf && pf.releve ? 'Pare-feu relevé ' + new Date(pf.releve * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' : '
+                    + (pf.regles ?? '—') + ' règles dans ' + (pf.tables ?? '—') + ' tables' + (pf.chaines_drop && pf.chaines_drop.length ? ', entrée fermée par « ' + pf.chaines_drop[0] + ' »' : '') + '.'
+                    : 'Pare-feu : pas encore relevé (relevé de nftables toutes les 5 min).';
+            }
             pos('sSsh', SEC && SEC.ssh_status, ['Running'], ['Stopped']);
             pos('sAa', SEC && SEC.apparmor, ['Enabled'], ['Disabled']);
             // Kiosque

@@ -572,9 +572,10 @@ async def network():
 # network) restent publiques : elles alimentent le tableau de bord Eye Remote.
 @router.get("/security", dependencies=[Depends(require_jwt)])
 def security():
-    """Security status for dashboard (public)."""
-    # nftables always active on SecuBox (rules loaded at boot)
-    firewall = "Active"
+    """Posture pour le tableau de bord. Pare-feu : MESURE datée relevée par l'unité root (#3780), jamais une affirmation."""
+    from .pare_feu import lire as _pare_feu      # noqa: PLC0415 — module léger, testé seul (#3780)
+    pare_feu = _pare_feu()
+    firewall = pare_feu["libelle"]
 
     # Check SSH
     try:
@@ -592,9 +593,11 @@ def security():
 
     return {
         "firewall": firewall,
+        "pare_feu": pare_feu,
         "ssh_status": ssh_status,
         "apparmor": apparmor,
     }
+
 
 
 @router.get("/packages", dependencies=[Depends(require_jwt)])

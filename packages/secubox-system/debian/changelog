@@ -1,3 +1,13 @@
+secubox-system (1.13.0-1~trixie1) trixie; urgency=medium
+
+  * Posture « Pare-feu » mesurée (#3780) : unité root en lecture seule
+    (secubox-systeme-pare-feu-releve, toutes les 5 min) qui relève
+    `nft -j list ruleset` (tables, règles, politique d'entrée) ; l'API rend la
+    mesure datée (fermé par défaut, ouvert, inactif, périmé, non relevé) au
+    lieu de « Active » écrit en dur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 06:38:06 +0100
+
 secubox-system (1.12.4-1~trixie1) trixie; urgency=low
 
   * system-tuning : plafond CPU du conteneur « yacy » remplacé par « searxng » (0,4 ; YaCy retiré, ref #3581).
