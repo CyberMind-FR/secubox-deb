@@ -32,7 +32,7 @@ def test_releve_reel_de_gk2():
     a = par_adresse(f)
     assert set(a) == {"192.168.1.200", "2a01:e0a:dec:c4e0::200", "2a01:e0a:dec:c4e0:f2ad:4eff:fe27:889b"}     # seulement l'interface du LAN
     assert a["2a01:e0a:dec:c4e0::200"]["type"] == "stable" and a["2a01:e0a:dec:c4e0::200"]["ecoute"] is True
-    assert a["2a01:e0a:dec:c4e0:f2ad:4eff:fe27:889b"]["type"] == "slaac"
+    assert a["2a01:e0a:dec:c4e0:f2ad:4eff:fe27:889b"]["type"] == "slaac_mac"           # dérivée de la MAC : durable (#3769)
     assert a["192.168.1.200"]["type"] == "ipv4" and a["192.168.1.200"]["ecoute"] is True
     assert f["alertes"] == []
 
@@ -48,7 +48,10 @@ def test_adresse_presente_mais_non_ecoutee_donne_une_alerte():
 def test_sans_ipv6_stable_alerte_et_slaac_deconseillee():
     ip6 = IP6.splitlines()[0] + "\n"
     f = B.dns_box(ip6, IP4, ROUTE, SS)
-    assert any("aucune ipv6 stable" in x.lower() for x in f["alertes"])
+    assert not any("aucune ipv6 durable" in x.lower() for x in f["alertes"])            # SLAAC dérivée de la MAC : durable
+    ip6 = ip6.replace("f2ad:4eff:fe27:889b", "1a2b:3c4d:5e6f:7a8b")                     # SLAAC « stable-privacy » : signalée
+    f = B.dns_box(ip6, IP4, ROUTE, SS)
+    assert any("aucune ipv6 durable" in x.lower() for x in f["alertes"])
 
 
 def test_adresse_temporaire_reconnue():
@@ -68,3 +71,10 @@ def test_suffixe_d_interface_et_ligne_sans_port_ignores():
     assert par_adresse(B.dns_box("", IP4, ROUTE, ss))["192.168.1.200"]["ecoute"] is True
     ss2 = "UNCONN 0 0 192.168.1.200:5353 0.0.0.0:*\n"                           # port 5353 (mDNS) ≠ DNS
     assert par_adresse(B.dns_box("", IP4, ROUTE, ss2))["192.168.1.200"]["ecoute"] is False
+
+
+def test_slaac_derivee_de_la_mac_est_durable_3769():
+    from api import dnstv_dnsbox as B
+    assert B.derivee_de_la_mac("2a01:e0a:dec:c4e0:dea6:32ff:fe64:f596") is True          # gk7 (EUI-64)
+    assert B.derivee_de_la_mac("2a01:e0a:dec:c4e0:1111:2222:3333:4444") is False
+    assert B.derivee_de_la_mac("pas une adresse") is False

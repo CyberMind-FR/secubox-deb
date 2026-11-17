@@ -5,7 +5,7 @@
 """SecuBox-Deb :: ad-guard :: fiche « DNS de la box » (#1938) — quelle adresse donner aux appareils, et Unbound l'écoute-t-il ?
 
 Analyse de TEXTE seulement (sorties de `ip -6/-4 -o addr`, `ip route show default`, `ss -H -lnu`) : aucune commande ici, aucun privilège, rien n'est modifié.
-Elle montre ce que la box OFFRE ; elle ne peut pas lire les réglages de la Freebox, donc ne sait pas si l'adresse y a été saisie.
+Elle montre ce que la box OFFRE ; ce que la Freebox annonce se lit dans l'onglet « DNS du réseau » de la page Freebox (#3769).
 """
 from __future__ import annotations
 
@@ -61,6 +61,16 @@ def _type(famille: int, reste: str) -> str:
     return "stable"
 
 
+def derivee_de_la_mac(adresse: str) -> bool:
+    """IPv6 SLAAC dont l'identifiant est tiré de la MAC (EUI-64, `…ff:fe…`) : elle ne change pas tant que le préfixe ne change
+    pas, exactement comme une adresse statique ; utilisable comme DNS (#3769, gk7 du 17/11)."""
+    try:
+        b = ipaddress.IPv6Address(adresse).packed
+    except ValueError:
+        return False
+    return b[11] == 0xFF and b[12] == 0xFE
+
+
 def dns_box(ip6: str, ip4: str, route_defaut: str, ss: str) -> Dict:
     dev = interface_du_lan(route_defaut)
     ecoute = ecoutes_dns(ss)
@@ -74,15 +84,18 @@ def dns_box(ip6: str, ip4: str, route_defaut: str, ss: str) -> Dict:
                 a = _adresse(m["addr"])
                 if a is None:
                     continue
-                adresses.append({"adresse": a, "famille": famille, "type": _type(famille, m["reste"]), "ecoute": a in ecoute})
+                t = _type(famille, m["reste"])
+                if t == "slaac" and derivee_de_la_mac(a):
+                    t = "slaac_mac"
+                adresses.append({"adresse": a, "famille": famille, "type": t, "ecoute": a in ecoute})
     alertes: List[str] = []
     if not dev:
         alertes.append("Interface du LAN introuvable (pas de route par défaut) : rien à afficher.")
     else:
-        stables = [a for a in adresses if a["famille"] == 6 and a["type"] == "stable"]
+        stables = [a for a in adresses if a["famille"] == 6 and a["type"] in ("stable", "slaac_mac")]
         if not stables:
-            alertes.append("Aucune IPv6 stable sur le LAN : une adresse SLAAC expire avec le préfixe. Posez une adresse statique avant de la saisir dans la Freebox.")
+            alertes.append("Aucune IPv6 durable sur le LAN (ni statique, ni dérivée de la MAC) : les appareils en IPv6 n'auraient pas de DNS fiable.")
         for a in adresses:
-            if not a["ecoute"] and a["type"] in ("stable", "ipv4"):
+            if not a["ecoute"] and a["type"] in ("stable", "slaac_mac", "ipv4"):
                 alertes.append(f"{a['adresse']} est sur l'interface mais Unbound n'écoute pas dessus : les appareils n'obtiendraient aucune réponse.")
     return {"interface": dev, "adresses": adresses, "alertes": alertes}

@@ -288,7 +288,7 @@ def test_onglet_ne_leve_aucune_exception_quand_l_api_rend_du_html(navigateur):
 FICHE = {"interface": "eth2", "alertes": [], "adresses": [
     {"adresse": "192.168.1.200", "famille": 4, "type": "ipv4", "ecoute": True},
     {"adresse": "2a01:e0a:dec:c4e0::200", "famille": 6, "type": "stable", "ecoute": True},
-    {"adresse": "2a01:e0a:dec:c4e0:f2ad:4eff:fe27:889b", "famille": 6, "type": "slaac", "ecoute": True}]}
+    {"adresse": "2a01:e0a:dec:c4e0:f2ad:4eff:fe27:889b", "famille": 6, "type": "slaac_mac", "ecoute": True}]}
 
 
 def test_fiche_dns_box_affiche_l_adresse_stable_a_saisir_dans_la_freebox(navigateur):
@@ -296,10 +296,10 @@ def test_fiche_dns_box_affiche_l_adresse_stable_a_saisir_dans_la_freebox(navigat
     p.click("button[data-tab=adblocktv]")
     p.wait_for_selector("#dnsbox-adresses tr")
     texte = p.inner_text("#dnsbox-adresses")
-    assert "2a01:e0a:dec:c4e0::200" in texte and "À renseigner dans Freebox OS" in texte
+    assert "2a01:e0a:dec:c4e0::200" in texte and "DNS IPv6 personnalisé" in texte
     ligne = p.locator("#dnsbox-adresses tr", has_text="2a01:e0a:dec:c4e0::200")
-    assert "stable" in ligne.inner_text().lower() and "oui" in ligne.inner_text().lower()
-    assert "expire" in p.locator("#dnsbox-adresses tr", has_text="889b").inner_text().lower()      # SLAAC : à éviter
+    assert "statique" in ligne.inner_text().lower() and "oui" in ligne.inner_text().lower()
+    assert "dérivée de la mac" in p.locator("#dnsbox-adresses tr", has_text="889b").inner_text().lower()      # #3769 : durable
     assert p.inner_text("#dnsbox-alertes").strip() == ""
     assert not erreurs
     ctx.close()

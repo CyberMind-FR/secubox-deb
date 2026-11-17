@@ -1,3 +1,12 @@
+secubox-ad-guard (1.28.1-1~trixie1) trixie; urgency=medium
+
+  * Fiche « DNS de la box » (#3769) : plus de nom « gk2 » en dur ; une IPv6
+    SLAAC dérivée de la MAC est reconnue durable (comme une statique) ;
+    renvoi vers l'onglet « DNS du réseau » de la page Freebox au lieu de
+    « la box ne peut pas lire la Freebox ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 06:24:21 +0100
+
 secubox-ad-guard (1.28.0-1~trixie1) trixie; urgency=medium
 
   * TV Privacy (#3774) : onglet « Filtrages automatiques » de la page Ad Guard
