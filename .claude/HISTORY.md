@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-17 — Relais seul (bêta 1) : garde des deux box, clé mobile, fiche DNS, posture pare-feu (ref #3769, #3780)
+
+- freebox 0.8.2 (PR #3777) : en « auto », jamais de remplacement d'un autre résolveur du réseau qui répond (état « délégué »).
+  0.8.3 (PR #3778) : sur une clé (secubox-mobile installé), le contrôle surveille sans corriger — c'est secubox-mobile qui
+  possède le DNS de la Freebox (pose, retrait, réglage de l'utilisateur ; c'est lui qui avait posé gk7 le 17/11). gk7 + gk2.
+- ad-guard 1.28.1 (PR #3779) : fiche « DNS de la box » sans « gk2 » en dur, IPv6 dérivée de la MAC = durable. gk7.
+- system 1.13.0 (PR #3781) : posture « Pare-feu » mesurée (unité root lecture seule `secubox-systeme-pare-feu-releve`, 5 min)
+  au lieu de « Active » en dur. gk7 (64 règles, entrée fermée par inet filter input) ; **gk2 à installer au prochain
+  redémarrage groupé de l'agrégateur**.
+- Consigne du propriétaire : le produit doit marcher tel quel, surtout en relais seul (= bêta 1) ; mise en routeur écartée.
+  Limite connue en relais seul : pubs dans les vidéos Netflix (TV jointe hors DNS).
+
 ## 2026-11-17 — TV Privacy : tous les filtrages en automatique par défaut (ref #3774) ; IPv6 auto du contrôle DNS (ref #3769)
 
 - ad-guard 1.27.0 (PR #3775) : essai et confirmation automatiques, déclencheurs pub, tri Netflix d'office pour chaque TV en mode
