@@ -122,7 +122,7 @@ def test_route_dns_box_lit_les_commandes_sans_privilege(api, monkeypatch):
         return ROUTE if "route" in argv else (IP6 if argv[1] == "-6" else IP4)
     monkeypatch.setattr(r, "_sortie", sortie)
     j = api.get("/adblock-tv/dns-box").json()
-    assert j["interface"] == "eth2" and {a["type"] for a in j["adresses"]} == {"ipv4", "stable", "slaac"} and j["alertes"] == []
+    assert j["interface"] == "eth2" and {a["type"] for a in j["adresses"]} == {"ipv4", "stable", "slaac_mac"} and j["alertes"] == []
     assert all(a[0] in ("ip", "ss") and "sudo" not in a for a in appels)                  # lecture seule : jamais sudo
 
 
