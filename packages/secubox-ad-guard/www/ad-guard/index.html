@@ -379,10 +379,10 @@
             </div>
             <!-- DNS de la box (#1938) : quelle adresse donner aux appareils, et Unbound l'écoute-t-il ? Lecture seule ; rendu par textContent -->
             <div class="card" style="margin-top:1rem;" id="dnsbox-carte">
-                <div class="card-header"><h2>🌐 DNS de la box <small style="font-weight:400;color:var(--text-dim);">— ce que gk2 offre aux appareils du LAN <span id="dnsbox-interface"></span></small></h2></div>
+                <div class="card-header"><h2>🌐 DNS de la box <small style="font-weight:400;color:var(--text-dim);">— ce que la box offre aux appareils du LAN <span id="dnsbox-interface"></span></small></h2></div>
                 <table><thead><tr><th>Adresse</th><th>Type</th><th>Unbound écoute</th><th>Usage</th></tr></thead><tbody id="dnsbox-adresses"></tbody></table>
                 <div id="dnsbox-alertes" style="margin-top:.5rem;"></div>
-                <p style="color:var(--text-dim);font-size:.8rem;margin:.5rem 0 0;">La box ne peut pas lire les réglages de la Freebox : cette fiche montre ce que gk2 propose, pas ce que la Freebox annonce.</p>
+                <p style="color:var(--text-dim);font-size:.8rem;margin:.5rem 0 0;">Cette fiche montre ce que la box propose. Ce que la Freebox annonce réellement, et son contrôle : <a href="/freebox/" style="color:var(--cyan)">page Freebox, onglet « DNS du réseau »</a>.</p>
             </div>
             <div class="card" style="margin-top:1rem;">
                 <div class="card-header"><h2>📊 Statistiques (7 jours)</h2></div>
@@ -798,9 +798,10 @@
 
 
         // ── DNS de la box (#1938) : tout texte venu de l'API passe par textContent ──
-        const DNSBOX_TYPE = { ipv4: 'IPv4', stable: 'IPv6 stable', slaac: 'IPv6 SLAAC', temporaire: 'IPv6 temporaire' };
-        const DNSBOX_USAGE = { ipv4: 'DNS IPv4 des appareils (annoncé par le DHCP de la Freebox)', stable: 'À renseigner dans Freebox OS (« DNS IPv6 personnalisé »)',
-                               slaac: 'Dynamique : expire avec le préfixe, à éviter', temporaire: 'Temporaire : ne pas utiliser' };       // libellés locaux, jamais ceux de l'API
+        const DNSBOX_TYPE = { ipv4: 'IPv4', stable: 'IPv6 statique', slaac_mac: 'IPv6 dérivée de la MAC', slaac: 'IPv6 SLAAC', temporaire: 'IPv6 temporaire' };
+        const DNSBOX_USAGE = { ipv4: 'DNS IPv4 des appareils (annoncé par le DHCP de la Freebox)', stable: 'DNS IPv6 des appareils (« DNS IPv6 personnalisé » de la Freebox)',
+                               slaac_mac: 'DNS IPv6 des appareils : fixe tant que le préfixe Free ne change pas',
+                               slaac: 'Change avec le temps : à éviter', temporaire: 'Temporaire : ne pas utiliser' };       // libellés locaux, jamais ceux de l'API
         async function dnsBoxRender() {
             const r = await api('/adblock-tv/dns-box');
             const tb = document.getElementById('dnsbox-adresses'), al = document.getElementById('dnsbox-alertes');
