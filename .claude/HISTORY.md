@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-17 — Freebox : contrôle des DNS IPv4 et IPv6 annoncés (ref #3769)
+
+- Onglet « DNS du réseau » (maquette approuvée) : contrôle activable, alerte ou correction (défaut), attendus auto/saisis,
+  remise aux DNS d'origine ; passage toutes les 15 min dans `secubox-freebox-maillage` (`freeboxctl dns-controle`).
+- Garde-fous : jamais de secondaire, jamais de correction vers un serveur muet, écritures relues et journalisées.
+- secubox-freebox 0.8.0 (PR #3770) publiée, installée sur gk2 (conforme, rien écrit) et gk7 (Freebox non autorisée : état
+  « illisible », rien écrit). `closes` après une journée sans anomalie.
+
 ## 2026-11-16 — Veille CVE : profils AppArmor des relevés en enforce, lot 2 (closes #3766)
 
 - Journal relevé sur les 5 relevés (audit.log de gk2 tourne en ~5 min : capturer juste après chaque passage).
