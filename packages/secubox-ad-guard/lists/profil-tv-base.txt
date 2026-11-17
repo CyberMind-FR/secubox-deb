@@ -52,3 +52,6 @@ adform.net
 realytics.net
 everesttech.net
 ups.analytics.yahoo.com
+# Pubs RTL9+ via OQEE (#3785) : validé avec le propriétaire devant la TV, relais seul (gk7, Freebox Pop, 17/11/2026) : pubs zappées, lecture OK.
+vizchoice.viznet.tv
+ads-canalplus.akamaized.net
