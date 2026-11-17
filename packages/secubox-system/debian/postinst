@@ -27,6 +27,8 @@ case "$1" in
     /usr/sbin/secubox-sshctl prepare || echo "system : dossiers de demandes SSH non prepares" >&2
     systemctl enable secubox-ssh-garde.service || true
     systemctl enable --now secubox-ssh.path secubox-ssh-garde.path || true
+    systemctl enable --now secubox-systeme-pare-feu-releve.timer || true     # #3780 : posture « pare-feu » mesurée
+    systemctl start secubox-systeme-pare-feu-releve.service || true
     systemctl start secubox-ssh-garde.service || echo "system : garde SSH du mot de passe par defaut non posee" >&2
 
     # Eye Remote OTG support

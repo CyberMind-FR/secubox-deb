@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Relevé du pare-feu pour la carte « posture » (#3780) : root (lecture de nftables), LECTURE SEULE, n'écrit que son résumé.
+[Unit]
+Description=SecuBox systeme : relevé du pare-feu nftables pour la posture (#3780)
+After=nftables.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-pare-feu-releve
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+CapabilityBoundingSet=CAP_NET_ADMIN
+UMask=0022
+ReadWritePaths=/var/lib/secubox/system
