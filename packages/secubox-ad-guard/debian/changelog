@@ -1,3 +1,12 @@
+secubox-ad-guard (1.26.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy : seconde voie de détection automatique des TV (#3771), par le
+    service du système de la TV (Android TV, Freebox Player, LG webOS, Samsung
+    Tizen, VIDAA, Roku) : un direct sans FreeWheel suffit. Liste et seuil
+    réglables (`plateformes_tv`, `min_plateforme`).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 05:24:41 +0100
+
 secubox-ad-guard (1.25.3-1~trixie1) trixie; urgency=medium
 
   * SBX TV Privacy : encart « Pubs bloquées récemment » dans la vue par appareil (ref #3676).

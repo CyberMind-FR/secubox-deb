@@ -59,6 +59,10 @@ min_requetes_actif = 100
 # L'ajout est activé par l'administrateur dans le panneau (`ajout_auto`, faux par défaut) ; ces valeurs ne font que le cadrer.
 min_declencheurs = 5        # requêtes vers un serveur d'insertion publicitaire sur 2 jours
 min_services = 2            # services de contenu ou de qualité vidéo distincts
+# Seconde voie (#3771) : service du système d’une TV connectée (Android TV, Freebox Player, webOS, Tizen, VIDAA, Roku).
+# Sans clé = liste intégrée ; plateformes_tv = [] désactive cette voie.
+# plateformes_tv = ["androidtvchannels-pa.googleapis.com", "freebox.itc.proxad.net", "lgtvsdp.com", "samsungcloudsolution.com"]
+min_plateforme = 3          # requêtes vers ces services sur 2 jours
 max_par_jour = 3            # nouveaux appareils par 24 h
 delai_s = 3600              # un changement du périmètre au plus par heure (chacun coûte un rechargement d'Unbound, ≈ 10 s sans DNS)
 retrait_jours = 7           # une adresse d'un appareil ajouté automatiquement, non vue depuis, est retirée (une reste toujours)
