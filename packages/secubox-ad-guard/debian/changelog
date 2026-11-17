@@ -1,3 +1,10 @@
+secubox-ad-guard (1.28.2-1~trixie1) trixie; urgency=medium
+
+  * Légendes des graphiques : chaque libellé prend la couleur de sa courbe
+    (demande du propriétaire, 17/11).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 07:12:28 +0100
+
 secubox-ad-guard (1.28.1-1~trixie1) trixie; urgency=medium
 
   * Fiche « DNS de la box » (#3769) : plus de nom « gk2 » en dur ; une IPv6

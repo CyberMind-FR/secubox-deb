@@ -1,3 +1,10 @@
+secubox-webos (1.20.8-1~trixie1) trixie; urgency=medium
+
+  * Légendes des graphiques : chaque libellé prend la couleur de sa courbe
+    (demande du propriétaire, 17/11).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 07:12:28 +0100
+
 secubox-webos (1.20.7-1~trixie1) trixie; urgency=medium
 
   * Moteur du dé : ses faces sont cherchées à côté de lui (ref #3556).

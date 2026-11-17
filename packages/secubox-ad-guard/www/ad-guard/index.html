@@ -197,7 +197,7 @@
             <section class="pan" aria-labelledby="h-courbe">
                 <div class="pan-tete"><h3 id="h-courbe">Requêtes DNS, 30 dernières minutes</h3><span class="mention">une valeur par minute close</span></div>
                 <div id="courbe" class="courbe"></div>
-                <div class="legende"><span><i style="background:var(--cyan)"></i>requêtes</span><span><i style="background:var(--rouge)"></i>bloquées</span></div>
+                <div class="legende"><span style="color:var(--cyan)"><i style="background:var(--cyan)"></i>requêtes</span><span style="color:var(--rouge)"><i style="background:var(--rouge)"></i>bloquées</span></div>
             </section>
             <section class="pan" aria-labelledby="h-top">
                 <div class="pan-tete"><h3 id="h-top">Domaines les plus bloqués</h3><span class="mention" id="m-top">dernière heure</span></div>
@@ -774,7 +774,10 @@
                     const t = document.createElementNS(ns, 'title'); t.textContent = tvHeure(p.ts) + ' — ' + p.requetes + ' requêtes, ' + (p.bloquees || 0) + ' bloquées'; rect.appendChild(t); svg.appendChild(rect);
                 });
             });
-            z.appendChild(svg); z.appendChild(tvEl('div', 'bleu : requêtes · rouge : bloquées · max ' + max + ' par tranche de ' + Math.round(r.pas_s / 60) + ' min', null, 'font-size:.75rem;color:var(--text-dim);'));
+            const leg = tvEl('div', null, 'legende', 'font-size:.75rem;');     // libellés aux couleurs de leurs courbes
+            leg.append(tvEl('span', 'requêtes', null, 'color:#4a90d9;font-weight:600;'), tvEl('span', 'bloquées', null, 'color:#d64545;font-weight:600;'),
+                       tvEl('span', 'max ' + max + ' par tranche de ' + Math.round(r.pas_s / 60) + ' min', null, 'color:var(--text-dim);'));
+            z.appendChild(svg); z.appendChild(leg);
         }
         async function tvServices() {
             const r = await api('/adblock-tv/flux?' + tvQuery() + 'heures=' + document.getElementById('tv-heures').value);
