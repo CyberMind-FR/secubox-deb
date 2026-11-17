@@ -43,3 +43,12 @@ segment.io
 smartadserver.com
 taboola.com
 videos-pub.ftv-publicite.fr
+# Pubs M6+ (#3783) : validé avec le propriétaire devant la TV, relais seul (gk7, Freebox Pop, 17/11/2026) : plus de pubs, lecture OK.
+7cbf2.v.fwmrm.net
+ads.stickyadstv.com
+2mdn.net
+smartclip.net
+adform.net
+realytics.net
+everesttech.net
+ups.analytics.yahoo.com

@@ -132,3 +132,37 @@ def ecrire_agrege(agrege: Dict[str, dict], dossier: Optional[Path] = None) -> No
         json.dump(valide, h, indent=2, ensure_ascii=False)
     os.chmod(tmp, 0o644)
     os.replace(tmp, d / FICHIER_AGREGE)
+
+
+MARQUE_GRAINE = ".profil-base-"            # + empreinte : une migration par version du profil de base (#3783)
+
+
+def migrer_graine(dossier_etat: Optional[Path] = None, maintenant: Optional[int] = None) -> bool:
+    """#3783 : le profil de base ne s'appliquait qu'aux TV ajoutées APRÈS un changement. À chaque NOUVELLE empreinte du profil,
+    le postinst équipe une fois les appareils déjà en mode auto (idempotent : seuls les domaines manquants sont posés ; garde des
+    catégories protégées). Appelé sous le verrou des règles. Rend vrai si des règles ont été posées."""
+    import hashlib
+    import time as _time
+    d = dossier_etat or dnstv.DOSSIER_ETAT
+    g = graine()
+    empreinte = hashlib.sha256("\n".join(g).encode()).hexdigest()[:12]
+    marque = d / (MARQUE_GRAINE + empreinte)
+    if not g or marque.exists() or marque.is_symlink():
+        return False
+    etat, erreur = dnstv.lire_etat(d)
+    if erreur:
+        return False
+    try:
+        from . import dnstv_regles
+    except ImportError:
+        from api import dnstv_regles
+    regles = dnstv_regles.charger(d)
+    profil = profil_effectif(g, charger_agrege())
+    t = int(maintenant or _time.time())
+    n = sum(equiper(regles, sl, profil, t) for sl in sorted({dnstv._slug(c["nom"]) for c in etat["clients"] if c.get("mode") == "auto"}))
+    if n:
+        dnstv_regles.ecrire(regles, d)
+    for ancienne in d.glob(MARQUE_GRAINE + "*"):
+        ancienne.unlink(missing_ok=True)
+    marque.write_text("1\n")
+    return n > 0
