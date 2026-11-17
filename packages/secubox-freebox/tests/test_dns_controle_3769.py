@@ -71,7 +71,7 @@ def test_appliquer_force_meme_en_mode_alerter():
 def test_ipv6_inconnue_n_est_pas_controlee():
     svc = FauxSvc(["192.168.1.200"], False, [])
     e = DC.controler(svc, "192.168.1.200", R, "", sonde=lambda s: True, horloge=lambda: 1, ecrire=lambda d: None)
-    assert e["conforme"] and not svc.ecritures
+    assert e["conforme"] and not svc.ecritures and "IPv6 non contrôlé" in e["alertes"][0]
 
 
 def test_reinitialiser_rend_les_dns_et_desactive(tmp_path, monkeypatch):
@@ -99,3 +99,40 @@ def test_ipv6_stable_sans_prefixe(tmp_path):
     p.write_text('[ipv6]\nstable = "2a01:e0a:dec:c4e0::200/64"\n')
     assert DC.ipv6_stable(str(p)) == "2a01:e0a:dec:c4e0::200"
     assert DC.ipv6_stable(str(tmp_path / "absent")) == ""
+
+
+# ── IPv6 de la box sans dns-lan.toml : relevée sur l'interface de la route par défaut ───────────────────────────────────────
+ROUTES = [{"dst": "default", "dev": "eth0"}]
+
+
+def _ip(*adresses):
+    return [{"ifname": "eth0", "addr_info": list(adresses)}, {"ifname": "wg-mesh", "addr_info": [
+        {"family": "inet6", "scope": "global", "local": "2001:db8:9::1", "valid_life_time": 4294967295}]}]
+
+
+SLAAC = {"family": "inet6", "scope": "global", "local": "2a01:e0a:dec:c4e0:dea6:32ff:fe64:f596", "dynamic": True, "mngtmpaddr": True, "valid_life_time": 86000}
+TEMP = {"family": "inet6", "scope": "global", "local": "2a01:e0a:dec:c4e0:1111:2222:3333:4444", "dynamic": True, "temporary": True, "valid_life_time": 80000}
+
+
+def test_ipv6_slaac_stable_retenue_jamais_la_temporaire():
+    assert DC.ipv6_box(_ip(TEMP, SLAAC), ROUTES) == "2a01:e0a:dec:c4e0:dea6:32ff:fe64:f596"     # cas réel de gk7
+
+
+def test_ipv6_fixe_prioritaire():
+    fixe = {"family": "inet6", "scope": "global", "local": "2a01:e0a:dec:c4e0::200", "valid_life_time": 4294967295}
+    assert DC.ipv6_box(_ip(SLAAC, fixe), ROUTES) == "2a01:e0a:dec:c4e0::200"
+
+
+def test_ipv6_depreciee_ou_hors_wan_ou_sans_route_ignoree():
+    assert DC.ipv6_box(_ip(TEMP, dict(SLAAC, deprecated=True)), ROUTES) == ""
+    assert DC.ipv6_box(_ip(SLAAC), []) == ""                                    # sans route par défaut : aucune devinette
+
+
+def test_ipv6_relevee_sert_l_api(tmp_path, monkeypatch):
+    monkeypatch.setattr(DC, "CHEMIN_ETAT", str(tmp_path / "e.json"))
+    monkeypatch.setattr(DC, "CHEMIN_DNS_LAN", str(tmp_path / "absent.toml"))
+    svc = FauxSvc(["192.168.1.128"], True, ["2a01::7"])
+    DC.controler(svc, "192.168.1.128", R, "2a01::7", sonde=lambda s: True, horloge=lambda: 1)       # passage du minuteur
+    assert DC.ipv6_auto_relevee() == "2a01::7"
+    e = DC.controler(svc, "192.168.1.128", R, sonde=lambda s: True, horloge=lambda: 2)              # API : sans netlink
+    assert e["attendu"]["ipv6"] == "2a01::7" and e["conforme"]

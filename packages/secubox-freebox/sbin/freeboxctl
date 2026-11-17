@@ -95,7 +95,13 @@ def controle_dns(fabriquer=None, sortie=sys.stderr):
     if not r["actif"]:
         return {"actif": False}
     try:
-        etat = DC.controler((fabriquer or _fabriquer)(), _ip_box(), r)
+        stable = DC.ipv6_stable()
+        if not stable:
+            try:
+                stable = DC.ipv6_box(MA._ip_json(), MA._routes_json())       # le minuteur a le netlink, pas l'API
+            except (OSError, ValueError, __import__("subprocess").SubprocessError):
+                stable = ""
+        etat = DC.controler((fabriquer or _fabriquer)(), _ip_box(), r, stable=stable)
     except (C.ErreurFreebox, OSError) as e:
         etat = {"actif": True, "conforme": None, "erreur": str(e)[:200], "verifie_le": int(__import__("time").time())}
         DC._ecrire_json(DC.CHEMIN_ETAT, etat)

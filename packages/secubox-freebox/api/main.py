@@ -202,7 +202,7 @@ def appliquer_autoconfig(corps: dict):
 def dns_etat():
     """Réglage, attendus et dernier contrôle (fichier du minuteur) : aucune requête à la Freebox."""
     r = DC.lire_reglage()
-    v4, v6 = DC.attendus(r, _ip_box(), DC.ipv6_stable())
+    v4, v6 = DC.attendus(r, _ip_box(), DC.ipv6_stable() or DC.ipv6_auto_relevee())
     return {"reglage": r, "attendu": {"ipv4": v4, "ipv6": v6}, "controle": DC.lire_etat()}
 
 

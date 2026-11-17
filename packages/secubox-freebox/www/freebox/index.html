@@ -320,7 +320,7 @@
                 $('dAtt4').value = r.ipv4 === 'auto' ? '' : r.ipv4; $('dAtt6').value = r.ipv6 === 'auto' ? '' : r.ipv6;
             }
             $('dAuto4').textContent = d && d.attendu ? 'auto : ' + (d.attendu.ipv4 || 'inconnue') : '';
-            $('dAuto6').textContent = d && d.attendu ? 'auto : ' + (d.attendu.ipv6 || 'non déclarée, IPv6 non contrôlée') : '';
+            $('dAuto6').textContent = d && d.attendu ? 'auto : ' + (d.attendu.ipv6 || 'introuvable, IPv6 non contrôlée') : '';
         }
         function reglageDns() {
             return { actif: $('dActif').value === '1', mode: $('dMode').value, ipv4: $('dAtt4').value.trim() || 'auto', ipv6: $('dAtt6').value.trim() || 'auto' };
