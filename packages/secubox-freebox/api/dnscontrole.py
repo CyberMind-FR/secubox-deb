@@ -177,6 +177,13 @@ def comparer(dns4, dns6, v4, v6):
 IMPACT = "Les appareils concernés ne passent plus par la box : TV Privacy et le blocage sont contournés."
 
 
+def resolveurs_tiers(annonce, attendu, ip_freebox, sonde):
+    """Serveurs annoncés par la Freebox qui ne sont ni la box, ni la Freebox elle-même, et qui RÉPONDENT : un autre
+    résolveur du réseau choisi exprès (autre SecuBox, Pi-hole…). Une box en « auto » ne le remplace jamais (#3769 :
+    deux box sur la même Freebox ne se disputent pas son réglage)."""
+    return [a for a in annonce if a and a != attendu and a != ip_freebox and sonde(a)]
+
+
 def controler(svc, ip_box, reglage=None, stable=None, sonde=repond, horloge=time.time, ecrire=None, corriger_force=False):
     """Un passage : lit les deux DNS, compare, corrige si le mode le demande (ou `corriger_force`, geste « Appliquer »).
     Écrit l'état et le rend. Les erreurs Freebox remontent (l'appelant les traduit)."""
@@ -184,13 +191,18 @@ def controler(svc, ip_box, reglage=None, stable=None, sonde=repond, horloge=time
     stable = (ipv6_stable() or ipv6_auto_relevee()) if stable is None else stable
     v4, v6 = attendus(reglage, ip_box, stable)
     etat = {"verifie_le": int(horloge()), "actif": reglage["actif"], "mode": reglage["mode"], "ipv6_auto": stable,
-            "attendu": {"ipv4": v4, "ipv6": v6}, "corrections": [], "refus": [], "alertes": []}
+            "attendu": {"ipv4": v4, "ipv6": v6}, "corrections": [], "refus": [], "delegue": [], "alertes": []}
     dns4 = svc.lire_dns()
     dns6 = svc.lire_dns6()
     etat["annonce"] = {"ipv4": dns4, "ipv6": dns6.get("dns") if dns6.get("use_custom_dns") else [], "ipv6_personnalise": bool(dns6.get("use_custom_dns"))}
     ecarts = comparer(dns4, dns6, v4, v6)
     if ecarts and (corriger_force or (reglage["actif"] and reglage["mode"] == "corriger")):
+        ip_fb = getattr(svc, "ip_freebox", lambda: "")()
         for e in ecarts:
+            tiers = [] if corriger_force or reglage[e["famille"]] != "auto" else resolveurs_tiers(e["annonce"], e["attendu"], ip_fb, sonde)
+            if tiers:
+                etat["delegue"].append({"famille": e["famille"], "serveurs": tiers})
+                continue
             if not sonde(e["attendu"]):
                 etat["refus"].append("%s : %s ne répond pas, la Freebox n'est pas modifiée." % (e["famille"].upper(), e["attendu"]))
                 continue
@@ -202,9 +214,14 @@ def controler(svc, ip_box, reglage=None, stable=None, sonde=repond, horloge=time
         dns4, dns6 = svc.lire_dns(), svc.lire_dns6()
         etat["annonce"] = {"ipv4": dns4, "ipv6": dns6.get("dns") if dns6.get("use_custom_dns") else [], "ipv6_personnalise": bool(dns6.get("use_custom_dns"))}
         ecarts = comparer(dns4, dns6, v4, v6)
-    etat["ecarts"] = ecarts
-    etat["conforme"] = not ecarts
-    etat["alertes"] = [e["message"] + " " + IMPACT for e in ecarts] + etat["refus"]
+    delegues = {d["famille"] for d in etat["delegue"]}
+    etat["ecarts"] = [e for e in ecarts if e["famille"] not in delegues]
+    etat["conforme"] = not etat["ecarts"]
+    etat["alertes"] = [e["message"] + " " + IMPACT for e in etat["ecarts"]] + etat["refus"]
+    for d in etat["delegue"]:
+        etat["alertes"].append("DNS %s : la Freebox annonce %s, un autre résolveur du réseau qui répond (autre SecuBox ?). "
+                               "Pas de correction automatique ; « Appliquer maintenant » ou une adresse saisie reprend la main."
+                               % (d["famille"].upper(), ", ".join(d["serveurs"])))
     if not v6:                       # un trou du contrôle se voit : jamais de silence sur l'IPv6 (#3769, gk7 du 17/11)
         etat["alertes"].append("DNS IPv6 non contrôlé : aucune IPv6 de la box connue (dns-lan.toml, ou adresse stable de l'interface). "
                                "Saisissez-la dans « DNS IPv6 attendu ».")

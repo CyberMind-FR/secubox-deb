@@ -1,3 +1,13 @@
+secubox-freebox (0.8.2-1~trixie1) trixie; urgency=medium
+
+  * Contrôle DNS (#3769) : deux box sur la même Freebox ne se disputent plus
+    son réglage. En « auto », une box ne remplace jamais un autre résolveur
+    du réseau qui répond (autre SecuBox, Pi-hole…) : état « délégué » et
+    alerte. Elle reprend la Freebox revenue à ses propres DNS ou un serveur
+    mort ; une adresse saisie ou « Appliquer maintenant » reprend la main.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 06:18:08 +0100
+
 secubox-freebox (0.8.1-1~trixie1) trixie; urgency=medium
 
   * Contrôle DNS (#3769) : sans IPv6 déclarée dans dns-lan.toml, le DNS IPv6

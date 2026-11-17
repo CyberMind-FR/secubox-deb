@@ -24,6 +24,11 @@ class FauxSvc:
         self.ecritures.append(("dns", list(s)))
         self.dns4 = list(s)
 
+    ip_fb = "192.168.1.254"
+
+    def ip_freebox(self):
+        return self.ip_fb
+
     def regler_dns6(self, perso, s):
         self.ecritures.append(("dns6", perso, list(s)))
         self.custom, self.dns6 = perso, list(s)
@@ -136,3 +141,31 @@ def test_ipv6_relevee_sert_l_api(tmp_path, monkeypatch):
     assert DC.ipv6_auto_relevee() == "2a01::7"
     e = DC.controler(svc, "192.168.1.128", R, sonde=lambda s: True, horloge=lambda: 2)              # API : sans netlink
     assert e["attendu"]["ipv6"] == "2a01::7" and e["conforme"]
+
+
+# ── deux box sur la même Freebox : une box en « auto » ne remplace jamais un autre résolveur qui répond ───────────────────
+def test_autre_secubox_annoncee_et_vivante_pas_de_correction():
+    # cas gk2/gk7 du 17/11 : gk2 (auto) voit la Freebox annoncer gk7, qui répond
+    svc = FauxSvc(["192.168.1.128"], True, ["2a01::7"])
+    e = DC.controler(svc, "192.168.1.200", R, "2a01::200", sonde=lambda s: True, horloge=lambda: 1, ecrire=lambda d: None)
+    assert not svc.ecritures and e["conforme"] and {d["famille"] for d in e["delegue"]} == {"ipv4", "ipv6"}
+    assert "autre résolveur" in e["alertes"][0]
+
+
+def test_freebox_revenue_a_ses_dns_est_reprise():
+    svc = FauxSvc(["192.168.1.254"], False, ["2a01::7"])          # sa propre adresse en IPv4, personnalisés décochés en IPv6
+    e = _ctl(svc)
+    assert e["corrections"] == ["ipv4", "ipv6"] and not e["delegue"]
+
+
+def test_resolveur_annonce_mort_est_remplace():
+    svc = FauxSvc(["192.168.1.128"], True, ["2a01::200"])
+    e = _ctl(svc, sonde=lambda s: s != "192.168.1.128")
+    assert e["corrections"] == ["ipv4"]
+
+
+def test_adresse_saisie_ou_geste_appliquer_reprend_la_main():
+    svc = FauxSvc(["192.168.1.128"], True, ["2a01::200"])
+    assert _ctl(svc, dict(R, ipv4="192.168.1.200"))["corrections"] == ["ipv4"]
+    svc = FauxSvc(["192.168.1.128"], True, ["2a01::200"])
+    assert _ctl(svc, corriger_force=True)["corrections"] == ["ipv4"]

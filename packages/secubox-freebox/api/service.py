@@ -275,6 +275,13 @@ class Freebox:
             i["conforme"] = i["actuel"] == i["cible"]
         return {"items": items, "ecarts": sum(1 for i in items if not i["conforme"]), "ip_box": ip_box}
 
+    def ip_freebox(self):
+        """Adresse LAN de la Freebox (passerelle du DHCP) : son propre résolveur ; "" si illisible (#3769)."""
+        try:
+            return str((self.client.lire("dhcp/config/") or {}).get("gateway") or "")
+        except C.ErreurFreebox:
+            return ""
+
     def lire_dns(self):
         """Réponse anormale = erreur, jamais « aucun DNS » : la clé relève ici ce qu'elle rendra."""
         dns = (self.client.lire("dhcp/config/") or {}).get("dns")
