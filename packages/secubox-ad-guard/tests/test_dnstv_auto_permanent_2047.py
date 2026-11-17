@@ -103,7 +103,7 @@ def test_sans_declencheurs_pub_comportement_inchange(magasin):
     t = int(time.time())
     charger(magasin, coupure_pub(t - 3000) + coupure_pub(t - 1500))
     r = R.Regles()
-    M.tick(ETAT, r, magasin, classer, M.Reglage(declencheurs=("fwmrm.net",)), t)
+    M.tick(ETAT, r, magasin, classer, M.Reglage(declencheurs=("fwmrm.net",), declencheurs_pub=False), t)
     assert r.liste() == []
 
 
@@ -112,7 +112,9 @@ def test_le_reglage_se_lit_dans_le_toml(tmp_path):
     f.write_text("[adblock_tv_auto]\nconfirmation_auto = true\ndeclencheurs_pub = true\n")
     rg = M.reglage_depuis({}, f)
     assert rg.confirmation_auto is True and rg.declencheurs_pub is True
-    assert M.reglage_depuis({}, tmp_path / "absent.toml").confirmation_auto is False
+    assert M.reglage_depuis({}, tmp_path / "absent.toml").confirmation_auto is True          # #3774 : actif par défaut
+    f.write_text("[adblock_tv_auto]\nconfirmation_auto = false\ndeclencheurs_pub = false\n")
+    assert M.reglage_depuis({}, f).declencheurs_pub is False                                    # le TOML peut le couper
 
 
 # ── un domaine confirmé ailleurs par l'administrateur entre à l'essai (constaté sur gk2 : pub Canal+) ─────────────────
