@@ -1,3 +1,12 @@
+secubox-freebox (0.8.1-1~trixie1) trixie; urgency=medium
+
+  * Contrôle DNS (#3769) : sans IPv6 déclarée dans dns-lan.toml, le DNS IPv6
+    attendu « auto » est l'IPv6 stable de la box (fixe, sinon SLAAC stable ;
+    jamais temporaire ni dépréciée), relevée par le minuteur. Un DNS IPv6 non
+    contrôlé est signalé au lieu d'être tu (gk7, 17/11).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 05:39:45 +0100
+
 secubox-freebox (0.8.0-1~trixie1) trixie; urgency=medium
 
   * Contrôle des DNS IPv4 et IPv6 annoncés par la Freebox (#3769) : onglet

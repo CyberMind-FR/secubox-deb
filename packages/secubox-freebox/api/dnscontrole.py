@@ -107,6 +107,35 @@ def ipv6_stable(chemin=None):
         return ""
 
 
+def ipv6_box(doc_ip, doc_routes):
+    """IPv6 de la box à annoncer quand dns-lan.toml n'en déclare pas : sur l'interface de la route par défaut, une adresse fixe
+    d'abord, sinon une adresse SLAAC stable (dérivée de la MAC ou « stable-privacy »). Jamais une temporaire ni une dépréciée :
+    elles disparaissent en quelques heures et le réseau perdrait son DNS. "" si aucune."""
+    from . import maillage as MA
+    fixes = MA.ipv6_fixes(doc_ip, doc_routes)
+    if fixes:
+        return fixes[0]["adresse"]
+    wan = MA.interfaces_wan(doc_routes)
+    for iface in doc_ip if isinstance(doc_ip, list) else []:
+        if str(iface.get("ifname") or "") not in wan:
+            continue
+        for a in iface.get("addr_info") or []:
+            if a.get("family") != "inet6" or a.get("scope") != "global" or a.get("temporary") or a.get("deprecated"):
+                continue
+            try:
+                ad = ipaddress.IPv6Address(a.get("local") or "")
+            except ValueError:
+                continue
+            if ad.is_global:
+                return str(ad)
+    return ""
+
+
+def ipv6_auto_relevee(chemin=None):
+    """IPv6 de la box relevée par le dernier passage du minuteur (l'API n'a pas accès au netlink)."""
+    return str((lire_etat(chemin) or {}).get("ipv6_auto") or "")
+
+
 def attendus(reglage, ip_box, stable):
     """(ipv4, ipv6) attendus ; "" = pas de valeur connue (cette famille n'est alors pas contrôlée)."""
     v4 = ip_box if reglage["ipv4"] == "auto" else reglage["ipv4"]
@@ -152,9 +181,9 @@ def controler(svc, ip_box, reglage=None, stable=None, sonde=repond, horloge=time
     """Un passage : lit les deux DNS, compare, corrige si le mode le demande (ou `corriger_force`, geste « Appliquer »).
     Écrit l'état et le rend. Les erreurs Freebox remontent (l'appelant les traduit)."""
     reglage = reglage or lire_reglage()
-    stable = ipv6_stable() if stable is None else stable
+    stable = (ipv6_stable() or ipv6_auto_relevee()) if stable is None else stable
     v4, v6 = attendus(reglage, ip_box, stable)
-    etat = {"verifie_le": int(horloge()), "actif": reglage["actif"], "mode": reglage["mode"],
+    etat = {"verifie_le": int(horloge()), "actif": reglage["actif"], "mode": reglage["mode"], "ipv6_auto": stable,
             "attendu": {"ipv4": v4, "ipv6": v6}, "corrections": [], "refus": [], "alertes": []}
     dns4 = svc.lire_dns()
     dns6 = svc.lire_dns6()
@@ -176,6 +205,9 @@ def controler(svc, ip_box, reglage=None, stable=None, sonde=repond, horloge=time
     etat["ecarts"] = ecarts
     etat["conforme"] = not ecarts
     etat["alertes"] = [e["message"] + " " + IMPACT for e in ecarts] + etat["refus"]
+    if not v6:                       # un trou du contrôle se voit : jamais de silence sur l'IPv6 (#3769, gk7 du 17/11)
+        etat["alertes"].append("DNS IPv6 non contrôlé : aucune IPv6 de la box connue (dns-lan.toml, ou adresse stable de l'interface). "
+                               "Saisissez-la dans « DNS IPv6 attendu ».")
     (ecrire or (lambda d: _ecrire_json(CHEMIN_ETAT, d)))(etat)
     return etat
 
