@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-17 — TV Privacy : pubs RTL9+ (OQEE) bloquées en relais seul (ref #3785)
+
+- Pub RTL9+ signalée sur gk7 : OQEE demande `vizchoice.viznet.tv` et `ads-canalplus.akamaized.net` au lancement du replay (14:11:28),
+  dans la même seconde que `pagead2` (déjà bloqué). Essai sur `tv-4e95` : pubs zappées, lecture OK (propriétaire devant la TV).
+- `secubox-ad-guard` 1.30.0 (PR #3786) : les deux noms au profil de base ; `ads-canalplus.akamaized.net` classé PUBLICITE par entrée
+  exacte dans `reference-tv.txt` (le suffixe `akamaized.net` reste CDN protégé, sinon la garde refusait la pose). Déployé gk7 et gk2
+  (marqueur `.profil-base-43da56c73c71`, règles posées à toutes les TV auto). 1232 tests verts.
+- Non découverts seuls : un nom INCONNU exige ≥ 2 coupures ; une seule pause pub vue. Pistes proposées (indice lexical `ads`/`vast`…,
+  démarrage de replay compté comme coupure), en attente du go du propriétaire.
+
 ## 2026-11-17 — TV Privacy : pubs M6+ bloquées en relais seul (ref #3783)
 
 - Test devant la TV avec le propriétaire (gk7, Freebox Pop, 11:34-11:38) : FreeWheel `7cbf2` + `stickyadstv`, `2mdn.net`,
