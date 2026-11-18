@@ -237,7 +237,10 @@ chemin SANS `/api/v1/waf`. gk3 appelle `https://<gk2>/api/v1/waf/menaces/flux?�
 `/menaces/flux` rend `{"lignes": [{"position": "<inode>:<octet>", "ligne": {…}|null, ["motif"]}], "suivant",
 "rotation", "trou"}` : lecture par `seek`, 1 Mio au plus par réponse, jamais de ligne partielle (la dernière ligne
 en cours d'écriture attend l'appel suivant) ; ligne illisible ⇒ `ligne: null, motif: illisible`, ligne > 64 Kio ⇒
-`motif: trop_longue` (sautée). À inode changé : fin de `waf-threats.log.1` (en clair, `delaycompress`) puis le courant
+`motif: trop_longue` (sautée). Leurres de service (#3728, lignes `tool: authwatch` de sbx-authwatch, #3795) : contacts
+(`client_ip`, `agent`, `user_agent`, `host`, `path`) rendus tels quels, mais chaque `essais[]` sans le mot de passe en
+clair — `{compte, mot_de_passe_sha256, mot_de_passe_longueur}` (empreinte de l'UTF-8, longueur en caractères) ; le journal
+de gk2 garde le clair (décision du propriétaire). À inode changé : fin de `waf-threats.log.1` (en clair, `delaycompress`) puis le courant
 depuis 0 (`rotation: true`) ; inode inconnu ou fichier raccourci ⇒ reprise au début de `.1` puis du courant,
 `trou: true`. `/enforcement?depuis=` relit `bans.jsonl` par la **fin** (16 Mio au plus, arrêt 10 min avant
 `depuis`), plus anciens d'abord, `complet` faux si coupé. `/mesures` lit `mesures.jsonl` par la fin (8 Mio au plus).

@@ -16,6 +16,7 @@ doublon. Inode inconnu (deux rotations ratées) ou fichier raccourci : reprise a
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -26,6 +27,28 @@ RE_POSITION = re.compile(r"[0-9]{1,20}:[0-9]{1,15}")
 #: Une ligne plus longue est sautée (rendue `ligne: null`, `motif: trop_longue`) : jamais un curseur bloqué.
 LIGNE_MAX = 64 * 1024
 _BLOC = 64 * 1024
+
+
+def masquer_essais(ligne: Any) -> Any:
+    """#3795 : identifiants tentés sur les leurres de service (#3728, lignes `essais` de sbx-authwatch) rendus SANS le
+    mot de passe en clair : `mot_de_passe_sha256` (hex de l'UTF-8) et `mot_de_passe_longueur` (caractères) ; le compte
+    reste. Une entrée illisible est écartée, jamais rendue telle quelle."""
+    if not isinstance(ligne, dict) or "essais" not in ligne:
+        return ligne
+    essais = ligne.get("essais")
+    sortie: List[Dict[str, Any]] = []
+    for e in essais if isinstance(essais, list) else []:
+        if not isinstance(e, dict):
+            continue
+        m: Dict[str, Any] = {}
+        if isinstance(e.get("compte"), str):
+            m["compte"] = e["compte"]
+        mdp = e.get("mot_de_passe")
+        if isinstance(mdp, str) and mdp:
+            m["mot_de_passe_sha256"] = hashlib.sha256(mdp.encode("utf-8", "surrogatepass")).hexdigest()
+            m["mot_de_passe_longueur"] = len(mdp)
+        sortie.append(m)
+    return {**ligne, "essais": sortie}
 
 
 class PositionInvalide(ValueError):

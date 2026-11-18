@@ -1950,11 +1950,16 @@ async def menaces_flux(depuis: Optional[str] = Query(None, max_length=40, patter
                        max: int = Query(500, ge=1, le=FLUX_MAX_LIGNES)):
     """Flux à curseur du journal des menaces : `depuis=<inode>:<octet>` (début de ligne ; absent : début du fichier
     courant), au plus `max` lignes entières et `FLUX_OCTETS_MAX` octets ; à la rotation, fin de `.1` puis courant
-    depuis 0. Chaque ligne porte sa position (identité unique, garde les doublons réels)."""
+    depuis 0. Chaque ligne porte sa position (identité unique, garde les doublons réels). Les `essais` des leurres
+    de service sont rendus sans mot de passe en clair (`masquer_essais`)."""
     try:
-        return await asyncio.to_thread(_veille.lire_flux, Path(THREATS_LOG), depuis, max, FLUX_OCTETS_MAX)
+        flux = await asyncio.to_thread(_veille.lire_flux, Path(THREATS_LOG), depuis, max, FLUX_OCTETS_MAX)
     except _veille.PositionInvalide:
         raise HTTPException(422, detail={"motif": "position"}) from None
+    # #3795 : leurres de service (#3728) — jamais un mot de passe tenté en clair hors de gk2 (SHA-256 + longueur).
+    for x in flux["lignes"]:
+        x["ligne"] = _veille.masquer_essais(x.get("ligne"))
+    return flux
 
 
 def _horodatage_epoque(v: Any) -> Optional[float]:

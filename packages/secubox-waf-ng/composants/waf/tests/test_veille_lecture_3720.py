@@ -325,3 +325,22 @@ def test_actord_publie_au_groupe_actord_lecture():
     assert not re.search(r"(gpasswd|deluser|usermod -G )", post)        # jamais d'appartenance retirée
     assert subprocess.run(["sh", "-n", str(COMPOSANT.parents[1] / "debian" / "postinst")], check=False,
                           timeout=10).returncode == 0
+
+
+# ── #3795 : leurres de service, jamais de mot de passe en clair ────────
+def test_flux_leurres_sans_mot_de_passe_en_clair(v):
+    import hashlib
+    ligne = {"timestamp": "2026-11-15T09:00:00+01:00", "client_ip": "203.0.113.9", "category": "leurre:telnet",
+             "tool": "authwatch", "agent": "mirai", "user_agent": "telnet",
+             "essais": [{"compte": "root", "mot_de_passe": "xc3511"}, {"compte": "admin"}, "pas un essai",
+                        {"compte": "u", "mot_de_passe": "pé"}]}
+    (v.t / "waf-threats.log").write_bytes((json.dumps(ligne) + "\n").encode())
+    r = v.get("/menaces/flux")
+    assert r.status_code == 200, r.text
+    assert "xc3511" not in r.text and "mot_de_passe\"" not in r.text
+    e = r.json()["lignes"][0]["ligne"]
+    assert e["agent"] == "mirai" and e["client_ip"] == "203.0.113.9"
+    assert e["essais"] == [
+        {"compte": "root", "mot_de_passe_sha256": hashlib.sha256(b"xc3511").hexdigest(), "mot_de_passe_longueur": 6},
+        {"compte": "admin"},
+        {"compte": "u", "mot_de_passe_sha256": hashlib.sha256("pé".encode()).hexdigest(), "mot_de_passe_longueur": 2}]
