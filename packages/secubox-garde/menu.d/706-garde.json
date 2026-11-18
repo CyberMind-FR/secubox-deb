@@ -1,0 +1,10 @@
+{
+  "id": "garde",
+  "name": "Garde",
+  "category": "security",
+  "icon": "🛡",
+  "path": "/garde/",
+  "order": 706,
+  "description": "Détecteur d'intrusion, d'évasion et d'infection : décisions automatiques et libérations",
+  "theme": "security"
+}

@@ -1,0 +1,7 @@
+secubox-garde (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Squelette du module (#3794) : base SQLite WAL (décisions, positions,
+    libérations, file de notifications, récidives), réglages par défaut,
+    API locale gardée, unités durcies, profil AppArmor, compte dédié.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 10:00:00 +0100
