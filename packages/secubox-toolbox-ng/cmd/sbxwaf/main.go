@@ -402,9 +402,12 @@ func (s *Server) handler() http.Handler {
 			// #3800 : appareil isolé par secubox-garde — son DNS renvoie la box
 			// pour tout nom. Ce n'est pas un scanner : page d'explication, et
 			// ni anomalie ni ban pour cette requête.
-			if e, isole := s.isoles.Cherche(clientIP(r)); isole {
-				writeIsole(w, e)
-				return
+			if cip := clientIP(r); cip != "" {
+				if e, isole := s.isoles.Cherche(cip); isole {
+					s.isoles.Trace(cip, host)
+					writeIsole(w, e)
+					return
+				}
 			}
 			var famServie, aleaSeme string
 			var marquesRejouees []string

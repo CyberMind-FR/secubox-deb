@@ -6,6 +6,13 @@
 set -e
 
 case "$1" in
+    remove|purge)
+        # Liste des isolées (#3800) : sans Garde, sbxwaf ne doit plus exempter personne.
+        rm -rf /run/secubox/garde
+        ;;
+esac
+
+case "$1" in
     purge)
         # Base et configuration semée (pas un conffile) ; le compte dédié est retiré s'il n'a plus de processus.
         rm -rf /var/lib/secubox/garde

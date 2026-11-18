@@ -47,13 +47,26 @@ def test_seules_les_infections_actives_toutes_adresses(tmp_path):
     assert set(ips) == {"192.168.1.20", "fd00::20", "192.168.1.50"}
     assert ips["fd00::20"] == {"ip": "fd00::20", "nom": "TV <salon>", "depuis": T, "motif": "infection : c2"}
     assert ips["192.168.1.50"]["nom"] == "cle-e" and len(ips["192.168.1.50"]["motif"]) == isoles.MOTIF_MAX
-    assert not list(tmp_path.glob(".garde-isoles.*"))
+    assert not list(tmp_path.glob(".isoles.*"))
 
 
 def test_passage_publie_et_profils():
     script = (RACINE / "sbin" / "secubox-garde-passage").read_text()
     assert script.count("_publier_isoles(db, maintenant)") == 2
     profil = (RACINE / "apparmor" / "secubox-garde-passage").read_text()
-    assert "/run/secubox/garde-isoles.json rw," in profil and "/run/secubox/.garde-isoles.* rw," in profil
+    assert "/run/secubox/garde/isoles.json rw," in profil and "/run/secubox/garde/.isoles.* rw," in profil
+    assert "/run/secubox/garde-isoles" not in profil
     unite = (RACINE / "debian" / "secubox-garde-passage.service").read_text()
-    assert "/run/secubox" in " ".join(re.findall(r"^ReadWritePaths=(.*)$", unite, re.M)).split()
+    rw = " ".join(re.findall(r"^ReadWritePaths=(.*)$", unite, re.M)).split()
+    assert "-/run/secubox/garde" in rw and "/run/secubox" not in rw
+    assert isoles.CHEMIN == Path("/run/secubox/garde/isoles.json")
+
+
+def test_dossier_dedie_tmpfiles_postinst_postrm():
+    conf = (RACINE / "tmpfiles.d" / "secubox-garde.conf").read_text()
+    assert "d /run/secubox/garde 0755 secubox-garde secubox-garde -" in conf
+    assert "tmpfiles.d/secubox-garde.conf $(P)/usr/lib/tmpfiles.d/" in (RACINE / "debian" / "rules").read_text()
+    assert "systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-garde.conf" in (
+        RACINE / "debian" / "postinst").read_text()
+    postrm = (RACINE / "debian" / "postrm").read_text()
+    assert "remove|purge)" in postrm and "rm -rf /run/secubox/garde" in postrm

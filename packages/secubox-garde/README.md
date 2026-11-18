@@ -71,9 +71,11 @@ intégrée. `?demo=1` : données fictives, aucune écriture.
 
 Statique (aucun script, aucun bouton, CSP `default-src 'none'` + hachage du style), installée dans
 `/usr/share/secubox/www/garde/isole.html` (référence du texte). Mécanisme réel : après chaque passage et au
-rapprochement, `secubox-garde-passage` écrit atomiquement `/run/secubox/garde-isoles.json` (0644,
+rapprochement, `secubox-garde-passage` écrit atomiquement `/run/secubox/garde/isoles.json` (dossier dédié 0755 secubox-garde créé par
+`tmpfiles.d/secubox-garde.conf`, retiré au remove/purge ; fichier 0644,
 `{"genere_le", "isoles": [{"ip", "nom", "depuis", "motif"}]}`, toutes les adresses des quarantaines d'infection
-actives, liste vide sinon ; profil AppArmor et `ReadWritePaths=/run/secubox` limités à ce fichier). L'appareil isolé
+actives, liste vide sinon ; profil AppArmor et `ReadWritePaths=-/run/secubox/garde` limités à ce dossier ; sbxwaf ignore un fichier lien, étranger,
+inscriptible par d'autres ou plus vieux que 600 s, et toute adresse publique). L'appareil isolé
 résout tout nom vers la box : sa requête HTTP arrive à sbxwaf (paquet `secubox-waf-ng` ≥ 1.40.3) avec un Host non
 routé ; si son adresse cliente figure dans la liste, sbxwaf sert la page d'explication (même texte, plus nom, heure
 et motif échappés ; 200, `Cache-Control: no-store`) au lieu du 421, sans anomalie d'hôte ni ban. Sans le fichier

@@ -44,6 +44,8 @@ case "$1" in
         fi
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload
+            # Dossier dédié de la liste des isolées (#3800), avant le premier passage.
+            systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-garde.conf || true
             systemctl enable --now secubox-garde.service secubox-garde-passage.timer >/dev/null 2>&1 || true
             if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
         fi

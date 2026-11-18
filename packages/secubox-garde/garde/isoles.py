@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""Liste des adresses isolées pour sbxwaf (#3800).
+"""Liste des adresses isolées pour sbxwaf (#3800), dans le dossier dédié /run/secubox/garde (tmpfiles).
 
 Un appareil en quarantaine d'infection voit toutes ses résolutions DNS pointer vers la box : ses requêtes HTTP
 arrivent à sbxwaf avec un Host inconnu. sbxwaf lit ce fichier et sert alors la page d'explication au lieu du 421.
@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 from typing import List
 
-CHEMIN = Path("/run/secubox/garde-isoles.json")
+CHEMIN = Path("/run/secubox/garde/isoles.json")
 MOTIF_MAX = 120
 
 
@@ -44,7 +44,7 @@ def ecrire(db, maintenant: int, chemin: Path = CHEMIN) -> int:
     """Écrit la liste atomiquement ; rend le nombre d'adresses. Un échec d'écriture lève OSError."""
     isoles = lister(db)
     donnees = json.dumps({"genere_le": int(maintenant), "isoles": isoles}, ensure_ascii=False)
-    fd, tmp = tempfile.mkstemp(prefix=".garde-isoles.", dir=str(chemin.parent))
+    fd, tmp = tempfile.mkstemp(prefix=".isoles.", dir=str(chemin.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(donnees)

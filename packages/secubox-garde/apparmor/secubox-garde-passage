@@ -55,9 +55,10 @@ profile secubox-garde-passage flags=(attach_disconnected) {
   # WAF (geste garde-ban).
   /run/secubox/ r,
   /run/secubox/waf.sock rw,
-  # Adresses isolées lues par sbxwaf (#3800) : temporaire puis rename, rien d'autre dans /run/secubox.
-  /run/secubox/garde-isoles.json rw,
-  /run/secubox/.garde-isoles.* rw,
+  # Adresses isolées lues par sbxwaf (#3800) : temporaire puis rename, dossier dédié /run/secubox/garde.
+  /run/secubox/garde/ r,
+  /run/secubox/garde/isoles.json rw,
+  /run/secubox/garde/.isoles.* rw,
 
   # État et audit.
   /var/lib/secubox/garde/ rw,

@@ -6,7 +6,7 @@
 // SecuBox-Deb :: sbxwaf — page d'explication pour les appareils isolés par secubox-garde (#3800).
 //
 // Un appareil en quarantaine d'infection voit toutes ses résolutions DNS pointer vers la box : ses requêtes HTTP
-// arrivent ici avec un Host inconnu. Si son adresse figure dans /run/secubox/garde-isoles.json (écrit par
+// arrivent ici avec un Host inconnu. Si son adresse figure dans /run/secubox/garde/isoles.json (écrit par
 // secubox-garde-passage), on lui sert une page qui explique l'isolement au lieu du 421, et la requête ne compte
 // pas comme signal d'attaque. Fichier absent ou invalide → ensemble vide : le 421 reste la réponse, jamais d'erreur.
 package main
@@ -15,16 +15,28 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"html"
 	"io"
+	"log"
 	"net/http"
+	"net/netip"
 	"os"
+	"os/user"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
-const defaultGardeIsoles = "/run/secubox/garde-isoles.json"
+const (
+	defaultGardeIsoles = "/run/secubox/garde/isoles.json"
+	compteGarde        = "secubox-garde"
+	isolesPerimee      = 600 * time.Second // le minuteur de Garde tourne toutes les 60 s
+)
 
 // isoleEntree : une adresse isolée, telle que l'écrit secubox-garde.
 type isoleEntree struct {
@@ -35,18 +47,68 @@ type isoleEntree struct {
 }
 
 // ListeIsoles relit le fichier quand son mtime ou sa taille change, au plus un stat par seconde.
+// Le fichier n'est cru que s'il est sûr : dossier et fichier non liens, à secubox-garde ou root, sans écriture
+// de groupe ni d'autres ; il est ignoré s'il est périmé (genere_le). Une entrée publique n'est jamais exemptée.
 type ListeIsoles struct {
 	chemin string
 	mu     sync.RWMutex
 	ens    map[string]isoleEntree
+	genere time.Time
 	mtime  time.Time
 	taille int64
 	vu     time.Time // dernier stat
 	now    func() time.Time
+	// uidGarde rend l'uid du compte secubox-garde (injectable pour les tests).
+	uidGarde func() (uint32, bool)
+	logf     func(format string, args ...any)
+
+	journalMu sync.Mutex
+	refusLog  time.Time
+	servisLog map[string]time.Time
 }
 
 func NewListeIsoles(chemin string) *ListeIsoles {
-	return &ListeIsoles{chemin: chemin, ens: map[string]isoleEntree{}, now: time.Now}
+	return &ListeIsoles{chemin: chemin, ens: map[string]isoleEntree{}, taille: -1, now: time.Now,
+		uidGarde: uidCompteGarde(), logf: log.Printf, servisLog: map[string]time.Time{}}
+}
+
+// uidCompteGarde résout l'uid une fois, et réessaie tant que la résolution échoue.
+func uidCompteGarde() func() (uint32, bool) {
+	var mu sync.Mutex
+	var uid uint32
+	var ok bool
+	return func() (uint32, bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !ok {
+			if u, err := user.Lookup(compteGarde); err == nil {
+				if n, err := strconv.ParseUint(u.Uid, 10, 32); err == nil {
+					uid, ok = uint32(n), true
+				}
+			}
+		}
+		return uid, ok
+	}
+}
+
+func (l *ListeIsoles) proprietaireAdmis(uid uint32) bool {
+	if uid == 0 {
+		return true
+	}
+	g, ok := l.uidGarde()
+	return ok && uid == g
+}
+
+// refuse vide l'ensemble et journalise au plus une ligne par minute.
+func (l *ListeIsoles) refuse(t time.Time, motif string) {
+	l.ens = map[string]isoleEntree{}
+	l.genere = time.Time{}
+	l.journalMu.Lock()
+	defer l.journalMu.Unlock()
+	if t.Sub(l.refusLog) >= time.Minute {
+		l.refusLog = t
+		l.logf("sbxwaf: liste des isolées %s ignorée : %s", l.chemin, motif)
+	}
 }
 
 func (l *ListeIsoles) maybe() {
@@ -63,37 +125,87 @@ func (l *ListeIsoles) maybe() {
 		return
 	}
 	l.vu = t
-	fi, err := os.Stat(l.chemin)
-	if err != nil || !fi.Mode().IsRegular() {
-		l.ens, l.mtime, l.taille = map[string]isoleEntree{}, time.Time{}, -1
+	fi, err := os.Lstat(l.chemin)
+	if err != nil {
+		l.ens, l.genere, l.mtime, l.taille = map[string]isoleEntree{}, time.Time{}, time.Time{}, -1
 		return
 	}
 	if fi.ModTime().Equal(l.mtime) && fi.Size() == l.taille {
 		return
 	}
 	l.mtime, l.taille = fi.ModTime(), fi.Size()
-	l.ens = lireIsoles(l.chemin)
+	if err := l.verifierDossier(); err != nil {
+		l.refuse(t, err.Error())
+		return
+	}
+	ens, genere, err := l.lire()
+	if err != nil {
+		l.refuse(t, err.Error())
+		return
+	}
+	l.ens, l.genere = ens, genere
 }
 
-func lireIsoles(chemin string) map[string]isoleEntree {
-	ens := map[string]isoleEntree{}
-	f, err := os.Open(chemin)
+func (l *ListeIsoles) verifierDossier() error {
+	di, err := os.Lstat(filepath.Dir(l.chemin))
 	if err != nil {
-		return ens
+		return err
 	}
+	if !di.IsDir() {
+		return errors.New("dossier lien ou non-dossier")
+	}
+	st, ok := di.Sys().(*syscall.Stat_t)
+	if !ok || !l.proprietaireAdmis(st.Uid) {
+		return errors.New("dossier d'un autre propriétaire")
+	}
+	if di.Mode().Perm()&0o022 != 0 {
+		return errors.New("dossier inscriptible par d'autres")
+	}
+	return nil
+}
+
+func (l *ListeIsoles) lire() (map[string]isoleEntree, time.Time, error) {
+	fd, err := syscall.Open(l.chemin, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("ouverture : %w", err)
+	}
+	f := os.NewFile(uintptr(fd), l.chemin)
 	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, time.Time{}, errors.New("pas un fichier ordinaire")
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok || !l.proprietaireAdmis(st.Uid) {
+		return nil, time.Time{}, errors.New("fichier d'un autre propriétaire")
+	}
+	if fi.Mode().Perm()&0o022 != 0 {
+		return nil, time.Time{}, errors.New("fichier inscriptible par d'autres")
+	}
 	var doc struct {
-		Isoles []isoleEntree `json:"isoles"`
+		GenereLe int64         `json:"genere_le"`
+		Isoles   []isoleEntree `json:"isoles"`
 	}
 	if err := json.NewDecoder(io.LimitReader(f, 1<<20)).Decode(&doc); err != nil {
-		return ens
+		return nil, time.Time{}, fmt.Errorf("JSON invalide : %w", err)
 	}
+	ens := map[string]isoleEntree{}
 	for _, e := range doc.Isoles {
-		if ip := normaliserIP(strings.TrimSpace(e.IP)); ip != "" {
-			ens[ip] = e
+		a, err := netip.ParseAddr(strings.TrimSpace(e.IP))
+		if err != nil {
+			continue
 		}
+		a = a.Unmap()
+		// Jamais une adresse publique : seules celles du réseau local peuvent être des appareils isolés.
+		if !a.IsPrivate() && !a.IsLinkLocalUnicast() {
+			continue
+		}
+		ens[normaliserIP(a.String())] = e
 	}
-	return ens
+	return ens, time.Unix(doc.GenereLe, 0), nil
 }
 
 // Cherche rend l'entrée de l'adresse cliente (déjà dérivée par clientIP), si elle est isolée. Nil-safe.
@@ -102,10 +214,32 @@ func (l *ListeIsoles) Cherche(ip string) (isoleEntree, bool) {
 		return isoleEntree{}, false
 	}
 	l.maybe()
+	t := l.now()
 	l.mu.RLock()
 	defer l.mu.RUnlock()
+	if t.Sub(l.genere) > isolesPerimee {
+		return isoleEntree{}, false // Garde ne publie plus : liste périmée, plus personne n'est exempté
+	}
 	e, ok := l.ens[normaliserIP(ip)]
 	return e, ok
+}
+
+// Trace garde une ligne « isolé-servi ip host » par adresse et par minute : ni score ni ban.
+func (l *ListeIsoles) Trace(ip, host string) {
+	if l == nil {
+		return
+	}
+	t := l.now()
+	l.journalMu.Lock()
+	defer l.journalMu.Unlock()
+	if d, ok := l.servisLog[ip]; ok && t.Sub(d) < time.Minute {
+		return
+	}
+	if len(l.servisLog) > 4096 {
+		l.servisLog = map[string]time.Time{}
+	}
+	l.servisLog[ip] = t
+	l.logf("sbxwaf: isolé-servi ip=%s host=%q", ip, host)
 }
 
 // Même texte que packages/secubox-garde/www/garde/isole.html, plus l'heure et le motif (échappés).
@@ -160,6 +294,7 @@ func writeIsole(w http.ResponseWriter, e isoleEntree) {
 	h.Set("Cache-Control", "no-store")
 	h.Set("Content-Security-Policy", isoleCSP)
 	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "no-referrer")
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, page)
 }
