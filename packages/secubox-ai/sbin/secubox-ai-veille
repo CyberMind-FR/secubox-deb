@@ -53,6 +53,17 @@ def _client():
     return ClientGk2(base_url, aud, cle, routes(cfg))
 
 
+def _reglages_correlation():
+    try:
+        with open(CONF, "rb") as f:
+            return correlation.reglages(tomllib.load(f))
+    except FileNotFoundError:
+        return correlation.reglages({})
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        log.error("%s illisible (%s) : corrélation aux réglages par défaut", CONF, e.__class__.__name__)
+        return correlation.reglages({})
+
+
 def _maintenant():
     return datetime.now(timezone.utc)
 
@@ -63,8 +74,10 @@ async def _main():
         res = await veille.sql(retention.purger, _maintenant())
         logging.getLogger("secubox-ai-veille").info("purge : %s", res)
 
+    reglages = _reglages_correlation()
+
     async def correler():
-        touches = await veille.sql(correlation.correler, _maintenant())
+        touches = await veille.sql(lambda d: correlation.correler(d, _maintenant(), **reglages))
         if touches:
             log.info("corrélation : %d incident(s) créé(s) ou étendu(s)", len(touches))
 

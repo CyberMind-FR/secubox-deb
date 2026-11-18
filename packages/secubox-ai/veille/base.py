@@ -64,8 +64,9 @@ def migrer(db, dossier=MIGRATIONS):
     attente = [(v, f) for v, f in _scripts(dossier) if v not in faites]
     chemin = db.execute("PRAGMA database_list").fetchone()[2]
     appliquees = []
+    peuplee = bool(faites)        # sauvegarde avant la première migration en attente d'une base DÉJÀ peuplée
     for version, fichier in attente:
-        if faites and chemin:
+        if peuplee and chemin and not appliquees:
             _sauvegarder(db, Path(chemin), version)
         script = fichier.read_text(encoding="utf-8")
         try:

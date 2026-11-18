@@ -199,3 +199,51 @@ def test_calme_rouvert_par_nouvelle_preuve(db):
     _auth(db, "100.64.13.1", t + timedelta(minutes=2), "imap")
     incs = {i.regle: i for i in correlation.correler(db, t + timedelta(minutes=3))}
     assert incs["multi_source"].id == iid and incs["multi_source"].etat == "ouvert"
+
+
+def test_clos_court_ban_reutilise_ne_bloque_pas(db):
+    """clos_s court (< 7 j) : le même ban, encore regardé en arrière, ne rouvre ni ne heurte l'incident clos."""
+    ban = _ajout(db, "bans", T0 - timedelta(hours=2), ip="100.64.14.1", cat="scanners", sev="medium",
+                 exp=int((T0 - timedelta(hours=1)).timestamp()))
+    _waf(db, "100.64.14.1", T0 - timedelta(minutes=5), cat="scanners:x")
+    premier = [i for i in correlation.correler(db, T0, calme_s=600, clos_s=1200) if i.regle == "retour_apres_ban"][0]
+    correlation.correler(db, T0 + timedelta(hours=1), calme_s=600, clos_s=1200)
+    assert db.execute("SELECT etat FROM incidents WHERE id = ?", (premier.id,)).fetchone()[0] == "clos"
+    t = T0 + timedelta(hours=1, minutes=10)
+    retour = _waf(db, "100.64.14.1", t - timedelta(minutes=1), cat="scanners:y")
+    nouveaux = [i for i in correlation.correler(db, t, calme_s=600, clos_s=1200) if i.regle == "retour_apres_ban"]
+    assert len(nouveaux) == 1 and nouveaux[0].id != premier.id
+    assert ban.id not in nouveaux[0].preuves and retour.id in nouveaux[0].preuves
+    correlation.correler(db, t + timedelta(seconds=60), calme_s=600, clos_s=1200)       # aucune exception
+
+
+def test_collision_identifiant_tolere(db):
+    _auth(db, "100.64.15.1", T0 - timedelta(minutes=10))
+    _waf(db, "100.64.15.1", T0 - timedelta(minutes=9))
+    iid = correlation.correler(db, T0)[0].id
+    db.execute("UPDATE incidents SET etat = 'clos'")
+    db.execute("DELETE FROM incident_preuves")                  # preuves détachées : même premiere_vue, même id
+    assert any(i.id == iid for i in correlation.correler(db, T0 + timedelta(seconds=60)))
+
+
+def test_reglages_bornes():
+    r = correlation.reglages({"veille": {"correlation": {"clos_s": 3600, "calme_s": 10, "fenetre_s": "x"}}})
+    assert r == {"fenetre_s": 1800, "calme_s": 600, "clos_s": correlation.RETOUR_BAN_S}
+    assert correlation.reglages({}) == {"fenetre_s": 1800, "calme_s": 21600, "clos_s": 604800}
+
+
+def test_familles_sures_alignees_waf_ng():
+    import ast
+    from veille import regles
+    src = Path(__file__).resolve().parents[2] / "secubox-waf-ng" / "composants" / "waf" / "api" / "gestes_ia.py"
+    if not src.exists():
+        pytest.skip("secubox-waf-ng absent")
+    for n in ast.parse(src.read_text(encoding="utf-8")).body:
+        if isinstance(n, ast.Assign) and any(getattr(t, "id", None) == "CATEGORIES_SURES" for t in n.targets):
+            assert set(ast.literal_eval(n.value.args[0])) == regles.CATEGORIES_SURES
+            return
+    pytest.fail("CATEGORIES_SURES introuvable dans gestes_ia.py")
+
+
+def test_index_source(db):
+    assert db.execute("SELECT name FROM sqlite_master WHERE name = 'idx_evt_source'").fetchone()

@@ -15,7 +15,7 @@ from typing import Optional
 
 ECHELLE = ("info", "low", "medium", "high", "critical")
 # Familles sûres de gk2 (gestes_ia.CATEGORIES_SURES, décision du 14/11) : reconnaissance, sondes, leurres.
-SURES = frozenset({"scanners", "recon_crawler", "host_anomaly", "leurre", "product_absent_probes", "honeypot",
+CATEGORIES_SURES = SURES = frozenset({"scanners", "recon_crawler", "host_anomaly", "leurre", "product_absent_probes", "honeypot",
                    "waf_fingerprint"})
 # Ni sûres ni d'attaque : décisions, trafic sans portée offensive, inconnues.
 NEUTRES = frozenset({"ban", "ban_actif", "decision", "inconnue", "body-inspect-skipped", "robots", "garde", "dns"})
