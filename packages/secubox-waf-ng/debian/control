@@ -10,7 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-waf-ng
 Architecture: any
 Depends: ${misc:Depends},
- secubox-core (>= 1.8.33~),
+ secubox-core (>= 1.8.34~),
  secubox-security-posture (>= 2.8.1~),
  adduser,
  apparmor,
