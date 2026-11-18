@@ -18,7 +18,9 @@ Bornes, toutes vérifiées ICI :
 - cible : UNE adresse publique, IPv4 ou IPv6, sous forme canonique. Jamais un bloc, ni le privé, l'ULA, le lien-local,
   le bouclage, la multidiffusion, le CGNAT (qui contient aussi le maillage 10.100.0.0/16 via 10.0.0.0/8), ni une
   IPv6 qui porte de l'IPv4 : 409 `forme` ou `privee` (le relais de la garde lit `motif`) ;
-- déjà bannie par la garde (journal) : 409 `deja_actif` ; plafonds glissants 120/h et 1000/j : 409 `plafond` ;
+- déjà bannie par la garde (journal) ou déjà présente dans l'ensemble nft VIVANT (`waf_ban` / `waf_ban6`, lu avant
+  wafctl) : 409 `deja_actif`, sans wafctl ni place de plafond ; ensemble illisible : 503 `etat`. Un ban étranger
+  (sbxwaf, administrateur, ai-ban) n'est donc jamais touché, et le retour arrière ne retire que ce que CE geste a posé ; plafonds glissants 120/h et 1000/j : 409 `plafond` ;
 - les gardes root de `wafctl ban` (`waf-blocs verifier` : plages protégées, box, pairs) : leur motif en 409.
 
 Application par le MÊME chemin que l'ai-ban : `sudo -n wafctl ban <ip> <durée>s`, qui pose l'adresse dans `waf_ban`
@@ -156,6 +158,11 @@ def _bilan(entrees: List[dict], maintenant: int):
     return actives, heure, jour
 
 
+def _lire_ensemble(nom: str):
+    """Adresses de l'ensemble nft vivant `nom` ; lève si illisible (`gestes_ia.lire_waf_ban`)."""
+    return _g.lire_waf_ban(nom)
+
+
 def _auditer(action: str, detail: str, user: dict) -> None:
     """Lève si la ligne n'a pas pu être écrite. Empreinte de la clé ajoutée, jamais le jeton."""
     _config["audit"](action, f"{detail} cle {_g._cle(user)}", {"sub": str((user or {}).get("sub") or "garde")})
@@ -183,6 +190,13 @@ def garde_ban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps
             raise _refus(503, "journal", geste.cible, user) from None
         if geste.cible in actives:
             raise _refus(409, "deja_actif", geste.cible, user)
+        try:
+            present = str(cible) in _lire_ensemble("waf_ban6" if cible.version == 6 else "waf_ban")
+        except Exception as e:  # noqa: BLE001 — ensemble illisible : jamais « libre » par défaut
+            log.warning("garde-ban : ensemble illisible : %s", e)
+            raise _refus(503, "etat", geste.cible, user) from None
+        if present:
+            raise _refus(409, "deja_actif", geste.cible, user)
         if heure >= PLAFONDS["heure"] or jour >= PLAFONDS["jour"]:
             raise _refus(409, "plafond", geste.cible, user)
 
@@ -197,7 +211,7 @@ def garde_ban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps
         r, panne = _g._lancer(_g._argv("ban", cible, geste.duree_s))
         if r is None:
             log.error("garde-ban : wafctl injoignable (%s) pour %s", panne, cible)
-            _g._defaire(cible)
+            _g._defaire(cible, "garde-ban")
             raise _refus(503, "wafctl", geste.cible, user)
         if r.returncode != 0:
             raise _refus(*_g._statut_motif(_g._motif_sortie(r)), geste.cible, user)
@@ -209,13 +223,13 @@ def garde_ban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps
             _ecrire_journal(entree)
         except OSError:
             # hors journal, le ban échapperait aux plafonds
-            if _g._defaire(cible):
+            if _g._defaire(cible, "garde-ban"):
                 raise _refus(503, "journal", geste.cible, user) from None
             raise _refus(500, "incoherent", geste.cible, user) from None
         try:
             _auditer("garde-ban", f"{resume} motif {geste.motif}", user)
         except Exception:  # noqa: BLE001 — un ban non audité n'existe pas : il est retiré
-            defait = _g._defaire(cible)
+            defait = _g._defaire(cible, "garde-ban")
             try:
                 _ecrire_journal({"ts": _g._horodatage(), "at": maintenant, "type": "annule", "id": ident,
                                  "cible": geste.cible, "cause": "audit"})

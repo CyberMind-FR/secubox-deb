@@ -164,7 +164,11 @@ Compte de service `garde` (portée `garde-ban`, mêmes règles de jeton que `ai-
 | `POST /garde/ban` | `{"geste": "ban", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…2592000, "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` ; 409 `{"detail": {"motif"}}` : `forme`, `privee`, `deja_actif`, `plafond`, ou motif de `wafctl` |
 
 Plafonds 120/h et 1000/j (journal `/var/lib/secubox/waf/garde-ban.jsonl`) ; application par `wafctl ban`
-(`waf_ban`/`waf_ban6` avec timeout), audit `garde-ban-demande` puis `garde-ban`.
+(`waf_ban`/`waf_ban6` avec timeout), audit `garde-ban-demande` puis `garde-ban`. Le champ `audit` de la réponse
+vaut l'`id` de l'entrée du journal. Une cible déjà présente dans l'ensemble vivant (`waf_ban`/`waf_ban6`, lu avant
+`wafctl`) est refusée en 409 `deja_actif`, et un ensemble illisible donne 503 `etat` : un ban posé par quelqu'un d'autre
+n'est jamais touché. Les plages IPv4 de documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) sont
+acceptées, comme pour l'ai-ban (banc et essais).
 
 Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,
 **cas sûr recontrôlé** (≥ 20 adresses du bloc dans `waf_ban`, toutes de familles sûres : `scanners`,

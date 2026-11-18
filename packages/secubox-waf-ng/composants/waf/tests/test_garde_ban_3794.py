@@ -63,6 +63,24 @@ def c(monkeypatch, tmp_path):
     from secubox_core.compte_service import require_garde
     waf, _g, gb, faux = _preparer(monkeypatch, tmp_path)
     waf.app.dependency_overrides[require_garde] = lambda: dict(USAGER_GARDE)
+    ensembles = {"waf_ban": set(), "waf_ban6": set()}
+    lus = []
+    monkeypatch.setattr(gb, "_lire_ensemble", lambda nom: (lus.append(nom), set(ensembles[nom]))[1])
+    try:
+        banc = Banc(TestClient(waf.app), gb, faux, tmp_path)
+        banc.ensembles, banc.lus = ensembles, lus
+        yield banc
+    finally:
+        waf.app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def c_nft(monkeypatch, tmp_path):
+    """Lecture RÉELLE de l'ensemble par le faux nft (gestes_ia.lire_waf_ban)."""
+    from fastapi.testclient import TestClient
+    from secubox_core.compte_service import require_garde
+    waf, _g, gb, faux = _preparer(monkeypatch, tmp_path)
+    waf.app.dependency_overrides[require_garde] = lambda: dict(USAGER_GARDE)
     try:
         yield Banc(TestClient(waf.app), gb, faux, tmp_path)
     finally:
@@ -201,6 +219,7 @@ def c_vrai(monkeypatch, tmp_path):
     monkeypatch.setattr(cs, "_minuterie", {"active": None})
     monkeypatch.setattr(cs, "_armer_minuterie", lambda: None)
     monkeypatch.setattr(cs, "_DEMARRAGE", 0.0)
+    monkeypatch.setattr(gb, "_lire_ensemble", lambda nom: set())
     yield TestClient(waf.app), cs, faux, tmp_path
 
 
@@ -242,3 +261,61 @@ def test_wafctl_cle_garde_ban_dans_l_aide():
     sortie = subprocess.run(["bash", str(COMPOSANT / "scripts" / "wafctl"), "aide"], capture_output=True, text=True,
                             check=False).stdout
     assert "cle-garde-ban" in sortie and "/etc/secubox/secrets/garde-ban.pem" in sortie
+
+
+# ── Jamais toucher un ban étranger (revue, ref #3794) ──────────────────
+@pytest.mark.parametrize("cible,ensemble", [("198.51.100.7", "waf_ban"), ("2a01:e0a:1:2::7", "waf_ban6")])
+def test_garde_ban_deja_dans_waf_ban_409_sans_wafctl(c, cible, ensemble):
+    c.ensembles[ensemble].add(cible)
+    r = c.ban(cible)
+    assert r.status_code == 409 and r.json() == {"detail": {"motif": "deja_actif"}}
+    assert c.lus == [ensemble] and c.faux.appels == [] and c.journal() == []
+    assert not [x for x in c.audit() if x["action"] in ("garde-ban-demande", "garde-ban")]
+
+
+def test_garde_ban_ensemble_illisible_503(c, monkeypatch):
+    def illisible(nom):
+        raise RuntimeError("nft muet")
+    monkeypatch.setattr(c.gb, "_lire_ensemble", illisible)
+    r = c.ban("198.51.100.7")
+    assert r.status_code == 503 and r.json() == {"detail": {"motif": "etat"}}
+    assert c.faux.appels == [] and c.journal() == []
+
+
+def test_garde_ban_lecture_reelle_waf_ban(c_nft):
+    c_nft.faux.reponses["nft"] = (0, json.dumps({"nftables": [{"metainfo": {}}, {"set": {
+        "name": "waf_ban", "elem": [{"elem": {"val": "198.51.100.7", "timeout": 60}}]}}]}), "")
+    assert c_nft.ban("198.51.100.7").json() == {"detail": {"motif": "deja_actif"}}
+    assert c_nft.faux.verbes() == ["nft"]
+    assert c_nft.faux.appels[0][-1] == "waf_ban"
+
+
+def test_garde_ban_lecture_reelle_v6_illisible_503(c_nft):
+    # le faux nft rend l'ensemble waf_ban : pour une IPv6, waf_ban6 est attendu → illisible, 503
+    r = c_nft.ban("2a01:e0a:1:2::7")
+    assert r.status_code == 503 and r.json() == {"detail": {"motif": "etat"}}
+    assert c_nft.faux.appels[0][-1] == "waf_ban6" and c_nft.faux.verbes() == ["nft"]
+
+
+def test_garde_ban_journal_impossible_unban_une_seule_fois(c, monkeypatch, tmp_path):
+    monkeypatch.setattr(c.gb, "JOURNAL_GARDE", tmp_path / "absent" / "garde-ban.jsonl")
+    r = c.ban("198.51.100.7")
+    assert r.status_code == 503 and r.json() == {"detail": {"motif": "journal"}}
+    assert c.faux.verbes() == ["ban", "unban"]
+    assert c.faux.appel("unban") == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+
+
+def test_garde_ban_preexistant_jamais_d_unban(c, monkeypatch, tmp_path):
+    """Cible déjà bannie ailleurs + journal impossible : refus AVANT wafctl, aucun chemin vers unban."""
+    c.ensembles["waf_ban"].add("198.51.100.7")
+    monkeypatch.setattr(c.gb, "JOURNAL_GARDE", tmp_path / "absent" / "garde-ban.jsonl")
+    c.ban("198.51.100.7")
+    assert "unban" not in c.faux.verbes() and "ban" not in c.faux.verbes()
+
+
+def test_defaire_etiquette_garde(c, caplog):
+    c.faux.reponses["unban"] = (1, "", "")
+    import ipaddress
+    with caplog.at_level("ERROR"):
+        assert c.gb._g._defaire(ipaddress.ip_address("198.51.100.7"), "garde-ban") is False
+    assert "garde-ban : retour arrière impossible" in caplog.text and "ai-ban" not in caplog.text
