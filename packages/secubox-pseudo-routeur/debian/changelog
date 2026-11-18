@@ -1,3 +1,10 @@
+secubox-pseudo-routeur (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * Relais IPv6 : préfixe explicite dans dhcp-range (constructor: n annonçait rien
+    sur gk2) ; bascule et sonde exigent la preuve que les annonces partent (#3807).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 15:22:42 +0100
+
 secubox-pseudo-routeur (0.3.0-1~trixie1) trixie; urgency=medium
 
   * Relais IPv6 par next hop Freebox (#3807), section [relais_ipv6], inactif
