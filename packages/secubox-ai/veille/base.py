@@ -10,6 +10,7 @@ par l'API de sauvegarde SQLite en `veille.db.avant-NNNN` (une seule sauvegarde g
 """
 import logging
 import re
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,14 +48,27 @@ def _scripts(dossier):
 
 
 def _sauvegarder(db, chemin, version):
-    for ancienne in chemin.parent.glob(chemin.name + ".avant-*"):
-        ancienne.unlink()
+    """Écrit la nouvelle sauvegarde (nom temporaire, fsync, renommage atomique) AVANT de retirer les anciennes."""
     cible = chemin.with_name(f"{chemin.name}.avant-{version:04d}")
-    copie = sqlite3.connect(str(cible))
+    temporaire = chemin.with_name(f"{chemin.name}.avant-tmp-{os.getpid()}")
     try:
-        db.backup(copie)
-    finally:
-        copie.close()
+        copie = sqlite3.connect(str(temporaire))
+        try:
+            db.backup(copie)
+        finally:
+            copie.close()
+        fd = os.open(str(temporaire), os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(temporaire, cible)
+    except BaseException:
+        temporaire.unlink(missing_ok=True)
+        raise
+    for ancienne in chemin.parent.glob(chemin.name + ".avant-*"):
+        if ancienne != cible:
+            ancienne.unlink(missing_ok=True)
 
 
 def migrer(db, dossier=MIGRATIONS):

@@ -22,8 +22,13 @@ def _par_lots(db, sql, params):
     total = 0
     while True:
         db.execute("BEGIN IMMEDIATE")
-        n = db.execute(sql, params).rowcount
-        db.commit()
+        try:
+            n = db.execute(sql, params).rowcount
+            db.commit()
+        except BaseException:
+            if db.in_transaction:
+                db.rollback()
+            raise
         total += max(n, 0)
         if n < LOT:
             return total

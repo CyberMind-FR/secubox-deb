@@ -234,3 +234,59 @@ def test_rules_et_postinst_installent_la_veille():
 def test_sbin_veille_executable():
     s = PAQUET / "sbin" / "secubox-ai-veille"
     assert s.read_text(encoding="utf-8").startswith("#!/usr/bin/python3 -IB")
+
+
+def test_sauvegarde_en_echec_garde_l_ancienne_et_n_applique_pas(tmp_path):
+    chemin = tmp_path / "veille.db"
+    db = base.ouvrir(chemin, MIGRATIONS)
+    db.close()
+    dossier = tmp_path / "mig"
+    dossier.mkdir()
+    for f in MIGRATIONS.glob("*.sql"):
+        (dossier / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    (dossier / "0098-test.sql").write_text("CREATE TABLE essai (x INTEGER);", encoding="utf-8")
+    db = base.ouvrir(chemin, dossier)
+    db.close()
+    ancienne = tmp_path / "veille.db.avant-0098"
+    assert ancienne.exists()
+    (dossier / "0099-test.sql").write_text("CREATE TABLE essai2 (x INTEGER);", encoding="utf-8")
+    db = base._connecter(chemin)
+
+    class Faux:
+        def __init__(self, reel):
+            self.reel = reel
+
+        def backup(self, dst):
+            raise sqlite3.OperationalError("disque plein")
+
+        def __getattr__(self, n):
+            return getattr(self.reel, n)
+
+    with pytest.raises(sqlite3.OperationalError):
+        base.migrer(Faux(db), dossier)
+    assert ancienne.exists()
+    assert [s.name for s in tmp_path.glob("veille.db.avant-*")] == ["veille.db.avant-0098"]
+    assert db.execute("SELECT 1 FROM schema_migrations WHERE version = 99").fetchone() is None
+    db.close()
+
+
+def test_par_lots_rollback_sur_exception():
+    class Db:
+        in_transaction = False
+        appels = []
+
+        def execute(self, sql, params=()):
+            self.appels.append(sql)
+            if sql == "BEGIN IMMEDIATE":
+                self.in_transaction = True
+                return None
+            raise sqlite3.OperationalError("boom")
+
+        def rollback(self):
+            self.in_transaction = False
+            self.appels.append("ROLLBACK")
+
+    db = Db()
+    with pytest.raises(sqlite3.OperationalError):
+        retention._par_lots(db, "DELETE FROM x", ())
+    assert db.appels[-1] == "ROLLBACK" and not db.in_transaction
