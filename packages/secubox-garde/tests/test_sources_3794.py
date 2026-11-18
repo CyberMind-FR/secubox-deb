@@ -91,3 +91,67 @@ def test_requetes_dns_lecture_seule(tmp_path):
     cx.close()
     assert sources.lire_requetes_dns(0, p) == [{"client_ip": "192.168.1.5", "domaine": "dns.google", "ts": 5}]
     assert sources.lire_requetes_dns(0, tmp_path / "x.db") == []
+
+
+def test_troncature_meme_inode(tmp_path):
+    db = base.ouvrir(tmp_path / "g.db")
+    f = tmp_path / "a.jsonl"
+    f.write_text(_alerte("192.168.1.5", 1) + _alerte("192.168.1.6", 2))
+    sources.lire_alertes_dns(db, f, {})
+    f.write_text(_alerte("192.168.1.9", 9))          # même inode, plus petit
+    assert [x.ip for x in sources.lire_alertes_dns(db, f, {})] == ["192.168.1.9"]
+
+
+def test_derniere_ligne_incomplete(tmp_path):
+    db = base.ouvrir(tmp_path / "g.db")
+    f = tmp_path / "a.jsonl"
+    l2 = _alerte("192.168.1.6", 2)
+    f.write_text(_alerte("192.168.1.5", 1) + l2.rstrip("\n"))
+    assert [x.ip for x in sources.lire_alertes_dns(db, f, {})] == ["192.168.1.5"]
+    with open(f, "a") as fh:
+        fh.write("\n")
+    assert [x.ip for x in sources.lire_alertes_dns(db, f, {})] == ["192.168.1.6"]
+    assert sources.lire_alertes_dns(db, f, {}) == []
+
+
+def _base_dns(p):
+    cx = sqlite3.connect(p)
+    cx.execute("PRAGMA journal_mode=WAL")
+    cx.execute("CREATE TABLE dnstv_recents (ts INTEGER, client TEXT, domaine TEXT, qtype TEXT, decision TEXT, categorie TEXT)")
+    cx.executemany("INSERT INTO dnstv_recents VALUES (?,?,?,'A','ALLOWED','')",
+                   [(1, "192.168.1.5", "dns.google"), (2, "192.168.1.6", "a.dns.google"),
+                    (3, "192.168.1.7", "exemple.fr"), (4, "192.168.1.8", "xdns.google")])
+    cx.commit()
+    return cx
+
+
+def test_requetes_dns_shm_en_lecture_seule(tmp_path, monkeypatch, caplog):
+    p = tmp_path / "dnstv.db"
+    cx = _base_dns(p)
+    vrai = sqlite3.connect
+    appels = []
+
+    def faux(cible, *a, **k):
+        appels.append(cible)
+        if "immutable" not in cible:
+            raise sqlite3.OperationalError("unable to open database file")
+        return vrai(cible, *a, **k)
+    monkeypatch.setattr(sources.sqlite3, "connect", faux)
+    with caplog.at_level("WARNING"):
+        r = sources.lire_requetes_dns(0, p, noms_doh={"dns.google"})
+    cx.close()
+    assert [x["client_ip"] for x in r] == ["192.168.1.5", "192.168.1.6"]
+    assert len(appels) == 2 and "immutable=1" in appels[1]
+    assert sum("immutable" in m for m in caplog.messages) == 1
+
+
+def test_requetes_dns_deux_echecs(tmp_path, monkeypatch, caplog):
+    p = tmp_path / "dnstv.db"
+    _base_dns(p).close()
+
+    def faux(*a, **k):
+        raise sqlite3.DatabaseError("boom")
+    monkeypatch.setattr(sources.sqlite3, "connect", faux)
+    with caplog.at_level("WARNING"):
+        assert sources.lire_requetes_dns(0, p) == []
+    assert any("illisible" in m for m in caplog.messages)

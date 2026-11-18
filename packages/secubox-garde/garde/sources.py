@@ -8,10 +8,12 @@ Chaque lecteur reçoit ses chemins et ses exécuteurs en paramètres (tests sans
 
 Source des requêtes DNS par client (pour `signaux_doh`) : table `dnstv_recents` (ts, client,
 domaine, qtype, decision, categorie) de `/var/lib/secubox/ad-guard/dnstv/dnstv.db`, tenue par
-ad-guard (compte `secubox`, UMask 0002, fichier 0664). `lire_requetes_dns` l'ouvre en lecture
-seule. Droits requis pour le compte `secubox-garde` : appartenance au groupe `secubox` et
-traversée du dossier ; en WAL, le lecteur doit pouvoir ouvrir `-shm` (dossier 0775 groupe
-`secubox`). Sans ces droits, la lecture renvoie [] (à régler dans ad-guard, hors de ce paquet).
+ad-guard. Droits constatés (gk7) : base, `-wal` et `-shm` en 0640 secubox:secubox, dossiers 0755 ;
+`secubox-garde` est du groupe `secubox` (lecture, pas d'écriture sur `-shm`). `lire_requetes_dns`
+ouvre en `mode=ro` puis, si SQLite refuse (WAL), reprend une fois en `mode=ro&immutable=1` sur la
+même requête bornée, avec un avertissement ; jamais d'écriture ; deux échecs : [].
+Positions : `positions` est mise à jour après la lecture, donc au plus une fois (un signal perdu
+si le moteur tombe entre les deux ; jamais de doublon).
 Liste des résolveurs DoH : `/usr/share/secubox/ad-guard/lists/resolveurs-doh.txt`.
 """
 from __future__ import annotations
@@ -66,9 +68,9 @@ def lire_alertes_dns(db: sqlite3.Connection, chemin: Path = ALERTES,
     for brut in donnees[:fin].splitlines():
         try:
             a = json.loads(brut)
-            ip = a.get("client_ip")
-            if not isinstance(a, dict) or not ip:
+            if not isinstance(a, dict) or not a.get("client_ip"):
                 continue
+            ip = a["client_ip"]
             ts = _ts_iso(a.get("timestamp"))
             if ts is None:
                 continue
@@ -131,21 +133,46 @@ def charger_noms_doh(chemin: Path = RESOLVEURS_DOH) -> Set[str]:
     return noms
 
 
-def lire_requetes_dns(depuis: int, chemin: Path = DNSTV_DB, limite: int = 20000) -> List[dict]:
-    """Requêtes DNS par client depuis `depuis` (table `dnstv_recents` d'ad-guard), lecture seule ; illisible : []."""
-    if not Path(chemin).is_file():
+def lire_requetes_dns(depuis: int, chemin: Path = DNSTV_DB, limite: int = 20000,
+                      noms_doh: Optional[Iterable[str]] = None) -> List[dict]:
+    """Requêtes DNS par client depuis `depuis` (table `dnstv_recents` d'ad-guard), jamais en écriture.
+
+    Ouverture `mode=ro` ; si elle échoue (WAL sans droit d'écriture sur `-shm`), une seule reprise en
+    `mode=ro&immutable=1` avec la même requête bornée (`ts >= depuis`), avertissement journalisé.
+    Les deux échouent : avertissement, []. `noms_doh` filtre en SQL (nom exact ou sous-domaine) pour que
+    les lignes récentes ne soient jamais écartées au profit d'anciennes."""
+    f = Path(chemin)
+    if not f.is_file():
         return []
-    try:
-        cx = sqlite3.connect(f"file:{chemin}?mode=ro", uri=True, timeout=5)
+    noms = sorted({n.lower().rstrip(".") for n in (noms_doh or []) if n})
+    sql = "SELECT ts, client, domaine FROM dnstv_recents WHERE ts>=?"
+    args: list = [int(depuis)]
+    if noms_doh is not None:
+        if not noms:
+            return []
+        cond = []
+        for n in noms:
+            cond.append("lower(domaine)=? OR lower(domaine) LIKE ? ESCAPE '\\'")
+            args += [n, "%." + n.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")]
+        sql += " AND (" + " OR ".join(cond) + ")"
+    sql += " ORDER BY ts DESC LIMIT ?"
+    args.append(int(limite))
+    derniere = None
+    for i, mode in enumerate(("mode=ro", "mode=ro&immutable=1")):
         try:
-            return [{"client_ip": c, "domaine": d, "ts": t} for t, c, d in cx.execute(
-                "SELECT ts, client, domaine FROM dnstv_recents WHERE ts>=? ORDER BY ts LIMIT ?",
-                (int(depuis), int(limite)))]
-        finally:
-            cx.close()
-    except sqlite3.Error as e:
-        log.warning("dnstv.db illisible : %s", e)
-        return []
+            cx = sqlite3.connect(f"file:{f}?{mode}", uri=True, timeout=5)
+            try:
+                lignes = cx.execute(sql, args).fetchall()
+            finally:
+                cx.close()
+        except sqlite3.Error as e:   # OperationalError, DatabaseError
+            derniere = e
+            continue
+        if i:
+            log.warning("dnstv.db lu en immutable (WAL non ouvrable en lecture seule) : %s", derniere)
+        return [{"client_ip": c, "domaine": d, "ts": t} for t, c, d in reversed(lignes)]
+    log.warning("dnstv.db illisible : %s", derniere)
+    return []
 
 
 def signaux_doh(evenements_dns: Iterable[dict], noms_doh: Set[str],

@@ -33,5 +33,7 @@ profil AppArmor, base SQLite (WAL) et réglages. Moteur, sources, notifications 
 `/run/secubox/actord-propositions.json`, `ip -j neigh` (IP → MAC) et la liste DoH d'ad-guard
 (`/usr/share/secubox/ad-guard/lists/resolveurs-doh.txt`, noms seulement). Requêtes DNS par client
 pour la détection DoH : table `dnstv_recents` de `/var/lib/secubox/ad-guard/dnstv/dnstv.db`
-(ad-guard, lecture seule). Le compte `secubox-garde` doit lire ce fichier (groupe `secubox`, dossier
-traversable, `-shm` ouvrable en WAL) ; sans ces droits la lecture renvoie une liste vide.
+(ad-guard). Droits : base, `-wal`, `-shm` en 0640 secubox:secubox, dossiers 0755 ; `secubox-garde`
+est du groupe `secubox` (lecture seule). Ouverture `mode=ro`, repli unique `mode=ro&immutable=1` avec
+avertissement ; deux échecs : liste vide. Les positions de lecture sont enregistrées après la lecture :
+au plus une fois (jamais de doublon, un signal peut se perdre en cas de chute du moteur).
