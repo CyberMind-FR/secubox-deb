@@ -307,3 +307,58 @@ def test_migration_contrainte_etat(tmp_path):
     db = base.ouvrir(f)
     db.execute("UPDATE decisions SET etat='levee_en_cours' WHERE id='a'")
     assert db.execute("SELECT etat FROM decisions").fetchall() == [("levee_en_cours",)]
+
+
+def test_levee_en_cours_bloque_nouvelle_decision(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    ef = EffetsLevee(refus={"192.168.1.20"})
+    moteur.passage(db, REG, sources(infection()), ef, nt, T)
+    moteur.passage(db, REG, sources(), ef, nt, T + 86400)
+    moteur.passage(db, REG, sources(infection(T + 86460)), ef, nt, T + 86460)
+    assert db.execute("SELECT etat FROM decisions WHERE menace='infection'").fetchall() == [("levee_en_cours",)]
+
+
+def test_levee_reessayee_ne_retire_pas_la_nouvelle_quarantaine(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    ef = EffetsLevee()
+    db.execute("INSERT INTO decisions(id, menace, cible, mac, ip, debut, fin, etat, leve_par) VALUES "
+               "('A','infection',?,?,'192.168.1.20',?,?,'levee_en_cours','reevaluation')", (MAC, MAC, T - 90000, T - 3600))
+    db.execute("INSERT INTO decisions(id, menace, cible, mac, ip, debut, fin, etat) VALUES "
+               "('B','infection',?,?,'192.168.1.20',?,?,'active')", (MAC, MAC, T - 60, T + 86000))
+    db.executemany("INSERT INTO adresses(decision_id, ip, fin) VALUES (?,?,?)",
+                   [("A", "192.168.1.20", T - 3600), ("B", "192.168.1.20", T + 86000)])
+    db.commit()
+    moteur.passage(db, REG, sources(), ef, nt, T)
+    assert ("liberer", "192.168.1.20") not in ef.appels
+    assert dict(db.execute("SELECT id, etat FROM decisions")) == {"A": "levee", "B": "active"}
+    assert db.execute("SELECT ip FROM adresses WHERE decision_id='B'").fetchall() == [("192.168.1.20",)]
+
+
+def _doh_tunnel(types):
+    return [Signal("ad-guard" if t == "doh" else "dns-guard", t, "192.168.1.20", None, d, t, T - 5) for t, d in types]
+
+
+def test_evasion_tunnel_refuse_le_domaine_du_tunnel(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    moteur.passage(db, REG, sources(_doh_tunnel([("tunneling", "abcd1234.t.Tunnel.example.")])), ef, nt, T)
+    assert ("fermer_evasion", "192.168.1.20", ("tunnel.example",)) in ef.appels
+    assert db.execute("SELECT etat FROM decisions WHERE menace='evasion'").fetchone() == ("active",)
+
+
+def test_evasion_sans_nom_devient_signale(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    moteur.passage(db, REG, sources(_doh_tunnel([("tunneling", "")])), ef, nt, T)
+    assert not [a for a in ef.appels if a[0] in ("fermer_evasion", "alerte")]
+    assert db.execute("SELECT menace, etat FROM decisions").fetchall() == [("signale", "echue")]
+
+
+def test_migration_fin_des_adresses_remplie(tmp_path):
+    import sqlite3
+    f = tmp_path / "g.db"
+    cx = sqlite3.connect(f)
+    cx.executescript(base.SCHEMA.replace(", fin INTEGER, PRIMARY KEY (decision_id, ip)", ", PRIMARY KEY (decision_id, ip)"))
+    cx.execute("INSERT INTO decisions(id, menace, fin, etat) VALUES ('a', 'infection', 99, 'active')")
+    cx.execute("INSERT INTO adresses(decision_id, ip) VALUES ('a', '192.168.1.20')")
+    cx.commit()
+    cx.close()
+    assert base.ouvrir(f).execute("SELECT fin FROM adresses").fetchall() == [(99,)]

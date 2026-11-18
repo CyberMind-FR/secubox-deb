@@ -66,6 +66,8 @@ def _repere(db, cle: str, valeur: Optional[int] = None) -> int:
 # -- effets par appareil
 
 def _poser(effets, menace: str, ip: str, mac, fin: int, noms: List[str], motif: str) -> dict:
+    if menace == "evasion" and not noms:    # rien à fermer (décision ancienne sans noms) : aucun appel, aucun échec
+        return {"ok": True, "motif": "sans_nom"}
     if menace == "infection":
         return effets.isoler(ip, mac, fin, motif)
     return effets.fermer_evasion(ip, mac, noms, motif)
@@ -80,9 +82,21 @@ def _lever(effets, menace: str, ip: str, mac, motif: str) -> dict:
 def _lever_tout(db, effets, did, menace, mac, motif) -> bool:
     """Lève chaque adresse ; seules les levées réussies quittent `adresses`. True si plus rien n'est posé."""
     for ip in _adresses(db, did):
+        if _tenue_ailleurs(db, did, menace, ip, mac):
+            # Une décision ACTIVE de même menace tient cette adresse (le ctl lève par IP) : on ne la lève pas,
+            # elle quitte simplement cette décision.
+            db.execute("DELETE FROM adresses WHERE decision_id=? AND ip=?", (did, ip))
+            continue
         if _lever(effets, menace, ip, mac, motif).get("ok"):
             db.execute("DELETE FROM adresses WHERE decision_id=? AND ip=?", (did, ip))
     return not _adresses(db, did)
+
+
+def _tenue_ailleurs(db, did: str, menace: str, ip: str, mac) -> bool:
+    return bool(db.execute(
+        "SELECT 1 FROM decisions d WHERE d.id!=? AND d.etat='active' AND d.menace=? AND "
+        "(EXISTS (SELECT 1 FROM adresses a WHERE a.decision_id=d.id AND a.ip=?) OR d.ip=? "
+        " OR (? IS NOT NULL AND d.mac=?))", (did, menace, ip, ip, mac, mac)).fetchone())
 
 
 def _alerte_une(db, effets, cle: str, texte: str, maintenant: int, delai: int = HEURE) -> None:
@@ -114,6 +128,12 @@ def _levees_en_cours(db, effets, maintenant: int) -> int:
         n += _terminer(db, effets, did, menace, mac, motif, par or "echeance", maintenant)
     db.commit()
     return n
+
+
+def _domaine_enregistre(nom: str) -> str:
+    """Deux derniers libellés (domaine enregistré approché, sans liste des suffixes publics)."""
+    p = [x for x in str(nom).lower().rstrip(".").split(".") if x]
+    return ".".join(p[-2:]) if len(p) >= 2 else ""
 
 
 # -- échéances et suivi des adresses
@@ -213,6 +233,9 @@ def passage(db: sqlite3.Connection, reglages: dict, sources, effets, notifs, mai
 
     actives = [Decision(m, c, mac, ip, mo, sg, de, fi)
                for _id, m, c, mac, ip, mo, sg, de, fi in _actives(db)]
+    # Une levée en attente compte comme active : aucune nouvelle décision de même menace sur l'appareil.
+    actives += [Decision(m, c, mac, ip, mo, sg, de, maintenant + 1) for m, c, mac, ip, mo, sg, de in db.execute(
+        "SELECT menace, cible, mac, ip, motif, signe, debut FROM decisions WHERE etat='levee_en_cours'")]
     decisions, alertes = decider(signaux, actives, _liberations(db, maintenant), _recidives(db, maintenant),
                                  sources.protegees, reglages, maintenant)
     bilan.update(appliquees=0, echecs=0, signalees=0, bans=0)
@@ -255,9 +278,15 @@ def _appliquer(db, d: Decision, signaux, voisins, effets, notifs, maintenant, bi
     nom = appareils.nom_de(db, cle)
     connues = [r[0] for r in db.execute("SELECT ip FROM appareil_ips WHERE cle=?", (cle,))]
     adresses = sorted(set(appareils.adresses_actuelles(cle, voisins, connues)) | {d.ip})
-    noms = sorted({s.domaine for s in signaux if s.type == "doh" and s.domaine
-                   and appareils.cle_de(db, s.ip, s.mac) == cle})
+    noms = sorted({(s.domaine if s.type == "doh" else _domaine_enregistre(s.domaine)).lower().rstrip(".")
+                   for s in signaux if s.type in ("doh", "tunneling") and s.domaine
+                   and appareils.cle_de(db, s.ip, s.mac) == cle} - {""})
     motif = f"{nom} — {d.motif}"
+    if d.menace == "evasion" and not noms:     # rien de précis à fermer : signalé, sans effet ni alerte d'échec
+        _enregistrer(db, Decision("signale", cle, d.mac, d.ip, d.motif, d.signe, d.debut, d.debut),
+                     "echue", f"{motif} (aucun nom à fermer)")
+        bilan["signalees"] += 1
+        return
     posees = [ip for ip in adresses if _poser(effets, d.menace, ip, d.mac, d.fin, noms, motif).get("ok")]
     if not posees:
         _alerte_une(db, effets, f"echec:{cle}:{d.menace}",

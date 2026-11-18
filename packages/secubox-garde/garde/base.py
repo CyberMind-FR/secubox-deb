@@ -83,6 +83,8 @@ def ouvrir(chemin: Path) -> sqlite3.Connection:
     cx.executescript(SCHEMA)
     if "fin" not in {r[1] for r in cx.execute("PRAGMA table_info(adresses)")}:
         cx.execute("ALTER TABLE adresses ADD COLUMN fin INTEGER")
+    # Lignes d'avant la colonne : posées avec la fin de leur décision.
+    cx.execute("UPDATE adresses SET fin=(SELECT fin FROM decisions WHERE id=adresses.decision_id) WHERE fin IS NULL")
     cx.commit()
     return cx
 
