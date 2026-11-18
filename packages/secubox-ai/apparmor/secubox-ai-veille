@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Profil AppArmor ENFORCE de secubox-ai-veille (#3719). Chargé par le postinst AVANT le démarrage de l'unité, qui le
-# nomme par AppArmorProfile=. Tout ce qui n'est pas listé est refusé : ni /etc/secubox/** (la clé ai-lecture arrivera
+# nomme par AppArmorProfile=. Tout ce qui n'est pas listé est refusé : ni /etc/secubox/** (la clé ai-lecture arrive
 # par LoadCredential=), ni shell, ni exécution hors de Python.
 
 #include <tunables/global>
@@ -28,6 +28,11 @@ profile secubox-ai-veille {
   # Configuration du module (lecture seule) ; jamais /etc/secubox/**.
   /etc/secubox/ r,
   /etc/secubox/ai.toml r,
+
+  # Clé du compte de lecture de gk2 (#3720), remise par LoadCredential= ; mémoire libre pour les mesures.
+  /run/credentials/secubox-ai-veille.service/ r,
+  /run/credentials/secubox-ai-veille.service/ai-lecture r,
+  @{PROC}/meminfo r,
 
   # veille.db (WAL : -wal, -shm), sauvegardes avant migration, tmp/ (SQLITE_TMPDIR). L'espace libre se lit par statvfs.
   /var/lib/secubox/ai/ r,

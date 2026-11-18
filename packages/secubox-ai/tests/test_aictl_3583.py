@@ -87,6 +87,7 @@ class Env:
         monkeypatch.setattr(ctl, "PROPRIETAIRE_CONFIG", uid)
         monkeypatch.setattr(ctl, "MEMINFO", str(self.meminfo))
         monkeypatch.setattr(ctl, "DROPIN_API", tmp_path / "secubox-ai.service.d")
+        monkeypatch.setattr(ctl, "DROPIN_VEILLE", tmp_path / "secubox-ai-veille.service.d")
         monkeypatch.setattr(ctl, "RESOLV", tmp_path / "resolv.conf")     # absent : jamais celui du poste de test
         monkeypatch.setattr(ctl, "PAS_PRET", 0.01)
         monkeypatch.setattr(ctl, "DELAI_PRET", 0.5)
@@ -377,6 +378,20 @@ def test_cle_remplacee_atomiquement(ctl, env, monkeypatch):
 
 
 # ── demandes de l'API ──
+
+def test_cle_ai_lecture_generee_0600_publique_imprimee_jamais_ecrasee(ctl, env, monkeypatch, capsys):
+    """#3720 : paire Ed25519 du compte de lecture de gk2 ; privée 0600, publique sur la sortie, jamais d'écrasement."""
+    cle = env.tmp / "secrets" / "ai" / "ai-lecture.key"
+    monkeypatch.setenv("SECUBOX_AI_CLE_LECTURE", str(cle))
+    assert ctl.main(["cle-ai-lecture", "generer"]) == 0
+    sortie = capsys.readouterr().out
+    assert sortie.startswith("-----BEGIN PUBLIC KEY-----") and "PRIVATE" not in sortie
+    assert stat.S_IMODE(cle.stat().st_mode) == 0o600 and b"PRIVATE KEY" in cle.read_bytes()
+    avant = cle.read_bytes()
+    assert ctl.main(["cle-ai-lecture", "generer"]) == 2
+    assert cle.read_bytes() == avant
+    assert ctl.main(["cle-ai-lecture"]) == 2
+
 
 @pytest.fixture
 def executees(ctl, env, monkeypatch):

@@ -1,3 +1,21 @@
+secubox-ai (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3720) : collecteur de gk2 (veille/client.py, veille/sources/,
+    veille/normaliser.py, veille/collecte.py). GET signés par le compte
+    ai-lecture (jeton lié à GET et au chemin exact), trust_env=False ; menaces,
+    bans, bans actifs, blocs, campagnes, décisions, réévaluations, posture,
+    garde, actord, alertes DNS ; essais des leurres. Normalisation UTC,
+    familles de gk2, « local », plages de documentation et autotest marqués ;
+    insertion idempotente par empreinte ; curseurs ok/en_panne/suspendu ;
+    espacement exponentiel (15 min max) après un refus 401 et une ligne
+    d'audit par motif et par 10 min.
+  * secubox-ai-veille.service : LoadCredential=ai-lecture ; « secubox-aictl
+    preparer » rouvre aussi les adresses de gk2 à la veille ;
+    « secubox-aictl cle-ai-lecture generer » crée la paire Ed25519.
+  * Depends: secubox-core (>= 1.8.35~).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 18:00:00 +0000
+
 secubox-ai (0.2.0-1~trixie1) trixie; urgency=medium
 
   * Veille V2 (#3719) : second processus secubox-ai-veille (User=secubox-ai, AppArmor

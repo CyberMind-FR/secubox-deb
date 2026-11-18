@@ -10,7 +10,7 @@ Architecture: all
 Depends: ${misc:Depends},
  adduser,
  python3 (>= 3.11),
- secubox-core (>= 1.8.30~),
+ secubox-core (>= 1.8.35~),
  python3-fastapi,
  python3-httpx,
  uvicorn,

@@ -11,6 +11,9 @@
   secubox-aictl redemarrer       arrête PUIS redémarre le moteur local sur le modèle des préférences (root)
   secubox-aictl etat [--json]    état du moteur local (sans privilège : groupe secubox-ai)
   secubox-aictl cle-distante     pose la clé du moteur distant, lue sur l'entrée standard, jamais affichée (root)
+  secubox-aictl cle-ai-lecture generer
+                                 crée la paire Ed25519 du compte de lecture `ai-lecture` (veille V2, #3720) et
+                                 imprime la clé PUBLIQUE à inscrire sur gk2 ; refuse d'écraser une clé existante (root)
   secubox-aictl demandes         traite UNE demande déposée par l'API (secubox-ai-demandes.service, root)
 
 Codes de sortie : 0 fait ; 1 échec (modèle absent, en-tête illisible, moteur tombé) ; 2 refus d'usage (commande,
@@ -64,6 +67,10 @@ MEMINFO = "/proc/meminfo"
 SYSTEMCTL = "/usr/bin/systemctl"
 # Drop-in des adresses permises à l'API, régénéré par « preparer » (perdu au redémarrage : refait à l'amorçage).
 DROPIN_API = Path("/run/systemd/system/secubox-ai.service.d")
+# Même drop-in pour la veille V2 (#3720), qui lit gk2 : mêmes adresses de ai.toml et mêmes résolveurs.
+DROPIN_VEILLE = Path("/run/systemd/system/secubox-ai-veille.service.d")
+# Clé privée du compte de lecture de gk2 (veille V2) : root 0600, remise à la veille par LoadCredential=.
+CLE_AI_LECTURE = "/etc/secubox/secrets/ai/ai-lecture.key"
 # Résolveurs de la box : 127.0.0.1 (Unbound) déjà permis par l'unité ; un résolveur du LAN (gk3 résout par gk2) est
 # rouvert à l'API comme les adresses de la configuration.
 RESOLV = Path("/etc/resolv.conf")
@@ -876,17 +883,18 @@ def texte_dropin(permises: list[str]) -> str:
     return "\n".join(lignes) + "\n"
 
 
-def ecrire_dropin(texte: str) -> bool:
+def ecrire_dropin(texte: str, dossier: Path | None = None) -> bool:
     """Écrit le drop-in s'il a changé ; True si systemd doit relire ses unités."""
-    DROPIN_API.mkdir(mode=0o755, parents=True, exist_ok=True)
-    cible = DROPIN_API / NOM_DROPIN
+    dossier = dossier or DROPIN_API
+    dossier.mkdir(mode=0o755, parents=True, exist_ok=True)
+    cible = dossier / NOM_DROPIN
     try:
         if cible.read_text(encoding="utf-8") == texte:
             return False
     except FileNotFoundError:
         pass
     ids = _identites()
-    fd = _ouvrir_dossier(DROPIN_API, {ids["racine"]})
+    fd = _ouvrir_dossier(dossier, {ids["racine"]})
     try:
         ecrire_atomique(fd, NOM_DROPIN, texte.encode(), 0o644, ids["racine"], ids["gid_racine"])
     finally:
@@ -912,7 +920,8 @@ def cmd_preparer() -> int:
     for r in refus:
         journal(r)
     try:
-        if ecrire_dropin(texte_dropin(permises)):
+        change = [ecrire_dropin(texte_dropin(permises), d) for d in (DROPIN_API, DROPIN_VEILLE)]
+        if any(change):
             systemctl("daemon-reload")
             audit("preparer", {"issue": "adresses", "permises": permises, "refus": refus})
     except (OSError, subprocess.SubprocessError) as e:
@@ -985,6 +994,51 @@ def cmd_cle_distante() -> int:
     return 0
 
 
+def cmd_cle_ai_lecture(args: list[str]) -> int:
+    """Crée la paire Ed25519 du compte `ai-lecture` (#3720) : clé privée root:root 0600 (lue par systemd pour
+    LoadCredential= de secubox-ai-veille, jamais par le compte du module), clé publique imprimée (à inscrire sur gk2).
+    Une clé existante n'est jamais écrasée."""
+    if args != ["generer"]:
+        journal("usage : secubox-aictl cle-ai-lecture generer")
+        return 2
+    if not _root():
+        journal("cle-ai-lecture : root exigé")
+        return 2
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    chemin = Path(os.environ.get("SECUBOX_AI_CLE_LECTURE", CLE_AI_LECTURE))
+    if chemin.parent.name != "ai" or not chemin.parent.parent.is_dir():
+        journal(f"{chemin} : dossier dédié « …/ai/ » sous le dossier des secrets attendu ; rien n'a été écrit")
+        return 1
+    try:
+        ids = _identites()
+        _dossier_root(chemin.parent, 0o750, ids["gid_ai"])
+        dfd = _ouvrir_dossier(chemin.parent, {ids["racine"]})
+        try:
+            try:
+                os.stat(chemin.name, dir_fd=dfd, follow_symlinks=False)
+                journal(f"{chemin} existe déjà : jamais écrasée (la retirer à la main pour changer de paire)")
+                return 2
+            except FileNotFoundError:
+                pass
+            cle = Ed25519PrivateKey.generate()
+            prive = cle.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                      serialization.NoEncryption())
+            ecrire_atomique(dfd, chemin.name, prive, 0o600, ids["racine"], ids["gid_racine"])
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except (Echec, OSError) as e:
+        journal(f"clé non créée : {e if isinstance(e, Echec) else e.__class__.__name__} ; rien n'a été écrit")
+        audit("cle-ai-lecture", {"issue": "erreur"})
+        return 1
+    audit("cle-ai-lecture", {"issue": "creee"})
+    print(cle.public_key().public_bytes(serialization.Encoding.PEM,
+                                        serialization.PublicFormat.SubjectPublicKeyInfo).decode("ascii"), end="")
+    return 0
+
+
 # ── état ──
 
 def cmd_etat(en_json: bool) -> int:
@@ -1003,7 +1057,7 @@ def aide() -> int:
     return 0
 
 
-VERBES = {"preparer", "demarrer", "arreter", "redemarrer", "etat", "cle-distante", "demandes"}
+VERBES = {"preparer", "demarrer", "arreter", "redemarrer", "etat", "cle-distante", "cle-ai-lecture", "demandes"}
 
 
 def main(argv: list[str]) -> int:
@@ -1013,6 +1067,8 @@ def main(argv: list[str]) -> int:
         print(f"secubox-aictl {VERSION}")
         return 0
     verbe, args = argv[0], argv[1:]
+    if verbe == "cle-ai-lecture":
+        return cmd_cle_ai_lecture(args)
     if verbe not in VERBES or (args and (verbe != "etat" or args != ["--json"])):
         journal(f"usage : secubox-aictl {{{'|'.join(sorted(VERBES))}}} (etat --json)")
         return 2

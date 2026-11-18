@@ -41,6 +41,7 @@ navigateur ─▶ nginx (admin) ─▶ /run/secubox/ai.sock ─▶ API secubox-a
 | `secubox-ai.service` | API (uvicorn), `User=secubox-ai`, sans capacité, filtrage IP (R13), profil `secubox-ai-api` |
 | `secubox-ai-moteur.service` | llama-server, `User=secubox-ai-moteur`, sans réseau IP, profil `secubox-ai-moteur` ; sans `[Install]` |
 | `secubox-ai-preparer.service` | oneshot root à l'amorçage : `/run/secubox-ai`, drop-in des adresses LAN de l'API |
+| `secubox-ai-veille.service` | veille V2 : seul écrivain de `veille.db`, collecte de gk2 (#3720) par GET signés du compte `ai-lecture` (`LoadCredential=`, clé créée par `secubox-aictl cle-ai-lecture generer`, publique à inscrire sur gk2) ; audience `[veille] aud` et routes `[veille.routes]` d'`ai.toml` ; profil `secubox-ai-veille` |
 | `secubox-ai-demandes.path` / `.service` | demandes de l'API (démarrer, arrêter, redémarrer) traitées par le contrôleur root |
 
 Aucun sudo, aucun `systemd-run` : l'API ne lance rien en root.
@@ -179,7 +180,7 @@ refus, adresses permises) vont dans `/var/log/secubox/audit.log`.
 
 ## Dépendances
 
-- Debian : `secubox-core (>= 1.8.30~)`, `secubox-zia-llm (>= 0.3.0~)` (llama-server statique,
+- Debian : `secubox-core (>= 1.8.35~)`, `secubox-zia-llm (>= 0.3.0~)` (llama-server statique,
   `/usr/lib/secubox/zia-llm/llama-server`), `python3 (>= 3.11)`, `python3-fastapi`, `python3-httpx`, `uvicorn`,
   `poppler-utils` (`pdfinfo`, `pdftotext`), `sqlite3`, `adduser` ; recommandés : `apparmor`, `logrotate`.
 - Python : FastAPI, httpx, uvicorn, bibliothèque standard (`sqlite3` avec FTS5, `tomllib`).

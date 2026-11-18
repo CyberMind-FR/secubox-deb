@@ -14,6 +14,15 @@ url = ""
 menaces_url = "https://admin.gk2.secubox.in/api/v1"
 sources_url = "https://hall.gk2.secubox.in/api/v1/zia/objets"
 
+[veille]
+# Veille V2 (#3720) : audience des jetons du compte `ai-lecture` = nom de la box gk2 (vérifié par gk2).
+aud = "gk2"
+# Routes lues sur gk2, relatives à menaces_url, et chemin EXACT signé (ce que voit la route de gk2). Défauts dans
+# veille/client.py ; n'en recouvrir une que si gk2 la sert ailleurs, par exemple :
+# [veille.routes.garde_historique]
+# url = "/garde/historique"
+# signe = "/api/v1/garde/historique"
+
 # [searxng]
 # SearXNG local de la box, essayé avant celui de gk0 (vide = aucun). Adresse du conteneur créé par
 # `searxngctl install` ; à ajouter aussi à IPAddressAllow — fait par l'empaquetage.
