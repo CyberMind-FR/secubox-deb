@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox Garde — passage du moteur (#3794), lancé par le minuteur : lit les capteurs, décide, applique
+# (ban par la socket du WAF, quarantaine/évasion par `sudo -n secubox-adguard-tv`), met les notifications en file
+# (envoyées ensuite par secubox-garde-envoi.service, seul à avoir le réseau IP).
+# sudo exige NoNewPrivileges=no (exception écrite dans .claude/RULES-CODE.md, même patron que
+# secubox-ad-guard-auto.service) ; AUCUNE option reposant sur seccomp (LockPersonality, ProtectKernelTunables,
+# SystemCallFilter, RestrictNamespaces, RestrictSUIDSGID, RestrictAddressFamilies…) : systemd poserait NoNewPrivileges
+# d'office. Pas d'IPAddressDeny : le contrôleur d'ad-guard appelle unbound-control (TCP local). Le confinement réseau du
+# passage lui-même est tenu par AppArmor (unix + netlink seulement).
+# Le contrôleur root lancé par sudo hérite de l'espace de montage : il lui faut écrire là où ad-guard écrit.
+# Groupes : `secubox` (primaire : alerts.jsonl, actord-propositions, dnstv.db, devices.db du NAC, traversée
+# de /etc/secubox/secrets 0750 root:secubox — constaté sur gk7 le 18/11), `secubox-garde` (garde-ban.pem 0640).
+[Unit]
+Description=SecuBox Garde — passage du moteur
+After=secubox-core.service secubox-waf.service
+# L'envoi des notifications (réseau IP) est un programme à part, sous son propre profil, lancé après chaque passage.
+Wants=secubox-garde-envoi.service
+
+[Service]
+Type=oneshot
+User=secubox-garde
+Group=secubox
+SupplementaryGroups=secubox-garde
+WorkingDirectory=/usr/lib/secubox/garde
+Environment=PYTHONDONTWRITEBYTECODE=1
+# Ajout à audit.log (0640 secubox:secubox) : ACL nommée d'écriture remise avant chaque passage, en root (« + »),
+# la rotation pouvant la perdre ; AppArmor ne permet que l'ajout (« a »). /var/log/secubox appartient à secubox :
+# l'aide refuse un lien ou un non-fichier et ne suit aucun lien (setfacl --physical). « - » : échec non bloquant.
+ExecStartPre=+-/usr/lib/secubox/garde/secubox-garde-acl-audit
+# Dépôts de l'API (réglages → /etc/secubox/garde.toml, clé SMS → /etc/secubox/secrets/garde-sms), en root (« + ») :
+# l'aide n'ouvre que des fichiers ordinaires du compte secubox-garde, sans suivre de lien, et revalide tout.
+ExecStartPre=+-/usr/lib/secubox/garde/secubox-garde-depots
+ExecStart=/usr/sbin/secubox-garde-passage
+UMask=0027
+AppArmorProfile=secubox-garde-passage
+Nice=10
+MemoryMax=192M
+TimeoutStartSec=55
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ReadWritePaths=/var/lib/secubox/garde /var/log/secubox
+# `sudo secubox-adguard-tv quarantaine|evasion` hérite de ProtectSystem=strict. Ce qu'il écrit (lu dans le contrôleur) :
+# - etat.json + temporaire .etat.garde.<pid> + verrou .regles.lock : /var/lib/secubox/ad-guard/dnstv ;
+# - instantané applique.json + temporaire .applique.* + verrou `verrou` : /var/lib/secubox-adguard-tv (0700 root) ;
+# - drop-in 94-secubox-adguard-tv.conf + son temporaire + remise de l'ancien : /etc/unbound/unbound.conf.d ;
+# - audit.log : /var/log/secubox. unbound-checkconf : /tmp privé ; unbound-control : socket, lecture seule suffit.
+# « - » : un chemin absent (ad-guard non installé) n'empêche pas le passage.
+ReadWritePaths=-/var/lib/secubox/ad-guard -/var/lib/secubox-adguard-tv -/etc/unbound/unbound.conf.d

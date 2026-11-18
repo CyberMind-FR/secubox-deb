@@ -1,0 +1,64 @@
+secubox-garde (0.3.2-1~trixie1) trixie; urgency=medium
+
+  * Notifications (#3794) : `vider_file` ne tient plus de transaction
+    d'écriture ouverte pendant l'envoi réseau (SMS, SMTP) ; lecture courte
+    puis une écriture BEGIN IMMEDIATE par ligne. Base : timeout 30 s et
+    busy_timeout 30000 ms (plus de « database is locked » avec l'API).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 19:00:00 +0100
+
+secubox-garde (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture finale (#3794) : l'envoi des notifications (courriel par le
+    relais, SMS Free Mobile en HTTPS) quitte le passage pour
+    secubox-garde-envoi (service oneshot tiré après chaque passage, profil
+    AppArmor secubox-garde-envoi : réseau IP, ssl_certs, aucun sudo ni autre
+    exécutable). Le profil du passage reste sans réseau IP.
+  * Passage : ReadWritePaths= (préfixés « - ») de tout ce qu'écrit
+    `secubox-adguard-tv quarantaine|evasion` sous ProtectSystem=strict.
+  * Tests : profils, unités, chemins inscriptibles, route nginx, préfixes /48.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 18:00:00 +0100
+
+secubox-garde (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * API (#3794) : /etat (tuiles, une carte par appareil, bans groupés),
+    /historique, /reglages (lecture : require_lecture, rien de personnel
+    pour un lecteur anonyme) ; /liberer, /rouvrir, /debannir, /reglages,
+    /cle-sms, /tester (require_jwt).
+  * Actions = demandes (table demandes, dépôt 0600) exécutées par le passage
+    suivant : l'API reste sans sudo ni secrets ; libération enregistrée 7 j ;
+    débannir seulement un ban de la garde (POST /garde/unban du WAF).
+  * Aide root secubox-garde-depots (ExecStartPre=+ du passage) : garde.toml
+    en double tampon, clé SMS dans /etc/secubox/secrets/garde-sms, jamais
+    relue par l'API.
+  * Page /garde/ (Aurora, CSP par hachage) et page de quarantaine statique
+    isole.html (branchement déclaratif en T9).
+  * garde.toml mis à jour en place (commentaires, tables gardés ; refus
+    audité sinon) ; CSP sans script-src-attr.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 20:00:00 +0100
+
+secubox-garde (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Moteur (#3794) : passage toutes les 60 s (lecture des capteurs, décision,
+    application, notifications, échéances et réévaluation à 24 h),
+    rapprochement au premier passage d'un démarrage.
+  * Effecteurs : ban par le geste garde-ban du WAF (jeton EdDSA,
+    /etc/secubox/secrets/garde-ban.pem), quarantaine et fermeture d'évasion
+    par sudo secubox-adguard-tv ; chaque effet dans audit.log.
+  * Registre d'appareils : un appareil (MAC) = toutes ses adresses, nom
+    déduit d'ad-guard, du NAC, des baux DHCP ou du constructeur ; une mesure
+    suit les adresses de l'appareil.
+  * Profil AppArmor propre au passage, groupe secubox-garde, ACL d'ajout à
+    audit.log.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 16:00:00 +0100
+
+secubox-garde (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Squelette du module (#3794) : base SQLite WAL (décisions, positions,
+    libérations, file de notifications, récidives), réglages par défaut,
+    API locale gardée, unités durcies, profil AppArmor, compte dédié.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 10:00:00 +0100

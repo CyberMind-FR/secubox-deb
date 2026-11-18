@@ -154,6 +154,24 @@ elles observent seulement, comme `detect`.
 
 Codes de cvectl : 2 → 422, 3 → 409, 4 → 404 ; autre code, délai dépassé ou binaire absent → 503 `ctl`.
 
+### Ban de secubox-garde (#3794)
+
+Compte de service `garde` (portée `garde-ban`, mêmes règles de jeton que `ai-ban`) ; clé privée
+`/etc/secubox/secrets/garde-ban.pem` (root:secubox-garde 0640), créée par `wafctl cle-garde-ban generer`.
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /garde/ban` | `{"geste": "ban", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…2592000, "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` ; 409 `{"detail": {"motif"}}` : `forme`, `privee`, `deja_actif`, `plafond`, ou motif de `wafctl` |
+| `POST /garde/unban` | `{"geste": "unban", "cible": "<ip>"}` (champs en trop : 422) | 200 `{cible, ids, etat: "annule"}` ; 200 `etat: "deja_leve"` si l'élément n'est plus dans `waf_ban`/`waf_ban6` (journal `note: déjà levé`, sans wafctl) ; 409 `etranger` si l'échéance restante de l'élément (ou un élément permanent) dépasse la `fin` notée par la garde de plus de 120 s — ban repris par un autre, jamais levé ; 503 `etat` si l'ensemble ou une échéance est illisible ; 409 `pas_garde` (aucun ban de la garde actif pour cette adresse dans `garde-ban.jsonl` : ban étranger, inconnu, échu ou déjà levé — jamais de wafctl), `plafond` (60/h), ou motif de `wafctl` |
+
+Plafonds 120/h et 1000/j (journal `/var/lib/secubox/waf/garde-ban.jsonl`) ; application par `wafctl ban`
+(`waf_ban`/`waf_ban6` avec timeout), audit `garde-ban-demande` puis `garde-ban`. Le champ `audit` de la réponse
+vaut l'`id` de l'entrée du journal. Une cible déjà présente dans l'ensemble vivant (`waf_ban`/`waf_ban6`, lu avant
+`wafctl`) est refusée en 409 `deja_actif`, et un ensemble illisible donne 503 `etat` : un ban posé par quelqu'un d'autre
+n'est jamais touché. `unban` : même garde (compte `garde`, portée `garde-ban`), audit `garde-unban` avant
+`wafctl unban` (chemin du retour arrière de l'ai-ban), puis ligne `{"type": "annule", "geste": "unban"}` au journal. Les plages IPv4 de documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) sont
+acceptées, comme pour l'ai-ban (banc et essais).
+
 Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,
 **cas sûr recontrôlé** (≥ 20 adresses du bloc dans `waf_ban`, toutes de familles sûres : `scanners`,
 `recon_crawler`, `host_anomaly`, `leurre`, `product_absent_probes`, `honeypot`, `waf_fingerprint` ; les attaques — `xss`,

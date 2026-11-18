@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox Garde (#3794) — page de quarantaine, vue par un appareil isolé (sa résolution DNS renvoie l'adresse
+  de la box). Statique : aucun script, aucun bouton, aucune donnée de l'appareil ; servie en HTTP par la voie
+  déclarative de routes (voir README, branchement en T9).
+-->
+<html lang="fr">
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-3TbI91m/XHbVENkhVZqiQugUCIX/H1iHGvzZ2RwJxRs='; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Appareil isolé</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#e9edf5;color:#1b2333;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;box-sizing:border-box}
+  main{max-width:34rem;background:#f4f6fb;border-radius:14px;padding:28px 24px;display:grid;gap:12px;text-align:center;box-shadow:0 2px 18px rgba(0,0,0,.08)}
+  h1{margin:0;font-size:1.4rem;color:#b3261e}
+  p{margin:0}
+  small{color:#5b6475}
+</style>
+<body>
+<main>
+  <h1>Cet appareil est isolé</h1>
+  <p>Il a contacté un serveur de pirates connu, ou montré plusieurs signes d'infection.</p>
+  <p>Le propriétaire de la box a été prévenu. Seuls l'heure, les mises à jour et la box restent joignables.</p>
+  <small>SecuBox</small>
+</main>
+</body>
+</html>

@@ -1,3 +1,15 @@
+secubox-ad-guard (1.32.0-1~trixie1) trixie; urgency=medium
+
+  * Garde (#3794) : verbes root `quarantaine poser|lever` et `evasion
+    poser|lever`, ouverts au seul utilisateur secubox-garde (sudoers). Une
+    quarantaine redirige tout nom vers la box (vue sbx-quarantaine-*), sauf les
+    noms indispensables, et garde les blocages TV Privacy (#3674) ; une
+    évasion refuse les noms fermés en plus de la vue de l'appareil. État
+    `quarantaines`/`evasions` dans etat.json (16 au plus), lever rend la vue
+    d'origine.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:00:00 +0100
+
 secubox-ad-guard (1.31.0-1~trixie1) trixie; urgency=medium
 
   * TV Privacy (#3787) : découverte automatique dès la première coupure d'un

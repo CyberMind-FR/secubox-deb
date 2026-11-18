@@ -1,0 +1,34 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Envoi des notifications de secubox-garde (#3794), lancé après chaque passage (secubox-garde-envoi.service).
+
+Séparé du passage : seul ce programme a le réseau IP (courriel par le relais de la box, SMS Free Mobile en HTTPS),
+sous son propre profil AppArmor `secubox-garde-envoi`, sans sudo ni autre exécutable. Le passage, lui, ne fait que
+mettre en file. Ici : rejouer la file `file_notifs` avec les vrais expéditeurs, rien d'autre.
+"""
+import logging
+import sys
+import time
+
+sys.path.insert(0, "/usr/lib/secubox/garde")
+
+from garde import base, notifs  # noqa: E402
+
+
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    db = base.ouvrir(base.BASE)
+    try:
+        bilan = notifs.vider_file(db, base.reglages(), envoyer_sms=notifs._sms_defaut,
+                                  envoyer_courriel=notifs._courriel_defaut, maintenant=int(time.time()))
+    finally:
+        db.close()
+    logging.info("envoi : %s", bilan)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

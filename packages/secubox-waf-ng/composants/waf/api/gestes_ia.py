@@ -112,6 +112,8 @@ _SUDO = ["sudo", "-n"]
 _SYSTEMD_RUN = ["/usr/bin/systemd-run", "--wait", "--pipe", "--collect", "--quiet"]
 #: Lecture de l'ensemble du WAF : argv EXACT du sudoers (SBX_WAF_NFTLIST).
 NFT_LISTE_WAF_BAN = ["/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban"]
+#: Idem pour l'IPv6 (SBX_WAF_NFTLIST l'autorise aussi) : lu par le geste garde-ban (#3794).
+NFT_LISTE_WAF_BAN6 = ["/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban6"]
 _DELAI_WAFCTL_S = 30
 
 #: Non globales, refusées dès la forme. PAS `ipaddress.is_global` : les plages de DOCUMENTATION (192.0.2.0/24,
@@ -484,21 +486,23 @@ def _fin_enregistree(r: subprocess.CompletedProcess, repli: int) -> int:
     return repli
 
 
-def _defaire(cible: Cible) -> bool:
+def _defaire(cible: Cible, etiquette: str = "ai-ban") -> bool:
     """Retire le ban qu'on vient de poser (audit ou journal impossibles, wafctl muet). False s'il reste peut-être
     (`wafctl unban` d'une adresse absente rend 0 : l'absence n'est pas un échec)."""
     r, _ = _lancer(_argv("unban", cible))
     if r is None or r.returncode != 0:
-        log.error("ai-ban : retour arrière impossible pour %s", cible)
+        log.error("%s : retour arrière impossible pour %s", etiquette, cible)
         return False
     return True
 
 
-def lire_waf_ban() -> Set[str]:
+def lire_waf_ban(ensemble: str = "waf_ban") -> Set[str]:
     """Adresses de l'ensemble nft `waf_ban`, lecture STRICTE et légère (ni GeoIP, ni journal) : lève Illisible si nft
     ne répond pas, si la table ou l'ensemble manquent (un pare-feu rechargé n'est pas « aucun ban ») ou si la
     réponse est illisible."""
-    r, panne = _lancer(_SUDO + NFT_LISTE_WAF_BAN)
+    if ensemble not in ("waf_ban", "waf_ban6"):
+        raise ValueError(ensemble)
+    r, panne = _lancer(_SUDO + (NFT_LISTE_WAF_BAN if ensemble == "waf_ban" else NFT_LISTE_WAF_BAN6))
     if r is None:
         raise Illisible(f"nft : {panne}")
     if r.returncode != 0 or not r.stdout:
@@ -508,8 +512,8 @@ def lire_waf_ban() -> Set[str]:
         jeux = [b["set"] for b in doc["nftables"] if isinstance(b, dict) and "set" in b]
     except (ValueError, KeyError, TypeError):
         raise Illisible("nft : réponse illisible") from None
-    if len(jeux) != 1 or not isinstance(jeux[0], dict) or jeux[0].get("name") != "waf_ban":
-        raise Illisible("nft : ensemble waf_ban absent")
+    if len(jeux) != 1 or not isinstance(jeux[0], dict) or jeux[0].get("name") != ensemble:
+        raise Illisible(f"nft : ensemble {ensemble} absent")
     adresses = set()
     for elem in jeux[0].get("elem", []) or []:
         e = elem.get("elem") if isinstance(elem, dict) else None

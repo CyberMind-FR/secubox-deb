@@ -66,15 +66,17 @@ def _secret(chemin: Optional[str]) -> Optional[str]:
         return None
 
 
-def envoie(destinataire: str, sujet: str, corps: str) -> Dict[str, Any]:
+def envoie(destinataire: str, sujet: str, corps: str,
+           expediteur: Optional[str] = None) -> Dict[str, Any]:
     """Envoie un message texte. Lève ValueError sur une adresse invalide,
-    OSError / smtplib.SMTPException si le relais refuse."""
+    OSError / smtplib.SMTPException si le relais refuse. `expediteur`
+    remplace l'expéditeur configuré (From) quand il est donné."""
     if "@" not in (destinataire or "") or "\n" in destinataire or "\r" in destinataire:
         raise ValueError("adresse destinataire invalide")
     c = config()
     msg = EmailMessage()
     msg["Subject"] = sujet.replace("\n", " ").replace("\r", " ")[:200]
-    msg["From"] = c["expediteur"]
+    msg["From"] = expediteur or c["expediteur"]
     msg["To"] = destinataire
     msg.set_content(corps)
     with smtplib.SMTP(c["smtp_hote"], int(c["smtp_port"]), timeout=20) as s:
