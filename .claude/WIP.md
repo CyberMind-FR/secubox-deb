@@ -9,6 +9,7 @@
 *Mis à jour : 2026-11-11 (MirrorNet 4b déployée) ; 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
+- ⬜ **Next Up (2026-11-18, soir)** : pseudo-routeur #3803 inactif sur gk2 ; coupe réseau Netflix arrêtée (Player en IPv6 direct). Plus tard : bascule par option 121 par bail au lieu de la passerelle DHCP (ignorée par la Freebox Ultra).
 - ⬜ **Next Up (2026-11-18, après-midi)** : V2 phases 1-3 en service (gk3 veille 12/12 sources) ; fusionner #3583 ; plan phases 4-7 (#3722-#3725) avec tout automatique ; posture 2.10.7 à livrer au prochain lot gk2.
 - ⬜ **Next Up (2026-11-18)** : `secubox-garde` (#3794) en ligne sur gk2 : régler courriel + SMS dans Réglages et « Envoyer un test » ; brancher `isole.html` (route déclarative) ; essai quarantaine/évasion sur un appareil de test puis ban/débannir ; `closes #3794` après une journée sans anomalie ; ensuite IA propositions #3795.
 - ⬜ **Next Up (2026-11-17)** : `closes` #3769/#3771/#3774/#3780 après une journée sans anomalie ; bêta 1 en relais seul : annoncer la limite pubs Netflix.

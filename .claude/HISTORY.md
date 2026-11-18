@@ -3277,3 +3277,12 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 
 ## 2026-11-05 — DPI : détail par appareil vivant (ref #3494)
 - secubox-dpi 1.14.7 : /pub/clients et /pub/sessions tirés de sbxdpi ; cumul de plus de 7 jours écarté. Cause du gel : flowcap écoute wg-toolbox, sans trafic depuis le 2026-10-13. Sens des octets par appareil non mesuré par sbxdpi.
+
+## 2026-11-18 — Pseudo-routeur 0.2.0→0.2.2 et essai devant la TV (ref #3803)
+- 0.2.0 (#3804) : chaîne forward limitée au LAN eth2 (LXC/hôte/maillage jamais filtrés, seuls NAC bloqués/quarantaine
+  coupés), fichier persistant validé avant bascule, page d'administration (appareils réservés à l'admin), sudoers étroit.
+- 0.2.1 (#3805) : activer arme la sonde puis ne bascule que si son 1er contrôle réussit ; retour la désarme.
+- 0.2.2 (#3806) : activer/retour relancés en tâche systemd transitoire (ProtectSystem=strict de l'API).
+- Essai : la Freebox Ultra ignore `dhcp/config gateway` ; option 121 par bail statique acceptée ; IPv6 LAN non
+  désactivable ; Netflix du Player 100 % IPv6 direct Freebox. Arrêt de la coupe réseau (choix du propriétaire),
+  bail d'essai retiré, pseudo-routeur installé inactif sur gk2.
