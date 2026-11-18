@@ -105,23 +105,46 @@ def appliquer_reglages(brut):
             return
     try:
         with open(TOML, "rb") as f:
-            actuel = tomllib.load(f)
+            ancien = f.read().decode("utf-8")
+        actuel = tomllib.loads(ancien)
         st = os.stat(TOML)
         uid, gid, mode = st.st_uid, st.st_gid, stat.S_IMODE(st.st_mode)
     except FileNotFoundError:
-        actuel, uid, gid, mode = {}, 0, 0, 0o640
-    except (OSError, tomllib.TOMLDecodeError):
+        ancien, actuel, uid, gid, mode = "", {}, 0, 0, 0o640
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
         audit("reglages", "refus toml actuel illisible")
         return
-    actuel.update(neuf)
-    texte = "# Réglages de secubox-garde (#3794), écrits par la page /garde/.\n" + "".join(
-        f"{k} = {toml_valeur(v)}\n" for k, v in actuel.items() if isinstance(v, (bool, int, str)))
-    tomllib.loads(texte)                                  # validation du tampon avant l'échange
-    if os.path.exists(TOML):
-        with open(TOML, "rb") as f:
-            ecrire_atomique(TOML + ".prec", f.read().decode("utf-8"), mode, uid, gid)
+    texte = maj_en_place(ancien, neuf)
+    attendu = dict(actuel)
+    attendu.update(neuf)
+    try:
+        ok = texte is not None and tomllib.loads(texte) == attendu     # tampon revalidé : seules les 4 clés changent
+    except tomllib.TOMLDecodeError:
+        ok = False
+    if not ok:
+        audit("reglages", "refus mise a jour en place impossible")
+        return
+    if ancien:
+        ecrire_atomique(TOML + ".prec", ancien, mode, uid, gid)
     ecrire_atomique(TOML, texte, mode, uid, gid)
     audit("reglages", "ok " + ",".join(sorted(neuf)))
+
+
+def maj_en_place(ancien, neuf):
+    """Remplace, ligne par ligne, les clés de premier niveau de `neuf` (avant toute [table]) ; une clé absente est
+    ajoutée à la fin du premier niveau. Le reste du fichier (commentaires, tables, tableaux) est gardé tel quel.
+    None si une clé visée est hors du premier niveau ou sur plusieurs lignes (vérifié ensuite par tomllib)."""
+    lignes = ancien.splitlines(keepends=True)
+    fin_haut = next((n for n, x in enumerate(lignes) if x.lstrip().startswith("[")), len(lignes))
+    reste = dict(neuf)
+    for n in range(fin_haut):
+        m = re.match(r"\s*([A-Za-z0-9_-]+)\s*=", lignes[n])
+        if m and m.group(1) in reste:
+            lignes[n] = f"{m.group(1)} = {toml_valeur(reste.pop(m.group(1)))}\n"
+    ajout = [f"{k} = {toml_valeur(v)}\n" for k, v in reste.items()]
+    if ajout and fin_haut and not lignes[fin_haut - 1].endswith("\n"):
+        lignes[fin_haut - 1] += "\n"
+    return "".join(lignes[:fin_haut] + ajout + lignes[fin_haut:])
 
 
 def appliquer_cle(brut, compte):

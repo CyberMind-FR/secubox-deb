@@ -12,6 +12,8 @@ secubox-garde (0.3.0-1~trixie1) trixie; urgency=medium
     relue par l'API.
   * Page /garde/ (Aurora, CSP par hachage) et page de quarantaine statique
     isole.html (branchement déclaratif en T9).
+  * garde.toml mis à jour en place (commentaires, tables gardés ; refus
+    audité sinon) ; CSP sans script-src-attr.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 20:00:00 +0100
 

@@ -64,3 +64,36 @@ def test_lien_refuse(aide):
     os.symlink(t / "cible", t / "depot" / "cle-sms")
     m.main()
     assert not (t / "secrets" / "garde-sms").exists() and not (t / "depot" / "cle-sms").exists()
+
+
+def test_reglages_en_place_table_et_commentaires_gardes(aide):
+    m, t = aide
+    avant = ('# Réglages de la garde\nautomatique = true  # actif d\'office\nseuils = [1.5, 2.5]\n\n'
+             '[avance]\n# commentaire de table\ncourriel = "ne pas toucher"\n')
+    (t / "garde.toml").write_text(avant)
+    (t / "depot" / "reglages.json").write_text('{"automatique": false, "courriel": "b@exemple.fr"}')
+    m.main()
+    apres = (t / "garde.toml").read_text()
+    assert "# Réglages de la garde" in apres and "# commentaire de table" in apres
+    assert tomllib.loads(apres) == {"automatique": False, "seuils": [1.5, 2.5], "courriel": "b@exemple.fr",
+                                    "avance": {"courriel": "ne pas toucher"}}
+    assert apres.index('courriel = "b@exemple.fr"') < apres.index("[avance]")
+    assert (t / "garde.toml.prec").read_text() == avant
+
+
+def test_reglages_cle_multiligne_refusee(aide):
+    m, t = aide
+    avant = 'courriel = """a@exemple.fr\n"""\n'
+    (t / "garde.toml").write_text(avant)
+    (t / "depot" / "reglages.json").write_text('{"courriel": "b@exemple.fr"}')
+    m.main()
+    assert (t / "garde.toml").read_text() == avant and "refus" in (t / "audit.log").read_text()
+
+
+def test_reglages_toml_non_utf8_refuse(aide):
+    m, t = aide
+    (t / "garde.toml").write_bytes(b'courriel = "\xff"\n')
+    (t / "depot" / "reglages.json").write_text('{"automatique": false}')
+    m.main()
+    assert (t / "garde.toml").read_bytes() == b'courriel = "\xff"\n'
+    assert "refus toml actuel illisible" in (t / "audit.log").read_text()

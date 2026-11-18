@@ -48,11 +48,13 @@ action est donc une **demande**, exécutée par le passage suivant (≤ 60 s) ; 
   d'ici là la demande finit `echec`) puis décision `levee` ; tester = mise en file d'une notification d'essai. Aucun verrou ad-guard
   n'est pris par l'API.
 - Libérer / rouvrir enregistrent dès la demande `liberations(cle, signe, maintenant + 7 j)` : pas de nouvelle mesure
-  pour ce signe sur cet appareil pendant 7 jours.
+  pour ce signe sur cet appareil pendant 7 jours. L'exemption est posée au moment de la DEMANDE et reste acquise même si
+  l'exécution échoue (levée incomplète ou refusée) : l'administrateur a tranché pour ce signe.
 - Réglages et clé SMS → fichiers 0600 dans `/var/lib/secubox/garde/depot/` (`reglages.json`, `cle-sms`), appliqués par
   l'aide root `/usr/lib/secubox/garde/secubox-garde-depots` (`ExecStartPre=+` du passage) : fichier ordinaire du compte
-  `secubox-garde`, sans suivre de lien, ≤ 4 Kio, tout revalidé ; `garde.toml` réécrit en double tampon (`.prec` gardé,
-  remplacement atomique), clé posée en `/etc/secubox/secrets/garde-sms` 0600 `secubox-garde`. La clé n'est jamais
+  `secubox-garde`, sans suivre de lien, ≤ 4 Kio, tout revalidé ; `garde.toml` mis à jour EN PLACE (seules les 4 clés de premier niveau, avant toute
+  `[table]` ; commentaires, tables et tableaux gardés ; tampon relu par tomllib et comparé à l'attendu, sinon refus
+  audité ; fichier non UTF-8 : refus), `.prec` gardé, remplacement atomique, clé posée en `/etc/secubox/secrets/garde-sms` 0600 `secubox-garde`. La clé n'est jamais
   relue par l'API ; le passage note seulement `etat_moteur.cle_sms_presente` (0/1).
 - Audit : l'API écrit `<action>-demande` dans `audit.log` (ajout seul, AppArmor `a`), l'aide et les effets l'exécution.
 

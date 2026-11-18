@@ -43,7 +43,8 @@ def test_csp_stricte_par_hash_a_jour():
     assert len(scripts) == 1 and len(re.findall(r"<style>", SRC)) == 1
     assert csp["default-src"] == ["'self'"]
     assert csp["script-src"] == ["'self'", _hash(scripts[0])], "script modifié sans mise à jour de la CSP"
-    assert csp["style-src"] == ["'self'", "'unsafe-inline'"] and csp["script-src-attr"] == ["'unsafe-inline'"]
+    assert csp["style-src"] == ["'self'", "'unsafe-inline'"] and "script-src-attr" not in csp
+    assert not re.search(r"<[^>]+\son[a-z]+=", SRC)                         # aucun gestionnaire en attribut
     assert "unsafe-eval" not in brut and "http" not in brut
     assert ' style="' not in SRC and "<script " not in SRC
 
