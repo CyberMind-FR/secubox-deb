@@ -11,56 +11,124 @@ import pytest
 CTL = Path(__file__).resolve().parents[1] / "sbin" / "pseudo-routeurctl"
 
 
-def _generer(tmp_path):
-    r = subprocess.run(["bash", str(CTL), "generer-chaine"],
-                       env={"PATH": "/usr/bin:/bin", "SECUBOX_PR_NFT_OUT": str(tmp_path / "chaine.nft")},
-                       capture_output=True, text=True, timeout=30)
+NFT_GABARIT = CTL.parents[1] / "nft" / "secubox-pseudo-routeur.nft"
+
+
+def _executer(tmp_path, lan_if="eth2", conf=None):
+    env = {"PATH": "/usr/bin:/bin", "SECUBOX_PR_NFT_OUT": str(tmp_path / "chaine.nft"),
+           "SECUBOX_PR_CONF": str(conf or tmp_path / "absent.toml"),
+           # sous-reseau de documentation : la detection par route ne trouve rien ici
+           "SECUBOX_PR_IP_GK2": "192.0.2.200"}
+    if lan_if is not None:
+        env["SECUBOX_PR_LAN_IF"] = lan_if
+    return subprocess.run(["bash", str(CTL), "generer-chaine"], env=env,
+                          capture_output=True, text=True, timeout=30)
+
+
+def _generer(tmp_path, **kw):
+    r = _executer(tmp_path, **kw)
     assert r.returncode == 0, r.stderr
     return (tmp_path / "chaine.nft").read_text()
 
 
-def test_politique_default_drop(tmp_path):
+def _regles(txt):
+    corps = re.search(r"chain forward \{(.*?)\n\t\}", txt, re.S).group(1)
+    return [l.strip() for l in corps.splitlines() if l.strip() and not l.strip().startswith("type ")]
+
+
+def _verdict(txt, iif, ensembles_mac):
+    """Evaluation statique de la chaine generee : premiere regle qui correspond."""
+    for r in _regles(txt):
+        m = re.match(r'iifname != "([^"]+)" accept$', r)
+        if m:
+            if iif != m.group(1):
+                return "accept"
+            continue
+        m = re.match(r"ether saddr @(\w+) .*\b(drop|accept)$", r)
+        if m:
+            if m.group(1) in ensembles_mac:
+                return m.group(2)
+            continue
+        m = re.match(r"(counter name \w+ )?(accept|drop)$", r)
+        assert m, f"regle non modelisee : {r}"
+        return m.group(2)
+    return re.search(r"policy (\w+);", txt).group(1)
+
+
+def test_politique_accept_jamais_drop(tmp_path):
     txt = _generer(tmp_path)
-    assert re.search(r"chain forward \{[^}]*policy drop;", txt, re.S)
+    assert "policy drop" not in txt
+    assert re.search(r"chain forward \{[^}]*policy accept;", txt, re.S)
 
 
-def test_lan_allowed_et_zones_connues_acceptees_avant_le_drop(tmp_path):
+def test_garde_iifname_en_tete(tmp_path):
+    regles = _regles(_generer(tmp_path))
+    assert regles[0] == 'iifname != "eth2" accept'
+
+
+def test_ingress_br_lxc_et_wg_acceptes_meme_bloque(tmp_path):
     txt = _generer(tmp_path)
-    assert "@lan_allowed" in txt and "accept" in txt
-    assert "@guest_zone" in txt and "@iot_zone" in txt
-    # blocked/quarantine restent un drop explicite, avant toute regle d'acceptation
-    assert txt.index("@blocked") < txt.index("accept")
+    for iif in ("br-lxc", "wg0", "mesh0", "lo"):
+        assert _verdict(txt, iif, set()) == "accept"
+        assert _verdict(txt, iif, {"blocked", "quarantine_zone"}) == "accept"
 
 
-def test_lxc_zone_acceptee_elle_aussi(tmp_path):
-    # Relecture securite (ref #2940) : secubox-nac a SIX ensembles (nft_desired.SETS),
-    # pas cinq. lxc_zone (« aucune restriction » cote NAC) omis ici coupait tous les
-    # conteneurs LXC du parc (mail, nextcloud, matrix, horde...) dès l'activation reelle
-    # de la chaine (policy drop final). Doit etre accepte, comme lan_allowed/guest/iot.
+def test_lan_non_classe_accepte(tmp_path):
+    assert _verdict(_generer(tmp_path), "eth2", set()) == "accept"
+
+
+def test_lan_bloque_ou_quarantaine_jete(tmp_path):
     txt = _generer(tmp_path)
-    assert "@lxc_zone" in txt
-    assert txt.index("@lxc_zone") < txt.rindex("accept")
+    assert _verdict(txt, "eth2", {"blocked"}) == "drop"
+    assert _verdict(txt, "eth2", {"quarantine_zone"}) == "drop"
+
+
+def test_aucun_drop_sans_ensemble_nac(tmp_path):
+    for r in _regles(_generer(tmp_path)):
+        if r.endswith("drop"):
+            assert re.match(r"ether saddr @(blocked|quarantine_zone) ", r), r
+
+
+def test_refus_sans_interface_lan(tmp_path):
+    r = _executer(tmp_path, lan_if=None)
+    assert r.returncode == 2
+    assert not (tmp_path / "chaine.nft").exists()
+
+
+def test_refus_interface_invalide(tmp_path):
+    r = _executer(tmp_path, lan_if='eth2" accept; drop')
+    assert r.returncode == 2
+
+
+def test_interface_lue_dans_le_toml(tmp_path):
+    conf = tmp_path / "pr.toml"
+    conf.write_text('lan_if = "enp1s0"\n')
+    assert 'iifname != "enp1s0" accept' in _generer(tmp_path, lan_if=None, conf=conf)
+
+
+def test_gabarit_identique_a_la_sortie_du_ctl(tmp_path):
+    gabarit = NFT_GABARIT.read_text()
+    corps = gabarit[gabarit.index("table inet"):]
+    assert corps == _generer(tmp_path)
+
+
+def test_ensembles_locaux_declares(tmp_path):
+    # Un ensemble nft est propre a sa table : @blocked doit exister dans la notre.
+    txt = _generer(tmp_path)
+    assert "set blocked {" in txt and "set quarantine_zone {" in txt
+    assert "counter sbx_pr_forward_rejete {" in txt and "counter sbx_pr_forward_lan {" in txt
 
 
 def test_nftables_valide_la_syntaxe(tmp_path):
-    # Ruling (ref #2940, Tache 2) : le fichier de base synthetique du brief mettait
-    # plusieurs `set { ... }` sur une seule ligne sans separateur -> erreur de syntaxe
-    # nft elle-meme (pas un defaut de notre chaine). Corrige en un bloc par ligne.
-    if not __import__("shutil").which("nft"):
+    import shutil
+    if not shutil.which("nft"):
         pytest.skip("nft absent")
-    txt = _generer(tmp_path)
     base = tmp_path / "base.nft"
-    base.write_text(
-        "table inet secubox_nac {\n"
-        "\tset lan_allowed { type ether_addr; }\n"
-        "\tset lxc_zone { type ether_addr; }\n"
-        "\tset guest_zone { type ether_addr; }\n"
-        "\tset iot_zone { type ether_addr; }\n"
-        "\tset quarantine_zone { type ether_addr; }\n"
-        "\tset blocked { type ether_addr; }\n"
-        "}\n" + txt
-    )
-    r = subprocess.run(["nft", "-c", "-f", str(base)], capture_output=True, text=True)
-    if r.returncode != 0 and "cache initialization failed" in r.stderr:
-        pytest.skip("nft -c sans acces netlink dans cet environnement (sandbox sans CAP_NET_ADMIN)")
+    base.write_text(_generer(tmp_path))
+    cmd = ["nft", "-c", "-f", str(base)]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0 and "cache initialization failed" in r.stderr and shutil.which("unshare"):
+        r = subprocess.run(["unshare", "-rn", *cmd], capture_output=True, text=True)
+    if r.returncode != 0 and ("cache initialization failed" in r.stderr or "unshare" in r.stderr):
+        pytest.skip("nft -c sans acces netlink dans cet environnement")
     assert r.returncode == 0, r.stderr

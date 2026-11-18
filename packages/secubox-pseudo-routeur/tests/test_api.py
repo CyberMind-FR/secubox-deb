@@ -45,3 +45,10 @@ def test_journal_exige_jwt():
     c = TestClient(main.app)
     r = c.get("/journal")
     assert r.status_code in (401, 403)
+
+
+def test_apercu_exige_jwt():
+    # #3803 : apercu liste des appareils du LAN (MAC/IP) -> admin seulement.
+    c = TestClient(main.app)
+    assert c.post("/apercu").status_code in (401, 403, 405)
+    assert c.get("/apercu").status_code in (401, 403)

@@ -12,6 +12,7 @@ motif que secubox-jellyfin (voir MODULE-COMPLIANCE.md § WebUI-delegates-to-conf
   GET  /etat          mode (gk2|freebox), sonde active                    (lecture)
   POST /activer       devient la passerelle (refuse si la sonde n'est pas active) (admin)
   POST /retour-freebox  revient a la Freebox, inconditionnel, chemin de secours    (admin)
+  GET  /apercu        voisins LAN non classes par le NAC, avant activation (admin, #3803)
   GET  /suggestions   appareils vus par la Freebox non classes par le NAC  (admin)
   GET  /journal       dernieres bascules de passerelle DHCP (audit.log)    (admin)
   GET  /health        vivacite (publique)
@@ -88,6 +89,13 @@ def activer():
 @app.post("/retour-freebox", dependencies=[Depends(require_jwt)])
 def retour_freebox():
     return _repondre("retour-freebox")
+
+
+@app.get("/apercu", dependencies=[Depends(require_jwt)])
+def apercu():
+    """Informatif (#3803) : appareils du LAN absents de tout ensemble NAC. Ils gardent
+    Internet apres activation (LAN = zone de confiance) ; a montrer avant POST /activer."""
+    return _repondre("apercu")
 
 
 def _appel_uds(socket_path, chemin, entetes, timeout=10.0):
