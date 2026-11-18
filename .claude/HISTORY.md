@@ -9,6 +9,22 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-18 — SecuBox AI V2 phases 1-3 livrées (veille, corrélation, dossiers, outils) (ref #3719, #3720, #3721, #3795)
+
+- Branche #3583 (non fusionnée, 70+ commits) : 8 tâches en sous-agents relues une à une + relecture finale. Déployé : gk2
+  secubox-core 1.8.35, secubox-waf-ng 1.41.1, secubox-garde 0.3.8, secubox-ad-guard 1.33.0 ; gk3 secubox-ai 0.3.4.
+- gk3 : `secubox-ai-veille` collecte 12/12 sources de gk2 par jetons `ai-lecture` (chemins signés vérifiés en réel :
+  WAF sans préfixe, garde et ad-guard avec préfixe) ; ≈ 8 000 événements, 1 300 dossiers au premier passage.
+- Réglage gk3 : `/etc/secubox/ai.toml` [gk2] menaces_url admin.gk3 → admin.gk2 (sauvegarde `.avant-3720`, audit) ;
+  clé ai-lecture générée sur gk3, publique posée sur gk2 (`wafctl cle-ai-lecture ajouter`).
+- Catalogue d'empreintes : seules les entrées vérifiées à la source (Nuclei/Nikto/DirBuster/Mirai retirés) ; un seul
+  trait par entrée → aucun outil nommé tant qu'un second trait sourcé n'existe pas.
+- Reste : secubox-security-posture 2.10.7 (garde ai-lecture, non urgente) à livrer ; fusion de #3583 dans master ;
+  phases 4-7 (analyste, réponses tout automatiques, console avec vue Dossier — maquette D88pq48vxLVqXBPygXpCAk).
+- POC ai.gk0 : carte « D'où viennent les menaces » avec hier/J-7 à la même heure (barres floutées, tendance 7 j,
+  graphique de la journée), historique `relais/pays-historique.json` relevé toutes les 15 min en tâche de fond
+  (maquette JkYpb9WgEfsohs262nZoir) ; à reporter dans la console du paquet (phase 6).
+
 ## 2026-11-18 — secubox-garde : détection et réponse automatiques (ref #3794)
 
 - Nouveau module `secubox-garde` (0.3.5) : lit capteurs DNS/DPI, décide seul (ban d'adresse d'Internet par le geste WAF
