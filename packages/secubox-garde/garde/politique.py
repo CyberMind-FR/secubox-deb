@@ -56,6 +56,17 @@ def _bannissable(ip: str) -> bool:
                                       or a.is_multicast or a.is_unspecified or a.is_reserved)
 
 
+def _lan(ip: str) -> bool:
+    """Appareil du réseau local : privé (ULA, lien-local compris), hors maillage."""
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    if a.version == 4 and a in MAILLAGE:
+        return False
+    return bool(a.is_private) and not a.is_loopback and not a.is_multicast and not a.is_unspecified
+
+
 def _actif(actives: List[Decision], menace: str, cible: str, maintenant: int) -> bool:
     return any(d.menace == menace and d.cible == cible and d.fin > maintenant for d in actives)
 
@@ -104,7 +115,7 @@ def decider(signaux: List[Signal], actives: List[Decision],
     for cle, ss in par_appareil.items():
         ref = ss[0]
         mac, ip = ref.mac, ref.ip
-        if protegees(ip):
+        if any(not _lan(i) or protegees(i) for i in {s.ip for s in ss}):
             continue
         agi = False
         evas = sorted({s.type for s in ss if s.type in ("doh", "tunneling")})
@@ -119,7 +130,8 @@ def decider(signaux: List[Signal], actives: List[Decision],
         if types and ("malicious" in types or len(types) >= 2):
             signe = "+".join(sorted(types))
             agi = True
-            libere = liberations.get((cle, signe), 0) > maintenant
+            libere = any(jusqua > maintenant and set(sg.split("+")) & types
+                         for (k, sg), jusqua in liberations.items() if k == cle)
             if not libere and not _actif(actives, "infection", cle, maintenant):
                 if auto and actives_infection >= plafond:
                     masse = True
@@ -129,7 +141,7 @@ def decider(signaux: List[Signal], actives: List[Decision],
                     nouvelles.append(Decision("infection", cle, mac, ip, f"infection : {signe}",
                                               signe, maintenant, maintenant + QUARANTAINE))
         if not agi:
-            for t in sorted({s.type for s in ss if s.type in ("dga", "high_rate")}):
+            for t in sorted({s.type for s in ss if s.type in ("dga", "high_rate", "exfiltration")}):
                 nouvelles.append(Decision("signale", cle, mac, ip, f"{t} : signe isolé", t,
                                           maintenant, maintenant))
     if masse:

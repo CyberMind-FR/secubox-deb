@@ -99,3 +99,41 @@ def test_tunnel_est_evasion_pas_infection():
         dec, _ = run([sig(t)])
         assert len(dec) == 1 and dec[0].menace == "evasion" and dec[0].signe == t
         assert dec[0].fin == T + 86400
+
+
+def test_infection_jamais_ip_publique():
+    dec, _ = run([sig("malicious", ip="8.8.4.4")])
+    assert dec == []
+    dec, _ = run([sig("tunneling", ip="8.8.4.4", mac=None)])
+    assert dec == []
+
+
+def test_infection_jamais_maillage():
+    dec, _ = run([sig("malicious", ip="10.100.0.7", mac=None)])
+    assert dec == []
+
+
+def test_liberation_bloque_les_familles_qui_se_recoupent():
+    lib = {(MAC, "malicious"): T + 86400}
+    dec, _ = run([sig("dga", ts=T - 50), sig("malicious", ts=T - 40)], liberations=lib)
+    assert dec == []
+    lib = {(MAC, "dga+exfiltration"): T + 86400}
+    dec, _ = run([sig("exfiltration", ts=T - 50), sig("malicious", ts=T - 40)], liberations=lib)
+    assert dec == []
+
+
+def test_liberation_ne_bloque_pas_une_famille_differente():
+    lib = {(MAC, "dga+exfiltration"): T + 86400}
+    dec, _ = run([sig("malicious")], liberations=lib)
+    assert len(dec) == 1 and dec[0].menace == "infection"
+
+
+def test_toute_ip_vue_est_controlee():
+    dec, _ = run([sig("malicious", ip="192.168.1.20"), sig("dga", ip="192.168.1.21")],
+                 protegees=lambda ip: ip == "192.168.1.21")
+    assert dec == []
+
+
+def test_exfiltration_seule_signalee():
+    dec, _ = run([sig("exfiltration")])
+    assert len(dec) == 1 and dec[0].menace == "signale" and dec[0].signe == "exfiltration"
