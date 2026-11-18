@@ -14,7 +14,7 @@ motif que secubox-jellyfin (voir MODULE-COMPLIANCE.md § WebUI-delegates-to-conf
   GET  /appareils     un appareil par MAC du LAN : zone NAC, passe par gk2, IPv6 globale (admin)
   POST /retour        alias de /retour-freebox                                 (admin)
   POST /tester-retour essai a blanc du chemin de secours, ne modifie rien       (admin)
-  POST /activer       devient la passerelle (refuse si la sonde n'est pas active) (admin)
+  POST /activer       arme la sonde, devient la passerelle si son 1er controle passe (admin)
   POST /retour-freebox  revient a la Freebox, inconditionnel, chemin de secours    (admin)
   GET  /apercu        voisins LAN non classes par le NAC, avant activation (admin, #3803)
   GET  /suggestions   appareils vus par la Freebox non classes par le NAC  (admin)
