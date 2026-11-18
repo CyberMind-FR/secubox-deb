@@ -21,8 +21,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, Query
+from fastapi import Path as ParamChemin
 from secubox_core.auth import require_lecture
+from secubox_core.compte_service import require_lecture_ou_compte
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
@@ -61,6 +63,10 @@ try:
     from api.historique import agreger_historique as _agreger_historique, bucket_ip
 except ImportError:  # standalone (WorkingDirectory=…/waf)
     from historique import agreger_historique as _agreger_historique, bucket_ip
+try:
+    from api import veille_lecture as _veille
+except ImportError:  # standalone
+    import veille_lecture as _veille
 try:
     from api import php_signaux as _php_signaux
 except ImportError:  # standalone
@@ -1068,6 +1074,11 @@ async def _lifespan(_app):
 app = FastAPI(title="SecuBox WAF", lifespan=_lifespan)
 
 
+# Garde des routes de lecture que la veille V2 (gk3) lit avec le compte de service `ai-lecture` (#3720) : sans
+# porteur, `require_lecture` inchangé (session, tableau de bord LAN) ; porteur EdDSA ⇒ jeton `ai-lecture` lié à GET
+# et au chemin exact, ou 401 (jamais de repli anonyme). Seul le CHEMIN est lié : chaque route bornée ses paramètres.
+require_lecture_ai = require_lecture_ou_compte("ai-lecture")
+
 # === Public Endpoints ===
 
 @app.get("/history", dependencies=[Depends(require_lecture)])
@@ -1080,8 +1091,8 @@ async def waf_history():
 CAMPAIGNS_FILE = "/var/cache/secubox/waf/campaigns.json"
 
 
-@app.get("/campaigns", dependencies=[Depends(require_lecture)])
-async def waf_campaigns():
+@app.get("/campaigns", dependencies=[Depends(require_lecture_ai)])
+async def waf_campaigns(limite: int = Query(20, ge=1, le=1000)):
     """Campagnes d'attaque corrélées (#1070 phase D) : attaquants regroupés par
     MÊME workflow (même jeu de sondes, même outil), à travers le temps et les IP.
     Produit par le timer secubox-waf-campaigns (corrélateur Go de sbxwaf) ; on lit
@@ -1090,7 +1101,8 @@ async def waf_campaigns():
         data = json.loads(Path(CAMPAIGNS_FILE).read_text())
     except (OSError, ValueError):
         return {"available": False, "attaquants": 0, "campagnes": []}
-    camps = data.get("campagnes", [])[:20]
+    camps = data.get("campagnes", [])
+    camps = camps[:limite] if isinstance(camps, list) else []
     for c in camps:
         c["exemple_sequence"] = c.get("exemple_sequence", [])[:12]
         c["nb_attaquants"] = len(c.get("attaquants", []))
@@ -1594,7 +1606,7 @@ async def get_cookies():
     return {"services": services, "registre": COOKIE_LEDGER}
 
 
-@app.get("/stats", dependencies=[Depends(require_lecture)])
+@app.get("/stats", dependencies=[Depends(require_lecture_ai)])
 async def get_stats():
     """Threat statistics for the dashboard (public).
 
@@ -1681,8 +1693,8 @@ def _slice_alerts(alerts: List[dict], limit: int, aggregate: bool) -> dict:
     return {"alerts": aggregated, "aggregated": True}
 
 
-@app.get("/alerts", dependencies=[Depends(require_lecture)])
-async def get_alerts(limit: int = 50, aggregate: bool = False):
+@app.get("/alerts", dependencies=[Depends(require_lecture_ai)])
+async def get_alerts(limit: int = Query(50, ge=1, le=500), aggregate: bool = False):
     """Recent threat alerts, sliced/aggregated from the warm cache."""
     with _warm_lock:
         raw = _warm["alerts_raw"]
@@ -1692,7 +1704,7 @@ async def get_alerts(limit: int = 50, aggregate: bool = False):
     return _slice_alerts(raw or [], limit, aggregate)
 
 
-@app.get("/bans", dependencies=[Depends(require_lecture)])
+@app.get("/bans", dependencies=[Depends(require_lecture_ai)])
 async def get_bans():
     """Active IP bans from the WAF nft set. Read from warm cache; the
     underlying `nft list set` call is too slow to run on the request
@@ -1880,15 +1892,116 @@ def _audit(action: str, detail: str, user, lever: bool = False) -> None:
             raise
 
 
-@app.get("/enforcement", dependencies=[Depends(require_lecture)])
-async def enforcement(statut: str = "", limite: int = 200):
-    """Actions défensives (bans posés par sbxwaf) : type, cible, raison, durée, échéance, rollback possible."""
+@app.get("/enforcement", dependencies=[Depends(require_lecture_ai)])
+async def enforcement(statut: str = Query("", pattern="^(|active|expired|released)$"),
+                      limite: int = Query(200, ge=1, le=1000),
+                      depuis: Optional[int] = Query(None, ge=0, le=4_102_444_800)):
+    """Actions défensives (bans posés par sbxwaf) : type, cible, raison, durée, échéance, rollback possible.
+
+    `depuis=<époque>` (#3720, veille V2) : seulement les bans posés à `at >= depuis`, lus depuis la FIN de bans.jsonl
+    (jamais le journal entier), les plus ANCIENS d'abord pour que la veille avance par `depuis = max(created_at)` ;
+    `complet` faux si `limite` ou la borne de relecture a coupé."""
     now = int(time.time())
-    lignes, actifs = await asyncio.to_thread(lambda: (_lire_journal_bans(now), _ips_bannies_actives()))
+    if depuis is None:
+        lignes, actifs = await asyncio.to_thread(lambda: (_lire_journal_bans(now), _ips_bannies_actives()))
+        complet = True
+    else:
+        (lignes, complet), actifs = await asyncio.to_thread(lambda: (_lire_bans_depuis(depuis), _ips_bannies_actives()))
     acts = _actions_def(lignes, now, actifs, limite=10**9)
     if statut:
         acts = [a for a in acts if a["status"] == statut]
-    return {"genere_le": now, "total": len(acts), "actions": acts[:max(1, min(limite, 1000))]}
+    if depuis is None:
+        return {"genere_le": now, "total": len(acts), "actions": acts[:limite]}
+    acts = [a for a in acts if a["created_at"] >= depuis]
+    acts.sort(key=lambda a: (a["created_at"], a["id"]))
+    return {"genere_le": now, "total": len(acts), "depuis": depuis, "complet": complet and len(acts) <= limite,
+            "actions": acts[:limite]}
+
+
+#: Relecture par la fin de bans.jsonl pour `depuis` : marge sur l'ordre (sbxwaf écrit à peu près dans l'ordre de
+#: `at`), octets et enregistrements relus au plus (≈ 110 o/ligne : 16 Mio ≈ 150 000 bans, des semaines).
+_BANS_DEPUIS_MARGE_S = 600
+_BANS_DEPUIS_OCTETS = 16 * 1024 * 1024
+_BANS_DEPUIS_LIGNES = 200_000
+
+
+def _lire_bans_depuis(depuis: int):
+    def at(r):
+        try:
+            return int(r.get("at") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return _veille.lire_fin_jsonl(BANS_JOURNAL, lambda r: at(r) >= depuis,
+                                  lambda r: at(r) < depuis - _BANS_DEPUIS_MARGE_S,
+                                  _BANS_DEPUIS_OCTETS, _BANS_DEPUIS_LIGNES)
+
+
+# ── Lectures de la veille V2 (#3720) ─────────────────────────────────────
+FLUX_MAX_LIGNES = 2000
+FLUX_OCTETS_MAX = 1024 * 1024          # par réponse : ≈ 2 000 lignes de 480 o tiennent dedans
+MESURES_JOURNAL = Path("/var/lib/secubox/waf/mesures.jsonl")
+_MESURES_OCTETS = 8 * 1024 * 1024     # fin relue au plus (le journal fait 74 Mo sans rotation)
+ACTORD_PROPOSITIONS = Path("/run/secubox/actord-propositions.json")
+_ACTORD_OCTETS_MAX = 2 * 1024 * 1024
+
+
+@app.get("/menaces/flux", dependencies=[Depends(require_lecture_ai)])
+async def menaces_flux(depuis: Optional[str] = Query(None, max_length=40, pattern=r"^[0-9]{1,20}:[0-9]{1,15}$"),
+                       max: int = Query(500, ge=1, le=FLUX_MAX_LIGNES)):
+    """Flux à curseur du journal des menaces : `depuis=<inode>:<octet>` (début de ligne ; absent : début du fichier
+    courant), au plus `max` lignes entières et `FLUX_OCTETS_MAX` octets ; à la rotation, fin de `.1` puis courant
+    depuis 0. Chaque ligne porte sa position (identité unique, garde les doublons réels)."""
+    try:
+        return await asyncio.to_thread(_veille.lire_flux, Path(THREATS_LOG), depuis, max, FLUX_OCTETS_MAX)
+    except _veille.PositionInvalide:
+        raise HTTPException(422, detail={"motif": "position"}) from None
+
+
+def _horodatage_epoque(v: Any) -> Optional[float]:
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str) and v:
+        try:
+            d = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).timestamp()
+    return None
+
+
+@app.get("/mesures", dependencies=[Depends(require_lecture_ai)])
+async def mesures(depuis: int = Query(0, ge=0, le=4_102_444_800), limite: int = Query(500, ge=1, le=2000)):
+    """Mesures Actor Intelligence (`mesures.jsonl`) d'horodatage `>= depuis`, lues par la FIN (8 Mio au plus), dans
+    l'ordre du fichier ; `complet` faux si une borne a coupé (la veille relance avec le dernier `ts`)."""
+    def ts(r):
+        return _horodatage_epoque(r.get("ts"))
+    recs, complet = await asyncio.to_thread(
+        _veille.lire_fin_jsonl, MESURES_JOURNAL, lambda r: (ts(r) or 0) >= depuis,
+        lambda r: ts(r) is not None and ts(r) < depuis - _BANS_DEPUIS_MARGE_S, _MESURES_OCTETS, limite)
+    return {"genere_le": int(time.time()), "depuis": depuis, "complet": complet, "mesures": recs}
+
+
+def _lire_propositions() -> Optional[Any]:
+    try:
+        with open(ACTORD_PROPOSITIONS, "rb") as f:
+            brut = f.read(_ACTORD_OCTETS_MAX + 1)
+    except OSError:
+        return None
+    if len(brut) > _ACTORD_OCTETS_MAX:
+        return None
+    try:
+        return json.loads(brut.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+
+
+@app.get("/actord/propositions", dependencies=[Depends(require_lecture_ai)])
+async def actord_propositions():
+    """Instantané des propositions d'actord (`/run/secubox/actord-propositions.json`, 2 Mio au plus), tel quel."""
+    data = await asyncio.to_thread(_lire_propositions)
+    return {"available": data is not None, "propositions": data}
 
 
 @app.get("/enforcement/mode", dependencies=[Depends(require_lecture)])
@@ -1897,7 +2010,7 @@ async def enforcement_mode():
     return _mode_global(await asyncio.to_thread(_lire_etats_ban), int(time.time()))
 
 
-@app.get("/decisions", dependencies=[Depends(require_lecture)])
+@app.get("/decisions", dependencies=[Depends(require_lecture_ai)])
 async def decisions_ban():
     """Décisions des bans automatiques : BLOCKED, WOULD_BLOCK (simulation) ou OBSERVE (écarté, avec le motif)."""
     now = int(time.time())
@@ -1925,8 +2038,8 @@ def _lire_reevaluations() -> List[dict]:
     return out
 
 
-@app.get("/reevaluations", dependencies=[Depends(require_lecture)])
-async def reevaluations_ban(limite: int = 100):
+@app.get("/reevaluations", dependencies=[Depends(require_lecture_ai)])
+async def reevaluations_ban(limite: int = Query(100, ge=1, le=1000)):
     """Kill switch logique : ce que sbxwaf a décidé à l'échéance de chaque ban (RELEASE ou EXTEND), avec le motif et la durée."""
     return _reevaluations_def(await asyncio.to_thread(_lire_reevaluations), int(time.time()), limite)
 
@@ -2207,8 +2320,8 @@ def _lookup_country(ip: str, reader=None) -> str:
     return "??"
 
 
-@app.get("/geoip/{ip}", dependencies=[Depends(require_lecture)])
-async def get_geoip(ip: str):
+@app.get("/geoip/{ip}", dependencies=[Depends(require_lecture_ai)])
+async def get_geoip(ip: str = ParamChemin(..., min_length=2, max_length=45, pattern=r"^[0-9A-Fa-f:.]+$")):
     """Lookup country code for IP address using local MaxMind database."""
     if ip in _geoip_cache:
         return {"ip": ip, "country": _geoip_cache[ip]}

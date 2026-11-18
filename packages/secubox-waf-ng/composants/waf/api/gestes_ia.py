@@ -61,10 +61,13 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple, Union
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from secubox_core.compte_service import TAILLE_MAX_CORPS, require_ai_ban
+from fastapi.concurrency import run_in_threadpool
+from secubox_core import auth as _auth
+from secubox_core.compte_service import TAILLE_MAX_CORPS, cles_publiques, garde_compte_service, require_ai_ban
 
 log = logging.getLogger("secubox.waf.gestes_ia")
 
@@ -809,8 +812,35 @@ def ai_unban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps
     return {"id": geste.id, "etat": "annule"}
 
 
+_garde_ai_lecture = garde_compte_service("ai-lecture")
+
+
+async def require_ai_etat(request: Request, creds=Depends(_auth._bearer)) -> Dict[str, Any]:
+    """#3720 : `/ai/etat` en lecture pour `ai-ban` OU `ai-lecture` (jeton lié à GET et au chemin). Aiguillage par le
+    `kid` NON vérifié : une clé du dossier `ai-lecture` ⇒ vérifiée comme `ai-lecture`, sinon comme `ai-ban` ; la
+    garde choisie vérifie tout (signature, portée, jti) : l'aiguillage ne donne aucun droit."""
+    jeton = creds.credentials if creds is not None and creds.credentials else ""
+    kid = None
+    if jeton:
+        try:
+            entete = jwt.get_unverified_header(jeton)
+            kid = entete.get("kid") if isinstance(entete, dict) else None
+        except Exception:  # noqa: BLE001 — illisible : la garde ai-ban le refusera
+            kid = None
+    if isinstance(kid, str) and kid in await run_in_threadpool(cles_publiques, "ai-lecture"):
+        return await _garde_ai_lecture(request, creds)
+    return await require_ai_ban(request, creds)
+
+
+async def _corps_etat(request: Request, _user: dict = Depends(require_ai_etat)) -> bytes:
+    corps = await request.body()
+    if len(corps) > TAILLE_MAX_CORPS:
+        raise HTTPException(413, detail={"motif": "corps_trop_grand"})
+    return corps
+
+
 @router.get("/etat")
-def ai_etat(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
+def ai_etat(user: dict = Depends(require_ai_etat), corps: bytes = Depends(_corps_etat)) -> Dict[str, Any]:
     _ = user
     if corps:
         raise HTTPException(422, detail={"motif": "corps"})   # P9 : un jeton de geste ne vaut rien ici

@@ -208,6 +208,41 @@ jeton. L'unité livrée porte `NoNewPrivileges=false` : les gestes passent par `
 **AppArmor** : `/etc/apparmor.d/usr.sbin.waf-blocs` est livré en **complain** ; il passe en enforce après relecture
 des journaux au banc gk6.
 
+## Lectures de la veille V2 et compte `ai-lecture` (#3720, 1.41.0)
+
+Garde `require_lecture_ou_compte("ai-lecture")` (secubox-core ≥ 1.8.35) : **sans porteur**, `require_lecture`
+inchangé (session, tableau de bord LAN) ; **porteur EdDSA** ⇒ jeton du compte `ai-lecture` (portée `waf-lecture`,
+clé publique posée par `wafctl cle-ai-lecture ajouter`), lié à `GET` et au **chemin exact vu par l'application**, ou
+401 (jamais de repli anonyme). Les paramètres de requête ne sont pas liés : chaque route les borne (hors bornes ⇒ 422).
+
+**Chemin à signer (réclamation `chemin`)** : le serveur d'administration (`location /api/v1/waf/ { proxy_pass
+http://unix:/run/secubox/waf.sock:/; }`) retire le préfixe ; uvicorn (`api.main:app`, sans `root_path`) voit le
+chemin SANS `/api/v1/waf`. gk3 appelle `https://<gk2>/api/v1/waf/menaces/flux?…` et signe `chemin = "/menaces/flux"`.
+
+| Appel (gk3) | Chemin signé | Paramètres (bornes) |
+|---|---|---|
+| `GET /api/v1/waf/menaces/flux` | `/menaces/flux` | `depuis=<inode>:<octet>` (début de ligne, sinon 422), `max` 1–2000 (500) |
+| `GET /api/v1/waf/enforcement` | `/enforcement` | `depuis` époque 0–4102444800, `limite` 1–1000 (200), `statut` ∈ {`active`,`expired`,`released`} |
+| `GET /api/v1/waf/campaigns` | `/campaigns` | `limite` 1–1000 (20) |
+| `GET /api/v1/waf/mesures` | `/mesures` | `depuis` époque (0), `limite` 1–2000 (500) |
+| `GET /api/v1/waf/actord/propositions` | `/actord/propositions` | — |
+| `GET /api/v1/waf/alerts` | `/alerts` | `limit` 1–500 (50), `aggregate` |
+| `GET /api/v1/waf/bans` | `/bans` | — |
+| `GET /api/v1/waf/decisions` | `/decisions` | — |
+| `GET /api/v1/waf/reevaluations` | `/reevaluations` | `limite` 1–1000 (100) |
+| `GET /api/v1/waf/stats` | `/stats` | — |
+| `GET /api/v1/waf/geoip/<ip>` | `/geoip/<ip>` (l'adresse comprise) | `ip` 2–45 car. `[0-9A-Fa-f:.]` |
+| `GET /api/v1/waf/ai/etat` | `/ai/etat` | — (ouvert à `ai-ban` et `ai-lecture` ; aiguillage par `kid`) |
+
+`/menaces/flux` rend `{"lignes": [{"position": "<inode>:<octet>", "ligne": {…}|null, ["motif"]}], "suivant",
+"rotation", "trou"}` : lecture par `seek`, 1 Mio au plus par réponse, jamais de ligne partielle (la dernière ligne
+en cours d'écriture attend l'appel suivant) ; ligne illisible ⇒ `ligne: null, motif: illisible`, ligne > 64 Kio ⇒
+`motif: trop_longue` (sautée). À inode changé : fin de `waf-threats.log.1` (en clair, `delaycompress`) puis le courant
+depuis 0 (`rotation: true`) ; inode inconnu ou fichier raccourci ⇒ reprise au début de `.1` puis du courant,
+`trou: true`. `/enforcement?depuis=` relit `bans.jsonl` par la **fin** (16 Mio au plus, arrêt 10 min avant
+`depuis`), plus anciens d'abord, `complet` faux si coupé. `/mesures` lit `mesures.jsonl` par la fin (8 Mio au plus).
+Non ouvertes au compte : `/history`, `/bans/history`, `/info`, `/rules`, toute route POST.
+
 ## Migration / cutover
 
 Shadow → parity → **go/no-go gate** (bench `>5×` req/s·core, `p99 < ⅓`, `RSS < ¼`;

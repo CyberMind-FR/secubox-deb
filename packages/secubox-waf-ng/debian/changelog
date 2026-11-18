@@ -1,3 +1,15 @@
+secubox-waf-ng (1.41.0-1~trixie1) trixie; urgency=medium
+
+  * #3720 : routes de lecture de la veille V2 : GET /menaces/flux (curseur
+    inode:octet, rotation .1 sans trou, max 2000, 1 Mio par réponse),
+    /enforcement?depuis= (lu par la fin de bans.jsonl), /campaigns?limite=,
+    GET /mesures, GET /actord/propositions ; garde
+    require_lecture_ou_compte("ai-lecture") sur les routes de lecture de la
+    veille (sans porteur : inchangé), /ai/etat ouvert à ai-lecture ;
+    paramètres bornés (422 hors bornes). Depends secubox-core >= 1.8.35.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 14:00:00 +0100
+
 secubox-waf-ng (1.40.4-1~trixie1) trixie; urgency=medium
 
   * #3720 : wafctl cle-ai-lecture ajouter|retirer|lister (clé publique de

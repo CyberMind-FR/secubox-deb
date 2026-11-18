@@ -132,6 +132,7 @@ def c(monkeypatch, tmp_path):
     banc = Banc(TestClient(waf.app), waf, g, faux, tmp_path)
     monkeypatch.setitem(g._config, "bans", lambda: list(banc.bans))
     waf.app.dependency_overrides[require_ai_ban] = lambda: dict(USAGER_AI)
+    waf.app.dependency_overrides[g.require_ai_etat] = lambda: dict(USAGER_AI)
     try:
         yield banc
     finally:
@@ -639,8 +640,11 @@ def test_routes_branchees_sur_l_application():
     routes = {(r.path, tuple(sorted(r.methods))): r for r in waf.app.routes if getattr(r, "path", "").startswith("/ai/")
               and not r.path.startswith("/ai/filtres")}   # #3732 : compte ai-filtres, test_filtres_ia_3732
     assert set(routes) == {("/ai/ban", ("POST",)), ("/ai/unban", ("POST",)), ("/ai/etat", ("GET",))}
+    from api import gestes_ia as g
     for route in routes.values():
-        assert require_ai_ban in [d.call for d in route.dependant.dependencies]
+        # #3720 : /ai/etat ouvert aussi à ai-lecture (aiguillage require_ai_etat → require_ai_ban ou ai-lecture)
+        garde = g.require_ai_etat if route.path == "/ai/etat" else require_ai_ban
+        assert garde in [d.call for d in route.dependant.dependencies]
         assert route.body_field is None                     # P11 : aucun modèle de corps FastAPI
         assert not __import__("asyncio").iscoroutinefunction(route.endpoint)   # § 6 : pool de fils
 
@@ -676,7 +680,8 @@ def test_le_drapeau_passe_avant_la_garde():
     for route in (r for r in waf.app.routes if getattr(r, "path", "").startswith("/ai/")
                   and not r.path.startswith("/ai/filtres")):
         appels = [d.call for d in route.dependant.dependencies]
-        assert appels.index(g.processus_designe) < appels.index(require_ai_ban)
+        garde = g.require_ai_etat if route.path == "/ai/etat" else require_ai_ban
+        assert appels.index(g.processus_designe) < appels.index(garde)
 
 
 def test_postinst_cree_le_dossier_des_cles_root():
