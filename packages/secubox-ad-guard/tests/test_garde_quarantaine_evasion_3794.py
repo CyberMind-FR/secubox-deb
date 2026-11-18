@@ -49,12 +49,14 @@ def monde(tmp_path, monkeypatch):
     return {"etat": etat, "conf": conf, "tmp": tmp_path}
 
 
-def ctl(*args, box=BOX):
+def ctl(*args, box=BOX, avant=None):
     loader = importlib.machinery.SourceFileLoader("tv_ctl_garde", str(CTL))
     spec = importlib.util.spec_from_loader("tv_ctl_garde", loader)
     m = importlib.util.module_from_spec(spec)
     loader.exec_module(m)
     m._adresses_box = lambda: box
+    if avant:
+        avant(m)
     return m.main(["secubox-adguard-tv", *args])
 
 
@@ -179,3 +181,70 @@ def test_sudoers_garde_verbes_limites():
     assert not [ligne for ligne in s.splitlines() if ligne.startswith("secubox ")]
     secubox = [ligne for ligne in (ICI / "sudoers.d" / "secubox-adguard-tv").read_text().splitlines() if ligne.startswith("secubox ")][0]
     assert "quarantaine" not in secubox and "evasion" not in secubox
+
+
+def test_garde_prend_le_verrou_partage(monde):
+    import contextlib
+    from api import dnstv_regles
+    declarer(monde, "block")
+    journal, tenu = [], {"partage": False, "ctl": False}
+
+    def regarder(m):
+        @contextlib.contextmanager
+        def partage(*a, **k):
+            assert not tenu["ctl"]                                               # ordre : le verrou partagé AVANT celui du contrôleur
+            tenu["partage"] = True
+            journal.append("partage+")
+            yield
+            tenu["partage"] = False
+            journal.append("partage-")
+        orig_ctl = m.verrou_controleur
+
+        @contextlib.contextmanager
+        def ctlv():
+            with orig_ctl():
+                tenu["ctl"] = True
+                yield
+                tenu["ctl"] = False
+        orig_ecrire, orig_rendre = m._ecrire_etat_root, m.dnstv.rendre_unbound
+
+        def ecrire(e):
+            assert tenu["partage"] and tenu["ctl"]
+            journal.append("ecrire")
+            return orig_ecrire(e)
+
+        def rendre(*a, **k):
+            assert tenu["partage"] and tenu["ctl"]
+            journal.append("rendre")
+            return orig_rendre(*a, **k)
+        m.dnstv_regles.verrou = partage
+        m.verrou_controleur = ctlv
+        m._ecrire_etat_root = ecrire
+        m.dnstv.rendre_unbound = rendre
+    orig = (dnstv_regles.verrou, dnstv.rendre_unbound)
+    try:
+        assert ctl("quarantaine", "poser", TV, "-", fin(), avant=regarder) == 0
+    finally:
+        dnstv_regles.verrou, dnstv.rendre_unbound = orig
+    assert journal[0] == "partage+" and journal[-1] == "partage-" and "ecrire" in journal and "rendre" in journal
+
+
+def test_verrou_cree_par_root_reste_au_proprietaire_du_dossier(monde, monkeypatch):
+    import os as _os
+    declarer(monde, "block")
+    verrou = monde["etat"] / ".regles.lock"
+    verrou.unlink(missing_ok=True)
+    poses = []
+    vrai = _os.fchown
+    monkeypatch.setattr(_os, "fchown", lambda fd, u, g: poses.append((u, g)) or vrai(fd, u, g))
+    real = _os.fstat
+
+    def faux_fstat(fd):                                                          # simule un fichier créé par root (uid différent)
+        st = real(fd)
+        if _os.readlink(f"/proc/self/fd/{fd}").endswith(".regles.lock"):
+            return _os.stat_result((st.st_mode, st.st_ino, st.st_dev, st.st_nlink, 0, 0, *tuple(st)[6:10]))
+        return st
+    monkeypatch.setattr(_os, "fstat", faux_fstat)
+    assert ctl("evasion", "poser", TV, "-", "dns.google") == 0
+    d = monde["etat"].stat()
+    assert verrou.exists() and (d.st_uid, d.st_gid) in poses
