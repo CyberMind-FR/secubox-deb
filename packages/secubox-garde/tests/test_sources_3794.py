@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from garde import base, sources  # noqa: E402
 
 
-def _alerte(ip, i, regle="r", type_="malicious"):
+def _alerte(ip, i, regle="dns.listed", type_="malicious"):
     return json.dumps({"id": i, "type": type_, "severity": "high", "domain": "x.test", "client_ip": ip,
                        "details": {"rule": regle}, "timestamp": "2026-11-18T10:00:00Z", "blocked": False}) + "\n"
 
@@ -24,7 +24,7 @@ def test_alertes_incrementales(tmp_path):
     f.write_text(_alerte("192.168.1.5", 1) + _alerte("192.168.1.6", 2))
     s = sources.lire_alertes_dns(db, f, {"192.168.1.5": "aa:bb"})
     assert [x.ip for x in s] == ["192.168.1.5", "192.168.1.6"]
-    assert s[0].mac == "aa:bb" and s[1].mac is None and s[0].regle == "r" and s[0].type == "malicious"
+    assert s[0].mac == "aa:bb" and s[1].mac is None and s[0].regle == "dns.listed" and s[0].type == "malicious"
     assert s[0].ts == 1794996000  # 2026-11-18T10:00:00Z
     assert sources.lire_alertes_dns(db, f, {}) == []
     with open(f, "a") as fh:
@@ -154,3 +154,24 @@ def test_requetes_dns_deux_echecs(tmp_path, monkeypatch, caplog):
     with caplog.at_level("WARNING"):
         assert sources.lire_requetes_dns(0, p) == []
     assert any("illisible" in m for m in caplog.messages)
+
+
+def test_type_derive_de_la_regle(tmp_path):
+    db = base.ouvrir(tmp_path / "g.db")
+    f = tmp_path / "a.jsonl"
+    cas = [("dns.listed", "malicious"), ("dns.hijack.new_net", "malicious"), ("dns.hijack.special", "malicious"),
+           ("dns.dga", "malicious"), ("dns.tunnel", "malicious"), ("dns.drift.subdomains", "x"),
+           ("dns.drift.spike", "x"), ("dns.autre", "malicious"), ("dns.autre", "dga")]
+    f.write_text("".join(_alerte("192.168.1.5", i, r, t) for i, (r, t) in enumerate(cas)))
+    assert [x.type for x in sources.lire_alertes_dns(db, f, {})] == [
+        "malicious", "detournement", "detournement", "dga", "tunneling", "exfiltration",
+        "high_rate", "inconnu", "dga"]
+
+
+def test_sans_regle_malicious_devient_inconnu(tmp_path):
+    db = base.ouvrir(tmp_path / "g.db")
+    f = tmp_path / "a.jsonl"
+    brut = json.loads(_alerte("192.168.1.5", 1))
+    del brut["details"]
+    f.write_text(json.dumps(brut) + "\n")
+    assert [x.type for x in sources.lire_alertes_dns(db, f, {})] == ["inconnu"]

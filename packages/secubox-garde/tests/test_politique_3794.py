@@ -160,3 +160,18 @@ def test_prefixe_invalide_ignore():
     assert len(dec) == 1
     dec, _ = run([sig("malicious")], reglages=dict(PREF, lan_prefixes=["zzz"]))
     assert len(dec) == 1
+
+
+def test_detournement_seul_signale_jamais_infection():
+    dec, _ = run([sig("detournement")])
+    assert [d.menace for d in dec] == ["signale"] and dec[0].signe == "detournement"
+
+
+def test_inconnu_seul_signale():
+    dec, _ = run([sig("inconnu")])
+    assert [d.menace for d in dec] == ["signale"]
+
+
+def test_detournement_plus_dga_infection():
+    dec, _ = run([sig("detournement", ts=T - 50), sig("dga", ts=T - 40)])
+    assert len(dec) == 1 and dec[0].menace == "infection" and dec[0].signe == "detournement+dga"

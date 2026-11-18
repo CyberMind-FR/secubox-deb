@@ -16,7 +16,7 @@ BAN_BASE = 14400          # 4 h
 BAN_PLAFOND = 2592000     # 30 j
 QUARANTAINE = 86400       # 24 h
 FENETRE_INFECTION = 3600
-FAMILLES = frozenset({"dga", "exfiltration", "malicious"})
+FAMILLES = frozenset({"dga", "exfiltration", "malicious", "detournement"})
 MAILLAGE = ipaddress.ip_network("10.100.0.0/16")
 MSG_MASSE = "comportement de masse anormal : quarantaines au plafond, appareils non isolés"
 
@@ -163,7 +163,8 @@ def decider(signaux: List[Signal], actives: List[Decision],
                     nouvelles.append(Decision("infection", cle, mac, ip, f"infection : {signe}",
                                               signe, maintenant, maintenant + QUARANTAINE))
         if not agi:
-            for t in sorted({s.type for s in ss if s.type in ("dga", "high_rate", "exfiltration")}):
+            for t in sorted({s.type for s in ss if s.type in ("dga", "high_rate", "exfiltration",
+                                                           "detournement", "inconnu")}):
                 nouvelles.append(Decision("signale", cle, mac, ip, f"{t} : signe isolé", t,
                                           maintenant, maintenant))
     if masse:

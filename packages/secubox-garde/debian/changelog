@@ -1,3 +1,13 @@
+secubox-garde (0.3.7-1~trixie1) trixie; urgency=medium
+
+  * #3794 : un détournement DNS (dns.hijack.*, rangé « malicious » par ad-guard)
+    n'isole plus seul un appareil : le type du signal vient de details.rule
+    (seul dns.listed donne malicious), nouvelle famille « detournement »
+    (compte pour les deux familles en 1 h, seule : signalée), « inconnu »
+    (règle absente ou inconnue typée malicious) : signalé seulement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 10:00:00 +0100
+
 secubox-garde (0.3.6-1~trixie1) trixie; urgency=medium
 
   * #3800 : le passage publie /run/secubox/garde/isoles.json (adresses des
