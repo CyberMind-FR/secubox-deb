@@ -93,6 +93,15 @@ et ordonné après lui, profil `secubox-garde-envoi`) : seul programme de Garde 
 
 ## Sources (capteurs)
 
+Type d'un signal DNS, tiré de `details.rule` (et non du `type` d'ad-guard, qui range aussi les
+`dns.hijack.*` sous « malicious ») : `dns.listed` -> `malicious` ; `dns.hijack.*` -> `detournement` ;
+`dns.dga` -> `dga` ; `dns.tunnel` -> `tunneling` ; `dns.drift.subdomains` -> `exfiltration` ;
+`dns.drift.spike` -> `high_rate`. Règle inconnue ou absente : le `type` est gardé, sauf `malicious`
+qui devient `inconnu` (signalé seulement). Seul `dns.listed` isole seul ; `detournement` compte comme
+famille (avec dga, exfiltration, malicious : >= 2 en 1 h = infection) mais seul il est signalé. La liste
+opérateur `/etc/secubox/actor/dns-malveillants.txt` est vide par défaut : « malicious seul » ne se
+déclenche qu'une fois qu'elle est remplie.
+
 `garde/sources.py` lit : `/var/lib/secubox/dns-guard/alerts.jsonl` (incrémental, inode + offset),
 `/run/secubox/actord-propositions.json`, `ip -j neigh` (IP → MAC) et la liste DoH d'ad-guard
 (`/usr/share/secubox/ad-guard/lists/resolveurs-doh.txt`, noms seulement). Requêtes DNS par client

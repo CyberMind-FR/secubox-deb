@@ -48,6 +48,24 @@ def _ts_iso(v) -> Optional[int]:
         return None
 
 
+REGLES_TYPE = {"dns.listed": "malicious", "dns.dga": "dga", "dns.tunnel": "tunneling",
+               "dns.drift.subdomains": "exfiltration", "dns.drift.spike": "high_rate"}
+
+
+def type_signal(type_capteur: str, regle: str) -> str:
+    """Type du Signal d'après la règle brute ; seul `dns.listed` peut donner `malicious`.
+
+    ad-guard range aussi les `dns.hijack.*` sous « malicious » : sans cette reprise, un
+    détournement isolerait seul un appareil (la spec veut le domaine listé seul, ou deux familles).
+    """
+    if regle:
+        if regle in REGLES_TYPE:
+            return REGLES_TYPE[regle]
+        if regle.startswith("dns.hijack."):
+            return "detournement"
+    return "inconnu" if type_capteur == "malicious" else type_capteur
+
+
 def lire_alertes_dns(db: sqlite3.Connection, chemin: Path = ALERTES,
                      voisins: Optional[Dict[str, str]] = None) -> List[Signal]:
     """Lecture incrémentale (inode + offset dans `positions`) ; ligne invalide ou sans client ignorée."""
@@ -76,7 +94,7 @@ def lire_alertes_dns(db: sqlite3.Connection, chemin: Path = ALERTES,
             if ts is None:
                 continue
             det = a.get("details") if isinstance(a.get("details"), dict) else {}
-            out.append(Signal("dns-guard", str(a["type"]), str(ip), voisins.get(str(ip)),
+            out.append(Signal("dns-guard", type_signal(str(a["type"]), str(det.get("rule") or "")), str(ip), voisins.get(str(ip)),
                               str(a.get("domain") or ""), str(det.get("rule") or ""), ts))
         except (ValueError, KeyError, TypeError, AttributeError):
             continue
