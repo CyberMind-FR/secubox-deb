@@ -14,7 +14,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-mPaMSses2wMI2xMPoZcy61Pe453HvxaP0w2ccSQdyxA='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-MB14B/wz9/hDSeM13NB/zMPUBJFdXqQP7w6efrP+gw8='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pseudo-routeur</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -145,7 +145,7 @@
     <div class="droite"><span id="releve">—</span><button class="btn" type="button" id="rafraichir">⟳ Actualiser</button></div>
   </header>
   <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — adresses de documentation, aucune écriture</div>
-  <div class="info" id="session" hidden>Actions et journal réservés à l'administrateur : session requise. <a href="/login.html">Se connecter</a></div>
+  <div class="info" id="session" hidden>Appareils, actions et journal réservés à l'administrateur : session requise. <a href="/login.html">Se connecter</a></div>
   <div class="retour" id="message" hidden role="status"></div>
 
   <div class="etat" id="bandeau"><b id="b-titre">—</b><span id="b-detail"></span>
@@ -246,6 +246,9 @@
     var c=d.compteurs||{};
     el('t-trafic').textContent=c.lan?octets(c.lan.octets):'—';
     el('t-trafic-s').textContent=c.lan?(Number(c.lan.paquets).toLocaleString('fr-FR')+' paquets · '+(c.rejete?Number(c.rejete.paquets).toLocaleString('fr-FR'):'0')+' rejeté(s) (NAC : bloqués, quarantaine)'):'aucune chaîne chargée';
+    if(etat.anonyme){var n=d.appareils_compte;
+      el('t-passes').textContent=n&&n.passes!=null?(n.passes+' / '+n.total):'—';
+      el('t-passes-s').textContent=n?(n.passes!=null?'détail réservé à l\'administrateur':'chaîne non chargée : pas de mesure'):'—';}
     el('btn-activer').disabled=d.actif;el('btn-activer').textContent=d.actif?'Activer (déjà actif)':'Activer';
   }
   function rendreAppareils(d){
@@ -284,8 +287,9 @@
     var session=false;
     function trou(e){if(e&&e.session){session=true;return null;}message('Lecture impossible : '+e.message,'erreur');return null;}
     Promise.all([lire('/etat').catch(trou),lire('/appareils').catch(trou),lire('/journal').catch(trou)]).then(function(r){
-      el('session').hidden=!session;
-      if(r[0])rendreEtat(r[0]);if(r[1])rendreAppareils(r[1]);if(r[2])rendreJournal(r[2]);hauteur();});
+      el('session').hidden=!session;etat.anonyme=!r[1];
+      if(r[0])rendreEtat(r[0]);if(r[1])rendreAppareils(r[1]);
+      else{vider(el('appareils'));var v=el('appareils-vide');v.hidden=false;v.textContent=session?'Liste des appareils réservée à l\'administrateur : session requise.':'Liste indisponible.';}if(r[2])rendreJournal(r[2]);hauteur();});
   }
   el('rafraichir').addEventListener('click',function(){message('');charger();});
   el('btn-retour').addEventListener('click',function(){confirmer(el('b-actions'),'Rendre la passerelle à la Freebox ?',function(){return ecrire('/retour');});});
@@ -300,7 +304,7 @@
   // ── démonstration (adresses de documentation RFC 5737 / 3849) ──
   var T=Math.floor(Date.now()/1000);
   var DONNEES={
-    '/etat':{actif:true,depuis:T-1080,table_presente:true,ip_forward:true,lan_if:'eth2',ip_gk2:'192.0.2.200',ip_freebox:'192.0.2.254',
+    '/etat':{appareils_compte:{total:3,passes:2},actif:true,depuis:T-1080,table_presente:true,ip_forward:true,lan_if:'eth2',ip_gk2:'192.0.2.200',ip_freebox:'192.0.2.254',
       passerelle_distribuee:'192.0.2.200',passerelle_lue_a:T,sonde:{active:true,echecs_consecutifs:0,historique:[1,2,3,4,5,6].map(function(i){return {ts:T-60*(6-i),ok:true};})},
       compteurs:{lan:{paquets:182340,octets:241000000},rejete:{paquets:0,octets:0}}},
     '/appareils':{lan_if:'eth2',releve:T,chaine_chargee:true,appareils:[

@@ -70,7 +70,7 @@ APP = {"lan_if": "eth2", "releve": 1, "chaine_chargee": False, "appareils": [
      "zone": "blocked", "passe_par_gk2": None}]}
 
 
-def _page(scenario, largeur=1400, chemin="/pseudo-routeur/"):
+def _page(scenario, largeur=1400, chemin="/pseudo-routeur/", anonyme=False):
     def tache():
         with sync_api.sync_playwright() as p:
             try:
@@ -87,6 +87,12 @@ def _page(scenario, largeur=1400, chemin="/pseudo-routeur/"):
                     posts.append(u)
                     corps = {"modifie": False, "pret": True, "etapes": [{"etape": "x", "possible": True, "detail": "y"}]}
                     return route.fulfill(status=200, content_type="application/json", body=json.dumps(corps))
+                if anonyme and ("/appareils" in u or "/journal" in u):
+                    return route.fulfill(status=401, content_type="application/json", body="{}")
+                if anonyme:
+                    corps = dict(ETAT, compteurs={"lan": {"paquets": 1, "octets": 1}, "rejete": None},
+                                 appareils_compte={"total": 4, "passes": 1})
+                    return route.fulfill(status=200, content_type="application/json", body=json.dumps(corps))
                 corps = APP if "/appareils" in u else {"entrees": []} if "/journal" in u else ETAT
                 route.fulfill(status=200, content_type="application/json", body=json.dumps(corps))
             pg.route("http://t.test/api/**", api)
@@ -102,6 +108,14 @@ def _page(scenario, largeur=1400, chemin="/pseudo-routeur/"):
     if res[0] == "skip":
         pytest.skip(res[1])
     return res[1:]
+
+
+def test_anonyme_ne_voit_que_des_comptes():
+    def sc(pg):
+        return pg.inner_text(".tuiles"), pg.inner_text("#appareils-vide"), pg.is_visible("#session")
+    (tuiles, vide, session), erreurs, _ = _page(sc, anonyme=True)
+    assert not erreurs and session and "session requise" in vide
+    assert "1 / 4" in tuiles and "02:00:5e" not in tuiles
 
 
 def test_valeurs_absentes_jamais_inventees():

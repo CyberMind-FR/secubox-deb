@@ -7,6 +7,8 @@ secubox-pseudo-routeur (0.2.0-1~trixie1) trixie; urgency=medium
   * API : GET /etat (etat-complet), GET /appareils, POST /retour, POST /tester-retour ;
     ctl etat-complet, appareils, tester-retour ; ensemble dynamique vus_lan (15 min) ;
     sonde-secours garde l'historique des 20 derniers contrôles (#3803).
+  * GET /appareils réservé à l'administrateur (/etat ne rend que des comptes) ; règle sudoers
+    étroite root -> secubox-freebox pour freeboxctl lire-passerelle (#3803).
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 14:00:00 +0100
 

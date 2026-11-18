@@ -11,7 +11,7 @@ motif que secubox-jellyfin (voir MODULE-COMPLIANCE.md § WebUI-delegates-to-conf
 
   GET  /etat          actif, depuis, passerelle distribuee (lue), sonde + historique,
                       compteurs forward (lan, rejete) — valeurs reelles ou null (lecture)
-  GET  /appareils     un appareil par MAC du LAN : zone NAC, passe par gk2, IPv6 globale (lecture)
+  GET  /appareils     un appareil par MAC du LAN : zone NAC, passe par gk2, IPv6 globale (admin)
   POST /retour        alias de /retour-freebox                                 (admin)
   POST /tester-retour essai a blanc du chemin de secours, ne modifie rien       (admin)
   POST /activer       devient la passerelle (refuse si la sonde n'est pas active) (admin)
@@ -82,7 +82,19 @@ async def health():
 
 @app.get("/etat", dependencies=[Depends(require_lecture)])
 def etat():
-    return _repondre("etat-complet")
+    data, erreur, code = _ctl_json("etat-complet")
+    if erreur is not None:
+        return JSONResponse({"erreur": erreur}, status_code=code)
+    # Comptes seulement (#3803) : la liste MAC/IP reste reservee a l'administrateur.
+    app, err2, _c = _ctl_json("appareils")
+    if err2 is None:
+        liste = app.get("appareils", [])
+        data["appareils_compte"] = {
+            "total": len(liste),
+            "passes": sum(1 for a in liste if a.get("passe_par_gk2") is True) if app.get("chaine_chargee") else None}
+    else:
+        data["appareils_compte"] = None
+    return data
 
 
 @app.post("/activer", dependencies=[Depends(require_jwt)])
@@ -119,7 +131,7 @@ def _noms_nac(entetes):
         return {}
 
 
-@app.get("/appareils", dependencies=[Depends(require_lecture)])
+@app.get("/appareils", dependencies=[Depends(require_jwt)])
 def appareils(request: Request):
     """Un objet par MAC du LAN (#3803). La part IPv4/IPv6 du trafic n'est PAS mesurable par
     gk2 (l'IPv6 va direct a la Freebox) : on ne rend qu'un booleen « IPv6 actif »."""
