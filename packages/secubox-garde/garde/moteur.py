@@ -93,11 +93,12 @@ def _lever_tout(db, effets, did, menace, mac, motif) -> bool:
     return not _adresses(db, did)
 
 
-def _tenue_ailleurs(db, did: str, menace: str, ip: str, mac) -> bool:
+def _tenue_ailleurs(db, did: str, menace: str, ip: str, mac=None) -> bool:
+    """Vrai si une autre décision ACTIVE de même menace tient cette IP (une MAC partagée ne suffit pas)."""
     return bool(db.execute(
         "SELECT 1 FROM decisions d WHERE d.id!=? AND d.etat='active' AND d.menace=? AND "
-        "(EXISTS (SELECT 1 FROM adresses a WHERE a.decision_id=d.id AND a.ip=?) OR d.ip=? "
-        " OR (? IS NOT NULL AND d.mac=?))", (did, menace, ip, ip, mac, mac)).fetchone())
+        "(EXISTS (SELECT 1 FROM adresses a WHERE a.decision_id=d.id AND a.ip=?) OR d.ip=?)",
+        (did, menace, ip, ip)).fetchone())
 
 
 def _alerte_une(db, effets, cle: str, texte: str, maintenant: int, delai: int = HEURE) -> None:
@@ -108,8 +109,9 @@ def _alerte_une(db, effets, cle: str, texte: str, maintenant: int, delai: int = 
     _repere(db, "alerte:" + cle, maintenant)
 
 
-def _terminer(db, effets, did, menace, mac, motif, par: str, maintenant: int) -> bool:
-    """Lève puis clôt ; un échec laisse `levee_en_cours` (réessayée à chaque passage), une alerte au début."""
+def _terminer(db, effets, did, menace, mac, motif, par: str, maintenant: int, notifs=None) -> bool:
+    """Lève puis clôt ; un échec laisse `levee_en_cours` (réessayée à chaque passage) : une alerte au début,
+    puis une réalerte (et un courriel) au plus une fois par heure tant que la levée échoue."""
     final = "levee" if par == "reevaluation" else "echue"
     if menace not in ("infection", "evasion") or _lever_tout(db, effets, did, menace, mac, motif):
         _clore(db, did, final, par)
@@ -119,14 +121,22 @@ def _terminer(db, effets, did, menace, mac, motif, par: str, maintenant: int) ->
     if not _repere(db, "levee:" + did):
         effets.alerte(f"{motif} : levée incomplète ({', '.join(_adresses(db, did))}), réessayée à chaque passage")
         _repere(db, "levee:" + did, maintenant)
+    elif maintenant - _repere(db, "levee:" + did) >= HEURE:
+        r = db.execute("SELECT cible FROM decisions WHERE id=?", (did,)).fetchone()
+        texte = (f"levée toujours en échec : {appareils.nom_de(db, r[0]) if r else did} "
+                 f"{', '.join(_adresses(db, did))}")
+        effets.alerte(texte)
+        if notifs is not None:
+            notifs.mettre_en_file(db, "courriel", "levee:" + did, f"SecuBox Garde : {texte}", maintenant)
+        _repere(db, "levee:" + did, maintenant)
     return False
 
 
-def _levees_en_cours(db, effets, maintenant: int) -> int:
+def _levees_en_cours(db, effets, maintenant: int, notifs=None) -> int:
     n = 0
     for did, menace, mac, motif, par in db.execute(
             "SELECT id, menace, mac, motif, leve_par FROM decisions WHERE etat='levee_en_cours'").fetchall():
-        n += _terminer(db, effets, did, menace, mac, motif, par or "echeance", maintenant)
+        n += _terminer(db, effets, did, menace, mac, motif, par or "echeance", maintenant, notifs)
     db.commit()
     return n
 
@@ -169,7 +179,7 @@ def _echeances(db, effets, notifs, maintenant: int) -> Dict[str, int]:
             _alerte_une(db, effets, "prolongation:" + did,
                         f"{nom} : prolongation de quarantaine impossible, mesure levée", maintenant)
         par = "reevaluation" if menace == "infection" else "echeance"
-        _terminer(db, effets, did, menace, mac, f"{nom} — échéance", par, maintenant)
+        _terminer(db, effets, did, menace, mac, f"{nom} — échéance", par, maintenant, notifs)
         n["levees"] += 1
     db.commit()
     return n
@@ -236,7 +246,7 @@ def passage(db: sqlite3.Connection, reglages: dict, sources, effets, notifs, mai
     db.commit()
 
     bilan: Dict[str, int] = dict(_echeances(db, effets, notifs, maintenant))
-    bilan["levees_reprises"] = _levees_en_cours(db, effets, maintenant)
+    bilan["levees_reprises"] = _levees_en_cours(db, effets, maintenant, notifs)
     _suivre_adresses(db, effets, voisins, maintenant)
 
     actives = [Decision(m, c, mac, ip, mo, sg, de, fi)
@@ -290,6 +300,10 @@ def _appliquer(db, d: Decision, signaux, voisins, effets, notifs, maintenant, bi
                    and appareils.cle_de(db, s.ip, s.mac) == cle} - {""})
     motif = f"{nom} — {d.motif}"
     if d.menace == "evasion" and not noms:     # rien de précis à fermer : signalé, sans effet ni alerte d'échec
+        repere = f"signale:{cle}:{d.signe}"    # même limite horaire que les autres « signalé »
+        if maintenant - _repere(db, repere) < HEURE:
+            return
+        _repere(db, repere, maintenant)
         _enregistrer(db, Decision("signale", cle, d.mac, d.ip, d.motif, d.signe, d.debut, d.debut),
                      "echue", f"{motif} (aucun nom à fermer)")
         bilan["signalees"] += 1

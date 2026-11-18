@@ -369,3 +369,51 @@ def test_evasion_refuse_un_suffixe_public(tmp_path):
     moteur.passage(db, REG, sources(_doh_tunnel([("tunneling", "co.uk"), ("tunneling", "localhost")])), ef, nt, T)
     assert not [a for a in ef.appels if a[0] in ("fermer_evasion", "alerte")]
     assert db.execute("SELECT menace FROM decisions").fetchall() == [("signale",)]
+
+
+def test_levee_en_echec_realerte_toutes_les_heures(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    ef = EffetsLevee(refus={"192.168.1.20"})
+    moteur.passage(db, REG, sources(infection()), ef, nt, T)
+    t0 = T + 86400
+    moteur.passage(db, REG, sources(), ef, nt, t0)
+
+    def alertes():
+        return [a[1] for a in ef.appels if a[0] == "alerte"]
+    assert len(alertes()) == 1
+    moteur.passage(db, REG, sources(), ef, nt, t0 + 1800)
+    assert len(alertes()) == 1
+    moteur.passage(db, REG, sources(), ef, nt, t0 + 3601)
+    assert len(alertes()) == 2 and alertes()[1].startswith("levée toujours en échec : ")
+    assert "192.168.1.20" in alertes()[1]
+    rel = [(c, t) for c, k, t in nt.file if k.startswith("levee:")]
+    assert len(rel) == 1 and rel[0][0] == "courriel"
+    assert not [a for a in ef.appels[-3:] if a[0] == "isoler"]
+    ef.refus.clear()
+    moteur.passage(db, REG, sources(), ef, nt, t0 + 7300)
+    assert _etat(db) == "levee"
+    moteur.passage(db, REG, sources(), ef, nt, t0 + 14000)
+    assert len(alertes()) == 2
+
+
+def test_garde_b_par_ip_seulement(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    ef = EffetsLevee()
+    db.execute("INSERT INTO decisions(id, menace, cible, mac, ip, debut, fin, etat, leve_par) VALUES "
+               "('A','infection',?,?,'192.168.1.20',?,?,'levee_en_cours','reevaluation')", (MAC, MAC, T - 90000, T - 3600))
+    db.execute("INSERT INTO decisions(id, menace, cible, mac, ip, debut, fin, etat) VALUES "
+               "('B','infection',?,?,'192.168.1.30',?,?,'active')", (MAC, MAC, T - 60, T + 86000))
+    db.executemany("INSERT INTO adresses(decision_id, ip, fin) VALUES (?,?,?)",
+                   [("A", "192.168.1.20", T - 3600), ("B", "192.168.1.30", T + 86000)])
+    db.commit()
+    moteur.passage(db, REG, sources(voisins={"192.168.1.30": MAC}), ef, nt, T)
+    assert ("liberer", "192.168.1.20") in ef.appels
+    assert ("liberer", "192.168.1.30") not in ef.appels
+    assert dict(db.execute("SELECT id, etat FROM decisions")) == {"A": "levee", "B": "active"}
+
+
+def test_evasion_sans_nom_signale_une_fois_par_heure(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    for dt in (0, 60, 1800):
+        moteur.passage(db, REG, sources(_doh_tunnel([("tunneling", "")])), ef, nt, T + dt)
+    assert db.execute("SELECT COUNT(*) FROM decisions WHERE menace='signale'").fetchone() == (1,)
