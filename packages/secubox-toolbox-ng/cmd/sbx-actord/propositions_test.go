@@ -56,3 +56,26 @@ func TestFichierDePropositionsEstAtomiqueEtDatee(t *testing.T) {
 		t.Fatalf("droits %v", st.Mode().Perm())
 	}
 }
+
+// #3720 : le fichier publié va au groupe `secubox-waf` (lu par sbxwaf ET par l'API du WAF), repli `actord-ingest`.
+func TestGroupeLecteurSecuboxWafPuisRepli(t *testing.T) {
+	vrai, groupes := chownGroupe, groupesLecteurs
+	defer func() { chownGroupe, groupesLecteurs = vrai, groupes }()
+	if groupesLecteurs[0] != "secubox-waf" || groupesLecteurs[1] != "actord-ingest" {
+		t.Fatalf("ordre des groupes : %v", groupesLecteurs)
+	}
+	// groupes de test qui existent partout : root (0) refusé, puis le second accepté
+	groupesLecteurs = []string{"root", "absent-xyz", "root"}
+	var essais []int
+	chownGroupe = func(_ string, gid int) error {
+		essais = append(essais, gid)
+		if len(essais) == 1 {
+			return os.ErrPermission
+		}
+		return nil
+	}
+	mettreAuGroupeLecteur(filepath.Join(t.TempDir(), "f"))
+	if len(essais) != 2 {
+		t.Fatalf("essais : %v (groupe absent sauté, repli après refus attendu)", essais)
+	}
+}

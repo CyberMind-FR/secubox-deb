@@ -62,8 +62,34 @@ func propositionsDepuis(acteurs []*graph.Actor, shadow bool) []Proposition {
 	return out
 }
 
+// groupesLecteurs : groupes candidats des fichiers publiés, dans l'ordre. `secubox-waf` (#3720) est le groupe
+// principal de sbxwaf ET un groupe de `secubox` (API du WAF, /waf/actord/propositions) : les deux lecteurs, sans
+// donner à `secubox` le droit d'écrire dans la socket d'ingestion (`actord-ingest`). Repli `actord-ingest` (ancien
+// comportement) si l'unité n'accorde pas encore `SupplementaryGroups=secubox-waf`.
+var groupesLecteurs = []string{"secubox-waf", "actord-ingest"}
+
+// chownGroupe est remplaçable par les tests.
+var chownGroupe = func(chemin string, gid int) error { return os.Chown(chemin, -1, gid) }
+
+// mettreAuGroupeLecteur met `chemin` au premier groupe candidat qui existe et que le processus peut donner (membre).
+func mettreAuGroupeLecteur(chemin string) {
+	for _, nom := range groupesLecteurs {
+		g, err := user.LookupGroup(nom)
+		if err != nil {
+			continue
+		}
+		gid, err := strconv.Atoi(g.Gid)
+		if err != nil {
+			continue
+		}
+		if chownGroupe(chemin, gid) == nil {
+			return
+		}
+	}
+}
+
 // ecrirePropositions écrit le fichier de façon atomique (le lecteur ne voit jamais un fichier à moitié écrit) en 0640, puis le met au groupe
-// `actord-ingest` (celui de sbxwaf) quand il existe : un membre d'un groupe peut y remettre son fichier sans capacité.
+// lecteur (`mettreAuGroupeLecteur`) : un membre d'un groupe peut y remettre son fichier sans capacité.
 func ecrirePropositions(chemin string, p []Proposition, shadow bool, now time.Time) error {
 	b, err := json.Marshal(FichierPropositions{GenereLe: now.Unix(), Shadow: shadow, Propositions: p})
 	if err != nil {
@@ -73,11 +99,7 @@ func ecrirePropositions(chemin string, p []Proposition, shadow bool, now time.Ti
 	if err := os.WriteFile(tmp, b, 0o640); err != nil {
 		return err
 	}
-	if g, err := user.LookupGroup("actord-ingest"); err == nil {
-		if gid, err := strconv.Atoi(g.Gid); err == nil {
-			_ = os.Chown(tmp, -1, gid)
-		}
-	}
+	mettreAuGroupeLecteur(tmp)
 	_ = os.Chmod(tmp, 0o640)
 	return os.Rename(tmp, filepath.Clean(chemin))
 }

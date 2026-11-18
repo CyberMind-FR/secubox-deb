@@ -222,7 +222,7 @@ def test_mesures_et_propositions(v):
     assert [m["ts"] for m in d["mesures"]] == [200, "2026-11-14T00:00:00Z"] and d["complet"]
     for p in ({"depuis": -1}, {"limite": 0}, {"limite": 2001}):
         assert v.get("/mesures", params=p).status_code == 422, p
-    assert v.get("/actord/propositions").json() == {"available": False, "propositions": None}
+    assert v.get("/actord/propositions").json() == {"available": False, "motif": "absent", "propositions": None}
     (v.t / "actord-propositions.json").write_text(json.dumps({"propositions": [{"ip": "203.0.113.9"}]}))
     assert v.get("/actord/propositions").json()["propositions"] == {"propositions": [{"ip": "203.0.113.9"}]}
 
@@ -276,3 +276,41 @@ def test_sans_porteur_comportement_anonyme_inchange(v, monkeypatch):
     assert v.c.get("/campaigns").status_code == 200
     # un porteur EdDSA mal formé ne retombe JAMAIS en anonyme
     assert v.c.get("/campaigns", headers={"Authorization": "Bearer pas.un.jeton"}).status_code == 401
+
+
+def test_propositions_motifs_et_journal_espace(v, monkeypatch):
+    p = v.t / "actord-propositions.json"
+    notes = []
+    monkeypatch.setattr(v.w, "_propositions_logue", {})
+    monkeypatch.setattr(v.w.log, "warning", lambda *a: notes.append(a[1]))
+    assert v.get("/actord/propositions").json()["motif"] == "absent"
+    p.write_text("{pas du json")
+    assert v.get("/actord/propositions").json() == {"available": False, "motif": "invalide", "propositions": None}
+    p.write_text("{}")
+    vrai_open = open
+
+    def refuse(chemin, *a, **k):
+        if Path(chemin) == p:
+            raise PermissionError(13, "Permission denied")
+        return vrai_open(chemin, *a, **k)
+    monkeypatch.setattr("builtins.open", refuse)
+    assert v.get("/actord/propositions").json()["motif"] == "illisible"
+    assert v.get("/actord/propositions").json()["motif"] == "illisible"
+    monkeypatch.setattr("builtins.open", vrai_open)
+    assert notes == ["absent", "invalide", "illisible"]          # une ligne par motif (10 min)
+
+
+def test_flux_ligne_demesuree_compte_dans_le_plafond(v, monkeypatch):
+    from api import veille_lecture as vl
+    monkeypatch.setattr(v.w, "FLUX_OCTETS_MAX", vl.LIGNE_MAX * 2)
+    grande = b"x" * (vl.LIGNE_MAX * 3) + b"\n"
+    (v.t / "waf-threats.log").write_bytes(grande + grande + _ligne(0))
+    d = v.get("/menaces/flux").json()
+    assert [x.get("motif") for x in d["lignes"]] == ["trop_longue"]        # plafond atteint après le premier saut
+    d = v.get("/menaces/flux", params={"depuis": d["suivant"]}).json()
+    assert [x.get("motif") for x in d["lignes"]] == ["trop_longue"]
+
+
+def test_actord_publie_au_groupe_secubox_waf():
+    unite = (COMPOSANT.parents[1] / "systemd" / "secubox-actord.service").read_text()
+    assert "SupplementaryGroups=secubox-waf" in unite and "actord-ingest" not in unite.split("SupplementaryGroups=")[1].splitlines()[0]

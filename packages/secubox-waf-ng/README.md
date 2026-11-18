@@ -241,6 +241,12 @@ en cours d'écriture attend l'appel suivant) ; ligne illisible ⇒ `ligne: null,
 depuis 0 (`rotation: true`) ; inode inconnu ou fichier raccourci ⇒ reprise au début de `.1` puis du courant,
 `trou: true`. `/enforcement?depuis=` relit `bans.jsonl` par la **fin** (16 Mio au plus, arrêt 10 min avant
 `depuis`), plus anciens d'abord, `complet` faux si coupé. `/mesures` lit `mesures.jsonl` par la fin (8 Mio au plus).
+`/actord/propositions` : `{"available": false, "motif": "absent"|"illisible"|"invalide"}` si le fichier manque, est
+refusé (droits) ou n'est pas du JSON (> 2 Mio compris) ; une ligne de journal par motif toutes les 10 min.
+**Droits** : sbx-actord (`secubox-actord.service`, `SupplementaryGroups=secubox-waf`) publie
+`actord-propositions.json` et `actord-mesures.json` en 0640 au groupe `secubox-waf` (repli `actord-ingest` si le
+groupe ne peut être donné) : lus par sbxwaf (groupe principal) et par l'API du WAF (`secubox` ∈ `secubox-waf`) ;
+`secubox` n'entre jamais dans `actord-ingest` (écriture de la socket d'ingestion).
 Non ouvertes au compte : `/history`, `/bans/history`, `/info`, `/rules`, toute route POST.
 
 ## Migration / cutover

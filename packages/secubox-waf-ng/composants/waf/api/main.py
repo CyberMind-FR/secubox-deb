@@ -1983,25 +1983,45 @@ async def mesures(depuis: int = Query(0, ge=0, le=4_102_444_800), limite: int = 
     return {"genere_le": int(time.time()), "depuis": depuis, "complet": complet, "mesures": recs}
 
 
-def _lire_propositions() -> Optional[Any]:
+_PROPOSITIONS_LOG_S = 600
+_propositions_logue: Dict[str, float] = {}
+
+
+def _noter_propositions(motif: str) -> None:
+    """Une ligne de journal par motif toutes les 10 min au plus (la veille interroge souvent)."""
+    t = time.monotonic()
+    if t - _propositions_logue.get(motif, -_PROPOSITIONS_LOG_S) >= _PROPOSITIONS_LOG_S:
+        _propositions_logue[motif] = t
+        log.warning("actord-propositions : %s (%s)", motif, ACTORD_PROPOSITIONS)
+
+
+def _lire_propositions():
+    """(données, None) ou (None, motif) : `absent`, `illisible` (droits, autre erreur d'E/S), `invalide`
+    (JSON illisible ou fichier > 2 Mio)."""
     try:
         with open(ACTORD_PROPOSITIONS, "rb") as f:
             brut = f.read(_ACTORD_OCTETS_MAX + 1)
-    except OSError:
-        return None
+    except FileNotFoundError:
+        return None, "absent"
+    except OSError:      # PermissionError compris : groupe du fichier pas encore secubox-waf
+        return None, "illisible"
     if len(brut) > _ACTORD_OCTETS_MAX:
-        return None
+        return None, "invalide"
     try:
-        return json.loads(brut.decode("utf-8"))
+        return json.loads(brut.decode("utf-8")), None
     except (UnicodeDecodeError, ValueError):
-        return None
+        return None, "invalide"
 
 
 @app.get("/actord/propositions", dependencies=[Depends(require_lecture_ai)])
 async def actord_propositions():
-    """Instantané des propositions d'actord (`/run/secubox/actord-propositions.json`, 2 Mio au plus), tel quel."""
-    data = await asyncio.to_thread(_lire_propositions)
-    return {"available": data is not None, "propositions": data}
+    """Instantané des propositions d'actord (`/run/secubox/actord-propositions.json`, 2 Mio au plus), tel quel ;
+    sinon `{"available": false, "motif": "absent"|"illisible"|"invalide"}`."""
+    data, motif = await asyncio.to_thread(_lire_propositions)
+    if motif:
+        _noter_propositions(motif)
+        return {"available": False, "motif": motif, "propositions": None}
+    return {"available": True, "propositions": data}
 
 
 @app.get("/enforcement/mode", dependencies=[Depends(require_lecture)])

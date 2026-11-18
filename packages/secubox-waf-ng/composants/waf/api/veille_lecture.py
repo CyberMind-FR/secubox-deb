@@ -73,6 +73,7 @@ def _lire_depuis(f, inode: int, octet: int, max_lignes: int, octets_max: int, to
             f.seek(pos + saut)
             sortie.append({"position": f"{inode}:{pos}", "ligne": None, "motif": "trop_longue"})
             pos += saut
+            consommes += saut   # les octets sautés comptent dans le plafond de la réponse
             continue
         if not complete and not tourne:
             break   # ligne en cours d'écriture : jamais rendue partielle
