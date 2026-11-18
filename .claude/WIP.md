@@ -9,6 +9,13 @@
 *Mis à jour : 2026-11-11 (MirrorNet 4b déployée) ; 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
+- ⬜ **Next Up (2026-11-18)** : `secubox-garde` (#3794) en ligne sur gk2 : régler courriel + SMS dans Réglages et « Envoyer un test » ; brancher `isole.html` (route déclarative) ; essai quarantaine/évasion sur un appareil de test puis ban/débannir ; `closes #3794` après une journée sans anomalie ; ensuite IA propositions #3795.
+- ⬜ **Next Up (2026-11-17)** : `closes` #3769/#3771/#3774/#3780 après une journée sans anomalie ; bêta 1 en relais seul : annoncer la limite pubs Netflix.
+- ⬜ **Next Up (2026-11-16)** : #3741/#3748/#3751/#3745/#3747 déployés sur gk2 ; **23/11 : basculer les catégories PHP** (page Modes) ; lot suivant #3732 : avis sans preuve de concept (CERT-FR) ; gk7 à rejoindre (`sbx-mesh-join`) ; gk6 hors ligne (initrd `MODULES=dep`, reprise sur place par netboot). `wg-quick@wg-mesh` : faux échec du 30/10, wg-mesh monté par secubox-p2p-mesh (vu le 16/11).
+- ⬜ **Next Up (2026-11-15, soir)** : #3732 lot 1 déployé sur gk2 (clé `ai-filtres` et automatique du relais à poser sur accord) ; #3742 maillage distant déployé sur gk2 (p2p 1.23.2, freebox 0.7.3) : gk7 à rejoindre par `sbx-mesh-join admin.gk2.secubox.in <jeton>`, puis vérifier la détection TV (adresse maillée multi-identités du 11/11) ; #3741 bascule des modes (adapter la validation `product_absent_probes`) ; gk6 : libérer `/boot` puis finir `initramfs-tools`.
+- ⬜ **Next Up (2026-11-15, midi)** : #3734 lot 1 et #3735 fusionnés et déployés sur gk2 ; suite #3734 (règles de ban, /24, groupes, SYN sans état, comparer aux comptes) ; issues à ouvrir : fuite mémoire secubox-metrics, mot de passe IMAP dans la ligne de commande de doveadm (secubox-mail) ; ne plus enchaîner les installations de waf-ng (relance sbx-actord).
+- ⬜ **Next Up (2026-11-15)** : leurres de service ouverts + identifiants captés (#3728, PR #3733) déployés sur gk2, `closes` après une journée sans anomalie ; **suite demandée : mémorisation des honeypots (attaquants, couples, rejeux, SYN sans état côté nft) et intervention sur les bans — maquette Aurora d'abord** ; #3732 à concevoir. V2 phase 0 (#3718) livrée (branche #3583), Q2 à trancher avec #3726.
+- ⬜ **Next Up (2026-11-14)** : conseils de l'IA applicables (#3716) déployés sur gk2, automatique relancé par le propriétaire ; correctif 1.35.3 du 14/11 (journal fermé au groupe, PR #3731) déployé ; `closes #3716` après une journée sans anomalie (à compter du 14/11 16 h). Console de pilotage (#3702) déployée sur gk2 (0.7.1), `closes` après usage sans anomalie.
 - ⬜ **Next Up (2026-11-09)** : bouton « Réparer » livré (#3628) et relance groupée de l'agrégateur par majauto (#3630), pilotage `synchroniser` corrigé (#3632), autojoin par appairage + relais automatique (#3638/#3639) ; **MirrorNet v1 : phases 0-3 + interface web `/mirrornet/` + phases 4a (#3653) et 4b (#3659) déployées ; **4c (#3661) déployée gk2, gk6, gk12 (annuaire 0.21.x, mirrornet 0.5.1), banc à finir au retour de gk12 (hors ligne depuis 09:11 le 11/11) : preuve de possession réussie + transfert depuis la réplique ; puis retirer sur gk12 l'offre « Espace banc 3661 » et la session `banc3661`** (gk6/gk2 déjà nettoyés) ; premier vrai jeu FAIT : indices TV Privacy partagés entre box (#3666, déployé gk2+gk6, livraison vérifiée) — agrégateur de gk2 relancé le 11/11 (page en ligne) ; encart « Pubs bloquées récemment » livré (#3676, 1.25.3, gk2/gk7/gk6 ; agrégateur gk7/gk6 à relancer) ; à voir : relais public admin.gk6 → 404 sur /mirrornet/** ; leurres CERT-FR livrés et fermés (#3584 : étape B 2.6.0 en ligne sur gk2 ; suite : id unique par leurre et verrou partagé, #3682) ; **MirrorNet : adresse maillée revendiquée par plusieurs identités (réinstallation) → gk7 sans indices de gk2, départager par clé WireGuard** ; reste : Status Live jalon 3 (section « Appliances » de live.secubox.in, en attente de l'accord du propriétaire), #3554 (tutoriel). Ensuite : WAF 1.34 (accord donné, confirmation avant gk2) ; `secubox-ai` en paquets pour gk3 (#3583) ; compte de service ZIA (#3579) ; SearXNG (#3581).
 
 ## ✅ Fusionné et nettoyé le 2026-10-02 et 03
@@ -492,3 +499,33 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - Endpoints: 2043
 - Migration: 64%
 - Commits: 7570
+
+## CI Sync 2026-11-14
+- Packages: 122
+- Endpoints: 2044
+- Migration: 64%
+- Commits: 7585
+
+## CI Sync 2026-11-15
+- Packages: 122
+- Endpoints: 2059
+- Migration: 64%
+- Commits: 7590
+
+## CI Sync 2026-11-16
+- Packages: 122
+- Endpoints: 2061
+- Migration: 64%
+- Commits: 7599
+
+## CI Sync 2026-11-17
+- Packages: 122
+- Endpoints: 2065
+- Migration: 64%
+- Commits: 7621
+
+## CI Sync 2026-11-18
+- Packages: 122
+- Endpoints: 2068
+- Migration: 64%
+- Commits: 7642

@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: system :: relevé du pare-feu (#3780).
+
+L'API tourne en `secubox`, sans CAP_NET_ADMIN : elle ne peut pas lire nftables. Cette unité root, en lecture seule
+(`nft -j list ruleset`, aucun changement de règle), écrit un résumé daté que l'API lit pour la carte « posture » :
+tables, règles, et politique des chaînes d'entrée (règle du projet : DEFAULT DROP).
+"""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+
+ETAT = os.environ.get("SECUBOX_PARE_FEU_ETAT", "/var/lib/secubox/system/pare-feu.json")
+
+
+def resumer(doc, maintenant):
+    """Résumé d'un `nft -j list ruleset` : actif = au moins une règle ; entrée = chaînes à crochet `input`."""
+    objets = (doc or {}).get("nftables") or []
+    tables = sum(1 for o in objets if "table" in o)
+    regles = sum(1 for o in objets if "rule" in o)
+    entrees = [{"chaine": "%s %s %s" % (c.get("family"), c.get("table"), c.get("name")), "politique": c.get("policy", "accept")}
+               for c in (o["chain"] for o in objets if "chain" in o) if c.get("hook") == "input"]
+    if not entrees:
+        politique = None
+    else:
+        politique = "drop" if any(e["politique"] == "drop" for e in entrees) else "accept"
+    return {"releve": int(maintenant), "actif": regles > 0, "tables": tables, "regles": regles,
+            "politique_entree": politique, "chaines_drop": sorted(e["chaine"] for e in entrees if e["politique"] == "drop")}
+
+
+def ecrire(etat, chemin=ETAT):
+    d = os.path.dirname(chemin)
+    os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".pare-feu.")
+    with os.fdopen(fd, "w") as f:
+        json.dump(etat, f)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, chemin)
+
+
+def main():
+    try:
+        r = subprocess.run(["nft", "-j", "list", "ruleset"], capture_output=True, text=True, timeout=30, check=True)
+        etat = resumer(json.loads(r.stdout or "{}"), time.time())
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        etat = {"releve": int(time.time()), "actif": None, "erreur": str(e)[:200]}
+    ecrire(etat)
+    print(json.dumps(etat))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

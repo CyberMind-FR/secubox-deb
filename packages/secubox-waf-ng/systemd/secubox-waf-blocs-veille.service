@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Veille des bans de bloc /24 (#3716). Un `nft -f /etc/nftables.conf` lancé
+# directement (flush ruleset ; p. ex. firewall.reload de secubox-soc-agent) ne
+# passe pas par nftables.service : ReloadPropagatedFrom ne voit rien et la table
+# disparaît en silence — exactement le trou mesuré pour sbxwaf (#1693 : six
+# coupures de 6 à 12 h en une semaine sur gk2). `waf-blocs reparer` remet SEULEMENT
+# ce qui manque (structure, puis blocs actifs avec leur temps restant), audite
+# chaque réparation, et n'écrit rien quand tout est en place.
+[Unit]
+Description=SecuBox WAF — veille des bans de bloc, réparation de la table nft (#3716)
+After=nftables.service secubox-waf-blocs.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/waf-blocs reparer
+TimeoutStartSec=30
+# La ligne JSON de chaque passage (une par minute) n'encombre pas le journal ;
+# les réparations et les erreurs y vont par stderr, et à l'audit.
+StandardOutput=null
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox-waf-blocs /var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_DAC_OVERRIDE
+RestrictAddressFamilies=AF_NETLINK AF_UNIX
+UMask=0027

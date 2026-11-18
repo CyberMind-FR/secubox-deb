@@ -9,6 +9,240 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-18 — secubox-garde : détection et réponse automatiques (ref #3794)
+
+- Nouveau module `secubox-garde` (0.3.5) : lit capteurs DNS/DPI, décide seul (ban d'adresse d'Internet par le geste WAF
+  `garde/ban|unban`, quarantaine DNS d'un appareil et fermeture d'évasion par les verbes ad-guard `quarantaine|evasion`), prévient
+  par la page `/garde/`, courriel (`<nœud>@secubox.in`) et SMS Free Mobile. Un appareil = un seul item (toutes adresses, nom déduit).
+  Conception + plan dans `docs/superpowers/` ; 8 tâches en sous-agents relues une à une + relecture finale (PR #3796).
+- Déployé gk2 : secubox-garde 0.3.5, secubox-waf-ng 1.40.2, secubox-ad-guard 1.32.0, secubox-core 1.8.34.
+- **Incident ~8 min** : `secubox-core` (compte de service `garde`) non reconstruit → API du WAF en boucle de redémarrage
+  (`ImportError require_garde`), trafic public non touché ; corrigé (core 1.8.34) puis dépendance `secubox-core (>= 1.8.34~)`
+  (PR #3797). Leçon : un changement de `common/` impose de reconstruire et publier `secubox-core` AVANT les paquets qui l'utilisent.
+- Page : CSP rétablit `script-src-attr 'unsafe-inline'` (sidebar.js commun) et bandeau rouge masqué (PR #3798) ; page alignée sur
+  les webui, aperçus retirés (PR #3799).
+- Reste (T9) : test réel courriel/SMS, essai de quarantaine/évasion et de ban/débannir, page `isole.html` à brancher par route
+  déclarative ; noms TV Privacy (etat.json 0600) en suivi ; suite IA : #3795.
+
+## 2026-11-18 — Audit des changements d'ACL : règle sbx_acl (ref #3791)
+
+- `secubox-security-posture` 2.10.6 (PR #3792, #3793) : `/etc/audit/rules.d/98-sbx-waf-droits.rules` =
+  `-S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -k sbx_acl`, sans filtre de chemin.
+- Piège : le noyau de gk2 n'a ni `CONFIG_AUDIT_WATCH` ni `CONFIG_AUDIT_TREE` ; `-w <dossier>` et `-F dir=` sont inertes (0
+  enregistrement, vérifié). Volume sans filtre : 1 évènement/min. `ausearch -k` ne liste pas ces lignes : `grep 'key="sbx_acl"'`.
+- Testé sur gk2 : setfacl sur `waf-threats.log` enregistré (exe=/usr/bin/setfacl).
+
+## 2026-11-18 — cve-leurres : ACL du journal WAF perdue, remise avant chaque passage (ref #3789)
+
+- gk2 04:24 : `secubox-cve-leurres` en échec (Permission denied sur `waf-threats.log`) ; ACL nommée `u:secubox-cve-leurres` absente
+  du dossier, du défaut et du fichier ; `secubox-cve-triage.service` aussi désactivé. Réparé par relance du maintscript du composant.
+- Cause NON identifiée : aucune installation à cette heure, aucune connexion SSH ni sudo inhabituel (20:00-04:30), antirootkit
+  silencieux ; mais aucune règle d'audit sur les attributs de ce dossier, donc rien ne prouve l'origine.
+- `secubox-security-posture` 2.10.4 (PR #3790) : `secubox-cve-leurres-acl` en `ExecStartPre=+` remet l'ACL nommée si absente, trace
+  au journal. Testé sur gk2 (ACL retirée exprès → remise au passage suivant).
+
+## 2026-11-18 — TV Privacy : nom de régie publicitaire découvert dès la première coupure (ref #3787)
+
+- `secubox-ad-guard` 1.31.0 (PR #3788) : un libellé d'hôte portant un mot de régie (`ads`, `adserver`, `adservice`, `pubads`,
+  `advert…`, `publicite`, `vast`, `vmap`, `vpaid` ; ni `ad` seul ni `ssai`) classe le nom PUBLICITE (source `lexique`, confiance 60) :
+  candidat dès UNE coupure, essai automatique 24 h, même locataire d'un CDN générique (`*.akamaized.net`). Jamais au-dessus d'une
+  catégorie STREAMING/DRM ; le CDN générique reste protégé. Déployé gk7 et gk2.
+- Limite dite au propriétaire : un nom sans mot de régie (`vizchoice.viznet.tv`) reste INCONNU donc jamais bloqué seul — impossible à
+  distinguer, au seul DNS, de `lbcdn.6cloud.fr` (vidéo M6, demandé dans la même seconde qu'une pub). Il passe par l'essai devant la TV
+  puis le profil de base, ou par les indices du maillage une fois confirmé quelque part.
+- Piège : retoucher `www/tv-privacy/index.html` casse l'empreinte CSP du script (24 tests de page rouges) ; retouche retirée.
+
+## 2026-11-17 — TV Privacy : pubs RTL9+ (OQEE) bloquées en relais seul (ref #3785)
+
+- Pub RTL9+ signalée sur gk7 : OQEE demande `vizchoice.viznet.tv` et `ads-canalplus.akamaized.net` au lancement du replay (14:11:28),
+  dans la même seconde que `pagead2` (déjà bloqué). Essai sur `tv-4e95` : pubs zappées, lecture OK (propriétaire devant la TV).
+- `secubox-ad-guard` 1.30.0 (PR #3786) : les deux noms au profil de base ; `ads-canalplus.akamaized.net` classé PUBLICITE par entrée
+  exacte dans `reference-tv.txt` (le suffixe `akamaized.net` reste CDN protégé, sinon la garde refusait la pose). Déployé gk7 et gk2
+  (marqueur `.profil-base-43da56c73c71`, règles posées à toutes les TV auto). 1232 tests verts.
+- Non découverts seuls : un nom INCONNU exige ≥ 2 coupures ; une seule pause pub vue. Pistes proposées (indice lexical `ads`/`vast`…,
+  démarrage de replay compté comme coupure), en attente du go du propriétaire.
+
+## 2026-11-17 — TV Privacy : pubs M6+ bloquées en relais seul (ref #3783)
+
+- Test devant la TV avec le propriétaire (gk7, Freebox Pop, 11:34-11:38) : FreeWheel `7cbf2` + `stickyadstv`, `2mdn.net`,
+  smartclip, adform, realytics, everesttech, `ups.analytics.yahoo.com` bloqués → « plus de pubs et stream ok ».
+- ad-guard 1.29.0 (PR #3784) : profil de base complété + `migrer_graine()` (chaque nouveau profil posé une fois aux TV déjà
+  en mode auto). gk7 (tv-4e95, tv-fb5b) et gk2 (5 appareils) équipés ; `tv-banc` de gk2 garde `7cbf2` retiré le 16/11
+  (une règle retirée n'est jamais reproposée automatiquement).
+- Pièges : les requêtes `…​.home` (suffixe de recherche) comptent « autorisées » dans les relevés — aucune fuite réelle
+  (journal Unbound : NXDOMAIN) ; la vue TV n'hérite pas des listes globales (fwmrm.net, stickyadstv.com y sont).
+
+## 2026-11-17 — Relais seul (bêta 1) : garde des deux box, clé mobile, fiche DNS, posture pare-feu (ref #3769, #3780)
+
+- freebox 0.8.2 (PR #3777) : en « auto », jamais de remplacement d'un autre résolveur du réseau qui répond (état « délégué »).
+  0.8.3 (PR #3778) : sur une clé (secubox-mobile installé), le contrôle surveille sans corriger — c'est secubox-mobile qui
+  possède le DNS de la Freebox (pose, retrait, réglage de l'utilisateur ; c'est lui qui avait posé gk7 le 17/11). gk7 + gk2.
+- ad-guard 1.28.1 (PR #3779) : fiche « DNS de la box » sans « gk2 » en dur, IPv6 dérivée de la MAC = durable. gk7.
+- system 1.13.0 (PR #3781) : posture « Pare-feu » mesurée (unité root lecture seule `secubox-systeme-pare-feu-releve`, 5 min)
+  au lieu de « Active » en dur. gk7 (64 règles, entrée fermée par inet filter input) ; installé sur gk2 aussi (agrégateur relancé, 21 s ; migration #3774 : tri Netflix sur 5 appareils auto de gk2).
+- Légendes des graphiques aux couleurs de leurs courbes (PR #3782 : ad-guard 1.28.2, status 0.1.4, webos 1.20.8), gk7 + gk2.
+- Consigne du propriétaire : le produit doit marcher tel quel, surtout en relais seul (= bêta 1) ; mise en routeur écartée.
+  Limite connue en relais seul : pubs dans les vidéos Netflix (TV jointe hors DNS).
+
+## 2026-11-17 — TV Privacy : tous les filtrages en automatique par défaut (ref #3774) ; IPv6 auto du contrôle DNS (ref #3769)
+
+- ad-guard 1.27.0 (PR #3775) : essai et confirmation automatiques, déclencheurs pub, tri Netflix d'office pour chaque TV en mode
+  auto ; migration unique au postinst (marque `dnstv/.politique-auto-3774`). Déployé gk7 (tri Netflix sur `tv-4e95`) ; gk2 non
+  mis à jour (réglé à la main, TV passées sur gk7). Onglet « Filtrages automatiques » (maquette approuvée) livré en 1.28.0 (PR #3776), déployé gk7 (agrégateur relancé).
+- freebox 0.8.1 (PR #3773) : DNS IPv6 « auto » = IPv6 stable relevée par le minuteur quand dns-lan.toml n'en déclare pas
+  (gk7 couvert) ; un DNS IPv6 non contrôlé est signalé. Déployé gk7 et gk2.
+
+## 2026-11-17 — TV Privacy : TV de la maison basculées sur gk7, détection par système TV (ref #3771)
+
+- Freebox (DHCP + DHCPv6) annonce gk7 (192.168.1.128 / `…dea6:32ff:fe64:f596`), maintenu par le contrôle DNS de gk2
+  (réglage sauvegardé `dns-reglage.json.avant-gk7`) ; contrôle DNS de gk7 désactivé (même Freebox que gk2 : pas de bascule
+  entre deux box). gk7 et gk2 sont sur le MÊME réseau 192.168.1.x (gk7 n'est pas distant).
+- Freebox Pop (`…4e:95`) ajouté en auto sur gk7 (`TV 4e95`), stream france.tv sans pub (npaw, firebase bloqués).
+- ad-guard 1.26.0 (PR #3772) : seconde voie de détection par service du système TV (Android TV, Freebox Player, webOS, Tizen,
+  VIDAA, Roku), sans condition FreeWheel ; déployé gk7 et gk2.
+- Pièges : gk7 n'avait pas tcpdump (installé) ; dans `dnstv/etat.json`, les appareils sont sous `clients`, pas `appareils`.
+
+## 2026-11-17 — Freebox : contrôle des DNS IPv4 et IPv6 annoncés (ref #3769)
+
+- Onglet « DNS du réseau » (maquette approuvée) : contrôle activable, alerte ou correction (défaut), attendus auto/saisis,
+  remise aux DNS d'origine ; passage toutes les 15 min dans `secubox-freebox-maillage` (`freeboxctl dns-controle`).
+- Garde-fous : jamais de secondaire, jamais de correction vers un serveur muet, écritures relues et journalisées.
+- secubox-freebox 0.8.0 (PR #3770) publiée, installée sur gk2 (conforme, rien écrit) et gk7 (Freebox non autorisée : état
+  « illisible », rien écrit). `closes` après une journée sans anomalie.
+
+## 2026-11-16 — Veille CVE : profils AppArmor des relevés en enforce, lot 2 (closes #3766)
+
+- Journal relevé sur les 5 relevés (audit.log de gk2 tourne en ~5 min : capturer juste après chaque passage).
+- `secubox-cve-releves` : aucun accès hors profil ; `secubox-cve-certfr-classer` complété (menu.d, nameservice, `deny /dev/tty`).
+- security-posture 2.10.3 publiée et installée sur gk2 (PR #3768) ; 3 profils cve en enforce, 5 relevés « success », zéro refus.
+
+## 2026-11-16 — Veille CVE : profils AppArmor des relevés, lot 1 en complain (ref #3766)
+
+- security-posture 2.10.2 : `secubox-cve-releves` (certfr, certfr-nuclei, flux, paquets) et `secubox-cve-certfr-classer`, complain, chargés au postinst. Chaîne CERT-FR en succès sur gk2, profils attachés.
+- **Lot 2 (après le 17/11)** : relire `audit.log` (événements ALLOWED : menu.d, nsswitch, …), compléter, passer en enforce.
+
+## 2026-11-16 — Filtres IA : plus jamais de filtre sur nos propres pages (ref #3764)
+
+- Faux positif latent : ia-cve-2021-20021-58165c (chemin_exact `/login.html`) bannissait 7 j toute visite de la page de connexion. Retiré sur gk2 (`cvectl filtres-ia retirer`, audit) ; les 571 restants confrontés à 2 237 chemins servis : aucun autre.
+- security-posture 2.10.1 (PR #3765) : motif de rejet `secubox` (chemins fixes + /usr/share/secubox/www). Installé gk2, vérifié avec les chemins réels.
+
+## 2026-11-16 — Kiosque gk7 : « Connexion requise » au lieu d'« état illisible » ; gk6 hors ligne (ref #3762)
+
+- secubox-wireguard 1.3.2 (PR #3763) : un 401 sur /status (kiosque limité à la console, #3488) affiche « CONNEXION REQUISE » + lien de connexion. Installé sur gk7, tunnels intacts.
+- gk6 : /boot nettoyé (6.12.107 purgé, 39 %), passé en `MODULES=dep` (initrd 12,9 Mo, sauvegarde `initramfs.conf.avant-dep`) puis redémarré SANS initrd de secours → ne revient pas. Pas de console : récupération sur place (netboot, remettre MODULES=most). Généralisation suspendue ; agrandir /boot reste la piste sûre.
+
+## 2026-11-16 — Rapatriement IMAP du conteneur mail : plus d'OOM (ref #3760)
+
+- `doveadm sync -1 -R imapc:` (INBOX distante ~307 000 messages) tué par le plafond 384M du conteneur mail à chaque passage (116 OOM, aucun succès en 3 jours).
+- secubox-mail 2.16.14 (PR #3761) : fenêtre `-t` (dernier succès − 3 j ; 14 j sans succès), index imapc sur disque `/var/vmail/.imapc-index/<adresse>`.
+- Mesure : doveadm ~253 Mo anonymes + ~185 Mo au repos (rspamd). Plafond live gk2 relevé 384M → 512M (`/data/lxc/mail/config.avant-3760`, audit). Passages ok : 130 s puis 33 s.
+
+## 2026-11-16 — Veille CVE planifiée, OSV et Debian Security Tracker ; gk7 nœud mobile ; plus de 504 (ref #3754, #3755, #3758)
+
+- **#3758** (security-posture 2.10.0) : minuteries CERT-FR (horaire, classement root isolé sans réseau), KEV/EPSS/NVD et paquets (6 h) ; OSV.dev + Debian Security Tracker → « Vos paquets » : 1561 paquets, 269 touchés, 4231 CVE ouvertes sur gk2 (tracker 90 Mo, pic 245 Mo). Relecture : écriture root qui suivait les liens corrigée.
+- **#3755** (p2p 1.24.0, gk2 + gk7) : sbx-mesh-reresolve ; gk7 joint gk2 par `gk2.secubox.in:51822` (WAN, DMZ ; rebouclage Freebox vérifié) ; `wg-quick@wg-mesh` en double désactivé.
+- **#3754** (2.9.1) : « Synchroniser les flux » en tâche de fond (504 du relais HTTP).
+- Constat : `doveadm` (rapatriement IMAP) tué par le cgroup mémoire du LXC mail (07:03, 07:32).
+
+## 2026-11-16 — Filtres IA chargés en grand, bascule des modes du WAF, pages Filtres IA et Couverture, réveil de Gitea (ref #3741, #3745, #3747, #3748, #3751)
+
+- **Filtres IA (#3732, #3745)** : clé `ai-filtres` enregistrée sur gk2 (empreinte 0af440ac…), onglet « Filtres WAF » dans le relais gk0 (tour à la demande, interrupteur horaire `filtres-auto.json`, journal descriptif). Plafonds réglables `[filtres_ia]` de `/etc/secubox/cve-triage.toml` (security-posture 2.7.1) : amorçage à 700/h puis retour à 10/50 ; **572 filtres appliqués** (256 critiques, 223 hautes, 93 moyennes, 102 KEV), 105 écartés (100 déjà couverts, 5 présents). Tour horaire allumé.
+- **#3741 — page « Modes »** (security-posture 2.8.0, toolbox-ng 0.17.0, waf-ng 1.38.0, PR #3749) : mode par catégorie avec `mode_choisi` gardé aux mises à jour, contrôles structurels en escalate/block et au journal des menaces, leurres de service observer/bannir, hôtes PHP cochés à la main. Catégories PHP laissées en détection : bascule par le propriétaire après une semaine de mesure (Nextcloud 3 touches/24 h, les autres immédiat).
+- **#3748 — onglet « Filtres IA » du WAF** (waf-ng 1.39.0, security-posture 2.8.1, PR #3752) : tuiles, chaîne, filtres touchés, radar commun avec les leurres, retrait d'un filtre par l'administrateur (cvectl : retrait seulement).
+- **#3751 — couverture WAF par CVE dans cve-triage** (security-posture 2.9.0, PR #3753) : colonne Protection WAF et onglet Couverture ; agrégateur relancé une fois (route servie en processus). Premier relevé : 618 CVE couvertes, 114/1769 KEV.
+- **#3747 — Gitea en veille réveillé toutes les 4 h** pour ses miroirs (secubox-gitea 1.8.0, PR #3750).
+- couture.gk2 : planning du créneau choisi (prénoms, réservés seulement), ZIP `atelier-partage-5.zip`. DMARC `_dmarc.cybermind.fr` posé par le propriétaire chez Gandi.
+- Constats : `wg-quick@wg-mesh` en échec depuis le 30/10 (maillage actif par ailleurs) ; sonde locale `/health` en 301.
+
+## 2026-11-15 — Maillage distant : nœud hors du LAN vers le WAN de gk2, Freebox réglée par secubox-freebox (ref #3742)
+
+- Constat : gk7 (autre maison) sans tunnel `wg-mesh` ; tous les pairs déclarés avec un Endpoint LAN, aucune adresse
+  publique annoncée. Freebox de gk2 lue en direct : DMZ → 192.168.1.200 (l'UDP 51822 arrive déjà), aucune
+  redirection 51822, pare-feu IPv6 actif, `fw/ipv6/`, `fw/ipv6/redir/`, `fw/pinhole/` refusés (pas d'exception IPv6
+  ciblée sur ce modèle).
+- `secubox-p2p` 1.23.2 : `[wireguard] public_endpoint` (validé strictement) ; nœud qui joint par nom → `distant`,
+  reçoit `master_endpoint` + `PersistentKeepalive = 25` ; sans annonce valide, la jonction distante échoue (code 5).
+- `secubox-freebox` 0.7.3 : redirection UDP 51822 idempotente (seule la règle SecuBox est corrigée, règle tierce →
+  `port_pris`, DMZ vers la box → `couvert_par_dmz`), exception IPv6 seulement si l'API l'offre (jamais de pare-feu
+  coupé), contrôle de l'IPv6 fixe toutes les 15 min (`secubox-freebox-maillage.timer`), profil AppArmor enforce
+  pour `freeboxctl` (banc gk6 : `attach_disconnected` et `/usr/sbin/` ajoutés après refus relevés).
+- Déployé sur gk2 le 15/11 ; `p2p.toml` : `public_endpoint = "gk2.secubox.in:51822"` (copie `p2p.toml.avant-3742`) ;
+  contrôle : `::200` présente sur eth2, conforme ; AAAA de `gk2.secubox.in` à poser à la main. Reste : gk7 à mettre
+  à jour puis `sbx-mesh-join admin.gk2.secubox.in <jeton>` quand il sera à sa place.
+
+## 2026-11-15 — Filtres WAF conçus par l'IA depuis les preuves de concept, lot 1 (ref #3732)
+
+- Chaîne : relais du POC (gk0) → modèles Nuclei enrichis KEV/EPSS, motif copié tel quel du modèle → compte de service
+  `ai-filtres` (jeton Ed25519 d'une requête) → `POST /api/v1/waf/ai/filtres` → `secubox-cvectl filtres-ia appliquer`
+  (root, sudoers exact) qui revérifie tout : forme fermée, gravité calculée par le code, motif échappé, spécificité,
+  chemins fréquents, produit absent (inventaire ET vhosts, un doute vaut présent), plafonds 10/h et 50/j.
+- Catégories `ia_filtres_critique` (1 touche, 168 h), `ia_filtres_haute` (1, 24 h), `ia_filtres_moyenne` (3, 4 h) ;
+  sbxwaf lit `ban_seuil`/`ban_duree` par catégorie. Paquets : toolbox-ng 0.16.0, security-posture 2.7.0,
+  core 1.8.33, waf-ng 1.37.0 (dépend de security-posture ≥ 2.7.0).
+- Banc gk6 : 10 filtres critiques appliqués ; une requête `/storfs-asup` → 403 puis ban nft 7 j, ligne de menace avec
+  `rule_id` = id du filtre ; `waf-rules generate --apply` les garde. Pièges vus au banc : `haproxy-routes.json` vide
+  (0 octet) sur gk6 → inventaire incomplet → tout « présent » (comportement voulu) ; `product_absent_probes` en
+  `escalate` sur gk6 refusé par la validation partagée (à revoir pour #3741) ; `/boot` de gk6 plein
+  (`initramfs-tools` à moitié configuré, ancien noyau 6.12.107 à retirer).
+- Déployé sur gk2 le 15/11 (quatre paquets ensemble) ; clé `ai-filtres` non posée, automatique du relais coupé
+  (`SECUBOX_AI_FILTRES_AUTO`) jusqu'à l'accord du propriétaire.
+
+## 2026-11-15 — Mémoire des leurres (ref #3734) et protection contre l'épuisement d'états TCP (ref #3735)
+
+- **#3734 lot 1 (PR #3737, waf-ng 1.36.2)** : base SQLite `/var/lib/secubox-waf-leurres/leurres.db` (0700 secubox, hors
+  de /var/lib/secubox/waf : chown -R du moteur + ACL secubox-live), ingestion à curseur des lignes `leurre:*`, 30 jours ;
+  routes `/waf/leurres/*` en require_jwt ; gestes ban/unban (prolonger = lever puis reposer) ; page + onglet Leurres
+  (maquette approuvée). Relecture : 5 importants corrigés. Restent : règles de ban, /24 et groupes, SYN sans état,
+  comparer aux comptes.
+- **Incident gk2 10:15-10:35** : mémoire épuisée (metrics 662 Mo, synchro IMAP OVH, sbx-actord relancé par 3
+  installations de waf-ng en 30 min) → hub muet. Résolu : synchro IMAP arrêtée, secubox-metrics redémarré seul.
+  Leçons : grouper les installations de waf-ng ; fuite mémoire de metrics à ouvrir ; mot de passe IMAP visible dans la
+  ligne de commande de doveadm (à passer par fichier, et à changer chez OVH).
+- **#3735 (PR #3736, hardening 1.7.0)** : Sockstress / MS13-018 / STOMP / SYN porteurs de données. sysctl (fin 20 s,
+  orphelins 8192/2, conntrack clôtures 30 s, établies 1 j), nft (SYN porteurs de données refusés v4/v6, 256 connexions
+  par adresse publique), détecteur `secubox-tcp-etats` (minute ; fenêtre nulle / clôture bloquée sur nos ports serveur,
+  jamais CLOSE_WAIT ni LAN ; ban 24 h, journal, audit, impact). Déployé gk2, aucun faux positif, routage intact.
+
+## 2026-11-15 — Leurres de service ouverts sur le WAN, identifiants des robots captés (ref #3728)
+
+- PR #3733 : `secubox-hardening` 1.6.5 (9 ports leurres sortis de la garde WAN/br-lan, IPv4 seulement, backends
+  toujours fermés, `leurres_ouverts` à part dans la page) ; `secubox-toolbox-ng` 0.15.0 (sbx-authwatch en régime
+  bannière, dialogue borné 3 s / 10 s / 4 Kio / 5 essais : telnet multi-essais, redis AUTH, postgres en clair,
+  HTTP Basic 9200, cookie RDP, version VNC, pilote Mongo ; journal : `essais` en clair, `agent`
+  balayeur/sondeur/force-brute, `user_agent` = client). Relecture `relecteur-securite` : 0 bloquant, 3 importants
+  corrigés (fenêtre courte car le ban nft coupe la connexion établie, IPv6 fermé, compte hors du graphe d'acteurs).
+- Déployé gk2 par apt (le postinst toolbox attend `secubox-sentinel-feeds`, oneshot de ~10 min quand abuse.ch
+  traîne). Vérifié : session telnet du poste captée (2 couples) ; 1re touche Internet `142.93.82.193` → leurre:vnc,
+  sondeur « RFB 003.003 », banni. Les balayages SYN sans état (fenêtre 1025) n'achèvent jamais la connexion :
+  invisibles des leurres, à voir côté nft (suite « mémorisation »).
+- Ouvert : #3732 (leurres filtrables par vulnérabilité, avis de sécurité, IA locale).
+
+## 2026-11-14 — Bans de l'IA retirés aussitôt posés sur gk2 : journal fermé au groupe (ref #3716)
+
+- Symptôme : depuis 13:33, chaque geste du relais gk0 sur 51.8.102.0/24 refusé « gk2 injoignable » ; gk2 répondait 503
+  motif `journal` (ban posé puis retiré, audit `ai-ban-echec`).
+- Cause : `secubox-waf-ng.service` fait `chown -R secubox-waf /var/lib/secubox/waf` à chaque démarrage ; `ai-ban.jsonl`,
+  créé en 0640 par l'API (compte secubox), lui devenait fermé en écriture après le redémarrage de 11:38 (install 1.35.2).
+- Correctif : `secubox-waf-ng` 1.35.3 (PR #3731) — création en 0660 malgré l'umask, postinst répare le fichier existant.
+  Déployé gk2 (apt), journal inscriptible par `secubox` vérifié après redémarrage du moteur.
+
+## 2026-11-14 — Console de pilotage du maître : actions, macros, journal en direct, zoom des panneaux (ref #3702)
+
+- `secubox-pilotage` 0.7.1 + `secubox-hub` 1.12.58 sur gk2 (apt) : page `/pilotage/console/` au menu « Console de pilotage » (catégorie de la Flotte) ; flotte et barre de commande (Ctrl K), un bouton par action du catalogue, journal en direct (flux authentifié, borné), macros livrées et programmées (« chaque nuit HH:MM »), éditeur et écran de lancement, `<box> · maintenant` (sans ligne disque), zoom « Agrandir » par panneau (Échap, agrandi d'office sous 720 px).
+- API : `/api/v1/pilotage/{flotte,catalogue,macros,executions…}` sous `require_jwt` ; moteur à une exécution par box (409), arrêt après l'étape en cours, exécution coupée → `interrompue` au redémarrage ; actions fortes : nom de chaque box retapé, vérifié par le serveur ; box cliente : session de support ouverte ; renommer jamais dans une macro.
+- Revue finale : entrée de menu filtrée par le hub (`www` sans index.html à la racine) → `"www": "pilotage/console"` (0.7.1, constaté sur gk2 puis corrigé). Agrégateur non relancé (service dédié, nginx direct). Banc gk6/gk7 non fait : déploiement direct demandé par le propriétaire.
+- Suivis (mineurs parqués) : demande d'arrêt non auditée ; course check-then-act de l'action manuelle ; nom du maître depuis `location.hostname` ; blocage intermittent de `test_renommage_reussi` (préexistant) ; 3 tests Playwright de secubox-hub déjà rouges sur master.
+
+## 2026-11-14 — Conseils de l'IA applicables : bans d'office des cas sûrs, un clic sinon (ref #3716)
+
+- gk2 (`secubox-waf-ng` 1.35.2, `secubox-core` 1.8.32) : bans de bloc /24 dans une table nft à part (`inet secubox_waf_blocs`, `waf-blocs` root : privé, `protegees.env`, adresses de la box, pairs WireGuard ; rejoué au rechargement) ; compte de service `ai-ban` (jeton Ed25519 d'une requête, 30 s, rejeu et audience refusés ; `wafctl cle-ai-ban`) ; routes `/api/v1/waf/ai/{ban,unban,etat}` servies par `secubox-waf.service` seul (drapeau `SECUBOX_WAF_GESTES_IA=1`, plus de relance d'agrégateur), plafonds 5/h et 20/j d'office, 30/h et 100/j au total, audit `ai-ban`/`ai-unban`/`ai-ban-refus`.
+- Décision du propriétaire « automatisme plus fréquent » : catégorie d'un ban tirée de `bans.jsonl` (historique depuis le 20/08, lu par incréments) au lieu des 6 h du journal des menaces ; cas sûr = ≥ 20 adresses du bloc bannies, toutes de familles de reconnaissance (scanners, recon_crawler, host_anomaly, leurre, product_absent_probes, honeypot, waf_fingerprint) ; attaques en un clic. Mesuré le 14/11 : 5 blocs gk2 le deviendraient (0 avant).
+- Relais du POC gk0 : catalogue fermé vérifié par le relais, cas sûr décidé par le relais ET recontrôlé par gk2, journal des gestes, page Menaces (conseils, Réglages, graphiques). Clé `~/.config/secubox-ai/ai-ban/` (gk0 ne laisse pas traverser `/etc/secubox/secrets`), `gestes.toml` : 82.67.100.75/32, 2a01:e0a:dec:c4e0::/60, pair itinérant 176.149.248.27/32.
+- Revue finale : le WAF de gk2 n'est pas monté par l'agrégateur (entrée `secubox-waf` orpheline) → gestes servis par `secubox-waf.service` ; `NoNewPrivileges=false` dans l'unité (gk2 ne marchait que par un `allow-sudo.conf` posé à la main).
+- Banc gk6 vert (paquets non publiés) : persistance du bloc, refus, clic, annulation, auto hors cas sûr, plafond, rejeu/audience, relais en copie jetable (`SECUBOX_AI_BANC=1`), AppArmor 0 refus. Deux défauts de `waf-blocs` trouvés sur le vrai `wg show all endpoints` (nom d'interface absent des pairs suivants, au banc ; interface sans pair, au premier essai sur gk2) → tout ban de bloc rendait `garde_illisible` ; corrigés (1.35.0, 1.35.1) ; profil AppArmor de waf-blocs, `audit.log` en `w` (1.35.2, attrapé par la CI).
+- Déployé gk2 le 14/11 : essai unique 203.0.113.0/24 1 h posé puis annulé, lignes d'audit. Relais relancé : mode auto **suspendu** — c'est le propriétaire qui lève la suspension ; `closes` après une journée sans anomalie.
+- Suivis : relais lit `/waf/bans` en cache ~1 min (gk2 tranche) ; mode tableau de bord relu seulement au redémarrage ; API WAF sans profil AppArmor ; `wafctl ban` manuel hérite de la famille du dernier ban sbxwaf ; POC : 503 `wafctl` compté refus certain ; gk6 : /boot plein, initramfs-tools à demi configuré (démarrage intact).
+
 ## 2026-11-12 — Leurres du WAF : apprentissage, promotion vers le bannissement, retrait (closes #3584, étape B)
 
 - Option 1 du propriétaire (sans toucher au moteur Go ni à secubox-waf-ng) : `secubox-security-posture` 2.6.0 (PR #3681).

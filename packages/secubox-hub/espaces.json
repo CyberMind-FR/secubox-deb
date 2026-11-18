@@ -371,6 +371,10 @@
    "espace": "services",
    "objet": "SERVICE"
   },
+  "pilotage-console": {
+   "espace": "systeme",
+   "objet": "BOX"
+  },
   "podcaster": {
    "espace": "services",
    "objet": "SERVICE"

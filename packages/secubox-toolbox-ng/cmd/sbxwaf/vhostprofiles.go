@@ -50,6 +50,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reload"
 )
 
 // serviceProfile est un service connu et l'ensemble de ses chemins légitimes,
@@ -433,4 +435,51 @@ func ligneArmementPHP(v *VhostProfiles) string {
 		l += " (vhost-profiles absent ou illisible : capture PHP2Shell coupée)"
 	}
 	return l
+}
+
+// remplacerDepuis (#3741) : rechargement à chaud. Les tables de n sont reprises
+// sous le verrou d'écriture et la mémoire des verdicts PHP est vidée : un hôte
+// coché dans php_hotes est couvert dès la relecture, sans redémarrer le WAF.
+func (v *VhostProfiles) remplacerDepuis(n *VhostProfiles) {
+	if v == nil || n == nil {
+		return
+	}
+	n.mu.RLock()
+	v.mu.Lock()
+	v.hoteService, v.services, v.supprimables = n.hoteService, n.services, n.supprimables
+	v.antirobots, v.phpServices, v.phpHotes, v.federation = n.antirobots, n.phpServices, n.phpHotes, n.federation
+	v.mu.Unlock()
+	n.mu.RUnlock()
+	v.memoMu.Lock()
+	v.memoPHP = nil
+	v.memoMu.Unlock()
+}
+
+// surveillerVhostProfiles (#3741) rend un observateur de mtime qui recharge le
+// fichier dans v. Un fichier devenu illisible garde les profils en place (le
+// WAF ne perd pas sa couverture sur une écriture ratée) et le dit.
+func surveillerVhostProfiles(chemin string, v *VhostProfiles) *reload.Watcher {
+	if chemin == "" || v == nil {
+		return nil
+	}
+	return reload.NewWatcher(0, reload.Target{
+		Path:      chemin,
+		LastMtime: reload.StatMtime(chemin),
+		Load: func(p string) any {
+			n, err := chargerVhostProfiles(p)
+			if err != nil {
+				log.Printf("sbxwaf: vhost-profiles relu ILLISIBLE (%s), profils précédents gardés : %v", p, err)
+				return nil
+			}
+			return n
+		},
+		Apply: func(x any) {
+			n, ok := x.(*VhostProfiles)
+			if !ok || n == nil {
+				return
+			}
+			v.remplacerDepuis(n)
+			log.Printf("sbxwaf: vhost-profiles rechargé à chaud → %s ; %s", chemin, ligneArmementPHP(v))
+		},
+	})
 }

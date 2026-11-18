@@ -772,6 +772,9 @@ class JoinRequest(BaseModel):
     # maîtres OpenWrt ; un pair qui ne l'envoie pas est inscrit sans transport.
     wg_public_key: Optional[str] = None
     wg_port: Optional[int] = None
+    # NŒUD DISTANT (#3742) : la box joint le maître à travers Internet (autre maison, derrière une autre box). Son adresse
+    # annoncée est alors celle de SON LAN, injoignable d'ici : on n'en fait pas un endpoint, c'est elle qui appelle.
+    distant: Optional[bool] = None
 
 
 class ApproveRequest(BaseModel):
@@ -2700,6 +2703,8 @@ def _inscrire_au_transport(state: Dict, join_request: Dict, pk: str, ip: str) ->
     ep = join_request.get("wg_endpoint")
     if ep:
         peer["endpoint"] = ep
+    if join_request.get("distant") is True:
+        peer["distant"] = True            # #3742 : il appelle (keepalive de son côté), WireGuard apprend son adresse
     mesh.upsert_mesh_peer(state, peer)
 
 
@@ -2716,13 +2721,21 @@ def _wg_offer(join_request: Dict) -> Optional[Dict]:
     master_pk = _master_wg_pubkey(state)
     if not master_pk:
         return None
-    return {
+    offre = {
         "master_public_key": master_pk,
         "master_port": state.get("listen_port", WG_PORT),
         "master_mesh_ip": (state.get("address") or "10.10.0.1/24").split("/")[0],
         "address": f"{join_request['mesh_ip']}/24",
         "network": state.get("network", WG_NETWORK),
     }
+    if join_request.get("distant") is True:
+        # #3742 : un nœud hors LAN reçoit l'annonce publique déclarée (p2p.toml [wireguard] public_endpoint) et appelle
+        # avec un keepalive. Les nœuds LAN ne reçoivent rien de plus : leur conf reste celle d'avant.
+        annonce = mesh.public_endpoint_valide(mesh.load_p2p_config(CONFIG_FILE).get("public_endpoint"))
+        if annonce:
+            offre["master_endpoint"] = annonce
+            offre["persistent_keepalive"] = 25
+    return offre
 
 
 def _provision(join_request: Dict) -> None:
@@ -2776,6 +2789,11 @@ def _record_wg_identity(join_request: Dict, req: "JoinRequest") -> None:
     port = req.wg_port or WG_PORT
     if not (1 <= int(port) <= 65535):
         raise HTTPException(status_code=400, detail="invalid WireGuard port")
+    if req.distant is True:               # #3742 : adresse LAN d'une autre maison, jamais un endpoint
+        join_request["distant"] = True
+        join_request.pop("wg_endpoint", None)
+        return
+    join_request.pop("distant", None)
     try:
         adresse = ipaddress.ip_address(join_request.get("address") or "")
         hote = f"[{adresse}]" if adresse.version == 6 else str(adresse)     # IPv6 entre crochets (#2936)

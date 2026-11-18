@@ -22,6 +22,8 @@ if [ "$1" = "purge" ]; then
         done
     fi
     rm -rf /var/lib/secubox-cve-leurres
+    rm -f /etc/audit/rules.d/98-sbx-waf-droits.rules                 # #3791
+    command -v augenrules >/dev/null 2>&1 && { augenrules --load >/dev/null 2>&1 || true; }
     if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
         apparmor_parser -R /etc/apparmor.d/secubox-cve-leurres >/dev/null 2>&1 || true
     fi

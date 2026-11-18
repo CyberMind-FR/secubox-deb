@@ -1,3 +1,10 @@
+secubox-status (0.1.4-1~trixie1) trixie; urgency=medium
+
+  * Légendes des graphiques : chaque libellé prend la couleur de sa courbe
+    (demande du propriétaire, 17/11).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 07:12:28 +0100
+
 secubox-status (0.1.3-1~trixie1) trixie; urgency=medium
 
   * Jalon 2 (#3626) : pairs vérifiés par l'Annuaire dans la vue de flotte

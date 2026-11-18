@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+Source: secubox-garde
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-garde
+Architecture: all
+Depends: ${misc:Depends},
+ python3 (>= 3.11),
+ python3-fastapi,
+ python3-uvicorn,
+ secubox-core (>= 1.8.34~),
+ adduser,
+ acl,
+ iproute2,
+ sudo,
+ systemd
+Description: SecuBox Garde — détecteur d'intrusion, d'évasion et d'infection
+ Répondeur automatique : transforme une menace détectée en décision
+ (quarantaine d'appareil, ban d'adresse, signalement), la notifie et la lève
+ à l'échéance. Base SQLite (WAL) dans /var/lib/secubox/garde, réglages dans
+ /etc/secubox/garde.toml, API locale gardée sur /run/secubox/garde.sock.
+ Moteur de décision et d'application, registre d'appareils (#3794).

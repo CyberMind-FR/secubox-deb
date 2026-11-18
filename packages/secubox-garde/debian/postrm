@@ -1,0 +1,27 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+
+case "$1" in
+    remove|purge)
+        # Liste des isolées (#3800) : sans Garde, sbxwaf ne doit plus exempter personne.
+        rm -rf /run/secubox/garde
+        ;;
+esac
+
+case "$1" in
+    purge)
+        # Base et configuration semée (pas un conffile) ; le compte dédié est retiré s'il n'a plus de processus.
+        rm -rf /var/lib/secubox/garde
+        rm -f /etc/secubox/garde.toml /etc/apparmor.d/secubox-garde /etc/apparmor.d/secubox-garde-passage /etc/apparmor.d/secubox-garde-envoi
+        if id -u secubox-garde >/dev/null 2>&1; then
+            deluser --system secubox-garde >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

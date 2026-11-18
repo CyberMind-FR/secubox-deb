@@ -276,6 +276,27 @@ puis toutes les minutes, ±10 s ; charge sur le maître : au plus 32 requêtes p
 - Variables `SBX_PAIRS_*` (dont `SBX_PAIRS_MAITRE_URL`) : réservées aux tests ; ne jamais les poser en production,
   `SBX_PAIRS_MAITRE_URL` remplaçant l'adresse du maître.
 
+## Nœud distant, hors du LAN (#3742)
+
+Un nœud placé dans une autre maison (derrière une autre box) joint le maître par Internet (`sbx-mesh-join admin.gk2.secubox.in
+<jeton>`) : le script se déclare alors `"distant": true` dans la requête de jonction (parent non local au sens de
+`es_adresse_locale`).
+
+- Côté maître, l'adresse annoncée par un nœud distant (celle de SON LAN) ne devient jamais un `Endpoint` ; le pair est marqué
+  `distant` dans `wg_mesh.json`, WireGuard apprend son adresse à la poignée de main.
+- Si le rendez-vous déclare `[wireguard] public_endpoint = "gk2.secubox.in:51822"` dans `/etc/secubox/p2p.toml` (nom DNS,
+  IPv4 ou `[IPv6]`, validé strictement : ce texte finit dans un fichier lu en root par wg-quick), l'offre WireGuard remise au
+  nœud distant porte `master_endpoint` et `persistent_keepalive = 25` ; le nœud écrit cet Endpoint et
+  `PersistentKeepalive = 25` (c'est lui qui appelle). Sans annonce valide remise (ou module p2p introuvable pour la
+  valider), la jonction distante **échoue** (code 5, message clair) : jamais de repli silencieux sur l'adresse jointe.
+  `PersistentKeepalive` est borné à 0..65535 (refus au-delà) dans `sbx-mesh-join` comme au rendu de la configuration ;
+  au rendu, une chaîne numérique d'un état existant est normalisée en entier.
+- Les nœuds du LAN ne reçoivent rien de plus : offre et configuration inchangées.
+- Migration : le postinst ne modifie jamais un `p2p.toml` existant (clé absente = aucune annonce, comportement d'avant) ; un
+  rendez-vous (`role = "master"`) sans annonce est seulement signalé.
+- Ouverture du port sur la Freebox : `secubox-freebox` (`POST /api/v1/freebox/maillage-distant` ou item d'autoconfiguration
+  « maillage distant »).
+
 ## Projection des pairs enrôlés pour le pilotage (#3126)
 
 `/var/lib/secubox/p2p` est 0700 `secubox` : le contrôleur du pilotage (compte `secubox-pilotage`) n'y lit rien. À chaque écriture de

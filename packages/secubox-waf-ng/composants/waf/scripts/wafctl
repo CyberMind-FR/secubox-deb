@@ -142,7 +142,7 @@ lxc.net.0.ipv4.gateway = 10.100.0.1
 # Routes: bind-mount the host-maintained haproxy routes DIRECTORY into the
 # container; the addon reads /etc/secubox/waf/haproxy-routes.json via a symlink
 # into it (created below). A *directory* mount (not a file mount) is required
-# so route tools that edit via `jq > tmp && mv` (new inode) stay visible — a
+# so route tools that edit via « jq > tmp && mv » (new inode) stay visible — a
 # file mount binds one inode and goes stale on mv (#609, was #603). Combined
 # with the addon's mtime live-reload, route edits apply with no restart.
 lxc.mount.entry = /srv/mitmproxy var/lib/secubox-waf-routes none bind,ro,create=dir 0 0
@@ -324,8 +324,10 @@ cmd_anti_robots() {
     local filtre tmp
     if [ "$action" = "on" ]; then
         # unique : cocher deux fois ne doit pas dupliquer la ligne.
+        # shellcheck disable=SC2016  # $h est une variable jq, pas du shell
         filtre='.anti_robots = ((.anti_robots // []) + [$h] | unique)'
     else
+        # shellcheck disable=SC2016  # $h est une variable jq, pas du shell
         filtre='.anti_robots = ((.anti_robots // []) - [$h])'
     fi
 
@@ -351,6 +353,167 @@ cmd_anti_robots() {
     else
         log "secubox-waf-ng inactif — la liste prendra effet à son démarrage"
     fi
+}
+
+# ── Page Modes du WAF (#3741) ───────────────────────────────────────────
+# Deux réglages que l'API (User=secubox) ne peut pas écrire elle-même : le mode
+# des leurres de service (lu à chaud par sbx-authwatch) et les hôtes PHP cochés
+# (php_hotes de vhost_profiles.json, relu à chaud par sbxwaf). L'entrée vient
+# sur STDIN (JSON, 16 Kio au plus), jamais en argument : les lignes sudoers
+# restent exactes. Validation par liste blanche, écriture atomique (fichier
+# temporaire du même dossier, mode et propriétaire repris, os.replace).
+LEURRES_MODES="/etc/secubox/authwatch/leurres-modes.json"
+ROUTES_HAPROXY="/etc/secubox/waf/haproxy-routes.json"
+
+AUDIT_SECUBOX="/var/log/secubox/audit.log"
+
+# Préambule Python commun : audit de CHAQUE issue d'écriture (ok, refus, échec), écrit par wafctl lui-même pour
+# qu'un appel sudo direct soit tracé aussi. Ajout seul, jamais créé ici, jamais au travers d'un lien.
+# shellcheck disable=SC2016
+WAFCTL_PY_AUDIT='
+import json, os, stat, sys, time
+def auditer(action, resultat, detail, acteur):
+    ligne = json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "waf", "action": action,
+                        "result": resultat, "detail": str(detail)[:300], "acteur": acteur,
+                        "par": os.environ.get("SUDO_USER") or "root"}, ensure_ascii=False)
+    try:
+        fd = os.open(os.environ["WAFCTL_AUDIT"], os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError("pas un fichier régulier")
+            os.write(fd, (ligne + "\n").encode())
+        finally:
+            os.close(fd)
+    except OSError as e:
+        print(f"audit non écrit ({e}) : {ligne}", file=sys.stderr)
+def acteur_de(entree):
+    a = entree.get("acteur") if isinstance(entree, dict) else None
+    return a if isinstance(a, str) and 0 < len(a) <= 64 and all(c.isalnum() or c in "_.@-" for c in a) else "local"
+def sortir(action, code, message, acteur, detail=""):
+    auditer(action, "ok" if code == 0 else ("refus" if code == 2 else "echec"), message + (" " + detail if detail else ""), acteur)
+    print(json.dumps({"ok": code == 0, "code": code, "erreur": None if code == 0 else message}, ensure_ascii=False))
+    sys.exit(code)
+'
+
+cmd_leurres_modes() {
+    case "${1:-}" in
+        lister|ecrire) ;;
+        *) error "Usage: wafctl leurres-modes <lister|ecrire>  (ecrire : JSON sur stdin)"; return 1 ;;
+    esac
+    WAFCTL_AUDIT="$AUDIT_SECUBOX" python3 -I - "$1" "$LEURRES_MODES" "$WAFCTL_PY_AUDIT" 3<&0 <<'PY'
+import json, os, sys, tempfile
+verbe, chemin = sys.argv[1], sys.argv[2]
+exec(sys.argv[3])
+SERVICES = {"rdp", "vnc", "telnet", "smb", "mysql", "postgres", "redis", "mongodb", "elasticsearch", "mssql"}
+def lire():
+    try:
+        with open(chemin, encoding="utf-8") as f:
+            d = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        print(json.dumps({"ok": False, "code": 3, "erreur": f"illisible : {e}"})); sys.exit(3)
+    m = d.get("modes") if isinstance(d, dict) else None
+    return {k: v for k, v in (m or {}).items() if k in SERVICES and v in ("observer", "bannir")}
+if verbe == "lister":
+    print(json.dumps({"ok": True, "modes": lire(), "present": os.path.exists(chemin)})); sys.exit(0)
+brut = os.fdopen(3, "rb").read(16385)
+try:
+    entree = json.loads(brut.decode("utf-8")) if len(brut) <= 16384 else None
+except (UnicodeDecodeError, ValueError):
+    entree = None
+acteur = acteur_de(entree)
+modes = entree.get("modes") if isinstance(entree, dict) else None
+if not isinstance(modes, dict) or any(k not in SERVICES or v not in ("observer", "bannir") for k, v in modes.items()):
+    sortir("waf-leurres-modes", 2, "modes : {service connu: observer|bannir} attendu", acteur)
+detail = " ".join(f"{k}={v}" for k, v in sorted(modes.items()))
+dossier = os.path.dirname(chemin)
+if not os.path.isdir(dossier):
+    sortir("waf-leurres-modes", 3, f"dossier {dossier} absent (posé par secubox-toolbox-ng)", acteur, detail)
+tmp = None
+try:
+    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".leurres-modes.", suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump({"modes": dict(sorted(modes.items()))}, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+        f.flush()
+        os.fchmod(f.fileno(), 0o644)
+        os.fsync(f.fileno())
+    os.replace(tmp, chemin)
+except OSError as e:
+    if tmp and os.path.exists(tmp):
+        os.unlink(tmp)
+    sortir("waf-leurres-modes", 3, f"écriture impossible : {e}", acteur, detail)
+auditer("waf-leurres-modes", "ok", detail, acteur)
+print(json.dumps({"ok": True, "modes": lire()}))
+PY
+}
+
+cmd_php_hotes() {
+    case "${1:-}" in
+        lister|ecrire) ;;
+        *) error "Usage: wafctl php-hotes <lister|ecrire>  (ecrire : JSON sur stdin)"; return 1 ;;
+    esac
+    WAFCTL_AUDIT="$AUDIT_SECUBOX" python3 -I - "$1" "$PROFILS_VHOST" "$ROUTES_HAPROXY" "$WAFCTL_PY_AUDIT" 3<&0 <<'PY'
+import json, os, re, stat, sys, tempfile
+verbe, chemin, routes = sys.argv[1], sys.argv[2], sys.argv[3]
+exec(sys.argv[4])
+HOTE = re.compile(r"^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)+$")
+# Motif « explicite » : ^nom\.domaine$ exact, posé par ce verbe ; les autres motifs ne sont jamais touchés.
+EXPLICITE = re.compile(r"^\^[a-z0-9_-]+(\\\.[a-z0-9_-]+)+\$$")
+def motif(h):
+    return "^" + h.replace(".", "\\.") + "$"
+entree = None
+if verbe == "ecrire":
+    brut = os.fdopen(3, "rb").read(16385)
+    try:
+        entree = json.loads(brut.decode("utf-8")) if len(brut) <= 16384 else None
+    except (UnicodeDecodeError, ValueError):
+        entree = None
+acteur = acteur_de(entree)
+try:
+    with open(chemin, encoding="utf-8") as f:
+        profils = json.load(f)
+except (OSError, ValueError) as e:
+    if verbe == "lister":
+        print(json.dumps({"ok": False, "code": 3, "erreur": f"profils illisibles : {e}"})); sys.exit(3)
+    sortir("waf-php-hotes", 3, f"profils illisibles : {e}", acteur)
+if verbe == "lister":
+    try:
+        with open(routes, encoding="utf-8") as f:
+            r = json.load(f)
+        vhosts = sorted(k for k in r if isinstance(k, str)) if isinstance(r, dict) else []
+    except (OSError, ValueError):
+        vhosts = None
+    print(json.dumps({"ok": True, "vhosts": vhosts, "profils_vhosts": profils.get("vhosts") or {},
+                      "php_services": profils.get("php_services") or [],
+                      "php_hotes": [m for m in profils.get("php_hotes") or [] if isinstance(m, str)]}))
+    sys.exit(0)
+hotes = entree.get("hotes") if isinstance(entree, dict) else None
+if not isinstance(hotes, list) or len(hotes) > 200 or any(not isinstance(h, str) or not HOTE.fullmatch(h) for h in hotes):
+    sortir("waf-php-hotes", 2, "hotes : liste de noms d'hôte (200 au plus) attendue", acteur)
+detail = "explicites " + (",".join(sorted(set(hotes))) or "aucun")
+gardes = [m for m in profils.get("php_hotes") or [] if not (isinstance(m, str) and EXPLICITE.fullmatch(m))]
+profils["php_hotes"] = gardes + [motif(h) for h in sorted(set(hotes))]
+tmp = None
+try:
+    st = os.stat(chemin)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(chemin), prefix=".vhost_profiles.", suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(profils, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+        f.flush()
+        os.fchmod(f.fileno(), stat.S_IMODE(st.st_mode))
+        os.fchown(f.fileno(), st.st_uid, st.st_gid)
+        os.fsync(f.fileno())
+    os.replace(tmp, chemin)
+except OSError as e:
+    if tmp and os.path.exists(tmp):
+        os.unlink(tmp)
+    sortir("waf-php-hotes", 3, f"écriture impossible : {e}", acteur, detail)
+auditer("waf-php-hotes", "ok", detail, acteur)
+print(json.dumps({"ok": True, "explicites": sorted(set(hotes)), "php_hotes": profils["php_hotes"]}))
+PY
 }
 
 NFT_TABLE="secubox"
@@ -392,8 +555,40 @@ print(6 if a.version == 6 else 4)
 PY
 }
 
+# _secondes <durée> — 30m, 4h, 1d… en secondes sur la sortie ; rend 1 si la forme
+# est fausse. Base 10 forcée (« 08h » n'est pas de l'octal) et 7 chiffres au plus
+# (pas de dépassement de l'arithmétique du shell).
+_secondes() {
+    local duree="$1" nombre
+    [[ "$duree" =~ ^[0-9]+[smhd]$ ]] || return 1
+    nombre="${duree%[smhd]}"
+    [ "${#nombre}" -le 7 ] || return 1
+    case "${duree: -1}" in
+        s) echo $((10#$nombre)) ;;
+        m) echo $((10#$nombre * 60)) ;;
+        h) echo $((10#$nombre * 3600)) ;;
+        d) echo $((10#$nombre * 86400)) ;;
+    esac
+}
+
+# _garde <cible> — `waf-blocs verifier` en root (#3716) : jamais le privé, une
+# plage protégée, une adresse de la box ni un pair WireGuard, pour TOUT ban.
+# Toute sortie non nulle refuse, y compris un script absent ou une réponse
+# illisible (garde_illisible) ; le motif part sur stderr en « refus:<motif> ».
+_garde() {
+    local sortie="" motif=""
+    if sortie=$(/usr/sbin/waf-blocs verifier "$1" 2>/dev/null); then
+        return 0
+    fi
+    motif=$(printf '%s' "$sortie" | jq -r '.motif // empty' 2>/dev/null) || motif=""
+    [[ "$motif" =~ ^[a-z_]{1,32}$ ]] || motif="garde_illisible"
+    printf 'refus:%s\n' "$motif" >&2
+    return 1
+}
+
 cmd_ban() {
-    local ip="$1" duree="${2:-4h}" version
+    local ip="$1" duree="${2:-4h}" version secondes
+    _garde "$ip" || return 1
     version=$(_valide_ip "$ip") || {
         case $? in
             2) error "Adresse privée refusée : $ip" ;;
@@ -401,18 +596,10 @@ cmd_ban() {
         esac
         return 1
     }
-    if ! [[ "$duree" =~ ^[0-9]+[smhd]$ ]]; then
+    if ! secondes=$(_secondes "$duree"); then
         error "Durée invalide : $duree (attendu 30m, 4h, 1d…)"
         return 1
     fi
-    local secondes unite nombre
-    nombre="${duree%[smhd]}"; unite="${duree: -1}"
-    case "$unite" in
-        s) secondes=$nombre ;;
-        m) secondes=$((nombre * 60)) ;;
-        h) secondes=$((nombre * 3600)) ;;
-        d) secondes=$((nombre * 86400)) ;;
-    esac
     local ensemble="waf_ban"
     [ "$version" = "6" ] && ensemble="waf_ban6"
     if nft add element inet "$NFT_TABLE" "$ensemble" "{ $ip timeout ${secondes}s }" 2>/dev/null; then
@@ -429,9 +616,243 @@ cmd_unban() {
     local ensemble="waf_ban"
     [ "$version" = "6" ] && ensemble="waf_ban6"
     # Retirer une adresse absente n'est pas une erreur : l'operateur veut
-    # qu'elle ne soit plus bannie, et c'est deja le cas.
-    nft delete element inet "$NFT_TABLE" "$ensemble" "{ $ip }" 2>/dev/null
+    # qu'elle ne soit plus bannie, et c'est deja le cas. Sous `set -e`, un
+    # `nft delete` nu d'un element absent sortait en 1 AVANT ce constat (#3716) :
+    # l'echec n'en est un que si l'element est TOUJOURS la apres le retrait.
+    command -v nft >/dev/null 2>&1 || { error "nft introuvable"; return 1; }
+    if ! nft delete element inet "$NFT_TABLE" "$ensemble" "{ $ip }" 2>/dev/null; then
+        if nft get element inet "$NFT_TABLE" "$ensemble" "{ $ip }" >/dev/null 2>&1; then
+            error "nft a refusé le retrait de $ip"
+            return 1
+        fi
+    fi
     log "unban $ip"
+}
+
+# cmd_ban_bloc / cmd_unban_bloc / cmd_blocs — bans de bloc /24 (#3716).
+#
+# Délégués à waf-blocs (root), qui tient la table nft à part
+# inet secubox_waf_blocs, son état et l'audit. Ici, seulement ce que le droit
+# sudo (« ban-bloc * ») ne borne pas : le NOMBRE d'arguments et la forme de la
+# durée. Réponse : une ligne JSON {"ok", "motif", …}, comme waf-blocs.
+_json_refus() {
+    printf '{"ok": false, "motif": "%s"}\n' "$1"
+    exit "$2"
+}
+
+cmd_ban_bloc() {
+    [ "$#" -eq 2 ] || _json_refus usage 64
+    local secondes
+    secondes=$(_secondes "$2") || _json_refus duree 8
+    exec /usr/sbin/waf-blocs ajouter "$1" "$secondes"
+}
+
+cmd_unban_bloc() {
+    [ "$#" -eq 1 ] || _json_refus usage 64
+    exec /usr/sbin/waf-blocs retirer "$1"
+}
+
+cmd_blocs() {
+    [ "$#" -eq 0 ] || _json_refus usage 64
+    exec /usr/sbin/waf-blocs lister
+}
+
+# cmd_cle_ai_ban — clés publiques du compte de service ai-ban (#3716).
+#
+# La box de l'IA signe chaque geste avec sa clé PRIVÉE Ed25519 ; gk2 ne garde
+# que la clé publique, dans un arbre root lu par secubox_core.compte_service :
+# /etc/secubox-comptes-service/ai-ban/<empreinte>.pub, où l'empreinte est le
+# SHA-256 hex du DER de la clé (le `kid` des jetons). Ces verbes sont réservés au
+# propriétaire, en root : ils ne sont PAS dans le sudoers de `secubox`.
+#
+#   ajouter <fichier.pub>   pose la clé sous son empreinte calculée (forme PEM
+#                           canonique, root:root 0644) ; refuse au-delà de deux
+#                           clés : compte_service n'en reconnaîtrait plus AUCUNE
+#   retirer <empreinte>     révoque une clé (effet à la requête suivante)
+#   retirer --toutes        révoque toutes les clés
+#   lister                  empreintes posées, et si le nom est la vraie empreinte
+#
+# Chaque ajout ou retrait est une ligne de l'audit ; un ajout non audité est
+# défait.
+CLES_RACINE="/etc/secubox-comptes-service"
+CLES_MAX_COMPTE=2
+AUDIT_LOG="/var/log/secubox/audit.log"
+# DER SubjectPublicKeyInfo d'une clé Ed25519 : 12 octets d'en-tête puis 32 de clé.
+_DER_ED25519="302a300506032b6570032100"
+
+_auditer_cle() {
+    local ligne
+    ligne=$(jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg a "$1" --arg d "$2" \
+        '{ts: $ts, module: "waf", action: $a, detail: $d, by: "wafctl"}') || return 1
+    printf '%s\n' "$ligne" >> "$AUDIT_LOG" 2>/dev/null
+}
+
+# Empreintes des fichiers <64 hex>.pub du dossier (liens compris : ils comptent).
+_cles_posees() {
+    local f nom
+    for f in "$1"/*.pub; do
+        [ -e "$f" ] || [ -L "$f" ] || continue
+        nom=$(basename "$f" .pub)
+        [[ "$nom" =~ ^[0-9a-f]{64}$ ]] && printf '%s\n' "$nom"
+    done
+    return 0
+}
+
+# _der_ed25519 <fichier> <der> — écrit dans <der> le DER SubjectPublicKeyInfo
+# de la clé publique ; rend 1 si ce n'est pas une clé Ed25519. Tout le reste
+# (empreinte, PEM posé) part de CET instantané : un fichier source modifié
+# entre deux lectures ne peut pas faire poser une clé sous le nom d'une autre.
+_der_ed25519() {
+    local der
+    openssl pkey -pubin -in "$1" -outform DER -out "$2" 2>/dev/null || return 1
+    der=$(od -An -v -tx1 "$2" | tr -d ' \n')
+    [ "${#der}" -eq 88 ] && [ "${der:0:24}" = "$_DER_ED25519" ]
+}
+
+# _empreinte_der <der> — SHA-256 hex du DER (`openssl pkey -pubin -outform DER | sha256sum`).
+_empreinte_der() {
+    local kid
+    kid=$(sha256sum "$1" | cut -d' ' -f1)
+    [[ "$kid" =~ ^[0-9a-f]{64}$ ]] && printf '%s\n' "$kid"
+}
+
+_cle_compte_ajouter() {
+    local source="$1" dossier="$2" compte kid nb tmp
+    compte=$(basename "$2")
+    if [ ! -f "$source" ] || [ -L "$source" ]; then
+        error "Fichier de clé absent (ou lien) : $source"; return 1
+    fi
+    tmp=$(mktemp -d)
+    if ! _der_ed25519 "$source" "$tmp/cle.der" || ! kid=$(_empreinte_der "$tmp/cle.der"); then
+        rm -rf "$tmp"; error "Pas une clé publique Ed25519 (PEM) : $source"; return 1
+    fi
+    install -d -m 0755 -o root -g root "$CLES_RACINE" "$dossier"
+    if [ -e "$dossier/$kid.pub" ]; then
+        rm -rf "$tmp"; log "clé $compte déjà présente : $kid"; return 0
+    fi
+    nb=$(_cles_posees "$dossier" | wc -l)
+    if [ "$nb" -ge "$CLES_MAX_COMPTE" ]; then
+        rm -rf "$tmp"
+        error "Déjà $nb clés $compte (au plus $CLES_MAX_COMPTE) : retirer l'ancienne d'abord (wafctl cle-$compte retirer <empreinte>)"
+        return 1
+    fi
+    # PEM canonique tiré du DER vérifié, posé root:root 0644.
+    if ! openssl pkey -pubin -inform DER -in "$tmp/cle.der" -out "$tmp/cle.pem" 2>/dev/null \
+       || ! install -m 0644 -o root -g root "$tmp/cle.pem" "$dossier/$kid.pub"; then
+        rm -rf "$tmp"; error "Pose de la clé échouée"; return 1
+    fi
+    rm -rf "$tmp"
+    if ! _auditer_cle "cle-$compte-ajout" "$kid"; then
+        rm -f "$dossier/$kid.pub"
+        error "Audit impossible ($AUDIT_LOG) : clé retirée"; return 1
+    fi
+    log "clé $compte ajoutée : $kid"
+}
+
+_cle_compte_retirer() {
+    local quoi="$1" dossier="$2" compte kid n=0
+    compte=$(basename "$2")
+    if [ "$quoi" = "--toutes" ]; then
+        for kid in $(_cles_posees "$dossier"); do
+            rm -f "$dossier/$kid.pub"; n=$((n + 1))
+        done
+        _auditer_cle "cle-$compte-retrait" "toutes ($n)" || { error "Clés retirées, audit impossible"; return 1; }
+        log "clés $compte retirées : $n"
+        return 0
+    fi
+    if ! [[ "$quoi" =~ ^[0-9a-f]{64}$ ]]; then
+        error "Empreinte invalide (64 hex attendus) : $quoi"; return 1
+    fi
+    if [ ! -e "$dossier/$quoi.pub" ] && [ ! -L "$dossier/$quoi.pub" ]; then
+        log "clé $compte absente : $quoi"; return 0
+    fi
+    rm -f "$dossier/$quoi.pub"
+    _auditer_cle "cle-$compte-retrait" "$quoi" || { error "Clé retirée, audit impossible"; return 1; }
+    log "clé $compte retirée : $quoi"
+}
+
+_cle_compte_lister() {
+    local dossier="$1" kid reel nb tmp
+    nb=0
+    tmp=$(mktemp)
+    for kid in $(_cles_posees "$dossier"); do
+        nb=$((nb + 1))
+        if [ -L "$dossier/$kid.pub" ]; then
+            printf '%s  refusée (lien)\n' "$kid"
+        elif _der_ed25519 "$dossier/$kid.pub" "$tmp" && reel=$(_empreinte_der "$tmp") && [ "$reel" = "$kid" ]; then
+            printf '%s  valide\n' "$kid"
+        else
+            printf '%s  refusée (nom ≠ empreinte, ou pas Ed25519)\n' "$kid"
+        fi
+    done
+    rm -f "$tmp"
+    if [ "$nb" -gt "$CLES_MAX_COMPTE" ]; then
+        error "$nb clés (> $CLES_MAX_COMPTE) : AUCUNE n'est reconnue"
+    fi
+    return 0
+}
+
+# cmd_cle_compte <compte> <verbe> … — clés d'un compte de service (ai-ban #3716, ai-filtres #3732).
+cmd_cle_compte() {
+    local compte="$1" dossier="$CLES_RACINE/$1"; shift
+    case "${1:-}" in
+        ajouter) [ "$#" -eq 2 ] || { error "Usage: wafctl cle-$compte ajouter <fichier.pub>"; return 1; }
+                 _cle_compte_ajouter "$2" "$dossier" ;;
+        retirer) [ "$#" -eq 2 ] || { error "Usage: wafctl cle-$compte retirer <empreinte>|--toutes"; return 1; }
+                 _cle_compte_retirer "$2" "$dossier" ;;
+        lister)  [ "$#" -eq 1 ] || { error "Usage: wafctl cle-$compte lister"; return 1; }
+                 _cle_compte_lister "$dossier" ;;
+        *)       error "Usage: wafctl cle-$compte ajouter <fichier.pub> | retirer <empreinte>|--toutes | lister"
+                 return 1 ;;
+    esac
+}
+
+cmd_cle_ai_ban() { cmd_cle_compte ai-ban "$@"; }
+cmd_cle_ai_filtres() { cmd_cle_compte ai-filtres "$@"; }
+
+# cmd_cle_garde_ban — clés du compte de service garde (#3794, secubox-garde).
+#
+# La garde tourne SUR la box : `generer` y crée la paire Ed25519, pose la clé
+# PRIVÉE dans /etc/secubox/secrets/garde-ban.pem, root:secubox-garde 0640 (lue
+# par le seul groupe du service de la garde ; root reste propriétaire, la garde
+# ne peut ni la réécrire ni la supprimer), puis la clé publique sous son
+# empreinte dans /etc/secubox-comptes-service/garde/ (comme `ajouter`). Le
+# groupe secubox-garde est créé par le paquet de la garde : absent, on refuse.
+# Une clé privée déjà là n'est jamais écrasée (retirer l'ancienne d'abord).
+CLE_GARDE_PRIVEE="/etc/secubox/secrets/garde-ban.pem"
+GROUPE_GARDE="secubox-garde"
+
+_cle_garde_generer() {
+    local tmp
+    getent group "$GROUPE_GARDE" >/dev/null 2>&1 || { error "Groupe $GROUPE_GARDE absent (paquet de la garde non installé)"; return 1; }
+    if [ -e "$CLE_GARDE_PRIVEE" ] || [ -L "$CLE_GARDE_PRIVEE" ]; then
+        error "Clé privée déjà présente : $CLE_GARDE_PRIVEE (wafctl cle-garde-ban retirer, puis la supprimer)"; return 1
+    fi
+    tmp=$(mktemp -d)
+    chmod 0700 "$tmp"
+    if ! openssl genpkey -algorithm ed25519 -out "$tmp/garde-ban.pem" 2>/dev/null \
+       || ! openssl pkey -in "$tmp/garde-ban.pem" -pubout -out "$tmp/garde-ban.pub" 2>/dev/null; then
+        rm -rf "$tmp"; error "Génération de la paire Ed25519 échouée"; return 1
+    fi
+    # Le dossier des secrets n'est jamais modifié ici (droits gérés par secubox-core).
+    [ -d "$(dirname "$CLE_GARDE_PRIVEE")" ] || { rm -rf "$tmp"; error "Dossier absent : $(dirname "$CLE_GARDE_PRIVEE")"; return 1; }
+    if ! install -m 0640 -o root -g "$GROUPE_GARDE" "$tmp/garde-ban.pem" "$CLE_GARDE_PRIVEE"; then
+        rm -rf "$tmp"; error "Pose de la clé privée échouée"; return 1
+    fi
+    if ! _cle_compte_ajouter "$tmp/garde-ban.pub" "$CLES_RACINE/garde"; then
+        rm -f "$CLE_GARDE_PRIVEE"; rm -rf "$tmp"; return 1
+    fi
+    rm -rf "$tmp"
+    log "clé privée de la garde posée : $CLE_GARDE_PRIVEE (root:$GROUPE_GARDE 0640)"
+}
+
+cmd_cle_garde_ban() {
+    if [ "${1:-}" = "generer" ]; then
+        [ "$#" -eq 1 ] || { error "Usage: wafctl cle-garde-ban generer"; return 1; }
+        _cle_garde_generer
+        return
+    fi
+    cmd_cle_compte garde "$@"
 }
 
 case "${1:-}" in
@@ -447,8 +868,16 @@ case "${1:-}" in
     reload)     cmd_reload ;;
     purge-cache) cmd_purge_cache ;;
     anti-robots) cmd_anti_robots "${2:-}" "${3:-}" ;;
+    leurres-modes) cmd_leurres_modes "${2:-}" ;;
+    php-hotes)  cmd_php_hotes "${2:-}" ;;
     ban)        cmd_ban "${2:-}" "${3:-}" ;;
     unban)      cmd_unban "${2:-}" ;;
+    ban-bloc)   shift; cmd_ban_bloc "$@" ;;
+    unban-bloc) shift; cmd_unban_bloc "$@" ;;
+    blocs)      shift; cmd_blocs "$@" ;;
+    cle-ai-ban) shift; cmd_cle_ai_ban "$@" ;;
+    cle-ai-filtres) shift; cmd_cle_ai_filtres "$@" ;;
+    cle-garde-ban) shift; cmd_cle_garde_ban "$@" ;;
     test)       cmd_test "$2" ;;
     *)
         cat << EOF
@@ -471,6 +900,29 @@ Routes:
 Cache:
   purge-cache   Vide le cache média du WAF (SIGUSR1) — fraîcheur immédiate
                 après un déploiement d'assets (TTL 1 h sinon)
+
+Bans (garde waf-blocs : jamais le privé, une plage protégée, la box ni un pair):
+  ban <ip> [durée]           Bannit une adresse (30m, 4h, 1d… ; 4h par défaut)
+  unban <ip>                 Retire le ban d'une adresse
+  ban-bloc <a.b.c.0/24> <durée>  Bannit un bloc /24 (1h à 7d), rejoué après un
+                             rechargement du pare-feu (secubox-waf-blocs)
+  unban-bloc <a.b.c.0/24>    Retire le ban d'un bloc
+  blocs                      Liste les blocs bannis (JSON)
+
+Compte de service ai-ban (root seulement, hors sudoers ; deux clés au plus) :
+  cle-ai-ban ajouter <fichier.pub>   Pose une clé publique Ed25519 sous son empreinte
+  cle-ai-ban retirer <empreinte>|--toutes   Révoque une clé, ou toutes
+  cle-ai-ban lister                  Empreintes posées et leur validité
+  cle-ai-filtres ajouter|retirer|lister   Idem pour le compte ai-filtres (#3732,
+                                     /etc/secubox-comptes-service/ai-filtres)
+  cle-garde-ban generer              Compte garde (#3794) : paire Ed25519, clé privée
+                                     /etc/secubox/secrets/garde-ban.pem (root:secubox-garde
+                                     0640), publique dans /etc/secubox-comptes-service/garde
+  cle-garde-ban ajouter|retirer|lister   Idem cle-ai-ban pour le compte garde
+
+Page Modes (#3741, JSON sur stdin pour ecrire) :
+  leurres-modes lister|ecrire  Mode observer|bannir des leurres de service
+  php-hotes lister|ecrire      Hôtes PHP cochés (motifs ^nom\.domaine$ de php_hotes)
 
 Operations:
   logs [n]      Show last n log lines (default 50)

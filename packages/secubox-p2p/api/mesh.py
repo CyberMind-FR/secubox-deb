@@ -78,6 +78,8 @@ def load_p2p_config(path: pathlib.Path) -> dict:
         "network": MESH_NETWORK,
         "role": "satellite",
         "master_endpoint": None,
+        # Point d'accès PUBLIC du rendez-vous (#3742), remis aux seuls nœuds distants (hors LAN) : « gk2.secubox.in:51822 ».
+        "public_endpoint": None,
     }
     try:
         with open(path, "rb") as f:
@@ -111,6 +113,61 @@ def load_p2p_config(path: pathlib.Path) -> dict:
             out_masterlink[k] = masterlink[k]
     out["masterlink"] = out_masterlink
     return out
+
+
+_NOM_HOTE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$", re.I)
+
+
+def public_endpoint_valide(valeur) -> str | None:
+    """« hôte:port » normalisé (nom DNS, IPv4, ou [IPv6]), ou None. Il finit dans un fichier lu en root par wg-quick (#1360) :
+    tout ce qui n'est pas strictement une adresse est refusé, jamais nettoyé."""
+    if not isinstance(valeur, str) or not valeur or len(valeur) > 270:
+        return None
+    hote, sep, port = valeur.strip().rpartition(":")
+    if not sep or not port.isdigit() or not 1 <= int(port) <= 65535:
+        return None
+    if hote.startswith("[") and hote.endswith("]"):
+        try:
+            return f"[{ipaddress.IPv6Address(hote[1:-1])}]:{int(port)}"
+        except ValueError:
+            return None
+    try:
+        ad = ipaddress.ip_address(hote)
+        return None if ad.version == 6 else f"{ad}:{int(port)}"     # une IPv6 nue est ambiguë : crochets exigés
+    except ValueError:
+        pass
+    return f"{hote.lower()}:{int(port)}" if _NOM_HOTE.match(hote) else None
+
+
+def keepalive_valide(valeur) -> int:
+    """PersistentKeepalive borné à 0..65535 (#3742) ; absent = 25. Une chaîne numérique d'un état existant (« 25 ») est
+    normalisée en entier ; non numérique, flottant, booléen ou hors bornes : refus avec un message clair, jamais d'arrondi."""
+    if valeur is None:
+        return 25
+    if isinstance(valeur, str) and valeur.strip().isdigit():
+        valeur = int(valeur.strip())
+    if isinstance(valeur, bool) or not isinstance(valeur, int):
+        raise ValueError("PersistentKeepalive doit être un entier de 0 à 65535, reçu %r" % (valeur,))
+    if not 0 <= valeur <= 65535:
+        raise ValueError("PersistentKeepalive hors de 0..65535 : %d" % valeur)
+    return valeur
+
+
+def endpoint_distant(offre: dict) -> str:
+    """Endpoint d'un nœud DISTANT : l'annonce publique validée, sinon ValueError (jamais de repli sur une adresse LAN)."""
+    annonce = public_endpoint_valide((offre or {}).get("master_endpoint"))
+    if not annonce:
+        raise ValueError("le maître n'a remis aucune annonce publique valide (p2p.toml : [wireguard] public_endpoint)")
+    return annonce
+
+
+def endpoint_vers_maitre(offre: dict, adresse_jointe: str) -> str:
+    """Endpoint du maître côté pair : l'annonce publique si le maître l'a remise (nœud distant, #3742), sinon l'adresse
+    que le pair vient lui-même de joindre (comportement LAN inchangé)."""
+    annonce = public_endpoint_valide((offre or {}).get("master_endpoint"))
+    if annonce:
+        return annonce
+    return "%s:%d" % (adresse_jointe, int(offre["master_port"]))
 
 
 def allocate_mesh_ip(network: str, taken: list[str]) -> str:
@@ -182,7 +239,7 @@ def render_wg_conf(state: dict) -> str:
                 lines.append(f"AllowedIPs = {_une_ligne(peer['allowed_ips'])}")
         else:
             lines.append(f"AllowedIPs = {_une_ligne(peer.get('allowed_ips', MESH_NETWORK))}")
-        lines.append("PersistentKeepalive = 25")
+        lines.append("PersistentKeepalive = %d" % keepalive_valide(peer.get("persistent_keepalive")))
     return "\n".join(lines) + "\n"
 
 

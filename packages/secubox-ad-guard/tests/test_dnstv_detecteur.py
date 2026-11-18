@@ -75,3 +75,46 @@ def test_compteurs_clients_toutes_decisions(tmp_path):
                (dnstv.Evenement(t - 5 * 86400, "192.168.1.128", "vieux.example.org", "A", "NOERROR", "ALLOWED"), "")])
     c = m.compteurs_clients(dnstv._jour(t - 86400))
     assert c == {"192.168.1.128": {"k7.ftven.fr": 2}}                           # tous les types de décision, et pas les jours trop anciens
+
+
+# ── #3771 : seconde voie, le service du système d'une TV connectée ──────────────────────────────────────────────────────────
+PLAT = D.PLATEFORMES_TV
+
+
+def test_freebox_player_en_direct_detecte_sans_freewheel():
+    # relevé gk7 du 17/11 : Freebox Pop sur le direct france.tv, trois adresses IPv6 d'une même MAC, aucune requête FreeWheel
+    vois = dict(VOISINS, **{"2a01::a": MAC, "2a01::b": MAC})
+    c = {"2a01::a": {"androidtvchannels-pa.googleapis.com": 2, "telemetry-prod.svc.freebox.itc.proxad.net": 2, "api.oqee.net": 2},
+         "2a01::b": {"telemetry-prod.svc.freebox.itc.proxad.net": 2, "androidtv.prod.cloud.netflix.com": 1}}
+    d = D.detecter(c, vois, SERVICES, ("fwmrm.net",), set(), plateformes=PLAT)
+    assert len(d) == 1 and d[0].mac == MAC and sorted(d[0].adresses) == ["2a01::a", "2a01::b"]
+    assert d[0].preuve.startswith("système TV : 7 requêtes") and "androidtvchannels-pa" in d[0].preuve     # preuve bornée à 120 caractères
+
+
+def test_tv_lg_et_samsung_detectees():
+    for dom in ("snu.lgtvsdp.com", "log-config.samsungacr.com"):
+        assert len(detect({V6: {dom: 3}}, plateformes=PLAT)) == 1
+
+
+def test_sous_le_seuil_ou_voie_desactivee_rien():
+    assert detect({V6: {"androidtvchannels-pa.googleapis.com": 2}}, plateformes=PLAT) == []
+    assert detect({V6: {"androidtvchannels-pa.googleapis.com": 50}}) == []                         # plateformes vide = voie fermée
+
+
+def test_telephone_android_pas_detecte():
+    # un téléphone Android interroge Google, YouTube, Netflix mobile, jamais l'accueil Android TV
+    tel = {"android.googleapis.com": 40, "youtubei.googleapis.com": 30, "android.prod.cloud.netflix.com": 10, "googleads.g.doubleclick.net": 9}
+    assert detect({V6: tel}, plateformes=PLAT) == []
+
+
+def test_un_nom_qui_imite_la_plateforme_ne_compte_pas():
+    assert detect({V6: {"androidtvchannels-pa.googleapis.com.evil.example": 9, "xlgtvsdp.com": 9}}, plateformes=PLAT) == []
+
+
+def test_reglage_toml_plateformes(tmp_path):
+    from api import dnstv_auto
+    t = tmp_path / "a.toml"
+    t.write_text('[adblock_tv_auto]\nplateformes_tv = []\nmin_plateforme = 5\n')
+    r = dnstv_auto.reglage_depuis({}, t)
+    assert r.plateformes_tv == () and r.min_plateforme == 5
+    assert dnstv_auto.reglage_depuis({}, tmp_path / "absent.toml").plateformes_tv == PLAT

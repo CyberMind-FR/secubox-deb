@@ -1,3 +1,53 @@
+secubox-toolbox-ng (0.17.0-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf : contrôles structurels dans les trois modes (ref #3741). En
+    escalate, une touche nourrit le compteur de la catégorie (ban_seuil,
+    sinon -escalate-threshold) ; en block, elle bannit l'adresse (la requête
+    analysée est déjà relayée, le ban couvre les suivantes). Chaque touche
+    est écrite au journal des menaces avec son action et son mode.
+  * sbxwaf : vhost_profiles.json relu à chaud (mtime) : un hôte coché dans
+    php_hotes est couvert sans redémarrer ; un fichier illisible garde les
+    profils précédents.
+  * sbx-authwatch : réglage observer|bannir par leurre de service dans
+    /etc/secubox/authwatch/leurres-modes.json (--leurres-modes), relu à
+    chaud ; absent, illisible ou valeur inconnue : bannir (comportement
+    d'origine). Un leurre observé est journalisé « detect » sans ban.
+  * postinst : /etc/secubox/authwatch en 0750 root:secubox (ref #3741).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 06:00:00 +0100
+
+secubox-toolbox-ng (0.16.0-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf : seuil et durée de ban par catégorie escalate (ref #3732).
+    Champs facultatifs "ban_seuil" (entier 1 à 10) et "ban_duree" (durée Go,
+    1h à 168h) : compteur escalate propre à la catégorie et durée de ban
+    nft choisie. Absents, illisibles ou hors bornes (avertissement au
+    chargement) : comportement inchangé (-escalate-threshold,
+    -nft-ban-duration).
+  * Test de bout en bout des catégories ia_filtres_* telles que cvectl les
+    écrit (ref #3732).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 11:30:00 +0100
+
+secubox-toolbox-ng (0.15.0-1~trixie1) trixie; urgency=medium
+
+  * sbx-authwatch : les leurres de service captent les identifiants des
+    robots (#3728). Régime bannière activé dans l'unité ; dialogue borné par
+    protocole (3 s pour un premier octet, 10 s au total : le ban attend la fin
+    du dialogue car il coupe aussi la connexion établie ; 4 Kio, 5 essais,
+    64 caractères par champ) : telnet
+    (plusieurs couples par connexion, négociation gardée comme signature),
+    redis (AUTH et HELLO AUTH, RESP et en ligne), postgres (demande du mot
+    de passe en clair, application_name, base), HTTP Basic sur 9200
+    (User-Agent), compte et protocoles du cookie RDP, version VNC, pilote
+    Mongo. Mots de passe journalisés EN CLAIR (décision du propriétaire :
+    aucun service ni compte derrière ces ports). Journal des menaces :
+    `essais`, `agent` (balayeur, sondeur, force-brute), `user_agent` = client ;
+    `rule_id` ne porte que le nombre d'essais, et le compte tenté n'est pas
+    émis vers sbx-actord (il relierait tous les robots qui tentent root).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 10:00:00 +0100
+
 secubox-toolbox-ng (0.14.0-1~trixie1) trixie; urgency=medium
 
   * sbxdpi : agregat PAR APPAREIL, opt-in et borne (SBX TV Privacy lot 4, ref #3374). Seules les adresses du fichier de cibles (DPI_TARGETS_FILE, /run/secubox/sbxdpi-cibles/cibles.json, ecrit par root via secubox-adguard-tv dpi-cibles) sont comptees par adresse : application nDPI, categorie, nom d'hote (SNI/QUIC), port, adresse distante seulement sans nom, flux, octets, premiere et derniere vue, a la minute. Fenetre glissante de 10 minutes, 20 000 cles et 2 000 par adresse au plus, fichier DPI_DEVICES_OUT (/run/secubox/sbxdpi/appareils.json, 0640, groupe secubox) reecrit atomiquement a chaque flush. Sans cibles, rien n'est compte ni ecrit : le reste de sbxdpi reste sans PII. tmpfiles : /run/secubox/sbxdpi 2750 secubox-toolbox:secubox. 3 tests Go.

@@ -20,6 +20,8 @@ from pathlib import Path
 GARDE_NFT = Path("/etc/nftables.d/secubox-wan-guard.nft")
 # Frontaux voulus côté LAN/WAN : jamais signalés comme exposés.
 FRONTAUX = {22, 80, 443, 9443}
+# Écoutes de leurre de sbx-authwatch (#3728) : OUVERTES exprès, un contact y vaut ban. Listées à part, jamais « exposées ».
+LEURRES = {23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017}
 
 _RE_PORTS = re.compile(r'iifname\s+"(?P<iface>[^"]+)"\s+tcp\s+dport\s+\{(?P<ports>[^}]*)\}')
 
@@ -59,6 +61,13 @@ def joignable_depuis_lan(addr: str) -> bool:
     return addr in ("0.0.0.0", "*", "::") or addr.startswith("*%") or addr.startswith("192.168.1.")
 
 
+def classer(ecoute: dict[int, str], gardes: list[int]) -> tuple[dict[int, str], list[int]]:
+    """(écoutes non gardées et joignables — à signaler, leurres en écoute — voulus)."""
+    expose = {p: a for p, a in sorted(ecoute.items())
+              if p not in gardes and p not in FRONTAUX and p not in LEURRES and joignable_depuis_lan(a)}
+    return expose, sorted(p for p in ecoute if p in LEURRES)
+
+
 def etat() -> dict:
     try:
         texte = GARDE_NFT.read_text()
@@ -70,11 +79,12 @@ def etat() -> dict:
     except (OSError, subprocess.SubprocessError):
         ss = ""
     ecoute = ports_en_ecoute(ss)
-    expose = {p: a for p, a in sorted(ecoute.items()) if p not in gardes and p not in FRONTAUX and joignable_depuis_lan(a)}
+    expose, leurres = classer(ecoute, gardes)
     return {
         "livree": bool(gardes),
         "interface": iface,
         "ports_gardes": gardes,
         "ports_gardes_en_ecoute": [p for p in gardes if p in ecoute],
         "ports_non_gardes": [{"port": p, "adresse": a} for p, a in expose.items()],
+        "leurres_ouverts": leurres,
     }

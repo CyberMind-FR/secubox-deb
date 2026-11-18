@@ -48,7 +48,11 @@ from api import dnstv, dnstv_regles
 with dnstv_regles.verrou():
     if (dnstv.DOSSIER_ETAT / "etat.json").exists() and dnstv.lire_etat()[1]:
         sys.exit(3)
-    sys.exit(0 if dnstv.activer_toujours() else 10)' || tv=$?
+    ecrit = dnstv.activer_toujours()
+    ecrit = dnstv.migrer_politique_auto() or ecrit      # #3774 : tous les filtrages en auto, une fois par box
+    from api import dnstv_profil
+    ecrit = dnstv_profil.migrer_graine() or ecrit       # #3783 : nouveau profil de base posé aux TV déjà en mode auto
+    sys.exit(0 if ecrit else 10)' || tv=$?
     case "$tv" in
         0|10) ;;
         *) echo "secubox-ad-guard : SBX TV Privacy non activé (état illisible ou erreur $tv) — voir /var/lib/secubox/ad-guard/dnstv/etat.json" >&2 ;;

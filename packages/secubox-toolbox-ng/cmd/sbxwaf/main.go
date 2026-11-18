@@ -51,6 +51,7 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/actor/emit"
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/reload"
 	"golang.org/x/net/http/httpguts"
 )
 
@@ -126,6 +127,12 @@ type Server struct {
 	// Nil means escalate behaves like detect (observe, never ban).
 	escalateBan *Ban
 
+	// escalateFenetre : fenêtre des compteurs escalate PAR CATÉGORIE (#3732),
+	// créés à la demande quand une catégorie porte "ban_seuil". Zéro = 24 h.
+	escalateFenetre time.Duration
+	escalateCats    map[string]*Ban
+	escalateCatsMu  sync.Mutex
+
 	// threatLog appends one JSON line per WAF hit to the threats log file.
 	// Wired in main() via NewThreatLog(--threat-log); tests can inject.
 	// Nil means no threat logging.
@@ -140,6 +147,11 @@ type Server struct {
 	// (#1290) — apprentissage seul, jamais de sanction. Nil ou inactif → le
 	// 421 d'origine est conservé, ce qui reste le comportement par défaut.
 	leurre *LeurreHTTP
+
+	// isoles : adresses mises en quarantaine par secubox-garde (#3800). Un
+	// hôte non routé demandé par l'une d'elles reçoit la page d'explication
+	// au lieu du 421, sans compter comme anomalie. Nil = désactivé.
+	isoles *ListeIsoles
 
 	// nftBan est le ban nft NATIF (#1070, phase B) — set nft à timeout géré par
 	// le WAF lui-même. Nil = backend désactivé (nft
@@ -157,6 +169,9 @@ type Server struct {
 	// supprimée POUR ce vhost seulement. Nil = phase G désactivée (opt-in via
 	// --vhost-profiles) ; la détection Phase F reste alors strictement inchangée.
 	vhostProfiles *VhostProfiles
+	// vhostProfilesWatch (#3741) : relecture à chaud de vhost_profiles.json
+	// (php_hotes coché depuis la page Modes). Nil = pas de fichier.
+	vhostProfilesWatch *reload.Watcher
 
 	// maxBodyInspect is the per-request body inspection cap in bytes.
 	// Only the first maxBodyInspect bytes of the request body are passed to
@@ -343,6 +358,9 @@ func (s *Server) handler() http.Handler {
 		if s.rules != nil {
 			s.rules.Maybe()
 		}
+		if s.vhostProfilesWatch != nil {
+			s.vhostProfilesWatch.Maybe()
+		}
 		// #896: same hot-reload check for the on-demand vhosts set — an operator
 		// flipping a service to/from on-demand must take effect without
 		// restarting the WAF. Same one-stat cost as routes/rules.
@@ -381,6 +399,16 @@ func (s *Server) handler() http.Handler {
 			// LE LEURRE SERT D'ABORD, LE JOURNAL ENSUITE — pour que l'entrée
 			// porte ce qui a été semé. L'inverse journaliserait l'anomalie
 			// sans jamais dire quelle marque est partie avec le visiteur.
+			// #3800 : appareil isolé par secubox-garde — son DNS renvoie la box
+			// pour tout nom. Ce n'est pas un scanner : page d'explication, et
+			// ni anomalie ni ban pour cette requête.
+			if cip := clientIP(r); cip != "" {
+				if e, isole := s.isoles.Cherche(cip); isole {
+					s.isoles.Trace(cip, host)
+					writeIsole(w, e)
+					return
+				}
+			}
 			var famServie, aleaSeme string
 			var marquesRejouees []string
 			// LEURRE (#1290). On est ici dans l'espace NON ROUTÉ : aucun
@@ -767,11 +795,16 @@ func (s *Server) handler() http.Handler {
 					// mix with the block-mode ban signal. Self-contained: it does
 					// NOT fall through to the block path below, which would double
 					// count into s.ban.
-					if s.escalateBan == nil {
+					seuilCat, dureeCat := s.rules.ParamsBan(cat)
+					compteur := s.escalateBan
+					if compteur != nil && seuilCat > 0 {
+						compteur = s.compteurEscalate(cat, seuilCat)
+					}
+					if compteur == nil {
 						// No counter → observe like detect, never ban.
 						s.logEscalate(r, ip, rawPath, cat, sev, motif, "detect")
 						hit = false
-					} else if count, banned := s.escalateBan.Record(ip, time.Now().Unix()); banned {
+					} else if count, banned := compteur.Record(ip, time.Now().Unix()); banned {
 						// Threshold crossed: ban for real, exactly as the block
 						// path's ban branch does — but gated on escalateBan.
 						s.logEscalate(r, ip, rawPath, cat, sev, motif, "banned")
@@ -780,7 +813,7 @@ func (s *Server) handler() http.Handler {
 						// escalate bans too — otherwise a banned scanner is
 						// visible in the dashboard JSON but silent in the logs.
 						log.Printf("sbxwaf: THREAT [%s] %s (escalate %d): %s", sev, ip, count, cat)
-						s.appliquerBan(ip, cat, sev)
+						s.appliquerBan(ip, cat, sev, dureeCat)
 						writeBan(w)
 						return
 					} else {
@@ -838,7 +871,7 @@ func (s *Server) handler() http.Handler {
 						// Ban natif nft (appliquerBan → nftBan). LA SANCTION
 						// EST APPLIQUÉE ICI, avant toute considération de
 						// présentation — le leurre ne l'allège en rien.
-						s.appliquerBan(ip, cat, sev)
+						s.appliquerBan(ip, cat, sev, 0)
 					}
 					// #1290 — CE QUE L'ATTAQUANT VOIT, PAS CE QU'IL OBTIENT.
 					// Sur un chemin-appât, la page de blocage est remplacée par
@@ -1029,10 +1062,38 @@ func (s *Server) fenetreCorps() int64 {
 //
 // Si nftBan est nil, RIEN ne bloque : c'est journalisé au démarrage plutôt que
 // laissé à deviner (voir main()).
-func (s *Server) appliquerBan(ip, cat, sev string) {
-	if s.nftBan != nil {
-		go s.nftBan.Ban(ip, cat, sev)
+//
+// duree : durée de la catégorie (#3732) ; 0 = durée globale (-nft-ban-duration).
+func (s *Server) appliquerBan(ip, cat, sev string, duree time.Duration) {
+	if s.nftBan == nil {
+		return
 	}
+	if duree > 0 {
+		go s.nftBan.BanFor(ip, cat, sev, duree)
+		return
+	}
+	go s.nftBan.Ban(ip, cat, sev)
+}
+
+// compteurEscalate rend le compteur escalate propre à une catégorie qui porte
+// "ban_seuil" (#3732), créé à la demande. Un rechargement qui change le seuil
+// remplace le compteur.
+func (s *Server) compteurEscalate(cat string, seuil int) *Ban {
+	s.escalateCatsMu.Lock()
+	defer s.escalateCatsMu.Unlock()
+	if b, ok := s.escalateCats[cat]; ok && b.threshold == seuil {
+		return b
+	}
+	fenetre := s.escalateFenetre
+	if fenetre <= 0 {
+		fenetre = 24 * time.Hour
+	}
+	if s.escalateCats == nil {
+		s.escalateCats = make(map[string]*Ban)
+	}
+	b := NewBan(fenetre, seuil)
+	s.escalateCats[cat] = b
+	return b
 }
 
 // recordHostAnomaly journalise et sanctionne un Host non routé (#1070, phase A).
@@ -1123,7 +1184,7 @@ func (s *Server) recordHostAnomalyAvecLeurre(r *http.Request, host, leurre, fili
 			}
 			s.banLeurre(ip, cls.Name, cls.Sev, plancher)
 		} else {
-			s.appliquerBan(ip, cat, cls.Sev)
+			s.appliquerBan(ip, cat, cls.Sev, 0)
 		}
 	}
 }
@@ -1253,6 +1314,8 @@ func main() {
 	honeypotSecret := flag.String("honeypot-secret", "/etc/secubox/secrets/filigrane",
 		"secret local du filigrane. Absent → le leurre sert des contenus SANS "+
 			"marque plutôt que des marques invérifiables.")
+	gardeIsoles := flag.String("garde-isoles", defaultGardeIsoles,
+		"Liste JSON des adresses isolées par secubox-garde (#3800) ; vide = désactivé")
 	hostAnomaly := flag.Bool("host-anomaly", true,
 		"traiter un Host non routé (vide/IP/DGA/inconnu) comme signal scanner "+
 			"— journaliser + bannir au lieu d'un 421 muet (#1070)")
@@ -1436,6 +1499,9 @@ func main() {
 			log.Printf("sbxwaf: vhost-profiles chargé → %s (phase G active)", *vhostProfiles)
 		}
 	}
+	// #3741 : relecture à chaud, seulement si le premier chargement a réussi
+	// (sinon la phase G reste désactivée jusqu'au redémarrage, comme avant).
+	profilsWatch := surveillerVhostProfiles(*vhostProfiles, profils)
 	// #3257 (I3) : ce que couvre la capture PHP2Shell, dit une fois au démarrage.
 	log.Print(ligneArmementPHP(profils))
 
@@ -1464,14 +1530,17 @@ func main() {
 		// BAN_WINDOW=300 / BAN_THRESHOLD=3 from secubox_waf.py lines 82-83).
 		ban: NewBan(300*time.Second, 3),
 		// escalate mode: separate long-window counter (default 24h/3).
-		escalateBan: NewBan(*escalateWindow, *escalateThreshold),
+		escalateBan:     NewBan(*escalateWindow, *escalateThreshold),
+		escalateFenetre: *escalateWindow,
 		// Task 3.2: append-only threat log (+ émission Actor Intelligence).
 		threatLog:   tl,
 		hostAnomaly: *hostAnomaly,
 		leurre:      construitLeurre(*honeypot, *honeypotSecret),
+		isoles:      nouvelleListeIsoles(*gardeIsoles),
 		ja4Header:   *ja4Header,
 		// #1080 phase G: profils de service par vhost (nil = désactivé).
-		vhostProfiles: profils,
+		vhostProfiles:      profils,
+		vhostProfilesWatch: profilsWatch,
 		// Task 5.1: RGPD cookie-audit ledger.
 		cookieAudit: cookieAudit,
 		// Task 6.1: response media cache.

@@ -36,6 +36,17 @@ sudo apt install secubox-security-posture
 
 Configuration file: `/etc/secubox/security-posture.toml`
 
+Filtres du WAF proposés par l'IA (#3732, #3745) : nombre de nouveaux filtres acceptés, réglable dans
+`/etc/secubox/cve-triage.toml` :
+
+```toml
+[filtres_ia]
+plafond_heure = 10    # 1..1000, défaut 10
+plafond_jour  = 50    # 1..5000, défaut 50 (24 h glissantes)
+```
+
+Relever ces valeurs sert à charger d'un coup toute la base connue (amorçage), puis à revenir aux défauts.
+
 ## API Endpoints
 
 - `GET /api/v1/security-posture/status` - Module status

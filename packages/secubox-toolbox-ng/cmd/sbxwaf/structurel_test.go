@@ -61,8 +61,10 @@ func TestStructurelChargeEtCompte(t *testing.T) {
 	}
 }
 
-func TestStructurelHorsDetectRejete(t *testing.T) {
-	for _, mode := range []string{"block", "escalate", ""} {
+// #3741 : les signatures structurelles se chargent dans les trois modes, et
+// chaque détection porte le mode de sa catégorie (absent = block).
+func TestStructurelChargeDansTousLesModes(t *testing.T) {
+	for mode, attendu := range map[string]string{"block": "block", "escalate": "escalate", "detect": "detect", "": "block"} {
 		corpus := `{"categories": {"php2shell": {"severity": "high", "mode": "` + mode + `",
 		  "patterns": [{"id": "p-1", "pattern": "abc"}],
 		  "structural": [
@@ -70,15 +72,17 @@ func TestStructurelHorsDetectRejete(t *testing.T) {
 		    {"id": "h-2", "check": "filename_charge"}]}}}`
 		r := LoadRules(ecrisRegles(t, corpus))
 		d, c, rej, _ := r.Integrite()
-		if d != 3 || c != 1 {
-			t.Errorf("mode %q : declares=%d charges=%d, attendu 3/1", mode, d, c)
+		if d != 3 || c != 3 || len(rej) != 0 {
+			t.Errorf("mode %q : declares=%d charges=%d rejetes=%v, attendu 3/3/[]", mode, d, c, rej)
 		}
-		j := strings.Join(rej, "|")
-		if !strings.Contains(j, "h-1") || !strings.Contains(j, "h-2") {
-			t.Errorf("mode %q : rejetes=%v", mode, rej)
+		got := r.EvaluerStructurel(ResultatMultipart{Parties: 99, FilenamePHP: true})
+		if len(got) != 2 {
+			t.Fatalf("mode %q : %d détections, attendu 2", mode, len(got))
 		}
-		if got := r.EvaluerStructurel(ResultatMultipart{Parties: 99, FilenamePHP: true}); len(got) != 0 {
-			t.Errorf("mode %q : evaluation non vide : %v", mode, got)
+		for _, g := range got {
+			if g.Mode != attendu {
+				t.Errorf("mode %q : détection %s en mode %q, attendu %q", mode, g.RuleID, g.Mode, attendu)
+			}
 		}
 	}
 }

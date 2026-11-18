@@ -18,7 +18,7 @@ def confirmer(r, app, dom, origine="admin", motif="ok"):
 
 def test_graine_est_le_profil_valide_et_le_manifeste_concorde():
     g = P.graine()
-    assert {"videos-pub.ftv-publicite.fr", "c.2mdn.net", "7cd77.v.fwmrm.net"} <= set(g) and len(g) == 35
+    assert {"videos-pub.ftv-publicite.fr", "2mdn.net", "7cd77.v.fwmrm.net"} <= set(g) and len(g) == 45      # #3783 M6+ (2mdn.net englobe c.2mdn.net), #3785 RTL9+
     assert dnstv.verifier_manifeste(dnstv.DOSSIER_LISTES if (dnstv.DOSSIER_LISTES / "MANIFEST.json").is_file() else P.DOSSIER_LISTES_PAQUET) == []
 
 

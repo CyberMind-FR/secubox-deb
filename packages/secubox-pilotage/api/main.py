@@ -30,10 +30,22 @@ L2 « Agir » (tâche 7) :
   GET    /boxes/{x}/flux            temps réel (text/event-stream) : événements notify | operation | etat, battement toutes les 15 s ;
                                     4 flux au plus par administrateur (le plus ancien est clos, #3308) ; box cliente : seulement pendant une session de support
                                     ouverte et non échue (403 sinon, flux clos à son terme), box du propriétaire : toujours (R-L2-31)
+#3702 console de pilotage (toutes `require_jwt`) :
+  GET /catalogue ; GET /flotte                       actions de la liste fermée ; box + matériel + groupes de sélection
+  GET|POST /macros ; GET|PUT|DELETE /macros/{id}     macros (400 si une étape sort de la liste fermée, 403 sur une livrée, audit pilotage_macro)
+  POST /macros/{id}/copier ; POST /macros/{id}/simuler {box}   copie modifiable ; simulation (rien d'envoyé, rien d'écrit)
+  POST /macros/{id}/lancer {cibles, confirmations?, support?}   202 {execution} ; refus du moteur (400, 409, 503) rendus tels quels
+  POST /executions/action {action, args?, cibles, confirmations?, support?}   202 : exécution d'une seule étape `action`
+  GET  /executions?limite= ; GET /executions/{id}    exécutions (sans, puis avec leurs étapes) ; 404 inconnue
+  POST /executions/{id}/arreter      202, arrêt après l'étape en cours ; 404 inconnue, 409 déjà finie
+  GET  /executions/{id}/flux         temps réel : etat (connexion), macro, operation relayées ; clos après `macro` `fin`
+  Une box tenue par une exécution refuse l'action manuelle (409). Au démarrage : macros livrées réécrites, exécutions `en_cours`
+  passées `interrompue` ; planificateur des macros programmées (tic de 60 s).
 """
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -41,37 +53,39 @@ import re
 import secrets
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime
+from functools import partial
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Annotated, Callable, Optional
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints
 
 from secubox_core.auth import require_jwt, session_toujours_admin
 
+from api import actions
+from api.actions import DELAI_ACTION_S, ERREUR_MAX, ETATS_REPONSE, IDENT_MAX, ActionIn, Contexte, ExecutantApi, ReleveIn, borne as _borne  # noqa: F401  (ré-exportés)
 from api.vhost import ajouter_routes_vhost
 from pilotage import exposition as EXPO
+from pilotage import flotte as FLOTTE
+from pilotage import macros as MACROS
 from pilotage import vhosts as V
 
 from pilotage.diffusion import FIN, Diffusion, LimiteAtteinte, formater
-from pilotage.files import COMMANDE_MESURE, DUREE_DEFAUT_S, DUREE_MAX_S, DUREE_MIN_S, FileDeBoxPleine, Files
+from pilotage.files import FileDeBoxPleine, Files
 from pilotage.inventaire import Inventaire, box_de_ligne
-from pilotage.operations import (CATALOGUE, COMMANDE_SUPPORT_FERMER, COMMANDE_SUPPORT_OUVRIR, RE_IDENT, Suivi, arguments,
-                                 corps_operate)
-from pilotage.stockage import HORS_LIGNE_S, SUPPORT_DUREE_MAX_MIN, StockageSqlite
+from pilotage.moteur import CIBLES_MAX, Moteur, RefusLancement, cle_flux
+from pilotage.operations import (CATALOGUE, COMMANDE_SUPPORT_FERMER, COMMANDE_SUPPORT_OUVRIR, RE_IDENT, Suivi, corps_operate)
+from pilotage.stockage import SUPPORT_DUREE_MAX_MIN, StockageSqlite
 
 OUBLI_EN_LIGNE_S = 600     # #3335 : une box vue depuis moins de 10 min ne s'oublie qu'avec `force`
 
 DELAI_LECTURE_S = 15.0
-DELAI_ACTION_S = 90.0          # OPERATE_RESP d'une action : plus que l'agent n'attend le ctl (60 s, delaiCtl), moins que la file (120 s)
 SUPPORT_DUREE_DEFAUT_MIN = 30
-ETATS_REPONSE = ("accepte", "consentement", "refuse")
 CHEMIN_MAX = 256
 _CHEMIN = re.compile(r"Device\.[A-Za-z0-9_.\-]*")
-IDENT_MAX = 128
-ERREUR_MAX = 300
 
 log = logging.getLogger("pilotage.admin")
 
@@ -94,16 +108,47 @@ class ReponseFlux(StreamingResponse):
                 self._liberer()
 
 
-class ReleveIn(BaseModel):
+class MacroIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    duree_s: StrictInt = Field(DUREE_DEFAUT_S, ge=DUREE_MIN_S, le=DUREE_MAX_S)  # entier strict : 60.0, "60", true et NaN sont refusés
+    nom: str
+    etapes: list
+    cibles: list[str] = Field(default_factory=list, max_length=32)
+    programmation: Optional[dict] = None
 
 
-class ActionIn(BaseModel):
+_MESURES_FR = {"memoire_dispo_mo": "mémoire disponible (Mo)", "cpu_pct": "CPU (%)", "swap_utilise_pct": "swap utilisé (%)",
+               "services_en_echec": "services en échec"}
+_REGLES_FR = {"nouveau_service_en_echec": "nouveau service en échec", "memoire_dispo_baisse_mo": "baisse de la mémoire disponible (Mo)"}
+
+
+def _resume_etape(e: dict) -> str:
+    t = e["type"]
+    if t == "releve":
+        return f"relevé {e['duree_s']} s « {e['nom']} »"
+    if t == "action":
+        return e["action"] + "".join(f" {v}" for _, v in sorted(e["args"].items()))
+    if t == "condition":
+        return f"si {_MESURES_FR[e['mesure']]} ({e['releve']}) {e['op']} {e['seuil']:g} alors " + ("arrêter" if e["alors"] == "arreter" else "passer")
+    if t == "comparer":
+        return f"comparer « {e['avant']} » et « {e['apres']} » : {_REGLES_FR[e['regle']]} (seuil {e['seuil']:g})"
+    return f"attendre {e['delai_s']} s"
+
+
+_Ident = Annotated[str, StringConstraints(min_length=1, max_length=IDENT_MAX)]
+_Sid = Annotated[str, StringConstraints(max_length=64, pattern="^(?:" + RE_IDENT.pattern + ")$")]
+
+
+class LancerIn(BaseModel):
+    """Clés de `confirmations` et `support` : les identifiants tels qu'écrits dans `cibles`."""
     model_config = ConfigDict(extra="forbid")
+    cibles: list[_Ident] = Field(min_length=1, max_length=CIBLES_MAX)
+    confirmations: dict[_Ident, Annotated[str, StringConstraints(max_length=IDENT_MAX)]] = Field(default_factory=dict, max_length=CIBLES_MAX)
+    support: dict[_Ident, _Sid] = Field(default_factory=dict, max_length=CIBLES_MAX)
+
+
+class ActionLancerIn(LancerIn):
+    action: Annotated[str, StringConstraints(min_length=1, max_length=64)]
     args: dict = Field(default_factory=dict)
-    confirmation: Optional[str] = Field(None, max_length=IDENT_MAX)
-    support: Optional[str] = Field(None, pattern="^(?:" + RE_IDENT.pattern + ")$", max_length=64)  # action demandée dans une session de support
 
 
 class SupportIn(BaseModel):
@@ -111,29 +156,35 @@ class SupportIn(BaseModel):
     duree_min: StrictInt = Field(SUPPORT_DUREE_DEFAUT_MIN, ge=1, le=SUPPORT_DUREE_MAX_MIN)
 
 
-def _borne(v, n: int = ERREUR_MAX) -> str:
-    return "".join(c for c in str(v)[:n] if c.isprintable())
-
-
 def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventaire, audit: Callable[[str, dict], None], *,
                     horloge: Callable[[], float] = time.time, delai_lecture_s: float = DELAI_LECTURE_S,
                     suivi: Optional[Suivi] = None, noms_pris: Callable[[], set] = set,
                     delai_action_s: float = DELAI_ACTION_S, diffusion=None, battement_s: float = 15.0,
                     maitre: Optional[str] = None, debit=None, plan_vhosts: Optional[Path] = None,
-                    racine_pages: Optional[Path] = None, plan_exposition: Optional[Path] = None) -> FastAPI:
+                    racine_pages: Optional[Path] = None, plan_exposition: Optional[Path] = None, moteur: Optional[Moteur] = None,
+                    planificateur: bool = True, maintenant_local: Callable[[], datetime] = lambda: datetime.now().astimezone(),
+                    sonde_s: float = 1.0) -> FastAPI:
     """`suivi` : fin des opérations (partagé avec le canal) ; `noms_pris()` : noms portés au maillage hors table des box (pairs
     enrôlés de la projection p2p-public/pairs-enroles.json, nom du maître), appelée hors boucle. L5 tâche 5 : routes du vhost admin.<box> (api/vhost.py) ; `plan_vhosts` :
-    fichier relu par le ctl root secubox-pilotage-vhost, réécrit à chaque tour d'inventaire s'il change."""
+    fichier relu par le ctl root secubox-pilotage-vhost, réécrit à chaque tour d'inventaire s'il change. #3702 : `moteur` des macros (par
+    défaut sur `ExecutantApi`, posé sur `app.state.moteur`) ; `planificateur` : tic des macros programmées, à l'heure de `maintenant_local`."""
     suivi = suivi or Suivi(stockage, files, audit)
     diffusion = diffusion if diffusion is not None else Diffusion()
 
     @asynccontextmanager
     async def vie(app):
+        await asyncio.to_thread(stockage.macros_livrees_installer, MACROS.LIVREES)
+        await moteur.interrompre_au_demarrage()   # jamais de reprise d'une exécution coupée par l'arrêt du service
+        plan = asyncio.create_task(moteur.planifier(maintenant_local)) if planificateur else None
         try:
             async with inventaire.utiliser():
                 yield
         finally:
             diffusion.fermer()   # les flux ouverts se terminent (sinon uvicorn attendrait leur fin)
+            if plan is not None:  # le planificateur d'abord : plus aucun lancement pendant la fermeture du moteur
+                plan.cancel()
+                await asyncio.gather(plan, return_exceptions=True)
+            await moteur.fermer()
             for t in list(taches):
                 t.cancel()
             await asyncio.gather(*list(taches), return_exceptions=True)
@@ -147,24 +198,220 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         return JSONResponse({"detail": [{"loc": [_borne(x, 64) for x in e.get("loc", [])], "msg": str(e.get("msg", ""))[:200]} for e in exc.errors()]}, status_code=422)
 
     garde = [Depends(require_jwt)]
-    taches: set = set()
-    releves_en_cours: set = set()   # Box.cle ayant un relevé demandé et pas encore rendu
+    ctx = Contexte(stockage=stockage, files=files, audit=audit, suivi=suivi, diffusion=diffusion, horloge=horloge, noms_pris=noms_pris,
+                   delai_action_s=delai_action_s)
+    app.state.contexte = ctx
+    if moteur is None:
+        moteur = Moteur(stockage, ExecutantApi(ctx, sonde_s=sonde_s), diffusion, audit, horloge=horloge, sonde_s=sonde_s,
+                        resoudre=stockage.boite)
+    app.state.moteur = moteur
+    taches, releves_en_cours = ctx.taches, ctx.releves_en_cours
+    trouver, en_ligne = partial(actions.trouver, ctx), partial(actions.en_ligne, ctx)
+    auditer_ou_503, auditer, operer = (partial(f, ctx) for f in (actions.auditer_ou_503, actions.auditer, actions.operer))
+    acteur_de = actions.acteur_de
 
-    async def trouver(ident: str) -> dict:
-        if not ident or len(ident) > IDENT_MAX or not ident.isprintable():
-            raise HTTPException(404, "box inconnue")
-        b = await asyncio.to_thread(stockage.boite, ident)
-        if b is not None:
-            return b
-        lignes = await asyncio.to_thread(stockage.boites_par_nom, ident)
-        if not lignes:
-            raise HTTPException(404, "box inconnue")
-        if len(lignes) > 1:
-            raise HTTPException(409, {"erreur": "nom ambigu : désigner la box par sa clé", "cles": [b["cle"] for b in lignes]})
-        return lignes[0]
+    # --- #3702 : catalogue, flotte, macros, simulation ---
 
-    def en_ligne(b: dict) -> bool:
-        return horloge() - b["vu_le"] < HORS_LIGNE_S
+    @app.get("/catalogue", dependencies=garde)
+    async def catalogue():
+        """Liste fermée des actions ; `macro` faux : action seule de la console, refusée dans une macro."""
+        return [{"cle": k, "parametres": list(a.parametres), "forte": a.forte, "macro": k not in MACROS.HORS_MACRO}
+                for k, a in sorted(CATALOGUE.items())]
+
+    @app.get("/flotte", dependencies=garde)
+    async def flotte():
+        resumes = await asyncio.to_thread(stockage.resumes)
+        return {"boxes": [{**r, "materiel": FLOTTE.materiel(r["modele"]), "cochable": bool(r["en_ligne"])} for r in resumes],
+                "groupes": FLOTTE.groupes(resumes)}
+
+    async def _preparer(corps: MacroIn):
+        """(nom, étapes, clés des cibles, programmation) validés ; MacroInvalide → 400, cible inconnue ou ambiguë → 404/409."""
+        try:
+            nom, etapes = MACROS.valider_nom(corps.nom), MACROS.valider_etapes(corps.etapes)
+            lignes = [await trouver(x) for x in corps.cibles]
+            prog = MACROS.valider_programmation(corps.programmation, etapes, any(b["reseau"] != "maillage" for b in lignes))
+        except MACROS.MacroInvalide as e:
+            raise HTTPException(400, str(e)) from None
+        return nom, etapes, sorted({b["cle"] for b in lignes}), prog
+
+    async def _macro(ident: str, modifiable: bool = False) -> dict:
+        m = await asyncio.to_thread(stockage.macro_lire, ident) if 0 < len(ident) <= IDENT_MAX else None
+        if m is None:
+            raise HTTPException(404, "macro inconnue")
+        if modifiable and m["livree"]:
+            raise HTTPException(403, "macro livrée : copiez-la pour la modifier")
+        return m
+
+    @app.get("/macros", dependencies=garde)
+    async def macros_liste():
+        return await asyncio.to_thread(stockage.macros)
+
+    @app.get("/macros/{ident}", dependencies=garde)
+    async def macro_lire(ident: str):
+        return await _macro(ident)
+
+    def _champs_macro(ident: str, nom: str, etapes: list, cibles: list, prog: Optional[dict], acteur: str) -> dict:
+        canon = json.dumps(etapes, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return {"evenement": "enregistrement", "macro": ident, "nom": nom, "cibles": ",".join(cibles), "acteur": acteur,
+                "etapes": len(etapes), "empreinte": hashlib.sha256(canon.encode()).hexdigest(),
+                "programmation": json.dumps(prog, sort_keys=True) if prog else None}
+
+    async def _enregistrer(nom: str, etapes: list, cibles: list, prog: Optional[dict], acteur: str) -> str:
+        """Plafond, identifiant tiré, audit (503 et rien d'écrit s'il échoue), puis seulement l'écriture."""
+        if await asyncio.to_thread(stockage.macros_pleines):
+            raise HTTPException(409, "trop de macros enregistrées : en supprimer avant d'en ajouter")
+        ident = stockage.macro_id_nouveau()
+        await auditer_ou_503("pilotage_macro", _champs_macro(ident, nom, etapes, cibles, prog, acteur))
+        if await asyncio.to_thread(stockage.macro_creer, nom, etapes, cibles, prog, acteur, ident) is None:
+            raise HTTPException(409, "trop de macros enregistrées : en supprimer avant d'en ajouter")
+        return ident
+
+    @app.post("/macros", status_code=201)
+    async def macro_creer(corps: MacroIn, jwt: dict = Depends(require_jwt)):
+        nom, etapes, cibles, prog = await _preparer(corps)
+        return {"id": await _enregistrer(nom, etapes, cibles, prog, acteur_de(jwt))}
+
+    @app.put("/macros/{ident}")
+    async def macro_modifier(ident: str, corps: MacroIn, jwt: dict = Depends(require_jwt)):
+        await _macro(ident, modifiable=True)
+        nom, etapes, cibles, prog = await _preparer(corps)
+        await auditer_ou_503("pilotage_macro", _champs_macro(ident, nom, etapes, cibles, prog, acteur_de(jwt)))
+        if not await asyncio.to_thread(stockage.macro_maj, ident, nom, etapes, cibles, prog):
+            raise HTTPException(404, "macro inconnue")
+        return {"id": ident}
+
+    @app.delete("/macros/{ident}")
+    async def macro_supprimer(ident: str, jwt: dict = Depends(require_jwt)):
+        m = await _macro(ident, modifiable=True)
+        await auditer_ou_503("pilotage_macro", {"evenement": "suppression", "macro": ident, "nom": m["nom"], "acteur": acteur_de(jwt)})
+        if not await asyncio.to_thread(stockage.macro_supprimer, ident):
+            raise HTTPException(404, "macro inconnue")
+        return {"supprime": ident}
+
+    @app.post("/macros/{ident}/copier", status_code=201)
+    async def macro_copier(ident: str, jwt: dict = Depends(require_jwt)):
+        m = await _macro(ident)
+        return {"id": await _enregistrer((m["nom"] + " copie")[:60], m["etapes"], m["cibles"], None, acteur_de(jwt))}
+
+    @app.post("/macros/{ident}/simuler", dependencies=garde)
+    async def macro_simuler(ident: str, corps: dict = Body(...)):
+        """Ce que la macro ferait sur une box : rien n'est envoyé, rien n'est écrit (ni base, ni audit)."""
+        if not isinstance(corps, dict) or set(corps) != {"box"} or not isinstance(corps["box"], str):
+            raise HTTPException(422, "corps attendu : {\"box\": \"<nom ou clé>\"}")
+        m = await _macro(ident)
+        b = await trouver(corps["box"])
+        etapes = [{"rang": i, "type": e["type"], "resume": _resume_etape(e), "forte": bool(e["type"] == "action" and CATALOGUE[e["action"]].forte),
+                   "coupure": MACROS.coupure(e), "duree_estimee_s": MACROS.estimer_s(e)} for i, e in enumerate(m["etapes"], 1)]
+        cliente = b["reseau"] != "maillage"
+        return {"box": b["nom"], "cle": b["cle"], "en_ligne": en_ligne(b), "cliente": cliente,
+                "forte_requise": MACROS.contient_forte(m["etapes"]), "support_requis": cliente, "etapes": etapes,
+                "duree_totale_s": sum(e["duree_estimee_s"] for e in etapes)}
+
+    # --- #3702 : lancement, exécutions, arrêt, flux en direct ---
+
+    async def _lancer(macro: dict, corps: LancerIn, jwt: dict) -> dict:
+        """Cibles résolues (404/409), confirmations et sessions de support réindexées par Box.cle ; refus du moteur → son statut."""
+        boxes, conf, sup = [], {}, {}
+        for x in corps.cibles:
+            b = await trouver(x)
+            boxes.append(b)
+            if x in corps.confirmations:
+                conf[b["cle"]] = corps.confirmations[x]
+            if x in corps.support:
+                sup[b["cle"]] = corps.support[x]
+        try:
+            ident = await moteur.lancer(macro, boxes, conf, sup, acteur_de(jwt))
+        except RefusLancement as e:
+            raise HTTPException(e.statut, e.message) from None
+        return JSONResponse({"execution": ident}, status_code=202)
+
+    @app.post("/macros/{ident}/lancer", status_code=202)
+    async def macro_lancer(ident: str, corps: LancerIn, jwt: dict = Depends(require_jwt)):
+        return await _lancer(await _macro(ident), corps, jwt)
+
+    @app.post("/executions/action", status_code=202)
+    async def execution_action(corps: ActionLancerIn, jwt: dict = Depends(require_jwt)):
+        """Une seule étape `action` par le moteur (même série, mêmes refus, même audit) ; le moteur valide l'action et ses paramètres."""
+        macro = {"id": None, "nom": corps.action, "etapes": [{"type": "action", "action": corps.action, "args": corps.args}]}
+        return await _lancer(macro, corps, jwt)
+
+    async def _execution(ident: int) -> dict:
+        e = await asyncio.to_thread(stockage.execution, ident) if 0 < ident < 1 << 62 else None
+        if e is None:
+            raise HTTPException(404, "exécution inconnue")
+        return e
+
+    @app.get("/executions", dependencies=garde)
+    async def executions(limite: int = Query(50, ge=1, le=200)):
+        return await asyncio.to_thread(stockage.executions, limite)
+
+    @app.get("/executions/{ident}", dependencies=garde)
+    async def execution_lire(ident: int):
+        return await _execution(ident)
+
+    @app.post("/executions/{ident}/arreter", status_code=202)
+    async def execution_arreter(ident: int, jwt: dict = Depends(require_jwt)):
+        await _execution(ident)
+        if not moteur.arreter(ident, acteur_de(jwt)):
+            raise HTTPException(409, "exécution déjà finie")
+        return {"arret": "demande"}
+
+    @app.get("/executions/{ident}/flux")
+    async def execution_flux(ident: int, jwt: dict = Depends(require_jwt)):
+        """Temps réel d'une exécution : `etat` (connexion, état courant), puis les `macro` et les `operation` relayées de la box en cours ;
+        battement avec `session_toujours_admin` ; fermé après l'événement `macro` `fin`. Exécution déjà finie (page rechargée) : un `macro`
+        `fin` portant l'état final, puis fermeture. Abonné AVANT la lecture de l'état : une fin entre les deux n'est pas perdue."""
+        await _execution(ident)
+        try:
+            ab = diffusion.abonner(acteur_de(jwt), cle_flux(ident))
+        except LimiteAtteinte:
+            raise HTTPException(429, "trop de flux ouverts") from None
+        exp = jwt.get("exp") if isinstance(jwt.get("exp"), (int, float)) and not isinstance(jwt.get("exp"), bool) else None
+
+        def fin_de(e: dict) -> str:
+            return formater("macro", {"execution": ident, "evenement": "fin", "box": None, "cle": None, "rang": None, "type": None,
+                                      "etat": e["etat"], "resultat": None, "raison": e["raison"]})
+
+        async def corps():
+            try:
+                e = await asyncio.to_thread(stockage.execution, ident)
+                if e is None:                     # évincée entre-temps
+                    return
+                yield formater("etat", {"execution": ident, "connecte": True, "etat": e["etat"]})
+                if e["etat"] != "en_cours":
+                    yield fin_de(e)
+                    return
+                loop = asyncio.get_running_loop()
+                echeance = loop.time() + battement_s
+                while True:
+                    prochaine = echeance
+                    if exp is not None and math.isfinite(exp):
+                        prochaine = min(prochaine, loop.time() + max(0.0, exp - time.time()))
+                    ev = await ab.suivant(max(0.0, prochaine - loop.time()))
+                    if ev is FIN:
+                        return
+                    if ev is None or loop.time() >= prochaine:
+                        if not await asyncio.to_thread(session_toujours_admin, jwt):
+                            yield formater("etat", {"execution": ident, "session": "expiree"})
+                            return
+                        if loop.time() >= echeance:
+                            echeance = loop.time() + battement_s
+                            if ev is None:
+                                e = await asyncio.to_thread(stockage.execution, ident)
+                                if e is None or e["etat"] != "en_cours":   # fin manquée (service relancé, exécution évincée)
+                                    if e is not None:
+                                        yield fin_de(e)
+                                    return
+                                yield ": battement\n\n"
+                    if ev is not None:
+                        yield formater(*ev)
+                        if ev[0] == "macro" and ev[1].get("evenement") == "fin":
+                            return
+            finally:
+                diffusion.liberer(ab)
+
+        return ReponseFlux(corps(), lambda: diffusion.liberer(ab), media_type="text/event-stream",
+                           headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.get("/boxes", dependencies=garde)
     async def boxes():
@@ -192,7 +439,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         return {"cle": b["cle"], "nom": b["nom"], "reseau": b["reseau"], "client": b["client"], "adresse": b["adresse"],
                 "agent_version": b["agent_version"] or None, "vu_le": b["vu_le"], "en_ligne": en_ligne(b),
                 "inventaire_le": inv["releve_le"], "inventaire_partiel": inv["partiel"], "inventaire_tronques": inv["tronques"],
-                "inventaire": inv["valeurs"]}
+                "inventaire": inv["valeurs"], "services_en_echec_noms": MACROS.services_en_echec(inv["valeurs"])}
 
     @app.get("/boxes/{ident}/lire", dependencies=garde)
     async def lire(ident: str, chemin: str = Query("", max_length=1024)):
@@ -220,47 +467,8 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
         b = await trouver(ident)
         if not en_ligne(b):
             raise HTTPException(409, "box hors ligne")
-        if b["cle"] in releves_en_cours:
-            raise HTTPException(409, "un relevé est déjà en cours pour cette box")
-        releves_en_cours.add(b["cle"])  # réservé avant tout await : pas de second relevé concurrent
-        try:
-            try:
-                await asyncio.to_thread(audit, "pilotage_releve_demande", {"cle": b["cle"], "acteur": _borne(jwt.get("sub", "?"), 64), "duree_s": corps.duree_s})
-            except Exception:
-                log.exception("audit du relevé impossible : relevé refusé")
-                raise HTTPException(503, "audit indisponible") from None
-            try:
-                futur = files.deposer(b["cle"], {"type": "OPERATE", "body": {"command": COMMANDE_MESURE, "args": {"duree_s": corps.duree_s}}})
-            except FileDeBoxPleine:
-                raise HTTPException(429, "trop de requêtes en attente pour cette box") from None
-        except BaseException:
-            releves_en_cours.discard(b["cle"])
-            raise
-        t = asyncio.create_task(suivre_releve(b["cle"], corps.duree_s, futur))
-        taches.add(t)
-        t.add_done_callback(taches.discard)
+        await actions.lancer_releve(ctx, b, corps.duree_s, acteur_de(jwt))
         return {"cle": b["cle"], "nom": b["nom"], "duree_s": corps.duree_s, "statut": "demande"}
-
-    async def suivre_releve(cle: str, duree_s: int, futur: asyncio.Future) -> None:
-        try:
-            try:
-                rep = await futur   # la file borne l'attente (duree_s + 30 s)
-            except asyncio.TimeoutError:
-                statut, sortie = "expire", {"err": "la box n'a pas rendu le relevé à temps"}
-            else:
-                corps = rep.get("body") if isinstance(rep.get("body"), dict) else {}
-                if rep.get("type") == "OPERATE_RESP":
-                    statut, sortie = "ok", corps.get("output")
-                else:
-                    statut, sortie = "erreur", {"err": _borne(corps.get("err", ""))}
-            await asyncio.to_thread(stockage.releve_enregistrer, cle, duree_s, statut, sortie)
-        except asyncio.CancelledError:
-            futur.cancel()
-            raise
-        except Exception:
-            log.exception("relevé de %s non rangé", cle)
-        finally:
-            releves_en_cours.discard(cle)
 
     @app.get("/boxes/{ident}/releve", dependencies=garde)
     async def dernier_releve(ident: str):
@@ -269,97 +477,16 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
 
     # --- L2 « Agir » : actions, journal des opérations, support (tâche 6) ---
 
-    async def auditer_ou_503(evenement: str, champs: dict) -> None:
-        try:
-            await asyncio.to_thread(audit, evenement, champs)
-        except Exception:
-            log.exception("audit %s impossible : demande refusée", evenement)
-            raise HTTPException(503, "audit indisponible") from None
-
-    async def auditer(evenement: str, champs: dict) -> None:
-        """Après coup (la demande est partie) : un échec d'audit est journalisé, la réponse de la box est rendue quand même."""
-        try:
-            await asyncio.to_thread(audit, evenement, champs)
-        except Exception:
-            log.exception("audit %s impossible", evenement)
-
-    async def operer(cle: str, corps: dict) -> Optional[dict]:
-        """Dépose l'Operate et attend l'OPERATE_RESP ; None au délai (la requête est retirée de la file si elle n'a pas été servie).
-        Rend {etat, job, raison} : la réponse de l'agent telle quelle, ou un refus pour une ERROR (agent de L1, sans exécuteur)."""
-        try:
-            futur = files.deposer(cle, {"type": "OPERATE", "body": corps})
-        except FileDeBoxPleine:
-            raise HTTPException(429, "trop de requêtes en attente pour cette box") from None
-        try:
-            rep = await asyncio.wait_for(futur, delai_action_s)
-        except asyncio.TimeoutError:
-            return None
-        c = rep.get("body") if isinstance(rep.get("body"), dict) else {}
-        if rep.get("type") == "OPERATE_RESP" and c.get("etat") in ETATS_REPONSE:
-            job = c.get("job") if isinstance(c.get("job"), str) and RE_IDENT.fullmatch(c.get("job") or "") else ""
-            return {"etat": c["etat"], "job": job, "raison": _borne(c.get("raison") or "")}
-        return {"etat": "refuse", "job": "", "raison": _borne(c.get("err") or c.get("raison") or "réponse inattendue de la box")}
-
-    def acteur_de(jwt: dict) -> str:
-        return _borne(jwt.get("sub", "?"), 64)
+    async def agir_manuel(ident: str, action: str, corps: ActionIn, jwt: dict) -> dict:
+        """Action hors moteur (route, vhost d'une box légère) : une box tenue par une exécution de macro la refuse (409)."""
+        b = await trouver(ident)
+        if b["cle"] in moteur.occupees():
+            raise HTTPException(409, "box tenue par une exécution de macro en cours : l'arrêter ou attendre sa fin")
+        return await actions.executer_action(ctx, b["cle"], action, corps, jwt)
 
     @app.post("/boxes/{ident}/actions/{action}")
     async def agir(ident: str, action: str, corps: ActionIn = ActionIn(), jwt: dict = Depends(require_jwt)):
-        return await executer_action(ident, action, corps, jwt)
-
-    async def executer_action(ident: str, action: str, corps: "ActionIn", jwt: dict) -> dict:
-        """Corps de POST /boxes/{x}/actions/{action}, partagé avec le vhost d'une box légère (#3324 : « Démarrer »)."""
-        a = CATALOGUE.get(action)
-        if a is None:
-            raise HTTPException(404, "action inconnue")
-        args = arguments(a, corps.args)
-        if args is None:
-            raise HTTPException(422, {"erreur": "paramètres invalides", "attendus": list(a.parametres)})
-        b = await trouver(ident)
-        if not en_ligne(b):
-            raise HTTPException(409, "box hors ligne")
-        # confirmation forte (box du propriétaire) : retaper EXACTEMENT le nom de la box ; une confirmation fausse est refusée partout
-        if (a.forte and b["reseau"] == "maillage") or corps.confirmation is not None:
-            if corps.confirmation != b["nom"]:
-                raise HTTPException(400, "confirmation : retapez exactement le nom de la box")
-        if b["reseau"] != "maillage" and corps.support is None:
-            # I3 (R-L2-47, R-L2-38) : le catalogue d'une box cliente n'est servi que pendant une session de support ouverte et non
-            # échue de cette box ; la garde est ici, pas seulement dans la page
-            raise HTTPException(409, "box cliente : action seulement pendant une session de support ouverte (champ support)")
-        if corps.support is not None and await asyncio.to_thread(stockage.support_ouvert, b["cle"], corps.support) is None:
-            raise HTTPException(409, "session de support non ouverte ou échue")
-        if action == "renommer":
-            pris = await asyncio.to_thread(lambda: {x["nom"] for x in stockage.boites()} | set(noms_pris()))
-            if args["nom"] in pris:
-                raise HTTPException(409, "nom déjà porté par une box ou un pair connu")
-        acteur = acteur_de(jwt)
-        # M3 : les paramètres, déjà validés par motif (unité, nom), ne sont jamais secrets : audités
-        champs = {"box": b["nom"], "cle": b["cle"], "action": action, "acteur": acteur,
-                  "args": json.dumps(args, ensure_ascii=False, sort_keys=True)}
-        if corps.support is not None:
-            champs["support"] = corps.support
-        await auditer_ou_503("pilotage_action", {**champs, "job": None, "etat": "demande"})   # pas d'audit, pas d'action
-        op = await asyncio.to_thread(stockage.operation_demander, b["cle"], action, args, acteur, corps.support)
-        try:
-            rep = await operer(b["cle"], corps_operate(a.commande, args, jwt.get("sub")))
-        except HTTPException as e:   # file pleine : rien n'est parti, la demande ne reste pas « demande »
-            await asyncio.to_thread(stockage.operation_reponse, op, "refuse", None, "file de la box pleine")
-            await auditer("pilotage_action", {**champs, "job": None, "etat": "refuse", "operation": op})
-            raise e
-        if rep is None:
-            await asyncio.to_thread(stockage.operation_sans_reponse, op)
-            await auditer("pilotage_action", {**champs, "job": None, "etat": "sans_reponse", "operation": op})
-            raise HTTPException(504, "la box n'a pas répondu à temps")
-        ligne = await asyncio.to_thread(stockage.operation_reponse, op, rep["etat"], rep["job"] or None, rep["raison"])
-        await auditer("pilotage_action", {**champs, "job": rep["job"] or None, "etat": rep["etat"], "operation": op})
-        if ligne is not None and ligne["etat"] == "termine":
-            # la fin est arrivée avant cette réponse (orpheline fusionnée) : son résultat est audité MAINTENANT, avec l'action
-            # désormais connue, une seule fois (I1), puis la suite part
-            await suivi.apres_fin(box_de_ligne(b), ligne)
-        diffusion.publier(b["cle"], "operation", {"box": b["nom"], "cle": b["cle"], "operation": op, "action": action, "args": args,
-                                                   "acteur": acteur, "etat": rep["etat"], "job": rep["job"], "raison": rep["raison"]})
-        return {"operation": op, "box": b["nom"], "cle": b["cle"], "action": action, **rep,
-                "operation_etat": ligne["etat"] if ligne else rep["etat"]}
+        return await agir_manuel(ident, action, corps, jwt)
 
     @app.get("/operations", dependencies=garde)
     async def operations(nom: Optional[str] = Query(None, max_length=IDENT_MAX), limite: int = Query(200, ge=1, le=1000)):
@@ -492,7 +619,7 @@ def creer_app_admin(stockage: StockageSqlite, files: Files, inventaire: Inventai
 
     # --- L5 tâche 5 : vhost admin.<box> d'une box légère ---
     ajouter_routes_vhost(app, stockage, files, audit, horloge=horloge, maitre=maitre, debit=debit, racine_pages=racine_pages,
-                         agir=lambda box, unite, p: executer_action(box, "service-demarrer", ActionIn(args={"unite": unite}), p))
+                         agir=lambda box, unite, p: agir_manuel(box, "service-demarrer", ActionIn(args={"unite": unite}), p))
     if plan_vhosts is not None:
         def ecrire_plan() -> None:
             boites = [(b["nom"], stockage.inventaire(b["cle"])["valeurs"]) for b in stockage.boites()]

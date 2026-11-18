@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « SBXWAF », onglet Filtres IA (#3748, maquette approuvée le 2026-11-16).
+  Lecture : GET /api/v1/waf/filtres-ia/{resume,touches,radar} (cache recalculé toutes les 5 min).
+  Écriture (session d'administrateur) : POST /filtres-ia/{id}/retirer. ?demo=1 : adresses de documentation,
+  aucune écriture. Ce que gk2 ne sait pas (vulnérabilités connues, candidats du relais gk0) s'affiche « — ».
+  Une mesure absente s'affiche « — », jamais 0. Tout texte venu de l'API est posé en textContent.
+-->
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SBXWAF — filtres IA</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#8296b8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:0}
+  body{background:radial-gradient(900px 520px at 50% 0%,rgba(41,182,246,.13),transparent 70%),var(--fond);color:var(--texte);
+       font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.4;font-variant-numeric:tabular-nums}
+  .cadre{container-type:inline-size;container-name:a;padding:14px;display:flex;flex-direction:column;gap:12px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .tete b{font-size:1.3rem;font-weight:800} .tete small{color:var(--cyan);font-size:.72rem;letter-spacing:.04em}
+  .tete .droite{margin-left:auto;color:var(--doux);font-size:.78rem;display:flex;gap:8px;align-items:center}
+  .bandeau{border-radius:10px;padding:8px 14px;font-size:.85rem;border:1px solid var(--cyan);background:rgba(41,182,246,.12)}
+  .bandeau.err{border-color:var(--rouge);background:rgba(255,77,94,.12)} .bandeau.ok{border-color:var(--vert);background:rgba(46,204,113,.1)}
+  .bandeau.demo{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.1)}
+  .tuiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  @container a (min-width:760px){.tuiles{grid-template-columns:repeat(6,1fr)}}
+  .tuile{border:1px solid var(--trait2);border-radius:14px;padding:10px 12px;background:rgba(12,24,48,.7);min-width:0}
+  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .v{font-size:1.45rem;font-weight:800;line-height:1.15} .tuile .s{color:var(--faible);font-size:.68rem}
+  .grille{display:grid;gap:12px}
+  @container a (min-width:1000px){.grille{grid-template-columns:1.5fr 1fr}}
+  .col{display:grid;gap:12px;min-width:0;align-content:start}
+  .pan{border:1px solid var(--trait2);border-radius:14px;padding:12px 14px;background:rgba(12,24,48,.7);min-width:0}
+  .pan h2{margin:0 0 8px;font-size:.92rem;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap} .pan h2 i{font-style:normal;font-weight:400;color:var(--faible);font-size:.72rem;margin-left:auto}
+  .chaine{display:grid;gap:8px;grid-template-columns:1fr}
+  @container a (min-width:760px){.chaine{grid-template-columns:repeat(5,1fr)}}
+  .maillon{border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(6,13,27,.5);text-align:left;color:var(--texte);font:inherit;cursor:pointer}
+  .maillon[disabled]{cursor:default}
+  .maillon b{display:block;font-size:1.2rem} .maillon small{color:var(--faible);font-size:.7rem} .maillon span{display:block;font-size:.72rem;color:var(--doux)}
+  .table{overflow-x:auto} table{width:100%;min-width:760px;border-collapse:collapse;font-size:.8rem}
+  th{color:var(--faible);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:5px 8px}
+  th button{all:unset;cursor:pointer} th button:focus-visible{outline:2px solid var(--cyan)}
+  td{padding:7px 8px;vertical-align:top;border-top:1px solid rgba(86,150,255,.14)} td small{display:block;color:var(--faible);font-size:.7rem}
+  tr:hover td{background:rgba(41,182,246,.07)}
+  button,input{font:inherit;color:var(--texte)}
+  :focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+  .pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:.7rem;border:1px solid currentColor;white-space:nowrap;margin:0 3px 2px 0}
+  .p-vert{color:var(--vert);background:rgba(46,204,113,.12)} .p-cyan{color:var(--cyan);background:rgba(41,182,246,.12)}
+  .p-orange{color:var(--orange);background:rgba(255,159,28,.12)} .p-gris{color:var(--faible);background:rgba(111,132,168,.12)}
+  .p-rouge{color:var(--rouge);background:rgba(255,77,94,.12)} .p-jaune{color:var(--jaune);background:rgba(255,210,63,.1)}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.76rem;color:var(--doux);overflow-wrap:anywhere}
+  .note{font-size:.74rem;color:var(--faible);margin:8px 0 0}
+  .filtres{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center}
+  .btn{cursor:pointer;padding:4px 10px;border-radius:8px;font-size:.76rem;border:1px solid var(--trait2);background:transparent;min-height:30px}
+  .btn[aria-pressed=true]{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .btn.d{color:var(--rouge);border-color:rgba(255,77,94,.5)} .btn:disabled{opacity:.5;cursor:default}
+  input[type=search]{min-height:30px;border-radius:8px;border:1px solid var(--trait2);background:#0a1630;padding:0 9px;max-width:100%}
+  .barres{display:grid;grid-template-columns:minmax(90px,max-content) minmax(0,1fr) 46px;gap:6px 8px;align-items:center;font-size:.76rem}
+  .piste{height:8px;border-radius:4px;background:rgba(159,179,214,.14);overflow:hidden} .piste i{display:block;height:100%;background:var(--cyan)}
+  .barres .n{text-align:right;color:var(--doux)}
+  .legende{display:flex;gap:10px;flex-wrap:wrap;font-size:.72rem;color:var(--doux)}
+  .vide{color:var(--faible);font-size:.82rem;padding:6px 0}
+  svg text{font-family:inherit}
+</style>
+<body>
+<div class="cadre" id="cadre">
+  <div class="tete">
+    <div><b>Filtres IA</b><br><small>VULNÉRABILITÉS CONNUES → FILTRES → LEURRES → BANS</small></div>
+    <div class="droite"><span id="releve">—</span><button class="btn" id="rafraichir" type="button">Rafraîchir</button></div>
+  </div>
+  <div class="bandeau demo" id="demo" hidden>Démonstration : adresses de documentation, aucune action n'est envoyée.</div>
+  <div class="bandeau" id="session" hidden>Session requise. <a href="/login.html" target="_top" style="color:var(--cyan)">Se connecter</a></div>
+  <div class="bandeau err" id="erreur" hidden role="alert"></div>
+  <div class="bandeau ok" id="succes" hidden role="status"></div>
+
+  <div class="tuiles">
+    <div class="tuile" title="Filtres de l'IA chargés par sbxwaf (3 catégories ia_filtres_*)"><div class="l">Filtres actifs</div><div class="v" id="tActifs">—</div><div class="s" id="tActifsS">—</div></div>
+    <div class="tuile" title="Filtres visant une faille exploitée (CISA KEV), quand gk2 garde l'information"><div class="l">Exploitées (KEV)</div><div class="v" id="tKev">—</div><div class="s" id="tKevS">—</div></div>
+    <div class="tuile" title="Candidats refusés par gk2 avant application (journal d'audit)"><div class="l">Écartés</div><div class="v" id="tEcartes">—</div><div class="s" id="tEcartesS">—</div></div>
+    <div class="tuile" title="Requêtes reconnues par un filtre IA, 24 h"><div class="l">Touches 24 h</div><div class="v" id="tTouches">—</div><div class="s" id="tTouchesS">—</div></div>
+    <div class="tuile" title="Adresses bannies ayant touché un filtre IA sur 7 jours, bans actifs"><div class="l">Bans actifs</div><div class="v" id="tBans">—</div><div class="s" id="tBansS">—</div></div>
+    <div class="tuile" title="Touches venant du LAN, du maillage ou de la liste blanche : à vérifier"><div class="l">Faux positifs probables</div><div class="v" id="tFp">—</div><div class="s">LAN + maillage, 24 h</div></div>
+  </div>
+
+  <div class="pan"><h2>La chaîne <i>de la vulnérabilité publiée jusqu'au ban</i></h2>
+    <div class="chaine">
+      <button class="maillon" type="button" disabled><small>1 · Vulnérabilités connues</small><b id="c1">—</b><span>relais gk0, non lisible depuis gk2</span></button>
+      <button class="maillon" type="button" disabled><small>2 · Filtres conçus (relais gk0)</small><b id="c2">—</b><span>candidats du relais, non lisibles depuis gk2</span></button>
+      <button class="maillon" type="button" data-vue="tous"><small>3 · Appliqués sur gk2</small><b id="c3">—</b><span id="c3s">—</span></button>
+      <button class="maillon" type="button" data-vue="touches"><small>4 · Touchés</small><b id="c4" style="color:var(--orange)">—</b><span id="c4s">—</span></button>
+      <button class="maillon" type="button" data-vue="bannis"><small>5 · Bannis</small><b id="c5" style="color:var(--rouge)">—</b><span id="c5s">—</span></button>
+    </div>
+    <p class="note">Les maillons 3 à 5 filtrent le tableau. Le radar place les mêmes adresses : un point rouge = banni et vu par un filtre IA, un point orange = vu par un leurre, un anneau = les deux.</p>
+  </div>
+
+  <div class="grille">
+    <div class="pan"><h2>Filtres touchés <i id="triLib">tri : touches 24 h</i></h2>
+      <div class="filtres" id="vues"></div>
+      <input type="search" id="cherche" placeholder="CVE, produit, id" aria-label="Rechercher un filtre">
+      <div class="table"><table>
+        <thead><tr><th>CVE · produit</th><th>Gravité</th><th>Motif</th><th><button type="button" data-tri="touches_24h">Touches 24 h</button></th><th><button type="button" data-tri="adresses_24h">Adresses</button></th><th>Aussi vu par</th><th></th></tr></thead>
+        <tbody id="corps"></tbody>
+      </table></div>
+      <p class="note">Retirer : le filtre quitte gk2 (audit). Un faux positif (touche du LAN ou du maillage) remonte en tête avec une pastille rouge. KEV et EPSS : affichés quand gk2 les garde, sinon « — ».</p>
+    </div>
+
+    <div class="col">
+      <div class="pan"><h2>Radar <i id="radarLib">mêmes adresses</i></h2>
+        <svg id="radar" viewBox="0 0 300 220" width="100%" role="img" aria-label="Radar des adresses vues par les filtres IA et les leurres"></svg>
+        <div class="legende"><span><span style="color:var(--rouge)">●</span> filtre IA, banni</span><span><span style="color:var(--cyan)">●</span> filtre IA, non banni</span><span><span style="color:var(--orange)">●</span> vu par un leurre</span><span><span style="color:var(--rouge)">◉</span> les deux</span></div>
+      </div>
+      <div class="pan"><h2>Leurres ↔ filtres <i>adresses communes, 7 j</i></h2>
+        <div class="barres" id="communs"></div>
+        <p class="note">Une adresse vue par un leurre puis touchant un filtre IA (ou l'inverse) balaie large : la règle de récidive des leurres (#3734) prolonge son ban.</p>
+      </div>
+      <div class="pan"><h2>Sources et cadence</h2>
+        <div class="barres" id="sources"></div>
+        <p class="note">Les sources (modèles Nuclei, CISA KEV, avis CERT-FR) et le plafond horaire vivent sur le relais gk0 : gk2 n'en voit que les filtres reçus. Plafond de gk2 : réglage [filtres_ia] de cve-triage.toml.</p>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  'use strict';
+  var API='/api/v1/waf';
+  var DEMO=/[?&]demo=1\b/.test(location.search);
+  var RES=null, FILTRES=null, POINTS=null, VUE='touches', TRI='touches_24h';
+  var GRAV={critique:'p-rouge',haute:'p-orange',moyenne:'p-jaune'};
+  function el(i){return document.getElementById(i);}
+  function cree(tag,cls,texte){var e=document.createElement(tag);if(cls)e.className=cls;if(texte!==undefined&&texte!==null)e.textContent=texte;return e;}
+  function vide(n){while(n.firstChild)n.removeChild(n.firstChild);}
+  function nb(v){return typeof v==='number'?v.toLocaleString('fr-FR'):'—';}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function entetes(json){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;if(json)h['Content-Type']='application/json';return h;}
+  function jget(c){return fetch(API+c,{headers:entetes(),credentials:'same-origin',cache:'no-store'}).then(function(r){
+    if(r.status===401||r.status===403){el('session').hidden=false;return null;}return r.ok?r.json():null;}).catch(function(){return null;});}
+  function jpost(c){return fetch(API+c,{method:'POST',headers:entetes(true),credentials:'same-origin',body:'{}'}).then(function(r){
+    return r.json().catch(function(){return {};}).then(function(j){return {ok:r.ok,statut:r.status,corps:j};});}).catch(function(){return {ok:false,statut:0,corps:{}};});}
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxWafVue:Math.ceil(el('cadre').getBoundingClientRect().height),onglet:'filtres-ia'},location.origin);}catch(e){}}}
+  function message(id,txt){var e=el(id);e.textContent=txt||'';e.hidden=!txt;hauteur();}
+  function motif(r){var d=r.corps&&r.corps.detail;return (d&&(d.erreur||d.motif))||('code '+r.statut);}
+
+  function exemple(){
+    var f=function(id,cve,produit,famille,gravite,motif,kev,epss,t,a,b,leurres,fp){return {id:id,cve:cve,produit:produit,famille:famille,gravite:gravite,motif:motif,kev:kev,epss:epss,touches_24h:t,touches_7j:t+2,adresses_24h:a,bannies:b,leurres:leurres,faux_positifs:fp||0};};
+    FILTRES=[f('ia-cve-2024-4577-3fa2c1','CVE-2024-4577','PHP-CGI','rce','critique','%AD[dn]',true,0.94,12,5,4,['telnet']),
+      f('ia-cve-2019-19781-08b1','CVE-2019-19781','Citrix ADC','traversal','critique','/vpn/../vpns/cfg/smb.conf',true,null,8,3,3,[]),
+      f('ia-cve-2023-22518-c2','CVE-2023-22518','Confluence','auth_bypass','critique','/json/setup-restore.action',true,null,5,2,0,[]),
+      f('ia-cve-2024-34102-7e','CVE-2024-34102','Magento','xxe','haute','/rest/V1/guest-carts/1/',null,0.31,4,2,2,['redis']),
+      f('ia-cve-2023-38646-1d','CVE-2023-38646','Metabase','rce','moyenne','/api/setup/validate',null,null,2,1,0,[]),
+      f('ia-cve-2021-41773-aa','CVE-2021-41773','Apache httpd','traversal','critique','/cgi-bin/.%2e/',true,0.97,0,0,0,[])];
+    RES={genere_le:new Date().toISOString(),resume:{actifs:6,par_gravite:{critique:4,haute:1,moyenne:1},kev:4,
+      ecartes:{total:3,par_raison:{'déjà couvert':2,'présent':1}},touches_24h:31,filtres_touches_24h:5,faux_positifs_24h:0,
+      bans_actifs:9,bans_aussi_leurre:3,vulnerabilites_connues:null,candidats_relais:null},
+      leurres_communs:{telnet:3,redis:2,rdp:1,vnc:0}};
+    var ips=['203.0.113.5','203.0.113.17','203.0.113.42','198.51.100.7','198.51.100.23','192.0.2.9','192.0.2.33','192.0.2.80','203.0.113.99','198.51.100.61'];
+    POINTS=ips.map(function(ip,i){return {ip:ip,ia:i<6,touches:i<6?8-i:0,filtres:i<6?1+(i%3):0,leurres:(i%3===0||i>5)?[['telnet','redis','rdp'][i%3]]:[],banni:i<4||i===7};});
+  }
+
+  function tuiles(){
+    var r=RES&&RES.resume;
+    function p(id,v){el(id).textContent=v;}
+    if(!r){['tActifs','tKev','tEcartes','tTouches','tBans','tFp','c3','c4','c5'].forEach(function(i){p(i,'—');});
+      ['tActifsS','tKevS','tEcartesS','tTouchesS','tBansS','c3s','c4s','c5s'].forEach(function(i){p(i,RES&&RES.etat?RES.etat:'—');});return;}
+    var g=r.par_gravite;
+    p('tActifs',nb(r.actifs));p('tActifsS',g?nb(g.critique)+' crit. · '+nb(g.haute)+' hautes · '+nb(g.moyenne)+' moy.':'—');
+    p('tKev',nb(r.kev));p('tKevS',r.kev===null||r.kev===undefined?'non gardé par gk2':'priorité critique');
+    var e=r.ecartes;p('tEcartes',e?nb(e.total):'—');
+    p('tEcartesS',e?Object.keys(e.par_raison||{}).slice(0,2).map(function(k){return nb(e.par_raison[k])+' '+k;}).join(' · ')||'aucun':'audit illisible');
+    p('tTouches',nb(r.touches_24h));p('tTouchesS',typeof r.filtres_touches_24h==='number'?nb(r.filtres_touches_24h)+' filtres différents':'—');
+    p('tBans',nb(r.bans_actifs));p('tBansS',typeof r.bans_aussi_leurre==='number'?'dont '+nb(r.bans_aussi_leurre)+' vues aussi par un leurre':'—');
+    p('tFp',nb(r.faux_positifs_24h));
+    p('c1',nb(r.vulnerabilites_connues));p('c2',nb(r.candidats_relais));
+    p('c3',nb(r.actifs));p('c3s',e?nb(e.total)+' écartés par gk2':'écartés : —');
+    p('c4',nb(r.filtres_touches_24h));p('c4s','filtres touchés · '+nb(r.touches_24h)+' requêtes');
+    p('c5',nb(r.bans_actifs));p('c5s','adresses · '+nb(r.bans_aussi_leurre)+' aussi sur un leurre');
+  }
+
+  function compte(pred){return FILTRES?FILTRES.filter(pred).length:null;}
+  var VUES=[['touches','Touchés',function(f){return f.touches_24h>0;}],['tous','Tous',function(){return true;}],
+    ['critiques','Critiques',function(f){return f.gravite==='critique';}],['kev','KEV',function(f){return f.kev===true;}],
+    ['bannis','Bannis',function(f){return f.bannies>0;}],['fp','Faux positifs',function(f){return f.faux_positifs>0;}]];
+  function rendreVues(){
+    var z=el('vues');vide(z);
+    VUES.forEach(function(v){var n=compte(v[2]),b=cree('button','btn',v[1]+' '+nb(n));b.type='button';b.setAttribute('aria-pressed',String(VUE===v[0]));
+      b.addEventListener('click',function(){VUE=v[0];rendre();});z.appendChild(b);});
+  }
+  function rendreTable(){
+    var tb=el('corps');vide(tb);
+    if(!FILTRES){var tr=cree('tr'),td=cree('td','vide',RES&&RES.etat?'Relevé : '+RES.etat:'Filtres indisponibles');td.colSpan=7;tr.appendChild(td);tb.appendChild(tr);return;}
+    var pred=VUES.filter(function(v){return v[0]===VUE;})[0][2],q=el('cherche').value.trim().toLowerCase();
+    var l=FILTRES.filter(function(f){return pred(f)&&(!q||[f.id,f.cve,f.produit,f.famille].join(' ').toLowerCase().indexOf(q)>=0);});
+    l.sort(function(a,b){return ((b.faux_positifs||0)-(a.faux_positifs||0))||((b[TRI]||0)-(a[TRI]||0))||(a.id<b.id?-1:1);});
+    if(!l.length){var tr2=cree('tr'),td2=cree('td','vide','Aucun filtre dans cette vue');td2.colSpan=7;tr2.appendChild(td2);tb.appendChild(tr2);}
+    l.slice(0,300).forEach(function(f){
+      var tr=cree('tr');
+      var t1=cree('td','',f.cve||f.id);t1.appendChild(cree('small','',[f.produit,f.famille,f.id].filter(Boolean).join(' · ')));tr.appendChild(t1);
+      var t2=cree('td');t2.appendChild(cree('span','pill '+(GRAV[f.gravite]||'p-gris'),f.gravite||'—'));
+      var ex=[];if(f.kev===true)ex.push('KEV');if(typeof f.epss==='number')ex.push('EPSS '+f.epss.toLocaleString('fr-FR',{maximumFractionDigits:2}));
+      if(ex.length)t2.appendChild(cree('small','',ex.join(' · ')));tr.appendChild(t2);
+      tr.appendChild(cree('td','mono',f.motif||'—'));
+      var t4=cree('td','',nb(f.touches_24h));if(typeof f.touches_7j==='number')t4.appendChild(cree('small','',nb(f.touches_7j)+' sur 7 j'));tr.appendChild(t4);
+      var t5=cree('td','',nb(f.adresses_24h));if(typeof f.bannies==='number'&&f.bannies)t5.appendChild(cree('small','',nb(f.bannies)+' bannies'));tr.appendChild(t5);
+      var t6=cree('td');
+      if(f.faux_positifs>0)t6.appendChild(cree('span','pill p-rouge',nb(f.faux_positifs)+' LAN/maillage'));
+      (f.leurres||[]).forEach(function(s){t6.appendChild(cree('span','pill p-orange','leurre '+s));});
+      if(!t6.firstChild)t6.appendChild(cree('span','pill p-gris','—'));tr.appendChild(t6);
+      var t7=cree('td'),b=cree('button','btn d','Retirer');b.type='button';b.addEventListener('click',function(){retirer(f,b);});t7.appendChild(b);tr.appendChild(t7);
+      tb.appendChild(tr);});
+    el('triLib').textContent='tri : '+(TRI==='touches_24h'?'touches 24 h':'adresses 24 h')+(l.length>300?' · 300 premiers sur '+nb(l.length):'');
+  }
+
+  var NS='http://www.w3.org/2000/svg';
+  function svg(tag,attrs,texte){var e=document.createElementNS(NS,tag);Object.keys(attrs).forEach(function(k){e.setAttribute(k,attrs[k]);});if(texte)e.textContent=texte;return e;}
+  function hache(s){var h=0;for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h;}
+  function rendreRadar(){
+    var z=el('radar');vide(z);
+    var g=svg('g',{fill:'none',stroke:'rgba(86,150,255,.25)'});
+    [100,66,33].forEach(function(r){g.appendChild(svg('circle',{cx:150,cy:110,r:r}));});
+    g.appendChild(svg('line',{x1:50,y1:110,x2:250,y2:110}));g.appendChild(svg('line',{x1:150,y1:10,x2:150,y2:210}));z.appendChild(g);
+    z.appendChild(svg('text',{x:150,y:8,fill:'#8296b8','font-size':9,'text-anchor':'middle'},'web (filtres IA)'));
+    z.appendChild(svg('text',{x:254,y:113,fill:'#8296b8','font-size':9},'leurres'));
+    if(!POINTS){z.appendChild(svg('text',{x:150,y:150,fill:'#8296b8','font-size':10,'text-anchor':'middle'},'—'));return;}
+    // Secteur : filtre IA seul en haut (−120°…−60°), leurre seul à droite (−20°…+40°), les deux entre (−55°…−25°).
+    // Rayon : plus de touches = plus près du centre. Angle fixé par l'adresse (stable d'un relevé à l'autre).
+    POINTS.forEach(function(p){
+      var deux=p.ia&&p.leurres&&p.leurres.length,h=hache(p.ip),u=(h%1000)/1000;
+      var a=(deux?-55+30*u:p.ia?-120+60*u:-20+60*u)*Math.PI/180;
+      var r=95-Math.min(60,(p.touches||0)*6)-(h%7);
+      var cx=150+r*Math.cos(a),cy=110+r*Math.sin(a);
+      var c=svg('circle',{cx:cx.toFixed(1),cy:cy.toFixed(1),r:deux?5:p.ia?4:3});
+      if(deux){c.setAttribute('fill','#ff4d5e');c.setAttribute('stroke','#ff9f1c');c.setAttribute('stroke-width','2.5');}
+      else c.setAttribute('fill',p.ia?(p.banni?'#ff4d5e':'#29b6f6'):'#ff9f1c');
+      var t=svg('title',{},p.ip+(p.ia?' · '+p.touches+' touche(s) IA':'')+(p.leurres&&p.leurres.length?' · leurre '+p.leurres.join(', '):'')+(p.banni===true?' · banni':p.banni===false?'':' · ban : —'));
+      c.appendChild(t);z.appendChild(c);});
+    el('radarLib').textContent=POINTS.length+' adresses · filtres 24 h, leurres 30 j';
+  }
+
+  function barres(z,lignes){
+    vide(z);var max=Math.max.apply(null,lignes.map(function(l){return typeof l[1]==='number'?l[1]:0;}).concat([1]));
+    lignes.forEach(function(l){z.appendChild(cree('span','',l[0]));var p=cree('span','piste'),i=cree('i');i.style.width=(typeof l[1]==='number'?Math.round(100*l[1]/max):0)+'%';p.appendChild(i);z.appendChild(p);z.appendChild(cree('span','n',nb(l[1])));});
+  }
+  function rendreCommuns(){
+    var c=RES&&RES.leurres_communs,z=el('communs');
+    if(!c){vide(z);z.appendChild(cree('span','vide','—'));return;}
+    var k=Object.keys(c).sort(function(a,b){return c[b]-c[a];});
+    if(!k.length){vide(z);z.appendChild(cree('span','vide','Aucune adresse commune'));return;}
+    barres(z,k.map(function(s){return [s,c[s]];}));
+  }
+  function rendreSources(){
+    var r=RES&&RES.resume;
+    barres(el('sources'),[['Nuclei CVE',r?r.vulnerabilites_connues:null],['CISA KEV',r?r.kev:null],['Avis CERT-FR',null]]);
+  }
+
+  function rendre(){tuiles();rendreVues();rendreTable();rendreRadar();rendreCommuns();rendreSources();hauteur();}
+
+  function charger(){
+    if(DEMO){exemple();el('releve').textContent='démonstration';rendre();return;}
+    Promise.all([jget('/filtres-ia/resume'),jget('/filtres-ia/touches'),jget('/filtres-ia/radar')]).then(function(r){
+      RES=r[0];FILTRES=r[1]&&Array.isArray(r[1].filtres)?r[1].filtres:null;POINTS=r[2]&&Array.isArray(r[2].points)?r[2].points:null;
+      var g=RES&&RES.genere_le?new Date(RES.genere_le):null;
+      el('releve').textContent=g?'relevé '+g.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+' · toutes les 5 min':(RES&&RES.etat?RES.etat:'—');
+      rendre();});
+  }
+
+  function retirer(f,b){
+    if(!window.confirm('Retirer le filtre '+(f.cve||'')+' ('+f.id+') de gk2 ?'))return;
+    if(DEMO){FILTRES=FILTRES.filter(function(x){return x.id!==f.id;});message('succes','Démonstration : action inerte.');rendre();return;}
+    b.disabled=true;
+    jpost('/filtres-ia/'+encodeURIComponent(f.id)+'/retirer').then(function(r){b.disabled=false;
+      if(r.ok){message('erreur','');message('succes','Filtre '+f.id+' retiré.');charger();}
+      else message('erreur','Retrait refusé : '+motif(r));});
+  }
+
+  if(DEMO)el('demo').hidden=false;
+  document.querySelectorAll('.maillon[data-vue]').forEach(function(m){m.addEventListener('click',function(){VUE=m.dataset.vue;rendre();});});
+  document.querySelectorAll('th button[data-tri]').forEach(function(b){b.addEventListener('click',function(){TRI=b.dataset.tri;rendreTable();hauteur();});});
+  el('cherche').addEventListener('input',function(){rendreTable();hauteur();});
+  el('rafraichir').addEventListener('click',charger);
+  if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));
+  charger();
+})();
+</script>
+</body>
+</html>

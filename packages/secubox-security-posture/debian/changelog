@@ -1,3 +1,150 @@
+secubox-security-posture (2.10.6-1~trixie1) trixie; urgency=medium
+
+  * Audit (#3791) : la règle -w sur /var/log/secubox/waf n'enregistrait rien
+    (noyau sans CONFIG_AUDIT_WATCH ni CONFIG_AUDIT_TREE, vérifié sur gk2).
+    Remplacée par sbx_acl : appels setxattr/removexattr de toute la box
+    (changements d'ACL), volume mesuré négligeable.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 06:16:50 +0100
+
+secubox-security-posture (2.10.5-1~trixie1) trixie; urgency=medium
+
+  * Audit (#3791) : règle auditd sbx_waf_droits sur /var/log/secubox/waf
+    (changements de droits, propriétaire et ACL, récursif) pour savoir quel
+    programme et quel compte les modifient (suite #3789).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 06:11:20 +0100
+
+secubox-security-posture (2.10.4-1~trixie1) trixie; urgency=medium
+
+  * cve-leurres (#3789) : l'ACL nommée de lecture du journal du WAF est
+    vérifiée et remise si elle a disparu, en root, avant chaque passage
+    (secubox-cve-leurres-acl, ExecStartPre « + ») ; toute remise est écrite
+    au journal. gk2 le 18/11 : ACL perdue, service en panne.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 06:05:04 +0100
+
+secubox-security-posture (2.10.3-1~trixie1) trixie; urgency=medium
+
+  * Veille CVE : profils AppArmor des relevés planifiés passés en enforce,
+    complétés d'après le journal (menu.d, nameservice, /dev/tty refusé) (#3766).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 15:46:59 +0100
+
+secubox-security-posture (2.10.2-1~trixie1) trixie; urgency=medium
+
+  * Veille CVE : profils AppArmor des relevés planifiés, en mode complain
+    (journalisent sans bloquer) — secubox-cve-releves (certfr, certfr-nuclei,
+    flux, paquets) et secubox-cve-certfr-classer. Enforce au lot suivant,
+    d'après le journal d'audit (#3766).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 12:53:24 +0100
+
+secubox-security-posture (2.10.1-1~trixie1) trixie; urgency=medium
+
+  * Filtres IA : nouveau motif de rejet « secubox » — un filtre qui touche une
+    page servie par SecuBox (/login.html, /api/v1/, arborescence
+    /usr/share/secubox/www) n'est jamais appliqué. ia-cve-2021-20021 visait
+    /login.html : ban 7 j de nos propres usagers (#3764).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 12:29:52 +0100
+
+secubox-security-posture (2.10.0-1~trixie1) trixie; urgency=medium
+
+  * cve-triage : relevés planifiés par minuteries systemd (compte secubox,
+    sans sudo) : veille CERT-FR toutes les heures, KEV + NVD 7 j + EPSS et
+    « vos paquets » toutes les 6 h ; verrou partagé avec l'API (un clic et
+    un relevé ne tournent jamais ensemble), écritures atomiques, une source
+    en panne garde ses données (ref #3758).
+  * cve-triage : nouvelles sources sans clé, Debian Security Tracker (JSON
+    téléchargé borné et conditionnel, lu en flux par python3-ijson, suite
+    trixie) et OSV.dev (querybatch, détails en cache) : CVE encore ouvertes
+    pour la version installée dans paquets-vulns.json, GET
+    /paquets/vulnerables, section « Vos paquets » de l'onglet Paquets ;
+    la tuile « Vous concernent » de la couverture les compte (ref #3758).
+  * cve-triage : les relevés font tout le réseau hors verrou de la base et ne
+    la verrouillent que pour relire, fusionner, écrire ; toute route qui écrit
+    la base attend ce verrou 10 s au plus (409 seulement au-delà) et relit
+    les fichiers changés avant de modifier ;
+    pagination OSV suivie (10 pages par requête) ; taille du JSON du
+    tracker journalisée ; flux CERT-FR lu par defusedxml (ref #3758).
+  * cve-triage : classement CERT-FR root dans sa propre unité sans réseau
+    (OnSuccess=), état écrit par temporaire aléatoire O_EXCL|O_NOFOLLOW sous
+    descripteur de dossier, cache lu O_NOFOLLOW borné ; réponses CERT-FR et
+    Nuclei bornées, un client par hôte ; routes réseau de l'API sur brouillon
+    puis fusion courte (ref #3758).
+  * cve-triage : le brouillon des routes réseau copie (en profondeur)
+    l'inventaire des paquets, « Rechercher les vulnérabilités » retrouve ses
+    CVE ; le classement root lit au plus 500 avis de forme validée (ref #3758).
+  * Dépend de python3-ijson et python3-defusedxml.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 14:00:00 +0100
+
+secubox-security-posture (2.9.1-1~trixie1) trixie; urgency=medium
+
+  * cve-triage : « Synchroniser les flux » en tâche de fond (202 puis
+    GET /feeds/sync-status suivi par la page) ; le relais HTTP coupait à 504
+    alors que la synchronisation aboutissait (ref #3754).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 08:00:00 +0100
+
+secubox-security-posture (2.9.0-1~trixie1) trixie; urgency=medium
+
+  * cve-triage : couverture WAF par CVE (ref #3751). GET /couverture-waf
+    (require_lecture, lecture seule) sert un cache tenu par une tâche de fond
+    (thread démarré à la première requête, toutes les 5 min, écriture
+    atomique) : filtres IA, sondes, contrôles structurels et signatures qui
+    citent une CVE, en attente (plafond) et écartés lus dans l'audit, KEV et
+    EPSS joints depuis la base locale, veille CERT-FR, touches 24 h du
+    journal des menaces. Source absente : null, jamais 0.
+  * cvectl waf-modes lister : `regles_cve` par catégorie (CVE citées par
+    chaque règle, champ cve, name ou desc ; jamais déduites d'un motif).
+  * Page : colonne « Protection WAF » (CISA KEV, Toutes, Récentes, Veille
+    CERT-FR) et onglet « Couverture WAF » (tuiles, tableau, qui protège
+    quoi, synchronisation, sans protection), ?demo=1 compris.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 18:00:00 +0100
+
+secubox-security-posture (2.8.1-1~trixie1) trixie; urgency=medium
+
+  * cvectl filtres-ia retirer accepte un administrateur pour acteur (motif
+    ACTEUR_RE) : retrait depuis l'onglet Filtres IA du WAF (ref #3748).
+    appliquer reste réservé au compte de service ai-filtres.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 12:00:00 +0100
+
+secubox-security-posture (2.8.0-1~trixie1) trixie; urgency=medium
+
+  * cvectl waf-modes lister|appliquer : bascule du mode des catégories du
+    WAF par lot (ref #3741). valider() accepte un changement de mode,
+    ban_seuil ou ban_duree (jamais enabled) d'une catégorie non générée ; les
+    catégories générées restent à mode fixé. Lignes sudoers exactes.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 06:00:00 +0100
+secubox-security-posture (2.7.1-1~trixie1) trixie; urgency=medium
+
+  * Filtres du WAF proposés par l IA : plafonds réglables dans
+    /etc/secubox/cve-triage.toml [filtres_ia] plafond_heure (1..1000) et
+    plafond_jour (1..5000), défauts 10 et 50 ; valeur invalide = défaut
+    (ref #3745).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 07:00:00 +0100
+
+secubox-security-posture (2.7.0-1~trixie1) trixie; urgency=medium
+
+  * Filtres du WAF proposés par l IA : module filtres_ia (forme, gravité,
+    motif littéral échappé, vérifications, plafonds, catégories
+    ia_filtres_critique|haute|moyenne) et verbe
+    secubox-cvectl filtres-ia appliquer|retirer|lister --json (acteur et
+    filtres sur stdin, 256 Kio au plus pour appliquer, simulation sans
+    --apply) ; trois lignes de sudoers exactes (ref #3732, tâches 2 et 3).
+  * Revue finale (ref #3732) : motifs alignés sur le texte comparé par sbxwaf
+    (chemin suivi d'un espace, premier paramètre sans « ? », « + » en
+    [ +]) ; filtres-ia sort en code 5 sur erreur interne (retentée par le
+    relais), jamais 3.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 12:00:00 +0100
+
 secubox-security-posture (2.6.0-1~trixie1) trixie; urgency=medium
 
   * Leurres du WAF : apprentissage (product_absent_probes, detect) → promotion

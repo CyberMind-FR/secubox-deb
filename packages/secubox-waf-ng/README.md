@@ -24,7 +24,7 @@ addons WAF. It shares an extracted core (`internal/forge`, `internal/httpcodec`,
 
 ## Features
 
-- **Vhost routing** — `haproxy-routes.json`, hot-reloaded (mtime); unmapped host → 421
+- **Vhost routing** — `haproxy-routes.json`, hot-reloaded (mtime); unmapped host → 421 ; adresse isolée par secubox-garde (`/run/secubox/garde/isoles.json`, `--garde-isoles` ; cru seulement si sûr — pas de lien, à secubox-garde ou root, non inscriptible par d'autres — et frais, < 600 s ; adresses publiques jamais exemptées) → page d'explication 200 `no-store`, sans anomalie ni ban, une ligne `isolé-servi` par adresse et par minute (#3800)
 - **Regex WAF engine** — `waf-rules.json` (SQLi/XSS/LFI/RCE/CVE…), case-insensitive, hot-reload
 - **PHP2Shell (`php2shell`, rules 1.7.0)** — multipart bodies sent to a PHP vhost are captured as a stream and checked by structural signatures (`php2shell-001` to `-008`), `detect` mode only: logged, never blocked or banned. A vhost is PHP when its service is listed in `php_services` (`vhost_profiles.json`: nextcloud, roundcube) **or** its normalised host matches a `php_hotes` pattern (shipped: `^(nc|nextcloud|cloud)\.`, `^(webmail|roundcube)\.`; an invalid pattern is rejected alone). Every client is analysed, LAN and 127.0.0.1 included (logged as `local`, never sent to actord). The body is read the way PHP 8.2 reads it: `main/rfc1867.c` transcribed (not `mime/multipart`), sticky `skip_upload` included, and checked against a C oracle built from `rfc1867.c` (reviewer probes, 300 000 random bodies and differential fuzzing, no divergence). Assumed PHP settings: defaults (`max_file_uploads=20`, `file_uploads=On`, `upload_max_filesize` ≥ 1 MiB, no mbstring encoding translation). The capture window is **min(`--max-body-inspect`, 1 MiB)**, whatever the text-inspection cap; up to 16 concurrent multipart captures plus 8 urlencoded ones, so at worst 24 MiB. Log statuses: `multipart-tronque`, `multipart-malforme`, `multipart-limite`, `capture-concurrence` (#3273: full semaphore, 16 multipart or 8 urlencoded captures, signal `genre` 1 or 2; written after the response, at most one line per second per `genre`, the next one carrying `supprimees`, the number of lines dropped meanwhile) (severity `audit` = 10, counted as *states*, not threats, by the panel); every multipart line carries `ja4` and `tool`. `vhost_profiles.json` is read at start only: after editing `php_services` or `php_hotes`, restart `secubox-waf-ng` and check the line `sbxwaf: vhosts PHP armés : N explicites, M motifs`. **Rollback**: set `"enabled": false` on the `php2shell` category of `/etc/secubox/waf/waf-rules.json` (hot reload): no category with a structural signature means no capture at all, and a body kind (XML prologue, start of a WebDAV `PUT`, urlencoded) is captured only while an enabled category reads it. `waf-rules-sync` keeps an operator's `"enabled": false` across upgrades (audited when the shipped copy enables the category); a `true` follows the shipped copy, so a package can still disable a category, and `waf-profils-fusion` never re-adds a `php_services`/`php_hotes` entry the operator removed. Or install the previous package.
 - **Equivalent PHP signatures (`roundcube`, `nextcloud`, `php_requete`, rules 1.7.0, #3273)** — three more categories, `"mode": "detect"` and `"enabled": true`, inserted before `php2shell` (which stays last). Same guarantee as PHP2Shell: logged with the real severity of the signature, never blocked, banned or escalated, and the relayed request is untouched. Each signature carries `cve`, `confidence`, `desc` and `source`; thresholds without a primary source carry `"seuil": "provisoire, non sourcé (2026-10-29)"` (`php2shell-002`, `-003`, `-006`, `-007`).
@@ -79,6 +79,135 @@ sudo apt install secubox-waf-ng
 - Logs: `/var/log/secubox/waf/waf-threats.log`, `/var/log/secubox/cookie-audit/server.jsonl`
 - Cache: `/var/cache/secubox/waf/media`
 
+## Bans de bloc /24 et compte de service `ai-ban` (#3716, 1.35.0)
+
+Une box d'IA (POC sur gk0) propose des bans à partir des alertes ; elle n'écrit dans le pare-feu de la box que par
+trois routes gardées, et un bloc /24 ne se bannit que par `waf-blocs`, en root.
+
+**Table `inet secubox_waf_blocs`** (à part de `inet secubox`, que sbxwaf vide et recrée) : ensemble `blocs4`
+(`ipv4_addr`, `interval, timeout`, compteur), chaîne `entree` (crochet `input`, priorité -101, juste avant `waf_drop`),
+règle `ct direction original ip saddr @blocs4 counter drop` : seuls les flux ouverts par le bloc sont coupés, les
+réponses aux connexions que la box ouvre (DNS, apt, ACME) passent. Fichier livré : `/usr/share/secubox/waf/blocs.nft`.
+État root : `/var/lib/secubox-waf-blocs/blocs.json` (dossier root 0700, fichier 0600), fin de chaque bloc. L'unité
+`secubox-waf-blocs` rejoue la table et ses blocs (temps **restant**) au démarrage et à chaque rechargement de
+`nftables.service` ; la minuterie `secubox-waf-blocs-veille` (60 s, `waf-blocs reparer`) remet ce qui manque après
+un `nft -f` direct. IPv4 seulement.
+
+**Gardes de `waf-blocs`** (pour tout ban, adresse ou bloc) : jamais le privé, une plage de
+`/etc/secubox/waf/protegees.env` (`SECUBOX_WAF_PROTEGEES=…`, une ligne, virgules), une adresse d'une interface de la
+box, ni un point de terminaison WireGuard. Une source illisible refuse (`garde_illisible`). **Un bloc est refusé tant
+que `protegees.env` n'a aucune ligne `SECUBOX_WAF_PROTEGEES`** : derrière un NAT l'adresse publique n'est sur aucune
+interface, et le paquet ne la devine pas. Le postinst sème un fichier **commenté** s'il est absent (jamais écrasé) ;
+l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (ou la ligne vide
+`SECUBOX_WAF_PROTEGEES=` s'il n'y a rien de plus à protéger), puis redémarre `secubox-waf-ng` pour sbxwaf.
+
+**Verbes `wafctl`** (le compte `secubox` les a par sudo ; `ban-bloc` et `unban-bloc` passent par `systemd-run`) :
+
+| Verbe | Effet |
+|---|---|
+| `wafctl ban-bloc <a.b.c.0/24> <durée>` | bannit un /24 canonique, 1 h à 7 j ; un rebannissement ne raccourcit jamais |
+| `wafctl unban-bloc <a.b.c.0/24>` | retire le bloc (table et état) |
+| `wafctl blocs` | liste JSON des blocs non échus, temps restant, présence dans nft |
+| `wafctl cle-ai-ban ajouter <fichier.pub>` | **root seul**, hors sudoers : pose une clé publique Ed25519 sous `/etc/secubox-comptes-service/ai-ban/<empreinte>.pub` (root 0644 ; empreinte = SHA-256 hex du DER, le `kid` des jetons) ; deux clés au plus |
+| `wafctl cle-ai-ban retirer <empreinte>` / `retirer --toutes` | **root seul** : révoque une clé, ou toutes (effet à la requête suivante) |
+| `wafctl cle-ai-ban lister` | empreintes posées, et si le nom de fichier est la vraie empreinte |
+| `wafctl cle-ai-filtres ajouter\|retirer\|lister` | **root seul**, même code pour le compte `ai-filtres` (#3732, 1.37.0) : `/etc/secubox-comptes-service/ai-filtres/` |
+
+Réponse : une ligne JSON `{"ok", "motif", …}` ; codes de sortie `invalide` 1, `privee` 2, `protegee` 3, `box` 4,
+`pair` 5, `garde_illisible` 6, `nft` 7, `duree` 8, `etat` 9, `audit` 10, `incoherent` 11, `usage` 64. Chaque geste
+est une ligne de `/var/log/secubox/audit.log`.
+
+**Rotation de la clé** : générer la nouvelle paire **sur la box de l'IA** (la privée ne la quitte jamais), copier la
+`.pub` sur la box, `sudo wafctl cle-ai-ban ajouter /tmp/nouvelle.pub` (deux clés valent le temps de la bascule),
+basculer le relais sur la nouvelle privée, puis `sudo wafctl cle-ai-ban retirer <ancienne empreinte>`. Une troisième
+clé est refusée. **Révocation d'urgence** : `sudo wafctl cle-ai-ban retirer --toutes` — plus aucun jeton `ai-ban`
+n'est accepté. Une mise à jour du paquet ne vide jamais ce dossier.
+
+**Routes `/api/v1/waf/ai/*`** — garde `require_ai_ban` (`secubox_core.compte_service`), exception écrite à
+`RULES-CODE` § 3 : en-tête `Authorization: Bearer <jeton EdDSA>` (`kid`, `sub="ai-ban"`, `aud` = nom court de la box,
+`portee="waf-ban"`, `exp - iat` ≤ 60 s, `jti` à usage unique, `corps` = SHA-256 hex du corps brut, `b""` pour un GET).
+Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet ou portée : 403 ; corps de plus de
+16 Kio : 413.
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /ai/ban` | `{"geste": "ban", "cible": "198.51.100.7" ou "203.0.113.0/24", "duree_s": 3600…604800, "mode": "clic"\|"auto", "conseil": "<id>", "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` |
+| `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` |
+| `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds}` |
+
+**Compte de service `ai-filtres` (#3732, 1.37.0)** — garde `require_ai_filtres` : même jeton que ci-dessus avec
+`sub="ai-filtres"` et `portee="waf-filtres"`, clés à part (un jeton `ai-ban` y est refusé, et inversement), même
+processus désigné. Écriture par `sudo -n /usr/sbin/secubox-cvectl filtres-ia appliquer|retirer --apply --json`
+(entrée sur STDIN, acteur `ai-filtres:<kid>`), lecture par `filtres-ia lister --json` ; délai de 60 s. Chaque appel
+est audité (`ai-filtres-appliquer`, `ai-filtres-retirer`, `ai-filtres-lister`) ; un changement fait dont l'audit ne
+s'écrit pas rend 500.
+Code 5 de cvectl (erreur interne) → 503 `ctl` (le relais le retente après 24 h ; 3 → 409 est un refus définitif).
+Les catégories `ia_filtres_*` (mode `escalate`, `ban_seuil`/`ban_duree` propres) ne bannissent que si le compteur
+escalate global de sbxwaf existe : `-escalate-threshold`/`-escalate-window` actifs (défauts 3 et 24 h) ; sans lui,
+elles observent seulement, comme `detect`.
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /ai/filtres` | `{"filtres": [1 à 50 objets]}` (tri et bornes par cvectl) | 200 `{appliques, rejets, inchanges, …}` ; 409 `rejete` si rien n'est appliqué ni inchangé |
+| `DELETE /ai/filtres/{id}` | aucun ; `id` = `ia-…` | 200 bilan de cvectl ; 404 id inconnu |
+| `GET /ai/filtres` | aucun | 200 `{filtres}` |
+
+Codes de cvectl : 2 → 422, 3 → 409, 4 → 404 ; autre code, délai dépassé ou binaire absent → 503 `ctl`.
+
+### Ban de secubox-garde (#3794)
+
+Compte de service `garde` (portée `garde-ban`, mêmes règles de jeton que `ai-ban`) ; clé privée
+`/etc/secubox/secrets/garde-ban.pem` (root:secubox-garde 0640), créée par `wafctl cle-garde-ban generer`.
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /garde/ban` | `{"geste": "ban", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…2592000, "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` ; 409 `{"detail": {"motif"}}` : `forme`, `privee`, `deja_actif`, `plafond`, ou motif de `wafctl` |
+| `POST /garde/unban` | `{"geste": "unban", "cible": "<ip>"}` (champs en trop : 422) | 200 `{cible, ids, etat: "annule"}` ; 200 `etat: "deja_leve"` si l'élément n'est plus dans `waf_ban`/`waf_ban6` (journal `note: déjà levé`, sans wafctl) ; 409 `etranger` si l'échéance restante de l'élément (ou un élément permanent) dépasse la `fin` notée par la garde de plus de 120 s — ban repris par un autre, jamais levé ; 503 `etat` si l'ensemble ou une échéance est illisible ; 409 `pas_garde` (aucun ban de la garde actif pour cette adresse dans `garde-ban.jsonl` : ban étranger, inconnu, échu ou déjà levé — jamais de wafctl), `plafond` (60/h), ou motif de `wafctl` |
+
+Plafonds 120/h et 1000/j (journal `/var/lib/secubox/waf/garde-ban.jsonl`) ; application par `wafctl ban`
+(`waf_ban`/`waf_ban6` avec timeout), audit `garde-ban-demande` puis `garde-ban`. Le champ `audit` de la réponse
+vaut l'`id` de l'entrée du journal. Une cible déjà présente dans l'ensemble vivant (`waf_ban`/`waf_ban6`, lu avant
+`wafctl`) est refusée en 409 `deja_actif`, et un ensemble illisible donne 503 `etat` : un ban posé par quelqu'un d'autre
+n'est jamais touché. `unban` : même garde (compte `garde`, portée `garde-ban`), audit `garde-unban` avant
+`wafctl unban` (chemin du retour arrière de l'ai-ban), puis ligne `{"type": "annule", "geste": "unban"}` au journal. Les plages IPv4 de documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) sont
+acceptées, comme pour l'ai-ban (banc et essais).
+
+Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,
+**cas sûr recontrôlé** (≥ 20 adresses du bloc dans `waf_ban`, toutes de familles sûres : `scanners`,
+`recon_crawler`, `host_anomaly`, `leurre`, `product_absent_probes`, `honeypot`, `waf_fingerprint` ; les attaques — `xss`,
+`lfi`, `sqli`, `rce`, `api_abuse`, `campagne`, `mesure`, toute autre, et `waf` inconnue — restent en un clic). Famille
+d'une adresse : celle de son **dernier** enregistrement `ban` de `/var/lib/secubox/waf/bans.jsonl` (`cat` coupé au
+premier `|` puis au premier `:` : `host_anomaly:unrouted` → `host_anomaly`, `scanners|prolonge` → `scanners`), lu par
+sa fin (16 Mio au plus : au-delà, les plus anciens ne sont plus lus) ; à défaut, le motif du journal des menaces
+(≈ 6 h), puis `waf`. `bans.jsonl` illisible : 503 `etat`, jamais « sans catégorie ». `GET /bans` porte la même
+`famille` par ban (lue par le relais du POC, qui applique le même ensemble) ;
+plafonds glissants d'office 5/h et 20/j, du compte 30/h et 100/j. Refus 409 `{"detail": {"motif"}}` : `deja_actif`,
+`duree`, `plafond_compte`, `plafond_auto`, `pas_sur`, et les gardes `privee`, `protegee`, `box`, `pair`,
+`garde_illisible`, `nft` ; 503 `etat`, `journal`, `audit`, `wafctl`, `processus` ; 500 `incoherent`. Un débannissement
+ne lève jamais un ban qu'une autre source couvre (sbxwaf, administrateur) : état `couvert`. Journal des gestes :
+`/var/lib/secubox/waf/ai-ban.jsonl`. La `fin` d'un ban de bloc (réponse et journal) est celle que `waf-blocs` a
+enregistrée.
+
+**Le cas sûr, deux contrôles** : la règle effective est **relais ∧ gk2**. Le relais vérifie chaque adresse du bloc
+dans ses propres relevés ; le recontrôle de la box ne regarde, pour chaque adresse de `waf_ban`, que la **dernière**
+catégorie de ban de cette adresse (journal des menaces), pas son historique. Ni l'un ni l'autre ne connaît les pairs
+hors site ou itinérants (box en déplacement, postes nomades, adresse publique d'un pair derrière un autre FAI) : leurs
+adresses ou blocs **doivent** être écrits dans `protegees.env`, sinon rien n'empêche leur /24 d'être banni.
+
+**Un seul processus sert `/ai/*`** : la mémoire des jetons vus, le verrou et les plafonds sont par processus. C'est
+`secubox-waf.service` : uvicorn mono-processus (sans `--workers`, `User=secubox`) sur `/run/secubox/waf.sock`, où le
+serveur d'administration (`webui.conf` de secubox-hub) envoie déjà `/api/v1/waf/` — aucune route nginx à part. Le
+paquet y pose `SECUBOX_WAF_GESTES_IA=1` (drop-in `/usr/lib/systemd/system/secubox-waf.service.d/secubox-waf-gestes-ia.conf`),
+pris au redémarrage de `secubox-waf.service` que le postinst fait à chaque mise à jour ; l'agrégateur n'est jamais
+relancé. Tout autre importateur du module (un agrégateur qui monterait `waf`) rend 503 `processus` avant de lire le
+jeton. L'unité livrée porte `NoNewPrivileges=false` : les gestes passent par `sudo -n` (droits exacts de
+`/etc/sudoers.d/secubox-waf`, compte `secubox`). Les premières 1.35.0 livraient une route
+`/etc/nginx/secubox-routes.d/waf-ai.conf` et un drop-in de l'agrégateur : la mise à niveau les retire
+(`debian/maintscript`, `rm_conffile`).
+
+**AppArmor** : `/etc/apparmor.d/usr.sbin.waf-blocs` est livré en **complain** ; il passe en enforce après relecture
+des journaux au banc gk6.
+
 ## Migration / cutover
 
 Shadow → parity → **go/no-go gate** (bench `>5×` req/s·core, `p99 < ⅓`, `RSS < ¼`;
@@ -97,3 +226,38 @@ log4shell, `\u0000→\x00` null-byte fix, goform false-positive fix,
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
 See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
+
+## Mémoire des leurres de service (#3734)
+
+`sbx-authwatch` écrit une ligne `leurre:<service>` par connexion à un leurre (#3728). L'API du WAF les range dans
+`/var/lib/secubox-waf-leurres/leurres.db` (SQLite, répertoire 0700 `secubox`, 30 jours, ingestion à curseur toutes les 60 s et avant chaque lecture).
+Toutes les routes sont en `require_jwt` : les mots de passe tentés par les robots y sont **en clair**.
+
+| Route | Rend |
+|---|---|
+| `GET /api/v1/waf/leurres/resume` | `attaquants`, `couples`, `rejeux`, `touches`, `bans_actifs`, `par_leurre`, `premiere` |
+| `GET /api/v1/waf/leurres/attaquants?filtre=&profil=&limite=` | une ligne par adresse : `services`, `profil`, `client`, `essais` (5 premiers), `nb_essais`, `rejeu`, `visites`, `premiere`, `derniere`, `ban` |
+| `GET /api/v1/waf/leurres/attaquant/<ip>` | chaque visite de l'adresse et ses couples |
+| `GET /api/v1/waf/leurres/dictionnaire` | `mots_de_passe` (essais, comptes, adresses), `comptes`, `couples` |
+| `GET /api/v1/waf/leurres/rejeux` | `mot_de_passe_plusieurs_comptes`, `couple_plusieurs_adresses`, `client_plusieurs_leurres` |
+| `POST /api/v1/waf/leurres/ban` | `{"ip", "duree": "4h"\|"24h"\|"7d"}` — adresse vue par un leurre seulement, jamais interne ; audit `leurre-ban` |
+| `POST /api/v1/waf/leurres/unban` | `{"ip"}` ; audit `leurre-unban` |
+
+Page : `/waf/leurres.html` (onglet « Leurres » de `/waf/`).
+
+## Onglet Filtres IA (#3748)
+
+Filtres de l'IA en vigueur sur la box (catégories `ia_filtres_critique|haute|moyenne`), leurs touches, les bans et
+le recoupement avec la mémoire des leurres. Une tâche de fond (toutes les 5 min) lit `secubox-cvectl filtres-ia
+lister --json`, le journal des menaces (7 j), les bans nft, la mémoire des leurres et les rejets audités de cvectl,
+puis écrit `/var/lib/secubox/waf/filtres-ia.json` par remplacement atomique ; les routes ne lisent que ce cache.
+Ce que la box ne sait pas (vulnérabilités connues, candidats du relais gk0, KEV quand il n'est pas gardé) vaut `null`.
+
+| Route | Garde | Rend |
+|---|---|---|
+| `GET /api/v1/waf/filtres-ia/resume` | `require_lecture` | `resume` (`actifs`, `par_gravite`, `kev`, `ecartes`, `touches_24h`, `filtres_touches_24h`, `faux_positifs_24h`, `bans_actifs`, `bans_aussi_leurre`, `vulnerabilites_connues`, `candidats_relais`), `leurres_communs`, `genere_le`, `etat` |
+| `GET /api/v1/waf/filtres-ia/touches` | `require_lecture` | `filtres` : `id`, `cve`, `produit`, `famille`, `gravite`, `motif`, `kev`, `epss`, `touches_24h`, `touches_7j`, `adresses_24h`, `bannies`, `faux_positifs`, `leurres`, `derniere` |
+| `GET /api/v1/waf/filtres-ia/radar` | `require_lecture` | `points` : `ip`, `ia`, `touches`, `filtres`, `leurres`, `banni` (300 au plus) |
+| `POST /api/v1/waf/filtres-ia/{id}/retirer` | `require_jwt` | bilan de `cvectl filtres-ia retirer --apply` (acteur = l'administrateur) ; audit `waf-filtres-ia-retirer` intention puis issue ; 404 id inconnu, 422 id invalide |
+
+Page : `/waf/filtres-ia.html` (onglet « Filtres IA » de `/waf/`), `?demo=1` : adresses de documentation, aucune écriture.

@@ -45,6 +45,9 @@ type entreeMenace struct {
 	UserAgent string `json:"user_agent"`
 	Tool      string `json:"tool,omitempty"`
 	JA4       string `json:"ja4,omitempty"`
+	// Leurres de service (#3728) : profil du visiteur et identifiants tentés.
+	Agent  string  `json:"agent,omitempty"`
+	Essais []Essai `json:"essais,omitempty"`
 }
 
 type JournalMenaces struct {
@@ -81,12 +84,15 @@ func (j *JournalMenaces) Inscrit(s Signal, action string, total int) {
 		Timestamp: time.Now().Format(time.RFC3339),
 		ClientIP:  ip,
 		Host:      s.Service,
-		Path:      s.Cible,
+		Path:      cheminDe(s),
 		Category:  s.Categorie,
 		Severity:  s.Severite,
 		RuleID:    fmt.Sprintf("%s/%d", s.Detail, total),
 		Action:    action,
+		UserAgent: s.Client,
 		Tool:      "authwatch",
+		Agent:     s.Agent,
+		Essais:    s.Essais,
 	}
 	data, err := json.Marshal(e)
 	if err != nil {
@@ -103,4 +109,12 @@ func (j *JournalMenaces) Inscrit(s Signal, action string, total int) {
 	}
 	defer f.Close()
 	_, _ = f.Write(data)
+}
+
+// cheminDe — `path` porte le compte visé ; pour un leurre, le premier compte tenté (journal seulement, jamais l'acteur).
+func cheminDe(s Signal) string {
+	if s.Cible == "" && len(s.Essais) > 0 {
+		return s.Essais[0].Compte
+	}
+	return s.Cible
 }

@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional
 
 try:
-    from . import dnstv, dnstv_detect, dnstv_dpi, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
+    from . import dnstv, dnstv_detect, dnstv_detecteur, dnstv_dpi, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
 except ImportError:
-    from api import dnstv, dnstv_detect, dnstv_dpi, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
+    from api import dnstv, dnstv_detect, dnstv_detecteur, dnstv_dpi, dnstv_profil, dnstv_regles, dnstv_signaux, dnstv_taxonomie
 
 if TYPE_CHECKING:                                    # pragma: no cover
     from .dnstv_indices import Index
@@ -38,9 +38,12 @@ class Reglage:
     min_declencheurs: int = 5
     min_services: int = 2
     min_appareils_agreg: int = 2
-    # Détection permanente (#2047), faux par défaut : l'administrateur les active dans ad-guard.toml
-    confirmation_auto: bool = False      # un essai sans régression devient règle confirmée à l'échéance (au lieu d'être retiré)
-    declencheurs_pub: bool = False       # un hôte de pub connu (listes), même déjà bloqué, ouvre la fenêtre de détection
+    # Détection permanente (#2047), vraie par défaut depuis #3774 ; ad-guard.toml peut la couper
+    confirmation_auto: bool = True      # un essai sans régression devient règle confirmée à l'échéance (au lieu d'être retiré)
+    declencheurs_pub: bool = True        # un hôte de pub connu (listes), même déjà bloqué, ouvre la fenêtre de détection
+    # Seconde voie de détection (#3771) : service du système d'une TV connectée (liste et seuil réglables)
+    plateformes_tv: tuple = dnstv_detecteur.PLATEFORMES_TV
+    min_plateforme: int = dnstv_detecteur.MIN_PLATEFORME
 
 
 TOML = Path("/etc/secubox/ad-guard.toml")
@@ -54,18 +57,29 @@ def reglage_depuis(etat: dict, toml: Path = TOML) -> Reglage:
         with open(toml, "rb") as h:
             c = tomllib.load(h).get("adblock_tv_auto", {})
     except (OSError, ValueError, ImportError):
-        return r
+        c = {}
+    _lire_toml(r, c)
+    for k in ("confirmation_auto", "declencheurs_pub"):          # #3774 : un réglage fait dans la page prime sur le TOML
+        v = (etat.get("filtrages") or {}).get(k)
+        if isinstance(v, bool):
+            setattr(r, k, v)
+    return r
+
+
+def _lire_toml(r: "Reglage", c: dict) -> None:
     for k in ("confirmation_auto", "declencheurs_pub"):
         if isinstance(c.get(k), bool):
             setattr(r, k, c[k])
     decl = c.get("declencheurs")
     if isinstance(decl, list) and decl and all(isinstance(d, str) and dnstv.valider_domaine(d) == d for d in decl):
         r.declencheurs = tuple(decl)
-    for k in ("seuil_refus_min", "duree_rafale_min", "min_requetes_actif", "max_par_jour", "delai_s", "retrait_jours", "min_declencheurs", "min_services", "min_appareils_agreg"):
+    plat = c.get("plateformes_tv")
+    if isinstance(plat, list) and all(isinstance(d, str) and dnstv.valider_domaine(d) == d for d in plat):
+        r.plateformes_tv = tuple(plat)                  # liste vide = seconde voie désactivée
+    for k in ("seuil_refus_min", "duree_rafale_min", "min_requetes_actif", "max_par_jour", "delai_s", "retrait_jours", "min_declencheurs", "min_services", "min_appareils_agreg", "min_plateforme"):
         v = c.get(k)
         if isinstance(v, int) and not isinstance(v, bool) and v > 0:
             setattr(r, k, v)
-    return r
 
 
 def appareils(etat: dict) -> Dict[str, List[str]]:

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Fichier distinct de secubox-adguard-tv : celui du compte secubox reste sans aucun joker (invariant testé).
+# #3794 : la garde (utilisateur secubox-garde) ne peut que poser ou lever une quarantaine DNS ou une fermeture d'évasion, rien d'autre.
+# Le joker final est inévitable (adresse, MAC, échéance, noms) ; il est sans risque parce que le contrôleur exige le nombre EXACT
+# d'arguments et revalide chacun (IP sans portée [0-9a-fA-F:.], MAC minuscule, epoch décimal futur, noms de domaine stricts) ; aucun
+# argument n'atteint un shell ni un chemin, et la configuration Unbound est reconstruite et vérifiée par unbound-checkconf.
+secubox-garde ALL=(root) NOPASSWD: /usr/sbin/secubox-adguard-tv quarantaine poser *, /usr/sbin/secubox-adguard-tv quarantaine lever *, /usr/sbin/secubox-adguard-tv evasion poser *, /usr/sbin/secubox-adguard-tv evasion lever *

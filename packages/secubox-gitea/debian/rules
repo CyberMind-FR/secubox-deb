@@ -16,6 +16,9 @@ override_dh_auto_install:
 	install -d debian/secubox-gitea/lib/systemd/system
 	install -m 644 systemd/secubox-gitea-reaper.service systemd/secubox-gitea-reaper.timer \
 	        debian/secubox-gitea/lib/systemd/system/
+	# Réveil planifié pour la synchronisation des miroirs (#3747).
+	install -m 644 systemd/secubox-gitea-reveil.service systemd/secubox-gitea-reveil.timer \
+	        debian/secubox-gitea/lib/systemd/system/
 	# Garde du SSH 2222 : LAN et maillage seulement (#1791). Activée par le postinst.
 	install -m 644 systemd/secubox-gitea-ssh-garde.service \
 	        systemd/secubox-gitea-ssh-garde-maj.service systemd/secubox-gitea-ssh-garde-maj.timer \
@@ -36,3 +39,4 @@ override_dh_auto_install:
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-gitea-reaper secubox-gitea-reaper.timer
+	dh_installsystemd --name=secubox-gitea-reveil secubox-gitea-reveil.timer

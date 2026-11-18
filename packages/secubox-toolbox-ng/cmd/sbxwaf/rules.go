@@ -65,6 +65,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"regexp"
 
@@ -104,6 +105,11 @@ type compiledCategory struct {
 	name     string
 	severity string
 	mode     string // modeBlock | modeDetect — never empty after loadFile
+	// banSeuil / banDuree (#3732) : seuil et durée de ban propres à une
+	// catégorie escalate. 0 = absent ou hors bornes → réglages globaux
+	// (-escalate-threshold, -nft-ban-duration).
+	banSeuil int
+	banDuree time.Duration
 	patterns []compiledPattern
 	// structurelles : signatures lues sur le ResultatMultipart de l'analyseur
 	// (#3257). Jamais consultees par MatchDetail.
@@ -128,6 +134,8 @@ type DetectionStructurelle struct {
 	RuleID    string
 	Severity  string
 	CVE       string
+	// Mode (#3741) : mode de la catégorie (detect, escalate, block).
+	Mode string
 }
 
 // parametreRequis donne, par controle connu, le parametre entier obligatoire
@@ -207,9 +215,10 @@ func compileStructurel(brut json.RawMessage, mode string) (signatureStructurelle
 	if sj.ID == "" {
 		return signatureStructurelle{}, "", errStructurel("id vide")
 	}
-	if mode != modeDetect {
-		return signatureStructurelle{}, sj.ID, errStructurel("categorie en mode " + mode + " : l'analyse en flux ne peut que detecter")
-	}
+	// #3741 : une signature structurelle se charge dans les trois modes. Elle
+	// est évaluée APRÈS le relais (la requête a déjà atteint le backend) : en
+	// escalate elle nourrit le compteur de la catégorie, en block elle bannit
+	// l'adresse (analyserRequetePHP). Le mode n'est plus un motif de rejet.
 	requis, connu := parametreRequis[sj.Check]
 	if !connu {
 		return signatureStructurelle{}, sj.ID, errStructurel("controle inconnu " + strconv.Quote(sj.Check))
@@ -513,6 +522,10 @@ func loadRulesJSON(path string) *rulesData {
 		// Brut : une forme inattendue est rejetee nommement plus bas, elle ne
 		// doit pas faire sauter la categorie entiere (ses motifs regex).
 		Structural json.RawMessage `json:"structural"`
+		// Bruts : une valeur de mauvais type est ignorée avec avertissement,
+		// elle ne fait pas sauter la catégorie entière.
+		BanSeuil json.RawMessage `json:"ban_seuil"`
+		BanDuree json.RawMessage `json:"ban_duree"`
 	}
 
 	// Use a simple ordered parse: json.Decoder over the categories object,
@@ -580,6 +593,7 @@ func loadRulesJSON(path string) *rulesData {
 		if cc.name == "" {
 			cc.name = catID
 		}
+		cc.banSeuil, cc.banDuree = lireParamsBan(catID, cat.BanSeuil, cat.BanDuree)
 
 		for _, p := range cat.Patterns {
 			if p.Pattern == "" {
@@ -711,6 +725,64 @@ func unquotePlus(s string) string {
 		return s
 	}
 	return decoded
+}
+
+// Bornes des réglages de ban par catégorie (#3732).
+const (
+	banSeuilMin = 1
+	banSeuilMax = 10
+	banDureeMin = time.Hour
+	banDureeMax = 168 * time.Hour
+)
+
+// lireParamsBan lit "ban_seuil" et "ban_duree" d'une catégorie. Une valeur
+// absente donne 0 (réglage global) en silence ; une valeur présente mais
+// illisible ou hors bornes donne aussi 0, avec un avertissement : jamais de
+// panique, jamais une sanction plus dure ou plus molle que prévu.
+func lireParamsBan(catID string, seuilBrut, dureeBrute json.RawMessage) (int, time.Duration) {
+	seuil := 0
+	if len(seuilBrut) > 0 && string(seuilBrut) != "null" {
+		var n int
+		if err := json.Unmarshal(seuilBrut, &n); err != nil || n < banSeuilMin || n > banSeuilMax {
+			log.Printf("sbxwaf/rules: category %q: ban_seuil %s ignoré (entier %d à %d attendu) — seuil global",
+				catID, string(seuilBrut), banSeuilMin, banSeuilMax)
+		} else {
+			seuil = n
+		}
+	}
+	var duree time.Duration
+	if len(dureeBrute) > 0 && string(dureeBrute) != "null" {
+		var txt string
+		err := json.Unmarshal(dureeBrute, &txt)
+		var d time.Duration
+		if err == nil {
+			d, err = time.ParseDuration(txt)
+		}
+		if err != nil || d < banDureeMin || d > banDureeMax {
+			log.Printf("sbxwaf/rules: category %q: ban_duree %s ignoré (durée de %s à %s attendue) — durée globale",
+				catID, string(dureeBrute), banDureeMin, banDureeMax)
+		} else {
+			duree = d
+		}
+	}
+	return seuil, duree
+}
+
+// ParamsBan rend le seuil et la durée de ban propres à la catégorie cat (0, 0
+// si absents, hors bornes ou catégorie inconnue).
+func (r *Rules) ParamsBan(cat string) (int, time.Duration) {
+	r.mu.RLock()
+	cur := r.current
+	r.mu.RUnlock()
+	if cur == nil {
+		return 0, 0
+	}
+	for _, c := range cur.cats {
+		if c.id == cat {
+			return c.data.banSeuil, c.data.banDuree
+		}
+	}
+	return 0, 0
 }
 
 // Match checks the request against all compiled WAF rules (all modes). See the
@@ -885,8 +957,8 @@ func (r *Rules) EvaluerStructurel(res ResultatMultipart) []DetectionStructurelle
 
 // EvaluerPHP rend toutes les signatures structurelles qui declenchent sur
 // l'entree : categories activees dans l'ordre du fichier, puis signatures dans
-// l'ordre, filtrees par service. Pur et sans effet de bord ; ne bloque rien
-// (mode detect seulement).
+// l'ordre, filtrees par service. Pur et sans effet de bord ; la sanction selon
+// le mode porté par chaque détection est décidée par l'appelant (#3741).
 func (r *Rules) EvaluerPHP(e *EntreePHP) []DetectionStructurelle {
 	r.mu.RLock()
 	cur := r.current
@@ -900,6 +972,7 @@ func (r *Rules) EvaluerPHP(e *EntreePHP) []DetectionStructurelle {
 			if s.visePHP(e.Service) && s.declenche(e) {
 				out = append(out, DetectionStructurelle{
 					Categorie: c.id, RuleID: s.id, Severity: s.severity, CVE: s.cve,
+					Mode: c.data.mode,
 				})
 			}
 		}

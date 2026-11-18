@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Table nft des bans de bloc /24 (#3716), rejouée au démarrage ET après chaque
+# rechargement du pare-feu : `systemctl reload nftables` relance un
+# `flush ruleset` qui emporte la table ; sans ce rejeu, un ban « actif » au
+# journal ne bloquerait plus rien. Chaque bloc revient avec son temps RESTANT
+# (fin enregistrée dans /var/lib/secubox-waf-blocs/blocs.json), jamais remis à
+# sa durée d'origine ; un bloc échu, forgé ou désormais protégé n'est pas rejoué.
+# Un `nft -f /etc/nftables.conf` DIRECT ne passe pas par nftables.service : c'est
+# la minuterie secubox-waf-blocs-veille (waf-blocs reparer) qui le rattrape.
+[Unit]
+Description=SecuBox WAF — bans de bloc /24, table nft rejouée (#3716)
+After=nftables.service
+PartOf=nftables.service
+ReloadPropagatedFrom=nftables.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/waf-blocs reappliquer
+ExecReload=/usr/sbin/waf-blocs reappliquer
+# root : nft exige CAP_NET_ADMIN ; l'état et protegees.env appartiennent à root.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox-waf-blocs /var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_DAC_OVERRIDE
+RestrictAddressFamilies=AF_NETLINK AF_UNIX
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
+# Démarré avec le pare-feu, pas seulement au démarrage de la box.
+WantedBy=nftables.service

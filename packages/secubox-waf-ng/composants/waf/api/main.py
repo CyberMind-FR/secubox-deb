@@ -9,6 +9,7 @@ Threat detection with in-engine nft ban enforcement (sbxwaf).
 300+ rules across 14+ categories (SQLi, XSS, RCE, VoIP, router botnets, etc.)
 """
 import asyncio
+import logging
 import os
 import json
 import re
@@ -27,6 +28,9 @@ from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 import geoip2.database
 import geoip2.errors
+
+# `_audit` s'en servait sans qu'il soit défini : un audit impossible levait NameError (#3716).
+log = logging.getLogger("secubox.waf")
 
 # Paths
 RULES_PATH = "/usr/share/secubox/waf/waf-rules.json"
@@ -80,6 +84,7 @@ HISTORY_CACHE = "/var/lib/secubox/waf/waf-history.json"
 # Profils de vhost déclaratifs (lus aussi par sbxwaf) et relevé des signaux PHP (#3273), calculé en tâche de fond.
 VHOST_PROFILES = Path("/etc/secubox/waf/vhost_profiles.json")
 PHP_SIGNAUX_CACHE = Path("/var/lib/secubox/waf/php-signaux.json")
+LEURRES_PERIODE = 60  # s : ingestion de la mémoire des leurres (#3734)
 PHP_SIGNAUX_PERIODE = 60  # s : le balayage du journal est rare, jamais par requête
 _history_lock = threading.Lock()
 
@@ -391,9 +396,18 @@ def _get_bans() -> List[dict]:
 
     L'echeance vient de nft (`expires`), le motif du journal de menaces, le pays
     de la base GeoIP. Rien n'est invente : un champ inconnu reste vide.
+
+    `famille` (#3716, I4) : famille du dernier ban de l'adresse dans bans.jsonl,
+    a defaut celle du motif — la meme que celle que recontrole `/ai/ban` (le
+    relais du POC la lit ici). Lecture non stricte : bans.jsonl illisible, on
+    se rabat sur le motif (la garde de `/ai/ban`, elle, refuse).
     """
     bans: List[dict] = []
     raisons = _raisons_recentes()
+    try:
+        familles = _gestes_ia.familles_bans_waf()
+    except Exception:  # noqa: BLE001 — affichage : repli sur le motif
+        familles = {}
     reader = _get_geoip_reader()
     maintenant = int(time.time())
 
@@ -433,6 +447,7 @@ def _get_bans() -> List[dict]:
                     "value": ip,
                     "scenario": categorie,
                     "reason": categorie,
+                    "famille": familles[ip] if ip in familles else _gestes_ia.famille(categorie),
                     "duration": f"{int(expire)}s" if isinstance(expire, int) else "",
                     "expires_in": int(expire) if isinstance(expire, int) else None,
                     "type": "ban",
@@ -995,19 +1010,45 @@ async def _warm_loop():
     # Stagger the very first refresh by 1 s so uvicorn finishes binding
     # before we burn CPU on the initial full scan.
     await asyncio.sleep(1)
-    dernier_php = 0.0
+    dernier_php = dernier_leurres = derniere_purge = dernier_stats7j = dernier_filtres_ia = 0.0
+    _leurres_panne = ""
     while True:
         try:
             await asyncio.to_thread(_refresh_warm_caches)
         except Exception:
             # Swallow — next tick will retry. Logging would spam.
             pass
+        if time.time() - dernier_leurres >= LEURRES_PERIODE:
+            try:
+                await asyncio.to_thread(_leurres.ingerer)       # la mémoire se remplit même sans visiteur
+                if time.time() - derniere_purge >= 86400:
+                    await asyncio.to_thread(_leurres.purger)
+                    derniere_purge = time.time()
+            except Exception as e:  # noqa: BLE001 — repris au tour suivant, le curseur n'a pas avancé
+                if str(e) != _leurres_panne:        # une trace par motif : une mémoire figée ne doit pas être muette
+                    log.warning("mémoire des leurres : ingestion en échec : %s", e)
+                    _leurres_panne = str(e)
+            else:
+                _leurres_panne = ""
+            dernier_leurres = time.time()
         if time.time() - dernier_php >= PHP_SIGNAUX_PERIODE:
             try:
                 await asyncio.to_thread(_rafraichir_php_signaux)
                 dernier_php = time.time()
             except Exception:
                 pass  # le relevé précédent reste servi ; la route annonce son âge
+        if time.time() - dernier_stats7j >= _modes.STATS7J_TTL:      # #3741 : touches 7 j par catégorie
+            try:
+                await asyncio.to_thread(_modes.rafraichir_stats7j)
+            except Exception as e:  # noqa: BLE001 — le cache précédent reste servi, repris au tour suivant
+                log.warning("stats7j : calcul en échec : %s", e)
+            dernier_stats7j = time.time()
+        if time.time() - dernier_filtres_ia >= _filtres_ia_vue.CACHE_TTL:   # #3748 : onglet Filtres IA
+            try:
+                await asyncio.to_thread(_filtres_ia_vue.rafraichir)
+            except Exception as e:  # noqa: BLE001 — le cache précédent reste servi, repris au tour suivant
+                log.warning("filtres-ia : calcul en échec : %s", e)
+            dernier_filtres_ia = time.time()
         await asyncio.sleep(WAF_WARM_INTERVAL)
 
 
@@ -1303,13 +1344,7 @@ def _ports_leurres() -> List[str]:
     return [p for p in candidats if p in ouverts and p not in echoues]
 
 
-@app.get("/categories", dependencies=[Depends(require_lecture)])
-async def get_categories():
-    """List all WAF categories with stats (public)."""
-    return {
-        "categories": _category_stats,
-        "total_rules": sum(c["rules_count"] for c in _category_stats.values()),
-    }
+# GET /categories : servi par api/modes.py (#3741) — mode, seuil, durée, motifs + structurels.
 
 
 @app.get("/rules", dependencies=[Depends(require_jwt)])
@@ -1831,14 +1866,18 @@ def _ips_bannies_actives() -> set:
     return {b["ip"] for b in bans}
 
 
-def _audit(action: str, detail: str, user) -> None:
-    """Toute décision de sécurité est une ligne de /var/log/secubox/audit.log (ajout seul)."""
+def _audit(action: str, detail: str, user, lever: bool = False) -> None:
+    """Toute décision de sécurité est une ligne de /var/log/secubox/audit.log (ajout seul). `lever` : l'échec
+    d'écriture est propagé (OSError) au lieu d'être seulement journalisé — pour un geste qui doit être défait s'il
+    n'est pas audité (#3716)."""
     try:
         with open(AUDIT_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "waf", "action": action,
                                 "detail": detail[:300], "by": str((user or {}).get("sub") or "")}, ensure_ascii=False) + "\n")
     except OSError as e:
         log.warning("audit non écrit (%s) : %s", action, e)
+        if lever:
+            raise
 
 
 @app.get("/enforcement", dependencies=[Depends(require_lecture)])
@@ -2192,3 +2231,100 @@ async def get_geoip(ip: str):
             pass
     
     return {"ip": ip, "country": ""}
+
+
+# ── Gestes d'une box d'IA, compte de service ai-ban (#3716) ─────────────
+# Exception écrite à RULES-CODE § 3 : `require_ai_ban`, pas `require_jwt`. Bans lus FRAIS dans nft (recontrôle du
+# cas sûr, cible déjà bannie) ; audit qui lève (un geste non audité n'est pas fait, ou est défait).
+try:
+    from api import gestes_ia as _gestes_ia
+except ImportError:  # standalone
+    import gestes_ia as _gestes_ia
+
+
+def _bans_stricts() -> List[dict]:
+    """`waf_ban` lu dans nft, motif du journal des menaces : lecture STRICTE (lève si nft ne répond pas ou si la
+    table manque — `_get_bans` rend alors une liste vide) et LÉGÈRE (sans GeoIP), pour les gardes de `/ai/ban`. Le
+    motif ne couvre que la fin du journal des menaces (4000 lignes, ≈ 6 h) : ce n'est que le REPLI du cas sûr, dont la
+    famille vient d'abord de bans.jsonl (`gestes_ia.familles_bans_waf`, I4)."""
+    adresses = _gestes_ia.lire_waf_ban()
+    raisons = _raisons_recentes()
+    return [{"ip": ip, "reason": _raison_du_ban(ip, raisons)} for ip in sorted(adresses)]
+
+
+_gestes_ia.configurer(bans=_bans_stricts, audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
+app.include_router(_gestes_ia.router)
+
+# ── Filtres du WAF proposés par une box d'IA, compte de service ai-filtres (#3732) ──
+# Même exception à RULES-CODE § 3 (`require_ai_filtres`), même processus désigné ; écriture par secubox-cvectl (root).
+try:
+    from api import filtres_ia as _filtres_ia
+except ImportError:  # standalone
+    import filtres_ia as _filtres_ia
+
+_filtres_ia.configurer(audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
+app.include_router(_filtres_ia.router)
+
+# ── Ban posé par secubox-garde, compte de service garde (#3794) ─────────
+# Même exception à RULES-CODE § 3 (`require_garde`), même processus désigné ; même chemin `wafctl ban` que l'ai-ban.
+try:
+    from api import garde_ban as _garde_ban
+except ImportError:  # standalone
+    import garde_ban as _garde_ban
+
+_garde_ban.configurer(audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
+app.include_router(_garde_ban.router)
+
+
+# ── Mémoire des leurres de service (#3734) ──────────────────────────────
+try:
+    from api import leurres as _leurres
+except ImportError:  # standalone
+    import leurres as _leurres
+
+
+def _bans_chauds() -> List[dict]:
+    with _warm_lock:
+        bans = _warm["bans"]
+    return bans if bans is not None else _get_bans()
+
+
+def _vider_bans_chauds(resultat: tuple) -> tuple:
+    stats_cache.invalidate()
+    with _warm_lock:
+        _warm["bans"] = None
+    return resultat
+
+
+_leurres.configurer(bans=_bans_chauds, audit=_audit,
+                    ban=lambda ip, duree: _vider_bans_chauds(_ban_ip(ip, duree, "leurre")),
+                    unban=lambda ip: _vider_bans_chauds(_unban_ip(ip)))
+app.include_router(_leurres.router)
+
+
+# ── Page Modes (#3741) : mode par catégorie, touches 7 j, leurres de service, hôtes PHP ──
+try:
+    from api import modes as _modes
+except ImportError:  # standalone
+    import modes as _modes
+
+_modes.configurer(audit=_audit, journal=THREATS_LOG, regles_livrees=RULES_PATH,
+                  liste_blanche=lambda: (_cfg() or {}).get("whitelist", "127.0.0.1").split(","))
+app.include_router(_modes.router)
+
+
+# ── Onglet Filtres IA (#3748) : filtres de l'IA en vigueur, touches, bans, recoupement avec les leurres ──
+try:
+    from api import filtres_ia_vue as _filtres_ia_vue
+except ImportError:  # standalone
+    import filtres_ia_vue as _filtres_ia_vue
+
+
+def _leurres_par_adresse() -> Dict[str, List[str]]:
+    _leurres.ingerer()
+    return {a["ip"]: a["services"] for a in _leurres._memoire.attaquants(int(time.time()), limite=1_000_000)}
+
+
+_filtres_ia_vue.configurer(audit=_audit, journal=THREATS_LOG, bans=_bans_chauds, leurres=_leurres_par_adresse,
+                           liste_blanche=lambda: (_cfg() or {}).get("whitelist", "127.0.0.1").split(","))
+app.include_router(_filtres_ia_vue.router)

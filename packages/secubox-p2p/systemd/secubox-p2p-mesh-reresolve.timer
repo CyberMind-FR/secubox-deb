@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+[Unit]
+Description=SecuBox P2P — re-résolution des pairs wg-mesh nommés, chaque minute (#3755)
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=60s
+RandomizedDelaySec=5s
+AccuracySec=5s
+Unit=secubox-p2p-mesh-reresolve.service
+
+[Install]
+WantedBy=timers.target

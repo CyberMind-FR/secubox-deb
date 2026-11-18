@@ -1,3 +1,32 @@
+secubox-hardening (1.7.0-1~trixie1) trixie; urgency=medium
+
+  * Protection contre l'épuisement d'états TCP (#3735) : famille Sockstress
+    (fenêtre nulle), clôtures bloquées (MS13-018 côté Windows), TCP STOMP de
+    Mirai, SYN porteurs de données. Noyau : tcp_fin_timeout 20, orphelins
+    plafonnés (8192, 2 relances), suivi des clôtures 30 s, établies 1 jour.
+    Pare-feu (eth2, br-lan) : SYN porteurs de données refusés en IPv4 et
+    IPv6 ; au plus 256 connexions TCP simultanées par adresse publique.
+    Détecteur secubox-tcp-etats (minuterie, 1 min) : par adresse externe, nos
+    connexions serveur à fenêtre nulle ou en clôture bloquée (jamais
+    CLOSE_WAIT, jamais le LAN) ; au-delà de 20, ban 24 h par wafctl, ligne
+    tcp_etats:* au journal des menaces, audit ; relevé d'impact (orphelins,
+    mémoire TCP, table de suivi) dans /var/lib/secubox-tcp-etats/etat.json.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 11:30:00 +0100
+
+secubox-hardening (1.6.5-1~trixie1) trixie; urgency=medium
+
+  * Leurres de service de sbx-authwatch OUVERTS sur eth2 et br-lan (#3728) :
+    23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017 sortent de la garde
+    WAN. Fermés, ils ne pouvaient jamais être touchés (102 123 paquets jetés
+    sur gk2, zéro touche). Les vrais backends (8088, 8404, 8880, 8900, 8910,
+    9080) restent fermés ; leurres fermés en IPv6. L'ouverture suppose eth2
+    déclarée de confiance (nft-input-trust.d, cas de gk2). La page de garde
+    liste les leurres à part (`leurres_ouverts`) au lieu de les signaler
+    comme exposés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 10:00:00 +0100
+
 secubox-hardening (1.6.4-1~trixie1) trixie; urgency=medium
 
   * Dépend d'apparmor : il n'arrivait que par secubox-waf-ng, absent du profil

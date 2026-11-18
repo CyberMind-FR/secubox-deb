@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de l'envoi des notifications de Garde (#3794), nommé par AppArmorProfile= dans
+# secubox-garde-envoi.service, chargé par le postinst. Le SEUL programme de Garde ayant le réseau IP : courriel par
+# le relais de la box (secubox_core.courriel), SMS Free Mobile en HTTPS. Aucun sudo, aucun autre exécutable.
+
+#include <tunables/global>
+
+profile secubox-garde-envoi flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/ssl_certs>
+
+  /usr/bin/python3* rix,
+  /usr/sbin/secubox-garde-envoi r,
+  /usr/lib/secubox/garde/ r,
+  /usr/lib/secubox/garde/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network unix stream,
+
+  # Réglages : garde.toml, relais de la box (metrics.toml [rapport], secubox.conf [courriel]).
+  /etc/secubox/garde.toml r,
+  /etc/secubox/metrics.toml r,
+  /etc/secubox/secubox.conf r,
+  /etc/hostname r,
+  /proc/sys/kernel/hostname r,
+  /dev/null rw,
+  # Secrets : clé SMS de Garde, mot de passe SMTP (`smtp_pass_file`, rangé dans /etc/secubox/secrets/).
+  /etc/secubox/secrets/ r,
+  /etc/secubox/secrets/garde-sms r,
+  /etc/secubox/secrets/*smtp* r,
+
+  # File d'attente (base de Garde).
+  /var/lib/secubox/garde/ r,
+  /var/lib/secubox/garde/garde.db* rwk,
+}

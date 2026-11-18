@@ -57,7 +57,14 @@ C_ECHECS = "Device.X_SECUBOX_Services.FailedNumberOfEntries"
 C_MAINS = "Device.X_SECUBOX_Pilotage.MainsLiees"
 C_INTERFACE = "Device.X_SECUBOX_Pilotage.Interface"  # L5 tâche 7 : « distante » (profil léger) ou « locale »
 TYPE_BOUCLE = "X_SECUBOX_ServiceLoop"
-_RESUME = (C_MEM, C_SWAP_TOTAL, C_SWAP_USED, C_CPU, C_ECHECS, C_MAINS, C_INTERFACE)
+C_MODELE = "Device.DeviceInfo.ModelName"
+MODELE_MAX = 120
+_RESUME = (C_MEM, C_SWAP_TOTAL, C_SWAP_USED, C_CPU, C_ECHECS, C_MAINS, C_INTERFACE, C_MODELE)
+
+MACROS_MAX = 200             # macros ordinaires (les livrées ne comptent pas)
+EXECUTIONS_MAX = 500         # au-delà, les plus anciennes partent avec leurs étapes et leurs relevés
+ETATS_EXECUTION = ("en_cours", "terminee", "ecart", "echec", "arretee", "interrompue")
+ETATS_ETAPE = ("en_attente", "en_cours", "ok", "passee", "ecart", "echec", "non_lancee", "sautee", "interrompue")
 
 log = logging.getLogger("pilotage.stockage")
 
@@ -122,6 +129,18 @@ CREATE INDEX IF NOT EXISTS operations_cle ON operations(cle, id);
 CREATE TABLE IF NOT EXISTS supports(
     cle TEXT NOT NULL, id TEXT NOT NULL, etat TEXT NOT NULL, duree_min INTEGER NOT NULL, acteur TEXT, fin INTEGER,
     demande_le INTEGER NOT NULL, maj_le INTEGER NOT NULL, PRIMARY KEY(cle, id));
+CREATE TABLE IF NOT EXISTS macros(
+    id TEXT PRIMARY KEY, nom TEXT NOT NULL, etapes_json TEXT NOT NULL, cibles_json TEXT NOT NULL DEFAULT '[]', programmation_json TEXT,
+    livree INTEGER NOT NULL DEFAULT 0, cree_le INTEGER NOT NULL, maj_le INTEGER NOT NULL, auteur TEXT);
+CREATE TABLE IF NOT EXISTS executions(
+    id INTEGER PRIMARY KEY AUTOINCREMENT, macro_id TEXT, macro_nom TEXT NOT NULL, cibles_json TEXT NOT NULL, etat TEXT NOT NULL,
+    acteur TEXT, debut INTEGER NOT NULL, fin INTEGER, raison TEXT);
+CREATE TABLE IF NOT EXISTS execution_etapes(
+    execution_id INTEGER NOT NULL, box TEXT NOT NULL, rang INTEGER NOT NULL, type TEXT NOT NULL, etat TEXT NOT NULL,
+    resultat_json TEXT, debut INTEGER, fin INTEGER, PRIMARY KEY(execution_id, box, rang));
+CREATE TABLE IF NOT EXISTS execution_releves(
+    execution_id INTEGER NOT NULL, box TEXT NOT NULL, nom TEXT NOT NULL, instantane_json TEXT NOT NULL, pris_le INTEGER NOT NULL,
+    PRIMARY KEY(execution_id, box, nom));
 """
 
 
@@ -441,6 +460,7 @@ class StockageSqlite:
                 "boucles_24h": boucles.get(b["cle"], 0),
                 # Panneau Flotte (T7) : « distante » ouvre par l'émission du code, tout le reste par le lien direct.
                 "interface": "distante" if v.get(C_INTERFACE) == "distante" else "locale",
+                "modele": v[C_MODELE][:MODELE_MAX] if isinstance(v.get(C_MODELE), str) else None,
                 "inventaire_le": b["inventaire_le"], "inventaire_partiel": bool(b["inventaire_partiel"]),
             })
         return out
@@ -636,6 +656,12 @@ class StockageSqlite:
         with self._cx() as cx:
             return [_operation(r) for r in cx.execute(sql, args)]
 
+    def operation_lire(self, ident: int) -> Optional[dict]:
+        """Une opération par son identifiant (même forme que `operations()`), None si inconnue."""
+        with self._cx() as cx:
+            r = cx.execute("SELECT o.*, b.nom FROM operations o LEFT JOIN boites b ON b.cle=o.cle WHERE o.id=?", (ident,)).fetchone()
+            return _operation(r) if r else None
+
     # --- sessions de support (L2 tâche 6, R-L2-31, R-L2-33) ---
     # Le maître borne lui-même une session ouverte : fin = la plus proche de la fin annoncée par la box et de la réception
     # de « ouvert » plus la durée demandée (4 h pour une session qu'il n'a pas demandée). Passée cette fin, la session est
@@ -705,6 +731,179 @@ class StockageSqlite:
                 args.append(ident)
             r = cx.execute(sql + " ORDER BY rowid DESC LIMIT 1", args).fetchone()
         return dict(r) if r else None
+
+    # --- macros et exécutions (#3702) ---
+    # Les listes d'étapes arrivent déjà normalisées par `macros.valider_etapes` ; ici, tout ce qui n'est pas sérialisable en JSON
+    # est refusé (TypeError/ValueError) avant d'ouvrir la transaction.
+
+    @staticmethod
+    def _macro(r) -> dict:
+        prog = r["programmation_json"]
+        return {"id": r["id"], "nom": r["nom"], "etapes": json.loads(r["etapes_json"]), "cibles": json.loads(r["cibles_json"]),
+                "programmation": json.loads(prog) if prog else None, "livree": bool(r["livree"]),
+                "cree_le": r["cree_le"], "maj_le": r["maj_le"], "auteur": r["auteur"]}
+
+    def macros_livrees_installer(self, livrees) -> None:
+        """Réécrit chaque macro livrée par son identifiant (`livree=1`), à chaque démarrage ; une livrée qui n'est plus livrée disparaît."""
+        lignes = [(m["id"], m["nom"], _json(m["etapes"])) for m in livrees]
+        maintenant = self._maintenant()
+        with self._tx() as cx:
+            for ident, nom, etapes in lignes:
+                cx.execute(
+                    "INSERT INTO macros(id,nom,etapes_json,cibles_json,programmation_json,livree,cree_le,maj_le,auteur) "
+                    "VALUES(?,?,?,'[]',NULL,1,?,?,NULL) ON CONFLICT(id) DO UPDATE SET nom=excluded.nom, etapes_json=excluded.etapes_json, "
+                    "cibles_json='[]', programmation_json=NULL, livree=1, maj_le=excluded.maj_le, auteur=NULL",
+                    (ident, nom, etapes, maintenant, maintenant))
+            marques = ",".join("?" * len(lignes))
+            cx.execute(f"DELETE FROM macros WHERE livree=1 AND id NOT IN ({marques})", [x[0] for x in lignes])
+
+    @staticmethod
+    def macro_id_nouveau() -> str:
+        return "m-" + os.urandom(6).hex()
+
+    def macros_pleines(self) -> bool:
+        with self._cx() as cx:
+            return cx.execute("SELECT COUNT(*) FROM macros WHERE livree=0").fetchone()[0] >= MACROS_MAX
+
+    def macro_creer(self, nom: str, etapes: list, cibles: list, programmation: Optional[dict], auteur: Optional[str],
+                    ident: Optional[str] = None) -> Optional[str]:
+        """Crée une macro ordinaire, rend son identifiant `m-` + 12 hexadécimaux (`ident` si l'appelant l'a déjà tiré) ; None au-delà de MACROS_MAX."""
+        e, c = _json(etapes), _json(cibles)
+        p = _json(programmation) if programmation is not None else None
+        maintenant = self._maintenant()
+        with self._tx() as cx:
+            if cx.execute("SELECT COUNT(*) FROM macros WHERE livree=0").fetchone()[0] >= MACROS_MAX:
+                return None
+            ident = ident or self.macro_id_nouveau()
+            cx.execute("INSERT INTO macros(id,nom,etapes_json,cibles_json,programmation_json,livree,cree_le,maj_le,auteur) "
+                       "VALUES(?,?,?,?,?,0,?,?,?)", (ident, nom, e, c, p, maintenant, maintenant, auteur))
+        return ident
+
+    def macro_lire(self, ident: str) -> Optional[dict]:
+        with self._cx() as cx:
+            r = cx.execute("SELECT * FROM macros WHERE id=?", (ident,)).fetchone()
+            return self._macro(r) if r else None
+
+    def macros(self) -> list:
+        """Les livrées d'abord, puis les autres ; par nom dans chaque groupe."""
+        with self._cx() as cx:
+            return [self._macro(r) for r in cx.execute("SELECT * FROM macros ORDER BY livree DESC, nom COLLATE NOCASE, id")]
+
+    def macro_maj(self, ident: str, nom: str, etapes: list, cibles: list, programmation: Optional[dict]) -> bool:
+        """Faux si la macro est absente ou livrée."""
+        e, c = _json(etapes), _json(cibles)
+        p = _json(programmation) if programmation is not None else None
+        with self._tx() as cx:
+            return cx.execute("UPDATE macros SET nom=?, etapes_json=?, cibles_json=?, programmation_json=?, maj_le=? WHERE id=? AND livree=0",
+                              (nom, e, c, p, self._maintenant(), ident)).rowcount > 0
+
+    def macro_supprimer(self, ident: str) -> bool:
+        """Faux si la macro est absente ou livrée. Les exécutions passées gardent le nom de la macro."""
+        with self._tx() as cx:
+            return cx.execute("DELETE FROM macros WHERE id=? AND livree=0", (ident,)).rowcount > 0
+
+    def macros_programmees(self) -> list:
+        with self._cx() as cx:
+            return [self._macro(r) for r in cx.execute(
+                "SELECT * FROM macros WHERE programmation_json IS NOT NULL ORDER BY nom COLLATE NOCASE, id")]
+
+    def execution_creer(self, macro_id: Optional[str], macro_nom: str, cibles: list, etapes: list, acteur: Optional[str]) -> int:
+        """Crée l'exécution `en_cours` et une ligne `en_attente` par (box, rang). `cibles` = [{"cle", "nom"}]. Au-delà de EXECUTIONS_MAX,
+        les plus anciennes partent avec leurs étapes et leurs relevés."""
+        c = _json([{"cle": x["cle"], "nom": x["nom"]} for x in cibles])
+        types = [str(x.get("type", "")) for x in etapes]
+        maintenant = self._maintenant()
+        with self._tx() as cx:
+            ident = cx.execute("INSERT INTO executions(macro_id,macro_nom,cibles_json,etat,acteur,debut) VALUES(?,?,?,'en_cours',?,?)",
+                               (macro_id, macro_nom, c, acteur, maintenant)).lastrowid
+            for x in cibles:
+                for rang, typ in enumerate(types):
+                    cx.execute("INSERT INTO execution_etapes(execution_id,box,rang,type,etat) VALUES(?,?,?,?,'en_attente')",
+                               (ident, x["cle"], rang, typ))
+            anciennes = "SELECT id FROM executions ORDER BY id DESC LIMIT -1 OFFSET ?"
+            for table in ("execution_etapes", "execution_releves"):
+                cx.execute(f"DELETE FROM {table} WHERE execution_id IN ({anciennes})", (EXECUTIONS_MAX,))
+            cx.execute(f"DELETE FROM executions WHERE id IN ({anciennes})", (EXECUTIONS_MAX,))
+        return ident
+
+    def etape_noter(self, ident: int, cle: str, rang: int, etat: str, resultat=None) -> None:
+        """`debut` est posé au passage à `en_cours`, `fin` à un état terminal ; le résultat (JSON) remplace le précédent s'il est donné."""
+        r = _json(resultat) if resultat is not None else None
+        maintenant = self._maintenant()
+        with self._tx() as cx:
+            cx.execute(
+                "UPDATE execution_etapes SET etat=?, resultat_json=COALESCE(?, resultat_json), "
+                "debut=CASE WHEN ?='en_cours' THEN ? ELSE debut END, "
+                "fin=CASE WHEN ? IN ('en_attente','en_cours') THEN fin ELSE ? END "
+                "WHERE execution_id=? AND box=? AND rang=?", (etat, r, etat, maintenant, etat, maintenant, ident, cle, rang))
+
+    def etapes_clore(self, ident: int, etat: str, cle: Optional[str] = None) -> int:
+        """Toutes les lignes `en_attente` (d'une box, ou de toutes) passent à `etat`. Rend leur nombre."""
+        sql, args = "UPDATE execution_etapes SET etat=?, fin=? WHERE execution_id=? AND etat='en_attente'", [etat, self._maintenant(), ident]
+        if cle is not None:
+            sql += " AND box=?"
+            args.append(cle)
+        with self._tx() as cx:
+            return cx.execute(sql, args).rowcount
+
+    def execution_finir(self, ident: int, etat: str, raison: Optional[str] = None) -> None:
+        with self._tx() as cx:
+            cx.execute("UPDATE executions SET etat=?, fin=?, raison=? WHERE id=?", (etat, self._maintenant(), raison, ident))
+
+    @staticmethod
+    def _execution(r) -> dict:
+        return {"id": r["id"], "macro_id": r["macro_id"], "macro_nom": r["macro_nom"], "cibles": json.loads(r["cibles_json"]),
+                "etat": r["etat"], "acteur": r["acteur"], "debut": r["debut"], "fin": r["fin"], "raison": r["raison"]}
+
+    def execution(self, ident: int) -> Optional[dict]:
+        """Une exécution avec ses étapes, dans l'ordre des cibles puis des rangs."""
+        with self._cx() as cx:
+            r = cx.execute("SELECT * FROM executions WHERE id=?", (ident,)).fetchone()
+            if r is None:
+                return None
+            e = self._execution(r)
+            ordre = {x["cle"]: i for i, x in enumerate(e["cibles"])}
+            lignes = cx.execute("SELECT * FROM execution_etapes WHERE execution_id=?", (ident,)).fetchall()
+        lignes.sort(key=lambda x: (ordre.get(x["box"], len(ordre)), x["rang"]))
+        e["etapes"] = [{"box": x["box"], "rang": x["rang"], "type": x["type"], "etat": x["etat"],
+                        "resultat": json.loads(x["resultat_json"]) if x["resultat_json"] else None,
+                        "debut": x["debut"], "fin": x["fin"]} for x in lignes]
+        return e
+
+    def executions(self, limite: int = 50) -> list:
+        """Sans les étapes, les plus récentes d'abord."""
+        with self._cx() as cx:
+            return [self._execution(r) for r in cx.execute("SELECT * FROM executions ORDER BY id DESC LIMIT ?",
+                                                           (max(1, min(int(limite), EXECUTIONS_MAX)),))]
+
+    def executions_interrompre(self) -> list:
+        """Au démarrage : toute exécution `en_cours` passe `interrompue`, ses lignes `en_cours`/`en_attente` aussi (jamais de reprise).
+        Rend les exécutions changées (sans les étapes)."""
+        maintenant = self._maintenant()
+        with self._tx() as cx:
+            ids = [r["id"] for r in cx.execute("SELECT id FROM executions WHERE etat='en_cours' ORDER BY id")]
+            for i in ids:
+                cx.execute("UPDATE executions SET etat='interrompue', fin=?, raison=COALESCE(raison, 'service redémarré') WHERE id=?", (maintenant, i))
+                cx.execute("UPDATE execution_etapes SET etat='interrompue', fin=? WHERE execution_id=? AND etat IN ('en_cours','en_attente')",
+                           (maintenant, i))
+            return [self._execution(cx.execute("SELECT * FROM executions WHERE id=?", (i,)).fetchone()) for i in ids]
+
+    def execution_programmee_depuis(self, macro_id: str, depuis: int) -> bool:
+        """Vrai si le planificateur a lancé cette macro à `depuis` (secondes) ou après."""
+        with self._cx() as cx:
+            return cx.execute("SELECT 1 FROM executions WHERE macro_id=? AND acteur='planificateur' AND debut>=? LIMIT 1",
+                              (macro_id, depuis)).fetchone() is not None
+
+    def releve_ranger(self, ident: int, cle: str, nom: str, instantane: dict) -> None:
+        i = _json(instantane)
+        with self._tx() as cx:
+            cx.execute("INSERT OR REPLACE INTO execution_releves(execution_id,box,nom,instantane_json,pris_le) VALUES(?,?,?,?,?)",
+                       (ident, cle, nom, i, self._maintenant()))
+
+    def releves_execution(self, ident: int, cle: str) -> dict:
+        with self._cx() as cx:
+            return {r["nom"]: json.loads(r["instantane_json"]) for r in cx.execute(
+                "SELECT nom, instantane_json FROM execution_releves WHERE execution_id=? AND box=?", (ident, cle))}
 
 
 def _instant_rfc3339(v) -> Optional[int]:

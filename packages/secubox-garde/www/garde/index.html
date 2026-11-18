@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — page « Garde » (#3794) au profil Aurora des webui d'administration (.claude/AURORA-REFERENCE.md,
+  mêmes en-tête, tuiles, onglets, panneaux et boutons que freebox / ad-guard) : quatre tuiles, décisions en cours
+  (UN appareil = UNE carte, toutes ses adresses en petit ; les bans d'Internet groupés en une carte), historique,
+  réglages. Données lues dans /api/v1/garde/ ; libérer, rouvrir, débannir, réglages et essais sont des DEMANDES
+  exécutées par le passage suivant (≤ 60 s) : la carte affiche « en cours ».
+  Coque de l'administration : menu latéral commun (/shared/sidebar.js), chargé hors ?embed=1 et hors démonstration.
+  Tout texte venu du réseau est posé par textContent. `?demo=1` : données fictives annoncées, aucune écriture.
+-->
+<html lang="fr" class="sbx-aurora">
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ydl9mBJ8A2mFY9UhuSAupOPmweAat03T9aZ9pw6xQnw='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garde</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;color-scheme:dark}
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+    color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
+  .principal{min-width:0}
+  body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+  .app>*,.grille>*{min-width:0}
+  [hidden]{display:none!important}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center}.marque h1{margin:0;font-size:1.35rem;font-weight:800}.marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .actif{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}.actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;min-height:30px;white-space:nowrap}
+  .btn:hover{border-color:var(--cyan)}.btn:disabled{opacity:.5;cursor:default}
+  .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px}.btn.danger{border-color:var(--rouge);color:var(--rouge)}.btn.danger:hover{background:rgba(255,77,94,.14)}
+  .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+  .btn:focus-visible,input:focus-visible,[role=tab]:focus-visible,[role=switch]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}.info a{color:var(--cyan)}
+  .retour{font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)}.retour.ko{border-color:var(--rouge)}.retour.ok{border-color:var(--vert)}
+  .alarme{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .alarme b{font-size:.88rem;color:var(--rouge)}.alarme span{color:var(--doux);overflow-wrap:anywhere}.alarme .btn{margin-left:auto}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:760px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.tuile .l{color:var(--doux);font-size:.74rem}.tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile.hors .v{color:var(--rouge)}.tuile.att .v{color:var(--orange)}.tuile.vio .v{color:var(--violet)}.tuile.ok .v{color:var(--vert)}
+  .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+  .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+  .onglets button:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .decisions{display:grid;gap:8px}
+  .dec{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:start;border:1px solid var(--trait);border-left-width:4px;border-radius:10px;padding:9px 11px;background:rgba(8,18,38,.5)}
+  @container a (min-width:560px){.dec{grid-template-columns:auto minmax(0,1fr) auto}}
+  .dec.infection{border-left-color:var(--rouge)}.dec.evasion{border-left-color:var(--violet)}.dec.intrusion{border-left-color:var(--orange)}
+  .dec .ico{font-size:1.1rem;line-height:1.2}
+  .dec .qui{font-weight:700;overflow-wrap:anywhere}.dec .qui small{display:block;font-weight:400;color:var(--faible);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.72rem;overflow-wrap:anywhere}
+  .dec .pourquoi{color:var(--doux);font-size:.8rem;overflow-wrap:anywhere}.quand{color:var(--faible);font-size:.72rem}
+  .dec .act{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;justify-content:flex-end;grid-column:1/-1}
+  @container a (min-width:560px){.dec .act{grid-column:auto;flex-direction:column;align-items:flex-end}}
+  .confirm{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--orange);border-radius:10px;padding:6px 8px;font-size:.78rem;background:rgba(255,159,28,.1)}
+  .liste{grid-column:1/-1;display:grid;gap:4px;max-height:320px;overflow:auto;margin-top:8px}
+  .liste div{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:.78rem;border-top:1px solid rgba(86,150,255,.12);padding-top:4px}
+  .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}.pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}.pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .pill.vio{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+  .tab{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums;min-width:560px}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+  td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;overflow-wrap:anywhere}td small{display:block;color:var(--faible);font-size:.7rem}
+  tbody tr:hover{background:rgba(41,182,246,.07)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+  .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem;margin:0}
+  .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
+  .kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center;font-size:.8rem;margin:0 0 10px}
+  .kv label{color:var(--texte);font-weight:600}.kv small{grid-column:1/-1;color:var(--faible);font-size:.72rem}
+  .inter{width:42px;height:24px;border-radius:12px;background:var(--vert);position:relative;flex:none;padding:0;border:0;cursor:pointer}
+  .inter::after{content:"";position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+  .inter[aria-checked=false]{background:rgba(111,132,168,.4)}.inter[aria-checked=false]::after{right:auto;left:3px}
+  .champ{display:grid;gap:4px;margin:0 0 10px}.champ>span{font-size:.74rem;color:var(--doux)}
+  .champ div{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .saisie{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0;width:100%}
+  .saisie:focus{outline:none;border-color:var(--cyan)}
+  @container a (min-width:420px){.saisie{width:auto;flex:1;max-width:280px}}
+  /* Coque partagée (#2733) : sidebar.js pose ces règles dans un bloc de style EN LIGNE ; on en reprend l'essentiel (comme ad-guard). */
+  .header-leds-metrics,.smart-strip{display:none!important}
+  .status-led{font-size:.9em;margin-left:auto}
+  .nav-item{display:flex;align-items:center;gap:.5rem}
+  .nav-item.offline{opacity:0;height:0;padding:0;margin:0;overflow:hidden}
+  .sidebar-toggle{display:none;position:fixed;top:.75rem;left:.75rem;z-index:1002;background:#0b1830;border:1px solid var(--trait2);color:var(--texte);width:40px;height:40px;font-size:1.4rem;cursor:pointer;align-items:center;justify-content:center;border-radius:8px;padding:0}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999}
+  .sidebar-overlay.active{display:block}
+  .mobile-mode .sidebar{transform:translateX(-100%);transition:transform .3s ease;z-index:1000}
+  .mobile-mode .sidebar.open{transform:translateX(0)}
+  html.sbx-aurora body.hybrid-skin main.principal{margin-left:220px!important;padding:48px 0 0!important;min-height:0}
+  html.sbx-aurora body.mobile-mode main.principal{margin-left:0!important;padding:56px 0 0!important}
+  #sidebar .nav-mode-link{color:inherit;text-decoration:none}
+  @media (max-width:900px){.sidebar:not(.open){transform:translateX(-100%)}html.sbx-aurora body.hybrid-skin main.principal{margin-left:0!important;padding:56px 0 0!important}}
+  html.sbx-aurora body.hybrid-skin .principal .app .pan{background-color:rgba(10,22,46,.6)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .btn{background-color:rgba(10,22,46,.7)!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:8px!important;backdrop-filter:none;box-shadow:none}
+  html.sbx-aurora body.hybrid-skin .principal .app .btn.prim{background-color:rgba(41,182,246,.18)!important;border-color:var(--cyan)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .btn.danger{border-color:var(--rouge)!important;color:var(--rouge)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app button.inter{background-color:var(--vert)!important;border:0!important;border-radius:12px!important}
+  html.sbx-aurora body.hybrid-skin .principal .app button.inter[aria-checked=false]{background-color:rgba(111,132,168,.4)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .onglets button{background-color:rgba(10,22,46,.5)!important;border:1px solid var(--trait)!important;color:var(--doux)!important;border-radius:9px!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .onglets button[aria-selected=true]{background-color:rgba(41,182,246,.22)!important;border-color:var(--cyan)!important;color:#d9f2ff!important}
+  html.sbx-aurora body.hybrid-skin .principal .app input{background-color:rgba(8,18,38,.8)!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:8px!important}
+  html.sbx-aurora body.hybrid-skin .principal .app th{background-color:transparent!important;color:var(--faible)!important;border-bottom:0!important}
+  html.sbx-aurora body.hybrid-skin .principal .app td{color:var(--texte)!important;border-bottom:0!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .demo{background-color:var(--orange)!important;color:#1a1000!important}
+</style>
+<body>
+<nav class="sidebar" id="sidebar" aria-label="Menu de l'administration"></nav>
+<main class="principal"><div class="cadre"><div class="app">
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      <div><h1>Garde</h1><small id="sous-titre">Détection et réponse automatiques : intrusion, évasion, infection</small></div>
+    </div>
+    <span class="actif" id="mode" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="releve">—</span><button class="btn" type="button" id="rafraichir">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — adresses de documentation, aucune écriture</div>
+  <div class="info" id="session" hidden>Détails réservés à l'administrateur : session requise. <a href="/login.html">Se connecter</a></div>
+  <div class="retour" id="message" hidden role="status"></div>
+
+  <div class="alarme" id="alarme" role="alert" hidden><b id="alarme-titre"></b><span id="alarme-texte"></span><button class="btn sm" type="button" id="alarme-voir">Voir</button></div>
+
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile hors" title="Appareils de la maison en quarantaine DNS"><span class="l">Appareils isolés</span><span class="v" id="n-isoles">—</span><span class="s" id="s-isoles">3 au plus en même temps</span></div>
+    <div class="tuile vio" title="Appareils dont le contournement du DNS est fermé"><span class="l">Contournements fermés</span><span class="v" id="n-evasions">—</span><span class="s">résolveurs chiffrés refusés</span></div>
+    <div class="tuile att" title="Adresses d'Internet bannies en ce moment"><span class="l">Adresses bannies</span><span class="v" id="n-bannis">—</span><span class="s" id="s-bannis">—</span></div>
+    <div class="tuile ok" title="Notifications envoyées sur 24 h"><span class="l">Prévenu (24 h)</span><span class="v" id="n-notifs">—</span><span class="s" id="s-notifs">—</span></div>
+  </section>
+
+  <div class="onglets" role="tablist" aria-label="Vues de la garde">
+    <button type="button" role="tab" id="t-decisions" aria-controls="v-decisions" aria-selected="true">Décisions</button>
+    <button type="button" role="tab" id="t-historique" aria-controls="v-historique" aria-selected="false" tabindex="-1">Historique</button>
+    <button type="button" role="tab" id="t-reglages" aria-controls="v-reglages" aria-selected="false" tabindex="-1">Réglages</button>
+  </div>
+
+  <section id="v-decisions" role="tabpanel" aria-labelledby="t-decisions" class="grille">
+    <div class="pan"><h3>En cours <i>chaque décision est écrite au journal d'audit</i></h3>
+      <div class="decisions" id="decisions"><p class="vide">Chargement…</p></div>
+      <div class="liste" id="demandes" hidden></div></div>
+  </section>
+
+  <section id="v-historique" role="tabpanel" aria-labelledby="t-historique" class="grille" hidden>
+    <div class="pan"><h3>Historique <i>24 dernières heures</i></h3>
+      <div class="tab"><table>
+        <thead><tr><th>Heure</th><th>Menace</th><th>Qui</th><th>Décision</th></tr></thead>
+        <tbody id="historique"></tbody></table></div>
+      <p class="note">« Signalé » : un signe seul et bruité (DGA, DNS inhabituel, dérive de débit) est compté et montré, jamais suivi d'une action.</p></div>
+  </section>
+
+  <section id="v-reglages" role="tabpanel" aria-labelledby="t-reglages" class="grille" hidden>
+    <div class="pan"><h3>Réglages <i>actifs d'office</i></h3>
+      <div class="kv"><label id="l-auto">Réponse automatique</label><button type="button" class="inter" role="switch" id="r-auto" aria-checked="true" aria-labelledby="l-auto"></button><small>Désactivé : la box prévient seulement, sans isoler ni bannir.</small></div>
+      <div class="champ"><span>Courriel du propriétaire</span><div><input class="saisie" id="r-courriel" type="email" autocomplete="off" aria-label="Courriel du propriétaire"></div></div>
+      <div class="champ"><span>SMS Free Mobile — identifiant et clé</span><div><input class="saisie" id="r-sms" inputmode="numeric" autocomplete="off" aria-label="Identifiant Free Mobile"><input class="saisie" id="r-cle" type="password" autocomplete="new-password" aria-label="Clé Free Mobile"></div></div>
+      <p class="note" id="cle-etat">À activer dans l'espace abonné Free Mobile (« Notifications par SMS ») ; la clé est gardée dans les secrets de la box et n'est jamais réaffichée.</p>
+      <div class="kv"><label id="l-bans">SMS pour les bans d'Internet</label><button type="button" class="inter" role="switch" id="r-bans" aria-checked="false" aria-labelledby="l-bans"></button><small>Par défaut : résumé horaire par courriel ; SMS seulement sur une rafale (plus de 50 adresses en 10 min).</small></div>
+      <div class="actions"><button class="btn prim" type="button" id="enregistrer">Enregistrer</button><button class="btn" type="button" id="test-sms">Envoyer un SMS d'essai</button><button class="btn" type="button" id="test-courriel">Envoyer un courriel d'essai</button></div>
+      <p class="note" id="reg-attente" hidden>Enregistré : appliqué par le prochain passage (moins d'une minute).</p></div>
+  </section>
+</div></div></main>
+<script>
+(function(){
+  'use strict';
+  var BASE='/api/v1/garde';
+  var q=new URLSearchParams(location.search),DEMO=!!q.get('demo'),EMB=!!q.get('embed');
+  if(EMB||DEMO)document.body.classList.add('emb');
+  else{var sb=document.createElement('script');sb.src='/shared/sidebar.js';document.body.appendChild(sb);}
+  document.addEventListener('click',function(e){var t=e.target&&e.target.closest?e.target.closest('#sidebar .nav-section-title'):null;if(!t)return;
+    var s=t.closest('.nav-section');if(!s)return;s.classList.toggle('collapsed');var i=t.querySelector('.toggle-icon');if(i)i.textContent=s.classList.contains('collapsed')?'▶':'▼';});
+  var MENACES={infection:['Infection','hors','⛔'],evasion:['Évasion','vio','↯'],intrusion:['Intrusion','att','⚑'],signale:['Signalé','','·'],libere:['Libéré','ok','✓']};
+  var etat={reglages:null,ouvert:false};
+  function el(id){return document.getElementById(id);}
+  function h(tag,attrs,texte){var n=document.createElement(tag);if(attrs)for(var k in attrs){if(k==='class')n.className=attrs[k];else n.setAttribute(k,attrs[k]);}
+    if(texte!=null)n.textContent=String(texte);return n;}
+  function vider(n){while(n.firstChild)n.removeChild(n.firstChild);}
+  function heure(ts){if(!ts)return '—';var d=new Date(ts*1000),j=new Date();var t=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    return d.toDateString()===j.toDateString()?t:d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+t;}
+  function message(texte,genre){var m=el('message');m.hidden=!texte;m.className='retour '+(genre==='erreur'?'ko':genre==='ok'?'ok':'');m.textContent=texte||'';}
+  function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function entetes(json){var o={'Accept':'application/json'},t=jeton();if(t)o.Authorization='Bearer '+t;if(json)o['Content-Type']='application/json';return o;}
+  function lire(chemin){
+    if(DEMO)return Promise.resolve(DONNEES[chemin.split('?')[0]]);
+    return fetch(BASE+chemin,{headers:entetes(false),credentials:'same-origin',cache:'no-store'}).then(function(r){
+      if(r.status===401||r.status===403){var e=new Error('session');e.session=true;throw e;}
+      if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+  }
+  function ecrire(chemin,corps){
+    if(DEMO)return Promise.reject(new Error('démonstration : aucune écriture'));
+    return fetch(BASE+chemin,{method:'POST',headers:entetes(true),credentials:'same-origin',cache:'no-store',body:JSON.stringify(corps)}).then(function(r){
+      return r.json().catch(function(){return {};}).then(function(j){if(!r.ok)throw new Error((j&&typeof j.detail==='string')?j.detail:('HTTP '+r.status));return j;});});
+  }
+  function hauteur(){try{parent.postMessage({sbxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+scrollY),onglet:'garde'},location.origin);}catch(e){}}
+  // Confirmation intégrée (jamais confirm()) : Confirmer / Annuler sous le bouton.
+  function confirmer(lieu,texte,action){
+    if(lieu.querySelector('.confirm'))return;etat.ouvert=true;
+    var c=h('div',{class:'confirm'}),ok=h('button',{type:'button',class:'btn sm danger'},'Confirmer'),non=h('button',{type:'button',class:'btn sm'},'Annuler');
+    function fermer(){if(c.parentNode)c.parentNode.removeChild(c);etat.ouvert=false;hauteur();}
+    non.addEventListener('click',fermer);
+    ok.addEventListener('click',function(){ok.disabled=true;action().then(function(){fermer();message('Demande enregistrée : appliquée par le prochain passage (moins d\'une minute).','ok');charger();},
+      function(e){ok.disabled=false;message('Refusé : '+e.message,'erreur');});});
+    c.appendChild(h('span',null,texte));c.appendChild(ok);c.appendChild(non);lieu.appendChild(c);ok.focus();hauteur();
+  }
+
+  // ── onglets ──
+  var ONGLETS=['decisions','historique','reglages'];
+  function montrer(nom){ONGLETS.forEach(function(o){var t=el('t-'+o),sel=o===nom;t.setAttribute('aria-selected',sel?'true':'false');t.tabIndex=sel?0:-1;el('v-'+o).hidden=!sel;});
+    if(nom==='historique')chargerHistorique();if(nom==='reglages')chargerReglages();hauteur();}
+  ONGLETS.forEach(function(o,i){var t=el('t-'+o);t.addEventListener('click',function(){montrer(o);});
+    t.addEventListener('keydown',function(e){var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(!d)return;var n=ONGLETS[(i+d+ONGLETS.length)%ONGLETS.length];montrer(n);el('t-'+n).focus();});});
+  el('alarme-voir').addEventListener('click',function(){montrer('decisions');var c=document.querySelector('.dec.infection');if(c)c.scrollIntoView({block:'center'});});
+  el('rafraichir').addEventListener('click',function(){charger();});
+
+  // ── décisions : UN appareil = UNE carte ; bans d'Internet groupés ──
+  function carte(d){
+    var m=MENACES[d.menace]||MENACES.signale,c=h('div',{class:'dec '+d.menace});
+    c.appendChild(h('span',{class:'ico','aria-hidden':'true'},m[2]));
+    var corps=h('div'),act=h('div',{class:'act'});
+    if(d.menace==='intrusion'){
+      var qui=h('div',{class:'qui'},'Internet · '+d.n+(d.n>1?' adresses':' adresse'));
+      qui.appendChild(h('small',null,'dernière : '+d.derniere.ip+' à '+heure(d.derniere.debut)));corps.appendChild(qui);
+      var p=h('div',{class:'pourquoi'});p.appendChild(h('span',{class:'pill '+m[1]},m[0]));
+      p.appendChild(document.createTextNode(' sondages et empreintes malveillantes (capteur DPI, leurres du WAF). Résumé envoyé chaque heure par courriel.'));corps.appendChild(p);
+      corps.appendChild(h('div',{class:'quand'},'4 h la première fois, ×4 à chaque récidive, 30 j au plus'));
+      var voir=h('button',{type:'button',class:'btn sm','aria-expanded':'false'},'Voir la liste'),liste=h('div',{class:'liste',hidden:''});
+      voir.addEventListener('click',function(){var o=liste.hidden;liste.hidden=!o;voir.setAttribute('aria-expanded',o?'true':'false');hauteur();});
+      (d.adresses||[]).forEach(function(a){var l=h('div');l.appendChild(h('span',{class:'mono'},a.ip));
+        l.appendChild(h('span',{class:'quand'},'jusqu\'à '+heure(a.fin)));if(a.recidive)l.appendChild(h('span',{class:'pill att'},'récidive'));
+        if(a.en_cours)l.appendChild(h('span',{class:'pill cy'},'en cours'));
+        else{var b=h('button',{type:'button',class:'btn sm'},'Débannir');b.addEventListener('click',function(){confirmer(l,'Débannir '+a.ip+' ?',function(){return ecrire('/debannir',{ip:a.ip});});});l.appendChild(b);}
+        liste.appendChild(l);});
+      act.appendChild(voir);c.appendChild(corps);c.appendChild(act);c.appendChild(liste);return c;
+    }
+    var q=h('div',{class:'qui'},d.nom);q.appendChild(h('small',null,(d.mac&&d.mac!==d.adresses[0]?d.mac+' · ':'')+(d.adresses||[]).join(' · ')));corps.appendChild(q);
+    var po=h('div',{class:'pourquoi'});po.appendChild(h('span',{class:'pill '+m[1]},m[0]));po.appendChild(document.createTextNode(' '+(d.motif||'')));
+    if(d.noms&&d.noms.length){po.appendChild(document.createTextNode(' — refusé : '));po.appendChild(h('span',{class:'mono'},d.noms.join(', ')));}
+    corps.appendChild(po);
+    corps.appendChild(h('div',{class:'quand'},(d.menace==='infection'?'Isolé depuis ':'Depuis ')+heure(d.debut)+' · réévalué à '+heure(d.fin)));
+    if(d.en_cours)act.appendChild(h('span',{class:'pill cy'},'levée en cours'));
+    else{
+      var lib=d.menace==='infection',b=h('button',{type:'button',class:lib?'btn sm danger':'btn sm'},lib?'Libérer':'Rouvrir');
+      b.addEventListener('click',function(){confirmer(act,(lib?'Libérer ':'Rouvrir ')+d.nom+' ? Pas de nouvelle mesure 7 j pour ce signe.',function(){return ecrire(lib?'/liberer':'/rouvrir',{id:d.id});});});
+      act.appendChild(b);
+    }
+    c.appendChild(corps);c.appendChild(act);return c;
+  }
+  function afficherEtat(e){
+    var t=e.tuiles;el('n-isoles').textContent=t.isoles;el('n-evasions').textContent=t.evasions;el('n-bannis').textContent=t.bannis;
+    el('s-isoles').textContent=(e.quarantaines_max||3)+' au plus en même temps';
+    el('s-bannis').textContent='dont '+t.recidivistes+' récidiviste'+(t.recidivistes>1?'s':'');
+    el('n-notifs').textContent=t.notifs_24h.sms+t.notifs_24h.courriel;
+    el('s-notifs').textContent=t.notifs_24h.sms+' SMS · '+t.notifs_24h.courriel+' courriels · '+t.en_attente+' en attente';
+    var mo=el('mode');mo.textContent=e.automatique?'AUTOMATIQUE':'PRÉVIENT SEULEMENT';mo.className='actif '+(e.automatique?'ok':'att');
+    el('releve').textContent='Relevé '+heure(e.releve);
+    var inf=(e.actives||[]).filter(function(d){return d.menace==='infection';});
+    el('alarme').hidden=!inf.length;
+    if(inf.length){el('alarme-titre').textContent=inf.length+(inf.length>1?' appareils isolés':' appareil isolé');
+      el('alarme-texte').textContent=inf.map(function(d){return d.nom+' depuis '+heure(d.debut);}).join(' · ');}
+    var box=el('decisions');vider(box);
+    if(!(e.actives||[]).length)box.appendChild(h('p',{class:'vide'},'Aucune mesure en cours.'));
+    (e.actives||[]).forEach(function(d){box.appendChild(carte(d));});
+    var dm=el('demandes'),ACT={liberer:'Libérer',rouvrir:'Rouvrir',debannir:'Débannir',tester:'Essai'};vider(dm);
+    (e.demandes||[]).forEach(function(x){var l=h('div');l.appendChild(h('span',{class:'pill '+(x.etat==='en_attente'?'cy':x.etat==='faite'?'ok':'att')},x.etat==='en_attente'?'en cours':x.etat));
+      l.appendChild(h('span',null,(ACT[x.action]||x.action)+' '+x.cible+(x.resultat?' : '+x.resultat:'')));dm.appendChild(l);});
+    dm.hidden=!dm.firstChild;
+    hauteur();
+  }
+  function erreur(e){if(e&&e.session){el('session').hidden=false;}else message('Lecture impossible : '+(e&&e.message),'erreur');}
+  function charger(){
+    if(etat.ouvert)return;
+    lire('/etat').then(function(e){el('session').hidden=!e.session_requise;afficherEtat(e);},erreur);
+  }
+  function chargerHistorique(){
+    lire('/historique?heures=24').then(function(r){
+      var tb=el('historique');vider(tb);
+      if(r.session_requise){el('session').hidden=false;}
+      if(!(r.lignes||[]).length){var tr=h('tr');tr.appendChild(h('td',{colspan:'4',class:'vide'},'Rien sur 24 h.'));tb.appendChild(tr);}
+      (r.lignes||[]).forEach(function(l){
+        var m=MENACES[l.menace]||MENACES.signale,tr=h('tr');tr.appendChild(h('td',null,heure(l.debut)));
+        var tm=h('td');tm.appendChild(h('span',{class:'pill '+m[1]},m[0]));tr.appendChild(tm);
+        var qui=h('td',null,l.menace==='intrusion'?l.n+(l.n>1?' adresses':' adresse'):l.nom);
+        qui.appendChild(h('small',null,l.menace==='intrusion'?(l.adresses||[]).join(', '):(l.motif||l.signe||'')));tr.appendChild(qui);
+        var dec=l.menace==='signale'?'aucune action : un seul signe':l.menace==='libere'?'pas de nouvelle mesure 7 j pour ce signe':
+          l.menace==='intrusion'?'bannies':l.etat==='active'?(l.menace==='infection'?'isolé':'nom refusé'):l.leve_par==='utilisateur'?'levée par l\'administrateur':'levée ('+(l.leve_par||l.etat)+')';
+        tr.appendChild(h('td',null,dec));tb.appendChild(tr);});
+      hauteur();
+    },erreur);
+  }
+  function inter(id,v){el(id).setAttribute('aria-checked',v?'true':'false');}
+  ['r-auto','r-bans'].forEach(function(id){el(id).addEventListener('click',function(){inter(id,el(id).getAttribute('aria-checked')!=='true');});});
+  function chargerReglages(){
+    lire('/reglages').then(function(r){
+      if(r.session_requise){el('session').hidden=false;return;}
+      var v=Object.assign({},r,r.en_attente||{});etat.reglages=r;
+      inter('r-auto',v.automatique);inter('r-bans',v.sms_bans);el('r-courriel').value=v.courriel||'';el('r-sms').value=v.sms_utilisateur||'';
+      el('r-cle').value='';el('r-cle').placeholder=r.cle_sms_en_attente?'clé en cours d\'enregistrement':r.cle_sms_enregistree?'clé enregistrée ••••':'clé non enregistrée';
+      el('reg-attente').hidden=!(r.en_attente||r.cle_sms_en_attente);hauteur();
+    },erreur);
+  }
+  el('enregistrer').addEventListener('click',function(){
+    var corps={automatique:el('r-auto').getAttribute('aria-checked')==='true',sms_bans:el('r-bans').getAttribute('aria-checked')==='true',
+      courriel:el('r-courriel').value.trim(),sms_utilisateur:el('r-sms').value.trim()},cle=el('r-cle').value.trim();
+    ecrire('/reglages',corps).then(function(){return cle?ecrire('/cle-sms',{cle:cle}):null;}).then(function(){el('r-cle').value='';message('Réglages enregistrés : appliqués par le prochain passage (moins d\'une minute).','ok');chargerReglages();},
+      function(e){message('Refusé : '+e.message,'erreur');});
+  });
+  ['sms','courriel'].forEach(function(c){el('test-'+c).addEventListener('click',function(){ecrire('/tester',{canal:c}).then(function(){message('Essai demandé : envoyé par le prochain passage.','ok');},function(e){message('Refusé : '+e.message,'erreur');});});});
+
+  // ── démonstration (adresses de documentation RFC 5737 / 3849) ──
+  var T=Math.floor(Date.now()/1000);
+  var DONNEES={
+    '/etat':{automatique:true,quarantaines_max:3,releve:T,tuiles:{isoles:1,evasions:1,bannis:2,recidivistes:1,notifs_24h:{sms:2,courriel:3},en_attente:0},actives:[
+      {id:'demo1',menace:'infection',nom:'TV salon',mac:'02:00:5e:00:00:95',adresses:['192.0.2.95','2001:db8::95'],motif:'a contacté un serveur de pirates connu (liste Actor)',noms:[],debut:T-660,fin:T+85740,en_cours:false},
+      {id:'demo2',menace:'evasion',nom:'Téléphone',mac:'02:00:5e:00:00:42',adresses:['192.0.2.42'],motif:'cherchait à joindre un résolveur DNS chiffré',noms:['dns.example'],debut:T-34000,fin:T+52000,en_cours:false},
+      {menace:'intrusion',n:2,derniere:{ip:'203.0.113.159',debut:T-120},adresses:[{ip:'203.0.113.159',fin:T+14000,recidive:true},{ip:'198.51.100.7',fin:T+9000,recidive:false}]}]},
+    '/historique':{heures:24,lignes:[{menace:'infection',debut:T-660,nom:'TV salon',motif:'serveur de pirates connu',etat:'active'},
+      {menace:'intrusion',debut:T-3600,n:12,adresses:['203.0.113.159']},{menace:'signale',debut:T-16000,nom:'Tablette',motif:'noms générés (DGA) seuls'},
+      {menace:'libere',debut:T-30000,nom:'Console de jeu',signe:'actor'}]},
+    '/reglages':{automatique:true,courriel:'proprietaire@example.org',sms_utilisateur:'12345678',sms_bans:false,cle_sms_enregistree:true,cle_sms_en_attente:false,en_attente:null}
+  };
+  if(DEMO){el('demo').hidden=false;}
+  charger();
+  setInterval(function(){if(!document.hidden&&!el('v-decisions').hidden)charger();},30000);
+})();
+</script>

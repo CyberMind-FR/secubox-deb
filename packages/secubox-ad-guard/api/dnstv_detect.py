@@ -16,8 +16,10 @@ from typing import AbstractSet, Callable, Dict, List, Set
 
 try:
     from . import dnstv
+    from .dnstv_taxonomie import nom_publicitaire
 except ImportError:
     from api import dnstv
+    from api.dnstv_taxonomie import nom_publicitaire
 
 # Domaines génériques : les bloquer casserait le système de l'appareil ou d'autres services. Jamais proposés (suffixe compris).
 LISTE_NOIRE = ("googleapis.com", "gstatic.com", "google.com", "googleusercontent.com", "apple.com", "icloud.com", "aaplimg.com",
@@ -76,16 +78,18 @@ def detecter(evts: List[dict], est_declencheur: Callable[[str], bool], classer: 
             dans[e["domaine"]].add(k)
     bruts: Dict[str, Candidat] = {}
     for d, ks in dans.items():
-        if d in exclus or est_liste_noire(d):
+        lexique = nom_publicitaire(d)                # #3787 : mot de régie dans le nom → une coupure suffit, même sous un CDN générique
+        if d in exclus or (est_liste_noire(d) and not lexique):
             continue
-        classe = classer(d) in CLASSES_PUB
+        classe = classer(d) in CLASSES_PUB or lexique
         n = len(ks)
         if d in indices:
             risque = "partage" if d in hors else "faible"
             score, motif = SCORE_INDICE, f"indice du maillage, vu dans {n} coupure(s)"
         elif classe:
             risque = "partage" if d in hors else "faible"
-            score, motif = SCORE_CLASSE + min(20, BONUS_COUPURE * (n - 1)), f"classé {classer(d)} par les listes, vu dans {n} coupure(s)"
+            score, motif = SCORE_CLASSE + min(20, BONUS_COUPURE * (n - 1)), (f"classé {classer(d)} par les listes, vu dans {n} coupure(s)" if classer(d) in CLASSES_PUB
+                                                                else f"nom de régie publicitaire, vu dans {n} coupure(s)")
         elif d not in hors and n >= min_coupures:
             risque, score, motif = "faible", SCORE_INCONNU + min(30, BONUS_COUPURE * (n - min_coupures)), f"vu seulement pendant {n} coupures"
         else:

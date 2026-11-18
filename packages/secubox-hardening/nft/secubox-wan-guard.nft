@@ -11,18 +11,44 @@
 # Le fichier de base n'appartient à aucun paquet ; plutôt que de le réécrire
 # (verrouillage possible, eth2 porte aussi l'administration), cette chaîne
 # s'exécute AVANT lui (priorité filter - 10) et ne coupe que les backends
-# identifiés, plus les écoutes de leurre de sbx-authwatch (23, 1433, 3306,
-# 3389, 5432, 5900, 6379, 9200, 27017), fermées à la demande. SSH, 80/443 (HAProxy), SMB, mDNS et le reste ne sont pas touchés.
+# identifiés. SSH, 80/443 (HAProxy), SMB, mDNS et le reste ne sont pas touchés.
+# Les écoutes de leurre de sbx-authwatch (23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017) sont OUVERTES depuis
+# #3728 : fermées, elles ne pouvaient jamais être touchées (102 123 paquets jetés sur gk2, zéro touche). Rien ne tourne
+# derrière ; un contact y vaut ban (adresses privées et liste blanche exceptées). En IPv4 seulement : les règles
+# `nfproto ipv6` ci-dessous les ferment en IPv6. L'ouverture suppose eth2 déclarée de confiance (nft-input-trust.d,
+# cas de gk2) : sous la base en `policy drop` sans cette déclaration, ces ports restent fermés quoi qu'il arrive.
 #
 # Chargement idempotent : créer, vider, redéfinir.
 table inet secubox_wan_guard { }
 delete table inet secubox_wan_guard
 
 table inet secubox_wan_guard {
+	# Connexions TCP simultanées par adresse publique (#3735) : tenue par nft, une entrée par source, oubliée quand
+	# ses connexions se ferment.
+	set connexions4 {
+		type ipv4_addr
+		flags dynamic
+		size 65536
+	}
+
 	chain input {
 		type filter hook input priority filter - 10; policy accept;
-		iifname "eth2" tcp dport { 23, 1433, 3306, 3389, 5432, 5900, 6379, 8088, 8404, 8880, 8900, 8910, 9080, 9200, 27017 } counter drop \
-			comment "backends + leurres sbx-authwatch fermes cote eth2 (#1306)"
+		iifname "eth2" tcp dport { 8088, 8404, 8880, 8900, 8910, 9080 } counter drop \
+			comment "backends fermes cote eth2 (#1306)"
+		iifname "eth2" meta nfproto ipv6 tcp dport { 23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017 } counter drop \
+			comment "leurres : IPv4 seulement (#3728)"
+		# SYN porteur de données (#3735) : une ouverture n'en porte pas (TCP Fast Open mis à part, inusité par les
+		# navigateurs) ; c'est la signature des réflexions par équipements intermédiaires et de floods de botnets.
+		# 80 = en-tête IP 20 + en-tête TCP 60 au plus (options comprises).
+		iifname "eth2" tcp flags & (syn | ack) == syn ip length > 80 counter drop \
+			comment "SYN porteur de donnees (#3735)"
+		iifname "eth2" tcp flags & (syn | ack) == syn ip6 length > 60 counter drop \
+			comment "SYN porteur de donnees, IPv6 (#3735)"
+		# Plafond de connexions TCP simultanées par adresse PUBLIQUE (#3735) : un robot qui ouvre puis abandonne des
+		# centaines de connexions (fenêtre nulle, clôture jamais finie) est arrêté à l'ouverture. 256 laisse large un
+		# client légitime derrière un NAT d'opérateur ; le LAN, le maillage et la boucle locale ne sont jamais comptés.
+		iifname "eth2" tcp flags & (syn | ack) == syn ip saddr != { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 127.0.0.0/8 } add @connexions4 { ip saddr ct count over 256 } counter drop \
+			comment "plafond de connexions par source (#3735)"
 		# 7331 = jonction au maillage (#3103). eth2 porte AUSSI le LAN (gk2 est sur le réseau de la Freebox) :
 		# fermé à Internet, ouvert aux adresses privées ; nginx p2p-masterlink restreint ensuite au LAN et au maillage.
 		iifname "eth2" tcp dport 7331 ip saddr != { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } counter drop \
@@ -32,8 +58,17 @@ table inet secubox_wan_guard {
 		# LAN du mode routeur (br-lan, #3206) : netmodes l'accepte en entrée comme eth2 ; mêmes backends fermés, MÊME
 		# liste (un test l'exige), sans quoi l'admin nginx :9080 serait joignable sans HAProxy ni sbxwaf. La jonction
 		# du maillage (7331, adresses privées) y reste ouverte : c'est ainsi qu'un nœud du LAN routé rejoint le maillage.
-		iifname "br-lan" tcp dport { 23, 1433, 3306, 3389, 5432, 5900, 6379, 8088, 8404, 8880, 8900, 8910, 9080, 9200, 27017 } counter drop \
-			comment "backends + leurres sbx-authwatch fermes cote LAN route (#3206)"
+		iifname "br-lan" tcp dport { 8088, 8404, 8880, 8900, 8910, 9080 } counter drop \
+			comment "backends fermes cote LAN route (#3206)"
+		iifname "br-lan" meta nfproto ipv6 tcp dport { 23, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017 } counter drop \
+			comment "leurres : IPv4 seulement (#3728)"
+		# SYN porteur de données (#3735) : une ouverture n'en porte pas (TCP Fast Open mis à part, inusité par les
+		# navigateurs) ; c'est la signature des réflexions par équipements intermédiaires et de floods de botnets.
+		# 80 = en-tête IP 20 + en-tête TCP 60 au plus (options comprises).
+		iifname "br-lan" tcp flags & (syn | ack) == syn ip length > 80 counter drop \
+			comment "SYN porteur de donnees (#3735)"
+		iifname "br-lan" tcp flags & (syn | ack) == syn ip6 length > 60 counter drop \
+			comment "SYN porteur de donnees, IPv6 (#3735)"
 		iifname "br-lan" meta nfproto ipv6 tcp dport 7331 counter drop \
 			comment "jonction du maillage : jamais en IPv6 depuis le LAN route (#3206)"
 	}

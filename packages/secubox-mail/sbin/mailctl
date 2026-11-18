@@ -857,19 +857,60 @@ PY
                 [ -f "$f" ] || continue
                 local lu; lu=$(basename "$f" .json)
                 [ -z "$cible" ] || [ "$cible" = "$lu" ] || continue
-                local host port user mdp debut fin sortie ok
-                eval "$(python3 -c 'import json,shlex,sys; c=json.load(open(sys.argv[1])); print("host=%s port=%s user=%s mdp=%s" % tuple(shlex.quote(str(c.get(k,""))) for k in ("host","port","user","password")))' "$f")"
+                local host user debut fin sortie ok conf
+                eval "$(python3 -c 'import json,shlex,sys; c=json.load(open(sys.argv[1])); print("host=%s user=%s" % tuple(shlex.quote(str(c.get(k,""))) for k in ("host","user")))' "$f")"
                 debut=$(date +%s)
-                # imapc_password en option de doveadm : visible le temps de la commande dans le ps DU CONTENEUR, pas sur l'hôte.
-                if sortie=$(lxc_attach "$CONTAINER" doveadm -o mail_fsync=never -o "imapc_host=$host" -o "imapc_port=$port" -o "imapc_user=$user" \
-                        -o "imapc_password=$mdp" -o imapc_ssl=imaps -o ssl_client_ca_dir=/etc/ssl/certs -o "imapc_features=rfc822.size fetch-headers" \
-                        sync -1 -R -u "$lu" imapc: 2>&1); then ok=true; else ok=false; rc=1; fi
-                fin=$(date +%s)
-                python3 - "$IMAP_SYNC_ETAT/$lu.json" "$ok" "$((fin-debut))" "$(printf '%s' "$sortie" | tail -c 600)" <<'PY'
+                # #3760 : fenêtre de rapatriement. Sans `-t`, dsync charge en mémoire la liste ENTIÈRE de la boîte distante
+                # (INBOX de ~307 000 messages sur gk2 : ~250 Mo, tué par le plafond du conteneur à chaque passage). L'historique
+                # est rapatrié une fois ; ensuite on ne demande que les messages reçus depuis le dernier succès moins 3 jours
+                # (14 jours sans succès connu). MAILCTL_IMAP_DEPUIS=<horodatage unix> force la fenêtre (reprise complète : 0).
+                local depuis
+                depuis=$(python3 - "$IMAP_SYNC_ETAT/$lu.json" "$debut" "${MAILCTL_IMAP_DEPUIS:-}" <<'PY'
 import datetime, json, sys
-f, ok, duree, msg = sys.argv[1:]
-json.dump({"dernier": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), "ok": ok == "true",
-           "duree_s": int(duree), "message": msg.strip()}, open(f, "w"))
+f, maintenant, force = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+if force.isdigit():
+    print(int(force)); sys.exit()
+try:
+    ok = datetime.datetime.fromisoformat(json.load(open(f))["dernier_ok"]).timestamp()
+    print(max(0, int(ok) - 3 * 86400))
+except (OSError, ValueError, KeyError, TypeError):
+    print(maintenant - 14 * 86400)
+PY
+)
+                # #3760 : index imapc SUR DISQUE. Avec la destination nue `imapc:`, l'index de la boîte distante est
+                # tenu en mémoire et reconstruit à chaque passage (FETCH de tous les UID) : la fenêtre seule ne suffit pas.
+                # Sur disque, il est persistant et chaque passage ne demande que ce qui a changé.
+                local index="/var/vmail/.imapc-index/$lu"
+                lxc_attach "$CONTAINER" install -d -o vmail -g mail -m 0700 /var/vmail/.imapc-index "$index"
+                local -a fenetre=()
+                [[ "$depuis" =~ ^[0-9]+$ ]] && [ "$depuis" -gt 0 ] && fenetre=(-t "$depuis")
+                # #3739 : JAMAIS le mot de passe en argument. `ps` sur l'HÔTE voit les processus des conteneurs : un
+                # `-o imapc_password=…` y était lisible par tout compte de la box. Les réglages imapc passent par
+                # l'entrée standard vers un fichier 0600 du conteneur (umask 077), inclus par `doveadm -c`, effacé après.
+                conf="/run/secubox-imapc-$lu.conf"
+                python3 -c '
+import json, sys
+c = json.load(open(sys.argv[1]))
+q = lambda v: "\"" + str(v).replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+print("!include /etc/dovecot/dovecot.conf")
+for k, cle in (("host", "imapc_host"), ("port", "imapc_port"), ("user", "imapc_user"), ("password", "imapc_password")):
+    print(cle, "=", q(c.get(k, "")))
+' "$f" | lxc_attach "$CONTAINER" sh -c "umask 077; cat > '$conf'"
+                if sortie=$(lxc_attach "$CONTAINER" doveadm -c "$conf" -o mail_fsync=never -o imapc_ssl=imaps -o ssl_client_ca_dir=/etc/ssl/certs \
+                        -o "imapc_features=rfc822.size fetch-headers" sync -1 -R "${fenetre[@]}" -u "$lu" "imapc:$index" 2>&1); then ok=true; else ok=false; rc=1; fi
+                lxc_attach "$CONTAINER" rm -f "$conf" || true
+                fin=$(date +%s)
+                python3 - "$IMAP_SYNC_ETAT/$lu.json" "$ok" "$((fin-debut))" "$(printf '%s' "$sortie" | tail -c 600)" "$depuis" <<'PY'
+import datetime, json, sys
+f, ok, duree, msg, depuis = sys.argv[1:]
+maintenant = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+try:
+    avant = json.load(open(f)).get("dernier_ok")
+except (OSError, ValueError, AttributeError):
+    avant = None
+# #3760 : « dernier_ok » survit aux échecs, c'est lui qui borne la fenêtre du passage suivant.
+json.dump({"dernier": maintenant, "ok": ok == "true", "dernier_ok": maintenant if ok == "true" else avant,
+           "depuis": int(depuis), "duree_s": int(duree), "message": msg.strip()}, open(f, "w"))
 PY
                 log "imap-sync : $lu ← $user@$host : $([ "$ok" = true ] && echo ok || echo ECHEC) en $((fin-debut)) s"
             done

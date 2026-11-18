@@ -11,6 +11,11 @@ case "$1" in
         systemctl stop "$unit" 2>/dev/null || true
         systemctl disable "$unit" 2>/dev/null || true
       done
+      # #3716 : minuterie sans extrait debhelper (dh_installsystemd n'en génère pas) — arrêtée au retrait seulement ;
+      # une mise à jour la garde (le postinst la démarre).
+      if [ "$1" = "remove" ]; then
+        systemctl stop secubox-waf-blocs-veille.timer 2>/dev/null || true
+      fi
     fi
     ;;
 

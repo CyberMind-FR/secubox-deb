@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# secubox-garde (#3794) — pose, en root, l'ACL nommée d'écriture de secubox-garde sur audit.log.
+# /var/log/secubox appartient à l'utilisateur secubox : audit.log peut y être remplacé par un lien. Refus si la
+# cible n'est pas un fichier ordinaire ou est un lien ; setfacl --physical ne suit jamais de lien.
+set -u
+f="${1:-/var/log/secubox/audit.log}"
+if [ -L "$f" ] || [ ! -f "$f" ]; then
+    echo "secubox-garde : $f n'est pas un fichier ordinaire (lien ou absent), ACL refusée" >&2
+    exit 1
+fi
+exec setfacl --physical -m u:secubox-garde:w -- "$f"

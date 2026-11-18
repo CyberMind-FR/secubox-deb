@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox Garde — /etc/secubox/garde.toml (#3794). Valeurs absentes = défauts du paquet.
+# Le numéro de téléphone et le secret d'envoi des SMS ne vont jamais ici : /etc/secubox/secrets/garde-sms (0600).
+
+automatique = true        # false : la garde observe et signale, sans agir
+courriel = ""             # destinataire des notifications (vide = aucun courriel)
+sms_utilisateur = ""      # identifiant de l'usager à prévenir par SMS (vide = aucun SMS)
+sms_bans = false          # true : résumé horaire des bans par SMS
+quarantaines_max = 3      # appareils en quarantaine en même temps, au plus
+rafale_bans = 50          # plus de ce nombre de bans en 10 min = rafale signalée

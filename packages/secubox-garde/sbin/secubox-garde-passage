@@ -1,0 +1,81 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Passage du moteur de secubox-garde (#3794), lancé par secubox-garde-passage.timer.
+
+Au premier passage d'un démarrage (boot_id différent de celui noté), `rapprocher` réapplique d'abord
+les décisions actives (ensembles nft et état ad-guard perdus ou à revoir), puis le passage normal.
+"""
+import logging
+import sys
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+sys.path.insert(0, "/usr/lib/secubox/garde")
+
+from garde import appareils, base, demandes, effets, isoles, moteur, notifs, reseau, sources  # noqa: E402
+
+BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
+NOTE_BOOT = base.ETAT / "boot_id"
+
+
+def _publier_isoles(db, maintenant: int) -> None:
+    """Adresses isolées pour sbxwaf (#3800) ; un échec n'arrête jamais le passage."""
+    try:
+        logging.info("isolées publiées : %d", isoles.ecrire(db, maintenant))
+    except OSError as e:
+        logging.warning("liste des isolées non écrite : %s", e)
+
+
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    maintenant = int(time.time())
+    db = base.ouvrir(base.BASE)
+    reglages = base.reglages()
+    protegees, prefixes = reseau.lire()
+    reglages["lan_prefixes"] = prefixes
+    ef = effets.Effets()
+    try:
+        boot = BOOT_ID.read_text().strip()
+    except OSError:
+        boot = ""
+    try:
+        note = NOTE_BOOT.read_text().strip()
+    except OSError:
+        note = ""
+    if boot != note:
+        logging.info("rapprochement : %s", moteur.rapprocher(db, ef, maintenant))
+        NOTE_BOOT.write_text(boot + "\n")
+        _publier_isoles(db, maintenant)
+    noms_doh = sources.charger_noms_doh()
+    nommeur = appareils.Nommeur.depuis_fichiers()
+    src = SimpleNamespace(
+        voisins=sources.voisins,
+        alertes=lambda d, v: sources.lire_alertes_dns(d, voisins=v),
+        propositions=lambda t: sources.lire_propositions(maintenant=t),
+        doh=lambda depuis, v: sources.signaux_doh(
+            sources.lire_requetes_dns(depuis, noms_doh=noms_doh), noms_doh, v),
+        protegees=protegees,
+        nommer=nommeur.nom,
+    )
+    nt = SimpleNamespace(
+        mettre_en_file=notifs.mettre_en_file,
+        # L'envoi (réseau IP) est fait par secubox-garde-envoi, lancé après le passage : ici, file seulement.
+        vider=lambda d, r, t: {"differe": "secubox-garde-envoi"},
+    )
+    # Demandes de l'administrateur (libérer, rouvrir, débannir, essai) déposées par l'API : avant les décisions.
+    logging.info("demandes : %s", demandes.executer(db, ef, nt, maintenant))
+    # Présence de la clé SMS, pour la page (l'API ne lit jamais les secrets) : un booléen, jamais la clé.
+    moteur._repere(db, "cle_sms_presente", 1 if notifs.lire_cle_sms() else 0)
+    db.commit()
+    logging.info("passage : %s", moteur.passage(db, reglages, src, ef, nt, maintenant))
+    _publier_isoles(db, maintenant)
+    db.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

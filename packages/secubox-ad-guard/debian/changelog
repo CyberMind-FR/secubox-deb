@@ -1,3 +1,92 @@
+secubox-ad-guard (1.32.0-1~trixie1) trixie; urgency=medium
+
+  * Garde (#3794) : verbes root `quarantaine poser|lever` et `evasion
+    poser|lever`, ouverts au seul utilisateur secubox-garde (sudoers). Une
+    quarantaine redirige tout nom vers la box (vue sbx-quarantaine-*), sauf les
+    noms indispensables, et garde les blocages TV Privacy (#3674) ; une
+    évasion refuse les noms fermés en plus de la vue de l'appareil. État
+    `quarantaines`/`evasions` dans etat.json (16 au plus), lever rend la vue
+    d'origine.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:00:00 +0100
+
+secubox-ad-guard (1.31.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (#3787) : découverte automatique dès la première coupure d'un
+    nom de régie publicitaire (mot « ads », « adserver », « vast », « vmap »…
+    dans un libellé d'hôte) : classé PUBLICITE (source « lexique »), proposé et
+    mis à l'essai 24 h, même locataire d'un CDN générique (akamaized.net…).
+    Jamais au-dessus d'une catégorie STREAMING/DRM ; le CDN générique reste
+    protégé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 05:14:34 +0100
+
+secubox-ad-guard (1.30.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (#3785) : pubs RTL9+ (OQEE) bloquées en relais seul (validé devant
+    la TV le 17/11 : pubs zappées, lecture OK) ; profil de base complété
+    (vizchoice.viznet.tv, ads-canalplus.akamaized.net), posé aux TV en mode auto ;
+    ads-canalplus.akamaized.net classé PUBLICITE (entrée exacte), akamaized.net
+    reste CDN protégé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 14:15:23 +0100
+
+secubox-ad-guard (1.29.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (#3783) : pubs M6+ bloquées en relais seul (validé devant la TV
+    le 17/11 : plus de pubs, lecture OK) ; profil de base complété (FreeWheel
+    7cbf2, stickyadstv, 2mdn.net, smartclip, adform, realytics, everesttech,
+    ups.analytics.yahoo.com). Migration : chaque nouveau profil de base est
+    posé une fois aux TV déjà en mode auto (garde des catégories protégées).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 11:50:28 +0100
+
+secubox-ad-guard (1.28.2-1~trixie1) trixie; urgency=medium
+
+  * Légendes des graphiques : chaque libellé prend la couleur de sa courbe
+    (demande du propriétaire, 17/11).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 07:12:28 +0100
+
+secubox-ad-guard (1.28.1-1~trixie1) trixie; urgency=medium
+
+  * Fiche « DNS de la box » (#3769) : plus de nom « gk2 » en dur ; une IPv6
+    SLAAC dérivée de la MAC est reconnue durable (comme une statique) ;
+    renvoi vers l'onglet « DNS du réseau » de la page Freebox au lieu de
+    « la box ne peut pas lire la Freebox ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 06:24:21 +0100
+
+secubox-ad-guard (1.28.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (#3774) : onglet « Filtrages automatiques » de la page Ad Guard
+    (maquette approuvée) : six interrupteurs (ajout, essai, confirmation,
+    déclencheurs pub, tri Netflix des nouvelles TV, indices du maillage),
+    tri Netflix par TV, retour aux réglages par défaut. Routes
+    GET/POST /adblock-tv/auto/filtrages, POST /adblock-tv/auto/filtrages/defaut ;
+    un réglage fait dans la page prime sur le TOML.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 06:08:37 +0100
+
+secubox-ad-guard (1.27.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (#3774) : en mode auto, tous les filtrages sont actifs par
+    défaut : essai automatique, confirmation automatique, déclencheurs pub,
+    et tri Netflix posé d'office pour chaque TV en mode auto (8 au plus).
+    Migration unique au postinst des box existantes (marque), un retrait
+    ultérieur par l'administrateur n'est jamais réécrit.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 06:02:53 +0100
+
+secubox-ad-guard (1.26.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy : seconde voie de détection automatique des TV (#3771), par le
+    service du système de la TV (Android TV, Freebox Player, LG webOS, Samsung
+    Tizen, VIDAA, Roku) : un direct sans FreeWheel suffit. Liste et seuil
+    réglables (`plateformes_tv`, `min_plateforme`).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 17 Nov 2026 05:24:41 +0100
+
 secubox-ad-guard (1.25.3-1~trixie1) trixie; urgency=medium
 
   * SBX TV Privacy : encart « Pubs bloquées récemment » dans la vue par appareil (ref #3676).

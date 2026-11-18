@@ -168,3 +168,36 @@ def test_le_controleur_audite_l_activation_de_l_ajout_automatique_et_le_mode_par
     mod.regles_appliquer()
     audit = (tmp_path / "audit.log").read_text()
     assert '"action": "ajout_auto"' in audit and "actif=True" in audit and "mode_defaut=off" in audit
+
+
+# ── #3774 : en mode auto, tous les filtrages sont actifs, tri Netflix compris ─────────────────────────────────────────────
+def test_migration_politique_auto_une_seule_fois(tmp_path):
+    dnstv.ecrire_etat({"actif": True, "ajout_auto": True, "auto_essai": False,
+                       "clients": [{"ip": "192.168.1.95", "nom": "TV 4e95", "mode": "auto"}, {"ip": "192.168.1.9", "nom": "PC", "mode": "off"}]}, tmp_path)
+    assert dnstv.migrer_politique_auto(tmp_path) is True
+    etat, _ = dnstv.lire_etat(tmp_path)
+    assert etat["auto_essai"] is True and etat["tri_netflix"]["appareils"] == ["tv-4e95"]
+    etat["tri_netflix"]["appareils"] = []                       # l'administrateur retire ensuite le tri : jamais réécrit
+    dnstv.ecrire_etat(etat, tmp_path)
+    assert dnstv.migrer_politique_auto(tmp_path) is False
+    assert dnstv.lire_etat(tmp_path)[0]["tri_netflix"]["appareils"] == []
+
+
+def test_migration_ne_touche_pas_un_etat_corrompu(tmp_path):
+    (tmp_path / "etat.json").write_text("{pas du json")
+    assert dnstv.migrer_politique_auto(tmp_path) is False and (tmp_path / "etat.json").read_text() == "{pas du json"
+
+
+def test_tri_netflix_plafonne_a_huit():
+    etat = {"clients": [{"ip": f"192.168.1.{i}", "nom": f"TV {i}", "mode": "auto"} for i in range(10, 20)]}
+    dnstv.politique_auto(etat)
+    assert len(etat["tri_netflix"]["appareils"]) == 8
+
+
+def test_tv_ajoutee_automatiquement_recoit_le_tri_netflix(monkeypatch, tmp_path):
+    t = int(time.time())
+    mod = charger_script(monkeypatch, tmp_path, {"actif": True, "ajout_auto": True, "clients": []})
+    donnees_tv(tmp_path, t)
+    lancer(mod, lambda: Rep(), t)
+    etat, _ = dnstv.lire_etat(tmp_path)
+    assert etat["tri_netflix"]["appareils"] == ["tv-fb5b"] and etat["auto_essai"] is True

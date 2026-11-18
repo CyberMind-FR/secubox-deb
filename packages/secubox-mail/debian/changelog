@@ -1,3 +1,24 @@
+secubox-mail (2.16.14-1~trixie1) trixie; urgency=medium
+
+  * Rapatriement IMAP : fenêtre -t de dsync (dernier succès moins 3 jours,
+    14 jours sans succès connu). Sans elle, la liste entière d'une INBOX de
+    307 000 messages (~250 Mo) dépassait le plafond de 384 Mo du conteneur :
+    113 OOM le 16/11 sur gk2 (#3760). Index imapc sur disque
+    (/var/vmail/.imapc-index/<adresse>) : la fenêtre seule ne suffisait pas,
+    l'index en mémoire relisait toute la boîte distante à chaque passage.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 16 Nov 2026 10:13:31 +0100
+
+secubox-mail (2.16.12-1~trixie1) trixie; urgency=medium
+
+  * Rapatriement IMAP distant : le mot de passe ne passe plus en argument de
+    doveadm (`-o imapc_password=…` était lisible par tout compte de l'HÔTE,
+    `ps` voit les processus des conteneurs). Réglages imapc écrits par
+    l'entrée standard dans un fichier 0600 du conteneur (umask 077), inclus
+    par `doveadm -c`, effacé après chaque synchronisation (ref #3739).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 15 Nov 2026 12:10:00 +0100
+
 secubox-mail (2.16.11-1~trixie1) trixie; urgency=medium
 
   * Rapatriement IMAP à sens unique (doveadm sync -1 -R) : en double sens,

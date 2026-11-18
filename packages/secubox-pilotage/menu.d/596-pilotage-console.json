@@ -1,0 +1,13 @@
+{
+  "id": "pilotage-console",
+  "name": "Console de pilotage",
+  "icon": "🎛",
+  "path": "/pilotage/console/",
+  "category": "mesh",
+  "order": 596,
+  "description": "Actions, macros et journal en direct sur plusieurs box du parc",
+  "requires": ["secubox-pilotage"],
+  "theme": "mesh",
+  "www": "pilotage/console",
+  "unite": "pilotage"
+}

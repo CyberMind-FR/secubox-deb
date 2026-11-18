@@ -28,7 +28,7 @@ except ImportError:                                   # lancé hors paquet
 CATEGORIES = ("PUBLICITE", "TRACKING", "TELEMETRIE", "STREAMING", "CDN", "DRM", "AUTHENTIFICATION",
               "MISE_A_JOUR", "SERVICES_CONSTRUCTEUR", "INCONNU")
 PROTEGEES = frozenset({"STREAMING", "CDN", "DRM", "AUTHENTIFICATION", "MISE_A_JOUR", "INCONNU"})
-SOURCES = ("liste", "apprentissage", "ndpi", "manuelle", "profil")      # `ndpi` : réservé, aucun flux nDPI -> ad-guard n'existe encore
+SOURCES = ("liste", "apprentissage", "ndpi", "manuelle", "profil", "lexique")      # `ndpi` : réservé, aucun flux nDPI -> ad-guard n'existe encore
 
 # Ancienne valeur -> catégorie unique. Origines : dnstv.CATEGORIES, dnstv.TYPES_SERVICE, main.AdCategory (code hérité).
 CORRESPONDANCE = {
@@ -45,7 +45,13 @@ CORRESPONDANCE = {
     "malware": "INCONNU", "cryptominer": "INCONNU",   # hors périmètre vie privée : jamais une raison de blocage AUTO ici
 }
 
-CONFIANCE = {"manuelle": 100, "reference": 90, "liste": 80, "services": 70, "profil": 70}
+CONFIANCE = {"manuelle": 100, "reference": 90, "liste": 80, "services": 70, "profil": 70, "lexique": 60}
+# #3787 : mots de régie publicitaire. Un libellé d'hôte (avant le domaine enregistrable), découpé sur « - », qui en porte un EXACTEMENT
+# classe le nom en PUBLICITE (source « lexique ») : un nom INCONNU, ou un locataire d'un CDN générique (ads-canalplus.akamaized.net,
+# mesuré gk7 le 17/11). Jamais au-dessus d'une autre catégorie protégée (STREAMING, DRM…). Pas de « ad » seul ni de « ssai » (le flux
+# vidéo lui-même passe par l'insertion côté serveur).
+MOTS_PUB = frozenset({"ads", "adserver", "adservice", "adserving", "adsrv", "pubads", "advert", "adverts", "advertising", "publicite",
+                      "vast", "vmap", "vpaid"})
 FICHIER = "classification.json"
 FICHIER_CACHE = "classification-cache.db"           # lot 3 : SQLite découpé (l'ancien JSON de 16 Mo est supprimé)
 MODE_FICHIER = 0o640
@@ -90,6 +96,15 @@ def _domaine(brut) -> str:
     if not d:
         raise ErreurTaxonomie("domaine invalide")
     return d
+
+
+def nom_publicitaire(domaine: str) -> bool:
+    """Vrai si un libellé d'hôte de `domaine`, avant son domaine enregistrable, porte un mot de MOTS_PUB (#3787)."""
+    if not isinstance(domaine, str):
+        return False
+    parts = domaine.strip().lower().rstrip(".").split(".")
+    reg = 3 if ".".join(parts[-2:]) in SUFFIXES_PUBLICS else 2
+    return any(m in MOTS_PUB for lab in parts[:-reg] for m in lab.split("-"))
 
 
 def _suffixes(domaine: str) -> List[str]:
@@ -262,8 +277,11 @@ class Taxonomie:
                 e = self.manuelles.get((m, s))
                 if e:
                     return self._resultat(d, e["categorie"], "manuelle", CONFIANCE["manuelle"])
+        lexique = nom_publicitaire(d)
         for s in suff:
             if s in self.reference:
+                if lexique and s != d and self.reference[s] == "CDN":       # locataire publicitaire d'un CDN générique (#3787)
+                    return self._resultat(d, "PUBLICITE", "lexique", CONFIANCE["lexique"])
                 return self._resultat(d, self.reference[s], "liste", CONFIANCE["reference"])
             if s in self.table:
                 return self._resultat(d, depuis_ancienne(self.table[s]), "liste", CONFIANCE["liste"], self.table[s])
@@ -275,6 +293,8 @@ class Taxonomie:
                 return self._resultat(d, depuis_ancienne(a), "liste", CONFIANCE["liste"], a)
         if d in self.profil:
             return self._resultat(d, "PUBLICITE", "profil", CONFIANCE["profil"])     # graine validée sur deux TV réelles (#1943/#1954)
+        if lexique:
+            return self._resultat(d, "PUBLICITE", "lexique", CONFIANCE["lexique"])     # #3787 : nom de régie, sinon INCONNU
         if d in self.appris:
             return self._resultat(d, "INCONNU", "apprentissage", self.appris[d])  # l'apprentissage ne se justifie jamais lui-même
         return self._resultat(d, "INCONNU", SOURCE_AUCUNE, 0)

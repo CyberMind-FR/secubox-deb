@@ -18,6 +18,8 @@ override_dh_auto_install:
 	install -D -m 755 sbin/secubox-pilotage-invite $(P)/usr/sbin/secubox-pilotage-invite
 	install -D -m 755 sbin/secubox-pilotage-www $(P)/usr/sbin/secubox-pilotage-www
 	install -D -m 755 sbin/secubox-pilotage-vhost $(P)/usr/sbin/secubox-pilotage-vhost
+	install -D -m 644 www/pilotage/console/index.html $(P)/usr/share/secubox/www/pilotage/console/index.html
+	install -D -m 644 menu.d/596-pilotage-console.json $(P)/usr/share/secubox/menu.d/596-pilotage-console.json
 	install -d $(P)/usr/share/secubox/pilotage/vhost-www/pilotage-connexion
 	install -m 644 www-vhost/pilotage-connexion/* $(P)/usr/share/secubox/pilotage/vhost-www/pilotage-connexion/
 	install -D -m 644 init_donnees.py $(P)/usr/lib/secubox/pilotage/init_donnees.py
