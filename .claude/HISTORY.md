@@ -9,6 +9,21 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-18 — secubox-garde : détection et réponse automatiques (ref #3794)
+
+- Nouveau module `secubox-garde` (0.3.5) : lit capteurs DNS/DPI, décide seul (ban d'adresse d'Internet par le geste WAF
+  `garde/ban|unban`, quarantaine DNS d'un appareil et fermeture d'évasion par les verbes ad-guard `quarantaine|evasion`), prévient
+  par la page `/garde/`, courriel (`<nœud>@secubox.in`) et SMS Free Mobile. Un appareil = un seul item (toutes adresses, nom déduit).
+  Conception + plan dans `docs/superpowers/` ; 8 tâches en sous-agents relues une à une + relecture finale (PR #3796).
+- Déployé gk2 : secubox-garde 0.3.5, secubox-waf-ng 1.40.2, secubox-ad-guard 1.32.0, secubox-core 1.8.34.
+- **Incident ~8 min** : `secubox-core` (compte de service `garde`) non reconstruit → API du WAF en boucle de redémarrage
+  (`ImportError require_garde`), trafic public non touché ; corrigé (core 1.8.34) puis dépendance `secubox-core (>= 1.8.34~)`
+  (PR #3797). Leçon : un changement de `common/` impose de reconstruire et publier `secubox-core` AVANT les paquets qui l'utilisent.
+- Page : CSP rétablit `script-src-attr 'unsafe-inline'` (sidebar.js commun) et bandeau rouge masqué (PR #3798) ; page alignée sur
+  les webui, aperçus retirés (PR #3799).
+- Reste (T9) : test réel courriel/SMS, essai de quarantaine/évasion et de ban/débannir, page `isole.html` à brancher par route
+  déclarative ; noms TV Privacy (etat.json 0600) en suivi ; suite IA : #3795.
+
 ## 2026-11-18 — Audit des changements d'ACL : règle sbx_acl (ref #3791)
 
 - `secubox-security-posture` 2.10.6 (PR #3792, #3793) : `/etc/audit/rules.d/98-sbx-waf-droits.rules` =
