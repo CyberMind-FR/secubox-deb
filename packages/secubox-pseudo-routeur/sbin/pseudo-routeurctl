@@ -461,6 +461,17 @@ readonly R6_ETAT="${SECUBOX_PR_R6_ETAT:-/var/lib/secubox/pseudo-routeur/relais6-
 readonly R6_UNITE_RA="secubox-relais6-ra.service"
 readonly R6_TIMER="pseudo-routeur-relais6-sonde.timer"
 readonly R6_SEUIL=3
+readonly R6_VERROU="${SECUBOX_PR_R6_VERROU:-/run/lock/secubox-relais6.lock}"
+
+# Verrou commun des verbes ecrivants relais6-* et de la sonde : jamais deux a la fois.
+_r6_verrou() {
+    mkdir -p "$(dirname "$R6_VERROU")"
+    exec 9>>"$R6_VERROU"
+    if ! flock -w 60 9; then
+        echo "refuse : verrou $R6_VERROU tenu depuis plus de 60 s" >&2
+        exit 1
+    fi
+}
 
 _audit() {
     # $1 action, $2 resultat, $3 detail (texte libre deja valide)
@@ -614,7 +625,11 @@ _r6_contenu_dnsmasq() {
 # Genere par pseudo-routeurctl relais6-preparer (#3807) — ne pas editer.
 # Annonces de routeur seules : pas de DNS (port=0), pas de DHCPv4, DHCPv6 sans etat.
 port=0
+user=dnsmasq
+group=nogroup
+# Seulement lan_if : gk1 fait deja tourner un autre dnsmasq (lxcbr0), on ne prend rien d'autre.
 interface=$R6_LAN_IF
+except-interface=lo
 bind-interfaces
 no-resolv
 no-hosts
@@ -676,6 +691,9 @@ cmd_relais6_preparer() {
         _audit relais6_preparer refuse "dnsmasq --test"; exit 1
     fi
     # 2. Adresse fixe + route par defaut via la Freebox : jamais de lien coupe ni de MTU change.
+    # A partir d'ici, tout echec defait ce qui a ete pose (retirer, idempotent).
+    # shellcheck disable=SC2064,SC2154
+    trap "rc=\$?; rm -f -- '$nft_tmp' '$conf_tmp'; if [ \$rc -ne 0 ]; then echo 'echec : relais IPv6 defait' >&2; cmd_relais6_retirer >/dev/null || true; _audit relais6_preparer echec 'defait apres echec'; fi" EXIT
     _r6_poser "$R6_NETWORKD_DIR/$fnet.d/$R6_DROPIN" "$(_r6_contenu_dropin)"
     networkctl reload
     # 3. Redirections ICMPv6 coupees + transit du prefixe (persistant puis charge).
@@ -748,7 +766,10 @@ except (OSError, ValueError, TypeError):
 }
 
 _r6_timer() {
-    systemctl "$1" --now "$R6_TIMER" >/dev/null 2>&1 || echo "avertissement : systemctl $1 $R6_TIMER a echoue" >&2
+    if ! systemctl "$1" --now "$R6_TIMER" >/dev/null 2>&1; then
+        echo "avertissement : systemctl $1 --now $R6_TIMER a echoue" >&2
+        return 1
+    fi
 }
 
 cmd_relais6_basculer() {
@@ -759,12 +780,17 @@ cmd_relais6_basculer() {
         _audit relais6_basculer refuse "sonde du routeur en echec"
         exit 2
     fi
+    # Surveillance armee AVANT le next hop : jamais de bascule sans sonde.
+    _r6_ecrire_etat 0 true
+    if ! _r6_timer enable; then
+        _audit relais6_basculer refuse "sonde non armee ; next hop inchange"
+        exit 1
+    fi
     if ! _freeboxctl nexthop-regler "$R6_ROUTEUR_LL"; then
+        _r6_timer disable || true
         _audit relais6_basculer echec "freeboxctl nexthop-regler"
         exit 1
     fi
-    _r6_ecrire_etat 0 true
-    _r6_timer enable
     _audit relais6_basculer ok "next hop $R6_PREFIXE -> $R6_ROUTEUR_LL"
 }
 
@@ -776,11 +802,12 @@ cmd_relais6_revenir() {
         echo "refuse : relais6-revenir se lance sur la box de repli (connecteur Freebox)" >&2
         exit 2
     fi
-    command -v systemctl >/dev/null 2>&1 && _r6_timer disable
+    # La sonde reste armee tant que le retour n'a pas reussi : elle relancera ce retour.
     if ! _freeboxctl nexthop-regler vide; then
-        _audit relais6_revenir echec "freeboxctl nexthop-regler vide"
+        _audit relais6_revenir echec "freeboxctl nexthop-regler vide ; sonde laissee armee"
         exit 1
     fi
+    _r6_timer disable || true
     _audit relais6_revenir ok "next hop rendu a la Freebox"
 }
 
@@ -856,6 +883,10 @@ case "${1:-}" in
                 --unit="pseudo-routeur-$1-$$" --setenv=SECUBOX_PR_HORS_BAC=1 \
                 "$(readlink -f "$0")" "$@"
         fi ;;
+esac
+
+case "${1:-}" in
+    relais6-preparer|relais6-retirer|relais6-basculer|relais6-revenir|relais6-sonde) _r6_verrou ;;
 esac
 
 case "${1:-}" in

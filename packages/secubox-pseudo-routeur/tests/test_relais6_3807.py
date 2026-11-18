@@ -27,7 +27,7 @@ dns = "2a01:e0a:dec:c4e0::200"
 REPLI = ROUTEUR.replace('role = "routeur"', 'role = "repli"') + 'sonde_cible = "2001:4860:4860::8888"\n'
 
 
-def _env(tmp_path, conf=None, ping_ok=True, nft_c_ok=True, dnsmasq_ok=True, freebox_ok=True):
+def _env(tmp_path, conf=None, ping_ok=True, nft_c_ok=True, dnsmasq_ok=True, freebox_ok=True, systemctl_ok=True, reload_ok=True):
     b = tmp_path / "bin"
     b.mkdir(exist_ok=True)
     j = tmp_path / "appels.log"
@@ -36,8 +36,8 @@ def _env(tmp_path, conf=None, ping_ok=True, nft_c_ok=True, dnsmasq_ok=True, free
                f'[ "$1" = "list" ] && [ -e {tmp_path}/table ] && exit 0; [ "$1" = "list" ] && exit 1; '
                f'[ "$1" = "-f" ] && touch {tmp_path}/table; [ "$1" = "delete" ] && rm -f {tmp_path}/table; exit 0',
         "sysctl": f'echo "sysctl $*" >> {j}; echo 1',
-        "systemctl": f'echo "systemctl $*" >> {j}; exit 0',
-        "networkctl": f'echo "networkctl $*" >> {j}; [ "$1" = "status" ] && echo "     Network File: /etc/systemd/network/10-eth2.network"; exit 0',
+        "systemctl": f'echo "systemctl $*" >> {j}; case "$1" in enable|disable|restart) exit {0 if systemctl_ok else 1};; esac; exit 0',
+        "networkctl": f'echo "networkctl $*" >> {j}; [ "$1" = "reload" ] && exit {0 if reload_ok else 1}; [ "$1" = "status" ] && echo "     Network File: /etc/systemd/network/10-eth2.network"; exit 0',
         "ip": f'echo "ip $*" >> {j}; exit 0',
         "dnsmasq": f'echo "dnsmasq $*" >> {j}; exit {0 if dnsmasq_ok else 1}',
         "ping": f'echo "ping $*" >> {j}; exit {0 if ping_ok else 1}',
@@ -57,7 +57,7 @@ def _env(tmp_path, conf=None, ping_ok=True, nft_c_ok=True, dnsmasq_ok=True, free
            "SECUBOX_PR_NETWORKD_DIR": str(tmp_path / "network"), "SECUBOX_PR_R6_NFT": str(tmp_path / "nftables.d" / "zz-secubox-relais6.nft"),
            "SECUBOX_PR_NFT_PERSIST": str(tmp_path / "nftables.d" / "zz-secubox-pseudo-routeur.nft"),
            "SECUBOX_PR_R6_DNSMASQ_CONF": str(tmp_path / "etc" / "relais6-ra.conf"),
-           "SECUBOX_PR_R6_ETAT": str(tmp_path / "relais6-sonde.json"), "SECUBOX_SONDE_ETAT": str(tmp_path / "sonde.json")}
+           "SECUBOX_PR_R6_ETAT": str(tmp_path / "relais6-sonde.json"), "SECUBOX_PR_R6_VERROU": str(tmp_path / "relais6.lock"), "SECUBOX_SONDE_ETAT": str(tmp_path / "sonde.json")}
     return env, j
 
 
@@ -282,3 +282,60 @@ def test_routes_api_relaient_le_ctl(monkeypatch):
     finally:
         main.app.dependency_overrides.clear()
     assert [a[0] for a in vus] == ["relais6-etat", "relais6-basculer", "relais6-revenir"]
+
+
+def test_revenir_garde_la_sonde_armee_si_le_connecteur_echoue(tmp_path):
+    env, j = _env(tmp_path, REPLI, freebox_ok=False)
+    assert _run(env, "relais6-revenir").returncode == 1
+    assert "disable" not in _appels(j)
+
+
+def test_revenir_desarme_apres_succes(tmp_path):
+    env, j = _env(tmp_path, REPLI)
+    assert _run(env, "relais6-revenir").returncode == 0
+    a = _appels(j)
+    assert a.index("nexthop-regler vide") < a.index("systemctl disable --now")
+
+
+def test_basculer_arme_avant_le_next_hop(tmp_path):
+    env, j = _env(tmp_path, REPLI)
+    assert _run(env, "relais6-basculer").returncode == 0
+    a = _appels(j)
+    assert a.index("systemctl enable --now") < a.index("nexthop-regler")
+
+
+def test_basculer_sans_sonde_armee_ne_touche_pas_au_next_hop(tmp_path):
+    env, j = _env(tmp_path, REPLI, systemctl_ok=False)
+    assert _run(env, "relais6-basculer").returncode != 0
+    assert "nexthop-regler" not in _appels(j)
+
+
+def test_basculer_desarme_si_le_next_hop_echoue(tmp_path):
+    env, j = _env(tmp_path, REPLI, freebox_ok=False)
+    assert _run(env, "relais6-basculer").returncode == 1
+    a = _appels(j)
+    assert a.index("nexthop-regler") < a.index("systemctl disable --now pseudo-routeur-relais6-sonde.timer")
+
+
+def test_preparer_defait_tout_si_echec_apres_le_dropin(tmp_path):
+    env, j = _env(tmp_path, ROUTEUR, reload_ok=False)
+    r = _run(env, "relais6-preparer")
+    assert r.returncode != 0 and "defait" in r.stderr
+    assert not (tmp_path / "network" / "10-eth2.network.d").exists()
+    assert not (tmp_path / "etc" / "relais6-ra.conf").exists()
+    assert not (tmp_path / "nftables.d" / "zz-secubox-relais6.nft").exists()
+    assert not list((tmp_path / "nftables.d").glob(".*tmp")) and not list((tmp_path / "etc").glob(".*tmp"))
+
+
+def test_conf_dnsmasq_limitee_a_lan_if(tmp_path):
+    env, j = _env(tmp_path, ROUTEUR)
+    assert _run(env, "relais6-preparer").returncode == 0
+    conf = (tmp_path / "etc" / "relais6-ra.conf").read_text()
+    for ligne in ("user=dnsmasq", "group=nogroup", "interface=eth2", "except-interface=lo", "bind-interfaces"):
+        assert ligne + "\n" in conf
+    assert conf.count("interface=") == 3   # interface, except-interface, no-dhcpv4-interface
+
+
+def test_verbes_ecrivants_verrouilles():
+    src = CTL.read_text()
+    assert "relais6-preparer|relais6-retirer|relais6-basculer|relais6-revenir|relais6-sonde) _r6_verrou" in src
