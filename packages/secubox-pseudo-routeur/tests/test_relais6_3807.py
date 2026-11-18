@@ -12,7 +12,7 @@ import pytest
 
 RACINE = Path(__file__).resolve().parents[1]
 CTL = RACINE / "sbin" / "pseudo-routeurctl"
-FAUX = ("nft", "sysctl", "systemctl", "networkctl", "ip", "dnsmasq", "ping", "sudo", "systemd-run", "freeboxctl")
+FAUX = ("nft", "sysctl", "systemctl", "networkctl", "ip", "dnsmasq", "ping", "sudo", "systemd-run", "freeboxctl", "journalctl")
 
 ROUTEUR = """
 [relais_ipv6]
@@ -28,7 +28,7 @@ REPLI = ROUTEUR.replace('role = "routeur"', 'role = "repli"') + 'sonde_cible = "
 
 
 def _env(tmp_path, conf=None, ping_ok=True, nft_c_ok=True, dnsmasq_ok=True, freebox_ok=True, systemctl_ok=True, reload_ok=True,
-         adresse_presente=False, route_ok=True, forwarding="1", ra_actif=True, ll="fe80::f2ad:4eff:fe27:889b"):
+         adresse_presente=False, route_ok=True, forwarding="1", ra_actif=True, ra_emises=True, ll="fe80::f2ad:4eff:fe27:889b"):
     b = tmp_path / "bin"
     b.mkdir(exist_ok=True)
     j = tmp_path / "appels.log"
@@ -48,6 +48,7 @@ def _env(tmp_path, conf=None, ping_ok=True, nft_c_ok=True, dnsmasq_ok=True, free
         "ping": f'echo "ping $*" >> {j}; exit {0 if ping_ok else 1}',
         "sudo": 'while [ "$1" = "-u" ] || [ "$1" = "-n" ]; do [ "$1" = "-u" ] && shift; shift; done; exec "$@"',
         "systemd-run": f'echo "systemd-run $*" >> {j}; exit 99',
+        "journalctl": f'echo "journalctl $*" >> {j}; {"echo \"dnsmasq-dhcp: RTR-ADVERT(eth2) 2a01:e0a:dec:c4e0::\"" if ra_emises else "true"}',
         "freeboxctl": f'echo "freeboxctl $*" >> {j}; [ "$1" = "nexthop-lire" ] && echo \'{{"prefix": "2a01:e0a:dec:c4e0::/64", "next_hop": ""}}\'; exit {0 if freebox_ok else 1}',
     }
     assert set(corps) == set(FAUX)
@@ -92,7 +93,7 @@ def test_preparer_pose_les_trois_pieces(tmp_path):
     assert "Address=2a01:e0a:dec:c4e0::94/64" in dropin and "Gateway=fe80::3a07:16ff:fe77:17d3" in dropin
     conf = (tmp_path / "etc" / "relais6-ra.conf").read_text()
     for ligne in ("port=0", "interface=eth2", "enable-ra", "no-dhcpv4-interface=eth2",
-              "dhcp-range=::,constructor:eth2,ra-stateless,64", "ra-param=eth2,high,0",
+              "dhcp-range=2a01:e0a:dec:c4e0::,ra-stateless,64", "log-dhcp", "ra-param=eth2,high,0",
               "dhcp-option=option6:dns-server,[2a01:e0a:dec:c4e0::200]"):
         assert ligne + "\n" in conf, ligne
     nft = (tmp_path / "nftables.d" / "zz-secubox-relais6.nft").read_text()
@@ -389,7 +390,7 @@ def test_tout_basculer_vers_son_propre_lien_local(tmp_path):
     assert "sysctl -n net.ipv6.conf.all.forwarding" in a and "is-active --quiet secubox-relais6-ra.service" in a
 
 
-@pytest.mark.parametrize("panne", [{"forwarding": "0"}, {"ra_actif": False}, {"route_ok": False}, {"ping_ok": False}])
+@pytest.mark.parametrize("panne", [{"forwarding": "0"}, {"ra_actif": False}, {"ra_emises": False}, {"route_ok": False}, {"ping_ok": False}])
 def test_tout_sonde_locale_trois_echecs(tmp_path, panne):
     env, j = _env(tmp_path, TOUT, **panne)
     assert [_run(env, "relais6-sonde").returncode for _ in range(3)] == [0, 0, 1]

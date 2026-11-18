@@ -663,7 +663,8 @@ no-resolv
 no-hosts
 no-dhcpv4-interface=$R6_LAN_IF
 enable-ra
-dhcp-range=::,constructor:$R6_LAN_IF,ra-stateless,64
+dhcp-range=${R6_PREFIXE%/*},ra-stateless,64
+log-dhcp
 ra-param=$R6_LAN_IF,high,0
 dhcp-option=option6:dns-server,[$R6_DNS]
 dhcp-leasefile=/run/secubox-relais6-ra/leases
@@ -775,6 +776,9 @@ _r6_local_ok() {
     [ "$(sysctl -n net.ipv6.conf.all.forwarding 2>/dev/null || echo 0)" = "1" ] || return 1
     systemctl is-active --quiet "$R6_UNITE_RA" 2>/dev/null || return 1
     ip -6 route show default dev "$R6_LAN_IF" 2>/dev/null | grep -qF "via ${R6_PASSERELLE_LL} " || return 1
+    # Preuve que les annonces PARTENT (18/11 : unite active mais aucune annonce, `constructor:`) :
+    # sans elle, la Freebox se tait apres la bascule et la maison perd l'IPv6 en <= 30 min.
+    journalctl -q -u "$R6_UNITE_RA" --since "-15min" 2>/dev/null | grep -q "RTR-ADVERT" || return 1
     ping -6 -c1 -W2 "$R6_SONDE_CIBLE" >/dev/null 2>&1 || return 1
 }
 

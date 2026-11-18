@@ -42,7 +42,7 @@ zone, /64 global, adresse fixe dans le préfixe, RDNSS routable) avant tout usag
 coupé ni de MTU changée), la table `inet secubox_relais6` (`/etc/nftables.d/zz-secubox-relais6.nft` :
 redirections ICMPv6 sortantes sur `lan_if` jetées, transit `lan_if`→`lan_if` du préfixe
 accepté) et l'instance dnsmasq `secubox-relais6-ra.service` (`/etc/secubox/relais6-ra.conf` :
-`port=0`, pas de DHCPv4, `enable-ra`, `dhcp-range=::,constructor:<lan_if>,ra-stateless,64`,
+`port=0`, pas de DHCPv4, `enable-ra`, `dhcp-range=<prefixe>,ra-stateless,64` (préfixe explicite : `constructor:` ne trouvait pas le préfixe sur gk2),
 `ra-param=<lan_if>,high,0`, RDNSS `option6:dns-server`). `relais6-retirer` retire les trois,
 idempotent, sans lire le TOML. `relais6-etat` : pièces posées, adresse et route présentes.
 
