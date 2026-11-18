@@ -1,3 +1,11 @@
+secubox-freebox (0.8.4-1~trixie1) trixie; urgency=medium
+
+  * freeboxctl nexthop-lire / nexthop-regler <fe80::…|vide> : next hop du
+    préfixe IPv6 principal (delegations[0]), PUT du tableau complet, relu,
+    audité (ipv6_next_hop) ; pour le relais IPv6 du pseudo-routeur (#3807).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 16:00:00 +0100
+
 secubox-freebox (0.8.3-1~trixie1) trixie; urgency=medium
 
   * Contrôle DNS (#3769) : sur une clé mobile, secubox-mobile possède le DNS

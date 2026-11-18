@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Pseudo-routeur — annonces de routeur IPv6 du relais (#3807), rôle « routeur » (gk1).
+# Instance dnsmasq DÉDIÉE (pas le service dnsmasq du système) : port=0 (aucun DNS), pas de DHCPv4,
+# RA + DHCPv6 sans état sur lan_if, RDNSS = résolveur de la box de repli. Configuration écrite par
+# `pseudo-routeurctl relais6-preparer` (validée par dnsmasq --test), retirée par relais6-retirer.
+# Jamais activée à l'installation : sans configuration, la condition l'empêche de démarrer.
+[Unit]
+Description=SecuBox Pseudo-routeur — annonces RA du relais IPv6 (#3807)
+After=network-online.target systemd-networkd.service
+Wants=network-online.target
+ConditionPathExists=/etc/secubox/relais6-ra.conf
+
+[Service]
+Type=simple
+# Root au démarrage (sockets ICMPv6 brutes, port DHCPv6 547), dnsmasq abandonne ensuite root pour
+# son utilisateur non privilégié (paquet dnsmasq-base) : exception RULES-CODE § 10 écrite.
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/etc/secubox/relais6-ra.conf --pid-file=
+RuntimeDirectory=secubox-relais6-ra
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_NET_ADMIN CAP_SETUID CAP_SETGID CAP_CHOWN
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

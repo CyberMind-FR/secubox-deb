@@ -14,7 +14,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-bnsfXWdSKsYHFn4WjLWnPuBcL5piNxGwJ5wRBRJMPcI='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-WdHMmVFqJdpKCKkpotwH2Tzjqsz1gbNVVSo9eQGJjT8='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pseudo-routeur</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -177,6 +177,14 @@
     </section>
   </div>
 
+  <section class="pan" id="relais6">
+    <h3>Relais IPv6 <i>next hop Freebox</i></h3>
+    <p class="note" id="r6-etat">—</p>
+    <ul class="etapes" id="r6-detail"></ul>
+    <div class="actions" id="r6-actions"><button class="btn prim" type="button" id="btn-r6-basculer" hidden>Router l'IPv6 par le relais</button><button class="btn danger" type="button" id="btn-r6-revenir" hidden>Rendre l'IPv6 à la Freebox</button></div>
+    <p class="note">La Freebox route alors son préfixe IPv6 vers le relais et cesse de l'annoncer. Contrôle chaque minute : après 3 échecs, le préfixe revient seul à la Freebox.</p>
+  </section>
+
   <section class="pan">
     <h3>Journal <i>audit</i></h3>
     <div class="journal" id="journal"></div>
@@ -283,10 +291,27 @@
   function etapes(d){var u=el('etapes');vider(u);u.hidden=false;
     u.appendChild(h('li',null,d.pret?'Le retour fonctionnerait (rien n\'a été modifié) :':'Le retour échouerait (rien n\'a été modifié) :'));
     (d.etapes||[]).forEach(function(x){u.appendChild(h('li',null,(x.possible?'✓ ':'✗ ')+x.etape+' — '+x.detail));});hauteur();}
+  function rendreRelais6(d){
+    var u=el('r6-detail');vider(u);var b=el('btn-r6-basculer'),r=el('btn-r6-revenir');b.hidden=true;r.hidden=true;
+    if(!d||!d.role){el('r6-etat').textContent=d?'Non configuré sur cette box ([relais_ipv6] du fichier pseudo-routeur.toml).':'—';hauteur();return;}
+    if(d.role==='routeur'){
+      el('r6-etat').textContent='Cette box est le routeur du relais'+(d.pret?' : prête.':' : incomplète.');
+      [['annonces_ra','annonces de routeur (RA)'],['table_nft','redirections ICMPv6 coupées'],['dropin_networkd','configuration réseau posée'],
+       ['adresse_fixe_posee','adresse fixe présente'],['route_freebox','route par défaut via la Freebox']].forEach(function(x){
+        u.appendChild(h('li',null,(d[x[0]]?'✓ ':'✗ ')+x[1]));});
+      hauteur();return;}
+    var nh=d.next_hop_lu,s=d.sonde||{};
+    el('r6-etat').textContent=nh?(d.actif?'Le préfixe '+(nh.prefix||'—')+' passe par le relais '+(d.routeur_ll||''):'Le préfixe '+(nh.prefix||'—')+' est annoncé par la Freebox'):'Next hop illisible : connecteur Freebox injoignable.';
+    u.appendChild(h('li',{class:'mono'},'next hop lu : '+(nh?(nh.next_hop||'aucun (Freebox)'):'—')));
+    var hist=s.historique||[],der=hist.length?hist[hist.length-1]:null;
+    u.appendChild(h('li',null,'contrôle : '+(s.armee?'armé · chaque minute':'non armé')+' · '+(s.echecs_consecutifs||0)+' échec(s) consécutif(s)'+(der?' · dernier '+heure(der.ts)+(der.ok?' ✓':' ✗'):'')));
+    b.hidden=!!d.actif;r.hidden=false;hauteur();
+  }
   function charger(){
     var session=false;
     function trou(e){if(e&&e.session){session=true;return null;}message('Lecture impossible : '+e.message,'erreur');return null;}
-    Promise.all([lire('/etat').catch(trou),lire('/appareils').catch(trou),lire('/journal').catch(trou)]).then(function(r){
+    Promise.all([lire('/etat').catch(trou),lire('/appareils').catch(trou),lire('/journal').catch(trou),lire('/relais6').catch(trou)]).then(function(r){
+      rendreRelais6(r[3]);
       el('session').hidden=!session;etat.anonyme=!r[1];
       if(r[0])rendreEtat(r[0]);if(r[1])rendreAppareils(r[1]);
       else{vider(el('appareils'));var v=el('appareils-vide');v.hidden=false;v.textContent=session?'Liste des appareils réservée à l\'administrateur : session requise.':'Liste indisponible.';}if(r[2])rendreJournal(r[2]);hauteur();});
@@ -295,6 +320,10 @@
   el('btn-retour').addEventListener('click',function(){confirmer(el('b-actions'),'Rendre la passerelle à la Freebox ?',function(){return ecrire('/retour');});});
   el('btn-activer').addEventListener('click',function(){
     confirmer(el('zone-activer'),'gk2 devient la passerelle DHCP du LAN. Confirmer ?',function(){return ecrire('/activer');});});
+  el('btn-r6-basculer').addEventListener('click',function(){
+    confirmer(el('r6-actions'),'La Freebox routera son préfixe IPv6 vers le relais. Confirmer ?',function(){return ecrire('/relais6/basculer');});});
+  el('btn-r6-revenir').addEventListener('click',function(){
+    confirmer(el('r6-actions'),'Rendre le préfixe IPv6 à la Freebox ?',function(){return ecrire('/relais6/revenir');});});
   el('btn-tester').addEventListener('click',function(){ecrire('/tester-retour').then(etapes,function(e){message('Refusé : '+e.message,'erreur');});});
   el('btn-apercu').addEventListener('click',function(){lire('/apercu').then(function(d){var u=el('etapes');vider(u);u.hidden=false;var n=(d&&d.non_classes)||[];
     u.appendChild(h('li',null,n.length+' appareil(s) non classé(s) sur '+(d.lan_if||'le LAN')+' : ils garderont Internet.'));
@@ -311,7 +340,9 @@
       {mac:'02:00:5e:00:00:12',nom:'Téléphone',ipv4:['192.0.2.112'],ipv6_globales:[],ipv6_actif:false,zone:null,passe_par_gk2:true},
       {mac:'02:00:5e:00:00:49',nom:null,ipv4:['192.0.2.49'],ipv6_globales:[],ipv6_actif:false,zone:null,passe_par_gk2:false}]},
     '/journal':{entrees:[{ts:'2026-11-18T14:02:00',action:'passerelle_dhcp',passerelle:'192.0.2.200',resultat:'ok'}]},
-    '/apercu':{lan_if:'eth2',non_classes:[{ip:'192.0.2.49',mac:'02:00:5e:00:00:49'}]}
+    '/apercu':{lan_if:'eth2',non_classes:[{ip:'192.0.2.49',mac:'02:00:5e:00:00:49'}]},
+    '/relais6':{role:'repli',lan_if:'eth2',prefixe:'2001:db8:0:1::/64',routeur_ll:'fe80::94',next_hop_lu:{prefix:'2001:db8:0:1::/64',next_hop:'fe80::94'},actif:true,
+      sonde:{armee:true,echecs_consecutifs:0,historique:[{ts:T-60,ok:true}]}}
   };
   if(DEMO){el('demo').hidden=false;}
   charger();

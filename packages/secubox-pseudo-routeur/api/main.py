@@ -18,6 +18,9 @@ motif que secubox-jellyfin (voir MODULE-COMPLIANCE.md § WebUI-delegates-to-conf
   POST /retour-freebox  revient a la Freebox, inconditionnel, chemin de secours    (admin)
   GET  /apercu        voisins LAN non classes par le NAC, avant activation (admin, #3803)
   GET  /suggestions   appareils vus par la Freebox non classes par le NAC  (admin)
+  GET  /relais6       relais IPv6 (#3807) : role, next hop lu, sonde, pieces posees (admin)
+  POST /relais6/basculer  next hop du /64 Freebox -> routeur, si sa sonde passe        (admin)
+  POST /relais6/revenir   next hop rendu a la Freebox, inconditionnel                  (admin)
   GET  /journal       dernieres bascules de passerelle DHCP (audit.log)    (admin)
   GET  /health        vivacite (publique)
 """
@@ -41,7 +44,7 @@ AUDIT_LOG = os.environ.get("SECUBOX_PR_AUDIT_LOG", "/var/log/secubox/audit.log")
 NAC_SOCK = os.environ.get("SECUBOX_PR_NAC_SOCK", "/run/secubox/nac.sock")
 FREEBOX_SOCK = os.environ.get("SECUBOX_PR_FREEBOX_SOCK", "/run/secubox/freebox.sock")
 
-app = FastAPI(title="SecuBox Pseudo-routeur", version="0.2.0")
+app = FastAPI(title="SecuBox Pseudo-routeur", version="0.3.0")
 
 
 def _run_ctl(*args: str, timeout: int = 30):
@@ -115,6 +118,33 @@ def retour():
 @app.post("/tester-retour", dependencies=[Depends(require_jwt)])
 def tester_retour():
     return _repondre("tester-retour")
+
+
+@app.get("/relais6", dependencies=[Depends(require_jwt)])
+def relais6():
+    """Relais IPv6 par next hop Freebox (#3807) : etat reel lu, null si illisible."""
+    return _repondre("relais6-etat", timeout=60)
+
+
+@app.post("/relais6/basculer", dependencies=[Depends(require_jwt)])
+def relais6_basculer():
+    return _repondre_action("relais6-basculer")
+
+
+@app.post("/relais6/revenir", dependencies=[Depends(require_jwt)])
+def relais6_revenir():
+    return _repondre_action("relais6-revenir")
+
+
+def _repondre_action(verbe):
+    """Verbe ecrivant sans sortie JSON obligatoire : code de retour du ctl, message d'erreur sinon."""
+    rc, out, err = _run_ctl(verbe, timeout=90)
+    if rc == 2:
+        return JSONResponse({"erreur": (err or out or "refuse").strip()[:500]}, status_code=409)
+    if rc != 0:
+        return JSONResponse({"erreur": (err or out or f"pseudo-routeurctl a quitte en erreur ({rc})").strip()[:500]},
+                            status_code=502)
+    return {"ok": True}
 
 
 def _noms_nac(entetes):
@@ -200,7 +230,7 @@ def journal(n: int = 50):
                     d = json.loads(ligne)
                 except json.JSONDecodeError:
                     continue
-                if d.get("action") == "passerelle_dhcp" or d.get("module") == "pseudo-routeur":
+                if d.get("action") in ("passerelle_dhcp", "ipv6_next_hop") or d.get("module") == "pseudo-routeur":
                     entrees.append(d)
     except OSError:
         pass

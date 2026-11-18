@@ -73,6 +73,6 @@ def test_commandes_ecrivantes_sortent_du_bac_a_sable():
     """#3803 : lance par l'API (ProtectSystem=strict), le ctl ne peut pas ecrire /etc/nftables.d ;
     activer / activer-transfert / retour-freebox se relancent en tache systemd transitoire."""
     src = CTL.read_text()
-    assert "activer|activer-transfert|retour-freebox)" in src
+    assert "activer|activer-transfert|retour-freebox|" in src
     assert "exec systemd-run --quiet --wait --pipe --collect" in src
     assert "SECUBOX_PR_HORS_BAC" in src

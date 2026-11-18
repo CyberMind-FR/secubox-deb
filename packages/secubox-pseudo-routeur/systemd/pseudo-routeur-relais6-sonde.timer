@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Pseudo-routeur — cadence de la sonde du relais IPv6 (#3807) : 60 s, trois échecs = retour
+# sous trois minutes. Armée (enable --now) par relais6-basculer, désarmée par relais6-revenir.
+# OnActiveSec ET OnUnitActiveSec (motif #2919/#2925).
+[Unit]
+Description=SecuBox Pseudo-routeur — sonde du relais IPv6, toutes les 60 s (#3807)
+
+[Timer]
+RandomizedDelaySec=15s
+FixedRandomDelay=true
+AccuracySec=6s
+OnActiveSec=60s
+OnUnitActiveSec=60s
+
+[Install]
+WantedBy=timers.target

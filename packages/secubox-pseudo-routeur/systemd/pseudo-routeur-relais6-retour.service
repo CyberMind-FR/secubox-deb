@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Pseudo-routeur — retour du préfixe IPv6 à la Freebox (#3807). Déclenché par OnFailure= de
+# pseudo-routeur-relais6-sonde.service : inconditionnel (next hop vidé, minuterie désarmée).
+[Unit]
+Description=SecuBox Pseudo-routeur — retour du préfixe IPv6 à la Freebox (#3807)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/pseudo-routeurctl relais6-revenir

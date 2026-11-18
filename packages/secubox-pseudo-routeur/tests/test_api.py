@@ -104,7 +104,9 @@ def test_sudoers_etroit_et_valide():
     f = Path(__file__).resolve().parents[1] / "sudoers" / "secubox-pseudo-routeur"
     regles = [l for l in f.read_text().splitlines() if l.strip() and not l.startswith("#")]
     assert regles == ["secubox-pseudo-routeur ALL=(root) NOPASSWD: /usr/sbin/pseudo-routeurctl",
-                      "root ALL=(secubox-freebox) NOPASSWD: /usr/sbin/freeboxctl lire-passerelle"]
+                      "root ALL=(secubox-freebox) NOPASSWD: /usr/sbin/freeboxctl lire-passerelle",
+                      "root ALL=(secubox-freebox) NOPASSWD: /usr/sbin/freeboxctl nexthop-lire, "
+                      "/usr/sbin/freeboxctl nexthop-regler *"]
     visudo = shutil.which("visudo") or ("/usr/sbin/visudo" if Path("/usr/sbin/visudo").exists() else None)
     if visudo:
         r = subprocess.run([visudo, "-cf", str(f)], capture_output=True, text=True)

@@ -10,3 +10,18 @@
 lan_if = "eth2"
 # Sous-reseau du LAN, utilise seulement si lan_if est absent.
 lan_subnet = "192.168.1.0/24"
+
+# Relais IPv6 par next hop Freebox (#3807). Vide ou absent : rien n'est actif.
+#   role = "routeur" : cette box annonce le /64 (gk1) — pseudo-routeurctl relais6-preparer / relais6-retirer
+#   role = "repli"   : cette box tient le connecteur Freebox (gk2) — relais6-basculer / relais6-revenir
+#   role = "tout"    : les deux sur la meme box (gk2) ; routeur_ll vide = son lien-local sur lan_if
+[relais_ipv6]
+role = ""
+lan_if = "eth2"
+# fichier_network = "10-eth2.network"   # facultatif : sinon lu par `networkctl status <lan_if>`
+prefixe = "2a01:e0a:dec:c4e0::/64"
+adresse_fixe = "2a01:e0a:dec:c4e0::94/64"     # adresse du routeur (role routeur, sondee par le repli)
+passerelle_ll = "fe80::3a07:16ff:fe77:17d3"   # Freebox (route par defaut du routeur)
+routeur_ll = "fe80::250:43ff:fe84:252f"       # lien-local du routeur sur lan_if (next hop)
+dns = "2a01:e0a:dec:c4e0::200"                # RDNSS annonce (resolveur de gk2)
+sonde_cible = "2001:4860:4860::8888"          # cible IPv6 externe de la sonde (role repli)

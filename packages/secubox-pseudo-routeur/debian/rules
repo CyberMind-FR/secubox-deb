@@ -27,6 +27,11 @@ override_dh_auto_install:
 	install -m 644 systemd/pseudo-routeur-sonde.service debian/secubox-pseudo-routeur/lib/systemd/system/
 	install -m 644 systemd/pseudo-routeur-sonde.timer debian/secubox-pseudo-routeur/lib/systemd/system/
 	install -m 644 systemd/pseudo-routeur-retour.service debian/secubox-pseudo-routeur/lib/systemd/system/
+	# Relais IPv6 (#3807) : rien n'est active a l'installation (relais6-preparer / relais6-basculer).
+	install -m 644 systemd/secubox-relais6-ra.service debian/secubox-pseudo-routeur/lib/systemd/system/
+	install -m 644 systemd/pseudo-routeur-relais6-sonde.service debian/secubox-pseudo-routeur/lib/systemd/system/
+	install -m 644 systemd/pseudo-routeur-relais6-sonde.timer debian/secubox-pseudo-routeur/lib/systemd/system/
+	install -m 644 systemd/pseudo-routeur-relais6-retour.service debian/secubox-pseudo-routeur/lib/systemd/system/
 
 override_dh_installsystemd:
 	# Postinst gere l'activation a la main : l'API demarre (enable+start), la sonde et
