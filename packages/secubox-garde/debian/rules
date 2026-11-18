@@ -28,6 +28,8 @@ override_dh_auto_install:
 	cp -r menu.d/. $(P)/usr/share/secubox/menu.d/
 	install -d $(P)/etc/apparmor.d
 	install -m 644 apparmor/secubox-garde apparmor/secubox-garde-passage apparmor/secubox-garde-envoi $(P)/etc/apparmor.d/
+	install -d $(P)/usr/lib/tmpfiles.d
+	install -m 644 tmpfiles.d/secubox-garde.conf $(P)/usr/lib/tmpfiles.d/secubox-garde.conf
 	install -d $(P)/usr/sbin
 	install -m 755 sbin/secubox-garde-passage sbin/secubox-garde-envoi $(P)/usr/sbin/
 	install -m 755 lib/secubox-garde-acl-audit lib/secubox-garde-depots $(P)/usr/lib/secubox/garde/

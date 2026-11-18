@@ -1,3 +1,13 @@
+secubox-garde (0.3.6-1~trixie1) trixie; urgency=medium
+
+  * #3800 : le passage publie /run/secubox/garde/isoles.json (adresses des
+    quarantaines d'infection actives, écriture atomique, 0644) après chaque
+    passage et au rapprochement ; sbxwaf y lit qui reçoit la page
+    d'explication. Dossier dédié /run/secubox/garde (0755 secubox-garde,
+    tmpfiles.d, créé au postinst), retiré au remove/purge.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 09:13:56 +0100
+
 secubox-garde (0.3.5-1~trixie1) trixie; urgency=medium
 
   * #3794 : page /garde/ alignée sur les webui d'administration Aurora
