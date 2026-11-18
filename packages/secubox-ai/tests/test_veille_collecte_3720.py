@@ -266,3 +266,24 @@ def test_horodatage_naif_ignore_et_faits_mal_formes(db, caplog):
                            "2026-11-18T12:00:00Z")
     assert db.execute("SELECT id FROM campagnes").fetchall() == [("s1",)]
     assert db.execute("SELECT bloc24 FROM blocs").fetchall() == [("1.2.3.0/24",)]
+
+
+def test_delai_par_route_bans_30s_et_configurable():
+    from veille.client import DELAI_S, delais
+    assert delais({})["enforcement"] == 30.0 and DELAI_S == 10.0
+    d = delais({"veille": {"delais": {"enforcement": 500, "stats": 0.1, "mesures": 20, "x": "y", "b": True}}})
+    assert d["enforcement"] == 60.0 and d["stats"] == 1.0 and d["mesures"] == 20.0 and "x" not in d and "b" not in d
+    vus = {}
+
+    class Rec(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, req):
+            vus[req.url.path] = req.extensions["timeout"]["read"]
+            return httpx.Response(200, json={})
+    pem = Ed25519PrivateKey.generate().private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                                     serialization.NoEncryption())
+    c = ClientGk2("https://g/api/v1", "gk2", pem, transport=Rec())
+    asyncio.run(c.get("enforcement"))
+    asyncio.run(c.get("stats"))
+    assert vus["/api/v1/waf/enforcement"] == 30.0 and vus["/api/v1/waf/stats"] == 10.0
+    assert ClientGk2("https://g/api/v1", "gk2", pem).table["posture_overview"] == (
+        "/security-posture/overview", "/overview")

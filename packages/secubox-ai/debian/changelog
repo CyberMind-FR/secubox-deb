@@ -1,3 +1,12 @@
+secubox-ai (0.3.4-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3720) : délai de lecture propre à la route des bans (`enforcement`,
+    30 s, gk2 relit bans.jsonl), configurable par `[veille.delais]` d'ai.toml
+    (bornes 1..60 s) ; route `posture_overview` (/security-posture/overview,
+    chemin signé `/overview`, nginx retire le préfixe).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:26:17 +0100
+
 secubox-ai (0.3.3-1~trixie1) trixie; urgency=medium
 
   * Veille V2 (#3795) : identification des outils (veille/outils.py) sur un

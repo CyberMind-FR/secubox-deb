@@ -1,3 +1,11 @@
+secubox-security-posture (2.10.7-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3720) : /overview lisible par le compte `ai-lecture` (jeton lié à
+    GET et au chemin `/overview`) via require_lecture_ou_compte ; anonyme du LAN
+    et session inchangés. Depends: secubox-core (>= 1.8.35~).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:26:17 +0100
+
 secubox-security-posture (2.10.6-1~trixie1) trixie; urgency=medium
 
   * Audit (#3791) : la règle -w sur /var/log/secubox/waf n'enregistrait rien

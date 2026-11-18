@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, "/usr/lib/secubox/ai")
 
 from veille import base, collecte, correlation, dossiers, retention  # noqa: E402
-from veille.client import ClientGk2, routes  # noqa: E402
+from veille.client import ClientGk2, delais, routes  # noqa: E402
 from veille.sources import toutes  # noqa: E402
 from veille.service import Boucle, Veille  # noqa: E402
 
@@ -50,7 +50,7 @@ def _client():
     except OSError:
         log.error("clé ai-lecture absente (secubox-aictl cle-ai-lecture generer) : collecte éteinte")
         return None
-    return ClientGk2(base_url, aud, cle, routes(cfg))
+    return ClientGk2(base_url, aud, cle, routes(cfg), delais_routes=delais(cfg))
 
 
 def _reglages_correlation():

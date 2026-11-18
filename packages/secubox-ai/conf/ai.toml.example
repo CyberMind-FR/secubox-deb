@@ -22,6 +22,9 @@ aud = "gk2"
 # [veille.routes.garde_historique]
 # url = "/garde/historique"
 # signe = "/api/v1/garde/historique"
+# Délai de lecture par route, en secondes (défaut 10 ; `enforcement` = bans, 30 : gk2 relit bans.jsonl). Bornes 1..60.
+# [veille.delais]
+# enforcement = 30
 
 # [veille.correlation]
 # Corrélateur (#3721), en secondes. Bornes : fenetre_s 300–86400 ; calme_s 600–2592000 ; clos_s 604800–31536000
