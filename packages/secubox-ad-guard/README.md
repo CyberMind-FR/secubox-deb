@@ -54,10 +54,11 @@ Configuration file: `/etc/secubox/ad-guard.toml`
   502 si l'écriture échoue côté root. Jamais 500.
 - `GET /api/v1/ad-guard/dnsguard/alertes?depuis=&max=` (1.33.0, #3795, `require_lecture_ou_compte("ai-lecture")`) - alertes
   du capteur DNS (`/var/lib/secubox/dns-guard/alerts.jsonl`, telles quelles) pour la veille V2 de gk3. `depuis` : RFC 3339 AVEC
-  fuseau ou epoch en secondes (défaut : 24 h ; 422 sinon), borne inclusive ; `max` 1…2000 (défaut 500, 422 hors bornes). Lecture
-  par la FIN, par blocs, au plus 16 Mio relus : rend les plus anciennes alertes `>= depuis` dans l'ordre du fichier.
-  Réponse `{alertes, depuis, suivant, complet, trou, releve}` : `complet=false` ⇒ redemander avec `depuis=suivant` et dédoublonner
-  par `id` ; `trou=true` ⇒ la borne d'octets a coupé la remontée avant `depuis`. Anonyme du tableau de bord LAN : comme
+  fuseau ou epoch en secondes (défaut : 24 h ; 422 sinon), premier appel ; `apres=<epoch>:<rang>` (curseur opaque rendu en
+  `suivant`, exclusif avec `depuis`) pour la suite ; `max` 1…2000 (défaut 500, 422 hors bornes). Lecture par la FIN, par blocs,
+  au plus 16 Mio relus : rend les plus anciennes alertes à partir du point de départ, dans l'ordre du fichier.
+  Réponse `{alertes, depuis, suivant, complet, trou, releve}` : `complet=false` ⇒ redemander avec `apres=suivant` (ni doublon ni
+  trou, même au-delà de `max` alertes dans une seconde) ; `trou=true` ⇒ la borne d'octets a coupé la remontée avant `depuis`. Anonyme du tableau de bord LAN : comme
   `require_lecture` ; autre porteur : 401. **Chemin que gk3 signe** (réclamation `chemin`, sans chaîne de requête) : ad-guard est
   groupable (#2748) et d'ordinaire MONTÉ dans l'agrégateur, qui voit le chemin complet ⇒ `/api/v1/ad-guard/dnsguard/alertes` ; s'il
   tourne sur sa socket propre (`/run/secubox/ad-guard.sock`, relais de l'agrégateur qui RETIRE le préfixe) ⇒ `/dnsguard/alertes`.

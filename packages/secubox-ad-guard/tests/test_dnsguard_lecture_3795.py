@@ -85,9 +85,30 @@ def test_max_les_plus_anciennes_et_suivant(v):
     v.ecrire([_alerte(i, now - 1000 + i * 10) for i in range(50)])
     d = v.get("/dnsguard/alertes", params={"depuis": now - 2000, "max": 5}).json()
     assert [a["id"] for a in d["alertes"]] == [f"dns-{i}" for i in range(5)]
-    assert d["complet"] is False and d["suivant"] == d["alertes"][-1]["timestamp"]
-    d2 = v.get("/dnsguard/alertes", params={"depuis": d["suivant"], "max": 3}).json()
-    assert [a["id"] for a in d2["alertes"]] == ["dns-4", "dns-5", "dns-6"]          # borne inclusive
+    assert d["complet"] is False and d["suivant"] == f"{now - 1000 + 40}:1"
+    d2 = v.get("/dnsguard/alertes", params={"apres": d["suivant"], "max": 3}).json()
+    assert [a["id"] for a in d2["alertes"]] == ["dns-5", "dns-6", "dns-7"]          # ni doublon ni trou
+
+
+def test_meme_seconde_plus_que_max_sans_blocage(v):
+    t = int(time.time()) - 50
+    v.ecrire([_alerte(0, t - 5)] + [_alerte(i, t) for i in range(1, 6)] + [_alerte(9, t + 1)])
+    d = v.get("/dnsguard/alertes", params={"depuis": t, "max": 4}).json()
+    assert [a["id"] for a in d["alertes"]] == ["dns-1", "dns-2", "dns-3", "dns-4"] and d["complet"] is False
+    assert d["suivant"] == f"{t}:4"
+    d2 = v.get("/dnsguard/alertes", params={"apres": d["suivant"], "max": 4}).json()
+    assert [a["id"] for a in d2["alertes"]] == ["dns-5", "dns-9"] and d2["complet"] is True and d2["suivant"] is None
+    # max+1 alertes sur une seule seconde, max=2 : trois appels, tout rendu une fois
+    v.ecrire([_alerte(i, t) for i in range(5)])
+    vus, p = [], {"depuis": t, "max": 2}
+    for _ in range(5):
+        d = v.get("/dnsguard/alertes", params=p).json()
+        vus += [a["id"] for a in d["alertes"]]
+        if d["complet"]:
+            break
+        assert d["suivant"].startswith(f"{t}:")
+        p = {"apres": d["suivant"], "max": 2}
+    assert vus == [f"dns-{i}" for i in range(5)] and d["complet"] is True
 
 
 def test_lecture_par_la_fin_bornee(v, monkeypatch):
@@ -116,7 +137,8 @@ def test_bornes_422(v):
     v.ecrire([])
     assert v.get("/dnsguard/alertes", params={"max": 2000}).status_code == 200
     for p in ({"max": 2001}, {"max": 0}, {"max": "x"}, {"depuis": "hier"}, {"depuis": "-1"},
-              {"depuis": "2026-11-18T10:00:00"}, {"depuis": "9" * 11}, {"depuis": "x" * 41}):
+              {"depuis": "2026-11-18T10:00:00"}, {"depuis": "9" * 11}, {"depuis": "x" * 41}, {"apres": "x"}, {"apres": "1:2:3"},
+              {"apres": "1:0", "depuis": "1"}):
         assert v.get("/dnsguard/alertes", params=p).status_code == 422, p
 
 

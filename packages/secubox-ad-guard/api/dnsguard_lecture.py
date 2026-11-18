@@ -7,8 +7,10 @@
 `GET /dnsguard/alertes?depuis=&max=` — garde `require_lecture_ou_compte("ai-lecture")` (jeton lié à GET et au chemin
 vu par l'application : voir le README). Lecture par la FIN, par blocs, bornée en octets : on remonte jusqu'à la
 première alerte antérieure à `depuis`, jamais le fichier entier. Rend les PLUS ANCIENNES alertes `>= depuis` (au plus
-`max`), dans l'ordre du fichier ; `complet = false` s'il en reste (redemander avec `depuis = suivant`, dédoublonner
-par `id` : la borne est inclusive), `trou = true` si la borne d'octets a coupé la remontée avant `depuis`.
+`max`), dans l'ordre du fichier ; `complet = false` s'il en reste : redemander avec `apres = suivant`, curseur opaque
+`<epoch>:<rang>` (seconde UTC de la dernière alerte rendue, nombre d'alertes de CETTE seconde déjà rendues) — aucune
+alerte rendue deux fois ni sautée, même si plus de `max` alertes partagent une seconde. `trou = true` si la borne
+d'octets a coupé la remontée avant le point de départ.
 """
 from __future__ import annotations
 
@@ -60,8 +62,11 @@ def _rfc3339(t: float) -> str:
     return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def lire(chemin: Path, depuis: float, maximum: int, octets_max: int) -> Tuple[List[dict], bool, bool]:
-    """(alertes >= depuis, les plus anciennes d'abord, au plus `maximum` ; complet ; trou)."""
+_RE_CURSEUR = re.compile(r"([0-9]{1,10}):([0-9]{1,9})")
+
+
+def lire(chemin: Path, depuis: float, octets_max: int) -> Tuple[List[Tuple[int, dict]], bool]:
+    """([(seconde UTC, alerte)] d'instant >= depuis, dans l'ordre du fichier ; trou)."""
     try:
         f = open(chemin, "rb")
     except OSError:
@@ -99,25 +104,49 @@ def lire(chemin: Path, depuis: float, maximum: int, octets_max: int) -> Tuple[Li
                 if t < depuis:
                     atteint = True
                     break
-                gardees.append(r)
+                gardees.append((int(t), r))
         if pos == 0:
             atteint = True
     gardees.reverse()
-    return gardees[:maximum], len(gardees) <= maximum, not atteint
+    return gardees, not atteint
 
 
 @router.get("/dnsguard/alertes")
 async def dnsguard_alertes(depuis: Optional[str] = Query(None, max_length=40),
+                           apres: Optional[str] = Query(None, max_length=21, pattern=r"^[0-9]{1,10}:[0-9]{1,9}$"),
                            max: int = Query(500, ge=1, le=MAX_ALERTES),  # noqa: A002 — nom du paramètre public
                            lecteur: Dict[str, Any] = Depends(require_lecture_veille)) -> Dict[str, Any]:
     now = time.time()
-    if depuis is None:
+    rang = 0
+    if apres is not None:
+        if depuis is not None:
+            raise HTTPException(status_code=422, detail="depuis ou apres, pas les deux")
+        m = _RE_CURSEUR.fullmatch(apres)
+        t, rang = float(int(m.group(1))), int(m.group(2))
+        if t >= _EPOCH_MAX:
+            raise HTTPException(status_code=422, detail="apres : curseur invalide")
+    elif depuis is None:
         t = now - DEFAUT_H * 3600
     else:
         t = instant(depuis, strict=True)
         if t is None or t < 0 or t >= _EPOCH_MAX:
             raise HTTPException(status_code=422, detail="depuis : RFC 3339 avec fuseau, ou epoch en secondes")
-    alertes, complet, trou = await run_in_threadpool(lire, ALERTES, t, max, OCTETS_MAX)
-    suivant = alertes[-1].get("timestamp") if alertes and not complet else None
-    return {"alertes": alertes, "depuis": _rfc3339(t), "suivant": suivant, "complet": complet, "trou": trou,
-            "releve": _rfc3339(now)}
+    lues, trou = await run_in_threadpool(lire, ALERTES, t, OCTETS_MAX)
+    if apres is not None:
+        # Écarter les `rang` premières alertes de la seconde du curseur (déjà rendues), puis tout ce qui précède.
+        sec, vus, reste = int(t), 0, []
+        for s_, a in lues:
+            if s_ == sec and vus < rang:
+                vus += 1
+                continue
+            reste.append((s_, a))
+        lues = reste
+    rendues = lues[:max]
+    complet = len(lues) <= max
+    suivant = None
+    if rendues and not complet:
+        der = rendues[-1][0]
+        n = sum(1 for s_, _ in rendues if s_ == der) + (rang if apres is not None and der == int(t) else 0)
+        suivant = f"{der}:{n}"
+    return {"alertes": [a for _, a in rendues], "depuis": _rfc3339(t), "suivant": suivant, "complet": complet,
+            "trou": trou, "releve": _rfc3339(now)}
