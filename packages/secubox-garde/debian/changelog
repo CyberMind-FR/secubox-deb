@@ -1,3 +1,11 @@
+secubox-garde (0.3.5-1~trixie1) trixie; urgency=medium
+
+  * #3794 : page /garde/ alignée sur les webui d'administration Aurora
+    (en-tête, tuiles, onglets, panneaux et boutons de freebox / ad-guard) ;
+    section « Aperçus » (page isolée, SMS, courriel) retirée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 08:40:14 +0100
+
 secubox-garde (0.3.4-1~trixie1) trixie; urgency=medium
 
   * #3794 : CSP de /garde/ rétablit script-src-attr 'unsafe-inline' (la barre

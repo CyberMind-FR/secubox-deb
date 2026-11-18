@@ -5,203 +5,178 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — page « Garde » (#3794), conforme à la maquette approuvée : bandeau, quatre tuiles, décisions en cours
+  SecuBox — page « Garde » (#3794) au profil Aurora des webui d'administration (.claude/AURORA-REFERENCE.md,
+  mêmes en-tête, tuiles, onglets, panneaux et boutons que freebox / ad-guard) : quatre tuiles, décisions en cours
   (UN appareil = UNE carte, toutes ses adresses en petit ; les bans d'Internet groupés en une carte), historique,
-  réglages, aperçus de ce qui part de la box. Données lues dans /api/v1/garde/ ; libérer, rouvrir, débannir,
-  réglages et essais sont des DEMANDES exécutées par le passage suivant (≤ 60 s) : la carte affiche « en cours ».
+  réglages. Données lues dans /api/v1/garde/ ; libérer, rouvrir, débannir, réglages et essais sont des DEMANDES
+  exécutées par le passage suivant (≤ 60 s) : la carte affiche « en cours ».
   Coque de l'administration : menu latéral commun (/shared/sidebar.js), chargé hors ?embed=1 et hors démonstration.
   Tout texte venu du réseau est posé par textContent. `?demo=1` : données fictives annoncées, aucune écriture.
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-h8hJs2OYtXG8w4FN/0Hpg+lhECOJb5RHS9rlkeBmBQo='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-ydl9mBJ8A2mFY9UhuSAupOPmweAat03T9aZ9pw6xQnw='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Garde</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
   :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
-    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd166;color-scheme:dark}
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;color-scheme:dark}
   *{box-sizing:border-box}
-  html,body{margin:0}
-  body{background:radial-gradient(900px 500px at 100% 0,rgba(59,130,246,.2),transparent 60%),var(--fond);color:var(--texte);
-    font:14px/1.45 "IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif}
-  body.emb{scrollbar-width:none} body.emb #sidebar{display:none}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+    color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
   .principal{min-width:0}
   body:not(.emb) .principal{margin-left:220px;padding-top:48px}
-  @media (max-width:768px){body:not(.emb) .principal{margin-left:0;padding-top:56px}}
-  .cadre{container-type:inline-size;container-name:a;padding:10px;max-width:1220px}
-  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));
-    box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:14px;display:grid;gap:12px;min-width:0}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
   .app>*,.grille>*{min-width:0}
-  .tete{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
-  .tete b{font-size:1.35rem;font-weight:800}.tete small{display:block;color:var(--cyan);font-size:.72rem;text-transform:uppercase}
-  .droite{margin-left:auto;display:flex;gap:8px;align-items:center;color:var(--faible);font-size:.76rem;flex-wrap:wrap}
-  button,input{font:inherit;color:var(--texte);background:rgba(41,182,246,.10);border:1px solid var(--trait2);border-radius:9px;padding:6px 12px;min-height:34px}
-  button{cursor:pointer;font-size:.8rem;white-space:nowrap}
-  button:hover{background:rgba(41,182,246,.2)}
-  button:focus-visible,input:focus-visible,[role=tab]:focus-visible,[role=switch]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
-  button.pri{background:rgba(41,182,246,.2);border-color:var(--cyan)}
-  button.danger{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.08)}
-  button[disabled]{opacity:.5;cursor:not-allowed}
-  .bandeau{border-radius:10px;padding:8px 12px;font-size:.82rem}
-  .demo{border:1px solid var(--orange);color:var(--orange);background:rgba(255,159,28,.08)}
-  .info{border:1px solid var(--cyan);color:var(--cyan);background:rgba(41,182,246,.10)}
-  .erreur{border:1px solid var(--rouge);color:#ffb3ba;background:rgba(255,77,94,.10)}
-  .ok{border:1px solid var(--vert);color:#a8f0c6;background:rgba(46,204,113,.10)}
-  .lien{color:var(--cyan)}
-  .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
-  .onglets [role=tab]{font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux)}
-  .onglets [role=tab][aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
   [hidden]{display:none!important}
-  .alarme{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border:1px solid rgba(255,77,94,.55);background:rgba(255,77,94,.08);border-radius:12px;padding:10px 14px}
-  .alarme b{font-size:1rem}.alarme span{color:var(--doux);font-size:.82rem;overflow-wrap:anywhere}.alarme button{margin-left:auto}
-  .tuiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  @container a (min-width:760px){.tuiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
-  .tuile{border-radius:12px;border:1px solid var(--trait);background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));padding:10px 12px;min-width:0}
-  .tuile i{font-style:normal;font-size:.74rem;color:var(--doux)}.tuile b{display:block;font-size:1.5rem;font-weight:800;margin:2px 0;font-variant-numeric:tabular-nums}
-  .tuile small{color:var(--faible);font-size:.72rem}
-  .t-rouge b{color:var(--rouge)}.t-orange b{color:var(--orange)}.t-violet b{color:var(--violet)}.t-vert b{color:var(--vert)}
-  .pan{border-radius:12px;border:1px solid var(--trait);background:rgba(10,22,46,.6);padding:14px;min-width:0;display:grid;gap:10px;align-content:start}
-  .pan h3{margin:0;font-size:.9rem;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.pan h3 em{margin-left:auto;font-style:normal;font-weight:400;color:var(--faible);font-size:.72rem}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;gap:10px;align-items:center}.marque h1{margin:0;font-size:1.35rem;font-weight:800}.marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .actif{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}.actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;min-height:30px;white-space:nowrap}
+  .btn:hover{border-color:var(--cyan)}.btn:disabled{opacity:.5;cursor:default}
+  .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px}.btn.danger{border-color:var(--rouge);color:var(--rouge)}.btn.danger:hover{background:rgba(255,77,94,.14)}
+  .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+  .btn:focus-visible,input:focus-visible,[role=tab]:focus-visible,[role=switch]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}.info a{color:var(--cyan)}
+  .retour{font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)}.retour.ko{border-color:var(--rouge)}.retour.ok{border-color:var(--vert)}
+  .alarme{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .alarme b{font-size:.88rem;color:var(--rouge)}.alarme span{color:var(--doux);overflow-wrap:anywhere}.alarme .btn{margin-left:auto}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:760px){.tuiles{grid-template-columns:repeat(4,1fr)}}
+  .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.tuile .l{color:var(--doux);font-size:.74rem}.tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile.hors .v{color:var(--rouge)}.tuile.att .v{color:var(--orange)}.tuile.vio .v{color:var(--violet)}.tuile.ok .v{color:var(--vert)}
+  .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+  .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+  .onglets button:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
   .decisions{display:grid;gap:8px}
-  .dec{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:start;border:1px solid var(--trait);border-left-width:4px;border-radius:10px;padding:10px 12px}
+  .dec{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:start;border:1px solid var(--trait);border-left-width:4px;border-radius:10px;padding:9px 11px;background:rgba(8,18,38,.5)}
   @container a (min-width:560px){.dec{grid-template-columns:auto minmax(0,1fr) auto}}
   .dec.infection{border-left-color:var(--rouge)}.dec.evasion{border-left-color:var(--violet)}.dec.intrusion{border-left-color:var(--orange)}
-  .dec .ico{font-size:1.2rem;line-height:1.2}
-  .dec .qui{font-weight:700;overflow-wrap:anywhere}.dec .qui small{display:block;font-weight:400;color:var(--faible);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.72rem;overflow-wrap:anywhere}
-  .dec .pourquoi{color:var(--doux);font-size:.8rem;overflow-wrap:anywhere}.dec .quand{color:var(--faible);font-size:.74rem}
+  .dec .ico{font-size:1.1rem;line-height:1.2}
+  .dec .qui{font-weight:700;overflow-wrap:anywhere}.dec .qui small{display:block;font-weight:400;color:var(--faible);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.72rem;overflow-wrap:anywhere}
+  .dec .pourquoi{color:var(--doux);font-size:.8rem;overflow-wrap:anywhere}.quand{color:var(--faible);font-size:.72rem}
   .dec .act{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;justify-content:flex-end;grid-column:1/-1}
   @container a (min-width:560px){.dec .act{grid-column:auto;flex-direction:column;align-items:flex-end}}
-  .confirm{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--orange);border-radius:9px;padding:6px 8px;font-size:.78rem;color:var(--orange);background:rgba(255,159,28,.06)}
-  .liste{grid-column:1/-1;display:grid;gap:4px;max-height:320px;overflow:auto}
+  .confirm{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--orange);border-radius:10px;padding:6px 8px;font-size:.78rem;background:rgba(255,159,28,.1)}
+  .liste{grid-column:1/-1;display:grid;gap:4px;max-height:320px;overflow:auto;margin-top:8px}
   .liste div{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:.78rem;border-top:1px solid rgba(86,150,255,.12);padding-top:4px}
-  .pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:.7rem;font-weight:700;border:1px solid currentColor;white-space:nowrap}
-  .p-rouge{color:var(--rouge);background:rgba(255,77,94,.12)}.p-violet{color:var(--violet);background:rgba(167,139,250,.12)}.p-orange{color:var(--orange);background:rgba(255,159,28,.12)}
-  .p-vert{color:var(--vert);background:rgba(46,204,113,.12)}.p-gris{color:var(--faible)}.p-cyan{color:var(--cyan);background:rgba(41,182,246,.12)}
-  .grille{display:grid;gap:12px}
-  .defile{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-size:.8rem;min-width:560px;font-variant-numeric:tabular-nums}
-  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;font-weight:600;padding:5px 8px}
-  td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:top;overflow-wrap:anywhere}td small{display:block;color:var(--faible);font-size:.7rem}
-  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.76rem}
-  .reg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;border:1px solid var(--trait);border-radius:10px;padding:10px 12px}
-  .reg label{font-weight:600}.reg small{grid-column:1/-1;color:var(--faible);font-size:.74rem}
-  .inter{width:42px;height:24px;min-height:24px;border-radius:12px;background:var(--vert);position:relative;flex:none;padding:0;border:0}
+  .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}.pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}.pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .pill.vio{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+  .tab{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums;min-width:560px}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+  td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;overflow-wrap:anywhere}td small{display:block;color:var(--faible);font-size:.7rem}
+  tbody tr:hover{background:rgba(41,182,246,.07)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+  .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem;margin:0}
+  .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
+  .kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center;font-size:.8rem;margin:0 0 10px}
+  .kv label{color:var(--texte);font-weight:600}.kv small{grid-column:1/-1;color:var(--faible);font-size:.72rem}
+  .inter{width:42px;height:24px;border-radius:12px;background:var(--vert);position:relative;flex:none;padding:0;border:0;cursor:pointer}
   .inter::after{content:"";position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:#fff}
   .inter[aria-checked=false]{background:rgba(111,132,168,.4)}.inter[aria-checked=false]::after{right:auto;left:3px}
-  .champ{display:grid;gap:4px}.champ>span{font-size:.76rem;color:var(--doux)}
+  .champ{display:grid;gap:4px;margin:0 0 10px}.champ>span{font-size:.74rem;color:var(--doux)}
   .champ div{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .saisie{font:13px "IBM Plex Mono",ui-monospace,monospace;background:rgba(0,0,0,.25);flex:1;min-width:0;width:100%}
-  @container a (min-width:420px){.saisie{width:auto;min-width:10rem}}
-  .rangee{display:flex;gap:8px;flex-wrap:wrap}
-  .note{font-size:.76rem;color:var(--faible);margin:0}
-  h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--doux);margin:10px 0 0}
-  .apercus{display:grid;gap:12px}@container a (min-width:900px){.apercus{grid-template-columns:repeat(3,minmax(0,1fr))}}
-  .ecran{border:1px solid var(--trait);border-radius:12px;padding:12px;background:#0b1426;display:grid;gap:8px;align-content:start;min-width:0}
-  .ecran .etiq{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--faible)}
-  .page-q{background:#f4f6fb;color:#1b2333;border-radius:10px;padding:16px;display:grid;gap:8px;text-align:center}
-  .page-q b{font-size:1.05rem;color:#b3261e}.page-q p{margin:0;font-size:.82rem}.page-q small{color:#5b6475;font-size:.72rem}
-  .sms{justify-self:start;max-width:100%;background:#1f2b3f;border-radius:14px 14px 14px 4px;padding:10px 12px;font-size:.8rem;overflow-wrap:anywhere}
-  .mail{background:#f4f6fb;color:#1b2333;border-radius:10px;padding:12px;font-size:.78rem;display:grid;gap:6px;overflow-wrap:anywhere}
-  .mail .ent{color:#5b6475;font-size:.72rem;border-bottom:1px solid #d8dde8;padding-bottom:6px}
-  .vide{color:var(--faible);font-size:.8rem}
-  @container a (min-width:900px){.grille.deux{grid-template-columns:1.25fr 1fr}}
+  .saisie{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0;width:100%}
+  .saisie:focus{outline:none;border-color:var(--cyan)}
+  @container a (min-width:420px){.saisie{width:auto;flex:1;max-width:280px}}
   /* Coque partagée (#2733) : sidebar.js pose ces règles dans un bloc de style EN LIGNE ; on en reprend l'essentiel (comme ad-guard). */
   .header-leds-metrics,.smart-strip{display:none!important}
   .status-led{font-size:.9em;margin-left:auto}
   .nav-item{display:flex;align-items:center;gap:.5rem}
   .nav-item.offline{opacity:0;height:0;padding:0;margin:0;overflow:hidden}
-  .sidebar-toggle{display:none;position:fixed;top:.75rem;left:.75rem;z-index:1002;background:#0b1830;border:1px solid var(--trait2);color:var(--texte);width:40px;height:40px;font-size:1.4rem;cursor:pointer;align-items:center;justify-content:center;border-radius:8px;padding:0;min-height:0}
+  .sidebar-toggle{display:none;position:fixed;top:.75rem;left:.75rem;z-index:1002;background:#0b1830;border:1px solid var(--trait2);color:var(--texte);width:40px;height:40px;font-size:1.4rem;cursor:pointer;align-items:center;justify-content:center;border-radius:8px;padding:0}
   .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999}
   .sidebar-overlay.active{display:block}
   .mobile-mode .sidebar{transform:translateX(-100%);transition:transform .3s ease;z-index:1000}
   .mobile-mode .sidebar.open{transform:translateX(0)}
-  html.sbx-aurora body.hybrid-skin main.principal{margin-left:220px!important;padding:48px 12px 12px!important;min-height:0}
+  html.sbx-aurora body.hybrid-skin main.principal{margin-left:220px!important;padding:48px 0 0!important;min-height:0}
   html.sbx-aurora body.mobile-mode main.principal{margin-left:0!important;padding:56px 0 0!important}
   #sidebar .nav-mode-link{color:inherit;text-decoration:none}
-  @media (max-width:768px){.sidebar:not(.open){transform:translateX(-100%)}html.sbx-aurora body.hybrid-skin main.principal{margin-left:0!important;padding:56px 0 0!important}}
+  @media (max-width:900px){.sidebar:not(.open){transform:translateX(-100%)}html.sbx-aurora body.hybrid-skin main.principal{margin-left:0!important;padding:56px 0 0!important}}
   html.sbx-aurora body.hybrid-skin .principal .app .pan{background-color:rgba(10,22,46,.6)!important}
-  html.sbx-aurora body.hybrid-skin .principal .app button{background-color:rgba(41,182,246,.10)!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:9px!important;backdrop-filter:none;box-shadow:none}
-  html.sbx-aurora body.hybrid-skin .principal .app button.danger{background-color:rgba(255,77,94,.08)!important;border-color:var(--rouge)!important;color:var(--rouge)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .btn{background-color:rgba(10,22,46,.7)!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:8px!important;backdrop-filter:none;box-shadow:none}
+  html.sbx-aurora body.hybrid-skin .principal .app .btn.prim{background-color:rgba(41,182,246,.18)!important;border-color:var(--cyan)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .btn.danger{border-color:var(--rouge)!important;color:var(--rouge)!important}
   html.sbx-aurora body.hybrid-skin .principal .app button.inter{background-color:var(--vert)!important;border:0!important;border-radius:12px!important}
   html.sbx-aurora body.hybrid-skin .principal .app button.inter[aria-checked=false]{background-color:rgba(111,132,168,.4)!important}
-  html.sbx-aurora body.hybrid-skin .principal .app .onglets [role=tab][aria-selected=true]{background-color:rgba(41,182,246,.22)!important;border-color:var(--cyan)!important}
-  html.sbx-aurora body.hybrid-skin .principal .app input{background-color:#0b1830!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:9px!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .onglets button{background-color:rgba(10,22,46,.5)!important;border:1px solid var(--trait)!important;color:var(--doux)!important;border-radius:9px!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .onglets button[aria-selected=true]{background-color:rgba(41,182,246,.22)!important;border-color:var(--cyan)!important;color:#d9f2ff!important}
+  html.sbx-aurora body.hybrid-skin .principal .app input{background-color:rgba(8,18,38,.8)!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:8px!important}
   html.sbx-aurora body.hybrid-skin .principal .app th{background-color:transparent!important;color:var(--faible)!important;border-bottom:0!important}
   html.sbx-aurora body.hybrid-skin .principal .app td{color:var(--texte)!important;border-bottom:0!important}
-  html.sbx-aurora body.hybrid-skin .principal .app .demo{background-color:rgba(255,159,28,.08)!important}
-  html.sbx-aurora body.hybrid-skin .principal .app .page-q,html.sbx-aurora body.hybrid-skin .principal .app .mail{background-color:#f4f6fb!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .demo{background-color:var(--orange)!important;color:#1a1000!important}
 </style>
 <body>
 <nav class="sidebar" id="sidebar" aria-label="Menu de l'administration"></nav>
 <main class="principal"><div class="cadre"><div class="app">
-  <div class="tete">
-    <div><b>Garde</b><small id="sous-titre">Détection et réponse automatiques</small></div>
-    <div class="droite"><span class="pill p-gris" id="mode">…</span><span id="releve">—</span><button type="button" id="rafraichir">Actualiser</button></div>
-  </div>
-  <div class="bandeau demo" id="demo" hidden>Démonstration : données fictives (adresses de documentation), aucune écriture.</div>
-  <div class="bandeau info" id="session" hidden>Détails réservés à l'administrateur : session requise. <a href="/login.html" class="lien">Se connecter</a></div>
-  <div class="bandeau" id="message" hidden role="status"></div>
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      <div><h1>Garde</h1><small id="sous-titre">Détection et réponse automatiques : intrusion, évasion, infection</small></div>
+    </div>
+    <span class="actif" id="mode" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="releve">—</span><button class="btn" type="button" id="rafraichir">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — adresses de documentation, aucune écriture</div>
+  <div class="info" id="session" hidden>Détails réservés à l'administrateur : session requise. <a href="/login.html">Se connecter</a></div>
+  <div class="retour" id="message" hidden role="status"></div>
+
+  <div class="alarme" id="alarme" role="alert" hidden><b id="alarme-titre"></b><span id="alarme-texte"></span><button class="btn sm" type="button" id="alarme-voir">Voir</button></div>
+
+  <section class="tuiles" id="tuiles" aria-label="Indicateurs">
+    <div class="tuile hors" title="Appareils de la maison en quarantaine DNS"><span class="l">Appareils isolés</span><span class="v" id="n-isoles">—</span><span class="s" id="s-isoles">3 au plus en même temps</span></div>
+    <div class="tuile vio" title="Appareils dont le contournement du DNS est fermé"><span class="l">Contournements fermés</span><span class="v" id="n-evasions">—</span><span class="s">résolveurs chiffrés refusés</span></div>
+    <div class="tuile att" title="Adresses d'Internet bannies en ce moment"><span class="l">Adresses bannies</span><span class="v" id="n-bannis">—</span><span class="s" id="s-bannis">—</span></div>
+    <div class="tuile ok" title="Notifications envoyées sur 24 h"><span class="l">Prévenu (24 h)</span><span class="v" id="n-notifs">—</span><span class="s" id="s-notifs">—</span></div>
+  </section>
+
   <div class="onglets" role="tablist" aria-label="Vues de la garde">
     <button type="button" role="tab" id="t-decisions" aria-controls="v-decisions" aria-selected="true">Décisions</button>
     <button type="button" role="tab" id="t-historique" aria-controls="v-historique" aria-selected="false" tabindex="-1">Historique</button>
     <button type="button" role="tab" id="t-reglages" aria-controls="v-reglages" aria-selected="false" tabindex="-1">Réglages</button>
   </div>
 
-  <div class="alarme" id="alarme" hidden><b id="alarme-titre"></b><span id="alarme-texte"></span><button type="button" id="alarme-voir">Voir</button></div>
-
-  <div class="tuiles" id="tuiles">
-    <div class="tuile t-rouge" title="Appareils de la maison en quarantaine DNS"><i>Appareils isolés</i><b id="n-isoles">—</b><small id="s-isoles">3 au plus en même temps</small></div>
-    <div class="tuile t-violet" title="Appareils dont le contournement du DNS est fermé"><i>Contournements fermés</i><b id="n-evasions">—</b><small>résolveurs chiffrés refusés</small></div>
-    <div class="tuile t-orange" title="Adresses d'Internet bannies en ce moment"><i>Adresses bannies</i><b id="n-bannis">—</b><small id="s-bannis">—</small></div>
-    <div class="tuile t-vert" title="Notifications envoyées sur 24 h"><i>Prévenu (24 h)</i><b id="n-notifs">—</b><small id="s-notifs">—</small></div>
-  </div>
-
-  <section id="v-decisions" role="tabpanel" aria-labelledby="t-decisions">
-    <div class="pan">
-      <h3>En cours <em>chaque décision est écrite au journal d'audit</em></h3>
+  <section id="v-decisions" role="tabpanel" aria-labelledby="t-decisions" class="grille">
+    <div class="pan"><h3>En cours <i>chaque décision est écrite au journal d'audit</i></h3>
       <div class="decisions" id="decisions"><p class="vide">Chargement…</p></div>
-      <div class="liste" id="demandes" hidden></div>
-    </div>
+      <div class="liste" id="demandes" hidden></div></div>
   </section>
 
-  <section id="v-historique" role="tabpanel" aria-labelledby="t-historique" hidden>
-    <div class="pan">
-      <h3>Historique <em>24 dernières heures</em></h3>
-      <div class="defile"><table>
+  <section id="v-historique" role="tabpanel" aria-labelledby="t-historique" class="grille" hidden>
+    <div class="pan"><h3>Historique <i>24 dernières heures</i></h3>
+      <div class="tab"><table>
         <thead><tr><th>Heure</th><th>Menace</th><th>Qui</th><th>Décision</th></tr></thead>
         <tbody id="historique"></tbody></table></div>
-      <p class="note">« Signalé » : un signe seul et bruité (DGA, DNS inhabituel, dérive de débit) est compté et montré, jamais suivi d'une action.</p>
-    </div>
+      <p class="note">« Signalé » : un signe seul et bruité (DGA, DNS inhabituel, dérive de débit) est compté et montré, jamais suivi d'une action.</p></div>
   </section>
 
-  <section id="v-reglages" role="tabpanel" aria-labelledby="t-reglages" hidden>
-    <div class="grille deux">
-      <div class="pan">
-        <h3>Réglages <em>actifs d'office</em></h3>
-        <div class="reg"><label id="l-auto">Réponse automatique</label><button type="button" class="inter" role="switch" id="r-auto" aria-checked="true" aria-labelledby="l-auto"></button><small>Désactivé : la box prévient seulement, sans isoler ni bannir.</small></div>
-        <div class="champ"><span>Courriel du propriétaire</span><div><input class="saisie" id="r-courriel" type="email" autocomplete="off" aria-label="Courriel du propriétaire"></div></div>
-        <div class="champ"><span>SMS Free Mobile — identifiant et clé</span><div><input class="saisie" id="r-sms" inputmode="numeric" autocomplete="off" aria-label="Identifiant Free Mobile"><input class="saisie" id="r-cle" type="password" autocomplete="new-password" aria-label="Clé Free Mobile"></div></div>
-        <p class="note" id="cle-etat">À activer dans l'espace abonné Free Mobile (« Notifications par SMS ») ; la clé est gardée dans les secrets de la box et n'est jamais réaffichée.</p>
-        <div class="reg"><label id="l-bans">SMS pour les bans d'Internet</label><button type="button" class="inter" role="switch" id="r-bans" aria-checked="false" aria-labelledby="l-bans"></button><small>Par défaut : résumé horaire par courriel ; SMS seulement sur une rafale (plus de 50 adresses en 10 min).</small></div>
-        <div class="rangee"><button type="button" class="pri" id="enregistrer">Enregistrer</button><button type="button" id="test-sms">Envoyer un SMS d'essai</button><button type="button" id="test-courriel">Envoyer un courriel d'essai</button></div>
-        <p class="note" id="reg-attente" hidden>Enregistré : appliqué par le prochain passage (moins d'une minute).</p>
-      </div>
-      <div class="pan">
-        <h3>Aperçus <em>ce qui part de la box</em></h3>
-        <div class="apercus">
-          <div class="ecran"><span class="etiq">Page vue sur l'appareil isolé</span>
-            <div class="page-q"><b>Cet appareil est isolé</b><p>Il a contacté un serveur de pirates connu.</p><p>Le propriétaire de la box a été prévenu.</p><small>SecuBox</small></div></div>
-          <div class="ecran"><span class="etiq">SMS (Free Mobile)</span>
-            <div class="sms">SecuBox : TV salon isolée (serveur de pirates connu). Plus d'Internet pour elle pendant 24 h. Détails et « Libérer » : page Garde de l'administration.</div></div>
-          <div class="ecran"><span class="etiq">Courriel</span>
-            <div class="mail"><div class="ent">Objet : TV salon isolée (infection)</div>
-              <div>La TV salon a contacté un serveur de pirates connu.</div>
-              <div>Elle est isolée 24 h : seuls l'heure, les mises à jour et la box restent joignables. TV Privacy reste active.</div>
-              <div>Ouvrir la page Garde (connexion administrateur demandée pour libérer).</div></div></div>
-        </div>
-      </div>
-    </div>
+  <section id="v-reglages" role="tabpanel" aria-labelledby="t-reglages" class="grille" hidden>
+    <div class="pan"><h3>Réglages <i>actifs d'office</i></h3>
+      <div class="kv"><label id="l-auto">Réponse automatique</label><button type="button" class="inter" role="switch" id="r-auto" aria-checked="true" aria-labelledby="l-auto"></button><small>Désactivé : la box prévient seulement, sans isoler ni bannir.</small></div>
+      <div class="champ"><span>Courriel du propriétaire</span><div><input class="saisie" id="r-courriel" type="email" autocomplete="off" aria-label="Courriel du propriétaire"></div></div>
+      <div class="champ"><span>SMS Free Mobile — identifiant et clé</span><div><input class="saisie" id="r-sms" inputmode="numeric" autocomplete="off" aria-label="Identifiant Free Mobile"><input class="saisie" id="r-cle" type="password" autocomplete="new-password" aria-label="Clé Free Mobile"></div></div>
+      <p class="note" id="cle-etat">À activer dans l'espace abonné Free Mobile (« Notifications par SMS ») ; la clé est gardée dans les secrets de la box et n'est jamais réaffichée.</p>
+      <div class="kv"><label id="l-bans">SMS pour les bans d'Internet</label><button type="button" class="inter" role="switch" id="r-bans" aria-checked="false" aria-labelledby="l-bans"></button><small>Par défaut : résumé horaire par courriel ; SMS seulement sur une rafale (plus de 50 adresses en 10 min).</small></div>
+      <div class="actions"><button class="btn prim" type="button" id="enregistrer">Enregistrer</button><button class="btn" type="button" id="test-sms">Envoyer un SMS d'essai</button><button class="btn" type="button" id="test-courriel">Envoyer un courriel d'essai</button></div>
+      <p class="note" id="reg-attente" hidden>Enregistré : appliqué par le prochain passage (moins d'une minute).</p></div>
   </section>
 </div></div></main>
 <script>
@@ -213,7 +188,7 @@
   else{var sb=document.createElement('script');sb.src='/shared/sidebar.js';document.body.appendChild(sb);}
   document.addEventListener('click',function(e){var t=e.target&&e.target.closest?e.target.closest('#sidebar .nav-section-title'):null;if(!t)return;
     var s=t.closest('.nav-section');if(!s)return;s.classList.toggle('collapsed');var i=t.querySelector('.toggle-icon');if(i)i.textContent=s.classList.contains('collapsed')?'▶':'▼';});
-  var MENACES={infection:['Infection','p-rouge','⛔'],evasion:['Évasion','p-violet','↯'],intrusion:['Intrusion','p-orange','⚑'],signale:['Signalé','p-gris','·'],libere:['Libéré','p-vert','✓']};
+  var MENACES={infection:['Infection','hors','⛔'],evasion:['Évasion','vio','↯'],intrusion:['Intrusion','att','⚑'],signale:['Signalé','','·'],libere:['Libéré','ok','✓']};
   var etat={reglages:null,ouvert:false};
   function el(id){return document.getElementById(id);}
   function h(tag,attrs,texte){var n=document.createElement(tag);if(attrs)for(var k in attrs){if(k==='class')n.className=attrs[k];else n.setAttribute(k,attrs[k]);}
@@ -221,7 +196,7 @@
   function vider(n){while(n.firstChild)n.removeChild(n.firstChild);}
   function heure(ts){if(!ts)return '—';var d=new Date(ts*1000),j=new Date();var t=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     return d.toDateString()===j.toDateString()?t:d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+t;}
-  function message(texte,genre){var m=el('message');m.hidden=!texte;m.className='bandeau '+(genre||'info');m.textContent=texte||'';}
+  function message(texte,genre){var m=el('message');m.hidden=!texte;m.className='retour '+(genre==='erreur'?'ko':genre==='ok'?'ok':'');m.textContent=texte||'';}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function entetes(json){var o={'Accept':'application/json'},t=jeton();if(t)o.Authorization='Bearer '+t;if(json)o['Content-Type']='application/json';return o;}
   function lire(chemin){
@@ -239,7 +214,7 @@
   // Confirmation intégrée (jamais confirm()) : Confirmer / Annuler sous le bouton.
   function confirmer(lieu,texte,action){
     if(lieu.querySelector('.confirm'))return;etat.ouvert=true;
-    var c=h('div',{class:'confirm'}),ok=h('button',{type:'button',class:'danger'},'Confirmer'),non=h('button',{type:'button'},'Annuler');
+    var c=h('div',{class:'confirm'}),ok=h('button',{type:'button',class:'btn sm danger'},'Confirmer'),non=h('button',{type:'button',class:'btn sm'},'Annuler');
     function fermer(){if(c.parentNode)c.parentNode.removeChild(c);etat.ouvert=false;hauteur();}
     non.addEventListener('click',fermer);
     ok.addEventListener('click',function(){ok.disabled=true;action().then(function(){fermer();message('Demande enregistrée : appliquée par le prochain passage (moins d\'une minute).','ok');charger();},
@@ -267,12 +242,12 @@
       var p=h('div',{class:'pourquoi'});p.appendChild(h('span',{class:'pill '+m[1]},m[0]));
       p.appendChild(document.createTextNode(' sondages et empreintes malveillantes (capteur DPI, leurres du WAF). Résumé envoyé chaque heure par courriel.'));corps.appendChild(p);
       corps.appendChild(h('div',{class:'quand'},'4 h la première fois, ×4 à chaque récidive, 30 j au plus'));
-      var voir=h('button',{type:'button','aria-expanded':'false'},'Voir la liste'),liste=h('div',{class:'liste',hidden:''});
+      var voir=h('button',{type:'button',class:'btn sm','aria-expanded':'false'},'Voir la liste'),liste=h('div',{class:'liste',hidden:''});
       voir.addEventListener('click',function(){var o=liste.hidden;liste.hidden=!o;voir.setAttribute('aria-expanded',o?'true':'false');hauteur();});
       (d.adresses||[]).forEach(function(a){var l=h('div');l.appendChild(h('span',{class:'mono'},a.ip));
-        l.appendChild(h('span',{class:'quand'},'jusqu\'à '+heure(a.fin)));if(a.recidive)l.appendChild(h('span',{class:'pill p-orange'},'récidive'));
-        if(a.en_cours)l.appendChild(h('span',{class:'pill p-cyan'},'en cours'));
-        else{var b=h('button',{type:'button'},'Débannir');b.addEventListener('click',function(){confirmer(l,'Débannir '+a.ip+' ?',function(){return ecrire('/debannir',{ip:a.ip});});});l.appendChild(b);}
+        l.appendChild(h('span',{class:'quand'},'jusqu\'à '+heure(a.fin)));if(a.recidive)l.appendChild(h('span',{class:'pill att'},'récidive'));
+        if(a.en_cours)l.appendChild(h('span',{class:'pill cy'},'en cours'));
+        else{var b=h('button',{type:'button',class:'btn sm'},'Débannir');b.addEventListener('click',function(){confirmer(l,'Débannir '+a.ip+' ?',function(){return ecrire('/debannir',{ip:a.ip});});});l.appendChild(b);}
         liste.appendChild(l);});
       act.appendChild(voir);c.appendChild(corps);c.appendChild(act);c.appendChild(liste);return c;
     }
@@ -281,9 +256,9 @@
     if(d.noms&&d.noms.length){po.appendChild(document.createTextNode(' — refusé : '));po.appendChild(h('span',{class:'mono'},d.noms.join(', ')));}
     corps.appendChild(po);
     corps.appendChild(h('div',{class:'quand'},(d.menace==='infection'?'Isolé depuis ':'Depuis ')+heure(d.debut)+' · réévalué à '+heure(d.fin)));
-    if(d.en_cours)act.appendChild(h('span',{class:'pill p-cyan'},'levée en cours'));
+    if(d.en_cours)act.appendChild(h('span',{class:'pill cy'},'levée en cours'));
     else{
-      var lib=d.menace==='infection',b=h('button',{type:'button',class:lib?'danger':''},lib?'Libérer':'Rouvrir');
+      var lib=d.menace==='infection',b=h('button',{type:'button',class:lib?'btn sm danger':'btn sm'},lib?'Libérer':'Rouvrir');
       b.addEventListener('click',function(){confirmer(act,(lib?'Libérer ':'Rouvrir ')+d.nom+' ? Pas de nouvelle mesure 7 j pour ce signe.',function(){return ecrire(lib?'/liberer':'/rouvrir',{id:d.id});});});
       act.appendChild(b);
     }
@@ -295,7 +270,7 @@
     el('s-bannis').textContent='dont '+t.recidivistes+' récidiviste'+(t.recidivistes>1?'s':'');
     el('n-notifs').textContent=t.notifs_24h.sms+t.notifs_24h.courriel;
     el('s-notifs').textContent=t.notifs_24h.sms+' SMS · '+t.notifs_24h.courriel+' courriels · '+t.en_attente+' en attente';
-    var mo=el('mode');mo.textContent=e.automatique?'AUTOMATIQUE':'PRÉVIENT SEULEMENT';mo.className='pill '+(e.automatique?'p-vert':'p-orange');
+    var mo=el('mode');mo.textContent=e.automatique?'AUTOMATIQUE':'PRÉVIENT SEULEMENT';mo.className='actif '+(e.automatique?'ok':'att');
     el('releve').textContent='Relevé '+heure(e.releve);
     var inf=(e.actives||[]).filter(function(d){return d.menace==='infection';});
     el('alarme').hidden=!inf.length;
@@ -305,7 +280,7 @@
     if(!(e.actives||[]).length)box.appendChild(h('p',{class:'vide'},'Aucune mesure en cours.'));
     (e.actives||[]).forEach(function(d){box.appendChild(carte(d));});
     var dm=el('demandes'),ACT={liberer:'Libérer',rouvrir:'Rouvrir',debannir:'Débannir',tester:'Essai'};vider(dm);
-    (e.demandes||[]).forEach(function(x){var l=h('div');l.appendChild(h('span',{class:'pill '+(x.etat==='en_attente'?'p-cyan':x.etat==='faite'?'p-vert':'p-orange')},x.etat==='en_attente'?'en cours':x.etat));
+    (e.demandes||[]).forEach(function(x){var l=h('div');l.appendChild(h('span',{class:'pill '+(x.etat==='en_attente'?'cy':x.etat==='faite'?'ok':'att')},x.etat==='en_attente'?'en cours':x.etat));
       l.appendChild(h('span',null,(ACT[x.action]||x.action)+' '+x.cible+(x.resultat?' : '+x.resultat:'')));dm.appendChild(l);});
     dm.hidden=!dm.firstChild;
     hauteur();
