@@ -1,3 +1,17 @@
+secubox-ai (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3719) : second processus secubox-ai-veille (User=secubox-ai, AppArmor
+    enforce, socle de durcissement), seul écrivain régulier de
+    /var/lib/secubox/ai/veille.db (WAL, clés étrangères, busy_timeout 5000).
+    Migrations /usr/lib/secubox/ai/migrations/NNNN-*.sql appliquées au démarrage
+    après sauvegarde veille.db.avant-NNNN (une seule gardée) ; rétention
+    (événements 30 j, incidents 365 j, mesures 30 j, lots de 1 000) ; garde
+    d'espace (collecte suspendue sous 1 Gio libre de /var/lib) ; boucles
+    isolées (une boucle en erreur est journalisée et réessayée). Pas encore de
+    collecte ni de corrélation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 12:00:00 +0000
+
 secubox-ai (0.1.2-1~trixie1) trixie; urgency=medium
 
   * Moteur local : surcoût mémoire calibré sur gk3 (Llama 3.2 1B, contexte 4096 :

@@ -15,6 +15,12 @@ override_dh_auto_install:
 	install -d debian/secubox-ai/usr/lib/secubox/ai
 	cp -r api debian/secubox-ai/usr/lib/secubox/ai/
 	find debian/secubox-ai/usr/lib/secubox/ai -name __pycache__ -type d -prune -exec rm -rf {} +
+	# Veille V2 (#3719) : paquet veille/ et migrations SQL à côté de api/ ; second processus et son unité.
+	cp -r veille debian/secubox-ai/usr/lib/secubox/ai/
+	cp -r migrations debian/secubox-ai/usr/lib/secubox/ai/
+	install -D -m 0755 sbin/secubox-ai-veille debian/secubox-ai/usr/sbin/secubox-ai-veille
+	install -D -m 0644 systemd/secubox-ai-veille.service debian/secubox-ai/usr/lib/systemd/system/secubox-ai-veille.service
+	install -D -m 0644 apparmor/secubox-ai-veille debian/secubox-ai/etc/apparmor.d/secubox-ai-veille
 	# Contrôleur root (moteur local, préparation, clé distante).
 	install -D -m 0755 sbin/secubox-aictl debian/secubox-ai/usr/sbin/secubox-aictl
 	# Unités : API, moteur (sans [Install]), préparation, demandes (.path + oneshot root).

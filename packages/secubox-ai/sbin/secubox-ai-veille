@@ -1,0 +1,49 @@
+#!/usr/bin/python3 -IB
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-ai-veille — processus de veille de secubox-ai V2 (#3719), User=secubox-ai.
+
+Seul écrivain régulier de /var/lib/secubox/ai/veille.db. Squelette : migrations, rétention quotidienne, garde
+d'espace et mesures ; les boucles de collecte et de corrélation arrivent dans les tâches suivantes.
+"""
+import asyncio
+import logging
+import signal
+import sys
+from datetime import datetime, timezone
+
+sys.path.insert(0, "/usr/lib/secubox/ai")
+
+from veille import base, retention  # noqa: E402
+from veille.service import Boucle, Veille  # noqa: E402
+
+DB = "/var/lib/secubox/ai/veille.db"
+
+
+def _maintenant():
+    return datetime.now(timezone.utc)
+
+
+async def _main():
+    db = await asyncio.to_thread(base.ouvrir, DB)
+    async def purge():
+        res = await veille.sql(retention.purger, _maintenant())
+        logging.getLogger("secubox-ai-veille").info("purge : %s", res)
+
+    veille = Veille(db, _maintenant, [Boucle("retention", 86400, purge)])
+    boucle = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        boucle.add_signal_handler(sig, veille.arreter)
+    await veille.executer()
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
+    asyncio.run(_main())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

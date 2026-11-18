@@ -81,7 +81,7 @@ def test_rules_installe(cible):
 
 def test_rules_installe_toutes_les_unites():
     installees = {c.rsplit("/", 1)[1] for _, c in _installs() if "/usr/lib/systemd/system/" in c}
-    assert installees == set(UNITES) and len(UNITES) == 5
+    assert installees == set(UNITES) and len(UNITES) == 6
 
 
 def test_rules_code_sans_cache_et_controleur_executable():
@@ -312,9 +312,9 @@ def test_postinst_ordre():
             < i["/usr/sbin/secubox-aictl preparer"] < i["systemctl restart secubox-ai-demandes.path"]
             < i["systemctl restart secubox-ai.service"])
     # Les deux profils, chargés avant le premier démarrage (une unité qui nomme un profil absent ne part pas).
-    assert 'for _p in secubox-ai-api secubox-ai-moteur; do' in code
+    assert 'for _p in secubox-ai-api secubox-ai-moteur secubox-ai-veille; do' in code
     assert 'apparmor_parser -r "/etc/apparmor.d/$_p"' in code
-    assert "for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service; do" in code
+    assert "for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service; do" in code
     assert 'deb-systemd-helper --quiet was-enabled "$_u"' in code
     assert "secubox-ai-moteur.service" not in code.split("for _u in", 1)[1].split("done", 1)[0]
 
@@ -328,10 +328,10 @@ def test_postinst_configuration_au_premier_passage():
 def test_prerm_et_postrm():
     code = _code(PRERM)
     assert "remove|deconfigure)" in code
-    assert ("systemctl stop secubox-ai-demandes.path secubox-ai-demandes.service secubox-ai.service "
+    assert ("systemctl stop secubox-ai-demandes.path secubox-ai-demandes.service secubox-ai-veille.service secubox-ai.service "
             "secubox-ai-moteur.service") in code
     post = _code(POSTRM)
-    assert post.count("for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service; do") == 2
+    assert post.count("for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service; do") == 2
     assert 'deb-systemd-helper purge "$_u"' in post and 'deb-systemd-helper mask "$_u"' in post
     assert post.count("    decharger_profils\n") == 2
     assert 'apparmor_parser -R "/etc/apparmor.d/$_p"' in post and "/sys/kernel/security/apparmor/.remove" in post
