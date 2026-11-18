@@ -4,7 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """Comptes de service par clé Ed25519 (#3716) : `ai-ban`, l'IA qui bannit sur gk2 ; `ai-filtres` (#3732), l'IA qui pose
-des filtres du WAF (portée `waf-filtres`, clés et jetons à part : aucun jeton ne vaut pour l'autre compte).
+des filtres du WAF (portée `waf-filtres`, clés et jetons à part : aucun jeton ne vaut pour l'autre compte) ; `garde`
+(#3794), secubox-garde qui bannit une adresse publique (portée `garde-ban`).
 
 CE N'EST PAS UN COMPTE DE SECUBOX-AUTH, NI UNE SESSION. Sur le modèle du porteur délégué du pilotage (#3126 L5) :
 
@@ -66,7 +67,7 @@ from . import auth
 #: Arbre root des clés publiques, HORS de /etc/secubox (qui appartient au compte secubox).
 DOSSIER_COMPTES_SERVICE = "/etc/secubox-comptes-service"
 #: Liste FERMÉE des comptes de service et de leur portée unique.
-COMPTES_SERVICE = {"ai-ban": "waf-ban", "ai-filtres": "waf-filtres"}
+COMPTES_SERVICE = {"ai-ban": "waf-ban", "ai-filtres": "waf-filtres", "garde": "garde-ban"}
 DUREE_MAX_S = 60
 DERIVE_S = 5
 ALGORITHME = "EdDSA"
@@ -517,7 +518,10 @@ def garde_compte_service(compte: str) -> Callable[..., Any]:
 require_ai_ban = garde_compte_service("ai-ban")
 #: #3732 : l'IA qui propose des filtres du WAF (`/ai/filtres`), portée `waf-filtres`, clés à part.
 require_ai_filtres = garde_compte_service("ai-filtres")
+#: #3794 : secubox-garde (détecteur d'intrusion de la box) qui bannit une adresse publique (`/garde/ban`), portée
+#: `garde-ban`, clés à part (`wafctl cle-garde-ban`).
+require_garde = garde_compte_service("garde")
 
 __all__ = ["DOSSIER_COMPTES_SERVICE", "COMPTES_SERVICE", "DUREE_MAX_S", "DERIVE_S", "ALGORITHME", "CLES_MAX",
            "REJEU_MAX", "TAILLE_MAX_CORPS", "RefusCompteService", "empreinte", "cles_publiques", "verifier_jeton", "frapper_jeton",
-           "garde_compte_service", "require_ai_ban", "require_ai_filtres"]
+           "garde_compte_service", "require_ai_ban", "require_ai_filtres", "require_garde"]

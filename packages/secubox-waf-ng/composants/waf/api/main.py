@@ -2265,6 +2265,16 @@ except ImportError:  # standalone
 _filtres_ia.configurer(audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
 app.include_router(_filtres_ia.router)
 
+# ── Ban posé par secubox-garde, compte de service garde (#3794) ─────────
+# Même exception à RULES-CODE § 3 (`require_garde`), même processus désigné ; même chemin `wafctl ban` que l'ai-ban.
+try:
+    from api import garde_ban as _garde_ban
+except ImportError:  # standalone
+    import garde_ban as _garde_ban
+
+_garde_ban.configurer(audit=lambda action, detail, user: _audit(action, detail, user, lever=True))
+app.include_router(_garde_ban.router)
+
 
 # ── Mémoire des leurres de service (#3734) ──────────────────────────────
 try:

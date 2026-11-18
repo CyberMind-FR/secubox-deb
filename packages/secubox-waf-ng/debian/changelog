@@ -1,3 +1,15 @@
+secubox-waf-ng (1.40.0-1~trixie1) trixie; urgency=medium
+
+  * Geste garde-ban (ref #3794) : POST /api/v1/waf/garde/ban, compte de
+    service garde (portée garde-ban, jeton EdDSA par requête), une adresse
+    IPv4 ou IPv6 publique seule (409 forme|privee sinon), durée 1 h à 30 j,
+    plafonds 120/h et 1000/j, journal /var/lib/secubox/waf/garde-ban.jsonl
+    et audit.log ; même chemin que l'ai-ban (wafctl ban → waf_ban/waf_ban6).
+  * wafctl cle-garde-ban generer|ajouter|retirer|lister : clé privée
+    /etc/secubox/secrets/garde-ban.pem root:secubox-garde 0640.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:00:00 +0100
+
 secubox-waf-ng (1.39.0-1~trixie1) trixie; urgency=medium
 
   * Onglet Filtres IA (ref #3748) : GET /filtres-ia/resume|touches|radar

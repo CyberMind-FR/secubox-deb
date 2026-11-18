@@ -154,6 +154,18 @@ elles observent seulement, comme `detect`.
 
 Codes de cvectl : 2 → 422, 3 → 409, 4 → 404 ; autre code, délai dépassé ou binaire absent → 503 `ctl`.
 
+### Ban de secubox-garde (#3794)
+
+Compte de service `garde` (portée `garde-ban`, mêmes règles de jeton que `ai-ban`) ; clé privée
+`/etc/secubox/secrets/garde-ban.pem` (root:secubox-garde 0640), créée par `wafctl cle-garde-ban generer`.
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /garde/ban` | `{"geste": "ban", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…2592000, "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` ; 409 `{"detail": {"motif"}}` : `forme`, `privee`, `deja_actif`, `plafond`, ou motif de `wafctl` |
+
+Plafonds 120/h et 1000/j (journal `/var/lib/secubox/waf/garde-ban.jsonl`) ; application par `wafctl ban`
+(`waf_ban`/`waf_ban6` avec timeout), audit `garde-ban-demande` puis `garde-ban`.
+
 Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: "auto"` = bloc seulement, 24 h au plus,
 **cas sûr recontrôlé** (≥ 20 adresses du bloc dans `waf_ban`, toutes de familles sûres : `scanners`,
 `recon_crawler`, `host_anomaly`, `leurre`, `product_absent_probes`, `honeypot`, `waf_fingerprint` ; les attaques — `xss`,
