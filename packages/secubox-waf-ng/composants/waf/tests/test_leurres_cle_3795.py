@@ -17,15 +17,18 @@ RULES = PAQUET / "debian/rules"
 
 
 def _lancer(cle):
-    return subprocess.run(["sh", str(SCRIPT)], env={**os.environ, "SECUBOX_LEURRES_CLE": str(cle)},
-                          capture_output=True, text=True)
+    import grp
+    groupe = grp.getgrgid(os.getgid()).gr_name
+    return subprocess.run(["sh", str(SCRIPT)], env={**os.environ, "SECUBOX_LEURRES_CLE": str(cle),
+                                                    "SECUBOX_LEURRES_GROUPE": groupe,
+                                                    "SECUBOX_LEURRES_PROPRIETAIRE": str(os.getuid())}, capture_output=True, text=True)
 
 
 def test_script_cree_puis_idempotent(tmp_path):
     cle = tmp_path / "leurres-hmac.key"
     assert _lancer(cle).returncode == 0
     brut = cle.read_bytes()
-    assert len(brut) == 32 and stat.S_IMODE(cle.stat().st_mode) == 0o600
+    assert len(brut) == 32 and stat.S_IMODE(cle.stat().st_mode) == 0o640
     assert _lancer(cle).returncode == 0 and cle.read_bytes() == brut          # jamais tournée
     assert [p.name for p in tmp_path.iterdir()] == ["leurres-hmac.key"]       # aucun temporaire laissé
 
@@ -42,14 +45,16 @@ def test_unites_presentes_et_ordonnees():
         assert l in u, l
     d = DROPIN.read_text()
     assert "Wants=secubox-waf-leurres-cle.service" in d and "After=secubox-waf-leurres-cle.service" in d
-    assert d.index("[Unit]") < d.index("Wants=") < d.index("[Service]") < d.index("LoadCredential=leurres-hmac:")
+    actives = [l for l in d.splitlines() if l.strip() and not l.lstrip().startswith("#")]
+    assert not any(l.startswith(("LoadCredential", "Requires", "BindsTo", "Requisite")) for l in actives)
+    assert d.index("\n[Unit]") < d.index("\nWants=") < d.index("\n[Service]")
     r = RULES.read_text()
     assert "systemd/secubox-waf-leurres-cle.service" in r and "scripts/secubox-waf-leurres-cle" in r
 
 
 def test_postinst_avertit_si_cle_absente(tmp_path):
     p = POSTINST.read_text()
-    i = p.index("/usr/sbin/secubox-waf-leurres-cle || true")
+    i = p.index("      /usr/sbin/secubox-waf-leurres-cle || true")
     bloc = p[i:p.index("deb-systemd-helper enable secubox-waf-leurres-cle.service", i)]
     assert "ATTENTION" in bloc and ">&2" in bloc and "leurres-hmac-absente" in bloc and "audit.log" in bloc
     # Exécution du chemin d'avertissement sur des chemins de test.
@@ -61,3 +66,19 @@ def test_postinst_avertit_si_cle_absente(tmp_path):
     r = subprocess.run(["sh", "-c", essai + "\n    :\n  fi\n" if essai.rstrip().endswith("then") else essai],
                        capture_output=True, text=True)
     assert "ATTENTION" in r.stderr and "leurres-hmac-absente" in audit.read_text()
+
+
+def test_postinst_remet_une_cle_0600_en_0640_sans_la_regenerer(tmp_path):
+    import grp
+    p = POSTINST.read_text()
+    i = p.index("      # Clé d'une installation antérieure")
+    bloc = p[i:p.index("      /usr/sbin/secubox-waf-leurres-cle || true", i)]
+    cle = tmp_path / "k"
+    cle.write_bytes(b"x" * 32)
+    os.chmod(cle, 0o600)
+    groupe = grp.getgrgid(os.getgid()).gr_name
+    essai = (bloc.replace("/etc/secubox/secrets/leurres-hmac.key", str(cle)).replace("root:secubox", f":{groupe}")
+             .replace("getent group secubox", "true"))
+    assert subprocess.run(["sh", "-c", essai]).returncode == 0
+    assert stat.S_IMODE(cle.stat().st_mode) == 0o640 and cle.read_bytes() == b"x" * 32
+    assert "chown root:secubox" in bloc and "chmod 0640" in bloc

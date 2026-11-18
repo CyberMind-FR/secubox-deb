@@ -2,11 +2,12 @@ secubox-waf-ng (1.41.1-1~trixie1) trixie; urgency=medium
 
   * #3795 : leurres de service (#3728) lus par la veille V2 — /menaces/flux
     rend les identifiants tentés (essais) sans mot de passe en clair :
-    mot_de_passe_hmac (HMAC-SHA256, clé locale leurres-hmac.key créée par le
-    postinst si absente, remise par LoadCredential=, null sans clé) et
+    mot_de_passe_hmac (HMAC-SHA256, clé locale leurres-hmac.key root:secubox
+    0640 lue directement, null sans clé, jamais bloquante) et
     mot_de_passe_longueur ; champs bruts retirés, chaînes masquées. Clé
     garantie avant l'API par l'oneshot secubox-waf-leurres-cle.service
-    (Wants/After du drop-in) ; postinst bruyant si elle manque.
+    (Wants/After du drop-in) ; postinst bruyant si elle manque, remet une
+    clé 0600 antérieure en root:secubox 0640.
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:00:00 +0100
 

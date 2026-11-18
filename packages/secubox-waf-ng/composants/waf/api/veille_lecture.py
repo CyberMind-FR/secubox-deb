@@ -19,7 +19,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import os
+import time
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -30,23 +32,34 @@ LIGNE_MAX = 64 * 1024
 _BLOC = 64 * 1024
 
 
-#: Nom du credential systemd (LoadCredential=leurres-hmac:/etc/secubox/secrets/leurres-hmac.key).
-CREDENTIAL_LEURRES = "leurres-hmac"
+#: Clé du HMAC des leurres (root:secubox 0640), lue directement ; SECUBOX_LEURRES_CLE pour les tests.
+CLE_LEURRES = "/etc/secubox/secrets/leurres-hmac.key"
+_AVERTI = {"t": 0.0}
+_AVERTIR_S = 600
 #: Champs de premier niveau qui pourraient porter un dialogue brut (mot de passe compris) : jamais rendus.
 CHAMPS_BRUTS = ("message", "ligne", "payload", "brut", "raw", "body", "corps", "donnees", "data")
 
 
 def cle_leurres() -> Optional[bytes]:
-    """La clé locale du HMAC des leurres, depuis `$CREDENTIALS_DIRECTORY` ; None si absente ou trop courte."""
-    dossier = os.environ.get("CREDENTIALS_DIRECTORY", "")
-    if not dossier:
-        return None
+    """La clé locale du HMAC des leurres ; None si absente, illisible ou trop courte (journalisé au plus une fois par
+    10 min). Ne lève jamais : la requête et le service ne dépendent pas de cette clé."""
+    chemin = os.environ.get("SECUBOX_LEURRES_CLE") or CLE_LEURRES
+    motif = ""
     try:
-        with open(os.path.join(dossier, CREDENTIAL_LEURRES), "rb") as f:
+        with open(chemin, "rb") as f:
             cle = f.read(4096)
-    except OSError:
+        if len(cle) < 16:
+            motif = "trop courte"
+    except OSError as e:
+        cle, motif = b"", type(e).__name__
+    if motif:
+        maintenant = time.monotonic()
+        if maintenant - _AVERTI["t"] >= _AVERTIR_S or _AVERTI["t"] == 0.0:
+            _AVERTI["t"] = maintenant
+            logging.getLogger("secubox.waf").warning("clé des leurres %s inutilisable (%s) : mot_de_passe_hmac=null",
+                                                     chemin, motif)
         return None
-    return cle if len(cle) >= 16 else None
+    return cle
 
 
 def masquer_essais(ligne: Any, cle: Optional[bytes]) -> Any:

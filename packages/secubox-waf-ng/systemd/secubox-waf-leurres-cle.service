@@ -3,8 +3,8 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 #
-# #3795 : garantit /etc/secubox/secrets/leurres-hmac.key avant secubox-waf.service, dont le drop-in
-# secubox-waf-gestes-ia.conf la charge par LoadCredential= (source absente = unité en échec 243/CREDENTIALS).
+# #3795 : crée /etc/secubox/secrets/leurres-hmac.key (root:secubox 0640) avant secubox-waf.service, qui la LIT
+# directement. Jamais bloquant : le drop-in ne fait que Wants=/After= ; un échec ici laisse l'API démarrer (HMAC null).
 # Crée la clé si elle manque, ne la tourne jamais ; sortie 0 si elle existe déjà.
 [Unit]
 Description=SecuBox WAF — clé locale du HMAC des leurres (#3795)
@@ -28,7 +28,7 @@ ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
 NoNewPrivileges=yes
-CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_FOWNER
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_FOWNER CAP_CHOWN
 SystemCallArchitectures=native
 LockPersonality=yes
 MemoryDenyWriteExecute=yes

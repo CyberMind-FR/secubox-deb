@@ -338,13 +338,13 @@ def _ligne_leurre():
 
 def _flux_leurre(v, monkeypatch, cle):
     import hashlib
-    if cle is None:
-        monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
-    else:
-        d = v.t / "creds"
-        d.mkdir(exist_ok=True)
-        (d / "leurres-hmac").write_bytes(cle)
-        monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(d))
+    k = v.t / "leurres-hmac.key"
+    if k.exists():
+        os.chmod(k, 0o600)
+        k.unlink()
+    if cle is not None:
+        k.write_bytes(cle)
+    monkeypatch.setenv("SECUBOX_LEURRES_CLE", str(k))
     (v.t / "waf-threats.log").write_bytes((json.dumps(_ligne_leurre()) + "\n").encode())
     r = v.get("/menaces/flux")
     assert r.status_code == 200, r.text
@@ -375,3 +375,17 @@ def test_flux_leurres_sans_cle_null(v, monkeypatch):
     assert e["essais"][0] == {"compte": "root", "mot_de_passe_hmac": None, "mot_de_passe_longueur": 6}
     e = _flux_leurre(v, monkeypatch, b"court")                       # clé trop courte : refus aussi
     assert e["essais"][0]["mot_de_passe_hmac"] is None
+
+
+def test_flux_leurres_cle_illisible_null(v, monkeypatch):
+    if os.geteuid() == 0:
+        pytest.skip("root lit tout")
+    k = v.t / "leurres-hmac.key"
+    k.write_bytes(bytes(range(32)))
+    os.chmod(k, 0)
+    monkeypatch.setenv("SECUBOX_LEURRES_CLE", str(k))
+    (v.t / "waf-threats.log").write_bytes((json.dumps(_ligne_leurre()) + "\n").encode())
+    r = v.get("/menaces/flux")
+    assert r.status_code == 200 and "xc3511" not in r.text
+    assert r.json()["lignes"][0]["ligne"]["essais"][0]["mot_de_passe_hmac"] is None
+    os.chmod(k, 0o600)

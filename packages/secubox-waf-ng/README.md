@@ -240,11 +240,11 @@ en cours d'écriture attend l'appel suivant) ; ligne illisible ⇒ `ligne: null,
 `motif: trop_longue` (sautée). Leurres de service (#3728, lignes `tool: authwatch` de sbx-authwatch, #3795) : contacts
 (`client_ip`, `agent`, `user_agent`, `host`, `path`) rendus tels quels, mais chaque `essais[]` sans le mot de passe en
 clair — `{compte, mot_de_passe_hmac, mot_de_passe_longueur}` : HMAC-SHA256 à clé locale de gk2
-(`/etc/secubox/secrets/leurres-hmac.key`, 32 octets, root 0600, créée par le postinst si absente, jamais tournée
-automatiquement, remise par `LoadCredential=leurres-hmac:` du drop-in `secubox-waf-gestes-ia.conf` ; garantie avant
-l'API par l'oneshot root `secubox-waf-leurres-cle.service` (`Wants=`/`After=` du drop-in), car une source absente fait
-échouer secubox-waf.service en 243/CREDENTIALS ; si la création échoue, l'API reste arrêtée et le postinst le signale
-sur stderr et dans `audit.log`) ; sans clé,
+(`/etc/secubox/secrets/leurres-hmac.key`, 32 octets, root:secubox 0640, LUE DIRECTEMENT par l'API, jamais tournée
+automatiquement ; créée si absente par l'oneshot root `secubox-waf-leurres-cle.service` — `Wants=`/`After=` du drop-in,
+jamais `Requires=` ni `LoadCredential=` : la clé ne bloque jamais l'API — et par le postinst, qui remet une clé 0600
+d'une installation antérieure en root:secubox 0640 sans la régénérer et signale une clé absente sur stderr et dans
+`audit.log`) ; clé absente, illisible ou courte (journalisé au plus toutes les 10 min),
 `mot_de_passe_hmac: null` (jamais le clair ni un SHA-256 nu). Sur ces lignes, les champs bruts (`message`, `ligne`,
 `payload`…) sont retirés et toute chaîne qui contient un mot de passe tenté devient `[masqué]`. Le journal de gk2 garde
 le clair (décision du propriétaire). À inode changé : fin de `waf-threats.log.1` (en clair, `delaycompress`) puis le courant
