@@ -9,6 +9,7 @@ CyberMind — https://cybermind.fr
 États en langage clair (non configuré, en attente de validation sur la Freebox, autorisé, injoignable…), droits obtenus et manquants,
 lectures avec un cache court (la Freebox n'est pas faite pour être interrogée en boucle). Aucune réponse ne contient le jeton.
 """
+import ipaddress
 import json
 import os
 import socket
@@ -205,6 +206,60 @@ class Freebox:
         if apres != ip:
             raise C.ErreurFreebox("La Freebox n'a pas pris en compte le changement de passerelle DHCP.")
         return {"passerelle": apres, "change": True}
+
+    # ── écriture : next hop du préfixe IPv6 principal (#3807) ────────────────
+    @staticmethod
+    def _valider_next_hop(nh):
+        """« » (vide : la Freebox reprend le préfixe) ou une adresse lien-local fe80::/10 sans zone."""
+        if nh == "":
+            return ""
+        if not isinstance(nh, str) or "%" in nh or len(nh) > 39:
+            raise ValueError("next hop invalide : adresse lien-local attendue")
+        try:
+            a = ipaddress.IPv6Address(nh)
+        except ValueError:
+            raise ValueError("next hop invalide : adresse lien-local attendue") from None
+        if not a.is_link_local:
+            raise ValueError("next hop invalide : adresse lien-local attendue (fe80::/10)")
+        return str(a)
+
+    def _delegations(self):
+        lu = self.client.lire("connection/ipv6/config/") or {}
+        d = lu.get("delegations")
+        if not isinstance(d, list) or not d or not isinstance(d[0], dict):
+            raise C.ErreurFreebox("La Freebox ne rend aucune délégation IPv6 (connection/ipv6/config/).")
+        return d
+
+    def lire_nexthop(self):
+        """Préfixe principal (delegations[0]) et son next hop ; "" = la Freebox l'annonce elle-même."""
+        d0 = self._delegations()[0]
+        return {"prefix": d0.get("prefix") or "", "next_hop": d0.get("next_hop") or ""}
+
+    def regler_nexthop(self, nh):
+        """Route le préfixe principal vers `nh` (lien-local) ou le rend à la Freebox (""), #3807.
+        Même charpente que regler_passerelle_dhcp. La Freebox refuse un PUT partiel : on renvoie
+        le tableau `delegations` relu en entier, seul delegations[0].next_hop changé, puis on relit."""
+        nh = self._valider_next_hop(nh)
+        if not self.client.session:
+            self.client.ouvrir_session()
+        if not self.client.droits.get("settings"):
+            raise C.DroitManquant("Cette action demande le droit « Modification des réglages de la Freebox » : réglez-le dans "
+                                  "Paramètres → Gestion des accès → Applications.")
+        delegations = self._delegations()
+        avant = delegations[0].get("next_hop") or ""
+        prefixe = delegations[0].get("prefix") or ""
+        if avant == nh:
+            return {"prefix": prefixe, "next_hop": avant, "change": False}
+        corps = [dict(x) if isinstance(x, dict) else x for x in delegations]
+        corps[0]["next_hop"] = nh
+        self.client.ecrire("PUT", "connection/ipv6/config/", {"delegations": corps})
+        apres_d0 = self._delegations()[0]
+        apres = apres_d0.get("next_hop") or ""
+        self._cache.clear()
+        self.journal({"action": "ipv6_next_hop", "prefixe": prefixe, "avant": avant, "apres": apres, "voulu": nh})
+        if apres != nh:
+            raise C.ErreurFreebox("La Freebox n'a pas pris en compte le next hop IPv6.")
+        return {"prefix": apres_d0.get("prefix") or prefixe, "next_hop": apres, "change": True}
 
     def upnp(self):
         def produire():

@@ -35,6 +35,11 @@ Connecteur de l'API Freebox OS (v0.1, lecture). Conception : `docs/dossiers/conn
   Freebox de gk2 les trois sont **refusés** : état `indisponible`, aucune écriture IPv6 tentée, et le pare-feu IPv6 global
   n'est jamais désactivé d'office (les nœuds distants passent par l'IPv4). Aussi item `maillage_distant` de
   l'autoconfiguration et verbes `freeboxctl maillage-lire|maillage-appliquer <ip_box>`.
+- **Next hop IPv6 (#3807)** : `freeboxctl nexthop-lire` rend `{prefix, next_hop}` du préfixe principal
+  (`connection/ipv6/config/`, `delegations[0]`) ; `freeboxctl nexthop-regler <fe80::…|vide>` route ce /64 vers une
+  adresse lien-local (la Freebox cesse alors de l'annoncer) ou le lui rend (`vide`). Droit « settings » exigé, tableau
+  `delegations` relu puis renvoyé en entier (seul `delegations[0].next_hop` change), relu après écriture, audité
+  (`ipv6_next_hop`), erreur si la Freebox ne l'a pas pris. Utilisé par le relais IPv6 de `secubox-pseudo-routeur`.
 - **Contrôle de l'IPv6 fixe** : `secubox-freebox-maillage.timer` (15 min) lance `freeboxctl maillage-controle` (lecture
   seule : `ip -j -6 addr`, résolution AAAA du nom annoncé) ; état dans `/var/lib/secubox/freebox/maillage-controle.json`,
   alerte au journal (priorité avertissement) si l'IPv6 fixe disparaît du WAN ou diffère de l'AAAA publiée. IPv6 attendue :

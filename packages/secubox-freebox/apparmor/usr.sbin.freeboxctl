@@ -7,7 +7,7 @@
 # appels sudo -u secubox-freebox d'autres modules). Il LIT sa conf (/etc/secubox/p2p.toml, /etc/secubox/freebox.toml) et
 # son code, n'ÉCRIT que sous /var/lib/secubox/freebox/ (magasin du jeton, état du contrôle) ; seule exception : l'AJOUT en
 # fin de /var/log/secubox/audit.log (append-only, exigence CSPN : chaque décision de sécurité y est écrite).
-# Verbes passerelle-dhcp / lire-passerelle (pseudo-routeurctl, sudo -u secubox-freebox) : magasin, HTTP vers la Freebox,
+# Verbes passerelle-dhcp / lire-passerelle / nexthop-lire / nexthop-regler (#3807) (pseudo-routeurctl, sudo -u secubox-freebox) : magasin, HTTP vers la Freebox,
 # résolution de mafreebox.freebox.fr, audit — rien d'autre.
 # N'exécute que `ip` (lecture des adresses et routes IPv6). Réseau : inet/inet6 (API Freebox, résolution DNS), netlink (ip).
 # Aucun shell, aucun secret.
