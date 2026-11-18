@@ -1,3 +1,18 @@
+secubox-pseudo-routeur (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * Relais IPv6 par next hop Freebox (#3807), section [relais_ipv6], inactif
+    par défaut. Rôle routeur : relais6-preparer / relais6-retirer / relais6-etat
+    (drop-in networkd adresse fixe + route via la Freebox, dnsmasq RA dédié
+    secubox-relais6-ra.service, table nft inet secubox_relais6 sans redirections
+    ICMPv6). Rôle repli : relais6-basculer (sonde d'abord) / relais6-revenir,
+    minuterie pseudo-routeur-relais6-sonde (60 s, retour au 3e échec).
+  * API GET /relais6, POST /relais6/basculer et /relais6/revenir (admin) ;
+    panneau « Relais IPv6 » de la page (CSP recalculée).
+  * Depends secubox-freebox (>= 0.8.4), dnsmasq-base ; sudoers nexthop-lire,
+    nexthop-regler.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 16:30:00 +0100
+
 secubox-pseudo-routeur (0.2.2-1~trixie1) trixie; urgency=medium
 
   * Activer / retour lancés depuis la page : relance en tâche systemd transitoire,

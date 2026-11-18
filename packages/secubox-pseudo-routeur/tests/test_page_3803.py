@@ -50,8 +50,9 @@ def test_textcontent_seulement():
 def test_routes_citees_existantes():
     from api import main
     existantes = {r.path for r in main.app.routes}
-    citees = set(re.findall(r"(?:lire|ecrire)\('(/[a-z-]+)'", CODE))
-    assert {"/etat", "/appareils", "/journal", "/apercu", "/activer", "/retour", "/tester-retour"} <= citees
+    citees = set(re.findall(r"(?:lire|ecrire)\('(/[a-z0-9/-]+)'", CODE))
+    assert {"/etat", "/appareils", "/journal", "/apercu", "/activer", "/retour", "/tester-retour",
+            "/relais6", "/relais6/basculer", "/relais6/revenir"} <= citees
     assert citees <= existantes, citees - existantes
 
 
@@ -153,3 +154,16 @@ def test_aucun_debordement_horizontal(largeur):
             return pg.evaluate(MESURE)
         (sw, cw), erreurs, _ = _page(sc, largeur, chemin)
         assert not erreurs and sw <= cw, (chemin, sw, cw)
+
+
+def test_relais6_panneau_et_confirmation():
+    """#3807 : panneau « Relais IPv6 » — démo : actif, bouton retour confirmé ; sans rôle : « non configuré »."""
+    def sc(pg):
+        txt = pg.inner_text("#relais6")
+        pg.click("#btn-r6-revenir")
+        return txt, pg.inner_text("#r6-actions .confirm"), pg.is_hidden("#btn-r6-basculer")
+    (txt, conf, cache), erreurs, posts = _page(sc, chemin="/pseudo-routeur/?demo=1")
+    assert not erreurs and "passe par le relais" in txt and "fe80::94" in txt and "Confirmer" in conf and cache
+    assert posts == []
+    (txt2,), erreurs2, _ = _page(lambda pg: (pg.inner_text("#relais6"),))
+    assert not erreurs2 and "Non configuré" in txt2

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox Pseudo-routeur — sonde du relais IPv6 (#3807), rôle « repli » (gk2). Un passage :
+# routeur lien-local, son adresse fixe et une cible IPv6 externe. Sort en erreur au 3e échec
+# consécutif : OnFailure= lance le retour (unité SÉPARÉE, même motif que pseudo-routeur-sonde).
+[Unit]
+Description=SecuBox Pseudo-routeur — sonde du relais IPv6 (#3807)
+OnFailure=pseudo-routeur-relais6-retour.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/pseudo-routeurctl relais6-sonde

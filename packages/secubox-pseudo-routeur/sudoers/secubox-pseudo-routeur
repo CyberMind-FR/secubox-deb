@@ -10,3 +10,7 @@ secubox-pseudo-routeur ALL=(root) NOPASSWD: /usr/sbin/pseudo-routeurctl
 # #3803 : pseudo-routeurctl (root) lit la passerelle DHCP sous l'utilisateur du connecteur
 # Freebox — lecture seule, argument exact, rien d'autre.
 root ALL=(secubox-freebox) NOPASSWD: /usr/sbin/freeboxctl lire-passerelle
+#
+# #3807 : relais IPv6 — pseudo-routeurctl (root) lit et regle le next hop du prefixe IPv6 principal
+# de la Freebox sous l'utilisateur du connecteur. freeboxctl valide l'argument (fe80::… ou « vide »).
+root ALL=(secubox-freebox) NOPASSWD: /usr/sbin/freeboxctl nexthop-lire, /usr/sbin/freeboxctl nexthop-regler *

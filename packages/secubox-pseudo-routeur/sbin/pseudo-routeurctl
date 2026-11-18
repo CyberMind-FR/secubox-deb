@@ -11,6 +11,8 @@
 #   activer-transfert   generer-chaine vers le fichier reel, nft -f, puis ip_forward=1
 #   apercu              JSON des voisins LAN non classes par le NAC (informatif, #3803)
 #   etat-transfert      JSON {"transfert_actif": bool, "paquets_rejetes": int}
+#   relais6-*           relais IPv6 par next hop Freebox (#3807) : preparer/retirer/etat (routeur),
+#                       basculer/revenir/sonde/etat (repli) — voir la section « Relais IPv6 »
 
 set -euo pipefail
 
@@ -443,11 +445,410 @@ print(json.dumps({"modifie": False, "pret": all(x["possible"] for x in etapes), 
 PYEOF
 }
 
+# ══ Relais IPv6 (#3807) ══════════════════════════════════════════════════════
+# La Freebox ignore la passerelle DHCP pour l'IPv6 et ne sait pas couper son IPv6 LAN ; mais elle
+# route son /64 principal vers un next hop lien-local si on le lui demande (connection/ipv6/config/,
+# delegations[0].next_hop) et cesse alors de l'annoncer. Deux roles, [relais_ipv6] du TOML :
+#   routeur (gk1) : adresse fixe + route par defaut via la Freebox (drop-in networkd), annonces RA
+#                   (dnsmasq dedie, RDNSS = gk2), redirections ICMPv6 coupees (nft) ;
+#   repli   (gk2) : bascule le next hop vers le routeur (si la sonde passe), sonde 60 s, retour au
+#                   3e echec consecutif. Rien n'est actif tant que role est vide (defaut).
+readonly R6_NETWORKD_DIR="${SECUBOX_PR_NETWORKD_DIR:-/etc/systemd/network}"
+readonly R6_DROPIN="zz-secubox-relais6.conf"
+readonly R6_NFT_PERSIST="${SECUBOX_PR_R6_NFT:-/etc/nftables.d/zz-secubox-relais6.nft}"
+readonly R6_DNSMASQ_CONF="${SECUBOX_PR_R6_DNSMASQ_CONF:-/etc/secubox/relais6-ra.conf}"
+readonly R6_ETAT="${SECUBOX_PR_R6_ETAT:-/var/lib/secubox/pseudo-routeur/relais6-sonde.json}"
+readonly R6_UNITE_RA="secubox-relais6-ra.service"
+readonly R6_TIMER="pseudo-routeur-relais6-sonde.timer"
+readonly R6_SEUIL=3
+
+_audit() {
+    # $1 action, $2 resultat, $3 detail (texte libre deja valide)
+    python3 - "$1" "$2" "${3:-}" >> "$AUDIT_LOG" 2>/dev/null <<'PYEOF' || echo "avertissement : audit.log non ecrit ($1)" >&2
+import json, sys
+from datetime import datetime, timezone
+print(json.dumps({"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "module": "pseudo-routeur",
+                  "action": sys.argv[1], "resultat": sys.argv[2], "detail": sys.argv[3]}, ensure_ascii=False))
+PYEOF
+}
+
+# Lit et VALIDE [relais_ipv6] : imprime des lignes cle=valeur canoniques (ipaddress), rien
+# d'autre ne sort du TOML vers une commande. Code 2 + message si une valeur est invalide.
+# Fichier ou section absents : role vide (aucun effet).
+_r6_conf() {
+    python3 - "$CONF" <<'PYEOF'
+import ipaddress, re, sys, tomllib
+try:
+    with open(sys.argv[1], "rb") as f:
+        s = tomllib.load(f).get("relais_ipv6") or {}
+except FileNotFoundError:
+    s = {}
+except (OSError, tomllib.TOMLDecodeError) as e:
+    print("refuse : %s illisible (%s)" % (sys.argv[1], e), file=sys.stderr); sys.exit(2)
+if not isinstance(s, dict):
+    print("refuse : [relais_ipv6] doit etre une table", file=sys.stderr); sys.exit(2)
+def txt(k):
+    v = s.get(k, "")
+    if not isinstance(v, str):
+        raise ValueError(k + " doit etre une chaine")
+    return v.strip()
+def ll(k, v):
+    a = ipaddress.IPv6Address(v)
+    if not a.is_link_local:
+        raise ValueError(k + " doit etre une adresse lien-local fe80::/10")
+    return str(a)
+out = {}
+try:
+    role = txt("role")
+    if role not in ("", "routeur", "repli"):
+        raise ValueError("role : routeur, repli ou vide")
+    out["role"] = role
+    i = txt("lan_if")
+    if i and not re.fullmatch(r"[A-Za-z0-9_.-]{1,15}", i):
+        raise ValueError("lan_if invalide")
+    out["lan_if"] = i
+    f = txt("fichier_network")
+    if f and not re.fullmatch(r"[A-Za-z0-9_.@-]{1,64}\.network", f):
+        raise ValueError("fichier_network invalide (nom de fichier .network)")
+    out["fichier_network"] = f
+    if role:
+        for k in ("passerelle_ll", "routeur_ll", "dns", "sonde_cible", "adresse_fixe", "prefixe"):
+            if "%" in txt(k):     # ipaddress accepte « fe80::1%eth2 » : la zone vient de lan_if, jamais du TOML
+                raise ValueError(k + " : pas d'identifiant de zone (%)")
+        p = ipaddress.IPv6Network(txt("prefixe"), strict=True)
+        if p.prefixlen != 64 or not p.is_global:
+            raise ValueError("prefixe : /64 global attendu")
+        out["prefixe"] = str(p)
+        out["passerelle_ll"] = ll("passerelle_ll", txt("passerelle_ll"))
+        out["routeur_ll"] = ll("routeur_ll", txt("routeur_ll"))
+        d = ipaddress.IPv6Address(txt("dns"))
+        if d.is_link_local or d.is_multicast or d.is_unspecified or d.is_loopback:
+            raise ValueError("dns : adresse IPv6 unicast routable attendue")
+        out["dns"] = str(d)
+        c = txt("sonde_cible")
+        if c:
+            c = ipaddress.IPv6Address(c)
+            if not c.is_global:
+                raise ValueError("sonde_cible : adresse IPv6 globale attendue")
+        out["sonde_cible"] = str(c)
+        a = txt("adresse_fixe")
+        if a:
+            a = ipaddress.IPv6Interface(a)
+            if a.network != p or a.ip == p.network_address:
+                raise ValueError("adresse_fixe : adresse/64 dans le prefixe attendue")
+        out["adresse_fixe"] = str(a)
+        if role == "routeur" and not a:
+            raise ValueError("adresse_fixe obligatoire pour le role routeur")
+        if role == "repli" and not c:
+            raise ValueError("sonde_cible obligatoire pour le role repli")
+except ValueError as e:
+    print("refuse : [relais_ipv6] " + str(e), file=sys.stderr); sys.exit(2)
+for k, v in out.items():
+    print(k + "=" + v)
+PYEOF
+}
+
+# Charge la config validee dans R6_* (variables globales). Code 2 si invalide : l'appelant decide.
+_r6_charger() {
+    local lignes k v
+    lignes="$(_r6_conf)" || return 2
+    R6_ROLE="" R6_LAN_IF="" R6_FICHIER_NETWORK="" R6_PREFIXE="" R6_PASSERELLE_LL="" R6_ROUTEUR_LL="" R6_DNS="" R6_SONDE_CIBLE="" R6_ADRESSE_FIXE=""
+    while IFS='=' read -r k v; do
+        case "$k" in
+            role) R6_ROLE="$v" ;; lan_if) R6_LAN_IF="$v" ;; fichier_network) R6_FICHIER_NETWORK="$v" ;;
+            prefixe) R6_PREFIXE="$v" ;; passerelle_ll) R6_PASSERELLE_LL="$v" ;; routeur_ll) R6_ROUTEUR_LL="$v" ;;
+            dns) R6_DNS="$v" ;; sonde_cible) R6_SONDE_CIBLE="$v" ;; adresse_fixe) R6_ADRESSE_FIXE="$v" ;;
+        esac
+    done <<< "$lignes"
+    [ -n "$R6_LAN_IF" ] || R6_LAN_IF="$(_lan_if)"
+}
+
+_r6_exiger_role() {
+    if [ -z "$R6_ROLE" ]; then
+        printf '{"role": "", "modifie": false, "note": "relais IPv6 non configure ([relais_ipv6] role vide)"}\n'
+        exit 0
+    fi
+    if [ "$R6_ROLE" != "$1" ]; then
+        echo "refuse : verbe du role $1, cette box a le role $R6_ROLE" >&2
+        exit 2
+    fi
+    if [ -z "$R6_LAN_IF" ]; then
+        echo "refuse : interface LAN inconnue (lan_if de [relais_ipv6])" >&2
+        exit 2
+    fi
+}
+
+# Fichier .network qui gere lan_if : fichier_network du TOML, sinon `networkctl status`.
+_r6_fichier_network() {
+    local f="$R6_FICHIER_NETWORK"
+    if [ -z "$f" ]; then
+        f="$(networkctl status -- "$R6_LAN_IF" 2>/dev/null | awk -F': ' '/Network File:/{print $2; exit}')"
+        f="$(basename -- "${f:-}")"
+    fi
+    if [[ "$f" =~ ^[A-Za-z0-9_.@-]{1,64}\.network$ ]]; then
+        printf '%s' "$f"
+    fi
+}
+
+_r6_contenu_nft() {
+    local i="$1" p="$2"
+    cat <<EOF
+table inet secubox_relais6 {}
+delete table inet secubox_relais6
+table inet secubox_relais6 {
+	chain sortie {
+		type filter hook output priority filter; policy accept;
+		oifname "${i}" icmpv6 type nd-redirect counter drop
+	}
+	chain transit {
+		type filter hook forward priority filter - 1; policy accept;
+		iifname "${i}" oifname "${i}" ip6 saddr ${p} counter accept
+		iifname "${i}" oifname "${i}" ip6 daddr ${p} counter accept
+	}
+}
+EOF
+}
+
+_r6_contenu_dnsmasq() {
+    cat <<EOF
+# Genere par pseudo-routeurctl relais6-preparer (#3807) — ne pas editer.
+# Annonces de routeur seules : pas de DNS (port=0), pas de DHCPv4, DHCPv6 sans etat.
+port=0
+interface=$R6_LAN_IF
+bind-interfaces
+no-resolv
+no-hosts
+no-dhcpv4-interface=$R6_LAN_IF
+enable-ra
+dhcp-range=::,constructor:$R6_LAN_IF,ra-stateless,64
+ra-param=$R6_LAN_IF,high,0
+dhcp-option=option6:dns-server,[$R6_DNS]
+dhcp-leasefile=/run/secubox-relais6-ra/leases
+EOF
+}
+
+_r6_contenu_dropin() {
+    cat <<EOF
+# Genere par pseudo-routeurctl relais6-preparer (#3807) — ne pas editer.
+[Network]
+Address=$R6_ADRESSE_FIXE
+
+[Route]
+Gateway=$R6_PASSERELLE_LL
+EOF
+}
+
+# Ecrit $2 dans $1 par double tampon (temporaire du meme dossier, mv atomique).
+_r6_poser() {
+    local dest="$1" contenu="$2" rep tmp
+    rep="$(dirname "$dest")"
+    mkdir -p "$rep"
+    tmp="$(mktemp "$rep/.$(basename "$dest").XXXXXX.tmp")"
+    printf '%s\n' "$contenu" > "$tmp"
+    chmod 644 "$tmp"
+    mv -f "$tmp" "$dest"
+}
+
+cmd_relais6_preparer() {
+    _r6_charger || exit 2
+    _r6_exiger_role routeur
+    local fnet nft_tmp conf_tmp rep
+    fnet="$(_r6_fichier_network)"
+    if [ -z "$fnet" ]; then
+        echo "refuse : fichier .network de $R6_LAN_IF introuvable (fichier_network de [relais_ipv6])" >&2
+        exit 2
+    fi
+    # 1. Valider AVANT toute ecriture : nft -c et dnsmasq --test sur des temporaires.
+    rep="$(dirname "$R6_NFT_PERSIST")"; mkdir -p "$rep"
+    nft_tmp="$(mktemp "$rep/.zz-secubox-relais6.XXXXXX.tmp")"
+    rep="$(dirname "$R6_DNSMASQ_CONF")"; mkdir -p "$rep"
+    conf_tmp="$(mktemp "$rep/.relais6-ra.XXXXXX.tmp")"
+    # shellcheck disable=SC2064
+    trap "rm -f -- '$nft_tmp' '$conf_tmp'" EXIT
+    _r6_contenu_nft "$R6_LAN_IF" "$R6_PREFIXE" > "$nft_tmp"
+    _r6_contenu_dnsmasq > "$conf_tmp"
+    if ! "$NFT" -c -f "$nft_tmp" >/dev/null; then
+        echo "refuse : table nft du relais rejetee par nft -c, rien n'a ete ecrit" >&2
+        _audit relais6_preparer refuse "nft -c"; exit 1
+    fi
+    if ! dnsmasq --test -C "$conf_tmp" >/dev/null 2>&1; then
+        echo "refuse : configuration dnsmasq rejetee (dnsmasq --test), rien n'a ete ecrit" >&2
+        _audit relais6_preparer refuse "dnsmasq --test"; exit 1
+    fi
+    # 2. Adresse fixe + route par defaut via la Freebox : jamais de lien coupe ni de MTU change.
+    _r6_poser "$R6_NETWORKD_DIR/$fnet.d/$R6_DROPIN" "$(_r6_contenu_dropin)"
+    networkctl reload
+    # 3. Redirections ICMPv6 coupees + transit du prefixe (persistant puis charge).
+    chmod 644 "$nft_tmp"; mv -f "$nft_tmp" "$R6_NFT_PERSIST"
+    "$NFT" -f "$R6_NFT_PERSIST"
+    # 4. Annonces RA (dnsmasq dedie).
+    chmod 644 "$conf_tmp"; mv -f "$conf_tmp" "$R6_DNSMASQ_CONF"
+    trap - EXIT
+    systemctl enable "$R6_UNITE_RA" >/dev/null 2>&1 || true
+    systemctl restart "$R6_UNITE_RA"
+    _audit relais6_preparer ok "$R6_LAN_IF $R6_ADRESSE_FIXE via $R6_PASSERELLE_LL, RDNSS $R6_DNS"
+    printf '{"role": "routeur", "modifie": true, "lan_if": "%s", "adresse_fixe": "%s"}\n' "$R6_LAN_IF" "$R6_ADRESSE_FIXE"
+}
+
+# retirer : idempotent, ne lit pas la config (un TOML casse ou vide n'empeche jamais le retrait).
+cmd_relais6_retirer() {
+    local f retire=false
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl disable --now "$R6_UNITE_RA" >/dev/null 2>&1 || true
+    fi
+    if [ -e "$R6_DNSMASQ_CONF" ]; then rm -f -- "$R6_DNSMASQ_CONF"; retire=true; fi
+    if command -v "$NFT" >/dev/null 2>&1 && "$NFT" list table inet secubox_relais6 >/dev/null 2>&1; then
+        "$NFT" delete table inet secubox_relais6 || echo "avertissement : table inet secubox_relais6 non supprimee" >&2
+        retire=true
+    fi
+    if [ -e "$R6_NFT_PERSIST" ]; then rm -f -- "$R6_NFT_PERSIST"; retire=true; fi
+    local dropins=0
+    for f in "$R6_NETWORKD_DIR"/*.network.d/"$R6_DROPIN"; do
+        [ -e "$f" ] || continue
+        rm -f -- "$f"; rmdir --ignore-fail-on-non-empty -- "$(dirname "$f")" 2>/dev/null || true
+        dropins=$((dropins + 1)); retire=true
+    done
+    if [ "$dropins" -gt 0 ]; then networkctl reload || echo "avertissement : networkctl reload a echoue" >&2; fi
+    $retire && _audit relais6_retirer ok "relais IPv6 retire"
+    printf '{"modifie": %s}\n' "$retire"
+}
+
+# Controle du routeur depuis le repli : routeur lien-local joignable ET Internet IPv6 joignable.
+_r6_routeur_ok() {
+    ping -6 -c1 -W2 "${R6_ROUTEUR_LL}%${R6_LAN_IF}" >/dev/null 2>&1 || return 1
+    if [ -n "$R6_ADRESSE_FIXE" ]; then ping -6 -c1 -W2 "${R6_ADRESSE_FIXE%/*}" >/dev/null 2>&1 || return 1; fi
+    ping -6 -c1 -W2 "$R6_SONDE_CIBLE" >/dev/null 2>&1 || return 1
+}
+
+_r6_ecrire_etat() {
+    local echecs="$1" ok="$2" tmp
+    mkdir -p "$(dirname "$R6_ETAT")"
+    tmp="$(mktemp "${R6_ETAT}.XXXXXX")"
+    python3 - "$R6_ETAT" "$echecs" "$ok" > "$tmp" <<'PYEOF'
+import json, sys, time
+hist = []
+try:
+    with open(sys.argv[1]) as f:
+        hist = json.load(f).get("historique", [])[-19:]
+except (OSError, ValueError):
+    pass
+hist.append({"ts": int(time.time()), "ok": sys.argv[3] == "true"})
+print(json.dumps({"echecs_consecutifs": int(sys.argv[2]), "historique": hist}))
+PYEOF
+    chmod 0644 "$tmp"
+    mv -f "$tmp" "$R6_ETAT"
+}
+
+_r6_echecs() {
+    python3 -c 'import json,sys
+try:
+    print(int(json.load(open(sys.argv[1])).get("echecs_consecutifs", 0)))
+except (OSError, ValueError, TypeError):
+    print(0)' "$R6_ETAT"
+}
+
+_r6_timer() {
+    systemctl "$1" --now "$R6_TIMER" >/dev/null 2>&1 || echo "avertissement : systemctl $1 $R6_TIMER a echoue" >&2
+}
+
+cmd_relais6_basculer() {
+    _r6_charger || exit 2
+    _r6_exiger_role repli
+    if ! _r6_routeur_ok; then
+        echo "refuse : le routeur $R6_ROUTEUR_LL (ou Internet IPv6 $R6_SONDE_CIBLE) ne repond pas ; next hop inchange" >&2
+        _audit relais6_basculer refuse "sonde du routeur en echec"
+        exit 2
+    fi
+    if ! _freeboxctl nexthop-regler "$R6_ROUTEUR_LL"; then
+        _audit relais6_basculer echec "freeboxctl nexthop-regler"
+        exit 1
+    fi
+    _r6_ecrire_etat 0 true
+    _r6_timer enable
+    _audit relais6_basculer ok "next hop $R6_PREFIXE -> $R6_ROUTEUR_LL"
+}
+
+# revenir : chemin de secours, toujours execute (sauf sur le routeur, qui n'a pas le connecteur).
+cmd_relais6_revenir() {
+    R6_ROLE=""
+    _r6_charger 2>/dev/null || R6_ROLE=""     # TOML casse : le retour part quand meme
+    if [ "$R6_ROLE" = "routeur" ]; then
+        echo "refuse : relais6-revenir se lance sur la box de repli (connecteur Freebox)" >&2
+        exit 2
+    fi
+    command -v systemctl >/dev/null 2>&1 && _r6_timer disable
+    if ! _freeboxctl nexthop-regler vide; then
+        _audit relais6_revenir echec "freeboxctl nexthop-regler vide"
+        exit 1
+    fi
+    _audit relais6_revenir ok "next hop rendu a la Freebox"
+}
+
+# relais6-sonde : un passage du minuteur. Sort en 1 au 3e echec consecutif (OnFailure= -> retour).
+cmd_relais6_sonde() {
+    _r6_charger || exit 2
+    [ "$R6_ROLE" = "repli" ] || exit 0
+    [ -n "$R6_LAN_IF" ] || exit 0
+    local echecs
+    if _r6_routeur_ok; then _r6_ecrire_etat 0 true; exit 0; fi
+    echecs=$(( $(_r6_echecs) + 1 ))
+    _r6_ecrire_etat "$echecs" false
+    if [ "$echecs" -ge "$R6_SEUIL" ]; then
+        _audit relais6_sonde echec "$echecs echecs consecutifs : retour a la Freebox"
+        exit 1
+    fi
+}
+
+cmd_relais6_etat() {
+    _r6_charger || exit 2
+    local nh="" timer=false ra=false table=false dropin=false adresse=false route=false
+    if [ "$R6_ROLE" = "repli" ]; then
+        nh="$(_freeboxctl nexthop-lire 2>/dev/null || true)"
+        systemctl is-active --quiet "$R6_TIMER" 2>/dev/null && timer=true
+    elif [ "$R6_ROLE" = "routeur" ]; then
+        systemctl is-active --quiet "$R6_UNITE_RA" 2>/dev/null && ra=true
+        command -v "$NFT" >/dev/null 2>&1 && "$NFT" list table inet secubox_relais6 >/dev/null 2>&1 && table=true
+        compgen -G "$R6_NETWORKD_DIR/*.network.d/$R6_DROPIN" >/dev/null && dropin=true
+        if [ -n "$R6_LAN_IF" ]; then
+            ip -6 addr show dev "$R6_LAN_IF" 2>/dev/null | grep -qF " ${R6_ADRESSE_FIXE} " && adresse=true
+            ip -6 route show default dev "$R6_LAN_IF" 2>/dev/null | grep -qF "via ${R6_PASSERELLE_LL} " && route=true
+        fi
+    fi
+    NH="$nh" ROLE="$R6_ROLE" LAN_IF="$R6_LAN_IF" PREFIXE="$R6_PREFIXE" ROUTEUR_LL="$R6_ROUTEUR_LL" \
+    TIMER="$timer" RA="$ra" TABLE="$table" DROPIN="$dropin" ADRESSE="$adresse" ROUTE="$route" ETAT="$R6_ETAT" python3 - <<'PYEOF'
+import json, os
+e = os.environ
+b = lambda k: e[k] == "true"
+r = {"role": e["ROLE"], "lan_if": e["LAN_IF"] or None, "prefixe": e["PREFIXE"] or None, "routeur_ll": e["ROUTEUR_LL"] or None}
+if e["ROLE"] == "repli":
+    try:
+        lu = json.loads(e["NH"])
+        if "erreur" in lu:
+            raise ValueError
+        nh = {"prefix": lu.get("prefix"), "next_hop": lu.get("next_hop")}
+    except ValueError:
+        nh = None
+    try:
+        with open(e["ETAT"]) as f:
+            s = json.load(f)
+    except (OSError, ValueError):
+        s = {}
+    r.update({"next_hop_lu": nh, "actif": bool(nh) and nh["next_hop"] == e["ROUTEUR_LL"],
+              "sonde": {"armee": b("TIMER"), "echecs_consecutifs": s.get("echecs_consecutifs", 0),
+                        "historique": s.get("historique", [])[-10:]}})
+elif e["ROLE"] == "routeur":
+    r.update({"annonces_ra": b("RA"), "table_nft": b("TABLE"), "dropin_networkd": b("DROPIN"),
+              "adresse_fixe_posee": b("ADRESSE"), "route_freebox": b("ROUTE"),
+              "pret": all(b(k) for k in ("RA", "TABLE", "DROPIN", "ADRESSE", "ROUTE"))})
+print(json.dumps(r))
+PYEOF
+}
+
 # Hors du bac a sable de l'API (#3803) : lance par l'API (sudo), le ctl herite de son
 # ProtectSystem=strict (/etc en lecture seule). Les commandes qui ECRIVENT se relancent
 # donc en tache systemd transitoire, root, hors bac a sable ; sortie et code transmis.
 case "${1:-}" in
-    activer|activer-transfert|retour-freebox)
+    activer|activer-transfert|retour-freebox|relais6-preparer|relais6-retirer|relais6-basculer|relais6-revenir)
         rep_nft="$(dirname "$NFT_OUT_DEFAUT")"
         if [ "$(id -u)" = 0 ] && [ -d "$rep_nft" ] && [ ! -w "$rep_nft" ] \
             && command -v systemd-run >/dev/null 2>&1 && [ -z "${SECUBOX_PR_HORS_BAC:-}" ]; then
@@ -468,5 +869,11 @@ case "${1:-}" in
     etat-complet) cmd_etat_complet ;;
     appareils) cmd_appareils ;;
     tester-retour) cmd_tester_retour ;;
-    *) echo "usage : pseudo-routeurctl generer-chaine|activer-transfert|etat-transfert|activer|retour-freebox|etat|apercu|etat-complet|appareils|tester-retour" >&2; exit 2 ;;
+    relais6-preparer) cmd_relais6_preparer ;;
+    relais6-retirer) cmd_relais6_retirer ;;
+    relais6-etat) cmd_relais6_etat ;;
+    relais6-basculer) cmd_relais6_basculer ;;
+    relais6-revenir) cmd_relais6_revenir ;;
+    relais6-sonde) cmd_relais6_sonde ;;
+    *) echo "usage : pseudo-routeurctl generer-chaine|activer-transfert|etat-transfert|activer|retour-freebox|etat|apercu|etat-complet|appareils|tester-retour|relais6-preparer|relais6-retirer|relais6-etat|relais6-basculer|relais6-revenir|relais6-sonde" >&2; exit 2 ;;
 esac

@@ -9,8 +9,8 @@ Rules-Requires-Root: no
 
 Package: secubox-pseudo-routeur
 Architecture: all
-Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, python3-httpx, adduser, sudo, nftables,
- secubox-core, secubox-aggregator, secubox-freebox (>= 0.6.0), secubox-nac, secubox-hardening
+Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, python3-httpx, adduser, sudo, nftables, dnsmasq-base,
+ secubox-core, secubox-aggregator, secubox-freebox (>= 0.8.4), secubox-nac, secubox-hardening
 Description: SecuBox Pseudo-routeur — gk2 passerelle DHCP du LAN plat (#2940)
  gk2 peut devenir la passerelle DHCP du réseau local plat de la Freebox : une sonde de
  secours (dead-man switch) vérifie en continu que le transfert fonctionne réellement et
@@ -20,6 +20,10 @@ Description: SecuBox Pseudo-routeur — gk2 passerelle DHCP du LAN plat (#2940)
  Un appareil déjà bloqué ou mis en quarantaine par le NAC le reste. Un appareil inconnu
  est bloqué tant qu'il n'est pas classé. Les suggestions de classement (liste des
  appareils vus par la Freebox) ne sont jamais appliquées automatiquement.
+ .
+ Relais IPv6 (#3807) : une box « routeur » annonce le /64 de la Freebox (RA, adresse
+ fixe, route via la Freebox) ; la box « repli » (connecteur Freebox) y fait pointer le next
+ hop du préfixe et le rend à la Freebox après 3 contrôles échoués. Inactif par défaut.
  .
  La sonde ne démarre jamais seule à l'installation : seule l'activation explicite via
  l'API (POST /activer) arme le transfert et bascule le DHCP.
