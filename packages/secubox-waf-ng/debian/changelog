@@ -1,3 +1,13 @@
+secubox-waf-ng (1.40.3-1~trixie1) trixie; urgency=medium
+
+  * #3800 : sbxwaf sert une page d'explication (200, no-store, CSP propre)
+    au lieu du 421 quand l'adresse cliente est isolée par secubox-garde
+    (/run/secubox/garde-isoles.json, relu sur changement, au plus un stat
+    par seconde ; option --garde-isoles). Ni anomalie d'hôte ni ban pour
+    ces requêtes ; fichier absent ou invalide : 421 inchangé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 09:13:56 +0100
+
 secubox-waf-ng (1.40.2-1~trixie1) trixie; urgency=medium
 
   * #3794 : dépend de secubox-core (>= 1.8.34~) (compte de service garde,

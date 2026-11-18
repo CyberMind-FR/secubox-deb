@@ -148,6 +148,11 @@ type Server struct {
 	// 421 d'origine est conservé, ce qui reste le comportement par défaut.
 	leurre *LeurreHTTP
 
+	// isoles : adresses mises en quarantaine par secubox-garde (#3800). Un
+	// hôte non routé demandé par l'une d'elles reçoit la page d'explication
+	// au lieu du 421, sans compter comme anomalie. Nil = désactivé.
+	isoles *ListeIsoles
+
 	// nftBan est le ban nft NATIF (#1070, phase B) — set nft à timeout géré par
 	// le WAF lui-même. Nil = backend désactivé (nft
 	// indisponible / droits manquants) : aucun ban natif posé.
@@ -394,6 +399,13 @@ func (s *Server) handler() http.Handler {
 			// LE LEURRE SERT D'ABORD, LE JOURNAL ENSUITE — pour que l'entrée
 			// porte ce qui a été semé. L'inverse journaliserait l'anomalie
 			// sans jamais dire quelle marque est partie avec le visiteur.
+			// #3800 : appareil isolé par secubox-garde — son DNS renvoie la box
+			// pour tout nom. Ce n'est pas un scanner : page d'explication, et
+			// ni anomalie ni ban pour cette requête.
+			if e, isole := s.isoles.Cherche(clientIP(r)); isole {
+				writeIsole(w, e)
+				return
+			}
 			var famServie, aleaSeme string
 			var marquesRejouees []string
 			// LEURRE (#1290). On est ici dans l'espace NON ROUTÉ : aucun
@@ -1299,6 +1311,8 @@ func main() {
 	honeypotSecret := flag.String("honeypot-secret", "/etc/secubox/secrets/filigrane",
 		"secret local du filigrane. Absent → le leurre sert des contenus SANS "+
 			"marque plutôt que des marques invérifiables.")
+	gardeIsoles := flag.String("garde-isoles", defaultGardeIsoles,
+		"Liste JSON des adresses isolées par secubox-garde (#3800) ; vide = désactivé")
 	hostAnomaly := flag.Bool("host-anomaly", true,
 		"traiter un Host non routé (vide/IP/DGA/inconnu) comme signal scanner "+
 			"— journaliser + bannir au lieu d'un 421 muet (#1070)")
@@ -1519,6 +1533,7 @@ func main() {
 		threatLog:   tl,
 		hostAnomaly: *hostAnomaly,
 		leurre:      construitLeurre(*honeypot, *honeypotSecret),
+		isoles:      nouvelleListeIsoles(*gardeIsoles),
 		ja4Header:   *ja4Header,
 		// #1080 phase G: profils de service par vhost (nil = désactivé).
 		vhostProfiles:      profils,
