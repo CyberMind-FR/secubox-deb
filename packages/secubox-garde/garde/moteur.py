@@ -112,7 +112,7 @@ def _alerte_une(db, effets, cle: str, texte: str, maintenant: int, delai: int = 
 def _terminer(db, effets, did, menace, mac, motif, par: str, maintenant: int, notifs=None) -> bool:
     """Lève puis clôt ; un échec laisse `levee_en_cours` (réessayée à chaque passage) : une alerte au début,
     puis une réalerte (et un courriel) au plus une fois par heure tant que la levée échoue."""
-    final = "levee" if par == "reevaluation" else "echue"
+    final = "levee" if par in ("reevaluation", "utilisateur") else "echue"
     if menace not in ("infection", "evasion") or _lever_tout(db, effets, did, menace, mac, motif):
         _clore(db, did, final, par)
         db.execute("DELETE FROM etat_moteur WHERE cle=?", ("levee:" + did,))

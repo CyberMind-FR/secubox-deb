@@ -5,8 +5,8 @@
 #
 # Profil AppArmor ENFORCE de Garde (#3794), nommé par AppArmorProfile= dans secubox-garde.service et
 # secubox-garde-passage.service, chargé par le postinst. LECTURE de garde.toml ; ÉCRITURE du seul
-# /var/lib/secubox/garde et de la socket. Aucun secret, aucun sudo, aucun réseau IP.
-# Les sources (journaux du WAF, des leurres) et les actions viendront avec les tâches suivantes.
+# /var/lib/secubox/garde et de la socket, ajout à audit.log. Aucun secret, aucun sudo, aucun réseau IP : les
+# actions sont des demandes exécutées par le passage.
 
 #include <tunables/global>
 
@@ -43,7 +43,10 @@ profile secubox-garde flags=(attach_disconnected) {
   /proc/sys/net/core/somaxconn r,
   deny /etc/secubox/secrets/** rwklx,
 
-  # État : base des décisions.
+  # Demandes de l'administrateur : ajout seul au journal d'audit.
+  /var/log/secubox/audit.log a,
+
+  # État : base des décisions, dépôts (réglages, clé SMS) appliqués par l'aide root du passage.
   /var/lib/secubox/garde/ rw,
   /var/lib/secubox/garde/** rwk,
 

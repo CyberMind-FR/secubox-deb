@@ -30,7 +30,9 @@ override_dh_auto_install:
 	install -m 644 apparmor/secubox-garde apparmor/secubox-garde-passage $(P)/etc/apparmor.d/
 	install -d $(P)/usr/sbin
 	install -m 755 sbin/secubox-garde-passage $(P)/usr/sbin/
-	install -m 755 lib/secubox-garde-acl-audit $(P)/usr/lib/secubox/garde/
+	install -m 755 lib/secubox-garde-acl-audit lib/secubox-garde-depots $(P)/usr/lib/secubox/garde/
+	install -d $(P)/usr/share/secubox/www/garde
+	install -m 644 www/garde/index.html www/garde/isole.html $(P)/usr/share/secubox/www/garde/
 	install -d $(P)/etc/nginx/secubox.d $(P)/etc/nginx/secubox-routes.d
 	install -m 644 nginx/garde.conf $(P)/etc/nginx/secubox.d/
 	install -m 644 nginx/garde.conf $(P)/etc/nginx/secubox-routes.d/

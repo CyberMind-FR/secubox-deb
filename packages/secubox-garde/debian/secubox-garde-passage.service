@@ -27,6 +27,9 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 # la rotation pouvant la perdre ; AppArmor ne permet que l'ajout (« a »). /var/log/secubox appartient à secubox :
 # l'aide refuse un lien ou un non-fichier et ne suit aucun lien (setfacl --physical). « - » : échec non bloquant.
 ExecStartPre=+-/usr/lib/secubox/garde/secubox-garde-acl-audit
+# Dépôts de l'API (réglages → /etc/secubox/garde.toml, clé SMS → /etc/secubox/secrets/garde-sms), en root (« + ») :
+# l'aide n'ouvre que des fichiers ordinaires du compte secubox-garde, sans suivre de lien, et revalide tout.
+ExecStartPre=+-/usr/lib/secubox/garde/secubox-garde-depots
 ExecStart=/usr/sbin/secubox-garde-passage
 UMask=0027
 AppArmorProfile=secubox-garde-passage

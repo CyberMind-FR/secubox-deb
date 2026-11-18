@@ -44,6 +44,8 @@ RestrictAddressFamilies=AF_UNIX
 IPAddressDeny=any
 ReadWritePaths=/var/lib/secubox/garde
 ReadWritePaths=/run/secubox
+# Demandes de l'administrateur : une ligne d'audit (ajout seul, ACL nommée remise par le passage).
+ReadWritePaths=-/var/log/secubox/audit.log
 
 [Install]
 WantedBy=multi-user.target

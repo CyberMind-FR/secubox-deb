@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, "/usr/lib/secubox/garde")
 
-from garde import appareils, base, effets, moteur, notifs, reseau, sources  # noqa: E402
+from garde import appareils, base, demandes, effets, moteur, notifs, reseau, sources  # noqa: E402
 
 BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
 NOTE_BOOT = base.ETAT / "boot_id"
@@ -56,6 +56,11 @@ def main() -> int:
         mettre_en_file=notifs.mettre_en_file,
         vider=lambda d, r, t: notifs.vider_file(d, r, maintenant=t),
     )
+    # Demandes de l'administrateur (libérer, rouvrir, débannir, essai) déposées par l'API : avant les décisions.
+    logging.info("demandes : %s", demandes.executer(db, ef, nt, maintenant))
+    # Présence de la clé SMS, pour la page (l'API ne lit jamais les secrets) : un booléen, jamais la clé.
+    moteur._repere(db, "cle_sms_presente", 1 if notifs.lire_cle_sms() else 0)
+    db.commit()
     logging.info("passage : %s", moteur.passage(db, reglages, src, ef, nt, maintenant))
     db.close()
     return 0

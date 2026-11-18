@@ -1,3 +1,20 @@
+secubox-garde (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * API (#3794) : /etat (tuiles, une carte par appareil, bans groupés),
+    /historique, /reglages (lecture : require_lecture, rien de personnel
+    pour un lecteur anonyme) ; /liberer, /rouvrir, /debannir, /reglages,
+    /cle-sms, /tester (require_jwt).
+  * Actions = demandes (table demandes, dépôt 0600) exécutées par le passage
+    suivant : l'API reste sans sudo ni secrets ; libération enregistrée 7 j ;
+    débannir seulement un ban de la garde (POST /garde/unban du WAF).
+  * Aide root secubox-garde-depots (ExecStartPre=+ du passage) : garde.toml
+    en double tampon, clé SMS dans /etc/secubox/secrets/garde-sms, jamais
+    relue par l'API.
+  * Page /garde/ (Aurora, CSP par hachage) et page de quarantaine statique
+    isole.html (branchement déclaratif en T9).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 20:00:00 +0100
+
 secubox-garde (0.2.0-1~trixie1) trixie; urgency=medium
 
   * Moteur (#3794) : passage toutes les 60 s (lecture des capteurs, décision,

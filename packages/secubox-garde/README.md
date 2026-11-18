@@ -6,7 +6,7 @@
 
 Répondeur automatique : une menace détectée devient une décision (`decisions`), appliquée sans attendre
 l'administrateur, notifiée, puis levée ou échue. Livré : squelette, sources, politique, notifications,
-moteur et registre d'appareils ; la page vient ensuite.
+moteur, registre d'appareils, API et page `/garde/`.
 
 ## Fichiers
 
@@ -22,7 +22,55 @@ moteur et registre d'appareils ; la page vient ensuite.
 | Méthode | Route | Garde |
 |---|---|---|
 | GET | `/health` | ouverte |
-| GET | `/etat` | `require_lecture` |
+| GET | `/etat` | `require_lecture` — `{tuiles:{isoles,evasions,bannis,recidivistes,notifs_24h:{sms,courriel},en_attente}, actives, automatique, quarantaines_max, demandes, releve, session_requise}` |
+| GET | `/historique?heures=24` (1…720) | `require_lecture` — `{heures, lignes}` (bans groupés par heure, libérations) |
+| GET | `/reglages` | `require_lecture` — 4 réglages + `cle_sms_enregistree`, `cle_sms_en_attente`, `en_attente` ; jamais la clé |
+| POST | `/liberer` `{id}` | `require_jwt` — infection seulement |
+| POST | `/rouvrir` `{id}` | `require_jwt` — évasion seulement |
+| POST | `/debannir` `{ip}` | `require_jwt` — seulement une adresse d'une décision `intrusion` active de la garde (404 sinon) |
+| POST | `/reglages` `{automatique?, courriel?, sms_utilisateur?, sms_bans?}` | `require_jwt` |
+| POST | `/cle-sms` `{cle}` (lettres et chiffres, vide = retirer) | `require_jwt` |
+| POST | `/tester` `{canal: sms\|courriel}` | `require_jwt` |
+
+Lecteur anonyme du tableau de bord (permis par `require_lecture` depuis le LAN) : chiffres seulement, aucun appareil,
+aucune adresse, aucun contact (`session_requise: true`).
+
+### Demandes exécutées par le passage
+
+L'API tourne sous le profil `secubox-garde` : ni sudo, ni clé du WAF, ni secrets, ni écriture dans `/etc`. Chaque
+action est donc une **demande**, exécutée par le passage suivant (≤ 60 s) ; la page affiche « en cours » :
+
+- `liberer`, `rouvrir`, `debannir`, `tester` → table `demandes` (`en_attente` → `faite` | `reprise` | `echec`), une seule
+  demande en attente par (action, cible). `garde/demandes.py::executer`, appelé par `secubox-garde-passage` avant les
+  décisions : libérer/rouvrir = levée de chaque adresse par `effets` (`leve_par = utilisateur`, état `levee` ; levée
+  incomplète → `levee_en_cours`, reprise par le moteur) ; débannir = `effets.debannir` (`POST /garde/unban` du WAF,
+  même jeton que le ban ; **route à créer dans secubox-waf-ng**, qui ne lèvera qu'un ban de `garde-ban.jsonl` —
+  d'ici là la demande finit `echec`) puis décision `levee` ; tester = mise en file d'une notification d'essai. Aucun verrou ad-guard
+  n'est pris par l'API.
+- Libérer / rouvrir enregistrent dès la demande `liberations(cle, signe, maintenant + 7 j)` : pas de nouvelle mesure
+  pour ce signe sur cet appareil pendant 7 jours.
+- Réglages et clé SMS → fichiers 0600 dans `/var/lib/secubox/garde/depot/` (`reglages.json`, `cle-sms`), appliqués par
+  l'aide root `/usr/lib/secubox/garde/secubox-garde-depots` (`ExecStartPre=+` du passage) : fichier ordinaire du compte
+  `secubox-garde`, sans suivre de lien, ≤ 4 Kio, tout revalidé ; `garde.toml` réécrit en double tampon (`.prec` gardé,
+  remplacement atomique), clé posée en `/etc/secubox/secrets/garde-sms` 0600 `secubox-garde`. La clé n'est jamais
+  relue par l'API ; le passage note seulement `etat_moteur.cle_sms_presente` (0/1).
+- Audit : l'API écrit `<action>-demande` dans `audit.log` (ajout seul, AppArmor `a`), l'aide et les effets l'exécution.
+
+## Page `/garde/` (`www/garde/index.html`)
+
+Aurora (maquette approuvée #3794), coque de l'administration (menu latéral partagé, hors `?embed=1` et `?demo=1`), CSP
+stricte par hachage du script, jeton `sbx_token`. Bandeau des appareils isolés, quatre tuiles, cartes « En cours » —
+UN appareil = UNE carte (nom du registre, toutes ses adresses en petit), les bans d'Internet groupés en une carte avec
+liste et « Débannir » —, historique 24 h, réglages, aperçus. Libérer, rouvrir et débannir demandent une confirmation
+intégrée. `?demo=1` : données fictives, aucune écriture.
+
+## Page de quarantaine (`www/garde/isole.html`)
+
+Statique (aucun script, aucun bouton, CSP `default-src 'none'` + hachage du style), installée dans
+`/usr/share/secubox/www/garde/isole.html`. Voie retenue pour la servir (branchement en T9, après repérage sur gk7 de
+la réponse actuelle à `curl -H 'Host: inconnu.example' http://<ip box>/` — HAProxy → sbxwaf « unrouted ») : déclaration
+par le mécanisme déclaratif de routes (`secubox-waf-route` / `/etc/secubox/haproxy.toml`), jamais à la main, pour qu'un
+Host inconnu en HTTP sur l'adresse de la box renvoie ce fichier.
 
 ## Unités
 

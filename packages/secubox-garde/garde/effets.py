@@ -6,6 +6,7 @@
 
 - `bannir` : `POST /garde/ban` sur `/run/secubox/waf.sock` (secubox-waf-ng), jeton EdDSA par requête
   frappé avec `/etc/secubox/secrets/garde-ban.pem` (compte de service `garde`).
+- `debannir` : `POST /garde/unban` `{"geste": "unban", "cible"}`, même jeton ; ne vise qu'un ban de la garde.
 - `isoler`/`liberer`/`fermer_evasion`/`rouvrir` : `sudo -n /usr/sbin/secubox-adguard-tv …` (sudoers
   `secubox-adguard-garde`), une entrée par adresse, sortie JSON `{"ok": …}`.
 Chaque effet ajoute une ligne JSON à `/var/log/secubox/audit.log` et rend `{"ok": bool, "motif": str}`
@@ -30,6 +31,7 @@ AUDIT = Path("/var/log/secubox/audit.log")
 CLE_BAN = Path("/etc/secubox/secrets/garde-ban.pem")
 SOCK_WAF = "/run/secubox/waf.sock"
 CHEMIN_BAN = "/garde/ban"
+CHEMIN_UNBAN = "/garde/unban"
 CTL = "/usr/sbin/secubox-adguard-tv"
 RE_MAC = re.compile(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}")
 RE_NOM = re.compile(r"(?=.{1,253}$)[a-z0-9_][a-z0-9_-]{0,62}(\.[a-z0-9_][a-z0-9_-]{0,62})*")
@@ -117,6 +119,33 @@ class Effets:
         self.audit("alerte", "-", texte, "signale")
 
     # -- WAF
+    def _waf(self, chemin: str, corps: bytes) -> dict:
+        try:
+            jeton = self.frapper(self.cle.read_bytes(), corps, self.horloge())
+            statut, brut = self.poster(self.sock, chemin, corps, {
+                "Authorization": f"Bearer {jeton}", "Content-Type": "application/json"})
+        except (OSError, ValueError) as e:
+            return {"ok": False, "motif": type(e).__name__, "statut": 0}
+        try:
+            d = json.loads(brut or b"{}")
+        except ValueError:
+            d = {}
+        det = d.get("detail") if isinstance(d, dict) else None
+        m = str(det.get("motif") if isinstance(det, dict) else (det or "")) or str(statut)
+        return {"ok": statut == 200, "motif": "" if statut == 200 else m, "statut": statut}
+
+    def debannir(self, ip: str, motif: str = "levée par l'administrateur") -> dict:
+        """`POST /garde/unban` (même compte de service) ; le WAF ne lève qu'un ban posé par la garde."""
+        try:
+            ip = _ip(ip)
+        except ValueError:
+            self.audit("debannir", str(ip)[:64], motif, "refus ip")
+            return {"ok": False, "motif": "refus ip"}
+        r = self._waf(CHEMIN_UNBAN, json.dumps({"geste": "unban", "cible": ip}).encode())
+        r = {"ok": r["ok"], "motif": r["motif"] if r["ok"] or not r["statut"] else f"{r['statut']} {r['motif']}"}
+        self.audit("debannir", ip, motif, "ok" if r["ok"] else f"echec {r['motif']}")
+        return r
+
     def bannir(self, ip: str, duree_s: int, motif: str) -> dict:
         try:
             ip = _ip(ip)

@@ -1,0 +1,168 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Aide ROOT de secubox-garde (#3794), lancée avant chaque passage (ExecStartPre=+) : applique les dépôts de l'API.
+
+L'API (compte secubox-garde, sans sudo, sans accès à /etc) dépose dans /var/lib/secubox/garde/depot/ :
+- `reglages.json` : réglages de l'administrateur → /etc/secubox/garde.toml (double tampon : copie revalidée,
+  ancienne gardée en `.prec`, remplacement atomique) ; seules les 4 clés modifiables, revalidées ici ;
+- `cle-sms` : clé Free Mobile → /etc/secubox/secrets/garde-sms (0600 secubox-garde), vide = retirée.
+Le dépôt appartient à un compte non privilégié : ouverture sans suivre de lien, fichier ordinaire du compte
+secubox-garde, 4 Kio au plus, sinon rejeté. La clé n'est jamais écrite dans un journal. Chaque pose dans audit.log.
+"""
+import json
+import os
+import pwd
+import re
+import stat
+import sys
+import time
+import tomllib
+
+DEPOT = "/var/lib/secubox/garde/depot"
+TOML = "/etc/secubox/garde.toml"
+CLE = "/etc/secubox/secrets/garde-sms"
+AUDIT = "/var/log/secubox/audit.log"
+COMPTE = "secubox-garde"
+RE_COURRIEL = re.compile(r"[^@\s;,<>\"']{1,64}@[a-z0-9.-]{1,190}\.[a-z]{2,24}", re.I)
+RE_CLE = re.compile(r"[A-Za-z0-9]{0,64}")
+RE_SMS = re.compile(r"[0-9]{0,16}")
+
+
+def audit(action, resultat):
+    ligne = json.dumps({"ts": int(time.time()), "module": "garde", "action": action, "cible": "-",
+                        "motif": "dépôt de l'API", "resultat": resultat}, ensure_ascii=False)
+    try:
+        with open(AUDIT, "a", encoding="utf-8") as f:
+            f.write(ligne + "\n")
+    except OSError:
+        pass
+
+
+def lire_depot(dfd, nom, uid):
+    """Contenu du dépôt (puis effacé), ou None ; refuse lien, non-fichier, autre propriétaire, > 4 Kio."""
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        os.unlink(nom, dir_fd=dfd)
+        return None
+    try:
+        st = os.fstat(fd)
+        ok = stat.S_ISREG(st.st_mode) and st.st_uid == uid and st.st_size <= 4096
+        data = os.read(fd, 4097) if ok else b""
+    finally:
+        os.close(fd)
+    os.unlink(nom, dir_fd=dfd)
+    if not ok:
+        audit(f"depot-{nom}", "refus forme")
+        return None
+    return data.decode("utf-8", "replace")
+
+
+def ecrire_atomique(chemin, contenu, mode, uid, gid):
+    tmp = f"{chemin}.nouveau"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, mode)
+    try:
+        os.fchown(fd, uid, gid)
+        os.fchmod(fd, mode)
+        os.write(fd, contenu.encode("utf-8"))
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(tmp, chemin)
+
+
+def toml_valeur(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(v)
+    return json.dumps(str(v), ensure_ascii=False)       # chaîne TOML de base : même échappement que JSON
+
+
+def appliquer_reglages(brut):
+    try:
+        d = json.loads(brut)
+    except ValueError:
+        audit("reglages", "refus json")
+        return
+    if not isinstance(d, dict):
+        return
+    neuf = {}
+    for cle, v in d.items():
+        if cle in ("automatique", "sms_bans") and isinstance(v, bool):
+            neuf[cle] = v
+        elif cle == "courriel" and isinstance(v, str) and (v == "" or RE_COURRIEL.fullmatch(v)):
+            neuf[cle] = v
+        elif cle == "sms_utilisateur" and isinstance(v, str) and RE_SMS.fullmatch(v):
+            neuf[cle] = v
+        else:
+            audit("reglages", f"refus {str(cle)[:32]}")
+            return
+    try:
+        with open(TOML, "rb") as f:
+            actuel = tomllib.load(f)
+        st = os.stat(TOML)
+        uid, gid, mode = st.st_uid, st.st_gid, stat.S_IMODE(st.st_mode)
+    except FileNotFoundError:
+        actuel, uid, gid, mode = {}, 0, 0, 0o640
+    except (OSError, tomllib.TOMLDecodeError):
+        audit("reglages", "refus toml actuel illisible")
+        return
+    actuel.update(neuf)
+    texte = "# Réglages de secubox-garde (#3794), écrits par la page /garde/.\n" + "".join(
+        f"{k} = {toml_valeur(v)}\n" for k, v in actuel.items() if isinstance(v, (bool, int, str)))
+    tomllib.loads(texte)                                  # validation du tampon avant l'échange
+    if os.path.exists(TOML):
+        with open(TOML, "rb") as f:
+            ecrire_atomique(TOML + ".prec", f.read().decode("utf-8"), mode, uid, gid)
+    ecrire_atomique(TOML, texte, mode, uid, gid)
+    audit("reglages", "ok " + ",".join(sorted(neuf)))
+
+
+def appliquer_cle(brut, compte):
+    cle = brut.strip()
+    if not RE_CLE.fullmatch(cle):
+        audit("cle-sms", "refus forme")
+        return
+    if not os.path.isdir(os.path.dirname(CLE)):
+        audit("cle-sms", "echec dossier des secrets absent")
+        return
+    if cle == "":
+        try:
+            os.unlink(CLE)
+        except FileNotFoundError:
+            pass
+        audit("cle-sms", "ok retiree")
+        return
+    ecrire_atomique(CLE, cle + "\n", 0o600, compte.pw_uid, compte.pw_gid)
+    audit("cle-sms", "ok")
+
+
+def main():
+    try:
+        compte = pwd.getpwnam(COMPTE)
+        dfd = os.open(DEPOT, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except (KeyError, OSError):
+        return 0
+    try:
+        st = os.fstat(dfd)
+        if st.st_uid != compte.pw_uid:
+            return 0
+        r = lire_depot(dfd, "reglages.json", compte.pw_uid)
+        if r is not None:
+            appliquer_reglages(r)
+        c = lire_depot(dfd, "cle-sms", compte.pw_uid)
+        if c is not None:
+            appliquer_cle(c, compte)
+    finally:
+        os.close(dfd)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -8,7 +8,8 @@ Le module répond automatiquement aux intrusions, évasions et infections ; chaq
 une ligne de `decisions`. Les autres tables portent l'état du moteur : position de lecture des
 journaux, libérations en cours, file des notifications, récidives par adresse, adresses posées par
 décision (`adresses`), noms DoH fermés (`decision_noms`), registre des appareils (`appareils`,
-`appareil_ips`) et repères du moteur (`etat_moteur`).
+`appareil_ips`), repères du moteur (`etat_moteur`) et demandes de l'administrateur (`demandes`,
+exécutées par le passage : l'API n'a ni sudo ni la clé du WAF).
 """
 from __future__ import annotations
 
@@ -71,6 +72,13 @@ CREATE TABLE IF NOT EXISTS appareil_ips (
 );
 CREATE TABLE IF NOT EXISTS etat_moteur (
     cle TEXT PRIMARY KEY, valeur INTEGER
+);
+CREATE TABLE IF NOT EXISTS demandes (
+    id INTEGER PRIMARY KEY,
+    action TEXT NOT NULL CHECK (action IN ('liberer','rouvrir','debannir','tester')),
+    cible TEXT NOT NULL, par TEXT, cree INTEGER,
+    etat TEXT NOT NULL CHECK (etat IN ('en_attente','faite','echec','reprise')),
+    resultat TEXT, traite INTEGER
 );
 """
 
