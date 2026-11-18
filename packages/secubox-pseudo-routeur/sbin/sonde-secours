@@ -33,25 +33,27 @@ _lire_echecs() {
     fi
 }
 
+# Etat + historique des 20 derniers controles (horodates, #3803 : affiches par la page).
 _ecrire_etat() {
-    local echecs="$1" actif="$2"
+    local echecs="$1" actif="$2" ok="$3"
     mkdir -p "$(dirname "$ETAT")"
     local tmp
     tmp="$(mktemp "${ETAT}.XXXXXX")"
     umask 077
-    printf '{"echecs_consecutifs": %d, "actif": %s}\n' "$echecs" "$actif" > "$tmp"
+    python3 - "$ETAT" "$echecs" "$actif" "$ok" > "$tmp" <<'PYEOF'
+import json, sys, time
+hist = []
+try:
+    hist = json.load(open(sys.argv[1])).get("historique", [])[-19:]
+except Exception:
+    pass
+hist.append({"ts": int(time.time()), "ok": sys.argv[4] == "true"})
+print(json.dumps({"echecs_consecutifs": int(sys.argv[2]), "actif": sys.argv[3] == "true", "historique": hist}))
+PYEOF
     chmod 0644 "$tmp"
     mv "$tmp" "$ETAT"
 }
 
-# Transfert reel : sysctl, regle presente dans la table dediee, ping a travers.
-#
-# #2940 Ruling (ecart de plan) : le harnais de test de la Tache 1 ne fige que `ping`
-# (PATH restreint a bin/ + /usr/bin:/bin, sans /usr/sbin) ; `sysctl` et `nft` y sont
-# introuvables. Chaque verification n'est donc EXIGEE que si son binaire existe dans
-# le PATH courant — en production (PATH complet, /usr/sbin inclus) les trois comptent
-# reellement ; en test, seul `ping` decide. Cout si faux : un gk2 ayant perdu sysctl ou
-# nft de son PATH (jamais en usage normal) serait juge « actif » sur le seul ping.
 _transfert_ok() {
     if command -v sysctl >/dev/null 2>&1; then
         [ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo 0)" = "1" ] || return 1
@@ -67,15 +69,15 @@ cmd_verifier() {
     local echecs
     echecs="$(_lire_echecs)"
     if _transfert_ok; then
-        _ecrire_etat 0 true
+        _ecrire_etat 0 true true
         exit 0
     fi
     echecs=$((echecs + 1))
     if [ "$echecs" -ge "$SEUIL" ]; then
-        _ecrire_etat "$echecs" false
+        _ecrire_etat "$echecs" false false
         exit 1   # sort en erreur : arme OnFailure= du service (#2940, etape 5)
     fi
-    _ecrire_etat "$echecs" true
+    _ecrire_etat "$echecs" true false
     exit 0
 }
 
@@ -83,7 +85,7 @@ cmd_etat() {
     if [ -f "$ETAT" ]; then
         cat "$ETAT"
     else
-        printf '{"echecs_consecutifs": 0, "actif": null}\n'
+        printf '{"echecs_consecutifs": 0, "actif": null, "historique": []}\n'
     fi
 }
 

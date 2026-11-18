@@ -19,6 +19,7 @@ override_dh_auto_install:
 	# l'installation du paquet (#2940 etape 6 : rien ne transfere seul).
 	install -d debian/secubox-pseudo-routeur/usr/share/secubox/pseudo-routeur
 	install -m 644 nft/secubox-pseudo-routeur.nft debian/secubox-pseudo-routeur/usr/share/secubox/pseudo-routeur/secubox-pseudo-routeur.nft.reference
+	install -m 644 conf/pseudo-routeur.toml.example debian/secubox-pseudo-routeur/usr/share/secubox/pseudo-routeur/pseudo-routeur.toml.example
 	install -d debian/secubox-pseudo-routeur/etc/sudoers.d
 	install -m 440 sudoers/secubox-pseudo-routeur debian/secubox-pseudo-routeur/etc/sudoers.d/secubox-pseudo-routeur
 	install -d debian/secubox-pseudo-routeur/lib/systemd/system

@@ -6,3 +6,7 @@
 # secubox-pseudo-routeur (API, sans capacité) -> pseudo-routeurctl (root, seule surface
 # privilégiée du module, #2940). Grant exact, pas de joker, pas de mot de passe.
 secubox-pseudo-routeur ALL=(root) NOPASSWD: /usr/sbin/pseudo-routeurctl
+#
+# #3803 : pseudo-routeurctl (root) lit la passerelle DHCP sous l'utilisateur du connecteur
+# Freebox — lecture seule, argument exact, rien d'autre.
+root ALL=(secubox-freebox) NOPASSWD: /usr/sbin/freeboxctl lire-passerelle

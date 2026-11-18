@@ -9,9 +9,14 @@ gk2 peut devenir la passerelle DHCP du LAN plat de la Freebox, filet de secours 
 chaque action est deleguee a `pseudo-routeurctl` (root, confine, audite) par sudo -n, meme
 motif que secubox-jellyfin (voir MODULE-COMPLIANCE.md § WebUI-delegates-to-confined-ctl).
 
-  GET  /etat          mode (gk2|freebox), sonde active                    (lecture)
+  GET  /etat          actif, depuis, passerelle distribuee (lue), sonde + historique,
+                      compteurs forward (lan, rejete) — valeurs reelles ou null (lecture)
+  GET  /appareils     un appareil par MAC du LAN : zone NAC, passe par gk2, IPv6 globale (admin)
+  POST /retour        alias de /retour-freebox                                 (admin)
+  POST /tester-retour essai a blanc du chemin de secours, ne modifie rien       (admin)
   POST /activer       devient la passerelle (refuse si la sonde n'est pas active) (admin)
   POST /retour-freebox  revient a la Freebox, inconditionnel, chemin de secours    (admin)
+  GET  /apercu        voisins LAN non classes par le NAC, avant activation (admin, #3803)
   GET  /suggestions   appareils vus par la Freebox non classes par le NAC  (admin)
   GET  /journal       dernieres bascules de passerelle DHCP (audit.log)    (admin)
   GET  /health        vivacite (publique)
@@ -36,7 +41,7 @@ AUDIT_LOG = os.environ.get("SECUBOX_PR_AUDIT_LOG", "/var/log/secubox/audit.log")
 NAC_SOCK = os.environ.get("SECUBOX_PR_NAC_SOCK", "/run/secubox/nac.sock")
 FREEBOX_SOCK = os.environ.get("SECUBOX_PR_FREEBOX_SOCK", "/run/secubox/freebox.sock")
 
-app = FastAPI(title="SecuBox Pseudo-routeur", version="0.1.0")
+app = FastAPI(title="SecuBox Pseudo-routeur", version="0.2.0")
 
 
 def _run_ctl(*args: str, timeout: int = 30):
@@ -77,7 +82,19 @@ async def health():
 
 @app.get("/etat", dependencies=[Depends(require_lecture)])
 def etat():
-    return _repondre("etat")
+    data, erreur, code = _ctl_json("etat-complet")
+    if erreur is not None:
+        return JSONResponse({"erreur": erreur}, status_code=code)
+    # Comptes seulement (#3803) : la liste MAC/IP reste reservee a l'administrateur.
+    app, err2, _c = _ctl_json("appareils")
+    if err2 is None:
+        liste = app.get("appareils", [])
+        data["appareils_compte"] = {
+            "total": len(liste),
+            "passes": sum(1 for a in liste if a.get("passe_par_gk2") is True) if app.get("chaine_chargee") else None}
+    else:
+        data["appareils_compte"] = None
+    return data
 
 
 @app.post("/activer", dependencies=[Depends(require_jwt)])
@@ -88,6 +105,51 @@ def activer():
 @app.post("/retour-freebox", dependencies=[Depends(require_jwt)])
 def retour_freebox():
     return _repondre("retour-freebox")
+
+
+@app.post("/retour", dependencies=[Depends(require_jwt)])
+def retour():
+    return _repondre("retour-freebox")
+
+
+@app.post("/tester-retour", dependencies=[Depends(require_jwt)])
+def tester_retour():
+    return _repondre("tester-retour")
+
+
+def _noms_nac(entetes):
+    """MAC -> nom connu du NAC (nom donne par l'administrateur, sinon nom DHCP/reseau).
+    Sans jeton admin, le NAC refuse : aucun nom, la page affiche « Appareil inconnu »."""
+    try:
+        r = _appel_uds(NAC_SOCK, "/clients", entetes)
+        if r.status_code != 200:
+            return {}
+        return {c.get("mac", "").lower(): (c.get("custom_hostname") or c.get("hostname") or "").strip()
+                for c in r.json().get("clients", []) if c.get("mac")}
+    except (OSError, httpx.HTTPError, ValueError) as e:
+        log.warning("appareils : appel au socket NAC (%s) impossible : %s", NAC_SOCK, e)
+        return {}
+
+
+@app.get("/appareils", dependencies=[Depends(require_jwt)])
+def appareils(request: Request):
+    """Un objet par MAC du LAN (#3803). La part IPv4/IPv6 du trafic n'est PAS mesurable par
+    gk2 (l'IPv6 va direct a la Freebox) : on ne rend qu'un booleen « IPv6 actif »."""
+    data, erreur, code = _ctl_json("appareils")
+    if erreur is not None:
+        return JSONResponse({"erreur": erreur}, status_code=code)
+    noms = _noms_nac({"Authorization": request.headers.get("authorization", "")})
+    for a in data.get("appareils", []):
+        a["nom"] = noms.get(a.get("mac", "")) or None
+        a["ipv6_actif"] = bool(a.get("ipv6_globales"))
+    return data
+
+
+@app.get("/apercu", dependencies=[Depends(require_jwt)])
+def apercu():
+    """Informatif (#3803) : appareils du LAN absents de tout ensemble NAC. Ils gardent
+    Internet apres activation (LAN = zone de confiance) ; a montrer avant POST /activer."""
+    return _repondre("apercu")
 
 
 def _appel_uds(socket_path, chemin, entetes, timeout=10.0):
@@ -127,7 +189,7 @@ def suggestions(request: Request):
 
 @app.get("/journal", dependencies=[Depends(require_jwt)])
 def journal(n: int = 50):
-    """Dernieres bascules de passerelle DHCP, lues dans l'audit.log partage (action
+    """Dernieres bascules de passerelle DHCP et evenements du module, lues dans l'audit.log partage (action
     `passerelle_dhcp`, ecrite par secubox-freebox a chaque appel de pseudo-routeurctl)."""
     n = max(1, min(n, 500))
     entrees = []
@@ -138,7 +200,7 @@ def journal(n: int = 50):
                     d = json.loads(ligne)
                 except json.JSONDecodeError:
                     continue
-                if d.get("action") == "passerelle_dhcp":
+                if d.get("action") == "passerelle_dhcp" or d.get("module") == "pseudo-routeur":
                     entrees.append(d)
     except OSError:
         pass
