@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-18 — Audit des changements d'ACL : règle sbx_acl (ref #3791)
+
+- `secubox-security-posture` 2.10.6 (PR #3792, #3793) : `/etc/audit/rules.d/98-sbx-waf-droits.rules` =
+  `-S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -k sbx_acl`, sans filtre de chemin.
+- Piège : le noyau de gk2 n'a ni `CONFIG_AUDIT_WATCH` ni `CONFIG_AUDIT_TREE` ; `-w <dossier>` et `-F dir=` sont inertes (0
+  enregistrement, vérifié). Volume sans filtre : 1 évènement/min. `ausearch -k` ne liste pas ces lignes : `grep 'key="sbx_acl"'`.
+- Testé sur gk2 : setfacl sur `waf-threats.log` enregistré (exe=/usr/bin/setfacl).
+
 ## 2026-11-18 — cve-leurres : ACL du journal WAF perdue, remise avant chaque passage (ref #3789)
 
 - gk2 04:24 : `secubox-cve-leurres` en échec (Permission denied sur `waf-threats.log`) ; ACL nommée `u:secubox-cve-leurres` absente
