@@ -522,3 +522,9 @@ apt protégée au niveau 0 #1366. Détail : `HISTORY.md` (octobre).
 - Endpoints: 2065
 - Migration: 64%
 - Commits: 7621
+
+## CI Sync 2026-11-18
+- Packages: 122
+- Endpoints: 2068
+- Migration: 64%
+- Commits: 7642
