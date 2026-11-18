@@ -18,6 +18,9 @@ override_dh_auto_install:
 	# Veille V2 (#3719) : paquet veille/ et migrations SQL à côté de api/ ; second processus et son unité.
 	cp -r veille debian/secubox-ai/usr/lib/secubox/ai/
 	cp -r migrations debian/secubox-ai/usr/lib/secubox/ai/
+	# Catalogue d'empreintes des outils (#3795), sourcé ; fichier local de l'opérateur : /etc/secubox/ai/empreintes.local.toml.
+	install -d debian/secubox-ai/usr/share/secubox-ai/empreintes
+	install -m 0644 empreintes/*.toml debian/secubox-ai/usr/share/secubox-ai/empreintes/
 	install -D -m 0755 sbin/secubox-ai-veille debian/secubox-ai/usr/sbin/secubox-ai-veille
 	install -D -m 0644 systemd/secubox-ai-veille.service debian/secubox-ai/usr/lib/systemd/system/secubox-ai-veille.service
 	install -D -m 0644 apparmor/secubox-ai-veille debian/secubox-ai/etc/apparmor.d/secubox-ai-veille

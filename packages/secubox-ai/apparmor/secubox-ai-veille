@@ -28,6 +28,11 @@ profile secubox-ai-veille {
   # Configuration du module (lecture seule) ; jamais /etc/secubox/**.
   /etc/secubox/ r,
   /etc/secubox/ai.toml r,
+  # Catalogue d'empreintes des outils (#3795) : paquet, puis fichier local facultatif de l'opérateur.
+  /usr/share/secubox-ai/empreintes/ r,
+  /usr/share/secubox-ai/empreintes/*.toml r,
+  /etc/secubox/ai/ r,
+  /etc/secubox/ai/empreintes.local.toml r,
 
   # Clé du compte de lecture de gk2 (#3720), remise par LoadCredential= ; mémoire libre pour les mesures.
   /run/credentials/secubox-ai-veille.service/ r,

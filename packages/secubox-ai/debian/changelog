@@ -1,3 +1,15 @@
+secubox-ai (0.3.3-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3795) : identification des outils (veille/outils.py) sur un
+    catalogue d'empreintes sourcées (/usr/share/secubox-ai/empreintes/*.toml,
+    plus /etc/secubox/ai/empreintes.local.toml facultatif). Entrée sans source
+    refusée ; motifs littéraux échappés, entrée tronquée. Un outil n'est
+    nommé qu'avec deux traits indépendants (agent + chemins = un trait),
+    sinon « inconnu » avec les traits observés. dossiers.outils_json rempli ;
+    campagne meme_outil_multi_adresses (outil:<outil>:<début>).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 22:00:00 +0000
+
 secubox-ai (0.3.2-1~trixie1) trixie; urgency=medium
 
   * Veille V2 (#3795) : dossiers d'attaquant et de campagne (veille/dossiers.py,

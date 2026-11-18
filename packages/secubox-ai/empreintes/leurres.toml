@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Leurres de service (#3795). LIMITE : gk2 ne rend le mot de passe que par HMAC local (non comparable à une liste
+# publique) ; les identifiants de dictionnaire se comparent par « compte:longueur du mot de passe ». Une telle paire
+# est commune à bien des dictionnaires : il en faut `min` distinctes, et ce trait seul ne nomme jamais l'outil.
+
+[[outil]]
+nom = "Mirai"
+source = "https://github.com/jgamblin/Mirai-Source-Code/blob/master/mirai/bot/scanner.c (table des identifiants)"
+[[outil.trait]]
+type = "identifiants"
+couche = "leurre"
+min = 3
+# root:xc3511, root:vizxv, root:xmhdipc, root:juantech, root:888888, support:support, admin:admin, root:default
+valeurs = ["root:6", "root:5", "root:7", "root:8", "support:7", "admin:5"]

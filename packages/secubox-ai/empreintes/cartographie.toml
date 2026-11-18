@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Cartographie d'Internet (#3795). Shodan n'a pas d'agent HTTP documenté : pas d'entrée (aucun trait sourcé).
+# Zmap ne parle pas HTTP : seule la couche DPI (rythme des ports) le verrait, absente aujourd'hui : pas d'entrée.
+# Masscan : seul son agent HTTP de bannière est documenté (couche waf) ; jamais nommé sur ce seul trait.
+
+[[outil]]
+nom = "Censys"
+source = "relevé gk2 2026-11-14 (tests/donnees/menaces.jsonl : agent « CensysInspect/1.1 ; +https://about.censys.io/ »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "CensysInspect/"
+
+[[outil]]
+nom = "Cortex Xpanse"
+source = "relevé gk2 2026-11-14 (agent « Hello from Palo Alto Networks … Cortex-Xpanse/Scanning-activity »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "Hello from Palo Alto Networks"
+
+[[outil]]
+nom = "zgrab"
+source = "https://github.com/zmap/zgrab2 (agent HTTP par défaut « Mozilla/5.0 zgrab/<version> »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "zgrab/"
+
+[[outil]]
+nom = "Masscan"
+source = "https://github.com/robertdavidgraham/masscan (bannière HTTP « masscan/<version> (https://github.com/robertdavidgraham/masscan) »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "masscan/"

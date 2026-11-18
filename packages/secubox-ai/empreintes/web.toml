@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Catalogue d'empreintes des outils web (#3795), installé sous /usr/share/secubox-ai/empreintes/.
+# Chaque entrée a une `source` (documentation publique de l'outil ou « relevé gk2 AAAA-MM-JJ »). Motifs = TEXTE
+# LITTÉRAL (comparaison sans casse, jamais une expression rationnelle). Agent HTTP, chemins, ordre des requêtes et
+# champ `tool` de sbxwaf sont UN SEUL trait (groupe « requete » de la couche waf) : un outil n'est nommé que si un
+# second trait d'une autre couche ou d'un autre groupe concorde. Par défaut l'agent de ces outils est le seul trait
+# sourcé : ils restent « inconnu » avec le trait observé tant qu'aucun second trait sourcé n'existe.
+
+[[outil]]
+nom = "sqlmap"
+source = "https://github.com/sqlmapproject/sqlmap/wiki/Usage (agent par défaut « sqlmap/<version> (https://sqlmap.org) »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "sqlmap/"
+
+[[outil]]
+nom = "Nikto"
+source = "https://github.com/sullo/nikto/blob/master/program/nikto.conf.default (USERAGENT « Mozilla/5.00 (Nikto/@VERSION) … »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "(Nikto/"
+
+[[outil]]
+nom = "Nuclei"
+source = "https://github.com/projectdiscovery/nuclei (agent « Nuclei - Open-source project (github.com/projectdiscovery/nuclei) »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "Nuclei - Open-source project"
+
+[[outil]]
+nom = "gobuster"
+source = "https://github.com/OJ/gobuster (option --useragent, défaut « gobuster/<version> »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "gobuster/"
+
+[[outil]]
+nom = "ffuf"
+source = "https://github.com/ffuf/ffuf (agent par défaut « Fuzz Faster U Fool v<version> »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "Fuzz Faster U Fool"
+
+[[outil]]
+nom = "DirBuster"
+source = "https://owasp.org/www-project-dirbuster/ (agent par défaut « DirBuster-<version> »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "DirBuster-"
+
+[[outil]]
+nom = "WPScan"
+source = "https://github.com/wpscanteam/wpscan (agent par défaut « WPScan v<version> (https://wpscan.com/wordpress-security-scanner) »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "WPScan v"

@@ -24,7 +24,9 @@ quand même dans leur dossier et le retard est journalisé ; dossiers
 Étapes, par règles nommées : `reperage` (balayage, cartographie, anomalie_hote, syn_sans_etat), `essais`
 (sondes_produits_absents, leurre_touche, identifiants_tentes), `exploitation` (regle_waf_attaque,
 risque_dpi_exploitation), `persistance` (retour_apres_ban — preuves de l'incident du corrélateur —, rotation_adresses).
-Chaque étape garde ses règles, ses preuves (identifiants d'événements) et leurs heures. `outils_json` reste vide ici.
+Chaque étape garde ses règles, ses preuves (identifiants d'événements) et leurs heures. `outils_json` : attributions de
+`outils.identifier` (dossiers d'acteur seulement). Campagne `meme_outil_multi_adresses` (`outil:<outil>:<début>`) :
+au moins deux dossiers d'acteur vus à moins de `calme_s` portant la même attribution NOMMÉE (jamais « inconnu »).
 """
 import hashlib
 import json
@@ -34,7 +36,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from veille import normaliser
+from veille import normaliser, outils as outils_mod
 from veille.correlation import _COLS, CALME_S, _evt, correlable
 from veille.regles import ECHELLE, Evt, iso, rang
 
@@ -255,6 +257,48 @@ def _campagnes(db, nouveaux, acteurs, maintenant, cible_s, calme_s, h):
     return touches
 
 
+def _nommes(outils):
+    return {a["outil"] for a in outils if a.get("outil") and a.get("outil") != "inconnu"}
+
+
+def _campagnes_outils(db, recalcules, maintenant, calme_s, h):
+    """Vagues `meme_outil_multi_adresses` nourries par les dossiers d'acteur recalculés ; rend les campagnes touchées."""
+    touches = set()
+    limite = iso(maintenant - timedelta(seconds=calme_s))
+    for nom in sorted({n for d in recalcules if d.type == "acteur" for n in _nommes(d.outils)}):
+        base = f"outil:{nom}"
+        membres = [(i, debut) for i, debut, o in db.execute(
+            "SELECT id, premiere_vue, outils_json FROM dossiers WHERE type = 'acteur' AND derniere_vue >= ? "
+            "AND instr(outils_json, ?) > 0 ORDER BY premiere_vue, id", (limite, json.dumps(nom, ensure_ascii=False))) if nom in _nommes(json.loads(o or "[]"))]
+        ouverte = db.execute(
+            "SELECT id FROM dossiers WHERE type = 'campagne' AND substr(cle, 1, ?) = ? AND derniere_vue >= ? "
+            "ORDER BY premiere_vue DESC LIMIT 1", (len(base) + 1, base + ":", limite)).fetchone()
+        if not membres or (ouverte is None and len(membres) < 2):
+            continue
+        debut = membres[0][1]
+        cid = ouverte[0] if ouverte else _assurer(db, f"{base}:{debut}", "campagne", debut, h)
+        deja = {m for (m,) in db.execute("SELECT membre_id FROM dossier_membres WHERE campagne_id = ?", (cid,))}
+        change, refuses = False, 0
+        for mid, _ in membres:
+            if mid not in deja:
+                if len(deja) >= MAX_MEMBRES:
+                    refuses += 1
+                    continue
+                db.execute("INSERT OR IGNORE INTO dossier_membres(campagne_id, membre_id, regle) VALUES (?, ?, ?)",
+                           (cid, mid, "meme_outil_multi_adresses"))
+                deja.add(mid)
+                change = True
+            ids = [i for (i,) in db.execute(
+                "SELECT d.evenement_id FROM dossier_evenements d JOIN evenements e ON e.id = d.evenement_id "
+                "WHERE d.dossier_id = ? AND e.horodatage >= ?", (mid, limite))]
+            change |= _lier(db, cid, ids)
+        if refuses:
+            log.warning("campagne %s : %d membre(s) au-delà de %d ignoré(s)", base, refuses, MAX_MEMBRES)
+        if change:
+            touches.add(cid)
+    return touches
+
+
 def _evenements(db, did):
     lignes = db.execute(f"SELECT {', '.join('e.' + c.strip() for c in _COLS.split(','))} FROM evenements e "
                         "JOIN dossier_evenements d ON d.evenement_id = e.id WHERE d.dossier_id = ? "
@@ -314,8 +358,10 @@ def _recalculer(db, did, h):
     etapes = _etapes(db, did, type_, evts)
     gravite = ECHELLE[max([rang(e.gravite) for e in evts] + [rang(g) for _, g in incidents])]
     premiere, derniere = evts[0].horodatage, max(e.horodatage for e in evts)
-    db.execute("UPDATE dossiers SET gravite = ?, etapes_json = ?, premiere_vue = ?, derniere_vue = ?, maj_le = ? "
-               "WHERE id = ?", (gravite, json.dumps(etapes), premiere, derniere, h, did))
+    if type_ == "acteur":
+        outils = json.dumps([a.dict() for a in outils_mod.identifier(evts)], ensure_ascii=False)
+    db.execute("UPDATE dossiers SET gravite = ?, etapes_json = ?, outils_json = ?, premiere_vue = ?, derniere_vue = ?, "
+               "maj_le = ? WHERE id = ?", (gravite, json.dumps(etapes), outils or "[]", premiere, derniere, h, did))
     membres = {c: r for c, r in db.execute(
         "SELECT d.cle, m.regle FROM dossier_membres m JOIN dossiers d ON d.id = m.membre_id WHERE m.campagne_id = ? "
         "ORDER BY d.cle", (did,))}
@@ -385,6 +431,10 @@ def construire(db, maintenant, fenetre_s=FENETRE_S, cible_s=CIBLE_S, calme_s=CAL
                                         (max_recalcul,))]
         out = [d for d in (_recalculer(db, did, h) for did in ids) if d is not None]
         db.executemany("UPDATE dossiers SET a_recalculer = 0 WHERE id = ?", [(d,) for d in ids])
+        for cid in sorted(_campagnes_outils(db, out, maintenant, calme_s, h)):
+            d = _recalculer(db, cid, h)
+            if d is not None:
+                out = [x for x in out if x.id != cid] + [d]
         db.execute("INSERT INTO curseurs(source, position, etat, derniere_lecture) VALUES ('dossiers', ?, 'ok', ?) "
                    "ON CONFLICT(source) DO UPDATE SET position = excluded.position, etat = 'ok', "
                    "derniere_lecture = excluded.derniere_lecture", (str(pos), h))

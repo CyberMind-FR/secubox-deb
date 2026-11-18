@@ -46,6 +46,12 @@ navigateur ─▶ nginx (admin) ─▶ /run/secubox/ai.sock ─▶ API secubox-a
 
 Aucun sudo, aucun `systemd-run` : l'API ne lance rien en root.
 
+Identification des outils (#3795) : la veille compare les faits de chaque dossier d'acteur au catalogue d'empreintes
+`/usr/share/secubox-ai/empreintes/*.toml` (plus `/etc/secubox/ai/empreintes.local.toml`, facultatif, même format :
+`[[outil]]` `nom`, `source` obligatoire, `[[outil.trait]]` `type`, `couche`, `motif` littéral ou `valeurs`, `min`).
+Un outil n'est nommé qu'avec deux traits indépendants (agent HTTP + chemins = un seul) ; sinon « inconnu » avec les
+traits vus. Les identifiants des leurres se comparent par « compte:longueur » (le mot de passe n'est connu que par HMAC).
+
 ## Socket et ports
 
 - `/run/secubox/ai.sock` : API (0660, groupe `secubox`, servie à nginx). Aucun port TCP.
