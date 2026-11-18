@@ -25,7 +25,7 @@ quand même dans leur dossier et le retard est journalisé ; dossiers
 (sondes_produits_absents, leurre_touche, identifiants_tentes), `exploitation` (regle_waf_attaque,
 risque_dpi_exploitation), `persistance` (retour_apres_ban — preuves de l'incident du corrélateur —, rotation_adresses).
 Chaque étape garde ses règles, ses preuves (identifiants d'événements) et leurs heures. `outils_json` : attributions de
-`outils.identifier` (dossiers d'acteur seulement). Campagne `meme_outil_multi_adresses` (`outil:<outil>:<début>`) :
+`outils.identifier` (dossiers d'acteur seulement). Campagne `meme_outil_multi_adresses` (`outil-nom:<outil>:<début>`) :
 au moins deux dossiers d'acteur vus à moins de `calme_s` portant la même attribution NOMMÉE (jamais « inconnu »).
 """
 import hashlib
@@ -266,7 +266,7 @@ def _campagnes_outils(db, recalcules, maintenant, calme_s, h):
     touches = set()
     limite = iso(maintenant - timedelta(seconds=calme_s))
     for nom in sorted({n for d in recalcules if d.type == "acteur" for n in _nommes(d.outils)}):
-        base = f"outil:{nom}"
+        base = f"outil-nom:{nom}"
         membres = [(i, debut) for i, debut, o in db.execute(
             "SELECT id, premiere_vue, outils_json FROM dossiers WHERE type = 'acteur' AND derniere_vue >= ? "
             "AND instr(outils_json, ?) > 0 ORDER BY premiere_vue, id", (limite, json.dumps(nom, ensure_ascii=False))) if nom in _nommes(json.loads(o or "[]"))]

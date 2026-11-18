@@ -9,34 +9,20 @@
 # champ `tool` de sbxwaf sont UN SEUL trait (groupe « requete » de la couche waf) : un outil n'est nommé que si un
 # second trait d'une autre couche ou d'un autre groupe concorde. Par défaut l'agent de ces outils est le seul trait
 # sourcé : ils restent « inconnu » avec le trait observé tant qu'aucun second trait sourcé n'existe.
+# Exclus après vérification à la source (2026-11-18) : Nuclei (agent tiré au hasard, useragent.PickRandom), Nikto
+# et DirBuster (chaîne citée introuvable à la source, pas de version épinglée nommable).
 
 [[outil]]
 nom = "sqlmap"
-source = "https://github.com/sqlmapproject/sqlmap/wiki/Usage (agent par défaut « sqlmap/<version> (https://sqlmap.org) »)"
+source = "https://github.com/sqlmapproject/sqlmap/blob/master/lib/core/settings.py#L25-L28 (branche master consultée le 2026-11-18 : « sqlmap/%s#%s »)"
 [[outil.trait]]
 type = "agent"
 couche = "waf"
 motif = "sqlmap/"
 
 [[outil]]
-nom = "Nikto"
-source = "https://github.com/sullo/nikto/blob/master/program/nikto.conf.default (USERAGENT « Mozilla/5.00 (Nikto/@VERSION) … »)"
-[[outil.trait]]
-type = "agent"
-couche = "waf"
-motif = "(Nikto/"
-
-[[outil]]
-nom = "Nuclei"
-source = "https://github.com/projectdiscovery/nuclei (agent « Nuclei - Open-source project (github.com/projectdiscovery/nuclei) »)"
-[[outil.trait]]
-type = "agent"
-couche = "waf"
-motif = "Nuclei - Open-source project"
-
-[[outil]]
 nom = "gobuster"
-source = "https://github.com/OJ/gobuster (option --useragent, défaut « gobuster/<version> »)"
+source = "https://github.com/OJ/gobuster/blob/master/libgobuster/version.go#L123-L124 (branche master consultée le 2026-11-18 : « gobuster/%s »)"
 [[outil.trait]]
 type = "agent"
 couche = "waf"
@@ -44,23 +30,15 @@ motif = "gobuster/"
 
 [[outil]]
 nom = "ffuf"
-source = "https://github.com/ffuf/ffuf (agent par défaut « Fuzz Faster U Fool v<version> »)"
+source = "https://github.com/ffuf/ffuf/blob/master/pkg/runner/simple.go#L207 (branche master consultée le 2026-11-18 : « Fuzz Faster U Fool »)"
 [[outil.trait]]
 type = "agent"
 couche = "waf"
 motif = "Fuzz Faster U Fool"
 
 [[outil]]
-nom = "DirBuster"
-source = "https://owasp.org/www-project-dirbuster/ (agent par défaut « DirBuster-<version> »)"
-[[outil.trait]]
-type = "agent"
-couche = "waf"
-motif = "DirBuster-"
-
-[[outil]]
 nom = "WPScan"
-source = "https://github.com/wpscanteam/wpscan (agent par défaut « WPScan v<version> (https://wpscan.com/wordpress-security-scanner) »)"
+source = "https://github.com/wpscanteam/wpscan/blob/master/lib/wpscan/browser.rb#L32 (branche master consultée le 2026-11-18 : « WPScan v#{VERSION} »)"
 [[outil.trait]]
 type = "agent"
 couche = "waf"

@@ -4,15 +4,17 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Leurres de service (#3795). LIMITE : gk2 ne rend le mot de passe que par HMAC local (non comparable à une liste
-# publique) ; les identifiants de dictionnaire se comparent par « compte:longueur du mot de passe ». Une telle paire
-# est commune à bien des dictionnaires : il en faut `min` distinctes, et ce trait seul ne nomme jamais l'outil.
-
-[[outil]]
-nom = "Mirai"
-source = "https://github.com/jgamblin/Mirai-Source-Code/blob/master/mirai/bot/scanner.c (table des identifiants)"
-[[outil.trait]]
-type = "identifiants"
-couche = "leurre"
-min = 3
-# root:xc3511, root:vizxv, root:xmhdipc, root:juantech, root:888888, support:support, admin:admin, root:default
-valeurs = ["root:6", "root:5", "root:7", "root:8", "support:7", "admin:5"]
+# publique) ; les identifiants de dictionnaire se comparent par « compte:longueur du mot de passe ». Un tel trait est
+# FAIBLE (`faible = true`) : sa combinaison `requis` doit être vue entière, et deux traits faibles d'une même couche ne
+# comptent que pour un. Mirai (scanner.c, table add_auth_entry) : entrée retirée tant qu'aucune ligne épinglée n'est
+# vérifiée (relecture du 2026-11-18). Forme attendue :
+#
+# [[outil]]
+# nom = "Mirai"
+# source = "<URL du fichier>#L<ligne> (version épinglée)"
+# [[outil.trait]]
+# type = "identifiants"
+# couche = "leurre"
+# faible = true
+# requis = ["support:7", "root:7", "root:8"]
+# valeurs = ["support:7", "root:7", "root:8"]

@@ -132,8 +132,10 @@ def test_catalogue_livre_source_et_lint():
     total = 0
     for f in fichiers:
         assert "SPDX-License-Identifier" in f.read_text(encoding="utf-8")
-        for brut in tomllib.loads(f.read_text(encoding="utf-8"))["outil"]:
-            assert brut["source"].strip()
+        for brut in tomllib.loads(f.read_text(encoding="utf-8")).get("outil", []):
+            src = brut["source"].strip()
+            # Jamais une racine de dépôt : un fichier et sa ligne, ou un relevé gk2 daté.
+            assert re.search(r"/blob/[^ ]+#L\d+", src) or re.match(r"relevé gk2 \d{4}-\d{2}-\d{2}", src), src
             o = outils.entree(brut)
             total += 1
             for t in o.traits:
@@ -142,8 +144,7 @@ def test_catalogue_livre_source_et_lint():
                     assert len(t.motif.pattern) <= 2 * outils.MOTIF_MAX
     assert len(outils.charger(fichiers)) == total
     noms = {o.nom for o in outils.charger(fichiers)}
-    assert {"sqlmap", "Nikto", "Nuclei", "gobuster", "ffuf", "DirBuster", "WPScan", "Censys", "zgrab", "Masscan",
-            "Mirai"} <= noms
+    assert {"sqlmap", "gobuster", "ffuf", "WPScan", "Censys", "Cortex Xpanse", "zgrab", "Masscan"} == noms
 
 
 def test_censys_reel_reste_inconnu(db):
@@ -167,7 +168,52 @@ def test_dossier_outils_et_campagne_meme_outil(db, cat, monkeypatch):
     assert ds["100.64.32.1"].outils[0]["outil"] == "inconnu"
     stocke = json.loads(db.execute("SELECT outils_json FROM dossiers WHERE cle = '100.64.31.1'").fetchone()[0])
     assert stocke[0]["outil"] == "OutilEssai"
-    [c] = [d for d in ds.values() if d.cle.startswith("outil:OutilEssai:")]
+    [c] = [d for d in ds.values() if d.cle.startswith("outil-nom:OutilEssai:")]
     assert c.membres == {"100.64.30.1": "meme_outil_multi_adresses", "100.64.31.1": "meme_outil_multi_adresses"}
     assert len(c.evenements) == 2
     assert not [d for d in ds.values() if d.cle.startswith("outil:inconnu")]
+
+
+FAIBLES = """
+[[outil]]
+nom = "Robot"
+source = "relevé gk2 2026-11-15"
+[[outil.trait]]
+type = "identifiants"
+faible = true
+requis = ["support:7", "root:7", "root:8"]
+valeurs = ["support:7", "root:7", "root:8"]
+[[outil.trait]]
+type = "banniere"
+faible = true
+groupe = "autre"
+motif = "SSH-2.0-robot"
+[[outil.trait]]
+type = "agent"
+motif = "robot/"
+"""
+
+
+def _essais(*paires, banniere=None, agent=None):
+    a = {"essais": [{"compte": c, "mot_de_passe_longueur": n} for c, n in paires]}
+    if banniere:
+        a["banniere"] = banniere
+    if agent:
+        a["user_agent"] = agent
+    return dossiers.Evt("e", "menaces", "t", "x", None, "info", None, None, None, None, a)
+
+
+def test_trait_faible_combinaison_et_couche(tmp_path, caplog):
+    f = tmp_path / "f.toml"
+    f.write_text(FAIBLES, encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="secubox-ai-veille"):
+        cat = outils.charger([f])
+    assert "groupe 'autre' ignoré" in caplog.text                      # pas d'indépendance fabriquée
+    # combinaison incomplète : le trait ne concorde pas
+    assert outils.identifier([_essais(("root", 7), ("root", 8))], cat) == []
+    # deux traits faibles de la couche leurre : un seul trait
+    [a] = outils.identifier([_essais(("support", 7), ("root", 7), ("root", 8), banniere="SSH-2.0-robot")], cat)
+    assert a.outil == "inconnu" and len(a.traits_observes) == 2
+    # faible (leurre) + agent (waf) : deux couches, nommé
+    [a] = outils.identifier([_essais(("support", 7), ("root", 7), ("root", 8), agent="robot/1")], cat)
+    assert a.outil == "Robot" and a.confiance == "forte"

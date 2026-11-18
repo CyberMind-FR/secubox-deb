@@ -18,6 +18,9 @@ empreinte HTTP et traits d'en-têtes = `entetes` ; identifiants, bannière, ja4,
 Un outil n'est NOMMÉ qu'avec ≥ 2 traits indépendants (confiance « forte » si deux couches, « moyenne » sinon) ; sinon
 `Attribution("inconnu", traits_observes=[…])` avec les traits vus, SANS nom d'outil.
 
+Trait `faible` (identifiants de dictionnaire) : sa combinaison `requis` doit être vue entière ; deux traits faibles
+d'une même couche comptent pour un. `groupe` n'est jamais choisi par le catalogue (valeur imposée par le type).
+
 Identifiants des leurres : gk2 ne rend le mot de passe que par HMAC local, non comparable à une liste publique ; on
 compare donc « compte:longueur » — limite documentée, d'où `min` paires distinctes exigées.
 """
@@ -54,6 +57,8 @@ class Trait:
     motif: Optional[re.Pattern] = None
     valeurs: tuple = ()
     min: int = 1
+    faible: bool = False
+    requis: tuple = ()
 
     def decrire(self):
         return {"type": self.type, "couche": self.couche, "source": self.source,
@@ -97,7 +102,13 @@ def _trait(brut, source_outil):
     if couche not in COUCHES:
         raise ValueError(f"couche inconnue : {couche!r}")
     source = str(brut.get("source") or source_outil)
-    groupe = str(brut.get("groupe") or GROUPES.get(type_, type_))
+    groupe = GROUPES.get(type_, type_)
+    if brut.get("groupe") not in (None, groupe):
+        # Le groupe fixe l'indépendance : jamais choisi par le catalogue (on ne fabrique pas un second trait).
+        log.warning("empreintes : groupe %r ignoré pour un trait %s (groupe %s)", brut.get("groupe"), type_, groupe)
+    faible = brut.get("faible", False)
+    if not isinstance(faible, bool):
+        raise ValueError("faible non booléen")
     mini = brut.get("min", 1)
     if not isinstance(mini, int) or isinstance(mini, bool) or not 1 <= mini <= VALEURS_MAX:
         raise ValueError("min hors bornes")
@@ -105,12 +116,16 @@ def _trait(brut, source_outil):
         motif = brut.get("motif")
         if not isinstance(motif, str) or not motif.strip() or len(motif) > MOTIF_MAX:
             raise ValueError("motif vide ou trop long")
-        return Trait(type_, couche, groupe, source, motif=re.compile(re.escape(motif), re.IGNORECASE))
+        return Trait(type_, couche, groupe, source, motif=re.compile(re.escape(motif), re.IGNORECASE), faible=faible)
     valeurs = brut.get("valeurs")
     if (not isinstance(valeurs, list) or not valeurs or len(valeurs) > VALEURS_MAX
             or not all(isinstance(v, str) and 0 < len(v) <= MOTIF_MAX for v in valeurs)):
         raise ValueError("valeurs absentes ou hors bornes")
-    return Trait(type_, couche, groupe, source, valeurs=tuple(valeurs), min=min(mini, len(set(valeurs))))
+    requis = brut.get("requis", [])
+    if not isinstance(requis, list) or not all(isinstance(v, str) and v in valeurs for v in requis):
+        raise ValueError("requis hors des valeurs")
+    return Trait(type_, couche, groupe, source, valeurs=tuple(valeurs), min=min(mini, len(set(valeurs))),
+                 faible=faible, requis=tuple(requis))
 
 
 def entree(brut) -> Outil:
@@ -205,6 +220,8 @@ def _concorde(t: Trait, f: dict):
     if t.type == "ordre_requetes":
         return " → ".join(t.valeurs) if _sous_suite(t.valeurs, obs) else None
     vus = sorted({v for v in obs if v in t.valeurs})
+    if not set(t.requis) <= set(vus):
+        return None
     return ", ".join(vus) if len(vus) >= t.min else None
 
 
@@ -223,7 +240,8 @@ def identifier(dossier, cat=None) -> list:
                 concordants.append((t, v))
         if not concordants:
             continue
-        cles = {(t.couche, t.groupe) for t, _ in concordants}
+        # Deux traits faibles d'une même couche ne font qu'un.
+        cles = {(t.couche, "faible" if t.faible else t.groupe) for t, _ in concordants}
         if len(cles) >= 2:
             couches = {t.couche for t, _ in concordants}
             nommes.append(Attribution(o.nom, [dict(t.decrire(), observe=v) for t, v in concordants],
