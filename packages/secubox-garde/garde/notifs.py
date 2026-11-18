@@ -18,20 +18,29 @@ log = logging.getLogger("secubox.garde.notifs")
 CLE_SMS = Path("/etc/secubox/secrets/garde-sms")
 INTERVALLE_SMS = 3600
 ESSAIS_MAX = 48
+PEREMPTION = 604800  # 7 jours
 URL_FREE = "https://smsapi.free-mobile.fr/sendmsg"
 
 
 def mettre_en_file(db: sqlite3.Connection, canal: Literal["courriel", "sms"],
                    cle: str, texte: str, maintenant: int) -> bool:
     """False si un SMS de même clé a été mis en file il y a moins d'une heure."""
-    if canal == "sms":
-        r = db.execute("SELECT 1 FROM file_notifs WHERE canal='sms' AND cle=? AND cree>?",
-                       (cle, maintenant - INTERVALLE_SMS)).fetchone()
-        if r:
-            return False
-    db.execute("INSERT INTO file_notifs(canal, cle, texte, cree, essais, envoye) "
-               "VALUES (?,?,?,?,0,0)", (canal, cle, texte, maintenant))
-    db.commit()
+    if db.in_transaction:
+        db.commit()
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        if canal == "sms":
+            r = db.execute("SELECT 1 FROM file_notifs WHERE canal='sms' AND cle=? AND cree>?",
+                           (cle, maintenant - INTERVALLE_SMS)).fetchone()
+            if r:
+                db.rollback()
+                return False
+        db.execute("INSERT INTO file_notifs(canal, cle, texte, cree, essais, envoye) "
+                   "VALUES (?,?,?,?,0,0)", (canal, cle, texte, maintenant))
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
     return True
 
 
@@ -59,11 +68,11 @@ def sms_free(utilisateur: str, cle: str, texte: str, http=urllib.request) -> boo
         return False
 
 
-def envoyer_courriel(destinataire: str, sujet: str, texte: str) -> bool:
-    """Envoi par le relais de la box (`secubox_core.courriel.envoie`)."""
+def _courriel_defaut(destinataire: str, sujet: str, texte: str) -> bool:
+    """Envoi par le relais de la box, From = `expediteur()`."""
     try:
         from secubox_core import courriel
-        courriel.envoie(destinataire, sujet, texte)
+        courriel.envoie(destinataire, sujet, texte, expediteur=expediteur())
         return True
     except Exception as e:
         log.warning("courriel : échec d'envoi (%s)", type(e).__name__)
@@ -76,24 +85,35 @@ def _sms_defaut(utilisateur: str, cle: str, texte: str) -> bool:
 
 def vider_file(db: sqlite3.Connection, reglages: Dict,
                envoyer_sms: Callable[[str, str, str], bool] = _sms_defaut,
-               envoyer_courriel: Callable[[str, str, str], bool] = envoyer_courriel,
+               envoyer_courriel: Callable[[str, str, str], bool] = _courriel_defaut,
                maintenant: int = 0, cle_sms: Optional[str] = None) -> dict:
     """Rejoue la file ; `envoyer_sms(utilisateur, cle_secrète, texte)`,
     `envoyer_courriel(destinataire, sujet, texte)`. Abandon après 48 essais."""
     envoyes = 0
     cle = lire_cle_sms() if cle_sms is None else cle_sms
-    rows = db.execute("SELECT id, canal, texte, essais FROM file_notifs "
+    rows = db.execute("SELECT id, canal, texte, essais, cree FROM file_notifs "
                       "WHERE envoye=0 ORDER BY id").fetchall()
-    for id_, canal, texte, essais in rows:
+    manquants = set()
+    for id_, canal, texte, essais, cree in rows:
         if canal == "sms":
             dest = str(reglages.get("sms_utilisateur") or "")
-            if not dest or not cle:
-                continue
-            ok = envoyer_sms(dest, cle, texte)
+            if not dest:
+                manquants.add("sms_utilisateur")
+            if not cle:
+                manquants.add("clé SMS")
         else:
             dest = str(reglages.get("courriel") or "")
             if not dest:
-                continue
+                manquants.add("courriel")
+        if not dest or (canal == "sms" and not cle):
+            if maintenant - cree > PEREMPTION:
+                db.execute("UPDATE file_notifs SET envoye=-1 WHERE id=?", (id_,))
+                log.error("notification %s (%s) abandonnée : non configurée depuis plus de 7 jours",
+                          id_, canal)
+            continue
+        if canal == "sms":
+            ok = envoyer_sms(dest, cle, texte)
+        else:
             sujet = (texte.splitlines() or [""])[0][:120]
             ok = envoyer_courriel(dest, sujet, texte)
         if ok:
@@ -104,6 +124,8 @@ def vider_file(db: sqlite3.Connection, reglages: Dict,
             log.error("notification %s (%s) abandonnée après %d essais", id_, canal, ESSAIS_MAX)
         else:
             db.execute("UPDATE file_notifs SET essais=? WHERE id=?", (essais + 1, id_))
+    if manquants:
+        log.warning("notifications en attente, réglage manquant : %s", ", ".join(sorted(manquants)))
     db.commit()
     n = db.execute("SELECT COUNT(*) FROM file_notifs WHERE envoye=0").fetchone()[0]
     return {"envoyes": envoyes, "en_attente": n}

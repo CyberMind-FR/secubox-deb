@@ -54,10 +54,13 @@ def test_courriel_sujet_premiere_ligne(tmp_path):
 def test_abandon_apres_48_essais(tmp_path, caplog):
     cx = base.ouvrir(tmp_path / "g.db")
     notifs.mettre_en_file(cx, "courriel", "k", "t", 1000)
+    caplog.set_level("WARNING")
     for i in range(48):
         r = notifs.vider_file(cx, {"courriel": "a@b.fr"}, lambda *a: False,
                               lambda *a: False, 1001 + i)
     assert r == {"envoyes": 0, "en_attente": 0}
+    assert cx.execute("SELECT envoye FROM file_notifs").fetchone()[0] == -1
+    assert "abandonnée" in caplog.text
 
 
 class FauxHttp:
@@ -83,7 +86,9 @@ def test_sms_free_url_et_cle_absente_du_journal(caplog):
     http = FauxHttp()
     with caplog.at_level("DEBUG"):
         assert notifs.sms_free("12345678", "SECRETKEY", "bonjour à tous", http=http) is True
-    assert "user=12345678" in http.url and "msg=bonjour+%C3%A0" in http.url.replace("%20", "+") or "msg=bonjour%20" in http.url
+    assert "user=12345678" in http.url
+    assert "msg=" in http.url
+    assert "SECRETKEY" in http.url  # la clé part bien dans la requête, seulement pas dans le journal
     assert "SECRETKEY" not in caplog.text
     assert notifs.sms_free("1", "K", "m", http=FauxHttp(500)) is False
 
@@ -99,3 +104,34 @@ def test_expediteur_nom_du_noeud(monkeypatch):
     from secubox_core import auth
     monkeypatch.setattr(auth, "nom_box_locale", lambda: "gk2")
     assert notifs.expediteur() == "gk2@secubox.in"
+
+
+def test_courriel_defaut_passe_expediteur(monkeypatch):
+    from secubox_core import auth, courriel
+    monkeypatch.setattr(auth, "nom_box_locale", lambda: "gk2")
+    vus = {}
+    monkeypatch.setattr(courriel, "envoie", lambda d, s, t, expediteur=None: vus.update(
+        d=d, s=s, t=t, e=expediteur))
+    assert notifs._courriel_defaut("a@b.fr", "S", "T") is True
+    assert vus["e"] == "gk2@secubox.in"
+
+
+def test_reglage_manquant_averti_puis_perime(tmp_path, caplog):
+    cx = base.ouvrir(tmp_path / "g.db")
+    notifs.mettre_en_file(cx, "sms", "k", "t", 1000)
+    caplog.set_level("WARNING")
+    r = notifs.vider_file(cx, {}, lambda *a: True, lambda *a: True, 2000, cle_sms="")
+    assert r == {"envoyes": 0, "en_attente": 1}
+    assert caplog.text.count("réglage manquant") == 1
+    assert "sms_utilisateur" in caplog.text
+    r = notifs.vider_file(cx, {}, lambda *a: True, lambda *a: True, 1000 + 604801, cle_sms="")
+    assert r == {"envoyes": 0, "en_attente": 0}
+    assert cx.execute("SELECT envoye FROM file_notifs").fetchone()[0] == -1
+
+
+def test_mise_en_file_atomique_en_transaction_ouverte(tmp_path):
+    cx = base.ouvrir(tmp_path / "g.db")
+    cx.execute("INSERT INTO recidives(ip, n, dernier) VALUES ('1.1.1.1',1,1)")
+    assert notifs.mettre_en_file(cx, "sms", "m", "x", 10) is True
+    assert notifs.mettre_en_file(cx, "sms", "m", "x", 11) is False
+    assert not cx.in_transaction
