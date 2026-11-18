@@ -66,9 +66,11 @@ def c(monkeypatch, tmp_path):
     ensembles = {"waf_ban": set(), "waf_ban6": set()}
     lus = []
     monkeypatch.setattr(gb, "_lire_ensemble", lambda nom: (lus.append(nom), set(ensembles[nom]))[1])
+    restes = {}
+    monkeypatch.setattr(gb, "_lire_expirations", lambda nom: dict(restes))
     try:
         banc = Banc(TestClient(waf.app), gb, faux, tmp_path)
-        banc.ensembles, banc.lus = ensembles, lus
+        banc.ensembles, banc.lus, banc.restes = ensembles, lus, restes
         yield banc
     finally:
         waf.app.dependency_overrides.clear()
@@ -328,6 +330,7 @@ def _unban(c, cible, **extra):
 
 def test_garde_unban_ban_propre_actif(c):
     ident = c.ban("198.51.100.7").json()["id"]
+    c.restes["198.51.100.7"] = 14390
     r = _unban(c, "198.51.100.7")
     assert r.status_code == 200, r.text
     assert r.json()["ids"] == [ident]
@@ -360,6 +363,7 @@ def test_garde_unban_echu_409(c):
 
 def test_garde_unban_champs_en_trop_et_plafond(c):
     c.ban("198.51.100.7")
+    c.restes["198.51.100.7"] = 14390
     assert _unban(c, "198.51.100.7", motif="x").status_code == 422
     maintenant = int(time.time())
     with open(c.gb.JOURNAL_GARDE, "a", encoding="utf-8") as f:
@@ -376,3 +380,53 @@ def test_garde_unban_jeton_portee_ai_ban_refuse(c_vrai):
               "Content-Type": "application/json"}
     assert client.post("/garde/unban", content=corps, headers=entete).status_code in (401, 403)
     assert faux.appels == []
+
+
+def test_garde_unban_ban_etranger_plus_long_409(c):
+    c.ban("198.51.100.7")                             # 4 h
+    c.restes["198.51.100.7"] = 86400                  # repris 24 h par un autre
+    r = _unban(c, "198.51.100.7")
+    assert r.status_code == 409 and r.json() == {"detail": {"motif": "etranger"}}
+    assert "unban" not in c.faux.verbes() and c.journal()[-1]["type"] == "ban"
+    assert [x for x in c.audit() if x["action"] == "garde-ban-refus" and "etranger" in x["detail"]]
+    c.restes["198.51.100.7"] = None                   # permanent
+    assert _unban(c, "198.51.100.7").json() == {"detail": {"motif": "etranger"}}
+
+
+def test_garde_unban_element_absent_sans_wafctl(c):
+    c.ban("198.51.100.7")
+    r = _unban(c, "198.51.100.7")
+    assert r.status_code == 200 and r.json()["etat"] == "deja_leve"
+    assert "unban" not in c.faux.verbes()
+    assert c.journal()[-1]["note"] == "déjà levé"
+
+
+def test_garde_unban_ensemble_illisible_503(c, monkeypatch):
+    c.ban("198.51.100.7")
+
+    def panne(nom):
+        raise c.gb._g.Illisible("nft")
+    monkeypatch.setattr(c.gb, "_lire_expirations", panne)
+    r = _unban(c, "198.51.100.7")
+    assert r.status_code == 503 and r.json() == {"detail": {"motif": "etat"}}
+    assert "unban" not in c.faux.verbes()
+
+
+def test_expirations_nft_json_reel_v4_v6():
+    from api import garde_ban as gb
+    v4 = {"nftables": [{"metainfo": {"version": "1.1.3", "json_schema_version": 1}},
+                       {"set": {"family": "inet", "name": "waf_ban", "table": "secubox", "type": "ipv4_addr",
+                                "handle": 7, "flags": ["timeout"], "elem": [
+                                    {"elem": {"val": "198.51.100.7", "timeout": 14400, "expires": 14023}},
+                                    "203.0.113.1"]}}]}
+    assert gb.expirations(v4, "waf_ban") == {"198.51.100.7": 14023, "203.0.113.1": None}
+    v6 = {"nftables": [{"metainfo": {}}, {"set": {"family": "inet", "name": "waf_ban6", "table": "secubox",
+                                                  "type": "ipv6_addr", "flags": ["timeout"], "elem": [
+                                                      {"elem": {"val": "2a01:e0a:1:2::7", "timeout": 3600,
+                                                                "expires": 120}}]}}]}
+    assert gb.expirations(v6, "waf_ban6") == {"2a01:e0a:1:2::7": 120}
+    for mauvais in ({"nftables": []}, {"nftables": [{"set": {"name": "waf_ban6", "elem": []}}]},
+                    {"nftables": [{"set": {"name": "waf_ban", "elem": [{"elem": {"val": "1.2.3.4", "timeout": 60,
+                                                                                    "expires": "1h"}}]}}]}):
+        with pytest.raises(gb._g.Illisible):
+            gb.expirations(mauvais, "waf_ban")

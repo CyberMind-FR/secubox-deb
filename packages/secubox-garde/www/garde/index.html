@@ -14,7 +14,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-79nPwHXLQlI/M+lk1QbCjxeivdu4Xmlls/yze/LwclA='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-h8hJs2OYtXG8w4FN/0Hpg+lhECOJb5RHS9rlkeBmBQo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Garde</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -160,6 +160,7 @@
     <div class="pan">
       <h3>En cours <em>chaque décision est écrite au journal d'audit</em></h3>
       <div class="decisions" id="decisions"><p class="vide">Chargement…</p></div>
+      <div class="liste" id="demandes" hidden></div>
     </div>
   </section>
 
@@ -302,6 +303,10 @@
     var box=el('decisions');vider(box);
     if(!(e.actives||[]).length)box.appendChild(h('p',{class:'vide'},'Aucune mesure en cours.'));
     (e.actives||[]).forEach(function(d){box.appendChild(carte(d));});
+    var dm=el('demandes'),ACT={liberer:'Libérer',rouvrir:'Rouvrir',debannir:'Débannir',tester:'Essai'};vider(dm);
+    (e.demandes||[]).forEach(function(x){var l=h('div');l.appendChild(h('span',{class:'pill '+(x.etat==='en_attente'?'p-cyan':x.etat==='faite'?'p-vert':'p-orange')},x.etat==='en_attente'?'en cours':x.etat));
+      l.appendChild(h('span',null,(ACT[x.action]||x.action)+' '+x.cible+(x.resultat?' : '+x.resultat:'')));dm.appendChild(l);});
+    dm.hidden=!dm.firstChild;
     hauteur();
   }
   function erreur(e){if(e&&e.session){el('session').hidden=false;}else message('Lecture impossible : '+(e&&e.message),'erreur');}

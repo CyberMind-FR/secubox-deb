@@ -241,6 +241,46 @@ def garde_ban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps
 
 # ── `POST /garde/unban` : levée d'un ban posé par la garde (page /garde/ « Débannir ») ──
 PLAFOND_UNBAN_HEURE = 60
+#: Marge tolérée entre l'échéance restante de l'élément nft et la `fin` notée par la garde (horloges, arrondis).
+MARGE_ETRANGER_S = 120
+
+
+def expirations(doc: Any, ensemble: str) -> Dict[str, Any]:
+    """`nft -j list set` → {adresse: secondes restantes, ou None (élément sans échéance : ban permanent)}.
+    Lève `Illisible` si l'ensemble manque ou si une échéance n'est pas un entier."""
+    try:
+        jeux = [b["set"] for b in doc["nftables"] if isinstance(b, dict) and "set" in b]
+    except (KeyError, TypeError):
+        raise _g.Illisible("nft : réponse illisible") from None
+    if len(jeux) != 1 or not isinstance(jeux[0], dict) or jeux[0].get("name") != ensemble:
+        raise _g.Illisible(f"nft : ensemble {ensemble} absent")
+    out: Dict[str, Any] = {}
+    for elem in jeux[0].get("elem", []) or []:
+        if isinstance(elem, str):
+            out[elem] = None
+            continue
+        e = elem.get("elem") if isinstance(elem, dict) else None
+        if not isinstance(e, dict) or not isinstance(e.get("val"), str):
+            raise _g.Illisible("nft : élément illisible")
+        exp = e.get("expires")
+        if exp is None and "timeout" not in e:
+            out[e["val"]] = None
+        elif isinstance(exp, int) and not isinstance(exp, bool) and exp >= 0:
+            out[e["val"]] = exp
+        else:
+            raise _g.Illisible("nft : échéance illisible")
+    return out
+
+
+def _lire_expirations(ensemble: str) -> Dict[str, Any]:
+    r, panne = _g._lancer(_g._SUDO + (_g.NFT_LISTE_WAF_BAN if ensemble == "waf_ban" else _g.NFT_LISTE_WAF_BAN6))
+    if r is None or r.returncode != 0 or not r.stdout:
+        raise _g.Illisible(f"nft : {panne or r.returncode}")
+    try:
+        doc = json.loads(r.stdout)
+    except ValueError:
+        raise _g.Illisible("nft : réponse illisible") from None
+    return expirations(doc, ensemble)
 
 
 class GesteGardeUnban(BaseModel):
@@ -266,7 +306,9 @@ def _unbans_heure(entrees: List[dict], maintenant: int) -> int:
 def garde_unban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
     """Seulement une adresse qui a un ban de la garde actif dans garde-ban.jsonl (409 `pas_garde` sinon) : un ban
     étranger n'est jamais levé. Application par `wafctl unban` (chemin du retour arrière de l'ai-ban), journal
-    `annule` + `geste: unban`, audit `garde-unban` avant le geste. Plafond propre : 60/h."""
+    `annule` + `geste: unban`, audit `garde-unban` avant le geste. Plafond propre : 60/h. Avant wafctl, l'élément
+    vivant est relu : absent → 200 `deja_leve` sans wafctl ; échéance restante (ou permanente) au-delà de la `fin` de
+    la garde + 120 s → 409 `etranger` (ban repris par un autre) ; ensemble ou échéance illisible → 503 `etat`."""
     geste: GesteGardeUnban = _g._valider(GesteGardeUnban, corps)
     try:
         cible = adresse_publique(geste.cible)
@@ -284,6 +326,26 @@ def garde_unban(user: dict = Depends(require_garde), corps: bytes = Depends(_cor
         if _unbans_heure(entrees, maintenant) >= PLAFOND_UNBAN_HEURE:
             raise _refus(409, "plafond", geste.cible, user)
         resume = f"ids {','.join(ids)} cible {geste.cible}"
+        # Un seul élément nft par adresse : si un autre (sbxwaf, ai-ban, administrateur) l'a repris avec une échéance
+        # plus longue, le retirer lèverait SON ban. Lecture stricte : illisible = 503, jamais « libre ».
+        try:
+            restes = _lire_expirations("waf_ban6" if cible.version == 6 else "waf_ban")
+        except Exception as e:  # noqa: BLE001
+            log.warning("garde-unban : ensemble illisible : %s", e)
+            raise _refus(503, "etat", geste.cible, user) from None
+        fin_garde = max(e["fin"] for e in entrees if e["type"] == "ban" and e["id"] in ids)
+        if geste.cible not in restes:
+            try:
+                for i in ids:
+                    _ecrire_journal({"ts": _g._horodatage(), "at": maintenant, "type": "annule", "id": i,
+                                     "cible": geste.cible, "geste": "unban", "cause": "garde",
+                                     "note": "déjà levé"})
+            except OSError:
+                raise _refus(503, "journal", geste.cible, user) from None
+            return {"cible": geste.cible, "ids": ids, "etat": "deja_leve"}
+        reste = restes[geste.cible]
+        if reste is None or reste > fin_garde - maintenant + MARGE_ETRANGER_S:
+            raise _refus(409, "etranger", geste.cible, user)
         try:
             _auditer("garde-unban", resume, user)
         except Exception:  # noqa: BLE001 — lever un ban sans trace serait pire que ne pas le lever

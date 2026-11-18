@@ -174,12 +174,12 @@ def test_tester(env):
 
 # ── Exécution des demandes par le passage ──
 class Effets:
-    def __init__(self, ok=True):
-        self.appels, self.ok = [], ok
+    def __init__(self, ok=True, motif="x"):
+        self.appels, self.ok, self.motif = [], ok, motif
 
     def _r(self, *a):
         self.appels.append(a)
-        return {"ok": self.ok, "motif": "" if self.ok else "x"}
+        return {"ok": self.ok, "motif": "" if self.ok else self.motif}
 
     def liberer(self, ip, mac=None, motif=""):
         return self._r("liberer", ip)
@@ -229,3 +229,14 @@ def test_passage_demande_debannir_echec_garde_la_decision(env):
     assert demandes.executer(db, Effets(ok=False), Notifs(), env.now) == {"faites": 0, "echecs": 1}
     assert db.execute("SELECT etat FROM decisions WHERE id='d3'").fetchone()[0] == "active"
     assert db.execute("SELECT etat FROM demandes").fetchone()[0] == "echec"
+
+
+def test_passage_debannir_ban_repris_par_un_autre_final(env):
+    _client().post("/api/v1/garde/debannir", json={"ip": "203.0.113.7"})
+    db = base.ouvrir(env.db)
+    assert demandes.executer(db, Effets(ok=False, motif="409 etranger"), Notifs(), env.now) == {"faites": 1, "echecs": 0}
+    assert db.execute("SELECT etat, leve_par FROM decisions WHERE id='d3'").fetchone() == ("levee", "autre")
+    assert db.execute("SELECT etat, resultat FROM demandes").fetchone() == ("faite", "ban repris par un autre mécanisme")
+    assert demandes.executer(db, Effets(), Notifs(), env.now + 60) == {"faites": 0, "echecs": 0}     # aucun nouvel essai
+    d = _client().get("/api/v1/garde/etat").json()["demandes"]
+    assert d[0]["resultat"] == "ban repris par un autre mécanisme"

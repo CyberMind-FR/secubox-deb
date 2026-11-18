@@ -162,7 +162,7 @@ Compte de service `garde` (portée `garde-ban`, mêmes règles de jeton que `ai-
 | Route | Corps | Réponse |
 |---|---|---|
 | `POST /garde/ban` | `{"geste": "ban", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…2592000, "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` ; 409 `{"detail": {"motif"}}` : `forme`, `privee`, `deja_actif`, `plafond`, ou motif de `wafctl` |
-| `POST /garde/unban` | `{"geste": "unban", "cible": "<ip>"}` (champs en trop : 422) | 200 `{cible, ids, etat: "annule"}` ; 409 `pas_garde` (aucun ban de la garde actif pour cette adresse dans `garde-ban.jsonl` : ban étranger, inconnu, échu ou déjà levé — jamais de wafctl), `plafond` (60/h), ou motif de `wafctl` |
+| `POST /garde/unban` | `{"geste": "unban", "cible": "<ip>"}` (champs en trop : 422) | 200 `{cible, ids, etat: "annule"}` ; 200 `etat: "deja_leve"` si l'élément n'est plus dans `waf_ban`/`waf_ban6` (journal `note: déjà levé`, sans wafctl) ; 409 `etranger` si l'échéance restante de l'élément (ou un élément permanent) dépasse la `fin` notée par la garde de plus de 120 s — ban repris par un autre, jamais levé ; 503 `etat` si l'ensemble ou une échéance est illisible ; 409 `pas_garde` (aucun ban de la garde actif pour cette adresse dans `garde-ban.jsonl` : ban étranger, inconnu, échu ou déjà levé — jamais de wafctl), `plafond` (60/h), ou motif de `wafctl` |
 
 Plafonds 120/h et 1000/j (journal `/var/lib/secubox/waf/garde-ban.jsonl`) ; application par `wafctl ban`
 (`waf_ban`/`waf_ban6` avec timeout), audit `garde-ban-demande` puis `garde-ban`. Le champ `audit` de la réponse

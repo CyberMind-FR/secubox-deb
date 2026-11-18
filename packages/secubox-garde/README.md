@@ -44,8 +44,9 @@ action est donc une **demande**, exécutée par le passage suivant (≤ 60 s) ; 
   demande en attente par (action, cible). `garde/demandes.py::executer`, appelé par `secubox-garde-passage` avant les
   décisions : libérer/rouvrir = levée de chaque adresse par `effets` (`leve_par = utilisateur`, état `levee` ; levée
   incomplète → `levee_en_cours`, reprise par le moteur) ; débannir = `effets.debannir` (`POST /garde/unban` du WAF,
-  même jeton que le ban ; **route à créer dans secubox-waf-ng**, qui ne lèvera qu'un ban de `garde-ban.jsonl` —
-  d'ici là la demande finit `echec`) puis décision `levee` ; tester = mise en file d'une notification d'essai. Aucun verrou ad-guard
+  même jeton que le ban ; il ne lève qu'un ban de la garde encore tenu par elle) puis décision `levee` ; refus `409 etranger` (le WAF a vu l'adresse
+  reprise plus longtemps par un autre mécanisme) = issue FINALE : décision `levee` (`leve_par = autre`), demande
+  `faite` « ban repris par un autre mécanisme », aucun nouvel essai, affichée sur la page ; tester = mise en file d'une notification d'essai. Aucun verrou ad-guard
   n'est pris par l'API.
 - Libérer / rouvrir enregistrent dès la demande `liberations(cle, signe, maintenant + 7 j)` : pas de nouvelle mesure
   pour ce signe sur cet appareil pendant 7 jours. L'exemption est posée au moment de la DEMANDE et reste acquise même si

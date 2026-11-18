@@ -74,6 +74,12 @@ def executer(db: sqlite3.Connection, effets, notifs, maintenant: int) -> Dict[st
                                [(i,) for i in ids])
                 _clore(db, did, "faite", "débanni", maintenant)
                 n["faites"] += 1
+            elif str(res.get("motif") or "").endswith("etranger"):
+                # Un autre mécanisme (sbxwaf, ai-ban, administrateur) a repris l'adresse plus longtemps : le WAF refuse
+                # de lever SON ban. Issue finale : la décision de la garde est close, aucun nouvel essai.
+                db.executemany("UPDATE decisions SET etat='levee', leve_par='autre' WHERE id=?", [(i,) for i in ids])
+                _clore(db, did, "faite", "ban repris par un autre mécanisme", maintenant)
+                n["faites"] += 1
             else:
                 _clore(db, did, "echec", str(res.get("motif") or "échec"), maintenant)
                 n["echecs"] += 1

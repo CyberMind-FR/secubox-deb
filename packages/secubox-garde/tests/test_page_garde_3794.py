@@ -81,6 +81,8 @@ def test_installation():
 sync_api = pytest.importorskip("playwright.sync_api")
 HOSTILE = "<img src=x onerror=window.xss=1>"
 ETAT = {"automatique": True, "quarantaines_max": 3, "releve": 1794980000, "session_requise": False,
+        "demandes": [{"id": 1, "action": "debannir", "cible": "203.0.113.8", "etat": "faite",
+                      "resultat": "ban repris par un autre mécanisme", "cree": 1794979000}],
         "tuiles": {"isoles": 1, "evasions": 1, "bannis": 2, "recidivistes": 1, "notifs_24h": {"sms": 2, "courriel": 3}, "en_attente": 1},
         "actives": [
             {"id": "d1", "menace": "infection", "nom": HOSTILE, "mac": "02:00:5e:00:00:95", "adresses": ["192.0.2.95", "2001:db8::95"],
@@ -253,3 +255,8 @@ def test_aucun_debordement_avec_le_vrai_menu_lateral(largeur):
     m, erreurs = res[1:]
     trop = {o: v for o, v in m.items() if v[0] > v[1]}
     assert not trop and not erreurs, (trop, erreurs)
+
+
+def test_resultat_des_demandes_affiche():
+    (t,), erreurs, _p = _page(lambda pg: (pg.inner_text("#demandes"),))
+    assert "Débannir 203.0.113.8 : ban repris par un autre mécanisme" in t and not erreurs
