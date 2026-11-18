@@ -1,3 +1,16 @@
+secubox-ai (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3721) : corrélateur d'incidents déterministe (veille/regles.py,
+    veille/correlation.py), passe de 60 s sur une fenêtre de 30 min. Règles
+    multi_source, multi_service, bloc_mixte, retour_apres_ban,
+    campagne_etendue, leurre_puis_attaque, garde_et_waf. Gravité = maximum des
+    preuves (+1 cran pour leurre_puis_attaque), sans score de confiance ;
+    incident étendu, jamais dupliqué ; calme après 6 h, clos après 7 j.
+    LAN (« local »), autotest du WAF et plages de documentation jamais
+    corrélés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 20:00:00 +0000
+
 secubox-ai (0.3.0-1~trixie1) trixie; urgency=medium
 
   * Veille V2 (#3720) : collecteur de gk2 (veille/client.py, veille/sources/,

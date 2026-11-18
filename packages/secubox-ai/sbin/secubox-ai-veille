@@ -19,13 +19,14 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, "/usr/lib/secubox/ai")
 
-from veille import base, collecte, retention  # noqa: E402
+from veille import base, collecte, correlation, retention  # noqa: E402
 from veille.client import ClientGk2, routes  # noqa: E402
 from veille.sources import toutes  # noqa: E402
 from veille.service import Boucle, Veille  # noqa: E402
 
 DB = "/var/lib/secubox/ai/veille.db"
 CONF = "/etc/secubox/ai.toml"
+PAS_CORRELATION_S = 60       # V2 § 8 : fenêtre glissante de 30 min, une passe par minute
 PAS_COLLECTE_S = 10           # chaque source garde son propre intervalle (collecte.passe ne lit que les sources dues)
 log = logging.getLogger("secubox-ai-veille")
 
@@ -62,7 +63,12 @@ async def _main():
         res = await veille.sql(retention.purger, _maintenant())
         logging.getLogger("secubox-ai-veille").info("purge : %s", res)
 
-    boucles = [Boucle("retention", 86400, purge)]
+    async def correler():
+        touches = await veille.sql(correlation.correler, _maintenant())
+        if touches:
+            log.info("corrélation : %d incident(s) créé(s) ou étendu(s)", len(touches))
+
+    boucles = [Boucle("retention", 86400, purge), Boucle("correlation", PAS_CORRELATION_S, correler)]
     client = _client()
     if client is not None:
         sources = toutes()
