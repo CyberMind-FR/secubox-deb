@@ -127,7 +127,7 @@ def _base_dns(p):
 
 def test_requetes_dns_shm_en_lecture_seule(tmp_path, monkeypatch, caplog):
     p = tmp_path / "dnstv.db"
-    cx = _base_dns(p)
+    _base_dns(p).close()      # fermeture : WAL replié dans la base (immutable ignore le -wal)
     vrai = sqlite3.connect
     appels = []
 
@@ -139,7 +139,6 @@ def test_requetes_dns_shm_en_lecture_seule(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(sources.sqlite3, "connect", faux)
     with caplog.at_level("WARNING"):
         r = sources.lire_requetes_dns(0, p, noms_doh={"dns.google"})
-    cx.close()
     assert [x["client_ip"] for x in r] == ["192.168.1.5", "192.168.1.6"]
     assert len(appels) == 2 and "immutable=1" in appels[1]
     assert sum("immutable" in m for m in caplog.messages) == 1

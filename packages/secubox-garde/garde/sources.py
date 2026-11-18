@@ -11,7 +11,8 @@ domaine, qtype, decision, categorie) de `/var/lib/secubox/ad-guard/dnstv/dnstv.d
 ad-guard. Droits constatés (gk7) : base, `-wal` et `-shm` en 0640 secubox:secubox, dossiers 0755 ;
 `secubox-garde` est du groupe `secubox` (lecture, pas d'écriture sur `-shm`). `lire_requetes_dns`
 ouvre en `mode=ro` puis, si SQLite refuse (WAL), reprend une fois en `mode=ro&immutable=1` sur la
-même requête bornée, avec un avertissement ; jamais d'écriture ; deux échecs : [].
+même requête bornée, avec un avertissement ; jamais d'écriture ; deux échecs : []. Réserve : immutable ignore le `-wal`, le repli ne voit que
+les lignes déjà repliées dans la base (retard borné par le point de contrôle d'ad-guard).
 Positions : `positions` est mise à jour après la lecture, donc au plus une fois (un signal perdu
 si le moteur tombe entre les deux ; jamais de doublon).
 Liste des résolveurs DoH : `/usr/share/secubox/ad-guard/lists/resolveurs-doh.txt`.
