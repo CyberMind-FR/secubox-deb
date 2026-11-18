@@ -14,6 +14,10 @@
   secubox-adguard-tv conntrack-dump  lot 4 (#3374) : lignes de /proc/net/nf_conntrack dont la source est un appareil du périmètre (lecture seule)
   secubox-adguard-tv dpi-cibles       lot 4 : cibles de sbxdpi (tri par appareil), reconstruites par root depuis l'état revalidé
   secubox-adguard-tv ndpid-arreter    lot 4 : garde de charge, arrête nDPId (reprise manuelle : ndpid-reprendre)
+  secubox-adguard-tv quarantaine poser <ip> <mac|-> <fin_epoch> | quarantaine lever <ip|mac>
+  secubox-adguard-tv evasion poser <ip> <mac|-> <nom>[,<nom>…] | evasion lever <ip|mac>
+                                      #3794 (utilisateur secubox-garde) : quarantaine DNS d'un appareil (tout nom -> la box, sauf
+                                      les indispensables ; TV Privacy gardé) ou fermeture des noms d'évasion ; chaque argument revalidé
   secubox-adguard-tv seuils           #3393 : seuils de l'autolearn (JSON sur l'entrée standard, revalidé) écrits EN PLACE dans
                                       /etc/secubox/toolbox/filters.json, sous verrou, audités
 
@@ -41,7 +45,7 @@ from pathlib import Path
 for _p in ("/usr/lib/secubox/ad-guard", str(Path(__file__).resolve().parents[1])):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from api import dnstv, dnstv_regles, dnstv_tri  # noqa: E402
+from api import dnstv, dnstv_dnsbox, dnstv_regles, dnstv_tri  # noqa: E402
 import secubox_unbound as _unbound  # noqa: E402   # D4 (#2050) : pose, vérification, rechargement — un seul code pour toutes les vues Unbound
 
 CHECKCONF = os.environ.get("SECUBOX_ADGUARD_TV_CHECKCONF", "unbound-checkconf")
@@ -157,6 +161,7 @@ def instantane(etat: dict, actives: dict, regles: dict | None = None) -> dict:
     return {"actif": etat["actif"], "auto_essai": bool(etat.get("auto_essai")), "ajout_auto": bool(etat.get("ajout_auto")), "mode_defaut": etat.get("mode_defaut", "auto"),
             "modes": sorted([c["ip"], c["mode"], c["nom"], c.get("puits", True)] for c in etat["clients"]), "vues": vues, "etats": regles or {},
             "autorisations": etat.get("autorisations", {}),
+            "garde": garde_active(etat),
             "ignores": sorted(etat.get("ignores", []))}
 
 
@@ -238,7 +243,7 @@ def appliquer() -> int:
     voulu = instantane(etat, actives, etats_regles())
     avant = lire_instantane()
     ecrire_verifier(dnstv.rendre_unbound(etat, table, actives, tri_autorises=_tri_autorises(),
-                                         tri_ouvertures=_tri_ouvertures()))
+                                         tri_ouvertures=_tri_ouvertures(), adresses_box=_adresses_box_si_garde(etat)))
     recharger()
     ecrire_instantane(voulu)
     audit_appareils(avant, etat)                                         # `apply` trace AUSSI les changements de périmètre (revue #1959)
@@ -320,13 +325,14 @@ def regles_appliquer() -> int:
     voulu = instantane(etat, actives, etats_regles())
     avant = lire_instantane()
     ecrire_verifier(dnstv.rendre_unbound(etat, table, actives, tri_autorises=_tri_autorises(),
-                                         tri_ouvertures=_tri_ouvertures()))
+                                         tri_ouvertures=_tri_ouvertures(), adresses_box=_adresses_box_si_garde(etat)))
     if etat["actif"]:
         _contournement_au_mieux(etat)                                    # lot 4 : modes, pauses et suspensions suivis à chaque passage
     else:
         contournement_retirer()
     if (avant is None or avant.get("actif") != voulu["actif"] or avant.get("modes") != voulu["modes"]
-            or set(avant.get("vues", {})) != set(voulu["vues"]) or avant.get("autorisations", {}) != voulu["autorisations"]):
+            or set(avant.get("vues", {})) != set(voulu["vues"]) or avant.get("autorisations", {}) != voulu["autorisations"]
+            or avant.get("garde") != voulu["garde"]):
         recharger()
         ecrire_instantane(voulu)
         audit_appareils(avant, etat)
@@ -1088,7 +1094,134 @@ def tri_appliquer(dossier: Path = dnstv_tri.DEMANDES) -> int:
     return 0
 
 
+# ── garde (#3794) : quarantaine et fermeture d'évasion, demandées par secubox-garde ──
+RE_EPOCH = re.compile(r"[0-9]{1,12}")
+
+
+def garde_active(etat: dict, maintenant: int | None = None) -> dict:
+    t = int(time.time()) if maintenant is None else maintenant
+    return {"quarantaines": sorted(q["ip"] for q in etat.get("quarantaines", []) if q["fin"] > t),
+            "evasions": sorted([e["ip"], e["noms"]] for e in etat.get("evasions", []))}
+
+
+def _adresses_box() -> tuple:
+    """(IPv4, IPv6) de la box sur le LAN (interface de la route par défaut), lues par root lui-même ; IPv6 seulement durable."""
+    def sortie(*args: str) -> str:
+        try:
+            return subprocess.run([IP_CMD, *args], capture_output=True, text=True, timeout=10).stdout or ""
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    fiche = dnstv_dnsbox.dns_box(sortie("-6", "-o", "addr", "show", "scope", "global"), sortie("-4", "-o", "addr", "show", "scope", "global"),
+                                 sortie("route", "show", "default"), "")
+    ip4 = next((a["adresse"] for a in fiche["adresses"] if a["famille"] == 4), None)
+    ip6 = next((a["adresse"] for a in fiche["adresses"] if a["famille"] == 6 and a["type"] in ("stable", "slaac_mac")), None)
+    return ip4, ip6
+
+
+def _adresses_box_si_garde(etat: dict) -> tuple | None:
+    return _adresses_box() if garde_active(etat)["quarantaines"] else None
+
+
+def _ecrire_etat_root(etat: dict) -> None:
+    """etat.json est dans l'arbre de `secubox` : root l'écrit par descripteur (dossier ouvert sans suivre de lien, fichier temporaire
+    exclusif), le rend à son propriétaire et le remplace atomiquement. L'état est revalidé avant toute écriture."""
+    etat = dnstv.valider_etat(etat)
+    donnees = json.dumps(etat, indent=2).encode()
+    dfd = os.open(dnstv.DOSSIER_ETAT, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        st = os.fstat(dfd)
+        try:
+            mode = stat.S_IMODE(os.stat("etat.json", dir_fd=dfd, follow_symlinks=False).st_mode) & 0o664
+        except FileNotFoundError:
+            mode = 0o644
+        tmp = f".etat.garde.{os.getpid()}"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dfd)
+        try:
+            with os.fdopen(fd, "wb") as h:
+                h.write(donnees)
+                h.flush()
+                os.fchown(h.fileno(), st.st_uid, st.st_gid)
+                os.fchmod(h.fileno(), mode or 0o644)
+            os.replace(tmp, "etat.json", src_dir_fd=dfd, dst_dir_fd=dfd)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp, dir_fd=dfd)
+            raise
+    finally:
+        os.close(dfd)
+
+
+def _garde_refus(motif: str) -> int:
+    print(json.dumps({"ok": False, "erreur": motif}))
+    return 1
+
+
+def garde(argv: list[str]) -> int:
+    """`quarantaine|evasion poser|lever …` : chaque argument est revalidé ici (le sudoers n'ouvre que ces deux verbes à secubox-garde)."""
+    verbe, geste, args = argv[1], argv[2] if len(argv) > 2 else "", argv[3:]
+    cle = "quarantaines" if verbe == "quarantaine" else "evasions"
+    if not ((geste == "poser" and len(args) == 3) or (geste == "lever" and len(args) == 1)):
+        return _garde_refus("usage : poser <ip> <mac|-> <valeur> | lever <ip|mac>")
+    maintenant = int(time.time())
+    etat, _ = charger()
+    avant = json.loads(json.dumps(etat))
+    if verbe == "quarantaine":                                           # les échues ne tiennent plus de place
+        etat["quarantaines"] = [q for q in etat.get("quarantaines", []) if q["fin"] > maintenant]
+    liste = list(etat.get(cle, []))
+    try:
+        if geste == "lever":
+            cible = args[0].lower()
+            if dnstv.MAC_RE.match(cible):
+                garde_ = [e for e in liste if e["mac"] != cible]
+            else:
+                ip = dnstv._ip(cible)
+                garde_ = [e for e in liste if e["ip"] != ip]
+            retires = len(liste) - len(garde_)
+            liste = garde_
+            detail = f"{args[0][:64]} retires={retires}"
+        else:
+            ip, mac = dnstv._ip(args[0]), dnstv._mac_garde(args[1])
+            entree: dict = {"ip": ip, "mac": mac}
+            if verbe == "quarantaine":
+                if not RE_EPOCH.fullmatch(args[2]) or int(args[2]) <= maintenant:
+                    return _garde_refus("échéance invalide (secondes epoch, dans le futur)")
+                entree["fin"] = int(args[2])
+                if _adresses_box() == (None, None):
+                    return _garde_refus("adresse de la box sur le LAN inconnue : quarantaine refusée (jamais de redirection vers nulle part)")
+            else:
+                noms = args[2].split(",")
+                if any(dnstv.valider_domaine(n) != n for n in noms):
+                    return _garde_refus("nom de domaine invalide")
+                entree["noms"] = noms
+            liste = [e for e in liste if e["ip"] != ip] + [entree]
+            detail = f"{ip} {mac or '-'} {args[2][:120]}"
+        etat[cle] = liste
+        etat = dnstv.valider_etat(etat)
+    except dnstv.ErreurTV as e:
+        return _garde_refus(str(e))
+    _ecrire_etat_root(etat)
+    try:
+        etat, table, actives = charger_avec_regles()
+        ecrire_verifier(dnstv.rendre_unbound(etat, table, actives, tri_autorises=_tri_autorises(),
+                                             tri_ouvertures=_tri_ouvertures(), adresses_box=_adresses_box_si_garde(etat)))
+        recharger()
+    except SystemExit as e:
+        _ecrire_etat_root(avant)                                         # rendu refusé : l'état d'avant est remis, rien ne reste à moitié
+        audit(f"{verbe}-{geste}-refuse", f"{detail} {e}"[:200])
+        return _garde_refus(str(e)[:200])
+    ecrire_instantane(instantane(etat, actives, etats_regles()))
+    audit(f"{verbe}-{geste}", detail)
+    print(json.dumps({"ok": True, "verbe": verbe, "geste": geste, cle: etat.get(cle, [])}))
+    return 0
+
+
 def main(argv: list[str], entree: str | None = None) -> int:
+    if len(argv) >= 2 and argv[1] in ("quarantaine", "evasion"):
+        if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
+            print("secubox-adguard-tv : root requis (sudo)", file=sys.stderr)
+            return 3
+        with verrou_controleur():
+            return garde(argv)
     if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump", "audit-classification",
                                          "audit-protection", "conntrack-dump", "dpi-cibles", "ndpid-arreter", "ndpid-reprendre", "seuils",
                                          "tri-appliquer"):

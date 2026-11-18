@@ -358,6 +358,7 @@ def valider_etat(brut) -> dict:
             etat_valide["tri_netflix"] = dnstv_tri.valider(brut["tri_netflix"])
         except dnstv_tri.ErreurTri as e:
             raise ErreurTV(str(e)) from None
+    etat_valide.update(valider_garde(brut))                       # #3794 : écrit seulement s'il existe (anciens états inchangés)
     return etat_valide
 
 
@@ -531,9 +532,112 @@ def vues_protect(etat: dict, regles_actives: Optional[Dict[str, List[str]]] = No
     return out
 
 
+# ── garde (#3794) : quarantaine et fermeture d'évasion par appareil ─────────────
+GARDE_MAX = 16                                                    # au plus 16 quarantaines et 16 évasions dans l'état
+EVASION_NOMS_MAX = 32
+# Noms qui restent résolus normalement pendant une quarantaine : la box elle-même, l'heure (sans heure, TLS échoue) et la détection de
+# portail captif (un appareil qui la voit échouer coupe parfois son Wi-Fi et perd aussi la page d'avertissement de la box).
+INDISPENSABLES = ("secubox.in", "ntp.org", "pool.ntp.org", "time.android.com", "time.apple.com", "connectivitycheck.gstatic.com")
+RE_ZONE_LIGNE = re.compile(r'^    local-zone: "(?P<nom>[^"]+)" (?P<action>[a-z_]+)$')
+
+
+def _mac_garde(brut) -> str:
+    mac = "" if brut in (None, "", "-") else brut
+    if mac and (not isinstance(mac, str) or not MAC_RE.match(mac) or mac == "00:00:00:00:00:00"):
+        raise ErreurTV("adresse MAC invalide (minuscules, a:b:c:d:e:f)")
+    return mac
+
+
+def valider_garde(brut: dict) -> Dict[str, list]:
+    """`quarantaines: [{ip, mac, fin}]`, `evasions: [{ip, mac, noms}]` : écrits par root (verbes du contrôleur), revalidés à chaque lecture."""
+    out: Dict[str, list] = {}
+    for cle in ("quarantaines", "evasions"):
+        if cle not in brut:
+            continue
+        liste = brut[cle]
+        if not isinstance(liste, list) or len(liste) > GARDE_MAX:
+            raise ErreurTV(f"{cle} : liste de {GARDE_MAX} entrées au plus")
+        vus, entrees = set(), []
+        for e in liste:
+            if not isinstance(e, dict):
+                raise ErreurTV(f"{cle} : entrée invalide")
+            ip = _ip(e.get("ip", ""))
+            if ip in vus:
+                raise ErreurTV(f"{cle} : adresse en double")
+            vus.add(ip)
+            entree = {"ip": ip, "mac": _mac_garde(e.get("mac", ""))}
+            if cle == "quarantaines":
+                fin = e.get("fin")
+                if not isinstance(fin, int) or isinstance(fin, bool) or fin <= 0:
+                    raise ErreurTV("quarantaines : échéance invalide")
+                entree["fin"] = fin
+            else:
+                noms = e.get("noms")
+                if not isinstance(noms, list) or not noms or len(noms) > EVASION_NOMS_MAX:
+                    raise ErreurTV(f"evasions : 1 à {EVASION_NOMS_MAX} noms")
+                propres = []
+                for n in noms:
+                    if not isinstance(n, str) or valider_domaine(n) != n:
+                        raise ErreurTV("evasions : nom de domaine invalide")
+                    if n not in propres:
+                        propres.append(n)
+                entree["noms"] = propres
+            entrees.append(entree)
+        out[cle] = entrees
+    return out
+
+
+def _vue_garde_nom(ip: str) -> str:
+    """Suffixe de vue tiré de l'adresse binaire (jamais tronqué, jamais deux adresses sur la même vue)."""
+    a = ipaddress.ip_address(ip)
+    return f"{a.version}-{a.packed.hex()}"
+
+
+def _vues_garde(etat: dict, acv: Dict[str, Tuple[str, str]], overrides: List[Tuple[str, str]], vues: Dict[str, List[str]],
+                adresses_box: Optional[Tuple[Optional[str], Optional[str]]], maintenant: int) -> None:
+    """Ajoute au rendu les vues de la garde. Rien n'est mémorisé à part : lever une mesure = la retirer de l'état, le rendu redevient
+    exactement celui d'avant. Une quarantaine échue n'est plus rendue (la garde la retire de l'état à son passage)."""
+    evasions = {e["ip"]: e["noms"] for e in etat.get("evasions", [])}
+    quarantaines = [q["ip"] for q in etat.get("quarantaines", []) if q["fin"] > maintenant]
+    for ip in quarantaines + [i for i in evasions if i not in quarantaines]:
+        if not IP_SURE_RE.fullmatch(ip):
+            raise ErreurTV("adresse IP invalide")
+        hote, vue_avant = acv.get(ip, ("/128" if ":" in ip else "/32", ""))
+        corps_avant = vues.get(vue_avant, [])
+        refus = evasions.get(ip, [])
+        if ip in quarantaines:
+            # #3674 : les blocages TV Privacy (always_nxdomain) de sa vue d'origine sont GARDÉS ; tout le reste pointe vers la box.
+            zones: Dict[str, str] = {f"{n}.": "transparent" for n in INDISPENSABLES}
+            for ligne in corps_avant:
+                m = RE_ZONE_LIGNE.match(ligne)
+                if m and m["action"] == "always_nxdomain" and m["nom"] != ".":
+                    zones[m["nom"]] = "always_nxdomain"
+            for n in refus:
+                zones.setdefault(f"{n}.", "always_refuse")
+            ip4, ip6 = adresses_box or (None, None)
+            corps = ['    local-zone: "." redirect' if (ip4 or ip6) else '    local-zone: "." always_refuse']   # adresse de la box inconnue : rien ne résout, jamais une redirection vers nulle part
+            if ip4:
+                corps.append(f'    local-data: ". A {_ip(ip4)}"')
+            if ip6:
+                corps.append(f'    local-data: ". AAAA {_ip(ip6)}"')
+            corps += [f'    local-zone: "{n}" {a}' for n, a in sorted(zones.items())]
+            nom_vue = f"sbx-quarantaine-{_vue_garde_nom(ip)}"
+            overrides[:] = [o for o in overrides if o[0] != ip]    # une autorisation ne perce pas la quarantaine
+        else:
+            # Évasion : la vue d'origine (copie propre à l'appareil, la vue commune n'est pas touchée) + un refus par nom fermé.
+            corps = list(corps_avant) if corps_avant else ["    view-first: yes"]   # hors périmètre : le puits global reste en vigueur
+            fermes = {f"{n}." for n in refus}
+            corps = [c for c in corps if not ((m := RE_ZONE_LIGNE.match(c)) and m["nom"] in fermes)]
+            corps += [f'    local-zone: "{n}." always_refuse' for n in refus]
+            nom_vue = f"sbx-evasion-{_vue_garde_nom(ip)}"
+        acv[ip] = (hote, nom_vue)
+        vues[nom_vue] = corps
+
+
 def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[Dict[str, List[str]]] = None,
                    tri_autorises: Optional[Dict[str, Dict[str, int]]] = None,
-                   tri_ouvertures: Optional[Dict[str, int]] = None) -> str:
+                   tri_ouvertures: Optional[Dict[str, int]] = None,
+                   adresses_box: Optional[Tuple[Optional[str], Optional[str]]] = None, maintenant: Optional[int] = None) -> str:
     """Drop-in Unbound du POC. Journalisation par requête + UNE VUE PAR MODE pour les appareils du périmètre.
 
     Pourquoi des vues et pas des listes globales : (1) les autres clients ne sont pas touchés ; (2) l'appareil en OBSERVE échappe au puits
@@ -548,6 +652,9 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
          "    log-queries: yes", "    log-replies: yes", "    log-local-actions: yes", "    log-tag-queryreply: yes"]
     suivis = [c for c in etat["clients"] if c["mode"] != "off"]
     protect = vues_protect(etat, regles_actives)
+    acv: Dict[str, Tuple[str, str]] = {}                          # ip -> (masque, vue) ; dict : une seule vue par adresse
+    overrides: List[Tuple[str, str]] = []                         # (ip, ligne)
+    vues: Dict[str, List[str]] = {}                               # nom de vue -> lignes (après « name: »), ordre d'émission conservé
     if etat["actif"]:
         for c in suivis:
             if not IP_SURE_RE.fullmatch(c["ip"]):
@@ -556,7 +663,7 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
             vue = f"sbx-tv-auto-{_slug(c['nom'])}" if c["mode"] == "auto" else f"sbx-tv-{c['mode']}"
             if c["mode"] == "block" and _slug(c["nom"]) in protect:
                 vue = f"sbx-tv-block-{_slug(c['nom'])}"           # exceptions de l'appareil (lot 3) : vue propre
-            L.append(f"    access-control-view: {c['ip']}{hote} {vue}")
+            acv[c["ip"]] = (hote, vue)
         # Autorisations (#1965) : un appareil en mode auto avec puits voit le puits global ; `local-zone-override` l'exempte d'un nom, SANS toucher aux autres clients
         # (mesuré sur Unbound 1.17.1 : fonctionne même dans une vue view-first, ce qu'une zone « transparent » de la vue ne fait pas).
         for c in suivis:
@@ -565,16 +672,9 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
                 for d in etat.get("autorisations", {}).get(_slug(c["nom"]), []):
                     if valider_domaine(d) != d:
                         raise ErreurTV("domaine d'autorisation invalide")
-                    L.append(f'    local-zone-override: "{d}." {c["ip"]}{hote} transparent')
-        # NB : les tampons de vue sont déclarés APRÈS « server: ».
-        L.append("view:")
-        L.append('    name: "sbx-tv-observe"')
-        L.append('    local-zone: "." transparent')
-        L.append("view:")
-        L.append('    name: "sbx-tv-block"')
-        for d in sorted(table):
-            L.append(f'    local-zone: "{d}." always_nxdomain')
-        L.append('    local-zone: "." transparent')
+                    overrides.append((c["ip"], f'    local-zone-override: "{d}." {c["ip"]}{hote} transparent'))
+        vues["sbx-tv-observe"] = ['    local-zone: "." transparent']
+        vues["sbx-tv-block"] = [f'    local-zone: "{d}." always_nxdomain' for d in sorted(table)] + ['    local-zone: "." transparent']
         # PROTECT avec exceptions (lot 3, #3374) : « autoriser » prime sur la liste livrée (zone transparente plus précise, et la zone de
         # liste du même nom est omise) ; « bloquer » ajoute un blocage. Une zone n'apparaît qu'une fois par vue.
         for nom, (aut, bl) in sorted(protect.items()):
@@ -588,30 +688,36 @@ def rendre_unbound(etat: dict, table: Dict[str, str], regles_actives: Optional[D
                 zones[d] = "always_nxdomain"
             for d in aut:
                 zones[d] = "transparent"
-            L.append("view:")
-            L.append(f'    name: "sbx-tv-block-{nom}"')
-            for d in sorted(zones):
-                L.append(f'    local-zone: "{d}." {zones[d]}')
-            L.append('    local-zone: "." transparent')
+            vues[f"sbx-tv-block-{nom}"] = [f'    local-zone: "{d}." {zones[d]}' for d in sorted(zones)] + ['    local-zone: "." transparent']
         # Mode auto : UNE vue par appareil, avec ses seules règles actives (essai ou confirmées).
         for nom in sorted({_slug(c["nom"]) for c in suivis if c["mode"] == "auto"}):
-            L.append("view:")
-            L.append(f'    name: "sbx-tv-auto-{nom}"')
+            V: List[str] = []
             puits = all(c.get("puits", True) for c in suivis if c["mode"] == "auto" and _slug(c["nom"]) == nom)
             if puits:
-                L.append("    view-first: yes")                  # le puits de production s'applique ET les règles de la vue s'y ajoutent (mesuré, Unbound 1.17.1)
+                V.append("    view-first: yes")                  # le puits de production s'applique ET les règles de la vue s'y ajoutent (mesuré, Unbound 1.17.1)
             exemptes = set(etat.get("autorisations", {}).get(nom, []))
             for d in sorted(set((regles_actives or {}).get(nom, []))):
                 if valider_domaine(d) != d:
                     raise ErreurTV("domaine de règle invalide")
                 if d in exemptes:
                     continue                                       # l'autorisation de l'administrateur l'emporte sur une règle de blocage du même nom
-                L.append(f'    local-zone: "{d}." always_nxdomain')
+                V.append(f'    local-zone: "{d}." always_nxdomain')
             # Tri Netflix par insistance (#3226) : tout serveur vidéo refusé, sauf ceux autorisés (zone plus précise, échéance).
             from . import dnstv_tri  # noqa: PLC0415
-            L.extend(dnstv_tri.zones_vue(nom, etat, tri_autorises or {}, ouvertures=tri_ouvertures or {}))
+            V.extend(dnstv_tri.zones_vue(nom, etat, tri_autorises or {}, ouvertures=tri_ouvertures or {}))
             if not puits:
-                L.append('    local-zone: "." transparent')           # puits=faux : l'ancien comportement (appareil hors du puits de production)
+                V.append('    local-zone: "." transparent')           # puits=faux : l'ancien comportement (appareil hors du puits de production)
+            vues[f"sbx-tv-auto-{nom}"] = V
+    _vues_garde(etat, acv, overrides, vues, adresses_box, int(time.time()) if maintenant is None else maintenant)
+    for ip, (hote, vue) in acv.items():
+        L.append(f"    access-control-view: {ip}{hote} {vue}")
+    L.extend(ligne for _, ligne in overrides)
+    if vues:
+        # NB : les tampons de vue sont déclarés APRÈS « server: ».
+        for nom, corps in vues.items():
+            L.append("view:")
+            L.append(f'    name: "{nom}"')
+            L.extend(corps)
     return "\n".join(L) + "\n"
 
 
