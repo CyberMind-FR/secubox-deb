@@ -56,15 +56,33 @@ def _bannissable(ip: str) -> bool:
                                       or a.is_multicast or a.is_unspecified or a.is_reserved)
 
 
-def _lan(ip: str) -> bool:
-    """Appareil du réseau local : privé (ULA, lien-local compris), hors maillage."""
+def _maillage(ip: str) -> bool:
     try:
         a = ipaddress.ip_address(ip)
     except ValueError:
         return False
-    if a.version == 4 and a in MAILLAGE:
+    return a.version == 4 and a in MAILLAGE
+
+
+def _prefixes(reglages: dict) -> list:
+    out = []
+    for p in reglages.get("lan_prefixes") or []:
+        try:
+            out.append(ipaddress.ip_network(str(p), strict=False))
+        except ValueError:
+            continue
+    return out
+
+
+def _lan(ip: str, prefixes: list) -> bool:
+    """Adresse du réseau local : privée (ULA, lien-local compris) ou dans un préfixe du LAN."""
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
         return False
-    return bool(a.is_private) and not a.is_loopback and not a.is_multicast and not a.is_unspecified
+    if _maillage(ip) or a.is_loopback or a.is_multicast or a.is_unspecified:
+        return False
+    return bool(a.is_private) or any(a.version == n.version and a in n for n in prefixes)
 
 
 def _actif(actives: List[Decision], menace: str, cible: str, maintenant: int) -> bool:
@@ -112,11 +130,15 @@ def decider(signaux: List[Signal], actives: List[Decision],
             par_appareil.setdefault(s.mac or s.ip, []).append(s)
     actives_infection = sum(1 for d in actives if d.menace == "infection" and d.fin > maintenant)
     masse = False
+    prefixes = _prefixes(reglages)
     for cle, ss in par_appareil.items():
+        if any(_maillage(s.ip) or protegees(s.ip) for s in ss):
+            continue
+        ss = [s for s in ss if _lan(s.ip, prefixes)]
+        if not ss:
+            continue
         ref = ss[0]
         mac, ip = ref.mac, ref.ip
-        if any(not _lan(i) or protegees(i) for i in {s.ip for s in ss}):
-            continue
         agi = False
         evas = sorted({s.type for s in ss if s.type in ("doh", "tunneling")})
         if evas and not _actif(actives, "evasion", cle, maintenant):

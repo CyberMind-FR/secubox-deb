@@ -137,3 +137,26 @@ def test_toute_ip_vue_est_controlee():
 def test_exfiltration_seule_signalee():
     dec, _ = run([sig("exfiltration")])
     assert len(dec) == 1 and dec[0].menace == "signale" and dec[0].signe == "exfiltration"
+
+
+PREF = {"automatique": True, "quarantaines_max": 3, "lan_prefixes": ["2a01:e0a:dec:c4e0::/64"]}
+
+
+def test_ipv6_globale_du_lan_reconnue():
+    dec, _ = run([sig("malicious", ip="2a01:e0a:dec:c4e0::95")], reglages=PREF)
+    assert len(dec) == 1 and dec[0].menace == "infection"
+    dec, _ = run([sig("malicious", ip="2a01:e0a:dec:c4e0::95")])
+    assert dec == []
+
+
+def test_ipv6_hors_prefixe_ignoree_sans_ecarter_lipv4():
+    dec, _ = run([sig("malicious"), sig("malicious", ip="2001:4860::1")], reglages=PREF)
+    assert len(dec) == 1 and dec[0].menace == "infection" and dec[0].ip == "192.168.1.20"
+
+
+def test_prefixe_invalide_ignore():
+    reg = dict(PREF, lan_prefixes=["pas-un-cidr", "2a01:e0a:dec:c4e0::/64"])
+    dec, _ = run([sig("malicious", ip="2a01:e0a:dec:c4e0::95")], reglages=reg)
+    assert len(dec) == 1
+    dec, _ = run([sig("malicious")], reglages=dict(PREF, lan_prefixes=["zzz"]))
+    assert len(dec) == 1
