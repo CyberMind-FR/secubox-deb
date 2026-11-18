@@ -1,3 +1,15 @@
+secubox-pseudo-routeur (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Page d'administration refaite sur la maquette approuvée (coque Aurora, CSP par
+    hachage) : état, passerelle distribuée lue, contrôle de secours et historique,
+    compteurs forward, appareils par MAC (zone NAC, passe par gk2, IPv6 actif sans
+    part inventée), aperçu, activation confirmée, essai à blanc du retour, journal (#3803).
+  * API : GET /etat (etat-complet), GET /appareils, POST /retour, POST /tester-retour ;
+    ctl etat-complet, appareils, tester-retour ; ensemble dynamique vus_lan (15 min) ;
+    sonde-secours garde l'historique des 20 derniers contrôles (#3803).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 14:00:00 +0100
+
 secubox-pseudo-routeur (0.1.3-1~trixie1) trixie; urgency=medium
 
   * Chaine forward limitee au trafic entre par l'interface LAN (lan_if du TOML,

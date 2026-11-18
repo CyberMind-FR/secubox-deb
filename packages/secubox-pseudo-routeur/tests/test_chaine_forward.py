@@ -44,6 +44,8 @@ def _verdict(txt, iif, ensembles_mac):
             if iif != m.group(1):
                 return "accept"
             continue
+        if r.startswith("update @vus_lan "):
+            continue  # memorise la MAC, sans verdict
         m = re.match(r"ether saddr @(\w+) .*\b(drop|accept)$", r)
         if m:
             if m.group(1) in ensembles_mac:

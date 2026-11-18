@@ -5,219 +5,313 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — Pseudo-routeur : gk2 passerelle DHCP du LAN plat (#2940). DONNÉES RÉELLES : GET /api/v1/pseudo-routeur/etat,
-  /suggestions, /journal (lues en session) ; POST /activer, /retour-freebox (confirmation intégrée, jamais confirm()).
-  « Classer » appelle l'API NAC existante (POST /api/v1/nac/add_to_zone), jamais une écriture nftables directe d'ici.
-  `?demo=1` : données de DÉMONSTRATION annoncées par un bandeau, actions inertes. `?embed=1` : une colonne, sans menu latéral.
+  SecuBox — page « Pseudo-routeur » (#2940, refonte #3803 sur la maquette approuvée) au profil Aurora des webui
+  d'administration (même coque que garde / freebox) : bandeau d'état, quatre tuiles, appareils regroupés par MAC,
+  aperçu avant activation, essai à blanc du retour, journal d'audit. Données RÉELLES de /api/v1/pseudo-routeur/ ;
+  aucune valeur inventée : un relevé absent s'affiche « — ». La part IPv6 n'est pas mesurable par gk2 : seul
+  « IPv6 actif » est montré. Tout texte venu du réseau est posé par textContent. `?demo=1` : données fictives
+  annoncées, aucune écriture. `?embed=1` : sans menu latéral.
 -->
-<html lang="fr">
-<head>
+<html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-mPaMSses2wMI2xMPoZcy61Pe453HvxaP0w2ccSQdyxA='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SecuBox — Pseudo-routeur</title>
+<title>Pseudo-routeur</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
 <style>
   :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
-    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;color-scheme:dark}
   *{box-sizing:border-box}
-  html,body{margin:0;min-height:0}
+  html,body{margin:0;min-height:100%}
   body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
-       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
-  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+    color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none} body.emb #sidebar{display:none}
   .principal{min-width:0}
-  body:not(.emb):not(.dem) .principal{margin-left:220px;padding-top:48px}
-  body.emb #sidebar,body.dem #sidebar{display:none}
-  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb):not(.dem) .principal{margin-left:0;padding-top:0}}
+  body:not(.emb) .principal{margin-left:220px;padding-top:48px}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
   .cadre{container-type:inline-size;container-name:a;padding:10px}
-  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.08);padding:14px;display:grid;gap:12px;min-width:0}
+  .app>*,.grille>*{min-width:0}
+  [hidden]{display:none!important}
   .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
-  .marque{display:flex;align-items:center;gap:8px}
-  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
-  .pastille{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
-  .pastille.hors{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
-  .pastille.alerte{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
-  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
-  button{font:inherit;cursor:pointer}
+  .marque{display:flex;gap:10px;align-items:center}.marque h1{margin:0;font-size:1.35rem;font-weight:800}.marque small{color:var(--cyan);font-size:.72rem;display:block}
+  .actif{border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}.actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  .btn{font:inherit;font-size:.74rem;padding:5px 12px;border-radius:8px;border:1px solid var(--trait2);background:rgba(10,22,46,.7);color:var(--texte);cursor:pointer;min-height:30px;white-space:nowrap}
+  .btn:hover{border-color:var(--cyan)}.btn:disabled{opacity:.5;cursor:default}
+  .btn.sm{padding:3px 9px;font-size:.72rem;min-height:26px}.btn.danger{border-color:var(--rouge);color:var(--rouge)}.btn.danger:hover{background:rgba(255,77,94,.14)}
+  .btn.prim{border-color:var(--cyan);background:rgba(41,182,246,.18)}
+  .btn:focus-visible,input:focus-visible,[role=tab]:focus-visible,[role=switch]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
   .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
-  h2{margin:0;font-size:1.15rem} .sous{color:var(--doux);font-size:.76rem}
-  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
-  @media (max-width:700px){.tuiles{grid-template-columns:1fr 1fr}}
+  .info{border:1px solid var(--cyan);background:rgba(41,182,246,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}.info a{color:var(--cyan)}
+  .retour{font-size:.78rem;padding:6px 10px;border-radius:8px;border:1px solid var(--trait2);background:rgba(8,18,38,.7)}.retour.ko{border-color:var(--rouge)}.retour.ok{border-color:var(--vert)}
+  .alarme{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border:1px solid var(--rouge);background:rgba(255,77,94,.1);border-radius:10px;padding:8px 12px;font-size:.8rem}
+  .alarme b{font-size:.88rem;color:var(--rouge)}.alarme span{color:var(--doux);overflow-wrap:anywhere}.alarme .btn{margin-left:auto}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  @container a (min-width:760px){.tuiles{grid-template-columns:repeat(4,1fr)}}
   .tuile{display:flex;flex-direction:column;gap:4px;border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
-  .tuile .l{color:var(--doux);font-size:.74rem} .tuile .v{font-size:1.3rem;font-weight:700;line-height:1.2}
-  .tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile .v{font-size:1.45rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.tuile .l{color:var(--doux);font-size:.74rem}.tuile .s{color:var(--faible);font-size:.68rem}
+  .tuile.hors .v{color:var(--rouge)}.tuile.att .v{color:var(--orange)}.tuile.vio .v{color:var(--violet)}.tuile.ok .v{color:var(--vert)}
+  .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
+  .onglets button{font:inherit;font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux);cursor:pointer;min-height:34px}
+  .onglets button:hover{border-color:var(--cyan);color:var(--texte)}
+  .onglets button[aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
   .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
-  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
-  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
-  .note{color:var(--faible);font-size:.66rem;margin-top:6px}
-  .btn{font-size:.78rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:7px 14px;min-height:30px}
-  .btn.dg{background:rgba(255,77,94,.14);border-color:var(--rouge);color:var(--rouge)}
-  .btn.ok{background:rgba(46,204,113,.14);border-color:var(--vert);color:var(--vert)}
-  .btn[disabled]{opacity:.5;cursor:default}
-  .confirme{display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:8px 10px;border:1px solid var(--orange);border-radius:10px;background:rgba(255,159,28,.1)}
-  .confirme.on{display:flex}
-  .confirme span{color:var(--doux);font-size:.76rem;flex:1 1 220px}
-  table{width:100%;border-collapse:collapse;font-size:.78rem}
-  th{text-align:left;color:var(--faible);font-weight:600;font-size:.68rem;padding:4px 6px;border-bottom:1px solid var(--trait)}
-  td{padding:6px;border-bottom:1px solid rgba(86,150,255,.1);vertical-align:middle}
-  .pil{border-radius:999px;padding:1px 9px;font-size:.66rem;border:1px solid;white-space:nowrap}
-  code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.72rem;color:var(--doux)}
+  .pan h3{margin:0 0 8px;font-size:.88rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.7rem}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr}
+  .decisions{display:grid;gap:8px}
+  .dec{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:start;border:1px solid var(--trait);border-left-width:4px;border-radius:10px;padding:9px 11px;background:rgba(8,18,38,.5)}
+  @container a (min-width:560px){.dec{grid-template-columns:auto minmax(0,1fr) auto}}
+  .dec.infection{border-left-color:var(--rouge)}.dec.evasion{border-left-color:var(--violet)}.dec.intrusion{border-left-color:var(--orange)}
+  .dec .ico{font-size:1.1rem;line-height:1.2}
+  .dec .qui{font-weight:700;overflow-wrap:anywhere}.dec .qui small{display:block;font-weight:400;color:var(--faible);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.72rem;overflow-wrap:anywhere}
+  .dec .pourquoi{color:var(--doux);font-size:.8rem;overflow-wrap:anywhere}.quand{color:var(--faible);font-size:.72rem}
+  .dec .act{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;justify-content:flex-end;grid-column:1/-1}
+  @container a (min-width:560px){.dec .act{grid-column:auto;flex-direction:column;align-items:flex-end}}
+  .confirm{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--orange);border-radius:10px;padding:6px 8px;font-size:.78rem;background:rgba(255,159,28,.1)}
+  .liste{grid-column:1/-1;display:grid;gap:4px;max-height:320px;overflow:auto;margin-top:8px}
+  .liste div{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:.78rem;border-top:1px solid rgba(86,150,255,.12);padding-top:4px}
+  .pill{display:inline-block;border:1px solid var(--faible);color:var(--doux);background:rgba(159,179,214,.12);border-radius:999px;padding:1px 9px;font-size:.68rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .pill.ok{border-color:var(--vert);color:var(--vert);background:rgba(46,204,113,.12)}.pill.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .pill.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}.pill.cy{border-color:var(--cyan);color:var(--cyan);background:rgba(41,182,246,.12)}
+  .pill.vio{border-color:var(--violet);color:var(--violet);background:rgba(167,139,250,.12)}
+  .tab{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;font-variant-numeric:tabular-nums;min-width:560px}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faible);text-align:left;padding:5px 8px;font-weight:600;white-space:nowrap}
+  td{padding:7px 8px;border-top:1px solid rgba(86,150,255,.12);vertical-align:middle;overflow-wrap:anywhere}td small{display:block;color:var(--faible);font-size:.7rem}
+  tbody tr:hover{background:rgba(41,182,246,.07)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.76rem}
+  .vide{color:var(--faible);padding:14px 8px;text-align:center;font-size:.8rem;margin:0}
+  .note{color:var(--faible);font-size:.72rem;margin:6px 0 0}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
+  .kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center;font-size:.8rem;margin:0 0 10px}
+  .kv label{color:var(--texte);font-weight:600}.kv small{grid-column:1/-1;color:var(--faible);font-size:.72rem}
+  .inter{width:42px;height:24px;border-radius:12px;background:var(--vert);position:relative;flex:none;padding:0;border:0;cursor:pointer}
+  .inter::after{content:"";position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+  .inter[aria-checked=false]{background:rgba(111,132,168,.4)}.inter[aria-checked=false]::after{right:auto;left:3px}
+  .champ{display:grid;gap:4px;margin:0 0 10px}.champ>span{font-size:.74rem;color:var(--doux)}
+  .champ div{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .saisie{font:inherit;font-size:.8rem;background:rgba(8,18,38,.8);color:var(--texte);border:1px solid var(--trait2);border-radius:8px;padding:5px 9px;min-width:0;width:100%}
+  .saisie:focus{outline:none;border-color:var(--cyan)}
+  @container a (min-width:420px){.saisie{width:auto;flex:1;max-width:280px}}
+  /* Coque partagée (#2733) : sidebar.js pose ces règles dans un bloc de style EN LIGNE ; on en reprend l'essentiel (comme ad-guard). */
+  .header-leds-metrics,.smart-strip{display:none!important}
+  .status-led{font-size:.9em;margin-left:auto}
+  .nav-item{display:flex;align-items:center;gap:.5rem}
+  .nav-item.offline{opacity:0;height:0;padding:0;margin:0;overflow:hidden}
+  .sidebar-toggle{display:none;position:fixed;top:.75rem;left:.75rem;z-index:1002;background:#0b1830;border:1px solid var(--trait2);color:var(--texte);width:40px;height:40px;font-size:1.4rem;cursor:pointer;align-items:center;justify-content:center;border-radius:8px;padding:0}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999}
+  .sidebar-overlay.active{display:block}
+  .mobile-mode .sidebar{transform:translateX(-100%);transition:transform .3s ease;z-index:1000}
+  .mobile-mode .sidebar.open{transform:translateX(0)}
+  html.sbx-aurora body.hybrid-skin main.principal{margin-left:220px!important;padding:48px 0 0!important;min-height:0}
+  html.sbx-aurora body.mobile-mode main.principal{margin-left:0!important;padding:56px 0 0!important}
+  #sidebar .nav-mode-link{color:inherit;text-decoration:none}
+  @media (max-width:900px){.sidebar:not(.open){transform:translateX(-100%)}html.sbx-aurora body.hybrid-skin main.principal{margin-left:0!important;padding:56px 0 0!important}}
+  html.sbx-aurora body.hybrid-skin .principal .app .pan{background-color:rgba(10,22,46,.6)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .btn{background-color:rgba(10,22,46,.7)!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:8px!important;backdrop-filter:none;box-shadow:none}
+  html.sbx-aurora body.hybrid-skin .principal .app .btn.prim{background-color:rgba(41,182,246,.18)!important;border-color:var(--cyan)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .btn.danger{border-color:var(--rouge)!important;color:var(--rouge)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app button.inter{background-color:var(--vert)!important;border:0!important;border-radius:12px!important}
+  html.sbx-aurora body.hybrid-skin .principal .app button.inter[aria-checked=false]{background-color:rgba(111,132,168,.4)!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .onglets button{background-color:rgba(10,22,46,.5)!important;border:1px solid var(--trait)!important;color:var(--doux)!important;border-radius:9px!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .onglets button[aria-selected=true]{background-color:rgba(41,182,246,.22)!important;border-color:var(--cyan)!important;color:#d9f2ff!important}
+  html.sbx-aurora body.hybrid-skin .principal .app input{background-color:rgba(8,18,38,.8)!important;border:1px solid var(--trait2)!important;color:var(--texte)!important;border-radius:8px!important}
+  html.sbx-aurora body.hybrid-skin .principal .app th{background-color:transparent!important;color:var(--faible)!important;border-bottom:0!important}
+  html.sbx-aurora body.hybrid-skin .principal .app td{color:var(--texte)!important;border-bottom:0!important}
+  html.sbx-aurora body.hybrid-skin .principal .app .demo{background-color:var(--orange)!important;color:#1a1000!important}
+  /* Pseudo-routeur (#3803), maquette approuvée : bandeau d'état, sonde, barre IPv4/IPv6, journal. */
+  .etat{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;border:1px solid var(--trait2);background:rgba(10,22,46,.5);border-radius:12px;padding:12px 14px}
+  .etat.ok{border-color:rgba(46,204,113,.5);background:rgba(46,204,113,.07)}.etat.att{border-color:rgba(255,159,28,.5);background:rgba(255,159,28,.07)}
+  .etat b{font-size:1.05rem;overflow-wrap:anywhere}.etat span{color:var(--doux);font-size:.82rem;overflow-wrap:anywhere}.etat .actions{margin:0 0 0 auto}
+  .sonde{display:flex;gap:4px;align-items:center;min-height:1.45rem}.sonde i{width:10px;height:18px;border-radius:3px;background:var(--vert);display:inline-block}.sonde i.ko{background:var(--rouge)}
+  @container a (min-width:900px){.grille.deux{grid-template-columns:1.2fr 1fr}}
+  .pan>h3+*{margin-top:0}
+  .journal div{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;padding:6px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}
+  .journal time{color:var(--faible);font-variant-numeric:tabular-nums}.journal span{overflow-wrap:anywhere}
+  .etapes{display:grid;gap:4px;margin:8px 0 0;padding:0;list-style:none;font-size:.78rem}.etapes li{overflow-wrap:anywhere}
 </style>
-</head>
 <body>
-<nav class="sidebar" id="sidebar"></nav>
+<nav class="sidebar" id="sidebar" aria-label="Menu de l'administration"></nav>
 <main class="principal"><div class="cadre"><div class="app">
-  <div class="tete">
-    <div class="marque"><b>Pseudo-routeur</b><small>gk2 passerelle DHCP du LAN (#2940)</small></div>
-    <span class="pastille" id="pastilleMode">—</span>
-    <div class="droite"><span id="demoTag" class="demo" style="display:none">DÉMONSTRATION</span></div>
-  </div>
-  <div class="sous">LAN plat : filtrage à l'aller seulement, sans état ni DPI fiable sur les flux. La sonde de secours revient automatiquement à la Freebox sous 3 minutes en cas de panne.</div>
+  <header class="tete">
+    <div class="marque">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>
+      <div><h1>Pseudo-routeur</h1><small>gk2 passerelle du LAN de la Freebox · retour automatique</small></div>
+    </div>
+    <span class="actif" id="mode" aria-live="polite">Chargement…</span>
+    <div class="droite"><span id="releve">—</span><button class="btn" type="button" id="rafraichir">⟳ Actualiser</button></div>
+  </header>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — adresses de documentation, aucune écriture</div>
+  <div class="info" id="session" hidden>Actions et journal réservés à l'administrateur : session requise. <a href="/login.html">Se connecter</a></div>
+  <div class="retour" id="message" hidden role="status"></div>
+
+  <div class="etat" id="bandeau"><b id="b-titre">—</b><span id="b-detail"></span>
+    <div class="actions" id="b-actions"><button class="btn danger" type="button" id="btn-retour" hidden>Revenir à la Freebox</button></div></div>
 
   <div class="tuiles">
-    <div class="tuile"><div class="l">Passerelle active</div><div class="v" id="vMode">—</div></div>
-    <div class="tuile"><div class="l">Sonde de secours</div><div class="v" id="vSonde">—</div></div>
-    <div class="tuile"><div class="l">Paquets rejetés</div><div class="v" id="vRejetes">—</div><div class="s">chaîne forward, DEFAULT DROP</div></div>
+    <div class="tuile"><span class="l">Passerelle distribuée (DHCP Freebox)</span><span class="v mono" id="t-passerelle">—</span><span class="s" id="t-passerelle-s"></span></div>
+    <div class="tuile"><span class="l">Appareils passés par gk2</span><span class="v" id="t-passes">—</span><span class="s" id="t-passes-s"></span></div>
+    <div class="tuile"><span class="l">Contrôle de secours</span><span class="v sonde" id="t-sonde"></span><span class="s" id="t-sonde-s"></span></div>
+    <div class="tuile"><span class="l">Trafic retransmis</span><span class="v" id="t-trafic">—</span><span class="s" id="t-trafic-s"></span></div>
   </div>
 
-  <div class="pan">
-    <h3>Bascule</h3>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button type="button" class="btn ok" id="btnActiver">Devenir la passerelle</button>
-      <button type="button" class="btn dg" id="btnRetour">Revenir à la Freebox</button>
-    </div>
-    <div class="confirme" id="confirmeZone">
-      <span id="confirmeTexte"></span>
-      <button type="button" class="btn dg" id="btnConfirmerOui">Confirmer</button>
-      <button type="button" class="btn" id="btnConfirmerNon">Annuler</button>
-    </div>
-    <div class="note">Un appareil déjà bloqué ou mis en quarantaine par le NAC le reste une fois gk2 passerelle.</div>
+  <div class="grille deux">
+    <section class="pan">
+      <h3>Appareils de la maison <i>regroupés par appareil</i></h3>
+      <div class="tab"><table>
+        <thead><tr><th>Appareil</th><th>Passe par gk2</th><th>Zone NAC</th><th>IPv6</th></tr></thead>
+        <tbody id="appareils"></tbody></table></div>
+      <p class="vide" id="appareils-vide" hidden>Aucun appareil vu sur le LAN.</p>
+      <p class="note">« Non classé » garde Internet : le LAN est une zone de confiance. Seuls les appareils bloqués ou en quarantaine par le NAC sont coupés. Les conteneurs de gk2 ne passent jamais par cette chaîne.</p>
+    </section>
+    <section class="pan">
+      <h3>Avant d'activer <i>aperçu</i></h3>
+      <p class="note" id="apercu-note">Liste des appareils non classés qui passeront par gk2 (ils gardent Internet). « Activer » demande une confirmation et refuse sans contrôle de secours actif.</p>
+      <div class="actions" id="zone-activer"><button class="btn prim" type="button" id="btn-activer">Activer</button><button class="btn" type="button" id="btn-tester">Tester le retour (sans activer)</button><button class="btn" type="button" id="btn-apercu">Voir l'aperçu</button></div>
+      <ul class="etapes" id="etapes" hidden></ul>
+      <h3>IPv6</h3>
+      <p class="note">L'IPv6 est annoncé par la Freebox et ne passe pas par gk2 : la part de trafic IPv6 n'est pas mesurable ici. Un appareil marqué « IPv6 actif » a une partie de son trafic qui échappe au pseudo-routeur.</p>
+    </section>
   </div>
 
-  <div class="pan">
-    <h3>Suggestions de classement <i>appareils Freebox non connus du NAC</i></h3>
-    <table id="tabSuggestions"><thead><tr><th>Nom</th><th>MAC</th><th>Type</th><th>Zone suggérée</th><th></th></tr></thead><tbody></tbody></table>
-    <div class="vide" id="videSuggestions" style="display:none">Aucun appareil non classé.</div>
-  </div>
-
-  <div class="pan">
-    <h3>Journal <i>dernières bascules de passerelle</i></h3>
-    <table id="tabJournal"><thead><tr><th>Quand</th><th>Avant</th><th>Après</th></tr></thead><tbody></tbody></table>
-    <div class="vide" id="videJournal" style="display:none">Aucune bascule enregistrée.</div>
-  </div>
+  <section class="pan">
+    <h3>Journal <i>audit</i></h3>
+    <div class="journal" id="journal"></div>
+    <p class="vide" id="journal-vide" hidden>Aucune bascule enregistrée.</p>
+  </section>
 </div></div></main>
 <script>
 (function(){
-  "use strict";
-  var API='/api/v1/pseudo-routeur';
-  var NAC_API='/api/v1/nac';
-  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
-  var q=new URLSearchParams(location.search);
-  var EMB=!!q.get('embed'),DEMOMODE=!!q.get('demo');
-  if(EMB) document.body.classList.add('emb');
-  if(DEMOMODE){document.body.classList.add('dem');document.getElementById('demoTag').style.display='';}
-  if(!EMB&&!DEMOMODE){try{var sc=document.createElement('script');sc.src='/shared/sidebar.js';document.head.appendChild(sc);}catch(e){}}
-
+  'use strict';
+  var BASE='/api/v1/pseudo-routeur';
+  var q=new URLSearchParams(location.search),DEMO=!!q.get('demo'),EMB=!!q.get('embed');
+  if(EMB||DEMO)document.body.classList.add('emb');
+  else{var sb=document.createElement('script');sb.src='/shared/sidebar.js';document.body.appendChild(sb);}
+  document.addEventListener('click',function(e){var t=e.target&&e.target.closest?e.target.closest('#sidebar .nav-section-title'):null;if(!t)return;
+    var s=t.closest('.nav-section');if(!s)return;s.classList.toggle('collapsed');var i=t.querySelector('.toggle-icon');if(i)i.textContent=s.classList.contains('collapsed')?'▶':'▼';});
+  var ZONES={lan_allowed:['LAN autorisé','ok'],lxc_zone:['conteneur','cy'],guest_zone:['invités','cy'],iot_zone:['objets connectés','cy'],quarantine_zone:['quarantaine','hors'],blocked:['bloqué','hors']};
+  var etat={actif:false,sonde:false};
+  function el(id){return document.getElementById(id);}
+  function h(tag,attrs,texte){var n=document.createElement(tag);if(attrs)for(var k in attrs){if(k==='class')n.className=attrs[k];else n.setAttribute(k,attrs[k]);}
+    if(texte!=null)n.textContent=String(texte);return n;}
+  function vider(n){while(n.firstChild)n.removeChild(n.firstChild);}
+  function heure(ts){if(!ts)return '—';var d=new Date(ts*1000),j=new Date();var t=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+    return d.toDateString()===j.toDateString()?t:d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+t;}
+  function octets(n){var u=['o','Ko','Mo','Go','To'],i=0;n=Number(n)||0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toLocaleString('fr-FR',{maximumFractionDigits:1})+' '+u[i];}
+  function message(texte,genre){var m=el('message');m.hidden=!texte;m.className='retour '+(genre==='erreur'?'ko':genre==='ok'?'ok':'');m.textContent=texte||'';}
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
-  function api(path,opts){
-    var h=Object.assign({'Authorization':'Bearer '+jeton()},(opts&&opts.headers)||{});
-    return fetch(API+path,Object.assign({credentials:'include',cache:'no-store'},opts,{headers:h}));
+  function entetes(json){var o={'Accept':'application/json'},t=jeton();if(t)o.Authorization='Bearer '+t;if(json)o['Content-Type']='application/json';return o;}
+  function lire(chemin){
+    if(DEMO)return Promise.resolve(DONNEES[chemin]);
+    return fetch(BASE+chemin,{headers:entetes(false),credentials:'same-origin',cache:'no-store'}).then(function(r){
+      if(r.status===401||r.status===403){var e=new Error('session');e.session=true;throw e;}
+      return r.json().catch(function(){return {};}).then(function(j){if(!r.ok)throw new Error((j&&j.erreur)||('HTTP '+r.status));return j;});});
   }
-  function getj(url){
-    var h={'Authorization':'Bearer '+jeton()};
-    return fetch(url,{headers:h,credentials:'include',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+  function ecrire(chemin){
+    if(DEMO)return Promise.reject(new Error('démonstration : aucune écriture'));
+    return fetch(BASE+chemin,{method:'POST',headers:entetes(true),credentials:'same-origin',cache:'no-store',body:'{}'}).then(function(r){
+      return r.json().catch(function(){return {};}).then(function(j){if(!r.ok)throw new Error((j&&(j.erreur||(typeof j.detail==='string'&&j.detail)))||('HTTP '+r.status));return j;});});
   }
-
-  var DEMO_ETAT={mode:'freebox',sonde_active:false};
-  var DEMO_SUGGESTIONS=[{nom:'tv-salon',mac:'aa:bb:cc:00:00:01',host_type:'television',zone_suggeree:'guest'},
-    {nom:'?',mac:'aa:bb:cc:00:00:02',host_type:'workstation',zone_suggeree:null}];
-  var DEMO_JOURNAL=[{ts:Math.floor(Date.now()/1000)-120,avant:'192.168.1.254',apres:'192.168.1.200'}];
-
-  function majPastille(mode,sonde){
-    var p=document.getElementById('pastilleMode');
-    if(mode==='gk2'){p.textContent='gk2 passerelle';p.className='pastille';}
-    else {p.textContent='Freebox passerelle';p.className='pastille hors';}
-    if(mode==='gk2'&&!sonde){p.textContent='gk2 passerelle — sonde inactive';p.className='pastille alerte';}
-  }
-
-  function majEtat(d){
-    document.getElementById('vMode').textContent=d.mode==='gk2'?'gk2':'Freebox';
-    document.getElementById('vSonde').textContent=d.sonde_active?'Active':'Inactive';
-    document.getElementById('vRejetes').textContent=(d.paquets_rejetes!=null)?d.paquets_rejetes:'—';
-    majPastille(d.mode,d.sonde_active);
-    document.getElementById('btnActiver').disabled=(d.mode==='gk2');
-    document.getElementById('btnRetour').disabled=(d.mode!=='gk2');
+  function hauteur(){try{parent.postMessage({sbxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+scrollY),onglet:'pseudo-routeur'},location.origin);}catch(e){}}
+  // Confirmation intégrée (jamais confirm()).
+  function confirmer(lieu,texte,action){
+    if(lieu.querySelector('.confirm'))return;
+    var c=h('div',{class:'confirm'}),ok=h('button',{type:'button',class:'btn sm danger'},'Confirmer'),non=h('button',{type:'button',class:'btn sm'},'Annuler');
+    function fermer(){if(c.parentNode)c.parentNode.removeChild(c);hauteur();}
+    non.addEventListener('click',fermer);
+    ok.addEventListener('click',function(){ok.disabled=true;action().then(function(){fermer();message('Fait : écrit au journal d\'audit.','ok');charger();},
+      function(e){ok.disabled=false;message('Refusé : '+e.message,'erreur');});});
+    c.appendChild(h('span',null,texte));c.appendChild(ok);c.appendChild(non);lieu.appendChild(c);ok.focus();hauteur();
   }
 
-  function chargerEtat(){
-    if(DEMOMODE){majEtat(DEMO_ETAT);return;}
-    getj(API+'/etat').then(function(d){if(d) majEtat(d);});
+  function rendreEtat(d){
+    etat.actif=!!d.actif;etat.sonde=!!(d.sonde&&d.sonde.active);
+    var mode=el('mode');mode.textContent=d.actif?'ACTIF':'INACTIF';mode.className='actif '+(d.actif?'ok':'');
+    el('releve').textContent='relevé '+heure(Math.floor(Date.now()/1000));
+    var b=el('bandeau');b.className='etat '+(d.actif?'ok':'att');
+    el('b-titre').textContent=d.actif?'gk2 est la passerelle IPv4 de la maison':'La Freebox est la passerelle de la maison';
+    el('b-detail').textContent=d.actif?('depuis '+heure(d.depuis)+' · la Freebox reste la passerelle vers Internet · retour automatique si 3 contrôles échouent')
+      :(d.table_presente?'chaîne de filtrage chargée mais DHCP non basculé':'gk2 ne retransmet pas le LAN');
+    el('btn-retour').hidden=!d.actif&&!d.table_presente;
+    el('t-passerelle').textContent=d.passerelle_distribuee||'inconnue';
+    el('t-passerelle-s').textContent='Freebox : '+(d.ip_freebox||'—')+(d.passerelle_lue_a?' · lue à '+heure(d.passerelle_lue_a):' · connecteur Freebox injoignable');
+    var so=el('t-sonde');vider(so);var hist=(d.sonde&&d.sonde.historique)||[];
+    hist.slice(-10).forEach(function(x){so.appendChild(h('i',{class:x.ok?'':'ko',title:heure(x.ts)+(x.ok?' ✓':' ✗')}));});
+    if(!hist.length)so.textContent='—';
+    var der=hist.length?hist[hist.length-1]:null;
+    el('t-sonde-s').textContent=(etat.sonde?'armé · chaque minute':'non armé')+(der?' · dernier '+heure(der.ts)+(der.ok?' ✓':' ✗'):'');
+    var c=d.compteurs||{};
+    el('t-trafic').textContent=c.lan?octets(c.lan.octets):'—';
+    el('t-trafic-s').textContent=c.lan?(Number(c.lan.paquets).toLocaleString('fr-FR')+' paquets · '+(c.rejete?Number(c.rejete.paquets).toLocaleString('fr-FR'):'0')+' rejeté(s) (NAC : bloqués, quarantaine)'):'aucune chaîne chargée';
+    el('btn-activer').disabled=d.actif;el('btn-activer').textContent=d.actif?'Activer (déjà actif)':'Activer';
   }
-
-  function ligneSuggestion(a){
-    var zone=a.zone_suggeree?'<span class="pil" style="border-color:#2ecc71;color:#2ecc71">'+esc(a.zone_suggeree)+'</span>':'<span class="pil" style="border-color:#6f84a8;color:#9fb3d6">aucune</span>';
-    return '<tr><td>'+esc(a.nom||'?')+'</td><td><code>'+esc(a.mac)+'</code></td><td>'+esc(a.host_type||'?')+'</td><td>'+zone+'</td>'+
-      '<td>'+(a.zone_suggeree?'<button type="button" class="btn ok" data-mac="'+esc(a.mac)+'" data-zone="'+esc(a.zone_suggeree)+'">Classer</button>':'')+'</td></tr>';
+  function rendreAppareils(d){
+    var tb=el('appareils');vider(tb);var liste=(d&&d.appareils)||[];
+    el('appareils-vide').hidden=liste.length>0;
+    var passes=0,connu=d&&d.chaine_chargee;
+    liste.forEach(function(a){
+      var tr=h('tr'),t1=h('td',null,a.nom||'Appareil inconnu');
+      t1.appendChild(h('small',{class:'mono'},[a.mac].concat(a.ipv4||[]).join(' · ')+(a.ipv6_globales&&a.ipv6_globales.length?' · '+a.ipv6_globales.length+' IPv6':'')));
+      tr.appendChild(t1);
+      var t2=h('td');
+      if(a.passe_par_gk2===true){passes++;t2.appendChild(h('span',{class:'pill ok'},'oui'));}
+      else if(a.passe_par_gk2===false)t2.appendChild(h('span',{class:'pill att'},'pas encore'));
+      else t2.appendChild(h('span',{class:'pill'},'—'));
+      tr.appendChild(t2);
+      var z=ZONES[a.zone]||['non classé',''],t3=h('td');t3.appendChild(h('span',{class:'pill '+z[1]},z[0]));tr.appendChild(t3);
+      var t4=h('td');
+      if(a.ipv6_actif){t4.appendChild(h('span',{class:'pill att'},'IPv6 actif'));t4.appendChild(h('small',null,'part non visible par gk2'));}
+      else t4.appendChild(h('small',null,'pas d\'IPv6 globale'));
+      tr.appendChild(t4);tb.appendChild(tr);
+    });
+    el('t-passes').textContent=connu?(passes+' / '+liste.length):'—';
+    el('t-passes-s').textContent=connu?(liste.length-passes)+' sans trafic retransmis (15 dernières minutes)':'chaîne non chargée : pas de mesure';
   }
-
-  function chargerSuggestions(){
-    var corps=document.querySelector('#tabSuggestions tbody'),vide=document.getElementById('videSuggestions');
-    function rendre(liste){
-      liste=liste||[];
-      corps.innerHTML=liste.map(ligneSuggestion).join('');
-      vide.style.display=liste.length?'none':'';
-      corps.querySelectorAll('button[data-mac]').forEach(function(b){
-        b.addEventListener('click',function(){
-          if(DEMOMODE) return;
-          fetch(NAC_API+'/add_to_zone',{method:'POST',credentials:'include',
-            headers:{'Authorization':'Bearer '+jeton(),'Content-Type':'application/json'},
-            body:JSON.stringify({mac:b.dataset.mac,zone:b.dataset.zone})
-          }).then(function(){chargerSuggestions();}).catch(function(){});
-        });
-      });
-    }
-    if(DEMOMODE){rendre(DEMO_SUGGESTIONS);return;}
-    getj(API+'/suggestions').then(function(d){rendre(d&&d.suggestions);});
+  function rendreJournal(d){
+    var j=el('journal');vider(j);var l=((d&&d.entrees)||[]).slice().reverse();
+    el('journal-vide').hidden=l.length>0;
+    l.forEach(function(e){var ts=e.ts;var t=typeof ts==='number'?heure(ts):(ts?String(ts).replace('T',' ').slice(5,16):'—');
+      var r=h('div');r.appendChild(h('time',null,t));
+      r.appendChild(h('span',null,[e.action,e.passerelle||e.valeur||e.cible||'',e.resultat||e.utilisateur||''].filter(Boolean).join(' · ')));j.appendChild(r);});
   }
-
-  function fmtQuand(ts){if(!ts) return '—';return new Date(ts*1000).toLocaleString('fr-FR');}
-  function ligneJournal(e){return '<tr><td>'+fmtQuand(e.ts)+'</td><td><code>'+esc(e.avant)+'</code></td><td><code>'+esc(e.apres)+'</code></td></tr>';}
-
-  function chargerJournal(){
-    var corps=document.querySelector('#tabJournal tbody'),vide=document.getElementById('videJournal');
-    function rendre(liste){
-      liste=liste||[];
-      corps.innerHTML=liste.map(ligneJournal).join('');
-      vide.style.display=liste.length?'none':'';
-    }
-    if(DEMOMODE){rendre(DEMO_JOURNAL);return;}
-    getj(API+'/journal').then(function(d){rendre(d&&d.entrees);});
+  function etapes(d){var u=el('etapes');vider(u);u.hidden=false;
+    u.appendChild(h('li',null,d.pret?'Le retour fonctionnerait (rien n\'a été modifié) :':'Le retour échouerait (rien n\'a été modifié) :'));
+    (d.etapes||[]).forEach(function(x){u.appendChild(h('li',null,(x.possible?'✓ ':'✗ ')+x.etape+' — '+x.detail));});hauteur();}
+  function charger(){
+    var session=false;
+    function trou(e){if(e&&e.session){session=true;return null;}message('Lecture impossible : '+e.message,'erreur');return null;}
+    Promise.all([lire('/etat').catch(trou),lire('/appareils').catch(trou),lire('/journal').catch(trou)]).then(function(r){
+      el('session').hidden=!session;
+      if(r[0])rendreEtat(r[0]);if(r[1])rendreAppareils(r[1]);if(r[2])rendreJournal(r[2]);hauteur();});
   }
+  el('rafraichir').addEventListener('click',function(){message('');charger();});
+  el('btn-retour').addEventListener('click',function(){confirmer(el('b-actions'),'Rendre la passerelle à la Freebox ?',function(){return ecrire('/retour');});});
+  el('btn-activer').addEventListener('click',function(){
+    if(!etat.sonde){message('Refusé : le contrôle de secours n\'est pas armé.','erreur');}
+    confirmer(el('zone-activer'),'gk2 devient la passerelle DHCP du LAN. Confirmer ?',function(){return ecrire('/activer');});});
+  el('btn-tester').addEventListener('click',function(){ecrire('/tester-retour').then(etapes,function(e){message('Refusé : '+e.message,'erreur');});});
+  el('btn-apercu').addEventListener('click',function(){lire('/apercu').then(function(d){var u=el('etapes');vider(u);u.hidden=false;var n=(d&&d.non_classes)||[];
+    u.appendChild(h('li',null,n.length+' appareil(s) non classé(s) sur '+(d.lan_if||'le LAN')+' : ils garderont Internet.'));
+    n.forEach(function(x){u.appendChild(h('li',{class:'mono'},x.ip+' · '+x.mac));});hauteur();},function(e){message(e.session?'Session administrateur requise.':'Aperçu impossible : '+e.message,'erreur');});});
 
-  var actionEnAttente=null;
-  function demanderConfirmation(action,texte){
-    actionEnAttente=action;
-    document.getElementById('confirmeTexte').textContent=texte;
-    document.getElementById('confirmeZone').classList.add('on');
-  }
-  document.getElementById('btnConfirmerNon').addEventListener('click',function(){
-    actionEnAttente=null;document.getElementById('confirmeZone').classList.remove('on');
-  });
-  document.getElementById('btnConfirmerOui').addEventListener('click',function(){
-    var a=actionEnAttente;actionEnAttente=null;document.getElementById('confirmeZone').classList.remove('on');
-    if(!a||DEMOMODE) return;
-    api(a==='activer'?'/activer':'/retour-freebox',{method:'POST'}).then(function(){chargerEtat();chargerJournal();}).catch(function(){});
-  });
-  document.getElementById('btnActiver').addEventListener('click',function(){
-    demanderConfirmation('activer','gk2 va devenir la passerelle DHCP du LAN. La sonde de secours doit déjà être active, sinon la bascule est refusée.');
-  });
-  document.getElementById('btnRetour').addEventListener('click',function(){
-    demanderConfirmation('retour','Retour immédiat à la Freebox comme passerelle DHCP.');
-  });
-
-  chargerEtat();chargerSuggestions();chargerJournal();
-  if(!DEMOMODE) setInterval(chargerEtat,15000);
+  // ── démonstration (adresses de documentation RFC 5737 / 3849) ──
+  var T=Math.floor(Date.now()/1000);
+  var DONNEES={
+    '/etat':{actif:true,depuis:T-1080,table_presente:true,ip_forward:true,lan_if:'eth2',ip_gk2:'192.0.2.200',ip_freebox:'192.0.2.254',
+      passerelle_distribuee:'192.0.2.200',passerelle_lue_a:T,sonde:{active:true,echecs_consecutifs:0,historique:[1,2,3,4,5,6].map(function(i){return {ts:T-60*(6-i),ok:true};})},
+      compteurs:{lan:{paquets:182340,octets:241000000},rejete:{paquets:0,octets:0}}},
+    '/appareils':{lan_if:'eth2',releve:T,chaine_chargee:true,appareils:[
+      {mac:'02:00:5e:00:00:95',nom:'TV salon',ipv4:['192.0.2.95'],ipv6_globales:['2001:db8::95'],ipv6_actif:true,zone:'iot_zone',passe_par_gk2:true},
+      {mac:'02:00:5e:00:00:12',nom:'Téléphone',ipv4:['192.0.2.112'],ipv6_globales:[],ipv6_actif:false,zone:null,passe_par_gk2:true},
+      {mac:'02:00:5e:00:00:49',nom:null,ipv4:['192.0.2.49'],ipv6_globales:[],ipv6_actif:false,zone:null,passe_par_gk2:false}]},
+    '/journal':{entrees:[{ts:'2026-11-18T14:02:00',action:'passerelle_dhcp',passerelle:'192.0.2.200',resultat:'ok'}]},
+    '/apercu':{lan_if:'eth2',non_classes:[{ip:'192.0.2.49',mac:'02:00:5e:00:00:49'}]}
+  };
+  if(DEMO){el('demo').hidden=false;}
+  charger();
+  setInterval(function(){if(!document.hidden)charger();},30000);
 })();
 </script>
-</body>
-</html>

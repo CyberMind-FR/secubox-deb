@@ -52,3 +52,27 @@ def test_apercu_exige_jwt():
     c = TestClient(main.app)
     assert c.post("/apercu").status_code in (401, 403, 405)
     assert c.get("/apercu").status_code in (401, 403)
+
+
+def test_gardes_des_routes_3803():
+    c = TestClient(main.app)
+    for chemin in ("/retour", "/tester-retour", "/activer", "/retour-freebox"):
+        assert c.post(chemin).status_code in (401, 403), chemin
+    # lectures : require_lecture -> jamais 404/500
+    for chemin in ("/etat", "/appareils"):
+        assert c.get(chemin).status_code in (200, 401, 403, 502), chemin
+
+
+def test_appareils_sans_chiffre_invente(monkeypatch):
+    # IPv6 : un booleen, jamais une part de trafic (non mesurable par gk2).
+    donnees = {"lan_if": "eth2", "chaine_chargee": False, "appareils": [
+        {"mac": "02:00:5e:00:00:01", "ipv4": ["192.0.2.1"], "ipv6_globales": ["2001:db8::1"], "zone": None, "passe_par_gk2": None}]}
+    monkeypatch.setattr(main, "_ctl_json", lambda *a, **k: (donnees, None, 200))
+    monkeypatch.setattr(main, "_noms_nac", lambda e: {})
+    c = TestClient(main.app)
+    r = c.get("/appareils")
+    if r.status_code in (401, 403):
+        return
+    a = r.json()["appareils"][0]
+    assert a["ipv6_actif"] is True and a["nom"] is None and a["passe_par_gk2"] is None
+    assert not any("part" in k or "pourcent" in k for k in a)

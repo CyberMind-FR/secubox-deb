@@ -72,6 +72,8 @@ _lan_if() {
 # ingress (br-lxc des conteneurs, wg, maillage) est accepte d'emblee : jamais coupe.
 # LAN = zone de confiance : un appareil non classe garde Internet ; seuls les ensembles
 # NAC blocked et quarantine_zone sont jetes (recopies ici, #2940 Review Focus point 1).
+# vus_lan (#3803) : MAC dont un paquet du LAN a reellement ete retransmis par gk2 dans
+# les 15 dernieres minutes — signal « passe par gk2 » de la page, sans conntrack.
 # Policy accept : aucun drop par defaut ne peut attraper une autre interface.
 #
 # Un ensemble nft n'est visible que dans sa table : @blocked de secubox_nac est
@@ -112,6 +114,11 @@ _contenu_chaine() {
     _def_ensemble blocked
     _def_ensemble quarantine_zone
     cat <<EOF
+	set vus_lan {
+		type ether_addr;
+		flags dynamic,timeout;
+		timeout 15m;
+	}
 	counter sbx_pr_forward_rejete {
 	}
 	counter sbx_pr_forward_lan {
@@ -121,6 +128,7 @@ _contenu_chaine() {
 		iifname != "${lan_if}" accept
 		ether saddr @blocked counter name sbx_pr_forward_rejete drop
 		ether saddr @quarantine_zone counter name sbx_pr_forward_rejete drop
+		update @vus_lan { ether saddr }
 		counter name sbx_pr_forward_lan accept
 	}
 }
@@ -272,6 +280,149 @@ except Exception:
     printf '{"mode": "%s", "sonde_active": %s}\n' "$mode" "$sonde_active"
 }
 
+_nft_json() {
+    if command -v "$NFT" >/dev/null 2>&1; then "$NFT" -j "$@" 2>/dev/null || true; fi
+}
+
+_passerelle_lue() {
+    _freeboxctl lire-passerelle 2>/dev/null | python3 -c 'import json,sys
+try:
+    print(json.load(sys.stdin).get("passerelle") or "")
+except Exception:
+    print("")' 2>/dev/null || true
+}
+
+# etat-complet (#3803, lecture) : tout ce que montre la page, valeurs reelles ou null.
+cmd_etat_complet() {
+    local table=false ipf=0 compteurs="" sonde passerelle
+    if command -v "$NFT" >/dev/null 2>&1 && "$NFT" list table inet secubox_pseudo_routeur >/dev/null 2>&1; then
+        table=true
+        compteurs="$(_nft_json list counters table inet secubox_pseudo_routeur)"
+    fi
+    ipf="$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo 0)"
+    sonde="$(bash "$SONDE_SCRIPT" etat 2>/dev/null || echo '{}')"
+    passerelle="$(_passerelle_lue)"
+    TABLE="$table" IPF="$ipf" COMPTEURS="$compteurs" SONDE="$sonde" PASSERELLE="$passerelle" \
+    PERSIST="$NFT_OUT_DEFAUT" PR_GK2="$IP_GK2" PR_FREEBOX="$IP_FREEBOX" LAN_IF="$(_lan_if)" python3 - <<'PYEOF'
+import json, os, time
+e = os.environ
+compteurs = {"lan": None, "rejete": None}
+try:
+    for o in json.loads(e["COMPTEURS"] or "{}").get("nftables", []):
+        c = o.get("counter")
+        if c and c.get("name") in ("sbx_pr_forward_lan", "sbx_pr_forward_rejete"):
+            compteurs["lan" if c["name"].endswith("lan") else "rejete"] = {"paquets": c.get("packets", 0), "octets": c.get("bytes", 0)}
+except ValueError:
+    pass
+try:
+    sonde = json.loads(e["SONDE"])
+except ValueError:
+    sonde = {}
+try:
+    depuis = int(os.stat(e["PERSIST"]).st_mtime)
+except OSError:
+    depuis = None
+table = e["TABLE"] == "true"
+passerelle = e["PASSERELLE"] or None
+print(json.dumps({
+    "actif": table and passerelle == e["PR_GK2"],
+    "depuis": depuis if table else None,
+    "table_presente": table,
+    "ip_forward": e["IPF"].strip() == "1",
+    "lan_if": e["LAN_IF"] or None,
+    "ip_gk2": e["PR_GK2"], "ip_freebox": e["PR_FREEBOX"],
+    "passerelle_distribuee": passerelle, "passerelle_lue_a": int(time.time()) if passerelle else None,
+    "sonde": {"active": sonde.get("actif") is True, "echecs_consecutifs": sonde.get("echecs_consecutifs", 0),
+              "historique": sonde.get("historique", [])[-10:]},
+    "compteurs": compteurs,
+}))
+PYEOF
+}
+
+# appareils (#3803, lecture) : un objet par MAC vue sur l'interface LAN (ip neigh v4+v6),
+# zone NAC (ensembles de secubox_nac), « passe par gk2 » = MAC dans @vus_lan (null si la
+# chaine n'est pas chargee : pas de signal, jamais de valeur inventee).
+cmd_appareils() {
+    local lan_if s zones="" vus=""
+    lan_if="$(_lan_if)"
+    if [ -z "$lan_if" ]; then
+        echo "refuse : interface LAN inconnue (lan_if dans $CONF ou SECUBOX_PR_LAN_IF)" >&2
+        exit 2
+    fi
+    for s in $NAC_SETS; do
+        zones+="$s $(_nft_json list set inet secubox_nac "$s" | tr '\n' ' ')"$'\n'
+    done
+    if command -v "$NFT" >/dev/null 2>&1 && "$NFT" list table inet secubox_pseudo_routeur >/dev/null 2>&1; then
+        vus="$(_nft_json list set inet secubox_pseudo_routeur vus_lan)"
+        [ -n "$vus" ] || vus='{}'
+    fi
+    LAN_IF="$lan_if" ZONES="$zones" VUS="$vus" \
+    V4="$(ip -4 neigh show dev "$lan_if" 2>/dev/null || true)" V6="$(ip -6 neigh show dev "$lan_if" 2>/dev/null || true)" python3 - <<'PYEOF'
+import ipaddress, json, os, re, time
+def macs_de(txt):
+    r = set()
+    try:
+        for o in json.loads(txt).get("nftables", []):
+            for el in (o.get("set") or {}).get("elem", []) or []:
+                v = el if isinstance(el, str) else ((el.get("elem") or {}).get("val") if isinstance(el, dict) else None)
+                if isinstance(v, str):
+                    r.add(v.lower())
+    except ValueError:
+        pass
+    return r
+zone = {}
+for ligne in os.environ["ZONES"].splitlines():
+    nom, _, js = ligne.partition(" ")
+    for m in macs_de(js or "{}"):
+        if m not in zone or nom in ("blocked", "quarantine_zone"):
+            zone[m] = nom
+vus = macs_de(os.environ["VUS"]) if os.environ["VUS"] else None
+app = {}
+for cle, fam in (("V4", 4), ("V6", 6)):
+    for ligne in os.environ[cle].splitlines():
+        m = re.match(r"(\S+) .*lladdr ([0-9a-fA-F:]{17})", ligne)
+        if not m or "FAILED" in ligne or "INCOMPLETE" in ligne:
+            continue
+        mac = m.group(2).lower()
+        a = app.setdefault(mac, {"mac": mac, "ipv4": [], "ipv6_globales": []})
+        ip = ipaddress.ip_address(m.group(1))
+        if fam == 4:
+            a["ipv4"].append(str(ip))
+        elif ip.is_global:
+            a["ipv6_globales"].append(str(ip))
+for a in app.values():
+    a["zone"] = zone.get(a["mac"])
+    a["passe_par_gk2"] = (a["mac"] in vus) if vus is not None else None
+print(json.dumps({"lan_if": os.environ["LAN_IF"], "releve": int(time.time()),
+                  "chaine_chargee": vus is not None,
+                  "appareils": sorted(app.values(), key=lambda a: (a["ipv4"] or ["~"])[0])}))
+PYEOF
+}
+
+# tester-retour (#3803) : essai a blanc du chemin de secours — ne modifie RIEN, dit ce que
+# retour-freebox ferait et si chaque etape est possible.
+cmd_tester_retour() {
+    local table=false fichier=false passerelle
+    if command -v "$NFT" >/dev/null 2>&1 && "$NFT" list table inet secubox_pseudo_routeur >/dev/null 2>&1; then table=true; fi
+    [ -f "$NFT_OUT_DEFAUT" ] && fichier=true
+    passerelle="$(_passerelle_lue)"
+    TABLE="$table" FICHIER="$fichier" PASSERELLE="$passerelle" PR_FREEBOX="$IP_FREEBOX" PERSIST="$NFT_OUT_DEFAUT" python3 - <<'PYEOF'
+import json, os
+e = os.environ
+lue = e["PASSERELLE"] or None
+etapes = [
+    {"etape": "supprimer la table inet secubox_pseudo_routeur", "possible": True,
+     "detail": "table presente, serait supprimee" if e["TABLE"] == "true" else "table absente, rien a supprimer"},
+    {"etape": "retirer " + e["PERSIST"], "possible": True,
+     "detail": "fichier present, serait retire" if e["FICHIER"] == "true" else "fichier absent, rien a retirer"},
+    {"etape": "rendre la passerelle DHCP a la Freebox (" + e["PR_FREEBOX"] + ")", "possible": lue is not None,
+     "detail": ("connecteur Freebox joignable, passerelle actuelle " + lue) if lue else "connecteur Freebox injoignable : le retour echouerait"},
+    {"etape": "laisser ip_forward=1", "possible": True, "detail": "volontaire : les conteneurs LXC en ont besoin"},
+]
+print(json.dumps({"modifie": False, "pret": all(x["possible"] for x in etapes), "etapes": etapes}))
+PYEOF
+}
+
 case "${1:-}" in
     generer-chaine) cmd_generer_chaine ;;
     activer-transfert) cmd_activer_transfert ;;
@@ -280,5 +431,8 @@ case "${1:-}" in
     retour-freebox) cmd_retour_freebox ;;
     etat) cmd_etat ;;
     apercu) cmd_apercu ;;
-    *) echo "usage : pseudo-routeurctl generer-chaine|activer-transfert|etat-transfert|activer|retour-freebox|etat|apercu" >&2; exit 2 ;;
+    etat-complet) cmd_etat_complet ;;
+    appareils) cmd_appareils ;;
+    tester-retour) cmd_tester_retour ;;
+    *) echo "usage : pseudo-routeurctl generer-chaine|activer-transfert|etat-transfert|activer|retour-freebox|etat|apercu|etat-complet|appareils|tester-retour" >&2; exit 2 ;;
 esac

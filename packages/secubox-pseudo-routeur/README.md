@@ -32,10 +32,12 @@ DHCP à la Freebox ; `ip_forward=1` est laissé volontairement (les LXC en ont b
 
 | Route | Garde | Rôle |
 |---|---|---|
-| `GET /etat` | lecture | mode (gk2/freebox), sonde active |
+| `GET /etat` | lecture | actif, depuis, passerelle distribuée (lue au connecteur Freebox), sonde + historique, compteurs `sbx_pr_forward_lan`/`sbx_pr_forward_rejete` ; `null` si non relevé |
+| `GET /appareils` | lecture | un appareil par MAC (`ip neigh` sur `lan_if`) : nom NAC, zone NAC, `passe_par_gk2` (MAC dans l'ensemble dynamique `vus_lan`, 15 min ; `null` si chaîne absente), `ipv6_actif` (booléen : la part IPv6 n'est pas mesurable par gk2) |
 | `GET /apercu` | admin | voisins du LAN absents de tout ensemble NAC, à montrer avant activation (informatif : ils garderont Internet) |
 | `POST /activer` | admin | bascule (refusée si la sonde n'est pas active) |
-| `POST /retour-freebox` | admin | retour à la Freebox, inconditionnel |
+| `POST /retour` (alias `/retour-freebox`) | admin | retour à la Freebox, inconditionnel |
+| `POST /tester-retour` | admin | essai à blanc du retour : étapes et faisabilité, ne modifie rien |
 | `GET /suggestions` | admin | appareils vus par la Freebox, zone suggérée |
 | `GET /journal` | admin | bascules de passerelle (audit.log) |
 

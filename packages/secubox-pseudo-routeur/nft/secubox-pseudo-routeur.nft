@@ -1,22 +1,3 @@
-# SPDX-License-Identifier: LicenseRef-CMSD-1.0
-# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-# Source-Disclosed License — All rights reserved except as expressly granted.
-# See LICENCE-CMSD-1.0.md for terms.
-
-
-# SecuBox-Deb :: secubox-pseudo-routeur :: chaine forward du LAN plat (#2940, #3803)
-#
-# priority filter - 1 : juste APRES la chaine forward de secubox-nac (priorite -5).
-# #3803 : seul le trafic ENTRE par l'interface LAN est gouverne ; tout autre ingress
-# (br-lxc des conteneurs, wg, maillage) est accepte d'emblee. LAN = zone de confiance :
-# un appareil non classe garde Internet ; seuls blocked et quarantine_zone sont jetes.
-# policy accept : aucun drop par defaut ne peut attraper une autre interface.
-# blocked/quarantine_zone : copies locales (un ensemble nft est propre a sa table),
-# remplies a la generation avec les MAC du NAC ; vides dans ce gabarit.
-#
-# Genere par `pseudo-routeurctl generer-chaine` (ici lan_if = eth2, cas de gk2) — le
-# contenu doit rester identique a celui que le ctl produit pour cette interface.
-
 table inet secubox_pseudo_routeur {}
 delete table inet secubox_pseudo_routeur
 table inet secubox_pseudo_routeur {
@@ -25,6 +6,11 @@ table inet secubox_pseudo_routeur {
 	}
 	set quarantine_zone {
 		type ether_addr;
+	}
+	set vus_lan {
+		type ether_addr;
+		flags dynamic,timeout;
+		timeout 15m;
 	}
 	counter sbx_pr_forward_rejete {
 	}
@@ -35,6 +21,7 @@ table inet secubox_pseudo_routeur {
 		iifname != "eth2" accept
 		ether saddr @blocked counter name sbx_pr_forward_rejete drop
 		ether saddr @quarantine_zone counter name sbx_pr_forward_rejete drop
+		update @vus_lan { ether saddr }
 		counter name sbx_pr_forward_lan accept
 	}
 }
