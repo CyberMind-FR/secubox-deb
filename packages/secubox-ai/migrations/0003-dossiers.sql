@@ -15,8 +15,10 @@ CREATE TABLE dossiers (
   gravite TEXT NOT NULL,
   etapes_json TEXT NOT NULL DEFAULT '[]',
   outils_json TEXT NOT NULL DEFAULT '[]',
-  premiere_vue TEXT NOT NULL, derniere_vue TEXT NOT NULL, maj_le TEXT NOT NULL
+  premiere_vue TEXT NOT NULL, derniere_vue TEXT NOT NULL, maj_le TEXT NOT NULL,
+  a_recalculer INTEGER NOT NULL DEFAULT 1     -- passe bornée : le reste attend la suivante
 );
+CREATE INDEX idx_dossiers_recalcul ON dossiers(a_recalculer);
 CREATE INDEX idx_dossiers_vue ON dossiers(derniere_vue);
 CREATE TABLE dossier_incidents (
   dossier_id TEXT NOT NULL REFERENCES dossiers(id) ON DELETE CASCADE,

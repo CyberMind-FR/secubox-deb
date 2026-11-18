@@ -167,7 +167,7 @@ def test_espacement_apres_401(db):
 def test_sources_ajoutees_garde_dns_actord(db):
     noms = {s.nom for s in toutes()}
     assert {"menaces", "bans", "bans_actifs", "blocs", "campagnes", "decisions", "reevaluations", "posture",
-            "garde", "actord", "dns"} == noms
+            "garde", "actord", "mesures", "dns"} == noms
     hist = {"heures": 24, "lignes": [
         {"id": 7, "menace": "infection", "debut": 1794585358, "fin": None, "etat": "active", "nom": "tv-salon",
          "motif": "dga"},

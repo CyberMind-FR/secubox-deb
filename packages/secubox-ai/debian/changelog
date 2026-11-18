@@ -5,7 +5,10 @@ secubox-ai (0.3.2-1~trixie1) trixie; urgency=medium
     adresse rattachée plus tard rejoint le dossier de l'acteur. Campagnes par
     règles meme_outil, meme_bloc, meme_cible. Étapes nommées reperage, essais,
     exploitation, persistance, chacune avec ses règles, preuves et heures.
-    Passe après la corrélation, dans la boucle de 60 s.
+    Passe après la corrélation, dans la boucle de 60 s. Source mesures
+    (/waf/mesures : actor, ip) ; campagnes par vagues closes au calme,
+    sans balayages, membres bornés ; passe incrémentale bornée ; rétention
+    des dossiers vides de plus de 365 j.
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 21:00:00 +0000
 

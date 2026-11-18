@@ -60,7 +60,7 @@ def normaliser_tous(nom, lignes, id_de, famille_defaut=None):
 def toutes():
     """Les sources collectées par défaut (les essais des leurres viennent du flux des menaces)."""
     from veille.sources import (actord, bans, bans_actifs, blocs, campagnes, decisions, dns, garde, menaces,
-                                posture, reevaluations)
+                                mesures, posture, reevaluations)
     return [menaces.Menaces(), bans.Bans(), bans_actifs.BansActifs(), blocs.Blocs(), campagnes.Campagnes(),
             decisions.Decisions(), reevaluations.Reevaluations(), posture.Posture(), garde.Garde(),
-            actord.Actord(), dns.Dns()]
+            actord.Actord(), mesures.Mesures(), dns.Dns()]

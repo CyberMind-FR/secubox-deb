@@ -43,7 +43,13 @@ def purger(db, maintenant):
     evenements = _par_lots(
         db, "DELETE FROM evenements WHERE rowid IN (SELECT rowid FROM evenements WHERE horodatage < ? "
             "AND id NOT IN (SELECT evenement_id FROM incident_preuves) LIMIT %d)" % LOT, (lim_evt,))
+    # Dossiers (#3795) : liens partis en cascade avec leurs événements et incidents ; le dossier vide et vieux part.
+    dossiers = _par_lots(
+        db, "DELETE FROM dossiers WHERE rowid IN (SELECT rowid FROM dossiers WHERE derniere_vue < ? "
+            "AND id NOT IN (SELECT dossier_id FROM dossier_evenements) "
+            "AND id NOT IN (SELECT dossier_id FROM dossier_incidents) "
+            "AND id NOT IN (SELECT campagne_id FROM dossier_membres) LIMIT %d)" % LOT, (lim_inc,))
     mesures = _par_lots(
         db, "DELETE FROM mesures WHERE rowid IN (SELECT rowid FROM mesures WHERE horodatage < ? LIMIT %d)" % LOT,
         (lim_mes,))
-    return {"evenements": evenements, "incidents": incidents, "mesures": mesures}
+    return {"evenements": evenements, "incidents": incidents, "mesures": mesures, "dossiers": dossiers}

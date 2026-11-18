@@ -100,12 +100,12 @@ def test_retention_par_lots(tmp_path):
     requetes = []
     db.set_trace_callback(lambda s: requetes.append(s) if s.startswith("DELETE") else None)
     res = retention.purger(db, MAINTENANT)
-    assert res == {"evenements": 2500, "incidents": 1, "mesures": 1}
+    assert res == {"evenements": 2500, "incidents": 1, "mesures": 1, "dossiers": 0}
     assert len([r for r in requetes if "evenements" in r]) >= 3          # lots de 1 000
     assert db.execute("SELECT count(*) FROM evenements").fetchone()[0] == 2
     assert db.execute("SELECT id FROM incidents").fetchall() == [("i-recent",)]
     assert db.execute("SELECT count(*) FROM mesures").fetchone()[0] == 1
-    assert retention.purger(db, MAINTENANT) == {"evenements": 0, "incidents": 0, "mesures": 0}
+    assert retention.purger(db, MAINTENANT) == {"evenements": 0, "incidents": 0, "mesures": 0, "dossiers": 0}
     assert (tmp_path / "veille.db").exists()                              # jamais supprimée
 
 

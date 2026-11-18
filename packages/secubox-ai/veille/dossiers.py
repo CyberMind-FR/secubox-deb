@@ -4,12 +4,20 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """Dossiers d'attaquant et de campagne, étapes (complément corrélation § 2), #3795. Déterministe, sans IA.
 
-Clé d'un dossier d'acteur : l'acteur d'actord (`ACT-nnnn`, champ `actor` des propositions, adresses dans `ips`) quand
-une adresse lui est rattachée, sinon l'adresse. Une adresse rattachée plus tard rejoint le dossier de l'acteur (le
-dossier par adresse est fondu). Une campagne réunit ≥ 2 dossiers d'acteur par règle écrite : `meme_outil` (signature
-de campagne de gk2, outil nommé par gk2, ou outil identifié par la tâche 8), `meme_bloc` (même /24 dans la fenêtre),
-`meme_cible` (même vhost attaqué à moins de `cible_s` d'écart). Seuls les événements CORRÉLABLES entrent (jamais
-documentation, `local`, autotest : `correlation.correlable`).
+Clé d'un dossier d'acteur : l'acteur d'actord (`ACT-nnnn` : propositions `actor`/`ips`, mesures `actor`/`ip` ; le
+rattachement le plus récent l'emporte) quand une adresse lui est rattachée, sinon l'adresse. Une adresse rattachée plus
+tard rejoint le dossier de l'acteur : le dossier par adresse est FONDU (son identifiant disparaît ; ses événements et
+ses appartenances de campagne passent au dossier de l'acteur). Seuls les événements CORRÉLABLES entrent (jamais
+documentation, `local`, autotest, mesures : `correlation.correlable`).
+
+Campagnes, par vagues : `meme_cible` (`cible:<vhost>:<famille>:<début>`) et `meme_bloc` (`bloc:<x/24>:<famille>:<début>`)
+ne comptent que des événements d'`essais` ou d'`exploitation` (jamais un balayage) de MÊME famille de règle, d'au
+moins deux acteurs à moins de `cible_s` ; `meme_outil` (`outil:<signature>:<début>`) suit les signatures de campagne
+de gk2. Une vague sans nouvel événement depuis `calme_s` est close : la suivante ouvre une nouvelle campagne.
+Membres bornés (MAX_MEMBRES, dépassement journalisé).
+
+Passe incrémentale : curseur `dossiers` (rowid d'evenements) dans `curseurs`, LOT_EVTS événements au plus ; dossiers
+à recalculer marqués, MAX_RECALCUL recalculés par passe (le reste à la suivante).
 
 Étapes, par règles nommées : `reperage` (balayage, cartographie, anomalie_hote, syn_sans_etat), `essais`
 (sondes_produits_absents, leurre_touche, identifiants_tentes), `exploitation` (regle_waf_attaque,
@@ -18,17 +26,22 @@ Chaque étape garde ses règles, ses preuves (identifiants d'événements) et le
 """
 import hashlib
 import json
+import logging
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from veille import normaliser
-from veille.correlation import _COLS, _charger, _evt, correlable
+from veille.correlation import _COLS, CALME_S, _evt, correlable
 from veille.regles import ECHELLE, Evt, iso, rang
 
 FENETRE_S = 86400              # événements nouveaux regardés à chaque passe (les liens déjà faits sont gardés)
-CIBLE_S = 1800                 # même cible : deux acteurs à moins de 30 min d'écart
+CIBLE_S = 1800                 # même cible / même bloc : deux acteurs à moins de 30 min d'écart
+LOT_EVTS = 5000                # événements lus par passe (curseur)
+MAX_RECALCUL = 500             # dossiers recalculés par passe
+MAX_MEMBRES = 200              # membres d'une campagne
+log = logging.getLogger("secubox-ai-veille")
 ORDRE = ("reperage", "essais", "exploitation", "persistance")
 ACTEUR = re.compile(r"^ACT-[0-9]{1,12}$")
 SYN_SANS_ETAT = frozenset({"syn_sans_etat", "syn_scan"})
@@ -106,8 +119,9 @@ def _acteurs(db, evts):
         if ip and not marques:
             out[ip] = acteur
 
-    for (attributs,) in db.execute("SELECT attributs_json FROM evenements WHERE source = 'actord' "
-                                   "ORDER BY horodatage, id"):
+    # Propositions (`ips`) et mesures (`ip`, rangé dans ip_src) mêlées dans l'ordre du temps : le plus récent gagne.
+    for attributs, ip_src in db.execute("SELECT attributs_json, ip_src FROM evenements "
+                                        "WHERE source IN ('actord', 'mesures') ORDER BY horodatage, rowid"):
         try:
             a = json.loads(attributs or "{}")
         except ValueError:
@@ -115,7 +129,7 @@ def _acteurs(db, evts):
         if not isinstance(a, dict):
             continue
         ips = a.get("ips") if isinstance(a.get("ips"), list) else []
-        for ip in ips + [a.get("ip")]:
+        for ip in ips + [a.get("ip"), ip_src]:
             _rattacher(a.get("actor"), ip)
     for e in evts:
         if e.attributs.get("actor") and e.ip_src not in out:
@@ -137,81 +151,89 @@ def _lier(db, did, ids):
     return db.total_changes > avant
 
 
-def _lier_incidents(db, did):
-    avant = db.total_changes
-    db.execute("INSERT OR IGNORE INTO dossier_incidents(dossier_id, incident_id) SELECT DISTINCT ?, p.incident_id "
-               "FROM incident_preuves p JOIN dossier_evenements d ON d.evenement_id = p.evenement_id "
-               "WHERE d.dossier_id = ?", (did, did))
-    return db.total_changes > avant
-
-
 def _fondre(db, acteurs, h):
-    """Dossier par adresse dont l'adresse est désormais rattachée à un acteur : ses liens passent à l'acteur."""
+    """Dossier par adresse dont l'adresse est désormais rattachée à un acteur : ses événements, incidents et
+    appartenances de campagne passent au dossier de l'acteur ; le dossier par adresse (et son id) disparaît."""
     touches = set()
     for ip, acteur in acteurs.items():
-        r = db.execute("SELECT id FROM dossiers WHERE cle = ? AND type = 'acteur'", (ip,)).fetchone()
+        r = db.execute("SELECT id, premiere_vue FROM dossiers WHERE cle = ? AND type = 'acteur'", (ip,)).fetchone()
         if r is None:
             continue
-        ids = [i for (i,) in db.execute("SELECT evenement_id FROM dossier_evenements WHERE dossier_id = ?", (r[0],))]
-        debut = db.execute("SELECT premiere_vue FROM dossiers WHERE id = ?", (r[0],)).fetchone()[0]
+        ancien, debut = r
         did = _assurer(db, acteur, "acteur", debut, h)
-        _lier(db, did, ids)
-        db.execute("DELETE FROM dossiers WHERE id = ?", (r[0],))
-        touches.add(did)
+        db.execute("INSERT OR IGNORE INTO dossier_evenements(dossier_id, evenement_id) SELECT ?, evenement_id "
+                   "FROM dossier_evenements WHERE dossier_id = ?", (did, ancien))
+        db.execute("INSERT OR IGNORE INTO dossier_incidents(dossier_id, incident_id) SELECT ?, incident_id "
+                   "FROM dossier_incidents WHERE dossier_id = ?", (did, ancien))
+        db.execute("INSERT OR IGNORE INTO dossier_membres(campagne_id, membre_id, regle) SELECT campagne_id, ?, regle "
+                   "FROM dossier_membres WHERE membre_id = ?", (did, ancien))
+        campagnes = [c for (c,) in db.execute("SELECT campagne_id FROM dossier_membres WHERE membre_id = ?", (ancien,))]
+        db.execute("DELETE FROM dossiers WHERE id = ?", (ancien,))
+        touches.update([did] + campagnes)
     return touches
 
 
-def _outils(db, did, evts):
-    """Outils d'un dossier d'acteur : signature de campagne de gk2, outil nommé par gk2, outils de la tâche 8."""
-    out = set()
-    for e in evts:
-        if e.famille == "campagne" and e.sous_famille:
-            out.add(e.sous_famille)
-        o = e.attributs.get("outil")
-        if isinstance(o, str) and o:
-            out.add(normaliser.texte(o, 64))
-    r = db.execute("SELECT outils_json FROM dossiers WHERE id = ?", (did,)).fetchone()
-    try:
-        for o in json.loads(r[0] or "[]") if r else []:
-            nom = o.get("outil") if isinstance(o, dict) else None
-            if isinstance(nom, str) and nom and nom != "inconnu":
-                out.add(nom)
-    except ValueError:
-        pass
+def _signaux(e: Evt):
+    """(base de clé, famille, règle, recul) des campagnes qu'un événement peut nourrir."""
+    out = []
+    if e.famille == "campagne" and e.sous_famille:
+        out.append((f"outil:{e.sous_famille}", "campagne", "meme_outil"))
+    r = etape_de(e)
+    if r and r[0] in ("essais", "exploitation"):
+        if e.vhost:
+            out.append((f"cible:{e.vhost}:{e.famille}", e.famille, "meme_cible"))
+        if e.bloc24:
+            out.append((f"bloc:{e.bloc24}:{e.famille}", e.famille, "meme_bloc"))
     return out
 
 
-def _campagnes(db, groupes, cible_s):
-    """{cle de campagne: (règle, {cle d'acteur: dossier})} pour ≥ 2 acteurs."""
-    par = {}
-
-    def _ajouter(cle, regle, membre, did):
-        par.setdefault(cle, (regle, {}))[1][membre] = did
-
-    for membre, (did, g) in groupes.items():
-        for outil in _outils(db, did, g):
-            _ajouter(f"outil:{outil}", "meme_outil", membre, did)
-        for bloc in {e.bloc24 for e in g if e.bloc24 and e.observation}:
-            _ajouter(f"bloc:{bloc}", "meme_bloc", membre, did)
-    # Même cible : attaques (pas les familles neutres) d'acteurs différents à moins de cible_s d'écart.
-    cibles = {}
-    for membre, (did, g) in groupes.items():
-        for e in g:
-            if e.vhost and e.observation and (e.attaque or etape_de(e)):
-                cibles.setdefault(e.vhost, []).append((e.horodatage, membre, did))
-    for vhost, vus in cibles.items():
-        vus.sort()
-        for i, (h1, m1, d1) in enumerate(vus):
-            for h2, m2, d2 in vus[i + 1:]:
-                if m2 != m1 and _ecart(h1, h2) <= cible_s:
-                    _ajouter(f"cible:{vhost}", "meme_cible", m1, d1)
-                    _ajouter(f"cible:{vhost}", "meme_cible", m2, d2)
-    return {c: v for c, v in par.items() if len(v[1]) >= 2}
-
-
-def _ecart(a, b):
-    f = "%Y-%m-%dT%H:%M:%SZ"
-    return abs((datetime.strptime(b, f) - datetime.strptime(a, f)).total_seconds())
+def _campagnes(db, nouveaux, acteurs, maintenant, cible_s, calme_s, h):
+    """Ouvre ou étend les vagues nourries par les événements nouveaux ; rend les dossiers touchés."""
+    touches = set()
+    vus = set()
+    for e in nouveaux:
+        for base, famille, regle in _signaux(e):
+            if base in vus:
+                continue
+            vus.add(base)
+            recul = calme_s if regle == "meme_outil" else cible_s
+            proches = [x for x in (_evt(y) for y in db.execute(
+                f"SELECT {_COLS} FROM evenements WHERE famille = ? AND horodatage >= ? AND horodatage <= ? "
+                "ORDER BY horodatage, id", (famille, iso(maintenant - timedelta(seconds=recul)), h)))
+                if correlable(x) and any(b == base for b, _, _ in _signaux(x))]
+            if not proches:
+                continue
+            membres = {}
+            for x in proches:
+                membres.setdefault(acteurs.get(x.ip_src, x.ip_src), []).append(x)
+            ouverte = db.execute(
+                "SELECT id FROM dossiers WHERE type = 'campagne' AND substr(cle, 1, ?) = ? AND derniere_vue >= ? "
+                "ORDER BY premiere_vue DESC LIMIT 1",
+                (len(base) + 1, base + ":", iso(maintenant - timedelta(seconds=calme_s)))).fetchone()
+            if ouverte is None and len(membres) < 2:
+                continue
+            debut = proches[0].horodatage
+            cid = ouverte[0] if ouverte else _assurer(db, f"{base}:{debut}", "campagne", debut, h)
+            deja = {m for (m,) in db.execute("SELECT membre_id FROM dossier_membres WHERE campagne_id = ?", (cid,))}
+            change, refuses = False, 0
+            for cle, g in sorted(membres.items()):
+                did = _assurer(db, cle, "acteur", g[0].horodatage, h)
+                if did not in deja:
+                    if len(deja) >= MAX_MEMBRES:
+                        refuses += 1
+                        continue
+                    db.execute("INSERT OR IGNORE INTO dossier_membres(campagne_id, membre_id, regle) VALUES (?, ?, ?)",
+                               (cid, did, regle))
+                    deja.add(did)
+                    change = True
+                change |= _lier(db, cid, [x.id for x in g])
+            if refuses:
+                log.warning("campagne %s : %d membre(s) au-delà de %d ignoré(s)", base, refuses, MAX_MEMBRES)
+            if change:
+                db.execute("UPDATE dossiers SET derniere_vue = MAX(derniere_vue, ?) WHERE id = ?",
+                           (proches[-1].horodatage, cid))
+                touches.add(cid)
+    return touches
 
 
 def _evenements(db, did):
@@ -283,42 +305,56 @@ def _recalculer(db, did, h):
                    membres)
 
 
-def construire(db, maintenant, fenetre_s=FENETRE_S, cible_s=CIBLE_S):
-    """Une passe : rattache les événements corrélables de la fenêtre aux dossiers, fond les dossiers par adresse dans
-    leur acteur, relie les incidents, forme les campagnes ; rend les dossiers qui ont changé. Une transaction."""
+def _curseur(db):
+    r = db.execute("SELECT position, derniere_lecture FROM curseurs WHERE source = 'dossiers'").fetchone()
+    pos = int(r[0]) if r and r[0] and str(r[0]).isdigit() else 0
+    return pos, (r[1] if r else None)
+
+
+def construire(db, maintenant, fenetre_s=FENETRE_S, cible_s=CIBLE_S, calme_s=CALME_S, lot=LOT_EVTS,
+               max_recalcul=MAX_RECALCUL):
+    """Une passe : lit les événements nouveaux (curseur), les rattache aux dossiers, fond les dossiers par adresse dans
+    leur acteur, relie les incidents récents, ouvre ou étend les vagues de campagne, puis recalcule au plus
+    max_recalcul dossiers marqués ; rend ceux recalculés. Une transaction courte."""
     if maintenant.tzinfo is None:
         raise ValueError("horodatage sans fuseau")
     h = iso(maintenant)
+    limite = iso(maintenant - timedelta(seconds=fenetre_s))
     db.execute("BEGIN IMMEDIATE")
     try:
-        evts = [e for e in _charger(db, iso(maintenant - timedelta(seconds=fenetre_s)), h) if correlable(e)]
+        pos, derniere = _curseur(db)
+        lignes = db.execute(f"SELECT rowid, {_COLS} FROM evenements WHERE rowid > ? ORDER BY rowid LIMIT ?",
+                            (pos, lot)).fetchall()
+        if lignes:
+            pos = lignes[-1][0]
+        evts = sorted((e for e in (_evt(x[1:]) for x in lignes) if limite <= e.horodatage <= h and correlable(e)),
+                      key=lambda e: (e.horodatage, e.id))
         acteurs = _acteurs(db, evts)
         touches = _fondre(db, acteurs, h)
         groupes = {}
         for e in evts:
             groupes.setdefault(acteurs.get(e.ip_src, e.ip_src), []).append(e)
-        actifs = {}
         for cle, g in groupes.items():
             did = _assurer(db, cle, "acteur", g[0].horodatage, h)
             if _lier(db, did, [e.id for e in g]):
                 touches.add(did)
-            actifs[cle] = (did, g)
-        for did, _ in actifs.values():
-            if _lier_incidents(db, did):
-                touches.add(did)
-        for cle, (regle, membres) in _campagnes(db, actifs, cible_s).items():
-            debut = min(actifs[m][1][0].horodatage for m in membres)
-            cid = _assurer(db, cle, "campagne", debut, h)
-            avant = db.total_changes
-            db.executemany("INSERT OR IGNORE INTO dossier_membres(campagne_id, membre_id, regle) VALUES (?, ?, ?)",
-                           [(cid, did, regle) for did in membres.values()])
-            change = db.total_changes > avant
-            for m in membres:
-                change |= _lier(db, cid, [e.id for e in actifs[m][1]])
-            change |= _lier_incidents(db, cid)
-            if change:
-                touches.add(cid)
-        out = [d for d in (_recalculer(db, did, h) for did in sorted(touches)) if d is not None]
+        # Incidents créés ou étendus depuis la passe précédente (ou tous à la première).
+        nouveaux_liens = db.execute(
+            "SELECT DISTINCT d.dossier_id, p.incident_id FROM incidents i JOIN incident_preuves p ON p.incident_id = i.id "
+            "JOIN dossier_evenements d ON d.evenement_id = p.evenement_id WHERE i.maj_le >= ? AND NOT EXISTS "
+            "(SELECT 1 FROM dossier_incidents x WHERE x.dossier_id = d.dossier_id AND x.incident_id = p.incident_id)",
+            (derniere or "",)).fetchall()
+        db.executemany("INSERT OR IGNORE INTO dossier_incidents(dossier_id, incident_id) VALUES (?, ?)", nouveaux_liens)
+        touches.update(d for d, _ in nouveaux_liens)
+        touches |= _campagnes(db, evts, acteurs, maintenant, cible_s, calme_s, h)
+        db.executemany("UPDATE dossiers SET a_recalculer = 1 WHERE id = ?", [(d,) for d in touches])
+        ids = [d for (d,) in db.execute("SELECT id FROM dossiers WHERE a_recalculer = 1 ORDER BY id LIMIT ?",
+                                        (max_recalcul,))]
+        out = [d for d in (_recalculer(db, did, h) for did in ids) if d is not None]
+        db.executemany("UPDATE dossiers SET a_recalculer = 0 WHERE id = ?", [(d,) for d in ids])
+        db.execute("INSERT INTO curseurs(source, position, etat, derniere_lecture) VALUES ('dossiers', ?, 'ok', ?) "
+                   "ON CONFLICT(source) DO UPDATE SET position = excluded.position, etat = 'ok', "
+                   "derniere_lecture = excluded.derniere_lecture", (str(pos), h))
         db.execute("COMMIT")
     except Exception:
         if db.in_transaction:
