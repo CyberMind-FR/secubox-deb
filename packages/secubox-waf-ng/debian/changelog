@@ -1,3 +1,12 @@
+secubox-waf-ng (1.40.1-1~trixie1) trixie; urgency=medium
+
+  * Geste garde-unban (ref #3794) : POST /api/v1/waf/garde/unban, même
+    compte de service garde ; seulement un ban de la garde actif dans
+    garde-ban.jsonl (409 pas_garde sinon, jamais un ban étranger), plafond
+    60/h, wafctl unban, journal (annule, geste unban) et audit garde-unban.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 21:00:00 +0100
+
 secubox-waf-ng (1.40.0-1~trixie1) trixie; urgency=medium
 
   * Geste garde-ban (ref #3794) : POST /api/v1/waf/garde/ban, compte de

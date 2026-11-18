@@ -319,3 +319,60 @@ def test_defaire_etiquette_garde(c, caplog):
     with caplog.at_level("ERROR"):
         assert c.gb._g._defaire(ipaddress.ip_address("198.51.100.7"), "garde-ban") is False
     assert "garde-ban : retour arrière impossible" in caplog.text and "ai-ban" not in caplog.text
+
+
+# ── POST /garde/unban ──
+def _unban(c, cible, **extra):
+    return c.c.post("/garde/unban", json={"geste": "unban", "cible": cible, **extra})
+
+
+def test_garde_unban_ban_propre_actif(c):
+    ident = c.ban("198.51.100.7").json()["id"]
+    r = _unban(c, "198.51.100.7")
+    assert r.status_code == 200, r.text
+    assert r.json()["ids"] == [ident]
+    assert c.faux.verbes().count("unban") == 1
+    assert c.faux.appel("unban") == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    j = c.journal()[-1]
+    assert j["type"] == "annule" and j["geste"] == "unban" and j["id"] == ident
+    assert "garde-unban" in [x["action"] for x in c.audit()]
+    # déjà levé : plus un ban de la garde
+    assert _unban(c, "198.51.100.7").json() == {"detail": {"motif": "pas_garde"}}
+    assert c.faux.verbes().count("unban") == 1
+
+
+@pytest.mark.parametrize("cible", ["198.51.100.9", "192.168.0.1", "pas-une-ip"])
+def test_garde_unban_etranger_ou_inconnu_409(c, cible):
+    c.ensembles["waf_ban"].add("198.51.100.9")          # ban étranger (sbxwaf, administrateur)
+    r = _unban(c, cible)
+    assert r.status_code == 409 and r.json() == {"detail": {"motif": "pas_garde"}}
+    assert c.faux.appels == []
+
+
+def test_garde_unban_echu_409(c):
+    maintenant = int(time.time())
+    with open(c.gb.JOURNAL_GARDE, "w", encoding="utf-8") as f:
+        f.write(json.dumps({"type": "ban", "id": "a" * 32, "at": maintenant - 9000, "cible": "198.51.100.7",
+                            "fin": maintenant - 1}) + "\n")
+    assert _unban(c, "198.51.100.7").json() == {"detail": {"motif": "pas_garde"}}
+    assert c.faux.appels == []
+
+
+def test_garde_unban_champs_en_trop_et_plafond(c):
+    c.ban("198.51.100.7")
+    assert _unban(c, "198.51.100.7", motif="x").status_code == 422
+    maintenant = int(time.time())
+    with open(c.gb.JOURNAL_GARDE, "a", encoding="utf-8") as f:
+        for i in range(60):
+            f.write(json.dumps({"type": "annule", "id": f"{i:032x}", "at": maintenant - 60, "geste": "unban"}) + "\n")
+    assert _unban(c, "198.51.100.7").json() == {"detail": {"motif": "plafond"}}
+
+
+def test_garde_unban_jeton_portee_ai_ban_refuse(c_vrai):
+    client, cs, faux, tmp_path = c_vrai
+    prive_ai = _cle(cs, tmp_path, "ai-ban")
+    corps = json.dumps({"geste": "unban", "cible": "198.51.100.7"}).encode()
+    entete = {"Authorization": f"Bearer {cs.frapper_jeton(prive_ai, 'ai-ban', 'gk2', corps, time.time())}",
+              "Content-Type": "application/json"}
+    assert client.post("/garde/unban", content=corps, headers=entete).status_code in (401, 403)
+    assert faux.appels == []

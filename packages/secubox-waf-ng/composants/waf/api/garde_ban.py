@@ -237,3 +237,66 @@ def garde_ban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps
                 log.error("garde-ban : annulation %s non journalisée", ident)
             raise HTTPException(500, detail={"motif": "audit" if defait else "incoherent"}) from None
     return {"id": ident, "cible": geste.cible, "fin": fin, "audit": ident}
+
+
+# ── `POST /garde/unban` : levée d'un ban posé par la garde (page /garde/ « Débannir ») ──
+PLAFOND_UNBAN_HEURE = 60
+
+
+class GesteGardeUnban(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    geste: Literal["unban"]
+    cible: str = Field(max_length=45)
+
+
+def _bans_actifs_de(entrees: List[dict], cible: str, maintenant: int) -> List[str]:
+    """Ids des bans de la garde pour `cible`, non échus et non annulés."""
+    annules = {e["id"] for e in entrees if e["type"] == "annule"}
+    return sorted({e["id"] for e in entrees if e["type"] == "ban" and e["cible"] == cible
+                   and e["fin"] > maintenant and e["id"] not in annules})
+
+
+def _unbans_heure(entrees: List[dict], maintenant: int) -> int:
+    return sum(1 for e in entrees if e["type"] == "annule" and e.get("geste") == "unban"
+               and maintenant - e["at"] < HEURE)
+
+
+@router.post("/unban")
+def garde_unban(user: dict = Depends(require_garde), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
+    """Seulement une adresse qui a un ban de la garde actif dans garde-ban.jsonl (409 `pas_garde` sinon) : un ban
+    étranger n'est jamais levé. Application par `wafctl unban` (chemin du retour arrière de l'ai-ban), journal
+    `annule` + `geste: unban`, audit `garde-unban` avant le geste. Plafond propre : 60/h."""
+    geste: GesteGardeUnban = _g._valider(GesteGardeUnban, corps)
+    try:
+        cible = adresse_publique(geste.cible)
+    except ValueError:
+        raise _refus(409, "pas_garde", geste.cible, user) from None
+    with _verrou:
+        maintenant = int(_g._maintenant())
+        try:
+            entrees = _lire_journal()
+        except OSError:
+            raise _refus(503, "journal", geste.cible, user) from None
+        ids = _bans_actifs_de(entrees, geste.cible, maintenant)
+        if not ids:
+            raise _refus(409, "pas_garde", geste.cible, user)
+        if _unbans_heure(entrees, maintenant) >= PLAFOND_UNBAN_HEURE:
+            raise _refus(409, "plafond", geste.cible, user)
+        resume = f"ids {','.join(ids)} cible {geste.cible}"
+        try:
+            _auditer("garde-unban", resume, user)
+        except Exception:  # noqa: BLE001 — lever un ban sans trace serait pire que ne pas le lever
+            raise _refus(503, "audit", geste.cible, user) from None
+        r, _ = _g._lancer(_g._argv("unban", cible))
+        if r is None or r.returncode != 0:
+            statut, motif = (503, "wafctl") if r is None else _g._statut_motif(_g._motif_sortie(r))
+            raise _refus(statut, motif, geste.cible, user)
+        try:
+            for i in ids:
+                _ecrire_journal({"ts": _g._horodatage(), "at": maintenant, "type": "annule", "id": i,
+                                 "cible": geste.cible, "geste": "unban", "cause": "garde"})
+        except OSError:
+            # levé et audité ; un nouvel essai refera un retrait idempotent puis la ligne
+            raise _refus(503, "journal", geste.cible, user) from None
+    return {"cible": geste.cible, "ids": ids, "etat": "annule"}
