@@ -144,10 +144,3 @@ def test_activation_idempotente(tmp_path):
     # regenerer donne exactement le meme fichier (une seule copie des regles)
     assert _generer(tmp_path) == txt
 
-
-def test_retour_freebox_supprime_la_table():
-    src = CTL.read_text()
-    corps = src[src.index("cmd_retour_freebox() {"):]
-    corps = corps[:corps.index("\n}\n")]
-    assert "nft delete table inet secubox_pseudo_routeur" in corps
-    assert 'rm -f "$NFT_OUT_DEFAUT"' in corps

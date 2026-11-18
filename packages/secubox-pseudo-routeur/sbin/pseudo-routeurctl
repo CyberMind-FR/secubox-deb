@@ -14,7 +14,9 @@
 
 set -euo pipefail
 
-readonly NFT_OUT_DEFAUT="/etc/nftables.d/zz-secubox-pseudo-routeur.nft"
+readonly NFT_OUT_DEFAUT="${SECUBOX_PR_NFT_PERSIST:-/etc/nftables.d/zz-secubox-pseudo-routeur.nft}"
+readonly NFT="${SECUBOX_PR_NFT:-nft}"
+readonly AUDIT_LOG="${SECUBOX_PR_AUDIT_LOG:-/var/log/secubox/audit.log}"
 readonly NFT_OUT="${SECUBOX_PR_NFT_OUT:-$NFT_OUT_DEFAUT}"
 # sonde-secours vit dans le meme sbin/ (dev comme une fois installe en /usr/sbin/) : pas
 # besoin que /usr/sbin figure dans le PATH pour le trouver.
@@ -75,7 +77,8 @@ _lan_if() {
 # Un ensemble nft n'est visible que dans sa table : @blocked de secubox_nac est
 # introuvable ici (nft refusait tout le fichier). On declare donc des copies locales,
 # remplies a la generation avec les MAC actuelles du NAC ; les drops vivants restent
-# ceux de la chaine forward de secubox-nac (priorite -5), evaluee avant celle-ci.
+# ceux de la chaine forward de secubox-nac (priorite -5), evaluee avant celle-ci et
+# seule source qui fait foi : ces copies ne sont qu'un instantane pris a la generation.
 _elements_nac() {
     command -v nft >/dev/null 2>&1 || return 0
     nft -j list set inet secubox_nac "$1" 2>/dev/null | python3 -c 'import json,re,sys
@@ -124,15 +127,20 @@ _contenu_chaine() {
 EOF
 }
 
-cmd_generer_chaine() {
-    local lan_if
+# Ecrit la chaine dans $1 ; refuse (exit 2) si l'interface LAN est inconnue.
+_ecrire_chaine() {
+    local dest="$1" lan_if
     lan_if="$(_lan_if)"
     if [ -z "$lan_if" ]; then
         echo "refuse : interface LAN inconnue (lan_if dans $CONF ou SECUBOX_PR_LAN_IF)" >&2
         exit 2
     fi
-    mkdir -p "$(dirname "$NFT_OUT")"
-    _contenu_chaine "$lan_if" > "$NFT_OUT"
+    mkdir -p "$(dirname "$dest")"
+    _contenu_chaine "$lan_if" > "$dest"
+}
+
+cmd_generer_chaine() {
+    _ecrire_chaine "$NFT_OUT"
 }
 
 # apercu (#3803, informatif) : voisins IPv4 de l'interface LAN absents de tout ensemble
@@ -179,9 +187,26 @@ print(json.dumps({"lan_if": os.environ["LAN_IF"],
 PYEOF
 }
 
+# Double tampon (#3803) : fichier temporaire dans le meme repertoire, nom hors du motif
+# d'inclusion (point initial, suffixe .tmp), valide par nft -c, puis mv atomique et
+# seulement alors nft -f. En cas d'echec : temporaire supprime, fichier persistant
+# precedent intact.
 cmd_activer_transfert() {
-    SECUBOX_PR_NFT_OUT="$NFT_OUT_DEFAUT" cmd_generer_chaine
-    nft -f "$NFT_OUT_DEFAUT"
+    local rep tmp
+    rep="$(dirname "$NFT_OUT_DEFAUT")"
+    mkdir -p "$rep"
+    tmp="$(mktemp "$rep/.zz-secubox-pseudo-routeur.XXXXXX.tmp")"
+    # shellcheck disable=SC2064
+    trap "rm -f '$tmp'" EXIT
+    _ecrire_chaine "$tmp"
+    if ! "$NFT" -c -f "$tmp"; then
+        echo "refuse : chaine generee rejetee par nft -c, fichier persistant inchange" >&2
+        exit 1
+    fi
+    chmod 644 "$tmp"
+    mv -f "$tmp" "$NFT_OUT_DEFAUT"
+    trap - EXIT
+    "$NFT" -f "$NFT_OUT_DEFAUT"
     sysctl -w net.ipv4.ip_forward=1 >/dev/null
 }
 
@@ -219,8 +244,15 @@ cmd_activer() {
 # garde, et retour-freebox n'a pas de garde a refuser).
 cmd_retour_freebox() {
     # Retire la chaine en entier (vivante et persistante) : plus rien ne filtre le forward.
-    if command -v nft >/dev/null 2>&1; then
-        nft delete table inet secubox_pseudo_routeur 2>/dev/null || true
+    # ip_forward=1 est laisse volontairement : les conteneurs LXC (br-lxc) en ont besoin.
+    # Un echec de suppression est signale et audite, mais n'empeche JAMAIS le retour DHCP.
+    if command -v "$NFT" >/dev/null 2>&1; then
+        "$NFT" delete table inet secubox_pseudo_routeur 2>/dev/null || true
+        if "$NFT" list table inet secubox_pseudo_routeur >/dev/null 2>&1; then
+            echo "avertissement : table inet secubox_pseudo_routeur toujours presente apres retour-freebox" >&2
+            printf '{"ts": "%s", "module": "pseudo-routeur", "action": "retour_freebox_table_restante", "resultat": "echec_suppression"}\n' \
+                "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$AUDIT_LOG" 2>/dev/null || true
+        fi
     fi
     rm -f "$NFT_OUT_DEFAUT"
     _freeboxctl passerelle-dhcp "$IP_FREEBOX" || exit 1
