@@ -40,6 +40,7 @@ override_dh_auto_install:
 	[ -d composants/cve-triage/menu.d ] && cp -r composants/cve-triage/menu.d/. debian/secubox-security-posture/usr/share/secubox/menu.d/ || true
 	install -d debian/secubox-security-posture/usr/sbin
 	install -m 0755 composants/cve-triage/sbin/secubox-cvectl debian/secubox-security-posture/usr/sbin/
+	install -m 0755 composants/cve-triage/sbin/secubox-cve-leurres-acl debian/secubox-security-posture/usr/sbin/
 	install -d debian/secubox-security-posture/usr/lib/secubox/cve-triage/nuclei-subset
 	cp -r composants/cve-triage/nuclei-subset/. debian/secubox-security-posture/usr/lib/secubox/cve-triage/nuclei-subset/
 	# sudoers: the panel (User=secubox in the aggregator) delegates the

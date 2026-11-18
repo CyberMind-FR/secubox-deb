@@ -1,3 +1,12 @@
+secubox-security-posture (2.10.4-1~trixie1) trixie; urgency=medium
+
+  * cve-leurres (#3789) : l'ACL nommée de lecture du journal du WAF est
+    vérifiée et remise si elle a disparu, en root, avant chaque passage
+    (secubox-cve-leurres-acl, ExecStartPre « + ») ; toute remise est écrite
+    au journal. gk2 le 18/11 : ACL perdue, service en panne.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 06:05:04 +0100
+
 secubox-security-posture (2.10.3-1~trixie1) trixie; urgency=medium
 
   * Veille CVE : profils AppArmor des relevés planifiés passés en enforce,
