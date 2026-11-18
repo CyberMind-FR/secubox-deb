@@ -16,10 +16,18 @@ from types import SimpleNamespace
 
 sys.path.insert(0, "/usr/lib/secubox/garde")
 
-from garde import appareils, base, demandes, effets, moteur, notifs, reseau, sources  # noqa: E402
+from garde import appareils, base, demandes, effets, isoles, moteur, notifs, reseau, sources  # noqa: E402
 
 BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
 NOTE_BOOT = base.ETAT / "boot_id"
+
+
+def _publier_isoles(db, maintenant: int) -> None:
+    """Adresses isolées pour sbxwaf (#3800) ; un échec n'arrête jamais le passage."""
+    try:
+        logging.info("isolées publiées : %d", isoles.ecrire(db, maintenant))
+    except OSError as e:
+        logging.warning("liste des isolées non écrite : %s", e)
 
 
 def main() -> int:
@@ -41,6 +49,7 @@ def main() -> int:
     if boot != note:
         logging.info("rapprochement : %s", moteur.rapprocher(db, ef, maintenant))
         NOTE_BOOT.write_text(boot + "\n")
+        _publier_isoles(db, maintenant)
     noms_doh = sources.charger_noms_doh()
     nommeur = appareils.Nommeur.depuis_fichiers()
     src = SimpleNamespace(
@@ -63,6 +72,7 @@ def main() -> int:
     moteur._repere(db, "cle_sms_presente", 1 if notifs.lire_cle_sms() else 0)
     db.commit()
     logging.info("passage : %s", moteur.passage(db, reglages, src, ef, nt, maintenant))
+    _publier_isoles(db, maintenant)
     db.close()
     return 0
 

@@ -45,6 +45,8 @@ ProtectHome=yes
 PrivateTmp=yes
 ProtectControlGroups=yes
 ReadWritePaths=/var/lib/secubox/garde /var/log/secubox
+# /run/secubox/garde-isoles.json (#3800), lu par sbxwaf ; AppArmor borne l'écriture à ce seul fichier.
+ReadWritePaths=/run/secubox
 # `sudo secubox-adguard-tv quarantaine|evasion` hérite de ProtectSystem=strict. Ce qu'il écrit (lu dans le contrôleur) :
 # - etat.json + temporaire .etat.garde.<pid> + verrou .regles.lock : /var/lib/secubox/ad-guard/dnstv ;
 # - instantané applique.json + temporaire .applique.* + verrou `verrou` : /var/lib/secubox-adguard-tv (0700 root) ;

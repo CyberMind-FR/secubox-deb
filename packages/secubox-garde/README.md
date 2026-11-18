@@ -67,13 +67,17 @@ UN appareil = UNE carte (nom du registre, toutes ses adresses en petit), les ban
 liste et « Débannir » —, historique 24 h, réglages, aperçus. Libérer, rouvrir et débannir demandent une confirmation
 intégrée. `?demo=1` : données fictives, aucune écriture.
 
-## Page de quarantaine (`www/garde/isole.html`)
+## Page de quarantaine (`www/garde/isole.html`) et liste des isolées (#3800)
 
 Statique (aucun script, aucun bouton, CSP `default-src 'none'` + hachage du style), installée dans
-`/usr/share/secubox/www/garde/isole.html`. Voie retenue pour la servir (branchement en T9, après repérage sur gk7 de
-la réponse actuelle à `curl -H 'Host: inconnu.example' http://<ip box>/` — HAProxy → sbxwaf « unrouted ») : déclaration
-par le mécanisme déclaratif de routes (`secubox-waf-route` / `/etc/secubox/haproxy.toml`), jamais à la main, pour qu'un
-Host inconnu en HTTP sur l'adresse de la box renvoie ce fichier.
+`/usr/share/secubox/www/garde/isole.html` (référence du texte). Mécanisme réel : après chaque passage et au
+rapprochement, `secubox-garde-passage` écrit atomiquement `/run/secubox/garde-isoles.json` (0644,
+`{"genere_le", "isoles": [{"ip", "nom", "depuis", "motif"}]}`, toutes les adresses des quarantaines d'infection
+actives, liste vide sinon ; profil AppArmor et `ReadWritePaths=/run/secubox` limités à ce fichier). L'appareil isolé
+résout tout nom vers la box : sa requête HTTP arrive à sbxwaf (paquet `secubox-waf-ng` ≥ 1.40.3) avec un Host non
+routé ; si son adresse cliente figure dans la liste, sbxwaf sert la page d'explication (même texte, plus nom, heure
+et motif échappés ; 200, `Cache-Control: no-store`) au lieu du 421, sans anomalie d'hôte ni ban. Sans le fichier
+(ou sbxwaf plus ancien), le 421 reste servi. HTTPS : le certificat ne correspond pas au nom demandé, rien à faire.
 
 ## Unités
 
