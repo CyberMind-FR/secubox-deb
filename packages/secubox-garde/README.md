@@ -22,8 +22,8 @@ moteur, registre d'appareils, API et page `/garde/`.
 | Méthode | Route | Garde |
 |---|---|---|
 | GET | `/health` | ouverte |
-| GET | `/etat` | `require_lecture` — `{tuiles:{isoles,evasions,bannis,recidivistes,notifs_24h:{sms,courriel},en_attente}, actives, automatique, quarantaines_max, demandes, releve, session_requise}` |
-| GET | `/historique?heures=24` (1…720) | `require_lecture` — `{heures, lignes}` (bans groupés par heure, libérations) |
+| GET | `/etat` | `require_lecture_ou_compte("ai-lecture")` — `{tuiles:{isoles,evasions,bannis,recidivistes,notifs_24h:{sms,courriel},en_attente}, actives, automatique, quarantaines_max, demandes, releve, session_requise}` |
+| GET | `/historique?heures=24` (1…720, 422 hors bornes) | `require_lecture_ou_compte("ai-lecture")` — `{heures, lignes}` (bans groupés par heure, libérations) |
 | GET | `/reglages` | `require_lecture` — 4 réglages + `cle_sms_enregistree`, `cle_sms_en_attente`, `en_attente` ; jamais la clé |
 | POST | `/liberer` `{id}` | `require_jwt` — infection seulement |
 | POST | `/rouvrir` `{id}` | `require_jwt` — évasion seulement |
@@ -34,6 +34,12 @@ moteur, registre d'appareils, API et page `/garde/`.
 
 Lecteur anonyme du tableau de bord (permis par `require_lecture` depuis le LAN) : chiffres seulement, aucun appareil,
 aucune adresse, aucun contact (`session_requise: true`).
+
+Veille V2 de gk3 (#3795) : `/etat` et `/historique` acceptent aussi le compte de service `ai-lecture` (jeton EdDSA
+de `secubox_core.compte_service`, GET seulement, contenu complet). nginx GARDE le préfixe (`proxy_pass
+…/api/v1/garde/`) : gk3 signe le chemin complet **`/api/v1/garde/etat`** et **`/api/v1/garde/historique`** (sans la
+chaîne de requête, non liée au jeton ; `heures` est borné 1…720). Clés publiques lues dans
+`/etc/secubox-comptes-service/ai-lecture/` (posées par `wafctl`), refus dans `audit.log`.
 
 ### Demandes exécutées par le passage
 

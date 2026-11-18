@@ -1,3 +1,13 @@
+secubox-garde (0.3.8-1~trixie1) trixie; urgency=medium
+
+  * #3795 : /etat et /historique acceptent le compte de service ai-lecture
+    (veille V2 de gk3, require_lecture_ou_compte, contenu complet) ; lecteur
+    anonyme du LAN inchangé (chiffres seulement). Chemin signé : complet
+    (/api/v1/garde/...). AppArmor : lecture des clés publiques ai-lecture.
+    Depends secubox-core (>= 1.8.35~).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:00:00 +0100
+
 secubox-garde (0.3.7-1~trixie1) trixie; urgency=medium
 
   * #3794 : un détournement DNS (dns.hijack.*, rangé « malicious » par ad-guard)

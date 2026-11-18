@@ -57,6 +57,7 @@ def _client(admin=True):
     if admin:
         main.app.dependency_overrides[require_jwt] = lambda: {"sub": "admin"}
         main.app.dependency_overrides[require_lecture] = lambda: {"sub": "admin"}
+        main.app.dependency_overrides[main.require_lecture_veille] = lambda: {"sub": "admin"}
     return TestClient(main.app)
 
 
@@ -84,8 +85,9 @@ def test_gardes_declarees():
         deps = {d.call for d in r.dependant.dependencies}
         for m in r.methods:
             gardes[(m, r.path)] = deps
-    for p in ("/etat", "/historique", "/reglages"):
-        assert require_lecture in gardes[("GET", "/api/v1/garde" + p)]
+    for p in ("/etat", "/historique"):
+        assert main.require_lecture_veille in gardes[("GET", "/api/v1/garde" + p)]
+    assert require_lecture in gardes[("GET", "/api/v1/garde/reglages")]
     for p in ("/liberer", "/rouvrir", "/debannir", "/reglages", "/cle-sms", "/tester"):
         assert require_jwt in gardes[("POST", "/api/v1/garde" + p)]
 

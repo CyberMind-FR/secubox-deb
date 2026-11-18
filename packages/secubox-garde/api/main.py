@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
+from secubox_core.compte_service import require_lecture_ou_compte  # noqa: E402
 
 from garde import appareils, base, demandes  # noqa: E402
 
@@ -39,6 +40,9 @@ RE_CLE = re.compile(r"[A-Za-z0-9]{1,64}")
 INTRUSIONS_MAX = 200
 
 router = APIRouter(prefix="/api/v1/garde")
+#: #3795 : la veille V2 (gk3) lit /etat et /historique avec le compte `ai-lecture` (jeton EdDSA lié à GET et au
+#: chemin complet `/api/v1/garde/<route>` : nginx garde le préfixe). Sans porteur : `require_lecture` inchangé.
+require_lecture_veille = require_lecture_ou_compte("ai-lecture")
 
 
 # -- outils
@@ -98,7 +102,7 @@ def _carte(db, row, attente) -> Dict[str, Any]:
 
 
 @router.get("/etat")
-def etat(lecteur: Any = Depends(require_lecture)) -> Dict[str, Any]:
+def etat(lecteur: Any = Depends(require_lecture_veille)) -> Dict[str, Any]:
     now = int(time.time())
     db = _db()
     try:
@@ -139,7 +143,7 @@ def etat(lecteur: Any = Depends(require_lecture)) -> Dict[str, Any]:
 
 
 @router.get("/historique")
-def historique(heures: int = Query(24, ge=1, le=720), lecteur: Any = Depends(require_lecture)) -> Dict[str, Any]:
+def historique(heures: int = Query(24, ge=1, le=720), lecteur: Any = Depends(require_lecture_veille)) -> Dict[str, Any]:
     if _anonyme(lecteur):
         return {"heures": heures, "lignes": [], "session_requise": True}
     now = int(time.time())
