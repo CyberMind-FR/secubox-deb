@@ -99,6 +99,8 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-security-posture/etc/audit/rules.d
 	install -m 640 $(CURDIR)/composants/antirootkit/conf/99-sbx-procwatch.rules \
 		$(CURDIR)/debian/secubox-security-posture/etc/audit/rules.d/
+	install -m 640 $(CURDIR)/composants/cve-triage/conf/98-sbx-waf-droits.rules \
+		$(CURDIR)/debian/secubox-security-posture/etc/audit/rules.d/
 	# Install module composants/antirootkit/config (allowlist + IOC seed)
 	install -d $(CURDIR)/debian/secubox-security-posture/etc/secubox
 	install -m 644 $(CURDIR)/composants/antirootkit/conf/antirootkit.toml \
