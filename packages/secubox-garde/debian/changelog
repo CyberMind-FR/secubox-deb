@@ -1,3 +1,11 @@
+secubox-garde (0.3.3-1~trixie1) trixie; urgency=medium
+
+  * #3794 : dépend de secubox-core (>= 1.8.34~) (compte de service garde,
+    expéditeur de courriel) ; sans lui l'API ne démarre pas (incident gk2
+    du 18/11).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 08:23:11 +0100
+
 secubox-garde (0.3.2-1~trixie1) trixie; urgency=medium
 
   * Notifications (#3794) : `vider_file` ne tient plus de transaction
