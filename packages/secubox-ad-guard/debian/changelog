@@ -1,3 +1,12 @@
+secubox-ad-guard (1.33.0-1~trixie1) trixie; urgency=medium
+
+  * #3795 : GET /dnsguard/alertes?depuis=&max= — alertes du capteur DNS pour
+    la veille V2 de gk3 (compte ai-lecture, require_lecture_ou_compte), lues
+    par la fin et bornées (max <= 2000, 16 Mio relus au plus, depuis RFC 3339
+    ou epoch, 422 hors bornes). Depends secubox-core (>= 1.8.35~).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:00:00 +0100
+
 secubox-ad-guard (1.32.0-1~trixie1) trixie; urgency=medium
 
   * Garde (#3794) : verbes root `quarantaine poser|lever` et `evasion

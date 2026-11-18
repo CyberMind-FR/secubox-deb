@@ -15,7 +15,7 @@ Architecture: all
 # fraiche : unbound boucle en echec (26 redemarrages constates) et le
 # systeme n'a AUCUNE resolution DNS, alors qu'unbound-anchor, l'outil
 # qui sait semer l'ancre, n'est pas installe non plus.
-Depends: ${misc:Depends}, secubox-core (>= 1.8.3), secubox-aggregator (>= 0.4.1),
+Depends: ${misc:Depends}, secubox-core (>= 1.8.35~), secubox-aggregator (>= 0.4.1),
  unbound, nftables, python3-httpx | python3-pip,
          dns-root-data
 # secubox-toolbox : Suggests (#3259), plus Recommends (#2855 l'avait sortie des Depends). ad-guard n'en lit la base qu'en lecture seule et
