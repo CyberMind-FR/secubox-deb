@@ -12,6 +12,7 @@ appareil) ; sinon une alerte est journalisée et le passage suivant réessaie.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import uuid
 from typing import Dict, List, Optional
@@ -130,10 +131,17 @@ def _levees_en_cours(db, effets, maintenant: int) -> int:
     return n
 
 
-def _domaine_enregistre(nom: str) -> str:
-    """Deux derniers libellés (domaine enregistré approché, sans liste des suffixes publics)."""
-    p = [x for x in str(nom).lower().rstrip(".").split(".") if x]
-    return ".".join(p[-2:]) if len(p) >= 2 else ""
+_RE_SUFFIXE = re.compile(r"[a-z]{2,3}\.[a-z]{2}")
+
+
+def _nom_fermable(nom: str) -> str:
+    """Nom tel que donné par le capteur (dns-guard écrit déjà le domaine ENREGISTRÉ d'un tunnel) ; refusé ("")
+    s'il a moins de deux libellés ou s'il a la forme d'un suffixe public `<2-3 lettres>.<2 lettres>` (co.uk,
+    com.au…) : garde prudente, quitte à refuser un vrai domaine court de cette forme."""
+    n = str(nom or "").lower().rstrip(".")
+    if len([x for x in n.split(".") if x]) < 2 or _RE_SUFFIXE.fullmatch(n):
+        return ""
+    return n
 
 
 # -- échéances et suivi des adresses
@@ -278,8 +286,7 @@ def _appliquer(db, d: Decision, signaux, voisins, effets, notifs, maintenant, bi
     nom = appareils.nom_de(db, cle)
     connues = [r[0] for r in db.execute("SELECT ip FROM appareil_ips WHERE cle=?", (cle,))]
     adresses = sorted(set(appareils.adresses_actuelles(cle, voisins, connues)) | {d.ip})
-    noms = sorted({(s.domaine if s.type == "doh" else _domaine_enregistre(s.domaine)).lower().rstrip(".")
-                   for s in signaux if s.type in ("doh", "tunneling") and s.domaine
+    noms = sorted({_nom_fermable(s.domaine) for s in signaux if s.type in ("doh", "tunneling") and s.domaine
                    and appareils.cle_de(db, s.ip, s.mac) == cle} - {""})
     motif = f"{nom} — {d.motif}"
     if d.menace == "evasion" and not noms:     # rien de précis à fermer : signalé, sans effet ni alerte d'échec

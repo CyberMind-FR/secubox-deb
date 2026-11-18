@@ -49,6 +49,8 @@ jour du registre, échéances, suivi des adresses, `decider`, application, notif
 - Une décision n'est `active` que si son effet a réussi (au moins une adresse pour un appareil) ; sinon alerte dans
   `audit.log` et nouvel essai au passage suivant. Ban `409 deja_actif` : enregistré « déjà banni ailleurs », sans
   nouvel essai. Récidives = bans de l'adresse sur 7 j dans `decisions`.
+- Noms d'une évasion : DoH = nom résolu, tunnel = `domain` de l'alerte dns-guard (domaine enregistré, tel quel) ;
+  refusés : moins de deux libellés ou forme `<2-3 lettres>.<2 lettres>` (suffixe public probable) ; aucun nom → signalé.
 - Infection / évasion portent sur l'APPAREIL : posées sur chacune de ses adresses (une entrée ad-guard par IP), puis
   suivies : une adresse quittée est levée, une nouvelle posée ; un appareil absent des voisins garde ses mesures.
 - Levée échouée : la décision passe `levee_en_cours`, seules les adresses levées quittent `adresses`, nouvel essai à

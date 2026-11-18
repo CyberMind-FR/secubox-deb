@@ -338,10 +338,10 @@ def _doh_tunnel(types):
     return [Signal("ad-guard" if t == "doh" else "dns-guard", t, "192.168.1.20", None, d, t, T - 5) for t, d in types]
 
 
-def test_evasion_tunnel_refuse_le_domaine_du_tunnel(tmp_path):
+def test_evasion_tunnel_utilise_le_domaine_du_capteur(tmp_path):
     db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
-    moteur.passage(db, REG, sources(_doh_tunnel([("tunneling", "abcd1234.t.Tunnel.example.")])), ef, nt, T)
-    assert ("fermer_evasion", "192.168.1.20", ("tunnel.example",)) in ef.appels
+    moteur.passage(db, REG, sources(_doh_tunnel([("tunneling", "t.Tunnel.example.co.uk.")])), ef, nt, T)
+    assert ("fermer_evasion", "192.168.1.20", ("t.tunnel.example.co.uk",)) in ef.appels
     assert db.execute("SELECT etat FROM decisions WHERE menace='evasion'").fetchone() == ("active",)
 
 
@@ -362,3 +362,10 @@ def test_migration_fin_des_adresses_remplie(tmp_path):
     cx.commit()
     cx.close()
     assert base.ouvrir(f).execute("SELECT fin FROM adresses").fetchall() == [(99,)]
+
+
+def test_evasion_refuse_un_suffixe_public(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    moteur.passage(db, REG, sources(_doh_tunnel([("tunneling", "co.uk"), ("tunneling", "localhost")])), ef, nt, T)
+    assert not [a for a in ef.appels if a[0] in ("fermer_evasion", "alerte")]
+    assert db.execute("SELECT menace FROM decisions").fetchall() == [("signale",)]
