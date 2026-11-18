@@ -216,7 +216,7 @@ def filtre(fenetre: str = "30j", macs=(), categories=(), decisions=(), sources=(
         ms.append(m2)
     cats = _liste(categories, dnstv_taxonomie.CATEGORIES, "catégorie", len(dnstv_taxonomie.CATEGORIES))
     decs = _liste(decisions, DECISIONS, "décision", len(DECISIONS))
-    srcs = _liste(sources, dnstv_taxonomie.SOURCES + (dnstv_taxonomie.SOURCE_AUCUNE,), "source", 6)
+    srcs = _liste(sources, dnstv_taxonomie.SOURCES + (dnstv_taxonomie.SOURCE_AUCUNE,), "source", len(dnstv_taxonomie.SOURCES) + 1)
     cmin, cmax = _entier(confiance_min, "confiance_min", 0, 100), _entier(confiance_max, "confiance_max", 0, 100)
     # 30 j (la rétention) : aussi les lignes jamais observées (domaines des règles, corrections manuelles), comme au lot 2.
     fen = "(derniere >= ? OR derniere = 0)" if fenetre == "30j" else "derniere >= ?"

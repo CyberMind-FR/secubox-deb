@@ -30,7 +30,7 @@ def test_dix_categories_et_six_protegees():
     assert T.CATEGORIES == ("PUBLICITE", "TRACKING", "TELEMETRIE", "STREAMING", "CDN", "DRM", "AUTHENTIFICATION",
                             "MISE_A_JOUR", "SERVICES_CONSTRUCTEUR", "INCONNU")
     assert T.PROTEGEES == frozenset({"STREAMING", "CDN", "DRM", "AUTHENTIFICATION", "MISE_A_JOUR", "INCONNU"})
-    assert T.SOURCES == ("liste", "apprentissage", "ndpi", "manuelle", "profil")
+    assert T.SOURCES == ("liste", "apprentissage", "ndpi", "manuelle", "profil", "lexique")
     for c in T.CATEGORIES:
         assert T.blocage_auto_permis(c) is (c not in T.PROTEGEES)
     assert T.blocage_auto_permis("nimporte") is False                       # inconnue = protégée
@@ -220,7 +220,7 @@ def test_refus_auto_admet_la_decision_explicite_de_l_administrateur():
         r.transiter(rid, "confirme", "admin", "", 3)
     admin = T.confirmes_par_admin(r)
     assert T.refus_auto(taxo(), "ads.cdn-pub.example", confirmes_admin=admin) is None
-    assert T.refus_auto(taxo(), "ads.autre.example", confirmes_admin=admin) is not None
+    assert T.refus_auto(taxo(), "img.autre.example", confirmes_admin=admin) is not None
 
 
 # ── observation et routes ────────────────────────────────────────────────────────────────────────────

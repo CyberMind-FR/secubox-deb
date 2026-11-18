@@ -1,3 +1,14 @@
+secubox-ad-guard (1.31.0-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (#3787) : découverte automatique dès la première coupure d'un
+    nom de régie publicitaire (mot « ads », « adserver », « vast », « vmap »…
+    dans un libellé d'hôte) : classé PUBLICITE (source « lexique »), proposé et
+    mis à l'essai 24 h, même locataire d'un CDN générique (akamaized.net…).
+    Jamais au-dessus d'une catégorie STREAMING/DRM ; le CDN générique reste
+    protégé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 05:14:34 +0100
+
 secubox-ad-guard (1.30.0-1~trixie1) trixie; urgency=medium
 
   * TV Privacy (#3785) : pubs RTL9+ (OQEE) bloquées en relais seul (validé devant
