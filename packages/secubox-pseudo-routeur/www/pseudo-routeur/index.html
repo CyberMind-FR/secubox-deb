@@ -14,7 +14,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-MB14B/wz9/hDSeM13NB/zMPUBJFdXqQP7w6efrP+gw8='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-bnsfXWdSKsYHFn4WjLWnPuBcL5piNxGwJ5wRBRJMPcI='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pseudo-routeur</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -169,7 +169,7 @@
     </section>
     <section class="pan">
       <h3>Avant d'activer <i>aperçu</i></h3>
-      <p class="note" id="apercu-note">Liste des appareils non classés qui passeront par gk2 (ils gardent Internet). « Activer » demande une confirmation et refuse sans contrôle de secours actif.</p>
+      <p class="note" id="apercu-note">Liste des appareils non classés qui passeront par gk2 (ils gardent Internet). « Activer » demande une confirmation, arme le contrôle de secours, et ne bascule que si son premier contrôle réussit.</p>
       <div class="actions" id="zone-activer"><button class="btn prim" type="button" id="btn-activer">Activer</button><button class="btn" type="button" id="btn-tester">Tester le retour (sans activer)</button><button class="btn" type="button" id="btn-apercu">Voir l'aperçu</button></div>
       <ul class="etapes" id="etapes" hidden></ul>
       <h3>IPv6</h3>
@@ -294,7 +294,6 @@
   el('rafraichir').addEventListener('click',function(){message('');charger();});
   el('btn-retour').addEventListener('click',function(){confirmer(el('b-actions'),'Rendre la passerelle à la Freebox ?',function(){return ecrire('/retour');});});
   el('btn-activer').addEventListener('click',function(){
-    if(!etat.sonde){message('Refusé : le contrôle de secours n\'est pas armé.','erreur');}
     confirmer(el('zone-activer'),'gk2 devient la passerelle DHCP du LAN. Confirmer ?',function(){return ecrire('/activer');});});
   el('btn-tester').addEventListener('click',function(){ecrire('/tester-retour').then(etapes,function(e){message('Refusé : '+e.message,'erreur');});});
   el('btn-apercu').addEventListener('click',function(){lire('/apercu').then(function(d){var u=el('etapes');vider(u);u.hidden=false;var n=(d&&d.non_classes)||[];

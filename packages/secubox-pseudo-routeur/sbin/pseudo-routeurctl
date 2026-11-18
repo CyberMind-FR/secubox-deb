@@ -238,12 +238,27 @@ except Exception:
 
 # activer : refuse (code 2) si la sonde n'est pas active — jamais de bascule DHCP sans
 # le filet de secours arme en premier (#2940 Review Focus point 3).
+# Ordre (#3803) : la sonde ne peut etre « active » qu'une fois le transfert charge ; l'exiger
+# AVANT le chargement rendait l'activation impossible. Donc : transfert, puis sonde armee
+# (timer) et un controle immediat, et la bascule DHCP seulement si ce controle passe.
+_sonde_timer() {
+    if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+        systemctl "$1" pseudo-routeur-sonde.timer >/dev/null 2>&1 || true
+    fi
+}
+
 cmd_activer() {
-    if ! _sonde_active; then
-        echo "refuse : la sonde de secours n'est pas active (sonde-secours etat)" >&2
+    cmd_activer_transfert
+    _sonde_timer start
+    bash "$SONDE_SCRIPT" verifier >/dev/null 2>&1 || true
+    # Le dernier controle doit avoir REUSSI (actif seul reste vrai apres 1-2 echecs).
+    if ! bash "$SONDE_SCRIPT" etat | python3 -c 'import json,sys
+d = json.load(sys.stdin); h = d.get("historique") or [{}]
+sys.exit(0 if d.get("actif") is True and h[-1].get("ok") is True else 1)'; then
+        echo "refuse : la sonde de secours n'est pas active (sonde-secours etat) ; retour a la Freebox" >&2
+        cmd_retour_freebox || true
         exit 2
     fi
-    cmd_activer_transfert
     _freeboxctl passerelle-dhcp "$IP_GK2" || exit 1
 }
 
@@ -263,6 +278,8 @@ cmd_retour_freebox() {
         fi
     fi
     rm -f "$NFT_OUT_DEFAUT"
+    # Sonde desarmee : sans table elle echouerait chaque minute et relancerait ce retour.
+    _sonde_timer stop
     _freeboxctl passerelle-dhcp "$IP_FREEBOX" || exit 1
 }
 

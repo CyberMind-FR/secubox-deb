@@ -23,6 +23,7 @@ def _env(tmp_path, nft_corps):
     _faux(b, "nft", f'echo "nft $*" >> {journal}\n' + nft_corps)
     _faux(b, "sudo", 'while [ "$1" = "-u" ] || [ "$1" = "-n" ]; do [ "$1" = "-u" ] && shift; shift; done; exec "$@"')
     _faux(b, "freeboxctl", f'echo "freeboxctl $*" >> {journal}')
+    _faux(b, "systemctl", f'echo "systemctl $*" >> {journal}')
     _faux(b, "sysctl", f'echo "sysctl $*" >> {journal}')
     rep = tmp_path / "nftables.d"
     rep.mkdir()
