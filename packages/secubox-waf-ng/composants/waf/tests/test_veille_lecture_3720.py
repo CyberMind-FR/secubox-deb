@@ -327,20 +327,51 @@ def test_actord_publie_au_groupe_actord_lecture():
                           timeout=10).returncode == 0
 
 
-# ── #3795 : leurres de service, jamais de mot de passe en clair ────────
-def test_flux_leurres_sans_mot_de_passe_en_clair(v):
+# ── #3795 : leurres de service, jamais de mot de passe en clair (HMAC à clé locale) ──
+def _ligne_leurre():
+    return {"timestamp": "2026-11-15T09:00:00+01:00", "client_ip": "203.0.113.9", "category": "leurre:telnet",
+            "tool": "authwatch", "agent": "mirai", "user_agent": "telnet", "path": "/root",
+            "rule_id": "essai xc3511/2", "message": "login root xc3511", "ligne": "USER root PASS xc3511",
+            "essais": [{"compte": "root", "mot_de_passe": "xc3511"}, {"compte": "admin"}, "pas un essai",
+                       {"compte": "u", "mot_de_passe": "pé"}]}
+
+
+def _flux_leurre(v, monkeypatch, cle):
     import hashlib
-    ligne = {"timestamp": "2026-11-15T09:00:00+01:00", "client_ip": "203.0.113.9", "category": "leurre:telnet",
-             "tool": "authwatch", "agent": "mirai", "user_agent": "telnet",
-             "essais": [{"compte": "root", "mot_de_passe": "xc3511"}, {"compte": "admin"}, "pas un essai",
-                        {"compte": "u", "mot_de_passe": "pé"}]}
-    (v.t / "waf-threats.log").write_bytes((json.dumps(ligne) + "\n").encode())
+    if cle is None:
+        monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    else:
+        d = v.t / "creds"
+        d.mkdir(exist_ok=True)
+        (d / "leurres-hmac").write_bytes(cle)
+        monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(d))
+    (v.t / "waf-threats.log").write_bytes((json.dumps(_ligne_leurre()) + "\n").encode())
     r = v.get("/menaces/flux")
     assert r.status_code == 200, r.text
-    assert "xc3511" not in r.text and "mot_de_passe\"" not in r.text
-    e = r.json()["lignes"][0]["ligne"]
-    assert e["agent"] == "mirai" and e["client_ip"] == "203.0.113.9"
+    assert "xc3511" not in r.text and "pé" not in r.text and "mot_de_passe\"" not in r.text
+    assert hashlib.sha256(b"xc3511").hexdigest() not in r.text
+    return r.json()["lignes"][0]["ligne"]
+
+
+def test_flux_leurres_hmac_sans_clair(v, monkeypatch):
+    import hashlib
+    import hmac
+    cle = bytes(range(32))
+    e = _flux_leurre(v, monkeypatch, cle)
+    assert e["agent"] == "mirai" and e["client_ip"] == "203.0.113.9" and e["path"] == "/root"
+    assert "message" not in e and "ligne" not in e and e["rule_id"] == "[masqué]"
+    attendu = hmac.new(cle, b"xc3511", hashlib.sha256).hexdigest()
+    assert attendu != hashlib.sha256(b"xc3511").hexdigest()
     assert e["essais"] == [
-        {"compte": "root", "mot_de_passe_sha256": hashlib.sha256(b"xc3511").hexdigest(), "mot_de_passe_longueur": 6},
+        {"compte": "root", "mot_de_passe_hmac": attendu, "mot_de_passe_longueur": 6},
         {"compte": "admin"},
-        {"compte": "u", "mot_de_passe_sha256": hashlib.sha256("pé".encode()).hexdigest(), "mot_de_passe_longueur": 2}]
+        {"compte": "u", "mot_de_passe_hmac": hmac.new(cle, "pé".encode(), hashlib.sha256).hexdigest(),
+         "mot_de_passe_longueur": 2}]
+    assert _flux_leurre(v, monkeypatch, cle)["essais"][0]["mot_de_passe_hmac"] == attendu      # stable
+
+
+def test_flux_leurres_sans_cle_null(v, monkeypatch):
+    e = _flux_leurre(v, monkeypatch, None)
+    assert e["essais"][0] == {"compte": "root", "mot_de_passe_hmac": None, "mot_de_passe_longueur": 6}
+    e = _flux_leurre(v, monkeypatch, b"court")                       # clé trop courte : refus aussi
+    assert e["essais"][0]["mot_de_passe_hmac"] is None

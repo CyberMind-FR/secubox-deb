@@ -195,6 +195,17 @@ PROTEGEES
         fi
       fi
 
+      # #3795 : clé du HMAC des mots de passe tentés sur les leurres de service (veille V2). 32 octets aléatoires,
+      # root 0600, créée si absente, JAMAIS tournée automatiquement (les empreintes de gk3 resteraient comparables).
+      # Remise à secubox-waf.service par LoadCredential= (drop-in secubox-waf-gestes-ia.conf).
+      if [ ! -s /etc/secubox/secrets/leurres-hmac.key ]; then
+        ( umask 077; head -c 32 /dev/urandom > /etc/secubox/secrets/leurres-hmac.key.tmp \
+            && chown root:root /etc/secubox/secrets/leurres-hmac.key.tmp \
+            && chmod 0600 /etc/secubox/secrets/leurres-hmac.key.tmp \
+            && mv -f /etc/secubox/secrets/leurres-hmac.key.tmp /etc/secubox/secrets/leurres-hmac.key ) 2>/dev/null \
+          || rm -f /etc/secubox/secrets/leurres-hmac.key.tmp
+      fi
+
     # ── 3. Log directories ────────────────────────────────────────────────────
     # /var/log/secubox is a SHARED parent traversed by many service users
     # (aggregator, WAF, SOC dashboards). It MUST be 0755 — a 0750 owned by

@@ -17,6 +17,7 @@ doublon. Inode inconnu (deux rotations ratées) ou fichier raccourci : reprise a
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -29,14 +30,36 @@ LIGNE_MAX = 64 * 1024
 _BLOC = 64 * 1024
 
 
-def masquer_essais(ligne: Any) -> Any:
-    """#3795 : identifiants tentés sur les leurres de service (#3728, lignes `essais` de sbx-authwatch) rendus SANS le
-    mot de passe en clair : `mot_de_passe_sha256` (hex de l'UTF-8) et `mot_de_passe_longueur` (caractères) ; le compte
-    reste. Une entrée illisible est écartée, jamais rendue telle quelle."""
+#: Nom du credential systemd (LoadCredential=leurres-hmac:/etc/secubox/secrets/leurres-hmac.key).
+CREDENTIAL_LEURRES = "leurres-hmac"
+#: Champs de premier niveau qui pourraient porter un dialogue brut (mot de passe compris) : jamais rendus.
+CHAMPS_BRUTS = ("message", "ligne", "payload", "brut", "raw", "body", "corps", "donnees", "data")
+
+
+def cle_leurres() -> Optional[bytes]:
+    """La clé locale du HMAC des leurres, depuis `$CREDENTIALS_DIRECTORY` ; None si absente ou trop courte."""
+    dossier = os.environ.get("CREDENTIALS_DIRECTORY", "")
+    if not dossier:
+        return None
+    try:
+        with open(os.path.join(dossier, CREDENTIAL_LEURRES), "rb") as f:
+            cle = f.read(4096)
+    except OSError:
+        return None
+    return cle if len(cle) >= 16 else None
+
+
+def masquer_essais(ligne: Any, cle: Optional[bytes]) -> Any:
+    """#3795 : identifiants tentés sur les leurres de service (#3728, `essais` de sbx-authwatch) rendus SANS le mot de
+    passe : `mot_de_passe_hmac` (HMAC-SHA256 à clé locale de gk2, hex ; `null` sans clé — jamais le clair, jamais un
+    SHA-256 nu, réversible par dictionnaire) et `mot_de_passe_longueur` ; le compte reste. Les champs bruts de premier
+    niveau (`CHAMPS_BRUTS`) d'une ligne qui porte des essais sont retirés, et toute chaîne de premier niveau qui
+    contient un mot de passe tenté est masquée."""
     if not isinstance(ligne, dict) or "essais" not in ligne:
         return ligne
     essais = ligne.get("essais")
     sortie: List[Dict[str, Any]] = []
+    secrets: List[str] = []
     for e in essais if isinstance(essais, list) else []:
         if not isinstance(e, dict):
             continue
@@ -45,10 +68,20 @@ def masquer_essais(ligne: Any) -> Any:
             m["compte"] = e["compte"]
         mdp = e.get("mot_de_passe")
         if isinstance(mdp, str) and mdp:
-            m["mot_de_passe_sha256"] = hashlib.sha256(mdp.encode("utf-8", "surrogatepass")).hexdigest()
+            secrets.append(mdp)
+            octets = mdp.encode("utf-8", "surrogatepass")
+            m["mot_de_passe_hmac"] = hmac.new(cle, octets, hashlib.sha256).hexdigest() if cle else None
             m["mot_de_passe_longueur"] = len(mdp)
         sortie.append(m)
-    return {**ligne, "essais": sortie}
+    propre: Dict[str, Any] = {}
+    for k, val in ligne.items():
+        if k == "essais" or k in CHAMPS_BRUTS:
+            continue
+        if isinstance(val, str) and any(s in val for s in secrets):
+            val = "[masqué]"
+        propre[k] = val
+    propre["essais"] = sortie
+    return propre
 
 
 class PositionInvalide(ValueError):

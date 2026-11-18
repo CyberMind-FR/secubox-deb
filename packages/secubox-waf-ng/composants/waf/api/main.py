@@ -1956,9 +1956,10 @@ async def menaces_flux(depuis: Optional[str] = Query(None, max_length=40, patter
         flux = await asyncio.to_thread(_veille.lire_flux, Path(THREATS_LOG), depuis, max, FLUX_OCTETS_MAX)
     except _veille.PositionInvalide:
         raise HTTPException(422, detail={"motif": "position"}) from None
-    # #3795 : leurres de service (#3728) — jamais un mot de passe tenté en clair hors de gk2 (SHA-256 + longueur).
+    # #3795 : leurres de service (#3728) — jamais un mot de passe tenté en clair hors de gk2 (HMAC à clé locale + longueur).
+    cle = _veille.cle_leurres()
     for x in flux["lignes"]:
-        x["ligne"] = _veille.masquer_essais(x.get("ligne"))
+        x["ligne"] = _veille.masquer_essais(x.get("ligne"), cle)
     return flux
 
 
