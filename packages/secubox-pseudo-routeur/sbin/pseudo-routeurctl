@@ -385,7 +385,10 @@ for cle, fam in (("V4", 4), ("V6", 6)):
             continue
         mac = m.group(2).lower()
         a = app.setdefault(mac, {"mac": mac, "ipv4": [], "ipv6_globales": []})
-        ip = ipaddress.ip_address(m.group(1))
+        try:
+            ip = ipaddress.ip_address(m.group(1))
+        except ValueError:
+            continue
         if fam == 4:
             a["ipv4"].append(str(ip))
         elif ip.is_global:
