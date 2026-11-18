@@ -9,6 +9,15 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-18 — cve-leurres : ACL du journal WAF perdue, remise avant chaque passage (ref #3789)
+
+- gk2 04:24 : `secubox-cve-leurres` en échec (Permission denied sur `waf-threats.log`) ; ACL nommée `u:secubox-cve-leurres` absente
+  du dossier, du défaut et du fichier ; `secubox-cve-triage.service` aussi désactivé. Réparé par relance du maintscript du composant.
+- Cause NON identifiée : aucune installation à cette heure, aucune connexion SSH ni sudo inhabituel (20:00-04:30), antirootkit
+  silencieux ; mais aucune règle d'audit sur les attributs de ce dossier, donc rien ne prouve l'origine.
+- `secubox-security-posture` 2.10.4 (PR #3790) : `secubox-cve-leurres-acl` en `ExecStartPre=+` remet l'ACL nommée si absente, trace
+  au journal. Testé sur gk2 (ACL retirée exprès → remise au passage suivant).
+
 ## 2026-11-18 — TV Privacy : nom de régie publicitaire découvert dès la première coupure (ref #3787)
 
 - `secubox-ad-guard` 1.31.0 (PR #3788) : un libellé d'hôte portant un mot de régie (`ads`, `adserver`, `adservice`, `pubads`,
