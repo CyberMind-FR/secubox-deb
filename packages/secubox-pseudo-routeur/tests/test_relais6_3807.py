@@ -426,3 +426,10 @@ def test_tout_etat_combine(tmp_path):
     _run(env, "relais6-preparer")
     d = json.loads(_run(env, "relais6-etat").stdout)
     assert d["role"] == "tout" and d["routeur_ll"] == LL_GK2 and "next_hop_lu" in d and d["pret"] is True
+
+
+def test_aucun_grep_q_en_fin_de_tube():
+    """18/11 : avec pipefail, `cmd | grep -q` echoue au hasard (SIGPIPE de cmd) : bascule refusee a tort."""
+    import re
+    src = (Path(__file__).resolve().parents[1] / "sbin" / "pseudo-routeurctl").read_text()
+    assert not re.search(r"\|\s*grep\s+-q", src)

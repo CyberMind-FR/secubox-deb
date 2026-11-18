@@ -1,3 +1,10 @@
+secubox-pseudo-routeur (0.3.2-1~trixie1) trixie; urgency=medium
+
+  * Relais IPv6 : contrôles par tube sans grep -q (pipefail + SIGPIPE refusait la
+    bascule au hasard) (#3807).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 16:30:35 +0100
+
 secubox-pseudo-routeur (0.3.1-1~trixie1) trixie; urgency=medium
 
   * Relais IPv6 : préfixe explicite dans dhcp-range (constructor: n annonçait rien
