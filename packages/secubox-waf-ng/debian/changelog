@@ -1,3 +1,11 @@
+secubox-waf-ng (1.40.4-1~trixie1) trixie; urgency=medium
+
+  * #3720 : wafctl cle-ai-lecture ajouter|retirer|lister (clé publique de
+    l'IA de gk3 ; la clé privée n'est jamais sur gk2) ; le postinst crée
+    /etc/secubox-comptes-service/ai-lecture (root:root 0755).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 10:18:11 +0100
+
 secubox-waf-ng (1.40.3-1~trixie1) trixie; urgency=medium
 
   * #3800 : sbxwaf sert une page d'explication (200, no-store, CSP propre)

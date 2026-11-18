@@ -5,7 +5,8 @@
 
 """Comptes de service par clé Ed25519 (#3716) : `ai-ban`, l'IA qui bannit sur gk2 ; `ai-filtres` (#3732), l'IA qui pose
 des filtres du WAF (portée `waf-filtres`, clés et jetons à part : aucun jeton ne vaut pour l'autre compte) ; `garde`
-(#3794), secubox-garde qui bannit une adresse publique (portée `garde-ban`).
+(#3794), secubox-garde qui bannit une adresse publique (portée `garde-ban`) ; `ai-lecture` (#3720), l'IA de gk3 qui LIT
+les routes du WAF de gk2 (portée `waf-lecture`, GET seulement).
 
 CE N'EST PAS UN COMPTE DE SECUBOX-AUTH, NI UNE SESSION. Sur le modèle du porteur délégué du pilotage (#3126 L5) :
 
@@ -32,6 +33,14 @@ CONTRAINTE SUR LES ROUTES (P9) : le jeton lie le CORPS, pas la méthode ni le ch
 compte de service doit donc exiger dans son corps un champ OBLIGATOIRE qui la distingue de toutes les autres (et une
 route sans corps, comme `GET /ai/etat`, n'avoir aucun effet) : sinon un jeton frappé pour une route vaudrait pour une
 autre. À défaut, le jeton doit gagner des réclamations `methode` et `chemin`, vérifiées par la garde.
+
+RÉCLAMATIONS DE REQUÊTE (#3720) : pour les seuls comptes de `COMPTES_LIES_REQUETE` (aujourd'hui `ai-lecture`), le jeton
+porte en plus `methode` (dans l'ensemble permis du compte : GET pour `ai-lecture`) et `chemin`, le chemin EXACT de la
+requête (`request.url.path`, chemin complet tel que l'application le voit, SANS la chaîne de requête ni fragment) ; la
+garde refuse (401 `methode`, `chemin`) une autre méthode ou un autre chemin. Les paramètres de requête ne sont PAS liés
+au jeton : chaque route gardée borne elle-même les siens. Les autres comptes ne portent ni ne vérifient ces réclamations.
+`require_lecture_ou_compte(compte)` : un porteur EdDSA (ou illisible) est vérifié comme jeton de ce compte, jamais de
+repli anonyme ; un autre porteur doit être une session valide (`require_lecture`) ; sans porteur, `require_lecture`.
 
 MÉMOIRE DE REJEU : en mémoire du processus, chaque `jti` gardé jusqu'à `exp + DERIVE_S`, `REJEU_MAX` au plus ; pleine,
 elle REFUSE (503) au lieu d'oublier un `jti` encore valide. Un `jti` oublié l'est parce que son échéance est passée ;
@@ -67,7 +76,10 @@ from . import auth
 #: Arbre root des clés publiques, HORS de /etc/secubox (qui appartient au compte secubox).
 DOSSIER_COMPTES_SERVICE = "/etc/secubox-comptes-service"
 #: Liste FERMÉE des comptes de service et de leur portée unique.
-COMPTES_SERVICE = {"ai-ban": "waf-ban", "ai-filtres": "waf-filtres", "garde": "garde-ban"}
+COMPTES_SERVICE = {"ai-ban": "waf-ban", "ai-filtres": "waf-filtres", "garde": "garde-ban", "ai-lecture": "waf-lecture"}
+#: Comptes dont le jeton est lié à la méthode et au chemin exact de la requête (#3720), et leurs méthodes permises.
+COMPTES_LIES_REQUETE = {"ai-lecture": frozenset({"GET"})}
+_TAILLE_MAX_CHEMIN = 1024
 DUREE_MAX_S = 60
 DERIVE_S = 5
 ALGORITHME = "EdDSA"
@@ -259,12 +271,26 @@ _DEMARRAGE = time.time()
 
 
 # ── Jetons ─────────────────────────────────────────────────────────────
+def _chemin_valide(chemin: Any) -> bool:
+    return (isinstance(chemin, str) and chemin.startswith("/") and 0 < len(chemin) <= _TAILLE_MAX_CHEMIN
+            and not any(c in chemin for c in "?#") and chemin.isprintable())
+
+
 def frapper_jeton(cle_privee_pem: bytes, compte: str, aud: str, corps: bytes, maintenant: float,
-                  duree_s: int = 30) -> str:
+                  duree_s: int = 30, methode: Optional[str] = None, chemin: Optional[str] = None) -> str:
     """Le jeton d'UNE requête (côté box de l'IA ; gk2 n'a jamais la clé privée). Lève ValueError sur un compte hors
-    liste, une durée hors `]0, DUREE_MAX_S]` ou une clé qui n'est pas une clé privée Ed25519."""
+    liste, une durée hors `]0, DUREE_MAX_S]` ou une clé qui n'est pas une clé privée Ed25519. Pour un compte de
+    `COMPTES_LIES_REQUETE`, `methode` (permise) et `chemin` (exact, sans chaîne de requête) sont obligatoires ; pour
+    les autres, interdits."""
     if compte not in COMPTES_SERVICE:
         raise ValueError(f"compte de service inconnu : {compte!r}")
+    if compte in COMPTES_LIES_REQUETE:
+        if methode not in COMPTES_LIES_REQUETE[compte]:
+            raise ValueError(f"méthode {methode!r} non permise au compte {compte!r}")
+        if not _chemin_valide(chemin):
+            raise ValueError(f"chemin {chemin!r} : chemin absolu exact attendu, sans chaîne de requête")
+    elif methode is not None or chemin is not None:
+        raise ValueError(f"le compte {compte!r} ne lie ni méthode ni chemin")
     if not _entier(duree_s) or not 0 < duree_s <= DUREE_MAX_S:
         raise ValueError(f"durée {duree_s!r} hors de ]0, {DUREE_MAX_S}]")
     try:
@@ -276,10 +302,13 @@ def frapper_jeton(cle_privee_pem: bytes, compte: str, aud: str, corps: bytes, ma
     iat = int(maintenant)
     reclamations = {"sub": compte, "aud": aud, "portee": COMPTES_SERVICE[compte], "iat": iat, "exp": iat + duree_s,
                     "jti": secrets.token_hex(16), "corps": hashlib.sha256(corps).hexdigest()}
+    if compte in COMPTES_LIES_REQUETE:
+        reclamations.update(methode=methode, chemin=chemin)
     return jwt.encode(reclamations, cle, algorithm=ALGORITHME, headers={"kid": _empreinte_cle(cle.public_key())})
 
 
-def _verifier_avant_corps(compte: str, jeton: str, maintenant: float) -> Tuple[str, str, float, str]:
+def _verifier_avant_corps(compte: str, jeton: str, maintenant: float, methode: Optional[str] = None,
+                          chemin: Optional[str] = None) -> Tuple[str, str, float, str]:
     """Tout ce qui ne dépend pas du corps : en-tête, clé, signature, réclamations, `jti` non vu. Rend
     `(kid, jti, fin, empreinte du corps signée)`. Lève `RefusCompteService`."""
     portee_attendue = COMPTES_SERVICE.get(compte)
@@ -330,6 +359,12 @@ def _verifier_avant_corps(compte: str, jeton: str, maintenant: float) -> Tuple[s
         raise RefusCompteService(403, "sujet")
     if not _egal(p.get("portee"), portee_attendue):
         raise RefusCompteService(403, "portee")
+    if compte in COMPTES_LIES_REQUETE:
+        # Méthode : celle de la requête doit être permise ET être celle du jeton ; chemin : égalité exacte.
+        if methode not in COMPTES_LIES_REQUETE[compte] or not _egal(p.get("methode"), methode):
+            raise RefusCompteService(401, "methode")
+        if not _chemin_valide(p.get("chemin")) or not _egal(p.get("chemin"), chemin):
+            raise RefusCompteService(401, "chemin")
     iat, exp, nbf = p.get("iat"), p.get("exp"), p.get("nbf")
     if not _entier(iat) or not _entier(exp) or (nbf is not None and not _entier(nbf)):
         raise RefusCompteService(401, "reclamations")
@@ -364,7 +399,8 @@ def _verifier_corps(compte: str, verifie: Tuple[str, str, float, str], corps: by
     return {"sub": compte, "compte_service": compte, "jti": jti, "cle": kid}
 
 
-def verifier_jeton(compte: str, jeton: str, corps: bytes, maintenant: float) -> Dict[str, Any]:
+def verifier_jeton(compte: str, jeton: str, corps: bytes, maintenant: float, methode: Optional[str] = None,
+                   chemin: Optional[str] = None) -> Dict[str, Any]:
     """`{"sub", "compte_service", "jti", "cle"}` d'un jeton valide pour `compte` et ce `corps` exact, à l'instant
     `maintenant` (secondes UNIX) ; consomme son `jti`. Lève `RefusCompteService` sinon.
 
@@ -372,7 +408,8 @@ def verifier_jeton(compte: str, jeton: str, corps: bytes, maintenant: float) -> 
     après le démarrage, échéance → `jti` (forme, non vu) → empreinte du corps → inscription atomique du `jti`. Un
     corps refusé ne consomme pas le `jti` : rejouer un jeton capturé avec un autre corps ne brûle pas le geste
     légitime."""
-    return _verifier_corps(compte, _verifier_avant_corps(compte, jeton, maintenant), corps, maintenant)
+    return _verifier_corps(compte, _verifier_avant_corps(compte, jeton, maintenant, methode, chemin), corps,
+                           maintenant)
 
 
 async def _lire_corps_borne(request: Request) -> bytes:
@@ -504,7 +541,8 @@ def garde_compte_service(compte: str) -> Callable[..., Any]:
             if not jeton:
                 raise RefusCompteService(401, "absent")
             # Lecture des clés et vérification Ed25519 hors de la boucle (RULES-CODE § 6).
-            verifie = await run_in_threadpool(_verifier_avant_corps, compte, jeton, maintenant)
+            verifie = await run_in_threadpool(_verifier_avant_corps, compte, jeton, maintenant,
+                                              request.method, request.url.path)
             corps = await _lire_corps_borne(request)
             return await run_in_threadpool(_verifier_corps, compte, verifie, corps, maintenant)
         except RefusCompteService as refus:
@@ -522,6 +560,41 @@ require_ai_filtres = garde_compte_service("ai-filtres")
 #: `garde-ban`, clés à part (`wafctl cle-garde-ban`).
 require_garde = garde_compte_service("garde")
 
+
+def _porteur_eddsa(jeton: str) -> bool:
+    """Vrai si le porteur se dit EdDSA, ou si son en-tête est illisible : il relève alors du compte de service et
+    n'a JAMAIS de repli anonyme."""
+    try:
+        entete = jwt.get_unverified_header(jeton)
+    except (jwt.PyJWTError, ValueError, TypeError):
+        return True
+    return not isinstance(entete, dict) or entete.get("alg") == ALGORITHME
+
+
+def require_lecture_ou_compte(compte: str) -> Callable[..., Any]:
+    """#3720 : garde de lecture qui admet aussi un compte de service lié à la requête (`COMPTES_LIES_REQUETE`,
+    ValueError sinon). Porteur EdDSA ou illisible ⇒ vérifié comme jeton de `compte` (portée, méthode, chemin, jti,
+    ≤ 60 s) ou 401 ; autre porteur ⇒ session valide exigée (401 sinon, pas de repli anonyme) ; aucun porteur ⇒
+    `auth.require_lecture` inchangé (cookie de session, tableau de bord LAN)."""
+    if compte not in COMPTES_LIES_REQUETE:
+        raise ValueError(f"compte de service non lié à la requête : {compte!r}")
+    garde_compte = garde_compte_service(compte)
+
+    async def garde(request: Request,
+                    creds: Optional[HTTPAuthorizationCredentials] = Depends(auth._bearer)) -> Dict[str, Any]:
+        jeton = creds.credentials if creds is not None and creds.credentials else ""
+        if jeton and _porteur_eddsa(jeton):
+            return await garde_compte(request, creds)
+        payload = await auth.require_lecture(request, creds)
+        if jeton and payload.get("tableau_de_bord") and payload.get("sub") is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Porteur invalide",
+                                headers={"WWW-Authenticate": "Bearer"})
+        return payload
+
+    garde.__name__ = f"require_lecture_ou_{compte.replace('-', '_')}"
+    return garde
+
 __all__ = ["DOSSIER_COMPTES_SERVICE", "COMPTES_SERVICE", "DUREE_MAX_S", "DERIVE_S", "ALGORITHME", "CLES_MAX",
            "REJEU_MAX", "TAILLE_MAX_CORPS", "RefusCompteService", "empreinte", "cles_publiques", "verifier_jeton", "frapper_jeton",
-           "garde_compte_service", "require_ai_ban", "require_ai_filtres", "require_garde"]
+           "garde_compte_service", "require_ai_ban", "require_ai_filtres", "require_garde",
+           "COMPTES_LIES_REQUETE", "require_lecture_ou_compte"]
