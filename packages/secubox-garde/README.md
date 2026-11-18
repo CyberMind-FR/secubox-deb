@@ -26,3 +26,12 @@ profil AppArmor, base SQLite (WAL) et réglages. Moteur, sources, notifications 
 
 `secubox-garde.service` (API, compte `secubox-garde`), `secubox-garde-passage.service` + `.timer`
 (passage du moteur toutes les 60 s ; sans effet tant que le moteur n'est pas livré).
+
+## Sources (capteurs)
+
+`garde/sources.py` lit : `/var/lib/secubox/dns-guard/alerts.jsonl` (incrémental, inode + offset),
+`/run/secubox/actord-propositions.json`, `ip -j neigh` (IP → MAC) et la liste DoH d'ad-guard
+(`/usr/share/secubox/ad-guard/lists/resolveurs-doh.txt`, noms seulement). Requêtes DNS par client
+pour la détection DoH : table `dnstv_recents` de `/var/lib/secubox/ad-guard/dnstv/dnstv.db`
+(ad-guard, lecture seule). Le compte `secubox-garde` doit lire ce fichier (groupe `secubox`, dossier
+traversable, `-shm` ouvrable en WAL) ; sans ces droits la lecture renvoie une liste vide.
