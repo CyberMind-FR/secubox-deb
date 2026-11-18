@@ -1,0 +1,195 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""#3794 — moteur de secubox-garde : passage, échéances, suivi des adresses, rapprochement."""
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from garde import base, moteur  # noqa: E402
+from garde.politique import Signal  # noqa: E402
+
+T = 1_800_000_000
+MAC = "aa:bb:cc:dd:ee:01"
+REG = {"automatique": True, "quarantaines_max": 3, "rafale_bans": 50, "sms_bans": False, "lan_prefixes": []}
+
+
+class Effets:
+    def __init__(self, echec=()):
+        self.appels, self.echec = [], set(echec)
+
+    def _r(self, nom, *a):
+        self.appels.append((nom,) + a)
+        return {"ok": nom not in self.echec, "motif": "x" if nom in self.echec else ""}
+
+    def bannir(self, ip, duree, motif):
+        return self._r("bannir", ip, duree)
+
+    def isoler(self, ip, mac, fin, motif=""):
+        return self._r("isoler", ip, mac, fin)
+
+    def liberer(self, ip, mac=None, motif=""):
+        return self._r("liberer", ip)
+
+    def fermer_evasion(self, ip, mac, noms, motif=""):
+        return self._r("fermer_evasion", ip, tuple(noms))
+
+    def rouvrir(self, ip, mac=None, motif=""):
+        return self._r("rouvrir", ip)
+
+    def alerte(self, texte):
+        self.appels.append(("alerte", texte))
+
+
+class Notifs:
+    def __init__(self):
+        self.file = []
+
+    def mettre_en_file(self, db, canal, cle, texte, maintenant):
+        self.file.append((canal, cle, texte))
+        return True
+
+    def vider(self, db, reglages, maintenant):
+        return {"envoyes": 0, "en_attente": 0}
+
+
+def sources(signaux=(), voisins=None, noms=None):
+    voisins = voisins if voisins is not None else {"192.168.1.20": MAC}
+    return SimpleNamespace(
+        voisins=lambda: dict(voisins),
+        alertes=lambda db, v: list(signaux),
+        propositions=lambda t: [],
+        doh=lambda depuis, v: [],
+        protegees=lambda ip: False,
+        nommer=lambda ip, mac: (noms or {}).get(mac, f"Appareil inconnu ({mac or ip})"),
+    )
+
+
+def infection(t=T, ip="192.168.1.20"):
+    return [Signal("dns-guard", "dga", ip, None, "x.example", "", t - 10),
+            Signal("dns-guard", "malicious", ip, None, "y.example", "", t - 5)]
+
+
+def test_passage_infection_isole_et_previent(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    vois = {"192.168.1.20": MAC, "2a01:e0a::20": MAC}
+    moteur.passage(db, REG, sources(infection(), vois, {MAC: "TV salon"}), ef, nt, T)
+    isoles = sorted(a[1] for a in ef.appels if a[0] == "isoler")
+    assert isoles == ["192.168.1.20", "2a01:e0a::20"]
+    etat, cible, motif = db.execute("SELECT etat, cible, motif FROM decisions WHERE menace='infection'").fetchone()
+    assert (etat, cible) == ("active", MAC) and "TV salon" in motif
+    assert {c for c, *_ in nt.file} == {"sms", "courriel"}
+    assert all("TV salon" in t for *_, t in nt.file)
+
+
+def test_passage_intrusion_resume_horaire(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    src = sources()
+    src.propositions = lambda t: [Signal("actord", "intrusion", "8.8.4.4", None, "", "scan", t)]
+    moteur.passage(db, REG, src, ef, nt, T)
+    assert ("bannir", "8.8.4.4", 14400) in ef.appels
+    assert nt.file == []                       # pas de notification immédiate pour un ban
+    src.propositions = lambda t: []
+    moteur.passage(db, REG, src, ef, nt, T + 3600)
+    assert [(c, k) for c, k, _ in nt.file] == [("courriel", "resume_bans")]
+    assert "1 adresse" in nt.file[0][2]
+
+
+def test_rafale_bans_envoie_un_sms(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    src = sources()
+    src.propositions = lambda t: [Signal("actord", "intrusion", f"8.8.{i // 250}.{i % 250 + 1}", None, "", "scan", t)
+                                  for i in range(51)]
+    moteur.passage(db, REG, src, ef, nt, T)
+    assert [k for c, k, _ in nt.file if c == "sms"] == ["rafale"]
+
+
+def test_reevaluation_24h_leve_ou_prolonge(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    moteur.passage(db, REG, sources(infection()), ef, nt, T)
+    # sans nouveau signal : levée à l'échéance
+    ef.appels.clear()
+    moteur.passage(db, REG, sources(), ef, nt, T + 86400)
+    assert ("liberer", "192.168.1.20") in ef.appels
+    assert db.execute("SELECT etat FROM decisions WHERE menace='infection'").fetchone()[0] == "levee"
+
+    db2, ef2 = base.ouvrir(tmp_path / "g2.db"), Effets()
+    moteur.passage(db2, REG, sources(infection()), ef2, Notifs(), T)
+    moteur.passage(db2, REG, sources([Signal("dns-guard", "dga", "192.168.1.20", None, "z", "", T + 50000)]),
+                   ef2, Notifs(), T + 50001)
+    ef2.appels.clear()
+    moteur.passage(db2, REG, sources(), ef2, Notifs(), T + 86400)
+    assert ("isoler", "192.168.1.20", MAC, T + 2 * 86400) in ef2.appels
+    assert db2.execute("SELECT etat, fin FROM decisions WHERE menace='infection'").fetchone() == ("active", T + 2 * 86400)
+
+
+def test_quarantaine_suit_la_mac(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    moteur.passage(db, REG, sources(infection()), ef, nt, T)
+    ef.appels.clear()
+    moteur.passage(db, REG, sources(voisins={"192.168.1.42": MAC}), ef, nt, T + 60)
+    assert ef.appels.index(("liberer", "192.168.1.20")) < ef.appels.index(("isoler", "192.168.1.42", MAC, T + 86400))
+    did = db.execute("SELECT id FROM decisions WHERE menace='infection'").fetchone()[0]
+    assert [r[0] for r in db.execute("SELECT ip FROM adresses WHERE decision_id=?", (did,))] == ["192.168.1.42"]
+    # appareil absent des voisins : on ne lève rien
+    ef.appels.clear()
+    moteur.passage(db, REG, sources(voisins={}), ef, nt, T + 120)
+    assert not [a for a in ef.appels if a[0] == "liberer"]
+
+
+def test_rapprochement_demarrage(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    moteur.passage(db, REG, sources(infection()), ef, nt, T)
+    src = sources()
+    src.propositions = lambda t: [Signal("actord", "intrusion", "8.8.4.4", None, "", "scan", t)]
+    moteur.passage(db, REG, src, ef, nt, T)
+    ef.appels.clear()
+    assert moteur.rapprocher(db, ef, T + 100) == {"reappliquees": 2, "echues": 0}
+    assert ("isoler", "192.168.1.20", MAC, T + 86400) in ef.appels
+    assert ("bannir", "8.8.4.4", 14300) in ef.appels
+    ef.appels.clear()
+    assert moteur.rapprocher(db, ef, T + 86400) == {"reappliquees": 0, "echues": 2}
+    assert ("liberer", "192.168.1.20") in ef.appels
+    assert db.execute("SELECT COUNT(*) FROM decisions WHERE etat='active'").fetchone()[0] == 0
+
+
+def test_echec_effet_pas_de_decision_active(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(echec={"isoler", "bannir"}), Notifs()
+    src = sources(infection())
+    src.propositions = lambda t: [Signal("actord", "intrusion", "8.8.4.4", None, "", "scan", t)]
+    bilan = moteur.passage(db, REG, src, ef, nt, T)
+    assert bilan["echecs"] == 2
+    assert db.execute("SELECT COUNT(*) FROM decisions WHERE etat='active'").fetchone()[0] == 0
+    assert len([a for a in ef.appels if a[0] == "alerte"]) == 2
+    assert nt.file == []
+
+
+def test_ban_deja_actif_enregistre_sans_reessai(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    ef = Effets()
+    ef.bannir = lambda ip, d, m: (ef.appels.append(("bannir", ip)), {"ok": True, "deja": True})[1]
+    src = sources()
+    src.propositions = lambda t: [Signal("actord", "intrusion", "8.8.4.4", None, "", "scan", t)]
+    moteur.passage(db, REG, src, ef, nt, T)
+    moteur.passage(db, REG, src, ef, nt, T + 60)
+    assert ef.appels.count(("bannir", "8.8.4.4")) == 1
+    assert "déjà banni ailleurs" in db.execute("SELECT motif FROM decisions").fetchone()[0]
+
+
+def test_alerte_de_masse_une_seule_fois(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    reg = dict(REG, quarantaines_max=0)
+    moteur.passage(db, reg, sources(infection()), ef, nt, T)
+    moteur.passage(db, reg, sources(infection(T + 60)), ef, nt, T + 60)
+    assert len([a for a in ef.appels if a[0] == "alerte"]) == 1
+
+
+def test_mac_apprise_plus_tot_pas_de_doublon(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    moteur.passage(db, REG, sources(), ef, nt, T - 100)              # registre : 192.168.1.20 -> MAC
+    moteur.passage(db, REG, sources(infection(), voisins={}), ef, nt, T)
+    moteur.passage(db, REG, sources(infection(T + 60), voisins={}), ef, nt, T + 60)
+    assert db.execute("SELECT COUNT(*), cible FROM decisions WHERE menace='infection'").fetchone() == (1, MAC)

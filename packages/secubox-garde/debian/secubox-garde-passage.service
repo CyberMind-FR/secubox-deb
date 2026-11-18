@@ -2,41 +2,40 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-# SecuBox Garde — passage du moteur (#3794), lancé par le minuteur. Squelette : le moteur arrive avec les
-# tâches suivantes ; le passage ouvre pour l'instant la base et rend la main.
+# SecuBox Garde — passage du moteur (#3794), lancé par le minuteur : lit les capteurs, décide, applique
+# (ban par la socket du WAF, quarantaine/évasion par `sudo -n secubox-adguard-tv`), notifie.
+# sudo exige NoNewPrivileges=no (exception écrite dans .claude/RULES-CODE.md, même patron que
+# secubox-ad-guard-auto.service) ; AUCUNE option reposant sur seccomp (LockPersonality, ProtectKernelTunables,
+# SystemCallFilter, RestrictNamespaces, RestrictSUIDSGID, RestrictAddressFamilies…) : systemd poserait NoNewPrivileges
+# d'office. Pas d'IPAddressDeny : le contrôleur d'ad-guard appelle unbound-control (TCP local). Le confinement réseau du
+# passage lui-même est tenu par AppArmor (unix + netlink seulement).
+# Le contrôleur root lancé par sudo hérite de l'espace de montage : il lui faut écrire là où ad-guard écrit.
+# Groupes : `secubox` (primaire : alerts.jsonl, actord-propositions, dnstv.db, devices.db du NAC, traversée
+# de /etc/secubox/secrets 0750 root:secubox — constaté sur gk7 le 18/11), `secubox-garde` (garde-ban.pem 0640).
 [Unit]
 Description=SecuBox Garde — passage du moteur
-After=secubox-core.service
+After=secubox-core.service secubox-waf.service
 
 [Service]
 Type=oneshot
 User=secubox-garde
 Group=secubox
+SupplementaryGroups=secubox-garde
 WorkingDirectory=/usr/lib/secubox/garde
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/usr/bin/python3 -c "from garde import base; base.ouvrir(base.BASE).close()"
+# Ajout à audit.log (0640 secubox:secubox) : ACL nommée d'écriture remise avant chaque passage, en root (« + »),
+# la rotation pouvant la perdre ; AppArmor ne permet que l'ajout (« a »). Dossier root 0755 : aucun lien piégé.
+ExecStartPre=+-/usr/bin/setfacl -m u:secubox-garde:w /var/log/secubox/audit.log
+ExecStart=/usr/sbin/secubox-garde-passage
 UMask=0027
-AppArmorProfile=secubox-garde
+AppArmorProfile=secubox-garde-passage
 Nice=10
-MemoryMax=128M
-TimeoutStartSec=50
-NoNewPrivileges=yes
+MemoryMax=192M
+TimeoutStartSec=55
+NoNewPrivileges=no
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectKernelLogs=yes
 ProtectControlGroups=yes
-ProtectClock=yes
-ProtectHostname=yes
-RestrictNamespaces=yes
-RestrictRealtime=yes
-RestrictSUIDSGID=yes
-LockPersonality=yes
-SystemCallArchitectures=native
-CapabilityBoundingSet=
-RestrictAddressFamilies=AF_UNIX
-IPAddressDeny=any
-ReadWritePaths=/var/lib/secubox/garde
+ReadWritePaths=/var/lib/secubox/garde /var/log/secubox
+ReadWritePaths=/var/lib/secubox/ad-guard /var/lib/secubox-adguard-tv /etc/unbound/unbound.conf.d

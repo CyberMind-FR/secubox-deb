@@ -11,6 +11,24 @@ case "$1" in
         id -u secubox-garde >/dev/null 2>&1 || \
           adduser --system --ingroup secubox --no-create-home --home /nonexistent \
             --shell /usr/sbin/nologin secubox-garde >/dev/null
+        # Groupe propre de la clé du geste garde-ban (/etc/secubox/secrets/garde-ban.pem root:secubox-garde 0640).
+        getent group secubox-garde >/dev/null || groupadd --system secubox-garde
+        id -nG secubox-garde | tr ' ' '\n' | grep -qx secubox-garde || usermod -a -G secubox-garde secubox-garde
+        # Traversée de /etc/secubox/secrets (0750 root:secubox sur gk7 : déjà permise par le groupe secubox).
+        # Si elle manque, ACL nommée x sur le SEUL dossier : aucun autre secret n'est ouvert en lecture.
+        if [ -d /etc/secubox/secrets ] && ! runuser -u secubox-garde -- test -x /etc/secubox/secrets 2>/dev/null; then
+            setfacl -m u:secubox-garde:x /etc/secubox/secrets \
+              || echo "secubox-garde : /etc/secubox/secrets non traversable, le ban par le WAF échouera" >&2
+        fi
+        if [ ! -e /etc/secubox/secrets/garde-ban.pem ]; then
+            if command -v wafctl >/dev/null 2>&1; then
+                wafctl cle-garde-ban generer >/dev/null \
+                  || echo "secubox-garde : clé garde-ban non créée (wafctl cle-garde-ban generer)" >&2
+            else
+                echo "secubox-garde : secubox-waf-ng absent, pas de ban (clé garde-ban à créer par wafctl cle-garde-ban generer)" >&2
+            fi
+        fi
+        [ -e /var/log/secubox/audit.log ] && setfacl -m u:secubox-garde:w /var/log/secubox/audit.log 2>/dev/null || true
         install -d -o secubox-garde -g secubox -m 0750 /var/lib/secubox/garde
         # La configuration n'est semée qu'une fois : une copie modifiée fait autorité.
         if [ ! -e /etc/secubox/garde.toml ] && [ ! -L /etc/secubox/garde.toml ] && [ -d /etc/secubox ] && [ ! -L /etc/secubox ]; then
@@ -19,8 +37,10 @@ case "$1" in
         # Profil AppArmor AVANT tout démarrage (les unités le nomment).
         if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] \
            && command -v apparmor_parser >/dev/null 2>&1; then
-            apparmor_parser -r /etc/apparmor.d/secubox-garde \
-              || echo "secubox-garde : profil AppArmor non chargé (apparmor_parser -r /etc/apparmor.d/secubox-garde ; journalctl -k)" >&2
+            for _p in secubox-garde secubox-garde-passage; do
+                apparmor_parser -r /etc/apparmor.d/$_p \
+                  || echo "secubox-garde : profil AppArmor $_p non chargé (apparmor_parser -r /etc/apparmor.d/$_p ; journalctl -k)" >&2
+            done
         fi
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload

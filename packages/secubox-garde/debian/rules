@@ -3,7 +3,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-# SecuBox-Deb :: garde — squelette (#3794).
+# SecuBox-Deb :: garde (#3794).
 P = $(CURDIR)/debian/secubox-garde
 
 %:
@@ -27,7 +27,9 @@ override_dh_auto_install:
 	install -d $(P)/usr/share/secubox/menu.d
 	cp -r menu.d/. $(P)/usr/share/secubox/menu.d/
 	install -d $(P)/etc/apparmor.d
-	install -m 644 apparmor/secubox-garde $(P)/etc/apparmor.d/secubox-garde
+	install -m 644 apparmor/secubox-garde apparmor/secubox-garde-passage $(P)/etc/apparmor.d/
+	install -d $(P)/usr/sbin
+	install -m 755 sbin/secubox-garde-passage $(P)/usr/sbin/
 	install -d $(P)/etc/nginx/secubox.d $(P)/etc/nginx/secubox-routes.d
 	install -m 644 nginx/garde.conf $(P)/etc/nginx/secubox.d/
 	install -m 644 nginx/garde.conf $(P)/etc/nginx/secubox-routes.d/

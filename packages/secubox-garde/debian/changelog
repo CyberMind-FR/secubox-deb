@@ -1,3 +1,19 @@
+secubox-garde (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Moteur (#3794) : passage toutes les 60 s (lecture des capteurs, décision,
+    application, notifications, échéances et réévaluation à 24 h),
+    rapprochement au premier passage d'un démarrage.
+  * Effecteurs : ban par le geste garde-ban du WAF (jeton EdDSA,
+    /etc/secubox/secrets/garde-ban.pem), quarantaine et fermeture d'évasion
+    par sudo secubox-adguard-tv ; chaque effet dans audit.log.
+  * Registre d'appareils : un appareil (MAC) = toutes ses adresses, nom
+    déduit d'ad-guard, du NAC, des baux DHCP ou du constructeur ; une mesure
+    suit les adresses de l'appareil.
+  * Profil AppArmor propre au passage, groupe secubox-garde, ACL d'ajout à
+    audit.log.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 16:00:00 +0100
+
 secubox-garde (0.1.0-1~trixie1) trixie; urgency=medium
 
   * Squelette du module (#3794) : base SQLite WAL (décisions, positions,

@@ -1,0 +1,65 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Passage du moteur de secubox-garde (#3794), lancé par secubox-garde-passage.timer.
+
+Au premier passage d'un démarrage (boot_id différent de celui noté), `rapprocher` réapplique d'abord
+les décisions actives (ensembles nft et état ad-guard perdus ou à revoir), puis le passage normal.
+"""
+import logging
+import sys
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+sys.path.insert(0, "/usr/lib/secubox/garde")
+
+from garde import appareils, base, effets, moteur, notifs, reseau, sources  # noqa: E402
+
+BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
+NOTE_BOOT = base.ETAT / "boot_id"
+
+
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    maintenant = int(time.time())
+    db = base.ouvrir(base.BASE)
+    reglages = base.reglages()
+    protegees, prefixes = reseau.lire()
+    reglages["lan_prefixes"] = prefixes
+    ef = effets.Effets()
+    try:
+        boot = BOOT_ID.read_text().strip()
+    except OSError:
+        boot = ""
+    try:
+        note = NOTE_BOOT.read_text().strip()
+    except OSError:
+        note = ""
+    if boot != note:
+        logging.info("rapprochement : %s", moteur.rapprocher(db, ef, maintenant))
+        NOTE_BOOT.write_text(boot + "\n")
+    noms_doh = sources.charger_noms_doh()
+    nommeur = appareils.Nommeur.depuis_fichiers()
+    src = SimpleNamespace(
+        voisins=sources.voisins,
+        alertes=lambda d, v: sources.lire_alertes_dns(d, voisins=v),
+        propositions=lambda t: sources.lire_propositions(maintenant=t),
+        doh=lambda depuis, v: sources.signaux_doh(
+            sources.lire_requetes_dns(depuis, noms_doh=noms_doh), noms_doh, v),
+        protegees=protegees,
+        nommer=nommeur.nom,
+    )
+    nt = SimpleNamespace(
+        mettre_en_file=notifs.mettre_en_file,
+        vider=lambda d, r, t: notifs.vider_file(d, r, maintenant=t),
+    )
+    logging.info("passage : %s", moteur.passage(db, reglages, src, ef, nt, maintenant))
+    db.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

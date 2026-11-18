@@ -6,7 +6,9 @@
 
 Le module répond automatiquement aux intrusions, évasions et infections ; chaque décision est
 une ligne de `decisions`. Les autres tables portent l'état du moteur : position de lecture des
-journaux, libérations en cours, file des notifications, récidives par adresse.
+journaux, libérations en cours, file des notifications, récidives par adresse, adresses posées par
+décision (`adresses`), noms DoH fermés (`decision_noms`), registre des appareils (`appareils`,
+`appareil_ips`) et repères du moteur (`etat_moteur`).
 """
 from __future__ import annotations
 
@@ -54,6 +56,21 @@ CREATE TABLE IF NOT EXISTS file_notifs (
 );
 CREATE TABLE IF NOT EXISTS recidives (
     ip TEXT PRIMARY KEY, n INTEGER, dernier INTEGER
+);
+CREATE TABLE IF NOT EXISTS adresses (
+    decision_id TEXT NOT NULL, ip TEXT NOT NULL, PRIMARY KEY (decision_id, ip)
+);
+CREATE TABLE IF NOT EXISTS decision_noms (
+    decision_id TEXT PRIMARY KEY, noms TEXT
+);
+CREATE TABLE IF NOT EXISTS appareils (
+    cle TEXT PRIMARY KEY, mac TEXT, nom TEXT, vu INTEGER, dernier_signal INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS appareil_ips (
+    cle TEXT NOT NULL, ip TEXT NOT NULL, vu INTEGER, PRIMARY KEY (cle, ip)
+);
+CREATE TABLE IF NOT EXISTS etat_moteur (
+    cle TEXT PRIMARY KEY, valeur INTEGER
 );
 """
 
