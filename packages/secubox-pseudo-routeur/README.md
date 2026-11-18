@@ -26,13 +26,13 @@ zone, /64 global, adresse fixe dans le préfixe, RDNSS routable) avant tout usag
 
 | Clé | Exemple | Usage |
 |---|---|---|
-| `role` | `"routeur"` / `"repli"` / `""` | rôle de cette box |
+| `role` | `"routeur"` / `"repli"` / `"tout"` / `""` | rôle de cette box |
 | `lan_if` | `"eth2"` | interface du LAN (sinon `lan_if` racine) |
 | `fichier_network` | `"10-eth2.network"` | facultatif, sinon `networkctl status <lan_if>` |
 | `prefixe` | `"2a01:e0a:dec:c4e0::/64"` | /64 principal de la Freebox |
 | `adresse_fixe` | `"2a01:e0a:dec:c4e0::94/64"` | adresse du routeur (obligatoire pour `routeur`) |
 | `passerelle_ll` | `"fe80::3a07:16ff:fe77:17d3"` | Freebox, route par défaut du routeur |
-| `routeur_ll` | `"fe80::250:43ff:fe84:252f"` | lien-local du routeur = next hop |
+| `routeur_ll` | `"fe80::250:43ff:fe84:252f"` | lien-local du routeur = next hop (rôle `tout` : facultatif, lu sur `lan_if`) |
 | `dns` | `"2a01:e0a:dec:c4e0::200"` | RDNSS annoncé |
 | `sonde_cible` | `"2001:4860:4860::8888"` | cible externe de la sonde (obligatoire pour `repli`) |
 
@@ -53,6 +53,26 @@ règle le next hop sur `routeur_ll` (`freeboxctl nexthop-regler`) que si la sond
 `OnFailure=` lance `pseudo-routeur-relais6-retour.service` → `relais6-revenir` (next hop
 `vide`, minuterie désarmée ; toujours exécuté, même TOML cassé). Chaque écriture est
 auditée (`relais6_*` dans `/var/log/secubox/audit.log`, `ipv6_next_hop` côté secubox-freebox).
+
+**Rôle tout (gk2 seule, décision du propriétaire)** — la même box est routeur ET repli :
+`relais6-preparer` (partie routeur) puis `relais6-basculer` / `relais6-revenir` et la sonde.
+`routeur_ll` vide = lien-local de la box sur `lan_if`, lu à l'exécution et validé. Si
+`adresse_fixe` est déjà configurée sur `lan_if` par un autre fichier (gk2 : `::200` par
+`50-secubox-ipv6-stable.conf`), le drop-in ne la redéclare pas et ce fichier n'est jamais
+touché ; seule la route par défaut via la Freebox est ajoutée. La sonde vérifie alors le
+routage **local** : `net.ipv6.conf.all.forwarding=1`, `secubox-relais6-ra.service` actif, route
+par défaut via `passerelle_ll` sur `lan_if`, ping d'une cible IPv6 externe ; 3 échecs →
+`relais6-revenir` (fonctionne même annonces RA mortes).
+
+> **Limite du rôle tout** : si gk2 tombe entièrement (panne, coupure secteur), plus rien ne
+> peut rendre le next hop à la Freebox. La maison n'a plus que l'IPv4 jusqu'à ce que le next
+> hop soit vidé à la main (interface Freebox : Paramètres → Configuration IPv6, ou
+> `freeboxctl nexthop-regler vide` une fois gk2 revenue).
+
+Écritures `relais6-*` et sonde sérialisées par `flock` sur `/run/lock/secubox-relais6.lock`.
+`relais6-basculer` arme la sonde AVANT de régler le next hop (désarme si le réglage échoue) ;
+`relais6-revenir` ne désarme la sonde qu'après un retour réussi (sinon elle le relance).
+`relais6-preparer` défait tout (`relais6-retirer`) si une étape échoue après le drop-in.
 
 ## Chaîne forward (#3803)
 

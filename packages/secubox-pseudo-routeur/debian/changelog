@@ -8,6 +8,10 @@ secubox-pseudo-routeur (0.3.0-1~trixie1) trixie; urgency=medium
     minuterie pseudo-routeur-relais6-sonde (60 s, retour au 3e échec).
   * API GET /relais6, POST /relais6/basculer et /relais6/revenir (admin) ;
     panneau « Relais IPv6 » de la page (CSP recalculée).
+  * Rôle « tout » (une seule box routeur et repli, sonde du routage local,
+    adresse fixe déjà posée jamais doublée) ; sonde armée avant la bascule et
+    désarmée seulement après un retour réussi ; preparer défait tout en cas
+    d'échec ; verrou flock ; dnsmasq limité à lan_if (user/group explicites).
   * Depends secubox-freebox (>= 0.8.4), dnsmasq-base ; sudoers nexthop-lire,
     nexthop-regler.
 

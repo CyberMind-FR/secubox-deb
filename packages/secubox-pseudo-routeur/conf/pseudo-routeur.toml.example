@@ -14,6 +14,7 @@ lan_subnet = "192.168.1.0/24"
 # Relais IPv6 par next hop Freebox (#3807). Vide ou absent : rien n'est actif.
 #   role = "routeur" : cette box annonce le /64 (gk1) — pseudo-routeurctl relais6-preparer / relais6-retirer
 #   role = "repli"   : cette box tient le connecteur Freebox (gk2) — relais6-basculer / relais6-revenir
+#   role = "tout"    : les deux sur la meme box (gk2) ; routeur_ll vide = son lien-local sur lan_if
 [relais_ipv6]
 role = ""
 lan_if = "eth2"

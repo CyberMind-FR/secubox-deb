@@ -27,7 +27,8 @@ dns = "2a01:e0a:dec:c4e0::200"
 REPLI = ROUTEUR.replace('role = "routeur"', 'role = "repli"') + 'sonde_cible = "2001:4860:4860::8888"\n'
 
 
-def _env(tmp_path, conf=None, ping_ok=True, nft_c_ok=True, dnsmasq_ok=True, freebox_ok=True, systemctl_ok=True, reload_ok=True):
+def _env(tmp_path, conf=None, ping_ok=True, nft_c_ok=True, dnsmasq_ok=True, freebox_ok=True, systemctl_ok=True, reload_ok=True,
+         adresse_presente=False, route_ok=True, forwarding="1", ra_actif=True, ll="fe80::f2ad:4eff:fe27:889b"):
     b = tmp_path / "bin"
     b.mkdir(exist_ok=True)
     j = tmp_path / "appels.log"
@@ -35,10 +36,14 @@ def _env(tmp_path, conf=None, ping_ok=True, nft_c_ok=True, dnsmasq_ok=True, free
         "nft": f'echo "nft $*" >> {j}; [ "$1" = "-c" ] && exit {0 if nft_c_ok else 1}; '
                f'[ "$1" = "list" ] && [ -e {tmp_path}/table ] && exit 0; [ "$1" = "list" ] && exit 1; '
                f'[ "$1" = "-f" ] && touch {tmp_path}/table; [ "$1" = "delete" ] && rm -f {tmp_path}/table; exit 0',
-        "sysctl": f'echo "sysctl $*" >> {j}; echo 1',
-        "systemctl": f'echo "systemctl $*" >> {j}; case "$1" in enable|disable|restart) exit {0 if systemctl_ok else 1};; esac; exit 0',
+        "sysctl": f'echo "sysctl $*" >> {j}; echo {forwarding}',
+        "systemctl": f'echo "systemctl $*" >> {j}; case "$1" in enable|disable|restart) exit {0 if systemctl_ok else 1};; is-active) exit {0 if ra_actif else 3};; esac; exit 0',
         "networkctl": f'echo "networkctl $*" >> {j}; [ "$1" = "reload" ] && exit {0 if reload_ok else 1}; [ "$1" = "status" ] && echo "     Network File: /etc/systemd/network/10-eth2.network"; exit 0',
-        "ip": f'echo "ip $*" >> {j}; exit 0',
+        "ip": f'echo "ip $*" >> {j}; case "$*" in '
+              f'"-6 -o addr show dev eth2 scope link") echo "3: eth2    inet6 {ll}/64 scope link \\       valid_lft forever";; '
+              f'"-6 addr show dev eth2") {"echo \"    inet6 2a01:e0a:dec:c4e0::200/64 scope global\"" if adresse_presente else "true"};; '
+              f'"-6 route show default dev eth2") {"echo \"default via fe80::3a07:16ff:fe77:17d3 proto static metric 1024\"" if route_ok else "true"};; '
+              'esac; exit 0',
         "dnsmasq": f'echo "dnsmasq $*" >> {j}; exit {0 if dnsmasq_ok else 1}',
         "ping": f'echo "ping $*" >> {j}; exit {0 if ping_ok else 1}',
         "sudo": 'while [ "$1" = "-u" ] || [ "$1" = "-n" ]; do [ "$1" = "-u" ] && shift; shift; done; exec "$@"',
@@ -339,3 +344,84 @@ def test_conf_dnsmasq_limitee_a_lan_if(tmp_path):
 def test_verbes_ecrivants_verrouilles():
     src = CTL.read_text()
     assert "relais6-preparer|relais6-retirer|relais6-basculer|relais6-revenir|relais6-sonde) _r6_verrou" in src
+
+
+TOUT = """
+[relais_ipv6]
+role = "tout"
+lan_if = "eth2"
+prefixe = "2a01:e0a:dec:c4e0::/64"
+adresse_fixe = "2a01:e0a:dec:c4e0::200/64"
+passerelle_ll = "fe80::3a07:16ff:fe77:17d3"
+dns = "2a01:e0a:dec:c4e0::200"
+sonde_cible = "2001:4860:4860::8888"
+"""
+LL_GK2 = "fe80::f2ad:4eff:fe27:889b"
+
+
+def test_tout_preparer_sans_doubler_l_adresse_existante(tmp_path):
+    env, j = _env(tmp_path, TOUT, adresse_presente=True)
+    existant = tmp_path / "network" / "10-eth2.network.d" / "50-secubox-ipv6-stable.conf"
+    existant.parent.mkdir(parents=True)
+    existant.write_text("[Network]\nAddress=2a01:e0a:dec:c4e0::200/64\n")
+    r = _run(env, "relais6-preparer")
+    assert r.returncode == 0, r.stderr
+    dropin = (existant.parent / "zz-secubox-relais6.conf").read_text()
+    assert "Address=" not in dropin and "Gateway=fe80::3a07:16ff:fe77:17d3" in dropin
+    assert existant.read_text() == "[Network]\nAddress=2a01:e0a:dec:c4e0::200/64\n"
+    assert _run(env, "relais6-retirer").returncode == 0
+    assert existant.exists() and not (existant.parent / "zz-secubox-relais6.conf").exists()
+
+
+def test_tout_preparer_pose_l_adresse_si_absente(tmp_path):
+    env, j = _env(tmp_path, TOUT, adresse_presente=False)
+    assert _run(env, "relais6-preparer").returncode == 0
+    assert "Address=2a01:e0a:dec:c4e0::200/64" in (tmp_path / "network" / "10-eth2.network.d" / "zz-secubox-relais6.conf").read_text()
+
+
+def test_tout_basculer_vers_son_propre_lien_local(tmp_path):
+    env, j = _env(tmp_path, TOUT)
+    r = _run(env, "relais6-basculer")
+    assert r.returncode == 0, r.stderr
+    a = _appels(j)
+    assert f"freeboxctl nexthop-regler {LL_GK2}" in a
+    assert "%eth2" not in a          # pas de ping d'un routeur distant
+    assert "sysctl -n net.ipv6.conf.all.forwarding" in a and "is-active --quiet secubox-relais6-ra.service" in a
+
+
+@pytest.mark.parametrize("panne", [{"forwarding": "0"}, {"ra_actif": False}, {"route_ok": False}, {"ping_ok": False}])
+def test_tout_sonde_locale_trois_echecs(tmp_path, panne):
+    env, j = _env(tmp_path, TOUT, **panne)
+    assert [_run(env, "relais6-sonde").returncode for _ in range(3)] == [0, 0, 1]
+    env2, _ = _env(tmp_path, TOUT, **panne)
+    assert _run(env2, "relais6-basculer").returncode == 2
+
+
+def test_tout_sonde_saine(tmp_path):
+    env, j = _env(tmp_path, TOUT)
+    assert _run(env, "relais6-sonde").returncode == 0
+    assert json.loads((tmp_path / "relais6-sonde.json").read_text())["echecs_consecutifs"] == 0
+
+
+def test_tout_revenir_meme_annonces_mortes(tmp_path):
+    env, j = _env(tmp_path, TOUT, ra_actif=False, route_ok=False, ping_ok=False)
+    assert _run(env, "relais6-revenir").returncode == 0
+    assert "freeboxctl nexthop-regler vide" in _appels(j)
+
+
+def test_tout_lien_local_explicite_valide(tmp_path):
+    env, j = _env(tmp_path, TOUT + 'routeur_ll = "2a01::1"\n')
+    assert _run(env, "relais6-basculer").returncode == 2 and "freeboxctl" not in _appels(j)
+
+
+def test_tout_sans_lien_local_lu_refuse(tmp_path):
+    env, j = _env(tmp_path, TOUT, ll="2a01::bad")
+    r = _run(env, "relais6-basculer")
+    assert r.returncode == 2 and "lien-local" in r.stderr and "nexthop-regler" not in _appels(j)
+
+
+def test_tout_etat_combine(tmp_path):
+    env, j = _env(tmp_path, TOUT, adresse_presente=True)
+    _run(env, "relais6-preparer")
+    d = json.loads(_run(env, "relais6-etat").stdout)
+    assert d["role"] == "tout" and d["routeur_ll"] == LL_GK2 and "next_hop_lu" in d and d["pret"] is True

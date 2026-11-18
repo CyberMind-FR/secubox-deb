@@ -511,8 +511,8 @@ def ll(k, v):
 out = {}
 try:
     role = txt("role")
-    if role not in ("", "routeur", "repli"):
-        raise ValueError("role : routeur, repli ou vide")
+    if role not in ("", "routeur", "repli", "tout"):
+        raise ValueError("role : routeur, repli, tout ou vide")
     out["role"] = role
     i = txt("lan_if")
     if i and not re.fullmatch(r"[A-Za-z0-9_.-]{1,15}", i):
@@ -531,7 +531,8 @@ try:
             raise ValueError("prefixe : /64 global attendu")
         out["prefixe"] = str(p)
         out["passerelle_ll"] = ll("passerelle_ll", txt("passerelle_ll"))
-        out["routeur_ll"] = ll("routeur_ll", txt("routeur_ll"))
+        # role tout : routeur_ll vide = lien-local de cette box sur lan_if, lu a l'execution.
+        out["routeur_ll"] = ll("routeur_ll", txt("routeur_ll")) if (txt("routeur_ll") or role != "tout") else ""
         d = ipaddress.IPv6Address(txt("dns"))
         if d.is_link_local or d.is_multicast or d.is_unspecified or d.is_loopback:
             raise ValueError("dns : adresse IPv6 unicast routable attendue")
@@ -548,10 +549,10 @@ try:
             if a.network != p or a.ip == p.network_address:
                 raise ValueError("adresse_fixe : adresse/64 dans le prefixe attendue")
         out["adresse_fixe"] = str(a)
-        if role == "routeur" and not a:
-            raise ValueError("adresse_fixe obligatoire pour le role routeur")
-        if role == "repli" and not c:
-            raise ValueError("sonde_cible obligatoire pour le role repli")
+        if role in ("routeur", "tout") and not a:
+            raise ValueError("adresse_fixe obligatoire pour le role " + role)
+        if role in ("repli", "tout") and not c:
+            raise ValueError("sonde_cible obligatoire pour le role " + role)
 except ValueError as e:
     print("refuse : [relais_ipv6] " + str(e), file=sys.stderr); sys.exit(2)
 for k, v in out.items():
@@ -572,6 +573,33 @@ _r6_charger() {
         esac
     done <<< "$lignes"
     [ -n "$R6_LAN_IF" ] || R6_LAN_IF="$(_lan_if)"
+    if [ "$R6_ROLE" = "tout" ] && [ -z "$R6_ROUTEUR_LL" ] && [ -n "$R6_LAN_IF" ]; then
+        R6_ROUTEUR_LL="$(_r6_ll_local)"
+        if [ -z "$R6_ROUTEUR_LL" ]; then
+            echo "refuse : aucune adresse lien-local lue sur $R6_LAN_IF (routeur_ll de [relais_ipv6])" >&2
+            return 2
+        fi
+    fi
+}
+
+# Lien-local de cette box sur lan_if (role tout), valide par ipaddress ; vide si absent.
+_r6_ll_local() {
+    ip -6 -o addr show dev "$R6_LAN_IF" scope link 2>/dev/null | python3 -c 'import ipaddress, re, sys
+for ligne in sys.stdin:
+    m = re.search(r"inet6 ([0-9a-fA-F:]+)/\d+", ligne)
+    if m:
+        try:
+            a = ipaddress.IPv6Address(m.group(1))
+        except ValueError:
+            continue
+        if a.is_link_local:
+            print(a)
+            break'
+}
+
+# L'adresse fixe est-elle deja posee sur lan_if (par un autre fichier) ? Alors on ne la double pas.
+_r6_adresse_presente() {
+    ip -6 addr show dev "$R6_LAN_IF" 2>/dev/null | grep -qF " ${R6_ADRESSE_FIXE} "
 }
 
 _r6_exiger_role() {
@@ -579,7 +607,7 @@ _r6_exiger_role() {
         printf '{"role": "", "modifie": false, "note": "relais IPv6 non configure ([relais_ipv6] role vide)"}\n'
         exit 0
     fi
-    if [ "$R6_ROLE" != "$1" ]; then
+    if [ "$R6_ROLE" != "$1" ] && [ "$R6_ROLE" != "tout" ]; then
         echo "refuse : verbe du role $1, cette box a le role $R6_ROLE" >&2
         exit 2
     fi
@@ -643,14 +671,12 @@ EOF
 }
 
 _r6_contenu_dropin() {
-    cat <<EOF
-# Genere par pseudo-routeurctl relais6-preparer (#3807) — ne pas editer.
-[Network]
-Address=$R6_ADRESSE_FIXE
-
-[Route]
-Gateway=$R6_PASSERELLE_LL
-EOF
+    echo "# Genere par pseudo-routeurctl relais6-preparer (#3807) — ne pas editer."
+    # Adresse deja configuree ailleurs (ex. gk2 ::200 par 50-secubox-ipv6-stable.conf) : pas de doublon.
+    if [ "${1:-}" != "sans-adresse" ]; then
+        printf '[Network]\nAddress=%s\n\n' "$R6_ADRESSE_FIXE"
+    fi
+    printf '[Route]\nGateway=%s\n' "$R6_PASSERELLE_LL"
 }
 
 # Ecrit $2 dans $1 par double tampon (temporaire du meme dossier, mv atomique).
@@ -694,7 +720,12 @@ cmd_relais6_preparer() {
     # A partir d'ici, tout echec defait ce qui a ete pose (retirer, idempotent).
     # shellcheck disable=SC2064,SC2154
     trap "rc=\$?; rm -f -- '$nft_tmp' '$conf_tmp'; if [ \$rc -ne 0 ]; then echo 'echec : relais IPv6 defait' >&2; cmd_relais6_retirer >/dev/null || true; _audit relais6_preparer echec 'defait apres echec'; fi" EXIT
-    _r6_poser "$R6_NETWORKD_DIR/$fnet.d/$R6_DROPIN" "$(_r6_contenu_dropin)"
+    local mode_adresse=avec-adresse
+    # Adresse deja posee par un AUTRE fichier (pas notre drop-in d'une preparation precedente) : pas de doublon.
+    if _r6_adresse_presente && ! grep -qsF "Address=$R6_ADRESSE_FIXE" "$R6_NETWORKD_DIR/$fnet.d/$R6_DROPIN"; then
+        mode_adresse=sans-adresse
+    fi
+    _r6_poser "$R6_NETWORKD_DIR/$fnet.d/$R6_DROPIN" "$(_r6_contenu_dropin "$mode_adresse")"
     networkctl reload
     # 3. Redirections ICMPv6 coupees + transit du prefixe (persistant puis charge).
     chmod 644 "$nft_tmp"; mv -f "$nft_tmp" "$R6_NFT_PERSIST"
@@ -733,8 +764,17 @@ cmd_relais6_retirer() {
 
 # Controle du routeur depuis le repli : routeur lien-local joignable ET Internet IPv6 joignable.
 _r6_routeur_ok() {
+    if [ "$R6_ROLE" = "tout" ]; then _r6_local_ok; return; fi
     ping -6 -c1 -W2 "${R6_ROUTEUR_LL}%${R6_LAN_IF}" >/dev/null 2>&1 || return 1
     if [ -n "$R6_ADRESSE_FIXE" ]; then ping -6 -c1 -W2 "${R6_ADRESSE_FIXE%/*}" >/dev/null 2>&1 || return 1; fi
+    ping -6 -c1 -W2 "$R6_SONDE_CIBLE" >/dev/null 2>&1 || return 1
+}
+
+# Role tout : sante du routage LOCAL (forwarding, annonces RA, route via la Freebox, Internet IPv6).
+_r6_local_ok() {
+    [ "$(sysctl -n net.ipv6.conf.all.forwarding 2>/dev/null || echo 0)" = "1" ] || return 1
+    systemctl is-active --quiet "$R6_UNITE_RA" 2>/dev/null || return 1
+    ip -6 route show default dev "$R6_LAN_IF" 2>/dev/null | grep -qF "via ${R6_PASSERELLE_LL} " || return 1
     ping -6 -c1 -W2 "$R6_SONDE_CIBLE" >/dev/null 2>&1 || return 1
 }
 
@@ -814,7 +854,7 @@ cmd_relais6_revenir() {
 # relais6-sonde : un passage du minuteur. Sort en 1 au 3e echec consecutif (OnFailure= -> retour).
 cmd_relais6_sonde() {
     _r6_charger || exit 2
-    [ "$R6_ROLE" = "repli" ] || exit 0
+    case "$R6_ROLE" in repli|tout) ;; *) exit 0 ;; esac
     [ -n "$R6_LAN_IF" ] || exit 0
     local echecs
     if _r6_routeur_ok; then _r6_ecrire_etat 0 true; exit 0; fi
@@ -829,10 +869,11 @@ cmd_relais6_sonde() {
 cmd_relais6_etat() {
     _r6_charger || exit 2
     local nh="" timer=false ra=false table=false dropin=false adresse=false route=false
-    if [ "$R6_ROLE" = "repli" ]; then
+    if [ "$R6_ROLE" = "repli" ] || [ "$R6_ROLE" = "tout" ]; then
         nh="$(_freeboxctl nexthop-lire 2>/dev/null || true)"
         systemctl is-active --quiet "$R6_TIMER" 2>/dev/null && timer=true
-    elif [ "$R6_ROLE" = "routeur" ]; then
+    fi
+    if [ "$R6_ROLE" = "routeur" ] || [ "$R6_ROLE" = "tout" ]; then
         systemctl is-active --quiet "$R6_UNITE_RA" 2>/dev/null && ra=true
         command -v "$NFT" >/dev/null 2>&1 && "$NFT" list table inet secubox_relais6 >/dev/null 2>&1 && table=true
         compgen -G "$R6_NETWORKD_DIR/*.network.d/$R6_DROPIN" >/dev/null && dropin=true
@@ -847,7 +888,7 @@ import json, os
 e = os.environ
 b = lambda k: e[k] == "true"
 r = {"role": e["ROLE"], "lan_if": e["LAN_IF"] or None, "prefixe": e["PREFIXE"] or None, "routeur_ll": e["ROUTEUR_LL"] or None}
-if e["ROLE"] == "repli":
+if e["ROLE"] in ("repli", "tout"):
     try:
         lu = json.loads(e["NH"])
         if "erreur" in lu:
@@ -863,7 +904,7 @@ if e["ROLE"] == "repli":
     r.update({"next_hop_lu": nh, "actif": bool(nh) and nh["next_hop"] == e["ROUTEUR_LL"],
               "sonde": {"armee": b("TIMER"), "echecs_consecutifs": s.get("echecs_consecutifs", 0),
                         "historique": s.get("historique", [])[-10:]}})
-elif e["ROLE"] == "routeur":
+if e["ROLE"] in ("routeur", "tout"):
     r.update({"annonces_ra": b("RA"), "table_nft": b("TABLE"), "dropin_networkd": b("DROPIN"),
               "adresse_fixe_posee": b("ADRESSE"), "route_freebox": b("ROUTE"),
               "pret": all(b(k) for k in ("RA", "TABLE", "DROPIN", "ADRESSE", "ROUTE"))})
