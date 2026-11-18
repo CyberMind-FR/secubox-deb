@@ -4,7 +4,11 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """Sources de la veille V2 (#3720) : une par fichier. Protocole `Source` : `nom`, `intervalle_s`,
 `async lire(client, curseur) -> Lot`. Les réponses de gk2 sont des données non fiables : une ligne illisible est
-comptée et sautée, jamais fatale."""
+comptée et sautée, jamais fatale.
+
+Horodatages par source : menaces = ISO 8601 avec décalage local (+01:00) ; dns = RFC 3339 ; bans, bans_actifs,
+reevaluations, decisions, garde = époque (UTC par définition) ; actord = époque ou ISO avec décalage. Aucune source
+n'est documentée en ISO sans décalage : une telle ligne est ignorée et comptée (`ignorees`), jamais supposée UTC."""
 from dataclasses import dataclass, field
 from typing import Optional, Protocol
 

@@ -46,21 +46,20 @@ def _ecrire_curseur(db, nom, position, etat, lecture, erreur, lus):
                (nom, position, etat, lecture, json.dumps(erreur, ensure_ascii=False) if erreur else None, lus, lus))
 
 
-def _audit(db, maintenant, motif, details):
-    """Une ligne d'audit par motif et par fenêtre de 10 min ; chaînée sur la précédente."""
+def _audit(db, maintenant, motif, details, operation="collecte_refus", resultat="refus", limiter=True):
+    """Ligne d'audit chaînée sur la précédente ; `limiter` : une seule par (opération, motif) et par 10 min."""
     limite = rfc3339(maintenant - timedelta(seconds=AUDIT_FENETRE_S))
-    if db.execute("SELECT 1 FROM audit_chaine WHERE operation = 'collecte_refus' AND objet = ? AND horodatage > ?",
-                  (motif, limite)).fetchone():
+    if limiter and db.execute("SELECT 1 FROM audit_chaine WHERE operation = ? AND objet = ? AND horodatage > ?",
+                              (operation, motif, limite)).fetchone():
         return False
     prec = db.execute("SELECT empreinte FROM audit_chaine ORDER BY id DESC LIMIT 1").fetchone()
     prec = prec[0] if prec else None
     h = rfc3339(maintenant)
     d = json.dumps(details, ensure_ascii=False, sort_keys=True)
-    emp = hashlib.sha256("\x1f".join([prec or "", h, "secubox-ai-veille", "collecte_refus", motif, d]).encode()).hexdigest()
+    emp = hashlib.sha256("\x1f".join([prec or "", h, "secubox-ai-veille", operation, motif, d]).encode()).hexdigest()
     db.execute("INSERT INTO audit_chaine(horodatage, acteur, operation, objet, objet_id, resultat, details_json, "
-               "empreinte_prec, empreinte) VALUES (?, 'secubox-ai-veille', 'collecte_refus', ?, NULL, 'refus', ?, ?, ?)",
-               (h, motif, d, prec, emp))
-    log.warning("collecte refusée par gk2 (%s) : %s", motif, d)
+               "empreinte_prec, empreinte) VALUES (?, 'secubox-ai-veille', ?, ?, NULL, ?, ?, ?, ?)",
+               (h, operation, motif, resultat, d, prec, emp))
     return True
 
 
@@ -89,17 +88,24 @@ def _transaction(db, fonction):
 
 
 def _ranger_faits(db, faits, h):
+    """Faits de gk2 (non fiables) : une entrée mal formée est sautée, jamais fatale à la passe."""
     for c in faits.get("campagnes") or []:
+        if not isinstance(c, dict) or not isinstance(c.get("id"), str):
+            log.warning("campagne mal formée ignorée")
+            continue
         db.execute("INSERT INTO campagnes(id, outil, attaquants, sondes, haute_valeur, premiere_vue, derniere_vue) "
                    "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET outil = excluded.outil, "
                    "attaquants = excluded.attaquants, sondes = excluded.sondes, haute_valeur = excluded.haute_valeur, "
                    "derniere_vue = excluded.derniere_vue",
-                   (c["id"], c.get("outil"), c.get("attaquants"), c.get("sondes"), c.get("haute_valeur"),
+                   (c.get("id"), c.get("outil"), c.get("attaquants"), c.get("sondes"), c.get("haute_valeur"),
                     c.get("premiere_vue") or h, c.get("derniere_vue") or h))
     for b in faits.get("blocs") or []:
+        if not isinstance(b, dict) or not isinstance(b.get("bloc24"), str):
+            log.warning("bloc mal formé ignoré")
+            continue
         db.execute("INSERT INTO blocs(bloc24, banni_jusqua, origine, vu_le) VALUES (?, ?, ?, ?) "
                    "ON CONFLICT(bloc24) DO UPDATE SET banni_jusqua = excluded.banni_jusqua, origine = excluded.origine, "
-                   "vu_le = excluded.vu_le", (b["bloc24"], b.get("banni_jusqua"), b.get("origine"), h))
+                   "vu_le = excluded.vu_le", (b.get("bloc24"), b.get("banni_jusqua"), b.get("origine"), h))
 
 
 async def _en_ligne(fonction):
@@ -130,13 +136,18 @@ async def passe(db, client, sources, maintenant, suspendu=False, faits=None, sql
             motif = f"refus_{code}" if code in (401, 403) else (f"http_{code}" if code else
                                                                   str(getattr(e, "motif", e))[:64])
             nouvelle = {"motif": motif, "echecs": echecs, "le": h}
+            if erreur.get("trous"):
+                nouvelle["trous"] = erreur["trous"]
             if code in (401, 403):
-                delai = min(source.intervalle_s * 2 ** echecs, PLAFOND_S)
+                # Espacement exponentiel : intervalle × 2^(échecs − 1), soit 1×, 2×, 4×… l'intervalle de la
+                # source, plafonné à 15 min (PLAFOND_S).
+                delai = min(source.intervalle_s * 2 ** (echecs - 1), PLAFOND_S)
                 nouvelle["prochain"] = rfc3339(maintenant + timedelta(seconds=delai))
 
                 def _ecrire():
                     _ecrire_curseur(db, source.nom, position, "en_panne", None, nouvelle, 0)
-                    _audit(db, maintenant, motif, {"source": source.nom, "echecs": echecs})
+                    if _audit(db, maintenant, motif, {"source": source.nom, "echecs": echecs}):
+                        log.warning("collecte refusée par gk2 (%s), source %s", motif, source.nom)
             else:
                 def _ecrire():
                     _ecrire_curseur(db, source.nom, position, "en_panne", h, nouvelle, 0)
@@ -145,12 +156,25 @@ async def passe(db, client, sources, maintenant, suspendu=False, faits=None, sql
             etats[source.nom] = "en_panne"
             continue
 
+        trou = bool(lot.faits.get("trou"))
+        trous = int(erreur.get("trous") or 0) + (1 if trou else 0)
+        if trou:
+            log.warning("source %s : trou signalé par gk2 (événements perdus avant %s)", source.nom, lot.curseur)
+        if lot.faits.get("rotation"):
+            log.info("source %s : rotation du journal de gk2", source.nom)
+        if lot.faits.get("ignorees"):
+            log.warning("source %s : %d ligne(s) illisible(s) ignorée(s)", source.nom, lot.faits["ignorees"])
+
         def _inserer():
             n = 0
             for e in lot.evenements:
                 n += db.execute(_INSERT, e.ligne()).rowcount
             _ranger_faits(db, lot.faits, h)
-            _ecrire_curseur(db, source.nom, lot.curseur, "ok", h, None, n)
+            if trou:
+                _audit(db, maintenant, source.nom, {"source": source.nom, "position": lot.curseur, "trous": trous},
+                       operation="collecte_trou", resultat="perte", limiter=False)
+            # Le compteur de trous survit aux passes réussies (derniere_erreur ne garde alors que lui).
+            _ecrire_curseur(db, source.nom, lot.curseur, "ok", h, {"trous": trous} if trous else None, n)
             return n
         await sql(lambda: _transaction(db, _inserer))
         if faits is not None:

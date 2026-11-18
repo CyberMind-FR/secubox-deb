@@ -155,7 +155,7 @@ def test_espacement_apres_401(db):
         assert len(client.appels) == n
         t = max(p, datetime.fromisoformat(json.loads(db.execute(
             "SELECT derniere_erreur FROM curseurs WHERE source='bans'").fetchone()[0])["prochain"].replace("Z", "+00:00")))
-    assert attentes[:3] == [60, 120, 240] and max(attentes) == 900 and attentes[-1] == 900
+    assert attentes[:3] == [30, 60, 120] and max(attentes) == 900 and attentes[-1] == 900
     # une ligne d'audit par motif et par 10 min (deux sources, même motif, même passe : une seule)
     lignes = db.execute("SELECT horodatage, objet FROM audit_chaine ORDER BY id").fetchall()
     assert lignes[0][1] == "refus_401"
@@ -232,3 +232,37 @@ def test_client_signe_get_et_chemin_exact():
     with pytest.raises(ErreurGk2) as e:
         asyncio.run(c401.get("stats"))
     assert e.value.code == 401
+
+
+def test_trou_et_rotation_signales(db, caplog):
+    lignes = _menaces()[:3]
+
+    def flux(params):
+        r = _flux(lignes)(params)
+        r.update(trou=True, rotation=True)
+        return r
+    c = Faux({"menaces_flux": flux})
+    with caplog.at_level("INFO", logger="secubox-ai-veille"):
+        assert _passe(db, c, [menaces.Menaces()]) == {"menaces": "ok"}
+    assert any("trou" in r.message and r.levelname == "WARNING" for r in caplog.records)
+    assert any("rotation" in r.message and r.levelname == "INFO" for r in caplog.records)
+    pos, err = db.execute("SELECT position, derniere_erreur FROM curseurs").fetchone()
+    assert pos == "1:3" and json.loads(err) == {"trous": 1}
+    _passe(db, c, [menaces.Menaces()], T0 + timedelta(minutes=1))
+    assert json.loads(db.execute("SELECT derniere_erreur FROM curseurs").fetchone()[0]) == {"trous": 2}
+    assert db.execute("SELECT COUNT(*) FROM audit_chaine WHERE operation='collecte_trou'").fetchone()[0] == 2
+
+
+def test_horodatage_naif_ignore_et_faits_mal_formes(db, caplog):
+    sans_decalage = dict(_menaces()[0], timestamp="2026-11-14T00:36:03")
+    c = Faux({"menaces_flux": _flux([sans_decalage, _menaces()[1]])})
+    with caplog.at_level("WARNING", logger="secubox-ai-veille"):
+        _passe(db, c, [menaces.Menaces()])
+    assert db.execute("SELECT COUNT(*) FROM evenements").fetchone()[0] == 1
+    assert any("ignorée" in r.message for r in caplog.records)
+    assert normaliser.utc("2026-11-14T00:36:03") is None
+    assert normaliser.utc("2026-11-14T00:36:03", naif_utc=True) == "2026-11-14T00:36:03Z"
+    collecte._ranger_faits(db, {"campagnes": [None, {"outil": "x"}, {"id": "s1"}], "blocs": ["x", {"bloc24": "1.2.3.0/24"}]},
+                           "2026-11-18T12:00:00Z")
+    assert db.execute("SELECT id FROM campagnes").fetchall() == [("s1",)]
+    assert db.execute("SELECT bloc24 FROM blocs").fetchall() == [("1.2.3.0/24",)]

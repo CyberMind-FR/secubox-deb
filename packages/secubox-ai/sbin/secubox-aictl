@@ -107,6 +107,8 @@ CONFIG_DEFAUT = {
 }
 # Hôtes de la configuration que l'API doit pouvoir joindre sur le LAN (R13).
 HOTES_CONFIG = (("gk2", "menaces_url"), ("gk2", "sources_url"), ("distant", "url"), ("searxng", "url"))
+# La veille (#3720) ne lit que gk2 par menaces_url : ni gk0, ni SearXNG, ni les sources du Hall.
+HOTES_VEILLE = (("gk2", "menaces_url"),)
 # Plages fermées par secubox-ai.service (IPAddressDeny) qu'une adresse de la configuration peut rouvrir, une à une.
 PLAGES_LAN = tuple(ipaddress.ip_network(p) for p in
                    ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7"))
@@ -799,12 +801,12 @@ def resoudre(hote: str) -> set[str]:
     return {info[4][0] for info in socket.getaddrinfo(hote, None, proto=socket.IPPROTO_TCP)}
 
 
-def adresses_permises(cfg: dict) -> tuple[list[str], list[str]]:
+def adresses_permises(cfg: dict, hotes=None) -> tuple[list[str], list[str]]:
     """(adresses LAN à rouvrir pour l'API, refus tracés). Seules les adresses des plages privées fermées par l'unité
     sont rouvertes, une à une (/32, /128) ; une adresse publique est déjà joignable ; boucle, lien local,
     multidiffusion ou réservée : jamais (même si un nom y résout)."""
     permises, refus = set(), []
-    for section, cle in HOTES_CONFIG:
+    for section, cle in (hotes or HOTES_CONFIG):
         url = cfg.get(section, {}).get(cle, "")
         if not url:
             continue
@@ -911,19 +913,22 @@ def cmd_preparer() -> int:
     try:
         cfg = charger_conf()
         permises, refus = adresses_permises(cfg)
+        veille, _ = adresses_permises(cfg, HOTES_VEILLE)
     except Refus as e:
         journal(f"configuration refusée : {e} ; aucune adresse LAN permise à l'API")
         audit("preparer", {"issue": "configuration-refusee", "detail": str(e)})
-        permises, refus, code = [], [], 2
+        permises, refus, veille, code = [], [], [], 2
     dns, refus_dns = resolveurs_permis()      # indépendants de ai.toml : gardés même si elle est refusée
     permises, refus = _trier(set(permises) | set(dns)), refus + refus_dns
+    veille = _trier(set(veille) | set(dns))
     for r in refus:
         journal(r)
     try:
-        change = [ecrire_dropin(texte_dropin(permises), d) for d in (DROPIN_API, DROPIN_VEILLE)]
+        change = [ecrire_dropin(texte_dropin(permises), DROPIN_API),
+                  ecrire_dropin(texte_dropin(veille), DROPIN_VEILLE)]
         if any(change):
             systemctl("daemon-reload")
-            audit("preparer", {"issue": "adresses", "permises": permises, "refus": refus})
+            audit("preparer", {"issue": "adresses", "permises": permises, "veille": veille, "refus": refus})
     except (OSError, subprocess.SubprocessError) as e:
         journal(f"adresses de l'API non appliquées ({e.__class__.__name__})")
         audit("preparer", {"issue": "erreur", "detail": f"drop-in non appliqué ({e.__class__.__name__})"})

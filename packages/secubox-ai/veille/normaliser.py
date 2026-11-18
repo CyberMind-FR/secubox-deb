@@ -75,8 +75,9 @@ def texte(v: Any, n: int = CHAMP_MAX) -> Optional[str]:
     return s or None
 
 
-def utc(v: Any) -> Optional[str]:
-    """Époque (s) ou ISO 8601 (décalage local compris) → UTC RFC 3339 ; None si illisible. Sans décalage : UTC."""
+def utc(v: Any, naif_utc: bool = False) -> Optional[str]:
+    """Époque (s) ou ISO 8601 avec décalage → UTC RFC 3339 ; None si illisible. Un ISO SANS décalage est ambigu
+    (heure locale de gk2 ?) : None (ligne ignorée et comptée), sauf `naif_utc` pour une source documentée en UTC."""
     if isinstance(v, bool) or v is None:
         return None
     try:
@@ -85,7 +86,11 @@ def utc(v: Any) -> Optional[str]:
         d = datetime.fromisoformat(str(v)[:40].replace("Z", "+00:00"))
     except (ValueError, OverflowError, OSError):
         return None
-    return rfc3339(d if d.tzinfo else d.replace(tzinfo=timezone.utc))
+    if d.tzinfo is None:
+        if not naif_utc:
+            return None
+        d = d.replace(tzinfo=timezone.utc)
+    return rfc3339(d)
 
 
 def _premier(brut: dict, *cles):
@@ -142,12 +147,13 @@ def empreinte(source, horodatage, ip, fam, vhost, id_source) -> str:
 
 
 def evenement(source: str, brut: dict, id_source: Any = None, noeud: str = "gk2",
-              maintenant: Optional[datetime] = None, famille_defaut: Optional[str] = None) -> Evenement:
+              maintenant: Optional[datetime] = None, famille_defaut: Optional[str] = None,
+              naif_utc: bool = False) -> Evenement:
     """Une ligne brute de gk2 → Evenement. Lève ValueError si ce n'est pas un objet ou sans horodatage lisible."""
     if not isinstance(brut, dict):
         raise ValueError("ligne non objet")
     cree = rfc3339(maintenant or datetime.now(timezone.utc))
-    h = utc(_premier(brut, "timestamp", "ts", "at", "created_at", "debut", "genere_le"))
+    h = utc(_premier(brut, "timestamp", "ts", "at", "created_at", "debut", "genere_le"), naif_utc)
     if h is None:
         raise ValueError("horodatage illisible")
     cat = _premier(brut, "category", "cat", "categorie", "famille", "menace") or famille_defaut
