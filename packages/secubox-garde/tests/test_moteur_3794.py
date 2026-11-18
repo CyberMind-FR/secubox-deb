@@ -193,3 +193,117 @@ def test_mac_apprise_plus_tot_pas_de_doublon(tmp_path):
     moteur.passage(db, REG, sources(infection(), voisins={}), ef, nt, T)
     moteur.passage(db, REG, sources(infection(T + 60), voisins={}), ef, nt, T + 60)
     assert db.execute("SELECT COUNT(*), cible FROM decisions WHERE menace='infection'").fetchone() == (1, MAC)
+
+
+class EffetsLevee(Effets):
+    """liberer échoue pour les adresses de `refus`."""
+
+    def __init__(self, refus=()):
+        super().__init__()
+        self.refus = set(refus)
+
+    def liberer(self, ip, mac=None, motif=""):
+        self.appels.append(("liberer", ip))
+        return {"ok": ip not in self.refus, "motif": ""}
+
+
+def _etat(db):
+    return db.execute("SELECT etat FROM decisions WHERE menace='infection'").fetchone()[0]
+
+
+def test_levee_echouee_reessayee_jusqua_succes(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    ef = EffetsLevee(refus={"192.168.1.20"})
+    moteur.passage(db, REG, sources(infection()), ef, nt, T)
+    moteur.passage(db, REG, sources(), ef, nt, T + 86400)
+    assert _etat(db) == "levee_en_cours"
+    moteur.passage(db, REG, sources(), ef, nt, T + 86460)
+    assert _etat(db) == "levee_en_cours"
+    assert len([a for a in ef.appels if a[0] == "alerte"]) == 1      # une alerte, pas une par passage
+    ef.refus.clear()
+    moteur.passage(db, REG, sources(), ef, nt, T + 86520)
+    assert _etat(db) == "levee"
+
+
+def test_levee_partielle_ne_ferme_que_les_adresses_levees(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    ef = EffetsLevee(refus={"2a01:e0a::20"})
+    vois = {"192.168.1.20": MAC, "2a01:e0a::20": MAC}
+    moteur.passage(db, REG, sources(infection(), vois), ef, nt, T)
+    moteur.passage(db, REG, sources(voisins=vois), ef, nt, T + 86400)
+    assert _etat(db) == "levee_en_cours"
+    assert [r[0] for r in db.execute("SELECT ip FROM adresses")] == ["2a01:e0a::20"]
+
+
+def test_rapprochement_levee_echouee_reste_en_cours(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    ef = EffetsLevee(refus={"192.168.1.20"})
+    moteur.passage(db, REG, sources(infection()), ef, nt, T)
+    assert moteur.rapprocher(db, ef, T + 86400)["echues"] == 0
+    assert _etat(db) == "levee_en_cours"
+    ef.refus.clear()
+    moteur.rapprocher(db, ef, T + 86500)
+    assert _etat(db) == "echue"
+
+
+def test_rafale_un_seul_sms_par_rafale(tmp_path):
+    db, ef, nt = base.ouvrir(tmp_path / "g.db"), Effets(), Notifs()
+    src = sources()
+    lot = [0]
+
+    def props(t):
+        lot[0] += 1
+        return [Signal("actord", "intrusion", f"9.{lot[0]}.{i // 250}.{i % 250 + 1}", None, "", "scan", t)
+                for i in range(51)]
+    src.propositions = props
+    moteur.passage(db, REG, src, ef, nt, T)
+    moteur.passage(db, REG, src, ef, nt, T + 60)
+    assert [k for c, k, _ in nt.file if c == "sms"] == ["rafale"]
+    src.propositions = lambda t: []
+    moteur.passage(db, REG, src, ef, nt, T + 1000)                  # fin de rafale : réarmée
+    src.propositions = props
+    moteur.passage(db, REG, src, ef, nt, T + 1100)
+    assert [k for c, k, _ in nt.file if c == "sms"] == ["rafale", "rafale"]
+
+
+def test_prolongation_echouee_reposee_au_passage_suivant(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    vois = {"192.168.1.20": MAC, "2a01:e0a::20": MAC}
+    ef = Effets()
+    moteur.passage(db, REG, sources(infection(), vois), ef, nt, T)
+    moteur.passage(db, REG, sources([Signal("dns-guard", "dga", "192.168.1.20", None, "z", "", T + 50000)], vois),
+                   ef, nt, T + 50001)
+    reel = ef.isoler
+    ef.isoler = lambda ip, mac, fin, motif="": ({"ok": False} if ip == "2a01:e0a::20" else reel(ip, mac, fin, motif))
+    moteur.passage(db, REG, sources(voisins=vois), ef, nt, T + 86400)
+    ef.isoler = reel
+    ef.appels.clear()
+    moteur.passage(db, REG, sources(voisins=vois), ef, nt, T + 86460)
+    assert ("isoler", "2a01:e0a::20", MAC, T + 2 * 86400) in ef.appels
+
+
+def test_echec_effet_une_alerte_par_heure_et_signale_dedoublonne(tmp_path):
+    db, nt = base.ouvrir(tmp_path / "g.db"), Notifs()
+    ef = Effets(echec={"isoler"})
+    for k in range(3):
+        moteur.passage(db, REG, sources(infection(T + 60 * k)), ef, nt, T + 60 * k)
+    assert len([a for a in ef.appels if a[0] == "alerte"]) == 1
+    db2 = base.ouvrir(tmp_path / "g2.db")
+    reg = dict(REG, automatique=False)
+    for k in range(3):
+        moteur.passage(db2, reg, sources(infection(T + 60 * k)), Effets(), nt, T + 60 * k)
+    n = db2.execute("SELECT COUNT(*) FROM decisions WHERE menace='signale' AND signe='dga+malicious'").fetchone()[0]
+    assert n == 1
+
+
+def test_migration_contrainte_etat(tmp_path):
+    import sqlite3
+    f = tmp_path / "g.db"
+    cx = sqlite3.connect(f)
+    cx.executescript(base.SCHEMA.replace(",'levee_en_cours'", "").split("CREATE INDEX")[0])
+    cx.execute("INSERT INTO decisions(id, menace, etat) VALUES ('a', 'signale', 'echue')")
+    cx.commit()
+    cx.close()
+    db = base.ouvrir(f)
+    db.execute("UPDATE decisions SET etat='levee_en_cours' WHERE id='a'")
+    assert db.execute("SELECT etat FROM decisions").fetchall() == [("levee_en_cours",)]

@@ -14,6 +14,8 @@ Chaque effet ajoute une ligne JSON à `/var/log/secubox/audit.log` et rend `{"ok
 from __future__ import annotations
 
 import http.client
+import ipaddress
+import re
 import json
 import logging
 import socket
@@ -29,6 +31,35 @@ CLE_BAN = Path("/etc/secubox/secrets/garde-ban.pem")
 SOCK_WAF = "/run/secubox/waf.sock"
 CHEMIN_BAN = "/garde/ban"
 CTL = "/usr/sbin/secubox-adguard-tv"
+RE_MAC = re.compile(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}")
+RE_NOM = re.compile(r"(?=.{1,253}$)[a-z0-9_][a-z0-9_-]{0,62}(\.[a-z0-9_][a-z0-9_-]{0,62})*")
+
+
+def _ip(v) -> str:
+    """Forme canonique ; ValueError sinon (jamais une valeur commençant par « - »)."""
+    return str(ipaddress.ip_address(str(v)))
+
+
+def _mac(v) -> str:
+    if v in (None, "", "-"):
+        return "-"
+    m = str(v).lower()
+    if not RE_MAC.fullmatch(m):
+        raise ValueError("mac")
+    return m
+
+
+def _noms(noms) -> str:
+    out = sorted({str(n).lower().rstrip(".") for n in noms})
+    if not out or any(not RE_NOM.fullmatch(n) for n in out):
+        raise ValueError("noms")
+    return ",".join(out)
+
+
+def _fin(v) -> str:
+    if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
+        raise ValueError("fin")
+    return str(v)
 
 
 class _UnixHTTP(http.client.HTTPConnection):
@@ -87,6 +118,11 @@ class Effets:
 
     # -- WAF
     def bannir(self, ip: str, duree_s: int, motif: str) -> dict:
+        try:
+            ip = _ip(ip)
+        except ValueError:
+            self.audit("ban", str(ip)[:64], motif, "refus ip")
+            return {"ok": False, "motif": "refus ip"}
         corps = json.dumps({"geste": "ban", "cible": ip, "duree_s": int(duree_s),
                             "motif": motif[:200]}).encode()
         try:
@@ -113,6 +149,12 @@ class Effets:
 
     # -- ad-guard
     def _geste(self, action: str, args, cible: str, motif: str) -> dict:
+        """`args` : fonction rendant la liste, validée AVANT tout sudo ; refus local : ok False, aucun appel."""
+        try:
+            args = args()
+        except ValueError as e:
+            self.audit(action, str(cible)[:64], motif, f"refus {e}")
+            return {"ok": False, "motif": f"refus {e}"}
         try:
             d = json.loads(self.ctl(args) or "{}")
             ok = isinstance(d, dict) and d.get("ok") is True
@@ -125,14 +167,14 @@ class Effets:
         return {"ok": ok, "motif": m}
 
     def isoler(self, ip: str, mac: Optional[str], fin: int, motif: str = "quarantaine") -> dict:
-        return self._geste("isoler", ["quarantaine", "poser", ip, mac or "-", str(int(fin))], ip, motif)
+        return self._geste("isoler", lambda: ["quarantaine", "poser", _ip(ip), _mac(mac), _fin(fin)], ip, motif)
 
     def liberer(self, ip: str, mac: Optional[str] = None, motif: str = "levée") -> dict:
-        return self._geste("liberer", ["quarantaine", "lever", ip], ip, motif)
+        return self._geste("liberer", lambda: ["quarantaine", "lever", _ip(ip)], ip, motif)
 
     def fermer_evasion(self, ip: str, mac: Optional[str], noms: Iterable[str], motif: str = "évasion") -> dict:
-        return self._geste("fermer_evasion", ["evasion", "poser", ip, mac or "-", ",".join(sorted(set(noms)))],
+        return self._geste("fermer_evasion", lambda: ["evasion", "poser", _ip(ip), _mac(mac), _noms(noms)],
                            ip, motif)
 
     def rouvrir(self, ip: str, mac: Optional[str] = None, motif: str = "levée") -> dict:
-        return self._geste("rouvrir", ["evasion", "lever", ip], ip, motif)
+        return self._geste("rouvrir", lambda: ["evasion", "lever", _ip(ip)], ip, motif)

@@ -51,6 +51,9 @@ jour du registre, échéances, suivi des adresses, `decider`, application, notif
   nouvel essai. Récidives = bans de l'adresse sur 7 j dans `decisions`.
 - Infection / évasion portent sur l'APPAREIL : posées sur chacune de ses adresses (une entrée ad-guard par IP), puis
   suivies : une adresse quittée est levée, une nouvelle posée ; un appareil absent des voisins garde ses mesures.
+- Levée échouée : la décision passe `levee_en_cours`, seules les adresses levées quittent `adresses`, nouvel essai à
+  chaque passage (et au rapprochement), une alerte au début. Rafale : un SMS par rafale. Alertes d'échec d'effet et
+  enregistrements « signalé » : un par (appareil, signe) et par heure.
 - Échéances : intrusion `echue` (le timeout nft fait foi) ; évasion levée (`rouvrir`) puis `echue` ; infection
   réévaluée : signal d'infection de l'appareil depuis le début de la période → prolongée de 24 h, sinon levée
   (`levee`, `leve_par = reevaluation`). ad-guard garde les mesures échues : le moteur les lève toujours explicitement.
@@ -73,7 +76,9 @@ jour du registre, échéances, suivi des adresses, `decider`, application, notif
   `secubox` ; à défaut le postinst pose une ACL nommée `x` sur le seul dossier.
 - Quarantaine / évasion : `sudo -n /usr/sbin/secubox-adguard-tv quarantaine|evasion poser|lever …`.
 - Audit : une ligne JSON `{"ts","module":"garde","action","cible","motif","resultat"}` par effet dans
-  `/var/log/secubox/audit.log` (0640 secubox:secubox : ACL nommée `w` remise avant chaque passage, AppArmor `a`).
+  `/var/log/secubox/audit.log` (0640 secubox:secubox : ACL nommée `w` remise avant chaque passage par
+  `/usr/lib/secubox/garde/secubox-garde-acl-audit`, qui refuse un lien ou un non-fichier et ne suit aucun lien ; AppArmor `a`).
+- Arguments du ctl validés avant tout sudo (IP canonique, MAC, noms DNS, échéance) : refus local `ok: false`.
 
 ## Registre d'appareils (`garde/appareils.py`)
 

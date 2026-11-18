@@ -24,8 +24,9 @@ SupplementaryGroups=secubox-garde
 WorkingDirectory=/usr/lib/secubox/garde
 Environment=PYTHONDONTWRITEBYTECODE=1
 # Ajout à audit.log (0640 secubox:secubox) : ACL nommée d'écriture remise avant chaque passage, en root (« + »),
-# la rotation pouvant la perdre ; AppArmor ne permet que l'ajout (« a »). Dossier root 0755 : aucun lien piégé.
-ExecStartPre=+-/usr/bin/setfacl -m u:secubox-garde:w /var/log/secubox/audit.log
+# la rotation pouvant la perdre ; AppArmor ne permet que l'ajout (« a »). /var/log/secubox appartient à secubox :
+# l'aide refuse un lien ou un non-fichier et ne suit aucun lien (setfacl --physical). « - » : échec non bloquant.
+ExecStartPre=+-/usr/lib/secubox/garde/secubox-garde-acl-audit
 ExecStart=/usr/sbin/secubox-garde-passage
 UMask=0027
 AppArmorProfile=secubox-garde-passage

@@ -28,7 +28,7 @@ case "$1" in
                 echo "secubox-garde : secubox-waf-ng absent, pas de ban (clé garde-ban à créer par wafctl cle-garde-ban generer)" >&2
             fi
         fi
-        [ -e /var/log/secubox/audit.log ] && setfacl -m u:secubox-garde:w /var/log/secubox/audit.log 2>/dev/null || true
+        /usr/lib/secubox/garde/secubox-garde-acl-audit 2>/dev/null || true
         install -d -o secubox-garde -g secubox -m 0750 /var/lib/secubox/garde
         # La configuration n'est semée qu'une fois : une copie modifiée fait autorité.
         if [ ! -e /etc/secubox/garde.toml ] && [ ! -L /etc/secubox/garde.toml ] && [ -d /etc/secubox ] && [ ! -L /etc/secubox ]; then

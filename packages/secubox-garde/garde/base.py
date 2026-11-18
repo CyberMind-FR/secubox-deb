@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS decisions (
     menace TEXT NOT NULL CHECK (menace IN ('infection','evasion','intrusion','signale')),
     cible TEXT, mac TEXT, ip TEXT, motif TEXT, signe TEXT,
     debut INTEGER, fin INTEGER,
-    etat TEXT NOT NULL CHECK (etat IN ('active','levee','echue')),
+    etat TEXT NOT NULL CHECK (etat IN ('active','levee','echue','levee_en_cours')),
     leve_par TEXT, notifie TEXT
 );
 CREATE INDEX IF NOT EXISTS decisions_etat ON decisions(etat, fin);
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS recidives (
     ip TEXT PRIMARY KEY, n INTEGER, dernier INTEGER
 );
 CREATE TABLE IF NOT EXISTS adresses (
-    decision_id TEXT NOT NULL, ip TEXT NOT NULL, PRIMARY KEY (decision_id, ip)
+    decision_id TEXT NOT NULL, ip TEXT NOT NULL, fin INTEGER, PRIMARY KEY (decision_id, ip)
 );
 CREATE TABLE IF NOT EXISTS decision_noms (
     decision_id TEXT PRIMARY KEY, noms TEXT
@@ -79,9 +79,28 @@ def ouvrir(chemin: Path) -> sqlite3.Connection:
     """Ouvre la base (créée si absente, schéma idempotent), en WAL."""
     cx = sqlite3.connect(str(chemin), timeout=10)
     cx.execute("PRAGMA journal_mode=WAL")
+    _migrer(cx)
     cx.executescript(SCHEMA)
+    if "fin" not in {r[1] for r in cx.execute("PRAGMA table_info(adresses)")}:
+        cx.execute("ALTER TABLE adresses ADD COLUMN fin INTEGER")
     cx.commit()
     return cx
+
+
+def _migrer(cx: sqlite3.Connection) -> None:
+    """0.1/0.2.0 : la contrainte de `decisions.etat` ignore `levee_en_cours` ; table reconstruite, lignes gardées."""
+    r = cx.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='decisions'").fetchone()
+    if not r or "levee_en_cours" in r[0]:
+        return
+    cx.executescript("""
+BEGIN;
+ALTER TABLE decisions RENAME TO decisions_avant;
+DROP INDEX IF EXISTS decisions_etat;
+""" + SCHEMA.split("CREATE INDEX")[0] + """
+INSERT INTO decisions SELECT * FROM decisions_avant;
+DROP TABLE decisions_avant;
+COMMIT;
+""")
 
 
 def reglages(chemin: Path = REGLAGES) -> Dict[str, Any]:

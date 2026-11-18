@@ -77,9 +77,43 @@ def _lever(effets, menace: str, ip: str, mac, motif: str) -> dict:
     return effets.rouvrir(ip, mac, motif)
 
 
-def _lever_tout(db, effets, did, menace, mac, motif) -> None:
+def _lever_tout(db, effets, did, menace, mac, motif) -> bool:
+    """Lève chaque adresse ; seules les levées réussies quittent `adresses`. True si plus rien n'est posé."""
     for ip in _adresses(db, did):
-        _lever(effets, menace, ip, mac, motif)
+        if _lever(effets, menace, ip, mac, motif).get("ok"):
+            db.execute("DELETE FROM adresses WHERE decision_id=? AND ip=?", (did, ip))
+    return not _adresses(db, did)
+
+
+def _alerte_une(db, effets, cle: str, texte: str, maintenant: int, delai: int = HEURE) -> None:
+    """Une alerte par clé et par `delai` (repère dans etat_moteur)."""
+    if maintenant - _repere(db, "alerte:" + cle) < delai:
+        return
+    effets.alerte(texte)
+    _repere(db, "alerte:" + cle, maintenant)
+
+
+def _terminer(db, effets, did, menace, mac, motif, par: str, maintenant: int) -> bool:
+    """Lève puis clôt ; un échec laisse `levee_en_cours` (réessayée à chaque passage), une alerte au début."""
+    final = "levee" if par == "reevaluation" else "echue"
+    if menace not in ("infection", "evasion") or _lever_tout(db, effets, did, menace, mac, motif):
+        _clore(db, did, final, par)
+        db.execute("DELETE FROM etat_moteur WHERE cle=?", ("levee:" + did,))
+        return True
+    db.execute("UPDATE decisions SET etat='levee_en_cours', leve_par=? WHERE id=?", (par, did))
+    if not _repere(db, "levee:" + did):
+        effets.alerte(f"{motif} : levée incomplète ({', '.join(_adresses(db, did))}), réessayée à chaque passage")
+        _repere(db, "levee:" + did, maintenant)
+    return False
+
+
+def _levees_en_cours(db, effets, maintenant: int) -> int:
+    n = 0
+    for did, menace, mac, motif, par in db.execute(
+            "SELECT id, menace, mac, motif, leve_par FROM decisions WHERE etat='levee_en_cours'").fetchall():
+        n += _terminer(db, effets, did, menace, mac, motif, par or "echeance", maintenant)
+    db.commit()
+    return n
 
 
 # -- échéances et suivi des adresses
@@ -95,15 +129,19 @@ def _echeances(db, effets, notifs, maintenant: int) -> Dict[str, int]:
         nom = appareils.nom_de(db, cible)
         if menace == "infection" and appareils.dernier_signal(db, cible) > fin - QUARANTAINE:
             nfin = maintenant + QUARANTAINE
-            ok = [ip_ for ip_ in _adresses(db, did)
-                  if effets.isoler(ip_, mac, nfin, f"{nom} — prolongation 24 h").get("ok")]
+            ok = 0
+            for ip_ in _adresses(db, did):   # un échec garde l'ancienne fin : reposé par _suivre_adresses
+                if effets.isoler(ip_, mac, nfin, f"{nom} — prolongation 24 h").get("ok"):
+                    db.execute("UPDATE adresses SET fin=? WHERE decision_id=? AND ip=?", (nfin, did, ip_))
+                    ok += 1
             if ok:
                 db.execute("UPDATE decisions SET fin=? WHERE id=?", (nfin, did))
                 n["prolongees"] += 1
                 continue
-            effets.alerte(f"{nom} : prolongation de quarantaine impossible, mesure levée")
-        _lever_tout(db, effets, did, menace, mac, f"{nom} — échéance")
-        _clore(db, did, "levee" if menace == "infection" else "echue", "reevaluation" if menace == "infection" else "echeance")
+            _alerte_une(db, effets, "prolongation:" + did,
+                        f"{nom} : prolongation de quarantaine impossible, mesure levée", maintenant)
+        par = "reevaluation" if menace == "infection" else "echeance"
+        _terminer(db, effets, did, menace, mac, f"{nom} — échéance", par, maintenant)
         n["levees"] += 1
     db.commit()
     return n
@@ -114,6 +152,10 @@ def _suivre_adresses(db, effets, voisins: Dict[str, str], maintenant: int) -> No
     for did, menace, cible, mac, ip, motif, signe, debut, fin in _actives(db):
         if menace not in ("infection", "evasion") or not mac or fin <= maintenant:
             continue
+        for a, afin in db.execute("SELECT ip, fin FROM adresses WHERE decision_id=?", (did,)).fetchall():
+            if afin is not None and afin < fin and _poser(effets, menace, a, mac, fin, _noms(db, did),
+                                                          f"{appareils.nom_de(db, cible)} — prolongation").get("ok"):
+                db.execute("UPDATE adresses SET fin=? WHERE decision_id=? AND ip=?", (fin, did, a))
         posees = set(_adresses(db, did))
         actuelles = set(appareils.adresses_actuelles(mac, voisins, posees))
         nom = appareils.nom_de(db, cible)
@@ -122,7 +164,7 @@ def _suivre_adresses(db, effets, voisins: Dict[str, str], maintenant: int) -> No
                 db.execute("DELETE FROM adresses WHERE decision_id=? AND ip=?", (did, vieille))
         for neuve in sorted(actuelles - posees):
             if _poser(effets, menace, neuve, mac, fin, _noms(db, did), f"{nom} — nouvelle adresse").get("ok"):
-                db.execute("INSERT OR IGNORE INTO adresses(decision_id, ip) VALUES (?,?)", (did, neuve))
+                db.execute("INSERT OR IGNORE INTO adresses(decision_id, ip, fin) VALUES (?,?,?)", (did, neuve, fin))
         principale = _adresses(db, did)
         if principale and ip not in principale:
             db.execute("UPDATE decisions SET ip=? WHERE id=?", (principale[0], did))
@@ -166,6 +208,7 @@ def passage(db: sqlite3.Connection, reglages: dict, sources, effets, notifs, mai
     db.commit()
 
     bilan: Dict[str, int] = dict(_echeances(db, effets, notifs, maintenant))
+    bilan["levees_reprises"] = _levees_en_cours(db, effets, maintenant)
     _suivre_adresses(db, effets, voisins, maintenant)
 
     actives = [Decision(m, c, mac, ip, mo, sg, de, fi)
@@ -185,14 +228,20 @@ def passage(db: sqlite3.Connection, reglages: dict, sources, effets, notifs, mai
 
 def _appliquer(db, d: Decision, signaux, voisins, effets, notifs, maintenant, bilan) -> None:
     if d.menace == "signale":
-        nom = appareils.nom_de(db, appareils.cle_de(db, d.ip, d.mac)) if d.signe != "intrusion" else d.ip
+        cle = appareils.cle_de(db, d.ip, d.mac) if d.signe != "intrusion" else d.ip
+        repere = f"signale:{cle}:{d.signe}"
+        if maintenant - _repere(db, repere) < HEURE:
+            return
+        _repere(db, repere, maintenant)
+        nom = appareils.nom_de(db, cle) if d.signe != "intrusion" else d.ip
         _enregistrer(db, d, "echue", f"{nom} — {d.motif}")
         bilan["signalees"] += 1
         return
     if d.menace == "intrusion":
         r = effets.bannir(d.ip, d.fin - d.debut, d.motif)
         if not r.get("ok"):
-            effets.alerte(f"ban de {d.ip} non posé ({r.get('motif')}) : décision non enregistrée")
+            _alerte_une(db, effets, f"echec:{d.ip}:intrusion",
+                        f"ban de {d.ip} non posé ({r.get('motif')}) : décision non enregistrée", maintenant)
             bilan["echecs"] += 1
             return
         motif = d.motif + (" (déjà banni ailleurs)" if r.get("deja") else "")
@@ -211,13 +260,15 @@ def _appliquer(db, d: Decision, signaux, voisins, effets, notifs, maintenant, bi
     motif = f"{nom} — {d.motif}"
     posees = [ip for ip in adresses if _poser(effets, d.menace, ip, d.mac, d.fin, noms, motif).get("ok")]
     if not posees:
-        effets.alerte(f"{nom} : {d.menace} non appliquée (aucune adresse posée) : décision non enregistrée")
+        _alerte_une(db, effets, f"echec:{cle}:{d.menace}",
+                    f"{nom} : {d.menace} non appliquée (aucune adresse posée) : décision non enregistrée", maintenant)
         bilan["echecs"] += 1
         return
     d.cible = cle
     d.ip = d.ip if d.ip in posees else posees[0]
     did = _enregistrer(db, d, "active", motif)
-    db.executemany("INSERT OR IGNORE INTO adresses(decision_id, ip) VALUES (?,?)", [(did, ip) for ip in posees])
+    db.executemany("INSERT OR IGNORE INTO adresses(decision_id, ip, fin) VALUES (?,?,?)",
+                   [(did, ip, d.fin) for ip in posees])
     if noms:
         db.execute("INSERT OR REPLACE INTO decision_noms(decision_id, noms) VALUES (?,?)", (did, ",".join(noms)))
     db.commit()
@@ -254,9 +305,13 @@ def _bans_depuis(db, depuis: int) -> int:
 def _resume_bans(db, reglages: dict, notifs, maintenant: int) -> None:
     rafale = int(reglages.get("rafale_bans", 50))
     n10 = _bans_depuis(db, maintenant - FENETRE_RAFALE)
-    if n10 > rafale:
-        notifs.mettre_en_file(db, "sms", "rafale",
-                              f"SecuBox Garde : rafale d'intrusions, {n10} adresses bannies en 10 min.", maintenant)
+    if n10 > rafale:                        # un SMS par rafale ; réarmé quand elle cesse
+        if not _repere(db, "rafale"):
+            notifs.mettre_en_file(db, "sms", "rafale",
+                                  f"SecuBox Garde : rafale d'intrusions, {n10} adresses bannies en 10 min.", maintenant)
+            _repere(db, "rafale", maintenant)
+    elif _repere(db, "rafale"):
+        _repere(db, "rafale", 0)
     dernier = _repere(db, "resume_bans")
     if not dernier:                         # premier passage : les bans de ce passage entrent au premier résumé
         _repere(db, "resume_bans", maintenant - 1)
@@ -277,12 +332,11 @@ def rapprocher(db: sqlite3.Connection, effets, maintenant: int) -> dict:
     """Réapplique les décisions actives non échues (fin d'origine) ; les autres passent `echue`."""
     maintenant = int(maintenant)
     n = {"reappliquees": 0, "echues": 0}
+    _levees_en_cours(db, effets, maintenant)
     for did, menace, cible, mac, ip, motif, signe, debut, fin in _actives(db):
         if fin <= maintenant:
-            if menace in ("infection", "evasion"):
-                _lever_tout(db, effets, did, menace, mac, f"{motif} — échue au démarrage")
-            _clore(db, did, "echue", "rapprochement")
-            n["echues"] += 1
+            if _terminer(db, effets, did, menace, mac, f"{motif} — échue au démarrage", "rapprochement", maintenant):
+                n["echues"] += 1
             continue
         if menace == "intrusion":
             reste = fin - maintenant

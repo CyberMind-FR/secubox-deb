@@ -137,3 +137,50 @@ def test_effets_bannir(tmp_path):
                       "Bearer JETON")
     e3 = effets.Effets(audit=tmp_path / "a.log", cle=tmp_path / "absente.pem", poster=poster)
     assert e3.bannir("8.8.4.4", 14400, "m")["ok"] is False
+
+
+def test_effets_valident_avant_sudo(tmp_path):
+    ctl = _Ctl('{"ok": true}')
+    e = effets.Effets(audit=tmp_path / "a.log", ctl=ctl)
+    assert not e.isoler("-1", MAC, 99)["ok"]
+    assert not e.isoler("192.168.1.20", "--evil", 99)["ok"]
+    assert not e.isoler("192.168.1.20", MAC, 0)["ok"]
+    assert not e.fermer_evasion("192.168.1.20", None, ["-x.example"])["ok"]
+    assert not e.fermer_evasion("192.168.1.20", None, ["a.example,b"])["ok"]
+    assert not e.liberer("192.168.1.20; rm")["ok"]
+    assert not e.bannir("--8.8.8.8", 14400, "m")["ok"]
+    assert ctl.args == []
+    assert e.isoler("2A01:E0A:0::20", MAC.upper(), 99)["ok"]
+    assert ctl.args == [["quarantaine", "poser", "2a01:e0a::20", MAC, "99"]]
+
+
+AIDE = Path(__file__).resolve().parent.parent / "lib" / "secubox-garde-acl-audit"
+
+
+def _aide(tmp_path, cible):
+    import subprocess
+    bin_ = tmp_path / "bin"
+    bin_.mkdir(exist_ok=True)
+    trace = tmp_path / "trace"
+    (bin_ / "setfacl").write_text(f'#!/bin/sh\necho "$@" >> {trace}\n')
+    (bin_ / "setfacl").chmod(0o755)
+    r = subprocess.run(["sh", str(AIDE), str(cible)], env={"PATH": f"{bin_}:/usr/bin:/bin"},
+                       capture_output=True, text=True)
+    return r.returncode, trace.read_text() if trace.exists() else ""
+
+
+def test_aide_acl_fichier_ordinaire(tmp_path):
+    f = tmp_path / "audit.log"
+    f.write_text("")
+    rc, trace = _aide(tmp_path, f)
+    assert rc == 0 and trace.strip() == f"--physical -m u:secubox-garde:w -- {f}"
+
+
+def test_aide_acl_refuse_un_lien(tmp_path):
+    autre = tmp_path / "shadow"
+    autre.write_text("")
+    lien = tmp_path / "audit.log"
+    lien.symlink_to(autre)
+    rc, trace = _aide(tmp_path, lien)
+    assert rc != 0 and trace == ""
+    assert _aide(tmp_path, tmp_path / "absent")[0] != 0
