@@ -599,7 +599,7 @@ for ligne in sys.stdin:
 
 # L'adresse fixe est-elle deja posee sur lan_if (par un autre fichier) ? Alors on ne la double pas.
 _r6_adresse_presente() {
-    ip -6 addr show dev "$R6_LAN_IF" 2>/dev/null | grep -qF " ${R6_ADRESSE_FIXE} "
+    ip -6 addr show dev "$R6_LAN_IF" 2>/dev/null | grep -F " ${R6_ADRESSE_FIXE} " >/dev/null
 }
 
 _r6_exiger_role() {
@@ -775,10 +775,10 @@ _r6_routeur_ok() {
 _r6_local_ok() {
     [ "$(sysctl -n net.ipv6.conf.all.forwarding 2>/dev/null || echo 0)" = "1" ] || return 1
     systemctl is-active --quiet "$R6_UNITE_RA" 2>/dev/null || return 1
-    ip -6 route show default dev "$R6_LAN_IF" 2>/dev/null | grep -qF "via ${R6_PASSERELLE_LL} " || return 1
+    ip -6 route show default dev "$R6_LAN_IF" 2>/dev/null | grep -F "via ${R6_PASSERELLE_LL} " >/dev/null || return 1
     # Preuve que les annonces PARTENT (18/11 : unite active mais aucune annonce, `constructor:`) :
     # sans elle, la Freebox se tait apres la bascule et la maison perd l'IPv6 en <= 30 min.
-    journalctl -q -u "$R6_UNITE_RA" --since "-15min" 2>/dev/null | grep -q "RTR-ADVERT" || return 1
+    journalctl -q -u "$R6_UNITE_RA" --since "-15min" 2>/dev/null | grep "RTR-ADVERT" >/dev/null || return 1
     ping -6 -c1 -W2 "$R6_SONDE_CIBLE" >/dev/null 2>&1 || return 1
 }
 
@@ -882,8 +882,8 @@ cmd_relais6_etat() {
         command -v "$NFT" >/dev/null 2>&1 && "$NFT" list table inet secubox_relais6 >/dev/null 2>&1 && table=true
         compgen -G "$R6_NETWORKD_DIR/*.network.d/$R6_DROPIN" >/dev/null && dropin=true
         if [ -n "$R6_LAN_IF" ]; then
-            ip -6 addr show dev "$R6_LAN_IF" 2>/dev/null | grep -qF " ${R6_ADRESSE_FIXE} " && adresse=true
-            ip -6 route show default dev "$R6_LAN_IF" 2>/dev/null | grep -qF "via ${R6_PASSERELLE_LL} " && route=true
+            ip -6 addr show dev "$R6_LAN_IF" 2>/dev/null | grep -F " ${R6_ADRESSE_FIXE} " >/dev/null && adresse=true
+            ip -6 route show default dev "$R6_LAN_IF" 2>/dev/null | grep -F "via ${R6_PASSERELLE_LL} " >/dev/null && route=true
         fi
     fi
     NH="$nh" ROLE="$R6_ROLE" LAN_IF="$R6_LAN_IF" PREFIXE="$R6_PREFIXE" ROUTEUR_LL="$R6_ROUTEUR_LL" \
