@@ -3286,3 +3286,11 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 - Essai : la Freebox Ultra ignore `dhcp/config gateway` ; option 121 par bail statique acceptée ; IPv6 LAN non
   désactivable ; Netflix du Player 100 % IPv6 direct Freebox. Arrêt de la coupe réseau (choix du propriétaire),
   bail d'essai retiré, pseudo-routeur installé inactif sur gk2.
+
+## 2026-11-18 — Relais IPv6 par Next Hop Freebox (ref #3807)
+- secubox-freebox 0.8.4 (nexthop-lire/regler, tableau delegations complet + relecture) ; secubox-pseudo-routeur
+  0.3.0 (#3808, rôles routeur/repli/tout, sonde 60 s) puis 0.3.1 (#3809) : `constructor:` n'annonçait rien sur
+  gk2 → préfixe explicite ; bascule et sonde exigent des RTR-ADVERT récents.
+- Essai gk2 rôle tout ~1 h : 3 appareils en IPv6 via gk2, sonde 0 échec ; le Player n'est jamais passé par gk2
+  (repli IPv4 direct Freebox). Next Hop et DNS retirés à la main par le propriétaire (coupures de session), gk2
+  nettoyé (revenir + retirer), DNS DHCP remis à 192.168.1.200. Relais installé, inactif.
