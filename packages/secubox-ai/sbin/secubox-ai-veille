@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, "/usr/lib/secubox/ai")
 
-from veille import base, collecte, correlation, retention  # noqa: E402
+from veille import base, collecte, correlation, dossiers, retention  # noqa: E402
 from veille.client import ClientGk2, routes  # noqa: E402
 from veille.sources import toutes  # noqa: E402
 from veille.service import Boucle, Veille  # noqa: E402
@@ -80,6 +80,10 @@ async def _main():
         touches = await veille.sql(lambda d: correlation.correler(d, _maintenant(), **reglages))
         if touches:
             log.info("corrélation : %d incident(s) créé(s) ou étendu(s)", len(touches))
+        # Dossiers d'attaquant (#3795) : transaction courte suivante, même boucle de 60 s.
+        changes = await veille.sql(lambda d: dossiers.construire(d, _maintenant()))
+        if changes:
+            log.info("dossiers : %d dossier(s) créé(s) ou mis à jour", len(changes))
 
     boucles = [Boucle("retention", 86400, purge), Boucle("correlation", PAS_CORRELATION_S, correler)]
     client = _client()

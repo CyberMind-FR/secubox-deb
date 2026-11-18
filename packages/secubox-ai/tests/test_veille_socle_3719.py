@@ -17,7 +17,7 @@ from veille.service import Boucle, Veille
 PAQUET = Path(__file__).resolve().parents[1]
 MIGRATIONS = PAQUET / "migrations"
 TABLES = {"schema_migrations", "curseurs", "evenements", "campagnes", "blocs", "incidents", "incident_preuves",
-          "mesures", "audit_chaine"}
+          "mesures", "audit_chaine", "dossiers", "dossier_incidents", "dossier_evenements", "dossier_membres"}
 MAINTENANT = datetime(2026, 11, 18, 12, 0, tzinfo=timezone.utc)
 
 
@@ -34,27 +34,27 @@ def test_migrations_idempotentes_et_sauvegarde(tmp_path):
     assert db.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
     assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert base.migrer(db, MIGRATIONS) == []                       # rien à refaire
-    assert db.execute("SELECT version FROM schema_migrations ORDER BY 1").fetchall() == [(1,), (2,)]
+    assert db.execute("SELECT version FROM schema_migrations ORDER BY 1").fetchall() == [(1,), (2,), (3,)]
     assert not list(tmp_path.glob("veille.db.avant-*"))            # base neuve : rien à sauvegarder
     db.execute("INSERT INTO curseurs(source, etat) VALUES ('waf_alertes', 'ok')")
     db.commit()
     db.close()
-    # Une migration 0003 arrive : sauvegarde veille.db.avant-0003 puis application ; une seule sauvegarde gardée.
+    # Une migration 0098 arrive : sauvegarde veille.db.avant-0098 puis application ; une seule sauvegarde gardée.
     dossier = tmp_path / "mig"
     dossier.mkdir()
     for f in MIGRATIONS.glob("*.sql"):
         (dossier / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
-    (dossier / "0003-test.sql").write_text("CREATE TABLE essai (x INTEGER);", encoding="utf-8")
+    (dossier / "0098-test.sql").write_text("CREATE TABLE essai (x INTEGER);", encoding="utf-8")
     db = base.ouvrir(chemin, dossier)
-    assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == [1, 2, 3]
+    assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == [1, 2, 3, 98]
     sauv = list(tmp_path.glob("veille.db.avant-*"))
-    assert [s.name for s in sauv] == ["veille.db.avant-0003"]
+    assert [s.name for s in sauv] == ["veille.db.avant-0098"]
     ancienne = sqlite3.connect(sauv[0])
     assert ancienne.execute("SELECT source FROM curseurs").fetchall() == [("waf_alertes",)]
     ancienne.close()
-    (dossier / "0004-test.sql").write_text("CREATE TABLE essai2 (x INTEGER);", encoding="utf-8")
-    assert base.migrer(db, dossier) == [4]
-    assert [s.name for s in tmp_path.glob("veille.db.avant-*")] == ["veille.db.avant-0004"]
+    (dossier / "0099-test.sql").write_text("CREATE TABLE essai2 (x INTEGER);", encoding="utf-8")
+    assert base.migrer(db, dossier) == [99]
+    assert [s.name for s in tmp_path.glob("veille.db.avant-*")] == ["veille.db.avant-0099"]
     db.close()
 
 

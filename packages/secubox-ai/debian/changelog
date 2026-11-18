@@ -1,3 +1,14 @@
+secubox-ai (0.3.2-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3795) : dossiers d'attaquant et de campagne (veille/dossiers.py,
+    migration 0003). Clé = acteur d'actord (ACT-nnnn) sinon adresse ; une
+    adresse rattachée plus tard rejoint le dossier de l'acteur. Campagnes par
+    règles meme_outil, meme_bloc, meme_cible. Étapes nommées reperage, essais,
+    exploitation, persistance, chacune avec ses règles, preuves et heures.
+    Passe après la corrélation, dans la boucle de 60 s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 21:00:00 +0000
+
 secubox-ai (0.3.1-1~trixie1) trixie; urgency=medium
 
   * Veille V2 (#3721) : corrélateur d'incidents déterministe (veille/regles.py,
