@@ -1,3 +1,10 @@
+secubox-pseudo-routeur (0.2.1-1~trixie1) trixie; urgency=medium
+
+  * Activer arme lui-même la sonde de secours puis ne bascule le DHCP que si
+    son premier contrôle réussit ; le retour à la Freebox désarme la sonde (#3803).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 13:40:54 +0100
+
 secubox-pseudo-routeur (0.2.0-1~trixie1) trixie; urgency=medium
 
   * Page d'administration refaite sur la maquette approuvée (coque Aurora, CSP par
