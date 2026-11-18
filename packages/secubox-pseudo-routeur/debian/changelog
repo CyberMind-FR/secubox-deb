@@ -1,3 +1,10 @@
+secubox-pseudo-routeur (0.2.2-1~trixie1) trixie; urgency=medium
+
+  * Activer / retour lancés depuis la page : relance en tâche systemd transitoire,
+    hors du bac à sable de l API (/etc en lecture seule) (#3803).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 13:43:22 +0100
+
 secubox-pseudo-routeur (0.2.1-1~trixie1) trixie; urgency=medium
 
   * Activer arme lui-même la sonde de secours puis ne bascule le DHCP que si

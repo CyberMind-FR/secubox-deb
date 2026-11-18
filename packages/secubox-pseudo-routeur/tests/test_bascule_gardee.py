@@ -67,3 +67,12 @@ def test_retour_freebox_fonctionne_meme_sonde_inactive(tmp_path):
     r = _ctl(tmp_path, "retour-freebox", sonde_active=False)
     assert r.returncode in (0, 1)  # peut echouer sur l'appel reseau en test, jamais sur la garde elle-meme
     assert "sonde" not in (r.stderr or "").lower()
+
+
+def test_commandes_ecrivantes_sortent_du_bac_a_sable():
+    """#3803 : lance par l'API (ProtectSystem=strict), le ctl ne peut pas ecrire /etc/nftables.d ;
+    activer / activer-transfert / retour-freebox se relancent en tache systemd transitoire."""
+    src = CTL.read_text()
+    assert "activer|activer-transfert|retour-freebox)" in src
+    assert "exec systemd-run --quiet --wait --pipe --collect" in src
+    assert "SECUBOX_PR_HORS_BAC" in src

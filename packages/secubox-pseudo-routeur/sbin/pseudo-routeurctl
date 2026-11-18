@@ -443,6 +443,20 @@ print(json.dumps({"modifie": False, "pret": all(x["possible"] for x in etapes), 
 PYEOF
 }
 
+# Hors du bac a sable de l'API (#3803) : lance par l'API (sudo), le ctl herite de son
+# ProtectSystem=strict (/etc en lecture seule). Les commandes qui ECRIVENT se relancent
+# donc en tache systemd transitoire, root, hors bac a sable ; sortie et code transmis.
+case "${1:-}" in
+    activer|activer-transfert|retour-freebox)
+        rep_nft="$(dirname "$NFT_OUT_DEFAUT")"
+        if [ "$(id -u)" = 0 ] && [ -d "$rep_nft" ] && [ ! -w "$rep_nft" ] \
+            && command -v systemd-run >/dev/null 2>&1 && [ -z "${SECUBOX_PR_HORS_BAC:-}" ]; then
+            exec systemd-run --quiet --wait --pipe --collect \
+                --unit="pseudo-routeur-$1-$$" --setenv=SECUBOX_PR_HORS_BAC=1 \
+                "$(readlink -f "$0")" "$@"
+        fi ;;
+esac
+
 case "${1:-}" in
     generer-chaine) cmd_generer_chaine ;;
     activer-transfert) cmd_activer_transfert ;;
