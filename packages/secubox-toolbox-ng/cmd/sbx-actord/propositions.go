@@ -62,11 +62,11 @@ func propositionsDepuis(acteurs []*graph.Actor, shadow bool) []Proposition {
 	return out
 }
 
-// groupesLecteurs : groupes candidats des fichiers publiés, dans l'ordre. `secubox-waf` (#3720) est le groupe
-// principal de sbxwaf ET un groupe de `secubox` (API du WAF, /waf/actord/propositions) : les deux lecteurs, sans
-// donner à `secubox` le droit d'écrire dans la socket d'ingestion (`actord-ingest`). Repli `actord-ingest` (ancien
-// comportement) si l'unité n'accorde pas encore `SupplementaryGroups=secubox-waf`.
-var groupesLecteurs = []string{"secubox-waf", "actord-ingest"}
+// groupesLecteurs : groupes candidats des fichiers publiés, dans l'ordre. `actord-lecture` (#3720) : groupe en
+// LECTURE SEULE (aucun fichier n'y est inscriptible) dont sont membres sbxwaf (`secubox-waf`) et l'API du WAF
+// (`secubox`) ; sbx-actord le reçoit par `SupplementaryGroups=actord-lecture`. Repli `actord-ingest` (ancien
+// comportement) si le groupe manque.
+var groupesLecteurs = []string{"actord-lecture", "actord-ingest"}
 
 // chownGroupe est remplaçable par les tests.
 var chownGroupe = func(chemin string, gid int) error { return os.Chown(chemin, -1, gid) }

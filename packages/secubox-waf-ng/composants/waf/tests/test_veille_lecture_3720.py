@@ -311,6 +311,17 @@ def test_flux_ligne_demesuree_compte_dans_le_plafond(v, monkeypatch):
     assert [x.get("motif") for x in d["lignes"]] == ["trop_longue"]
 
 
-def test_actord_publie_au_groupe_secubox_waf():
+def test_actord_publie_au_groupe_actord_lecture():
+    import re
+    import subprocess
     unite = (COMPOSANT.parents[1] / "systemd" / "secubox-actord.service").read_text()
-    assert "SupplementaryGroups=secubox-waf" in unite and "actord-ingest" not in unite.split("SupplementaryGroups=")[1].splitlines()[0]
+    supp = [l for l in unite.splitlines() if l.startswith("SupplementaryGroups=")]
+    assert supp == ["SupplementaryGroups=actord-lecture"]
+    assert "secubox-waf" not in supp[0]
+    post = (COMPOSANT.parents[1] / "debian" / "postinst").read_text()
+    assert "if ! getent group actord-lecture >/dev/null 2>&1; then\n        addgroup --system actord-lecture" in post
+    assert "for u in secubox secubox-waf; do" in post
+    assert "grep -qx actord-lecture; then\n          usermod -aG actord-lecture \"$u\"" in post
+    assert not re.search(r"(gpasswd|deluser|usermod -G )", post)        # jamais d'appartenance retirée
+    assert subprocess.run(["sh", "-n", str(COMPOSANT.parents[1] / "debian" / "postinst")], check=False,
+                          timeout=10).returncode == 0

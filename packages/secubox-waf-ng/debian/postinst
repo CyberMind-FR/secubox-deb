@@ -58,6 +58,17 @@ case "$1" in
           usermod -aG actord-ingest "$u" || true
         fi
       done
+      # #3720 : groupe en LECTURE SEULE des fichiers publiés par sbx-actord (propositions, mesures, 0640) :
+      # sbxwaf (secubox-waf) et l'API du WAF (secubox) les lisent ; aucun fichier n'est inscriptible par ce groupe.
+      if ! getent group actord-lecture >/dev/null 2>&1; then
+        addgroup --system actord-lecture || true
+      fi
+      for u in secubox secubox-waf; do
+        if getent passwd "$u" >/dev/null 2>&1 \
+           && ! id -nG "$u" 2>/dev/null | tr ' ' '\n' | grep -qx actord-lecture; then
+          usermod -aG actord-lecture "$u" || true
+        fi
+      done
 
     # ── 2. Config directories ─────────────────────────────────────────────────
     # IMPORTANT: NEVER chmod the SHARED PARENTS /etc/secubox to 0750 — that

@@ -243,10 +243,11 @@ depuis 0 (`rotation: true`) ; inode inconnu ou fichier raccourci ⇒ reprise au 
 `depuis`), plus anciens d'abord, `complet` faux si coupé. `/mesures` lit `mesures.jsonl` par la fin (8 Mio au plus).
 `/actord/propositions` : `{"available": false, "motif": "absent"|"illisible"|"invalide"}` si le fichier manque, est
 refusé (droits) ou n'est pas du JSON (> 2 Mio compris) ; une ligne de journal par motif toutes les 10 min.
-**Droits** : sbx-actord (`secubox-actord.service`, `SupplementaryGroups=secubox-waf`) publie
-`actord-propositions.json` et `actord-mesures.json` en 0640 au groupe `secubox-waf` (repli `actord-ingest` si le
-groupe ne peut être donné) : lus par sbxwaf (groupe principal) et par l'API du WAF (`secubox` ∈ `secubox-waf`) ;
-`secubox` n'entre jamais dans `actord-ingest` (écriture de la socket d'ingestion).
+**Droits** : sbx-actord (`secubox-actord.service`, `SupplementaryGroups=actord-lecture`) publie
+`actord-propositions.json` et `actord-mesures.json` en 0640 au groupe `actord-lecture` (repli `actord-ingest` si le
+groupe manque). `actord-lecture` est un groupe en **lecture seule** (créé par le postinst, membres `secubox` et
+`secubox-waf`, aucun fichier inscriptible par lui) : sbxwaf et l'API du WAF lisent ; sbx-actord n'entre jamais dans
+`secubox-waf` (écriture de `waf-threats.log`) et `secubox` jamais dans `actord-ingest`.
 Non ouvertes au compte : `/history`, `/bans/history`, `/info`, `/rules`, toute route POST.
 
 ## Migration / cutover
