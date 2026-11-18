@@ -184,3 +184,14 @@ def test_aide_acl_refuse_un_lien(tmp_path):
     rc, trace = _aide(tmp_path, lien)
     assert rc != 0 and trace == ""
     assert _aide(tmp_path, tmp_path / "absent")[0] != 0
+
+
+def test_reseau_prefixe_plus_large_que_48_refuse():
+    sorties = {
+        ("addr",): [{"ifname": "eth0", "addr_info": [
+                        {"local": "2a01:e0a:1::1", "prefixlen": 47},
+                        {"local": "2a01:e0b:1::1", "prefixlen": 48}]}],
+        ("route", "show", "default"): [], ("-6", "route", "show", "default"): [], ("neigh",): [],
+    }
+    _, prefixes = reseau.lire(lambda a: json.dumps(sorties[tuple(a)]))
+    assert prefixes == ["2a01:e0b:1::/48"]

@@ -248,3 +248,34 @@ def test_verrou_cree_par_root_reste_au_proprietaire_du_dossier(monde, monkeypatc
     assert ctl("evasion", "poser", TV, "-", "dns.google") == 0
     d = monde["etat"].stat()
     assert verrou.exists() and (d.st_uid, d.st_gid) in poses
+
+
+@pytest.mark.parametrize("args", [
+    ("quarantaine", "poser", TV, "-", "9999999999", "trop"),        # argument en plus
+    ("quarantaine", "poser"),                                         # arguments manquants
+    ("quarantaine", "lever"),
+    ("quarantaine", "lever", TV, "trop"),
+    ("evasion", "poser", TV, "-"),
+    ("evasion", "lever"),
+    ("evasion", "lever", TV, "trop"),
+    ("quarantaine", "poser", "--help", "-", "9999999999"),           # valeurs commençant par « - »
+    ("quarantaine", "poser", TV, "--", "9999999999"),
+    ("quarantaine", "poser", TV, "-", "-9999999999"),
+    ("quarantaine", "lever", "-x"),
+    ("quarantaine", "lever", "--all"),
+    ("evasion", "poser", "-" + TV, "-", "dns.google"),
+    ("evasion", "poser", TV, "-", "-dns.google"),
+    ("evasion", "lever", "--help"),
+])
+def test_arguments_en_trop_manquants_ou_options_refuses_sans_rien_changer(monde, capsys, args):
+    """Relecture finale #3794 : sudo Ux reste, le contrôleur revalide tout ; un refus ne touche ni l'état ni le drop-in."""
+    declarer(monde, "block")
+    ctl("quarantaine", "poser", TV, "-", fin())
+    ctl("evasion", "poser", TV, "-", "dns.google")
+    capsys.readouterr()
+    etat_avant = (monde["etat"] / "etat.json").read_bytes()
+    conf_avant = monde["conf"].read_bytes()
+    assert ctl(*args) == 1
+    assert json.loads(capsys.readouterr().out)["ok"] is False
+    assert (monde["etat"] / "etat.json").read_bytes() == etat_avant
+    assert monde["conf"].read_bytes() == conf_avant

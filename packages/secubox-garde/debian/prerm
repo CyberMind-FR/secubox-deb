@@ -8,7 +8,7 @@ set -e
 case "$1" in
     remove|deconfigure)
         if [ -d /run/systemd/system ]; then
-            systemctl stop secubox-garde-passage.timer secubox-garde-passage.service secubox-garde.service || true
+            systemctl stop secubox-garde-passage.timer secubox-garde-passage.service secubox-garde-envoi.service secubox-garde.service || true
             systemctl disable secubox-garde-passage.timer secubox-garde.service >/dev/null 2>&1 || true
         fi
         ;;

@@ -37,7 +37,7 @@ case "$1" in
         # Profil AppArmor AVANT tout démarrage (les unités le nomment).
         if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] \
            && command -v apparmor_parser >/dev/null 2>&1; then
-            for _p in secubox-garde secubox-garde-passage; do
+            for _p in secubox-garde secubox-garde-passage secubox-garde-envoi; do
                 apparmor_parser -r /etc/apparmor.d/$_p \
                   || echo "secubox-garde : profil AppArmor $_p non chargé (apparmor_parser -r /etc/apparmor.d/$_p ; journalctl -k)" >&2
             done

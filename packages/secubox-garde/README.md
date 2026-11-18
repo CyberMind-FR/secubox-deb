@@ -79,7 +79,11 @@ Host inconnu en HTTP sur l'adresse de la box renvoie ce fichier.
 
 `secubox-garde.service` (API, compte `secubox-garde`, profil `secubox-garde`), `secubox-garde-passage.service`
 + `.timer` (`/usr/sbin/secubox-garde-passage` toutes les 60 s, profil `secubox-garde-passage`, groupes `secubox` et
-`secubox-garde`, `NoNewPrivileges=no` pour sudo, patron de `secubox-ad-guard-auto.service`).
+`secubox-garde`, `NoNewPrivileges=no` pour sudo, patron de `secubox-ad-guard-auto.service` ; sans réseau IP : met
+les notifications en file). `secubox-garde-envoi.service` (`/usr/sbin/secubox-garde-envoi`, tiré par `Wants=` du passage
+et ordonné après lui, profil `secubox-garde-envoi`) : seul programme de Garde ayant le réseau IP, il vide `file_notifs`
+(courriel par le relais de la box, SMS Free Mobile en HTTPS) ; ni sudo ni autre exécutable. Le mot de passe SMTP
+(`smtp_pass_file`) doit être rangé dans `/etc/secubox/secrets/` et son nom contenir `smtp`.
 
 ## Sources (capteurs)
 

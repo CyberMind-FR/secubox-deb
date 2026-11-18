@@ -1,3 +1,16 @@
+secubox-garde (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * Relecture finale (#3794) : l'envoi des notifications (courriel par le
+    relais, SMS Free Mobile en HTTPS) quitte le passage pour
+    secubox-garde-envoi (service oneshot tiré après chaque passage, profil
+    AppArmor secubox-garde-envoi : réseau IP, ssl_certs, aucun sudo ni autre
+    exécutable). Le profil du passage reste sans réseau IP.
+  * Passage : ReadWritePaths= (préfixés « - ») de tout ce qu'écrit
+    `secubox-adguard-tv quarantaine|evasion` sous ProtectSystem=strict.
+  * Tests : profils, unités, chemins inscriptibles, route nginx, préfixes /48.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 18:00:00 +0100
+
 secubox-garde (0.3.0-1~trixie1) trixie; urgency=medium
 
   * API (#3794) : /etat (tuiles, une carte par appareil, bans groupés),

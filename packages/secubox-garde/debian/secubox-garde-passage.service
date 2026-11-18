@@ -3,7 +3,8 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 # SecuBox Garde — passage du moteur (#3794), lancé par le minuteur : lit les capteurs, décide, applique
-# (ban par la socket du WAF, quarantaine/évasion par `sudo -n secubox-adguard-tv`), notifie.
+# (ban par la socket du WAF, quarantaine/évasion par `sudo -n secubox-adguard-tv`), met les notifications en file
+# (envoyées ensuite par secubox-garde-envoi.service, seul à avoir le réseau IP).
 # sudo exige NoNewPrivileges=no (exception écrite dans .claude/RULES-CODE.md, même patron que
 # secubox-ad-guard-auto.service) ; AUCUNE option reposant sur seccomp (LockPersonality, ProtectKernelTunables,
 # SystemCallFilter, RestrictNamespaces, RestrictSUIDSGID, RestrictAddressFamilies…) : systemd poserait NoNewPrivileges
@@ -15,6 +16,8 @@
 [Unit]
 Description=SecuBox Garde — passage du moteur
 After=secubox-core.service secubox-waf.service
+# L'envoi des notifications (réseau IP) est un programme à part, sous son propre profil, lancé après chaque passage.
+Wants=secubox-garde-envoi.service
 
 [Service]
 Type=oneshot
@@ -42,4 +45,10 @@ ProtectHome=yes
 PrivateTmp=yes
 ProtectControlGroups=yes
 ReadWritePaths=/var/lib/secubox/garde /var/log/secubox
-ReadWritePaths=/var/lib/secubox/ad-guard /var/lib/secubox-adguard-tv /etc/unbound/unbound.conf.d
+# `sudo secubox-adguard-tv quarantaine|evasion` hérite de ProtectSystem=strict. Ce qu'il écrit (lu dans le contrôleur) :
+# - etat.json + temporaire .etat.garde.<pid> + verrou .regles.lock : /var/lib/secubox/ad-guard/dnstv ;
+# - instantané applique.json + temporaire .applique.* + verrou `verrou` : /var/lib/secubox-adguard-tv (0700 root) ;
+# - drop-in 94-secubox-adguard-tv.conf + son temporaire + remise de l'ancien : /etc/unbound/unbound.conf.d ;
+# - audit.log : /var/log/secubox. unbound-checkconf : /tmp privé ; unbound-control : socket, lecture seule suffit.
+# « - » : un chemin absent (ad-guard non installé) n'empêche pas le passage.
+ReadWritePaths=-/var/lib/secubox/ad-guard -/var/lib/secubox-adguard-tv -/etc/unbound/unbound.conf.d

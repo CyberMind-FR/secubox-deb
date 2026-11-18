@@ -54,7 +54,8 @@ def main() -> int:
     )
     nt = SimpleNamespace(
         mettre_en_file=notifs.mettre_en_file,
-        vider=lambda d, r, t: notifs.vider_file(d, r, maintenant=t),
+        # L'envoi (réseau IP) est fait par secubox-garde-envoi, lancé après le passage : ici, file seulement.
+        vider=lambda d, r, t: {"differe": "secubox-garde-envoi"},
     )
     # Demandes de l'administrateur (libérer, rouvrir, débannir, essai) déposées par l'API : avant les décisions.
     logging.info("demandes : %s", demandes.executer(db, ef, nt, maintenant))

@@ -71,9 +71,9 @@ def test_voisins_json():
 
 
 def test_doh_par_client(tmp_path):
-    l = tmp_path / "doh.txt"
-    l.write_text("# c\n1.1.1.1\ndns.google  # x\n\ncloudflare-dns.com\n")
-    noms = sources.charger_noms_doh(l)
+    liste = tmp_path / "doh.txt"
+    liste.write_text("# c\n1.1.1.1\ndns.google  # x\n\ncloudflare-dns.com\n")
+    noms = sources.charger_noms_doh(liste)
     assert noms == {"dns.google", "cloudflare-dns.com"}
     ev = [{"client_ip": "192.168.1.5", "domaine": "dns.google", "ts": 10},
           {"client_ip": "192.168.1.5", "domaine": "dns.google", "ts": 11},
