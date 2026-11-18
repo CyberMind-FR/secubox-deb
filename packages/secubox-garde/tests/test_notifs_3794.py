@@ -135,3 +135,27 @@ def test_mise_en_file_atomique_en_transaction_ouverte(tmp_path):
     assert notifs.mettre_en_file(cx, "sms", "m", "x", 10) is True
     assert notifs.mettre_en_file(cx, "sms", "m", "x", 11) is False
     assert not cx.in_transaction
+
+
+def test_vider_file_ne_tient_pas_de_verrou_pendant_lenvoi(tmp_path):
+    import sqlite3
+    chemin = tmp_path / "g.db"
+    cx = base.ouvrir(chemin)
+    notifs.mettre_en_file(cx, "sms", "bans", "texte", 1000)
+    vu = []
+
+    def sms(u, k, t):
+        autre = sqlite3.connect(str(chemin), timeout=0.2)
+        try:
+            autre.execute("INSERT INTO file_notifs(canal, cle, texte, cree, essais, envoye) "
+                          "VALUES ('courriel','x','y',1,0,1)")
+            autre.commit()
+            vu.append(True)
+        finally:
+            autre.close()
+        return True
+
+    r = {"sms_utilisateur": "12345678", "courriel": "a@b.fr"}
+    res = notifs.vider_file(cx, r, sms, lambda d, s, t: True, 1100, cle_sms="k")
+    assert vu == [True]
+    assert res == {"envoyes": 1, "en_attente": 0}

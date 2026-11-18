@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS demandes (
 
 def ouvrir(chemin: Path) -> sqlite3.Connection:
     """Ouvre la base (créée si absente, schéma idempotent), en WAL."""
-    cx = sqlite3.connect(str(chemin), timeout=10)
+    cx = sqlite3.connect(str(chemin), timeout=30)
+    cx.execute("PRAGMA busy_timeout=30000")
     cx.execute("PRAGMA journal_mode=WAL")
     _migrer(cx)
     cx.executescript(SCHEMA)

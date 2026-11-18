@@ -91,8 +91,23 @@ def vider_file(db: sqlite3.Connection, reglages: Dict,
     `envoyer_courriel(destinataire, sujet, texte)`. Abandon après 48 essais."""
     envoyes = 0
     cle = lire_cle_sms() if cle_sms is None else cle_sms
+    if db.in_transaction:
+        db.commit()
+    # Lecture courte, puis aucun verrou pendant les envois réseau.
     rows = db.execute("SELECT id, canal, texte, essais, cree FROM file_notifs "
                       "WHERE envoye=0 ORDER BY id").fetchall()
+    db.commit()
+
+    def noter(requete: str, params: tuple) -> None:
+        """Écriture courte, une ligne : BEGIN IMMEDIATE … COMMIT."""
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            db.execute(requete, params)
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
+
     manquants = set()
     for id_, canal, texte, essais, cree in rows:
         if canal == "sms":
@@ -107,7 +122,7 @@ def vider_file(db: sqlite3.Connection, reglages: Dict,
                 manquants.add("courriel")
         if not dest or (canal == "sms" and not cle):
             if maintenant - cree > PEREMPTION:
-                db.execute("UPDATE file_notifs SET envoye=-1 WHERE id=?", (id_,))
+                noter("UPDATE file_notifs SET envoye=-1 WHERE id=?", (id_,))
                 log.error("notification %s (%s) abandonnée : non configurée depuis plus de 7 jours",
                           id_, canal)
             continue
@@ -117,15 +132,14 @@ def vider_file(db: sqlite3.Connection, reglages: Dict,
             sujet = (texte.splitlines() or [""])[0][:120]
             ok = envoyer_courriel(dest, sujet, texte)
         if ok:
-            db.execute("UPDATE file_notifs SET envoye=1, essais=? WHERE id=?", (essais + 1, id_))
+            noter("UPDATE file_notifs SET envoye=1, essais=? WHERE id=?", (essais + 1, id_))
             envoyes += 1
         elif essais + 1 >= ESSAIS_MAX:
-            db.execute("UPDATE file_notifs SET envoye=-1, essais=? WHERE id=?", (essais + 1, id_))
+            noter("UPDATE file_notifs SET envoye=-1, essais=? WHERE id=?", (essais + 1, id_))
             log.error("notification %s (%s) abandonnée après %d essais", id_, canal, ESSAIS_MAX)
         else:
-            db.execute("UPDATE file_notifs SET essais=? WHERE id=?", (essais + 1, id_))
+            noter("UPDATE file_notifs SET essais=? WHERE id=?", (essais + 1, id_))
     if manquants:
         log.warning("notifications en attente, réglage manquant : %s", ", ".join(sorted(manquants)))
-    db.commit()
     n = db.execute("SELECT COUNT(*) FROM file_notifs WHERE envoye=0").fetchone()[0]
     return {"envoyes": envoyes, "en_attente": n}
