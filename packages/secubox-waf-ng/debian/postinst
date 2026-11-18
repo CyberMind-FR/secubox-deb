@@ -198,12 +198,16 @@ PROTEGEES
       # #3795 : clé du HMAC des mots de passe tentés sur les leurres de service (veille V2). 32 octets aléatoires,
       # root 0600, créée si absente, JAMAIS tournée automatiquement (les empreintes de gk3 resteraient comparables).
       # Remise à secubox-waf.service par LoadCredential= (drop-in secubox-waf-gestes-ia.conf).
+      # Même création que l'oneshot secubox-waf-leurres-cle.service (activé ici, lancé avant secubox-waf.service).
+      /usr/sbin/secubox-waf-leurres-cle || true
       if [ ! -s /etc/secubox/secrets/leurres-hmac.key ]; then
-        ( umask 077; head -c 32 /dev/urandom > /etc/secubox/secrets/leurres-hmac.key.tmp \
-            && chown root:root /etc/secubox/secrets/leurres-hmac.key.tmp \
-            && chmod 0600 /etc/secubox/secrets/leurres-hmac.key.tmp \
-            && mv -f /etc/secubox/secrets/leurres-hmac.key.tmp /etc/secubox/secrets/leurres-hmac.key ) 2>/dev/null \
-          || rm -f /etc/secubox/secrets/leurres-hmac.key.tmp
+        echo "secubox-waf-ng: ATTENTION — /etc/secubox/secrets/leurres-hmac.key absente : secubox-waf.service (API du WAF) échouera (LoadCredential, 243/CREDENTIALS) tant qu'elle manque" >&2
+        mkdir -p /var/log/secubox 2>/dev/null || true
+        printf '%s secubox-waf-ng postinst leurres-hmac-absente : clé non créée, API du WAF en échec\n' \
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /var/log/secubox/audit.log 2>/dev/null || true
+      fi
+      if [ -d /run/systemd/system ]; then
+        deb-systemd-helper enable secubox-waf-leurres-cle.service >/dev/null 2>&1 || true
       fi
 
     # ── 3. Log directories ────────────────────────────────────────────────────

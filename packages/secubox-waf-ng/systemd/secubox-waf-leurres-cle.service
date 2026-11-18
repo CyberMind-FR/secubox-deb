@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# #3795 : garantit /etc/secubox/secrets/leurres-hmac.key avant secubox-waf.service, dont le drop-in
+# secubox-waf-gestes-ia.conf la charge par LoadCredential= (source absente = unité en échec 243/CREDENTIALS).
+# Crée la clé si elle manque, ne la tourne jamais ; sortie 0 si elle existe déjà.
+[Unit]
+Description=SecuBox WAF — clé locale du HMAC des leurres (#3795)
+Before=secubox-waf.service
+DefaultDependencies=yes
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+User=root
+ExecStart=/usr/sbin/secubox-waf-leurres-cle
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ReadWritePaths=/etc/secubox/secrets
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_FOWNER
+SystemCallArchitectures=native
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=secubox-waf.service
