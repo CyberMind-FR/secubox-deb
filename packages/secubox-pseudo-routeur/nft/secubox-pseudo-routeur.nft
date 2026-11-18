@@ -17,6 +17,8 @@
 # Genere par `pseudo-routeurctl generer-chaine` (ici lan_if = eth2, cas de gk2) — le
 # contenu doit rester identique a celui que le ctl produit pour cette interface.
 
+table inet secubox_pseudo_routeur {}
+delete table inet secubox_pseudo_routeur
 table inet secubox_pseudo_routeur {
 	set blocked {
 		type ether_addr;

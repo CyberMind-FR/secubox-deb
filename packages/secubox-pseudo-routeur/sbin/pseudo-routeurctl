@@ -101,6 +101,10 @@ _def_ensemble() {
 
 _contenu_chaine() {
     local lan_if="$1"
+    # Idempotent : declarer (vide) puis supprimer la table dans la meme transaction
+    # nft -f, puis la redeclarer -> une seule copie des regles, remplacement atomique.
+    echo "table inet secubox_pseudo_routeur {}"
+    echo "delete table inet secubox_pseudo_routeur"
     echo "table inet secubox_pseudo_routeur {"
     _def_ensemble blocked
     _def_ensemble quarantine_zone
@@ -214,6 +218,11 @@ cmd_activer() {
 # l'appel reseau/connecteur sort en 1 (jamais en 2 : ce code est reserve au refus de la
 # garde, et retour-freebox n'a pas de garde a refuser).
 cmd_retour_freebox() {
+    # Retire la chaine en entier (vivante et persistante) : plus rien ne filtre le forward.
+    if command -v nft >/dev/null 2>&1; then
+        nft delete table inet secubox_pseudo_routeur 2>/dev/null || true
+    fi
+    rm -f "$NFT_OUT_DEFAUT"
     _freeboxctl passerelle-dhcp "$IP_FREEBOX" || exit 1
 }
 

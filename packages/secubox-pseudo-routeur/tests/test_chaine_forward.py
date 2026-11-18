@@ -132,3 +132,22 @@ def test_nftables_valide_la_syntaxe(tmp_path):
     if r.returncode != 0 and ("cache initialization failed" in r.stderr or "unshare" in r.stderr):
         pytest.skip("nft -c sans acces netlink dans cet environnement")
     assert r.returncode == 0, r.stderr
+
+
+def test_activation_idempotente(tmp_path):
+    # Fix #3803 : le fichier supprime puis redeclare la table dans la meme transaction.
+    txt = _generer(tmp_path)
+    lignes = txt.splitlines()
+    assert lignes[0] == "table inet secubox_pseudo_routeur {}"
+    assert lignes[1] == "delete table inet secubox_pseudo_routeur"
+    assert txt.count("chain forward {") == 1
+    # regenerer donne exactement le meme fichier (une seule copie des regles)
+    assert _generer(tmp_path) == txt
+
+
+def test_retour_freebox_supprime_la_table():
+    src = CTL.read_text()
+    corps = src[src.index("cmd_retour_freebox() {"):]
+    corps = corps[:corps.index("\n}\n")]
+    assert "nft delete table inet secubox_pseudo_routeur" in corps
+    assert 'rm -f "$NFT_OUT_DEFAUT"' in corps

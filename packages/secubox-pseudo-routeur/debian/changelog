@@ -6,6 +6,8 @@ secubox-pseudo-routeur (0.1.3-1~trixie1) trixie; urgency=medium
     seuls blocked et quarantine_zone jetes (copies locales des ensembles NAC, la
     reference inter-table etait refusee par nft) (#3803).
   * pseudo-routeurctl apercu + GET /apercu : voisins LAN non classes, informatif (#3803).
+  * Activation idempotente (table supprimee puis redeclaree en une transaction) ;
+    retour-freebox supprime la table et le fichier persistant ; exemple TOML, README (#3803).
 
  -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:00:00 +0100
 
