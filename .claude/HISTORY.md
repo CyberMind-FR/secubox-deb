@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-18 — TV Privacy : nom de régie publicitaire découvert dès la première coupure (ref #3787)
+
+- `secubox-ad-guard` 1.31.0 (PR #3788) : un libellé d'hôte portant un mot de régie (`ads`, `adserver`, `adservice`, `pubads`,
+  `advert…`, `publicite`, `vast`, `vmap`, `vpaid` ; ni `ad` seul ni `ssai`) classe le nom PUBLICITE (source `lexique`, confiance 60) :
+  candidat dès UNE coupure, essai automatique 24 h, même locataire d'un CDN générique (`*.akamaized.net`). Jamais au-dessus d'une
+  catégorie STREAMING/DRM ; le CDN générique reste protégé. Déployé gk7 et gk2.
+- Limite dite au propriétaire : un nom sans mot de régie (`vizchoice.viznet.tv`) reste INCONNU donc jamais bloqué seul — impossible à
+  distinguer, au seul DNS, de `lbcdn.6cloud.fr` (vidéo M6, demandé dans la même seconde qu'une pub). Il passe par l'essai devant la TV
+  puis le profil de base, ou par les indices du maillage une fois confirmé quelque part.
+- Piège : retoucher `www/tv-privacy/index.html` casse l'empreinte CSP du script (24 tests de page rouges) ; retouche retirée.
+
 ## 2026-11-17 — TV Privacy : pubs RTL9+ (OQEE) bloquées en relais seul (ref #3785)
 
 - Pub RTL9+ signalée sur gk7 : OQEE demande `vizchoice.viznet.tv` et `ads-canalplus.akamaized.net` au lancement du replay (14:11:28),
