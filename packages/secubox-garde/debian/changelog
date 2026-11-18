@@ -1,3 +1,12 @@
+secubox-garde (0.3.4-1~trixie1) trixie; urgency=medium
+
+  * #3794 : CSP de /garde/ rétablit script-src-attr 'unsafe-inline' (la barre
+    latérale commune sidebar.js pose des gestionnaires en attribut ; bloqués
+    sur gk2 le 18/11) ; bandeau rouge masqué quand aucun appareil n'est isolé
+    ([hidden] prioritaire sur display:flex).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 08:27:38 +0100
+
 secubox-garde (0.3.3-1~trixie1) trixie; urgency=medium
 
   * #3794 : dépend de secubox-core (>= 1.8.34~) (compte de service garde,

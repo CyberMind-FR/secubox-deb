@@ -14,7 +14,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-h8hJs2OYtXG8w4FN/0Hpg+lhECOJb5RHS9rlkeBmBQo='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-h8hJs2OYtXG8w4FN/0Hpg+lhECOJb5RHS9rlkeBmBQo='; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Garde</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -52,6 +52,7 @@
   .onglets{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--trait);padding-bottom:8px}
   .onglets [role=tab]{font-size:.8rem;padding:7px 14px;border-radius:9px;border:1px solid var(--trait);background:rgba(10,22,46,.5);color:var(--doux)}
   .onglets [role=tab][aria-selected=true]{background:rgba(41,182,246,.22);border-color:var(--cyan);color:#d9f2ff;font-weight:700}
+  [hidden]{display:none!important}
   .alarme{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;border:1px solid rgba(255,77,94,.55);background:rgba(255,77,94,.08);border-radius:12px;padding:10px 14px}
   .alarme b{font-size:1rem}.alarme span{color:var(--doux);font-size:.82rem;overflow-wrap:anywhere}.alarme button{margin-left:auto}
   .tuiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}

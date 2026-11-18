@@ -43,7 +43,7 @@ def test_csp_stricte_par_hash_a_jour():
     assert len(scripts) == 1 and len(re.findall(r"<style>", SRC)) == 1
     assert csp["default-src"] == ["'self'"]
     assert csp["script-src"] == ["'self'", _hash(scripts[0])], "script modifié sans mise à jour de la CSP"
-    assert csp["style-src"] == ["'self'", "'unsafe-inline'"] and "script-src-attr" not in csp
+    assert csp["style-src"] == ["'self'", "'unsafe-inline'"] and csp["script-src-attr"] == ["'unsafe-inline'"]  # sidebar.js commun : gestionnaires en attribut
     assert not re.search(r"<[^>]+\son[a-z]+=", SRC)                         # aucun gestionnaire en attribut
     assert "unsafe-eval" not in brut and "http" not in brut
     assert ' style="' not in SRC and "<script " not in SRC
@@ -260,3 +260,10 @@ def test_aucun_debordement_avec_le_vrai_menu_lateral(largeur):
 def test_resultat_des_demandes_affiche():
     (t,), erreurs, _p = _page(lambda pg: (pg.inner_text("#demandes"),))
     assert "Débannir 203.0.113.8 : ban repris par un autre mécanisme" in t and not erreurs
+
+
+def test_attribut_hidden_toujours_respecte():
+    # gk2 18/11 : `.alarme{display:flex}` affichait le bandeau rouge vide sans appareil isolé.
+    import pathlib
+    html = (pathlib.Path(__file__).resolve().parents[1] / "www" / "garde" / "index.html").read_text()
+    assert "[hidden]{display:none!important}" in html
