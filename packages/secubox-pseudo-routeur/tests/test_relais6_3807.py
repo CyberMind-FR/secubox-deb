@@ -86,10 +86,10 @@ def test_preparer_pose_les_trois_pieces(tmp_path):
     dropin = (tmp_path / "network" / "10-eth2.network.d" / "zz-secubox-relais6.conf").read_text()
     assert "Address=2a01:e0a:dec:c4e0::94/64" in dropin and "Gateway=fe80::3a07:16ff:fe77:17d3" in dropin
     conf = (tmp_path / "etc" / "relais6-ra.conf").read_text()
-    for l in ("port=0", "interface=eth2", "enable-ra", "no-dhcpv4-interface=eth2",
+    for ligne in ("port=0", "interface=eth2", "enable-ra", "no-dhcpv4-interface=eth2",
               "dhcp-range=::,constructor:eth2,ra-stateless,64", "ra-param=eth2,high,0",
               "dhcp-option=option6:dns-server,[2a01:e0a:dec:c4e0::200]"):
-        assert l + "\n" in conf, l
+        assert ligne + "\n" in conf, ligne
     nft = (tmp_path / "nftables.d" / "zz-secubox-relais6.nft").read_text()
     assert 'oifname "eth2" icmpv6 type nd-redirect counter drop' in nft and "ip6 saddr 2a01:e0a:dec:c4e0::/64" in nft
     a = _appels(j)
@@ -120,7 +120,7 @@ def test_retirer_retire_tout_et_est_idempotent(tmp_path):
     env, j = _env(tmp_path, ROUTEUR)
     assert _run(env, "relais6-preparer").returncode == 0
     r = _run(env, "relais6-retirer")
-    assert r.returncode == 0, r.stderr and json.loads(r.stdout)["modifie"] is True
+    assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout)["modifie"] is True
     assert not (tmp_path / "network" / "10-eth2.network.d").exists()
     assert not (tmp_path / "etc" / "relais6-ra.conf").exists()
@@ -145,7 +145,7 @@ def test_retirer_marche_meme_avec_un_toml_casse(tmp_path):
     ("lan_if", "eth2\"; drop"), ("role", "routeur2"),
 ])
 def test_valeurs_invalides_refusees_avant_toute_ecriture(tmp_path, cle, valeur):
-    lignes = [l for l in ROUTEUR.splitlines() if not l.startswith(cle + " =")]
+    lignes = [x for x in ROUTEUR.splitlines() if not x.startswith(cle + " =")]
     lignes.append(f"{cle} = {json.dumps(valeur)}")
     env, j = _env(tmp_path, "\n".join(lignes) + "\n")
     r = _run(env, "relais6-preparer")
