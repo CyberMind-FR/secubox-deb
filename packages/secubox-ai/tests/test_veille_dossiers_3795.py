@@ -205,3 +205,30 @@ def test_source_mesures_garde_acteur_et_adresse():
                                                          "exclu_correlation": "mesure"}
     assert e.horodatage == "2026-11-18T09:23:29Z" and lot.curseur == "1794993809"
     assert asyncio.run(mesures.Mesures().lire(c, lot.curseur)).curseur == "1794993809"
+
+
+def test_curseur_remis_apres_table_videe(db, caplog):
+    for k in range(3):
+        _waf(db, f"100.64.30.{k + 1}", T0 - timedelta(minutes=5), cat="scanners:x")
+    dossiers.construire(db, T0)
+    db.execute("DELETE FROM dossier_evenements")
+    db.execute("DELETE FROM evenements")
+    db.commit()
+    w = _waf(db, "100.64.31.1", T0 + timedelta(minutes=1), cat="scanners:x")
+    with caplog.at_level("WARNING", "secubox-ai-veille"):
+        ds = {d.cle: d for d in dossiers.construire(db, T0 + timedelta(minutes=2))}
+    assert ds["100.64.31.1"].evenements == [w.id] and "repart de 0" in caplog.text
+
+
+def test_retard_rattrape_et_signale(db, caplog):
+    vieux = T0 - timedelta(days=3)
+    for k in range(6000):
+        _waf(db, f"100.66.{k // 250}.{k % 250 + 1}", vieux + timedelta(seconds=k), cat="scanners:x")
+    with caplog.at_level("WARNING", "secubox-ai-veille"):
+        dossiers.construire(db, T0)
+        assert "en retard" in caplog.text
+        caplog.clear()
+        dossiers.construire(db, T0)
+        dossiers.construire(db, T0 + timedelta(seconds=60))
+    assert db.execute("SELECT COUNT(*) FROM dossier_evenements").fetchone()[0] == 6000
+    assert db.execute("SELECT COUNT(*) FROM dossiers WHERE type = 'acteur'").fetchone()[0] == 6000

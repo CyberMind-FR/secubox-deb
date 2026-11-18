@@ -38,3 +38,7 @@ CREATE TABLE dossier_membres (
   regle TEXT NOT NULL,
   PRIMARY KEY(campagne_id, membre_id)
 );
+-- Annuaire adresse → acteur d'actord (propositions et mesures), tenu à jour par passe ; le plus récent l'emporte.
+CREATE TABLE acteurs_adresses (
+  ip TEXT PRIMARY KEY, acteur TEXT NOT NULL, horodatage TEXT NOT NULL
+);
