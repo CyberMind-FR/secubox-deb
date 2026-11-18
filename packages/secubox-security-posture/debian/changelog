@@ -1,3 +1,12 @@
+secubox-security-posture (2.10.6-1~trixie1) trixie; urgency=medium
+
+  * Audit (#3791) : la règle -w sur /var/log/secubox/waf n'enregistrait rien
+    (noyau sans CONFIG_AUDIT_WATCH ni CONFIG_AUDIT_TREE, vérifié sur gk2).
+    Remplacée par sbx_acl : appels setxattr/removexattr de toute la box
+    (changements d'ACL), volume mesuré négligeable.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 06:16:50 +0100
+
 secubox-security-posture (2.10.5-1~trixie1) trixie; urgency=medium
 
   * Audit (#3791) : règle auditd sbx_waf_droits sur /var/log/secubox/waf
