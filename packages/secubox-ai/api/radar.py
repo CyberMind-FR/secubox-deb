@@ -272,6 +272,10 @@ async def _boucle() -> None:
             await rafraichir()
         except (sqlite3.Error, OSError, ValueError, KeyError, TypeError) as e:
             log.warning("radar : calcul de fond en échec (%s)", type(e).__name__)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - la boucle ne doit jamais mourir en silence (cache figé)
+            log.exception("radar : erreur inattendue du calcul de fond")
         await asyncio.sleep(PERIODE_S)
 
 
