@@ -1,3 +1,26 @@
+secubox-hub (1.12.59-1~trixie1) trixie; urgency=medium
+
+  * Bouton d'état du module (#3812) : /shared/etat-module.js et
+    /shared/etat-module.css, chargés par sidebar.js (même origine, aucun
+    gestionnaire ni style en ligne, DOM sans innerHTML). Dans l'en-tête de
+    chaque page de module, avant « ⟳ Actualiser » : pastille Éveillé,
+    Endormi, Arrêté, En échec, Dépendance en panne ; au clic, panneau
+    (politique, unités, dépendances), Réveiller (session) et Endormir
+    (administrateur, confirmation dans le panneau). Module de la page :
+    attribut data-sbx-module ou <meta name="secubox-module">, sinon l'entrée
+    de menu au plus long préfixe, sinon le premier segment ; aucun module
+    connu de /api/v1/profiles/lifecycles : rien n'est affiché.
+  * Badge « HORS LIGNE » d'une page : la vraie raison s'affiche à côté
+    (endormi + Réveiller, service arrêté, unité en échec, dépendance
+    endormie ou en panne, raison inconnue). « endormi » seulement si l'API
+    de secubox-profiles le dit (ref #3812).
+  * Sans session d'administration : seulement ce que /lifecycles donne,
+    jamais de bouton Endormir. Inactif en ?demo=1.
+  * Lit GET /api/v1/profiles/module/{id} (secubox-profiles >= 0.29.0) ; sans
+    elle, la pastille retombe sur /lifecycles.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 12:00:00 +0100
+
 secubox-hub (1.12.58-1~trixie1) trixie; urgency=medium
 
   * espaces.json : la nouvelle entrée de menu pilotage-console (Console de pilotage du maître du parc, #3702)

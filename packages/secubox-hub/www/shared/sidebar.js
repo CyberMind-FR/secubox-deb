@@ -72,6 +72,14 @@
         script.defer = true;
         document.head.appendChild(script);
     })();
+    // Bouton d'état du module de la page (#3812) : fichier à part, même origine (CSP `script-src 'self'`), DOM bâti sans innerHTML.
+    (function chargerEtatModule() {
+        if (window.SbxEtatModule || document.querySelector('script[src="/shared/etat-module.js"]')) return;
+        var script = document.createElement('script');
+        script.src = '/shared/etat-module.js';
+        script.defer = true;
+        document.head.appendChild(script);
+    })();
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health

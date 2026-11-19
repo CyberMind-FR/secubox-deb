@@ -1,3 +1,19 @@
+secubox-profiles (0.29.0-1~trixie1) trixie; urgency=medium
+
+  * Nouvelle lecture GET /api/v1/profiles/module/{id} (require_jwt) : état
+    d'UN module, de chacune de ses unités (ActiveState/SubState/Result) et
+    de ses dépendances `needs`, avec la raison d'un « HORS LIGNE » (unité en
+    échec, endormi, arrêté, dépendance endormie ou en panne, inconnu). Id
+    validé par motif entier avant toute sonde (422), inconnu 404 ; une seule
+    `systemctl show` batchée hors de la boucle, cache 10 s. « endormi » n'est
+    dit que si sleep_state le dit et que rien ne tourne ; une sonde muette
+    donne « inconnu ». Sert le bouton d'état commun des pages (ref #3812).
+  * /wake et /sleep vident la fiche du module et le cache de /status : la
+    page relit l'état juste après le geste (ref #3812).
+  * Rien d'autre ne change : aucune nouvelle action, ni sudoers ni ctl.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 12:00:00 +0100
+
 secubox-profiles (0.28.7-1~trixie1) trixie; urgency=medium
 
   * Réunit le retrait de YaCy (0.28.5, branche #3581) et le verrou de réveil
