@@ -83,6 +83,17 @@ if [ "$1" = "configure" ]; then
     systemctl enable secubox-mail.service || true
     systemctl start secubox-mail.service || true
 
+    # Mémoire du conteneur mail (19/11, gk2 : 512M sans swap, 116 OOM pendant le rapatriement IMAP) : bloc
+    # unique REMPLACÉ dans la config LXC, et appliqué au cgroup vivant (aucun redémarrage du conteneur).
+    if [ -r /usr/lib/secubox/mail/lib/memoire.sh ] && command -v lxc-config >/dev/null 2>&1; then
+        _lxcpath="$(lxc-config lxc.lxcpath 2>/dev/null || echo /var/lib/lxc)"
+        bash -c '. /usr/lib/secubox/mail/lib/memoire.sh
+                 mail_memoire_config "$1/mail/config"; rc=$?
+                 [ "$rc" -eq 10 ] && echo "secubox-mail: mémoire du conteneur mail ramenée à un bloc unique (1G)"
+                 mail_memoire_vive mail || echo "secubox-mail: limites vives non appliquées (conteneur arrêté ?)"
+                 true' _ "$_lxcpath" || true
+    fi
+
     # SSL auto-renew timer (ref #1169 task 10). Guarded like the other units:
     # never fail the install if systemd isn't around (chroot/image build).
     if command -v systemctl >/dev/null 2>&1; then
