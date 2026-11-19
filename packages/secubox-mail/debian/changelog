@@ -1,3 +1,13 @@
+secubox-mail (2.16.16-1~trixie1) trixie; urgency=medium
+
+  * Minuteries autocrypt-sync et imap-sync (sans cible) : conteneur mail
+    arrêté ou endormi (module hors profil, sommeil) = « rien à faire »,
+    sortie 0, sans le réveiller ; une panne conteneur en marche reste une
+    panne, et un rapatriement demandé pour une boîte reste une erreur
+    (gk3, #3826).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 10:55:22 +0100
+
 secubox-mail (2.16.15-1~trixie1) trixie; urgency=medium
 
   * Mémoire du conteneur mail : bloc unique réécrit (1G, haut 900M, sans swap) à la place des lignes

@@ -19,10 +19,19 @@ SCRIPT = RACINE / "packages/secubox-core/sbin/secubox-minuteries-garde"
 class FauxSystemctl:
     """Répond aux appels du garde comme systemd ; note les gestes."""
 
-    def __init__(self, unites, absentes=()):
+    def __init__(self, unites, absentes=(), services=None):
         self.unites = unites            # nom -> (UnitFileState, ActiveState)
         self.absentes = list(absentes)  # unités not-found en échec
+        self.services = services or {}  # service déclenché -> LoadState (défaut : loaded)
         self.gestes = []
+
+    def _show(self, n):
+        if n in self.unites:
+            base = n[:-len(".timer")] if n.endswith(".timer") else n
+            return (f"Id={n}\nActiveState={self.unites[n][1]}\nUnitFileState={self.unites[n][0]}\nLoadState=loaded\n"
+                    f"Triggers={base}.service\n")
+        etat = self.services.get(n, "loaded")
+        return f"Id={n}\nActiveState=inactive\nUnitFileState={'masked' if etat == 'masked' else 'static'}\nLoadState={etat}\n"
 
     def __call__(self, *args, delai=60):
         a = list(args)
@@ -30,8 +39,7 @@ class FauxSystemctl:
             sortie = "".join(f"{n} {f} enabled\n" for n, (f, _) in self.unites.items() if f == "enabled")
         elif a[0] == "show":
             noms = a[a.index("--") + 1:]
-            sortie = "\n".join(f"Id={n}\nActiveState={self.unites[n][1]}\nUnitFileState={self.unites[n][0]}\nLoadState=loaded\n"
-                               for n in noms)
+            sortie = "\n".join(self._show(n) for n in noms)
         elif a[0] == "list-units":
             sortie = "".join(f"{n} not-found failed failed {n}\n" for n in self.absentes)
         else:
@@ -98,3 +106,42 @@ def test_verifier_n_agit_pas(g, monkeypatch, capsys):
 def test_minuterie_du_garde_sur_l_horloge():
     texte = (RACINE / "packages/secubox-core/systemd/secubox-minuteries-garde.timer").read_text()
     assert "OnCalendar=" in texte and "OnUnitActiveSec" not in texte
+
+
+def test_minuterie_dont_le_service_est_masque_n_est_ni_relancee_ni_en_echec(g, monkeypatch, capsys):
+    """#3826 : l'image live masque secubox-ui-health.service et laisse sa minuterie activée (gk3) ; systemd refuse de
+    la démarrer (« unit to trigger not loaded »). Le garde ne la relance pas et ne sort pas en échec."""
+    f = FauxSystemctl({
+        "secubox-ui-health.timer": ("enabled", "inactive"),
+        "secubox-gone.timer": ("enabled", "failed"),
+        "secubox-mail-imap-sync.timer": ("enabled", "inactive"),
+    }, services={"secubox-ui-health.service": "masked", "secubox-gone.service": "not-found"})
+    monkeypatch.setattr(g, "systemctl", f)
+    assert g.main([]) == 0
+    demarrees = [x[-1] for x in f.gestes if x[0] == "start"]
+    assert demarrees == ["secubox-mail-imap-sync.timer"]
+    sortie = json.loads(capsys.readouterr().out)
+    assert sortie["ok"] is True and sortie["echecs"] == []
+    assert g.main(["--verifier"]) == 0
+    v = json.loads(capsys.readouterr().out)
+    assert v["minuteries_sans_service"] == ["secubox-gone.timer", "secubox-ui-health.timer"]
+    assert v["minuteries_arretees"] == ["secubox-mail-imap-sync.timer"]
+
+
+def test_relance_refusee_avec_service_charge_reste_un_echec(g, monkeypatch):
+    """#3826 : un service bien chargé dont la minuterie refuse de démarrer reste une vraie panne (rc 1, audité)."""
+    f = FauxSystemctl({"secubox-netstats.timer": ("enabled", "failed")})
+
+    def appel(*args, delai=60):
+        r = f(*args, delai=delai)
+        return subprocess.CompletedProcess(r.args, 1, "", "Job failed") if args[0] == "start" else r
+    monkeypatch.setattr(g, "systemctl", appel)
+    assert g.main([]) == 1
+
+
+def test_verifier_sans_service_seul_est_ok(g, monkeypatch, capsys):
+    f = FauxSystemctl({"secubox-ui-health.timer": ("enabled", "inactive")},
+                      services={"secubox-ui-health.service": "masked"})
+    monkeypatch.setattr(g, "systemctl", f)
+    assert g.main(["--verifier"]) == 0
+    assert json.loads(capsys.readouterr().out)["ok"] is True

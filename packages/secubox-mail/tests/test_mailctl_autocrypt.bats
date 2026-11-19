@@ -60,10 +60,24 @@ setup() {
   ! grep -q 'ATTACH' "$CALLS"
 }
 
-@test "autocrypt-sync avec un conteneur provisionne mais arrete reste une panne" {
+# #3826 : conteneur arrêté ou endormi (module hors profil sur gk3) : rien à faire, sans réveil ni panne de la minuterie.
+@test "autocrypt-sync avec un conteneur provisionne mais arrete ne fait rien et sort en 0" {
   export SBX_TABLE='{"alice@secubox.in":"QUJD"}'
   lxc_exists() { return 0; }
   lxc_running() { return 1; }
+  lxc-start() { echo "REVEIL" >> "$CALLS"; }
+  run cmd_autocrypt_sync
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"rien à faire"*"arrêté"* ]]
+  ! grep -q 'ATTACH\|REVEIL' "$CALLS"
+}
+
+@test "autocrypt-sync conteneur en marche : un echec de rspamd reste une panne" {
+  export SBX_TABLE='{"alice@secubox.in":"QUJD"}'
+  lxc_attach() {
+    echo "ATTACH: $*" >> "$CALLS"; timeout 1 cat > /dev/null 2>&1 || true
+    case "$*" in *configtest*) return 1 ;; esac
+  }
   run cmd_autocrypt_sync
   [ "$status" -ne 0 ]
 }
@@ -75,4 +89,22 @@ setup() {
   run cmd_imap_sync run
   [ "$status" -eq 0 ]
   [[ "$output" == *"non provisionn"* ]]
+}
+
+@test "imap-sync run (minuterie) avec un conteneur arrete ne fait rien et sort en 0" {
+  lxc_exists() { return 0; }
+  lxc_running() { return 1; }
+  export IMAP_SYNC_DIR="$BATS_TEST_TMPDIR/imap" IMAP_SYNC_ETAT="$BATS_TEST_TMPDIR/imap-etat"
+  run cmd_imap_sync run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"rien à faire"*"arrêté"* ]]
+  [ ! -d "$IMAP_SYNC_ETAT" ]
+}
+
+@test "imap-sync run d'une boite demandee par l'administrateur, conteneur arrete : erreur" {
+  lxc_exists() { return 0; }
+  lxc_running() { return 1; }
+  export IMAP_SYNC_DIR="$BATS_TEST_TMPDIR/imap" IMAP_SYNC_ETAT="$BATS_TEST_TMPDIR/imap-etat"
+  run cmd_imap_sync run alice@secubox.in
+  [ "$status" -ne 0 ]
 }

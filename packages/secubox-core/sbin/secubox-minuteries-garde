@@ -14,6 +14,9 @@ troisième (mail-imap-sync) s'est arrêtée sans trace. Plutôt que de compter s
   (inactive ou failed) est relancée ; la relance est écrite dans /var/log/secubox/audit.log. Pour arrêter une
   minuterie pour de bon, on la DÉSACTIVE (disable) : le garde ne touche jamais une unité désactivée, masquée, statique
   ou transitoire (les gardes de pilotage, le retour de netmodes) ;
+- une minuterie dont l'unité déclenchée n'est pas chargée (masquée ou absente : sur gk3, l'image masque
+  secubox-ui-health.service et laisse sa minuterie activée, #3826) n'est PAS relancée : systemd refuserait (« unit to
+  trigger not loaded ») à chaque passage. Elle est rendue à part (`minuteries_sans_service`), sans compter en échec ;
 - une unité SecuBox dont le fichier a disparu mais qui reste « failed » (reste d'une unité retirée) est effacée
   (reset-failed), pour qu'elle cesse d'apparaître en panne.
 
@@ -45,10 +48,11 @@ def minuteries_activees():
 
 
 def etats(unites):
-    """{unité: {ActiveState, UnitFileState, LoadState}} en un seul appel."""
+    """{unité: {ActiveState, UnitFileState, LoadState, Triggers}} en un seul appel."""
     if not unites:
         return {}
-    r = systemctl("show", "-p", "Id", "-p", "ActiveState", "-p", "UnitFileState", "-p", "LoadState", "--", *unites)
+    r = systemctl("show", "-p", "Id", "-p", "ActiveState", "-p", "UnitFileState", "-p", "LoadState", "-p", "Triggers",
+                  "--", *unites)
     res, cur = {}, {}
     for ligne in [*r.stdout.splitlines(), ""]:
         if not ligne.strip():
@@ -72,9 +76,16 @@ def unites_absentes_en_echec():
 
 
 def constat():
-    arretees = [u for u, e in etats(minuteries_activees()).items()
-                if e.get("UnitFileState") == "enabled" and e.get("ActiveState") in ("inactive", "failed")]
-    return {"minuteries_arretees": sorted(arretees), "unites_absentes": unites_absentes_en_echec()}
+    candidates = {u: e for u, e in etats(minuteries_activees()).items()
+                  if e.get("UnitFileState") == "enabled" and e.get("ActiveState") in ("inactive", "failed")}
+    # Unité déclenchée masquée ou absente (#3826) : une relance échouerait toujours, ce n'est pas une panne du garde.
+    declenchees = {u: e.get("Triggers", "").split() for u, e in candidates.items()}
+    charge = etats(sorted({d for ds in declenchees.values() for d in ds}))
+    sans_service = sorted(u for u, ds in declenchees.items()
+                          if ds and any(charge.get(d, {}).get("LoadState", "loaded") != "loaded" for d in ds))
+    arretees = sorted(u for u in candidates if u not in sans_service)
+    return {"minuteries_arretees": arretees, "minuteries_sans_service": sans_service,
+            "unites_absentes": unites_absentes_en_echec()}
 
 
 def auditer(evenement, **champs):

@@ -5,8 +5,9 @@
 """#3182 — meetctl : relevé de l'activité, réunions, en direct, clôture d'une réunion, audit des décisions."""
 import json
 import sqlite3
+import subprocess
 
-from conftest import _ecrire_exec, run_ctl, run_ctl_rc
+from conftest import CTL, _ecrire_exec, _env_ctl, run_ctl, run_ctl_rc
 from test_activite import GANDALF, REELLES, SALLE
 
 
@@ -109,3 +110,22 @@ def test_collecte_refuse_un_dossier_de_base_lien_symbolique(tmp_path):
     _preparer(tmp_path, REELLES)
     rc, out = run_ctl_rc(tmp_path, "activite-collecte")
     assert rc == 1 and not (reel / "activite.db").exists()
+
+
+def test_collecte_conteneur_arrete_rien_a_faire_sans_reveil(tmp_path):
+    """#3826 : conteneur arrêté (meet hors profil sur gk3) : sortie 0, rien relevé, aucun lxc-attach ni lxc-start."""
+    _preparer(tmp_path, REELLES)
+    rc, out = run_ctl_rc(tmp_path, "activite-collecte", lxc_state="STOPPED")
+    d = json.loads(out)
+    assert rc == 0 and d["success"] is True and d["evenements"] == 0 and "arrêté" in d["rien_a_faire"]
+    assert not (tmp_path / "urls").exists()                    # ni journalctl ni psql dans le conteneur
+    assert not (tmp_path / "activite" / "activite.db").exists()
+
+
+def test_collecte_conteneur_en_marche_echec_d_attache_reste_une_panne(tmp_path):
+    """#3826 : en marche, un lxc-attach qui échoue fait toujours échouer le relevé (pipefail)."""
+    _preparer(tmp_path, REELLES)
+    env = _env_ctl(tmp_path)
+    _ecrire_exec(tmp_path / "bin" / "lxc-attach", "#!/bin/bash\necho 'Failed to get init pid' >&2\nexit 1\n")
+    r = subprocess.run(["bash", str(CTL), "activite-collecte"], capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode != 0

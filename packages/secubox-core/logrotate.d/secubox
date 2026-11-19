@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
 # SecuBox-Deb :: rotation des journaux de modules (#1039)
 #
 # UNE REGLE GENERALE, PAS UNE PAR MODULE. Avant celle-ci, UN SEUL fichier
@@ -14,7 +18,28 @@
 # ont leurs propres regles. Les melanger imposerait un `su` unique a des
 # fichiers qui n'ont pas le meme proprietaire.
 /var/log/secubox/*.log {
-    su secubox secubox
+    # ROTATION EN ROOT, QUEL QUE SOIT LE PROPRIETAIRE DU DOSSIER (#3826).
+    #
+    # `su secubox secubox` exigeait que `secubox` puisse ECRIRE dans
+    # /var/log/secubox. Or ce parent partage change de main selon l'ordre des
+    # installations : root:root par le tmpfiles de secubox-waf-ng (a chaque
+    # `systemd-tmpfiles --create`), secubox:secubox par une dizaine de postinst,
+    # secubox-toolbox:secubox 0775 par toolbox (#2490, deja pour ce motif).
+    # Des que root le reprenait, la rotation echouait : sur gk3 le 19/11
+    # (« error creating output file audit.log.1.gz: Permission denied »), et
+    # sur gk2 audit.log ne tournait plus depuis le 08/11 (10 Mo, premiere
+    # ligne du 07/11), sans un mot dans le journal.
+    #
+    # `su root root` : root ecrit dans le dossier quel que soit son
+    # proprietaire, et la directive vaut declaration que le dossier peut etre
+    # ouvert au groupe (0775 de toolbox) — sans elle logrotate refuse un
+    # parent inscriptible par un groupe autre que root. Les journaux gardent
+    # leur proprietaire : le renommage ne le change pas, la compression le
+    # recopie de l'original, `create` (plus bas) le fixe a secubox:secubox.
+    # Un lien symbolique ou un lien dur pose a la place d'un journal n'est
+    # pas suivi (logrotate refuse les liens, ouvre en O_NOFOLLOW ; le noyau
+    # protege les liens, fs.protected_symlinks/hardlinks = 1).
+    su root root
     daily
     # `maxsize` ET NON `size` : avec `size`, logrotate ANNULE le critere
     # temporel — il l'annonce en mode debug. `maxsize` garde les deux.

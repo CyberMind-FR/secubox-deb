@@ -1,3 +1,12 @@
+secubox-meet (0.2.9-1~trixie1) trixie; urgency=medium
+
+  * activite-collecte : conteneur meet arrêté ou endormi = « rien à faire »,
+    sortie 0 sans lxc-attach ni réveil. Avant, lxc-attach échouait (« Failed
+    to get init pid »), la sortie disait success et l'unité finissait en
+    échec toutes les 5 min (gk3, #3826). En marche, un échec reste un échec.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 10:55:22 +0100
+
 secubox-meet (0.2.8-1~trixie1) trixie; urgency=medium
 
   * Salle créée depuis l'administration : le code EST le nom et l'adresse,
