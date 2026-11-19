@@ -82,7 +82,18 @@ touch "$HOLD/gitea"
 
 avant=$(miroirs_echus)
 log "réveil de gitea ($avant miroir(s) échu(s))"
-/usr/sbin/secubox-wakectl wake gitea || { log "réveil refusé ou en échec"; exit 1; }
+# Gitea coupé par le profil (gk3, box IA : gitea tourne sur gk2) ou endormi par
+# politique : le réveil est refusé et c'est NORMAL — le sleeper en a la charge.
+# On sort « rien à faire » (code 0), comme mail/meet (#3826), au lieu d'échouer
+# toutes les 10 min (#3831).
+if secubox-profilectl coupe secubox-gitea.service >/dev/null 2>&1; then
+    log "rien à faire : gitea coupé par le profil actif"
+    exit 0
+fi
+if ! /usr/sbin/secubox-wakectl wake gitea; then
+    log "rien à faire : gitea non réveillable (endormi par politique ou absent)"
+    exit 0
+fi
 
 debut=$(date +%s)
 while :; do
