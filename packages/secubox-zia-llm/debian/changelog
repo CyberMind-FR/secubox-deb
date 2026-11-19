@@ -1,3 +1,14 @@
+secubox-zia-llm (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * Ajout de l'architecture amd64 (#3583) : llama-server/llama-cli STATIQUES,
+    CPU seul, AVX2/FMA/F16C, pour gk3 (secubox-ai). build-amd64.sh -> bin/amd64/.
+  * llama.cpp epingle (LLAMA_TAG=v0.9.0, commit cd959ba, la version de gk0) dans
+    build-amd64.sh et build-arm64.sh ; le commit clone est verifie.
+  * build-arm64.sh ecrit desormais dans bin/arm64/ ; debian/rules installe
+    bin/$(DEB_HOST_ARCH)/. Comportement arm64 (postinst, prerm, unite) inchange.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 14 Nov 2026 08:00:00 +0100
+
 secubox-zia-llm (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * llama.cpp arm64 STATIQUE prebuilt (#1245), cross-compile HORS box (le build

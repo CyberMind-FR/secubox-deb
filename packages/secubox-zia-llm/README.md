@@ -7,7 +7,15 @@ Ships a statically-linked aarch64 llama.cpp (llama-server + llama-cli), cross-co
 
 Fetch a model with `secubox-zia-getmodel <url.gguf>`; the llama-server unit is memory-capped (1.4G) to protect the rest of the parc, and only starts once a model is present. Rebuild the binaries with build-arm64.sh.
 
-Paquet Debian : version `0.1.0-1~bookworm1`, architecture `arm64`.
+Paquet Debian : version `0.3.0-1~trixie1`, architectures `arm64` et `amd64`.
+
+## Binaires (hors dépôt, hors CI)
+
+`bin/` est ignoré par git et le paquet est construit hors CI. `debian/rules` installe `bin/$(DEB_HOST_ARCH)/`.
+- `./build-amd64.sh` : llama.cpp épinglé (`LLAMA_TAG=v0.9.0`, commit `cd959ba`), CPU, AVX2/FMA/F16C, statique, vers `bin/amd64/`.
+- `./build-arm64.sh` : même étiquette, cross-compilation, vers `bin/arm64/`.
+- Binaires arm64 existants (à plat dans `bin/`) : `mkdir -p bin/arm64 && mv bin/llama-server bin/llama-cli bin/arm64/`.
+- Construire : `dpkg-buildpackage -us -uc -b -aamd64` (ou `-aarm64`).
 
 ## Contenu
 

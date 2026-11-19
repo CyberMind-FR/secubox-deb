@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox IA V2 — veille (#3719) : second processus du module, SEUL écrivain régulier de veille.db (V2 § 5.2, § 6).
+# Collecte de gk2 (#3720), migrations, rétention, garde d'espace ; corrélation et file de travaux viendront ensuite. Utilisateur dédié, aucune capacité, socle de durcissement complet (RULES-CODE § 10).
+[Unit]
+Description=SecuBox IA — veille (base veille.db, boucles, rétention)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3719
+After=network.target secubox-ai-preparer.service
+Wants=secubox-ai-preparer.service
+
+[Service]
+Type=simple
+User=secubox-ai
+Group=secubox-ai
+SupplementaryGroups=secubox
+UMask=0027
+WorkingDirectory=/usr/lib/secubox/ai
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+# Temporaires de SQLite : dans l'état du module (créé 0700 par le postinst), seul tmp autorisé par le profil.
+Environment=SQLITE_TMPDIR=/var/lib/secubox/ai/tmp
+AppArmorProfile=secubox-ai-veille
+ExecStart=/usr/sbin/secubox-ai-veille
+Restart=on-failure
+RestartSec=5
+MemoryMax=256M
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+# AF_UNIX : journal ; AF_INET/AF_INET6 : gk2 (collecte). Les adresses de gk2 (ai.toml) et les résolveurs du LAN sont
+# rouverts une à une par le drop-in de « secubox-aictl preparer » (/run/systemd/system/secubox-ai-veille.service.d).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/secubox/ai
+# Clé privée du compte de lecture de gk2 (#3720) : root 0600, remise par systemd ; la veille seule la reçoit.
+# Absente : la collecte reste éteinte (journalisé), le reste tourne.
+LoadCredential=ai-lecture:/etc/secubox/secrets/ai/ai-lecture.key
+IPAddressDeny=localhost link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
+IPAddressAllow=127.0.0.1/32
+
+[Install]
+WantedBy=multi-user.target

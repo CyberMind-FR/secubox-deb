@@ -60,3 +60,16 @@ def test_php_hotes_ok_refus_audites_motifs_gardes(ctl):
     assert [x["result"] for x in ctl.audits()] == ["ok", "refus", "ok"]
     rc, d = ctl("php-hotes", "lister")
     assert rc == 0 and d["vhosts"] == ["a.exemple.fr"]
+
+
+def test_php_hotes_tous_pose_et_retire_le_motif_global(ctl):
+    rc, d = ctl("php-hotes", "ecrire", entree=json.dumps({"acteur": "admin", "hotes": ["blog.exemple.fr"]}).encode())
+    assert rc == 0
+    rc, d = ctl("php-hotes", "ecrire", entree=json.dumps({"acteur": "admin", "tous": True}).encode())
+    assert rc == 0 and d["tous"] is True and "^.*$" in d["php_hotes"]
+    assert "^blog\\.exemple\\.fr$" in d["php_hotes"]          # les explicites restent
+    rc, d = ctl("php-hotes", "ecrire", entree=json.dumps({"acteur": "admin", "tous": False}).encode())
+    assert rc == 0 and d["tous"] is False and "^.*$" not in d["php_hotes"]
+    assert "^blog\\.exemple\\.fr$" in d["php_hotes"]
+    rc, d = ctl("php-hotes", "ecrire", entree=b'{"tous": "oui"}')
+    assert rc == 2

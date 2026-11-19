@@ -58,6 +58,17 @@ case "$1" in
           usermod -aG actord-ingest "$u" || true
         fi
       done
+      # #3720 : groupe en LECTURE SEULE des fichiers publiés par sbx-actord (propositions, mesures, 0640) :
+      # sbxwaf (secubox-waf) et l'API du WAF (secubox) les lisent ; aucun fichier n'est inscriptible par ce groupe.
+      if ! getent group actord-lecture >/dev/null 2>&1; then
+        addgroup --system actord-lecture || true
+      fi
+      for u in secubox secubox-waf; do
+        if getent passwd "$u" >/dev/null 2>&1 \
+           && ! id -nG "$u" 2>/dev/null | tr ' ' '\n' | grep -qx actord-lecture; then
+          usermod -aG actord-lecture "$u" || true
+        fi
+      done
 
     # ── 2. Config directories ─────────────────────────────────────────────────
     # IMPORTANT: NEVER chmod the SHARED PARENTS /etc/secubox to 0750 — that
@@ -96,6 +107,10 @@ case "$1" in
     mkdir -p /etc/secubox-comptes-service/ai-filtres
     chown root:root /etc/secubox-comptes-service/ai-filtres
     chmod 0755 /etc/secubox-comptes-service/ai-filtres
+    # Compte ai-lecture (#3720, `wafctl cle-ai-lecture ajouter`) : même règle.
+    mkdir -p /etc/secubox-comptes-service/ai-lecture
+    chown root:root /etc/secubox-comptes-service/ai-lecture
+    chmod 0755 /etc/secubox-comptes-service/ai-lecture
 
     # ── 2b. Plages protégées de la box (#3450, #3716 ruling P2) ───────────────
     # waf-blocs REFUSE tout ban de bloc /24 tant que protegees.env ne déclare pas
@@ -178,6 +193,26 @@ PROTEGEES
         if getent passwd secubox-waf >/dev/null 2>&1; then
           chown secubox-waf:secubox-waf /etc/secubox/secrets/actor-credential 2>/dev/null || true
         fi
+      fi
+
+      # #3795 : clé du HMAC des mots de passe tentés sur les leurres de service (veille V2). 32 octets aléatoires,
+      # root:secubox 0640, créée si absente, JAMAIS tournée automatiquement (les empreintes de gk3 restent comparables).
+      # Lue directement par l'API (utilisateur secubox) ; jamais bloquante pour secubox-waf.service.
+      # Même création que l'oneshot secubox-waf-leurres-cle.service (activé ici, lancé avant secubox-waf.service).
+      # Clé d'une installation antérieure (root 0600) : remise à root:secubox 0640 SANS la régénérer.
+      if [ -s /etc/secubox/secrets/leurres-hmac.key ] && getent group secubox >/dev/null 2>&1; then
+        chown root:secubox /etc/secubox/secrets/leurres-hmac.key 2>/dev/null || true
+        chmod 0640 /etc/secubox/secrets/leurres-hmac.key 2>/dev/null || true
+      fi
+      /usr/sbin/secubox-waf-leurres-cle || true
+      if [ ! -s /etc/secubox/secrets/leurres-hmac.key ]; then
+        echo "secubox-waf-ng: ATTENTION — /etc/secubox/secrets/leurres-hmac.key absente : l'API du WAF rend mot_de_passe_hmac=null tant qu'elle manque" >&2
+        mkdir -p /var/log/secubox 2>/dev/null || true
+        printf '%s secubox-waf-ng postinst leurres-hmac-absente : clé non créée, mots de passe des leurres non exposés (HMAC null)\n' \
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /var/log/secubox/audit.log 2>/dev/null || true
+      fi
+      if [ -d /run/systemd/system ]; then
+        deb-systemd-helper enable secubox-waf-leurres-cle.service >/dev/null 2>&1 || true
       fi
 
     # ── 3. Log directories ────────────────────────────────────────────────────

@@ -42,6 +42,10 @@ profile secubox-garde flags=(attach_disconnected) {
   /dev/null rw,
   /proc/sys/net/core/somaxconn r,
   deny /etc/secubox/secrets/** rwklx,
+  # Compte de service ai-lecture (veille V2, #3795) : clés PUBLIQUES seulement.
+  /etc/secubox-comptes-service/ r,
+  /etc/secubox-comptes-service/ai-lecture/ r,
+  /etc/secubox-comptes-service/ai-lecture/*.pub r,
 
   # Demandes de l'administrateur : ajout seul au journal d'audit.
   /var/log/secubox/audit.log a,

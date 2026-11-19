@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Catalogue d'empreintes des outils web (#3795), installé sous /usr/share/secubox-ai/empreintes/.
+# Chaque entrée a une `source` (documentation publique de l'outil ou « relevé gk2 AAAA-MM-JJ »). Motifs = TEXTE
+# LITTÉRAL (comparaison sans casse, jamais une expression rationnelle). Agent HTTP, chemins, ordre des requêtes et
+# champ `tool` de sbxwaf sont UN SEUL trait (groupe « requete » de la couche waf) : un outil n'est nommé que si un
+# second trait d'une autre couche ou d'un autre groupe concorde. Par défaut l'agent de ces outils est le seul trait
+# sourcé : ils restent « inconnu » avec le trait observé tant qu'aucun second trait sourcé n'existe.
+# Exclus après vérification à la source (2026-11-18) : Nuclei (agent tiré au hasard, useragent.PickRandom), Nikto
+# et DirBuster (chaîne citée introuvable à la source, pas de version épinglée nommable).
+
+[[outil]]
+nom = "sqlmap"
+source = "https://github.com/sqlmapproject/sqlmap/blob/master/lib/core/settings.py#L25-L28 (branche master consultée le 2026-11-18 : « sqlmap/%s#%s »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "sqlmap/"
+
+[[outil]]
+nom = "gobuster"
+source = "https://github.com/OJ/gobuster/blob/master/libgobuster/version.go#L123-L124 (branche master consultée le 2026-11-18 : « gobuster/%s »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "gobuster/"
+
+[[outil]]
+nom = "ffuf"
+source = "https://github.com/ffuf/ffuf/blob/master/pkg/runner/simple.go#L207 (branche master consultée le 2026-11-18 : « Fuzz Faster U Fool »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "Fuzz Faster U Fool"
+
+[[outil]]
+nom = "WPScan"
+source = "https://github.com/wpscanteam/wpscan/blob/master/lib/wpscan/browser.rb#L32 (branche master consultée le 2026-11-18 : « WPScan v#{VERSION} »)"
+[[outil.trait]]
+type = "agent"
+couche = "waf"
+motif = "WPScan v"

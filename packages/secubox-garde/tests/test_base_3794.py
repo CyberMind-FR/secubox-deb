@@ -62,6 +62,6 @@ def test_api_gardes():
     assert TestClient(main.app).get("/api/v1/garde/health").json() == {"status": "ok", "module": "garde"}
     for r in main.app.routes:
         if getattr(r, "path", None) == "/api/v1/garde/etat":
-            assert "require_lecture" in {d.call.__name__ for d in r.dependant.dependencies}
+            assert "require_lecture_ou_ai_lecture" in {d.call.__name__ for d in r.dependant.dependencies}
             return
     raise AssertionError("route /etat absente")

@@ -8,10 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/user"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 
@@ -146,11 +144,7 @@ func (s *Server) publierMesuresUneFois(chemin string, now time.Time) error {
 	if err := os.WriteFile(tmp, b, 0o640); err != nil {
 		return err
 	}
-	if g, err := user.LookupGroup("actord-ingest"); err == nil {
-		if gid, err := strconv.Atoi(g.Gid); err == nil {
-			_ = os.Chown(tmp, -1, gid)
-		}
-	}
+	mettreAuGroupeLecteur(tmp)
 	_ = os.Chmod(tmp, 0o640)
 	return os.Rename(tmp, filepath.Clean(chemin))
 }

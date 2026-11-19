@@ -51,6 +51,10 @@ RestartSec=3
 # Identité non privilégiée dédiée ; groupe partagé secubox pour les sockets.
 User=secubox-actord
 Group=secubox
+# #3720 : les fichiers publiés (actord-propositions.json, actord-mesures.json) vont au groupe actord-lecture (0640),
+# groupe en LECTURE SEULE dont sont membres secubox-waf (sbxwaf) et secubox (API du WAF). Jamais secubox-waf ici :
+# il donnerait l'écriture de waf-threats.log (0660). chgrp vers un groupe dont on est membre : aucune capacité.
+SupplementaryGroups=actord-lecture
 UMask=0007
 
 # Répertoire d'état (créé/possédé automatiquement) : /var/lib/secubox/actor.

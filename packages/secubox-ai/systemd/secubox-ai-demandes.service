@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox IA — traitement d'UNE demande de l'API (#3583), oneshot ROOT démarré par secubox-ai-demandes.path.
+# « secubox-aictl demandes » revalide la demande (nom, type, propriétaire), démarre, arrête ou redémarre
+# secubox-ai-moteur.service et publie l'issue dans /run/secubox-ai/moteur-etat.json. Root (exception § 10 : piloter une
+# unité système), mais borné : aucun réseau IP, système en lecture seule sauf /run/secubox-ai et le journal d'audit,
+# quatre capacités seulement (lire le dépôt et les modèles du compte de l'API, poser propriétaire et mode des fichiers
+# publiés, joindre la socket du moteur pour sa sonde).
+[Unit]
+Description=SecuBox IA : demande au contrôleur du moteur local (root, #3583)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3583
+After=secubox-ai-preparer.service
+# Des refus en rafale ne doivent pas désarmer l'unité .path : limite de démarrages large.
+StartLimitIntervalSec=300
+StartLimitBurst=20
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-aictl demandes
+# Pire cas d'UNE demande : arrêt (8 s) puis chargement du modèle attendu 170 s.
+TimeoutStartSec=5min
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH
+# AF_UNIX : systemctl (bus du gestionnaire), sonde de la socket du moteur, journal. Aucun réseau IP.
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ReadWritePaths=/run/secubox-ai /var/log/secubox

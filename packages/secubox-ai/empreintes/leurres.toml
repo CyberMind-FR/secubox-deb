@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Leurres de service (#3795). LIMITE : gk2 ne rend le mot de passe que par HMAC local (non comparable à une liste
+# publique) ; les identifiants de dictionnaire se comparent par « compte:longueur du mot de passe ». Un tel trait est
+# FAIBLE (`faible = true`) : sa combinaison `requis` doit être vue entière, et deux traits faibles d'une même couche ne
+# comptent que pour un. Mirai (scanner.c, table add_auth_entry) : entrée retirée tant qu'aucune ligne épinglée n'est
+# vérifiée (relecture du 2026-11-18). Forme attendue :
+#
+# [[outil]]
+# nom = "Mirai"
+# source = "<URL du fichier>#L<ligne> (version épinglée)"
+# [[outil.trait]]
+# type = "identifiants"
+# couche = "leurre"
+# faible = true
+# requis = ["support:7", "root:7", "root:8"]
+# valeurs = ["support:7", "root:7", "root:8"]

@@ -1,3 +1,13 @@
+secubox-core (1.8.35-1~trixie1) trixie; urgency=medium
+
+  * #3720 : compte de service `ai-lecture` (portée waf-lecture, GET seulement,
+    jeton lié à la méthode et au chemin exact sans chaîne de requête) et
+    garde require_lecture_ou_compte("ai-lecture"), sans repli anonyme dès
+    qu'un porteur EdDSA est présent. Comptes ai-ban, ai-filtres, garde
+    inchangés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 10:18:11 +0100
+
 secubox-core (1.8.34-1~trixie1) trixie; urgency=medium
 
   * #3794 : compte de service `garde` (portée garde-ban, require_garde) et

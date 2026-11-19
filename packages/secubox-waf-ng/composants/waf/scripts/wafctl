@@ -489,11 +489,20 @@ if verbe == "lister":
                       "php_services": profils.get("php_services") or [],
                       "php_hotes": [m for m in profils.get("php_hotes") or [] if isinstance(m, str)]}))
     sys.exit(0)
+TOUS = "^.*$"   # « Tout couvrir » : un seul motif, vaut aussi pour les vhosts ajoutés plus tard
 hotes = entree.get("hotes") if isinstance(entree, dict) else None
+tous = entree.get("tous") if isinstance(entree, dict) else None
+if tous is not None and not isinstance(tous, bool):
+    sortir("waf-php-hotes", 2, "tous : vrai ou faux attendu", acteur)
+if hotes is None and tous is not None:
+    hotes = [m[1:-1].replace("\\.", ".") for m in profils.get("php_hotes") or [] if isinstance(m, str) and EXPLICITE.fullmatch(m)]
 if not isinstance(hotes, list) or len(hotes) > 200 or any(not isinstance(h, str) or not HOTE.fullmatch(h) for h in hotes):
     sortir("waf-php-hotes", 2, "hotes : liste de noms d'hôte (200 au plus) attendue", acteur)
 detail = "explicites " + (",".join(sorted(set(hotes))) or "aucun")
 gardes = [m for m in profils.get("php_hotes") or [] if not (isinstance(m, str) and EXPLICITE.fullmatch(m))]
+if tous is not None:
+    gardes = [m for m in gardes if m != TOUS] + ([TOUS] if tous else [])
+    detail += " ; tous " + ("oui" if tous else "non")
 profils["php_hotes"] = gardes + [motif(h) for h in sorted(set(hotes))]
 tmp = None
 try:
@@ -512,7 +521,7 @@ except OSError as e:
         os.unlink(tmp)
     sortir("waf-php-hotes", 3, f"écriture impossible : {e}", acteur, detail)
 auditer("waf-php-hotes", "ok", detail, acteur)
-print(json.dumps({"ok": True, "explicites": sorted(set(hotes)), "php_hotes": profils["php_hotes"]}))
+print(json.dumps({"ok": True, "explicites": sorted(set(hotes)), "tous": TOUS in profils["php_hotes"], "php_hotes": profils["php_hotes"]}))
 PY
 }
 
@@ -809,6 +818,10 @@ cmd_cle_compte() {
 
 cmd_cle_ai_ban() { cmd_cle_compte ai-ban "$@"; }
 cmd_cle_ai_filtres() { cmd_cle_compte ai-filtres "$@"; }
+# Compte ai-lecture (#3720) : l'IA de gk3 lit les routes du WAF (GET, jeton lié
+# à la méthode et au chemin). Clé PRIVÉE générée sur gk3, jamais sur gk2 : on ne
+# pose ici que sa clé publique, comme cle-ai-ban.
+cmd_cle_ai_lecture() { cmd_cle_compte ai-lecture "$@"; }
 
 # cmd_cle_garde_ban — clés du compte de service garde (#3794, secubox-garde).
 #
@@ -877,6 +890,7 @@ case "${1:-}" in
     blocs)      shift; cmd_blocs "$@" ;;
     cle-ai-ban) shift; cmd_cle_ai_ban "$@" ;;
     cle-ai-filtres) shift; cmd_cle_ai_filtres "$@" ;;
+    cle-ai-lecture) shift; cmd_cle_ai_lecture "$@" ;;
     cle-garde-ban) shift; cmd_cle_garde_ban "$@" ;;
     test)       cmd_test "$2" ;;
     *)
@@ -915,6 +929,8 @@ Compte de service ai-ban (root seulement, hors sudoers ; deux clés au plus) :
   cle-ai-ban lister                  Empreintes posées et leur validité
   cle-ai-filtres ajouter|retirer|lister   Idem pour le compte ai-filtres (#3732,
                                      /etc/secubox-comptes-service/ai-filtres)
+  cle-ai-lecture ajouter|retirer|lister   Idem pour le compte ai-lecture (#3720,
+                                     lecture GET, /etc/secubox-comptes-service/ai-lecture)
   cle-garde-ban generer              Compte garde (#3794) : paire Ed25519, clé privée
                                      /etc/secubox/secrets/garde-ban.pem (root:secubox-garde
                                      0640), publique dans /etc/secubox-comptes-service/garde

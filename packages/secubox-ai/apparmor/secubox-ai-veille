@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de secubox-ai-veille (#3719). Chargé par le postinst AVANT le démarrage de l'unité, qui le
+# nomme par AppArmorProfile=. Tout ce qui n'est pas listé est refusé : ni /etc/secubox/** (la clé ai-lecture arrive
+# par LoadCredential=), ni shell, ni exécution hors de Python.
+
+#include <tunables/global>
+
+profile secubox-ai-veille {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/openssl>
+  #include <abstractions/ssl_certs>
+
+  /usr/bin/python3* rix,
+  /usr/sbin/secubox-ai-veille r,
+  /usr/lib/secubox/ r,
+  /usr/lib/secubox/ai/ r,
+  /usr/lib/secubox/ai/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # Configuration du module (lecture seule) ; jamais /etc/secubox/**.
+  /etc/secubox/ r,
+  /etc/secubox/ai.toml r,
+  # Catalogue d'empreintes des outils (#3795) : paquet, puis fichier local facultatif de l'opérateur.
+  /usr/share/secubox-ai/empreintes/ r,
+  /usr/share/secubox-ai/empreintes/*.toml r,
+  /etc/secubox/ai/ r,
+  /etc/secubox/ai/empreintes.local.toml r,
+
+  # Clé du compte de lecture de gk2 (#3720), remise par LoadCredential= ; mémoire libre pour les mesures.
+  /run/credentials/secubox-ai-veille.service/ r,
+  /run/credentials/secubox-ai-veille.service/ai-lecture r,
+  @{PROC}/meminfo r,
+
+  # veille.db (WAL : -wal, -shm), sauvegardes avant migration, tmp/ (SQLITE_TMPDIR). L'espace libre se lit par statvfs.
+  /var/lib/secubox/ai/ r,
+  /var/lib/secubox/ai/** rwk,
+
+  network unix stream,
+  network unix dgram,
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+}

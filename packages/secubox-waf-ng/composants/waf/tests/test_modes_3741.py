@@ -184,3 +184,13 @@ def test_page_modes_et_onglet():
     assert "fenetre" not in page                      # pas de fenêtre par catégorie (fenêtre escalate globale)
     onglets = (www / "index.html").read_text(encoding="utf-8")
     assert 'data-tab="modes"' in onglets and "modes: 'modes'" in onglets
+
+
+def test_php_hotes_tous(c):
+    c.ctl.reponses[("wafctl", "php-hotes", "lister")] = (0, {"ok": True, "vhosts": ["a.ex.fr"], "profils_vhosts": {},
+                                                           "php_services": [], "php_hotes": ["^.*$"]})
+    c.ctl.reponses[("wafctl", "php-hotes", "ecrire")] = (0, {"ok": True})
+    r = c.post("/php-hotes", json={"tous": True})
+    assert r.status_code == 200 and r.json()["tous"] is True and r.json()["hotes"][0]["couvert"] is True
+    assert (["sudo", "-n", "/usr/sbin/wafctl", "php-hotes", "ecrire"], {"acteur": "admin", "tous": True}) in c.ctl.appels
+    assert c.post("/php-hotes", json={}).status_code == 422

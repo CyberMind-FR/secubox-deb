@@ -104,6 +104,7 @@ override_dh_auto_install:
 	install -m 755 composants/waf/scripts/waf-rules-sync debian/secubox-waf-ng/usr/sbin/waf-rules-sync
 	# #3716 : gardes et bans de bloc /24 (table nft inet secubox_waf_blocs), appelé par wafctl et l'unité secubox-waf-blocs.
 	install -m 755 composants/waf/scripts/waf-blocs debian/secubox-waf-ng/usr/sbin/waf-blocs
+	install -m 755 composants/waf/scripts/secubox-waf-leurres-cle debian/secubox-waf-ng/usr/sbin/secubox-waf-leurres-cle
 	# #3716 (P8) : profil AppArmor de waf-blocs, livré en complain ; enforce après le banc gk6. Chargé par le postinst.
 	install -D -m 0644 apparmor/usr.sbin.waf-blocs \
 	  debian/secubox-waf-ng/etc/apparmor.d/usr.sbin.waf-blocs
@@ -156,6 +157,7 @@ override_dh_installsystemd:
 	dh_installsystemd --name=secubox-actord
 	dh_installsystemd --name=secubox-actord-ingest --no-start
 	# #498 : rate-limit nft pre-inspection, jusqu'ici orpheline dans /etc.
+	install -m 0644 systemd/secubox-waf-leurres-cle.service debian/secubox-waf-ng/lib/systemd/system/
 	install -m 0644 systemd/secubox-waf-ratelimit.service \
 	  debian/secubox-waf-ng/lib/systemd/system/
 	dh_installsystemd --name=secubox-waf-ratelimit

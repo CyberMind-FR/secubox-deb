@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# #3795 : crée la clé locale du HMAC des mots de passe tentés sur les leurres (32 octets aléatoires, root:secubox 0640) SI ELLE
+# MANQUE ; ne la tourne jamais. Sortie 0 si la clé existe (déjà là ou créée), 1 sinon (message sur stderr).
+# SECUBOX_LEURRES_CLE, SECUBOX_LEURRES_GROUPE, SECUBOX_LEURRES_PROPRIETAIRE : chemin, groupe, propriétaire (tests seulement ; défauts
+# /etc/secubox/secrets/leurres-hmac.key, secubox).
+set -u
+CLE="${SECUBOX_LEURRES_CLE:-/etc/secubox/secrets/leurres-hmac.key}"
+[ -s "$CLE" ] && exit 0
+TMP="$CLE.tmp.$$"
+umask 077
+GROUPE="${SECUBOX_LEURRES_GROUPE:-secubox}"
+PROPRIO="${SECUBOX_LEURRES_PROPRIETAIRE:-root}"
+if head -c 32 /dev/urandom > "$TMP" && [ "$(wc -c < "$TMP")" -eq 32 ] && chown "$PROPRIO:$GROUPE" "$TMP" \
+        && chmod 0640 "$TMP" && mv -f "$TMP" "$CLE"; then
+    exit 0
+fi
+rm -f "$TMP"
+echo "secubox-waf-leurres-cle: ERREUR, clé $CLE non créée : l'API du WAF rendra mot_de_passe_hmac=null" >&2
+exit 1

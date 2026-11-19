@@ -117,6 +117,7 @@ def _client(monkeypatch, tmp_path, lignes, etats=None, actifs=()):
     appels = []
     monkeypatch.setattr(waf, "_unban_ip", lambda ip: (appels.append(ip) or (True, "ok")))
     waf.app.dependency_overrides[require_lecture] = lambda: {"sub": "lecteur"}
+    waf.app.dependency_overrides[waf.require_lecture_ai] = lambda: {"sub": "lecteur"}
     waf.app.dependency_overrides[require_jwt] = lambda: {"sub": "admin"}
     return TestClient(waf.app), waf, appels
 

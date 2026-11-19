@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# /etc/logrotate.d/secubox-ai — journal du module secubox-ai (#3583), hors de /var/log/secubox (la règle générale de
+# secubox-core ne le voit pas).
+#
+# RENOMMAGE, PAS copytruncate : api/journal.py rouvre le fichier (O_APPEND | O_CREAT, 0600) à CHAQUE événement, donc
+# une ligne écrite après le renommage part dans un nouveau fichier, créé par l'API elle-même avec ses droits : aucune
+# perte ni troncature en pleine écriture (ce que copytruncate risque), et « nocreate » laisse l'API seule créatrice.
+# « su secubox-ai secubox-ai » : logrotate agit avec le compte du dossier (0750 secubox-ai), jamais en root dans un
+# dossier qu'un autre compte peut modifier.
+/var/lib/secubox/ai/journal.jsonl {
+    su secubox-ai secubox-ai
+    weekly
+    # maxsize ET NON size : size annulerait le critère temporel.
+    maxsize 5M
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    nocreate
+}

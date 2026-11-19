@@ -62,8 +62,34 @@ func propositionsDepuis(acteurs []*graph.Actor, shadow bool) []Proposition {
 	return out
 }
 
+// groupesLecteurs : groupes candidats des fichiers publiés, dans l'ordre. `actord-lecture` (#3720) : groupe en
+// LECTURE SEULE (aucun fichier n'y est inscriptible) dont sont membres sbxwaf (`secubox-waf`) et l'API du WAF
+// (`secubox`) ; sbx-actord le reçoit par `SupplementaryGroups=actord-lecture`. Repli `actord-ingest` (ancien
+// comportement) si le groupe manque.
+var groupesLecteurs = []string{"actord-lecture", "actord-ingest"}
+
+// chownGroupe est remplaçable par les tests.
+var chownGroupe = func(chemin string, gid int) error { return os.Chown(chemin, -1, gid) }
+
+// mettreAuGroupeLecteur met `chemin` au premier groupe candidat qui existe et que le processus peut donner (membre).
+func mettreAuGroupeLecteur(chemin string) {
+	for _, nom := range groupesLecteurs {
+		g, err := user.LookupGroup(nom)
+		if err != nil {
+			continue
+		}
+		gid, err := strconv.Atoi(g.Gid)
+		if err != nil {
+			continue
+		}
+		if chownGroupe(chemin, gid) == nil {
+			return
+		}
+	}
+}
+
 // ecrirePropositions écrit le fichier de façon atomique (le lecteur ne voit jamais un fichier à moitié écrit) en 0640, puis le met au groupe
-// `actord-ingest` (celui de sbxwaf) quand il existe : un membre d'un groupe peut y remettre son fichier sans capacité.
+// lecteur (`mettreAuGroupeLecteur`) : un membre d'un groupe peut y remettre son fichier sans capacité.
 func ecrirePropositions(chemin string, p []Proposition, shadow bool, now time.Time) error {
 	b, err := json.Marshal(FichierPropositions{GenereLe: now.Unix(), Shadow: shadow, Propositions: p})
 	if err != nil {
@@ -73,11 +99,7 @@ func ecrirePropositions(chemin string, p []Proposition, shadow bool, now time.Ti
 	if err := os.WriteFile(tmp, b, 0o640); err != nil {
 		return err
 	}
-	if g, err := user.LookupGroup("actord-ingest"); err == nil {
-		if gid, err := strconv.Atoi(g.Gid); err == nil {
-			_ = os.Chown(tmp, -1, gid)
-		}
-	}
+	mettreAuGroupeLecteur(tmp)
 	_ = os.Chmod(tmp, 0o640)
 	return os.Rename(tmp, filepath.Clean(chemin))
 }

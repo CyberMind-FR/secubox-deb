@@ -344,7 +344,7 @@ def _hotes(etat: dict) -> dict:
         out.append({"hote": h, "service": service, "conteneur_php": "oui" if par_service else "inconnu",
                     "couvert": par_service or any(r.search(h) for r in compiles),
                     "explicite": h in explicites})
-    return {"hotes": out, "motifs": motifs, "routes_lisibles": vhosts is not None}
+    return {"hotes": out, "motifs": motifs, "tous": "^.*$" in motifs, "routes_lisibles": vhosts is not None}
 
 
 @router.get("/php-hotes", dependencies=[Depends(require_lecture)])
@@ -354,16 +354,26 @@ def php_hotes():
 
 class HotesPHP(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    hotes: List[str] = Field(max_length=200)
+    hotes: Optional[List[str]] = Field(default=None, max_length=200)
+    tous: Optional[bool] = None       # « Tout couvrir » : motif ^.*$, vhosts futurs compris
 
 
 @router.post("/php-hotes")
 def php_hotes_ecrire(corps: HotesPHP, user: dict = Depends(require_jwt)):
     """Liste EXPLICITE des hôtes cochés (motifs ^nom\\.domaine$) ; les autres motifs restent. Jamais de cochage
     automatique : seule cette route, sur geste de l'administrateur, écrit."""
-    hotes = sorted({h.strip().lower() for h in corps.hotes})
-    if any(not _HOTE.fullmatch(h) for h in hotes):
-        raise HTTPException(422, detail={"motif": "hote"})
-    _ecrire([WAFCTL, "php-hotes", "ecrire"], {"acteur": _acteur(user), "hotes": hotes}, "waf-php-hotes",
-            "explicites " + (",".join(hotes) or "aucun"), user)
+    if corps.hotes is None and corps.tous is None:
+        raise HTTPException(422, detail={"motif": "vide"})
+    entree: dict = {"acteur": _acteur(user)}
+    detail = []
+    if corps.hotes is not None:
+        hotes = sorted({h.strip().lower() for h in corps.hotes})
+        if any(not _HOTE.fullmatch(h) for h in hotes):
+            raise HTTPException(422, detail={"motif": "hote"})
+        entree["hotes"] = hotes
+        detail.append("explicites " + (",".join(hotes) or "aucun"))
+    if corps.tous is not None:
+        entree["tous"] = corps.tous
+        detail.append("tous " + ("oui" if corps.tous else "non"))
+    _ecrire([WAFCTL, "php-hotes", "ecrire"], entree, "waf-php-hotes", " ; ".join(detail), user)
     return _hotes(_ctl([WAFCTL, "php-hotes", "lister"]))

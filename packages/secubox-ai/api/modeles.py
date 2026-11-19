@@ -1,0 +1,538 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""Modèles de texte (#3583, tâche 12) : catalogue, installés, téléchargement Hugging Face, activation, suppression.
+
+Fichiers `<etat>/modeles/*.gguf` ; liens symboliques refusés à la liste comme à l'activation. Tout accès à Hugging Face
+passe par la garde SSRF de `recherche` (connexion épinglée, adresses publiques, redirections revérifiées à chaque saut :
+le CDN de Hugging Face est atteint par redirection). Le fichier est écrit en flux dans `<nom>.part`, empreinte SHA-256
+calculée au fil de l'eau, jamais chargé en mémoire. Le journal ne reçoit ni adresse ni dépôt.
+"""
+import asyncio
+import hashlib
+import json
+import os
+import re
+import secrets
+import shutil
+import tempfile
+from datetime import date
+
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
+
+from api import moteurs, recherche, reglages
+from api.journal import journal
+from secubox_core.auth import require_jwt
+
+PLANCHER_DISQUE = 5 * 1024**3
+DEPOT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,100}$")
+DELAI_TELECHARGEMENT_S = 120       # délai de lecture entre deux blocs (pas durée totale)
+DELAI_CONNEXION_S = 10             # délai de connexion (distinct du délai de lecture)
+RETENTATIVES = 3                   # reprises automatiques après une erreur réseau
+ATTENTES_S = (2, 5, 15)            # attente avant chaque reprise
+API_HF_MAX = 5 * 1024**2           # réponse JSON de l'API Hugging Face
+telechargements: dict = {}         # nom -> {"recu", "total"[, "erreur"]} : suivi en mémoire, exposé par GET /modeles
+
+# Suggestions seulement : la taille et la licence font foi au moment du téléchargement, lues sur le dépôt.
+# Les projecteurs `mmproj` du POC ne sont pas repris : l'étape 1 ne lit pas les images.
+CATALOGUE = [
+    {"nom": "Llama 3.2 1B", "depot": "bartowski/Llama-3.2-1B-Instruct-GGUF", "fichier": "Llama-3.2-1B-Instruct-Q4_K_M.gguf", "mo": 770, "licence": "llama3.2"},
+    {"nom": "Phi-4 mini", "depot": "bartowski/microsoft_Phi-4-mini-instruct-GGUF", "fichier": "microsoft_Phi-4-mini-instruct-Q4_K_M.gguf", "mo": 2376, "licence": "à lire sur le dépôt"},
+    {"nom": "Gemma 3 4B", "depot": "bartowski/google_gemma-3-4b-it-GGUF", "fichier": "google_gemma-3-4b-it-Q4_K_M.gguf", "mo": 2374, "licence": "à lire sur le dépôt"},
+    {"nom": "Mistral 7B", "depot": "bartowski/Mistral-7B-Instruct-v0.3-GGUF", "fichier": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf", "mo": 4170, "licence": "apache-2.0"},
+    {"nom": "Llama 3.1 8B", "depot": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "fichier": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", "mo": 4692, "licence": "llama3.1"},
+    {"nom": "Kev 4B (récent)", "depot": "ggml-org/Kev-4B-GGUF", "fichier": "Kev-4B-Q4_K_M.gguf", "mo": 2870, "licence": "apache-2.0"},
+    {"nom": "Ministral 3 3B", "depot": "ggml-org/Ministral-3-3B-Instruct-2512-GGUF", "fichier": "Ministral-3-3B-Instruct-2512-Q8_0.gguf", "mo": 3480, "licence": "apache-2.0"},
+    {"nom": "Ministral 3 3B raisonnement", "depot": "ggml-org/Ministral-3-3B-Reasoning-2512-GGUF", "fichier": "Ministral-3-3B-Reasoning-2512-Q8_0.gguf", "mo": 3480, "licence": "apache-2.0"},
+    {"nom": "Kev 9B (récent)", "depot": "ggml-org/Kev-9B-GGUF", "fichier": "Kev-9B-Q4_K_M.gguf", "mo": 6040, "licence": "apache-2.0"},
+    {"nom": "Clef Flash", "depot": "ggml-org/Clef-Flash-GGUF", "fichier": "Clef-Flash-Q4_K_M.gguf", "mo": 6350, "licence": "apache-2.0"},
+    {"nom": "Ministral 3 8B", "depot": "ggml-org/Ministral-3-8B-Instruct-2512-GGUF", "fichier": "Ministral-3-8B-Instruct-2512-Q8_0.gguf", "mo": 8600, "licence": "apache-2.0"},
+    {"nom": "GPT-OSS 20B", "depot": "ggml-org/gpt-oss-20b-GGUF", "fichier": "gpt-oss-20b-MXFP4.gguf", "mo": 11548, "licence": "apache-2.0"},
+    # Qwen 3.5 9B distillé des réponses de DeepSeek-V4-Pro (Jackrong) ; « heretic » = refus retirés (xtools-at).
+    {"nom": "DeepSeek-V4-Pro Qwen3.5 9B non censuré", "depot": "Sakura721/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-GGUF", "fichier": "DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-Q4_K_M.gguf", "mo": 5368, "licence": "apache-2.0"},
+    {"nom": "DeepSeek-V4-Pro Qwen3.5 9B non censuré (Q5)", "depot": "mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-GGUF", "fichier": "DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic.Q5_K_M.gguf", "mo": 6168, "licence": "apache-2.0"},
+    {"nom": "DeepSeek-V4-Pro Qwen3.5 9B", "depot": "mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-GGUF", "fichier": "DeepSeek-V4-Pro-Qwen3.5-9B.Q4_K_M.gguf", "mo": 5512, "licence": "apache-2.0"},
+    # Ajouts du 2026-11-12 : dépôts, fichiers, tailles et licences lus sur l'API Hugging Face le jour même (non restreints).
+    {"nom": "Qwen3 0.6B", "depot": "bartowski/Qwen_Qwen3-0.6B-GGUF", "fichier": "Qwen_Qwen3-0.6B-Q4_K_M.gguf", "mo": 484, "licence": "à lire sur le dépôt"},
+    {"nom": "Qwen3 1.7B", "depot": "bartowski/Qwen_Qwen3-1.7B-GGUF", "fichier": "Qwen_Qwen3-1.7B-Q4_K_M.gguf", "mo": 1282, "licence": "à lire sur le dépôt"},
+    {"nom": "Qwen3 4B", "depot": "bartowski/Qwen_Qwen3-4B-GGUF", "fichier": "Qwen_Qwen3-4B-Q4_K_M.gguf", "mo": 2497, "licence": "à lire sur le dépôt"},
+    {"nom": "Qwen3 8B", "depot": "bartowski/Qwen_Qwen3-8B-GGUF", "fichier": "Qwen_Qwen3-8B-Q4_K_M.gguf", "mo": 5028, "licence": "apache-2.0"},
+    {"nom": "Qwen3 14B", "depot": "bartowski/Qwen_Qwen3-14B-GGUF", "fichier": "Qwen_Qwen3-14B-Q4_K_M.gguf", "mo": 9002, "licence": "à lire sur le dépôt"},
+    {"nom": "Qwen3 30B-A3B (MoE, 32 Go conseillés)", "depot": "bartowski/Qwen_Qwen3-30B-A3B-GGUF", "fichier": "Qwen_Qwen3-30B-A3B-Q4_K_M.gguf", "mo": 18632, "licence": "apache-2.0"},
+    {"nom": "Gemma 3 1B", "depot": "bartowski/google_gemma-3-1b-it-GGUF", "fichier": "google_gemma-3-1b-it-Q4_K_M.gguf", "mo": 806, "licence": "gemma"},
+    {"nom": "Gemma 3 12B", "depot": "bartowski/google_gemma-3-12b-it-GGUF", "fichier": "google_gemma-3-12b-it-Q4_K_M.gguf", "mo": 7301, "licence": "gemma"},
+    {"nom": "Gemma 3n E4B", "depot": "unsloth/gemma-3n-E4B-it-GGUF", "fichier": "gemma-3n-E4B-it-Q4_K_M.gguf", "mo": 4539, "licence": "gemma"},
+    {"nom": "Gemma 3 4B non censuré (abliterated)", "depot": "mlabonne/gemma-3-4b-it-abliterated-GGUF", "fichier": "gemma-3-4b-it-abliterated.q4_k_m.gguf", "mo": 2490, "licence": "gemma"},
+    {"nom": "Gemma 3 12B non censuré (abliterated)", "depot": "mlabonne/gemma-3-12b-it-abliterated-GGUF", "fichier": "gemma-3-12b-it-abliterated.q4_k_m.gguf", "mo": 7301, "licence": "gemma"},
+    {"nom": "Phi-4 14B", "depot": "bartowski/phi-4-GGUF", "fichier": "phi-4-Q4_K_M.gguf", "mo": 9053, "licence": "mit"},
+    {"nom": "Phi-4 mini raisonnement", "depot": "bartowski/microsoft_Phi-4-mini-reasoning-GGUF", "fichier": "microsoft_Phi-4-mini-reasoning-Q4_K_M.gguf", "mo": 2492, "licence": "mit"},
+    {"nom": "DeepSeek-R1 distillé Qwen 7B", "depot": "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF", "fichier": "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", "mo": 4683, "licence": "à lire sur le dépôt"},
+    {"nom": "DeepSeek-R1 distillé Qwen 14B", "depot": "bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF", "fichier": "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf", "mo": 8988, "licence": "à lire sur le dépôt"},
+    {"nom": "Qwen2.5 Coder 7B", "depot": "bartowski/Qwen2.5-Coder-7B-Instruct-GGUF", "fichier": "Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf", "mo": 4683, "licence": "apache-2.0"},
+    {"nom": "Qwen2.5 Coder 14B", "depot": "bartowski/Qwen2.5-Coder-14B-Instruct-GGUF", "fichier": "Qwen2.5-Coder-14B-Instruct-Q4_K_M.gguf", "mo": 8988, "licence": "apache-2.0"},
+    {"nom": "SmolLM3 3B", "depot": "bartowski/HuggingFaceTB_SmolLM3-3B-GGUF", "fichier": "HuggingFaceTB_SmolLM3-3B-Q4_K_M.gguf", "mo": 1915, "licence": "apache-2.0"},
+    {"nom": "Granite 3.3 8B", "depot": "bartowski/ibm-granite_granite-3.3-8b-instruct-GGUF", "fichier": "ibm-granite_granite-3.3-8b-instruct-Q4_K_M.gguf", "mo": 4943, "licence": "apache-2.0"},
+    {"nom": "Mistral Nemo 12B", "depot": "bartowski/Mistral-Nemo-Instruct-2407-GGUF", "fichier": "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf", "mo": 7477, "licence": "apache-2.0"},
+    {"nom": "Mistral Small 3.2 24B", "depot": "bartowski/mistralai_Mistral-Small-3.2-24B-Instruct-2506-GGUF", "fichier": "mistralai_Mistral-Small-3.2-24B-Instruct-2506-Q4_K_M.gguf", "mo": 14334, "licence": "apache-2.0"},
+    {"nom": "Hermes 3 Llama 3.1 8B", "depot": "NousResearch/Hermes-3-Llama-3.1-8B-GGUF", "fichier": "Hermes-3-Llama-3.1-8B.Q4_K_M.gguf", "mo": 4921, "licence": "llama3"},
+    {"nom": "Llama 3.2 3B", "depot": "bartowski/Llama-3.2-3B-Instruct-GGUF", "fichier": "Llama-3.2-3B-Instruct-Q4_K_M.gguf", "mo": 2019, "licence": "llama3.2"},
+]
+
+
+def nom_valide(nom) -> bool:
+    """`[A-Za-z0-9._-]+.gguf` : ni `/`, ni `..`, ni point initial (la regex de reglages l'impose déjà)."""
+    return isinstance(nom, str) and bool(reglages.NOM_MODELE.match(nom)) and ".." not in nom
+
+
+genre_fichier = reglages.genre_fichier
+
+
+def _fichiers(tous=False) -> dict:
+    """Liste blanche : les modèles réellement présents (fichiers réguliers, ni lien ni nom douteux).
+    `tous` : annexes et découpes comprises (gestionnaire de fichiers)."""
+    sortie = {}
+    try:
+        for f in sorted(reglages.modeles_dir().glob("*.gguf")):
+            if nom_valide(f.name) and not f.is_symlink() and f.is_file() and (tous or genre_fichier(f.name) == "modele"):
+                sortie[f.name] = f
+    except OSError:
+        pass
+    return sortie
+
+
+def _fiche(f) -> dict:
+    infos = {}
+    meta = f.with_suffix(".json")
+    try:
+        if meta.is_file() and not meta.is_symlink():
+            lu = json.loads(meta.read_text(encoding="utf-8"))
+            if isinstance(lu, dict):
+                infos = lu
+    except (OSError, ValueError):
+        pass
+    # Étape 1 : texte seulement (aucun projecteur `--mmproj` n'est chargé par le contrôleur).
+    return {**infos, "id": f.name, "taille": f.stat().st_size, "medias": ["texte"]}
+
+
+RE_PART = re.compile(r"^(?P<nom>[A-Za-z0-9][A-Za-z0-9._-]{0,150}\.gguf)(?:\.[0-9a-f]{8})?\.(?P<ext>part|faux)$")
+
+
+def _restes() -> dict:
+    """`.part` (téléchargements, y compris abandonnés) et `.faux` (empreinte fausse) : liste blanche nom -> (fichier, nom du modèle, ext)."""
+    sortie = {}
+    try:
+        for f in sorted(reglages.modeles_dir().iterdir()):
+            m = RE_PART.match(f.name)
+            if m and ".." not in f.name and not f.is_symlink() and f.is_file():
+                sortie[f.name] = (f, m["nom"], m["ext"])
+    except OSError:
+        pass
+    return sortie
+
+
+def _en_cours(nom) -> bool:
+    return nom in telechargements and "erreur" not in telechargements[nom]
+
+
+def _dossier(creer=False):
+    d = reglages.modeles_dir()
+    if creer:
+        d.mkdir(mode=0o750, parents=True, exist_ok=True)
+    return d
+
+
+async def _json_hf(url: str) -> dict:
+    """Réponse JSON de l'API Hugging Face, lue par la garde SSRF (fichier temporaire borné, jamais en mémoire entière
+    avant le contrôle de taille). 404 si le dépôt n'existe pas ou est réservé ; 502 si Hugging Face est injoignable."""
+    d = _dossier(creer=True)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".api-", suffix=".tmp")
+    os.close(fd)
+    try:
+        try:
+            await recherche.telecharger_fichier(url, tmp, API_HF_MAX, delai=20)
+        except HTTPException as e:
+            if e.status_code == 502 and re.search(r"\b(401|403|404)$", str(e.detail)):
+                raise HTTPException(404, "dépôt introuvable ou réservé") from None
+            if e.status_code == 502:
+                raise HTTPException(502, "Hugging Face injoignable depuis ce poste (réseau ou DNS)") from None
+            raise HTTPException(502, "réponse de Hugging Face refusée") from None
+        try:
+            with open(tmp, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            raise HTTPException(502, "réponse de Hugging Face illisible") from None
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+async def infos_depot(depot: str) -> dict:
+    if not DEPOT.match(depot):
+        raise HTTPException(422, "dépôt invalide (éditeur/nom)")
+    d = await _json_hf(f"https://huggingface.co/api/models/{depot}?blobs=true")
+    if not isinstance(d, dict):
+        raise HTTPException(502, "réponse de Hugging Face illisible")
+    fichiers = []
+    for s in d.get("siblings") or []:
+        nom = s.get("rfilename") if isinstance(s, dict) else None
+        if isinstance(nom, str) and nom.endswith(".gguf") and "/" not in nom:
+            lfs = s.get("lfs") if isinstance(s.get("lfs"), dict) else {}
+            fichiers.append({"nom": nom, "taille": s.get("size"), "sha256": lfs.get("sha256"), "genre": genre_fichier(nom),
+                             "refuse": reglages.MESSAGE_FORMAT_RETIRE if reglages.format_retire(nom) else None})
+    carte = d.get("cardData") if isinstance(d.get("cardData"), dict) else {}
+    return {"depot": depot, "licence": carte.get("license"), "restreint": bool(d.get("gated")), "fichiers": fichiers}
+
+
+def _empreinte_de(chemin, n):
+    """SHA-256 des `n` premiers octets de `chemin`, ou None si le fichier n'a pas exactement `n` octets au moins."""
+    h, reste = hashlib.sha256(), n
+    with open(chemin, "rb") as f:
+        while reste:
+            bloc = f.read(min(reste, 1024 * 1024))
+            if not bloc:
+                return None
+            h.update(bloc)
+            reste -= len(bloc)
+    return h
+
+
+async def _attendre(secondes):
+    await asyncio.sleep(secondes)
+
+
+def _creer_part(part):
+    # 0640 quel que soit l'umask (os.replace garde le mode) : le moteur, du groupe secubox-ai, doit pouvoir le lire
+    # (secubox-aictl refuse un modèle illisible par le groupe).
+    fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+    try:
+        os.fchmod(fd, 0o640)
+    finally:
+        os.close(fd)
+
+
+async def _recevoir(url, part, nom, taille, progres):
+    """Reçoit le fichier dans `part` ; rend (empreinte SHA-256 du contenu complet, `repris`) où `repris` dit que ce
+    contenu mêle des octets reçus lors d'une tentative précédente. Après une erreur réseau, reprise (HTTP Range) depuis
+    les octets déjà écrits, au plus `RETENTATIVES` fois avec attente croissante. La reprise recalcule d'abord
+    l'empreinte des octets présents et ne vaut que pour ce même fichier (nom, taille attendue) ; au moindre doute
+    (`.part` modifié entre deux tentatives, serveur sans Range, Content-Range incohérent) on repart de zéro, sans
+    compter cette tentative parmi les reprises. Une panne 5xx/429 pendant une reprise garde l'avance. Chaque tentative
+    repasse par la garde SSRF ; le journal ne reçoit ni adresse ni dépôt."""
+    recu, echecs = 0, 0
+    while True:
+        empreinte = None
+        if recu:
+            try:
+                ok = part.is_file() and not part.is_symlink() and part.stat().st_size == recu
+                empreinte = await asyncio.to_thread(_empreinte_de, part, recu) if ok else None
+            except OSError:
+                empreinte = None
+            if empreinte is None:
+                recu = 0
+        if recu >= taille > 0:
+            return empreinte, True            # déjà complet : plus rien à recevoir
+        if empreinte is None:
+            empreinte = hashlib.sha256()
+        progres(recu)
+        try:
+            await recherche.telecharger_fichier(url, part, taille, delai=DELAI_TELECHARGEMENT_S, empreinte=empreinte,
+                                                progres=progres, connexion=DELAI_CONNEXION_S, reprise=recu)
+            return empreinte, recu > 0
+        except recherche.RepriseRefusee:
+            journal("modele.reprise", modele=nom, tentative=echecs + 1, issue="repart_de_zero")
+            recu = 0
+        except recherche.ErreurReseau:
+            if echecs >= RETENTATIVES:
+                raise
+            try:
+                recu = part.stat().st_size
+            except OSError:
+                recu = 0
+            journal("modele.reprise", modele=nom, tentative=echecs + 1, octets=recu, issue="reseau")
+            await _attendre(ATTENTES_S[min(echecs, len(ATTENTES_S) - 1)])
+            echecs += 1
+
+
+async def telecharger(depot, nom, sha, taille, licence):
+    """Télécharge `nom` dans un fichier temporaire propre à ce téléchargement (O_EXCL, `<nom>.<aléa>.part`), flux et
+    empreinte au fil de l'eau hors de la boucle, puis le renomme. Empreinte différente : le fichier devient
+    `<nom>.faux` et la fonction lève HTTPException(409). Autre échec (GGUF invalide, garde SSRF, réseau, taille) :
+    le temporaire est effacé, HTTPException levée."""
+    d = _dossier(creer=True)
+    final, faux = d / nom, d / (nom + ".faux")
+    part = d / f"{nom}.{secrets.token_hex(4)}.part"
+    suivi = telechargements.setdefault(nom, {"recu": 0, "total": taille})
+    suivi["part"] = part.name
+
+    def progres(n):
+        suivi["recu"] = n
+
+    try:
+        _creer_part(part)
+        url = f"https://huggingface.co/{depot}/resolve/main/{nom}"
+        empreinte, repris = await _recevoir(url, part, nom, taille, progres)
+        if repris and empreinte.hexdigest() != str(sha).lower():
+            # Un fichier mêlant plusieurs tentatives a une empreinte fausse : avant de le mettre de côté (plusieurs Go),
+            # une seule nouvelle réception complète, depuis zéro.
+            journal("modele.reprise", modele=nom, issue="empreinte_repart_de_zero")
+            part.unlink(missing_ok=True)
+            _creer_part(part)
+            empreinte, _ = await _recevoir(url, part, nom, taille, progres)
+        if empreinte.hexdigest() != str(sha).lower():
+            faux.unlink(missing_ok=True)
+            os.replace(part, faux)          # gardé pour examen, jamais listé comme modèle ni activable
+            raise HTTPException(409, "empreinte SHA-256 différente : fichier mis de côté (.faux)")
+        with open(part, "rb") as f:
+            if f.read(4) != b"GGUF":
+                raise HTTPException(422, "ce n'est pas un fichier GGUF")
+        os.replace(part, final)
+        meta = final.with_suffix(".json")
+        tmp = meta.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps({"depot": depot, "licence": licence, "sha256": str(sha).lower(),
+                                   "ajoute": date.today().isoformat()}, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, meta)
+        journal("modele.ajout", modele=nom, licence=licence if isinstance(licence, str) else None)
+        telechargements.pop(nom, None)
+    except HTTPException:
+        part.unlink(missing_ok=True)
+        raise
+    except OSError:
+        part.unlink(missing_ok=True)
+        raise HTTPException(500, "écriture impossible") from None
+    except BaseException:
+        part.unlink(missing_ok=True)
+        raise
+
+
+async def _lancer(depot, nom, sha, taille, licence):
+    """Tâche de fond : toute fin anormale (même annulation) est consignée dans le suivi, jamais un nom « en cours »
+    pour toujours ; journal sans adresse ni dépôt."""
+    try:
+        await telecharger(depot, nom, sha, taille, licence)
+    except HTTPException as e:
+        telechargements.setdefault(nom, {"recu": 0, "total": taille})["erreur"] = str(e.detail)[:200]
+        journal("modele.echec", modele=nom, code=e.status_code, cause=str(e.detail)[:200])
+    except BaseException as e:  # noqa: BLE001 — y compris CancelledError
+        telechargements.setdefault(nom, {"recu": 0, "total": taille})["erreur"] = "téléchargement interrompu"
+        journal("modele.echec", modele=nom, cause=type(e).__name__)
+        if not isinstance(e, Exception):
+            raise
+
+
+def _modele(nom) -> object:
+    f = _fichiers().get(nom) if nom_valide(nom) else None
+    if f is None:
+        raise HTTPException(404, "modèle inconnu")
+    return f
+
+
+routeur = APIRouter(prefix="")
+
+
+@routeur.get("/modeles/catalogue", dependencies=[Depends(require_jwt)])
+async def get_catalogue():
+    return {"catalogue": CATALOGUE}
+
+
+@routeur.get("/modeles", dependencies=[Depends(require_jwt)])
+async def get_modeles():
+    return {"actif": reglages.lire_prefs()["moteur"]["modele"],
+            "modeles": [_fiche(f) for f in _fichiers().values()], "telechargements": telechargements}
+
+
+@routeur.get("/modeles/depot", dependencies=[Depends(require_jwt)])
+async def get_depot(depot: str):
+    return await infos_depot(depot)
+
+
+@routeur.post("/modeles", dependencies=[Depends(require_jwt)])
+async def post_modele(taches: BackgroundTasks, corps: dict = Body(...)):
+    depot, nom = str(corps.get("depot", "")), str(corps.get("fichier", ""))
+    if not DEPOT.match(depot) or not nom_valide(nom):
+        raise HTTPException(422, "dépôt ou fichier invalide")
+    if reglages.format_retire(nom):
+        raise HTTPException(422, reglages.MESSAGE_FORMAT_RETIRE)       # avant tout accès réseau
+    if (_dossier() / nom).exists() or _en_cours(nom):
+        raise HTTPException(409, "déjà présent ou en cours")
+    autres = sorted(n for n in telechargements if _en_cours(n))
+    if autres:
+        raise HTTPException(409, "un téléchargement est déjà en cours : " + ", ".join(autres))
+    # Réservation AVANT tout await : deux demandes simultanées du même nom ne passent pas toutes les deux.
+    telechargements[nom] = {"recu": 0, "total": 0}
+    lancee = False
+    try:
+        infos = await infos_depot(depot)
+        choix = next((f for f in infos["fichiers"] if f["nom"] == nom), None)
+        if choix and choix["genre"] != "modele":
+            raise HTTPException(422, "fichier annexe ou modèle découpé : non installable seul")
+        if (not choix or not isinstance(choix["sha256"], str) or not re.fullmatch(r"[0-9a-fA-F]{64}", choix["sha256"])
+                or not isinstance(choix["taille"], int) or isinstance(choix["taille"], bool) or choix["taille"] <= 0):
+            raise HTTPException(422, "fichier absent du dépôt, ou sans empreinte vérifiable")
+        if infos["restreint"]:
+            raise HTTPException(403, "dépôt réservé : conditions à accepter chez l'éditeur")
+        if shutil.disk_usage(_dossier(creer=True)).free - choix["taille"] < PLANCHER_DISQUE:
+            raise HTTPException(507, "place insuffisante : 5 Gio doivent rester libres")
+        if (_dossier() / nom).exists():
+            raise HTTPException(409, "déjà présent ou en cours")
+        telechargements[nom]["total"] = choix["taille"]
+        taches.add_task(_lancer, depot, nom, choix["sha256"], choix["taille"], infos["licence"])
+        lancee = True
+    finally:
+        if not lancee:
+            telechargements.pop(nom, None)       # refus : le nom est libéré
+    return {"ok": True}
+
+
+@routeur.post("/modeles/{nom}/activer", dependencies=[Depends(require_jwt)])
+async def activer(nom: str):
+    """Écrit la préférence, puis, si le moteur local tourne, le redémarre sur ce modèle et attend qu'il réponde.
+    Refus mémoire ou erreur du contrôleur : retour arrière (ancien modèle réécrit, démarrage de l'ancien demandé),
+    503 avec le message du contrôleur."""
+    _modele(nom)
+    if reglages.format_retire(nom):
+        raise HTTPException(422, reglages.MESSAGE_FORMAT_RETIRE)
+    avant = reglages.lire_prefs()["moteur"]["modele"]
+    reglages.ecrire_prefs(reglages.valider({"moteur": {"modele": nom}}))
+    if await moteurs._sonde(moteurs._local(), 2):
+        try:
+            await moteurs.changer_modele_local()
+        except HTTPException:
+            prefs = reglages.lire_prefs()
+            prefs["moteur"]["modele"] = avant
+            reglages.ecrire_prefs(prefs)
+            journal("modele.activer", modele=nom, issue="refus")
+            await asyncio.to_thread(moteurs.deposer_demande, "demarrer")   # l'ancien moteur revient
+            raise
+    journal("modele.activer", modele=nom, issue="ok")
+    return {"ok": True}
+
+
+@routeur.delete("/modeles/{nom}", dependencies=[Depends(require_jwt)])
+async def supprimer(nom: str):
+    f = _modele(nom)
+    if reglages.lire_prefs()["moteur"]["modele"] == nom:
+        raise HTTPException(409, "modèle actif : en activer un autre d'abord")
+    f.unlink()
+    f.with_suffix(".json").unlink(missing_ok=True)
+    journal("modele.suppression", modele=nom)
+    return {"ok": True}
+
+
+# ---- gestionnaire de fichiers GGUF (dossier des modèles) : déclaré avant `/medias/{dossier}` (main.py inclut ce routeur le premier)
+def _refus_suppression(nom, actif):
+    return "modèle actif : en activer un autre d'abord" if nom == actif else None
+
+
+@routeur.get("/medias/gguf", dependencies=[Depends(require_jwt)])
+async def get_gguf():
+    moteur_actif = await moteurs._sonde(moteurs._local(), 2)
+
+    def lire():
+        actif = reglages.lire_prefs()["moteur"]["modele"]
+        sortie = []
+        for nom, f in _fichiers(tous=True).items():
+            meta = {}
+            try:
+                mj = f.with_suffix(".json")
+                if mj.is_file() and not mj.is_symlink():
+                    lu = json.loads(mj.read_text(encoding="utf-8"))
+                    meta = lu if isinstance(lu, dict) else {}
+            except (OSError, ValueError):
+                pass
+            sortie.append({"nom": nom, "genre": genre_fichier(nom), "taille": f.stat().st_size, "associes": [],
+                           "provenance": {c: meta.get(c) for c in ("depot", "licence", "sha256", "ajoute") if meta.get(c)},
+                           "actif": nom == actif, "refus": _refus_suppression(nom, actif)})
+        parts = [{"nom": n, "taille": f.stat().st_size, "en_cours": _en_cours(modele) and telechargements[modele].get("part") == n,
+                  "genre": "faux" if ext == "faux" else "part"} for n, (f, modele, ext) in _restes().items()]
+        return {"fichiers": sortie, "parts": parts, "actif": actif, "moteur_actif": moteur_actif,
+                "disque_libre": shutil.disk_usage(_dossier(creer=True)).free}
+    return await asyncio.to_thread(lire)
+
+
+@routeur.delete("/medias/gguf/{nom}", dependencies=[Depends(require_jwt)])
+async def supprimer_gguf(nom: str):
+    f = _fichiers(tous=True).get(nom) if nom_valide(nom) else None     # liste blanche : aucun chemin du client n'est suivi
+    if f is None:
+        raise HTTPException(404, "fichier inconnu")
+    genre, taille = genre_fichier(nom), f.stat().st_size
+    raison = _refus_suppression(nom, reglages.lire_prefs()["moteur"]["modele"])
+    if raison:
+        journal("modele.fichier_suppression", genre=genre, taille=taille, issue="refuse")
+        raise HTTPException(409, raison)
+    f.unlink()
+    f.with_suffix(".json").unlink(missing_ok=True)
+    journal("modele.fichier_suppression", genre=genre, taille=taille, modele=nom, issue="ok")
+    return {"ok": True}
+
+
+@routeur.delete("/medias/gguf-part/{nom}", dependencies=[Depends(require_jwt)])
+async def supprimer_part(nom: str):
+    reste = _restes().get(nom)
+    if reste is None:
+        raise HTTPException(404, "fichier inconnu")
+    f, modele, _ext = reste
+    taille = f.stat().st_size
+    if _en_cours(modele) and telechargements[modele].get("part") == nom:
+        journal("modele.part_suppression", taille=taille, issue="refuse")
+        raise HTTPException(409, "téléchargement en cours")
+    f.unlink()
+    journal("modele.part_suppression", taille=taille, issue="ok")
+    return {"ok": True}
+
+
+# ---- dépôts Hugging Face favoris (liste de la page) ----
+DEPOTS_MAX = 200
+
+
+def _fichier_depots():
+    return reglages.etat_dir() / "depots.json"
+
+
+def lire_depots() -> list:
+    try:
+        d = json.loads(_fichier_depots().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [x for x in d if isinstance(x, str) and DEPOT.match(x)] if isinstance(d, list) else []
+
+
+def _ecrire_depots(liste):
+    f = _fichier_depots()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps(liste, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, f)
+
+
+@routeur.get("/depots", dependencies=[Depends(require_jwt)])
+async def get_depots():
+    return {"depots": lire_depots()}
+
+
+@routeur.post("/depots", dependencies=[Depends(require_jwt)])
+async def post_depot(corps: dict = Body(...)):
+    depot = str(corps.get("depot", "")).strip()
+    if not DEPOT.match(depot):
+        raise HTTPException(422, "dépôt invalide (éditeur/nom)")
+    liste = lire_depots()
+    if depot not in liste:
+        if len(liste) >= DEPOTS_MAX:
+            raise HTTPException(422, "trop de dépôts dans la liste")
+        _ecrire_depots([*liste, depot])
+        journal("depot.ajout")                  # jamais le nom du dépôt
+    return {"ok": True}
+
+
+@routeur.delete("/depots/{editeur}/{nom}", dependencies=[Depends(require_jwt)])
+async def delete_depot(editeur: str, nom: str):
+    depot = f"{editeur}/{nom}"
+    if not DEPOT.match(depot):
+        raise HTTPException(422, "dépôt invalide (éditeur/nom)")
+    liste = lire_depots()
+    if depot in liste:
+        _ecrire_depots([d for d in liste if d != depot])
+        journal("depot.retrait")
+    return {"ok": True}

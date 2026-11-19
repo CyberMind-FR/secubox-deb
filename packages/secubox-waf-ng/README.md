@@ -208,6 +208,58 @@ jeton. L'unité livrée porte `NoNewPrivileges=false` : les gestes passent par `
 **AppArmor** : `/etc/apparmor.d/usr.sbin.waf-blocs` est livré en **complain** ; il passe en enforce après relecture
 des journaux au banc gk6.
 
+## Lectures de la veille V2 et compte `ai-lecture` (#3720, 1.41.0)
+
+Garde `require_lecture_ou_compte("ai-lecture")` (secubox-core ≥ 1.8.35) : **sans porteur**, `require_lecture`
+inchangé (session, tableau de bord LAN) ; **porteur EdDSA** ⇒ jeton du compte `ai-lecture` (portée `waf-lecture`,
+clé publique posée par `wafctl cle-ai-lecture ajouter`), lié à `GET` et au **chemin exact vu par l'application**, ou
+401 (jamais de repli anonyme). Les paramètres de requête ne sont pas liés : chaque route les borne (hors bornes ⇒ 422).
+
+**Chemin à signer (réclamation `chemin`)** : le serveur d'administration (`location /api/v1/waf/ { proxy_pass
+http://unix:/run/secubox/waf.sock:/; }`) retire le préfixe ; uvicorn (`api.main:app`, sans `root_path`) voit le
+chemin SANS `/api/v1/waf`. gk3 appelle `https://<gk2>/api/v1/waf/menaces/flux?…` et signe `chemin = "/menaces/flux"`.
+
+| Appel (gk3) | Chemin signé | Paramètres (bornes) |
+|---|---|---|
+| `GET /api/v1/waf/menaces/flux` | `/menaces/flux` | `depuis=<inode>:<octet>` (début de ligne, sinon 422), `max` 1–2000 (500) |
+| `GET /api/v1/waf/enforcement` | `/enforcement` | `depuis` époque 0–4102444800, `limite` 1–1000 (200), `statut` ∈ {`active`,`expired`,`released`} |
+| `GET /api/v1/waf/campaigns` | `/campaigns` | `limite` 1–1000 (20) |
+| `GET /api/v1/waf/mesures` | `/mesures` | `depuis` époque (0), `limite` 1–2000 (500) |
+| `GET /api/v1/waf/actord/propositions` | `/actord/propositions` | — |
+| `GET /api/v1/waf/alerts` | `/alerts` | `limit` 1–500 (50), `aggregate` |
+| `GET /api/v1/waf/bans` | `/bans` | — |
+| `GET /api/v1/waf/decisions` | `/decisions` | — |
+| `GET /api/v1/waf/reevaluations` | `/reevaluations` | `limite` 1–1000 (100) |
+| `GET /api/v1/waf/stats` | `/stats` | — |
+| `GET /api/v1/waf/geoip/<ip>` | `/geoip/<ip>` (l'adresse comprise) | `ip` 2–45 car. `[0-9A-Fa-f:.]` |
+| `GET /api/v1/waf/ai/etat` | `/ai/etat` | — (ouvert à `ai-ban` et `ai-lecture` ; aiguillage par `kid`) |
+
+`/menaces/flux` rend `{"lignes": [{"position": "<inode>:<octet>", "ligne": {…}|null, ["motif"]}], "suivant",
+"rotation", "trou"}` : lecture par `seek`, 1 Mio au plus par réponse, jamais de ligne partielle (la dernière ligne
+en cours d'écriture attend l'appel suivant) ; ligne illisible ⇒ `ligne: null, motif: illisible`, ligne > 64 Kio ⇒
+`motif: trop_longue` (sautée). Leurres de service (#3728, lignes `tool: authwatch` de sbx-authwatch, #3795) : contacts
+(`client_ip`, `agent`, `user_agent`, `host`, `path`) rendus tels quels, mais chaque `essais[]` sans le mot de passe en
+clair — `{compte, mot_de_passe_hmac, mot_de_passe_longueur}` : HMAC-SHA256 à clé locale de gk2
+(`/etc/secubox/secrets/leurres-hmac.key`, 32 octets, root:secubox 0640, LUE DIRECTEMENT par l'API, jamais tournée
+automatiquement ; créée si absente par l'oneshot root `secubox-waf-leurres-cle.service` — `Wants=`/`After=` du drop-in,
+jamais `Requires=` ni `LoadCredential=` : la clé ne bloque jamais l'API — et par le postinst, qui remet une clé 0600
+d'une installation antérieure en root:secubox 0640 sans la régénérer et signale une clé absente sur stderr et dans
+`audit.log`) ; clé absente, illisible ou courte (journalisé au plus toutes les 10 min),
+`mot_de_passe_hmac: null` (jamais le clair ni un SHA-256 nu). Sur ces lignes, les champs bruts (`message`, `ligne`,
+`payload`…) sont retirés et toute chaîne qui contient un mot de passe tenté devient `[masqué]`. Le journal de gk2 garde
+le clair (décision du propriétaire). À inode changé : fin de `waf-threats.log.1` (en clair, `delaycompress`) puis le courant
+depuis 0 (`rotation: true`) ; inode inconnu ou fichier raccourci ⇒ reprise au début de `.1` puis du courant,
+`trou: true`. `/enforcement?depuis=` relit `bans.jsonl` par la **fin** (16 Mio au plus, arrêt 10 min avant
+`depuis`), plus anciens d'abord, `complet` faux si coupé. `/mesures` lit `mesures.jsonl` par la fin (8 Mio au plus).
+`/actord/propositions` : `{"available": false, "motif": "absent"|"illisible"|"invalide"}` si le fichier manque, est
+refusé (droits) ou n'est pas du JSON (> 2 Mio compris) ; une ligne de journal par motif toutes les 10 min.
+**Droits** : sbx-actord (`secubox-actord.service`, `SupplementaryGroups=actord-lecture`) publie
+`actord-propositions.json` et `actord-mesures.json` en 0640 au groupe `actord-lecture` (repli `actord-ingest` si le
+groupe manque). `actord-lecture` est un groupe en **lecture seule** (créé par le postinst, membres `secubox` et
+`secubox-waf`, aucun fichier inscriptible par lui) : sbxwaf et l'API du WAF lisent ; sbx-actord n'entre jamais dans
+`secubox-waf` (écriture de `waf-threats.log`) et `secubox` jamais dans `actord-ingest`.
+Non ouvertes au compte : `/history`, `/bans/history`, `/info`, `/rules`, toute route POST.
+
 ## Migration / cutover
 
 Shadow → parity → **go/no-go gate** (bench `>5×` req/s·core, `p99 < ⅓`, `RSS < ¼`;

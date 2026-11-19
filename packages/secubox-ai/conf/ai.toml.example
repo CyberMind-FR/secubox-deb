@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# Configuration fixe de secubox-ai : /etc/secubox/ai.toml (root, lue seulement par le module).
+# Aucun secret ici : la clé du moteur distant vit dans /etc/secubox/secrets/ai/distant.key.
+
+[distant]
+# Adresse du moteur distant compatible OpenAI (vide = moteur distant non configuré).
+url = ""
+
+[gk2]
+# Passerelle SecuBox de gk2 pour le relevé des menaces et les sources.
+menaces_url = "https://admin.gk2.secubox.in/api/v1"
+sources_url = "https://hall.gk2.secubox.in/api/v1/zia/objets"
+
+[veille]
+# Veille V2 (#3720) : audience des jetons du compte `ai-lecture` = nom de la box gk2 (vérifié par gk2).
+aud = "gk2"
+# Routes lues sur gk2, relatives à menaces_url, et chemin EXACT signé (ce que voit la route de gk2). Défauts dans
+# veille/client.py ; n'en recouvrir une que si gk2 la sert ailleurs, par exemple :
+# [veille.routes.garde_historique]
+# url = "/garde/historique"
+# signe = "/api/v1/garde/historique"
+# Délai de lecture par route, en secondes (défaut 10 ; `enforcement` = bans, 30 : gk2 relit bans.jsonl). Bornes 1..60.
+# [veille.delais]
+# enforcement = 30
+
+# [veille.correlation]
+# Corrélateur (#3721), en secondes. Bornes : fenetre_s 300–86400 ; calme_s 600–2592000 ; clos_s 604800–31536000
+# (jamais sous 7 j : un ban regardé en arrière ne doit pas rouvrir un incident clos). Hors bornes : ramené et journalisé.
+# fenetre_s = 1800
+# calme_s = 21600
+# clos_s = 604800
+
+# [searxng]
+# SearXNG local de la box, essayé avant celui de gk0 (vide = aucun). Adresse du conteneur créé par
+# `searxngctl install` ; à ajouter aussi à IPAddressAllow — fait par l'empaquetage.
+# url = "http://10.100.0.85:8888"
+
+[moteur_local]
+# Modèle GGUF servi par le moteur local (llama-server de secubox-zia-llm) quand aucun n'est activé dans la page.
+# Entrée du catalogue (Llama 3.2 3B, Q4_K_M, 2 Go) : la télécharger depuis l'onglet Modèles suffit au premier usage.
+modele = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"

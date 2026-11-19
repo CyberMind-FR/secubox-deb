@@ -1,0 +1,157 @@
+secubox-ai (0.4.0-1~trixie1) trixie; urgency=medium
+
+  * Console (#3811) : onglets Radar et Chaîne, et graphiques de l'onglet
+    Menaces, portés du POC ai.gk0 (maquettes Radar+Chaîne du 14/11, tendances
+    par pays du 18/11). Lecture seule, chiffres du relevé ou de veille.db.
+  * Radar : compteurs, anneau de gravité, fil des alertes, classement des pays
+    avec hier et J-7 à la même heure en surimpression floutée, série 7 jours
+    et journée heure par heure, messagerie, sites, balayages, campagnes,
+    analyste IA, familles, blocs /24. `?demo=1` (adresses de documentation).
+  * Tendances par pays : la veille échantillonne /waf/stats et /waf/bans par
+    son client signé (routes déjà déclarées) une fois par créneau de 15 min,
+    table pays_echantillons (migration 0004), gardée 8 jours. L'API la lit en
+    lecture seule par une tâche de fond (60 s) : GET /menaces/pays.
+  * Chaîne d'attaque : dossiers d'attaquant de la veille (#3795), étapes
+    repérage → essais → exploitation → persistance avec règles, preuves,
+    heures et première preuve réelle ; entonnoir 24 h ; GET /menaces/chaine.
+  * GET /menaces/series (1 h / 3 h, tranches de 10 min, sans interpolation).
+  * Résumé des menaces (« analyse qui tourne sans fin ») : la page rendait
+    muets un échec, un arrêt et un suivi perdu (tâche oubliée après
+    redémarrage, 404) en laissant la barre figée ; elle les affiche, avec
+    l'étape en cours et la durée. /menaces/releve : resume_en_cours n'est
+    plus que la tâche réellement en cours ; resume_tache, resume_etat,
+    resume_echec ajoutés.
+  * Non repris du POC : panneau Réponses et verdict « cas sûr » des blocs
+    (gestes ai-ban #3716, pas dans ce module), « Écouter le rapport » (voix).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 10:00:00 +0100
+
+secubox-ai (0.3.4-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3720) : délai de lecture propre à la route des bans (`enforcement`,
+    30 s, gk2 relit bans.jsonl), configurable par `[veille.delais]` d'ai.toml
+    (bornes 1..60 s) ; route `posture_overview` (/security-posture/overview,
+    chemin signé `/overview`, nginx retire le préfixe).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Wed, 18 Nov 2026 12:26:17 +0100
+
+secubox-ai (0.3.3-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3795) : identification des outils (veille/outils.py) sur un
+    catalogue d'empreintes sourcées (/usr/share/secubox-ai/empreintes/*.toml,
+    plus /etc/secubox/ai/empreintes.local.toml facultatif). Entrée sans source
+    refusée ; motifs littéraux échappés, entrée tronquée. Un outil n'est
+    nommé qu'avec deux traits indépendants (agent + chemins = un trait),
+    sinon « inconnu » avec les traits observés. dossiers.outils_json rempli ;
+    campagne meme_outil_multi_adresses (outil-nom:<outil>:<début>).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 22:00:00 +0000
+
+secubox-ai (0.3.2-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3795) : dossiers d'attaquant et de campagne (veille/dossiers.py,
+    migration 0003). Clé = acteur d'actord (ACT-nnnn) sinon adresse ; une
+    adresse rattachée plus tard rejoint le dossier de l'acteur. Campagnes par
+    règles meme_outil, meme_bloc, meme_cible. Étapes nommées reperage, essais,
+    exploitation, persistance, chacune avec ses règles, preuves et heures.
+    Passe après la corrélation, dans la boucle de 60 s. Source mesures
+    (/waf/mesures : actor, ip) ; campagnes par vagues closes au calme,
+    sans balayages, membres bornés ; passe incrémentale bornée ; rétention
+    des dossiers vides de plus de 365 j.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 21:00:00 +0000
+
+secubox-ai (0.3.1-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3721) : corrélateur d'incidents déterministe (veille/regles.py,
+    veille/correlation.py), passe de 60 s sur une fenêtre de 30 min. Règles
+    multi_source, multi_service, bloc_mixte, retour_apres_ban,
+    campagne_etendue, leurre_puis_attaque, garde_et_waf. Gravité = maximum des
+    preuves (+1 cran pour leurre_puis_attaque), sans score de confiance ;
+    incident étendu, jamais dupliqué ; calme après 6 h, clos après 7 j.
+    LAN (« local »), autotest du WAF et plages de documentation jamais
+    corrélés. Réglages [veille.correlation] d'ai.toml bornés (clos_s >= 7 j) ;
+    migration 0002 : index evenements(source, horodatage).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 20:00:00 +0000
+
+secubox-ai (0.3.0-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3720) : collecteur de gk2 (veille/client.py, veille/sources/,
+    veille/normaliser.py, veille/collecte.py). GET signés par le compte
+    ai-lecture (jeton lié à GET et au chemin exact), trust_env=False ; menaces,
+    bans, bans actifs, blocs, campagnes, décisions, réévaluations, posture,
+    garde, actord, alertes DNS ; essais des leurres. Normalisation UTC,
+    familles de gk2, « local », plages de documentation et autotest marqués ;
+    insertion idempotente par empreinte ; curseurs ok/en_panne/suspendu ;
+    espacement exponentiel (15 min max) après un refus 401 et une ligne
+    d'audit par motif et par 10 min.
+  * secubox-ai-veille.service : LoadCredential=ai-lecture ; « secubox-aictl
+    preparer » rouvre aussi les adresses de gk2 à la veille ;
+    « secubox-aictl cle-ai-lecture generer » crée la paire Ed25519.
+  * Depends: secubox-core (>= 1.8.35~).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 18:00:00 +0000
+
+secubox-ai (0.2.0-1~trixie1) trixie; urgency=medium
+
+  * Veille V2 (#3719) : second processus secubox-ai-veille (User=secubox-ai, AppArmor
+    enforce, socle de durcissement), seul écrivain régulier de
+    /var/lib/secubox/ai/veille.db (WAL, clés étrangères, busy_timeout 5000).
+    Migrations /usr/lib/secubox/ai/migrations/NNNN-*.sql appliquées au démarrage
+    après sauvegarde veille.db.avant-NNNN (une seule gardée) ; rétention
+    (événements 30 j, incidents 365 j, mesures 30 j, lots de 1 000) ; garde
+    d'espace (collecte suspendue sous 1 Gio libre de /var/lib) ; boucles
+    isolées (une boucle en erreur est journalisée et réessayée). Pas encore de
+    collecte ni de corrélation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 18 Nov 2026 12:00:00 +0000
+
+secubox-ai (0.1.2-1~trixie1) trixie; urgency=medium
+
+  * Moteur local : surcoût mémoire calibré sur gk3 (Llama 3.2 1B, contexte 4096 :
+    tampons de calcul + exécution environ 600 Mo, l'ancien 300 Mo laissait le
+    cgroup à son plafond et évinçait les pages du modèle). MemoryMax = poids +
+    cache(contexte) + max(640 Mo, 0,35 × poids) ; même surcoût dans la règle de
+    refus mémoire et dans le contexte automatique (contexte_auto le retranche
+    avant de dimensionner le cache) (ref #3583).
+  * Défauts : moteur.contexte = 0 (automatique, jamais utilisé avec l'ancien 4096)
+    et moteur.threads = 0 (tous les coeurs disponibles, validé 0..64) ; le
+    contrôleur passe -t <n> au moteur (THREADS dans moteur.env). Les valeurs déjà
+    enregistrées, dont l'ancien 4096, sont conservées (donnée de l'usager) :
+    0 signifie automatique, voir le README.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 18:00:00 +0100
+
+secubox-ai (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * Formats ARM retirés de llama.cpp (Q4_0_4_4, Q4_0_4_8, Q4_0_8_8) : refusés
+    avec un message clair au téléchargement (422 avant tout accès réseau),
+    signalés « refuse » dans la liste du dépôt (grisés dans la page), refusés à
+    l'activation et à la validation des réglages, ignorés par secubox-aictl
+    (constaté sur gk3 : le moteur rejetait Q4_0_8_8) (ref #3583).
+  * Téléchargements de modèles : un seul à la fois (409 avec le nom de celui
+    en cours), délai de lecture de 120 s et de connexion de 10 s, reprise HTTP
+    Range depuis le .part après une erreur réseau (empreinte recalculée sur
+    les octets présents, repart de zéro au moindre doute), 3 reprises
+    automatiques avec attente croissante, chaque tentative repassant par la
+    garde SSRF ; journal sans adresse (ref #3583).
+  * Reprise durcie : Content-Range 206 vérifié en entier (début, fin, total),
+    Accept-Encoding identity, 5xx/429 retentés en gardant l'avance, reprise
+    refusée sans consommer de tentative, empreinte fausse après reprise =
+    une seule réception complète depuis zéro avant .faux ; motif des formats
+    retirés tolérant aux séparateurs (Q4-0-8-8, q4.0.8.8), identique dans
+    l'API et le contrôleur ; bouton Ajouter grisé pendant un téléchargement
+    (ref #3583).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 14:00:00 +0100
+
+secubox-ai (0.1.0-1~trixie1) trixie; urgency=medium
+
+  * Squelette du paquet : application FastAPI, GET /health, GET /status,
+    toute route gardée par require_jwt (ref #3583).
+  * Empaquetage complet : comptes secubox-ai et secubox-ai-moteur, dossiers
+    par descripteur, profils AppArmor (API enforce, moteur complain), route
+    nginx, rotation du journal, activation après preparer (ref #3583).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 14 Nov 2026 09:00:00 +0100

@@ -33,6 +33,7 @@ from .posture.collectors import collect_all
 from .posture.model import DOMAINS
 from .posture.scoring import build_domain_scores, defcon, findings_from, overall_score
 from secubox_core.auth import require_lecture
+from secubox_core.compte_service import require_lecture_ou_compte
 
 log = logging.getLogger("secubox.security-posture")
 
@@ -137,7 +138,12 @@ def _snapshot() -> dict:
     return snap
 
 
-@app.get("/overview", dependencies=[Depends(require_lecture)])
+#: #3720 : la veille V2 (gk3) lit /overview avec le compte `ai-lecture` (jeton EdDSA lié à GET et au chemin `/overview`,
+#: nginx retire le préfixe /api/v1/security-posture) ; anonyme du LAN et session inchangés.
+require_lecture_veille = require_lecture_ou_compte("ai-lecture")
+
+
+@app.get("/overview", dependencies=[Depends(require_lecture_veille)])
 async def overview():
     return _snapshot()
 
