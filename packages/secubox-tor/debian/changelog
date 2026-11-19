@@ -1,3 +1,10 @@
+secubox-tor (1.7.7-1~trixie1) trixie; urgency=medium
+
+  * Diagnostic .onion : reconnaît la zone Unbound sous ses deux noms (secubox-onion-forward.conf posé
+    par torctl, 48-secubox-onion.conf par la toolbox) — « Zone NON / canari NON » à tort sinon (#3834).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 12:45:58 +0100
+
 secubox-tor (1.7.6-1~trixie1) trixie; urgency=medium
 
   * Relecture #3401, passe 2 (ref #3401) : dépend de secubox-core 1.8.16 (garde d'exposition publique, audit avec l'administrateur).
