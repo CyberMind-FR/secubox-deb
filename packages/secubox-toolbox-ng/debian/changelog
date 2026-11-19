@@ -1,3 +1,12 @@
+secubox-toolbox-ng (0.17.2-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf : compactage de mesures.jsonl et reevaluations.jsonl (ref #3820),
+    livré par secubox-waf-ng 1.42.1. Suffixe récent gardé (8 j, plus de
+    8 Mio pour /mesures, 5 000 lignes au moins pour /reevaluations), le reste
+    en archives mensuelles gzip ; aides d'archive de #3816 rendues génériques.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 08:52:03 +0100
+
 secubox-toolbox-ng (0.17.1-1~trixie1) trixie; urgency=medium
 
   * sbxwaf : compactage de bans.jsonl et archives mensuelles gzip (ref #3816),

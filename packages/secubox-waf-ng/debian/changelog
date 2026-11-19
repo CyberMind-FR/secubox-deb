@@ -1,3 +1,20 @@
+secubox-waf-ng (1.42.1-1~trixie1) trixie; urgency=medium
+
+  * #3820 : sbxwaf compacte aussi /var/lib/secubox/waf/mesures.jsonl (84 Mo
+    sur gk2, jamais tourné) et reevaluations.jsonl (9 Mo), au démarrage puis
+    chaque heure : il garde un SUFFIXE du fichier (octets et ordre
+    inchangés) à partir de la première ligne de moins de --preuves-fenetre
+    (8 j, 24 h au moins), reculé pour garder plus de 8 Mio de mesures.jsonl
+    (fin relue par /mesures) et au moins 5 000 lignes de reevaluations.jsonl
+    (relues par /reevaluations) : les deux routes rendent exactement la même
+    chose, prouvé par test contre les lecteurs Python réels. Le reste part
+    dans mesures-AAAAMM.jsonl.gz / reevaluations-AAAAMM.jsonl.gz
+    (--preuves-archives, 6 mois) ; pas de réécriture sous 1 Mio archivable
+    (--preuves-seuil). Réécriture atomique comme bans.jsonl ; les écrivains
+    prennent un verrou d'ajout par chemin. Commentaires de l'API mis à jour.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 08:52:03 +0100
+
 secubox-waf-ng (1.42.0-1~trixie1) trixie; urgency=medium
 
   * #3816 : sbxwaf compacte /var/lib/secubox/waf/bans.jsonl (11 Mo, 105 000
