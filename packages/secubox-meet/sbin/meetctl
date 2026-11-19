@@ -21,7 +21,7 @@ set -euo pipefail
 
 readonly MODULE="meet"
 # Tenue en phase avec debian/changelog.
-readonly VERSION="0.2.8"
+readonly VERSION="0.2.9"
 readonly CONFIG_FILE="${SECUBOX_MEET_CONFIG:-/etc/secubox/meet.toml}"
 readonly STATE_DIR="${SECUBOX_MEET_STATE_DIR:-/etc/secubox/meet}"
 readonly INSTALL_SCRIPT="${SECUBOX_MEET_INSTALL_SCRIPT:-/usr/lib/secubox/meet/install-lxc.sh}"
@@ -485,6 +485,14 @@ readonly SQL_SALLES="SELECT r.resource_id AS id, r.name AS nom, r.slug, r.access
 # Relevé (minuterie, 5 min) : pseudos des comptes, puis journal de LiveKit après le dernier curseur (30 jours au premier passage).
 cmd_activite_collecte() {
     lxc_exists || { echo '{"success": false, "error": "conteneur Meet absent"}'; return 1; }
+    # Conteneur arrêté ou endormi (module hors profil, sommeil ; gk3 #3826) : rien à relever, et jamais de réveil. Avant,
+    # lxc-attach échouait (« Failed to get init pid »), la sortie disait success et l'unité finissait en échec. Le relevé
+    # reprend après le dernier curseur au premier passage qui le trouve en marche.
+    if [ "$(lxc_state)" != "running" ]; then
+        log "rien à faire : conteneur $LXC_NAME arrêté"
+        echo '{"success": true, "evenements": 0, "rien_a_faire": "conteneur arrêté"}'
+        return 0
+    fi
     activite_base_prete || return 1
     # Une lecture ratée de psql ne remplace pas les pseudos (activite.py refuse une sortie qui n'est pas du JSON).
     psql_meet "$SQL_COMPTES" | python3 "$ACTIVITE_PY" comptes --db "$ACTIVITE_DB" >/dev/null \
