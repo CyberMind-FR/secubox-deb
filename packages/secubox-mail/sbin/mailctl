@@ -468,11 +468,12 @@ cmd_webmail_pgp() {
 cmd_autocrypt_sync() {
     local ct="$CONTAINER" tpl="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd" table rc=0
     # Messagerie installée mais jamais provisionnée (gk1, #3185) : rien à synchroniser, pas une panne de la minuterie.
-    # Un conteneur qui existe et qui est arrêté, lui, reste une panne (plus bas).
     lxc_exists "$ct" || { log "conteneur '$ct' non provisionné : rien à synchroniser"; return 0; }
+    # Conteneur arrêté ou endormi (module hors profil, sommeil, gk3 #3826) : rien à faire, et surtout pas le réveiller.
+    # La table sera poussée au premier passage qui le trouve en marche ; une panne conteneur EN MARCHE reste une panne.
+    lxc_running "$ct" || { log "rien à faire : conteneur '$ct' arrêté"; return 0; }
     command -v sbx-openpgp >/dev/null 2>&1 || { error "secubox-openpgp absent : pas d'annuaire de clés"; return 1; }
     [ -f "$tpl/autocrypt.lua" ] || { error "gabarit autocrypt.lua introuvable ($tpl)"; return 1; }
-    lxc_running "$ct" || { error "conteneur '$ct' a l'arret"; return 1; }
     table="$(sbx-openpgp autocrypt)" || { error "annuaire illisible"; return 1; }
     printf '%s' "$table" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d,dict)' 2>/dev/null \
         || { error "table Autocrypt invalide — rien n'est poussé"; return 1; }
@@ -849,9 +850,14 @@ PY
             ;;
         run)
             local cible="${1:-}" f rc=0
-            # Jamais provisionné (#3185) : rien à rapatrier ; provisionné mais arrêté : panne.
+            # Jamais provisionné (#3185) : rien à rapatrier. Arrêté ou endormi (hors profil, sommeil, #3826) : pour la
+            # minuterie (passage sans cible), rien à faire et jamais de réveil ; le rapatriement reprend au premier passage
+            # qui le trouve en marche. Un passage demandé pour UNE boîte (geste de l'administrateur) reste une erreur.
             lxc_exists "$CONTAINER" || { log "imap-sync run : conteneur $CONTAINER non provisionné, rien à rapatrier"; return 0; }
-            lxc_running "$CONTAINER" || { error "imap-sync run : conteneur $CONTAINER à l'arrêt"; return 1; }
+            if ! lxc_running "$CONTAINER"; then
+                if [ -n "$cible" ]; then error "imap-sync run : conteneur $CONTAINER à l'arrêt"; return 1; fi
+                log "imap-sync run : rien à faire : conteneur $CONTAINER arrêté"; return 0
+            fi
             install -d -m 0700 "$IMAP_SYNC_ETAT"
             for f in "$IMAP_SYNC_DIR"/*.json; do
                 [ -f "$f" ] || continue
