@@ -3298,3 +3298,12 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
   propriétaire perd ses connexions longues (API Claude, ECONNRESET) quand son IPv6 passe par gk2 ; cause non
   trouvée (aucune redirection 443 IPv6, pistes : bascule de route en cours de connexion, pare-feu IPv6 Freebox
   avec Next Hop). Relais retiré, Next Hop vide. Tout nouvel essai : depuis un autre appareil, gk2 préparé avant.
+
+## 2026-11-19 — gk2 saturé, correctifs et fusion V2
+- gk2 charge 110-130, pression mémoire 49 % : fuite secubox-metrics (bans.jsonl relu à chaque appel, boucle lancée
+  deux fois, reconstruction du cache par requête) corrigée en 1.29.12 (#3813, PR #3815, plafond MemoryMax 400M) ;
+  rapatriement IMAP (doveadm 350 Mo dans le conteneur mail 512 Mo, 116 OOM) suspendu, minuteur arrêté (audit).
+- Bouton d'état du module + raison du HORS LIGNE (#3812, PR #3814) : profiles 0.29.0, hub 1.12.59 sur gk2.
+- secubox-ai 0.4.0 : Radar, pays hier/J-7, Chaîne, blocage de l'analyse corrigé (#3811) sur gk3.
+- WAF 1.41.2 : « Tout couvrir » des hôtes PHP (301/301 sur gk2).
+- Branche V2 #3583 fusionnée dans master (PR #3817, 79 commits, sans conflit).

@@ -9,6 +9,7 @@
 *Mis à jour : 2026-11-11 (MirrorNet 4b déployée) ; 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
+- ⬜ **Next Up (2026-11-19)** : #3816 compaction bans.jsonl (agent en cours, déployer avec redémarrage sbxwaf) ; rapatriement IMAP gk2 suspendu (limite mémoire du conteneur mail ou lots plus petits) ; bump toolbox-ng (sbx-actord modifié sans bump) ; projet maillage IA (gk0 annonce son moteur) ; V2 phases 4-7.
 - ⬜ **Next Up (2026-11-18, soir)** : pseudo-routeur 0.3.1 + relais IPv6 #3807 installés, inactifs sur gk2. Relais IPv6 fonctionne (3 appareils via gk2) mais le Player ne passe ni en IPv6 (repli IPv4) ni en IPv4 (option 121 non demandée, passerelle DHCP ignorée) : coupe réseau Netflix sans issue sur Freebox Ultra, reste le DNS.
 - ⬜ **Next Up (2026-11-18, après-midi)** : V2 phases 1-3 en service (gk3 veille 12/12 sources) ; fusionner #3583 ; plan phases 4-7 (#3722-#3725) avec tout automatique ; posture 2.10.7 à livrer au prochain lot gk2.
 - ⬜ **Next Up (2026-11-18)** : `secubox-garde` (#3794) en ligne sur gk2 : régler courriel + SMS dans Réglages et « Envoyer un test » ; brancher `isole.html` (route déclarative) ; essai quarantaine/évasion sur un appareil de test puis ban/débannir ; `closes #3794` après une journée sans anomalie ; ensuite IA propositions #3795.
