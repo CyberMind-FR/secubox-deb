@@ -1,3 +1,10 @@
+secubox-mail (2.16.15-1~trixie1) trixie; urgency=medium
+
+  * Mémoire du conteneur mail : bloc unique réécrit (1G, haut 900M, sans swap) à la place des lignes
+    du budget #496 répétées (512M), appliqué à chaud ; rapatriement IMAP réactivé par la minuterie.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 08:30:52 +0100
+
 secubox-mail (2.16.14-1~trixie1) trixie; urgency=medium
 
   * Rapatriement IMAP : fenêtre -t de dsync (dernier succès moins 3 jours,
