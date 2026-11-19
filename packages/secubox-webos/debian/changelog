@@ -1,3 +1,23 @@
+secubox-webos (1.21.1-1~trixie1) trixie; urgency=high
+
+  * Nom de nœud : API publiques fermées (ref #3824). Le vhost généré ne sert
+    plus que « / » (le dé), /_noeud/ et /api/v1/health (relayée à l'ancienne
+    cible, sinon 200 JSON local) ; tout le reste rend 404. 1.21.0 relayait
+    tous les autres chemins à l'ancienne cible : sur gk2, l'API admin,
+    metrics et metablogizer de :8000 étaient publiques par gk2.secubox.in.
+  * Relais des autres chemins = option [noeud] relais_api, FERMÉE par défaut
+    (absente ou illisible = fermée) ; la montée réécrit le vhost fermé.
+  * webos-noeud relais activer|desactiver|etat : webos.toml réécrit
+    atomiquement (seule la clé change), vhost régénéré (nginx -t, réglage et
+    vhost remis sinon), ouvrir refusé tant que le mot de passe admin par
+    défaut est actif (#3401), chaque geste audité avec l'acteur.
+  * API GET|POST /api/v1/webos/noeud/relais (require_jwt) : demande déposée
+    dans /run/secubox/webos-noeud, traitée par secubox-webos-noeud.path →
+    .service (oneshot root durci, sans sudo ; exception RULES-CODE § 10).
+    L'interrupteur est dans la page Système (secubox-system 1.13.1).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 09:41:42 +0100
+
 secubox-webos (1.21.0-1~trixie1) trixie; urgency=medium
 
   * Accueil du nom de nœud (ref #3821) : <nœud>.<zone> (ex. gk2.secubox.in)

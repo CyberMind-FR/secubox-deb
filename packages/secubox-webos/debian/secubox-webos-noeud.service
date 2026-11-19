@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox WebOS : relais du nom de noeud, ouvert ou ferme par l administrateur (#3824)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3824
+StartLimitIntervalSec=60
+StartLimitBurst=30
+
+[Service]
+Type=oneshot
+# Depot (root:secubox 1770) et resultats (root:secubox 0750) crees en root sous /run/secubox (1777), jamais par
+# tmpfiles (#3172) : `+` = hors du bac a sable, pour ce seul verbe (lien retire, jamais suivi). Lance aussi au
+# demarrage (WantedBy) pour que le depot existe apres un redemarrage.
+ExecStartPre=+/usr/sbin/webos-noeud prepare
+ExecStart=/usr/sbin/webos-noeud traite
+# nginx -t par PID 1 (systemd-run), comme le pilotage : dans ce bac a sable, sans IP, il echouerait.
+Environment=SBX_NOEUD_UNITE=1
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+# audit.log (secubox 0640), users.json lu par la garde du mot de passe par defaut, resultats chownes root:secubox.
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER
+AmbientCapabilities=
+# /etc/secubox : webos.toml reecrit par renommage atomique (un fichier seul ne se renomme pas sur un montage lie).
+# Exception ecrite : RULES-CODE § Exceptions (#3824).
+ReadWritePaths=/etc/secubox /etc/nginx/conf.d /var/log/secubox -/run/secubox/webos-noeud -/run/secubox/webos-noeud-resultats
+
+[Install]
+WantedBy=multi-user.target

@@ -4,7 +4,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """
-SecuBox-Deb :: webos — accueil du NOM DE NŒUD (#3821)
+SecuBox-Deb :: webos — accueil du NOM DE NŒUD (#3821), API fermées sur ce nom (#3824)
 CyberMind — https://cybermind.fr
 
 Le nom nu d'une box, `<nœud>.<zone>` (`secubox-domaine`, ex. gk2.secubox.in), est celui que son frontal expose en
@@ -15,15 +15,23 @@ d'accueil : le dé SecuBox en plein écran (moteur et faces du Hall, partagés).
     webos-noeud appliquer   (postinst) déclare le vhost nginx, la route sbxwaf et le vhost HAProxy
     webos-noeud retirer     (postrm)   retire le vhost et rend à la route son ancienne cible si on l'avait reprise
     webos-noeud etat        ce qui est en place, en JSON
+    webos-noeud relais activer|desactiver [acteur]   ouvre / ferme le relais des autres chemins (#3824)
+    webos-noeud relais etat                          l'état du relais, en JSON
+    webos-noeud prepare | traite   (secubox-webos-noeud.service, root) dépôt des demandes de l'API et leur traitement
 
 RÈGLES, dans l'ordre :
   1. `[noeud] accueil = false` dans /etc/secubox/webos.toml : rien n'est posé, ce qui l'avait été est retiré.
   2. CE QUI EST EXPLICITE GAGNE. Un serveur nginx qui nomme déjà ce domaine (server_name exact ou `.domaine`) : rien.
      Une route sbxwaf vers une autre cible que 9080 qui SERT quelque chose à « / » : rien. Seule une ancienne cible
-     qui répond 404 à « / » est reprise — et alors tout le reste de ses chemins lui est relayé tel quel (le vhost
-     généré n'ajoute QUE « / » exact et ses deux ressources sous /_noeud/). Aucun chemin, aucune API n'est masqué.
-  3. LE WAF RESTE SUR LE CHEMIN. La route va vers nginx :9080 par sbxwaf comme tout vhost ; jamais de contournement.
-  4. Aucune NOUVELLE exposition publique tant que le mot de passe admin par défaut n'est pas prouvé changé (#3401) :
+     qui répond 404 à « / » est reprise.
+  3. LE NOM PUBLIC NE SERT QUE LE DÉ (#3824, décision du propriétaire). Le vhost généré sert « / » exact, ses
+     ressources sous /_noeud/ et `/api/v1/health` (relayé à l'ancienne cible s'il y en a une, sinon un 200 JSON local) ;
+     TOUT LE RESTE rend 404. Relayer les autres chemins à l'ancienne cible (sur gk2 : l'API admin, metrics,
+     metablogizer…) est une OPTION, fermée par défaut : `[noeud] relais_api = true`, que l'administrateur ouvre ou
+     ferme depuis la page Système (API webos, require_jwt) ; chaque bascule est auditée. L'ouvrir est refusé tant que
+     le mot de passe admin par défaut n'est pas prouvé changé (#3401).
+  4. LE WAF RESTE SUR LE CHEMIN. La route va vers nginx :9080 par sbxwaf comme tout vhost ; jamais de contournement.
+  5. Aucune NOUVELLE exposition publique tant que le mot de passe admin par défaut n'est pas prouvé changé (#3401) :
      le vhost nginx est posé, la route et le vhost HAProxy attendent (refus audité).
 Chaque décision est écrite dans /var/log/secubox/audit.log. nginx n'est rechargé qu'après `nginx -t` réussi ; un
 échec remet le fichier précédent.
@@ -35,6 +43,7 @@ import ipaddress
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -58,6 +67,15 @@ ETAT_DIR = R + "/var/lib/secubox-webos-noeud"
 ETAT = ETAT_DIR + "/etat.json"
 AUDIT = R + "/var/log/secubox/audit.log"
 MDP_DEFAUT_PY = "/usr/lib/python3/dist-packages/secubox_core/mot_de_passe_defaut.py"
+# Demandes de l'API webos (#3824) : dépôt root:secubox 1770 (l'API dépose), résultats root:secubox 0750 (l'API lit).
+# Créés par `prepare`, en root, jamais par tmpfiles (#3172) ; un lien à leur place est retiré, jamais suivi.
+DEMANDES = R + "/run/secubox/webos-noeud"
+RESULTATS = R + "/run/secubox/webos-noeud-resultats"
+TAILLE_DEMANDE = 512
+NOM_DEMANDE = re.compile(r"^[a-f0-9]{16}\.demande$")
+ACTEUR = re.compile(r"^[A-Za-z0-9_.@-]{1,64}$")
+# Dans l'unité root (bac à sable, réseau IP fermé) `nginx -t` passe par PID 1, comme le pilotage (#3126).
+NGINX_T_PAR_SYSTEMD = os.environ.get("SBX_NOEUD_UNITE") == "1"
 
 DOMAINE = re.compile(r"^(?=.{4,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
 SERVER_NAME = re.compile(r"\bserver_name\s+([^;]+);")
@@ -113,6 +131,20 @@ def accueil_voulu() -> bool:
         log(f"{REGLAGES} illisible ({e.__class__.__name__}) : réglage par défaut (accueil actif)")
         return True
     return val is not False
+
+
+def relais_voulu() -> bool:
+    """`[noeud] relais_api` de webos.toml, FAUX par défaut (#3824) : seul `true` ouvre. Illisible : fermé."""
+    try:
+        import tomllib
+        with open(REGLAGES, "rb") as fh:
+            val = tomllib.load(fh).get("noeud", {}).get("relais_api", False)
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError) as e:
+        log(f"{REGLAGES} illisible ({e.__class__.__name__}) : relais des autres chemins FERMÉ")
+        return False
+    return val is True
 
 
 def noms_explicites(dom: str) -> list[str]:
@@ -186,13 +218,15 @@ def lire_etat() -> dict:
         return {}
 
 
-def ecrire_atomique(chemin: str, texte: str, mode: int) -> None:
+def ecrire_atomique(chemin: str, texte: str, mode: int, proprio: tuple[int, int] | None = None) -> None:
     dossier = os.path.dirname(chemin)
     fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".noeud-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(texte)
         os.chmod(tmp, mode)
+        if proprio is not None and os.geteuid() == 0:
+            os.chown(tmp, *proprio)
         os.replace(tmp, chemin)
     except BaseException:
         if os.path.exists(tmp):
@@ -220,26 +254,38 @@ def mot_de_passe_change() -> bool:
 
 # ── Le vhost nginx ───────────────────────────────────────────────────────────────────────────────────────────
 
-def rendre(dom: str, repli: tuple[str, int] | None, journal_hotes: bool) -> str:
+def rendre(dom: str, repli: tuple[str, int] | None, journal_hotes: bool, relais: bool = False) -> str:
+    """Le vhost : « / » exact, /_noeud/, /api/v1/health ; le reste 404, ou relayé à l'ancienne cible si `relais`."""
+    entetes = ("        proxy_http_version 1.1;\n"
+               "        proxy_set_header Host $host;\n"
+               "        proxy_set_header X-Real-IP $remote_addr;\n"
+               "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
+    amont = ""
     if repli:
         ip, port = repli
-        hote = f"[{ip}]" if ":" in ip else ip
-        reste = (f"    # Tout le reste va à l'ancienne cible de la route, comme avant la reprise : rien n'est masqué.\n"
-                 f"    location / {{\n"
-                 f"        proxy_pass http://{hote}:{port};\n"
-                 f"        proxy_http_version 1.1;\n"
-                 f"        proxy_set_header Host $host;\n"
-                 f"        proxy_set_header X-Real-IP $remote_addr;\n"
-                 f"        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
-                 f"    }}\n")
+        amont = f"http://{f'[{ip}]' if ':' in ip else ip}:{port}"
+    # Santé : la seule API publique de ce nom. Relayée à l'ancienne cible s'il y en a une, sinon rendue ici.
+    if amont:
+        sante = f"    location = /api/v1/health {{\n        proxy_pass {amont};\n{entetes}    }}\n"
     else:
-        reste = "    location / {\n        return 404;\n    }\n"
+        sante = ("    location = /api/v1/health {\n"
+                 "        default_type application/json;\n"
+                 "        add_header Cache-Control \"no-store\" always;\n"
+                 "        return 200 '{\"status\": \"ok\"}';\n"
+                 "    }\n")
+    if relais and amont:
+        reste = ("    # [noeud] relais_api = true (#3824) : l'administrateur a OUVERT le relais des autres chemins.\n"
+                 f"    location / {{\n        proxy_pass {amont};\n{entetes}    }}\n")
+    else:
+        reste = ("    # Rien d'autre n'est servi sur ce nom (#3824) : aucune API d'administration publique.\n"
+                 "    location / {\n        return 404;\n    }\n")
     journal = "    access_log /var/log/nginx/secubox-hosts.log sbx_host;\n" if journal_hotes else ""
     csp = ("default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; "
            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
     return f"""{ENTETE} — ne pas éditer : réécrit à chaque configuration du paquet.
-# Accueil du nom de nœud : le dé SecuBox en plein écran sur « / » EXACT, rien d'autre.
+# Accueil du nom de nœud : le dé SecuBox en plein écran sur « / » EXACT, sa santé, rien d'autre (#3824).
 # Désactiver : [noeud] accueil = false dans /etc/secubox/webos.toml, puis `webos-noeud appliquer`.
+# Relais des autres chemins vers l'ancienne cible : page Système, ou `webos-noeud relais activer|desactiver`.
 server {{
     listen {PORT};
     server_name {dom};
@@ -262,13 +308,16 @@ server {{
         alias {WWW}/hall/dice/;
         add_header X-Content-Type-Options "nosniff" always;
     }}
-{reste}}}
+{sante}{reste}}}
 """
 
 
 def nginx_valide_et_recharge() -> bool:
     try:
-        executer(["nginx", "-t"], delai=60)
+        argv = ["nginx", "-t"]
+        if NGINX_T_PAR_SYSTEMD:
+            argv = ["systemd-run", "--wait", "--pipe", "--collect", "--quiet", "/usr/sbin/nginx", "-t"]
+        executer(argv, delai=60)
     except subprocess.CalledProcessError as e:
         log(f"nginx -t refuse la configuration : {(e.stderr or '').strip()[-400:]}")
         return False
@@ -282,13 +331,17 @@ def nginx_valide_et_recharge() -> bool:
     return True
 
 
-def poser_conf(texte: str) -> bool:
-    """Écrit le vhost, le valide, recharge. Refusé : l'ancien fichier revient (ou aucun)."""
+def lire_conf() -> str | None:
     try:
         with open(CONF, encoding="utf-8") as fh:
-            avant = fh.read()
+            return fh.read()
     except FileNotFoundError:
-        avant = None
+        return None
+
+
+def poser_conf(texte: str) -> bool:
+    """Écrit le vhost, le valide, recharge. Refusé : l'ancien fichier revient (ou aucun)."""
+    avant = lire_conf()
     if avant == texte:
         return True
     ecrire_atomique(CONF, texte, 0o644)
@@ -397,7 +450,7 @@ def appliquer() -> int:
         etat = {}
     actuelle = table.get(dom) if table is not None else None
     port_actuel = (cible(actuelle) or ("", 0))[1]
-    # Ancienne cible reprise lors d'un passage précédent : le reste de ses chemins lui est toujours relayé.
+    # Ancienne cible reprise lors d'un passage précédent : sa santé lui est relayée, le reste seulement si relais_api.
     repli = cible(etat.get("route_precedente")) if etat.get("route_reprise") else None
     route_a_poser = nouvelle = False
     if table is None:
@@ -419,16 +472,23 @@ def appliquer() -> int:
         route_a_poser = False
         audit("exposition_refusee", "refus", f"{dom} : mot de passe admin par défaut actif ou inconnu (#3401)")
         log("mot de passe admin par défaut actif ou inconnu : route et vhost HAProxy en attente (#3401)")
-    if not poser_conf(rendre(dom, repli, os.path.isfile(FORMAT_HOTES))):
+    relais = relais_voulu()
+    avant = lire_conf()
+    texte = rendre(dom, repli, os.path.isfile(FORMAT_HOTES), relais)
+    if not poser_conf(texte):
         audit("appliquer", "echec", f"{dom} : nginx -t refuse le vhost, rien n'a changé")
         return 1
+    if avant is not None and avant != texte:
+        # Montée de 1.21.0 (#3824) : un vhost qui relayait tout est réécrit FERMÉ, sauf relais_api = true.
+        audit("vhost", "regenere", f"{dom} : relais des autres chemins {'OUVERT' if relais and repli else 'fermé'}")
     if route_a_poser:
         if not poser_route(dom):
             audit("appliquer", "echec", f"{dom} : vhost posé, route sbxwaf non posée")
             return 1
         detail = f"{dom} -> :{PORT}"
         if repli is not None:
-            detail += f" (reste des chemins relayé à {repli[0]}:{repli[1]})"
+            detail += (f" (santé relayée à {repli[0]}:{repli[1]} ; autres chemins "
+                       f"{'relayés' if relais else 'fermés, relais_api = false'})")
         audit("route", "reprise" if repli is not None else "pose", detail)
     if table is not None and not bloque:
         declarer_haproxy(dom)
@@ -443,21 +503,314 @@ def afficher_etat() -> int:
         table = lire_table()
     except ValueError:
         table = None
-    print(json.dumps({"domaine": dom or None, "accueil": accueil_voulu(), "vhost": os.path.isfile(CONF),
-                      "route": (table or {}).get(dom) if dom else None, "etat": lire_etat()},
-                     ensure_ascii=False, indent=2))
+    print(json.dumps({"domaine": dom or None, "accueil": accueil_voulu(), "relais_api": relais_voulu(),
+                      "vhost": os.path.isfile(CONF), "route": (table or {}).get(dom) if dom else None,
+                      "etat": lire_etat()}, ensure_ascii=False, indent=2))
     return 0
+
+
+# ── Relais des autres chemins (#3824) : l'option de l'administrateur ─────────────────────────────────────────
+
+SECTION = re.compile(r"^\s*\[\s*noeud\s*\]\s*(#.*)?$")
+TABLE_TOML = re.compile(r"^\s*\[")
+CLE_RELAIS = re.compile(r"^\s*relais_api\s*=")
+
+
+def reglage_avec_relais(texte: str, valeur: bool) -> str:
+    """Le texte de webos.toml avec `[noeud] relais_api = valeur`, le reste intact (commentaires compris)."""
+    ligne = f"relais_api = {'true' if valeur else 'false'}"
+    lignes = texte.splitlines()
+    debut = next((i for i, x in enumerate(lignes) if SECTION.match(x)), None)
+    if debut is None:
+        sep = "" if not texte or texte.endswith("\n\n") else ("\n" if texte.endswith("\n") else "\n\n")
+        return f"{texte}{sep}[noeud]\n{ligne}\n"
+    fin = next((i for i in range(debut + 1, len(lignes)) if TABLE_TOML.match(lignes[i])), len(lignes))
+    cle = next((i for i in range(debut + 1, fin) if CLE_RELAIS.match(lignes[i])), None)
+    if cle is None:
+        lignes.insert(debut + 1, ligne)
+    else:
+        lignes[cle] = ligne
+    return "\n".join(lignes) + "\n"
+
+
+def ecrire_reglage_relais(valeur: bool) -> tuple[str, int, tuple[int, int] | None] | None:
+    """Pose `relais_api` dans webos.toml, atomiquement (mode et propriétaire gardés). Rend de quoi le remettre :
+    (ancien texte, "" s'il n'existait pas ; mode ; propriétaire) ; None si refus (rien n'est écrit)."""
+    import tomllib
+    try:
+        fd = os.open(REGLAGES, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode) or st.st_size > (1 << 20):
+                log(f"{REGLAGES} : pas un fichier ordinaire, ou trop grand — inchangé")
+                return None
+            avant = os.read(fd, st.st_size + 1).decode("utf-8")
+        finally:
+            os.close(fd)
+        mode, proprio = stat.S_IMODE(st.st_mode) & 0o644, (st.st_uid, st.st_gid)
+    except FileNotFoundError:
+        avant, mode, proprio = "", 0o644, None
+    except (OSError, UnicodeDecodeError) as e:
+        log(f"{REGLAGES} illisible ({e.__class__.__name__}) — inchangé")
+        return None
+    try:
+        ancien = tomllib.loads(avant)
+        apres = reglage_avec_relais(avant, valeur)
+        nouveau = tomllib.loads(apres)
+    except ValueError as e:
+        log(f"{REGLAGES} n'est pas un TOML valide ({e}) — inchangé, rien n'est écrit")
+        return None
+    # Contrôle : seule la clé voulue a changé, et elle vaut bien ce qu'on a demandé.
+    attendu = dict(ancien)
+    attendu["noeud"] = {**ancien.get("noeud", {}), "relais_api": valeur}
+    if nouveau != attendu:
+        log(f"{REGLAGES} : la réécriture changerait autre chose que relais_api — inchangé")
+        return None
+    if apres != avant:
+        ecrire_atomique(REGLAGES, apres, mode or 0o644, proprio)
+    return avant, mode or 0o644, proprio
+
+
+def chemins_cible(ip: str, port: int) -> dict:
+    """Les `location` d'un serveur nginx de CETTE box qui écoute sur ip:port (ce que le relais exposerait)."""
+    ecoute = re.compile(r"\blisten\s+(?:(?:" + re.escape(ip) + r"|\*|0\.0\.0\.0|\[::\])\:)?" + str(port) + r"\b")
+    for dossier in DOSSIERS_NGINX:
+        try:
+            noms = sorted(os.listdir(dossier))
+        except OSError:
+            continue
+        for nom in noms:
+            chemin = os.path.join(dossier, nom)
+            if os.path.abspath(chemin) == os.path.abspath(CONF) or not os.path.isfile(chemin):
+                continue
+            if dossier.endswith("conf.d") and not nom.endswith(".conf"):
+                continue
+            try:
+                with open(chemin, encoding="utf-8", errors="replace") as fh:
+                    texte = "\n".join(x.split("#", 1)[0] for x in fh.read(1 << 20).splitlines())
+            except OSError:
+                continue
+            if not ecoute.search(texte):
+                continue
+            vus = []
+            for m in re.finditer(r"\blocation\s+(?:(?:=|\^~|~\*?)\s+)?([^\s{]+)\s*\{", texte):
+                if m.group(1) not in vus:
+                    vus.append(m.group(1))
+            return {"source": chemin, "chemins": vus[:50]}
+    return {"source": None, "chemins": []}
+
+
+def etat_relais() -> dict:
+    etat = lire_etat()
+    dom = etat.get("domaine") if isinstance(etat.get("domaine"), str) and DOMAINE.match(etat["domaine"]) else None
+    repli = cible(etat.get("route_precedente")) if etat.get("route_reprise") else None
+    conf = lire_conf()
+    a_nous = conf is not None and conf.startswith(ENTETE)
+    voulu = relais_voulu()
+    vu = chemins_cible(*repli) if repli else {"source": None, "chemins": []}
+    return {
+        "domaine": dom,
+        "relais_api": voulu,                                       # le réglage
+        "relais_actif": bool(a_nous and voulu and repli),          # ce que sert le vhost
+        "vhost": a_nous,
+        "cible": f"{repli[0]}:{repli[1]}" if repli else None,
+        "chemins_cible": vu["chemins"],
+        "source_chemins": vu["source"],
+        "servis": ["/", "/_noeud/sbx-dice.js", "/_noeud/dice/", "/api/v1/health"],
+        "mot_de_passe_defaut": not mot_de_passe_change(),
+    }
+
+
+def regenerer() -> bool:
+    """Réécrit le vhost (s'il est le nôtre) selon le réglage courant ; ne touche ni la route ni HAProxy."""
+    conf = lire_conf()
+    if conf is None or not conf.startswith(ENTETE):
+        return True                     # rien en place : le réglage vaudra au prochain `appliquer`
+    etat = lire_etat()
+    dom = etat.get("domaine") if isinstance(etat.get("domaine"), str) and DOMAINE.match(etat["domaine"]) else ""
+    dom = dom or domaine()
+    if not dom:
+        return False
+    repli = cible(etat.get("route_precedente")) if etat.get("route_reprise") else None
+    return poser_conf(rendre(dom, repli, os.path.isfile(FORMAT_HOTES), relais_voulu()))
+
+
+def relais(geste: str, acteur: str) -> int:
+    """activer | desactiver : réglage écrit atomiquement, vhost régénéré (nginx -t, retour arrière), audit.
+    Codes : 0 fait, 1 échec (rien n'a changé), 2 usage, 3 refus (mot de passe admin par défaut actif, #3401)."""
+    acteur = acteur if ACTEUR.match(acteur or "") else "inconnu"
+    valeur = geste == "activer"
+    if valeur and not mot_de_passe_change():
+        audit("relais_api", "refus", f"ouvrir demandé par {acteur} : mot de passe admin par défaut actif ou inconnu (#3401)")
+        log("mot de passe admin par défaut actif ou inconnu : le relais reste fermé (#3401)")
+        return 3
+    sauve = ecrire_reglage_relais(valeur)
+    if sauve is None:
+        audit("relais_api", "echec", f"{geste} par {acteur} : webos.toml non modifiable, rien n'a changé")
+        return 1
+    if not regenerer():
+        avant, mode, proprio = sauve
+        try:
+            if avant:
+                ecrire_atomique(REGLAGES, avant, mode, proprio)
+            else:
+                os.unlink(REGLAGES)
+        except OSError as e:
+            log(f"{REGLAGES} non remis ({e.__class__.__name__})")
+        audit("relais_api", "echec", f"{geste} par {acteur} : nginx -t refuse le vhost, réglage remis")
+        return 1
+    e = etat_relais()
+    if not valeur:
+        detail = f"{e['domaine'] or '?'} : relais des autres chemins FERMÉ par {acteur}"
+    elif e["relais_actif"]:
+        detail = f"{e['domaine']} : relais des autres chemins OUVERT vers {e['cible']} par {acteur}"
+        if e["chemins_cible"]:
+            detail += " (" + ", ".join(e["chemins_cible"][:8]) + ")"
+    else:
+        detail = (f"{e['domaine'] or '?'} : relais_api = true posé par {acteur}, rien à relayer "
+                  "(pas de vhost du nœud, ou pas d'ancienne cible)")
+    audit("relais_api", "ouvert" if valeur else "ferme", detail)
+    return 0
+
+
+# ── Demandes de l'API webos (secubox-webos-noeud.path → .service, root) ──────────────────────────────────────
+
+def _gid_secubox() -> int:
+    import grp
+    try:
+        return grp.getgrnam("secubox").gr_gid
+    except KeyError:
+        return -1
+
+
+def prepare() -> int:
+    """Dépôt 1770 et résultats 0750, root:secubox. Un lien ou un fichier à leur place est retiré, jamais suivi."""
+    gid = -1 if R else _gid_secubox()
+    for chemin, mode in ((DEMANDES, 0o1770), (RESULTATS, 0o750)):
+        try:
+            st = os.lstat(chemin)
+            if not stat.S_ISDIR(st.st_mode):
+                os.unlink(chemin)
+                raise FileNotFoundError
+            if not R and st.st_uid != 0:
+                log(f"{chemin} n'appartient pas à root : refusé")
+                return 1
+        except FileNotFoundError:
+            os.mkdir(chemin, 0o700)
+        if not R:
+            os.chown(chemin, 0, gid, follow_symlinks=False)
+        os.chmod(chemin, mode)
+    return 0
+
+
+def lire_demande(dfd: int, nom: str) -> dict | None:
+    """Une lecture par descripteur relatif au dépôt : sans suivre de lien, non bloquante, fichier ordinaire, 512 o."""
+    try:
+        fd = os.open(nom, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > TAILLE_DEMANDE:
+            return None
+        d = json.loads(os.read(fd, TAILLE_DEMANDE + 1))
+    except (OSError, ValueError):
+        return None
+    finally:
+        os.close(fd)
+    if not isinstance(d, dict) or d.get("geste") not in ("etat", "activer", "desactiver"):
+        return None
+    acteur = d.get("acteur", "")
+    if not isinstance(acteur, str) or (acteur and not ACTEUR.match(acteur)):
+        return None
+    return {"geste": d["geste"], "acteur": acteur or "inconnu"}
+
+
+def ecrire_resultat(ident: str, corps: dict) -> None:
+    fd, tmp = tempfile.mkstemp(dir=RESULTATS, prefix=".r.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(corps, fh, ensure_ascii=False)
+        os.chmod(tmp, 0o640)
+        if not R:
+            os.chown(tmp, 0, _gid_secubox())
+        os.replace(tmp, os.path.join(RESULTATS, ident + ".json"))
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def traite() -> int:
+    """Chaque `<id>.demande` = {"geste": etat|activer|desactiver, "acteur": ...} ; résultat `<id>.json` =
+    {"code": int, "etat": {...}}. Les « .tmp.* » de l'API (en cours d'écriture) sont laissés ; tout autre nom est retiré."""
+    if prepare() != 0:
+        return 1
+    maintenant = datetime.now(timezone.utc).timestamp()
+    for nom in os.listdir(RESULTATS):                       # résultats non relus : purgés après 5 min
+        try:
+            if maintenant - os.lstat(os.path.join(RESULTATS, nom)).st_mtime > 300:
+                os.unlink(os.path.join(RESULTATS, nom))
+        except OSError:
+            continue
+    dfd = os.open(DEMANDES, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        for nom in sorted(os.listdir(dfd))[:32]:
+            if nom.startswith(".tmp."):
+                # écriture de l'API en cours ; abandonnée depuis plus d'une minute, elle relancerait l'unité sans fin
+                try:
+                    if maintenant - os.stat(nom, dir_fd=dfd, follow_symlinks=False).st_mtime > 60:
+                        os.unlink(nom, dir_fd=dfd)
+                except OSError:
+                    pass
+                continue
+            if not NOM_DEMANDE.match(nom):
+                os.unlink(nom, dir_fd=dfd)
+                continue
+            demande = lire_demande(dfd, nom)
+            os.unlink(nom, dir_fd=dfd)
+            if demande is None:
+                ecrire_resultat(nom[:16], {"code": 2, "detail": "demande illisible (lien, FIFO, trop grande, JSON)"})
+                continue
+            code = 0 if demande["geste"] == "etat" else relais(demande["geste"], demande["acteur"])
+            ecrire_resultat(nom[:16], {"code": code, "etat": etat_relais()})
+    finally:
+        os.close(dfd)
+    return 0
+
+
+USAGE = "usage: webos-noeud appliquer|retirer|etat|prepare|traite | relais activer|desactiver [acteur] | relais etat"
 
 
 def main(argv: list[str]) -> int:
     verbe = argv[1] if len(argv) > 1 else ""
-    if len(argv) != 2 or verbe not in ("appliquer", "retirer", "etat"):
-        print("usage: webos-noeud appliquer|retirer|etat", file=sys.stderr)
+    if verbe == "relais":
+        geste = argv[2] if len(argv) > 2 else ""
+        if geste == "etat" and len(argv) == 3:
+            print(json.dumps(etat_relais(), ensure_ascii=False, indent=2))
+            return 0
+        if geste in ("activer", "desactiver") and len(argv) in (3, 4):
+            if os.geteuid() != 0 and not R:
+                print(f"{MODULE}: root requis", file=sys.stderr)
+                return 1
+            acteur = argv[3] if len(argv) == 4 else (os.environ.get("SUDO_USER") or "root")
+            return relais(geste, acteur)
+        print(USAGE, file=sys.stderr)
         return 2
+    if len(argv) != 2 or verbe not in ("appliquer", "retirer", "etat", "prepare", "traite"):
+        print(USAGE, file=sys.stderr)
+        return 2
+    if os.geteuid() != 0 and not R and verbe != "etat":
+        print(f"{MODULE}: root requis", file=sys.stderr)
+        return 1
     if verbe == "etat":
         return afficher_etat()
     if verbe == "retirer":
         return retirer("paquet retiré")
+    if verbe == "prepare":
+        return prepare()
+    if verbe == "traite":
+        return traite()
     return appliquer()
 
 

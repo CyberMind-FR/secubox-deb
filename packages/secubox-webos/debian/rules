@@ -55,6 +55,9 @@ override_dh_auto_install:
 	# Le moteur du dé et ses faces ne sont PAS recopiés : le vhost généré les sert depuis www/hall.
 	install -D -m 0755 sbin/webos-noeud $(CURDIR)/debian/secubox-webos/usr/sbin/webos-noeud
 	install -D -m 0644 www/noeud/index.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/noeud/index.html
+	# Relais du nom de nœud (#3824) : l'API dépose une demande, cette unité root (déclenchée par fichier) la traite.
+	install -D -m 0644 debian/secubox-webos-noeud.path $(CURDIR)/debian/secubox-webos/usr/lib/systemd/system/secubox-webos-noeud.path
+	install -D -m 0644 debian/secubox-webos-noeud.service $(CURDIR)/debian/secubox-webos/usr/lib/systemd/system/secubox-webos-noeud.service
 	install -D -m 0644 debian/secubox-webos-vignettes.service $(CURDIR)/debian/secubox-webos/usr/lib/systemd/system/secubox-webos-vignettes.service
 	install -D -m 0644 debian/secubox-webos-vignettes.timer $(CURDIR)/debian/secubox-webos/usr/lib/systemd/system/secubox-webos-vignettes.timer
 	install -m 0644 www/hall/composants.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/composants.js

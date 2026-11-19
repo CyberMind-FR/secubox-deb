@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, Response
 # pas l'administration ; ce qu'il relaie à un module, ce module le juge.
 from secubox_core.auth import require_session, require_personne, create_token, domaine_box
 from secubox_core.health import systemd_batch
-from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes, pairs, ports
+from api import registry, flags, cardlets, actions, aide, hotes, systeme, vignettes, pairs, ports, noeud
 from api.models import Service  # noqa: F401 — exposé pour les tests (main.Service), ne pas « nettoyer »
 from secubox_core.auth import require_lecture
 
@@ -904,3 +904,5 @@ async def sbxos_manifeste(request: Request):
 
 app.include_router(public_router)
 app.include_router(router)
+# Relais du nom de nœud (#3824) : interrupteur de l'administrateur (require_jwt), écrit par l'unité root.
+app.include_router(noeud.router)
