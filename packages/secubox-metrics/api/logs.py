@@ -743,7 +743,9 @@ async def refresh_cache():
     global _cache
     while True:
         try:
-            entries = _get_all_logs(since="1h", lines=1000)
+            # #3813 : journalctl (jusqu'a 30 s sur une box chargee) tournait SUR
+            # la boucle et gelait toutes les requetes du module (499 en rafale).
+            entries = await asyncio.to_thread(_get_all_logs, since="1h", lines=1000)
             error_count = sum(1 for e in entries if int(e.get("PRIORITY", 6)) <= 3)
             warning_count = sum(1 for e in entries if int(e.get("PRIORITY", 6)) == 4)
 

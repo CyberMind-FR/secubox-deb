@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import subprocess
+import threading
 import time
 import tomllib
 from contextlib import asynccontextmanager
@@ -59,6 +60,7 @@ from live_hosts import LiveHostsAggregator
 from cert_status import CertStatusAggregator
 from cookie_audit import CookieAuditAggregator
 import memoire
+from bans_actifs import bans_actifs
 
 try:
     from secubox_core.config import (
@@ -181,7 +183,9 @@ async def lifespan(_app):
     amorcer_collecte()
     tasks = [
         asyncio.create_task(_prechauffer_cache()),
-        asyncio.create_task(_boucle_cache_leger()),
+        # PAS de second `_boucle_cache_leger` ici (#3813) : amorcer_collecte()
+        # l'a deja lance. Il tournait deux fois, et chaque tour relisait
+        # bans.jsonl en entier dans son propre fil.
         asyncio.create_task(visitor_origin_agg.run_forever()),
         asyncio.create_task(live_hosts_agg.run_forever()),
         asyncio.create_task(cert_status_agg.run_forever()),
@@ -196,9 +200,10 @@ async def lifespan(_app):
     try:
         yield
     finally:
-        for t in tasks:
+        toutes = tasks + [x for x in (_collecte, _tache_cache_leger) if x is not None]
+        for t in toutes:
             t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*toutes, return_exceptions=True)
 
 
 app = FastAPI(
@@ -512,19 +517,11 @@ def build_waf_stats() -> dict:
     # secubox-waf). Les BANS NFT NATIFS du WAF ne sont visibles que dans
     # bans.jsonl ; les menaces du jour et cumulées, que dans waf-history.json.
     # Sans ça le panneau restait à 0.
+    # #3813 : lecture INCREMENTALE (bans_actifs.py). Relire les 11 Mo du
+    # journal a chaque appel, dans plusieurs fils a la fois, faisait monter la
+    # RSS de pres de 1 Mo/s.
     try:
-        etat = {}
-        for line in Path("/var/lib/secubox/waf/bans.jsonl").read_text().splitlines():
-            try:
-                r = json.loads(line)
-            except ValueError:
-                continue
-            if r.get("ip"):
-                etat[r["ip"]] = r
-        now = int(time.time())
-        actifs = sum(1 for r in etat.values()
-                     if r.get("action") == "ban" and (not r.get("exp") or int(r["exp"]) > now))
-        bans = max(bans, actifs)
+        bans = max(bans, bans_actifs())
     except OSError:
         pass
     try:
@@ -582,6 +579,28 @@ def build_cache() -> dict:
     write_cache(data)
     return data
 
+# #3813 — UNE SEULE reconstruction a la fois. Cache perime sur une box chargee :
+# chaque requete du bandeau de sante (et /overview, /all) relancait build_cache
+# dans son propre fil, toutes ensemble — jusqu'a 20+ reconstructions
+# simultanees. Celui qui arrive pendant une reconstruction sert le cache
+# existant, meme perime ; sans cache du tout, il attend la reconstruction en cours.
+_verrou_cache = threading.Lock()
+
+
+def build_cache_unique() -> dict:
+    if _verrou_cache.acquire(blocking=False):
+        try:
+            return build_cache()
+        finally:
+            _verrou_cache.release()
+    cached = read_cache()
+    if cached:
+        return cached
+    with _verrou_cache:
+        cached = read_cache()
+        return cached if cached else build_cache()
+
+
 def get_freshness() -> dict:
     """Get cache freshness metadata."""
     age = get_cache_age()
@@ -600,7 +619,7 @@ def get_cached_or_build() -> dict:
         cached = read_cache()
         if cached:
             return cached
-    return build_cache()
+    return build_cache_unique()
 
 # API Endpoints
 
@@ -747,7 +766,7 @@ async def get_all(auth: None = Depends(require_jwt)):
 @app.post("/api/v1/metrics/refresh")
 def refresh_cache(auth: None = Depends(require_jwt)):
     """Force cache refresh."""
-    data = build_cache()
+    data = build_cache_unique()
     return {"status": "ok", "message": "Cache refreshed", "timestamp": data["timestamp"]}
 
 @app.get("/api/v1/metrics/certs")
@@ -859,7 +878,7 @@ def build_health_summary() -> dict:
     # Get cached metrics or build fresh
     cached = read_cache()
     if not cached or not cache_is_fresh():
-        cached = build_cache()
+        cached = build_cache_unique()
 
     overview = cached.get("overview", {})
     waf_stats = cached.get("waf", {})
@@ -1096,17 +1115,38 @@ def get_ssl_status(domain: str) -> dict:
 # minute, un certificat a l'echelle du mois. Une memoire courte suffit, et
 # elle transforme une tempete en une mesure par minute.
 _memo: dict = {}
+# #3813 — la memoire n'empechait pas la ruee : tant que le premier calcul
+# n'avait pas fini, chaque requete le relancait aussi. Un verrou par cle (pris
+# dans un jeu fixe : la cle `ssl:<domaine>` vient de l'en-tete Host, on ne cree
+# rien par cle) ; qui trouve le calcul en cours sert la valeur precedente.
+# Les entrees sont bornees pour la meme raison (domaines arbitraires).
+_MEMO_MAX = 256
+_memo_verrous = [threading.Lock() for _ in range(16)]
 
 
 def _memoise(cle: str, duree: int, calcul):
     """Rend la valeur memorisee, ou la recalcule si elle a passe `duree`."""
     entree = _memo.get(cle)
-    maintenant = time.time()
-    if entree and maintenant - entree[0] < duree:
+    if entree and time.time() - entree[0] < duree:
         return entree[1]
-    valeur = calcul()
-    _memo[cle] = (maintenant, valeur)
-    return valeur
+    verrou = _memo_verrous[hash(cle) % len(_memo_verrous)]
+    if entree is not None:
+        if not verrou.acquire(blocking=False):
+            return entree[1]
+    else:
+        verrou.acquire()
+    try:
+        entree = _memo.get(cle)
+        if entree and time.time() - entree[0] < duree:
+            return entree[1]
+        valeur = calcul()
+        _memo[cle] = (time.time(), valeur)
+        if len(_memo) > _MEMO_MAX:
+            for k, _ in sorted(_memo.items(), key=lambda kv: kv[1][0])[:len(_memo) - _MEMO_MAX]:
+                _memo.pop(k, None)
+        return valeur
+    finally:
+        verrou.release()
 
 
 @app.get("/api/v1/metrics/health/summary", dependencies=[Depends(require_lecture)])
