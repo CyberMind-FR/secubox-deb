@@ -70,7 +70,7 @@ Mode d'écriture des producteurs, vérifié dans leur source :
 | Fichier | Producteur | Écriture | Lecture par secubox-live |
 |---|---|---|---|
 | `vhost_stats.json` | secubox-metrics | `.tmp` puis `os.replace`, mode selon l'umask (0644) | ACL par défaut du dossier, héritée |
-| `bans.jsonl` | sbxwaf | append-only 0640, jamais tourné | ACL de fichier + ACL par défaut du dossier |
+| `bans.jsonl` | sbxwaf | append-only 0640, compacté par rename (#3816, ACL recopiée) | ACL de fichier + ACL par défaut du dossier |
 | `waf-threats.log*` | sbxwaf | append, rotation quotidienne, `.N.gz` (7) | ACL par défaut + reposée à chaque collecte |
 | `haproxy.toml` | haproxyctl | réécrit en place | ACL de fichier reposée à chaque collecte |
 

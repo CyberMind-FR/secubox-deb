@@ -1,3 +1,10 @@
+secubox-metrics (1.29.13-1~trixie1) trixie; urgency=medium
+
+  * Bans actifs : identité de bans.jsonl lue sur le descripteur ouvert (fstat),
+    sbxwaf le compacte désormais par rename (#3816).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 12:00:00 +0100
+
 secubox-metrics (1.29.12-1~trixie1) trixie; urgency=medium
 
   * Fuite rapide de l'API (52 -> 450 Mo en 15 min, 750 Mo en 4 h sur gk2) : bans.jsonl (11 Mo, 105 000 lignes) était
