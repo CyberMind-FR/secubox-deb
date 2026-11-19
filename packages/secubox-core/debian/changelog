@@ -1,3 +1,17 @@
+secubox-core (1.8.36-1~trixie1) trixie; urgency=medium
+
+  * #3826 : garde des minuteries — une minuterie dont l'unité déclenchée est
+    masquée ou absente (secubox-ui-health.service masqué par l'image live,
+    gk3) n'est plus relancée ni comptée en échec ; rendue à part
+    (minuteries_sans_service).
+  * #3826 : rotation de /var/log/secubox en root (`su root root` au lieu de
+    `su secubox secubox`) : elle échouait dès que le dossier partagé
+    appartenait à root (tmpfiles de secubox-waf-ng) — gk3 en échec, audit.log
+    de gk2 sans rotation depuis le 08/11. Ni copytruncate ni changement de
+    propriétaire : audit.log reste secubox:secubox 0640, en ajout seul.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 10:55:22 +0100
+
 secubox-core (1.8.35-1~trixie1) trixie; urgency=medium
 
   * #3720 : compte de service `ai-lecture` (portée waf-lecture, GET seulement,
