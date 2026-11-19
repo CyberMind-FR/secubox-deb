@@ -20,6 +20,10 @@ case "$1" in
                 systemctl reload nginx 2>/dev/null || true
             fi
         fi
+        # #3821 : état du vhost du nom de nœud (root 0700), seulement à la purge.
+        if [ "$1" = purge ]; then
+            rm -rf /var/lib/secubox-webos-noeud
+        fi
         ;;
 esac
 

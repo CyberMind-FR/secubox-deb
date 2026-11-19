@@ -1,3 +1,22 @@
+secubox-webos (1.21.0-1~trixie1) trixie; urgency=medium
+
+  * Accueil du nom de nœud (ref #3821) : <nœud>.<zone> (ex. gk2.secubox.in)
+    montre par défaut, sur chaque box, le dé SecuBox en plein écran qui tourne
+    sans fin (www/noeud/index.html, profil Aurora, aucune donnée ni ressource
+    extérieure). Moteur <sbx-dice> et faces partagés avec le Hall (servis sous
+    /_noeud/), jamais recopiés.
+  * webos-noeud (postinst : appliquer ; prerm : retirer) : vhost nginx généré
+    /etc/nginx/conf.d/secubox-noeud.conf (« / » exact seulement, nginx -t avant
+    rechargement), route sbxwaf vers :9080 par secubox-waf-route (jamais de
+    contournement), vhost HAProxy derrière sbxwaf_inspector s'il manque.
+    L'existant gagne : server_name déjà servi, ou route qui sert déjà « / ».
+    Une ancienne cible qui rend 404 à « / » est reprise et garde tous ses
+    autres chemins (relayés). Aucune nouvelle exposition tant que le mot de
+    passe admin par défaut est actif (#3401). Désactivable :
+    [noeud] accueil = false dans webos.toml. Décisions auditées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 09:30:00 +0100
+
 secubox-webos (1.20.8-1~trixie1) trixie; urgency=medium
 
   * Légendes des graphiques : chaque libellé prend la couleur de sa courbe

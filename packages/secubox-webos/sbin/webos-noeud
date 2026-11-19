@@ -1,0 +1,465 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: webos — accueil du NOM DE NŒUD (#3821)
+CyberMind — https://cybermind.fr
+
+Le nom nu d'une box, `<nœud>.<zone>` (`secubox-domaine`, ex. gk2.secubox.in), est celui que son frontal expose en
+premier. Il ne servait rien : sur gk2 une route posée à la main l'envoyait vers un serveur nginx sans nom (:8000) qui
+rend 404 à « / » ; ailleurs il n'avait pas de route du tout. Ce script lui donne, PAR DÉFAUT et sur chaque box, une page
+d'accueil : le dé SecuBox en plein écran (moteur et faces du Hall, partagés).
+
+    webos-noeud appliquer   (postinst) déclare le vhost nginx, la route sbxwaf et le vhost HAProxy
+    webos-noeud retirer     (postrm)   retire le vhost et rend à la route son ancienne cible si on l'avait reprise
+    webos-noeud etat        ce qui est en place, en JSON
+
+RÈGLES, dans l'ordre :
+  1. `[noeud] accueil = false` dans /etc/secubox/webos.toml : rien n'est posé, ce qui l'avait été est retiré.
+  2. CE QUI EST EXPLICITE GAGNE. Un serveur nginx qui nomme déjà ce domaine (server_name exact ou `.domaine`) : rien.
+     Une route sbxwaf vers une autre cible que 9080 qui SERT quelque chose à « / » : rien. Seule une ancienne cible
+     qui répond 404 à « / » est reprise — et alors tout le reste de ses chemins lui est relayé tel quel (le vhost
+     généré n'ajoute QUE « / » exact et ses deux ressources sous /_noeud/). Aucun chemin, aucune API n'est masqué.
+  3. LE WAF RESTE SUR LE CHEMIN. La route va vers nginx :9080 par sbxwaf comme tout vhost ; jamais de contournement.
+  4. Aucune NOUVELLE exposition publique tant que le mot de passe admin par défaut n'est pas prouvé changé (#3401) :
+     le vhost nginx est posé, la route et le vhost HAProxy attendent (refus audité).
+Chaque décision est écrite dans /var/log/secubox/audit.log. nginx n'est rechargé qu'après `nginx -t` réussi ; un
+échec remet le fichier précédent.
+"""
+from __future__ import annotations
+
+import http.client
+import ipaddress
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+
+MODULE = "webos-noeud"
+PORT = 9080
+WWW = "/usr/share/secubox/www"
+# Racine substituée (tests seulement) : honorée HORS root uniquement.
+R = ""
+if os.geteuid() != 0 and os.environ.get("SBX_NOEUD_ESSAI"):
+    R = os.environ["SBX_NOEUD_ESSAI"].rstrip("/")
+
+CONF = R + "/etc/nginx/conf.d/secubox-noeud.conf"
+DOSSIERS_NGINX = (R + "/etc/nginx/sites-enabled", R + "/etc/nginx/conf.d")
+FORMAT_HOTES = R + "/etc/nginx/conf.d/secubox-hosts-log.conf"   # log_format sbx_host (secubox-metrics)
+ROUTES = os.environ.get("SBX_WAF_ROUTES", R + "/etc/secubox/waf/haproxy-routes.json")
+REGLAGES = R + "/etc/secubox/webos.toml"
+HAPROXY_TOML = R + "/etc/secubox/haproxy.toml"
+ETAT_DIR = R + "/var/lib/secubox-webos-noeud"
+ETAT = ETAT_DIR + "/etat.json"
+AUDIT = R + "/var/log/secubox/audit.log"
+MDP_DEFAUT_PY = "/usr/lib/python3/dist-packages/secubox_core/mot_de_passe_defaut.py"
+
+DOMAINE = re.compile(r"^(?=.{4,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
+SERVER_NAME = re.compile(r"\bserver_name\s+([^;]+);")
+ENTETE = "# GÉNÉRÉ par /usr/sbin/webos-noeud (secubox-webos, #3821)"
+
+
+def log(msg: str) -> None:
+    print(f"{MODULE}: {msg}", file=sys.stderr)
+
+
+def executer(argv: list[str], delai: int = 60) -> subprocess.CompletedProcess:
+    """Toutes les commandes passent ici (substituable par les tests). Liste d'arguments, jamais de shell."""
+    return subprocess.run(argv, check=True, timeout=delai, capture_output=True, text=True)
+
+
+def audit(action: str, resultat: str, detail: str = "") -> None:
+    ligne = json.dumps({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "module": MODULE,
+                        "action": action, "result": resultat, "detail": detail[:300]}, ensure_ascii=False)
+    try:
+        fd = os.open(AUDIT, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        try:
+            os.write(fd, (ligne + "\n").encode())
+        finally:
+            os.close(fd)
+    except OSError as e:
+        log(f"audit.log non écrit ({e.__class__.__name__}) : {ligne}")
+
+
+# ── Entrées ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+def domaine() -> str:
+    """Le nom du nœud, celui de `secubox-domaine` ; vide si inconnu ou invalide (alors rien n'est posé)."""
+    brut = os.environ.get("SECUBOX_DOMAINE", "") if R else ""
+    if not brut:
+        try:
+            brut = executer(["secubox-domaine"], delai=30).stdout
+        except (OSError, subprocess.SubprocessError) as e:
+            log(f"domaine de la box inconnu ({e.__class__.__name__})")
+            return ""
+    dom = brut.strip().lower().rstrip(".")
+    return dom if DOMAINE.match(dom) else ""
+
+
+def accueil_voulu() -> bool:
+    """`[noeud] accueil` de webos.toml, vrai par défaut. Un fichier illisible ne désactive rien."""
+    try:
+        import tomllib
+        with open(REGLAGES, "rb") as fh:
+            val = tomllib.load(fh).get("noeud", {}).get("accueil", True)
+    except FileNotFoundError:
+        return True
+    except (OSError, ValueError) as e:
+        log(f"{REGLAGES} illisible ({e.__class__.__name__}) : réglage par défaut (accueil actif)")
+        return True
+    return val is not False
+
+
+def noms_explicites(dom: str) -> list[str]:
+    """Fichiers nginx (hors le nôtre) dont un server_name nomme ce domaine exactement, ou `.domaine`."""
+    trouves = []
+    for dossier in DOSSIERS_NGINX:
+        try:
+            noms = sorted(os.listdir(dossier))
+        except OSError:
+            continue
+        for nom in noms:
+            chemin = os.path.join(dossier, nom)
+            if os.path.abspath(chemin) == os.path.abspath(CONF) or not os.path.isfile(chemin):
+                continue
+            if dossier.endswith("conf.d") and not nom.endswith(".conf"):
+                continue   # nginx n'inclut que conf.d/*.conf
+            try:
+                with open(chemin, encoding="utf-8", errors="replace") as fh:
+                    texte = "\n".join(ligne.split("#", 1)[0] for ligne in fh.read(1 << 20).splitlines())
+            except OSError:
+                continue
+            for m in SERVER_NAME.finditer(texte):
+                if any(t.lower() in (dom, "." + dom) for t in m.group(1).split()):
+                    trouves.append(chemin)
+                    break
+    return trouves
+
+
+def lire_table():
+    """La table des routes sbxwaf ; None si absente (sbxwaf non installé). Illisible : ValueError (on abandonne)."""
+    try:
+        with open(ROUTES) as fh:
+            table = json.load(fh)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as e:
+        raise ValueError(f"table des routes illisible ({e.__class__.__name__})") from e
+    if not isinstance(table, dict):
+        raise ValueError("table des routes : pas un objet")
+    return table
+
+
+def cible(valeur) -> tuple[str, int] | None:
+    if isinstance(valeur, list) and len(valeur) == 2 and isinstance(valeur[1], int) and 0 < valeur[1] < 65536:
+        try:
+            return str(ipaddress.ip_address(str(valeur[0]))), valeur[1]
+        except ValueError:
+            return None
+    return None
+
+
+def sonder(ip: str, port: int, dom: str) -> int | None:
+    """Code HTTP de `GET /` pour ce nom sur l'ancienne cible ; None si elle ne répond pas."""
+    try:
+        cnx = http.client.HTTPConnection(ip, port, timeout=5)
+        try:
+            cnx.request("GET", "/", headers={"Host": dom, "User-Agent": MODULE})
+            return cnx.getresponse().status
+        finally:
+            cnx.close()
+    except (OSError, http.client.HTTPException):
+        return None
+
+
+def lire_etat() -> dict:
+    try:
+        with open(ETAT) as fh:
+            e = json.load(fh)
+        return e if isinstance(e, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def ecrire_atomique(chemin: str, texte: str, mode: int) -> None:
+    dossier = os.path.dirname(chemin)
+    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".noeud-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(texte)
+        os.chmod(tmp, mode)
+        os.replace(tmp, chemin)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def ecrire_etat(etat: dict) -> None:
+    os.makedirs(ETAT_DIR, mode=0o700, exist_ok=True)
+    ecrire_atomique(ETAT, json.dumps(etat, indent=2, sort_keys=True) + "\n", 0o600)
+
+
+def mot_de_passe_change() -> bool:
+    """La garde #3401 : vrai seulement si le mot de passe admin par défaut est PROUVÉ changé (code 10)."""
+    if R:
+        return os.environ.get("SBX_NOEUD_MDP_CHANGE") == "1"
+    try:
+        subprocess.run(["python3", "-I", MDP_DEFAUT_PY], check=True, timeout=30, capture_output=True, cwd="/")
+    except subprocess.CalledProcessError as e:
+        return e.returncode == 10
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return False   # code 0 : défaut actif
+
+
+# ── Le vhost nginx ───────────────────────────────────────────────────────────────────────────────────────────
+
+def rendre(dom: str, repli: tuple[str, int] | None, journal_hotes: bool) -> str:
+    if repli:
+        ip, port = repli
+        hote = f"[{ip}]" if ":" in ip else ip
+        reste = (f"    # Tout le reste va à l'ancienne cible de la route, comme avant la reprise : rien n'est masqué.\n"
+                 f"    location / {{\n"
+                 f"        proxy_pass http://{hote}:{port};\n"
+                 f"        proxy_http_version 1.1;\n"
+                 f"        proxy_set_header Host $host;\n"
+                 f"        proxy_set_header X-Real-IP $remote_addr;\n"
+                 f"        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+                 f"    }}\n")
+    else:
+        reste = "    location / {\n        return 404;\n    }\n"
+    journal = "    access_log /var/log/nginx/secubox-hosts.log sbx_host;\n" if journal_hotes else ""
+    csp = ("default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; "
+           "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+    return f"""{ENTETE} — ne pas éditer : réécrit à chaque configuration du paquet.
+# Accueil du nom de nœud : le dé SecuBox en plein écran sur « / » EXACT, rien d'autre.
+# Désactiver : [noeud] accueil = false dans /etc/secubox/webos.toml, puis `webos-noeud appliquer`.
+server {{
+    listen {PORT};
+    server_name {dom};
+{journal}
+    location = / {{
+        root {WWW}/noeud;
+        rewrite ^ /index.html break;
+        add_header Content-Security-Policy "{csp}" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header Cache-Control "no-cache" always;
+    }}
+    # Le moteur et les six faces du Hall, partagés (jamais recopiés).
+    location = /_noeud/sbx-dice.js {{
+        alias {WWW}/hall/sbx-dice.js;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cache-Control "no-cache" always;
+    }}
+    location ^~ /_noeud/dice/ {{
+        alias {WWW}/hall/dice/;
+        add_header X-Content-Type-Options "nosniff" always;
+    }}
+{reste}}}
+"""
+
+
+def nginx_valide_et_recharge() -> bool:
+    try:
+        executer(["nginx", "-t"], delai=60)
+    except subprocess.CalledProcessError as e:
+        log(f"nginx -t refuse la configuration : {(e.stderr or '').strip()[-400:]}")
+        return False
+    except (OSError, subprocess.SubprocessError) as e:
+        log(f"nginx -t impossible ({e.__class__.__name__})")
+        return False
+    try:
+        executer(["systemctl", "reload", "nginx"], delai=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        log(f"rechargement de nginx impossible ({e.__class__.__name__}) : pris au prochain rechargement")
+    return True
+
+
+def poser_conf(texte: str) -> bool:
+    """Écrit le vhost, le valide, recharge. Refusé : l'ancien fichier revient (ou aucun)."""
+    try:
+        with open(CONF, encoding="utf-8") as fh:
+            avant = fh.read()
+    except FileNotFoundError:
+        avant = None
+    if avant == texte:
+        return True
+    ecrire_atomique(CONF, texte, 0o644)
+    if nginx_valide_et_recharge():
+        return True
+    if avant is None:
+        os.unlink(CONF)
+    else:
+        ecrire_atomique(CONF, avant, 0o644)
+    return False
+
+
+def retirer_conf() -> bool:
+    try:
+        with open(CONF, encoding="utf-8") as fh:
+            if not fh.readline().startswith(ENTETE):
+                log(f"{CONF} n'est pas le nôtre : laissé tel quel")
+                return False
+    except FileNotFoundError:
+        return False
+    os.unlink(CONF)
+    nginx_valide_et_recharge()
+    return True
+
+
+# ── Route sbxwaf et vhost HAProxy ────────────────────────────────────────────────────────────────────────────
+
+def poser_route(dom: str) -> bool:
+    """La route vers nginx :9080, par l'outil commun de secubox-core (adresse prise aux voisines du même port)."""
+    try:
+        executer(["secubox-waf-route", dom, str(PORT)], delai=60)
+        return True
+    except (OSError, subprocess.SubprocessError) as e:
+        log(f"route sbxwaf de {dom} non posée ({e.__class__.__name__})")
+        return False
+
+
+def rendre_route(dom: str, ancienne: list) -> bool:
+    """Retour arrière : la route reprend EXACTEMENT son ancienne cible, si elle est toujours la nôtre (:9080)."""
+    try:
+        table = lire_table()
+    except ValueError as e:
+        log(f"{e} — ABANDON, la route n'est pas rendue")
+        return False
+    if table is None or not (cible(table.get(dom)) or ("", 0))[1] == PORT:
+        return False
+    table[dom] = ancienne
+    ecrire_atomique(ROUTES, json.dumps(table, indent=2, sort_keys=True) + "\n", 0o644)
+    return True
+
+
+def declarer_haproxy(dom: str) -> None:
+    """Le vhost HAProxy derrière sbxwaf_inspector, s'il n'est pas déjà déclaré (sa déclaration existante gagne)."""
+    try:
+        with open(HAPROXY_TOML, encoding="utf-8") as fh:
+            if f'"{dom}"' in fh.read():
+                return
+    except FileNotFoundError:
+        return   # pas de frontal HAProxy sur cette box
+    except OSError as e:
+        log(f"{HAPROXY_TOML} illisible ({e.__class__.__name__}) : vhost HAProxy non déclaré")
+        return
+    try:
+        executer(["haproxyctl", "vhost", "add", dom, "sbxwaf_inspector", "true"], delai=300)
+        executer(["systemctl", "reload", "haproxy"], delai=60)
+        audit("vhost-haproxy", "pose", f"{dom} -> sbxwaf_inspector")
+    except (OSError, subprocess.SubprocessError) as e:
+        log(f"vhost HAProxy de {dom} non déclaré ({e.__class__.__name__})")
+
+
+# ── Verbes ───────────────────────────────────────────────────────────────────────────────────────────────────
+
+def retirer(raison: str) -> int:
+    etat = lire_etat()
+    retire = retirer_conf()
+    rendue = False
+    if etat.get("route_reprise") and etat.get("domaine") and isinstance(etat.get("route_precedente"), list):
+        rendue = rendre_route(etat["domaine"], etat["route_precedente"])
+    if retire or rendue:
+        audit("retirer", "fait", f"{etat.get('domaine', '?')} : {raison}" + (" ; route rendue" if rendue else ""))
+    if etat:
+        ecrire_etat({})
+    return 0
+
+
+def appliquer() -> int:
+    dom = domaine()
+    if not dom:
+        log("domaine de la box inconnu : rien n'est posé")
+        return 0
+    if not accueil_voulu():
+        return retirer("désactivé ([noeud] accueil = false)")
+    explicites = noms_explicites(dom)
+    if explicites:
+        log(f"{dom} déjà servi par {', '.join(explicites)} : l'existant gagne")
+        if retirer_conf():
+            audit("appliquer", "conserve", f"{dom} servi par {explicites[0]}")
+        return 0
+    try:
+        table = lire_table()
+    except ValueError as e:
+        log(f"{e} — ABANDON, rien n'est posé")
+        return 1
+    etat = lire_etat()
+    if etat.get("domaine") != dom:
+        etat = {}
+    actuelle = table.get(dom) if table is not None else None
+    port_actuel = (cible(actuelle) or ("", 0))[1]
+    # Ancienne cible reprise lors d'un passage précédent : le reste de ses chemins lui est toujours relayé.
+    repli = cible(etat.get("route_precedente")) if etat.get("route_reprise") else None
+    route_a_poser = nouvelle = False
+    if table is None:
+        pass                                    # pas de sbxwaf : le vhost seul, joignable du seul nginx local
+    elif actuelle is None:
+        route_a_poser = nouvelle = True         # nom jamais routé : NOUVELLE exposition
+    elif port_actuel != PORT:
+        ancienne = cible(actuelle)
+        code = sonder(*ancienne, dom) if ancienne else None
+        if code != 404:
+            log(f"route explicite {dom} -> {actuelle} (« / » rend {code}) : l'existant gagne")
+            if retirer_conf():
+                audit("appliquer", "conserve", f"{dom} -> {actuelle}")
+            return 0
+        repli, route_a_poser = ancienne, True   # exposition EXISTANTE dont « / » ne sert rien : reprise
+        etat = {"domaine": dom, "route_reprise": True, "route_precedente": [ancienne[0], ancienne[1]]}
+    bloque = nouvelle and not mot_de_passe_change()
+    if bloque:
+        route_a_poser = False
+        audit("exposition_refusee", "refus", f"{dom} : mot de passe admin par défaut actif ou inconnu (#3401)")
+        log("mot de passe admin par défaut actif ou inconnu : route et vhost HAProxy en attente (#3401)")
+    if not poser_conf(rendre(dom, repli, os.path.isfile(FORMAT_HOTES))):
+        audit("appliquer", "echec", f"{dom} : nginx -t refuse le vhost, rien n'a changé")
+        return 1
+    if route_a_poser:
+        if not poser_route(dom):
+            audit("appliquer", "echec", f"{dom} : vhost posé, route sbxwaf non posée")
+            return 1
+        detail = f"{dom} -> :{PORT}"
+        if repli is not None:
+            detail += f" (reste des chemins relayé à {repli[0]}:{repli[1]})"
+        audit("route", "reprise" if repli is not None else "pose", detail)
+    if table is not None and not bloque:
+        declarer_haproxy(dom)
+    etat["domaine"] = dom
+    ecrire_etat(etat)
+    return 0
+
+
+def afficher_etat() -> int:
+    dom = domaine()
+    try:
+        table = lire_table()
+    except ValueError:
+        table = None
+    print(json.dumps({"domaine": dom or None, "accueil": accueil_voulu(), "vhost": os.path.isfile(CONF),
+                      "route": (table or {}).get(dom) if dom else None, "etat": lire_etat()},
+                     ensure_ascii=False, indent=2))
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    verbe = argv[1] if len(argv) > 1 else ""
+    if len(argv) != 2 or verbe not in ("appliquer", "retirer", "etat"):
+        print("usage: webos-noeud appliquer|retirer|etat", file=sys.stderr)
+        return 2
+    if verbe == "etat":
+        return afficher_etat()
+    if verbe == "retirer":
+        return retirer("paquet retiré")
+    return appliquer()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

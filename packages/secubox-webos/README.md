@@ -27,6 +27,28 @@ disponible et bascule seul quand un service apprend à se résumer.
 | **Le BiB** | voir ci-dessous |
 | **Vue maître (v2)** | coque responsive derrière le flag `hall_v2` de `/etc/secubox/webos.toml` (prévisualisation : `?hall=v2`) — jetons `tokens.css`, `hall-v2.css`, `hall-v2.js` ; état public `GET /api/v1/webos/public/etat` → `{hall_v2, version, en_ligne}` ; dé SecuBox `<sbx-dice>` (`sbx-dice.js`, textures `dice/`) dans la topbar ; composants `window.SbxUI` (`composants.js/.css` : Card, Hero, StatRing, Sparkline, Tabs, Pill, Tile, ModuleTile, NewsItem, DeviceRow) ; relevé `GET /api/v1/webos/public/systeme` → `{cpu_pct, charge, coeurs, mem, disque, reseau, es, uptime_s, releve}` ; `GET /public/services` porte `status ∈ {active, idle, offline, stale, nosource}`, `releve`, `intervalle_s` ; dossier `docs/dossiers/hall-vue-maitre.md` (#2996) |
 
+## Accueil du nom de nœud (#3821)
+
+Le nom nu de la box, `<nœud>.<zone>` (`secubox-domaine`, ex. `gk2.secubox.in`), montre **par défaut** le dé
+SecuBox en plein écran, qui tourne sans fin (`www/noeud/index.html`, profil Aurora : aucune donnée, aucun appel
+réseau, aucune ressource extérieure ; quart de vitesse sous `prefers-reduced-motion`, comme le composant).
+
+`webos-noeud appliquer` (lancé par le `postinst`) pose :
+
+- le vhost **généré** `/etc/nginx/conf.d/secubox-noeud.conf` sur `:9080` : `location = /` (la page) et
+  `/_noeud/sbx-dice.js`, `/_noeud/dice/` (moteur et faces du **Hall**, partagés), rien d'autre ; `nginx -t` avant
+  tout rechargement, l'ancien fichier revient sinon ;
+- la route sbxwaf `<nœud>.<zone> → :9080` (`secubox-waf-route`) : le WAF reste sur le chemin, jamais de contournement ;
+- le vhost HAProxy derrière `sbxwaf_inspector`, s'il n'est pas déjà déclaré.
+
+**L'existant gagne** : un `server_name` qui nomme déjà ce domaine (exact ou `.domaine`), ou une route vers une autre
+cible qui **sert** « / », et rien n'est posé. Une ancienne cible qui rend **404** à « / » (cas de gk2 : route à la
+main vers le serveur sans nom de `:8000`) est reprise : tous ses autres chemins lui restent relayés. Aucune
+**nouvelle** exposition tant que le mot de passe admin par défaut est actif (#3401, refus audité). Chaque décision
+va dans `/var/log/secubox/audit.log` ; état dans `/var/lib/secubox-webos-noeud/etat.json` (root 0600).
+Désactiver : `[noeud] accueil = false` dans `/etc/secubox/webos.toml`, puis `webos-noeud appliquer`. `webos-noeud
+retirer` (`prerm`) retire le vhost et rend à une route reprise son ancienne cible ; `webos-noeud etat` dit ce qui est en place.
+
 ## Les cartes du Hall
 
 Chaque carte est un aperçu **vivant** d'un service — elle ne peint rien qu'elle
