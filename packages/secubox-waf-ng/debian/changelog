@@ -1,3 +1,9 @@
+secubox-waf-ng (1.41.2-1~trixie1) trixie; urgency=medium
+
+  * Hôtes PHP : « Tout couvrir » (motif global, vhosts futurs compris), au-delà de 200 vhosts.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 08:19:42 +0100
+
 secubox-waf-ng (1.41.1-1~trixie1) trixie; urgency=medium
 
   * #3795 : leurres de service (#3728) lus par la veille V2 — /menaces/flux
