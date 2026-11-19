@@ -1,3 +1,16 @@
+secubox-metrics (1.29.12-1~trixie1) trixie; urgency=medium
+
+  * Fuite rapide de l'API (52 -> 450 Mo en 15 min, 750 Mo en 4 h sur gk2) : bans.jsonl (11 Mo, 105 000 lignes) était
+    relu en entier à chaque calcul des statistiques WAF, dans plusieurs fils à la fois ; lecture incrémentale qui ne
+    garde que les bans actifs (#3813).
+  * Une seule reconstruction du cache à la fois (bandeau de santé, /overview, /all, /refresh) ; la mémoire courte du
+    bandeau ne relance plus un calcul par requête pendant qu'il tourne, et ses clés sont bornées (#3813).
+  * La boucle du cache léger n'est plus lancée deux fois ; les boucles amorcées hors lifespan sont annulées à l'arrêt ;
+    journalctl de l'analyse des journaux sort de la boucle asyncio (#3813).
+  * Unité : MemoryHigh/MemoryMax, MemorySwapMax=0, TimeoutStopSec : le service ne peut plus pousser la box en swap (#3813).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 07:10:00 +0100
+
 secubox-metrics (1.29.11-1~trixie1) trixie; urgency=medium
 
   * Activation des unités hors du test /run/systemd/system (deb-systemd-helper enable) : dans le chroot des images
