@@ -1,3 +1,31 @@
+secubox-ai (0.4.0-1~trixie1) trixie; urgency=medium
+
+  * Console (#3811) : onglets Radar et Chaîne, et graphiques de l'onglet
+    Menaces, portés du POC ai.gk0 (maquettes Radar+Chaîne du 14/11, tendances
+    par pays du 18/11). Lecture seule, chiffres du relevé ou de veille.db.
+  * Radar : compteurs, anneau de gravité, fil des alertes, classement des pays
+    avec hier et J-7 à la même heure en surimpression floutée, série 7 jours
+    et journée heure par heure, messagerie, sites, balayages, campagnes,
+    analyste IA, familles, blocs /24. `?demo=1` (adresses de documentation).
+  * Tendances par pays : la veille échantillonne /waf/stats et /waf/bans par
+    son client signé (routes déjà déclarées) une fois par créneau de 15 min,
+    table pays_echantillons (migration 0004), gardée 8 jours. L'API la lit en
+    lecture seule par une tâche de fond (60 s) : GET /menaces/pays.
+  * Chaîne d'attaque : dossiers d'attaquant de la veille (#3795), étapes
+    repérage → essais → exploitation → persistance avec règles, preuves,
+    heures et première preuve réelle ; entonnoir 24 h ; GET /menaces/chaine.
+  * GET /menaces/series (1 h / 3 h, tranches de 10 min, sans interpolation).
+  * Résumé des menaces (« analyse qui tourne sans fin ») : la page rendait
+    muets un échec, un arrêt et un suivi perdu (tâche oubliée après
+    redémarrage, 404) en laissant la barre figée ; elle les affiche, avec
+    l'étape en cours et la durée. /menaces/releve : resume_en_cours n'est
+    plus que la tâche réellement en cours ; resume_tache, resume_etat,
+    resume_echec ajoutés.
+  * Non repris du POC : panneau Réponses et verdict « cas sûr » des blocs
+    (gestes ai-ban #3716, pas dans ce module), « Écouter le rapport » (voix).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 10:00:00 +0100
+
 secubox-ai (0.3.4-1~trixie1) trixie; urgency=medium
 
   * Veille V2 (#3720) : délai de lecture propre à la route des bans (`enforcement`,

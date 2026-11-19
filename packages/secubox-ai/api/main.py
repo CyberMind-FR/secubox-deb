@@ -17,9 +17,9 @@ from fastapi import APIRouter, Depends, FastAPI
 
 from secubox_core.auth import require_jwt
 
-from api import code, dialogue, documents, journal, medias, memoire, menaces, modeles, moteurs, reglages, taches
+from api import code, dialogue, documents, journal, medias, memoire, menaces, modeles, moteurs, radar, reglages, taches
 
-VERSION = "0.1.2"
+VERSION = "0.4.0"
 
 ROUTEUR = APIRouter(prefix="")
 
@@ -38,11 +38,13 @@ async def status():
 async def cycle_de_vie(_app):
     menaces.charger_instantanes()
     menaces.demarrer_veille()
+    radar.demarrer()
     taches.demarrer_arret_inactivite()
     try:
         yield
     finally:
         await taches.arreter_arret_inactivite()
+        await radar.arreter()
         await menaces.arreter_veille()
 
 
@@ -57,6 +59,7 @@ app.include_router(memoire.routeur)
 app.include_router(dialogue.routeur)
 app.include_router(documents.routeur)
 app.include_router(menaces.routeur)
+app.include_router(radar.routeur)
 app.include_router(code.routeur)
 app.include_router(modeles.routeur)
 app.include_router(medias.routeur)

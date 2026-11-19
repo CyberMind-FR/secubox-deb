@@ -151,7 +151,10 @@ Toute route porte `require_jwt` (administrateur réel), sauf `GET /health` (test
 | `POST /documents/fichier` | dépôt en corps brut (100 Mo), en-tête `X-Nom` |
 | `POST /documents/{ident}/analyser` | `resume`, `points`, `question`, `liens`, `traduire` (tâche) |
 | `POST /memoire/documents/{doc}` | garde un document lu en mémoire |
-| `GET /menaces/releve` | relevé des menaces de gk2 |
+| `GET /menaces/releve` | relevé des menaces de gk2 ; `resume_en_cours` (tâche réellement en cours, sinon null), `resume_tache`, `resume_etat`, `resume_echec` (texte d'un échec ou d'un arrêt, #3811) |
+| `GET /menaces/pays` | tendances par pays du Radar (#3811) : `{pret, calcule, pays_tendances}` ; `pays_tendances.colonnes.{alertes,bans}` = `pays` (aujourd'hui, hier et J-7 à la même heure, `serie7`, drapeaux « hors top 5 »), `jour` (`auj`, `hier`, `j7` : 24 valeurs horaires, null sans échantillon à ±15 min ; `maintenant`), `hier_dispo`, `j7_dispo` ; calcul de fond (60 s), jamais par requête |
+| `GET /menaces/chaine` | chaîne d'attaque (#3811) : `{pret, calcule, chaine}` ; `chaine` = `entonnoir` (attaquants par étape, 24 h), `acteurs`, `enchainees_2`, `dossiers` (12 au plus : clé, gravité, adresses, outils, étapes avec règles, nombre de preuves, heures et première preuve), `campagnes` (5 au plus), `tronque` ; `disponible: false` + `raison` si veille.db est absente |
+| `GET /menaces/series` | `fenetre=1h` ou `3h` (défaut) ; séries du relevé (#3811) : nouvelles alertes par catégorie et par tranche de 10 min (null = aucun écart mesuré), bans actifs, blocs /24, tuiles |
 | `POST /menaces/resumer` | résumé IA du relevé (tâche) |
 | `POST /menaces/demander` | question sur le relevé (tâche) |
 | `POST /code/{action}` | `expliquer`, `relire`, `tests`, `corriger`, `documenter` (tâche) |

@@ -238,6 +238,10 @@ async def releve_menaces(force: bool = False) -> dict:
             _ecrire_instantanes()
         releve["evolution_1h"] = evolution(maintenant)
         # Adresses déjà bannies, portées PAR ce relevé (pas par le cache, qu'un relevé suivant en erreur remplacerait).
+        # Alertes par pays (top 5 de gk2) pour les tendances du Radar (#3811) : clé interne, comptes entiers seulement.
+        releve["_pays_alertes"] = {str(x["country"])[:8]: x["count"] for x in _liste(stats.get("top_countries"))[:5]
+                                   if isinstance(x.get("country"), str) and x["country"] and isinstance(x.get("count"), int)
+                                   and not isinstance(x.get("count"), bool)}
         releve["_bannies"] = frozenset(str(b["ip"]) for b in liste if isinstance(b.get("ip"), str) and b["ip"])
         _cache.update(quand=maintenant, releve=releve)
         return releve
@@ -566,7 +570,17 @@ async def menaces_releve():
     r = await releve_menaces()
     return {**_visible(r), "resume": DERNIER_RESUME["texte"], "resume_quand": DERNIER_RESUME["quand"],
             "resume_propositions": DERNIER_RESUME.get("propositions") or [],
-            "resume_en_cours": DERNIER_RESUME["en_cours"]}
+            "resume_en_cours": _resume_en_cours(), **_dernier_resume()}
+
+
+def _dernier_resume() -> dict:
+    """Dernière tâche de résumé et son état (#3811) : un échec ou un arrêt est RENDU à la page, jamais tu. Tâche
+    oubliée (redémarrage du module, plus de 30 tâches depuis) : état None."""
+    t = DERNIER_RESUME["en_cours"]
+    x = taches.TACHES.get(t) if t else None
+    etat = x["etat"] if x else None
+    return {"resume_tache": t, "resume_etat": etat,
+            "resume_echec": x["resultat"] if x and etat in ("echec", "arrete") else None}
 
 
 @routeur.post("/menaces/resumer")

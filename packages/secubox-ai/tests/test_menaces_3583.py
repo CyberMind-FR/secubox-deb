@@ -347,7 +347,9 @@ async def test_resume_double_tampon_et_controles(gk2, monkeypatch):
                                   "lien": "https://admin.gk2.secubox.in/waf/attaquants.html"}]
     rel = (await appeler("GET", "/menaces/releve")).json()
     assert rel["resume"] == res and rel["resume_propositions"] == t["propositions"]
-    assert rel["resume_en_cours"] == r.json()["tache"] and rel["resume_quand"] > 0
+    # #3811 : une tâche finie n'est plus « en cours » ; la dernière tâche et son état restent lisibles.
+    assert rel["resume_en_cours"] is None and rel["resume_quand"] > 0
+    assert (rel["resume_tache"], rel["resume_etat"], rel["resume_echec"]) == (r.json()["tache"], "fini", None)
 
 
 @pytest.mark.asyncio
