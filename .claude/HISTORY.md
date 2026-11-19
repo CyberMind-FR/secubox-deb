@@ -3294,3 +3294,7 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 - Essai gk2 rôle tout ~1 h : 3 appareils en IPv6 via gk2, sonde 0 échec ; le Player n'est jamais passé par gk2
   (repli IPv4 direct Freebox). Next Hop et DNS retirés à la main par le propriétaire (coupures de session), gk2
   nettoyé (revenir + retirer), DNS DHCP remis à 192.168.1.200. Relais installé, inactif.
+- 18/11 soir, 2e essai (0.3.2, #3810 : `grep -q` en tube + pipefail refusait la bascule au hasard) : le PC du
+  propriétaire perd ses connexions longues (API Claude, ECONNRESET) quand son IPv6 passe par gk2 ; cause non
+  trouvée (aucune redirection 443 IPv6, pistes : bascule de route en cours de connexion, pare-feu IPv6 Freebox
+  avec Next Hop). Relais retiré, Next Hop vide. Tout nouvel essai : depuis un autre appareil, gk2 préparé avant.
