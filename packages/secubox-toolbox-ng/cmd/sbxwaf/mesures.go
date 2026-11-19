@@ -128,6 +128,10 @@ func (m *MesuresWAF) ecrireLigne(chemin string, v any) {
 		return
 	}
 	_ = os.MkdirAll(filepath.Dir(chemin), 0o755)
+	// #3820 : sous le verrou d'ajout du chemin, que le compactage (journal_compactage.go) prend pour recopier la fin et renommer.
+	mu := verrouAjout(chemin)
+	mu.Lock()
+	defer mu.Unlock()
 	f, err := os.OpenFile(chemin, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o640)
 	if err != nil {
 		log.Printf("sbxwaf: mesures — écriture %s impossible : %v", chemin, err)

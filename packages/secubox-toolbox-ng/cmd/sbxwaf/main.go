@@ -1410,6 +1410,13 @@ func main() {
 	mesuresMaxBans := flag.Int("mesures-max-bans-heure", 20, "coupe-circuit : bans de l'échelle de réponse par heure glissante")
 	reevaluation := flag.String("reevaluation", "off", "kill switch logique : réévalue chaque ban à l'échéance, RELEASE ou EXTEND gradué (jamais permanent, plafond 30 j) : off | propose | auto (#2240 phase 4)")
 	reevalPreuves := flag.String("reevaluation-preuves", "/var/lib/secubox/waf/reevaluations.jsonl", "journal des réévaluations (une ligne par transition, append-only)")
+	mesuresPreuves := flag.String("mesures-preuves", "/var/lib/secubox/waf/mesures.jsonl", "journal des mesures appliquées ou écartées (une ligne par première décision, append-only)")
+	// #3820 : compactage des journaux de preuves (mesures, réévaluations) : suffixe récent gardé, le reste en archives mensuelles gzip.
+	preuvesFenetre := flag.Duration("preuves-fenetre", 8*24*time.Hour,
+		"lignes de mesures.jsonl et reevaluations.jsonl gardées telles quelles (24 h au moins ; toujours plus des 8 Mio de fin "+
+			"relus par /mesures et des 5 000 dernières lignes relues par /reevaluations) ; le reste part en archive mensuelle gzip")
+	preuvesArchives := flag.Int("preuves-archives", 6, "archives mensuelles mesures-AAAAMM.jsonl.gz et reevaluations-AAAAMM.jsonl.gz gardées (mois)")
+	preuvesSeuil := flag.Int64("preuves-seuil", 1024*1024, "octets archivables en dessous desquels un journal de preuves n'est pas réécrit")
 	reevalSeuil := flag.Uint64("reeval-seuil", seuilReevalDefaut, "paquets reçus pendant le ban à partir desquels l'adresse est jugée insistante")
 	campagneBanMaxHeure := flag.Int("campagne-ban-max-heure", 30, "coupe-circuit : bans de campagne maximum par heure glissante")
 	actorBanMode := flag.String("actor-ban", "off", "ban automatique piloté par Actor Intelligence : off | propose (n'applique rien, écrit les candidats) | auto")
@@ -1652,7 +1659,7 @@ func main() {
 			if *mesuresMode == "propose" || *mesuresMode == "auto" {
 				mw := NewMesuresWAF(*mesuresFichier, *mesuresMode, store, nb)
 				mw.etat = "/var/lib/secubox/waf/mesures-etat.json"
-				mw.preuves = "/var/lib/secubox/waf/mesures.jsonl"
+				mw.preuves = *mesuresPreuves
 				mw.protegees = parseCIDRs(*actorBanProtegees)
 				mw.robots = nb.robots
 				mw.maxBansHeure = *mesuresMaxBans
@@ -1681,6 +1688,12 @@ func main() {
 			}()
 		}
 	}
+	// #3820 : journaux de preuves bornés, quel que soit le mode (un journal d'un mode repassé à off est compacté aussi).
+	// Bornes de lecture de l'API du WAF : fin de 8 Mio (/mesures), 5 000 dernières lignes (/reevaluations).
+	go VeillerCompactageJournaux([]JournalPreuves{
+		{Chemin: *mesuresPreuves, Prefixe: "mesures", MinOctets: octetsLusMesures},
+		{Chemin: *reevalPreuves, Prefixe: "reevaluations", MinLignes: lignesLuesReevaluations},
+	}, CompactageJournal{Fenetre: *preuvesFenetre, ArchivesMois: *preuvesArchives, Seuil: *preuvesSeuil}, *banStoreCompactage)
 
 	// Wire in the WAF rules engine when --rules is provided.
 	if *rules != "" {

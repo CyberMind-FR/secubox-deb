@@ -68,7 +68,8 @@ type BilanCompactage struct {
 	ArchivesSupprimees         int
 }
 
-var motifArchiveBans = regexp.MustCompile(`^bans-([0-9]{6})\.jsonl\.gz$`)
+// prefixeArchivesBans : archives bans-AAAAMM.jsonl.gz (les journaux de preuves ont les leurs, journal_compactage.go).
+const prefixeArchivesBans = "bans"
 
 // ligneBan : ce que le tri retient d'une ligne (pas la ligne elle-même : mémoire ~32 o/ligne).
 type ligneBan struct {
@@ -90,8 +91,8 @@ func (s *BanStore) Compacter(now time.Time, cfg CompactageBans) (bilan BilanComp
 	s.compactMu.Lock()
 	defer s.compactMu.Unlock()
 	dir := filepath.Dir(s.path)
-	nettoyerTemporairesBans(dir, filepath.Base(s.path))
-	defer func() { bilan.ArchivesSupprimees = purgerArchivesBans(dir, now, cfg.ArchivesMois) }()
+	nettoyerTemporaires(dir, filepath.Base(s.path), prefixeArchivesBans)
+	defer func() { bilan.ArchivesSupprimees = purgerArchives(dir, prefixeArchivesBans, now, cfg.ArchivesMois) }()
 
 	// 1. Taille figée N sous le verrou : tout ce qui est avant N est écrit en entier et ne bougera plus.
 	s.mu.Lock()
@@ -156,7 +157,7 @@ func (s *BanStore) Compacter(now time.Time, cfg CompactageBans) (bilan BilanComp
 			os.Remove(tmpNom)
 		}
 	}()
-	archives := map[string]*archiveBans{}
+	archives := map[string]*archiveMensuelle{}
 	defer func() {
 		for _, a := range archives {
 			a.abandonner()
@@ -188,7 +189,7 @@ func (s *BanStore) Compacter(now time.Time, cfg CompactageBans) (bilan BilanComp
 		}
 		a := archives[mois]
 		if a == nil {
-			if a, err = ouvrirArchiveBans(dir, mois); err != nil {
+			if a, err = ouvrirArchive(dir, prefixeArchivesBans, mois); err != nil {
 				return bilan, err
 			}
 			archives[mois] = a
@@ -388,21 +389,21 @@ func etatChaine(lignes []ligneBan, L []int) chaine {
 	return c
 }
 
-// archiveBans : copie d'une archive mensuelle en cours d'écriture (anciens octets + un membre gzip de plus).
-type archiveBans struct {
+// archiveMensuelle : copie d'une archive mensuelle <préfixe>-AAAAMM.jsonl.gz en cours d'écriture (anciens octets + un membre gzip de plus).
+type archiveMensuelle struct {
 	final, tmp string
 	f          *os.File
 	gz         *gzip.Writer
 	fait       bool
 }
 
-func ouvrirArchiveBans(dir, mois string) (*archiveBans, error) {
-	final := filepath.Join(dir, "bans-"+mois+".jsonl.gz")
-	f, err := os.CreateTemp(dir, "bans-"+mois+".jsonl.gz.tmp-*")
+func ouvrirArchive(dir, prefixe, mois string) (*archiveMensuelle, error) {
+	final := filepath.Join(dir, prefixe+"-"+mois+".jsonl.gz")
+	f, err := os.CreateTemp(dir, prefixe+"-"+mois+".jsonl.gz.tmp-*")
 	if err != nil {
 		return nil, err
 	}
-	a := &archiveBans{final: final, tmp: f.Name(), f: f}
+	a := &archiveMensuelle{final: final, tmp: f.Name(), f: f}
 	if st, err := os.Lstat(final); err == nil {
 		if !st.Mode().IsRegular() {
 			a.abandonner()
@@ -427,7 +428,7 @@ func ouvrirArchiveBans(dir, mois string) (*archiveBans, error) {
 	return a, nil
 }
 
-func (a *archiveBans) valider() error {
+func (a *archiveMensuelle) valider() error {
 	if err := a.gz.Close(); err != nil {
 		return err
 	}
@@ -447,7 +448,7 @@ func (a *archiveBans) valider() error {
 	return nil
 }
 
-func (a *archiveBans) abandonner() {
+func (a *archiveMensuelle) abandonner() {
 	if a.fait {
 		return
 	}
@@ -456,35 +457,36 @@ func (a *archiveBans) abandonner() {
 	a.fait = true
 }
 
-// purgerArchivesBans supprime les archives d'un mois antérieur à (mois courant − mois).
-func purgerArchivesBans(dir string, now time.Time, mois int) int {
+// purgerArchives supprime les archives <préfixe>-AAAAMM.jsonl.gz d'un mois antérieur à (mois courant − mois).
+func purgerArchives(dir, prefixe string, now time.Time, mois int) int {
 	if mois < 0 {
 		return 0
 	}
 	u := now.UTC()
 	limite := time.Date(u.Year(), u.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -mois, 0).Format("200601")
+	motif := regexp.MustCompile(`^` + regexp.QuoteMeta(prefixe) + `-([0-9]{6})\.jsonl\.gz$`)
 	entrees, err := os.ReadDir(dir)
 	if err != nil {
 		return 0
 	}
 	n := 0
 	for _, e := range entrees {
-		m := motifArchiveBans.FindStringSubmatch(e.Name())
+		m := motif.FindStringSubmatch(e.Name())
 		if m == nil || !e.Type().IsRegular() || m[1] >= limite {
 			continue
 		}
 		if err := os.Remove(filepath.Join(dir, e.Name())); err == nil {
 			n++
 		} else {
-			log.Printf("sbxwaf: archive de bans %s non supprimée : %v", e.Name(), err)
+			log.Printf("sbxwaf: archive %s non supprimée : %v", e.Name(), err)
 		}
 	}
 	return n
 }
 
-// nettoyerTemporairesBans retire les temporaires d'une passe interrompue (arrêt brutal) : seul le compactage en crée,
+// nettoyerTemporaires retire les temporaires d'une passe interrompue (arrêt brutal) : seul le compactage en crée,
 // et il tient compactMu.
-func nettoyerTemporairesBans(dir, base string) {
+func nettoyerTemporaires(dir, base, prefixe string) {
 	entrees, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -494,7 +496,7 @@ func nettoyerTemporairesBans(dir, base string) {
 		if !e.Type().IsRegular() {
 			continue
 		}
-		if strings.HasPrefix(nom, base+".tmp-") || (strings.HasPrefix(nom, "bans-") && strings.Contains(nom, ".jsonl.gz.tmp-")) {
+		if strings.HasPrefix(nom, base+".tmp-") || (strings.HasPrefix(nom, prefixe+"-") && strings.Contains(nom, ".jsonl.gz.tmp-")) {
 			os.Remove(filepath.Join(dir, nom))
 		}
 	}
