@@ -48,7 +48,14 @@ TOR_DATA = Path("/var/lib/tor")
 TOR_CONTROL_SOCKET = Path("/run/tor/control")
 DATA_DIR = Path("/var/lib/secubox/tor")
 CONFIG_FILE = Path("/etc/secubox/tor.json")
-ONION_FORWARD_ZONE = Path("/etc/unbound/unbound.conf.d/48-secubox-onion.conf")
+# La zone de renvoi .onion vers le DNSPort de Tor peut être posée sous DEUX noms,
+# tous deux valides : « secubox-onion-forward.conf » par torctl (secubox-tor) et
+# « 48-secubox-onion.conf » par secubox-toolbox-tor-reconcile (egress armé). Le
+# diagnostic doit accepter l'un OU l'autre (sinon « Zone NON » à tort, #3834).
+ONION_FORWARD_ZONES = (
+    Path("/etc/unbound/unbound.conf.d/secubox-onion-forward.conf"),
+    Path("/etc/unbound/unbound.conf.d/48-secubox-onion.conf"),
+)
 HISTORY_FILE = DATA_DIR / "history.json"
 WEBHOOKS_FILE = DATA_DIR / "webhooks.json"
 STATS_FILE = DATA_DIR / "stats_history.json"
@@ -611,7 +618,7 @@ async def get_onion_dns():
         dnsport_up = False
 
     try:
-        forward_zone_installed = ONION_FORWARD_ZONE.exists()
+        forward_zone_installed = any(z.exists() for z in ONION_FORWARD_ZONES)
     except Exception:
         forward_zone_installed = False
 
