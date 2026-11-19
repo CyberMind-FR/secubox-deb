@@ -1,3 +1,11 @@
+secubox-toolbox-ng (0.17.1-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf : compactage de bans.jsonl et archives mensuelles gzip (ref #3816),
+    livré par secubox-waf-ng 1.42.0. Prend aussi la montée oubliée des
+    changements de sbx-actord de la fusion V2 (#3817).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 12:00:00 +0100
+
 secubox-toolbox-ng (0.17.0-1~trixie1) trixie; urgency=medium
 
   * sbxwaf : contrôles structurels dans les trois modes (ref #3741). En

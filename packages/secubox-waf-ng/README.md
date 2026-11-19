@@ -178,7 +178,8 @@ Bornes vérifiées sur la box : IPv4 publique ou /24 exact (422 sinon) ; `mode: 
 `lfi`, `sqli`, `rce`, `api_abuse`, `campagne`, `mesure`, toute autre, et `waf` inconnue — restent en un clic). Famille
 d'une adresse : celle de son **dernier** enregistrement `ban` de `/var/lib/secubox/waf/bans.jsonl` (`cat` coupé au
 premier `|` puis au premier `:` : `host_anomaly:unrouted` → `host_anomaly`, `scanners|prolonge` → `scanners`), lu par
-sa fin (16 Mio au plus : au-delà, les plus anciens ne sont plus lus) ; à défaut, le motif du journal des menaces
+sa fin (16 Mio au plus : au-delà, les plus anciens ne sont plus lus ; depuis #3816 le journal ne garde que 31 jours
+plus les bans actifs, voir « Journal des bans ») ; à défaut, le motif du journal des menaces
 (≈ 6 h), puis `waf`. `bans.jsonl` illisible : 503 `etat`, jamais « sans catégorie ». `GET /bans` porte la même
 `famille` par ban (lue par le relais du POC, qui applique le même ensemble) ;
 plafonds glissants d'office 5/h et 20/j, du compte 30/h et 100/j. Refus 409 `{"detail": {"motif"}}` : `deja_actif`,
@@ -187,6 +188,15 @@ plafonds glissants d'office 5/h et 20/j, du compte 30/h et 100/j. Refus 409 `{"d
 ne lève jamais un ban qu'une autre source couvre (sbxwaf, administrateur) : état `couvert`. Journal des gestes :
 `/var/lib/secubox/waf/ai-ban.jsonl`. La `fin` d'un ban de bloc (réponse et journal) est celle que `waf-blocs` a
 enregistrée.
+
+**Journal des bans** (`/var/lib/secubox/waf/bans.jsonl`, #3816). sbxwaf y ajoute une ligne par ban/unban et le relit au
+démarrage. Il le **compacte** au démarrage puis chaque heure (`--ban-store-compactage 1h`) : restent les lignes de moins
+de `--ban-store-fenetre` (31 j d'office, jamais moins de 30 j : récidive leurre et campagne, plafond de chaîne de la
+réévaluation, vue `/enforcement`), le dernier état de chaque ban actif et toute chaîne de bans qui atteint la fenêtre ; le
+reste est ajouté à `bans-AAAAMM.jsonl.gz` (mois de `at`, gzip multi-membres, `zcat` le lit), archives purgées au-delà de
+`--ban-store-archives` mois (6). Réécriture atomique (temporaire dans le dossier, fsync, rename, mode et ACL recopiés) ;
+rien n'est réécrit sous `--ban-store-seuil` octets archivables (256 Kio). Un lecteur incrémental identifie le fichier
+par le descripteur ouvert (`fstat`) : un nouvel inode veut dire « relire depuis le début ».
 
 **Le cas sûr, deux contrôles** : la règle effective est **relais ∧ gk2**. Le relais vérifie chaque adresse du bloc
 dans ses propres relevés ; le recontrôle de la box ne regarde, pour chaque adresse de `waf_ban`, que la **dernière**
