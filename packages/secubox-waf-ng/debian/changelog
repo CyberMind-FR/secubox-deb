@@ -1,3 +1,18 @@
+secubox-waf-ng (1.42.0-1~trixie1) trixie; urgency=medium
+
+  * #3816 : sbxwaf compacte /var/lib/secubox/waf/bans.jsonl (11 Mo, 105 000
+    lignes sur gk2, jamais tourné) au démarrage puis chaque heure : gardés,
+    les lignes de moins de 31 jours (--ban-store-fenetre, 30 j au moins :
+    récidive leurre/campagne, plafond de chaîne, vue /enforcement), le
+    dernier état de chaque ban actif et toute chaîne de bans qui atteint la
+    fenêtre ; le reste part dans bans-AAAAMM.jsonl.gz (--ban-store-archives,
+    6 mois). Réécriture atomique (temporaire, fsync, rename, fsync du
+    dossier, mode et ACL recopiés), sans bloquer les bans pendant le tri ;
+    relecture identique prouvée par test. Pas de réécriture sous 256 Kio
+    archivables (--ban-store-seuil).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 12:00:00 +0100
+
 secubox-waf-ng (1.41.2-1~trixie1) trixie; urgency=medium
 
   * Hôtes PHP : « Tout couvrir » (motif global, vhosts futurs compris), au-delà de 200 vhosts.

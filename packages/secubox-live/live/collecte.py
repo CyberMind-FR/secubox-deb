@@ -10,7 +10,8 @@ Agrège des sources EXISTANTES du maître, en lecture seule, et écrit /var/cach
   et par jour ; les totaux par jour sont persistés (menaces-etat.json, JOURS_MAX jours) et survivent aux rotations ;
 - visites : le cache de secubox-metrics (vhost_stats.json), par jour et par pays ;
 - bans : le journal de bans de sbxwaf (bans.jsonl, ban/unban append-only, celui que sbxwaf relit au démarrage pour
-  réinjecter ses bans dans nft) : bans posés par jour et bans actifs ; aucun DPI (décision du propriétaire) ;
+  réinjecter ses bans dans nft ; compacté par rename depuis #3816) : bans posés par jour et bans actifs ; aucun DPI
+  (décision du propriétaire) ;
 - développement : l'API publique de GitHub, sans jeton, gardée en cache 10 min.
 
 RÈGLES (page publique) : aucune adresse IP ni privée, aucun nom de compte ni d'appareil, aucun secret. Les pays sont
@@ -384,22 +385,26 @@ def menaces(src: Sources, maintenant: float):
 
 
 def _bans(src: Sources, etat: dict, maintenant: float) -> Optional[dict]:
-    """Bans posés par jour et bans actifs, d'après le journal de bans de sbxwaf (ban/unban, append-only, jamais tourné).
+    """Bans posés par jour et bans actifs, d'après le journal de bans de sbxwaf (ban/unban, append-only, compacté par
+    rename depuis #3816 : nouvel inode = relecture complète, les jours déjà comptés sont gardés au maximum).
     Lu par incréments (inode + position). L'état ne garde des adresses qu'une empreinte tronquée, et seulement le temps
     du ban ; rien n'en sort hormis deux comptes."""
     try:
-        st = os.stat(src.bans)
+        f = open(src.bans, "rb")
     except OSError:
         return None
-    b = etat.get("bans") if isinstance(etat.get("bans"), dict) else None
-    if b is None or b.get("ino") != st.st_ino or b.get("pos", 0) > st.st_size:
-        b = {"ino": st.st_ino, "pos": 0, "jours": (b or {}).get("jours", {}) if b else {}, "actifs": {},
-             "depuis": (b or {}).get("depuis")}
-        refait = True
-    else:
-        refait = False
-    recompte = {}
-    with open(src.bans, "rb") as f:
+    with f:
+        # Identité lue sur le descripteur ouvert : sbxwaf compacte le journal par rename (#3816) ; un stat du chemin
+        # avant l'ouverture ferait relire le nouveau fichier à la position de l'ancien (jours comptés deux fois).
+        st = os.fstat(f.fileno())
+        b = etat.get("bans") if isinstance(etat.get("bans"), dict) else None
+        if b is None or b.get("ino") != st.st_ino or b.get("pos", 0) > st.st_size:
+            b = {"ino": st.st_ino, "pos": 0, "jours": (b or {}).get("jours", {}) if b else {}, "actifs": {},
+                 "depuis": (b or {}).get("depuis")}
+            refait = True
+        else:
+            refait = False
+        recompte = {}
         f.seek(b["pos"])
         for brut in f:
             try:

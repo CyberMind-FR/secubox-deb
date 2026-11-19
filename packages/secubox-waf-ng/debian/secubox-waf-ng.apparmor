@@ -89,7 +89,8 @@
   /usr/share/iproute2/       r,
   /usr/share/iproute2/*      r,
   # Journal des bans (persistance + ré-application après un rechargement du
-  # pare-feu) : --ban-store /var/lib/secubox/waf/bans.jsonl.
+  # pare-feu) : --ban-store /var/lib/secubox/waf/bans.jsonl. Son compactage (#3816)
+  # y écrit aussi bans.jsonl.tmp-*, bans-AAAAMM.jsonl.gz(.tmp-*) : couverts par **.
   /var/lib/secubox/          r,
   /var/lib/secubox/waf/      rw,
   /var/lib/secubox/waf/**    rw,

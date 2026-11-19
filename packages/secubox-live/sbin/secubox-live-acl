@@ -7,7 +7,7 @@
 # Producteurs (écriture atomique, nouveau fichier puis rename, dans le même dossier : l'ACL par défaut du dossier
 # s'applique) : vhost_stats.json (secubox-metrics, 0644 selon l'umask),
 # waf-threats.log (sbxwaf, 0660 puis rotation et .N.gz),
-# bans.jsonl (sbxwaf, append-only 0640, jamais tourné). haproxy.toml : fichier simple.
+# bans.jsonl (sbxwaf, append-only 0640, compacté par rename #3816 : ACL recopiée). haproxy.toml : fichier simple.
 set -eu
 command -v setfacl >/dev/null 2>&1 || exit 0
 for d in /var/log/secubox /var/cache/secubox /var/lib/secubox; do

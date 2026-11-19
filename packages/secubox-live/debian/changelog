@@ -1,3 +1,11 @@
+secubox-live (0.1.8-1~trixie1) trixie; urgency=medium
+
+  * Bans : identité de bans.jsonl lue sur le descripteur ouvert (fstat) ; sbxwaf
+    le compacte désormais par rename (#3816) : relecture complète, jours déjà
+    comptés gardés au maximum, jamais comptés deux fois.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 12:00:00 +0100
+
 secubox-live (0.1.7-1~trixie1) trixie; urgency=medium
 
   * ACL du collecteur : l'ACL par défaut des dossiers sources ne masque plus

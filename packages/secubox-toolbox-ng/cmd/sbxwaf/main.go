@@ -1335,6 +1335,13 @@ func main() {
 	nftTable := flag.String("nft-table", "secubox", "table nft inet pour les sets de ban")
 	banStore := flag.String("ban-store", "/var/lib/secubox/waf/bans.jsonl",
 		"journal JSONL des bans nft (persistance + audit ; rechargé au démarrage)")
+	// #3816 : compactage du journal (fenêtre, archives mensuelles gzip, purge). Fenêtre ramenée à 30 j au moins.
+	banStoreFenetre := flag.Duration("ban-store-fenetre", 31*24*time.Hour,
+		"lignes de bans.jsonl gardées telles quelles (30 j au moins : récidive leurre/campagne, plafond de chaîne, vue /enforcement) ; "+
+			"au-delà, seuls les bans actifs et leur chaîne restent, le reste part en archive mensuelle gzip")
+	banStoreArchives := flag.Int("ban-store-archives", 6, "archives mensuelles bans-AAAAMM.jsonl.gz gardées (mois)")
+	banStoreCompactage := flag.Duration("ban-store-compactage", time.Hour, "intervalle de compactage de bans.jsonl (0 : au démarrage seulement)")
+	banStoreSeuil := flag.Int64("ban-store-seuil", 256*1024, "octets archivables en dessous desquels bans.jsonl n'est pas réécrit")
 	nftBanDuration := flag.Duration("nft-ban-duration", 4*time.Hour, "durée d'un ban nft")
 	nftEtat := flag.String("nft-etat", "/var/cache/secubox/waf/nft-etat.json",
 		"état du blocage nft (actif, réparations, dernier échec), réécrit à chaque veille — lu par le tableau de bord (#1693)")
@@ -1606,6 +1613,9 @@ func main() {
 				}
 			}()
 			go nb.Veiller(30*time.Second, 2*time.Minute)
+			// #3816 : journal compacté après le premier Reload (ne retarde pas le démarrage), puis chaque heure.
+			go store.VeillerCompactage(CompactageBans{Fenetre: *banStoreFenetre, ArchivesMois: *banStoreArchives, Seuil: *banStoreSeuil},
+				*banStoreCompactage)
 			// Ban automatique piloté par Actor Intelligence : garde-fous dans actorban.go. « off » par défaut ; « propose » n'applique rien.
 			if *actorBanMode == "propose" || *actorBanMode == "auto" {
 				ab := NewActorBan(*actorProps, *actorBanMode, store, nb)

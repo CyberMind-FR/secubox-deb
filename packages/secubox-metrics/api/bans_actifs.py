@@ -16,9 +16,13 @@ qui trouvait le cache perime le faisaient EN MEME TEMPS, dans autant de fils :
 Ici on ne lit que ce qui s'est ajoute depuis le passage precedent, ligne a
 ligne, et on ne garde que les bans encore actifs ({ip: echeance}) : la memoire
 suit le nombre de bans actifs, pas la taille du journal.
+
+Depuis #3816, sbxwaf compacte le journal (nouveau fichier puis rename) : un
+autre inode fait tout relire depuis le debut.
 """
 
 import json
+import os
 import threading
 import time
 from pathlib import Path
@@ -44,13 +48,16 @@ class BansActifs:
             return len(self._actifs)
 
     def _lire(self, now: int) -> None:
-        st = self.chemin.stat()
-        cle = (st.st_dev, st.st_ino)
-        if cle != self._cle or st.st_size < self._pos:
-            self._cle, self._pos, self._actifs = cle, 0, {}
-        if st.st_size == self._pos:
-            return
+        # Identite lue sur le descripteur OUVERT (fstat), jamais par un stat du chemin avant l'ouverture : sbxwaf
+        # compacte le journal par rename (#3816) ; un rename entre stat et open ferait lire le nouveau fichier a la
+        # position de l'ancien.
         with self.chemin.open("rb") as fh:
+            st = os.fstat(fh.fileno())
+            cle = (st.st_dev, st.st_ino)
+            if cle != self._cle or st.st_size < self._pos:
+                self._cle, self._pos, self._actifs = cle, 0, {}
+            if st.st_size == self._pos:
+                return
             fh.seek(self._pos)
             for brute in fh:
                 if not brute.endswith(b"\n"):

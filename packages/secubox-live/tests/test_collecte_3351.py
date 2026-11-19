@@ -271,6 +271,33 @@ def test_bans_par_jour_et_actifs_depuis_le_journal_de_bans(tmp_path):
     assert etat["tuiles"]["bans_actifs"] == 1 and {x["jour"]: x["bans"] for x in etat["histo"]}["2026-10-31"] == 2
 
 
+def test_bans_compactage_par_rename_3816(tmp_path, monkeypatch):
+    """sbxwaf compacte bans.jsonl par rename (#3816) : identité lue sur le descripteur ouvert (un stat périmé du chemin
+    ne fait pas lire le nouveau fichier à la position de l'ancien), jours déjà comptés gardés, actifs recalculés."""
+    import os
+    s = _sources(tmp_path)
+    j = 86400
+    anciens = [{"ip": f"203.0.113.{i}", "cat": "x", "at": MAINTENANT - 2 * j, "exp": MAINTENANT - j, "action": "ban"}
+               for i in range(40)]
+    actif = {"ip": "198.51.100.1", "cat": "leurre", "at": MAINTENANT - 600, "exp": MAINTENANT + j, "action": "ban"}
+    s.bans = _bans(tmp_path, anciens + [actif])
+    etat = C.collecter(s, maintenant=MAINTENANT, reseau=False)
+    assert etat["tuiles"]["bans_actifs"] == 1
+    perime = os.stat(s.bans)
+    # compactage : les 40 vieux bans partent en archive ; le nouveau fichier est plus long que la position lue
+    nouveaux = [actif] + [{"ip": f"198.51.100.{i}", "cat": "y", "at": MAINTENANT - 300, "exp": MAINTENANT + j,
+                           "action": "ban"} for i in range(2, 80)]
+    tmp = tmp_path / "bans.jsonl.tmp-1"
+    tmp.write_text("".join(json.dumps(x) + "\n" for x in nouveaux))
+    os.rename(tmp, s.bans)
+    vrai_stat = os.stat
+    monkeypatch.setattr(C.os, "stat", lambda p, *a, **k: perime if str(p) == str(s.bans) else vrai_stat(p, *a, **k))
+    etat = C.collecter(s, maintenant=MAINTENANT + 60, reseau=False)
+    h = {x["jour"]: x["bans"] for x in etat["histo"]}
+    assert etat["tuiles"]["bans_actifs"] == 79
+    assert h["2026-10-29"] == 40 and h["2026-10-31"] == 79
+
+
 def test_sans_journal_de_bans_rien_n_est_invente(tmp_path):
     etat = C.collecter(_sources(tmp_path), maintenant=MAINTENANT, reseau=False)
     assert etat["tuiles"]["bans_actifs"] is None and all(x["bans"] is None for x in etat["histo"])

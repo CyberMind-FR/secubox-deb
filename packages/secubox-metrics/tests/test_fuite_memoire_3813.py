@@ -239,3 +239,24 @@ def test_unite_bornee_en_memoire():
     assert lignes.get("MemoryHigh") and lignes.get("MemoryMax")
     assert lignes.get("Restart") == "always"
     assert lignes.get("MemorySwapMax") == "0"
+
+
+def test_bans_compactage_par_rename_3816(tmp_path, monkeypatch):
+    """sbxwaf compacte bans.jsonl par rename (#3816) : l'identite est celle du descripteur ouvert. Meme si un stat du
+    chemin (fait juste avant le rename) rendait encore l'ancien inode, le nouveau fichier est relu depuis le debut,
+    jamais a la position de l'ancien."""
+    import os
+    import pathlib
+    from bans_actifs import BansActifs
+    f = tmp_path / "bans.jsonl"
+    now = 1_000_000
+    f.write_text("".join(_ligne(f"10.0.0.{i}", exp=now - 1) for i in range(50)) + _ligne("1.1.1.1", exp=now + 100))
+    b = BansActifs(f)
+    assert b.compter(now) == 1
+    ancien = os.stat(f)
+    # compactage : nouveau fichier (plus long que la position deja lue) mis en place par rename
+    tmp = tmp_path / "bans.jsonl.tmp-1"
+    tmp.write_text(_ligne("1.1.1.1", exp=now + 100) + "".join(_ligne(f"10.1.0.{i}", exp=now + 100) for i in range(80)))
+    os.rename(tmp, f)
+    monkeypatch.setattr(pathlib.Path, "stat", lambda self, **kw: ancien)   # stat perime : ignore
+    assert b.compter(now) == 81

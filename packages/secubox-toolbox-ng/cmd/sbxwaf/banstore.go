@@ -32,10 +32,13 @@ type BanRecord struct {
 	Action   string `json:"action"` // "ban" | "unban"
 }
 
-// BanStore sérialise l'accès à un fichier JSONL append-only.
+// BanStore sérialise l'accès à un fichier JSONL append-only, compacté par Compacter (#3816,
+// banstore_compactage.go) : mu sérialise les ajouts, les relectures et le rename du compactage ;
+// compactMu, les passes de compactage entre elles.
 type BanStore struct {
-	path string
-	mu   sync.Mutex
+	path      string
+	mu        sync.Mutex
+	compactMu sync.Mutex
 }
 
 func NewBanStore(path string) *BanStore {
