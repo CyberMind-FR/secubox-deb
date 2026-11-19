@@ -1,3 +1,10 @@
+secubox-peertube (1.6.9-1~trixie1) trixie; urgency=medium
+
+  * Backlog : un seul lxc-attach (dépassait le délai de 60 s sous charge) et coercition entière
+    de redis/psql (« total + 0 : syntax error », comparaison d entier sur du vide) (#3829).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 11:25:53 +0100
+
 secubox-peertube (1.6.8-1~trixie1) trixie; urgency=medium
 
   * Dépend de secubox-core >= 1.8.29 : le format de journal sbx_masque

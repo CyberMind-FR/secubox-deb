@@ -364,24 +364,36 @@ cmd_upgrade() {
 # Number of transcoding jobs really in flight: bull's queued/active/delayed
 # states PLUS any live ffmpeg. Bull namespaces keys `bull-<hostname>:<queue>:
 # <state>` — a `bull:*` scan matches nothing and would always read as "idle".
+# Garde un entier, et seulement un entier (#3829) : `redis-cli`/`psql` peuvent
+# rendre une ligne vide, un avertissement ou plusieurs lignes ; un `$(( ))` sur
+# cette valeur plantait le script (« total + 0 : syntax error ») et `[ -gt ]`
+# échouait (« integer expression expected »).
+_entier() { local v; v=$(printf '%s' "$1" | tr -cd '0-9'); printf '%s' "${v:-0}"; }
+
+# UN SEUL lxc-attach (#3829) : la version par file×état en lançait huit, chacun
+# un redis-cli ; sous charge, le service dépassait son délai de 60 s. Toute la
+# somme est calculée DANS le conteneur, une ligne rendue.
 _jobs_in_flight() {
-    local total=0 n k
-    for q in video-transcoding transcoding-job-builder; do
-        for s in wait active delayed paused; do
-            k="bull-${PUBLIC_HOSTNAME}:${q}:${s}"
-            n=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c \
-                "t=\$(redis-cli -n 0 type '$k' 2>/dev/null);
-                 case \"\$t\" in
-                   list) redis-cli -n 0 llen '$k' 2>/dev/null ;;
-                   zset) redis-cli -n 0 zcard '$k' 2>/dev/null ;;
-                   set)  redis-cli -n 0 scard '$k' 2>/dev/null ;;
-                   *) echo 0 ;;
-                 esac" 2>/dev/null)
-            total=$(( total + ${n:-0} ))
-        done
-    done
-    total=$(( total + $(pgrep -c ffmpeg 2>/dev/null || echo 0) ))
-    printf '%s' "$total"
+    local n ff
+    n=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c \
+        "t=0
+         for q in video-transcoding transcoding-job-builder; do
+           for s in wait active delayed paused; do
+             k=\"bull-${PUBLIC_HOSTNAME}:\$q:\$s\"
+             ty=\$(redis-cli -n 0 type \"\$k\" 2>/dev/null)
+             case \"\$ty\" in
+               list) c=\$(redis-cli -n 0 llen \"\$k\" 2>/dev/null) ;;
+               zset) c=\$(redis-cli -n 0 zcard \"\$k\" 2>/dev/null) ;;
+               set)  c=\$(redis-cli -n 0 scard \"\$k\" 2>/dev/null) ;;
+               *) c=0 ;;
+             esac
+             t=\$(( t + \${c:-0} ))
+           done
+         done
+         printf '%s' \"\$t\"" 2>/dev/null)
+    n=$(_entier "$n")
+    ff=$(_entier "$(pgrep -c ffmpeg 2>/dev/null)")
+    printf '%s' "$(( n + ff ))"
 }
 
 # Rows whose pendingTranscode counter says a job owns them.
@@ -403,7 +415,8 @@ cmd_backlog() {
     # companion — rather than in a log nobody reads.
     local flight counters stuck=false
     flight=$(_jobs_in_flight)
-    counters=$(_pending_counters)
+    counters=$(_entier "$(_pending_counters)")
+    flight=$(_entier "$flight")
     [ "$counters" -gt 0 ] && [ "$flight" -eq 0 ] && stuck=true
     local rows
     rows=$(printf '%s\n' "
