@@ -117,7 +117,7 @@ class FeedManager:
         },
         {
             "name": "abuse-ch-urlhaus-domain",
-            "url": "https://urlhaus.abuse.ch/downloads/hostfile/",
+            "url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts.txt",
             "feed_type": "domain",
             "format": "hosts",
             "category": "malware",

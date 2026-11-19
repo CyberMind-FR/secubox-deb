@@ -56,7 +56,7 @@ mode = "observe"
   taille_max = 15000000
   [[categorie.source]]
   nom = "urlhaus"
-  url = "https://urlhaus.abuse.ch/downloads/hostfile/"
+  url = "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-hosts.txt"
   format = "hosts"
   licence = "conditions abuse.ch"
   taille_max = 1000000

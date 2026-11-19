@@ -1,3 +1,9 @@
+secubox-webfilter (0.5.6-1~trixie1) trixie; urgency=medium
+
+  * Source URLhaus repointée vers le miroir malware-filter ; migration postinst de la copie live (abuse.ch 410 Gone) (#3833).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 12:37:27 +0100
+
 secubox-webfilter (0.5.5-1~trixie1) trixie; urgency=medium
 
   * Synchronisation retentée si le réseau manque au démarrage (ref #3467).
