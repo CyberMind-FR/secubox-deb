@@ -81,6 +81,15 @@ restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
 délégué (R-L5-15, R-L5-16) : les premières passent par les actions du pilotage (L2). `POST /check_updates` et
 `POST /run_diagnostic_test` (GET avant 1.11.6).
 
+## Nom du nœud (#3824)
+
+Panneau « Nom du nœud » de la page Système : l'interrupteur du **relais des autres chemins** du nom public
+(`<nœud>.<zone>`) vers l'ancienne cible de sa route, **fermé par défaut** (le nom ne sert que le dé SecuBox et
+`/api/v1/health`). Il montre le nom, ce qui est toujours servi, l'état (404 — FERMÉ / RELAYÉS), l'ancienne cible et,
+ouvert, la liste des chemins relayés publiquement. Bascule confirmée dans le panneau ; ouvrir est impossible tant que le
+mot de passe par défaut est actif ou sans ancienne cible. API : `GET|POST /api/v1/webos/noeud/relais` de
+**secubox-webos ≥ 1.21.1** (`require_jwt`), voir son README ; webos absent ou plus ancien : « — » et une note.
+
 ## Accès SSH (#3401)
 
 | Méthode | Route | Garde | Effet |
