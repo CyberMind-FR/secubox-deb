@@ -1,3 +1,14 @@
+secubox-system (1.13.1-1~trixie1) trixie; urgency=medium
+
+  * Page Système : panneau « Nom du nœud » (ref #3824), interrupteur du relais
+    des autres chemins du nom public vers l'ancienne cible, fermé par défaut.
+    État, ancienne cible, chemins relayés quand il est ouvert ; confirmation
+    dans le panneau ; ouverture impossible tant que le mot de passe par défaut
+    est actif. API de secubox-webos >= 1.21.1 (GET|POST
+    /api/v1/webos/noeud/relais, require_jwt) ; webos plus ancien : « — ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 09:41:42 +0100
+
 secubox-system (1.13.0-1~trixie1) trixie; urgency=medium
 
   * Posture « Pare-feu » mesurée (#3780) : unité root en lecture seule

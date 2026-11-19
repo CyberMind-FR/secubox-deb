@@ -87,6 +87,13 @@
         .jl .m{color:var(--doux);overflow-wrap:anywhere}
         pre.brut{margin:8px 0 0;max-height:220px;overflow:auto;background:rgba(4,10,22,.8);border:1px solid var(--trait);border-radius:8px;padding:8px;font-size:.7rem;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--doux)}
         details summary{cursor:pointer;color:var(--doux);font-size:.78rem}
+        /* Interrupteur (#3824) : un bouton role=switch, la bascule passe par la confirmation du panneau. */
+        .interr{display:inline-flex;align-items:center;gap:9px;font:inherit;font-size:.78rem;background:none;border:0;color:var(--texte);cursor:pointer;padding:2px 0}
+        .interr .piste{flex:none;width:40px;height:22px;border-radius:999px;border:1px solid var(--trait2);background:rgba(159,179,214,.16);position:relative;transition:background .15s,border-color .15s}
+        .interr .piste::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--doux);transition:left .15s,background .15s}
+        .interr[aria-checked="true"] .piste{background:rgba(255,159,28,.25);border-color:var(--orange)} .interr[aria-checked="true"] .piste::after{left:21px;background:var(--orange)}
+        .interr:disabled{opacity:.5;cursor:default} .interr:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:6px}
+        ul.chemins{margin:4px 0 0;padding-left:18px;font-size:.74rem;color:var(--doux);display:grid;gap:2px} ul.chemins li{overflow-wrap:anywhere}
         .toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,12px);background:rgba(8,18,38,.96);border:1px solid var(--cyan);border-radius:10px;padding:8px 14px;font-size:.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:90vw}
         .toast.show{opacity:1;transform:translate(-50%,0)}
     </style>
@@ -148,6 +155,19 @@
                     <button class="btn prim" id="sshOn" type="button">Activer SSH</button><button class="btn danger" id="sshOff" type="button">Désactiver SSH</button>
                     <button class="btn" id="sshMdpOn" type="button">Permettre le mot de passe</button><button class="btn" id="sshMdpOff" type="button">Clé seulement</button>
                 </div></div>
+
+            <div class="pan" id="pNoeud"><h3>Nom du nœud <i>accueil public</i></h3>
+                <div id="cNoeud" class="conf"></div><div id="rNoeud" class="retour" hidden></div>
+                <dl class="kv"><dt>Nom public</dt><dd class="mono" id="noDom">—</dd>
+                    <dt title="Ce que le nom public sert toujours, quel que soit le relais.">Toujours servi</dt><dd id="noServi">—</dd>
+                    <dt title="Tout autre chemin du nom public : 404, ou relayé à l’ancienne cible de sa route si le relais est ouvert.">Autres chemins</dt><dd id="noRelais">—</dd>
+                    <dt title="Ancienne cible de la route du nom, reprise par l’accueil (#3821).">Ancienne cible</dt><dd class="mono" id="noCible">—</dd></dl>
+                <div class="actions" style="margin-top:10px;align-items:center">
+                    <button class="interr" id="noInterr" type="button" role="switch" aria-checked="false" disabled><span class="piste" aria-hidden="true"></span><span id="noInterrTxt">Relayer les API de l’ancienne cible</span></button>
+                </div>
+                <div id="noChemins" hidden><p class="note">Chemins relayés publiquement (à travers le WAF), lus dans <span class="mono" id="noSource">—</span> :</p><ul class="chemins mono" id="noListe"></ul></div>
+                <p class="note" id="noDefaut" hidden>Mot de passe par défaut actif : le relais ne peut pas être ouvert. <a href="/users/" style="color:var(--cyan)">Changez d’abord le mot de passe par défaut</a>.</p>
+                <p class="note" id="noNote">Fermé par défaut : le nom public ne sert que le dé SecuBox et /api/v1/health. Chaque bascule est écrite dans le journal d’audit.</p></div>
 
             <div class="pan large"><h3>Détection de la carte <button class="btn sm" id="redetect" type="button">Relancer la détection</button></h3>
                 <div id="cCarte" class="conf"></div><div id="rCarte" class="retour" hidden></div>
@@ -346,7 +366,7 @@
                 $('kkServ').appendChild(pastille(k.service_active ? 'ok' : 'hors', k.service_active ? 'EN COURS' : 'ARRÊTÉ'));
             } else { $('kkEtat').textContent = '—'; $('kkMode').textContent = '—'; $('kkServ').textContent = '—'; }
             rendreCarte(); rendreServices(); rendreReseau(); rendreSessions(); rendreJournal(); rendrePaquets(); rendreConf();
-            chargerSsh();
+            chargerSsh(); chargerNoeud();
             $('maj').textContent = 'Relevé ' + new Date().toLocaleTimeString('fr-FR');
             annoncer();
         }
@@ -527,6 +547,72 @@
         $('sshOff').addEventListener('click', () => demande('cSsh', 'Désactiver le service SSH', () => ssh('/ssh/acces', false, 'SSH désactivé.')));
         $('sshMdpOn').addEventListener('click', () => demande('cSsh', 'Permettre SSH par mot de passe', () => ssh('/ssh/mot-de-passe', true, 'SSH par mot de passe permis.')));
         $('sshMdpOff').addEventListener('click', () => demande('cSsh', 'SSH par clé seulement', () => ssh('/ssh/mot-de-passe', false, 'SSH par clé seulement.')));
+
+        // Nom du nœud (#3824) : relais des autres chemins du nom public vers l'ancienne cible, FERMÉ par défaut.
+        // API de secubox-webos (administrateur réel) ; l'écriture passe par l'unité root `webos-noeud traite`.
+        const API_NOEUD = '/api/v1/webos/noeud/relais';
+        let NOEUD = null;
+        const DEMO_NOEUD = { domaine: 'gk2.secubox.in', relais_api: false, relais_actif: false, vhost: true, cible: '192.0.2.1:8000',
+            chemins_cible: ['/api/v1/metrics', '/api/v1/metablogizer/', '/api/v1/admin/', '/api/v1/system/metrics', '/api/v1/health', '/'],
+            source_chemins: '/etc/nginx/sites-enabled/eye-remote-api', servis: ['/', '/_noeud/sbx-dice.js', '/_noeud/dice/', '/api/v1/health'], mot_de_passe_defaut: false };
+        // Les chemins qui deviendraient publics : ceux de la cible, hors « / » (son repli) et la santé (déjà servie).
+        const cheminsExposes = e => (Array.isArray(e && e.chemins_cible) ? e.chemins_cible : []).filter(c => c !== '/' && c !== '/api/v1/health').map(String);
+        async function chargerNoeud() {
+            if (DEMO) { NOEUD = NOEUD || Object.assign({}, DEMO_NOEUD); rendreNoeud(); return; }
+            try {
+                const r = await fetch(API_NOEUD, { credentials: 'same-origin', cache: 'no-store', headers: entetes() });
+                NOEUD = r.ok ? await r.json() : { erreur: r.status };
+            } catch (e) { NOEUD = { erreur: 0 }; }
+            rendreNoeud();
+        }
+        function rendreNoeud() {
+            const e = NOEUD, sw = $('noInterr');
+            $('noRelais').replaceChildren(); $('noServi').replaceChildren(); $('noListe').replaceChildren();
+            $('noChemins').hidden = true; $('noDefaut').hidden = true;
+            if (!e || e.erreur !== undefined) {
+                ['noDom', 'noServi', 'noRelais', 'noCible'].forEach(id => { $(id).textContent = '—'; });
+                sw.disabled = true; sw.setAttribute('aria-checked', 'false');
+                $('noNote').textContent = e && e.erreur === 404 ? 'Interrupteur absent : secubox-webos antérieur à 1.21.1.'
+                    : e && (e.erreur === 401 || e.erreur === 403) ? 'Réservé aux administrateurs.' : 'État du relais illisible (webos ou son unité root injoignable).';
+                return;
+            }
+            $('noNote').textContent = 'Fermé par défaut : le nom public ne sert que le dé SecuBox et /api/v1/health. Chaque bascule est écrite dans le journal d’audit.';
+            $('noDom').textContent = tiret(e.domaine);
+            $('noServi').textContent = e.vhost ? '« / » (le dé), /api/v1/health' : 'aucun vhost du nœud posé';
+            const ouvert = !!e.relais_actif;
+            $('noRelais').appendChild(ouvert ? pastille('att', 'RELAYÉS', 'Relayés à ' + tiret(e.cible)) : e.relais_api ? pastille('', 'RELAIS DEMANDÉ, RIEN À RELAYER') : pastille('ok', '404 — FERMÉ'));
+            $('noCible').textContent = e.cible ? String(e.cible) : 'aucune';
+            sw.setAttribute('aria-checked', e.relais_api ? 'true' : 'false');
+            $('noInterrTxt').textContent = e.relais_api ? 'Relais ouvert' : 'Relais fermé';
+            // Ouvrir : seulement s'il y a une cible et que le mot de passe par défaut est changé. Fermer : toujours.
+            sw.disabled = !e.relais_api && (!e.cible || !!e.mot_de_passe_defaut);
+            $('noDefaut').hidden = !(e.mot_de_passe_defaut && !e.relais_api);
+            const liste = cheminsExposes(e);
+            if (ouvert) {
+                $('noChemins').hidden = false; $('noSource').textContent = tiret(e.source_chemins);
+                if (!liste.length) $('noListe').appendChild(el('li', '', 'tout chemin autre que « / » et /_noeud/ (liste de la cible non lue)'));
+                liste.forEach(c => $('noListe').appendChild(el('li', '', c)));
+            }
+        }
+        async function basculerNoeud(actif) {
+            if (DEMO) { retour('rNoeud', true, 'Démonstration : action inerte.'); return; }
+            const r = await (async () => {
+                try {
+                    const x = await fetch(API_NOEUD, { method: 'POST', credentials: 'same-origin', headers: entetes({ 'Content-Type': 'application/json' }), body: JSON.stringify({ actif }) });
+                    let data = null; try { data = await x.json(); } catch (err) { /* corps vide */ }
+                    return { ok: x.ok, statut: x.status, data };
+                } catch (err) { return { ok: false, statut: 0, data: null }; }
+            })();
+            if (reussi(r)) { NOEUD = r.data; rendreNoeud(); retour('rNoeud', true, actif ? 'Relais ouvert : les autres chemins sont relayés à ' + tiret(r.data.cible) + '.' : 'Relais fermé : le nom public ne sert plus que le dé et sa santé.'); }
+            else retour('rNoeud', false, 'Refusé : ' + detail(r));
+        }
+        $('noInterr').addEventListener('click', () => {
+            const e = NOEUD; if (!e || e.erreur !== undefined) return;
+            if (e.relais_api) { demande('cNoeud', 'Fermer le relais : ' + tiret(e.domaine) + ' ne servira plus que le dé et /api/v1/health', () => basculerNoeud(false)); return; }
+            const l = cheminsExposes(e);
+            demande('cNoeud', 'Ouvrir le relais : ' + (l.length ? l.length + ' chemin' + (l.length > 1 ? 's' : '') + ' (' + l.slice(0, 4).join(', ') + (l.length > 4 ? '…' : '') + ')' : 'tous les autres chemins')
+                + ' de ' + tiret(e.cible) + ' deviendront publics sur ' + tiret(e.domaine), () => basculerNoeud(true));
+        });
 
         $('redetect').addEventListener('click', async () => {
             const r = await ecrire('POST', '/board/detect');

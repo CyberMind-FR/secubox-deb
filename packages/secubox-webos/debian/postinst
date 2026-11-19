@@ -99,9 +99,16 @@ if [ "$1" = "configure" ]; then
     # cible qui rend 404 à « / » est reprise et garde tous ses autres chemins. Route par sbxwaf, jamais de
     # contournement ; aucune nouvelle exposition tant que le mot de passe admin par défaut est actif (#3401).
     # Désactiver : [noeud] accueil = false dans /etc/secubox/webos.toml. Un échec n'arrête pas l'installation.
+    # #3824 : le vhost ne sert plus que « / », /_noeud/ et /api/v1/health ; le reste rend 404. Le relais des autres
+    # chemins vers l'ancienne cible est une OPTION fermée par défaut ([noeud] relais_api), que l'administrateur
+    # ouvre depuis la page Système. Une montée depuis 1.21.0 (qui relayait tout) réécrit donc le vhost FERMÉ.
     if [ -x /usr/sbin/webos-noeud ]; then
         /usr/sbin/webos-noeud appliquer || echo "secubox-webos : accueil du nom de nœud non posé (voir ci-dessus)" >&2
+        /usr/sbin/webos-noeud prepare || echo "secubox-webos : dépôt des demandes du relais non préparé" >&2
     fi
+    systemctl daemon-reload || true
+    systemctl enable secubox-webos-noeud.service || true
+    systemctl enable --now secubox-webos-noeud.path || true
     # CONSOLE LOCALE DU KIOSQUE (#1695). Un secret partage par nginx, qui le
     # joint aux seules demandes recues sur le port console (127.0.0.1:9078),
     # et l'auth, qui le verifie : il prouve qu'une demande est passee par ce

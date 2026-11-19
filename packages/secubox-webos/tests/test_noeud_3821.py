@@ -15,86 +15,13 @@ import re
 import shutil
 import socket
 import subprocess
-import sys
 import threading
 import time
-import urllib.error
-import urllib.request
-from importlib.machinery import SourceFileLoader
-from importlib.util import module_from_spec, spec_from_loader
 from pathlib import Path
 
 import pytest
 
-PKG = Path(__file__).resolve().parents[1]
-RACINE = PKG.parents[1]
-SCRIPT = PKG / "sbin" / "webos-noeud"
-PAGE = PKG / "www" / "noeud" / "index.html"
-WAF_ROUTE = RACINE / "packages" / "secubox-core" / "usr" / "sbin" / "secubox-waf-route"
-DOM = "gk2.secubox.in"
-
-
-def charger():
-    loader = SourceFileLoader("webos_noeud", str(SCRIPT))
-    mod = module_from_spec(spec_from_loader("webos_noeud", loader))
-    loader.exec_module(mod)
-    return mod
-
-
-@pytest.fixture
-def box(tmp_path, monkeypatch):
-    """Une box en miniature : arbres nginx, table sbxwaf, réglages, état, audit ; commandes enregistrées."""
-    m = charger()
-    for d in ("etc/nginx/sites-enabled", "etc/nginx/conf.d", "etc/secubox/waf", "var/log/secubox"):
-        (tmp_path / d).mkdir(parents=True)
-    routes = tmp_path / "etc/secubox/waf/haproxy-routes.json"
-    routes.write_text(json.dumps({"hall.gk2.secubox.in": ["192.168.1.200", 9080]}))
-    (tmp_path / "etc/secubox/haproxy.toml").write_text('[vhosts.hall]\ndomain = "hall.gk2.secubox.in"\n')
-    monkeypatch.setattr(m, "CONF", str(tmp_path / "etc/nginx/conf.d/secubox-noeud.conf"))
-    monkeypatch.setattr(m, "DOSSIERS_NGINX", (str(tmp_path / "etc/nginx/sites-enabled"), str(tmp_path / "etc/nginx/conf.d")))
-    monkeypatch.setattr(m, "FORMAT_HOTES", str(tmp_path / "etc/nginx/conf.d/secubox-hosts-log.conf"))
-    monkeypatch.setattr(m, "ROUTES", str(routes))
-    monkeypatch.setenv("SBX_WAF_ROUTES", str(routes))
-    monkeypatch.setattr(m, "REGLAGES", str(tmp_path / "etc/secubox/webos.toml"))
-    monkeypatch.setattr(m, "HAPROXY_TOML", str(tmp_path / "etc/secubox/haproxy.toml"))
-    monkeypatch.setattr(m, "ETAT_DIR", str(tmp_path / "var/lib/secubox-webos-noeud"))
-    monkeypatch.setattr(m, "ETAT", str(tmp_path / "var/lib/secubox-webos-noeud/etat.json"))
-    monkeypatch.setattr(m, "AUDIT", str(tmp_path / "var/log/secubox/audit.log"))
-    monkeypatch.setattr(m, "domaine", lambda: DOM)
-    monkeypatch.setattr(m, "mot_de_passe_change", lambda: True)
-    m.appels = []
-    m.nginx_ok = True
-    m.sonde = None
-
-    def executer(argv, delai=60):
-        m.appels.append(list(argv))
-        if argv[:2] == ["nginx", "-t"] and not m.nginx_ok:
-            raise subprocess.CalledProcessError(1, argv, "", "emerg")
-        if argv[0] == "secubox-waf-route":       # le VRAI outil de secubox-core, sur la table de la box miniature
-            return subprocess.run([sys.executable, "-I", str(WAF_ROUTE), *argv[1:]], check=True, timeout=delai,
-                                  capture_output=True, text=True)
-        if argv[:3] == ["haproxyctl", "vhost", "add"]:  # haproxyctl écrit sa table
-            with open(m.HAPROXY_TOML, "a") as fh:
-                fh.write(f'[vhosts.x]\ndomain = "{argv[3]}"\nbackend = "{argv[4]}"\n')
-        return subprocess.CompletedProcess(argv, 0, "", "")
-    monkeypatch.setattr(m, "executer", executer)
-    monkeypatch.setattr(m, "sonder", lambda ip, port, dom: m.sonde)
-    m.racine = tmp_path
-    return m
-
-
-def table(m):
-    return json.loads(Path(m.ROUTES).read_text())
-
-
-def conf(m):
-    p = Path(m.CONF)
-    return p.read_text() if p.exists() else None
-
-
-def audits(m):
-    p = Path(m.AUDIT)
-    return [json.loads(x) for x in p.read_text().splitlines()] if p.exists() else []
+from tests.banc_noeud import DOM, PAGE, PKG, SCRIPT, audits, charger, conf, get, port_libre, table  # noqa: F401
 
 
 # ── Décisions ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -130,11 +57,13 @@ def test_gk2_ancienne_cible_qui_rend_404_reprise_sans_masquer_ses_chemins(box):
     box.sonde = 404
     assert box.appliquer() == 0
     c = conf(box)
-    assert "proxy_pass http://192.168.1.200:8000;" in c and "return 404;" not in c
+    # #3824 : seule la santé est relayée ; le reste rend 404 tant que relais_api n'est pas ouvert
+    assert "location = /api/v1/health {\n        proxy_pass http://192.168.1.200:8000;" in c
+    assert "location / {\n        return 404;" in c and c.count("proxy_pass") == 1
     assert table(box)[DOM] == ["192.168.1.200", 9080]
     etat = json.loads(Path(box.ETAT).read_text())
     assert etat == {"domaine": DOM, "route_reprise": True, "route_precedente": ["192.168.1.200", 8000]}
-    assert "reste des chemins relayé à 192.168.1.200:8000" in audits(box)[0]["detail"]
+    assert "santé relayée à 192.168.1.200:8000 ; autres chemins fermés" in audits(box)[0]["detail"]
     assert ["haproxyctl", "vhost", "add", DOM, "sbxwaf_inspector", "true"] in box.appels
     # passage suivant (route déjà à nous) : le relais est gardé
     assert box.appliquer() == 0 and conf(box) == c
@@ -192,12 +121,6 @@ def test_fichier_qui_n_est_pas_le_notre_jamais_retire(box):
 
 # ── Le vhost rendu, servi par un vrai nginx ──────────────────────────────────────────────────────────────────
 
-def port_libre():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 class _Ancienne(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         corps = b'{"status": "ok"}' if self.path == "/api/v1/health" else b'{"detail": "Not Found"}'
@@ -209,15 +132,6 @@ class _Ancienne(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, *a):
         pass
-
-
-def get(url, hote):
-    req = urllib.request.Request(url, headers={"Host": hote})
-    try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            return r.status, dict(r.headers), r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, dict(e.headers), e.read()
 
 
 @pytest.mark.skipif(not shutil.which("nginx"), reason="nginx absent")
@@ -263,14 +177,15 @@ def test_vrai_nginx_ne_sert_que_la_racine_exacte(tmp_path, avec_repli):
         for i in range(6):
             code, h, corps = get(url + f"/_noeud/dice/face-{i}.jpg", DOM)
             assert code == 200 and h["Content-Type"] == "image/jpeg" and corps[:2] == b"\xff\xd8"
+        # santé : relayée à l'ancienne cible, sinon rendue sur place (#3824)
+        code, h, corps = get(url + "/api/v1/health", DOM)
+        assert code == 200 and json.loads(corps) == {"status": "ok"}
+        assert (h.get("X-Hote-Recu") == DOM) if avec_repli else ("X-Hote-Recu" not in h)
         # rien d'autre n'est servi par l'accueil : ni /index.html, ni une API, ni le dossier du Hall
-        for chemin in ("/index.html", "/api/v1/health", "/_noeud/", "/_noeud/../hall/index.html", "/sbx-dice.js"):
+        for chemin in ("/index.html", "/api/v1/admin/", "/_noeud/", "/_noeud/../hall/index.html", "/sbx-dice.js"):
             code, h, corps = get(url + chemin, DOM)
             assert b"<sbx-dice" not in corps, chemin
-            if avec_repli and chemin == "/api/v1/health":
-                assert code == 200 and corps == b'{"status": "ok"}' and h["X-Hote-Recu"] == DOM
-            else:
-                assert code == 404, (chemin, code)
+            assert code == 404, (chemin, code)
     finally:
         subprocess.run(base + ["-s", "stop"], check=False, timeout=30, capture_output=True)
         if serveur:

@@ -10,3 +10,7 @@ hall_v2 = false
 # false = rien n'est posé (et ce qui l'avait été est retiré) ; appliquer : webos-noeud appliquer
 [noeud]
 accueil = true
+# Relais des AUTRES chemins de ce nom vers l'ancienne cible de sa route (#3824 ; sur gk2 : l'API admin, metrics…).
+# FERMÉ par défaut : le nom public ne sert que le dé (« / », /_noeud/) et /api/v1/health, tout le reste rend 404.
+# À ouvrir ou fermer depuis la page Système (panneau « Nom du nœud »), ou : webos-noeud relais activer|desactiver
+relais_api = false
