@@ -94,6 +94,14 @@ if [ "$1" = "configure" ]; then
         secubox-waf-route hall.gk2.net 9080 || true
       fi
     fi
+    # ACCUEIL DU NOM DE NŒUD (#3821) : <nœud>.<zone> montre le dé SecuBox en plein écran sur « / » exact, par
+    # défaut sur chaque box. L'existant gagne (server_name déjà servi, route qui sert déjà « / ») ; une ancienne
+    # cible qui rend 404 à « / » est reprise et garde tous ses autres chemins. Route par sbxwaf, jamais de
+    # contournement ; aucune nouvelle exposition tant que le mot de passe admin par défaut est actif (#3401).
+    # Désactiver : [noeud] accueil = false dans /etc/secubox/webos.toml. Un échec n'arrête pas l'installation.
+    if [ -x /usr/sbin/webos-noeud ]; then
+        /usr/sbin/webos-noeud appliquer || echo "secubox-webos : accueil du nom de nœud non posé (voir ci-dessus)" >&2
+    fi
     # CONSOLE LOCALE DU KIOSQUE (#1695). Un secret partage par nginx, qui le
     # joint aux seules demandes recues sur le port console (127.0.0.1:9078),
     # et l'auth, qui le verifie : il prouve qu'une demande est passee par ce

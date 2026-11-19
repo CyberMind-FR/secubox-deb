@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox #3821 — ACCUEIL DU NOM DE NŒUD (<nœud>.<zone>, le nom nu de la box). Profil Aurora (.claude/AURORA-REFERENCE.md).
+
+  Le nom nu d'une box exposée par son frontal répondait 404 : il montre désormais le dé SecuBox, en plein écran,
+  qui tourne sans fin. Le moteur est celui du Hall (<sbx-dice>, « SecuBox Dice 3D ») et ses six faces, PARTAGÉS
+  avec le Hall (servis sous /_noeud/ par le vhost généré par webos-noeud), jamais recopiés.
+
+  Aucune donnée, aucun appel réseau, aucune ressource extérieure : la page ne lit que son propre nom d'hôte.
+  Sous prefers-reduced-motion le dé tourne au quart de vitesse (comportement du composant) ; localStorage
+  sbx_de=fige le fige sur la face SecuBox.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>SecuBox</title>
+<style>
+:root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+  --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{min-height:100vh;min-height:100dvh;overflow:hidden;color:var(--texte);
+  font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:radial-gradient(ellipse 70% 60% at 85% 0%,rgba(59,130,246,.2),transparent 70%),
+             radial-gradient(ellipse 60% 55% at 0% 100%,rgba(41,182,246,.10),transparent 70%),var(--fond)}
+main{position:relative;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:clamp(14px,3vh,32px);padding:16px;text-align:center}
+.scene{position:relative;display:grid;place-items:center;min-width:0}
+.scene::before{content:"";position:absolute;inset:8%;border-radius:50%;
+  background:radial-gradient(circle,rgba(41,182,246,.22),rgba(59,130,246,.06) 55%,transparent 72%);filter:blur(18px)}
+.scene::after{content:"";position:absolute;left:18%;right:18%;bottom:-6%;height:9%;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(0,0,0,.55),transparent 70%)}
+sbx-dice{position:relative;z-index:1}
+h1{font-size:clamp(2rem,7vw,4.2rem);font-weight:800;letter-spacing:.04em;line-height:1;min-width:0;overflow-wrap:anywhere}
+.zone{margin-top:.55em;font-size:clamp(.8rem,2.4vw,1rem);color:var(--doux);letter-spacing:.08em;overflow-wrap:anywhere}
+.marque{position:absolute;left:0;right:0;bottom:14px;font-size:.72rem;color:var(--faible);letter-spacing:.18em;text-transform:uppercase}
+.marque b{color:var(--cyan);font-weight:700}
+</style>
+</head>
+<body>
+<main>
+  <div class="scene"><sbx-dice id="de" size="280" speed="3" fov="40" role="img" aria-label="Dé SecuBox en rotation"></sbx-dice></div>
+  <div>
+    <h1 id="noeud">SecuBox</h1>
+    <p class="zone" id="zone"></p>
+  </div>
+  <p class="marque"><b>SecuBox</b> · nœud</p>
+</main>
+<script>
+(function(){
+  'use strict';
+  // Le nom de la page est celui de l'hôte demandé, rien d'autre : textContent seulement.
+  var h=(location.hostname||'').toLowerCase(), i=h.indexOf('.');
+  if(/^[a-z0-9.-]{1,253}$/.test(h) && i>0){
+    var n=h.slice(0,i);
+    document.getElementById('noeud').textContent=n;
+    document.getElementById('zone').textContent=h;
+    document.title=n+' · SecuBox';
+  }
+  // Le dé occupe la page : 86 % de la largeur ou 62 % de la hauteur (le plus petit), entre 140 et 720 px.
+  var de=document.getElementById('de'), attente=0;
+  function taille(){
+    attente=0;
+    var s=Math.round(Math.max(140,Math.min(720,innerWidth*0.86,innerHeight*0.62)));
+    if(String(s)!==de.getAttribute('size')) de.setAttribute('size',String(s));
+  }
+  addEventListener('resize',function(){ if(!attente) attente=requestAnimationFrame(taille); });
+  taille();
+})();
+</script>
+<script src="/_noeud/sbx-dice.js"></script>
+</body>
+</html>

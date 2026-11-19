@@ -5,3 +5,8 @@ registry_enabled = true
 # Coque « vue maître » du Hall (#2996) : false = Hall classique. Prévisualisation
 # par navigateur sans toucher ce fichier : https://hall.<domaine>/?hall=v2
 hall_v2 = false
+
+# Accueil du nom de nœud (#3821) : <nœud>.<zone> (ex. gk2.secubox.in) montre le dé SecuBox en plein écran sur « / ».
+# false = rien n'est posé (et ce qui l'avait été est retiré) ; appliquer : webos-noeud appliquer
+[noeud]
+accueil = true
