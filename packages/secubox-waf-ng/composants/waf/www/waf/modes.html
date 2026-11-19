@@ -116,7 +116,7 @@
       <div class="pan">
         <h2>Hôtes PHP <i>contrôles Roundcube, Nextcloud, PHP</i></h2>
         <div id="hotes"></div>
-        <div class="btns" style="margin-top:8px"><button class="btn" id="hotesOk" type="button" disabled>Enregistrer les hôtes cochés</button></div>
+        <div class="btns" style="margin-top:8px"><button class="btn" id="hotesOk" type="button" disabled>Enregistrer les hôtes cochés</button> <button class="btn" id="hotesTous" type="button">Tout couvrir</button></div>
         <p class="note">Conteneur PHP : « oui » quand le service du vhost est déclaré PHP, sinon « inconnu » (non détectable sans privilège). Rien n'est coché automatiquement ; les motifs existants restent : <span class="mono" id="motifs">—</span></p>
       </div>
     </div>
@@ -246,6 +246,7 @@
   function rendreHotes(){
     var z=el('hotes');vide(z);
     el('motifs').textContent=HOTES&&HOTES.motifs&&HOTES.motifs.length?HOTES.motifs.join('  '):'—';
+    el('hotesTous').textContent=HOTES&&HOTES.tous?'Retirer « tout couvrir »':'Tout couvrir';
     if(!HOTES){z.appendChild(cree('div','vide','—'));return;}
     if(!HOTES.hotes.length){z.appendChild(cree('div','vide','Aucun vhost connu'));return;}
     HOTES.hotes.forEach(function(h){var lb=cree('label','chk'),i=cree('input');i.type='checkbox';i.checked=!!h.explicite;i.dataset.hote=h.hote;
@@ -293,6 +294,15 @@
   el('appliquer').addEventListener('click',appliquer);
   el('annuler').addEventListener('click',function(){ATTENTE={};rendre();});
   el('hotesOk').addEventListener('click',ecrireHotes);
+  function ecrireTous(){
+    var actif=!!(HOTES&&HOTES.tous);
+    if(DEMO){message('succes','Démonstration : action inerte.');return;}
+    el('hotesTous').disabled=true;
+    jpost('/php-hotes',{tous:!actif}).then(function(r){el('hotesTous').disabled=false;
+      if(r.ok){HOTES=r.corps;message('succes',actif?'« Tout couvrir » retiré : seuls les hôtes cochés restent couverts.':'Tous les sites sont couverts, y compris ceux ajoutés plus tard.');rendre();}
+      else message('erreur','Enregistrement refusé : '+motif(r));});
+  }
+  el('hotesTous').addEventListener('click',ecrireTous);
   el('cherche').addEventListener('input',rendreCats);
   el('rafraichir').addEventListener('click',charger);
   if(window.ResizeObserver)new ResizeObserver(hauteur).observe(el('cadre'));
