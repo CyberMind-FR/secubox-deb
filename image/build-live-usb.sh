@@ -3059,6 +3059,12 @@ INCOMPLETE_MODULES=(
 for svc in "${INCOMPLETE_MODULES[@]}"; do
   chroot "${ROOTFS}" systemctl disable ${svc}.service 2>/dev/null || true
   chroot "${ROOTFS}" systemctl mask ${svc}.service 2>/dev/null || true
+  # #3826 : un service masqué dont la minuterie reste activée donne une minuterie que systemd refuse de démarrer
+  # (« unit to trigger not loaded ») ; secubox-ui-health.timer échouait toutes les 10 min sur gk3. La minuterie suit.
+  if [[ -e "${ROOTFS}/usr/lib/systemd/system/${svc}.timer" || -e "${ROOTFS}/lib/systemd/system/${svc}.timer" ]]; then
+    chroot "${ROOTFS}" systemctl disable ${svc}.timer 2>/dev/null || true
+    chroot "${ROOTFS}" systemctl mask ${svc}.timer 2>/dev/null || true
+  fi
 done
 ok "Incomplete modules masked"
 
