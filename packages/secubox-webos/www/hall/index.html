@@ -99,6 +99,8 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .mast-main{display:flex;align-items:center;gap:16px;padding:10px clamp(14px,3vw,26px);max-width:1560px;margin:0 auto}
 .logo{display:flex;align-items:center;gap:12px;flex:none}
 .logo img.medaille{width:46px;height:46px;border-radius:50%;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(12,32,64,.35))}
+/* Le dé SecuBox (sbx-dice) remplace le médaillon rond : même emprise, aligné au mot « SbX ». */
+.logo .logo-de{flex:none;display:inline-block;line-height:0;filter:drop-shadow(0 1px 3px rgba(12,32,64,.35))}
 .logo-t{display:flex;flex-direction:column}
 .logo-h{font-family:var(--police);font-size:1.4rem;font-weight:800;letter-spacing:.02em;line-height:1;color:var(--texte)}
 .logo .sub{font-size:.62rem;letter-spacing:.14em;color:var(--cyan);text-transform:uppercase}
@@ -1147,11 +1149,12 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 <link rel="stylesheet" href="/hall-v2.css">
 <link rel="stylesheet" href="/composants.css">
 <script src="/hall-v2.js" defer></script>
+<script src="/sbx-dice.js" defer></script>
 </head>
 <body>
 <header class="mast">
   <div class="mast-main">
-    <div class="logo-wrap"><a class="logo" href="/"><span class="medaillon anime n6"><img class="medaille" src="/hall-logo.svg" alt="SbX" width="46" height="46"><img class="mface" src="/medaillons/01-communaute.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/02-bibliotheque.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/03-noeud.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/04-maillage.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/05-publication.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="/medaillons/06-securite.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"></span><span class="logo-t"><span class="serif logo-h">SbX</span></span></a><button type="button" class="logo-notif hidden" id="logo-notif" title="Diffusions du parc" aria-label="Nouvelles diffusions du parc"></button><div class="logo-diff" id="logo-diff" role="menu" aria-label="Diffusions du parc"><div class="ld-tete">📡 Diffusions du parc <span id="logo-diff-n"></span></div><div class="ld-liste" id="logo-diff-liste"><p class="who-note">Aucune diffusion reçue pour l’instant.</p></div></div></div>
+    <div class="logo-wrap"><a class="logo" href="/"><sbx-dice class="logo-de" size="46" speed="4" fov="40" role="img" aria-label="SecuBox, accueil"></sbx-dice><span class="logo-t"><span class="serif logo-h">SbX</span></span></a><button type="button" class="logo-notif hidden" id="logo-notif" title="Diffusions du parc" aria-label="Nouvelles diffusions du parc"></button><div class="logo-diff" id="logo-diff" role="menu" aria-label="Diffusions du parc"><div class="ld-tete">📡 Diffusions du parc <span id="logo-diff-n"></span></div><div class="ld-liste" id="logo-diff-liste"><p class="who-note">Aucune diffusion reçue pour l’instant.</p></div></div></div>
     <nav class="mnav" aria-label="Menus">
       <!-- Bouton « Accueil » retiré (#1266) : le logo mène déjà à l'accueil,
            c'était un doublon. -->

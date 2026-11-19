@@ -366,14 +366,20 @@
 
   // ── Le dé SecuBox remplace le médaillon (chargé seulement en v2) ───────
   function de(){
-    var logo=$('.logo'), med=$('.logo .medaillon'); if(!logo||!med) return;
-    function pose(){
-      var d=document.createElement('sbx-dice'); d.setAttribute('speed','4'); d.setAttribute('fov','40');
+    var logo=$('.logo'); if(!logo) return;
+    function branche(d){
       var mq=matchMedia('(max-width:720px)'), taille=function(){ d.setAttribute('size',mq.matches?'30':'36'); }; taille();
       if(mq.addEventListener) mq.addEventListener('change',taille); else mq.addListener(taille);
-      med.replaceWith(d);
       logo.addEventListener('mouseenter',function(){ d.setAttribute('speed','12'); });
       logo.addEventListener('mouseleave',function(){ d.setAttribute('speed','4'); });
+    }
+    // Le dé vit désormais dans le HTML statique (.logo-de) : il remplace le badge rond en v1 comme en v2.
+    var deja=$('.logo sbx-dice'); if(deja) return branche(deja);
+    // Repli page ancienne encore en cache (médaillon présent) : on le remplace à la volée.
+    var med=$('.logo .medaillon'); if(!med) return;
+    function pose(){
+      var d=document.createElement('sbx-dice'); d.setAttribute('speed','4'); d.setAttribute('fov','40'); d.className='logo-de';
+      med.replaceWith(d); branche(d);
     }
     if(customElements.get('sbx-dice')) return pose();
     var s=document.createElement('script'); s.src='/sbx-dice.js'; s.onload=pose; document.head.appendChild(s);

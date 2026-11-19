@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/home/reepost/CyberMindStudio/secubox-deb/secubox-deb/.codex/hooks/lint-apres-edition.sh'",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
