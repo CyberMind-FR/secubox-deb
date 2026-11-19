@@ -36,6 +36,18 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --log-level warning
 Restart=always
 RestartSec=5
+# GARDE-FOU MEMOIRE (#3813). Une fuite (bans.jsonl relu par 20 fils a la fois)
+# a porte l'API a 750 Mo et pousse gk2 en swap (charge 110+). Regime normal
+# mesure apres correctif sur copie des donnees de gk2 : ~130 Mo, ~200 Mo avec
+# 30 jours de vhost_stats charges (matplotlib precharge compris), stable.
+# Au-dessus de MemoryHigh le noyau reprend la memoire du service (ralenti, pas
+# tue) ; a MemoryMax il est tue et Restart=always le relance. Jamais de swap :
+# une fuite ne doit pas pouvoir deborder sur toute la box.
+MemoryHigh=300M
+MemoryMax=400M
+MemorySwapMax=0
+# L'arret attendait 90 s puis SIGKILL (fils bloques dans des sous-processus).
+TimeoutStopSec=20
 # Redemarrage de prudence toutes les 6 h : porte par secubox-metrics-redemarrage.timer
 # (try-restart, non journalise comme un echec — RuntimeMaxSec le faisait, #3295).
 # A retirer apres mesure de la RSS sur 24 h.
