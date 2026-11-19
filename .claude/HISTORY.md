@@ -3307,3 +3307,16 @@ Essai sur gk2 : zéro écart, 5 fichiers réécrits, Unbound ni rechargé ni red
 - secubox-ai 0.4.0 : Radar, pays hier/J-7, Chaîne, blocage de l'analyse corrigé (#3811) sur gk3.
 - WAF 1.41.2 : « Tout couvrir » des hôtes PHP (301/301 sur gk2).
 - Branche V2 #3583 fusionnée dans master (PR #3817, 79 commits, sans conflit).
+
+## 2026-11-19 (suite) — flotte au propre, correctifs divers
+- #3826 (core 1.8.36, mail 2.16.16, meet 0.2.9) déployé gk1/gk2/gk3 : tâches de conteneur arrêté = « rien à faire »,
+  garde des minuteries, logrotate en root (audit.log de gk2 rétabli, bloqué depuis le 08/11). gk1/gk3 : 0 échec.
+- #3829 peertube 1.6.9 : backlog en un seul lxc-attach + coercition entière (dépassait son délai, erreurs shell).
+- #3831 gitea 1.8.1 : réveil « rien à faire » quand gitea coupé/endormi (gk3) ; issue #3831 ouverte (faille profils :
+  minuteries d'un module éteint).
+- #3833 ipblock 1.6.1 + webfilter 0.5.6 : URLhaus repointée vers le miroir malware-filter (abuse.ch /hostfile/ = 410),
+  migration du conffile live, déployé gk1/gk2/gk3.
+- #3834 tor 1.7.7 : diagnostic .onion reconnaît la zone sous ses deux noms (secubox-onion-forward.conf / 48-…).
+- gk3 : marqueur de profil corrigé mobile->lite (mobile aurait coupé 57 modules) ; apply NON lancé (lite périmé,
+  VoiceStudio retiré). secubox-streamlit : fuite métriques #3813 réglée plus tôt.
+- Refus du cadrage offensif (hack-back) ; design réponse graduée défensive livré (#3827).
