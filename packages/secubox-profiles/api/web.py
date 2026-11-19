@@ -58,6 +58,7 @@ except ImportError:  # pragma: no cover - dev sans secubox_core installé
     require_session = require_jwt
 
 from . import cli as _cli
+from . import etat_module as _etat_module
 from . import minuteurs as _minuteurs
 from .diff import ProtectedViolation, plan_changes
 from .lifecycle import effective_lifecycle, is_sleepable, wake_budget
@@ -295,6 +296,47 @@ async def _status_cache_refresher() -> None:
         await asyncio.sleep(_STATUS_CACHE_TTL_S)
 
 
+# ---------------------------------------------------------------------------
+# /module/{id} (#3812) — état d'UN module, de ses unités et de ses `needs`, pour
+# le bouton d'état commun des pages. Même double cache que /status, plus court
+# (10 s : la fiche suit un geste réveiller/endormir) ; calcul hors boucle.
+# /wake et /sleep vident la fiche du module et le cache de /status : la page
+# relit l'état juste après le geste et ne doit pas revoir l'ancien.
+# ---------------------------------------------------------------------------
+
+_MODULE_CACHE_TTL_S = 10.0
+_module_cache: dict[tuple[str, str], _StatusCacheEntry] = {}
+
+
+def _compute_module_payload(root: Path, mid: str) -> Optional[dict]:
+    """Bloquant (systemctl show) — via asyncio.to_thread seulement."""
+    mod_dir, _prof_dir, _pins_file, _active_file = _cli._paths(root)
+    manifests = _load_manifests_or_500(mod_dir)
+    return _etat_module.etat_du_module(mid, manifests)
+
+
+async def _get_module_cached(root: Path, mid: str) -> Optional[dict]:
+    key = (str(root), mid)
+    entry = _module_cache.get(key)
+    if entry is not None and (time.time() - entry.computed_at) < _MODULE_CACHE_TTL_S:
+        return _with_freshness(entry)
+    async with _status_lock("module:" + str(root) + ":" + mid):
+        entry = _module_cache.get(key)
+        if entry is not None and (time.time() - entry.computed_at) < _MODULE_CACHE_TTL_S:
+            return _with_freshness(entry)
+        payload = await asyncio.to_thread(_compute_module_payload, root, mid)
+        if payload is None:
+            return None
+        entry = _StatusCacheEntry(payload=payload, computed_at=time.time())
+        _module_cache[key] = entry
+        return _with_freshness(entry)
+
+
+def _invalider_etat(root: Path, mid: str) -> None:
+    _module_cache.pop((str(root), mid), None)
+    _status_cache.pop(str(root), None)
+
+
 def _load_manifests_or_500(mod_dir: Path) -> dict:
     try:
         return load_all(mod_dir)
@@ -529,6 +571,18 @@ def create_app() -> FastAPI:
             for m in payload.get("modules", [])
         ]}
 
+    @app.get("/api/v1/profiles/module/{mid}")
+    async def get_module(mid: str, _claims=Depends(require_jwt)):
+        """Fiche d'état d'UN module (#3812) : manifeste, état de chaque unité,
+        état de chaque dépendance (`needs`), raison d'un « HORS LIGNE ».
+        Id validé par motif entier AVANT toute sonde (422), inconnu = 404."""
+        if not _etat_module.id_valide(mid):
+            raise HTTPException(status_code=422, detail="id de module invalide")
+        fiche = await _get_module_cached(_root(), mid)
+        if fiche is None:
+            raise HTTPException(status_code=404, detail=f"module inconnu: {mid}")
+        return fiche
+
     @app.get("/api/v1/profiles/comparatif", dependencies=[Depends(require_lecture)])
     async def get_comparatif():
         contenu = Path(os.environ.get("SECUBOX_PROFILS_CONTENU", "/usr/share/secubox/profiles/contenu-profils.json"))
@@ -740,7 +794,10 @@ def create_app() -> FastAPI:
         mod_dir, _prof_dir, _pins_file, _active = _cli._paths(root)
         _sleepable_module_or_error(mod_dir, body.module)
         async with _apply_lock:
-            return await _run_wake_ctl(body.module)
+            try:
+                return await _run_wake_ctl(body.module)
+            finally:
+                _invalider_etat(root, body.module)
 
     @app.post("/api/v1/profiles/sleep")
     async def sleep_module(body: ModuleAction, _claims=Depends(require_jwt)):
@@ -748,7 +805,10 @@ def create_app() -> FastAPI:
         mod_dir, _prof_dir, _pins_file, _active = _cli._paths(root)
         _sleepable_module_or_error(mod_dir, body.module)
         async with _apply_lock:
-            return await _run_sleep_ctl(body.module)
+            try:
+                return await _run_sleep_ctl(body.module)
+            finally:
+                _invalider_etat(root, body.module)
 
     @app.post("/api/v1/profiles/lifecycle")
     async def set_lifecycle_route(body: LifecycleUpdate, _claims=Depends(require_jwt)):
