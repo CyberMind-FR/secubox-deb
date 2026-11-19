@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, "/usr/lib/secubox/ai")
 
-from veille import base, collecte, correlation, dossiers, retention  # noqa: E402
+from veille import base, collecte, correlation, dossiers, pays, retention  # noqa: E402
 from veille.client import ClientGk2, delais, routes  # noqa: E402
 from veille.sources import toutes  # noqa: E402
 from veille.service import Boucle, Veille  # noqa: E402
@@ -27,6 +27,7 @@ from veille.service import Boucle, Veille  # noqa: E402
 DB = "/var/lib/secubox/ai/veille.db"
 CONF = "/etc/secubox/ai.toml"
 PAS_CORRELATION_S = 60       # V2 § 8 : fenêtre glissante de 30 min, une passe par minute
+PAS_PAYS_S = 60               # échantillon par pays (#3811) : un par créneau de 15 min, vérifié chaque minute
 PAS_COLLECTE_S = 10           # chaque source garde son propre intervalle (collecte.passe ne lit que les sources dues)
 log = logging.getLogger("secubox-ai-veille")
 
@@ -96,6 +97,11 @@ async def _main():
             if any(e != "ok" for e in etats.values()):
                 log.info("collecte : %s", etats)
         boucles.append(Boucle("collecte", PAS_COLLECTE_S, collecter))
+
+        async def echantillonner_pays():
+            if await pays.tour(veille.sql, client, _maintenant().timestamp()):
+                log.info("pays : échantillon du créneau écrit")
+        boucles.append(Boucle("pays", PAS_PAYS_S, echantillonner_pays, collecte=True))
     veille = Veille(db, _maintenant, boucles)
     boucle = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

@@ -2,7 +2,8 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""Rétention de veille.db (V2 § 6) : événements 30 j, incidents 365 j, mesures 30 j ; lots de 1 000, transactions courtes.
+"""Rétention de veille.db (V2 § 6) : événements 30 j, incidents 365 j, mesures 30 j, échantillons par pays 8 j (#3811) ;
+lots de 1 000, transactions courtes.
 
 Un événement qui prouve un incident gardé n'est jamais purgé (clé étrangère) ; la base elle-même n'est jamais supprimée.
 """
@@ -12,6 +13,7 @@ LOT = 1000
 EVENEMENTS_J = 30
 INCIDENTS_J = 365
 MESURES_J = 30
+PAYS_J = 8
 
 
 def _rfc(dt):
@@ -57,4 +59,7 @@ def purger(db, maintenant):
     mesures = _par_lots(
         db, "DELETE FROM mesures WHERE rowid IN (SELECT rowid FROM mesures WHERE horodatage < ? LIMIT %d)" % LOT,
         (lim_mes,))
-    return {"evenements": evenements, "incidents": incidents, "mesures": mesures, "dossiers": dossiers}
+    pays = _par_lots(
+        db, "DELETE FROM pays_echantillons WHERE rowid IN (SELECT rowid FROM pays_echantillons WHERE quand < ? LIMIT %d)"
+            % LOT, (int((maintenant - timedelta(days=PAYS_J)).timestamp()),))
+    return {"evenements": evenements, "incidents": incidents, "mesures": mesures, "dossiers": dossiers, "pays": pays}
