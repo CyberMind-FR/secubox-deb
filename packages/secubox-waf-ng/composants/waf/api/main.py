@@ -1940,7 +1940,7 @@ def _lire_bans_depuis(depuis: int):
 FLUX_MAX_LIGNES = 2000
 FLUX_OCTETS_MAX = 1024 * 1024          # par réponse : ≈ 2 000 lignes de 480 o tiennent dedans
 MESURES_JOURNAL = Path("/var/lib/secubox/waf/mesures.jsonl")
-_MESURES_OCTETS = 8 * 1024 * 1024     # fin relue au plus (le journal fait 74 Mo sans rotation)
+_MESURES_OCTETS = 8 * 1024 * 1024     # fin relue au plus ; sbxwaf en garde toujours davantage au compactage (#3820)
 ACTORD_PROPOSITIONS = Path("/run/secubox/actord-propositions.json")
 _ACTORD_OCTETS_MAX = 2 * 1024 * 1024
 
@@ -2044,7 +2044,7 @@ async def decisions_ban():
 
 
 REEVALUATIONS_JOURNAL = Path("/var/lib/secubox/waf/reevaluations.jsonl")
-_REEVAL_LIGNES_MAX = 5000   # on ne relit que la fin du journal : il est append-only et ne cesse de grossir
+_REEVAL_LIGNES_MAX = 5000   # dernières lignes relues ; sbxwaf en garde toujours au moins autant au compactage (#3820)
 
 
 def _lire_reevaluations() -> List[dict]:

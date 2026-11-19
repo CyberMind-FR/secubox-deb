@@ -174,6 +174,8 @@ une mise à jour qui la change. Appliquer un changement : `systemctl restart sec
   `RELEASE` (elle s'est tue, ou aucun compteur : jamais de prolongation à l'aveugle) ou `EXTEND` (durée graduée suivante, plafonnée à 7 j et au reste des 30 j).
   Un ban posé à la main n'est jamais touché.
 - **Preuves** : chaque transition est une ligne de `/var/lib/secubox/waf/reevaluations.jsonl` (append-only) et de `/var/log/secubox/waf/audit.log`.
+  `reevaluations.jsonl` et `mesures.jsonl` gardent 8 j (`--preuves-fenetre`) ; le plus ancien est dans `reevaluations-AAAAMM.jsonl.gz` et
+  `mesures-AAAAMM.jsonl.gz` (`zcat`), 6 mois (`--preuves-archives`, #3820).
 
 ## 6. Procédure d'activation `PASSIVE_ONLY → SIMULATION → ACTIVE`
 

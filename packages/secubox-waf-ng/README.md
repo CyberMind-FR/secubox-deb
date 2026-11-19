@@ -198,6 +198,16 @@ reste est ajouté à `bans-AAAAMM.jsonl.gz` (mois de `at`, gzip multi-membres, `
 rien n'est réécrit sous `--ban-store-seuil` octets archivables (256 Kio). Un lecteur incrémental identifie le fichier
 par le descripteur ouvert (`fstat`) : un nouvel inode veut dire « relire depuis le début ».
 
+**Journaux de preuves** (`mesures.jsonl`, `reevaluations.jsonl`, #3820). Une ligne par décision de l'échelle de réponse
+et par réévaluation ; seuls lecteurs : `/mesures` (8 Mio de fin au plus) et `/reevaluations` (5 000 dernières lignes).
+sbxwaf les compacte au même rythme que `bans.jsonl` : il garde un **suffixe** du fichier (octets et ordre inchangés)
+qui commence à la première ligne de moins de `--preuves-fenetre` (8 j d'office, 24 h au moins), reculé pour toujours
+garder plus de 8 Mio de `mesures.jsonl` et au moins 5 000 lignes de `reevaluations.jsonl` : les deux routes rendent
+exactement la même chose qu'avant. Le reste va dans `mesures-AAAAMM.jsonl.gz` / `reevaluations-AAAAMM.jsonl.gz`
+(mois de `ts`, `zcat` les lit), purgées au-delà de `--preuves-archives` mois (6) ; rien n'est réécrit sous
+`--preuves-seuil` octets archivables (1 Mio). Mêmes garanties de réécriture que `bans.jsonl` ; les écrivains de sbxwaf
+prennent un verrou d'ajout par chemin que le compactage tient pour recopier la fin et renommer.
+
 **Le cas sûr, deux contrôles** : la règle effective est **relais ∧ gk2**. Le relais vérifie chaque adresse du bloc
 dans ses propres relevés ; le recontrôle de la box ne regarde, pour chaque adresse de `waf_ban`, que la **dernière**
 catégorie de ban de cette adresse (journal des menaces), pas son historique. Ni l'un ni l'autre ne connaît les pairs
