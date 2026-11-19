@@ -1,3 +1,9 @@
+secubox-ipblock (1.6.1-1~trixie1) trixie; urgency=medium
+
+  * cyberfeed : source URLhaus repointée vers le miroir malware-filter (abuse.ch /downloads/hostfile/ en 410 Gone) (#3833).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Thu, 19 Nov 2026 12:37:27 +0100
+
 secubox-ipblock (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Page /cyberfeed/ (composant cyberfeed) refaite au profil Aurora (ref #2650) : un seul fichier autonome (plus de crt-light ni hybrid-dark), tuiles (flux actifs, IP bloquees, domaines bloques, flux en erreur, derniere mise a jour) avec infobulles de definition, onglets Flux, Listes, Verifier un indicateur et Export, filtre cote client des flux, ajout de flux dans un panneau de la page (plus de fenetre modale), ?demo=1 (donnees fictives RFC 5737, aucune ecriture), ?embed=1, bandeau « session requise » sur 401/403, hauteur annoncee a l'hote (sbxVue, onglet cyberfeed). Textes en francais.
