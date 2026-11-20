@@ -1,0 +1,18 @@
+{
+  "bans": [
+    {
+      "ip": "203.0.113.10", "value": "203.0.113.10",
+      "scenario": "auth_ssh:bruteforce", "reason": "auth_ssh:bruteforce", "famille": "auth_ssh",
+      "duration": "3120s", "expires_in": 3120, "type": "ban", "origin": "sbxwaf",
+      "id": null, "created_at": "", "country": "ZZ", "asn": "", "asn_org": ""
+    },
+    {
+      "ip": "198.51.100.7", "value": "198.51.100.7",
+      "scenario": "sqli", "reason": "sqli", "famille": "http",
+      "duration": "900s", "expires_in": 900, "type": "ban", "origin": "sbxwaf",
+      "id": null, "created_at": "", "country": "ZZ", "asn": "", "asn_org": ""
+    }
+  ],
+  "total": 2,
+  "application": {"etat": "appliquee", "ok": true, "detail": "", "verifie": 1763629990}
+}

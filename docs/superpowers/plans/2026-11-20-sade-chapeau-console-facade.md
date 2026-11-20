@@ -153,7 +153,7 @@ def test_phase_et_validation():
 **Interfaces:**
 - Consumes: `substrat.lire`, `echelle.bande/phase/exige_validation`, fixtures de la tâche 1.
 - Produces (toutes `require_lecture`, toutes avec `"sources": {"actord": {"ok": bool}, "waf": {...}, "threatmesh": {...}}`) :
-  - `GET /defense/status` → `{"mode", "menaces_24h", "blocages_actifs", "a_valider", "score_max", "bande_max", "sources"}`
+  - `GET /defense/status` → `{"mode", "menaces_suivies", "evenements_24h", "blocages_actifs", "a_valider", "score_max", "bande_max", "sources"}`
   - `GET /defense/threats` → `{"menaces": [{"id", "source", "score", "bande", "phase", "couches", "tentatives", "vu"}], "sources"}` triées par score décroissant, 200 au plus
   - `GET /defense/threats/{id}` → la menace + `"chronologie": [{"ts", "capteur", "libelle"}]`
   - `GET /defense/actions` → `{"actions": [{"ts", "cible", "geste", "origine", "ttl_s", "etat"}], "sources"}` (bans actifs + historique WAF)
@@ -170,7 +170,7 @@ def test_substrat_muet_ne_rend_jamais_500(client, substrat_ko):     # les trois 
     assert r.status_code == 200
     j = r.json()
     assert all(v["ok"] is False for v in j["sources"].values())
-    assert j["menaces_24h"] is None and j["score_max"] is None     # None, pas 0
+    assert j["menaces_suivies"] is None and j["score_max"] is None     # None, pas 0
 
 def test_une_source_ko_les_autres_servies(client, waf_ko):
     j = client.get("/defense/actions", headers=LECTURE).json()

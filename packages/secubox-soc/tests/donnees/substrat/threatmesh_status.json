@@ -1,0 +1,7 @@
+{
+  "mode": "sovereign", "node": "gk-exemple", "capi": false,
+  "feeds": {"feed:exemple-a": 1200, "feed:exemple-b": 340}, "feed_total": 1540,
+  "mesh": {"mesh:gk-pair": 12}, "mesh_total": 12,
+  "peers": 1,
+  "sources": {"feed:exemple-a": 1200, "feed:exemple-b": 340, "mesh:gk-pair": 12}
+}

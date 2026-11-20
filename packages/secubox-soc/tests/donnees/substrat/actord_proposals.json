@@ -1,0 +1,12 @@
+{
+  "genere_le": 1763630000,
+  "shadow": true,
+  "propositions": [
+    {
+      "actor": "ACT-0001", "mode": "DENY",
+      "raison": "attaque à forte gravité et confiance : blocage temporaire proposé",
+      "ttl_s": 3600, "ips": ["203.0.113.10", "203.0.113.11"],
+      "bans": 3, "confiance": 74, "priorite": 86, "reversible": true
+    }
+  ]
+}

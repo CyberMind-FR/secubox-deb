@@ -42,6 +42,9 @@ app = FastAPI(title="SecuBox SOC", version="2.0.0")
 # Phase 2b/2c (#488/#490) : ingest mitm SOC events + score aggregation
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
 from secubox_core.auth import require_lecture
+from . import defense  # noqa: E402  (façade SADE lecture seule, #3839)
+
+app.include_router(defense.router, prefix="/defense")
 
 
 def _soc_enrich(event: dict) -> dict:

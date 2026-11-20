@@ -1,0 +1,24 @@
+[
+  {
+    "id": "ACT-0001", "name": "", "priority": 86, "level": "HIGH",
+    "tags": [["automatisé", "auto"], ["ciblé", "target"]],
+    "vec": {"severity": 82, "knowledge": 40, "continuity": 55, "intent": 78, "automation": 91, "persistence": 60, "confidence": 74},
+    "src": {"ips": 2, "asns": 1, "countries": 1},
+    "first": "08:12", "last": "09:47",
+    "targets": ["git.example.test", "gitea.example.test"],
+    "bans": 3,
+    "hyp": [["campagne ciblée automatisée", 0.46], ["bot générique / scanner", 0.38], ["bruit non relié", 0.16]],
+    "tl": []
+  },
+  {
+    "id": "ACT-0002", "name": "", "priority": 31, "level": "LOW",
+    "tags": [["observé", ""]],
+    "vec": {"severity": 20, "knowledge": 10, "continuity": 15, "intent": 22, "automation": 35, "persistence": 12, "confidence": 30},
+    "src": {"ips": 1, "asns": 1, "countries": 1},
+    "first": "—", "last": "07:03",
+    "targets": ["www.example.test"],
+    "bans": 0,
+    "hyp": [["bot générique / scanner", 0.38], ["bruit non relié", 0.38], ["campagne ciblée automatisée", 0.24]],
+    "tl": []
+  }
+]

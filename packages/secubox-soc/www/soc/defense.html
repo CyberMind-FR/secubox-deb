@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — « Cyber Defense Live » (SADE, #3839) : la défense vue d'un seul écran, sur la façade /api/v1/soc/defense.
+  Lecture partout ; deux écritures, réservées à un administrateur et confirmées dans la page : le mode (OBSERVE ↔ REACTIVE)
+  et la file d'approbation (Approuver / Refuser / Simuler, en REACTIVE seulement). La façade tranche : la page affiche la cause.
+  Profil projet référence Aurora. DONNÉES RÉELLES UNIQUEMENT ; chaque carte a trois états : chargement, données, « relevé indisponible ».
+  Une source muette ne s'affiche jamais comme un zéro. Les adresses n'arrivent que pour un administrateur : la page ne les suppose pas.
+  `?embed=1` : page encadrée (une colonne), hauteur annoncée à l'hôte.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cyber Defense Live — SecuBox</title>
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f;--sourd:#7f93b6}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.35}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque b{font-size:1.3rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem}
+  .etat{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .etat.vieux{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .etat.hors{border-color:var(--rouge);color:var(--rouge);background:rgba(255,77,94,.12)}
+  .etat.attente{border-color:var(--sourd);color:var(--sourd);background:rgba(127,147,182,.12)}
+  .droite{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--doux);font-size:.74rem}
+  button{font:inherit;color:var(--texte)}
+  .droite button{font-size:.74rem;background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;cursor:pointer}
+  .bandeau{text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{background:rgba(41,182,246,.9);color:#00131f} .info a{color:inherit}
+  .modes{display:flex;gap:4px;flex-wrap:wrap;border:1px solid var(--trait);border-radius:12px;padding:4px;background:rgba(10,22,46,.6)}
+  .modes button{font-size:.74rem;font-weight:700;letter-spacing:.03em;background:transparent;border:0;border-radius:8px;padding:6px 11px;cursor:pointer;color:var(--doux)}
+  .modes button .m{display:block;font-size:.58rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--faible);margin-top:2px}
+  .modes button[aria-pressed=true]{background:rgba(59,130,246,.28);color:var(--texte);box-shadow:inset 0 0 0 1px var(--trait2)}
+  .modes button:disabled{opacity:.5;cursor:not-allowed}
+  .mnote{color:var(--faible);font-size:.7rem;min-height:1em}
+  .grille{display:grid;gap:10px;grid-template-columns:1fr;align-items:start}
+  .pile{display:grid;gap:10px;min-width:0}
+  .carte{border:1px solid var(--trait);border-radius:12px;padding:11px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .carte>h2{margin:0;font-size:.95rem;display:flex;align-items:baseline;gap:8px}
+  .carte>h2 i{font-style:normal;margin-left:auto;font-size:.64rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--faible)}
+  .corps{margin-top:8px;display:grid;gap:7px}
+  .vide,.indispo,.charge{color:var(--faible);font-size:.8rem;padding:6px 2px}
+  .indispo{color:var(--orange)} .charge{color:var(--sourd)}
+  .note{color:var(--faible);font-size:.7rem}
+  /* phases */
+  .phases{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .ph{border:1px solid var(--trait);border-left-width:3px;border-radius:10px;padding:9px 10px;background:rgba(18,40,78,.5);position:relative;min-width:0}
+  .ph .n{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faible)}
+  .ph b{display:block;font-size:.86rem;margin:2px 0}
+  .ph small{display:block;color:var(--faible);font-size:.7rem}
+  .ph .tag{position:absolute;top:8px;right:8px;font-size:.58rem;color:var(--faible);border:1px solid var(--trait);border-radius:6px;padding:1px 5px}
+  .ph.p1{border-left-color:var(--cyan)} .ph.p2{border-left-color:var(--jaune)} .ph.p3{border-left-color:var(--rouge)} .ph.p4{border-left-color:var(--vert)}
+  .ph.on{box-shadow:0 0 0 1px rgba(41,182,246,.35)} .ph.off{opacity:.6}
+  /* tuiles + jauge */
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
+  .tuile{border:1px solid var(--trait);border-radius:12px;padding:9px 11px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .l{color:var(--doux);font-size:.72rem} .tuile .v{font-size:1.45rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;margin-top:3px}
+  .tuile .v.nd{font-size:.82rem;font-weight:600;color:var(--orange);line-height:1.5}
+  .tuile .s{color:var(--faible);font-size:.66rem;margin-top:2px}
+  .v.c{color:var(--cyan)} .v.o{color:var(--orange)} .v.r{color:var(--rouge)} .v.g{color:var(--vert)}
+  .jauge{display:flex;align-items:center;gap:14px;margin-top:10px}
+  .gw{position:relative;width:118px;height:70px;flex:none}
+  .gw svg{display:block}
+  .gv{position:absolute;left:0;right:0;bottom:2px;text-align:center;font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .gv small{font-size:.8rem;color:var(--faible);font-weight:400}
+  .gl{font-size:.78rem;color:var(--doux)} .gl b{font-weight:700}
+  /* flux */
+  .lot>h3{margin:2px 0 0;font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--doux);font-weight:700}
+  .ev{display:grid;grid-template-columns:44px 1fr;gap:4px 10px;padding:8px 0;border-bottom:1px solid var(--trait);cursor:default}
+  .ev:last-child{border-bottom:0}
+  .ev .sc{font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+  .ev .tt{display:flex;gap:6px 8px;align-items:baseline;flex-wrap:wrap;min-width:0}
+  .ev .tt b{font-size:.86rem;overflow-wrap:anywhere}
+  .ev .ds{color:var(--faible);font-size:.72rem;grid-column:2}
+  .ev button.det{margin-left:auto;font-size:.66rem;background:transparent;border:1px solid var(--trait);border-radius:6px;padding:1px 7px;cursor:pointer;color:var(--doux)}
+  .chrono{grid-column:2;margin:2px 0 0;padding:0;list-style:none;display:grid;gap:3px;font-size:.72rem;color:var(--doux)}
+  .b-observer{color:var(--sourd)} .b-reactive{color:var(--cyan)} .b-contenir{color:var(--jaune)} .b-usager{color:var(--orange)} .b-incident{color:var(--rouge)} .b-inconnu{color:var(--faible)}
+  .chip{display:inline-flex;align-items:center;font-size:.66rem;padding:1px 8px;border-radius:999px;border:1px solid var(--trait2);color:var(--doux);white-space:nowrap}
+  .chip.ok{border-color:rgba(46,204,113,.5);color:#b9f3d5;background:rgba(46,204,113,.10)}
+  .chip.wn{border-color:rgba(255,159,28,.5);color:#ffe2ad;background:rgba(255,159,28,.10)}
+  .chip.cr{border-color:rgba(255,77,94,.5);color:#ffc3cd;background:rgba(255,77,94,.10)}
+  /* approbation */
+  .appro{border:1px dashed var(--trait2);border-radius:10px;padding:12px;color:var(--doux);font-size:.82rem;background:rgba(59,130,246,.06)}
+  .gestes,.conf,.retour{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.76rem}
+  .gestes button,.conf button,.mconf button{font-size:.72rem;border:1px solid var(--trait2);border-radius:7px;padding:3px 10px;cursor:pointer;background:rgba(59,130,246,.16)}
+  .gestes button.ap,.conf button.oui{border-color:rgba(255,77,94,.6);background:rgba(255,77,94,.16)}
+  .gestes button:disabled,.conf button:disabled{opacity:.5;cursor:not-allowed}
+  .conf{border:1px solid rgba(255,159,28,.5);border-radius:8px;padding:6px 8px;background:rgba(255,159,28,.08);color:#ffe2ad}
+  .retour.ok{color:#b9f3d5} .retour.ko{color:#ffc3cd}
+  .mconf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.76rem;border:1px solid rgba(255,159,28,.5);border-radius:8px;padding:6px 8px;background:rgba(255,159,28,.08);color:#ffe2ad}
+  .mconf[hidden]{display:none}
+  /* maillage, seuils */
+  .noeud{display:flex;align-items:center;gap:10px;border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(18,40,78,.4)}
+  .noeud .led{width:9px;height:9px;border-radius:50%;background:var(--vert);flex:none}
+  .noeud .led.soi{background:var(--cyan)} .noeud .led.sil{background:var(--sourd)}
+  .noeud .r{margin-left:auto;color:var(--doux);font-size:.74rem;text-align:right}
+  .kv{display:flex;gap:10px;font-size:.82rem;align-items:baseline;border-bottom:1px solid var(--trait);padding:4px 0}
+  .kv:last-child{border-bottom:0}
+  .kv span{color:var(--doux)} .kv b{margin-left:auto;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;text-align:right}
+  .repos{display:flex;flex-wrap:wrap;gap:6px}
+  @container a (min-width:900px){.grille{grid-template-columns:1.5fr 1fr}.tuiles{grid-template-columns:repeat(2,1fr)}.phases{grid-template-columns:repeat(4,1fr)}}
+</style>
+<div class="cadre" id="cadre"><div class="app">
+  <div class="tete">
+    <div class="marque"><b>SADE · Cyber Defense Live</b><small>Ce que la défense a vu, retenu et décidé — approbation en REACTIVE</small></div>
+    <span class="etat attente" id="etat" aria-live="polite">lecture…</span>
+    <div class="modes" role="group" aria-label="Mode de défense" id="modes">
+      <button type="button" data-mode="observe" aria-pressed="false">OBSERVE<span class="m">analyse</span></button>
+      <button type="button" data-mode="reactive" aria-pressed="false">REACTIVE<span class="m">léger auto</span></button>
+      <button type="button" data-mode="active" aria-pressed="false" disabled title="gestes gradués non livrés (V2 4-7)">ACTIVE<span class="m">non livré</span></button>
+      <button type="button" data-mode="aggressive" aria-pressed="false" disabled title="gestes gradués non livrés (V2 4-7)">AGGRESSIVE<span class="m">non livré</span></button>
+    </div>
+    <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
+  </div>
+  <div class="mnote" id="mnote" aria-live="polite"></div>
+  <div class="mconf" id="mconf" role="group" aria-label="Confirmation du changement de mode" hidden></div>
+  <div class="bandeau info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+
+  <div class="grille">
+    <div class="pile">
+      <section class="carte" id="phases"><h2>Stratégie en 4 phases<i>critère de succès, puis phase suivante</i></h2>
+        <div class="corps"><div class="phases" id="phases-corps"></div></div></section>
+      <section class="carte" id="flux"><h2>Flux en direct<i>acteurs et gestes</i></h2>
+        <div class="corps" id="flux-corps"><div class="charge">chargement…</div></div></section>
+      <section class="carte" id="approbation"><h2>File d'approbation<i>l'IA propose, l'opérateur valide</i></h2>
+        <div class="corps" id="appro-corps"><div class="charge">chargement…</div></div></section>
+      <section class="carte" id="incidents"><h2>Incidents récents<i>échantillon des 7 derniers jours</i></h2>
+        <div class="corps" id="incidents-corps"><div class="charge">chargement…</div></div></section>
+    </div>
+    <div class="pile">
+      <section class="carte" id="synthese"><h2>Synthèse<i>24 h</i></h2>
+        <div class="corps" id="synthese-corps"><div class="charge">chargement…</div></div></section>
+      <section class="carte" id="maillage"><h2>Maillage<i>threatmesh</i></h2>
+        <div class="corps" id="maillage-corps"><div class="charge">chargement…</div></div></section>
+      <section class="carte" id="seuils"><h2>Seuils et bandes<i>lecture seule</i></h2>
+        <div class="corps" id="seuils-corps"><div class="charge">chargement…</div></div></section>
+    </div>
+  </div>
+  <div class="note">Les compteurs viennent d'actord (acteurs suivis, événements sur 24 h), du WAF (blocages actifs) et de threatmesh. Une source muette s'affiche « relevé indisponible », jamais un zéro. Les adresses ne sont visibles que d'un administrateur.</div>
+</div></div>
+<script>
+(function(){
+  'use strict';
+  var Q = new URLSearchParams(location.search), EMB = Q.has('embed');
+  var BASE = '/api/v1/soc/defense';
+  var $ = function(id){ return document.getElementById(id); };
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function num(n){ return (typeof n === 'number' && isFinite(n)) ? n : null; }
+  function nb(n){ return num(n) === null ? '—' : n.toLocaleString('fr-FR'); }
+  var NOMS_BANDE = {observer:'observer', reactive:'réactif', contenir:'contenir', usager:'usager', incident:'incident', inconnu:'inconnu'};
+  var COUL_BANDE = {observer:'#7f93b6', reactive:'#29b6f6', contenir:'#ffd23f', usager:'#ff9f1c', incident:'#ff4d5e'};
+
+  var session = false;
+  function jeton(){ try { return localStorage.getItem('sbx_token'); } catch (e) { return null; } }
+  // Un appel : { ok, statut, d } ; d est le JSON (objet) ou null, y compris sur une erreur (pour en lire la cause).
+  function appel(methode, chemin, corps){
+    var h = {'Accept':'application/json'}, t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
+    var o = {method:methode, headers:h, credentials:'same-origin', cache:'no-store'};
+    if (corps !== undefined) { h['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
+    return fetch(BASE + chemin, o).then(function(r){
+      return r.json().catch(function(){ return null; }).then(function(d){
+        return {ok:r.ok, statut:r.status, d:(d && typeof d === 'object') ? d : null};
+      });
+    }).catch(function(){ return {ok:false, statut:0, d:null}; });
+  }
+  // Une lecture : 401/403 → session requise (jamais un faux zéro) ; un 200 illisible n'est pas une donnée.
+  function lire(chemin){
+    return appel('GET', chemin).then(function(r){
+      if (r.statut === 401 || r.statut === 403) session = true;
+      return (r.ok && r.d) ? r : {ok:false, statut:r.statut, d:null};
+    });
+  }
+  // Cause d'un refus de la façade, en clair ; le code `cause` reste affiché tel quel (échappé).
+  var CAUSES = {
+    mode:'le mode n\'est pas REACTIVE', liste_blanche:'adresse protégée (liste blanche) ou non publique : proposition entière refusée',
+    gestes_non_livres:'geste non livré : seul le ban est exécutable', porteur_requis:'jeton de session requis (reconnectez-vous) : le WAF refuse une écriture par cookie seul',
+    deja_traitee:'décision déjà traitée', audit_indisponible:'audit indisponible : aucun geste appliqué', base_indisponible:'base d\'état indisponible',
+    actord_indisponible:'actord injoignable : proposition non relue',
+    sans_adresse:'proposition sans adresse', waf:'le WAF a refusé le ban', corps:'requête invalide',
+    proposition_changee:'la proposition a changé chez actord depuis l\'affichage : file rechargée, vérifiez avant de recommencer',
+    pas_bloquee:'décision non bloquée (ou demande trop récente)', duree_invalide:'durée non représentable par le WAF',
+    trop_d_adresses:'trop d\'adresses pour une approbation'};
+  function causeDe(r){
+    var d = r.d || {}, c = typeof d.cause === 'string' ? d.cause : null, t;
+    if (c) t = (CAUSES[c] || 'refus') + ' [' + c + ']';
+    else if (r.statut === 401 || r.statut === 403) t = 'réservé à un administrateur : session administrateur requise [' + r.statut + ']';
+    else if (r.statut === 0) t = 'façade injoignable';
+    else t = 'erreur HTTP ' + r.statut;
+    if (typeof d.error === 'string' && d.error) t += ' — ' + d.error;
+    else if (!c && typeof d.detail === 'string' && d.detail) t += ' — ' + d.detail;
+    if (Array.isArray(d.bannies) && d.bannies.length) t += ' ; déjà bannies : ' + d.bannies.join(', ');
+    return t;
+  }
+  function src(r, nom){ var s = r.ok && r.d && r.d.sources && r.d.sources[nom]; return s ? s.ok : null; }
+
+  var INDISPO = '<div class="indispo">relevé indisponible</div>';
+  function pose(id, html){ $(id).innerHTML = html; }
+  function chip(t, c){ return '<span class="chip' + (c ? ' ' + c : '') + '">' + esc(t) + '</span>'; }
+
+  // ── bandeau et modes ──
+  var modeCourant = null;
+  function rendMode(mode, base){
+    modeCourant = (mode === 'observe' || mode === 'reactive' || mode === 'active' || mode === 'aggressive') ? mode : null;
+    [].slice.call(document.querySelectorAll('#modes button')).forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === modeCourant));
+    });
+    $('mnote').textContent = base === 'indisponible' ? 'Base d\'état indisponible : mode par défaut affiché, à ne pas tenir pour confirmé.' : '';
+  }
+  // Changement de mode : OBSERVE ↔ REACTIVE seulement, toujours confirmé dans la page ; la façade (require_jwt) tranche.
+  var confMode = null, modeEnVol = false;
+  var TEXTES_MODE = {
+    observe:'Revenir en OBSERVE : la file d\'approbation ne pourra plus appliquer aucun geste.',
+    reactive:'Passer en REACTIVE : un administrateur pourra approuver des bans réels, un par un, chacun audité.'};
+  function rendConfMode(){
+    var c = $('mconf');
+    if (!confMode) { c.hidden = true; c.innerHTML = ''; return; }
+    c.hidden = false;
+    c.innerHTML = '<span>' + esc(TEXTES_MODE[confMode]) + ' Confirmer ?</span>' +
+      '<button type="button" data-conf="oui"' + (modeEnVol ? ' disabled' : '') + '>Confirmer</button>' +
+      '<button type="button" data-conf="non"' + (modeEnVol ? ' disabled' : '') + '>Annuler</button>';
+    hauteur();
+  }
+  [].slice.call(document.querySelectorAll('#modes button:not([disabled])')).forEach(function(b){
+    b.addEventListener('click', function(){
+      var m = b.getAttribute('data-mode');
+      if (m !== 'observe' && m !== 'reactive') return;
+      if (m === modeCourant) { confMode = null; rendConfMode(); $('mnote').textContent = 'Mode ' + m.toUpperCase() + ' déjà actif.'; return; }
+      confMode = m; $('mnote').textContent = ''; rendConfMode();
+    });
+  });
+  $('mconf').addEventListener('click', function(ev){
+    var b = ev.target.closest ? ev.target.closest('button[data-conf]') : null;
+    if (!b || modeEnVol || !confMode) return;
+    if (b.getAttribute('data-conf') !== 'oui') { confMode = null; rendConfMode(); return; }
+    var cible = confMode;
+    modeEnVol = true; rendConfMode();
+    appel('POST', '/mode', {mode:cible}).then(function(r){
+      modeEnVol = false; confMode = null; rendConfMode();
+      $('mnote').textContent = (r.ok && r.d) ? 'Mode ' + String(r.d.mode || cible).toUpperCase() + ' appliqué (audité).' : 'Mode inchangé : ' + causeDe(r);
+      if (r.ok) charge();
+    });
+  });
+
+  // ── phases ──
+  function rendPhases(){
+    var ph = [
+      ['p1','1 · Défensive','Détection','journaux enrichis, leurres, collecte de signatures et d\'adresses','profil confirmé', 'observe'],
+      ['p2','2 · Réactive','Réaction ciblée','règles WAF dynamiques, limite de débit, bans automatiques','attaque inefficace', 'reactive'],
+      ['p3','3 · Offensive défensive','Neutralisation locale','quarantaine, leurre, durcissement','redirigé vers le leurre', null],
+      ['p4','4 · Adaptative','Apprentissage','signatures, partage d\'indicateurs, renforcement des politiques','non reproduit sur le maillage', null]];
+    pose('phases-corps', ph.map(function(p){
+      var on = p[5] && modeCourant === p[5], livre = !!p[5];
+      return '<div class="ph ' + p[0] + (on ? ' on' : '') + (livre ? '' : ' off') + '"><span class="n">' + esc(p[1]) + '</span>' +
+        (on ? '<span class="tag">en cours</span>' : (livre ? '' : '<span class="tag">V2 4-7</span>')) +
+        '<b>' + esc(p[2]) + '</b><small>' + esc(p[3]) + '</small><small>critère : ' + esc(p[4]) + '</small></div>';
+    }).join(''));
+  }
+
+  // ── synthèse ──
+  function tuile(l, v, c, s, pref){
+    var nd = num(v) === null;
+    return '<div class="tuile"><div class="l">' + esc(l) + '</div><div class="v ' + (nd ? 'nd' : c) + '">' + (nd ? 'relevé indisponible' : esc((pref || '') + nb(v))) + '</div><div class="s">' + esc(s) + '</div></div>';
+  }
+  function jauge(score, bande, actordOk){
+    if (num(score) === null) {
+      return '<div class="jauge"><div class="gl">Score de menace max<br><b class="b-inconnu">' + (actordOk === false ? 'relevé indisponible' : 'aucun score relevé') + '</b></div></div>';
+    }
+    var t = Math.PI * Math.max(0, Math.min(100, score)) / 100, x = 59 - 50 * Math.cos(t), y = 64 - 50 * Math.sin(t);
+    var c = COUL_BANDE[bande] || '#7f93b6';
+    return '<div class="jauge"><div class="gw"><svg viewBox="0 0 118 70" width="118" height="70" aria-hidden="true">' +
+      '<path d="M9 64 A50 50 0 0 1 109 64" fill="none" stroke="#1b2b4d" stroke-width="10" stroke-linecap="round"/>' +
+      (score > 0 ? '<path d="M9 64 A50 50 0 0 1 ' + x.toFixed(1) + ' ' + y.toFixed(1) + '" fill="none" stroke="' + c + '" stroke-width="10" stroke-linecap="round"/>' : '') +
+      '</svg><div class="gv">' + esc(score) + '<small>/100</small></div></div>' +
+      '<div class="gl">Score de menace max<br><b class="b-' + esc(bande || 'inconnu') + '">bande ' + esc(NOMS_BANDE[bande] || 'inconnue') + '</b></div></div>';
+  }
+  function sousBlocages(d){
+    var n = num(d.blocages_enregistres);
+    if (n === null) return 'bans appliqués par le WAF';
+    if (d.blocages_actifs === 0 && n > 0) return n + ' enregistré(s), non appliqué(s)' + (d.blocages_application ? ' (' + d.blocages_application + ')' : '');
+    if (num(d.blocages_actifs) === null) return n + ' enregistré(s), application inconnue';
+    return 'bans appliqués par le WAF';
+  }
+  function rendSynthese(r){
+    if (!r.ok) { pose('synthese-corps', INDISPO); return; }
+    var d = r.d || {}, a = src(r, 'actord'), w = src(r, 'waf');
+    // une source en panne rend ses chiffres null côté façade ; on ne repeint jamais un zéro à leur place
+    pose('synthese-corps', '<div class="tuiles">' +
+      tuile('Acteurs suivis', d.menaces_suivies, 'c', 'connus d\'actord') +
+      (d.evenements_24h_plafonne
+        ? tuile('Événements 24 h', d.evenements_24h, 'c', 'échantillon plafonné par actord', '≥ ')
+        : tuile('Événements 24 h', d.evenements_24h, 'c', 'activité sur 24 h')) +
+      tuile('Blocages actifs', d.blocages_actifs, 'o', w === false ? 'WAF muet' : sousBlocages(d)) +
+      tuile('À valider', d.a_valider, 'g', 'propositions en attente') + '</div>' +
+      jauge(d.score_max, d.bande_max, a));
+  }
+
+  // ── flux ──
+  function carteSource(ok, vide){ return ok === false ? INDISPO : vide; }
+  function dateCourte(s){
+    if (typeof s !== 'string' || !s) return null;
+    var d = new Date(s); if (isNaN(d)) return s;
+    return d.toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+  }
+  var ouverts = {};
+  function ligneMenace(m){
+    var b = m.bande || 'inconnu', couches = (m.couches || []).map(function(c){ return chip(c); }).join(' ');
+    var ds = [];
+    ds.push(num(m.tentatives) === null ? 'tentatives : —' : nb(m.tentatives) + ' tentatives');
+    if (m.vu) ds.push('vu ' + m.vu);
+    var id = esc(m.id || '');
+    return '<div class="ev" data-id="' + id + '"><span class="sc b-' + esc(b) + '">' + (num(m.score) === null ? '—' : esc(m.score)) + '</span>' +
+      '<div class="tt"><b>' + esc(m.source || m.id || '—') + '</b>' + chip(NOMS_BANDE[b] || 'inconnu') +
+      (m.phase ? chip('phase ' + m.phase) : '') + couches +
+      '<button type="button" class="det" data-id="' + id + '">chronologie</button></div>' +
+      '<div class="ds">' + esc(ds.join(' · ')) + '</div><ul class="chrono" id="chr-' + id + '"' + (ouverts[m.id] ? '' : ' hidden') + '></ul></div>';
+  }
+  function ligneAction(a){
+    var etat = a.etat === 'actif' ? chip('actif', 'ok') : chip(a.etat || 'historique');
+    var ds = [];
+    if (a.origine) ds.push('origine ' + a.origine);
+    if (num(a.ttl_s) !== null) ds.push('reste ' + nb(Math.round(a.ttl_s / 60)) + ' min');
+    var t = dateCourte(a.ts);
+    return '<div class="ev"><span class="sc"></span><div class="tt"><b>' + esc(a.geste || '—') + '</b>' + etat + '<span class="note">' + esc(a.cible || '—') + '</span></div>' +
+      '<div class="ds">' + esc((t ? t + ' · ' : '') + (ds.join(' · ') || '—')) + '</div></div>';
+  }
+  function rendFlux(rt, ra){
+    var h = '';
+    var tAct = src(rt, 'actord');
+    if (!rt.ok || tAct === false) h += '<div class="lot"><h3>Acteurs suivis</h3>' + INDISPO + '</div>';
+    else {
+      var m = (rt.d && rt.d.menaces) || [];
+      h += '<div class="lot"><h3>Acteurs suivis</h3>' + (m.length ? m.slice(0, 8).map(ligneMenace).join('') : '<div class="vide">Aucun acteur suivi.</div>') + '</div>';
+    }
+    var aWaf = src(ra, 'waf');
+    if (!ra.ok || aWaf === false) h += '<div class="lot"><h3>Gestes et blocages</h3>' + INDISPO + '</div>';
+    else {
+      var g = (ra.d && ra.d.actions) || [];
+      h += '<div class="lot"><h3>Gestes et blocages</h3>' + (g.length ? g.slice(0, 8).map(ligneAction).join('') : '<div class="vide">Aucun geste enregistré.</div>') + '</div>';
+    }
+    pose('flux-corps', h);
+    Object.keys(ouverts).forEach(function(id){ if (ouverts[id]) chronologie(id, true); });
+  }
+  function chronologie(id, rafraichi){
+    var ul = $('chr-' + id); if (!ul) return;
+    if (!rafraichi) { ouverts[id] = !ouverts[id]; ul.hidden = !ouverts[id]; if (!ouverts[id]) return; }
+    ul.innerHTML = '<li class="charge">chargement…</li>';
+    lire('/threats/' + encodeURIComponent(id)).then(function(r){
+      var u = $('chr-' + id); if (!u) return;
+      if (!r.ok) { u.innerHTML = '<li class="indispo">relevé indisponible</li>'; return; }
+      var c = (r.d && r.d.chronologie) || [];
+      u.innerHTML = c.length ? c.map(function(e){ var t = dateCourte(e.ts); return '<li>' + esc((t ? t + ' · ' : '') + (e.capteur || '') + ' : ' + (e.libelle || '')) + '</li>'; }).join('')
+        : '<li class="vide">Aucun événement daté pour cet acteur.</li>';
+      hauteur();
+    });
+  }
+  $('flux-corps').addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('button.det'); if (b) chronologie(b.getAttribute('data-id'), false);
+  });
+
+  // ── incidents ──
+  function rendIncidents(r){
+    if (!r.ok || src(r, 'actord') === false) { pose('incidents-corps', INDISPO); return; }
+    var l = (r.d && r.d.incidents) || [];
+    // WAF muet : l'ensemble des bans actifs est vide par défaut, l'issue (bloqué/proposé/observé) serait fausse
+    var wafMuet = src(r, 'waf') === false;
+    var avert = wafMuet ? '<div class="indispo">WAF indisponible : l\'issue des incidents est inconnue</div>' : '';
+    if (!l.length) { pose('incidents-corps', avert + '<div class="vide">Aucun incident dans l\'échantillon des 7 derniers jours.</div>'); return; }
+    pose('incidents-corps', avert + l.slice(0, 12).map(function(i){
+      var b = i.bande || 'inconnu', t = dateCourte(i.ts);
+      return '<div class="ev"><span class="sc b-' + esc(b) + '">' + (num(i.score) === null ? '—' : esc(i.score)) + '</span>' +
+        '<div class="tt"><b>' + esc(i.titre || '—') + '</b>' + (wafMuet ? chip('issue inconnue') : chip(i.issue || '—', i.issue === 'bloqué' ? 'ok' : (i.issue === 'proposé' ? 'wn' : ''))) + '</div>' +
+        '<div class="ds">' + esc((t || 'date inconnue') + ' · bande ' + (NOMS_BANDE[b] || 'inconnue')) + '</div></div>';
+    }).join('') + '<div class="note">Échantillon borné par la source, pas un historique complet.</div>');
+  }
+
+  // ── maillage ──
+  function rendMaillage(r){
+    if (!r.ok || src(r, 'threatmesh') === false) { pose('maillage-corps', INDISPO); return; }
+    var n = (r.d && r.d.noeuds) || [];
+    if (!n.length) { pose('maillage-corps', '<div class="vide">Aucun nœud rapporté.</div>'); return; }
+    pose('maillage-corps', n.map(function(x){
+      var led = x.soi ? 'soi' : (x.etat === 'actif' ? '' : 'sil');
+      var recus = num(x.recus) === null ? 'reçus : —' : nb(x.recus) + ' reçus';
+      var emis = num(x.emis) === null ? 'émis : —' : nb(x.emis) + ' émis';
+      return '<div class="noeud"><span class="led ' + led + '"></span><b>' + esc(x.nom || '—') + '</b><span class="r">' +
+        esc((x.soi ? 'ce nœud · ' : '') + emis + ' · ' + recus + (x.soi ? '' : ' · ' + (x.etat || '—'))) + '</span></div>';
+    }).join(''));
+  }
+
+  // ── seuils ──
+  function rendSeuils(r){
+    if (!r.ok || !r.d) { pose('seuils-corps', INDISPO); return; }
+    var d = r.d, h = '', base = d.etat_base === 'indisponible';
+    var bandes = Array.isArray(d.bandes) ? d.bandes : [];
+    if (bandes.length) h += '<div class="lot"><h3>Bandes de score</h3>' + bandes.map(function(b){
+      return '<div class="kv"><span class="b-' + esc(b.nom) + '">' + esc(NOMS_BANDE[b.nom] || b.nom) + '</span><b>dès ' + esc(b.seuil) + '</b></div>'; }).join('') + '</div>';
+    var s = d.seuils && typeof d.seuils === 'object' ? Object.keys(d.seuils) : [];
+    h += '<div class="lot"><h3>Seuils</h3>' + (base ? INDISPO : s.length ? s.map(function(k){ return '<div class="kv"><span>' + esc(k) + '</span><b>' + esc(d.seuils[k]) + '</b></div>'; }).join('') : '<div class="vide">Aucun seuil enregistré.</div>') + '</div>';
+    var lb = Array.isArray(d.liste_blanche) ? d.liste_blanche : [];
+    h += '<div class="lot"><h3>Liste blanche (jamais bloqué)</h3>' + (base ? INDISPO : lb.length ? '<div class="repos">' + lb.map(function(e){ return chip(e.cidr + (e.motif ? ' · ' + e.motif : '')); }).join('') + '</div>' : '<div class="vide">Liste vide.</div>') + '</div>';
+    h += '<div class="note">Modes ouverts : ' + esc((d.modes_ouverts || []).join(', ') || '—') + '.</div>';
+    pose('seuils-corps', h);
+  }
+
+  // ── file d'approbation ──
+  // Boutons seulement en REACTIVE et pour un administrateur réel (`admin` rendu par la façade) ; chaque geste est
+  // confirmé dans la page. La page renvoie l'EMPREINTE de la proposition affichée (rendue aux seuls administrateurs) :
+  // la façade la recalcule sur la proposition courante d'actord et refuse (`proposition_changee`) si elle a changé.
+  var props = {}, propsAdmin = false, propsMode = null, confAppro = null, enVol = null, retours = {}, dernieresProps = null;
+  var ETATS = {en_attente:'en attente', en_cours:'en cours', applique:'appliqué', refuse:'refusé'};
+  var LIB_GESTE = {approuver:'Approuver', refuser:'Refuser', simuler:'Simuler', reprendre:'Reprendre'};
+  var ROUTE_GESTE = {approuver:'/approve', simuler:'/approve', refuser:'/refuse', reprendre:'/reprendre'};
+  function texteConf(a, p){
+    var duree = num(p.ttl_s) !== null ? nb(Math.round(p.ttl_s / 60)) + ' min' : 'durée par défaut du WAF';
+    if (a === 'approuver') return 'Bannir réellement ' + (p.cible || '—') + ' (' + duree + ') pour ' + p.menace_id + ' ?' +
+      (p.validation_humaine ? ' Mesure exceptionnelle (bande incident).' : '');
+    if (a === 'refuser') return 'Refuser la proposition ' + p.menace_id + ' ? Elle ne pourra plus être approuvée avant 24 h.';
+    if (a === 'reprendre') return 'Reprendre la décision restée « en cours » pour ' + p.menace_id +
+      ' : elle repasse en attente (refusé par la façade tant que des appels au WAF peuvent être en vol).';
+    return 'Simuler l\'approbation de ' + p.menace_id + ' : contrôles et audit seulement, aucun ban.';
+  }
+  function ligneProp(p, actif){
+    var b = NOMS_BANDE[p.bande] ? p.bande : 'inconnu', cle = typeof p.empreinte === 'string' ? p.empreinte : null;
+    var e = cle ? esc(cle) : '';
+    var etat = ETATS[p.etat] || 'état inconnu';
+    var cl = p.etat === 'applique' ? 'ok' : (p.etat === 'refuse' ? '' : 'wn');
+    var ds = [];
+    if (p.motif) ds.push(p.motif);
+    ds.push(num(p.ttl_s) !== null ? 'durée ' + nb(Math.round(p.ttl_s / 60)) + ' min' : 'durée par défaut du WAF');
+    var h = '<div class="ev"><span class="sc b-' + esc(b) + '">' + (num(p.score) === null ? '—' : esc(p.score)) + '</span>' +
+      '<div class="tt"><b>' + esc(p.menace_id || '—') + '</b>' + chip(p.geste || '—') + chip(etat, cl) +
+      (p.validation_humaine ? chip('mesure exceptionnelle', 'cr') : '') + '<span class="note">' + esc(p.cible || '—') + '</span></div>' +
+      '<div class="ds">' + esc(ds.join(' · ')) + '</div>';
+    // gestes : administrateur (empreinte rendue) ; Approuver/Refuser/Simuler en REACTIVE sur une décision en attente,
+    // Reprendre sur une décision restée « en cours » (quel que soit le mode : elle ne pose aucun ban)
+    var offre = !cle ? null : (actif && p.etat === 'en_attente') ? 'file' : (propsAdmin && p.etat === 'en_cours') ? 'reprise' : null;
+    if (offre) {
+      if (enVol === cle) h += '<div class="gestes"><span class="note">envoi…</span></div>';
+      else if (confAppro && confAppro.id === cle) h += '<div class="conf"><span>' + esc(texteConf(confAppro.a, p)) + '</span>' +
+        '<button type="button" class="oui" data-oui="1" data-id="' + e + '">Confirmer</button><button type="button" data-non="1">Annuler</button></div>';
+      else if (offre === 'reprise') h += '<div class="gestes"><button type="button" data-act="reprendre" data-id="' + e + '">Reprendre</button></div>';
+      else h += '<div class="gestes">' +
+        (p.executable ? '<button type="button" class="ap" data-act="approuver" data-id="' + e + '">Approuver</button>' : '<span class="note">geste non livré</span>') +
+        '<button type="button" data-act="refuser" data-id="' + e + '">Refuser</button>' +
+        (p.executable ? '<button type="button" data-act="simuler" data-id="' + e + '">Simuler</button>' : '') + '</div>';
+    }
+    var rt = cle ? retours[cle] : null;
+    if (rt) h += '<div class="retour ' + (rt.ok ? 'ok' : 'ko') + '">' + esc(rt.texte) + '</div>';
+    return h + '</div>';
+  }
+  function rendAppro(r){
+    dernieresProps = r;
+    if (!r.ok || !r.d) {
+      pose('appro-corps', (r.statut === 401 || r.statut === 403) ? '<div class="vide">Session requise pour consulter la file.</div>' : INDISPO);
+      return;
+    }
+    var d = r.d, l = Array.isArray(d.propositions) ? d.propositions : [];
+    propsAdmin = d.admin === true; propsMode = d.mode; props = {};
+    l.forEach(function(p){ if (p && typeof p.empreinte === 'string') props[p.empreinte] = p; });
+    var actif = propsMode === 'reactive' && propsAdmin && d.etat_base !== 'indisponible';
+    var notes = [];
+    if (propsMode !== 'reactive') notes.push('Mode ' + String(propsMode || 'inconnu').toUpperCase() + ' : la file se consulte, aucun geste ne s\'approuve hors REACTIVE.');
+    else if (!propsAdmin) notes.push('Approbation réservée à un administrateur : adresses masquées, aucun bouton.');
+    if (d.etat_base === 'indisponible') notes.push('Base d\'état indisponible : état des décisions inconnu, aucun geste proposé.');
+    if (d.shadow === true) notes.push('actord propose seulement (shadow) : rien n\'est appliqué sans validation.');
+    var h = notes.map(function(n){ return '<div class="note">' + esc(n) + '</div>'; }).join('');
+    if (src(r, 'actord') === false) h += INDISPO;
+    else if (!l.length) h += '<div class="vide">Aucune proposition d\'actord.</div>';
+    else h += l.filter(function(p){ return p && typeof p.id === 'string'; }).map(function(p){ return ligneProp(p, actif); }).join('');
+    pose('appro-corps', h);
+    hauteur();
+  }
+  function rechargeProps(){ return lire('/proposals').then(rendAppro); }
+  $('appro-corps').addEventListener('click', function(ev){
+    var b = ev.target.closest ? ev.target.closest('button') : null;
+    if (!b || enVol) return;
+    if (b.hasAttribute('data-non')) { confAppro = null; if (dernieresProps) rendAppro(dernieresProps); return; }
+    var id = b.getAttribute('data-id'), p = id && Object.prototype.hasOwnProperty.call(props, id) ? props[id] : null;
+    if (!p) return;
+    if (b.hasAttribute('data-act')) {
+      var a = b.getAttribute('data-act');
+      if (!LIB_GESTE[a]) return;
+      confAppro = {id:id, a:a}; delete retours[id];
+      rendAppro(dernieresProps); return;
+    }
+    if (!b.hasAttribute('data-oui') || !confAppro || confAppro.id !== id) return;
+    var act = confAppro.a;
+    enVol = id; confAppro = null; rendAppro(dernieresProps);
+    var corps = act === 'reprendre' ? {empreinte:id} : {empreinte:id, simuler:act === 'simuler'};
+    appel('POST', ROUTE_GESTE[act], corps).then(function(r){
+      var d = r.d || {}, t;
+      if (r.ok) {
+        t = (d.etat === 'simule' ? 'Simulation' : d.etat === 'applique' ? 'Appliqué' : d.etat === 'refuse' ? 'Refusé' :
+          act === 'reprendre' ? 'Repris' : LIB_GESTE[act]) + ' : ' + (typeof d.resultat === 'string' ? d.resultat : '—');
+        if (Array.isArray(d.avertissements) && d.avertissements.length) t += ' — attention : ' + d.avertissements.join(' ; ');
+      } else t = LIB_GESTE[act] + ' refusé : ' + causeDe(r);
+      if (d.pairs_maillage === 'non_verifies') t += ' — pairs du maillage non vérifiés (threatmesh muet)';
+      retours[id] = {ok:r.ok, texte:t};
+      enVol = null;
+      return rechargeProps();
+    });
+  });
+
+  function hauteur(){
+    if (window.parent === window) return;
+    try { window.parent.postMessage({sbxVue: Math.ceil($('cadre').getBoundingClientRect().bottom + window.scrollY), onglet: 'defense'}, location.origin); } catch (e) {}
+  }
+
+  var enCours = false;
+  function charge(){
+    if (enCours) return;
+    enCours = true; session = false;
+    Promise.all([lire('/status'), lire('/threats'), lire('/actions'), lire('/mesh'), lire('/incidents?jours=7'), lire('/policies'), lire('/proposals')]).then(function(r){
+      var st = r[0];
+      rendMode(st.ok && st.d ? st.d.mode : (r[5].ok && r[5].d ? r[5].d.mode : null), st.ok && st.d ? st.d.etat_base : (r[5].ok && r[5].d ? r[5].d.etat_base : null));
+      rendPhases(); rendSynthese(st); rendFlux(r[1], r[2]); rendIncidents(r[4]); rendMaillage(r[3]); rendSeuils(r[5]); rendAppro(r[6]);
+      var lues = r.filter(function(x){ return x.ok; }).length, e = $('etat');
+      var muettes = [st, r[1], r[2], r[3], r[4], r[6]].some(function(x){ var s = x.ok && x.d && x.d.sources; return s && Object.keys(s).some(function(k){ return s[k].ok === false; }); });
+      e.className = 'etat' + (lues === 0 ? ' hors' : (lues < r.length || muettes ? ' vieux' : ''));
+      e.textContent = lues === 0 ? 'AUCUNE MESURE' : (lues < r.length || muettes ? 'RELEVÉ PARTIEL' : 'EN DIRECT');
+      $('session').hidden = !session;
+      $('heure').textContent = new Date().toLocaleString('fr-FR', {dateStyle:'medium', timeStyle:'short'});
+      enCours = false; hauteur();
+    });
+  }
+  $('rafraichir').addEventListener('click', charge);
+  if (EMB) document.body.classList.add('emb');
+  rendPhases();
+  charge();
+  setInterval(function(){ if (!document.hidden) charge(); }, 15000);
+  addEventListener('resize', hauteur);
+  if (window.ResizeObserver) new ResizeObserver(hauteur).observe(document.body);
+})();
+</script>
