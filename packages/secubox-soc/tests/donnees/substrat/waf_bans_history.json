@@ -1,0 +1,20 @@
+{
+  "window_hours": 24,
+  "total_ips": 2,
+  "tracked": [
+    {
+      "ip": "203.0.113.10", "count": 142,
+      "first_seen": "2026-11-20T08:12:03Z", "last_seen": "2026-11-20T09:47:51Z",
+      "severity_max": "high", "sample_path": "/login",
+      "top_categories": [{"category": "auth_ssh:bruteforce", "count": 120}, {"category": "sqli", "count": 22}],
+      "currently_banned": true
+    },
+    {
+      "ip": "198.51.100.7", "count": 4,
+      "first_seen": "2026-11-20T06:00:00Z", "last_seen": "2026-11-20T06:10:00Z",
+      "severity_max": "medium", "sample_path": "/wp-login.php",
+      "top_categories": [{"category": "scanner", "count": 4}],
+      "currently_banned": false
+    }
+  ]
+}
