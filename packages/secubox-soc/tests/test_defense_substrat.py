@@ -143,3 +143,19 @@ def test_fixtures_attendues_presentes():
     attendues = {"actord_actors", "actord_proposals", "waf_bans", "waf_bans_history", "threatmesh_status",
                  "threatmesh_decisions"}
     assert attendues <= {p.stem for p in DONNEES.glob("*.json")}
+
+
+@pytest.mark.parametrize("corps", [b"42", b"null", b'"texte"', b"true"])
+def test_json_scalaire_ou_null_est_inattendu(serveur_unix, corps):
+    serveur_unix.repond("/x", 200, corps)
+    assert substrat.lire("waf", "/x") == {"ok": False, "donnees": None, "erreur": "réponse inattendue"}
+
+
+def test_socket_inaccessible_dit_acces_refuse(monkeypatch, tmp_path):
+    monkeypatch.setitem(substrat.SOURCES, "waf", str(tmp_path / "x.sock"))
+
+    def refuse(self):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(substrat._Connexion, "connect", refuse)
+    assert substrat.lire("waf", "/bans")["erreur"] == "accès refusé"

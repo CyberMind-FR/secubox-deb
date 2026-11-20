@@ -9,7 +9,6 @@ Seule une source inconnue lève `KeyError` (erreur de programmation, pas d'explo
 """
 import http.client
 import json
-import os
 import socket
 from typing import Any, Dict, Optional
 
@@ -41,8 +40,6 @@ def _ko(erreur: str) -> Dict[str, Any]:
 def lire(source: str, chemin: str, entetes: Optional[Dict[str, str]] = None, delai: float = 3.0) -> Dict[str, Any]:
     """GET `chemin` sur le socket de `source`. Rend `{"ok", "donnees", "erreur"}`."""
     sock = SOURCES[source]  # KeyError si source inconnue
-    if not os.path.exists(sock):
-        return _ko("socket absent")
     conn = None
     try:
         conn = _Connexion(sock, delai)
@@ -57,9 +54,15 @@ def lire(source: str, chemin: str, entetes: Optional[Dict[str, str]] = None, del
             donnees = json.loads(corps.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
             return _ko("réponse illisible")
+        if not isinstance(donnees, (dict, list)):  # scalaire ou null : jamais une réponse exploitable
+            return _ko("réponse inattendue")
         return {"ok": True, "donnees": donnees, "erreur": None}
     except (TimeoutError, socket.timeout):
         return _ko("délai")
+    except FileNotFoundError:
+        return _ko("socket absent")
+    except PermissionError:
+        return _ko("accès refusé")
     except OSError as e:
         return _ko(f"socket injoignable : {type(e).__name__}")
     except Exception as e:  # noqa: BLE001 — jamais d'exception vers l'appelant
