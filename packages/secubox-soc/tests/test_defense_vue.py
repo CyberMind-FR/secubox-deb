@@ -26,8 +26,16 @@ def test_les_sept_lectures_visent_la_facade():
 
 def test_ecritures_limitees_au_mode_et_a_la_file():
     # trois écritures seulement, toutes vers la façade (require_jwt côté serveur) ; jamais de confirm() natif
-    assert sorted(re.findall(r"appel\('POST', ([^,]+),", PAGE)) == sorted(["'/mode'", "act === 'refuser' ? '/refuse' : '/approve'"])
+    assert sorted(re.findall(r"appel\('POST', ([^,]+),", PAGE)) == sorted(["'/mode'", "ROUTE_GESTE[act]"])
+    assert "ROUTE_GESTE = {approuver:'/approve', simuler:'/approve', refuser:'/refuse', reprendre:'/reprendre'}" in PAGE
     assert "confirm(" not in PAGE and "alert(" not in PAGE
+
+
+def test_approbation_liee_a_l_empreinte_affichee():
+    assert "{empreinte:id, simuler:act === 'simuler'}" in PAGE and "{empreinte:id}" in PAGE
+    assert "props[p.empreinte] = p" in PAGE and "{id:id, simuler" not in PAGE
+    g = re.search(r"function ligneProp.*?\n  }\n", PAGE, re.S).group(0)
+    assert "p.etat === 'en_cours'" in g and "Reprendre" in g
 
 
 def test_jeton_sous_la_cle_sbx_token():
@@ -63,7 +71,7 @@ def test_boutons_d_approbation_seulement_en_reactive_et_pour_un_admin():
     f = re.search(r"function rendAppro.*?\n  }\n", PAGE, re.S).group(0)
     assert "propsMode === 'reactive' && propsAdmin" in f and "d.admin === true" in f
     g = re.search(r"function ligneProp.*?\n  }\n", PAGE, re.S).group(0)
-    assert "if (actif && p.etat === 'en_attente')" in g
+    assert "(actif && p.etat === 'en_attente')" in g and "!cle ? null" in g
     for b in ("Approuver", "Refuser", "Simuler", "Confirmer", "Annuler", "mesure exceptionnelle"):
         assert b in g, b
 
@@ -71,7 +79,8 @@ def test_boutons_d_approbation_seulement_en_reactive_et_pour_un_admin():
 def test_causes_affichees_et_chaines_echappees():
     f = re.search(r"function causeDe.*?\n  }\n", PAGE, re.S).group(0)
     assert "d.cause" in f and "d.error" in f and "d.bannies" in f
-    for c in ("mode", "liste_blanche", "gestes_non_livres", "porteur_requis", "deja_traitee", "audit_indisponible"):
+    for c in ("mode", "liste_blanche", "gestes_non_livres", "porteur_requis", "deja_traitee", "audit_indisponible",
+              "proposition_changee", "pas_bloquee", "duree_invalide", "trop_d_adresses"):
         assert c + ":" in PAGE, c
     g = re.search(r"function ligneProp.*?\n  }\n", PAGE, re.S).group(0)
     for champ in ("p.menace_id", "p.cible", "rt.texte", "p.geste"):

@@ -20,18 +20,24 @@ CREATE TABLE IF NOT EXISTS liste_blanche (
     ts TEXT NOT NULL,
     amorcee INTEGER NOT NULL DEFAULT 0
 );
+-- Identité d'une décision : `empreinte` = sha256(geste | adresses normalisées triées | ttl_s), jamais l'identifiant
+-- d'acteur (ACT-NNNN est renuméroté à chaque redémarrage d'actord) ; `menace_id` n'est qu'un libellé.
+-- `generation` : une décision tranchée se ré-arme (ban expiré, refus de plus de 24 h) par une nouvelle génération.
 CREATE TABLE IF NOT EXISTS decisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empreinte TEXT NOT NULL,
+    generation INTEGER NOT NULL DEFAULT 1,
     menace_id TEXT NOT NULL,
     cible TEXT NOT NULL,
     geste TEXT NOT NULL,
     score INTEGER,
+    ttl_s INTEGER,
     etat TEXT NOT NULL,
     demande_ts TEXT NOT NULL,
     tranche_ts TEXT,
     par TEXT,
     resultat TEXT,
-    UNIQUE (menace_id, geste)
+    UNIQUE (empreinte, generation)
 );
 
 -- Entrées amorcées : ni suppression ni modification, au niveau des données.

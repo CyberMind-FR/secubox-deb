@@ -14,7 +14,7 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 DB_DEFAUT = "/var/lib/secubox/soc/defense.db"
 AUDIT_DEFAUT = "/var/log/secubox/audit.log"
@@ -79,6 +79,11 @@ def mode_courant() -> str:
     except (sqlite3.Error, OSError) as e:
         raise EtatIndisponible(e.__class__.__name__) from e
     return r[0] if r else "observe"
+
+
+def champ_sain(v: Any, n: int = 256) -> str:
+    """Champ d'audit : sans espace ni caractère de contrôle (une ligne = une décision), borné à `n` caractères."""
+    return ("".join(c if (c.isprintable() and not c.isspace()) else "_" for c in str(v))[:n]) or "-"
 
 
 def _operateur_sain(par: str) -> str:
@@ -147,8 +152,16 @@ def liste_blanche() -> List[Dict[str, Any]]:
 
 
 # ── décisions de la file d'approbation (REACTIVE) ────────────────────────────────────────────────
+#
+# Une décision est identifiée par l'EMPREINTE de la proposition (geste, adresses, durée), pas par l'acteur. Seule la
+# dernière génération d'une empreinte compte. Une décision tranchée se ré-arme (nouvelle génération) quand le ban est
+# expiré (`tranche_ts + (ttl_s ou 4 h) + 5 min`) ou quand un refus a plus de 24 h ; son état effectif est alors
+# `en_attente`. Une ligne `en_cours` ne se débloque que par `reprendre`, après le délai maximal des appels au WAF.
 
 ETATS_DECISION = ("en_attente", "en_cours", "applique", "refuse")
+TTL_DEFAUT_WAF_S = 4 * 3600  # durée par défaut du WAF (`duration` omise : « 4h »)
+MARGE_EXPIRATION_S = 5 * 60
+REARMEMENT_REFUS_S = 24 * 3600
 
 
 class ModeRefuse(Exception):
@@ -159,41 +172,80 @@ class DejaTraitee(Exception):
     """La décision est déjà appliquée, refusée ou en cours : jamais deux fois le même geste."""
 
 
-def _cle_decision(decision_id: str):
-    menace_id, _, geste = str(decision_id).partition(":")
-    return menace_id, geste
+class PasBloquee(Exception):
+    """Reprise refusée : la décision n'est pas `en_cours`, ou pas depuis assez longtemps."""
 
 
-def decision(decision_id: str) -> Optional[Dict[str, Any]]:
-    """Ligne `decisions` d'un identifiant `ACT-NNNN:geste`, ou un état `en_attente` implicite si aucune ligne."""
-    menace_id, geste = _cle_decision(decision_id)
+def _epoch(ts: Optional[str]) -> Optional[float]:
+    try:
+        return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if ts else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _rearmable(etat: str, tranche_ts: Optional[str], ttl_s: Optional[int], maintenant: float) -> bool:
+    t = _epoch(tranche_ts)
+    if t is None:
+        return False
+    if etat == "applique":
+        return maintenant > t + (ttl_s or TTL_DEFAUT_WAF_S) + MARGE_EXPIRATION_S
+    if etat == "refuse":
+        return maintenant > t + REARMEMENT_REFUS_S
+    return False
+
+
+_COLS = ("generation", "menace_id", "cible", "geste", "score", "ttl_s", "etat", "demande_ts", "tranche_ts", "par", "resultat")
+
+
+def _derniere(db: sqlite3.Connection, empreinte: str) -> Optional[Dict[str, Any]]:
+    r = db.execute(f"SELECT {', '.join(_COLS)} FROM decisions WHERE empreinte = ? ORDER BY generation DESC LIMIT 1",
+                   (empreinte,)).fetchone()
+    return dict(zip(_COLS, r)) if r else None
+
+
+def _effectif(ligne: Optional[Dict[str, Any]], maintenant: float) -> str:
+    if ligne is None:
+        return "en_attente"
+    if _rearmable(ligne["etat"], ligne["tranche_ts"], ligne["ttl_s"], maintenant):
+        return "en_attente"
+    return ligne["etat"]
+
+
+def decision(empreinte: str) -> Dict[str, Any]:
+    """Dernière génération d'une empreinte, avec `etat` EFFECTIF (`en_attente` si aucune ligne ou si ré-armable) et
+    `etat_enregistre` (valeur en base, None sans ligne)."""
     try:
         with closing(_connecter()) as db:
-            r = db.execute("SELECT etat, cible, score, demande_ts, tranche_ts, par, resultat FROM decisions "
-                           "WHERE menace_id = ? AND geste = ?", (menace_id, geste)).fetchone()
+            ligne = _derniere(db, empreinte)
     except (sqlite3.Error, OSError) as e:
         raise EtatIndisponible(e.__class__.__name__) from e
-    if r is None:
-        return {"etat": "en_attente", "cible": None, "score": None, "demande_ts": None, "tranche_ts": None,
-                "par": None, "resultat": None}
-    return dict(zip(("etat", "cible", "score", "demande_ts", "tranche_ts", "par", "resultat"), r))
+    out = dict(ligne) if ligne else {c: None for c in _COLS}
+    out["etat_enregistre"] = ligne["etat"] if ligne else None
+    out["etat"] = _effectif(ligne, datetime.now(timezone.utc).timestamp())
+    return out
 
 
-def etats_decisions() -> Dict[Tuple[str, str], str]:
-    """{(menace_id, geste): etat} de toutes les décisions enregistrées."""
+def etats_decisions() -> Dict[str, str]:
+    """{empreinte: état effectif de la dernière génération}."""
+    maintenant = datetime.now(timezone.utc).timestamp()
     try:
         with closing(_connecter()) as db:
-            return {(m, g): e for m, g, e in db.execute("SELECT menace_id, geste, etat FROM decisions")}
+            lignes = db.execute(
+                "SELECT d.empreinte, d.etat, d.tranche_ts, d.ttl_s FROM decisions d JOIN "
+                "(SELECT empreinte, MAX(generation) g FROM decisions GROUP BY empreinte) m "
+                "ON d.empreinte = m.empreinte AND d.generation = m.g").fetchall()
     except (sqlite3.Error, OSError) as e:
         raise EtatIndisponible(e.__class__.__name__) from e
+    return {e: ("en_attente" if _rearmable(et, t, ttl, maintenant) else et) for e, et, t, ttl in lignes}
 
 
-def reclamer(menace_id: str, geste: str, cible: str, score: Optional[int], par: str, etat: str,
-             ligne_audit: str) -> None:
-    """Réclame une décision (`en_cours` avant un geste, ou `refuse`) dans UNE transaction BEGIN IMMEDIATE :
-    relit le mode (doit être `reactive`), refuse une décision déjà tranchée ou en cours, pose la ligne par INSERT sous
-    la contrainte UNIQUE (menace_id, geste) — ou la reprend si elle était revenue `en_attente` après un échec —, écrit
-    l'audit (flush + fsync) PUIS valide. Audit en échec : ROLLBACK, rien n'est réclamé."""
+def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Optional[int], ttl_s: Optional[int],
+             par: str, etat: str, ligne_audit: str) -> int:
+    """Réclame une décision (`en_cours` avant un geste, ou `refuse`) dans UNE transaction BEGIN IMMEDIATE : relit le
+    mode (doit être `reactive`), prend la dernière génération de l'empreinte — aucune : INSERT génération 1 ;
+    `en_attente` : reprise ; tranchée et ré-armable : INSERT génération + 1 (contrainte UNIQUE (empreinte, generation)) ;
+    sinon `DejaTraitee` —, écrit l'audit (flush + fsync, suffixé de la génération) PUIS valide. Audit en échec :
+    ROLLBACK, rien n'est réclamé. Rend la génération réclamée."""
     if etat not in ("en_cours", "refuse"):
         raise ValueError("état de réclamation inconnu")
     try:
@@ -207,22 +259,27 @@ def reclamer(menace_id: str, geste: str, cible: str, score: Optional[int], par: 
             if (r[0] if r else "observe") != "reactive":
                 db.execute("ROLLBACK")
                 raise ModeRefuse(r[0] if r else "observe")
-            ex = db.execute("SELECT etat FROM decisions WHERE menace_id = ? AND geste = ?",
-                            (menace_id, geste)).fetchone()
-            if ex is None:
+            ligne = _derniere(db, empreinte)
+            maintenant = datetime.now(timezone.utc).timestamp()
+            tranche = _ts() if etat == "refuse" else None
+            if ligne is not None and ligne["etat"] == "en_attente":
+                gen = ligne["generation"]
+                db.execute("UPDATE decisions SET etat = ?, menace_id = ?, cible = ?, score = ?, ttl_s = ?, demande_ts = ?, "
+                           "tranche_ts = ?, par = ?, resultat = NULL "
+                           "WHERE empreinte = ? AND generation = ? AND etat = 'en_attente'",
+                           (etat, menace_id, cible, score, ttl_s, _ts(), tranche, par, empreinte, gen))
+            elif ligne is None or _rearmable(ligne["etat"], ligne["tranche_ts"], ligne["ttl_s"], maintenant):
+                gen = 1 if ligne is None else ligne["generation"] + 1
                 # l'INSERT tranche le double clic : un second INSERT concurrent heurterait la contrainte UNIQUE
-                db.execute("INSERT INTO decisions(menace_id, cible, geste, score, etat, demande_ts, tranche_ts, par) "
-                           "VALUES (?,?,?,?,?,?,?,?)",
-                           (menace_id, cible, geste, score, etat, _ts(), _ts() if etat == "refuse" else None, par))
-            elif ex[0] == "en_attente":
-                db.execute("UPDATE decisions SET etat = ?, cible = ?, score = ?, demande_ts = ?, tranche_ts = ?, par = ?, "
-                           "resultat = NULL WHERE menace_id = ? AND geste = ? AND etat = 'en_attente'",
-                           (etat, cible, score, _ts(), _ts() if etat == "refuse" else None, par, menace_id, geste))
+                db.execute("INSERT INTO decisions(empreinte, generation, menace_id, cible, geste, score, ttl_s, etat, "
+                           "demande_ts, tranche_ts, par) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                           (empreinte, gen, menace_id, cible, geste, score, ttl_s, etat, _ts(), tranche, par))
             else:
                 db.execute("ROLLBACK")
-                raise DejaTraitee(ex[0])
-            ecrire_audit(ligne_audit)
+                raise DejaTraitee(ligne["etat"])
+            ecrire_audit(f"{ligne_audit} generation={gen}")
             db.execute("COMMIT")
+            return gen
         except (AuditIndisponible, ModeRefuse, DejaTraitee):
             if db.in_transaction:
                 db.execute("ROLLBACK")
@@ -237,14 +294,53 @@ def reclamer(menace_id: str, geste: str, cible: str, score: Optional[int], par: 
             raise EtatIndisponible(e.__class__.__name__) from e
 
 
-def conclure(menace_id: str, geste: str, etat: str, resultat: str) -> None:
+def conclure(empreinte: str, generation: int, etat: str, resultat: str) -> None:
     """Tranche une décision `en_cours` : `applique`, ou retour `en_attente` après un échec du WAF."""
     if etat not in ("applique", "en_attente"):
         raise ValueError("état de conclusion inconnu")
     try:
         with closing(_connecter()) as db:
             db.execute("UPDATE decisions SET etat = ?, resultat = ?, tranche_ts = ? "
-                       "WHERE menace_id = ? AND geste = ? AND etat = 'en_cours'",
-                       (etat, resultat[:500], _ts() if etat == "applique" else None, menace_id, geste))
+                       "WHERE empreinte = ? AND generation = ? AND etat = 'en_cours'",
+                       (etat, resultat[:500], _ts() if etat == "applique" else None, empreinte, generation))
     except (sqlite3.Error, OSError) as e:
         raise EtatIndisponible(e.__class__.__name__) from e
+
+
+def reprendre(empreinte: str, par: str, delai_par_adresse_s: float, marge_s: float = 60.0) -> Dict[str, Any]:
+    """Ramène une décision `en_cours` à `en_attente`, seulement si sa demande date de plus de
+    `nb_adresses × delai_par_adresse_s + marge_s` (aucun appel au WAF ne peut plus être en vol). BEGIN IMMEDIATE ;
+    ligne d'audit `sade-reprise` écrite (fsync) AVANT le COMMIT. Sinon `PasBloquee`."""
+    try:
+        db = _connecter()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    with closing(db):
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            ligne = _derniere(db, empreinte)
+            if ligne is None or ligne["etat"] != "en_cours":
+                db.execute("ROLLBACK")
+                raise PasBloquee("pas en cours")
+            n = len([a for a in (ligne["cible"] or "").split(",") if a]) or 1
+            debut = _epoch(ligne["demande_ts"])
+            age = datetime.now(timezone.utc).timestamp() - debut if debut is not None else None
+            seuil = n * delai_par_adresse_s + marge_s
+            if age is None or age <= seuil:
+                db.execute("ROLLBACK")
+                raise PasBloquee(f"demande trop récente ({int(age or 0)} s ≤ {int(seuil)} s)")
+            db.execute("UPDATE decisions SET etat = 'en_attente', resultat = ? WHERE empreinte = ? AND generation = ? "
+                       "AND etat = 'en_cours'", (f"reprise par {_operateur_sain(par)}", empreinte, ligne["generation"]))
+            ecrire_audit(f"sade-reprise empreinte={empreinte} generation={ligne['generation']} "
+                         f"acteur={champ_sain(ligne['menace_id'], 16)} adresses={champ_sain(ligne['cible'], 1024)} "
+                         f"age_s={int(age)} operateur={_operateur_sain(par)}")
+            db.execute("COMMIT")
+            return {"generation": ligne["generation"], "age_s": int(age)}
+        except (AuditIndisponible, PasBloquee):
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise
+        except sqlite3.Error as e:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise EtatIndisponible(e.__class__.__name__) from e

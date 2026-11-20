@@ -280,10 +280,13 @@ async def threat(menace_id: str, request: Request, admin: bool = Depends(_est_ad
         if trouvee is None:
             return {"_erreur": (404, "menace inconnue"), "sources": src}
         chrono = []
+        masque: Dict[str, str] = {}
         for p in _liste(ctx["actord/proposals"], "propositions"):
             if isinstance(p, dict) and p.get("actor") == menace_id:
+                lib = p.get("raison") if isinstance(p.get("raison"), str) and p.get("raison") else f"proposition {p.get('mode')}"
+                # vue complète d'actord : un non-administrateur ne reçoit jamais une adresse, même dans un texte libre
                 chrono.append({"ts": _iso((ctx["actord/proposals"]["donnees"] or {}).get("genere_le")),
-                               "capteur": "actord", "libelle": p.get("raison") or f"proposition {p.get('mode')}"})
+                               "capteur": "actord", "libelle": lib if admin else _masquer(lib, masque)})
                 hist = _historique_par_ip(ctx)
                 for ip in p.get("ips", []):
                     t = hist.get(ip)
@@ -438,16 +441,25 @@ async def changer_mode(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(
 
 # ── file d'approbation (REACTIVE) ─────────────────────────────────────────────────────────────────
 #
-# Ordre des contrôles, identique en simulation : corps → mode → proposition relue chez actord → geste exécutable →
-# liste blanche (toutes les adresses, échec fermé) → porteur → décision non tranchée. Le geste réel réclame ensuite la
-# décision (`en_cours`, INSERT sous contrainte UNIQUE, mode relu, audit fsync, dans UNE transaction) AVANT tout appel
-# au WAF ; le WAF n'est jamais appelé si l'audit de la demande n'a pas pu être écrit.
+# Identité d'une décision : l'EMPREINTE de la proposition = sha256(geste | adresses normalisées triées | ttl_s), jamais
+# l'identifiant d'acteur (ACT-NNNN est renuméroté à chaque redémarrage d'actord). L'administrateur approuve une
+# empreinte : celle qu'il a vue (rendue par GET /proposals, à lui seul). Le serveur la recalcule sur la proposition
+# COURANTE d'actord ; aucune correspondance → 409 `proposition_changee`, rien n'est fait.
+#
+# Ordre des contrôles, identique en simulation : corps → mode → proposition relue chez actord (même empreinte) →
+# [approbation] geste exécutable → adresses (présentes, ≤ 32) → durée représentable → liste blanche (toutes les
+# adresses, échec fermé) → porteur → décision non tranchée. Le geste réel réclame ensuite la décision (`en_cours`,
+# mode relu, audit fsync, dans UNE transaction) AVANT tout appel au WAF ; jamais d'appel si l'audit a échoué.
 
-_ID_DECISION = re.compile(r"^(ACT-\d{1,9}):([a-z_]{1,32})$")
+_EMPREINTE = re.compile(r"^[0-9a-f]{64}$")
 _GESTES = {"DENY": "ban", "QUARANTINE": "quarantaine"}  # mode d'actord → geste SADE
 GESTES_EXECUTABLES = ("ban",)                            # seul geste livré : un POST /ban du WAF par adresse
 ROUTES_PROC = "/proc/net/route"                          # passerelles IPv4 (les IPv6 sont lien-local, déjà refusées)
-DELAI_WAF_S = 15.0                                       # wafctl passe par sudo : plus lent qu'une lecture
+# Le WAF borne `wafctl` à 15 s (subprocess timeout), plus sudo et uvicorn : la façade attend nettement plus, pour qu'un
+# succès lent ne soit jamais audité comme un échec. Sur expiration malgré tout, l'issue est « incertain ».
+DELAI_WAF_S = 30.0
+ADRESSES_MAX = 32                                        # un sudo wafctl séquentiel par adresse
+TTL_MAX_S = 9_999_999                                    # au-delà, « <n>s » n'est plus accepté par wafctl
 
 # Jamais bannissables, quelle que soit la liste blanche en base (qui en amorce déjà la plupart). Les plages de
 # documentation (192.0.2/24, 198.51.100/24, 203.0.113/24, 2001:db8::/32) ne sont pas routées : elles restent admises
@@ -458,7 +470,20 @@ _INTERDITS = tuple(ipaddress.ip_network(n) for n in (
     "::/128", "::1/128", "::ffff:0:0/96", "64:ff9b::/96", "64:ff9b:1::/48", "100::/64", "2001::/32", "2002::/16",
     "fc00::/7", "fe80::/10", "fec0::/10", "ff00::/8",
 ))
-_IP_TEXTE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b|\b[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{0,4}){2,7}\b")
+_IP_TEXTE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b|[0-9a-fA-F]{0,4}(?::[0-9a-fA-F]{0,4}){2,7}")
+
+
+def _masquer(texte: str, masque: Dict[str, str]) -> str:
+    """Remplace toute adresse d'un texte libre par `cible-N` (même numérotation que les cibles masquées)."""
+    def sub(m):
+        v = m.group(0)
+        if ":" in v:
+            try:
+                ipaddress.ip_address(v)
+            except ValueError:
+                return v  # « 09:47:00 » et autres : pas une adresse
+        return masque.setdefault(v, f"cible-{len(masque) + 1}")
+    return _IP_TEXTE.sub(sub, texte)
 
 
 def _geste(mode: Any) -> str:
@@ -468,23 +493,41 @@ def _geste(mode: Any) -> str:
     return g if re.fullmatch(r"[a-z_]{1,32}", g) else "inconnu"
 
 
+def _normaliser(a: str) -> str:
+    """Forme canonique d'une adresse pour l'empreinte (IPv4 sous IPv6 déballée) ; texte inchangé si illisible."""
+    try:
+        ip = ipaddress.ip_address(a)
+    except ValueError:
+        return a
+    if ip.version == 6 and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.compressed
+
+
+def empreinte(geste: str, ips: List[str], ttl_s: Optional[int]) -> str:
+    """sha256(geste | adresses normalisées triées | ttl_s) en hexadécimal : l'identité d'une décision."""
+    brut = f"{geste}|{','.join(sorted(_normaliser(a) for a in ips))}|{ttl_s if ttl_s else ''}"
+    return hashlib.sha256(brut.encode("utf-8")).hexdigest()
+
+
 def _propositions(r: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Propositions d'actord normalisées. Une adresse qui n'est pas une chaîne est gardée sous forme textuelle : elle
-    échouera au contrôle d'adresse (échec fermé), jamais silencieusement retirée."""
+    """Propositions d'actord normalisées, une par empreinte. Une adresse qui n'est pas une chaîne est gardée sous forme
+    textuelle : elle échouera au contrôle d'adresse (échec fermé), jamais silencieusement retirée."""
     out, vus = [], set()
     for p in _liste(r, "propositions"):
         if not isinstance(p, dict) or not isinstance(p.get("actor"), str) or not _ID_ACTEUR.match(p["actor"]):
             continue
         g = _geste(p.get("mode"))
-        pid = f"{p['actor']}:{g}"
-        if pid in vus:
-            continue
-        vus.add(pid)
         ips = p.get("ips") if isinstance(p.get("ips"), list) else []
-        sc = p.get("priorite") if echelle.bande(p.get("priorite")) != "inconnu" else None
+        ips = [i if isinstance(i, str) else repr(i) for i in ips]
         ttl = p.get("ttl_s")
         ttl = ttl if isinstance(ttl, int) and not isinstance(ttl, bool) and ttl > 0 else None
-        out.append({"id": pid, "menace_id": p["actor"], "geste": g, "ips": [i if isinstance(i, str) else repr(i) for i in ips],
+        e = empreinte(g, ips, ttl)
+        if e in vus:
+            continue
+        vus.add(e)
+        sc = p.get("priorite") if echelle.bande(p.get("priorite")) != "inconnu" else None
+        out.append({"id": f"{p['actor']}:{g}", "empreinte": e, "menace_id": p["actor"], "geste": g, "ips": ips,
                     "score": sc, "bande": echelle.bande(sc),
                     "motif": p.get("raison") if isinstance(p.get("raison"), str) else None, "ttl_s": ttl})
     return out
@@ -540,8 +583,9 @@ def _passerelles() -> List[Any]:
     return out
 
 
-def _pairs(entetes: Dict[str, str]) -> List[Any]:
-    """Adresses des pairs du maillage (threatmesh /peers), si le substrat les donne ; rien sinon."""
+def _pairs(entetes: Dict[str, str]) -> Tuple[List[Any], bool]:
+    """Adresses des pairs du maillage (threatmesh /peers) et si la liste a pu être lue. Non lue : l'approbation
+    continue (la garde du WAF reste le dernier rempart), mais la réponse et l'audit le disent."""
     r = substrat.lire("threatmesh", "/peers", entetes=entetes)
     out = []
     for p in _liste(r, "peers"):
@@ -550,29 +594,34 @@ def _pairs(entetes: Dict[str, str]) -> List[Any]:
                 n = _reseau(p.get(champ))
                 if n is not None:
                     out.append(n)
-    return out
+    return out, bool(r.get("ok"))
 
 
-def _proteges(entetes: Dict[str, str], appelant: List[str]) -> List[Any]:
-    """Liste blanche en base + passerelles + pairs du maillage + adresses de l'administrateur qui approuve.
-    Lève `EtatIndisponible` si la liste blanche ne se lit pas (échec fermé)."""
+def _proteges(entetes: Dict[str, str], appelant: List[str]) -> Tuple[List[Any], List[str], bool]:
+    """(réseaux protégés, entrées de liste blanche illisibles, pairs lus). Protégés : liste blanche en base +
+    passerelles + pairs du maillage + adresses de l'administrateur. Lève `EtatIndisponible` si la base ne se lit pas."""
     try:
         lb = defense_etat.liste_blanche()
     except (sqlite3.Error, OSError) as e:
         raise defense_etat.EtatIndisponible(e.__class__.__name__) from e
-    nets = [n for n in (_reseau(e["cidr"]) for e in lb) if n is not None]
-    nets += _passerelles() + _pairs(entetes)
+    nets, illisibles = [], []
+    for e in lb:
+        n = _reseau(e.get("cidr"))
+        if n is None:
+            illisibles.append(str(e.get("cidr")))
+        else:
+            nets.append(n)
+    pairs, pairs_lus = _pairs(entetes)
+    nets += _passerelles() + pairs
     nets += [n for n in (_reseau(a) for a in appelant) if n is not None]
-    return nets
+    return nets, illisibles, pairs_lus
 
 
-def _sain(v: Any, n: int = 256) -> str:
-    """Champ d'audit : sans espace ni caractère de contrôle (une ligne = une décision), borné."""
-    return ("".join(c if (c.isprintable() and not c.isspace()) else "_" for c in str(v))[:n]) or "-"
+_sain = defense_etat.champ_sain
 
 
 def _champs(p: Dict[str, Any], par: str, duree: Optional[str]) -> str:
-    return (f"decision={_sain(p['id'], 48)} acteur={_sain(p['menace_id'], 16)} adresses={_sain(','.join(p['ips']), 1024)} "
+    return (f"empreinte={p['empreinte']} acteur={_sain(p['menace_id'], 16)} adresses={_sain(','.join(p['ips']), 1024)} "
             f"geste={_sain(p['geste'], 32)} duree={duree or 'defaut_waf'} "
             f"score={p['score'] if p['score'] is not None else 'inconnu'} operateur={defense_etat._operateur_sain(par)}")
 
@@ -581,22 +630,26 @@ def _non(code: int, cause: str, message: str, **extra) -> Tuple[int, Dict[str, A
     return code, {"error": message, "cause": cause, **extra}
 
 
-def _traiter(action: str, pid: str, simuler: bool, par: str, porteur: Optional[str], entetes: Dict[str, str],
+def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[str], entetes: Dict[str, str],
              appelant: List[str]) -> Tuple[int, Dict[str, Any]]:
-    """Approuve ou refuse une proposition. Rend (code HTTP, corps). Synchrone : appelé dans un fil."""
+    """Approuve ou refuse la proposition d'empreinte `emp`. Rend (code HTTP, corps). Synchrone : appelé dans un fil."""
     p: Optional[Dict[str, Any]] = None
     duree: Optional[str] = None
+    pairs_note = ""          # « pairs_maillage=… » dans l'audit, une fois la liste blanche évaluée
+    pairs_extra: Dict[str, Any] = {}
 
-    def bloque(code, cause, message, **extra):
+    def bloque(code, cause, message, note="", **extra):
         # en simulation, la ligne d'audit EST le résultat : obligatoire ; sinon trace d'un geste empêché, au mieux
-        champs = _champs(p, par, duree) if p else f"decision={_sain(pid, 48)} operateur={defense_etat._operateur_sain(par)}"
+        champs = (_champs(p, par, duree) if p
+                  else f"empreinte={_sain(emp, 64)} operateur={defense_etat._operateur_sain(par)}")
+        suffixe = (f" {note}" if note else "") + pairs_note
         try:
-            defense_etat.ecrire_audit(f"sade-simule action={action} verdict={cause} {champs}" if simuler
-                                      else f"sade-{action}-bloque cause={cause} {champs}")
+            defense_etat.ecrire_audit(f"sade-simule action={action} verdict={cause} {champs}{suffixe}" if simuler
+                                      else f"sade-{action}-refus cause={cause} {champs}{suffixe}")
         except defense_etat.AuditIndisponible:
             if simuler:
                 return _non(503, "audit_indisponible", "audit indisponible : simulation non tracée")
-        return _non(code, cause, message, **extra)
+        return _non(code, cause, message, **extra, **pairs_extra)
 
     try:
         mode = defense_etat.mode_courant()
@@ -607,19 +660,32 @@ def _traiter(action: str, pid: str, simuler: bool, par: str, porteur: Optional[s
     r = _lire_propositions()
     if not r["ok"]:
         return bloque(503, "actord_indisponible", f"actord injoignable ({r['erreur']}) : proposition non relue")
-    p = next((x for x in _propositions(r) if x["id"] == pid), None)
+    p = next((x for x in _propositions(r) if x["empreinte"] == emp), None)
     if p is None:
-        return bloque(404, "proposition_inconnue", "proposition absente chez actord (expirée ou jamais émise)")
+        return bloque(409, "proposition_changee",
+                      "la proposition affichée n'existe plus telle quelle chez actord (adresses, durée ou geste changés, "
+                      "ou expirée) : rechargez la file")
     duree = f"{p['ttl_s']}s" if p["ttl_s"] else None
     if action == "approuve":
         if p["geste"] not in GESTES_EXECUTABLES:
             return bloque(409, "gestes_non_livres", f"geste « {p['geste']} » non livré : seul le ban est exécutable")
         if not p["ips"]:
             return bloque(409, "sans_adresse", "proposition sans adresse : rien à bannir")
+        if len(p["ips"]) > ADRESSES_MAX:
+            return bloque(409, "trop_d_adresses", f"{len(p['ips'])} adresses : au plus {ADRESSES_MAX} par approbation")
+        if p["ttl_s"] and p["ttl_s"] > TTL_MAX_S:
+            return bloque(409, "duree_invalide", f"durée {p['ttl_s']} s non représentable par le WAF")
         try:
-            proteges = _proteges(entetes, appelant)
+            proteges, illisibles, pairs_lus = _proteges(entetes, appelant)
         except defense_etat.EtatIndisponible:
             return _non(503, "base_indisponible", "liste blanche illisible : aucun geste")
+        pairs_note = f" pairs_maillage={'verifies' if pairs_lus else 'non_verifies'}"
+        if not pairs_lus:
+            pairs_extra = {"pairs_maillage": "non_verifies"}
+        if illisibles:
+            return bloque(403, "liste_blanche", "entrée de liste blanche illisible : aucun geste tant qu'elle n'est pas corrigée",
+                          note=f"motif=liste_blanche_illisible entrees={_sain(','.join(illisibles), 256)}",
+                          entrees_illisibles=illisibles)
         refusees = [ip for ip in p["ips"] if _adresse_interdite(ip, proteges)]
         if refusees:
             return bloque(403, "liste_blanche", "adresse protégée ou non publique : proposition entière refusée",
@@ -627,7 +693,7 @@ def _traiter(action: str, pid: str, simuler: bool, par: str, porteur: Optional[s
         if not porteur:
             return bloque(409, "porteur_requis", "jeton porteur requis : le WAF refuse une écriture par cookie seul")
     try:
-        etat = defense_etat.decision(pid)["etat"]
+        etat = defense_etat.decision(emp)["etat"]
     except defense_etat.EtatIndisponible:
         return _non(503, "base_indisponible", "base d'état indisponible")
     if etat != "en_attente":
@@ -635,18 +701,18 @@ def _traiter(action: str, pid: str, simuler: bool, par: str, porteur: Optional[s
 
     if simuler:
         try:
-            defense_etat.ecrire_audit(f"sade-simule action={action} verdict=ok {_champs(p, par, duree)}")
+            defense_etat.ecrire_audit(f"sade-simule action={action} verdict=ok {_champs(p, par, duree)}{pairs_note}")
         except defense_etat.AuditIndisponible:
             return _non(503, "audit_indisponible", "audit indisponible : simulation non tracée")
         quoi = (f"ban de {len(p['ips'])} adresse(s) pour {duree or 'la durée par défaut du WAF'}"
                 if action == "approuve" else "refus")
-        return 200, {"etat": "simule", "resultat": f"simulation : {quoi} possible, rien n'a été appliqué"}
+        return 200, {"etat": "simule", "resultat": f"simulation : {quoi} possible, rien n'a été appliqué", **pairs_extra}
 
-    cible = ",".join(p["ips"])
     try:
-        defense_etat.reclamer(p["menace_id"], p["geste"], cible, p["score"], par,
-                              "refuse" if action == "refuse" else "en_cours",
-                              f"sade-{'refuse' if action == 'refuse' else 'approuve-demande'} {_champs(p, par, duree)}")
+        gen = defense_etat.reclamer(emp, p["menace_id"], p["geste"], ",".join(p["ips"]), p["score"], p["ttl_s"], par,
+                                    "refuse" if action == "refuse" else "en_cours",
+                                    f"sade-{'refuse' if action == 'refuse' else 'approuve-demande'} "
+                                    f"{_champs(p, par, duree)}{pairs_note}")
     except defense_etat.ModeRefuse as e:
         return _non(409, "mode", f"mode {e} : la file d'approbation n'agit qu'en REACTIVE")
     except defense_etat.DejaTraitee as e:
@@ -672,27 +738,33 @@ def _traiter(action: str, pid: str, simuler: bool, par: str, porteur: Optional[s
             continue
         echec = (ip, rep.get("erreur") or "réponse du WAF sans succès")
         break
-    issue = "applique" if echec is None else ("partiel" if bannies else "echec")
+    if echec is None:
+        issue = "applique"
+    elif echec[1] == "délai":
+        issue = "incertain"  # le WAF a peut-être posé le ban après notre délai : un nouvel essai est idempotent
+    else:
+        issue = "partiel" if bannies else "echec"
     resultat = (f"{len(bannies)} adresse(s) bannie(s) pour {duree or 'la durée par défaut du WAF'}" if echec is None
                 else f"échec du WAF sur {echec[0]} : {echec[1]} ; déjà bannies : {', '.join(bannies) or 'aucune'}")
     avertissements = []
     try:
-        defense_etat.conclure(p["menace_id"], p["geste"], "applique" if echec is None else "en_attente", resultat)
+        defense_etat.conclure(emp, gen, "applique" if echec is None else "en_attente", resultat)
     except defense_etat.EtatIndisponible:
-        # la ligne reste `en_cours` : plus aucun geste possible sur elle sans intervention (jamais deux bans)
-        avertissements.append("décision non close en base : elle reste « en cours »")
+        # la ligne reste `en_cours` : plus aucun geste sans reprise explicite (jamais deux bans en parallèle)
+        avertissements.append("décision non close en base : elle reste « en cours » (reprise possible plus tard)")
     try:
-        defense_etat.ecrire_audit(f"sade-approuve-resultat issue={issue} bannies={_sain(','.join(bannies) or 'aucune', 1024)} "
+        defense_etat.ecrire_audit(f"sade-approuve-resultat issue={issue} generation={gen} "
+                                  f"bannies={_sain(','.join(bannies) or 'aucune', 1024)} "
                                   + (f"echec={_sain(echec[0], 64)} erreur={_sain(echec[1], 200)} " if echec else "")
-                                  + _champs(p, par, duree))
+                                  + _champs(p, par, duree) + pairs_note)
     except defense_etat.AuditIndisponible:
         avertissements.append("audit du résultat indisponible")
     with _VERROU:
         _CACHE.clear()  # les bans actifs ont changé : la façade relit au prochain appel
-    extra = {"avertissements": avertissements} if avertissements else {}
+    extra = {**({"avertissements": avertissements} if avertissements else {}), **pairs_extra}
     if echec is None:
         return 200, {"etat": "applique", "resultat": resultat, "bannies": bannies, **extra}
-    return _non(502, "waf", f"WAF : {echec[1]}", etat="en_attente", resultat=resultat, bannies=bannies,
+    return _non(502, "waf", f"WAF : {echec[1]}", etat="en_attente", issue=issue, resultat=resultat, bannies=bannies,
                 echec=echec[0], **extra)
 
 
@@ -714,14 +786,19 @@ def _adresses_appelant(request: Request) -> List[str]:
     return out
 
 
+def _empreinte_du_corps(corps: Any) -> Optional[str]:
+    e = corps.get("empreinte") if isinstance(corps, dict) else None
+    return e if isinstance(e, str) and _EMPREINTE.match(e) else None
+
+
 async def _action(action: str, corps: Any, request: Request, payload: Dict[str, Any]) -> JSONResponse:
-    pid = corps.get("id") if isinstance(corps, dict) else None
+    emp = _empreinte_du_corps(corps)
     simuler = corps.get("simuler", False) if isinstance(corps, dict) else False
-    if not isinstance(pid, str) or not _ID_DECISION.match(pid) or not isinstance(simuler, bool):
-        return JSONResponse(status_code=400, content={"error": "corps attendu : {\"id\": \"ACT-NNNN:geste\", \"simuler\": bool}",
+    if emp is None or not isinstance(simuler, bool):
+        return JSONResponse(status_code=400, content={"error": "corps attendu : {\"empreinte\": <64 hex>, \"simuler\": bool}",
                                                       "cause": "corps"})
     par = str((payload or {}).get("sub") or "inconnu")
-    code, rep = await asyncio.to_thread(_traiter, action, pid, simuler, par, _porteur(request),
+    code, rep = await asyncio.to_thread(_traiter, action, emp, simuler, par, _porteur(request),
                                         _entetes_appelant(request), _adresses_appelant(request))
     return JSONResponse(status_code=code, content=rep)
 
@@ -736,10 +813,31 @@ async def refuser(corps: Dict[str, Any], request: Request, payload: Dict[str, An
     return await _action("refuse", corps, request, payload)
 
 
+@router.post("/reprendre")
+async def reprendre(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(require_jwt)):
+    """Débloque une décision restée `en_cours` (processus interrompu pendant les appels au WAF) : retour `en_attente`
+    seulement si la demande est plus vieille que le délai maximal de ses appels au WAF + 60 s."""
+    emp = _empreinte_du_corps(corps)
+    if emp is None:
+        return JSONResponse(status_code=400, content={"error": "corps attendu : {\"empreinte\": <64 hex>}", "cause": "corps"})
+    par = str((payload or {}).get("sub") or "inconnu")
+    try:
+        r = await asyncio.to_thread(defense_etat.reprendre, emp, par, DELAI_WAF_S)
+    except defense_etat.PasBloquee as e:
+        return JSONResponse(status_code=409, content={"error": f"décision non bloquée : {e}", "cause": "pas_bloquee"})
+    except defense_etat.AuditIndisponible:
+        return JSONResponse(status_code=503, content={"error": "audit indisponible : rien n'est repris",
+                                                      "cause": "audit_indisponible"})
+    except defense_etat.EtatIndisponible:
+        return JSONResponse(status_code=503, content={"error": "base d'état indisponible", "cause": "base_indisponible"})
+    return {"etat": "en_attente", "resultat": f"décision reprise (demande vieille de {r['age_s']} s) : à nouveau en attente"}
+
+
 @router.get("/proposals", dependencies=[Depends(require_lecture)])
 async def proposals(admin: bool = Depends(_est_admin)):
-    """Propositions d'actord, état de décision de chacune. Adresses : administrateur seulement (`cible-N` sinon).
-    Jamais en cache : l'état d'une décision doit se voir dès qu'elle change."""
+    """Propositions d'actord et état de la décision de chacune (par empreinte, dernière génération). Adresses et
+    empreinte : administrateur seulement (`cible-N` sinon ; l'empreinte d'une IPv4 se retrouve par force brute).
+    Jamais en cache : l'état d'une décision doit se voir dès qu'il change."""
     def calcul():
         r = _lire_propositions()
         # `admin` : la page n'affiche les boutons qu'à un administrateur réel (le POST reste gardé par require_jwt)
@@ -751,7 +849,7 @@ async def proposals(admin: bool = Depends(_est_admin)):
         out["shadow"] = d.get("shadow") if isinstance(d.get("shadow"), bool) else None
         out["genere_le"] = _iso(d.get("genere_le"))
         try:
-            etats: Optional[Dict[Tuple[str, str], str]] = defense_etat.etats_decisions()
+            etats: Optional[Dict[str, str]] = defense_etat.etats_decisions()
         except defense_etat.EtatIndisponible:
             etats, out["etat_base"] = None, "indisponible"
         masque: Dict[str, str] = {}
@@ -760,11 +858,14 @@ async def proposals(admin: bool = Depends(_est_admin)):
                 cible, motif = ", ".join(p["ips"]), p["motif"]
             else:
                 cible = ", ".join(masque.setdefault(ip, f"cible-{len(masque) + 1}") for ip in p["ips"])
-                motif = _IP_TEXTE.sub("…", p["motif"]) if p["motif"] else None
-            out["propositions"].append({
+                motif = _masquer(p["motif"], masque) if p["motif"] else None
+            ligne = {
                 "id": p["id"], "menace_id": p["menace_id"], "cible": cible, "geste": p["geste"], "score": p["score"],
                 "bande": p["bande"], "motif": motif, "validation_humaine": echelle.exige_validation(p["bande"]),
-                "etat": etats.get((p["menace_id"], p["geste"]), "en_attente") if etats is not None else None,
-                "ttl_s": p["ttl_s"], "executable": p["geste"] in GESTES_EXECUTABLES})
+                "etat": etats.get(p["empreinte"], "en_attente") if etats is not None else None,
+                "ttl_s": p["ttl_s"], "executable": p["geste"] in GESTES_EXECUTABLES}
+            if admin:
+                ligne["empreinte"] = p["empreinte"]
+            out["propositions"].append(ligne)
         return out
     return await asyncio.to_thread(calcul)

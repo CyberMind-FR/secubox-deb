@@ -184,7 +184,10 @@
     gestes_non_livres:'geste non livré : seul le ban est exécutable', porteur_requis:'jeton de session requis (reconnectez-vous) : le WAF refuse une écriture par cookie seul',
     deja_traitee:'décision déjà traitée', audit_indisponible:'audit indisponible : aucun geste appliqué', base_indisponible:'base d\'état indisponible',
     actord_indisponible:'actord injoignable : proposition non relue', proposition_inconnue:'proposition expirée ou inconnue',
-    sans_adresse:'proposition sans adresse', waf:'le WAF a refusé le ban', corps:'requête invalide'};
+    sans_adresse:'proposition sans adresse', waf:'le WAF a refusé le ban', corps:'requête invalide',
+    proposition_changee:'la proposition a changé chez actord depuis l\'affichage : file rechargée, vérifiez avant de recommencer',
+    pas_bloquee:'décision non bloquée (ou demande trop récente)', duree_invalide:'durée non représentable par le WAF',
+    trop_d_adresses:'trop d\'adresses pour une approbation'};
   function causeDe(r){
     var d = r.d || {}, c = typeof d.cause === 'string' ? d.cause : null, t;
     if (c) t = (CAUSES[c] || 'refus') + ' [' + c + ']';
@@ -400,19 +403,24 @@
 
   // ── file d'approbation ──
   // Boutons seulement en REACTIVE et pour un administrateur réel (`admin` rendu par la façade) ; chaque geste est
-  // confirmé dans la page. L'identifiant cliqué n'est qu'une clé : la proposition est relue côté serveur chez actord.
+  // confirmé dans la page. La page renvoie l'EMPREINTE de la proposition affichée (rendue aux seuls administrateurs) :
+  // la façade la recalcule sur la proposition courante d'actord et refuse (`proposition_changee`) si elle a changé.
   var props = {}, propsAdmin = false, propsMode = null, confAppro = null, enVol = null, retours = {}, dernieresProps = null;
   var ETATS = {en_attente:'en attente', en_cours:'en cours', applique:'appliqué', refuse:'refusé'};
-  var LIB_GESTE = {approuver:'Approuver', refuser:'Refuser', simuler:'Simuler'};
+  var LIB_GESTE = {approuver:'Approuver', refuser:'Refuser', simuler:'Simuler', reprendre:'Reprendre'};
+  var ROUTE_GESTE = {approuver:'/approve', simuler:'/approve', refuser:'/refuse', reprendre:'/reprendre'};
   function texteConf(a, p){
     var duree = num(p.ttl_s) !== null ? nb(Math.round(p.ttl_s / 60)) + ' min' : 'durée par défaut du WAF';
     if (a === 'approuver') return 'Bannir réellement ' + (p.cible || '—') + ' (' + duree + ') pour ' + p.menace_id + ' ?' +
       (p.validation_humaine ? ' Mesure exceptionnelle (bande incident).' : '');
-    if (a === 'refuser') return 'Refuser la proposition ' + p.menace_id + ' ? Elle ne pourra plus être approuvée.';
+    if (a === 'refuser') return 'Refuser la proposition ' + p.menace_id + ' ? Elle ne pourra plus être approuvée avant 24 h.';
+    if (a === 'reprendre') return 'Reprendre la décision restée « en cours » pour ' + p.menace_id +
+      ' : elle repasse en attente (refusé par la façade tant que des appels au WAF peuvent être en vol).';
     return 'Simuler l\'approbation de ' + p.menace_id + ' : contrôles et audit seulement, aucun ban.';
   }
   function ligneProp(p, actif){
-    var b = NOMS_BANDE[p.bande] ? p.bande : 'inconnu', id = esc(p.id);
+    var b = NOMS_BANDE[p.bande] ? p.bande : 'inconnu', cle = typeof p.empreinte === 'string' ? p.empreinte : null;
+    var e = cle ? esc(cle) : '';
     var etat = ETATS[p.etat] || 'état inconnu';
     var cl = p.etat === 'applique' ? 'ok' : (p.etat === 'refuse' ? '' : 'wn');
     var ds = [];
@@ -422,16 +430,20 @@
       '<div class="tt"><b>' + esc(p.menace_id || '—') + '</b>' + chip(p.geste || '—') + chip(etat, cl) +
       (p.validation_humaine ? chip('mesure exceptionnelle', 'cr') : '') + '<span class="note">' + esc(p.cible || '—') + '</span></div>' +
       '<div class="ds">' + esc(ds.join(' · ')) + '</div>';
-    if (actif && p.etat === 'en_attente') {
-      if (enVol === p.id) h += '<div class="gestes"><span class="note">envoi…</span></div>';
-      else if (confAppro && confAppro.id === p.id) h += '<div class="conf"><span>' + esc(texteConf(confAppro.a, p)) + '</span>' +
-        '<button type="button" class="oui" data-oui="1" data-id="' + id + '">Confirmer</button><button type="button" data-non="1">Annuler</button></div>';
+    // gestes : administrateur (empreinte rendue) ; Approuver/Refuser/Simuler en REACTIVE sur une décision en attente,
+    // Reprendre sur une décision restée « en cours » (quel que soit le mode : elle ne pose aucun ban)
+    var offre = !cle ? null : (actif && p.etat === 'en_attente') ? 'file' : (propsAdmin && p.etat === 'en_cours') ? 'reprise' : null;
+    if (offre) {
+      if (enVol === cle) h += '<div class="gestes"><span class="note">envoi…</span></div>';
+      else if (confAppro && confAppro.id === cle) h += '<div class="conf"><span>' + esc(texteConf(confAppro.a, p)) + '</span>' +
+        '<button type="button" class="oui" data-oui="1" data-id="' + e + '">Confirmer</button><button type="button" data-non="1">Annuler</button></div>';
+      else if (offre === 'reprise') h += '<div class="gestes"><button type="button" data-act="reprendre" data-id="' + e + '">Reprendre</button></div>';
       else h += '<div class="gestes">' +
-        (p.executable ? '<button type="button" class="ap" data-act="approuver" data-id="' + id + '">Approuver</button>' : '<span class="note">geste non livré</span>') +
-        '<button type="button" data-act="refuser" data-id="' + id + '">Refuser</button>' +
-        (p.executable ? '<button type="button" data-act="simuler" data-id="' + id + '">Simuler</button>' : '') + '</div>';
+        (p.executable ? '<button type="button" class="ap" data-act="approuver" data-id="' + e + '">Approuver</button>' : '<span class="note">geste non livré</span>') +
+        '<button type="button" data-act="refuser" data-id="' + e + '">Refuser</button>' +
+        (p.executable ? '<button type="button" data-act="simuler" data-id="' + e + '">Simuler</button>' : '') + '</div>';
     }
-    var rt = retours[p.id];
+    var rt = cle ? retours[cle] : null;
     if (rt) h += '<div class="retour ' + (rt.ok ? 'ok' : 'ko') + '">' + esc(rt.texte) + '</div>';
     return h + '</div>';
   }
@@ -443,7 +455,7 @@
     }
     var d = r.d, l = Array.isArray(d.propositions) ? d.propositions : [];
     propsAdmin = d.admin === true; propsMode = d.mode; props = {};
-    l.forEach(function(p){ if (p && typeof p.id === 'string') props[p.id] = p; });
+    l.forEach(function(p){ if (p && typeof p.empreinte === 'string') props[p.empreinte] = p; });
     var actif = propsMode === 'reactive' && propsAdmin && d.etat_base !== 'indisponible';
     var notes = [];
     if (propsMode !== 'reactive') notes.push('Mode ' + String(propsMode || 'inconnu').toUpperCase() + ' : la file se consulte, aucun geste ne s\'approuve hors REACTIVE.');
@@ -473,13 +485,15 @@
     if (!b.hasAttribute('data-oui') || !confAppro || confAppro.id !== id) return;
     var act = confAppro.a;
     enVol = id; confAppro = null; rendAppro(dernieresProps);
-    appel('POST', act === 'refuser' ? '/refuse' : '/approve', {id:id, simuler:act === 'simuler'}).then(function(r){
+    var corps = act === 'reprendre' ? {empreinte:id} : {empreinte:id, simuler:act === 'simuler'};
+    appel('POST', ROUTE_GESTE[act], corps).then(function(r){
       var d = r.d || {}, t;
-      if (r.ok && d) {
-        t = (d.etat === 'simule' ? 'Simulation' : d.etat === 'applique' ? 'Appliqué' : d.etat === 'refuse' ? 'Refusé' : LIB_GESTE[act]) +
-          ' : ' + (typeof d.resultat === 'string' ? d.resultat : '—');
+      if (r.ok) {
+        t = (d.etat === 'simule' ? 'Simulation' : d.etat === 'applique' ? 'Appliqué' : d.etat === 'refuse' ? 'Refusé' :
+          act === 'reprendre' ? 'Repris' : LIB_GESTE[act]) + ' : ' + (typeof d.resultat === 'string' ? d.resultat : '—');
         if (Array.isArray(d.avertissements) && d.avertissements.length) t += ' — attention : ' + d.avertissements.join(' ; ');
       } else t = LIB_GESTE[act] + ' refusé : ' + causeDe(r);
+      if (d.pairs_maillage === 'non_verifies') t += ' — pairs du maillage non vérifiés (threatmesh muet)';
       retours[id] = {ok:r.ok, texte:t};
       enVol = null;
       return rechargeProps();
