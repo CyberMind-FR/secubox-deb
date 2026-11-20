@@ -60,11 +60,11 @@ def client():
 
 def test_mode_par_defaut_observe(client):
     j = client.get("/defense/policies", headers=LECTURE).json()
-    assert j["mode"] == "observe" and j["modes_ouverts"] == ["observe", "reactive"]
+    assert j["mode"] == "observe" and j["modes_ouverts"] == ["observe", "reactive", "active"]
     assert [b["nom"] for b in j["bandes"]] == ["observer", "reactive", "contenir", "usager", "incident"]
 
 
-@pytest.mark.parametrize("m", ["active", "aggressive"])
+@pytest.mark.parametrize("m", ["aggressive"])
 def test_modes_differes_refuses(client, m):
     r = client.post("/defense/mode", json={"mode": m}, headers=ADMIN)
     assert r.status_code == 409 and r.json()["cause"] == "gestes_non_livres" and r.json()["error"]

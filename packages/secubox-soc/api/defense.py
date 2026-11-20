@@ -763,8 +763,8 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
         mode = defense_etat.mode_courant()
     except defense_etat.EtatIndisponible:
         return _non(503, "base_indisponible", "base d'état indisponible")
-    if mode != "reactive":
-        return bloque(409, "mode", f"mode {mode} : la file d'approbation n'agit qu'en REACTIVE")
+    if mode not in ("reactive", "active"):
+        return bloque(409, "mode", f"mode {mode} : la file d'approbation n'agit qu'en REACTIVE ou ACTIVE")
     r = _lire_propositions()
     if not r["ok"]:
         return bloque(503, "actord_indisponible", f"actord injoignable ({r['erreur']}) : proposition non relue")
@@ -820,9 +820,10 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
         gen = defense_etat.reclamer(emp, p["menace_id"], p["geste"], ",".join(p["ips"]), p["score"], p["ttl_s"], par,
                                     "refuse" if action == "refuse" else "en_cours",
                                     f"sade-{'refuse' if action == 'refuse' else 'approuve-demande'} "
-                                    f"{_champs(p, par, duree)}{pairs_note}")
+                                    f"{_champs(p, par, duree)}{pairs_note}",
+                                    modes=("reactive", "active"))
     except defense_etat.ModeRefuse as e:
-        return _non(409, "mode", f"mode {e} : la file d'approbation n'agit qu'en REACTIVE")
+        return _non(409, "mode", f"mode {e} : la file d'approbation n'agit qu'en REACTIVE ou ACTIVE")
     except defense_etat.DejaTraitee as e:
         return _non(409, "deja_traitee", f"décision déjà {e}", etat=str(e))
     except defense_etat.AuditIndisponible:

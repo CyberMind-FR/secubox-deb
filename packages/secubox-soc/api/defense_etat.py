@@ -15,7 +15,7 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 DB_DEFAUT = "/var/lib/secubox/soc/defense.db"
 AUDIT_DEFAUT = "/var/log/secubox/audit.log"
@@ -23,7 +23,7 @@ MIGRATIONS = Path(__file__).resolve().parent / "migrations"
 _NOM = re.compile(r"^(\d{4})-[\w.-]+\.sql$")
 
 MODES = ("observe", "reactive", "active", "aggressive")
-MODES_OUVERTS = ("observe", "reactive")  # active/aggressive attendent les gestes (hors périmètre « chapeau »)
+MODES_OUVERTS = ("observe", "reactive", "active")  # aggressive attend ses gestes (hors périmètre)
 
 
 def _chemin_db() -> str:
@@ -267,9 +267,9 @@ class Reclamation(int):
 
 
 def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Optional[int], ttl_s: Optional[int],
-             par: str, etat: str, ligne_audit: str) -> int:
+             par: str, etat: str, ligne_audit: str, modes: Tuple[str, ...] = ("reactive",)) -> int:
     """Réclame une décision (`en_cours` avant un geste, ou `refuse`) dans UNE transaction BEGIN IMMEDIATE : relit le
-    mode (doit être `reactive`), prend la dernière génération de l'empreinte — aucune : INSERT génération 1 ;
+    mode (doit être l'un de `modes`, `reactive` par défaut), prend la dernière génération de l'empreinte — aucune : INSERT génération 1 ;
     `en_attente` : reprise ; tranchée et ré-armable : INSERT génération + 1 (contrainte UNIQUE (empreinte, generation)) ;
     sinon `DejaTraitee` —, écrit l'audit (flush + fsync, suffixé de la génération) PUIS valide. Audit en échec :
     ROLLBACK, rien n'est réclamé. Rend la génération réclamée."""
@@ -283,7 +283,7 @@ def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Opti
         try:
             db.execute("BEGIN IMMEDIATE")
             r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
-            if (r[0] if r else "observe") != "reactive":
+            if (r[0] if r else "observe") not in modes:
                 db.execute("ROLLBACK")
                 raise ModeRefuse(r[0] if r else "observe")
             ligne = _derniere(db, empreinte)
@@ -322,6 +322,20 @@ def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Opti
             if db.in_transaction:
                 db.execute("ROLLBACK")
             raise EtatIndisponible(e.__class__.__name__) from e
+
+
+def bans_auto_depuis(secondes: int, maintenant: Optional[float] = None) -> int:
+    """Nombre d'ADRESSES bannies par l'exécuteur automatique (`par = 'sade-auto'`, décisions `applique` ou `en_cours`)
+    dont la demande tombe dans les `secondes` dernières secondes. `cible` est une liste d'adresses séparées par `,`."""
+    fin = maintenant if maintenant is not None else datetime.now(timezone.utc).timestamp()
+    debut = datetime.fromtimestamp(fin - secondes, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        with closing(_connecter()) as db:
+            lignes = db.execute("SELECT cible FROM decisions WHERE par = 'sade-auto' AND etat IN ('applique', 'en_cours') "
+                                "AND demande_ts >= ?", (debut,)).fetchall()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return sum(len([a for a in (lg[0] or "").split(",") if a.strip()]) for lg in lignes)
 
 
 def conclure(empreinte: str, generation: int, etat: str, resultat: str, demande_ts: Optional[str] = None) -> None:
