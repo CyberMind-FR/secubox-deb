@@ -597,9 +597,11 @@ def _vues_garde(etat: dict, acv: Dict[str, Tuple[str, str]], overrides: List[Tup
                 adresses_box: Optional[Tuple[Optional[str], Optional[str]]], maintenant: int) -> None:
     """Ajoute au rendu les vues de la garde. Rien n'est mémorisé à part : lever une mesure = la retirer de l'état, le rendu redevient
     exactement celui d'avant. Une quarantaine échue n'est plus rendue (la garde la retire de l'état à son passage)."""
-    evasions = {e["ip"]: e["noms"] for e in etat.get("evasions", [])}
-    quarantaines = [q["ip"] for q in etat.get("quarantaines", []) if q["fin"] > maintenant]
-    for ip in quarantaines + [i for i in evasions if i not in quarantaines]:
+    # Ordre TRIÉ (#3850) : le rendu ne dépend que du CONTENU de l'état. L'ordre des listes de la garde variait d'un passage à
+    # l'autre ; deux vues qui permutaient réécrivaient le drop-in, ce qui relançait la compilation complète des listes DNS.
+    evasions = {e["ip"]: sorted(set(e["noms"])) for e in etat.get("evasions", [])}
+    quarantaines = sorted({q["ip"] for q in etat.get("quarantaines", []) if q["fin"] > maintenant})
+    for ip in quarantaines + sorted(i for i in evasions if i not in quarantaines):
         if not IP_SURE_RE.fullmatch(ip):
             raise ErreurTV("adresse IP invalide")
         hote, vue_avant = acv.get(ip, ("/128" if ":" in ip else "/32", ""))
