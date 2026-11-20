@@ -52,3 +52,9 @@ def test_httponly_prefixe_non_pris_pour_un_commentaire():
     # Une ligne #HttpOnly_ est une donnée, pas un commentaire : son cookie compte.
     ligne = "#HttpOnly_.google.com\tTRUE\t/\tTRUE\t1800000000\tSAPISID\tXXXX"
     assert cookies_session_presents(ligne) is True
+
+
+def test_refuse_sid_dun_autre_site():
+    # Un cookie nommé SID mais d'un autre domaine ne doit pas valider la session.
+    ligne = ".exemple.org\tTRUE\t/\tTRUE\t1800000000\tSID\tZZZZ"
+    assert cookies_session_presents(ligne) is False

@@ -62,6 +62,10 @@ réservées à l'administrateur :
   30 s (429 + `reessayer_dans`), 409 sans cookies, 502 avec `cause` si YouTube refuse sans ancien cache ; avec un ancien cache : 200,
   `ok: false`, `perime: true` et la cause. Lecture seule du compte.
 - `POST /api/v1/ytsas/flux/vider/<liste>` : supprime le cache de cette liste seulement.
+- `POST /api/v1/ytsas/cookies` : dépose un `cookies.txt` Netscape dans le coffre (0600). **Refusé (400, `cause: "sans_session"`)**
+  si le fichier ne contient aucun cookie de session Google/YouTube (`__Secure-1PSID`, `SAPISID`, `LOGIN_INFO`… sur un domaine
+  google/youtube) — un export fait déconnecté ou tronqué est rejeté sans écraser le coffre existant (#3837). Validation par les
+  seuls NOMS des cookies, jamais leurs valeurs (`lxc/app/cookies_verif.py`).
 
 Garde : nginx (`nginx/ytsas-routes.conf`) exige `auth_request /auth/verify?exige=admin` puis pose `X-Sbx-Garde-Admin`, dont le jeton est
 tiré par `install-lxc.sh` (hôte : `/var/lib/secubox/ytsas/garde-admin.jeton` et `/etc/nginx/snippets/secubox-ytsas-garde.conf`, root seul ;

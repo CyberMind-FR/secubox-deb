@@ -20,6 +20,18 @@ COOKIES_SESSION = (
 )
 
 
+def _domaine_google(dom):
+    """Le domaine du cookie est-il un domaine Google/YouTube ?
+    (Les noms courts SID/APISID… existent ailleurs : on exige le bon domaine.)"""
+    d = dom.lstrip("#").lstrip(".").lower()
+    # « #HttpOnly_.youtube.com » → on a déjà retiré le préfixe côté nom ; ici le
+    # champ domaine peut porter le préfixe HttpOnly_.
+    if d.startswith("httponly_"):
+        d = d[len("httponly_"):].lstrip(".")
+    return (d == "google.com" or d.endswith(".google.com")
+            or d == "youtube.com" or d.endswith(".youtube.com"))
+
+
 def cookies_session_presents(text):
     """Le texte Netscape contient-il au moins un cookie de session Google/YouTube ?"""
     if not text:
@@ -34,6 +46,6 @@ def cookies_session_presents(text):
         champs = ligne.split("\t")
         if len(champs) < 7:
             champs = ligne.split()
-        if len(champs) >= 7 and champs[5] in COOKIES_SESSION:
+        if len(champs) >= 7 and champs[5] in COOKIES_SESSION and _domaine_google(champs[0]):
             return True
     return False
