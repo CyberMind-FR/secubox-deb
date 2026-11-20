@@ -23,8 +23,12 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   présente) ; gk3 via gk2 par le maillage (10.10.0.5), SOC hors agrégateur. **gk1 non déployé : route SSH
   introuvable** (gk1.secubox.in pointe l'IP publique de la maison, clé d'hôte ≠ gk1 — non contournée).
 - Préexistant, non lié : `secubox-metrics-rapport-waf` en échec sur gk2 depuis 05:32.
-- Reste : ouverture authentifiée de la console par le propriétaire (crée `defense.db`), gk1, bascule REACTIVE box par
-  box sur décision du propriétaire.
+- 1.9.1 (PR #3841), déployé gk2 + gk3 : en mode tableau de bord LAN, le verdict LAN de nginx est retransmis aux
+  lectures WAF/threatmesh (le WAF répondait 401, cartes vides). Vérifié par le chemin public de gk2 : WAF ok, 1 976 bans
+  appliqués, 2 042 actions ; mode `reactive` (posé par la console à 10:38).
+- Carte maillage vide sur gk2 : threatmesh 1.1.2 y écoute en TCP 8780 ; la 1.2.0 (socket, retire le partage #3461)
+  attend la décision du propriétaire.
+- Reste : gk1 (route SSH inconnue), mise à jour threatmesh gk2.
 
 ## 2026-11-20 — ytsas : dépôt de cookies validé (closes #3837) ; design SADE (défense active, chapeau)
 
