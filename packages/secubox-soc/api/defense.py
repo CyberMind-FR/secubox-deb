@@ -41,7 +41,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 
-from secubox_core.auth import SESSION_COOKIE, _validate_token, est_admin_reel, require_jwt, require_lecture
+from secubox_core.auth import (
+    ENTETE_LAN,
+    SESSION_COOKIE,
+    _validate_token,
+    est_admin_reel,
+    mode_tableau_de_bord_actif,
+    require_jwt,
+    require_lecture,
+)
 
 from . import defense_etat, echelle, substrat
 
@@ -92,12 +100,21 @@ async def _est_admin(request: Request) -> bool:
 
 
 def _entetes_appelant(request: Request) -> Dict[str, str]:
-    """Les seuls identifiants retransmis au WAF et à threatmesh (jamais à actord, qui n'en a pas l'usage)."""
+    """Les seuls identifiants retransmis au WAF et à threatmesh (jamais à actord, qui n'en a pas l'usage).
+
+    Mode tableau de bord (LAN sans jeton) : le verdict LAN posé par nginx (`X-SecuBox-LAN: 1`) est retransmis
+    pour les LECTURES, et seulement quand le mode est actif sur la box — sans lui, le WAF répondait 401 et les
+    cartes blocages/actions restaient vides depuis le LAN (constaté sur gk2, 20/11). Le WAF applique ensuite sa
+    propre règle de tableau de bord. Aucune exposition nouvelle : ses sockets acceptent déjà cet en-tête de tout
+    processus local. Le ban (`POST /ban`) n'utilise pas cette fonction : il exige toujours le porteur admin.
+    """
     e = {}
     for nom in ("Authorization", "Cookie"):
         v = request.headers.get(nom.lower())
         if v:
             e[nom] = v
+    if request.headers.get(ENTETE_LAN.lower(), "").strip() == "1" and mode_tableau_de_bord_actif():
+        e[ENTETE_LAN] = "1"
     return e
 
 

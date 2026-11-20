@@ -1,3 +1,13 @@
+secubox-soc (1.9.1-1~trixie1) trixie; urgency=medium
+
+  * SADE (ref #3839) : en mode tableau de bord (LAN sans jeton), le verdict LAN
+    de nginx est retransmis aux lectures du WAF et de threatmesh, seulement si le
+    mode est actif. Constaté sur gk2 : le WAF répondait 401 et les cartes
+    blocages/actions restaient vides depuis le LAN. Le ban exige toujours le
+    porteur de l'administrateur.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 10:43:41 +0100
+
 secubox-soc (1.9.0-1~trixie1) trixie; urgency=medium
 
   * SADE « Cyber Defense Live » (ref #3839) : console de défense active (page /soc/defense.html, routes /defense/*)
