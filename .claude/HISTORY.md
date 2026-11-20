@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-20 — bans.jsonl compacté en service (closes #3816) ; Postfix gk2 rétabli après 31 h (ref #3842)
+
+- #3816 : toolbox-ng 0.17.2 / waf-ng 1.42.1 / metrics 1.29.13 / live 0.1.8 installés sur gk2 depuis le 19/11 08:45,
+  sbxwaf relancé ; archives `bans-2026{08,09,10,11}.jsonl.gz` écrites, bans.jsonl 11 → 8,3 Mo. Lecteurs sains
+  (waf-ng, metrics ; plus d'une journée sans anomalie).
+- `secubox-metrics-rapport-waf` en échec : SMTP refusé. Cause : dans le LXC mail (1 Go, sans swap, 116 `oom_kill`
+  en 21 jours), le maître Postfix est mort le 19/11 vers 06:00 UTC ; `postfix@-` failed à 06:39, sans relance ni
+  alerte (~31 h sans courrier). Relancé à la main : SMTP 250, file vide, rapport WAF envoyé. Correctif durable : #3842.
+- Journal hôte de gk2 : > 110 000 lignes/h, des tranches entières perdues (rien de 05:30 le 20/11).
+
 ## 2026-11-20 — SADE chapeau livré : console Cyber Defense Live + façade /defense (ref #3839)
 
 - secubox-soc 1.9.0 (PR #3840) : façade `/api/v1/soc/defense/*` sur le substrat réel (actord `actor.sock`, WAF,
