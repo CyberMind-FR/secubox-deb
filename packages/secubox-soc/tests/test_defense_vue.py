@@ -69,3 +69,14 @@ def test_rafraichissement_15s_suspendu_onglet_cache():
 def test_onglet_du_soc_en_tete():
     assert 'data-vue="defense.html?embed=1"' in SOC
     assert SOC.index('data-vue="defense.html?embed=1"') < SOC.index('id="t0"')
+
+
+def test_incidents_signales_quand_le_waf_est_muet():
+    f = re.search(r"function rendIncidents.*?\n  }\n", PAGE, re.S).group(0)
+    assert "src(r, 'waf')" in f and "WAF indisponible : l\\'issue des incidents est inconnue" in f
+    assert "issue inconnue" in f
+
+
+def test_bandes_gardees_quand_la_base_est_indisponible():
+    f = re.search(r"function rendSeuils.*?\n  }\n", PAGE, re.S).group(0)
+    assert "etat_base === 'indisponible'" in f and "if (!r.ok || !r.d) {" in f

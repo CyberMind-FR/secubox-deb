@@ -226,7 +226,7 @@
   function carteSource(ok, vide){ return ok === false ? INDISPO : vide; }
   function dateCourte(s){
     if (typeof s !== 'string' || !s) return null;
-    var d = new Date(s); if (isNaN(d)) return esc(s);
+    var d = new Date(s); if (isNaN(d)) return s;
     return d.toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
   }
   var ouverts = {};
@@ -289,11 +289,14 @@
   function rendIncidents(r){
     if (!r.ok || src(r, 'actord') === false) { pose('incidents-corps', INDISPO); return; }
     var l = (r.d && r.d.incidents) || [];
-    if (!l.length) { pose('incidents-corps', '<div class="vide">Aucun incident dans l\'échantillon des 7 derniers jours.</div>'); return; }
-    pose('incidents-corps', l.slice(0, 12).map(function(i){
+    // WAF muet : l'ensemble des bans actifs est vide par défaut, l'issue (bloqué/proposé/observé) serait fausse
+    var wafMuet = src(r, 'waf') === false;
+    var avert = wafMuet ? '<div class="indispo">WAF indisponible : l\'issue des incidents est inconnue</div>' : '';
+    if (!l.length) { pose('incidents-corps', avert + '<div class="vide">Aucun incident dans l\'échantillon des 7 derniers jours.</div>'); return; }
+    pose('incidents-corps', avert + l.slice(0, 12).map(function(i){
       var b = i.bande || 'inconnu', t = dateCourte(i.ts);
       return '<div class="ev"><span class="sc b-' + esc(b) + '">' + (num(i.score) === null ? '—' : esc(i.score)) + '</span>' +
-        '<div class="tt"><b>' + esc(i.titre || '—') + '</b>' + chip(i.issue || '—', i.issue === 'bloqué' ? 'ok' : (i.issue === 'proposé' ? 'wn' : '')) + '</div>' +
+        '<div class="tt"><b>' + esc(i.titre || '—') + '</b>' + (wafMuet ? chip('issue inconnue') : chip(i.issue || '—', i.issue === 'bloqué' ? 'ok' : (i.issue === 'proposé' ? 'wn' : ''))) + '</div>' +
         '<div class="ds">' + esc((t || 'date inconnue') + ' · bande ' + (NOMS_BANDE[b] || 'inconnue')) + '</div></div>';
     }).join('') + '<div class="note">Échantillon borné par la source, pas un historique complet.</div>');
   }
@@ -314,15 +317,15 @@
 
   // ── seuils ──
   function rendSeuils(r){
-    if (!r.ok || !r.d || r.d.etat_base === 'indisponible') { pose('seuils-corps', INDISPO); return; }
-    var d = r.d, h = '';
+    if (!r.ok || !r.d) { pose('seuils-corps', INDISPO); return; }
+    var d = r.d, h = '', base = d.etat_base === 'indisponible';
     var bandes = Array.isArray(d.bandes) ? d.bandes : [];
     if (bandes.length) h += '<div class="lot"><h3>Bandes de score</h3>' + bandes.map(function(b){
       return '<div class="kv"><span class="b-' + esc(b.nom) + '">' + esc(NOMS_BANDE[b.nom] || b.nom) + '</span><b>dès ' + esc(b.seuil) + '</b></div>'; }).join('') + '</div>';
     var s = d.seuils && typeof d.seuils === 'object' ? Object.keys(d.seuils) : [];
-    h += '<div class="lot"><h3>Seuils</h3>' + (s.length ? s.map(function(k){ return '<div class="kv"><span>' + esc(k) + '</span><b>' + esc(d.seuils[k]) + '</b></div>'; }).join('') : '<div class="vide">Aucun seuil enregistré.</div>') + '</div>';
+    h += '<div class="lot"><h3>Seuils</h3>' + (base ? INDISPO : s.length ? s.map(function(k){ return '<div class="kv"><span>' + esc(k) + '</span><b>' + esc(d.seuils[k]) + '</b></div>'; }).join('') : '<div class="vide">Aucun seuil enregistré.</div>') + '</div>';
     var lb = Array.isArray(d.liste_blanche) ? d.liste_blanche : [];
-    h += '<div class="lot"><h3>Liste blanche (jamais bloqué)</h3>' + (lb.length ? '<div class="repos">' + lb.map(function(e){ return chip(e.cidr + (e.motif ? ' · ' + e.motif : '')); }).join('') + '</div>' : '<div class="vide">Liste vide.</div>') + '</div>';
+    h += '<div class="lot"><h3>Liste blanche (jamais bloqué)</h3>' + (base ? INDISPO : lb.length ? '<div class="repos">' + lb.map(function(e){ return chip(e.cidr + (e.motif ? ' · ' + e.motif : '')); }).join('') + '</div>' : '<div class="vide">Liste vide.</div>') + '</div>';
     h += '<div class="note">Modes ouverts : ' + esc((d.modes_ouverts || []).join(', ') || '—') + '.</div>';
     pose('seuils-corps', h);
   }
