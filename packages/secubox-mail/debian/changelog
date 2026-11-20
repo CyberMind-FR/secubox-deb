@@ -1,3 +1,13 @@
+secubox-mail (2.16.18-1~trixie1) trixie; urgency=medium
+
+  * Antispam rspamd désactivable (ref #3845) : mailctl antispam on|off|status,
+    routes /spam/status et /spam/enable|disable (require_jwt) que la page
+    appelait sans qu elles existent. « off » vide les milters puis arrête
+    rspamd ; la page prévient que la signature DKIM sortante est coupée aussi.
+    Gestes audités ; la veille ne relance pas un rspamd désactivé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 15:02:56 +0100
+
 secubox-mail (2.16.17-1~trixie1) trixie; urgency=medium
 
   * Postfix et Dovecot du conteneur repartent seuls après un échec (surcharge

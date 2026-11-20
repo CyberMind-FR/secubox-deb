@@ -65,6 +65,7 @@ See [LICENCE-CMSD-1.0.md](../../LICENCE-CMSD-1.0.md).
 | `mailctl ssl renew` | Renouvelle le cert LE mail + redéploie + reload (timer hebdo auto) |
 | `mailctl backup` / `restore <archive>` | Filet de sûreté (tar horodaté de vmail+config+dovecot.conf) |
 | `mailctl services` | Surcharges systemd du conteneur : sans bac à sable (dovecot, clamav-daemon, #3667) ; relance automatique de Postfix (`postfix@`) et Dovecot ; rspamd et clamav-daemon tués en premier par l'OOM (`OOMScoreAdjust=500`, un négatif est refusé dans le LXC sans privilèges) (#3842) |
+| `mailctl antispam on\|off\|status` | rspamd désactivable (#3845) : `off` vide les milters de Postfix puis arrête et désactive rspamd ; `on` l'inverse ; audit `antispam_active` / `antispam_desactive`. **`off` coupe aussi la signature DKIM du courrier sortant** (et l'antivirus, porté par rspamd). Page : carte « Antispam (Rspamd) », routes `GET /spam/status`, `POST /spam/enable\|disable` (require_jwt) |
 | `mailctl veille` | Lancée toutes les 5 min par `secubox-mail-veille.timer` : relance `postfix@-`, `dovecot` ou `rspamd` en échec dans le conteneur (journal `secubox-mail`) ; sort en erreur s'il ne repart pas, l'unité apparaît alors en échec dans le relevé de flotte (#3842) |
 
 ### Options TOML ajoutées
