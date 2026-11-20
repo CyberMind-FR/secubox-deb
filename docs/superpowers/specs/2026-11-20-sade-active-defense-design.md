@@ -7,7 +7,11 @@ See LICENCE-CMSD-1.0.md for terms.
 
 # SADE — SecuBox Active Defense Engine (conception)
 
-Date : 2026-11-20. Statut : conception, à valider par le propriétaire. **Prolonge, ne remplace pas**
+Date : 2026-11-20. Statut : **direction validée (20/11)** — chapeau unifiant, mode ACTIVE concilié, **périmètre
+retenu « chapeau d'abord » : étapes 1-2 (console unifiée + API de façade en OBSERVE puis REACTIVE au banc) sur le
+substrat réel ; ACTIVE complet + mesh différés jusqu'à la livraison de V2 phases 4-7 (les gestes gradués)**.
+Console canonique : le paquet **`secubox-soc`** (« Vigie SOC »), pas la vue embarquée du hub. **Prolonge, ne
+remplace pas**
 `docs/superpowers/specs/2026-11-19-secubox-ai-v2-riposte-graduee-design.md` (#3827) et les deux specs V2
 (`2026-11-14-secubox-ai-v2-design.md`, `2026-11-18-...-correlation-outils-auto-design.md`). Ce qui n'est pas
 dit ici reste comme dans ces specs.
@@ -134,6 +138,23 @@ sont pas, SADE en ACTIVE ne peut appliquer seul que le ban déterministe existan
 à **proposer** (carte d'action) et à partager l'indicateur. Les **plafonds de gk2** (complément V2 : `ban` 60/h,
 400/j…) valent pour la **somme** des gestes, pas par niveau. La montée est pilotée par les **signaux de persistance** de #3827 (tentatives, couches, fenêtre,
 campagne, récidive) ; la redescente ne défait pas les bans actifs (ils expirent seuls).
+
+## Les 4 phases de réponse (modèle propriétaire, 20/11)
+
+Modèle retenu (infographie 20/11). « Offensive défensive » = **défense locale agressive** (leurres, fake DB,
+durcissement ciblé, quarantaine) — **jamais** une action sortante vers un tiers (le panneau « Règles et
+périmètre » le confirme). C'est l'échelle de réponse, par-dessus la boucle de traitement par événement.
+
+| Phase | Action concrète | Objectif tactique | Critère de succès → phase suivante | Substrat |
+|---|---|---|---|---|
+| **1. Défensive** (détection) | logs enrichis, honeypot, collecte signatures + IP | identifier script, techniques, profil | profil stable, comportement répété confirmé | **réel** (leurres, Actor Intelligence, dossiers) |
+| **2. Réactive** (ciblée) | règles WAF dynamiques, rotation de session, limite de débit, segmentation du service | rendre l'attaque inefficace, augmenter son coût | chute des tentatives valides, échecs qui se multiplient | **partiel** : WAF/ban réels ; `limite_debit`/segmentation = V2 4-7 |
+| **3. Offensive défensive** (locale) | blocage IP/plages, quarantaine réseau, leurre/fake DB, durcissement ciblé | neutraliser l'accès **sur notre périmètre**, capter de nouvelles signatures | aucune tentative valide, attaquant redirigé vers le leurre | **V2 4-7** (quarantaine, `rediriger_leurre`, `ban_bloc` exéc.) |
+| **4. Adaptative** (intelligente) | ajout de signatures, partage d'IoC, renforcement auto des politiques | éviter la réapparition, protéger les autres nœuds | règles à jour, attaque non reproduite sur le maillage | threatmesh **réel** ; renforcement auto = nouveau |
+
+Correspondance modes : phases 1-2 ⊂ OBSERVE/REACTIVE (périmètre « chapeau » livrable maintenant, au ban près) ;
+phase 3 ⊂ ACTIVE (dépend de V2 4-7) ; phase 4 = adaptative/mesh (threatmesh existe, renforcement auto à bâtir).
+Le passage d'une phase à la suivante est **piloté par le critère de succès mesuré** (chiffres), pas par le modèle.
 
 ## Modes de fonctionnement (commutateur global)
 
