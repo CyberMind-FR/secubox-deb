@@ -29,7 +29,14 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - threatmesh 1.2.0 installé sur gk2 par apt (accord du propriétaire) : socket `/run/secubox/threatmesh.sock`, port
   8780 fermé, partage non signé retiré (#3450). Console : les trois sources ok (actord, WAF, threatmesh) ; page
   /threatmesh/ 200.
-- Reste : gk1 (route SSH inconnue).
+- gk1 trouvé sur le maillage (10.10.0.8, rebond gk2) : secubox-soc 1.9.1, webos 1.21.2, threatmesh 1.2.0 installés
+  par apt ; SOC actif, sockets actord/WAF/threatmesh présents.
+- Comparateur de flotte (gk1 kiosk/plymouth « en erreur ») : **pas un faux positif**. /boot de gk1 (vfat 253 Mo) plein
+  depuis le 19/11 → postinst plymouth en échec, secubox-kiosk et secubox-plymouth restés `iU`. Réparé : purge du
+  noyau 6.12.107 (non chargeable par boot.scr), `dpkg --configure -a` ; Image/initrd.img inchangés (sha256). Relevé
+  signé republié : kiosk et plymouth « fonctionnel », kiosk toujours désactivé. Aucun changement de code.
+- À trancher : /boot de gk2 à 53 Mo libres (5 noyaux), la prochaine mise à jour noyau y échouera pareil ;
+  `dailyaidecheck.service` en échec sur gk1 (préexistant).
 
 ## 2026-11-20 — ytsas : dépôt de cookies validé (closes #3837) ; design SADE (défense active, chapeau)
 
