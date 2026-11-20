@@ -29,7 +29,7 @@ et fragmenterait l'audit CSPN — exclu (AGENTS « ne pas dupliquer », méthode
 |---|---|---|
 | Détection (WAF/DPI/logs/réseau) | `secubox-waf-ng` (sbxwaf), DPI/nDPI, leurres, Actor Intelligence 2.0, bans auto WAF (#2238) | aucun — SADE **lit** |
 | Scoring 0-100, récurrence | Actor Intelligence (score acteur), dossiers V2 + signaux de persistance (#3827) | **mapper** score→échelle, pas le recalculer |
-| Réponse graduée (5 niveaux) | Échelle observer/contenir/usager (#3827), catalogue de gestes fermé V2 (waf-ng `gestes_ia`) | **bande REACTIVE** (ralentir seul) + **garde humaine 95-100** à ajouter à l'échelle |
+| Réponse graduée (5 niveaux) | **Partiel** : `ai-ban` exécute `ban`/`unban` (`waf-ng gestes_ia.py`) ; `menaces.py` propose bannir adresse/bloc, examiner campagne, vérifier service ; actord décide sur 3 niveaux OBSERVE/MITIGATE/BLOCK | **les autres gestes (`limite_debit`, `quarantaine_dns`, `isoler_zone`, `rejet_doh_dot`, `rediriger_leurre`, `propager_maillage`) ne sont PAS construits = V2 phases 4-7 (#3827), à bâtir AVANT que SADE puisse les piloter** |
 | Confinement d'appareil / quarantaine | `secubox-garde` (`demandes.py` : l'IA propose, garde applique) | aucun — SADE **route** vers garde |
 | Mesh Defense (indicateurs GK2/GK3/C3Box) | threatmesh / `secubox-p2p`, `propager_maillage` (#3827) | aucun — SADE **expose/contrôle** |
 | Console Cyber Defense Live | SOC (`secubox-hub/www/soc`), cardlet actor, Radar/Chaîne V2 (#3811) | **vue unifiée** DÉTECTION→ANALYSE→DÉCISION→ACTION→VÉRIF + commutateur de mode |
@@ -39,6 +39,28 @@ et fragmenterait l'audit CSPN — exclu (AGENTS « ne pas dupliquer », méthode
 **Composant** : `secubox-active-defense` — indépendant mais **mince** : console + politique/modes + orchestration
 + API de façade (statut/menaces/actions/approbation/rollback). Il **propose** depuis gk3 et **applique par le
 chemin audité de gk2** (comme V2) ; il n'a aucun privilège d'écriture réseau propre.
+
+## Substrat réel vs à construire (relecture constructeur, 20/11)
+
+Une relecture constructeur a vérifié le dépôt. À retenir avant tout plan :
+
+- **Réel, réutilisable tel quel** : score acteur 0-100 (`secubox-toolbox-ng/internal/actor/analysis`, sous-score
+  persistance ; actord décide OBSERVE/MITIGATE/BLOCK — 3 niveaux, pas 5) ; dossiers V2
+  (`secubox-ai/veille/dossiers.py`, `api/menaces.py`, lecture seule gk2, double tampon) ; `ai-ban` ban/unban
+  signés EdDSA (`secubox-waf-ng/.../gestes_ia.py`, garde `require_ai_ban`, audité) + `wafctl` ; garde
+  `secubox-garde/garde/demandes.py` ; threatmesh (`secubox-threatmesh`, `secubox-annuaire/annuaire/threatmesh.py`) ;
+  console SOC.
+- **Spec non construite (V2 phases 4-7, #3827)** : l'échelle à 5 niveaux et les gestes `limite_debit`,
+  `quarantaine_dns`, `isoler_zone`, `rejet_doh_dot`, `rediriger_leurre`, `propager_maillage`, `ban_bloc`
+  exécutable. **Le design les citait comme réutilisables : c'était faux.** SADE ne peut les piloter qu'une fois
+  bâtis.
+- **À trancher** : **deux pages SOC coexistent** — `secubox-hub/www/soc` (citée) et `secubox-soc/www/soc` (plus
+  riche, non citée). Dire laquelle est canonique avant de « prolonger ».
+
+**Conséquence sur le périmètre de SADE** : en « chapeau mince », SADE est constructible jusqu'aux **étapes 1-2**
+(console + API lecture seule en OBSERVE, puis REACTIVE au banc) sur le substrat réel. **ACTIVE complet et mesh
+supposent d'abord de livrer V2 phases 4-7** (les gestes gradués) — c'est de l'ingénierie, pas un chapeau. D'où
+l'arbitrage de séquencement ci-dessous, réservé au propriétaire.
 
 ## Réconciliation « ACTIVE d'emblée » ↔ « l'IA propose, n'agit pas »
 
@@ -57,6 +79,33 @@ par la **source de la décision**, pas par le mode :
 
 Donc : ACTIVE = « les gestes sûrs et réversibles s'appliquent seuls, le reste se propose, l'exceptionnel se
 valide ». Jamais un faux positif inféré par l'IA auto-appliqué sur gk2.
+
+## Moteur d'intelligence tactique (charte du rôle du modèle)
+
+Charte fournie par le propriétaire (20/11), **adoptée et bornée** par les règles permanentes. Le modèle de langue
+de SADE est le **conseiller tactique** : il cherche la réponse défensive **la plus ciblée, efficace et
+proportionnée** et l'**explique**. Il **propose**, il ne décide ni n'applique.
+
+Moyens autorisés, tous **locaux**. **Attention (relecture constructeur 20/11) : seuls `ban`/`unban` sont
+exécutables aujourd'hui** (`ai-ban`), avec les propositions de `menaces.py` (bannir adresse/bloc, examiner
+campagne, vérifier service) et le partage d'indicateurs (threatmesh). Les autres moyens de la charte —
+honeypots/`rediriger_leurre`, contre-mesures **dynamiques locales** (règle WAF/limite de débit adaptée, jamais
+un paquet émis vers l'attaquant), `isoler_zone`, `quarantaine_dns`, révocation de session, segmentation
+adaptative — **sont à construire (V2 phases 4-7, #3827)** avant que SADE puisse les piloter. Chaque intervention
+doit rester **mesurable** (effet observé dans le dossier), **réversible** (TTL + retour arrière) et
+**documentée** (`audit.log`).
+
+Objectif : rendre une **attaque répétée progressivement inefficace sur nos infrastructures** (l'épuiser contre
+des leurres, l'isoler, la ralentir), **sans jamais** réduire la disponibilité des services légitimes.
+
+Bornes dures (non négociables, priment sur la charte) :
+
+- Le modèle **ne décide pas** le « cas sûr » ni la **montée de niveau** : c'est le code, sur des chiffres
+  (signaux de persistance #3827). Le modèle explique et propose un geste du **catalogue fermé**.
+- « Réduire la capacité opérationnelle de l'attaquant » = **uniquement sur notre périmètre** (leurres, bans,
+  segmentation). **Jamais** émettre quoi que ce soit vers l'attaquant au-delà de la réponse normale de la box
+  (anti-réflexion, pas de « contre-mesure » sortante).
+- Les exclusions hack-back ci-dessous s'appliquent intégralement à ce moteur.
 
 ## Non-objectifs / Anti-objectifs (repris de #3827, non négociables)
 
@@ -78,8 +127,12 @@ Le score 0-100 **est celui d'Actor Intelligence** (pas recalculé). SADE le proj
 | 80-94 | **usager** (N3) | `ban` long, `ban_bloc` /24, `propager_maillage`, `rediriger_leurre` | auto si récidive/campagne confirmée par le code ; sinon proposé |
 | 95-100 | **incident** | confinement renforcé, mesures exceptionnelles | **proposé + validation humaine obligatoire** |
 
-Les **plafonds de gk2** (complément V2 : `ban` 60/h, 400/j…) valent pour la **somme** des gestes, pas par
-niveau. La montée est pilotée par les **signaux de persistance** de #3827 (tentatives, couches, fenêtre,
+**Réserve (relecture constructeur) : dans ce tableau, seuls `ban`/`unban` sont exécutables aujourd'hui. Les
+gestes `limite_debit`, `quarantaine_dns`, `isoler_zone`, `rejet_doh_dot`, `ban_bloc` (exécutable),
+`propager_maillage`, `rediriger_leurre` relèvent de V2 phases 4-7 (#3827), non livrées.** Tant qu'elles ne le
+sont pas, SADE en ACTIVE ne peut appliquer seul que le ban déterministe existant ; les autres bandes se limitent
+à **proposer** (carte d'action) et à partager l'indicateur. Les **plafonds de gk2** (complément V2 : `ban` 60/h,
+400/j…) valent pour la **somme** des gestes, pas par niveau. La montée est pilotée par les **signaux de persistance** de #3827 (tentatives, couches, fenêtre,
 campagne, récidive) ; la redescente ne défait pas les bans actifs (ils expirent seuls).
 
 ## Modes de fonctionnement (commutateur global)
