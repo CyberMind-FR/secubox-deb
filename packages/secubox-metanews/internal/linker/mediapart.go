@@ -35,6 +35,16 @@ func EstBlogMediapart(u string) bool {
 	return strings.EqualFold(pu.Hostname(), "blogs.mediapart.fr")
 }
 
+// hoteMediapart : l'URL reste-t-elle sur un domaine Mediapart ?
+func hoteMediapart(u string) bool {
+	pu, err := url.Parse(u)
+	if err != nil {
+		return false
+	}
+	h := strings.ToLower(pu.Hostname())
+	return h == "blogs.mediapart.fr" || h == "www.mediapart.fr" || h == "mediapart.fr"
+}
+
 // Collecter choisit le bon lecteur selon le type de source (ou, à défaut, l'hôte)
 // et renvoie des Contenu normalisés. Les sources classiques passent par Flux
 // (RSS/Atom) ; un blog Mediapart passe par MediapartBlog.
@@ -104,7 +114,8 @@ func AnalyserBlogMediapart(corps string, base *url.URL) []Contenu {
 		}
 		titre := texteMediapart(tt[2])
 		lien := absolutiser(base, strings.TrimSpace(tt[1]))
-		if titre == "" || lien == "" {
+		// Un gabarit modifié ne doit pas pouvoir injecter un lien hors Mediapart.
+		if titre == "" || lien == "" || !hoteMediapart(lien) {
 			continue
 		}
 		ref := lien

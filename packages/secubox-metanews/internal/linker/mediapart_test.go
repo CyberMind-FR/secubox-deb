@@ -6,6 +6,7 @@
 package linker
 
 import (
+	"fmt"
 	"net/url"
 	"testing"
 	"time"
@@ -86,6 +87,26 @@ func TestAnalyserBlogMediapart(t *testing.T) {
 	}
 	if b.PublieLe != time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC).Unix() {
 		t.Errorf("date #2 inattendue : %d", b.PublieLe)
+	}
+}
+
+// Non-régression SSRF : le chemin Mediapart de Collecter passe par la garde,
+// comme le chemin RSS, avant tout accès réseau.
+func TestCollecterPasseParLaGarde(t *testing.T) {
+	var vus []string
+	r := NewRSS(func(h string) error { vus = append(vus, h); return fmt.Errorf("refus:%s", h) })
+	urls := []string{
+		"https://blogs.mediapart.fr/sudfa/blog", // → MediapartBlog
+		"https://www.mediapart.fr/articles/feed", // → Flux
+		"http://127.0.0.1/sudfa/blog",            // SSRF : doit être refusé
+	}
+	for _, u := range urls {
+		if _, err := r.Collecter("", u); err == nil {
+			t.Errorf("%s : la garde aurait dû refuser", u)
+		}
+	}
+	if len(vus) != 3 || vus[0] != "blogs.mediapart.fr" || vus[1] != "www.mediapart.fr" || vus[2] != "127.0.0.1" {
+		t.Errorf("garde non appelée comme attendu : %v", vus)
 	}
 }
 
