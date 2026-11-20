@@ -4,7 +4,7 @@ secubox-soc (1.10.1-1~trixie1) trixie; urgency=medium
     la page (carte « Seuils et bandes », administrateur), l API
     (POST /defense/liste-blanche, /liste-blanche/retirer, require_jwt) et la
     ligne de commande (python3 -m api.liste_blanche, compte secubox). Réseau
-    au plus /16 (IPv4) ou /32 (IPv6), entrées système non retirables. Prérequis
+    au plus /24 (IPv4) ou /48 (IPv6), entrées système non retirables. Prérequis
     d ACTIVE : protéger l adresse publique de la box et du poste admin.
 
  -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 16:08:59 +0100
