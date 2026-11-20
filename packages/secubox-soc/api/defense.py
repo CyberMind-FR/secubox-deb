@@ -554,7 +554,7 @@ async def changer_mode(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(
 
 
 # ── liste blanche : ajout et retrait par un administrateur réel (#3839) ─────────────────────────────
-_CAUSES_LB = {"cidr_illisible": "réseau illisible", "cidr_trop_large": "réseau trop large (au plus /16 en IPv4, /32 en IPv6)",
+_CAUSES_LB = {"cidr_illisible": "réseau illisible ou non admis", "cidr_trop_large": "réseau trop large (au plus /24 en IPv4, /48 en IPv6)",
               "motif_invalide": "motif requis (1 à 80 caractères)", "deja_presente": "réseau déjà en liste blanche",
               "liste_pleine": "liste blanche pleine"}
 

@@ -9,16 +9,29 @@
     runuser -u secubox -- python3 -m api.liste_blanche retirer 203.0.113.7/32
 
 Toujours sous le compte `secubox` (propriétaire de defense.db) : lancé en root, SQLite créerait des fichiers de
-journal root que le service ne pourrait plus écrire. L'opérateur audité est `cli:<utilisateur sudo ou connecté>`.
+journal root que le service ne pourrait plus écrire. L'opérateur audité est `cli:<utilisateur de la session de
+connexion>` (loginuid du noyau, jamais l'environnement).
 """
 import os
+import pwd
 import sys
 
 from . import defense_etat
 
+LOGINUID = "/proc/self/loginuid"
+
 
 def _operateur() -> str:
-    return "cli:" + (os.environ.get("SUDO_USER") or os.environ.get("LOGNAME") or os.environ.get("USER") or "inconnu")
+    """Utilisateur de la session de connexion (loginuid, posé par le noyau à la connexion, conservé par sudo/runuser),
+    jamais une variable d'environnement que l'appelant choisirait."""
+    try:
+        with open(LOGINUID, encoding="ascii") as f:
+            uid = int(f.read().strip())
+        if uid == 4294967295:  # aucune session de connexion (service)
+            return "cli:sans-session"
+        return "cli:" + pwd.getpwuid(uid).pw_name
+    except (OSError, ValueError, KeyError):
+        return "cli:inconnu"
 
 
 def main(argv=None) -> int:

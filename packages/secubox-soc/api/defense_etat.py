@@ -10,6 +10,7 @@ appliquées au premier usage de façon idempotente. Chemins surchargeables pour 
 """
 import ipaddress
 import json
+import unicodedata
 import os
 import re
 import sqlite3
@@ -186,10 +187,13 @@ def liste_blanche() -> List[Dict[str, Any]]:
 
 # ── liste blanche : ajout et retrait audités (#3839) ──────────────────────────────────────────────
 # Une adresse en liste blanche n'est jamais bannie par SADE (approbation ni exécuteur automatique). Un réseau trop
-# large neutraliserait la défense : au plus /16 en IPv4, /32 en IPv6 (plus étroit accepté). Les entrées amorcées
+# large neutraliserait la défense : au plus /24 en IPv4, /48 en IPv6 (un abonné reçoit un /56 ou un /64 ; un /32 IPv6
+# couvrirait un opérateur entier). Les réseaux IPv6 qui portent de l'IPv4 (::ffff:0:0/96, ::/96, 6to4, NAT64) sont
+# refusés : ils contourneraient la borne IPv4. Les entrées amorcées
 # (privé, boucle, lien-local, CGNAT) restent protégées par les déclencheurs de la base.
 LISTE_BLANCHE_MAX = 64
-PREFIXE_MIN = {4: 16, 6: 32}
+PREFIXE_MIN = {4: 24, 6: 48}
+_V6_PORTEURS_V4 = tuple(ipaddress.ip_network(n) for n in ("::ffff:0:0/96", "::/96", "2002::/16", "64:ff9b::/96"))
 _MOTIF = re.compile(r"^[^\x00-\x1f\x7f]{1,80}$")
 
 
@@ -203,6 +207,8 @@ def normaliser_cidr(texte: Any, borne: bool = True) -> str:
         raise ValueError("cidr_illisible") from e
     if borne and n.prefixlen < PREFIXE_MIN[n.version]:
         raise ValueError("cidr_trop_large")
+    if borne and n.version == 6 and any(n.overlaps(r) for r in _V6_PORTEURS_V4):
+        raise ValueError("cidr_illisible")
     return n.with_prefixlen
 
 
@@ -210,7 +216,8 @@ def ajouter_liste_blanche(cidr: Any, motif: Any, par: str) -> str:
     """Ajoute un réseau, audit `sade-liste-blanche-ajout` écrit AVANT le COMMIT (rien sans trace). Rend le réseau
     canonique. ValueError : cidr illisible/trop large, motif invalide, déjà présent, liste pleine."""
     net = normaliser_cidr(cidr)
-    if not isinstance(motif, str) or not _MOTIF.match(motif.strip()):
+    if (not isinstance(motif, str) or not _MOTIF.match(motif.strip())
+            or any(unicodedata.category(c) in ("Cf", "Zl", "Zp") for c in motif)):  # contrôle bidirectionnel, invisibles
         raise ValueError("motif_invalide")
     try:
         db = _connecter()

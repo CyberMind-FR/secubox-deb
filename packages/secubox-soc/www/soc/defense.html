@@ -424,21 +424,26 @@
       // entrée ajoutée (administrateur seulement) : retrait en deux temps ; les entrées système ne se retirent pas
       var ret = admin && e.supprimable ? ' <button type="button" class="lbr" data-lbr="' + esc(e.cidr) + '">' + (lbRetrait === e.cidr ? 'confirmer le retrait' : 'retirer') + '</button>' : '';
       return chip(e.cidr + (e.motif ? ' · ' + e.motif : '')) + ret; }).join('') + '</div>' : '<div class="vide">Liste vide.</div>') +
-      (admin && !base ? '<div class="lbf"><input id="lbCidr" placeholder="203.0.113.7/32 ou 2a01:db8::/64" maxlength="64" aria-label="Réseau à protéger">' +
-        '<input id="lbMotif" placeholder="motif (ex. adresse publique du foyer)" maxlength="80" aria-label="Motif">' +
-        '<button type="button" id="lbAjout">Ajouter</button></div><div class="note" id="lbNote">' + esc(lbNote) + '</div>' : '') + '</div>';
+      (admin && !base ? '<div class="lbf"><input id="lbCidr" placeholder="203.0.113.7/32 ou 2a01:db8::/64" maxlength="64" aria-label="Réseau à protéger" value="' + esc(lbSaisie.cidr) + '">' +
+        '<input id="lbMotif" placeholder="motif (ex. adresse publique du foyer)" maxlength="80" aria-label="Motif" value="' + esc(lbSaisie.motif) + '">' +
+        '<button type="button" id="lbAjout">' + (lbAjout ? 'Confirmer l\'ajout' : 'Ajouter') + '</button></div><div class="note" id="lbNote">' + esc(lbNote) + '</div>' : '') + '</div>';
     h += '<div class="note">Modes ouverts : ' + esc((d.modes_ouverts || []).join(', ') || '—') + '.</div>';
     pose('seuils-corps', h);
   }
 
-  // ── liste blanche : ajout direct (protéger est sans risque), retrait confirmé ; la façade audite (require_jwt) ──
-  var lbRetrait = null, lbNote = '';
+  // ── liste blanche : ajout ET retrait confirmés (ajouter une exemption affaiblit la défense) ; la façade audite ──
+  var lbRetrait = null, lbAjout = null, lbNote = '', lbSaisie = {cidr:'', motif:''};
   $('seuils-corps').addEventListener('click', function(ev){
     var t = ev.target;
     if (t && t.id === 'lbAjout') {
-      var cidr = ($('lbCidr') || {}).value || '', motif = ($('lbMotif') || {}).value || '';
-      appel('POST', '/liste-blanche', {cidr: cidr.trim(), motif: motif.trim()}).then(function(r){
-        lbNote = r.ok && r.d ? 'Ajouté : ' + r.d.cidr + ' (audité).' : 'Refusé : ' + causeDe(r); charge(); });
+      lbSaisie = {cidr: (($('lbCidr') || {}).value || '').trim(), motif: (($('lbMotif') || {}).value || '').trim()};
+      var cle = lbSaisie.cidr + '|' + lbSaisie.motif;
+      if (lbAjout !== cle) { lbAjout = cle; lbNote = 'Jamais bloquer ' + lbSaisie.cidr + ' ? Cliquez de nouveau sur « Confirmer l\'ajout ».'; charge(); return; }
+      lbAjout = null;
+      appel('POST', '/liste-blanche', lbSaisie).then(function(r){
+        if (r.ok && r.d) { lbNote = 'Ajouté : ' + r.d.cidr + ' (audité).'; lbSaisie = {cidr:'', motif:''}; }
+        else lbNote = 'Refusé : ' + causeDe(r);
+        charge(); });
       return;
     }
     var c = t && t.getAttribute ? t.getAttribute('data-lbr') : null;
