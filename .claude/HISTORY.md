@@ -26,9 +26,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - 1.9.1 (PR #3841), déployé gk2 + gk3 : en mode tableau de bord LAN, le verdict LAN de nginx est retransmis aux
   lectures WAF/threatmesh (le WAF répondait 401, cartes vides). Vérifié par le chemin public de gk2 : WAF ok, 1 976 bans
   appliqués, 2 042 actions ; mode `reactive` (posé par la console à 10:38).
-- Carte maillage vide sur gk2 : threatmesh 1.1.2 y écoute en TCP 8780 ; la 1.2.0 (socket, retire le partage #3461)
-  attend la décision du propriétaire.
-- Reste : gk1 (route SSH inconnue), mise à jour threatmesh gk2.
+- threatmesh 1.2.0 installé sur gk2 par apt (accord du propriétaire) : socket `/run/secubox/threatmesh.sock`, port
+  8780 fermé, partage non signé retiré (#3450). Console : les trois sources ok (actord, WAF, threatmesh) ; page
+  /threatmesh/ 200.
+- Reste : gk1 (route SSH inconnue).
 
 ## 2026-11-20 — ytsas : dépôt de cookies validé (closes #3837) ; design SADE (défense active, chapeau)
 
