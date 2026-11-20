@@ -1,3 +1,14 @@
+secubox-ytsas (0.8.12-1~trixie1) trixie; urgency=medium
+
+  * Cookies : le dépôt (POST /cookies) refuse désormais un fichier SANS cookie
+    de session Google/YouTube (export fait déconnecté ou tronqué) — HTTP 400
+    avec message clair, sans écraser le coffre existant (#3837). Validateur isolé
+    dans cookies_verif.py (ne lit que les noms, jamais les valeurs). Évite le cas
+    constaté sur gk2 : cookies.txt de 114 o accepté, verdict « inconnu », puis
+    échecs « auth requise » sans cause visible.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 08:39:21 +0100
+
 secubox-ytsas (0.8.11-1~trixie1) trixie; urgency=medium
 
   * Case « via Tor » à l'ajout d'une vidéo ou d'une playlist (#3618) : yt-dlp
