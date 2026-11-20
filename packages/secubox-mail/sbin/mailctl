@@ -631,6 +631,8 @@ cmd_veille() {
     for svc in $SERVICES_VEILLES; do
         lxc_attach "$CONTAINER" sh -c "systemctl cat ${svc}.service >/dev/null 2>&1" || continue
         lxc_attach "$CONTAINER" systemctl is-failed --quiet "$svc" || continue
+        # rspamd désactivé par « mailctl antispam off » (#3845) : son échec éventuel n'appelle pas de relance
+        if [[ "$svc" == rspamd ]] && ! lxc_attach "$CONTAINER" systemctl is-enabled --quiet rspamd; then continue; fi
         warn "${svc} en echec dans '$CONTAINER' : relance"
         logger -t secubox-mail -p mail.warning "veille : ${svc} en echec dans le conteneur ${CONTAINER}, relance (#3842)" 2>/dev/null || true
         lxc_attach "$CONTAINER" sh -c "systemctl reset-failed ${svc}; systemctl start ${svc}" >/dev/null 2>&1 || true
@@ -1861,6 +1863,53 @@ cmd_antivirus() {
     esac
 }
 
+# Antispam rspamd désactivable (#3845). rspamd est le milter de Postfix : il filtre l'entrant ET signe en DKIM le
+# sortant (et porte l'antivirus). « off » retire d'abord les milters (Postfix n'appelle plus un service arrêté), puis
+# arrête et désactive rspamd ; « on » fait l'inverse. L'état vit dans le conteneur (unité + milters), rien à garder
+# ailleurs : une mise à jour du paquet ne le réactive pas (configure_rspamd_milter ne tourne qu'à l'installation).
+MILTER_RSPAMD="inet:127.0.0.1:11332"
+_antispam_audit() {
+    local journal="${SECUBOX_AUDIT_LOG:-/var/log/secubox/audit.log}"
+    printf '{"ts":"%s","module":"mail","action":"%s","acteur":"%s"}\n' \
+        "$(date -u +%FT%TZ)" "$1" "${SUDO_USER:-$(id -un)}" >> "$journal" 2>/dev/null || true
+}
+cmd_antispam() {
+    local m
+    case "${1:-status}" in
+        on|off) lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; } ;;
+    esac
+    case "${1:-status}" in
+        on)
+            lxc_attach "$CONTAINER" sh -c 'systemctl reset-failed rspamd 2>/dev/null; systemctl enable --now rspamd' >/dev/null 2>&1 \
+                || { error "rspamd n'a pas demarre : milters laisses vides"; return 1; }
+            lxc_attach "$CONTAINER" postconf -e "smtpd_milters=$MILTER_RSPAMD" "non_smtpd_milters=$MILTER_RSPAMD" \
+                && lxc_attach "$CONTAINER" postfix reload >/dev/null 2>&1 \
+                || { error "milters non poses dans Postfix"; return 1; }
+            _antispam_audit antispam_active
+            log "antispam active (rspamd : filtrage entrant, signature DKIM sortante)"
+            ;;
+        off)
+            lxc_attach "$CONTAINER" postconf -e "smtpd_milters=" "non_smtpd_milters=" \
+                && lxc_attach "$CONTAINER" postfix reload >/dev/null 2>&1 \
+                || { error "milters non retires : rspamd laisse en marche"; return 1; }
+            lxc_attach "$CONTAINER" systemctl disable --now rspamd >/dev/null 2>&1 || warn "rspamd non arrete"
+            _antispam_audit antispam_desactive
+            log "antispam desactive : courrier entrant non filtre, sortant NON signe en DKIM"
+            ;;
+        status)
+            if ! lxc_running "$CONTAINER"; then echo "conteneur=arrete"; return 0; fi
+            m="$(lxc_attach "$CONTAINER" postconf -h smtpd_milters 2>/dev/null)"
+            echo "rspamd_unite=$(lxc_attach "$CONTAINER" systemctl is-enabled rspamd 2>/dev/null || true)"
+            echo "rspamd_actif=$(lxc_attach "$CONTAINER" systemctl is-active rspamd 2>/dev/null || true)"
+            if [[ "$m" == *"$MILTER_RSPAMD"* ]]; then echo "milter=branche"; else echo "milter=absent"; fi
+            ;;
+        *)
+            error "usage: mailctl antispam on|off|status"
+            return 1
+            ;;
+    esac
+}
+
 # ============================================================================
 # Logs
 # ============================================================================
@@ -2141,6 +2190,7 @@ case "${1:-}" in
     ssl)         shift; cmd_ssl "$@" ;;
     dkim)        shift; cmd_dkim "$@" ;;
     antivirus)   shift; cmd_antivirus "$@" ;;
+    antispam)    shift; cmd_antispam "$@" ;;
     dns-setup)   cmd_dns_setup ;;
     # Diagnostics
     logs)        shift; cmd_logs "$@" ;;

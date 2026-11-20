@@ -1348,6 +1348,33 @@ async def update_settings(settings: SettingsUpdate):
 # DKIM MANAGEMENT
 # =============================================================================
 
+# Antispam rspamd (#3845) : la page appelait ces routes sans qu'elles existent. Lecture et gestes par mailctl
+# (état lu dans le conteneur : unité rspamd + milters de Postfix).
+def _antispam_etat() -> dict:
+    ok, out, _ = run_cmd(["/usr/sbin/mailctl", "antispam", "status"], timeout=30)
+    v = dict(l.split("=", 1) for l in out.splitlines() if "=" in l) if ok else {}
+    if not v or v.get("conteneur") == "arrete":
+        return {"enabled": None, "running": None, "milter": None, "conteneur": v.get("conteneur", "inconnu")}
+    return {"enabled": v.get("rspamd_unite") == "enabled" and v.get("milter") == "branche",
+            "running": v.get("rspamd_actif") == "active", "milter": v.get("milter") == "branche"}
+
+
+@app.get("/spam/status", dependencies=[Depends(require_jwt)])
+async def spam_status():
+    return await asyncio.to_thread(_antispam_etat)
+
+
+@app.post("/spam/{action}", dependencies=[Depends(require_jwt)])
+async def spam_toggle(action: str):
+    geste = {"enable": "on", "disable": "off"}.get(action)
+    if geste is None:
+        raise HTTPException(400, "action inconnue (enable|disable)")
+    ok, out, err = await asyncio.to_thread(run_cmd, ["/usr/sbin/mailctl", "antispam", geste], 60)
+    if not ok:
+        raise HTTPException(500, (err or out or "échec de mailctl antispam")[-300:])
+    return {"success": True, **(await asyncio.to_thread(_antispam_etat))}
+
+
 @app.get("/av/status", dependencies=[Depends(require_jwt)])
 async def av_status():
     """Get ClamAV antivirus status"""

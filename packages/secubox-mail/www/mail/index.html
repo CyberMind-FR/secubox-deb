@@ -536,7 +536,7 @@
         function protections() {
             return [
                 { cle: 'dkim', nom: 'DKIM', sous: 'Signature des courriers sortants', on: DKIMREC ? !!DKIMREC.record : null, lab: ['CLÉ PUBLIÉE', 'PAS DE CLÉ'] },
-                { cle: 'spam', nom: 'Antispam (Rspamd)', sous: 'Filtrage du courrier entrant', on: SPAM ? !!SPAM.enabled : null, lab: ['ACTIF', 'INACTIF'] },
+                { cle: 'spam', nom: 'Antispam (Rspamd)', sous: 'Filtrage de l’entrant et signature DKIM du sortant', on: SPAM && SPAM.enabled !== null && SPAM.enabled !== undefined ? !!SPAM.enabled : null, lab: ['ACTIF', 'INACTIF'] },
                 { cle: 'grey', nom: 'Greylisting', sous: 'Retarde les expéditeurs inconnus', on: null, lab: ['ACTIF', 'INACTIF'] },
                 { cle: 'av', nom: 'ClamAV', sous: 'Analyse antivirus' + (AV && AV.running ? ' · démon en marche' : ''), on: AV ? !!AV.enabled : null, lab: ['ACTIF', 'INACTIF'] }
             ];
@@ -549,7 +549,7 @@
                 if (p.cle === 'dkim') bs.push(btn('Générer la clé', '', () => agir('Génération de la clé DKIM', 'POST', '/dkim/setup', undefined, 2000)));
                 if (p.cle === 'spam') {
                     bs.push(btn('Activer', 'ok', () => agir('Activation de l’antispam', 'POST', '/spam/enable', undefined, 1000)));
-                    bs.push(btn('Désactiver', 'danger', () => demander('Désactiver l’antispam ? Le courrier entrant ne sera plus filtré.', () => agir('Désactivation de l’antispam', 'POST', '/spam/disable', undefined, 1000))));
+                    bs.push(btn('Désactiver', 'danger', () => demander('Désactiver l’antispam (Rspamd) ? Le courrier entrant ne sera plus filtré, et le courrier sortant ne sera plus signé en DKIM : il risque d’arriver en indésirables chez vos correspondants.', () => agir('Désactivation de l’antispam', 'POST', '/spam/disable', undefined, 1000))));
                 }
                 if (p.cle === 'grey') {
                     bs.push(btn('Activer', 'ok', () => agir('Activation du greylisting', 'POST', '/grey/enable', undefined, 1000)));
