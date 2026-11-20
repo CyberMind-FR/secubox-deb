@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-20 — metanews : blogs du Club Mediapart sans RSS + dé SecuBox dans le Hall (closes #3835)
+
+- Mediapart ne publie plus de flux RSS par blog (seul `/articles/feed`, déjà seedé). metanews 0.6.3 : nouveau type
+  de source `mediapart-blog` (+ auto-détection de l'hôte `blogs.mediapart.fr`) qui lit la liste publique des billets
+  (`li[data-type=blog]`) et en fait des articles ; dispatch `Collecter` (Sonder + test), réutilise la garde anti-SSRF
+  et le client à redirections gardées du linker RSS ; lien restreint au domaine mediapart. Seed : « Mediapart — Sudfa ».
+- Déployé gk2 (arm64) : source id=32 collectée, **10 billets sudfa ingérés** sans erreur. Option B (adaptateur maison)
+  retenue avec le propriétaire plutôt que RSSHub (pas de route Mediapart). PR #3836 fusionnée, relecture 0 bloquant.
+- Hall (webos 1.21.2) : le dé SecuBox (`sbx-dice`) remplace le médaillon rond dans l'en-tête, en v1 comme en v2 (dé
+  dans le HTML statique, `de()` rebranché). Déployé gk2. gk1/gk3 en attente de route SSH (seul gk2 est joignable d'ici).
+
 ## 2026-11-18 — SecuBox AI V2 phases 1-3 livrées (veille, corrélation, dossiers, outils) (ref #3719, #3720, #3721, #3795)
 
 - Branche #3583 (non fusionnée, 70+ commits) : 8 tâches en sous-agents relues une à une + relecture finale. Déployé : gk2
