@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-20 — SADE ACTIVE v1 livré, aucune box en ACTIVE (ref #3839)
+
+- secubox-soc 1.10.0 (PR #3848, plan `docs/superpowers/plans/2026-11-20-sade-active-v1.md`, 4 tâches par
+  sous-agents + relecture finale + vague de corrections, 349 tests). Déployé gk2 (reste `reactive`), gk1, gk3 ;
+  gk6 hors ligne (maillage 10.10.0.x muet), banc à choisir.
+- Exécuteur `secubox-soc-sade-auto.timer` (2 min, User=secubox, sudo `wafctl ban`) : n'agit qu'en `active`, sur les
+  propositions d'actord du cas sûr (ban, score 60-79, ≤ 8 adresses publiques hors liste blanche/passerelles/pairs
+  `wg_mesh.json`+threatmesh, ≤ 24 h et 4 h par défaut, apparues après le passage en ACTIVE, sans refus humain
+  sur l'empreinte ni sur une adresse). Plafond 20 adresses/h ⇒ retour OBSERVE. Audit avant geste.
+- Vérifié sur les 3 box : exécuteur `success`, 0 ligne `sade-auto` (rien fait), sudo `wafctl ban` autorisé dans
+  le confinement de l'unité (`sudo -l`). Pas encore de profil AppArmor (#3847).
+- Limite v1 : IP publique de la box et du poste admin non détectées ⇒ à mettre en liste blanche avant ACTIVE.
+
 ## 2026-11-20 — mail : antispam rspamd désactivable (closes #3845)
 
 - secubox-mail 2.16.18 (PR #3846), déployé gk2 : `mailctl antispam on|off|status` (off : milters vidés puis rspamd
