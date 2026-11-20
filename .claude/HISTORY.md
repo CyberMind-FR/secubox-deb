@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-20 — SADE : liste blanche modifiable ; banc ACTIVE = gk1 (ref #3839)
+
+- secubox-soc 1.10.1 (PR #3849), déployé gk1, gk2, gk3 : ajout/retrait audités de la liste blanche (page,
+  `POST /defense/liste-blanche[/retirer]` require_jwt, `runuser -u secubox -- python3 -m api.liste_blanche`,
+  opérateur = loginuid), bornes /24 et /48, préfixes IPv6 porteurs d'IPv4 refusés, ajout/retrait confirmés.
+  Relecture sécurité : 0 bloquant, 3 à corriger traités.
+- Banc choisi par le propriétaire : **gk1** (gk6 hors ligne). Liste blanche posée sur gk1 et gk2 :
+  82.67.100.75/32 (adresse publique du foyer, gk2 maître, poste admin) et 2a01:e0a:dec:c4e0::/64 (LAN v6).
+- gk1 encore en `observe`/`reactive` : passage en ACTIVE par sa page (geste du propriétaire), puis relevé 24 h.
+
 ## 2026-11-20 — SADE ACTIVE v1 livré, aucune box en ACTIVE (ref #3839)
 
 - secubox-soc 1.10.0 (PR #3848, plan `docs/superpowers/plans/2026-11-20-sade-active-v1.md`, 4 tâches par
