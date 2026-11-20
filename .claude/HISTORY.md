@@ -9,6 +9,16 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-20 — SADE 1.9.2 : « Gestes et blocages » fiable sur gk2 chargé (ref #3839)
+
+- Vu sur la capture du propriétaire : « relevé indisponible » + « RELEVÉ PARTIEL ». Cause : délai de lecture des
+  sources à 3 s, `/bans/history` du WAF à 1-3 s sur gk2 (pression CPU ~40 %), échec gardé au-delà de 120 s.
+- secubox-soc 1.9.2 (PR #3844), déployé gk2 (agrégateur relancé 14:49, revenu 14:51), gk1, gk3 : délai 20 s,
+  tampon 15 min daté (`releve_a`, badge « RELEVÉ DU HH:MM »), nœud nommé par le nom d'hôte (`identifiant` à part,
+  note pairs silencieux #3450), incidents regroupés par minute (×n), « …? » d'actord → « (probable) ».
+- Vérifié par le chemin public : actions 2 081, source WAF ok (3,6 s puis cache), maillage « gk2 », Hall 200.
+- Limite connue : le WAF ne remplit pas `created_at` de ses bans (heure des gestes « — »).
+
 ## 2026-11-20 — mail : Postfix et Dovecot repartent seuls après OOM, veille des services (closes #3842)
 
 - secubox-mail 2.16.17 (PR #3843), déployé gk2, gk1, gk3 par apt. Dans le LXC mail : `Restart=on-failure` sur
