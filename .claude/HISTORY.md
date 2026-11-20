@@ -9,6 +9,19 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-20 — ytsas : dépôt de cookies validé (closes #3837) ; design SADE (défense active, chapeau)
+
+- ytsas 0.8.12 (déployé gk2, LXC) : POST /cookies refuse un cookies.txt SANS cookie de session Google/YouTube
+  (export déconnecté/tronqué) — 400 `cause: sans_session`, sans écraser le coffre. Validateur `cookies_verif.py`
+  (noms seulement, domaine google/youtube exigé). Constat gk2 : fichier de 114 o accepté, verdict « inconnu ».
+  yt-dlp est déjà à jour (2026.10.26). PR #3838. Item « service host fantôme » : vérifié inexistant — ytsas tourne
+  dans son LXC (10.100.0.180:8091) ; le llama-server host (127.0.0.1:8091) est sur une autre IP, pas de collision.
+- SADE (SecuBox Active Defense Engine) : design consolidé
+  `docs/superpowers/specs/2026-11-20-sade-active-defense-design.md`, arbitrages propriétaire 20/11 : **chapeau
+  unifiant** (pas de moteur neuf, réutilise WAF/Actor Intelligence/V2/#3827/garde/threatmesh/SOC), **mode ACTIVE**
+  concilié avec « l'IA propose » (auto = déterministe réversible ; IA-inféré = proposé ; irréversible/95-100 =
+  validation humaine). Zéro offensif. En conception, à valider avant plan.
+
 ## 2026-11-20 — metanews : blogs du Club Mediapart sans RSS + dé SecuBox dans le Hall (closes #3835)
 
 - Mediapart ne publie plus de flux RSS par blog (seul `/articles/feed`, déjà seedé). metanews 0.6.3 : nouveau type
