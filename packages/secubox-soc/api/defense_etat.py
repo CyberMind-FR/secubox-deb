@@ -14,7 +14,7 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 DB_DEFAUT = "/var/lib/secubox/soc/defense.db"
 AUDIT_DEFAUT = "/var/log/secubox/audit.log"
@@ -87,6 +87,19 @@ def _operateur_sain(par: str) -> str:
     return nettoye[:64] or "inconnu"
 
 
+def ecrire_audit(corps: str) -> None:
+    """Ajoute une ligne horodatée à l'audit, flush + fsync. Lève `AuditIndisponible` en cas d'échec.
+    `corps` doit être fait de champs déjà assainis : les sauts de ligne y sont neutralisés en dernier recours."""
+    ligne = f"{_ts()} " + corps.replace("\r", "_").replace("\n", "_") + "\n"
+    try:
+        with open(os.environ.get("SECUBOX_AUDIT_LOG", AUDIT_DEFAUT), "a", encoding="utf-8") as f:
+            f.write(ligne)
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError as e:
+        raise AuditIndisponible(e.__class__.__name__) from e
+
+
 def changer_mode(valeur: str, par: str) -> None:
     """Change le mode ET écrit sa ligne d'audit dans la même transaction (BEGIN IMMEDIATE) : l'audit est écrit,
     flush + fsync, AVANT le COMMIT ; s'il échoue, ROLLBACK (le mode ne change jamais sans trace)."""
@@ -110,14 +123,7 @@ def changer_mode(valeur: str, par: str) -> None:
                        "ON CONFLICT(id) DO UPDATE SET valeur=excluded.valeur, depuis=excluded.depuis, par=excluded.par",
                        (valeur, _ts(), par))
             operateur = _operateur_sain(par)
-            ligne = f"{_ts()} sade-mode ancien={ancien} nouveau={valeur} operateur={operateur}\n"
-            try:
-                with open(os.environ.get("SECUBOX_AUDIT_LOG", AUDIT_DEFAUT), "a", encoding="utf-8") as f:
-                    f.write(ligne)
-                    f.flush()
-                    os.fsync(f.fileno())
-            except OSError as e:
-                raise AuditIndisponible(e.__class__.__name__) from e
+            ecrire_audit(f"sade-mode ancien={ancien} nouveau={valeur} operateur={operateur}")
             db.execute("COMMIT")
         except AuditIndisponible:
             if db.in_transaction:
@@ -138,3 +144,107 @@ def liste_blanche() -> List[Dict[str, Any]]:
     with closing(_connecter()) as db:
         return [{"cidr": c, "motif": m, "par": p, "ts": t, "supprimable": not a}
                 for c, m, p, t, a in db.execute("SELECT cidr, motif, par, ts, amorcee FROM liste_blanche ORDER BY rowid")]
+
+
+# ── décisions de la file d'approbation (REACTIVE) ────────────────────────────────────────────────
+
+ETATS_DECISION = ("en_attente", "en_cours", "applique", "refuse")
+
+
+class ModeRefuse(Exception):
+    """Le mode courant n'autorise pas la décision (relu dans la transaction qui la réclame)."""
+
+
+class DejaTraitee(Exception):
+    """La décision est déjà appliquée, refusée ou en cours : jamais deux fois le même geste."""
+
+
+def _cle_decision(decision_id: str):
+    menace_id, _, geste = str(decision_id).partition(":")
+    return menace_id, geste
+
+
+def decision(decision_id: str) -> Optional[Dict[str, Any]]:
+    """Ligne `decisions` d'un identifiant `ACT-NNNN:geste`, ou un état `en_attente` implicite si aucune ligne."""
+    menace_id, geste = _cle_decision(decision_id)
+    try:
+        with closing(_connecter()) as db:
+            r = db.execute("SELECT etat, cible, score, demande_ts, tranche_ts, par, resultat FROM decisions "
+                           "WHERE menace_id = ? AND geste = ?", (menace_id, geste)).fetchone()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    if r is None:
+        return {"etat": "en_attente", "cible": None, "score": None, "demande_ts": None, "tranche_ts": None,
+                "par": None, "resultat": None}
+    return dict(zip(("etat", "cible", "score", "demande_ts", "tranche_ts", "par", "resultat"), r))
+
+
+def etats_decisions() -> Dict[Tuple[str, str], str]:
+    """{(menace_id, geste): etat} de toutes les décisions enregistrées."""
+    try:
+        with closing(_connecter()) as db:
+            return {(m, g): e for m, g, e in db.execute("SELECT menace_id, geste, etat FROM decisions")}
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+
+
+def reclamer(menace_id: str, geste: str, cible: str, score: Optional[int], par: str, etat: str,
+             ligne_audit: str) -> None:
+    """Réclame une décision (`en_cours` avant un geste, ou `refuse`) dans UNE transaction BEGIN IMMEDIATE :
+    relit le mode (doit être `reactive`), refuse une décision déjà tranchée ou en cours, pose la ligne par INSERT sous
+    la contrainte UNIQUE (menace_id, geste) — ou la reprend si elle était revenue `en_attente` après un échec —, écrit
+    l'audit (flush + fsync) PUIS valide. Audit en échec : ROLLBACK, rien n'est réclamé."""
+    if etat not in ("en_cours", "refuse"):
+        raise ValueError("état de réclamation inconnu")
+    try:
+        db = _connecter()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    with closing(db):
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
+            if (r[0] if r else "observe") != "reactive":
+                db.execute("ROLLBACK")
+                raise ModeRefuse(r[0] if r else "observe")
+            ex = db.execute("SELECT etat FROM decisions WHERE menace_id = ? AND geste = ?",
+                            (menace_id, geste)).fetchone()
+            if ex is None:
+                # l'INSERT tranche le double clic : un second INSERT concurrent heurterait la contrainte UNIQUE
+                db.execute("INSERT INTO decisions(menace_id, cible, geste, score, etat, demande_ts, tranche_ts, par) "
+                           "VALUES (?,?,?,?,?,?,?,?)",
+                           (menace_id, cible, geste, score, etat, _ts(), _ts() if etat == "refuse" else None, par))
+            elif ex[0] == "en_attente":
+                db.execute("UPDATE decisions SET etat = ?, cible = ?, score = ?, demande_ts = ?, tranche_ts = ?, par = ?, "
+                           "resultat = NULL WHERE menace_id = ? AND geste = ? AND etat = 'en_attente'",
+                           (etat, cible, score, _ts(), _ts() if etat == "refuse" else None, par, menace_id, geste))
+            else:
+                db.execute("ROLLBACK")
+                raise DejaTraitee(ex[0])
+            ecrire_audit(ligne_audit)
+            db.execute("COMMIT")
+        except (AuditIndisponible, ModeRefuse, DejaTraitee):
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise
+        except sqlite3.IntegrityError as e:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise DejaTraitee("en_cours") from e
+        except sqlite3.Error as e:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise EtatIndisponible(e.__class__.__name__) from e
+
+
+def conclure(menace_id: str, geste: str, etat: str, resultat: str) -> None:
+    """Tranche une décision `en_cours` : `applique`, ou retour `en_attente` après un échec du WAF."""
+    if etat not in ("applique", "en_attente"):
+        raise ValueError("état de conclusion inconnu")
+    try:
+        with closing(_connecter()) as db:
+            db.execute("UPDATE decisions SET etat = ?, resultat = ?, tranche_ts = ? "
+                       "WHERE menace_id = ? AND geste = ? AND etat = 'en_cours'",
+                       (etat, resultat[:500], _ts() if etat == "applique" else None, menace_id, geste))
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e

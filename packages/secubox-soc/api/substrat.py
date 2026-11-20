@@ -4,7 +4,9 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """Lecteur du substrat SADE : GET sur les sockets Unix d'actord, du WAF et de threatmesh (#3839).
 
-Aucune exception ne sort de `lire` : tout échec devient `{"ok": False, "donnees": None, "erreur": <motif>}`.
+Aucune exception ne sort de `lire` ni d'`ecrire` : tout échec devient `{"ok": False, "donnees": None, "erreur": <motif>}`.
+`ecrire` (POST JSON) ne sert qu'au geste approuvé en REACTIVE (`POST /ban` du WAF) ; sur un refus, le `detail` renvoyé
+par le service est repris dans `erreur` (borné, sans caractère de contrôle).
 Seule une source inconnue lève `KeyError` (erreur de programmation, pas d'exploitation).
 """
 import http.client
@@ -37,17 +39,46 @@ def _ko(erreur: str) -> Dict[str, Any]:
     return {"ok": False, "donnees": None, "erreur": erreur}
 
 
+def _detail(corps: bytes) -> str:
+    """`detail` (ou `error`) d'un corps d'erreur JSON, assaini et borné ; chaîne vide sinon."""
+    try:
+        d = json.loads(corps.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return ""
+    v = (d.get("detail") or d.get("error")) if isinstance(d, dict) else None
+    if not isinstance(v, str):
+        return ""
+    return "".join(c if c.isprintable() else " " for c in v)[:200]
+
+
 def lire(source: str, chemin: str, entetes: Optional[Dict[str, str]] = None, delai: float = 3.0) -> Dict[str, Any]:
     """GET `chemin` sur le socket de `source`. Rend `{"ok", "donnees", "erreur"}`."""
+    return _requete("GET", source, chemin, None, entetes, delai)
+
+
+def ecrire(source: str, chemin: str, corps: Any, entetes: Optional[Dict[str, str]] = None,
+           delai: float = 10.0) -> Dict[str, Any]:
+    """POST `corps` (JSON) sur `chemin` du socket de `source`. Rend `{"ok", "donnees", "erreur"}`."""
+    return _requete("POST", source, chemin, corps, entetes, delai)
+
+
+def _requete(methode: str, source: str, chemin: str, corps_json: Any, entetes: Optional[Dict[str, str]],
+             delai: float) -> Dict[str, Any]:
     sock = SOURCES[source]  # KeyError si source inconnue
     conn = None
     try:
+        h = dict(entetes or {})
+        brut = None
+        if methode == "POST":
+            brut = json.dumps(corps_json).encode("utf-8")
+            h["Content-Type"] = "application/json"
         conn = _Connexion(sock, delai)
-        conn.request("GET", chemin, headers=dict(entetes or {}))
+        conn.request(methode, chemin, body=brut, headers=h)
         rep = conn.getresponse()
         corps = rep.read(CORPS_MAX + 1)
         if rep.status != 200:
-            return _ko(f"http {rep.status}")
+            d = _detail(corps[:CORPS_MAX]) if methode == "POST" else ""
+            return _ko(f"http {rep.status}" + (f" : {d}" if d else ""))
         if len(corps) > CORPS_MAX:
             return _ko("réponse trop grande")
         try:

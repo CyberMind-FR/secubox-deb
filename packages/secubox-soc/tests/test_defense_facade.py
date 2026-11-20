@@ -165,8 +165,9 @@ def test_lecteur_simple_ne_recoit_jamais_d_adresse(faux, client):
         assert not IP.search(corps), (route, corps)
     m = client.get("/defense/threats", headers=LECTURE).json()["menaces"]
     assert m[0]["source"] == "ACT-0001"
-    assert not any(c[2].get("X-Sbx-Vue") for c in faux.appels if c[0] == "actord")
-    assert not any(c[1] == "/proposals" and c[2].get("X-Sbx-Vue") for c in faux.appels)
+    # /actors en vue réduite ; /proposals n'existe qu'en vue complète (404 sinon) : demandée, adresses jamais copiées
+    assert not any(c[2].get("X-Sbx-Vue") for c in faux.appels if c[0] == "actord" and c[1] != "/proposals")
+    assert all(c[2].get("X-Sbx-Vue") == "complete" for c in faux.appels if c[1] == "/proposals")
 
 
 def test_vue_complete_et_identifiants_transmis(faux, client, admin):

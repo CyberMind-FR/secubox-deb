@@ -24,8 +24,10 @@ def test_les_sept_lectures_visent_la_facade():
         assert re.search(r"lire\('" + re.escape(chemin), PAGE), chemin
 
 
-def test_lecture_seule_sans_ecriture():
-    assert "POST" not in PAGE and "method" not in PAGE
+def test_ecritures_limitees_au_mode_et_a_la_file():
+    # trois écritures seulement, toutes vers la façade (require_jwt côté serveur) ; jamais de confirm() natif
+    assert sorted(re.findall(r"appel\('POST', ([^,]+),", PAGE)) == sorted(["'/mode'", "act === 'refuser' ? '/refuse' : '/approve'"])
+    assert "confirm(" not in PAGE and "alert(" not in PAGE
 
 
 def test_jeton_sous_la_cle_sbx_token():
@@ -51,10 +53,34 @@ def test_aucune_valeur_fictive_de_la_maquette():
     assert "Menaces (24 h)" not in PAGE and "Acteurs suivis" in PAGE and "Événements 24 h" in PAGE
 
 
-def test_carte_d_approbation_vide_sans_bouton():
+def test_carte_d_approbation_chargee_par_la_facade():
     m = re.search(r'<section[^>]*id="approbation".*?</section>', PAGE, re.S)
-    assert m and "Aucune proposition chargée — la file s'ouvre en mode REACTIVE" in m.group(0)
-    assert "<button" not in m.group(0) and "/proposals" not in PAGE
+    assert m and 'id="appro-corps"' in m.group(0) and "<button" not in m.group(0)  # boutons rendus par le script
+    assert "lire('/proposals')" in PAGE
+
+
+def test_boutons_d_approbation_seulement_en_reactive_et_pour_un_admin():
+    f = re.search(r"function rendAppro.*?\n  }\n", PAGE, re.S).group(0)
+    assert "propsMode === 'reactive' && propsAdmin" in f and "d.admin === true" in f
+    g = re.search(r"function ligneProp.*?\n  }\n", PAGE, re.S).group(0)
+    assert "if (actif && p.etat === 'en_attente')" in g
+    for b in ("Approuver", "Refuser", "Simuler", "Confirmer", "Annuler", "mesure exceptionnelle"):
+        assert b in g, b
+
+
+def test_causes_affichees_et_chaines_echappees():
+    f = re.search(r"function causeDe.*?\n  }\n", PAGE, re.S).group(0)
+    assert "d.cause" in f and "d.error" in f and "d.bannies" in f
+    for c in ("mode", "liste_blanche", "gestes_non_livres", "porteur_requis", "deja_traitee", "audit_indisponible"):
+        assert c + ":" in PAGE, c
+    g = re.search(r"function ligneProp.*?\n  }\n", PAGE, re.S).group(0)
+    for champ in ("p.menace_id", "p.cible", "rt.texte", "p.geste"):
+        assert re.search(r"(esc|chip)\(" + re.escape(champ), g), champ
+
+
+def test_bascule_de_mode_confirmee_dans_la_page():
+    assert 'id="mconf"' in PAGE and "appel('POST', '/mode', {mode:cible})" in PAGE
+    assert "m !== 'observe' && m !== 'reactive'" in PAGE
 
 
 def test_etats_honnetes():

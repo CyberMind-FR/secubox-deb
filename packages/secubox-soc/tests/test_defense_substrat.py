@@ -37,11 +37,17 @@ class _Unix:
         self.chemin = os.path.join(self.dossier, "s.sock")
         self.routes = {}
         self.vus = []
+        self.postes = []
         outer = self
 
         class H(BaseHTTPRequestHandler):
             def log_message(self, *a):
                 pass
+
+            def do_POST(self):
+                n = int(self.headers.get("Content-Length") or 0)
+                outer.postes.append((self.path, dict(self.headers), self.rfile.read(n)))
+                self.do_GET()
 
             def do_GET(self):
                 outer.vus.append((self.path, dict(self.headers)))
@@ -159,3 +165,34 @@ def test_socket_inaccessible_dit_acces_refuse(monkeypatch, tmp_path):
 
     monkeypatch.setattr(substrat._Connexion, "connect", refuse)
     assert substrat.lire("waf", "/bans")["erreur"] == "accès refusé"
+
+
+# ── écriture (POST) : seul le geste approuvé en REACTIVE s'en sert (tâche 6) ──
+
+def test_ecrire_post_json_et_entetes(serveur_unix):
+    serveur_unix.repond("/ban", 200, {"success": True, "ip": "203.0.113.10"})
+    r = substrat.ecrire("waf", "/ban", {"ip": "203.0.113.10", "reason": "x"}, entetes={"Authorization": "Bearer abc"})
+    assert r == {"ok": True, "donnees": {"success": True, "ip": "203.0.113.10"}, "erreur": None}
+    chemin, h, corps = serveur_unix.postes[-1]
+    assert chemin == "/ban" and h.get("Authorization") == "Bearer abc"
+    assert h.get("Content-Type") == "application/json"
+    assert json.loads(corps) == {"ip": "203.0.113.10", "reason": "x"}
+
+
+def test_ecrire_reprend_le_detail_d_erreur(serveur_unix):
+    serveur_unix.repond("/ban", 500, {"detail": "bannissement refusé : adresse privée\nforge"})
+    r = substrat.ecrire("waf", "/ban", {"ip": "203.0.113.10"})
+    assert r["ok"] is False and r["donnees"] is None
+    assert r["erreur"].startswith("http 500 : bannissement refusé : adresse privée") and "\n" not in r["erreur"]
+    serveur_unix.repond("/ban", 403, b"pas du json")
+    assert substrat.ecrire("waf", "/ban", {})["erreur"] == "http 403"
+
+
+def test_ecrire_trop_grand_delai_et_socket_absent(serveur_unix, monkeypatch, tmp_path):
+    monkeypatch.setattr(substrat, "CORPS_MAX", 10)
+    serveur_unix.repond("/ban", 200, {"a": "b" * 50})
+    assert substrat.ecrire("waf", "/ban", {})["erreur"] == "réponse trop grande"
+    serveur_unix.dort("/lent", 2.0)
+    assert substrat.ecrire("waf", "/lent", {}, delai=0.2)["erreur"] == "délai"
+    monkeypatch.setitem(substrat.SOURCES, "waf", str(tmp_path / "absent.sock"))
+    assert substrat.ecrire("waf", "/ban", {}) == {"ok": False, "donnees": None, "erreur": "socket absent"}

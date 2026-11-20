@@ -5,7 +5,9 @@
   Source-Disclosed License — All rights reserved except as expressly granted.
   See LICENCE-CMSD-1.0.md for terms.
 
-  SecuBox — « Cyber Defense Live » (SADE, #3839) : la défense vue d'un seul écran, en LECTURE SEULE sur la façade /api/v1/soc/defense.
+  SecuBox — « Cyber Defense Live » (SADE, #3839) : la défense vue d'un seul écran, sur la façade /api/v1/soc/defense.
+  Lecture partout ; deux écritures, réservées à un administrateur et confirmées dans la page : le mode (OBSERVE ↔ REACTIVE)
+  et la file d'approbation (Approuver / Refuser / Simuler, en REACTIVE seulement). La façade tranche : la page affiche la cause.
   Profil projet référence Aurora. DONNÉES RÉELLES UNIQUEMENT ; chaque carte a trois états : chargement, données, « relevé indisponible ».
   Une source muette ne s'affiche jamais comme un zéro. Les adresses n'arrivent que pour un administrateur : la page ne les suppose pas.
   `?embed=1` : page encadrée (une colonne), hauteur annoncée à l'hôte.
@@ -87,6 +89,14 @@
   .chip.cr{border-color:rgba(255,77,94,.5);color:#ffc3cd;background:rgba(255,77,94,.10)}
   /* approbation */
   .appro{border:1px dashed var(--trait2);border-radius:10px;padding:12px;color:var(--doux);font-size:.82rem;background:rgba(59,130,246,.06)}
+  .gestes,.conf,.retour{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.76rem}
+  .gestes button,.conf button,.mconf button{font-size:.72rem;border:1px solid var(--trait2);border-radius:7px;padding:3px 10px;cursor:pointer;background:rgba(59,130,246,.16)}
+  .gestes button.ap,.conf button.oui{border-color:rgba(255,77,94,.6);background:rgba(255,77,94,.16)}
+  .gestes button:disabled,.conf button:disabled{opacity:.5;cursor:not-allowed}
+  .conf{border:1px solid rgba(255,159,28,.5);border-radius:8px;padding:6px 8px;background:rgba(255,159,28,.08);color:#ffe2ad}
+  .retour.ok{color:#b9f3d5} .retour.ko{color:#ffc3cd}
+  .mconf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.76rem;border:1px solid rgba(255,159,28,.5);border-radius:8px;padding:6px 8px;background:rgba(255,159,28,.08);color:#ffe2ad}
+  .mconf[hidden]{display:none}
   /* maillage, seuils */
   .noeud{display:flex;align-items:center;gap:10px;border:1px solid var(--trait);border-radius:10px;padding:8px 10px;background:rgba(18,40,78,.4)}
   .noeud .led{width:9px;height:9px;border-radius:50%;background:var(--vert);flex:none}
@@ -100,7 +110,7 @@
 </style>
 <div class="cadre" id="cadre"><div class="app">
   <div class="tete">
-    <div class="marque"><b>SADE · Cyber Defense Live</b><small>Ce que la défense a vu, retenu et décidé — lecture seule</small></div>
+    <div class="marque"><b>SADE · Cyber Defense Live</b><small>Ce que la défense a vu, retenu et décidé — approbation en REACTIVE</small></div>
     <span class="etat attente" id="etat" aria-live="polite">lecture…</span>
     <div class="modes" role="group" aria-label="Mode de défense" id="modes">
       <button type="button" data-mode="observe" aria-pressed="false">OBSERVE<span class="m">analyse</span></button>
@@ -111,6 +121,7 @@
     <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
   </div>
   <div class="mnote" id="mnote" aria-live="polite"></div>
+  <div class="mconf" id="mconf" role="group" aria-label="Confirmation du changement de mode" hidden></div>
   <div class="bandeau info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
 
   <div class="grille">
@@ -120,7 +131,7 @@
       <section class="carte" id="flux"><h2>Flux en direct<i>acteurs et gestes</i></h2>
         <div class="corps" id="flux-corps"><div class="charge">chargement…</div></div></section>
       <section class="carte" id="approbation"><h2>File d'approbation<i>l'IA propose, l'opérateur valide</i></h2>
-        <div class="corps"><div class="appro">Aucune proposition chargée — la file s'ouvre en mode REACTIVE</div></div></section>
+        <div class="corps" id="appro-corps"><div class="charge">chargement…</div></div></section>
       <section class="carte" id="incidents"><h2>Incidents récents<i>échantillon des 7 derniers jours</i></h2>
         <div class="corps" id="incidents-corps"><div class="charge">chargement…</div></div></section>
     </div>
@@ -149,13 +160,41 @@
 
   var session = false;
   function jeton(){ try { return localStorage.getItem('sbx_token'); } catch (e) { return null; } }
-  // Une lecture : { ok, statut, d } ; d est le JSON ou null. 401/403 : session requise (jamais un faux zéro).
-  function lire(chemin){
+  // Un appel : { ok, statut, d } ; d est le JSON (objet) ou null, y compris sur une erreur (pour en lire la cause).
+  function appel(methode, chemin, corps){
     var h = {'Accept':'application/json'}, t = jeton(); if (t) h.Authorization = 'Bearer ' + t;
-    return fetch(BASE + chemin, {headers:h, credentials:'same-origin', cache:'no-store'}).then(function(r){
-      if (r.status === 401 || r.status === 403) session = true;
-      return r.ok ? r.json().then(function(d){ return {ok:true, statut:r.status, d:d}; }) : {ok:false, statut:r.status, d:null};
+    var o = {method:methode, headers:h, credentials:'same-origin', cache:'no-store'};
+    if (corps !== undefined) { h['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
+    return fetch(BASE + chemin, o).then(function(r){
+      return r.json().catch(function(){ return null; }).then(function(d){
+        return {ok:r.ok, statut:r.status, d:(d && typeof d === 'object') ? d : null};
+      });
     }).catch(function(){ return {ok:false, statut:0, d:null}; });
+  }
+  // Une lecture : 401/403 → session requise (jamais un faux zéro) ; un 200 illisible n'est pas une donnée.
+  function lire(chemin){
+    return appel('GET', chemin).then(function(r){
+      if (r.statut === 401 || r.statut === 403) session = true;
+      return (r.ok && r.d) ? r : {ok:false, statut:r.statut, d:null};
+    });
+  }
+  // Cause d'un refus de la façade, en clair ; le code `cause` reste affiché tel quel (échappé).
+  var CAUSES = {
+    mode:'le mode n\'est pas REACTIVE', liste_blanche:'adresse protégée (liste blanche) ou non publique : proposition entière refusée',
+    gestes_non_livres:'geste non livré : seul le ban est exécutable', porteur_requis:'jeton de session requis (reconnectez-vous) : le WAF refuse une écriture par cookie seul',
+    deja_traitee:'décision déjà traitée', audit_indisponible:'audit indisponible : aucun geste appliqué', base_indisponible:'base d\'état indisponible',
+    actord_indisponible:'actord injoignable : proposition non relue', proposition_inconnue:'proposition expirée ou inconnue',
+    sans_adresse:'proposition sans adresse', waf:'le WAF a refusé le ban', corps:'requête invalide'};
+  function causeDe(r){
+    var d = r.d || {}, c = typeof d.cause === 'string' ? d.cause : null, t;
+    if (c) t = (CAUSES[c] || 'refus') + ' [' + c + ']';
+    else if (r.statut === 401 || r.statut === 403) t = 'réservé à un administrateur : session administrateur requise [' + r.statut + ']';
+    else if (r.statut === 0) t = 'façade injoignable';
+    else t = 'erreur HTTP ' + r.statut;
+    if (typeof d.error === 'string' && d.error) t += ' — ' + d.error;
+    else if (!c && typeof d.detail === 'string' && d.detail) t += ' — ' + d.detail;
+    if (Array.isArray(d.bannies) && d.bannies.length) t += ' ; déjà bannies : ' + d.bannies.join(', ');
+    return t;
   }
   function src(r, nom){ var s = r.ok && r.d && r.d.sources && r.d.sources[nom]; return s ? s.ok : null; }
 
@@ -172,9 +211,38 @@
     });
     $('mnote').textContent = base === 'indisponible' ? 'Base d\'état indisponible : mode par défaut affiché, à ne pas tenir pour confirmé.' : '';
   }
+  // Changement de mode : OBSERVE ↔ REACTIVE seulement, toujours confirmé dans la page ; la façade (require_jwt) tranche.
+  var confMode = null, modeEnVol = false;
+  var TEXTES_MODE = {
+    observe:'Revenir en OBSERVE : la file d\'approbation ne pourra plus appliquer aucun geste.',
+    reactive:'Passer en REACTIVE : un administrateur pourra approuver des bans réels, un par un, chacun audité.'};
+  function rendConfMode(){
+    var c = $('mconf');
+    if (!confMode) { c.hidden = true; c.innerHTML = ''; return; }
+    c.hidden = false;
+    c.innerHTML = '<span>' + esc(TEXTES_MODE[confMode]) + ' Confirmer ?</span>' +
+      '<button type="button" data-conf="oui"' + (modeEnVol ? ' disabled' : '') + '>Confirmer</button>' +
+      '<button type="button" data-conf="non"' + (modeEnVol ? ' disabled' : '') + '>Annuler</button>';
+    hauteur();
+  }
   [].slice.call(document.querySelectorAll('#modes button:not([disabled])')).forEach(function(b){
     b.addEventListener('click', function(){
-      $('mnote').textContent = 'Mode ' + b.textContent.replace(/analyse|léger auto/, '') + ' : cette vue affiche le mode, elle ne le change pas (lecture seule).';
+      var m = b.getAttribute('data-mode');
+      if (m !== 'observe' && m !== 'reactive') return;
+      if (m === modeCourant) { confMode = null; rendConfMode(); $('mnote').textContent = 'Mode ' + m.toUpperCase() + ' déjà actif.'; return; }
+      confMode = m; $('mnote').textContent = ''; rendConfMode();
+    });
+  });
+  $('mconf').addEventListener('click', function(ev){
+    var b = ev.target.closest ? ev.target.closest('button[data-conf]') : null;
+    if (!b || modeEnVol || !confMode) return;
+    if (b.getAttribute('data-conf') !== 'oui') { confMode = null; rendConfMode(); return; }
+    var cible = confMode;
+    modeEnVol = true; rendConfMode();
+    appel('POST', '/mode', {mode:cible}).then(function(r){
+      modeEnVol = false; confMode = null; rendConfMode();
+      $('mnote').textContent = (r.ok && r.d) ? 'Mode ' + String(r.d.mode || cible).toUpperCase() + ' appliqué (audité).' : 'Mode inchangé : ' + causeDe(r);
+      if (r.ok) charge();
     });
   });
 
@@ -330,6 +398,94 @@
     pose('seuils-corps', h);
   }
 
+  // ── file d'approbation ──
+  // Boutons seulement en REACTIVE et pour un administrateur réel (`admin` rendu par la façade) ; chaque geste est
+  // confirmé dans la page. L'identifiant cliqué n'est qu'une clé : la proposition est relue côté serveur chez actord.
+  var props = {}, propsAdmin = false, propsMode = null, confAppro = null, enVol = null, retours = {}, dernieresProps = null;
+  var ETATS = {en_attente:'en attente', en_cours:'en cours', applique:'appliqué', refuse:'refusé'};
+  var LIB_GESTE = {approuver:'Approuver', refuser:'Refuser', simuler:'Simuler'};
+  function texteConf(a, p){
+    var duree = num(p.ttl_s) !== null ? nb(Math.round(p.ttl_s / 60)) + ' min' : 'durée par défaut du WAF';
+    if (a === 'approuver') return 'Bannir réellement ' + (p.cible || '—') + ' (' + duree + ') pour ' + p.menace_id + ' ?' +
+      (p.validation_humaine ? ' Mesure exceptionnelle (bande incident).' : '');
+    if (a === 'refuser') return 'Refuser la proposition ' + p.menace_id + ' ? Elle ne pourra plus être approuvée.';
+    return 'Simuler l\'approbation de ' + p.menace_id + ' : contrôles et audit seulement, aucun ban.';
+  }
+  function ligneProp(p, actif){
+    var b = NOMS_BANDE[p.bande] ? p.bande : 'inconnu', id = esc(p.id);
+    var etat = ETATS[p.etat] || 'état inconnu';
+    var cl = p.etat === 'applique' ? 'ok' : (p.etat === 'refuse' ? '' : 'wn');
+    var ds = [];
+    if (p.motif) ds.push(p.motif);
+    ds.push(num(p.ttl_s) !== null ? 'durée ' + nb(Math.round(p.ttl_s / 60)) + ' min' : 'durée par défaut du WAF');
+    var h = '<div class="ev"><span class="sc b-' + esc(b) + '">' + (num(p.score) === null ? '—' : esc(p.score)) + '</span>' +
+      '<div class="tt"><b>' + esc(p.menace_id || '—') + '</b>' + chip(p.geste || '—') + chip(etat, cl) +
+      (p.validation_humaine ? chip('mesure exceptionnelle', 'cr') : '') + '<span class="note">' + esc(p.cible || '—') + '</span></div>' +
+      '<div class="ds">' + esc(ds.join(' · ')) + '</div>';
+    if (actif && p.etat === 'en_attente') {
+      if (enVol === p.id) h += '<div class="gestes"><span class="note">envoi…</span></div>';
+      else if (confAppro && confAppro.id === p.id) h += '<div class="conf"><span>' + esc(texteConf(confAppro.a, p)) + '</span>' +
+        '<button type="button" class="oui" data-oui="1" data-id="' + id + '">Confirmer</button><button type="button" data-non="1">Annuler</button></div>';
+      else h += '<div class="gestes">' +
+        (p.executable ? '<button type="button" class="ap" data-act="approuver" data-id="' + id + '">Approuver</button>' : '<span class="note">geste non livré</span>') +
+        '<button type="button" data-act="refuser" data-id="' + id + '">Refuser</button>' +
+        (p.executable ? '<button type="button" data-act="simuler" data-id="' + id + '">Simuler</button>' : '') + '</div>';
+    }
+    var rt = retours[p.id];
+    if (rt) h += '<div class="retour ' + (rt.ok ? 'ok' : 'ko') + '">' + esc(rt.texte) + '</div>';
+    return h + '</div>';
+  }
+  function rendAppro(r){
+    dernieresProps = r;
+    if (!r.ok || !r.d) {
+      pose('appro-corps', (r.statut === 401 || r.statut === 403) ? '<div class="vide">Session requise pour consulter la file.</div>' : INDISPO);
+      return;
+    }
+    var d = r.d, l = Array.isArray(d.propositions) ? d.propositions : [];
+    propsAdmin = d.admin === true; propsMode = d.mode; props = {};
+    l.forEach(function(p){ if (p && typeof p.id === 'string') props[p.id] = p; });
+    var actif = propsMode === 'reactive' && propsAdmin && d.etat_base !== 'indisponible';
+    var notes = [];
+    if (propsMode !== 'reactive') notes.push('Mode ' + String(propsMode || 'inconnu').toUpperCase() + ' : la file se consulte, aucun geste ne s\'approuve hors REACTIVE.');
+    else if (!propsAdmin) notes.push('Approbation réservée à un administrateur : adresses masquées, aucun bouton.');
+    if (d.etat_base === 'indisponible') notes.push('Base d\'état indisponible : état des décisions inconnu, aucun geste proposé.');
+    if (d.shadow === true) notes.push('actord propose seulement (shadow) : rien n\'est appliqué sans validation.');
+    var h = notes.map(function(n){ return '<div class="note">' + esc(n) + '</div>'; }).join('');
+    if (src(r, 'actord') === false) h += INDISPO;
+    else if (!l.length) h += '<div class="vide">Aucune proposition d\'actord.</div>';
+    else h += l.filter(function(p){ return p && typeof p.id === 'string'; }).map(function(p){ return ligneProp(p, actif); }).join('');
+    pose('appro-corps', h);
+    hauteur();
+  }
+  function rechargeProps(){ return lire('/proposals').then(rendAppro); }
+  $('appro-corps').addEventListener('click', function(ev){
+    var b = ev.target.closest ? ev.target.closest('button') : null;
+    if (!b || enVol) return;
+    if (b.hasAttribute('data-non')) { confAppro = null; if (dernieresProps) rendAppro(dernieresProps); return; }
+    var id = b.getAttribute('data-id'), p = id && Object.prototype.hasOwnProperty.call(props, id) ? props[id] : null;
+    if (!p) return;
+    if (b.hasAttribute('data-act')) {
+      var a = b.getAttribute('data-act');
+      if (!LIB_GESTE[a]) return;
+      confAppro = {id:id, a:a}; delete retours[id];
+      rendAppro(dernieresProps); return;
+    }
+    if (!b.hasAttribute('data-oui') || !confAppro || confAppro.id !== id) return;
+    var act = confAppro.a;
+    enVol = id; confAppro = null; rendAppro(dernieresProps);
+    appel('POST', act === 'refuser' ? '/refuse' : '/approve', {id:id, simuler:act === 'simuler'}).then(function(r){
+      var d = r.d || {}, t;
+      if (r.ok && d) {
+        t = (d.etat === 'simule' ? 'Simulation' : d.etat === 'applique' ? 'Appliqué' : d.etat === 'refuse' ? 'Refusé' : LIB_GESTE[act]) +
+          ' : ' + (typeof d.resultat === 'string' ? d.resultat : '—');
+        if (Array.isArray(d.avertissements) && d.avertissements.length) t += ' — attention : ' + d.avertissements.join(' ; ');
+      } else t = LIB_GESTE[act] + ' refusé : ' + causeDe(r);
+      retours[id] = {ok:r.ok, texte:t};
+      enVol = null;
+      return rechargeProps();
+    });
+  });
+
   function hauteur(){
     if (window.parent === window) return;
     try { window.parent.postMessage({sbxVue: Math.ceil($('cadre').getBoundingClientRect().bottom + window.scrollY), onglet: 'defense'}, location.origin); } catch (e) {}
@@ -339,14 +495,14 @@
   function charge(){
     if (enCours) return;
     enCours = true; session = false;
-    Promise.all([lire('/status'), lire('/threats'), lire('/actions'), lire('/mesh'), lire('/incidents?jours=7'), lire('/policies')]).then(function(r){
+    Promise.all([lire('/status'), lire('/threats'), lire('/actions'), lire('/mesh'), lire('/incidents?jours=7'), lire('/policies'), lire('/proposals')]).then(function(r){
       var st = r[0];
       rendMode(st.ok && st.d ? st.d.mode : (r[5].ok && r[5].d ? r[5].d.mode : null), st.ok && st.d ? st.d.etat_base : (r[5].ok && r[5].d ? r[5].d.etat_base : null));
-      rendPhases(); rendSynthese(st); rendFlux(r[1], r[2]); rendIncidents(r[4]); rendMaillage(r[3]); rendSeuils(r[5]);
+      rendPhases(); rendSynthese(st); rendFlux(r[1], r[2]); rendIncidents(r[4]); rendMaillage(r[3]); rendSeuils(r[5]); rendAppro(r[6]);
       var lues = r.filter(function(x){ return x.ok; }).length, e = $('etat');
-      var muettes = [st, r[1], r[2], r[3], r[4]].some(function(x){ var s = x.ok && x.d && x.d.sources; return s && Object.keys(s).some(function(k){ return s[k].ok === false; }); });
-      e.className = 'etat' + (lues === 0 ? ' hors' : (lues < 6 || muettes ? ' vieux' : ''));
-      e.textContent = lues === 0 ? 'AUCUNE MESURE' : (lues < 6 || muettes ? 'RELEVÉ PARTIEL' : 'EN DIRECT');
+      var muettes = [st, r[1], r[2], r[3], r[4], r[6]].some(function(x){ var s = x.ok && x.d && x.d.sources; return s && Object.keys(s).some(function(k){ return s[k].ok === false; }); });
+      e.className = 'etat' + (lues === 0 ? ' hors' : (lues < r.length || muettes ? ' vieux' : ''));
+      e.textContent = lues === 0 ? 'AUCUNE MESURE' : (lues < r.length || muettes ? 'RELEVÉ PARTIEL' : 'EN DIRECT');
       $('session').hidden = !session;
       $('heure').textContent = new Date().toLocaleString('fr-FR', {dateStyle:'medium', timeStyle:'short'});
       enCours = false; hauteur();
