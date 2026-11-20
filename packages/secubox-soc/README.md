@@ -66,7 +66,13 @@ identiques d'une même minute (`n`) ; un outil deviné par actord (« …? ») e
 
 - `observe` (défaut) : lecture seule, aucun geste.
 - `reactive` : ouvert ; la file d'approbation agit, sur approbation d'un administrateur.
-- `active` et `aggressive` : refusés par `POST /mode` avec 409 `gestes_non_livres`.
+- `active` : ouvert. Le chemin manuel de `reactive` reste valable, et l'exécuteur automatique du cas sûr
+  (`secubox-soc-sade-auto.timer`, toutes les 2 min) bannit seul les propositions d'actord de score 60 à 94, d'au plus
+  8 adresses publiques hors liste blanche, passerelles et pairs, pour 24 h au plus (4 h par défaut), par
+  `sudo wafctl ban`. Plafond de 20 adresses par heure : au-delà, retour en `observe` et audit `sade-auto-plafond`.
+  Un refus humain (`sade-refuse`) est toujours respecté ; tout le reste attend la file d'approbation. Hors mode
+  `active`, l'exécuteur ne fait rien.
+- `aggressive` : refusé par `POST /mode` avec 409 `gestes_non_livres`.
 
 ### Données et audit
 
@@ -78,7 +84,10 @@ identiques d'une même minute (`n`) ; un outil deviné par actord (« …? ») e
   (`"soc"`), `action`, `operateur`, puis les champs propres à l'action (`empreinte`, `acteur`, `adresses`, `geste`,
   `duree`, `score`, `generation`, `issue`, `cause`, `verdict`, `operation` pour une simulation, …).
   Valeurs de `action` : `sade-mode`, `sade-simule`, `sade-approuve-demande`, `sade-approuve-resultat`, `sade-refuse`,
-  `sade-approuve-refus`, `sade-refuse-refus`, `sade-reprise`.
+  `sade-approuve-refus`, `sade-refuse-refus`, `sade-reprise`, et, pour l'exécuteur (`operateur` = `sade-auto`) :
+  `sade-auto-demande` (avant les bans), `sade-auto-resultat` (issue) et `sade-auto-plafond` (retour en observe).
+- Unité `secubox-soc-sade-auto.service` (oneshot, utilisateur `secubox`, `NoNewPrivileges=no` pour sudo, exception
+  § 10) lancée par `secubox-soc-sade-auto.timer` ; le sudoers `SBX_WAF_BANMANUEL` de secubox-waf-ng accorde `wafctl ban`.
 
 ### Compteurs de `/defense/status`
 

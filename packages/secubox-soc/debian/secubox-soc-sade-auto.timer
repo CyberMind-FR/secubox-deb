@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox SOC - SADE ACTIVE, passage de l'exécuteur toutes les 2 minutes (#3839)
+
+[Timer]
+OnBootSec=3min
+OnCalendar=*:0/2
+Persistent=false
+Unit=secubox-soc-sade-auto.service
+
+[Install]
+WantedBy=timers.target

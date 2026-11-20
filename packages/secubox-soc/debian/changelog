@@ -1,3 +1,19 @@
+secubox-soc (1.10.0-1~trixie1) trixie; urgency=medium
+
+  * SADE ACTIVE v1 (ref #3839) : le mode `active` est ouvert (`aggressive` reste
+    refusé, 409 gestes_non_livres). Le mode par défaut reste `observe`.
+  * Exécuteur automatique du cas sûr (`python3 -m api.sade_auto`) : propositions
+    d'actord de score 60 à 94, au plus 8 adresses publiques hors protégés
+    (liste blanche, passerelles, pairs), ban d'au plus 24 h (4 h par défaut) par
+    `sudo wafctl ban`. Plafond de 20 adresses par heure : au-delà, retour en
+    OBSERVE. Une empreinte refusée par un humain n'est jamais traitée. Audit
+    `sade-auto-demande`, `sade-auto-resultat`, `sade-auto-plafond`.
+  * Minuterie `secubox-soc-sade-auto.timer` (toutes les 2 min, 3 min après le
+    démarrage) et unité oneshot `secubox-soc-sade-auto.service` (exception § 10 :
+    NoNewPrivileges=no pour sudo, socle ProtectSystem=strict gardé).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 15:33:00 +0100
+
 secubox-soc (1.9.2-1~trixie1) trixie; urgency=medium
 
   * SADE (ref #3839) : « Gestes et blocages : relevé indisponible » sur gk2. La

@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 if [ "$1" = "remove" ]; then
+    systemctl disable --now secubox-soc-sade-auto.timer || true
+    systemctl stop secubox-soc-sade-auto.service || true
     systemctl stop secubox-soc.service || true
     systemctl disable secubox-soc.service || true
 fi
