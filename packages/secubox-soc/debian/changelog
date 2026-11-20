@@ -1,3 +1,14 @@
+secubox-soc (1.10.1-1~trixie1) trixie; urgency=medium
+
+  * SADE (ref #3839) : liste blanche modifiable. Ajout et retrait audités par
+    la page (carte « Seuils et bandes », administrateur), l API
+    (POST /defense/liste-blanche, /liste-blanche/retirer, require_jwt) et la
+    ligne de commande (python3 -m api.liste_blanche, compte secubox). Réseau
+    au plus /24 (IPv4) ou /48 (IPv6), entrées système non retirables. Prérequis
+    d ACTIVE : protéger l adresse publique de la box et du poste admin.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 16:08:59 +0100
+
 secubox-soc (1.10.0-1~trixie1) trixie; urgency=medium
 
   * SADE ACTIVE v1 (ref #3839) : le mode `active` est ouvert (`aggressive` reste

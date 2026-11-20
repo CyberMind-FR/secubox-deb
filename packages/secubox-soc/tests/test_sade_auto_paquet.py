@@ -65,7 +65,8 @@ def test_prerm_arrete_la_minuterie_et_le_service():
 
 def test_changelog_1_10_0():
     t = _lire(DEBIAN / "changelog")
-    assert t.startswith("secubox-soc (1.10.0-1~trixie1) trixie; urgency=medium")
+    # l'entrée de la 1.10.0 (exécuteur ACTIVE) existe ; une version plus récente peut la précéder
+    assert "\nsecubox-soc (1.10.0-1~trixie1) trixie; urgency=medium" in "\n" + t
 
 
 def test_exception_rules_code_nomme_l_unite():

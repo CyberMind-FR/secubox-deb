@@ -55,6 +55,7 @@ côté public). Elle agrège actord, le WAF et le maillage ; une source injoigna
 | `POST /mode` | `require_jwt` | Change le mode (audit écrit avant le COMMIT) |
 | `POST /approve`, `POST /refuse` | `require_jwt` | Approuve ou refuse une proposition, désignée par son empreinte ; `simuler: true` ne fait rien et ne trace que le verdict |
 | `POST /reprendre` | `require_jwt` | Débloque une décision restée `en_cours` (retour `en_attente`) |
+| `POST /liste-blanche`, `POST /liste-blanche/retirer` | `require_jwt` | Ajoute (`{cidr, motif}`) ou retire (`{cidr}`) un réseau protégé : au plus /24 en IPv4, /48 en IPv6 (jamais un préfixe IPv6 qui porte de l IPv4), 64 ajouts ; ajout et retrait confirmés dans la page ; entrées système non retirables ; audit `sade-liste-blanche-ajout` / `-retrait` avant le COMMIT. Aussi en ligne de commande : `cd /usr/lib/secubox/soc && runuser -u secubox -- python3 -m api.liste_blanche lister\|ajouter <cidr> <motif>\|retirer <cidr>` |
 
 Lectures : chaque source est lue avec un délai de 20 s. Une vue est servie 15 s depuis le cache. Quand une source
 est muette, le dernier relevé complet de moins de 15 min reste servi, avec son heure (`releve_a`) : la page affiche
