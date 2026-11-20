@@ -239,6 +239,11 @@ def etats_decisions() -> Dict[str, str]:
     return {e: ("en_attente" if _rearmable(et, t, ttl, maintenant) else et) for e, et, t, ttl in lignes}
 
 
+class Reclamation(int):
+    """Génération réclamée (un entier) portant l'horodatage `demande_ts` de la réclamation, pour `conclure`."""
+    demande_ts: Optional[str] = None
+
+
 def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Optional[int], ttl_s: Optional[int],
              par: str, etat: str, ligne_audit: str) -> int:
     """Réclame une décision (`en_cours` avant un geste, ou `refuse`) dans UNE transaction BEGIN IMMEDIATE : relit le
@@ -261,25 +266,28 @@ def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Opti
                 raise ModeRefuse(r[0] if r else "observe")
             ligne = _derniere(db, empreinte)
             maintenant = datetime.now(timezone.utc).timestamp()
-            tranche = _ts() if etat == "refuse" else None
+            demande = _ts()
+            tranche = demande if etat == "refuse" else None
             if ligne is not None and ligne["etat"] == "en_attente":
                 gen = ligne["generation"]
                 db.execute("UPDATE decisions SET etat = ?, menace_id = ?, cible = ?, score = ?, ttl_s = ?, demande_ts = ?, "
                            "tranche_ts = ?, par = ?, resultat = NULL "
                            "WHERE empreinte = ? AND generation = ? AND etat = 'en_attente'",
-                           (etat, menace_id, cible, score, ttl_s, _ts(), tranche, par, empreinte, gen))
+                           (etat, menace_id, cible, score, ttl_s, demande, tranche, par, empreinte, gen))
             elif ligne is None or _rearmable(ligne["etat"], ligne["tranche_ts"], ligne["ttl_s"], maintenant):
                 gen = 1 if ligne is None else ligne["generation"] + 1
                 # l'INSERT tranche le double clic : un second INSERT concurrent heurterait la contrainte UNIQUE
                 db.execute("INSERT INTO decisions(empreinte, generation, menace_id, cible, geste, score, ttl_s, etat, "
                            "demande_ts, tranche_ts, par) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                           (empreinte, gen, menace_id, cible, geste, score, ttl_s, etat, _ts(), tranche, par))
+                           (empreinte, gen, menace_id, cible, geste, score, ttl_s, etat, demande, tranche, par))
             else:
                 db.execute("ROLLBACK")
                 raise DejaTraitee(ligne["etat"])
             ecrire_audit(f"{ligne_audit} generation={gen}")
             db.execute("COMMIT")
-            return gen
+            rec = Reclamation(gen)
+            rec.demande_ts = demande
+            return rec
         except (AuditIndisponible, ModeRefuse, DejaTraitee):
             if db.in_transaction:
                 db.execute("ROLLBACK")
@@ -294,15 +302,21 @@ def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Opti
             raise EtatIndisponible(e.__class__.__name__) from e
 
 
-def conclure(empreinte: str, generation: int, etat: str, resultat: str) -> None:
-    """Tranche une décision `en_cours` : `applique`, ou retour `en_attente` après un échec du WAF."""
+def conclure(empreinte: str, generation: int, etat: str, resultat: str, demande_ts: Optional[str] = None) -> None:
+    """Tranche une décision `en_cours` : `applique`, ou retour `en_attente` après un échec du WAF. Avec `demande_ts`
+    (celui de la réclamation close), un fil retardataire ne peut pas clore une réclamation ultérieure de la même
+    génération (reprise)."""
     if etat not in ("applique", "en_attente"):
         raise ValueError("état de conclusion inconnu")
     try:
         with closing(_connecter()) as db:
-            db.execute("UPDATE decisions SET etat = ?, resultat = ?, tranche_ts = ? "
-                       "WHERE empreinte = ? AND generation = ? AND etat = 'en_cours'",
-                       (etat, resultat[:500], _ts() if etat == "applique" else None, empreinte, generation))
+            sql = ("UPDATE decisions SET etat = ?, resultat = ?, tranche_ts = ? "
+                   "WHERE empreinte = ? AND generation = ? AND etat = 'en_cours'")
+            args: list = [etat, resultat[:500], _ts() if etat == "applique" else None, empreinte, generation]
+            if demande_ts is not None:
+                sql += " AND demande_ts = ?"
+                args.append(demande_ts)
+            db.execute(sql, args)
     except (sqlite3.Error, OSError) as e:
         raise EtatIndisponible(e.__class__.__name__) from e
 

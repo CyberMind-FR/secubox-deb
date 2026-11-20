@@ -470,19 +470,22 @@ _INTERDITS = tuple(ipaddress.ip_network(n) for n in (
     "::/128", "::1/128", "::ffff:0:0/96", "64:ff9b::/96", "64:ff9b:1::/48", "100::/64", "2001::/32", "2002::/16",
     "fc00::/7", "fe80::/10", "fec0::/10", "ff00::/8",
 ))
-_IP_TEXTE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b|[0-9a-fA-F]{0,4}(?::[0-9a-fA-F]{0,4}){2,7}")
+_IP_TEXTE = re.compile(r"[0-9a-fA-F:.]{2,}")
 
 
 def _masquer(texte: str, masque: Dict[str, str]) -> str:
     """Remplace toute adresse d'un texte libre par `cible-N` (même numérotation que les cibles masquées)."""
     def sub(m):
         v = m.group(0)
-        if ":" in v:
+        # on jette la ponctuation de bord (« : » ou « . » de fin) puis on valide par ipaddress
+        for cand in dict.fromkeys((v, v.rstrip(".:"), v.rstrip("."), v.rstrip(":"), v.strip(".:"))):
             try:
-                ipaddress.ip_address(v)
+                ipaddress.ip_address(cand)
             except ValueError:
-                return v  # « 09:47:00 » et autres : pas une adresse
-        return masque.setdefault(v, f"cible-{len(masque) + 1}")
+                continue
+            cle = cand
+            return masque.setdefault(cle, f"cible-{len(masque) + 1}") + v[len(cand):]
+        return v  # « 09:47:00 », « 1.2 » et autres : pas une adresse
     return _IP_TEXTE.sub(sub, texte)
 
 
@@ -748,7 +751,8 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
                 else f"échec du WAF sur {echec[0]} : {echec[1]} ; déjà bannies : {', '.join(bannies) or 'aucune'}")
     avertissements = []
     try:
-        defense_etat.conclure(emp, gen, "applique" if echec is None else "en_attente", resultat)
+        defense_etat.conclure(emp, gen, "applique" if echec is None else "en_attente", resultat,
+                              getattr(gen, "demande_ts", None))
     except defense_etat.EtatIndisponible:
         # la ligne reste `en_cours` : plus aucun geste sans reprise explicite (jamais deux bans en parallèle)
         avertissements.append("décision non close en base : elle reste « en cours » (reprise possible plus tard)")

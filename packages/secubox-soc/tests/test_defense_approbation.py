@@ -645,3 +645,21 @@ def test_chronologie_masquee_pour_un_lecteur(client, monkeypatch):
     libs = [c["libelle"] for c in client.get("/defense/threats/ACT-0001", headers=LECTURE).json()["chronologie"]
             if c["capteur"] == "actord"]
     assert libs == ["vu depuis 203.0.113.10 et 2001:db8::7 à 09:47:00"]
+
+
+def test_masquer_ipv6_suivie_de_deux_points_et_ipv4_mappee():
+    from api import defense
+    assert defense._masquer("adresse 2001:db8::5: refus", {}) == "adresse cible-1: refus"
+    m = {}
+    assert defense._masquer("vu ::ffff:203.0.113.9 puis 64:ff9b::198.51.100.7.", m) == "vu cible-1 puis cible-2."
+    assert defense._masquer("à 09:47:00 depuis 203.0.113.9.", {}) == "à 09:47:00 depuis cible-1."
+
+
+def test_conclure_lie_a_la_demande():
+    defense_etat.changer_mode("reactive", "op")
+    rec = _reclame()
+    assert rec.demande_ts
+    defense_etat.conclure(P1, int(rec), "applique", "x", "1999-01-01T00:00:00Z")  # fil retardataire d'une autre demande
+    assert defense_etat.etats_decisions()[P1] == "en_cours"
+    defense_etat.conclure(P1, int(rec), "applique", "ok", rec.demande_ts)
+    assert defense_etat.etats_decisions()[P1] == "applique"
