@@ -1,3 +1,14 @@
+secubox-ad-guard (1.33.1-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (ref #3850) : drop-in Unbound rendu dans un ordre TRIÉ
+    (évasions, quarantaines, noms refusés). L ordre des listes de la garde
+    variait : deux vues sbx-evasion permutaient, le drop-in était réécrit à
+    chaque passage, ce qui relançait unbound-checkconf et la compilation
+    complète des listes DNS (~8 min de processeur, gk2 saturé). Contenu
+    identique désormais tant que l état ne change pas (pas de réécriture).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 17:20:38 +0100
+
 secubox-ad-guard (1.33.0-1~trixie1) trixie; urgency=medium
 
   * #3795 : GET /dnsguard/alertes?depuis=&max= — alertes du capteur DNS pour
