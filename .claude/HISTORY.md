@@ -9,6 +9,17 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-20 — mail : Postfix et Dovecot repartent seuls après OOM, veille des services (closes #3842)
+
+- secubox-mail 2.16.17 (PR #3843), déployé gk2, gk1, gk3 par apt. Dans le LXC mail : `Restart=on-failure` sur
+  `postfix@` et `dovecot` (5 essais / 10 min) ; `OOMScoreAdjust=500` sur rspamd et clamav-daemon (un ajustement
+  négatif est refusé dans ce LXC sans privilèges, vérifié). `mailctl veille` + `secubox-mail-veille.timer` (5 min,
+  `TimeoutStartSec=2min`, socle compatible lxc-attach, exception RULES-CODE § 10) : relance un service en échec,
+  unité en échec si le conteneur est injoignable ou si le service ne repart pas.
+- Vérifié sur gk2 : SIGKILL du maître Postfix → relancé par systemd en 14 s, SMTP 250 ; veille `success` sur les
+  trois box (gk1 sans conteneur mail, gk3 conteneur arrêté : rien à faire). Relecture sécurité : 0 bloquant, 5 points
+  traités. Reste ouvert dans #3760 : budget mémoire du conteneur (rspamd ≈ 300 Mo).
+
 ## 2026-11-20 — bans.jsonl compacté en service (closes #3816) ; Postfix gk2 rétabli après 31 h (ref #3842)
 
 - #3816 : toolbox-ng 0.17.2 / waf-ng 1.42.1 / metrics 1.29.13 / live 0.1.8 installés sur gk2 depuis le 19/11 08:45,
