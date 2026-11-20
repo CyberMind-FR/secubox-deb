@@ -48,7 +48,7 @@ def faux(monkeypatch):
     f.rep = {
         ("actord", "/actors"): _j("actord_actors.json"),
         ("actord", "/proposals"): _j("actord_proposals.json"),
-        ("actord", "/overview"): {"recents": [
+        ("actord", "/overview"): {"activite_24h": [1, 2, 3] + [0] * 21, "recents": [
             {"ts": int(time.time()) - 60, "heure": "09:47", "acteur": "ACT-0001", "type": "sqli", "module": "waf", "score": 86},
             {"ts": int(time.time()) - 40 * 86400, "heure": "08:00", "acteur": "ACT-0002", "type": "scan", "module": "waf", "score": 31},
         ]},
@@ -89,7 +89,7 @@ def test_sans_jeton_401(faux, route, monkeypatch):
 def test_status_nominal(faux, client, admin):
     j = client.get("/defense/status", headers=LECTURE).json()
     assert j["mode"] == "OBSERVE"
-    assert (j["menaces_24h"], j["blocages_actifs"], j["a_valider"]) == (2, 2, 0)
+    assert (j["menaces_suivies"], j["blocages_actifs"], j["a_valider"]) == (2, 2, 0)
     assert (j["score_max"], j["bande_max"]) == (86, "usager")
     assert all(j["sources"][s]["ok"] is True for s in ("actord", "waf", "threatmesh"))
 
@@ -138,7 +138,7 @@ def test_substrat_muet_ne_rend_jamais_500(client):
         assert r.status_code in (200, 404, 503), route
     j = client.get("/defense/status", headers=LECTURE).json()
     assert all(v["ok"] is False for v in j["sources"].values())
-    assert j["menaces_24h"] is None and j["score_max"] is None
+    assert j["menaces_suivies"] is None and j["evenements_24h"] is None and j["score_max"] is None
     assert j["blocages_actifs"] is None and j["a_valider"] is None and j["bande_max"] is None
 
 
@@ -188,10 +188,69 @@ def test_cache_15s_et_double_tampon(faux, client, admin):
         e["retry_at"] = 0.0
     faux.rep.clear()
     j = client.get("/defense/status", headers=LECTURE).json()
-    assert j["menaces_24h"] == 2 and j["sources"]["actord"]["ok"] is True
+    assert j["menaces_suivies"] == 2 and j["sources"]["actord"]["ok"] is True
     # au-delà de 120 s, on dit la vérité
     for e in defense._CACHE.values():
         e["retry_at"] = 0.0
         e["complet_a"] -= 200
     j = client.get("/defense/status", headers=LECTURE).json()
-    assert j["menaces_24h"] is None and j["sources"]["actord"]["ok"] is False
+    assert j["menaces_suivies"] is None and j["sources"]["actord"]["ok"] is False
+
+
+def test_evenements_24h_depuis_overview(faux, client, admin):
+    assert client.get("/defense/status", headers=LECTURE).json()["evenements_24h"] == 6
+
+
+def test_compteurs_non_plafonnes_au_dela_de_200(faux, client, admin):
+    faux.rep[("actord", "/actors")] = [{"id": f"ACT-{i:04d}", "priority": 96 if i % 2 else 10, "last": "09:00"}
+                                       for i in range(300)]
+    j = client.get("/defense/status", headers=LECTURE).json()
+    assert j["menaces_suivies"] == 300 and j["a_valider"] == 150
+    assert len(client.get("/defense/threats", headers=LECTURE).json()["menaces"]) == 200
+
+
+def test_incident_bloque_seulement_si_ban_actif(faux, client, admin):
+    def issues():
+        defense._CACHE.clear()
+        return [i["issue"] for i in client.get("/defense/incidents?jours=7", headers=LECTURE).json()["incidents"]]
+    assert issues() == ["bloqué"]  # ACT-0001 : 203.0.113.10 est dans les bans actifs
+    faux.rep[("waf", "/bans")] = {"bans": [], "total": 0}
+    assert issues() == ["proposé"]  # proposition shadow, rien d'appliqué
+    faux.rep[("actord", "/proposals")] = {"shadow": True, "propositions": []}
+    assert issues() == ["observé"]
+
+
+def test_detail_sert_le_tampon_quand_actord_tombe(faux, client, admin):
+    assert client.get("/defense/threats/ACT-0001", headers=LECTURE).status_code == 200
+    for e in defense._CACHE.values():
+        e["retry_at"] = 0.0
+    faux.rep.clear()
+    r = client.get("/defense/threats/ACT-0001", headers=LECTURE)
+    assert r.status_code == 200 and r.json()["id"] == "ACT-0001"
+    defense._CACHE.clear()
+    assert client.get("/defense/threats/ACT-0001", headers=LECTURE).status_code == 503
+
+
+def test_id_hors_forme_refuse_sans_toucher_au_cache(faux, client, admin):
+    assert client.get("/defense/threats/n-importe-quoi", headers=LECTURE).status_code == 404
+    assert not defense._CACHE
+
+
+def test_cache_evince_les_plus_anciennes_sans_tout_vider(faux, client, admin, monkeypatch):
+    monkeypatch.setattr(defense, "CACHE_MAX", 3)
+    client.get("/defense/status", headers=LECTURE)
+    for i in range(1, 5):
+        client.get(f"/defense/threats/ACT-000{i}", headers=LECTURE)
+    assert 0 < len(defense._CACHE) <= 3
+
+
+def test_cache_admin_puis_lecteur_simple_sans_adresse(faux, client, monkeypatch):
+    async def ok(request, creds=None):
+        return {"sub": "admin"}
+    monkeypatch.setattr(defense, "require_jwt", ok)
+    assert "203.0.113.10" in client.get("/defense/threats", headers=LECTURE).text
+    async def non(request, creds=None):
+        raise defense.HTTPException(status_code=403)
+    monkeypatch.setattr(defense, "require_jwt", non)
+    corps = client.get("/defense/threats", headers=LECTURE).text
+    assert not IP.search(corps)

@@ -11,10 +11,18 @@ Confidentialité (#2201/#2274) : une adresse d'acteur ne sort QUE pour un admini
 Tout autre lecteur reçoit la vue réduite d'actord et des cibles masquées ; les adresses ne sont même pas copiées
 dans sa réponse. Les identifiants de l'appelant (Authorization, Cookie) sont retransmis tels quels au WAF et à
 threatmesh : la façade ne forge ni ne conserve aucun jeton.
+
+Contrat de `sources.<x>.ok` : True ou False quand la route a consulté la source, `None` quand elle ne l'a pas
+consultée (seule `/status` lit les trois). Un front ne doit pas traiter `None` comme une panne : c'est « non lu ».
+
+Compteurs : `menaces_suivies` = acteurs connus d'actord (aucune fenêtre de 24 h n'existe dans /actors, qui ne porte que
+« HH:MM »), compté avant toute troncature ; `evenements_24h` = somme de `activite_24h` de /overview.
 """
 import asyncio
 import hashlib
+import re
 import threading
+from collections import OrderedDict
 import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -34,7 +42,8 @@ TAMPON_S = 120.0      # un relevé complet de moins de 120 s n'est pas écrasé 
 MENACES_MAX = 200
 CACHE_MAX = 256       # entrées au plus : la clé contient un condensat des identifiants de l'appelant
 
-_CACHE: Dict[Any, Dict[str, Any]] = {}
+_CACHE: "OrderedDict[Any, Dict[str, Any]]" = OrderedDict()
+_ID_ACTEUR = re.compile(r"^ACT-\d{1,9}$")  # forme des identifiants d'actord (RELEVE.md)
 _VERROU = threading.Lock()
 _SOURCES = ("actord", "waf", "threatmesh")
 
@@ -82,8 +91,9 @@ def _servi(cle: Tuple, calcul: Callable[[], Dict[str, Any]]) -> Dict[str, Any]:
         if not complet and e is not None and e["complet"] and maintenant - e["complet_a"] < TAMPON_S:
             e["retry_at"] = maintenant + TTL_S
             return e["payload"]
-        if len(_CACHE) >= CACHE_MAX and cle not in _CACHE:
-            _CACHE.clear()
+        _CACHE.pop(cle, None)
+        while len(_CACHE) >= CACHE_MAX:
+            _CACHE.popitem(last=False)  # évince la plus ancienne, jamais tout le cache
         _CACHE[cle] = {"payload": payload, "complet": complet, "complet_a": maintenant if complet else None,
                        "retry_at": maintenant + TTL_S}
         return payload
@@ -191,12 +201,13 @@ def _menace(a: Dict[str, Any], admin: bool, ips: Dict[str, List[str]], hist: Dic
     }
 
 
-def _menaces(ctx: Dict[str, Any], admin: bool) -> List[Dict[str, Any]]:
+def _menaces(ctx: Dict[str, Any], admin: bool, borne: bool = False) -> List[Dict[str, Any]]:
+    """Menaces triées par score décroissant. `borne` tronque à MENACES_MAX (affichage seulement, jamais les compteurs)."""
     ips, hist = _ips_par_acteur(ctx), _historique_par_ip(ctx)
     acteurs = [a for a in _liste(ctx["actord/actors"]) if isinstance(a, dict) and isinstance(a.get("id"), str)]
     m = [_menace(a, admin, ips, hist) for a in acteurs]
     m.sort(key=lambda x: (x["score"] is None, -(x["score"] or 0)))
-    return m[:MENACES_MAX]
+    return m[:MENACES_MAX] if borne else m
 
 
 # ── routes ────────────────────────────────────────────────────────────────────────────────────────
@@ -206,14 +217,19 @@ async def status(request: Request, admin: bool = Depends(_est_admin)):
     entetes = _entetes_appelant(request)
 
     def calcul():
-        ctx = _contexte(admin, entetes, actord=("/actors", "/proposals"), waf=("/bans",), mesh=("/status",))
+        ctx = _contexte(admin, entetes, actord=("/actors", "/proposals", "/overview"), waf=("/bans",),
+                        mesh=("/status",))
         src = _sources(ctx["lues"])
-        out: Dict[str, Any] = {"mode": MODE, "menaces_24h": None, "blocages_actifs": None, "a_valider": None,
+        out: Dict[str, Any] = {"mode": MODE, "menaces_suivies": None, "evenements_24h": None, "blocages_actifs": None, "a_valider": None,
                                "score_max": None, "bande_max": None, "sources": src}
         if src["actord"]["ok"]:
             m = _menaces(ctx, admin)
             scores = [x["score"] for x in m if x["score"] is not None]
-            out["menaces_24h"] = len(m)
+            out["menaces_suivies"] = len(m)
+            act = (ctx["actord/overview"]["donnees"] or {}).get("activite_24h") if ctx["actord/overview"]["ok"] and \
+                isinstance(ctx["actord/overview"]["donnees"], dict) else None
+            if isinstance(act, list) and all(isinstance(n, int) and not isinstance(n, bool) for n in act):
+                out["evenements_24h"] = sum(act)
             out["a_valider"] = sum(1 for x in m if echelle.exige_validation(x["bande"]))
             if scores:
                 out["score_max"] = max(scores)
@@ -232,23 +248,27 @@ async def threats(request: Request, admin: bool = Depends(_est_admin)):
 
     def calcul():
         ctx = _contexte(admin, entetes)
-        return {"menaces": _menaces(ctx, admin), "sources": _sources(ctx["lues"])}
+        return {"menaces": _menaces(ctx, admin, borne=True), "sources": _sources(ctx["lues"])}
 
     return await asyncio.to_thread(_servi, _cle("threats", admin, entetes), calcul)
 
 
 @router.get("/threats/{menace_id}", dependencies=[Depends(require_lecture)])
 async def threat(menace_id: str, request: Request, admin: bool = Depends(_est_admin)):
+    if not _ID_ACTEUR.match(menace_id):  # clé de cache contrôlée par l'appelant : forme validée avant tout
+        raise HTTPException(status_code=404, detail="menace inconnue")
     entetes = _entetes_appelant(request)
 
     def calcul():
         ctx = _contexte(admin, entetes)
         src = _sources(ctx["lues"])
+        # Les erreurs voyagent dans la charge (`_erreur`) pour passer par le double tampon : un relevé complet
+        # récent est servi à la place d'un 503.
         if not src["actord"]["ok"]:
-            raise HTTPException(status_code=503, detail="actord injoignable")
+            return {"_erreur": (503, "actord injoignable"), "sources": src}
         trouvee = next((x for x in _menaces(ctx, admin) if x["id"] == menace_id), None)
         if trouvee is None:
-            raise HTTPException(status_code=404, detail="menace inconnue")
+            return {"_erreur": (404, "menace inconnue"), "sources": src}
         chrono = []
         for p in _liste(ctx["actord/proposals"], "propositions"):
             if isinstance(p, dict) and p.get("actor") == menace_id:
@@ -267,7 +287,10 @@ async def threat(menace_id: str, request: Request, admin: bool = Depends(_est_ad
         chrono.sort(key=lambda c: str(c["ts"] or ""))
         return {**trouvee, "chronologie": chrono, "sources": src}
 
-    return await asyncio.to_thread(_servi, _cle("threat:" + menace_id, admin, entetes), calcul)
+    rep_ = await asyncio.to_thread(_servi, _cle("threat:" + menace_id, admin, entetes), calcul)
+    if "_erreur" in rep_:
+        raise HTTPException(status_code=rep_["_erreur"][0], detail=rep_["_erreur"][1])
+    return rep_
 
 
 @router.get("/actions", dependencies=[Depends(require_lecture)])
@@ -332,9 +355,13 @@ async def incidents(request: Request, jours: int = Query(7, ge=1, le=90), admin:
     entetes = _entetes_appelant(request)
 
     def calcul():
-        ctx = _contexte(admin, entetes, actord=("/overview", "/proposals"), waf=())
+        ctx = _contexte(admin, entetes, actord=("/overview", "/proposals"), waf=("/bans",))
         src = _sources(ctx["lues"])
-        bloques = set(_ips_par_acteur(ctx))
+        propose = _ips_par_acteur(ctx)
+        bannies = {b.get("ip") for b in _liste(ctx["waf/bans"], "bans") if isinstance(b, dict)}
+        # « bloqué » seulement si une adresse de l'acteur est dans les bans ACTIFS du WAF ; une proposition
+        # d'actord (shadow ou non) n'est qu'« proposé ».
+        bloques = {a for a, ips in propose.items() if bannies & set(ips)}
         depuis = time.time() - jours * 86400
         out = []
         for e in _liste(ctx["actord/overview"], "recents"):
@@ -347,7 +374,8 @@ async def incidents(request: Request, jours: int = Query(7, ge=1, le=90), admin:
             b = echelle.bande(sc)
             out.append({"ts": _iso(ts), "titre": f"{e.get('acteur')} : {e.get('type')} ({e.get('module')})",
                         "score": sc, "bande": b,
-                        "issue": "bloqué" if e.get("acteur") in bloques else "observé"})
+                        "issue": "bloqué" if e.get("acteur") in bloques
+                        else "proposé" if e.get("acteur") in propose else "observé"})
         return {"incidents": out, "sources": src}
 
     return await asyncio.to_thread(_servi, _cle(f"incidents:{jours}", admin, entetes), calcul)
