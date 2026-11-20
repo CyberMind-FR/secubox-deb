@@ -54,7 +54,9 @@ if [ "$1" = "configure" ]; then
     # retour arriere ; conteneurs absents ou arretes : ne fait rien.
     if [ -x /usr/sbin/mailctl ] && [ -d /run/systemd/system ]; then
         # Services du conteneur sans bac à sable systemd (#3667) : dovecot, clamav-daemon (redis-server : mailctl redis).
-        /usr/sbin/mailctl services >/dev/null 2>&1 || true
+        # + relance de Postfix/Dovecot et priorité OOM (#3842) ; borné : un lxc-attach figé ne gèle pas dpkg.
+        timeout 300 /usr/sbin/mailctl services >/dev/null 2>&1 \
+            || echo "secubox-mail: surcharges du conteneur non posées (conteneur arrêté ?) — mailctl services"
         /usr/sbin/mailctl webmail-sso >/dev/null 2>&1 || true
         # OpenPGP par Mailvelope (#1738) : la clé reste dans le navigateur.
         /usr/sbin/mailctl webmail-openpgp >/dev/null 2>&1 || true

@@ -102,3 +102,31 @@ setup() {
   grep -q 'enable --now secubox-mail-veille.timer' "$BATS_TEST_DIRNAME/../debian/postinst"
   grep -q 'ExecStart=/usr/sbin/mailctl veille' "$BATS_TEST_DIRNAME/../debian/secubox-mail-veille.service"
 }
+
+@test "veille : conteneur injoignable (attache en échec), la veille échoue au lieu de se taire" {
+  lxc_attach() { echo "ATTACH $*" >> "$CALLS"; return 1; }; export -f lxc_attach
+  run cmd_veille
+  [ "$status" -ne 0 ]
+  grep -q 'LOGGER .*injoignable' "$CALLS"
+}
+
+@test "mailctl services continue (sans bac à sable, #3667) même si la relance échoue" {
+  cmd_services_relance() { return 1; }; export -f cmd_services_relance
+  run cmd_services
+  [ "$status" -eq 0 ]
+  grep -q 'dovecot.service.d/10-lxc-sans-sandbox.conf' "$CALLS"
+}
+
+@test "l'unité de veille est bornée dans le temps et porte le socle compatible lxc-attach" {
+  u="$BATS_TEST_DIRNAME/../debian/secubox-mail-veille.service"
+  for d in TimeoutStartSec=2min UMask=0027 PrivateTmp=true ProtectHome=true ProtectKernelLogs=true \
+           ProtectKernelModules=true RestrictRealtime=true SystemCallArchitectures=native; do
+    grep -qx "$d" "$u"
+  done
+  grep -q 'secubox-mail-veille.service' "$BATS_TEST_DIRNAME/../../../.claude/RULES-CODE.md"
+}
+
+@test "le postinst borne mailctl services et dit quand les surcharges ne sont pas posées" {
+  grep -q 'timeout 300 /usr/sbin/mailctl services' "$BATS_TEST_DIRNAME/../debian/postinst"
+  grep -q 'surcharges du conteneur non posées' "$BATS_TEST_DIRNAME/../debian/postinst"
+}

@@ -11,5 +11,13 @@ After=secubox-mail.service
 Type=oneshot
 # Root : entre dans le conteneur mail (lxc-attach). Relance un service en échec ; sort en erreur s'il ne repart pas.
 ExecStart=/usr/sbin/mailctl veille
-ProtectHome=true
+# Un lxc-attach figé (conteneur saturé, le cas visé) ne doit pas bloquer la veille : l'unité échoue et se voit.
+TimeoutStartSec=2min
+# Socle compatible avec lxc-attach (exception écrite dans RULES-CODE § 10, précédent secubox-searxng-reload).
+UMask=0027
 PrivateTmp=true
+ProtectHome=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+RestrictRealtime=true
+SystemCallArchitectures=native
