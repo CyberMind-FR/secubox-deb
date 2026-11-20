@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Mail — veille des services de courrier toutes les 5 min (#3842)
+
+[Timer]
+OnBootSec=5min
+# Sur l horloge (#3692) : une minuterie relative à la dernière exécution peut s arrêter après une réactivation.
+OnCalendar=*:0/5
+Persistent=false
+
+[Install]
+WantedBy=timers.target

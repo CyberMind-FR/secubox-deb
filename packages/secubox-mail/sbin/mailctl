@@ -541,6 +541,7 @@ SERVICES_SANS_SANDBOX="dovecot clamav-daemon"
 cmd_services() {
     local svc
     lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
+    cmd_services_relance || return 1                     # avant les relances ci-dessous : clamav-daemon prend sa priorité OOM
     for svc in $SERVICES_SANS_SANDBOX; do
         lxc_attach "$CONTAINER" sh -c "systemctl cat ${svc}.service >/dev/null 2>&1" || continue   # service absent du conteneur
         lxc_service_sans_sandbox "$svc" "$CONTAINER" || return 1
@@ -548,6 +549,90 @@ cmd_services() {
             || warn "${svc} n'a pas demarre dans '$CONTAINER'"
     done
     log "services du conteneur sans bac a sable : $SERVICES_SANS_SANDBOX (redis-server : mailctl redis)"
+}
+
+# Relance et priorité mémoire des services du conteneur mail (#3842). Le 19/11 sur gk2, l'OOM du conteneur (1 Go, sans
+# swap) a tué le maître de Postfix : postfix@- est resté en échec 31 h, sans courrier ni alerte. Postfix et Dovecot
+# repartent seuls après un échec. Le conteneur sans privilèges refuse un OOMScoreAdjust NÉGATIF (systemd ne
+# démarrerait plus le service) : on désigne donc rspamd et clamav-daemon comme premières victimes (+500).
+SERVICES_RELANCE="postfix@ dovecot"
+SERVICES_SACRIFIES="rspamd clamav-daemon"
+OOM_SACRIFIE=500
+
+# Pose une surcharge systemd nommée dans le conteneur ; le contenu arrive sur l'entrée standard.
+_lxc_surcharge() {
+    local svc="${1:-}" nom="${2:-}" cont="${3:-$CONTAINER}"
+    case "$svc" in
+        ""|*[!a-zA-Z0-9@._-]*) error "nom de service invalide : '$svc'"; return 1 ;;
+    esac
+    case "$nom" in
+        ""|*[!a-z0-9-]*) error "nom de surcharge invalide : '$nom'"; return 1 ;;
+    esac
+    lxc_attach "$cont" sh -c "mkdir -p /etc/systemd/system/${svc}.service.d && cat > /etc/systemd/system/${svc}.service.d/${nom}.conf"
+}
+
+lxc_service_relance() {
+    local svc="${1:-}" cont="${2:-$CONTAINER}"
+    _lxc_surcharge "$svc" 20-secubox-relance "$cont" <<'EOF_RELANCE' || return 1
+# secubox-mail (#3842) : repartir seul après un échec (OOM du conteneur).
+[Unit]
+StartLimitIntervalSec=10min
+StartLimitBurst=5
+
+[Service]
+Restart=on-failure
+RestartSec=10s
+EOF_RELANCE
+}
+
+lxc_service_sacrifie() {
+    local svc="${1:-}" cont="${2:-$CONTAINER}"
+    printf '%s\n' "# secubox-mail (#3842) : tué en premier quand la mémoire du conteneur manque, avant Postfix et Dovecot." \
+        "[Service]" "OOMScoreAdjust=$OOM_SACRIFIE" \
+        | _lxc_surcharge "$svc" 20-secubox-oom "$cont"
+}
+
+cmd_services_relance() {
+    local svc unite
+    lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
+    for svc in $SERVICES_RELANCE; do
+        unite="$svc"; [ "${svc%@}" != "$svc" ] && unite="${svc}-"          # gabarit : une instance suffit pour le test
+        lxc_attach "$CONTAINER" sh -c "systemctl cat ${unite}.service >/dev/null 2>&1" || continue
+        lxc_service_relance "$svc" "$CONTAINER" || return 1
+    done
+    for svc in $SERVICES_SACRIFIES; do
+        lxc_attach "$CONTAINER" sh -c "systemctl cat ${svc}.service >/dev/null 2>&1" || continue
+        lxc_service_sacrifie "$svc" "$CONTAINER" || return 1
+    done
+    lxc_attach "$CONTAINER" systemctl daemon-reload >/dev/null 2>&1 || warn "daemon-reload refuse dans '$CONTAINER'"
+    # La priorité OOM se prend au démarrage : rspamd repart (quelques secondes) ; clamav-daemon est relancé par cmd_services.
+    lxc_attach "$CONTAINER" sh -c "systemctl is-active --quiet rspamd && systemctl restart rspamd" >/dev/null 2>&1 || true
+    log "relance automatique : $SERVICES_RELANCE ; premiers tués par l'OOM : $SERVICES_SACRIFIES"
+}
+
+# Veille des services de courrier (#3842), lancée par secubox-mail-veille.timer : un service en échec est relancé une
+# fois et journalisé ; s'il ne repart pas, la veille sort en erreur (unité en échec, visible du relevé de flotte).
+SERVICES_VEILLES="postfix@- dovecot rspamd"
+cmd_veille() {
+    local svc ko=""
+    if ! lxc_running "$CONTAINER"; then
+        log "conteneur mail '$CONTAINER' a l'arret : rien a veiller"
+        return 0
+    fi
+    for svc in $SERVICES_VEILLES; do
+        lxc_attach "$CONTAINER" sh -c "systemctl cat ${svc}.service >/dev/null 2>&1" || continue
+        lxc_attach "$CONTAINER" systemctl is-failed --quiet "$svc" || continue
+        warn "${svc} en echec dans '$CONTAINER' : relance"
+        logger -t secubox-mail -p mail.warning "veille : ${svc} en echec dans le conteneur ${CONTAINER}, relance (#3842)" 2>/dev/null || true
+        lxc_attach "$CONTAINER" sh -c "systemctl reset-failed ${svc}; systemctl start ${svc}" >/dev/null 2>&1 || true
+        lxc_attach "$CONTAINER" systemctl is-active --quiet "$svc" || ko="$ko $svc"
+    done
+    if [ -n "$ko" ]; then
+        error "toujours en echec apres relance :$ko"
+        logger -t secubox-mail -p mail.err "veille : toujours en echec apres relance :$ko (#3842)" 2>/dev/null || true
+        return 1
+    fi
+    log "services de courrier en service : $SERVICES_VEILLES"
 }
 
 cmd_antispam_apprentissage() {
@@ -2063,6 +2148,7 @@ case "${1:-}" in
     antispam-apprentissage) cmd_antispam_apprentissage ;;
     redis)       cmd_redis ;;
     services)    cmd_services ;;
+    veille)      cmd_veille ;;
     webmail)     cmd_webmail ;;
     sync)        cmd_sync ;;
     # Help

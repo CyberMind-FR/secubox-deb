@@ -1,3 +1,15 @@
+secubox-mail (2.16.17-1~trixie1) trixie; urgency=medium
+
+  * Postfix et Dovecot du conteneur repartent seuls après un échec (surcharge
+    Restart=on-failure, 5 essais / 10 min) ; rspamd et clamav-daemon tués en
+    premier par l'OOM (OOMScoreAdjust=500). Sur gk2, l'OOM du conteneur avait
+    tué le maître de Postfix le 19/11 : 31 h sans courrier ni alerte (ref #3842).
+  * mailctl veille + secubox-mail-veille.timer (5 min) : un service de courrier
+    en échec est relancé et journalisé ; s'il ne repart pas, l'unité est en
+    échec et visible dans le relevé de flotte (ref #3842).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 14:30:03 +0100
+
 secubox-mail (2.16.16-1~trixie1) trixie; urgency=medium
 
   * Minuteries autocrypt-sync et imap-sync (sans cible) : conteneur mail
