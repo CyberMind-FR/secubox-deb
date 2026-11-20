@@ -25,8 +25,10 @@ def test_les_sept_lectures_visent_la_facade():
 
 
 def test_ecritures_limitees_au_mode_et_a_la_file():
-    # trois écritures seulement, toutes vers la façade (require_jwt côté serveur) ; jamais de confirm() natif
-    assert sorted(re.findall(r"appel\('POST', ([^,]+),", PAGE)) == sorted(["'/mode'", "ROUTE_GESTE[act]"])
+    # écritures limitées, toutes vers la façade (require_jwt côté serveur) : mode, file, liste blanche (#3839) ;
+    # jamais de confirm() natif
+    assert sorted(re.findall(r"appel\('POST', ([^,]+),", PAGE)) == sorted(
+        ["'/mode'", "ROUTE_GESTE[act]", "'/liste-blanche'", "'/liste-blanche/retirer'"])
     assert "ROUTE_GESTE = {approuver:'/approve', simuler:'/approve', refuser:'/refuse', reprendre:'/reprendre'}" in PAGE
     assert "confirm(" not in PAGE and "alert(" not in PAGE
 

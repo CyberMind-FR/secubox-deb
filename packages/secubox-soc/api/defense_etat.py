@@ -8,6 +8,7 @@ Une connexion par appel (jamais partagée entre fils). Migrations numérotées `
 appliquées au premier usage de façon idempotente. Chemins surchargeables pour les tests :
 `SECUBOX_SOC_DEFENSE_DB` et `SECUBOX_AUDIT_LOG` (lus à chaque appel).
 """
+import ipaddress
 import json
 import os
 import re
@@ -182,6 +183,94 @@ def liste_blanche() -> List[Dict[str, Any]]:
         return [{"cidr": c, "motif": m, "par": p, "ts": t, "supprimable": not a}
                 for c, m, p, t, a in db.execute("SELECT cidr, motif, par, ts, amorcee FROM liste_blanche ORDER BY rowid")]
 
+
+# ── liste blanche : ajout et retrait audités (#3839) ──────────────────────────────────────────────
+# Une adresse en liste blanche n'est jamais bannie par SADE (approbation ni exécuteur automatique). Un réseau trop
+# large neutraliserait la défense : au plus /16 en IPv4, /32 en IPv6 (plus étroit accepté). Les entrées amorcées
+# (privé, boucle, lien-local, CGNAT) restent protégées par les déclencheurs de la base.
+LISTE_BLANCHE_MAX = 64
+PREFIXE_MIN = {4: 16, 6: 32}
+_MOTIF = re.compile(r"^[^\x00-\x1f\x7f]{1,80}$")
+
+
+def normaliser_cidr(texte: Any, borne: bool = True) -> str:
+    """Réseau canonique (`203.0.113.7/32`, `2a01:db8::/64`) ou ValueError (illisible ; trop large si `borne`)."""
+    if not isinstance(texte, str) or not texte.strip() or len(texte) > 64:
+        raise ValueError("cidr_illisible")
+    try:
+        n = ipaddress.ip_network(texte.strip(), strict=False)
+    except ValueError as e:
+        raise ValueError("cidr_illisible") from e
+    if borne and n.prefixlen < PREFIXE_MIN[n.version]:
+        raise ValueError("cidr_trop_large")
+    return n.with_prefixlen
+
+
+def ajouter_liste_blanche(cidr: Any, motif: Any, par: str) -> str:
+    """Ajoute un réseau, audit `sade-liste-blanche-ajout` écrit AVANT le COMMIT (rien sans trace). Rend le réseau
+    canonique. ValueError : cidr illisible/trop large, motif invalide, déjà présent, liste pleine."""
+    net = normaliser_cidr(cidr)
+    if not isinstance(motif, str) or not _MOTIF.match(motif.strip()):
+        raise ValueError("motif_invalide")
+    try:
+        db = _connecter()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    with closing(db):
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT 1 FROM liste_blanche WHERE cidr = ?", (net,)).fetchone():
+                db.execute("ROLLBACK")
+                raise ValueError("deja_presente")
+            if db.execute("SELECT COUNT(*) FROM liste_blanche WHERE amorcee = 0").fetchone()[0] >= LISTE_BLANCHE_MAX:
+                db.execute("ROLLBACK")
+                raise ValueError("liste_pleine")
+            db.execute("INSERT INTO liste_blanche(cidr, motif, par, ts, amorcee) VALUES (?,?,?,?,0)",
+                       (net, motif.strip(), _operateur_sain(par), _ts()))
+            ecrire_audit(f"sade-liste-blanche-ajout cidr={champ_sain(net, 64)} motif={champ_sain(motif.strip(), 80)} "
+                         f"operateur={_operateur_sain(par)}")
+            db.execute("COMMIT")
+        except (AuditIndisponible, ValueError):
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise
+        except sqlite3.Error as e:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise EtatIndisponible(e.__class__.__name__) from e
+    return net
+
+
+def retirer_liste_blanche(cidr: Any, par: str) -> str:
+    """Retire un réseau ajouté (jamais une entrée amorcée : PermissionError), audit `sade-liste-blanche-retrait`
+    AVANT le COMMIT. KeyError s'il n'existe pas."""
+    net = normaliser_cidr(cidr, borne=False)  # désigner une entrée système large (10.0.0.0/8) doit dire « système »
+    try:
+        db = _connecter()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    with closing(db):
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            r = db.execute("SELECT amorcee FROM liste_blanche WHERE cidr = ?", (net,)).fetchone()
+            if r is None:
+                db.execute("ROLLBACK")
+                raise KeyError(net)
+            if r[0]:
+                db.execute("ROLLBACK")
+                raise PermissionError("entree_amorcee")
+            db.execute("DELETE FROM liste_blanche WHERE cidr = ? AND amorcee = 0", (net,))
+            ecrire_audit(f"sade-liste-blanche-retrait cidr={champ_sain(net, 64)} operateur={_operateur_sain(par)}")
+            db.execute("COMMIT")
+        except (AuditIndisponible, KeyError, PermissionError):
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise
+        except sqlite3.Error as e:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise EtatIndisponible(e.__class__.__name__) from e
+    return net
 
 # ── décisions de la file d'approbation (REACTIVE) ────────────────────────────────────────────────
 #

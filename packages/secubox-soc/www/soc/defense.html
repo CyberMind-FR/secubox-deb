@@ -106,6 +106,8 @@
   .kv:last-child{border-bottom:0}
   .kv span{color:var(--doux)} .kv b{margin-left:auto;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;text-align:right}
   .repos{display:flex;flex-wrap:wrap;gap:6px}
+  .lbf{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.lbf input{flex:1 1 180px;min-width:0;background:transparent;border:1px solid var(--bord,#2a3a55);border-radius:8px;color:inherit;padding:5px 8px;font:inherit}
+  .lbf button,.lbr{border:1px solid var(--bord,#2a3a55);border-radius:8px;background:transparent;color:inherit;padding:4px 10px;cursor:pointer;font:inherit;font-size:.8rem}
   @container a (min-width:900px){.grille{grid-template-columns:1.5fr 1fr}.tuiles{grid-template-columns:repeat(2,1fr)}.phases{grid-template-columns:repeat(4,1fr)}}
 </style>
 <div class="cadre" id="cadre"><div class="app">
@@ -397,7 +399,7 @@
   }
 
   // ── seuils ──
-  function rendSeuils(r){
+  function rendSeuils(r, admin){
     if (!r.ok || !r.d) { pose('seuils-corps', INDISPO); return; }
     var d = r.d, h = '', base = d.etat_base === 'indisponible';
     var bandes = Array.isArray(d.bandes) ? d.bandes : [];
@@ -418,10 +420,34 @@
       h += '</div>';
     }
     var lb = Array.isArray(d.liste_blanche) ? d.liste_blanche : [];
-    h += '<div class="lot"><h3>Liste blanche (jamais bloqué)</h3>' + (base ? INDISPO : lb.length ? '<div class="repos">' + lb.map(function(e){ return chip(e.cidr + (e.motif ? ' · ' + e.motif : '')); }).join('') + '</div>' : '<div class="vide">Liste vide.</div>') + '</div>';
+    h += '<div class="lot"><h3>Liste blanche (jamais bloqué)</h3>' + (base ? INDISPO : lb.length ? '<div class="repos">' + lb.map(function(e){
+      // entrée ajoutée (administrateur seulement) : retrait en deux temps ; les entrées système ne se retirent pas
+      var ret = admin && e.supprimable ? ' <button type="button" class="lbr" data-lbr="' + esc(e.cidr) + '">' + (lbRetrait === e.cidr ? 'confirmer le retrait' : 'retirer') + '</button>' : '';
+      return chip(e.cidr + (e.motif ? ' · ' + e.motif : '')) + ret; }).join('') + '</div>' : '<div class="vide">Liste vide.</div>') +
+      (admin && !base ? '<div class="lbf"><input id="lbCidr" placeholder="203.0.113.7/32 ou 2a01:db8::/64" maxlength="64" aria-label="Réseau à protéger">' +
+        '<input id="lbMotif" placeholder="motif (ex. adresse publique du foyer)" maxlength="80" aria-label="Motif">' +
+        '<button type="button" id="lbAjout">Ajouter</button></div><div class="note" id="lbNote">' + esc(lbNote) + '</div>' : '') + '</div>';
     h += '<div class="note">Modes ouverts : ' + esc((d.modes_ouverts || []).join(', ') || '—') + '.</div>';
     pose('seuils-corps', h);
   }
+
+  // ── liste blanche : ajout direct (protéger est sans risque), retrait confirmé ; la façade audite (require_jwt) ──
+  var lbRetrait = null, lbNote = '';
+  $('seuils-corps').addEventListener('click', function(ev){
+    var t = ev.target;
+    if (t && t.id === 'lbAjout') {
+      var cidr = ($('lbCidr') || {}).value || '', motif = ($('lbMotif') || {}).value || '';
+      appel('POST', '/liste-blanche', {cidr: cidr.trim(), motif: motif.trim()}).then(function(r){
+        lbNote = r.ok && r.d ? 'Ajouté : ' + r.d.cidr + ' (audité).' : 'Refusé : ' + causeDe(r); charge(); });
+      return;
+    }
+    var c = t && t.getAttribute ? t.getAttribute('data-lbr') : null;
+    if (!c) return;
+    if (lbRetrait !== c) { lbRetrait = c; charge(); return; }
+    lbRetrait = null;
+    appel('POST', '/liste-blanche/retirer', {cidr: c}).then(function(r){
+      lbNote = r.ok && r.d ? 'Retiré : ' + r.d.cidr + ' (audité).' : 'Refusé : ' + causeDe(r); charge(); });
+  });
 
   // ── file d'approbation ──
   // Boutons seulement en REACTIVE ou ACTIVE et pour un administrateur réel (`admin` rendu par la façade) ; chaque geste est
@@ -534,7 +560,7 @@
     Promise.all([lire('/status'), lire('/threats'), lire('/actions'), lire('/mesh'), lire('/incidents?jours=7'), lire('/policies'), lire('/proposals')]).then(function(r){
       var st = r[0];
       rendMode(st.ok && st.d ? st.d.mode : (r[5].ok && r[5].d ? r[5].d.mode : null), st.ok && st.d ? st.d.etat_base : (r[5].ok && r[5].d ? r[5].d.etat_base : null));
-      rendPhases(); rendSynthese(st); rendFlux(r[1], r[2]); rendIncidents(r[4]); rendMaillage(r[3]); rendSeuils(r[5]); rendAppro(r[6]);
+      rendPhases(); rendSynthese(st); rendFlux(r[1], r[2]); rendIncidents(r[4]); rendMaillage(r[3]); rendSeuils(r[5], r[6].ok && r[6].d && r[6].d.admin === true); rendAppro(r[6]);
       var lues = r.filter(function(x){ return x.ok; }).length, e = $('etat');
       var muettes = [st, r[1], r[2], r[3], r[4], r[6]].some(function(x){ var s = x.ok && x.d && x.d.sources; return s && Object.keys(s).some(function(k){ return s[k].ok === false; }); });
       // Relevé servi par le double tampon (source muette à l'instant) : il garde son heure, jamais présenté comme direct.

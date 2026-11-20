@@ -552,6 +552,46 @@ async def changer_mode(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(
     return {"mode": valeur}
 
 
+
+# ── liste blanche : ajout et retrait par un administrateur réel (#3839) ─────────────────────────────
+_CAUSES_LB = {"cidr_illisible": "réseau illisible", "cidr_trop_large": "réseau trop large (au plus /16 en IPv4, /32 en IPv6)",
+              "motif_invalide": "motif requis (1 à 80 caractères)", "deja_presente": "réseau déjà en liste blanche",
+              "liste_pleine": "liste blanche pleine"}
+
+
+async def _geste_liste_blanche(fn, *args) -> JSONResponse:
+    try:
+        cidr = await asyncio.to_thread(fn, *args)
+    except defense_etat.AuditIndisponible:
+        return JSONResponse(status_code=503, content={"error": "audit indisponible : rien changé", "cause": "audit_indisponible"})
+    except defense_etat.EtatIndisponible:
+        return JSONResponse(status_code=503, content={"error": "base d'état indisponible", "cause": "base_indisponible"})
+    except ValueError as e:
+        c = str(e) if str(e) in _CAUSES_LB else "corps"
+        return JSONResponse(status_code=409 if c in ("deja_presente", "liste_pleine") else 400,
+                            content={"error": _CAUSES_LB.get(c, "requête invalide"), "cause": c})
+    except KeyError:
+        return JSONResponse(status_code=404, content={"error": "réseau absent de la liste blanche", "cause": "absente"})
+    except PermissionError:
+        return JSONResponse(status_code=403, content={"error": "entrée système non supprimable", "cause": "entree_amorcee"})
+    with _VERROU:
+        _CACHE.clear()
+    return JSONResponse(status_code=200, content={"cidr": cidr})
+
+
+@router.post("/liste-blanche")
+async def ajouter_liste_blanche(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(require_jwt)):
+    corps = corps if isinstance(corps, dict) else {}
+    return await _geste_liste_blanche(defense_etat.ajouter_liste_blanche, corps.get("cidr"), corps.get("motif"),
+                                      str((payload or {}).get("sub") or "inconnu"))
+
+
+@router.post("/liste-blanche/retirer")
+async def retirer_liste_blanche(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(require_jwt)):
+    corps = corps if isinstance(corps, dict) else {}
+    return await _geste_liste_blanche(defense_etat.retirer_liste_blanche, corps.get("cidr"),
+                                      str((payload or {}).get("sub") or "inconnu"))
+
 # ── file d'approbation (REACTIVE) ─────────────────────────────────────────────────────────────────
 #
 # Identité d'une décision : l'EMPREINTE de la proposition = sha256(geste | adresses normalisées triées | ttl_s), jamais
