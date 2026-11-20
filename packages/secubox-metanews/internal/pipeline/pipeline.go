@@ -52,7 +52,7 @@ func (p *Pipe) Tour(now int64) (int, int, error) {
 // TesterURL récupère un flux et retourne le nombre d'articles lisibles (pour le
 // bouton « tester » de la gestion des sources).
 func (p *Pipe) TesterURL(u string) (int, error) {
-	items, err := p.rss.Flux(u)
+	items, err := p.rss.Collecter("", u)
 	if err != nil {
 		return 0, err
 	}
@@ -67,7 +67,7 @@ func (p *Pipe) Sonder(now int64) (int, error) {
 	}
 	neufs := 0
 	for _, src := range srcs {
-		items, err := p.rss.Flux(src.URL)
+		items, err := p.rss.Collecter(src.Type, src.URL)
 		if err != nil {
 			_ = p.st.MarquerSync(src.ID, now, err.Error())
 			if p.jr != nil {
