@@ -35,8 +35,12 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   depuis le 19/11 → postinst plymouth en échec, secubox-kiosk et secubox-plymouth restés `iU`. Réparé : purge du
   noyau 6.12.107 (non chargeable par boot.scr), `dpkg --configure -a` ; Image/initrd.img inchangés (sha256). Relevé
   signé republié : kiosk et plymouth « fonctionnel », kiosk toujours désactivé. Aucun changement de code.
-- À trancher : /boot de gk2 à 53 Mo libres (5 noyaux), la prochaine mise à jour noyau y échouera pareil ;
-  `dailyaidecheck.service` en échec sur gk1 (préexistant).
+- gk2 /boot : `linux-image-arm64` est en hold (pas de noyau automatique), plymouth absent → pas de risque immédiat.
+  Purgés sur accord (non chargeables par extlinux) : linux-image-6.12.85, 6.12.85+deb12, 6.12.111+deb13 et ses
+  en-têtes. Gardés : 6.12.113 (défaut, switch #3093) et 6.12.111 SecuBox (modules de l'entrée de secours Image-stock).
+  Fichiers de démarrage identiques (sha256). /boot 53 → 60 Mo libres, / 78 → 75 %. Restent sans paquet dans
+  /lib/modules (≈ 133 Mo, laissés) : 6.6.137, lib/, 6.12.85 (reste), 6.1.0-42/-53.
+- `dailyaidecheck.service` en échec sur gk1 (préexistant).
 
 ## 2026-11-20 — ytsas : dépôt de cookies validé (closes #3837) ; design SADE (défense active, chapeau)
 
