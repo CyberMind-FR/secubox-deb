@@ -12,7 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fastapi.testclient import TestClient  # noqa: E402
 
-from api import defense_etat, main  # noqa: E402
+from api import defense, defense_etat, main  # noqa: E402
 from secubox_core.auth import require_jwt, require_lecture  # noqa: E402
 
 LECTURE = {"Authorization": "Bearer lecteur"}
@@ -157,3 +157,15 @@ def test_insert_or_replace_sur_cidr_amorce_refuse():
     assert db.execute("SELECT amorcee FROM liste_blanche WHERE cidr = '10.0.0.0/8'").fetchone() == (1,)
     db.execute("INSERT INTO liste_blanche(cidr, motif, par, ts, amorcee) VALUES ('203.0.113.0/24','test','op','t',0)")
     assert db.execute("SELECT COUNT(*) FROM liste_blanche").fetchone() == (10,)
+
+
+def test_policies_lecteur_sans_ajouts_ni_auteur(client, monkeypatch):
+    defense_etat._connecter().execute("INSERT INTO liste_blanche(cidr, motif, par, ts, amorcee) "
+                                      "VALUES ('198.51.100.0/24', 'x', 'gerald', 't', 0)")
+    lecteur = client.get("/defense/policies", headers=LECTURE).json()["liste_blanche"]
+    assert lecteur and all("par" not in e and e["cidr"] != "198.51.100.0/24" for e in lecteur)
+    async def ok(request, creds=None):
+        return {"sub": "gerald"}
+    monkeypatch.setattr(defense, "require_jwt", ok)
+    admin = client.get("/defense/policies", headers=ADMIN).json()["liste_blanche"]
+    assert any(e["cidr"] == "198.51.100.0/24" and e["par"] == "gerald" for e in admin)

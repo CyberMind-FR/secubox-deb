@@ -405,7 +405,7 @@ def _mode_vivant() -> Dict[str, Any]:
 
 
 @router.get("/policies", dependencies=[Depends(require_lecture)])
-async def policies():
+async def policies(admin: bool = Depends(_est_admin)):
     def lire():
         out = {**_mode_vivant(), "modes_ouverts": list(defense_etat.MODES_OUVERTS),
                "bandes": [{"seuil": s, "nom": n} for s, n in echelle.BANDES_DEFAUT],
@@ -413,6 +413,9 @@ async def policies():
         if "etat_base" not in out:
             try:
                 out["seuils"], out["liste_blanche"] = defense_etat.seuils(), defense_etat.liste_blanche()
+                if not admin:  # un lecteur ne voit que l'amorçage système, jamais les ajouts ni leur auteur
+                    out["liste_blanche"] = [{k: e[k] for k in ("cidr", "motif", "ts", "supprimable")}
+                                            for e in out["liste_blanche"] if not e["supprimable"]]
             except (sqlite3.Error, OSError):
                 out["etat_base"] = "indisponible"
         return out
@@ -473,6 +476,9 @@ _INTERDITS = tuple(ipaddress.ip_network(n) for n in (
 _IP_TEXTE = re.compile(r"[0-9a-fA-F:.]{2,}")
 
 
+_IPV4_ENFOUIE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}")
+
+
 def _masquer(texte: str, masque: Dict[str, str]) -> str:
     """Remplace toute adresse d'un texte libre par `cible-N` (même numérotation que les cibles masquées)."""
     def sub(m):
@@ -485,7 +491,14 @@ def _masquer(texte: str, masque: Dict[str, str]) -> str:
                 continue
             cle = cand
             return masque.setdefault(cle, f"cible-{len(masque) + 1}") + v[len(cand):]
-        return v  # « 09:47:00 », « 1.2 » et autres : pas une adresse
+        # « 1.2.3.4:8080 », « a1.2.3.4 » : une IPv4 enfouie dans le jeton est masquée ; « 09:47:00 » reste intact
+        def ipv4(n):
+            try:
+                ipaddress.IPv4Address(n.group(0))
+            except ValueError:
+                return n.group(0)
+            return masque.setdefault(n.group(0), f"cible-{len(masque) + 1}")
+        return _IPV4_ENFOUIE.sub(ipv4, v)
     return _IP_TEXTE.sub(sub, texte)
 
 

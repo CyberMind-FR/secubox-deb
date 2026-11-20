@@ -663,3 +663,9 @@ def test_conclure_lie_a_la_demande():
     assert defense_etat.etats_decisions()[P1] == "en_cours"
     defense_etat.conclure(P1, int(rec), "applique", "ok", rec.demande_ts)
     assert defense_etat.etats_decisions()[P1] == "applique"
+
+
+def test_masquer_ipv4_avec_port_ou_collee():
+    from api import defense
+    assert defense._masquer("ip=203.0.113.9:8080, essai", {}) == "ip=cible-1:8080, essai"
+    assert defense._masquer("a203.0.113.9", {}) == "acible-1"

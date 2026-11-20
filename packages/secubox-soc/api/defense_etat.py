@@ -35,13 +35,18 @@ def _ts() -> str:
 
 def _connecter() -> sqlite3.Connection:
     chemin = _chemin_db()
-    Path(chemin).parent.mkdir(parents=True, exist_ok=True)
+    Path(chemin).parent.mkdir(mode=0o750, parents=True, exist_ok=True)
     db = sqlite3.connect(chemin, timeout=5, isolation_level=None)
     db.execute("PRAGMA journal_mode = WAL")
     db.execute("PRAGMA busy_timeout = 5000")
     db.execute("PRAGMA recursive_triggers = ON")  # seconde garde : REPLACE déclenche aussi les triggers DELETE
     db.execute("PRAGMA synchronous = NORMAL")
     _migrer(db)
+    for suffixe in ("", "-wal", "-shm"):  # file d'approbation et liste blanche : jamais lisibles par « autres »
+        try:
+            os.chmod(chemin + suffixe, 0o640)
+        except OSError:
+            pass  # fichier absent (WAL pas encore créé) ou non possédé : la contrainte vaut au mieux
     return db
 
 

@@ -11,6 +11,7 @@ Seule une source inconnue lève `KeyError` (erreur de programmation, pas d'explo
 """
 import http.client
 import json
+import logging
 import socket
 from typing import Any, Dict, Optional
 
@@ -102,5 +103,5 @@ def _requete(methode: str, source: str, chemin: str, corps_json: Any, entetes: O
         if conn is not None:
             try:
                 conn.close()
-            except Exception:  # noqa: BLE001
-                pass
+            except OSError as e:
+                logging.getLogger("secubox.soc.substrat").debug("fermeture du socket : %s", type(e).__name__)
