@@ -376,7 +376,7 @@
     pose('incidents-corps', avert + l.slice(0, 12).map(function(i){
       var b = i.bande || 'inconnu', t = dateCourte(i.ts);
       return '<div class="ev"><span class="sc b-' + esc(b) + '">' + (num(i.score) === null ? '—' : esc(i.score)) + '</span>' +
-        '<div class="tt"><b>' + esc(i.titre || '—') + '</b>' + (wafMuet ? chip('issue inconnue') : chip(i.issue || '—', i.issue === 'bloqué' ? 'ok' : (i.issue === 'proposé' ? 'wn' : ''))) + '</div>' +
+        '<div class="tt"><b>' + esc(i.titre || '—') + '</b>' + (num(i.n) > 1 ? chip('×' + i.n) : '') + (wafMuet ? chip('issue inconnue') : chip(i.issue || '—', i.issue === 'bloqué' ? 'ok' : (i.issue === 'proposé' ? 'wn' : ''))) + '</div>' +
         '<div class="ds">' + esc((t || 'date inconnue') + ' · bande ' + (NOMS_BANDE[b] || 'inconnue')) + '</div></div>';
     }).join('') + '<div class="note">Échantillon borné par la source, pas un historique complet.</div>');
   }
@@ -392,7 +392,7 @@
       var emis = num(x.emis) === null ? 'émis : —' : nb(x.emis) + ' émis';
       return '<div class="noeud"><span class="led ' + led + '"></span><b>' + esc(x.nom || '—') + '</b><span class="r">' +
         esc((x.soi ? 'ce nœud · ' : '') + emis + ' · ' + recus + (x.soi ? '' : ' · ' + (x.etat || '—'))) + '</span></div>';
-    }).join(''));
+    }).join('') + (r.d.pairs_silencieux ? '<div class="note">Aucun pair ne transmet d\'indicateur : threatmesh ne partage plus d\'indicateurs non signés (#3450). « Silencieux » est donc l\'état attendu.</div>' : ''));
   }
 
   // ── seuils ──
@@ -524,8 +524,14 @@
       rendPhases(); rendSynthese(st); rendFlux(r[1], r[2]); rendIncidents(r[4]); rendMaillage(r[3]); rendSeuils(r[5]); rendAppro(r[6]);
       var lues = r.filter(function(x){ return x.ok; }).length, e = $('etat');
       var muettes = [st, r[1], r[2], r[3], r[4], r[6]].some(function(x){ var s = x.ok && x.d && x.d.sources; return s && Object.keys(s).some(function(k){ return s[k].ok === false; }); });
-      e.className = 'etat' + (lues === 0 ? ' hors' : (lues < r.length || muettes ? ' vieux' : ''));
-      e.textContent = lues === 0 ? 'AUCUNE MESURE' : (lues < r.length || muettes ? 'RELEVÉ PARTIEL' : 'EN DIRECT');
+      // Relevé servi par le double tampon (source muette à l'instant) : il garde son heure, jamais présenté comme direct.
+      var ancien = null;
+      r.forEach(function(x){ var t = x.ok && x.d && typeof x.d.releve_a === 'string' ? Date.parse(x.d.releve_a) : NaN;
+        if (!isNaN(t) && Date.now() - t > 60000 && (ancien === null || t < ancien)) ancien = t; });
+      var differe = ancien !== null;
+      e.className = 'etat' + (lues === 0 ? ' hors' : (lues < r.length || muettes || differe ? ' vieux' : ''));
+      e.textContent = lues === 0 ? 'AUCUNE MESURE' : (lues < r.length || muettes ? 'RELEVÉ PARTIEL'
+        : differe ? 'RELEVÉ DU ' + new Date(ancien).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) : 'EN DIRECT');
       $('session').hidden = !session;
       $('heure').textContent = new Date().toLocaleString('fr-FR', {dateStyle:'medium', timeStyle:'short'});
       enCours = false; hauteur();

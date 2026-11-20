@@ -56,6 +56,12 @@ côté public). Elle agrège actord, le WAF et le maillage ; une source injoigna
 | `POST /approve`, `POST /refuse` | `require_jwt` | Approuve ou refuse une proposition, désignée par son empreinte ; `simuler: true` ne fait rien et ne trace que le verdict |
 | `POST /reprendre` | `require_jwt` | Débloque une décision restée `en_cours` (retour `en_attente`) |
 
+Lectures : chaque source est lue avec un délai de 20 s. Une vue est servie 15 s depuis le cache. Quand une source
+est muette, le dernier relevé complet de moins de 15 min reste servi, avec son heure (`releve_a`) : la page affiche
+alors « RELEVÉ DU HH:MM », jamais « EN DIRECT ». `/mesh` donne le nom d'hôte de la box (`identifiant` = nœud
+threatmesh) et `pairs_silencieux` (attendu depuis threatmesh 1.2.0, #3450). `/incidents` regroupe les événements
+identiques d'une même minute (`n`) ; un outil deviné par actord (« …? ») est écrit « … (probable) ».
+
 ### Modes
 
 - `observe` (défaut) : lecture seule, aucun geste.
