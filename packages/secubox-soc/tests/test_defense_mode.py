@@ -147,3 +147,13 @@ def test_base_indisponible_degrade_sans_500(client, monkeypatch, tmp_path):
     j = client.get("/defense/policies", headers=LECTURE).json()
     assert j["mode"] == "observe" and j["etat_base"] == "indisponible"
     assert client.post("/defense/mode", json={"mode": "reactive"}, headers=ADMIN).status_code == 503
+
+
+def test_insert_or_replace_sur_cidr_amorce_refuse():
+    defense_etat.mode_courant()
+    db = sqlite3.connect(defense_etat._chemin_db())
+    with pytest.raises(sqlite3.DatabaseError):
+        db.execute("INSERT OR REPLACE INTO liste_blanche(cidr, motif, par, ts, amorcee) VALUES ('10.0.0.0/8','x','y','t',0)")
+    assert db.execute("SELECT amorcee FROM liste_blanche WHERE cidr = '10.0.0.0/8'").fetchone() == (1,)
+    db.execute("INSERT INTO liste_blanche(cidr, motif, par, ts, amorcee) VALUES ('203.0.113.0/24','test','op','t',0)")
+    assert db.execute("SELECT COUNT(*) FROM liste_blanche").fetchone() == (10,)

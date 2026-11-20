@@ -39,6 +39,7 @@ def _connecter() -> sqlite3.Connection:
     db = sqlite3.connect(chemin, timeout=5, isolation_level=None)
     db.execute("PRAGMA journal_mode = WAL")
     db.execute("PRAGMA busy_timeout = 5000")
+    db.execute("PRAGMA recursive_triggers = ON")  # seconde garde : REPLACE déclenche aussi les triggers DELETE
     db.execute("PRAGMA synchronous = NORMAL")
     _migrer(db)
     return db
