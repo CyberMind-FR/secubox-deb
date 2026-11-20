@@ -9,6 +9,14 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-20 — mail : antispam rspamd désactivable (closes #3845)
+
+- secubox-mail 2.16.18 (PR #3846), déployé gk2 : `mailctl antispam on|off|status` (off : milters vidés puis rspamd
+  arrêté/désactivé ; on : l'inverse ; audit), routes `GET /spam/status`, `POST /spam/enable|disable` (require_jwt)
+  que la page appelait sans qu'elles existent ; avertissement : off coupe aussi la signature DKIM sortante.
+  La veille (#3842) ne relance pas un rspamd désactivé. rspamd laissé ACTIF sur gk2 (choix du propriétaire par la
+  page). Vérifié : routes servies (401 sans jeton, 404 pour une route inexistante).
+
 ## 2026-11-20 — SADE 1.9.2 : « Gestes et blocages » fiable sur gk2 chargé (ref #3839)
 
 - Vu sur la capture du propriétaire : « relevé indisponible » + « RELEVÉ PARTIEL ». Cause : délai de lecture des
