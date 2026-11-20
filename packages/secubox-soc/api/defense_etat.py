@@ -325,17 +325,32 @@ def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Opti
 
 
 def bans_auto_depuis(secondes: int, maintenant: Optional[float] = None) -> int:
-    """Nombre d'ADRESSES bannies par l'exécuteur automatique (`par = 'sade-auto'`, décisions `applique` ou `en_cours`)
-    dont la demande tombe dans les `secondes` dernières secondes. `cible` est une liste d'adresses séparées par `,`."""
+    """Nombre d'ADRESSES réclamées par l'exécuteur automatique (`par = 'sade-auto'`) dont la demande tombe dans les
+    `secondes` dernières secondes, QUEL QUE SOIT l'état de la décision (`applique`, `en_cours`, `en_attente`, `refuse`) :
+    une décision partielle a pu bannir une partie de ses adresses, et un plafond surcompte plutôt que de sous-compter.
+    Les décisions des autres opérateurs ne comptent pas. `cible` est une liste d'adresses séparées par `,`."""
     fin = maintenant if maintenant is not None else datetime.now(timezone.utc).timestamp()
     debut = datetime.fromtimestamp(fin - secondes, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         with closing(_connecter()) as db:
-            lignes = db.execute("SELECT cible FROM decisions WHERE par = 'sade-auto' AND etat IN ('applique', 'en_cours') "
-                                "AND demande_ts >= ?", (debut,)).fetchall()
+            lignes = db.execute("SELECT cible FROM decisions WHERE par = 'sade-auto' AND demande_ts >= ?",
+                                (debut,)).fetchall()
     except (sqlite3.Error, OSError) as e:
         raise EtatIndisponible(e.__class__.__name__) from e
     return sum(len([a for a in (lg[0] or "").split(",") if a.strip()]) for lg in lignes)
+
+
+def refuse_par_humain(empreinte: str) -> bool:
+    """Vrai si une décision de l'empreinte, toutes générations confondues, a été REFUSÉE par un autre opérateur que
+    l'exécuteur automatique. Un « non » humain lie le chemin automatique pour toujours, même après le ré-armement de
+    24 h (la proposition reste approuvable à la main). Lève `EtatIndisponible` si la base ne se lit pas."""
+    try:
+        with closing(_connecter()) as db:
+            r = db.execute("SELECT 1 FROM decisions WHERE empreinte = ? AND etat = 'refuse' AND par != 'sade-auto' LIMIT 1",
+                           (empreinte,)).fetchone()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return r is not None
 
 
 def conclure(empreinte: str, generation: int, etat: str, resultat: str, demande_ts: Optional[str] = None) -> None:

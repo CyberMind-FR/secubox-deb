@@ -259,6 +259,48 @@ def test_decision_refusee_par_l_administrateur_respectee(actif):
     assert actif.bans == []
 
 
+def _refus_humain_ancien(emp, cible, il_y_a_s):
+    import sqlite3
+    from contextlib import closing
+    from datetime import datetime, timedelta, timezone
+    ts = (datetime.now(timezone.utc) - timedelta(seconds=il_y_a_s)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with closing(sqlite3.connect(os.environ["SECUBOX_SOC_DEFENSE_DB"])) as db, db:
+        db.execute("INSERT INTO decisions(empreinte, generation, menace_id, cible, geste, score, ttl_s, etat, "
+                   "demande_ts, tranche_ts, par) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                   (emp, 1, "ACT-0001", cible, "ban", 86, 3600, "refuse", ts, ts, "admin"))
+
+
+def test_refus_humain_lie_l_executeur_meme_re_arme(actif):
+    emp = defense.empreinte("ban", ["203.0.113.10"], 3600)
+    _refus_humain_ancien(emp, "203.0.113.10", 25 * 3600)
+    assert defense_etat.decision(emp)["etat"] == "en_attente"  # ré-armée pour la file manuelle
+    r = sade_auto.executer()
+    assert actif.bans == [] and r["bannies"] == []
+    d = defense_etat.decision(emp)
+    assert d["generation"] == 1 and d["etat_enregistre"] == "refuse"  # aucune nouvelle décision
+
+
+def test_refus_humain_illisible_rien(actif, monkeypatch):
+    def panne(_e):
+        raise defense_etat.EtatIndisponible("OperationalError")
+    monkeypatch.setattr(defense_etat, "refuse_par_humain", panne)
+    r = sade_auto.executer()
+    assert actif.bans == [] and r["erreur"] == "base_indisponible"
+
+
+def test_plafond_compte_les_partielles(actif):
+    for i in range(19):
+        e = f"{i:064x}"
+        defense_etat.reclamer(e, "ACT-x", "ban", f"203.0.113.{100 + i}", 70, 3600, "sade-auto", "en_cours",
+                              "sade-auto-demande", modes=("active",))
+        defense_etat.conclure(e, 1, "refuse" if i % 2 else "en_attente", "partiel")
+    r = sade_auto.executer()
+    assert r["plafond"] is False and len(actif.bans) == 1  # 19 + 1 = 20
+    actif.rep[("actord", "/proposals")] = _actord(_brute(actor="ACT-0009", ips=["203.0.113.50"]))
+    r = sade_auto.executer()
+    assert r["plafond"] is True and len(actif.bans) == 1
+
+
 def test_refus_wafctl_conclu_refuse(actif):
     actif.rep[("actord", "/proposals")] = _actord(_brute(ips=["203.0.113.10", "203.0.113.11", "203.0.113.12"]))
     actif.reponse_ban = lambda ip, duree: ((True, "ok") if ip == "203.0.113.10" else (False, "refus: adresse protégée"))

@@ -13,7 +13,8 @@ pairs du maillage (illisibles ⇒ sortie ; pairs non lus ⇒ on continue, `wafct
 root, et l'audit porte `pairs_maillage=non_verifies`) → filtre `cas_sur` → pour chaque retenue encore en attente :
 plafond horaire (dépassé ⇒ retour en OBSERVE, audit `sade-auto-plafond`, arrêt) → réclamation `en_cours` (mode relu,
 audit `sade-auto-demande` fsync, dans UNE transaction) → `wafctl ban` par adresse, arrêt au premier échec →
-conclusion → audit `sade-auto-resultat`.
+conclusion → audit `sade-auto-resultat`. Une empreinte refusée un jour par un humain (toute génération) n'est jamais
+traitée ici, même ré-armée : elle reste approuvable à la main.
 
 Conclusion : tout banni ⇒ `applique` ; `wafctl` a REFUSÉ une adresse (code de sortie non nul) ⇒ `refuse`, ré-armable
 après 24 h, jamais retenté à chaque passage ; délai dépassé ou sudo injoignable ⇒ `en_attente` (nouvel essai au
@@ -57,7 +58,8 @@ def _wafctl_ban(ip: str, duree: str) -> Tuple[bool, str]:
     if r.returncode == 0:
         return True, "ok"
     message = (r.stderr or r.stdout or "").strip()
-    if message.startswith("sudo:"):  # sudo -n : mot de passe exigé, règle absente, commande introuvable
+    # dépend du préfixe « sudo: » que sudo met à ses propres messages (mot de passe exigé, règle absente, introuvable)
+    if message.startswith("sudo:"):
         return False, f"injoignable: {message[:200]}"
     return False, f"refus: {message[:200] or f'code {r.returncode}'}"
 
@@ -195,11 +197,16 @@ def executer() -> Dict[str, Any]:
         return out
     note = f" pairs_maillage={'verifies' if pairs_lus else 'non_verifies'}"
     retenues = []
-    for p in defense._propositions(r):
-        if not cas_sur(p, proteges)[0]:
-            out["ecartees"] += 1
-        elif etats.get(p["empreinte"], "en_attente") == "en_attente":
-            retenues.append(p)  # déjà tranchée : ni plafond ni réclamation (reclamer garde la course)
+    try:
+        for p in defense._propositions(r):
+            if not cas_sur(p, proteges)[0]:
+                out["ecartees"] += 1
+            elif (etats.get(p["empreinte"], "en_attente") == "en_attente"  # déjà tranchée : ni plafond ni réclamation
+                  and not defense_etat.refuse_par_humain(p["empreinte"])):  # un « non » humain lie l'automate
+                retenues.append(p)
+    except defense_etat.EtatIndisponible:
+        out["erreur"] = "base_indisponible"
+        return out
     for p in retenues:
         try:
             if _plafond(p, out):

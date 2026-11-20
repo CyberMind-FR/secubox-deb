@@ -57,8 +57,27 @@ def test_bans_auto_compte_les_adresses_de_l_heure(etat):
     _inserer("2" * 64, "203.0.113.2,203.0.113.3", "sade-auto", "en_cours", 120)
     _inserer("3" * 64, "203.0.113.4", "admin", "applique", 60)            # un administrateur : pas compté
     _inserer("4" * 64, "203.0.113.5", "sade-auto", "applique", 7200)      # hors fenêtre
-    _inserer("5" * 64, "203.0.113.6", "sade-auto", "refuse", 60)          # refusée : pas appliquée
-    assert defense_etat.bans_auto_depuis(3600) == 3
+    _inserer("5" * 64, "203.0.113.6", "sade-auto", "refuse", 60)          # refusée par wafctl : comptée (surcompte)
+    _inserer("6" * 64, "203.0.113.7,203.0.113.8", "sade-auto", "en_attente", 60)  # partielle : comptée
+    _inserer("7" * 64, "203.0.113.9", "admin", "refuse", 60)              # un administrateur : pas compté
+    assert defense_etat.bans_auto_depuis(3600) == 6
+
+
+def test_refuse_par_humain(etat):
+    assert defense_etat.refuse_par_humain("1" * 64) is False
+    _inserer("1" * 64, "203.0.113.1", "sade-auto", "refuse", 60)         # refus de wafctl : pas un humain
+    assert defense_etat.refuse_par_humain("1" * 64) is False
+    _inserer("2" * 64, "203.0.113.2", "admin", "refuse", 90000)          # refus humain, ré-armé depuis : lie toujours
+    assert defense_etat.refuse_par_humain("2" * 64) is True
+    _inserer("3" * 64, "203.0.113.3", "admin", "applique", 60)
+    assert defense_etat.refuse_par_humain("3" * 64) is False
+
+
+def test_refuse_par_humain_base_indisponible(etat, monkeypatch, tmp_path):
+    (tmp_path / "f").write_text("x")
+    monkeypatch.setenv("SECUBOX_SOC_DEFENSE_DB", str(tmp_path / "f" / "d.db"))
+    with pytest.raises(defense_etat.EtatIndisponible):
+        defense_etat.refuse_par_humain("1" * 64)
 
 
 def test_bans_auto_zero_sans_decision(etat):
