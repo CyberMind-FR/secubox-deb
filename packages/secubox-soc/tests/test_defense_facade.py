@@ -88,7 +88,7 @@ def test_sans_jeton_401(faux, route, monkeypatch):
 
 def test_status_nominal(faux, client, admin):
     j = client.get("/defense/status", headers=LECTURE).json()
-    assert j["mode"] == "OBSERVE"
+    assert j["mode"] == "observe"
     assert (j["menaces_suivies"], j["blocages_actifs"], j["a_valider"]) == (2, 2, 0)
     assert (j["score_max"], j["bande_max"]) == (86, "usager")
     assert all(j["sources"][s]["ok"] is True for s in ("actord", "waf", "threatmesh"))

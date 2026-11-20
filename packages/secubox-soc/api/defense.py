@@ -21,6 +21,7 @@ Compteurs : `menaces_suivies` = acteurs connus d'actord (aucune fenêtre de 24 h
 import asyncio
 import hashlib
 import re
+import sqlite3
 import threading
 from collections import OrderedDict
 import time
@@ -37,7 +38,6 @@ from . import defense_etat, echelle, substrat
 
 router = APIRouter(tags=["defense"])
 
-MODE = "OBSERVE"
 TTL_S = 15.0          # durée du cache par route
 TAMPON_S = 120.0      # un relevé complet de moins de 120 s n'est pas écrasé par un relevé dégradé (#3011)
 MENACES_MAX = 200
@@ -221,7 +221,7 @@ async def status(request: Request, admin: bool = Depends(_est_admin)):
         ctx = _contexte(admin, entetes, actord=("/actors", "/proposals", "/overview"), waf=("/bans",),
                         mesh=("/status",))
         src = _sources(ctx["lues"])
-        out: Dict[str, Any] = {"mode": defense_etat.mode_courant().upper(), "menaces_suivies": None, "evenements_24h": None, "blocages_actifs": None, "a_valider": None,
+        out: Dict[str, Any] = {"mode": None, "menaces_suivies": None, "evenements_24h": None, "blocages_actifs": None, "a_valider": None,
                                "score_max": None, "bande_max": None, "sources": src}
         if src["actord"]["ok"]:
             m = _menaces(ctx, admin)
@@ -240,7 +240,9 @@ async def status(request: Request, admin: bool = Depends(_est_admin)):
             out["blocages_actifs"] = len(_liste(ctx["waf/bans"], "bans")) if isinstance(d, dict) else None
         return out
 
-    return await asyncio.to_thread(_servi, _cle("status", admin, entetes), calcul)
+    rep = await asyncio.to_thread(_servi, _cle("status", admin, entetes), calcul)
+    # le mode se lit en direct, jamais depuis le cache : un changement se voit tout de suite
+    return {**rep, **await asyncio.to_thread(_mode_vivant)}
 
 
 @router.get("/threats", dependencies=[Depends(require_lecture)])
@@ -384,12 +386,26 @@ async def incidents(request: Request, jours: int = Query(7, ge=1, le=90), admin:
 
 # ── mode et politique ─────────────────────────────────────────────────────────────────────────────
 
+def _mode_vivant() -> Dict[str, Any]:
+    """Mode en direct ; base indisponible : `observe` (défaut sûr) et `etat_base: indisponible`."""
+    try:
+        return {"mode": defense_etat.mode_courant()}
+    except defense_etat.EtatIndisponible:
+        return {"mode": "observe", "etat_base": "indisponible"}
+
+
 @router.get("/policies", dependencies=[Depends(require_lecture)])
 async def policies():
     def lire():
-        return {"mode": defense_etat.mode_courant(), "modes_ouverts": list(defense_etat.MODES_OUVERTS),
-                "bandes": [{"seuil": s, "nom": n} for s, n in echelle.BANDES_DEFAUT],
-                "seuils": defense_etat.seuils(), "liste_blanche": defense_etat.liste_blanche()}
+        out = {**_mode_vivant(), "modes_ouverts": list(defense_etat.MODES_OUVERTS),
+               "bandes": [{"seuil": s, "nom": n} for s, n in echelle.BANDES_DEFAUT],
+               "seuils": {}, "liste_blanche": []}
+        if "etat_base" not in out:
+            try:
+                out["seuils"], out["liste_blanche"] = defense_etat.seuils(), defense_etat.liste_blanche()
+            except (sqlite3.Error, OSError):
+                out["etat_base"] = "indisponible"
+        return out
     return await asyncio.to_thread(lire)
 
 
@@ -401,6 +417,12 @@ async def changer_mode(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(
     par = str((payload or {}).get("sub") or "inconnu")
     try:
         await asyncio.to_thread(defense_etat.changer_mode, valeur, par)
+    except defense_etat.AuditIndisponible:
+        return JSONResponse(status_code=503, content={"error": "audit indisponible : mode inchangé",
+                                                      "cause": "audit_indisponible"})
+    except defense_etat.EtatIndisponible:
+        return JSONResponse(status_code=503, content={"error": "base d'état indisponible",
+                                                      "cause": "base_indisponible"})
     except PermissionError:
         return JSONResponse(status_code=409, content={"error": "ce mode attend les gestes de réaction, non livrés",
                                                       "cause": "gestes_non_livres"})

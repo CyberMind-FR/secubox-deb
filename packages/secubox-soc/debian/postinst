@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
+    # base d'état SADE (#3839) : répertoire propre à l'utilisateur du service
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/soc || true
     systemctl daemon-reload
     systemctl enable secubox-soc.service || true
     systemctl start secubox-soc.service || true

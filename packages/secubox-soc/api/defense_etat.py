@@ -24,13 +24,6 @@ _NOM = re.compile(r"^(\d{4})-[\w.-]+\.sql$")
 MODES = ("observe", "reactive", "active", "aggressive")
 MODES_OUVERTS = ("observe", "reactive")  # active/aggressive attendent les gestes (hors périmètre « chapeau »)
 
-# Liste blanche amorcée, non supprimable : jamais de blocage du réseau local ni de la boucle.
-AMORCE = (
-    ("10.0.0.0/8", "RFC 1918"), ("172.16.0.0/12", "RFC 1918"), ("192.168.0.0/16", "RFC 1918"),
-    ("127.0.0.0/8", "boucle locale"), ("169.254.0.0/16", "lien-local"), ("100.64.0.0/10", "CGNAT"),
-    ("::1/128", "boucle locale IPv6"), ("fc00::/7", "ULA IPv6"), ("fe80::/10", "lien-local IPv6"),
-)
-
 
 def _chemin_db() -> str:
     return os.environ.get("SECUBOX_SOC_DEFENSE_DB", DB_DEFAUT)
@@ -52,58 +45,87 @@ def _connecter() -> sqlite3.Connection:
 
 
 def _migrer(db: sqlite3.Connection) -> None:
+    """Applique les migrations manquantes. Chaque script est idempotent (IF NOT EXISTS / INSERT OR IGNORE)
+    et s'exécute dans sa propre transaction : deux processus qui migrent ensemble convergent."""
     db.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, appliquee_le TEXT NOT NULL)")
     faites = {v for (v,) in db.execute("SELECT version FROM schema_migrations")}
     for f in sorted(MIGRATIONS.iterdir()):
         m = _NOM.match(f.name)
         if not m or int(m.group(1)) in faites:
             continue
+        script = ("BEGIN IMMEDIATE;\n" + f.read_text(encoding="utf-8") +
+                  f"\nINSERT OR IGNORE INTO schema_migrations(version, appliquee_le) VALUES ({int(m.group(1))}, '{_ts()}');\nCOMMIT;")
         try:
-            db.execute("BEGIN IMMEDIATE")
-            # une autre connexion a pu migrer entre-temps
-            if db.execute("SELECT 1 FROM schema_migrations WHERE version = ?", (int(m.group(1)),)).fetchone():
-                db.execute("COMMIT")
-                continue
-            for instr in f.read_text(encoding="utf-8").split(";"):
-                if "\n".join(l for l in instr.splitlines() if not l.strip().startswith("--")).strip():
-                    db.execute(instr)
-            if int(m.group(1)) == 1:
-                for cidr, motif in AMORCE:
-                    db.execute("INSERT OR IGNORE INTO liste_blanche(cidr, motif, par, ts, amorcee) VALUES (?,?,?,?,1)",
-                               (cidr, motif, "systeme", _ts()))
-            db.execute("INSERT INTO schema_migrations(version, appliquee_le) VALUES (?, ?)", (int(m.group(1)), _ts()))
-            db.execute("COMMIT")
+            db.executescript(script)
         except sqlite3.Error:
             if db.in_transaction:
                 db.execute("ROLLBACK")
             raise
 
 
+class EtatIndisponible(Exception):
+    """Base illisible ou non inscriptible (répertoire absent, droits)."""
+
+
+class AuditIndisponible(Exception):
+    """L'audit n'a pu être écrit : le changement de mode est annulé (échec fermé)."""
+
+
 def mode_courant() -> str:
-    with closing(_connecter()) as db:
-        r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
+    try:
+        with closing(_connecter()) as db:
+            r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
     return r[0] if r else "observe"
 
 
-def _auditer(ancien: str, nouveau: str, par: str) -> None:
-    """Une ligne en ajout seul ; jamais de secret. Un échec d'écriture ne passe pas en silence (exception)."""
-    ligne = f"{_ts()} sade-mode ancien={ancien} nouveau={nouveau} operateur={par}\n"
-    with open(os.environ.get("SECUBOX_AUDIT_LOG", AUDIT_DEFAUT), "a", encoding="utf-8") as f:
-        f.write(ligne)
+def _operateur_sain(par: str) -> str:
+    """Nom d'opérateur pour l'audit : sans caractère de contrôle ni espace (anti-forge de ligne), 64 car. au plus."""
+    nettoye = "".join(c if (c.isprintable() and not c.isspace()) else "_" for c in str(par))
+    return nettoye[:64] or "inconnu"
 
 
 def changer_mode(valeur: str, par: str) -> None:
+    """Change le mode ET écrit sa ligne d'audit dans la même transaction (BEGIN IMMEDIATE) : l'audit est écrit,
+    flush + fsync, AVANT le COMMIT ; s'il échoue, ROLLBACK (le mode ne change jamais sans trace)."""
     if valeur not in MODES:
         raise ValueError("mode inconnu")
     if valeur not in MODES_OUVERTS:
         raise PermissionError("gestes_non_livres")
-    with closing(_connecter()) as db:
-        r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
-        ancien = r[0] if r else "observe"
-        db.execute("INSERT INTO mode(id, valeur, depuis, par) VALUES (1,?,?,?) "
-                   "ON CONFLICT(id) DO UPDATE SET valeur=excluded.valeur, depuis=excluded.depuis, par=excluded.par",
-                   (valeur, _ts(), par))
-    _auditer(ancien, valeur, par)
+    try:
+        db = _connecter()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    with closing(db):
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
+            ancien = r[0] if r else "observe"
+            if ancien == valeur:
+                db.execute("ROLLBACK")
+                return
+            db.execute("INSERT INTO mode(id, valeur, depuis, par) VALUES (1,?,?,?) "
+                       "ON CONFLICT(id) DO UPDATE SET valeur=excluded.valeur, depuis=excluded.depuis, par=excluded.par",
+                       (valeur, _ts(), par))
+            operateur = _operateur_sain(par)
+            ligne = f"{_ts()} sade-mode ancien={ancien} nouveau={valeur} operateur={operateur}\n"
+            try:
+                with open(os.environ.get("SECUBOX_AUDIT_LOG", AUDIT_DEFAUT), "a", encoding="utf-8") as f:
+                    f.write(ligne)
+                    f.flush()
+                    os.fsync(f.fileno())
+            except OSError as e:
+                raise AuditIndisponible(e.__class__.__name__) from e
+            db.execute("COMMIT")
+        except AuditIndisponible:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise
+        except sqlite3.Error as e:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise EtatIndisponible(e.__class__.__name__) from e
 
 
 def seuils() -> Dict[str, str]:

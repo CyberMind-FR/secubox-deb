@@ -96,3 +96,54 @@ def test_migration_idempotente_et_tables():
     assert {t for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} >= {
         "mode", "seuils", "liste_blanche", "decisions"}
     assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
+def test_audit_en_echec_laisse_le_mode_et_repond_503(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "absent" / "audit.log"))
+    r = client.post("/defense/mode", json={"mode": "reactive"}, headers=ADMIN)
+    assert r.status_code == 503 and r.json()["cause"] == "audit_indisponible"
+    assert defense_etat.mode_courant() == "observe"
+
+
+def test_deux_changements_chainent_l_audit(client, audit):
+    client.post("/defense/mode", json={"mode": "reactive"}, headers=ADMIN)
+    client.post("/defense/mode", json={"mode": "observe"}, headers=ADMIN)
+    l = audit.chemin.read_text(encoding="utf-8").splitlines()
+    assert len(l) == 2
+    assert "ancien=observe nouveau=reactive" in l[0] and "ancien=reactive nouveau=observe" in l[1]
+    assert defense_etat.mode_courant() == "observe"
+    client.post("/defense/mode", json={"mode": "observe"}, headers=ADMIN)  # inchangé : pas de ligne
+    assert len(audit.chemin.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_liste_blanche_amorcee_protegee_en_base():
+    defense_etat.mode_courant()
+    db = sqlite3.connect(defense_etat._chemin_db())
+    with pytest.raises(sqlite3.DatabaseError):
+        db.execute("DELETE FROM liste_blanche WHERE cidr = '10.0.0.0/8'")
+    with pytest.raises(sqlite3.DatabaseError):
+        db.execute("UPDATE liste_blanche SET motif = 'x' WHERE cidr = '10.0.0.0/8'")
+
+
+def test_status_montre_le_mode_vivant(client):
+    from api import defense
+    defense._CACHE.clear()
+    assert client.get("/defense/status", headers=LECTURE).json()["mode"] == "observe"
+    client.post("/defense/mode", json={"mode": "reactive"}, headers=ADMIN)
+    assert client.get("/defense/status", headers=LECTURE).json()["mode"] == "reactive"
+
+
+def test_operateur_assaini(client, audit):
+    main.app.dependency_overrides[require_jwt] = lambda: {"sub": "x\n2026 sade-mode forge " + "a" * 100}
+    client.post("/defense/mode", json={"mode": "reactive"}, headers=ADMIN)
+    d = audit.chemin.read_text(encoding="utf-8")
+    assert d.count("\n") == 1 and len(d.split("operateur=")[1].strip()) <= 64 and " forge" not in d
+
+
+def test_base_indisponible_degrade_sans_500(client, monkeypatch, tmp_path):
+    f = tmp_path / "fichier"
+    f.write_text("x")
+    monkeypatch.setenv("SECUBOX_SOC_DEFENSE_DB", str(f / "sous" / "defense.db"))  # parent = fichier : mkdir échoue
+    j = client.get("/defense/policies", headers=LECTURE).json()
+    assert j["mode"] == "observe" and j["etat_base"] == "indisponible"
+    assert client.post("/defense/mode", json={"mode": "reactive"}, headers=ADMIN).status_code == 503
