@@ -28,11 +28,12 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 
 from secubox_core.auth import require_jwt, require_lecture
 
-from . import echelle, substrat
+from . import defense_etat, echelle, substrat
 
 router = APIRouter(tags=["defense"])
 
@@ -220,7 +221,7 @@ async def status(request: Request, admin: bool = Depends(_est_admin)):
         ctx = _contexte(admin, entetes, actord=("/actors", "/proposals", "/overview"), waf=("/bans",),
                         mesh=("/status",))
         src = _sources(ctx["lues"])
-        out: Dict[str, Any] = {"mode": MODE, "menaces_suivies": None, "evenements_24h": None, "blocages_actifs": None, "a_valider": None,
+        out: Dict[str, Any] = {"mode": defense_etat.mode_courant().upper(), "menaces_suivies": None, "evenements_24h": None, "blocages_actifs": None, "a_valider": None,
                                "score_max": None, "bande_max": None, "sources": src}
         if src["actord"]["ok"]:
             m = _menaces(ctx, admin)
@@ -379,3 +380,28 @@ async def incidents(request: Request, jours: int = Query(7, ge=1, le=90), admin:
         return {"incidents": out, "sources": src}
 
     return await asyncio.to_thread(_servi, _cle(f"incidents:{jours}", admin, entetes), calcul)
+
+
+# ── mode et politique ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/policies", dependencies=[Depends(require_lecture)])
+async def policies():
+    def lire():
+        return {"mode": defense_etat.mode_courant(), "modes_ouverts": list(defense_etat.MODES_OUVERTS),
+                "bandes": [{"seuil": s, "nom": n} for s, n in echelle.BANDES_DEFAUT],
+                "seuils": defense_etat.seuils(), "liste_blanche": defense_etat.liste_blanche()}
+    return await asyncio.to_thread(lire)
+
+
+@router.post("/mode")
+async def changer_mode(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(require_jwt)):
+    valeur = corps.get("mode") if isinstance(corps, dict) else None
+    if not isinstance(valeur, str) or valeur not in defense_etat.MODES:
+        raise HTTPException(status_code=400, detail="mode inconnu")
+    par = str((payload or {}).get("sub") or "inconnu")
+    try:
+        await asyncio.to_thread(defense_etat.changer_mode, valeur, par)
+    except PermissionError:
+        return JSONResponse(status_code=409, content={"error": "ce mode attend les gestes de réaction, non livrés",
+                                                      "cause": "gestes_non_livres"})
+    return {"mode": valeur}
