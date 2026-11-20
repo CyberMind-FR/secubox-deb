@@ -15,7 +15,7 @@ import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 DB_DEFAUT = "/var/lib/secubox/soc/defense.db"
 AUDIT_DEFAUT = "/var/log/secubox/audit.log"
@@ -23,7 +23,7 @@ MIGRATIONS = Path(__file__).resolve().parent / "migrations"
 _NOM = re.compile(r"^(\d{4})-[\w.-]+\.sql$")
 
 MODES = ("observe", "reactive", "active", "aggressive")
-MODES_OUVERTS = ("observe", "reactive")  # active/aggressive attendent les gestes (hors périmètre « chapeau »)
+MODES_OUVERTS = ("observe", "reactive", "active")  # aggressive attend ses gestes (hors périmètre)
 
 
 def _chemin_db() -> str:
@@ -85,6 +85,16 @@ def mode_courant() -> str:
     except (sqlite3.Error, OSError) as e:
         raise EtatIndisponible(e.__class__.__name__) from e
     return r[0] if r else "observe"
+
+
+def mode_detail() -> Tuple[str, Optional[str], Optional[str]]:
+    """(valeur, depuis, par) du mode ; sans ligne : (`observe`, None, None). Lève `EtatIndisponible`."""
+    try:
+        with closing(_connecter()) as db:
+            r = db.execute("SELECT valeur, depuis, par FROM mode WHERE id = 1").fetchone()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return (r[0], r[1], r[2]) if r else ("observe", None, None)
 
 
 def champ_sain(v: Any, n: int = 256) -> str:
@@ -261,15 +271,29 @@ def etats_decisions() -> Dict[str, str]:
     return {e: ("en_attente" if _rearmable(et, t, ttl, maintenant) else et) for e, et, t, ttl in lignes}
 
 
+def auteurs_decisions() -> Dict[str, str]:
+    """{empreinte: opérateur (`par`) de la dernière génération}. Sert à reconnaître une décision de l'exécuteur
+    automatique ; l'appelant n'expose jamais le nom d'un opérateur humain."""
+    try:
+        with closing(_connecter()) as db:
+            lignes = db.execute(
+                "SELECT d.empreinte, d.par FROM decisions d JOIN "
+                "(SELECT empreinte, MAX(generation) g FROM decisions GROUP BY empreinte) m "
+                "ON d.empreinte = m.empreinte AND d.generation = m.g").fetchall()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return {e: (par or "") for e, par in lignes}
+
+
 class Reclamation(int):
     """Génération réclamée (un entier) portant l'horodatage `demande_ts` de la réclamation, pour `conclure`."""
     demande_ts: Optional[str] = None
 
 
 def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Optional[int], ttl_s: Optional[int],
-             par: str, etat: str, ligne_audit: str) -> int:
+             par: str, etat: str, ligne_audit: str, modes: Tuple[str, ...] = ("reactive",)) -> int:
     """Réclame une décision (`en_cours` avant un geste, ou `refuse`) dans UNE transaction BEGIN IMMEDIATE : relit le
-    mode (doit être `reactive`), prend la dernière génération de l'empreinte — aucune : INSERT génération 1 ;
+    mode (doit être l'un de `modes`, `reactive` par défaut), prend la dernière génération de l'empreinte — aucune : INSERT génération 1 ;
     `en_attente` : reprise ; tranchée et ré-armable : INSERT génération + 1 (contrainte UNIQUE (empreinte, generation)) ;
     sinon `DejaTraitee` —, écrit l'audit (flush + fsync, suffixé de la génération) PUIS valide. Audit en échec :
     ROLLBACK, rien n'est réclamé. Rend la génération réclamée."""
@@ -283,7 +307,7 @@ def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Opti
         try:
             db.execute("BEGIN IMMEDIATE")
             r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
-            if (r[0] if r else "observe") != "reactive":
+            if (r[0] if r else "observe") not in modes:
                 db.execute("ROLLBACK")
                 raise ModeRefuse(r[0] if r else "observe")
             ligne = _derniere(db, empreinte)
@@ -324,17 +348,94 @@ def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Opti
             raise EtatIndisponible(e.__class__.__name__) from e
 
 
+def bans_auto_depuis(secondes: int, maintenant: Optional[float] = None) -> int:
+    """Nombre d'ADRESSES réclamées par l'exécuteur automatique (`par = 'sade-auto'`) dont la demande tombe dans les
+    `secondes` dernières secondes, QUEL QUE SOIT l'état de la décision (`applique`, `en_cours`, `en_attente`, `refuse`) :
+    une décision partielle a pu bannir une partie de ses adresses, et un plafond surcompte plutôt que de sous-compter.
+    Les décisions des autres opérateurs ne comptent pas. `cible` est une liste d'adresses séparées par `,`."""
+    fin = maintenant if maintenant is not None else datetime.now(timezone.utc).timestamp()
+    debut = datetime.fromtimestamp(fin - secondes, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        with closing(_connecter()) as db:
+            lignes = db.execute("SELECT cible FROM decisions WHERE par = 'sade-auto' AND demande_ts >= ?",
+                                (debut,)).fetchall()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return sum(len([a for a in (lg[0] or "").split(",") if a.strip()]) for lg in lignes)
+
+
+def refuse_par_humain(empreinte: str) -> bool:
+    """Vrai si une décision de l'empreinte, toutes générations confondues, a été REFUSÉE par un autre opérateur que
+    l'exécuteur automatique. Un « non » humain lie le chemin automatique pour toujours, même après le ré-armement de
+    24 h (la proposition reste approuvable à la main). Lève `EtatIndisponible` si la base ne se lit pas."""
+    try:
+        with closing(_connecter()) as db:
+            # COALESCE : un refus sans opérateur enregistré compte comme humain (échec fermé)
+            r = db.execute("SELECT 1 FROM decisions WHERE empreinte = ? AND etat = 'refuse' "
+                           "AND COALESCE(par, '') != 'sade-auto' LIMIT 1", (empreinte,)).fetchone()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return r is not None
+
+
+def adresses_refusees_par_humain() -> List[str]:
+    """Adresses (texte brut de `cible`, séparées par `,`) de toute décision REFUSÉE par un autre opérateur que
+    l'exécuteur automatique, toutes générations et empreintes confondues : une adresse refusée une fois par un humain
+    exclut du chemin automatique toute proposition qui la contient (durée ou lot différents). Lève `EtatIndisponible`."""
+    try:
+        with closing(_connecter()) as db:
+            lignes = db.execute("SELECT cible FROM decisions WHERE etat = 'refuse' "
+                                "AND COALESCE(par, '') != 'sade-auto'").fetchall()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return [a.strip() for (c,) in lignes for a in (c or "").split(",") if a.strip()]
+
+
+RETENTION_VUES_S = 30 * 86400
+
+
+def noter_propositions_vues(empreintes: List[str]) -> Dict[str, str]:
+    """Note la PREMIÈRE vue de chaque empreinte (INSERT OR IGNORE : une vue plus ancienne n'est jamais rajeunie) et rend
+    {empreinte: vu_ts} pour celles données. Purge les vues de plus de 30 jours dont l'empreinte n'est plus proposée
+    (une proposition encore présente garde sa première vue). Une transaction ; lève `EtatIndisponible`."""
+    maintenant = _ts()
+    limite = datetime.fromtimestamp(datetime.now(timezone.utc).timestamp() - RETENTION_VUES_S,
+                                    timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        db = _connecter()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    with closing(db):
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            db.executemany("INSERT OR IGNORE INTO propositions_vues(empreinte, vu_ts) VALUES (?, ?)",
+                           [(e, maintenant) for e in empreintes])
+            courantes = set(empreintes)
+            anciennes = [e for (e,) in db.execute("SELECT empreinte FROM propositions_vues WHERE vu_ts < ?", (limite,))
+                         if e not in courantes]
+            db.executemany("DELETE FROM propositions_vues WHERE empreinte = ?", [(e,) for e in anciennes])
+            vues = {e: t for e, t in db.execute("SELECT empreinte, vu_ts FROM propositions_vues")
+                    if e in courantes}
+            db.execute("COMMIT")
+        except sqlite3.Error as e:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise EtatIndisponible(e.__class__.__name__) from e
+    return vues
+
+
 def conclure(empreinte: str, generation: int, etat: str, resultat: str, demande_ts: Optional[str] = None) -> None:
-    """Tranche une décision `en_cours` : `applique`, ou retour `en_attente` après un échec du WAF. Avec `demande_ts`
-    (celui de la réclamation close), un fil retardataire ne peut pas clore une réclamation ultérieure de la même
-    génération (reprise)."""
-    if etat not in ("applique", "en_attente"):
+    """Tranche une décision `en_cours` : `applique`, `refuse` (l'exécuteur automatique, quand `wafctl` a refusé une
+    adresse : ré-armable après 24 h, jamais retenté à chaque passage), ou retour `en_attente` après un échec transitoire
+    du WAF. Avec `demande_ts` (celui de la réclamation close), un fil retardataire ne peut pas clore une réclamation
+    ultérieure de la même génération (reprise)."""
+    if etat not in ("applique", "refuse", "en_attente"):
         raise ValueError("état de conclusion inconnu")
     try:
         with closing(_connecter()) as db:
             sql = ("UPDATE decisions SET etat = ?, resultat = ?, tranche_ts = ? "
                    "WHERE empreinte = ? AND generation = ? AND etat = 'en_cours'")
-            args: list = [etat, resultat[:500], _ts() if etat == "applique" else None, empreinte, generation]
+            args: list = [etat, resultat[:500], _ts() if etat in ("applique", "refuse") else None, empreinte, generation]
             if demande_ts is not None:
                 sql += " AND demande_ts = ?"
                 args.append(demande_ts)

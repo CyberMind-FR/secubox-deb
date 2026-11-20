@@ -31,7 +31,7 @@ sudo (verbe `wafctl ban` existant), page `www/soc/defense.html`.
 - Cas sûr, toutes conditions réunies : geste `ban` (mode actord `DENY`) ; score de **60 à 94** inclus ; 1 à **8**
   adresses ; toutes publiques et hors protégés (liste blanche en base, passerelles, pairs du maillage) via
   `defense._adresse_interdite` ; liste blanche lisible.
-- Durée appliquée : `min(ttl_s or 86400, 86400)` secondes, passée à wafctl sous la forme `"<n>s"`. L'empreinte reste
+- Durée appliquée : `min(ttl_s or 14400, 86400)` secondes (14400 = durée par défaut du WAF, comme l'approbation manuelle sans durée ; ruling T2), passée à wafctl sous la forme `"<n>s"`. L'empreinte reste
   celle de la proposition (`defense.empreinte`), sans changement.
 - Plafond : **20 adresses** bannies par `sade-auto` sur 3600 s glissantes. Si un lot le dépasserait, rien n'est banni
   dans ce lot et le mode repasse à `observe`, `par = "sade-auto"`, avec un audit `sade-auto-plafond`.
@@ -63,7 +63,7 @@ sudo (verbe `wafctl ban` existant), page `www/soc/defense.html`.
 
 ---
 
-### Tâche 1 : état — mode ACTIVE ouvert, réclamation par mode, compteur automatique
+### Task 1 : état — mode ACTIVE ouvert, réclamation par mode, compteur automatique
 
 **Fichiers :**
 - Modifier : `packages/secubox-soc/api/defense_etat.py` (`MODES_OUVERTS`, `reclamer`, nouvelle `bans_auto_depuis`)
@@ -110,7 +110,7 @@ def test_approbation_manuelle_ouverte_en_active(faux, client, admin):   # via /d
   mis à jour : `active` est désormais accepté, `aggressive` reste refusé).
 - [ ] **Étape 5 :** commit `feat(soc): SADE, mode ACTIVE ouvert, réclamation par mode, compteur auto (ref #3839)`.
 
-### Tâche 2 : exécuteur `sade_auto` (cas sûr, plafond, wafctl)
+### Task 2 : exécuteur `sade_auto` (cas sûr, plafond, wafctl)
 
 **Fichiers :**
 - Créer : `packages/secubox-soc/api/sade_auto.py`
@@ -164,7 +164,7 @@ def test_incident_95_reste_dans_la_file():   # score 97 : ni ban ni décision ; 
 - [ ] **Étape 4 :** `pytest tests -q` → tout passe.
 - [ ] **Étape 5 :** commit `feat(soc): SADE ACTIVE, exécuteur automatique du cas sûr (ref #3839)`.
 
-### Tâche 3 : unité minutée, sudo, paquet
+### Task 3 : unité minutée, sudo, paquet
 
 **Fichiers :**
 - Créer : `packages/secubox-soc/debian/secubox-soc-sade-auto.service`, `packages/secubox-soc/debian/secubox-soc-sade-auto.timer`
@@ -188,7 +188,7 @@ def test_incident_95_reste_dans_la_file():   # score 97 : ni ban ni décision ; 
   unités (`dpkg -c`).
 - [ ] **Étape 5 :** commit `feat(soc): SADE ACTIVE, minuterie de l'exécuteur et paquet 1.10.0 (ref #3839)`.
 
-### Tâche 4 : façade et page — bouton ACTIVE et compteur
+### Task 4 : façade et page — bouton ACTIVE et compteur
 
 **Fichiers :**
 - Modifier : `packages/secubox-soc/api/defense.py` (`/policies` : bloc `auto`)
@@ -212,7 +212,7 @@ def test_incident_95_reste_dans_la_file():   # score 97 : ni ban ni décision ; 
 - [ ] **Étape 4 :** `pytest tests -q` → tout passe ; contrôler la syntaxe du script de la page avec `node --check`.
 - [ ] **Étape 5 :** commit `feat(soc): SADE, bouton ACTIVE et compteur des bans automatiques (ref #3839)`.
 
-### Tâche 5 : banc gk6, mesure, puis gk2 sur accord
+### Task 5 : banc gk6, mesure, puis gk2 sur accord
 
 - [ ] PR, fusion, `scripts/apt-publier.sh`, installation par apt sur **gk6** (maître de test), gk1 et gk3. gk2
   reçoit le paquet mais reste en `reactive`. Sur gk2, l'agrégateur est relancé, et un seul redémarrage groupé suffit.

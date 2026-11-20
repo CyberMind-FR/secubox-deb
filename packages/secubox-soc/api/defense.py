@@ -51,7 +51,7 @@ from secubox_core.auth import (
     require_lecture,
 )
 
-from . import defense_etat, echelle, substrat
+from . import defense_etat, echelle, sade_auto, substrat
 
 router = APIRouter(tags=["defense"])
 
@@ -505,6 +505,24 @@ async def policies(admin: bool = Depends(_est_admin)):
         if "etat_base" not in out:
             try:
                 out["seuils"], out["liste_blanche"] = defense_etat.seuils(), defense_etat.liste_blanche()
+                try:
+                    bans: Optional[int] = defense_etat.bans_auto_depuis(sade_auto.FENETRE_PLAFOND_S)
+                except defense_etat.EtatIndisponible:
+                    bans = None  # jamais un zéro inventé
+                try:
+                    _v, depuis, par = defense_etat.mode_detail()
+                except defense_etat.EtatIndisponible:
+                    depuis, par = None, None
+                # auteur du dernier changement de mode : la page dit « retour en OBSERVE par le plafond » quand c'est
+                # l'exécuteur ; le nom d'un opérateur humain ne sort que pour un administrateur
+                if not admin and par != sade_auto.OPERATEUR:
+                    par = None
+                # `bans_derniere_heure` : ADRESSES réclamées par l'exécuteur sur l'heure glissante, quel que soit l'état
+                # de la décision (la page écrit « Décisions automatiques ») ; c'est le compte du plafond
+                out["auto"] = {"plafond_heure": sade_auto.PLAFOND_HEURE, "bans_derniere_heure": bans,
+                               "score": [sade_auto.SCORE_MIN, sade_auto.SCORE_MAX],
+                               "ttl_max_s": sade_auto.TTL_AUTO_MAX_S, "adresses_max": sade_auto.ADRESSES_AUTO_MAX,
+                               "mode_par": par, "mode_depuis": depuis}
                 if not admin:  # un lecteur ne voit que l'amorçage système, jamais les ajouts ni leur auteur
                     out["liste_blanche"] = [{k: e[k] for k in ("cidr", "motif", "ts", "supprimable")}
                                             for e in out["liste_blanche"] if not e["supprimable"]]
@@ -763,8 +781,8 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
         mode = defense_etat.mode_courant()
     except defense_etat.EtatIndisponible:
         return _non(503, "base_indisponible", "base d'état indisponible")
-    if mode != "reactive":
-        return bloque(409, "mode", f"mode {mode} : la file d'approbation n'agit qu'en REACTIVE")
+    if mode not in ("reactive", "active"):
+        return bloque(409, "mode", f"mode {mode} : la file d'approbation n'agit qu'en REACTIVE ou ACTIVE")
     r = _lire_propositions()
     if not r["ok"]:
         return bloque(503, "actord_indisponible", f"actord injoignable ({r['erreur']}) : proposition non relue")
@@ -820,9 +838,10 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
         gen = defense_etat.reclamer(emp, p["menace_id"], p["geste"], ",".join(p["ips"]), p["score"], p["ttl_s"], par,
                                     "refuse" if action == "refuse" else "en_cours",
                                     f"sade-{'refuse' if action == 'refuse' else 'approuve-demande'} "
-                                    f"{_champs(p, par, duree)}{pairs_note}")
+                                    f"{_champs(p, par, duree)}{pairs_note}",
+                                    modes=("reactive", "active"))
     except defense_etat.ModeRefuse as e:
-        return _non(409, "mode", f"mode {e} : la file d'approbation n'agit qu'en REACTIVE")
+        return _non(409, "mode", f"mode {e} : la file d'approbation n'agit qu'en REACTIVE ou ACTIVE")
     except defense_etat.DejaTraitee as e:
         return _non(409, "deja_traitee", f"décision déjà {e}", etat=str(e))
     except defense_etat.AuditIndisponible:
@@ -964,8 +983,9 @@ async def proposals(admin: bool = Depends(_est_admin)):
         out["genere_le"] = _iso(d.get("genere_le"))
         try:
             etats: Optional[Dict[str, str]] = defense_etat.etats_decisions()
+            auteurs = defense_etat.auteurs_decisions()
         except defense_etat.EtatIndisponible:
-            etats, out["etat_base"] = None, "indisponible"
+            etats, auteurs, out["etat_base"] = None, {}, "indisponible"
         masque: Dict[str, str] = {}
         for p in _propositions(r):
             if admin:
@@ -978,6 +998,8 @@ async def proposals(admin: bool = Depends(_est_admin)):
                 "bande": p["bande"], "motif": motif, "validation_humaine": echelle.exige_validation(p["bande"]),
                 "etat": etats.get(p["empreinte"], "en_attente") if etats is not None else None,
                 "ttl_s": p["ttl_s"], "executable": p["geste"] in GESTES_EXECUTABLES}
+            if auteurs.get(p["empreinte"]) == sade_auto.OPERATEUR:
+                ligne["auto"] = True  # seul le fait « automatique » sort, jamais le nom d'un opérateur humain
             if admin:
                 ligne["empreinte"] = p["empreinte"]
             out["propositions"].append(ligne)

@@ -1,0 +1,32 @@
+[Unit]
+Description=SecuBox SOC - SADE ACTIVE, exécuteur automatique du cas sûr (#3839)
+Documentation=file:///usr/share/doc/secubox-soc/README.md
+After=secubox-soc.service secubox-waf-ng.service
+ConditionPathExists=/usr/lib/secubox/soc/api/sade_auto.py
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/soc
+ExecStart=/usr/bin/python3 -m api.sade_auto
+TimeoutStartSec=5min
+UMask=0027
+
+# EXCEPTION § 10 (.claude/RULES-CODE.md) : l'exécuteur lance `sudo -n /usr/sbin/wafctl ban <ip> <n>s`
+# (sudoers SBX_WAF_BANMANUEL de secubox-waf-ng). sudo est setuid : NoNewPrivileges doit rester `no`, et
+# les options qui l'impliquent (SystemCallFilter, RestrictSUIDSGID, LockPersonality,
+# MemoryDenyWriteExecute, ProtectKernelTunables, RestrictNamespaces) sont donc absentes.
+NoNewPrivileges=no
+
+# Socle gardé. wafctl s'exécute DANS l'espace de noms de montage de cette unité (sudo l'hérite) :
+# `wafctl ban` n'écrit aucun fichier (ensemble nft = noyau, journal sur stdout) ; `waf-blocs verifier`
+# ne fait que lire (liste des protégés, `ip -j addr`, `wg show`). Seuls chemins en écriture :
+#  - /var/lib/secubox/soc  : base SQLite defense.db (mode, décisions) ;
+#  - /var/log/secubox      : audit.log (append-only) ;
+#  - /run/sudo             : horodatage de sudo, absent tant que sudo ne l'a pas créé.
+# /etc/sudoers* et /usr/sbin sont lisibles sous `strict`.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox/soc /var/log/secubox -/run/sudo
+ProtectHome=yes
+PrivateTmp=yes

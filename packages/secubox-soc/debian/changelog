@@ -1,3 +1,38 @@
+secubox-soc (1.10.0-1~trixie1) trixie; urgency=medium
+
+  * SADE ACTIVE v1 (ref #3839) : le mode `active` est ouvert (`aggressive` reste
+    refusé, 409 gestes_non_livres). Le mode par défaut reste `observe`.
+  * Exécuteur automatique du cas sûr (`python3 -m api.sade_auto`) : propositions
+    d'actord de score 60 à 79 (80-94 sans récidive confirmée : proposé), au plus
+    8 adresses publiques hors protégés (liste blanche, passerelles, pairs), ban
+    d'au plus 24 h (4 h par défaut) par `sudo wafctl ban`. Plafond de 20 adresses
+    par heure : au-delà, retour en OBSERVE. Audit `sade-auto-demande`,
+    `sade-auto-resultat` (`conclusion=echec` si la base n'a pu conclure),
+    `sade-auto-plafond`. Budget de 3 min par passage.
+  * Pairs du maillage lus dans /var/lib/secubox/p2p/wg_mesh.json (mesh_ip,
+    endpoint) en plus de threatmesh : fichier illisible ⇒ aucun ban
+    (pairs_illisibles) ; absent ⇒ box sans maillage.
+  * Seuls les verdicts de garde de wafctl (refus:privee, protegee, box, pair,
+    invalide ; adresse privée ou invalide) concluent `refuse` ; tout autre échec
+    (garde illisible, nft, délai, sudo) remet en attente et arrête le passage.
+  * Arriéré à la main : migration 0002 (propositions_vues) ; seule une
+    proposition vue pour la première fois après le passage en ACTIVE est
+    traitée automatiquement.
+  * Refus humain respecté par empreinte et par adresse (une adresse refusée par
+    un opérateur exclut toute proposition qui la contient).
+  * /policies : bloc `auto` avec `mode_par` (nom humain réservé à
+    l'administrateur) et `mode_depuis` ; la page écrit « Décisions
+    automatiques : n / 20 sur l'heure », « retour en OBSERVE par le plafond
+    (HH:MM) », et « traité automatiquement » hors état appliqué.
+  * Limite v1 (README) : adresse publique de la box et du poste admin non
+    détectées, à mettre en liste blanche avant ACTIVE.
+  * Minuterie `secubox-soc-sade-auto.timer` (toutes les 2 min, 3 min après le
+    démarrage) et unité oneshot `secubox-soc-sade-auto.service` (exception § 10 :
+    NoNewPrivileges=no pour sudo, socle ProtectSystem=strict gardé). Pas encore
+    de profil AppArmor pour cette unité (suivi #3847).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 15:33:00 +0100
+
 secubox-soc (1.9.2-1~trixie1) trixie; urgency=medium
 
   * SADE (ref #3839) : « Gestes et blocages : relevé indisponible » sur gk2. La

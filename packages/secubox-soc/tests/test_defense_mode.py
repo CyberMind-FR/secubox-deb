@@ -60,11 +60,11 @@ def client():
 
 def test_mode_par_defaut_observe(client):
     j = client.get("/defense/policies", headers=LECTURE).json()
-    assert j["mode"] == "observe" and j["modes_ouverts"] == ["observe", "reactive"]
+    assert j["mode"] == "observe" and j["modes_ouverts"] == ["observe", "reactive", "active"]
     assert [b["nom"] for b in j["bandes"]] == ["observer", "reactive", "contenir", "usager", "incident"]
 
 
-@pytest.mark.parametrize("m", ["active", "aggressive"])
+@pytest.mark.parametrize("m", ["aggressive"])
 def test_modes_differes_refuses(client, m):
     r = client.post("/defense/mode", json={"mode": m}, headers=ADMIN)
     assert r.status_code == 409 and r.json()["cause"] == "gestes_non_livres" and r.json()["error"]
@@ -101,10 +101,10 @@ def test_migration_idempotente_et_tables():
     defense_etat.mode_courant()
     defense_etat.mode_courant()
     db = sqlite3.connect(defense_etat._chemin_db())
-    assert db.execute("SELECT version FROM schema_migrations").fetchall() == [(1,)]
+    assert db.execute("SELECT version FROM schema_migrations").fetchall() == [(1,), (2,)]
     assert db.execute("SELECT COUNT(*) FROM liste_blanche").fetchone()[0] == 9
     assert {t for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} >= {
-        "mode", "seuils", "liste_blanche", "decisions"}
+        "mode", "seuils", "liste_blanche", "decisions", "propositions_vues"}
     assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
 
 
@@ -118,9 +118,9 @@ def test_audit_en_echec_laisse_le_mode_et_repond_503(client, monkeypatch, tmp_pa
 def test_deux_changements_chainent_l_audit(client, audit):
     client.post("/defense/mode", json={"mode": "reactive"}, headers=ADMIN)
     client.post("/defense/mode", json={"mode": "observe"}, headers=ADMIN)
-    l = audit.lignes()
-    assert len(l) == 2
-    assert "ancien=observe nouveau=reactive" in l[0] and "ancien=reactive nouveau=observe" in l[1]
+    lignes = audit.lignes()
+    assert len(lignes) == 2
+    assert "ancien=observe nouveau=reactive" in lignes[0] and "ancien=reactive nouveau=observe" in lignes[1]
     assert defense_etat.mode_courant() == "observe"
     client.post("/defense/mode", json={"mode": "observe"}, headers=ADMIN)  # inchangé : pas de ligne
     assert len(audit.chemin.read_text(encoding="utf-8").splitlines()) == 2

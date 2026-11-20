@@ -9,3 +9,8 @@ override_dh_auto_install:
 	cp -r www/soc/. debian/secubox-soc/usr/share/secubox/www/soc/
 	install -d debian/secubox-soc/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-soc/usr/share/secubox/menu.d/ || true
+	# SADE ACTIVE (#3839) : exécuteur minuté du cas sûr. dh_installsystemd ne
+	# reconnaît que l'unité au nom du paquet ; ces deux-là sont posées à la main.
+	install -d debian/secubox-soc/usr/lib/systemd/system
+	install -m 644 debian/secubox-soc-sade-auto.service debian/secubox-soc/usr/lib/systemd/system/
+	install -m 644 debian/secubox-soc-sade-auto.timer debian/secubox-soc/usr/lib/systemd/system/

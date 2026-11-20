@@ -6,6 +6,8 @@ if [ "$1" = "configure" ]; then
     systemctl daemon-reload
     systemctl enable secubox-soc.service || true
     systemctl start secubox-soc.service || true
+    # SADE ACTIVE (#3839) : minuterie de l'exécuteur ; il ne fait rien hors mode active
+    systemctl enable --now secubox-soc-sade-auto.timer >/dev/null 2>&1 || true
 fi
 #DEBHELPER#
 exit 0

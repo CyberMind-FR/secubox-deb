@@ -6,8 +6,8 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   SecuBox — « Cyber Defense Live » (SADE, #3839) : la défense vue d'un seul écran, sur la façade /api/v1/soc/defense.
-  Lecture partout ; deux écritures, réservées à un administrateur et confirmées dans la page : le mode (OBSERVE ↔ REACTIVE)
-  et la file d'approbation (Approuver / Refuser / Simuler, en REACTIVE seulement). La façade tranche : la page affiche la cause.
+  Lecture partout ; deux écritures, réservées à un administrateur et confirmées dans la page : le mode (OBSERVE, REACTIVE, ACTIVE)
+  et la file d'approbation (Approuver / Refuser / Simuler, en REACTIVE ou ACTIVE). La façade tranche : la page affiche la cause.
   Profil projet référence Aurora. DONNÉES RÉELLES UNIQUEMENT ; chaque carte a trois états : chargement, données, « relevé indisponible ».
   Une source muette ne s'affiche jamais comme un zéro. Les adresses n'arrivent que pour un administrateur : la page ne les suppose pas.
   `?embed=1` : page encadrée (une colonne), hauteur annoncée à l'hôte.
@@ -110,12 +110,12 @@
 </style>
 <div class="cadre" id="cadre"><div class="app">
   <div class="tete">
-    <div class="marque"><b>SADE · Cyber Defense Live</b><small>Ce que la défense a vu, retenu et décidé — approbation en REACTIVE</small></div>
+    <div class="marque"><b>SADE · Cyber Defense Live</b><small>Ce que la défense a vu, retenu et décidé — approbation en REACTIVE ou ACTIVE</small></div>
     <span class="etat attente" id="etat" aria-live="polite">lecture…</span>
     <div class="modes" role="group" aria-label="Mode de défense" id="modes">
       <button type="button" data-mode="observe" aria-pressed="false">OBSERVE<span class="m">analyse</span></button>
       <button type="button" data-mode="reactive" aria-pressed="false">REACTIVE<span class="m">léger auto</span></button>
-      <button type="button" data-mode="active" aria-pressed="false" disabled title="gestes gradués non livrés (V2 4-7)">ACTIVE<span class="m">non livré</span></button>
+      <button type="button" data-mode="active" aria-pressed="false">ACTIVE<span class="m">bans sûrs auto</span></button>
       <button type="button" data-mode="aggressive" aria-pressed="false" disabled title="gestes gradués non livrés (V2 4-7)">AGGRESSIVE<span class="m">non livré</span></button>
     </div>
     <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
@@ -180,7 +180,7 @@
   }
   // Cause d'un refus de la façade, en clair ; le code `cause` reste affiché tel quel (échappé).
   var CAUSES = {
-    mode:'le mode n\'est pas REACTIVE', liste_blanche:'adresse protégée (liste blanche) ou non publique : proposition entière refusée',
+    mode:'le mode n\'est ni REACTIVE ni ACTIVE', liste_blanche:'adresse protégée (liste blanche) ou non publique : proposition entière refusée',
     gestes_non_livres:'geste non livré : seul le ban est exécutable', porteur_requis:'jeton de session requis (reconnectez-vous) : le WAF refuse une écriture par cookie seul',
     deja_traitee:'décision déjà traitée', audit_indisponible:'audit indisponible : aucun geste appliqué', base_indisponible:'base d\'état indisponible',
     actord_indisponible:'actord injoignable : proposition non relue',
@@ -214,11 +214,12 @@
     });
     $('mnote').textContent = base === 'indisponible' ? 'Base d\'état indisponible : mode par défaut affiché, à ne pas tenir pour confirmé.' : '';
   }
-  // Changement de mode : OBSERVE ↔ REACTIVE seulement, toujours confirmé dans la page ; la façade (require_jwt) tranche.
+  // Changement de mode : OBSERVE, REACTIVE ou ACTIVE, toujours confirmé dans la page ; la façade (require_jwt) tranche.
   var confMode = null, modeEnVol = false;
   var TEXTES_MODE = {
     observe:'Revenir en OBSERVE : la file d\'approbation ne pourra plus appliquer aucun geste.',
-    reactive:'Passer en REACTIVE : un administrateur pourra approuver des bans réels, un par un, chacun audité.'};
+    reactive:'Passer en REACTIVE : un administrateur pourra approuver des bans réels, un par un, chacun audité.',
+    active:'Passer en ACTIVE : les propositions sûres d\'actord (score 60 à 79, adresse publique, ban de 24 h au plus, 4 h par défaut) seront bannies automatiquement, 20 par heure au plus ; au-delà, retour en OBSERVE. Seules les propositions apparues après ce passage sont concernées ; le reste attend votre validation.'};
   function rendConfMode(){
     var c = $('mconf');
     if (!confMode) { c.hidden = true; c.innerHTML = ''; return; }
@@ -231,7 +232,7 @@
   [].slice.call(document.querySelectorAll('#modes button:not([disabled])')).forEach(function(b){
     b.addEventListener('click', function(){
       var m = b.getAttribute('data-mode');
-      if (m !== 'observe' && m !== 'reactive') return;
+      if (m !== 'observe' && m !== 'reactive' && m !== 'active') return;
       if (m === modeCourant) { confMode = null; rendConfMode(); $('mnote').textContent = 'Mode ' + m.toUpperCase() + ' déjà actif.'; return; }
       confMode = m; $('mnote').textContent = ''; rendConfMode();
     });
@@ -404,6 +405,18 @@
       return '<div class="kv"><span class="b-' + esc(b.nom) + '">' + esc(NOMS_BANDE[b.nom] || b.nom) + '</span><b>dès ' + esc(b.seuil) + '</b></div>'; }).join('') + '</div>';
     var s = d.seuils && typeof d.seuils === 'object' ? Object.keys(d.seuils) : [];
     h += '<div class="lot"><h3>Seuils</h3>' + (base ? INDISPO : s.length ? s.map(function(k){ return '<div class="kv"><span>' + esc(k) + '</span><b>' + esc(d.seuils[k]) + '</b></div>'; }).join('') : '<div class="vide">Aucun seuil enregistré.</div>') + '</div>';
+    var au = d.auto && typeof d.auto === 'object' ? d.auto : null;
+    if (au) {
+      h += '<div class="lot"><h3>Exécuteur automatique</h3><div class="kv"><span>Décisions automatiques</span><b>' +
+        (num(au.bans_derniere_heure) === null ? '—' : esc(au.bans_derniere_heure)) + ' / ' + (num(au.plafond_heure) === null ? '—' : esc(au.plafond_heure)) + ' sur l\'heure</b></div>';
+      // retour en OBSERVE décidé par l'exécuteur (plafond horaire) : la cause et l'heure, jamais un mode muet
+      if (d.mode === 'observe' && au.mode_par === 'sade-auto') {
+        var hp = au.mode_depuis ? new Date(au.mode_depuis) : null;
+        hp = hp && !isNaN(hp) ? hp.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) : '—';
+        h += '<div class="note">' + esc('retour en OBSERVE par le plafond (' + hp + ')') + '</div>';
+      }
+      h += '</div>';
+    }
     var lb = Array.isArray(d.liste_blanche) ? d.liste_blanche : [];
     h += '<div class="lot"><h3>Liste blanche (jamais bloqué)</h3>' + (base ? INDISPO : lb.length ? '<div class="repos">' + lb.map(function(e){ return chip(e.cidr + (e.motif ? ' · ' + e.motif : '')); }).join('') + '</div>' : '<div class="vide">Liste vide.</div>') + '</div>';
     h += '<div class="note">Modes ouverts : ' + esc((d.modes_ouverts || []).join(', ') || '—') + '.</div>';
@@ -411,7 +424,7 @@
   }
 
   // ── file d'approbation ──
-  // Boutons seulement en REACTIVE et pour un administrateur réel (`admin` rendu par la façade) ; chaque geste est
+  // Boutons seulement en REACTIVE ou ACTIVE et pour un administrateur réel (`admin` rendu par la façade) ; chaque geste est
   // confirmé dans la page. La page renvoie l'EMPREINTE de la proposition affichée (rendue aux seuls administrateurs) :
   // la façade la recalcule sur la proposition courante d'actord et refuse (`proposition_changee`) si elle a changé.
   var props = {}, propsAdmin = false, propsMode = null, confAppro = null, enVol = null, retours = {}, dernieresProps = null;
@@ -437,9 +450,9 @@
     ds.push(num(p.ttl_s) !== null ? 'durée ' + nb(Math.round(p.ttl_s / 60)) + ' min' : 'durée par défaut du WAF');
     var h = '<div class="ev"><span class="sc b-' + esc(b) + '">' + (num(p.score) === null ? '—' : esc(p.score)) + '</span>' +
       '<div class="tt"><b>' + esc(p.menace_id || '—') + '</b>' + chip(p.geste || '—') + chip(etat, cl) +
-      (p.validation_humaine ? chip('mesure exceptionnelle', 'cr') : '') + '<span class="note">' + esc(p.cible || '—') + '</span></div>' +
+      (p.validation_humaine ? chip('mesure exceptionnelle', 'cr') : '') + (p.auto === true ? (p.etat === 'applique' ? chip('appliqué automatiquement', 'ok') : chip('traité automatiquement')) : '') + '<span class="note">' + esc(p.cible || '—') + '</span></div>' +
       '<div class="ds">' + esc(ds.join(' · ')) + '</div>';
-    // gestes : administrateur (empreinte rendue) ; Approuver/Refuser/Simuler en REACTIVE sur une décision en attente,
+    // gestes : administrateur (empreinte rendue) ; Approuver/Refuser/Simuler en REACTIVE ou ACTIVE sur une décision en attente,
     // Reprendre sur une décision restée « en cours » (quel que soit le mode : elle ne pose aucun ban)
     var offre = !cle ? null : (actif && p.etat === 'en_attente') ? 'file' : (propsAdmin && p.etat === 'en_cours') ? 'reprise' : null;
     if (offre) {
@@ -465,9 +478,9 @@
     var d = r.d, l = Array.isArray(d.propositions) ? d.propositions : [];
     propsAdmin = d.admin === true; propsMode = d.mode; props = {};
     l.forEach(function(p){ if (p && typeof p.empreinte === 'string') props[p.empreinte] = p; });
-    var actif = propsMode === 'reactive' && propsAdmin && d.etat_base !== 'indisponible';
+    var actif = (propsMode === 'reactive' || propsMode === 'active') && propsAdmin && d.etat_base !== 'indisponible';
     var notes = [];
-    if (propsMode !== 'reactive') notes.push('Mode ' + String(propsMode || 'inconnu').toUpperCase() + ' : la file se consulte, aucun geste ne s\'approuve hors REACTIVE.');
+    if (propsMode !== 'reactive' && propsMode !== 'active') notes.push('Mode ' + String(propsMode || 'inconnu').toUpperCase() + ' : la file se consulte, aucun geste ne s\'approuve hors REACTIVE ou ACTIVE.');
     else if (!propsAdmin) notes.push('Approbation réservée à un administrateur : adresses masquées, aucun bouton.');
     if (d.etat_base === 'indisponible') notes.push('Base d\'état indisponible : état des décisions inconnu, aucun geste proposé.');
     if (d.shadow === true) notes.push('actord propose seulement (shadow) : rien n\'est appliqué sans validation.');

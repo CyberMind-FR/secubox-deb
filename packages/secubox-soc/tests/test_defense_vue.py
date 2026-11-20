@@ -48,10 +48,10 @@ def test_sections_presentes():
 
 
 def test_modes_non_livres_desactives_avec_infobulle():
-    for m in ("active", "aggressive"):
+    for m in ("aggressive",):
         b = re.search(r'<button[^>]*data-mode="' + m + r'"[^>]*>', PAGE)
         assert b and " disabled" in b.group(0) and "gestes gradués non livrés (V2 4-7)" in b.group(0), m
-    for m in ("observe", "reactive"):
+    for m in ("observe", "reactive", "active"):
         b = re.search(r'<button[^>]*data-mode="' + m + r'"[^>]*>', PAGE)
         assert b and " disabled" not in b.group(0), m
 
@@ -69,7 +69,7 @@ def test_carte_d_approbation_chargee_par_la_facade():
 
 def test_boutons_d_approbation_seulement_en_reactive_et_pour_un_admin():
     f = re.search(r"function rendAppro.*?\n  }\n", PAGE, re.S).group(0)
-    assert "propsMode === 'reactive' && propsAdmin" in f and "d.admin === true" in f
+    assert "(propsMode === 'reactive' || propsMode === 'active') && propsAdmin" in f and "d.admin === true" in f
     g = re.search(r"function ligneProp.*?\n  }\n", PAGE, re.S).group(0)
     assert "(actif && p.etat === 'en_attente')" in g and "!cle ? null" in g
     for b in ("Approuver", "Refuser", "Simuler", "Confirmer", "Annuler", "mesure exceptionnelle"):
@@ -89,7 +89,7 @@ def test_causes_affichees_et_chaines_echappees():
 
 def test_bascule_de_mode_confirmee_dans_la_page():
     assert 'id="mconf"' in PAGE and "appel('POST', '/mode', {mode:cible})" in PAGE
-    assert "m !== 'observe' && m !== 'reactive'" in PAGE
+    assert "m !== 'observe' && m !== 'reactive' && m !== 'active'" in PAGE
 
 
 def test_etats_honnetes():
