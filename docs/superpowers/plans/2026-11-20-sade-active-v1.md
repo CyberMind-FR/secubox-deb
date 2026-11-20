@@ -31,7 +31,7 @@ sudo (verbe `wafctl ban` existant), page `www/soc/defense.html`.
 - Cas sûr, toutes conditions réunies : geste `ban` (mode actord `DENY`) ; score de **60 à 94** inclus ; 1 à **8**
   adresses ; toutes publiques et hors protégés (liste blanche en base, passerelles, pairs du maillage) via
   `defense._adresse_interdite` ; liste blanche lisible.
-- Durée appliquée : `min(ttl_s or 86400, 86400)` secondes, passée à wafctl sous la forme `"<n>s"`. L'empreinte reste
+- Durée appliquée : `min(ttl_s or 14400, 86400)` secondes (14400 = durée par défaut du WAF, comme l'approbation manuelle sans durée ; ruling T2), passée à wafctl sous la forme `"<n>s"`. L'empreinte reste
   celle de la proposition (`defense.empreinte`), sans changement.
 - Plafond : **20 adresses** bannies par `sade-auto` sur 3600 s glissantes. Si un lot le dépasserait, rien n'est banni
   dans ce lot et le mode repasse à `observe`, `par = "sade-auto"`, avec un audit `sade-auto-plafond`.
