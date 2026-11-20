@@ -339,16 +339,17 @@ def bans_auto_depuis(secondes: int, maintenant: Optional[float] = None) -> int:
 
 
 def conclure(empreinte: str, generation: int, etat: str, resultat: str, demande_ts: Optional[str] = None) -> None:
-    """Tranche une décision `en_cours` : `applique`, ou retour `en_attente` après un échec du WAF. Avec `demande_ts`
-    (celui de la réclamation close), un fil retardataire ne peut pas clore une réclamation ultérieure de la même
-    génération (reprise)."""
-    if etat not in ("applique", "en_attente"):
+    """Tranche une décision `en_cours` : `applique`, `refuse` (l'exécuteur automatique, quand `wafctl` a refusé une
+    adresse : ré-armable après 24 h, jamais retenté à chaque passage), ou retour `en_attente` après un échec transitoire
+    du WAF. Avec `demande_ts` (celui de la réclamation close), un fil retardataire ne peut pas clore une réclamation
+    ultérieure de la même génération (reprise)."""
+    if etat not in ("applique", "refuse", "en_attente"):
         raise ValueError("état de conclusion inconnu")
     try:
         with closing(_connecter()) as db:
             sql = ("UPDATE decisions SET etat = ?, resultat = ?, tranche_ts = ? "
                    "WHERE empreinte = ? AND generation = ? AND etat = 'en_cours'")
-            args: list = [etat, resultat[:500], _ts() if etat == "applique" else None, empreinte, generation]
+            args: list = [etat, resultat[:500], _ts() if etat in ("applique", "refuse") else None, empreinte, generation]
             if demande_ts is not None:
                 sql += " AND demande_ts = ?"
                 args.append(demande_ts)
