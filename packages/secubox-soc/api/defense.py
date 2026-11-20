@@ -56,7 +56,9 @@ from . import defense_etat, echelle, substrat
 router = APIRouter(tags=["defense"])
 
 TTL_S = 15.0          # durée du cache par route
-TAMPON_S = 120.0      # un relevé complet de moins de 120 s n'est pas écrasé par un relevé dégradé (#3011)
+TAMPON_S = 900.0      # un relevé complet de moins de 15 min n'est pas écrasé par un relevé dégradé (#3011) ; il porte
+                      # son heure (`releve_a`) et la page l'affiche « RELEVÉ DU HH:MM » : jamais présenté comme direct
+DELAI_LECTURE_S = 20.0  # lecture d'une source : /bans/history prend 1 à 3 s sur gk2 chargé, 3 s coupaient (20/11)
 MENACES_MAX = 200
 CACHE_MAX = 256       # entrées au plus : la clé contient un condensat des identifiants de l'appelant
 
@@ -128,6 +130,7 @@ def _servi(cle: Tuple, calcul: Callable[[], Dict[str, Any]]) -> Dict[str, Any]:
         if e is not None and maintenant < e["retry_at"]:
             return e["payload"]
     payload = calcul()
+    payload["releve_a"] = _iso(maintenant)
     complet = all(v["ok"] is not False for v in payload["sources"].values())
     with _VERROU:
         e = _CACHE.get(cle)
@@ -168,7 +171,7 @@ def _lire_actord(admin: bool, chemin: str) -> Dict[str, Any]:
     QUE dans la vue complète (404 sinon, RELEVE.md) : on la demande pour tous, ses adresses ne servent qu'en interne
     et n'atteignent que la réponse d'un administrateur."""
     entetes = {"X-Sbx-Vue": "complete"} if chemin == "/proposals" or (admin and chemin == "/actors") else None
-    return substrat.lire("actord", chemin, entetes=entetes)
+    return substrat.lire("actord", chemin, entetes=entetes, delai=DELAI_LECTURE_S)
 
 
 def _liste(r: Dict[str, Any], cle: Optional[str] = None) -> list:
@@ -194,15 +197,35 @@ def _contexte(admin: bool, entetes: Dict[str, str], actord=("/actors", "/proposa
         brut["actord" + chemin] = r
         par_source.setdefault("actord", []).append(r)
     for chemin in waf:
-        r = substrat.lire("waf", chemin, entetes=entetes)
+        r = substrat.lire("waf", chemin, entetes=entetes, delai=DELAI_LECTURE_S)
         brut["waf" + chemin] = r
         par_source.setdefault("waf", []).append(r)
     for chemin in mesh:
-        r = substrat.lire("threatmesh", chemin, entetes=entetes)
+        r = substrat.lire("threatmesh", chemin, entetes=entetes, delai=DELAI_LECTURE_S)
         brut["threatmesh" + chemin] = r
         par_source.setdefault("threatmesh", []).append(r)
     brut["lues"] = {s: _agreger(v) for s, v in par_source.items()}
     return brut
+
+
+def _nom_hote() -> Optional[str]:
+    try:
+        n = socket.gethostname().split(".")[0]
+    except OSError:
+        return None
+    return n if re.fullmatch(r"[A-Za-z0-9-]{1,63}", n or "") else None
+
+
+def _type_lisible(t: Any) -> Any:
+    """actord marque d'un « ? » final un outil deviné (« client-automatise? ») : « client-automatise (probable) »."""
+    if isinstance(t, str) and t.endswith("?") and t.rstrip("?"):
+        return t.rstrip("?") + " (probable)"
+    return t
+
+
+def _meme_incident(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
+    return (a["titre"], (a["ts"] or "")[:16], a["bande"], a["issue"], a["score"]) == \
+        (b["titre"], (b["ts"] or "")[:16], b["bande"], b["issue"], b["score"])
 
 
 # ── construction des menaces ──────────────────────────────────────────────────────────────────────
@@ -408,7 +431,8 @@ async def mesh(request: Request, admin: bool = Depends(_est_admin)):
         noeuds: List[Dict[str, Any]] = []
         if isinstance(st, dict):
             recus = st.get("mesh") if isinstance(st.get("mesh"), dict) else {}
-            noeuds.append({"nom": st.get("node"), "soi": True, "emis": None,
+            # le nom d'hôte de la box, pas l'identifiant technique de threatmesh (« sb-b3f6… » vu sur gk2, 20/11)
+            noeuds.append({"nom": _nom_hote() or st.get("node"), "identifiant": st.get("node"), "soi": True, "emis": None,
                            "recus": st.get("mesh_total") if isinstance(st.get("mesh_total"), int) else None,
                            "etat": "actif"})
             for p in _liste(ctx["threatmesh/peers"], "peers"):
@@ -418,7 +442,10 @@ async def mesh(request: Request, admin: bool = Depends(_est_admin)):
                 n = recus.get(f"mesh:{nom}")
                 noeuds.append({"nom": nom, "soi": False, "emis": None, "recus": n if isinstance(n, int) else None,
                                "etat": "actif" if isinstance(n, int) and n > 0 else "silencieux"})
-        return {"noeuds": noeuds, "sources": src}
+        # threatmesh ≥ 1.2.0 ne partage plus d'indicateurs non signés (#3450) : des pairs tous silencieux sont attendus
+        pairs = [n for n in noeuds if not n["soi"]]
+        return {"noeuds": noeuds, "pairs_silencieux": bool(pairs) and all(n["etat"] == "silencieux" for n in pairs),
+                "sources": src}
 
     return await asyncio.to_thread(_servi, _cle("mesh", admin, entetes), calcul)
 
@@ -436,7 +463,7 @@ async def incidents(request: Request, jours: int = Query(7, ge=1, le=90), admin:
         # d'actord (shadow ou non) n'est qu'« proposé ».
         bloques = {a for a, ips in propose.items() if bannies & set(ips)}
         depuis = time.time() - jours * 86400
-        out = []
+        out: List[Dict[str, Any]] = []
         for e in _liste(ctx["actord/overview"], "recents"):
             if not isinstance(e, dict):
                 continue
@@ -445,10 +472,15 @@ async def incidents(request: Request, jours: int = Query(7, ge=1, le=90), admin:
                 continue
             sc = e.get("score") if echelle.bande(e.get("score")) != "inconnu" else None
             b = echelle.bande(sc)
-            out.append({"ts": _iso(ts), "titre": f"{e.get('acteur')} : {e.get('type')} ({e.get('module')})",
-                        "score": sc, "bande": b,
-                        "issue": "bloqué" if e.get("acteur") in bloques
-                        else "proposé" if e.get("acteur") in propose else "observé"})
+            inc = {"ts": _iso(ts), "titre": f"{e.get('acteur')} : {_type_lisible(e.get('type'))} ({e.get('module')})",
+                   "score": sc, "bande": b,
+                   "issue": "bloqué" if e.get("acteur") in bloques
+                   else "proposé" if e.get("acteur") in propose else "observé", "n": 1}
+            # actord émet un événement par requête : deux lignes identiques dans la même minute n'en font qu'une (×n)
+            if out and _meme_incident(out[-1], inc):
+                out[-1]["n"] += 1
+                continue
+            out.append(inc)
         return {"incidents": out, "sources": src}
 
     return await asyncio.to_thread(_servi, _cle(f"incidents:{jours}", admin, entetes), calcul)

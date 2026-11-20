@@ -1,3 +1,16 @@
+secubox-soc (1.9.2-1~trixie1) trixie; urgency=medium
+
+  * SADE (ref #3839) : « Gestes et blocages : relevé indisponible » sur gk2. La
+    lecture du WAF était coupée à 3 s (/bans/history : 1 à 3 s sur une box
+    chargée) : délai porté à 20 s ; le dernier relevé complet reste servi 15 min
+    au lieu de 2, daté (releve_a), la page affiche « RELEVÉ DU HH:MM ».
+  * Maillage : nom d hôte de la box au lieu de l identifiant threatmesh ; note
+    quand tous les pairs sont silencieux (partage retiré, #3450).
+  * Incidents : doublons d une même minute regroupés (×n) ; outil deviné par
+    actord (« …? ») écrit « … (probable) ».
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 14:48:02 +0100
+
 secubox-soc (1.9.1-1~trixie1) trixie; urgency=medium
 
   * SADE (ref #3839) : en mode tableau de bord (LAN sans jeton), le verdict LAN

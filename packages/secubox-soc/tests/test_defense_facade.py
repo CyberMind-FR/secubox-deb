@@ -119,9 +119,11 @@ def test_actions_nominal_admin(faux, client, admin):
                     "etat": "actif"}
 
 
-def test_mesh_nominal(faux, client, admin):
+def test_mesh_nominal(faux, client, admin, monkeypatch):
+    monkeypatch.setattr(defense, "_nom_hote", lambda: "gk-test")
     n = client.get("/defense/mesh", headers=LECTURE).json()["noeuds"]
-    assert n[0]["nom"] == "gk-exemple" and n[0]["soi"] is True and n[0]["recus"] == 12
+    # le nom d'hôte de la box, l'identifiant technique de threatmesh à part
+    assert n[0]["nom"] == "gk-test" and n[0]["identifiant"] == "gk-exemple" and n[0]["soi"] is True and n[0]["recus"] == 12
     assert n[1] == {"nom": "gk-pair", "soi": False, "emis": None, "recus": 12, "etat": "actif"}
 
 
@@ -185,16 +187,16 @@ def test_cache_15s_et_double_tampon(faux, client, admin):
     n = len(faux.appels)
     client.get("/defense/status", headers=LECTURE)
     assert len(faux.appels) == n  # servi par le cache
-    # expiration du cache, puis sources muettes : le relevé complet de moins de 120 s est conservé
+    # expiration du cache, puis sources muettes : le relevé complet de moins de 15 min est conservé
     for e in defense._CACHE.values():
         e["retry_at"] = 0.0
     faux.rep.clear()
     j = client.get("/defense/status", headers=LECTURE).json()
     assert j["menaces_suivies"] == 2 and j["sources"]["actord"]["ok"] is True
-    # au-delà de 120 s, on dit la vérité
+    # au-delà de 15 min, on dit la vérité
     for e in defense._CACHE.values():
         e["retry_at"] = 0.0
-        e["complet_a"] -= 200
+        e["complet_a"] -= 1000
     j = client.get("/defense/status", headers=LECTURE).json()
     assert j["menaces_suivies"] is None and j["sources"]["actord"]["ok"] is False
 
