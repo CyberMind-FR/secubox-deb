@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+[Unit]
+Description=SecuBox Mail — veille des services de courrier du conteneur (Postfix, Dovecot, rspamd ; #3842)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3842
+After=secubox-mail.service
+
+[Service]
+Type=oneshot
+# Root : entre dans le conteneur mail (lxc-attach). Relance un service en échec ; sort en erreur s'il ne repart pas.
+ExecStart=/usr/sbin/mailctl veille
+# Un lxc-attach figé (conteneur saturé, le cas visé) ne doit pas bloquer la veille : l'unité échoue et se voit.
+TimeoutStartSec=2min
+# Socle compatible avec lxc-attach (exception écrite dans RULES-CODE § 10, précédent secubox-searxng-reload).
+UMask=0027
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+RestrictRealtime=true
+SystemCallArchitectures=native

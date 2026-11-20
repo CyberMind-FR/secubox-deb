@@ -95,6 +95,9 @@ override_dh_auto_install:
 	# Rapatriement des boîtes IMAP distantes (#3033)
 	install -m 644 debian/secubox-mail-imap-sync.service debian/secubox-mail/usr/lib/systemd/system/
 	install -m 644 debian/secubox-mail-imap-sync.timer debian/secubox-mail/usr/lib/systemd/system/
+	# Veille des services de courrier du conteneur (#3842).
+	install -m 644 debian/secubox-mail-veille.service debian/secubox-mail/usr/lib/systemd/system/
+	install -m 644 debian/secubox-mail-veille.timer debian/secubox-mail/usr/lib/systemd/system/
 	# Composant absorbé : smtp-relay (#2050)
 	install -d debian/secubox-mail/usr/lib/secubox/smtp-relay/
 	cp -r composants/smtp-relay/api debian/secubox-mail/usr/lib/secubox/smtp-relay/
