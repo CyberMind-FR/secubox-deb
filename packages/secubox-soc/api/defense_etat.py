@@ -87,6 +87,16 @@ def mode_courant() -> str:
     return r[0] if r else "observe"
 
 
+def mode_detail() -> Tuple[str, Optional[str], Optional[str]]:
+    """(valeur, depuis, par) du mode ; sans ligne : (`observe`, None, None). Lève `EtatIndisponible`."""
+    try:
+        with closing(_connecter()) as db:
+            r = db.execute("SELECT valeur, depuis, par FROM mode WHERE id = 1").fetchone()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return (r[0], r[1], r[2]) if r else ("observe", None, None)
+
+
 def champ_sain(v: Any, n: int = 256) -> str:
     """Champ d'audit : sans espace ni caractère de contrôle (une ligne = une décision), borné à `n` caractères."""
     return ("".join(c if (c.isprintable() and not c.isspace()) else "_" for c in str(v))[:n]) or "-"
@@ -360,11 +370,58 @@ def refuse_par_humain(empreinte: str) -> bool:
     24 h (la proposition reste approuvable à la main). Lève `EtatIndisponible` si la base ne se lit pas."""
     try:
         with closing(_connecter()) as db:
-            r = db.execute("SELECT 1 FROM decisions WHERE empreinte = ? AND etat = 'refuse' AND par != 'sade-auto' LIMIT 1",
-                           (empreinte,)).fetchone()
+            # COALESCE : un refus sans opérateur enregistré compte comme humain (échec fermé)
+            r = db.execute("SELECT 1 FROM decisions WHERE empreinte = ? AND etat = 'refuse' "
+                           "AND COALESCE(par, '') != 'sade-auto' LIMIT 1", (empreinte,)).fetchone()
     except (sqlite3.Error, OSError) as e:
         raise EtatIndisponible(e.__class__.__name__) from e
     return r is not None
+
+
+def adresses_refusees_par_humain() -> List[str]:
+    """Adresses (texte brut de `cible`, séparées par `,`) de toute décision REFUSÉE par un autre opérateur que
+    l'exécuteur automatique, toutes générations et empreintes confondues : une adresse refusée une fois par un humain
+    exclut du chemin automatique toute proposition qui la contient (durée ou lot différents). Lève `EtatIndisponible`."""
+    try:
+        with closing(_connecter()) as db:
+            lignes = db.execute("SELECT cible FROM decisions WHERE etat = 'refuse' "
+                                "AND COALESCE(par, '') != 'sade-auto'").fetchall()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return [a.strip() for (c,) in lignes for a in (c or "").split(",") if a.strip()]
+
+
+RETENTION_VUES_S = 30 * 86400
+
+
+def noter_propositions_vues(empreintes: List[str]) -> Dict[str, str]:
+    """Note la PREMIÈRE vue de chaque empreinte (INSERT OR IGNORE : une vue plus ancienne n'est jamais rajeunie) et rend
+    {empreinte: vu_ts} pour celles données. Purge les vues de plus de 30 jours dont l'empreinte n'est plus proposée
+    (une proposition encore présente garde sa première vue). Une transaction ; lève `EtatIndisponible`."""
+    maintenant = _ts()
+    limite = datetime.fromtimestamp(datetime.now(timezone.utc).timestamp() - RETENTION_VUES_S,
+                                    timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        db = _connecter()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    with closing(db):
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            db.executemany("INSERT OR IGNORE INTO propositions_vues(empreinte, vu_ts) VALUES (?, ?)",
+                           [(e, maintenant) for e in empreintes])
+            courantes = set(empreintes)
+            anciennes = [e for (e,) in db.execute("SELECT empreinte FROM propositions_vues WHERE vu_ts < ?", (limite,))
+                         if e not in courantes]
+            db.executemany("DELETE FROM propositions_vues WHERE empreinte = ?", [(e,) for e in anciennes])
+            vues = {e: t for e, t in db.execute("SELECT empreinte, vu_ts FROM propositions_vues")
+                    if e in courantes}
+            db.execute("COMMIT")
+        except sqlite3.Error as e:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise EtatIndisponible(e.__class__.__name__) from e
+    return vues
 
 
 def conclure(empreinte: str, generation: int, etat: str, resultat: str, demande_ts: Optional[str] = None) -> None:

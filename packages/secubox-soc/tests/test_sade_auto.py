@@ -28,11 +28,11 @@ def _actord(*props):
     return {"genere_le": 1763630000, "shadow": False, "propositions": list(props)}
 
 
-def _brute(actor="ACT-0001", mode="DENY", ips=("203.0.113.10",), ttl=3600, priorite=86):
+def _brute(actor="ACT-0001", mode="DENY", ips=("203.0.113.10",), ttl=3600, priorite=70):
     return {"actor": actor, "mode": mode, "raison": "essai", "ttl_s": ttl, "ips": list(ips), "priorite": priorite}
 
 
-def prop(score=86, geste="ban", ips=("203.0.113.10",), ttl=3600):
+def prop(score=70, geste="ban", ips=("203.0.113.10",), ttl=3600):
     """Proposition normalisée (forme de `defense._propositions`)."""
     ips = list(ips)
     return {"id": f"ACT-0001:{geste}", "empreinte": defense.empreinte(geste, ips, ttl), "menace_id": "ACT-0001",
@@ -70,6 +70,7 @@ def faux(tmp_path, monkeypatch):
     monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "audit.log"))
     monkeypatch.setenv("SECUBOX_TABLEAU_DE_BORD", "0")
     monkeypatch.setattr(defense, "ROUTES_PROC", str(tmp_path / "route-absente"))
+    monkeypatch.setenv("SECUBOX_SOC_WG_MESH", str(tmp_path / "wg_mesh-absent.json"))  # jamais l'état réel du poste
     f = Faux()
     monkeypatch.setattr(defense.substrat, "lire", f.lire)
     monkeypatch.setattr(sade_auto, "_wafctl_ban", f.ban)
@@ -97,13 +98,14 @@ def _actions():
 
 def test_constantes():
     assert sade_auto.PLAFOND_HEURE == 20 and sade_auto.TTL_AUTO_MAX_S == 86400
-    assert (sade_auto.SCORE_MIN, sade_auto.SCORE_MAX) == (60, 94)
+    assert (sade_auto.SCORE_MIN, sade_auto.SCORE_MAX) == (60, 79)  # 80-94 : récidive non contrôlée ⇒ proposé
     assert sade_auto.ADRESSES_AUTO_MAX == 8 and sade_auto.OPERATEUR == "sade-auto"
 
 
 def test_cas_sur_bornes():
-    assert cas_sur(prop(score=60), []) == (True, "ok") and cas_sur(prop(score=94), []) == (True, "ok")
-    assert cas_sur(prop(score=59), [])[1] == "score" and cas_sur(prop(score=95), [])[1] == "score"
+    assert cas_sur(prop(score=60), []) == (True, "ok") and cas_sur(prop(score=79), []) == (True, "ok")
+    assert cas_sur(prop(score=59), [])[1] == "score" and cas_sur(prop(score=80), [])[1] == "score"
+    assert cas_sur(prop(score=94), [])[1] == "score" and cas_sur(prop(score=95), [])[1] == "score"
     assert cas_sur(prop(score=None), [])[1] == "score"
     assert cas_sur(prop(geste="quarantaine"), [])[1] == "geste"
     assert cas_sur(prop(ips=[]), [])[1] == "sans_adresse"
@@ -124,7 +126,8 @@ def test_hors_active_rien(faux):
     r = sade_auto.executer()
     assert r["mode"] == "reactive" and r["bannies"] == [] and faux.bans == []
     assert defense_etat.etats_decisions() == {}
-    assert not any(s == "actord" for s, _c, _e in faux.lus)
+    # hors ACTIVE, l'exécuteur relève seulement la première vue des propositions (arriéré, F3) : aucune décision
+    assert not any(s == "threatmesh" for s, _c, _e in faux.lus)
 
 
 def test_observe_par_defaut_rien(faux):
@@ -383,9 +386,13 @@ def test_wafctl_ban_commande_et_classement(monkeypatch):
     assert sade_auto._wafctl_ban("203.0.113.10", "3600s") == (True, "ok")
     assert vus == [(["sudo", "-n", "/usr/sbin/wafctl", "ban", "203.0.113.10", "3600s"], 30)]
 
-    monkeypatch.setattr(sade_auto.subprocess, "run", lambda cmd, **kw: _Fini(1, "adresse protégée\n"))
+    monkeypatch.setattr(sade_auto.subprocess, "run", lambda cmd, **kw: _Fini(1, "refus:protegee\n"))
     ok, raison = sade_auto._wafctl_ban("203.0.113.10", "3600s")
     assert not ok and sade_auto.refus_definitif(raison)
+
+    monkeypatch.setattr(sade_auto.subprocess, "run", lambda cmd, **kw: _Fini(1, "adresse protégée\n"))
+    ok, raison = sade_auto._wafctl_ban("203.0.113.10", "3600s")
+    assert not ok and not sade_auto.refus_definitif(raison)  # message inconnu : temporaire
 
     monkeypatch.setattr(sade_auto.subprocess, "run", lambda cmd, **kw: _Fini(1, "sudo: a password is required\n"))
     ok, raison = sade_auto._wafctl_ban("203.0.113.10", "3600s")

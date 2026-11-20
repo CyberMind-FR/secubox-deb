@@ -509,9 +509,20 @@ async def policies(admin: bool = Depends(_est_admin)):
                     bans: Optional[int] = defense_etat.bans_auto_depuis(sade_auto.FENETRE_PLAFOND_S)
                 except defense_etat.EtatIndisponible:
                     bans = None  # jamais un zéro inventé
+                try:
+                    _v, depuis, par = defense_etat.mode_detail()
+                except defense_etat.EtatIndisponible:
+                    depuis, par = None, None
+                # auteur du dernier changement de mode : la page dit « retour en OBSERVE par le plafond » quand c'est
+                # l'exécuteur ; le nom d'un opérateur humain ne sort que pour un administrateur
+                if not admin and par != sade_auto.OPERATEUR:
+                    par = None
+                # `bans_derniere_heure` : ADRESSES réclamées par l'exécuteur sur l'heure glissante, quel que soit l'état
+                # de la décision (la page écrit « Décisions automatiques ») ; c'est le compte du plafond
                 out["auto"] = {"plafond_heure": sade_auto.PLAFOND_HEURE, "bans_derniere_heure": bans,
                                "score": [sade_auto.SCORE_MIN, sade_auto.SCORE_MAX],
-                               "ttl_max_s": sade_auto.TTL_AUTO_MAX_S, "adresses_max": sade_auto.ADRESSES_AUTO_MAX}
+                               "ttl_max_s": sade_auto.TTL_AUTO_MAX_S, "adresses_max": sade_auto.ADRESSES_AUTO_MAX,
+                               "mode_par": par, "mode_depuis": depuis}
                 if not admin:  # un lecteur ne voit que l'amorçage système, jamais les ajouts ni leur auteur
                     out["liste_blanche"] = [{k: e[k] for k in ("cidr", "motif", "ts", "supprimable")}
                                             for e in out["liste_blanche"] if not e["supprimable"]]

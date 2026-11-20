@@ -10,15 +10,32 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_defense_facade import faux, client, admin, LECTURE  # noqa: E402,F401
-from api import defense, defense_etat  # noqa: E402
+from api import defense_etat  # noqa: E402
 
 PAGE = (Path(__file__).resolve().parent.parent / "www" / "soc" / "defense.html").read_text(encoding="utf-8")
 
 
 def test_policies_bloc_auto(faux, client):
     j = client.get("/defense/policies", headers=LECTURE).json()
-    assert j["auto"] == {"plafond_heure": 20, "bans_derniere_heure": 0, "score": [60, 94],
-                         "ttl_max_s": 86400, "adresses_max": 8}
+    assert j["auto"] == {"plafond_heure": 20, "bans_derniere_heure": 0, "score": [60, 79],
+                         "ttl_max_s": 86400, "adresses_max": 8, "mode_par": None, "mode_depuis": None}
+
+
+def test_policies_cause_du_retour_en_observe(faux, client, admin, monkeypatch, tmp_path):
+    monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "audit.log"))
+    defense_etat.changer_mode("active", "alice")
+    j = client.get("/defense/policies", headers=LECTURE).json()
+    assert j["auto"]["mode_par"] == "alice" and j["auto"]["mode_depuis"].endswith("Z")  # administrateur
+    defense_etat.changer_mode("observe", "sade-auto")
+    j = client.get("/defense/policies", headers=LECTURE).json()
+    assert j["mode"] == "observe" and j["auto"]["mode_par"] == "sade-auto"
+
+
+def test_policies_lecteur_ne_voit_pas_l_operateur_humain(faux, client, monkeypatch, tmp_path):
+    monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "audit.log"))
+    defense_etat.changer_mode("active", "alice")
+    j = client.get("/defense/policies", headers=LECTURE).json()
+    assert j["auto"]["mode_par"] is None and "alice" not in str(j) and j["auto"]["mode_depuis"].endswith("Z")
 
 
 def test_policies_auto_none_si_base_illisible(faux, client, monkeypatch):
@@ -62,9 +79,22 @@ def test_bouton_active_actif_aggressive_non():
 def test_texte_de_confirmation_active():
     m = re.search(r"\n    active:'(.*?)'\};", PAGE, re.S).group(1)
     assert "20 par heure" in m and "retour en OBSERVE" in m and "ban de 24 h au plus" in m
+    assert "score 60 à 79" in m and "94" not in m
 
 
 def test_page_compteur_et_marque_auto():
-    assert "sur l\\'heure" in PAGE and "Bans automatiques" in PAGE
+    assert "sur l\\'heure" in PAGE and "Décisions automatiques" in PAGE and "Bans automatiques" not in PAGE
     assert "appliqué automatiquement" in PAGE and "p.auto === true" in PAGE
     assert "REACTIVE seulement" not in PAGE and "hors REACTIVE.'" not in PAGE
+
+
+def test_marque_auto_selon_l_etat():
+    """« appliqué automatiquement » seulement pour un état `applique` ; sinon « traité automatiquement »."""
+    m = re.search(r"p\.auto === true \? \(p\.etat === 'applique' \? chip\('appliqué automatiquement', 'ok'\) : "
+                  r"chip\('traité automatiquement'\)\) : ''", PAGE)
+    assert m is not None
+
+
+def test_page_retour_observe_par_le_plafond():
+    assert "retour en OBSERVE par le plafond (" in PAGE
+    assert "au.mode_par === 'sade-auto'" in PAGE and "d.mode === 'observe'" in PAGE
