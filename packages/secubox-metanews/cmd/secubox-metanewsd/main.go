@@ -265,6 +265,9 @@ func seed(st *store.Store, jr *log.Logger) {
 		{Slug: "ledauphine-savoie", Name: "Le Dauphiné — Savoie", URL: "https://www.ledauphine.com/savoie/rss", Enabled: true, Category: "local"},
 		// FR — presse indépendante et d'enquête (#1360)
 		{Slug: "mediapart", Name: "Mediapart", URL: "https://www.mediapart.fr/articles/feed", Enabled: true, Category: "general"},
+		// Blog du Club Mediapart (pas de flux RSS public → lecture de la page des
+		// billets, cf. internal/linker/mediapart.go) — #3835.
+		{Slug: "mediapart-sudfa", Name: "Mediapart — Sudfa", Type: "mediapart-blog", URL: "https://blogs.mediapart.fr/sudfa/blog", Enabled: true, Category: "general"},
 		{Slug: "reporterre", Name: "Reporterre", URL: "https://reporterre.net/spip.php?page=backend", Enabled: true, Category: "general"},
 		{Slug: "basta", Name: "Basta!", URL: "https://basta.media/spip.php?page=backend", Enabled: true, Category: "general"},
 		{Slug: "humanite", Name: "L'Humanité", URL: "https://www.humanite.fr/rss/actu.rss", Enabled: true, Category: "general"},

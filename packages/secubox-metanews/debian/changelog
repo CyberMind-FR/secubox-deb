@@ -1,3 +1,14 @@
+secubox-metanews (0.6.3-1~trixie1) trixie; urgency=medium
+
+  * Blogs du Club Mediapart : suivi sans RSS (#3835). Mediapart ne publie
+    plus de flux par blog ; nouveau type de source « mediapart-blog » (et
+    auto-détection de l'hôte blogs.mediapart.fr) qui lit la liste publique
+    des billets (li[data-type=blog] : titre, lien, data-id, date, auteur,
+    vignette) et en fait des articles. Dispatch dans le pipeline (Sonder +
+    test d'URL). Seed : « Mediapart — Sudfa » (blogs.mediapart.fr/sudfa).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 08:00:29 +0100
+
 secubox-metanews (0.6.2-1~trixie1) trixie; urgency=medium
 
   * searxng : TimeoutStopSec=15 sur l'unité du conteneur (granian dépassait
