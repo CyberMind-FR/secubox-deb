@@ -3,6 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """#3839 — mode et politique SADE : persistance, audit, liste blanche amorcée, modes différés."""
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -19,12 +20,21 @@ LECTURE = {"Authorization": "Bearer lecteur"}
 ADMIN = {"Authorization": "Bearer admin"}
 
 
+def _en_texte(ligne):
+    """Ligne d'audit JSON -> « ts action clé=valeur … » : les assertions lisent les champs, le format JSON a son test."""
+    o = json.loads(ligne)
+    return " ".join([o["ts"], o["action"]] + [f"{k}={v}" for k, v in o.items() if k not in ("ts", "module", "action")])
+
+
 class Audit:
     def __init__(self, chemin):
         self.chemin = chemin
 
+    def lignes(self):
+        return [_en_texte(x) for x in self.chemin.read_text(encoding="utf-8").splitlines()]
+
     def derniere(self):
-        return self.chemin.read_text(encoding="utf-8").splitlines()[-1]
+        return self.lignes()[-1]
 
 
 @pytest.fixture(autouse=True)
@@ -108,7 +118,7 @@ def test_audit_en_echec_laisse_le_mode_et_repond_503(client, monkeypatch, tmp_pa
 def test_deux_changements_chainent_l_audit(client, audit):
     client.post("/defense/mode", json={"mode": "reactive"}, headers=ADMIN)
     client.post("/defense/mode", json={"mode": "observe"}, headers=ADMIN)
-    l = audit.chemin.read_text(encoding="utf-8").splitlines()
+    l = audit.lignes()
     assert len(l) == 2
     assert "ancien=observe nouveau=reactive" in l[0] and "ancien=reactive nouveau=observe" in l[1]
     assert defense_etat.mode_courant() == "observe"
@@ -136,8 +146,8 @@ def test_status_montre_le_mode_vivant(client):
 def test_operateur_assaini(client, audit):
     main.app.dependency_overrides[require_jwt] = lambda: {"sub": "x\n2026 sade-mode forge " + "a" * 100}
     client.post("/defense/mode", json={"mode": "reactive"}, headers=ADMIN)
-    d = audit.chemin.read_text(encoding="utf-8")
-    assert d.count("\n") == 1 and len(d.split("operateur=")[1].strip()) <= 64 and " forge" not in d
+    d = "\n".join(audit.lignes()) + "\n"
+    assert d.count("\n") == 1 and len(d.split("operateur=")[1].split()[0]) <= 64 and " forge" not in d
 
 
 def test_base_indisponible_degrade_sans_500(client, monkeypatch, tmp_path):

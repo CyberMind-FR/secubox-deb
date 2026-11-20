@@ -67,9 +67,22 @@ côté public). Elle agrège actord, le WAF et le maillage ; une source injoigna
 - Base SQLite `/var/lib/secubox/soc/defense.db` (surcharge : variable `SECUBOX_SOC_DEFENSE_DB`) : mode, décisions,
   liste blanche ; schéma par migrations (`api/migrations/0001-defense.sql`).
 - Chaque décision de sécurité est écrite, avec fsync, dans `/var/log/secubox/audit.log` (append-only) avant d'être
-  validée ; si l'audit échoue, rien n'est fait (503 `audit_indisponible`). Étiquettes émises : `sade-mode`,
-  `sade-simule`, `sade-approuve-demande`, `sade-approuve-resultat`, `sade-refuse`, `sade-approuve-refus`,
-  `sade-refuse-refus`, `sade-reprise`.
+  validée ; si l'audit échoue, rien n'est fait (503 `audit_indisponible`). Format : UNE ligne JSON par décision
+  (`json.dumps`, `ensure_ascii=True`, comme `secubox_core.auth`), clés dans l'ordre `ts` (ISO-8601 UTC), `module`
+  (`"soc"`), `action`, `operateur`, puis les champs propres à l'action (`empreinte`, `acteur`, `adresses`, `geste`,
+  `duree`, `score`, `generation`, `issue`, `cause`, `verdict`, `operation` pour une simulation, …).
+  Valeurs de `action` : `sade-mode`, `sade-simule`, `sade-approuve-demande`, `sade-approuve-resultat`, `sade-refuse`,
+  `sade-approuve-refus`, `sade-refuse-refus`, `sade-reprise`.
+
+### Compteurs de `/defense/status`
+
+- `evenements_24h` : somme de l'activité 24 h d'actord, calculée sur ses 5000 derniers événements seulement ;
+  `evenements_24h_plafonne` vaut `true` quand l'échantillon est plein (ou de taille inconnue) : le chiffre est alors un
+  minimum (la page affiche « ≥ N, échantillon plafonné par actord »).
+- `a_valider` : propositions d'actord en attente de décision (même règle que `/defense/proposals`), `null` si la base
+  d'état est illisible.
+- `blocages_actifs` : bans que le WAF déclare appliqués (`application.ok`) ; `blocages_enregistres` : bans inscrits au
+  WAF ; `blocages_application` : état d'application du WAF. `application.ok` faux : 0 actif ; absent : `null`.
 
 ### Liste blanche
 

@@ -18,7 +18,11 @@ Contrat de `sources.<x>.ok` : True ou False quand la route a consulté la source
 consultée (seule `/status` lit les trois). Un front ne doit pas traiter `None` comme une panne : c'est « non lu ».
 
 Compteurs : `menaces_suivies` = acteurs connus d'actord (aucune fenêtre de 24 h n'existe dans /actors, qui ne porte que
-« HH:MM »), compté avant toute troncature ; `evenements_24h` = somme de `activite_24h` de /overview.
+« HH:MM »), compté avant toute troncature ; `evenements_24h` = somme de `activite_24h` de /overview, qui ne couvre
+que les ECHANTILLON_ACTORD derniers événements d'actord : `evenements_24h_plafonne` vaut True quand l'échantillon est
+plein (ou de taille inconnue) et le chiffre n'est alors qu'un minimum ; `a_valider` = propositions d'actord en attente
+de décision (même règle que /proposals) ; `blocages_actifs` = bans que le WAF dit appliqués (`application.ok`),
+`blocages_enregistres` = bans inscrits au WAF, appliqués ou non.
 """
 import asyncio
 import hashlib
@@ -37,7 +41,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 
-from secubox_core.auth import require_jwt, require_lecture
+from secubox_core.auth import SESSION_COOKIE, _validate_token, est_admin_reel, require_jwt, require_lecture
 
 from . import defense_etat, echelle, substrat
 
@@ -52,16 +56,32 @@ _CACHE: "OrderedDict[Any, Dict[str, Any]]" = OrderedDict()
 _ID_ACTEUR = re.compile(r"^ACT-\d{1,9}$")  # forme des identifiants d'actord (RELEVE.md)
 _VERROU = threading.Lock()
 _SOURCES = ("actord", "waf", "threatmesh")
+ECHANTILLON_ACTORD = 5000  # `apercuEchantillon` (cmd/sbx-actord/overview.go) : derniers événements examinés par /overview
 
 
 # ── identité de l'appelant ────────────────────────────────────────────────────────────────────────
 
 async def _est_admin(request: Request) -> bool:
-    """Vrai seulement si l'appelant passe `require_jwt` (administrateur réel). Aucun cryptage ici : on rejoue la garde."""
+    """Vrai seulement si l'appelant passe `require_jwt` (administrateur réel). Aucun cryptage ici.
+
+    Sonde silencieuse d'abord : un jeton de session valide dont le compte n'est pas administrateur réel est refusé SANS
+    rejouer `require_jwt` (qui journalise un WARNING « administration refusée » à chaque lecture). Tout le reste (jeton
+    invalide, porteur de pilotage, administrateur) passe par `require_jwt` comme avant : la garde elle-même n'est pas
+    affaiblie, elle n'est seulement plus appelée pour un refus déjà certain."""
     creds = None
     brut = request.headers.get("authorization", "")
     if brut.lower().startswith("bearer ") and brut[7:].strip():
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=brut[7:].strip())
+    try:
+        jetons = ([creds.credentials] if creds is not None else []) + [t for t in [request.cookies.get(SESSION_COOKIE)] if t]
+        for jeton in jetons:  # même ordre que `require_session` : porteur puis cookie, le premier valide l'emporte
+            payload = _validate_token(jeton)
+            if payload is not None:
+                if not est_admin_reel(payload):
+                    return False
+                break
+    except Exception:  # noqa: BLE001 — sonde seulement : en cas de doute, la garde réelle tranche
+        pass
     try:
         await require_jwt(request, creds)
         return True
@@ -220,6 +240,16 @@ def _menaces(ctx: Dict[str, Any], admin: bool, borne: bool = False) -> List[Dict
 
 # ── routes ────────────────────────────────────────────────────────────────────────────────────────
 
+def _a_valider(r: Dict[str, Any]) -> Optional[int]:
+    """Propositions d'actord en attente de décision : même source et même règle que GET /proposals (état de la dernière
+    génération par empreinte ; absent = en attente). None si la base d'état est illisible : jamais un zéro inventé."""
+    try:
+        etats = defense_etat.etats_decisions()
+    except defense_etat.EtatIndisponible:
+        return None
+    return sum(1 for p in _propositions(r) if etats.get(p["empreinte"], "en_attente") == "en_attente")
+
+
 @router.get("/status", dependencies=[Depends(require_lecture)])
 async def status(request: Request, admin: bool = Depends(_est_admin)):
     entetes = _entetes_appelant(request)
@@ -228,23 +258,36 @@ async def status(request: Request, admin: bool = Depends(_est_admin)):
         ctx = _contexte(admin, entetes, actord=("/actors", "/proposals", "/overview"), waf=("/bans",),
                         mesh=("/status",))
         src = _sources(ctx["lues"])
-        out: Dict[str, Any] = {"mode": None, "menaces_suivies": None, "evenements_24h": None, "blocages_actifs": None, "a_valider": None,
-                               "score_max": None, "bande_max": None, "sources": src}
+        out: Dict[str, Any] = {"mode": None, "menaces_suivies": None, "evenements_24h": None, "evenements_24h_plafonne": False,
+                               "blocages_actifs": None, "blocages_enregistres": None, "blocages_application": None,
+                               "a_valider": None, "score_max": None, "bande_max": None, "sources": src}
         if src["actord"]["ok"]:
             m = _menaces(ctx, admin)
             scores = [x["score"] for x in m if x["score"] is not None]
             out["menaces_suivies"] = len(m)
-            act = (ctx["actord/overview"]["donnees"] or {}).get("activite_24h") if ctx["actord/overview"]["ok"] and \
-                isinstance(ctx["actord/overview"]["donnees"], dict) else None
+            ov = ctx["actord/overview"]["donnees"] if ctx["actord/overview"]["ok"] and \
+                isinstance(ctx["actord/overview"]["donnees"], dict) else {}
+            act = ov.get("activite_24h")
             if isinstance(act, list) and all(isinstance(n, int) and not isinstance(n, bool) for n in act):
                 out["evenements_24h"] = sum(act)
-            out["a_valider"] = sum(1 for x in m if echelle.exige_validation(x["bande"]))
+                ech = ov.get("echantillon")
+                # échantillon plein, ou de taille inconnue (ancien actord, même plafond) : jamais présenté comme exact
+                out["evenements_24h_plafonne"] = not (isinstance(ech, int) and not isinstance(ech, bool)
+                                                      and ech < ECHANTILLON_ACTORD)
+            out["a_valider"] = _a_valider(ctx["actord/proposals"])
             if scores:
                 out["score_max"] = max(scores)
                 out["bande_max"] = echelle.bande(max(scores))
         if src["waf"]["ok"]:
             d = ctx["waf/bans"]["donnees"]
-            out["blocages_actifs"] = len(_liste(ctx["waf/bans"], "bans")) if isinstance(d, dict) else None
+            if isinstance(d, dict):
+                n = len(_liste(ctx["waf/bans"], "bans"))
+                app = d.get("application") if isinstance(d.get("application"), dict) else {}
+                out["blocages_enregistres"] = n
+                out["blocages_application"] = app.get("etat") if isinstance(app.get("etat"), str) else None
+                # appliqués = la table nft du WAF les porte : `application.ok` vrai. Faux : rien n'est appliqué (0) ;
+                # champ absent : on ne sait pas (None, jamais un 0 inventé).
+                out["blocages_actifs"] = n if app.get("ok") is True else (0 if app.get("ok") is False else None)
         return out
 
     rep = await asyncio.to_thread(_servi, _cle("status", admin, entetes), calcul)
@@ -660,7 +703,7 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
                   else f"empreinte={_sain(emp, 64)} operateur={defense_etat._operateur_sain(par)}")
         suffixe = (f" {note}" if note else "") + pairs_note
         try:
-            defense_etat.ecrire_audit(f"sade-simule action={action} verdict={cause} {champs}{suffixe}" if simuler
+            defense_etat.ecrire_audit(f"sade-simule operation={action} verdict={cause} {champs}{suffixe}" if simuler
                                       else f"sade-{action}-refus cause={cause} {champs}{suffixe}")
         except defense_etat.AuditIndisponible:
             if simuler:
@@ -717,7 +760,7 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
 
     if simuler:
         try:
-            defense_etat.ecrire_audit(f"sade-simule action={action} verdict=ok {_champs(p, par, duree)}{pairs_note}")
+            defense_etat.ecrire_audit(f"sade-simule operation={action} verdict=ok {_champs(p, par, duree)}{pairs_note}")
         except defense_etat.AuditIndisponible:
             return _non(503, "audit_indisponible", "audit indisponible : simulation non tracée")
         quoi = (f"ban de {len(p['ips'])} adresse(s) pour {duree or 'la durée par défaut du WAF'}"
@@ -817,6 +860,9 @@ async def _action(action: str, corps: Any, request: Request, payload: Dict[str, 
     par = str((payload or {}).get("sub") or "inconnu")
     code, rep = await asyncio.to_thread(_traiter, action, emp, simuler, par, _porteur(request),
                                         _entetes_appelant(request), _adresses_appelant(request))
+    if not simuler:
+        with _VERROU:
+            _CACHE.clear()  # la file d'approbation a changé : « À valider » se relit au prochain appel
     return JSONResponse(status_code=code, content=rep)
 
 
@@ -847,6 +893,8 @@ async def reprendre(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(req
                                                       "cause": "audit_indisponible"})
     except defense_etat.EtatIndisponible:
         return JSONResponse(status_code=503, content={"error": "base d'état indisponible", "cause": "base_indisponible"})
+    with _VERROU:
+        _CACHE.clear()
     return {"etat": "en_attente", "resultat": f"décision reprise (demande vieille de {r['age_s']} s) : à nouveau en attente"}
 
 

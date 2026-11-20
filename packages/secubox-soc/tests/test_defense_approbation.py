@@ -6,6 +6,7 @@
 
 Aucun socket réel : actord, threatmesh et le WAF sont des faux (le WAF factice journalise chaque POST /ban).
 """
+import json
 import copy
 import re
 import sqlite3
@@ -127,7 +128,16 @@ def proposition_bloc(proposition):
 
 
 def _lignes(audit):
-    return audit.read_text(encoding="utf-8").splitlines() if audit.exists() else []
+    return [_en_texte(x) for x in audit.read_text(encoding="utf-8").splitlines()] if audit.exists() else []
+
+def _en_texte(ligne):
+    """Ligne d'audit JSON -> « ts action clé=valeur … » : les assertions lisent les champs, le format JSON a son test."""
+    o = json.loads(ligne)
+    return " ".join([o["ts"], o["action"]] + [f"{k}={v}" for k, v in o.items() if k not in ("ts", "module", "action")])
+
+
+def _texte(audit):
+    return "\n".join(_lignes(audit)) + "\n"
 
 
 # ── tests du plan (brief) ──────────────────────────────────────────────────────────────────────────
@@ -148,6 +158,20 @@ def test_liste_blanche_prioritaire(client, reactive, proposition, cible):
     r = client.post("/defense/approve", json={"empreinte": proposition(cible)}, headers=ADMIN)
     assert r.status_code == 403 and r.json()["cause"] == "liste_blanche"
     assert waf_factice.appels == []
+
+
+def test_audit_une_ligne_json_par_decision(client, reactive, audit):
+    client.post("/defense/approve", json={"empreinte": P1, "simuler": True}, headers=ADMIN)
+    client.post("/defense/refuse", json={"empreinte": P2}, headers=ADMIN)
+    brut = audit.read_text(encoding="utf-8").splitlines()
+    assert len(brut) == 3  # mode, simulation, refus
+    for ligne in brut:
+        o = json.loads(ligne)
+        assert list(o)[:4] == ["ts", "module", "action", "operateur"] and o["module"] == "soc"
+        assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", o["ts"]) and o["action"].startswith("sade-")
+        assert o["operateur"] and ligne.isascii()
+    s = json.loads(brut[1])
+    assert s["action"] == "sade-simule" and s["verdict"] == "ok" and s["operation"] == "approuve"
 
 
 def test_simulation_n_appelle_pas_le_waf(client, reactive, audit):
@@ -277,7 +301,7 @@ def test_porteur_seul_transmis_jamais_stocke(client, reactive, audit):
     chemin, corps, entetes = waf_factice.appels[0]
     assert chemin == "/ban" and entetes == {"Authorization": "Bearer admin"}
     assert corps == {"ip": "203.0.113.10", "duration": "3600s", "reason": "SADE ACT-0001 approuvé par gerald"}
-    assert "Bearer" not in audit.read_text(encoding="utf-8")
+    assert "Bearer" not in _texte(audit)
     db = sqlite3.connect(defense_etat._chemin_db())
     assert "Bearer" not in repr(db.execute("SELECT * FROM decisions").fetchall())
 
@@ -349,13 +373,13 @@ def test_simulation_passe_tous_les_controles(client, reactive, proposition, audi
 def test_refus_simule(client, reactive, audit):
     r = client.post("/defense/refuse", json={"empreinte": P1, "simuler": True}, headers=ADMIN)
     assert r.status_code == 200 and r.json()["etat"] == "simule"
-    assert "action=refuse" in _lignes(audit)[-1] and defense_etat.decision(P1)["etat"] == "en_attente"
+    assert "operation=refuse" in _lignes(audit)[-1] and defense_etat.decision(P1)["etat"] == "en_attente"
 
 
 def test_operateur_assaini_dans_l_audit(client, reactive, audit):
     main.app.dependency_overrides[require_jwt] = lambda: {"sub": "x\n2026 sade-approuve forge"}
     client.post("/defense/approve", json={"empreinte": P1}, headers=ADMIN)
-    t = audit.read_text(encoding="utf-8")
+    t = _texte(audit)
     assert t.count("\n") == 3 and " forge" not in t  # mode, demande, résultat
 
 
@@ -525,7 +549,7 @@ def test_proposition_changee_aucun_appel(client, reactive, audit):
         r = client.post("/defense/approve", json={"empreinte": P1, "simuler": simuler}, headers=ADMIN)
         assert r.status_code == 409 and r.json()["cause"] == "proposition_changee"
     assert waf_factice.appels == [] and defense_etat.decision(P1)["etat_enregistre"] is None
-    assert "sade-approuve-refus cause=proposition_changee" in _lignes(audit)[-1]
+    assert "sade-approuve-refus " in _lignes(audit)[-1] and "cause=proposition_changee" in _lignes(audit)[-1]
     _props()[0]["ttl_s"] = 7200
     _props()[0]["ips"] = ["203.0.113.10"]
     assert client.post("/defense/approve", json={"empreinte": P1}, headers=ADMIN).json()["cause"] == "proposition_changee"

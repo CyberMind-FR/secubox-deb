@@ -8,6 +8,7 @@ Une connexion par appel (jamais partagée entre fils). Migrations numérotées `
 appliquées au premier usage de façon idempotente. Chemins surchargeables pour les tests :
 `SECUBOX_SOC_DEFENSE_DB` et `SECUBOX_AUDIT_LOG` (lus à chaque appel).
 """
+import json
 import os
 import re
 import sqlite3
@@ -98,12 +99,28 @@ def _operateur_sain(par: str) -> str:
 
 
 def ecrire_audit(corps: str) -> None:
-    """Ajoute une ligne horodatée à l'audit, flush + fsync. Lève `AuditIndisponible` en cas d'échec.
-    `corps` doit être fait de champs déjà assainis : les sauts de ligne y sont neutralisés en dernier recours."""
-    ligne = f"{_ts()} " + corps.replace("\r", "_").replace("\n", "_") + "\n"
+    """Ajoute à l'audit UNE ligne JSON (comme `secubox_core.auth._ecrire_audit` : json.dumps, ensure_ascii=True), flush
+    + fsync. Lève `AuditIndisponible` en cas d'échec.
+
+    `corps` = « <action> clé=valeur clé=valeur … » (champs déjà assainis, sans espace) ; l'objet écrit commence par
+    `ts` (ISO-8601 UTC), `module: "soc"`, `action` (l'étiquette `sade-*`), `operateur`, puis les autres champs. Un champ
+    qui porterait un nom réservé est préfixé `champ_` : il ne masque jamais l'une des quatre clés."""
+    action, *champs = corps.replace("\r", "_").replace("\n", "_").split()
+    entree: Dict[str, Any] = {"ts": _ts(), "module": "soc", "action": action}
+    reste: Dict[str, Any] = {}
+    for c in champs:
+        cle, sep, val = c.partition("=")
+        if not sep or not cle:
+            cle, val = "note", c
+        if cle in ("ts", "module", "action", "operateur"):
+            cle = cle if cle == "operateur" else "champ_" + cle
+        (entree if cle == "operateur" else reste)[cle] = val
+    entree.setdefault("operateur", "inconnu")
+    entree.update(reste)
+    ligne = json.dumps(entree, ensure_ascii=True)
     try:
         with open(os.environ.get("SECUBOX_AUDIT_LOG", AUDIT_DEFAUT), "a", encoding="utf-8") as f:
-            f.write(ligne)
+            f.write(ligne + "\n")
             f.flush()
             os.fsync(f.fileno())
     except OSError as e:

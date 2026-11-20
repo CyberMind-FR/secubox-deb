@@ -15,7 +15,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fastapi.testclient import TestClient  # noqa: E402
 
-from api import defense, main  # noqa: E402
+from api import defense, defense_etat, main  # noqa: E402
 from secubox_core.auth import require_lecture  # noqa: E402
 
 DONNEES = Path(__file__).resolve().parent / "donnees" / "substrat"
@@ -43,7 +43,8 @@ class Substrat:
 
 
 @pytest.fixture
-def faux(monkeypatch):
+def faux(monkeypatch, tmp_path):
+    monkeypatch.setenv("SECUBOX_SOC_DEFENSE_DB", str(tmp_path / "defense.db"))
     f = Substrat()
     f.rep = {
         ("actord", "/actors"): _j("actord_actors.json"),
@@ -89,7 +90,7 @@ def test_sans_jeton_401(faux, route, monkeypatch):
 def test_status_nominal(faux, client, admin):
     j = client.get("/defense/status", headers=LECTURE).json()
     assert j["mode"] == "observe"
-    assert (j["menaces_suivies"], j["blocages_actifs"], j["a_valider"]) == (2, 2, 0)
+    assert (j["menaces_suivies"], j["blocages_actifs"], j["a_valider"]) == (2, 2, 1)
     assert (j["score_max"], j["bande_max"]) == (86, "usager")
     assert all(j["sources"][s]["ok"] is True for s in ("actord", "waf", "threatmesh"))
 
@@ -199,14 +200,84 @@ def test_cache_15s_et_double_tampon(faux, client, admin):
 
 
 def test_evenements_24h_depuis_overview(faux, client, admin):
-    assert client.get("/defense/status", headers=LECTURE).json()["evenements_24h"] == 6
+    faux.rep[("actord", "/overview")]["echantillon"] = 40
+    j = client.get("/defense/status", headers=LECTURE).json()
+    assert j["evenements_24h"] == 6 and j["evenements_24h_plafonne"] is False
+
+
+def test_evenements_24h_plafonne_par_l_echantillon(faux, client, admin):
+    faux.rep[("actord", "/overview")]["echantillon"] = defense.ECHANTILLON_ACTORD
+    j = client.get("/defense/status", headers=LECTURE).json()
+    assert j["evenements_24h"] == 6 and j["evenements_24h_plafonne"] is True
+    # taille d'échantillon inconnue : jamais présenté comme exact
+    defense._CACHE.clear()
+    del faux.rep[("actord", "/overview")]["echantillon"]
+    assert client.get("/defense/status", headers=LECTURE).json()["evenements_24h_plafonne"] is True
+
+
+def test_a_valider_egale_les_propositions_en_attente(faux, client, admin, monkeypatch, tmp_path):
+    monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "audit.log"))
+    defense_etat.changer_mode("reactive", "op")
+    faux.rep[("actord", "/proposals")]["propositions"].append(
+        {"actor": "ACT-0002", "mode": "BAN", "raison": "x", "ttl_s": 600, "ips": ["198.51.100.7"], "priorite": 90})
+    j = client.get("/defense/status", headers=LECTURE).json()
+    pend = [p for p in client.get("/defense/proposals", headers=LECTURE).json()["propositions"] if p["etat"] == "en_attente"]
+    assert j["a_valider"] == len(pend) == 2
+    # une décision close sort du compte (même règle que /proposals)
+    emp = next(p["empreinte"] for p in client.get("/defense/proposals", headers=LECTURE).json()["propositions"]
+               if p["menace_id"] == "ACT-0002")
+    defense_etat.reclamer(emp, "ACT-0002", "ban", "198.51.100.7", 90, 600, "op", "refuse", "sade-refuse operateur=op")
+    defense._CACHE.clear()
+    j = client.get("/defense/status", headers=LECTURE).json()
+    pend = [p for p in client.get("/defense/proposals", headers=LECTURE).json()["propositions"] if p["etat"] == "en_attente"]
+    assert j["a_valider"] == len(pend) == 1
+
+
+def test_a_valider_sans_adresse_pour_un_lecteur(faux, client, monkeypatch):
+    async def non(request, creds=None):
+        raise defense.HTTPException(status_code=403)
+    monkeypatch.setattr(defense, "require_jwt", non)
+    r = client.get("/defense/status", headers=LECTURE)
+    assert r.json()["a_valider"] == 1 and not IP.search(r.text)
+
+
+def test_blocages_actifs_seulement_si_le_waf_les_applique(faux, client, admin):
+    j = client.get("/defense/status", headers=LECTURE).json()
+    assert (j["blocages_actifs"], j["blocages_enregistres"], j["blocages_application"]) == (2, 2, "appliquee")
+    for app, attendu in (({"etat": "table_absente", "ok": False, "detail": ""}, 0), (None, None)):
+        defense._CACHE.clear()
+        if app is None:
+            faux.rep[("waf", "/bans")].pop("application", None)
+        else:
+            faux.rep[("waf", "/bans")]["application"] = app
+        j = client.get("/defense/status", headers=LECTURE).json()
+        assert j["blocages_actifs"] == attendu and j["blocages_enregistres"] == 2
+
+
+def test_lecteur_non_admin_ne_journalise_pas_d_avertissement(faux, monkeypatch, caplog):
+    """Un compte non administrateur valide est refusé par la sonde silencieuse : require_jwt n'est pas rejouée."""
+    import logging
+    monkeypatch.setattr(defense, "_validate_token", lambda t: {"sub": "usager"})
+    monkeypatch.setattr(defense, "est_admin_reel", lambda p: False)
+
+    async def jamais(request, creds=None):
+        raise AssertionError("require_jwt rejouée pour un non-administrateur")
+    monkeypatch.setattr(defense, "require_jwt", jamais)
+    main.app.dependency_overrides[require_lecture] = lambda: {"sub": "usager"}
+    try:
+        with caplog.at_level(logging.WARNING):
+            r = TestClient(main.app).get("/defense/threats", headers=LECTURE)
+    finally:
+        main.app.dependency_overrides.pop(require_lecture, None)
+    assert r.status_code == 200 and not IP.search(r.text)
+    assert [x for x in caplog.records if x.levelno >= logging.WARNING] == []
 
 
 def test_compteurs_non_plafonnes_au_dela_de_200(faux, client, admin):
     faux.rep[("actord", "/actors")] = [{"id": f"ACT-{i:04d}", "priority": 96 if i % 2 else 10, "last": "09:00"}
                                        for i in range(300)]
     j = client.get("/defense/status", headers=LECTURE).json()
-    assert j["menaces_suivies"] == 300 and j["a_valider"] == 150
+    assert j["menaces_suivies"] == 300 and j["a_valider"] == 1  # file d'approbation, pas les acteurs ≥ 95
     assert len(client.get("/defense/threats", headers=LECTURE).json()["menaces"]) == 200
 
 

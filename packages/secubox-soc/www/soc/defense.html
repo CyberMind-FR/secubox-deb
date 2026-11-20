@@ -265,9 +265,9 @@
   }
 
   // ── synthèse ──
-  function tuile(l, v, c, s){
+  function tuile(l, v, c, s, pref){
     var nd = num(v) === null;
-    return '<div class="tuile"><div class="l">' + esc(l) + '</div><div class="v ' + (nd ? 'nd' : c) + '">' + (nd ? 'relevé indisponible' : esc(nb(v))) + '</div><div class="s">' + esc(s) + '</div></div>';
+    return '<div class="tuile"><div class="l">' + esc(l) + '</div><div class="v ' + (nd ? 'nd' : c) + '">' + (nd ? 'relevé indisponible' : esc((pref || '') + nb(v))) + '</div><div class="s">' + esc(s) + '</div></div>';
   }
   function jauge(score, bande, actordOk){
     if (num(score) === null) {
@@ -281,15 +281,24 @@
       '</svg><div class="gv">' + esc(score) + '<small>/100</small></div></div>' +
       '<div class="gl">Score de menace max<br><b class="b-' + esc(bande || 'inconnu') + '">bande ' + esc(NOMS_BANDE[bande] || 'inconnue') + '</b></div></div>';
   }
+  function sousBlocages(d){
+    var n = num(d.blocages_enregistres);
+    if (n === null) return 'bans appliqués par le WAF';
+    if (d.blocages_actifs === 0 && n > 0) return n + ' enregistré(s), non appliqué(s)' + (d.blocages_application ? ' (' + d.blocages_application + ')' : '');
+    if (num(d.blocages_actifs) === null) return n + ' enregistré(s), application inconnue';
+    return 'bans appliqués par le WAF';
+  }
   function rendSynthese(r){
     if (!r.ok) { pose('synthese-corps', INDISPO); return; }
     var d = r.d || {}, a = src(r, 'actord'), w = src(r, 'waf');
     // une source en panne rend ses chiffres null côté façade ; on ne repeint jamais un zéro à leur place
     pose('synthese-corps', '<div class="tuiles">' +
       tuile('Acteurs suivis', d.menaces_suivies, 'c', 'connus d\'actord') +
-      tuile('Événements 24 h', d.evenements_24h, 'c', 'activité sur 24 h') +
-      tuile('Blocages actifs', d.blocages_actifs, 'o', w === false ? 'WAF muet' : 'bans en cours') +
-      tuile('À valider', d.a_valider, 'g', 'validation humaine') + '</div>' +
+      (d.evenements_24h_plafonne
+        ? tuile('Événements 24 h', d.evenements_24h, 'c', 'échantillon plafonné par actord', '≥ ')
+        : tuile('Événements 24 h', d.evenements_24h, 'c', 'activité sur 24 h')) +
+      tuile('Blocages actifs', d.blocages_actifs, 'o', w === false ? 'WAF muet' : sousBlocages(d)) +
+      tuile('À valider', d.a_valider, 'g', 'propositions en attente') + '</div>' +
       jauge(d.score_max, d.bande_max, a));
   }
 

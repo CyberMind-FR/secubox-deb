@@ -8,6 +8,9 @@ secubox-soc (1.9.0-1~trixie1) trixie; urgency=medium
     sade-* écrit avant chaque décision ; adresses et empreinte réservées aux administrateurs.
   * Masquage complet des adresses dans les textes libres (IPv6 suivie de « : », IPv4 sous IPv6) ; clôture d'une
     décision liée à sa demande.
+  * Chiffres exacts : « Événements 24 h » signale l'échantillon plafonné d'actord (≥ N), « À valider » compte les
+    propositions en attente, « Blocages actifs » ne compte que les bans appliqués selon le WAF ; audit sade-* en une
+    ligne JSON par décision (ts, module, action, operateur) ; sonde d'administrateur sans avertissement répété.
 
  -- Gérald Kerma <devel@cybermind.fr>  Fri, 20 Nov 2026 10:12:10 +0100
 
