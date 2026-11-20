@@ -31,6 +31,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from cookies_verif import cookies_session_presents
 from engine import AuthRequired, EngineError, Engine, PlaylistTimeout
 import flux as _flux
 from library import Library
@@ -687,6 +688,15 @@ async def upload_cookies(request: Request):
             text = raw.decode("utf-8", "replace")
     if not text or not text.strip():
         return JSONResponse({"error": "cookies body required"}, status_code=400)
+    # Refuse un export sans session : on ne touche PAS au coffre existant (il peut
+    # encore être valide), et on dit clairement quoi refaire. Aucun nom/valeur n'est journalisé.
+    if not cookies_session_presents(text):
+        return JSONResponse(
+            {"error": "aucun cookie de session YouTube dans ce fichier — "
+                      "refais l'export en étant connecté à ton compte "
+                      "(le fichier doit contenir par ex. __Secure-1PSID, SAPISID ou LOGIN_INFO)",
+             "cause": "sans_session"},
+            status_code=400)
     try:
         os.makedirs(os.path.dirname(COOKIE_PATH), exist_ok=True)
         # Write 0600 atomically (never widen the vault).
