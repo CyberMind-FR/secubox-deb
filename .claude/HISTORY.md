@@ -9,6 +9,23 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-20 — SADE chapeau livré : console Cyber Defense Live + façade /defense (ref #3839)
+
+- secubox-soc 1.9.0 (PR #3840) : façade `/api/v1/soc/defense/*` sur le substrat réel (actord `actor.sock`, WAF,
+  threatmesh), vue « Cyber Defense Live » (onglet du SOC), modes observe (défaut) / reactive, active/aggressive
+  refusés (409) tant que V2 4-7 n'est pas livrée. File d'approbation : seul geste `POST /ban` du WAF avec le porteur
+  de l'admin, décision par empreinte liée à l'affiché, exactement une fois, liste blanche verrouillée en base, audit
+  JSON avant/après, simulation, reprise. Adresses et empreintes réservées aux administrateurs réels.
+- Exécution par sous-agents (7 tâches, relecture par tâche, relecteur-securite, relecture finale « ship en observe »),
+  248 tests. Chiffres corrigés pour ne rien afficher de faux : « Acteurs suivis » (pas de compteur de menaces 24 h
+  dans le substrat), « Événements 24 h » marqué « ≥ N » quand actord plafonne son échantillon (5 000).
+- Déployé en **observe** : gk2 (SOC monté dans l'agrégateur, redémarré à 10:34, route `/defense` 401 sans jeton =
+  présente) ; gk3 via gk2 par le maillage (10.10.0.5), SOC hors agrégateur. **gk1 non déployé : route SSH
+  introuvable** (gk1.secubox.in pointe l'IP publique de la maison, clé d'hôte ≠ gk1 — non contournée).
+- Préexistant, non lié : `secubox-metrics-rapport-waf` en échec sur gk2 depuis 05:32.
+- Reste : ouverture authentifiée de la console par le propriétaire (crée `defense.db`), gk1, bascule REACTIVE box par
+  box sur décision du propriétaire.
+
 ## 2026-11-20 — ytsas : dépôt de cookies validé (closes #3837) ; design SADE (défense active, chapeau)
 
 - ytsas 0.8.12 (déployé gk2, LXC) : POST /cookies refuse un cookies.txt SANS cookie de session Google/YouTube
