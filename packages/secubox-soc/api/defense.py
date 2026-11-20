@@ -51,7 +51,7 @@ from secubox_core.auth import (
     require_lecture,
 )
 
-from . import defense_etat, echelle, substrat
+from . import defense_etat, echelle, sade_auto, substrat
 
 router = APIRouter(tags=["defense"])
 
@@ -505,6 +505,13 @@ async def policies(admin: bool = Depends(_est_admin)):
         if "etat_base" not in out:
             try:
                 out["seuils"], out["liste_blanche"] = defense_etat.seuils(), defense_etat.liste_blanche()
+                try:
+                    bans: Optional[int] = defense_etat.bans_auto_depuis(sade_auto.FENETRE_PLAFOND_S)
+                except defense_etat.EtatIndisponible:
+                    bans = None  # jamais un zéro inventé
+                out["auto"] = {"plafond_heure": sade_auto.PLAFOND_HEURE, "bans_derniere_heure": bans,
+                               "score": [sade_auto.SCORE_MIN, sade_auto.SCORE_MAX],
+                               "ttl_max_s": sade_auto.TTL_AUTO_MAX_S, "adresses_max": sade_auto.ADRESSES_AUTO_MAX}
                 if not admin:  # un lecteur ne voit que l'amorçage système, jamais les ajouts ni leur auteur
                     out["liste_blanche"] = [{k: e[k] for k in ("cidr", "motif", "ts", "supprimable")}
                                             for e in out["liste_blanche"] if not e["supprimable"]]
@@ -965,8 +972,9 @@ async def proposals(admin: bool = Depends(_est_admin)):
         out["genere_le"] = _iso(d.get("genere_le"))
         try:
             etats: Optional[Dict[str, str]] = defense_etat.etats_decisions()
+            auteurs = defense_etat.auteurs_decisions()
         except defense_etat.EtatIndisponible:
-            etats, out["etat_base"] = None, "indisponible"
+            etats, auteurs, out["etat_base"] = None, {}, "indisponible"
         masque: Dict[str, str] = {}
         for p in _propositions(r):
             if admin:
@@ -979,6 +987,8 @@ async def proposals(admin: bool = Depends(_est_admin)):
                 "bande": p["bande"], "motif": motif, "validation_humaine": echelle.exige_validation(p["bande"]),
                 "etat": etats.get(p["empreinte"], "en_attente") if etats is not None else None,
                 "ttl_s": p["ttl_s"], "executable": p["geste"] in GESTES_EXECUTABLES}
+            if auteurs.get(p["empreinte"]) == sade_auto.OPERATEUR:
+                ligne["auto"] = True  # seul le fait « automatique » sort, jamais le nom d'un opérateur humain
             if admin:
                 ligne["empreinte"] = p["empreinte"]
             out["propositions"].append(ligne)

@@ -261,6 +261,20 @@ def etats_decisions() -> Dict[str, str]:
     return {e: ("en_attente" if _rearmable(et, t, ttl, maintenant) else et) for e, et, t, ttl in lignes}
 
 
+def auteurs_decisions() -> Dict[str, str]:
+    """{empreinte: opérateur (`par`) de la dernière génération}. Sert à reconnaître une décision de l'exécuteur
+    automatique ; l'appelant n'expose jamais le nom d'un opérateur humain."""
+    try:
+        with closing(_connecter()) as db:
+            lignes = db.execute(
+                "SELECT d.empreinte, d.par FROM decisions d JOIN "
+                "(SELECT empreinte, MAX(generation) g FROM decisions GROUP BY empreinte) m "
+                "ON d.empreinte = m.empreinte AND d.generation = m.g").fetchall()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return {e: (par or "") for e, par in lignes}
+
+
 class Reclamation(int):
     """Génération réclamée (un entier) portant l'horodatage `demande_ts` de la réclamation, pour `conclure`."""
     demande_ts: Optional[str] = None
