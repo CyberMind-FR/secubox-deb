@@ -42,6 +42,58 @@ Configuration file: `/etc/secubox/soc.toml`
 - `GET /api/v1/soc/status` - Module status
 - `GET /api/v1/soc/health` - Health check
 
+## SADE — Cyber Defense Live
+
+Console de défense active du SOC : page `/soc/defense.html`, routes montées sous `/defense` (préfixe `/api/v1/soc`
+côté public). Elle agrège actord, le WAF et le maillage ; une source injoignable s'affiche « relevé indisponible ».
+
+### Routes `/defense/*`
+
+| Route | Garde | Rôle |
+|---|---|---|
+| `GET /status`, `/threats`, `/threats/{id}`, `/actions`, `/mesh`, `/incidents`, `/policies`, `/proposals` | `require_lecture` | Vues de lecture |
+| `POST /mode` | `require_jwt` | Change le mode (audit écrit avant le COMMIT) |
+| `POST /approve`, `POST /refuse` | `require_jwt` | Approuve ou refuse une proposition, désignée par son empreinte ; `simuler: true` ne fait rien et ne trace que le verdict |
+| `POST /reprendre` | `require_jwt` | Débloque une décision restée `en_cours` (retour `en_attente`) |
+
+### Modes
+
+- `observe` (défaut) : lecture seule, aucun geste.
+- `reactive` : ouvert ; la file d'approbation agit, sur approbation d'un administrateur.
+- `active` et `aggressive` : refusés par `POST /mode` avec 409 `gestes_non_livres`.
+
+### Données et audit
+
+- Base SQLite `/var/lib/secubox/soc/defense.db` (surcharge : variable `SECUBOX_SOC_DEFENSE_DB`) : mode, décisions,
+  liste blanche ; schéma par migrations (`api/migrations/0001-defense.sql`).
+- Chaque décision de sécurité est écrite, avec fsync, dans `/var/log/secubox/audit.log` (append-only) avant d'être
+  validée ; si l'audit échoue, rien n'est fait (503 `audit_indisponible`). Étiquettes émises : `sade-mode`,
+  `sade-simule`, `sade-approuve-demande`, `sade-approuve-resultat`, `sade-refuse`, `sade-approuve-refus`,
+  `sade-refuse-refus`, `sade-reprise`.
+
+### Liste blanche
+
+Réseaux jamais bannis : RFC 1918, boucle locale, lien-local, CGNAT, ::1, fc00::/7, fe80::/10. Les entrées amorcées
+sont verrouillées par des triggers SQL (ni suppression, ni modification, ni remplacement). Toute adresse d'une
+proposition est contrôlée ; échec fermé.
+
+### Approbation
+
+- Une décision est identifiée par l'**empreinte** de la proposition (sha256 de geste, adresses normalisées triées et
+  ttl), jamais par l'identifiant d'acteur, renuméroté au redémarrage d'actord. Le serveur la recalcule sur la
+  proposition courante d'actord ; sans correspondance : 409 `proposition_changee`, rien n'est fait.
+- La décision est réclamée (`en_cours`, mode relu, audit fsync, une transaction BEGIN IMMEDIATE) avant tout appel
+  au WAF ; un double clic ou une réclamation concurrente donne 409 `deja_traitee`.
+- `POST /reprendre` ne ramène une décision `en_cours` à `en_attente` que si sa demande dépasse le délai maximal des
+  appels au WAF + 60 s.
+- Seul geste exécutable : `ban`, soit un `POST /ban` du WAF par adresse (au plus 32), avec le jeton administrateur de
+  l'appelant relayé ; arrêt au premier échec. Les autres gestes (par exemple la quarantaine) ne sont pas exécutables.
+
+### Confidentialité
+
+Les adresses et l'empreinte ne sont rendues qu'aux administrateurs (`require_jwt`). Un lecteur ne voit que des
+cibles masquées (`cible-N`), y compris dans les textes libres.
+
 ## License
 
 LicenseRef-CMSD-1.0 (Source-Disclosed License) — CyberMind © 2024-2026.
