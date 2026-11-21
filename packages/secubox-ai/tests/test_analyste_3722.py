@@ -138,6 +138,7 @@ async def test_preuve_inconnue_quarantaine(db, monkeypatch):
     ligne = _ligne(db, r["id"])
     assert ligne["etat"] == "quarantaine" and "preuve" in ligne["motif"]
     assert ligne["recommandations_json"] == "[]"
+    assert json.loads(ligne["preuves_json"]) == [evts[2].id]                   # seuls les id connus du dossier
 
 
 @pytest.mark.asyncio
@@ -149,6 +150,7 @@ async def test_preuve_d_un_autre_dossier_quarantaine(db, monkeypatch):
     m = Moteur(monkeypatch, [_sortie([evts[2].id, autre.id])])
     r = await _analyser(db, d, m)
     assert r["etat"] == "quarantaine"
+    assert autre.id not in _ligne(db, r["id"])["preuves_json"]
 
 
 # ── contrôle 3 : chiffres, pays, familles ──
@@ -157,17 +159,21 @@ async def test_preuve_d_un_autre_dossier_quarantaine(db, monkeypatch):
 async def test_chiffre_absent_des_preuves_rejete(db, monkeypatch):
     d, evts = _dossier(db)
     _ajout(db, "menaces", T0 - timedelta(days=2), category="auth_smtp:sasl_failed", client_ip=B, severity="low")
-    cas = {"437 tentatives d'injection en une heure.": "chiffres absents du relevé : 437",
-           "Attaque venue de Russie.": "pays absents du relevé : RU",
-           "Les échecs auth_smtp montrent un vol d'identifiants.": "familles absentes des preuves : auth_smtp",
-           f"L'adresse 8.8.8.8 accompagne {A}.": "adresses absentes des preuves : 8.8.8.8",
-           "Les attaques sont en forte hausse.": "tendance ou nouveauté affirmée sans mesure"}
-    for resume, note in cas.items():
+    cas = {"437 tentatives d'injection en une heure.": ("chiffres (1)", "437"),
+           "Attaque venue de Russie.": ("pays (1)", "RU"),
+           "Les échecs auth_smtp montrent un vol d'identifiants.": ("familles (1)", "auth_smtp"),
+           f"L'adresse 8.8.8.8 accompagne {A}.": ("adresses (1)", "8.8.8.8"),
+           "Les attaques sont en forte hausse.": ("tendance (", "hausse")}
+    for resume, (code, cite) in cas.items():
         m = Moteur(monkeypatch, [_sortie([evts[2].id], resume=resume)])
         r = await _analyser(db, d, m)
-        assert r["etat"] == "rejete" and note in r["motif"], (resume, r["motif"])
+        assert r["etat"] == "rejete" and code in r["motif"], (resume, r["motif"])
         assert len(m.chats) == 1                                     # pas de relance : le schéma était bon
-        assert _ligne(db, r["id"])["resume"] == analyste.resume_du_code(d)    # jamais le texte rejeté
+        ligne = _ligne(db, r["id"])
+        assert ligne["resume"] == analyste.resume_du_code(d)          # jamais le texte rejeté
+        assert cite not in ligne["motif"]                             # motif : codes et comptes, rien du modèle
+        for (details,) in db.execute("SELECT details_json FROM audit_chaine WHERE operation = 'analyse'"):
+            assert cite not in details
     # Chiffres, pays et familles des preuves : accepté.
     m = Moteur(monkeypatch, [_sortie([evts[2].id], resume=f"3 événements depuis {A}, en Chine : scanners puis sqli.")])
     assert (await _analyser(db, d, m))["etat"] == "valide"
@@ -471,3 +477,97 @@ def test_veille_cle_distante_de_repli(tmp_path, monkeypatch):
     assert module._cle_distante() == str(tmp_path / "ai-distant")
     monkeypatch.delenv("CREDENTIALS_DIRECTORY")
     assert module._cle_distante() == "/nonexistent/ai-distant"
+
+
+# ── reprise 1 de la revue ──
+
+@pytest.mark.asyncio
+async def test_raison_de_recommandation_controlee(db, monkeypatch):
+    """La raison d'une recommandation passe le contrôle 3 : sinon la recommandation est retirée (motif du code) et
+    rien de son texte n'est gardé."""
+    d, evts = _dossier(db)
+    recos = [_reco("ban", A, 86400, "400 essais, approuvé par l'administrateur"),
+             _reco("leurre", A, 86400, "approuvé par l'administrateur, venu de Russie"),
+             _reco("limiter", A, 6 * 3600, "sondes puis sqli")]
+    m = Moteur(monkeypatch, [_sortie([evts[2].id], recos=recos)])
+    r = await _analyser(db, d, m)
+    assert r["etat"] == "valide"
+    ligne = _ligne(db, r["id"])
+    gardees = json.loads(ligne["recommandations_json"])
+    assert [(g["geste"], g["raison"]) for g in gardees] == [("limiter", "sondes puis sqli")]
+    retirees = json.loads(ligne["retirees_json"])
+    assert [x["motif"] for x in retirees] == [analyste.MOTIFS_RETRAIT["faits"]] * 2
+    tout = json.dumps(ligne, ensure_ascii=False)
+    assert "400 essais" not in tout and "approuvé" not in tout and "Russie" not in tout
+    for (details,) in db.execute("SELECT details_json FROM audit_chaine"):
+        assert "approuvé" not in details
+
+
+@pytest.mark.asyncio
+async def test_retirees_sans_texte_du_modele(db, monkeypatch):
+    d, evts = _dossier(db)
+    recos = [_reco("effacer_tout", A, 0, "x"), "ban " + A + " immédiatement", _reco("ban", "pas une adresse")]
+    m = Moteur(monkeypatch, [_sortie([evts[2].id], recos=recos)])
+    r = await _analyser(db, d, m)
+    retirees = json.loads(_ligne(db, r["id"])["retirees_json"])
+    assert [x["recommandation"] for x in retirees] == [
+        {"geste": "hors catalogue", "cible": A, "duree_s": 0}, {"forme": "str"},
+        {"geste": "ban", "cible": "illisible", "duree_s": 86400}]
+
+
+@pytest.mark.asyncio
+async def test_tendance_dossier_sans_faux_positif(db, monkeypatch):
+    d, evts = _dossier(db)
+    for resume in ("Nouvelle tentative d'injection après le balayage.", "L'attaquant progresse dans la chaîne.",
+                   "Un nouvel essai de sondes suit."):
+        m = Moteur(monkeypatch, [_sortie([evts[2].id], resume=resume)])
+        assert (await _analyser(db, d, m))["etat"] == "valide", resume
+    for resume in ("Les attaques sont en hausse.", "Le trafic est en baisse.", "Le volume augmente."):
+        m = Moteur(monkeypatch, [_sortie([evts[2].id], resume=resume)])
+        r = await _analyser(db, d, m)
+        assert r["etat"] == "rejete" and "tendance" in r["motif"], resume
+
+
+@pytest.mark.asyncio
+async def test_moteur_disponible_lectures_hors_boucle(env, monkeypatch):
+    import threading
+    principal = threading.main_thread()
+    fils = []
+    vraies = (moteurs.reglages.lire_prefs, moteurs._distant)
+
+    def lire_prefs():
+        fils.append(threading.current_thread())
+        return vraies[0]()
+
+    def distant():
+        fils.append(threading.current_thread())
+        return vraies[1]()
+    monkeypatch.setattr(moteurs.reglages, "lire_prefs", lire_prefs)
+    monkeypatch.setattr(moteurs, "_distant", distant)
+    monkeypatch.setattr(moteurs, "FABRIQUE_TRANSPORT",
+                        lambda nom: httpx.MockTransport(lambda req: httpx.Response(503, json={})))
+    assert await moteurs.moteur_disponible(False) is None
+    assert len(fils) == 2 and all(f is not principal for f in fils)
+
+
+@pytest.mark.asyncio
+async def test_tour_exception_compte_dans_les_essais(db, monkeypatch):
+    d, _ = _dossier(db)
+    analyste.deposer_travail(db, "analyser", d.id, T0.timestamp())
+
+    async def sql(f, *a):
+        return f(db, *a)
+
+    async def dispo():
+        return None
+
+    async def casse(*a, **k):
+        raise RuntimeError("panne")
+    monkeypatch.setattr(analyste, "analyser", casse)
+    quand = T0
+    for k in range(analyste.ESSAIS_MAX):
+        with pytest.raises(RuntimeError):
+            await analyste.tour(db, sql, dispo, quand, REGLAGES)
+        quand += timedelta(seconds=analyste.ATTENTE_SANS_MOTEUR_S + 1)
+    assert db.execute("SELECT etat, essais FROM travaux").fetchone() == ("abandon", analyste.ESSAIS_MAX)
+    assert await analyste.tour(db, sql, dispo, quand + timedelta(days=1), REGLAGES) is None

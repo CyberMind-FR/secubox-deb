@@ -84,6 +84,7 @@ MOTIFS_RETRAIT = {
     "duree": "durée hors des bornes du geste",
     "unban": "levée refusée : cible sans ban dans les preuves, ou avec des preuves d'essais, d'exploitation ou de "
              "persistance",
+    "faits": "raison citant un chiffre, un pays, une famille, une adresse ou une tendance absents des preuves",
     "doublon": "recommandation en double",
     "plafond": f"au-delà de {RECOS_MAX} recommandations",
 }
@@ -388,20 +389,26 @@ def _releve(ctx, jointes):
             "evolution_1h": {"disponible": False, "raison": "aucune tendance mesurée sur un dossier"}}
 
 
-def _anomalies(texte, ctx, jointes):
-    releve = _releve(ctx, jointes)
-    notes = controles.anomalies(texte, releve)
+def _anomalies(texte, ctx, jointes, releve=None):
+    """Contrôle 3 : {code: nombre d'éléments en écart}. Seuls les codes et les comptes sortent d'ici : les éléments
+    viennent du texte du modèle et ne sont jamais écrits (ni motif, ni audit)."""
+    releve = releve or _releve(ctx, jointes)
+    ecarts = {code: len(elements) for code, elements in controles.constats(texte, releve, controles.TENDANCE_DOSSIER)}
     citees = {f for f in ctx.familles_connues if len(f) >= 4
               and re.search(rf"(?<![\w-]){re.escape(f)}(?![\w-])", texte, re.I)}
     presentes = {p.get(k) for p in releve["preuves"] for k in ("famille", "sous_famille")}
     if citees - presentes:
-        notes.append("familles absentes des preuves : " + ", ".join(sorted(citees - presentes)[:8]))
+        ecarts["familles"] = len(citees - presentes)
     adresses = {p.get("ip") for p in releve["preuves"]} | {str(p.get("bloc24", "")).split("/")[0]
                                                          for p in releve["preuves"]}
-    hors = sorted({a for a in controles.IPV4.findall(texte) if a not in adresses})
+    hors = {a for a in controles.IPV4.findall(texte) if a not in adresses}
     if hors:
-        notes.append("adresses absentes des preuves : " + ", ".join(hors[:8]))
-    return notes
+        ecarts["adresses"] = len(hors)
+    return ecarts
+
+
+def _motif_ecarts(ecarts) -> str:
+    return "contrôle des faits, éléments absents des preuves : " + ", ".join(f"{c} ({n})" for c, n in ecarts.items())
 
 
 def _protegee(n, protegees) -> bool:
@@ -418,14 +425,28 @@ def motif_recommandation(cle, geste, version=VERSION_PROMPT) -> str:
 
 
 def _brut(r):
-    if isinstance(r, dict):
-        return {str(k)[:32]: (v[:CHAMP_MAX] if isinstance(v, str) else v if isinstance(v, (int, float, bool)) or v is None
-                              else "…") for k, v in list(r.items())[:8]}
-    return {"brut": str(r)[:CHAMP_MAX]}
+    """Trace d'une recommandation retirée, SANS texte libre du modèle : geste du catalogue (sinon « hors catalogue »),
+    cible si c'est une adresse ou une plage lisible (sinon « illisible »), durée entière. Ni raison, ni champ inconnu."""
+    if not isinstance(r, dict):
+        return {"forme": type(r).__name__}
+    geste, cible, duree = r.get("geste"), r.get("cible"), r.get("duree_s")
+    try:
+        n = ipaddress.ip_network(cible, strict=False) if isinstance(cible, str) and len(cible) <= 64 else None
+    except ValueError:
+        n = None
+    if n is None:
+        cible = "illisible"
+    elif "/" not in cible:
+        cible = str(n.network_address)            # adresse lue, réécrite par le code
+    else:
+        cible = str(n)
+    return {"geste": geste if geste in GESTES else "hors catalogue", "cible": cible,
+            "duree_s": duree if isinstance(duree, int) and not isinstance(duree, bool) else None}
 
 
-def filtrer_recommandations(recos, ctx, version=VERSION_PROMPT):
-    """Contrôle 4 : (gardées, retirées) ; chaque retrait porte son motif (MOTIFS_RETRAIT)."""
+def filtrer_recommandations(recos, ctx, version=VERSION_PROMPT, verifier=None):
+    """Contrôle 4 : (gardées, retirées) ; chaque retrait porte son motif (MOTIFS_RETRAIT). `verifier(texte)` : écarts
+    du contrôle 3 sur la raison d'une recommandation (une raison fautive retire la recommandation)."""
     adresses = {e.ip_src for e in ctx.evts if e.ip_src}
     blocs = {e.bloc24 for e in ctx.evts if e.bloc24}
     bannies = {e.ip_src for e in ctx.evts if e.source in ("bans", "bans_actifs") or e.famille in ("ban", "ban_actif")}
@@ -469,6 +490,9 @@ def filtrer_recommandations(recos, ctx, version=VERSION_PROMPT):
             continue
         if rec.geste == "unban" and (cible not in bannies or cible in offensives):
             retirer(r, "unban")
+            continue
+        if verifier is not None and verifier(rec.raison):
+            retirer(r, "faits")
             continue
         if (rec.geste, cible) in vues:
             retirer(r, "doublon")
@@ -618,17 +642,20 @@ async def analyser(db, dossier_id: str, moteur, *, sql=None, maintenant: Optiona
     citees = [p.evenement_id for p in sortie.preuves]
     hors = [i for i in citees if i not in montrees]
     if hors:
+        connus = set(ctx.dossier.evenements)
         return await finir("quarantaine", f"preuve hors du dossier ou inexistante : {len(hors)} identifiant(s)",
-                           "preuve_hors_dossier", preuves=citees)
+                           "preuve_hors_dossier", preuves=[i for i in citees if i in connus])
     if not citees:
         return await finir("rejete", "aucune preuve citée", "sans_preuve")
     # 3. faits cités
     texte = "\n".join([sortie.resume, sortie.lecture, *sortie.manques, *(p.raison for p in sortie.preuves)])
-    notes = _anomalies(texte, ctx, jointes)
-    if notes:
-        return await finir("rejete", "contrôle des faits : " + " ; ".join(notes), "faits_absents")
-    # 4 et 5. recommandations : catalogue, cible, protections ; motif du code
-    gardees, retirees = filtrer_recommandations(sortie.recommandations, ctx)
+    releve = _releve(ctx, jointes)
+    ecarts = _anomalies(texte, ctx, jointes, releve)
+    if ecarts:
+        return await finir("rejete", _motif_ecarts(ecarts), "faits_absents")
+    # 4 et 5. recommandations : catalogue, cible, protections, raison contrôlée comme le texte ; motif du code
+    gardees, retirees = filtrer_recommandations(sortie.recommandations, ctx,
+                                                verifier=lambda t: _anomalies(t, ctx, jointes, releve))
     Analyse.model_validate({"resume": sortie.resume, "lecture": sortie.lecture,
                             "preuves": [p.model_dump() for p in sortie.preuves], "manques": list(sortie.manques),
                             "recommandations": [{k: g[k] for k in ("geste", "cible", "duree_s", "raison")}
@@ -759,7 +786,11 @@ async def tour(db, sql, disponible, maintenant: datetime, reg: Optional[dict] = 
         moteur = await disponible() if COUPE.ouvert_jusqua(maintenant) is None else None
         r = await analyser(db, objet, moteur, sql=sql, maintenant=maintenant, reglages=reg)
     except BaseException:
-        await asyncio.shield(sql(finir_travail, tid, "attente", maintenant.timestamp() + ATTENTE_SANS_MOTEUR_S))
+        # Une exception compte comme un essai : abandonné après ESSAIS_MAX, jamais repris sans fin.
+        if essais >= ESSAIS_MAX:
+            await asyncio.shield(sql(finir_travail, tid, "abandon"))
+        else:
+            await asyncio.shield(sql(finir_travail, tid, "attente", maintenant.timestamp() + ATTENTE_SANS_MOTEUR_S))
         raise
     if r["id"] is None:
         await sql(finir_travail, tid, "abandon")
