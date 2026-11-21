@@ -18,6 +18,13 @@ secubox-ai (2.0.0-1~trixie1) trixie; urgency=medium
     imprimées).
   * Profil AppArmor secubox-ai-moteur : enforce (plus de flags=(complain)). À vérifier au déploiement sur gk3 :
     aucun refus apparmor="DENIED" de secubox-ai-moteur, secubox-ai-veille, secubox-waf-indices.
+  * Rétention bornée de veille.db (#3725, migration 0010 : index) : dossiers sans incident ni action 30 j (avec : 365 j),
+    propositions closes et approbations 90 j (jamais une chaîne de référence vivante), actions closes 365 j avant
+    leurs propositions (jamais un ban vivant), acteurs_adresses 30 j, filtres retirés 90 j, audit_chaine 365 j (le déjà
+    relayé seulement), plafonds de secours par table ; jamais une ligne vivante ou en vol.
+  * Garde d'espace sur la partition de veille.db (statvfs de son dossier) : sous le seuil, TOUTES les boucles
+    d'écriture se suspendent, seule la rétention tourne (toutes les 5 min) ; reprise à seuil + 256 Mio ; état dans
+    /veille/etat (garde_espace).
   * Ordre de déploiement : secubox-waf-ng 1.43.0, secubox-soc 1.12.0, secubox-mirrornet 0.7.0 et
     secubox-annuaire 0.23.0 AVANT secubox-ai 2.0.0 (README, § Mise en service).
 

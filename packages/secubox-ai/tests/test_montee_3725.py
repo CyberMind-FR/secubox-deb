@@ -3,7 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Montée depuis 0.4.0 (#3725) : état d'une box en 0.4.0 (veille.db migrations 0001 à 0004 avec lignes, memoire.db,
-preferences.toml, historique), ouvert comme le service le fait au démarrage. Rien ne se perd, 0005 à 0009 sont
+preferences.toml, historique), ouvert comme le service le fait au démarrage. Rien ne se perd, 0005 à 0010 sont
 appliquées, la sauvegarde veille.db.avant-0005 existe et reflète l'état d'avant."""
 import shutil
 import sqlite3
@@ -33,6 +33,14 @@ def _tables(db):
     return {n for (n,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
 
 
+def _contenu_memoire(etat):
+    c = sqlite3.connect(str(etat / "memoire.db"))
+    try:
+        return {t: c.execute(f"SELECT * FROM {t} ORDER BY id").fetchall() for t in ("souvenirs", "historique")}
+    finally:
+        c.close()
+
+
 def _etat_040(etat):
     """veille.db telle que 0.4.0 la laisse : migrations 0001 à 0004 et des lignes."""
     db = base.ouvrir(etat / "veille.db", _scripts_jusqu_a(etat, 4))
@@ -57,13 +65,14 @@ def test_montee_depuis_040_sans_perte(etat):
     modele = etat / "modeles"
     modele.mkdir()
     (modele / "petit.gguf").write_bytes(b"GGUF" + bytes(64))
-    avant_memoire = (etat / "memoire.db").read_bytes()
+    avant_memoire = _contenu_memoire(etat)
+    assert avant_memoire["souvenirs"] and avant_memoire["historique"]
 
     # Le service ouvre la base avec toutes les migrations du paquet 2.0.0.
     db = base.ouvrir(etat / "veille.db")
     try:
         versions = [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")]
-        assert versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        assert versions == list(range(1, 11))
         assert db.execute("SELECT COUNT(*) FROM evenements").fetchone()[0] == 50
         assert db.execute("SELECT cle FROM dossiers").fetchall() == [("100.64.9.1",)]
         assert {"analyses", "actions", "redescentes"} <= _tables(db)
@@ -84,13 +93,7 @@ def test_montee_depuis_040_sans_perte(etat):
         sauve.close()
 
     # La montée ne touche ni la mémoire, ni les préférences, ni les modèles.
-    c = sqlite3.connect(str(etat / "memoire.db"))
-    try:
-        assert c.execute("SELECT COUNT(*) FROM souvenirs").fetchone() == (1,)
-        assert c.execute("SELECT COUNT(*) FROM historique").fetchone() == (1,)
-    finally:
-        c.close()
-    assert (etat / "memoire.db").exists() and avant_memoire[:16] == b"SQLite format 3\x00"
+    assert _contenu_memoire(etat) == avant_memoire          # mêmes lignes, colonne pour colonne
     assert prefs.read_text(encoding="utf-8") == '[moteur]\nmode = "local"\n'
     assert (modele / "petit.gguf").read_bytes().startswith(b"GGUF")
 
@@ -103,7 +106,7 @@ def test_deuxieme_demarrage_ne_refait_rien(etat):
     db = base.ouvrir(etat / "veille.db")
     try:
         assert base.migrer(db) == []
-        assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == list(range(1, 10))
+        assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == list(range(1, 11))
     finally:
         db.close()
     assert sauve.stat().st_mtime_ns == quand and [p.name for p in etat.glob("veille.db.avant-*")] == ["veille.db.avant-0005"]

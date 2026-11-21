@@ -130,6 +130,7 @@ async def _main():
     db = await asyncio.to_thread(base.ouvrir, DB)
     async def purge():
         res = await veille.sql(retention.purger, _maintenant())
+        await veille.sql(retention.liberer)
         logging.getLogger("secubox-ai-veille").info("purge : %s", res)
 
     reglages = _reglages_correlation()
@@ -176,7 +177,7 @@ async def _main():
         await analyste.tour(db, veille.sql, lambda: moteurs.moteur_disponible(reglages_ia["reveiller_local"]),
                             _maintenant(), reglages_ia)
 
-    boucles = [Boucle("retention", 86400, purge), Boucle("correlation", PAS_CORRELATION_S, correler),
+    boucles = [Boucle("retention", 86400, purge, exempte=True), Boucle("correlation", PAS_CORRELATION_S, correler),
                Boucle("analyse", PAS_ANALYSE_S, analyser)]
     client = _client()
     if client is not None:

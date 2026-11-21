@@ -28,6 +28,13 @@ Ordre de déploiement : `secubox-waf-ng` 1.43.0, `secubox-soc` 1.12.0, `secubox-
 0.23.0 **avant** `secubox-ai` 2.0.0. La montée depuis 0.4.0 applique les migrations 0005 à 0009 de `veille.db` après la
 sauvegarde `veille.db.avant-0005` (une seule gardée) ; mémoire, préférences, historique et modèles restent intacts.
 
+Rétention de `veille.db` (bornée) : événements, mesures 30 j ; dossiers sans incident ni action 30 j, avec 365 j ;
+propositions closes 90 j ; actions closes 365 j ; adresses d'acteurs 30 j ; filtres retirés 90 j ; audit_chaine 365 j
+(le relayé seulement, `audit.log` reste la référence) ; plafonds de secours 200 000 dossiers et propositions, 100 000
+actions et analyses. Garde d'espace sur la partition de `veille.db` : toutes les boucles d'écriture se suspendent sous
+1 Gio libre (seule la rétention tourne), reprise à 1,25 Gio ; `/veille/etat` donne `garde_espace`. La base ne rétrécit
+pas (ni VACUUM, ni suppression) : si la partition reste pleine, c'est à l'administrateur d'agir.
+
 Contrôles au déploiement :
 
 1. `threatmesh` : `/peers` doit répondre sur gk2, sinon chaque geste d'office est refusé en 409 `protegee_inconnue`.

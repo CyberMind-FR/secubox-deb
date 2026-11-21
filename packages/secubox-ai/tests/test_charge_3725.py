@@ -117,7 +117,9 @@ def test_profil_de_charge(tmp_path, monkeypatch, par_minute):
           f"  dossiers : moy {statistics.mean(constructions) * 1000:.0f} ms, max {max(constructions) * 1000:.0f} ms\n"
           f"  retard de bout en bout (pire passe) : {pire * 1000:.0f} ms\n"
           f"  /radar (calculer) : {min(radar_s) * 1000:.0f} à {max(radar_s) * 1000:.0f} ms ; /dossiers (100) : {liste_s * 1000:.0f} ms\n"
-          f"  base : {octets / 1e6:.1f} Mo pour {total} événements ; projetée à 30 j (rétention) : {projete / 1e9:.2f} Go\n"
+          f"  base : {octets / 1e6:.1f} Mo pour {total} événements ; projetée à 30 j : {projete / 1e9:.2f} Go "
+          f"(extrapolation linéaire de {minutes} min, BORNE HAUTE : tous les dossiers sont jeunes et sans incident, or la "
+          f"rétention bornée en retire 30 j après leur dernière vue ; la base réelle suit les plafonds de retention.py)\n"
           f"  plus gros objets : {', '.join(f'{n} {o / 1e6:.1f} Mo' for n, o in gros) or 'dbstat indisponible'}\n"
           f"  (acteurs tirés au hasard parmi ~16 000 adresses : presque un dossier par adresse, cas défavorable)")
     assert pire < LIMITE_PASSE_S
