@@ -67,8 +67,8 @@ secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
     SADE « zéro action ») ; REACTIVE admet tous les clics, d'office limiter
     seul ; `mode` (auto|clic) obligatoire dans limiter, leurre, partager et
     prolonger. Les levées (unban, lever) ne sont pas gardées par le mode.
-    I3 : waf-blocs refuse les préfixes globaux on-link de la box (motif lan,
-    code 12) pour tout ban, limite, leurre et partage.
+    I3 : waf-blocs refuse les préfixes IPv6 globaux on-link de la box (motif
+    lan, code 12 ; jamais un préfixe IPv4 : voisins du WAN bannissables) pour tout ban, limite, leurre et partage.
     I4 : wafctl ban, prolonger, limiter et leurre gardent la fin la plus
     tardive (jamais raccourcie ; limiter/leurre rendent `demandee`, la fin
     d'ai-ban) ; unban, limiter-lever et leurre-lever acceptent une fin
@@ -76,6 +76,8 @@ secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
     409 couvert) ; /ai/unban, /ai/lever et les retours arrière la passent.
     M1 : un clic de ban passe la garde des pairs du maillage. M4 : /ai/unban
     plafonné à 30/h et 100/j. M5 : non_vue tranché avant toute requête DNS.
+    Le journal ai-ban retient le mode réel (auto|clic) des limites, leurres
+    et partages.
     M3 : secubox-waf-indices.service reçoit le socle § 10 complet
     (PrivateDevices, RestrictNamespaces, RestrictSUIDSGID,
     SystemCallFilter=@system-service, CapabilityBoundingSet borné), vérifié

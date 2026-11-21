@@ -149,7 +149,7 @@ tardive d'un élément déjà posé (SADE, WAF, administrateur) ; `limiter` et `
 journal ai-ban retient `demandee` (la sienne). `wafctl unban|limiter-lever|leurre-lever <ip> <fin_max>` ne lève que si
 la fin réelle ne dépasse pas `fin_max` de plus de 60 s (`refus:couvert` sinon, `refus:etat` si nft est illisible) ;
 ai-ban passe sa fin à chaque levée et à chaque retour arrière. La garde root de waf-blocs refuse aussi les préfixes
-globaux on-link de la box (`ip -j addr`, portée globale : motif `lan`, code 12, I3). Un ban par clic passe la garde des
+IPv6 globaux on-link de la box (jamais un préfixe IPv4 : LAN privé, WAN public aux voisins bannissables) (`ip -j addr`, portée globale : motif `lan`, code 12, I3). Un ban par clic passe la garde des
 pairs du maillage (M1) ; `non_vue` est tranché avant toute requête DNS (M5).
 
 **Gestes d'office du compte `ai-ban` (#3723, 1.43.0).** Le journal `/var/lib/secubox/waf/ai-ban.jsonl` porte un champ

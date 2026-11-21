@@ -68,7 +68,8 @@ Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
 - jamais d'écrasement (revue finale I4) : wafctl garde la fin la plus tardive (ban, prolonger, limiter, leurre) et
   rend `demandee` (la fin d'ai-ban, que le journal retient) ; toute levée d'adresse par ai-ban (`unban`, `lever`,
   retours arrière) porte la fin d'ai-ban : wafctl refuse (409 `couvert`, rien n'est clos) si SADE ou un autre l'a
-  allongée depuis. Les préfixes globaux on-link de la box sont refusés par la garde root (409 `lan`, I3) ;
+  allongée depuis. Les préfixes IPv6 globaux on-link de la box sont refusés par la garde root (409 `lan`,
+  I3) ;
 - débannir (`PLAFONDS_UNBAN` 30/h et 100/j, revue finale M4) : un `id` du journal seulement, jamais une adresse ; et
   JAMAIS une cible qu'une autre source couvre
   désormais (ruling P12) : adresse dont le dernier enregistrement de `bans.jsonl` (sbxwaf) est un `ban` non échu,
@@ -1699,7 +1700,7 @@ def ai_limiter(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_cor
             raise _refus(*_statut_motif(_motif_sortie(r)), geste, user, "ai-limiter")
         fin = _fin_limite(r, int(_maintenant()) + geste.duree_s)
         entree = {"ts": _horodatage(), "at": maintenant, "type": "limite", "geste": "limiter", "id": ident,
-                  "cible": geste.cible, "fin": fin, "mode": "auto", "conseil": geste.conseil, "motif": geste.motif,
+                  "cible": geste.cible, "fin": fin, "mode": geste.mode, "conseil": geste.conseil, "motif": geste.motif,
                   "jti": str((user or {}).get("jti") or ""), "cle": _cle(user), "duree_s": geste.duree_s}
         try:
             _ecrire_journal(entree)
@@ -1825,7 +1826,7 @@ def ai_leurre(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corp
             raise _refus(*_statut_motif(_motif_sortie(r)), geste, user, "ai-leurre")
         fin = _fin_limite(r, int(_maintenant()) + geste.duree_s)
         entree = {"ts": _horodatage(), "at": maintenant, "type": "leurre", "geste": "leurre", "id": ident,
-                  "cible": geste.cible, "fin": fin, "mode": "auto", "conseil": geste.conseil, "motif": geste.motif,
+                  "cible": geste.cible, "fin": fin, "mode": geste.mode, "conseil": geste.conseil, "motif": geste.motif,
                   "jti": str((user or {}).get("jti") or ""), "cle": _cle(user), "duree_s": geste.duree_s}
         try:
             _ecrire_journal(entree)
@@ -1944,7 +1945,7 @@ def ai_partager(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_co
         resume = (f"id {ident} cible {geste.cible} famille {geste.famille} {geste.duree_s}s fin {fin} "
                   f"conseil {geste.conseil}")
         entree = {"ts": _horodatage(), "at": maintenant, "type": "partage", "geste": "partager", "id": ident,
-                  "cible": geste.cible, "fin": fin, "mode": "auto", "conseil": geste.conseil, "famille": geste.famille,
+                  "cible": geste.cible, "fin": fin, "mode": geste.mode, "conseil": geste.conseil, "famille": geste.famille,
                   "jti": str((user or {}).get("jti") or ""), "cle": _cle(user), "duree_s": geste.duree_s}
         try:
             _ecrire_journal(entree)

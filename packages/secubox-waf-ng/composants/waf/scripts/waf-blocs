@@ -183,9 +183,10 @@ def lire_protegees(chemin, exiger=False):
 
 
 def adresses_et_prefixes(executer):
-    """(adresses de la box, préfixes globaux on-link) d'après `ip -j addr` ; échec => GardeIllisible. Un préfixe
-    on-link (`local`/`prefixlen` de portée `global`, revue finale #3723 I3) est le LAN de la box — en IPv6 surtout :
-    ses machines y ont des adresses publiques ; jamais visé (motif `lan`). Lien local et hôte : non (privée déjà)."""
+    """(adresses de la box, préfixes IPv6 globaux on-link) d'après `ip -j addr` ; échec => GardeIllisible. Un préfixe
+    IPv6 on-link (`local`/`prefixlen` de portée `global`, revue finale #3723 I3) est le LAN de la box : ses machines y
+    ont des adresses publiques ; jamais visé (motif `lan`). Jamais un préfixe IPv4 : le LAN IPv4 est privé (`privee`),
+    un préfixe IPv4 public on-link est celui du WAN, dont les voisins restent bannissables."""
     try:
         donnees = json.loads(executer([IP, "-j", "addr"]))
         adresses, prefixes = set(), []
@@ -197,7 +198,10 @@ def adresses_et_prefixes(executer):
                 adresse = _depli(ipaddress.ip_address(local.split("%")[0]))
                 adresses.add(adresse)
                 longueur = info.get("prefixlen")
-                if info.get("scope") == "global" and type(longueur) is int and longueur < adresse.max_prefixlen:
+                # IPv6 seulement : un LAN IPv4 est privé (refusé `privee`) ; un préfixe IPv4 PUBLIC on-link est le WAN
+                # (pont Freebox /24, DOCSIS /22, VPS /24) : ses voisins restent bannissables
+                if (adresse.version == 6 and info.get("scope") == "global" and type(longueur) is int
+                        and longueur < adresse.max_prefixlen):
                     reseau = ipaddress.ip_network(f"{adresse}/{longueur}", strict=False)
                     if reseau not in prefixes:
                         prefixes.append(reseau)

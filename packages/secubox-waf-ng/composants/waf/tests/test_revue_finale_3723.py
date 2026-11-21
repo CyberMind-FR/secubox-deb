@@ -436,3 +436,30 @@ def test_unite_indices_socle_complet_compatible_sudo():
     regles = (COMPOSANT.parents[3] / ".claude" / "RULES-CODE.md").read_text()
     ligne = next(x for x in regles.splitlines() if "`secubox-waf-indices.service`" in x)
     assert "CapabilityBoundingSet" in ligne and "et `RestrictSUIDSGID`" not in ligne    # l'ancienne raison, fausse
+
+
+# ── re-revue : `lan` limité aux préfixes IPv6, mode réel au journal ────
+IP_ADDR_WAN = json.dumps([
+    {"ifname": "eth2", "addr_info": [
+        {"family": "inet", "local": "82.64.10.5", "prefixlen": 24, "scope": "global"},
+        {"family": "inet6", "local": "2a01:e0a:1:2::1", "prefixlen": 64, "scope": "global"}]},
+])
+
+
+def test_lan_ipv6_seulement_voisin_ipv4_public_bannissable():
+    wb = _waf_blocs()
+    locales, prefixes = wb.adresses_et_prefixes(_lancer_ip(IP_ADDR_WAN))
+    assert all(n.version == 6 for n in prefixes)
+    voisin = wb.normaliser_cible("82.64.10.77")                       # même /24 public on-link (Freebox, DOCSIS, VPS)
+    assert wb.motif_refus(voisin, [], locales, set(), prefixes) is None
+    assert wb.motif_refus(wb.normaliser_cible("82.64.10.5"), [], locales, set(), prefixes) == "box"
+    assert wb.motif_refus(wb.normaliser_cible("2a01:e0a:1:2::99"), [], locales, set(), prefixes) == "lan"
+
+
+@pytest.mark.parametrize("route", ["limiter", "leurre", "partager"])
+def test_journal_porte_le_mode_reel(g, route):
+    g.bans = [{"ip": IP4, "reason": "scanners"}]                       # partager : bannie sur gk2
+    r = {"limiter": _limiter, "leurre": lambda g, mode: _leurre(g, cible="198.51.100.30", mode=mode),
+         "partager": _partager}[route](g, mode="clic")
+    assert r.status_code == 200, r.text
+    assert g.lignes_journal()[-1]["mode"] == "clic"
