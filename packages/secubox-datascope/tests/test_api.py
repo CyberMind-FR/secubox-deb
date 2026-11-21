@@ -254,3 +254,33 @@ def test_sources_sans_empreinte(client):
 
 def test_id_avec_saut_de_ligne_400(client):
     assert client.get(P + "/entities/device:aa%0A").status_code == 400
+
+
+def test_graph_cache_malforme_sans_500(env, client):
+    ok = {"id": "ip:1.1.1.1", "type": "ip", "label": "x", "source_module": "network"}
+    (env.cache / "graph.json").write_text(json.dumps(
+        {"genere_le": T0, "complet": True, "tronque": False, "noeuds": [ok, {"type": "ip"}, "x", {"id": ["a"]}],
+         "aretes": [{"src": ["x"], "dst": {}}, {"src": "ip:1.1.1.1", "dst": "ip:1.1.1.1", "type": "BELONGS_TO"}, 3]}))
+    r = client.get(P + "/graph")
+    j = r.json()
+    assert r.status_code == 200 and [n["id"] for n in j["noeuds"]] == ["ip:1.1.1.1"] and len(j["aretes"]) == 1
+    assert j["tronque"] is True
+    for forme in ({"noeuds": "x", "aretes": []}, {"noeuds": [], "aretes": {}}, {"noeuds": None}):
+        (env.cache / "graph.json").write_text(json.dumps({"genere_le": T0, **forme}))
+        r = client.get(P + "/graph")
+        assert r.status_code == 200 and r.json()["disponible"] is False and r.json()["motif"]
+
+
+def test_graph_filtre_tronque_aretes(env, client):
+    db = store.ouvrir(env.base)
+    db.execute("PRAGMA foreign_keys = OFF")
+    ids = [f"network:z{i}" for i in range(60)]
+    db.executemany("INSERT INTO entities(id,type,label,attributes_json,source_module,first_seen,last_seen) "
+                   "VALUES (?,?,?,?,?,?,?)", [(i, "network", "x", "{}", "network", T0, T0) for i in ids])
+    db.executemany("INSERT INTO relationships(src,dst,type,source_module,first_seen,last_seen,evidence_type,"
+                   "confidence,justification) VALUES (?,?,?,?,?,?,?,?,?)",
+                   [(a, b, "CONNECTS_TO", "network", T0, T0, "observed", 1.0, "v") for a in ids for b in ids
+                    if a != b])
+    db.close()
+    g = client.get(P + "/graph?type=network").json()
+    assert len(g["aretes"]) == 1500 and g["tronque"] is True

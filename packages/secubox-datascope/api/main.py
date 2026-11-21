@@ -245,12 +245,17 @@ async def context(id: str) -> Dict[str, Any]:
 
 def _borner_cache(g: Dict[str, Any], etats: Dict[str, str]) -> Dict[str, Any]:
     """Bornes défensives sur graph.json : 500 nœuds, 1 500 arêtes entre nœuds retenus."""
-    brut_n = [n for n in g.get("noeuds", []) if isinstance(n, dict) and isinstance(n.get("id"), str)]
-    brut_a = [a for a in g.get("aretes", []) if isinstance(a, dict)]
+    n_cache, a_cache = g.get("noeuds"), g.get("aretes")
+    if not isinstance(n_cache, list) or not isinstance(a_cache, list):
+        return {"disponible": False, "motif": "graph.json de forme inattendue"}
+    brut_n = [n for n in n_cache if isinstance(n, dict) and isinstance(n.get("id"), str)]
+    brut_a = [a for a in a_cache if isinstance(a, dict) and isinstance(a.get("src"), str)
+              and isinstance(a.get("dst"), str)]
     noeuds = brut_n[:store.VOISINS_NOEUDS_MAX]
     ids = {n["id"] for n in noeuds}
-    aretes = [a for a in brut_a if a.get("src") in ids and a.get("dst") in ids]
-    tronque = bool(g.get("tronque")) or len(noeuds) < len(brut_n) or len(aretes) < len(brut_a)
+    aretes = [a for a in brut_a if a["src"] in ids and a["dst"] in ids]
+    tronque = bool(g.get("tronque")) or len(brut_n) < len(n_cache) or len(brut_a) < len(a_cache) \
+        or len(noeuds) < len(brut_n) or len(aretes) < len(brut_a)
     if len(aretes) > store.VOISINS_ARETES_MAX:
         aretes = aretes[:store.VOISINS_ARETES_MAX]
         tronque = True
