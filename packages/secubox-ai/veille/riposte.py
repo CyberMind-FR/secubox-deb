@@ -343,10 +343,40 @@ def duree_recidive(n: int) -> int:
     return min(DUREE_MAX_S, DUREE_AUTO_ADRESSE_S * FACTEUR_RECIDIVE ** min(max(n, 0), EXPOSANT_MAX))
 
 
+# Un ban V2 levé par une levée V2 faite (`unban`, `reference` = id du ban) ne compte plus, comme gk2 retire de la
+# récidive les bans annulés (`_CAUSES_SANS_RECIDIVE`) ; un ban jamais posé (`echec`, `refusee_gk2`) n'est pas `faite`.
+_NON_LEVE = ("NOT EXISTS (SELECT 1 FROM propositions u WHERE u.geste = 'unban' AND u.etat = 'faite' "
+             "AND u.reference = propositions.id)")
+
+
 def _bans_poses(db, geste, cible) -> int:
-    """Bans V2 faits sur la cible (miroir du compte de gk2 : ses propres bans de la cible)."""
-    return db.execute("SELECT COUNT(*) FROM propositions WHERE geste = ? AND cible = ? AND etat = 'faite'",
-                      (geste, cible)).fetchone()[0]
+    """Bans V2 faits et non levés sur la cible (miroir du compte de gk2 : ses propres bans de la cible)."""
+    return db.execute(f"SELECT COUNT(*) FROM propositions WHERE geste = ? AND cible = ? AND etat = 'faite' "
+                      f"AND {_NON_LEVE}", (geste, cible)).fetchone()[0]
+
+
+def _fin(maj, duree):
+    try:
+        return datetime.fromisoformat(maj.replace("Z", "+00:00")) + timedelta(seconds=int(duree or 0))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _fin_prolongee(db, pid, fin):
+    """Fin d'un ban V2 après ses prolongations FAITES (`prolonger` dont `reference` = le ban ou une prolongation de
+    ce ban, en chaîne) : la plus tardive. gk2 ne raccourcit jamais."""
+    vus, file = {pid}, [pid]
+    while file:
+        ref = file.pop()
+        for qid, maj, duree in db.execute("SELECT id, maj_le, duree_s FROM propositions WHERE geste = 'prolonger' "
+                                          "AND etat = 'faite' AND reference = ?", (ref,)).fetchall():
+            f = _fin(maj, duree)
+            if f is not None and (fin is None or f > fin):
+                fin = f
+            if qid not in vus:
+                vus.add(qid)
+                file.append(qid)
+    return fin
 
 
 def _cibles_ban(ip, bloc):
@@ -360,18 +390,20 @@ def _ban_en_vol(db, ip, bloc) -> bool:
 
 
 def _ban_vivant(db, ip, bloc, maintenant):
-    """Ban V2 FAIT de l'adresse ou de son bloc dont la fin est à venir : (id, geste, cible, fin) le plus tardif, ou
-    None. Fin = passage à `faite` (`maj_le`) + `duree_s` (la tâche 7 tient `faite` à jour)."""
+    """Ban V2 FAIT de l'adresse ou de son bloc dont la fin est à venir : (id, geste, cible, fin, prolongé) le plus
+    tardif, ou
+    None. Fin = passage à `faite` (`maj_le`) + `duree_s` (la tâche 7 tient `faite` à jour), repoussée par ses
+    prolongations faites ; un ban levé par une levée V2 faite n'est plus vivant."""
     meilleur = None
     for g, c in _cibles_ban(ip, bloc):
-        for pid, maj, duree in db.execute("SELECT id, maj_le, duree_s FROM propositions WHERE geste = ? AND cible = ? "
-                                          "AND etat = 'faite'", (g, c)):
-            try:
-                fin = datetime.fromisoformat(maj.replace("Z", "+00:00")) + timedelta(seconds=int(duree or 0))
-            except (ValueError, TypeError, AttributeError):
+        for pid, maj, duree in db.execute(f"SELECT id, maj_le, duree_s FROM propositions WHERE geste = ? AND cible = ? "
+                                          f"AND etat = 'faite' AND {_NON_LEVE}", (g, c)).fetchall():
+            origine = _fin(maj, duree)
+            fin = _fin_prolongee(db, pid, origine)
+            if fin is None:
                 continue
             if fin > maintenant and (meilleur is None or fin > meilleur[3]):
-                meilleur = (pid, g, c, fin)
+                meilleur = (pid, g, c, fin, origine is None or fin > origine)
     return meilleur
 
 
@@ -423,10 +455,11 @@ def _candidats(db, d, s: Signaux, comptes, maintenant):
                 out.append(("limiter", ip, DUREE_LIMITER_S, "contenir_limiter", dict(base), None))
             continue
         if vivant:
-            pid, g, c, fin = vivant
+            pid, g, c, fin, prolonge = vivant
             n = _bans_poses(db, g, c)
             duree = duree_recidive(n) if g == "ban" else DUREE_MAX_S
-            if maintenant + timedelta(seconds=duree) > fin:          # gk2 ne raccourcit jamais (409 raccourcit)
+            # Une prolongation au plus tant qu'elle court ; gk2 ne raccourcit jamais (409 raccourcit).
+            if not prolonge and maintenant + timedelta(seconds=duree) > fin:
                 out.append(("prolonger", c, duree, "usager_prolonger", {"bans": n}, pid))
             if s.campagne or s.outil_nomme:
                 out.append(("partager", ip, DUREE_PARTAGER_S, "usager_partager", {}, None))

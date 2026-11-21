@@ -116,8 +116,9 @@ des chiffres ; le texte du modèle n'entre ni dans un niveau, ni dans une propos
 - **Compatibilité avec gk2** : une adresse **IPv6** n'est jamais bannie ni partagée (`/ai/ban` : IPv4 publique ou /24
   exact) — `contenir` → `limiter` 6 h, `usager` → `leurre` si web seul, sinon `limiter` 24 h. Tant qu'un ban V2 de
   l'adresse ou de son bloc est **en vol** (proposé, approuvé, envoyé) : rien de neuf, on attend. Un ban V2 **fait et
-  actif** : `prolonger` ce ban (fin de récidive, 7 j au plus, jamais plus courte ; colonne `reference` = proposition du
-  ban), jamais de `leurre` sur une adresse bannie ; `partager` (7 j, campagne ou outil ≥ 2 traits) n'est proposé
+  actif** : `prolonger` ce ban (fin de récidive, 7 j au plus, jamais plus courte, une prolongation au plus tant
+  qu'elle court ; colonne `reference` = proposition du ban ; fin vivante = fin du ban repoussée par ses prolongations
+  faites ; un ban levé par une levée V2 faite n'est plus vivant ni compté en récidive), jamais de `leurre` sur une adresse bannie ; `partager` (7 j, campagne ou outil ≥ 2 traits) n'est proposé
   **qu'à ce moment-là**, jamais à côté d'un ban encore en vol ni pour une adresse servie par le leurre.
 - **Limites acceptées (V0)** : une proposition expirée n'est reproposée qu'avec de nouvelles preuves (le dossier doit
   être recalculé) ; la redescente va directement à `observer` (pas de palier par palier).

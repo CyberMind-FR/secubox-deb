@@ -460,3 +460,39 @@ def test_migration_0006_rejouable(tmp_path):
     db = base.ouvrir(chemin)                                         # réouverture : aucune migration, aucune erreur
     assert db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 6
     db.close()
+
+
+def test_fin_de_ban_prolonge_prise_en_compte(db):
+    _waf(db, A, T0 - timedelta(minutes=10), cat="sqli:union", sev="high")
+    _auth(db, A, T0 - timedelta(minutes=5), "smtp")
+    _ajout(db, "garde", T0 - timedelta(minutes=3), menace="intrusion", ip=A, gravite="high")
+    d = _passe(db)[A]
+    assert d.niveau == "usager"
+    ban = _ban_fait(db, A, T0 - timedelta(hours=1))                     # fin d'origine : T0 + 23 h
+    [pro] = _proposer(db, d)
+    assert (pro.geste, pro.reference) == ("prolonger", ban)
+    _faite(db, pro.id, T0)                                              # fin prolongée : T0 + 96 h
+    # avant la fin prolongée : aucune nouvelle prolongation
+    assert _proposer(db, d, T0 + timedelta(minutes=5)) == []
+    # après la fin d'origine, avant la fin prolongée : toujours banni (ni nouveau ban, ni leurre)
+    tard = T0 + timedelta(hours=30)
+    _waf(db, A, tard - timedelta(minutes=10), cat="sqli:union", sev="high")
+    _auth(db, A, tard - timedelta(minutes=5), "smtp")
+    _ajout(db, "garde", tard - timedelta(minutes=3), menace="intrusion", ip=A, gravite="high")
+    d = _passe(db, tard)[A]
+    assert riposte._ban_vivant(db, A, "45.83.64.0/24", tard)[3] == T0 + timedelta(hours=96)
+    assert [p.geste for p in _proposer(db, d, tard)] == []
+    # avec une campagne connue, partager est permis sur ce ban vivant
+    d.campagnes = ["c"]
+    assert [p.geste for p in _proposer(db, d, tard + timedelta(minutes=1))] == ["partager"]
+
+
+def test_ban_leve_ne_compte_plus(db):
+    ban = _ban_fait(db, A, T0 - timedelta(hours=1))
+    assert riposte._bans_poses(db, "ban", A) == 1
+    assert riposte._ban_vivant(db, A, None, T0) is not None
+    db.execute("INSERT INTO propositions(id, geste, cible, duree_s, mode, reference, politique, motif, etat, expire_le, "
+               "cree_le, maj_le) VALUES ('u1', 'unban', ?, 0, 'clic', ?, 'gestes.unban', 'm', 'faite', 'z', 'a', 'a')",
+               (A, ban))
+    assert riposte._bans_poses(db, "ban", A) == 0
+    assert riposte._ban_vivant(db, A, None, T0) is None
