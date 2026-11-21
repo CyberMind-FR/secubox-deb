@@ -16,7 +16,12 @@ LoadCredential= (ai-distant), jamais lue dans /etc/secubox/secrets.
 
 Riposte graduée (#3723) : la même boucle fixe le niveau des dossiers recalculés (seuils de
 /etc/secubox/ai/riposte.toml) puis PROPOSE les gestes de leur niveau selon /etc/secubox/ai/politiques.toml (double
-tampon relu à chaque passe). Aucun geste n'est envoyé à gk2 ici : les propositions attendent l'exécution (tâche 7).
+tampon relu à chaque passe).
+
+Réponses (#3723) : la boucle `reponses` (10 s) relaie les décisions de l'API dans audit.log, rapproche les envois
+interrompus par GET /ai/etat, puis EXÉCUTE les propositions approuvées ou d'office (veille/executeur.py) par les seules
+routes `ai-ban` de gk2, signées par la clé ai-ban (LoadCredential=ai-ban, jamais lue ailleurs). Sans cette clé (ou
+avec la valeur de repli « absente »), rien n'est exécuté et /veille/etat le dit ; la veille continue.
 """
 import asyncio
 import logging
@@ -46,7 +51,8 @@ def _cle_distante():
 os.environ["SECUBOX_AI_CLE"] = _cle_distante()
 
 from api import moteurs  # noqa: E402
-from veille import analyste, base, collecte, correlation, dossiers, pays, politiques, retention, riposte  # noqa: E402
+from veille import (analyste, base, collecte, correlation, dossiers, executeur, pays, politiques, retention,  # noqa: E402
+                    riposte)
 from veille.client import ClientGk2, delais, routes  # noqa: E402
 from veille.sources import toutes  # noqa: E402
 from veille.service import Boucle, Veille  # noqa: E402
@@ -57,11 +63,13 @@ PAS_CORRELATION_S = 60       # V2 § 8 : fenêtre glissante de 30 min, une passe
 PAS_PAYS_S = 60               # échantillon par pays (#3811) : un par créneau de 15 min, vérifié chaque minute
 PAS_ANALYSE_S = 30            # analyste IA (#3722) : un travail au plus par tour
 PAS_COLLECTE_S = 10           # chaque source garde son propre intervalle (collecte.passe ne lit que les sources dues)
+PAS_REPONSES_S = 10           # exécuteur des réponses (#3723)
 log = logging.getLogger("secubox-ai-veille")
 
 
 def _client():
-    """Client de gk2, ou None (journalisé) sans clé ou sans configuration."""
+    """Client de gk2, ou None (journalisé) sans clé de lecture ou sans configuration. La clé ai-ban (#3723) s'y
+    ajoute si elle est remise : sans elle, le client lit mais n'agit pas (`peut_agir` faux)."""
     try:
         with open(CONF, "rb") as f:
             cfg = tomllib.load(f)
@@ -73,13 +81,14 @@ def _client():
     base_url = str((cfg.get("gk2") or {}).get("menaces_url") or "https://admin.gk2.secubox.in/api/v1")
     aud = str((cfg.get("veille") or {}).get("aud") or "gk2")
     dossier = os.environ.get("CREDENTIALS_DIRECTORY")
-    try:
-        with open(os.path.join(dossier or "/nonexistent", "ai-lecture"), "rb") as f:
-            cle = f.read(8192)
-    except OSError:
+    cle = executeur.lire_cle(dossier, "ai-lecture")
+    if cle is None:
         log.error("clé ai-lecture absente (secubox-aictl cle-ai-lecture generer) : collecte éteinte")
         return None
-    return ClientGk2(base_url, aud, cle, routes(cfg), delais_routes=delais(cfg))
+    cle_ban = executeur.lire_cle(dossier, "ai-ban")
+    if cle_ban is None:
+        log.error("clé ai-ban absente (secubox-aictl cle-ai-ban generer) : aucune réponse ne sera exécutée")
+    return ClientGk2(base_url, aud, cle, routes(cfg), delais_routes=delais(cfg), cle_ban=cle_ban)
 
 
 def _reglages_correlation():
@@ -175,6 +184,19 @@ async def _main():
             if await pays.tour(veille.sql, client, _maintenant().timestamp()):
                 log.info("pays : échantillon du créneau écrit")
         boucles.append(Boucle("pays", PAS_PAYS_S, echantillonner_pays, collecte=True))
+    def _politiques_reponses():
+        m = _maintenant()
+
+        def auditer(evenement, details):
+            collecte._audit(db, m, evenement, details, operation="politiques", resultat="refus", limiter=False)
+            riposte.ecrire_audit_log(evenement, details)
+        return politiques.charger_politiques(auditer=auditer, maintenant=m)
+
+    async def repondre():
+        pol = await veille.sql(lambda _db: _politiques_reponses())
+        await executeur.executer(veille, client, _maintenant(), politiques=pol)
+    # Sans client (clé de lecture absente) la boucle tourne quand même : relais d'audit et état « clé absente ».
+    boucles.append(Boucle("reponses", PAS_REPONSES_S, repondre))
     veille = Veille(db, _maintenant, boucles)
     boucle = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

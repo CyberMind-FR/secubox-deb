@@ -14,13 +14,21 @@
   secubox-aictl cle-ai-lecture generer
                                  crée la paire Ed25519 du compte de lecture `ai-lecture` (veille V2, #3720) et
                                  imprime la clé PUBLIQUE à inscrire sur gk2 ; refuse d'écraser une clé existante (root)
+  secubox-aictl cle-ai-ban generer
+                                 crée la paire Ed25519 du compte `ai-ban` (réponses de la veille V2, #3723) et imprime
+                                 la clé PUBLIQUE à poser sur gk2 (« wafctl cle-ai-ban ajouter ») ; jamais d'écrasement
+  secubox-aictl veille suspendre|reprendre
+                                 suspend ou reprend les gestes d'office de la veille (les gestes approuvés restent
+                                 possibles) ; écrit dans veille.db au compte du module, audité (root)
+  secubox-aictl acl-audit        (re)pose l'ACL nommée d'ajout du compte secubox-ai sur audit.log (root ; unité de la
+                                 veille avant son démarrage, ou demande « acl-audit » après une rotation)
   secubox-aictl demandes         traite UNE demande déposée par l'API (secubox-ai-demandes.service, root)
 
 Codes de sortie : 0 fait ; 1 échec (modèle absent, en-tête illisible, moteur tombé) ; 2 refus d'usage (commande,
 droits, configuration, clé refusée) ; 4 mémoire insuffisante ; 5 occupé (un autre démarrage ou arrêt en cours).
 
 L'API (secubox-ai, NoNewPrivileges) ne lance rien en root : elle DÉPOSE `<action>.demande` (action ∈ demarrer,
-arreter, redemarrer ; fichier vide) dans `$SECUBOX_AI_RUN/demandes` (root:secubox-ai 1770) ;
+arreter, redemarrer ; la veille dépose aussi `acl-audit` ; fichier vide) dans `$SECUBOX_AI_RUN/demandes` (root:secubox-ai 1770) ;
 secubox-ai-demandes.path démarre secubox-ai-demandes.service (oneshot root), qui exécute « secubox-aictl demandes ».
 L'issue est publiée dans `$SECUBOX_AI_RUN/moteur-etat.json` (R9), que l'API lit. Ni sudo ni systemd-run.
 
@@ -55,7 +63,7 @@ sys.path.insert(0, os.environ.get("SECUBOX_AI_LIB", "/usr/lib/secubox/ai"))
 
 from api import contexte_auto as CA  # noqa: E402
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 
 # ── chemins (R2 : lus à l'appel, redirigeables par l'environnement) ──
 ETAT_DEFAUT = "/var/lib/secubox/ai"
@@ -71,6 +79,9 @@ DROPIN_API = Path("/run/systemd/system/secubox-ai.service.d")
 DROPIN_VEILLE = Path("/run/systemd/system/secubox-ai-veille.service.d")
 # Clé privée du compte de lecture de gk2 (veille V2) : root 0600, remise à la veille par LoadCredential=.
 CLE_AI_LECTURE = "/etc/secubox/secrets/ai/ai-lecture.key"
+# Clé privée du compte ai-ban (réponses de la veille, #3723) : même régime, remise à la seule veille.
+CLE_AI_BAN = "/etc/secubox/secrets/ai/ai-ban.key"
+SETFACL = "/usr/bin/setfacl"
 # Résolveurs de la box : 127.0.0.1 (Unbound) déjà permis par l'unité ; un résolveur du LAN (gk3 résout par gk2) est
 # rouvert à l'API comme les adresses de la configuration.
 RESOLV = Path("/etc/resolv.conf")
@@ -84,7 +95,7 @@ GROUPE_MOTEUR = "secubox-ai-moteur"
 PROPRIETAIRE_CONFIG = 0
 
 ACTIONS = ("demarrer", "arreter", "redemarrer")
-_NOM_DEMANDE = re.compile(r"^(demarrer|arreter|redemarrer)\.demande$")
+_NOM_DEMANDE = re.compile(r"^(demarrer|arreter|redemarrer|acl-audit)\.demande$")
 # Temporaire de l'API (moteurs.deposer_demande : mkstemp(prefix=".<action>.", suffix=".tmp")).
 _TMP_API = re.compile(r"^\.(demarrer|arreter|redemarrer)\..+\.tmp$")
 TAILLE_DEMANDE = 64           # l'API dépose un fichier vide
@@ -752,7 +763,9 @@ def traiter_demandes() -> int:
         audit("demande", {"issue": "erreur", "detail": f"dépôt inutilisable : {motif}"})
         _vider_depot()
         return 0
-    if retenue is not None:
+    if retenue == "acl-audit.demande":
+        cmd_acl_audit()
+    elif retenue is not None:
         try:
             executer_action(retenue[: -len(".demande")], "api", attendre=True)
         except (Echec, OSError, subprocess.SubprocessError) as e:
@@ -1000,20 +1013,21 @@ def cmd_cle_distante() -> int:
     return 0
 
 
-def cmd_cle_ai_lecture(args: list[str]) -> int:
-    """Crée la paire Ed25519 du compte `ai-lecture` (#3720) : clé privée root:root 0600 (lue par systemd pour
+def _generer_paire(compte: str, args: list[str], variable: str, defaut: str) -> int:
+    """Crée la paire Ed25519 d'un compte de service de la veille : clé privée root:root 0600 (lue par systemd pour
     LoadCredential= de secubox-ai-veille, jamais par le compte du module), clé publique imprimée (à inscrire sur gk2).
     Une clé existante n'est jamais écrasée."""
+    verbe = f"cle-{compte}"
     if args != ["generer"]:
-        journal("usage : secubox-aictl cle-ai-lecture generer")
+        journal(f"usage : secubox-aictl {verbe} generer")
         return 2
     if not _root():
-        journal("cle-ai-lecture : root exigé")
+        journal(f"{verbe} : root exigé")
         return 2
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-    chemin = Path(os.environ.get("SECUBOX_AI_CLE_LECTURE", CLE_AI_LECTURE))
+    chemin = Path(os.environ.get(variable, defaut))
     if chemin.parent.name != "ai" or not chemin.parent.parent.is_dir():
         journal(f"{chemin} : dossier dédié « …/ai/ » sous le dossier des secrets attendu ; rien n'a été écrit")
         return 1
@@ -1037,12 +1051,133 @@ def cmd_cle_ai_lecture(args: list[str]) -> int:
             os.close(dfd)
     except (Echec, OSError) as e:
         journal(f"clé non créée : {e if isinstance(e, Echec) else e.__class__.__name__} ; rien n'a été écrit")
-        audit("cle-ai-lecture", {"issue": "erreur"})
+        audit(verbe, {"issue": "erreur"})
         return 1
-    audit("cle-ai-lecture", {"issue": "creee"})
-    print(cle.public_key().public_bytes(serialization.Encoding.PEM,
-                                        serialization.PublicFormat.SubjectPublicKeyInfo).decode("ascii"), end="")
+    publique = cle.public_key().public_bytes(serialization.Encoding.PEM,
+                                             serialization.PublicFormat.SubjectPublicKeyInfo)
+    import hashlib
+    der = cle.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+    audit(verbe, {"issue": "creee", "empreinte": hashlib.sha256(der).hexdigest()})
+    print(publique.decode("ascii"), end="")
     return 0
+
+
+def cmd_cle_ai_lecture(args: list[str]) -> int:
+    """Paire du compte de lecture `ai-lecture` (#3720)."""
+    return _generer_paire("ai-lecture", args, "SECUBOX_AI_CLE_LECTURE", CLE_AI_LECTURE)
+
+
+def cmd_cle_ai_ban(args: list[str]) -> int:
+    """Paire du compte `ai-ban` (#3723) : seul chemin d'écriture de gk3 vers gk2. La publique est posée sur gk2 par
+    « wafctl cle-ai-ban ajouter » (root) ; la privée ne quitte jamais gk3."""
+    return _generer_paire("ai-ban", args, "SECUBOX_AI_CLE_BAN", CLE_AI_BAN)
+
+
+# ── journal d'audit de la veille ──
+
+def cmd_acl_audit() -> int:
+    """ACL nommée d'écriture (ajout seul par le profil AppArmor de la veille) du compte secubox-ai sur audit.log.
+    Refus si la cible est un lien ou n'est pas un fichier ordinaire ; setfacl --physical ne suit aucun lien."""
+    if not _root():
+        journal("acl-audit : root exigé")
+        return 2
+    chemin = os.environ.get("SECUBOX_AI_AUDIT", AUDIT_DEFAUT)
+    try:
+        st = os.lstat(chemin)
+    except FileNotFoundError:
+        journal(f"{chemin} absent : ACL non posée (le fichier appartient à secubox-core)")
+        return 1
+    if not stat.S_ISREG(st.st_mode):
+        journal(f"{chemin} n'est pas un fichier ordinaire (lien ou autre) : ACL refusée")
+        audit("acl-audit", {"issue": "refusee"})
+        return 2
+    try:
+        r = subprocess.run([SETFACL, "--physical", "-m", f"u:{COMPTE_API}:w", "--", chemin], capture_output=True,
+                           text=True, timeout=10, check=False)
+    except (OSError, subprocess.SubprocessError) as e:
+        journal(f"setfacl impossible ({e.__class__.__name__})")
+        return 1
+    if r.returncode != 0:
+        journal(f"setfacl a échoué ({r.returncode})")
+        return 1
+    return 0
+
+
+# ── suspension de l'automatique (veille.db) ──
+
+def _au_compte_du_module(fonction) -> int:
+    """Exécute `fonction()` au compte du module (secubox-ai) : jamais un fichier de veille.db (-wal, -shm) créé à
+    root. Dans un processus fils qui abandonne root (groupes, gid, uid) ; directement si l'on est déjà ce compte."""
+    ids = _identites()
+    if os.geteuid() == ids["api"]:
+        return fonction()
+    pid = os.fork()
+    if pid == 0:
+        code = 1
+        try:
+            os.setgroups([])
+            os.setgid(ids["gid_ai"])
+            os.setuid(ids["api"])
+            code = fonction()
+        except BaseException as e:  # noqa: BLE001 — le fils ne remonte jamais dans le contrôleur
+            journal(f"veille : {e.__class__.__name__}")
+        finally:
+            os._exit(code)
+    _, statut = os.waitpid(pid, 0)
+    return os.waitstatus_to_exitcode(statut)
+
+
+def cmd_veille(args: list[str]) -> int:
+    """`veille suspendre|reprendre` : suspension de l'automatique dans veille.db (lue par l'exécuteur à chaque passe).
+    La base doit exister et être migrée (jamais créée ici)."""
+    if len(args) != 1 or args[0] not in ("suspendre", "reprendre"):
+        journal("usage : secubox-aictl veille suspendre|reprendre")
+        return 2
+    if not _root():
+        journal("veille : root exigé")
+        return 2
+    acteur = os.environ.get("SUDO_USER") or "root"
+    if not re.fullmatch(r"[A-Za-z0-9._@-]{1,64}", acteur):
+        acteur = "?"
+    acteur = f"aictl:{acteur}"
+    chemin = etat_dir() / "veille.db"
+
+    def faire() -> int:
+        import sqlite3
+
+        from veille import decisions
+        try:
+            db = sqlite3.connect(chemin.resolve().as_uri() + "?mode=rw", uri=True, timeout=5, isolation_level=None)
+        except sqlite3.Error:
+            journal(f"{chemin} absente ou illisible : la veille ne l'a pas encore créée")
+            return 1
+        try:
+            db.execute("PRAGMA busy_timeout = 5000")
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE name = 'executeur_etat'").fetchone():
+                journal(f"{chemin} : migration 0007 en attente (démarrer secubox-ai-veille)")
+                return 1
+            m = datetime.now(timezone.utc)
+            if args[0] == "suspendre":
+                change = decisions.suspendre(db, acteur, m, relais=False)
+            else:
+                change = decisions.reprendre(db, acteur, m, relais=False)
+            print(json.dumps(decisions.suspension(db), ensure_ascii=False))
+            return 0 if change else 3
+        except sqlite3.Error as e:
+            journal(f"veille.db : {e.__class__.__name__}")
+            return 1
+        finally:
+            db.close()
+    try:
+        code = _au_compte_du_module(faire)
+    except (Echec, OSError) as e:
+        journal(f"veille {args[0]} impossible : {e if isinstance(e, Echec) else e.__class__.__name__}")
+        return 1
+    if code in (0, 3):
+        audit("veille-suspendue" if args[0] == "suspendre" else "veille-reprise",
+              {"acteur": acteur, "change": code == 0})
+        return 0
+    return code
 
 
 # ── état ──
@@ -1063,7 +1198,8 @@ def aide() -> int:
     return 0
 
 
-VERBES = {"preparer", "demarrer", "arreter", "redemarrer", "etat", "cle-distante", "cle-ai-lecture", "demandes"}
+VERBES = {"preparer", "demarrer", "arreter", "redemarrer", "etat", "cle-distante", "cle-ai-lecture", "cle-ai-ban",
+          "veille", "acl-audit", "demandes"}
 
 
 def main(argv: list[str]) -> int:
@@ -1075,6 +1211,10 @@ def main(argv: list[str]) -> int:
     verbe, args = argv[0], argv[1:]
     if verbe == "cle-ai-lecture":
         return cmd_cle_ai_lecture(args)
+    if verbe == "cle-ai-ban":
+        return cmd_cle_ai_ban(args)
+    if verbe == "veille":
+        return cmd_veille(args)
     if verbe not in VERBES or (args and (verbe != "etat" or args != ["--json"])):
         journal(f"usage : secubox-aictl {{{'|'.join(sorted(VERBES))}}} (etat --json)")
         return 2
@@ -1084,6 +1224,8 @@ def main(argv: list[str]) -> int:
         return cmd_cle_distante()
     if verbe == "demandes":
         return traiter_demandes()
+    if verbe == "acl-audit":
+        return cmd_acl_audit()
     if not _root():
         journal(f"{verbe} : root exigé")
         return 2

@@ -24,6 +24,37 @@ secubox-ai (0.6.0-1~trixie1) trixie; urgency=medium
     récidive de gk2 (duree_recidive, relue par test).
   * leurre_redirige (requêtes servies par le leurre de la box) : neutre,
     jamais preuve d'une règle ni tentative (pas de boucle leurre → ban).
+  * Exécuteur des réponses (#3723, veille/executeur.py, boucle reponses de
+    10 s) : seul chemin d'écriture vers gk2, les routes ai-ban. Propositions
+    approuvées (clic) ou d'office (automatique non suspendu), par gravité,
+    étapes puis récence, sous les plafonds de gk3 ; ligne actions créée en
+    envoi AVANT l'appel (migration 0007, UNIQUE par proposition), réponse de
+    gk2 enregistrée telle quelle (200 faite, 409/404 refusee_gk2, autre
+    echec). prolonger et unban visent l'id de gk2 du ban de reference
+    (introuvable : echec local, rien n'est envoyé).
+  * Rapprochement : une action restée en envoi (arrêt en plein envoi, délai)
+    est confrontée à GET /ai/etat avant toute nouvelle tentative, jamais
+    renvoyée ; gk2 illisible : rien d'autre ne part.
+  * Suspension de l'automatique dans veille.db (survit au redémarrage) :
+    console, secubox-aictl veille suspendre|reprendre, ou d'elle-même après
+    trois 409 plafond_* en 10 min ou un 503 (audit veille-auto-suspendue) ;
+    les gestes approuvés restent possibles.
+  * API (require_jwt) : GET /propositions, /propositions/{id}, /actions
+    (curseur, 100 par défaut, 500 au plus), /veille/etat ; POST
+    /propositions/{id}/approuver|refuser ({version}, une seule décision
+    gagne), /veille/suspendre|reprendre. L'API n'écrit que ces décisions
+    (veille.db en mode=rw, jamais créée) ; la veille les relaie dans
+    audit.log.
+  * Clé ai-ban : secubox-aictl cle-ai-ban generer (root, jamais
+    d'écrasement, publique imprimée), remise par LoadCredential=ai-ban à la
+    seule veille ; client signé (corps exact, audience, jti unique). Toute
+    clé remise a sa valeur de repli SetCredential=<nom>:absente (ai-lecture
+    corrigée : une clé absente empêchait l'unité de démarrer).
+  * Audit : chaque envoi, réponse, rapprochement, suspension et décision →
+    audit_chaine et audit.log (jamais le jeton ni la clé, son empreinte).
+    La veille n'a sur audit.log que l'ajout (AppArmor a), par une ACL
+    nommée reposée en root par secubox-aictl acl-audit au démarrage et,
+    après une rotation, sur demande acl-audit. Dépendance : acl.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 14:00:00 +0100
 

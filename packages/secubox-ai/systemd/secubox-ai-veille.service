@@ -4,8 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # SecuBox IA V2 — veille (#3719) : second processus du module, SEUL écrivain régulier de veille.db (V2 § 5.2, § 6).
-# Collecte de gk2 (#3720), migrations, rétention, garde d'espace, corrélation, dossiers, file de travaux et analyste IA
-# (#3722 : un moteur qui répond déjà, distant gk0 ou local par sa socket ; le local n'est réveillé que sur réglage). Utilisateur dédié, aucune capacité, socle de durcissement complet (RULES-CODE § 10).
+# Collecte de gk2 (#3720), migrations, rétention, garde d'espace, corrélation, dossiers, file de travaux, analyste IA
+# (#3722 : un moteur qui répond déjà, distant gk0 ou local par sa socket ; le local n'est réveillé que sur réglage) et exécuteur des réponses signées ai-ban (#3723). Utilisateur dédié, aucune capacité, socle de durcissement complet (RULES-CODE § 10).
 [Unit]
 Description=SecuBox IA — veille (base veille.db, boucles, rétention)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3719
@@ -54,14 +54,30 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 ReadWritePaths=/var/lib/secubox/ai
 # Dépôt des demandes au contrôleur root : servi seulement si [veille.analyste] reveiller_local = true (défaut : jamais).
 ReadWritePaths=-/run/secubox-ai/demandes
-# Clé privée du compte de lecture de gk2 (#3720) : root 0600, remise par systemd ; la veille seule la reçoit.
-# Absente : la collecte reste éteinte (journalisé), le reste tourne.
+# Clés remises par systemd (LoadCredential=), lues par la veille SEULE (ni l'API ni le moteur) : root 0600 dans
+# /etc/secubox/secrets/ai/. Un chemin absolu absent rend LoadCredential= FATAL (l'unité ne démarre pas,
+# 243/CREDENTIALS) : chacune a donc sa valeur de repli « absente » (SetCredential=, prise seulement si le fichier
+# manque), que la veille lit comme « pas de clé ».
+# - ai-lecture (#3720) : compte de LECTURE de gk2 ; absente, la collecte reste éteinte (journalisé), le reste tourne.
 LoadCredential=ai-lecture:/etc/secubox/secrets/ai/ai-lecture.key
-# Clé du moteur distant gk0 (#3722, analyste IA) : même remise. Un chemin absolu absent rend LoadCredential= FATAL
-# (l'unité ne démarre pas, 243/CREDENTIALS) : la valeur de repli « absente » (SetCredential=, prise seulement si le
-# fichier manque) garde la veille en marche, et la veille la lit comme « pas de clé » (gk0 jamais appelé).
+SetCredential=ai-lecture:absente
+# - ai-distant (#3722) : moteur distant gk0 de l'analyste ; absente, gk0 n'est jamais appelé.
 LoadCredential=ai-distant:/etc/secubox/secrets/ai/distant.key
 SetCredential=ai-distant:absente
+# - ai-ban (#3723) : SEUL chemin d'écriture vers gk2 (routes ai-ban) ; absente, aucune réponse n'est exécutée (état
+#   visible dans /veille/etat), la veille tourne. Créée par « secubox-aictl cle-ai-ban generer ».
+LoadCredential=ai-ban:/etc/secubox/secrets/ai/ai-ban.key
+SetCredential=ai-ban:absente
+# Journal d'audit (#3723) : AJOUT SEUL à /var/log/secubox/audit.log (secubox:secubox 0640), et à lui seul : c'est le
+# profil AppArmor (« /var/log/secubox/audit.log a, » et rien d'autre sous /var/log) qui le borne. L'ACL nommée
+# d'écriture du compte secubox-ai est (re)posée en root avant le démarrage par « secubox-aictl acl-audit » (refuse
+# un lien ou un non-fichier ; « - » : échec non bloquant), puis après chaque rotation par la demande « acl-audit » que
+# la veille dépose dans /run/secubox-ai/demandes. Le DOSSIER est rouvert en écriture et non le seul fichier : un
+# ReadWritePaths= de fichier est un montage lié de SON inode, que la rotation quotidienne (renommage, puis nouveau
+# fichier) laisserait derrière — la veille écrirait dans audit.log.1, puis sur un système en lecture seule
+# (même choix que secubox-pilotage-agent). Le dossier n'est pas inscriptible par secubox-ai (0755).
+ExecStartPre=+-/usr/sbin/secubox-aictl acl-audit
+ReadWritePaths=-/var/log/secubox
 IPAddressDeny=localhost link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
 # gk0 (moteur distant, [distant] url de ai.toml) : adresse non fixe, rouverte une à une avec gk2 par le drop-in de
 # « secubox-aictl preparer » (HOTES_VEILLE) ; une adresse publique de gk0 est déjà joignable (V2 § 12).

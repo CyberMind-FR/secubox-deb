@@ -34,6 +34,7 @@ reproposée qu'avec de nouvelles preuves, quand le dossier est recalculé). Comp
 IPv6 ni bannie ni partagée ; rien de neuf tant qu'un ban V2 est en vol ; ban V2 fait et actif → `prolonger` (champ
 `reference`) et, seulement alors, `partager` ; retour après la fin d'un ban → nouveau ban, durée de récidive de gk2.
 """
+import errno
 import ipaddress
 import json
 import logging
@@ -336,6 +337,9 @@ def ecrire_audit_log(evenement: str, details: dict, chemin: Optional[str] = None
             os.close(fd)
     except OSError as e:
         log.warning("audit.log non écrit (%s) : %s", e.__class__.__name__, ligne)
+        if e.errno in (errno.EACCES, errno.EPERM):
+            from veille.executeur import _demander_acl   # rotation : ACL de la veille à reposer (#3723)
+            _demander_acl()
 
 
 def duree_recidive(n: int) -> int:

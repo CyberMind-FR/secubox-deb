@@ -458,7 +458,8 @@ def test_migration_0006_rejouable(tmp_path):
     assert db.execute("SELECT dossier_id, incident_id FROM propositions WHERE id = 'p1'").fetchone() == (None, None)
     db.close()
     db = base.ouvrir(chemin)                                         # réouverture : aucune migration, aucune erreur
-    assert db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 6
+    assert db.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == \
+        max(int(f.name[:4]) for f in base.MIGRATIONS.glob("*.sql"))
     db.close()
 
 

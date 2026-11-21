@@ -41,7 +41,7 @@ navigateur ─▶ nginx (admin) ─▶ /run/secubox/ai.sock ─▶ API secubox-a
 | `secubox-ai.service` | API (uvicorn), `User=secubox-ai`, sans capacité, filtrage IP (R13), profil `secubox-ai-api` |
 | `secubox-ai-moteur.service` | llama-server, `User=secubox-ai-moteur`, sans réseau IP, profil `secubox-ai-moteur` ; sans `[Install]` |
 | `secubox-ai-preparer.service` | oneshot root à l'amorçage : `/run/secubox-ai`, drop-in des adresses LAN de l'API |
-| `secubox-ai-veille.service` | veille V2 : seul écrivain de `veille.db`, analyste IA (#3722, § Analyste), collecte de gk2 (#3720) par GET signés du compte `ai-lecture` (`LoadCredential=`, clé créée par `secubox-aictl cle-ai-lecture generer`, publique à inscrire sur gk2) ; audience `[veille] aud` et routes `[veille.routes]` d'`ai.toml` ; profil `secubox-ai-veille` |
+| `secubox-ai-veille.service` | veille V2 : seul écrivain régulier de `veille.db`, analyste IA (#3722, § Analyste), collecte de gk2 (#3720) par GET signés du compte `ai-lecture` (`LoadCredential=`, clé créée par `secubox-aictl cle-ai-lecture generer`, publique à inscrire sur gk2), exécuteur des réponses (#3723, § Réponses) signées `ai-ban` (§ Clé ai-ban) ; audience `[veille] aud` et routes `[veille.routes]` d'`ai.toml` ; profil `secubox-ai-veille` |
 | `secubox-ai-demandes.path` / `.service` | demandes de l'API (démarrer, arrêter, redémarrer) traitées par le contrôleur root |
 
 Aucun sudo, aucun `systemd-run` : l'API ne lance rien en root.
@@ -93,7 +93,7 @@ protegees = []                 # adresses ou plages publiques jamais visées (pa
 ## Riposte graduée
 
 Réponse graduée **défensive** (#3723, spec 2026-11-19) : rien n'est émis vers l'attaquant ; gk3 **propose** des gestes
-du catalogue, que seul gk2 applique (`ai-ban`, exécution en tâche 7). Le **code** fixe le niveau et les gestes sur
+du catalogue, que seul gk2 applique (`ai-ban`, § Réponses). Le **code** fixe le niveau et les gestes sur
 des chiffres ; le texte du modèle n'entre ni dans un niveau, ni dans une proposition, ni dans un motif.
 
 - **Couches** (`veille/riposte.py`) : `menaces` de sbx-authwatch → `auth`, de sbxwaf → `waf` (SYN sans état → `nft`,
@@ -142,6 +142,62 @@ heure = 60                # leurre 30/200, partager 30/200 (heure/jour)
 jour = 400
 ```
 
+## Réponses
+
+Exécuteur (#3723, `veille/executeur.py`, boucle `reponses` de 10 s dans `secubox-ai-veille`) : **seul chemin
+d'écriture de gk3 vers gk2**, les routes `ai-ban` (`/api/v1/waf/ai/ban`, `unban`, `prolonger`, `limiter`, `leurre`,
+`partager`). gk2 fait foi : il recontrôle cible protégée, cas sûr, plafonds du compte et mode SADE.
+
+- **Ce qui part** : une proposition `approuvee` (décision d'un administrateur, envoyée en `clic`) ou `proposee`
+  d'office (`mode = auto`, politique `hybride`, geste d'office, automatique **non suspendu**), non expirée, sans
+  action. Ordre : gravité du dossier, nombre d'étapes, récence. Plafonds de gk3 (`[plafonds]` de politiques.toml,
+  ≤ gk2) sur les envois de l'heure et du jour. Une proposition expirée passe `expiree` sans envoi.
+- **Avant l'envoi** : la ligne `actions` (UNIQUE par proposition : jamais deux envois, même après redémarrage) est
+  créée en `envoi` avec le `jti` du jeton et l'empreinte de la clé, et la proposition passe `envoyee`, dans une
+  transaction. Corps aux formes exactes de gk2 (`conseil` = `v2-<id>`, `motif` = celui du code) ; `prolonger` et
+  `unban` visent l'id rendu par gk2 au ban de la proposition `reference` (introuvable : `echec` local, rien n'est
+  envoyé) ; `partager` porte la famille dominante des événements de l'adresse (`riposte` à défaut).
+- **Réponse de gk2**, enregistrée telle quelle (corps borné à 4 Kio, donnée non fiable) : 200 → `faite` (id et fin
+  de gk2) ; 409/404 → `refusee_gk2` + motif ; autre → `echec`. Réponse perdue (délai, coupure, illisible) : l'action
+  reste `envoi` et la passe s'arrête.
+- **Rapprochement** : au tour suivant (et donc au redémarrage), AVANT toute nouvelle tentative, chaque action en
+  `envoi` est confrontée à `GET /ai/etat` (cible et liste du geste, fin compatible avec l'heure d'envoi, id de gk2
+  jamais déjà attribué ; `prolonger` : fin repoussée ; `unban` : id disparu). Trouvée → `faite`, absente → `echec`.
+  **Jamais renvoyée à l'aveugle.** gk2 illisible : rien d'autre ne part.
+- **Suspension** : `POST /veille/suspendre` (console) ou `secubox-aictl veille suspendre` arrête tout geste d'office ;
+  les propositions approuvées restent envoyées. Trois 409 `plafond_*` en 10 min ou un 503 de gk2 la posent
+  **d'elles-mêmes** (audit `veille-auto-suspendue`). Elle vit dans `veille.db` (`executeur_etat`) : un redémarrage la
+  garde ; seul un administrateur la lève (`POST /veille/reprendre`, `secubox-aictl veille reprendre`). La valeur
+  `automatique_suspendu` de politiques.toml s'y ajoute.
+- **Décisions** (`POST /propositions/{id}/approuver|refuser`, corps `{"version": n}`) : refusées (409) si la version a
+  changé (`version`), si la proposition a expiré (`expiree`) ou est déjà décidée (`decidee`) ; deux décisions
+  simultanées : une seule gagne (transaction `BEGIN IMMEDIATE`, `UNIQUE(proposition_id, version)`). L'API n'écrit dans
+  `veille.db` (ouverte en `mode=rw`, jamais créée ni migrée : 503 sinon) que ces décisions et la suspension.
+- **Audit** : chaque envoi (`ai-reponse-envoi`), réponse (`ai-reponse-gk2`), réponse perdue, rapprochement, échec
+  local, suspension, approbation et refus → une ligne `audit_chaine` et une ligne `/var/log/secubox/audit.log`
+  (jamais le jeton ni la clé ; le `jti` et l'empreinte de la clé). Les décisions de l'API (dont le profil interdit
+  audit.log) sont recopiées par la veille, une fois, dans l'ordre. La veille n'a sur audit.log que l'**ajout** (profil
+  AppArmor `a`, `ReadWritePaths=` de ce seul fichier) par une ACL nommée `u:secubox-ai:w` posée en root par
+  `secubox-aictl acl-audit` avant chaque démarrage ; après une rotation (nouveau fichier sans ACL), la veille dépose
+  `acl-audit.demande` (au plus une fois par 10 min) que `secubox-ai-demandes` traite. Une ligne non écrite est dite
+  au journal du service, jamais perdue en silence.
+
+## Clé ai-ban
+
+Paire Ed25519 du compte de service `ai-ban` (portée `waf-ban`, V2 § 5.3), **générée sur gk3** :
+
+```sh
+sudo secubox-aictl cle-ai-ban generer     # privée /etc/secubox/secrets/ai/ai-ban.key (root 0600), jamais écrasée
+# la clé PUBLIQUE imprimée se pose sur gk2 : wafctl cle-ai-ban ajouter (root, deux clés au plus : rotation)
+```
+
+La privée ne quitte jamais gk3 ; elle n'est remise qu'à `secubox-ai-veille` (`LoadCredential=ai-ban`) — ni l'API ni le
+moteur ne la lisent. Absente, l'unité démarre quand même (`SetCredential=ai-ban:absente`, comme `ai-lecture` et
+`ai-distant`) : aucune réponse n'est exécutée et `GET /veille/etat` le dit (`cle_ai_ban.etat` = `absente`,
+`invalide`, ou `presente` avec l'empreinte). Un jeton par geste : audience = nom de gk2 (`[veille] aud`), empreinte
+SHA-256 du corps exact, `jti` à usage unique, une minute au plus ; gk2 refuse un rejeu (401 `rejeu`). Les plafonds
+sont ceux du **compte**, partagés avec tout autre relais qui signe avec une clé admise.
+
 ## Socket et ports
 
 - `/run/secubox/ai.sock` : API (0660, groupe `secubox`, servie à nginx). Aucun port TCP.
@@ -157,6 +213,8 @@ jour = 400
 | `/etc/secubox/ai/politiques.toml` | root 0644 | politiques de réponse (§ Riposte graduée), déposées si absentes, jamais écrasées |
 | `/etc/secubox/ai/riposte.toml` | root 0644 | seuils de la riposte (`n2_tentatives`, `n3_tentatives`, `fenetre_s`, `calme_s`), déposés si absents |
 | `/etc/secubox/secrets/ai/distant.key` | root:secubox-ai 0640 | clé du moteur distant, posée par `secubox-aictl cle-distante` (lue sur l'entrée standard) |
+| `/etc/secubox/secrets/ai/ai-lecture.key` | root 0600 | clé du compte de lecture de gk2, remise à la veille seule |
+| `/etc/secubox/secrets/ai/ai-ban.key` | root 0600 | clé du compte `ai-ban` (§ Clé ai-ban), remise à la veille seule |
 | `/var/lib/secubox/ai/preferences.toml` | secubox-ai | préférences modifiables depuis la page (écriture atomique, double tampon) |
 | `/var/lib/secubox/ai/` | secubox-ai 0750 | `memoire.db`, `journal.jsonl`, `documents/`, `medias/`, `modeles/` (0750, modèles 0640), `tmp/` (0700, temporaires de SQLite) |
 
@@ -267,6 +325,14 @@ Toute route porte `require_jwt` (administrateur réel), sauf `GET /health` (test
 | `DELETE /medias/{dossier}/{ident}` | supprime un média |
 | `POST /medias/entree` | dépôt d'un média en corps brut (50 Mo, quota 2 Go) |
 | `GET /journal` | fin du journal du module |
+| `GET /propositions` | propositions de la veille (§ Réponses) ; `etat`, `curseur`, `limite` (100, 500 au plus) |
+| `GET /propositions/{pid}` | une proposition, ses décisions et son action |
+| `POST /propositions/{pid}/approuver` | approuve `{"version": n}` (409 `version`, `expiree`, `decidee`) |
+| `POST /propositions/{pid}/refuser` | refuse `{"version": n}` (mêmes refus) |
+| `GET /actions` | actions envoyées à gk2 et leur réponse ; `curseur`, `limite` (100, 500 au plus) |
+| `GET /veille/etat` | suspension, clé ai-ban, mode SADE et plafonds restants (relevé de `/ai/etat`), plafonds de gk3 |
+| `POST /veille/suspendre` | suspend les gestes d'office (les approuvés restent possibles) |
+| `POST /veille/reprendre` | lève la suspension (manuelle ou d'elle-même) |
 
 nginx : flux du dialogue sans tampon (lecture jusqu'à 2 h), corps de 100 Mo pour les deux seuls dépôts de fichier,
 8 Mo pour le dialogue (image jointe), 64 Mo pour l'import de mémoire, 2 Mo ailleurs ; 900 s pour les lectures de
