@@ -193,8 +193,15 @@ d'écriture de gk3 vers gk2**, les routes `ai-ban` (`/api/v1/waf/ai/ban`, `unban
   est audité). Une ligne non écrite est dite au journal du service, jamais perdue en silence. L'ACL nommée vaut pour
   le compte `secubox-ai`, partagé avec l'API : c'est le profil AppArmor de l'API (`deny … audit.log w`) et son unité
   (sans `/var/log/secubox` en écriture) qui l'en tiennent à l'écart.
-- **Isolement** : l'API (même compte que la veille) ne voit pas les clés de la veille
-  (`InaccessiblePaths=-/run/credentials/secubox-ai-veille.service`) ; la veille ne sort que vers gk2 et gk0
+- **Isolement** : l'API (même compte que la veille) ne voit pas les clés de la veille : son unité masque tout
+  `/run/credentials` (`InaccessiblePaths=/run/credentials` ; elle-même ne reçoit aucune clé par systemd), parent
+  toujours présent, donc masque fiable quel que soit l'ordre de démarrage ou un redémarrage de la veille.
+  **Résidu** : les deux processus tournent sous le même uid `secubox-ai` ; seuls l'espace de noms de montage et
+  AppArmor les séparent (aucune règle `ptrace` dans les profils : ni traçage ni lecture de
+  `/proc/<pid de la veille>/root`, à vérifier sur la box ; rien ne vaut toutefois un compte distinct).
+  **Suite recommandée** : un utilisateur dédié à la veille (`secubox-ai-veille`, accès à veille.db par groupe) ;
+  contrôle sur la box après déploiement : après `systemctl restart secubox-ai-veille`,
+  `nsenter -t <pid de l'API> -m ls /run/credentials/secubox-ai-veille.service` doit échouer ; la veille ne sort que vers gk2 et gk0
   (`IPAddressDeny=any`, puis `IPAddressAllow=` de leurs adresses résolues — publiques comprises — et des
   résolveurs, écrit par `secubox-aictl preparer` dans `/run/systemd/system/secubox-ai-veille.service.d/`, plus
   127.0.0.1 pour Unbound ; le moteur local passe par sa socket Unix, hors de ce filtre). Une adresse de gk2 ou de

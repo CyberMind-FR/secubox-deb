@@ -68,8 +68,12 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 # jamais audit.log (la veille relaie ses décisions) ; les traces de secubox_core (délégation, origine) passent alors
 # au journal système (LOG_AUTH), jamais en silence.
 ReadWritePaths=/run/secubox /var/lib/secubox/ai -/run/secubox-ai/demandes
-# Même compte (secubox-ai) que la veille : la clé ai-ban remise à la veille lui est rendue inaccessible (#3723).
-InaccessiblePaths=-/run/credentials/secubox-ai-veille.service
+# Même compte (secubox-ai) que la veille : les clés remises à la veille (ai-ban, ai-lecture, ai-distant) lui sont
+# rendues inaccessibles (#3723). Le PARENT est masqué, pas le seul dossier de la veille : celui-ci n'existe pas si
+# l'API démarre avant la veille (un « - » sauterait alors le masque), et chaque redémarrage de la veille en monte un
+# neuf qui se propagerait sans masque dans l'espace de noms de l'API. /run/credentials existe toujours ; l'API ne
+# reçoit aucune clé par systemd (pas de LoadCredential= ici), le masque ne lui retire rien.
+InaccessiblePaths=/run/credentials
 
 # R13 : garde SSRF dans le noyau, en plus du contrôle applicatif (api/recherche.py). Boucle, lien local
 # (169.254.169.254), multidiffusion et plages privées fermés ; Internet reste ouvert.

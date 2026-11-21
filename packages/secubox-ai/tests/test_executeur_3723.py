@@ -937,7 +937,9 @@ def test_plafond_unban_gk3(banc):
 def test_unites_api_sans_cle_ni_audit_veille_sortie_fermee():
     api = (PAQUET / "systemd" / "secubox-ai.service").read_text(encoding="utf-8")
     acode = "\n".join(x for x in api.splitlines() if not x.lstrip().startswith("#"))
-    assert "InaccessiblePaths=-/run/credentials/secubox-ai-veille.service" in acode
+    # le PARENT, sans « - » (toujours présent) : jamais le seul dossier de la veille, absent ou remonté neuf
+    assert re.findall(r"^InaccessiblePaths=.*$", acode, re.M) == ["InaccessiblePaths=/run/credentials"]
+    assert "LoadCredential" not in acode and "SetCredential" not in acode and "ImportCredential" not in acode
     assert "/var/log/secubox" not in acode
     veille = (PAQUET / "systemd" / "secubox-ai-veille.service").read_text(encoding="utf-8")
     vcode = "\n".join(x for x in veille.splitlines() if not x.lstrip().startswith("#"))
