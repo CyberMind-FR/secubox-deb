@@ -67,7 +67,7 @@ MEMINFO = "/proc/meminfo"
 SYSTEMCTL = "/usr/bin/systemctl"
 # Drop-in des adresses permises à l'API, régénéré par « preparer » (perdu au redémarrage : refait à l'amorçage).
 DROPIN_API = Path("/run/systemd/system/secubox-ai.service.d")
-# Même drop-in pour la veille V2 (#3720), qui lit gk2 : mêmes adresses de ai.toml et mêmes résolveurs.
+# Même drop-in pour la veille V2 (#3720, #3722), qui lit gk2 et appelle gk0 : adresses de ai.toml et résolveurs.
 DROPIN_VEILLE = Path("/run/systemd/system/secubox-ai-veille.service.d")
 # Clé privée du compte de lecture de gk2 (veille V2) : root 0600, remise à la veille par LoadCredential=.
 CLE_AI_LECTURE = "/etc/secubox/secrets/ai/ai-lecture.key"
@@ -107,8 +107,9 @@ CONFIG_DEFAUT = {
 }
 # Hôtes de la configuration que l'API doit pouvoir joindre sur le LAN (R13).
 HOTES_CONFIG = (("gk2", "menaces_url"), ("gk2", "sources_url"), ("distant", "url"), ("searxng", "url"))
-# La veille (#3720) ne lit que gk2 par menaces_url : ni gk0, ni SearXNG, ni les sources du Hall.
-HOTES_VEILLE = (("gk2", "menaces_url"),)
+# La veille lit gk2 par menaces_url (#3720) et appelle le moteur distant gk0 pour l'analyste IA (#3722, V2 § 12 :
+# IPAddressAllow limité à gk2 et gk0) ; ni SearXNG, ni les sources du Hall.
+HOTES_VEILLE = (("gk2", "menaces_url"), ("distant", "url"))
 # Plages fermées par secubox-ai.service (IPAddressDeny) qu'une adresse de la configuration peut rouvrir, une à une.
 PLAGES_LAN = tuple(ipaddress.ip_network(p) for p in
                    ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7"))

@@ -33,6 +33,16 @@ aud = "gk2"
 # calme_s = 21600
 # clos_s = 604800
 
+# [veille.analyste]
+# Analyste IA (#3722). Le moteur local n'est jamais démarré pour une analyse sauf reveiller_local = true ; preuves
+# jointes au modèle plafonnées en jetons (500..8000) ; dossiers analysés à partir de gravite_min ; protegees : adresses
+# ou plages PUBLIQUES jamais recommandées (pairs du maillage, Freebox, adresse publique de la box). Les adresses non
+# publiques (LAN, maillage, CGNAT) et les adresses littérales de gk2 et gk0 ci-dessus le sont toujours.
+# reveiller_local = false
+# preuves_max_jetons = 3000
+# gravite_min = "medium"
+# protegees = []
+
 # [searxng]
 # SearXNG local de la box, essayé avant celui de gk0 (vide = aucun). Adresse du conteneur créé par
 # `searxngctl install` ; à ajouter aussi à IPAddressAllow — fait par l'empaquetage.

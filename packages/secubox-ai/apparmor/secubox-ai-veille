@@ -34,14 +34,28 @@ profile secubox-ai-veille {
   /etc/secubox/ai/ r,
   /etc/secubox/ai/empreintes.local.toml r,
 
-  # Clé du compte de lecture de gk2 (#3720), remise par LoadCredential= ; mémoire libre pour les mesures.
+  # Consignes versionnées de l'analyste IA (#3722) : du paquet seulement.
+  /usr/share/secubox-ai/prompts/ r,
+  /usr/share/secubox-ai/prompts/*.txt r,
+
+  # Clés remises par LoadCredential= : compte de lecture de gk2 (#3720), moteur distant gk0 (#3722) ; mémoire libre
+  # pour les mesures.
   /run/credentials/secubox-ai-veille.service/ r,
   /run/credentials/secubox-ai-veille.service/ai-lecture r,
+  /run/credentials/secubox-ai-veille.service/ai-distant r,
   @{PROC}/meminfo r,
 
   # veille.db (WAL : -wal, -shm), sauvegardes avant migration, tmp/ (SQLITE_TMPDIR). L'espace libre se lit par statvfs.
   /var/lib/secubox/ai/ r,
   /var/lib/secubox/ai/** rwk,
+
+  # Moteur local (#3722) : sa socket et l'état publié par le contrôleur ; dépôt des demandes seulement si
+  # reveiller_local = true (temporaire créé puis renommé par la veille elle-même). Ni moteur.env, ni le verrou.
+  /run/secubox-ai/ r,
+  /run/secubox-ai/moteur-etat.json r,
+  /run/secubox-ai/moteur.sock rw,
+  /run/secubox-ai/demandes/ r,
+  owner /run/secubox-ai/demandes/* rw,
 
   network unix stream,
   network unix dgram,

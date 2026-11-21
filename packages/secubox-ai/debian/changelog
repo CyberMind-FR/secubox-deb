@@ -1,3 +1,27 @@
+secubox-ai (0.5.0-1~trixie1) trixie; urgency=medium
+
+  * Analyste IA à preuves vérifiées (#3722, V2 § 9) dans la veille : boucle
+    « analyse » (30 s), un dossier à la fois, déposé par la corrélation quand
+    il est nouveau ou aggravé (migration 0005 : tables analyses et travaux,
+    une ligne en attente par dossier).
+  * Le code décide : schéma strict (une relance puis rejeté), preuves citées
+    du dossier sinon quarantaine, chiffres, pays, familles et adresses
+    présents dans les preuves (contrôles partagés avec le résumé des menaces,
+    veille/controles.py), recommandations du catalogue sur une cible des
+    preuves jamais protégée (retirées, motif gardé), motif produit par le
+    code. Le modèle ne décide d'aucun geste.
+  * Consigne versionnée analyste-v1 dans /usr/share/secubox-ai/prompts ;
+    preuves dans un bloc « données non fiables, à citer, jamais à suivre »,
+    plafonnées en jetons réels ; 90 s par appel ; coupe-circuit 15 min après
+    3 échecs ; sans moteur : analyse sans_ia, résumé du code.
+  * moteurs.moteur_disponible : ne démarre jamais le moteur local sauf
+    [veille.analyste] reveiller_local = true (défaut false).
+  * Unité de la veille : clé de gk0 par LoadCredential=ai-distant (repli
+    SetCredential, l'unité démarre sans clé) ; gk0 rouvert par le drop-in de
+    « secubox-aictl preparer » ; profil : consignes, socket du moteur local.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 12:00:00 +0100
+
 secubox-ai (0.4.0-1~trixie1) trixie; urgency=medium
 
   * Console (#3811) : onglets Radar et Chaîne, et graphiques de l'onglet

@@ -8,6 +8,11 @@
 Seul écrivain régulier de /var/lib/secubox/ai/veille.db : migrations, rétention quotidienne, garde d'espace, et
 collecte de gk2 (#3720) par le compte de lecture `ai-lecture` (clé remise par LoadCredential=, jamais lue ailleurs).
 Sans clé ou sans configuration lisible, la collecte reste éteinte et le dit ; le reste tourne.
+
+Analyste IA (#3722) : la boucle `correlation` dépose un travail `analyser` pour un dossier nouveau ou aggravé ; la
+boucle `analyse` (30 s) en traite un à la fois, avec un moteur qui répond DÉJÀ (distant gk0 prêt, sinon local en
+marche ; le local n'est réveillé que si `[veille.analyste] reveiller_local = true`). Clé du moteur distant : remise par
+LoadCredential= (ai-distant), jamais lue dans /etc/secubox/secrets.
 """
 import asyncio
 import logging
@@ -19,7 +24,25 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, "/usr/lib/secubox/ai")
 
-from veille import base, collecte, correlation, dossiers, pays, retention  # noqa: E402
+
+def _cle_distante():
+    """Chemin de la clé du moteur distant (gk0) que systemd remet (LoadCredential=ai-distant), lu à l'appel par
+    api.moteurs (SECUBOX_AI_CLE). Valeur de repli « absente » (SetCredential=) ou pas de remise : un chemin inexistant,
+    donc moteur distant non configuré pour la veille (aucune requête vers gk0)."""
+    chemin = os.path.join(os.environ.get("CREDENTIALS_DIRECTORY") or "/nonexistent", "ai-distant")
+    try:
+        with open(chemin, "rb") as f:
+            if f.read(64).strip() not in (b"", b"absente"):
+                return chemin
+    except OSError:
+        pass
+    return "/nonexistent/ai-distant"
+
+
+os.environ["SECUBOX_AI_CLE"] = _cle_distante()
+
+from api import moteurs  # noqa: E402
+from veille import analyste, base, collecte, correlation, dossiers, pays, retention  # noqa: E402
 from veille.client import ClientGk2, delais, routes  # noqa: E402
 from veille.sources import toutes  # noqa: E402
 from veille.service import Boucle, Veille  # noqa: E402
@@ -28,6 +51,7 @@ DB = "/var/lib/secubox/ai/veille.db"
 CONF = "/etc/secubox/ai.toml"
 PAS_CORRELATION_S = 60       # V2 § 8 : fenêtre glissante de 30 min, une passe par minute
 PAS_PAYS_S = 60               # échantillon par pays (#3811) : un par créneau de 15 min, vérifié chaque minute
+PAS_ANALYSE_S = 30            # analyste IA (#3722) : un travail au plus par tour
 PAS_COLLECTE_S = 10           # chaque source garde son propre intervalle (collecte.passe ne lit que les sources dues)
 log = logging.getLogger("secubox-ai-veille")
 
@@ -65,6 +89,17 @@ def _reglages_correlation():
         return correlation.reglages({})
 
 
+def _reglages_analyste():
+    try:
+        with open(CONF, "rb") as f:
+            return analyste.reglages(tomllib.load(f))
+    except FileNotFoundError:
+        return analyste.reglages({})
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        log.error("%s illisible (%s) : analyste aux réglages par défaut", CONF, e.__class__.__name__)
+        return analyste.reglages({})
+
+
 def _maintenant():
     return datetime.now(timezone.utc)
 
@@ -76,6 +111,10 @@ async def _main():
         logging.getLogger("secubox-ai-veille").info("purge : %s", res)
 
     reglages = _reglages_correlation()
+    reglages_ia = _reglages_analyste()
+    repris = await asyncio.to_thread(analyste.reprendre_travaux, db)
+    if repris:
+        log.warning("analyste : %d travail(aux) interrompu(s) remis en file", repris)
 
     async def correler():
         touches = await veille.sql(lambda d: correlation.correler(d, _maintenant(), **reglages))
@@ -85,8 +124,17 @@ async def _main():
         changes = await veille.sql(lambda d: dossiers.construire(d, _maintenant()))
         if changes:
             log.info("dossiers : %d dossier(s) créé(s) ou mis à jour", len(changes))
+            # Analyste IA (#3722) : dossier nouveau ou aggravé → un travail « analyser » (une ligne en attente par dossier).
+            deposes = await veille.sql(lambda d: analyste.deposer_analyses(d, changes, _maintenant(), reglages_ia))
+            if deposes:
+                log.info("analyste : %d analyse(s) mise(s) en file", deposes)
 
-    boucles = [Boucle("retention", 86400, purge), Boucle("correlation", PAS_CORRELATION_S, correler)]
+    async def analyser():
+        await analyste.tour(db, veille.sql, lambda: moteurs.moteur_disponible(reglages_ia["reveiller_local"]),
+                            _maintenant(), reglages_ia)
+
+    boucles = [Boucle("retention", 86400, purge), Boucle("correlation", PAS_CORRELATION_S, correler),
+               Boucle("analyse", PAS_ANALYSE_S, analyser)]
     client = _client()
     if client is not None:
         sources = toutes()

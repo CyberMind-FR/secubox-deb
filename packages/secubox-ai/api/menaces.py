@@ -28,6 +28,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from secubox_core.auth import require_jwt
 
 from api import moteurs, reglages, taches
+from veille import controles
 
 log = logging.getLogger("secubox.ai.menaces")
 
@@ -53,7 +54,7 @@ INSTANTANES: deque = deque(maxlen=90)   # un relevé chiffré toutes les ~2 min 
 _instantanes_charges = [False]
 _verrou_boucle: dict = {}
 _VEILLE: list = []
-IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+IPV4 = controles.IPV4
 
 
 def _reinitialiser() -> None:
@@ -272,57 +273,14 @@ def evolution(maintenant: float) -> dict:
             "par_categorie": dict(sorted(((c, d) for c, d in delta.items() if d), key=lambda x: -abs(x[1]))[:8])}
 
 
-# ---- Contrôles mécaniques, SANS modèle ----
-PAYS_NOMS = {"CN": r"chin", "US": r"usa|[ée]tats[- ]unis|am[ée]ric", "RU": r"russ", "DE": r"allemagne|allemand",
-             "FR": r"france|fran[çc]ais", "BR": r"br[ée]sil", "KR": r"cor[ée]e", "IN": r"inde\b|indien",
-             "NL": r"pays[- ]bas|n[ée]erlandais", "GB": r"royaume[- ]uni|britanni", "HK": r"hong[- ]kong",
-             "SG": r"singapour", "VN": r"vi[eê]t", "IR": r"\biran", "UA": r"ukrain", "JP": r"japon", "TW": r"ta[ïi]wan"}
+# ---- Contrôles mécaniques, SANS modèle : veille/controles.py (partagé avec l'analyste de la veille, #3722) ----
+PAYS_NOMS = controles.PAYS_NOMS
 
 
 def controler_resume(texte: str, releve: dict) -> str:
     """Contrôle SANS modèle : chiffres absents du relevé, tendance affirmée sans mesure, pays absents.
     Le reste n'est pas prouvé."""
-    nombres = set(re.findall(r"\d+(?:[.,]\d+)?", json.dumps(_visible(releve), ensure_ascii=False, default=str)))
-    propre = IPV4.sub(" ", re.sub(r"`[^`]*`|\b[0-9a-f]{12,64}\b|\b\d+(?:\.\d+){1,3}/\d+\b", " ", texte))
-    valeurs = [float(v.replace(",", ".")) for v in nombres]
-
-    def connu(n):   # un arrondi (91,9 → 92) n'est pas une invention
-        x = float(n.replace(",", "."))
-        return any(abs(x - v) <= 0.5 for v in valeurs)
-    absents = sorted({n for n in re.findall(r"\b\d+(?:[.,]\d+)?\b", propre)
-                      if len(n.replace(",", "").replace(".", "")) >= 2 and not connu(n)})
-    notes = []
-    if absents:
-        notes.append("chiffres absents du relevé : " + ", ".join(absents[:8]))
-    # Un nombre suivi de « % » doit être une PART du relevé (clés en pct / part*), pas un compte : « +60 % » pour
-    # « sasl_failed +60 » (60 alertes de plus) est une invention d'unité (vu le 14/11/2026).
-    parts: list[float] = []
-
-    def _parts(x, part=False):   # `part` : une clé ancêtre en pct / part* (les sous-clés sont des catégories)
-        if isinstance(x, dict):
-            for k, v in x.items():
-                _parts(v, part or "pct" in str(k) or str(k).startswith("part"))
-        elif isinstance(x, list):
-            for v in x:
-                _parts(v, part)
-        elif part and isinstance(x, (int, float)) and not isinstance(x, bool):
-            parts.append(float(x))
-    _parts(_visible(releve))
-    faux_pct = sorted({m.group(1) for m in re.finditer(r"(\d+(?:[.,]\d+)?)\s*%", propre)
-                       if not any(abs(float(m.group(1).replace(",", ".")) - v) <= 0.5 for v in parts)},
-                      key=lambda n: float(n.replace(",", ".")))
-    if faux_pct:
-        notes.append("pourcentages absents du relevé (des comptes donnés pour des parts ?) : "
-                     + ", ".join(f + " %" for f in faux_pct[:8]))
-    if not (releve.get("evolution_1h") or {}).get("disponible") and re.search(
-            r"hausse|baisse|augment|diminu|recul|progress|explos|en forte|r[ée]cemment|nouve(?:au|lle|aux)s?\b|r[ée]cent",
-            texte, re.I):
-        notes.append("tendance ou nouveauté affirmée sans mesure : "
-                     + (releve.get("evolution_1h") or {}).get("raison", "pas de recul"))
-    codes = {str(x).split()[0] for x in releve.get("pays") or [] if str(x).split()} | set(releve.get("bans_par_pays") or {})
-    cites = [c for c, motif in PAYS_NOMS.items() if re.search(motif, texte, re.I) and c not in codes]
-    if cites:
-        notes.append("pays absents du relevé : " + ", ".join(cites))
+    notes = controles.anomalies(texte, releve)
     return texte + ("\n\n⚠ Contrôle du relais — " + " ; ".join(notes) + "." if notes else "")
 
 

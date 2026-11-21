@@ -4,7 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # SecuBox IA V2 — veille (#3719) : second processus du module, SEUL écrivain régulier de veille.db (V2 § 5.2, § 6).
-# Collecte de gk2 (#3720), migrations, rétention, garde d'espace ; corrélation et file de travaux viendront ensuite. Utilisateur dédié, aucune capacité, socle de durcissement complet (RULES-CODE § 10).
+# Collecte de gk2 (#3720), migrations, rétention, garde d'espace, corrélation, dossiers, file de travaux et analyste IA
+# (#3722 : un moteur qui répond déjà, distant gk0 ou local par sa socket ; le local n'est réveillé que sur réglage). Utilisateur dédié, aucune capacité, socle de durcissement complet (RULES-CODE § 10).
 [Unit]
 Description=SecuBox IA — veille (base veille.db, boucles, rétention)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3719
@@ -46,14 +47,24 @@ LockPersonality=yes
 SystemCallArchitectures=native
 CapabilityBoundingSet=
 AmbientCapabilities=
-# AF_UNIX : journal ; AF_INET/AF_INET6 : gk2 (collecte). Les adresses de gk2 (ai.toml) et les résolveurs du LAN sont
+# AF_UNIX : journal, socket du moteur local (/run/secubox-ai/moteur.sock) ; AF_INET/AF_INET6 : gk2 (collecte), gk0
+# (moteur distant de l'analyste). Les adresses de gk2 (ai.toml) et les résolveurs du LAN sont
 # rouverts une à une par le drop-in de « secubox-aictl preparer » (/run/systemd/system/secubox-ai-veille.service.d).
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 ReadWritePaths=/var/lib/secubox/ai
+# Dépôt des demandes au contrôleur root : servi seulement si [veille.analyste] reveiller_local = true (défaut : jamais).
+ReadWritePaths=-/run/secubox-ai/demandes
 # Clé privée du compte de lecture de gk2 (#3720) : root 0600, remise par systemd ; la veille seule la reçoit.
 # Absente : la collecte reste éteinte (journalisé), le reste tourne.
 LoadCredential=ai-lecture:/etc/secubox/secrets/ai/ai-lecture.key
+# Clé du moteur distant gk0 (#3722, analyste IA) : même remise. Un chemin absolu absent rend LoadCredential= FATAL
+# (l'unité ne démarre pas, 243/CREDENTIALS) : la valeur de repli « absente » (SetCredential=, prise seulement si le
+# fichier manque) garde la veille en marche, et la veille la lit comme « pas de clé » (gk0 jamais appelé).
+LoadCredential=ai-distant:/etc/secubox/secrets/ai/distant.key
+SetCredential=ai-distant:absente
 IPAddressDeny=localhost link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
+# gk0 (moteur distant, [distant] url de ai.toml) : adresse non fixe, rouverte une à une avec gk2 par le drop-in de
+# « secubox-aictl preparer » (HOTES_VEILLE) ; une adresse publique de gk0 est déjà joignable (V2 § 12).
 IPAddressAllow=127.0.0.1/32
 
 [Install]
