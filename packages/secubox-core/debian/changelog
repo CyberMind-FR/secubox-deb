@@ -1,3 +1,10 @@
+secubox-core (1.8.39-1~trixie1) trixie; urgency=medium
+
+  * secubox-domaine --migrer (ref #3858) : une section [gk2] / [gk2.*] n'est
+    jamais réécrite ; la veille secubox-ai de gk3 collectait auprès d'elle-même.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 18:15:28 +0100
+
 secubox-core (1.8.38-1~trixie1) trixie; urgency=medium
 
   * fast_reload (ref #3850) : un code 0 sans message d'erreur est un succès.

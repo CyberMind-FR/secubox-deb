@@ -67,6 +67,28 @@ def test_migration_reecrit_les_noms_gk2(tmp_path):
     assert lancer("--etat", racine=tmp_path).stdout == ""
 
 
+def test_migration_ne_touche_pas_la_section_gk2(tmp_path):
+    """#3858 : `[gk2]` d'ai.toml vise gk2 par construction ; la réécrire faisait collecter gk3 auprès d'elle-même."""
+    f = tmp_path / "ai.toml"
+    f.write_text('url = "https://hall.gk2.secubox.in/"\n'
+                 '[gk2]\n'
+                 'menaces_url = "https://admin.gk2.secubox.in/api/v1"\n'
+                 '[gk2.routes]\n'
+                 'x = "https://admin.gk2.secubox.in/x"\n'
+                 '[veille]  # suite\n'
+                 'aud = "admin.gk2.secubox.in"\n'
+                 '[gk2x]\n'
+                 'y = "meet.gk2.secubox.in"\n')
+    assert lancer("--migrer", racine=tmp_path).returncode == 0
+    t = f.read_text()
+    assert 'url = "https://hall.gk3.secubox.in/"' in t
+    assert 'menaces_url = "https://admin.gk2.secubox.in/api/v1"' in t
+    assert 'x = "https://admin.gk2.secubox.in/x"' in t
+    assert 'aud = "admin.gk3.secubox.in"' in t
+    assert 'y = "meet.gk3.secubox.in"' in t
+    assert lancer("--etat", racine=tmp_path).stdout == ""
+
+
 def test_migration_sans_effet_sur_gk2(tmp_path):
     f = tmp_path / "jitsi.toml"
     f.write_text('domain = "meet.gk2.secubox.in"\n')
