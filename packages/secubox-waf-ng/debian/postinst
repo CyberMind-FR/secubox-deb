@@ -380,7 +380,12 @@ PROTEGEES
       systemctl start secubox-waf-campaigns.service 2>/dev/null || true
       # #3716 : veille des bans de bloc (60 s) ; le dossier d'état existe déjà (2c).
       systemctl start secubox-waf-blocs-veille.timer 2>/dev/null || true
-      # #3723 : indicateurs d'adresses reçus des pairs (5 min).
+      # #3723 : indicateurs d'adresses reçus des pairs (5 min). Ses appels sudo portent log_output (comme tous les
+      # alias SBX_WAF_*) sous ProtectSystem=strict : le journal d'E/S de sudo doit exister AVANT, sinon
+      # « -/var/log/sudo-io » est ignoré par ReadWritePaths, sudo ne peut pas le créer et refuse chaque commande.
+      if [ ! -e /var/log/sudo-io ] && [ ! -L /var/log/sudo-io ]; then
+        install -d -m 0700 -o root -g root /var/log/sudo-io
+      fi
       systemctl start secubox-waf-indices.timer 2>/dev/null || true
     fi
 

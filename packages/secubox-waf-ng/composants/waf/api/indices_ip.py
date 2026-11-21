@@ -78,6 +78,10 @@ TAILLE_MENACES = 16 * 1024 * 1024
 TAILLE_ETAT_MAX = 8 * 1024 * 1024
 TAILLE_RESUME_MAX = 64 * 1024
 RECUS_MAX = LIVRAISONS_MAX * INDICATEURS_MAX
+#: Adresses retenues au plus par producteur (un pair ne remplit jamais seul l'état).
+QUOTA_PRODUCTEUR = 500
+#: Échéance d'un indicateur reçu bornée à la réception : 7 j au plus (durée maximale d'un partage sur gk2).
+EXPIRE_MAX_S = 7 * 86_400
 RESUME_PERIME_S = 1800
 _RESUME_AVANCE_MAX_S = 60
 COMPTE_RESUME = "secubox"
@@ -177,12 +181,14 @@ def _contenu(c: Any) -> Optional[Tuple[List[dict], List[str]]]:
     return indicateurs, list(rev)
 
 
-def lire_livraisons() -> Dict[str, Tuple[List[dict], List[str]]]:
+def lire_livraisons() -> Optional[Dict[str, Tuple[List[dict], List[str]]]]:
     """{did : (indicateurs, revus)} des producteurs de `index.json` (64 au plus, did conforme, fichier ordinaire borné,
-    contenu au schéma) ; un producteur défectueux n'affecte pas les autres. Dossier ou index absents : {}."""
+    contenu au schéma) ; un producteur défectueux n'affecte pas les autres. Index absent ou illisible : None (on ne
+    sait pas ce que les pairs livrent : ni réception, ni oubli, ni compte des pairs)."""
     idx = _lire_json(LIVRAISONS / "index.json", TAILLE_INDEX_MAX)
     if not isinstance(idx, dict):
-        return {}
+        log.warning("indices : index des livraisons absent ou illisible, livraisons inconnues à cette passe")
+        return None
     res: Dict[str, Tuple[List[dict], List[str]]] = {}
     for did in list(idx)[:LIVRAISONS_MAX]:
         m = _DID.match(did) if isinstance(did, str) else None
@@ -246,7 +252,7 @@ def lire_etat() -> Dict[str, Any]:
         return _etat_vierge()
     recus = {ip: r for ip, r in d["recus"].items() if isinstance(r, dict) and _g._entier(r.get("recu"))
              and _g._entier(r.get("expire")) and isinstance(r.get("famille"), str) and _FAMILLE.match(r["famille"])
-             and _adresse(ip) is not None}
+             and isinstance(r.get("source"), str) and _DID.match(r["source"]) and _adresse(ip) is not None}
     appliques = {ip: a for ip, a in d["appliques"].items() if isinstance(a, dict) and _g._entier(a.get("at"))}
     bans = [t for t in d["bans"] if _g._entier(t)]
     return {"format": 1, "recus": recus, "appliques": appliques, "bans": bans}
@@ -390,12 +396,26 @@ def passe(maintenant: Optional[float] = None) -> Dict[str, Any]:
     now = int(maintenant if maintenant is not None else _maintenant())
     etat = lire_etat()
     livraisons = lire_livraisons()
-    # réception : la première vue d'une adresse fait foi (instant, famille) ; un indicateur échu est oublié
-    for indicateurs, _ in livraisons.values():
-        for i in indicateurs:
-            if i["expire"] <= now or i["ip"] in etat["recus"] or len(etat["recus"]) >= RECUS_MAX:
-                continue
-            etat["recus"][i["ip"]] = {"recu": now, "famille": i["famille"], "expire": i["expire"]}
+    if livraisons is not None:
+        # Oubli : une adresse qu'aucune livraison actuelle ne porte plus (indicateur retiré, pair résilié ou descendu
+        # sous le seuil de confiance) n'est plus retenue.
+        livrees = {i["ip"] for indicateurs, _ in livraisons.values() for i in indicateurs}
+        for ip in [ip for ip in etat["recus"] if ip not in livrees]:
+            del etat["recus"][ip]
+        # Réception : la première vue d'une adresse fait foi (instant, famille, producteur) ; échéance bornée à 7 j ;
+        # 500 adresses retenues au plus par producteur ; un indicateur échu n'est pas retenu.
+        par_source: Dict[str, int] = {}
+        for r in etat["recus"].values():
+            par_source[r["source"]] = par_source.get(r["source"], 0) + 1
+        for did, (indicateurs, _) in livraisons.items():
+            for i in indicateurs:
+                if i["expire"] <= now or i["ip"] in etat["recus"] or len(etat["recus"]) >= RECUS_MAX:
+                    continue
+                if par_source.get(did, 0) >= QUOTA_PRODUCTEUR:
+                    break
+                etat["recus"][i["ip"]] = {"recu": now, "famille": i["famille"], "source": did,
+                                          "expire": min(i["expire"], now + EXPIRE_MAX_S)}
+                par_source[did] = par_source.get(did, 0) + 1
     for ip in [ip for ip, r in etat["recus"].items() if r["expire"] <= now]:
         del etat["recus"][ip]
     etat["appliques"] = {ip: a for ip, a in etat["appliques"].items() if ip in etat["recus"]}
@@ -441,13 +461,16 @@ def passe(maintenant: Optional[float] = None) -> Dict[str, Any]:
     return bilan
 
 
-def etat_depuis(livraisons: Dict[str, Tuple[List[dict], List[str]]], now: int) -> Dict[str, int]:
-    """Mesure de la tâche 11 depuis la publication LOCALE et les livraisons reçues."""
+def etat_depuis(livraisons: Optional[Dict[str, Tuple[List[dict], List[str]]]], now: int) -> Dict[str, Optional[int]]:
+    """Mesure de la tâche 11 depuis la publication LOCALE et les livraisons reçues. Jamais un zéro inventé : publication
+    absente ou illisible ⇒ les trois valeurs None ; livraisons inconnues (index illisible) ⇒ comptes des pairs None."""
     pub = _lire_json(PUBLICATION, TAILLE_LIVRAISON_MAX)
-    partages: Set[str] = set()
-    if isinstance(pub, dict) and isinstance(pub.get("indicateurs"), list):
-        partages = {i["ip"] for i in pub["indicateurs"][:INDICATEURS_MAX] if isinstance(i, dict)
-                    and isinstance(i.get("ip"), str) and _g._entier(i.get("expire")) and i["expire"] > now}
+    if not (isinstance(pub, dict) and pub.get("jeu") == "ip-indices" and isinstance(pub.get("indicateurs"), list)):
+        return {"partages": None, "revus_chez_pairs": None, "contenus_chez_pairs": None}
+    partages = {i["ip"] for i in pub["indicateurs"][:INDICATEURS_MAX] if isinstance(i, dict)
+                and isinstance(i.get("ip"), str) and _g._entier(i.get("expire")) and i["expire"] > now}
+    if livraisons is None:
+        return {"partages": len(partages), "revus_chez_pairs": None, "contenus_chez_pairs": None}
     revus = [partages & set(rev) for _, rev in livraisons.values()]
     return {"partages": len(partages), "revus_chez_pairs": len(set().union(*revus)) if revus else 0,
             "contenus_chez_pairs": sum(len(r) for r in revus)}
@@ -460,9 +483,10 @@ def _uids_resume() -> Set[int]:
         return {0}
 
 
-def indices_etat() -> Optional[Dict[str, int]]:
+def indices_etat() -> Optional[Dict[str, Optional[int]]]:
     """`{"partages", "revus_chez_pairs", "contenus_chez_pairs"}` du dernier résumé, ou None (relevé indisponible :
-    absent, illisible, d'un autre compte que root ou secubox, modifiable par le groupe ou les autres, ou périmé)."""
+    absent, illisible, d'un autre compte que root ou secubox, modifiable par le groupe ou les autres, périmé, ou
+    publication locale illisible). Livraisons inconnues : les deux comptes des pairs valent None."""
     fd = -1
     try:
         fd = os.open(str(RESUME), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
@@ -479,7 +503,11 @@ def indices_etat() -> Optional[Dict[str, int]]:
         if fd >= 0:
             os.close(fd)
     cles = ("partages", "revus_chez_pairs", "contenus_chez_pairs")
-    if not isinstance(d, dict) or not _g._entier(d.get("maj")) or not all(_g._entier(d.get(k)) for k in cles):
+    if not isinstance(d, dict) or not _g._entier(d.get("maj")) or not _g._entier(d.get("partages")):
+        return None
+    if not all(d.get(k) is None or _g._entier(d.get(k)) for k in cles[1:]):
+        return None
+    if (d.get("revus_chez_pairs") is None) != (d.get("contenus_chez_pairs") is None):
         return None
     age = _maintenant() - d["maj"]
     if age > RESUME_PERIME_S or age < -_RESUME_AVANCE_MAX_S:

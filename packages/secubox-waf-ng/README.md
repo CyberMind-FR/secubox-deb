@@ -239,6 +239,13 @@ forme de sa cible.
   lue par `indices_ip.indices_etat()` (None si absente, d'un autre compte que root/secubox, modifiable par d'autres
   ou de plus de 30 min). `partages` : indicateurs non échus de la publication locale ; `revus_chez_pairs` : adresses
   partagées ici qu'au moins un pair a revues ; `contenus_chez_pairs` : couples pair × adresse partagée et revue.
+  Jamais un zéro inventé : publication locale absente ou illisible ⇒ relevé indisponible (None) ; index des
+  livraisons illisible ⇒ comptes des pairs None. Réception bornée : échéance reçue ramenée à 7 j au plus, 500
+  adresses retenues au plus par producteur, une adresse qu'aucune livraison actuelle ne porte plus est oubliée (index
+  illisible : rien n'est oublié). Le dossier `/var/log/sudo-io` est créé par le postinst (log_output sous
+  ProtectSystem=strict).
+  Limite connue : un indicateur publié vit jusqu'à son échéance (7 j au plus) même si le ban de l'adresse sur gk2
+  prend fin plus tôt ou est levé ; seul `/ai/unban` de l'id du partage le retire de la publication.
 
   `GET /ai/etat` rend `plafonds_par_geste` (`{geste: {heure, jour, restant_heure, restant_jour}}`) et `sade_mode`
   (`null` si le fichier est absent), `limites` et `leurres` (`[{id, cible, fin}]`), `partages` (`[{id, cible, fin,

@@ -1857,10 +1857,21 @@ def _tv_indices_fond() -> Optional[Dict[str, Any]]:
     demande `publications.json` de secubox-mirrornet. Aucune demande ou aucune clé (`annuairectl init` pas fait) :
     aucun geste. Chaque geste signé est audité avec `par = "fond"`, puis l'export MirrorNet est rafraîchi. Jamais
     d'exception vers la boucle de synchronisation."""
+    return _indices_fond("tv-indices")
+
+
+def _ip_indices_fond() -> Optional[Dict[str, Any]]:
+    """Indicateurs d'adresses du WAF (#3723) : même traitement que `_tv_indices_fond`, jeu `ip-indices` (sa propre
+    offre, ses versions, ses abonnements, signés avec node.key)."""
+    return _indices_fond("ip-indices")
+
+
+def _indices_fond(jeu: str) -> Optional[Dict[str, Any]]:
     from annuaire import mirrornet_locaux as ML  # noqa: PLC0415
     from annuaire.verbs import _get_nodes  # noqa: PLC0415
+    libelle = ML.JEUX[jeu]["libelle"]
     try:
-        demandes = ML.lire_demandes()
+        demandes = ML.lire_demandes(jeu=jeu)
         if demandes is None:
             return None
         try:
@@ -1874,14 +1885,14 @@ def _tv_indices_fond() -> Optional[Dict[str, Any]]:
             _auditer_mirrornet(action, {"sub": "fond"}, **details)
 
         with _VERROU_ABONNEMENT:                    # même verrou que les routes /self : « déjà en cours » + signature
-            res = ML.traiter(j, priv, did, boxname, demandes, datetime.now(timezone.utc), auditer=auditer)
+            res = ML.traiter(j, priv, did, boxname, demandes, datetime.now(timezone.utc), auditer=auditer, jeu=jeu)
         if res["offre"] in ("creee", "retiree") or res["version"] or res["abonnements"] or res["resiliations"]:
-            _sync_log.info("indices TV : offre %s, version %s, %s abonnement(s), %s résiliation(s)", res["offre"],
+            _sync_log.info("%s : offre %s, version %s, %s abonnement(s), %s résiliation(s)", libelle, res["offre"],
                            (res["version"] or "inchangée")[:19], res["abonnements"], res["resiliations"])
             _exporter_mirrornet()
         return res
     except Exception as e:  # noqa: BLE001 — la boucle ne meurt pas, mais elle le dit
-        _sync_log.warning("indices TV : traitement de fond échoué : %s", e)
+        _sync_log.warning("%s : traitement de fond échoué : %s", libelle, e)
         return None
 
 
@@ -1897,6 +1908,10 @@ async def _dir_sync_loop():
             await asyncio.to_thread(_tv_indices_fond)
         except Exception as e:  # noqa: BLE001
             _sync_log.warning("indices TV : traitement de fond échoué : %s", e)
+        try:                                                         # #3723 : chaque jeu à part, même règle
+            await asyncio.to_thread(_ip_indices_fond)
+        except Exception as e:  # noqa: BLE001
+            _sync_log.warning("indicateurs d'adresses : traitement de fond échoué : %s", e)
         await asyncio.sleep(interval)
 
 

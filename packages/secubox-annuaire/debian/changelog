@@ -1,3 +1,16 @@
+secubox-annuaire (0.23.0-1~trixie1) trixie; urgency=medium
+
+  * Indicateurs d'adresses (ref #3723) : mirrornet_locaux devient une table
+    de jeux. tv-indices inchangé (mêmes constantes, mêmes audits, offres en
+    place conformes) ; ip-indices ajouté avec sa propre offre (usage
+    ip-indices, endpoint et provenance propres), ses versions et ses
+    abonnements, signés avec node.key au seuil confiance_min de MirrorNet.
+    Chaque jeu est traité à part (_ip_indices_fond dans la boucle de
+    synchronisation) : un abonnement ip-indices n'est jamais résilié par le
+    traitement tv-indices, et inversement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 17:00:00 +0100
+
 secubox-annuaire (0.22.3-1~trixie1) trixie; urgency=medium
 
   * fast_reload (ref #3850) : un code 0 sans message d'erreur est un succès.

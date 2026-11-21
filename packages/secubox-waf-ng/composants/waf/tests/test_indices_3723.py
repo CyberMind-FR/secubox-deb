@@ -607,3 +607,71 @@ def test_unite_minuterie_profil_et_exception():
         assert f in regles_paquet, f
     lanceur = (PAQUET / "sbin" / "secubox-waf-indices").read_text()
     assert lanceur.startswith("#!/usr/bin/python3") and "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in lanceur
+
+
+# ── revue, tour 1 ──────────────────────────────────────────────────────
+def test_publication_illisible_etat_indisponible(pair):
+    """Publication locale absente ou illisible : jamais « 0 partagé », le relevé est indisponible."""
+    pair.livrer([], revus=[IP4])
+    pair.ii.passe()
+    assert pair.ii.indices_etat() is None                               # publication absente
+    pair.ii.PUBLICATION.write_text("{tronqué")
+    pair.ii.passe()
+    assert pair.ii.indices_etat() is None
+    assert json.loads(pair.ii.RESUME.read_text())["partages"] is None
+
+
+def test_index_illisible_comptes_des_pairs_inconnus(pair):
+    pair.ii.PUBLICATION.write_text(json.dumps({"format": 1, "jeu": "ip-indices", "revus": [],
+                                               "indicateurs": [_ind(IP4)]}))
+    pair.livrer([_ind(IP6)], revus=[IP4])
+    pair.ii.passe()
+    assert pair.ii.indices_etat() == {"partages": 1, "revus_chez_pairs": 1, "contenus_chez_pairs": 1}
+    (pair.ii.LIVRAISONS / "index.json").write_text("{tronqué")
+    assert pair.ii.passe()["recus"] == 1                                # rien n'est oublié sur une lecture ratée
+    assert pair.ii.indices_etat() == {"partages": 1, "revus_chez_pairs": None, "contenus_chez_pairs": None}
+    (pair.ii.LIVRAISONS / "index.json").unlink()
+    pair.ii.passe()
+    assert pair.ii.indices_etat()["revus_chez_pairs"] is None
+
+
+def test_echeance_recue_bornee_a_7_jours(pair):
+    now = int(time.time())
+    pair.livrer([_ind(IP4, expire=now + 400 * 86400)])
+    pair.ii.passe(now)
+    assert json.loads(pair.ii.ETAT.read_text())["recus"][IP4]["expire"] == now + 7 * 86400
+
+
+def test_adresse_retiree_des_livraisons_oubliee(pair):
+    """Un indicateur retiré par son producteur (ou un pair résilié, ou descendu sous le seuil) n'est plus retenu :
+    une vue hostile postérieure ne le bannit pas."""
+    now = int(time.time())
+    pair.livrer([_ind(IP4), _ind(IP6)])
+    pair.ii.passe(now - 600)
+    pair.livrer([_ind(IP6)])                                            # IP4 retirée par le producteur
+    pair.menace(IP4, now - 60)
+    pair.menace(IP6, now - 60)
+    r = pair.ii.passe(now)
+    assert r["recus"] == 1 and pair.bannis() == [IP6]
+    assert set(json.loads(pair.ii.ETAT.read_text())["recus"]) == {IP6}
+    (pair.ii.LIVRAISONS / "index.json").write_text(json.dumps({}))      # plus aucun producteur livré
+    assert pair.ii.passe(now + 1)["recus"] == 0
+
+
+def test_quota_par_producteur(pair, monkeypatch):
+    monkeypatch.setattr(pair.ii, "QUOTA_PRODUCTEUR", 2)
+    pair.livrer([_ind(f"203.0.113.{i}") for i in range(1, 6)])
+    pair.livrer([_ind(f"203.0.114.{i}") for i in range(1, 4)], did=DID2, nom="gk6")
+    pair.ii.passe()
+    recus = json.loads(pair.ii.ETAT.read_text())["recus"]
+    par = {}
+    for r in recus.values():
+        par[r["source"]] = par.get(r["source"], 0) + 1
+    assert par == {DID: 2, DID2: 2} and len(recus) == 4
+
+
+def test_postinst_cree_le_journal_d_e_s_de_sudo():
+    """log_output (comme tous les alias SBX_WAF_*) sous ProtectSystem=strict : le dossier doit exister, sinon le
+    `-/var/log/sudo-io` de ReadWritePaths est ignoré, sudo ne peut pas le créer et refuse la commande."""
+    texte = (PAQUET / "debian" / "postinst").read_text()
+    assert "install -d -m 0700 -o root -g root /var/log/sudo-io" in texte

@@ -11,6 +11,7 @@ secubox-mirrornet (0.7.0-1~trixie1) trixie; urgency=medium
     livraisons/ip-indices/. Source absente : le jeu sort de la demande.
     AppArmor : lecture de la publication et du dossier de livraison ;
     postinst : ACL u:secubox-mirrornet:x sur /var/lib/secubox/waf.
+    Recommends secubox-annuaire (>= 0.23.0~), qui signe l'offre ip-indices.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 15:00:00 +0100
 

@@ -144,8 +144,8 @@ est un fichier ordinaire de root, à un seul lien, sans écriture du groupe ni d
 500 revus au plus, adresses publiques canoniques, famille `[a-z0-9_-]`). Présente : déposée comme objet de ce nœud et
 ajoutée à `publications.json` (publier et recevoir vrais) ; absente : le jeu sort de la demande. Les versions reçues
 des pairs sont livrées sous `livraisons/ip-indices/` et lues par `secubox-waf-indices` (secubox-waf-ng). Le postinst
-pose l'ACL `u:secubox-mirrornet:x` sur `/var/lib/secubox/waf` (traversée seule, paquet `acl`). La signature et l'abonnement restent
-le fait de l'annuaire, qui ne traite aujourd'hui que `tv-indices` (suite à faire).
+pose l'ACL `u:secubox-mirrornet:x` sur `/var/lib/secubox/waf` (traversée seule, paquet `acl`). La signature et l'abonnement sont le fait de
+l'annuaire (secubox-annuaire 0.23.0, offre `ip-indices` propre).
 
 ## Configuration
 
