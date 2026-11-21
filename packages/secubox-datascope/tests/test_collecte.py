@@ -106,14 +106,56 @@ def test_ecriture_atomique(cfg):
     assert sorted(p.name for p in cfg.cache.iterdir()) == ["graph.json", "overview.json"]
 
 
+def _changes(cfg):
+    db = sqlite3.connect(cfg.base)
+    try:
+        return db.execute("SELECT count(*) FROM observations").fetchone()[0], cfg.base.stat().st_size
+    finally:
+        db.close()
+
+
 def test_deux_passes_sans_changement_aucune_ecriture(cfg):
     collecte.passe(cfg, NOW)
-    cache = {n: (cfg.cache / n).stat().st_mtime_ns for n in ("overview.json", "graph.json")}
-    db = cfg.base.read_bytes()
+    g = (cfg.cache / "graph.json").stat().st_mtime_ns
+    gb = (cfg.cache / "graph.json").read_bytes()
+    ov, base = _lire(cfg, "overview.json"), _changes(cfg)
     time.sleep(0.01)
     collecte.passe(cfg, NOW + 60)
-    assert {n: (cfg.cache / n).stat().st_mtime_ns for n in cache} == cache
-    assert cfg.base.read_bytes() == db
+    assert (cfg.cache / "graph.json").stat().st_mtime_ns == g and (cfg.cache / "graph.json").read_bytes() == gb
+    assert _changes(cfg) == base
+    ov2 = _lire(cfg, "overview.json")
+    assert ov2["genere_le"] == ov["genere_le"] and ov2["verifie_le"] > ov["verifie_le"]
+    assert ov2["verifie_le"].endswith("Z")
+
+
+def test_verifie_le_n_avance_pas_sur_conserve(cfg):
+    collecte.passe(cfg, NOW)
+    avant = (cfg.cache / "overview.json").read_bytes()
+    cfg.nac_db.unlink()
+    assert collecte.passe(cfg, NOW + 60)["etat"] == "degrade"
+    assert (cfg.cache / "overview.json").read_bytes() == avant
+
+
+def test_verifie_le_n_avance_pas_sur_abstention(cfg, monkeypatch):
+    collecte.passe(cfg, NOW)
+    avant = (cfg.cache / "overview.json").read_bytes()
+    monkeypatch.setattr(collecte, "BASE_MAX_OCTETS", 1024)
+    assert collecte.passe(cfg, NOW + 60)["etat"] == "abstenu"
+    assert (cfg.cache / "overview.json").read_bytes() == avant
+
+
+def test_erreur_temporaire_sans_echec_d_unite(cfg, monkeypatch, capsys):
+    monkeypatch.setattr(collecte, "charger", lambda: cfg)
+
+    def verrou(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(collecte, "passe", verrou)
+    assert collecte.main() == 0
+    assert json.loads(capsys.readouterr().out)["etat"] == "erreur_temporaire"
+    monkeypatch.setattr(collecte, "passe", lambda *a: (_ for _ in ()).throw(OSError(28, "plein")))
+    assert collecte.main() == 0
+    monkeypatch.setattr(collecte, "passe", lambda *a: (_ for _ in ()).throw(ValueError("bug")))
+    assert collecte.main() == 1
 
 
 def test_graph_borne(cfg, monkeypatch):

@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import socket
+import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
@@ -27,7 +28,6 @@ from .store import (BASE_MAX_OCTETS, VOISINS_ARETES_MAX, VOISINS_NOEUDS_MAX, _ta
 
 DISQUE_MIN_OCTETS = 512 * 1024 * 1024
 COMPLET_VALIDE_S = 15 * 60
-RAFRAICHIR_S = 10 * 60  # un cache identique n'est réécrit qu'au bout de ce délai (fraîcheur de genere_le)
 
 
 def _iso(t: float) -> str:
@@ -63,8 +63,12 @@ def _actuel(chemin: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _publier(chemin: Path, neuf: Dict[str, Any], complet: bool, maintenant: float) -> str:
-    """Double tampon : une passe dégradée garde le dernier complet frais ; un contenu identique n'est pas réécrit."""
+def _publier(chemin: Path, neuf: Dict[str, Any], complet: bool, maintenant: float, battement: bool = False) -> str:
+    """Double tampon : une passe dégradée garde le dernier complet frais (sans battement : le collecteur vieillit).
+
+    genere_le = date du contenu (inchangée si le contenu est identique). Avec battement, verifie_le = maintenant
+    et le fichier est réécrit à chaque passe ; sans, un contenu identique n'est pas réécrit.
+    """
     ancien = _actuel(chemin)
     age: Optional[float] = None
     if ancien is not None:
@@ -72,17 +76,21 @@ def _publier(chemin: Path, neuf: Dict[str, Any], complet: bool, maintenant: floa
         age = None if t is None else maintenant - t
     if not complet and ancien and ancien.get("complet") is True and age is not None and age < COMPLET_VALIDE_S:
         return "conserve"
-    if ancien and ancien.get("complet") == complet and age is not None and age < RAFRAICHIR_S:
-        a = {k: v for k, v in ancien.items() if k != "genere_le"}
-        n = {k: v for k, v in neuf.items() if k != "genere_le"}
-        if a == n:
-            return "inchange"
+    if ancien and ancien.get("complet") == complet:
+        coeur = ("genere_le", "verifie_le")
+        if {k: v for k, v in ancien.items() if k not in coeur} == {k: v for k, v in neuf.items() if k not in coeur}:
+            if not battement:
+                return "inchange"
+            neuf["genere_le"] = ancien.get("genere_le", neuf["genere_le"])
+    if battement:
+        neuf["verifie_le"] = _iso(maintenant)
     _ecrire_atomique(chemin, neuf)
     return "ecrit"
 
 
 def _vue_graphe(db, genere: str, complet: bool) -> Dict[str, Any]:
     n_tot = db.execute("SELECT count(*) FROM entities").fetchone()[0]
+    # Vue tronquée : les 500 premiers noeuds par id (ordre déterministe, pas une pertinence) ; arêtes entre eux.
     noeuds = [dict(r) for r in db.execute(
         "SELECT id, type, label, source_module, first_seen, last_seen FROM entities ORDER BY id LIMIT ?",
         (VOISINS_NOEUDS_MAX,))]
@@ -139,7 +147,7 @@ def passe(cfg: Config, maintenant: float) -> Dict[str, Any]:
         complet = all(s["etat"] == "ok" and not s["refusees"] for s in sources.values())
         ecrit = {
             "overview.json": _publier(Path(cfg.cache) / "overview.json", _vue_apercu(db, horodatage, complet),
-                                      complet, maintenant),
+                                      complet, maintenant, battement=True),
             "graph.json": _publier(Path(cfg.cache) / "graph.json", _vue_graphe(db, horodatage, complet),
                                    complet, maintenant),
         }
@@ -151,6 +159,9 @@ def passe(cfg: Config, maintenant: float) -> Dict[str, Any]:
 def main() -> int:
     try:
         res = passe(charger(), time.time())
+    except (sqlite3.OperationalError, OSError) as e:  # base verrouillée, cache non écrit : la passe suivante réessaie
+        print(json.dumps({"etat": "erreur_temporaire", "motif": type(e).__name__}), flush=True)
+        return 0
     except Exception as e:  # noqa: BLE001 - erreur imprévue : une ligne pour journald, code non nul
         print(json.dumps({"etat": "erreur", "motif": type(e).__name__}), flush=True)
         return 1
