@@ -11,6 +11,24 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-21 (soir) — SecuBox AI V2 phases 4-7 déployées ; secubox-domaine corrigé (ref #3722 #3723 #3724 #3725 #3858)
+
+- Publiés et installés : gk2 waf-ng 1.43.0, toolbox-ng 0.18.0, soc 1.12.0, mirrornet 0.7.0, annuaire 0.23.0 (installation
+  groupée, RC=0, Hub et admin 200, aucun refus AppArmor) ; gk1 waf-ng 1.43.0 ; gk3 secubox-ai 2.0.0 (migrations
+  0005-0011, sauvegarde `veille.db.avant-0005`) puis secubox-core 1.8.39.
+- Contrôles gk2 : sets `limite_ia` chargés, `protegees.env` avec le préfixe IPv6, threatmesh `/peers` lu par
+  gestes_ia (7 pairs + 16 wg), minuteries `secubox-waf-indices` et `sade-auto` actives. SADE de gk2 en ACTIVE par
+  l'administrateur depuis 14:09Z (geste du propriétaire). Défaut noté : `depuis` de `sade-mode.json` porte l'heure du
+  battement, pas celle de la bascule.
+- Contrôles gk3 : veille 190 Mo RSS (< 256M), l'API ne voit pas les clés de la veille, profils AppArmor chargés sans
+  refus, ACL d'`audit.log` reposée par `preparer` (refus d'écriture avant). Clés `ai-ban` et `ai-filtres` absentes sur
+  gk3 : aucune réponse n'est exécutée tant que le propriétaire ne les pose pas.
+- #3858 : `secubox-domaine --migrer` (postinst de secubox-core) avait réécrit `[gk2] menaces_url/sources_url` de
+  l'`ai.toml` de gk3 en gk3 (18 et 19/11) : la veille collectait auprès d'elle-même (404/401). Remise en état à la
+  main (copie `ai.toml.avant-retour-gk2-*`), puis correctif : une section `[gk2]`/`[gk2.*]` n'est jamais réécrite
+  (PR #3859, core 1.8.39, vérifié sur gk3). 12/12 sources ensuite, `dns` en délai intermittent (charge de gk2).
+- Échecs CI préexistants sur master : `test_secubox_filterlists_2863` (core), webos, soc, hub, pilotage, appstore.
+
 ## 2026-11-21 — SecuBox AI V2 phases 4-7 fusionnées, pas déployées (ref #3722 #3723 #3724 #3725 #3839)
 
 PR #3857 (squash da83d2ca9) : 13 tâches menées par sous-agents, chacune relue, puis revue de toute la branche.
