@@ -492,11 +492,19 @@ async def incidents(request: Request, jours: int = Query(7, ge=1, le=90), admin:
 # ── mode et politique ─────────────────────────────────────────────────────────────────────────────
 
 def _mode_vivant() -> Dict[str, Any]:
-    """Mode en direct ; base indisponible : `observe` (défaut sûr) et `etat_base: indisponible`."""
+    """Mode en direct ; base indisponible : `observe` (défaut sûr) et `etat_base: indisponible`. `audit_indisponible`
+    (horodatage) quand un passage en OBSERVE a été validé sans pouvoir écrire son audit."""
     try:
-        return {"mode": defense_etat.mode_courant()}
+        out: Dict[str, Any] = {"mode": defense_etat.mode_courant()}
     except defense_etat.EtatIndisponible:
         return {"mode": "observe", "etat_base": "indisponible"}
+    try:
+        a = defense_etat.alertes().get("audit_indisponible")
+    except defense_etat.EtatIndisponible:
+        a = None
+    if a:
+        out["audit_indisponible"] = a["depuis"]
+    return out
 
 
 @router.get("/policies", dependencies=[Depends(require_lecture)])
@@ -542,7 +550,7 @@ async def changer_mode(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(
         raise HTTPException(status_code=400, detail="mode inconnu")
     par = str((payload or {}).get("sub") or "inconnu")
     try:
-        await asyncio.to_thread(defense_etat.changer_mode, valeur, par)
+        audite = await asyncio.to_thread(defense_etat.changer_mode, valeur, par)
     except defense_etat.AuditIndisponible:
         return JSONResponse(status_code=503, content={"error": "audit indisponible : mode inchangé",
                                                       "cause": "audit_indisponible"})
@@ -552,6 +560,9 @@ async def changer_mode(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(
     except PermissionError:
         return JSONResponse(status_code=409, content={"error": "mode fermé : seuils abaissés, réservé au banc — "
                                                       "ouverture sur accord du propriétaire", "cause": "gestes_non_livres"})
+    if audite is False:  # passage en OBSERVE validé quand même : le resserrement ne dépend jamais de l'audit
+        return {"mode": valeur, "audit_indisponible": True,
+                "avertissement": "mode appliqué SANS audit (journal d'audit non inscriptible) : alerte enregistrée"}
     return {"mode": valeur}
 
 

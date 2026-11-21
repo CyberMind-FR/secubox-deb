@@ -149,14 +149,18 @@ def ecrire_audit(corps: str) -> None:
         raise AuditIndisponible(e.__class__.__name__) from e
 
 
-def changer_mode(valeur: str, par: str) -> None:
-    """Change le mode ET écrit sa ligne d'audit dans la même transaction (BEGIN IMMEDIATE) : l'audit est écrit,
-    flush + fsync, AVANT le COMMIT ; s'il échoue, ROLLBACK (le mode ne change jamais sans trace).
+def changer_mode(valeur: str, par: str) -> bool:
+    """Change le mode dans une transaction BEGIN IMMEDIATE. Rend True si l'audit a été écrit.
 
-    Vers `observe` (coupure manuelle ou retour forcé par le plafond) : dans la MÊME transaction, toute approbation en
-    file (`approuve`) revient `en_attente` avec le résultat `annulee_observe`, une ligne d'audit
-    `sade-approuve-annulee` chacune — un retour ultérieur en REACTIVE/ACTIVE n'exécute jamais une approbation d'avant
-    la coupure."""
+    Ouvrir (REACTIVE, ACTIVE) : l'audit est écrit, flush + fsync, AVANT le COMMIT ; s'il échoue, ROLLBACK et
+    `AuditIndisponible` (on n'ouvre jamais sans trace).
+
+    Resserrer vers `observe` (coupure manuelle ou retour forcé par le plafond) ne dépend JAMAIS de l'audit : le mode et
+    la remise de la file (toute approbation `approuve` revient `en_attente`, résultat `annulee_observe`) sont validés
+    dans la même transaction, PUIS les lignes d'audit (`sade-mode`, un `sade-approuve-annulee` par approbation) sont
+    écrites au mieux. Audit en échec : erreur au journal du service et alerte `audit_indisponible` en base (visible
+    dans /defense/status), rend False — jamais d'exception, jamais de blocage. Un retour ultérieur en REACTIVE/ACTIVE
+    n'exécute jamais une approbation d'avant la coupure."""
     if valeur not in MODES:
         raise ValueError("mode inconnu")
     if valeur not in MODES_OUVERTS:
@@ -165,6 +169,7 @@ def changer_mode(valeur: str, par: str) -> None:
         db = _connecter()
     except (sqlite3.Error, OSError) as e:
         raise EtatIndisponible(e.__class__.__name__) from e
+    resserre = valeur == "observe"
     with closing(db):
         try:
             db.execute("BEGIN IMMEDIATE")
@@ -172,22 +177,23 @@ def changer_mode(valeur: str, par: str) -> None:
             ancien = r[0] if r else "observe"
             if ancien == valeur:
                 db.execute("ROLLBACK")
-                return
+                return True
             db.execute("INSERT INTO mode(id, valeur, depuis, par) VALUES (1,?,?,?) "
                        "ON CONFLICT(id) DO UPDATE SET valeur=excluded.valeur, depuis=excluded.depuis, par=excluded.par",
                        (valeur, _ts(), par))
             operateur = _operateur_sain(par)
-            annulees = []
-            if valeur == "observe":
-                annulees = db.execute("SELECT empreinte, generation, geste, cible FROM decisions "
-                                      "WHERE etat = 'approuve'").fetchall()
+            lignes = [f"sade-mode ancien={ancien} nouveau={valeur} operateur={operateur}"]
+            if resserre:
+                for emp, gen, geste, cible in db.execute("SELECT empreinte, generation, geste, cible FROM decisions "
+                                                         "WHERE etat = 'approuve'").fetchall():
+                    lignes.append(f"sade-approuve-annulee motif=annulee_observe empreinte={champ_sain(emp, 64)} "
+                                  f"generation={gen} geste={champ_sain(geste, 32)} "
+                                  f"adresses={champ_sain(cible, 1024)} operateur={operateur}")
                 db.execute("UPDATE decisions SET etat = 'en_attente', resultat = 'annulee_observe' "
                            "WHERE etat = 'approuve'")
-            ecrire_audit(f"sade-mode ancien={ancien} nouveau={valeur} operateur={operateur}")
-            for emp, gen, geste, cible in annulees:
-                ecrire_audit(f"sade-approuve-annulee motif=annulee_observe empreinte={champ_sain(emp, 64)} "
-                             f"generation={gen} geste={champ_sain(geste, 32)} adresses={champ_sain(cible, 1024)} "
-                             f"operateur={operateur}")
+            else:
+                for ligne in lignes:
+                    ecrire_audit(ligne)
             db.execute("COMMIT")
         except AuditIndisponible:
             if db.in_transaction:
@@ -197,7 +203,40 @@ def changer_mode(valeur: str, par: str) -> None:
             if db.in_transaction:
                 db.execute("ROLLBACK")
             raise EtatIndisponible(e.__class__.__name__) from e
+        audit_ok = True
+        if resserre:
+            try:
+                for ligne in lignes:
+                    ecrire_audit(ligne)
+            except AuditIndisponible as e:
+                audit_ok = False
+                log.error("SADE : passage en OBSERVE validé SANS audit (%s) : %d ligne(s) non écrite(s) : %s",
+                          e, len(lignes), " | ".join(lignes))
+            try:
+                if audit_ok:
+                    db.execute("DELETE FROM alertes WHERE cle = 'audit_indisponible'")
+                else:
+                    db.execute("INSERT INTO alertes(cle, depuis, detail) VALUES ('audit_indisponible', ?, ?) "
+                               "ON CONFLICT(cle) DO UPDATE SET depuis=excluded.depuis, detail=excluded.detail",
+                               (_ts(), f"passage en observe par {operateur} non audité"))
+            except sqlite3.Error as e:
+                log.error("SADE : alerte audit_indisponible non enregistrée (%s)", e.__class__.__name__)
+        else:
+            try:
+                db.execute("DELETE FROM alertes WHERE cle = 'audit_indisponible'")  # l'audit écrit de nouveau
+            except sqlite3.Error:
+                pass
     publier_mode()
+    return audit_ok
+
+
+def alertes() -> Dict[str, Dict[str, str]]:
+    """{clé: {"depuis", "detail"}} des alertes d'état en base. Lève `EtatIndisponible`."""
+    try:
+        with closing(_connecter()) as db:
+            return {c: {"depuis": d, "detail": t} for c, d, t in db.execute("SELECT cle, depuis, detail FROM alertes")}
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
 
 
 # ── publication du mode pour gk2 (#3723) ──────────────────────────────────────────────────────────

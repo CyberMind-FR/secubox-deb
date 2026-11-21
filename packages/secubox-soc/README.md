@@ -90,6 +90,12 @@ identiques d'une même minute (`n`) ; un outil deviné par actord (« …? ») e
   l'heure glissante, tout état confondu : le compte du plafond, affiché « Décisions automatiques : n / 20 sur
   l'heure »), `score` (`[60, 79]`), `ttl_max_s`, `adresses_max`, `mode_par` (auteur du dernier changement de mode :
   `sade-auto` pour tous, un nom humain pour l'administrateur seulement, sinon `null`) et `mode_depuis`.
+- **Resserrer ne dépend jamais de l'audit (1.12.0)** : ouvrir (`reactive`, `active`) exige l'audit écrit avant le
+  COMMIT (sinon 503 `audit_indisponible`, mode inchangé) ; passer en `observe` (coupure manuelle ou retour forcé par
+  le plafond) est TOUJOURS validé, avec la remise de la file (`annulee_observe`), puis les lignes d'audit sont écrites
+  au mieux. En échec : erreur au journal du service, alerte `audit_indisponible` en base (table `alertes`, migration
+  0003), visible dans `/defense/status` (`audit_indisponible` = horodatage) et dans la réponse de `POST /mode`
+  (`audit_indisponible: true`) ; l'alerte s'efface au prochain changement de mode audité.
 - `aggressive` : toujours fermé, refusé par `POST /mode` avec 409 `gestes_non_livres` ; bouton désactivé, titre
   « seuils abaissés, réservé au banc — ouverture sur accord du propriétaire » (SADE § Modes, déploiement étape 5).
 

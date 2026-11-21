@@ -212,10 +212,10 @@ def _plafond(p: Dict[str, Any], out: Dict[str, Any]) -> bool:
     try:
         # Retour forcé en OBSERVE, même si un administrateur vient de passer en REACTIVE entre-temps : le plafond ne
         # peut que rendre la défense plus stricte (OBSERVE n'autorise aucun geste), jamais l'ouvrir davantage.
-        defense_etat.changer_mode("observe", OPERATEUR)
+        # le resserrement ne dépend jamais de l'audit : OBSERVE est validé même si audit.log n'est pas inscriptible
+        if not defense_etat.changer_mode("observe", OPERATEUR):
+            out["erreur"] = "audit_indisponible"
         out["mode"] = "observe"
-    except defense_etat.AuditIndisponible:
-        out["erreur"] = "audit_indisponible"  # le mode reste ACTIVE : le plafond rejoue au prochain passage
     except defense_etat.EtatIndisponible:
         out["erreur"] = "base_indisponible"
     return True

@@ -230,4 +230,4 @@ def test_migration_0002_sur_base_existante(faux):
                          "\nINSERT INTO schema_migrations VALUES (1, '2026-11-01T00:00:00Z');")
     assert defense_etat.noter_propositions_vues(["c" * 64])
     with closing(sqlite3.connect(chemin)) as db:
-        assert db.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall() == [(1,), (2,)]
+        assert db.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall() == [(1,), (2,), (3,)]

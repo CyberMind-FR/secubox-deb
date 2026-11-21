@@ -22,6 +22,11 @@ secubox-soc (1.12.0-1~trixie1) trixie; urgency=medium
     Unité sade-auto : -/var/lib/secubox/waf et -/var/log/sudo-io en écriture
     pour wafctl leurre et le journal d E/S de sudo. Dépend de
     secubox-waf-ng >= 1.43.0.
+  * Le passage en OBSERVE (manuel ou retour forcé par le plafond) ne dépend
+    jamais de l audit : validé d abord, audit écrit ensuite au mieux ;
+    échec : erreur au journal et alerte audit_indisponible (table alertes,
+    migration 0003) visible dans /defense/status. Ouvrir REACTIVE ou ACTIVE
+    exige toujours l audit avant le COMMIT.
   * Relevé des phases en vol unique (un seul calcul à la fois, mesures
     précédentes servies pendant un recalcul).
   * Page : étiquette V2 4-7 retirée, critère mesuré sur chaque carte ;

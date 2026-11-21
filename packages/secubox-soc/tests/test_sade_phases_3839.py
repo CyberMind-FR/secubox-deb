@@ -509,3 +509,48 @@ def test_aggressive_toujours_409(client):
     r = client.post("/defense/mode", json={"mode": "aggressive"}, headers=ADMIN)
     assert r.status_code == 409 and r.json()["cause"] == "gestes_non_livres"
     assert defense_etat.mode_courant() == "observe"
+
+
+# ── le resserrement vers OBSERVE ne dépend jamais de l'audit (#3839, fix 3) ───────────────────────────
+
+def _audit_hs(tmp_path, monkeypatch):
+    monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "absent" / "audit.log"))
+
+
+def test_observe_manuel_sans_audit(client, tmp_path, monkeypatch):
+    defense_etat.changer_mode("reactive", "test")
+    e = _proposer("LIMITER", ["203.0.113.90"])
+    assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
+    _audit_hs(tmp_path, monkeypatch)
+    r = client.post("/defense/mode", json={"mode": "observe"}, headers=ADMIN)
+    assert r.status_code == 200 and r.json()["mode"] == "observe" and r.json()["audit_indisponible"] is True
+    assert defense_etat.mode_courant() == "observe"
+    d = defense_etat.decision(e)
+    assert d["etat"] == "en_attente" and d["resultat"] == "annulee_observe"
+    st = _status(client)
+    assert st["mode"] == "observe" and isinstance(st["audit_indisponible"], str)
+    # ouvrir sans audit reste refusé (et le mode ne bouge pas)
+    r = client.post("/defense/mode", json={"mode": "active"}, headers=ADMIN)
+    assert r.status_code == 503 and r.json()["cause"] == "audit_indisponible"
+    assert defense_etat.mode_courant() == "observe"
+    with pytest.raises(defense_etat.AuditIndisponible):
+        defense_etat.changer_mode("reactive", "test")
+    # audit rétabli : l'ouverture suivante, auditée, efface l'alerte
+    monkeypatch.setenv("SECUBOX_AUDIT_LOG", str(tmp_path / "audit.log"))
+    assert defense_etat.changer_mode("reactive", "test") is True
+    assert "audit_indisponible" not in _status(client)
+
+
+def test_repli_automatique_en_observe_sans_audit(client, tmp_path, monkeypatch):
+    defense_etat.changer_mode("active", "test")
+    e = _proposer("LEURRE", ["203.0.113.91"])
+    assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
+    _audit_hs(tmp_path, monkeypatch)
+    out = {"plafond": False, "erreur": None}
+    monkeypatch.setattr(defense_etat, "bans_auto_depuis", lambda s: sade_auto.PLAFOND_HEURE)
+    assert sade_auto._plafond({"ips": ["203.0.113.92"], "empreinte": "0" * 64}, out) is True
+    assert out["mode"] == "observe" and out["erreur"] == "audit_indisponible"
+    assert defense_etat.mode_courant() == "observe"
+    assert defense_etat.decision(e)["etat"] == "en_attente"
+    assert "audit_indisponible" in defense_etat.alertes()
+    defense_etat.changer_mode("observe", "test")  # déjà en observe : rien, jamais d'exception
