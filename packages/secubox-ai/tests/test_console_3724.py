@@ -7,6 +7,7 @@ analyser à nouveau, défaire), envoi de la levée par l'exécuteur, rendu de la
 
 Aucun réseau : gk2 est le gk2 simulé de test_executeur_3723 (vraie garde ai-ban, vrais modèles Pydantic de gk2).
 """
+import asyncio
 import json
 import re
 import secrets
@@ -164,20 +165,48 @@ def test_detail_chronologie_etapes_niveau_analyse_gestes(api):
     [g] = d["gestes"]
     assert g["proposition"]["id"] == ban and g["action"]["id"] == aid and g["action"]["code_http"] == 200
     assert g["action"]["effet"] is None                                          # jamais inventé
-    assert g["defaire"] == {"possible": True, "action_id": aid, "raison": None}
+    assert g["defaire"] == {"possible": True, "action_id": aid, "raison": None, "partages": []}
     assert c.get("/dossiers/inconnu").status_code == 404
 
 
-def test_detail_prolonger_defait_par_le_ban_d_origine(api):
+def test_prolongation_jamais_defaite_le_ban_prolonge_si(api):
+    """Revue 1 : une prolongation n'a pas de « Défaire » (409 `prolongation`) ; le ban prolongé reste défaisable
+    après sa fin d'origine (fin = la plus tardive de ses prolongations faites, comme l'exécuteur)."""
+    c, db = api
+    did = _dossier_reel(db)
+    m = int(_maintenant().timestamp())
+    ban = _prop(db, cible=A, dossier=did)
+    aid = _action_faite(db, ban, "ban", A, fin=m - 10 * 3600)                  # ban 24 h posé il y a 34 h
+    pro = _prop(db, geste="prolonger", cible=A, dossier=did, reference=ban, duree=4 * 86400)
+    pid = _action_faite(db, pro, "prolonger", A, fin=m + 86 * 3600)            # prolongé à h20 de 4 j
+    db.commit()
+    gestes = {g["proposition"]["geste"]: g for g in c.get(f"/dossiers/{did}").json()["gestes"]}
+    assert gestes["prolonger"]["defaire"] == {"possible": False, "action_id": None, "raison": "prolongation"}
+    assert gestes["ban"]["defaire"]["possible"] is True and gestes["ban"]["defaire"]["action_id"] == aid
+    r = c.post(f"/actions/{pid}/defaire")
+    assert r.status_code == 409 and r.json()["detail"]["motif"] == "prolongation"
+    assert c.post(f"/actions/{aid}/defaire").status_code == 200                # à h30 : gk2 le tient encore
+    assert executeur._fin_ban is decisions.fin_geste                            # une seule règle, partagée
+
+
+def test_ban_avec_partage_vivant_signale_jamais_retire_seul(api):
+    """Revue 1 : lever un ban dont l'adresse a un indicateur partagé le SIGNALE ; le retrait est une seconde levée,
+    seulement si l'administrateur la demande (deux levées vivantes de la même cible sont permises)."""
     c, db = api
     did = _dossier_reel(db)
     ban = _prop(db, cible=A, dossier=did)
     aid = _action_faite(db, ban, "ban", A)
-    pro = _prop(db, geste="prolonger", cible=A, dossier=did, reference=ban, duree=4 * 86400)
-    _action_faite(db, pro, "prolonger", A)
+    par = _prop(db, geste="partager", cible=A, dossier=did, duree=7 * 86400)
+    paid = _action_faite(db, par, "partager", A)
     db.commit()
-    gestes = {g["proposition"]["geste"]: g for g in c.get(f"/dossiers/{did}").json()["gestes"]}
-    assert gestes["prolonger"]["defaire"]["action_id"] == aid                   # lever le ban, prolongation comprise
+    g = next(x for x in c.get(f"/dossiers/{did}").json()["gestes"] if x["proposition"]["id"] == ban)
+    assert g["defaire"]["partages"] == [{"action_id": paid, "cible": A}]
+    lev = c.post(f"/actions/{aid}/defaire").json()["proposition"]
+    assert db.execute("SELECT COUNT(*) FROM propositions WHERE geste = 'unban'").fetchone()[0] == 1   # rien de seul
+    r = c.post(f"/actions/{paid}/defaire")
+    assert r.status_code == 200, r.text
+    refs = {x for (x,) in db.execute("SELECT reference FROM propositions WHERE geste = 'unban' AND etat = 'approuvee'")}
+    assert refs == {ban, par} and lev
 
 
 # ── POST /dossiers/{id}/redescendre : décision humaine, appliquée par la veille ──
@@ -271,7 +300,7 @@ def test_defaire_refuse_hors_v2_et_hors_etat(api):
     pro = _prop(db, geste="prolonger", cible="45.83.64.24", reference=refus)
     pid = _action_faite(db, pro, "prolonger", "45.83.64.24")
     db.commit()
-    attendus = {aid: "source", rid: "etat", eid: "echu", lid: "geste", pid: "geste"}
+    attendus = {aid: "source", rid: "etat", eid: "echu", lid: "geste", pid: "prolongation"}
     for ident, motif in attendus.items():
         r = c.post(f"/actions/{ident}/defaire")
         assert r.status_code == 409 and r.json()["detail"]["motif"] == motif, (ident, r.text)
@@ -319,6 +348,27 @@ def test_defaire_envoye_par_la_bonne_route(banc, geste, cible, duree, route, att
     assert nom == route and corps == {**attendu, "id": id_gk2}
     assert _etat(banc.db, lev) == "faite" and banc.gk2.journal[id_gk2]["annule"]
     assert _action(banc.db, lev)["id_cible"] == id_gk2
+
+
+@pytest.mark.parametrize("geste,cible,duree,liste", [("limiter", "45.83.64.11", 6 * 3600, "limites"),
+                                                     ("leurre", "45.83.64.12", 86400, "leurres"),
+                                                     ("partager", "45.83.64.13", 7 * 86400, "partages")])
+def test_levee_perdue_rapprochee_sur_les_listes_de_gk2(banc, geste, cible, duree, liste):  # noqa: F811
+    """Revue 1 : /ai/etat liste limites, leurres et partages (ensemble `tous` du rapprochement). Une levée restée en
+    `envoi` n'est `faite` que si l'id a disparu de ces listes ; encore listé (rien n'est arrivé) : `echec`."""
+    _ajouter_lever(banc)
+    pid = _prop(banc.db, geste=geste, cible=cible, duree=duree)
+    _tour(banc)
+    id_gk2 = _action(banc.db, pid)["id_gk2"]
+    assert any(e["id"] == id_gk2 for e in asyncio.run(banc.client.get("ai_etat"))[liste])
+    aid = banc.db.execute("SELECT id FROM actions WHERE proposition_id = ?", (pid,)).fetchone()[0]
+    lev = decisions.demander_defaire(banc.db, aid, "admin", _maintenant())["proposition"]
+    banc.transport.couper = "avant"                       # rien n'arrive à gk2 : la levée reste en `envoi`
+    _tour(banc)
+    banc.transport.couper = None
+    assert _action(banc.db, lev)["etat"] == "envoi"
+    _tour(banc, maintenant=_maintenant() + timedelta(seconds=100))
+    assert _action(banc.db, lev)["etat"] == "echec" and not banc.gk2.journal[id_gk2].get("annule")
 
 
 def test_levee_revalidee_avant_signature(banc):  # noqa: F811
@@ -469,3 +519,19 @@ console.log(JSON.stringify(Object.keys(noeuds).filter(function (k) { return /^(d
     assert "relevé indisponible" in out
     # aucun chiffre inventé (les noms des box, gk2 et gk3, ne sont pas des chiffres relevés)
     assert not re.search(r"\d", re.sub(r"\bgk[0-9]\b", "gk", out)), out
+
+
+def test_page_revue_1(html, tmp_path):
+    """Revue 1 : raison de la prolongation, partage proposé (jamais retiré seul), lecture directe de ?dossier=,
+    confirmation ouverte jamais détruite par le rafraîchissement."""
+    b = _bloc(html)
+    assert "une prolongation ne se raccourcit pas ; défaire le ban ci-dessus" in b
+    assert "Lever le ban seul" in b and "Lever le ban et retirer le partage" in b
+    assert "!DZ.confirmation" in b and "DZ.confirmation = true" in b
+    charger = b[b.index("function dzCharger("):b.index("$('dzChoix').addEventListener")]
+    assert "ids.indexOf" not in charger                                    # plus de filtre sur les 100 plus récents
+    out = _node(html, tmp_path, r"""
+var d = dzDemoDossier(); dzRendre(d);
+console.log(texte(noeuds['dzGestes']));
+""")
+    assert "une prolongation ne se raccourcit pas" in out and out.count("Défaire") == 2

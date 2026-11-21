@@ -1470,13 +1470,13 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
   var DZ_COUCHES = { waf: 'WAF', nft: 'nft', leurres: 'leurres', auth: 'auth', dns: 'DNS', garde: 'garde', dpi: 'DPI' };
   var DZ_GRAV = { critical: 'critique', high: 'haute', medium: 'moyenne', low: 'basse', info: 'info' };
   var DZ_ANALYSE = { valide: ['valide', 'vert'], rejete: ['rejetée par le code', 'grav'], quarantaine: ['en quarantaine', 'orange'], sans_ia: ['sans IA', 'n1'] };
-  var DZ_RAISONS = { levee: 'une levée ne se défait pas', non_envoyee: 'non envoyée à gk2', etat: 'rien n\'a été appliqué par gk2', source: 'pas posée par V2', geste: 'ne se défait pas', echu: 'déjà échu', deja: 'levée déjà demandée', inconnue: 'action inconnue' };
+  var DZ_RAISONS = { prolongation: 'une prolongation ne se raccourcit pas ; défaire le ban ci-dessus', levee: 'une levée ne se défait pas', non_envoyee: 'non envoyée à gk2', etat: 'rien n\'a été appliqué par gk2', source: 'pas posée par V2', geste: 'ne se défait pas', echu: 'déjà échu', deja: 'levée déjà demandée', inconnue: 'action inconnue' };
   var V2_ETATS = { proposee: 'proposée, non envoyée', approuvee: 'approuvée, en attente d\'envoi', refusee: 'refusée par un administrateur', expiree: 'expirée sans envoi', envoyee: 'en cours d\'envoi', faite: 'faite', refusee_gk2: 'refusée par gk2', echec: 'échec' };
   var V2_MOTIFS = { niveau: 'le dossier est déjà au niveau observer', en_attente: 'redescente déjà demandée', deja: 'levée déjà demandée', en_cours: 'une levée de cette cible est déjà en cours', etat: 'rien n\'a été appliqué par gk2', source: 'action non posée par V2', geste: 'ce geste ne se défait pas', echu: 'geste déjà échu', version: 'la proposition a changé : rechargez', decidee: 'déjà décidée', expiree: 'proposition expirée', file_pleine: 'file d\'analyse pleine', veille_indisponible: 'veille indisponible', inconnu: 'inconnu', inconnue: 'inconnue' };
   var V2_FILTRES = { envoi: 'en cours d\'envoi', essai: 'en essai', a_confirmer: 'à confirmer', confirme: 'confirmé', retire: 'retiré d\'office', rejete: 'rejeté par gk2', echec: 'échec' };
   var RS_PLAFONDS = [['ban', 'ban'], ['ban_bloc', 'ban_bloc d\'office'], ['prolonger', 'prolonger'], ['limiter', 'limiter'], ['leurre', 'leurre'], ['partager', 'partager'], ['unban', 'levées (plafond de gk3)']];
   var V2_CLES = { presente: 'posée', absente: 'absente', invalide: 'invalide' };
-  var DZ = { id: null, donnees: null }, RS = { etat: null };
+  var DZ = { id: null, donnees: null, confirmation: false }, RS = { etat: null };
   function v2Nb(v) { return rNombre(v) ? String(v) : V2_NI; }
   function v2Heure(s) { var d = s ? new Date(s) : null; return !d || isNaN(d) ? '—' : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
   function v2Duree(s) { if (!rNombre(s) || s <= 0) return null; if (s % 86400 === 0) return (s / 86400) + ' j'; if (s % 3600 === 0) return (s / 3600) + ' h'; return Math.round(s / 60) + ' min'; }
@@ -1563,7 +1563,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
       l.appendChild(el('span', 'h v2mono', v2Heure(ac ? ac.envoyee_le : p.cree_le))); l.appendChild(el('b', 'g', v2Geste(p)));
       l.appendChild(el('span', 'e', ac ? v2Gk2(ac) + ' · effet : ' + v2Effet(ac) : (V2_ETATS[p.etat] || p.etat || V2_NI)));
       var df = x.defaire || {};
-      if (df.possible && df.action_id) zb.appendChild(v2Bouton('Défaire', 'leger', function () { dzDefaire(zb, df.action_id); }));
+      if (df.possible && df.action_id) zb.appendChild(v2Bouton('Défaire', 'leger', function () { dzDefaire(zb, df.action_id, df.partages || []); }));
       else if (df.raison) zb.appendChild(el('span', 'v2petit', DZ_RAISONS[df.raison] || df.raison));
       l.appendChild(zb); g.appendChild(l);
     });
@@ -1593,24 +1593,45 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     }
     annoncer();
   }
-  function dzDefaire(zone, aid) {
-    vider(zone); zone.appendChild(el('span', 'v2petit', 'Lever ce geste sur gk2 ?'));
-    zone.appendChild(v2Bouton('Confirmer la levée', 'att', function () { dzDecider('/actions/' + encodeURIComponent(aid) + '/defaire', 'Levée approuvée : l\'exécuteur l\'enverra à gk2 après l\'avoir revalidée.'); }));
-    zone.appendChild(v2Bouton('Annuler', 'leger', function () { dzRendre(DZ.donnees); }));
+  function dzDefaire(zone, aid, partages) {
+    // un indicateur partagé de la cible est SIGNALÉ ; il n'est retiré que si l'administrateur le choisit
+    var levee = function (avec) {
+      DZ.confirmation = false;
+      dzDecider('/actions/' + encodeURIComponent(aid) + '/defaire', 'Levée approuvée : l\'exécuteur l\'enverra à gk2 après l\'avoir revalidée.', avec ? partages : []);
+    };
+    DZ.confirmation = true; vider(zone);
+    if (partages.length) {
+      zone.appendChild(el('span', 'v2petit', 'Indicateur partagé au maillage pour ' + partages.map(function (p) { return p.cible; }).join(', ') + ' : le retirer aussi ?'));
+      zone.appendChild(v2Bouton('Lever le ban seul', 'att', function () { levee(false); }));
+      zone.appendChild(v2Bouton('Lever le ban et retirer le partage', 'att', function () { levee(true); }));
+    } else {
+      zone.appendChild(el('span', 'v2petit', 'Lever ce geste sur gk2 ?'));
+      zone.appendChild(v2Bouton('Confirmer la levée', 'att', function () { levee(false); }));
+    }
+    zone.appendChild(v2Bouton('Annuler', 'leger', function () { DZ.confirmation = false; dzRendre(DZ.donnees); }));
   }
-  function dzDecider(chemin, ok) {
+  function dzDecider(chemin, ok, partages) {
     if (DEMO) { v2Msg('dzMsg', 'Démonstration : aucune décision envoyée.', true); return; }
-    v2Poster(chemin).then(function () { v2Msg('dzMsg', ok, true); dzCharger(DZ.id); }).catch(function (e) { v2Msg('dzMsg', e.message); });
+    var suite = v2Poster(chemin);
+    (partages || []).forEach(function (p) {
+      suite = suite.then(function () { return v2Poster('/actions/' + encodeURIComponent(p.action_id) + '/defaire'); });
+      ok += ' Retrait du partage de ' + p.cible + ' approuvé.';
+    });
+    suite.then(function () { v2Msg('dzMsg', ok, true); dzCharger(DZ.id); }).catch(function (e) { v2Msg('dzMsg', e.message); dzCharger(DZ.id); });
   }
   function dzCharger(id) {
     if (DEMO) { dzListe(dzDemoListe()); DZ.id = 'demo'; DZ.donnees = dzDemoDossier(); $('dzVide').hidden = true; dzRendre(DZ.donnees); return; }
     api(API + '/dossiers?limite=100').then(function (l) {
       dzListe(l);
-      var ids = (l.dossiers || []).map(function (x) { return x.id; }), choisi = [id, DZ.id, ids[0]].filter(function (x) { return x && ids.indexOf(x) >= 0; })[0];
+      // un dossier demandé (?dossier=, sélecteur) est lu DIRECTEMENT, même hors des 100 plus récents
+      var choisi = id || DZ.id || ((l.dossiers || [])[0] || {}).id;
       if (!choisi) { dzVide('Aucun dossier d\'attaquant dans veille.db.'); return null; }
-      DZ.id = choisi; $('dzChoix').value = choisi;
-      return api(API + '/dossiers/' + encodeURIComponent(choisi)).then(function (d) { DZ.donnees = d; $('dzVide').hidden = true; dzRendre(d); });
-    }).catch(function (e) { dzVide(e.status === 401 || e.status === 403 ? 'Aucune mesure : session requise. Se connecter.' : 'Aucune mesure : ' + e.message + '.'); });
+      return api(API + '/dossiers/' + encodeURIComponent(choisi)).then(function (d) {
+        var s = $('dzChoix');
+        if (!(l.dossiers || []).some(function (x) { return x.id === choisi; })) { var o = el('option', '', d.dossier.cle + ' · ' + (d.dossier.niveau || '—')); o.value = choisi; s.appendChild(o); }
+        DZ.id = choisi; s.value = choisi; DZ.donnees = d; DZ.confirmation = false; $('dzVide').hidden = true; dzRendre(d);
+      });
+    }).catch(function (e) { dzVide(e.status === 401 || e.status === 403 ? 'Aucune mesure : session requise. Se connecter.' : e.status === 404 ? 'Dossier inconnu de veille.db.' : 'Aucune mesure : ' + e.message + '.'); });
   }
   $('dzChoix').addEventListener('change', function () { dzCharger(this.value); });
   $('dzRedescendre').addEventListener('click', function () { if (DZ.id) dzDecider('/dossiers/' + encodeURIComponent(DZ.id) + '/redescendre', 'Redescente demandée : la veille l\'applique à sa prochaine passe, aucun geste n\'est défait.'); });
@@ -1704,7 +1725,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     var s = RS.etat && RS.etat.suspension, rep = !!(s && s.suspendu);
     rsDecider(rep ? '/veille/reprendre' : '/veille/suspendre', undefined, rep ? 'Automatique repris.' : 'Automatique suspendu : seuls les gestes approuvés partent.');
   });
-  setInterval(function () { if (document.hidden) return; var a = document.querySelector('section[data-o=reponses]'), b = document.querySelector('section[data-o=dossier]'); if (a && !a.hidden) rsCharger(); if (b && !b.hidden && !document.activeElement.matches('select')) dzCharger(DZ.id); }, 30000);
+  setInterval(function () { if (document.hidden) return; var a = document.querySelector('section[data-o=reponses]'), b = document.querySelector('section[data-o=dossier]'); if (a && !a.hidden) rsCharger(); if (b && !b.hidden && !DZ.confirmation && !document.activeElement.matches('select')) dzCharger(DZ.id); }, 30000);
 
   // démonstration (#3724) : données fictives annoncées, adresses de documentation (RFC 5737, RFC 3849), aucun appel
   function v2Il(m) { return new Date(Date.now() - m * 60000).toISOString().slice(0, 19) + 'Z'; }
@@ -1722,7 +1743,8 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
         seuils: { n2_tentatives: 20, n3_tentatives: 100 }, historique: [{ horodatage: v2Il(52), vers: 'contenir' }, { horodatage: v2Il(18), vers: 'usager' }], redescente_en_attente: false },
       analyse: { etat: 'valide', preuves: 4, resume: 'Démonstration : deux adresses d\'un même bloc enchaînent repérage WordPress, échecs IMAP et une requête d\'exécution, puis reviennent.', lecture: null, manques: ['aucune empreinte TLS relevée'], moteur: 'démo', version_prompt: 'analyste-v1', cree_le: v2Il(16) },
       analyse_en_file: false,
-      gestes: [{ proposition: { geste: 'ban', cible: ip1, duree_s: 345600, mode: 'auto', etat: 'faite', cree_le: v2Il(30) }, action: { id: 'demo-a', etat: 'faite', code_http: 200, envoyee_le: v2Il(30), effet: null }, defaire: { possible: true, action_id: 'demo-a' } },
+      gestes: [{ proposition: { geste: 'ban', cible: ip1, duree_s: 345600, mode: 'auto', etat: 'faite', cree_le: v2Il(30) }, action: { id: 'demo-a', etat: 'faite', code_http: 200, envoyee_le: v2Il(30), effet: null }, defaire: { possible: true, action_id: 'demo-a', partages: [{ action_id: 'demo-e', cible: ip1 }] } },
+        { proposition: { geste: 'prolonger', cible: ip1, duree_s: 518400, mode: 'auto', etat: 'faite', cree_le: v2Il(9) }, action: { id: 'demo-d', etat: 'faite', code_http: 200, envoyee_le: v2Il(9), effet: null }, defaire: { possible: false, raison: 'prolongation' } },
         { proposition: { geste: 'limiter', cible: '2001:db8:5::21', duree_s: 21600, mode: 'auto', etat: 'faite', cree_le: v2Il(22) }, action: { id: 'demo-b', etat: 'faite', code_http: 200, envoyee_le: v2Il(22), effet: null }, defaire: { possible: true, action_id: 'demo-b' } },
         { proposition: { geste: 'ban', cible: ip2, duree_s: 345600, mode: 'auto', etat: 'refusee_gk2', cree_le: v2Il(12) }, action: { id: 'demo-c', etat: 'refusee_gk2', code_http: 409, motif: 'deja_actif', envoyee_le: v2Il(12), effet: null }, defaire: { possible: false, raison: 'etat' } }] };
   }

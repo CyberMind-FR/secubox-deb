@@ -187,8 +187,11 @@ d'écriture de gk3 vers gk2**, les routes `ai-ban` (`/api/v1/waf/ai/ban`, `unban
   courte auditée et relayée : redescendre un dossier (table `redescentes`, migration 0009 ; appliquée par la veille,
   preuves antérieures soldées, aucun geste défait), analyser à nouveau, défaire une action V2 (levée `unban` approuvée
   dont `reference` est la proposition du geste ; une limite ou un leurre sont levés par `POST /ai/lever` de gk2, un
-  ban, un bloc ou un partage par `/ai/unban` ; une prolongation se défait par le ban qu'elle prolonge). Une levée
-  n'empêche pas la riposte de reproposer un geste sur des preuves NOUVELLES : redescendre le niveau pour l'arrêter.
+  ban, un bloc ou un partage par `/ai/unban`). Une prolongation ne se défait pas (409 `prolongation` : défaire le
+  ban, dont la fin compte ses prolongations faites). Lever un ban dont l'adresse a un indicateur partagé le signale et
+  propose de le retirer aussi (seconde levée), jamais en silence ; une levée est unique par geste visé (`reference`).
+  Une levée n'empêche pas la riposte de reproposer un geste sur des preuves NOUVELLES (arbitrage du propriétaire en
+  attente) : redescendre le niveau pour l'arrêter.
 - **Audit** : chaque envoi (`ai-reponse-envoi`), réponse (`ai-reponse-gk2`), réponse perdue, rapprochement, échec
   local, suspension, approbation et refus → une ligne `audit_chaine` et une ligne `/var/log/secubox/audit.log`
   (jamais le jeton ni la clé ; le `jti` et l'empreinte de la clé). Les décisions de l'API (dont le profil interdit

@@ -16,3 +16,10 @@ CREATE TABLE redescentes (
   resultat TEXT CHECK (resultat IN ('appliquee', 'deja_observer'))
 );
 CREATE UNIQUE INDEX idx_redescente_attente ON redescentes(dossier_id) WHERE appliquee_le IS NULL;
+
+-- Défaire (#3724) : une levée (`unban`) est unique par geste visé (`reference`), non plus par cible : lever le ban
+-- d'une adresse ET retirer l'indicateur partagé de la même adresse sont deux levées vivantes distinctes. Les autres
+-- gestes gardent une seule proposition vivante par (geste, cible).
+DROP INDEX idx_prop_vivante;
+CREATE UNIQUE INDEX idx_prop_vivante ON propositions(geste, cible, COALESCE(CASE WHEN geste = 'unban' THEN reference END, ''))
+  WHERE etat IN ('proposee', 'approuvee', 'envoyee');

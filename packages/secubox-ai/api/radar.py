@@ -503,20 +503,19 @@ def _gestes(db, did, maintenant):
                        (pid,)).fetchone()
         action = dict(zip(_COLONNES_ACTION_D, a)) if a else None
         defaire = {"possible": False, "action_id": None, "raison": None}
-        cible_aid = None
-        if geste == "prolonger" and ref:
-            r = db.execute("SELECT id FROM actions WHERE proposition_id = ?", (ref,)).fetchone()
-            cible_aid = r[0] if r else None
-        elif action:
-            cible_aid = action["id"]
         if geste == "unban":
             defaire["raison"] = "levee"
-        elif cible_aid is None:
+        elif geste == "prolonger":
+            defaire["raison"] = "prolongation"    # ne se raccourcit pas : défaire le ban qu'elle prolonge
+        elif action is None:
             defaire["raison"] = "non_envoyee"
         else:
-            _, _, raison = decisions.cible_levee(db, cible_aid, maintenant)
-            defaire = {"possible": raison is None, "action_id": cible_aid if raison is None else None,
+            _, _, raison = decisions.cible_levee(db, action["id"], maintenant)
+            defaire = {"possible": raison is None, "action_id": action["id"] if raison is None else None,
                        "raison": raison}
+            if raison is None and geste in ("ban", "ban_bloc"):
+                # un indicateur partagé de la cible : signalé, retiré seulement si l'administrateur le demande
+                defaire["partages"] = decisions.partages_vivants(db, cible, maintenant)
         out.append({"proposition": {"id": pid, "geste": geste, "cible": cible, "duree_s": duree, "mode": mode,
                                     "etat": etat, "reference": ref, "cree_le": cree, "maj_le": maj,
                                     "motif": _texte(motif)},

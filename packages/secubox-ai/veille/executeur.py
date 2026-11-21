@@ -267,15 +267,8 @@ def _instant(texte) -> float:
     return datetime.fromisoformat(texte.replace("Z", "+00:00")).timestamp()
 
 
-def _fin_ban(db, ref) -> Optional[float]:
-    """Fin (instant UNIX) du ban de la proposition `ref` : la plus tardive de sa fin rendue par gk2 et de celles de
-    ses prolongations faites (gk2 ne raccourcit jamais). None si elle est inconnue."""
-    if not ref:
-        return None
-    fins = [f for (f,) in db.execute(
-        "SELECT a.fin_gk2 FROM actions a JOIN propositions q ON q.id = a.proposition_id WHERE a.etat = 'faite' "
-        "AND (q.id = ? OR (q.geste = 'prolonger' AND q.reference = ?))", (ref, ref)).fetchall() if _entier(f)]
-    return float(max(fins)) if fins else None
+#: Fin d'un geste V2 après ses prolongations faites : partagée avec la console (decisions.fin_geste, #3724).
+_fin_ban = decisions.fin_geste
 
 
 def _rapprocher_db(db, en_cours, etat, maintenant):

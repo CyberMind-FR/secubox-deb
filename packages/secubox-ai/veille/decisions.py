@@ -17,6 +17,7 @@ l'exécuteur lui-même (`par` = `secubox-ai-veille`) ; elle vit dans veille.db, 
 `[suspension] automatique_suspendu` de politiques.toml s'y AJOUTE (l'une ou l'autre suspend), elle ne l'efface jamais.
 """
 import hashlib
+import ipaddress
 import json
 import re
 import sqlite3
@@ -222,6 +223,38 @@ def demander_analyse(db, did: str, acteur: str, maintenant: datetime) -> dict:
     return _transaction(db, faire)
 
 
+def fin_geste(db, ref):
+    """Fin (instant UNIX) du geste V2 de la proposition `ref` : la plus tardive de sa fin rendue par gk2 et de celles
+    de ses prolongations faites (gk2 ne raccourcit jamais). None si elle est inconnue. Partagée par l'exécuteur
+    (rapprochement d'une levée) et la console (défaire, #3724)."""
+    if not ref:
+        return None
+    fins = [f for (f,) in db.execute(
+        "SELECT a.fin_gk2 FROM actions a JOIN propositions q ON q.id = a.proposition_id WHERE a.etat = 'faite' "
+        "AND (q.id = ? OR (q.geste = 'prolonger' AND q.reference = ?))", (ref, ref)).fetchall()
+        if isinstance(f, int) and not isinstance(f, bool)]
+    return float(max(fins)) if fins else None
+
+
+def partages_vivants(db, cible: str, maintenant: datetime) -> list:
+    """Actions `partager` V2 encore défaisables couvertes par `cible` (l'adresse, ou une adresse du bloc /24) : la
+    console les signale avant de lever un ban, sans jamais les retirer d'elle-même (#3724)."""
+    try:
+        reseau = ipaddress.ip_network(cible, strict=False)
+    except ValueError:
+        return []
+    out = []
+    for aid, c in db.execute("SELECT a.id, p.cible FROM actions a JOIN propositions p ON p.id = a.proposition_id "
+                             "WHERE p.geste = 'partager' AND a.etat = 'faite' ORDER BY a.envoyee_le").fetchall():
+        try:
+            dedans = ipaddress.ip_address(c) in reseau
+        except ValueError:
+            continue
+        if dedans and cible_levee(db, aid, maintenant)[2] is None:
+            out.append({"action_id": aid, "cible": c})
+    return out
+
+
 def cible_levee(db, aid: str, maintenant: datetime):
     """(action à lever, proposition visée, motif de refus) pour l'action `aid` ; une prolongation se défait par le ban
     qu'elle prolonge. Lecture seule (utilisée aussi par la vue du dossier)."""
@@ -234,9 +267,13 @@ def cible_levee(db, aid: str, maintenant: datetime):
         return None, None, "etat"
     if not isinstance(id_gk2, str) or not _RE_ID_GK2.fullmatch(id_gk2):
         return None, None, "source"               # aucun id rendu par gk2 à V2 : pas un geste posé par V2
+    if geste == "prolonger":
+        return None, None, "prolongation"         # ne se raccourcit pas : défaire le ban qu'elle prolonge
     if geste not in DEFAISABLES:
         return None, None, "geste"
-    if isinstance(fin, int) and not isinstance(fin, bool) and fin <= int(maintenant.timestamp()):
+    if geste in ("ban", "ban_bloc"):
+        fin = fin_geste(db, pid)                  # fin repoussée par les prolongations faites
+    if isinstance(fin, (int, float)) and not isinstance(fin, bool) and fin <= maintenant.timestamp():
         return None, None, "echu"
     if db.execute("SELECT 1 FROM propositions WHERE geste = 'unban' AND reference = ? AND etat IN "
                   "('proposee', 'approuvee', 'envoyee', 'faite')", (pid,)).fetchone():
@@ -248,7 +285,7 @@ def demander_defaire(db, aid: str, acteur: str, maintenant: datetime) -> dict:
     """Décision humaine : défaire l'action V2 `aid`. Crée la levée (`unban`, `reference` = la proposition du geste,
     dont dépendent riposte._NON_LEVE et l'exécuteur), approuvée par cet administrateur ; l'EXÉCUTEUR l'envoie
     (/ai/unban ou /ai/lever selon le geste visé) après l'avoir revalidée. 404 `inconnue` ; 409 `etat` (pas faite),
-    `source` (pas posée par V2), `geste` (levée, prolongation : défaire le ban qu'elle prolonge), `echu`, `deja`,
+    `source` (pas posée par V2), `prolongation` (défaire le ban qu'elle prolonge), `geste` (levée), `echu`, `deja`,
     `en_cours` (une levée de la même cible est déjà en vol)."""
     def faire():
         _, cible, motif = cible_levee(db, aid, maintenant)
