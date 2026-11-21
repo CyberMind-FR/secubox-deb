@@ -45,9 +45,9 @@ profile secubox-datascope flags=(attach_disconnected) {
   deny /etc/secubox/secrets/** rwklx,
 
   # Sources (données d'autres modules), en LECTURE seule.
-  /var/lib/secubox/nac/devices.db r,
-  /var/lib/secubox/nac/devices.db-wal r,
-  /var/lib/secubox/nac/devices.db-shm r,
+  /var/lib/secubox/nac/devices.db rk,
+  /var/lib/secubox/nac/devices.db-wal rk,
+  /var/lib/secubox/nac/devices.db-shm rk,
   /var/lib/secubox/hub/netstats.json r,
   /var/cache/secubox/health/modules.json r,
 

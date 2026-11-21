@@ -131,7 +131,7 @@ def test_control():
     assert "Architecture: all" in c
     assert "python3-fastapi" in c and "python3-uvicorn" in c and "secubox-core" in c
     assert _lire("debian/compat").strip() == "13"
-    assert _lire("debian/changelog").startswith("secubox-datascope (0.1.0-1~trixie1) trixie;")
+    assert _lire("debian/changelog").startswith("secubox-datascope (0.1.1-1~trixie1) trixie;")
 
 
 def test_health_sans_jeton():
