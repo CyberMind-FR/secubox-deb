@@ -35,9 +35,22 @@ def _lignes(nac_db: Path) -> List[sqlite3.Row]:
 
 def _ip(valeur: Any) -> str | None:
     try:
-        return ipaddress.ip_address(str(valeur).strip()).compressed
+        a = ipaddress.ip_address(str(valeur).strip().split("%", 1)[0])
     except ValueError:
         return None
+    if isinstance(a, ipaddress.IPv6Address) and a.ipv4_mapped:
+        a = a.ipv4_mapped
+    return a.compressed
+
+
+def _jour_sur(valeur: Any, repli: str) -> str:
+    """Date d'un last_seen ; valeur corrompue (hors plage, négative, non numérique) : repli."""
+    if isinstance(valeur, bool) or not isinstance(valeur, (int, float)) or valeur < 0:
+        return repli
+    try:
+        return jour(valeur)
+    except (OverflowError, OSError, ValueError, TypeError):
+        return repli
 
 
 def lire(nac_db: Path, netstats: Path, hote: str, maintenant: float) -> Releve:
@@ -76,7 +89,7 @@ def lire(nac_db: Path, netstats: Path, hote: str, maintenant: float) -> Releve:
         mac = str(r["mac"] or "").strip().lower()
         if not _MAC.match(mac):
             continue
-        vu = jour(r["last_seen"]) if isinstance(r["last_seen"], (int, float)) else aujourdhui
+        vu = _jour_sur(r["last_seen"], aujourdhui)
         d = f"device:{mac}"
         attrs = {k: r[k] for k in ("hostname", "device_type", "oui_vendor") if r[k]}
         attrs["mac_random"] = bool(r["mac_random"])

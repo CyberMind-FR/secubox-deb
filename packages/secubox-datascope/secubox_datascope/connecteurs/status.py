@@ -14,6 +14,7 @@ from ..store import Releve
 from ._commun import empreinte, suffixe_valide
 
 SOURCE = "status"
+FUTUR_MAX_S = 60  # horodatage plus loin dans le futur : horloge fausse, donc périmé
 
 
 def _epoch(v: Any) -> Optional[float]:
@@ -49,7 +50,7 @@ def lire(modules: Path, hote: str, maintenant: float, perime_apres_s: int = 300)
         tous = [t for t in tous if t is not None]
         ts = max(tous) if tous else None
         horodatage = datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if ts else None
-    perime = ts is None or maintenant - ts > perime_apres_s
+    perime = ts is None or maintenant - ts > perime_apres_s or ts - maintenant > FUTUR_MAX_S
     noeud = f"node:{hote}"
     entites: List[Dict[str, Any]] = [{"id": noeud, "label": hote, "attributes": {}}]
     rels: List[Dict[str, Any]] = []

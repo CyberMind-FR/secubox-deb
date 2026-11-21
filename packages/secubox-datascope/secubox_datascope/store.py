@@ -84,7 +84,7 @@ def _migrer(db: sqlite3.Connection) -> None:
 def _valider(releve: Releve) -> None:
     if releve.etat not in ETATS:
         raise ValueError(f"état inconnu : {releve.etat!r}")
-    if releve.etat != "ok":
+    if releve.etat == "inaccessible":
         return
     for e in releve.entites:
         if not isinstance(e.get("id"), str) or not _ID.match(e["id"]):
@@ -123,8 +123,9 @@ def appliquer(db: sqlite3.Connection, releve: Releve, maintenant: str) -> Dict[s
         return res
     db.execute("BEGIN IMMEDIATE")
     try:
-        if releve.etat == "ok":
-            _ecrire(db, releve, maintenant, res)
+        if releve.etat in ("ok", "unknown"):
+            # « unknown » : les entités sont réécrites (overall → unknown), jamais les relations.
+            _ecrire(db, releve, maintenant, res, relations=releve.etat == "ok")
         # Passe partielle : l'empreinte n'est pas posée, le même relevé sera rejoué (les refus seront retentés).
         empreinte = "" if res["refusees"] else releve.empreinte
         db.execute(
@@ -140,7 +141,8 @@ def appliquer(db: sqlite3.Connection, releve: Releve, maintenant: str) -> Dict[s
     return res
 
 
-def _ecrire(db: sqlite3.Connection, releve: Releve, maintenant: str, res: Dict[str, Any]) -> None:
+def _ecrire(db: sqlite3.Connection, releve: Releve, maintenant: str, res: Dict[str, Any],
+            relations: bool = True) -> None:
     n_ent = db.execute("SELECT count(*) FROM entities").fetchone()[0]
     n_rel = db.execute("SELECT count(*) FROM relationships").fetchone()[0]
     plein = _taille(db) >= BASE_MAX_OCTETS
@@ -170,7 +172,7 @@ def _ecrire(db: sqlite3.Connection, releve: Releve, maintenant: str, res: Dict[s
             db.execute("UPDATE entities SET label=?, attributes_json=?, last_seen=? WHERE id=?",
                        (label, attrs, maintenant, e["id"]))
             res["ecrites"] += 1
-    for r in releve.relations:
+    for r in (releve.relations if relations else []):
         ex = db.execute("SELECT id, evidence_type, confidence, justification, last_seen FROM relationships "
                         "WHERE src=? AND dst=? AND type=? AND source_module=?",
                         (r["src"], r["dst"], r["type"], releve.source)).fetchone()

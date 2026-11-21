@@ -105,7 +105,8 @@ def test_aucun_domaine_dans_les_cles(tmp_path, netstats):
     r = network.lire(tmp_path / "n.db", netstats, "gk2", NOW)
     dev = next(e for e in r.entites if e["id"].startswith("device:"))
     assert dev["attributes"]["hostname"] == "secret.example.org"
-    blob = json.dumps([e["id"] for e in r.entites] + [[x["src"], x["dst"]] for x in r.relations])
+    blob = json.dumps([e["id"] for e in r.entites] + [[x["src"], x["dst"], x["justification"]]
+                                                    for x in r.relations])
     assert "example" not in blob and "Acme" not in blob
 
 
@@ -164,3 +165,32 @@ def test_apparmor_lit_wal_et_shm_sans_ecriture():
     for f in ("devices.db", "devices.db-wal", "devices.db-shm"):
         assert re.search(rf"^\s*/var/lib/secubox/nac/{f} r,$", p, re.M), f
     assert not re.search(r"/var/lib/secubox/nac/\S+ (rw|w|a)", p)
+
+
+@pytest.mark.parametrize("mauvais", [1e30, -5, "hier", None, float("inf")])
+def test_last_seen_corrompu_ne_fait_pas_echouer(tmp_path, netstats, mauvais):
+    lignes = [_ligne("aa:bb:cc:dd:ee:01", ip="192.0.2.1"), _ligne("aa:bb:cc:dd:ee:02", ip="192.0.2.2")]
+    lignes[1] = lignes[1][:7] + (lignes[1][7],) + lignes[1][8:]
+    mauvaise = list(_ligne("aa:bb:cc:dd:ee:03", ip="192.0.2.3"))
+    mauvaise[7] = mauvais
+    _nac(tmp_path / "n.db", lignes + [tuple(mauvaise)])
+    r = network.lire(tmp_path / "n.db", netstats, "gk2", NOW)
+    assert r.etat == "ok"
+    ids = {e["id"] for e in r.entites}
+    assert {"device:aa:bb:cc:dd:ee:01", "device:aa:bb:cc:dd:ee:02", "ip:192.0.2.1"} <= ids
+
+
+def test_ipv4_mappee_et_zone_link_local(tmp_path, netstats):
+    _nac(tmp_path / "n.db", [_ligne("aa:bb:cc:dd:ee:01", ip="::ffff:192.0.2.1"),
+                             _ligne("aa:bb:cc:dd:ee:02", ip="fe80::1%eth0")])
+    ids = {e["id"] for e in network.lire(tmp_path / "n.db", netstats, "gk2", NOW).entites}
+    assert "ip:192.0.2.1" in ids and "ip:fe80::1" in ids
+    assert not [i for i in ids if "%" in i or "ffff" in i]
+
+
+def test_status_date_future_perimee(tmp_path):
+    from datetime import datetime
+    ts = datetime.fromtimestamp(NOW + 120).astimezone().isoformat()
+    assert status.lire(_modules(tmp_path, ts), "gk2", NOW, 300).etat == "unknown"
+    ts = datetime.fromtimestamp(NOW + 30).astimezone().isoformat()
+    assert status.lire(_modules(tmp_path, ts), "gk2", NOW, 300).etat == "ok"

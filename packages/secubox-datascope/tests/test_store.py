@@ -189,3 +189,29 @@ def test_bornes_voisins_et_page(db):
     v = store.voisins(db, "device:aa0000", max_noeuds=0, max_aretes=0)
     assert len(v["noeuds"]) == 1 and v["tronque"] is True
     assert store.lister_entites(db, None, None, 10**30, 50)[0] == []
+
+
+def _sante(overall, etat="ok", emp="s1"):
+    es = [{"id": "node:gk2", "label": "gk2", "attributes": {}},
+          {"id": "service:actor", "label": "actor", "attributes": {"overall": overall, "critical": True}}]
+    rs = [rel("service:actor", "node:gk2", type="HOSTED_ON", evidence_type="reported")]
+    return store.Releve(source="status", etat=etat, motif=None, entites=es, relations=rs, empreinte=emp)
+
+
+def test_sante_perimee_ecrase_overall_sans_toucher_aux_relations(db):
+    store.appliquer(db, _sante("operational"), T0)
+    avant = [dict(r) for r in db.execute("SELECT * FROM relationships")]
+    t1 = "2026-11-21T10:10:00Z"
+    r = store.appliquer(db, _sante("unknown", etat="unknown", emp="s2"), t1)
+    assert store.entite(db, "service:actor")["attributes"]["overall"] == "unknown"
+    assert [dict(x) for x in db.execute("SELECT * FROM relationships")] == avant
+    assert r["ecrites"] >= 1
+    r2 = store.appliquer(db, _sante("unknown", etat="unknown", emp="s2"), "2026-11-21T10:11:00Z")
+    assert r2["ecrites"] == 0
+
+
+def test_inaccessible_ecrit_seulement_le_curseur(db):
+    store.appliquer(db, _sante("operational"), T0)
+    store.appliquer(db, store.Releve(source="status", etat="inaccessible", motif="x", empreinte="z",
+                                     entites=_sante("unknown").entites), "2026-11-21T10:10:00Z")
+    assert store.entite(db, "service:actor")["attributes"]["overall"] == "operational"
