@@ -1,3 +1,11 @@
+secubox-datascope (0.1.1-1~trixie1) trixie; urgency=medium
+
+  * AppArmor : verrou de lecture (rk) sur la base du NAC et ses -wal/-shm.
+    Sans lui, SQLite répondait « database is locked » même en mode=ro et la
+    source Network restait inaccessible (constaté sur gk2, ref #3853).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 08:01:38 +0100
+
 secubox-datascope (0.1.0-1~trixie1) trixie; urgency=medium
 
   * SBXOS DataScope V0.1 (#3853) : squelette du paquet, API locale gardée sur

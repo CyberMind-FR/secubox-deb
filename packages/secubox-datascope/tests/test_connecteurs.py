@@ -161,9 +161,11 @@ def test_modules_absent_unknown(tmp_path):
 
 
 def test_apparmor_lit_wal_et_shm_sans_ecriture():
+    # « rk » : SQLite pose un verrou de lecture même en mode=ro ; sans « k », AppArmor le refuse et la base du NAC
+    # répond « database is locked » (constaté sur gk2 le 21/11, #3853). Jamais d'écriture.
     p = (RACINE / "apparmor" / "secubox-datascope").read_text(encoding="utf-8")
     for f in ("devices.db", "devices.db-wal", "devices.db-shm"):
-        assert re.search(rf"^\s*/var/lib/secubox/nac/{f} r,$", p, re.M), f
+        assert re.search(rf"^\s*/var/lib/secubox/nac/{f} rk,$", p, re.M), f
     assert not re.search(r"/var/lib/secubox/nac/\S+ (rw|w|a)", p)
 
 
