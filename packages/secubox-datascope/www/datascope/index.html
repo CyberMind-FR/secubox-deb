@@ -98,6 +98,15 @@
   .bulles .env{fill:none;stroke:var(--faible);stroke-dasharray:4 4;vector-effect:non-scaling-stroke} .bulles .envt{fill:var(--faible)}
   .bulles .plus circle{fill:rgba(159,179,214,.18);stroke:var(--doux);stroke-dasharray:2 2;vector-effect:non-scaling-stroke} .bulles .plus text{fill:var(--doux)}
   .vues{display:inline-flex;gap:4px;margin-left:8px} .vues .bt{padding:3px 10px;min-height:26px} .vues .bt[aria-pressed="true"]{border-color:var(--cyan);background:rgba(41,182,246,.22)}
+  .topoPan{container-type:inline-size;container-name:t}
+  .liste{max-height:560px;overflow:auto;margin-top:8px}
+  .liste h4{margin:0 0 6px;font-size:.78rem;color:var(--doux);display:flex;gap:8px;align-items:center}
+  .ligneApp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;width:100%;min-height:44px;margin:0 0 4px;padding:6px 10px;text-align:left;font:inherit;font-size:.78rem;color:var(--texte);background:rgba(59,130,246,.10);border:1px solid var(--trait);border-radius:8px;cursor:pointer}
+  .ligneApp b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600} .ligneApp .m{grid-column:1/-1;color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .ligneApp.sel{border-color:var(--cyan);background:rgba(41,182,246,.22)} .ligneApp:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  @container t (min-width:700px){.topoCorps{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:10px;align-items:start}.liste{margin-top:0}}
+  @media (pointer:coarse){.pan .topoCorps{display:block}.pan .liste{margin-top:8px}}
+  .bulles .nd.voisin.gene:not(.sel) .lbl{display:none}
   .legende{display:flex;flex-wrap:wrap;gap:4px 12px;color:var(--doux);font-size:.7rem;margin-top:6px} .legende i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px} .legende i.gris{background:rgba(111,132,168,.5);border:1px dashed var(--faible)}
   dl.props{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:.76rem} dl.props dt{color:var(--faible)} dl.props dd{margin:0;min-width:0;overflow-wrap:anywhere}
   .insp h4{margin:12px 0 5px;font-size:.78rem;color:var(--doux);font-weight:700}
@@ -125,7 +134,7 @@
   <div class="tuiles" id="tuiles"></div>
   <div class="corps">
     <div class="pan tiroir" id="panSources"><h3>Sources <i>relevé du collecteur</i><button type="button" class="bt fermer" data-ferme="panSources">✕ Fermer</button></h3><div id="sources"></div><div class="note">Décocher une source masque ses entités dans la topologie (affichage seulement).</div></div>
-    <div class="pan"><h3>Topologie <span class="vues" role="group" aria-label="Vue de la topologie"><button type="button" class="bt" id="vueBulles" aria-pressed="true">Bulles</button><button type="button" class="bt" id="vueArbre" aria-pressed="false">Arbre</button></span><i id="topoNote">relations relevées, preuve au clic</i></h3><div class="topo" id="topo"></div><div class="legende" id="legende" hidden></div><div class="note" id="topoBas"></div></div>
+    <div class="pan topoPan"><h3>Topologie <span class="vues" role="group" aria-label="Vue de la topologie"><button type="button" class="bt" id="vueBulles" aria-pressed="true">Bulles</button><button type="button" class="bt" id="vueArbre" aria-pressed="false">Arbre</button></span><i id="topoNote">relations relevées, preuve au clic</i></h3><div class="topoCorps"><div class="topo" id="topo"></div><div class="liste" id="liste" hidden aria-label="Liste des appareils"></div></div><div class="legende" id="legende" hidden></div><div class="note" id="topoBas"></div></div>
     <div class="pan tiroir insp" id="panInsp"><h3>Inspecteur <i id="inspType"></i><button type="button" class="bt fermer" data-ferme="panInsp">✕ Fermer</button></h3><div id="insp"><div class="vide">Choisir un élément de la topologie.</div></div></div>
   </div>
   <div class="note">Lecture seule · chaque relation porte sa preuve (observée ou rapportée), sa source et sa date · aucune relation déduite.</div>
@@ -181,8 +190,9 @@
     selection.type=id?(a||id.indexOf('|')>0?'arete':(n?n.type:id.split(':')[0])):null;
     selection.source=a?sourceDe(a.source_module):(n?sourceDe(n.source_module):null);
     ecrireStock(CLE_SEL,selection.id);
-    marquerSelection();inspecter();
-    if(opts.ouvrir&&modeTiroir())ouvrir('panInsp',true);
+    marquerSelection();inspecter();rendreListe();
+    // interface ou zone : sa liste d'appareils s'ouvre (sous le graphe en tiroir) ; autre élément : l'inspecteur
+    if(opts.ouvrir&&modeTiroir()){if(selection.type==='interface'||selection.type==='network'){try{el('liste').scrollIntoView({block:'nearest'});}catch(e){}}else ouvrir('panInsp',true);}
   }
 
   // --- accès aux données ---
@@ -254,6 +264,20 @@
   function rayonGrappe(n){return n>0?ANNEAU0+PAS_ANNEAU*(anneaux(n).length-1):0;}
   function premiere(A,N,id,type,cible){var c=A.filter(function(a){return a.src===id&&a.type===type&&N[a.dst]&&N[a.dst].type===cible;});
     c.sort(function(x,y){var p=String(x.last_seen||''),q=String(y.last_seen||'');return p<q?1:p>q?-1:(x.dst<y.dst?-1:x.dst>y.dst?1:0);});return c[0]||null;}
+  // Libellés : posés hors de la bulle, du côté opposé à son parent (appareil → son interface, service/zone → box) ;
+  // une interface, cernée par ses appareils, porte le sien vers la box.
+  // `libre` : distance au centre voisin le plus proche (borne de la zone de prise) ; `gene` : le libellé d'une petite bulle
+  // tomberait sur une bulle plus grande, il n'est alors montré que si la bulle elle-même est choisie.
+  var SEUIL_LIBELLE=9;
+  function libelles(pos,plus){
+    var ids=Object.keys(pos).sort(),pts=ids.map(function(id){return pos[id];}).concat(plus);
+    ids.forEach(function(id){var p=pos[id],dx=p.px===undefined?0:p.x-p.px,dy=p.px===undefined?1:p.y-p.py,d=Math.sqrt(dx*dx+dy*dy)||1;
+      // une interface est entourée de sa grappe : son seul côté libre est vers la box (exception assumée à la règle)
+      if(p.dedans){dx=-dx;dy=-dy;}
+      p.ux=dx/d;p.uy=dy/d;p.lx=p.x+p.ux*(p.r+4);p.ly=p.y+p.uy*(p.r+4);
+      var m=Infinity;pts.forEach(function(q){if(q!==p){var e=Math.sqrt((q.x-p.x)*(q.x-p.x)+(q.y-p.y)*(q.y-p.y));if(e<m)m=e;}});p.libre=m===Infinity?60:m;
+      p.gene=p.r<SEUIL_LIBELLE&&ids.some(function(o){var q=pos[o];return q!==p&&q.r>p.r&&Math.sqrt((q.x-p.lx)*(q.x-p.lx)+(q.y-p.ly)*(q.y-p.ly))<q.r+14;});});
+  }
   function disposerBulles(noeuds,aretes){
     var N={},liste=noeuds.filter(function(n){return n&&typeof n.id==='string';}).slice().sort(parId);
     liste.forEach(function(n){N[n.id]=n;});
@@ -277,20 +301,21 @@
     pos[box.id]={x:0,y:0,r:rb};
     places.forEach(function(p,i){
       var a=-Math.PI/2+2*Math.PI*i/Math.max(k,1),cx=R1*Math.cos(a),cy=R1*Math.sin(a);
-      if(p.id)pos[p.id]={x:cx,y:cy,r:rayonBulle('interface',deg[p.id])};else enveloppes.push({x:cx,y:cy,r:p.rc+12});
+      if(p.id)pos[p.id]={x:cx,y:cy,r:rayonBulle('interface',deg[p.id]),px:0,py:0,dedans:true};else enveloppes.push({x:cx,y:cy,r:p.rc+12});
       var ord=p.garde.slice().sort(parId),idx=0;   // angle dans la grappe : ordre des identifiants
       anneaux(ord.length+(p.reste>0?1:0)).forEach(function(n,j){var rr=ANNEAU0+PAS_ANNEAU*j,dec=j%2?Math.PI/n:0;
         for(var m=0;m<n;m++,idx++){var t=a+dec+2*Math.PI*m/n,x=cx+rr*Math.cos(t),y=cy+rr*Math.sin(t);
-          if(idx<ord.length)pos[ord[idx].id]={x:x,y:y,r:rayonBulle('device',deg[ord[idx].id])};else plus.push({x:x,y:y,r:11,n:p.reste,interface:p.id});}});
+          if(idx<ord.length)pos[ord[idx].id]={x:x,y:y,r:rayonBulle('device',deg[ord[idx].id]),px:cx,py:cy};else plus.push({x:x,y:y,r:11,n:p.reste,interface:p.id});}});
     });
     // services : arc intérieur autour de la box, décalé d'un demi-pas pour ne pas couvrir les liens des interfaces
-    services.forEach(function(s,m){var t=-Math.PI/2+Math.PI/Math.max(k,1)+2*Math.PI*m/Math.max(services.length,1);pos[s.id]={x:R0*Math.cos(t),y:R0*Math.sin(t),r:rayonBulle('service',deg[s.id])};});
+    services.forEach(function(s,m){var t=-Math.PI/2+Math.PI/Math.max(k,1)+2*Math.PI*m/Math.max(services.length,1);pos[s.id]={x:R0*Math.cos(t),y:R0*Math.sin(t),r:rayonBulle('service',deg[s.id]),px:0,py:0};});
     // zones : anneau extérieur, à l'angle moyen de leurs appareils placés ; écart minimal imposé dans l'ordre des angles
     var R3=R1+maxC+56,za=zones.map(function(z){var sx=0,sy=0,n=0;A.forEach(function(a){if(a.dst===z.id&&a.type==='BELONGS_TO'&&pos[a.src]&&N[a.src].type==='device'){sx+=pos[a.src].x;sy+=pos[a.src].y;n++;}});
       return {z:z,a:n&&(Math.abs(sx)+Math.abs(sy)>1e-6)?Math.atan2(sy,sx):Math.PI/2};});
     za.sort(function(x,y){return x.a-y.a||parId(x.z,y.z);});
     var ecart=zones.length?Math.min(0.32,2*Math.PI/zones.length):0;
-    za.forEach(function(e,i){if(i&&e.a-za[i-1].a<ecart)e.a=za[i-1].a+ecart;pos[e.z.id]={x:R3*Math.cos(e.a),y:R3*Math.sin(e.a),r:rayonBulle('network',deg[e.z.id])};});
+    za.forEach(function(e,i){if(i&&e.a-za[i-1].a<ecart)e.a=za[i-1].a+ecart;pos[e.z.id]={x:R3*Math.cos(e.a),y:R3*Math.sin(e.a),r:rayonBulle('network',deg[e.z.id]),px:0,py:0};});
+    libelles(pos,plus);
     // toutes les relations dont les deux bouts sont dessinés (les IP restent dans l'inspecteur)
     var liens=A.filter(function(a){return pos[a.src]&&pos[a.dst];});
     var x0=0,y0=0,x1=0,y1=0;Object.keys(pos).forEach(function(id){var p=pos[id];x0=Math.min(x0,p.x-p.r);y0=Math.min(y0,p.y-p.r);x1=Math.max(x1,p.x+p.r);y1=Math.max(y1,p.y+p.r);});
@@ -303,7 +328,6 @@
 
   // --- vue « Bulles » (par défaut) : graphe de bulles reliées, disposition radiale déterministe ---
   var COUL={node:'#3b82f6',interface:'#29b6f6',network:'#a78bfa',device:'#38d9c0',service:'#f472b6',ip:'#ffd23f'};
-  var SEUIL_LIBELLE=9;   // en dessous (appareils, IP), le libellé n'apparaît que sur la bulle choisie et ses voisines
   function rendreBulles(box){
     var N=etat.noeuds,liste=Object.keys(N).map(function(k){return N[k];}).filter(visible);
     var L=disposerBulles(liste,Object.keys(etat.aretes).map(function(k){return etat.aretes[k];}));
@@ -313,7 +337,8 @@
     var gl=s('g',{'class':'liens'},sv);
     L.liens.forEach(function(a){
       var p=L.pos[a.src],q=L.pos[a.dst],k=cleArete(a),src=N[a.src],dst=N[a.dst],inc=sourceEtat(a.source_module)!=='ok';
-      var gr=s('g',{'class':'ar'+(inc?' inc':''),tabindex:'0',role:'button','data-cle':k,'data-src':a.src,'data-dst':a.dst,'aria-label':'Relation '+(REL_FR[a.type]||a.type)+' : '+(src.label||src.id)+' → '+(dst.label||dst.id)},gl);
+      // hors tabulation : au clavier, une relation s'atteint par la liste des relations de l'inspecteur
+      var gr=s('g',{'class':'ar'+(inc?' inc':''),tabindex:'-1','data-cle':k,'data-src':a.src,'data-dst':a.dst,'aria-label':'Relation '+(REL_FR[a.type]||a.type)+' : '+(src.label||src.id)+' → '+(dst.label||dst.id)},gl);
       var ti=s('title',{},gr);ti.textContent=(REL_FR[a.type]||a.type)+' · preuve '+(a.evidence_type||'?')+' · '+(a.source_module||'?')+' · '+fmtDate(a.last_seen);
       s('line',{'class':'v',x1:p.x,y1:p.y,x2:q.x,y2:q.y},gr);s('line',{'class':'z',x1:p.x,y1:p.y,x2:q.x,y2:q.y},gr);
       activer(gr,k);
@@ -332,13 +357,14 @@
   }
   function bulle(sv,n,p){
     var inc=n.etat_source!=='ok',petit=(n.type==='device'||n.type==='ip')&&p.r<SEUIL_LIBELLE;
-    var g=s('g',{'class':'nd b-'+n.type+(inc?' inc':'')+(petit?' petit':''),tabindex:'0',role:'button','data-id':n.id,
-      'aria-label':TYPE_FR[n.type]+' '+(n.label||n.id)+(inc?' (état inconnu : source non à jour)':'')},sv);
+    var g=s('g',{'class':'nd b-'+n.type+(inc?' inc':'')+(petit?' petit':'')+(p.gene?' gene':''),tabindex:'0',role:'button','data-id':n.id,
+      'aria-label':TYPE_FR[n.type]+' '+(n.label||n.id)+(inc?' · inconnu (source non à jour)':'')},sv);
     var ti=s('title',{},g);ti.textContent=TYPE_FR[n.type]+' · '+(n.label||n.id)+' · '+n.id+(inc?' · source '+etatFr(n.etat_source)+' : état inconnu':'');
     s('circle',{'class':'anneau',cx:p.x,cy:p.y,r:p.r+5},g);
     s('circle',{'class':'b',cx:p.x,cy:p.y,r:p.r,fill:inc?'#6f84a8':COUL[n.type]||COUL.ip},g);
-    s('circle',{'class':'prise',cx:p.x,cy:p.y,r:Math.max(p.r,10)},g);
-    var t=s('text',{'class':'lbl',x:p.x,y:p.y+p.r+4,'text-anchor':'middle','dominant-baseline':'hanging'},g);t.textContent=court(n.label||n.id,22)+(inc?' ?':'');
+    s('circle',{'class':'prise',cx:p.x,cy:p.y,r:Math.max(p.r,10),'data-r':p.r,'data-libre':p.libre},g);
+    var t=s('text',{'class':'lbl',x:p.lx,y:p.ly,'text-anchor':p.ux>.35?'start':p.ux<-.35?'end':'middle','dominant-baseline':p.uy>.35?'hanging':p.uy<-.35?'alphabetic':'central'},g);
+    t.textContent=court(n.label||n.id,inc?14:22)+(inc?' · inconnu':'');
     activer(g,n.id);
   }
   function activer(g,id){function choisir(){selectionner(id,{ouvrir:true});}
@@ -346,7 +372,11 @@
   // libellés lisibles à toute largeur : la taille de police suit l'échelle du viewBox (positions inchangées)
   function echelle(){var sv=document.querySelector('#topo svg.bulles');if(!sv)return;var rc=sv.getBoundingClientRect(),vb=sv.viewBox.baseVal;
     if(!rc.width||!rc.height||!vb||!vb.width||!vb.height)return;
-    var k=Math.min(rc.width/vb.width,rc.height/vb.height);sv.style.setProperty('--fs',Math.max(9,Math.min(48,12/k)).toFixed(1)+'px');}
+    var k=Math.min(rc.width/vb.width,rc.height/vb.height);sv.style.setProperty('--fs',Math.max(9,Math.min(48,12/k)).toFixed(1)+'px');
+    // zone de prise : 22 px de rayon à l'écran là où la place le permet, sans dépasser la mi-distance au centre voisin
+    // (deux voisines égales ne se chevauchent pas ; une petite bulle, dessinée au-dessus d'une grande, garde la priorité)
+    Array.prototype.forEach.call(sv.querySelectorAll('circle.prise'),function(c){var r=+c.getAttribute('data-r')||0,l=+c.getAttribute('data-libre')||0;
+      c.setAttribute('r',Math.max(r,Math.min(22/k,l/2)).toFixed(1));});}
 
   // --- vue « Arbre » : box → interfaces → zones → appareils, disposition en colonnes déterministe ---
   function visible(n){return !!n&&(n.type==='node'||masquees.indexOf(sourceDe(n.source_module))<0);}
@@ -399,8 +429,8 @@
       'aria-label':TYPE_FR[n.type]+' '+(n.label||n.id)+(inc?' (état inconnu : source non à jour)':'')},sv);
     var ti=s('title',{},g);ti.textContent=TYPE_FR[n.type]+' · '+n.id+(inc?' · source '+etatFr(n.etat_source)+' : état inconnu':'');
     var t;
-    if(n.type==='device'){s('circle',{cx:p.x+6,cy:p.y,r:6},g);t=s('text',{x:p.x+18,y:p.y+4},g);t.textContent=court(n.label||n.id,34)+(inc?' (inconnu)':'');}
-    else{s('rect',{x:p.x,y:p.y-10,width:LARG[n.type],height:20,rx:6},g);t=s('text',{x:p.x+8,y:p.y+4},g);t.textContent=court(n.label||n.id,n.type==='node'?18:19)+(inc?' ?':'');}
+    if(n.type==='device'){s('circle',{cx:p.x+6,cy:p.y,r:6},g);t=s('text',{x:p.x+18,y:p.y+4},g);t.textContent=court(n.label||n.id,inc?24:34)+(inc?' · inconnu':'');}
+    else{s('rect',{x:p.x,y:p.y-10,width:LARG[n.type],height:20,rx:6},g);t=s('text',{x:p.x+8,y:p.y+4},g);t.textContent=court(n.label||n.id,inc?9:(n.type==='node'?18:19))+(inc?' · inconnu':'');}
     function choisir(){selectionner(n.id,{ouvrir:true});}
     g.addEventListener('click',choisir);g.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();choisir();}});
   }
@@ -443,7 +473,7 @@
     if(!notes){box.appendChild(h('div',{'class':'vide',text:'Aucune box dans le relevé (source réseau masquée ou absente).'}));return;}
     if(g.tronque)notes.unshift('Graphe tronqué par l\u2019API (500 nœuds, 1 500 arêtes au plus, ordre des identifiants et non pertinence).');
     bas.textContent=notes.join(' ');
-    echelle();marquerSelection();
+    echelle();marquerSelection();rendreListe();
   }
   function choisirVue(v){
     vue=v==='arbre'?'arbre':'bulles';ecrireStock(CLE_VUE,vue);
@@ -457,6 +487,40 @@
     else if(id)Object.keys(etat.aretes).forEach(function(k){var a=etat.aretes[k];if(a.src===id)vois[a.dst]=1;if(a.dst===id)vois[a.src]=1;});
     Array.prototype.forEach.call(sv.querySelectorAll('.nd'),function(n){var nid=n.getAttribute('data-id');n.classList.toggle('sel',!!id&&(nid===id||n.getAttribute('data-cle')===id));n.classList.toggle('voisin',!!vois[nid]);});
     Array.prototype.forEach.call(sv.querySelectorAll('.ar'),function(n){n.classList.toggle('sel',!!id&&n.getAttribute('data-cle')===id);n.classList.toggle('lie',!!id&&(n.getAttribute('data-src')===id||n.getAttribute('data-dst')===id));});
+  }
+
+  // --- liste au doigt : appareils de l'interface ou de la zone choisie (ou de l'interface de l'appareil choisi), sinon les interfaces ---
+  function aretesListe(){return Object.keys(etat.aretes).sort().map(function(k){return etat.aretes[k];});}
+  function contexteListe(A){
+    var n=selection.id&&etat.noeuds[selection.id];if(!n||!visible(n))return null;
+    if(n.type==='interface'||n.type==='network')return n;
+    if(n.type==='device'){var c=premiere(A,etat.noeuds,n.id,'CONNECTS_TO','interface');return c&&visible(etat.noeuds[c.dst])?etat.noeuds[c.dst]:null;}
+    return null;
+  }
+  function rendreListe(){
+    var box=el('liste'),N=etat.noeuds,A=aretesListe(),focus=document.activeElement&&box.contains(document.activeElement);vider(box);
+    if(!etat.graphe||etat.graphe.disponible===false||!Object.keys(N).length){box.hidden=true;return;}
+    box.hidden=false;
+    function ligne(id,titre,detail){var b=h('button',{type:'button','class':'ligneApp'+(id===selection.id?' sel':''),'data-id':id,'aria-pressed':id===selection.id?'true':'false'},[h('b',{text:titre}),h('span',{'class':'m',text:detail})]);
+      b.addEventListener('click',function(){selectionner(id,{ouvrir:true});});box.appendChild(b);return b;}
+    var ctx=contexteListe(A),sel=null;
+    if(!ctx){
+      var ifs=Object.keys(N).map(function(k){return N[k];}).filter(function(n){return n.type==='interface'&&visible(n);}).sort(parLabel);
+      box.appendChild(h('h4',{text:'Interfaces ('+ifs.length+') : toucher pour lister leurs appareils'}));
+      ifs.forEach(function(i){var nb=A.filter(function(a){return a.type==='CONNECTS_TO'&&a.dst===i.id&&N[a.src].type==='device'&&visible(N[a.src]);}).length;
+        ligne(i.id,i.label||i.id,nb+' appareil'+(nb>1?'s':'')+' · '+(i.etat_source==='ok'?'à jour':'inconnu'));});
+      return;
+    }
+    var vus={},devs=A.filter(function(a){return ctx.type==='interface'?a.type==='CONNECTS_TO'&&a.dst===ctx.id:a.type==='BELONGS_TO'&&a.dst===ctx.id;})
+      .map(function(a){return N[a.src];}).filter(function(d){if(!d||d.type!=='device'||!visible(d)||vus[d.id])return false;vus[d.id]=1;return true;}).sort(parLastSeen);
+    var tous=h('button',{type:'button','class':'bt',text:'Toutes les interfaces'});tous.addEventListener('click',function(){selectionner(null);});
+    box.appendChild(h('h4',{},['Appareils de '+(TYPE_FR[ctx.type]||ctx.type)+' '+(ctx.label||ctx.id)+' ('+devs.length+')',tous]));
+    if(!devs.length)box.appendChild(h('div',{'class':'vide',text:'Aucun appareil.'}));
+    devs.forEach(function(d){
+      var ips=A.filter(function(a){return a.type==='BELONGS_TO'&&a.dst===d.id&&N[a.src].type==='ip';}).map(function(a){return N[a.src].label||a.src;});
+      var b=ligne(d.id,d.label||d.id,(ips.length?ips.join(', '):'IP —')+' · '+(d.etat_source==='ok'?'à jour':'inconnu')+' · vu le '+fmtDate(d.last_seen));
+      if(d.id===selection.id)sel=b;});
+    if(focus&&sel)sel.focus();
   }
 
   // --- inspecteur ---

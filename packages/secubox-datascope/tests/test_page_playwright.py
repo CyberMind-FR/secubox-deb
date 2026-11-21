@@ -162,3 +162,41 @@ def test_arbre_borne_et_selection_survit_au_changement_de_vue():
     assert any(x.startswith("+ 3 ") for x in arbre[4]), arbre[4]
     assert recharge == (1, 1)  # vue et sélection retenues en sessionStorage
     assert retour[0] == 1 and retour[1] == avant
+
+
+def test_liste_au_doigt_a_420():
+    def sc(pg):
+        r = {"interfaces": pg.eval_on_selector_all("#liste button", "l => l.map(b => b.textContent)")}
+        pg.click("#liste button[data-id='interface:wlan0']")
+        pg.wait_for_timeout(100)
+        r["lignes"] = pg.locator("#liste button.ligneApp").count()
+        r["hauteur"] = pg.eval_on_selector("#liste button.ligneApp", "b => b.getBoundingClientRect().height")
+        r["sous_graphe"] = pg.evaluate("document.getElementById('liste').getBoundingClientRect().top >= document.getElementById('topo').getBoundingClientRect().bottom")
+        pg.click("#liste button.ligneApp[data-id='device:00:00:5e:00:53:14']")
+        pg.wait_for_timeout(100)
+        r["insp"] = pg.inner_text("#insp")
+        # là où la place le permet (zone isolée) : 22 px ; partout : au moins min(22 px, mi-distance au voisin)
+        r["prise"] = pg.eval_on_selector("#topo .nd[data-id='network:lan'] circle.prise", "c => c.getBoundingClientRect().width / 2")
+        r["regle"] = pg.evaluate("""() => { const sv = document.querySelector('#topo svg.bulles'), k = sv.getBoundingClientRect().width / sv.viewBox.baseVal.width;
+            return [...sv.querySelectorAll('circle.prise')].every(c => c.getBoundingClientRect().width / 2 >=
+              Math.min(22, Math.max(+c.dataset.r, +c.dataset.libre / 2) * k) - 0.6); }""")
+        r["deborde"] = _debordement(pg)
+        return r
+    r = _navigateur(sc, largeur=420, hauteur=900)
+    assert any("wlan0" in x for x in r["interfaces"])
+    assert r["lignes"] == 63 and r["hauteur"] >= 44  # toute l'interface, y compris les 3 non dessinés
+    assert r["sous_graphe"]
+    assert "objet-05" in r["insp"]
+    assert r["prise"] >= 21.5 and r["regle"]
+    assert not r["deborde"]
+
+
+def test_liste_a_cote_du_graphe_en_large():
+    def sc(pg):
+        pg.click("#topo .nd[data-id='interface:br-lan'] circle.prise")
+        pg.wait_for_timeout(100)
+        return pg.evaluate("""() => { const l = document.getElementById('liste').getBoundingClientRect(),
+            t = document.getElementById('topo').getBoundingClientRect(); return [l.left >= t.right - 1, l.top < t.bottom]; }"""), \
+            pg.locator("#liste button.ligneApp").count(), pg.get_attribute("#topo svg.bulles .ar", "tabindex")
+    (cote, nb, tab) = _navigateur(sc)
+    assert cote == [True, True] and nb == 6 and tab == "-1"

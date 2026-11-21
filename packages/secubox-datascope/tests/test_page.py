@@ -174,7 +174,12 @@ def test_disposition_bulles_deterministe_et_bornee():
     process.stdout.write(JSON.stringify({egal:JSON.stringify(L1.pos)===JSON.stringify(L2.pos)&&JSON.stringify(cles(L1))===JSON.stringify(cles(L2)),
       box:L1.pos['node:box'],plus:L1.plus.map(function(p){return [p.interface,p.n];}),
       nbDev:Object.keys(L1.pos).filter(function(k){return k.indexOf('device:')===0;}).length,liens:cles(L1),
-      rIf:L1.pos['interface:br-lan'].r,rDev:L1.pos['device:00:00:5e:00:53:02'].r,rBox:L1.pos['node:box'].r}));
+      rIf:L1.pos['interface:br-lan'].r,rDev:L1.pos['device:00:00:5e:00:53:02'].r,rBox:L1.pos['node:box'].r,
+      // libellé du côté opposé au parent : produit scalaire (libellé - bulle) · (bulle - parent) > 0
+      sens:Object.keys(L1.pos).filter(function(k){var q=L1.pos[k];return k!=='node:box'&&q.px!==undefined;}).every(function(k){var q=L1.pos[k],
+        v=(q.lx-q.x)*(q.x-q.px)+(q.ly-q.y)*(q.y-q.py);return k.indexOf('interface:')===0?v<0:v>0;}),
+      libre:Object.keys(L1.pos).every(function(k){return L1.pos[k].libre>0;}),
+      gene:Object.keys(L1.pos).filter(function(k){return L1.pos[k].gene;}).length===Object.keys(L2.pos).filter(function(k){return L2.pos[k].gene;}).length}));
     """
     r = _noeud_js(prog)
     assert r["egal"], "mêmes entrées dans un autre ordre : mêmes positions"
@@ -187,3 +192,25 @@ def test_disposition_bulles_deterministe_et_bornee():
     assert "device:00:00:5e:00:53:01|CONNECTS_TO|interface:eth2" in r["liens"]
     assert "service:waf|HOSTED_ON|node:box" in r["liens"]
     assert r["rBox"] > r["rIf"] > r["rDev"]
+    assert r["sens"], "libellé à l'opposé du parent (interface : vers la box, côté libre de sa grappe)"
+    assert r["libre"] and r["gene"]
+
+
+def test_liste_d_appareils_au_doigt():
+    p, s = _page(), _script()
+    assert 'id="liste"' in p and "function rendreListe(" in s
+    debut = s.index("function rendreListe(")
+    corps = s[debut:s.index("\n  }", debut)]
+    assert "h('button'" in corps and "selectionner(" in corps and "parLastSeen" in corps
+    assert re.search(r"\.ligneApp\{[^}]*min-height:44px", p)
+    assert "@media (pointer:coarse)" in p  # sous le graphe sur écran tactile
+    # rayon de prise minimal à l'écran (22 px) là où la place le permet
+    assert re.search(r"22/k", s) and "libre" in s
+
+
+def test_liens_bulles_hors_tabulation_et_libelle_inconnu():
+    s = _script()
+    debut = s.index("function rendreBulles(")
+    corps = s[debut:s.index("\n  }", debut)]
+    assert "tabindex:'-1'" in corps and "tabindex:'0'" not in corps
+    assert "' ?'" not in s and "' · inconnu'" in s
