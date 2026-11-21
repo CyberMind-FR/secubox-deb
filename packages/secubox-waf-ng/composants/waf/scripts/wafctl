@@ -704,6 +704,112 @@ cmd_limiter_lever() {
     log "limiter-lever $ip"
 }
 
+# cmd_leurre <ip> <durée> / cmd_leurre_lever <ip> — geste `leurre` du compte ai-ban (#3723). L'adresse PUBLIQUE (IPv4
+# ou IPv6) entre dans la liste que sbxwaf relit (leurres-ip.json) pour 1 h à 7 j : ses requêtes reçoivent une scène du
+# théâtre, jamais le vhost réel. Écriture en root, sous verrou du dossier, par REMPLACEMENT atomique (fichier
+# temporaire exclusif, 0644, fsync, rename) : jamais à travers un lien, jamais un fichier modifié en place. Un fichier
+# existant n'est repris que s'il est ordinaire, à root (le compte qui écrit), à un seul lien, sans écriture de groupe ni
+# d'autres et au format 1 ; sinon il est remplacé. Les entrées échues sont purgées ; 2 048 au plus (`refus:plein`).
+# Sortie : une ligne JSON `{"fin": <epoch>}`, ou `refus:<motif>` sur stderr. Garde d'office (protegees.env exigé).
+LEURRES_IP="/var/lib/secubox/waf/leurres-ip.json"
+LEURRE_MIN_S=3600
+LEURRE_MAX_S=604800
+LEURRES_MAX=2048
+
+_leurres_ecrire() {
+    python3 -I - "$1" "$LEURRES_IP" "$2" "${3:-0}" "$LEURRES_MAX" <<'PY'
+import fcntl, ipaddress, json, os, stat, sys, tempfile, time
+verbe, chemin, ip, secondes, maxi = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
+def refus(motif):
+    print(f"refus:{motif}", file=sys.stderr)
+    sys.exit(1)
+try:
+    ip = str(ipaddress.ip_address(ip))
+except ValueError:
+    refus("privee")
+dossier = os.path.dirname(chemin)
+try:
+    dfd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+except OSError:
+    refus("etat")
+fcntl.flock(dfd, fcntl.LOCK_EX)
+maintenant = int(time.time())
+entrees = {}
+try:
+    fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+except OSError:
+    fd = None  # absent, ou lien (jamais suivi) : remplacé
+if fd is not None:
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        doc = None
+        if (stat.S_ISREG(st.st_mode) and st.st_uid == os.geteuid() and st.st_nlink == 1
+                and not st.st_mode & 0o022):
+            try:
+                doc = json.loads(f.read(4 << 20))
+            except ValueError:
+                doc = None
+        if isinstance(doc, dict) and doc.get("format") == 1 and isinstance(doc.get("entrees"), dict):
+            for k, v in doc["entrees"].items():
+                fin = v.get("fin") if isinstance(v, dict) else None
+                if isinstance(fin, int) and not isinstance(fin, bool) and fin > maintenant and len(entrees) < maxi:
+                    entrees[k] = {"fin": fin, "motif": str(v.get("motif") or "")[:64]}
+        else:
+            print("wafctl: liste des leurres illisible ou douteuse, remplacée", file=sys.stderr)
+fin = None
+if verbe == "poser":
+    if ip not in entrees and len(entrees) >= maxi:
+        refus("plein")
+    fin = maintenant + secondes
+    entrees.pop(ip, None)
+    entrees[ip] = {"fin": fin, "motif": "ai-leurre"}
+else:
+    entrees.pop(ip, None)
+tmp = None
+try:
+    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".leurres-ip.", suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump({"format": 1, "entrees": entrees}, f, ensure_ascii=True)
+        f.write("\n")
+        f.flush()
+        os.fchmod(f.fileno(), 0o644)
+        os.fsync(f.fileno())
+    os.replace(tmp, chemin)
+    tmp = None
+    os.fsync(dfd)
+except OSError as e:
+    if tmp:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+    print(f"wafctl: écriture de la liste des leurres impossible : {e}", file=sys.stderr)
+    refus("etat")
+if fin is not None:
+    print(json.dumps({"fin": fin}))
+PY
+}
+
+cmd_leurre() {
+    [ "$#" -eq 2 ] || { error "Usage : wafctl leurre <ip> <durée>"; return 1; }
+    local ip="$1" duree="$2" secondes
+    if ! secondes=$(_secondes "$duree") || [ "$secondes" -lt "$LEURRE_MIN_S" ] || [ "$secondes" -gt "$LEURRE_MAX_S" ]; then
+        printf 'refus:duree\n' >&2
+        return 1
+    fi
+    _garde "$ip" --exiger || return 1
+    _valide_ip "$ip" >/dev/null || { printf 'refus:privee\n' >&2; return 1; }
+    _leurres_ecrire poser "$ip" "$secondes"
+}
+
+cmd_leurre_lever() {
+    [ "$#" -eq 1 ] || { error "Usage : wafctl leurre-lever <ip>"; return 1; }
+    local ip="$1"
+    _valide_ip "$ip" >/dev/null || { error "Adresse invalide ou privée : $ip"; return 1; }
+    _leurres_ecrire lever "$ip" || return 1
+    log "leurre-lever $ip"
+}
+
 cmd_unban() {
     local ip="$1" version
     version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
@@ -973,6 +1079,8 @@ case "${1:-}" in
     prolonger)  shift; cmd_prolonger "$@" ;;
     limiter)    shift; cmd_limiter "$@" ;;
     limiter-lever) shift; cmd_limiter_lever "$@" ;;
+    leurre)     shift; cmd_leurre "$@" ;;
+    leurre-lever) shift; cmd_leurre_lever "$@" ;;
     unban)      cmd_unban "${2:-}" ;;
     ban-bloc)   shift; cmd_ban_bloc "$@" ;;
     unban-bloc) shift; cmd_unban_bloc "$@" ;;

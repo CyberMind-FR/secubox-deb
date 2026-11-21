@@ -25,6 +25,15 @@ secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
     limite_ia_v4 et limite_ia_v6 de inet secubox_waf_ratelimit, règle drop
     au-delà de 5/s (rafale 20) par adresse vers 80/443, LAN jamais limité.
     Un rechargement de la table perd les limites en cours.
+    Geste leurre : POST /ai/leurre (adresse publique IPv4 ou IPv6, 1 h à
+    7 j, 30/h et 200/j, refusé en SADE observe et reactive, mêmes cibles
+    protégées ; cible déjà bannie = 409 deja_banni, rien n est levé),
+    verbes wafctl leurre et leurre-lever (sudoers SBX_WAF_LEURRE) qui
+    remplacent atomiquement /var/lib/secubox/waf/leurres-ip.json (root,
+    0644, 2 048 entrées au plus). sbxwaf (secubox-toolbox-ng 0.18.0) sert
+    à ces adresses une scène du théâtre au lieu du vhost réel, journalisée
+    en leurre_redirige, sans ban ni émission vers sbx-actord. L unité ne
+    rend plus cette liste à secubox-waf au démarrage (find ... ! -name).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
 

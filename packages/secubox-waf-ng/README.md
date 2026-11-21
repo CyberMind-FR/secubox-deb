@@ -109,6 +109,7 @@ l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (
 | `wafctl unban-bloc <a.b.c.0/24>` | retire le bloc (table et état) |
 | `wafctl blocs` | liste JSON des blocs non échus, temps restant, présence dans nft |
 | `wafctl ban <ip> <durée> --exiger-protegees` | ban d'adresse d'office du compte `ai-ban` (#3723) : la garde exige `protegees.env` et sa ligne `SECUBOX_WAF_PROTEGEES`, comme pour un bloc |
+| `wafctl leurre <ip> <N>s` / `wafctl leurre-lever <ip>` | #3723 : redirection d'une adresse publique IPv4 ou IPv6 vers le théâtre de sbxwaf (1 h à 7 j, sinon `refus:duree`) : remplacement atomique de `/var/lib/secubox/waf/leurres-ip.json` sous verrou ; sortie `{"fin": <epoch>}` ou `refus:<motif>` (`plein` au-delà de 2 048) ; garde d'office ; sudoers `SBX_WAF_LEURRE` |
 | `wafctl limiter <ip> <N>s` / `wafctl limiter-lever <ip>` | #3723 : limite de débit d'une adresse publique IPv4 ou IPv6 (1 h à 24 h, sinon `refus:duree`) dans `limite_ia_v4`/`limite_ia_v6` ; ajout et nouveau délai en UNE transaction nft ; sortie `{"fin": <epoch>}` ou `refus:<motif>` ; garde d'office ; sudoers `SBX_WAF_LIMITER` |
 | `wafctl prolonger <ip> <N>s` | #3723 : prolonge une adresse DÉJÀ dans `waf_ban` par UNE transaction `nft -f` (`delete element` puis `add element … timeout`), jamais un simple `add` dont le délai ne serait pas rafraîchi ; absente : `refus:absent` ; garde d'office ; IPv4 ; sudoers `SBX_WAF_PROLONGER` |
 | `wafctl cle-ai-ban ajouter <fichier.pub>` | **root seul**, hors sudoers : pose une clé publique Ed25519 sous `/etc/secubox-comptes-service/ai-ban/<empreinte>.pub` (root 0644 ; empreinte = SHA-256 hex du DER, le `kid` des jetons) ; deux clés au plus |
@@ -137,6 +138,7 @@ Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet
 | `POST /ai/ban` | `{"geste": "ban", "cible": "198.51.100.7" ou "203.0.113.0/24", "duree_s": 3600…604800, "mode": "clic"\|"auto", "conseil": "<id>", "motif": "<200 car.>"}` | 200 `{id, cible, fin, duree_s, audit}` |
 | `POST /ai/prolonger` | `{"geste": "prolonger", "id": "<32 hex>", "duree_s": <s>, "conseil": "<id>", "motif": "<200 car.>"}` (#3723, 1.43.0) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/limiter` | `{"geste": "limiter", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…86400, "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
+| `POST /ai/leurre` | `{"geste": "leurre", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…604800, "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` |
 | `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds, plafonds_par_geste, sade_mode}` |
 
@@ -179,6 +181,7 @@ forme de sa cible.
   | tout `ban_bloc` (d'office et clic) | 30/h, 100/j | `plafond_compte` |
   | `prolonger` | 30/h, 100/j | `plafond_heure`, `plafond_jour` |
   | `limiter` | 60/h, 400/j | `plafond_heure`, `plafond_jour` |
+  | `leurre` | 30/h, 200/j | `plafond_heure`, `plafond_jour` |
 
 - **`limiter`** (geste d'office, le seul admis en SADE `reactive`) : une adresse publique IPv4 ou IPv6 en forme
   canonique (jamais un bloc, ni une IPv6 porteuse d'IPv4) ; 1 h à 24 h (409 `duree`) ; 409 `deja_actif` si elle est
@@ -193,8 +196,22 @@ forme de sa cible.
   sont perdues** (choix assumé : gestes courts) ; le journal ai-ban les montre encore jusqu'à leur fin. `/ai/unban` de
   l'id d'une limite la lève (`wafctl limiter-lever`) ; `/ai/prolonger` la refuse (`inconnu`).
 
+- **`leurre`** (geste d'office, refusé en SADE `observe` et `reactive`) : une adresse publique IPv4 ou IPv6 en forme
+  canonique est redirigée vers le théâtre de sbxwaf (#1290) ; 1 h à 7 j (409 `duree`) ; 409 `deja_actif` si elle est
+  déjà leurrée ; mêmes cibles protégées que le ban d'office ; **409 `deja_banni`** si elle est déjà bannie (ban ai-ban
+  actif, bloc ai-ban ou de l'administrateur, `waf_ban`/`waf_ban6`) : un attaquant banni n'atteint pas le leurre, et ce
+  geste ne lève jamais un ban ; état illisible : 503 `etat`. Audit `ai-leurre-demande` puis `ai-leurre` (leurre levé
+  si ce dernier échoue). `wafctl leurre <ip> <N>s` remplace atomiquement `/var/lib/secubox/waf/leurres-ip.json`
+  (`{"format": 1, "entrees": {ip: {fin, motif}}}`, root, 0644, entrées échues purgées, 2 048 au plus : `refus:plein`).
+  sbxwaf (`--leurres-ip`) relit ce fichier au plus toutes les 5 s, ne le croit qu'à root (ordinaire, un seul lien,
+  sans écriture de groupe ni d'autres) et ignore le LAN : chaque requête d'une adresse listée reçoit une scène du
+  théâtre, jamais le vhost réel (une méthode autre que GET, HEAD ou POST : 405), et une ligne `leurre_redirige`
+  (gravité `audit`) au journal des menaces, sans émission vers sbx-actord : ni ban, ni escalade, ni anomalie d'hôte.
+  L'unité `secubox-waf-ng` ne rend plus ce fichier à `secubox-waf` au démarrage. `/ai/unban` de l'id d'un leurre le
+  lève (`wafctl leurre-lever`) ; `/ai/prolonger` le refuse (`inconnu`).
+
   `GET /ai/etat` rend `plafonds_par_geste` (`{geste: {heure, jour, restant_heure, restant_jour}}`) et `sade_mode`
-  (`null` si le fichier est absent) et `limites` (`[{id, cible, fin}]`) ; `compteurs` et `plafonds` ne portent plus
+  (`null` si le fichier est absent), `limites` et `leurres` (`[{id, cible, fin}]`) ; `compteurs` et `plafonds` ne portent plus
   que les blocs.
 
 **Compte de service `ai-filtres` (#3732, 1.37.0)** — garde `require_ai_filtres` : même jeton que ci-dessus avec

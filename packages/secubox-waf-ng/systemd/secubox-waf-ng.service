@@ -92,7 +92,10 @@ ExecStartPre=+/bin/sh -c 'test -e /var/log/secubox/waf/waf-threats.log && /bin/c
 # secubox-waf) y écrit le cache d'historique waf-history.json (#1070 D) — sinon
 # l'onglet « Historique » reste vide (le calcul réussit, le cache échoue).
 ExecStartPre=+/bin/mkdir -p /var/lib/secubox/waf
-ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/lib/secubox/waf
+# #3723 : SAUF la liste des leurres de SecuBox AI (leurres-ip.json), écrite par `wafctl leurre` en root et que sbxwaf
+# ne croit qu'à root : un `chown -R` la rendait à secubox-waf, et le moteur l'aurait ignorée jusqu'au geste suivant.
+# `-h` : un lien est re-possédé lui-même, jamais sa cible (comme `chown -R`, qui ne suit pas les liens).
+ExecStartPre=+/usr/bin/find /var/lib/secubox/waf -xdev ! -name leurres-ip.json -exec /bin/chown -h secubox-waf:secubox-waf {} +
 ExecStartPre=+/bin/chmod 0770 /var/lib/secubox/waf
 # Le cache (signaux d'activité des vhosts, cache média) appartient au service (#1001, #2283). Il appartenait à `secubox` alors que le service tourne en `secubox-waf` : sbxwaf ne
 # pouvait pas y écrire ses signaux d'activité, le fichier est resté figé ONZE JOURS et tous les vhosts paraissaient inactifs — la mise en veille branchée dessus aurait éteint la box.

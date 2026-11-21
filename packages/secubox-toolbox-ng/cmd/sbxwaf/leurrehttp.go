@@ -305,13 +305,15 @@ func construitLeurre(actif bool, cheminSecret string) *LeurreHTTP {
 		log.Printf("sbxwaf: leurre ARMÉ sur les hôtes non routés, filigrane actif " +
 			"(un contact avec le leurre est banni si --leurre-ban : le leurre n'a pas d'autre but que de détecter)")
 	}
-	return NewLeurreHTTP(true, fil, func(hote, chemin string, f familleSonde, alea string) {
-		// Journal du SEMIS : c'est lui qui, plus tard, dira d'où vient une
-		// marque qui revient. L'aléa seul suffit — le jeton complet n'a pas à
-		// traîner dans un fichier.
-		log.Printf("sbxwaf: leurre semé host=%s path=%s famille=%s filigrane=%s",
-			hote, chemin, f, alea)
-	})
+	return NewLeurreHTTP(true, fil, journalSemis)
+}
+
+// journalSemis : journal du SEMIS. C'est lui qui, plus tard, dira d'où vient
+// une marque qui revient. L'aléa seul suffit — le jeton complet n'a pas à
+// traîner dans un fichier.
+func journalSemis(hote, chemin string, f familleSonde, alea string) {
+	log.Printf("sbxwaf: leurre semé host=%s path=%s famille=%s filigrane=%s",
+		hote, chemin, f, alea)
 }
 
 // marquesRevenues cherche, dans une requête ENTRANTE, une marque que nous avons

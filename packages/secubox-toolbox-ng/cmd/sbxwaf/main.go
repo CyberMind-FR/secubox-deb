@@ -153,6 +153,12 @@ type Server struct {
 	// au lieu du 421, sans compter comme anomalie. Nil = désactivé.
 	isoles *ListeIsoles
 
+	// leurresIP : adresses redirigées vers le théâtre par le geste `leurre`
+	// de SecuBox AI (#3723), et le leurre qui leur répond (toujours armé).
+	// Nil = désactivé.
+	leurresIP *ListeLeurres
+	leurreIP  *LeurreHTTP
+
 	// nftBan est le ban nft NATIF (#1070, phase B) — set nft à timeout géré par
 	// le WAF lui-même. Nil = backend désactivé (nft
 	// indisponible / droits manquants) : aucun ban natif posé.
@@ -335,11 +341,13 @@ func (s *Server) handler() http.Handler {
 		// relaye : le corps a été confié au proxy (#3257). Posé juste avant les
 		// deux proxy.ServeHTTP ; la capture multipart n'analyse que dans ce cas.
 		var relaye bool
+		// leurreIP : réponse du théâtre à une adresse leurrée (#3723), pas une visite.
+		var leurreIP bool
 		if s.visits != nil {
 			sr := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			w = sr
 			defer func() {
-				if !viaWaker && sr.status != http.StatusForbidden && sr.status != http.StatusMisdirectedRequest {
+				if !viaWaker && !leurreIP && sr.status != http.StatusForbidden && sr.status != http.StatusMisdirectedRequest {
 					s.visits.Record(visitHost, r.UserAgent(), clientIP(r), sr.status)
 				}
 			}()
@@ -380,6 +388,18 @@ func (s *Server) handler() http.Handler {
 		}
 		host = strings.ToLower(strings.TrimSpace(host))
 		visitHost = host
+
+		// #3723 : adresse redirigée vers le théâtre par le geste `leurre`. Avant le
+		// routage et toute inspection : jamais le vhost réel, quel que soit l'hôte,
+		// et ni marque revenue, ni anomalie, ni règle, ni ban pour cette requête.
+		// Les isolés de secubox-garde (LAN) n'y sont jamais : la liste est publique.
+		if cip := clientIP(r); cip != "" {
+			if _, leurree := s.leurresIP.Cherche(cip); leurree {
+				leurreIP = true
+				s.servirLeurreIP(w, r, host, cip)
+				return
+			}
+		}
 
 		s.surMarqueRevenue(r) // une marque du leurre rejouée vers un service réel : bannie (#2240)
 
@@ -1316,6 +1336,8 @@ func main() {
 			"marque plutôt que des marques invérifiables.")
 	gardeIsoles := flag.String("garde-isoles", defaultGardeIsoles,
 		"Liste JSON des adresses isolées par secubox-garde (#3800) ; vide = désactivé")
+	leurresIPChemin := flag.String("leurres-ip", defaultLeurresIP,
+		"Liste JSON des adresses redirigées vers le théâtre par le geste leurre (#3723, root seul) ; vide = désactivé")
 	hostAnomaly := flag.Bool("host-anomaly", true,
 		"traiter un Host non routé (vide/IP/DGA/inconnu) comme signal scanner "+
 			"— journaliser + bannir au lieu d'un 421 muet (#1070)")
@@ -1551,6 +1573,7 @@ func main() {
 		hostAnomaly: *hostAnomaly,
 		leurre:      construitLeurre(*honeypot, *honeypotSecret),
 		isoles:      nouvelleListeIsoles(*gardeIsoles),
+		leurresIP:   nouvelleListeLeurres(*leurresIPChemin),
 		ja4Header:   *ja4Header,
 		// #1080 phase G: profils de service par vhost (nil = désactivé).
 		vhostProfiles:      profils,
@@ -1584,6 +1607,8 @@ func main() {
 	}
 	// Un leurre servi sur un chemin-appât d'un VRAI vhost bannit à son tour (#2240) : sans cela, l'attaquant leurré restait libre de continuer.
 	srv.leurre.surTouche = func(ip string, f familleSonde) { srv.banLeurre(ip, "appat", "medium", 0) }
+	// #3723 : le leurre des adresses leurrées sert toujours (le geste vaut décision), --honeypot ou non.
+	srv.leurreIP = leurrePourIP(srv.leurre, *honeypotSecret)
 	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
 	log.Printf("sbxwaf: body-inspect cap=%d bytes; trusted-skip hosts=%d; body-skip hosts=%d",
 		*maxBodyInspectFlag, len(srv.trustedHosts), len(srv.skipBodyHosts))

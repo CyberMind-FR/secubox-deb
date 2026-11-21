@@ -72,6 +72,11 @@ type ThreatRecord struct {
 	// une observation (« detect ») ; Signaux porte des COMPTEURS seulement.
 	Mode    string
 	Signaux map[string]int
+
+	// HorsActeur (#3723) : la ligne n'est PAS émise vers sbx-actord. Une
+	// adresse redirigée vers le théâtre par le geste `leurre` ne doit nourrir
+	// ni score d'acteur ni mesure : ce n'est pas un signal d'attaque.
+	HorsActeur bool
 }
 
 // ThreatLog appends JSON threat records to a file, one per line.
@@ -287,7 +292,7 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 	// actord est absent/lent/tombé, l'enveloppe est déposée et la requête n'attend
 	// jamais. Le trafic interne (agrégé sous "local" plus haut) n'est pas un
 	// acteur → non émis ; on n'émet que pour une IP source réelle.
-	if l.emitter != nil && entry.ClientIP != "local" && net.ParseIP(entry.ClientIP) != nil {
+	if l.emitter != nil && !rec.HorsActeur && entry.ClientIP != "local" && net.ParseIP(entry.ClientIP) != nil {
 		env := entryToEnvelope(&entry)
 		env.GeoCountry = l.geo.Pays(entry.ClientIP) // nil-safe
 		l.emitter.Emit(env)

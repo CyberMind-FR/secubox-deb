@@ -55,6 +55,13 @@ Cmnd_Alias SBX_WAF_PROLONGER = /usr/sbin/wafctl prolonger *
 Cmnd_Alias SBX_WAF_LIMITER = /usr/sbin/wafctl limiter *, \
                              /usr/sbin/wafctl limiter-lever *
 
+# Geste `leurre` du compte ai-ban (#3723) : redirection d'une adresse publique
+# vers le théâtre de sbxwaf (/var/lib/secubox/waf/leurres-ip.json), et sa levée.
+# `wafctl` exige exactement « leurre <ip> <durée> » (1 h à 7 j) et
+# « leurre-lever <ip> ».
+Cmnd_Alias SBX_WAF_LEURRE = /usr/sbin/wafctl leurre *, \
+                            /usr/sbin/wafctl leurre-lever *
+
 Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
                             /usr/sbin/wafctl anti-robots on *, \
                             /usr/sbin/wafctl anti-robots off *
@@ -87,6 +94,7 @@ secubox ALL=(root) NOPASSWD: SBX_WAF_BANMANUEL
 secubox ALL=(root) NOPASSWD: SBX_WAF_BLOCS
 secubox ALL=(root) NOPASSWD: SBX_WAF_PROLONGER
 secubox ALL=(root) NOPASSWD: SBX_WAF_LIMITER
+secubox ALL=(root) NOPASSWD: SBX_WAF_LEURRE
 secubox ALL=(root) NOPASSWD: SBX_WAF_MODES
 
 # Déclenché depuis une minuterie (pas de terminal) et tracé.
@@ -109,3 +117,6 @@ Defaults!SBX_WAF_PROLONGER log_output
 
 Defaults!SBX_WAF_LIMITER !requiretty
 Defaults!SBX_WAF_LIMITER log_output
+
+Defaults!SBX_WAF_LEURRE !requiretty
+Defaults!SBX_WAF_LEURRE log_output
