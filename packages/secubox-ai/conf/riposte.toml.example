@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Seuils de la riposte graduée (#3723, spec 2026-11-19 § 2) : /etc/secubox/ai/riposte.toml, déposé au premier passage
+# seulement (jamais écrasé). root, 0644. Valeurs de départ, à affiner au banc (gk4-gk7) ; hors bornes ou illisible :
+# seuils par défaut, journalisé. Le niveau est calculé par le code sur ces chiffres, jamais par le modèle.
+
+version = 1
+
+[seuils]
+n2_tentatives = 20        # contenir dès 20 tentatives dans la fenêtre (ou 2 couches, ou une règle critique)
+n3_tentatives = 100       # usager si campagne avec 100 tentatives (ou récidive, ou 3 couches)
+fenetre_s = 86400         # fenêtre des signaux (1 h .. 7 j)
+calme_s = 21600           # redescente à « observer » après 6 h sans nouvelle preuve (1 h .. 7 j)

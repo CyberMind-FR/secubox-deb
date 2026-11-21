@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Politiques de réponse de la veille secubox-ai (#3723, V2 § 10.2) : /etc/secubox/ai/politiques.toml, déposé au
+# premier passage seulement (jamais écrasé). root, 0644. Relu à chaque passe par double tampon : un fichier invalide
+# garde la politique précédente (audit « politiques-invalides »). Toute clé inconnue rend le fichier invalide.
+# gk2 fait foi : il recontrôle chaque geste (cible protégée, cas sûr, plafonds, mode SADE).
+
+version = 1
+
+[defauts]
+mode = "hybride"          # "observation" : rien n'est proposé | "hybride" : propositions d'office ou en un clic
+refuser_inconnu = true    # obligatoire : geste absent du catalogue = refus
+expiration_min = 120      # une proposition non décidée expire (5..1440)
+
+# Tout automatique (décision du propriétaire du 18/11) : chaque geste actif et d'office.
+[gestes.ban]
+actif = true
+auto = true
+
+[gestes.ban_bloc]
+actif = true
+auto = true
+
+[gestes.prolonger]
+actif = true
+auto = true
+
+[gestes.limiter]
+actif = true
+auto = true
+
+[gestes.leurre]
+actif = true
+auto = true
+
+[gestes.partager]
+actif = true
+auto = true
+
+[gestes.unban]
+actif = true
+auto = true
+
+[suspension]
+automatique_suspendu = false   # true : propositions en un clic seulement (aucun geste d'office)
+
+# Plafonds de gk3 par geste (fenêtres glissantes) : AU PLUS ceux de gk2, sinon fichier invalide.
+[plafonds.ban]
+heure = 60
+jour = 400
+
+[plafonds.ban_bloc]
+heure = 5
+jour = 20
+
+[plafonds.prolonger]
+heure = 30
+jour = 100
+
+[plafonds.limiter]
+heure = 60
+jour = 400
+
+[plafonds.leurre]
+heure = 30
+jour = 200
+
+[plafonds.partager]
+heure = 30
+jour = 200

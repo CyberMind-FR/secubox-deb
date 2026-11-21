@@ -90,6 +90,48 @@ gravite_min = "medium"         # info, low, medium, high, critical
 protegees = []                 # adresses ou plages publiques jamais visées (pairs du maillage, Freebox, box…)
 ```
 
+## Riposte graduée
+
+Réponse graduée **défensive** (#3723, spec 2026-11-19) : rien n'est émis vers l'attaquant ; gk3 **propose** des gestes
+du catalogue, que seul gk2 applique (`ai-ban`, exécution en tâche 7). Le **code** fixe le niveau et les gestes sur
+des chiffres ; le texte du modèle n'entre ni dans un niveau, ni dans une proposition, ni dans un motif.
+
+- **Couches** (`veille/riposte.py`) : `menaces` de sbx-authwatch → `auth`, de sbxwaf → `waf` (SYN sans état → `nft`,
+  `dpi` → `dpi`) ; leurre (`leurre`, `honeypot`, essais d'un leurre de service) → `leurres` ; `dns` ; `garde`. Ne
+  comptent pas : décisions de gk2 (bans, réévaluations), `actord`, `mesures`, `campagnes`, familles neutres — dont
+  `leurre_redirige` (adresse servie par le leurre de la box : jamais hostile, ni preuve d'une règle, pas de boucle
+  leurre → ban). **Web seul** = couches ⊆ {waf, leurres} et tout vient de sbxwaf.
+- **Niveau** (`dossiers.niveau`, `niveau_depuis`, `signaux_json`) : `contenir` dès 20 tentatives (24 h), 2 couches ou
+  une preuve `critical` ; `usager` dès une récidive (`retour_apres_ban`), une campagne avec 100 tentatives ou 3
+  couches. Monte dès que la cible le dépasse ; redescend à `observer` après 6 h sans preuve (preuves soldées, aucun
+  geste défait). Seuils : `/etc/secubox/ai/riposte.toml`.
+- **Propositions** (table `propositions`, dossiers d'acteur seulement) : `contenir` → `ban` 24 h si l'adresse a des
+  preuves de 2 sources ou 2 étapes, sinon `limiter` 6 h ; `usager` web seul → `leurre` 24 h ; `usager` autre → `ban`
+  96 h, `ban_bloc` 24 h si le cas sûr local est vrai (`veille/cas_sur.py`, mêmes `CATEGORIES_SURES` et `SEUIL_BLOC`
+  que gk2), `prolonger` 7 j sur retour après ban ; `usager` ajoute `partager` 7 j si campagne ou outil identifié
+  (≥ 2 traits). Une seule vivante par (geste, cible) ; jamais une cible protégée (non publique, box, `protegees`) ;
+  jamais de levée ; plafonds de la politique ; expiration `expiration_min`. Chaque proposition admise : une ligne
+  `audit_chaine` et une ligne `audit.log` (`ai-riposte-proposition`).
+- **Politiques** : `/etc/secubox/ai/politiques.toml`, relu à chaque passe par double tampon (ombre, validation,
+  bascule) ; fichier absent, invalide, lien ou inscriptible : la politique précédente reste, audit
+  `politiques-invalides` une fois par contenu fautif ; sans politique valide depuis le démarrage : politique fermée.
+
+```toml
+version = 1
+[defauts]
+mode = "hybride"          # "observation" : rien n'est proposé
+refuser_inconnu = true    # obligatoire
+expiration_min = 120
+[gestes.ban]              # idem ban_bloc, prolonger, limiter, leurre, partager, unban
+actif = true
+auto = true
+[suspension]
+automatique_suspendu = false
+[plafonds.ban]            # au plus ceux de gk2 : ban 60/400, ban_bloc 5/20, prolonger 30/100, limiter 60/400,
+heure = 60                # leurre 30/200, partager 30/200 (heure/jour)
+jour = 400
+```
+
 ## Socket et ports
 
 - `/run/secubox/ai.sock` : API (0660, groupe `secubox`, servie à nginx). Aucun port TCP.
@@ -102,6 +144,8 @@ protegees = []                 # adresses ou plages publiques jamais visées (pa
 | Fichier | Propriétaire | Rôle |
 |---|---|---|
 | `/etc/secubox/ai.toml` | root 0644 | configuration fixe, copiée de `/usr/share/secubox/ai/ai.toml.example` au premier passage seulement |
+| `/etc/secubox/ai/politiques.toml` | root 0644 | politiques de réponse (§ Riposte graduée), déposées si absentes, jamais écrasées |
+| `/etc/secubox/ai/riposte.toml` | root 0644 | seuils de la riposte (`n2_tentatives`, `n3_tentatives`, `fenetre_s`, `calme_s`), déposés si absents |
 | `/etc/secubox/secrets/ai/distant.key` | root:secubox-ai 0640 | clé du moteur distant, posée par `secubox-aictl cle-distante` (lue sur l'entrée standard) |
 | `/var/lib/secubox/ai/preferences.toml` | secubox-ai | préférences modifiables depuis la page (écriture atomique, double tampon) |
 | `/var/lib/secubox/ai/` | secubox-ai 0750 | `memoire.db`, `journal.jsonl`, `documents/`, `medias/`, `modeles/` (0750, modèles 0640), `tmp/` (0700, temporaires de SQLite) |

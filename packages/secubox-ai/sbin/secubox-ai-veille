@@ -13,6 +13,10 @@ Analyste IA (#3722) : la boucle `correlation` dépose un travail `analyser` pour
 boucle `analyse` (30 s) en traite un à la fois, avec un moteur qui répond DÉJÀ (distant gk0 prêt, sinon local en
 marche ; le local n'est réveillé que si `[veille.analyste] reveiller_local = true`). Clé du moteur distant : remise par
 LoadCredential= (ai-distant), jamais lue dans /etc/secubox/secrets.
+
+Riposte graduée (#3723) : la même boucle fixe le niveau des dossiers recalculés (seuils de
+/etc/secubox/ai/riposte.toml) puis PROPOSE les gestes de leur niveau selon /etc/secubox/ai/politiques.toml (double
+tampon relu à chaque passe). Aucun geste n'est envoyé à gk2 ici : les propositions attendent l'exécution (tâche 7).
 """
 import asyncio
 import logging
@@ -42,7 +46,7 @@ def _cle_distante():
 os.environ["SECUBOX_AI_CLE"] = _cle_distante()
 
 from api import moteurs  # noqa: E402
-from veille import analyste, base, collecte, correlation, dossiers, pays, retention  # noqa: E402
+from veille import analyste, base, collecte, correlation, dossiers, pays, politiques, retention, riposte  # noqa: E402
 from veille.client import ClientGk2, delais, routes  # noqa: E402
 from veille.sources import toutes  # noqa: E402
 from veille.service import Boucle, Veille  # noqa: E402
@@ -116,14 +120,35 @@ async def _main():
     if repris:
         log.warning("analyste : %d travail(aux) interrompu(s) remis en file", repris)
 
+    seuils = {"courants": riposte.SEUILS}
+
+    def _construire(d):
+        seuils["courants"] = riposte.charger_seuils(precedents=seuils["courants"])
+        return dossiers.construire(d, _maintenant(), seuils=seuils["courants"])
+
+    def _proposer(d, changes):
+        """Politique relue (double tampon), puis propositions des dossiers recalculés ; un fichier refusé est audité
+        (audit_chaine + audit.log, une fois par contenu fautif)."""
+        m = _maintenant()
+
+        def auditer(evenement, details):
+            collecte._audit(d, m, evenement, details, operation="politiques", resultat="refus", limiter=False)
+            riposte.ecrire_audit_log(evenement, details)
+        pol = politiques.charger_politiques(auditer=auditer, maintenant=m)
+        return sum(len(riposte.proposer(d, x, pol, m, protegees=reglages_ia["protegees"], seuils=seuils["courants"]))
+                   for x in changes)
+
     async def correler():
         touches = await veille.sql(lambda d: correlation.correler(d, _maintenant(), **reglages))
         if touches:
             log.info("corrélation : %d incident(s) créé(s) ou étendu(s)", len(touches))
-        # Dossiers d'attaquant (#3795) : transaction courte suivante, même boucle de 60 s.
-        changes = await veille.sql(lambda d: dossiers.construire(d, _maintenant()))
+        # Dossiers d'attaquant (#3795) et niveau de riposte (#3723) : transaction courte suivante, même boucle de 60 s.
+        changes = await veille.sql(_construire)
         if changes:
             log.info("dossiers : %d dossier(s) créé(s) ou mis à jour", len(changes))
+            proposees = await veille.sql(lambda d: _proposer(d, changes))
+            if proposees:
+                log.info("riposte : %d proposition(s) admise(s)", proposees)
             # Analyste IA (#3722) : dossier nouveau ou aggravé → un travail « analyser » (une ligne en attente par dossier).
             deposes = await veille.sql(lambda d: analyste.deposer_analyses(d, changes, _maintenant(), reglages_ia))
             if deposes:

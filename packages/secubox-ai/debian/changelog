@@ -1,3 +1,27 @@
+secubox-ai (0.6.0-1~trixie1) trixie; urgency=medium
+
+  * Riposte graduée défensive (#3723, spec 2026-11-19) : niveau observer /
+    contenir / usager de chaque dossier, calculé par le code sur des signaux
+    chiffrés (tentatives, couches, fenêtre, campagne, récidive, règle
+    critique) ; redescente après 6 h sans preuve, aucun geste défait
+    (migration 0006 : niveau, niveau_depuis, signaux_json ; tables
+    propositions et approbations).
+  * Propositions par politique (veille/riposte.py) : contenir → ban 24 h
+    (2 sources ou 2 étapes) sinon limiter 6 h ; usager web seul → leurre ;
+    usager autre → ban long, ban_bloc si cas sûr local (veille/cas_sur.py,
+    copie de gestes_ia.py), prolonger sur retour après ban ; partager si
+    campagne ou outil identifié. Une vivante par (geste, cible), jamais une
+    cible protégée, jamais de levée, motif produit par le code ; audit_chaine
+    et audit.log par proposition admise. Rien n'est encore envoyé à gk2.
+  * /etc/secubox/ai/politiques.toml et riposte.toml déposés s'ils sont
+    absents (jamais écrasés), lus par la veille (profil AppArmor) ; double
+    tampon : un fichier invalide garde la politique précédente (audit
+    politiques-invalides, une fois par contenu fautif).
+  * leurre_redirige (requêtes servies par le leurre de la box) : neutre,
+    jamais preuve d'une règle ni tentative (pas de boucle leurre → ban).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 14:00:00 +0100
+
 secubox-ai (0.5.0-1~trixie1) trixie; urgency=medium
 
   * Analyste IA à preuves vérifiées (#3722, V2 § 9) dans la veille : boucle

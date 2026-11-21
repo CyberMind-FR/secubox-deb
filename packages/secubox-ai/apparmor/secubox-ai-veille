@@ -33,6 +33,9 @@ profile secubox-ai-veille {
   /usr/share/secubox-ai/empreintes/*.toml r,
   /etc/secubox/ai/ r,
   /etc/secubox/ai/empreintes.local.toml r,
+  # Politiques de réponse et seuils de la riposte (#3723) : lus à chaque passe (double tampon), jamais écrits.
+  /etc/secubox/ai/politiques.toml r,
+  /etc/secubox/ai/riposte.toml r,
 
   # Consignes versionnées de l'analyste IA (#3722) : du paquet seulement.
   /usr/share/secubox-ai/prompts/ r,

@@ -17,8 +17,12 @@ ECHELLE = ("info", "low", "medium", "high", "critical")
 # Familles sûres de gk2 (gestes_ia.CATEGORIES_SURES, décision du 14/11) : reconnaissance, sondes, leurres.
 CATEGORIES_SURES = SURES = frozenset({"scanners", "recon_crawler", "host_anomaly", "leurre", "product_absent_probes", "honeypot",
                    "waf_fingerprint"})
-# Ni sûres ni d'attaque : décisions, trafic sans portée offensive, inconnues.
-NEUTRES = frozenset({"ban", "ban_actif", "decision", "inconnue", "body-inspect-skipped", "robots", "garde", "dns"})
+# Requêtes servies par le leurre de la box (#3723, `leurresip.go` de sbxwaf) : l'adresse est DÉJÀ traitée par un
+# geste ; la compter comme hostile ferait boucler leurre → ban. Jamais preuve d'une règle, ni tentative, ni récidive.
+REDIRIGES = frozenset({"leurre_redirige"})
+# Ni sûres ni d'attaque : décisions, trafic sans portée offensive, inconnues, leurre de la box.
+NEUTRES = frozenset({"ban", "ban_actif", "decision", "inconnue", "body-inspect-skipped", "robots", "garde", "dns"}) \
+    | REDIRIGES
 LEURRES = frozenset({"leurre", "honeypot"})
 # Sources qui portent des DÉCISIONS de gk2 (faits), pas des tentatives observées.
 DECISIONS = frozenset({"bans", "bans_actifs", "decisions", "reevaluations"})
