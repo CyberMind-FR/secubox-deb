@@ -26,6 +26,7 @@ VOISINS_NOEUDS_MAX = 500
 VOISINS_ARETES_MAX = 1500
 PAR_PAGE_DEFAUT = 50
 PAR_PAGE_MAX = 200
+PAGE_MAX = 100000
 
 MIGRATIONS = Path(__file__).resolve().parent.parent / "migrations"
 _NOM = re.compile(r"^(\d{4})-[\w.-]+\.sql$")
@@ -105,7 +106,8 @@ def _valider(releve: Releve) -> None:
 
 
 def _taille(db: sqlite3.Connection) -> int:
-    return db.execute("PRAGMA page_count").fetchone()[0] * db.execute("PRAGMA page_size").fetchone()[0]
+    pages = db.execute("PRAGMA page_count").fetchone()[0] - db.execute("PRAGMA freelist_count").fetchone()[0]
+    return pages * db.execute("PRAGMA page_size").fetchone()[0]
 
 
 def _json(v: Any) -> str:
@@ -123,11 +125,13 @@ def appliquer(db: sqlite3.Connection, releve: Releve, maintenant: str) -> Dict[s
     try:
         if releve.etat == "ok":
             _ecrire(db, releve, maintenant, res)
+        # Passe partielle : l'empreinte n'est pas posée, le même relevé sera rejoué (les refus seront retentés).
+        empreinte = "" if res["refusees"] else releve.empreinte
         db.execute(
             "INSERT INTO curseurs(source, empreinte, etat, motif, vu_le) VALUES (?,?,?,?,?) "
             "ON CONFLICT(source) DO UPDATE SET empreinte=excluded.empreinte, etat=excluded.etat, "
             "motif=excluded.motif, vu_le=excluded.vu_le",
-            (releve.source, releve.empreinte, releve.etat, releve.motif, maintenant))
+            (releve.source, empreinte, releve.etat, releve.motif, maintenant))
         db.execute("COMMIT")
     except BaseException:
         if db.in_transaction:
@@ -214,7 +218,7 @@ def _entite(r: sqlite3.Row) -> Dict[str, Any]:
 
 def lister_entites(db: sqlite3.Connection, type: Optional[str], q: Optional[str], page: int,
                    par_page: int) -> Tuple[List[Dict[str, Any]], int]:
-    page = max(1, int(page))
+    page = max(1, min(int(page), PAGE_MAX))
     par_page = max(1, min(int(par_page), PAR_PAGE_MAX))
     where, args = [], []
     if type:
@@ -238,17 +242,19 @@ def entite(db: sqlite3.Connection, id: str) -> Optional[Dict[str, Any]]:
 
 def voisins(db: sqlite3.Connection, id: str, max_noeuds: int = VOISINS_NOEUDS_MAX,
             max_aretes: int = VOISINS_ARETES_MAX) -> Dict[str, Any]:
-    max_noeuds = min(max_noeuds, VOISINS_NOEUDS_MAX)
-    max_aretes = min(max_aretes, VOISINS_ARETES_MAX)
+    max_noeuds = max(1, min(max_noeuds, VOISINS_NOEUDS_MAX))
+    max_aretes = max(1, min(max_aretes, VOISINS_ARETES_MAX))
     centre = entite(db, id)
     if centre is None:
         return {"noeuds": [], "aretes": [], "tronque": False}
     aretes = [dict(r) for r in db.execute(
         "SELECT * FROM relationships WHERE src = ? OR dst = ? ORDER BY id", (id, id))]
     ids: List[str] = []
+    vus = set()
     for a in aretes:
         autre = a["dst"] if a["src"] == id else a["src"]
-        if autre != id and autre not in ids:
+        if autre != id and autre not in vus:
+            vus.add(autre)
             ids.append(autre)
     tronque = len(ids) + 1 > max_noeuds
     ids = ids[:max_noeuds - 1]

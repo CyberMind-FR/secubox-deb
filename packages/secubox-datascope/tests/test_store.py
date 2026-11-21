@@ -159,3 +159,33 @@ def test_lister_pagination_et_filtre(db):
 def test_migrations_installees_par_rules():
     rules = (RACINE / "debian/rules").read_text(encoding="utf-8")
     assert "usr/lib/secubox/datascope/migrations" in rules and (RACINE / "migrations/0001-socle.sql").is_file()
+
+
+def test_refus_rejoue_apres_hausse_du_plafond(db, monkeypatch):
+    monkeypatch.setattr(store, "ENTITES_MAX", 3)
+    rv = lambda: store.Releve("nac", "ok", "e5", None, [ent(i) for i in range(5)], [])  # noqa: E731
+    assert store.appliquer(db, rv(), T0)["refusees"] == 2
+    monkeypatch.setattr(store, "ENTITES_MAX", 5)
+    r = store.appliquer(db, rv(), "2026-11-21T10:05:00Z")
+    assert r["refusees"] == 0 and r["ecrites"] >= 2
+    assert db.execute("SELECT count(*) FROM entities").fetchone()[0] == 5
+    avant = db.total_changes  # passe complète : l'empreinte est posée, plus d'écriture
+    store.appliquer(db, rv(), "2026-11-21T10:10:00Z")
+    assert db.total_changes == avant
+
+
+def test_taille_utile_apres_purge(db):
+    store.appliquer(db, releve(1), "2026-09-01T00:00:00Z")
+    for _ in range(3000):
+        db.execute("INSERT INTO observations(entity_id, source_module, observed_at, attributes_json) "
+                   "VALUES ('device:aa0000','nac','2026-09-01T00:00:00Z', ?)", ("x" * 200,))
+    plein = store._taille(db)
+    assert store.purger(db, T0) == 3001
+    assert store._taille(db) < plein
+
+
+def test_bornes_voisins_et_page(db):
+    store.appliquer(db, releve(2), T0)
+    v = store.voisins(db, "device:aa0000", max_noeuds=0, max_aretes=0)
+    assert len(v["noeuds"]) == 1 and v["tronque"] is True
+    assert store.lister_entites(db, None, None, 10**30, 50)[0] == []
