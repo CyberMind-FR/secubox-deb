@@ -75,11 +75,14 @@ ROUTES_DEFAUT = {
     "ai_limiter": ("/waf/ai/limiter", "/ai/limiter"),
     "ai_leurre": ("/waf/ai/leurre", "/ai/leurre"),
     "ai_partager": ("/waf/ai/partager", "/ai/partager"),
+    # #3724 : levée d'une limite ou d'un leurre (« Défaire » de la console).
+    "ai_lever": ("/waf/ai/lever", "/ai/lever"),
     # #3723 (carte 4) : filtres du WAF, compte ai-filtres (POST, DELETE /{id}, GET).
     "ai_filtres": ("/waf/ai/filtres", "/ai/filtres"),
 }
 #: Les seuls noms que `post` accepte (catalogue fermé des gestes de gk2).
-ROUTES_GESTES = frozenset({"ai_ban", "ai_unban", "ai_prolonger", "ai_limiter", "ai_leurre", "ai_partager"})
+ROUTES_GESTES = frozenset({"ai_ban", "ai_unban", "ai_prolonger", "ai_limiter", "ai_leurre", "ai_partager",
+                           "ai_lever"})
 #: Routes d'écriture non redirigeables par la configuration (gestes et filtres).
 ROUTES_ECRITURE = ROUTES_GESTES | {"ai_filtres"}
 

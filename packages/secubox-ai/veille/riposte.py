@@ -39,6 +39,7 @@ import ipaddress
 import json
 import logging
 import os
+import sqlite3
 import tomllib
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -249,6 +250,8 @@ def evaluer(db, dossier, maintenant: datetime, seuils: Seuils = SEUILS):
         nouveau = "observer"
     stocke = s.dict()
     stocke["plancher"] = dossier.plancher
+    # Seuils qui ont fixé ce niveau (console #3724 : « tentatives N (seuil N3 : X) », jamais une valeur supposée).
+    stocke["seuils"] = {"n2_tentatives": seuils.n2_tentatives, "n3_tentatives": seuils.n3_tentatives}
     if nouveau == "observer" and courant != "observer":
         stocke["plancher"] = max(filter(None, (s.derniere_preuve, dossier.plancher)), default=None)
     h = iso(maintenant)
@@ -283,6 +286,38 @@ def redescendre(db, maintenant: datetime, seuils: Seuils = SEUILS) -> int:
                    (h, json.dumps(sig, sort_keys=True), did))
         _audit(db, maintenant, did, {"de": niveau, "vers": "observer", "cible": "calme"},
                operation="riposte_niveau", resultat="observer", limiter=False)
+        n += 1
+    return n
+
+
+def appliquer_redescentes(db, maintenant: datetime) -> int:
+    """Décisions humaines de redescente (#3724, table `redescentes`, écrites par l'API) : le dossier revient à
+    `observer`, ses preuves ANTÉRIEURES À LA DÉCISION sont soldées (plancher), une remontée exige des preuves
+    nouvelles. Aucun geste défait, aucune proposition touchée. Dans la transaction de l'appelant (dossiers.construire,
+    avant les recalculs). Rend le nombre de dossiers redescendus. Sans la migration 0009 : rien (0)."""
+    try:
+        attente = db.execute("SELECT r.id, r.dossier_id, r.acteur, r.demandee_le, d.niveau, d.signaux_json "
+                             "FROM redescentes r JOIN dossiers d ON d.id = r.dossier_id "
+                             "WHERE r.appliquee_le IS NULL ORDER BY r.demandee_le").fetchall()
+    except sqlite3.OperationalError:
+        return 0
+    h = iso(maintenant)
+    n = 0
+    for rid, did, acteur, demandee, niveau, brut in attente:
+        if niveau == "observer":
+            db.execute("UPDATE redescentes SET appliquee_le = ?, resultat = 'deja_observer' WHERE id = ?", (h, rid))
+            continue
+        try:
+            sig = json.loads(brut or "{}")
+        except ValueError:
+            sig = {}
+        sig = sig if isinstance(sig, dict) else {}
+        sig["plancher"] = max(filter(None, (demandee, sig.get("derniere_preuve"), sig.get("plancher"))), default=None)
+        db.execute("UPDATE dossiers SET niveau = 'observer', niveau_depuis = ?, signaux_json = ? WHERE id = ?",
+                   (h, json.dumps(sig, sort_keys=True), did))
+        db.execute("UPDATE redescentes SET appliquee_le = ?, resultat = 'appliquee' WHERE id = ?", (h, rid))
+        _audit(db, maintenant, did, {"de": niveau, "vers": "observer", "cible": "humain", "acteur": acteur,
+                                     "decision": rid}, operation="riposte_niveau", resultat="observer", limiter=False)
         n += 1
     return n
 

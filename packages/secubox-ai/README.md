@@ -183,6 +183,12 @@ d'écriture de gk3 vers gk2**, les routes `ai-ban` (`/api/v1/waf/ai/ban`, `unban
   changé (`version`), si la proposition a expiré (`expiree`) ou est déjà décidée (`decidee`) ; deux décisions
   simultanées : une seule gagne (transaction `BEGIN IMMEDIATE`, `UNIQUE(proposition_id, version)`). L'API n'écrit dans
   `veille.db` (ouverte en `mode=rw`, jamais créée ni migrée : 503 sinon) que ces décisions et la suspension.
+- **Console (#3724)** : onglets Dossier et Réponses de `/ai/`. Trois décisions humaines de plus, chacune une transaction
+  courte auditée et relayée : redescendre un dossier (table `redescentes`, migration 0009 ; appliquée par la veille,
+  preuves antérieures soldées, aucun geste défait), analyser à nouveau, défaire une action V2 (levée `unban` approuvée
+  dont `reference` est la proposition du geste ; une limite ou un leurre sont levés par `POST /ai/lever` de gk2, un
+  ban, un bloc ou un partage par `/ai/unban` ; une prolongation se défait par le ban qu'elle prolonge). Une levée
+  n'empêche pas la riposte de reproposer un geste sur des preuves NOUVELLES : redescendre le niveau pour l'arrêter.
 - **Audit** : chaque envoi (`ai-reponse-envoi`), réponse (`ai-reponse-gk2`), réponse perdue, rapprochement, échec
   local, suspension, approbation et refus → une ligne `audit_chaine` et une ligne `/var/log/secubox/audit.log`
   (jamais le jeton ni la clé ; le `jti` et l'empreinte de la clé). Les décisions de l'API (dont le profil interdit
@@ -399,6 +405,11 @@ Toute route porte `require_jwt` (administrateur réel), sauf `GET /health` (test
 | `GET /filtres` | filtres WAF d'office (§ Apprentissage) et `etat` (nombres, null si inconnus) |
 | `GET /filtres/suggestions` | suggestions d'empreintes (jamais appliquées) ; `suggestions: null` avant la première passe |
 | `POST /filtres/{fid}/confirmer` | confirme en un clic un filtre `a_confirmer` (404 inconnu, 409 autre état) |
+| `GET /dossiers` | dossiers d'attaquant (#3724) ; `niveau`, `curseur` (`derniere_vue\|id`), `limite` (100, 500 au plus) |
+| `GET /dossiers/{did}` | chronologie multicouche, étapes, outils, niveau (signaux, seuils, historique), dernière analyse, gestes et réponse de gk2 |
+| `POST /dossiers/{did}/redescendre` | décision humaine : la veille ramène le dossier à `observer` à sa passe suivante (409 `niveau`, `en_attente`) |
+| `POST /dossiers/{did}/analyser` | dépose un travail `analyser` (`en_file` ou `deja_en_file` ; 503 `file_pleine`) |
+| `POST /actions/{aid}/defaire` | levée `unban` approuvée (reference = la proposition du geste), envoyée par l'exécuteur vers `/ai/unban` ou `/ai/lever` (409 `etat`, `source`, `geste`, `echu`, `deja`, `en_cours`) |
 
 nginx : flux du dialogue sans tampon (lecture jusqu'à 2 h), corps de 100 Mo pour les deux seuls dépôts de fichier,
 8 Mo pour le dialogue (image jointe), 64 Mo pour l'import de mémoire, 2 Mo ailleurs ; 900 s pour les lectures de

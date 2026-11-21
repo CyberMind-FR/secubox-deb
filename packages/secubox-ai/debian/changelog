@@ -1,3 +1,32 @@
+secubox-ai (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * Console /ai/ (#3724) : onglets Dossier et Réponses, fidèles aux maquettes
+    approuvées (palette sombre, cibles de 44 px, ?demo=1 annoncé, adresses de
+    documentation). Chaque chiffre vient d'une route ; absent = « relevé
+    indisponible », jamais un zéro inventé.
+  * GET /dossiers (curseur derniere_vue|id, 100 par défaut, 500 au plus,
+    filtre niveau) et GET /dossiers/{id} : chronologie multicouche (couche et
+    étape calculées par le code), étapes, outils et traits, niveau avec
+    signaux, seuils et historique, dernière analyse et son état, gestes avec
+    la réponse de gk2, l'effet mesuré et la possibilité de les défaire.
+    Lecture seule de veille.db, require_jwt.
+  * Décisions humaines écrites par l'API en une transaction courte, auditées
+    et relayées dans audit.log par la veille : POST /dossiers/{id}/redescendre
+    (table redescentes, migration 0009 ; la veille l'applique à sa passe
+    suivante, preuves antérieures soldées, aucun geste défait),
+    POST /dossiers/{id}/analyser (un travail analyser en file),
+    POST /actions/{id}/defaire (levée unban approuvée, reference = la
+    proposition du geste ; 409 si l'action n'a pas été posée par V2, n'est pas
+    faite, est échue, est une levée ou une prolongation, ou déjà levée).
+  * Exécuteur : la levée d'une limite ou d'un leurre part vers POST /ai/lever
+    de gk2 (secubox-waf-ng 1.43.0), celle d'un ban, d'un bloc ou d'un partage
+    vers /ai/unban ; revalidation avant signature inchangée (même cible, geste
+    V2 fait). La riposte enregistre les seuils qui ont fixé le niveau.
+  * GET /veille/etat : partages_7j (partagés ; revus et contenus chez un pair
+    à null, non remontés à gk3).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 16:00:00 +0100
+
 secubox-ai (0.6.0-1~trixie1) trixie; urgency=medium
 
   * Riposte graduée défensive (#3723, spec 2026-11-19) : niveau observer /

@@ -22,7 +22,8 @@ Une passe (boucle `reponses`, 10 s, dans secubox-ai-veille) :
    `approuvee`) passe `expiree` sans envoi (une approuvée expirée est auditée) ;
 5. pour chacune : REVALIDATION avant signature (geste du catalogue, cible de la forme du geste, publique et hors des
    plages protégées `[veille.analyste] protegees`, durée dans les bornes de gk2) ; corps aux formes EXACTES des
-   modèles de gk2 ; `prolonger` et `unban` visent l'id de gk2 rendu au ban de la proposition `reference`. Tout écart :
+   modèles de gk2 ; `prolonger` et `unban` visent l'id de gk2 rendu au geste de la proposition `reference` (la levée
+   d'une limite ou d'un leurre part vers `POST /ai/lever`, celle d'un ban ou d'un partage vers `/ai/unban`). Tout écart :
    `echec` local audité, rien n'est signé. La ligne `actions` est créée en `envoi` (avec le `jti` et l'empreinte de la
    clé) et la proposition passe `envoyee` DANS UNE TRANSACTION, AVANT le premier octet envoyé ; puis la réponse de gk2
    est enregistrée telle quelle : 200 → `faite` (id et fin de gk2 ; levée `echu` → `refusee_gk2`) ; 409/404 →
@@ -87,7 +88,10 @@ DUREE_BLOC_AUTO_MAX_S = 86400
 #: Décisions écrites par l'API (`relais`) → événement d'audit.log.
 RELAIS = {"proposition_approuvee": "ai-proposition-approuvee", "proposition_refusee": "ai-proposition-refusee",
           "veille_suspendre": "veille-suspendue", "veille_reprendre": "veille-reprise",
-          "filtre_confirme": "ai-filtre-confirme"}
+          "filtre_confirme": "ai-filtre-confirme", "dossier_redescendre": "ai-dossier-redescendre",
+          "dossier_analyser": "ai-dossier-analyser", "action_defaire": "ai-action-defaire"}
+#: Levée (`unban`) d'un geste sans ban : `POST /ai/lever` de gk2 (#3724), `cible_geste` = le geste visé.
+LEVEES_SANS_BAN = ("limiter", "leurre")
 # {auto} : « ? » des gestes d'office permis à cette passe (NULL : aucun).
 _ORDRE = ("SELECT p.id, p.version, p.etat, p.geste, p.cible, p.duree_s, p.mode, p.reference, p.motif "
           "FROM propositions p LEFT JOIN dossiers d ON d.id = p.dossier_id "
@@ -435,12 +439,18 @@ def _construire(db, p, protegees=()):
     conseil = "v2-" + _RE_CONSEIL.sub("", p["id"])[:61]
     mode = "clic" if p["etat"] == "approuvee" else "auto"
     if geste in ("prolonger", "unban"):
-        r = db.execute("SELECT a.id_gk2 FROM propositions r JOIN actions a ON a.proposition_id = r.id "
-                       "WHERE r.id = ? AND r.geste IN ('ban', 'ban_bloc') AND r.cible = ? AND a.etat = 'faite'",
+        # prolonger : un ban V2 fait ; unban : un ban, une limite, un leurre ou un partage V2 faits (#3724), de MÊME
+        # cible : la levée ne vise jamais que l'id rendu par gk2 au geste de la proposition `reference`.
+        visees = ("('ban', 'ban_bloc')" if geste == "prolonger"
+                  else "('ban', 'ban_bloc', 'limiter', 'leurre', 'partager')")
+        r = db.execute("SELECT a.id_gk2, r.geste FROM propositions r JOIN actions a ON a.proposition_id = r.id "
+                       f"WHERE r.id = ? AND r.geste IN {visees} AND r.cible = ? AND a.etat = 'faite'",
                        (p["reference"], p["cible"])).fetchone() if p["reference"] else None
         if r is None or not isinstance(r[0], str) or not _RE_ID.fullmatch(r[0]):
             return None, None, "reference"
         if geste == "unban":
+            if r[1] in LEVEES_SANS_BAN:
+                return {"geste": "lever", "cible_geste": r[1], "id": r[0]}, r[0], None
             return {"geste": "unban", "id": r[0]}, r[0], None
     duree = p["duree_s"]
     bas, haut = BORNES_DUREE[geste]
@@ -628,7 +638,8 @@ async def _executer_une(veille, client, p, maintenant, pol, journal, protegees=(
         await _journaliser(journal, [("ai-reponse-envoi", details)])
 
     try:
-        reponse = await client.post(ROUTES[p["geste"]], corps, avant_envoi=avant_envoi)
+        route = "ai_lever" if corps.get("geste") == "lever" else ROUTES[p["geste"]]
+        reponse = await client.post(route, corps, avant_envoi=avant_envoi)
     except _Ecarte as e:
         log.info("exécuteur : %s %s écartée (%s)", p["geste"], p["id"], e)
         return "suite"

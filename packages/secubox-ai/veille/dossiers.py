@@ -29,7 +29,8 @@ Chaque étape garde ses règles, ses preuves (identifiants d'événements) et le
 au moins deux dossiers d'acteur vus à moins de `calme_s` portant la même attribution NOMMÉE (jamais « inconnu »).
 
 Riposte graduée (#3723) : chaque recalcul fixe le niveau du dossier (`riposte.evaluer`, signaux chiffrés) ; à chaque
-passe, les dossiers sans nouvelle preuve depuis `calme_s` de la riposte redescendent (`riposte.redescendre`). Les
+passe, les dossiers sans nouvelle preuve depuis `calme_s` de la riposte redescendent (`riposte.redescendre`), et
+ceux dont un administrateur a demandé la redescente (#3724, `riposte.appliquer_redescentes`) avant les recalculs. Les
 requêtes servies par le leurre de la box (`leurre_redirige`) ne sont jamais preuve d'une étape.
 """
 import hashlib
@@ -462,6 +463,10 @@ def construire(db, maintenant, fenetre_s=FENETRE_S, cible_s=CIBLE_S, calme_s=CAL
         touches.update(d for d, _ in nouveaux_liens)
         touches |= _campagnes(db, recents, acteurs, maintenant, cible_s, calme_s, h)
         db.executemany("UPDATE dossiers SET a_recalculer = 1 WHERE id = ?", [(d,) for d in touches])
+        # Redescentes décidées par un administrateur (#3724) : avant les recalculs, qui partent alors du plancher.
+        humaines = riposte.appliquer_redescentes(db, maintenant)
+        if humaines:
+            log.info("riposte : %d dossier(s) redescendu(s) à observer (décision humaine)", humaines)
         ids = [d for (d,) in db.execute("SELECT id FROM dossiers WHERE a_recalculer = 1 ORDER BY id LIMIT ?",
                                         (max_recalcul,))]
         out = [d for d in (_recalculer(db, did, h, maintenant, seuils) for did in ids) if d is not None]

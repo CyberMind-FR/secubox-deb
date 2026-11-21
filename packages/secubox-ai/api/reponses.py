@@ -16,7 +16,7 @@ import asyncio
 import json
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -196,7 +196,16 @@ def _vue_etat(db) -> dict:
             # À décider : les clics, plus les propositions d'office tant que l'automatique est suspendu (elles
             # n'attendent plus qu'un administrateur). `auto_en_attente` les compte à part dans tous les cas.
             "a_decider": clic + (auto if bloque else 0), "auto_en_attente": auto,
-            "observation": observation}
+            "observation": observation, "partages_7j": _partages_7j(db)}
+
+
+def _partages_7j(db) -> dict:
+    """Indicateurs partagés au maillage par V2 sur 7 jours (#3724). Les retours des pairs (revu, contenu) ne remontent
+    pas jusqu'à gk3 : null, jamais un zéro inventé."""
+    depuis = (_maintenant() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    n = db.execute("SELECT COUNT(*) FROM propositions WHERE geste = 'partager' AND etat = 'faite' AND maj_le >= ?",
+                   (depuis,)).fetchone()[0]
+    return {"partages": n, "revus": None, "contenus": None}
 
 
 @routeur.get("/veille/etat")
@@ -280,3 +289,32 @@ async def filtre_confirmer(fid: str, user: dict = Depends(require_jwt)):
         except decisions.RefusDecision as e:
             raise HTTPException(e.statut, detail={"motif": e.motif}) from None
     return await _executer(ecrire, ecriture=True)
+
+
+# ---- console #3724 : décisions humaines de l'onglet Dossier (écrites ici, appliquées par la veille) ----
+async def _demande(fonction, ident: str, user: dict):
+    def ecrire(db):
+        try:
+            return fonction(db, ident, _acteur(user), _maintenant())
+        except decisions.RefusDecision as e:
+            raise HTTPException(e.statut, detail={"motif": e.motif}) from None
+    return await _executer(ecrire, ecriture=True)
+
+
+@routeur.post("/dossiers/{did}/redescendre")
+async def dossier_redescendre(did: str, user: dict = Depends(require_jwt)):
+    """Redescendre le niveau à `observer` : la décision est écrite (auditée, relayée), la veille l'applique."""
+    return await _demande(decisions.demander_redescente, did, user)
+
+
+@routeur.post("/dossiers/{did}/analyser")
+async def dossier_analyser(did: str, user: dict = Depends(require_jwt)):
+    """Analyser à nouveau : un travail `analyser` déposé (un seul en attente par dossier)."""
+    return await _demande(decisions.demander_analyse, did, user)
+
+
+@routeur.post("/actions/{aid}/defaire")
+async def action_defaire(aid: str, user: dict = Depends(require_jwt)):
+    """Défaire une action V2 : levée `unban` approuvée (référence = la proposition du geste), envoyée par
+    l'exécuteur après revalidation. 409 si l'action n'a pas été posée par V2, n'est pas faite, est échue ou levée."""
+    return await _demande(decisions.demander_defaire, aid, user)
