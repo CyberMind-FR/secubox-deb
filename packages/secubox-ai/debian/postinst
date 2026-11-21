@@ -82,8 +82,17 @@ DOSSIERS
     if [ ! -e /etc/secubox/ai.toml ] && [ -f /usr/share/secubox/ai/ai.toml.example ]; then
       install -m 0644 -o root -g root /usr/share/secubox/ai/ai.toml.example /etc/secubox/ai.toml
     fi
+    # Politiques et seuils de la riposte (#3723) : déposés s'ils sont absents, JAMAIS écrasés. root 0644 (la veille
+    # refuse un fichier d'un autre propriétaire ou inscriptible par le groupe ou les autres).
+    [ -d /etc/secubox/ai ] || install -d -o root -g root -m 0755 /etc/secubox/ai
+    if [ ! -e /etc/secubox/ai/politiques.toml ] && [ -f /usr/share/secubox/ai/politiques.toml.example ]; then
+      install -m 0644 -o root -g root /usr/share/secubox/ai/politiques.toml.example /etc/secubox/ai/politiques.toml
+    fi
+    if [ ! -e /etc/secubox/ai/riposte.toml ] && [ -f /usr/share/secubox/ai/riposte.toml.example ]; then
+      install -m 0644 -o root -g root /usr/share/secubox/ai/riposte.toml.example /etc/secubox/ai/riposte.toml
+    fi
 
-    # Profils AppArmor (API en enforce, moteur en complain), chargés AVANT tout démarrage : avec AppArmor actif, une
+    # Profils AppArmor (API, moteur et veille en enforce), chargés AVANT tout démarrage : avec AppArmor actif, une
     # unité qui nomme un profil non chargé échoue. Sans AppArmor, l'unité démarre sans profil. Dans le chroot d'une
     # image, /sys est celui de l'hôte : apparmor.service les chargera au premier démarrage depuis /etc/apparmor.d.
     PROFILS=1

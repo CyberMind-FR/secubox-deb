@@ -1,0 +1,18 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-waf-indices (#3723) : une passe sur les indicateurs d'adresses reçus des pairs du maillage.
+
+La logique vit dans /usr/lib/secubox/waf/api/indices_ip.py (avec les gardes de gestes_ia) ; ce lanceur ne fait que
+l'appeler. Lancé par secubox-waf-indices.service (minuterie de 5 min), compte secubox.
+"""
+import sys
+
+sys.path.insert(0, "/usr/lib/secubox/waf")
+
+from api import indices_ip  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(indices_ip.main())

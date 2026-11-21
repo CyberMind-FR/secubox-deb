@@ -169,10 +169,17 @@ override_dh_installsystemd:
 	install -m 0644 systemd/secubox-waf-blocs-veille.service systemd/secubox-waf-blocs-veille.timer \
 	  debian/secubox-waf-ng/lib/systemd/system/
 	dh_installsystemd --name=secubox-waf-blocs-veille.timer
+	# #3723 : indicateurs d'adresses reçus des pairs du maillage (oneshot, minuterie de 5 min, compte secubox).
+	install -m 0644 systemd/secubox-waf-indices.service systemd/secubox-waf-indices.timer \
+	  debian/secubox-waf-ng/lib/systemd/system/
+	dh_installsystemd --name=secubox-waf-indices.timer
 
 execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/sbin
 	install -m 0755 sbin/secubox-actord-ingest-perms debian/secubox-waf-ng/usr/sbin/
+	# #3723 : lanceur de secubox-waf-indices (logique dans /usr/lib/secubox/waf/api/indices_ip.py) et son profil ENFORCE.
+	install -m 0755 sbin/secubox-waf-indices debian/secubox-waf-ng/usr/sbin/
+	install -D -m 0644 apparmor/secubox-waf-indices debian/secubox-waf-ng/etc/apparmor.d/secubox-waf-indices
 	install -d debian/secubox-waf-ng/etc/secubox
 	install -m 0644 config/secubox-waf-ratelimit.nft debian/secubox-waf-ng/etc/secubox/
 	install -m 0755 sbxwaf debian/secubox-waf-ng/usr/sbin/sbxwaf

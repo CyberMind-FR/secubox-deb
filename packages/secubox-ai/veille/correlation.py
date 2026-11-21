@@ -90,10 +90,12 @@ def correlable(e: Evt) -> bool:
 
 
 def _charger(db, debut, fin):
+    """Événements corrélables de la fenêtre, SANS les requêtes servies par le leurre de la box (`REDIRIGES`) : elles
+    ne sont preuve d'aucune règle (ni plusieurs sources, ni retour après ban : pas de boucle leurre → ban)."""
     evts = [_evt(x) for x in db.execute(
         f"SELECT {_COLS} FROM evenements WHERE horodatage >= ? AND horodatage <= ? ORDER BY horodatage, id",
         (debut, fin))]
-    return [e for e in evts if correlable(e)]
+    return [e for e in evts if correlable(e) and e.famille not in regles.REDIRIGES]
 
 
 def _fin_ban(e: Evt):

@@ -34,7 +34,7 @@ def test_migrations_idempotentes_et_sauvegarde(tmp_path):
     assert db.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
     assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert base.migrer(db, MIGRATIONS) == []                       # rien à refaire
-    assert db.execute("SELECT version FROM schema_migrations ORDER BY 1").fetchall() == [(1,), (2,), (3,), (4,)]
+    assert db.execute("SELECT version FROM schema_migrations ORDER BY 1").fetchall() == [(1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (10,), (11,)]
     assert not list(tmp_path.glob("veille.db.avant-*"))            # base neuve : rien à sauvegarder
     db.execute("INSERT INTO curseurs(source, etat) VALUES ('waf_alertes', 'ok')")
     db.commit()
@@ -46,7 +46,7 @@ def test_migrations_idempotentes_et_sauvegarde(tmp_path):
         (dossier / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     (dossier / "0098-test.sql").write_text("CREATE TABLE essai (x INTEGER);", encoding="utf-8")
     db = base.ouvrir(chemin, dossier)
-    assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == [1, 2, 3, 4, 98]
+    assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 98]
     sauv = list(tmp_path.glob("veille.db.avant-*"))
     assert [s.name for s in sauv] == ["veille.db.avant-0098"]
     ancienne = sqlite3.connect(sauv[0])
@@ -100,12 +100,12 @@ def test_retention_par_lots(tmp_path):
     requetes = []
     db.set_trace_callback(lambda s: requetes.append(s) if s.startswith("DELETE") else None)
     res = retention.purger(db, MAINTENANT)
-    assert res == {"evenements": 2500, "incidents": 1, "mesures": 1, "dossiers": 0, "pays": 0}
+    assert {k: v for k, v in res.items() if v} == {"evenements": 2500, "incidents": 1, "mesures": 1}
     assert len([r for r in requetes if "evenements" in r]) >= 3          # lots de 1 000
     assert db.execute("SELECT count(*) FROM evenements").fetchone()[0] == 2
     assert db.execute("SELECT id FROM incidents").fetchall() == [("i-recent",)]
     assert db.execute("SELECT count(*) FROM mesures").fetchone()[0] == 1
-    assert retention.purger(db, MAINTENANT) == {"evenements": 0, "incidents": 0, "mesures": 0, "dossiers": 0, "pays": 0}
+    assert not any(retention.purger(db, MAINTENANT).values())
     assert (tmp_path / "veille.db").exists()                              # jamais supprimée
 
 
@@ -183,11 +183,14 @@ def test_garde_espace_suspend(tmp_path):
         libre["v"] = 2**29                                           # sous 1 Gio
         await asyncio.sleep(0.08)
         assert v.suspendue
-        avant = collectes.count(1)
+        avant, autres = collectes.count(1), collectes.count("autre")
         await asyncio.sleep(0.1)
-        assert collectes.count(1) == avant                           # collecte arrêtée, les autres boucles continuent
-        assert "autre" in collectes
+        assert collectes.count(1) == avant                           # collecte arrêtée
+        assert collectes.count("autre") == autres                    # #3725 : TOUTES les boucles d'écriture, pas seulement la collecte
         assert v.etat()["espace"] == "suspendu"
+        libre["v"] = 2**30 + 2**20            # au-dessus du seuil mais sous la marge : reste suspendu
+        await asyncio.sleep(0.1)
+        assert v.suspendue
         libre["v"] = 2**31
         await asyncio.sleep(0.1)
         assert not v.suspendue and collectes.count(1) > avant

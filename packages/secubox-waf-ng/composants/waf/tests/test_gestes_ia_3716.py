@@ -57,6 +57,7 @@ class FauxWafctl:
         self.reponses = {
             "ban": (0, "[..] ban ok\n", ""),
             "unban": (0, "[..] unban ok\n", ""),
+            "prolonger": (0, "[..] prolonger ok\n", ""),
             "ban-bloc": (0, '{"ok": true, "motif": null}\n', ""),
             "unban-bloc": (0, '{"ok": true, "motif": null}\n', ""),
             "blocs": (0, '{"ok": true, "motif": null, "blocs": []}\n', ""),
@@ -126,6 +127,16 @@ def c(monkeypatch, tmp_path):
     monkeypatch.setattr(waf, "AUDIT_LOG", tmp_path / "audit.log")
     monkeypatch.setattr(g, "JOURNAL_AI", tmp_path / "ai-ban.jsonl")
     monkeypatch.setattr(g, "BANS_WAF", tmp_path / "bans.jsonl")
+    # #3723 : jamais le journal des menaces ni le mode SADE du poste qui lance la suite
+    monkeypatch.setattr(g, "JOURNAL_MENACES", tmp_path / "waf-threats.log")
+    monkeypatch.setattr(g, "FICHIER_SADE", tmp_path / "sade-mode.json")
+    monkeypatch.setattr(g, "_uids_sade", lambda: {0, os.getuid()})
+    # revue finale I1 : secubox-soc installé ⇒ fichier absent = observe ; jamais les marqueurs du poste de test
+    monkeypatch.setattr(g, "MARQUEURS_SOC", (tmp_path / "soc-absent",))
+    # #3723 : cibles protégées des gestes d'office (maillage, robots) sans réseau ni DNS ; aucun pair par défaut
+    monkeypatch.setattr(g, "WG_MESH", tmp_path / "wg_mesh.json")
+    monkeypatch.setattr(g, "_lire_threatmesh_peers", lambda: {"node": "x", "peers": []})
+    monkeypatch.setattr(g, "_fcrdns", lambda ip: "")
     _regroupement_neuf(monkeypatch, g)
     faux = FauxWafctl()
     monkeypatch.setattr(g, "_executer", faux)
@@ -179,12 +190,13 @@ def test_ban_bloc_clic_passe_par_systemd_run(c):
 
 
 def test_auto_refuse_une_adresse_seule(c):
+    # #3723 : une adresse d'office n'est admise que vue depuis moins de 24 h (test_gestes_ia_3723) ; jamais vue ici
     c.bans = _bloc_peuple(30)
     r = c.ban("203.0.113.5", mode="auto")
-    assert r.status_code == 409 and r.json()["detail"]["motif"] == "pas_sur"
+    assert r.status_code == 409 and r.json()["detail"]["motif"] == "non_vue"
     assert "ban" not in c.faux.verbes()
     refus = [x for x in c.audit() if x["action"] == "ai-ban-refus"]
-    assert len(refus) == 1 and "pas_sur" in refus[0]["detail"] and "203.0.113.5" in refus[0]["detail"]
+    assert len(refus) == 1 and "non_vue" in refus[0]["detail"] and "203.0.113.5" in refus[0]["detail"]
     assert "auto" in refus[0]["detail"] and refus[0]["by"] == "ai-ban" and "nombre 1" in refus[0]["detail"]
     assert f"cle {USAGER_AI['cle']}" in refus[0]["detail"]
 
@@ -267,7 +279,8 @@ def test_duree_clic_plus_de_7j_422(c):
 
 def test_plafond_auto_6e_refuse(c):
     now = int(time.time())
-    c.journal(*[_ban_journal(f"192.0.2.{i}", now - 100 * i - 1, now + 80000, mode="auto") for i in range(5)])
+    # #3723 : les plafonds d'office des blocs ne comptent que des blocs (les adresses ont les leurs)
+    c.journal(*[_ban_journal(f"198.51.{i}.0/24", now - 100 * i - 1, now + 80000, mode="auto") for i in range(5)])
     c.bans = _bloc_peuple(20)
     r = c.ban("203.0.113.0/24", mode="auto")
     assert r.status_code == 409 and r.json()["detail"]["motif"] == "plafond_auto"
@@ -278,25 +291,27 @@ def test_plafond_auto_6e_refuse(c):
 
 def test_plafond_auto_jour_refuse(c):
     now = int(time.time())
-    c.journal(*[_ban_journal(f"192.0.2.{i}", now - 3600 - 3000 * i, now + 1000, mode="auto") for i in range(20)])
+    c.journal(*[_ban_journal(f"198.51.{i}.0/24", now - 3600 - 3000 * i, now + 1000, mode="auto") for i in range(20)])
     c.bans = _bloc_peuple(20)
     assert c.ban("203.0.113.0/24", mode="auto").json()["detail"]["motif"] == "plafond_auto"
 
 
 def test_plafond_compte_31e_refuse(c):
+    # #3723 : le plafond du compte (30/h, 100/j) ne vaut plus que pour les blocs ; une adresse a 60/h et 400/j
     now = int(time.time())
-    c.journal(*[_ban_journal(f"192.0.2.{i}", now - 60 * i - 1, now + 80000) for i in range(30)])
-    r = c.ban("198.51.100.7")
+    c.journal(*[_ban_journal(f"198.51.{i}.0/24", now - 60 * i - 1, now + 80000) for i in range(30)])
+    r = c.ban("203.0.113.0/24")
     assert r.status_code == 409 and r.json()["detail"]["motif"] == "plafond_compte"
     assert c.faux.appels == []
+    assert c.ban("198.51.100.7").status_code == 200
 
 
 def test_plafond_compte_jour_et_bans_annules_comptes(c):
     now = int(time.time())
-    entrees = [_ban_journal(f"192.0.2.{i}", now - 3600 - 800 * i, now - 10) for i in range(100)]
+    entrees = [_ban_journal(f"198.{i}.0.0/24", now - 3600 - 800 * i, now - 10) for i in range(100)]
     annules = [{"ts": "", "at": now - 5, "type": "annule", "id": e["id"], "cible": e["cible"]} for e in entrees[:50]]
     c.journal(*entrees, *annules)
-    assert c.ban("198.51.100.7").json()["detail"]["motif"] == "plafond_compte"
+    assert c.ban("203.0.113.0/24").json()["detail"]["motif"] == "plafond_compte"
 
 
 def test_deja_actif(c):
@@ -376,7 +391,9 @@ def test_wafctl_injoignable_ou_delai_503_et_retour_arriere(c, monkeypatch):
     monkeypatch.setattr(c.g, "_executer", lent)
     r = c.ban("198.51.100.7")
     assert r.status_code == 503 and r.json()["detail"]["motif"] == "wafctl"
-    assert appels[-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    # revue finale I4 : la levée porte la fin demandée (wafctl ne lève pas un ban allongé par un autre)
+    assert appels[-1][:-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    assert abs(int(appels[-1][-1]) - (int(time.time()) + 86400)) <= 5
     assert c.lignes_journal() == []
 
 
@@ -385,7 +402,7 @@ def test_audit_echoue_le_ban_est_retire_et_500(c, monkeypatch):
     r = c.ban("198.51.100.7")
     assert r.status_code == 500 and r.json()["detail"]["motif"] == "audit"
     assert c.faux.verbes()[-2:] == ["ban", "unban"]
-    assert c.faux.appels[-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    assert c.faux.appels[-1][:-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
     types = [x["type"] for x in c.lignes_journal()]
     assert types == ["ban", "annule"] and c.lignes_journal()[1]["cause"] == "audit"
     # le bloc : retiré par systemd-run unban-bloc
@@ -448,7 +465,9 @@ def test_unban_annule_puis_deja_annule(c):
     ident = c.ban("198.51.100.7").json()["id"]
     r = c.c.post("/ai/unban", json={"geste": "unban", "id": ident})
     assert r.status_code == 200 and r.json() == {"id": ident, "etat": "annule"}
-    assert c.faux.appels[-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    # la fin du ban d'ai-ban accompagne la levée (revue finale I4)
+    assert c.faux.appels[-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7",
+                                 str(c.lignes_journal()[0]["fin"])]
     unban = [x for x in c.audit() if x["action"] == "ai-unban"]
     assert len(unban) == 1 and ident in unban[0]["detail"] and unban[0]["by"] == "ai-ban"
     assert c.lignes_journal()[-1]["type"] == "annule" and c.lignes_journal()[-1]["id"] == ident
@@ -508,7 +527,9 @@ def test_etat_rend_actifs_et_compteurs(c):
     e = r.json()
     assert sorted(a["id"] for a in e["actifs"]) == sorted([actif["id"], vieux["id"]])
     assert {"id", "cible", "fin", "mode"} == set(e["actifs"][0])
-    assert e["compteurs"] == {"auto_heure": 1, "auto_jour": 1, "compte_heure": 2, "compte_jour": 3}
+    # #3723 : `compteurs` = plafonds des blocs (un seul bloc ici) ; les adresses sont dans `plafonds_par_geste`
+    assert e["compteurs"] == {"auto_heure": 1, "auto_jour": 1, "compte_heure": 1, "compte_jour": 1}
+    assert e["plafonds_par_geste"]["ban"]["restant_jour"] == 400 - 2
     assert e["plafonds"] == {"auto_heure": 5, "auto_jour": 20, "compte_heure": 30, "compte_jour": 100}
     assert c.faux.appels == []
 
@@ -550,6 +571,16 @@ def c_garde(monkeypatch, tmp_path):
     monkeypatch.setattr(waf, "AUDIT_LOG", tmp_path / "audit.log")
     monkeypatch.setattr(g, "JOURNAL_AI", tmp_path / "ai-ban.jsonl")
     monkeypatch.setattr(g, "BANS_WAF", tmp_path / "bans.jsonl")
+    # #3723 : jamais le journal des menaces ni le mode SADE du poste qui lance la suite
+    monkeypatch.setattr(g, "JOURNAL_MENACES", tmp_path / "waf-threats.log")
+    monkeypatch.setattr(g, "FICHIER_SADE", tmp_path / "sade-mode.json")
+    monkeypatch.setattr(g, "_uids_sade", lambda: {0, os.getuid()})
+    # revue finale I1 : secubox-soc installé ⇒ fichier absent = observe ; jamais les marqueurs du poste de test
+    monkeypatch.setattr(g, "MARQUEURS_SOC", (tmp_path / "soc-absent",))
+    # #3723 : cibles protégées des gestes d'office (maillage, robots) sans réseau ni DNS ; aucun pair par défaut
+    monkeypatch.setattr(g, "WG_MESH", tmp_path / "wg_mesh.json")
+    monkeypatch.setattr(g, "_lire_threatmesh_peers", lambda: {"node": "x", "peers": []})
+    monkeypatch.setattr(g, "_fcrdns", lambda ip: "")
     _regroupement_neuf(monkeypatch, g)
     faux = FauxWafctl()
     monkeypatch.setattr(g, "_executer", faux)
@@ -639,7 +670,10 @@ def test_routes_branchees_sur_l_application():
     from secubox_core.compte_service import require_ai_ban
     routes = {(r.path, tuple(sorted(r.methods))): r for r in waf.app.routes if getattr(r, "path", "").startswith("/ai/")
               and not r.path.startswith("/ai/filtres")}   # #3732 : compte ai-filtres, test_filtres_ia_3732
-    assert set(routes) == {("/ai/ban", ("POST",)), ("/ai/unban", ("POST",)), ("/ai/etat", ("GET",))}
+    assert set(routes) == {("/ai/ban", ("POST",)), ("/ai/unban", ("POST",)), ("/ai/etat", ("GET",)),
+                           ("/ai/prolonger", ("POST",)), ("/ai/limiter", ("POST",)),
+                           ("/ai/leurre", ("POST",)), ("/ai/partager", ("POST",)),
+                           ("/ai/lever", ("POST",))}   # #3723, #3724
     from api import gestes_ia as g
     for route in routes.values():
         # #3720 : /ai/etat ouvert aussi à ai-lecture (aiguillage require_ai_etat → require_ai_ban ou ai-lecture)
@@ -831,7 +865,7 @@ def test_unban_adresse_non_couverte_est_levee(c, records):
     ident = c.ban("198.51.100.7").json()["id"]
     _bans_waf_journal(c, *[_rec(ip, now + at, (now + exp) if exp else 0, action) for ip, at, exp, action in records])
     r = _unban(c, ident)
-    assert r.json()["etat"] == "annule" and c.faux.appels[-1][-2:] == ["unban", "198.51.100.7"]
+    assert r.json()["etat"] == "annule" and c.faux.appels[-1][-3:-1] == ["unban", "198.51.100.7"]
 
 
 def test_unban_bans_waf_illisible_503_rien_n_est_leve(c, monkeypatch, tmp_path):
@@ -973,8 +1007,8 @@ def test_demande_non_auditee_rien_n_est_fait(c, monkeypatch):
 
 def test_horloge_reculee_ne_fait_pas_sauter_le_plafond(c):
     now = int(time.time())
-    c.journal(*[_ban_journal(f"192.0.2.{i}", now + 5000, now + 90000) for i in range(30)])
-    assert c.ban("198.51.100.7").json()["detail"]["motif"] == "plafond_compte"
+    c.journal(*[_ban_journal(f"198.51.{i}.0/24", now + 5000, now + 90000) for i in range(30)])
+    assert c.ban("203.0.113.0/24").json()["detail"]["motif"] == "plafond_compte"
     e = c.c.get("/ai/etat").json()
     assert e["compteurs"]["compte_heure"] == 30
 

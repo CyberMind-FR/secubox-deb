@@ -78,7 +78,7 @@ def test_pairs_threatmesh_toujours_fusionnes(actif, tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("stderr,definitif", [
     ("refus:privee\n", True), ("refus:protegee\n", True), ("refus:box\n", True), ("refus:pair\n", True),
-    ("refus:invalide\n", True),
+    ("refus:invalide\n", True), ("refus:lan\n", True),          # lan : préfixe on-link de la box (#3723 I3)
     ("[2026-11-20 15:00:00] ERROR: Adresse privée refusée : 10.0.0.1\n", True),
     ("[2026-11-20 15:00:00] ERROR: Adresse invalide : x\n", True),
     ("refus:garde_illisible\n", False),
@@ -230,4 +230,4 @@ def test_migration_0002_sur_base_existante(faux):
                          "\nINSERT INTO schema_migrations VALUES (1, '2026-11-01T00:00:00Z');")
     assert defense_etat.noter_propositions_vues(["c" * 64])
     with closing(sqlite3.connect(chemin)) as db:
-        assert db.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall() == [(1,), (2,)]
+        assert db.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall() == [(1,), (2,), (3,)]

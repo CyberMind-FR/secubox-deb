@@ -16,6 +16,7 @@ Depends: ${misc:Depends},
  uvicorn,
  poppler-utils,
  sqlite3,
+ acl,
  secubox-zia-llm (>= 0.3.0~)
 Recommends: apparmor, logrotate
 Description: SecuBox IA — assistant, analyses et moteurs local ou distant

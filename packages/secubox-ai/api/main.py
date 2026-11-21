@@ -17,9 +17,10 @@ from fastapi import APIRouter, Depends, FastAPI
 
 from secubox_core.auth import require_jwt
 
-from api import code, dialogue, documents, journal, medias, memoire, menaces, modeles, moteurs, radar, reglages, taches
+from api import (code, dialogue, documents, journal, medias, memoire, menaces, modeles, moteurs, radar, reglages,
+                 reponses, taches)
 
-VERSION = "0.4.0"
+VERSION = "2.0.0"
 
 ROUTEUR = APIRouter(prefix="")
 
@@ -64,3 +65,4 @@ app.include_router(code.routeur)
 app.include_router(modeles.routeur)
 app.include_router(medias.routeur)
 app.include_router(journal.routeur)
+app.include_router(reponses.routeur)

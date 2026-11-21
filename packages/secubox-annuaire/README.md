@@ -179,6 +179,18 @@ versions (une action par heure, retour de contenu possible) et les abonnements a
 seulement, d'un jour au moins, bornés, un seul par fournisseur (l'ancien résilié une fois le nouveau approuvé), sous
 le seuil `confiance_min` de MirrorNet. Chaque geste est audité par « fond » dans `audit.log`.
 
+## Indicateurs d'adresses du maillage (#3723, 0.23.0)
+
+`mirrornet_locaux.py` tient une table de jeux (`JEUX`) : `tv-indices` (constantes d'origine inchangées : ses offres
+en place restent conformes) et `ip-indices` (indicateurs d'adresses du WAF, demande écrite par secubox-mirrornet
+0.7.0). Chaque jeu a SA propre offre (`scope.usage = ip-indices`, endpoint `mirrornet://<did>/ip-indices`, nom
+« Indicateurs d'adresses — <box> », provenance `secubox-waf-ng:ip-indices`), ses versions et ses abonnements, signés
+avec `node.key` exactement comme tv-indices, au seuil `confiance_min` de MirrorNet. Les jeux sont traités à part
+(`_tv_indices_fond`, `_ip_indices_fond`) : un geste d'offre, l'historique et les résiliations d'un jeu ne voient
+jamais les offres ni les abonnements de l'autre. Audit `mirrornet_ip_indices_*`. Classe `communaute` en approbation
+automatique (la classe `specialise` imposerait une approbation manuelle de chaque abonnement) et
+`donnees_personnelles = agregees` : la qualification RGPD de ces adresses reste à arbitrer.
+
 ## Jeux de données MirrorNet (#3653)
 
 `service_dataset_version` : manifeste signé d'une version (numéro et parent calculés, empreinte BLAKE2b de l'objet,

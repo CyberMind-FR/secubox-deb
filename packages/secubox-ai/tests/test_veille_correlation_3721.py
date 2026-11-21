@@ -30,7 +30,7 @@ def _ajout(db, source, quand, **brut):
     _n[0] += 1
     brut.setdefault("ts", int(quand.timestamp()))
     e = normaliser.evenement(source, brut, id_source=f"t{_n[0]}", maintenant=T0)
-    db.execute(f"INSERT INTO evenements({', '.join(normaliser.COLONNES)}) VALUES ({', '.join('?' * 17)})", e.ligne())
+    db.execute(f"INSERT INTO evenements({', '.join(normaliser.COLONNES)}) VALUES ({', '.join('?' * len(normaliser.COLONNES))})", e.ligne())
     return e
 
 
@@ -145,7 +145,7 @@ def test_plages_documentation_exclues(db):
     evts = [normaliser.evenement("menaces", x, id_source=f"r{i}") for i, x in enumerate(lignes)]
     evts += [normaliser.evenement("bans", x, id_source=f"b{i}") for i, x in enumerate(bans)]
     db.executemany(f"INSERT OR IGNORE INTO evenements({', '.join(normaliser.COLONNES)}) VALUES "
-                   f"({', '.join('?' * 17)})", [e.ligne() for e in evts])
+                   f"({', '.join('?' * len(normaliser.COLONNES))})", [e.ligne() for e in evts])
     assert db.execute("SELECT COUNT(*) FROM evenements").fetchone()[0] > 300
     fin = max(datetime.fromisoformat(e.horodatage.replace("Z", "+00:00")) for e in evts)
     for k in range(0, 48):

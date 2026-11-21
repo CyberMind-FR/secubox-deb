@@ -42,7 +42,7 @@ WG = "/usr/bin/wg"
 
 CODES = {None: 0, "invalide": 1, "privee": 2, "protegee": 3,
          "box": 4, "pair": 5, "garde_illisible": 6, "nft": 7, "duree": 8,
-         "etat": 9, "audit": 10, "incoherent": 11, "usage": 64}
+         "etat": 9, "audit": 10, "incoherent": 11, "lan": 12, "usage": 64}
 
 # IPv6 qui encapsulent ou traduisent de l'IPv4 : refusées, sbxwaf les traiterait en IPv4.
 # 6to4, NAT64 bien connu, NAT64 d'usage local (RFC 8215), SIIT « IPv4-translated » (RFC 2765).
@@ -182,21 +182,39 @@ def lire_protegees(chemin, exiger=False):
     return reseaux
 
 
-def adresses_locales(executer):
-    """Adresses de la box d'après `ip -j addr` ; échec => GardeIllisible."""
+def adresses_et_prefixes(executer):
+    """(adresses de la box, préfixes IPv6 globaux on-link) d'après `ip -j addr` ; échec => GardeIllisible. Un préfixe
+    IPv6 on-link (`local`/`prefixlen` de portée `global`, revue finale #3723 I3) est le LAN de la box : ses machines y
+    ont des adresses publiques ; jamais visé (motif `lan`). Jamais un préfixe IPv4 : le LAN IPv4 est privé (`privee`),
+    un préfixe IPv4 public on-link est celui du WAN, dont les voisins restent bannissables."""
     try:
         donnees = json.loads(executer([IP, "-j", "addr"]))
-        adresses = set()
+        adresses, prefixes = set(), []
         for interface in donnees:
             for info in interface.get("addr_info", []):
                 local = info.get("local")
-                if local:
-                    adresses.add(_depli(ipaddress.ip_address(local.split("%")[0])))
+                if not local:
+                    continue
+                adresse = _depli(ipaddress.ip_address(local.split("%")[0]))
+                adresses.add(adresse)
+                longueur = info.get("prefixlen")
+                # IPv6 seulement : un LAN IPv4 est privé (refusé `privee`) ; un préfixe IPv4 PUBLIC on-link est le WAN
+                # (pont Freebox /24, DOCSIS /22, VPS /24) : ses voisins restent bannissables
+                if (adresse.version == 6 and info.get("scope") == "global" and type(longueur) is int
+                        and longueur < adresse.max_prefixlen):
+                    reseau = ipaddress.ip_network(f"{adresse}/{longueur}", strict=False)
+                    if reseau not in prefixes:
+                        prefixes.append(reseau)
         if not adresses:
             raise ValueError("aucune adresse : la sortie est inutilisable")
-        return adresses
+        return adresses, prefixes
     except Exception as e:  # toute défaillance : la garde est aveugle
         raise GardeIllisible(f"adresses locales illisibles : {e}") from e
+
+
+def adresses_locales(executer):
+    """Adresses de la box d'après `ip -j addr` ; échec => GardeIllisible."""
+    return adresses_et_prefixes(executer)[0]
 
 
 def _hote_endpoint(endpoint):
@@ -242,33 +260,39 @@ def adresses_pairs(executer):
     return pairs
 
 
-def motif_refus(cible, protegees, locales, pairs):
-    """"privee" | "protegee" | "box" | "pair" | None, dans cet ordre."""
+def motif_refus(cible, protegees, locales, pairs, prefixes=()):
+    """"privee" | "protegee" | "box" | "lan" | "pair" | None, dans cet ordre (`prefixes` : réseaux on-link de la
+    box, `adresses_et_prefixes`)."""
     if any(_recoupe(cible, r) for r in INTERDITS):
         return "privee"
     if any(_recoupe(cible, r) for r in protegees):
         return "protegee"
     if any(_contient(cible, a) for a in locales):
         return "box"
+    if any(_recoupe(cible, r) for r in prefixes):
+        return "lan"
     if any(_contient(cible, a) for a in pairs):
         return "pair"
     return None
 
 
-def _gardes(cible, lancer):
-    """Les trois listes de protection, relues à chaque appel ; GardeIllisible si l'une manque."""
+def _gardes(cible, lancer, exiger=False):
+    """Les listes de protection (protégées, adresses de la box, pairs, préfixes on-link), relues à chaque appel, dans
+    l'ordre des arguments de `motif_refus` ; GardeIllisible si l'une manque. Un bloc, ou une adresse bannie d'office
+    (`exiger`, #3723), exige `protegees.env` et sa ligne SECUBOX_WAF_PROTEGEES."""
     bloc = isinstance(cible, ipaddress.IPv4Network)
-    return lire_protegees(PROTEGEES_ENV, exiger=bloc), adresses_locales(lancer), adresses_pairs(lancer)
+    locales, prefixes = adresses_et_prefixes(lancer)
+    return lire_protegees(PROTEGEES_ENV, exiger=bloc or exiger), locales, adresses_pairs(lancer), prefixes
 
 
-def verifier(texte):
+def verifier(texte, exiger=False):
     """Motif de refus d'une cible (texte), ou None ; les trois listes sont relues à chaque appel."""
     try:
         cible = normaliser_cible(texte)
     except ValueError:
         return "invalide"
     try:
-        return motif_refus(cible, *_gardes(cible, executer))
+        return motif_refus(cible, *_gardes(cible, executer, exiger))
     except GardeIllisible:
         return "garde_illisible"
 
@@ -682,10 +706,12 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     verbe, args = (argv[0], argv[1:]) if argv else ("", [])
     attendus = {"verifier": 1, "ajouter": 2, "retirer": 1, "lister": 0, "reappliquer": 0, "reparer": 0}
-    if attendus.get(verbe) != len(args):
+    # `verifier <cible> --exiger` (#3723) : geste d'office d'une adresse, protegees.env exigé comme pour un bloc
+    exiger = verbe == "verifier" and len(args) == 2 and args[1] == "--exiger"
+    if attendus.get(verbe) != len(args) - exiger:
         return _imprimer(_refus("usage"))
     if verbe == "verifier":
-        motif = verifier(args[0])
+        motif = verifier(args[0], exiger)
         return _imprimer({"ok": motif is None, "motif": motif})
     if verbe == "ajouter":
         if not re.fullmatch(r"[0-9]{1,9}", args[1]):

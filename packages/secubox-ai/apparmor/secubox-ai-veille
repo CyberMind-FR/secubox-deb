@@ -4,8 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Profil AppArmor ENFORCE de secubox-ai-veille (#3719). Chargé par le postinst AVANT le démarrage de l'unité, qui le
-# nomme par AppArmorProfile=. Tout ce qui n'est pas listé est refusé : ni /etc/secubox/** (la clé ai-lecture arrive
-# par LoadCredential=), ni shell, ni exécution hors de Python.
+# nomme par AppArmorProfile=. Tout ce qui n'est pas listé est refusé : ni /etc/secubox/** (les clés ai-lecture et ai-ban
+# arrivent par LoadCredential=), ni shell, ni exécution hors de Python.
 
 #include <tunables/global>
 
@@ -33,15 +33,38 @@ profile secubox-ai-veille {
   /usr/share/secubox-ai/empreintes/*.toml r,
   /etc/secubox/ai/ r,
   /etc/secubox/ai/empreintes.local.toml r,
+  # Politiques de réponse et seuils de la riposte (#3723) : lus à chaque passe (double tampon), jamais écrits.
+  /etc/secubox/ai/politiques.toml r,
+  /etc/secubox/ai/riposte.toml r,
 
-  # Clé du compte de lecture de gk2 (#3720), remise par LoadCredential= ; mémoire libre pour les mesures.
+  # Consignes versionnées de l'analyste IA (#3722) : du paquet seulement.
+  /usr/share/secubox-ai/prompts/ r,
+  /usr/share/secubox-ai/prompts/*.txt r,
+
+  # Clés remises par LoadCredential= : compte de lecture de gk2 (#3720), moteur distant gk0 (#3722), compte ai-ban
+  # des réponses (#3723) ; mémoire libre pour les mesures.
   /run/credentials/secubox-ai-veille.service/ r,
   /run/credentials/secubox-ai-veille.service/ai-lecture r,
+  /run/credentials/secubox-ai-veille.service/ai-distant r,
+  /run/credentials/secubox-ai-veille.service/ai-ban r,
+  /run/credentials/secubox-ai-veille.service/ai-filtres r,
+
+  # Journal d'audit (#3723) : ajout seul, ce fichier seulement (jamais écrit, tronqué ni créé ici).
+  /var/log/secubox/audit.log a,
   @{PROC}/meminfo r,
 
   # veille.db (WAL : -wal, -shm), sauvegardes avant migration, tmp/ (SQLITE_TMPDIR). L'espace libre se lit par statvfs.
   /var/lib/secubox/ai/ r,
   /var/lib/secubox/ai/** rwk,
+
+  # Moteur local (#3722) : sa socket et l'état publié par le contrôleur ; dépôt des demandes seulement si
+  # reveiller_local = true (temporaire créé puis renommé par la veille elle-même). Ni moteur.env, ni le verrou.
+  /run/secubox-ai/ r,
+  /run/secubox-ai/moteur-etat.json r,
+  /run/secubox-ai/moteur.sock rw,
+  /run/secubox-ai/demandes/ r,
+  owner /run/secubox-ai/demandes/* rw,
+  # (#3723 : la même dépose sert la demande « acl-audit.demande » après une rotation d'audit.log.)
 
   network unix stream,
   network unix dgram,

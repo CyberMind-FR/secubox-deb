@@ -27,6 +27,11 @@ risque_dpi_exploitation), `persistance` (retour_apres_ban — preuves de l'incid
 Chaque étape garde ses règles, ses preuves (identifiants d'événements) et leurs heures. `outils_json` : attributions de
 `outils.identifier` (dossiers d'acteur seulement). Campagne `meme_outil_multi_adresses` (`outil-nom:<outil>:<début>`) :
 au moins deux dossiers d'acteur vus à moins de `calme_s` portant la même attribution NOMMÉE (jamais « inconnu »).
+
+Riposte graduée (#3723) : chaque recalcul fixe le niveau du dossier (`riposte.evaluer`, signaux chiffrés) ; à chaque
+passe, les dossiers sans nouvelle preuve depuis `calme_s` de la riposte redescendent (`riposte.redescendre`), et
+ceux dont un administrateur a demandé la redescente (#3724, `riposte.appliquer_redescentes`) avant les recalculs. Les
+requêtes servies par le leurre de la box (`leurre_redirige`) ne sont jamais preuve d'une étape.
 """
 import hashlib
 import json
@@ -36,9 +41,11 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from veille import normaliser, outils as outils_mod
+from typing import Optional
+
+from veille import normaliser, outils as outils_mod, riposte
 from veille.correlation import _COLS, CALME_S, _evt, correlable
-from veille.regles import ECHELLE, Evt, iso, rang
+from veille.regles import ECHELLE, REDIRIGES, Evt, iso, rang
 
 FENETRE_S = 86400              # événements nouveaux regardés à chaque passe (les liens déjà faits sont gardés)
 CIBLE_S = 1800                 # même cible / même bloc : deux acteurs à moins de 30 min d'écart
@@ -86,6 +93,15 @@ class Dossier:
     incidents: list = field(default_factory=list)
     adresses: list = field(default_factory=list)
     membres: dict = field(default_factory=dict)
+    # Riposte (#3723) : niveau et signaux (riposte.evaluer) ; événements, campagnes d'appartenance et preuves de
+    # retour après ban, lus au recalcul (non stockés) ; plancher : preuves soldées par la dernière redescente.
+    niveau: str = "observer"
+    niveau_depuis: Optional[str] = None
+    signaux: object = None
+    evts: list = field(default_factory=list, repr=False)
+    campagnes: list = field(default_factory=list)
+    retours: list = field(default_factory=list)
+    plancher: Optional[str] = None
 
     @property
     def enchainees(self) -> int:
@@ -330,7 +346,7 @@ def _etapes(db, did, type_, evts):
     if type_ == "acteur":
         premiers, derniers = {}, {}
         for e in evts:
-            if e.observation and e.ip_src:
+            if e.observation and e.ip_src and e.famille not in REDIRIGES:
                 premiers.setdefault(e.ip_src, e)
                 derniers[e.ip_src] = e.horodatage
         vues = sorted(premiers.values(), key=lambda e: (e.horodatage, e.id))
@@ -348,7 +364,19 @@ def _etapes(db, did, type_, evts):
     return out
 
 
-def _recalculer(db, did, h):
+def _retours(db, did, connus):
+    """Preuves observées des incidents `retour_apres_ban` du dossier (récidive de la riposte)."""
+    out = []
+    for (eid,) in db.execute("SELECT p.evenement_id FROM incident_preuves p JOIN incidents i ON i.id = p.incident_id "
+                             "JOIN dossier_incidents d ON d.incident_id = i.id WHERE d.dossier_id = ? "
+                             "AND i.regle = 'retour_apres_ban' ORDER BY p.evenement_id", (did,)):
+        e = connus.get(eid)
+        if e is not None and e.observation and e.famille not in REDIRIGES:
+            out.append(eid)
+    return out
+
+
+def _recalculer(db, did, h, maintenant=None, seuils=riposte.SEUILS):
     cle, type_, outils = db.execute("SELECT cle, type, outils_json FROM dossiers WHERE id = ?", (did,)).fetchone()
     evts = _evenements(db, did)
     if not evts:
@@ -365,9 +393,16 @@ def _recalculer(db, did, h):
     membres = {c: r for c, r in db.execute(
         "SELECT d.cle, m.regle FROM dossier_membres m JOIN dossiers d ON d.id = m.membre_id WHERE m.campagne_id = ? "
         "ORDER BY d.cle", (did,))}
-    return Dossier(did, cle, type_, gravite, etapes, json.loads(outils or "[]"), premiere, derniere, h,
-                   [e.id for e in evts], [i for i, _ in incidents], sorted({e.ip_src for e in evts if e.ip_src}),
-                   membres)
+    d = Dossier(did, cle, type_, gravite, etapes, json.loads(outils or "[]"), premiere, derniere, h,
+                [e.id for e in evts], [i for i, _ in incidents], sorted({e.ip_src for e in evts if e.ip_src}),
+                membres)
+    d.evts = evts
+    d.campagnes = [c for (c,) in db.execute("SELECT campagne_id FROM dossier_membres WHERE membre_id = ? "
+                                            "ORDER BY campagne_id", (did,))]
+    d.retours = _retours(db, did, {e.id: e for e in evts})
+    if maintenant is not None:
+        riposte.evaluer(db, d, maintenant, seuils)
+    return d
 
 
 def _curseur(db):
@@ -377,10 +412,11 @@ def _curseur(db):
 
 
 def construire(db, maintenant, fenetre_s=FENETRE_S, cible_s=CIBLE_S, calme_s=CALME_S, lot=LOT_EVTS,
-               max_recalcul=MAX_RECALCUL):
+               max_recalcul=MAX_RECALCUL, seuils=riposte.SEUILS):
     """Une passe : lit les événements nouveaux (curseur), les rattache aux dossiers, fond les dossiers par adresse dans
     leur acteur, relie les incidents récents, ouvre ou étend les vagues de campagne, puis recalcule au plus
-    max_recalcul dossiers marqués ; rend ceux recalculés. Une transaction courte."""
+    max_recalcul dossiers marqués (niveau de riposte compris, `seuils`) et fait redescendre les dossiers calmes ; rend
+    ceux recalculés. Une transaction courte."""
     if maintenant.tzinfo is None:
         raise ValueError("horodatage sans fuseau")
     h = iso(maintenant)
@@ -427,14 +463,21 @@ def construire(db, maintenant, fenetre_s=FENETRE_S, cible_s=CIBLE_S, calme_s=CAL
         touches.update(d for d, _ in nouveaux_liens)
         touches |= _campagnes(db, recents, acteurs, maintenant, cible_s, calme_s, h)
         db.executemany("UPDATE dossiers SET a_recalculer = 1 WHERE id = ?", [(d,) for d in touches])
+        # Redescentes décidées par un administrateur (#3724) : avant les recalculs, qui partent alors du plancher.
+        humaines = riposte.appliquer_redescentes(db, maintenant)
+        if humaines:
+            log.info("riposte : %d dossier(s) redescendu(s) à observer (décision humaine)", humaines)
         ids = [d for (d,) in db.execute("SELECT id FROM dossiers WHERE a_recalculer = 1 ORDER BY id LIMIT ?",
                                         (max_recalcul,))]
-        out = [d for d in (_recalculer(db, did, h) for did in ids) if d is not None]
+        out = [d for d in (_recalculer(db, did, h, maintenant, seuils) for did in ids) if d is not None]
         db.executemany("UPDATE dossiers SET a_recalculer = 0 WHERE id = ?", [(d,) for d in ids])
         for cid in sorted(_campagnes_outils(db, out, maintenant, calme_s, h)):
-            d = _recalculer(db, cid, h)
+            d = _recalculer(db, cid, h, maintenant, seuils)
             if d is not None:
                 out = [x for x in out if x.id != cid] + [d]
+        descendus = riposte.redescendre(db, maintenant, seuils)
+        if descendus:
+            log.info("riposte : %d dossier(s) redescendu(s) à observer (calme)", descendus)
         db.execute("INSERT INTO curseurs(source, position, etat, derniere_lecture) VALUES ('dossiers', ?, 'ok', ?) "
                    "ON CONFLICT(source) DO UPDATE SET position = excluded.position, etat = 'ok', "
                    "derniere_lecture = excluded.derniere_lecture", (str(pos), h))

@@ -4,7 +4,8 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # SecuBox IA V2 — veille (#3719) : second processus du module, SEUL écrivain régulier de veille.db (V2 § 5.2, § 6).
-# Collecte de gk2 (#3720), migrations, rétention, garde d'espace ; corrélation et file de travaux viendront ensuite. Utilisateur dédié, aucune capacité, socle de durcissement complet (RULES-CODE § 10).
+# Collecte de gk2 (#3720), migrations, rétention, garde d'espace, corrélation, dossiers, file de travaux, analyste IA
+# (#3722 : un moteur qui répond déjà, distant gk0 ou local par sa socket ; le local n'est réveillé que sur réglage) et exécuteur des réponses signées ai-ban (#3723). Utilisateur dédié, aucune capacité, socle de durcissement complet (RULES-CODE § 10).
 [Unit]
 Description=SecuBox IA — veille (base veille.db, boucles, rétention)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3719
@@ -46,14 +47,47 @@ LockPersonality=yes
 SystemCallArchitectures=native
 CapabilityBoundingSet=
 AmbientCapabilities=
-# AF_UNIX : journal ; AF_INET/AF_INET6 : gk2 (collecte). Les adresses de gk2 (ai.toml) et les résolveurs du LAN sont
+# AF_UNIX : journal, socket du moteur local (/run/secubox-ai/moteur.sock) ; AF_INET/AF_INET6 : gk2 (collecte), gk0
+# (moteur distant de l'analyste). Les adresses de gk2 (ai.toml) et les résolveurs du LAN sont
 # rouverts une à une par le drop-in de « secubox-aictl preparer » (/run/systemd/system/secubox-ai-veille.service.d).
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 ReadWritePaths=/var/lib/secubox/ai
-# Clé privée du compte de lecture de gk2 (#3720) : root 0600, remise par systemd ; la veille seule la reçoit.
-# Absente : la collecte reste éteinte (journalisé), le reste tourne.
+# Dépôt des demandes au contrôleur root : servi seulement si [veille.analyste] reveiller_local = true (défaut : jamais).
+ReadWritePaths=-/run/secubox-ai/demandes
+# Clés remises par systemd (LoadCredential=), lues par la veille SEULE (ni l'API ni le moteur) : root 0600 dans
+# /etc/secubox/secrets/ai/. Un chemin absolu absent rend LoadCredential= FATAL (l'unité ne démarre pas,
+# 243/CREDENTIALS) : chacune a donc sa valeur de repli « absente » (SetCredential=, prise seulement si le fichier
+# manque), que la veille lit comme « pas de clé ».
+# - ai-lecture (#3720) : compte de LECTURE de gk2 ; absente, la collecte reste éteinte (journalisé), le reste tourne.
 LoadCredential=ai-lecture:/etc/secubox/secrets/ai/ai-lecture.key
-IPAddressDeny=localhost link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
+SetCredential=ai-lecture:absente
+# - ai-distant (#3722) : moteur distant gk0 de l'analyste ; absente, gk0 n'est jamais appelé.
+LoadCredential=ai-distant:/etc/secubox/secrets/ai/distant.key
+SetCredential=ai-distant:absente
+# - ai-ban (#3723) : SEUL chemin d'écriture vers gk2 (routes ai-ban) ; absente, aucune réponse n'est exécutée (état
+#   visible dans /veille/etat), la veille tourne. Créée par « secubox-aictl cle-ai-ban generer ».
+LoadCredential=ai-ban:/etc/secubox/secrets/ai/ai-ban.key
+SetCredential=ai-ban:absente
+# - ai-filtres (#3723, carte 4) : filtres WAF d'office (POST/DELETE /ai/filtres) ; absente, aucun filtre n'est envoyé
+#   (les suggestions d'empreintes sont calculées quand même). Créée par « secubox-aictl cle-ai-filtres generer ».
+LoadCredential=ai-filtres:/etc/secubox/secrets/ai/ai-filtres.key
+SetCredential=ai-filtres:absente
+# Journal d'audit (#3723) : AJOUT SEUL à /var/log/secubox/audit.log (secubox:secubox 0640), et à lui seul : c'est le
+# profil AppArmor (« /var/log/secubox/audit.log a, » et rien d'autre sous /var/log) qui le borne. L'ACL nommée
+# d'écriture du compte secubox-ai est (re)posée en root avant le démarrage par « secubox-aictl acl-audit » (refuse
+# un lien ou un non-fichier ; « - » : échec non bloquant), puis après chaque rotation par la demande « acl-audit » que
+# la veille dépose dans /run/secubox-ai/demandes. Le DOSSIER est rouvert en écriture et non le seul fichier : un
+# ReadWritePaths= de fichier est un montage lié de SON inode, que la rotation quotidienne (renommage, puis nouveau
+# fichier) laisserait derrière — la veille écrirait dans audit.log.1, puis sur un système en lecture seule
+# (même choix que secubox-pilotage-agent). Le dossier n'est pas inscriptible par secubox-ai (0755).
+ExecStartPre=+-/usr/sbin/secubox-aictl acl-audit
+ReadWritePaths=-/var/log/secubox
+# Sortie réseau FERMÉE (#3723, V2 § 12) : la veille, qui détient la clé ai-ban, ne joint que gk2 ([gk2] menaces_url)
+# et gk0 ([distant] url), adresses résolues (publiques comprises) rouvertes une à une avec les résolveurs de
+# /etc/resolv.conf par le drop-in de « secubox-aictl preparer » (HOTES_VEILLE, /run/systemd/system/
+# secubox-ai-veille.service.d/50-adresses.conf). 127.0.0.1/32 : Unbound de la box (IPAddressAllow= ne connaît pas
+# les ports). Le moteur local passe par sa socket Unix (/run/secubox-ai/moteur.sock), hors de ce filtre IP.
+IPAddressDeny=any
 IPAddressAllow=127.0.0.1/32
 
 [Install]

@@ -1,3 +1,56 @@
+secubox-soc (1.12.0-1~trixie1) trixie; urgency=medium
+
+  * SADE (ref #3839) : cartes 3 (Neutralisation locale) et 4 (Apprentissage)
+    vivantes. /defense/status porte phases : p3 active en ACTIVE avec un
+    leurre ou un ban d office du journal ai-ban sur 24 h ; critère
+    rediriges_24h (somme des servies des lignes leurre_redirige) et
+    tentatives_valides_24h (lignes detect laissées passer). p4 : indicateurs
+    partagés, revus et contenus chez les pairs (résumé waf-indices-etat.json,
+    lecteur recopié), filtres IA actifs depuis au moins 24 h (substitut gk2
+    de l état confirmé de gk3). Valeur manquante : relevé indisponible,
+    jamais 0. Mesures gardées 60 s, lectures bornées par la fin.
+  * File d approbation : limiter (6 h, 1 h à 24 h), leurre (24 h, 1 h à 7 j)
+    et prolonger (24 h, 1 h à 7 j, ban présent, jamais raccourci). L API ne
+    lance jamais sudo (NoNewPrivileges gardé) : POST /approve rend 202 et la
+    décision passe en approuve ; sade-auto (REACTIVE ou ACTIVE) la prend en
+    une transaction, recontrôle les cibles et exécute sudo wafctl, audit
+    avant et après, par = l administrateur. 8 par passage, plafonds horaires
+    par geste (60, 30, 30) dans defense.db, rien dans ai-ban.jsonl ;
+    approbation expirée après 1 h, plus grande que son plafond rendue
+    aussitôt. Le passage en OBSERVE vide la file (annulee_observe, audit
+    sade-approuve-annulee). partager et tout autre geste : 409.
+    Unité sade-auto : -/var/lib/secubox/waf et -/var/log/sudo-io en écriture
+    pour wafctl leurre et le journal d E/S de sudo. Dépend de
+    secubox-waf-ng >= 1.43.0.
+  * Le passage en OBSERVE (manuel ou retour forcé par le plafond) ne dépend
+    jamais de l audit : validé d abord, audit écrit ensuite au mieux ;
+    échec : erreur au journal et alerte audit_indisponible (table alertes,
+    migration 0003) visible dans /defense/status. Ouvrir REACTIVE ou ACTIVE
+    exige toujours l audit avant le COMMIT.
+  * Relevé des phases en vol unique (un seul calcul à la fois, mesures
+    précédentes servies pendant un recalcul).
+  * Page : étiquette V2 4-7 retirée, critère mesuré sur chaque carte ;
+    AGGRESSIVE reste fermé, titre « seuils abaissés, réservé au banc —
+    ouverture sur accord du propriétaire ».
+  * Revue finale #3723 : `refus:lan` de wafctl (préfixe on-link de la box)
+    est un verdict de garde définitif pour l'exécuteur automatique.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 14:29:39 +0100
+
+secubox-soc (1.11.0-1~trixie1) trixie; urgency=medium
+
+  * SADE (ref #3723) : publication du mode pour gk2. L API écrit
+    /run/secubox/sade-mode.json (mode, depuis, liste_blanche ; 0644,
+    renommage atomique) après chaque changement de mode, chaque ajout ou
+    retrait de la liste blanche, au démarrage puis toutes les 60 s. L API du
+    WAF en tire la porte des gestes d office du compte ai-ban et tient pour
+    observe un fichier de plus de 15 min. Base illisible : rien n est publié.
+    Échec de publication bruyant (journal en erreur, audit
+    sade-mode-publication-echec, cause fichier_etranger si la place est prise
+    par un fichier d un autre compte).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
+
 secubox-soc (1.10.1-1~trixie1) trixie; urgency=medium
 
   * SADE (ref #3839) : liste blanche modifiable. Ajout et retrait audités par

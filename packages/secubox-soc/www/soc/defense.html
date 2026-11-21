@@ -118,7 +118,7 @@
       <button type="button" data-mode="observe" aria-pressed="false">OBSERVE<span class="m">analyse</span></button>
       <button type="button" data-mode="reactive" aria-pressed="false">REACTIVE<span class="m">léger auto</span></button>
       <button type="button" data-mode="active" aria-pressed="false">ACTIVE<span class="m">bans sûrs auto</span></button>
-      <button type="button" data-mode="aggressive" aria-pressed="false" disabled title="gestes gradués non livrés (V2 4-7)">AGGRESSIVE<span class="m">non livré</span></button>
+      <button type="button" data-mode="aggressive" aria-pressed="false" disabled title="seuils abaissés, réservé au banc — ouverture sur accord du propriétaire">AGGRESSIVE<span class="m">banc</span></button>
     </div>
     <div class="droite"><span id="heure">—</span><button type="button" id="rafraichir">⟳ Rafraîchir</button></div>
   </div>
@@ -183,12 +183,15 @@
   // Cause d'un refus de la façade, en clair ; le code `cause` reste affiché tel quel (échappé).
   var CAUSES = {
     mode:'le mode n\'est ni REACTIVE ni ACTIVE', liste_blanche:'adresse protégée (liste blanche) ou non publique : proposition entière refusée',
-    gestes_non_livres:'geste non livré : seul le ban est exécutable', porteur_requis:'jeton de session requis (reconnectez-vous) : le WAF refuse une écriture par cookie seul',
+    gestes_non_livres:'geste non exécutable (seuls ban, limiter, leurre et prolonger le sont), ou mode fermé', porteur_requis:'jeton de session requis (reconnectez-vous) : le WAF refuse une écriture par cookie seul',
     deja_traitee:'décision déjà traitée', audit_indisponible:'audit indisponible : aucun geste appliqué', base_indisponible:'base d\'état indisponible',
     actord_indisponible:'actord injoignable : proposition non relue',
     sans_adresse:'proposition sans adresse', waf:'le WAF a refusé le ban', corps:'requête invalide',
+    wafctl:'wafctl a refusé le geste', absent:'adresse non bannie : prolonger ne bannit pas',
+    raccourcit:'le ban dure déjà plus longtemps : prolonger ne raccourcit jamais', ipv4_seulement:'prolonger : IPv4 seulement',
+    waf_illisible:'bans du WAF illisibles : rien n\'est prolongé', pairs_illisibles:'pairs du maillage illisibles : aucun geste',
     proposition_changee:'la proposition a changé chez actord depuis l\'affichage : file rechargée, vérifiez avant de recommencer',
-    pas_bloquee:'décision non bloquée (ou demande trop récente)', duree_invalide:'durée non représentable par le WAF',
+    pas_bloquee:'décision non bloquée (ou demande trop récente)', duree_invalide:'durée hors bornes ou non représentable par le WAF',
     trop_d_adresses:'trop d\'adresses pour une approbation'};
   function causeDe(r){
     var d = r.d || {}, c = typeof d.cause === 'string' ? d.cause : null, t;
@@ -220,7 +223,7 @@
   var confMode = null, modeEnVol = false;
   var TEXTES_MODE = {
     observe:'Revenir en OBSERVE : la file d\'approbation ne pourra plus appliquer aucun geste.',
-    reactive:'Passer en REACTIVE : un administrateur pourra approuver des bans réels, un par un, chacun audité.',
+    reactive:'Passer en REACTIVE : un administrateur pourra approuver des gestes réels (ban, limite de débit, leurre, prolongation), un par un, chacun audité.',
     active:'Passer en ACTIVE : les propositions sûres d\'actord (score 60 à 79, adresse publique, ban de 24 h au plus, 4 h par défaut) seront bannies automatiquement, 20 par heure au plus ; au-delà, retour en OBSERVE. Seules les propositions apparues après ce passage sont concernées ; le reste attend votre validation.'};
   function rendConfMode(){
     var c = $('mconf');
@@ -253,17 +256,33 @@
   });
 
   // ── phases ──
-  function rendPhases(){
+  // Cartes 1 et 2 : suivies du mode. Carte 3 : ACTIVE et une neutralisation d'office (leurre, ban) sur 24 h ; carte 4 :
+  // un indicateur partagé ou un filtre IA confirmé. Critère mesuré par la façade : « relevé indisponible » si absent.
+  function pl(n, un, plusieurs){ return nb(n) + ' ' + (n > 1 ? plusieurs : un); }
+  function critere(v, un, plusieurs, nom, min){
+    return num(v) === null ? nom + ' : relevé indisponible' : (min ? 'au moins ' : '') + pl(v, un, plusieurs);
+  }
+  function rendPhases(phases){
+    var p3 = phases && phases.p3 ? phases.p3 : null, p4 = phases && phases.p4 ? phases.p4 : null;
+    var c3 = p3 && p3.critere ? p3.critere : {}, c4 = p4 && p4.critere ? p4.critere : {}, b3 = !!(p3 && p3.lecture_bornee);
+    var mesure3 = p3 ? [critere(c3.rediriges_24h, 'requête servie par le leurre en 24 h', 'requêtes servies par le leurre en 24 h', 'requêtes servies par le leurre', b3),
+      critere(c3.tentatives_valides_24h, 'tentative laissée passer en 24 h', 'tentatives laissées passer en 24 h', 'tentatives laissées passer', b3)].join(' · ') : 'relevé indisponible';
+    var mesure4 = p4 ? [critere(c4.partages, 'indicateur partagé', 'indicateurs partagés', 'indicateurs partagés'),
+      critere(c4.revus_chez_pairs, 'revu chez un pair', 'revus chez des pairs', 'revus chez les pairs'),
+      critere(c4.contenus_chez_pairs, 'contenu chez un pair', 'contenus chez des pairs', 'contenus chez les pairs'),
+      critere(c4.filtres_confirmes, 'filtre IA confirmé', 'filtres IA confirmés', 'filtres IA confirmés')].join(' · ') : 'relevé indisponible';
     var ph = [
-      ['p1','1 · Défensive','Détection','journaux enrichis, leurres, collecte de signatures et d\'adresses','profil confirmé', 'observe'],
-      ['p2','2 · Réactive','Réaction ciblée','règles WAF dynamiques, limite de débit, bans automatiques','attaque inefficace', 'reactive'],
-      ['p3','3 · Offensive défensive','Neutralisation locale','quarantaine, leurre, durcissement','redirigé vers le leurre', null],
-      ['p4','4 · Adaptative','Apprentissage','signatures, partage d\'indicateurs, renforcement des politiques','non reproduit sur le maillage', null]];
+      ['p1','1 · Défensive','Détection','journaux enrichis, leurres, collecte de signatures et d\'adresses','profil confirmé', 'observe', null],
+      ['p2','2 · Réactive','Réaction ciblée','règles WAF dynamiques, limite de débit, bans automatiques','attaque inefficace', 'reactive', null],
+      ['p3','3 · Offensive défensive','Neutralisation locale','quarantaine, leurre, durcissement','redirigé vers le leurre', 'active', mesure3],
+      ['p4','4 · Adaptative','Apprentissage','signatures, partage d\'indicateurs, renforcement des politiques','non reproduit sur le maillage', null, mesure4]];
     pose('phases-corps', ph.map(function(p){
-      var on = p[5] && modeCourant === p[5], livre = !!p[5];
-      return '<div class="ph ' + p[0] + (on ? ' on' : '') + (livre ? '' : ' off') + '"><span class="n">' + esc(p[1]) + '</span>' +
-        (on ? '<span class="tag">en cours</span>' : (livre ? '' : '<span class="tag">V2 4-7</span>')) +
-        '<b>' + esc(p[2]) + '</b><small>' + esc(p[3]) + '</small><small>critère : ' + esc(p[4]) + '</small></div>';
+      var on = p[0] === 'p3' ? (modeCourant === 'active' && !!p3 && p3.active === true)
+        : p[0] === 'p4' ? (!!p4 && p4.active === true) : modeCourant === p[5];
+      return '<div class="ph ' + p[0] + (on ? ' on' : '') + '"><span class="n">' + esc(p[1]) + '</span>' +
+        (on ? '<span class="tag">en cours</span>' : '') +
+        '<b>' + esc(p[2]) + '</b><small>' + esc(p[3]) + '</small><small>critère : ' + esc(p[4]) + '</small>' +
+        (p[6] ? '<small>mesuré : ' + esc(p[6]) + '</small>' : '') + '</div>';
     }).join(''));
   }
 
@@ -459,11 +478,15 @@
   // confirmé dans la page. La page renvoie l'EMPREINTE de la proposition affichée (rendue aux seuls administrateurs) :
   // la façade la recalcule sur la proposition courante d'actord et refuse (`proposition_changee`) si elle a changé.
   var props = {}, propsAdmin = false, propsMode = null, confAppro = null, enVol = null, retours = {}, dernieresProps = null;
-  var ETATS = {en_attente:'en attente', en_cours:'en cours', applique:'appliqué', refuse:'refusé'};
+  // `approuve` : geste gradué approuvé, en file pour l'exécuteur sade-auto (2 min au plus), puis l'issue réelle
+  var ETATS = {en_attente:'en attente', approuve:'en file', en_cours:'en cours', applique:'appliqué', refuse:'refusé'};
+  var GRADUES = {limiter:'Limiter le débit de', leurre:'Rediriger vers le leurre', prolonger:'Prolonger le ban de'};
   var LIB_GESTE = {approuver:'Approuver', refuser:'Refuser', simuler:'Simuler', reprendre:'Reprendre'};
   var ROUTE_GESTE = {approuver:'/approve', simuler:'/approve', refuser:'/refuse', reprendre:'/reprendre'};
   function texteConf(a, p){
     var duree = num(p.ttl_s) !== null ? nb(Math.round(p.ttl_s / 60)) + ' min' : 'durée par défaut du WAF';
+    if (a === 'approuver' && GRADUES[p.geste]) return GRADUES[p.geste] + ' ' + (p.cible || '—') + ' (' + duree + ') pour ' +
+      p.menace_id + ' ? Mis en file : sade-auto recontrôle les cibles et l\'exécute au prochain passage (2 min au plus).';
     if (a === 'approuver') return 'Bannir réellement ' + (p.cible || '—') + ' (' + duree + ') pour ' + p.menace_id + ' ?' +
       (p.validation_humaine ? ' Mesure exceptionnelle (bande incident).' : '');
     if (a === 'refuser') return 'Refuser la proposition ' + p.menace_id + ' ? Elle ne pourra plus être approuvée avant 24 h.';
@@ -482,7 +505,8 @@
     var h = '<div class="ev"><span class="sc b-' + esc(b) + '">' + (num(p.score) === null ? '—' : esc(p.score)) + '</span>' +
       '<div class="tt"><b>' + esc(p.menace_id || '—') + '</b>' + chip(p.geste || '—') + chip(etat, cl) +
       (p.validation_humaine ? chip('mesure exceptionnelle', 'cr') : '') + (p.auto === true ? (p.etat === 'applique' ? chip('appliqué automatiquement', 'ok') : chip('traité automatiquement')) : '') + '<span class="note">' + esc(p.cible || '—') + '</span></div>' +
-      '<div class="ds">' + esc(ds.join(' · ')) + '</div>';
+      '<div class="ds">' + esc(ds.join(' · ')) + '</div>' +
+      (typeof p.resultat === 'string' && p.resultat ? '<div class="ds">issue : ' + esc(p.resultat) + '</div>' : '');
     // gestes : administrateur (empreinte rendue) ; Approuver/Refuser/Simuler en REACTIVE ou ACTIVE sur une décision en attente,
     // Reprendre sur une décision restée « en cours » (quel que soit le mode : elle ne pose aucun ban)
     var offre = !cle ? null : (actif && p.etat === 'en_attente') ? 'file' : (propsAdmin && p.etat === 'en_cours') ? 'reprise' : null;
@@ -492,7 +516,7 @@
         '<button type="button" class="oui" data-oui="1" data-id="' + e + '">Confirmer</button><button type="button" data-non="1">Annuler</button></div>';
       else if (offre === 'reprise') h += '<div class="gestes"><button type="button" data-act="reprendre" data-id="' + e + '">Reprendre</button></div>';
       else h += '<div class="gestes">' +
-        (p.executable ? '<button type="button" class="ap" data-act="approuver" data-id="' + e + '">Approuver</button>' : '<span class="note">geste non livré</span>') +
+        (p.executable ? '<button type="button" class="ap" data-act="approuver" data-id="' + e + '">Approuver</button>' : '<span class="note">geste non exécutable</span>') +
         '<button type="button" data-act="refuser" data-id="' + e + '">Refuser</button>' +
         (p.executable ? '<button type="button" data-act="simuler" data-id="' + e + '">Simuler</button>' : '') + '</div>';
     }
@@ -543,6 +567,7 @@
       var d = r.d || {}, t;
       if (r.ok) {
         t = (d.etat === 'simule' ? 'Simulation' : d.etat === 'applique' ? 'Appliqué' : d.etat === 'refuse' ? 'Refusé' :
+          d.etat === 'approuve' ? 'En file' :
           act === 'reprendre' ? 'Repris' : LIB_GESTE[act]) + ' : ' + (typeof d.resultat === 'string' ? d.resultat : '—');
         if (Array.isArray(d.avertissements) && d.avertissements.length) t += ' — attention : ' + d.avertissements.join(' ; ');
       } else t = LIB_GESTE[act] + ' refusé : ' + causeDe(r);
@@ -565,7 +590,7 @@
     Promise.all([lire('/status'), lire('/threats'), lire('/actions'), lire('/mesh'), lire('/incidents?jours=7'), lire('/policies'), lire('/proposals')]).then(function(r){
       var st = r[0];
       rendMode(st.ok && st.d ? st.d.mode : (r[5].ok && r[5].d ? r[5].d.mode : null), st.ok && st.d ? st.d.etat_base : (r[5].ok && r[5].d ? r[5].d.etat_base : null));
-      rendPhases(); rendSynthese(st); rendFlux(r[1], r[2]); rendIncidents(r[4]); rendMaillage(r[3]); rendSeuils(r[5], r[6].ok && r[6].d && r[6].d.admin === true); rendAppro(r[6]);
+      rendPhases(st.ok && st.d ? st.d.phases : null); rendSynthese(st); rendFlux(r[1], r[2]); rendIncidents(r[4]); rendMaillage(r[3]); rendSeuils(r[5], r[6].ok && r[6].d && r[6].d.admin === true); rendAppro(r[6]);
       var lues = r.filter(function(x){ return x.ok; }).length, e = $('etat');
       var muettes = [st, r[1], r[2], r[3], r[4], r[6]].some(function(x){ var s = x.ok && x.d && x.d.sources; return s && Object.keys(s).some(function(k){ return s[k].ok === false; }); });
       // Relevé servi par le double tampon (source muette à l'instant) : il garde son heure, jamais présenté comme direct.
@@ -583,7 +608,7 @@
   }
   $('rafraichir').addEventListener('click', charge);
   if (EMB) document.body.classList.add('emb');
-  rendPhases();
+  rendPhases(null);
   charge();
   setInterval(function(){ if (!document.hidden) charge(); }, 15000);
   addEventListener('resize', hauteur);

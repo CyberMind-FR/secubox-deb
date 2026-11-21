@@ -2,21 +2,46 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""Client de lecture de gk2 pour la veille V2 (#3720) : GET seulement, signé par le compte `ai-lecture`.
+"""Client de gk2 pour la veille V2 : lectures (#3720) signées `ai-lecture`, gestes (#3723) signés `ai-ban`.
 
 Chaque requête porte un jeton neuf (`secubox_core.compte_service.frapper_jeton`) lié à GET et au chemin EXACT vu par
 la route de gk2 (sans chaîne de requête) : le WAF voit `/menaces/flux` (nginx retire `/api/v1/waf`), la garde et
 ad-guard voient leur chemin complet. La table nom → (URL relative à `menaces_url`, chemin signé) vient de
 `[veille.routes]` d'ai.toml, défauts ci-dessous. `trust_env=False`, délai court (30 s pour `enforcement`, `[veille.delais]`), aucune redirection suivie.
+
+Gestes (#3723, `post`) : SEULS les noms de `ROUTES_GESTES` (les routes `ai-ban` de gk2, `/api/v1/waf/ai/*`), seul
+chemin d'écriture de gk3. Le corps est sérialisé UNE fois (octets exacts) et le jeton du compte `ai-ban` (clé remise
+par LoadCredential=, jamais celle de lecture) lie son empreinte SHA-256, l'audience et un `jti` à usage unique ; le
+compte `ai-ban` ne lie ni méthode ni chemin (contrainte P9 : chaque corps porte son `geste`). `avant_envoi(jti, kid)`
+est attendu AVANT le premier octet envoyé : l'exécuteur y inscrit sa ligne `actions` en état `envoi` ; s'il lève, rien
+ne part. TLS vérifié (défaut de httpx), pas de redirection, réponse bornée. Une réponse perdue (délai, coupure,
+corps illisible) lève `ErreurGk2(None, …)` : le geste a PEUT-ÊTRE été fait, l'appelant rapproche, jamais ne rejoue.
 """
+import json
+import re
 import time
-from typing import Any, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 import httpx
+import jwt
+from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from secubox_core.compte_service import frapper_jeton
+from secubox_core.compte_service import empreinte, frapper_jeton
 
 COMPTE = "ai-lecture"
+COMPTE_GESTES = "ai-ban"
+#: #3723 (carte 4) : filtres du WAF, compte et clé à part (portée `waf-filtres` : un jeton ai-ban n'y vaut rien).
+COMPTE_FILTRES = "ai-filtres"
+_RE_FILTRE = re.compile(r"^ia-[a-z0-9._-]{1,93}$")
+#: Corps d'une réponse à un geste, au plus (gk2 rend quelques centaines d'octets).
+TAILLE_MAX_GESTE = 64 * 1024
+#: Délai d'un geste : gk2 attend wafctl / waf-blocs jusqu'à 30 s ; au-delà, l'issue est inconnue (rapprochement).
+DELAI_GESTE_S = 45.0
+#: Délai d'un appel de filtres : gk2 attend `secubox-cvectl filtres-ia` jusqu'à 60 s.
+DELAI_FILTRES_S = 75.0
+_MOTIF = re.compile(r"^[a-z_]{1,32}$")
 DELAI_S = 10.0
 #: Délais propres à une route (nom de la table) : `enforcement` relit bans.jsonl sur gk2, plusieurs secondes.
 #: Surchargeable par `[veille.delais] <nom> = <secondes>`, borné à DELAI_MIN_S..DELAI_MAX_S.
@@ -43,16 +68,33 @@ ROUTES_DEFAUT = {
     # #3720 : security-posture a sa propre socket, nginx retire `/api/v1/security-posture` : la route voit `/overview`.
     "posture_overview": ("/security-posture/overview", "/overview"),
     "dns_alertes": ("/ad-guard/dnsguard/alertes", "/api/v1/ad-guard/dnsguard/alertes"),
+    # #3723 : gestes signés ai-ban (le chemin signé est ignoré : le compte ai-ban ne lie que le corps).
+    "ai_ban": ("/waf/ai/ban", "/ai/ban"),
+    "ai_unban": ("/waf/ai/unban", "/ai/unban"),
+    "ai_prolonger": ("/waf/ai/prolonger", "/ai/prolonger"),
+    "ai_limiter": ("/waf/ai/limiter", "/ai/limiter"),
+    "ai_leurre": ("/waf/ai/leurre", "/ai/leurre"),
+    "ai_partager": ("/waf/ai/partager", "/ai/partager"),
+    # #3724 : levée d'une limite ou d'un leurre (« Défaire » de la console).
+    "ai_lever": ("/waf/ai/lever", "/ai/lever"),
+    # #3723 (carte 4) : filtres du WAF, compte ai-filtres (POST, DELETE /{id}, GET).
+    "ai_filtres": ("/waf/ai/filtres", "/ai/filtres"),
 }
+#: Les seuls noms que `post` accepte (catalogue fermé des gestes de gk2).
+ROUTES_GESTES = frozenset({"ai_ban", "ai_unban", "ai_prolonger", "ai_limiter", "ai_leurre", "ai_partager",
+                           "ai_lever"})
+#: Routes d'écriture non redirigeables par la configuration (gestes et filtres).
+ROUTES_ECRITURE = ROUTES_GESTES | {"ai_filtres"}
 
 
 class ErreurGk2(Exception):
     """Lecture impossible. `code` : statut HTTP (None : réseau, délai, réponse illisible)."""
 
-    def __init__(self, code: Optional[int], motif: str):
+    def __init__(self, code: Optional[int], motif: str, reponse: Any = None):
         super().__init__(f"{code or 'reseau'} {motif}")
         self.code = code
         self.motif = motif
+        self.reponse = reponse            # corps JSON de gk2 (geste refusé), donnée NON FIABLE
 
 
 def routes(cfg: dict) -> dict:
@@ -60,6 +102,8 @@ def routes(cfg: dict) -> dict:
     table = dict(ROUTES_DEFAUT)
     for nom, r in ((cfg.get("veille") or {}).get("routes") or {}).items():
         if isinstance(r, dict) and isinstance(r.get("url"), str) and isinstance(r.get("signe"), str):
+            if nom in ROUTES_ECRITURE:
+                continue                  # les routes d'écriture ne se redirigent pas par la configuration
             if r["url"].startswith("/") and r["signe"].startswith("/") and "?" not in r["signe"]:
                 table[nom] = (r["url"], r["signe"])
     return table
@@ -77,20 +121,36 @@ def delais(cfg: dict) -> dict:
 class ClientGk2:
     def __init__(self, base: str, aud: str, cle_pem: bytes, table: Optional[dict] = None,
                  transport: Optional[httpx.AsyncBaseTransport] = None, horloge: Callable[[], float] = time.time,
-                 delai_s: float = DELAI_S, delais_routes: Optional[dict] = None):
+                 delai_s: float = DELAI_S, delais_routes: Optional[dict] = None, cle_ban: Optional[bytes] = None,
+                 cle_filtres: Optional[bytes] = None):
         self.base = base.rstrip("/")
         self.aud = aud
         self._cle = cle_pem
+        self._cle_ban = cle_ban
+        self._cle_filtres = cle_filtres
         self.table = table or dict(ROUTES_DEFAUT)
         self._transport = transport
         self.horloge = horloge
         self.delai_s = delai_s
         self.delais_routes = dict(DELAIS_DEFAUT if delais_routes is None else delais_routes)
 
+    @property
+    def peut_lire(self) -> bool:
+        """Vrai si la clé du compte `ai-lecture` a été remise (collecte). Sans elle (revue finale M6), seul
+        `GET /ai/etat` reste lisible, signé par la clé `ai-ban` (gk2 l'admet : `require_ai_etat`) : l'exécuteur
+        rapproche et lit le mode SADE, jamais rien d'autre."""
+        return bool(self._cle)
+
     async def get(self, nom: str, params: Optional[dict] = None) -> Any:
         url, signe = self.table[nom]
-        jeton = frapper_jeton(self._cle, COMPTE, aud=self.aud, corps=b"", maintenant=self.horloge(),
-                              methode="GET", chemin=signe)
+        if self._cle:
+            jeton = frapper_jeton(self._cle, COMPTE, aud=self.aud, corps=b"", maintenant=self.horloge(),
+                                  methode="GET", chemin=signe)
+        elif nom == "ai_etat" and self._cle_ban:
+            # compte ai-ban : il lie le corps (vide), jamais la méthode ni le chemin (contrainte P9 de gk2)
+            jeton = frapper_jeton(self._cle_ban, COMPTE_GESTES, aud=self.aud, corps=b"", maintenant=self.horloge())
+        else:
+            raise ErreurGk2(None, "cle_lecture_absente")
         entetes = dict(AGENT, Authorization=f"Bearer {jeton}")
         try:
             async with httpx.AsyncClient(transport=self._transport, timeout=self.delais_routes.get(nom, self.delai_s), trust_env=False,
@@ -106,3 +166,120 @@ class ClientGk2:
             return r.json()
         except ValueError:
             raise ErreurGk2(None, "json") from None
+
+    @property
+    def peut_agir(self) -> bool:
+        """Vrai si la clé du compte `ai-ban` a été remise (sinon aucun geste n'est possible)."""
+        return bool(self._cle_ban)
+
+    @property
+    def empreinte_ban(self) -> Optional[str]:
+        """Empreinte (kid) de la clé ai-ban remise, ou None si elle n'est pas une clé privée Ed25519 lisible. Seule
+        l'empreinte se journalise, jamais la clé."""
+        if not self._cle_ban:
+            return None
+        try:
+            cle = serialization.load_pem_private_key(self._cle_ban, password=None)
+        except (ValueError, TypeError, UnsupportedAlgorithm):
+            return None
+        if not isinstance(cle, Ed25519PrivateKey):
+            return None
+        return empreinte(cle.public_key().public_bytes(serialization.Encoding.PEM,
+                                                       serialization.PublicFormat.SubjectPublicKeyInfo))
+
+    async def post(self, nom: str, corps: dict,
+                   avant_envoi: Optional[Callable[[str, str], Awaitable[None]]] = None) -> dict:
+        """Geste signé `ai-ban` ; rend le corps JSON (objet) d'une réponse 200. Lève ValueError (route hors du
+        catalogue, pas de clé), ErreurGk2(code, motif, reponse) pour un refus de gk2, ErreurGk2(None, …) pour une
+        réponse perdue ou illisible (issue inconnue : à rapprocher)."""
+        if nom not in ROUTES_GESTES:
+            raise ValueError(f"route d'écriture inconnue : {nom!r}")
+        if not self._cle_ban:
+            raise ValueError("clé ai-ban absente")
+        url, _ = self.table[nom]
+        octets = json.dumps(corps, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("ascii")
+        jeton = frapper_jeton(self._cle_ban, COMPTE_GESTES, aud=self.aud, corps=octets, maintenant=self.horloge())
+        if avant_envoi is not None:
+            jti = jwt.decode(jeton, options={"verify_signature": False})["jti"]
+            await avant_envoi(jti, jwt.get_unverified_header(jeton)["kid"])
+        entetes = dict(AGENT, Authorization=f"Bearer {jeton}")
+        entetes["Content-Type"] = "application/json"
+        try:
+            async with httpx.AsyncClient(transport=self._transport, timeout=DELAI_GESTE_S, trust_env=False,
+                                         follow_redirects=False, headers=entetes) as c:
+                r = await c.post(self.base + url, content=octets)
+        except httpx.HTTPError as e:
+            raise ErreurGk2(None, e.__class__.__name__) from None
+        if len(r.content) > TAILLE_MAX_GESTE:
+            raise ErreurGk2(None if r.status_code == 200 else r.status_code, "trop_gros")
+        try:
+            reponse = r.json()
+        except ValueError:
+            reponse = None
+        if r.status_code == 200:
+            if not isinstance(reponse, dict):
+                raise ErreurGk2(None, "reponse_illisible")
+            return reponse
+        detail = reponse.get("detail") if isinstance(reponse, dict) else None
+        motif = detail.get("motif") if isinstance(detail, dict) else None
+        if not isinstance(motif, str) or not _MOTIF.fullmatch(motif):
+            motif = "refus" if r.status_code in (401, 403) else "statut"
+        raise ErreurGk2(r.status_code, motif, reponse)
+
+    # ── filtres du WAF (#3723, carte 4), compte ai-filtres ──
+
+    @property
+    def peut_filtrer(self) -> bool:
+        return bool(self._cle_filtres)
+
+    async def _filtres(self, methode: str, suffixe: str, octets: bytes,
+                       avant_envoi: Optional[Callable[[str, str], Awaitable[None]]] = None) -> dict:
+        if not self._cle_filtres:
+            raise ValueError("clé ai-filtres absente")
+        jeton = frapper_jeton(self._cle_filtres, COMPTE_FILTRES, aud=self.aud, corps=octets,
+                              maintenant=self.horloge())
+        if avant_envoi is not None:
+            await avant_envoi(jwt.decode(jeton, options={"verify_signature": False})["jti"],
+                              jwt.get_unverified_header(jeton)["kid"])
+        entetes = dict(AGENT, Authorization=f"Bearer {jeton}")
+        if octets:
+            entetes["Content-Type"] = "application/json"
+        try:
+            async with httpx.AsyncClient(transport=self._transport, timeout=DELAI_FILTRES_S, trust_env=False,
+                                         follow_redirects=False, headers=entetes) as c:
+                r = await c.request(methode, self.base + self.table.get("ai_filtres", ROUTES_DEFAUT["ai_filtres"])[0]
+                                    + suffixe, content=octets or None)
+        except httpx.HTTPError as e:
+            raise ErreurGk2(None, e.__class__.__name__) from None
+        if len(r.content) > TAILLE_MAX_GESTE:
+            raise ErreurGk2(None if r.status_code == 200 else r.status_code, "trop_gros")
+        try:
+            reponse = r.json()
+        except ValueError:
+            reponse = None
+        if r.status_code == 200:
+            if not isinstance(reponse, dict):
+                raise ErreurGk2(None, "reponse_illisible")
+            return reponse
+        detail = reponse.get("detail") if isinstance(reponse, dict) else None
+        motif = detail.get("motif") if isinstance(detail, dict) else None
+        if not isinstance(motif, str) or not _MOTIF.fullmatch(motif):
+            motif = "refus" if r.status_code in (401, 403) else "statut"
+        raise ErreurGk2(r.status_code, motif, reponse)
+
+    async def post_filtres(self, corps: dict,
+                           avant_envoi: Optional[Callable[[str, str], Awaitable[None]]] = None) -> dict:
+        """`POST /ai/filtres` signé ai-filtres (corps exact) ; rend le bilan de gk2 (`appliques`, `inchanges`,
+        `rejets`). Mêmes erreurs que `post`."""
+        octets = json.dumps(corps, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("ascii")
+        return await self._filtres("POST", "", octets, avant_envoi)
+
+    async def retirer_filtre(self, fid: str) -> dict:
+        """`DELETE /ai/filtres/{fid}` (sans corps) ; ValueError sur un id hors de la forme `ia-…`."""
+        if not isinstance(fid, str) or not _RE_FILTRE.fullmatch(fid):
+            raise ValueError("id de filtre invalide")
+        return await self._filtres("DELETE", "/" + fid, b"")
+
+    async def lister_filtres(self) -> dict:
+        """`GET /ai/filtres` (sans corps) : filtres de l'IA en vigueur sur gk2."""
+        return await self._filtres("GET", "", b"")

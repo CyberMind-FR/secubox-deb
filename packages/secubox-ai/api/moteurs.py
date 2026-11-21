@@ -304,6 +304,29 @@ async def assurer_moteur(delai: float = DELAI_DEMARRAGE_S, pas: float = 1.0, for
     return await _assurer_local(delai, pas)
 
 
+async def moteur_disponible(reveiller: bool = False, delai: float = DELAI_DEMARRAGE_S,
+                            pas: float = 1.0) -> Moteur | None:
+    """Moteur d'un travail de fond (analyste de la veille, V2 § 9.4) : un moteur qui répond DÉJÀ, sinon None (le travail
+    attend dans la file). Ne démarre JAMAIS le moteur local et ne réveille jamais le distant si `reveiller` est faux
+    (défaut : gk3 garde sa mémoire pour le courrier et le kiosque). Ordre : distant prêt (sonde 200, sauf préférence
+    `local`), puis local qui répond à /health. `reveiller` vrai : `assurer_moteur` (démarre au besoin). Ne lève jamais.
+    Lectures de fichiers (préférences, configuration, clé) hors de la boucle (asyncio.to_thread)."""
+    try:
+        force = (await asyncio.to_thread(reglages.lire_prefs))["moteur"]["force"]
+        if reveiller:
+            return await assurer_moteur(delai, pas, force=force)
+        if force != "local":
+            distant = await asyncio.to_thread(_distant)
+            if distant is not None and await _statut_distant(distant) == "pret":
+                return distant
+            if force == "distant":
+                return None
+        m = _local()
+        return m if await _sonde(m, 5) else None
+    except (HTTPException, httpx.HTTPError, OSError):
+        return None
+
+
 async def props(m: Moteur) -> dict:
     """`GET /props` du moteur en marche (llama-server)."""
     async with m.client(10) as c:

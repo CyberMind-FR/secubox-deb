@@ -56,23 +56,35 @@ _sain = defense_etat.champ_sain
 # waf-blocs `verifier`) : « refus:<motif> » sur stderr, ou le message de `_valide_ip` (« ERROR: Adresse privée
 # refusée : … », « ERROR: Adresse invalide : … »). `refus:garde_illisible`, un refus de nft, une durée refusée ou tout
 # message inconnu sont TEMPORAIRES.
-_VERDICT_GARDE = re.compile(r"^refus:(invalide|privee|protegee|box|pair)$")
+_VERDICT_GARDE = re.compile(r"^refus:(invalide|privee|protegee|box|pair|lan)$")  # lan : préfixe on-link (#3723 I3)
 _VERDICT_VALIDATION = re.compile(r"ERROR: Adresse (privée refusée|invalide) : ")
 
 
 # ── point d'exécution unique ─────────────────────────────────────────────────────────────────────
 
-def _wafctl_ban(ip: str, duree: str) -> Tuple[bool, str]:
+def _sudo(argv: List[str]) -> subprocess.CompletedProcess:
+    """SEUL appel de sous-processus du module (et de la file d'approbation, qui passe par ici) : `sudo -n` + argv exact
+    du sudoers. Lève TimeoutExpired, OSError, SubprocessError."""
+    return subprocess.run(["sudo", "-n", *argv], capture_output=True, text=True, timeout=DELAI_WAFCTL_S)
+
+
+# Verbes de wafctl exécutables depuis SADE, et leurs argv (`wafctl <verbe> <ip> <n>s`) : ceux du compte ai-ban
+# (gestes_ia de secubox-waf-ng), accordés à `secubox` par les sudoers SBX_WAF_BANMANUEL, _LIMITER, _LEURRE, _PROLONGER.
+VERBES_WAFCTL = ("ban", "limiter", "leurre", "prolonger")
+
+
+def _wafctl(verbe: str, ip: str, duree: str) -> Tuple[bool, str]:
     """SEUL point d'exécution d'un geste. Rend (succès, raison) :
     - `(True, "ok")` ;
     - `(False, "refus:<motif>")` : verdict de garde de `wafctl` (privee, protegee, box, pair, invalide) : DÉFINITIF ;
-    - `(False, "echec: <message>")` : autre sortie non nulle (garde illisible, nft, inconnu) : transitoire ;
-    - `(False, "delai")` : délai dépassé, le ban a peut-être été posé : transitoire ;
+    - `(False, "echec: <message>")` : autre sortie non nulle (garde illisible, nft, durée, absent, inconnu) : transitoire ;
+    - `(False, "delai")` : délai dépassé, le geste a peut-être été posé : transitoire ;
     - `(False, "injoignable: <message>")` : sudo absent ou refusé (`sudo: …`), exécutable introuvable : transitoire.
     `refus_definitif(raison)` tranche entre les deux familles."""
+    if verbe not in VERBES_WAFCTL:
+        raise ValueError(f"verbe wafctl non admis : {verbe}")
     try:
-        r = subprocess.run(["sudo", "-n", "/usr/sbin/wafctl", "ban", ip, duree],
-                           capture_output=True, text=True, timeout=DELAI_WAFCTL_S)
+        r = _sudo(["/usr/sbin/wafctl", verbe, ip, duree])
     except subprocess.TimeoutExpired:
         return False, "delai"
     except (OSError, subprocess.SubprocessError) as e:
@@ -91,6 +103,44 @@ def _wafctl_ban(ip: str, duree: str) -> Tuple[bool, str]:
         if m:
             return False, "refus:privee" if m.group(1).startswith("privée") else "refus:invalide"
     return False, f"echec: {message[:200] or f'code {r.returncode}'}"
+
+
+def _wafctl_ban(ip: str, duree: str) -> Tuple[bool, str]:
+    """`wafctl ban <ip> <durée>` (exécuteur automatique) ; voir `_wafctl`."""
+    return _wafctl("ban", ip, duree)
+
+
+class EnsembleIllisible(Exception):
+    """L'ensemble nft des bans du WAF n'a pas pu être lu."""
+
+
+def expiration_ban(ip: str) -> Optional[float]:
+    """Secondes restantes du ban IPv4 `ip` dans `inet secubox waf_ban` (`sudo nft -j list set`, argv exact du sudoers
+    SBX_WAF_NFTLIST) ; None si l'adresse n'y est pas ; `float('inf')` pour un élément sans délai. Lève
+    `EnsembleIllisible`."""
+    try:
+        r = _sudo(["/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban"])
+        if r.returncode != 0:
+            raise EnsembleIllisible((r.stderr or "")[:200])
+        doc = json.loads(r.stdout)
+    except (subprocess.SubprocessError, OSError, ValueError, RecursionError) as e:
+        raise EnsembleIllisible(e.__class__.__name__) from e
+    items = doc.get("nftables") if isinstance(doc, dict) else None
+    if not isinstance(items, list):
+        raise EnsembleIllisible("forme")
+    for it in items:
+        ens = it.get("set") if isinstance(it, dict) else None
+        if not isinstance(ens, dict):
+            continue
+        for el in ens.get("elem") or []:
+            if el == ip:
+                return float("inf")
+            e = el.get("elem") if isinstance(el, dict) else None
+            if isinstance(e, dict) and e.get("val") == ip:
+                exp = e.get("expires", e.get("timeout"))
+                return float(exp) if isinstance(exp, (int, float)) and not isinstance(exp, bool) else float("inf")
+        return None
+    raise EnsembleIllisible("ensemble absent")
 
 
 def refus_definitif(raison: str) -> bool:
@@ -162,10 +212,10 @@ def _plafond(p: Dict[str, Any], out: Dict[str, Any]) -> bool:
     try:
         # Retour forcé en OBSERVE, même si un administrateur vient de passer en REACTIVE entre-temps : le plafond ne
         # peut que rendre la défense plus stricte (OBSERVE n'autorise aucun geste), jamais l'ouvrir davantage.
-        defense_etat.changer_mode("observe", OPERATEUR)
+        # le resserrement ne dépend jamais de l'audit : OBSERVE est validé même si audit.log n'est pas inscriptible
+        if not defense_etat.changer_mode("observe", OPERATEUR):
+            out["erreur"] = "audit_indisponible"
         out["mode"] = "observe"
-    except defense_etat.AuditIndisponible:
-        out["erreur"] = "audit_indisponible"  # le mode reste ACTIVE : le plafond rejoue au prochain passage
     except defense_etat.EtatIndisponible:
         out["erreur"] = "base_indisponible"
     return True
@@ -232,15 +282,193 @@ def _bannir(p: Dict[str, Any], note: str, out: Dict[str, Any]) -> bool:
     return arret
 
 
+# ── file des gestes gradués approuvés par un administrateur (#3839, 1.12.0) ──────────────────────────
+
+APPROUVEES_PAR_PASSAGE = 8          # approbations entamées par passage, au plus (dans le même budget de 3 min)
+APPROBATION_MAX_S = 3600            # une approbation non exécutée après 1 h revient à la file humaine (jamais d'office)
+# plafonds horaires (glissants) des gestes approuvés par un humain, en ADRESSES : ceux de gk2 (plan V2 4-7)
+PLAFONDS_APPROUVES_HEURE = {"limiter": 60, "leurre": 30, "prolonger": 30}
+
+
+def _champs_decision(d: Dict[str, Any], ips: List[str], duree: str) -> str:
+    return (f"empreinte={d['empreinte']} acteur={_sain(d['menace_id'], 16)} adresses={_sain(','.join(ips), 1024)} "
+            f"geste={_sain(d['geste'], 32)} duree={duree} "
+            f"score={d['score'] if d['score'] is not None else 'inconnu'} "
+            f"operateur={defense_etat._operateur_sain(d['par'] or 'inconnu')}")
+
+
+def _controle_execution(d: Dict[str, Any], ips: List[str], secondes: Optional[int],
+                        proteges: List[Any]) -> Optional[Tuple[str, str]]:
+    """Recontrôle d'une approbation au moment de l'exécuter. Rend None (on exécute), ("abandon", motif) (rendue à la
+    file humaine) ou ("attente", motif) (laissée `approuve`, essai au passage suivant)."""
+    if d["geste"] not in defense.DUREES_GRADUEES:
+        return "abandon", "geste_non_admis"
+    _defaut, bas, haut = defense.DUREES_GRADUEES[d["geste"]]
+    if not ips or len(ips) > defense.ADRESSES_MAX:
+        return "abandon", "adresses"
+    if secondes is None or not bas <= secondes <= haut:
+        return "abandon", "duree_invalide"
+    if d["geste"] == "prolonger" and any(":" in ip for ip in ips):
+        return "abandon", "ipv4_seulement"
+    if any(defense._adresse_interdite(ip, proteges) for ip in ips):
+        return "abandon", "cible_protegee"
+    if d["geste"] == "prolonger":
+        try:
+            restes = [expiration_ban(ip) for ip in ips]
+        except EnsembleIllisible:
+            return "attente", "waf_illisible"
+        if any(r is None for r in restes):
+            return "abandon", "absent"
+        if any(r > secondes for r in restes):
+            return "abandon", "raccourcit"
+    return None
+
+
+def _executer_approuvees(out: Dict[str, Any], t0: float) -> bool:
+    """Exécute les gestes gradués approuvés (`approuve`), en REACTIVE comme en ACTIVE. `par` reste l'administrateur
+    (jamais 'sade-auto' : ni le plafond de 20/h ni le retour en OBSERVE de l'automatique). Rend True si le passage doit
+    s'arrêter (base, audit, sudo en panne)."""
+    try:
+        file = defense_etat.approuvees()
+    except defense_etat.EtatIndisponible:
+        out["erreur"] = "base_indisponible"
+        return True
+    if not file:
+        return False
+    entetes = {ENTETE_LAN: "1"} if mode_tableau_de_bord_actif() else {}
+    try:
+        proteges, illisibles, pairs_lus = defense._proteges(entetes, [])
+    except defense_etat.EtatIndisponible:
+        out["erreur"] = "base_indisponible"
+        return True
+    if illisibles:
+        out["erreur"] = "liste_blanche_illisible"
+        return True
+    locaux = _pairs_wg_mesh()
+    if locaux is None:
+        out["erreur"] = "pairs_illisibles"
+        return True
+    proteges = proteges + locaux
+    note = f" pairs_maillage={'verifies' if pairs_lus else 'non_verifies'} file=approuvee"
+    maintenant = time.time()
+    for n, d in enumerate(file):
+        if n >= APPROUVEES_PAR_PASSAGE or _horloge() - t0 >= BUDGET_PASSAGE_S:
+            out["budget"] = True
+            break
+        ips = [a for a in (d["cible"] or "").split(",") if a]
+        secondes = d["ttl_s"] if isinstance(d["ttl_s"], int) and not isinstance(d["ttl_s"], bool) else None
+        duree = f"{secondes}s" if secondes else "inconnue"
+        champs = _champs_decision(d, ips, duree)
+        demande = defense_etat._epoch(d["demande_ts"])
+        verdict = (("abandon", "expiree") if demande is None or maintenant - demande > APPROBATION_MAX_S
+                   else _controle_execution(d, ips, secondes, proteges))
+        if verdict is not None:
+            if verdict[0] == "attente":
+                out["approuvees_en_attente"] += 1
+                continue
+            try:
+                defense_etat.abandonner_approuvee(d["empreinte"], d["generation"], d["demande_ts"],
+                                                  f"approbation non exécutée : {verdict[1]}",
+                                                  f"sade-approuve-abandon motif={verdict[1]} {champs}{note}")
+            except defense_etat.DejaTraitee:
+                pass
+            except defense_etat.AuditIndisponible:
+                out["erreur"] = "audit_indisponible"
+                return True
+            except defense_etat.EtatIndisponible:
+                out["erreur"] = "base_indisponible"
+                return True
+            out["approuvees_abandonnees"] += 1
+            continue
+        try:
+            deja = defense_etat.gestes_humains_depuis(d["geste"], FENETRE_PLAFOND_S)
+        except defense_etat.EtatIndisponible:
+            out["erreur"] = "base_indisponible"
+            return True
+        plafond = PLAFONDS_APPROUVES_HEURE[d["geste"]]
+        if len(ips) > plafond:
+            # plus grande que le plafond lui-même : n'aboutirait jamais, rendue tout de suite (visible, auditée)
+            try:
+                defense_etat.abandonner_approuvee(d["empreinte"], d["generation"], d["demande_ts"],
+                                                  f"approbation non exécutée : plafond ({len(ips)} adresses, "
+                                                  f"{plafond} par heure au plus)",
+                                                  f"sade-approuve-abandon motif=plafond {champs}{note}")
+            except defense_etat.DejaTraitee:
+                pass
+            except defense_etat.AuditIndisponible:
+                out["erreur"] = "audit_indisponible"
+                return True
+            except defense_etat.EtatIndisponible:
+                out["erreur"] = "base_indisponible"
+                return True
+            out["approuvees_abandonnees"] += 1
+            continue
+        if deja + len(ips) > plafond:
+            out["approuvees_en_attente"] += 1  # plafond horaire : essai au passage suivant (expire après 1 h)
+            continue
+        try:
+            gen = defense_etat.prendre_approuvee(d["empreinte"], d["generation"], d["demande_ts"],
+                                                 f"sade-approuve-execution {champs}{note}")
+        except defense_etat.DejaTraitee:
+            continue  # un autre passage l'a prise : jamais deux fois
+        except defense_etat.ModeRefuse as e:
+            out["mode"] = str(e)
+            return True
+        except defense_etat.AuditIndisponible:
+            out["erreur"] = "audit_indisponible"
+            return True
+        except defense_etat.EtatIndisponible:
+            out["erreur"] = "base_indisponible"
+            return True
+        faites: List[str] = []
+        echec: Optional[Tuple[str, str]] = None
+        for ip in ips:
+            ok, raison = _wafctl(d["geste"], ip, duree)
+            if ok:
+                faites.append(ip)
+                continue
+            echec = (ip, raison)
+            break
+        out["approuvees_executees"].extend(faites)
+        if echec is None:
+            etat = issue = "applique"
+            resultat = f"{len(faites)} adresse(s) traitée(s) ({d['geste']}, {duree}) par sade-auto"
+        else:
+            etat = "en_attente"  # rendue à l'administrateur, jamais retentée seule
+            issue = "incertain" if echec[1] == "delai" else ("partiel" if faites else "echec")
+            resultat = f"échec de wafctl sur {echec[0]} : {echec[1]} ; déjà traitées : {', '.join(faites) or 'aucune'}"
+        arret = echec is not None and not refus_definitif(echec[1])
+        try:
+            defense_etat.conclure(d["empreinte"], gen, etat, resultat, getattr(gen, "demande_ts", None))
+        except defense_etat.EtatIndisponible:
+            out["erreur"] = "base_indisponible"
+            arret = True
+        try:
+            defense_etat.ecrire_audit(f"sade-approuve-resultat issue={issue} generation={gen} "
+                                      f"traitees={_sain(','.join(faites) or 'aucune', 1024)} "
+                                      + (f"echec={_sain(echec[0], 64)} erreur={_sain(echec[1], 200)} " if echec else "")
+                                      + champs + note)
+        except defense_etat.AuditIndisponible:
+            out["erreur"] = "audit_indisponible"
+            arret = True
+        if arret:
+            return True
+    return False
+
+
 def executer() -> Dict[str, Any]:
     """Un passage. Ne lève jamais pour une condition attendue : l'issue est dans `erreur`."""
     out: Dict[str, Any] = {"mode": None, "bannies": [], "ecartees": 0, "arriere": 0, "plafond": False, "budget": False,
-                           "erreur": None}
+                           "erreur": None, "approuvees_executees": [], "approuvees_abandonnees": 0,
+                           "approuvees_en_attente": 0}
     t0 = _horloge()
     try:
         out["mode"], depuis, _par = defense_etat.mode_detail()
     except defense_etat.EtatIndisponible:
         out["erreur"] = "base_indisponible"
+        return out
+    # Gestes approuvés par un administrateur d'abord, en REACTIVE comme en ACTIVE (sans actord : la décision suffit)
+    if out["mode"] in ("reactive", "active") and _executer_approuvees(out, t0):
         return out
     r = defense._lire_propositions()
     if not r.get("ok"):
@@ -309,6 +537,7 @@ def executer() -> Dict[str, Any]:
 def main() -> int:
     r = executer()
     print(f"sade-auto mode={r['mode']} bannies={len(r['bannies'])} ecartees={r['ecartees']} arriere={r['arriere']} "
+          f"approuvees={len(r['approuvees_executees'])}/{r['approuvees_abandonnees']}/{r['approuvees_en_attente']} "
           f"plafond={'oui' if r['plafond'] else 'non'} budget={'depasse' if r['budget'] else 'ok'} "
           f"erreur={r['erreur'] or 'aucune'}", flush=True)
     return 0

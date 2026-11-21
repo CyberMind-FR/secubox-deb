@@ -826,8 +826,9 @@ def _gguf_1b(env):
     return f
 
 
-def test_preparer_veille_seulement_gk2_et_resolveurs(ctl, env, monkeypatch):
-    """#3720 : la veille ne joint que gk2 (menaces_url) et les résolveurs ; ni gk0 ni SearXNG."""
+def test_preparer_veille_seulement_gk2_gk0_et_resolveurs(ctl, env, monkeypatch):
+    """#3720, #3722 : la veille ne joint que gk2 (menaces_url), gk0 (moteur distant de l'analyste) et les résolveurs ;
+    ni SearXNG ni les sources du Hall."""
     resolv = env.tmp / "resolv.conf"
     resolv.write_text("nameserver 192.168.1.200\n")
     monkeypatch.setattr(ctl, "RESOLV", resolv)
@@ -839,4 +840,4 @@ def test_preparer_veille_seulement_gk2_et_resolveurs(ctl, env, monkeypatch):
     veille = (ctl.DROPIN_VEILLE / "50-adresses.conf").read_text()
     assert "192.168.1.30/32" in api and "10.100.0.85/32" in api
     lignes = [x for x in veille.splitlines() if x.startswith("IPAddressAllow")]
-    assert lignes == ["IPAddressAllow=192.168.1.20/32 192.168.1.200/32"]
+    assert lignes == ["IPAddressAllow=192.168.1.20/32 192.168.1.200/32 192.168.1.30/32"]

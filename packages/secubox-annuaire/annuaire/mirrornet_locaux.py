@@ -26,6 +26,13 @@ La création ou le retrait de son offre : un geste d'offre au plus par heure (co
 Une demande absente, illisible ou invalide, ou une clé absente : aucun geste. Deux passes de suite avec la même demande :
 la seconde ne signe rien. L'interrupteur « Recevoir » est le choix du propriétaire ; un refus ou une révocation signés par
 le FOURNISSEUR ne sont jamais contournés par un réabonnement de fond.
+
+Table de jeux (#3723) : le même traitement sert `ip-indices` (indicateurs d'adresses vérifiés du WAF, demande
+`jeux["ip-indices"]` écrite par secubox-mirrornet 0.7.0), avec SA propre offre (`scope.usage = ip-indices`, endpoint
+`mirrornet://<did>/ip-indices`, provenance `secubox-waf-ng:ip-indices`), ses versions et ses abonnements. Chaque jeu
+est traité à part (`traiter(..., jeu=…)`) : offres, gestes d'offre, historique et abonnements d'un jeu ne voient
+jamais ceux de l'autre (un abonnement ip-indices n'est jamais résilié comme « pas tv »). Les constantes de
+`tv-indices` (OFFRE, MANIFESTE, noms d'audit) sont inchangées : ses offres en place restent conformes.
 """
 from __future__ import annotations
 
@@ -42,6 +49,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 PUBLICATIONS = Path(os.environ.get("ANNUAIRE_MIRRORNET_PUBLICATIONS",
                                    "/var/lib/secubox-mirrornet-partage/publications.json"))
 USAGE = "tv-indices"
+USAGE_IP = "ip-indices"
 TAILLE_MAX = 64 * 1024                    # publications.json : quelques centaines d'octets en pratique
 OBJET_MAX = 2 * 1024 * 1024               # même plafond que MirrorNet (TAILLE_MAX de locaux.py)
 INTERVALLE = timedelta(seconds=3600)      # un geste d'offre, un geste de version, un abonnement par fournisseur : au plus par heure
@@ -59,6 +67,27 @@ OFFRE = {"kind": "dataset", "approval_mode": "auto", "classe": "communaute", "sc
                         "(domaine → catégorie, rien d'autre)."}
 MANIFESTE = {"classe": "communaute", "format": "application/json", "licence": "CC0-1.0",
              "provenance": "secubox-ad-guard:tv-indices", "donnees_personnelles": "non"}
+
+# Indicateurs d'adresses (#3723). Classe « communaute » et approbation automatique, comme tv-indices : la classe
+# « specialise » (base légale déclarée) exige une approbation MANUELLE de chaque abonnement par le fournisseur
+# (`publish_dataset_version`), ce qui couperait le partage automatique. `donnees_personnelles = agregees` (seule
+# valeur admise en communauté hors « non ») : des adresses d'attaquants sont des données personnelles au sens du RGPD ;
+# la qualification définitive (classe, base légale) reste à arbitrer par le propriétaire (rapport de la tâche 4).
+OFFRE_IP = {"kind": "dataset", "approval_mode": "auto", "classe": "communaute", "scope": {"usage": USAGE_IP},
+            "description": "Adresses publiques bannies par ce nœud et vues hostiles (adresse → famille, échéance), et "
+                           "adresses reçues revues ici (rien d'autre)."}
+MANIFESTE_IP = {"classe": "communaute", "format": "application/json", "licence": "CC0-1.0",
+                "provenance": "secubox-waf-ng:ip-indices", "donnees_personnelles": "agregees"}
+
+#: Un jeu = son offre, son manifeste, le préfixe de son nom d'offre, celui de ses lignes d'audit, son libellé de
+#: journal et le motif de ses résiliations de fond. tv-indices : constantes d'origine (#3666), inchangées.
+JEUX: Dict[str, Dict[str, Any]] = {
+    USAGE: {"offre": OFFRE, "manifeste": MANIFESTE, "nom": "Indices TV Privacy", "audit": "mirrornet_tv_indices",
+            "libelle": "indices TV", "motif_fond": MOTIF_FOND},
+    USAGE_IP: {"offre": OFFRE_IP, "manifeste": MANIFESTE_IP, "nom": "Indicateurs d'adresses",
+               "audit": "mirrornet_ip_indices", "libelle": "indicateurs d'adresses",
+               "motif_fond": "réception des indicateurs d'adresses coupée (tâche de fond)"},
+}
 
 _EMPREINTE = re.compile(r"^b2:[0-9a-f]{64}\Z")
 _log = logging.getLogger("secubox.annuaire.sync")
@@ -92,8 +121,8 @@ def valider(jeu: Any) -> Optional[Dict[str, Any]]:
     return {"publier": publier, "recevoir": recevoir, "empreinte": empreinte, "taille": taille, "confiance_min": seuil}
 
 
-def lire_demandes(chemin: Optional[Path] = None) -> Optional[Dict[str, Any]]:
-    """La demande `tv-indices` de `publications.json`, avec le `confiance_min` de MirrorNet : fichier ORDINAIRE (jamais
+def lire_demandes(chemin: Optional[Path] = None, jeu: str = USAGE) -> Optional[Dict[str, Any]]:
+    """La demande du jeu `jeu` (`tv-indices` par défaut) de `publications.json`, avec le `confiance_min` de MirrorNet : fichier ORDINAIRE (jamais
     un lien), ≤ 64 Kio, JSON strict. Absent, illisible ou invalide : None (aucun geste)."""
     chemin = Path(chemin) if chemin is not None else PUBLICATIONS
     fd = -1
@@ -115,10 +144,12 @@ def lire_demandes(chemin: Optional[Path] = None) -> Optional[Dict[str, Any]]:
             os.close(fd)
     if not isinstance(d, dict) or d.get("format") != 1 or not isinstance(d.get("jeux"), dict):
         return None
-    jeu = d["jeux"].get(USAGE)
-    if not isinstance(jeu, dict) or "confiance_min" in jeu:
+    if jeu not in JEUX:
         return None
-    return valider({**jeu, "confiance_min": d.get("confiance_min")})
+    entree = d["jeux"].get(jeu)
+    if not isinstance(entree, dict) or "confiance_min" in entree:
+        return None
+    return valider({**entree, "confiance_min": d.get("confiance_min")})
 
 
 # --- lecture du journal -------------------------------------------------------------------------------------------
@@ -133,18 +164,27 @@ def _recent(instants: Iterable[Optional[datetime]], maintenant: datetime) -> boo
     return any(t is not None and timedelta(0) <= maintenant - t < INTERVALLE for t in instants)
 
 
-def _usage_tv(o: Dict[str, Any]) -> bool:
+def _usage(o: Dict[str, Any], jeu: str) -> bool:
     scope = o.get("scope")
-    return isinstance(scope, dict) and scope.get("usage") == USAGE
+    return isinstance(scope, dict) and scope.get("usage") == jeu
+
+
+def _usage_tv(o: Dict[str, Any]) -> bool:
+    return _usage(o, USAGE)
+
+
+def _est(o: Dict[str, Any], jeu: str) -> bool:
+    return o.get("kind") == "dataset" and _usage(o, jeu)
 
 
 def _est_tv(o: Dict[str, Any]) -> bool:
-    return o.get("kind") == "dataset" and _usage_tv(o)
+    return _est(o, USAGE)
 
 
-def _conforme(o: Dict[str, Any]) -> bool:
-    """Offre propre conforme aux constantes (une offre ancienne ou déviante est remplacée, pas réutilisée)."""
-    return _est_tv(o) and o.get("classe") == OFFRE["classe"] and o.get("approval_mode") == OFFRE["approval_mode"]
+def _conforme(o: Dict[str, Any], jeu: str = USAGE) -> bool:
+    """Offre propre conforme aux constantes de son jeu (une offre ancienne ou déviante est remplacée, pas réutilisée)."""
+    offre = JEUX[jeu]["offre"]
+    return _est(o, jeu) and o.get("classe") == offre["classe"] and o.get("approval_mode") == offre["approval_mode"]
 
 
 def _tarif_accepte(o: Dict[str, Any]) -> bool:
@@ -205,7 +245,8 @@ def abonnements_en_cours(journal, abonne: str, maintenant: Optional[datetime] = 
 
 
 def _historique(journal, did: str, offres_tv: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    """fournisseur → {"dernier_le": instant du dernier abonnement de ce nœud à l'une de ses offres tv-indices,
+    """fournisseur → {"dernier_le": instant du dernier abonnement de ce nœud à l'une de ses offres `offres_tv` (celles
+    d'UN jeu : tv-indices ou ip-indices),
     "refuse": ce dernier abonnement a été refusé ou révoqué par le FOURNISSEUR (signature de celui-ci)}."""
     from annuaire.model import Op  # noqa: PLC0415
     from annuaire.verbs import forme_valide  # noqa: PLC0415
@@ -241,10 +282,10 @@ def _retraits_le(journal, did: str, sid: str) -> List[Optional[datetime]]:
             if e.author == did and e.payload.get("service_id") == sid and forme_valide(e.op, e.payload, e.author)]
 
 
-def _gestes_offre_le(journal, did: str, toutes: Dict[str, Dict[str, Any]]) -> List[Optional[datetime]]:
-    """Instants des gestes d'offre `tv-indices` de ce nœud : créations (`created_at`) et retraits (`revoked_at`)."""
+def _gestes_offre_le(journal, did: str, toutes: Dict[str, Dict[str, Any]], jeu: str = USAGE) -> List[Optional[datetime]]:
+    """Instants des gestes d'offre du jeu `jeu` de ce nœud : créations (`created_at`) et retraits (`revoked_at`)."""
     from annuaire.model import Op  # noqa: PLC0415
-    miennes = {sid for sid, o in toutes.items() if o.get("provider") == did and _usage_tv(o)}
+    miennes = {sid for sid, o in toutes.items() if o.get("provider") == did and _usage(o, jeu)}
     instants = [_instant(toutes[sid].get("created_at")) for sid in miennes]
     for e in journal.iter_entries(ops=(Op.SERVICE_REVOKE_OFFER.value,)):
         p = e.payload
@@ -253,15 +294,15 @@ def _gestes_offre_le(journal, did: str, toutes: Dict[str, Dict[str, Any]]) -> Li
     return instants
 
 
-def _nom(boxname: Any, did: str) -> str:
+def _nom(boxname: Any, did: str, jeu: str = USAGE) -> str:
     nom = "".join(c for c in boxname if c.isprintable()).strip()[:48] if isinstance(boxname, str) else ""
-    return f"Indices TV Privacy — {nom or 'box-' + did[8:16]}"
+    return f"{JEUX[jeu]['nom']} — {nom or 'box-' + did[8:16]}"
 
 
 # --- traitement ---------------------------------------------------------------------------------------------------
 
 def traiter(journal, priv: Optional[bytes], did: Optional[str], boxname: str, demandes: Optional[dict],
-            maintenant: datetime, *, auditer: Optional[Callable[..., None]] = None) -> Dict[str, Any]:
+            maintenant: datetime, *, auditer: Optional[Callable[..., None]] = None, jeu: str = USAGE) -> Dict[str, Any]:
     """Aligne le journal sur la demande. Rend {"offre": "creee"|"existante"|"retiree"|None, "version": empreinte|None,
     "abonnements": n, "resiliations": n}. `auditer(action, **détails)` est appelé après chaque geste signé.
 
@@ -273,62 +314,65 @@ def traiter(journal, priv: Optional[bytes], did: Optional[str], boxname: str, de
                                 offer_service, publish_dataset_version, retract_dataset_version, revoke_offer,
                                 subscribe, subscription_state)
     res: Dict[str, Any] = {"offre": None, "version": None, "abonnements": 0, "resiliations": 0}
+    t = JEUX.get(jeu)
     d = valider(demandes)
-    if not priv or not did or d is None:
+    if not priv or not did or d is None or t is None:
         return res
+    pref, libelle = t["audit"], t["libelle"]
     noter = auditer or (lambda action, **details: None)
 
     def geste(quoi: str, fn, *args, **kwargs):
         try:
             return fn(*args, **kwargs)
         except (ValueError, PermissionError) as e:     # pydantic.ValidationError hérite de ValueError
-            _log.warning("indices TV : %s refusé : %s", quoi, e)
+            _log.warning("%s : %s refusé : %s", libelle, quoi, e)
             return None
 
     def retirer_offre(o: Dict[str, Any], marquer: bool = True) -> None:
         if geste("retrait de l'offre", revoke_offer, journal, priv, did, o["service_id"]) is not None:
             if marquer:
                 res["offre"] = "retiree"
-            noter("mirrornet_tv_indices_offre_retiree", service_id=o["service_id"])
+            noter(f"{pref}_offre_retiree", service_id=o["service_id"])
 
     vivantes = _get_offers(journal)
-    miennes = [o for o in vivantes if o.get("provider") == did and _usage_tv(o)]
+    miennes = [o for o in vivantes if o.get("provider") == did and _usage(o, jeu)]
     toutes, hauteurs = _toutes_offres(journal)
     # Un geste d'offre (création, avec le retrait des offres propres déviantes qui l'accompagne, ou retrait) au plus par heure.
-    offre_libre = not _recent(_gestes_offre_le(journal, did, toutes), maintenant)
+    offre_libre = not _recent(_gestes_offre_le(journal, did, toutes, jeu), maintenant)
 
     # --- publication : l'offre, puis la version ---------------------------------------------------------------
     if d["publier"]:
-        conformes = [o for o in miennes if _conforme(o)]
+        conformes = [o for o in miennes if _conforme(o, jeu)]
         sid, cree = None, False
         if conformes:
             sid, res["offre"] = conformes[0]["service_id"], "existante"
         elif offre_libre:
-            nom = _nom(boxname, did)
-            o = geste("offre", offer_service, journal, priv, did, name=nom, endpoint=f"mirrornet://{did}/{USAGE}",
-                      **{**OFFRE, "scope": dict(OFFRE["scope"])})
+            nom = _nom(boxname, did, jeu)
+            offre = t["offre"]
+            o = geste("offre", offer_service, journal, priv, did, name=nom, endpoint=f"mirrornet://{did}/{jeu}",
+                      **{**offre, "scope": dict(offre["scope"])})
             if o is not None:
                 sid, res["offre"], cree = o.service_id, "creee", True
-                noter("mirrornet_tv_indices_offre_publiee", service_id=sid, nom=nom)
+                noter(f"{pref}_offre_publiee", service_id=sid, nom=nom)
         if sid and (cree or offre_libre):
             for o in miennes:                            # une offre propre déviante ne reste pas à côté de la conforme
-                if not _conforme(o):
+                if not _conforme(o, jeu):
                     retirer_offre(o, marquer=False)
         if sid and d["empreinte"]:
             _version(journal, priv, did, sid, d, maintenant, res, geste, noter, dataset_versions,
-                     publish_dataset_version, retract_dataset_version)
+                     publish_dataset_version, retract_dataset_version, jeu)
     elif offre_libre:
         for o in miennes:
             retirer_offre(o)
 
-    # --- réception : abonnements aux offres tv-indices des AUTRES nœuds, ou leur résiliation ---------------------
-    offres_tv = {sid: o for sid, o in toutes.items() if o.get("provider") != did and _est_tv(o)}
+    # --- réception : abonnements aux offres de CE jeu des AUTRES nœuds, ou leur résiliation ----------------------
+    offres_tv = {sid: o for sid, o in toutes.items() if o.get("provider") != did and _est(o, jeu)}
     en_cours = abonnements_en_cours(journal, did, maintenant, service_ids=offres_tv)
 
     def resilier(sid: str, sub_id: str, motif: str) -> None:
         if geste("résiliation", cancel_subscription, journal, priv, did, sub_id, motif) is not None:
             res["resiliations"] += 1
-            noter("mirrornet_tv_indices_resiliation", subscription_id=sub_id, service_id=sid,
+            noter(f"{pref}_resiliation", subscription_id=sub_id, service_id=sid,
                   fournisseur=offres_tv[sid].get("provider"), motif=motif)
 
     if d["recevoir"]:
@@ -348,7 +392,7 @@ def traiter(journal, priv: Optional[bytes], did: Optional[str], boxname: str, de
                 if prec is None or hauteurs[sid] > hauteurs[prec["service_id"]]:   # ordre du journal local
                     dernieres[prov] = o
             except Exception as e:  # noqa: BLE001
-                _log.warning("indices TV : offre ignorée : %s", e)
+                _log.warning("%s : offre ignorée : %s", libelle, e)
         suivis = {offres_tv[sid]["provider"] for sid in en_cours}
         # Plafond : les fournisseurs déjà suivis d'abord, puis les autres dans un ordre stable.
         for prov in sorted(dernieres, key=lambda p: (p not in suivis, p))[:PRODUCTEURS_MAX]:
@@ -363,7 +407,7 @@ def traiter(journal, priv: Optional[bytes], did: Optional[str], boxname: str, de
                     if s is not None:
                         en_cours[sid] = [s.subscription_id]
                         res["abonnements"] += 1
-                        noter("mirrornet_tv_indices_abonnement", subscription_id=s.subscription_id, service_id=sid,
+                        noter(f"{pref}_abonnement", subscription_id=s.subscription_id, service_id=sid,
                               fournisseur=prov)
                 if any(subscription_state(journal, x) == SubscriptionState.APPROVED for x in en_cours.get(sid, ())):
                     # Suivi de la dernière offre : les abonnements aux offres PLUS ANCIENNES du fournisseur sont résiliés
@@ -375,16 +419,16 @@ def traiter(journal, priv: Optional[bytes], did: Optional[str], boxname: str, de
                                 resilier(autre, sub_id, MOTIF_REMPLACE)
                             del en_cours[autre]
             except Exception as e:  # noqa: BLE001
-                _log.warning("indices TV : abonnement à %s non traité : %s", prov[8:20], e)
+                _log.warning("%s : abonnement à %s non traité : %s", libelle, prov[8:20], e)
     else:
         for sid, subs in en_cours.items():
             for sub_id in subs:
-                resilier(sid, sub_id, MOTIF_FOND)
+                resilier(sid, sub_id, t["motif_fond"])
     return res
 
 
 def _version(journal, priv, did, sid, d, maintenant, res, geste, noter, dataset_versions, publish_dataset_version,
-             retract_dataset_version) -> None:
+             retract_dataset_version, jeu: str = USAGE) -> None:
     """Un geste de version au plus par heure (dernière version ou dernier retrait) :
     - empreinte = version courante (dernière non retirée) : rien ;
     - empreinte = version ANTÉRIEURE non retirée (A → B → A) : retrait des versions plus récentes, A redevient courante ;
@@ -405,7 +449,7 @@ def _version(journal, priv, did, sid, d, maintenant, res, geste, noter, dataset_
             if geste("retrait de version", retract_dataset_version, journal, priv, did, sid, v["empreinte"],
                      MOTIF_RETOUR) is not None:
                 retirees += 1
-                noter("mirrornet_tv_indices_version_retiree", service_id=sid, numero=v.get("numero"),
+                noter(f"{JEUX[jeu]['audit']}_version_retiree", service_id=sid, numero=v.get("numero"),
                       empreinte=v["empreinte"], motif=MOTIF_RETOUR)
         if retirees == len(actives) - rang - 1:
             res["version"] = empreinte
@@ -413,8 +457,8 @@ def _version(journal, priv, did, sid, d, maintenant, res, geste, noter, dataset_
     if any(v.get("empreinte") == empreinte for v in versions):
         return
     v = geste("version", publish_dataset_version, journal, priv, did, sid, empreinte=empreinte, taille=d["taille"],
-              **MANIFESTE)
+              **JEUX[jeu]["manifeste"])
     if v is not None:
         res["version"] = empreinte
-        noter("mirrornet_tv_indices_version_publiee", service_id=sid, numero=v.numero, empreinte=empreinte,
+        noter(f"{JEUX[jeu]['audit']}_version_publiee", service_id=sid, numero=v.numero, empreinte=empreinte,
               taille=d["taille"])

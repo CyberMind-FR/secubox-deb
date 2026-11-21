@@ -46,6 +46,30 @@ from . import defense  # noqa: E402  (façade SADE lecture seule, #3839)
 
 app.include_router(defense.router, prefix="/defense")
 
+from . import defense_etat  # noqa: E402  (publication du mode pour gk2, #3723)
+
+#: Battement de la publication du mode SADE (`/run/secubox/sade-mode.json`) : gk2 tient pour `observe` un fichier
+#: daté de plus de 15 min ; 60 s laissent une large marge et rattrapent une publication manquée (sade-auto, dont le
+#: bac à sable n'écrit pas /run/secubox, change le mode sans pouvoir publier).
+BATTEMENT_SADE_S = 60
+_taches_sade: set = set()
+
+
+async def _battement_sade(une_fois: bool = False) -> None:
+    """Publie le mode au démarrage, puis toutes les `BATTEMENT_SADE_S` (dans un fil : SQLite et fsync)."""
+    while True:
+        await asyncio.to_thread(defense_etat.publier_mode)
+        if une_fois:
+            return
+        await asyncio.sleep(BATTEMENT_SADE_S)
+
+
+@app.on_event("startup")
+async def _demarrer_battement_sade() -> None:
+    tache = asyncio.create_task(_battement_sade())
+    _taches_sade.add(tache)  # référence gardée : une tâche sans référence peut être ramassée
+    tache.add_done_callback(_taches_sade.discard)
+
 
 def _soc_enrich(event: dict) -> dict:
     """Phase 2c enrichment : sum indicator weights -> score band.

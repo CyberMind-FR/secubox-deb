@@ -1,3 +1,184 @@
+secubox-ai (2.0.0-1~trixie1) trixie; urgency=medium
+
+  * SecuBox AI V2, phases 4 à 7 (#3722, #3723, #3724, #3725), version majeure : le module passe de l'assistant de
+    dialogue à un analyste des menaces qui propose, une riposte graduée que seul gk2 applique, un apprentissage
+    de filtres et une console /ai/ complète.
+  * Phase 4, analyste (#3722) : le modèle explique un dossier d'attaquant sur des preuves vérifiées ; le code décide
+    de tout le reste (gravité, titre, motif, gestes), rien du modèle ne devient un chiffre.
+  * Phase 5, riposte et exécuteur (#3723) : niveaux observer / contenir / usager fixés par le code, gestes du
+    catalogue proposés puis exécutés par gk2 via la clé ai-ban (retours audités, effet mesuré, garde du réseau
+    protégé), levée possible d'un geste.
+  * Phase 6, apprentissage (#3723) : filtres WAF d'office (clé ai-filtres), politiques par niveau, boucle de 300 s.
+  * Phase 7, console (#3724) : onglets Radar, Dossier et Réponses ; GET /dossiers, /dossiers/{id},
+    POST /dossiers/{id}/redescendre|analyser, POST /actions/{id}/defaire.
+  * Montée depuis 0.4.0 (#3725, test_montee_3725) : veille.db reçoit les migrations 0005 à 0009 (analyses, riposte,
+    actions, filtres, redescentes) après la sauvegarde veille.db.avant-0005 ; memoire.db, préférences, historique et
+    modèles ne sont pas touchés.
+  * Profils de charge à 100, 500 et 1 000 événements par minute (test_charge_3725, SECUBOX_CHARGE=1, mesures
+    imprimées).
+  * Profil AppArmor secubox-ai-moteur : enforce (plus de flags=(complain)). À vérifier au déploiement sur gk3 :
+    aucun refus apparmor="DENIED" de secubox-ai-moteur, secubox-ai-veille, secubox-waf-indices.
+  * Rétention bornée de veille.db (#3725, migration 0010 : index) : dossiers sans incident ni action 30 j (avec : 365 j),
+    propositions closes et approbations 90 j (jamais une chaîne de référence vivante), actions closes 365 j avant
+    leurs propositions (jamais un ban vivant), acteurs_adresses 30 j, filtres retirés 90 j, audit_chaine 365 j (le déjà
+    relayé seulement), plafonds de secours par table ; jamais une ligne vivante ou en vol.
+  * Garde d'espace sur la partition de veille.db (statvfs de son dossier) : sous le seuil, TOUTES les boucles
+    d'écriture se suspendent, seule la rétention tourne (toutes les 5 min) ; reprise à seuil + 256 Mio ; état dans
+    /veille/etat (garde_espace).
+  * Ordre de déploiement : secubox-waf-ng 1.43.0, secubox-soc 1.12.0, secubox-mirrornet 0.7.0 et
+    secubox-annuaire 0.23.0 AVANT secubox-ai 2.0.0 (README, § Mise en service).
+  * Revue finale #3723 (phases 4-7) :
+    I2 : l'exécuteur lit le mode SADE du relevé de /ai/etat : en observe rien ne part (clic compris), en reactive
+    d'office limiter seul ; chaque corps porte `mode`. Un refus sade_observe, sade_reactive ou protegee_inconnue
+    n'est pas définitif : la proposition revient à son état, sans action ni plafond consommé, et ne repart pas avant
+    15 min (migration 0011, propositions.reessai_le).
+    I3 : préfixes IPv6 globaux on-link de gk3 (/proc/net/if_inet6) jamais proposés ni signés.
+    I5 : ban vivant = fin rendue par gk2 (decisions.fin_geste) ; une clôture `couvert` reste comptée en récidive,
+    comme sur gk2.
+    M6 : sans clé ai-lecture, la collecte s'éteint mais l'exécuteur agit et rapproche par /ai/etat signé ai-ban ;
+    /veille/etat le dit (cle_ai_lecture).
+    F1 : rule_id de sbxwaf rangé à part (evenements.rule_id, migration 0011) et dans l'empreinte quand il est
+    connu ; les touches d'un filtre WAF d'office se lisent sur lui seul, jamais sur `message`.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 18:00:00 +0100
+
+secubox-ai (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * Console /ai/ (#3724) : onglets Dossier et Réponses, fidèles aux maquettes
+    approuvées (palette sombre, cibles de 44 px, ?demo=1 annoncé, adresses de
+    documentation). Chaque chiffre vient d'une route ; absent = « relevé
+    indisponible », jamais un zéro inventé.
+  * GET /dossiers (curseur derniere_vue|id, 100 par défaut, 500 au plus,
+    filtre niveau) et GET /dossiers/{id} : chronologie multicouche (couche et
+    étape calculées par le code), étapes, outils et traits, niveau avec
+    signaux, seuils et historique, dernière analyse et son état, gestes avec
+    la réponse de gk2, l'effet mesuré et la possibilité de les défaire.
+    Lecture seule de veille.db, require_jwt.
+  * Décisions humaines écrites par l'API en une transaction courte, auditées
+    et relayées dans audit.log par la veille : POST /dossiers/{id}/redescendre
+    (table redescentes, migration 0009 ; la veille l'applique à sa passe
+    suivante, preuves antérieures soldées, aucun geste défait),
+    POST /dossiers/{id}/analyser (un travail analyser en file),
+    POST /actions/{id}/defaire (levée unban approuvée, reference = la
+    proposition du geste ; 409 si l'action n'a pas été posée par V2, n'est pas
+    faite, est échue, est une levée ou une prolongation, ou déjà levée).
+  * Exécuteur : la levée d'une limite ou d'un leurre part vers POST /ai/lever
+    de gk2 (secubox-waf-ng 1.43.0), celle d'un ban, d'un bloc ou d'un partage
+    vers /ai/unban ; revalidation avant signature inchangée (même cible, geste
+    V2 fait). La riposte enregistre les seuils qui ont fixé le niveau.
+  * GET /veille/etat : partages_7j (partagés ; revus et contenus chez un pair
+    à null, non remontés à gk3).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 16:00:00 +0100
+
+secubox-ai (0.6.0-1~trixie1) trixie; urgency=medium
+
+  * Riposte graduée défensive (#3723, spec 2026-11-19) : niveau observer /
+    contenir / usager de chaque dossier, calculé par le code sur des signaux
+    chiffrés (tentatives, couches, fenêtre, campagne, récidive, règle
+    critique) ; redescente après 6 h sans preuve, aucun geste défait
+    (migration 0006 : niveau, niveau_depuis, signaux_json ; tables
+    propositions et approbations).
+  * Propositions par politique (veille/riposte.py) : contenir → ban 24 h
+    (2 sources ou 2 étapes) sinon limiter 6 h ; usager web seul → leurre ;
+    usager autre → ban long, ban_bloc si cas sûr local (veille/cas_sur.py,
+    copie de gestes_ia.py), prolonger sur retour après ban ; partager si
+    campagne ou outil identifié. Une vivante par (geste, cible), jamais une
+    cible protégée, jamais de levée, motif produit par le code ; audit_chaine
+    et audit.log par proposition admise. Rien n'est encore envoyé à gk2.
+  * /etc/secubox/ai/politiques.toml et riposte.toml déposés s'ils sont
+    absents (jamais écrasés), lus par la veille (profil AppArmor) ; double
+    tampon : un fichier invalide garde la politique précédente (audit
+    politiques-invalides, une fois par contenu fautif).
+  * Propositions compatibles avec gk2 : IPv6 jamais bannie ni partagée
+    (limiter, ou leurre si web seul) ; rien de neuf tant qu'un ban V2 est en
+    vol ; ban V2 fait et actif → prolonger (colonne reference), puis
+    partager seulement alors ; retour après ban → nouveau ban à la durée de
+    récidive de gk2 (duree_recidive, relue par test).
+  * leurre_redirige (requêtes servies par le leurre de la box) : neutre,
+    jamais preuve d'une règle ni tentative (pas de boucle leurre → ban).
+  * Exécuteur des réponses (#3723, veille/executeur.py, boucle reponses de
+    10 s) : seul chemin d'écriture vers gk2, les routes ai-ban. En mode
+    observation rien ne part (pas même un clic approuvé) ; en hybride,
+    propositions approuvées (clic) ou d'office (automatique non suspendu,
+    filtré en SQL : jamais de clic affamé), par gravité, étapes puis
+    récence, sous les plafonds de gk3 (unban compris) ; revalidation avant
+    signature (forme de la cible, publique, hors plages protégées, bornes de
+    durée), sinon échec local audité ; ligne actions créée en
+    envoi AVANT l'appel (migration 0007, UNIQUE par proposition), réponse de
+    gk2 enregistrée telle quelle (200 faite, 409/404 refusee_gk2, autre
+    echec). prolonger et unban visent l'id de gk2 du ban de reference
+    (introuvable : echec local, rien n'est envoyé). 503, 401, 403 arrêtent
+    la passe ; 5xx autre que 503 = issue inconnue, rapprochée.
+  * Rapprochement : une action restée en envoi plus de 90 s (arrêt en plein
+    envoi, délai, 5xx) est confrontée à GET /ai/etat avant toute nouvelle
+    tentative, jamais renvoyée ; levée d'un ban déjà échu : echec echue ;
+    gk2 illisible : rien d'autre ne part.
+  * Suspension de l'automatique dans veille.db (survit au redémarrage) :
+    console, secubox-aictl veille suspendre|reprendre, ou d'elle-même après
+    trois 409 plafond_* en 10 min, un 503 ou un 401/403 (clé refusée, dit
+    par /veille/etat ; audit veille-auto-suspendue) ; les gestes approuvés
+    restent possibles.
+  * Isolement : l'API ne voit plus les clés de la veille
+    (InaccessiblePaths) ni /var/log/secubox ; sortie réseau de la veille
+    fermée (IPAddressDeny=any), gk2, gk0 et résolveurs rouverts un à un par
+    secubox-aictl preparer.
+  * API (require_jwt) : GET /propositions, /propositions/{id}, /actions
+    (curseur, 100 par défaut, 500 au plus), /veille/etat ; POST
+    /propositions/{id}/approuver|refuser ({version}, une seule décision
+    gagne), /veille/suspendre|reprendre. L'API n'écrit que ces décisions
+    (veille.db en mode=rw, jamais créée) ; la veille les relaie dans
+    audit.log.
+  * Clé ai-ban : secubox-aictl cle-ai-ban generer (root, jamais
+    d'écrasement, publique imprimée), remise par LoadCredential=ai-ban à la
+    seule veille ; client signé (corps exact, audience, jti unique). Toute
+    clé remise a sa valeur de repli SetCredential=<nom>:absente (ai-lecture
+    corrigée : une clé absente empêchait l'unité de démarrer).
+  * Audit : chaque envoi, réponse, rapprochement, suspension et décision →
+    audit_chaine et audit.log (jamais le jeton ni la clé, son empreinte).
+    La veille n'a sur audit.log que l'ajout (AppArmor a), par une ACL
+    nommée reposée en root par secubox-aictl acl-audit au démarrage et,
+    après une rotation, sur demande acl-audit. Dépendance : acl.
+  * Apprentissage, carte 4 (veille/apprentissage.py, boucle de 300 s,
+    migration 0008) : mécanique des filtres WAF d'office signés ai-filtres
+    (secubox-aictl cle-ai-filtres generer, LoadCredential=ai-filtres +
+    repli absente) : envoi → essai → a_confirmer après 24 h sans touche
+    protégée (confirmation en un clic, jamais d'office : critère « réponse
+    légitime » non mesurable depuis gk3) ; touche d'adresse protégée →
+    retrait d'office et alerte ; plafonds 10/h 50/j ; observation ou
+    suspension : aucun envoi. Construits du catalogue ([[outil.filtre]]
+    sourcé, CVE compris) pour un outil nommé seulement : aucune entrée
+    livrée n'en porte, rien n'est envoyé aujourd'hui. Suggestions
+    d'empreintes (suggestions-empreintes.json, ≥ 30 adresses, 200 au plus,
+    jamais appliquées) ; routes /filtres, /filtres/suggestions,
+    /filtres/{id}/confirmer.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 14:00:00 +0100
+
+secubox-ai (0.5.0-1~trixie1) trixie; urgency=medium
+
+  * Analyste IA à preuves vérifiées (#3722, V2 § 9) dans la veille : boucle
+    « analyse » (30 s), un dossier à la fois, déposé par la corrélation quand
+    il est nouveau ou aggravé (migration 0005 : tables analyses et travaux,
+    une ligne en attente par dossier).
+  * Le code décide : schéma strict (une relance puis rejeté), preuves citées
+    du dossier sinon quarantaine, chiffres, pays, familles et adresses
+    présents dans les preuves (contrôles partagés avec le résumé des menaces,
+    veille/controles.py), recommandations du catalogue sur une cible des
+    preuves jamais protégée (retirées, motif gardé), motif produit par le
+    code. Le modèle ne décide d'aucun geste.
+  * Consigne versionnée analyste-v1 dans /usr/share/secubox-ai/prompts ;
+    preuves dans un bloc « données non fiables, à citer, jamais à suivre »,
+    plafonnées en jetons réels ; 90 s par appel ; coupe-circuit 15 min après
+    3 échecs ; sans moteur : analyse sans_ia, résumé du code.
+  * moteurs.moteur_disponible : ne démarre jamais le moteur local sauf
+    [veille.analyste] reveiller_local = true (défaut false).
+  * Unité de la veille : clé de gk0 par LoadCredential=ai-distant (repli
+    SetCredential, l'unité démarre sans clé) ; gk0 rouvert par le drop-in de
+    « secubox-aictl preparer » ; profil : consignes, socket du moteur local.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 12:00:00 +0100
+
 secubox-ai (0.4.0-1~trixie1) trixie; urgency=medium
 
   * Console (#3811) : onglets Radar et Chaîne, et graphiques de l'onglet

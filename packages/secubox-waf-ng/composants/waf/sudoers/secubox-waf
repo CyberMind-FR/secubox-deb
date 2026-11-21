@@ -44,6 +44,34 @@ Cmnd_Alias SBX_WAF_NFTLIST = /usr/sbin/nft -j list set inet secubox waf_ban, \
 Cmnd_Alias SBX_WAF_BANMANUEL = /usr/sbin/wafctl ban *, \
                                /usr/sbin/wafctl unban *
 
+# Prolonger le ban d'une adresse DÉJÀ bannie (#3723, geste `prolonger` du compte
+# ai-ban) : retrait et nouvel ajout en une transaction nft, garde d'office.
+# `wafctl` exige exactement « prolonger <ip> <durée> ».
+Cmnd_Alias SBX_WAF_PROLONGER = /usr/sbin/wafctl prolonger *
+
+# Geste `limiter` du compte ai-ban (#3723) : limite de débit d'une adresse
+# publique (table inet secubox_waf_ratelimit), et sa levée. `wafctl` exige
+# exactement « limiter <ip> <durée> » (1 h à 24 h) et « limiter-lever <ip> ».
+Cmnd_Alias SBX_WAF_LIMITER = /usr/sbin/wafctl limiter *, \
+                             /usr/sbin/wafctl limiter-lever *
+
+# Geste `leurre` du compte ai-ban (#3723) : redirection d'une adresse publique
+# vers le théâtre de sbxwaf (/var/lib/secubox/waf/leurres-ip.json), et sa levée.
+# `wafctl` exige exactement « leurre <ip> <durée> » (1 h à 7 j) et
+# « leurre-lever <ip> ».
+Cmnd_Alias SBX_WAF_LEURRE = /usr/sbin/wafctl leurre *, \
+                            /usr/sbin/wafctl leurre-lever *
+
+# Geste `partager` du compte ai-ban et revue des pairs (#3723) : publication des
+# indicateurs d'adresses (/var/lib/secubox/waf/ip-indices-publication.json, root,
+# signée et publiée par secubox-mirrornet). `wafctl` exige exactement
+# « indice-partager <ip> <durée> <famille> » (1 h à 7 j, adresse publique, garde
+# d'office), « indice-retirer <ip> » et « indice-revu <ip> » (secubox-waf-indices,
+# qui a banni l'adresse après l'avoir vue hostile ici).
+Cmnd_Alias SBX_WAF_INDICES = /usr/sbin/wafctl indice-partager *, \
+                             /usr/sbin/wafctl indice-retirer *, \
+                             /usr/sbin/wafctl indice-revu *
+
 Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
                             /usr/sbin/wafctl anti-robots on *, \
                             /usr/sbin/wafctl anti-robots off *
@@ -74,7 +102,11 @@ secubox ALL=(root) NOPASSWD: SBX_WAF_ROBOTS
 secubox ALL=(root) NOPASSWD: SBX_WAF_NFTLIST
 secubox ALL=(root) NOPASSWD: SBX_WAF_BANMANUEL
 secubox ALL=(root) NOPASSWD: SBX_WAF_BLOCS
+secubox ALL=(root) NOPASSWD: SBX_WAF_PROLONGER
+secubox ALL=(root) NOPASSWD: SBX_WAF_LIMITER
+secubox ALL=(root) NOPASSWD: SBX_WAF_LEURRE
 secubox ALL=(root) NOPASSWD: SBX_WAF_MODES
+secubox ALL=(root) NOPASSWD: SBX_WAF_INDICES
 
 # Déclenché depuis une minuterie (pas de terminal) et tracé.
 Defaults!SBX_WAF_PURGE !requiretty
@@ -90,3 +122,15 @@ Defaults!SBX_WAF_MODES log_output
 
 Defaults!SBX_WAF_BLOCS !requiretty
 Defaults!SBX_WAF_BLOCS log_output
+
+Defaults!SBX_WAF_PROLONGER !requiretty
+Defaults!SBX_WAF_PROLONGER log_output
+
+Defaults!SBX_WAF_LIMITER !requiretty
+Defaults!SBX_WAF_LIMITER log_output
+
+Defaults!SBX_WAF_LEURRE !requiretty
+Defaults!SBX_WAF_LEURRE log_output
+
+Defaults!SBX_WAF_INDICES !requiretty
+Defaults!SBX_WAF_INDICES log_output

@@ -72,6 +72,14 @@ type ThreatRecord struct {
 	// une observation (« detect ») ; Signaux porte des COMPTEURS seulement.
 	Mode    string
 	Signaux map[string]int
+
+	// HorsActeur (#3723) : la ligne n'est PAS émise vers sbx-actord. Une
+	// adresse redirigée vers le théâtre par le geste `leurre` ne doit nourrir
+	// ni score d'acteur ni mesure : ce n'est pas un signal d'attaque.
+	HorsActeur bool
+	// Servies (#3723) : requêtes servies par le leurre que la ligne représente (elle-même et celles qui n'ont pas
+	// été écrites depuis la précédente). La somme du champ compte les requêtes, pas le nombre de lignes.
+	Servies int64
 }
 
 // ThreatLog appends JSON threat records to a file, one per line.
@@ -205,6 +213,8 @@ type logEntry struct {
 	// #3257 — absents des lignes qui ne les portent pas.
 	Mode    string         `json:"mode,omitempty"`
 	Signals map[string]int `json:"signals,omitempty"`
+	// #3723 — lignes leurre_redirige : requêtes représentées par la ligne.
+	Servies int64 `json:"servies,omitempty"`
 }
 
 // Record appends one JSON line to the threat log for the given ThreatRecord.
@@ -264,6 +274,7 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 		MarqueRevenue: rec.MarqueRevenue,
 		Mode:          rec.Mode,
 		Signals:       rec.Signaux,
+		Servies:       rec.Servies,
 	}
 
 	if estAutoTest(rec.ClientIP, rec.UA) {
@@ -287,7 +298,7 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 	// actord est absent/lent/tombé, l'enveloppe est déposée et la requête n'attend
 	// jamais. Le trafic interne (agrégé sous "local" plus haut) n'est pas un
 	// acteur → non émis ; on n'émet que pour une IP source réelle.
-	if l.emitter != nil && entry.ClientIP != "local" && net.ParseIP(entry.ClientIP) != nil {
+	if l.emitter != nil && !rec.HorsActeur && entry.ClientIP != "local" && net.ParseIP(entry.ClientIP) != nil {
 		env := entryToEnvelope(&entry)
 		env.GeoCountry = l.geo.Pays(entry.ClientIP) // nil-safe
 		l.emitter.Emit(env)

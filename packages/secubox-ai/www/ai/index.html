@@ -128,6 +128,36 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
 .chet .ex{color:var(--doux);font-size:.72rem;overflow-wrap:anywhere;margin-top:3px}
 .chliste{display:grid;gap:10px}
 .chcamp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:7px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.8rem}.chcamp:first-child{border-top:0}.chcamp small{color:var(--doux)}
+/* Dossier et Réponses (#3724) : maquettes approuvées (Main.dc.html, Reponses.dc.html), palette sombre ; cibles 44 px. */
+.v2{--v2-carte:#0c1528;--v2-trait:#1b2944;--v2-tete:#0f1a30;--v2-tete-trait:#1f2f52;--v2-cote:#111a2e;--v2-cote-trait:#22304d;--v2-texte:#e6edf7;--v2-doux:#a8b6cf;
+  display:flex;flex-direction:column;gap:16px;color:var(--v2-texte);font-size:14px;min-width:0}
+.v2barre{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.v2barre label{margin:0;display:flex;align-items:center;gap:8px;color:var(--v2-doux);font-size:13px}
+.v2barre select{min-height:44px;width:auto;max-width:100%;margin:0}
+.v2tete{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:16px 18px;border-radius:14px;background:var(--v2-tete);border:1px solid var(--v2-tete-trait)}
+.v2tete .t{display:flex;flex-direction:column;gap:4px;flex:1 1 360px;min-width:0}.v2tete h2{margin:0;font-size:22px;font-weight:700;overflow-wrap:anywhere}.v2tete .s{color:var(--v2-doux);font-size:13px;overflow-wrap:anywhere}
+.v2pil{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-weight:600;font-size:13px;border:1px solid #27406a;color:#bfdbfe;max-width:100%;overflow-wrap:anywhere}
+.v2pil.n3{background:#3a1d12;border-color:#f97316;color:#fed7aa;font-weight:700}.v2pil.n2{background:#2a1a0a;border-color:#b45309;color:#fed7aa}.v2pil.n1{background:#0f1e36}
+.v2pil.grav{background:#2a1720;border-color:#be123c;color:#fecdd3}.v2pil.vert{background:#0f2a24;border-color:#1f6f5c;color:#6ee7b7}.v2pil.orange{background:#2a1a0a;border-color:#b45309;color:#fed7aa}
+.v2pil .point{width:8px;height:8px;border-radius:50%;background:#34d399;flex:none}
+.v2b{min-height:44px;padding:0 16px;border-radius:10px;border:1px solid #27406a;background:#0f1e36;color:var(--v2-texte);font:inherit;font-weight:600;cursor:pointer}
+.v2b.bleu{border-color:#2b6cb0;background:#10213f;color:#bfdbfe}.v2b.ok{border-color:#1f6f5c;background:#0f2a24;color:#6ee7b7}.v2b.att{border-color:#b45309;background:#2a1a0a;color:#fed7aa}
+.v2b.leger{font-weight:400;padding:0 14px}.v2b:disabled{opacity:.5;cursor:default}
+.v2corps{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}.v2princ{flex:999 1 640px;min-width:0;display:flex;flex-direction:column;gap:16px}.v2cote{flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:16px}
+.v2carte{border-radius:14px;background:var(--v2-carte);border:1px solid var(--v2-trait);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.v2cote .v2carte{background:var(--v2-cote);border-color:var(--v2-cote-trait)}.v2carte h3{margin:0;font-size:15px;font-weight:700}.v2carte h3 small{color:var(--v2-doux);font-weight:400;font-size:13px}
+.v2doux{color:var(--v2-doux);font-size:13px;overflow-wrap:anywhere}.v2petit{color:var(--v2-doux);font-size:12px}.v2mono{font-family:"JetBrains Mono",ui-monospace,monospace;overflow-wrap:anywhere}
+.v2tab{overflow-x:auto}.v2tab table{width:100%;border-collapse:collapse;font-size:13px;min-width:620px}.v2tab th{padding:6px 8px;font-weight:500;color:var(--v2-doux);text-align:left;text-transform:none;font-size:13px}
+.v2tab td{padding:8px;border-top:1px solid var(--v2-trait);vertical-align:top}.v2tab tr:hover td{background:transparent}
+.v2deux{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}@container a (max-width:700px){.v2deux{grid-template-columns:minmax(0,1fr)}}
+.v2puces{display:flex;flex-wrap:wrap;gap:8px}.v2puce{padding:6px 10px;border-radius:8px;background:#0b2d3a;border:1px solid #155e75}.v2puce.non{background:transparent;border:1px dashed #2a3a5a;color:var(--v2-doux)}
+.v2outil{display:flex;flex-direction:column;gap:4px}.v2outil b{font-weight:600}
+.v2ligne{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;border:1px solid var(--v2-tete-trait)}
+.v2ligne .h{width:48px}.v2ligne .g{flex:1 1 260px;font-weight:600;overflow-wrap:anywhere}.v2ligne .e{flex:1 1 220px;color:var(--v2-doux);overflow-wrap:anywhere}.v2ligne .q{flex:1 1 320px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.v2ligne .z{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.v2grille{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:13px}.v2grille b{font-weight:600;overflow-wrap:anywhere}.v2grille span{color:var(--v2-doux)}
+.v2hist{margin:4px 0 0;padding-left:18px;color:var(--v2-doux);font-size:13px;display:flex;flex-direction:column;gap:2px}
+.v2trois{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}.v2trois div{display:flex;flex-direction:column;gap:2px}.v2trois b{font-size:22px;font-weight:700}.v2trois b.ni{font-size:12px;font-weight:400;color:var(--v2-doux)}
+.v2sugg{display:flex;justify-content:space-between;gap:8px;font-size:13px}.v2chaud{color:#fed7aa}.v2 p{margin:0;line-height:1.5}.v2 .msg:empty{display:none}.v2tab td:first-child{white-space:nowrap}.v2grille b.ni{font-weight:400;color:var(--v2-doux);font-family:inherit}
 </style></head><body>
 <nav class="sidebar" id="sidebar"></nav>
 <main class="principal"><div class="cadre"><div class="app">
@@ -191,6 +221,54 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
       <div class="chent" id="chEntonnoir" style="margin-top:8px"></div></div>
     <div class="pan"><h3>Attaquants qui enchaînent le plus d'étapes <i id="chSous"></i></h3><div class="chliste" id="chDossiers"></div></div>
     <div class="pan"><h3>Campagnes de la veille <i>acteurs réunis par une règle écrite</i></h3><div id="chCampagnes"></div></div>
+  </section>
+  <section data-o="dossier" class="v2" aria-label="Dossier d'attaquant">
+    <div class="v2barre"><label for="dzChoix">Dossier</label><select id="dzChoix" aria-label="Choisir un dossier"></select><span class="v2doux" id="dzMaj">—</span></div>
+    <div class="bandeau demo" id="dzDemo" hidden>Démonstration : données fictives (adresses de documentation), aucune lecture de veille.db, aucune décision envoyée.</div>
+    <div class="bandeau neutre" id="dzVide" hidden></div>
+    <header class="v2tete"><div class="t"><h2 id="dzTitre">Dossier</h2><span class="s" id="dzSous">—</span></div>
+      <span class="v2pil n1" id="dzNiveau">—</span><span class="v2pil grav" id="dzGravite">—</span>
+      <button type="button" class="v2b" id="dzRedescendre">Redescendre le niveau</button><button type="button" class="v2b bleu" id="dzAnalyser">Analyser à nouveau</button></header>
+    <div class="msg" id="dzMsg" role="status" aria-live="polite"></div>
+    <div class="v2corps">
+      <div class="v2princ">
+        <section class="v2carte" aria-label="Chronologie multicouche"><h3>Chronologie multicouche <small id="dzChronoNote"></small></h3>
+          <div class="v2tab"><table><thead><tr><th>Heure</th><th>Couche</th><th>Fait</th><th>Étape</th><th>Preuve</th></tr></thead><tbody id="dzChrono"></tbody></table></div></section>
+        <section class="v2deux" aria-label="Étapes et outils">
+          <div class="v2carte"><h3>Étapes atteintes</h3><div class="v2puces" id="dzEtapes"></div></div>
+          <div class="v2carte"><h3>Outils</h3><div id="dzOutils" class="v2outil"></div></div></section>
+        <section class="v2carte" aria-label="Gestes appliqués et effet"><h3>Gestes appliqués et effet</h3><div id="dzGestes" class="grille"></div></section>
+      </div>
+      <aside class="v2cote">
+        <section class="v2carte" aria-label="Niveau"><h3>Pourquoi ce niveau</h3><span class="v2petit">Fixé par le code sur ces chiffres, jamais par le modèle.</span>
+          <div class="v2grille" id="dzSignaux"></div><ol class="v2hist" id="dzHist"></ol></section>
+        <section class="v2carte" aria-label="Analyse IA"><div class="ligne"><h3 style="flex:1">Analyse IA</h3><span class="v2pil n1" id="dzAnaEtat">—</span></div>
+          <div id="dzAnaTexte" class="grille"></div>
+          <div class="v2outil"><b>Ce qui manque</b><span class="v2doux" id="dzManques">—</span></div>
+          <span class="v2petit" id="dzAnaPied">le texte du modèle ne devient jamais un geste</span></section>
+      </aside>
+    </div>
+  </section>
+  <section data-o="reponses" class="v2" aria-label="Réponses de la veille">
+    <div class="bandeau demo" id="rsDemo" hidden>Démonstration : données fictives (adresses de documentation), aucune lecture de veille.db, aucune décision envoyée.</div>
+    <header class="v2tete"><div class="t"><h2>Réponses</h2><span class="s">gk2 décide et recontrôle chaque geste · la veille propose, signe et enregistre</span></div>
+      <span class="v2pil n1" id="rsAuto">—</span><span class="v2pil" id="rsSade">—</span><span class="v2pil" id="rsCles">—</span>
+      <button type="button" class="v2b att" id="rsSuspendre">Suspendre l'automatique</button></header>
+    <div class="msg" id="rsMsg" role="status" aria-live="polite"></div>
+    <div class="v2corps">
+      <div class="v2princ">
+        <section class="v2carte" aria-label="Propositions à décider"><h3 id="rsTitre">À décider</h3><div id="rsDecider" class="grille"></div></section>
+        <section class="v2carte" aria-label="Actions récentes"><h3>Actions et réponse de gk2</h3>
+          <div class="v2tab"><table><thead><tr><th>Heure</th><th>Geste</th><th>Cible</th><th>gk2</th><th>Effet</th></tr></thead><tbody id="rsActions"></tbody></table></div></section>
+        <section class="v2carte" aria-label="Filtres WAF"><h3>Filtres WAF d'office</h3><div id="rsFiltres" class="grille"></div><span class="v2doux" id="rsBilan">—</span></section>
+      </div>
+      <aside class="v2cote">
+        <section class="v2carte" aria-label="Plafonds restants"><h3>Plafonds restants (heure · jour)</h3><div class="v2grille" id="rsPlafonds"></div>
+          <span class="v2petit">3 refus « plafond » en 10 min ou un 503 de gk2 suspendent l'automatique, et c'est dit ici.</span></section>
+        <section class="v2carte" aria-label="Indicateurs partagés"><h3>Indicateurs partagés (7 j)</h3><div class="v2trois" id="rsPartages"></div></section>
+        <section class="v2carte" aria-label="Suggestions d'empreintes"><h3>Suggestions d'empreintes</h3><span class="v2petit">Jamais appliquées seules : à relire avant d'enrichir le catalogue.</span><div id="rsSuggestions" class="grille"></div></section>
+      </aside>
+    </div>
   </section>
   <section data-o="menaces" class="grille">
     <div class="pan"><div class="ligne" style="justify-content:space-between"><h3 style="margin:0">Menaces de gk2 <i>lecture seule · temps réel (20 s) · l'IA explique et propose, elle n'agit jamais</i></h3><span class="mono" id="zMaj"></span></div>
@@ -337,7 +415,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     if (corps !== undefined) { h['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
     return fetch(chemin, o).then(lireReponse);
   }
-  var ONGLETS = [['essai', 'Essai'], ['radar', 'Radar'], ['chaine', 'Chaîne'], ['menaces', 'Menaces'], ['code', 'Code'], ['documents', 'Documents'], ['memoire', 'Mémoire'], ['historique', 'Historique'], ['modeles', 'Modèles'], ['prefs', 'Préférences'], ['medias', 'Médias'], ['journal', 'Journal']];
+  var ONGLETS = [['essai', 'Essai'], ['radar', 'Radar'], ['chaine', 'Chaîne'], ['dossier', 'Dossier'], ['reponses', 'Réponses'], ['menaces', 'Menaces'], ['code', 'Code'], ['documents', 'Documents'], ['memoire', 'Mémoire'], ['historique', 'Historique'], ['modeles', 'Modèles'], ['prefs', 'Préférences'], ['medias', 'Médias'], ['journal', 'Journal']];
   function montrer(n) {
     document.querySelectorAll('section[data-o]').forEach(function (s) { s.hidden = s.dataset.o !== n; });
     Array.prototype.forEach.call($('onglets').children, function (b) { b.setAttribute('aria-selected', b.dataset.o === n ? 'true' : 'false'); });
@@ -348,6 +426,8 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     if (n === 'menaces') { chargerMenaces(); graphesCharger(); }
     if (n === 'radar') chargerRadar();
     if (n === 'chaine') chargerChaine();
+    if (n === 'dossier') dzCharger(q.get('dossier'));
+    if (n === 'reponses') rsCharger();
     annoncer();
   }
   ONGLETS.forEach(function (o) { var b = el('button', '', o[1]); b.type = 'button'; b.dataset.o = o[0]; b.setAttribute('role', 'tab'); b.addEventListener('click', function () { montrer(o[0]); }); $('onglets').appendChild(b); });
@@ -1382,6 +1462,302 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
       .catch(function (e) { msg('mEntree', e.message); });
   }
   function chargerMedias() { chargerGeneres(); chargerFichiers(); chargerModeles().then(chargerEntree); }
+
+  // ---- Dossier et Réponses (#3724) : maquettes approuvées ; chaque chiffre vient d'une route, absent = « relevé indisponible » ----
+  var V2_NI = 'relevé indisponible';
+  var DZ_NIVEAUX = { observer: ['OBSERVER', 'N1', 'n1'], contenir: ['CONTENIR', 'N2', 'n2'], usager: ['USAGER', 'N3', 'n3'] };
+  var DZ_ETAPES = [['reperage', 'repérage'], ['essais', 'essais'], ['exploitation', 'exploitation'], ['persistance', 'persistance']];
+  var DZ_COUCHES = { waf: 'WAF', nft: 'nft', leurres: 'leurres', auth: 'auth', dns: 'DNS', garde: 'garde', dpi: 'DPI' };
+  var DZ_GRAV = { critical: 'critique', high: 'haute', medium: 'moyenne', low: 'basse', info: 'info' };
+  var DZ_ANALYSE = { valide: ['valide', 'vert'], rejete: ['rejetée par le code', 'grav'], quarantaine: ['en quarantaine', 'orange'], sans_ia: ['sans IA', 'n1'] };
+  var DZ_RAISONS = { prolongation: 'une prolongation ne se raccourcit pas ; défaire le ban ci-dessus', levee: 'une levée ne se défait pas', non_envoyee: 'non envoyée à gk2', etat: 'rien n\'a été appliqué par gk2', source: 'pas posée par V2', geste: 'ne se défait pas', echu: 'déjà échu', deja: 'levée déjà demandée', inconnue: 'action inconnue' };
+  var V2_ETATS = { proposee: 'proposée, non envoyée', approuvee: 'approuvée, en attente d\'envoi', refusee: 'refusée par un administrateur', expiree: 'expirée sans envoi', envoyee: 'en cours d\'envoi', faite: 'faite', refusee_gk2: 'refusée par gk2', echec: 'échec' };
+  var V2_MOTIFS = { niveau: 'le dossier est déjà au niveau observer', en_attente: 'redescente déjà demandée', deja: 'levée déjà demandée', en_cours: 'une levée de cette cible est déjà en cours', etat: 'rien n\'a été appliqué par gk2', source: 'action non posée par V2', geste: 'ce geste ne se défait pas', echu: 'geste déjà échu', version: 'la proposition a changé : rechargez', decidee: 'déjà décidée', expiree: 'proposition expirée', file_pleine: 'file d\'analyse pleine', veille_indisponible: 'veille indisponible', inconnu: 'inconnu', inconnue: 'inconnue' };
+  var V2_FILTRES = { envoi: 'en cours d\'envoi', essai: 'en essai', a_confirmer: 'à confirmer', confirme: 'confirmé', retire: 'retiré d\'office', rejete: 'rejeté par gk2', echec: 'échec' };
+  var RS_PLAFONDS = [['ban', 'ban'], ['ban_bloc', 'ban_bloc d\'office'], ['prolonger', 'prolonger'], ['limiter', 'limiter'], ['leurre', 'leurre'], ['partager', 'partager'], ['unban', 'levées (plafond de gk3)']];
+  var V2_CLES = { presente: 'posée', absente: 'absente', invalide: 'invalide' };
+  var DZ = { id: null, donnees: null, confirmation: false }, RS = { etat: null };
+  function v2Nb(v) { return rNombre(v) ? String(v) : V2_NI; }
+  function v2Heure(s) { var d = s ? new Date(s) : null; return !d || isNaN(d) ? '—' : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+  function v2Duree(s) { if (!rNombre(s) || s <= 0) return null; if (s % 86400 === 0) return (s / 86400) + ' j'; if (s % 3600 === 0) return (s / 3600) + ' h'; return Math.round(s / 60) + ' min'; }
+  function v2Reste(iso) { var d = iso ? new Date(iso) : null; if (!d || isNaN(d)) return null; var m = Math.round((d - Date.now()) / 60000); if (m <= 0) return 'expirée'; return 'expire dans ' + (m >= 60 ? Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0') : m + ' min'); }
+  function v2Pil(id, texte, cls) { var e = $(id); e.textContent = texte; e.className = 'v2pil ' + (cls || ''); return e; }
+  function v2Bouton(texte, cls, fn) { var b = el('button', 'v2b ' + (cls || ''), texte); b.type = 'button'; b.addEventListener('click', fn); return b; }
+  function v2Msg(id, t, ok) { var e = $(id); e.textContent = t || ''; e.className = 'msg ' + (ok ? 'b' : 'e'); }
+  function v2Pluriel(n, mot) { return n + ' ' + mot + (n > 1 ? 's' : ''); }
+  function v2Geste(p) {
+    var tete = p.geste === 'prolonger' ? 'prolonger le ban' : p.geste === 'unban' ? 'levée ' + (p.cible || '') : p.geste + (p.cible ? ' ' + p.cible : '');
+    return [tete, v2Duree(p.duree_s), p.mode === 'auto' ? 'd\'office' : p.mode === 'clic' ? 'en un clic' : null].filter(Boolean).join(' · ');
+  }
+  function v2Gk2(a) { return a ? 'gk2 : ' + (rNombre(a.code_http) ? a.code_http : a.etat === 'envoi' ? 'en attente de réponse' : V2_NI) + (a.motif ? ' ' + a.motif : '') : null; }
+  function v2Effet(a) { return a.effet || (a.etat === 'faite' ? 'à mesurer' : a.etat === 'envoi' ? 'issue à rapprocher' : 'rien appliqué'); }
+  function v2Poster(chemin, corps) {
+    var h = entetes({ Accept: 'application/json' }), o = { method: 'POST', headers: h, credentials: 'same-origin', cache: 'no-store' };
+    if (corps !== undefined) { h['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
+    return fetch(API + chemin, o).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (r.ok) return d;
+        var m = d && d.detail && typeof d.detail.motif === 'string' ? d.detail.motif : null;
+        var e = new Error(r.status === 401 || r.status === 403 ? 'Session expirée : reconnectez-vous' : 'Refusé : ' + (V2_MOTIFS[m] || m || 'erreur ' + r.status) + '.');
+        e.status = r.status; throw e;
+      });
+    });
+  }
+
+  // Dossier
+  function dzFait(e) { return [e.famille + (e.sous_famille ? ':' + e.sous_famille : ''), e.vhost || e.service, e.message].filter(Boolean).join(' · '); }
+  function dzSeuil(n) { var s = n.seuils; if (!s) return ''; var haut = n.niveau === 'usager'; return rNombre(haut ? s.n3_tentatives : s.n2_tentatives) ? ' (seuil ' + (haut ? 'N3' : 'N2') + ' : ' + (haut ? s.n3_tentatives : s.n2_tentatives) + ')' : ''; }
+  function dzOui(v) { return typeof v === 'boolean' ? (v ? 'oui' : 'non') : V2_NI; }
+  function dzListe(l) {
+    var s = $('dzChoix'); vider(s);
+    ((l && l.dossiers) || []).forEach(function (x) { var o = el('option', '', [x.cle, x.niveau, 'gravité ' + (DZ_GRAV[x.gravite] || x.gravite || '—'), 'vu ' + v2Heure(x.derniere_vue)].join(' · ')); o.value = x.id; s.appendChild(o); });
+  }
+  function dzVide(t) { var v = $('dzVide'); v.hidden = false; v.textContent = t; DZ.donnees = null; dzRendre(null); }
+  function dzRendre(d) {
+    var x = (d && d.dossier) || {}, n = (d && d.niveau) || {}, sig = n.signaux || {}, niv = DZ_NIVEAUX[n.niveau];
+    $('dzDemo').hidden = !DEMO;
+    $('dzMaj').textContent = DEMO ? 'démonstration · aucune lecture de veille.db' : d ? 'lu dans veille.db, sans IA' : '—';
+    $('dzTitre').textContent = 'Dossier ' + (x.cle || '—') + ' · ' + (x.type === 'campagne' ? 'campagne' : 'acteur');
+    $('dzSous').textContent = [rNombre(x.adresses_total) ? v2Pluriel(x.adresses_total, 'adresse') : 'adresses : ' + V2_NI].concat(x.blocs || [])
+      .concat(['première vue ' + v2Heure(x.premiere_vue), 'dernière preuve ' + v2Heure(sig.derniere_preuve)]).join(' · ');
+    v2Pil('dzNiveau', niv ? 'NIVEAU ' + niv[0] + ' (' + niv[1] + ') · depuis ' + v2Heure(n.depuis) : 'niveau : ' + V2_NI, niv ? niv[2] : 'n1');
+    v2Pil('dzGravite', 'gravité ' + (DZ_GRAV[x.gravite] || V2_NI), 'grav');
+    var r = $('dzRedescendre'), a = $('dzAnalyser');
+    r.disabled = !d || !niv || n.niveau === 'observer' || !!n.redescente_en_attente;
+    r.textContent = n.redescente_en_attente ? 'Redescente demandée' : 'Redescendre le niveau';
+    a.disabled = !d || !!d.analyse_en_file; a.textContent = d && d.analyse_en_file ? 'Analyse en file' : 'Analyser à nouveau';
+    // chronologie
+    var t = $('dzChrono'); vider(t);
+    var chrono = d ? d.chronologie : null;
+    $('dzChronoNote').textContent = d && d.chronologie_tronquee ? '· les ' + chrono.length + ' plus récentes sur ' + d.chronologie_total : '';
+    if (!chrono || !chrono.length) { var tr0 = el('tr'), td0 = el('td', 'v2doux', chrono ? 'Aucune preuve rattachée.' : V2_NI); td0.setAttribute('colspan', 5); tr0.appendChild(td0); t.appendChild(tr0); }
+    (chrono || []).forEach(function (e) {
+      var tr = el('tr'), et = DZ_ETAPES.filter(function (y) { return y[0] === e.etape; })[0];
+      tr.appendChild(el('td', 'v2mono', v2Heure(e.horodatage))); tr.appendChild(el('td', '', DZ_COUCHES[e.couche] || '—'));
+      tr.appendChild(el('td', '', dzFait(e))); tr.appendChild(el('td', et ? '' : 'v2doux', et ? et[1] : 'neutre'));
+      tr.appendChild(el('td', 'v2mono v2doux', 'evt ' + String(e.id || '').slice(0, 4) + '…')); t.appendChild(tr);
+    });
+    // étapes
+    var z = $('dzEtapes'); vider(z);
+    if (!d || !(d.etapes || []).length) z.appendChild(el('span', 'v2doux', V2_NI));
+    ((d && d.etapes) || []).forEach(function (e) {
+      var nom = (DZ_ETAPES.filter(function (y) { return y[0] === e.etape; })[0] || [e.etape, e.etape])[1];
+      z.appendChild(el('span', e.atteinte ? 'v2puce' : 'v2puce non', nom + ' · ' + (e.atteinte ? v2Heure(e.debut) : 'non vue')));
+    });
+    // outils
+    var o = $('dzOutils'); vider(o);
+    if (!d) o.appendChild(el('span', 'v2doux', V2_NI));
+    else if (!(d.outils || []).length) o.appendChild(el('span', 'v2doux', 'aucun outil identifié'));
+    ((d && d.outils) || []).forEach(function (u) {
+      var inc = u.outil === 'inconnu', tr = u.traits || [], b = el('div', 'v2outil');
+      b.appendChild(el('b', '', inc ? 'outil inconnu' : u.outil + (u.version ? ' ' + u.version : '')));
+      var det = (tr.length === 1 ? 'trait ' + (inc ? 'observé seul' : 'concordant') : v2Pluriel(tr.length, 'trait') + (inc ? ' observés' : ' indépendants')) + (tr.length ? ' : ' + tr.map(function (x) { return [x.type, x.couche ? '(' + (DZ_COUCHES[x.couche] || x.couche) + ')' : ''].filter(Boolean).join(' '); }).join(' + ') : '');
+      b.appendChild(el('span', 'v2doux', det + (u.confiance ? ' · confiance ' + u.confiance : ''))); o.appendChild(b);
+    });
+    // gestes
+    var g = $('dzGestes'); vider(g);
+    if (!d) g.appendChild(el('span', 'v2doux', V2_NI));
+    else if (!(d.gestes || []).length) g.appendChild(el('span', 'v2doux', 'Aucun geste de la veille sur ce dossier.'));
+    ((d && d.gestes) || []).forEach(function (x) {
+      var p = x.proposition || {}, ac = x.action, l = el('div', 'v2ligne'), zb = el('div', 'z');
+      l.appendChild(el('span', 'h v2mono', v2Heure(ac ? ac.envoyee_le : p.cree_le))); l.appendChild(el('b', 'g', v2Geste(p)));
+      l.appendChild(el('span', 'e', ac ? v2Gk2(ac) + ' · effet : ' + v2Effet(ac) : (V2_ETATS[p.etat] || p.etat || V2_NI)));
+      var df = x.defaire || {};
+      if (df.possible && df.action_id) zb.appendChild(v2Bouton('Défaire', 'leger', function () { dzDefaire(zb, df.action_id, df.partages || []); }));
+      else if (df.raison) zb.appendChild(el('span', 'v2petit', DZ_RAISONS[df.raison] || df.raison));
+      l.appendChild(zb); g.appendChild(l);
+    });
+    // pourquoi ce niveau
+    var s = $('dzSignaux'); vider(s);
+    [['tentatives', rNombre(sig.tentatives) ? sig.tentatives + dzSeuil(n) : V2_NI],
+     ['couches', rNombre(sig.couches) ? sig.couches + ((sig.noms_couches || []).length ? ' (' + sig.noms_couches.map(function (c) { return DZ_COUCHES[c] || c; }).join(', ') + ')' : '') : V2_NI],
+     ['fenêtre', rNombre(sig.fenetre_s) ? Math.round(sig.fenetre_s / 60) + ' min' : V2_NI],
+     ['campagne', dzOui(sig.campagne)], ['récidive', dzOui(sig.recidive)]].forEach(function (c) { s.appendChild(el('span', '', c[0])); s.appendChild(el('b', '', c[1])); });
+    var hi = $('dzHist'); vider(hi);
+    if (!(n.historique || []).length) hi.appendChild(el('li', '', d ? 'aucun changement de niveau relevé' : V2_NI));
+    (n.historique || []).forEach(function (h) { hi.appendChild(el('li', '', v2Heure(h.horodatage) + ' ' + (h.vers || '—') + (h.cible === 'humain' ? ' (décision humaine)' : h.cible === 'calme' ? ' (calme, preuves soldées)' : ''))); });
+    // analyse IA
+    var an = d ? d.analyse : null, at = $('dzAnaTexte'), m = $('dzManques'); vider(at);
+    if (!an) {
+      v2Pil('dzAnaEtat', d && d.analyse_en_file ? 'en file' : 'aucune', 'n1');
+      at.appendChild(el('p', 'v2doux', !d ? V2_NI : d.analyse_en_file ? 'Analyse en file : elle paraîtra ici.' : 'Aucune analyse pour ce dossier.'));
+      m.textContent = '—'; $('dzAnaPied').textContent = 'le texte du modèle ne devient jamais un geste';
+    } else {
+      var ea = DZ_ANALYSE[an.etat] || [an.etat || V2_NI, 'n1'];
+      v2Pil('dzAnaEtat', an.etat === 'valide' ? 'valide · ' + (rNombre(an.preuves) ? v2Pluriel(an.preuves, 'preuve') + ' vérifiée' + (an.preuves > 1 ? 's' : '') : V2_NI) : ea[0], ea[1]);
+      at.appendChild(el('p', '', an.resume || '—'));
+      if (an.lecture) at.appendChild(el('p', 'v2doux', an.lecture));
+      if (an.etat !== 'valide' && an.motif) at.appendChild(el('p', 'v2petit', 'motif du code : ' + an.motif));
+      m.textContent = (an.manques || []).length ? an.manques.join(' · ') : 'rien de signalé';
+      $('dzAnaPied').textContent = [an.version_prompt, an.moteur ? 'moteur ' + an.moteur : null, v2Heure(an.cree_le), 'le texte du modèle ne devient jamais un geste'].filter(Boolean).join(' · ');
+    }
+    annoncer();
+  }
+  function dzDefaire(zone, aid, partages) {
+    // un indicateur partagé de la cible est SIGNALÉ ; il n'est retiré que si l'administrateur le choisit
+    var levee = function (avec) {
+      DZ.confirmation = false;
+      dzDecider('/actions/' + encodeURIComponent(aid) + '/defaire', 'Levée approuvée : l\'exécuteur l\'enverra à gk2 après l\'avoir revalidée.', avec ? partages : []);
+    };
+    DZ.confirmation = true; vider(zone);
+    if (partages.length) {
+      zone.appendChild(el('span', 'v2petit', 'Indicateur partagé au maillage pour ' + partages.map(function (p) { return p.cible; }).join(', ') + ' : le retirer aussi ?'));
+      zone.appendChild(v2Bouton('Lever le ban seul', 'att', function () { levee(false); }));
+      zone.appendChild(v2Bouton('Lever le ban et retirer le partage', 'att', function () { levee(true); }));
+    } else {
+      zone.appendChild(el('span', 'v2petit', 'Lever ce geste sur gk2 ?'));
+      zone.appendChild(v2Bouton('Confirmer la levée', 'att', function () { levee(false); }));
+    }
+    zone.appendChild(v2Bouton('Annuler', 'leger', function () { DZ.confirmation = false; dzRendre(DZ.donnees); }));
+  }
+  function dzDecider(chemin, ok, partages) {
+    if (DEMO) { v2Msg('dzMsg', 'Démonstration : aucune décision envoyée.', true); return; }
+    var suite = v2Poster(chemin);
+    (partages || []).forEach(function (p) {
+      suite = suite.then(function () { return v2Poster('/actions/' + encodeURIComponent(p.action_id) + '/defaire'); });
+      ok += ' Retrait du partage de ' + p.cible + ' approuvé.';
+    });
+    suite.then(function () { v2Msg('dzMsg', ok, true); dzCharger(DZ.id); }).catch(function (e) { v2Msg('dzMsg', e.message); dzCharger(DZ.id); });
+  }
+  function dzCharger(id) {
+    if (DEMO) { dzListe(dzDemoListe()); DZ.id = 'demo'; DZ.donnees = dzDemoDossier(); $('dzVide').hidden = true; dzRendre(DZ.donnees); return; }
+    api(API + '/dossiers?limite=100').then(function (l) {
+      dzListe(l);
+      // un dossier demandé (?dossier=, sélecteur) est lu DIRECTEMENT, même hors des 100 plus récents
+      var choisi = id || DZ.id || ((l.dossiers || [])[0] || {}).id;
+      if (!choisi) { dzVide('Aucun dossier d\'attaquant dans veille.db.'); return null; }
+      return api(API + '/dossiers/' + encodeURIComponent(choisi)).then(function (d) {
+        var s = $('dzChoix');
+        if (!(l.dossiers || []).some(function (x) { return x.id === choisi; })) { var o = el('option', '', d.dossier.cle + ' · ' + (d.dossier.niveau || '—')); o.value = choisi; s.appendChild(o); }
+        DZ.id = choisi; s.value = choisi; DZ.donnees = d; DZ.confirmation = false; $('dzVide').hidden = true; dzRendre(d);
+      });
+    }).catch(function (e) { dzVide(e.status === 401 || e.status === 403 ? 'Aucune mesure : session requise. Se connecter.' : e.status === 404 ? 'Dossier inconnu de veille.db.' : 'Aucune mesure : ' + e.message + '.'); });
+  }
+  $('dzChoix').addEventListener('change', function () { dzCharger(this.value); });
+  $('dzRedescendre').addEventListener('click', function () { if (DZ.id) dzDecider('/dossiers/' + encodeURIComponent(DZ.id) + '/redescendre', 'Redescente demandée : la veille l\'applique à sa prochaine passe, aucun geste n\'est défait.'); });
+  $('dzAnalyser').addEventListener('click', function () { if (DZ.id) dzDecider('/dossiers/' + encodeURIComponent(DZ.id) + '/analyser', 'Analyse demandée : elle part dans la file de l\'analyste.'); });
+
+  // Réponses
+  function rsLigne(zone, titre, sous, boutons) {
+    var l = el('div', 'v2ligne'), q2 = el('div', 'q'); q2.appendChild(el('b', '', titre)); q2.appendChild(el('span', 'v2doux', sous)); l.appendChild(q2);
+    (boutons || []).forEach(function (b) { l.appendChild(b); }); zone.appendChild(l);
+  }
+  function rsDecider(chemin, corps, ok) {
+    if (DEMO) { v2Msg('rsMsg', 'Démonstration : aucune décision envoyée.', true); return; }
+    v2Poster(chemin, corps).then(function () { v2Msg('rsMsg', ok, true); rsCharger(); }).catch(function (e) { v2Msg('rsMsg', e.message); rsCharger(); });
+  }
+  function rsRendre(r) {
+    r = r || {}; var e = r.etat || null, s = e ? e.suspension || {} : null, bloque = s ? !!(s.suspendu || s.politique) : null;
+    RS.etat = e; $('rsDemo').hidden = !DEMO;
+    if (!e) v2Pil('rsAuto', 'automatique : ' + V2_NI, 'n1');
+    else if (e.observation) v2Pil('rsAuto', 'Observation : rien ne part', 'orange');
+    else if (bloque) v2Pil('rsAuto', 'Automatique suspendu' + (s.politique ? ' par la politique' : s.par ? ' par ' + s.par : '') + (s.motif ? ' · ' + s.motif : ''), 'orange');
+    else { var pa = v2Pil('rsAuto', '', 'vert'); pa.appendChild(el('span', 'point')); pa.appendChild(el('span', '', 'Automatique actif')); }
+    v2Pil('rsSade', 'mode SADE sur gk2 : ' + (e && e.sade_mode ? String(e.sade_mode).toUpperCase() : V2_NI));
+    var cle = e && e.cle_ai_ban;
+    v2Pil('rsCles', 'clé ai-ban : ' + (cle && cle.refusee ? 'refusée par gk2' : cle && V2_CLES[cle.etat] || V2_NI) + ' · ai-filtres : ' + V2_NI);
+    var bs = $('rsSuspendre'); bs.disabled = !e || !!(s && s.politique);
+    bs.textContent = s && s.suspendu ? 'Reprendre l\'automatique' : 'Suspendre l\'automatique';
+    // à décider
+    var ti = $('rsTitre'); vider(ti); ti.textContent = 'À décider' + (e && rNombre(e.a_decider) ? ' (' + e.a_decider + ')' : '');
+    ti.appendChild(el('small', '', ' · ' + (e && rNombre(e.auto_en_attente) ? v2Pluriel(e.auto_en_attente, 'proposition') + ' d\'office en file' : 'propositions d\'office : ' + V2_NI)));
+    var zd = $('rsDecider'); vider(zd);
+    var props = r.propositions ? r.propositions.filter(function (p) { return p.mode === 'clic' || bloque; }) : null;
+    if (!props) zd.appendChild(el('span', 'v2doux', V2_NI));
+    else if (!props.length) zd.appendChild(el('span', 'v2doux', 'Rien à décider.'));
+    (props || []).forEach(function (p) {
+      rsLigne(zd, v2Geste({ geste: p.geste, cible: p.cible, duree_s: p.duree_s }), [p.niveau, p.motif, v2Reste(p.expire_le)].filter(Boolean).join(' · '), [
+        v2Bouton('Approuver', 'ok', function () { rsDecider('/propositions/' + encodeURIComponent(p.id) + '/approuver', { version: p.version }, 'Approuvée : l\'exécuteur l\'enverra à gk2.'); }),
+        v2Bouton('Refuser', 'leger', function () { rsDecider('/propositions/' + encodeURIComponent(p.id) + '/refuser', { version: p.version }, 'Refusée : rien ne part.'); })]);
+    });
+    // actions
+    var ta = $('rsActions'); vider(ta);
+    if (!r.actions || !r.actions.length) { var tr0 = el('tr'), td0 = el('td', 'v2doux', r.actions ? 'Aucune action envoyée.' : V2_NI); td0.setAttribute('colspan', 5); tr0.appendChild(td0); ta.appendChild(tr0); }
+    (r.actions || []).forEach(function (a) {
+      var tr = el('tr'), refus = a.etat === 'refusee_gk2' || a.etat === 'echec';
+      tr.appendChild(el('td', 'v2mono', v2Heure(a.envoyee_le))); tr.appendChild(el('td', '', a.geste + ' · ' + (a.mode === 'auto' ? 'd\'office' : 'en un clic')));
+      tr.appendChild(el('td', 'v2mono', a.cible)); tr.appendChild(el('td', refus ? 'v2chaud' : '', v2Gk2(a).replace('gk2 : ', '')));
+      tr.appendChild(el('td', a.effet ? '' : 'v2doux', v2Effet(a))); ta.appendChild(tr);
+    });
+    // filtres WAF d'office
+    var zf = $('rsFiltres'); vider(zf);
+    var fl = r.filtres && r.filtres.filtres, fe = (r.filtres && r.filtres.etat) || {};
+    var vivants = fl ? fl.filter(function (f) { return f.etat === 'a_confirmer' || f.etat === 'essai' || f.etat === 'envoi'; }) : null;
+    if (!vivants) zf.appendChild(el('span', 'v2doux', V2_NI));
+    else if (!vivants.length) zf.appendChild(el('span', 'v2doux', 'Aucun filtre en essai.'));
+    (vivants || []).forEach(function (f) {
+      var sous = [f.outil, f.cve, f.etat === 'a_confirmer' ? 'essai sans toucher d\'adresse protégée · réponses légitimes non mesurables depuis gk3' : f.essai_depuis ? 'en essai depuis ' + v2Heure(f.essai_depuis) : null].filter(Boolean).join(' · ');
+      rsLigne(zf, f.id + ' · ' + (V2_FILTRES[f.etat] || f.etat), sous, f.etat === 'a_confirmer' ? [v2Bouton('Confirmer', 'ok', function () { rsDecider('/filtres/' + encodeURIComponent(f.id) + '/confirmer', undefined, 'Filtre confirmé.'); })] : []);
+    });
+    $('rsBilan').textContent = 'en essai : ' + v2Nb(fe.filtres_essai) + ' · confirmés : ' + v2Nb(fe.filtres_confirmes) + ' · retirés d\'office : ' + v2Nb(fe.filtres_retires);
+    // plafonds restants (gk2 fait foi)
+    var zp = $('rsPlafonds'), pl = e && e.plafonds; vider(zp);
+    RS_PLAFONDS.forEach(function (c) {
+      var x = pl && pl[c[0]], k2 = x && x.gk2, k3 = x && x.gk3, v = V2_NI;
+      if (k2 && rNombre(k2.restant_heure) && rNombre(k2.heure)) v = k2.restant_heure + '/' + k2.heure + ' · ' + (rNombre(k2.restant_jour) && rNombre(k2.jour) ? k2.restant_jour + '/' + k2.jour : V2_NI);
+      else if (k3 && rNombre(k3.heure) && rNombre(k3.jour)) v = 'au plus ' + k3.heure + '/h · ' + k3.jour + '/j';
+      zp.appendChild(el('span', '', c[1])); zp.appendChild(el('b', v === V2_NI ? 'ni' : 'v2mono', v));
+    });
+    zp.appendChild(el('span', '', 'filtres WAF')); zp.appendChild(el('b', 'ni', V2_NI));
+    // indicateurs partagés
+    var zi = $('rsPartages'), ip = e && e.partages_7j; vider(zi);
+    [['partages', 'partagés'], ['revus', 'revus chez un pair'], ['contenus', 'contenus chez un pair']].forEach(function (c) {
+      var d = el('div'), v = ip ? ip[c[0]] : null; d.appendChild(el('b', rNombre(v) ? '' : 'ni', v2Nb(v))); d.appendChild(el('span', 'v2petit', c[1])); zi.appendChild(d);
+    });
+    // suggestions d'empreintes
+    var zs = $('rsSuggestions'), sg = r.suggestions && r.suggestions.suggestions; vider(zs);
+    if (!Array.isArray(sg)) zs.appendChild(el('span', 'v2doux', V2_NI));
+    else if (!sg.length) zs.appendChild(el('span', 'v2doux', 'Aucune suggestion.'));
+    (Array.isArray(sg) ? sg.slice(0, 6) : []).forEach(function (x) {
+      var l = el('div', 'v2sugg'); l.appendChild(el('span', 'v2mono', (x.type || '—') + ' « ' + x.valeur + ' »' + (x.outil_catalogue ? ' · déjà au catalogue : ' + x.outil_catalogue : '')));
+      l.appendChild(el('b', '', rNombre(x.adresses) ? v2Pluriel(x.adresses, 'adresse') : V2_NI)); zs.appendChild(l);
+    });
+    annoncer();
+  }
+  function rsCharger() {
+    if (DEMO) { rsRendre(rsDemo()); return; }
+    function lire(c) { return api(API + c).catch(function (e) { if (e.status === 401 || e.status === 403) throw e; return null; }); }
+    Promise.all([lire('/veille/etat'), lire('/propositions?etat=proposee&limite=100'), lire('/actions?limite=25'), lire('/filtres'), lire('/filtres/suggestions')])
+      .then(function (x) { rsRendre({ etat: x[0], propositions: x[1] && x[1].propositions, actions: x[2] && x[2].actions, filtres: x[3], suggestions: x[4] }); })
+      .catch(function (e) { rsRendre(null); v2Msg('rsMsg', e.message); });
+  }
+  $('rsSuspendre').addEventListener('click', function () {
+    var s = RS.etat && RS.etat.suspension, rep = !!(s && s.suspendu);
+    rsDecider(rep ? '/veille/reprendre' : '/veille/suspendre', undefined, rep ? 'Automatique repris.' : 'Automatique suspendu : seuls les gestes approuvés partent.');
+  });
+  setInterval(function () { if (document.hidden) return; var a = document.querySelector('section[data-o=reponses]'), b = document.querySelector('section[data-o=dossier]'); if (a && !a.hidden) rsCharger(); if (b && !b.hidden && !DZ.confirmation && !document.activeElement.matches('select')) dzCharger(DZ.id); }, 30000);
+
+  // démonstration (#3724) : données fictives annoncées, adresses de documentation (RFC 5737, RFC 3849), aucun appel
+  function v2Il(m) { return new Date(Date.now() - m * 60000).toISOString().slice(0, 19) + 'Z'; }
+  function dzDemoListe() { return { dossiers: [{ id: 'demo', cle: 'ACT-2317', niveau: 'usager', gravite: 'critical', derniere_vue: v2Il(3) }], curseur: null }; }
+  function dzDemoDossier() {
+    var ip1 = '198.51.100.83', ip2 = '198.51.100.91';
+    function ev(m, c, fam, sous, vh, msgx, etape, id) { return { id: id, horodatage: v2Il(m), couche: c, source: 'menaces', famille: fam, sous_famille: sous, vhost: vh, service: null, message: msgx, etape: etape }; }
+    return { dossier: { id: 'demo', cle: 'ACT-2317', type: 'acteur', gravite: 'critical', niveau: 'usager', niveau_depuis: v2Il(18), premiere_vue: v2Il(52), derniere_vue: v2Il(3), adresses: [ip1, ip2], adresses_total: 2, blocs: ['198.51.100.0/24'] },
+      chronologie: [ev(52, 'waf', 'scanners', 'wordpress', 'blog.exemple.secubox.in', 'GET /wp-admin/install.php', 'reperage', 'a1b2c3d4'), ev(47, 'auth', 'auth_imap', 'login_failed', null, null, 'essais', 'b5e6f708'),
+        ev(31, 'waf', 'rce', 'php', 'blog.exemple.secubox.in', 'POST /xmlrpc.php', 'exploitation', 'c9d0e1f2'), ev(18, 'nft', 'syn_sans_etat', null, null, null, 'persistance', 'd3a4b5c6'), ev(3, 'waf', 'leurre_redirige', null, 'blog.exemple.secubox.in', null, null, 'e7f8a9b0')],
+      chronologie_total: 5, chronologie_tronquee: false,
+      etapes: [{ etape: 'reperage', atteinte: true, debut: v2Il(52) }, { etape: 'essais', atteinte: true, debut: v2Il(47) }, { etape: 'exploitation', atteinte: true, debut: v2Il(31) }, { etape: 'persistance', atteinte: true, debut: v2Il(18) }],
+      outils: [{ outil: 'WPScan', confiance: 'forte', version: null, traits: [{ type: 'agent', couche: 'waf' }, { type: 'chemins', couche: 'leurres' }, { type: 'cadence', couche: 'nft' }] }],
+      niveau: { niveau: 'usager', depuis: v2Il(18), signaux: { tentatives: 212, couches: 3, noms_couches: ['auth', 'nft', 'waf'], fenetre_s: 2940, campagne: false, recidive: true, derniere_preuve: v2Il(3) },
+        seuils: { n2_tentatives: 20, n3_tentatives: 100 }, historique: [{ horodatage: v2Il(52), vers: 'contenir' }, { horodatage: v2Il(18), vers: 'usager' }], redescente_en_attente: false },
+      analyse: { etat: 'valide', preuves: 4, resume: 'Démonstration : deux adresses d\'un même bloc enchaînent repérage WordPress, échecs IMAP et une requête d\'exécution, puis reviennent.', lecture: null, manques: ['aucune empreinte TLS relevée'], moteur: 'démo', version_prompt: 'analyste-v1', cree_le: v2Il(16) },
+      analyse_en_file: false,
+      gestes: [{ proposition: { geste: 'ban', cible: ip1, duree_s: 345600, mode: 'auto', etat: 'faite', cree_le: v2Il(30) }, action: { id: 'demo-a', etat: 'faite', code_http: 200, envoyee_le: v2Il(30), effet: null }, defaire: { possible: true, action_id: 'demo-a', partages: [{ action_id: 'demo-e', cible: ip1 }] } },
+        { proposition: { geste: 'prolonger', cible: ip1, duree_s: 518400, mode: 'auto', etat: 'faite', cree_le: v2Il(9) }, action: { id: 'demo-d', etat: 'faite', code_http: 200, envoyee_le: v2Il(9), effet: null }, defaire: { possible: false, raison: 'prolongation' } },
+        { proposition: { geste: 'limiter', cible: '2001:db8:5::21', duree_s: 21600, mode: 'auto', etat: 'faite', cree_le: v2Il(22) }, action: { id: 'demo-b', etat: 'faite', code_http: 200, envoyee_le: v2Il(22), effet: null }, defaire: { possible: true, action_id: 'demo-b' } },
+        { proposition: { geste: 'ban', cible: ip2, duree_s: 345600, mode: 'auto', etat: 'refusee_gk2', cree_le: v2Il(12) }, action: { id: 'demo-c', etat: 'refusee_gk2', code_http: 409, motif: 'deja_actif', envoyee_le: v2Il(12), effet: null }, defaire: { possible: false, raison: 'etat' } }] };
+  }
+  function rsDemo() {
+    return { etat: { suspension: { suspendu: false }, observation: false, sade_mode: 'active', cle_ai_ban: { etat: 'presente' }, a_decider: 1, auto_en_attente: 3,
+        plafonds: { ban: { gk2: { heure: 60, jour: 400, restant_heure: 54, restant_jour: 377 } }, ban_bloc: { gk2: { heure: 5, jour: 20, restant_heure: 5, restant_jour: 18 } }, limiter: { gk2: { heure: 60, jour: 400, restant_heure: 58, restant_jour: 391 } }, unban: { gk3: { heure: 30, jour: 100 } } },
+        partages_7j: { partages: 6, revus: null, contenus: null } },
+      propositions: [{ id: 'demo-p', version: 1, geste: 'ban_bloc', cible: '203.0.113.0/24', duree_s: 86400, mode: 'clic', niveau: 'usager', motif: 'riposte usager : ban du bloc 24 h, cas sûr local (au moins 20 adresses du bloc bannies, familles sûres)', expire_le: new Date(Date.now() + 5400000).toISOString() }],
+      actions: [{ envoyee_le: v2Il(30), geste: 'ban', mode: 'auto', cible: '198.51.100.83', etat: 'faite', code_http: 200, effet: null }, { envoyee_le: v2Il(12), geste: 'ban', mode: 'auto', cible: '198.51.100.91', etat: 'refusee_gk2', code_http: 409, motif: 'deja_actif', effet: null }],
+      filtres: { filtres: [{ id: 'ia-demo-wpscan', etat: 'a_confirmer', outil: 'WPScan', cve: null }], etat: { filtres_essai: 1, filtres_confirmes: 2, filtres_retires: 0 } },
+      suggestions: { suggestions: [{ type: 'agent', valeur: 'Go-http-client/1.1', adresses: 27 }, { type: 'identifiant', valeur: 'root', adresses: 19 }] } };
+  }
+  // ---- fin Dossier et Réponses ----
 
   $('bRafraichir').addEventListener('click', function () { chargerEtat(); chargerModeles(); chargerTravaux(); if (!document.querySelector('section[data-o=medias]').hidden) chargerMedias(); });
   if (q.get('embed')) $('tete').hidden = true;

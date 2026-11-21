@@ -101,10 +101,10 @@ def test_migration_idempotente_et_tables():
     defense_etat.mode_courant()
     defense_etat.mode_courant()
     db = sqlite3.connect(defense_etat._chemin_db())
-    assert db.execute("SELECT version FROM schema_migrations").fetchall() == [(1,), (2,)]
+    assert db.execute("SELECT version FROM schema_migrations").fetchall() == [(1,), (2,), (3,)]
     assert db.execute("SELECT COUNT(*) FROM liste_blanche").fetchone()[0] == 9
     assert {t for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type='table'")} >= {
-        "mode", "seuils", "liste_blanche", "decisions", "propositions_vues"}
+        "mode", "seuils", "liste_blanche", "decisions", "propositions_vues", "alertes"}
     assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
 
 

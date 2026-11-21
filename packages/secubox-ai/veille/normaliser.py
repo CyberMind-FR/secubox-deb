@@ -48,6 +48,8 @@ class Evenement:
     attributs: dict = field(default_factory=dict)
     empreinte: str = ""
     cree_le: str = ""
+    #: Règle de sbxwaf (`rule_id`), à part de `message` (revue finale F1) : les touches de filtre se lisent sur elle.
+    rule_id: Optional[str] = None
 
     def ligne(self):
         """Valeurs dans l'ordre des colonnes de la table `evenements`."""
@@ -56,11 +58,11 @@ class Evenement:
             attributs = json.dumps({"tronque": True}, sort_keys=True)
         return (self.id, self.source, self.id_source, self.noeud, self.horodatage, self.famille, self.sous_famille,
                 self.gravite, self.ip_src, self.bloc24, self.pays, self.service, self.vhost, self.message,
-                attributs, self.empreinte, self.cree_le)
+                attributs, self.empreinte, self.cree_le, self.rule_id)
 
 
 COLONNES = ("id", "source", "id_source", "noeud", "horodatage", "famille", "sous_famille", "gravite", "ip_src",
-            "bloc24", "pays", "service", "vhost", "message", "attributs_json", "empreinte", "cree_le")
+            "bloc24", "pays", "service", "vhost", "message", "attributs_json", "empreinte", "cree_le", "rule_id")
 
 
 def rfc3339(dt: datetime) -> str:
@@ -140,9 +142,13 @@ def _valeur(v, profondeur=0):
     return texte(v)
 
 
-def empreinte(source, horodatage, ip, fam, vhost, id_source) -> str:
-    """SHA-256 de (source, horodatage, ip, famille, vhost, id_source) — V2 § 6."""
+def empreinte(source, horodatage, ip, fam, vhost, id_source, rule_id=None) -> str:
+    """SHA-256 de (source, horodatage, ip, famille, vhost, id_source) — V2 § 6 — et de `rule_id` s'il est connu
+    (revue finale F1 : deux règles touchées à la même seconde sont deux événements ; sans `rule_id`, l'empreinte reste
+    celle d'avant)."""
     champs = [x if x is not None else "" for x in (source, horodatage, ip, fam, vhost, id_source)]
+    if rule_id is not None:
+        champs.append(rule_id)
     return hashlib.sha256("\x1f".join(champs).encode("utf-8")).hexdigest()
 
 
@@ -173,10 +179,11 @@ def evenement(source: str, brut: dict, id_source: Any = None, noeud: str = "gk2"
         attributs["exclu_correlation"] = "autotest"
     vhost = texte(_premier(brut, "host", "vhost"))
     ids = texte(id_source, 128)
-    emp = empreinte(source, h, ip or ("local" if marques.get("local") else None), fam, vhost, ids)
+    regle = texte(brut.get("rule_id"), 128)
+    emp = empreinte(source, h, ip or ("local" if marques.get("local") else None), fam, vhost, ids, regle)
     return Evenement(
         id=str(uuid.UUID(emp[:32])), source=source, id_source=ids, noeud=noeud, horodatage=h, famille=fam,
         sous_famille=sous, gravite=texte(_premier(brut, "severity", "sev", "gravite"), 32) or "info",
         ip_src=ip, bloc24=bloc, pays=texte(_premier(brut, "country", "pays"), 8), service=texte(brut.get("service"), 64),
         vhost=vhost, message=texte(_premier(brut, "message", "rule_id", "raison", "reason", "motif"), MESSAGE_MAX),
-        attributs=attributs, empreinte=emp, cree_le=cree)
+        attributs=attributs, empreinte=emp, cree_le=cree, rule_id=regle)

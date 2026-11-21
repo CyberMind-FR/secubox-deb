@@ -90,7 +90,68 @@ identiques d'une même minute (`n`) ; un outil deviné par actord (« …? ») e
   l'heure glissante, tout état confondu : le compte du plafond, affiché « Décisions automatiques : n / 20 sur
   l'heure »), `score` (`[60, 79]`), `ttl_max_s`, `adresses_max`, `mode_par` (auteur du dernier changement de mode :
   `sade-auto` pour tous, un nom humain pour l'administrateur seulement, sinon `null`) et `mode_depuis`.
-- `aggressive` : refusé par `POST /mode` avec 409 `gestes_non_livres`.
+- **Resserrer ne dépend jamais de l'audit (1.12.0)** : ouvrir (`reactive`, `active`) exige l'audit écrit avant le
+  COMMIT (sinon 503 `audit_indisponible`, mode inchangé) ; passer en `observe` (coupure manuelle ou retour forcé par
+  le plafond) est TOUJOURS validé, avec la remise de la file (`annulee_observe`), puis les lignes d'audit sont écrites
+  au mieux. En échec : erreur au journal du service, alerte `audit_indisponible` en base (table `alertes`, migration
+  0003), visible dans `/defense/status` (`audit_indisponible` = horodatage) et dans la réponse de `POST /mode`
+  (`audit_indisponible: true`) ; l'alerte s'efface au prochain changement de mode audité.
+- `aggressive` : toujours fermé, refusé par `POST /mode` avec 409 `gestes_non_livres` ; bouton désactivé, titre
+  « seuils abaissés, réservé au banc — ouverture sur accord du propriétaire » (SADE § Modes, déploiement étape 5).
+
+### Phases (`/defense/status` → `phases`, 1.12.0)
+
+Les cartes 1 et 2 suivent le mode. Les cartes 3 et 4 sont livrées (`livree: true`) et portent leur critère mesuré
+(`api/phases.py`, mesures gardées 60 s et calculées en vol unique, mode relu en direct) ; une valeur vaut `null` quand sa source manque ou se
+lit mal — la page écrit alors « relevé indisponible », jamais 0.
+
+```
+{"p3": {"livree": true, "active": bool|null, "lecture_bornee": bool,
+        "critere": {"rediriges_24h": int|null, "tentatives_valides_24h": int|null}},
+ "p4": {"livree": true, "active": bool|null,
+        "critere": {"partages": int|null, "revus_chez_pairs": int|null, "contenus_chez_pairs": int|null,
+                    "filtres_confirmes": int|null}}}
+```
+
+- `p3.active` : mode `active` ET au moins un `leurre`, ou un `ban` / `ban_bloc` d'office (`mode: auto`), daté des
+  dernières 24 h dans `/var/lib/secubox/waf/ai-ban.jsonl` (un ban annulé pour défaut d'audit est écarté) ; hors
+  `active` : `false` ; journal illisible : `null`.
+- `rediriges_24h` : SOMME des champs `servies` des lignes `leurre_redirige` de `waf-threats.log` sur 24 h (une ligne
+  est bornée par adresse et porte le nombre de requêtes servies qu'elle représente). `tentatives_valides_24h` (page : « tentatives laissées passer ») : lignes
+  `action: detect` d'une adresse non locale (détectées puis laissées passer jusqu'au service). Lecture par la fin,
+  16 Mio au plus, fichier courant puis `waf-threats.log.1` s'il ne couvre pas 24 h ; budget épuisé avant 24 h :
+  `lecture_bornee: true` et la page écrit « au moins N ».
+- `partages`, `revus_chez_pairs`, `contenus_chez_pairs` : résumé `/run/secubox/waf-indices-etat.json` de
+  secubox-waf-indices, lu directement (le lecteur `indices_etat` de secubox-waf-ng est recopié, même validation :
+  fichier ordinaire à root ou `secubox`, sans écriture du groupe ni des autres, ≤ 64 Kio, de moins de 30 min) — pas
+  d'import entre paquets.
+- `filtres_confirmes` : l'état « confirmé » d'un filtre de l'IA n'existe que sur gk3 ; gk2 le remplace par **« filtre
+  IA actif depuis au moins 24 h »**. Actifs : cache `/var/lib/secubox/waf/filtres-ia.json` de l'onglet Filtres IA du
+  WAF (moins d'1 h) ; date d'application : lignes `leurre_filtres-ia-appliquer` / `-retirer` (résultat `ok`) que
+  secubox-cvectl écrit dans `audit.log` (puis `.1`), 4 Mio par fichier. Une ligne d'application tronquée (ids
+  manquants), une fenêtre de moins de 24 h ou un état incohérent rendent `null`.
+- `p4.active` : au moins un indicateur partagé non échu (7 j) ou un filtre confirmé ; `null` si l'on ne peut trancher.
+- Accès (compte `secubox` de l'API, sans profil AppArmor ni `ProtectSystem` à ce jour, #3847) : `ai-ban.jsonl` et
+  `waf-threats.log` sont 0660 au groupe `secubox-waf`, dont `secubox` est membre (postinst de secubox-waf-ng) ; le
+  résumé des indices est 0644 ; le cache des filtres et `audit.log` sont au compte `secubox`. Aucun droit d'écriture
+  nouveau.
+
+Surcharges (tests) : `SECUBOX_SOC_AI_BAN`, `SECUBOX_SOC_WAF_MENACES`, `SECUBOX_SOC_INDICES`, `SECUBOX_SOC_FILTRES_IA`,
+`SECUBOX_AUDIT_LOG`.
+- **Publication pour gk2 (#3723, 1.11.0)** : `/run/secubox/sade-mode.json` (0644, renommage atomique d'un temporaire
+  du même dossier : jamais de fichier partiel) = `{"mode", "depuis", "liste_blanche"}`, où `depuis` est l'instant de
+  la publication et `liste_blanche` les réseaux de la liste blanche (entrées amorcées comprises). Réécrit après
+  `changer_mode`, après chaque ajout ou retrait de la liste blanche, au démarrage de l'API puis toutes les 60 s
+  (battement). L'API du WAF (`gestes_ia.mode_sade`) en tire la porte des gestes d'office du compte `ai-ban` et tient
+  pour `observe` un fichier daté de plus de 15 min : un SOC arrêté ferme l'automatique de gk2. Base illisible : rien
+  n'est publié (le fichier vieillit). L'exécuteur `sade-auto` ne peut pas écrire `/run/secubox` (bac à sable) : son
+  retour en `observe` est publié par le battement suivant (60 s au plus). Surcharge : `SECUBOX_SOC_SADE_MODE`.
+  Un échec de publication est bruyant : journal en erreur à chaque essai, ligne d'audit `sade-mode-publication-echec`
+  (`cause` : `base_illisible`, `fichier_etranger` quand un fichier d'un autre compte occupe la place dans
+  `/run/secubox` 1777 et ne peut être remplacé, ou l'erreur système) à chaque changement de cause, puis
+  `sade-mode-publication-retablie`. gk2 ne croit le fichier que s'il appartient à root ou à `secubox`, sans écriture
+  du groupe ni des autres. Limite : tout processus qui tourne sous le compte `secubox` (l'API SOC, l'agrégateur, et
+  les autres modules de ce compte) peut l'écrire.
 
 ### Données et audit
 
@@ -133,8 +194,44 @@ proposition est contrôlée ; échec fermé.
   au WAF ; un double clic ou une réclamation concurrente donne 409 `deja_traitee`.
 - `POST /reprendre` ne ramène une décision `en_cours` à `en_attente` que si sa demande dépasse le délai maximal des
   appels au WAF + 60 s.
-- Seul geste exécutable : `ban`, soit un `POST /ban` du WAF par adresse (au plus 32), avec le jeton administrateur de
-  l'appelant relayé ; arrêt au premier échec. Les autres gestes (par exemple la quarantaine) ne sont pas exécutables.
+- Gestes exécutables (`GESTES_EXECUTABLES`) : `ban`, soit un `POST /ban` du WAF par adresse (au plus 32), tout de
+  suite, avec le jeton administrateur de l'appelant relayé (porteur requis) ; et, depuis 1.12.0, les gestes gradués
+  `limiter` (6 h par défaut, 1 h à 24 h), `leurre` (24 h par défaut, 1 h à 7 j) et `prolonger` (24 h par défaut,
+  1 h à 7 j, IPv4). `partager`, `ban_bloc`, `quarantaine` et tout autre geste : 409 `gestes_non_livres`. Une durée hors
+  bornes est refusée (409 `duree_invalide`), jamais ramenée dans les bornes.
+- **Gestes gradués : en file, exécutés par sade-auto.** L'API garde `NoNewPrivileges=true` et ne lance jamais sudo.
+  `POST /approve` fait les contrôles (mode, proposition relue, bornes, liste blanche, passerelles, pairs threatmesh et
+  `wg_mesh.json`, adresses de l'administrateur), puis passe la décision en `approuve` (audit `sade-approuve-demande`,
+  fsync avant le COMMIT) et rend **202** `{"etat": "approuve"}` ; la page écrit « en file ». Au passage suivant
+  (2 min au plus), `secubox-soc-sade-auto` — en REACTIVE comme en ACTIVE, avant son propre chemin automatique, sans
+  attendre actord — prend chaque approbation dans UNE transaction BEGIN IMMEDIATE (`approuve → en_cours`, mode relu,
+  audit `sade-approuve-execution` fsync AVANT tout sudo ; un second passage ne la reprend jamais), RECONTRÔLE tout au
+  moment d'exécuter (cible devenue protégée, `wg_mesh.json`, bornes de durée, et pour `prolonger` : ban présent dans
+  `waf_ban` lu par `sudo nft -j list set inet secubox waf_ban`, jamais plus court que ce qui reste), lance
+  `sudo -n /usr/sbin/wafctl <verbe> <ip> <n>s` par adresse (verbes du compte ai-ban, sudoers `SBX_WAF_LIMITER`,
+  `_LEURRE`, `_PROLONGER` de secubox-waf-ng ≥ 1.43.0), puis `conclure` (`applique`, ou `en_attente` rendu à
+  l'administrateur sur échec) et audit `sade-approuve-resultat`. Recontrôle négatif : `sade-approuve-abandon`
+  (`motif` : `cible_protegee`, `absent`, `raccourcit`, `duree_invalide`, `expiree`…), décision rendue `en_attente`
+  avec son motif. Ensemble nft illisible : l'approbation attend le passage suivant. Une approbation non exécutée après
+  1 h est rendue (`expiree`). Au plus 8 approbations par passage, dans le budget de 3 min du passage ; plafonds
+  horaires glissants par geste pour les approbations humaines, comptés dans `defense.db` (`par` ≠ `sade-auto`, en
+  adresses) : limiter 60, leurre 30, prolonger 30 — au-delà, l'approbation attend. Rien n'est écrit dans
+  `ai-ban.jsonl`. `par` reste l'administrateur : ces gestes ne comptent ni dans le plafond de 20/h de l'automatique ni
+  pour son retour en OBSERVE. Une ligne restée `en_cours` se débloque par `POST /reprendre`. L'issue réelle
+  (`resultat`) d'un geste en file est rendue par `/proposals` à l'administrateur seulement. Hors REACTIVE/ACTIVE, la
+  file n'est pas exécutée. Le passage en `observe` (coupure manuelle ou retour forcé par le plafond) VIDE la file dans
+  la même transaction : chaque `approuve` revient `en_attente` avec le résultat `annulee_observe` (audit
+  `sade-approuve-annulee`) ; un retour en REACTIVE/ACTIVE n'exécute jamais une approbation d'avant la coupure. Une
+  approbation plus grande que le plafond de son geste est rendue aussitôt (`motif=plafond`).
+- Unité `secubox-soc-sade-auto.service` : `ReadWritePaths` porte aussi `-/var/lib/secubox/waf` (`wafctl leurre`,
+  root dans l'espace de montage de l'unité, y remplace `leurres-ip.json`) et `-/var/log/sudo-io` (`log_output` des
+  sudoers de ces verbes), comme `secubox-waf-indices.service`.
+
+### Suite
+
+- Dette acceptée (1.12.0) : `secubox-soc-sade-auto.service` écrit dans `/var/lib/secubox/waf` pour `wafctl leurre` ;
+  le compte `secubox` y atteint aussi, par le groupe `secubox-waf`, les fichiers inscriptibles du groupe
+  (`ai-ban.jsonl`…). À resserrer : un dossier dédié pour `leurres-ip.json` côté secubox-waf-ng, seul chemin ouvert.
 
 ### Confidentialité
 

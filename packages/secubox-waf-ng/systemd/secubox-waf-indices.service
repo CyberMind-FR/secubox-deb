@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Indicateurs d'adresses reçus des pairs du maillage (#3723, tâche 4). Une passe : lit les livraisons ip-indices de
+# secubox-mirrornet, ne bannit 24 h (sudo -n wafctl ban <ip> 86400s --exiger-protegees) qu'une adresse vue HOSTILE
+# dans le journal des menaces local APRÈS sa réception, jamais une cible protégée, 30 par heure au plus ; l'adresse
+# bannie entre dans les « revus » de la publication de cette box (sudo -n wafctl indice-revu). Audit avant et après.
+#
+# Compte secubox (exception § 10 de RULES-CODE, écrite) : il porte déjà le droit sudo exact `wafctl ban *` du bouton
+# Ban, écrit audit.log (secubox, 0640), lit les livraisons (groupe secubox) et le journal des menaces (groupe
+# secubox-waf, ajouté ici seulement). NoNewPrivileges=no : sudo serait neutralisé. wafctl, lancé par sudo, hérite de
+# l'espace de montage : il écrit la publication dans /var/lib/secubox/waf et nft passe par netlink. Dette nommée :
+# compte dédié + sudoers à son nom.
+#
+# Socle § 10 complet (revue finale #3723 M3), vérifié avec sudo sous systemd 255 (systemd-run, User= non root,
+# NoNewPrivileges=no) : PrivateDevices (pty de log_output compris), RestrictNamespaces, RestrictSUIDSGID (interdit d'en
+# CRÉER, pas d'exécuter sudo), SystemCallFilter=@system-service, MemoryDenyWriteExecute (python3), ProtectClock,
+# ProtectHostname : sudo, nft, ip, wg et python3 fonctionnent. CapabilityBoundingSet ne peut pas être vide : root
+# lancé par sudo hérite de l'ensemble borné ; il garde le strict nécessaire — CAP_SETUID/CAP_SETGID (sudo change
+# d'identité), CAP_AUDIT_WRITE (journal d'audit de sudo), CAP_SYS_RESOURCE (pam_limits de sudo), CAP_NET_ADMIN (nft,
+# wg), CAP_DAC_OVERRIDE (wafctl écrit dans /var/lib/secubox/waf, dossier du groupe secubox-waf). Sans CAP_NET_ADMIN,
+# `sudo nft` échoue (« Operation not permitted ») : l'ensemble borné est bien effectif.
+[Unit]
+Description=SecuBox WAF — indicateurs d'adresses reçus des pairs du maillage (#3723)
+After=secubox-waf-ng.service secubox-mirrornet.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+SupplementaryGroups=secubox-waf
+ExecStart=/usr/sbin/secubox-waf-indices
+AppArmorProfile=secubox-waf-indices
+StateDirectory=secubox-waf-indices
+StateDirectoryMode=0700
+TimeoutStartSec=120
+NoNewPrivileges=no
+ProtectSystem=strict
+ReadWritePaths=/run/secubox -/var/log/secubox/audit.log -/var/lib/secubox/waf -/var/log/sudo-io
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+PrivateDevices=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+ProtectClock=yes
+ProtectHostname=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_AUDIT_WRITE CAP_SYS_RESOURCE CAP_NET_ADMIN CAP_DAC_OVERRIDE
+UMask=0027
+# DNS (robots vérifiés), socket de threatmesh, netlink de nft / ip / wg (gardes de wafctl et waf-blocs).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native

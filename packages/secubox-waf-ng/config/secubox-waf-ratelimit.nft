@@ -44,6 +44,37 @@ table inet secubox_waf_ratelimit {
         size 65535
     }
 
+    # Geste `limiter` du compte ai-ban (#3723) : adresses PUBLIQUES posées par
+    # `wafctl limiter <ip> <N>s` (1 h à 24 h), retirées par `wafctl limiter-lever`.
+    # Un rechargement de ce fichier (restart de secubox-waf-ratelimit, mise à
+    # jour du paquet) recrée la table : les limites en cours sont PERDUES
+    # (gestes courts, assumé ; README).
+    set limite_ia_v4 {
+        type ipv4_addr
+        flags timeout
+        size 4096
+    }
+    set limite_ia_v6 {
+        type ipv6_addr
+        flags timeout
+        size 4096
+    }
+    # Compteur de débit PAR ADRESSE limitée (un seau par adresse, pas un seau
+    # partagé par toutes les adresses de limite_ia_*) ; une adresse inactive
+    # depuis 1 min sort du compteur.
+    set debit_ia_v4 {
+        type ipv4_addr
+        flags dynamic,timeout
+        timeout 1m
+        size 4096
+    }
+    set debit_ia_v6 {
+        type ipv6_addr
+        flags dynamic,timeout
+        timeout 1m
+        size 4096
+    }
+
     # Whitelist : LAN, loopback, LXC bridges
     set whitelist_v4 {
         type ipv4_addr
@@ -56,6 +87,13 @@ table inet secubox_waf_ratelimit {
 
         # Skip whitelist (LAN, loopback)
         ip saddr @whitelist_v4 accept
+
+        # Limite de débit du geste `limiter` (#3723) : au-delà de 5 paquets/s
+        # (rafale 20) vers 80/443, les paquets sont JETÉS. Jamais `reject` ni
+        # redirection : rien n'est émis vers l'adresse limitée. Le LAN est
+        # accepté juste au-dessus (whitelist_v4), il n'est jamais limité.
+        ip saddr @limite_ia_v4 tcp dport { 80, 443 } update @debit_ia_v4 { ip saddr limit rate over 5/second burst 20 packets } counter drop
+        ip6 saddr @limite_ia_v6 tcp dport { 80, 443 } update @debit_ia_v6 { ip6 saddr limit rate over 5/second burst 20 packets } counter drop
 
         # Drop active offenders fast (no further matching)
         ip saddr @offenders_v4 counter drop

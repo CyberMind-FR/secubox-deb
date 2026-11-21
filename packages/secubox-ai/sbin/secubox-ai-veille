@@ -8,6 +8,24 @@
 Seul écrivain régulier de /var/lib/secubox/ai/veille.db : migrations, rétention quotidienne, garde d'espace, et
 collecte de gk2 (#3720) par le compte de lecture `ai-lecture` (clé remise par LoadCredential=, jamais lue ailleurs).
 Sans clé ou sans configuration lisible, la collecte reste éteinte et le dit ; le reste tourne.
+
+Analyste IA (#3722) : la boucle `correlation` dépose un travail `analyser` pour un dossier nouveau ou aggravé ; la
+boucle `analyse` (30 s) en traite un à la fois, avec un moteur qui répond DÉJÀ (distant gk0 prêt, sinon local en
+marche ; le local n'est réveillé que si `[veille.analyste] reveiller_local = true`). Clé du moteur distant : remise par
+LoadCredential= (ai-distant), jamais lue dans /etc/secubox/secrets.
+
+Riposte graduée (#3723) : la même boucle fixe le niveau des dossiers recalculés (seuils de
+/etc/secubox/ai/riposte.toml) puis PROPOSE les gestes de leur niveau selon /etc/secubox/ai/politiques.toml (double
+tampon relu à chaque passe).
+
+Réponses (#3723) : la boucle `reponses` (10 s) relaie les décisions de l'API dans audit.log, rapproche les envois
+interrompus par GET /ai/etat, puis EXÉCUTE les propositions approuvées ou d'office (veille/executeur.py) par les seules
+routes `ai-ban` de gk2, signées par la clé ai-ban (LoadCredential=ai-ban, jamais lue ailleurs). Sans cette clé (ou
+avec la valeur de repli « absente »), rien n'est exécuté et /veille/etat le dit ; la veille continue.
+
+Apprentissage (#3723, carte 4) : la boucle `apprentissage` (300 s) écrit les suggestions d'empreintes (jamais
+appliquées) et mène les filtres WAF d'office (veille/apprentissage.py), signés par la clé ai-filtres
+(LoadCredential=ai-filtres). Aucune entrée livrée du catalogue ne porte de filtre : rien n'est envoyé aujourd'hui.
 """
 import asyncio
 import logging
@@ -19,7 +37,26 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, "/usr/lib/secubox/ai")
 
-from veille import base, collecte, correlation, dossiers, pays, retention  # noqa: E402
+
+def _cle_distante():
+    """Chemin de la clé du moteur distant (gk0) que systemd remet (LoadCredential=ai-distant), lu à l'appel par
+    api.moteurs (SECUBOX_AI_CLE). Valeur de repli « absente » (SetCredential=) ou pas de remise : un chemin inexistant,
+    donc moteur distant non configuré pour la veille (aucune requête vers gk0)."""
+    chemin = os.path.join(os.environ.get("CREDENTIALS_DIRECTORY") or "/nonexistent", "ai-distant")
+    try:
+        with open(chemin, "rb") as f:
+            if f.read(64).strip() not in (b"", b"absente"):
+                return chemin
+    except OSError:
+        pass
+    return "/nonexistent/ai-distant"
+
+
+os.environ["SECUBOX_AI_CLE"] = _cle_distante()
+
+from api import moteurs  # noqa: E402
+from veille import (analyste, apprentissage, base, collecte, correlation, dossiers, executeur, pays,  # noqa: E402
+                    politiques, retention, riposte)
 from veille.client import ClientGk2, delais, routes  # noqa: E402
 from veille.sources import toutes  # noqa: E402
 from veille.service import Boucle, Veille  # noqa: E402
@@ -28,12 +65,18 @@ DB = "/var/lib/secubox/ai/veille.db"
 CONF = "/etc/secubox/ai.toml"
 PAS_CORRELATION_S = 60       # V2 § 8 : fenêtre glissante de 30 min, une passe par minute
 PAS_PAYS_S = 60               # échantillon par pays (#3811) : un par créneau de 15 min, vérifié chaque minute
+PAS_ANALYSE_S = 30            # analyste IA (#3722) : un travail au plus par tour
 PAS_COLLECTE_S = 10           # chaque source garde son propre intervalle (collecte.passe ne lit que les sources dues)
+PAS_REPONSES_S = 10           # exécuteur des réponses (#3723)
+PAS_APPRENTISSAGE_S = 300     # filtres WAF d'office et suggestions d'empreintes (#3723, carte 4)
 log = logging.getLogger("secubox-ai-veille")
 
 
 def _client():
-    """Client de gk2, ou None (journalisé) sans clé ou sans configuration."""
+    """Client de gk2, ou None (journalisé) sans aucune clé ou sans configuration. La clé ai-ban (#3723) s'y ajoute si
+    elle est remise : sans elle, le client lit mais n'agit pas (`peut_agir` faux). Sans clé ai-lecture mais avec
+    ai-ban (revue finale M6) : la collecte est éteinte (`peut_lire` faux), l'exécuteur agit et rapproche par /ai/etat
+    signé ai-ban ; /veille/etat le dit (`cle_ai_lecture`)."""
     try:
         with open(CONF, "rb") as f:
             cfg = tomllib.load(f)
@@ -45,13 +88,19 @@ def _client():
     base_url = str((cfg.get("gk2") or {}).get("menaces_url") or "https://admin.gk2.secubox.in/api/v1")
     aud = str((cfg.get("veille") or {}).get("aud") or "gk2")
     dossier = os.environ.get("CREDENTIALS_DIRECTORY")
-    try:
-        with open(os.path.join(dossier or "/nonexistent", "ai-lecture"), "rb") as f:
-            cle = f.read(8192)
-    except OSError:
+    cle = executeur.lire_cle(dossier, "ai-lecture")
+    if cle is None:
         log.error("clé ai-lecture absente (secubox-aictl cle-ai-lecture generer) : collecte éteinte")
-        return None
-    return ClientGk2(base_url, aud, cle, routes(cfg), delais_routes=delais(cfg))
+    cle_ban = executeur.lire_cle(dossier, "ai-ban")
+    if cle_ban is None:
+        log.error("clé ai-ban absente (secubox-aictl cle-ai-ban generer) : aucune réponse ne sera exécutée")
+        if cle is None:
+            return None
+    cle_filtres = executeur.lire_cle(dossier, "ai-filtres")
+    if cle_filtres is None:
+        log.error("clé ai-filtres absente (secubox-aictl cle-ai-filtres generer) : aucun filtre WAF d'office")
+    return ClientGk2(base_url, aud, cle, routes(cfg), delais_routes=delais(cfg), cle_ban=cle_ban,
+                     cle_filtres=cle_filtres)
 
 
 def _reglages_correlation():
@@ -65,6 +114,17 @@ def _reglages_correlation():
         return correlation.reglages({})
 
 
+def _reglages_analyste():
+    try:
+        with open(CONF, "rb") as f:
+            return analyste.reglages(tomllib.load(f))
+    except FileNotFoundError:
+        return analyste.reglages({})
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        log.error("%s illisible (%s) : analyste aux réglages par défaut", CONF, e.__class__.__name__)
+        return analyste.reglages({})
+
+
 def _maintenant():
     return datetime.now(timezone.utc)
 
@@ -73,22 +133,57 @@ async def _main():
     db = await asyncio.to_thread(base.ouvrir, DB)
     async def purge():
         res = await veille.sql(retention.purger, _maintenant())
+        await veille.sql(retention.liberer)
         logging.getLogger("secubox-ai-veille").info("purge : %s", res)
 
     reglages = _reglages_correlation()
+    reglages_ia = _reglages_analyste()
+    repris = await asyncio.to_thread(analyste.reprendre_travaux, db)
+    if repris:
+        log.warning("analyste : %d travail(aux) interrompu(s) remis en file", repris)
+
+    seuils = {"courants": riposte.SEUILS}
+
+    def _construire(d):
+        seuils["courants"] = riposte.charger_seuils(precedents=seuils["courants"])
+        return dossiers.construire(d, _maintenant(), seuils=seuils["courants"])
+
+    def _proposer(d, changes):
+        """Politique relue (double tampon), puis propositions des dossiers recalculés ; un fichier refusé est audité
+        (audit_chaine + audit.log, une fois par contenu fautif)."""
+        m = _maintenant()
+
+        def auditer(evenement, details):
+            collecte._audit(d, m, evenement, details, operation="politiques", resultat="refus", limiter=False)
+            riposte.ecrire_audit_log(evenement, details)
+        pol = politiques.charger_politiques(auditer=auditer, maintenant=m)
+        return sum(len(riposte.proposer(d, x, pol, m, protegees=reglages_ia["protegees"], seuils=seuils["courants"]))
+                   for x in changes)
 
     async def correler():
         touches = await veille.sql(lambda d: correlation.correler(d, _maintenant(), **reglages))
         if touches:
             log.info("corrélation : %d incident(s) créé(s) ou étendu(s)", len(touches))
-        # Dossiers d'attaquant (#3795) : transaction courte suivante, même boucle de 60 s.
-        changes = await veille.sql(lambda d: dossiers.construire(d, _maintenant()))
+        # Dossiers d'attaquant (#3795) et niveau de riposte (#3723) : transaction courte suivante, même boucle de 60 s.
+        changes = await veille.sql(_construire)
         if changes:
             log.info("dossiers : %d dossier(s) créé(s) ou mis à jour", len(changes))
+            proposees = await veille.sql(lambda d: _proposer(d, changes))
+            if proposees:
+                log.info("riposte : %d proposition(s) admise(s)", proposees)
+            # Analyste IA (#3722) : dossier nouveau ou aggravé → un travail « analyser » (une ligne en attente par dossier).
+            deposes = await veille.sql(lambda d: analyste.deposer_analyses(d, changes, _maintenant(), reglages_ia))
+            if deposes:
+                log.info("analyste : %d analyse(s) mise(s) en file", deposes)
 
-    boucles = [Boucle("retention", 86400, purge), Boucle("correlation", PAS_CORRELATION_S, correler)]
+    async def analyser():
+        await analyste.tour(db, veille.sql, lambda: moteurs.moteur_disponible(reglages_ia["reveiller_local"]),
+                            _maintenant(), reglages_ia)
+
+    boucles = [Boucle("retention", 86400, purge, exempte=True), Boucle("correlation", PAS_CORRELATION_S, correler),
+               Boucle("analyse", PAS_ANALYSE_S, analyser)]
     client = _client()
-    if client is not None:
+    if client is not None and client.peut_lire:
         sources = toutes()
 
         async def collecter():
@@ -102,6 +197,25 @@ async def _main():
             if await pays.tour(veille.sql, client, _maintenant().timestamp()):
                 log.info("pays : échantillon du créneau écrit")
         boucles.append(Boucle("pays", PAS_PAYS_S, echantillonner_pays, collecte=True))
+    def _politiques_reponses():
+        m = _maintenant()
+
+        def auditer(evenement, details):
+            collecte._audit(db, m, evenement, details, operation="politiques", resultat="refus", limiter=False)
+            riposte.ecrire_audit_log(evenement, details)
+        return politiques.charger_politiques(auditer=auditer, maintenant=m)
+
+    async def repondre():
+        pol = await veille.sql(lambda _db: _politiques_reponses())
+        await executeur.executer(veille, client, _maintenant(), politiques=pol, protegees=reglages_ia["protegees"])
+    # Sans client (clé de lecture absente) la boucle tourne quand même : relais d'audit et état « clé absente ».
+    boucles.append(Boucle("reponses", PAS_REPONSES_S, repondre))
+
+    async def apprendre():
+        pol = await veille.sql(lambda _db: _politiques_reponses())
+        await apprentissage.apprendre(veille, client, _maintenant(), politiques=pol,
+                                      protegees=reglages_ia["protegees"])
+    boucles.append(Boucle("apprentissage", PAS_APPRENTISSAGE_S, apprendre))
     veille = Veille(db, _maintenant, boucles)
     boucle = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

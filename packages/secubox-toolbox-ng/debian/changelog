@@ -1,3 +1,20 @@
+secubox-toolbox-ng (0.18.0-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf : geste leurre de SecuBox AI (ref #3723), livré par
+    secubox-waf-ng 1.43.0. Liste /var/lib/secubox/waf/leurres-ip.json
+    (--leurres-ip, root seul, 2 048 entrées au plus, relue sur changement
+    au plus toutes les 5 s, entrées échues ignorées, LAN jamais leurré) :
+    une adresse listée reçoit une scène du théâtre (#1290), jamais le vhost
+    réel, quel que soit l hôte. Ligne leurre_redirige (gravité audit) au
+    journal des menaces, sans émission vers sbx-actord : ni ban, ni
+    compteur d escalade, ni anomalie d hôte.
+    Journal borné par adresse leurrée : une ligne par nouvelle étape de
+    scène plus 6 par minute ; champ servies (requêtes représentées) et
+    solde chaque minute, somme exacte ; plus de journal du semis pour ces
+    requêtes (la ligne porte le filigrane).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 12:30:00 +0100
+
 secubox-toolbox-ng (0.17.2-1~trixie1) trixie; urgency=medium
 
   * sbxwaf : compactage de mesures.jsonl et reevaluations.jsonl (ref #3820),
