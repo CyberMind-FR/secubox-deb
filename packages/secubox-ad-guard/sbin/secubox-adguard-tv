@@ -204,14 +204,10 @@ class Systeme(_unbound.SystemeUnbound):
     """Les effets de bord sur Unbound. Les chemins des outils restent réglables par l'environnement (tests, bancs) ; ni redémarrage ni repli."""
     MODULE = "ad-guard-tv"
     ERREUR = RuntimeError
+    CONTROLE = CONTROL      # #3850 : rechargement commun (fast_reload, le DNS répond pendant ; repli reload si refusé)
 
     def verifier_unbound(self):
         return _unbound.commande([CHECKCONF], 120)
-
-    def recharger_unbound(self):
-        ok, sortie = _unbound.commande([CONTROL, "reload"], 120)
-        if not ok:
-            raise self.ERREUR("unbound-control reload a échoué : " + sortie[:200])
 
 
 def ecrire_verifier(contenu: str) -> None:

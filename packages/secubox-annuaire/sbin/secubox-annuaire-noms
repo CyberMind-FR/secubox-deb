@@ -186,8 +186,23 @@ def applique_unbound(contenu: str) -> str:
         else:
             UNBOUND.write_text(ancien)
         return "REFUSÉ par unbound-checkconf — ancienne configuration remise"
-    subprocess.run(["unbound-control", "reload"], capture_output=True)
+    _recharger_unbound()
     return "appliqué"
+
+
+def _recharger_unbound() -> None:
+    """`fast_reload` d'abord (#3850) : Unbound charge la configuration à part et CONTINUE de répondre ; `reload` coupe la
+    résolution de tout le réseau le temps de relire les listes (plus d'une minute sur gk2). Repli sur `reload` seulement si
+    Unbound refuse ; jamais après un dépassement de délai (le chargement peut encore être en cours)."""
+    try:
+        r = subprocess.run(["unbound-control", "fast_reload"], capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        return
+    except OSError:
+        r = None
+    if r is not None and r.returncode == 0 and (r.stdout.strip().splitlines() or [""])[-1] == "ok":
+        return
+    subprocess.run(["unbound-control", "reload"], capture_output=True, timeout=120)
 
 
 def ecoute_manquante(contenu: str, ecoutes: str) -> List[str]:

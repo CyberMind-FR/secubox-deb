@@ -34,7 +34,7 @@ def monde(tmp_path, monkeypatch):
     etat.mkdir()
     journal = tmp_path / "appels.log"
     checkconf = _script(tmp_path / "checkconf", f'echo checkconf >> {journal}; [ -f {tmp_path}/refuse ] && {{ echo "erreur de syntaxe" >&2; exit 1; }}; exit 0\n')
-    control = _script(tmp_path / "control", f'echo "control $*" >> {journal}\nexit 0\n')
+    control = _script(tmp_path / "control", f'echo "control $*" >> {journal}\necho ok\nexit 0\n')   # comme unbound-control
     nft = _script(tmp_path / "nft-neutre", "exit 0\n")                    # lot 4 : jamais le vrai nft dans les tests
     conf = tmp_path / "unbound.d" / "94-secubox-adguard-tv.conf"
     for k, v in {"SECUBOX_ADGUARD_TV_ETAT": etat, "SECUBOX_ADGUARD_TV_LISTES": LISTES, "SECUBOX_ADGUARD_TV_UNBOUND": conf,
@@ -67,7 +67,7 @@ def test_apply_ecrit_verifie_puis_recharge_dans_cet_ordre(monde, capsys):
     assert ctl(monde, "apply") == 0
     c = monde["conf"].read_text()
     assert "access-control-view: 192.168.1.50/32 sbx-tv-block" in c and 'local-zone: "doubleclick.net." always_nxdomain' in c
-    assert monde["journal"].read_text().split() == ["checkconf", "control", "reload"]
+    assert monde["journal"].read_text().split() == ["checkconf", "control", "fast_reload"]   # #3850 : sans coupure DNS
     assert json.loads(capsys.readouterr().out)["domaines"] >= 30
 
 

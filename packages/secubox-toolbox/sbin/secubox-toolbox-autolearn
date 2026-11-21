@@ -149,6 +149,25 @@ def registrable(host: str):
     return ".".join(p[-3:]) if (last2 in _2L and len(p) >= 3) else last2
 
 
+def _recharger_unbound() -> None:
+    """`fast_reload` d'abord (#3850) : Unbound charge la configuration à part et CONTINUE de répondre ; `reload` coupe la
+    résolution de tout le réseau le temps de relire les listes (plus d'une minute sur gk2). Repli sur `reload` seulement si
+    Unbound refuse ; jamais après un dépassement de délai (le chargement peut encore être en cours)."""
+    import subprocess
+    try:
+        r = subprocess.run(["unbound-control", "fast_reload"], capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        return
+    except OSError:
+        r = None
+    if r is not None and r.returncode == 0 and (r.stdout.strip().splitlines() or [""])[-1] == "ok":
+        return
+    try:
+        subprocess.run(["unbound-control", "reload"], capture_output=True, timeout=120)
+    except Exception as e:
+        sys.stderr.write(f"autolearn: unbound reload failed: {e}\n")
+
+
 def _dns_feed(pure_hosts) -> int:
     """Write the unbound NXDOMAIN drop-in for pure trackers + reload, gated by
     privacy_enforce && privacy_dns_feed. Returns the zone count written, or -1
@@ -164,24 +183,25 @@ def _dns_feed(pure_hosts) -> int:
         return -1
     try:
         lines = _ip_dns.unbound_block_lines(pure_hosts)
+        contenu = "\n".join(lines) + "\n"
+        try:
+            with open(UNBOUND_BLOCK_CONF, encoding="utf-8") as fh:
+                inchange = fh.read() == contenu
+        except OSError:
+            inchange = False
+        if inchange:
+            # #3850 : réécrire un fichier identique relançait la compilation des listes DNS (secubox-dns-listes.path)
+            # et un rechargement d'Unbound à chaque passage
+            return sum(1 for l in lines if "local-zone:" in l)
         tmp = UNBOUND_BLOCK_CONF + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write("\n".join(lines) + "\n")
+            fh.write(contenu)
         os.replace(tmp, UNBOUND_BLOCK_CONF)
     except Exception as e:
         sys.stderr.write(f"autolearn: dns drop-in write failed: {e}\n")
         return -1
     if os.environ.get("SECUBOX_UNBOUND_RELOAD", "1") != "0":
-        import subprocess
-        try:
-            subprocess.run(["unbound-control", "reload"], timeout=10,
-                           capture_output=True)
-        except Exception:
-            try:
-                subprocess.run(["systemctl", "reload", "unbound"], timeout=10,
-                               capture_output=True)
-            except Exception as e:
-                sys.stderr.write(f"autolearn: unbound reload failed: {e}\n")
+        _recharger_unbound()
     return sum(1 for l in lines if "local-zone:" in l)
 
 

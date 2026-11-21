@@ -499,7 +499,7 @@ def _commandes(monkeypatch, statuts):
 
     def commande(args, delai):
         appels.append(args[-1])
-        return (True, "ok") if args[-1] == "reload" else next(reponses)
+        return (True, "ok") if args[-1] in ("reload", "fast_reload") else next(reponses)
     monkeypatch.setattr(U, "commande", commande)
     monkeypatch.setattr(D, "commande", commande)
     monkeypatch.setattr(D.time, "sleep", lambda s: None)
@@ -509,7 +509,7 @@ def _commandes(monkeypatch, statuts):
 def test_le_rechargement_attend_qu_unbound_reponde(monkeypatch):
     appels = _commandes(monkeypatch, [(False, "refusé"), (False, "refusé"), (True, "is running")])
     D.SystemeListes().recharger_unbound()
-    assert appels == ["reload", "status", "status", "status"]
+    assert appels == ["fast_reload", "status", "status", "status"]     # #3850 : le DNS répond pendant le rechargement
 
 
 def test_un_unbound_qui_ne_repond_plus_est_une_erreur(monkeypatch):

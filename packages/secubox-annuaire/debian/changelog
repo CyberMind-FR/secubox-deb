@@ -1,3 +1,10 @@
+secubox-annuaire (0.22.2-1~trixie1) trixie; urgency=medium
+
+  * secubox-annuaire-noms (ref #3850) : rechargement d'Unbound par fast_reload,
+    reload seulement si refusé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 04:36:09 +0100
+
 secubox-annuaire (0.22.1-1~trixie1) trixie; urgency=low
 
   * Exemples d'aide (annuairectl --scope) et de modèle sans yacy, module retiré (ref #3581).
