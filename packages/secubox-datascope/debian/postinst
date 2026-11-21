@@ -35,8 +35,12 @@ case "$1" in
         fi
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload
-            systemctl enable --now secubox-datascope.service || true
-            systemctl enable --now secubox-datascope-collect.timer || true
+            systemctl enable secubox-datascope.service secubox-datascope-collect.timer || true
+            # Mise à jour : un simple enable avec démarrage laisserait tourner l'ancienne API ; restart explicite.
+            systemctl restart secubox-datascope.service || true
+            systemctl start secubox-datascope-collect.timer || true
+            # Premier index tout de suite, sans attendre la minuterie ni bloquer dpkg.
+            systemctl start --no-block secubox-datascope-collect.service || true
             if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
         fi
         ;;

@@ -284,3 +284,28 @@ def test_graph_filtre_tronque_aretes(env, client):
     db.close()
     g = client.get(P + "/graph?type=network").json()
     assert len(g["aretes"]) == 1500 and g["tronque"] is True
+
+
+def test_status_derniere_passe_suit_verifie_le(env):
+    """derniere_passe = battement verifie_le d'overview.json (la base n'est plus réécrite si rien ne change)."""
+    (env.cache / "overview.json").write_text(json.dumps(
+        {"genere_le": "2026-11-21T09:00:00Z", "verifie_le": "2026-11-21T11:59:00Z", "complet": True}))
+    assert main.status() == {"module": "datascope", "base": "ok", "derniere_passe": "2026-11-21T11:59:00Z"}
+
+
+def test_status_derniere_passe_repli_mtime(env):
+    import os
+    os.utime(env.base, (1795000000, 1795000000))
+    attendu = datetime.fromtimestamp(1795000000, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert main.status()["derniere_passe"] == attendu  # pas d'overview.json
+    (env.cache / "overview.json").write_text(json.dumps({"verifie_le": 12, "genere_le": "pas une date"}))
+    assert main.status()["derniere_passe"] == attendu  # battement illisible
+
+
+def test_connexion_lecture_temp_en_memoire(env):
+    """La table temporaire du graphe filtré ne doit pas déborder sur disque (base en lecture seule)."""
+    db = main._ro(env.base)
+    try:
+        assert db.execute("PRAGMA temp_store").fetchone()[0] == 2  # MEMORY
+    finally:
+        db.close()

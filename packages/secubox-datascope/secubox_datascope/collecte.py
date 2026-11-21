@@ -88,23 +88,46 @@ def _publier(chemin: Path, neuf: Dict[str, Any], complet: bool, maintenant: floa
     return "ecrit"
 
 
+MAX_PAR_IF = 60  # même plafond que la page (MAX_PAR_IF) : appareils dessinés par interface
+TYPES_SOCLE = ("node", "interface", "network", "service")
+_COLS = "id, type, label, source_module, first_seen, last_seen"
+
+
 def _vue_graphe(db, genere: str, complet: bool) -> Dict[str, Any]:
-    n_tot = db.execute("SELECT count(*) FROM entities").fetchone()[0]
-    # Vue tronquée : les 500 premiers noeuds par id (ordre déterministe, pas une pertinence) ; arêtes entre eux.
-    noeuds = [dict(r) for r in db.execute(
-        "SELECT id, type, label, source_module, first_seen, last_seen FROM entities ORDER BY id LIMIT ?",
-        (VOISINS_NOEUDS_MAX,))]
-    ids = {n["id"] for n in noeuds}
-    aretes = []
-    for r in db.execute("SELECT src, dst, type, evidence_type, confidence, source_module, last_seen "
-                        "FROM relationships ORDER BY src, dst, type, source_module"):
-        if r["src"] in ids and r["dst"] in ids:
-            aretes.append(dict(r))
-            if len(aretes) >= VOISINS_ARETES_MAX:
-                break
-    n_rel = db.execute("SELECT count(*) FROM relationships").fetchone()[0]
-    tronque = n_tot > len(noeuds) or n_rel > len(aretes)
-    return {"genere_le": genere, "complet": complet, "noeuds": noeuds, "aretes": aretes, "tronque": tronque}
+    """Vue par défaut, priorisée : box, interfaces, zones et services d'abord ; puis, par interface (CONNECTS_TO le
+    plus récent ; « sans interface » compte pour une), les MAX_PAR_IF appareils vus le plus récemment ; jamais
+    d'adresse ip (dans l'inspecteur). 500 noeuds et 1 500 arêtes entre retenus au plus ; tronque si un noeud
+    non-ip ou une arête entre retenus est écarté.
+    """
+    socle = [dict(r) for r in db.execute(
+        f"SELECT {_COLS} FROM entities WHERE type IN ({','.join('?' * len(TYPES_SOCLE))}) "
+        "ORDER BY CASE type WHEN 'node' THEN 0 WHEN 'interface' THEN 1 WHEN 'network' THEN 2 ELSE 3 END, id LIMIT ?",
+        (*TYPES_SOCLE, VOISINS_NOEUDS_MAX))]
+    reste = VOISINS_NOEUDS_MAX - len(socle)
+    appareils = [] if reste <= 0 else [dict(r) for r in db.execute(
+        f"WITH d AS (SELECT {_COLS}, (SELECT r.dst FROM relationships r WHERE r.src = e.id AND r.type = 'CONNECTS_TO'"
+        "   AND r.dst LIKE 'interface:%' ORDER BY r.last_seen DESC, r.dst LIMIT 1) AS iface"
+        "  FROM entities e WHERE e.type = 'device'),"
+        " r AS (SELECT d.*, ROW_NUMBER() OVER (PARTITION BY coalesce(iface, '') ORDER BY last_seen DESC, id) AS rang"
+        "  FROM d)"
+        f" SELECT {_COLS} FROM r WHERE rang <= ? ORDER BY rang, last_seen DESC, id LIMIT ?", (MAX_PAR_IF, reste))]
+    noeuds = sorted(socle + appareils, key=lambda n: n["id"])
+    ids = [n["id"] for n in noeuds]
+    db.execute("CREATE TEMP TABLE IF NOT EXISTS _vue(id TEXT PRIMARY KEY)")
+    db.execute("DELETE FROM _vue")
+    db.executemany("INSERT OR IGNORE INTO _vue(id) VALUES (?)", [(i,) for i in ids])
+    # Arêtes du socle avant celles des appareils : la box et ses interfaces restent reliées même sous le plafond.
+    aretes = [dict(r) for r in db.execute(
+        "SELECT src, dst, type, evidence_type, confidence, source_module, last_seen FROM relationships "
+        "WHERE src IN (SELECT id FROM _vue) AND dst IN (SELECT id FROM _vue) "
+        "ORDER BY (src LIKE 'device:%' OR dst LIKE 'device:%'), src, dst, type, source_module LIMIT ?",
+        (VOISINS_ARETES_MAX + 1,))]
+    db.execute("DELETE FROM _vue")
+    par_type = {r[0]: r[1] for r in db.execute("SELECT type, count(*) FROM entities GROUP BY type")}
+    hors_ip = sum(n for t, n in par_type.items() if t != "ip")
+    tronque = hors_ip > len(noeuds) or len(aretes) > VOISINS_ARETES_MAX
+    return {"genere_le": genere, "complet": complet, "noeuds": noeuds, "aretes": aretes[:VOISINS_ARETES_MAX],
+            "tronque": tronque, "ip_hors_vue": par_type.get("ip", 0)}
 
 
 def _vue_apercu(db, genere: str, complet: bool) -> Dict[str, Any]:
@@ -156,13 +179,22 @@ def passe(cfg: Config, maintenant: float) -> Dict[str, Any]:
         db.close()
 
 
+def _temporaire(e: BaseException) -> bool:
+    """Seuls un verrou ou une base occupée sont temporaires : la passe suivante réessaie (unité en succès).
+    Droits, refus AppArmor, disque plein, schéma : vraie erreur, visible (unité en échec)."""
+    if not isinstance(e, sqlite3.OperationalError):
+        return False
+    m = str(e).lower()
+    return "locked" in m or "busy" in m
+
+
 def main() -> int:
     try:
         res = passe(charger(), time.time())
-    except (sqlite3.OperationalError, OSError) as e:  # base verrouillée, cache non écrit : la passe suivante réessaie
-        print(json.dumps({"etat": "erreur_temporaire", "motif": type(e).__name__}), flush=True)
-        return 0
-    except Exception as e:  # noqa: BLE001 - erreur imprévue : une ligne pour journald, code non nul
+    except Exception as e:  # noqa: BLE001 - une ligne pour journald ; code non nul sauf verrou temporaire
+        if _temporaire(e):
+            print(json.dumps({"etat": "erreur_temporaire", "motif": type(e).__name__}), flush=True)
+            return 0
         print(json.dumps({"etat": "erreur", "motif": type(e).__name__}), flush=True)
         return 1
     print(json.dumps(res, sort_keys=True, ensure_ascii=False), flush=True)

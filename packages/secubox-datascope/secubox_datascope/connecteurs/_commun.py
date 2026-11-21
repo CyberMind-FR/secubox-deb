@@ -11,11 +11,11 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-_SUFFIXE = re.compile(r"^[A-Za-z0-9:._-]{1,128}$")
+_SUFFIXE = re.compile(r"[A-Za-z0-9:._-]{1,128}")
 
 
 def suffixe_valide(s: Any) -> bool:
-    return isinstance(s, str) and bool(_SUFFIXE.match(s))
+    return isinstance(s, str) and _SUFFIXE.fullmatch(s) is not None
 
 
 def empreinte(entites: List[Dict[str, Any]], relations: List[Dict[str, Any]]) -> str:

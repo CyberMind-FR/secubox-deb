@@ -14,9 +14,12 @@ override_dh_auto_test:
 override_dh_installsystemd:
 
 override_dh_auto_install:
-	install -d $(P)/usr/lib/secubox/datascope/api $(P)/usr/lib/secubox/datascope/secubox_datascope
+	install -d $(P)/usr/lib/secubox/datascope/api
 	install -m 644 api/*.py $(P)/usr/lib/secubox/datascope/api/
-	install -m 644 secubox_datascope/*.py $(P)/usr/lib/secubox/datascope/secubox_datascope/
+	# Tout l'arbre du paquet Python (sous-paquet connecteurs/ compris), sans __pycache__.
+	cd secubox_datascope && find . -name __pycache__ -prune -o -type f -name '*.py' -print | while read -r f; do \
+	  install -D -m 644 "$$f" "$(P)/usr/lib/secubox/datascope/secubox_datascope/$$f" || exit 1; \
+	done
 	# Migrations de schéma (tâche 2) : installées seulement si présentes.
 	if [ -d migrations ]; then \
 	  install -d $(P)/usr/lib/secubox/datascope/migrations; \

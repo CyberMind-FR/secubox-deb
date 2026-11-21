@@ -3,10 +3,14 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """#3853 — squelette du paquet DataScope : unités, route, confinement, postinst, API, configuration."""
+import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -69,9 +73,56 @@ def test_postinst():
     assert "adduser" in p and "secubox-datascope" in p
     assert "mountpoint -q /data" in p
     assert "0750" in p
-    assert "systemctl enable --now secubox-datascope.service" in p
-    assert "systemctl enable --now secubox-datascope-collect.timer" in p
-    assert p.index("apparmor_parser") < p.index("systemctl enable --now")
+    # mise à jour : « enable --now » ne relance pas une API déjà active ; restart explicite, première passe aussitôt
+    assert "systemctl enable secubox-datascope.service secubox-datascope-collect.timer" in p
+    assert "systemctl restart secubox-datascope.service" in p
+    assert "systemctl start secubox-datascope-collect.timer" in p
+    assert "systemctl start --no-block secubox-datascope-collect.service" in p
+    assert "enable --now" not in p
+    assert p.index("apparmor_parser") < p.index("systemctl restart") < p.index("--no-block")
+    bloc = p[p.index('if [ -d /run/systemd/system ]; then\n            systemctl daemon-reload'):]
+    assert p.index("systemctl enable") > p.index('if [ -d /run/systemd/system ]; then\n            systemctl daemon')
+    for ligne in bloc.splitlines():
+        if ligne.strip().startswith("systemctl ") and "daemon-reload" not in ligne:
+            assert ligne.rstrip().endswith("|| true"), ligne
+
+
+def test_postrm_decharge_apparmor_et_recharge_nginx():
+    p = _lire("debian/postrm")
+    assert re.search(r"^\s*remove\|purge\)", p, re.M) or "remove|purge)" in p
+    assert "apparmor_parser -R /etc/apparmor.d/secubox-datascope" in p
+    assert "command -v apparmor_parser" in p
+    assert "nginx -t" in p and "systemctl reload nginx" in p
+    assert p.index("apparmor_parser -R") < p.index("rm -f /etc/secubox/datascope.toml /etc/apparmor.d/secubox-datascope")
+
+
+def test_scripts_mainteneur_sh_n():
+    for nom in ("postinst", "postrm", "prerm"):
+        r = subprocess.run(["sh", "-n", str(RACINE / "debian" / nom)], capture_output=True, text=True)
+        assert r.returncode == 0, (nom, r.stderr)
+
+
+def test_menu_ordre_suit_le_prefixe():
+    for f in (RACINE / "menu.d").glob("*.json"):
+        assert json.loads(f.read_text(encoding="utf-8"))["order"] == int(f.name.split("-", 1)[0]), f.name
+
+
+def test_rules_installe_tout_le_paquet_python(tmp_path):
+    """Exécute la cible d'installation de debian/rules dans un dossier jetable : tout .py du paquet (connecteurs
+    compris), toute route d'API et toute migration doivent y être, sans __pycache__."""
+    if not shutil.which("make") or not shutil.which("install"):
+        pytest.skip("make ou install absent")
+    dest = tmp_path / "pkg"
+    r = subprocess.run(["make", "-s", "-f", "debian/rules", "override_dh_auto_install", f"P={dest}"],
+                       cwd=RACINE, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    lib = dest / "usr/lib/secubox/datascope"
+    attendus = [p.relative_to(RACINE) for motif in ("secubox_datascope/**/*.py", "api/*.py", "migrations/*.sql")
+                for p in RACINE.glob(motif) if "__pycache__" not in p.parts]
+    assert Path("secubox_datascope/connecteurs/network.py") in attendus
+    manquants = [str(a) for a in attendus if not (lib / a).is_file()]
+    assert not manquants, manquants
+    assert not list(lib.rglob("__pycache__")) and not list(lib.rglob("*.pyc"))
 
 
 def test_control():

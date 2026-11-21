@@ -4,7 +4,7 @@
   "category": "mind",
   "icon": "🕸",
   "path": "/datascope/",
-  "order": 708,
+  "order": 706,
   "description": "Cockpit réseau : appareils, interfaces et services observés, relations et fraîcheur des sources",
   "theme": "supervision"
 }

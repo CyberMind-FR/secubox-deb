@@ -36,7 +36,14 @@ def _etat(cfg: config.Config) -> Dict[str, Any]:
         st = cfg.base.stat()
     except OSError:
         return {"module": "datascope", "base": "absente", "derniere_passe": None}
-    passe: Optional[str] = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Battement verifie_le d'overview.json (réécrit à chaque passe qui atteint ses sources) ; la base n'est plus
+    # réécrite quand rien ne change, son mtime n'est qu'un repli.
+    passe: Optional[str] = None
+    ov = _lire_cache("overview.json", cfg)
+    if ov is not None and _epoch(ov.get("verifie_le")) is not None:
+        passe = ov["verifie_le"]
+    if passe is None:
+        passe = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {"module": "datascope", "base": "ok", "derniere_passe": passe}
 
 
@@ -67,6 +74,7 @@ def _ro(base: Path) -> sqlite3.Connection:
     db = sqlite3.connect(f"file:{base}?mode=ro", uri=True, timeout=5, isolation_level=None)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA busy_timeout = 5000")
+    db.execute("PRAGMA temp_store = MEMORY")  # table temporaire du graphe filtré : jamais de fichier temporaire
     return db
 
 
@@ -122,9 +130,9 @@ def _epoch(s: Any) -> Optional[float]:
         return None
 
 
-def _lire_cache(nom: str) -> Optional[Dict[str, Any]]:
+def _lire_cache(nom: str, cfg: Optional[config.Config] = None) -> Optional[Dict[str, Any]]:
     try:
-        d = json.loads((Path(CFG.cache) / nom).read_text(encoding="utf-8"))
+        d = json.loads((Path((cfg or CFG).cache) / nom).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     return d if isinstance(d, dict) else None

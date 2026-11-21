@@ -471,7 +471,7 @@
     if(g.disponible===false){box.appendChild(h('div',{'class':'vide',text:'Aucun graphe : '+(g.motif||'relevé indisponible')+'.'}));return;}
     var notes=vue==='arbre'?rendreArbre(box):rendreBulles(box);
     if(!notes){box.appendChild(h('div',{'class':'vide',text:'Aucune box dans le relevé (source réseau masquée ou absente).'}));return;}
-    if(g.tronque)notes.unshift('Graphe tronqué par l\u2019API (500 nœuds, 1 500 arêtes au plus, ordre des identifiants et non pertinence).');
+    if(g.tronque)notes.unshift('Graphe tronqué par l\u2019API (500 nœuds, 1 500 arêtes au plus : box, interfaces, zones et services d\u2019abord, puis '+MAX_PAR_IF+' appareils par interface, les plus récemment vus).');
     bas.textContent=notes.join(' ');
     echelle();marquerSelection();rendreListe();
   }

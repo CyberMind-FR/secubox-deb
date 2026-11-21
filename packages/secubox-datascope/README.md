@@ -29,7 +29,7 @@ locales — appareils du NAC, débits des interfaces, santé des modules — et 
 | `GET entities/{id}` | `require_jwt` | une entité |
 | `GET entities/{id}/context` | `require_jwt` | `{entity, summary, relationships, recent_events: null, history: null, motifs, available_actions, source_provenance}` ; sections non livrées : `null` + `motifs` « non livré en V0.1 » |
 | `GET entities/{id}/neighbors` | `require_jwt` | voisins, au plus 500 nœuds et 1 500 arêtes, `tronque` |
-| `GET graph?type=` | `require_jwt` | sans filtre : `graph.json` (rebornée à 500 nœuds et 1 500 arêtes) ; avec filtre : requête bornée (500 nœuds, 1 500 arêtes) |
+| `GET graph?type=` | `require_jwt` | sans filtre : `graph.json` — box, interfaces, zones et services, puis 60 appareils par interface (les plus récemment vus), jamais d'`ip` (`ip_hors_vue` les compte) ; rebornée à 500 nœuds et 1 500 arêtes ; avec filtre : requête bornée (500 nœuds, 1 500 arêtes) |
 
 Erreurs en JSON : identifiant ou type invalide 400, inconnu 404, base illisible 503. Aucune route mutante.
 Base ouverte en lecture seule (`mode=ro`) par requête, dans `asyncio.to_thread`. Chaque entité ou nœud rendu porte

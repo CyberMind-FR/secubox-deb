@@ -194,3 +194,23 @@ def test_status_date_future_perimee(tmp_path):
     assert status.lire(_modules(tmp_path, ts), "gk2", NOW, 300).etat == "unknown"
     ts = datetime.fromtimestamp(NOW + 30).astimezone().isoformat()
     assert status.lire(_modules(tmp_path, ts), "gk2", NOW, 300).etat == "ok"
+
+
+def test_suffixe_fin_de_ligne_ecarte_sans_casser_la_passe(tmp_path):
+    """« eth0\\n » passait `^…$` (le $ accepte un \\n final) puis faisait refuser tout le relevé par le store."""
+    from secubox_datascope import store
+    from secubox_datascope.connecteurs._commun import suffixe_valide
+    assert suffixe_valide("eth0") and not suffixe_valide("eth0\n") and not suffixe_valide("eth0\n\n")
+    ns = tmp_path / "ns.json"
+    ns.write_text(json.dumps({"interfaces": {"eth0\n": {}, "eth1": {}}}))
+    _nac(tmp_path / "n.db", [_ligne("aa:bb:cc:dd:ee:01", iface="br-lan\n", zone="lan\n")])
+    r = network.lire(tmp_path / "n.db", ns, "gk2", NOW)
+    ids = {e["id"] for e in r.entites}
+    assert "interface:eth1" in ids and not [i for i in ids if "\n" in i]
+    db = store.ouvrir(tmp_path / "ds.db")
+    try:
+        res = store.appliquer(db, r, "2026-11-21T10:00:00Z")
+        assert res["refusees"] == 0
+        assert db.execute("SELECT count(*) FROM entities WHERE id = 'interface:eth1'").fetchone()[0] == 1
+    finally:
+        db.close()
