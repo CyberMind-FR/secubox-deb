@@ -109,6 +109,7 @@ l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (
 | `wafctl unban-bloc <a.b.c.0/24>` | retire le bloc (table et état) |
 | `wafctl blocs` | liste JSON des blocs non échus, temps restant, présence dans nft |
 | `wafctl ban <ip> <durée> --exiger-protegees` | ban d'adresse d'office du compte `ai-ban` (#3723) : la garde exige `protegees.env` et sa ligne `SECUBOX_WAF_PROTEGEES`, comme pour un bloc |
+| `wafctl limiter <ip> <N>s` / `wafctl limiter-lever <ip>` | #3723 : limite de débit d'une adresse publique IPv4 ou IPv6 (1 h à 24 h, sinon `refus:duree`) dans `limite_ia_v4`/`limite_ia_v6` ; ajout et nouveau délai en UNE transaction nft ; sortie `{"fin": <epoch>}` ou `refus:<motif>` ; garde d'office ; sudoers `SBX_WAF_LIMITER` |
 | `wafctl prolonger <ip> <N>s` | #3723 : prolonge une adresse DÉJÀ dans `waf_ban` par UNE transaction `nft -f` (`delete element` puis `add element … timeout`), jamais un simple `add` dont le délai ne serait pas rafraîchi ; absente : `refus:absent` ; garde d'office ; IPv4 ; sudoers `SBX_WAF_PROLONGER` |
 | `wafctl cle-ai-ban ajouter <fichier.pub>` | **root seul**, hors sudoers : pose une clé publique Ed25519 sous `/etc/secubox-comptes-service/ai-ban/<empreinte>.pub` (root 0644 ; empreinte = SHA-256 hex du DER, le `kid` des jetons) ; deux clés au plus |
 | `wafctl cle-ai-ban retirer <empreinte>` / `retirer --toutes` | **root seul** : révoque une clé, ou toutes (effet à la requête suivante) |
@@ -135,6 +136,7 @@ Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet
 |---|---|---|
 | `POST /ai/ban` | `{"geste": "ban", "cible": "198.51.100.7" ou "203.0.113.0/24", "duree_s": 3600…604800, "mode": "clic"\|"auto", "conseil": "<id>", "motif": "<200 car.>"}` | 200 `{id, cible, fin, duree_s, audit}` |
 | `POST /ai/prolonger` | `{"geste": "prolonger", "id": "<32 hex>", "duree_s": <s>, "conseil": "<id>", "motif": "<200 car.>"}` (#3723, 1.43.0) | 200 `{id, cible, fin, audit}` |
+| `POST /ai/limiter` | `{"geste": "limiter", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…86400, "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` |
 | `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds, plafonds_par_geste, sade_mode}` |
 
@@ -176,9 +178,24 @@ forme de sa cible.
   | `ban_bloc` d'office | 5/h, 20/j | `plafond_auto` |
   | tout `ban_bloc` (d'office et clic) | 30/h, 100/j | `plafond_compte` |
   | `prolonger` | 30/h, 100/j | `plafond_heure`, `plafond_jour` |
+  | `limiter` | 60/h, 400/j | `plafond_heure`, `plafond_jour` |
+
+- **`limiter`** (geste d'office, le seul admis en SADE `reactive`) : une adresse publique IPv4 ou IPv6 en forme
+  canonique (jamais un bloc, ni une IPv6 porteuse d'IPv4) ; 1 h à 24 h (409 `duree`) ; 409 `deja_actif` si elle est
+  déjà limitée (un ban reste possible) ; mêmes cibles protégées que le ban d'office (liste blanche SADE, pairs du
+  maillage, robots vérifiés, gardes root avec `protegees.env` exigé). Audit `ai-limiter-demande` puis `ai-limiter`
+  (limite levée si ce dernier échoue). Table `inet secubox_waf_ratelimit` (`/etc/secubox/secubox-waf-ratelimit.nft`) :
+  ensembles `limite_ia_v4`/`limite_ia_v6` (`flags timeout`, 4096 éléments) et, après l'acceptation du LAN
+  (`whitelist_v4`, jamais limité), `ip saddr @limite_ia_v4 tcp dport { 80, 443 } update @debit_ia_v4 { ip saddr limit
+  rate over 5/second burst 20 packets } counter drop` (et l'équivalent IPv6) : un seau PAR adresse, les paquets au-delà
+  sont **jetés**, jamais `reject` ni redirection. **Un rechargement du fichier** (`systemctl restart
+  secubox-waf-ratelimit`, ou la mise à jour du paquet, qui redémarre l'unité) recrée la table : **les limites en cours
+  sont perdues** (choix assumé : gestes courts) ; le journal ai-ban les montre encore jusqu'à leur fin. `/ai/unban` de
+  l'id d'une limite la lève (`wafctl limiter-lever`) ; `/ai/prolonger` la refuse (`inconnu`).
 
   `GET /ai/etat` rend `plafonds_par_geste` (`{geste: {heure, jour, restant_heure, restant_jour}}`) et `sade_mode`
-  (`null` si le fichier est absent) ; `compteurs` et `plafonds` ne portent plus que les blocs.
+  (`null` si le fichier est absent) et `limites` (`[{id, cible, fin}]`) ; `compteurs` et `plafonds` ne portent plus
+  que les blocs.
 
 **Compte de service `ai-filtres` (#3732, 1.37.0)** — garde `require_ai_filtres` : même jeton que ci-dessus avec
 `sub="ai-filtres"` et `portee="waf-filtres"`, clés à part (un jeton `ai-ban` y est refusé, et inversement), même

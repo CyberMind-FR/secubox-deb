@@ -19,6 +19,12 @@ secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
     --exiger) et nouveau verbe wafctl prolonger (retrait et ajout en une
     transaction nft, sudoers SBX_WAF_PROLONGER). Fichier du mode SADE cru
     seulement s il appartient à root ou à secubox, sans g+w ni o+w.
+    Geste limiter : POST /ai/limiter (adresse publique IPv4 ou IPv6, 1 h à
+    24 h, 60/h et 400/j, seul geste d office admis en SADE reactive), verbes
+    wafctl limiter et limiter-lever (sudoers SBX_WAF_LIMITER), ensembles
+    limite_ia_v4 et limite_ia_v6 de inet secubox_waf_ratelimit, règle drop
+    au-delà de 5/s (rafale 20) par adresse vers 80/443, LAN jamais limité.
+    Un rechargement de la table perd les limites en cours.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
 

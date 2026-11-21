@@ -656,6 +656,54 @@ cmd_prolonger() {
     fi
 }
 
+# cmd_limiter <ip> <durée> / cmd_limiter_lever <ip> — geste `limiter` du compte ai-ban (#3723). L'adresse PUBLIQUE
+# (IPv4 ou IPv6) entre dans limite_ia_v4|v6 de la table inet secubox_waf_ratelimit (règle `drop` au-delà de 5/s vers
+# 80/443) pour 1 h à 24 h. Ajout idempotent en UNE transaction (`add` sans effet si présente, `delete`, puis `add`
+# avec le nouveau délai) : le délai est toujours celui demandé. Sortie : une ligne JSON `{"fin": <epoch>}`, ou
+# `refus:<motif>` sur stderr. Garde d'office (protegees.env exigé).
+NFT_TABLE_DEBIT="secubox_waf_ratelimit"
+LIMITE_MIN_S=3600
+LIMITE_MAX_S=86400
+
+_lot_limiter() {
+    printf 'add element inet %s %s { %s }\n' "$NFT_TABLE_DEBIT" "$2" "$1"
+    printf 'delete element inet %s %s { %s }\n' "$NFT_TABLE_DEBIT" "$2" "$1"
+    printf 'add element inet %s %s { %s timeout %ss }\n' "$NFT_TABLE_DEBIT" "$2" "$1" "$3"
+}
+
+cmd_limiter() {
+    [ "$#" -eq 2 ] || { error "Usage : wafctl limiter <ip> <durée>"; return 1; }
+    local ip="$1" duree="$2" version secondes ensemble
+    if ! secondes=$(_secondes "$duree") || [ "$secondes" -lt "$LIMITE_MIN_S" ] || [ "$secondes" -gt "$LIMITE_MAX_S" ]; then
+        printf 'refus:duree\n' >&2
+        return 1
+    fi
+    _garde "$ip" --exiger || return 1
+    version=$(_valide_ip "$ip") || { printf 'refus:privee\n' >&2; return 1; }
+    ensemble="limite_ia_v$version"
+    if _lot_limiter "$ip" "$ensemble" "$secondes" | nft -f - 2>/dev/null; then
+        printf '{"fin": %s}\n' "$(( $(date +%s) + secondes ))"
+    else
+        printf 'refus:nft\n' >&2
+        return 1
+    fi
+}
+
+cmd_limiter_lever() {
+    [ "$#" -eq 1 ] || { error "Usage : wafctl limiter-lever <ip>"; return 1; }
+    local ip="$1" version ensemble
+    version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
+    ensemble="limite_ia_v$version"
+    # Absente : déjà levée (comme cmd_unban), l'échec n'en est un que si l'élément est toujours là.
+    if ! nft delete element inet "$NFT_TABLE_DEBIT" "$ensemble" "{ $ip }" 2>/dev/null; then
+        if nft get element inet "$NFT_TABLE_DEBIT" "$ensemble" "{ $ip }" >/dev/null 2>&1; then
+            error "nft a refusé de lever la limite de $ip"
+            return 1
+        fi
+    fi
+    log "limiter-lever $ip"
+}
+
 cmd_unban() {
     local ip="$1" version
     version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
@@ -923,6 +971,8 @@ case "${1:-}" in
     ban)        [ "$#" -le 4 ] || { error "Usage : wafctl ban <ip> [durée] [--exiger-protegees]"; exit 1; }
                 cmd_ban "${2:-}" "${3:-}" "${4:-}" ;;
     prolonger)  shift; cmd_prolonger "$@" ;;
+    limiter)    shift; cmd_limiter "$@" ;;
+    limiter-lever) shift; cmd_limiter_lever "$@" ;;
     unban)      cmd_unban "${2:-}" ;;
     ban-bloc)   shift; cmd_ban_bloc "$@" ;;
     unban-bloc) shift; cmd_unban_bloc "$@" ;;

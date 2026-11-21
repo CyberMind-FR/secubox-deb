@@ -49,6 +49,12 @@ Cmnd_Alias SBX_WAF_BANMANUEL = /usr/sbin/wafctl ban *, \
 # `wafctl` exige exactement « prolonger <ip> <durée> ».
 Cmnd_Alias SBX_WAF_PROLONGER = /usr/sbin/wafctl prolonger *
 
+# Geste `limiter` du compte ai-ban (#3723) : limite de débit d'une adresse
+# publique (table inet secubox_waf_ratelimit), et sa levée. `wafctl` exige
+# exactement « limiter <ip> <durée> » (1 h à 24 h) et « limiter-lever <ip> ».
+Cmnd_Alias SBX_WAF_LIMITER = /usr/sbin/wafctl limiter *, \
+                             /usr/sbin/wafctl limiter-lever *
+
 Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
                             /usr/sbin/wafctl anti-robots on *, \
                             /usr/sbin/wafctl anti-robots off *
@@ -80,6 +86,7 @@ secubox ALL=(root) NOPASSWD: SBX_WAF_NFTLIST
 secubox ALL=(root) NOPASSWD: SBX_WAF_BANMANUEL
 secubox ALL=(root) NOPASSWD: SBX_WAF_BLOCS
 secubox ALL=(root) NOPASSWD: SBX_WAF_PROLONGER
+secubox ALL=(root) NOPASSWD: SBX_WAF_LIMITER
 secubox ALL=(root) NOPASSWD: SBX_WAF_MODES
 
 # Déclenché depuis une minuterie (pas de terminal) et tracé.
@@ -99,3 +106,6 @@ Defaults!SBX_WAF_BLOCS log_output
 
 Defaults!SBX_WAF_PROLONGER !requiretty
 Defaults!SBX_WAF_PROLONGER log_output
+
+Defaults!SBX_WAF_LIMITER !requiretty
+Defaults!SBX_WAF_LIMITER log_output

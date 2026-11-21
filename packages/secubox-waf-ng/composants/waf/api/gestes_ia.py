@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """Gestes d'une box d'IA sur le pare-feu du WAF (#3716, #3723) : `POST /ai/ban`, `POST /ai/unban`,
-`POST /ai/prolonger`, `GET /ai/etat`.
+`POST /ai/prolonger`, `POST /ai/limiter`, `GET /ai/etat`.
 
 LE SEUL CHEMIN D'ÉCRITURE D'UNE IA DANS LE PARE-FEU. Exception écrite à RULES-CODE § 3 : ces routes ne portent pas
 `require_jwt` mais `require_ai_ban` (`secubox_core.compte_service`) : jeton EdDSA par requête, signé par la clé privée
@@ -37,6 +37,10 @@ Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
 - prolonger : un `id` d'un ban ai-ban ACTIF du journal seulement (409 `inconnu` sinon, jamais le ban d'une autre
   source) ; nouvelle fin = maintenant + `duree_s`, jamais plus tôt que la fin actuelle (409 `raccourcit`), jamais
   au-delà de 7 j (409 `duree`) ; ligne `prolonge` au journal, qui fait foi pour la fin ensuite ;
+- limiter (#3723, tâche 2) : une adresse publique IPv4 ou IPv6 (forme canonique) ; 1 h à 24 h (409 `duree`) ;
+  60/h et 400/j ; mêmes cibles protégées et même porte SADE que les gestes d'office (seul geste admis en `reactive`) ;
+  `wafctl limiter <ip> <N>s` (ensembles limite_ia_v4|v6 de inet secubox_waf_ratelimit, règle `drop`) ; ligne
+  `limite` au journal, levée par `/ai/unban` de son id (`wafctl limiter-lever`), jamais prolongée ;
 - débannir : un `id` du journal seulement, jamais une adresse ; et JAMAIS une cible qu'une autre source couvre
   désormais (ruling P12) : adresse dont le dernier enregistrement de `bans.jsonl` (sbxwaf) est un `ban` non échu,
   bloc dont la fin enregistrée par waf-blocs dépasse celle du journal ai-ban de plus de 5 s. Le ban ai-ban est alors
@@ -167,7 +171,9 @@ PLAFONDS = {"auto_heure": 5, "auto_jour": 20, "compte_heure": 30, "compte_jour":
 #: `ban_bloc` : blocs d'office (les mêmes que `auto_*`). Un geste nouveau ajoute ici sa ligne et son compteur.
 PLAFONDS_PAR_GESTE = {"ban": {"heure": 60, "jour": 400},
                       "ban_bloc": {"heure": PLAFONDS["auto_heure"], "jour": PLAFONDS["auto_jour"]},
-                      "prolonger": {"heure": 30, "jour": 100}}
+                      "prolonger": {"heure": 30, "jour": 100},
+                      "limiter": {"heure": 60, "jour": 400}}
+LIMITE_MIN_S, LIMITE_MAX_S = 3600, 86_400
 #: Causes d'annulation qui retirent un ban de la récidive : jamais posé (audit) ou retiré par l'IA ou l'humain.
 _CAUSES_SANS_RECIDIVE = frozenset({"audit", "unban"})
 #: Un bloc dont la fin enregistrée dépasse la nôtre de plus que ceci a été rebanni par quelqu'un d'autre.
@@ -218,7 +224,7 @@ def configurer(bans: Callable[[], List[dict]], audit: Callable[[str, str, dict],
 
 
 # ── Forme ──────────────────────────────────────────────────────────────
-Cible = Union[ipaddress.IPv4Address, ipaddress.IPv4Network]
+Cible = Union[ipaddress.IPv4Address, ipaddress.IPv4Network, ipaddress.IPv6Address]
 
 
 def forme_cible(texte: Any) -> Cible:
@@ -234,6 +240,36 @@ def forme_cible(texte: Any) -> Cible:
     reseau = cible if isinstance(cible, ipaddress.IPv4Network) else ipaddress.IPv4Network(f"{cible}/32")
     if any(reseau.overlaps(r) for r in NON_GLOBALES):
         raise ValueError("cible : adresse non publique")
+    return cible
+
+
+#: IPv6 jamais limitables : non globales, ou porteuses d'IPv4 (contourneraient les gardes IPv4), comme waf-blocs.
+_V6_REFUSES = tuple(ipaddress.IPv6Network(r) for r in ("::ffff:0:0/96", "::/96", "2002::/16", "64:ff9b::/96",
+                                                      "64:ff9b:1::/48", "2001::/32"))
+_V6_DOCUMENTATION = ipaddress.IPv6Network("2001:db8::/32")
+_RE_FORME_V6 = re.compile(r"[0-9a-f:]{2,39}")
+
+
+def forme_limite(texte: Any) -> Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+    """Cible du geste `limiter` (#3723) : une adresse publique IPv4 (règles de `forme_cible`) ou IPv6 globale, écrite
+    sous forme canonique (minuscules, compressée). Lève ValueError sinon."""
+    if isinstance(texte, str) and ":" in texte:
+        if not _RE_FORME_V6.fullmatch(texte):
+            raise ValueError("cible : adresse IPv6 canonique attendue")
+        try:
+            a = ipaddress.IPv6Address(texte)
+        except ValueError:
+            raise ValueError("cible : adresse IPv6 attendue") from None
+        if str(a) != texte:
+            raise ValueError("cible : forme non canonique")
+        # 2001:db8::/32 (documentation) reste limitable comme 192.0.2.0/24 : banc et essais (comme wafctl)
+        documentation = a in _V6_DOCUMENTATION
+        if a.is_multicast or (not a.is_global and not documentation) or any(a in r for r in _V6_REFUSES):
+            raise ValueError("cible : adresse non publique")
+        return a
+    cible = forme_cible(texte)
+    if not isinstance(cible, ipaddress.IPv4Address):
+        raise ValueError("cible : une adresse seule, jamais un bloc")
     return cible
 
 
@@ -264,6 +300,23 @@ class GesteProlonger(BaseModel):
     duree_s: int = Field(ge=1, le=10 * DUREE_MAX_S, strict=True)
     conseil: str = Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")
     motif: str = Field("", max_length=200)
+
+
+class GesteLimiter(BaseModel):
+    """`duree_s` : 1 h à 24 h, sinon 409 `duree` (borne de la forme bien plus large : refus métier)."""
+    model_config = {"extra": "forbid"}
+
+    geste: Literal["limiter"]
+    cible: str = Field(max_length=39)
+    duree_s: int = Field(ge=1, le=10 * DUREE_MAX_S, strict=True)
+    conseil: str = Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")
+    motif: str = Field("", max_length=200)
+
+    @field_validator("cible")
+    @classmethod
+    def _cible(cls, v: str) -> str:
+        forme_limite(v)
+        return v
 
 
 class GesteAnnuler(BaseModel):
@@ -299,7 +352,7 @@ def _entier(v: Any) -> bool:
 
 
 def _entree_valide(e: Any) -> bool:
-    if not isinstance(e, dict) or e.get("type") not in ("ban", "annule", "prolonge"):
+    if not isinstance(e, dict) or e.get("type") not in ("ban", "annule", "prolonge", "limite"):
         return False
     if not isinstance(e.get("id"), str) or not _RE_ID.fullmatch(e["id"]) or not _entier(e.get("at")):
         return False
@@ -307,6 +360,8 @@ def _entree_valide(e: Any) -> bool:
         return isinstance(e.get("cible"), str) and _entier(e.get("fin")) and e.get("mode") in ("auto", "clic")
     if e["type"] == "prolonge":
         return _entier(e.get("fin"))
+    if e["type"] == "limite":
+        return isinstance(e.get("cible"), str) and _entier(e.get("fin"))
     return True
 
 
@@ -315,6 +370,8 @@ def geste_de(e: dict) -> str:
     pour les lignes d'avant #3723 sans champ `geste` comme pour les autres ; `prolonge` → `prolonger`."""
     if e["type"] == "prolonge":
         return "prolonger"
+    if e["type"] == "limite":
+        return "limiter"
     if e["type"] == "ban":
         return "ban_bloc" if "/" in e["cible"] else "ban"
     return "unban"
@@ -396,12 +453,17 @@ def _bilan(entrees: List[dict], maintenant: int) -> Tuple[Dict[str, dict], set, 
         elif e["type"] == "prolonge":
             prolongees[e["id"]] = max(prolongees.get(e["id"], 0), e["fin"])
             comptees.append(("prolonger", "auto", e["at"]))
+        elif e["type"] == "limite":
+            # une limite est rangée avec les bans (annulable par son id) mais n'est jamais un ban actif
+            if e["id"] not in bans:
+                bans[e["id"]] = {**e, "mode": "auto"}
+                comptees.append(("limiter", "auto", e["at"]))
         else:
             annules.add(e["id"])
     for i, fin in prolongees.items():
         if i in bans and fin > bans[i]["fin"]:
             bans[i] = {**bans[i], "fin": fin}
-    actifs = [b for i, b in bans.items() if i not in annules and b["fin"] > maintenant]
+    actifs = [b for i, b in bans.items() if i not in annules and b["fin"] > maintenant and b["type"] == "ban"]
     compteurs = dict.fromkeys(PLAFONDS, 0)
     for g in PLAFONDS_PAR_GESTE:
         compteurs[f"{g}_heure"] = compteurs[f"{g}_jour"] = 0
@@ -422,6 +484,11 @@ def _bilan(entrees: List[dict], maintenant: int) -> Tuple[Dict[str, dict], set, 
                 if f"{cle}_{f}" in compteurs:
                     compteurs[f"{cle}_{f}"] += 1
     return bans, annules, actifs, compteurs
+
+
+def limites_actives(bans: Dict[str, dict], annules: set, maintenant: int) -> List[dict]:
+    """Limites (geste `limiter`) non annulées et non échues, du journal."""
+    return [b for i, b in bans.items() if b["type"] == "limite" and i not in annules and b["fin"] > maintenant]
 
 
 def _plafond_atteint(compteurs: Dict[str, int], geste: str) -> Optional[str]:
@@ -490,9 +557,9 @@ def vue_recemment(ip: str, maintenant: int) -> bool:
     return False
 
 
-def _reseaux(valeur: Any) -> Optional[List[ipaddress.IPv4Network]]:
-    """Réseaux IPv4 d'une liste blanche publiée (les IPv6 ne visent aucune cible ici) ; None si elle est illisible
-    (une seule entrée illisible suffit : jamais une liste partielle)."""
+def _reseaux(valeur: Any) -> Optional[List[Any]]:
+    """Réseaux IPv4 et IPv6 d'une liste blanche publiée (IPv6 : cibles du geste `limiter`) ; None si elle est
+    illisible (une seule entrée illisible suffit : jamais une liste partielle)."""
     if not isinstance(valeur, list):
         return None
     reseaux = []
@@ -503,8 +570,7 @@ def _reseaux(valeur: Any) -> Optional[List[ipaddress.IPv4Network]]:
             n = ipaddress.ip_network(v, strict=False)
         except ValueError:
             return None
-        if isinstance(n, ipaddress.IPv4Network):
-            reseaux.append(n)
+        reseaux.append(n)
     return reseaux
 
 
@@ -590,9 +656,16 @@ def protegee_par_sade(cible: Cible, sade: Optional[Dict[str, Any]]) -> bool:
         return False
     if sade["liste"] is None:
         raise Illisible("liste blanche SADE illisible")
+    return any(_touche(cible, n) for n in sade["liste"])
+
+
+def _touche(cible: Cible, n: Any) -> bool:
+    """La cible (adresse ou bloc) recoupe-t-elle le réseau `n` (même famille seulement) ?"""
+    if cible.version != n.version:
+        return False
     if isinstance(cible, ipaddress.IPv4Network):
-        return any(cible.overlaps(n) for n in sade["liste"])
-    return any(cible in n for n in sade["liste"])
+        return cible.overlaps(n)
+    return cible in n
 
 
 def famille(categorie: Any) -> str:
@@ -720,6 +793,8 @@ def _argv(verbe: str, cible: Cible, duree_s: Optional[int] = None, d_office: boo
     transaction nft) ; d'un bloc : `ban-bloc` (waf-blocs ne raccourcit jamais). `d_office` sur un ban d'adresse :
     `--exiger-protegees` (protegees.env exigé par la garde root, #3723)."""
     bloc = isinstance(cible, ipaddress.IPv4Network)
+    if bloc and verbe in ("limiter", "limiter-lever"):
+        raise ValueError("limiter : une adresse seule")
     if bloc:
         argv = _SUDO + _SYSTEMD_RUN + [WAFCTL, f"{'ban' if verbe == 'prolonger' else verbe}-bloc", str(cible)]
     else:
@@ -1063,16 +1138,24 @@ def _fcrdns(ip: str) -> str:
         if not dom:
             continue
         try:
-            infos = socket.getaddrinfo(n.rstrip("."), None, socket.AF_INET)
+            famille_ip = socket.AF_INET6 if ":" in ip else socket.AF_INET
+            infos = socket.getaddrinfo(n.rstrip("."), None, famille_ip)
         except socket.gaierror as e:
             if e.errno in (socket.EAI_NONAME, getattr(socket, "EAI_NODATA", socket.EAI_NONAME)):
                 continue
             raise ProtectionInconnue(f"dns direct : {e.errno}") from None
         except OSError as e:
             raise ProtectionInconnue(f"dns direct : {type(e).__name__}") from None
-        if any(i[4][0] == ip for i in infos):
+        if any(_meme_adresse(i[4][0], ip) for i in infos):
             return dom
     return ""
+
+
+def _meme_adresse(a: str, b: str) -> bool:
+    try:
+        return ipaddress.ip_address(a.split("%")[0]) == ipaddress.ip_address(b)
+    except ValueError:
+        return False
 
 
 def robot_verifie(ip: str) -> str:
@@ -1088,19 +1171,18 @@ def protegee_d_office(cible: Cible) -> bool:
     """Pair du maillage (wg_mesh.json + threatmesh /peers) ou robot vérifié (adresse seule) ? Lève
     ProtectionInconnue si une source ne répond pas : un geste d'office n'est jamais fait à l'aveugle."""
     pairs = pairs_wg_mesh() + pairs_threatmesh()
-    for n in pairs:
-        if n.version != 4:
-            continue
-        if cible.overlaps(n) if isinstance(cible, ipaddress.IPv4Network) else cible in n:
-            return True
-    return isinstance(cible, ipaddress.IPv4Address) and bool(robot_verifie(str(cible)))
+    if any(_touche(cible, n) for n in pairs):
+        return True
+    return not isinstance(cible, ipaddress.IPv4Network) and bool(robot_verifie(str(cible)))
 
 
-def _refus(statut: int, motif: str, geste: Union[GesteBan, GesteProlonger], user: dict,
+def _refus(statut: int, motif: str, geste: Union[GesteBan, GesteProlonger, GesteLimiter], user: dict,
            etiquette: str = "ai-ban") -> HTTPException:
     action = f"{etiquette}-refus" if statut == 409 else f"{etiquette}-echec"
     if isinstance(geste, GesteProlonger):
         mode, quoi = "auto", f"id {geste.id}"
+    elif isinstance(geste, GesteLimiter):
+        mode, quoi = "auto", f"cible {geste.cible}"
     else:
         mode, quoi = geste.mode, f"cible {geste.cible}"
     _auditer_regroupe(action, motif, mode, f"motif {motif} {quoi} mode {mode} conseil {geste.conseil}", user)
@@ -1326,12 +1408,14 @@ def ai_unban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps
             return {"id": geste.id, "etat": "deja_annule"}
         if ban["fin"] <= maintenant:
             return {"id": geste.id, "etat": "echu"}
+        limite = ban["type"] == "limite"
         try:
-            cible = forme_cible(ban["cible"])
+            cible = forme_limite(ban["cible"]) if limite else forme_cible(ban["cible"])
         except ValueError:
             raise HTTPException(500, detail={"motif": "journal"}) from None
         try:
-            couverte = _couverte(cible, ban, maintenant)
+            # une limite n'est couverte par personne : la lever ne libère jamais une cible qu'un autre aurait bannie
+            couverte = False if limite else _couverte(cible, ban, maintenant)
         except Exception as e:  # noqa: BLE001 — sans savoir qui d'autre couvre la cible, on ne lève rien
             log.warning("ai-unban : couverture illisible : %s", e)
             raise HTTPException(503, detail={"motif": "etat"}) from None
@@ -1348,7 +1432,7 @@ def ai_unban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps
             _auditer("ai-unban", f"id {geste.id} cible {ban['cible']}", user)
         except Exception:  # noqa: BLE001
             raise HTTPException(503, detail={"motif": "audit"}) from None
-        r, _ = _lancer(_argv("unban", cible))
+        r, _ = _lancer(_argv("limiter-lever" if limite else "unban", cible))
         if r is None or r.returncode != 0:
             statut, motif = (503, "wafctl") if r is None else _statut_motif(_motif_sortie(r))
             _auditer_sans_lever("ai-unban-echec", f"id {geste.id} cible {ban['cible']} motif {motif}", user)
@@ -1356,6 +1440,102 @@ def ai_unban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps
         # le ban est levé et audité ; si la ligne manque, un nouvel essai refera un retrait idempotent puis la ligne
         _clore(geste.id, ban, maintenant, "unban")
     return {"id": geste.id, "etat": "annule"}
+
+
+def _fin_limite(r: subprocess.CompletedProcess, repli: int) -> int:
+    """La `fin` de la ligne JSON `{"fin": …}` de `wafctl limiter` ; `repli` si elle manque ou est illisible."""
+    for ligne in (r.stdout or "").splitlines():
+        try:
+            d = json.loads(ligne)
+        except ValueError:
+            continue
+        if isinstance(d, dict) and _entier(d.get("fin")) and d["fin"] > 0:
+            return d["fin"]
+    return repli
+
+
+@router.post("/limiter")
+def ai_limiter(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
+    """Limite de débit d'une adresse publique, IPv4 ou IPv6 (#3723). Geste d'office : la porte du mode SADE passe
+    d'abord (`limiter` est le seul geste d'office admis en `reactive`)."""
+    geste: GesteLimiter = _valider(GesteLimiter, corps)
+    cible = forme_limite(geste.cible)
+    sade = lire_sade()
+    motif = porte_sade("limiter", sade)
+    if motif:
+        raise _refus(409, motif, geste, user, "ai-limiter")
+    with _verrou:
+        maintenant = int(_maintenant())
+        try:
+            bans, annules, _, compteurs = _bilan(_lire_journal(), maintenant)
+        except OSError:
+            raise _refus(503, "journal", geste, user, "ai-limiter") from None
+        if geste.cible in {b["cible"] for b in limites_actives(bans, annules, maintenant)}:
+            raise _refus(409, "deja_actif", geste, user, "ai-limiter")
+        if not LIMITE_MIN_S <= geste.duree_s <= LIMITE_MAX_S:
+            raise _refus(409, "duree", geste, user, "ai-limiter")
+        motif = _plafond_atteint(compteurs, "limiter")
+        if motif:
+            raise _refus(409, motif, geste, user, "ai-limiter")
+        try:
+            if protegee_par_sade(cible, sade):
+                raise _refus(409, "protegee", geste, user, "ai-limiter")
+        except Illisible as e:
+            log.warning("ai-limiter : garde illisible : %s", e)
+            raise _refus(503, "etat", geste, user, "ai-limiter") from None
+        try:
+            if protegee_d_office(cible):
+                raise _refus(409, "protegee", geste, user, "ai-limiter")
+        except ProtectionInconnue as e:
+            log.warning("ai-limiter : cibles protégées inconnues : %s", e)
+            raise _refus(409, "protegee_inconnue", geste, user, "ai-limiter") from None
+
+        ident = secrets.token_hex(16)
+        fin = maintenant + geste.duree_s
+        resume = f"id {ident} cible {geste.cible} {geste.duree_s}s fin {fin} conseil {geste.conseil}"
+        try:
+            _auditer("ai-limiter-demande", resume, user)
+        except Exception:  # noqa: BLE001 — sans trace de la demande, rien n'est fait
+            raise _refus(503, "audit", geste, user, "ai-limiter") from None
+        r, panne = _lancer(_argv("limiter", cible, geste.duree_s))
+        if r is None:
+            # wafctl muet : la limite est peut-être posée ; aucune autre source ne limite par ces ensembles
+            log.error("ai-limiter : wafctl injoignable (%s) pour %s", panne, cible)
+            _defaire_limite(cible)
+            raise _refus(503, "wafctl", geste, user, "ai-limiter")
+        if r.returncode != 0:
+            raise _refus(*_statut_motif(_motif_sortie(r)), geste, user, "ai-limiter")
+        fin = _fin_limite(r, int(_maintenant()) + geste.duree_s)
+        entree = {"ts": _horodatage(), "at": maintenant, "type": "limite", "geste": "limiter", "id": ident,
+                  "cible": geste.cible, "fin": fin, "mode": "auto", "conseil": geste.conseil, "motif": geste.motif,
+                  "jti": str((user or {}).get("jti") or ""), "cle": _cle(user), "duree_s": geste.duree_s}
+        try:
+            _ecrire_journal(entree)
+        except OSError:
+            # hors journal, la limite échapperait aux plafonds et ne pourrait pas être levée par son id
+            if _defaire_limite(cible):
+                raise _refus(503, "journal", geste, user, "ai-limiter") from None
+            raise _refus(500, "incoherent", geste, user, "ai-limiter") from None
+        try:
+            _auditer("ai-limiter", f"id {ident} cible {geste.cible} {geste.duree_s}s fin {fin} conseil {geste.conseil}",
+                     user)
+        except Exception:  # noqa: BLE001 — une limite non auditée n'existe pas : elle est levée
+            defaite = _defaire_limite(cible)
+            try:
+                _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "annule", "geste": "limiter",
+                                 "id": ident, "cible": geste.cible, "cause": "audit"})
+            except OSError:
+                log.error("ai-limiter : annulation %s non journalisée", ident)
+            raise HTTPException(500, detail={"motif": "audit" if defaite else "incoherent"}) from None
+    return {"id": ident, "cible": geste.cible, "fin": fin, "audit": ident}
+
+
+def _defaire_limite(cible: Any) -> bool:
+    r, _ = _lancer(_argv("limiter-lever", cible))
+    if r is None or r.returncode != 0:
+        log.error("ai-limiter : retour arrière impossible pour %s", cible)
+        return False
+    return True
 
 
 _garde_ai_lecture = garde_compte_service("ai-lecture")
@@ -1390,11 +1570,14 @@ def ai_etat(user: dict = Depends(require_ai_etat), corps: bytes = Depends(_corps
     _ = user
     if corps:
         raise HTTPException(422, detail={"motif": "corps"})   # P9 : un jeton de geste ne vaut rien ici
+    maintenant = int(_maintenant())
     try:
-        _, _, actifs, compteurs = _bilan(_lire_journal(), int(_maintenant()))
+        bans, annules, actifs, compteurs = _bilan(_lire_journal(), maintenant)
     except OSError:
         raise HTTPException(503, detail={"motif": "journal"}) from None
     return {"actifs": [{"id": b["id"], "cible": b["cible"], "fin": b["fin"], "mode": b["mode"]}
                        for b in sorted(actifs, key=lambda b: (b["fin"], b["id"]))],
             "compteurs": {k: compteurs[k] for k in PLAFONDS}, "plafonds": dict(PLAFONDS),
-            "plafonds_par_geste": plafonds_par_geste(compteurs), "sade_mode": mode_sade()}
+            "plafonds_par_geste": plafonds_par_geste(compteurs), "sade_mode": mode_sade(),
+            "limites": [{"id": b["id"], "cible": b["cible"], "fin": b["fin"]}
+                        for b in sorted(limites_actives(bans, annules, maintenant), key=lambda b: (b["fin"], b["id"]))]}

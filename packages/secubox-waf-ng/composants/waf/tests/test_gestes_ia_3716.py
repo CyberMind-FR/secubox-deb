@@ -663,7 +663,7 @@ def test_routes_branchees_sur_l_application():
     routes = {(r.path, tuple(sorted(r.methods))): r for r in waf.app.routes if getattr(r, "path", "").startswith("/ai/")
               and not r.path.startswith("/ai/filtres")}   # #3732 : compte ai-filtres, test_filtres_ia_3732
     assert set(routes) == {("/ai/ban", ("POST",)), ("/ai/unban", ("POST",)), ("/ai/etat", ("GET",)),
-                           ("/ai/prolonger", ("POST",))}   # #3723
+                           ("/ai/prolonger", ("POST",)), ("/ai/limiter", ("POST",))}   # #3723
     from api import gestes_ia as g
     for route in routes.values():
         # #3720 : /ai/etat ouvert aussi à ai-lecture (aiguillage require_ai_etat → require_ai_ban ou ai-lecture)
