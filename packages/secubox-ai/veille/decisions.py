@@ -151,3 +151,20 @@ def decider(db, pid: str, version, acteur: str, decision: str, maintenant: datet
                       {"geste": geste, "cible": cible, "version": version}, relais=True)
         return {"id": pid, "version": version, "etat": nouvel}
     return _transaction(db, faire)
+
+
+def confirmer_filtre(db, fid: str, acteur: str, maintenant: datetime) -> dict:
+    """Confirmation en un clic d'un filtre WAF d'office (#3723, carte 4) : `a_confirmer` → `confirme` seulement (404
+    inconnu, 409 `etat` sinon). Jamais d'office : le critère « réponse légitime » n'est pas mesurable depuis gk3."""
+    def faire():
+        r = db.execute("SELECT etat, outil, cve FROM filtres WHERE id = ?", (fid,)).fetchone()
+        if r is None:
+            raise RefusDecision(404, "inconnu")
+        if r[0] != "a_confirmer":
+            raise RefusDecision(409, "etat")
+        db.execute("UPDATE filtres SET etat = 'confirme', confirme_par = ?, maj_le = ? WHERE id = ? "
+                   "AND etat = 'a_confirmer'", (acteur, iso(maintenant), fid))
+        ajouter_audit(db, maintenant, acteur, "filtre_confirme", fid, "confirme", {"outil": r[1], "cve": r[2]},
+                      relais=True)
+        return {"id": fid, "etat": "confirme"}
+    return _transaction(db, faire)

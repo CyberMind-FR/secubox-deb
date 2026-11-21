@@ -32,10 +32,15 @@ from secubox_core.compte_service import empreinte, frapper_jeton
 
 COMPTE = "ai-lecture"
 COMPTE_GESTES = "ai-ban"
+#: #3723 (carte 4) : filtres du WAF, compte et clé à part (portée `waf-filtres` : un jeton ai-ban n'y vaut rien).
+COMPTE_FILTRES = "ai-filtres"
+_RE_FILTRE = re.compile(r"^ia-[a-z0-9._-]{1,93}$")
 #: Corps d'une réponse à un geste, au plus (gk2 rend quelques centaines d'octets).
 TAILLE_MAX_GESTE = 64 * 1024
 #: Délai d'un geste : gk2 attend wafctl / waf-blocs jusqu'à 30 s ; au-delà, l'issue est inconnue (rapprochement).
 DELAI_GESTE_S = 45.0
+#: Délai d'un appel de filtres : gk2 attend `secubox-cvectl filtres-ia` jusqu'à 60 s.
+DELAI_FILTRES_S = 75.0
 _MOTIF = re.compile(r"^[a-z_]{1,32}$")
 DELAI_S = 10.0
 #: Délais propres à une route (nom de la table) : `enforcement` relit bans.jsonl sur gk2, plusieurs secondes.
@@ -70,9 +75,13 @@ ROUTES_DEFAUT = {
     "ai_limiter": ("/waf/ai/limiter", "/ai/limiter"),
     "ai_leurre": ("/waf/ai/leurre", "/ai/leurre"),
     "ai_partager": ("/waf/ai/partager", "/ai/partager"),
+    # #3723 (carte 4) : filtres du WAF, compte ai-filtres (POST, DELETE /{id}, GET).
+    "ai_filtres": ("/waf/ai/filtres", "/ai/filtres"),
 }
 #: Les seuls noms que `post` accepte (catalogue fermé des gestes de gk2).
 ROUTES_GESTES = frozenset({"ai_ban", "ai_unban", "ai_prolonger", "ai_limiter", "ai_leurre", "ai_partager"})
+#: Routes d'écriture non redirigeables par la configuration (gestes et filtres).
+ROUTES_ECRITURE = ROUTES_GESTES | {"ai_filtres"}
 
 
 class ErreurGk2(Exception):
@@ -90,7 +99,7 @@ def routes(cfg: dict) -> dict:
     table = dict(ROUTES_DEFAUT)
     for nom, r in ((cfg.get("veille") or {}).get("routes") or {}).items():
         if isinstance(r, dict) and isinstance(r.get("url"), str) and isinstance(r.get("signe"), str):
-            if nom in ROUTES_GESTES:
+            if nom in ROUTES_ECRITURE:
                 continue                  # les routes d'écriture ne se redirigent pas par la configuration
             if r["url"].startswith("/") and r["signe"].startswith("/") and "?" not in r["signe"]:
                 table[nom] = (r["url"], r["signe"])
@@ -109,11 +118,13 @@ def delais(cfg: dict) -> dict:
 class ClientGk2:
     def __init__(self, base: str, aud: str, cle_pem: bytes, table: Optional[dict] = None,
                  transport: Optional[httpx.AsyncBaseTransport] = None, horloge: Callable[[], float] = time.time,
-                 delai_s: float = DELAI_S, delais_routes: Optional[dict] = None, cle_ban: Optional[bytes] = None):
+                 delai_s: float = DELAI_S, delais_routes: Optional[dict] = None, cle_ban: Optional[bytes] = None,
+                 cle_filtres: Optional[bytes] = None):
         self.base = base.rstrip("/")
         self.aud = aud
         self._cle = cle_pem
         self._cle_ban = cle_ban
+        self._cle_filtres = cle_filtres
         self.table = table or dict(ROUTES_DEFAUT)
         self._transport = transport
         self.horloge = horloge
@@ -198,3 +209,61 @@ class ClientGk2:
         if not isinstance(motif, str) or not _MOTIF.fullmatch(motif):
             motif = "refus" if r.status_code in (401, 403) else "statut"
         raise ErreurGk2(r.status_code, motif, reponse)
+
+    # ── filtres du WAF (#3723, carte 4), compte ai-filtres ──
+
+    @property
+    def peut_filtrer(self) -> bool:
+        return bool(self._cle_filtres)
+
+    async def _filtres(self, methode: str, suffixe: str, octets: bytes,
+                       avant_envoi: Optional[Callable[[str, str], Awaitable[None]]] = None) -> dict:
+        if not self._cle_filtres:
+            raise ValueError("clé ai-filtres absente")
+        jeton = frapper_jeton(self._cle_filtres, COMPTE_FILTRES, aud=self.aud, corps=octets,
+                              maintenant=self.horloge())
+        if avant_envoi is not None:
+            await avant_envoi(jwt.decode(jeton, options={"verify_signature": False})["jti"],
+                              jwt.get_unverified_header(jeton)["kid"])
+        entetes = dict(AGENT, Authorization=f"Bearer {jeton}")
+        if octets:
+            entetes["Content-Type"] = "application/json"
+        try:
+            async with httpx.AsyncClient(transport=self._transport, timeout=DELAI_FILTRES_S, trust_env=False,
+                                         follow_redirects=False, headers=entetes) as c:
+                r = await c.request(methode, self.base + self.table.get("ai_filtres", ROUTES_DEFAUT["ai_filtres"])[0]
+                                    + suffixe, content=octets or None)
+        except httpx.HTTPError as e:
+            raise ErreurGk2(None, e.__class__.__name__) from None
+        if len(r.content) > TAILLE_MAX_GESTE:
+            raise ErreurGk2(None if r.status_code == 200 else r.status_code, "trop_gros")
+        try:
+            reponse = r.json()
+        except ValueError:
+            reponse = None
+        if r.status_code == 200:
+            if not isinstance(reponse, dict):
+                raise ErreurGk2(None, "reponse_illisible")
+            return reponse
+        detail = reponse.get("detail") if isinstance(reponse, dict) else None
+        motif = detail.get("motif") if isinstance(detail, dict) else None
+        if not isinstance(motif, str) or not _MOTIF.fullmatch(motif):
+            motif = "refus" if r.status_code in (401, 403) else "statut"
+        raise ErreurGk2(r.status_code, motif, reponse)
+
+    async def post_filtres(self, corps: dict,
+                           avant_envoi: Optional[Callable[[str, str], Awaitable[None]]] = None) -> dict:
+        """`POST /ai/filtres` signé ai-filtres (corps exact) ; rend le bilan de gk2 (`appliques`, `inchanges`,
+        `rejets`). Mêmes erreurs que `post`."""
+        octets = json.dumps(corps, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("ascii")
+        return await self._filtres("POST", "", octets, avant_envoi)
+
+    async def retirer_filtre(self, fid: str) -> dict:
+        """`DELETE /ai/filtres/{fid}` (sans corps) ; ValueError sur un id hors de la forme `ia-…`."""
+        if not isinstance(fid, str) or not _RE_FILTRE.fullmatch(fid):
+            raise ValueError("id de filtre invalide")
+        return await self._filtres("DELETE", "/" + fid, b"")
+
+    async def lister_filtres(self) -> dict:
+        """`GET /ai/filtres` (sans corps) : filtres de l'IA en vigueur sur gk2."""
+        return await self._filtres("GET", "", b"")

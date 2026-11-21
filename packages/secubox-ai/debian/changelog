@@ -66,6 +66,19 @@ secubox-ai (0.6.0-1~trixie1) trixie; urgency=medium
     La veille n'a sur audit.log que l'ajout (AppArmor a), par une ACL
     nommée reposée en root par secubox-aictl acl-audit au démarrage et,
     après une rotation, sur demande acl-audit. Dépendance : acl.
+  * Apprentissage, carte 4 (veille/apprentissage.py, boucle de 300 s,
+    migration 0008) : mécanique des filtres WAF d'office signés ai-filtres
+    (secubox-aictl cle-ai-filtres generer, LoadCredential=ai-filtres +
+    repli absente) : envoi → essai → a_confirmer après 24 h sans touche
+    protégée (confirmation en un clic, jamais d'office : critère « réponse
+    légitime » non mesurable depuis gk3) ; touche d'adresse protégée →
+    retrait d'office et alerte ; plafonds 10/h 50/j ; observation ou
+    suspension : aucun envoi. Construits du catalogue ([[outil.filtre]]
+    sourcé, CVE compris) pour un outil nommé seulement : aucune entrée
+    livrée n'en porte, rien n'est envoyé aujourd'hui. Suggestions
+    d'empreintes (suggestions-empreintes.json, ≥ 30 adresses, 200 au plus,
+    jamais appliquées) ; routes /filtres, /filtres/suggestions,
+    /filtres/{id}/confirmer.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 14:00:00 +0100
 

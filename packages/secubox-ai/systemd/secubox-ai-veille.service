@@ -68,6 +68,10 @@ SetCredential=ai-distant:absente
 #   visible dans /veille/etat), la veille tourne. Créée par « secubox-aictl cle-ai-ban generer ».
 LoadCredential=ai-ban:/etc/secubox/secrets/ai/ai-ban.key
 SetCredential=ai-ban:absente
+# - ai-filtres (#3723, carte 4) : filtres WAF d'office (POST/DELETE /ai/filtres) ; absente, aucun filtre n'est envoyé
+#   (les suggestions d'empreintes sont calculées quand même). Créée par « secubox-aictl cle-ai-filtres generer ».
+LoadCredential=ai-filtres:/etc/secubox/secrets/ai/ai-filtres.key
+SetCredential=ai-filtres:absente
 # Journal d'audit (#3723) : AJOUT SEUL à /var/log/secubox/audit.log (secubox:secubox 0640), et à lui seul : c'est le
 # profil AppArmor (« /var/log/secubox/audit.log a, » et rien d'autre sous /var/log) qui le borne. L'ACL nommée
 # d'écriture du compte secubox-ai est (re)posée en root avant le démarrage par « secubox-aictl acl-audit » (refuse

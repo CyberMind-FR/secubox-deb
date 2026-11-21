@@ -21,6 +21,11 @@ Un outil n'est NOMMÉ qu'avec ≥ 2 traits indépendants (confiance « forte » 
 Trait `faible` (identifiants de dictionnaire) : sa combinaison `requis` doit être vue entière ; deux traits faibles
 d'une même couche comptent pour un. `groupe` n'est jamais choisi par le catalogue (valeur imposée par le type).
 
+Filtres (#3723, carte 4) : une entrée peut porter des `[[outil.filtre]]` SOURCÉS, au contrat de gk2 (#3732) :
+`cve` (CVE-AAAA-NNNN), `produit`, `famille`, `motif_type` (chemin_exact | chemin_prefixe | parametre_egal |
+corps_contient), `motif`, `parametre` (parametre_egal seulement), `source` OBLIGATOIRE. Seul un outil NOMMÉ (≥ 2 traits)
+fait envoyer ses filtres (veille/apprentissage.py) ; aucune entrée livrée n'en porte aujourd'hui.
+
 Identifiants des leurres : gk2 ne rend le mot de passe que par HMAC local, non comparable à une liste publique ; on
 compare donc « compte:longueur » — limite documentée, d'où `min` paires distinctes exigées.
 """
@@ -71,6 +76,7 @@ class Outil:
     source: str
     traits: list
     version: Optional[str] = None
+    filtres: list = field(default_factory=list)
 
 
 @dataclass
@@ -128,6 +134,41 @@ def _trait(brut, source_outil):
                  faible=faible, requis=tuple(requis))
 
 
+_RE_CVE = re.compile(r"^CVE-\d{4}-\d{4,7}$")
+FAMILLES_FILTRE = frozenset({"rce", "lfi", "sqli", "auth_bypass", "ssrf", "deserialisation", "xss", "traversal",
+                             "divulgation", "autre"})
+MOTIF_TYPES = ("chemin_exact", "chemin_prefixe", "parametre_egal", "corps_contient")
+_RE_PARAMETRE = re.compile(r"^[A-Za-z0-9_.\[\]-]{1,64}$")
+
+
+def _filtre(brut) -> dict:
+    """Un `[[outil.filtre]]` : forme de gk2 (`lire_filtre` de #3732) revérifiée, source obligatoire."""
+    if not isinstance(brut, dict) or set(brut) - {"cve", "produit", "famille", "motif_type", "motif", "parametre",
+                                                   "source"}:
+        raise ValueError("filtre : objet aux clés connues attendu")
+    source = brut.get("source")
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("filtre sans source : refusé")
+    cve, produit, famille = brut.get("cve"), brut.get("produit"), brut.get("famille")
+    motif_type, motif, parametre = brut.get("motif_type"), brut.get("motif"), brut.get("parametre")
+    if not isinstance(cve, str) or not _RE_CVE.fullmatch(cve):
+        raise ValueError("filtre : cve invalide")
+    if not isinstance(produit, str) or not 0 < len(produit) <= 64 or not produit.isprintable():
+        raise ValueError("filtre : produit invalide")
+    if famille not in FAMILLES_FILTRE or motif_type not in MOTIF_TYPES:
+        raise ValueError("filtre : famille ou motif_type inconnu")
+    if not isinstance(motif, str) or not 0 < len(motif) <= 256 or not motif.isprintable():
+        raise ValueError("filtre : motif invalide")
+    if motif_type.startswith("chemin_") and (not motif.startswith("/") or "%" in motif):
+        raise ValueError("filtre : chemin décodé commençant par « / » attendu")
+    if (motif_type == "parametre_egal") != (parametre is not None):
+        raise ValueError("filtre : parametre réservé à parametre_egal (et obligatoire alors)")
+    if parametre is not None and (not isinstance(parametre, str) or not _RE_PARAMETRE.fullmatch(parametre)):
+        raise ValueError("filtre : parametre invalide")
+    return {"cve": cve, "produit": produit, "famille": famille, "motif_type": motif_type, "motif": motif,
+            "parametre": parametre, "source": source.strip()}
+
+
 def entree(brut) -> Outil:
     """Une entrée `[[outil]]` du catalogue ; ValueError si elle est sans source ou mal formée."""
     if not isinstance(brut, dict):
@@ -141,7 +182,8 @@ def entree(brut) -> Outil:
     if not traits:
         raise ValueError(f"entrée {nom!r} sans trait")
     version = brut.get("version")
-    return Outil(nom.strip(), source.strip(), traits, str(version) if version is not None else None)
+    filtres = [_filtre(f) for f in brut.get("filtre") or []]
+    return Outil(nom.strip(), source.strip(), traits, str(version) if version is not None else None, filtres)
 
 
 def charger(chemins) -> list:

@@ -86,7 +86,8 @@ BORNES_DUREE = {"ban": (3600, 7 * 86400), "ban_bloc": (3600, 7 * 86400), "prolon
 DUREE_BLOC_AUTO_MAX_S = 86400
 #: Décisions écrites par l'API (`relais`) → événement d'audit.log.
 RELAIS = {"proposition_approuvee": "ai-proposition-approuvee", "proposition_refusee": "ai-proposition-refusee",
-          "veille_suspendre": "veille-suspendue", "veille_reprendre": "veille-reprise"}
+          "veille_suspendre": "veille-suspendue", "veille_reprendre": "veille-reprise",
+          "filtre_confirme": "ai-filtre-confirme"}
 # {auto} : « ? » des gestes d'office permis à cette passe (NULL : aucun).
 _ORDRE = ("SELECT p.id, p.version, p.etat, p.geste, p.cible, p.duree_s, p.mode, p.reference, p.motif "
           "FROM propositions p LEFT JOIN dossiers d ON d.id = p.dossier_id "

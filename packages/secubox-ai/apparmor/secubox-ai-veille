@@ -47,6 +47,7 @@ profile secubox-ai-veille {
   /run/credentials/secubox-ai-veille.service/ai-lecture r,
   /run/credentials/secubox-ai-veille.service/ai-distant r,
   /run/credentials/secubox-ai-veille.service/ai-ban r,
+  /run/credentials/secubox-ai-veille.service/ai-filtres r,
 
   # Journal d'audit (#3723) : ajout seul, ce fichier seulement (jamais écrit, tronqué ni créé ici).
   /var/log/secubox/audit.log a,

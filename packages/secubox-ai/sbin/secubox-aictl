@@ -17,6 +17,9 @@
   secubox-aictl cle-ai-ban generer
                                  crée la paire Ed25519 du compte `ai-ban` (réponses de la veille V2, #3723) et imprime
                                  la clé PUBLIQUE à poser sur gk2 (« wafctl cle-ai-ban ajouter ») ; jamais d'écrasement
+  secubox-aictl cle-ai-filtres generer
+                                 crée la paire Ed25519 du compte `ai-filtres` (filtres WAF d'office, #3723) et imprime
+                                 la clé PUBLIQUE à poser sur gk2 ; jamais d'écrasement (root)
   secubox-aictl veille suspendre|reprendre
                                  suspend ou reprend les gestes d'office de la veille (les gestes approuvés restent
                                  possibles) ; écrit dans veille.db au compte du module, audité (root)
@@ -63,7 +66,7 @@ sys.path.insert(0, os.environ.get("SECUBOX_AI_LIB", "/usr/lib/secubox/ai"))
 
 from api import contexte_auto as CA  # noqa: E402
 
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 
 # ── chemins (R2 : lus à l'appel, redirigeables par l'environnement) ──
 ETAT_DEFAUT = "/var/lib/secubox/ai"
@@ -81,6 +84,8 @@ DROPIN_VEILLE = Path("/run/systemd/system/secubox-ai-veille.service.d")
 CLE_AI_LECTURE = "/etc/secubox/secrets/ai/ai-lecture.key"
 # Clé privée du compte ai-ban (réponses de la veille, #3723) : même régime, remise à la seule veille.
 CLE_AI_BAN = "/etc/secubox/secrets/ai/ai-ban.key"
+# Clé privée du compte ai-filtres (filtres WAF d'office, #3723 carte 4) : même régime.
+CLE_AI_FILTRES = "/etc/secubox/secrets/ai/ai-filtres.key"
 SETFACL = "/usr/bin/setfacl"
 # Résolveurs de la box : 127.0.0.1 (Unbound) déjà permis par l'unité ; un résolveur du LAN (gk3 résout par gk2) est
 # rouvert à l'API comme les adresses de la configuration.
@@ -1082,6 +1087,12 @@ def cmd_cle_ai_ban(args: list[str]) -> int:
     return _generer_paire("ai-ban", args, "SECUBOX_AI_CLE_BAN", CLE_AI_BAN)
 
 
+def cmd_cle_ai_filtres(args: list[str]) -> int:
+    """Paire du compte `ai-filtres` (#3723, carte 4) : filtres WAF d'office. La publique est posée sur gk2 dans
+    l'arbre des comptes de service (`ai-filtres`, #3732) ; la privée ne quitte jamais gk3."""
+    return _generer_paire("ai-filtres", args, "SECUBOX_AI_CLE_FILTRES", CLE_AI_FILTRES)
+
+
 # ── journal d'audit de la veille ──
 
 def cmd_acl_audit() -> int:
@@ -1210,7 +1221,7 @@ def aide() -> int:
     return 0
 
 
-VERBES = {"preparer", "demarrer", "arreter", "redemarrer", "etat", "cle-distante", "cle-ai-lecture", "cle-ai-ban",
+VERBES = {"preparer", "demarrer", "arreter", "redemarrer", "etat", "cle-distante", "cle-ai-lecture", "cle-ai-ban", "cle-ai-filtres",
           "veille", "acl-audit", "demandes"}
 
 
@@ -1225,6 +1236,8 @@ def main(argv: list[str]) -> int:
         return cmd_cle_ai_lecture(args)
     if verbe == "cle-ai-ban":
         return cmd_cle_ai_ban(args)
+    if verbe == "cle-ai-filtres":
+        return cmd_cle_ai_filtres(args)
     if verbe == "veille":
         return cmd_veille(args)
     if verbe not in VERBES or (args and (verbe != "etat" or args != ["--json"])):

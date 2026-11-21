@@ -223,6 +223,42 @@ moteur ne la lisent. Absente, l'unité démarre quand même (`SetCredential=ai-b
 SHA-256 du corps exact, `jti` à usage unique, une minute au plus ; gk2 refuse un rejeu (401 `rejeu`). Les plafonds
 sont ceux du **compte**, partagés avec tout autre relais qui signe avec une clé admise.
 
+## Apprentissage
+
+Carte 4 de SADE (#3723, `veille/apprentissage.py`, boucle `apprentissage` de 300 s dans la veille).
+
+- **Filtres WAF d'office** (compte `ai-filtres`, portée `waf-filtres`, clé `LoadCredential=ai-filtres` avec repli
+  `SetCredential=ai-filtres:absente`, créée par `secubox-aictl cle-ai-filtres generer`, publique à poser sur gk2) :
+  construits par le **code** depuis le catalogue d'empreintes — un outil **nommé** (≥ 2 traits indépendants) dont
+  l'entrée porte des `[[outil.filtre]]` sourcés au contrat de gk2 (#3732 : `cve`, `produit`, `famille`,
+  `motif_type`, `motif`, `source`). **Aucune entrée livrée n'en porte aujourd'hui : en production la boucle
+  n'envoie rien** (voir § Suite). Cycle : `envoi` (ligne créée avant `POST /ai/filtres`) → `essai` (le vérificateur
+  de gk2 l'a appliqué ; `rejete` sinon, jamais renvoyé) → après 24 h sans touche d'adresse protégée, `a_confirmer`
+  (confirmation en **un clic**, `POST /filtres/{id}/confirmer`, **jamais d'office** : le critère « vhost routé ayant
+  donné une réponse 2xx/3xx » n'est **pas mesurable depuis gk3**) → `confirme`. Une touche d'adresse **protégée**
+  (non publique, `local`, `[veille.analyste] protegees`), lue dans les lignes `ia_filtres_*` du journal des menaces
+  déjà collectées, fait **retirer** le filtre d'office (`DELETE /ai/filtres/{id}`) avec alerte (`ai-filtre-retire`,
+  `ai-filtre-alerte`, audit_chaine), à tout moment, même confirmé, en observation ou suspendu. Plafonds de gk2 : 10/h,
+  50/j ; mode `observation` ou automatique suspendu : aucun nouvel envoi. Réponse perdue : rapprochement par
+  `GET /ai/filtres` après 120 s, jamais de renvoi à l'aveugle.
+- **Suggestions d'empreintes** : `/var/lib/secubox/ai/suggestions-empreintes.json` (0640, 200 entrées au plus) —
+  valeurs d'agent HTTP, `tool` de sbxwaf, empreinte HTTP ou JA4 vues sur au moins 30 adresses en 7 jours, adresses
+  sans outil nommé ; données non fiables de gk2, tronquées. Lisibles dans la console, **jamais appliquées**.
+- `etat_apprentissage()` : nombres de filtres en essai, à confirmer, confirmés, retirés, et de suggestions ; `null`
+  quand la source est inconnue, jamais un zéro inventé.
+
+## Suite
+
+À faire dans une issue de suite (non livré ici) :
+
+1. **Forme « outil » des filtres sur gk2** (#3732) : un filtre sans CVE, construit d'un outil du catalogue (motif
+   d'agent ou chemins), avec sa propre vérification — le contrat actuel exige un `cve`.
+2. **`GET /ai/filtres/legitimes` sur gk2**, ouverte au compte `ai-lecture` : par filtre `ia-*`, lignes d'accès nginx
+   des 24 h sur un vhost routé, statut 2xx/3xx, chemin reconnu par le filtre (`null` si illisible) — pour rendre la
+   confirmation automatique.
+3. **Seconds traits du catalogue** (leurres de service, JA4 quand actord sera lu) : aujourd'hui chaque outil n'a
+   qu'un trait (agent), aucun n'est nommé, aucun filtre ne peut partir.
+
 ## Socket et ports
 
 - `/run/secubox/ai.sock` : API (0660, groupe `secubox`, servie à nginx). Aucun port TCP.
@@ -240,6 +276,8 @@ sont ceux du **compte**, partagés avec tout autre relais qui signe avec une cl�
 | `/etc/secubox/secrets/ai/distant.key` | root:secubox-ai 0640 | clé du moteur distant, posée par `secubox-aictl cle-distante` (lue sur l'entrée standard) |
 | `/etc/secubox/secrets/ai/ai-lecture.key` | root 0600 | clé du compte de lecture de gk2, remise à la veille seule |
 | `/etc/secubox/secrets/ai/ai-ban.key` | root 0600 | clé du compte `ai-ban` (§ Clé ai-ban), remise à la veille seule |
+| `/etc/secubox/secrets/ai/ai-filtres.key` | root 0600 | clé du compte `ai-filtres` (§ Apprentissage), `secubox-aictl cle-ai-filtres generer`, remise à la veille seule |
+| `/var/lib/secubox/ai/suggestions-empreintes.json` | secubox-ai 0640 | suggestions d'empreintes (§ Apprentissage), jamais appliquées |
 | `/var/lib/secubox/ai/preferences.toml` | secubox-ai | préférences modifiables depuis la page (écriture atomique, double tampon) |
 | `/var/lib/secubox/ai/` | secubox-ai 0750 | `memoire.db`, `journal.jsonl`, `documents/`, `medias/`, `modeles/` (0750, modèles 0640), `tmp/` (0700, temporaires de SQLite) |
 
@@ -358,6 +396,9 @@ Toute route porte `require_jwt` (administrateur réel), sauf `GET /health` (test
 | `GET /veille/etat` | suspension, clé ai-ban, mode SADE et plafonds restants (relevé de `/ai/etat`), plafonds de gk3 |
 | `POST /veille/suspendre` | suspend les gestes d'office (les approuvés restent possibles) |
 | `POST /veille/reprendre` | lève la suspension (manuelle ou d'elle-même) |
+| `GET /filtres` | filtres WAF d'office (§ Apprentissage) et `etat` (nombres, null si inconnus) |
+| `GET /filtres/suggestions` | suggestions d'empreintes (jamais appliquées) ; `suggestions: null` avant la première passe |
+| `POST /filtres/{fid}/confirmer` | confirme en un clic un filtre `a_confirmer` (404 inconnu, 409 autre état) |
 
 nginx : flux du dialogue sans tampon (lecture jusqu'à 2 h), corps de 100 Mo pour les deux seuls dépôts de fichier,
 8 Mo pour le dialogue (image jointe), 64 Mo pour l'import de mémoire, 2 Mo ailleurs ; 900 s pour les lectures de

@@ -25,7 +25,7 @@ from pydantic import BaseModel, StrictInt
 from secubox_core.auth import require_jwt
 
 from api import radar
-from veille import decisions
+from veille import apprentissage, decisions
 
 routeur = APIRouter(prefix="", dependencies=[Depends(require_jwt)])
 
@@ -240,4 +240,43 @@ async def veille_reprendre(user: dict = Depends(require_jwt)):
     def ecrire(db):
         decisions.reprendre(db, _acteur(user), _maintenant())
         return {"suspension": decisions.suspension(db)}
+    return await _executer(ecrire, ecriture=True)
+
+
+COLONNES_FILTRE = ("id", "outil", "cve", "dossier_id", "etat", "code_http", "motif", "touches_protegees", "envoye_le",
+                   "essai_depuis", "confirme_par", "maj_le")
+
+
+@routeur.get("/filtres")
+async def filtres():
+    """Filtres WAF d'office (#3723, carte 4) et état de l'apprentissage (nombres, ou null si inconnus)."""
+    def lire(db):
+        try:
+            lignes = [dict(zip(COLONNES_FILTRE, r)) for r in db.execute(
+                f"SELECT {', '.join(COLONNES_FILTRE)} FROM filtres ORDER BY envoye_le DESC LIMIT 500").fetchall()]
+        except sqlite3.OperationalError:
+            lignes = None
+        return {"filtres": lignes, "etat": apprentissage.etat_apprentissage(db),
+                "critere_legitime": "non_mesurable_depuis_gk3"}
+    return await _executer(lire)
+
+
+@routeur.get("/filtres/suggestions")
+async def filtres_suggestions():
+    """Suggestions d'empreintes (jamais appliquées) ; null si le fichier n'existe pas encore."""
+    def lire():
+        try:
+            return json.loads(apprentissage.chemin_suggestions().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {"suggestions": None}
+    return await asyncio.to_thread(lire)
+
+
+@routeur.post("/filtres/{fid}/confirmer")
+async def filtre_confirmer(fid: str, user: dict = Depends(require_jwt)):
+    def ecrire(db):
+        try:
+            return decisions.confirmer_filtre(db, fid, _acteur(user), _maintenant())
+        except decisions.RefusDecision as e:
+            raise HTTPException(e.statut, detail={"motif": e.motif}) from None
     return await _executer(ecrire, ecriture=True)
