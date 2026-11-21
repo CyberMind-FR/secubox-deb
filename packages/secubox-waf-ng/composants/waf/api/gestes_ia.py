@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """Gestes d'une box d'IA sur le pare-feu du WAF (#3716, #3723) : `POST /ai/ban`, `POST /ai/unban`,
-`POST /ai/prolonger`, `POST /ai/limiter`, `POST /ai/leurre`, `GET /ai/etat`.
+`POST /ai/prolonger`, `POST /ai/limiter`, `POST /ai/leurre`, `POST /ai/partager`, `GET /ai/etat`.
 
 LE SEUL CHEMIN D'ÉCRITURE D'UNE IA DANS LE PARE-FEU. Exception écrite à RULES-CODE § 3 : ces routes ne portent pas
 `require_jwt` mais `require_ai_ban` (`secubox_core.compte_service`) : jeton EdDSA par requête, signé par la clé privée
@@ -47,6 +47,15 @@ Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
   est refusée en 409 `deja_banni` : un attaquant banni n'atteint pas le leurre, rien n'est levé ici ;
   `wafctl leurre <ip> <N>s` (liste /var/lib/secubox/waf/leurres-ip.json, root, remplacement atomique) ; ligne
   `leurre` au journal, levée par `/ai/unban` de son id (`wafctl leurre-lever`), jamais prolongée ;
+- partager (#3723, tâche 4) : une adresse publique IPv4 ou IPv6 (forme canonique) BANNIE sur gk2 à cet instant —
+  vérité nft : `waf_ban` / `waf_ban6`, ou un bloc actif de waf-blocs qui la couvre ; le journal ai-ban seul ne suffit
+  pas (409 `non_bannie` : rien de non vérifié ne part ; état illisible ⇒ 503 `etat`) ; `famille` `[a-z0-9_-]` de 64
+  au plus ; 1 h à 7 j (409 `duree`) ; 30/h et 200/j ; mêmes cibles protégées et même porte SADE que les gestes
+  d'office (refusé en `reactive`) ; `wafctl indice-partager <ip> <N>s <famille>` (publication
+  /var/lib/secubox/waf/ip-indices-publication.json, root, remplacement atomique, 500 indicateurs au plus, que
+  secubox-mirrornet signe et publie au maillage) ; ligne `partage` au journal, retirée par `/ai/unban` de son id
+  (`wafctl indice-retirer`, le ban de l'adresse reste), jamais prolongée. Les pairs ne bannissent qu'après l'avoir
+  vue hostile chez eux (`indices_ip.py`, unité secubox-waf-indices) ;
 - débannir : un `id` du journal seulement, jamais une adresse ; et JAMAIS une cible qu'une autre source couvre
   désormais (ruling P12) : adresse dont le dernier enregistrement de `bans.jsonl` (sbxwaf) est un `ban` non échu,
   bloc dont la fin enregistrée par waf-blocs dépasse celle du journal ai-ban de plus de 5 s. Le ban ai-ban est alors
@@ -179,12 +188,15 @@ PLAFONDS_PAR_GESTE = {"ban": {"heure": 60, "jour": 400},
                       "ban_bloc": {"heure": PLAFONDS["auto_heure"], "jour": PLAFONDS["auto_jour"]},
                       "prolonger": {"heure": 30, "jour": 100},
                       "limiter": {"heure": 60, "jour": 400},
-                      "leurre": {"heure": 30, "jour": 200}}
+                      "leurre": {"heure": 30, "jour": 200},
+                      "partager": {"heure": 30, "jour": 200}}
 LIMITE_MIN_S, LIMITE_MAX_S = 3600, 86_400
 LEURRE_MIN_S, LEURRE_MAX_S = 3600, 604_800
+PARTAGE_MIN_S, PARTAGE_MAX_S = 3600, 604_800
 #: Gestes « sans ban » du journal : rangés avec les bans (annulables par leur id), jamais un ban actif ni prolongés.
 #: type de la ligne → (nom du geste, verbe wafctl de levée).
-GESTES_SANS_BAN = {"limite": ("limiter", "limiter-lever"), "leurre": ("leurre", "leurre-lever")}
+GESTES_SANS_BAN = {"limite": ("limiter", "limiter-lever"), "leurre": ("leurre", "leurre-lever"),
+                   "partage": ("partager", "indice-retirer")}
 #: Causes d'annulation qui retirent un ban de la récidive : jamais posé (audit) ou retiré par l'IA ou l'humain.
 _CAUSES_SANS_RECIDIVE = frozenset({"audit", "unban"})
 #: Un bloc dont la fin enregistrée dépasse la nôtre de plus que ceci a été rebanni par quelqu'un d'autre.
@@ -210,6 +222,8 @@ _RE_FORME = re.compile(r"[0-9]{1,3}(?:\.[0-9]{1,3}){3}(?:/24)?")
 
 #: Motifs que wafctl / waf-blocs peuvent rendre (ensemble FERMÉ : jamais une chaîne arbitraire dans une réponse).
 _MOTIFS_409 = frozenset({"privee", "protegee", "box", "pair", "garde_illisible", "duree", "nft", "absent", "plein"})
+#: Famille d'un indicateur partagé : devient le motif `indice-maillage:<famille>` d'un ban chez les pairs.
+FAMILLE_INDICE = r"^[a-z0-9][a-z0-9_-]{0,63}$"
 _MOTIFS_503 = frozenset({"etat", "audit"})
 _MOTIFS_500 = frozenset({"incoherent", "invalide", "usage"})
 _MOTIFS_WAFCTL = _MOTIFS_409 | _MOTIFS_503 | _MOTIFS_500
@@ -339,6 +353,24 @@ class GesteLeurre(BaseModel):
     duree_s: int = Field(ge=1, le=10 * DUREE_MAX_S, strict=True)
     conseil: str = Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")
     motif: str = Field("", max_length=200)
+
+    @field_validator("cible")
+    @classmethod
+    def _cible(cls, v: str) -> str:
+        forme_limite(v)
+        return v
+
+
+class GestePartager(BaseModel):
+    """`duree_s` : 1 h à 7 j, sinon 409 `duree` (borne de la forme bien plus large : refus métier). Pas de `motif` :
+    seule la `famille` (forme fermée) voyage jusqu'aux pairs."""
+    model_config = {"extra": "forbid"}
+
+    geste: Literal["partager"]
+    cible: str = Field(max_length=39)
+    duree_s: int = Field(ge=1, le=10 * DUREE_MAX_S, strict=True)
+    conseil: str = Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")
+    famille: str = Field(pattern=FAMILLE_INDICE)
 
     @field_validator("cible")
     @classmethod
@@ -821,7 +853,7 @@ def _argv(verbe: str, cible: Cible, duree_s: Optional[int] = None, d_office: boo
     transaction nft) ; d'un bloc : `ban-bloc` (waf-blocs ne raccourcit jamais). `d_office` sur un ban d'adresse :
     `--exiger-protegees` (protegees.env exigé par la garde root, #3723)."""
     bloc = isinstance(cible, ipaddress.IPv4Network)
-    if bloc and verbe in ("limiter", "limiter-lever", "leurre", "leurre-lever"):
+    if bloc and verbe in ("limiter", "limiter-lever", "leurre", "leurre-lever", "indice-partager", "indice-retirer"):
         raise ValueError(f"{verbe} : une adresse seule")
     if bloc:
         argv = _SUDO + _SYSTEMD_RUN + [WAFCTL, f"{'ban' if verbe == 'prolonger' else verbe}-bloc", str(cible)]
@@ -1204,12 +1236,13 @@ def protegee_d_office(cible: Cible) -> bool:
     return not isinstance(cible, ipaddress.IPv4Network) and bool(robot_verifie(str(cible)))
 
 
-def _refus(statut: int, motif: str, geste: Union[GesteBan, GesteProlonger, GesteLimiter, GesteLeurre], user: dict,
+def _refus(statut: int, motif: str,
+           geste: Union[GesteBan, GesteProlonger, GesteLimiter, GesteLeurre, GestePartager], user: dict,
            etiquette: str = "ai-ban") -> HTTPException:
     action = f"{etiquette}-refus" if statut == 409 else f"{etiquette}-echec"
     if isinstance(geste, GesteProlonger):
         mode, quoi = "auto", f"id {geste.id}"
-    elif isinstance(geste, (GesteLimiter, GesteLeurre)):
+    elif isinstance(geste, (GesteLimiter, GesteLeurre, GestePartager)):
         mode, quoi = "auto", f"cible {geste.cible}"
     else:
         mode, quoi = geste.mode, f"cible {geste.cible}"
@@ -1692,6 +1725,124 @@ def _defaire_leurre(cible: Any) -> bool:
     return True
 
 
+def bannie_sur_gk2(cible: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
+    """La cible est-elle bannie À CET INSTANT selon le pare-feu (vérité nft) : ensemble `waf_ban` (lecture stricte de
+    main.py) ou `waf_ban6`, ou bloc actif de waf-blocs qui la couvre ? Le journal ai-ban n'est pas consulté : un ban
+    retiré à la main y paraîtrait encore actif. Lève Illisible (jamais « non bannie » par défaut d'un état illisible)."""
+    if isinstance(cible, ipaddress.IPv6Address):
+        return str(cible) in {str(ipaddress.ip_address(a)) for a in lire_waf_ban("waf_ban6") if _ip_lisible(a)}
+    if str(cible) in {b.get("ip") for b in _bans_waf()}:
+        return True
+    return any(b["reste"] > 0 and cible in ipaddress.IPv4Network(bloc, strict=False)
+               for bloc, b in _blocs_enregistres().items() if _reseau_lisible(bloc))
+
+
+def _fin_indice(r: subprocess.CompletedProcess, repli: int) -> int:
+    """L'`expire` de la ligne JSON `{"expire": …}` de `wafctl indice-partager` ; `repli` si elle manque."""
+    for ligne in (r.stdout or "").splitlines():
+        try:
+            d = json.loads(ligne)
+        except ValueError:
+            continue
+        if isinstance(d, dict) and _entier(d.get("expire")) and d["expire"] > 0:
+            return d["expire"]
+    return repli
+
+
+@router.post("/partager")
+def ai_partager(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
+    """Publie au maillage une adresse publique BANNIE sur gk2 (#3723, tâche 4) : indicateur vérifié, que les pairs
+    n'appliquent qu'après l'avoir vue hostile chez eux. Geste d'office : la porte du mode SADE passe d'abord (refusé en
+    `observe` et en `reactive`)."""
+    geste: GestePartager = _valider(GestePartager, corps)
+    cible = forme_limite(geste.cible)
+    sade = lire_sade()
+    motif = porte_sade("partager", sade)
+    if motif:
+        raise _refus(409, motif, geste, user, "ai-partager")
+    with _verrou:
+        maintenant = int(_maintenant())
+        try:
+            bans, annules, _, compteurs = _bilan(_lire_journal(), maintenant)
+        except OSError:
+            raise _refus(503, "journal", geste, user, "ai-partager") from None
+        if geste.cible in {b["cible"] for b in limites_actives(bans, annules, maintenant, "partage")}:
+            raise _refus(409, "deja_actif", geste, user, "ai-partager")
+        if not PARTAGE_MIN_S <= geste.duree_s <= PARTAGE_MAX_S:
+            raise _refus(409, "duree", geste, user, "ai-partager")
+        motif = _plafond_atteint(compteurs, "partager")
+        if motif:
+            raise _refus(409, motif, geste, user, "ai-partager")
+        try:
+            if protegee_par_sade(cible, sade):
+                raise _refus(409, "protegee", geste, user, "ai-partager")
+        except Illisible as e:
+            log.warning("ai-partager : garde illisible : %s", e)
+            raise _refus(503, "etat", geste, user, "ai-partager") from None
+        try:
+            if protegee_d_office(cible):
+                raise _refus(409, "protegee", geste, user, "ai-partager")
+        except ProtectionInconnue as e:
+            log.warning("ai-partager : cibles protégées inconnues : %s", e)
+            raise _refus(409, "protegee_inconnue", geste, user, "ai-partager") from None
+        try:
+            bannie = bannie_sur_gk2(cible)
+        except Exception as e:  # noqa: BLE001 — sans savoir si la cible est bannie, rien ne part
+            log.warning("ai-partager : état des bans illisible : %s", e)
+            raise _refus(503, "etat", geste, user, "ai-partager") from None
+        if not bannie:
+            raise _refus(409, "non_bannie", geste, user, "ai-partager")
+
+        ident = secrets.token_hex(16)
+        fin = maintenant + geste.duree_s
+        resume = (f"id {ident} cible {geste.cible} famille {geste.famille} {geste.duree_s}s fin {fin} "
+                  f"conseil {geste.conseil}")
+        try:
+            _auditer("ai-partager-demande", resume, user)
+        except Exception:  # noqa: BLE001 — sans trace de la demande, rien n'est fait
+            raise _refus(503, "audit", geste, user, "ai-partager") from None
+        r, panne = _lancer(_argv("indice-partager", cible, geste.duree_s) + [geste.famille])
+        if r is None:
+            # wafctl muet : l'indicateur est peut-être publié ; aucune autre source n'écrit cette publication
+            log.error("ai-partager : wafctl injoignable (%s) pour %s", panne, cible)
+            _defaire_partage(cible)
+            raise _refus(503, "wafctl", geste, user, "ai-partager")
+        if r.returncode != 0:
+            raise _refus(*_statut_motif(_motif_sortie(r)), geste, user, "ai-partager")
+        fin = _fin_indice(r, int(_maintenant()) + geste.duree_s)
+        resume = (f"id {ident} cible {geste.cible} famille {geste.famille} {geste.duree_s}s fin {fin} "
+                  f"conseil {geste.conseil}")
+        entree = {"ts": _horodatage(), "at": maintenant, "type": "partage", "geste": "partager", "id": ident,
+                  "cible": geste.cible, "fin": fin, "mode": "auto", "conseil": geste.conseil, "famille": geste.famille,
+                  "jti": str((user or {}).get("jti") or ""), "cle": _cle(user), "duree_s": geste.duree_s}
+        try:
+            _ecrire_journal(entree)
+        except OSError:
+            # hors journal, l'indicateur échapperait aux plafonds et ne pourrait pas être retiré par son id
+            if _defaire_partage(cible):
+                raise _refus(503, "journal", geste, user, "ai-partager") from None
+            raise _refus(500, "incoherent", geste, user, "ai-partager") from None
+        try:
+            _auditer("ai-partager", resume, user)
+        except Exception:  # noqa: BLE001 — un indicateur non audité n'existe pas : il est retiré
+            defait = _defaire_partage(cible)
+            try:
+                _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "annule", "geste": "partager",
+                                 "id": ident, "cible": geste.cible, "cause": "audit"})
+            except OSError:
+                log.error("ai-partager : annulation %s non journalisée", ident)
+            raise HTTPException(500, detail={"motif": "audit" if defait else "incoherent"}) from None
+    return {"id": ident, "cible": geste.cible, "fin": fin, "audit": ident}
+
+
+def _defaire_partage(cible: Any) -> bool:
+    r, _ = _lancer(_argv("indice-retirer", cible))
+    if r is None or r.returncode != 0:
+        log.error("ai-partager : retour arrière impossible pour %s", cible)
+        return False
+    return True
+
+
 _garde_ai_lecture = garde_compte_service("ai-lecture")
 
 
@@ -1737,4 +1888,7 @@ def ai_etat(user: dict = Depends(require_ai_etat), corps: bytes = Depends(_corps
                         for b in sorted(limites_actives(bans, annules, maintenant), key=lambda b: (b["fin"], b["id"]))],
             "leurres": [{"id": b["id"], "cible": b["cible"], "fin": b["fin"]}
                         for b in sorted(limites_actives(bans, annules, maintenant, "leurre"),
-                                        key=lambda b: (b["fin"], b["id"]))]}
+                                        key=lambda b: (b["fin"], b["id"]))],
+            "partages": [{"id": b["id"], "cible": b["cible"], "fin": b["fin"], "famille": b.get("famille")}
+                         for b in sorted(limites_actives(bans, annules, maintenant, "partage"),
+                                         key=lambda b: (b["fin"], b["id"]))]}

@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Indicateurs d'adresses reçus des pairs du maillage (#3723, tâche 4). Une passe : lit les livraisons ip-indices de
+# secubox-mirrornet, ne bannit 24 h (sudo -n wafctl ban <ip> 86400s --exiger-protegees) qu'une adresse vue HOSTILE
+# dans le journal des menaces local APRÈS sa réception, jamais une cible protégée, 30 par heure au plus ; l'adresse
+# bannie entre dans les « revus » de la publication de cette box (sudo -n wafctl indice-revu). Audit avant et après.
+#
+# Compte secubox (exception § 10 de RULES-CODE, écrite) : il porte déjà le droit sudo exact `wafctl ban *` du bouton
+# Ban, écrit audit.log (secubox, 0640), lit les livraisons (groupe secubox) et le journal des menaces (groupe
+# secubox-waf, ajouté ici seulement). NoNewPrivileges=no : sudo serait neutralisé ; RestrictSUIDSGID absent pour la
+# même raison. wafctl, lancé par sudo, hérite de l'espace de montage : il écrit la publication dans
+# /var/lib/secubox/waf et nft passe par netlink. Dette nommée : compte dédié + sudoers à son nom.
+[Unit]
+Description=SecuBox WAF — indicateurs d'adresses reçus des pairs du maillage (#3723)
+After=secubox-waf-ng.service secubox-mirrornet.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+SupplementaryGroups=secubox-waf
+ExecStart=/usr/sbin/secubox-waf-indices
+AppArmorProfile=secubox-waf-indices
+StateDirectory=secubox-waf-indices
+StateDirectoryMode=0700
+TimeoutStartSec=120
+NoNewPrivileges=no
+ProtectSystem=strict
+ReadWritePaths=/run/secubox -/var/log/secubox/audit.log -/var/lib/secubox/waf -/var/log/sudo-io
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+UMask=0027
+# DNS (robots vérifiés), socket de threatmesh, netlink de nft / ip / wg (gardes de wafctl et waf-blocs).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native

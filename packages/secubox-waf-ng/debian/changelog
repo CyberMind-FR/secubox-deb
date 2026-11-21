@@ -36,6 +36,24 @@ secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
     rend plus cette liste ni ses fichiers temporaires à secubox-waf au
     démarrage (find ... ! -name). Lignes leurre_redirige bornées par
     adresse (6/min plus une par étape de scène), champ servies cumulable.
+    Geste partager : POST /ai/partager (adresse publique IPv4 ou IPv6 BANNIE
+    sur gk2 à cet instant selon nft, waf_ban, waf_ban6 ou bloc actif ; sinon
+    409 non_bannie), famille [a-z0-9_-] de 64 au plus, 1 h à 7 j, 30/h et
+    200/j, refusé en SADE observe et reactive, mêmes cibles protégées ;
+    verbes wafctl indice-partager, indice-retirer, indice-revu (sudoers
+    SBX_WAF_INDICES) et indices-init (postinst) qui remplacent atomiquement
+    /var/lib/secubox/waf/ip-indices-publication.json (root, 0644, 500
+    indicateurs et 500 revus au plus), publiée au maillage par
+    secubox-mirrornet 0.7.0 (jeu ip-indices). Nouveau service
+    secubox-waf-indices (oneshot, minuterie de 5 min, compte secubox, profil
+    AppArmor enforce) : lit livraisons/ip-indices, ne bannit 24 h une
+    adresse reçue que si le journal des menaces local la montre hostile
+    APRÈS sa réception (hors leurre_redirige, gravité audit et familles
+    neutres), jamais une cible protégée, 30/h, motif
+    indice-maillage:<famille>, audit avant et après, puis l ajoute aux revus
+    de sa publication ; résumé /run/secubox/waf-indices-etat.json pour SADE
+    (indices_etat). L unité secubox-waf-ng ne rend plus la publication à
+    secubox-waf au démarrage.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
 

@@ -36,6 +36,13 @@ case "$1" in
         if [ ! -L /var/lib/secubox-mirrornet-partage ]; then
             install -d -o secubox-mirrornet -g secubox -m 0750 /var/lib/secubox-mirrornet-partage
         fi
+        # Indicateurs d'adresses du WAF (#3723) : /var/lib/secubox/waf est 0770 secubox-waf ; le service n'a besoin que
+        # de le TRAVERSER pour lire la publication de wafctl (root, 0644). ACL nommée « x » seule, jamais le groupe du
+        # WAF (qui ouvrirait le journal des menaces). secubox-waf-ng la pose aussi (ordre d'installation quelconque).
+        if [ -d /var/lib/secubox/waf ] && [ ! -L /var/lib/secubox/waf ] && command -v setfacl >/dev/null 2>&1; then
+            setfacl -m u:secubox-mirrornet:x /var/lib/secubox/waf \
+              || echo "secubox-mirrornet : ACL de /var/lib/secubox/waf non posée (indicateurs d'adresses non publiés)" >&2
+        fi
         # Preuve de l'écouteur maillé (#3653) : secret root seul, transmis au service par LoadCredential et posé par nginx
         # (en-tête X-SecuBox-Pair-Preuve) ; un appelant local de la socket ne le connaît pas.
         _s=/etc/secubox/secrets/mirrornet

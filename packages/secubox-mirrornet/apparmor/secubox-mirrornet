@@ -70,6 +70,13 @@ profile secubox-mirrornet flags=(attach_disconnected) {
   /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/index.json rw,
   /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/[0-9a-f]*.json rw,
   /var/lib/secubox-mirrornet-partage/livraisons/tv-indices/.*.tmp rw,
+  # Indicateurs d'adresses du WAF (#3723) : publication de wafctl lue (root seul cru, bornée, sans lien) ; le dossier
+  # /var/lib/secubox/waf n'est que TRAVERSÉ (ACL u:secubox-mirrornet:x posée par les postinst), rien d'autre n'y est lu.
+  /var/lib/secubox/waf/ip-indices-publication.json r,
+  /var/lib/secubox-mirrornet-partage/livraisons/ip-indices/ rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/ip-indices/index.json rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/ip-indices/[0-9a-f]*.json rw,
+  /var/lib/secubox-mirrornet-partage/livraisons/ip-indices/.*.tmp rw,
 
   # API ; routes /self/... de l'annuaire local.
   /run/secubox/ r,

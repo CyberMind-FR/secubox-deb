@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de secubox-waf-indices (#3723, tâche 4) : indicateurs d'adresses reçus des pairs. Lit les
+# livraisons, le journal des menaces, la publication locale et les sources de cibles protégées ; écrit son état, le
+# résumé de /run/secubox et audit.log. Le seul assistant privilégié est sudo (sudoers à argv exact : wafctl ban,
+# unban, indice-revu, lecture nft de waf_ban/waf_ban6), qui s'exécute hors de ce profil. Tout ce qui n'est pas listé est refusé.
+# Posé dans /etc/apparmor.d/secubox-waf-indices, chargé par le postinst.
+
+#include <tunables/global>
+
+profile secubox-waf-indices /usr/sbin/secubox-waf-indices {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/sbin/secubox-waf-indices r,
+  /usr/bin/python3* rix,
+  /usr/bin/sudo Ux,
+  /usr/lib/secubox/waf/ r,
+  /usr/lib/secubox/waf/** r,
+  # Pas de cache d'octets écrit à côté du code livré (refus silencieux, pas de bruit d'audit).
+  deny /usr/lib/secubox/waf/** w,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # Configuration commune (mode tableau de bord lu par la garde des pairs threatmesh), jamais les secrets.
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  deny /etc/secubox/secrets/** rwklx,
+
+  # Entrées : livraisons de MirrorNet, journal des menaces local, publication de cette box, cibles protégées.
+  /var/lib/secubox-mirrornet-partage/livraisons/ip-indices/ r,
+  /var/lib/secubox-mirrornet-partage/livraisons/ip-indices/index.json r,
+  /var/lib/secubox-mirrornet-partage/livraisons/ip-indices/[0-9a-f]*.json r,
+  /var/log/secubox/waf/waf-threats.log r,
+  /var/lib/secubox/waf/ip-indices-publication.json r,
+  /var/lib/secubox/p2p/wg_mesh.json r,
+  /run/secubox/ r,
+  /run/secubox/sade-mode.json r,
+  /run/secubox/threatmesh.sock rw,
+
+  # Sorties : état (StateDirectory 0700), résumé pour SADE, audit en ajout seul.
+  /var/lib/secubox-waf-indices/ rw,
+  /var/lib/secubox-waf-indices/etat.json rw,
+  /var/lib/secubox-waf-indices/.etat.json.*.tmp rw,
+  /run/secubox/waf-indices-etat.json rw,
+  /run/secubox/.waf-indices-etat.json.*.tmp rw,
+  /var/log/secubox/audit.log a,
+
+  network unix stream,
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+}

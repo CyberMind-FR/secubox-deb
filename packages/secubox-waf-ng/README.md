@@ -139,6 +139,7 @@ Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet
 | `POST /ai/prolonger` | `{"geste": "prolonger", "id": "<32 hex>", "duree_s": <s>, "conseil": "<id>", "motif": "<200 car.>"}` (#3723, 1.43.0) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/limiter` | `{"geste": "limiter", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…86400, "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/leurre` | `{"geste": "leurre", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…604800, "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
+| `POST /ai/partager` | `{"geste": "partager", "cible": "<IPv4 ou IPv6 publique BANNIE>", "duree_s": 3600…604800, "conseil": "<id>", "famille": "<[a-z0-9_-], 64 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` |
 | `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds, plafonds_par_geste, sade_mode}` |
 
@@ -182,6 +183,7 @@ forme de sa cible.
   | `prolonger` | 30/h, 100/j | `plafond_heure`, `plafond_jour` |
   | `limiter` | 60/h, 400/j | `plafond_heure`, `plafond_jour` |
   | `leurre` | 30/h, 200/j | `plafond_heure`, `plafond_jour` |
+  | `partager` | 30/h, 200/j | `plafond_heure`, `plafond_jour` |
 
 - **`limiter`** (geste d'office, le seul admis en SADE `reactive`) : une adresse publique IPv4 ou IPv6 en forme
   canonique (jamais un bloc, ni une IPv6 porteuse d'IPv4) ; 1 h à 24 h (409 `duree`) ; 409 `deja_actif` si elle est
@@ -210,8 +212,37 @@ forme de sa cible.
   L'unité `secubox-waf-ng` ne rend plus ce fichier à `secubox-waf` au démarrage. `/ai/unban` de l'id d'un leurre le
   lève (`wafctl leurre-lever`) ; `/ai/prolonger` le refuse (`inconnu`).
 
+- **`partager`** (geste d'office, refusé en SADE `observe` et `reactive`) : publie au maillage une adresse publique
+  IPv4 ou IPv6 **bannie sur gk2 à cet instant** selon le pare-feu (`waf_ban`, `waf_ban6`, ou un bloc actif de
+  waf-blocs qui la couvre ; le journal ai-ban seul ne suffit pas) : sinon **409 `non_bannie`**, rien de non vérifié ne
+  part ; état illisible : 503 `etat`. `famille` (`[a-z0-9_-]`, 64 au plus, pas de `motif` libre) ; 1 h à 7 j (409
+  `duree`) ; 409 `deja_actif` si elle est déjà partagée ; mêmes cibles protégées que le ban d'office. Audit
+  `ai-partager-demande` puis `ai-partager` (indicateur retiré si ce dernier échoue). `wafctl indice-partager <ip> <N>s
+  <famille>` remplace atomiquement `/var/lib/secubox/waf/ip-indices-publication.json` : contenu exact `{"format": 1,
+  "jeu": "ip-indices", "indicateurs": [{ip, famille, expire}], "revus": [ip]}`, root, 0644, échus purgés, 500
+  indicateurs (`refus:plein`) et 500 revus au plus ; secubox-mirrornet (0.7.0) ne le croit qu'à root et le publie
+  comme jeu `ip-indices`. `/ai/unban` de l'id le retire (`wafctl indice-retirer`, le ban reste).
+
+- **Pairs : `secubox-waf-indices`** (oneshot, minuterie de 5 min, compte `secubox`, profil AppArmor enforce, exception
+  § 10 écrite) : lit `/var/lib/secubox-mirrornet-partage/livraisons/ip-indices/` (64 producteurs, 2 Mio et 500
+  indicateurs chacun, schéma exact). Une adresse reçue est notée avec l'instant de sa réception ; elle n'est bannie
+  24 h (`sudo -n wafctl ban <ip> 86400s --exiger-protegees`, motif d'audit `indice-maillage:<famille>`) **que si le
+  journal des menaces local la montre hostile APRÈS cette réception** (famille hors des neutres, ni `leurre_redirige`,
+  ni gravité `audit`) ; jamais une cible protégée (privé, box, LAN, pairs `wg_mesh.json` et threatmesh si sa socket
+  existe, robots vérifiés, liste blanche SADE, `protegees.env` exigé par la garde root), porte SADE `ban` si le mode
+  est publié ; 30 bans par heure glissante ; un indicateur échu est oublié. Déjà dans `waf_ban`/`waf_ban6` de la
+  box (lecture `sudo -n nft -j list set …`, droit SBX_WAF_NFTLIST) : rien n'est posé, l'adresse est seulement revue
+  (`waf-indice-deja-bannie`), et aucun retour arrière ne retire le ban du WAF local ; ensemble illisible : elle attend. Audit `waf-indice-demande` puis
+  `waf-indice` (ban retiré si ce dernier échoue), `waf-indice-refus`. L'adresse bannie entre dans les `revus` de la
+  publication de la box (`wafctl indice-revu`). État : `/var/lib/secubox-waf-indices/etat.json` (0700). Mesure pour
+  SADE : `/run/secubox/waf-indices-etat.json` (0644, `{maj, partages, revus_chez_pairs, contenus_chez_pairs, recus}`),
+  lue par `indices_ip.indices_etat()` (None si absente, d'un autre compte que root/secubox, modifiable par d'autres
+  ou de plus de 30 min). `partages` : indicateurs non échus de la publication locale ; `revus_chez_pairs` : adresses
+  partagées ici qu'au moins un pair a revues ; `contenus_chez_pairs` : couples pair × adresse partagée et revue.
+
   `GET /ai/etat` rend `plafonds_par_geste` (`{geste: {heure, jour, restant_heure, restant_jour}}`) et `sade_mode`
-  (`null` si le fichier est absent), `limites` et `leurres` (`[{id, cible, fin}]`) ; `compteurs` et `plafonds` ne portent plus
+  (`null` si le fichier est absent), `limites` et `leurres` (`[{id, cible, fin}]`), `partages` (`[{id, cible, fin,
+  famille}]`) ; `compteurs` et `plafonds` ne portent plus
   que les blocs.
 
 **Compte de service `ai-filtres` (#3732, 1.37.0)** — garde `require_ai_filtres` : même jeton que ci-dessus avec

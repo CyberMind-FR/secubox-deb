@@ -1,3 +1,19 @@
+secubox-mirrornet (0.7.0-1~trixie1) trixie; urgency=medium
+
+  * Indicateurs d'adresses (ref #3723) : `locaux` devient une table de jeux.
+    `tv-indices` est inchangé (mêmes octets, même demande, même livraison) ;
+    `ip-indices` est ajouté : publication de wafctl
+    /var/lib/secubox/waf/ip-indices-publication.json (contenu exact
+    {format, jeu, indicateurs [{ip, famille, expire}], revus}, 500 au plus,
+    adresses publiques canoniques ; crue seulement si fichier ordinaire de
+    root, un lien, sans g+w ni o+w), déposée comme objet de ce nœud, ajoutée
+    à publications.json (les autres jeux gardés), livrée sous
+    livraisons/ip-indices/. Source absente : le jeu sort de la demande.
+    AppArmor : lecture de la publication et du dossier de livraison ;
+    postinst : ACL u:secubox-mirrornet:x sur /var/lib/secubox/waf.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 15:00:00 +0100
+
 secubox-mirrornet (0.6.0-1~trixie1) trixie; urgency=medium
 
   * Indices TV (ref #3666) : schéma v6 `offer.usage` ; `locaux` reprend la publication d'ad-guard

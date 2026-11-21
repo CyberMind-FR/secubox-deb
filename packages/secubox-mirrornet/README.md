@@ -135,6 +135,18 @@ Le contenu est revalidé avant dépôt (schéma, catégories, plafonds, listes d
 publication d'ad-guard absente devient `publier`/`recevoir` faux ; une copie d'espace n'est jamais reprise comme dépôt
 local ; AppArmor n'ouvre que les fichiers nécessaires du dossier partagé.
 
+## Indicateurs d'adresses (#3723, 0.7.0)
+
+`locaux.py` tient une table de jeux (`JEUX`) : `tv-indices` (inchangé) et `ip-indices`. La publication
+`/var/lib/secubox/waf/ip-indices-publication.json` est écrite par `wafctl` (root, 0644) ; elle n'est crue que si elle
+est un fichier ordinaire de root, à un seul lien, sans écriture du groupe ni des autres. Son contenu exact :
+`{"format": 1, "jeu": "ip-indices", "indicateurs": [{"ip", "famille", "expire"}], "revus": [ip]}` (500 indicateurs et
+500 revus au plus, adresses publiques canoniques, famille `[a-z0-9_-]`). Présente : déposée comme objet de ce nœud et
+ajoutée à `publications.json` (publier et recevoir vrais) ; absente : le jeu sort de la demande. Les versions reçues
+des pairs sont livrées sous `livraisons/ip-indices/` et lues par `secubox-waf-indices` (secubox-waf-ng). Le postinst
+pose l'ACL `u:secubox-mirrornet:x` sur `/var/lib/secubox/waf` (traversée seule, paquet `acl`). La signature et l'abonnement restent
+le fait de l'annuaire, qui ne traite aujourd'hui que `tv-indices` (suite à faire).
+
 ## Configuration
 
 `/etc/secubox/mirrornet.toml` (0640 root:secubox, semé une fois depuis `conf/mirrornet.toml`) : `[catalogue]

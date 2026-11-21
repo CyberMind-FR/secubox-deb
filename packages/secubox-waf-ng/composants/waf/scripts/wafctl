@@ -810,6 +810,150 @@ cmd_leurre_lever() {
     log "leurre-lever $ip"
 }
 
+# cmd_indice_partager <ip> <durée> <famille> / cmd_indice_retirer <ip> / cmd_indice_revu <ip> — geste `partager` du
+# compte ai-ban et revue des pairs (#3723, tâche 4). La publication des indicateurs d'adresses
+# (/var/lib/secubox/waf/ip-indices-publication.json), que secubox-mirrornet signe et publie au maillage, est le contenu
+# exact {"format": 1, "jeu": "ip-indices", "indicateurs": [{ip, famille, expire}], "revus": [ip]}. Écriture en root,
+# sous verrou du dossier, par REMPLACEMENT atomique (temporaire exclusif, 0644, fsync, rename) : jamais à travers un
+# lien. Un fichier existant n'est repris que s'il est ordinaire, à root, à un seul lien, sans écriture de groupe ni
+# d'autres ; sinon il est remplacé (mirrornet ne croit que ces fichiers-là). Indicateurs échus purgés, 500 au plus
+# (`refus:plein`) ; `revus` sans doublon, les 500 derniers. partager : 1 h à 7 j, garde d'office (protegees.env exigé),
+# sortie `{"expire": <epoch>}` ; revu : une adresse publique bannie par ce pair après l'avoir vue hostile chez lui
+# (secubox-waf-indices) ; indices-init (postinst, root seul) : crée la publication vide si elle manque.
+INDICES_IP="/var/lib/secubox/waf/ip-indices-publication.json"
+INDICE_MIN_S=3600
+INDICE_MAX_S=604800
+INDICES_MAX=500
+
+_indices_ecrire() {
+    python3 -I - "$1" "$INDICES_IP" "${2:-}" "${3:-0}" "${4:-}" "$INDICES_MAX" <<'PY'
+import fcntl, ipaddress, json, os, re, stat, sys, tempfile, time
+verbe, chemin, ip, secondes, famille, maxi = sys.argv[1:7]
+secondes, maxi = int(secondes), int(maxi)
+FAMILLE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+def refus(motif):
+    print(f"refus:{motif}", file=sys.stderr)
+    sys.exit(1)
+def canonique(v):
+    try:
+        return isinstance(v, str) and str(ipaddress.ip_address(v)) == v
+    except ValueError:
+        return False
+if verbe != "init" and not canonique(ip):
+    refus("privee")
+if verbe == "partager" and not FAMILLE.fullmatch(famille):
+    refus("invalide")
+dossier = os.path.dirname(chemin)
+try:
+    dfd = os.open(dossier, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+except OSError:
+    refus("etat")
+fcntl.flock(dfd, fcntl.LOCK_EX)
+maintenant = int(time.time())
+indicateurs, revus, present = [], [], False
+try:
+    fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+except OSError:
+    fd = None  # absent, ou lien (jamais suivi) : remplacé
+if fd is not None:
+    present = True
+    with os.fdopen(fd, "rb") as f:
+        st = os.fstat(f.fileno())
+        doc = None
+        if (stat.S_ISREG(st.st_mode) and st.st_uid == os.geteuid() and st.st_nlink == 1
+                and not st.st_mode & 0o022):
+            try:
+                doc = json.loads(f.read(4 << 20))
+            except ValueError:
+                doc = None
+        if (isinstance(doc, dict) and doc.get("format") == 1 and doc.get("jeu") == "ip-indices"
+                and isinstance(doc.get("indicateurs"), list) and isinstance(doc.get("revus"), list)):
+            vus = set()
+            for e in doc["indicateurs"]:
+                if not isinstance(e, dict):
+                    continue
+                a, fam, exp = e.get("ip"), e.get("famille"), e.get("expire")
+                if (canonique(a) and a not in vus and isinstance(fam, str) and FAMILLE.fullmatch(fam)
+                        and type(exp) is int and exp > maintenant and len(indicateurs) < maxi):
+                    vus.add(a)
+                    indicateurs.append({"ip": a, "famille": fam, "expire": exp})
+            vus = set()
+            for r in doc["revus"]:
+                if canonique(r) and r not in vus:
+                    vus.add(r)
+                    revus.append(r)
+            revus = revus[-maxi:]
+        else:
+            print("wafctl: publication des indicateurs illisible ou douteuse, remplacée", file=sys.stderr)
+if verbe == "init" and present:
+    sys.exit(0)
+expire = None
+if verbe == "partager":
+    if ip not in {e["ip"] for e in indicateurs} and len(indicateurs) >= maxi:
+        refus("plein")
+    expire = maintenant + secondes
+    indicateurs = [e for e in indicateurs if e["ip"] != ip] + [{"ip": ip, "famille": famille, "expire": expire}]
+elif verbe == "retirer":
+    indicateurs = [e for e in indicateurs if e["ip"] != ip]
+elif verbe == "revu":
+    revus = ([r for r in revus if r != ip] + [ip])[-maxi:]
+tmp = None
+try:
+    fd, tmp = tempfile.mkstemp(dir=dossier, prefix=".ip-indices-publication.", suffix=".tmp")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump({"format": 1, "jeu": "ip-indices", "indicateurs": indicateurs, "revus": revus}, f,
+                  ensure_ascii=True, sort_keys=True)
+        f.write("\n")
+        f.flush()
+        os.fchmod(f.fileno(), 0o644)
+        os.fsync(f.fileno())
+    os.replace(tmp, chemin)
+    tmp = None
+    os.fsync(dfd)
+except OSError as e:
+    if tmp:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+    print(f"wafctl: écriture de la publication des indicateurs impossible : {e}", file=sys.stderr)
+    refus("etat")
+if expire is not None:
+    print(json.dumps({"expire": expire}))
+PY
+}
+
+cmd_indice_partager() {
+    [ "$#" -eq 3 ] || { error "Usage : wafctl indice-partager <ip> <durée> <famille>"; return 1; }
+    local ip="$1" duree="$2" famille="$3" secondes
+    if ! secondes=$(_secondes "$duree") || [ "$secondes" -lt "$INDICE_MIN_S" ] || [ "$secondes" -gt "$INDICE_MAX_S" ]; then
+        printf 'refus:duree\n' >&2
+        return 1
+    fi
+    [[ "$famille" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { printf 'refus:invalide\n' >&2; return 1; }
+    _valide_ip "$ip" >/dev/null || { printf 'refus:privee\n' >&2; return 1; }
+    _garde "$ip" --exiger || return 1
+    _indices_ecrire partager "$ip" "$secondes" "$famille"
+}
+
+cmd_indice_retirer() {
+    [ "$#" -eq 1 ] || { error "Usage : wafctl indice-retirer <ip>"; return 1; }
+    _valide_ip "$1" >/dev/null || { error "Adresse invalide ou privée : $1"; return 1; }
+    _indices_ecrire retirer "$1" || return 1
+    log "indice-retirer $1"
+}
+
+cmd_indice_revu() {
+    [ "$#" -eq 1 ] || { error "Usage : wafctl indice-revu <ip>"; return 1; }
+    _valide_ip "$1" >/dev/null || { printf 'refus:privee\n' >&2; return 1; }
+    _indices_ecrire revu "$1"
+}
+
+cmd_indices_init() {
+    [ "$#" -eq 0 ] || { error "Usage : wafctl indices-init"; return 1; }
+    _indices_ecrire init
+}
+
 cmd_unban() {
     local ip="$1" version
     version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
@@ -1081,6 +1225,10 @@ case "${1:-}" in
     limiter-lever) shift; cmd_limiter_lever "$@" ;;
     leurre)     shift; cmd_leurre "$@" ;;
     leurre-lever) shift; cmd_leurre_lever "$@" ;;
+    indice-partager) shift; cmd_indice_partager "$@" ;;
+    indice-retirer) shift; cmd_indice_retirer "$@" ;;
+    indice-revu) shift; cmd_indice_revu "$@" ;;
+    indices-init) shift; cmd_indices_init "$@" ;;
     unban)      cmd_unban "${2:-}" ;;
     ban-bloc)   shift; cmd_ban_bloc "$@" ;;
     unban-bloc) shift; cmd_unban_bloc "$@" ;;
@@ -1119,6 +1267,12 @@ Bans (garde waf-blocs : jamais le privé, une plage protégée, la box ni un pai
                              rechargement du pare-feu (secubox-waf-blocs)
   unban-bloc <a.b.c.0/24>    Retire le ban d'un bloc
   blocs                      Liste les blocs bannis (JSON)
+
+Indicateurs d'adresses partagés au maillage (#3723, publication ip-indices) :
+  indice-partager <ip> <durée> <famille>  Publie une adresse bannie (1h à 7d)
+  indice-retirer <ip>        Retire un indicateur publié
+  indice-revu <ip>           Note une adresse reçue et bannie ici (revus)
+  indices-init               Crée la publication vide si elle manque (root)
 
 Compte de service ai-ban (root seulement, hors sudoers ; deux clés au plus) :
   cle-ai-ban ajouter <fichier.pub>   Pose une clé publique Ed25519 sous son empreinte

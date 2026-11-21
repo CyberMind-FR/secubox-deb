@@ -173,6 +173,17 @@ PROTEGEES
     # Elle vit désormais dans /var/lib/secubox-waf-leurres (0700 secubox, créé par tmpfiles ci-dessus) et se
     # reconstruit depuis le journal des menaces.
     rm -f /var/lib/secubox/waf/leurres.db /var/lib/secubox/waf/leurres.db-journal
+    # Indicateurs d'adresses (#3723) : publication vide créée si elle manque (wafctl, root, 0644), pour que cette box
+    # s'abonne aux indicateurs des pairs ; secubox-mirrornet la lit en TRAVERSANT seulement /var/lib/secubox/waf
+    # (ACL nommée « x », jamais le groupe du WAF). secubox-mirrornet pose la même ACL s'il est installé après.
+    if [ -d /var/lib/secubox/waf ] && [ ! -L /var/lib/secubox/waf ]; then
+      /usr/sbin/wafctl indices-init >/dev/null \
+        || echo "secubox-waf-ng: publication des indicateurs d'adresses non créée (wafctl indices-init)" >&2
+      if getent passwd secubox-mirrornet >/dev/null 2>&1 && command -v setfacl >/dev/null 2>&1; then
+        setfacl -m u:secubox-mirrornet:x /var/lib/secubox/waf \
+          || echo "secubox-waf-ng: ACL de /var/lib/secubox/waf pour secubox-mirrornet non posée" >&2
+      fi
+    fi
     if [ ! -d /var/lib/secubox-waf-leurres ] || [ -L /var/lib/secubox-waf-leurres ]; then
       echo "secubox-waf-ng: ATTENTION — /var/lib/secubox-waf-leurres absent : la mémoire des leurres restera vide (systemd-tmpfiles --create secubox-waf-ng.conf)" >&2
     fi
@@ -280,6 +291,12 @@ PROTEGEES
       apparmor_parser -r /etc/apparmor.d/usr.sbin.waf-blocs \
         || echo "secubox-waf-ng: profil AppArmor waf-blocs non chargé (apparmor_parser -r /etc/apparmor.d/usr.sbin.waf-blocs)" >&2
     fi
+    # secubox-waf-indices (#3723) : profil ENFORCE chargé AVANT la première passe de la minuterie.
+    if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
+       && [ -f /etc/apparmor.d/secubox-waf-indices ]; then
+      apparmor_parser -r /etc/apparmor.d/secubox-waf-indices \
+        || echo "secubox-waf-ng: profil AppArmor secubox-waf-indices non chargé (apparmor_parser -r /etc/apparmor.d/secubox-waf-indices)" >&2
+    fi
 
     # ── 5b. Profils de vhost : services et vhosts livrés absents (#3193) ──────
     # /etc/secubox/waf/vhost_profiles.json est un conffile MODIFIÉ à l'exécution
@@ -363,6 +380,8 @@ PROTEGEES
       systemctl start secubox-waf-campaigns.service 2>/dev/null || true
       # #3716 : veille des bans de bloc (60 s) ; le dossier d'état existe déjà (2c).
       systemctl start secubox-waf-blocs-veille.timer 2>/dev/null || true
+      # #3723 : indicateurs d'adresses reçus des pairs (5 min).
+      systemctl start secubox-waf-indices.timer 2>/dev/null || true
     fi
 
     # ── 7. #1240 : vhost dédié actor.<domaine> (Renseignement) ─────────────────

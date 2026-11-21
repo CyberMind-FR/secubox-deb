@@ -20,6 +20,7 @@ Depends: ${misc:Depends},
  python3-cryptography,
  secubox-core (>= 1.5.9),
  adduser,
+ acl,
  systemd
 Recommends: secubox-annuaire (>= 0.22.0),
  secubox-p2p
