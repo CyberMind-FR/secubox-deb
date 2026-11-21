@@ -11,6 +11,36 @@ Module IA de SecuBox (#3583), porté du POC de gk0. Une page d'administration `/
 Unix `/run/secubox/ai.sock`, publiée sous `/api/v1/ai` (nginx retire le préfixe). Le modèle répond soit sur la box
 (moteur **local** : llama-server de `secubox-zia-llm`), soit sur un moteur **distant** compatible OpenAI (gk0).
 
+## Vue d'ensemble de la V2 (2.0.0)
+
+SecuBox AI V2 (#3722 à #3725) fait du module un analyste des menaces à gestes bornés. Tout ce qui décide est du code ;
+le modèle explique et ne tranche jamais.
+
+- **Analyste** : explique un dossier d'attaquant sur des preuves vérifiées (§ Analyste).
+- **Riposte** : niveaux observer, contenir, usager et gestes du catalogue, proposés par gk3 (§ Riposte graduée).
+- **Exécuteur** : seul gk2 applique les gestes (clé `ai-ban`), retour audité, effet mesuré, levée possible (§ Réponses).
+- **Apprentissage** : filtres WAF d'office et politiques par niveau (§ Apprentissage).
+- **Console** `/ai/` : Radar, Dossier, Réponses, chaque chiffre issu d'une route (§ API).
+
+## Mise en service (2.0.0)
+
+Ordre de déploiement : `secubox-waf-ng` 1.43.0, `secubox-soc` 1.12.0, `secubox-mirrornet` 0.7.0 et `secubox-annuaire`
+0.23.0 **avant** `secubox-ai` 2.0.0. La montée depuis 0.4.0 applique les migrations 0005 à 0009 de `veille.db` après la
+sauvegarde `veille.db.avant-0005` (une seule gardée) ; mémoire, préférences, historique et modèles restent intacts.
+
+Contrôles au déploiement :
+
+1. `threatmesh` : `/peers` doit répondre sur gk2, sinon chaque geste d'office est refusé en 409 `protegee_inconnue`.
+2. Le conffile `/etc/secubox/secubox-waf-ratelimit.nft` contient les ensembles `limite_ia`.
+3. `protegees.env` liste le préfixe IPv6 de la box.
+4. `secubox-ai-veille` : RSS comparée à `MemoryMax=256M`.
+5. `secubox-aictl preparer`, puis relancer `secubox-ai-veille`.
+6. `nsenter -t <pid de l'API> -m ls /run/credentials/secubox-ai-veille.service` doit échouer (l'API ne voit pas les
+   clés de la veille).
+7. Refus AppArmor de `secubox-ai-moteur`, `secubox-ai-veille` et `secubox-waf-indices` : journal vide
+   (`journalctl -k | grep 'apparmor="DENIED"'`).
+8. ACL d'`audit.log` toujours posée après une rotation.
+
 ## Fonctionnalités
 
 - Dialogue en flux (NDJSON), curseur de lucidité, image jointe pour un modèle multimodal, reprise d'une réponse coupée.
@@ -442,8 +472,7 @@ secubox-aictl cle-distante < cle.txt  # facultatif : clé du moteur distant, jam
 ```
 
 Le postinst crée les comptes `secubox-ai` et `secubox-ai-moteur`, `/var/lib/secubox/ai` et `modeles/` (0750, par
-descripteur), copie `ai.toml` s'il manque, charge les profils AppArmor (API en enforce, moteur en complain jusqu'à la
-mesure sur gk3), active `secubox-ai-preparer.service`, `secubox-ai-demandes.path` et `secubox-ai.service`, lance
+descripteur), copie `ai.toml` s'il manque, charge les profils AppArmor (API, moteur et veille en enforce), active `secubox-ai-preparer.service`, `secubox-ai-demandes.path` et `secubox-ai.service`, lance
 `secubox-aictl preparer` puis relance l'API. Préférences, mémoire, journal et modèles survivent aux mises à jour ; la
 purge retire `ai.toml` mais garde les données et la clé (retrait à la main).
 
@@ -460,3 +489,8 @@ curl -s -H "Authorization: Bearer $JETON" https://admin.<box>/api/v1/ai/moteur
 
 `python -m pytest packages/secubox-ai/tests -q` depuis la racine du dépôt, ce paquet seul (collision des paquets
 `api`).
+
+Montée depuis 0.4.0 : `tests/test_montee_3725.py`. Profils de charge (100, 500, 1 000 événements par minute ; mesures
+imprimées, ignorés par défaut) :
+`SECUBOX_CHARGE=1 python -m pytest packages/secubox-ai/tests/test_charge_3725.py -q -s`
+(`SECUBOX_CHARGE_MINUTES=<n>` : durée simulée, 10 par défaut).

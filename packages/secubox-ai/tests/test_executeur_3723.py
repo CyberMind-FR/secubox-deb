@@ -683,10 +683,10 @@ def test_unite_credentials_avec_repli_et_audit_en_ajout():
     assert "ai-ban" not in "\n".join(x for x in api.splitlines() if not x.lstrip().startswith("#"))
 
 
-def test_version_0_7_0():
+def test_version_2_0_0():
     from api.main import VERSION
-    assert VERSION == "0.7.0"                                          # #3724 : onglets Dossier et Réponses
-    assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith("secubox-ai (0.7.0-1~trixie1)")
+    assert VERSION == "2.0.0"                                          # #3725 : secubox-ai V2 (phases 4 à 7)
+    assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith("secubox-ai (2.0.0-1~trixie1)")
 
 
 def test_cle_lue_absente_ou_repli(tmp_path, monkeypatch):

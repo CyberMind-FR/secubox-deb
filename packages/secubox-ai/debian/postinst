@@ -92,7 +92,7 @@ DOSSIERS
       install -m 0644 -o root -g root /usr/share/secubox/ai/riposte.toml.example /etc/secubox/ai/riposte.toml
     fi
 
-    # Profils AppArmor (API en enforce, moteur en complain), chargés AVANT tout démarrage : avec AppArmor actif, une
+    # Profils AppArmor (API, moteur et veille en enforce), chargés AVANT tout démarrage : avec AppArmor actif, une
     # unité qui nomme un profil non chargé échoue. Sans AppArmor, l'unité démarre sans profil. Dans le chroot d'une
     # image, /sys est celui de l'hôte : apparmor.service les chargera au premier démarrage depuis /etc/apparmor.d.
     PROFILS=1

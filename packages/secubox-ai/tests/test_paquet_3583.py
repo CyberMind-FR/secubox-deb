@@ -3,7 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """#3583 Tâche 15 — empaquetage : chaque fichier installé par debian/rules existe, profils AppArmor nommés par les
-unités (API enforce sans /etc/secubox/**, moteur en complain), route nginx sur le patron SearXNG, postinst (comptes,
+unités (API enforce sans /etc/secubox/**, moteur enforce depuis 2.0.0), route nginx sur le patron SearXNG, postinst (comptes,
 dossiers par descripteur, profils chargés avant tout démarrage, preparer avant la relance de l'API), prerm, rotation
 du journal, README et wiki."""
 import grp
@@ -97,8 +97,8 @@ def test_profils_nommes_par_les_unites():
     assert _unite("secubox-ai.service")["AppArmorProfile"] == ["secubox-ai-api"]
     assert _unite("secubox-ai-moteur.service")["AppArmorProfile"] == ["secubox-ai-moteur"]
     assert re.search(r"^profile secubox-ai-api \{", PROFIL_API, re.M)
-    assert re.search(r"^profile secubox-ai-moteur flags=\(complain\) \{", PROFIL_MOTEUR, re.M)
-    assert "complain" not in _code(PROFIL_API)                       # l'API part en enforce
+    assert re.search(r"^profile secubox-ai-moteur \{", PROFIL_MOTEUR, re.M)
+    assert "complain" not in _code(PROFIL_API) and "complain" not in _code(PROFIL_MOTEUR)   # enforce depuis 2.0.0
 
 
 def test_profil_api_jamais_tout_etc_secubox():
@@ -136,7 +136,7 @@ def test_profil_moteur_borne():
                   "deny /etc/secubox/** rwklx,", "deny network inet,", "deny network inet6,", "deny capability,"):
         assert regle in code, regle
     assert not re.search(r"^\s*/var/lib/secubox/ai/\*\*", code, re.M) and "demandes" not in code
-    assert "Tâche 18" in PROFIL_MOTEUR and "enforce" in PROFIL_MOTEUR      # bascule documentée
+    assert "MODE ENFORCE" in PROFIL_MOTEUR and "DENIED" in PROFIL_MOTEUR      # bascule documentée (2.0.0)
 
 
 @pytest.mark.parametrize("profil", ["secubox-ai-api", "secubox-ai-moteur"])

@@ -7,15 +7,15 @@
 # AppArmorProfile=secubox-ai-moteur dans secubox-ai-moteur.service. Posé dans /etc/apparmor.d/secubox-ai-moteur, chargé
 # par le postinst avant tout démarrage.
 #
-# MODE COMPLAIN, VOLONTAIREMENT : la liste exacte de /proc et /sys que lit ggml (détection des cœurs et des jeux
-# d'instructions, limite mémoire du cgroup) dépend de la version épinglée de llama.cpp. Elle se MESURE sur gk3
-# (aa-logprof sur les refus journalisés en complain) avant de passer ce profil en enforce : Tâche 18. D'ici là, la
-# barrière effective est la vue du système de fichiers de l'unité (TemporaryFileSystem, BindReadOnlyPaths des seuls
-# modèles, InaccessiblePaths des secrets, des sockets et des journaux), PrivateNetwork et l'absence de capacités.
+# MODE ENFORCE (2.0.0, arbitrage du contrôleur) : la liste de /proc et /sys que lit ggml (cœurs, jeux d'instructions,
+# limite mémoire du cgroup) dépend de la version épinglée de llama.cpp. Au déploiement sur gk3, vérifier qu'aucun refus
+# n'est journalisé (journalctl -k | grep 'apparmor="DENIED".*secubox-ai-moteur') ; sinon compléter ce profil. En plus du
+# profil : la vue du système de fichiers de l'unité (TemporaryFileSystem, BindReadOnlyPaths des seuls modèles,
+# InaccessiblePaths des secrets, des sockets et des journaux), PrivateNetwork et l'absence de capacités.
 
 #include <tunables/global>
 
-profile secubox-ai-moteur flags=(complain) {
+profile secubox-ai-moteur {
   #include <abstractions/base>
 
   # Binaire statique (build-arm64.sh : -static) : aucune bibliothèque partagée à lui ouvrir.

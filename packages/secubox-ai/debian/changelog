@@ -1,3 +1,28 @@
+secubox-ai (2.0.0-1~trixie1) trixie; urgency=medium
+
+  * SecuBox AI V2, phases 4 à 7 (#3722, #3723, #3724, #3725), version majeure : le module passe de l'assistant de
+    dialogue à un analyste des menaces qui propose, une riposte graduée que seul gk2 applique, un apprentissage
+    de filtres et une console /ai/ complète.
+  * Phase 4, analyste (#3722) : le modèle explique un dossier d'attaquant sur des preuves vérifiées ; le code décide
+    de tout le reste (gravité, titre, motif, gestes), rien du modèle ne devient un chiffre.
+  * Phase 5, riposte et exécuteur (#3723) : niveaux observer / contenir / usager fixés par le code, gestes du
+    catalogue proposés puis exécutés par gk2 via la clé ai-ban (retours audités, effet mesuré, garde du réseau
+    protégé), levée possible d'un geste.
+  * Phase 6, apprentissage (#3723) : filtres WAF d'office (clé ai-filtres), politiques par niveau, boucle de 300 s.
+  * Phase 7, console (#3724) : onglets Radar, Dossier et Réponses ; GET /dossiers, /dossiers/{id},
+    POST /dossiers/{id}/redescendre|analyser, POST /actions/{id}/defaire.
+  * Montée depuis 0.4.0 (#3725, test_montee_3725) : veille.db reçoit les migrations 0005 à 0009 (analyses, riposte,
+    actions, filtres, redescentes) après la sauvegarde veille.db.avant-0005 ; memoire.db, préférences, historique et
+    modèles ne sont pas touchés.
+  * Profils de charge à 100, 500 et 1 000 événements par minute (test_charge_3725, SECUBOX_CHARGE=1, mesures
+    imprimées).
+  * Profil AppArmor secubox-ai-moteur : enforce (plus de flags=(complain)). À vérifier au déploiement sur gk3 :
+    aucun refus apparmor="DENIED" de secubox-ai-moteur, secubox-ai-veille, secubox-waf-indices.
+  * Ordre de déploiement : secubox-waf-ng 1.43.0, secubox-soc 1.12.0, secubox-mirrornet 0.7.0 et
+    secubox-annuaire 0.23.0 AVANT secubox-ai 2.0.0 (README, § Mise en service).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 18:00:00 +0100
+
 secubox-ai (0.7.0-1~trixie1) trixie; urgency=medium
 
   * Console /ai/ (#3724) : onglets Dossier et Réponses, fidèles aux maquettes
