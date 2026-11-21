@@ -1,3 +1,12 @@
+secubox-core (1.8.37-1~trixie1) trixie; urgency=medium
+
+  * secubox_unbound (ref #3850) : rechargement d'Unbound par fast_reload (le DNS
+    répond pendant le chargement ; reload coupait la résolution plus d'une minute
+    sur gk2), repli sur reload seulement si Unbound refuse, jamais après un délai
+    dépassé. Chemin de unbound-control réglable par l'appelant (CONTROLE).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 04:36:09 +0100
+
 secubox-core (1.8.36-1~trixie1) trixie; urgency=medium
 
   * #3826 : garde des minuteries — une minuterie dont l'unité déclenchée est

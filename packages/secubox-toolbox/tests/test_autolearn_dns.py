@@ -50,3 +50,23 @@ def test_dns_dropin_written_when_armed(tmp_path):
 def test_dns_dropin_not_written_when_dark(tmp_path):
     dropin = _run(tmp_path, enforce=False, dns_feed=True)
     assert not dropin.exists()
+
+
+def test_dns_dropin_identique_non_reecrit_3850(tmp_path):
+    """#3850 : un drop-in identique n'est pas réécrit (sa réécriture relançait la compilation des listes DNS et un
+    rechargement d'Unbound à chaque passage)."""
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    dropin = _run(tmp_path / "a", enforce=True, dns_feed=True)
+    second = tmp_path / "b" / "97-antitrack.conf"
+    second.write_bytes(dropin.read_bytes())                 # même contenu déjà en place pour le second passage
+    avant = second.stat().st_mtime_ns - 10**9
+    os.utime(second, ns=(avant, avant))
+    _run(tmp_path / "b", enforce=True, dns_feed=True)
+    assert second.stat().st_mtime_ns == avant
+
+
+def test_rechargement_par_fast_reload_3850():
+    corps = SCRIPT.read_text(encoding="utf-8")
+    assert '["unbound-control", "fast_reload"]' in corps
+    assert '"systemctl", "reload", "unbound"' not in corps

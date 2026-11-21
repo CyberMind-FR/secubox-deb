@@ -42,6 +42,9 @@ class ErreurUnbound(RuntimeError):
     """La vue n'a pas pu être posée ; l'état précédent est remis."""
 
 
+DELAI_FAST_RELOAD = 600                                   # le chargement en fil à part des listes de gk2 (50 Mo) prend son temps
+
+
 def commande(args: list[str], delai: int) -> tuple[bool, str]:
     """Lance une commande avec un délai ; rend (succès, fin de la sortie). Ne lève jamais : un outil absent ou trop lent est un échec."""
     try:
@@ -98,12 +101,24 @@ class SystemeUnbound:
     MODULE = "unbound"
     ERREUR = ErreurUnbound
     AUDIT = AUDIT
+    CONTROLE = CONTROL                                     # un appelant peut le régler (chemin d'outil de banc ou de test)
 
     def verifier_unbound(self) -> tuple[bool, str]:
         return commande([CHECKCONF], DELAI_CHECKCONF)
 
     def recharger_unbound(self) -> None:
-        ok, sortie = commande([CONTROL, "reload"], 120)
+        """`fast_reload` d'abord (#3850) : Unbound charge la configuration dans un fil à part et CONTINUE de répondre, puis bascule
+        en un instant. `reload` arrête la résolution le temps de tout relire : plus d'une minute sur gk2 (listes de 50 Mo), le
+        réseau entier sans DNS (TV coupée, 20/11). Mesuré sur gk1 : 241 requêtes pendant un fast_reload, 0 échec.
+        Repli sur `reload` seulement si Unbound REFUSE le fast_reload (option non rechargeable à chaud, version ancienne) ;
+        jamais après un dépassement de délai : le chargement peut encore être en cours, un second rechargement s'y ajouterait."""
+        ok, sortie = commande([self.CONTROLE, "fast_reload"], DELAI_FAST_RELOAD)
+        if ok and sortie.strip().splitlines()[-1:] == ["ok"]:
+            return
+        if not ok and "délai" in sortie:
+            raise self.ERREUR("unbound-control fast_reload : " + sortie)
+        self.audit("fast-reload-refuse", sortie)
+        ok, sortie = commande([self.CONTROLE, "reload"], 120)
         if not ok:
             raise self.ERREUR("unbound-control reload a échoué : " + sortie)
 

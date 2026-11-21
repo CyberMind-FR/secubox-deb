@@ -1,3 +1,11 @@
+secubox-toolbox (2.13.10-1~trixie1) trixie; urgency=medium
+
+  * secubox-toolbox-autolearn (ref #3850) : drop-in Unbound non réécrit s'il est
+    identique (il relançait la compilation des listes DNS chaque heure) ;
+    rechargement par fast_reload, plus de systemctl reload unbound.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 04:36:09 +0100
+
 secubox-toolbox (2.13.9-1~trixie1) trixie; urgency=medium
 
   * secubox-blacklist-sync : ignore les entrées mesh: non signées (ref #3450).

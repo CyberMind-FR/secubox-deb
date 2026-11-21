@@ -1,3 +1,10 @@
+secubox-ad-guard (1.33.2-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (ref #3850) : rechargement commun de secubox-core (fast_reload,
+    sans coupure DNS). Depends secubox-core (>= 1.8.37~).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 04:36:09 +0100
+
 secubox-ad-guard (1.33.1-1~trixie1) trixie; urgency=medium
 
   * TV Privacy (ref #3850) : drop-in Unbound rendu dans un ordre TRIÉ
