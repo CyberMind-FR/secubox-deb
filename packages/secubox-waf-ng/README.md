@@ -131,9 +131,42 @@ Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet
 
 | Route | Corps | Réponse |
 |---|---|---|
-| `POST /ai/ban` | `{"geste": "ban", "cible": "198.51.100.7" ou "203.0.113.0/24", "duree_s": 3600…604800, "mode": "clic"\|"auto", "conseil": "<id>", "motif": "<200 car.>"}` | 200 `{id, cible, fin, audit}` |
+| `POST /ai/ban` | `{"geste": "ban", "cible": "198.51.100.7" ou "203.0.113.0/24", "duree_s": 3600…604800, "mode": "clic"\|"auto", "conseil": "<id>", "motif": "<200 car.>"}` | 200 `{id, cible, fin, duree_s, audit}` |
+| `POST /ai/prolonger` | `{"geste": "prolonger", "id": "<32 hex>", "duree_s": <s>, "conseil": "<id>", "motif": "<200 car.>"}` (#3723, 1.43.0) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` |
-| `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds}` |
+| `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds, plafonds_par_geste, sade_mode}` |
+
+**Gestes d'office du compte `ai-ban` (#3723, 1.43.0).** Le journal `/var/lib/secubox/waf/ai-ban.jsonl` porte un champ
+`geste` par ligne (`ban`, `ban_bloc`, `prolonger`, `unban`) ; une ligne d'avant 1.43.0 sans lui est classée par la
+forme de sa cible.
+
+- **Porte du mode SADE**, avant tout autre contrôle d'un geste d'office (`mode = "auto"`, et `prolonger`) : gk2 lit
+  `/run/secubox/sade-mode.json`, publié par secubox-soc (`{"mode", "depuis", "liste_blanche"}`), jamais la base du SOC.
+  Fichier absent : aucune porte. `observe` : 409 `sade_observe` ; `reactive` : seul `limiter` passe, 409
+  `sade_reactive` sinon ; `active` / `aggressive` : ouverte. Un fichier illisible, d'un mode inconnu ou dont `depuis`
+  date de plus de 15 min vaut `observe`. La `liste_blanche` publiée est une liste de cibles protégées pour TOUT geste,
+  clic compris (409 `protegee`) ; illisible : 503 `etat`.
+- **Ban d'adresse d'office** : admis seulement si l'adresse a une ligne de menace (`client_ip` ou `ip` exact) de moins
+  de 24 h dans la fin de `/var/log/secubox/waf/waf-threats.log` (16 Mio lus au plus), 409 `non_vue` sinon. **La durée
+  est calculée par gk2 et le `duree_s` du client est ignoré** : 24 h, × 4 par ban ai-ban précédent de la même adresse
+  dans le journal (hors bans annulés pour `audit` ou `unban`), 7 j au plus (24 h, 96 h, puis 7 j) ; la réponse la
+  rend (`duree_s`). Gardes de `wafctl` inchangées (privé, `protegees.env` dont la Freebox, box, pair : leur motif).
+- **`prolonger`** : un `id` d'un ban ai-ban ACTIF du journal seulement (409 `inconnu` sinon : jamais un ban d'une autre
+  source ni un ban levé ou échu) ; nouvelle fin = maintenant + `duree_s`, 409 `duree` au-delà de 7 j, 409
+  `raccourcit` si elle tombe avant la fin actuelle. `wafctl ban <ip> <N>s` pour une adresse, `wafctl ban-bloc <cidr>
+  <N>s` pour un bloc (waf-blocs ne raccourcit jamais : sa fin enregistrée fait foi). Audit `ai-prolonger-demande`
+  (sans elle, rien n'est fait) puis `ai-prolonger` ; une ligne `prolonge` au journal, qui fait foi pour la fin.
+- **Plafonds par geste** (fenêtres glissantes, sommés sur tous les niveaux) :
+
+  | Geste | Plafond | Refus |
+  |---|---|---|
+  | `ban` d'adresse (d'office et clic) | 60/h, 400/j | `plafond_heure`, `plafond_jour` |
+  | `ban_bloc` d'office | 5/h, 20/j | `plafond_auto` |
+  | tout `ban_bloc` (d'office et clic) | 30/h, 100/j | `plafond_compte` |
+  | `prolonger` | 30/h, 100/j | `plafond_heure`, `plafond_jour` |
+
+  `GET /ai/etat` rend `plafonds_par_geste` (`{geste: {heure, jour, restant_heure, restant_jour}}`) et `sade_mode`
+  (`null` si le fichier est absent) ; `compteurs` et `plafonds` ne portent plus que les blocs.
 
 **Compte de service `ai-filtres` (#3732, 1.37.0)** — garde `require_ai_filtres` : même jeton que ci-dessus avec
 `sub="ai-filtres"` et `portee="waf-filtres"`, clés à part (un jeton `ai-ban` y est refusé, et inversement), même

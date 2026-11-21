@@ -91,6 +91,14 @@ identiques d'une même minute (`n`) ; un outil deviné par actord (« …? ») e
   l'heure »), `score` (`[60, 79]`), `ttl_max_s`, `adresses_max`, `mode_par` (auteur du dernier changement de mode :
   `sade-auto` pour tous, un nom humain pour l'administrateur seulement, sinon `null`) et `mode_depuis`.
 - `aggressive` : refusé par `POST /mode` avec 409 `gestes_non_livres`.
+- **Publication pour gk2 (#3723, 1.11.0)** : `/run/secubox/sade-mode.json` (0644, renommage atomique d'un temporaire
+  du même dossier : jamais de fichier partiel) = `{"mode", "depuis", "liste_blanche"}`, où `depuis` est l'instant de
+  la publication et `liste_blanche` les réseaux de la liste blanche (entrées amorcées comprises). Réécrit après
+  `changer_mode`, après chaque ajout ou retrait de la liste blanche, au démarrage de l'API puis toutes les 60 s
+  (battement). L'API du WAF (`gestes_ia.mode_sade`) en tire la porte des gestes d'office du compte `ai-ban` et tient
+  pour `observe` un fichier daté de plus de 15 min : un SOC arrêté ferme l'automatique de gk2. Base illisible : rien
+  n'est publié (le fichier vieillit). L'exécuteur `sade-auto` ne peut pas écrire `/run/secubox` (bac à sable) : son
+  retour en `observe` est publié par le battement suivant (60 s au plus). Surcharge : `SECUBOX_SOC_SADE_MODE`.
 
 ### Données et audit
 

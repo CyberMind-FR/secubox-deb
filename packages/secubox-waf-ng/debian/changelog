@@ -1,3 +1,21 @@
+secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
+
+  * #3723 : compte ai-ban, gestes d office. POST /ai/ban accepte mode auto
+    sur une adresse seule, vue dans waf-threats.log depuis moins de 24 h
+    (non_vue sinon) ; la durée est calculée par gk2 (24 h, x 4 par ban
+    ai-ban précédent de l adresse, 7 j au plus) et rendue dans la réponse.
+    Nouvelle route POST /ai/prolonger (un ban ai-ban actif seulement, ne
+    raccourcit jamais, 7 j au plus, audit ai-prolonger-demande puis
+    ai-prolonger). Plafonds par geste : ban d adresse 60/h et 400/j, bloc
+    d office 5/h et 20/j, tout bloc 30/h et 100/j, prolonger 30/h et 100/j ;
+    chaque ligne de ai-ban.jsonl porte son geste. Porte du mode SADE lue dans
+    /run/secubox/sade-mode.json (publié par secubox-soc 1.11.0) : observe,
+    fichier illisible ou daté de plus de 15 min refusent tout geste d office,
+    reactive n admet que limiter ; sa liste blanche protège toute cible.
+    GET /ai/etat rend plafonds_par_geste et sade_mode.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
+
 secubox-waf-ng (1.42.1-1~trixie1) trixie; urgency=medium
 
   * #3820 : sbxwaf compacte aussi /var/lib/secubox/waf/mesures.jsonl (84 Mo

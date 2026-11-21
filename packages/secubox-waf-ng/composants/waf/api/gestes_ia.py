@@ -3,7 +3,8 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 
-"""Gestes d'une box d'IA sur le pare-feu du WAF (#3716) : `POST /ai/ban`, `POST /ai/unban`, `GET /ai/etat`.
+"""Gestes d'une box d'IA sur le pare-feu du WAF (#3716, #3723) : `POST /ai/ban`, `POST /ai/unban`,
+`POST /ai/prolonger`, `GET /ai/etat`.
 
 LE SEUL CHEMIN D'ÉCRITURE D'UNE IA DANS LE PARE-FEU. Exception écrite à RULES-CODE § 3 : ces routes ne portent pas
 `require_jwt` mais `require_ai_ban` (`secubox_core.compte_service`) : jeton EdDSA par requête, signé par la clé privée
@@ -12,16 +13,28 @@ de la box de l'IA (jamais sur gk2), `aud` = cette box, portée `waf-ban`, `jti` 
 Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
 
 - forme : IPv4 publique seule, ou bloc /24 exact (canonique) ; jamais d'IPv6 ; 422 sinon ;
-- durée : `GesteBan.duree_s` de 1 h à 7 j (422) ; d'office (`mode = auto`) 24 h au plus (409 `duree`) ;
-- plafonds en fenêtres glissantes sur le journal : d'office 5/h et 20/j (`plafond_auto`), compte 30/h et 100/j
-  (`plafond_compte`) ; un ban annulé reste compté ;
-- d'office : bloc seulement, et le CAS SÛR RECONTRÔLÉ sur gk2 (≥ `SEUIL_BLOC` adresses du bloc dans `waf_ban`,
+- porte du mode SADE (#3723), AVANT tout autre contrôle d'un geste d'office (`mode = auto`, et `prolonger`) : le
+  fichier `/run/secubox/sade-mode.json` publié par secubox-soc (`mode_sade`). Absent : aucune porte (comportement
+  d'avant) ; `observe` (ou fichier illisible, daté de plus de `SADE_PERIME_S`, mode inconnu) : 409 `sade_observe` ;
+  `reactive` : seul `limiter` passe, 409 `sade_reactive` sinon ; `active` / `aggressive` : la porte est ouverte. Sa
+  `liste_blanche` est une liste de cibles protégées (409 `protegee`, tous modes) ; illisible ⇒ 503 `etat` ;
+- durée : `GesteBan.duree_s` de 1 h à 7 j (422) ; bloc d'office 24 h au plus (409 `duree`) ; adresse d'office :
+  la durée du client est ignorée, gk2 la calcule (24 h × 4 par ban ai-ban précédent de l'adresse, 7 j au plus) ;
+- plafonds PAR GESTE en fenêtres glissantes sur le journal (`PLAFONDS_PAR_GESTE`, chaque ligne porte son `geste`,
+  les anciennes lignes sans lui sont classées par la forme de la cible) : `ban` d'adresse 60/h et 400/j, d'office et
+  clic sommés (`plafond_heure`, `plafond_jour`) ; `ban_bloc` d'office 5/h et 20/j (`plafond_auto`) et tout bloc
+  30/h et 100/j (`plafond_compte`, les blocs seuls) ; `prolonger` 30/h et 100/j ; un ban annulé reste compté ;
+- adresse d'office : vue dans le journal des menaces depuis moins de 24 h (`non_vue` sinon, lecture bornée de sa
+  fin) ; bloc d'office : le CAS SÛR RECONTRÔLÉ sur gk2 (≥ `SEUIL_BLOC` adresses du bloc dans `waf_ban`,
   toutes de familles ⊆ `CATEGORIES_SURES`) ; `pas_sur` sinon. Famille d'une adresse (I4) : celle de son DERNIER
   enregistrement `ban` de `bans.jsonl` (historique de sbxwaf), à défaut le motif du journal des menaces (~6 h), à
   défaut « waf » ; `bans.jsonl` illisible ⇒ 503 `etat` ;
 - une cible déjà bannie (au journal, par le WAF dans `waf_ban`, ou un bloc de l'administrateur) est refusée
   (`deja_actif`) ; `waf_ban` ou la liste des blocs illisibles ⇒ 503 `etat` (jamais « libre » par défaut) ;
 - les gardes root de `wafctl` / `waf-blocs` (privé, plages protégées, box, pairs) ; leur motif rendu en 409 ;
+- prolonger : un `id` d'un ban ai-ban ACTIF du journal seulement (409 `inconnu` sinon, jamais le ban d'une autre
+  source) ; nouvelle fin = maintenant + `duree_s`, jamais plus tôt que la fin actuelle (409 `raccourcit`), jamais
+  au-delà de 7 j (409 `duree`) ; ligne `prolonge` au journal, qui fait foi pour la fin ensuite ;
 - débannir : un `id` du journal seulement, jamais une adresse ; et JAMAIS une cible qu'une autre source couvre
   désormais (ruling P12) : adresse dont le dernier enregistrement de `bans.jsonl` (sbxwaf) est un `ban` non échu,
   bloc dont la fin enregistrée par waf-blocs dépasse celle du journal ai-ban de plus de 5 s. Le ban ai-ban est alors
@@ -31,13 +44,14 @@ Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
   Les refus (`ai-ban-refus`) et pannes (`ai-ban-echec`) répétés sont regroupés : une ligne par (motif, mode) toutes les
   `INTERVALLE_AUDIT_S`, avec le `nombre` qu'elle résume.
 
-Réponses pour le relais (Tâches 6-7) : `/ai/ban` 200 `{id, cible, fin, audit}`, 409/5xx `{"detail": {"motif"}}` ;
+Réponses pour le relais (Tâches 6-7) : `/ai/ban` 200 `{id, cible, fin, duree_s, audit}`, 409/5xx
+`{"detail": {"motif"}}` ; `/ai/prolonger` 200 `{id, cible, fin, audit}` ;
 `/ai/unban` 200 `{id, etat}` avec `etat ∈ {annule, echu, deja_annule, couvert}`, 404 `{"detail": {"motif": "inconnu"}}`.
 
 CONTRAINTE P9 : le jeton lie le corps, pas la route. Chaque corps porte un `geste` obligatoire propre à sa route
-(`ban`, `unban`) ; `GET /ai/etat` n'accepte aucun corps. CONTRAINTE P11 : aucune route ne déclare de modèle de corps
-FastAPI (FastAPI lirait le corps AVANT la garde) ; le corps brut, déjà lu et borné par la garde, est relu puis validé
-par `model_validate_json`.
+(`ban`, `unban`, `prolonger`) ; `GET /ai/etat` n'accepte aucun corps. CONTRAINTE P11 : aucune route ne déclare de
+modèle de corps FastAPI (FastAPI lirait le corps AVANT la garde) ; le corps brut, déjà lu et borné par la garde, est
+relu puis validé par `model_validate_json`.
 
 Les gestes sont sérialisés par un verrou de processus (contrôle du journal → wafctl → journal → audit) : les routes
 sont servies par UN seul processus, comme l'exige la mémoire de rejeu de la garde : `secubox-waf.service` (uvicorn
@@ -55,10 +69,12 @@ import logging
 import os
 import re
 import secrets
+import stat
 import subprocess
 import threading
 import time
 from pathlib import Path
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple, Union
 
 import jwt
@@ -95,8 +111,26 @@ BANS_WAF = Path("/var/lib/secubox/waf/bans.jsonl")
 _TAILLE_LECTURE = 4 * 1024 * 1024
 _TAILLE_LECTURE_BANS_WAF = 16 * 1024 * 1024
 
+#: Journal des menaces de sbxwaf (`timestamp`, `client_ip`) : « vue depuis moins de 24 h » d'une adresse d'office.
+JOURNAL_MENACES = Path(os.environ.get("SECUBOX_WAF_THREATS_LOG") or "/var/log/secubox/waf/waf-threats.log")
+_TAILLE_LECTURE_MENACES = 16 * 1024 * 1024
+VUE_FENETRE_S = 86_400
+
+#: Mode SADE publié par secubox-soc (`defense_etat.publier_mode`) : `{"mode", "depuis", "liste_blanche"}`, `depuis`
+#: = instant de la publication (battement de 60 s). Jamais la base du SOC : ce fichier seul.
+FICHIER_SADE = Path("/run/secubox/sade-mode.json")
+_TAILLE_MAX_SADE = 256 * 1024
+SADE_PERIME_S = 900
+#: Une publication datée du futur au-delà de ceci est illisible (même horloge des deux côtés : c'est la même box).
+_SADE_AVANCE_MAX_S = 60
+MODES_SADE = frozenset({"observe", "reactive", "active", "aggressive"})
+#: Gestes d'office admis en `reactive` (décision du propriétaire : limiter seul) ; `observe` n'en admet aucun.
+GESTES_AUTO_REACTIVE = frozenset({"limiter"})
+
 DUREE_MIN_S, DUREE_MAX_S = 3600, 604_800
 DUREE_AUTO_MAX_S = 86_400
+#: Adresse d'office : 24 h, × 4 par ban ai-ban précédent de la même adresse, `DUREE_MAX_S` au plus.
+DUREE_AUTO_ADRESSE_S, FACTEUR_RECIDIVE = 86_400, 4
 SEUIL_BLOC = 20
 #: Familles sûres (I4, décision du propriétaire du 14/11) : reconnaissance, sondes, leurres. Les familles d'attaque
 #: (xss, lfi, sqli, rce, api_abuse, campagne, mesure…), toute autre, et « waf » (inconnue) restent en un clic.
@@ -104,7 +138,15 @@ SEUIL_BLOC = 20
 CATEGORIES_SURES = frozenset({"scanners", "recon_crawler", "host_anomaly", "leurre", "product_absent_probes",
                               "honeypot", "waf_fingerprint"})
 HEURE, JOUR = 3600, 86_400
+#: Plafonds des blocs (#3716) : `auto_*` les blocs d'office, `compte_*` tous les blocs (les adresses ont les leurs).
 PLAFONDS = {"auto_heure": 5, "auto_jour": 20, "compte_heure": 30, "compte_jour": 100}
+#: Plafonds par geste (#3723), fenêtres glissantes, sommés sur tous les niveaux. `ban` : adresses (d'office et clic) ;
+#: `ban_bloc` : blocs d'office (les mêmes que `auto_*`). Un geste nouveau ajoute ici sa ligne et son compteur.
+PLAFONDS_PAR_GESTE = {"ban": {"heure": 60, "jour": 400},
+                      "ban_bloc": {"heure": PLAFONDS["auto_heure"], "jour": PLAFONDS["auto_jour"]},
+                      "prolonger": {"heure": 30, "jour": 100}}
+#: Causes d'annulation qui retirent un ban de la récidive : jamais posé (audit) ou retiré par l'IA ou l'humain.
+_CAUSES_SANS_RECIDIVE = frozenset({"audit", "unban"})
 #: Un bloc dont la fin enregistrée dépasse la nôtre de plus que ceci a été rebanni par quelqu'un d'autre.
 MARGE_BLOC_S = 5
 INTERVALLE_AUDIT_S = 10
@@ -189,6 +231,18 @@ class GesteBan(BaseModel):
         return v
 
 
+class GesteProlonger(BaseModel):
+    """`duree_s` : nouvelle fin = maintenant + `duree_s` ; au-delà de 7 j, 409 `duree` (borne de la forme bien plus
+    large : le refus est un motif métier, pas une erreur de forme)."""
+    model_config = {"extra": "forbid"}
+
+    geste: Literal["prolonger"]
+    id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    duree_s: int = Field(ge=1, le=10 * DUREE_MAX_S, strict=True)
+    conseil: str = Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")
+    motif: str = Field("", max_length=200)
+
+
 class GesteAnnuler(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -222,18 +276,30 @@ def _entier(v: Any) -> bool:
 
 
 def _entree_valide(e: Any) -> bool:
-    if not isinstance(e, dict) or e.get("type") not in ("ban", "annule"):
+    if not isinstance(e, dict) or e.get("type") not in ("ban", "annule", "prolonge"):
         return False
     if not isinstance(e.get("id"), str) or not _RE_ID.fullmatch(e["id"]) or not _entier(e.get("at")):
         return False
     if e["type"] == "ban":
         return isinstance(e.get("cible"), str) and _entier(e.get("fin")) and e.get("mode") in ("auto", "clic")
+    if e["type"] == "prolonge":
+        return _entier(e.get("fin"))
     return True
 
 
-def _lire_fin_jsonl(chemin: Path, taille_max: int) -> Optional[List[Any]]:
-    """Objets JSON des lignes de la fin d'un fichier (première ligne coupée ignorée) ; None s'il n'existe pas. Lève
-    OSError s'il est illisible (lien, dossier, droits)."""
+def geste_de(e: dict) -> str:
+    """Geste d'une entrée du journal. Un ban est classé par la FORME de sa cible (`ban` / `ban_bloc`), qui fait foi
+    pour les lignes d'avant #3723 sans champ `geste` comme pour les autres ; `prolonge` → `prolonger`."""
+    if e["type"] == "prolonge":
+        return "prolonger"
+    if e["type"] == "ban":
+        return "ban_bloc" if "/" in e["cible"] else "ban"
+    return "unban"
+
+
+def _lire_fin_octets(chemin: Path, taille_max: int) -> Optional[List[bytes]]:
+    """Lignes de la fin d'un fichier, `taille_max` octets au plus (première ligne coupée ignorée) ; None s'il
+    n'existe pas. Lève OSError s'il est illisible (lien, dossier, droits)."""
     try:
         fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     except FileNotFoundError:
@@ -246,6 +312,15 @@ def _lire_fin_jsonl(chemin: Path, taille_max: int) -> Optional[List[Any]]:
     lignes = donnees.split(b"\n")
     if debut:
         lignes = lignes[1:]
+    return lignes
+
+
+def _lire_fin_jsonl(chemin: Path, taille_max: int) -> Optional[List[Any]]:
+    """Objets JSON des lignes de la fin d'un fichier (première ligne coupée ignorée) ; None s'il n'existe pas. Lève
+    OSError s'il est illisible (lien, dossier, droits)."""
+    lignes = _lire_fin_octets(chemin, taille_max)
+    if lignes is None:
+        return None
     objets = []
     for ligne in lignes:
         try:
@@ -282,29 +357,196 @@ def _horodatage() -> str:
 
 
 def _bilan(entrees: List[dict], maintenant: int) -> Tuple[Dict[str, dict], set, List[dict], Dict[str, int]]:
-    """(bans par id, ids annulés, bans actifs, compteurs des fenêtres glissantes). Un ban daté du futur (horloge
-    reculée) compte pour un âge nul : un retour de l'horloge ne fait jamais sauter un plafond."""
+    """(bans par id, ids annulés, bans actifs, compteurs des fenêtres glissantes). La fin d'un ban est la plus tardive
+    de la sienne et de ses lignes `prolonge`. Compteurs : `PLAFONDS` (blocs) et `<geste>_heure` / `<geste>_jour` de
+    chaque geste de `PLAFONDS_PAR_GESTE`. Une entrée datée du futur (horloge reculée) compte pour un âge nul : un
+    retour de l'horloge ne fait jamais sauter un plafond."""
     bans: Dict[str, dict] = {}
     annules = set()
+    prolongees: Dict[str, int] = {}
+    comptees: List[Tuple[str, str, int]] = []
     for e in entrees:
         if e["type"] == "ban":
-            bans.setdefault(e["id"], e)
+            if e["id"] not in bans:
+                bans[e["id"]] = e
+                comptees.append((geste_de(e), e["mode"], e["at"]))
+        elif e["type"] == "prolonge":
+            prolongees[e["id"]] = max(prolongees.get(e["id"], 0), e["fin"])
+            comptees.append(("prolonger", "auto", e["at"]))
         else:
             annules.add(e["id"])
+    for i, fin in prolongees.items():
+        if i in bans and fin > bans[i]["fin"]:
+            bans[i] = {**bans[i], "fin": fin}
     actifs = [b for i, b in bans.items() if i not in annules and b["fin"] > maintenant]
-    compteurs = {"auto_heure": 0, "auto_jour": 0, "compte_heure": 0, "compte_jour": 0}
-    for b in bans.values():
-        age = max(0, maintenant - b["at"])
+    compteurs = dict.fromkeys(PLAFONDS, 0)
+    for g in PLAFONDS_PAR_GESTE:
+        compteurs[f"{g}_heure"] = compteurs[f"{g}_jour"] = 0
+    for geste, mode, at in comptees:
+        age = max(0, maintenant - at)
         if age >= JOUR:
             continue
-        compteurs["compte_jour"] += 1
-        if age < HEURE:
-            compteurs["compte_heure"] += 1
-        if b["mode"] == "auto":
-            compteurs["auto_jour"] += 1
-            if age < HEURE:
-                compteurs["auto_heure"] += 1
+        fenetres = ("jour", "heure") if age < HEURE else ("jour",)
+        cles = []
+        if geste == "ban_bloc":
+            cles.append("compte")
+            if mode == "auto":
+                cles += ["auto", "ban_bloc"]
+        else:
+            cles.append(geste)
+        for cle in cles:
+            for f in fenetres:
+                if f"{cle}_{f}" in compteurs:
+                    compteurs[f"{cle}_{f}"] += 1
     return bans, annules, actifs, compteurs
+
+
+def _plafond_atteint(compteurs: Dict[str, int], geste: str) -> Optional[str]:
+    """`plafond_heure` / `plafond_jour` si le geste a atteint l'un de ses plafonds, None sinon."""
+    p = PLAFONDS_PAR_GESTE[geste]
+    if compteurs[f"{geste}_heure"] >= p["heure"]:
+        return "plafond_heure"
+    if compteurs[f"{geste}_jour"] >= p["jour"]:
+        return "plafond_jour"
+    return None
+
+
+def plafonds_par_geste(compteurs: Dict[str, int]) -> Dict[str, Dict[str, int]]:
+    return {g: {"heure": p["heure"], "jour": p["jour"],
+                "restant_heure": max(0, p["heure"] - compteurs[f"{g}_heure"]),
+                "restant_jour": max(0, p["jour"] - compteurs[f"{g}_jour"])}
+            for g, p in PLAFONDS_PAR_GESTE.items()}
+
+
+def duree_recidive(entrees: List[dict], ip: str) -> int:
+    """Durée d'un ban d'office de l'adresse : 24 h × 4 par ban ai-ban précédent de cette adresse dans le journal
+    (hors bans jamais posés ou retirés : causes `_CAUSES_SANS_RECIDIVE`), `DUREE_MAX_S` au plus."""
+    retires = {e["id"] for e in entrees if e["type"] == "annule" and e.get("cause") in _CAUSES_SANS_RECIDIVE}
+    n = len({e["id"] for e in entrees if e["type"] == "ban" and e["cible"] == ip and e["id"] not in retires})
+    return min(DUREE_MAX_S, DUREE_AUTO_ADRESSE_S * FACTEUR_RECIDIVE ** min(n, 8))
+
+
+# ── Journal des menaces, mode SADE ─────────────────────────────────────
+def _instant(valeur: Any) -> Optional[float]:
+    """Instant d'un horodatage RFC 3339 (`2026-11-21T10:00:00Z`) ou d'un entier epoch ; None s'il est illisible."""
+    if _entier(valeur):
+        return float(valeur)
+    if not isinstance(valeur, str) or not valeur:
+        return None
+    try:
+        d = datetime.fromisoformat(valeur.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d.timestamp() if d.tzinfo is not None else None
+
+
+def vue_recemment(ip: str, maintenant: int) -> bool:
+    """L'adresse a-t-elle une ligne de menace de moins de `VUE_FENETRE_S` dans la FIN du journal des menaces
+    (`_TAILLE_LECTURE_MENACES` au plus) ? Champ `client_ip` (ou `ip`) EXACT, instant `at` ou `timestamp`. Journal
+    absent : jamais vue. Lève Illisible s'il ne peut pas être lu."""
+    try:
+        lignes = _lire_fin_octets(JOURNAL_MENACES, _TAILLE_LECTURE_MENACES)
+    except OSError as e:
+        raise Illisible(f"journal des menaces : {type(e).__name__}") from None
+    aiguille = f'"{ip}"'.encode()
+    seuil = maintenant - VUE_FENETRE_S
+    for ligne in reversed(lignes or []):
+        if aiguille not in ligne:
+            continue
+        try:
+            e = json.loads(ligne)
+        except ValueError:
+            continue
+        if not isinstance(e, dict) or ip not in (e.get("client_ip"), e.get("ip")):
+            continue
+        at = e.get("at")
+        instant = float(at) if _entier(at) and at > 0 else _instant(e.get("timestamp"))
+        if instant is not None and instant >= seuil:
+            return True
+    return False
+
+
+def _reseaux(valeur: Any) -> Optional[List[ipaddress.IPv4Network]]:
+    """Réseaux IPv4 d'une liste blanche publiée (les IPv6 ne visent aucune cible ici) ; None si elle est illisible
+    (une seule entrée illisible suffit : jamais une liste partielle)."""
+    if not isinstance(valeur, list):
+        return None
+    reseaux = []
+    for v in valeur:
+        if not isinstance(v, str) or len(v) > 64:
+            return None
+        try:
+            n = ipaddress.ip_network(v, strict=False)
+        except ValueError:
+            return None
+        if isinstance(n, ipaddress.IPv4Network):
+            reseaux.append(n)
+    return reseaux
+
+
+def lire_sade() -> Optional[Dict[str, Any]]:
+    """None : fichier absent (aucune porte). Sinon `{"mode", "liste"}` : `mode` vaut `observe` si le fichier est
+    illisible, daté de plus de `SADE_PERIME_S` (ou du futur), ou d'un mode inconnu ; `liste` (réseaux IPv4 protégés)
+    vaut None si elle ne peut pas être lue. Jamais à travers un lien, jamais plus de `_TAILLE_MAX_SADE` octets."""
+    illisible: Dict[str, Any] = {"mode": "observe", "liste": None}
+    try:
+        fd = os.open(FICHIER_SADE, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        log.warning("ai-ban : mode SADE illisible : %s", type(e).__name__)
+        return illisible
+    try:
+        with os.fdopen(fd, "rb") as f:
+            if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+                return illisible
+            donnees = f.read(_TAILLE_MAX_SADE + 1)
+    except OSError as e:
+        log.warning("ai-ban : mode SADE illisible : %s", type(e).__name__)
+        return illisible
+    if len(donnees) > _TAILLE_MAX_SADE:
+        return illisible
+    try:
+        d = json.loads(donnees)
+    except ValueError:
+        return illisible
+    if not isinstance(d, dict):
+        return illisible
+    mode, depuis = d.get("mode"), _instant(d.get("depuis"))
+    maintenant = _maintenant()
+    if (not isinstance(mode, str) or mode not in MODES_SADE or depuis is None
+            or maintenant - depuis > SADE_PERIME_S or depuis - maintenant > _SADE_AVANCE_MAX_S):
+        mode = "observe"
+    return {"mode": mode, "liste": _reseaux(d.get("liste_blanche"))}
+
+
+def mode_sade() -> Optional[str]:
+    """Mode SADE effectif pour gk2 : None (fichier absent, comportement d'avant #3723), sinon le mode publié, ou
+    `observe` si le fichier est illisible ou daté de plus de 15 min."""
+    sade = lire_sade()
+    return None if sade is None else sade["mode"]
+
+
+def porte_sade(geste: str, sade: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Motif du refus d'un geste d'office par le mode SADE, None s'il passe."""
+    if sade is None:
+        return None
+    if sade["mode"] == "observe":
+        return "sade_observe"
+    if sade["mode"] == "reactive" and geste not in GESTES_AUTO_REACTIVE:
+        return "sade_reactive"
+    return None
+
+
+def protegee_par_sade(cible: Cible, sade: Optional[Dict[str, Any]]) -> bool:
+    """La cible touche-t-elle la liste blanche SADE ? Lève Illisible si la liste n'a pas pu être lue."""
+    if sade is None:
+        return False
+    if sade["liste"] is None:
+        raise Illisible("liste blanche SADE illisible")
+    if isinstance(cible, ipaddress.IPv4Network):
+        return any(cible.overlaps(n) for n in sade["liste"])
+    return any(cible in n for n in sade["liste"])
 
 
 def famille(categorie: Any) -> str:
@@ -656,10 +898,14 @@ def _auditer_regroupe(action: str, motif: str, mode: str, detail: str, user: dic
         _auditer_sans_lever(a, d, u)
 
 
-def _refus(statut: int, motif: str, geste: GesteBan, user: dict) -> HTTPException:
-    action = "ai-ban-refus" if statut == 409 else "ai-ban-echec"
-    _auditer_regroupe(action, motif, geste.mode,
-                      f"motif {motif} cible {geste.cible} mode {geste.mode} conseil {geste.conseil}", user)
+def _refus(statut: int, motif: str, geste: Union[GesteBan, GesteProlonger], user: dict,
+           etiquette: str = "ai-ban") -> HTTPException:
+    action = f"{etiquette}-refus" if statut == 409 else f"{etiquette}-echec"
+    if isinstance(geste, GesteProlonger):
+        mode, quoi = "auto", f"id {geste.id}"
+    else:
+        mode, quoi = geste.mode, f"cible {geste.cible}"
+    _auditer_regroupe(action, motif, mode, f"motif {motif} {quoi} mode {mode} conseil {geste.conseil}", user)
     return HTTPException(statut, detail={"motif": motif})
 
 
@@ -669,47 +915,65 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
     geste: GesteBan = _valider(GesteBan, corps)
     cible = forme_cible(geste.cible)
     bloc = isinstance(cible, ipaddress.IPv4Network)
+    nom = "ban_bloc" if bloc else "ban"
+    auto_adresse = geste.mode == "auto" and not bloc
+    sade = lire_sade()
+    if geste.mode == "auto":
+        motif = porte_sade(nom, sade)   # AVANT tout autre contrôle d'un geste d'office
+        if motif:
+            raise _refus(409, motif, geste, user)
     with _verrou:
         maintenant = int(_maintenant())
         try:
-            _, _, actifs, compteurs = _bilan(_lire_journal(), maintenant)
+            entrees = _lire_journal()
+            _, _, actifs, compteurs = _bilan(entrees, maintenant)
         except OSError:
             raise _refus(503, "journal", geste, user) from None
         if geste.cible in {b["cible"] for b in actifs}:
             raise _refus(409, "deja_actif", geste, user)
-        if geste.mode == "auto" and geste.duree_s > DUREE_AUTO_MAX_S:
-            raise _refus(409, "duree", geste, user)
-        if (compteurs["compte_heure"] >= PLAFONDS["compte_heure"]
-                or compteurs["compte_jour"] >= PLAFONDS["compte_jour"]):
-            raise _refus(409, "plafond_compte", geste, user)
-        if geste.mode == "auto" and (compteurs["auto_heure"] >= PLAFONDS["auto_heure"]
-                                     or compteurs["auto_jour"] >= PLAFONDS["auto_jour"]):
-            raise _refus(409, "plafond_auto", geste, user)
+        if bloc:
+            if geste.mode == "auto" and geste.duree_s > DUREE_AUTO_MAX_S:
+                raise _refus(409, "duree", geste, user)
+            if (compteurs["compte_heure"] >= PLAFONDS["compte_heure"]
+                    or compteurs["compte_jour"] >= PLAFONDS["compte_jour"]):
+                raise _refus(409, "plafond_compte", geste, user)
+            if geste.mode == "auto" and (compteurs["auto_heure"] >= PLAFONDS["auto_heure"]
+                                         or compteurs["auto_jour"] >= PLAFONDS["auto_jour"]):
+                raise _refus(409, "plafond_auto", geste, user)
+        else:
+            motif = _plafond_atteint(compteurs, "ban")
+            if motif:
+                raise _refus(409, motif, geste, user)
         try:
+            if protegee_par_sade(cible, sade):
+                raise _refus(409, "protegee", geste, user)
             bans_waf = None
             if geste.mode == "auto":
-                if not bloc:
-                    raise _refus(409, "pas_sur", geste, user)
-                bans_waf = _bans_waf()
-                if not cas_sur(cible, bans_waf, familles_bans_waf()):
-                    raise _refus(409, "pas_sur", geste, user)
+                if bloc:
+                    bans_waf = _bans_waf()
+                    if not cas_sur(cible, bans_waf, familles_bans_waf()):
+                        raise _refus(409, "pas_sur", geste, user)
+                elif not vue_recemment(geste.cible, maintenant):
+                    raise _refus(409, "non_vue", geste, user)
             if _deja_banni_ailleurs(cible, bans_waf):
                 raise _refus(409, "deja_actif", geste, user)
         except HTTPException:
             raise
-        except Exception as e:  # noqa: BLE001 — waf_ban ou blocs illisibles : jamais « libre » par défaut
+        except Exception as e:  # noqa: BLE001 — waf_ban, blocs, menaces ou liste blanche illisibles : jamais « libre »
             log.warning("ai-ban : garde illisible : %s", e)
             raise _refus(503, "etat", geste, user) from None
 
+        # Adresse d'office : la durée est celle de gk2 (récidive), jamais celle du client.
+        duree_s = duree_recidive(entrees, geste.cible) if auto_adresse else geste.duree_s
         ident = secrets.token_hex(16)
-        fin = maintenant + geste.duree_s
-        resume = f"id {ident} cible {geste.cible} {geste.duree_s}s fin {fin} mode {geste.mode} conseil {geste.conseil}"
+        fin = maintenant + duree_s
+        resume = f"id {ident} cible {geste.cible} {duree_s}s fin {fin} mode {geste.mode} conseil {geste.conseil}"
         try:
             _auditer("ai-ban-demande", resume, user)
         except Exception:  # noqa: BLE001 — sans trace de la demande, rien n'est fait
             raise _refus(503, "audit", geste, user) from None
 
-        r, panne = _lancer(_argv("ban", cible, geste.duree_s))
+        r, panne = _lancer(_argv("ban", cible, duree_s))
         if r is None:
             # wafctl muet : le ban est peut-être posé, on le retire (la cible n'était bannie par personne d'autre).
             log.error("ai-ban : wafctl injoignable (%s) pour %s", panne, cible)
@@ -720,13 +984,13 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
         if bloc:
             # Revue finale I1 : la fin qui fait foi est celle que waf-blocs a ENREGISTRÉE (sa date est prise après
             # nos lectures, l'audit et systemd-run) ; `_couverte` la compare à la nôtre à MARGE_BLOC_S près.
-            fin = _fin_enregistree(r, int(_maintenant()) + geste.duree_s)
-            resume = (f"id {ident} cible {geste.cible} {geste.duree_s}s fin {fin} mode {geste.mode} "
+            fin = _fin_enregistree(r, int(_maintenant()) + duree_s)
+            resume = (f"id {ident} cible {geste.cible} {duree_s}s fin {fin} mode {geste.mode} "
                       f"conseil {geste.conseil}")
 
-        entree = {"ts": _horodatage(), "at": maintenant, "type": "ban", "id": ident, "cible": geste.cible,
-                  "fin": fin, "mode": geste.mode, "conseil": geste.conseil, "motif": geste.motif,
-                  "jti": str((user or {}).get("jti") or ""), "cle": _cle(user), "duree_s": geste.duree_s}
+        entree = {"ts": _horodatage(), "at": maintenant, "type": "ban", "geste": nom, "id": ident,
+                  "cible": geste.cible, "fin": fin, "mode": geste.mode, "conseil": geste.conseil, "motif": geste.motif,
+                  "jti": str((user or {}).get("jti") or ""), "cle": _cle(user), "duree_s": duree_s}
         try:
             _ecrire_journal(entree)
         except OSError:
@@ -739,12 +1003,83 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
         except Exception:  # noqa: BLE001 — un ban non audité n'existe pas : il est retiré
             defait = _defaire(cible)
             try:
-                _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "annule", "id": ident,
+                _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "annule", "geste": nom, "id": ident,
                                  "cible": geste.cible, "cause": "audit"})
             except OSError:
                 log.error("ai-ban : annulation %s non journalisée", ident)
             raise HTTPException(500, detail={"motif": "audit" if defait else "incoherent"}) from None
-    return {"id": ident, "cible": geste.cible, "fin": fin, "audit": ident}
+    return {"id": ident, "cible": geste.cible, "fin": fin, "duree_s": duree_s, "audit": ident}
+
+
+@router.post("/prolonger")
+def ai_prolonger(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
+    """Prolonge un ban ai-ban ACTIF du journal (#3723). Geste d'office : la porte du mode SADE passe d'abord."""
+    geste: GesteProlonger = _valider(GesteProlonger, corps)
+    sade = lire_sade()
+    motif = porte_sade("prolonger", sade)
+    if motif:
+        raise _refus(409, motif, geste, user, "ai-prolonger")
+    with _verrou:
+        maintenant = int(_maintenant())
+        try:
+            _, _, actifs, compteurs = _bilan(_lire_journal(), maintenant)
+        except OSError:
+            raise _refus(503, "journal", geste, user, "ai-prolonger") from None
+        ban = next((b for b in actifs if b["id"] == geste.id), None)
+        if ban is None:
+            # inconnu, annulé ou échu : jamais le ban d'une autre source, jamais un ban levé
+            raise _refus(409, "inconnu", geste, user, "ai-prolonger")
+        if geste.duree_s > DUREE_MAX_S:
+            raise _refus(409, "duree", geste, user, "ai-prolonger")
+        nouvelle_fin = maintenant + geste.duree_s
+        if nouvelle_fin < ban["fin"]:
+            raise _refus(409, "raccourcit", geste, user, "ai-prolonger")
+        motif = _plafond_atteint(compteurs, "prolonger")
+        if motif:
+            raise _refus(409, motif, geste, user, "ai-prolonger")
+        try:
+            cible = forme_cible(ban["cible"])
+        except ValueError:
+            raise _refus(500, "journal", geste, user, "ai-prolonger") from None
+        try:
+            if protegee_par_sade(cible, sade):
+                raise _refus(409, "protegee", geste, user, "ai-prolonger")
+        except Illisible as e:
+            log.warning("ai-prolonger : garde illisible : %s", e)
+            raise _refus(503, "etat", geste, user, "ai-prolonger") from None
+
+        ident = secrets.token_hex(16)
+        resume = (f"id {ident} ban {geste.id} cible {ban['cible']} {geste.duree_s}s fin {nouvelle_fin} "
+                  f"conseil {geste.conseil}")
+        try:
+            _auditer("ai-prolonger-demande", resume, user)
+        except Exception:  # noqa: BLE001 — sans trace de la demande, rien n'est fait
+            raise _refus(503, "audit", geste, user, "ai-prolonger") from None
+        r, panne = _lancer(_argv("ban", cible, geste.duree_s))
+        if r is None:
+            # Rien à défaire : la cible était déjà bannie par ce ban, la prolonger ou non ne lève rien.
+            log.error("ai-prolonger : wafctl injoignable (%s) pour %s", panne, cible)
+            raise _refus(503, "wafctl", geste, user, "ai-prolonger")
+        if r.returncode != 0:
+            raise _refus(*_statut_motif(_motif_sortie(r)), geste, user, "ai-prolonger")
+        fin = nouvelle_fin
+        if isinstance(cible, ipaddress.IPv4Network):
+            # waf-blocs ne raccourcit jamais un bloc : sa fin enregistrée fait foi
+            fin = _fin_enregistree(r, int(_maintenant()) + geste.duree_s)
+        try:
+            _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "prolonge", "geste": "prolonger",
+                             "id": geste.id, "cible": ban["cible"], "fin": fin, "duree_s": geste.duree_s,
+                             "conseil": geste.conseil, "motif": geste.motif, "audit": ident,
+                             "jti": str((user or {}).get("jti") or ""), "cle": _cle(user)})
+        except OSError:
+            # La prolongation est posée (sens sûr : la cible reste bannie plus longtemps) mais hors journal.
+            log.error("ai-prolonger : prolongation %s de %s non journalisée", ident, geste.id)
+            raise _refus(503, "journal", geste, user, "ai-prolonger") from None
+        try:
+            _auditer("ai-prolonger", f"id {ident} ban {geste.id} cible {ban['cible']} fin {fin}", user)
+        except Exception:  # noqa: BLE001 — la demande est tracée ; la prolongation ne se défait pas (nft)
+            raise HTTPException(500, detail={"motif": "audit"}) from None
+    return {"id": geste.id, "cible": ban["cible"], "fin": fin, "audit": ident}
 
 
 def _couverte(cible: Cible, ban: dict, maintenant: int) -> bool:
@@ -758,7 +1093,7 @@ def _couverte(cible: Cible, ban: dict, maintenant: int) -> bool:
 def _clore(ident: str, ban: dict, maintenant: int, cause: str) -> None:
     """Ligne `annule` au journal ; 503 `journal` si elle ne peut pas être écrite."""
     try:
-        _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "annule", "id": ident,
+        _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "annule", "geste": "unban", "id": ident,
                          "cible": ban["cible"], "cause": cause})
     except OSError:
         raise HTTPException(503, detail={"motif": "journal"}) from None
@@ -850,4 +1185,5 @@ def ai_etat(user: dict = Depends(require_ai_etat), corps: bytes = Depends(_corps
         raise HTTPException(503, detail={"motif": "journal"}) from None
     return {"actifs": [{"id": b["id"], "cible": b["cible"], "fin": b["fin"], "mode": b["mode"]}
                        for b in sorted(actifs, key=lambda b: (b["fin"], b["id"]))],
-            "compteurs": compteurs, "plafonds": dict(PLAFONDS)}
+            "compteurs": {k: compteurs[k] for k in PLAFONDS}, "plafonds": dict(PLAFONDS),
+            "plafonds_par_geste": plafonds_par_geste(compteurs), "sade_mode": mode_sade()}

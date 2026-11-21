@@ -10,16 +10,20 @@ appliquées au premier usage de façon idempotente. Chemins surchargeables pour 
 """
 import ipaddress
 import json
+import logging
 import unicodedata
 import os
 import re
 import sqlite3
+import tempfile
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 DB_DEFAUT = "/var/lib/secubox/soc/defense.db"
+#: Mode et liste blanche publiés pour l'API du WAF de gk2 (#3723), qui ne lit jamais la base du SOC.
+FICHIER_SADE_DEFAUT = "/run/secubox/sade-mode.json"
 AUDIT_DEFAUT = "/var/log/secubox/audit.log"
 MIGRATIONS = Path(__file__).resolve().parent / "migrations"
 _NOM = re.compile(r"^(\d{4})-[\w.-]+\.sql$")
@@ -27,9 +31,15 @@ _NOM = re.compile(r"^(\d{4})-[\w.-]+\.sql$")
 MODES = ("observe", "reactive", "active", "aggressive")
 MODES_OUVERTS = ("observe", "reactive", "active")  # aggressive attend ses gestes (hors périmètre)
 
+log = logging.getLogger("secubox.soc.defense_etat")
+
 
 def _chemin_db() -> str:
     return os.environ.get("SECUBOX_SOC_DEFENSE_DB", DB_DEFAUT)
+
+
+def _chemin_fichier_sade() -> str:
+    return os.environ.get("SECUBOX_SOC_SADE_MODE", FICHIER_SADE_DEFAUT)
 
 
 def _ts() -> str:
@@ -172,6 +182,49 @@ def changer_mode(valeur: str, par: str) -> None:
             if db.in_transaction:
                 db.execute("ROLLBACK")
             raise EtatIndisponible(e.__class__.__name__) from e
+    publier_mode()
+
+
+# ── publication du mode pour gk2 (#3723) ──────────────────────────────────────────────────────────
+# `/run/secubox/sade-mode.json` = {"mode", "depuis", "liste_blanche"} : `depuis` est l'instant de CETTE publication
+# (le battement de l'API la refait toutes les `BATTEMENT_SADE_S`), jamais celui du changement de mode. L'API du WAF
+# tient pour `observe` un fichier daté de plus de 15 min : un SOC arrêté ferme l'automatique de lui-même. Écriture par
+# renommage atomique (temporaire du même dossier, fsync, `os.replace`) en 0644 : gk2 ne voit jamais un fichier partiel.
+# Jamais levée : le mode et la liste font foi dans la base ; un échec de publication est journalisé, le battement
+# suivant le rattrape. Base illisible : RIEN n'est publié (jamais un mode ni une liste inventés ; le fichier vieillit).
+
+def publier_mode() -> bool:
+    """Réécrit le fichier du mode SADE ; True s'il est publié, False sinon (sans lever)."""
+    try:
+        with closing(_connecter()) as db:
+            r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
+            cidrs = [c for (c,) in db.execute("SELECT cidr FROM liste_blanche ORDER BY rowid")]
+    except (sqlite3.Error, OSError) as e:
+        log.warning("sade-mode : base illisible, rien publié : %s", e.__class__.__name__)
+        return False
+    contenu = json.dumps({"mode": r[0] if r else "observe", "depuis": _ts(), "liste_blanche": cidrs},
+                         ensure_ascii=True) + "\n"
+    cible = Path(_chemin_fichier_sade())
+    temp = None
+    try:
+        fd, temp = tempfile.mkstemp(prefix=".sade-mode.", suffix=".tmp", dir=str(cible.parent))
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), 0o644)  # lu par le compte du WAF : jamais un secret, la liste blanche est publique
+            f.write(contenu)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp, cible)
+        temp = None
+    except OSError as e:
+        log.warning("sade-mode : publication impossible : %s", e.__class__.__name__)
+        return False
+    finally:
+        if temp is not None:
+            try:
+                os.unlink(temp)
+            except OSError:
+                log.warning("sade-mode : temporaire %s non retiré", temp)
+    return True
 
 
 def seuils() -> Dict[str, str]:
@@ -245,6 +298,7 @@ def ajouter_liste_blanche(cidr: Any, motif: Any, par: str) -> str:
             if db.in_transaction:
                 db.execute("ROLLBACK")
             raise EtatIndisponible(e.__class__.__name__) from e
+    publier_mode()
     return net
 
 
@@ -277,6 +331,7 @@ def retirer_liste_blanche(cidr: Any, par: str) -> str:
             if db.in_transaction:
                 db.execute("ROLLBACK")
             raise EtatIndisponible(e.__class__.__name__) from e
+    publier_mode()
     return net
 
 # ── décisions de la file d'approbation (REACTIVE) ────────────────────────────────────────────────

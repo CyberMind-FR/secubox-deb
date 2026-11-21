@@ -1,3 +1,14 @@
+secubox-soc (1.11.0-1~trixie1) trixie; urgency=medium
+
+  * SADE (ref #3723) : publication du mode pour gk2. L API écrit
+    /run/secubox/sade-mode.json (mode, depuis, liste_blanche ; 0644,
+    renommage atomique) après chaque changement de mode, chaque ajout ou
+    retrait de la liste blanche, au démarrage puis toutes les 60 s. L API du
+    WAF en tire la porte des gestes d office du compte ai-ban et tient pour
+    observe un fichier de plus de 15 min. Base illisible : rien n est publié.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
+
 secubox-soc (1.10.1-1~trixie1) trixie; urgency=medium
 
   * SADE (ref #3839) : liste blanche modifiable. Ajout et retrait audités par
