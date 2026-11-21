@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE de DataScope (#3853), nommé par AppArmorProfile= dans secubox-datascope.service et
+# secubox-datascope-collect.service, chargé par le postinst. LECTURE des trois sources (appareils du NAC, débits des
+# interfaces, santé des modules) et de datascope.toml ; ÉCRITURE de la base, du cache et de la socket, rien d'autre.
+# Aucun secret, aucun sudo, aucun réseau IP.
+
+#include <tunables/global>
+
+profile secubox-datascope flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+
+  /usr/bin/python3* rix,
+  /usr/lib/secubox/datascope/ r,
+  /usr/lib/secubox/datascope/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # ExecStartPost de l'API : remettre la socket en 0660.
+  /{usr/,}bin/sh ix,
+  /{usr/,}bin/dash ix,
+  /{usr/,}bin/seq ix,
+  /{usr/,}bin/sleep ix,
+  /{usr/,}bin/chmod ix,
+
+  # Configuration ; jamais les secrets.
+  /etc/secubox/datascope.toml r,
+  # Gardes de l'API (require_lecture / require_jwt de secubox_core) : secret de signature des sessions, comptes,
+  # réglages d'auth, sessions, journal de délégation — même liste que secubox-status.
+  /etc/secubox/ r,
+  /etc/secubox/secubox.conf r,
+  /etc/secubox/users.json r,
+  /etc/secubox/auth.toml r,
+  /var/lib/secubox/auth/ r,
+  /var/lib/secubox/auth/sessions.json r,
+  /var/log/secubox/delegation.log w,
+  /dev/null rw,
+  /proc/sys/net/core/somaxconn r,
+  deny /etc/secubox/secrets/** rwklx,
+
+  # Sources (données d'autres modules), en LECTURE seule.
+  /var/lib/secubox/nac/devices.db r,
+  /var/lib/secubox/nac/devices.db-wal r,
+  /var/lib/secubox/nac/devices.db-shm r,
+  /var/lib/secubox/hub/netstats.json r,
+  /var/cache/secubox/health/modules.json r,
+
+  # Base (/data si point de montage, sinon /var/lib) et cache (double tampon, écriture atomique).
+  /var/lib/secubox-datascope/ rw,
+  /var/lib/secubox-datascope/** rwk,
+  /data/secubox-datascope/ rw,
+  /data/secubox-datascope/** rwk,
+  /var/cache/secubox/datascope/ rw,
+  /var/cache/secubox/datascope/** rwk,
+
+  # Garde disque : espace libre du volume de la base (statvfs, aucun accès aux fichiers).
+  owner @{PROC}/@{pid}/** r,
+
+  # API.
+  /run/secubox/ r,
+  /run/secubox/datascope.sock rw,
+  network unix stream,
+}

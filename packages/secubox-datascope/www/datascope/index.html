@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox — DataScope V0.1 (#3853), « Network Cockpit » : la box, ses interfaces, ses zones et ses appareils, d'après les
+  relevés du collecteur DataScope (API /api/v1/datascope/ : overview, sources, graph, entities/{id}/context). Lecture seule.
+    · gauche : sources et leur état ; centre : topologie SVG déterministe ; droite : inspecteur de la sélection ;
+    · sous 900 px de cadre ou avec ?embed=1, les panneaux latéraux deviennent des tiroirs.
+  DONNÉES RÉELLES UNIQUEMENT : une mesure absente s'affiche « — » ; une source qui n'est pas « ok » rend l'état « inconnu ».
+  ?demo=1 : données de DÉMONSTRATION (adresses RFC 5737), annoncées par un bandeau orange, aucun appel réseau.
+  V0.1 : pas de frise d'événements (l'API rend recent_events et history à null).
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — DataScope, Network Cockpit</title>
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+  :root{--fond:#060d1b;--trait:rgba(86,150,255,.22);--trait2:rgba(86,150,255,.38);--texte:#eaf1ff;--doux:#9fb3d6;--faible:#6f84a8;
+    --cyan:#29b6f6;--bleu:#3b82f6;--vert:#2ecc71;--rouge:#ff4d5e;--orange:#ff9f1c;--violet:#a78bfa;--jaune:#ffd23f}
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;min-height:100%}
+  body{background:radial-gradient(1200px 520px at 85% -10%,rgba(59,130,246,.2),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(41,182,246,.10),transparent 60%),var(--fond);
+       color:var(--texte);font-family:"IBM Plex Sans","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.3}
+  body.emb{scrollbar-width:none} body.emb::-webkit-scrollbar{display:none}
+  .principal{min-width:0}
+  body:not(.emb):not(.demoOn) .principal{margin-left:220px;padding-top:48px}
+  body.emb #sidebar,body.demoOn #sidebar{display:none}
+  @media (max-width:900px),(hover:none) and (pointer:coarse){body:not(.emb) .principal{margin-left:0}}
+  body.mobile-mode:not(.emb) .principal{margin-left:0}
+  .cadre{container-type:inline-size;container-name:a;padding:10px}
+  .app{border:1px solid var(--trait2);border-radius:16px;background:linear-gradient(160deg,rgba(15,32,64,.92),rgba(7,15,32,.96));box-shadow:0 0 0 1px rgba(41,182,246,.10),0 0 38px rgba(41,182,246,.18);padding:12px;display:grid;gap:10px;min-width:0}
+  .tete{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .marque{display:flex;align-items:center;gap:8px}
+  .marque b{font-size:1.4rem;font-weight:800;letter-spacing:.02em} .marque small{display:block;color:var(--cyan);font-size:.72rem;margin-top:-2px}
+  .actif{border:1px solid var(--vert);color:var(--vert);background:rgba(46,204,113,.12);border-radius:999px;padding:3px 12px;font-size:.7rem;font-weight:700;letter-spacing:.04em}
+  .actif.att{border-color:var(--orange);color:var(--orange);background:rgba(255,159,28,.12)}
+  .actif.hors{border-color:var(--faible);color:var(--doux);background:rgba(159,179,214,.12)}
+  .droite{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;color:var(--doux);font-size:.74rem}
+  button.bt{font:inherit;font-size:.74rem;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:5px 10px;cursor:pointer;min-height:30px}
+  button.bt:focus-visible,a:focus-visible,.nd:focus-visible,.ar:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .demo{background:var(--orange);color:#1a1000;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem}
+  .info{background:var(--cyan);color:#001;text-align:center;font-weight:700;border-radius:8px;padding:3px 8px;font-size:.78rem} .info a{color:#001}
+  .tuiles{display:grid;gap:8px;grid-template-columns:repeat(3,1fr)}
+  .tuile{border:1px solid var(--trait);border-radius:12px;padding:8px 10px;background:linear-gradient(160deg,rgba(18,40,78,.7),rgba(8,18,38,.7));min-width:0}
+  .tuile .v{font-size:1.3rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums} .tuile .l{color:var(--doux);font-size:.72rem;margin-top:3px}
+  .corps{display:grid;gap:10px;grid-template-columns:minmax(0,1fr);position:relative;min-height:360px}
+  .pan{border:1px solid var(--trait);border-radius:12px;padding:10px 12px;background:rgba(10,22,46,.6);min-width:0}
+  .pan h3{margin:0 0 8px;font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:7px}
+  .pan h3 i{font-style:normal;font-weight:500;color:var(--faible);font-size:.68rem;margin-left:auto}
+  .vide{color:var(--faible);font-size:.8rem;padding:10px 2px}
+  .note{color:var(--faible);font-size:.68rem;margin-top:6px}
+  .mono{font-family:ui-monospace,"IBM Plex Mono",Menlo,Consolas,monospace;font-size:.74rem;word-break:break-all}
+  /* tiroirs : par défaut (cadre étroit ou ?embed=1), les panneaux latéraux recouvrent la topologie à la demande */
+  .tiroir{display:none;position:absolute;top:0;z-index:5;width:min(360px,100%);max-height:100%;overflow:auto;background:#0b1830;box-shadow:0 6px 28px rgba(0,0,0,.6)}
+  .tiroir.ouvert{display:block} #panSources{left:0} #panInsp{right:0}
+  .fermer{margin-left:auto}
+  @container a (min-width:900px){
+    body:not(.emb) .corps{grid-template-columns:210px minmax(0,1fr) 330px;align-items:start}
+    body:not(.emb) .tiroir{display:block;position:static;width:auto;max-height:none;overflow:visible;background:rgba(10,22,46,.6);box-shadow:none}
+    body:not(.emb) .btT,body:not(.emb) .fermer{display:none}
+    .tuiles{grid-template-columns:repeat(6,1fr)}
+  }
+  .src{display:grid;grid-template-columns:auto 1fr auto;gap:4px 8px;align-items:center;padding:6px 0;border-top:1px solid rgba(86,150,255,.12);font-size:.78rem}
+  .src:first-of-type{border-top:0} .src label{display:flex;gap:6px;align-items:center;cursor:pointer;min-width:0} .src input{width:16px;height:16px;margin:0}
+  .src .m{grid-column:1/-1;color:var(--faible);font-size:.68rem}
+  .pas{border-radius:999px;padding:1px 8px;font-weight:700;font-size:.66rem;border:1px solid currentColor;white-space:nowrap}
+  .pas.ok{color:var(--vert);background:rgba(46,204,113,.12)} .pas.ko{color:var(--rouge);background:rgba(255,77,94,.12)} .pas.inc{color:var(--doux);background:rgba(159,179,214,.12)}
+  .pas.obs{color:var(--cyan);background:rgba(41,182,246,.12)} .pas.rap{color:var(--violet);background:rgba(167,139,250,.12)}
+  .topo{overflow:auto;max-height:720px;border-radius:8px;background:rgba(6,13,27,.45)}
+  svg.arbre{display:block;width:100%;min-width:720px;height:auto}
+  svg.arbre text{font-size:11px;fill:var(--texte)} svg.arbre text.col{fill:var(--faible);font-size:10px;letter-spacing:.06em}
+  svg.arbre text.plus{fill:var(--doux);font-style:italic}
+  .nd{cursor:pointer;outline:none} .arbre .nd rect,.arbre .nd circle{fill:rgba(18,40,78,.9);stroke-width:1.4}
+  .arbre .nd.t-node rect{stroke:var(--bleu);fill:rgba(59,130,246,.22)} .arbre .nd.t-interface rect{stroke:var(--cyan)} .arbre .nd.t-network rect{stroke:var(--violet)}
+  .arbre .nd.t-device circle{stroke:var(--cyan);fill:rgba(41,182,246,.25)} .arbre .nd.t-service rect{stroke:var(--vert)}
+  .arbre .nd.inc rect,.arbre .nd.inc circle{stroke:var(--faible);stroke-dasharray:3 2;fill:rgba(159,179,214,.08)} .arbre .nd.inc text{fill:var(--doux)}
+  .arbre .nd.sel rect,.arbre .nd.sel circle{stroke:var(--cyan);stroke-width:2.6}
+  .ar{cursor:pointer;outline:none} .arbre .ar .v{fill:none;stroke:rgba(159,179,214,.42);stroke-width:1.2} .arbre .ar .z{fill:none;stroke:transparent;stroke-width:10}
+  .arbre .ar:hover .v,.arbre .ar.lie .v{stroke:var(--cyan)} .arbre .ar.sel .v{stroke:var(--jaune);stroke-width:2.4}
+  .arbre .ar.inc .v{stroke-dasharray:4 3}
+  path.grp{fill:none;stroke:rgba(167,139,250,.35);stroke-width:1;stroke-dasharray:2 3}
+  svg.bulles{display:block;width:100%;height:auto;max-height:700px}
+  svg.bulles text{font-size:var(--fs,12px);fill:var(--texte);paint-order:stroke;stroke:#060d1b;stroke-width:calc(var(--fs,12px) / 4);stroke-linejoin:round;pointer-events:none}
+  .bulles .nd circle.b{fill-opacity:.88;stroke:rgba(234,241,255,.45);stroke-width:1;vector-effect:non-scaling-stroke}
+  .bulles .nd circle.anneau{fill:none;stroke:none} .bulles .nd circle.prise{fill:transparent}
+  .bulles .nd.sel circle.anneau{stroke:var(--cyan);stroke-width:3;vector-effect:non-scaling-stroke}
+  .bulles .nd.inc circle.b{fill-opacity:.35;stroke:var(--faible);stroke-dasharray:3 2}
+  .bulles .nd.petit .lbl{display:none} .bulles .nd.sel .lbl,.bulles .nd.voisin .lbl{display:block}
+  .bulles .ar line.v{stroke:rgba(159,179,214,.26);stroke-width:1;vector-effect:non-scaling-stroke} .bulles .ar line.z{stroke:transparent;stroke-width:8}
+  .bulles .ar:hover line.v,.bulles .ar.lie line.v{stroke:var(--cyan);stroke-width:1.8} .bulles .ar.sel line.v{stroke:var(--jaune);stroke-width:2.6}
+  .bulles .ar.inc line.v{stroke-dasharray:4 3}
+  .bulles .env{fill:none;stroke:var(--faible);stroke-dasharray:4 4;vector-effect:non-scaling-stroke} .bulles .envt{fill:var(--faible)}
+  .bulles .plus circle{fill:rgba(159,179,214,.18);stroke:var(--doux);stroke-dasharray:2 2;vector-effect:non-scaling-stroke} .bulles .plus text{fill:var(--doux)}
+  .vues{display:inline-flex;gap:4px;margin-left:8px} .vues .bt{padding:3px 10px;min-height:26px} .vues .bt[aria-pressed="true"]{border-color:var(--cyan);background:rgba(41,182,246,.22)}
+  .topoPan{container-type:inline-size;container-name:t}
+  .liste{max-height:560px;overflow:auto;margin-top:8px}
+  .liste h4{margin:0 0 6px;font-size:.78rem;color:var(--doux);display:flex;gap:8px;align-items:center}
+  .ligneApp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;width:100%;min-height:44px;margin:0 0 4px;padding:6px 10px;text-align:left;font:inherit;font-size:.78rem;color:var(--texte);background:rgba(59,130,246,.10);border:1px solid var(--trait);border-radius:8px;cursor:pointer}
+  .ligneApp b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600} .ligneApp .m{grid-column:1/-1;color:var(--faible);font-size:.68rem;overflow-wrap:anywhere}
+  .ligneApp.sel{border-color:var(--cyan);background:rgba(41,182,246,.22)} .ligneApp:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  @container t (min-width:700px){.topoCorps{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:10px;align-items:start}.liste{margin-top:0}}
+  @media (pointer:coarse){.pan .topoCorps{display:block}.pan .liste{margin-top:8px}}
+  .bulles .nd.voisin.gene:not(.sel) .lbl{display:none}
+  .legende{display:flex;flex-wrap:wrap;gap:4px 12px;color:var(--doux);font-size:.7rem;margin-top:6px} .legende i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px} .legende i.gris{background:rgba(111,132,168,.5);border:1px dashed var(--faible)}
+  dl.props{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:.76rem} dl.props dt{color:var(--faible)} dl.props dd{margin:0;min-width:0;overflow-wrap:anywhere}
+  .insp h4{margin:12px 0 5px;font-size:.78rem;color:var(--doux);font-weight:700}
+  .rel{border-top:1px solid rgba(86,150,255,.12);padding:6px 0;font-size:.74rem;display:grid;gap:3px}
+  .rel .h{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center} .rel .j{color:var(--doux)} .rel .d{color:var(--faible);font-size:.68rem}
+  button.lien{font:inherit;color:var(--cyan);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-align:left;overflow-wrap:anywhere}
+  .actions a{display:inline-block;margin:2px 6px 2px 0;color:var(--texte);background:rgba(59,130,246,.18);border:1px solid var(--trait2);border-radius:8px;padding:4px 10px;text-decoration:none;font-size:.74rem}
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<div class="principal"><div class="cadre"><div class="app">
+  <div class="tete">
+    <span class="marque"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#29b6f6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="5" rx="1.2" fill="rgba(41,182,246,.16)"/><rect x="2.5" y="16.5" width="6" height="5" rx="1.2"/><rect x="15.5" y="16.5" width="6" height="5" rx="1.2"/><path d="M12 7.5v4.5M5.5 16.5V12h13v4.5"/></svg><span><b>DataScope</b><small>Network Cockpit</small></span></span>
+    <span class="actif hors" id="actif" title="État des sources du dernier relevé du collecteur DataScope">—</span>
+    <div class="droite">
+      <span id="heure">—</span>
+      <button type="button" class="bt btT" id="btSources" aria-controls="panSources" aria-expanded="false">Sources</button>
+      <button type="button" class="bt btT" id="btInsp" aria-controls="panInsp" aria-expanded="false">Inspecteur</button>
+      <button type="button" class="bt" id="rafraichir">⟳ Rafraîchir</button>
+    </div>
+  </div>
+  <div class="info" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top">Se connecter</a></div>
+  <div class="demo" id="demo" hidden>DONNÉES DE DÉMONSTRATION — maquette, aucune mesure réelle</div>
+  <div class="tuiles" id="tuiles"></div>
+  <div class="corps">
+    <div class="pan tiroir" id="panSources"><h3>Sources <i>relevé du collecteur</i><button type="button" class="bt fermer" data-ferme="panSources">✕ Fermer</button></h3><div id="sources"></div><div class="note">Décocher une source masque ses entités dans la topologie (affichage seulement).</div></div>
+    <div class="pan topoPan"><h3>Topologie <span class="vues" role="group" aria-label="Vue de la topologie"><button type="button" class="bt" id="vueBulles" aria-pressed="true">Bulles</button><button type="button" class="bt" id="vueArbre" aria-pressed="false">Arbre</button></span><i id="topoNote">relations relevées, preuve au clic</i></h3><div class="topoCorps"><div class="topo" id="topo"></div><div class="liste" id="liste" hidden aria-label="Liste des appareils"></div></div><div class="legende" id="legende" hidden></div><div class="note" id="topoBas"></div></div>
+    <div class="pan tiroir insp" id="panInsp"><h3>Inspecteur <i id="inspType"></i><button type="button" class="bt fermer" data-ferme="panInsp">✕ Fermer</button></h3><div id="insp"><div class="vide">Choisir un élément de la topologie.</div></div></div>
+  </div>
+  <div class="note">Lecture seule · chaque relation porte sa preuve (observée ou rapportée), sa source et sa date · aucune relation déduite.</div>
+</div></div></div>
+<script>
+(function(){
+  "use strict";
+  var el=function(i){return document.getElementById(i);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});}
+  var q=new URLSearchParams(location.search), DEMO=!!q.get('demo'), EMB=!!q.get('embed');
+  if(EMB) document.body.classList.add('emb');
+  if(DEMO) document.body.classList.add('demoOn');
+  // menu latéral commun : hors ?embed=1 et hors démonstration (règle Aurora), chargé sans balise <script src>
+  if(!EMB&&!DEMO){try{var sc=document.createElement('script');sc.src='/shared/sidebar.js';document.head.appendChild(sc);}catch(e){}}
+  var API='/api/v1/datascope/', NS='http://www.w3.org/2000/svg', CLE_SEL='datascope.selection', CLE_MASQ='datascope.masquees', CLE_VUE='datascope.vue';
+  var RE_ID=/^(node|network|interface|device|ip|service):[A-Za-z0-9:._-]{1,128}$/;
+  var SOURCE_DU_MODULE={nac:'network'};
+  var TYPE_FR={node:'box',network:'zone',interface:'interface',device:'appareil',ip:'adresse IP',service:'service',arete:'relation'};
+  var REL_FR={BELONGS_TO:'appartient à',CONNECTS_TO:'connecté à',HOSTED_ON:'hébergé sur',OBSERVED_BY:'observé par'};
+  var ETAT_FR={ok:'à jour',inaccessible:'inaccessible',unknown:'inconnu'};
+
+  // --- petits outils DOM : les valeurs de l'API passent par textContent (ou esc() dans les rares chaînes HTML) ---
+  function h(tag,at,kids){var n=document.createElement(tag);if(at)for(var k in at){if(k==='class')n.className=at[k];else if(k==='text')n.textContent=at[k];else n.setAttribute(k,at[k]);}
+    (kids||[]).forEach(function(c){if(c==null)return;n.appendChild(typeof c==='string'?document.createTextNode(c):c);});return n;}
+  function s(tag,at,parent){var n=document.createElementNS(NS,tag);for(var k in at)n.setAttribute(k,at[k]);if(parent)parent.appendChild(n);return n;}
+  function vider(n){while(n.firstChild)n.removeChild(n.firstChild);}
+  function fmtDate(v){if(typeof v!=='string'||!v)return '—';var d=new Date(v);if(isNaN(d.getTime()))return '—';
+    return d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+  function nombre(v){return typeof v==='number'&&isFinite(v)?String(v).replace(/\B(?=(\d{3})+(?!\d))/g,' '):'—';}
+  function court(t,n){t=String(t==null?'':t);return t.length>n?t.slice(0,n-1)+'…':t;}
+  function etatFr(e){return ETAT_FR[e]||'inconnu';}
+  function pasEtat(e){return h('span',{'class':'pas '+(e==='ok'?'ok':e==='inaccessible'?'ko':'inc'),text:etatFr(e)});}
+  function pasPreuve(t){return h('span',{'class':'pas '+(t==='observed'?'obs':t==='reported'?'rap':'inc'),text:t==='observed'?'observée':t==='reported'?'rapportée':'preuve inconnue'});}
+  function sourceDe(sm){return SOURCE_DU_MODULE[sm]||sm||'';}
+  function cleArete(a){return a.src+'|'+a.type+'|'+a.dst;}
+  function idValide(id){if(typeof id!=='string')return false;if(RE_ID.test(id))return true;var p=id.split('|');return p.length===3&&RE_ID.test(p[0])&&/^[A-Z_]{1,32}$/.test(p[1])&&RE_ID.test(p[2]);}
+  function lireStock(cle){try{return JSON.parse(sessionStorage.getItem(cle)||'null');}catch(e){return null;}}
+  function ecrireStock(cle,v){try{sessionStorage.setItem(cle,JSON.stringify(v));}catch(e){}}
+
+  // --- état ---
+  var etat={overview:null,sources:null,graphe:null,refus:false,noeuds:{},aretes:{},contextes:{}};
+  var masquees=(function(){var m=lireStock(CLE_MASQ);return Array.isArray(m)?m.filter(function(x){return typeof x==='string';}):[];})();
+  var vue=lireStock(CLE_VUE)==='arbre'?'arbre':'bulles';   // vue de la topologie : « bulles » par défaut
+  var selection = {id: null, type: null, source: null};
+  var jetonInsp=0;
+
+  // Seule fonction qui écrit `selection`. Toutes les zones (topologie, inspecteur) la relisent.
+  function selectionner(id,opts){
+    opts=opts||{};
+    if(id!==null&&!idValide(id))id=null;
+    var a=id&&id.indexOf('|')>0?etat.aretes[id]:null, n=id&&!a?etat.noeuds[id]:null;
+    selection.id=id;
+    selection.type=id?(a||id.indexOf('|')>0?'arete':(n?n.type:id.split(':')[0])):null;
+    selection.source=a?sourceDe(a.source_module):(n?sourceDe(n.source_module):null);
+    ecrireStock(CLE_SEL,selection.id);
+    marquerSelection();inspecter();rendreListe();
+    // interface ou zone : sa liste d'appareils s'ouvre (sous le graphe en tiroir) ; autre élément : l'inspecteur
+    if(opts.ouvrir&&modeTiroir()){if(selection.type==='interface'||selection.type==='network'){try{el('liste').scrollIntoView({block:'nearest'});}catch(e){}}else ouvrir('panInsp',true);}
+  }
+
+  // --- accès aux données ---
+  function jeton(){try{return localStorage.getItem('sbx_token')||sessionStorage.getItem('sbx_token')||'';}catch(e){return '';}}
+  function jget(chemin){var hd={'Accept':'application/json'},t=jeton();if(t)hd.Authorization='Bearer '+t;
+    return fetch(API+chemin,{headers:hd,credentials:'same-origin',cache:'no-store'}).then(function(r){
+      if(r.status===401||r.status===403)return {refus:true};return r.ok?r.json().then(function(j){return {ok:true,j:j};}):{ok:false,status:r.status};
+    }).catch(function(){return {ok:false};});}
+
+  function charge(){
+    if(DEMO){appliquer(DEMO_DONNEES);return;}
+    Promise.all([jget('overview'),jget('sources'),jget('graph')]).then(function(r){
+      appliquer({overview:r[0].ok?r[0].j:null,sources:r[1].ok&&r[1].j&&Array.isArray(r[1].j.sources)?r[1].j.sources:null,
+        graphe:r[2].ok?r[2].j:null,refus:!r[2].ok});
+    });
+  }
+  function appliquer(d){
+    etat.overview=d.overview;etat.sources=d.sources;etat.graphe=d.graphe;etat.refus=!!d.refus;etat.contextes={};
+    etat.noeuds={};etat.aretes={};
+    var g=d.graphe;
+    if(g&&g.disponible!==false&&Array.isArray(g.noeuds)){
+      g.noeuds.forEach(function(n){if(n&&RE_ID.test(n.id))etat.noeuds[n.id]=n;});
+      (g.aretes||[]).forEach(function(a){if(a&&etat.noeuds[a.src]&&etat.noeuds[a.dst])etat.aretes[cleArete(a)]=a;});
+    }
+    rendre();
+    // la sélection survit au rafraîchissement : relue après chaque chargement
+    selectionner(selection.id);
+  }
+
+  // --- rendu : en-tête, tuiles, sources ---
+  function rendre(){
+    el('demo').hidden=!DEMO;el('session').hidden=DEMO||!etat.refus;
+    var ov=etat.overview&&etat.overview.disponible!==false?etat.overview:null,a=el('actif');
+    a.className='actif';
+    if(!ov){a.textContent=etat.refus?'—':'AUCUN RELEVÉ';a.classList.add(etat.refus?'hors':'att');a.title=etat.overview&&etat.overview.motif?String(etat.overview.motif):'État des sources du dernier relevé';}
+    else if(ov.perime){a.textContent='DONNÉES PÉRIMÉES — COLLECTEUR ARRÊTÉ ?';a.classList.add('att');a.title='Dernier relevé vérifié le '+fmtDate(ov.verifie_le||ov.genere_le);}
+    else if(!ov.complet){a.textContent='RELEVÉ PARTIEL';a.classList.add('att');a.title='Une source au moins n’est pas à jour : ses entités sont affichées « inconnu ».';}
+    else{a.textContent='SOURCES À JOUR';a.title='Toutes les sources du dernier relevé sont à jour.';}
+    el('heure').textContent=ov?'relevé du '+fmtDate(ov.genere_le):'relevé —';
+    var en=ov&&ov.entites||{},T=[['device','Appareils'],['interface','Interfaces'],['network','Zones'],['ip','Adresses IP'],['service','Services']],tu=el('tuiles');vider(tu);
+    T.forEach(function(t){tu.appendChild(h('div',{'class':'tuile',title:'Entités de type « '+TYPE_FR[t[0]]+' » dans la base DataScope (dernier relevé).'},[h('div',{'class':'v',text:ov?nombre(en[t[0]]||0):'—'}),h('div',{'class':'l',text:t[1]})]));});
+    tu.appendChild(h('div',{'class':'tuile',title:'Relations stockées, chacune avec sa preuve et sa source.'},[h('div',{'class':'v',text:ov?nombre(ov.relations):'—'}),h('div',{'class':'l',text:'Relations'})]));
+    rendreSources();rendreTopo();
+  }
+  function rendreSources(){
+    var box=el('sources');vider(box);var l=etat.sources;
+    if(!l){box.appendChild(h('div',{'class':'vide',text:etat.refus?'— (session requise)':'—'}));return;}
+    if(!l.length){box.appendChild(h('div',{'class':'vide',text:'Aucune source relevée.'}));return;}
+    l.forEach(function(x){var id='src-'+String(x.source).replace(/[^a-z0-9_-]/gi,'');
+      var cb=h('input',{type:'checkbox',id:id});cb.checked=masquees.indexOf(x.source)<0;
+      cb.addEventListener('change',function(){var i=masquees.indexOf(x.source);if(cb.checked&&i>=0)masquees.splice(i,1);else if(!cb.checked&&i<0)masquees.push(x.source);ecrireStock(CLE_MASQ,masquees);rendreTopo();marquerSelection();});
+      box.appendChild(h('div',{'class':'src'},[h('label',{'for':id},[cb,h('span',{'class':'mono',text:x.source})]),h('span',{text:''}),pasEtat(x.etat),
+        h('div',{'class':'m',text:(x.motif?x.motif+' · ':'')+'vu le '+fmtDate(x.vu_le)})]));});
+  }
+
+  // <disposition-bulles> — fonctions pures, sans DOM ni hasard : mêmes entrées (dans n'importe quel ordre) ⇒ mêmes positions.
+  // Extraites et exécutées par tests/test_page.py (node). Aucune physique : anneaux et grappes calculés.
+  var MAX_PAR_IF=60;
+  function parId(a,b){return a.id<b.id?-1:a.id>b.id?1:0;}
+  // récence : date du NAC (attributs.vu_nac, au jour près) d'abord ; last_seen n'est que la date de la passe
+  function vuNac(n){var v=n&&n.attributes&&n.attributes.vu_nac;return typeof v==='string'?v:'';}
+  function parLastSeen(a,b){var p=vuNac(a),q=vuNac(b);if(p!==q)return p<q?1:-1;var x=String(a.last_seen||''),y=String(b.last_seen||'');return x<y?1:x>y?-1:parId(a,b);}
+  // IP affichée d'un appareil (texte brut, écrit en textContent) : attribut ip, sinon nœuds ip reliés, sinon renvoi
+  function ipAffichee(d,A,N,horsVue){var v=d&&d.attributes&&d.attributes.ip;if(typeof v==='string'&&v)return v;
+    var ips=A.filter(function(a){return a.type==='BELONGS_TO'&&a.dst===d.id&&N[a.src]&&N[a.src].type==='ip';}).map(function(a){return N[a.src].label||a.src;});
+    if(ips.length)return ips.join(', ');return horsVue>0?'IP dans l\u2019inspecteur':'IP \u2014';}
+  function parLabel(a,b){var x=String(a.label||a.id),y=String(b.label||b.id);return x<y?-1:x>y?1:parId(a,b);}
+  function cleTri(a){return a.src+'|'+a.type+'|'+a.dst;}
+  // rayon d'une bulle selon son type et son degré (nombre de relations) : [base, pente, plafond]
+  var RAYON={node:[16,2.2,36],interface:[10,1.4,24],network:[8,1.2,18],service:[6,1,12],device:[5,.8,10],ip:[3,.5,6]};
+  function rayonBulle(type,deg){var r=RAYON[type]||RAYON.ip;return Math.min(r[2],r[0]+r[1]*Math.sqrt(deg||0));}
+  // anneaux d'une grappe autour de son interface : 12 + 20 + 28 places = 60 (MAX_PAR_IF), puis +8 par anneau
+  var PLACES=[12,20,28],ANNEAU0=44,PAS_ANNEAU=34;
+  function anneaux(n){var r=[],i=0;while(n>0){var k=Math.min(PLACES[i]||(PLACES[PLACES.length-1]+8*(i-PLACES.length+1)),n);r.push(k);n-=k;i++;}return r;}
+  function rayonGrappe(n){return n>0?ANNEAU0+PAS_ANNEAU*(anneaux(n).length-1):0;}
+  function premiere(A,N,id,type,cible){var c=A.filter(function(a){return a.src===id&&a.type===type&&N[a.dst]&&N[a.dst].type===cible;});
+    c.sort(function(x,y){var p=String(x.last_seen||''),q=String(y.last_seen||'');return p<q?1:p>q?-1:(x.dst<y.dst?-1:x.dst>y.dst?1:0);});return c[0]||null;}
+  // Libellés : posés hors de la bulle, du côté opposé à son parent (appareil → son interface, service/zone → box) ;
+  // une interface, cernée par ses appareils, porte le sien vers la box.
+  // `libre` : distance au centre voisin le plus proche (borne de la zone de prise) ; `gene` : le libellé d'une petite bulle
+  // tomberait sur une bulle plus grande, il n'est alors montré que si la bulle elle-même est choisie.
+  var SEUIL_LIBELLE=9;
+  function libelles(pos,plus){
+    var ids=Object.keys(pos).sort(),pts=ids.map(function(id){return pos[id];}).concat(plus);
+    ids.forEach(function(id){var p=pos[id],dx=p.px===undefined?0:p.x-p.px,dy=p.px===undefined?1:p.y-p.py,d=Math.sqrt(dx*dx+dy*dy)||1;
+      // une interface est entourée de sa grappe : son seul côté libre est vers la box (exception assumée à la règle)
+      if(p.dedans){dx=-dx;dy=-dy;}
+      p.ux=dx/d;p.uy=dy/d;p.lx=p.x+p.ux*(p.r+4);p.ly=p.y+p.uy*(p.r+4);
+      var m=Infinity;pts.forEach(function(q){if(q!==p){var e=Math.sqrt((q.x-p.x)*(q.x-p.x)+(q.y-p.y)*(q.y-p.y));if(e<m)m=e;}});p.libre=m===Infinity?60:m;
+      p.gene=p.r<SEUIL_LIBELLE&&ids.some(function(o){var q=pos[o];return q!==p&&q.r>p.r&&Math.sqrt((q.x-p.lx)*(q.x-p.lx)+(q.y-p.ly)*(q.y-p.ly))<q.r+14;});});
+  }
+  function disposerBulles(noeuds,aretes){
+    var N={},liste=noeuds.filter(function(n){return n&&typeof n.id==='string';}).slice().sort(parId);
+    liste.forEach(function(n){N[n.id]=n;});
+    var A=aretes.filter(function(a){return a&&N[a.src]&&N[a.dst];}).slice().sort(function(x,y){var p=cleTri(x),q=cleTri(y);return p<q?-1:p>q?1:0;});
+    var deg={};A.forEach(function(a){deg[a.src]=(deg[a.src]||0)+1;deg[a.dst]=(deg[a.dst]||0)+1;});
+    var boxes=liste.filter(function(n){return n.type==='node';});if(!boxes.length)return null;
+    var refs={};A.forEach(function(a){if(N[a.dst].type==='node')refs[a.dst]=(refs[a.dst]||0)+1;});
+    boxes.sort(function(a,b){return (refs[b.id]||0)-(refs[a.id]||0)||parId(a,b);});
+    var box=boxes[0],de=function(t){return liste.filter(function(n){return n.type===t;});};
+    var ifs=de('interface').sort(parLabel),services=de('service').sort(parLabel),zones=de('network').sort(parLabel),devs=de('device').sort(parLastSeen);
+    // un appareil rejoint la grappe de son interface (CONNECTS_TO le plus récent) ; sans interface : grappe « sans interface connue »
+    var grp={'':[]};ifs.forEach(function(i){grp[i.id]=[];});
+    devs.forEach(function(d){var c=premiere(A,N,d.id,'CONNECTS_TO','interface');grp[c?c.dst:''].push(d);});
+    var places=ifs.map(function(i){return {id:i.id,devs:grp[i.id]};});if(grp[''].length)places.push({id:'',devs:grp['']});
+    places.forEach(function(p){p.garde=p.devs.slice(0,MAX_PAR_IF);p.reste=p.devs.length-p.garde.length;p.rc=rayonGrappe(p.garde.length+(p.reste>0?1:0));});
+    // la box porte tout le relevé : sa taille suit le nombre d'entités qui s'y rattachent, pas ses seuls liens directs
+    var pos={},plus=[],enveloppes=[],rb=rayonBulle('node',liste.length),R0=rb+52,k=places.length,maxC=0;
+    places.forEach(function(p){maxC=Math.max(maxC,p.rc);});
+    var R1=Math.max(R0+maxC+40,170);
+    if(k>1)places.forEach(function(p,i){var q=places[(i+1)%k];R1=Math.max(R1,(p.rc+q.rc+36)/(2*Math.sin(Math.PI/k)));});
+    pos[box.id]={x:0,y:0,r:rb};
+    places.forEach(function(p,i){
+      var a=-Math.PI/2+2*Math.PI*i/Math.max(k,1),cx=R1*Math.cos(a),cy=R1*Math.sin(a);
+      if(p.id)pos[p.id]={x:cx,y:cy,r:rayonBulle('interface',deg[p.id]),px:0,py:0,dedans:true};else enveloppes.push({x:cx,y:cy,r:p.rc+12});
+      var ord=p.garde.slice().sort(parId),idx=0;   // angle dans la grappe : ordre des identifiants
+      anneaux(ord.length+(p.reste>0?1:0)).forEach(function(n,j){var rr=ANNEAU0+PAS_ANNEAU*j,dec=j%2?Math.PI/n:0;
+        for(var m=0;m<n;m++,idx++){var t=a+dec+2*Math.PI*m/n,x=cx+rr*Math.cos(t),y=cy+rr*Math.sin(t);
+          if(idx<ord.length)pos[ord[idx].id]={x:x,y:y,r:rayonBulle('device',deg[ord[idx].id]),px:cx,py:cy};else plus.push({x:x,y:y,r:11,n:p.reste,interface:p.id});}});
+    });
+    // services : arc intérieur autour de la box, décalé d'un demi-pas pour ne pas couvrir les liens des interfaces
+    services.forEach(function(s,m){var t=-Math.PI/2+Math.PI/Math.max(k,1)+2*Math.PI*m/Math.max(services.length,1);pos[s.id]={x:R0*Math.cos(t),y:R0*Math.sin(t),r:rayonBulle('service',deg[s.id]),px:0,py:0};});
+    // zones : anneau extérieur, à l'angle moyen de leurs appareils placés ; écart minimal imposé dans l'ordre des angles
+    var R3=R1+maxC+56,za=zones.map(function(z){var sx=0,sy=0,n=0;A.forEach(function(a){if(a.dst===z.id&&a.type==='BELONGS_TO'&&pos[a.src]&&N[a.src].type==='device'){sx+=pos[a.src].x;sy+=pos[a.src].y;n++;}});
+      return {z:z,a:n&&(Math.abs(sx)+Math.abs(sy)>1e-6)?Math.atan2(sy,sx):Math.PI/2};});
+    za.sort(function(x,y){return x.a-y.a||parId(x.z,y.z);});
+    var ecart=zones.length?Math.min(0.32,2*Math.PI/zones.length):0;
+    za.forEach(function(e,i){if(i&&e.a-za[i-1].a<ecart)e.a=za[i-1].a+ecart;pos[e.z.id]={x:R3*Math.cos(e.a),y:R3*Math.sin(e.a),r:rayonBulle('network',deg[e.z.id]),px:0,py:0};});
+    libelles(pos,plus);
+    // toutes les relations dont les deux bouts sont dessinés (les IP restent dans l'inspecteur)
+    var liens=A.filter(function(a){return pos[a.src]&&pos[a.dst];});
+    var x0=0,y0=0,x1=0,y1=0;Object.keys(pos).forEach(function(id){var p=pos[id];x0=Math.min(x0,p.x-p.r);y0=Math.min(y0,p.y-p.r);x1=Math.max(x1,p.x+p.r);y1=Math.max(y1,p.y+p.r);});
+    plus.concat(enveloppes).forEach(function(p){x0=Math.min(x0,p.x-p.r);y0=Math.min(y0,p.y-p.r);x1=Math.max(x1,p.x+p.r);y1=Math.max(y1,p.y+p.r);});
+    var M=60;
+    return {box:box.id,pos:pos,liens:liens,plus:plus,enveloppes:enveloppes,R1:R1,
+      vb:[Math.floor(x0-M),Math.floor(y0-M),Math.ceil(x1-x0+2*M),Math.ceil(y1-y0+2*M)],nDev:devs.length,nIf:ifs.length};
+  }
+  // </disposition-bulles>
+
+  // --- vue « Bulles » (par défaut) : graphe de bulles reliées, disposition radiale déterministe ---
+  var COUL={node:'#3b82f6',interface:'#29b6f6',network:'#a78bfa',device:'#38d9c0',service:'#f472b6',ip:'#ffd23f'};
+  function rendreBulles(box){
+    var N=etat.noeuds,liste=Object.keys(N).map(function(k){return N[k];}).filter(visible);
+    var L=disposerBulles(liste,Object.keys(etat.aretes).map(function(k){return etat.aretes[k];}));
+    if(!L)return null;
+    var sv=s('svg',{'class':'graphe bulles',viewBox:L.vb.join(' '),role:'group','aria-label':'Graphe des entités : box au centre, interfaces en anneau, appareils en grappes autour de leur interface, zones à l’extérieur'},box);
+    L.enveloppes.forEach(function(e){s('circle',{'class':'env',cx:e.x,cy:e.y,r:e.r},sv);var t=s('text',{'class':'envt',x:e.x,y:e.y-e.r-6,'text-anchor':'middle'},sv);t.textContent='Appareils sans interface connue';});
+    var gl=s('g',{'class':'liens'},sv);
+    L.liens.forEach(function(a){
+      var p=L.pos[a.src],q=L.pos[a.dst],k=cleArete(a),src=N[a.src],dst=N[a.dst],inc=sourceEtat(a.source_module)!=='ok';
+      // hors tabulation : au clavier, une relation s'atteint par la liste des relations de l'inspecteur
+      var gr=s('g',{'class':'ar'+(inc?' inc':''),tabindex:'-1','data-cle':k,'data-src':a.src,'data-dst':a.dst,'aria-label':'Relation '+(REL_FR[a.type]||a.type)+' : '+(src.label||src.id)+' → '+(dst.label||dst.id)},gl);
+      var ti=s('title',{},gr);ti.textContent=(REL_FR[a.type]||a.type)+' · preuve '+(a.evidence_type||'?')+' · '+(a.source_module||'?')+' · '+fmtDate(a.last_seen);
+      s('line',{'class':'v',x1:p.x,y1:p.y,x2:q.x,y2:q.y},gr);s('line',{'class':'z',x1:p.x,y1:p.y,x2:q.x,y2:q.y},gr);
+      activer(gr,k);
+    });
+    L.plus.forEach(function(p){var g=s('g',{'class':'plus','data-n':p.n},sv);var ti=s('title',{},g);
+      ti.textContent=p.n+' appareil'+(p.n>1?'s':'')+' de plus sur cette interface, non dessiné'+(p.n>1?'s':'')+' (les '+MAX_PAR_IF+' vus le plus récemment le sont).';
+      s('circle',{cx:p.x,cy:p.y,r:p.r},g);var t=s('text',{x:p.x,y:p.y,'text-anchor':'middle','dominant-baseline':'central'},g);t.textContent='+'+p.n;});
+    // grandes bulles d'abord, petites par-dessus : chaque appareil reste cliquable
+    Object.keys(L.pos).sort(function(a,b){return L.pos[b].r-L.pos[a].r||(a<b?-1:1);}).forEach(function(id){bulle(sv,N[id],L.pos[id]);});
+    var lg=el('legende');vider(lg);lg.hidden=false;
+    ['node','interface','network','device','service'].forEach(function(t){lg.appendChild(h('span',{},[h('i',{style:'background:'+COUL[t]}),TYPE_FR[t]]));});
+    lg.appendChild(h('span',{},[h('i',{'class':'gris'}),'source non à jour : état inconnu']));
+    var notes=['Taille d’une bulle = nombre de ses relations. Appareils en grappe autour de leur interface (ordre des identifiants), '+MAX_PAR_IF+' au plus par interface : les plus récemment vus. Adresses IP dans l’inspecteur.'];
+    if(!L.nIf&&L.nDev)notes.push('Aucune interface relevée : appareils affichés sans rattachement.');
+    return notes;
+  }
+  function bulle(sv,n,p){
+    var inc=n.etat_source!=='ok',petit=(n.type==='device'||n.type==='ip')&&p.r<SEUIL_LIBELLE;
+    var g=s('g',{'class':'nd b-'+n.type+(inc?' inc':'')+(petit?' petit':'')+(p.gene?' gene':''),tabindex:'0',role:'button','data-id':n.id,
+      'aria-label':TYPE_FR[n.type]+' '+(n.label||n.id)+(inc?' · inconnu (source non à jour)':'')},sv);
+    var ti=s('title',{},g);ti.textContent=TYPE_FR[n.type]+' · '+(n.label||n.id)+' · '+n.id+(inc?' · source '+etatFr(n.etat_source)+' : état inconnu':'');
+    s('circle',{'class':'anneau',cx:p.x,cy:p.y,r:p.r+5},g);
+    s('circle',{'class':'b',cx:p.x,cy:p.y,r:p.r,fill:inc?'#6f84a8':COUL[n.type]||COUL.ip},g);
+    s('circle',{'class':'prise',cx:p.x,cy:p.y,r:Math.max(p.r,10),'data-r':p.r,'data-libre':p.libre},g);
+    var t=s('text',{'class':'lbl',x:p.lx,y:p.ly,'text-anchor':p.ux>.35?'start':p.ux<-.35?'end':'middle','dominant-baseline':p.uy>.35?'hanging':p.uy<-.35?'alphabetic':'central'},g);
+    t.textContent=court(n.label||n.id,inc?14:22)+(inc?' · inconnu':'');
+    activer(g,n.id);
+  }
+  function activer(g,id){function choisir(){selectionner(id,{ouvrir:true});}
+    g.addEventListener('click',choisir);g.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();choisir();}});}
+  // libellés lisibles à toute largeur : la taille de police suit l'échelle du viewBox (positions inchangées)
+  function echelle(){var sv=document.querySelector('#topo svg.bulles');if(!sv)return;var rc=sv.getBoundingClientRect(),vb=sv.viewBox.baseVal;
+    if(!rc.width||!rc.height||!vb||!vb.width||!vb.height)return;
+    var k=Math.min(rc.width/vb.width,rc.height/vb.height);sv.style.setProperty('--fs',Math.max(9,Math.min(48,12/k)).toFixed(1)+'px');
+    // zone de prise : 22 px de rayon à l'écran là où la place le permet, sans dépasser la mi-distance au centre voisin
+    // (deux voisines égales ne se chevauchent pas ; une petite bulle, dessinée au-dessus d'une grande, garde la priorité)
+    Array.prototype.forEach.call(sv.querySelectorAll('circle.prise'),function(c){var r=+c.getAttribute('data-r')||0,l=+c.getAttribute('data-libre')||0;
+      c.setAttribute('r',Math.max(r,Math.min(22/k,l/2)).toFixed(1));});}
+
+  // --- vue « Arbre » : box → interfaces → zones → appareils, disposition en colonnes déterministe ---
+  function visible(n){return !!n&&(n.type==='node'||masquees.indexOf(sourceDe(n.source_module))<0);}
+  function dispositionArbre(){
+    var N=etat.noeuds,A=Object.keys(etat.aretes).sort().map(function(k){return etat.aretes[k];});
+    var liste=Object.keys(N).sort().map(function(k){return N[k];}).filter(visible);
+    var boxes=liste.filter(function(n){return n.type==='node';});
+    if(!boxes.length)return null;
+    var refs={};A.forEach(function(a){if(N[a.dst]&&N[a.dst].type==='node')refs[a.dst]=(refs[a.dst]||0)+1;});
+    boxes.sort(function(a,b){return (refs[b.id]||0)-(refs[a.id]||0)||(a.id<b.id?-1:1);});
+    var box=boxes[0], vis={};liste.forEach(function(n){vis[n.id]=true;});
+    var ifs=liste.filter(function(n){return n.type==='interface';}).sort(parLabel);
+    var services=liste.filter(function(n){return n.type==='service';}).sort(parLabel);
+    var devs=liste.filter(function(n){return n.type==='device';}).sort(parLastSeen);
+    // rattachement d'un appareil : la relation CONNECTS_TO la plus récente ; sa zone : le BELONGS_TO vers network le plus récent
+    function premiere(d,type,cible){var c=A.filter(function(a){return a.src===d.id&&a.type===type&&vis[a.dst]&&N[a.dst].type===cible;});
+      c.sort(function(x,y){var p=String(x.last_seen||''),q2=String(y.last_seen||'');return p<q2?1:p>q2?-1:(x.dst<y.dst?-1:1);});return c[0]||null;}
+    var groupes={},ordre=ifs.map(function(i){return i.id;});ordre.push('');
+    ordre.forEach(function(k){groupes[k]=[];});
+    devs.forEach(function(d){var c=premiere(d,'CONNECTS_TO','interface'),z=premiere(d,'BELONGS_TO','network');groupes[c?c.dst:''].push({d:d,c:c,z:z});});
+    var X={box:16,ifc:200,zone:380,dev:560},ROW=22,y=40,pos={},aretes=[],groupements=[],plus=[],zones=[];
+    ordre.forEach(function(k){
+      var g=groupes[k];if(k===''&&!g.length)return;
+      var garde=g.slice(0,MAX_PAR_IF),reste=g.length-garde.length,debut=y;
+      if(k==='')plus.push({x:X.ifc,y:y+4,t:'Appareils sans interface connue',cls:'col'});
+      if(k==='')y+=ROW;
+      // interface et zone alignées sur leur premier appareil : lisibles sans défiler une longue liste
+      // sous-groupes : rattachés directement à l'interface d'abord (aucune zone fantôme), puis par zone (ordre alphabétique)
+      var sans=garde.filter(function(e){return !e.z;}),avec={};
+      garde.forEach(function(e){if(e.z)(avec[e.z.dst]=avec[e.z.dst]||[]).push(e);});
+      sans.forEach(function(e){pos[e.d.id]={x:X.dev,y:y};if(e.c)aretes.push({a:e.c});y+=ROW;});
+      Object.keys(avec).map(function(z){return N[z];}).sort(parLabel).forEach(function(zn){
+        var zid=zn.id+'@'+(k||'-'),z0=y;avec[zn.id].forEach(function(e){pos[e.d.id]={x:X.dev,y:y};aretes.push({a:e.z,zone:zid});y+=ROW;});
+        zones.push({id:zn.id,cle:zid,x:X.zone,y:z0});
+        if(k)groupements.push({de:k,vers:zid});});
+      if(reste>0){plus.push({x:X.dev,y:y,t:'+ '+reste+' appareil'+(reste>1?'s':'')+' non affiché'+(reste>1?'s':'')+' (les '+MAX_PAR_IF+' vus le plus récemment sont montrés)',cls:'plus'});y+=ROW;}
+      if(k){if(y===debut)y+=ROW;pos[k]={x:X.ifc,y:debut};var r=A.filter(function(a){return a.src===k&&a.dst===box.id;})[0];if(r)aretes.push({a:r});}
+      y+=10;
+    });
+    var ys=ifs.map(function(i){return pos[i.id]&&pos[i.id].y;}).filter(function(v){return v!=null;});
+    // box alignée sur la première interface (en haut) : une longue liste d'appareils ne la repousse pas hors de vue
+    var by=ys.length?Math.min.apply(null,ys):40;pos[box.id]={x:X.box,y:by};
+    var sy=by+44;services.forEach(function(sv){pos[sv.id]={x:X.box,y:sy};var r=A.filter(function(a){return a.src===sv.id&&a.dst===box.id;})[0];if(r)aretes.push({a:r});sy+=ROW+4;});
+    return {box:box,ifs:ifs,services:services,pos:pos,zones:zones,aretes:aretes,groupements:groupements,plus:plus,H:Math.max(y,sy)+16,X:X,nDev:devs.length};
+  }
+  var LARG={node:150,interface:150,network:140,service:150};
+  function bord(n,cote,p){if(n.type==='device')return {x:p.x+(cote==='g'?0:12),y:p.y};return {x:p.x+(cote==='g'?0:LARG[n.type]),y:p.y};}
+  function noeudSvg(sv,n,p,cle){
+    var inc=n.etat_source!=='ok',g=s('g',{'class':'nd t-'+n.type+(inc?' inc':''),tabindex:'0',role:'button','data-id':n.id,'data-cle':cle||n.id,
+      'aria-label':TYPE_FR[n.type]+' '+(n.label||n.id)+(inc?' (état inconnu : source non à jour)':'')},sv);
+    var ti=s('title',{},g);ti.textContent=TYPE_FR[n.type]+' · '+n.id+(inc?' · source '+etatFr(n.etat_source)+' : état inconnu':'');
+    var t;
+    if(n.type==='device'){s('circle',{cx:p.x+6,cy:p.y,r:6},g);t=s('text',{x:p.x+18,y:p.y+4},g);t.textContent=court(n.label||n.id,inc?24:34)+(inc?' · inconnu':'');}
+    else{s('rect',{x:p.x,y:p.y-10,width:LARG[n.type],height:20,rx:6},g);t=s('text',{x:p.x+8,y:p.y+4},g);t.textContent=court(n.label||n.id,inc?9:(n.type==='node'?18:19))+(inc?' · inconnu':'');}
+    function choisir(){selectionner(n.id,{ouvrir:true});}
+    g.addEventListener('click',choisir);g.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();choisir();}});
+  }
+  function courbe(a,b){var m=(a.x+b.x)/2;return 'M'+a.x+','+a.y+' C'+m+','+a.y+' '+m+','+b.y+' '+b.x+','+b.y;}
+  function rendreArbre(box){
+    var L=dispositionArbre();
+    if(!L)return null;
+    var W=900,sv=s('svg',{'class':'graphe arbre',viewBox:'0 0 '+W+' '+L.H,width:W,height:L.H,role:'group','aria-label':'Topologie en arbre : box, interfaces, zones et appareils'});
+    [['BOX',L.X.box],['INTERFACES',L.X.ifc],['ZONES',L.X.zone],['APPAREILS',L.X.dev]].forEach(function(c){var t=s('text',{x:c[1],y:18,'class':'col'},sv);t.textContent=c[0];});
+    var N=etat.noeuds,zpos={};L.zones.forEach(function(z){zpos[z.cle]=z;});
+    // regroupement d'affichage interface → zone : pas une relation du modèle (aucune arête cliquable)
+    L.groupements.forEach(function(r){var a=bord(N[r.de],'d',L.pos[r.de]),z=zpos[r.vers];var p=s('path',{'class':'grp',d:courbe(a,{x:z.x,y:z.y})},sv);var ti=s('title',{},p);ti.textContent='Regroupement d’affichage : appareils de cette zone vus sur cette interface (pas une relation stockée).';});
+    L.aretes.forEach(function(t){
+      var a=t.a,src=N[a.src],dst=N[a.dst],ps=L.pos[a.src],pd=t.zone?zpos[t.zone]:L.pos[a.dst];if(!ps||!pd)return;
+      var droiteA=bord(dst,'d',pd),gaucheS=bord(src,'g',ps),d;
+      if(src.type==='service')d='M'+(ps.x+20)+','+(ps.y-10)+' L'+(pd.x+20)+','+(pd.y+10);else d=courbe(droiteA,gaucheS);
+      var k=cleArete(a),inc=sourceEtat(a.source_module)!=='ok',gr=s('g',{'class':'ar'+(inc?' inc':''),tabindex:'0',role:'button','data-cle':k,'data-src':a.src,'data-dst':a.dst,'aria-label':'Relation '+(REL_FR[a.type]||a.type)+' : '+(src.label||src.id)+' → '+(dst.label||dst.id)},sv);
+      var ti=s('title',{},gr);ti.textContent=(REL_FR[a.type]||a.type)+' · preuve '+(a.evidence_type||'?')+' · '+(a.source_module||'?')+' · '+fmtDate(a.last_seen);
+      s('path',{'class':'v',d:d},gr);s('path',{'class':'z',d:d},gr);
+      function choisir(){selectionner(k,{ouvrir:true});}
+      gr.addEventListener('click',choisir);gr.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();choisir();}});
+    });
+    L.zones.forEach(function(z){noeudSvg(sv,N[z.id],{x:z.x,y:z.y},z.cle);});
+    Object.keys(L.pos).forEach(function(id){noeudSvg(sv,N[id],L.pos[id]);});
+    L.plus.forEach(function(p){var t=s('text',{x:p.x,y:p.y+4,'class':p.cls},sv);t.textContent=p.t;});
+    box.appendChild(sv);el('legende').hidden=true;
+    var notes=[];
+    if(!L.ifs.length&&L.nDev)notes.push('Aucune interface relevée : appareils affichés sans rattachement.');
+    notes.push('Appareils groupés par interface, du plus récemment vu au plus ancien ; '+MAX_PAR_IF+' au plus par interface. Adresses IP dans l\u2019inspecteur.');
+    return notes;
+  }
+  function sourceEtat(sm){var src=sourceDe(sm),l=etat.sources||[];for(var i=0;i<l.length;i++)if(l[i].source===src)return l[i].etat;return 'unknown';}
+  // --- choix de la vue et rendu commun : les deux vues lisent les mêmes données et le même objet `selection` ---
+  function rendreTopo(){
+    var box=el('topo'),bas=el('topoBas');vider(box);bas.textContent='';el('legende').hidden=true;
+    var g=etat.graphe;
+    if(!g){box.appendChild(h('div',{'class':'vide',text:etat.refus?'— (session requise : la topologie demande une session d\u2019administration)':'— (API DataScope injoignable)'}));return;}
+    if(g.disponible===false){box.appendChild(h('div',{'class':'vide',text:'Aucun graphe : '+(g.motif||'relevé indisponible')+'.'}));return;}
+    var notes=vue==='arbre'?rendreArbre(box):rendreBulles(box);
+    if(!notes){box.appendChild(h('div',{'class':'vide',text:'Aucune box dans le relevé (source réseau masquée ou absente).'}));return;}
+    if(g.tronque)notes.unshift('Graphe tronqué par l\u2019API (500 nœuds, 1 500 arêtes au plus : box, interfaces, zones et services d\u2019abord, puis '+MAX_PAR_IF+' appareils par interface, les plus récemment vus par le NAC, au jour près).');
+    bas.textContent=notes.join(' ');
+    echelle();marquerSelection();rendreListe();
+  }
+  function choisirVue(v){
+    vue=v==='arbre'?'arbre':'bulles';ecrireStock(CLE_VUE,vue);
+    el('vueBulles').setAttribute('aria-pressed',vue==='bulles'?'true':'false');el('vueArbre').setAttribute('aria-pressed',vue==='arbre'?'true':'false');
+    rendreTopo();
+  }
+  function marquerSelection(){
+    var sv=document.querySelector('#topo svg');if(!sv)return;
+    var id=selection.id,vois={};
+    if(id&&selection.type==='arete'){var p=id.split('|');vois[p[0]]=1;vois[p[2]]=1;}
+    else if(id)Object.keys(etat.aretes).forEach(function(k){var a=etat.aretes[k];if(a.src===id)vois[a.dst]=1;if(a.dst===id)vois[a.src]=1;});
+    Array.prototype.forEach.call(sv.querySelectorAll('.nd'),function(n){var nid=n.getAttribute('data-id');n.classList.toggle('sel',!!id&&(nid===id||n.getAttribute('data-cle')===id));n.classList.toggle('voisin',!!vois[nid]);});
+    Array.prototype.forEach.call(sv.querySelectorAll('.ar'),function(n){n.classList.toggle('sel',!!id&&n.getAttribute('data-cle')===id);n.classList.toggle('lie',!!id&&(n.getAttribute('data-src')===id||n.getAttribute('data-dst')===id));});
+  }
+
+  // --- liste au doigt : appareils de l'interface ou de la zone choisie (ou de l'interface de l'appareil choisi), sinon les interfaces ---
+  function aretesListe(){return Object.keys(etat.aretes).sort().map(function(k){return etat.aretes[k];});}
+  function contexteListe(A){
+    var n=selection.id&&etat.noeuds[selection.id];if(!n||!visible(n))return null;
+    if(n.type==='interface'||n.type==='network')return n;
+    if(n.type==='device'){var c=premiere(A,etat.noeuds,n.id,'CONNECTS_TO','interface');return c&&visible(etat.noeuds[c.dst])?etat.noeuds[c.dst]:null;}
+    return null;
+  }
+  function rendreListe(){
+    var box=el('liste'),N=etat.noeuds,A=aretesListe(),focus=document.activeElement&&box.contains(document.activeElement);vider(box);
+    if(!etat.graphe||etat.graphe.disponible===false||!Object.keys(N).length){box.hidden=true;return;}
+    box.hidden=false;
+    function ligne(id,titre,detail){var b=h('button',{type:'button','class':'ligneApp'+(id===selection.id?' sel':''),'data-id':id,'aria-pressed':id===selection.id?'true':'false'},[h('b',{text:titre}),h('span',{'class':'m',text:detail})]);
+      b.addEventListener('click',function(){selectionner(id,{ouvrir:true});});box.appendChild(b);return b;}
+    var ctx=contexteListe(A),sel=null;
+    if(!ctx){
+      var ifs=Object.keys(N).map(function(k){return N[k];}).filter(function(n){return n.type==='interface'&&visible(n);}).sort(parLabel);
+      box.appendChild(h('h4',{text:'Interfaces ('+ifs.length+') : toucher pour lister leurs appareils'}));
+      ifs.forEach(function(i){var nb=A.filter(function(a){return a.type==='CONNECTS_TO'&&a.dst===i.id&&N[a.src].type==='device'&&visible(N[a.src]);}).length;
+        ligne(i.id,i.label||i.id,nb+' appareil'+(nb>1?'s':'')+' · '+(i.etat_source==='ok'?'à jour':'inconnu'));});
+      return;
+    }
+    var vus={},devs=A.filter(function(a){return ctx.type==='interface'?a.type==='CONNECTS_TO'&&a.dst===ctx.id:a.type==='BELONGS_TO'&&a.dst===ctx.id;})
+      .map(function(a){return N[a.src];}).filter(function(d){if(!d||d.type!=='device'||!visible(d)||vus[d.id])return false;vus[d.id]=1;return true;}).sort(parLastSeen);
+    var tous=h('button',{type:'button','class':'bt',text:'Toutes les interfaces'});tous.addEventListener('click',function(){selectionner(null);});
+    box.appendChild(h('h4',{},['Appareils de '+(TYPE_FR[ctx.type]||ctx.type)+' '+(ctx.label||ctx.id)+' ('+devs.length+')',tous]));
+    if(!devs.length)box.appendChild(h('div',{'class':'vide',text:'Aucun appareil.'}));
+    devs.forEach(function(d){
+      var hv=etat.graphe&&typeof etat.graphe.ip_hors_vue==='number'?etat.graphe.ip_hors_vue:0;
+      var b=ligne(d.id,d.label||d.id,ipAffichee(d,A,N,hv)+' · '+(d.etat_source==='ok'?'à jour':'inconnu')+' · vu le '+(vuNac(d)||fmtDate(d.last_seen)));
+      if(d.id===selection.id)sel=b;});
+    if(focus&&sel)sel.focus();
+  }
+
+  // --- inspecteur ---
+  function lienEntite(id){var n=etat.noeuds[id];var b=h('button',{type:'button','class':'lien',text:n?(n.label||id):id,title:id});b.addEventListener('click',function(){selectionner(id,{ouvrir:true});});return b;}
+  function props(l){var dl=h('dl',{'class':'props'});dl.innerHTML=l.map(function(p){return '<dt>'+esc(p[0])+'</dt><dd'+(p[2]?' class="mono"':'')+'>'+esc(p[1])+'</dd>';}).join('');return dl;}
+  function contexte(id){
+    if(DEMO)return Promise.resolve({ok:true,j:contexteDemo(id)});
+    if(etat.contextes[id])return Promise.resolve(etat.contextes[id]);
+    return jget('entities/'+encodeURIComponent(id)+'/context').then(function(r){if(r.ok)etat.contextes[id]=r;return r;});
+  }
+  function inspecter(){
+    var box=el('insp'),ty=el('inspType'),id=selection.id,mon=++jetonInsp;vider(box);
+    ty.textContent=selection.type?TYPE_FR[selection.type]||selection.type:'';
+    if(!id){box.appendChild(h('div',{'class':'vide',text:'Choisir un élément de la topologie.'}));return;}
+    if(selection.type==='arete'){inspecterArete(box,id,mon);return;}
+    var n=etat.noeuds[id];
+    box.appendChild(h('div',{'class':'mono',text:id}));
+    if(!n)box.appendChild(h('div',{'class':'note',text:'Absent du dernier relevé affiché (disparu, masqué ou hors de la coupe du graphe).'}));
+    var attente=h('div',{'class':'vide',text:'Chargement du contexte…'});box.appendChild(attente);
+    contexte(id).then(function(r){
+      if(mon!==jetonInsp)return;box.removeChild(attente);
+      if(r.refus||!r.ok){box.appendChild(props(n?[['Type',TYPE_FR[n.type]||n.type],['Libellé',n.label||'—'],['État',n.etat_source==='ok'?'à jour':'inconnu']]:[]));
+        box.appendChild(h('div',{'class':'vide',text:r.refus?'— Contexte : session requise.':'— Contexte indisponible.'}));return;}
+      var c=r.j||{},e=c.entity||{},at=e.attributes||{},ok=e.etat_source==='ok',l=[['Type',TYPE_FR[e.type]||e.type||'—'],['Libellé',e.label||'—'],['Source',(e.source_module||'—')+' · '+etatFr(e.etat_source)],['État',ok?'à jour':'inconnu (source non à jour)'],['Vu la 1re fois',fmtDate(e.first_seen)],['Vu la dernière fois',fmtDate(e.last_seen)]];
+      Object.keys(at).sort().forEach(function(k){var v=at[k];if(k==='overall'&&!ok)v='inconnu';if(typeof v==='boolean')v=v?'oui':'non';if(v!==null&&typeof v==='object')v=JSON.stringify(v);l.push([k,v==null||v===''?'—':v,true]);});
+      box.appendChild(props(l));
+      var rels=Array.isArray(c.relationships)?c.relationships:[];
+      box.appendChild(h('h4',{text:'Relations ('+rels.length+(c.summary&&c.summary.tronque?', liste tronquée':'')+')'}));
+      if(!rels.length)box.appendChild(h('div',{'class':'vide',text:'Aucune relation.'}));
+      rels.forEach(function(a){var autre=a.src===id?a.dst:a.src,sens=a.src===id?'→':'←';
+        box.appendChild(h('div',{'class':'rel'},[h('div',{'class':'h'},[h('b',{text:(REL_FR[a.type]||a.type)+' '+sens}),lienEntite(autre),pasPreuve(a.evidence_type)]),
+          h('div',{'class':'j',text:a.justification||'— (justification absente)'}),
+          h('div',{'class':'d',text:'source '+(a.source_module||'—')+' · '+etatFr(sourceEtat(a.source_module))+' · vu le '+fmtDate(a.last_seen)+' · confiance '+(typeof a.confidence==='number'?a.confidence:'—')})]));});
+      var pv=Array.isArray(c.source_provenance)?c.source_provenance:[];
+      if(pv.length){box.appendChild(h('h4',{text:'Provenance'}));pv.forEach(function(p){box.appendChild(h('div',{'class':'rel'},[h('div',{'class':'h'},[h('span',{'class':'mono',text:p.source_module+' → '+p.source}),pasEtat(p.etat_source)])]));});}
+      var acts=(Array.isArray(c.available_actions)?c.available_actions:[]).filter(function(x){return x&&typeof x.href==='string'&&/^\/[A-Za-z0-9._~\/-]*$/.test(x.href)&&x.href.indexOf('//')<0;});
+      if(acts.length){box.appendChild(h('h4',{text:'Actions'}));box.appendChild(h('div',{'class':'actions'},acts.map(function(x){return h('a',{href:x.href,target:'_top',text:x.libelle||x.href});})));}
+      if(c.motifs)box.appendChild(h('div',{'class':'note',text:'Événements récents et historique : '+(c.motifs.recent_events||'—')+'.'}));
+    });
+  }
+  function inspecterArete(box,k,mon){
+    var a=etat.aretes[k],p=k.split('|');
+    box.appendChild(h('div',{'class':'h'},[lienEntite(p[0]),' '+(REL_FR[p[1]]||p[1])+' ',lienEntite(p[2])]));
+    if(!a){box.appendChild(h('div',{'class':'note',text:'Relation absente du dernier relevé affiché.'}));return;}
+    box.appendChild(props([['Relation',a.type],['Preuve',a.evidence_type==='observed'?'observée':a.evidence_type==='reported'?'rapportée':'inconnue'],['Source',(a.source_module||'—')+' · '+etatFr(sourceEtat(a.source_module))],['Confiance',typeof a.confidence==='number'?a.confidence:'—'],['Vue la dernière fois',fmtDate(a.last_seen)]]));
+    var j=h('div',{'class':'rel'},[h('div',{'class':'j',text:'Chargement de la justification…'})]);box.appendChild(h('h4',{text:'Justification'}));box.appendChild(j);
+    contexte(p[0]).then(function(r){if(mon!==jetonInsp)return;var txt='— (justification non disponible : '+(r.refus?'session requise':'contexte indisponible')+')';
+      if(r.ok){var rels=r.j&&Array.isArray(r.j.relationships)?r.j.relationships:[],m=rels.filter(function(x){return x.src===p[0]&&x.type===p[1]&&x.dst===p[2];})[0];txt=m&&m.justification?m.justification:'— (justification absente du contexte)';
+        if(m&&m.first_seen)j.appendChild(h('div',{'class':'d',text:'vue la 1re fois le '+fmtDate(m.first_seen)}));}
+      j.firstChild.textContent=txt;});
+  }
+
+  // --- tiroirs ---
+  function modeTiroir(){return getComputedStyle(el('btInsp')).display!=='none';}
+  function ouvrir(id,on){var p=el(id);p.classList.toggle('ouvert',on);el(id==='panInsp'?'btInsp':'btSources').setAttribute('aria-expanded',on?'true':'false');
+    if(on){var autre=id==='panInsp'?'panSources':'panInsp';el(autre).classList.remove('ouvert');}}
+  el('btSources').addEventListener('click',function(){ouvrir('panSources',!el('panSources').classList.contains('ouvert'));});
+  el('btInsp').addEventListener('click',function(){ouvrir('panInsp',!el('panInsp').classList.contains('ouvert'));});
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ferme]'),function(b){b.addEventListener('click',function(){ouvrir(b.getAttribute('data-ferme'),false);});});
+
+  // --- démonstration : adresses RFC 5737, MAC de documentation (RFC 7042), noms fictifs ---
+  var DEMO_DONNEES=(function(){
+    var t0=Date.parse('2026-11-21T10:00:00Z'),iso=function(min){return new Date(t0-min*60000).toISOString().replace(/\.\d{3}Z$/,'Z');};
+    var n=[],a=[],at={},just={};
+    function E(id,label,sm,vu,attrs){n.push({id:id,type:id.split(':')[0],label:label,source_module:sm,first_seen:iso(60*24*9),last_seen:iso(vu),etat_source:sm==='status'?'inaccessible':'ok'});at[id]=attrs||{};}
+    function R(src,dst,type,sm,vu,ev,j){a.push({src:src,dst:dst,type:type,evidence_type:ev||'observed',confidence:1,source_module:sm,last_seen:iso(vu)});just[src+'|'+type+'|'+dst]=j;}
+    E('node:secubox-demo','secubox-demo','network',1);
+    [['br-lan',1],['eth2',1],['wlan0',1]].forEach(function(i){E('interface:'+i[0],i[0],'network',i[1]);R('interface:'+i[0],'node:secubox-demo','BELONGS_TO','nac',i[1],'observed','inventaire du NAC, vu le 2026-11-21');});
+    E('network:lan','lan','network',2);E('network:invites','invites','network',3);
+    var mac=function(i){var x=(i).toString(16);return '00:00:5e:00:53:'+(x.length<2?'0'+x:x);};
+    var nommes=[['poste-atelier','pc','lan','192.0.2.10',2],['nas-salon','nas','lan','192.0.2.20',4],['imprimante','imprimante','lan','192.0.2.30',35],['tv-salon','tv','invites','198.51.100.40',6],['tablette-invite','tablette','invites','198.51.100.41',90],['console-jeux','console',null,'192.0.2.50',12]];
+    nommes.forEach(function(d,i){var id='device:'+mac(i+1);E(id,d[0],'network',d[4],{hostname:d[0],device_type:d[1],mac_random:false});
+      R(id,'interface:br-lan','CONNECTS_TO','nac',d[4],'observed','inventaire du NAC, vu le 2026-11-21');
+      if(d[2])R(id,'network:'+d[2],'BELONGS_TO','nac',d[4],'observed','inventaire du NAC, vu le 2026-11-21');
+      E('ip:'+d[3],d[3],'network',d[4]);R('ip:'+d[3],id,'BELONGS_TO','nac',d[4],'observed','inventaire du NAC, vu le 2026-11-21');});
+    E('device:'+mac(7),'box-operateur','network',1,{hostname:'box-operateur',device_type:'routeur',mac_random:false});R('device:'+mac(7),'interface:eth2','CONNECTS_TO','nac',1,'observed','inventaire du NAC, vu le 2026-11-21');
+    E('ip:203.0.113.1','203.0.113.1','network',1);R('ip:203.0.113.1','device:'+mac(7),'BELONGS_TO','nac',1,'observed','inventaire du NAC, vu le 2026-11-21');
+    for(var i=0;i<63;i++){var id='device:'+mac(16+i),nom='objet-'+(i<9?'0':'')+(i+1);E(id,nom,'network',5+i*7,{device_type:'objet connecté',mac_random:i%3===0,ip:'192.0.2.'+(100+i),vu_nac:'2026-11-'+(21-Math.floor(i/10))});n[n.length-1].attributes={ip:'192.0.2.'+(100+i),vu_nac:'2026-11-'+(21-Math.floor(i/10))};R(id,'interface:wlan0','CONNECTS_TO','nac',5+i*7,'observed','inventaire du NAC, vu le 2026-11-'+(21-Math.floor(i/10)));}
+    ['dns-guard','nac','waf'].forEach(function(m){E('service:'+m,m,'status',3,{overall:'healthy',critical:m==='waf'});R('service:'+m,'node:secubox-demo','HOSTED_ON','status',3,'reported','santé des modules du 2026-11-21T09:57:00Z');});
+    var compte={};n.forEach(function(x){compte[x.type]=(compte[x.type]||0)+1;});compte.ip=(compte.ip||0)+63;  // adresses des objets wlan0 : attribut seulement (ip_hors_vue)
+    return {overview:{disponible:true,genere_le:iso(2),verifie_le:iso(1),complet:false,perime:false,entites:compte,relations:a.length},
+      sources:[{source:'status',etat:'inaccessible',motif:'santé des modules périmée (plus de 300 s)',vu_le:iso(14)},{source:'network',etat:'ok',motif:null,vu_le:iso(2)}],
+      graphe:{disponible:true,noeuds:n,aretes:a,tronque:false,ip_hors_vue:63},refus:false,_attrs:at,_just:just};
+  })();
+  function contexteDemo(id){
+    var D=DEMO_DONNEES,e=etat.noeuds[id];if(!e)return null;e=JSON.parse(JSON.stringify(e));e.attributes=JSON.parse(JSON.stringify(D._attrs[id]||{}));
+    if(e.etat_source!=='ok'&&e.type==='service')e.attributes.overall='unknown';
+    var rels=D.graphe.aretes.filter(function(a){return a.src===id||a.dst===id;}).map(function(a){var r=JSON.parse(JSON.stringify(a));r.justification=D._just[cleArete(a)];r.first_seen=e.first_seen;return r;});
+    var sms={};sms[e.source_module]=1;rels.forEach(function(r){sms[r.source_module]=1;});
+    var act=e.type==='device'?[{libelle:'Ouvrir dans le NAC',href:'/nac/'}]:e.type==='service'?[{libelle:'Ouvrir le module '+e.label,href:'/'+e.label+'/'}]:[];
+    return {entity:e,summary:{type:e.type,label:e.label,relations:rels.length,tronque:false},relationships:rels,recent_events:null,history:null,
+      motifs:{recent_events:'non livré en V0.1',history:'non livré en V0.1'},available_actions:act,
+      source_provenance:Object.keys(sms).sort().map(function(sm){var src=sourceDe(sm);return {source_module:sm,source:src,etat_source:sourceEtat(sm)};})};
+  }
+
+  // --- hauteur annoncée à l'hôte (iframe) : mesure du cadre, jamais du document ---
+  function hauteur(){if(window.parent!==window){try{window.parent.postMessage({sbxVue:Math.ceil(document.querySelector('.cadre').getBoundingClientRect().bottom+scrollY),onglet:'datascope'},location.origin);}catch(e){}}}
+  window.addEventListener('load',hauteur);window.addEventListener('resize',hauteur);if(window.ResizeObserver)new ResizeObserver(hauteur).observe(document.body);
+
+  el('rafraichir').addEventListener('click',charge);
+  el('vueBulles').addEventListener('click',function(){choisirVue('bulles');});
+  el('vueArbre').addEventListener('click',function(){choisirVue('arbre');});
+  el('vueBulles').setAttribute('aria-pressed',vue==='bulles'?'true':'false');el('vueArbre').setAttribute('aria-pressed',vue==='arbre'?'true':'false');
+  if(window.ResizeObserver)new ResizeObserver(echelle).observe(el('topo'));
+  // sélection conservée d'une visite à l'autre de l'onglet (sessionStorage, protégé)
+  var memo=lireStock(CLE_SEL);
+  if(memo&&idValide(memo))selectionner(memo);
+  charge();
+  // actualisation toutes les 30 s, seulement si l'onglet est visible
+  setInterval(function(){if(!document.hidden)charge();},30000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)charge();});
+})();
+</script>
+</body>
+</html>

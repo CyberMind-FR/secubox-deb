@@ -1,0 +1,50 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+    configure)
+        getent group secubox >/dev/null || groupadd --system secubox
+        # Compte dédié, sans shell ; groupe secubox pour lire les caches 0640 et servir la socket.
+        id -u secubox-datascope >/dev/null 2>&1 || \
+          adduser --system --ingroup secubox --no-create-home --home /nonexistent \
+            --shell /usr/sbin/nologin secubox-datascope >/dev/null
+        # Base : /data si c'est un point de montage (gk2), sinon /var/lib/secubox-datascope (StateDirectory).
+        if mountpoint -q /data 2>/dev/null; then
+            BASE=/data/secubox-datascope
+            install -d -m 0750 -o secubox-datascope -g secubox "$BASE"
+        else
+            BASE=/var/lib/secubox-datascope
+            install -d -m 0750 -o secubox-datascope -g secubox "$BASE"
+        fi
+        install -d -m 0750 -o secubox-datascope -g secubox /var/cache/secubox/datascope
+        # La configuration n'est semée qu'une fois : une copie modifiée fait autorité.
+        if [ ! -e /etc/secubox/datascope.toml ] && [ ! -L /etc/secubox/datascope.toml ] \
+           && [ -d /etc/secubox ] && [ ! -L /etc/secubox ]; then
+            sed "s#^base = .*#base = \"$BASE/datascope.db\"#" /usr/share/secubox/datascope/datascope.toml.example \
+              > /etc/secubox/datascope.toml
+            chown root:secubox /etc/secubox/datascope.toml
+            chmod 0640 /etc/secubox/datascope.toml
+        fi
+        # Profil AppArmor AVANT tout démarrage (les unités le nomment ; « - » : ignoré là où AppArmor est absent).
+        if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ] \
+           && command -v apparmor_parser >/dev/null 2>&1; then
+            apparmor_parser -r /etc/apparmor.d/secubox-datascope \
+              || echo "secubox-datascope : profil AppArmor non chargé (apparmor_parser -r /etc/apparmor.d/secubox-datascope ; journalctl -k)" >&2
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+            systemctl enable secubox-datascope.service secubox-datascope-collect.timer || true
+            # Mise à jour : un simple enable avec démarrage laisserait tourner l'ancienne API ; restart explicite.
+            systemctl restart secubox-datascope.service || true
+            systemctl start secubox-datascope-collect.timer || true
+            # Premier index tout de suite, sans attendre la minuterie ni bloquer dpkg.
+            systemctl start --no-block secubox-datascope-collect.service || true
+            if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

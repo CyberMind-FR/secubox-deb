@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox DataScope — API locale, lecture seule (#3853). Ne collecte rien : relit la base écrite par
+# secubox-datascope-collect. Compte dédié, aucune capacité, aucun réseau IP. Aucun dossier d'exécution géré par l'unité : le dossier
+# /run/secubox est partagé (parent 1777) et ne doit pas être effacé à l'arrêt.
+[Unit]
+Description=SecuBox DataScope — API locale (lecture seule)
+After=network.target secubox-core.service
+
+[Service]
+Type=simple
+User=secubox-datascope
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/datascope
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStartPre=+/bin/rm -f /run/secubox/datascope.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/datascope.sock --workers 1 --log-level warning
+# uvicorn force sa socket en 0666 : remise en 0660 (groupe secubox, que nginx traverse) dès qu'elle existe.
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 1200); do [ -S /run/secubox/datascope.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/datascope.sock'
+UMask=0027
+AppArmorProfile=-secubox-datascope
+# StateDirectory en écriture : SQLite en WAL crée le fichier -shm même pour une lecture.
+StateDirectory=secubox-datascope
+StateDirectoryMode=0750
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ReadWritePaths=/run/secubox -/data/secubox-datascope -/var/cache/secubox/datascope
+# Journal de délégation écrit par les gardes de secubox_core.
+ReadWritePaths=-/var/log/secubox/delegation.log
+
+[Install]
+WantedBy=multi-user.target

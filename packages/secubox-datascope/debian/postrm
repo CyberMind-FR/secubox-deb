@@ -1,0 +1,33 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+case "$1" in
+    remove|purge)
+        # Profil AppArmor déchargé du noyau (le fichier reste jusqu'à la purge : conffile de /etc).
+        if [ -d /sys/kernel/security/apparmor ] && command -v apparmor_parser >/dev/null 2>&1 \
+           && [ -f /etc/apparmor.d/secubox-datascope ]; then
+            apparmor_parser -R /etc/apparmor.d/secubox-datascope >/dev/null 2>&1 || true
+        fi
+        # La route nginx est un conffile : elle reste après remove (retirée à la purge par dpkg). Simple rechargement,
+        # seulement si la configuration reste valide.
+        if [ -d /run/systemd/system ] && command -v nginx >/dev/null 2>&1; then
+            if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+        fi
+        ;;
+esac
+
+case "$1" in
+    purge)
+        # Base, cache et configuration semée (pas un conffile) ; le compte dédié est retiré s'il n'a plus de processus.
+        rm -rf /var/lib/secubox-datascope /data/secubox-datascope /var/cache/secubox/datascope
+        rm -f /etc/secubox/datascope.toml /etc/apparmor.d/secubox-datascope
+        if id -u secubox-datascope >/dev/null 2>&1; then
+            deluser --system secubox-datascope >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+exit 0
