@@ -215,3 +215,9 @@ def test_inaccessible_ecrit_seulement_le_curseur(db):
     store.appliquer(db, store.Releve(source="status", etat="inaccessible", motif="x", empreinte="z",
                                      entites=_sante("unknown").entites), "2026-11-21T10:10:00Z")
     assert store.entite(db, "service:actor")["attributes"]["overall"] == "operational"
+
+
+def test_identifiant_saut_de_ligne_refuse(db):
+    with pytest.raises(ValueError):
+        store.appliquer(db, store.Releve(source="nac", etat="ok", empreinte="z",
+                                         entites=[{"id": "device:aa\n", "label": "x"}]), T0)

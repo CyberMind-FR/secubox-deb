@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -57,6 +58,7 @@ PERIME_S = 180
 TYPES = ("node", "network", "interface", "device", "ip", "service")
 # Module propriétaire d'une entité (source_module) -> source du curseur ; défaut : identité.
 SOURCE_DU_MODULE = {"nac": "network"}
+_MODULE = re.compile(r"[a-z0-9_-]{1,64}")
 NON_LIVRE = "non livré en V0.1"
 
 
@@ -106,7 +108,7 @@ def _surcouche(e: Dict[str, Any], etats: Dict[str, str]) -> Dict[str, Any]:
 
 
 def _valider_id(id: str) -> str:
-    if not store._ID.match(id):
+    if not store.id_valide(id):
         raise HTTPException(status_code=400, detail="identifiant invalide")
     return id
 
@@ -145,6 +147,8 @@ def _liens(e: Dict[str, Any]) -> List[Dict[str, str]]:
         return [{"libelle": "Ouvrir dans le NAC", "href": "/nac/"}]
     if e["type"] == "service":
         mod = e["id"].split(":", 1)[1]
+        if not _MODULE.fullmatch(mod):
+            return []
         return [{"libelle": f"Ouvrir le module {mod}", "href": f"/{mod}/"}]
     return []
 
@@ -156,7 +160,9 @@ async def overview() -> Dict[str, Any]:
 
 @router.get("/sources", dependencies=[Depends(require_lecture)])
 async def sources() -> Dict[str, Any]:
-    return {"sources": await asyncio.to_thread(_lire_base, store.etat_sources)}
+    def lire(db):
+        return [{k: v for k, v in s.items() if k != "empreinte"} for s in store.etat_sources(db)]
+    return {"sources": await asyncio.to_thread(_lire_base, lire)}
 
 
 @router.get("/entities", dependencies=[Depends(require_jwt)])
@@ -237,6 +243,38 @@ async def context(id: str) -> Dict[str, Any]:
     return await asyncio.to_thread(_contexte, _valider_id(id))
 
 
+def _borner_cache(g: Dict[str, Any], etats: Dict[str, str]) -> Dict[str, Any]:
+    """Bornes défensives sur graph.json : 500 nœuds, 1 500 arêtes entre nœuds retenus."""
+    brut_n = [n for n in g.get("noeuds", []) if isinstance(n, dict) and isinstance(n.get("id"), str)]
+    brut_a = [a for a in g.get("aretes", []) if isinstance(a, dict)]
+    noeuds = brut_n[:store.VOISINS_NOEUDS_MAX]
+    ids = {n["id"] for n in noeuds}
+    aretes = [a for a in brut_a if a.get("src") in ids and a.get("dst") in ids]
+    tronque = bool(g.get("tronque")) or len(noeuds) < len(brut_n) or len(aretes) < len(brut_a)
+    if len(aretes) > store.VOISINS_ARETES_MAX:
+        aretes = aretes[:store.VOISINS_ARETES_MAX]
+        tronque = True
+    out = dict(g)
+    out.update({"disponible": True, "noeuds": [_surcouche(n, etats) for n in noeuds], "aretes": aretes,
+                "tronque": tronque})
+    return out
+
+
+def _aretes_entre(db: sqlite3.Connection, ids: List[str]) -> List[Dict[str, Any]]:
+    """Arêtes dont src ET dst sont dans ids : SQL borné (LIMIT 1501), par paquets de 900 paramètres au plus."""
+    if not ids:
+        return []
+    db.execute("CREATE TEMP TABLE IF NOT EXISTS _sel(id TEXT PRIMARY KEY)")
+    db.execute("DELETE FROM _sel")
+    for i in range(0, len(ids), 900):
+        lot = ids[i:i + 900]
+        db.execute("INSERT OR IGNORE INTO _sel(id) VALUES " + ",".join("(?)" for _ in lot), lot)
+    return [dict(r) for r in db.execute(
+        "SELECT src, dst, type, evidence_type, confidence, source_module, last_seen FROM relationships "
+        "WHERE src IN (SELECT id FROM _sel) AND dst IN (SELECT id FROM _sel) "
+        "ORDER BY src, dst, type, source_module LIMIT ?", (store.VOISINS_ARETES_MAX + 1,))]
+
+
 def _graphe(type: Optional[str]) -> Dict[str, Any]:
     def lire(db):
         etats = _etats(db)
@@ -244,24 +282,16 @@ def _graphe(type: Optional[str]) -> Dict[str, Any]:
             g = _lire_cache("graph.json")
             if g is None:
                 return {"disponible": False, "motif": "relevé absent ou illisible"}
-            g = dict(g)
-            g["disponible"] = True
-            g["noeuds"] = [_surcouche(n, etats) for n in g.get("noeuds", [])][:store.VOISINS_NOEUDS_MAX]
-            return g
+            return _borner_cache(g, etats)
         noeuds = [dict(r) for r in db.execute(
             "SELECT id, type, label, source_module, first_seen, last_seen FROM entities WHERE type = ? "
             "ORDER BY id LIMIT ?", (type, store.VOISINS_NOEUDS_MAX + 1))]
         tronque = len(noeuds) > store.VOISINS_NOEUDS_MAX
         noeuds = noeuds[:store.VOISINS_NOEUDS_MAX]
-        ids = {n["id"] for n in noeuds}
-        aretes: List[Dict[str, Any]] = []
-        for r in db.execute("SELECT src, dst, type, evidence_type, confidence, source_module, last_seen "
-                            "FROM relationships ORDER BY src, dst, type, source_module"):
-            if r["src"] in ids and r["dst"] in ids:
-                if len(aretes) >= store.VOISINS_ARETES_MAX:
-                    tronque = True
-                    break
-                aretes.append(dict(r))
+        aretes = _aretes_entre(db, [n["id"] for n in noeuds])
+        if len(aretes) > store.VOISINS_ARETES_MAX:
+            aretes = aretes[:store.VOISINS_ARETES_MAX]
+            tronque = True
         return {"disponible": True, "noeuds": [_surcouche(n, etats) for n in noeuds], "aretes": aretes,
                 "tronque": tronque}
     return _lire_base(lire)

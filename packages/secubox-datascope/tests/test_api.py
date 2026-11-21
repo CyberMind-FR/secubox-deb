@@ -192,3 +192,65 @@ def test_base_absente_503(env, client, tmp_path, monkeypatch):
                                                    netstats=env.netstats, modules=env.modules))
     r = client.get(P + "/entities")
     assert r.status_code == 503 and not (tmp_path / "rien.db").exists()
+
+
+def test_graph_filtre_borne_en_sql(env, client):
+    db = store.ouvrir(env.base)
+    db.execute("PRAGMA foreign_keys = OFF")
+    db.execute("BEGIN")
+    db.executemany("INSERT INTO entities(id,type,label,attributes_json,source_module,first_seen,last_seen) "
+                   "VALUES (?,?,?,?,?,?,?)",
+                   [(f"interface:i{i}", "interface", "x", "{}", "network", T0, T0) for i in range(3)])
+    db.executemany("INSERT INTO relationships(src,dst,type,source_module,first_seen,last_seen,evidence_type,"
+                   "confidence,justification) VALUES (?,?,?,?,?,?,?,?,?)",
+                   [(f"ip:9.9.{i // 250}.{i % 250}", "node:h", "BELONGS_TO", "network", T0, T0, "observed", 1.0, "v")
+                    for i in range(20000)] +
+                   [("interface:i0", "interface:i1", "CONNECTS_TO", "network", T0, T0, "observed", 1.0, "v")])
+    db.execute("COMMIT")
+    db.close()
+    lus = []
+    reel = main._ro
+
+    def compte(base):
+        c = reel(base)
+        c.set_trace_callback(lambda s: lus.append(s))
+        return c
+    main._ro = compte
+    try:
+        g = client.get(P + "/graph?type=interface").json()
+    finally:
+        main._ro = reel
+    assert [a["src"] for a in g["aretes"]] == ["interface:i0"] and len(g["noeuds"]) == 4 and not g["tronque"]
+    assert any("LIMIT" in s and "relationships" in s for s in lus)
+
+
+def test_graph_cache_borne(env, client):
+    noeuds = [{"id": f"ip:10.0.{i // 250}.{i % 250}", "type": "ip", "label": "x", "source_module": "network"}
+              for i in range(700)]
+    aretes = [{"src": noeuds[i]["id"], "dst": noeuds[i + 1]["id"], "type": "BELONGS_TO"} for i in range(699)]
+    aretes += [{"src": noeuds[0]["id"], "dst": noeuds[1]["id"], "type": "CONNECTS_TO"}] * 1600
+    (env.cache / "graph.json").write_text(json.dumps(
+        {"genere_le": T0, "complet": True, "tronque": False, "noeuds": noeuds, "aretes": aretes}))
+    g = client.get(P + "/graph").json()
+    ids = {n["id"] for n in g["noeuds"]}
+    assert len(g["noeuds"]) == 500 and len(g["aretes"]) <= 1500 and g["tronque"] is True
+    assert all(a["src"] in ids and a["dst"] in ids for a in g["aretes"])
+    (env.cache / "graph.json").write_text(json.dumps(
+        {"genere_le": T0, "complet": True, "tronque": True, "noeuds": noeuds[:3], "aretes": []}))
+    assert client.get(P + "/graph").json()["tronque"] is True
+
+
+def test_liens_nom_de_module_strict(client, env):
+    assert main._liens({"id": "service:..", "type": "service"}) == []
+    assert main._liens({"id": "service:a:b", "type": "service"}) == []
+    assert main._liens({"id": "service:Waf", "type": "service"}) == []
+    assert main._liens({"id": "service:waf-ng_1", "type": "service"})[0]["href"] == "/waf-ng_1/"
+
+
+def test_sources_sans_empreinte(client):
+    for s in client.get(P + "/sources").json()["sources"]:
+        assert "empreinte" not in s and {"source", "etat", "motif", "vu_le"} <= set(s)
+
+
+def test_id_avec_saut_de_ligne_400(client):
+    assert client.get(P + "/entities/device:aa%0A").status_code == 400

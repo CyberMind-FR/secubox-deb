@@ -87,11 +87,11 @@ def _valider(releve: Releve) -> None:
     if releve.etat == "inaccessible":
         return
     for e in releve.entites:
-        if not isinstance(e.get("id"), str) or not _ID.match(e["id"]):
+        if not isinstance(e.get("id"), str) or not _ID.fullmatch(e["id"]):
             raise ValueError(f"identifiant invalide : {e.get('id')!r}")
     for r in releve.relations:
         for cle in ("src", "dst"):
-            if not isinstance(r.get(cle), str) or not _ID.match(r[cle]):
+            if not isinstance(r.get(cle), str) or not _ID.fullmatch(r[cle]):
                 raise ValueError(f"identifiant invalide : {r.get(cle)!r}")
         if r.get("type") not in TYPES_RELATION:
             raise ValueError(f"type de relation invalide : {r.get('type')!r}")
@@ -269,6 +269,10 @@ def voisins(db: sqlite3.Connection, id: str, max_noeuds: int = VOISINS_NOEUDS_MA
         tronque = True
     noeuds = [centre] + [e for e in (entite(db, i) for i in ids) if e]
     return {"noeuds": noeuds, "aretes": retenues, "tronque": tronque}
+
+
+def id_valide(id: Any) -> bool:
+    return isinstance(id, str) and bool(_ID.fullmatch(id))
 
 
 def etat_sources(db: sqlite3.Connection) -> List[Dict[str, Any]]:
