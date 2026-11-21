@@ -9,6 +9,18 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+## 2026-11-21 — gk2 saturé : listes DNS recompilées en continu, DNS coupé aux rechargements (ref #3850)
+
+- Cause 1 : `94-secubox-adguard-tv.conf` réécrit à chaque passage (deux vues sbx-evasion permutaient) ⇒
+  `secubox-dns-listes.path` relançait une compilation complète (1 M candidats, 7-9 min, squelette changé donc pas de
+  retouche) + unbound-checkconf + reload. secubox-ad-guard 1.33.1 (PR #3851) : rendu trié. Mesuré : 2 réécritures en
+  30 min, pression CPU 74 % → 36 %, pertes nDPIsrvd 0 ; la nuit, 2 compilations en 8 h.
+- Cause 2 : `unbound-control reload` coupe la résolution > 1 min sur gk2 (TV coupée le 20/11 vers 17:30, au
+  déploiement). PR #3852 : secubox-core 1.8.37 (`recharger_unbound` = fast_reload, repli reload si refusé, jamais
+  après délai), ad-guard 1.33.2, annuaire 0.22.2 (noms), toolbox 2.13.10 (autolearn : drop-in non réécrit à
+  l'identique, fast_reload). Déployé gk1 puis gk2 : 716 requêtes DNS pendant l'installation sur gk2, 0 échec.
+- Reste #3850 : tampon nDPIsrvd (-M), 3 drop-ins journald posés à la main sur gk2 (effectif 120 Mo).
+
 ## 2026-11-20 — SADE : liste blanche modifiable ; banc ACTIVE = gk1 (ref #3839)
 
 - secubox-soc 1.10.1 (PR #3849), déployé gk1, gk2, gk3 : ajout/retrait audités de la liste blanche (page,
