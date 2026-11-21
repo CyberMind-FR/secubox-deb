@@ -31,6 +31,8 @@ def test_unite_service_directives():
     chemins = rw[0].split("=", 1)[1].split()
     assert "/var/lib/secubox/soc" in chemins and "/var/log/secubox" in chemins
     assert "-/run/sudo" in chemins
+    # gestes approuvés (1.12.0) : wafctl leurre écrit leurres-ip.json, sudo journalise les E/S de ces verbes
+    assert "-/var/lib/secubox/waf" in chemins and "-/var/log/sudo-io" in chemins
 
 
 def test_unite_sans_options_impliquant_nonewprivileges():

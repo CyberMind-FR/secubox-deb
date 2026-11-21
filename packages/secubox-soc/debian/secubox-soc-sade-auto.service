@@ -20,13 +20,16 @@ UMask=0027
 NoNewPrivileges=no
 
 # Socle gardé. wafctl s'exécute DANS l'espace de noms de montage de cette unité (sudo l'hérite) :
-# `wafctl ban` n'écrit aucun fichier (ensemble nft = noyau, journal sur stdout) ; `waf-blocs verifier`
-# ne fait que lire (liste des protégés, `ip -j addr`, `wg show`). Seuls chemins en écriture :
+# `wafctl ban`, `limiter`, `prolonger` n'écrivent aucun fichier (ensembles nft = noyau, journal sur stdout) ;
+# `waf-blocs verifier` ne fait que lire (liste des protégés, `ip -j addr`, `wg show`). Seuls chemins en écriture :
 #  - /var/lib/secubox/soc  : base SQLite defense.db (mode, décisions) ;
 #  - /var/log/secubox      : audit.log (append-only) ;
-#  - /run/sudo             : horodatage de sudo, absent tant que sudo ne l'a pas créé.
+#  - /run/sudo             : horodatage de sudo, absent tant que sudo ne l'a pas créé ;
+#  - /var/lib/secubox/waf  : `wafctl leurre` (root) y remplace leurres-ip.json (temporaire + renommage) pour les
+#                            gestes approuvés de la file (1.12.0), comme secubox-waf-indices.service ;
+#  - /var/log/sudo-io      : `Defaults!SBX_WAF_LIMITER|LEURRE|PROLONGER log_output` (journal d'E/S de sudo).
 # /etc/sudoers* et /usr/sbin sont lisibles sous `strict`.
 ProtectSystem=strict
-ReadWritePaths=/var/lib/secubox/soc /var/log/secubox -/run/sudo
+ReadWritePaths=/var/lib/secubox/soc /var/log/secubox -/run/sudo -/var/lib/secubox/waf -/var/log/sudo-io
 ProtectHome=yes
 PrivateTmp=yes

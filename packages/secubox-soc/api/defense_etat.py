@@ -373,7 +373,11 @@ def retirer_liste_blanche(cidr: Any, par: str) -> str:
 # expiré (`tranche_ts + (ttl_s ou 4 h) + 5 min`) ou quand un refus a plus de 24 h ; son état effectif est alors
 # `en_attente`. Une ligne `en_cours` ne se débloque que par `reprendre`, après le délai maximal des appels au WAF.
 
-ETATS_DECISION = ("en_attente", "en_cours", "applique", "refuse")
+# `approuve` (#3839, 1.12.0) : geste gradué (limiter, leurre, prolonger) approuvé par un administrateur, en file pour
+# l'exécuteur `sade-auto` (l'API garde NoNewPrivileges : elle ne lance jamais sudo). `approuve → en_cours` se prend
+# dans UNE transaction (`prendre_approuvee`), puis `conclure` ; jamais ré-armable par le temps : une approbation
+# non exécutée revient `en_attente` par `abandonner_approuvee` (expirée, cible devenue protégée…).
+ETATS_DECISION = ("en_attente", "approuve", "en_cours", "applique", "refuse")
 TTL_DEFAUT_WAF_S = 4 * 3600  # durée par défaut du WAF (`duration` omise : « 4h »)
 MARGE_EXPIRATION_S = 5 * 60
 REARMEMENT_REFUS_S = 24 * 3600
@@ -480,7 +484,7 @@ def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Opti
     `en_attente` : reprise ; tranchée et ré-armable : INSERT génération + 1 (contrainte UNIQUE (empreinte, generation)) ;
     sinon `DejaTraitee` —, écrit l'audit (flush + fsync, suffixé de la génération) PUIS valide. Audit en échec :
     ROLLBACK, rien n'est réclamé. Rend la génération réclamée."""
-    if etat not in ("en_cours", "refuse"):
+    if etat not in ("en_cours", "refuse", "approuve"):
         raise ValueError("état de réclamation inconnu")
     try:
         db = _connecter()
@@ -529,6 +533,101 @@ def reclamer(empreinte: str, menace_id: str, geste: str, cible: str, score: Opti
             if db.in_transaction:
                 db.execute("ROLLBACK")
             raise EtatIndisponible(e.__class__.__name__) from e
+
+
+def approuvees() -> List[Dict[str, Any]]:
+    """Décisions dont la DERNIÈRE génération est `approuve`, la plus ancienne demande d'abord : la file de sade-auto."""
+    try:
+        with closing(_connecter()) as db:
+            lignes = db.execute(
+                f"SELECT d.empreinte, {', '.join('d.' + c for c in _COLS)} FROM decisions d JOIN "
+                "(SELECT empreinte, MAX(generation) g FROM decisions GROUP BY empreinte) m "
+                "ON d.empreinte = m.empreinte AND d.generation = m.g WHERE d.etat = 'approuve' "
+                "ORDER BY d.demande_ts, d.id").fetchall()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return [dict(zip(("empreinte",) + _COLS, x)) for x in lignes]
+
+
+def _transition_approuvee(empreinte: str, generation: int, demande_ts: str, vers: str, ligne_audit: str,
+                          modes: Optional[Tuple[str, ...]], resultat: Optional[str]) -> "Reclamation":
+    """`approuve` → `vers` pour (empreinte, génération, demande_ts) exacts, dans UNE transaction BEGIN IMMEDIATE ; audit
+    écrit (fsync) AVANT le COMMIT. `modes` : le mode relu doit en faire partie (`ModeRefuse` sinon). Ligne qui n'est
+    plus cette approbation : `DejaTraitee` (un second passage ne l'exécute jamais)."""
+    try:
+        db = _connecter()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    with closing(db):
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            if modes is not None:
+                r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
+                if (r[0] if r else "observe") not in modes:
+                    db.execute("ROLLBACK")
+                    raise ModeRefuse(r[0] if r else "observe")
+            maintenant = _ts()
+            cur = db.execute("UPDATE decisions SET etat = ?, demande_ts = ?, resultat = ? WHERE empreinte = ? "
+                             "AND generation = ? AND etat = 'approuve' AND demande_ts = ?",
+                             (vers, maintenant if vers == "en_cours" else demande_ts,
+                              None if resultat is None else resultat[:500], empreinte, generation, demande_ts))
+            if cur.rowcount != 1:
+                db.execute("ROLLBACK")
+                raise DejaTraitee("plus approuvée")
+            ecrire_audit(f"{ligne_audit} generation={generation}")
+            db.execute("COMMIT")
+            rec = Reclamation(generation)
+            rec.demande_ts = maintenant if vers == "en_cours" else demande_ts
+            return rec
+        except (AuditIndisponible, ModeRefuse, DejaTraitee):
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise
+        except sqlite3.Error as e:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise EtatIndisponible(e.__class__.__name__) from e
+
+
+def prendre_approuvee(empreinte: str, generation: int, demande_ts: str, ligne_audit: str,
+                      modes: Tuple[str, ...] = ("reactive", "active")) -> "Reclamation":
+    """Prend une approbation pour l'exécuter : `approuve → en_cours` (demande_ts = maintenant, pour `reprendre`)."""
+    return _transition_approuvee(empreinte, generation, demande_ts, "en_cours", ligne_audit, modes, None)
+
+
+def abandonner_approuvee(empreinte: str, generation: int, demande_ts: str, resultat: str, ligne_audit: str) -> None:
+    """Rend une approbation non exécutée à la file humaine : `approuve → en_attente`, motif dans `resultat`."""
+    _transition_approuvee(empreinte, generation, demande_ts, "en_attente", ligne_audit, None, resultat)
+
+
+def gestes_humains_depuis(geste: str, secondes: int, maintenant: Optional[float] = None) -> int:
+    """ADRESSES d'un geste approuvé par un humain (`par` ≠ 'sade-auto') prises pour exécution ou rendues après un essai,
+    dont la demande tombe dans les `secondes` dernières secondes : plafond horaire par geste des approbations (jamais
+    le journal ai-ban). Compte `en_cours`, `applique` et `en_attente` (un échec a pu poser une partie des adresses ;
+    une approbation abandonnée compte aussi : on surcompte plutôt que de sous-compter). Lève `EtatIndisponible`."""
+    fin = maintenant if maintenant is not None else datetime.now(timezone.utc).timestamp()
+    debut = datetime.fromtimestamp(fin - secondes, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        with closing(_connecter()) as db:
+            lignes = db.execute("SELECT cible FROM decisions WHERE geste = ? AND COALESCE(par, '') != 'sade-auto' "
+                                "AND etat IN ('en_cours', 'applique', 'en_attente') AND demande_ts >= ?",
+                                (geste, debut)).fetchall()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return sum(len([a for a in (lg[0] or "").split(",") if a.strip()]) for lg in lignes)
+
+
+def resultats_decisions() -> Dict[str, str]:
+    """{empreinte: résultat de la dernière génération} (issue réelle d'une approbation, pour la page administrateur)."""
+    try:
+        with closing(_connecter()) as db:
+            lignes = db.execute(
+                "SELECT d.empreinte, d.resultat FROM decisions d JOIN "
+                "(SELECT empreinte, MAX(generation) g FROM decisions GROUP BY empreinte) m "
+                "ON d.empreinte = m.empreinte AND d.generation = m.g").fetchall()
+    except (sqlite3.Error, OSError) as e:
+        raise EtatIndisponible(e.__class__.__name__) from e
+    return {e: r for e, r in lignes if r}
 
 
 def bans_auto_depuis(secondes: int, maintenant: Optional[float] = None) -> int:

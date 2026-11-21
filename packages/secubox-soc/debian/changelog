@@ -10,12 +10,18 @@ secubox-soc (1.12.0-1~trixie1) trixie; urgency=medium
     de l état confirmé de gk3). Valeur manquante : relevé indisponible,
     jamais 0. Mesures gardées 60 s, lectures bornées par la fin.
   * File d approbation : limiter (6 h, 1 h à 24 h), leurre (24 h, 1 h à 7 j)
-    et prolonger (24 h, 7 j au plus, ban présent, jamais raccourci) exécutés
-    par sudo wafctl, mêmes contrôles que l exécuteur automatique (pairs
-    wg_mesh.json compris), audit avant et après. partager et tout autre
-    geste : 409. Dépend de secubox-waf-ng >= 1.43.0. Prérequis : sudo est
-    neutralisé tant que secubox-soc.service garde NoNewPrivileges (décision
-    à prendre) ; d ici là un geste gradué échoue fermé (502 wafctl).
+    et prolonger (24 h, 1 h à 7 j, ban présent, jamais raccourci). L API ne
+    lance jamais sudo (NoNewPrivileges gardé) : POST /approve rend 202 et la
+    décision passe en approuve ; sade-auto (REACTIVE ou ACTIVE) la prend en
+    une transaction, recontrôle les cibles et exécute sudo wafctl, audit
+    avant et après, par = l administrateur. 8 par passage, plafonds horaires
+    par geste (60, 30, 30) dans defense.db, rien dans ai-ban.jsonl ;
+    approbation expirée après 1 h. partager et tout autre geste : 409.
+    Unité sade-auto : -/var/lib/secubox/waf et -/var/log/sudo-io en écriture
+    pour wafctl leurre et le journal d E/S de sudo. Dépend de
+    secubox-waf-ng >= 1.43.0.
+  * Relevé des phases en vol unique (un seul calcul à la fois, mesures
+    précédentes servies pendant un recalcul).
   * Page : étiquette V2 4-7 retirée, critère mesuré sur chaque carte ;
     AGGRESSIVE reste fermé, titre « seuils abaissés, réservé au banc —
     ouverture sur accord du propriétaire ».

@@ -96,7 +96,7 @@ identiques d'une même minute (`n`) ; un outil deviné par actord (« …? ») e
 ### Phases (`/defense/status` → `phases`, 1.12.0)
 
 Les cartes 1 et 2 suivent le mode. Les cartes 3 et 4 sont livrées (`livree: true`) et portent leur critère mesuré
-(`api/phases.py`, mesures gardées 60 s, mode relu en direct) ; une valeur vaut `null` quand sa source manque ou se
+(`api/phases.py`, mesures gardées 60 s et calculées en vol unique, mode relu en direct) ; une valeur vaut `null` quand sa source manque ou se
 lit mal — la page écrit alors « relevé indisponible », jamais 0.
 
 ```
@@ -111,7 +111,7 @@ lit mal — la page écrit alors « relevé indisponible », jamais 0.
   dernières 24 h dans `/var/lib/secubox/waf/ai-ban.jsonl` (un ban annulé pour défaut d'audit est écarté) ; hors
   `active` : `false` ; journal illisible : `null`.
 - `rediriges_24h` : SOMME des champs `servies` des lignes `leurre_redirige` de `waf-threats.log` sur 24 h (une ligne
-  est bornée par adresse et porte le nombre de requêtes servies qu'elle représente). `tentatives_valides_24h` : lignes
+  est bornée par adresse et porte le nombre de requêtes servies qu'elle représente). `tentatives_valides_24h` (page : « tentatives laissées passer ») : lignes
   `action: detect` d'une adresse non locale (détectées puis laissées passer jusqu'au service). Lecture par la fin,
   16 Mio au plus, fichier courant puis `waf-threats.log.1` s'il ne couvre pas 24 h ; budget épuisé avant 24 h :
   `lecture_bornee: true` et la page écrit « au moins N ».
@@ -188,22 +188,35 @@ proposition est contrôlée ; échec fermé.
   au WAF ; un double clic ou une réclamation concurrente donne 409 `deja_traitee`.
 - `POST /reprendre` ne ramène une décision `en_cours` à `en_attente` que si sa demande dépasse le délai maximal des
   appels au WAF + 60 s.
-- Gestes exécutables (`GESTES_EXECUTABLES`) : `ban`, soit un `POST /ban` du WAF par adresse (au plus 32), avec le
-  jeton administrateur de l'appelant relayé (porteur requis) ; et, depuis 1.12.0, les gestes gradués `limiter`
-  (6 h par défaut, 1 h à 24 h), `leurre` (24 h par défaut, 1 h à 7 j) et `prolonger` (24 h par défaut, 7 j au plus,
-  IPv4, seulement un ban présent dans `waf_ban` et jamais plus court que ce qui reste : 409 `absent` / `raccourcit`,
-  ensemble illisible 503 `waf_illisible`), exécutés par `sudo -n /usr/sbin/wafctl <verbe> <ip> <n>s` — les verbes
-  du compte ai-ban (`gestes_ia`), accordés à `secubox` par les sudoers `SBX_WAF_LIMITER`, `SBX_WAF_LEURRE`,
-  `SBX_WAF_PROLONGER` (et `SBX_WAF_NFTLIST` pour lire `waf_ban`) de secubox-waf-ng ≥ 1.43.0. Mêmes contrôles que
-  l'exécuteur automatique : liste blanche, passerelles, pairs threatmesh ET `wg_mesh.json` (illisible : 503
-  `pairs_illisibles`), adresses de l'administrateur ; la garde root de wafctl (`--exiger` : protegees.env, box, pairs)
-  reste le dernier rempart. Audit `sade-approuve-demande` (geste, durée) avant, `sade-approuve-resultat` après ;
-  échec de wafctl : 502 `wafctl`, décision `en_attente`. Arrêt au premier échec. `partager`, `ban_bloc`,
-  `quarantaine` et tout autre geste : 409 `gestes_non_livres`. Les durées par défaut ne sont pas ramenées dans les
-  bornes : une durée hors bornes est refusée (409 `duree_invalide`).
-- **Prérequis non tranché (1.12.0)** : `secubox-soc.service` garde `NoNewPrivileges=true`, qui neutralise sudo. Tant
-  qu'il n'est pas levé (exception § 10 à écrire dans `.claude/RULES-CODE.md`, sur décision), un geste gradué approuvé
-  échoue fermé : `injoignable: sudo: …`, 502 `wafctl`, rien n'est posé, décision `en_attente`, audit du résultat.
+- Gestes exécutables (`GESTES_EXECUTABLES`) : `ban`, soit un `POST /ban` du WAF par adresse (au plus 32), tout de
+  suite, avec le jeton administrateur de l'appelant relayé (porteur requis) ; et, depuis 1.12.0, les gestes gradués
+  `limiter` (6 h par défaut, 1 h à 24 h), `leurre` (24 h par défaut, 1 h à 7 j) et `prolonger` (24 h par défaut,
+  1 h à 7 j, IPv4). `partager`, `ban_bloc`, `quarantaine` et tout autre geste : 409 `gestes_non_livres`. Une durée hors
+  bornes est refusée (409 `duree_invalide`), jamais ramenée dans les bornes.
+- **Gestes gradués : en file, exécutés par sade-auto.** L'API garde `NoNewPrivileges=true` et ne lance jamais sudo.
+  `POST /approve` fait les contrôles (mode, proposition relue, bornes, liste blanche, passerelles, pairs threatmesh et
+  `wg_mesh.json`, adresses de l'administrateur), puis passe la décision en `approuve` (audit `sade-approuve-demande`,
+  fsync avant le COMMIT) et rend **202** `{"etat": "approuve"}` ; la page écrit « en file ». Au passage suivant
+  (2 min au plus), `secubox-soc-sade-auto` — en REACTIVE comme en ACTIVE, avant son propre chemin automatique, sans
+  attendre actord — prend chaque approbation dans UNE transaction BEGIN IMMEDIATE (`approuve → en_cours`, mode relu,
+  audit `sade-approuve-execution` fsync AVANT tout sudo ; un second passage ne la reprend jamais), RECONTRÔLE tout au
+  moment d'exécuter (cible devenue protégée, `wg_mesh.json`, bornes de durée, et pour `prolonger` : ban présent dans
+  `waf_ban` lu par `sudo nft -j list set inet secubox waf_ban`, jamais plus court que ce qui reste), lance
+  `sudo -n /usr/sbin/wafctl <verbe> <ip> <n>s` par adresse (verbes du compte ai-ban, sudoers `SBX_WAF_LIMITER`,
+  `_LEURRE`, `_PROLONGER` de secubox-waf-ng ≥ 1.43.0), puis `conclure` (`applique`, ou `en_attente` rendu à
+  l'administrateur sur échec) et audit `sade-approuve-resultat`. Recontrôle négatif : `sade-approuve-abandon`
+  (`motif` : `cible_protegee`, `absent`, `raccourcit`, `duree_invalide`, `expiree`…), décision rendue `en_attente`
+  avec son motif. Ensemble nft illisible : l'approbation attend le passage suivant. Une approbation non exécutée après
+  1 h est rendue (`expiree`). Au plus 8 approbations par passage, dans le budget de 3 min du passage ; plafonds
+  horaires glissants par geste pour les approbations humaines, comptés dans `defense.db` (`par` ≠ `sade-auto`, en
+  adresses) : limiter 60, leurre 30, prolonger 30 — au-delà, l'approbation attend. Rien n'est écrit dans
+  `ai-ban.jsonl`. `par` reste l'administrateur : ces gestes ne comptent ni dans le plafond de 20/h de l'automatique ni
+  pour son retour en OBSERVE. Une ligne restée `en_cours` se débloque par `POST /reprendre`. L'issue réelle
+  (`resultat`) d'un geste en file est rendue par `/proposals` à l'administrateur seulement. Hors REACTIVE/ACTIVE, la
+  file n'est pas exécutée (l'approbation attend, puis expire).
+- Unité `secubox-soc-sade-auto.service` : `ReadWritePaths` porte aussi `-/var/lib/secubox/waf` (`wafctl leurre`,
+  root dans l'espace de montage de l'unité, y remplace `leurres-ip.json`) et `-/var/log/sudo-io` (`log_output` des
+  sudoers de ces verbes), comme `secubox-waf-indices.service`.
 
 ### Confidentialité
 

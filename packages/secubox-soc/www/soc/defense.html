@@ -266,9 +266,10 @@
     var p3 = phases && phases.p3 ? phases.p3 : null, p4 = phases && phases.p4 ? phases.p4 : null;
     var c3 = p3 && p3.critere ? p3.critere : {}, c4 = p4 && p4.critere ? p4.critere : {}, b3 = !!(p3 && p3.lecture_bornee);
     var mesure3 = p3 ? [critere(c3.rediriges_24h, 'requête servie par le leurre en 24 h', 'requêtes servies par le leurre en 24 h', 'requêtes servies par le leurre', b3),
-      critere(c3.tentatives_valides_24h, 'tentative valide en 24 h', 'tentatives valides en 24 h', 'tentatives valides', b3)].join(' · ') : 'relevé indisponible';
+      critere(c3.tentatives_valides_24h, 'tentative laissée passer en 24 h', 'tentatives laissées passer en 24 h', 'tentatives laissées passer', b3)].join(' · ') : 'relevé indisponible';
     var mesure4 = p4 ? [critere(c4.partages, 'indicateur partagé', 'indicateurs partagés', 'indicateurs partagés'),
-      critere(c4.revus_chez_pairs, 'revu chez un pair', 'revus chez un pair', 'revus chez un pair'),
+      critere(c4.revus_chez_pairs, 'revu chez un pair', 'revus chez des pairs', 'revus chez les pairs'),
+      critere(c4.contenus_chez_pairs, 'contenu chez un pair', 'contenus chez des pairs', 'contenus chez les pairs'),
       critere(c4.filtres_confirmes, 'filtre IA confirmé', 'filtres IA confirmés', 'filtres IA confirmés')].join(' · ') : 'relevé indisponible';
     var ph = [
       ['p1','1 · Défensive','Détection','journaux enrichis, leurres, collecte de signatures et d\'adresses','profil confirmé', 'observe', null],
@@ -477,11 +478,15 @@
   // confirmé dans la page. La page renvoie l'EMPREINTE de la proposition affichée (rendue aux seuls administrateurs) :
   // la façade la recalcule sur la proposition courante d'actord et refuse (`proposition_changee`) si elle a changé.
   var props = {}, propsAdmin = false, propsMode = null, confAppro = null, enVol = null, retours = {}, dernieresProps = null;
-  var ETATS = {en_attente:'en attente', en_cours:'en cours', applique:'appliqué', refuse:'refusé'};
+  // `approuve` : geste gradué approuvé, en file pour l'exécuteur sade-auto (2 min au plus), puis l'issue réelle
+  var ETATS = {en_attente:'en attente', approuve:'en file', en_cours:'en cours', applique:'appliqué', refuse:'refusé'};
+  var GRADUES = {limiter:'Limiter le débit de', leurre:'Rediriger vers le leurre', prolonger:'Prolonger le ban de'};
   var LIB_GESTE = {approuver:'Approuver', refuser:'Refuser', simuler:'Simuler', reprendre:'Reprendre'};
   var ROUTE_GESTE = {approuver:'/approve', simuler:'/approve', refuser:'/refuse', reprendre:'/reprendre'};
   function texteConf(a, p){
     var duree = num(p.ttl_s) !== null ? nb(Math.round(p.ttl_s / 60)) + ' min' : 'durée par défaut du WAF';
+    if (a === 'approuver' && GRADUES[p.geste]) return GRADUES[p.geste] + ' ' + (p.cible || '—') + ' (' + duree + ') pour ' +
+      p.menace_id + ' ? Mis en file : sade-auto recontrôle les cibles et l\'exécute au prochain passage (2 min au plus).';
     if (a === 'approuver') return 'Bannir réellement ' + (p.cible || '—') + ' (' + duree + ') pour ' + p.menace_id + ' ?' +
       (p.validation_humaine ? ' Mesure exceptionnelle (bande incident).' : '');
     if (a === 'refuser') return 'Refuser la proposition ' + p.menace_id + ' ? Elle ne pourra plus être approuvée avant 24 h.';
@@ -500,7 +505,8 @@
     var h = '<div class="ev"><span class="sc b-' + esc(b) + '">' + (num(p.score) === null ? '—' : esc(p.score)) + '</span>' +
       '<div class="tt"><b>' + esc(p.menace_id || '—') + '</b>' + chip(p.geste || '—') + chip(etat, cl) +
       (p.validation_humaine ? chip('mesure exceptionnelle', 'cr') : '') + (p.auto === true ? (p.etat === 'applique' ? chip('appliqué automatiquement', 'ok') : chip('traité automatiquement')) : '') + '<span class="note">' + esc(p.cible || '—') + '</span></div>' +
-      '<div class="ds">' + esc(ds.join(' · ')) + '</div>';
+      '<div class="ds">' + esc(ds.join(' · ')) + '</div>' +
+      (typeof p.resultat === 'string' && p.resultat ? '<div class="ds">issue : ' + esc(p.resultat) + '</div>' : '');
     // gestes : administrateur (empreinte rendue) ; Approuver/Refuser/Simuler en REACTIVE ou ACTIVE sur une décision en attente,
     // Reprendre sur une décision restée « en cours » (quel que soit le mode : elle ne pose aucun ban)
     var offre = !cle ? null : (actif && p.etat === 'en_attente') ? 'file' : (propsAdmin && p.etat === 'en_cours') ? 'reprise' : null;
@@ -561,6 +567,7 @@
       var d = r.d || {}, t;
       if (r.ok) {
         t = (d.etat === 'simule' ? 'Simulation' : d.etat === 'applique' ? 'Appliqué' : d.etat === 'refuse' ? 'Refusé' :
+          d.etat === 'approuve' ? 'En file' :
           act === 'reprendre' ? 'Repris' : LIB_GESTE[act]) + ' : ' + (typeof d.resultat === 'string' ? d.resultat : '—');
         if (Array.isArray(d.avertissements) && d.avertissements.length) t += ' — attention : ' + d.avertissements.join(' ; ');
       } else t = LIB_GESTE[act] + ' refusé : ' + causeDe(r);

@@ -267,70 +267,171 @@ def test_critere_indisponible_jamais_zero(client, tmp_path):
     assert _status(client)["phases"]["p4"]["critere"]["filtres_confirmes"] is None
 
 
-def test_approve_limiter_passe_par_gestes_ia(client, tmp_path):
-    """Les gestes gradués approuvés passent par les verbes de wafctl qu'utilise le compte ai-ban (gestes_ia), en
-    `sudo -n` à argv exact, audités avant et après ; jamais par le POST /ban du WAF."""
-    defense_etat.changer_mode("reactive", "test")
-    props = faux.rep[("actord", "/proposals")]["propositions"]
-    props += [{"actor": "ACT-0101", "mode": "LIMITER", "raison": "rafale", "ttl_s": 0, "ips": ["203.0.113.40"],
-               "priorite": 50},
-              {"actor": "ACT-0102", "mode": "LEURRE", "raison": "scanner", "ttl_s": 7200,
-               "ips": ["2001:db8::40", "203.0.113.41"], "priorite": 50},
-              {"actor": "ACT-0103", "mode": "PROLONGER", "raison": "récidive", "ttl_s": 172800,
-               "ips": ["203.0.113.42"], "priorite": 50},
-              {"actor": "ACT-0104", "mode": "LIMITER", "raison": "x", "ttl_s": 600, "ips": ["203.0.113.43"],
-               "priorite": 50},
-              {"actor": "ACT-0105", "mode": "LIMITER", "raison": "x", "ttl_s": 0, "ips": ["192.168.1.9"],
-               "priorite": 50},
-              {"actor": "ACT-0106", "mode": "PROLONGER", "raison": "x", "ttl_s": 3600, "ips": ["203.0.113.44"],
-               "priorite": 50}]
-    lim = defense.empreinte("limiter", ["203.0.113.40"], None)
-    r = client.post("/defense/approve", json={"empreinte": lim}, headers={"Cookie": "s=1"})  # pas de porteur requis
-    assert r.status_code == 200 and r.json()["etat"] == "applique", r.json()
-    assert sudo.wafctl() == [["sudo", "-n", "/usr/sbin/wafctl", "limiter", "203.0.113.40", "21600s"]]
-    assert faux.ecrits == [] and defense_etat.decision(lim)["etat"] == "applique"
-    audit = [json.loads(x) for x in (tmp_path / "audit.log").read_text(encoding="utf-8").splitlines()]
-    assert [a["action"] for a in audit[-2:]] == ["sade-approuve-demande", "sade-approuve-resultat"]
-    assert audit[-2]["geste"] == "limiter" and audit[-2]["duree"] == "21600s" and audit[-2]["operateur"] == "gerald"
-    assert audit[-1]["issue"] == "applique"
-
-    leu = defense.empreinte("leurre", ["2001:db8::40", "203.0.113.41"], 7200)
-    assert client.post("/defense/approve", json={"empreinte": leu}, headers=ADMIN).status_code == 200
-    assert sudo.wafctl()[-2:] == [["sudo", "-n", "/usr/sbin/wafctl", "leurre", "2001:db8::40", "7200s"],
-                                  ["sudo", "-n", "/usr/sbin/wafctl", "leurre", "203.0.113.41", "7200s"]]
-
-    # prolonger : seulement un ban présent, jamais plus court que ce qui reste
-    pro = defense.empreinte("prolonger", ["203.0.113.42"], 172800)
-    r = client.post("/defense/approve", json={"empreinte": pro}, headers=ADMIN)
-    assert r.status_code == 409 and r.json()["cause"] == "absent"
-    sudo.ensemble = [{"elem": {"val": "203.0.113.42", "timeout": 86400, "expires": 80000}}]
-    r = client.post("/defense/approve", json={"empreinte": pro}, headers=ADMIN)
-    assert r.status_code == 200, r.json()
-    assert sudo.wafctl()[-1] == ["sudo", "-n", "/usr/sbin/wafctl", "prolonger", "203.0.113.42", "172800s"]
-    assert ["sudo", "-n", "/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban"] in sudo.appels
-    court = defense.empreinte("prolonger", ["203.0.113.44"], 3600)
-    sudo.ensemble = [{"elem": {"val": "203.0.113.44", "timeout": 86400, "expires": 80000}}]
-    r = client.post("/defense/approve", json={"empreinte": court}, headers=ADMIN)
-    assert r.status_code == 409 and r.json()["cause"] == "raccourcit"
-
-    n = len(sudo.wafctl())
-    r = client.post("/defense/approve", json={"empreinte": defense.empreinte("limiter", ["203.0.113.43"], 600)},
-                    headers=ADMIN)
-    assert r.status_code == 409 and r.json()["cause"] == "duree_invalide"  # limiter : 1 h à 24 h
-    r = client.post("/defense/approve", json={"empreinte": defense.empreinte("limiter", ["192.168.1.9"], None)},
-                    headers=ADMIN)
-    assert r.status_code == 403 and r.json()["cause"] == "liste_blanche"
-    assert len(sudo.wafctl()) == n
-
-    # wafctl refuse (garde root) : jamais « appliqué »
-    sudo.sortie = Fini(1, "", "refus:protegee\n")
+def _proposer(mode, ips, ttl=0, acteur=None):
+    n = len(faux.rep[("actord", "/proposals")]["propositions"]) + 101
     faux.rep[("actord", "/proposals")]["propositions"].append(
-        {"actor": "ACT-0107", "mode": "LIMITER", "raison": "x", "ttl_s": 0, "ips": ["203.0.113.45"], "priorite": 50})
-    e = defense.empreinte("limiter", ["203.0.113.45"], None)
-    r = client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN)
-    assert r.status_code == 502 and r.json()["cause"] == "wafctl" and "refus:protegee" in r.json()["error"]
-    assert defense_etat.decision(e)["etat"] == "en_attente"
+        {"actor": acteur or f"ACT-{n:04d}", "mode": mode, "raison": "x", "ttl_s": ttl, "ips": list(ips),
+         "priorite": 50})
+    return defense.empreinte(mode.lower(), list(ips), ttl if ttl > 0 else None)
+
+
+def _audit(tmp_path):
+    return [json.loads(x) for x in (tmp_path / "audit.log").read_text(encoding="utf-8").splitlines()]
+
+
+def test_approve_limiter_passe_par_gestes_ia(client, tmp_path):
+    """Un geste gradué approuvé est MIS EN FILE (202, `approuve`) sans aucun sudo dans l'API ; le passage suivant de
+    sade-auto l'exécute par le verbe de wafctl qu'utilise le compte ai-ban (gestes_ia), audité avant et après, une
+    seule fois, au nom de l'administrateur ; jamais par le POST /ban du WAF."""
+    defense_etat.changer_mode("reactive", "test")      # REACTIVE : la file des approuvées s'exécute aussi
+    lim = _proposer("LIMITER", ["203.0.113.40"])
+    r = client.post("/defense/approve", json={"empreinte": lim}, headers={"Cookie": "s=1"})  # pas de porteur requis
+    assert r.status_code == 202 and r.json()["etat"] == "approuve", r.json()
+    assert sudo.appels == [] and faux.ecrits == []
+    assert defense_etat.decision(lim)["etat"] == "approuve"
+    a = _audit(tmp_path)[-1]
+    assert a["action"] == "sade-approuve-demande" and a["geste"] == "limiter" and a["duree"] == "21600s"
+    assert a["operateur"] == "gerald"
+    p = {x["geste"]: x for x in client.get("/defense/proposals", headers=ADMIN).json()["propositions"]}
+    assert p["limiter"]["etat"] == "approuve" and p["limiter"]["executable"] is True
+
+    out = sade_auto.executer()
+    assert out["approuvees_executees"] == ["203.0.113.40"] and out["erreur"] is None, out
+    assert sudo.wafctl() == [["sudo", "-n", "/usr/sbin/wafctl", "limiter", "203.0.113.40", "21600s"]]
+    d = defense_etat.decision(lim)
+    assert d["etat"] == "applique" and d["par"] == "gerald"         # jamais « sade-auto »
+    actions = [x["action"] for x in _audit(tmp_path)]
+    assert actions[-2:] == ["sade-approuve-execution", "sade-approuve-resultat"]
+    assert all(x["operateur"] == "gerald" for x in _audit(tmp_path)[-2:])
+    assert defense_etat.bans_auto_depuis(3600) == 0                   # ni plafond auto ni retour en OBSERVE
+    assert defense_etat.mode_courant() == "reactive"
+    # double passage : jamais deux fois
+    sade_auto.executer()
+    assert len(sudo.wafctl()) == 1
+    # la page voit l'issue réelle (administrateur seulement)
+    lecteur = {x["geste"]: x for x in client.get("/defense/proposals", headers=LECTURE).json()["propositions"]}
+    assert lecteur["limiter"]["etat"] == "applique" and "resultat" not in lecteur["limiter"]
+    main.app.dependency_overrides[defense._est_admin] = lambda: True
+    try:
+        p = {x["geste"]: x for x in client.get("/defense/proposals", headers=ADMIN).json()["propositions"]}
+    finally:
+        main.app.dependency_overrides.pop(defense._est_admin, None)
+    assert p["limiter"]["etat"] == "applique" and "sade-auto" in p["limiter"]["resultat"]
     assert faux.ecrits == []
+
+
+def test_execution_recontrole_et_bornes(client, tmp_path, monkeypatch):
+    defense_etat.changer_mode("active", "test")
+    leu = _proposer("LEURRE", ["2001:db8::40", "203.0.113.41"], 7200)
+    pro = _proposer("PROLONGER", ["203.0.113.42"], 172800)
+    court = _proposer("PROLONGER", ["203.0.113.44"], 3600)
+    proteg = _proposer("LIMITER", ["198.51.100.60"])
+    for e in (leu, pro, court, proteg):
+        assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
+    assert sudo.appels == []  # prolonger : ni nft ni wafctl dans l'API
+    # entre l'approbation et l'exécution, 198.51.100.60 entre en liste blanche ; un seul ban présent, plus court
+    defense_etat.ajouter_liste_blanche("198.51.100.0/24", "box amie", "gerald")
+    sudo.ensemble = [{"elem": {"val": "203.0.113.42", "timeout": 86400, "expires": 80000}},
+                     {"elem": {"val": "203.0.113.44", "timeout": 86400, "expires": 80000}}]
+    out = sade_auto.executer()
+    assert out["erreur"] is None, out
+    assert sudo.wafctl() == [["sudo", "-n", "/usr/sbin/wafctl", "leurre", "2001:db8::40", "7200s"],
+                             ["sudo", "-n", "/usr/sbin/wafctl", "leurre", "203.0.113.41", "7200s"],
+                             ["sudo", "-n", "/usr/sbin/wafctl", "prolonger", "203.0.113.42", "172800s"]]
+    assert ["sudo", "-n", "/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban"] in sudo.appels
+    assert defense_etat.decision(court)["etat"] == "en_attente"            # prolonger ne raccourcit jamais
+    assert "raccourcit" in defense_etat.decision(court)["resultat"]
+    assert defense_etat.decision(proteg)["etat"] == "en_attente"           # cible devenue protégée : rien
+    assert "cible_protegee" in defense_etat.decision(proteg)["resultat"]
+    abandons = [x for x in _audit(tmp_path) if x["action"] == "sade-approuve-abandon"]
+    assert {x["motif"] for x in abandons} == {"raccourcit", "cible_protegee"}
+    # bornes à l'approbation : limiter 1 h à 24 h, prolonger 1 h au moins ; IPv4 seulement pour prolonger
+    for mode, ips, ttl, cause in (("LIMITER", ["203.0.113.43"], 600, "duree_invalide"),
+                                  ("PROLONGER", ["203.0.113.46"], 1800, "duree_invalide"),
+                                  ("PROLONGER", ["2001:db8::46"], 7200, "ipv4_seulement")):
+        r = client.post("/defense/approve", json={"empreinte": _proposer(mode, ips, ttl)}, headers=ADMIN)
+        assert r.status_code == 409 and r.json()["cause"] == cause, (mode, ttl)
+    r = client.post("/defense/approve", json={"empreinte": _proposer("LIMITER", ["192.168.1.9"])}, headers=ADMIN)
+    assert r.status_code == 403 and r.json()["cause"] == "liste_blanche"
+
+
+def test_execution_echec_rendue_a_l_administrateur(client, tmp_path):
+    defense_etat.changer_mode("active", "test")
+    e = _proposer("LIMITER", ["203.0.113.45"])
+    assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
+    sudo.sortie = Fini(1, "", "refus:protegee\n")
+    sade_auto.executer()
+    d = defense_etat.decision(e)
+    assert d["etat"] == "en_attente" and "refus:protegee" in d["resultat"] and d["par"] == "gerald"
+    assert _audit(tmp_path)[-1]["action"] == "sade-approuve-resultat" and _audit(tmp_path)[-1]["issue"] == "echec"
+    # observe : la file n'est pas exécutée
+    assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
+    defense_etat.changer_mode("observe", "test")
+    n = len(sudo.wafctl())
+    sade_auto.executer()
+    assert len(sudo.wafctl()) == n and defense_etat.decision(e)["etat"] == "approuve"
+
+
+def test_approbation_expiree_et_plafond_par_geste(client, tmp_path, monkeypatch):
+    defense_etat.changer_mode("active", "test")
+    e = _proposer("LEURRE", ["203.0.113.47"])
+    assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
+    monkeypatch.setattr(sade_auto, "PLAFONDS_APPROUVES_HEURE", {"limiter": 60, "leurre": 0, "prolonger": 30})
+    out = sade_auto.executer()
+    assert out["approuvees_en_attente"] == 1 and sudo.wafctl() == []
+    assert defense_etat.decision(e)["etat"] == "approuve"                  # attend le passage suivant
+    monkeypatch.setattr(sade_auto, "APPROBATION_MAX_S", -1)
+    sade_auto.executer()
+    assert defense_etat.decision(e)["etat"] == "en_attente" and "expiree" in defense_etat.decision(e)["resultat"]
+    assert sudo.wafctl() == []
+
+
+def test_prendre_approuvee_une_seule_fois(client):
+    defense_etat.changer_mode("active", "test")
+    e = _proposer("LIMITER", ["203.0.113.48"])
+    assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
+    d = defense_etat.approuvees()[0]
+    defense_etat.prendre_approuvee(d["empreinte"], d["generation"], d["demande_ts"], "sade-approuve-execution t=1")
+    with pytest.raises(defense_etat.DejaTraitee):
+        defense_etat.prendre_approuvee(d["empreinte"], d["generation"], d["demande_ts"], "sade-approuve-execution t=2")
+    assert defense_etat.decision(e)["etat"] == "en_cours"
+
+
+def test_phases_vol_unique(monkeypatch):
+    import threading
+    appels, porte = [], threading.Event()
+
+    def lent(maintenant):
+        appels.append(1)
+        porte.wait(2)
+        return 1, 0, False
+    monkeypatch.setattr(phases, "_menaces_24h", lent)
+    res = []
+    fils = [threading.Thread(target=lambda: res.append(phases.phases("observe"))) for _ in range(2)]
+    for f in fils:
+        f.start()
+    time.sleep(0.2)
+    porte.set()
+    for f in fils:
+        f.join(3)
+    assert len(appels) == 1 and len(res) == 2
+    assert all(r["p3"]["critere"]["rediriges_24h"] == 1 for r in res)
+    # mesures précédentes servies pendant un recalcul
+    phases._cache["expire"] = 0
+    porte.clear()
+    t = threading.Thread(target=lambda: phases.phases("observe"))
+    t.start()
+    time.sleep(0.1)
+    assert phases.phases("observe")["p3"]["critere"]["rediriges_24h"] == 1 and len(appels) == 2
+    porte.set()
+    t.join(3)
+
+
+def test_retrait_de_plusieurs_filtres(client, tmp_path):
+    _filtres(tmp_path, ["ia-a", "ia-b"])
+    _audit_cvectl(tmp_path, (3 * JOUR, "appliquer", "2 filtre(s) : ia-a, ia-b"),
+                  (2 * JOUR, "retirer", "ia-a, ia-b retirés"), (3600, "appliquer", "2 filtre(s) : ia-a, ia-b"))
+    assert _status(client)["phases"]["p4"]["critere"]["filtres_confirmes"] == 0
 
 
 def test_approve_geste_inconnu_refuse(client):
@@ -356,7 +457,9 @@ def test_page_sans_tag_v2_4_7():
     assert "phases.p4.active" in f or "p4.active" in f
     assert "relevé indisponible" in f
     assert "requêtes servies par le leurre en 24 h" in PAGE and "indicateurs partagés" in PAGE
-    assert "revu chez un pair" in PAGE
+    assert "revu chez un pair" in PAGE and "revus chez des pairs" in PAGE and "c4.contenus_chez_pairs" in PAGE
+    assert "tentatives laissées passer" in PAGE and "tentatives valides" not in PAGE
+    assert "approuve:'en file'" in PAGE
     b = re.search(r'<button[^>]*data-mode="aggressive"[^>]*>', PAGE).group(0)
     assert " disabled" in b
     assert 'title="seuils abaissés, réservé au banc — ouverture sur accord du propriétaire"' in b

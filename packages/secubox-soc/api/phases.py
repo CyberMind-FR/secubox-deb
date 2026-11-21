@@ -62,7 +62,8 @@ DEFAUTS = {
 _RE_ID_FILTRE = re.compile(r"ia-[a-z0-9._-]{1,93}")
 _RE_NB_FILTRES = re.compile(r"^\s*(\d{1,4}) filtre")
 
-_verrou = threading.Lock()
+_verrou = threading.Lock()          # protège `_cache`
+_calcul = threading.Lock()          # vol unique : un seul fil relit les fichiers à la fois
 _cache: Dict[str, Any] = {}
 
 
@@ -315,7 +316,7 @@ def filtres_confirmes(maintenant: float) -> Optional[int]:
                 if pose.get(fid) is None:
                     pose[fid] = t
         elif o.get("action") == "leurre_filtres-ia-retirer":
-            for fid in _RE_ID_FILTRE.findall(detail)[:1]:
+            for fid in _RE_ID_FILTRE.findall(detail):
                 pose[fid] = None
     n = 0
     for fid in actifs:
@@ -334,10 +335,25 @@ def filtres_confirmes(maintenant: float) -> Optional[int]:
 # ── assemblage ────────────────────────────────────────────────────────────────────────────────────
 
 def _mesures() -> Dict[str, Any]:
-    maintenant = time.time()
+    """Mesures gardées 60 s, calculées en VOL UNIQUE : pendant un calcul, les autres appels reçoivent les mesures
+    précédentes s'il y en a, sinon attendent ce même calcul (jamais deux relevés concurrents des journaux)."""
     with _verrou:
-        if _cache.get("expire", 0) > maintenant:
+        if _cache.get("expire", 0) > time.time():
             return _cache["mesures"]
+        precedentes = _cache.get("mesures")
+    if not _calcul.acquire(blocking=precedentes is None):
+        return precedentes
+    try:
+        with _verrou:
+            if _cache.get("expire", 0) > time.time():
+                return _cache["mesures"]  # calculé par le fil qu'on attendait
+        return _calculer()
+    finally:
+        _calcul.release()
+
+
+def _calculer() -> Dict[str, Any]:
+    maintenant = time.time()
     rediriges, tentatives, borne = _menaces_24h(maintenant)
     ind = indices_etat(maintenant) or {}
     m = {"neutralisation_24h": _neutralisation_24h(maintenant), "rediriges_24h": rediriges,
