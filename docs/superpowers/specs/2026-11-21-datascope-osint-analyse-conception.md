@@ -8,7 +8,11 @@
 > **Statut (21/11/2026)** : analyse de conception, avant spec. Décision du propriétaire sur la question 6 :
 > **OSINT = intégration profonde ou remplacement complet par des outils SBX équivalents** — SecuBox possède son
 > moteur (graphe, enrichissement, transforms) ; Maltego n est jamais une dépendance, au mieux un format d échange.
-> Questions 1 à 5 en attente.
+> Questions 1 à 5 : **valeurs par défaut retenues** (21/11) : (1) DataScope sur gk2, maître (vision remote
+> controller : collecteur par box, vue sur le maître), vhost d'administration seulement, le Hall n'offre qu'un lien ;
+> (2) exception Aurora pour la seule perspective Graph, V0.1 en topologie SVG, Cytoscape/Sigma vendorés en V0.2 ;
+> (3) pas de DNS par appareil dans l'index, lecture à la demande avec les droits de l'appelant ; (4) connecteurs
+> Network + Status en V0.1, compte de service de lecture en V0.3 ; (5) rétention 30 j, 200 Mo au plus, base sur /data.
 
 # SBXOS DataScope — analyse de conception (21/11/2026)
 
