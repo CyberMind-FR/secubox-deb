@@ -10,7 +10,8 @@ case "$1" in
            && [ -f /etc/apparmor.d/secubox-datascope ]; then
             apparmor_parser -R /etc/apparmor.d/secubox-datascope >/dev/null 2>&1 || true
         fi
-        # Route /api/v1/datascope/ retirée : nginx rechargé seulement si sa configuration reste valide.
+        # La route nginx est un conffile : elle reste après remove (retirée à la purge par dpkg). Simple rechargement,
+        # seulement si la configuration reste valide.
         if [ -d /run/systemd/system ] && command -v nginx >/dev/null 2>&1; then
             if nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
         fi

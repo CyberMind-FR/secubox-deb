@@ -104,13 +104,21 @@ def _vue_graphe(db, genere: str, complet: bool) -> Dict[str, Any]:
         "ORDER BY CASE type WHEN 'node' THEN 0 WHEN 'interface' THEN 1 WHEN 'network' THEN 2 ELSE 3 END, id LIMIT ?",
         (*TYPES_SOCLE, VOISINS_NOEUDS_MAX))]
     reste = VOISINS_NOEUDS_MAX - len(socle)
+    # Récence = date du NAC (attribut vu_nac, au jour près) : entities.last_seen n'est que la date de la passe.
     appareils = [] if reste <= 0 else [dict(r) for r in db.execute(
-        f"WITH d AS (SELECT {_COLS}, (SELECT r.dst FROM relationships r WHERE r.src = e.id AND r.type = 'CONNECTS_TO'"
+        f"WITH d AS (SELECT {_COLS}, CASE WHEN json_valid(attributes_json) THEN attributes_json ELSE '{{}}' END AS a,"
+        "   (SELECT r.dst FROM relationships r WHERE r.src = e.id AND r.type = 'CONNECTS_TO'"
         "   AND r.dst LIKE 'interface:%' ORDER BY r.last_seen DESC, r.dst LIMIT 1) AS iface"
         "  FROM entities e WHERE e.type = 'device'),"
-        " r AS (SELECT d.*, ROW_NUMBER() OVER (PARTITION BY coalesce(iface, '') ORDER BY last_seen DESC, id) AS rang"
-        "  FROM d)"
-        f" SELECT {_COLS} FROM r WHERE rang <= ? ORDER BY rang, last_seen DESC, id LIMIT ?", (MAX_PAR_IF, reste))]
+        " v AS (SELECT d.*, coalesce(json_extract(a, '$.vu_nac'), '') AS vu_nac, json_extract(a, '$.ip') AS ip"
+        "  FROM d),"
+        " r AS (SELECT v.*, ROW_NUMBER() OVER (PARTITION BY coalesce(iface, '') ORDER BY vu_nac DESC, id) AS rang"
+        "  FROM v)"
+        f" SELECT {_COLS}, vu_nac, ip FROM r WHERE rang <= ? ORDER BY rang, vu_nac DESC, id LIMIT ?",
+        (MAX_PAR_IF, reste))]
+    for n in appareils:  # seuls ip et vu_nac voyagent dans le graphe (liste d'appareils de la page)
+        vu, ip = n.pop("vu_nac"), n.pop("ip")
+        n["attributes"] = {k: v for k, v in (("vu_nac", vu), ("ip", ip)) if isinstance(v, str) and v}
     noeuds = sorted(socle + appareils, key=lambda n: n["id"])
     ids = [n["id"] for n in noeuds]
     db.execute("CREATE TEMP TABLE IF NOT EXISTS _vue(id TEXT PRIMARY KEY)")

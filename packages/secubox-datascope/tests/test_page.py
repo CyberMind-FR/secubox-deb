@@ -214,3 +214,29 @@ def test_liens_bulles_hors_tabulation_et_libelle_inconnu():
     corps = s[debut:s.index("\n  }", debut)]
     assert "tabindex:'-1'" in corps and "tabindex:'0'" not in corps
     assert "' ?'" not in s and "' · inconnu'" in s
+
+
+def test_ip_de_la_liste_et_ordre_par_date_du_nac():
+    """IP d'un appareil : attribut ip, sinon relations BELONGS_TO d'une ip, sinon « IP dans l'inspecteur » si le
+    graphe en a écarté, sinon « — ». Ordre : vu_nac décroissant, puis last_seen, puis id."""
+    prog = _disposition_js() + r"""
+    var N={'device:a':{id:'device:a',type:'device',attributes:{ip:'192.0.2.7<b>'}},'device:b':{id:'device:b',type:'device'},
+           'device:c':{id:'device:c',type:'device',attributes:{ip:12}},'ip:192.0.2.9':{id:'ip:192.0.2.9',type:'ip',label:'192.0.2.9'}};
+    var A=[{src:'ip:192.0.2.9',dst:'device:b',type:'BELONGS_TO'}];
+    var t=[{id:'device:x',attributes:{vu_nac:'2026-11-20'},last_seen:'2026-11-21T10:00:00Z'},
+           {id:'device:y',attributes:{vu_nac:'2026-11-21'},last_seen:'2026-11-21T10:00:00Z'},
+           {id:'device:z',last_seen:'2026-11-21T10:00:00Z'},{id:'device:w',attributes:{vu_nac:'2026-11-21'},last_seen:'2026-11-21T10:00:00Z'}];
+    process.stdout.write(JSON.stringify({a:ipAffichee(N['device:a'],A,N,0),b:ipAffichee(N['device:b'],A,N,5),
+      c5:ipAffichee(N['device:c'],A,N,5),c0:ipAffichee(N['device:c'],A,N,0),cu:ipAffichee(N['device:c'],A,N,undefined),
+      ordre:t.sort(parLastSeen).map(function(d){return d.id;})}));
+    """
+    r = _noeud_js(prog)
+    assert r["a"] == "192.0.2.7<b>"  # brut : la liste l'écrit en textContent
+    assert r["b"] == "192.0.2.9"
+    assert r["c5"] == "IP dans l’inspecteur" and r["c0"] == "IP —" and r["cu"] == "IP —"
+    assert r["ordre"] == ["device:w", "device:y", "device:x", "device:z"]
+    s = _script()
+    debut = s.index("function rendreListe(")
+    corps = s[debut:s.index("\n  }", debut)]
+    assert "ipAffichee(d,A,N," in corps and "ip_hors_vue" in corps and "'IP —'" not in corps
+    assert "au jour près" in s

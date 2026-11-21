@@ -93,11 +93,18 @@ def lire(nac_db: Path, netstats: Path, hote: str, maintenant: float) -> Releve:
         d = f"device:{mac}"
         attrs = {k: r[k] for k in ("hostname", "device_type", "oui_vendor") if r[k]}
         attrs["mac_random"] = bool(r["mac_random"])
+        # Date du NAC au jour près (UTC) : la vue du graphe trie les appareils dessus ; le jour seul garde
+        # l'empreinte stable entre deux contacts d'une même journée. Absente si last_seen est corrompu.
+        vu_nac = _jour_sur(r["last_seen"], "")
+        if vu_nac:
+            attrs["vu_nac"] = vu_nac
+        adresse = _ip(r["ip"]) if r["ip"] else None
+        if adresse and suffixe_valide(adresse):
+            attrs["ip"] = adresse
         entites[d] = {"id": d, "label": (r["hostname"] or mac), "attributes": attrs}
         nom_if = (r["interface"] or "").strip()
         if nom_if and suffixe_valide(nom_if):
             rel(d, interface(nom_if), "CONNECTS_TO", vu)
-        adresse = _ip(r["ip"]) if r["ip"] else None
         if adresse and suffixe_valide(adresse):
             i = f"ip:{adresse}"
             entites[i] = {"id": i, "label": adresse, "attributes": {}}

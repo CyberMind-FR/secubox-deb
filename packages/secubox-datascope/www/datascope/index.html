@@ -252,7 +252,13 @@
   // Extraites et exécutées par tests/test_page.py (node). Aucune physique : anneaux et grappes calculés.
   var MAX_PAR_IF=60;
   function parId(a,b){return a.id<b.id?-1:a.id>b.id?1:0;}
-  function parLastSeen(a,b){var x=String(a.last_seen||''),y=String(b.last_seen||'');return x<y?1:x>y?-1:parId(a,b);}
+  // récence : date du NAC (attributs.vu_nac, au jour près) d'abord ; last_seen n'est que la date de la passe
+  function vuNac(n){var v=n&&n.attributes&&n.attributes.vu_nac;return typeof v==='string'?v:'';}
+  function parLastSeen(a,b){var p=vuNac(a),q=vuNac(b);if(p!==q)return p<q?1:-1;var x=String(a.last_seen||''),y=String(b.last_seen||'');return x<y?1:x>y?-1:parId(a,b);}
+  // IP affichée d'un appareil (texte brut, écrit en textContent) : attribut ip, sinon nœuds ip reliés, sinon renvoi
+  function ipAffichee(d,A,N,horsVue){var v=d&&d.attributes&&d.attributes.ip;if(typeof v==='string'&&v)return v;
+    var ips=A.filter(function(a){return a.type==='BELONGS_TO'&&a.dst===d.id&&N[a.src]&&N[a.src].type==='ip';}).map(function(a){return N[a.src].label||a.src;});
+    if(ips.length)return ips.join(', ');return horsVue>0?'IP dans l\u2019inspecteur':'IP \u2014';}
   function parLabel(a,b){var x=String(a.label||a.id),y=String(b.label||b.id);return x<y?-1:x>y?1:parId(a,b);}
   function cleTri(a){return a.src+'|'+a.type+'|'+a.dst;}
   // rayon d'une bulle selon son type et son degré (nombre de relations) : [base, pente, plafond]
@@ -471,7 +477,7 @@
     if(g.disponible===false){box.appendChild(h('div',{'class':'vide',text:'Aucun graphe : '+(g.motif||'relevé indisponible')+'.'}));return;}
     var notes=vue==='arbre'?rendreArbre(box):rendreBulles(box);
     if(!notes){box.appendChild(h('div',{'class':'vide',text:'Aucune box dans le relevé (source réseau masquée ou absente).'}));return;}
-    if(g.tronque)notes.unshift('Graphe tronqué par l\u2019API (500 nœuds, 1 500 arêtes au plus : box, interfaces, zones et services d\u2019abord, puis '+MAX_PAR_IF+' appareils par interface, les plus récemment vus).');
+    if(g.tronque)notes.unshift('Graphe tronqué par l\u2019API (500 nœuds, 1 500 arêtes au plus : box, interfaces, zones et services d\u2019abord, puis '+MAX_PAR_IF+' appareils par interface, les plus récemment vus par le NAC, au jour près).');
     bas.textContent=notes.join(' ');
     echelle();marquerSelection();rendreListe();
   }
@@ -517,8 +523,8 @@
     box.appendChild(h('h4',{},['Appareils de '+(TYPE_FR[ctx.type]||ctx.type)+' '+(ctx.label||ctx.id)+' ('+devs.length+')',tous]));
     if(!devs.length)box.appendChild(h('div',{'class':'vide',text:'Aucun appareil.'}));
     devs.forEach(function(d){
-      var ips=A.filter(function(a){return a.type==='BELONGS_TO'&&a.dst===d.id&&N[a.src].type==='ip';}).map(function(a){return N[a.src].label||a.src;});
-      var b=ligne(d.id,d.label||d.id,(ips.length?ips.join(', '):'IP —')+' · '+(d.etat_source==='ok'?'à jour':'inconnu')+' · vu le '+fmtDate(d.last_seen));
+      var hv=etat.graphe&&typeof etat.graphe.ip_hors_vue==='number'?etat.graphe.ip_hors_vue:0;
+      var b=ligne(d.id,d.label||d.id,ipAffichee(d,A,N,hv)+' · '+(d.etat_source==='ok'?'à jour':'inconnu')+' · vu le '+(vuNac(d)||fmtDate(d.last_seen)));
       if(d.id===selection.id)sel=b;});
     if(focus&&sel)sel.focus();
   }
@@ -598,12 +604,12 @@
       E('ip:'+d[3],d[3],'network',d[4]);R('ip:'+d[3],id,'BELONGS_TO','nac',d[4],'observed','inventaire du NAC, vu le 2026-11-21');});
     E('device:'+mac(7),'box-operateur','network',1,{hostname:'box-operateur',device_type:'routeur',mac_random:false});R('device:'+mac(7),'interface:eth2','CONNECTS_TO','nac',1,'observed','inventaire du NAC, vu le 2026-11-21');
     E('ip:203.0.113.1','203.0.113.1','network',1);R('ip:203.0.113.1','device:'+mac(7),'BELONGS_TO','nac',1,'observed','inventaire du NAC, vu le 2026-11-21');
-    for(var i=0;i<63;i++){var id='device:'+mac(16+i),nom='objet-'+(i<9?'0':'')+(i+1);E(id,nom,'network',5+i*7,{device_type:'objet connecté',mac_random:i%3===0});R(id,'interface:wlan0','CONNECTS_TO','nac',5+i*7,'observed','inventaire du NAC, vu le 2026-11-'+(21-Math.floor(i/10)));}
+    for(var i=0;i<63;i++){var id='device:'+mac(16+i),nom='objet-'+(i<9?'0':'')+(i+1);E(id,nom,'network',5+i*7,{device_type:'objet connecté',mac_random:i%3===0,ip:'192.0.2.'+(100+i),vu_nac:'2026-11-'+(21-Math.floor(i/10))});n[n.length-1].attributes={ip:'192.0.2.'+(100+i),vu_nac:'2026-11-'+(21-Math.floor(i/10))};R(id,'interface:wlan0','CONNECTS_TO','nac',5+i*7,'observed','inventaire du NAC, vu le 2026-11-'+(21-Math.floor(i/10)));}
     ['dns-guard','nac','waf'].forEach(function(m){E('service:'+m,m,'status',3,{overall:'healthy',critical:m==='waf'});R('service:'+m,'node:secubox-demo','HOSTED_ON','status',3,'reported','santé des modules du 2026-11-21T09:57:00Z');});
-    var compte={};n.forEach(function(x){compte[x.type]=(compte[x.type]||0)+1;});
+    var compte={};n.forEach(function(x){compte[x.type]=(compte[x.type]||0)+1;});compte.ip=(compte.ip||0)+63;  // adresses des objets wlan0 : attribut seulement (ip_hors_vue)
     return {overview:{disponible:true,genere_le:iso(2),verifie_le:iso(1),complet:false,perime:false,entites:compte,relations:a.length},
       sources:[{source:'status',etat:'inaccessible',motif:'santé des modules périmée (plus de 300 s)',vu_le:iso(14)},{source:'network',etat:'ok',motif:null,vu_le:iso(2)}],
-      graphe:{disponible:true,noeuds:n,aretes:a,tronque:false},refus:false,_attrs:at,_just:just};
+      graphe:{disponible:true,noeuds:n,aretes:a,tronque:false,ip_hors_vue:63},refus:false,_attrs:at,_just:just};
   })();
   function contexteDemo(id){
     var D=DEMO_DONNEES,e=etat.noeuds[id];if(!e)return null;e=JSON.parse(JSON.stringify(e));e.attributes=JSON.parse(JSON.stringify(D._attrs[id]||{}));

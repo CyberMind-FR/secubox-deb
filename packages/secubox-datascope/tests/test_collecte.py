@@ -193,9 +193,9 @@ def test_graph_par_defaut_priorise_box_et_interfaces(cfg):
     _nac_recents(cfg.nac_db.with_name("gros.db"), 800)
     cfg.nac_db = cfg.nac_db.with_name("gros.db")
     collecte.passe(cfg, NOW)
-    # 100 appareils revus plus tard : ce sont eux que la vue garde (last_seen DESC)
+    # 100 appareils revus plus tard par le NAC : ce sont eux que la vue garde (vu_nac DESC)
     db = sqlite3.connect(cfg.base)
-    db.execute("UPDATE entities SET last_seen = '2030-01-01T00:00:00Z' WHERE id IN "
+    db.execute("UPDATE entities SET attributes_json = json_set(attributes_json, '$.vu_nac', '2030-01-01') WHERE id IN "
                "(SELECT id FROM entities WHERE type = 'device' ORDER BY id DESC LIMIT 100)")
     recents = {r[0] for r in db.execute("SELECT id FROM entities WHERE type = 'device' ORDER BY id DESC LIMIT 100")}
     db.commit()
@@ -268,3 +268,58 @@ def test_collecteur_temp_en_memoire(cfg):
         assert db.execute("PRAGMA temp_store").fetchone()[0] == 2
     finally:
         db.close()
+
+
+def _nac_dates(chemin, vus):
+    db = sqlite3.connect(chemin)
+    db.execute("CREATE TABLE devices (mac TEXT PRIMARY KEY, ip TEXT, hostname TEXT, interface TEXT, "
+               "device_type TEXT, zone TEXT, first_seen INT, last_seen INT, mac_random INT, oui_vendor TEXT)")
+    db.executemany("INSERT INTO devices VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   [(f"aa:bb:cc:00:{i >> 8 & 255:02x}:{i & 255:02x}", f"10.0.{i >> 8 & 255}.{i & 255}", f"h{i}",
+                     "br-lan", "pc", None, vu - 100, vu, 0, None) for i, vu in enumerate(vus)])
+    db.commit()
+    db.close()
+
+
+def test_graph_appareils_par_date_du_nac(cfg):
+    """Les 60 gardés par interface sont les plus récemment vus PAR LE NAC (au jour près), pas l'ordre des ids."""
+    # 100 appareils : les ids élevés sont les plus récents (jour NOW - (99 - i) jours)
+    vus = [NOW - (99 - i) * 86400 for i in range(100)]
+    _nac_dates(cfg.nac_db.with_name("dates.db"), vus)
+    cfg.nac_db = cfg.nac_db.with_name("dates.db")
+    collecte.passe(cfg, NOW)
+    g = _lire(cfg, "graph.json")
+    devs = [n for n in g["noeuds"] if n["type"] == "device"]
+    assert len(devs) == 60
+    garde = {n["id"] for n in devs}
+    assert garde == {f"device:aa:bb:cc:00:00:{i:02x}" for i in range(40, 100)}
+    d = next(n for n in devs if n["id"] == "device:aa:bb:cc:00:00:63")
+    assert d["attributes"] == {"ip": "10.0.0.99", "vu_nac": "2026-11-18"}
+
+
+def test_graph_sans_vu_nac_repli_sur_id(cfg):
+    db = collecte.ouvrir(cfg.base)
+    try:
+        for i in range(70):
+            db.execute("INSERT INTO entities(id, type, label, attributes_json, source_module, first_seen, last_seen)"
+                       " VALUES (?, 'device', '', '{}', 'network', 'x', 'x')", (f"device:aa:00:00:00:00:{i:02x}",))
+        g = collecte._vue_graphe(db, "2026-11-21T00:00:00Z", True)
+    finally:
+        db.close()
+    ids = [n["id"] for n in g["noeuds"]]
+    assert ids == [f"device:aa:00:00:00:00:{i:02x}" for i in range(60)]
+
+
+def test_nac_qui_avance_dans_la_journee_aucune_ecriture(cfg):
+    debut = 1794960000.0  # 2026-11-18T00:00:00Z ; NOW = 11:06 le même jour
+    _nac_dates(cfg.nac_db.with_name("j.db"), [debut + 60, debut + 120])
+    cfg.nac_db = cfg.nac_db.with_name("j.db")
+    collecte.passe(cfg, NOW)
+    gb, base = (cfg.cache / "graph.json").read_bytes(), _changes(cfg)
+    db = sqlite3.connect(cfg.nac_db)
+    db.execute("UPDATE devices SET last_seen = last_seen + 30000")
+    db.commit()
+    db.close()
+    r = collecte.passe(cfg, NOW + 60)
+    assert r["sources"]["network"]["ecrites"] == 0
+    assert (cfg.cache / "graph.json").read_bytes() == gb and _changes(cfg) == base

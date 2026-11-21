@@ -172,6 +172,7 @@ def test_liste_au_doigt_a_420():
         r["lignes"] = pg.locator("#liste button.ligneApp").count()
         r["hauteur"] = pg.eval_on_selector("#liste button.ligneApp", "b => b.getBoundingClientRect().height")
         r["sous_graphe"] = pg.evaluate("document.getElementById('liste').getBoundingClientRect().top >= document.getElementById('topo').getBoundingClientRect().bottom")
+        r["ip"] = pg.inner_text("#liste button.ligneApp[data-id='device:00:00:5e:00:53:14'] .m")
         pg.click("#liste button.ligneApp[data-id='device:00:00:5e:00:53:14']")
         pg.wait_for_timeout(100)
         r["insp"] = pg.inner_text("#insp")
@@ -187,6 +188,7 @@ def test_liste_au_doigt_a_420():
     assert r["lignes"] == 63 and r["hauteur"] >= 44  # toute l'interface, y compris les 3 non dessinés
     assert r["sous_graphe"]
     assert "objet-05" in r["insp"]
+    assert r["ip"].startswith("192.0.2.") and "IP —" not in r["ip"]  # attribut ip de l'appareil, sans nœud ip
     assert r["prise"] >= 21.5 and r["regle"]
     assert not r["deborde"]
 

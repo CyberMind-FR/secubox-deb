@@ -214,3 +214,34 @@ def test_suffixe_fin_de_ligne_ecarte_sans_casser_la_passe(tmp_path):
         assert db.execute("SELECT count(*) FROM entities WHERE id = 'interface:eth1'").fetchone()[0] == 1
     finally:
         db.close()
+
+
+def test_appareil_porte_vu_nac_au_jour_et_ip(tmp_path, netstats):
+    """Date du NAC (au jour près, UTC) et adresse canonique dans les attributs de l'appareil ; ip absente : pas de clé."""
+    _nac(tmp_path / "n.db", [_ligne("aa:bb:cc:dd:ee:01", ip="2001:0DB8::0001"), _ligne("aa:bb:cc:dd:ee:02", ip=None)])
+    r = network.lire(tmp_path / "n.db", netstats, "gk2", NOW)
+    d = {e["id"]: e for e in r.entites}
+    a1, a2 = d["device:aa:bb:cc:dd:ee:01"]["attributes"], d["device:aa:bb:cc:dd:ee:02"]["attributes"]
+    assert a1["vu_nac"] == "2026-11-18" and a1["ip"] == "2001:db8::1"
+    assert a2["vu_nac"] == "2026-11-18" and "ip" not in a2
+
+
+@pytest.mark.parametrize("mauvais", [1e30, -5, "hier", None])
+def test_vu_nac_absent_si_last_seen_corrompu(tmp_path, netstats, mauvais):
+    m = list(_ligne("aa:bb:cc:dd:ee:03"))
+    m[7] = mauvais
+    _nac(tmp_path / "n.db", [tuple(m)])
+    dev = next(e for e in network.lire(tmp_path / "n.db", netstats, "gk2", NOW).entites if e["id"].startswith("device:"))
+    assert "vu_nac" not in dev["attributes"]
+
+
+def test_empreinte_stable_dans_la_journee(tmp_path, netstats):
+    """Le NAC avance last_seen à chaque contact : l'empreinte ne bouge qu'au changement de jour."""
+    debut = 1794960000  # 2026-11-18T00:00:00Z
+    empreintes = []
+    for i, vu in enumerate((debut + 60, debut + 40000, debut + 86399, debut + 86400)):
+        lg = list(_ligne("aa:bb:cc:dd:ee:01"))
+        lg[7] = vu
+        _nac(tmp_path / f"{i}.db", [tuple(lg)])
+        empreintes.append(network.lire(tmp_path / f"{i}.db", netstats, "gk2", NOW + 86400).empreinte)
+    assert empreintes[0] == empreintes[1] == empreintes[2] != empreintes[3]
