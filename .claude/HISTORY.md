@@ -11,6 +11,21 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-21 — SecuBox AI V2 phases 4-7 fusionnées, pas déployées (ref #3722 #3723 #3724 #3725 #3839)
+
+PR #3857 (squash da83d2ca9) : 13 tâches menées par sous-agents, chacune relue, puis revue de toute la branche.
+- gk2 : secubox-waf-ng 1.43.0, toolbox-ng 0.18.0, soc 1.12.0, mirrornet 0.7.0, annuaire 0.23.0.
+  - Gestes `ai-ban` : ban d'office d'adresse vue < 24 h, prolonger, limiter (nft par adresse), leurre (théâtre sbxwaf), partager (`ip-indices`), lever.
+  - Plafonds par geste ; cibles protégées sur tout chemin (préfixe `lan` limité à l'IPv6).
+  - Mode SADE publié dans `/run/secubox/sade-mode.json` : OBSERVE refuse tout geste IA, ne dépend jamais de l'audit et vide la file.
+  - Cartes 3 et 4 de `/soc/` vivantes ; gestes approuvés exécutés par sade-auto.
+- gk3 : secubox-ai 2.0.0.
+  - Analyste à preuves vérifiées ; riposte observer/contenir/usager ; politiques.
+  - Exécuteur signé avec rapprochement et suspension automatique.
+  - Mécanique des filtres d'office ; onglets Dossier et Réponses (maquettes approuvées) ; rétention bornée et garde d'espace.
+- Reste avant déploiement (décisions du propriétaire) : classe RGPD de `ip-indices`, levée de la suspension de l'automatique, retrait de la clé `ai-ban` du POC gk0. Vérifications : README de secubox-ai, « Mise en service ».
+- Suite (à ouvrir) : filtres « outil » sans CVE et route gk2 des réponses légitimes, seconds traits du catalogue ; utilisateur dédié pour la veille.
+
 ## 2026-11-21 — fast_reload silencieux pris pour un refus : reload en double corrigé (ref #3850)
 
 - gk2 à nouveau saturé (charge 46, pression CPU 78 %, 24 556 pertes nDPIsrvd en 30 min). Cause : sans `+v`,
