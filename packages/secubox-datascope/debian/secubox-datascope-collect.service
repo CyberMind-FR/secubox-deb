@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+# SecuBox DataScope — passe de collecte (#3853) : lit les trois sources locales, écrit la base et le cache.
+# Même socle de durcissement que l'API ; basse priorité (Nice, CPUQuota, IO idle) pour ne jamais gêner le routage.
+[Unit]
+Description=SecuBox DataScope — passe de collecte
+After=secubox-core.service
+
+[Service]
+Type=oneshot
+User=secubox-datascope
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/datascope
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -m secubox_datascope.collecte
+StateDirectory=secubox-datascope
+StateDirectoryMode=0750
+UMask=0027
+AppArmorProfile=-secubox-datascope
+Nice=10
+CPUQuota=25%
+IOSchedulingClass=idle
+MemoryMax=128M
+TimeoutStartSec=60
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ReadWritePaths=-/data/secubox-datascope -/var/cache/secubox/datascope

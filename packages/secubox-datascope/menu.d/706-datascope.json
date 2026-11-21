@@ -1,0 +1,10 @@
+{
+  "id": "datascope",
+  "name": "DataScope",
+  "category": "mind",
+  "icon": "🕸",
+  "path": "/datascope/",
+  "order": 708,
+  "description": "Cockpit réseau : appareils, interfaces et services observés, relations et fraîcheur des sources",
+  "theme": "supervision"
+}
