@@ -54,6 +54,11 @@ secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
     de sa publication ; résumé /run/secubox/waf-indices-etat.json pour SADE
     (indices_etat). L unité secubox-waf-ng ne rend plus la publication à
     secubox-waf au démarrage.
+    #3724 : POST /ai/lever (compte ai-ban), corps {geste: lever, cible_geste:
+    limiter|leurre, id} : lève seulement une entrée de ai-ban.jsonl du type
+    annoncé (409 geste sinon, 404 inconnu hors du journal), wafctl
+    limiter-lever ou leurre-lever, audit ai-lever-demande avant et ai-lever
+    après, plafonds 30/h et 100/j (PLAFONDS_LEVER, hors PLAFONDS_PAR_GESTE).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
 

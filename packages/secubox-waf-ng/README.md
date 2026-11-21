@@ -141,6 +141,7 @@ Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet
 | `POST /ai/leurre` | `{"geste": "leurre", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…604800, "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/partager` | `{"geste": "partager", "cible": "<IPv4 ou IPv6 publique BANNIE>", "duree_s": 3600…604800, "conseil": "<id>", "famille": "<[a-z0-9_-], 64 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
 | `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` |
+| `POST /ai/lever` | `{"geste": "lever", "cible_geste": "limiter"\|"leurre", "id": "<32 hex>"}` (#3724 : seulement une entrée ai-ban du type annoncé ; 30/h, 100/j ; audit `ai-lever-demande` puis `ai-lever`) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule` ; 404 `inconnu` ; 409 `geste`, `plafond_heure`, `plafond_jour` |
 | `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds, plafonds_par_geste, sade_mode}` |
 
 **Gestes d'office du compte `ai-ban` (#3723, 1.43.0).** Le journal `/var/lib/secubox/waf/ai-ban.jsonl` porte un champ

@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 """Gestes d'une box d'IA sur le pare-feu du WAF (#3716, #3723) : `POST /ai/ban`, `POST /ai/unban`,
-`POST /ai/prolonger`, `POST /ai/limiter`, `POST /ai/leurre`, `POST /ai/partager`, `GET /ai/etat`.
+`POST /ai/prolonger`, `POST /ai/limiter`, `POST /ai/leurre`, `POST /ai/partager`, `POST /ai/lever`, `GET /ai/etat`.
 
 LE SEUL CHEMIN D'ÉCRITURE D'UNE IA DANS LE PARE-FEU. Exception écrite à RULES-CODE § 3 : ces routes ne portent pas
 `require_jwt` mais `require_ai_ban` (`secubox_core.compte_service`) : jeton EdDSA par requête, signé par la clé privée
@@ -56,6 +56,10 @@ Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
   secubox-mirrornet signe et publie au maillage) ; ligne `partage` au journal, retirée par `/ai/unban` de son id
   (`wafctl indice-retirer`, le ban de l'adresse reste), jamais prolongée. Les pairs ne bannissent qu'après l'avoir
   vue hostile chez eux (`indices_ip.py`, unité secubox-waf-indices) ;
+- lever (#3724, « Défaire » de la console de gk3) : `{geste: "lever", cible_geste: "limiter"|"leurre", id}`, un `id`
+  du journal ai-ban dont la ligne est du type annoncé (`limite` / `leurre`, 409 `geste` sinon : jamais un ban ni un
+  partage, 404 `inconnu` hors du journal) ; `wafctl limiter-lever` / `leurre-lever` ; 30/h et 100/j
+  (`PLAFONDS_LEVER`, lignes `annule` de geste `lever`) ; audit `ai-lever-demande` avant, `ai-lever` après ;
 - débannir : un `id` du journal seulement, jamais une adresse ; et JAMAIS une cible qu'une autre source couvre
   désormais (ruling P12) : adresse dont le dernier enregistrement de `bans.jsonl` (sbxwaf) est un `ban` non échu,
   bloc dont la fin enregistrée par waf-blocs dépasse celle du journal ai-ban de plus de 5 s. Le ban ai-ban est alors
@@ -197,6 +201,11 @@ PARTAGE_MIN_S, PARTAGE_MAX_S = 3600, 604_800
 #: type de la ligne → (nom du geste, verbe wafctl de levée).
 GESTES_SANS_BAN = {"limite": ("limiter", "limiter-lever"), "leurre": ("leurre", "leurre-lever"),
                    "partage": ("partager", "indice-retirer")}
+#: Levée d'un geste sans ban par gk3 (#3724, `POST /ai/lever`) : geste annoncé → type de la ligne du journal.
+LEVABLES = {"limiter": "limite", "leurre": "leurre"}
+#: Plafonds de la levée (fenêtres glissantes, lignes `annule` de geste `lever`) : à part de PLAFONDS_PAR_GESTE, qui
+#: ne porte que les gestes posés (relus par gk3 comme bornes de sa politique).
+PLAFONDS_LEVER = {"heure": 30, "jour": 100}
 #: Causes d'annulation qui retirent un ban de la récidive : jamais posé (audit) ou retiré par l'IA ou l'humain.
 _CAUSES_SANS_RECIDIVE = frozenset({"audit", "unban"})
 #: Un bloc dont la fin enregistrée dépasse la nôtre de plus que ceci a été rebanni par quelqu'un d'autre.
@@ -386,6 +395,15 @@ class GesteAnnuler(BaseModel):
     id: str = Field(pattern=r"^[0-9a-f]{32}$")
 
 
+class GesteLever(BaseModel):
+    """#3724 : défaire une limite ou un leurre posés par ai-ban, par l'id de gk2 (jamais une adresse)."""
+    model_config = {"extra": "forbid"}
+
+    geste: Literal["lever"]
+    cible_geste: Literal["limiter", "leurre"]
+    id: str = Field(pattern=r"^[0-9a-f]{32}$")
+
+
 def _valider(modele, corps: bytes):
     try:
         return modele.model_validate_json(corps)
@@ -520,12 +538,14 @@ def _bilan(entrees: List[dict], maintenant: int) -> Tuple[Dict[str, dict], set, 
                 comptees.append((GESTES_SANS_BAN[e["type"]][0], "auto", e["at"]))
         else:
             annules.add(e["id"])
+            if e.get("geste") == "lever":
+                comptees.append(("lever", "auto", e["at"]))
     for i, fin in prolongees.items():
         if i in bans and fin > bans[i]["fin"]:
             bans[i] = {**bans[i], "fin": fin}
     actifs = [b for i, b in bans.items() if i not in annules and b["fin"] > maintenant and b["type"] == "ban"]
     compteurs = dict.fromkeys(PLAFONDS, 0)
-    for g in PLAFONDS_PAR_GESTE:
+    for g in (*PLAFONDS_PAR_GESTE, "lever"):
         compteurs[f"{g}_heure"] = compteurs[f"{g}_jour"] = 0
     for geste, mode, at in comptees:
         age = max(0, maintenant - at)
@@ -553,7 +573,7 @@ def limites_actives(bans: Dict[str, dict], annules: set, maintenant: int, type_:
 
 def _plafond_atteint(compteurs: Dict[str, int], geste: str) -> Optional[str]:
     """`plafond_heure` / `plafond_jour` si le geste a atteint l'un de ses plafonds, None sinon."""
-    p = PLAFONDS_PAR_GESTE[geste]
+    p = PLAFONDS_LEVER if geste == "lever" else PLAFONDS_PAR_GESTE[geste]
     if compteurs[f"{geste}_heure"] >= p["heure"]:
         return "plafond_heure"
     if compteurs[f"{geste}_jour"] >= p["jour"]:
@@ -1500,6 +1520,58 @@ def ai_unban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps
             raise HTTPException(statut, detail={"motif": motif})
         # le ban est levé et audité ; si la ligne manque, un nouvel essai refera un retrait idempotent puis la ligne
         _clore(geste.id, ban, maintenant, "unban")
+    return {"id": geste.id, "etat": "annule"}
+
+
+@router.post("/lever")
+def ai_lever(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps)) -> Dict[str, Any]:
+    """Lève une limite ou un leurre posés par ai-ban (#3724, « Défaire » de la console de gk3). Seule une entrée du
+    journal ai-ban, du type annoncé par `cible_geste` (409 `geste` sinon : jamais un ban, ni un partage), est levée ;
+    404 `inconnu` si l'id n'y est pas. Déjà annulée : `deja_annule` ; échue : `echu` (rien n'est lancé). Plafonds
+    `PLAFONDS_LEVER`. Audit `ai-lever-demande` AVANT wafctl (sans elle, rien n'est fait), `ai-lever` après."""
+    geste: GesteLever = _valider(GesteLever, corps)
+    with _verrou:
+        maintenant = int(_maintenant())
+        try:
+            bans, annules, _, compteurs = _bilan(_lire_journal(), maintenant)
+        except OSError:
+            raise HTTPException(503, detail={"motif": "journal"}) from None
+        entree = bans.get(geste.id)
+        if entree is None:
+            raise HTTPException(404, detail={"motif": "inconnu"})
+        if entree["type"] != LEVABLES[geste.cible_geste]:
+            raise HTTPException(409, detail={"motif": "geste"})
+        if geste.id in annules:
+            return {"id": geste.id, "etat": "deja_annule"}
+        if entree["fin"] <= maintenant:
+            return {"id": geste.id, "etat": "echu"}
+        motif = _plafond_atteint(compteurs, "lever")
+        if motif:
+            _auditer_regroupe("ai-lever-refus", motif, "clic", f"motif {motif} id {geste.id}", user)
+            raise HTTPException(409, detail={"motif": motif})
+        try:
+            cible = forme_limite(entree["cible"])
+        except ValueError:
+            raise HTTPException(500, detail={"motif": "journal"}) from None
+        resume = f"id {geste.id} geste {geste.cible_geste} cible {entree['cible']}"
+        try:
+            _auditer("ai-lever-demande", resume, user)
+        except Exception:  # noqa: BLE001 — sans trace de la demande, rien n'est levé
+            raise HTTPException(503, detail={"motif": "audit"}) from None
+        r, _ = _lancer(_argv(GESTES_SANS_BAN[entree["type"]][1], cible))
+        if r is None or r.returncode != 0:
+            statut, motif = (503, "wafctl") if r is None else _statut_motif(_motif_sortie(r))
+            _auditer_sans_lever("ai-lever-echec", f"{resume} motif {motif}", user)
+            raise HTTPException(statut, detail={"motif": motif})
+        try:
+            _ecrire_journal({"ts": _horodatage(), "at": maintenant, "type": "annule", "geste": "lever",
+                             "id": geste.id, "cible": entree["cible"], "cause": "lever"})
+        except OSError:
+            # levée faite et demande auditée ; un nouvel essai refera une levée idempotente puis la ligne
+            _auditer_sans_lever("ai-lever-echec", f"{resume} motif journal", user)
+            raise HTTPException(503, detail={"motif": "journal"}) from None
+        # la levée est faite, demandée et journalisée : une ligne d'issue manquante ne la défait pas
+        _auditer_sans_lever("ai-lever", resume, user)
     return {"id": geste.id, "etat": "annule"}
 
 
