@@ -255,20 +255,21 @@ def motif_refus(cible, protegees, locales, pairs):
     return None
 
 
-def _gardes(cible, lancer):
-    """Les trois listes de protection, relues à chaque appel ; GardeIllisible si l'une manque."""
+def _gardes(cible, lancer, exiger=False):
+    """Les trois listes de protection, relues à chaque appel ; GardeIllisible si l'une manque. Un bloc, ou une
+    adresse bannie d'office (`exiger`, #3723), exige `protegees.env` et sa ligne SECUBOX_WAF_PROTEGEES."""
     bloc = isinstance(cible, ipaddress.IPv4Network)
-    return lire_protegees(PROTEGEES_ENV, exiger=bloc), adresses_locales(lancer), adresses_pairs(lancer)
+    return lire_protegees(PROTEGEES_ENV, exiger=bloc or exiger), adresses_locales(lancer), adresses_pairs(lancer)
 
 
-def verifier(texte):
+def verifier(texte, exiger=False):
     """Motif de refus d'une cible (texte), ou None ; les trois listes sont relues à chaque appel."""
     try:
         cible = normaliser_cible(texte)
     except ValueError:
         return "invalide"
     try:
-        return motif_refus(cible, *_gardes(cible, executer))
+        return motif_refus(cible, *_gardes(cible, executer, exiger))
     except GardeIllisible:
         return "garde_illisible"
 
@@ -682,10 +683,12 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     verbe, args = (argv[0], argv[1:]) if argv else ("", [])
     attendus = {"verifier": 1, "ajouter": 2, "retirer": 1, "lister": 0, "reappliquer": 0, "reparer": 0}
-    if attendus.get(verbe) != len(args):
+    # `verifier <cible> --exiger` (#3723) : geste d'office d'une adresse, protegees.env exigé comme pour un bloc
+    exiger = verbe == "verifier" and len(args) == 2 and args[1] == "--exiger"
+    if attendus.get(verbe) != len(args) - exiger:
         return _imprimer(_refus("usage"))
     if verbe == "verifier":
-        motif = verifier(args[0])
+        motif = verifier(args[0], exiger)
         return _imprimer({"ok": motif is None, "motif": motif})
     if verbe == "ajouter":
         if not re.fullmatch(r"[0-9]{1,9}", args[1]):

@@ -584,9 +584,10 @@ _secondes() {
 # plage protégée, une adresse de la box ni un pair WireGuard, pour TOUT ban.
 # Toute sortie non nulle refuse, y compris un script absent ou une réponse
 # illisible (garde_illisible) ; le motif part sur stderr en « refus:<motif> ».
+# `_garde <cible> --exiger` (#3723) : geste d'office d'une adresse, protegees.env exigé comme pour un bloc.
 _garde() {
     local sortie="" motif=""
-    if sortie=$(/usr/sbin/waf-blocs verifier "$1" 2>/dev/null); then
+    if sortie=$(/usr/sbin/waf-blocs verifier "$@" 2>/dev/null); then
         return 0
     fi
     motif=$(printf '%s' "$sortie" | jq -r '.motif // empty' 2>/dev/null) || motif=""
@@ -596,8 +597,13 @@ _garde() {
 }
 
 cmd_ban() {
-    local ip="$1" duree="${2:-4h}" version secondes
-    _garde "$ip" || return 1
+    local ip="$1" duree="${2:-4h}" option="${3:-}" version secondes
+    # 3e argument : seulement « --exiger-protegees » (ban d'adresse d'office du compte ai-ban, #3723)
+    case "$option" in
+        "") _garde "$ip" || return 1 ;;
+        --exiger-protegees) _garde "$ip" --exiger || return 1 ;;
+        *) error "Option inconnue : $option"; return 1 ;;
+    esac
     version=$(_valide_ip "$ip") || {
         case $? in
             2) error "Adresse privée refusée : $ip" ;;
@@ -615,6 +621,37 @@ cmd_ban() {
         log "ban $ip → $ensemble (${secondes}s)"
     else
         error "nft a refusé le bannissement de $ip"
+        return 1
+    fi
+}
+
+# cmd_prolonger <ip> <durée> — prolonge le ban d'une adresse DÉJÀ dans waf_ban (#3723, geste `prolonger` du compte
+# ai-ban). `nft add element` d'un élément présent ne rafraîchit pas son délai de façon garantie : le retrait et le
+# nouvel ajout passent en UNE transaction (`nft -f`), sans instant où l'adresse serait libre. Absente de l'ensemble :
+# refus (`refus:absent`), jamais un nouveau ban par ce verbe. IPv4 seulement ; garde d'office (protegees.env exigé).
+_lot_prolonger() {
+    printf 'delete element inet %s %s { %s }\n' "$NFT_TABLE" "$2" "$1"
+    printf 'add element inet %s %s { %s timeout %ss }\n' "$NFT_TABLE" "$2" "$1" "$3"
+}
+
+cmd_prolonger() {
+    [ "$#" -eq 2 ] || { error "Usage : wafctl prolonger <ip> <durée>"; return 1; }
+    local ip="$1" duree="$2" version secondes
+    _garde "$ip" --exiger || return 1
+    version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
+    [ "$version" = "4" ] || { error "IPv4 seulement : $ip"; return 1; }
+    if ! secondes=$(_secondes "$duree"); then
+        error "Durée invalide : $duree"
+        return 1
+    fi
+    if ! nft get element inet "$NFT_TABLE" waf_ban "{ $ip }" >/dev/null 2>&1; then
+        printf 'refus:absent\n' >&2
+        return 1
+    fi
+    if _lot_prolonger "$ip" waf_ban "$secondes" | nft -f - 2>/dev/null; then
+        log "prolonger $ip → waf_ban (${secondes}s)"
+    else
+        error "nft a refusé la prolongation de $ip"
         return 1
     fi
 }
@@ -883,7 +920,9 @@ case "${1:-}" in
     anti-robots) cmd_anti_robots "${2:-}" "${3:-}" ;;
     leurres-modes) cmd_leurres_modes "${2:-}" ;;
     php-hotes)  cmd_php_hotes "${2:-}" ;;
-    ban)        cmd_ban "${2:-}" "${3:-}" ;;
+    ban)        [ "$#" -le 4 ] || { error "Usage : wafctl ban <ip> [durée] [--exiger-protegees]"; exit 1; }
+                cmd_ban "${2:-}" "${3:-}" "${4:-}" ;;
+    prolonger)  shift; cmd_prolonger "$@" ;;
     unban)      cmd_unban "${2:-}" ;;
     ban-bloc)   shift; cmd_ban_bloc "$@" ;;
     unban-bloc) shift; cmd_unban_bloc "$@" ;;

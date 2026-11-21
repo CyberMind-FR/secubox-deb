@@ -57,6 +57,7 @@ class FauxWafctl:
         self.reponses = {
             "ban": (0, "[..] ban ok\n", ""),
             "unban": (0, "[..] unban ok\n", ""),
+            "prolonger": (0, "[..] prolonger ok\n", ""),
             "ban-bloc": (0, '{"ok": true, "motif": null}\n', ""),
             "unban-bloc": (0, '{"ok": true, "motif": null}\n', ""),
             "blocs": (0, '{"ok": true, "motif": null, "blocs": []}\n', ""),
@@ -129,6 +130,11 @@ def c(monkeypatch, tmp_path):
     # #3723 : jamais le journal des menaces ni le mode SADE du poste qui lance la suite
     monkeypatch.setattr(g, "JOURNAL_MENACES", tmp_path / "waf-threats.log")
     monkeypatch.setattr(g, "FICHIER_SADE", tmp_path / "sade-mode.json")
+    monkeypatch.setattr(g, "_uids_sade", lambda: {0, os.getuid()})
+    # #3723 : cibles protégées des gestes d'office (maillage, robots) sans réseau ni DNS ; aucun pair par défaut
+    monkeypatch.setattr(g, "WG_MESH", tmp_path / "wg_mesh.json")
+    monkeypatch.setattr(g, "_lire_threatmesh_peers", lambda: {"node": "x", "peers": []})
+    monkeypatch.setattr(g, "_fcrdns", lambda ip: "")
     _regroupement_neuf(monkeypatch, g)
     faux = FauxWafctl()
     monkeypatch.setattr(g, "_executer", faux)
@@ -562,6 +568,11 @@ def c_garde(monkeypatch, tmp_path):
     # #3723 : jamais le journal des menaces ni le mode SADE du poste qui lance la suite
     monkeypatch.setattr(g, "JOURNAL_MENACES", tmp_path / "waf-threats.log")
     monkeypatch.setattr(g, "FICHIER_SADE", tmp_path / "sade-mode.json")
+    monkeypatch.setattr(g, "_uids_sade", lambda: {0, os.getuid()})
+    # #3723 : cibles protégées des gestes d'office (maillage, robots) sans réseau ni DNS ; aucun pair par défaut
+    monkeypatch.setattr(g, "WG_MESH", tmp_path / "wg_mesh.json")
+    monkeypatch.setattr(g, "_lire_threatmesh_peers", lambda: {"node": "x", "peers": []})
+    monkeypatch.setattr(g, "_fcrdns", lambda ip: "")
     _regroupement_neuf(monkeypatch, g)
     faux = FauxWafctl()
     monkeypatch.setattr(g, "_executer", faux)

@@ -108,6 +108,8 @@ l'administrateur y écrit l'IPv4 publique en /32 et le préfixe IPv6 de la box (
 | `wafctl ban-bloc <a.b.c.0/24> <durée>` | bannit un /24 canonique, 1 h à 7 j ; un rebannissement ne raccourcit jamais |
 | `wafctl unban-bloc <a.b.c.0/24>` | retire le bloc (table et état) |
 | `wafctl blocs` | liste JSON des blocs non échus, temps restant, présence dans nft |
+| `wafctl ban <ip> <durée> --exiger-protegees` | ban d'adresse d'office du compte `ai-ban` (#3723) : la garde exige `protegees.env` et sa ligne `SECUBOX_WAF_PROTEGEES`, comme pour un bloc |
+| `wafctl prolonger <ip> <N>s` | #3723 : prolonge une adresse DÉJÀ dans `waf_ban` par UNE transaction `nft -f` (`delete element` puis `add element … timeout`), jamais un simple `add` dont le délai ne serait pas rafraîchi ; absente : `refus:absent` ; garde d'office ; IPv4 ; sudoers `SBX_WAF_PROLONGER` |
 | `wafctl cle-ai-ban ajouter <fichier.pub>` | **root seul**, hors sudoers : pose une clé publique Ed25519 sous `/etc/secubox-comptes-service/ai-ban/<empreinte>.pub` (root 0644 ; empreinte = SHA-256 hex du DER, le `kid` des jetons) ; deux clés au plus |
 | `wafctl cle-ai-ban retirer <empreinte>` / `retirer --toutes` | **root seul** : révoque une clé, ou toutes (effet à la requête suivante) |
 | `wafctl cle-ai-ban lister` | empreintes posées, et si le nom de fichier est la vraie empreinte |
@@ -143,18 +145,28 @@ forme de sa cible.
 - **Porte du mode SADE**, avant tout autre contrôle d'un geste d'office (`mode = "auto"`, et `prolonger`) : gk2 lit
   `/run/secubox/sade-mode.json`, publié par secubox-soc (`{"mode", "depuis", "liste_blanche"}`), jamais la base du SOC.
   Fichier absent : aucune porte. `observe` : 409 `sade_observe` ; `reactive` : seul `limiter` passe, 409
-  `sade_reactive` sinon ; `active` / `aggressive` : ouverte. Un fichier illisible, d'un mode inconnu ou dont `depuis`
-  date de plus de 15 min vaut `observe`. La `liste_blanche` publiée est une liste de cibles protégées pour TOUT geste,
+  `sade_reactive` sinon ; `active` / `aggressive` : ouverte. `depuis` est l'instant de la PUBLICATION (l'API SOC
+  republie toutes les 60 s) : un fichier illisible, d'un mode inconnu ou dont `depuis` date de plus de 15 min vaut
+  `observe`. `/run/secubox` étant 1777, le fichier n'est cru que s'il appartient à root ou au compte `secubox` et
+  n'est modifiable ni par le groupe ni par les autres ; sinon `observe` et liste vide (journal en erreur, une fois).
+  Limite : tout processus qui tourne sous le compte `secubox` peut l'écrire. La `liste_blanche` publiée est une liste de cibles protégées pour TOUT geste,
   clic compris (409 `protegee`) ; illisible : 503 `etat`.
 - **Ban d'adresse d'office** : admis seulement si l'adresse a une ligne de menace (`client_ip` ou `ip` exact) de moins
   de 24 h dans la fin de `/var/log/secubox/waf/waf-threats.log` (16 Mio lus au plus), 409 `non_vue` sinon. **La durée
   est calculée par gk2 et le `duree_s` du client est ignoré** : 24 h, × 4 par ban ai-ban précédent de la même adresse
   dans le journal (hors bans annulés pour `audit` ou `unban`), 7 j au plus (24 h, 96 h, puis 7 j) ; la réponse la
-  rend (`duree_s`). Gardes de `wafctl` inchangées (privé, `protegees.env` dont la Freebox, box, pair : leur motif).
+  rend (`duree_s`). « Vue » se lit au champ `timestamp` des lignes de sbxwaf (RFC 3339 avec décalage ; sbxwaf
+  n'écrit pas de champ `at`). Cibles jamais visées d'office (409 `protegee`) : pair du maillage
+  (`/var/lib/secubox/p2p/wg_mesh.json` et threatmesh `GET /peers`, mêmes sources que `sade_auto` de secubox-soc),
+  robot d'indexation vérifié (DNS inverse confirmé par le direct, mêmes domaines que sbxwaf `crawlers.go`, 4 s au
+  plus), liste blanche SADE ; une source muette, illisible, ou un DNS en doute ⇒ 409 `protegee_inconnue` (jamais un
+  geste à l'aveugle ; la socket threatmesh absente compte comme muette). `wafctl ban … --exiger-protegees` : la garde
+  root exige `protegees.env` (Freebox, adresse publique) ; privé, box et pairs WireGuard : leur motif.
 - **`prolonger`** : un `id` d'un ban ai-ban ACTIF du journal seulement (409 `inconnu` sinon : jamais un ban d'une autre
   source ni un ban levé ou échu) ; nouvelle fin = maintenant + `duree_s`, 409 `duree` au-delà de 7 j, 409
-  `raccourcit` si elle tombe avant la fin actuelle. `wafctl ban <ip> <N>s` pour une adresse, `wafctl ban-bloc <cidr>
-  <N>s` pour un bloc (waf-blocs ne raccourcit jamais : sa fin enregistrée fait foi). Audit `ai-prolonger-demande`
+  `raccourcit` si elle tombe avant la fin actuelle ; mêmes cibles protégées que le ban d'office. `wafctl prolonger
+  <ip> <N>s` pour une adresse (une transaction nft ; 409 `absent` si elle n'est plus dans `waf_ban`), `wafctl
+  ban-bloc <cidr> <N>s` pour un bloc (waf-blocs ne raccourcit jamais : sa fin enregistrée fait foi). Audit `ai-prolonger-demande`
   (sans elle, rien n'est fait) puis `ai-prolonger` ; une ligne `prolonge` au journal, qui fait foi pour la fin.
 - **Plafonds par geste** (fenêtres glissantes, sommés sur tous les niveaux) :
 

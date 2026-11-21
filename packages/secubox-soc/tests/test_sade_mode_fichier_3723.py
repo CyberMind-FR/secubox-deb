@@ -98,3 +98,38 @@ def test_demarrage_et_battement_publient(isole):
     d = _lu(isole)
     assert d["mode"] == "observe" and 0 <= _age_s(d["depuis"]) < 60
     assert main.BATTEMENT_SADE_S <= 300                      # bien en deçà des 15 min au-delà desquelles gk2 vaut observe
+
+
+# ── ronde de correction 1 : une publication manquée se voit ───────────
+def _audit(tmp_path):
+    p = tmp_path / "audit.log"
+    return [json.loads(x) for x in p.read_text().splitlines()] if p.exists() else []
+
+
+def test_publication_impossible_est_auditee_et_journalisee_en_erreur(tmp_path, monkeypatch, caplog):
+    defense_etat._derniere_cause_publication.clear()
+    monkeypatch.setenv("SECUBOX_SOC_SADE_MODE", str(tmp_path / "absent" / "sade-mode.json"))
+    with caplog.at_level("ERROR", logger="secubox.soc.defense_etat"):
+        assert defense_etat.publier_mode() is False
+    assert any(r.levelname == "ERROR" and "sade-mode" in r.getMessage() for r in caplog.records)
+    echecs = [a for a in _audit(tmp_path) if a["action"] == "sade-mode-publication-echec"]
+    assert len(echecs) == 1 and echecs[0]["cause"] == "FileNotFoundError"
+    assert defense_etat.publier_mode() is False                     # même cause : pas une ligne par battement
+    assert len([a for a in _audit(tmp_path) if a["action"] == "sade-mode-publication-echec"]) == 1
+    monkeypatch.setenv("SECUBOX_SOC_SADE_MODE", str(tmp_path / "sade-mode.json"))
+    assert defense_etat.publier_mode() is True
+    assert [a["action"] for a in _audit(tmp_path)][-1] == "sade-mode-publication-retablie"
+
+
+def test_fichier_etranger_eperm_dit_explicitement(isole, monkeypatch, caplog, tmp_path):
+    defense_etat._derniere_cause_publication.clear()
+
+    def refuse(src, dst):
+        raise PermissionError(1, "Operation not permitted")
+    monkeypatch.setattr(defense_etat.os, "replace", refuse)
+    with caplog.at_level("ERROR", logger="secubox.soc.defense_etat"):
+        assert defense_etat.publier_mode() is False
+    assert any("autre compte" in r.getMessage() for r in caplog.records)
+    assert [a for a in _audit(tmp_path) if a["action"] == "sade-mode-publication-echec"][-1]["cause"] == \
+        "fichier_etranger"
+    assert [p.name for p in isole.parent.iterdir() if p.name.startswith(".sade-mode")] == []

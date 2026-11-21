@@ -12,7 +12,13 @@ secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
     /run/secubox/sade-mode.json (publié par secubox-soc 1.11.0) : observe,
     fichier illisible ou daté de plus de 15 min refusent tout geste d office,
     reactive n admet que limiter ; sa liste blanche protège toute cible.
-    GET /ai/etat rend plafonds_par_geste et sade_mode.
+    GET /ai/etat rend plafonds_par_geste et sade_mode. Cibles jamais visées
+    d office : pairs du maillage (wg_mesh.json et threatmesh /peers), robots
+    d indexation vérifiés (FCrDNS, comme sbxwaf) ; source muette =
+    protegee_inconnue. wafctl ban --exiger-protegees (waf-blocs verifier
+    --exiger) et nouveau verbe wafctl prolonger (retrait et ajout en une
+    transaction nft, sudoers SBX_WAF_PROLONGER). Fichier du mode SADE cru
+    seulement s il appartient à root ou à secubox, sans g+w ni o+w.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
 

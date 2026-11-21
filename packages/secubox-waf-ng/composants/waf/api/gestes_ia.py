@@ -25,7 +25,9 @@ Bornes, toutes vérifiées ICI (le relais ne fait foi de rien) :
   clic sommés (`plafond_heure`, `plafond_jour`) ; `ban_bloc` d'office 5/h et 20/j (`plafond_auto`) et tout bloc
   30/h et 100/j (`plafond_compte`, les blocs seuls) ; `prolonger` 30/h et 100/j ; un ban annulé reste compté ;
 - adresse d'office : vue dans le journal des menaces depuis moins de 24 h (`non_vue` sinon, lecture bornée de sa
-  fin) ; bloc d'office : le CAS SÛR RECONTRÔLÉ sur gk2 (≥ `SEUIL_BLOC` adresses du bloc dans `waf_ban`,
+  fin) ; jamais un pair du maillage (`wg_mesh.json` + threatmesh `/peers`) ni un robot vérifié (FCrDNS, règle de
+  sbxwaf) : 409 `protegee`, source muette ou DNS en doute ⇒ 409 `protegee_inconnue` ; `wafctl ban … --exiger-protegees`
+  (protegees.env exigé par la garde root, comme pour un bloc) ; bloc d'office : le CAS SÛR RECONTRÔLÉ sur gk2 (≥ `SEUIL_BLOC` adresses du bloc dans `waf_ban`,
   toutes de familles ⊆ `CATEGORIES_SURES`) ; `pas_sur` sinon. Famille d'une adresse (I4) : celle de son DERNIER
   enregistrement `ban` de `bans.jsonl` (historique de sbxwaf), à défaut le motif du journal des menaces (~6 h), à
   défaut « waf » ; `bans.jsonl` illisible ⇒ 503 `etat` ;
@@ -63,12 +65,16 @@ sans route à part. Tout autre importateur de ce module (un agrégateur qui mont
 """
 from __future__ import annotations
 
+import concurrent.futures
+import http.client
 import ipaddress
 import json
 import logging
 import os
+import pwd
 import re
 import secrets
+import socket
 import stat
 import subprocess
 import threading
@@ -118,7 +124,10 @@ VUE_FENETRE_S = 86_400
 
 #: Mode SADE publié par secubox-soc (`defense_etat.publier_mode`) : `{"mode", "depuis", "liste_blanche"}`, `depuis`
 #: = instant de la publication (battement de 60 s). Jamais la base du SOC : ce fichier seul.
-FICHIER_SADE = Path("/run/secubox/sade-mode.json")
+FICHIER_SADE = Path("/run/secubox/sade-mode.json")  # cru seulement s'il est à root ou à COMPTE_SADE, sans g+w/o+w
+#: /run/secubox est 1777 : le fichier n'est cru que s'il appartient à root ou au compte de l'API SOC (`secubox`), sans
+#: écriture du groupe ni des autres. Tout processus de ce compte peut l'écrire (limite documentée au README).
+COMPTE_SADE = "secubox"
 _TAILLE_MAX_SADE = 256 * 1024
 SADE_PERIME_S = 900
 #: Une publication datée du futur au-delà de ceci est illisible (même horloge des deux côtés : c'est la même box).
@@ -126,6 +135,20 @@ _SADE_AVANCE_MAX_S = 60
 MODES_SADE = frozenset({"observe", "reactive", "active", "aggressive"})
 #: Gestes d'office admis en `reactive` (décision du propriétaire : limiter seul) ; `observe` n'en admet aucun.
 GESTES_AUTO_REACTIVE = frozenset({"limiter"})
+
+#: Pairs du maillage, jamais visés par un geste d'office (mêmes sources que sade_auto de secubox-soc) : le fichier
+#: local `wg_mesh.json` (`mesh_ip`, `endpoint`) et threatmesh `GET /peers` (`address`, `endpoint`, `ip`).
+WG_MESH = Path(os.environ.get("SECUBOX_WAF_WG_MESH") or "/var/lib/secubox/p2p/wg_mesh.json")
+_TAILLE_MAX_WG_MESH = 1024 * 1024
+SOCKET_THREATMESH = "/run/secubox/threatmesh.sock"
+_DELAI_THREATMESH_S = 3.0
+_TAILLE_MAX_PAIRS = 1024 * 1024
+#: Robots d'indexation vérifiés : même règle que sbxwaf (crawlers.go, #2240), DNS inverse CONFIRMÉ par le direct
+#: (FCrDNS) vers un de ces domaines. Une erreur DNS transitoire ou un délai : protection inconnue (on ne bannit pas).
+DOMAINES_ROBOTS = ("googlebot.com", "google.com", "search.msn.com", "applebot.apple.com", "crawl.baidu.com",
+                   "yandex.com", "yandex.ru", "yandex.net")
+_DELAI_DNS_S = 4.0
+_dns = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="ai-ban-dns")
 
 DUREE_MIN_S, DUREE_MAX_S = 3600, 604_800
 DUREE_AUTO_MAX_S = 86_400
@@ -169,7 +192,7 @@ NON_GLOBALES = tuple(ipaddress.IPv4Network(r) for r in (
 _RE_FORME = re.compile(r"[0-9]{1,3}(?:\.[0-9]{1,3}){3}(?:/24)?")
 
 #: Motifs que wafctl / waf-blocs peuvent rendre (ensemble FERMÉ : jamais une chaîne arbitraire dans une réponse).
-_MOTIFS_409 = frozenset({"privee", "protegee", "box", "pair", "garde_illisible", "duree", "nft"})
+_MOTIFS_409 = frozenset({"privee", "protegee", "box", "pair", "garde_illisible", "duree", "nft", "absent"})
 _MOTIFS_503 = frozenset({"etat", "audit"})
 _MOTIFS_500 = frozenset({"incoherent", "invalide", "usage"})
 _MOTIFS_WAFCTL = _MOTIFS_409 | _MOTIFS_503 | _MOTIFS_500
@@ -442,8 +465,8 @@ def _instant(valeur: Any) -> Optional[float]:
 
 def vue_recemment(ip: str, maintenant: int) -> bool:
     """L'adresse a-t-elle une ligne de menace de moins de `VUE_FENETRE_S` dans la FIN du journal des menaces
-    (`_TAILLE_LECTURE_MENACES` au plus) ? Champ `client_ip` (ou `ip`) EXACT, instant `at` ou `timestamp`. Journal
-    absent : jamais vue. Lève Illisible s'il ne peut pas être lu."""
+    (`_TAILLE_LECTURE_MENACES` au plus) ? Champ `client_ip` (ou `ip`) EXACT, instant `timestamp` (RFC 3339 avec
+    décalage ; sans décalage : ignorée). Journal absent : jamais vue. Lève Illisible s'il ne peut pas être lu."""
     try:
         lignes = _lire_fin_octets(JOURNAL_MENACES, _TAILLE_LECTURE_MENACES)
     except OSError as e:
@@ -459,8 +482,9 @@ def vue_recemment(ip: str, maintenant: int) -> bool:
             continue
         if not isinstance(e, dict) or ip not in (e.get("client_ip"), e.get("ip")):
             continue
-        at = e.get("at")
-        instant = float(at) if _entier(at) and at > 0 else _instant(e.get("timestamp"))
+        # sbxwaf (threatlog.go, logEntry) écrit `timestamp` en RFC 3339 avec le décalage local
+        # (`time.Now().Format(time.RFC3339)`), et aucun champ `at` : seul `timestamp` fait foi.
+        instant = _instant(e.get("timestamp")) if isinstance(e.get("timestamp"), str) else None
         if instant is not None and instant >= seuil:
             return True
     return False
@@ -498,8 +522,13 @@ def lire_sade() -> Optional[Dict[str, Any]]:
         return illisible
     try:
         with os.fdopen(fd, "rb") as f:
-            if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            st = os.fstat(f.fileno())
+            if not stat.S_ISREG(st.st_mode):
                 return illisible
+            if st.st_uid not in _uids_sade() or st.st_mode & 0o022:
+                # /run/secubox est 1777 : un fichier d'un autre compte, ou modifiable par d'autres, peut être forgé
+                _signaler_une_fois(f"proprietaire uid {st.st_uid} mode {stat.S_IMODE(st.st_mode):o}")
+                return {"mode": "observe", "liste": []}
             donnees = f.read(_TAILLE_MAX_SADE + 1)
     except OSError as e:
         log.warning("ai-ban : mode SADE illisible : %s", type(e).__name__)
@@ -518,6 +547,23 @@ def lire_sade() -> Optional[Dict[str, Any]]:
             or maintenant - depuis > SADE_PERIME_S or depuis - maintenant > _SADE_AVANCE_MAX_S):
         mode = "observe"
     return {"mode": mode, "liste": _reseaux(d.get("liste_blanche"))}
+
+
+def _uids_sade() -> Set[int]:
+    """root et le compte de l'API SOC ; compte inconnu : root seul."""
+    try:
+        return {0, pwd.getpwnam(COMPTE_SADE).pw_uid}
+    except KeyError:
+        return {0}
+
+
+_signales: Set[str] = set()
+
+
+def _signaler_une_fois(raison: str) -> None:
+    if raison not in _signales:
+        _signales.add(raison)
+        log.error("ai-ban : fichier du mode SADE non fiable (%s) : tenu pour observe, liste vide", raison)
 
 
 def mode_sade() -> Optional[str]:
@@ -669,14 +715,19 @@ def _executer(argv: List[str]) -> subprocess.CompletedProcess:
     return subprocess.run(argv, check=False, timeout=_DELAI_WAFCTL_S, capture_output=True, text=True)
 
 
-def _argv(verbe: str, cible: Cible, duree_s: Optional[int] = None) -> List[str]:
+def _argv(verbe: str, cible: Cible, duree_s: Optional[int] = None, d_office: bool = False) -> List[str]:
+    """argv exact du sudoers. `prolonger` d'une adresse : `wafctl prolonger <ip> <N>s` (retrait + ajout en une
+    transaction nft) ; d'un bloc : `ban-bloc` (waf-blocs ne raccourcit jamais). `d_office` sur un ban d'adresse :
+    `--exiger-protegees` (protegees.env exigé par la garde root, #3723)."""
     bloc = isinstance(cible, ipaddress.IPv4Network)
     if bloc:
-        argv = _SUDO + _SYSTEMD_RUN + [WAFCTL, f"{verbe}-bloc", str(cible)]
+        argv = _SUDO + _SYSTEMD_RUN + [WAFCTL, f"{'ban' if verbe == 'prolonger' else verbe}-bloc", str(cible)]
     else:
         argv = _SUDO + [WAFCTL, verbe, str(cible)]
     if duree_s is not None:
         argv.append(f"{duree_s}s")
+    if d_office and verbe == "ban" and not bloc:
+        argv.append("--exiger-protegees")
     return argv
 
 
@@ -898,6 +949,153 @@ def _auditer_regroupe(action: str, motif: str, mode: str, detail: str, user: dic
         _auditer_sans_lever(a, d, u)
 
 
+# ── Cibles protégées des gestes d'office : pairs du maillage, robots vérifiés ──
+class ProtectionInconnue(Exception):
+    """Une source de cibles protégées n'a pas pu être lue : le geste d'office est refusé (409 `protegee_inconnue`)."""
+
+
+def _reseau_pair(texte: Any) -> Optional[Union[ipaddress.IPv4Network, ipaddress.IPv6Network]]:
+    """Réseau d'une adresse, d'un CIDR ou d'un point d'accès « hôte:port » / « [v6]:port » (comme
+    `defense._reseau` de secubox-soc) ; None si illisible (un nom d'hôte n'est pas une adresse)."""
+    if not isinstance(texte, str) or not texte.strip() or len(texte) > 128:
+        return None
+    t = texte.strip()
+    if t.startswith("[") and "]" in t:
+        t = t[1:t.index("]")]
+    elif t.count(":") == 1:
+        t = t.split(":")[0]
+    try:
+        return ipaddress.ip_network(t, strict=False)
+    except ValueError:
+        return None
+
+
+def pairs_wg_mesh() -> List[Any]:
+    """Pairs du fichier local `wg_mesh.json` ; absent : [] (box sans maillage). Illisible ou de forme inattendue :
+    ProtectionInconnue."""
+    try:
+        fd = os.open(WG_MESH, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        raise ProtectionInconnue(f"wg_mesh.json : {type(e).__name__}") from None
+    try:
+        with os.fdopen(fd, "rb") as f:
+            donnees = f.read(_TAILLE_MAX_WG_MESH + 1)
+    except OSError as e:
+        raise ProtectionInconnue(f"wg_mesh.json : {type(e).__name__}") from None
+    if len(donnees) > _TAILLE_MAX_WG_MESH:
+        raise ProtectionInconnue("wg_mesh.json : trop grand")
+    try:
+        doc = json.loads(donnees)
+    except ValueError:
+        raise ProtectionInconnue("wg_mesh.json : illisible") from None
+    pairs = doc.get("peers") if isinstance(doc, dict) else doc
+    if not isinstance(pairs, list):
+        raise ProtectionInconnue("wg_mesh.json : forme inattendue")
+    return [n for p in pairs if isinstance(p, dict) for n in (_reseau_pair(p.get(c)) for c in ("mesh_ip", "endpoint"))
+            if n is not None]
+
+
+class _ConnexionUnix(http.client.HTTPConnection):
+    def __init__(self, chemin: str, delai: float):
+        super().__init__("localhost", timeout=delai)
+        self._chemin = chemin
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self._chemin)
+
+
+def _lire_threatmesh_peers() -> Any:
+    """`GET /peers` de threatmesh sur sa socket (comme le substrat de secubox-soc : en-tête LAN si le mode tableau de
+    bord est armé). Lève ProtectionInconnue sur toute défaillance (socket absente comprise : jamais « aucun pair »)."""
+    entetes = {_auth.ENTETE_LAN: "1"} if _auth.mode_tableau_de_bord_actif() else {}
+    conn = _ConnexionUnix(SOCKET_THREATMESH, _DELAI_THREATMESH_S)
+    try:
+        conn.request("GET", "/peers", headers=entetes)
+        rep = conn.getresponse()
+        corps = rep.read(_TAILLE_MAX_PAIRS + 1)
+    except (OSError, http.client.HTTPException) as e:
+        raise ProtectionInconnue(f"threatmesh : {type(e).__name__}") from None
+    finally:
+        conn.close()
+    if rep.status != 200 or len(corps) > _TAILLE_MAX_PAIRS:
+        raise ProtectionInconnue(f"threatmesh : http {rep.status}")
+    try:
+        return json.loads(corps)
+    except ValueError:
+        raise ProtectionInconnue("threatmesh : réponse illisible") from None
+
+
+def pairs_threatmesh() -> List[Any]:
+    doc = _lire_threatmesh_peers()
+    pairs = doc.get("peers") if isinstance(doc, dict) else None
+    if not isinstance(pairs, list):
+        raise ProtectionInconnue("threatmesh : forme inattendue")
+    return [n for p in pairs if isinstance(p, dict) for n in (_reseau_pair(p.get(c)) for c in ("address", "endpoint", "ip"))
+            if n is not None]
+
+
+def domaine_robot(nom: str) -> str:
+    """Le domaine reconnu dont `nom` est un sous-domaine (jamais un simple suffixe de texte)."""
+    nom = nom.lower().rstrip(".")
+    for d in DOMAINES_ROBOTS:
+        if nom == d or nom.endswith("." + d):
+            return d
+    return ""
+
+
+def _fcrdns(ip: str) -> str:
+    """Domaine du robot si `ip` est un robot vérifié (inverse dans un domaine reconnu ET direct qui revient à `ip`),
+    "" sinon. Lève ProtectionInconnue sur une erreur DNS transitoire (TRY_AGAIN, EAI_AGAIN, délai)."""
+    try:
+        nom, alias, _ = socket.gethostbyaddr(ip)
+    except socket.herror as e:
+        if e.errno in (1, 4):       # HOST_NOT_FOUND, NO_DATA : aucun nom inverse, ce n'est pas un robot
+            return ""
+        raise ProtectionInconnue(f"dns inverse : {e.errno}") from None
+    except OSError as e:
+        raise ProtectionInconnue(f"dns inverse : {type(e).__name__}") from None
+    for n in [nom, *alias]:
+        dom = domaine_robot(n)
+        if not dom:
+            continue
+        try:
+            infos = socket.getaddrinfo(n.rstrip("."), None, socket.AF_INET)
+        except socket.gaierror as e:
+            if e.errno in (socket.EAI_NONAME, getattr(socket, "EAI_NODATA", socket.EAI_NONAME)):
+                continue
+            raise ProtectionInconnue(f"dns direct : {e.errno}") from None
+        except OSError as e:
+            raise ProtectionInconnue(f"dns direct : {type(e).__name__}") from None
+        if any(i[4][0] == ip for i in infos):
+            return dom
+    return ""
+
+
+def robot_verifie(ip: str) -> str:
+    """`_fcrdns` borné à `_DELAI_DNS_S` : au-delà, ProtectionInconnue (le doute ne vaut jamais ban)."""
+    tache = _dns.submit(_fcrdns, ip)
+    try:
+        return tache.result(timeout=_DELAI_DNS_S)
+    except concurrent.futures.TimeoutError:
+        raise ProtectionInconnue("dns : délai") from None
+
+
+def protegee_d_office(cible: Cible) -> bool:
+    """Pair du maillage (wg_mesh.json + threatmesh /peers) ou robot vérifié (adresse seule) ? Lève
+    ProtectionInconnue si une source ne répond pas : un geste d'office n'est jamais fait à l'aveugle."""
+    pairs = pairs_wg_mesh() + pairs_threatmesh()
+    for n in pairs:
+        if n.version != 4:
+            continue
+        if cible.overlaps(n) if isinstance(cible, ipaddress.IPv4Network) else cible in n:
+            return True
+    return isinstance(cible, ipaddress.IPv4Address) and bool(robot_verifie(str(cible)))
+
+
 def _refus(statut: int, motif: str, geste: Union[GesteBan, GesteProlonger], user: dict,
            etiquette: str = "ai-ban") -> HTTPException:
     action = f"{etiquette}-refus" if statut == 409 else f"{etiquette}-echec"
@@ -947,6 +1145,13 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
         try:
             if protegee_par_sade(cible, sade):
                 raise _refus(409, "protegee", geste, user)
+            if geste.mode == "auto":
+                try:
+                    if protegee_d_office(cible):
+                        raise _refus(409, "protegee", geste, user)
+                except ProtectionInconnue as e:
+                    log.warning("ai-ban : cibles protégées inconnues : %s", e)
+                    raise _refus(409, "protegee_inconnue", geste, user) from None
             bans_waf = None
             if geste.mode == "auto":
                 if bloc:
@@ -973,7 +1178,7 @@ def ai_ban(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_corps))
         except Exception:  # noqa: BLE001 — sans trace de la demande, rien n'est fait
             raise _refus(503, "audit", geste, user) from None
 
-        r, panne = _lancer(_argv("ban", cible, duree_s))
+        r, panne = _lancer(_argv("ban", cible, duree_s, d_office=geste.mode == "auto"))
         if r is None:
             # wafctl muet : le ban est peut-être posé, on le retire (la cible n'était bannie par personne d'autre).
             log.error("ai-ban : wafctl injoignable (%s) pour %s", panne, cible)
@@ -1047,6 +1252,12 @@ def ai_prolonger(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_c
         except Illisible as e:
             log.warning("ai-prolonger : garde illisible : %s", e)
             raise _refus(503, "etat", geste, user, "ai-prolonger") from None
+        try:
+            if protegee_d_office(cible):
+                raise _refus(409, "protegee", geste, user, "ai-prolonger")
+        except ProtectionInconnue as e:
+            log.warning("ai-prolonger : cibles protégées inconnues : %s", e)
+            raise _refus(409, "protegee_inconnue", geste, user, "ai-prolonger") from None
 
         ident = secrets.token_hex(16)
         resume = (f"id {ident} ban {geste.id} cible {ban['cible']} {geste.duree_s}s fin {nouvelle_fin} "
@@ -1055,7 +1266,7 @@ def ai_prolonger(user: dict = Depends(require_ai_ban), corps: bytes = Depends(_c
             _auditer("ai-prolonger-demande", resume, user)
         except Exception:  # noqa: BLE001 — sans trace de la demande, rien n'est fait
             raise _refus(503, "audit", geste, user, "ai-prolonger") from None
-        r, panne = _lancer(_argv("ban", cible, geste.duree_s))
+        r, panne = _lancer(_argv("prolonger", cible, geste.duree_s))
         if r is None:
             # Rien à défaire : la cible était déjà bannie par ce ban, la prolonger ou non ne lève rien.
             log.error("ai-prolonger : wafctl injoignable (%s) pour %s", panne, cible)

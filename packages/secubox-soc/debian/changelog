@@ -6,6 +6,9 @@ secubox-soc (1.11.0-1~trixie1) trixie; urgency=medium
     retrait de la liste blanche, au démarrage puis toutes les 60 s. L API du
     WAF en tire la porte des gestes d office du compte ai-ban et tient pour
     observe un fichier de plus de 15 min. Base illisible : rien n est publié.
+    Échec de publication bruyant (journal en erreur, audit
+    sade-mode-publication-echec, cause fichier_etranger si la place est prise
+    par un fichier d un autre compte).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
 

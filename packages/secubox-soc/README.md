@@ -99,6 +99,12 @@ identiques d'une même minute (`n`) ; un outil deviné par actord (« …? ») e
   pour `observe` un fichier daté de plus de 15 min : un SOC arrêté ferme l'automatique de gk2. Base illisible : rien
   n'est publié (le fichier vieillit). L'exécuteur `sade-auto` ne peut pas écrire `/run/secubox` (bac à sable) : son
   retour en `observe` est publié par le battement suivant (60 s au plus). Surcharge : `SECUBOX_SOC_SADE_MODE`.
+  Un échec de publication est bruyant : journal en erreur à chaque essai, ligne d'audit `sade-mode-publication-echec`
+  (`cause` : `base_illisible`, `fichier_etranger` quand un fichier d'un autre compte occupe la place dans
+  `/run/secubox` 1777 et ne peut être remplacé, ou l'erreur système) à chaque changement de cause, puis
+  `sade-mode-publication-retablie`. gk2 ne croit le fichier que s'il appartient à root ou à `secubox`, sans écriture
+  du groupe ni des autres. Limite : tout processus qui tourne sous le compte `secubox` (l'API SOC, l'agrégateur, et
+  les autres modules de ce compte) peut l'écrire.
 
 ### Données et audit
 

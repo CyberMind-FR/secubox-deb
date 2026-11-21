@@ -193,15 +193,42 @@ def changer_mode(valeur: str, par: str) -> None:
 # Jamais levée : le mode et la liste font foi dans la base ; un échec de publication est journalisé, le battement
 # suivant le rattrape. Base illisible : RIEN n'est publié (jamais un mode ni une liste inventés ; le fichier vieillit).
 
+#: Dernière cause d'échec de publication signalée (clé « cause ») : une ligne d'audit par CHANGEMENT d'état
+#: (échec, cause nouvelle, retour à la normale), jamais une par battement (gk2 : disque racine chargé).
+_derniere_cause_publication: Dict[str, str] = {}
+
+
+def _echec_publication(cause: str, message: str) -> bool:
+    """Échec BRUYANT : journal en erreur à chaque fois, audit `sade-mode-publication-echec` au premier échec de cette
+    cause. Rend False."""
+    log.error("sade-mode : publication de %s impossible (%s) : %s", _chemin_fichier_sade(), cause, message)
+    if _derniere_cause_publication.get("cause") != cause:
+        _derniere_cause_publication["cause"] = cause
+        try:
+            ecrire_audit(f"sade-mode-publication-echec cause={champ_sain(cause, 64)} "
+                         f"fichier={champ_sain(_chemin_fichier_sade(), 128)} operateur=secubox-soc")
+        except AuditIndisponible:
+            log.error("sade-mode : échec de publication non audité (audit indisponible)")
+    return False
+
+
+def _publication_reussie() -> None:
+    if _derniere_cause_publication.pop("cause", None) is not None:
+        try:
+            ecrire_audit(f"sade-mode-publication-retablie fichier={champ_sain(_chemin_fichier_sade(), 128)} "
+                         f"operateur=secubox-soc")
+        except AuditIndisponible:
+            log.error("sade-mode : retour de la publication non audité (audit indisponible)")
+
+
 def publier_mode() -> bool:
-    """Réécrit le fichier du mode SADE ; True s'il est publié, False sinon (sans lever)."""
+    """Réécrit le fichier du mode SADE ; True s'il est publié, False sinon (sans lever, mais bruyamment)."""
     try:
         with closing(_connecter()) as db:
             r = db.execute("SELECT valeur FROM mode WHERE id = 1").fetchone()
             cidrs = [c for (c,) in db.execute("SELECT cidr FROM liste_blanche ORDER BY rowid")]
     except (sqlite3.Error, OSError) as e:
-        log.warning("sade-mode : base illisible, rien publié : %s", e.__class__.__name__)
-        return False
+        return _echec_publication("base_illisible", f"rien publié ({e.__class__.__name__})")
     contenu = json.dumps({"mode": r[0] if r else "observe", "depuis": _ts(), "liste_blanche": cidrs},
                          ensure_ascii=True) + "\n"
     cible = Path(_chemin_fichier_sade())
@@ -213,17 +240,22 @@ def publier_mode() -> bool:
             f.write(contenu)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(temp, cible)
+        try:
+            os.replace(temp, cible)
+        except PermissionError as e:
+            # /run/secubox est 1777 (sticky) : la cible appartient à un autre compte, elle ne peut être remplacée
+            return _echec_publication("fichier_etranger", f"{cible} appartient à un autre compte : il n'est pas "
+                                      f"remplacé, gk2 ne le croit pas ({e.__class__.__name__})")
         temp = None
     except OSError as e:
-        log.warning("sade-mode : publication impossible : %s", e.__class__.__name__)
-        return False
+        return _echec_publication(e.__class__.__name__, "écriture impossible")
     finally:
         if temp is not None:
             try:
                 os.unlink(temp)
             except OSError:
-                log.warning("sade-mode : temporaire %s non retiré", temp)
+                log.error("sade-mode : temporaire %s non retiré", temp)
+    _publication_reussie()
     return True
 
 
