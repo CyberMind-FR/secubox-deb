@@ -9,6 +9,20 @@
 Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ; les mois
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
+
+## 2026-11-21 — SBXOS DataScope V0.1 livré et déployé sur gk2 (ref #3853)
+
+- secubox-datascope 0.1.0 (PR #3854, plan docs/superpowers/plans/2026-11-21-datascope-v0-1.md, 6 tâches par sous-agents
+  + relecture finale + corrections, 146 tests) puis 0.1.1 (PR #3855) : AppArmor `rk` sur la base du NAC (SQLite pose un
+  verrou de lecture même en mode=ro ; sans `k` : « database is locked », trouvé au premier déploiement sur gk2).
+- Socket `/run/secubox/datascope.sock` hors agrégateur, collecteur 60 s, base sur /data/secubox-datascope, page
+  /datascope/ (vue Bulles par défaut + Arbre, inspecteur avec preuve, liste d'appareils au doigt). Consignes du
+  propriétaire en cours de route : bulles reliées + les deux vues.
+- gk2 : collecte complète (772 appareils, 25 interfaces, 103 modules, 1 228 relations), passe 2,1 s ; health 200,
+  overview 200, graph 401 sans jeton, page 200, Hall 200 ; 0 refus AppArmor, aucun port TCP, API 64 Mo. Banc gk1 sauté
+  à la demande du propriétaire (« deploy sur gk2 »).
+- Maquette : https://claude.ai/artifact/6hM3qLHbq5vxBBXAwza8eD
+
 ## 2026-11-21 — gk2 saturé : listes DNS recompilées en continu, DNS coupé aux rechargements (ref #3850)
 
 - Cause 1 : `94-secubox-adguard-tv.conf` réécrit à chaque passage (deux vues sbx-evasion permutaient) ⇒
