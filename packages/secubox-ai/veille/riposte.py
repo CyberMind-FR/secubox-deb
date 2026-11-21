@@ -330,7 +330,7 @@ def ecrire_audit_log(evenement: str, details: dict, chemin: Optional[str] = None
                         "evenement": evenement, **details}, ensure_ascii=True, sort_keys=True)
     try:
         fd = os.open(chemin or os.environ.get("SECUBOX_AI_AUDIT", AUDIT_LOG),
-                     os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
+                     os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW | os.O_CLOEXEC)   # jamais créé ici (compte secubox)
         try:
             os.write(fd, (ligne + "\n").encode())
         finally:

@@ -71,3 +71,8 @@ jour = 200
 [plafonds.partager]
 heure = 30
 jour = 200
+
+# Levées (unban) : plafond propre à gk3 (gk2 n'en a pas), 30/h et 100/j au plus.
+[plafonds.unban]
+heure = 30
+jour = 100

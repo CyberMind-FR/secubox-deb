@@ -17,6 +17,7 @@ Schéma (toute clé inconnue = invalide) :
   catalogue fermé), `expiration_min` (5..1440) ;
 - `[gestes.<g>]` : `actif`, `auto` (booléens), `<g>` du catalogue seulement ; un geste absent n'est pas admis ;
 - `[suspension] automatique_suspendu` (booléen) : vrai = propositions en un clic seulement ;
+- `[plafonds.unban]` (#3723) : plafond PROPRE à gk3 (gk2 n'en a pas), au plus `PLAFONDS_GK3` ; absent : ces valeurs ;
 - `[plafonds.<g>] heure, jour` : entiers ≥ 0, AU PLUS ceux de gk2 (`PLAFONDS_GK2`, relus dans `gestes_ia.py` par le
   test) ; un plafond absent vaut celui de gk2.
 """
@@ -39,6 +40,9 @@ CATALOGUE = ("ban", "ban_bloc", "prolonger", "limiter", "leurre", "partager", "u
 PLAFONDS_GK2 = {"ban": {"heure": 60, "jour": 400}, "ban_bloc": {"heure": 5, "jour": 20},
                 "prolonger": {"heure": 30, "jour": 100}, "limiter": {"heure": 60, "jour": 400},
                 "leurre": {"heure": 30, "jour": 200}, "partager": {"heure": 30, "jour": 200}}
+#: Plafonds propres à gk3 (gestes sans plafond sur gk2) : bornes hautes et défauts.
+PLAFONDS_GK3 = {"unban": {"heure": 30, "jour": 100}}
+PLAFONDS_BORNES = {**PLAFONDS_GK2, **PLAFONDS_GK3}
 MODES = ("observation", "hybride")
 EXPIRATION_BORNES = (5, 1440)
 REAUDIT_S = 3600            # un même contenu fautif est redit au plus une fois par heure
@@ -76,7 +80,7 @@ class Politiques:
 
 
 FERMEE = Politiques(1, "observation", True, 120, MappingProxyType({}), True,
-                    MappingProxyType({g: MappingProxyType(dict(p)) for g, p in PLAFONDS_GK2.items()}), "fermee")
+                    MappingProxyType({g: MappingProxyType(dict(p)) for g, p in PLAFONDS_BORNES.items()}), "fermee")
 
 
 def _bool(v, ou):
@@ -119,12 +123,12 @@ def valider(brut, empreinte: str = "") -> Politiques:
                             _bool(g.get("auto", False), f"gestes.{nom}.auto"))
     s = _table(brut.get("suspension", {}), "suspension", ("automatique_suspendu",))
     suspendu = _bool(s.get("automatique_suspendu", True), "suspension.automatique_suspendu")
-    plafonds = {g: dict(p) for g, p in PLAFONDS_GK2.items()}
-    for nom, p in _table(brut.get("plafonds", {}), "plafonds", PLAFONDS_GK2).items():
+    plafonds = {g: dict(p) for g, p in PLAFONDS_BORNES.items()}
+    for nom, p in _table(brut.get("plafonds", {}), "plafonds", PLAFONDS_BORNES).items():
         p = _table(p, f"plafonds.{nom}", ("heure", "jour"))
         for champ in ("heure", "jour"):
             if champ in p:
-                plafonds[nom][champ] = _entier(p[champ], f"plafonds.{nom}.{champ}", 0, PLAFONDS_GK2[nom][champ])
+                plafonds[nom][champ] = _entier(p[champ], f"plafonds.{nom}.{champ}", 0, PLAFONDS_BORNES[nom][champ])
     return Politiques(1, mode, True, expiration, MappingProxyType(gestes), suspendu,
                       MappingProxyType({g: MappingProxyType(p) for g, p in plafonds.items()}), empreinte)
 

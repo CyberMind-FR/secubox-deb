@@ -25,20 +25,31 @@ secubox-ai (0.6.0-1~trixie1) trixie; urgency=medium
   * leurre_redirige (requêtes servies par le leurre de la box) : neutre,
     jamais preuve d'une règle ni tentative (pas de boucle leurre → ban).
   * Exécuteur des réponses (#3723, veille/executeur.py, boucle reponses de
-    10 s) : seul chemin d'écriture vers gk2, les routes ai-ban. Propositions
-    approuvées (clic) ou d'office (automatique non suspendu), par gravité,
-    étapes puis récence, sous les plafonds de gk3 ; ligne actions créée en
+    10 s) : seul chemin d'écriture vers gk2, les routes ai-ban. En mode
+    observation rien ne part (pas même un clic approuvé) ; en hybride,
+    propositions approuvées (clic) ou d'office (automatique non suspendu,
+    filtré en SQL : jamais de clic affamé), par gravité, étapes puis
+    récence, sous les plafonds de gk3 (unban compris) ; revalidation avant
+    signature (forme de la cible, publique, hors plages protégées, bornes de
+    durée), sinon échec local audité ; ligne actions créée en
     envoi AVANT l'appel (migration 0007, UNIQUE par proposition), réponse de
     gk2 enregistrée telle quelle (200 faite, 409/404 refusee_gk2, autre
     echec). prolonger et unban visent l'id de gk2 du ban de reference
-    (introuvable : echec local, rien n'est envoyé).
-  * Rapprochement : une action restée en envoi (arrêt en plein envoi, délai)
-    est confrontée à GET /ai/etat avant toute nouvelle tentative, jamais
-    renvoyée ; gk2 illisible : rien d'autre ne part.
+    (introuvable : echec local, rien n'est envoyé). 503, 401, 403 arrêtent
+    la passe ; 5xx autre que 503 = issue inconnue, rapprochée.
+  * Rapprochement : une action restée en envoi plus de 90 s (arrêt en plein
+    envoi, délai, 5xx) est confrontée à GET /ai/etat avant toute nouvelle
+    tentative, jamais renvoyée ; levée d'un ban déjà échu : echec echue ;
+    gk2 illisible : rien d'autre ne part.
   * Suspension de l'automatique dans veille.db (survit au redémarrage) :
     console, secubox-aictl veille suspendre|reprendre, ou d'elle-même après
-    trois 409 plafond_* en 10 min ou un 503 (audit veille-auto-suspendue) ;
-    les gestes approuvés restent possibles.
+    trois 409 plafond_* en 10 min, un 503 ou un 401/403 (clé refusée, dit
+    par /veille/etat ; audit veille-auto-suspendue) ; les gestes approuvés
+    restent possibles.
+  * Isolement : l'API ne voit plus les clés de la veille
+    (InaccessiblePaths) ni /var/log/secubox ; sortie réseau de la veille
+    fermée (IPAddressDeny=any), gk2, gk0 et résolveurs rouverts un à un par
+    secubox-aictl preparer.
   * API (require_jwt) : GET /propositions, /propositions/{id}, /actions
     (curseur, 100 par défaut, 500 au plus), /veille/etat ; POST
     /propositions/{id}/approuver|refuser ({version}, une seule décision

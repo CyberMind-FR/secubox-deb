@@ -815,10 +815,11 @@ def resoudre(hote: str) -> set[str]:
     return {info[4][0] for info in socket.getaddrinfo(hote, None, proto=socket.IPPROTO_TCP)}
 
 
-def adresses_permises(cfg: dict, hotes=None) -> tuple[list[str], list[str]]:
+def adresses_permises(cfg: dict, hotes=None, publiques: bool = False) -> tuple[list[str], list[str]]:
     """(adresses LAN à rouvrir pour l'API, refus tracés). Seules les adresses des plages privées fermées par l'unité
     sont rouvertes, une à une (/32, /128) ; une adresse publique est déjà joignable ; boucle, lien local,
-    multidiffusion ou réservée : jamais (même si un nom y résout)."""
+    multidiffusion ou réservée : jamais (même si un nom y résout). `publiques` (veille, #3723 : IPAddressDeny=any) :
+    les adresses publiques sont rouvertes aussi, une à une."""
     permises, refus = set(), []
     for section, cle in (hotes or HOTES_CONFIG):
         url = cfg.get(section, {}).get(cle, "")
@@ -838,7 +839,7 @@ def adresses_permises(cfg: dict, hotes=None) -> tuple[list[str], list[str]]:
             refus.append(f"{section}.{cle} : {hote} non résolu ({e.__class__.__name__})")
             continue
         for a in sorted(adresses):
-            _classer(a, f"{section}.{cle}", permises, refus)
+            _classer(a, f"{section}.{cle}", permises, refus, publiques)
     return _trier(permises), refus
 
 
@@ -846,7 +847,7 @@ def _trier(permises) -> list[str]:
     return sorted(permises, key=lambda s: (":" in s, s))
 
 
-def _classer(a: str, origine: str, permises: set, refus: list) -> None:
+def _classer(a: str, origine: str, permises: set, refus: list, publiques: bool = False) -> None:
     """Ajoute `a` (/32, /128) à `permises` si elle est dans une plage privée fermée par l'unité ; boucle, lien local,
     multidiffusion, non spécifiée ou illisible : tracée dans `refus` ; publique : rien (déjà joignable)."""
     try:
@@ -858,11 +859,11 @@ def _classer(a: str, origine: str, permises: set, refus: list) -> None:
         ip = ip.ipv4_mapped
     if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
         refus.append(f"{origine} : {ip} refusée (boucle, lien local ou multidiffusion)")
-    elif any(ip in plage for plage in PLAGES_LAN):
+    elif any(ip in plage for plage in PLAGES_LAN) or (publiques and ip.is_global):
         permises.add(f"{ip}/{ip.max_prefixlen}")
 
 
-def resolveurs_permis() -> tuple[list[str], list[str]]:
+def resolveurs_permis(publiques: bool = False) -> tuple[list[str], list[str]]:
     """(résolveurs privés de /etc/resolv.conf à rouvrir pour l'API, refus tracés). La boucle (127.0.0.1, Unbound de la
     box) n'est pas tracée : l'unité la permet déjà. Fichier absent ou illisible : aucun."""
     permises, refus = set(), []
@@ -875,7 +876,7 @@ def resolveurs_permis() -> tuple[list[str], list[str]]:
         if len(mots) >= 2 and mots[0] == "nameserver":
             if mots[1] == "127.0.0.1":
                 continue
-            _classer(mots[1], "resolv.conf", permises, refus)
+            _classer(mots[1], "resolv.conf", permises, refus, publiques)
     return _trier(permises), refus
 
 
@@ -887,13 +888,20 @@ def _est_ip(hote: str) -> bool:
     return True
 
 
-def texte_dropin(permises: list[str]) -> str:
-    """Drop-in de secubox-ai.service. Jamais de « IPAddressAllow= » vide : il remettrait à zéro la liste de l'unité
-    (127.0.0.1/32, le résolveur de la box)."""
-    lignes = ["# Généré par « secubox-aictl preparer » (#3583) depuis /etc/secubox/ai.toml : adresses LAN de gk2, gk0",
-              "# et du SearXNG local, résolues au moment de l'appel, et résolveurs privés de /etc/resolv.conf. Un",
-              "# changement de DNS ou de configuration demande un nouveau « secubox-aictl preparer » puis la relance de",
-              "# secubox-ai.", "[Service]"]
+def texte_dropin(permises: list[str], veille: bool = False) -> str:
+    """Drop-in de secubox-ai.service (ou de secubox-ai-veille.service). Jamais de « IPAddressAllow= » vide : il
+    remettrait à zéro la liste de l'unité (127.0.0.1/32, le résolveur de la box)."""
+    if veille:
+        lignes = ["# Généré par « secubox-aictl preparer » (#3723) depuis /etc/secubox/ai.toml : SEULES adresses que",
+                  "# la veille peut joindre (unité en IPAddressDeny=any) : gk2 ([gk2] menaces_url) et gk0 ([distant]",
+                  "# url), résolues au moment de l'appel, publiques comprises, et les résolveurs de /etc/resolv.conf.",
+                  "# Un changement de DNS ou de configuration demande un nouveau « secubox-aictl preparer » puis la",
+                  "# relance de secubox-ai-veille.", "[Service]"]
+    else:
+        lignes = ["# Généré par « secubox-aictl preparer » (#3583) depuis /etc/secubox/ai.toml : adresses LAN de gk2,",
+                  "# gk0 et du SearXNG local, résolues au moment de l'appel, et résolveurs privés de /etc/resolv.conf.",
+                  "# Un changement de DNS ou de configuration demande un nouveau « secubox-aictl preparer » puis la",
+                  "# relance de secubox-ai.", "[Service]"]
     if permises:
         lignes.append("IPAddressAllow=" + " ".join(permises))
     return "\n".join(lignes) + "\n"
@@ -927,19 +935,20 @@ def cmd_preparer() -> int:
     try:
         cfg = charger_conf()
         permises, refus = adresses_permises(cfg)
-        veille, _ = adresses_permises(cfg, HOTES_VEILLE)
+        veille, _ = adresses_permises(cfg, HOTES_VEILLE, publiques=True)
     except Refus as e:
         journal(f"configuration refusée : {e} ; aucune adresse LAN permise à l'API")
         audit("preparer", {"issue": "configuration-refusee", "detail": str(e)})
         permises, refus, veille, code = [], [], [], 2
     dns, refus_dns = resolveurs_permis()      # indépendants de ai.toml : gardés même si elle est refusée
     permises, refus = _trier(set(permises) | set(dns)), refus + refus_dns
-    veille = _trier(set(veille) | set(dns))
+    dns_veille, _ = resolveurs_permis(publiques=True)
+    veille = _trier(set(veille) | set(dns_veille))
     for r in refus:
         journal(r)
     try:
         change = [ecrire_dropin(texte_dropin(permises), DROPIN_API),
-                  ecrire_dropin(texte_dropin(veille), DROPIN_VEILLE)]
+                  ecrire_dropin(texte_dropin(veille, veille=True), DROPIN_VEILLE)]
         if any(change):
             systemctl("daemon-reload")
             audit("preparer", {"issue": "adresses", "permises": permises, "veille": veille, "refus": refus})
@@ -1086,7 +1095,7 @@ def cmd_acl_audit() -> int:
         st = os.lstat(chemin)
     except FileNotFoundError:
         journal(f"{chemin} absent : ACL non posée (le fichier appartient à secubox-core)")
-        return 1
+        return 1                          # pas de fichier : pas d'audit possible, dit au journal
     if not stat.S_ISREG(st.st_mode):
         journal(f"{chemin} n'est pas un fichier ordinaire (lien ou autre) : ACL refusée")
         audit("acl-audit", {"issue": "refusee"})
@@ -1096,10 +1105,13 @@ def cmd_acl_audit() -> int:
                            text=True, timeout=10, check=False)
     except (OSError, subprocess.SubprocessError) as e:
         journal(f"setfacl impossible ({e.__class__.__name__})")
+        audit("acl-audit", {"issue": "erreur", "detail": e.__class__.__name__})
         return 1
     if r.returncode != 0:
         journal(f"setfacl a échoué ({r.returncode})")
+        audit("acl-audit", {"issue": "erreur", "code": r.returncode})
         return 1
+    audit("acl-audit", {"issue": "posee", "compte": COMPTE_API})
     return 0
 
 

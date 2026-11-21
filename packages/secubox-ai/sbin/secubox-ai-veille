@@ -194,7 +194,7 @@ async def _main():
 
     async def repondre():
         pol = await veille.sql(lambda _db: _politiques_reponses())
-        await executeur.executer(veille, client, _maintenant(), politiques=pol)
+        await executeur.executer(veille, client, _maintenant(), politiques=pol, protegees=reglages_ia["protegees"])
     # Sans client (clé de lecture absente) la boucle tourne quand même : relais d'audit et état « clé absente ».
     boucles.append(Boucle("reponses", PAS_REPONSES_S, repondre))
     veille = Veille(db, _maintenant, boucles)

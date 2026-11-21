@@ -64,8 +64,12 @@ AmbientCapabilities=
 # Wikipédia, Hugging Face (gk3 sort sur Internet en direct).
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 # /run/secubox : sa socket ; /run/secubox-ai/demandes : dépôt des demandes au contrôleur (créé par preparer ; le
-# reste de /run/secubox-ai, dont moteur.env, reste en lecture seule) ; /var/log/secubox : traces de secubox_core.
-ReadWritePaths=/run/secubox /var/lib/secubox/ai /var/log/secubox -/run/secubox-ai/demandes
+# reste de /run/secubox-ai, dont moteur.env, reste en lecture seule). PAS /var/log/secubox (#3723) : l'API n'écrit
+# jamais audit.log (la veille relaie ses décisions) ; les traces de secubox_core (délégation, origine) passent alors
+# au journal système (LOG_AUTH), jamais en silence.
+ReadWritePaths=/run/secubox /var/lib/secubox/ai -/run/secubox-ai/demandes
+# Même compte (secubox-ai) que la veille : la clé ai-ban remise à la veille lui est rendue inaccessible (#3723).
+InaccessiblePaths=-/run/credentials/secubox-ai-veille.service
 
 # R13 : garde SSRF dans le noyau, en plus du contrôle applicatif (api/recherche.py). Boucle, lien local
 # (169.254.169.254), multidiffusion et plages privées fermés ; Internet reste ouvert.

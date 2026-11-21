@@ -9,24 +9,30 @@ Une passe (boucle `reponses`, 10 s, dans secubox-ai-veille) :
 1. relaie dans audit.log les décisions écrites par l'API (lignes `audit_chaine` marquées `relais`) ;
 2. sans clé `ai-ban` (absente, valeur de repli « absente » de systemd, illisible) : aucune exécution, état visible
    dans `/veille/etat` ; jamais d'arrêt du processus ;
-3. RAPPROCHEMENT d'abord : toute ligne `actions` restée en `envoi` (arrêt en plein envoi, délai, réponse illisible)
-   est confrontée à `GET /ai/etat` (cible, geste, fin compatible avec l'heure d'envoi ; un id de gk2 déjà attribué à
-   une autre action n'est jamais repris). Trouvée : `faite` ; absente : `echec`. Jamais renvoyée. Tant qu'une ligne
-   n'est pas rapprochée (gk2 injoignable), RIEN d'autre n'est envoyé ;
-4. propositions retenues : `approuvee` (décision humaine, envoyée en `clic`) ou `proposee` d'office (`mode = auto`,
-   politique en mode hybride et geste d'office, automatique NON suspendu), non expirées, sans action ; par gravité du
-   dossier, nombre d'étapes, puis récence ; plafonds de gk3 (`politiques.toml`, ≤ ceux de gk2) sur les envois de
-   l'heure et du jour. Une proposition expirée (`proposee` ou `approuvee`) passe `expiree` sans envoi ;
-5. pour chacune : corps du geste (forme EXACTE des modèles de gk2 ; `prolonger` et `unban` visent l'id de gk2 rendu
-   au ban de la proposition `reference`, sinon `echec` local sans envoi) ; la ligne `actions` est créée en `envoi`
-   (avec le `jti` et l'empreinte de la clé) et la proposition passe `envoyee` DANS UNE TRANSACTION, AVANT le premier
-   octet envoyé ; puis la réponse de gk2 est enregistrée telle quelle : 200 → `faite` (id et fin de gk2) ;
-   409/404 → `refusee_gk2` (motif) ; autre statut → `echec` ; réponse perdue → reste `envoi` (rapprochée à la passe
-   suivante), la passe s'arrête.
+3. RAPPROCHEMENT d'abord : toute ligne `actions` restée en `envoi` depuis plus de `DELAI_RAPPROCHEMENT_S` (arrêt
+   en plein envoi, délai, réponse illisible, 5xx autre que 503) est confrontée à `GET /ai/etat` (cible, geste, fin
+   compatible avec l'heure d'envoi ; un id de gk2 déjà attribué à une autre action n'est jamais repris). Trouvée :
+   `faite` ; absente : `echec` ; levée d'un ban déjà échu : `echec` `echue` (gk2 n'a rien levé). Jamais renvoyée.
+   Tant qu'une ligne reste en `envoi` (trop récente, ou gk2 illisible), RIEN d'autre n'est envoyé ;
+4. politique en mode `observation` : RIEN ne part, pas même une proposition approuvée (V2 § 10.2). En `hybride` :
+   `approuvee` (décision humaine, envoyée en `clic`) ou `proposee` d'office (`mode = auto`, geste d'office,
+   automatique NON suspendu — filtré en SQL : une file d'office suspendue n'affame jamais un clic approuvé), non
+   expirées, sans action ; par gravité du dossier, nombre d'étapes, puis récence ; plafonds de gk3 (`politiques.toml`,
+   ≤ ceux de gk2, `unban` compris) sur les envois de l'heure et du jour. Une proposition expirée (`proposee` ou
+   `approuvee`) passe `expiree` sans envoi (une approuvée expirée est auditée) ;
+5. pour chacune : REVALIDATION avant signature (geste du catalogue, cible de la forme du geste, publique et hors des
+   plages protégées `[veille.analyste] protegees`, durée dans les bornes de gk2) ; corps aux formes EXACTES des
+   modèles de gk2 ; `prolonger` et `unban` visent l'id de gk2 rendu au ban de la proposition `reference`. Tout écart :
+   `echec` local audité, rien n'est signé. La ligne `actions` est créée en `envoi` (avec le `jti` et l'empreinte de la
+   clé) et la proposition passe `envoyee` DANS UNE TRANSACTION, AVANT le premier octet envoyé ; puis la réponse de gk2
+   est enregistrée telle quelle : 200 → `faite` (id et fin de gk2 ; levée `echu` → `refusee_gk2`) ; 409/404 →
+   `refusee_gk2` (motif) ; 503, 401, 403 → `echec` et FIN DE PASSE (le reste du lot n'est pas brûlé) ; autre 4xx →
+   `echec` ; 5xx autre que 503, ou réponse perdue → issue INCONNUE : reste `envoi` (rapprochée plus tard), fin de passe.
 
-Suspension d'elle-même : trois 409 `plafond_*` en 10 min, ou un 503, posent la suspension de l'automatique dans
-veille.db (survit au redémarrage) avec l'audit `veille-auto-suspendue` ; les propositions approuvées restent envoyées.
-Seul un administrateur la lève (`POST /veille/reprendre`, `secubox-aictl veille reprendre`).
+Suspension d'elle-même : trois 409 `plafond_*` en 10 min, un 503, ou un 401/403 (clé refusée par gk2, dit par
+`/veille/etat`) posent la suspension de l'automatique dans veille.db (survit au redémarrage) avec l'audit
+`veille-auto-suspendue` ; les propositions approuvées restent envoyées. Seul un administrateur la lève
+(`POST /veille/reprendre`, `secubox-aictl veille reprendre`).
 
 Audit : chaque envoi, réponse, rapprochement, échec local et suspension → une ligne `audit_chaine` (dans la
 transaction) et une ligne de `/var/log/secubox/audit.log` (après validation ; ajout seul ; jamais le jeton ni la clé,
@@ -35,6 +41,7 @@ journal par `asyncio.to_thread`.
 """
 import asyncio
 import errno
+import ipaddress
 import json
 import logging
 import os
@@ -48,6 +55,7 @@ from typing import Callable, Optional
 from veille import decisions
 from veille.client import ErreurGk2
 from veille.decisions import ACTEUR_VEILLE, ajouter_audit, iso
+from veille.riposte import _protegee
 
 log = logging.getLogger("secubox-ai-veille")
 
@@ -62,6 +70,8 @@ FENETRE_PLAFONDS_S = 600
 SEUIL_PLAFONDS = 3
 RAFRAICHIR_RELEVE_S = 60
 TOLERANCE_S = 120
+#: Une action en `envoi` plus récente que ceci peut encore recevoir sa réponse (délai du client : 45 s).
+DELAI_RAPPROCHEMENT_S = 90
 DUREE_MIN_S, DUREE_MAX_S = 3600, 7 * 86400
 LOT = 20
 TAILLE_REPONSE = 4096
@@ -70,13 +80,18 @@ _RE_ID = re.compile(r"^[0-9a-f]{32}$")
 _RE_CONSEIL = re.compile(r"[^A-Za-z0-9._-]")
 _RE_FAMILLE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 FAMILLE_DEFAUT = "riposte"
+#: Bornes de durée de gk2 par geste (gestes_ia.py), revérifiées avant de signer ; bloc d'office : 24 h au plus.
+BORNES_DUREE = {"ban": (3600, 7 * 86400), "ban_bloc": (3600, 7 * 86400), "prolonger": (3600, 7 * 86400),
+                "limiter": (3600, 86400), "leurre": (3600, 7 * 86400), "partager": (3600, 7 * 86400)}
+DUREE_BLOC_AUTO_MAX_S = 86400
 #: Décisions écrites par l'API (`relais`) → événement d'audit.log.
 RELAIS = {"proposition_approuvee": "ai-proposition-approuvee", "proposition_refusee": "ai-proposition-refusee",
           "veille_suspendre": "veille-suspendue", "veille_reprendre": "veille-reprise"}
+# {auto} : « ? » des gestes d'office permis à cette passe (NULL : aucun).
 _ORDRE = ("SELECT p.id, p.version, p.etat, p.geste, p.cible, p.duree_s, p.mode, p.reference, p.motif "
           "FROM propositions p LEFT JOIN dossiers d ON d.id = p.dossier_id "
           "WHERE p.expire_le > ? AND NOT EXISTS (SELECT 1 FROM actions a WHERE a.proposition_id = p.id) "
-          "AND (p.etat = 'approuvee' OR (p.etat = 'proposee' AND p.mode = 'auto')) "
+          "AND (p.etat = 'approuvee' OR (p.etat = 'proposee' AND p.mode = 'auto' AND p.geste IN ({auto}))) "
           "ORDER BY CASE d.gravite WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 "
           "ELSE 0 END DESC, CASE WHEN json_valid(d.etapes_json) THEN json_array_length(d.etapes_json) ELSE 0 END DESC, "
           "p.cree_le DESC, p.id LIMIT ?")
@@ -247,15 +262,27 @@ def _instant(texte) -> float:
     return datetime.fromisoformat(texte.replace("Z", "+00:00")).timestamp()
 
 
+def _fin_ban(db, ref) -> Optional[float]:
+    """Fin (instant UNIX) du ban de la proposition `ref` : la plus tardive de sa fin rendue par gk2 et de celles de
+    ses prolongations faites (gk2 ne raccourcit jamais). None si elle est inconnue."""
+    if not ref:
+        return None
+    fins = [f for (f,) in db.execute(
+        "SELECT a.fin_gk2 FROM actions a JOIN propositions q ON q.id = a.proposition_id WHERE a.etat = 'faite' "
+        "AND (q.id = ? OR (q.geste = 'prolonger' AND q.reference = ?))", (ref, ref)).fetchall() if _entier(f)]
+    return float(max(fins)) if fins else None
+
+
 def _rapprocher_db(db, en_cours, etat, maintenant):
     lignes = []
     h = iso(maintenant)
     db.execute("BEGIN IMMEDIATE")
     try:
         tous = {e["id"] for liste in set(LISTES_ETAT.values()) for e in _entrees(etat, liste)}
-        for aid, pid, geste, cible, id_cible, envoyee_le, duree in en_cours:
+        for aid, pid, geste, cible, id_cible, envoyee_le, duree, reference in en_cours:
             envoi = _instant(envoyee_le)
             trouve = None
+            motif = "absente_apres_envoi"
             if geste in LISTES_ETAT:
                 for e in _entrees(etat, LISTES_ETAT[geste]):
                     if (e["cible"] == cible and envoi + DUREE_MIN_S - TOLERANCE_S <= e["fin"]
@@ -267,8 +294,12 @@ def _rapprocher_db(db, en_cours, etat, maintenant):
             elif geste == "prolonger":
                 trouve = next((e for e in _entrees(etat, "actifs") if e["id"] == id_cible
                                and e["fin"] >= envoi + int(duree or 0) - TOLERANCE_S), None)
-            elif geste == "unban":
-                trouve = {"id": id_cible, "fin": None} if id_cible and id_cible not in tous else None
+            elif geste == "unban" and id_cible and id_cible not in tous:
+                fin_ban = _fin_ban(db, reference)
+                if fin_ban is not None and fin_ban <= maintenant.timestamp():
+                    motif = "echue"          # échu de lui-même : gk2 n'a rien levé, le ban reste compté en récidive
+                else:
+                    trouve = {"id": id_cible, "fin": None}
             if trouve is not None:
                 db.execute("UPDATE actions SET etat = 'faite', id_gk2 = ?, fin_gk2 = ?, motif = 'rapprochee', "
                            "rapprochee_le = ? WHERE id = ?", (trouve["id"], trouve["fin"], h, aid))
@@ -276,13 +307,13 @@ def _rapprocher_db(db, en_cours, etat, maintenant):
                            (envoyee_le, pid))
                 resultat = "faite"
             else:
-                db.execute("UPDATE actions SET etat = 'echec', motif = 'absente_apres_envoi', rapprochee_le = ? "
-                           "WHERE id = ?", (h, aid))
+                db.execute("UPDATE actions SET etat = 'echec', motif = ?, rapprochee_le = ? WHERE id = ?",
+                           (motif, h, aid))
                 db.execute("UPDATE propositions SET etat = 'echec', maj_le = ? WHERE id = ? AND etat = 'envoyee'",
                            (h, pid))
                 resultat = "echec"
             details = {"proposition": pid, "action": aid, "geste": geste, "cible": cible, "resultat": resultat,
-                       "id_gk2": trouve["id"] if trouve else None}
+                       "motif": None if trouve else motif, "id_gk2": trouve["id"] if trouve else None}
             ajouter_audit(db, maintenant, ACTEUR_VEILLE, "reponse_rapprochee", pid, resultat, details)
             lignes.append(("ai-reponse-rapprochee", details))
         db.execute("COMMIT")
@@ -294,20 +325,26 @@ def _rapprocher_db(db, en_cours, etat, maintenant):
 
 
 async def rapprocher(veille, client, maintenant, journal=ecrire_audit) -> bool:
-    """Rapproche les actions restées en `envoi` ; rend False si l'une d'elles n'a pas pu l'être (rien d'autre ne
-    doit partir alors)."""
+    """Rapproche les actions restées en `envoi` depuis plus de DELAI_RAPPROCHEMENT_S ; rend False s'il en reste une
+    (trop récente, ou gk2 illisible) : rien d'autre ne doit partir alors."""
     en_cours = await veille.sql(lambda db: db.execute(
-        "SELECT a.id, a.proposition_id, a.geste, a.cible, a.id_cible_gk2, a.envoyee_le, p.duree_s FROM actions a "
-        "JOIN propositions p ON p.id = a.proposition_id WHERE a.etat = 'envoi' ORDER BY a.envoyee_le").fetchall())
+        "SELECT a.id, a.proposition_id, a.geste, a.cible, a.id_cible_gk2, a.envoyee_le, p.duree_s, p.reference "
+        "FROM actions a JOIN propositions p ON p.id = a.proposition_id WHERE a.etat = 'envoi' "
+        "ORDER BY a.envoyee_le").fetchall())
     if not en_cours:
         return True
+    limite = iso(maintenant - timedelta(seconds=DELAI_RAPPROCHEMENT_S))
+    murs = [r for r in en_cours if r[5] <= limite]
+    if not murs:
+        log.info("exécuteur : %d envoi(s) récent(s) en attente de rapprochement", len(en_cours))
+        return False
     etat = await _lire_etat_gk2(veille, client, maintenant)
     if etat is None:
-        log.warning("exécuteur : %d envoi(s) à rapprocher, gk2 illisible : aucun nouvel envoi", len(en_cours))
+        log.warning("exécuteur : %d envoi(s) à rapprocher, gk2 illisible : aucun nouvel envoi", len(murs))
         return False
-    lignes = await veille.sql(_rapprocher_db, en_cours, etat, maintenant)
+    lignes = await veille.sql(_rapprocher_db, murs, etat, maintenant)
     await _journaliser(journal, lignes)
-    return True
+    return len(murs) == len(en_cours)
 
 
 # ── choix et envoi ──
@@ -316,13 +353,18 @@ def _suspendu(db, pol) -> bool:
     return pol.automatique_suspendu or decisions.suspension(db)["suspendu"]
 
 
-def _auto_permis(db, pol, geste) -> bool:
-    return pol.mode == "hybride" and pol.admet(geste) and pol.mode_de(geste) == "auto" and not _suspendu(db, pol)
+def _gestes_auto(db, pol) -> list:
+    """Gestes d'office permis à cette passe : aucun hors du mode hybride ou si l'automatique est suspendu."""
+    if pol.mode != "hybride" or _suspendu(db, pol):
+        return []
+    return [g for g in ROUTES if pol.admet(g) and pol.mode_de(g) == "auto"]
 
 
 def _choisir(db, maintenant, pol):
-    """Expire ce qui doit l'être, puis rend les propositions à envoyer dans l'ordre (gravité, étapes, récence)."""
+    """Expire ce qui doit l'être, puis rend les propositions à envoyer dans l'ordre (gravité, étapes, récence), et les
+    lignes d'audit des approuvées expirées. Mode `observation` : rien (pas même un clic approuvé)."""
     h = iso(maintenant)
+    lignes = []
     db.execute("BEGIN IMMEDIATE")
     try:
         for pid, etat, geste, cible in db.execute(
@@ -331,22 +373,21 @@ def _choisir(db, maintenant, pol):
                 (h,)).fetchall():
             db.execute("UPDATE propositions SET etat = 'expiree', maj_le = ? WHERE id = ?", (h, pid))
             if etat == "approuvee":
-                ajouter_audit(db, maintenant, ACTEUR_VEILLE, "reponse_expiree", pid, "expiree",
-                              {"geste": geste, "cible": cible})
+                details = {"proposition": pid, "geste": geste, "cible": cible}
+                ajouter_audit(db, maintenant, ACTEUR_VEILLE, "reponse_expiree", pid, "expiree", details)
+                lignes.append(("ai-reponse-expiree", details))
         db.execute("COMMIT")
     except BaseException:
         if db.in_transaction:
             db.execute("ROLLBACK")
         raise
-    retenues = []
-    for r in db.execute(_ORDRE, (h, LOT)).fetchall():
-        p = dict(zip(_CHAMPS, r))
-        if p["geste"] not in ROUTES or not pol.admet(p["geste"]):
-            continue
-        if p["etat"] == "proposee" and not _auto_permis(db, pol, p["geste"]):
-            continue
-        retenues.append(p)
-    return retenues
+    if pol.mode != "hybride":
+        return [], lignes
+    auto = _gestes_auto(db, pol)
+    sql = _ORDRE.format(auto=", ".join("?" * len(auto)) or "NULL")
+    retenues = [p for p in (dict(zip(_CHAMPS, r)) for r in db.execute(sql, (h, *auto, LOT)).fetchall())
+                if p["geste"] in ROUTES and pol.admet(p["geste"])]
+    return retenues, lignes
 
 
 def _famille(db, cible) -> str:
@@ -357,9 +398,39 @@ def _famille(db, cible) -> str:
     return FAMILLE_DEFAUT
 
 
-def _construire(db, p):
-    """(corps, id visé chez gk2, motif d'échec local). Forme EXACTE des modèles de gk2 (gestes_ia.py)."""
+def _cible_valide(geste, cible, protegees):
+    """Motif d'échec, ou None : forme exacte du geste (adresse IPv4 pour `ban`, /24 IPv4 exact pour `ban_bloc`,
+    adresse IPv4 ou IPv6 pour limiter/leurre/partager, adresse ou /24 pour prolonger/unban), publique et hors des
+    plages protégées (même règle que la riposte et l'analyste)."""
+    if not isinstance(cible, str) or len(cible) > 64:
+        return "cible"
+    try:
+        n = ipaddress.ip_network(cible, strict=True)
+    except ValueError:
+        return "cible"
+    if n.with_prefixlen.split("/")[0] != cible.split("/")[0] or ("/" in cible) != (n.prefixlen < n.max_prefixlen):
+        return "cible"                       # forme non canonique (zéros, « /32 ») : gk2 la refuserait
+    adresse = n.prefixlen == n.max_prefixlen
+    bloc = n.version == 4 and n.prefixlen == 24
+    formes = {"ban": n.version == 4 and adresse, "ban_bloc": bloc, "prolonger": n.version == 4 and (adresse or bloc),
+              "unban": adresse or bloc, "limiter": adresse, "leurre": adresse, "partager": adresse}
+    if not formes.get(geste, False):
+        return "cible"
+    if _protegee(n, protegees):
+        return "protegee"
+    return None
+
+
+def _construire(db, p, protegees=()):
+    """(corps, id visé chez gk2, motif d'échec local). REVALIDE la ligne avant toute signature (geste du catalogue,
+    cible, durée) : une ligne de `propositions` forgée ou corrompue n'est jamais signée. Forme EXACTE des modèles de
+    gk2 (gestes_ia.py)."""
     geste = p["geste"]
+    if geste not in ROUTES:
+        return None, None, "geste"
+    motif_cible = _cible_valide(geste, p["cible"], protegees)
+    if motif_cible:
+        return None, None, motif_cible
     conseil = "v2-" + _RE_CONSEIL.sub("", p["id"])[:61]
     mode = "clic" if p["etat"] == "approuvee" else "auto"
     if geste in ("prolonger", "unban"):
@@ -371,7 +442,10 @@ def _construire(db, p):
         if geste == "unban":
             return {"geste": "unban", "id": r[0]}, r[0], None
     duree = p["duree_s"]
-    if not _entier(duree) or duree < 1:
+    bas, haut = BORNES_DUREE[geste]
+    if geste == "ban_bloc" and mode == "auto":
+        haut = DUREE_BLOC_AUTO_MAX_S
+    if not _entier(duree) or not bas <= duree <= haut:
         return None, None, "duree"
     motif = (p["motif"] or "")[:200]
     if geste == "prolonger":
@@ -402,10 +476,12 @@ def _inscrire(db, p, action_id, jti, kid, mode, id_cible, maintenant, pol):
     h = iso(maintenant)
     db.execute("BEGIN IMMEDIATE")
     try:
+        if pol.mode != "hybride":
+            raise _Ecarte("observation")
         r = db.execute("SELECT etat, version, expire_le FROM propositions WHERE id = ?", (p["id"],)).fetchone()
         if r is None or r[0] != p["etat"] or r[1] != p["version"] or r[2] <= h:
             raise _Ecarte("etat")
-        if p["etat"] == "proposee" and not _auto_permis(db, pol, p["geste"]):
+        if p["etat"] == "proposee" and p["geste"] not in _gestes_auto(db, pol):
             raise _Ecarte("suspendu")
         if _plafond_gk3(db, pol, p["geste"], maintenant):
             raise _Ecarte("plafond_gk3")
@@ -437,7 +513,7 @@ def _echouer_local(db, p, motif, maintenant):
                       (h, p["id"], p["etat"])).rowcount != 1:
             db.execute("ROLLBACK")
             return None
-        details = {"proposition": p["id"], "geste": p["geste"], "cible": p["cible"], "motif": motif}
+        details = {"proposition": p["id"], "geste": p["geste"], "cible": str(p["cible"])[:64], "motif": motif}
         ajouter_audit(db, maintenant, ACTEUR_VEILLE, "reponse_echec", p["id"], "echec", details)
         db.execute("COMMIT")
         return details
@@ -455,7 +531,7 @@ def _json_borne(reponse) -> Optional[str]:
 
 
 def _enregistrer(db, p, action_id, code, motif, reponse, maintenant):
-    """Réponse de gk2 telle quelle ; suspension d'elle-même (3 × 409 plafond_* en 10 min, ou 503)."""
+    """Réponse de gk2 telle quelle ; suspension d'elle-même (3 × 409 plafond_* en 10 min, 503, 401/403)."""
     h = iso(maintenant)
     lignes = []
     db.execute("BEGIN IMMEDIATE")
@@ -469,6 +545,9 @@ def _enregistrer(db, p, action_id, code, motif, reponse, maintenant):
                 fin = reponse["fin"]
             motif = reponse.get("etat") if p["geste"] == "unban" and isinstance(reponse.get("etat"), str) \
                 and re.fullmatch(r"[a-z_]{1,32}", reponse["etat"]) else None
+            if motif == "echu":
+                etat = "refusee_gk2"         # rien n'a été levé : le ban échu reste compté en récidive (comme gk2)
+            db.execute("DELETE FROM executeur_etat WHERE cle = 'cle_refusee'")
         elif code in (404, 409):
             etat = "refusee_gk2"
         else:
@@ -485,6 +564,10 @@ def _enregistrer(db, p, action_id, code, motif, reponse, maintenant):
         cause = None
         if code == 503:
             cause = "503"
+        elif code in (401, 403):
+            cause = "cle_refusee"
+            decisions.poser_etat(db, "cle_refusee", json.dumps({"code": code, "motif": motif, "le": h},
+                                                               sort_keys=True), maintenant)
         elif code == 409 and isinstance(motif, str) and motif.startswith("plafond_"):
             n = db.execute("SELECT COUNT(*) FROM actions WHERE code_http = 409 AND motif LIKE 'plafond\\_%' ESCAPE '\\' "
                            "AND repondue_le > ?", (iso(maintenant - timedelta(seconds=FENETRE_PLAFONDS_S)),)
@@ -504,11 +587,15 @@ def _enregistrer(db, p, action_id, code, motif, reponse, maintenant):
     return lignes
 
 
-def _ambigu(db, p, action_id, motif, maintenant):
+def _ambigu(db, p, action_id, code, motif, maintenant):
+    """Issue inconnue (réponse perdue, 5xx autre que 503) : l'action RESTE en `envoi`, rapprochée plus tard."""
     details = {"proposition": p["id"], "action": action_id, "geste": p["geste"], "cible": p["cible"],
-               "motif": motif}
+               "code": code, "motif": motif}
     db.execute("BEGIN IMMEDIATE")
     try:
+        if code is not None:
+            db.execute("UPDATE actions SET code_http = ?, motif = ?, repondue_le = ? WHERE id = ? AND etat = 'envoi'",
+                       (code, motif, iso(maintenant), action_id))
         ajouter_audit(db, maintenant, ACTEUR_VEILLE, "reponse_perdue", p["id"], "envoi", details)
         db.execute("COMMIT")
     except BaseException:
@@ -518,9 +605,14 @@ def _ambigu(db, p, action_id, motif, maintenant):
     return details
 
 
-async def _executer_une(veille, client, p, maintenant, pol, journal) -> str:
-    """« suite » (proposition traitée ou écartée) ou « arret » (issue inconnue, clé illisible : fin de passe)."""
-    corps, id_cible, erreur = await veille.sql(_construire, p)
+#: Statuts qui arrêtent la passe : le reste du lot n'est pas brûlé contre une panne ou une clé refusée.
+_ARRET = frozenset({401, 403, 503})
+
+
+async def _executer_une(veille, client, p, maintenant, pol, journal, protegees=()) -> str:
+    """« suite » (proposition traitée ou écartée) ou « arret » (issue inconnue, panne de gk2, clé refusée ou
+    illisible : fin de passe)."""
+    corps, id_cible, erreur = await veille.sql(_construire, p, protegees)
     if erreur:
         details = await veille.sql(_echouer_local, p, erreur, maintenant)
         if details:
@@ -544,23 +636,24 @@ async def _executer_une(veille, client, p, maintenant, pol, journal) -> str:
         await veille.sql(lambda db: _poser_si_change(db, "cle_ai_ban", {"etat": "invalide"}, maintenant))
         return "arret"
     except ErreurGk2 as e:
-        if e.code is None:
-            details = await veille.sql(_ambigu, p, action_id, e.motif, maintenant)
-            log.warning("exécuteur : réponse de gk2 perdue (%s) pour %s : rapprochement à la passe suivante",
-                        e.motif, p["id"])
+        if e.code is None or (e.code >= 500 and e.code != 503):
+            details = await veille.sql(_ambigu, p, action_id, e.code, e.motif, maintenant)
+            log.warning("exécuteur : issue inconnue (%s %s) pour %s : rapprochement plus tard", e.code, e.motif,
+                        p["id"])
             await _journaliser(journal, [("ai-reponse-perdue", details)])
             return "arret"
         lignes = await veille.sql(_enregistrer, p, action_id, e.code, e.motif, e.reponse, maintenant)
         await _journaliser(journal, lignes)
-        return "suite"
+        return "arret" if e.code in _ARRET else "suite"
     lignes = await veille.sql(_enregistrer, p, action_id, 200, None, reponse, maintenant)
     await _journaliser(journal, lignes)
     return "suite"
 
 
 async def executer(veille, client, maintenant: datetime, politiques=None,
-                   journal: Optional[Callable[[str, dict], bool]] = None) -> None:
-    """Une passe de l'exécuteur (cf. docstring du module)."""
+                   journal: Optional[Callable[[str, dict], bool]] = None, protegees=()) -> None:
+    """Une passe de l'exécuteur (cf. docstring du module). `protegees` : plages jamais visées
+    (`[veille.analyste] protegees` d'ai.toml), revérifiées avant chaque signature."""
     if maintenant.tzinfo is None:
         raise ValueError("horodatage sans fuseau")
     journal = journal or ecrire_audit
@@ -584,6 +677,8 @@ async def executer(veille, client, maintenant: datetime, politiques=None,
     vue = {"mode": politiques.mode, "automatique_suspendu": politiques.automatique_suspendu,
            "plafonds": {g: dict(p) for g, p in politiques.plafonds.items()}}
     await veille.sql(lambda db: _poser_si_change(db, "politique", vue, maintenant))
-    for p in await veille.sql(_choisir, maintenant, politiques):
-        if await _executer_une(veille, client, p, maintenant, politiques, journal) == "arret":
+    retenues, lignes = await veille.sql(_choisir, maintenant, politiques)
+    await _journaliser(journal, lignes)
+    for p in retenues:
+        if await _executer_une(veille, client, p, maintenant, politiques, journal, protegees) == "arret":
             break

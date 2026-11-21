@@ -148,25 +148,35 @@ Exécuteur (#3723, `veille/executeur.py`, boucle `reponses` de 10 s dans `secubo
 d'écriture de gk3 vers gk2**, les routes `ai-ban` (`/api/v1/waf/ai/ban`, `unban`, `prolonger`, `limiter`, `leurre`,
 `partager`). gk2 fait foi : il recontrôle cible protégée, cas sûr, plafonds du compte et mode SADE.
 
-- **Ce qui part** : une proposition `approuvee` (décision d'un administrateur, envoyée en `clic`) ou `proposee`
-  d'office (`mode = auto`, politique `hybride`, geste d'office, automatique **non suspendu**), non expirée, sans
-  action. Ordre : gravité du dossier, nombre d'étapes, récence. Plafonds de gk3 (`[plafonds]` de politiques.toml,
-  ≤ gk2) sur les envois de l'heure et du jour. Une proposition expirée passe `expiree` sans envoi.
+- **Ce qui part** : RIEN en mode `observation` (pas même une proposition approuvée). En `hybride` : une
+  proposition `approuvee` (décision d'un administrateur, envoyée en `clic`) ou `proposee` d'office (`mode = auto`,
+  geste d'office, automatique **non suspendu** — filtré en SQL : une file d'office suspendue n'affame jamais un
+  clic), non expirée, sans action. Ordre : gravité du dossier, nombre d'étapes, récence. Plafonds de gk3
+  (`[plafonds]` de politiques.toml, ≤ gk2 ; `[plafonds.unban]` propre à gk3, 30/h et 100/j au plus) sur les envois
+  de l'heure et du jour. Une proposition expirée passe `expiree` sans envoi (approuvée : auditée).
+- **Revalidation avant signature** : chaque ligne est revérifiée (geste du catalogue ; cible de la forme exacte du
+  geste — adresse IPv4 pour `ban`, /24 pour `ban_bloc`, IPv4/IPv6 pour `limiter`/`leurre`/`partager` — canonique,
+  publique, hors des plages `[veille.analyste] protegees` ; durée dans les bornes de gk2, bloc d'office ≤ 24 h).
+  Une ligne forgée ou corrompue n'est jamais signée : `echec` local audité.
 - **Avant l'envoi** : la ligne `actions` (UNIQUE par proposition : jamais deux envois, même après redémarrage) est
   créée en `envoi` avec le `jti` du jeton et l'empreinte de la clé, et la proposition passe `envoyee`, dans une
   transaction. Corps aux formes exactes de gk2 (`conseil` = `v2-<id>`, `motif` = celui du code) ; `prolonger` et
   `unban` visent l'id rendu par gk2 au ban de la proposition `reference` (introuvable : `echec` local, rien n'est
   envoyé) ; `partager` porte la famille dominante des événements de l'adresse (`riposte` à défaut).
 - **Réponse de gk2**, enregistrée telle quelle (corps borné à 4 Kio, donnée non fiable) : 200 → `faite` (id et fin
-  de gk2) ; 409/404 → `refusee_gk2` + motif ; autre → `echec`. Réponse perdue (délai, coupure, illisible) : l'action
-  reste `envoi` et la passe s'arrête.
-- **Rapprochement** : au tour suivant (et donc au redémarrage), AVANT toute nouvelle tentative, chaque action en
-  `envoi` est confrontée à `GET /ai/etat` (cible et liste du geste, fin compatible avec l'heure d'envoi, id de gk2
-  jamais déjà attribué ; `prolonger` : fin repoussée ; `unban` : id disparu). Trouvée → `faite`, absente → `echec`.
-  **Jamais renvoyée à l'aveugle.** gk2 illisible : rien d'autre ne part.
+  de gk2 ; levée d'un ban `echu` → `refusee_gk2`) ; 409/404 → `refusee_gk2` + motif ; 503, 401, 403 → `echec` et fin
+  de passe (le reste du lot n'est pas brûlé) ; autre 4xx → `echec`. 5xx autre que 503, ou réponse perdue (délai,
+  coupure, illisible) : issue **inconnue**, l'action reste `envoi` et la passe s'arrête.
+- **Rapprochement** : une action en `envoi` depuis plus de 90 s (délai du client 45 s) — donc aussi au redémarrage —
+  est confrontée, AVANT toute nouvelle tentative, à `GET /ai/etat` (cible et liste du geste, fin compatible avec
+  l'heure d'envoi, id de gk2 jamais déjà attribué ; `prolonger` : fin repoussée ; `unban` : id disparu alors que le
+  ban courait encore — sinon `echec` `echue`, gk2 n'ayant rien levé). Trouvée → `faite`, absente → `echec`.
+  **Jamais renvoyée à l'aveugle.** Une action plus récente, ou gk2 illisible : rien d'autre ne part.
 - **Suspension** : `POST /veille/suspendre` (console) ou `secubox-aictl veille suspendre` arrête tout geste d'office ;
-  les propositions approuvées restent envoyées. Trois 409 `plafond_*` en 10 min ou un 503 de gk2 la posent
-  **d'elles-mêmes** (audit `veille-auto-suspendue`). Elle vit dans `veille.db` (`executeur_etat`) : un redémarrage la
+  les propositions approuvées restent envoyées. Trois 409 `plafond_*` en 10 min, un 503 ou un 401/403 de gk2 (clé
+  refusée : `cle_ai_ban.refusee` dans `/veille/etat`, effacé au prochain geste réussi) la posent **d'eux-mêmes**
+  (audit `veille-auto-suspendue`). `/veille/etat` compte à part `auto_en_attente` ; `a_decider` y ajoute les
+  propositions d'office tant que l'automatique est suspendu. Elle vit dans `veille.db` (`executeur_etat`) : un redémarrage la
   garde ; seul un administrateur la lève (`POST /veille/reprendre`, `secubox-aictl veille reprendre`). La valeur
   `automatique_suspendu` de politiques.toml s'y ajoute.
 - **Décisions** (`POST /propositions/{id}/approuver|refuser`, corps `{"version": n}`) : refusées (409) si la version a
@@ -179,8 +189,16 @@ d'écriture de gk3 vers gk2**, les routes `ai-ban` (`/api/v1/waf/ai/ban`, `unban
   audit.log) sont recopiées par la veille, une fois, dans l'ordre. La veille n'a sur audit.log que l'**ajout** (profil
   AppArmor `a`, `ReadWritePaths=` de ce seul fichier) par une ACL nommée `u:secubox-ai:w` posée en root par
   `secubox-aictl acl-audit` avant chaque démarrage ; après une rotation (nouveau fichier sans ACL), la veille dépose
-  `acl-audit.demande` (au plus une fois par 10 min) que `secubox-ai-demandes` traite. Une ligne non écrite est dite
-  au journal du service, jamais perdue en silence.
+  `acl-audit.demande` (au plus une fois par 10 min) que `secubox-ai-demandes` traite (chaque pose ou échec de l'ACL
+  est audité). Une ligne non écrite est dite au journal du service, jamais perdue en silence. L'ACL nommée vaut pour
+  le compte `secubox-ai`, partagé avec l'API : c'est le profil AppArmor de l'API (`deny … audit.log w`) et son unité
+  (sans `/var/log/secubox` en écriture) qui l'en tiennent à l'écart.
+- **Isolement** : l'API (même compte que la veille) ne voit pas les clés de la veille
+  (`InaccessiblePaths=-/run/credentials/secubox-ai-veille.service`) ; la veille ne sort que vers gk2 et gk0
+  (`IPAddressDeny=any`, puis `IPAddressAllow=` de leurs adresses résolues — publiques comprises — et des
+  résolveurs, écrit par `secubox-aictl preparer` dans `/run/systemd/system/secubox-ai-veille.service.d/`, plus
+  127.0.0.1 pour Unbound ; le moteur local passe par sa socket Unix, hors de ce filtre). Une adresse de gk2 ou de
+  gk0 qui change demande `secubox-aictl preparer` puis la relance de la veille.
 
 ## Clé ai-ban
 
@@ -210,7 +228,7 @@ sont ceux du **compte**, partagés avec tout autre relais qui signe avec une cl�
 | Fichier | Propriétaire | Rôle |
 |---|---|---|
 | `/etc/secubox/ai.toml` | root 0644 | configuration fixe, copiée de `/usr/share/secubox/ai/ai.toml.example` au premier passage seulement |
-| `/etc/secubox/ai/politiques.toml` | root 0644 | politiques de réponse (§ Riposte graduée), déposées si absentes, jamais écrasées |
+| `/etc/secubox/ai/politiques.toml` | root 0644 | politiques de réponse (§ Riposte graduée), déposées si absentes, jamais écrasées ; lisibles par tous (aucun secret : seuils et plafonds) — à passer en 0640 si l'on veut les cacher |
 | `/etc/secubox/ai/riposte.toml` | root 0644 | seuils de la riposte (`n2_tentatives`, `n3_tentatives`, `fenetre_s`, `calme_s`), déposés si absents |
 | `/etc/secubox/secrets/ai/distant.key` | root:secubox-ai 0640 | clé du moteur distant, posée par `secubox-aictl cle-distante` (lue sur l'entrée standard) |
 | `/etc/secubox/secrets/ai/ai-lecture.key` | root 0600 | clé du compte de lecture de gk2, remise à la veille seule |

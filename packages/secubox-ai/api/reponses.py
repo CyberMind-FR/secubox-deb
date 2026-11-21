@@ -180,13 +180,23 @@ def _vue_etat(db) -> dict:
         plafonds[g] = {"gk2": (gk2 or {}).get(g), "gk3": (gk3 or {}).get(g)}
     s = decisions.suspension(db)
     s["politique"] = bool(isinstance(politique, dict) and politique.get("automatique_suspendu"))
-    return {"suspension": s, "cle_ai_ban": _json_etat(db, "cle_ai_ban") or {"etat": "inconnu"},
+    observation = isinstance(politique, dict) and politique.get("mode") == "observation"
+    cle = _json_etat(db, "cle_ai_ban") or {"etat": "inconnu"}
+    refus = _json_etat(db, "cle_refusee")
+    if isinstance(cle, dict) and isinstance(refus, dict):
+        cle = {**cle, "refusee": refus}          # gk2 a refusé la clé (401/403) depuis le dernier geste réussi
+    clic = db.execute("SELECT COUNT(*) FROM propositions WHERE etat = 'proposee' AND mode = 'clic'").fetchone()[0]
+    auto = db.execute("SELECT COUNT(*) FROM propositions WHERE etat = 'proposee' AND mode = 'auto'").fetchone()[0]
+    bloque = s["suspendu"] or s["politique"]
+    return {"suspension": s, "cle_ai_ban": cle,
             "sade_mode": releve.get("sade_mode") if isinstance(releve, dict) else None,
             "releve_lu_le": releve.get("lu_le") if isinstance(releve, dict) else None,
             "mode": politique.get("mode") if isinstance(politique, dict) else None, "plafonds": plafonds,
             "envois_en_attente": db.execute("SELECT COUNT(*) FROM actions WHERE etat = 'envoi'").fetchone()[0],
-            "a_decider": db.execute("SELECT COUNT(*) FROM propositions WHERE etat = 'proposee' AND mode = 'clic'"
-                                    ).fetchone()[0]}
+            # À décider : les clics, plus les propositions d'office tant que l'automatique est suspendu (elles
+            # n'attendent plus qu'un administrateur). `auto_en_attente` les compte à part dans tous les cas.
+            "a_decider": clic + (auto if bloque else 0), "auto_en_attente": auto,
+            "observation": observation}
 
 
 @routeur.get("/veille/etat")

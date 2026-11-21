@@ -78,9 +78,12 @@ SetCredential=ai-ban:absente
 # (même choix que secubox-pilotage-agent). Le dossier n'est pas inscriptible par secubox-ai (0755).
 ExecStartPre=+-/usr/sbin/secubox-aictl acl-audit
 ReadWritePaths=-/var/log/secubox
-IPAddressDeny=localhost link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
-# gk0 (moteur distant, [distant] url de ai.toml) : adresse non fixe, rouverte une à une avec gk2 par le drop-in de
-# « secubox-aictl preparer » (HOTES_VEILLE) ; une adresse publique de gk0 est déjà joignable (V2 § 12).
+# Sortie réseau FERMÉE (#3723, V2 § 12) : la veille, qui détient la clé ai-ban, ne joint que gk2 ([gk2] menaces_url)
+# et gk0 ([distant] url), adresses résolues (publiques comprises) rouvertes une à une avec les résolveurs de
+# /etc/resolv.conf par le drop-in de « secubox-aictl preparer » (HOTES_VEILLE, /run/systemd/system/
+# secubox-ai-veille.service.d/50-adresses.conf). 127.0.0.1/32 : Unbound de la box (IPAddressAllow= ne connaît pas
+# les ports). Le moteur local passe par sa socket Unix (/run/secubox-ai/moteur.sock), hors de ce filtre IP.
+IPAddressDeny=any
 IPAddressAllow=127.0.0.1/32
 
 [Install]

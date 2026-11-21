@@ -335,8 +335,11 @@ def test_envoi_interrompu_rapproche_jamais_rejoue(banc):
     assert _action(banc.db, pid)["etat"] == "envoi" and _etat(banc.db, pid) == "envoyee"
     autre = _prop(banc.db, cible=B, mode="auto")
     banc.transport.couper = None
+    # moins de 90 s après l'envoi : la réponse peut encore arriver, on n'envoie rien d'autre et on ne rapproche pas
+    _tour(banc, maintenant=_maintenant() + timedelta(seconds=30))
+    assert _action(banc.db, pid)["etat"] == "envoi" and _action(banc.db, autre) is None
     # redémarrage : le rapprochement passe AVANT toute nouvelle tentative, et ne renvoie jamais la première
-    _tour(banc)
+    _tour(banc, maintenant=_maintenant() + timedelta(seconds=100))
     a = _action(banc.db, pid)
     assert a["etat"] == "faite" and a["id_gk2"] in banc.gk2.journal and _etat(banc.db, pid) == "faite"
     assert [c["cible"] for _, c in banc.gk2.appels] == [A, B]           # A une seule fois
@@ -346,10 +349,10 @@ def test_envoi_interrompu_rapproche_jamais_rejoue(banc):
     # envoi perdu AVANT gk2 : rapproché « absent » → échec, jamais renvoyé
     p2 = _prop(banc.db, cible=C, mode="auto")
     banc.transport.couper = "avant"
-    _tour(banc)
+    _tour(banc, maintenant=_maintenant() + timedelta(seconds=200))
     assert _action(banc.db, p2)["etat"] == "envoi"
     banc.transport.couper = None
-    _tour(banc)
+    _tour(banc, maintenant=_maintenant() + timedelta(seconds=400))
     assert _action(banc.db, p2)["etat"] == "echec" and _etat(banc.db, p2) == "echec"
     assert [c["cible"] for _, c in banc.gk2.appels] == [A, B]
 
@@ -364,7 +367,7 @@ def test_rapprochement_impossible_bloque_tout_nouvel_envoi(banc, monkeypatch):
     async def panne(*a, **k):
         raise ErreurGk2(None, "ConnectError")
     monkeypatch.setattr(banc.client, "get", panne)
-    _tour(banc)
+    _tour(banc, maintenant=_maintenant() + timedelta(seconds=100))
     assert _action(banc.db, pid)["etat"] == "envoi" and _action(banc.db, autre) is None
     assert len(banc.gk2.appels) == 1
 
@@ -768,3 +771,214 @@ def test_demande_acl_audit_deposee_par_la_veille(ctl, env, monkeypatch):  # noqa
     assert executeur.ecrire_audit("essai", {"x": 1}) is False
     assert (env.run / "demandes" / "acl-audit.demande").exists()
     assert ctl.traiter_demandes() == 0 and appels == ["acl"]
+
+
+# ── correctifs de revue (ronde 1) ──
+
+def _pol(**modifs):
+    brut = tomllib.loads((PAQUET / "conf" / "politiques.toml.example").read_text("utf-8"))
+    for cle, valeur in modifs.items():
+        brut[cle] = {**brut.get(cle, {}), **valeur}
+    return politiques.valider(brut)
+
+
+def test_observation_bloque_tout_meme_approuve(banc):
+    pol = _pol(defauts={"mode": "observation"})
+    clic = _prop(banc.db, mode="clic", etat="approuvee")
+    auto = _prop(banc.db, cible=B, mode="auto")
+    _tour(banc, pol=pol)
+    assert banc.gk2.appels == [] and _etat(banc.db, clic) == "approuvee" and _etat(banc.db, auto) == "proposee"
+    assert json.loads(decisions.lire_etat(banc.db, "politique"))["mode"] == "observation"
+    _tour(banc)                                         # retour en hybride : le clic part
+    assert _etat(banc.db, clic) == "faite"
+
+
+def test_clic_jamais_affame_par_une_file_d_office_suspendue(banc):
+    decisions.suspendre(banc.db, "admin", _maintenant())
+    m = _maintenant()
+    for i in range(25):                                  # plus que le lot (20), plus récentes et plus graves
+        _prop(banc.db, cible=f"45.83.80.{i}", mode="auto", cree=m, dossier=_dossier(banc.db, f"g{i}", "critical", 4))
+    clic = _prop(banc.db, cible=A, mode="clic", etat="approuvee", cree=m - timedelta(hours=1))
+    _tour(banc)
+    assert _etat(banc.db, clic) == "faite" and [c["cible"] for _, c in banc.gk2.appels] == [A]
+
+
+@pytest.mark.parametrize("code", [500, 502, 504])
+def test_5xx_autre_que_503_issue_inconnue_rapprochee(banc, code):
+    m = _maintenant()
+    p1 = _prop(banc.db, cible=A, mode="auto", cree=m)
+    p2 = _prop(banc.db, cible=B, mode="auto", cree=m - timedelta(seconds=5))
+    banc.gk2.forcer = [(code, "incoherent")]
+    _tour(banc)
+    a = _action(banc.db, p1)
+    assert a["etat"] == "envoi" and a["code"] == code and _etat(banc.db, p1) == "envoyee"
+    assert _action(banc.db, p2) is None                 # la passe s'arrête
+    assert decisions.suspension(banc.db)["suspendu"] is False
+    _tour(banc, maintenant=_maintenant() + timedelta(seconds=100))
+    assert _action(banc.db, p1)["etat"] == "echec"      # rien chez gk2 : absent, jamais renvoyé
+    assert [c["cible"] for _, c in banc.gk2.appels] == [A, B]
+
+
+def test_503_arrete_la_passe(banc):
+    m = _maintenant()
+    p1 = _prop(banc.db, cible=A, mode="clic", etat="approuvee", cree=m)
+    p2 = _prop(banc.db, cible=B, mode="clic", etat="approuvee", cree=m - timedelta(seconds=5))
+    banc.gk2.forcer = [(503, "wafctl")]
+    _tour(banc)
+    assert _action(banc.db, p1)["etat"] == "echec" and _action(banc.db, p2) is None
+    _tour(banc)
+    assert _etat(banc.db, p2) == "faite"                # approuvée : partie malgré la suspension
+
+
+@pytest.mark.parametrize("code", [401, 403])
+def test_cle_refusee_suspend_arrete_et_se_voit(banc, code, api):
+    m = _maintenant()
+    p1 = _prop(banc.db, cible=A, mode="auto", cree=m)
+    p2 = _prop(banc.db, cible=B, mode="auto", cree=m - timedelta(seconds=5))
+    banc.gk2.forcer = [(code, "x")]
+    _tour(banc)
+    assert _action(banc.db, p1)["etat"] == "echec" and _action(banc.db, p2) is None
+    s = decisions.suspension(banc.db)
+    assert s["suspendu"] is True and s["motif"] == "cle_refusee"
+    assert json.loads(decisions.lire_etat(banc.db, "cle_refusee"))["code"] == code
+    # vu par la console (le même fichier veille.db que l'API)
+    c, _ = api
+    e = c.get("/veille/etat").json()
+    assert e["cle_ai_ban"]["refusee"]["code"] == code and e["suspension"]["motif"] == "cle_refusee"
+
+
+def test_veille_etat_dit_cle_refusee_et_compte_l_office_suspendu(api):
+    c, db = api
+    decisions.poser_etat(db, "cle_refusee", json.dumps({"code": 401, "motif": "refus", "le": "x"}), _maintenant())
+    decisions.poser_etat(db, "cle_ai_ban", json.dumps({"etat": "presente", "empreinte": "e"}), _maintenant())
+    for i in range(3):
+        _prop(db, cible=f"45.83.81.{i}", mode="auto")
+    _prop(db, cible=A, mode="clic")
+    e = c.get("/veille/etat").json()
+    assert e["cle_ai_ban"]["refusee"]["code"] == 401
+    assert e["a_decider"] == 1 and e["auto_en_attente"] == 3
+    decisions.suspendre(db, "admin", _maintenant())
+    assert c.get("/veille/etat").json()["a_decider"] == 4
+
+
+def test_unban_d_un_ban_echu_rapproche_en_echec(banc):
+    ban = _prop(banc.db, mode="auto")
+    _tour(banc)
+    id_gk2 = _action(banc.db, ban)["id_gk2"]
+    lev = _prop(banc.db, geste="unban", cible=A, duree=None, reference=ban)
+    banc.transport.couper = "apres"
+    _tour(banc)
+    assert _action(banc.db, lev)["etat"] == "envoi"
+    banc.transport.couper = None
+    # le ban a échu de lui-même : l'unban n'a rien levé, il ne doit pas sortir le ban de la récidive
+    banc.db.execute("UPDATE actions SET fin_gk2 = ? WHERE proposition_id = ?", (int(time.time()) - 10, ban))
+    banc.gk2.journal[id_gk2]["fin"] = int(time.time()) - 10
+    _tour(banc, maintenant=_maintenant() + timedelta(seconds=100))
+    a = _action(banc.db, lev)
+    assert a["etat"] == "echec" and a["motif"] == "echue" and _etat(banc.db, lev) == "echec"
+
+
+def test_unban_rapproche_faite_si_le_ban_court_encore(banc):
+    ban = _prop(banc.db, mode="auto")
+    _tour(banc)
+    lev = _prop(banc.db, geste="unban", cible=A, duree=None, reference=ban)
+    banc.transport.couper = "apres"
+    _tour(banc)
+    banc.transport.couper = None
+    _tour(banc, maintenant=_maintenant() + timedelta(seconds=100))
+    assert _action(banc.db, lev)["etat"] == "faite" and _etat(banc.db, lev) == "faite"
+
+
+@pytest.mark.parametrize("geste,cible,duree,motif", [
+    ("ban", "10.0.0.1", 86400, "protegee"),
+    ("ban", "203.0.113.0/24", 86400, "cible"),          # un /24 n'est pas un ban d'adresse
+    ("ban_bloc", "45.83.64.1", 86400, "cible"),
+    ("ban_bloc", "45.83.64.0/24", 3 * 86400, "duree"),   # bloc d'office : 24 h au plus
+    ("ban", "45.83.064.1", 86400, "cible"),
+    ("ban", "45.83.64.1/32", 86400, "cible"),
+    ("limiter", "45.83.64.1", 3 * 86400, "duree"),
+    ("ban", A, 10, "duree"),
+    ("leurre", "::ffff:2d53:4001", 86400, "protegee"),     # IPv4 mêlée (forme canonique)
+    ("leurre", "::ffff:45.83.64.1", 86400, "cible"),       # forme non canonique
+    ("ban", "198.51.100.7", 86400, "protegee"),          # plage protégée de ai.toml
+])
+def test_ligne_forgee_jamais_signee(banc, geste, cible, duree, motif):
+    import ipaddress as ipa
+    pid = _prop(banc.db, geste=geste, cible=cible, duree=duree, mode="auto")
+    v = Veille(banc.db, _maintenant, [])
+    asyncio.run(executeur.executer(v, banc.client, _maintenant(), politiques=POLITIQUES, journal=banc.journal,
+                                   protegees=[ipa.ip_network("198.51.100.0/24")]))
+    assert banc.gk2.appels == [] and _etat(banc.db, pid) == "echec" and _action(banc.db, pid) is None
+    assert [d["motif"] for ev, d in banc.lignes if ev == "ai-reponse-echec"] == [motif]
+    assert not [r for r in banc.transport.requetes if r[0] == "POST"]
+
+
+def test_approuvee_expiree_auditee(banc):
+    pid = _prop(banc.db, mode="clic", etat="approuvee", expire_s=-5)
+    _tour(banc)
+    assert _etat(banc.db, pid) == "expiree"
+    assert [d["proposition"] for ev, d in banc.lignes if ev == "ai-reponse-expiree"] == [pid]
+
+
+def test_plafond_unban_gk3(banc):
+    pol = _pol(plafonds={"unban": {"heure": 1, "jour": 100}})
+    assert POLITIQUES.plafonds["unban"] == {"heure": 30, "jour": 100}
+    with pytest.raises(politiques.PolitiqueInvalide):
+        _pol(plafonds={"unban": {"heure": 31, "jour": 100}})
+    bans = []
+    for c in (A, B):
+        bans.append(_prop(banc.db, cible=c, mode="auto"))
+    _tour(banc)
+    levees = [_prop(banc.db, geste="unban", cible=c, duree=None, reference=b) for c, b in zip((A, B), bans)]
+    _tour(banc, pol=pol)
+    assert sorted(_etat(banc.db, x) for x in levees) == ["faite", "proposee"]
+
+
+def test_unites_api_sans_cle_ni_audit_veille_sortie_fermee():
+    api = (PAQUET / "systemd" / "secubox-ai.service").read_text(encoding="utf-8")
+    acode = "\n".join(x for x in api.splitlines() if not x.lstrip().startswith("#"))
+    assert "InaccessiblePaths=-/run/credentials/secubox-ai-veille.service" in acode
+    assert "/var/log/secubox" not in acode
+    veille = (PAQUET / "systemd" / "secubox-ai-veille.service").read_text(encoding="utf-8")
+    vcode = "\n".join(x for x in veille.splitlines() if not x.lstrip().startswith("#"))
+    assert re.search(r"^IPAddressDeny=any$", vcode, re.M)
+    assert re.findall(r"^IPAddressAllow=.*$", vcode, re.M) == ["IPAddressAllow=127.0.0.1/32"]
+
+
+def test_aictl_drop_in_veille_publiques_comprises(ctl, env, monkeypatch):  # noqa: F811
+    resolv = env.tmp / "resolv.conf"
+    resolv.write_text("nameserver 192.168.1.200\nnameserver 9.9.9.9\n")
+    monkeypatch.setattr(ctl, "RESOLV", resolv)
+    env.conf.write_text('[gk2]\nmenaces_url = "https://admin.gk2.example/api/v1"\nsources_url = ""\n'
+                        '[distant]\nurl = "https://45.83.90.1:8443"\n[searxng]\nurl = "http://10.100.0.85:8888"\n')
+    env.conf.chmod(0o644)
+    monkeypatch.setattr(ctl, "resoudre", lambda h: {"45.83.91.2", "127.0.0.1"})
+    assert ctl.cmd_preparer() == 0
+    veille = (ctl.DROPIN_VEILLE / "50-adresses.conf").read_text()
+    api = (ctl.DROPIN_API / "50-adresses.conf").read_text()
+    assert [x for x in veille.splitlines() if x.startswith("IPAddressAllow")] == \
+        ["IPAddressAllow=192.168.1.200/32 45.83.90.1/32 45.83.91.2/32 9.9.9.9/32"]
+    assert "IPAddressDeny=any" in veille or "IPAddressDeny" not in veille     # le drop-in n'en change pas
+    assert "45.83.90.1" not in api and "9.9.9.9" not in api                    # l'API : LAN seulement, inchangé
+    assert "10.100.0.85" not in veille
+
+
+def test_aictl_acl_audit_chaque_issue_auditee(ctl, env, monkeypatch, tmp_path):  # noqa: F811
+    faux = tmp_path / "setfacl"
+    faux.write_text("#!/bin/sh\nexit 1\n")
+    faux.chmod(0o755)
+    monkeypatch.setattr(ctl, "SETFACL", str(faux))
+    env.audit.write_text("")
+    assert ctl.cmd_acl_audit() == 1
+    faux.write_text("#!/bin/sh\nexit 0\n")
+    assert ctl.cmd_acl_audit() == 0
+    issues = [json.loads(x)["issue"] for x in env.audit.read_text().splitlines()
+              if json.loads(x)["evenement"] == "acl-audit"]
+    assert issues == ["erreur", "posee"]
+
+
+def test_riposte_ne_cree_jamais_audit_log(tmp_path):
+    from veille import riposte
+    chemin = tmp_path / "audit.log"
+    riposte.ecrire_audit_log("essai", {}, chemin=str(chemin))
+    assert not chemin.exists()
