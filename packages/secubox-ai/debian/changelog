@@ -17,6 +17,11 @@ secubox-ai (0.6.0-1~trixie1) trixie; urgency=medium
     absents (jamais écrasés), lus par la veille (profil AppArmor) ; double
     tampon : un fichier invalide garde la politique précédente (audit
     politiques-invalides, une fois par contenu fautif).
+  * Propositions compatibles avec gk2 : IPv6 jamais bannie ni partagée
+    (limiter, ou leurre si web seul) ; rien de neuf tant qu'un ban V2 est en
+    vol ; ban V2 fait et actif → prolonger (colonne reference), puis
+    partager seulement alors ; retour après ban → nouveau ban à la durée de
+    récidive de gk2 (duree_recidive, relue par test).
   * leurre_redirige (requêtes servies par le leurre de la box) : neutre,
     jamais preuve d'une règle ni tentative (pas de boucle leurre → ban).
 

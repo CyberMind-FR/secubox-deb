@@ -21,6 +21,7 @@ from test_veille_correlation_3721 import T0, _ajout, _auth, _waf
 PAQUET = Path(__file__).resolve().parents[1]
 POLITIQUES = politiques.valider(tomllib.loads((PAQUET / "conf" / "politiques.toml.example").read_text("utf-8")))
 A, B, C = "45.83.64.10", "45.83.64.11", "45.83.65.12"
+V6 = "2a01:4f8:c0c:1::1"
 
 
 @pytest.fixture
@@ -43,6 +44,19 @@ def _passe(db, quand=T0):
 def _proposer(db, d, quand=T0, pol=POLITIQUES, **kw):
     kw.setdefault("journal_audit", Journal())
     return riposte.proposer(db, d, pol, quand, **kw)
+
+
+def _faite(db, pid, quand):
+    """Ce que la tâche 7 fera : la proposition exécutée par gk2 passe à `faite` (maj_le = heure de l'effet)."""
+    db.execute("UPDATE propositions SET etat = 'faite', maj_le = ? WHERE id = ?", (regles.iso(quand), pid))
+
+
+def _ban_fait(db, ip, debut, duree_s=86400, pid=None):
+    pid = pid or f"anc-{ip}-{debut.timestamp()}"
+    db.execute("INSERT INTO propositions(id, geste, cible, duree_s, mode, politique, motif, etat, expire_le, cree_le, "
+               "maj_le) VALUES (?, 'ban', ?, ?, 'auto', 'gestes.ban', 'm', 'faite', ?, ?, ?)",
+               (pid, ip, duree_s, regles.iso(debut), regles.iso(debut), regles.iso(debut)))
+    return pid
 
 
 def _lignes(db):
@@ -106,11 +120,38 @@ def test_usager_par_recidive(db):
     d = _passe(db)[A]
     s = riposte.signaux(d, T0)
     assert s.recidive is True and s.web_seul is False and d.niveau == "usager"
-    gestes = {(p.geste, p.cible, p.duree_s) for p in _proposer(db, d)}
-    assert ("ban", A, 4 * 86400) in gestes                    # ban long ×4
-    assert ("prolonger", A, 7 * 86400) in gestes              # retour_apres_ban
-    assert not {g for g, _, _ in gestes} & {"leurre", "limiter", "unban", "ban_bloc", "partager"}
+    # le ban précédent est FINI : nouveau ban (jamais prolonger), durée de récidive de gk2 (aucun ban V2 avant : 24 h)
+    props = _proposer(db, d)
+    assert [(p.geste, p.cible, p.duree_s, p.regle) for p in props] == [("ban", A, 86400, "usager_ban_recidive")]
 
+
+def test_recidive_apres_un_ban_v2_duree_de_gk2(db):
+    _ban_fait(db, A, T0 - timedelta(days=3))                  # ban V2 fait il y a 3 j, fini depuis 2 j
+    _ajout(db, "bans", T0 - timedelta(days=3), ip=A, cat="sqli", sev="high",
+           exp=int((T0 - timedelta(days=2)).timestamp()))
+    _waf(db, A, T0 - timedelta(minutes=20), cat="sqli:union", sev="high")
+    _auth(db, A, T0 - timedelta(minutes=10), "ssh")
+    d = _passe(db)[A]
+    [p] = _proposer(db, d)
+    assert (p.geste, p.duree_s, p.regle) == ("ban", riposte.duree_recidive(1), "usager_ban_recidive")
+    assert p.duree_s == 4 * 86400
+
+
+def test_duree_recidive_identique_a_gk2():
+    source = PAQUET.parent / "secubox-waf-ng" / "composants" / "waf" / "api" / "gestes_ia.py"
+    texte = source.read_text(encoding="utf-8")
+    arbre = ast.parse(texte)
+    noms = {}
+    for n in arbre.body:
+        if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Tuple):
+            for t, v in zip(n.targets[0].elts, n.value.elts):
+                noms[t.id] = ast.literal_eval(v)
+        if isinstance(n, ast.FunctionDef) and n.name == "duree_recidive":
+            corps = ast.get_source_segment(texte, n)
+    assert noms["DUREE_AUTO_ADRESSE_S"] == riposte.DUREE_AUTO_ADRESSE_S
+    assert noms["FACTEUR_RECIDIVE"] == riposte.FACTEUR_RECIDIVE and noms["DUREE_MAX_S"] == riposte.DUREE_MAX_S
+    assert f"FACTEUR_RECIDIVE ** min(n, {riposte.EXPOSANT_MAX})" in corps
+    assert [riposte.duree_recidive(n) for n in (0, 1, 2, 20)] == [86400, 345600, 604800, 604800]
 
 def test_web_seul_usager_propose_leurre_pas_ban(db):
     _ajout(db, "bans", T0 - timedelta(days=1), ip=A, cat="scanners", sev="medium",
@@ -144,8 +185,61 @@ def test_usager_partage_si_campagne(db):
     d = _passe(db)[A]
     s = riposte.signaux(d, T0)
     assert s.couches == 3 and s.campagne is True and d.niveau == "usager"
-    gestes = {(p.geste, p.cible) for p in _proposer(db, d)}
-    assert ("partager", A) in gestes and ("ban", A) in gestes
+    # pas de ban V2 vivant : ban seulement, jamais partager à côté d'un ban encore en vol
+    props = _proposer(db, d)
+    assert [(p.geste, p.cible) for p in props] == [("ban", A)]
+    assert _proposer(db, d, T0 + timedelta(minutes=1)) == []          # ban en vol : on attend
+    # ban fait (tâche 7) et actif : partager, et prolonger ce ban (référence gardée)
+    _faite(db, props[0].id, T0 + timedelta(minutes=1))
+    suite = {p.geste: p for p in _proposer(db, d, T0 + timedelta(minutes=2))}
+    assert set(suite) == {"partager", "prolonger"}
+    assert suite["partager"].cible == A and suite["prolonger"].reference == props[0].id
+    assert db.execute("SELECT reference FROM propositions WHERE id = ?", (suite["prolonger"].id,)).fetchone()[0] == \
+        props[0].id
+
+
+def test_montee_sur_ban_en_vol_puis_actif(db):
+    _waf(db, A, T0 - timedelta(minutes=10), cat="scanners:x", sev="low")
+    _waf(db, A, T0 - timedelta(minutes=5), cat="sqli:union", sev="critical")
+    d = _passe(db)[A]
+    assert d.niveau == "contenir"                                       # règle critique
+    [ban] = _proposer(db, d)
+    assert (ban.geste, ban.regle) == ("ban", "contenir_ban")            # deux étapes
+    # retour après la fin d'un ban du WAF : usager, dossier web seul
+    _ajout(db, "bans", T0 - timedelta(days=1), ip=A, cat="scanners", sev="medium",
+           exp=int((T0 + timedelta(minutes=2)).timestamp()))
+    _waf(db, A, T0 + timedelta(minutes=5), cat="scanners:x", sev="low")
+    t1 = T0 + timedelta(minutes=6)
+    d = _passe(db, t1)[A]
+    assert d.niveau == "usager" and riposte.signaux(d, t1).web_seul is True
+    assert _proposer(db, d, t1) == []                                   # ban V2 en vol : rien de neuf
+    _faite(db, ban.id, t1)
+    props = _proposer(db, d, t1 + timedelta(minutes=1))
+    assert [(p.geste, p.cible, p.reference) for p in props] == [("prolonger", A, ban.id)]   # jamais un leurre
+    assert props[0].duree_s == riposte.duree_recidive(1) <= 7 * 86400
+
+
+def test_ipv6_jamais_bannie_ni_partagee(db):
+    _waf(db, V6, T0 - timedelta(minutes=10), cat="sqli:union", sev="high")
+    _auth(db, V6, T0 - timedelta(minutes=5), "smtp")
+    d = _passe(db)[V6]
+    assert d.niveau == "contenir"
+    assert [(p.geste, p.cible, p.duree_s) for p in _proposer(db, d)] == [("limiter", V6, 21600)]
+    _ajout(db, "garde", T0 - timedelta(minutes=3), menace="intrusion", ip=V6, gravite="high")
+    t1 = T0 + timedelta(minutes=1)
+    d = _passe(db, t1)[V6]
+    assert d.niveau == "usager" and riposte.signaux(d, t1).web_seul is False
+    db.execute("UPDATE propositions SET etat = 'faite'")
+    assert [(p.geste, p.duree_s) for p in _proposer(db, d, t1)] == [("limiter", 86400)]
+
+
+def test_ipv6_web_seul_usager_leurre(db):
+    _ajout(db, "bans", T0 - timedelta(days=1), ip=V6, cat="scanners", sev="medium",
+           exp=int((T0 - timedelta(hours=2)).timestamp()))
+    _waf(db, V6, T0 - timedelta(minutes=20), cat="scanners:x", sev="low")
+    d = _passe(db)[V6]
+    assert d.niveau == "usager"
+    assert [(p.geste, p.cible) for p in _proposer(db, d)] == [("leurre", V6)]
 
 
 def test_redescente_ne_defait_rien(db):
@@ -192,8 +286,10 @@ def test_une_proposition_vivante_par_geste_cible(db):
         db.execute("INSERT INTO propositions(id, geste, cible, duree_s, mode, politique, motif, etat, expire_le, "
                    "cree_le, maj_le) VALUES ('x', 'ban', ?, 86400, 'clic', 'gestes.ban', 'm', 'approuvee', 'z', 'a', "
                    "'a')", (A,))
-    # une proposition finie (faite) libère la place
-    db.execute("UPDATE propositions SET etat = 'faite'")
+    # une proposition finie sans effet (échec) libère la place ; faite, le ban V2 actif suffit (rien de neuf)
+    db.execute("UPDATE propositions SET etat = 'faite', maj_le = ?", (regles.iso(T0 + timedelta(minutes=1)),))
+    assert _proposer(db, d, T0 + timedelta(minutes=2)) == []
+    db.execute("UPDATE propositions SET etat = 'echec'")
     assert len(_proposer(db, d, T0 + timedelta(minutes=2))) == 1
 
 

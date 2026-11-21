@@ -29,7 +29,10 @@ une remontée exige des preuves nouvelles. La redescente ne défait aucun geste 
 Propositions (`proposer`) : dossiers d'ACTEUR seulement (un dossier de campagne n'en fait aucune : ses membres ont
 chacun leur dossier et leur niveau). Une seule proposition vivante par (geste, cible) ; jamais une cible protégée
 (adresse non publique, adresse de la box vue en vhost, plages `protegees` de ai.toml dont gk2 et gk0) ; jamais de
-levée (`unban`) ; plafonds de gk3 de la politique ; expiration `expiration_min`.
+levée (`unban`) ; plafonds de gk3 de la politique ; expiration `expiration_min` (une proposition expirée n'est
+reproposée qu'avec de nouvelles preuves, quand le dossier est recalculé). Compatibilité avec gk2 (`_candidats`) :
+IPv6 ni bannie ni partagée ; rien de neuf tant qu'un ban V2 est en vol ; ban V2 fait et actif → `prolonger` (champ
+`reference`) et, seulement alors, `partager` ; retour après la fin d'un ban → nouveau ban, durée de récidive de gk2.
 """
 import ipaddress
 import json
@@ -58,9 +61,13 @@ FACTEUR_USAGER = 4
 DUREE_MAX_S = 7 * 86400
 DUREE_BAN_BLOC_S = 86400
 DUREE_LIMITER_S = 6 * 3600
+DUREE_LIMITER_MAX_S = 86400          # borne de gk2 (LIMITE_MAX_S) : limitation d'usager d'une adresse IPv6
 DUREE_LEURRE_S = 86400
 DUREE_PARTAGER_S = 7 * 86400
-DUREE_PROLONGER_S = 7 * 86400
+# Miroir de gestes_ia.duree_recidive (gk2, relu par le test) : un ban d'adresse D'OFFICE dure 24 h × 4 par ban ai-ban
+# précédent de l'adresse, 7 j au plus (exposant borné à 8). gk2 impose cette durée en mode auto : gk3 affiche la même.
+DUREE_AUTO_ADRESSE_S, FACTEUR_RECIDIVE, EXPOSANT_MAX = 86_400, 4, 8
+EN_VOL = ("proposee", "approuvee", "envoyee")
 SANS_COUCHE = frozenset({"actord", "mesures", "campagnes", "posture"}) | DECISIONS
 SYN = frozenset({"syn_sans_etat", "syn_scan"})
 WEB = frozenset({"waf", "leurres"})
@@ -72,12 +79,18 @@ MOTIFS = {
                         "({tentatives} tentative(s), {couches} couche(s))",
     "usager_leurre": "riposte usager, dossier web seul : leurre {duree_h} h ({tentatives} tentative(s), "
                      "{couches} couche(s))",
-    "usager_ban_long": "riposte usager : ban long {duree_h} h ({tentatives} tentative(s), {couches} couche(s))",
+    "usager_ban_long": "riposte usager : ban {duree_h} h ({tentatives} tentative(s), {couches} couche(s))",
+    "usager_ban_recidive": "riposte usager : nouveau ban {duree_h} h après la fin d'un ban (retour après ban, "
+                           "{bans} ban(s) V2 précédent(s))",
     "usager_ban_bloc": "riposte usager : ban du bloc {duree_h} h, cas sûr local (au moins {seuil} adresses du bloc "
                        "bannies, familles sûres)",
-    "usager_prolonger": "riposte usager : prolonger jusqu'à {duree_h} h, retour après ban",
-    "usager_partager": "riposte usager : partage de l'indicateur {duree_h} h (campagne ou outil identifié par au moins "
-                       "deux traits)",
+    "usager_prolonger": "riposte usager : prolonger le ban V2 actif de {duree_h} h ({bans} ban(s) V2 de la cible)",
+    "usager_partager": "riposte usager : partage de l'indicateur {duree_h} h, cible bannie par V2 (campagne ou outil "
+                       "identifié par au moins deux traits)",
+    "contenir_limiter_v6": "riposte contenir : limitation {duree_h} h, adresse IPv6 (ni ban ni partage sur gk2) "
+                           "({tentatives} tentative(s), {couches} couche(s))",
+    "usager_limiter_v6": "riposte usager : limitation {duree_h} h, adresse IPv6 hors web (ni ban ni partage sur gk2) "
+                         "({tentatives} tentative(s), {couches} couche(s))",
 }
 
 
@@ -292,6 +305,7 @@ class Proposition:
     regle: str = ""
     valeurs: dict = field(default_factory=dict)
     version: int = 1
+    reference: Optional[str] = None
 
 
 def motifs_possibles(p: Proposition):
@@ -324,8 +338,51 @@ def ecrire_audit_log(evenement: str, details: dict, chemin: Optional[str] = None
         log.warning("audit.log non écrit (%s) : %s", e.__class__.__name__, ligne)
 
 
+def duree_recidive(n: int) -> int:
+    """Durée d'un ban d'adresse d'office après `n` bans V2 précédents de l'adresse (miroir de gk2)."""
+    return min(DUREE_MAX_S, DUREE_AUTO_ADRESSE_S * FACTEUR_RECIDIVE ** min(max(n, 0), EXPOSANT_MAX))
+
+
+def _bans_poses(db, geste, cible) -> int:
+    """Bans V2 faits sur la cible (miroir du compte de gk2 : ses propres bans de la cible)."""
+    return db.execute("SELECT COUNT(*) FROM propositions WHERE geste = ? AND cible = ? AND etat = 'faite'",
+                      (geste, cible)).fetchone()[0]
+
+
+def _cibles_ban(ip, bloc):
+    return [("ban", ip)] + ([("ban_bloc", bloc)] if bloc else [])
+
+
+def _ban_en_vol(db, ip, bloc) -> bool:
+    """Un ban V2 de l'adresse ou de son bloc proposé, approuvé ou en cours d'envoi."""
+    return any(db.execute("SELECT 1 FROM propositions WHERE geste = ? AND cible = ? AND etat IN (?, ?, ?)",
+                          (g, c, *EN_VOL)).fetchone() for g, c in _cibles_ban(ip, bloc))
+
+
+def _ban_vivant(db, ip, bloc, maintenant):
+    """Ban V2 FAIT de l'adresse ou de son bloc dont la fin est à venir : (id, geste, cible, fin) le plus tardif, ou
+    None. Fin = passage à `faite` (`maj_le`) + `duree_s` (la tâche 7 tient `faite` à jour)."""
+    meilleur = None
+    for g, c in _cibles_ban(ip, bloc):
+        for pid, maj, duree in db.execute("SELECT id, maj_le, duree_s FROM propositions WHERE geste = ? AND cible = ? "
+                                          "AND etat = 'faite'", (g, c)):
+            try:
+                fin = datetime.fromisoformat(maj.replace("Z", "+00:00")) + timedelta(seconds=int(duree or 0))
+            except (ValueError, TypeError, AttributeError):
+                continue
+            if fin > maintenant and (meilleur is None or fin > meilleur[3]):
+                meilleur = (pid, g, c, fin)
+    return meilleur
+
+
 def _candidats(db, d, s: Signaux, comptes, maintenant):
-    """(geste, cible, durée, règle, valeurs) du niveau atteint, par adresse du dossier (table de la tâche 6)."""
+    """(geste, cible, durée, règle, valeurs, référence) du niveau atteint, par adresse du dossier.
+
+    Compatibles avec gk2 (`/ai/ban` : IPv4 publique ou /24 exact) : une adresse IPv6 n'est jamais bannie ni partagée
+    (contenir : limiter 6 h ; usager : leurre si web seul, sinon limiter 24 h). Une adresse dont un ban V2 (adresse ou
+    bloc) est en vol n'a rien de nouveau (on attend) ; dont un ban V2 est FAIT et actif : `prolonger` ce ban (référence
+    gardée), jamais de leurre, et `partager` si campagne ou outil. `partager` n'est proposé que sur un ban vivant : la
+    passe suivante le proposera une fois le ban fait. Retour après la fin d'un ban : NOUVEAU ban (durée de récidive)."""
     par_ip = {}
     for e, _ in comptes:
         par_ip.setdefault(e.ip_src, []).append(e)
@@ -338,25 +395,53 @@ def _candidats(db, d, s: Signaux, comptes, maintenant):
     out = []
     for ip in sorted(par_ip):
         evs = par_ip[ip]
+        try:
+            v6 = ipaddress.ip_address(ip).version == 6
+        except ValueError:
+            continue
+        if v6:
+            if d.niveau == "contenir":
+                out.append(("limiter", ip, DUREE_LIMITER_S, "contenir_limiter_v6", dict(base), None))
+            elif s.web_seul:
+                out.append(("leurre", ip, DUREE_LEURRE_S, "usager_leurre", dict(base), None))
+            else:
+                out.append(("limiter", ip, DUREE_LIMITER_MAX_S, "usager_limiter_v6", dict(base), None))
+            continue
+        bloc = next((e.bloc24 for e in evs if e.bloc24), None)
+        if _ban_en_vol(db, ip, bloc):
+            continue                                  # un ban V2 en vol : attendre son issue
+        vivant = _ban_vivant(db, ip, bloc, maintenant)
         if d.niveau == "contenir":
+            if vivant:
+                continue                              # déjà contenue par un ban V2 actif
             sources = len({e.emetteur for e in evs})
             etapes = len({x for e in evs for x in etapes_de.get(e.id, ())})
             if sources >= 2 or etapes >= 2:
-                out.append(("ban", ip, DUREE_BAN_S, "contenir_ban", {**base, "sources": sources, "etapes": etapes}))
+                out.append(("ban", ip, DUREE_BAN_S, "contenir_ban", {**base, "sources": sources, "etapes": etapes},
+                            None))
             else:
-                out.append(("limiter", ip, DUREE_LIMITER_S, "contenir_limiter", dict(base)))
+                out.append(("limiter", ip, DUREE_LIMITER_S, "contenir_limiter", dict(base), None))
+            continue
+        if vivant:
+            pid, g, c, fin = vivant
+            n = _bans_poses(db, g, c)
+            duree = duree_recidive(n) if g == "ban" else DUREE_MAX_S
+            if maintenant + timedelta(seconds=duree) > fin:          # gk2 ne raccourcit jamais (409 raccourcit)
+                out.append(("prolonger", c, duree, "usager_prolonger", {"bans": n}, pid))
+            if s.campagne or s.outil_nomme:
+                out.append(("partager", ip, DUREE_PARTAGER_S, "usager_partager", {}, None))
             continue
         if s.web_seul:
-            out.append(("leurre", ip, DUREE_LEURRE_S, "usager_leurre", dict(base)))
+            out.append(("leurre", ip, DUREE_LEURRE_S, "usager_leurre", dict(base), None))
+            continue
+        if any(e.id in retours for e in evs):
+            n = _bans_poses(db, "ban", ip)
+            out.append(("ban", ip, duree_recidive(n), "usager_ban_recidive", {"bans": n}, None))
         else:
-            out.append(("ban", ip, min(DUREE_BAN_S * FACTEUR_USAGER, DUREE_MAX_S), "usager_ban_long", dict(base)))
-            bloc = next((e.bloc24 for e in evs if e.bloc24), None)
-            if bloc and cas_sur.bloc_sur(db, bloc, maintenant):
-                out.append(("ban_bloc", bloc, DUREE_BAN_BLOC_S, "usager_ban_bloc", {"seuil": cas_sur.SEUIL_BLOC}))
-            if any(e.id in retours for e in evs):
-                out.append(("prolonger", ip, DUREE_PROLONGER_S, "usager_prolonger", {}))
-        if s.campagne or s.outil_nomme:
-            out.append(("partager", ip, DUREE_PARTAGER_S, "usager_partager", {}))
+            out.append(("ban", ip, min(DUREE_BAN_S * FACTEUR_USAGER, DUREE_MAX_S), "usager_ban_long", dict(base),
+                        None))
+        if bloc and cas_sur.bloc_sur(db, bloc, maintenant):
+            out.append(("ban_bloc", bloc, DUREE_BAN_BLOC_S, "usager_ban_bloc", {"seuil": cas_sur.SEUIL_BLOC}, None))
     return out
 
 
@@ -413,7 +498,7 @@ def proposer(db, dossier, politiques, maintenant: datetime, protegees=(), seuils
         analyse_id = r[0] if r else None
         incident_id = dossier.incidents[-1] if dossier.incidents else None
         vus = set()
-        for geste, cible, duree, regle, valeurs in _candidats(db, dossier, s, comptes, maintenant):
+        for geste, cible, duree, regle, valeurs, reference in _candidats(db, dossier, s, comptes, maintenant):
             if (geste, cible) in vus:
                 continue
             vus.add((geste, cible))
@@ -434,15 +519,19 @@ def proposer(db, dossier, politiques, maintenant: datetime, protegees=(), seuils
             if _plafond_atteint(db, politiques, geste, maintenant):
                 ecartees["plafond"] = ecartees.get("plafond", 0) + 1
                 continue
+            mode = politiques.mode_de(geste)
+            if geste == "ban" and mode == "auto":
+                # gk2 impose sa durée de récidive à un ban d'adresse d'office : gk3 propose et affiche la même.
+                duree = duree_recidive(_bans_poses(db, "ban", cible))
             valeurs = {**valeurs, "duree_h": duree // 3600}
-            p = Proposition(str(uuid.uuid4()), dossier.id, geste, cible, duree, politiques.mode_de(geste),
-                            dossier.niveau, f"gestes.{geste}", MOTIFS[regle].format(**valeurs), "proposee", expire, h,
-                            regle, valeurs)
+            p = Proposition(str(uuid.uuid4()), dossier.id, geste, cible, duree, mode, dossier.niveau,
+                            f"gestes.{geste}", MOTIFS[regle].format(**valeurs), "proposee", expire, h, regle, valeurs,
+                            reference=reference)
             db.execute("INSERT INTO propositions(id, version, dossier_id, incident_id, analyse_id, geste, cible, "
-                       "duree_s, mode, niveau, politique, motif, etat, expire_le, cree_le, maj_le) "
-                       "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposee', ?, ?, ?)",
-                       (p.id, dossier.id, incident_id, analyse_id, geste, cible, duree, p.mode, p.niveau, p.politique,
-                        p.motif, expire, h, h))
+                       "duree_s, mode, niveau, reference, politique, motif, etat, expire_le, cree_le, maj_le) "
+                       "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposee', ?, ?, ?)",
+                       (p.id, dossier.id, incident_id, analyse_id, geste, cible, duree, mode, p.niveau, reference,
+                        p.politique, p.motif, expire, h, h))
             _audit(db, maintenant, p.id, _details(p), operation="riposte_proposition", resultat="admise",
                    limiter=False)
             admises.append(p)
@@ -460,4 +549,4 @@ def proposer(db, dossier, politiques, maintenant: datetime, protegees=(), seuils
 
 def _details(p: Proposition) -> dict:
     return {"id": p.id, "dossier": p.dossier_id, "geste": p.geste, "cible": p.cible, "duree_s": p.duree_s,
-            "mode": p.mode, "niveau": p.niveau, "politique": p.politique, "regle": p.regle}
+            "mode": p.mode, "niveau": p.niveau, "politique": p.politique, "regle": p.regle, "reference": p.reference}

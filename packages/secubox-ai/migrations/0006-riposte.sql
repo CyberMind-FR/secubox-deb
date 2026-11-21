@@ -26,6 +26,7 @@ CREATE TABLE propositions (
   duree_s INTEGER,
   mode TEXT NOT NULL CHECK (mode IN ('clic', 'auto')),
   niveau TEXT CHECK (niveau IN ('observer', 'contenir', 'usager')),
+  reference TEXT,                               -- action V2 visée (prolonger : id de la proposition du ban vivant)
   politique TEXT NOT NULL,                      -- clé de politiques.toml qui l'a admise
   motif TEXT NOT NULL,                          -- produit par le code, jamais par le modèle
   etat TEXT NOT NULL CHECK (etat IN ('proposee', 'approuvee', 'refusee', 'expiree', 'envoyee', 'faite',

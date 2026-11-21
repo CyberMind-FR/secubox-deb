@@ -107,11 +107,20 @@ des chiffres ; le texte du modèle n'entre ni dans un niveau, ni dans une propos
   geste défait). Seuils : `/etc/secubox/ai/riposte.toml`.
 - **Propositions** (table `propositions`, dossiers d'acteur seulement) : `contenir` → `ban` 24 h si l'adresse a des
   preuves de 2 sources ou 2 étapes, sinon `limiter` 6 h ; `usager` web seul → `leurre` 24 h ; `usager` autre → `ban`
-  96 h, `ban_bloc` 24 h si le cas sûr local est vrai (`veille/cas_sur.py`, mêmes `CATEGORIES_SURES` et `SEUIL_BLOC`
-  que gk2), `prolonger` 7 j sur retour après ban ; `usager` ajoute `partager` 7 j si campagne ou outil identifié
-  (≥ 2 traits). Une seule vivante par (geste, cible) ; jamais une cible protégée (non publique, box, `protegees`) ;
-  jamais de levée ; plafonds de la politique ; expiration `expiration_min`. Chaque proposition admise : une ligne
-  `audit_chaine` et une ligne `audit.log` (`ai-riposte-proposition`).
+  96 h (retour après la fin d'un ban : NOUVEAU ban, durée de récidive de gk2), `ban_bloc` 24 h si le cas sûr local
+  est vrai (`veille/cas_sur.py`, mêmes `CATEGORIES_SURES` et `SEUIL_BLOC` que gk2). Un ban d'adresse d'office porte
+  la durée que gk2 imposera (`duree_recidive` : 24 h × 4 par ban V2 précédent, 7 j au plus, relu dans `gestes_ia.py`).
+  Une seule vivante par (geste, cible) ; jamais une cible protégée (non publique, box, `protegees`) ; jamais de levée ;
+  plafonds de la politique ; expiration `expiration_min`. Chaque proposition admise : une ligne `audit_chaine` et une
+  ligne `audit.log` (`ai-riposte-proposition`).
+- **Compatibilité avec gk2** : une adresse **IPv6** n'est jamais bannie ni partagée (`/ai/ban` : IPv4 publique ou /24
+  exact) — `contenir` → `limiter` 6 h, `usager` → `leurre` si web seul, sinon `limiter` 24 h. Tant qu'un ban V2 de
+  l'adresse ou de son bloc est **en vol** (proposé, approuvé, envoyé) : rien de neuf, on attend. Un ban V2 **fait et
+  actif** : `prolonger` ce ban (fin de récidive, 7 j au plus, jamais plus courte ; colonne `reference` = proposition du
+  ban), jamais de `leurre` sur une adresse bannie ; `partager` (7 j, campagne ou outil ≥ 2 traits) n'est proposé
+  **qu'à ce moment-là**, jamais à côté d'un ban encore en vol ni pour une adresse servie par le leurre.
+- **Limites acceptées (V0)** : une proposition expirée n'est reproposée qu'avec de nouvelles preuves (le dossier doit
+  être recalculé) ; la redescente va directement à `observer` (pas de palier par palier).
 - **Politiques** : `/etc/secubox/ai/politiques.toml`, relu à chaque passe par double tampon (ombre, validation,
   bascule) ; fichier absent, invalide, lien ou inscriptible : la politique précédente reste, audit
   `politiques-invalides` une fois par contenu fautif ; sans politique valide depuis le démarrage : politique fermée.
