@@ -361,3 +361,4 @@ def test_service_ne_rend_pas_la_liste_a_secubox_waf():
     ligne = next(x for x in texte.splitlines() if x.startswith("ExecStartPre=") and "/var/lib/secubox/waf" in x
                  and "chown" in x)
     assert "! -name leurres-ip.json" in ligne and "-h" in ligne
+    assert "! -name '.leurres-ip.*'" in ligne                             # ni les fichiers temporaires de wafctl

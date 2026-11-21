@@ -77,6 +77,9 @@ type ThreatRecord struct {
 	// adresse redirigée vers le théâtre par le geste `leurre` ne doit nourrir
 	// ni score d'acteur ni mesure : ce n'est pas un signal d'attaque.
 	HorsActeur bool
+	// Servies (#3723) : requêtes servies par le leurre que la ligne représente (elle-même et celles qui n'ont pas
+	// été écrites depuis la précédente). La somme du champ compte les requêtes, pas le nombre de lignes.
+	Servies int64
 }
 
 // ThreatLog appends JSON threat records to a file, one per line.
@@ -210,6 +213,8 @@ type logEntry struct {
 	// #3257 — absents des lignes qui ne les portent pas.
 	Mode    string         `json:"mode,omitempty"`
 	Signals map[string]int `json:"signals,omitempty"`
+	// #3723 — lignes leurre_redirige : requêtes représentées par la ligne.
+	Servies int64 `json:"servies,omitempty"`
 }
 
 // Record appends one JSON line to the threat log for the given ThreatRecord.
@@ -269,6 +274,7 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 		MarqueRevenue: rec.MarqueRevenue,
 		Mode:          rec.Mode,
 		Signals:       rec.Signaux,
+		Servies:       rec.Servies,
 	}
 
 	if estAutoTest(rec.ClientIP, rec.UA) {

@@ -33,7 +33,9 @@ secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
     0644, 2 048 entrées au plus). sbxwaf (secubox-toolbox-ng 0.18.0) sert
     à ces adresses une scène du théâtre au lieu du vhost réel, journalisée
     en leurre_redirige, sans ban ni émission vers sbx-actord. L unité ne
-    rend plus cette liste à secubox-waf au démarrage (find ... ! -name).
+    rend plus cette liste ni ses fichiers temporaires à secubox-waf au
+    démarrage (find ... ! -name). Lignes leurre_redirige bornées par
+    adresse (6/min plus une par étape de scène), champ servies cumulable.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 11:16:06 +0100
 

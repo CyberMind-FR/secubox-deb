@@ -40,6 +40,12 @@ const (
 	leurresTailleMax  = 4 << 20
 	leurresMotifMax   = 64
 	categorieLeurreIP = "leurre_redirige"
+	// leurresLignesParMinute : lignes du journal des menaces par adresse leurrée et par minute, en plus d'une ligne
+	// par nouvelle étape de scène. Une adresse leurrée échappe aux compteurs de ban : sans borne, une seule à
+	// 500 req/s écrirait des dizaines de Gio par jour (gk2 : disque racine à 91 %).
+	leurresLignesParMinute = 6
+	leurresSuivisMax       = 4096
+	leurresInactif         = 10 * time.Minute
 )
 
 // leurreEntree : une adresse redirigée vers le théâtre jusqu'à `Fin` (epoch).
@@ -270,13 +276,18 @@ func (s *Server) servirLeurreIP(w http.ResponseWriter, r *http.Request, host, ci
 	var marques []string
 	servi := false
 	if s.leurreIP != nil {
-		servi, famille, alea, marques = s.leurreIP.Sert(w, r, host)
+		servi, famille, alea, marques = s.leurreIP.sert(w, r, host, false)
 	}
 	if !servi {
 		w.Header().Set("Allow", "GET, HEAD, POST")
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	}
-	if s.threatLog != nil {
+	ecrire, servies := s.journalLeurres.Note(cip, famille)
+	// Une marque revenue est le signal le plus fort du dispositif : toujours écrite.
+	if !ecrire && len(marques) > 0 {
+		ecrire, servies = true, s.journalLeurres.Solder(cip)
+	}
+	if ecrire && s.threatLog != nil {
 		s.threatLog.Record(ThreatRecord{
 			ClientIP:      cip,
 			Host:          host,
@@ -292,6 +303,158 @@ func (s *Server) servirLeurreIP(w http.ResponseWriter, r *http.Request, host, ci
 			Filigrane:     alea,
 			MarqueRevenue: marques,
 			HorsActeur:    true,
+			Servies:       servies,
 		})
 	}
+}
+
+// viderLeurres écrit, pour chaque adresse dont des requêtes servies n'ont pas été écrites, une ligne de solde (sans
+// chemin) qui porte leur nombre : la somme des champs `servies` reste exacte. Appelé chaque minute par main().
+func (s *Server) viderLeurres() {
+	for _, sol := range s.journalLeurres.Vider() {
+		if s.threatLog == nil {
+			continue
+		}
+		s.threatLog.Record(ThreatRecord{
+			ClientIP:   sol.ip,
+			Category:   categorieLeurreIP,
+			Severity:   "audit",
+			RuleID:     "ai-leurre",
+			Action:     categorieLeurreIP,
+			HorsActeur: true,
+			Servies:    sol.servies,
+		})
+	}
+}
+
+// compteLeurre : suivi d'une adresse leurrée pour borner ses lignes.
+type compteLeurre struct {
+	debut     time.Time // début de la fenêtre d'une minute
+	lignes    int       // lignes écrites dans la fenêtre
+	enAttente int64     // requêtes servies non encore portées par une ligne
+	total     int64     // requêtes servies depuis le démarrage
+	familles  map[familleSonde]bool
+	vu        time.Time
+}
+
+// JournalLeurres borne les lignes du journal des menaces par adresse leurrée (une par nouvelle étape de scène, plus
+// `leurresLignesParMinute` par minute) et garde des compteurs EXACTS en mémoire, par adresse et au total. Nil-safe :
+// sans lui, chaque requête est écrite avec `servies` 1.
+type JournalLeurres struct {
+	mu    sync.Mutex
+	parIP map[string]*compteLeurre
+	total int64
+	now   func() time.Time
+}
+
+func NewJournalLeurres() *JournalLeurres {
+	return &JournalLeurres{parIP: map[string]*compteLeurre{}, now: time.Now}
+}
+
+// Note compte une requête servie à `ip` ; rend (écrire une ligne ?, requêtes que cette ligne représente).
+func (j *JournalLeurres) Note(ip string, f familleSonde) (bool, int64) {
+	if j == nil {
+		return true, 1
+	}
+	t := j.now()
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	c := j.parIP[ip]
+	if c == nil {
+		if len(j.parIP) >= leurresSuivisMax {
+			j.purgerSansVerrou(t, true)
+		}
+		c = &compteLeurre{debut: t, familles: map[familleSonde]bool{}}
+		j.parIP[ip] = c
+	}
+	c.vu = t
+	c.total++
+	c.enAttente++
+	j.total++
+	if t.Sub(c.debut) >= time.Minute {
+		c.debut, c.lignes = t, 0
+	}
+	nouvelle := f != "" && !c.familles[f]
+	if !nouvelle && c.lignes >= leurresLignesParMinute {
+		return false, 0
+	}
+	if f != "" {
+		c.familles[f] = true
+	}
+	c.lignes++
+	n := c.enAttente
+	c.enAttente = 0
+	return true, n
+}
+
+// Solder rend et remet à zéro les requêtes en attente de `ip` (ligne écrite hors budget).
+func (j *JournalLeurres) Solder(ip string) int64 {
+	if j == nil {
+		return 1
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	c := j.parIP[ip]
+	if c == nil {
+		return 0
+	}
+	n := c.enAttente
+	c.enAttente = 0
+	return n
+}
+
+type soldeLeurre struct {
+	ip      string
+	servies int64
+}
+
+// Vider rend les soldes en attente (et les remet à zéro), puis oublie les adresses inactives depuis 10 min.
+func (j *JournalLeurres) Vider() []soldeLeurre {
+	if j == nil {
+		return nil
+	}
+	t := j.now()
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	var soldes []soldeLeurre
+	for ip, c := range j.parIP {
+		if c.enAttente > 0 {
+			soldes = append(soldes, soldeLeurre{ip, c.enAttente})
+			c.enAttente = 0
+		}
+	}
+	j.purgerSansVerrou(t, false)
+	return soldes
+}
+
+// purgerSansVerrou oublie les adresses sans attente inactives depuis `leurresInactif` (toutes celles sans attente si
+// `plein`) : la table reste bornée, et aucune requête servie n'est perdue du décompte écrit.
+func (j *JournalLeurres) purgerSansVerrou(t time.Time, plein bool) {
+	for ip, c := range j.parIP {
+		if c.enAttente == 0 && (plein || t.Sub(c.vu) >= leurresInactif) {
+			delete(j.parIP, ip)
+		}
+	}
+}
+
+// Servies : requêtes servies à `ip` depuis le démarrage (tant qu'elle est suivie). Total : toutes adresses.
+func (j *JournalLeurres) Servies(ip string) int64 {
+	if j == nil {
+		return 0
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if c := j.parIP[ip]; c != nil {
+		return c.total
+	}
+	return 0
+}
+
+func (j *JournalLeurres) Total() int64 {
+	if j == nil {
+		return 0
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return j.total
 }

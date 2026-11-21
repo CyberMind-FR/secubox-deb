@@ -360,3 +360,117 @@ func TestLeurresHoteNonRouteAussi(t *testing.T) {
 		t.Fatal("hôte non routé d'une adresse leurrée : ni anomalie ni ban")
 	}
 }
+
+// lignesLeurre : les lignes leurre_redirige du journal des menaces, et la somme de leur champ `servies`.
+func lignesLeurre(t *testing.T, chemin string) (int, int64) {
+	t.Helper()
+	f, err := os.Open(chemin)
+	if os.IsNotExist(err) {
+		return 0, 0
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	n, somme := 0, int64(0)
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		var e struct {
+			Category string `json:"category"`
+			Servies  int64  `json:"servies"`
+		}
+		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
+			t.Fatal(err)
+		}
+		if e.Category == "leurre_redirige" {
+			n++
+			somme += e.Servies
+		}
+	}
+	return n, somme
+}
+
+func TestLeurresJournalBorneParAdresse(t *testing.T) {
+	chemin := filepath.Join(t.TempDir(), "leurres-ip.json")
+	ecrireListe(t, chemin, leurresJSON(map[string]int64{
+		"203.0.113.7": time.Now().Add(time.Hour).Unix(),
+		"203.0.113.8": time.Now().Add(time.Hour).Unix(),
+	}), 0o644)
+	srv, appels, journalMenaces := serveurLeurreTest(t, chemin)
+	var semis int64
+	srv.leurreIP = NewLeurreHTTP(true, nil, func(string, string, familleSonde, string) { atomic.AddInt64(&semis, 1) })
+	srv.journalLeurres = NewJournalLeurres()
+	h := srv.handler()
+	chemins := []string{"/", "/.env", "/.git/HEAD", "/wp-login.php"} // 4 étapes de scène distinctes
+	familles := map[familleSonde]bool{}
+	for _, c := range chemins {
+		familles[classeSonde(c)] = true
+	}
+	for i := 0; i < 1000; i++ {
+		c := chemins[i%len(chemins)]
+		req := httptest.NewRequest(http.MethodGet, "http://vrai.example"+c, nil)
+		req.Host = "vrai.example"
+		req.RemoteAddr = "203.0.113.7:5555"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("requête %d : %d", i, rec.Code)
+		}
+	}
+	lignes, somme := lignesLeurre(t, journalMenaces)
+	if borne := leurresLignesParMinute + len(familles); lignes > borne || lignes == 0 {
+		t.Fatalf("%d lignes pour 1000 requêtes, %d au plus", lignes, borne)
+	}
+	if semis != 0 {
+		t.Fatalf("journal du semis appelé %d fois : la ligne du fichier porte déjà le filigrane", semis)
+	}
+	if srv.journalLeurres.Servies("203.0.113.7") != 1000 || srv.journalLeurres.Total() != 1000 {
+		t.Fatalf("compteur exact attendu : %d / %d", srv.journalLeurres.Servies("203.0.113.7"), srv.journalLeurres.Total())
+	}
+	// les requêtes non écrites sont reportées : la vidange périodique solde le reste
+	srv.viderLeurres()
+	lignes2, somme := lignesLeurre(t, journalMenaces)
+	if somme != 1000 {
+		t.Fatalf("somme des champs servies %d, veut 1000", somme)
+	}
+	if lignes2 > lignes+1 {
+		t.Fatalf("une ligne de solde au plus par adresse : %d puis %d", lignes, lignes2)
+	}
+	srv.viderLeurres() // rien en attente : rien d'écrit
+	if l3, _ := lignesLeurre(t, journalMenaces); l3 != lignes2 {
+		t.Fatalf("vidange sans attente : %d lignes, veut %d", l3, lignes2)
+	}
+	if atomic.LoadInt64(appels) != 0 {
+		t.Fatal("jamais le vrai service")
+	}
+}
+
+func TestLeurresJournalFenetreParMinute(t *testing.T) {
+	j := NewJournalLeurres()
+	horloge := time.Unix(1800000000, 0)
+	j.now = func() time.Time { return horloge }
+	emises := 0
+	var somme int64
+	for i := 0; i < 100; i++ {
+		if ok, n := j.Note("203.0.113.7", sondeRacine); ok {
+			emises++
+			somme += n
+		}
+	}
+	if emises != leurresLignesParMinute {
+		t.Fatalf("%d lignes dans la minute, veut %d", emises, leurresLignesParMinute)
+	}
+	horloge = horloge.Add(61 * time.Second)
+	ok, n := j.Note("203.0.113.7", sondeRacine)
+	if !ok || somme+n != 101 {
+		t.Fatalf("nouvelle minute : une ligne qui porte le reliquat (somme %d)", somme+n)
+	}
+	// une autre adresse a son propre budget
+	if ok, _ := j.Note("203.0.113.8", sondeRacine); !ok {
+		t.Fatal("budget par adresse")
+	}
+	var nilJ *JournalLeurres
+	if ok, n := nilJ.Note("203.0.113.7", sondeRacine); !ok || n != 1 {
+		t.Fatal("nil : chaque requête écrite, servies 1")
+	}
+}

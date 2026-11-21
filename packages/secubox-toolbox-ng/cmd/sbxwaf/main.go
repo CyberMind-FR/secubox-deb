@@ -156,8 +156,9 @@ type Server struct {
 	// leurresIP : adresses redirigées vers le théâtre par le geste `leurre`
 	// de SecuBox AI (#3723), et le leurre qui leur répond (toujours armé).
 	// Nil = désactivé.
-	leurresIP *ListeLeurres
-	leurreIP  *LeurreHTTP
+	leurresIP      *ListeLeurres
+	leurreIP       *LeurreHTTP
+	journalLeurres *JournalLeurres
 
 	// nftBan est le ban nft NATIF (#1070, phase B) — set nft à timeout géré par
 	// le WAF lui-même. Nil = backend désactivé (nft
@@ -1609,6 +1610,15 @@ func main() {
 	srv.leurre.surTouche = func(ip string, f familleSonde) { srv.banLeurre(ip, "appat", "medium", 0) }
 	// #3723 : le leurre des adresses leurrées sert toujours (le geste vaut décision), --honeypot ou non.
 	srv.leurreIP = leurrePourIP(srv.leurre, *honeypotSecret)
+	if srv.leurresIP != nil {
+		// Lignes leurre_redirige bornées par adresse ; le reliquat est soldé chaque minute (somme de `servies` exacte).
+		srv.journalLeurres = NewJournalLeurres()
+		go func() {
+			for range time.Tick(time.Minute) {
+				srv.viderLeurres()
+			}
+		}()
+	}
 	log.Printf("sbxwaf: ban window=300s threshold=3; threat-log=%s", *threatLog)
 	log.Printf("sbxwaf: body-inspect cap=%d bytes; trusted-skip hosts=%d; body-skip hosts=%d",
 		*maxBodyInspectFlag, len(srv.trustedHosts), len(srv.skipBodyHosts))

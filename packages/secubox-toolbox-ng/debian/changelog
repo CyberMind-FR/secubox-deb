@@ -8,6 +8,10 @@ secubox-toolbox-ng (0.18.0-1~trixie1) trixie; urgency=medium
     réel, quel que soit l hôte. Ligne leurre_redirige (gravité audit) au
     journal des menaces, sans émission vers sbx-actord : ni ban, ni
     compteur d escalade, ni anomalie d hôte.
+    Journal borné par adresse leurrée : une ligne par nouvelle étape de
+    scène plus 6 par minute ; champ servies (requêtes représentées) et
+    solde chaque minute, somme exacte ; plus de journal du semis pour ces
+    requêtes (la ligne porte le filigrane).
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 12:30:00 +0100
 

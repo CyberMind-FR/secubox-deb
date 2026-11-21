@@ -138,6 +138,12 @@ func NewLeurreHTTP(actif bool, fil *Filigrane,
 // n'entendraient jamais parler — c'est-à-dire perdre le signal le plus fort du
 // dispositif au moment précis où il se produit.
 func (l *LeurreHTTP) Sert(w http.ResponseWriter, r *http.Request, hote string) (bool, familleSonde, string, []string) {
+	return l.sert(w, r, hote, true)
+}
+
+// sert : `journaliser=false` quand l'appelant écrit lui-même le filigrane (#3723, adresses leurrées : la ligne du
+// journal des menaces le porte, bornée par adresse ; le journal du semis, lui, ne l'était pas).
+func (l *LeurreHTTP) sert(w http.ResponseWriter, r *http.Request, hote string, journaliser bool) (bool, familleSonde, string, []string) {
 	if l == nil || !l.actif {
 		return false, "", "", nil
 	}
@@ -198,7 +204,7 @@ func (l *LeurreHTTP) Sert(w http.ResponseWriter, r *http.Request, hote string) (
 		_, _ = w.Write([]byte(corps))
 	}
 
-	if l.journal != nil {
+	if journaliser && l.journal != nil {
 		l.journal(hote, r.URL.Path, famille, alea)
 	}
 	_ = etape
