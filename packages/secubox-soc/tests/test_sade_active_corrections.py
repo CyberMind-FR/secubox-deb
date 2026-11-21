@@ -78,7 +78,7 @@ def test_pairs_threatmesh_toujours_fusionnes(actif, tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("stderr,definitif", [
     ("refus:privee\n", True), ("refus:protegee\n", True), ("refus:box\n", True), ("refus:pair\n", True),
-    ("refus:invalide\n", True),
+    ("refus:invalide\n", True), ("refus:lan\n", True),          # lan : préfixe on-link de la box (#3723 I3)
     ("[2026-11-20 15:00:00] ERROR: Adresse privée refusée : 10.0.0.1\n", True),
     ("[2026-11-20 15:00:00] ERROR: Adresse invalide : x\n", True),
     ("refus:garde_illisible\n", False),

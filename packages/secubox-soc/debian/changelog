@@ -32,6 +32,8 @@ secubox-soc (1.12.0-1~trixie1) trixie; urgency=medium
   * Page : étiquette V2 4-7 retirée, critère mesuré sur chaque carte ;
     AGGRESSIVE reste fermé, titre « seuils abaissés, réservé au banc —
     ouverture sur accord du propriétaire ».
+  * Revue finale #3723 : `refus:lan` de wafctl (préfixe on-link de la box)
+    est un verdict de garde définitif pour l'exécuteur automatique.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 14:29:39 +0100
 

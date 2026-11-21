@@ -42,7 +42,7 @@ WG = "/usr/bin/wg"
 
 CODES = {None: 0, "invalide": 1, "privee": 2, "protegee": 3,
          "box": 4, "pair": 5, "garde_illisible": 6, "nft": 7, "duree": 8,
-         "etat": 9, "audit": 10, "incoherent": 11, "usage": 64}
+         "etat": 9, "audit": 10, "incoherent": 11, "lan": 12, "usage": 64}
 
 # IPv6 qui encapsulent ou traduisent de l'IPv4 : refusées, sbxwaf les traiterait en IPv4.
 # 6to4, NAT64 bien connu, NAT64 d'usage local (RFC 8215), SIIT « IPv4-translated » (RFC 2765).
@@ -182,21 +182,35 @@ def lire_protegees(chemin, exiger=False):
     return reseaux
 
 
-def adresses_locales(executer):
-    """Adresses de la box d'après `ip -j addr` ; échec => GardeIllisible."""
+def adresses_et_prefixes(executer):
+    """(adresses de la box, préfixes globaux on-link) d'après `ip -j addr` ; échec => GardeIllisible. Un préfixe
+    on-link (`local`/`prefixlen` de portée `global`, revue finale #3723 I3) est le LAN de la box — en IPv6 surtout :
+    ses machines y ont des adresses publiques ; jamais visé (motif `lan`). Lien local et hôte : non (privée déjà)."""
     try:
         donnees = json.loads(executer([IP, "-j", "addr"]))
-        adresses = set()
+        adresses, prefixes = set(), []
         for interface in donnees:
             for info in interface.get("addr_info", []):
                 local = info.get("local")
-                if local:
-                    adresses.add(_depli(ipaddress.ip_address(local.split("%")[0])))
+                if not local:
+                    continue
+                adresse = _depli(ipaddress.ip_address(local.split("%")[0]))
+                adresses.add(adresse)
+                longueur = info.get("prefixlen")
+                if info.get("scope") == "global" and type(longueur) is int and longueur < adresse.max_prefixlen:
+                    reseau = ipaddress.ip_network(f"{adresse}/{longueur}", strict=False)
+                    if reseau not in prefixes:
+                        prefixes.append(reseau)
         if not adresses:
             raise ValueError("aucune adresse : la sortie est inutilisable")
-        return adresses
+        return adresses, prefixes
     except Exception as e:  # toute défaillance : la garde est aveugle
         raise GardeIllisible(f"adresses locales illisibles : {e}") from e
+
+
+def adresses_locales(executer):
+    """Adresses de la box d'après `ip -j addr` ; échec => GardeIllisible."""
+    return adresses_et_prefixes(executer)[0]
 
 
 def _hote_endpoint(endpoint):
@@ -242,24 +256,29 @@ def adresses_pairs(executer):
     return pairs
 
 
-def motif_refus(cible, protegees, locales, pairs):
-    """"privee" | "protegee" | "box" | "pair" | None, dans cet ordre."""
+def motif_refus(cible, protegees, locales, pairs, prefixes=()):
+    """"privee" | "protegee" | "box" | "lan" | "pair" | None, dans cet ordre (`prefixes` : réseaux on-link de la
+    box, `adresses_et_prefixes`)."""
     if any(_recoupe(cible, r) for r in INTERDITS):
         return "privee"
     if any(_recoupe(cible, r) for r in protegees):
         return "protegee"
     if any(_contient(cible, a) for a in locales):
         return "box"
+    if any(_recoupe(cible, r) for r in prefixes):
+        return "lan"
     if any(_contient(cible, a) for a in pairs):
         return "pair"
     return None
 
 
 def _gardes(cible, lancer, exiger=False):
-    """Les trois listes de protection, relues à chaque appel ; GardeIllisible si l'une manque. Un bloc, ou une
-    adresse bannie d'office (`exiger`, #3723), exige `protegees.env` et sa ligne SECUBOX_WAF_PROTEGEES."""
+    """Les listes de protection (protégées, adresses de la box, pairs, préfixes on-link), relues à chaque appel, dans
+    l'ordre des arguments de `motif_refus` ; GardeIllisible si l'une manque. Un bloc, ou une adresse bannie d'office
+    (`exiger`, #3723), exige `protegees.env` et sa ligne SECUBOX_WAF_PROTEGEES."""
     bloc = isinstance(cible, ipaddress.IPv4Network)
-    return lire_protegees(PROTEGEES_ENV, exiger=bloc or exiger), adresses_locales(lancer), adresses_pairs(lancer)
+    locales, prefixes = adresses_et_prefixes(lancer)
+    return lire_protegees(PROTEGEES_ENV, exiger=bloc or exiger), locales, adresses_pairs(lancer), prefixes
 
 
 def verifier(texte, exiger=False):

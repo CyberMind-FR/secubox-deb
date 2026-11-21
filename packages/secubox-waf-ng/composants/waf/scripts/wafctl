@@ -580,6 +580,48 @@ _secondes() {
     esac
 }
 
+# _reste_element <table> <ensemble> <ip> — secondes restantes d'un élément nft (revue finale #3723 I4) : un entier,
+# « inf » (élément sans délai), « absent » (nft get en échec : l'élément n'y est pas), ou rend 2 si la réponse de nft
+# est illisible (jamais « absent » par défaut d'une réponse lue).
+_reste_element() {
+    local sortie
+    sortie=$(nft -j get element inet "$1" "$2" "{ $3 }" 2>/dev/null) || { echo absent; return 0; }
+    printf '%s' "$sortie" | python3 -I -c '
+import json, sys
+ip = sys.argv[1]
+try:
+    doc = json.load(sys.stdin)
+    for it in doc["nftables"]:
+        ens = it.get("set") if isinstance(it, dict) else None
+        if not isinstance(ens, dict):
+            continue
+        for el in ens.get("elem") or []:
+            if el == ip:
+                print("inf")
+                sys.exit(0)
+            e = el.get("elem") if isinstance(el, dict) else None
+            if isinstance(e, dict) and e.get("val") == ip:
+                r = e.get("expires", e.get("timeout"))
+                print(int(r) if isinstance(r, int) and not isinstance(r, bool) else "inf")
+                sys.exit(0)
+    print("absent")
+except Exception:
+    sys.exit(2)
+' "$3"
+}
+
+# _fin_couverte <reste> <fin_max> — vrai (0) si la fin réelle (maintenant + reste) dépasse `fin_max` de plus de
+# MARGE_COUVERT_S : un autre (SADE, l'administrateur) a allongé le geste depuis ai-ban, qui ne le lève pas.
+MARGE_COUVERT_S=60
+_fin_couverte() {
+    [ "$1" = "absent" ] && return 1
+    [ "$1" = "inf" ] && return 0
+    [ $(( $(date +%s) + $1 )) -gt $(( $2 + MARGE_COUVERT_S )) ]
+}
+
+# _fin_max_valide <texte> — une fin epoch (10 chiffres au plus), argument optionnel des levées d'ai-ban.
+_fin_max_valide() { [[ "$1" =~ ^[0-9]{1,10}$ ]]; }
+
 # _garde <cible> — `waf-blocs verifier` en root (#3716) : jamais le privé, une
 # plage protégée, une adresse de la box ni un pair WireGuard, pour TOUT ban.
 # Toute sortie non nulle refuse, y compris un script absent ou une réponse
@@ -615,8 +657,24 @@ cmd_ban() {
         error "Durée invalide : $duree (attendu 30m, 4h, 1d…)"
         return 1
     fi
-    local ensemble="waf_ban"
+    local ensemble="waf_ban" reste
     [ "$version" = "6" ] && ensemble="waf_ban6"
+    # Revue finale #3723 I4 : jamais une fin raccourcie. Déjà banni plus longtemps (SADE, WAF, administrateur) : rien
+    # n'est touché ; plus court : retrait + ajout en UNE transaction (jamais un instant libre) ; état illisible : `add`
+    # seul (sans effet sur un élément présent, donc sans raccourcir).
+    reste=$(_reste_element "$NFT_TABLE" "$ensemble" "$ip") || reste="inconnu"
+    if [ "$reste" = "inf" ] || { [[ "$reste" =~ ^[0-9]+$ ]] && [ "$reste" -ge "$secondes" ]; }; then
+        log "ban $ip : déjà dans $ensemble pour plus longtemps (${reste}), rien n'est raccourci"
+        return 0
+    fi
+    if [[ "$reste" =~ ^[0-9]+$ ]]; then
+        if _lot_prolonger "$ip" "$ensemble" "$secondes" | nft -f - 2>/dev/null; then
+            log "ban $ip → $ensemble (${secondes}s, allongé)"
+            return 0
+        fi
+        error "nft a refusé le bannissement de $ip"
+        return 1
+    fi
     if nft add element inet "$NFT_TABLE" "$ensemble" "{ $ip timeout ${secondes}s }" 2>/dev/null; then
         log "ban $ip → $ensemble (${secondes}s)"
     else
@@ -644,9 +702,16 @@ cmd_prolonger() {
         error "Durée invalide : $duree"
         return 1
     fi
-    if ! nft get element inet "$NFT_TABLE" waf_ban "{ $ip }" >/dev/null 2>&1; then
+    local reste
+    reste=$(_reste_element "$NFT_TABLE" waf_ban "$ip") || reste="inconnu"
+    if [ "$reste" = "absent" ]; then
         printf 'refus:absent\n' >&2
         return 1
+    fi
+    # I4 : la fin la plus tardive est gardée (une prolongation plus longue d'un autre n'est jamais raccourcie)
+    [ "$reste" = "inf" ] && { log "prolonger $ip : ban sans délai, rien à faire"; return 0; }
+    if [[ "$reste" =~ ^[0-9]+$ ]] && [ "$reste" -gt "$secondes" ]; then
+        secondes="$reste"
     fi
     if _lot_prolonger "$ip" waf_ban "$secondes" | nft -f - 2>/dev/null; then
         log "prolonger $ip → waf_ban (${secondes}s)"
@@ -681,19 +746,37 @@ cmd_limiter() {
     _garde "$ip" --exiger || return 1
     version=$(_valide_ip "$ip") || { printf 'refus:privee\n' >&2; return 1; }
     ensemble="limite_ia_v$version"
-    if _lot_limiter "$ip" "$ensemble" "$secondes" | nft -f - 2>/dev/null; then
-        printf '{"fin": %s}\n' "$(( $(date +%s) + secondes ))"
+    # I4 : une limite plus longue posée par un autre (SADE) est gardée ; `fin` = la fin réelle, `demandee` = la sienne
+    local reste demandee effectif
+    demandee=$(( $(date +%s) + secondes ))
+    effectif="$secondes"
+    reste=$(_reste_element "$NFT_TABLE_DEBIT" "$ensemble" "$ip") || reste="inconnu"
+    if [[ "$reste" =~ ^[0-9]+$ ]] && [ "$reste" -gt "$secondes" ]; then
+        effectif="$reste"
+    fi
+    if _lot_limiter "$ip" "$ensemble" "$effectif" | nft -f - 2>/dev/null; then
+        printf '{"fin": %s, "demandee": %s}\n' "$(( $(date +%s) + effectif ))" "$demandee"
     else
         printf 'refus:nft\n' >&2
         return 1
     fi
 }
 
+# `limiter-lever <ip> <fin_max>` (I4) : la limite n'est levée que si sa fin réelle ne dépasse pas `fin_max` (la fin
+# posée par ai-ban) ; sinon `refus:couvert` (allongée par un autre) ; état illisible : `refus:etat`.
 cmd_limiter_lever() {
-    [ "$#" -eq 1 ] || { error "Usage : wafctl limiter-lever <ip>"; return 1; }
-    local ip="$1" version ensemble
+    { [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && _fin_max_valide "$2"; }; } || {
+        error "Usage : wafctl limiter-lever <ip> [fin_max]"; return 1; }
+    local ip="$1" version ensemble reste
     version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
     ensemble="limite_ia_v$version"
+    if [ "$#" -eq 2 ]; then
+        reste=$(_reste_element "$NFT_TABLE_DEBIT" "$ensemble" "$ip") || { printf 'refus:etat\n' >&2; return 1; }
+        if _fin_couverte "$reste" "$2"; then
+            printf 'refus:couvert\n' >&2
+            return 1
+        fi
+    fi
     # Absente : déjà levée (comme cmd_unban), l'échec n'en est un que si l'élément est toujours là.
     if ! nft delete element inet "$NFT_TABLE_DEBIT" "$ensemble" "{ $ip }" 2>/dev/null; then
         if nft get element inet "$NFT_TABLE_DEBIT" "$ensemble" "{ $ip }" >/dev/null 2>&1; then
@@ -717,9 +800,10 @@ LEURRE_MAX_S=604800
 LEURRES_MAX=2048
 
 _leurres_ecrire() {
-    python3 -I - "$1" "$LEURRES_IP" "$2" "${3:-0}" "$LEURRES_MAX" <<'PY'
+    python3 -I - "$1" "$LEURRES_IP" "$2" "${3:-0}" "$LEURRES_MAX" "${4:-}" "${MARGE_COUVERT_S}" <<'PY'
 import fcntl, ipaddress, json, os, stat, sys, tempfile, time
 verbe, chemin, ip, secondes, maxi = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
+fin_max, marge = (int(sys.argv[6]) if sys.argv[6] else None), int(sys.argv[7])
 def refus(motif):
     print(f"refus:{motif}", file=sys.stderr)
     sys.exit(1)
@@ -756,14 +840,19 @@ if fd is not None:
                     entrees[k] = {"fin": fin, "motif": str(v.get("motif") or "")[:64]}
         else:
             print("wafctl: liste des leurres illisible ou douteuse, remplacée", file=sys.stderr)
-fin = None
+fin = demandee = None
 if verbe == "poser":
     if ip not in entrees and len(entrees) >= maxi:
         refus("plein")
-    fin = maintenant + secondes
-    entrees.pop(ip, None)
-    entrees[ip] = {"fin": fin, "motif": "ai-leurre"}
+    # revue finale I4 : la fin la plus tardive est gardée (un leurre plus long d'un autre n'est jamais raccourci)
+    demandee = maintenant + secondes
+    ancienne = entrees.pop(ip, None)
+    fin = max(demandee, ancienne["fin"]) if ancienne else demandee
+    entrees[ip] = {"fin": fin, "motif": (ancienne or {}).get("motif") or "ai-leurre"}
 else:
+    # levée d'ai-ban avec sa fin (I4) : un leurre allongé par un autre depuis n'est pas levé
+    if fin_max is not None and ip in entrees and entrees[ip]["fin"] > fin_max + marge:
+        refus("couvert")
     entrees.pop(ip, None)
 tmp = None
 try:
@@ -786,7 +875,7 @@ except OSError as e:
     print(f"wafctl: écriture de la liste des leurres impossible : {e}", file=sys.stderr)
     refus("etat")
 if fin is not None:
-    print(json.dumps({"fin": fin}))
+    print(json.dumps({"fin": fin, "demandee": demandee}))
 PY
 }
 
@@ -803,10 +892,11 @@ cmd_leurre() {
 }
 
 cmd_leurre_lever() {
-    [ "$#" -eq 1 ] || { error "Usage : wafctl leurre-lever <ip>"; return 1; }
+    { [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && _fin_max_valide "$2"; }; } || {
+        error "Usage : wafctl leurre-lever <ip> [fin_max]"; return 1; }
     local ip="$1"
     _valide_ip "$ip" >/dev/null || { error "Adresse invalide ou privée : $ip"; return 1; }
-    _leurres_ecrire lever "$ip" || return 1
+    _leurres_ecrire lever "$ip" 0 "${2:-}" || return 1
     log "leurre-lever $ip"
 }
 
@@ -954,11 +1044,21 @@ cmd_indices_init() {
     _indices_ecrire init
 }
 
+# `unban <ip> [fin_max]` : avec `fin_max` (levée d'ai-ban, revue finale #3723 I4), le ban n'est levé que si sa fin
+# réelle ne la dépasse pas (`refus:couvert` sinon : prolongé par SADE ou un autre) ; état illisible : `refus:etat`.
 cmd_unban() {
-    local ip="$1" version
+    local ip="$1" fin_max="${2:-}" version reste
     version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
     local ensemble="waf_ban"
     [ "$version" = "6" ] && ensemble="waf_ban6"
+    if [ -n "$fin_max" ]; then
+        _fin_max_valide "$fin_max" || { error "Usage : wafctl unban <ip> [fin_max]"; return 1; }
+        reste=$(_reste_element "$NFT_TABLE" "$ensemble" "$ip") || { printf 'refus:etat\n' >&2; return 1; }
+        if _fin_couverte "$reste" "$fin_max"; then
+            printf 'refus:couvert\n' >&2
+            return 1
+        fi
+    fi
     # Retirer une adresse absente n'est pas une erreur : l'operateur veut
     # qu'elle ne soit plus bannie, et c'est deja le cas. Sous `set -e`, un
     # `nft delete` nu d'un element absent sortait en 1 AVANT ce constat (#3716) :
@@ -1229,7 +1329,8 @@ case "${1:-}" in
     indice-retirer) shift; cmd_indice_retirer "$@" ;;
     indice-revu) shift; cmd_indice_revu "$@" ;;
     indices-init) shift; cmd_indices_init "$@" ;;
-    unban)      cmd_unban "${2:-}" ;;
+    unban)      [ "$#" -le 3 ] || { error "Usage : wafctl unban <ip> [fin_max]"; exit 1; }
+                cmd_unban "${2:-}" "${3:-}" ;;
     ban-bloc)   shift; cmd_ban_bloc "$@" ;;
     unban-bloc) shift; cmd_unban_bloc "$@" ;;
     blocs)      shift; cmd_blocs "$@" ;;

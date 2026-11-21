@@ -49,7 +49,7 @@ def g(gk2_simule):  # noqa: F811
 
 def _partager(g: Gk2, cible=IP4, duree_s=604800, famille="scanners", **extra):
     return g.c.post("/ai/partager", json={"geste": "partager", "cible": cible, "duree_s": duree_s, "conseil": "c-5",
-                                          "famille": famille, **extra})
+                                          "famille": famille, "mode": "auto", **extra})
 
 
 def _appel(g, verbe):
@@ -563,6 +563,8 @@ def test_pair_audit_impossible(pair, monkeypatch):
     monkeypatch.setattr(pair.ii, "_auditer", apres)
     assert pair.ii.passe(now + 1)["bannis"] == 0
     assert pair.bannis() == [IP4] and "unban" in pair.faux.verbes()     # un ban non audité est retiré
+    retrait = [x for x in pair.faux.appels if "unban" in x][-1]
+    assert retrait[-2] == IP4 and int(retrait[-1]) >= int(time.time()) + 86400 - 5   # sa fin, au plus (I4)
 
 
 def test_indices_etat_resume(pair, monkeypatch):

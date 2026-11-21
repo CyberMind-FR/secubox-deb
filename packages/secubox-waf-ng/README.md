@@ -136,22 +136,33 @@ Jeton absent, invalide, échu ou rejoué : 401 ; audience d'une autre box, sujet
 | Route | Corps | Réponse |
 |---|---|---|
 | `POST /ai/ban` | `{"geste": "ban", "cible": "198.51.100.7" ou "203.0.113.0/24", "duree_s": 3600…604800, "mode": "clic"\|"auto", "conseil": "<id>", "motif": "<200 car.>"}` | 200 `{id, cible, fin, duree_s, audit}` |
-| `POST /ai/prolonger` | `{"geste": "prolonger", "id": "<32 hex>", "duree_s": <s>, "conseil": "<id>", "motif": "<200 car.>"}` (#3723, 1.43.0) | 200 `{id, cible, fin, audit}` |
-| `POST /ai/limiter` | `{"geste": "limiter", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…86400, "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
-| `POST /ai/leurre` | `{"geste": "leurre", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…604800, "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
-| `POST /ai/partager` | `{"geste": "partager", "cible": "<IPv4 ou IPv6 publique BANNIE>", "duree_s": 3600…604800, "conseil": "<id>", "famille": "<[a-z0-9_-], 64 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
-| `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` |
-| `POST /ai/lever` | `{"geste": "lever", "cible_geste": "limiter"\|"leurre", "id": "<32 hex>"}` (#3724 : seulement une entrée ai-ban du type annoncé ; 30/h, 100/j ; audit `ai-lever-demande` puis `ai-lever`) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule` ; 404 `inconnu` ; 409 `geste`, `plafond_heure`, `plafond_jour` |
+| `POST /ai/prolonger` | `{"geste": "prolonger", "id": "<32 hex>", "duree_s": <s>, "mode": "auto"\|"clic", "conseil": "<id>", "motif": "<200 car.>"}` (#3723, 1.43.0) | 200 `{id, cible, fin, audit}` |
+| `POST /ai/limiter` | `{"geste": "limiter", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…86400, "mode": "auto"\|"clic", "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
+| `POST /ai/leurre` | `{"geste": "leurre", "cible": "<IPv4 ou IPv6 publique>", "duree_s": 3600…604800, "mode": "auto"\|"clic", "conseil": "<id>", "motif": "<200 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
+| `POST /ai/partager` | `{"geste": "partager", "cible": "<IPv4 ou IPv6 publique BANNIE>", "duree_s": 3600…604800, "mode": "auto"\|"clic", "conseil": "<id>", "famille": "<[a-z0-9_-], 64 car.>"}` (#3723) | 200 `{id, cible, fin, audit}` |
+| `POST /ai/unban` | `{"geste": "unban", "id": "<32 hex>"}` (un id du journal, jamais une adresse ; 30/h, 100/j) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule`, `couvert` ; 404 `inconnu` ; 409 `couvert` (allongé par SADE depuis), `plafond_heure`, `plafond_jour` |
+| `POST /ai/lever` | `{"geste": "lever", "cible_geste": "limiter"\|"leurre", "id": "<32 hex>"}` (#3724 : seulement une entrée ai-ban du type annoncé ; 30/h, 100/j ; audit `ai-lever-demande` puis `ai-lever`) | 200 `{id, etat}`, `etat` ∈ `annule`, `echu`, `deja_annule` ; 404 `inconnu` ; 409 `geste`, `couvert`, `plafond_heure`, `plafond_jour` |
 | `GET /ai/etat` | aucun | 200 `{actifs, compteurs, plafonds, plafonds_par_geste, sade_mode}` |
+
+**Jamais d'écrasement (revue finale #3723 I4).** `wafctl ban`, `prolonger`, `limiter` et `leurre` gardent la fin la plus
+tardive d'un élément déjà posé (SADE, WAF, administrateur) ; `limiter` et `leurre` rendent `{"fin", "demandee"}` et le
+journal ai-ban retient `demandee` (la sienne). `wafctl unban|limiter-lever|leurre-lever <ip> <fin_max>` ne lève que si
+la fin réelle ne dépasse pas `fin_max` de plus de 60 s (`refus:couvert` sinon, `refus:etat` si nft est illisible) ;
+ai-ban passe sa fin à chaque levée et à chaque retour arrière. La garde root de waf-blocs refuse aussi les préfixes
+globaux on-link de la box (`ip -j addr`, portée globale : motif `lan`, code 12, I3). Un ban par clic passe la garde des
+pairs du maillage (M1) ; `non_vue` est tranché avant toute requête DNS (M5).
 
 **Gestes d'office du compte `ai-ban` (#3723, 1.43.0).** Le journal `/var/lib/secubox/waf/ai-ban.jsonl` porte un champ
 `geste` par ligne (`ban`, `ban_bloc`, `prolonger`, `unban`) ; une ligne d'avant 1.43.0 sans lui est classée par la
 forme de sa cible.
 
-- **Porte du mode SADE**, avant tout autre contrôle d'un geste d'office (`mode = "auto"`, et `prolonger`) : gk2 lit
-  `/run/secubox/sade-mode.json`, publié par secubox-soc (`{"mode", "depuis", "liste_blanche"}`), jamais la base du SOC.
-  Fichier absent : aucune porte. `observe` : 409 `sade_observe` ; `reactive` : seul `limiter` passe, 409
-  `sade_reactive` sinon ; `active` / `aggressive` : ouverte. `depuis` est l'instant de la PUBLICATION (l'API SOC
+- **Porte du mode SADE**, avant tout autre contrôle de tout geste posé (ban, prolonger, limiter, leurre, partager ;
+  chaque corps porte `mode`) : gk2 lit `/run/secubox/sade-mode.json`, publié par secubox-soc (`{"mode", "depuis",
+  "liste_blanche"}`), jamais la base du SOC. Fichier absent : `observe` si secubox-soc est installé (sa base
+  `defense.db` ou son unité, revue finale I1), aucune porte sinon. `observe` : 409 `sade_observe` pour TOUT geste,
+  clic compris (revue finale I2, spec SADE « zéro action ») ; `reactive` : tous les clics passent, d'office `limiter`
+  seul, 409 `sade_reactive` sinon ; `active` / `aggressive` : ouverte. Les levées (`unban`, `lever`) ne sont pas
+  gardées par le mode. `depuis` est l'instant de la PUBLICATION (l'API SOC
   republie toutes les 60 s) : un fichier illisible, d'un mode inconnu ou dont `depuis` date de plus de 15 min vaut
   `observe`. `/run/secubox` étant 1777, le fichier n'est cru que s'il appartient à root ou au compte `secubox` et
   n'est modifiable ni par le groupe ni par les autres ; sinon `observe` et liste vide (journal en erreur, une fois).

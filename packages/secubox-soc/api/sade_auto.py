@@ -56,7 +56,7 @@ _sain = defense_etat.champ_sain
 # waf-blocs `verifier`) : « refus:<motif> » sur stderr, ou le message de `_valide_ip` (« ERROR: Adresse privée
 # refusée : … », « ERROR: Adresse invalide : … »). `refus:garde_illisible`, un refus de nft, une durée refusée ou tout
 # message inconnu sont TEMPORAIRES.
-_VERDICT_GARDE = re.compile(r"^refus:(invalide|privee|protegee|box|pair)$")
+_VERDICT_GARDE = re.compile(r"^refus:(invalide|privee|protegee|box|pair|lan)$")  # lan : préfixe on-link (#3723 I3)
 _VERDICT_VALIDATION = re.compile(r"ERROR: Adresse (privée refusée|invalide) : ")
 
 

@@ -372,7 +372,8 @@ def appliquer(ip: str, famille: str, sade: Optional[Dict[str, Any]]) -> Tuple[st
         return "attente", "audit"
     r = _lancer(_SUDO + [WAFCTL, "ban", ip, f"{DUREE_BAN_S}s", "--exiger-protegees"])
     if r is None:
-        _lancer(_SUDO + [WAFCTL, "unban", ip])           # peut-être posé : retiré
+        # peut-être posé : retiré, jamais un ban allongé depuis par un autre (fin au plus, revue finale I4)
+        _lancer(_SUDO + [WAFCTL, "unban", ip, str(int(_maintenant()) + DUREE_BAN_S)])
         return "attente", "wafctl"
     if r.returncode != 0:
         motif = _motif_refus(r)
@@ -381,7 +382,7 @@ def appliquer(ip: str, famille: str, sade: Optional[Dict[str, Any]]) -> Tuple[st
     try:
         _auditer("waf-indice", resume)
     except OSError:
-        defait = _lancer(_SUDO + [WAFCTL, "unban", ip])
+        defait = _lancer(_SUDO + [WAFCTL, "unban", ip, str(int(_maintenant()) + DUREE_BAN_S)])
         log.error("indices : ban de %s non audité, %s", ip, "retiré" if defait and defait.returncode == 0
                   else "RETRAIT IMPOSSIBLE")
         return "attente", "audit"

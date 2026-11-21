@@ -131,6 +131,8 @@ def c(monkeypatch, tmp_path):
     monkeypatch.setattr(g, "JOURNAL_MENACES", tmp_path / "waf-threats.log")
     monkeypatch.setattr(g, "FICHIER_SADE", tmp_path / "sade-mode.json")
     monkeypatch.setattr(g, "_uids_sade", lambda: {0, os.getuid()})
+    # revue finale I1 : secubox-soc installé ⇒ fichier absent = observe ; jamais les marqueurs du poste de test
+    monkeypatch.setattr(g, "MARQUEURS_SOC", (tmp_path / "soc-absent",))
     # #3723 : cibles protégées des gestes d'office (maillage, robots) sans réseau ni DNS ; aucun pair par défaut
     monkeypatch.setattr(g, "WG_MESH", tmp_path / "wg_mesh.json")
     monkeypatch.setattr(g, "_lire_threatmesh_peers", lambda: {"node": "x", "peers": []})
@@ -389,7 +391,9 @@ def test_wafctl_injoignable_ou_delai_503_et_retour_arriere(c, monkeypatch):
     monkeypatch.setattr(c.g, "_executer", lent)
     r = c.ban("198.51.100.7")
     assert r.status_code == 503 and r.json()["detail"]["motif"] == "wafctl"
-    assert appels[-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    # revue finale I4 : la levée porte la fin demandée (wafctl ne lève pas un ban allongé par un autre)
+    assert appels[-1][:-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    assert abs(int(appels[-1][-1]) - (int(time.time()) + 86400)) <= 5
     assert c.lignes_journal() == []
 
 
@@ -398,7 +402,7 @@ def test_audit_echoue_le_ban_est_retire_et_500(c, monkeypatch):
     r = c.ban("198.51.100.7")
     assert r.status_code == 500 and r.json()["detail"]["motif"] == "audit"
     assert c.faux.verbes()[-2:] == ["ban", "unban"]
-    assert c.faux.appels[-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    assert c.faux.appels[-1][:-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
     types = [x["type"] for x in c.lignes_journal()]
     assert types == ["ban", "annule"] and c.lignes_journal()[1]["cause"] == "audit"
     # le bloc : retiré par systemd-run unban-bloc
@@ -461,7 +465,9 @@ def test_unban_annule_puis_deja_annule(c):
     ident = c.ban("198.51.100.7").json()["id"]
     r = c.c.post("/ai/unban", json={"geste": "unban", "id": ident})
     assert r.status_code == 200 and r.json() == {"id": ident, "etat": "annule"}
-    assert c.faux.appels[-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7"]
+    # la fin du ban d'ai-ban accompagne la levée (revue finale I4)
+    assert c.faux.appels[-1] == ["sudo", "-n", "/usr/sbin/wafctl", "unban", "198.51.100.7",
+                                 str(c.lignes_journal()[0]["fin"])]
     unban = [x for x in c.audit() if x["action"] == "ai-unban"]
     assert len(unban) == 1 and ident in unban[0]["detail"] and unban[0]["by"] == "ai-ban"
     assert c.lignes_journal()[-1]["type"] == "annule" and c.lignes_journal()[-1]["id"] == ident
@@ -569,6 +575,8 @@ def c_garde(monkeypatch, tmp_path):
     monkeypatch.setattr(g, "JOURNAL_MENACES", tmp_path / "waf-threats.log")
     monkeypatch.setattr(g, "FICHIER_SADE", tmp_path / "sade-mode.json")
     monkeypatch.setattr(g, "_uids_sade", lambda: {0, os.getuid()})
+    # revue finale I1 : secubox-soc installé ⇒ fichier absent = observe ; jamais les marqueurs du poste de test
+    monkeypatch.setattr(g, "MARQUEURS_SOC", (tmp_path / "soc-absent",))
     # #3723 : cibles protégées des gestes d'office (maillage, robots) sans réseau ni DNS ; aucun pair par défaut
     monkeypatch.setattr(g, "WG_MESH", tmp_path / "wg_mesh.json")
     monkeypatch.setattr(g, "_lire_threatmesh_peers", lambda: {"node": "x", "peers": []})
@@ -857,7 +865,7 @@ def test_unban_adresse_non_couverte_est_levee(c, records):
     ident = c.ban("198.51.100.7").json()["id"]
     _bans_waf_journal(c, *[_rec(ip, now + at, (now + exp) if exp else 0, action) for ip, at, exp, action in records])
     r = _unban(c, ident)
-    assert r.json()["etat"] == "annule" and c.faux.appels[-1][-2:] == ["unban", "198.51.100.7"]
+    assert r.json()["etat"] == "annule" and c.faux.appels[-1][-3:-1] == ["unban", "198.51.100.7"]
 
 
 def test_unban_bans_waf_illisible_503_rien_n_est_leve(c, monkeypatch, tmp_path):

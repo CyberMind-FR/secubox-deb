@@ -49,7 +49,7 @@ def test_lever_retire_l_entree_ai_ban(g, type_, cible_geste, verbe, cible):
     r = _lever(g, e["id"], cible_geste)
     assert r.status_code == 200, r.text
     assert r.json() == {"id": e["id"], "etat": "annule"}
-    assert g.faux.appel(verbe)[:3] == ["sudo", "-n", "/usr/sbin/wafctl"] and g.faux.appel(verbe)[-1] == cible
+    assert g.faux.appel(verbe)[:3] == ["sudo", "-n", "/usr/sbin/wafctl"] and g.faux.appel(verbe)[-2:] == [cible, str(e["fin"])]
     ligne = g.lignes_journal()[-1]
     assert ligne["type"] == "annule" and ligne["geste"] == "lever" and ligne["id"] == e["id"]
     assert ligne["cause"] == "lever"

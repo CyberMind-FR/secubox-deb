@@ -45,7 +45,7 @@ def _leurre(g: Gk2, cible=IP4, duree_s=86400, garder_nft=False, **extra):
     if ":" in cible and not garder_nft:
         g.faux.reponses["nft"] = _nft6()                                # waf_ban6 vide
     return g.c.post("/ai/leurre", json={"geste": "leurre", "cible": cible, "duree_s": duree_s, "conseil": "c-4",
-                                        "motif": "", **extra})
+                                        "motif": "", "mode": "auto", **extra})
 
 
 def _leurre_journal(cible, at, fin):
@@ -139,7 +139,8 @@ def test_leurre_plafond_30h(g):
     assert _verbes_ecriture(g) == []
     # les autres gestes ont leurs propres plafonds
     g.faux.reponses["limiter"] = (0, json.dumps({"fin": now + 3600}) + "\n", "")
-    assert g.c.post("/ai/limiter", json={"geste": "limiter", "cible": IP4, "duree_s": 3600, "conseil": "c-3"}
+    assert g.c.post("/ai/limiter", json={"geste": "limiter", "cible": IP4, "duree_s": 3600, "conseil": "c-3",
+                                         "mode": "auto"}
                     ).status_code == 200
 
 
@@ -211,7 +212,7 @@ def test_leurre_audit_final_impossible_le_leurre_est_leve(g, monkeypatch):
     monkeypatch.setitem(g.g._config, "audit", audit)
     r = _leurre(g)
     assert r.status_code == 500 and _motif(r) == "audit"
-    assert _appel(g, "leurre-lever")[-1] == IP4
+    assert _appel(g, "leurre-lever")[-2] == IP4                       # [-1] : la fin d’ai-ban (I4)
     assert g.lignes_journal()[-1]["type"] == "annule"
 
 
@@ -225,7 +226,7 @@ def test_leurre_wafctl_muet_leurre_leve(g, monkeypatch):
         return faux(argv)
     monkeypatch.setattr(g.g, "_executer", muet)
     assert _motif(_leurre(g)) == "wafctl"
-    assert _appel(g, "leurre-lever")[-1] == IP4                       # peut-être posé : retiré
+    assert _appel(g, "leurre-lever")[-2] == IP4                       # peut-être posé : retiré
     assert not [e for e in g.lignes_journal() if e["type"] == "leurre"]
 
 
@@ -233,7 +234,7 @@ def test_unban_d_un_leurre_le_leve(g):
     ident = _leurre(g, IP6).json()["id"]
     r = g.c.post("/ai/unban", json={"geste": "unban", "id": ident})
     assert r.status_code == 200 and r.json()["etat"] == "annule"
-    assert _appel(g, "leurre-lever")[-1] == IP6
+    assert _appel(g, "leurre-lever")[-2] == IP6
     assert g.c.get("/ai/etat").json()["leurres"] == []
     assert g.prolonger(ident, 172800).json()["detail"]["motif"] == "inconnu"   # un leurre ne se prolonge pas
 

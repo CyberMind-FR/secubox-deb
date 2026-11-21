@@ -37,7 +37,7 @@ def g(gk2_simule):  # noqa: F811
 
 def _limiter(g: Gk2, cible=IP4, duree_s=21600, **extra):
     return g.c.post("/ai/limiter", json={"geste": "limiter", "cible": cible, "duree_s": duree_s, "conseil": "c-3",
-                                         "motif": "", **extra})
+                                         "motif": "", "mode": "auto", **extra})
 
 
 def _limite_journal(cible, at, fin):
@@ -160,7 +160,7 @@ def test_limiter_audit_final_impossible_la_limite_est_levee(g, monkeypatch):
     monkeypatch.setitem(g.g._config, "audit", audit)
     r = _limiter(g)
     assert r.status_code == 500 and _motif(r) == "audit"
-    assert g.faux.appel("limiter-lever")[-1] == IP4
+    assert g.faux.appel("limiter-lever")[-2] == IP4
     assert g.lignes_journal()[-1]["type"] == "annule"
 
 
@@ -168,7 +168,7 @@ def test_unban_d_une_limite_la_leve(g):
     ident = _limiter(g, IP6).json()["id"]
     r = g.c.post("/ai/unban", json={"geste": "unban", "id": ident})
     assert r.status_code == 200 and r.json()["etat"] == "annule"
-    assert g.faux.appel("limiter-lever")[-1] == IP6
+    assert g.faux.appel("limiter-lever")[-2] == IP6
     assert g.c.get("/ai/etat").json()["limites"] == []
     assert g.prolonger(ident, 172800).json()["detail"]["motif"] == "inconnu"   # une limite ne se prolonge pas
 

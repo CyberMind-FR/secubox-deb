@@ -72,7 +72,7 @@ class Gk2:
 
     def prolonger(self, ident, duree_s, conseil="c-2", **extra):
         return self.c.post("/ai/prolonger", json={"geste": "prolonger", "id": ident, "duree_s": duree_s,
-                                                  "conseil": conseil, "motif": "", **extra})
+                                                  "conseil": conseil, "motif": "", "mode": "auto", **extra})
 
 
 @pytest.fixture
@@ -362,7 +362,8 @@ def test_mode_sade_observe_refuse_tout_auto(gk2_simule):
     assert g.faux.appels == []
     e = _actif(g, cible="198.51.100.9")
     assert _motif(g.prolonger(e["id"], 172800)) == "sade_observe"
-    assert g.ban("198.51.100.8").status_code == 200                   # clic
+    # revue finale I2 (spec SADE « OBSERVE = zéro action ») : le clic aussi
+    assert _motif(g.ban("198.51.100.8")) == "sade_observe"
 
 
 def test_mode_sade_porte_avant_tout_controle(gk2_simule, monkeypatch):
@@ -411,7 +412,7 @@ def test_mode_sade_illisible_refuse_le_clic_faute_de_liste_blanche(gk2_simule):
     g = gk2_simule
     g.sade("", brut="{pas du json")
     r = g.ban("198.51.100.8")
-    assert r.status_code == 503 and _motif(r) == "etat"
+    assert r.status_code == 409 and _motif(r) == "sade_observe"       # illisible = observe : le clic aussi (I2)
     g.sade("active", liste=["pas un réseau"])
     assert _motif(g.ban("198.51.100.8")) == "etat"
     assert g.faux.appels == []
@@ -500,7 +501,8 @@ def test_wg_mesh_illisible_refuse_d_office(gk2_simule):
     g.menace(IP)
     g.g.WG_MESH.write_text("{tronqué")
     assert _motif(g.ban(IP, mode="auto")) == "protegee_inconnue"
-    assert g.ban("198.51.100.8").status_code == 200                    # le clic ne dépend pas du maillage
+    # revue finale M1 : le clic passe aussi la garde des pairs (source muette : jamais « aucun pair »)
+    assert _motif(g.ban("198.51.100.8")) == "protegee_inconnue"
 
 
 def test_pair_threatmesh_jamais_banni_d_office(gk2_simule, monkeypatch):
@@ -521,7 +523,7 @@ def test_threatmesh_injoignable_refuse_d_office(gk2_simule, monkeypatch, tmp_pat
         g.g.pairs_threatmesh()                                         # socket absente : jamais « aucun pair »
     r = g.ban(IP, mode="auto")
     assert r.status_code == 409 and _motif(r) == "protegee_inconnue"
-    assert g.ban("198.51.100.8").status_code == 200                    # le clic ne dépend pas du maillage
+    assert _motif(g.ban("198.51.100.8")) == "protegee_inconnue"        # M1 : le clic aussi
     monkeypatch.setattr(g.g, "_lire_threatmesh_peers", lambda: {"node": "gk2"})
     with pytest.raises(g.g.ProtectionInconnue):
         g.g.pairs_threatmesh()                                         # forme inattendue
@@ -588,7 +590,7 @@ def _wafctl_banc(tmp_path, code_garde=0, code_get=0):
     nft = bin_ / "nft"
     nft.write_text(f'#!/bin/bash\necho "$*" >> {tmp_path}/nft.log\n'
                    f'if [ "$1" = "-f" ]; then cat > {tmp_path}/lot.nft; exit 0; fi\n'
-                   f'case "$1" in get) exit {code_get} ;; esac\nexit 0\n')
+                   f'case "$1" in get) exit {code_get} ;; -j) [ "$2" = get ] && exit {code_get} ;; esac\nexit 0\n')
     for f in (garde, nft):
         f.chmod(0o755)
     script = tmp_path / "wafctl"
@@ -610,7 +612,7 @@ def test_wafctl_prolonger_une_seule_transaction_nft(tmp_path):
         f"add element inet secubox waf_ban {{ {IP} timeout 172800s }}\n")
     assert (tmp_path / "garde.log").read_text().split() == ["verifier", IP, "--exiger"]
     nft = (tmp_path / "nft.log").read_text().splitlines()
-    assert nft[0].startswith("get element inet secubox waf_ban") and nft[-1] == "-f -"
+    assert nft[0].startswith("-j get element inet secubox waf_ban") and nft[-1] == "-f -"
     assert not any(x.startswith("add element") for x in nft)            # jamais un `add` hors transaction
 
 
