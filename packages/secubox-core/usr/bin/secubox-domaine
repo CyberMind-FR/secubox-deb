@@ -25,6 +25,10 @@ jamais un nom d'une autre box.
 dans un réglage est un défaut livré ou dérivé à tort, jamais un choix : il
 devient `<x>.<domaine>`. Lignes de commentaire intactes, copie de chaque
 fichier modifié, fichiers *.example ignorés.
+
+Exception (#3858) : une section TOML nommée `[gk2]` ou `[gk2.<x>]` désigne gk2
+PAR CONSTRUCTION (la veille de secubox-ai sur gk3 collecte auprès de gk2) :
+ses lignes ne sont jamais réécrites.
 """
 from __future__ import annotations
 
@@ -40,6 +44,7 @@ GK2 = "gk2.secubox.in"
 PREFIXE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 # `gk2.secubox.in`, `.gk2.secubox.in`, `peertube.gk2.secubox.in`… — pas
 # `xgk2.secubox.in` ni `gk2.secubox.info`.
+SECTION = re.compile(r"^\s*\[\[?\s*([^\]]+?)\s*\]\]?\s*(#.*)?$")
 NOM_GK2 = re.compile(r"(?<![a-z0-9-])((?:[a-z0-9-]+\.)*)gk2\.secubox\.in(?![a-z0-9-])")
 
 
@@ -56,8 +61,13 @@ def domaine() -> str:
 
 def reecrire(texte: str, dom: str) -> tuple[str, int]:
     n, out = 0, []
+    section_gk2 = False
     for ligne in texte.splitlines(keepends=True):
-        if ligne.lstrip().startswith("#"):
+        entete = SECTION.match(ligne)
+        if entete:
+            nom = entete.group(1)
+            section_gk2 = nom == "gk2" or nom.startswith("gk2.")
+        if ligne.lstrip().startswith("#") or section_gk2:
             out.append(ligne)
             continue
         nouvelle, k = NOM_GK2.subn(lambda m: m.group(1) + dom, ligne)
