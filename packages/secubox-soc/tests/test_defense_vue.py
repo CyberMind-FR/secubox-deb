@@ -52,7 +52,7 @@ def test_sections_presentes():
 def test_modes_non_livres_desactives_avec_infobulle():
     for m in ("aggressive",):
         b = re.search(r'<button[^>]*data-mode="' + m + r'"[^>]*>', PAGE)
-        assert b and " disabled" in b.group(0) and "gestes gradués non livrés (V2 4-7)" in b.group(0), m
+        assert b and " disabled" in b.group(0) and "seuils abaissés, réservé au banc — ouverture sur accord du propriétaire" in b.group(0), m
     for m in ("observe", "reactive", "active"):
         b = re.search(r'<button[^>]*data-mode="' + m + r'"[^>]*>', PAGE)
         assert b and " disabled" not in b.group(0), m

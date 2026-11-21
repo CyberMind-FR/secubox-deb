@@ -5,8 +5,9 @@
 """Façade SADE : /defense/* au-dessus du substrat actord, WAF, threatmesh (#3839).
 
 Lecture seule partout, sauf deux écritures réservées à un administrateur réel (`require_jwt`) : le mode
-(`POST /mode`) et la file d'approbation REACTIVE (`POST /approve`, `POST /refuse`), seul chemin qui pose un ban
-réel (un `POST /ban` du WAF par adresse, au nom de l'administrateur, audité ici avant et après). Chaque réponse porte `sources` : l'état de lecture de chaque source, pour qu'une
+(`POST /mode`) et la file d'approbation REACTIVE (`POST /approve`, `POST /refuse`), seul chemin qui pose un geste
+réel : un ban (un `POST /ban` du WAF par adresse, au nom de l'administrateur) ou un geste gradué (`sudo wafctl
+limiter|leurre|prolonger`), audité ici avant et après. `/status` porte aussi `phases` (cartes 3 et 4, `api/phases`). Chaque réponse porte `sources` : l'état de lecture de chaque source, pour qu'une
 source muette se voie au lieu de se confondre avec « zéro menace » (les compteurs valent alors `None`, jamais 0).
 
 Confidentialité (#2201/#2274) : une adresse d'acteur ne sort QUE pour un administrateur réel (`require_jwt`).
@@ -51,7 +52,7 @@ from secubox_core.auth import (
     require_lecture,
 )
 
-from . import defense_etat, echelle, sade_auto, substrat
+from . import defense_etat, echelle, phases, sade_auto, substrat
 
 router = APIRouter(tags=["defense"])
 
@@ -331,8 +332,10 @@ async def status(request: Request, admin: bool = Depends(_est_admin)):
         return out
 
     rep = await asyncio.to_thread(_servi, _cle("status", admin, entetes), calcul)
-    # le mode se lit en direct, jamais depuis le cache : un changement se voit tout de suite
-    return {**rep, **await asyncio.to_thread(_mode_vivant)}
+    # le mode se lit en direct, jamais depuis le cache : un changement se voit tout de suite ; les phases 3 et 4 en
+    # dépendent (mesures gardées 60 s par `phases`, combinées au mode vivant)
+    mode = await asyncio.to_thread(_mode_vivant)
+    return {**rep, **mode, "phases": await asyncio.to_thread(phases.phases, mode.get("mode"))}
 
 
 @router.get("/threats", dependencies=[Depends(require_lecture)])
@@ -547,8 +550,8 @@ async def changer_mode(corps: Dict[str, Any], payload: Dict[str, Any] = Depends(
         return JSONResponse(status_code=503, content={"error": "base d'état indisponible",
                                                       "cause": "base_indisponible"})
     except PermissionError:
-        return JSONResponse(status_code=409, content={"error": "ce mode attend les gestes de réaction, non livrés",
-                                                      "cause": "gestes_non_livres"})
+        return JSONResponse(status_code=409, content={"error": "mode fermé : seuils abaissés, réservé au banc — "
+                                                      "ouverture sur accord du propriétaire", "cause": "gestes_non_livres"})
     return {"mode": valeur}
 
 
@@ -606,7 +609,12 @@ async def retirer_liste_blanche(corps: Dict[str, Any], payload: Dict[str, Any] =
 
 _EMPREINTE = re.compile(r"^[0-9a-f]{64}$")
 _GESTES = {"DENY": "ban", "QUARANTINE": "quarantaine"}  # mode d'actord → geste SADE
-GESTES_EXECUTABLES = ("ban",)                            # seul geste livré : un POST /ban du WAF par adresse
+# `ban` : un POST /ban du WAF par adresse, au nom de l'administrateur (porteur requis). Gestes gradués (#3839, V2 4-7) :
+# `sudo -n wafctl <verbe> <ip> <n>s` par adresse, mêmes verbes que le compte ai-ban (gestes_ia) et que l'exécuteur
+# automatique (`sade_auto._wafctl`). `partager`, `ban_bloc`, `quarantaine` et tout autre geste : refusés.
+GESTES_EXECUTABLES = ("ban", "limiter", "leurre", "prolonger")
+# geste gradué → (durée par défaut, minimum, maximum) en secondes : plan V2 4-7, « Durées » (bornes de wafctl)
+DUREES_GRADUEES = {"limiter": (21600, 3600, 86400), "leurre": (86400, 3600, 604800), "prolonger": (86400, 1, 604800)}
 ROUTES_PROC = "/proc/net/route"                          # passerelles IPv4 (les IPv6 sont lien-local, déjà refusées)
 # Le WAF borne `wafctl` à 15 s (subprocess timeout), plus sudo et uvicorn : la façade attend nettement plus, pour qu'un
 # succès lent ne soit jamais audité comme un échec. Sur expiration malgré tout, l'issue est « incertain ».
@@ -834,13 +842,22 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
     duree = f"{p['ttl_s']}s" if p["ttl_s"] else None
     if action == "approuve":
         if p["geste"] not in GESTES_EXECUTABLES:
-            return bloque(409, "gestes_non_livres", f"geste « {p['geste']} » non livré : seul le ban est exécutable")
+            return bloque(409, "gestes_non_livres", f"geste « {p['geste']} » non exécutable : seuls "
+                          f"{', '.join(GESTES_EXECUTABLES)} le sont")
         if not p["ips"]:
             return bloque(409, "sans_adresse", "proposition sans adresse : rien à bannir")
         if len(p["ips"]) > ADRESSES_MAX:
             return bloque(409, "trop_d_adresses", f"{len(p['ips'])} adresses : au plus {ADRESSES_MAX} par approbation")
         if p["ttl_s"] and p["ttl_s"] > TTL_MAX_S:
             return bloque(409, "duree_invalide", f"durée {p['ttl_s']} s non représentable par le WAF")
+        if p["geste"] in DUREES_GRADUEES:
+            defaut, bas, haut = DUREES_GRADUEES[p["geste"]]
+            secondes = p["ttl_s"] or defaut
+            duree = f"{secondes}s"
+            if not bas <= secondes <= haut:
+                return bloque(409, "duree_invalide", f"{p['geste']} : durée {secondes} s hors bornes ({bas} à {haut} s)")
+            if p["geste"] == "prolonger" and any(":" in ip for ip in p["ips"]):
+                return bloque(409, "ipv4_seulement", "prolonger : adresses IPv4 seulement (ensemble waf_ban)")
         try:
             proteges, illisibles, pairs_lus = _proteges(entetes, appelant)
         except defense_etat.EtatIndisponible:
@@ -852,12 +869,31 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
             return bloque(403, "liste_blanche", "entrée de liste blanche illisible : aucun geste tant qu'elle n'est pas corrigée",
                           note=f"motif=liste_blanche_illisible entrees={_sain(','.join(illisibles), 256)}",
                           entrees_illisibles=illisibles)
+        if p["geste"] != "ban":
+            # comme l'exécuteur automatique : pairs WireGuard locaux en plus ; illisibles ⇒ aucun geste
+            locaux = sade_auto._pairs_wg_mesh()
+            if locaux is None:
+                return bloque(503, "pairs_illisibles", "pairs du maillage (wg_mesh.json) illisibles : aucun geste")
+            proteges = proteges + locaux
         refusees = [ip for ip in p["ips"] if _adresse_interdite(ip, proteges)]
         if refusees:
             return bloque(403, "liste_blanche", "adresse protégée ou non publique : proposition entière refusée",
                           adresses_refusees=refusees)
-        if not porteur:
+        if p["geste"] == "ban" and not porteur:
             return bloque(409, "porteur_requis", "jeton porteur requis : le WAF refuse une écriture par cookie seul")
+        if p["geste"] == "prolonger":
+            # ne prolonge qu'un ban présent, et ne raccourcit jamais ce qui reste (plan V2 4-7, « Durées »)
+            try:
+                restes = {ip: sade_auto.expiration_ban(ip) for ip in p["ips"]}
+            except sade_auto.EnsembleIllisible:
+                return bloque(503, "waf_illisible", "ensemble des bans du WAF illisible : rien n'est prolongé")
+            absentes = [ip for ip, r in restes.items() if r is None]
+            if absentes:
+                return bloque(409, "absent", f"adresse non bannie : {', '.join(absentes)} (prolonger ne bannit pas)")
+            courtes = [ip for ip, r in restes.items() if r > int(duree[:-1])]
+            if courtes:
+                return bloque(409, "raccourcit", f"le ban de {', '.join(courtes)} dure déjà plus longtemps : "
+                              "prolonger ne raccourcit jamais")
     try:
         etat = defense_etat.decision(emp)["etat"]
     except defense_etat.EtatIndisponible:
@@ -870,12 +906,14 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
             defense_etat.ecrire_audit(f"sade-simule operation={action} verdict=ok {_champs(p, par, duree)}{pairs_note}")
         except defense_etat.AuditIndisponible:
             return _non(503, "audit_indisponible", "audit indisponible : simulation non tracée")
-        quoi = (f"ban de {len(p['ips'])} adresse(s) pour {duree or 'la durée par défaut du WAF'}"
+        quoi = (f"{p['geste']} de {len(p['ips'])} adresse(s) pour {duree or 'la durée par défaut du WAF'}"
                 if action == "approuve" else "refus")
         return 200, {"etat": "simule", "resultat": f"simulation : {quoi} possible, rien n'a été appliqué", **pairs_extra}
 
     try:
-        gen = defense_etat.reclamer(emp, p["menace_id"], p["geste"], ",".join(p["ips"]), p["score"], p["ttl_s"], par,
+        # la durée enregistrée est celle réellement demandée (ré-armement à l'expiration réelle du geste)
+        ttl_reel = int(duree[:-1]) if duree and p["geste"] in DUREES_GRADUEES else p["ttl_s"]
+        gen = defense_etat.reclamer(emp, p["menace_id"], p["geste"], ",".join(p["ips"]), p["score"], ttl_reel, par,
                                     "refuse" if action == "refuse" else "en_cours",
                                     f"sade-{'refuse' if action == 'refuse' else 'approuve-demande'} "
                                     f"{_champs(p, par, duree)}{pairs_note}",
@@ -891,10 +929,19 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
     if action == "refuse":
         return 200, {"etat": "refuse", "resultat": "proposition refusée"}
 
-    # Geste réel : la décision est réclamée et la demande auditée. Un POST /ban par adresse, arrêt au premier échec.
+    # Geste réel : la décision est réclamée et la demande auditée. Un geste par adresse, arrêt au premier échec : ban par
+    # le POST /ban du WAF ; gestes gradués par `sudo wafctl` (idempotents : un nouvel essai repose le même délai).
+    gradue = p["geste"] in DUREES_GRADUEES
     bannies: List[str] = []
     echec: Optional[Tuple[str, str]] = None
     for ip in p["ips"]:
+        if gradue:
+            ok, raison = sade_auto._wafctl(p["geste"], ip, duree)
+            if ok:
+                bannies.append(ip)
+                continue
+            echec = (ip, "délai" if raison == "delai" else raison)
+            break
         corps: Dict[str, Any] = {"ip": ip, "reason": f"SADE {p['menace_id']} approuvé par {defense_etat._operateur_sain(par)}"}
         if duree:
             corps["duration"] = duree
@@ -908,11 +955,14 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
     if echec is None:
         issue = "applique"
     elif echec[1] == "délai":
-        issue = "incertain"  # le WAF a peut-être posé le ban après notre délai : un nouvel essai est idempotent
+        issue = "incertain"  # le WAF a peut-être posé le geste après notre délai : un nouvel essai est idempotent
     else:
         issue = "partiel" if bannies else "echec"
-    resultat = (f"{len(bannies)} adresse(s) bannie(s) pour {duree or 'la durée par défaut du WAF'}" if echec is None
-                else f"échec du WAF sur {echec[0]} : {echec[1]} ; déjà bannies : {', '.join(bannies) or 'aucune'}")
+    qui = "wafctl" if gradue else "WAF"
+    fait = {"limiter": "limitée(s)", "leurre": "redirigée(s) vers le leurre", "prolonger": "prolongée(s)"}.get(
+        p["geste"], "bannie(s)")
+    resultat = (f"{len(bannies)} adresse(s) {fait} pour {duree or 'la durée par défaut du WAF'}" if echec is None
+                else f"échec de {qui} sur {echec[0]} : {echec[1]} ; déjà traitées : {', '.join(bannies) or 'aucune'}")
     avertissements = []
     try:
         defense_etat.conclure(emp, gen, "applique" if echec is None else "en_attente", resultat,
@@ -929,11 +979,12 @@ def _traiter(action: str, emp: str, simuler: bool, par: str, porteur: Optional[s
         avertissements.append("audit du résultat indisponible")
     with _VERROU:
         _CACHE.clear()  # les bans actifs ont changé : la façade relit au prochain appel
+    phases.vider()
     extra = {**({"avertissements": avertissements} if avertissements else {}), **pairs_extra}
     if echec is None:
         return 200, {"etat": "applique", "resultat": resultat, "bannies": bannies, **extra}
-    return _non(502, "waf", f"WAF : {echec[1]}", etat="en_attente", issue=issue, resultat=resultat, bannies=bannies,
-                echec=echec[0], **extra)
+    return _non(502, "wafctl" if gradue else "waf", f"{qui} : {echec[1]}", etat="en_attente", issue=issue,
+                resultat=resultat, bannies=bannies, echec=echec[0], **extra)
 
 
 def _porteur(request: Request) -> Optional[str]:

@@ -13,7 +13,7 @@ Architecture: all
 # isp et full. En Suggests et non en Recommends : apt installe les Recommends par defaut, il le ramenerait dans lite. Sans lui,
 # l'onglet « Trafic (DPI) » du SOC reste vide.
 Depends: ${misc:Depends}, secubox-core (>= 1.4.0),
- secubox-waf-ng (>= 1.29.0),
+ secubox-waf-ng (>= 1.43.0),
  secubox-webos (>= 1.9.7)
 Suggests: secubox-dpi (>= 1.11.2)
 Replaces: secubox-hub, secubox-soc-web

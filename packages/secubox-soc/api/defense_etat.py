@@ -29,7 +29,7 @@ MIGRATIONS = Path(__file__).resolve().parent / "migrations"
 _NOM = re.compile(r"^(\d{4})-[\w.-]+\.sql$")
 
 MODES = ("observe", "reactive", "active", "aggressive")
-MODES_OUVERTS = ("observe", "reactive", "active")  # aggressive attend ses gestes (hors périmètre)
+MODES_OUVERTS = ("observe", "reactive", "active")  # aggressive : banc seulement, ouverture sur accord du propriétaire
 
 log = logging.getLogger("secubox.soc.defense_etat")
 

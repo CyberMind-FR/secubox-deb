@@ -90,7 +90,48 @@ identiques d'une même minute (`n`) ; un outil deviné par actord (« …? ») e
   l'heure glissante, tout état confondu : le compte du plafond, affiché « Décisions automatiques : n / 20 sur
   l'heure »), `score` (`[60, 79]`), `ttl_max_s`, `adresses_max`, `mode_par` (auteur du dernier changement de mode :
   `sade-auto` pour tous, un nom humain pour l'administrateur seulement, sinon `null`) et `mode_depuis`.
-- `aggressive` : refusé par `POST /mode` avec 409 `gestes_non_livres`.
+- `aggressive` : toujours fermé, refusé par `POST /mode` avec 409 `gestes_non_livres` ; bouton désactivé, titre
+  « seuils abaissés, réservé au banc — ouverture sur accord du propriétaire » (SADE § Modes, déploiement étape 5).
+
+### Phases (`/defense/status` → `phases`, 1.12.0)
+
+Les cartes 1 et 2 suivent le mode. Les cartes 3 et 4 sont livrées (`livree: true`) et portent leur critère mesuré
+(`api/phases.py`, mesures gardées 60 s, mode relu en direct) ; une valeur vaut `null` quand sa source manque ou se
+lit mal — la page écrit alors « relevé indisponible », jamais 0.
+
+```
+{"p3": {"livree": true, "active": bool|null, "lecture_bornee": bool,
+        "critere": {"rediriges_24h": int|null, "tentatives_valides_24h": int|null}},
+ "p4": {"livree": true, "active": bool|null,
+        "critere": {"partages": int|null, "revus_chez_pairs": int|null, "contenus_chez_pairs": int|null,
+                    "filtres_confirmes": int|null}}}
+```
+
+- `p3.active` : mode `active` ET au moins un `leurre`, ou un `ban` / `ban_bloc` d'office (`mode: auto`), daté des
+  dernières 24 h dans `/var/lib/secubox/waf/ai-ban.jsonl` (un ban annulé pour défaut d'audit est écarté) ; hors
+  `active` : `false` ; journal illisible : `null`.
+- `rediriges_24h` : SOMME des champs `servies` des lignes `leurre_redirige` de `waf-threats.log` sur 24 h (une ligne
+  est bornée par adresse et porte le nombre de requêtes servies qu'elle représente). `tentatives_valides_24h` : lignes
+  `action: detect` d'une adresse non locale (détectées puis laissées passer jusqu'au service). Lecture par la fin,
+  16 Mio au plus, fichier courant puis `waf-threats.log.1` s'il ne couvre pas 24 h ; budget épuisé avant 24 h :
+  `lecture_bornee: true` et la page écrit « au moins N ».
+- `partages`, `revus_chez_pairs`, `contenus_chez_pairs` : résumé `/run/secubox/waf-indices-etat.json` de
+  secubox-waf-indices, lu directement (le lecteur `indices_etat` de secubox-waf-ng est recopié, même validation :
+  fichier ordinaire à root ou `secubox`, sans écriture du groupe ni des autres, ≤ 64 Kio, de moins de 30 min) — pas
+  d'import entre paquets.
+- `filtres_confirmes` : l'état « confirmé » d'un filtre de l'IA n'existe que sur gk3 ; gk2 le remplace par **« filtre
+  IA actif depuis au moins 24 h »**. Actifs : cache `/var/lib/secubox/waf/filtres-ia.json` de l'onglet Filtres IA du
+  WAF (moins d'1 h) ; date d'application : lignes `leurre_filtres-ia-appliquer` / `-retirer` (résultat `ok`) que
+  secubox-cvectl écrit dans `audit.log` (puis `.1`), 4 Mio par fichier. Une ligne d'application tronquée (ids
+  manquants), une fenêtre de moins de 24 h ou un état incohérent rendent `null`.
+- `p4.active` : au moins un indicateur partagé non échu (7 j) ou un filtre confirmé ; `null` si l'on ne peut trancher.
+- Accès (compte `secubox` de l'API, sans profil AppArmor ni `ProtectSystem` à ce jour, #3847) : `ai-ban.jsonl` et
+  `waf-threats.log` sont 0660 au groupe `secubox-waf`, dont `secubox` est membre (postinst de secubox-waf-ng) ; le
+  résumé des indices est 0644 ; le cache des filtres et `audit.log` sont au compte `secubox`. Aucun droit d'écriture
+  nouveau.
+
+Surcharges (tests) : `SECUBOX_SOC_AI_BAN`, `SECUBOX_SOC_WAF_MENACES`, `SECUBOX_SOC_INDICES`, `SECUBOX_SOC_FILTRES_IA`,
+`SECUBOX_AUDIT_LOG`.
 - **Publication pour gk2 (#3723, 1.11.0)** : `/run/secubox/sade-mode.json` (0644, renommage atomique d'un temporaire
   du même dossier : jamais de fichier partiel) = `{"mode", "depuis", "liste_blanche"}`, où `depuis` est l'instant de
   la publication et `liste_blanche` les réseaux de la liste blanche (entrées amorcées comprises). Réécrit après
@@ -147,8 +188,22 @@ proposition est contrôlée ; échec fermé.
   au WAF ; un double clic ou une réclamation concurrente donne 409 `deja_traitee`.
 - `POST /reprendre` ne ramène une décision `en_cours` à `en_attente` que si sa demande dépasse le délai maximal des
   appels au WAF + 60 s.
-- Seul geste exécutable : `ban`, soit un `POST /ban` du WAF par adresse (au plus 32), avec le jeton administrateur de
-  l'appelant relayé ; arrêt au premier échec. Les autres gestes (par exemple la quarantaine) ne sont pas exécutables.
+- Gestes exécutables (`GESTES_EXECUTABLES`) : `ban`, soit un `POST /ban` du WAF par adresse (au plus 32), avec le
+  jeton administrateur de l'appelant relayé (porteur requis) ; et, depuis 1.12.0, les gestes gradués `limiter`
+  (6 h par défaut, 1 h à 24 h), `leurre` (24 h par défaut, 1 h à 7 j) et `prolonger` (24 h par défaut, 7 j au plus,
+  IPv4, seulement un ban présent dans `waf_ban` et jamais plus court que ce qui reste : 409 `absent` / `raccourcit`,
+  ensemble illisible 503 `waf_illisible`), exécutés par `sudo -n /usr/sbin/wafctl <verbe> <ip> <n>s` — les verbes
+  du compte ai-ban (`gestes_ia`), accordés à `secubox` par les sudoers `SBX_WAF_LIMITER`, `SBX_WAF_LEURRE`,
+  `SBX_WAF_PROLONGER` (et `SBX_WAF_NFTLIST` pour lire `waf_ban`) de secubox-waf-ng ≥ 1.43.0. Mêmes contrôles que
+  l'exécuteur automatique : liste blanche, passerelles, pairs threatmesh ET `wg_mesh.json` (illisible : 503
+  `pairs_illisibles`), adresses de l'administrateur ; la garde root de wafctl (`--exiger` : protegees.env, box, pairs)
+  reste le dernier rempart. Audit `sade-approuve-demande` (geste, durée) avant, `sade-approuve-resultat` après ;
+  échec de wafctl : 502 `wafctl`, décision `en_attente`. Arrêt au premier échec. `partager`, `ban_bloc`,
+  `quarantaine` et tout autre geste : 409 `gestes_non_livres`. Les durées par défaut ne sont pas ramenées dans les
+  bornes : une durée hors bornes est refusée (409 `duree_invalide`).
+- **Prérequis non tranché (1.12.0)** : `secubox-soc.service` garde `NoNewPrivileges=true`, qui neutralise sudo. Tant
+  qu'il n'est pas levé (exception § 10 à écrire dans `.claude/RULES-CODE.md`, sur décision), un geste gradué approuvé
+  échoue fermé : `injoignable: sudo: …`, 502 `wafctl`, rien n'est posé, décision `en_attente`, audit du résultat.
 
 ### Confidentialité
 

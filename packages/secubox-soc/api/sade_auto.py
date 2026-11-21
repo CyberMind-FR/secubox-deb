@@ -62,17 +62,29 @@ _VERDICT_VALIDATION = re.compile(r"ERROR: Adresse (privée refusée|invalide) : 
 
 # ── point d'exécution unique ─────────────────────────────────────────────────────────────────────
 
-def _wafctl_ban(ip: str, duree: str) -> Tuple[bool, str]:
+def _sudo(argv: List[str]) -> subprocess.CompletedProcess:
+    """SEUL appel de sous-processus du module (et de la file d'approbation, qui passe par ici) : `sudo -n` + argv exact
+    du sudoers. Lève TimeoutExpired, OSError, SubprocessError."""
+    return subprocess.run(["sudo", "-n", *argv], capture_output=True, text=True, timeout=DELAI_WAFCTL_S)
+
+
+# Verbes de wafctl exécutables depuis SADE, et leurs argv (`wafctl <verbe> <ip> <n>s`) : ceux du compte ai-ban
+# (gestes_ia de secubox-waf-ng), accordés à `secubox` par les sudoers SBX_WAF_BANMANUEL, _LIMITER, _LEURRE, _PROLONGER.
+VERBES_WAFCTL = ("ban", "limiter", "leurre", "prolonger")
+
+
+def _wafctl(verbe: str, ip: str, duree: str) -> Tuple[bool, str]:
     """SEUL point d'exécution d'un geste. Rend (succès, raison) :
     - `(True, "ok")` ;
     - `(False, "refus:<motif>")` : verdict de garde de `wafctl` (privee, protegee, box, pair, invalide) : DÉFINITIF ;
-    - `(False, "echec: <message>")` : autre sortie non nulle (garde illisible, nft, inconnu) : transitoire ;
-    - `(False, "delai")` : délai dépassé, le ban a peut-être été posé : transitoire ;
+    - `(False, "echec: <message>")` : autre sortie non nulle (garde illisible, nft, durée, absent, inconnu) : transitoire ;
+    - `(False, "delai")` : délai dépassé, le geste a peut-être été posé : transitoire ;
     - `(False, "injoignable: <message>")` : sudo absent ou refusé (`sudo: …`), exécutable introuvable : transitoire.
     `refus_definitif(raison)` tranche entre les deux familles."""
+    if verbe not in VERBES_WAFCTL:
+        raise ValueError(f"verbe wafctl non admis : {verbe}")
     try:
-        r = subprocess.run(["sudo", "-n", "/usr/sbin/wafctl", "ban", ip, duree],
-                           capture_output=True, text=True, timeout=DELAI_WAFCTL_S)
+        r = _sudo(["/usr/sbin/wafctl", verbe, ip, duree])
     except subprocess.TimeoutExpired:
         return False, "delai"
     except (OSError, subprocess.SubprocessError) as e:
@@ -91,6 +103,44 @@ def _wafctl_ban(ip: str, duree: str) -> Tuple[bool, str]:
         if m:
             return False, "refus:privee" if m.group(1).startswith("privée") else "refus:invalide"
     return False, f"echec: {message[:200] or f'code {r.returncode}'}"
+
+
+def _wafctl_ban(ip: str, duree: str) -> Tuple[bool, str]:
+    """`wafctl ban <ip> <durée>` (exécuteur automatique) ; voir `_wafctl`."""
+    return _wafctl("ban", ip, duree)
+
+
+class EnsembleIllisible(Exception):
+    """L'ensemble nft des bans du WAF n'a pas pu être lu."""
+
+
+def expiration_ban(ip: str) -> Optional[float]:
+    """Secondes restantes du ban IPv4 `ip` dans `inet secubox waf_ban` (`sudo nft -j list set`, argv exact du sudoers
+    SBX_WAF_NFTLIST) ; None si l'adresse n'y est pas ; `float('inf')` pour un élément sans délai. Lève
+    `EnsembleIllisible`."""
+    try:
+        r = _sudo(["/usr/sbin/nft", "-j", "list", "set", "inet", "secubox", "waf_ban"])
+        if r.returncode != 0:
+            raise EnsembleIllisible((r.stderr or "")[:200])
+        doc = json.loads(r.stdout)
+    except (subprocess.SubprocessError, OSError, ValueError, RecursionError) as e:
+        raise EnsembleIllisible(e.__class__.__name__) from e
+    items = doc.get("nftables") if isinstance(doc, dict) else None
+    if not isinstance(items, list):
+        raise EnsembleIllisible("forme")
+    for it in items:
+        ens = it.get("set") if isinstance(it, dict) else None
+        if not isinstance(ens, dict):
+            continue
+        for el in ens.get("elem") or []:
+            if el == ip:
+                return float("inf")
+            e = el.get("elem") if isinstance(el, dict) else None
+            if isinstance(e, dict) and e.get("val") == ip:
+                exp = e.get("expires", e.get("timeout"))
+                return float(exp) if isinstance(exp, (int, float)) and not isinstance(exp, bool) else float("inf")
+        return None
+    raise EnsembleIllisible("ensemble absent")
 
 
 def refus_definitif(raison: str) -> bool:
