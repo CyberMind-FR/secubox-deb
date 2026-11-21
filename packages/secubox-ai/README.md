@@ -202,13 +202,21 @@ d'écriture de gk3 vers gk2**, les routes `ai-ban` (`/api/v1/waf/ai/ban`, `unban
   envoyé) ; `partager` porte la famille dominante des événements de l'adresse (`riposte` à défaut).
 - **Réponse de gk2**, enregistrée telle quelle (corps borné à 4 Kio, donnée non fiable) : 200 → `faite` (id et fin
   de gk2 ; levée d'un ban `echu` → `refusee_gk2`) ; 409/404 → `refusee_gk2` + motif ; 503, 401, 403 → `echec` et fin
-  de passe (le reste du lot n'est pas brûlé) ; autre 4xx → `echec`. 5xx autre que 503, ou réponse perdue (délai,
+  de passe (le reste du lot n'est pas brûlé) ; autre 4xx → `echec`. Refus **non définitifs** (revue finale #3723 I2) :
+  409 `sade_observe`, `sade_reactive`, `protegee_inconnue` → la proposition revient à son état (proposée ou
+  approuvée), sans action ni plafond consommé, et ne repart pas avant 15 min (`propositions.reessai_le`, migration
+  0011) ; elle expire comme les autres. 5xx autre que 503, ou réponse perdue (délai,
   coupure, illisible) : issue **inconnue**, l'action reste `envoi` et la passe s'arrête.
 - **Rapprochement** : une action en `envoi` depuis plus de 90 s (délai du client 45 s) — donc aussi au redémarrage —
   est confrontée, AVANT toute nouvelle tentative, à `GET /ai/etat` (cible et liste du geste, fin compatible avec
   l'heure d'envoi, id de gk2 jamais déjà attribué ; `prolonger` : fin repoussée ; `unban` : id disparu alors que le
   ban courait encore — sinon `echec` `echue`, gk2 n'ayant rien levé). Trouvée → `faite`, absente → `echec`.
   **Jamais renvoyée à l'aveugle.** Une action plus récente, ou gk2 illisible : rien d'autre ne part.
+- **Mode SADE de gk2** (revue finale I2, miroir de sa porte) : lu au relevé de `/ai/etat` ; en `observe`, aucun geste
+  posé ne part, clic compris ; en `reactive`, d'office `limiter` seul, les clics partent ; écartée, la proposition
+  reste telle quelle. Chaque corps porte son `mode` (`auto` | `clic`). Les levées ne sont pas gardées par le mode.
+- **Cibles** : jamais un préfixe IPv6 global on-link de gk3 (`/proc/net/if_inet6`, revue finale I3 ; gk2 refuse les
+  siens, 409 `lan`).
 - **Suspension** : `POST /veille/suspendre` (console) ou `secubox-aictl veille suspendre` arrête tout geste d'office ;
   les propositions approuvées restent envoyées. Trois 409 `plafond_*` en 10 min, un 503 ou un 401/403 de gk2 (clé
   refusée : `cle_ai_ban.refusee` dans `/veille/etat`, effacé au prochain geste réussi) la posent **d'eux-mêmes**
@@ -265,7 +273,9 @@ sudo secubox-aictl cle-ai-ban generer     # privée /etc/secubox/secrets/ai/ai-b
 La privée ne quitte jamais gk3 ; elle n'est remise qu'à `secubox-ai-veille` (`LoadCredential=ai-ban`) — ni l'API ni le
 moteur ne la lisent. Absente, l'unité démarre quand même (`SetCredential=ai-ban:absente`, comme `ai-lecture` et
 `ai-distant`) : aucune réponse n'est exécutée et `GET /veille/etat` le dit (`cle_ai_ban.etat` = `absente`,
-`invalide`, ou `presente` avec l'empreinte). Un jeton par geste : audience = nom de gk2 (`[veille] aud`), empreinte
+`invalide`, ou `presente` avec l'empreinte). Sans clé `ai-lecture` mais avec `ai-ban` (revue finale M6), la collecte
+s'éteint, l'exécuteur agit et rapproche par `GET /ai/etat` signé `ai-ban` (gk2 l'admet) : `cle_ai_lecture` de
+`/veille/etat` vaut `{"etat": "absente", "rapprochement": "ai-ban"}`. Un jeton par geste : audience = nom de gk2 (`[veille] aud`), empreinte
 SHA-256 du corps exact, `jti` à usage unique, une minute au plus ; gk2 refuse un rejeu (401 `rejeu`). Les plafonds
 sont ceux du **compte**, partagés avec tout autre relais qui signe avec une clé admise.
 
@@ -439,7 +449,7 @@ Toute route porte `require_jwt` (administrateur réel), sauf `GET /health` (test
 | `POST /propositions/{pid}/approuver` | approuve `{"version": n}` (409 `version`, `expiree`, `decidee`) |
 | `POST /propositions/{pid}/refuser` | refuse `{"version": n}` (mêmes refus) |
 | `GET /actions` | actions envoyées à gk2 et leur réponse ; `curseur`, `limite` (100, 500 au plus) |
-| `GET /veille/etat` | suspension, clé ai-ban, mode SADE et plafonds restants (relevé de `/ai/etat`), plafonds de gk3 |
+| `GET /veille/etat` | suspension, clés ai-ban et ai-lecture, mode SADE et plafonds restants (relevé de `/ai/etat`), plafonds de gk3 |
 | `POST /veille/suspendre` | suspend les gestes d'office (les approuvés restent possibles) |
 | `POST /veille/reprendre` | lève la suspension (manuelle ou d'elle-même) |
 | `GET /filtres` | filtres WAF d'office (§ Apprentissage) et `etat` (nombres, null si inconnus) |

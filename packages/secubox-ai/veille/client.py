@@ -134,10 +134,23 @@ class ClientGk2:
         self.delai_s = delai_s
         self.delais_routes = dict(DELAIS_DEFAUT if delais_routes is None else delais_routes)
 
+    @property
+    def peut_lire(self) -> bool:
+        """Vrai si la clé du compte `ai-lecture` a été remise (collecte). Sans elle (revue finale M6), seul
+        `GET /ai/etat` reste lisible, signé par la clé `ai-ban` (gk2 l'admet : `require_ai_etat`) : l'exécuteur
+        rapproche et lit le mode SADE, jamais rien d'autre."""
+        return bool(self._cle)
+
     async def get(self, nom: str, params: Optional[dict] = None) -> Any:
         url, signe = self.table[nom]
-        jeton = frapper_jeton(self._cle, COMPTE, aud=self.aud, corps=b"", maintenant=self.horloge(),
-                              methode="GET", chemin=signe)
+        if self._cle:
+            jeton = frapper_jeton(self._cle, COMPTE, aud=self.aud, corps=b"", maintenant=self.horloge(),
+                                  methode="GET", chemin=signe)
+        elif nom == "ai_etat" and self._cle_ban:
+            # compte ai-ban : il lie le corps (vide), jamais la méthode ni le chemin (contrainte P9 de gk2)
+            jeton = frapper_jeton(self._cle_ban, COMPTE_GESTES, aud=self.aud, corps=b"", maintenant=self.horloge())
+        else:
+            raise ErreurGk2(None, "cle_lecture_absente")
         entetes = dict(AGENT, Authorization=f"Bearer {jeton}")
         try:
             async with httpx.AsyncClient(transport=self._transport, timeout=self.delais_routes.get(nom, self.delai_s), trust_env=False,

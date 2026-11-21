@@ -19,7 +19,9 @@ Une passe (boucle `reponses`, 10 s, dans secubox-ai-veille) :
    automatique NON suspendu — filtré en SQL : une file d'office suspendue n'affame jamais un clic approuvé), non
    expirées, sans action ; par gravité du dossier, nombre d'étapes, puis récence ; plafonds de gk3 (`politiques.toml`,
    ≤ ceux de gk2, `unban` compris) sur les envois de l'heure et du jour. Une proposition expirée (`proposee` ou
-   `approuvee`) passe `expiree` sans envoi (une approuvée expirée est auditée) ;
+   `approuvee`) passe `expiree` sans envoi (une approuvée expirée est auditée). Mode SADE de gk2 (dernier relevé de
+   /ai/etat, revue finale I2) : en `observe` aucun geste posé ne part, clic compris ; en `reactive`, d'office
+   `limiter` seul ; écartée, la proposition reste telle quelle ;
 5. pour chacune : REVALIDATION avant signature (geste du catalogue, cible de la forme du geste, publique et hors des
    plages protégées `[veille.analyste] protegees`, durée dans les bornes de gk2) ; corps aux formes EXACTES des
    modèles de gk2 ; `prolonger` et `unban` visent l'id de gk2 rendu au geste de la proposition `reference` (la levée
@@ -27,7 +29,9 @@ Une passe (boucle `reponses`, 10 s, dans secubox-ai-veille) :
    `echec` local audité, rien n'est signé. La ligne `actions` est créée en `envoi` (avec le `jti` et l'empreinte de la
    clé) et la proposition passe `envoyee` DANS UNE TRANSACTION, AVANT le premier octet envoyé ; puis la réponse de gk2
    est enregistrée telle quelle : 200 → `faite` (id et fin de gk2 ; levée `echu` → `refusee_gk2`) ; 409/404 →
-   `refusee_gk2` (motif) ; 503, 401, 403 → `echec` et FIN DE PASSE (le reste du lot n'est pas brûlé) ; autre 4xx →
+   `refusee_gk2` (motif), sauf un 409 non définitif (`REFUS_NON_DEFINITIFS`) : la proposition revient à son état
+   sans action, nouvel essai après `REESSAI_S` ; 503, 401, 403 → `echec` et FIN DE PASSE (le reste du lot n'est pas
+   brûlé) ; autre 4xx →
    `echec` ; 5xx autre que 503, ou réponse perdue → issue INCONNUE : reste `envoi` (rapprochée plus tard), fin de passe.
 
 Suspension d'elle-même : trois 409 `plafond_*` en 10 min, un 503, ou un 401/403 (clé refusée par gk2, dit par
@@ -56,7 +60,7 @@ from typing import Callable, Optional
 from veille import decisions
 from veille.client import ErreurGk2
 from veille.decisions import ACTEUR_VEILLE, ajouter_audit, iso
-from veille.riposte import _protegee
+from veille.riposte import _protegee, prefixes_locaux
 
 log = logging.getLogger("secubox-ai-veille")
 
@@ -77,6 +81,13 @@ DUREE_MIN_S, DUREE_MAX_S = 3600, 7 * 86400
 LOT = 20
 TAILLE_REPONSE = 4096
 DELAI_DEMANDE_ACL_S = 600
+#: Revue finale I2 : refus de gk2 NON définitifs (mode SADE du moment, cibles protégées momentanément inconnues). La
+#: proposition revient à son état (proposée ou approuvée) sans action ni plafond consommé ; elle ne repart pas avant
+#: `REESSAI_S` (jamais en boucle) et expire comme les autres.
+REFUS_NON_DEFINITIFS = frozenset({"sade_observe", "sade_reactive", "protegee_inconnue"})
+REESSAI_S = 900
+#: Gestes posés soumis au mode SADE de gk2 (`porte_sade`) ; les levées (`unban`) ne le sont pas.
+GESTES_SADE = frozenset({"ban", "ban_bloc", "prolonger", "limiter", "leurre", "partager"})
 _RE_ID = re.compile(r"^[0-9a-f]{32}$")
 _RE_CONSEIL = re.compile(r"[^A-Za-z0-9._-]")
 _RE_FAMILLE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
@@ -96,6 +107,7 @@ LEVEES_SANS_BAN = ("limiter", "leurre")
 _ORDRE = ("SELECT p.id, p.version, p.etat, p.geste, p.cible, p.duree_s, p.mode, p.reference, p.motif "
           "FROM propositions p LEFT JOIN dossiers d ON d.id = p.dossier_id "
           "WHERE p.expire_le > ? AND NOT EXISTS (SELECT 1 FROM actions a WHERE a.proposition_id = p.id) "
+          "AND (p.reessai_le IS NULL OR p.reessai_le <= ?) "
           "AND (p.etat = 'approuvee' OR (p.etat = 'proposee' AND p.mode = 'auto' AND p.geste IN ({auto}))) "
           "ORDER BY CASE d.gravite WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 "
           "ELSE 0 END DESC, CASE WHEN json_valid(d.etapes_json) THEN json_array_length(d.etapes_json) ELSE 0 END DESC, "
@@ -383,9 +395,30 @@ def _choisir(db, maintenant, pol):
         return [], lignes
     auto = _gestes_auto(db, pol)
     sql = _ORDRE.format(auto=", ".join("?" * len(auto)) or "NULL")
-    retenues = [p for p in (dict(zip(_CHAMPS, r)) for r in db.execute(sql, (h, *auto, LOT)).fetchall())
-                if p["geste"] in ROUTES and pol.admet(p["geste"])]
+    sade = _sade_releve(db)
+    retenues = [p for p in (dict(zip(_CHAMPS, r)) for r in db.execute(sql, (h, h, *auto, LOT)).fetchall())
+                if p["geste"] in ROUTES and pol.admet(p["geste"]) and _admis_par_sade(p, sade)]
     return retenues, lignes
+
+
+def _sade_releve(db) -> Optional[str]:
+    """Mode SADE de gk2 au dernier relevé de /ai/etat (None : inconnu, ou aucune porte sur gk2)."""
+    try:
+        mode = json.loads(decisions.lire_etat(db, "ai_etat") or "{}").get("sade_mode")
+    except (ValueError, AttributeError):
+        return None
+    return mode if mode in ("observe", "reactive", "active", "aggressive") else None
+
+
+def _admis_par_sade(p, sade) -> bool:
+    """Revue finale I2 (miroir de `porte_sade` de gk2) : en `observe`, aucun geste posé ne part, clic compris ; en
+    `reactive`, les clics partent, d'office `limiter` seul. Écartée ici, la proposition reste telle quelle : rien
+    n'est consommé, elle repartira quand le mode le permettra (ou expirera)."""
+    if p["geste"] not in GESTES_SADE or sade not in ("observe", "reactive"):
+        return True
+    if sade == "observe":
+        return False
+    return p["etat"] == "approuvee" or p["geste"] == "limiter"
 
 
 def _famille(db, cible) -> str:
@@ -453,14 +486,16 @@ def _construire(db, p, protegees=()):
         return None, None, "duree"
     motif = (p["motif"] or "")[:200]
     if geste == "prolonger":
-        return {"geste": "prolonger", "id": r[0], "duree_s": duree, "conseil": conseil, "motif": motif}, r[0], None
+        return {"geste": "prolonger", "id": r[0], "duree_s": duree, "mode": mode, "conseil": conseil,
+                "motif": motif}, r[0], None
     if geste in ("ban", "ban_bloc"):
         return {"geste": "ban", "cible": p["cible"], "duree_s": duree, "mode": mode, "conseil": conseil,
                 "motif": motif}, None, None
     if geste == "partager":
-        return {"geste": "partager", "cible": p["cible"], "duree_s": duree, "conseil": conseil,
+        return {"geste": "partager", "cible": p["cible"], "duree_s": duree, "mode": mode, "conseil": conseil,
                 "famille": _famille(db, p["cible"])}, None, None
-    return {"geste": geste, "cible": p["cible"], "duree_s": duree, "conseil": conseil, "motif": motif}, None, None
+    return {"geste": geste, "cible": p["cible"], "duree_s": duree, "mode": mode, "conseil": conseil,
+            "motif": motif}, None, None
 
 
 def _plafond_gk3(db, pol, geste, maintenant) -> bool:
@@ -552,15 +587,24 @@ def _enregistrer(db, p, action_id, code, motif, reponse, maintenant):
             if motif == "echu":
                 etat = "refusee_gk2"         # rien n'a été levé : le ban échu reste compté en récidive (comme gk2)
             db.execute("DELETE FROM executeur_etat WHERE cle = 'cle_refusee'")
+        elif code == 409 and motif in REFUS_NON_DEFINITIFS:
+            etat = "reessai"
         elif code in (404, 409):
             etat = "refusee_gk2"
         else:
             etat = "echec"
-        db.execute("UPDATE actions SET etat = ?, code_http = ?, motif = ?, reponse_json = ?, id_gk2 = ?, fin_gk2 = ?, "
-                   "repondue_le = ? WHERE id = ?", (etat, code, motif, _json_borne(reponse), id_gk2, fin, h,
-                                                    action_id))
-        db.execute("UPDATE propositions SET etat = ?, maj_le = ? WHERE id = ? AND etat = 'envoyee'",
-                   (etat, h, p["id"]))
+        if etat == "reessai":
+            # I2 : ni action (UNIQUE(proposition_id) permettra le nouvel envoi), ni plafond consommé ; la trace reste
+            # dans audit_chaine et audit.log (ligne ci-dessous)
+            db.execute("DELETE FROM actions WHERE id = ?", (action_id,))
+            db.execute("UPDATE propositions SET etat = ?, reessai_le = ?, maj_le = ? WHERE id = ? AND etat = 'envoyee'",
+                       (p["etat"], iso(maintenant + timedelta(seconds=REESSAI_S)), h, p["id"]))
+        else:
+            db.execute("UPDATE actions SET etat = ?, code_http = ?, motif = ?, reponse_json = ?, id_gk2 = ?, "
+                       "fin_gk2 = ?, repondue_le = ? WHERE id = ?", (etat, code, motif, _json_borne(reponse), id_gk2,
+                                                                     fin, h, action_id))
+            db.execute("UPDATE propositions SET etat = ?, maj_le = ? WHERE id = ? AND etat = 'envoyee'",
+                       (etat, h, p["id"]))
         details = {"proposition": p["id"], "action": action_id, "geste": p["geste"], "cible": p["cible"],
                    "code": code, "motif": motif, "id_gk2": id_gk2, "resultat": etat}
         ajouter_audit(db, maintenant, ACTEUR_VEILLE, "reponse_gk2", p["id"], etat, details)
@@ -672,6 +716,9 @@ async def executer(veille, client, maintenant: datetime, politiques=None,
         return
     await veille.sql(lambda db: _poser_si_change(db, "cle_ai_ban", {"etat": "presente", "empreinte": empreinte},
                                                  maintenant))
+    # M6 : sans clé ai-lecture, /ai/etat (rapprochement, mode SADE) est lu avec la clé ai-ban ; dit dans /veille/etat
+    lecture = {"etat": "presente"} if client.peut_lire else {"etat": "absente", "rapprochement": "ai-ban"}
+    await veille.sql(lambda db: _poser_si_change(db, "cle_ai_lecture", lecture, maintenant))
     if not await rapprocher(veille, client, maintenant, journal):
         return
     if await veille.sql(_releve_perime, maintenant):
@@ -684,6 +731,7 @@ async def executer(veille, client, maintenant: datetime, politiques=None,
     await veille.sql(lambda db: _poser_si_change(db, "politique", vue, maintenant))
     retenues, lignes = await veille.sql(_choisir, maintenant, politiques)
     await _journaliser(journal, lignes)
+    protegees = list(protegees) + await asyncio.to_thread(prefixes_locaux)     # I3 : LAN connu de gk3
     for p in retenues:
         if await _executer_une(veille, client, p, maintenant, politiques, journal, protegees) == "arret":
             break

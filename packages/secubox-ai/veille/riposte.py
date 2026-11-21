@@ -46,7 +46,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from veille import cas_sur
+from veille import cas_sur, decisions
 from veille.collecte import _audit
 from veille.politiques import lire_toml
 from veille.regles import DECISIONS, NEUTRES, iso
@@ -349,6 +349,34 @@ def motifs_possibles(p: Proposition):
     return [(MOTIFS[p.regle], p.valeurs)]
 
 
+#: Adresses IPv6 des interfaces de gk3 (injectable en test) : leurs préfixes globaux on-link sont un LAN connu, jamais
+#: visé (revue finale I3 ; gk2 refuse aussi les siens, motif `lan`). L'IPv4 d'un LAN est privée : déjà protégée.
+SOURCE_IF_INET6 = "/proc/net/if_inet6"
+
+
+def prefixes_locaux() -> list:
+    """Préfixes IPv6 globaux on-link de cette box (portée 0x00 de /proc/net/if_inet6), [] s'ils sont illisibles."""
+    reseaux = []
+    try:
+        with open(SOURCE_IF_INET6, encoding="ascii") as f:
+            for ligne in f:
+                champs = ligne.split()
+                if len(champs) < 6:
+                    continue
+                try:
+                    adresse = ipaddress.IPv6Address(int(champs[0], 16))
+                    longueur, portee = int(champs[2], 16), int(champs[3], 16)
+                except ValueError:
+                    continue
+                if portee == 0 and 0 < longueur < 128 and adresse.is_global:
+                    n = ipaddress.ip_network((adresse, longueur), strict=False)
+                    if n not in reseaux:
+                        reseaux.append(n)
+    except OSError:
+        pass
+    return reseaux
+
+
 def _protegee(n, protegees) -> bool:
     """Même règle que l'analyste (analyste._protegee) : forme mêlée, adresse non publique ou plage protégée."""
     if isinstance(n, ipaddress.IPv6Network) and n.network_address.ipv4_mapped is not None:
@@ -382,16 +410,23 @@ def duree_recidive(n: int) -> int:
     return min(DUREE_MAX_S, DUREE_AUTO_ADRESSE_S * FACTEUR_RECIDIVE ** min(max(n, 0), EXPOSANT_MAX))
 
 
-# Un ban V2 levé par une levée V2 faite (`unban`, `reference` = id du ban) ne compte plus, comme gk2 retire de la
-# récidive les bans annulés (`_CAUSES_SANS_RECIDIVE`) ; un ban jamais posé (`echec`, `refusee_gk2`) n'est pas `faite`.
+# Un ban V2 clos par une levée V2 faite (`unban`, `reference` = id du ban) n'est plus vivant (gk2 l'a clos, même
+# `couvert`) ; un ban jamais posé (`echec`, `refusee_gk2`) n'est pas `faite`.
 _NON_LEVE = ("NOT EXISTS (SELECT 1 FROM propositions u WHERE u.geste = 'unban' AND u.etat = 'faite' "
              "AND u.reference = propositions.id)")
+# Récidive (revue finale I5) : MIROIR de `_CAUSES_SANS_RECIDIVE` de gk2 (audit, unban) — une levée qui a vraiment levé
+# retire le ban du compte ; une clôture `couvert` (gk2 clôt sans rien lever, une autre source couvre la cible) le
+# laisse compté, comme sur gk2.
+_NON_LEVE_RECIDIVE = ("NOT EXISTS (SELECT 1 FROM propositions u WHERE u.geste = 'unban' AND u.etat = 'faite' "
+                      "AND u.reference = propositions.id AND NOT EXISTS (SELECT 1 FROM actions a "
+                      "WHERE a.proposition_id = u.id AND a.motif = 'couvert'))")
 
 
 def _bans_poses(db, geste, cible) -> int:
-    """Bans V2 faits et non levés sur la cible (miroir du compte de gk2 : ses propres bans de la cible)."""
+    """Bans V2 faits et non levés sur la cible (miroir du compte de gk2 : ses propres bans de la cible, une clôture
+    `couvert` comprise)."""
     return db.execute(f"SELECT COUNT(*) FROM propositions WHERE geste = ? AND cible = ? AND etat = 'faite' "
-                      f"AND {_NON_LEVE}", (geste, cible)).fetchone()[0]
+                      f"AND {_NON_LEVE_RECIDIVE}", (geste, cible)).fetchone()[0]
 
 
 def _fin(maj, duree):
@@ -430,19 +465,26 @@ def _ban_en_vol(db, ip, bloc) -> bool:
 
 def _ban_vivant(db, ip, bloc, maintenant):
     """Ban V2 FAIT de l'adresse ou de son bloc dont la fin est à venir : (id, geste, cible, fin, prolongé) le plus
-    tardif, ou
-    None. Fin = passage à `faite` (`maj_le`) + `duree_s` (la tâche 7 tient `faite` à jour), repoussée par ses
-    prolongations faites ; un ban levé par une levée V2 faite n'est plus vivant."""
+    tardif, ou None. Fin (revue finale I5) : celle que gk2 a RENDUE (`decisions.fin_geste` : `fin_gk2` du ban et de ses
+    prolongations faites, la plus tardive) ; à défaut (action sans fin lue), passage à `faite` (`maj_le`) + `duree_s`
+    repoussé par ses prolongations faites. Un ban clos par une levée V2 faite n'est plus vivant."""
     meilleur = None
     for g, c in _cibles_ban(ip, bloc):
         for pid, maj, duree in db.execute(f"SELECT id, maj_le, duree_s FROM propositions WHERE geste = ? AND cible = ? "
                                           f"AND etat = 'faite' AND {_NON_LEVE}", (g, c)).fetchall():
-            origine = _fin(maj, duree)
-            fin = _fin_prolongee(db, pid, origine)
-            if fin is None:
-                continue
+            reelle = decisions.fin_geste(db, pid)
+            prolonge = db.execute("SELECT 1 FROM propositions WHERE geste = 'prolonger' AND etat = 'faite' "
+                                  "AND reference = ?", (pid,)).fetchone() is not None
+            if reelle is not None:
+                fin = datetime.fromtimestamp(reelle, timezone.utc)
+            else:
+                origine = _fin(maj, duree)
+                fin = _fin_prolongee(db, pid, origine)
+                if fin is None:
+                    continue
+                prolonge = prolonge or origine is None or fin > origine
             if fin > maintenant and (meilleur is None or fin > meilleur[3]):
-                meilleur = (pid, g, c, fin, origine is None or fin > origine)
+                meilleur = (pid, g, c, fin, prolonge)
     return meilleur
 
 
@@ -552,8 +594,8 @@ def proposer(db, dossier, politiques, maintenant: datetime, protegees=(), seuils
     comptes = _comptes(dossier, maintenant, seuils)
     h = iso(maintenant)
     expire = iso(maintenant + timedelta(minutes=politiques.expiration_min))
-    # Adresses de la box vues en vhost (IP nue) : jamais visées.
-    protegees = list(protegees)
+    # Adresses de la box vues en vhost (IP nue), préfixes LAN connus de gk3 (I3) : jamais visés.
+    protegees = list(protegees) + prefixes_locaux()
     for e in getattr(dossier, "evts", []) or []:
         try:
             n = ipaddress.ip_network(e.vhost) if e.vhost else None

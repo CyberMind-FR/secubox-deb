@@ -189,7 +189,9 @@ def _vue_etat(db) -> dict:
     auto = db.execute("SELECT COUNT(*) FROM propositions WHERE etat = 'proposee' AND mode = 'auto'").fetchone()[0]
     bloque = s["suspendu"] or s["politique"]
     garde = _json_etat(db, "garde_espace") or {"etat": "inconnu"}     # écrite par la veille (#3725)
-    return {"suspension": s, "cle_ai_ban": cle, "garde_espace": garde,
+    # M6 : sans clé ai-lecture, la collecte est éteinte ; le rapprochement passe par la clé ai-ban (écrit par la veille)
+    lecture = _json_etat(db, "cle_ai_lecture") or {"etat": "inconnu"}
+    return {"suspension": s, "cle_ai_ban": cle, "cle_ai_lecture": lecture, "garde_espace": garde,
             "sade_mode": releve.get("sade_mode") if isinstance(releve, dict) else None,
             "releve_lu_le": releve.get("lu_le") if isinstance(releve, dict) else None,
             "mode": politique.get("mode") if isinstance(politique, dict) else None, "plafonds": plafonds,

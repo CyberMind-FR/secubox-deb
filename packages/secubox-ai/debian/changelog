@@ -27,6 +27,18 @@ secubox-ai (2.0.0-1~trixie1) trixie; urgency=medium
     /veille/etat (garde_espace).
   * Ordre de déploiement : secubox-waf-ng 1.43.0, secubox-soc 1.12.0, secubox-mirrornet 0.7.0 et
     secubox-annuaire 0.23.0 AVANT secubox-ai 2.0.0 (README, § Mise en service).
+  * Revue finale #3723 (phases 4-7) :
+    I2 : l'exécuteur lit le mode SADE du relevé de /ai/etat : en observe rien ne part (clic compris), en reactive
+    d'office limiter seul ; chaque corps porte `mode`. Un refus sade_observe, sade_reactive ou protegee_inconnue
+    n'est pas définitif : la proposition revient à son état, sans action ni plafond consommé, et ne repart pas avant
+    15 min (migration 0011, propositions.reessai_le).
+    I3 : préfixes IPv6 globaux on-link de gk3 (/proc/net/if_inet6) jamais proposés ni signés.
+    I5 : ban vivant = fin rendue par gk2 (decisions.fin_geste) ; une clôture `couvert` reste comptée en récidive,
+    comme sur gk2.
+    M6 : sans clé ai-lecture, la collecte s'éteint mais l'exécuteur agit et rapproche par /ai/etat signé ai-ban ;
+    /veille/etat le dit (cle_ai_lecture).
+    F1 : rule_id de sbxwaf rangé à part (evenements.rule_id, migration 0011) et dans l'empreinte quand il est
+    connu ; les touches d'un filtre WAF d'office se lisent sur lui seul, jamais sur `message`.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 18:00:00 +0100
 

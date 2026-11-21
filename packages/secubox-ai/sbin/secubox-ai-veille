@@ -73,8 +73,10 @@ log = logging.getLogger("secubox-ai-veille")
 
 
 def _client():
-    """Client de gk2, ou None (journalisé) sans clé de lecture ou sans configuration. La clé ai-ban (#3723) s'y
-    ajoute si elle est remise : sans elle, le client lit mais n'agit pas (`peut_agir` faux)."""
+    """Client de gk2, ou None (journalisé) sans aucune clé ou sans configuration. La clé ai-ban (#3723) s'y ajoute si
+    elle est remise : sans elle, le client lit mais n'agit pas (`peut_agir` faux). Sans clé ai-lecture mais avec
+    ai-ban (revue finale M6) : la collecte est éteinte (`peut_lire` faux), l'exécuteur agit et rapproche par /ai/etat
+    signé ai-ban ; /veille/etat le dit (`cle_ai_lecture`)."""
     try:
         with open(CONF, "rb") as f:
             cfg = tomllib.load(f)
@@ -89,10 +91,11 @@ def _client():
     cle = executeur.lire_cle(dossier, "ai-lecture")
     if cle is None:
         log.error("clé ai-lecture absente (secubox-aictl cle-ai-lecture generer) : collecte éteinte")
-        return None
     cle_ban = executeur.lire_cle(dossier, "ai-ban")
     if cle_ban is None:
         log.error("clé ai-ban absente (secubox-aictl cle-ai-ban generer) : aucune réponse ne sera exécutée")
+        if cle is None:
+            return None
     cle_filtres = executeur.lire_cle(dossier, "ai-filtres")
     if cle_filtres is None:
         log.error("clé ai-filtres absente (secubox-aictl cle-ai-filtres generer) : aucun filtre WAF d'office")
@@ -180,7 +183,7 @@ async def _main():
     boucles = [Boucle("retention", 86400, purge, exempte=True), Boucle("correlation", PAS_CORRELATION_S, correler),
                Boucle("analyse", PAS_ANALYSE_S, analyser)]
     client = _client()
-    if client is not None:
+    if client is not None and client.peut_lire:
         sources = toutes()
 
         async def collecter():

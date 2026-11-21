@@ -199,11 +199,11 @@ def _attribution(nom="sqlmap", traits=2):
             "traits_concordants": [{"type": "agent"}, {"type": "identifiants"}][:traits], "traits_observes": []}
 
 
-def _evt(db, ip, famille="scanners", message=None, attributs=None, quand=None):
+def _evt(db, ip, famille="scanners", message=None, attributs=None, quand=None, rule_id=None):
     eid = str(uuid.uuid4())
-    db.execute("INSERT INTO evenements(id, source, noeud, horodatage, famille, gravite, ip_src, message, "
-               "attributs_json, empreinte, cree_le) VALUES (?, 'menaces', 'gk2', ?, ?, 'high', ?, ?, ?, ?, 'x')",
-               (eid, iso(quand or _maintenant()), famille, ip, message, json.dumps(attributs or {}), eid))
+    db.execute("INSERT INTO evenements(id, source, noeud, horodatage, famille, gravite, ip_src, message, rule_id, "
+               "attributs_json, empreinte, cree_le) VALUES (?, 'menaces', 'gk2', ?, ?, 'high', ?, ?, ?, ?, ?, 'x')",
+               (eid, iso(quand or _maintenant()), famille, ip, message, rule_id, json.dumps(attributs or {}), eid))
     return eid
 
 
@@ -255,7 +255,7 @@ def test_confirmation_apres_24h_sans_touche_protegee(banc, tmp_path, monkeypatch
     n'est pas mesurable depuis gk3) ; un clic d'administrateur le confirme."""
     _dossier(banc.db, "45.83.64.1", [_attribution()])
     _tour(banc)
-    _evt(banc.db, "45.83.70.9", famille="ia_filtres_haute", message=FID)          # touche publique : sans effet
+    _evt(banc.db, "45.83.70.9", famille="ia_filtres_haute", rule_id=FID)          # touche publique : sans effet
     _tour(banc, maintenant=_maintenant() + timedelta(hours=23))
     assert _etat(banc.db, FID) == "essai"
     _tour(banc, maintenant=_maintenant() + timedelta(hours=25))
@@ -290,7 +290,7 @@ def test_retrait_si_reponse_legitime_touchee(banc):
     _dossier(banc.db, "45.83.64.1", [_attribution()])
     _tour(banc)
     assert FID in banc.gk2.filtres
-    _evt(banc.db, None, famille="ia_filtres_haute", message=FID, attributs={"local": True})
+    _evt(banc.db, None, famille="ia_filtres_haute", rule_id=FID, attributs={"local": True})
     decisions.suspendre(banc.db, "admin", _maintenant())
     _tour(banc)
     assert _etat(banc.db, FID) == "retire" and FID not in banc.gk2.filtres
@@ -312,7 +312,7 @@ def test_retrait_sur_adresse_privee_ou_plage_protegee(banc, ip):
     _tour(banc)
     decisions.poser_etat(banc.db, "x", "y", _maintenant())
     banc.db.execute("UPDATE filtres SET etat = 'confirme' WHERE id = ?", (FID,))
-    _evt(banc.db, ip, famille="ia_filtres_critique", message=FID)
+    _evt(banc.db, ip, famille="ia_filtres_critique", rule_id=FID)
     _tour(banc, protegees=[ipaddress.ip_network("198.51.100.0/24")])
     assert _etat(banc.db, FID) == "retire"
 

@@ -3,7 +3,7 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """Montée depuis 0.4.0 (#3725) : état d'une box en 0.4.0 (veille.db migrations 0001 à 0004 avec lignes, memoire.db,
-preferences.toml, historique), ouvert comme le service le fait au démarrage. Rien ne se perd, 0005 à 0010 sont
+preferences.toml, historique), ouvert comme le service le fait au démarrage. Rien ne se perd, 0005 à 0011 sont
 appliquées, la sauvegarde veille.db.avant-0005 existe et reflète l'état d'avant."""
 import shutil
 import sqlite3
@@ -72,7 +72,7 @@ def test_montee_depuis_040_sans_perte(etat):
     db = base.ouvrir(etat / "veille.db")
     try:
         versions = [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")]
-        assert versions == list(range(1, 11))
+        assert versions == list(range(1, 12))
         assert db.execute("SELECT COUNT(*) FROM evenements").fetchone()[0] == 50
         assert db.execute("SELECT cle FROM dossiers").fetchall() == [("100.64.9.1",)]
         assert {"analyses", "actions", "redescentes"} <= _tables(db)
@@ -106,7 +106,7 @@ def test_deuxieme_demarrage_ne_refait_rien(etat):
     db = base.ouvrir(etat / "veille.db")
     try:
         assert base.migrer(db) == []
-        assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == list(range(1, 11))
+        assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == list(range(1, 12))
     finally:
         db.close()
     assert sauve.stat().st_mtime_ns == quand and [p.name for p in etat.glob("veille.db.avant-*")] == ["veille.db.avant-0005"]

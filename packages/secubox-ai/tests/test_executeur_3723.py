@@ -86,8 +86,8 @@ class Gk2:
         self.appels = []
         self.forcer = []
         self.utilisateurs = []
+        self.sade_mode = "active"
         self.app = FastAPI()
-        garde_lecture = cs.garde_compte_service("ai-lecture")
 
         def actifs(type_):
             m = int(time.time())
@@ -96,9 +96,9 @@ class Gk2:
                     if e["type"] == type_ and not e.get("annule") and e["fin"] > m]
 
         @self.app.get("/ai/etat")
-        async def etat(user=Depends(garde_lecture)):
+        async def etat(user=Depends(G.require_ai_etat)):       # la VRAIE garde : ai-lecture OU ai-ban (#3720)
             return {"actifs": actifs("ban"), "limites": actifs("limite"), "leurres": actifs("leurre"),
-                    "partages": actifs("partage"), "sade_mode": "active",
+                    "partages": actifs("partage"), "sade_mode": self.sade_mode,
                     "plafonds_par_geste": {g: {"heure": p["heure"], "jour": p["jour"], "restant_heure": p["heure"],
                                                "restant_jour": p["jour"]} for g, p in G.PLAFONDS_PAR_GESTE.items()}}
 
@@ -468,7 +468,7 @@ def test_prolonger_et_unban_par_l_id_de_gk2(banc):
     _tour(banc)
     assert _etat(banc.db, pro) == "faite" and banc.gk2.appels[-1][1] == {
         "geste": "prolonger", "id": id_gk2, "duree_s": 4 * 86400, "conseil": banc.gk2.appels[-1][1]["conseil"],
-        "motif": banc.gk2.appels[-1][1]["motif"]}
+        "motif": banc.gk2.appels[-1][1]["motif"], "mode": "auto"}
     assert _action(banc.db, pro)["id_cible"] == id_gk2
     lev = _prop(banc.db, geste="unban", cible=A, duree=None, reference=ban)
     _tour(banc)

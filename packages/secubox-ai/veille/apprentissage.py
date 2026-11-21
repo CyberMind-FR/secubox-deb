@@ -15,7 +15,8 @@ FILTRES (boucle `apprentissage`, 300 s, compte `ai-filtres`, clé remise par Loa
 - plafonds de gk3 = ceux de gk2 (10/h, 50/j, fenêtres glissantes, sur les envois) ; mode `observation` de la
   politique ou automatique suspendu (veille.db ou politique) : aucun NOUVEL envoi ;
 - essai de 24 h : une touche d'une adresse PROTÉGÉE (non publique, `local`, plages `[veille.analyste] protegees`),
-  lue dans les lignes `ia_filtres_*` du journal des menaces déjà collectées (`message` = `rule_id` = id du filtre),
+  lue dans les lignes `ia_filtres_*` du journal des menaces déjà collectées (colonne `rule_id` = id du filtre, jamais
+  `message`, revue finale F1),
   fait RETIRER le filtre (`DELETE /ai/filtres/{id}`) avec alerte — d'office, à tout moment, y compris pour un filtre
   confirmé et même en observation ou suspendu (retirer protège). Sans touche protégée après 24 h : `a_confirmer`,
   confirmation en UN CLIC d'un administrateur (`POST /filtres/{id}/confirmer`), JAMAIS d'office : le second critère
@@ -125,7 +126,7 @@ def touches_protegees(db, fid, depuis, protegees=()) -> int:
     """Touches du filtre `fid` sur une adresse protégée depuis `depuis` (lignes `ia_filtres_*` collectées)."""
     n = 0
     for ip, attributs in db.execute("SELECT ip_src, attributs_json FROM evenements WHERE famille LIKE "
-                                    "'ia\\_filtres\\_%' ESCAPE '\\' AND message = ? AND horodatage >= ?",
+                                    "'ia\\_filtres\\_%' ESCAPE '\\' AND rule_id = ? AND horodatage >= ?",
                                     (fid, depuis)).fetchall():
         n += _protegee_ip(ip, attributs, protegees)
     return n
