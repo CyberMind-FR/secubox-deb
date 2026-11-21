@@ -113,7 +113,9 @@ class SystemeUnbound:
         Repli sur `reload` seulement si Unbound REFUSE le fast_reload (option non rechargeable à chaud, version ancienne) ;
         jamais après un dépassement de délai : le chargement peut encore être en cours, un second rechargement s'y ajouterait."""
         ok, sortie = commande([self.CONTROLE, "fast_reload"], DELAI_FAST_RELOAD)
-        if ok and sortie.strip().splitlines()[-1:] == ["ok"]:
+        # Succès = code 0 sans message d'erreur : sans « +v », unbound-control fast_reload n'affiche RIEN (vu sur gk2
+        # le 21/11 : rc 0, sortie vide) ; exiger « ok » faisait suivre chaque fast_reload d'un reload complet (coupure).
+        if ok and "error" not in sortie.lower():
             return
         if not ok and "délai" in sortie:
             raise self.ERREUR("unbound-control fast_reload : " + sortie)

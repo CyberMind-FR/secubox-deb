@@ -70,3 +70,8 @@ def test_rechargement_par_fast_reload_3850():
     corps = SCRIPT.read_text(encoding="utf-8")
     assert '["unbound-control", "fast_reload"]' in corps
     assert '"systemctl", "reload", "unbound"' not in corps
+
+
+def test_fast_reload_sortie_vide_est_un_succes_3850():
+    corps = SCRIPT.read_text(encoding="utf-8")
+    assert '"error" not in' in corps and '[-1] == "ok"' not in corps

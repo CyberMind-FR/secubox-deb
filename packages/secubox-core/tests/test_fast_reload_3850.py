@@ -60,3 +60,11 @@ def test_reload_en_echec_leve(systeme, monkeypatch):
     _faux(monkeypatch, {"fast_reload": (False, "refus"), "reload": (False, "boom")})
     with pytest.raises(U.ErreurUnbound):
         systeme.recharger_unbound()
+
+
+def test_sortie_vide_est_un_succes(systeme, monkeypatch):
+    """Sans « +v », unbound-control fast_reload n'affiche rien (gk2, 21/11) : code 0 et sortie vide = succès, jamais
+    un reload derrière (qui couperait le DNS)."""
+    vus = _faux(monkeypatch, {"fast_reload": (True, "")})
+    systeme.recharger_unbound()
+    assert [v[0] for v in vus] == [["fast_reload"]]

@@ -1,3 +1,11 @@
+secubox-annuaire (0.22.3-1~trixie1) trixie; urgency=medium
+
+  * fast_reload (ref #3850) : un code 0 sans message d'erreur est un succès.
+    Sans +v, unbound-control fast_reload n'affiche rien (gk2, 21/11) ; exiger
+    « ok » faisait suivre chaque fast_reload d'un reload complet (coupure DNS).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sat, 21 Nov 2026 08:13:29 +0100
+
 secubox-annuaire (0.22.2-1~trixie1) trixie; urgency=medium
 
   * secubox-annuaire-noms (ref #3850) : rechargement d'Unbound par fast_reload,
