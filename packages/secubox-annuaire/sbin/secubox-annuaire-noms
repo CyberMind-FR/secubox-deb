@@ -200,7 +200,8 @@ def _recharger_unbound() -> None:
         return
     except OSError:
         r = None
-    if r is not None and r.returncode == 0 and (r.stdout.strip().splitlines() or [""])[-1] == "ok":
+    # code 0 sans erreur = succès : sans « +v », fast_reload n'affiche rien (gk2, 21/11)
+    if r is not None and r.returncode == 0 and "error" not in ((r.stdout or "") + (r.stderr or "")).lower():
         return
     subprocess.run(["unbound-control", "reload"], capture_output=True, timeout=120)
 

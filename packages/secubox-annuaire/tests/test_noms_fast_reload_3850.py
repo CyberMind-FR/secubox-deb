@@ -51,3 +51,10 @@ def test_delai_jamais_de_second_rechargement(monkeypatch):
     appels = _faux(monkeypatch, m, "", delai=True)
     m._recharger_unbound()
     assert appels == ["fast_reload"]
+
+
+def test_sortie_vide_est_un_succes(monkeypatch):
+    m = _module()
+    appels = _faux(monkeypatch, m, "")
+    m._recharger_unbound()
+    assert appels == ["fast_reload"]
