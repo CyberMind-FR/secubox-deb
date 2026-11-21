@@ -151,7 +151,12 @@ def ecrire_audit(corps: str) -> None:
 
 def changer_mode(valeur: str, par: str) -> None:
     """Change le mode ET écrit sa ligne d'audit dans la même transaction (BEGIN IMMEDIATE) : l'audit est écrit,
-    flush + fsync, AVANT le COMMIT ; s'il échoue, ROLLBACK (le mode ne change jamais sans trace)."""
+    flush + fsync, AVANT le COMMIT ; s'il échoue, ROLLBACK (le mode ne change jamais sans trace).
+
+    Vers `observe` (coupure manuelle ou retour forcé par le plafond) : dans la MÊME transaction, toute approbation en
+    file (`approuve`) revient `en_attente` avec le résultat `annulee_observe`, une ligne d'audit
+    `sade-approuve-annulee` chacune — un retour ultérieur en REACTIVE/ACTIVE n'exécute jamais une approbation d'avant
+    la coupure."""
     if valeur not in MODES:
         raise ValueError("mode inconnu")
     if valeur not in MODES_OUVERTS:
@@ -172,7 +177,17 @@ def changer_mode(valeur: str, par: str) -> None:
                        "ON CONFLICT(id) DO UPDATE SET valeur=excluded.valeur, depuis=excluded.depuis, par=excluded.par",
                        (valeur, _ts(), par))
             operateur = _operateur_sain(par)
+            annulees = []
+            if valeur == "observe":
+                annulees = db.execute("SELECT empreinte, generation, geste, cible FROM decisions "
+                                      "WHERE etat = 'approuve'").fetchall()
+                db.execute("UPDATE decisions SET etat = 'en_attente', resultat = 'annulee_observe' "
+                           "WHERE etat = 'approuve'")
             ecrire_audit(f"sade-mode ancien={ancien} nouveau={valeur} operateur={operateur}")
+            for emp, gen, geste, cible in annulees:
+                ecrire_audit(f"sade-approuve-annulee motif=annulee_observe empreinte={champ_sain(emp, 64)} "
+                             f"generation={gen} geste={champ_sain(geste, 32)} adresses={champ_sain(cible, 1024)} "
+                             f"operateur={operateur}")
             db.execute("COMMIT")
         except AuditIndisponible:
             if db.in_transaction:

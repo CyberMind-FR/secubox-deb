@@ -385,7 +385,25 @@ def _executer_approuvees(out: Dict[str, Any], t0: float) -> bool:
         except defense_etat.EtatIndisponible:
             out["erreur"] = "base_indisponible"
             return True
-        if deja + len(ips) > PLAFONDS_APPROUVES_HEURE[d["geste"]]:
+        plafond = PLAFONDS_APPROUVES_HEURE[d["geste"]]
+        if len(ips) > plafond:
+            # plus grande que le plafond lui-même : n'aboutirait jamais, rendue tout de suite (visible, auditée)
+            try:
+                defense_etat.abandonner_approuvee(d["empreinte"], d["generation"], d["demande_ts"],
+                                                  f"approbation non exécutée : plafond ({len(ips)} adresses, "
+                                                  f"{plafond} par heure au plus)",
+                                                  f"sade-approuve-abandon motif=plafond {champs}{note}")
+            except defense_etat.DejaTraitee:
+                pass
+            except defense_etat.AuditIndisponible:
+                out["erreur"] = "audit_indisponible"
+                return True
+            except defense_etat.EtatIndisponible:
+                out["erreur"] = "base_indisponible"
+                return True
+            out["approuvees_abandonnees"] += 1
+            continue
+        if deja + len(ips) > plafond:
             out["approuvees_en_attente"] += 1  # plafond horaire : essai au passage suivant (expire après 1 h)
             continue
         try:

@@ -16,7 +16,9 @@ secubox-soc (1.12.0-1~trixie1) trixie; urgency=medium
     une transaction, recontrôle les cibles et exécute sudo wafctl, audit
     avant et après, par = l administrateur. 8 par passage, plafonds horaires
     par geste (60, 30, 30) dans defense.db, rien dans ai-ban.jsonl ;
-    approbation expirée après 1 h. partager et tout autre geste : 409.
+    approbation expirée après 1 h, plus grande que son plafond rendue
+    aussitôt. Le passage en OBSERVE vide la file (annulee_observe, audit
+    sade-approuve-annulee). partager et tout autre geste : 409.
     Unité sade-auto : -/var/lib/secubox/waf et -/var/log/sudo-io en écriture
     pour wafctl leurre et le journal d E/S de sudo. Dépend de
     secubox-waf-ng >= 1.43.0.

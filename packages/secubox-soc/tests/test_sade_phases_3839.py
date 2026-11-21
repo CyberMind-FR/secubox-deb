@@ -364,19 +364,20 @@ def test_execution_echec_rendue_a_l_administrateur(client, tmp_path):
     d = defense_etat.decision(e)
     assert d["etat"] == "en_attente" and "refus:protegee" in d["resultat"] and d["par"] == "gerald"
     assert _audit(tmp_path)[-1]["action"] == "sade-approuve-resultat" and _audit(tmp_path)[-1]["issue"] == "echec"
-    # observe : la file n'est pas exécutée
+    # observe : la file est vidée (annulee_observe) et rien n'est exécuté
     assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
     defense_etat.changer_mode("observe", "test")
     n = len(sudo.wafctl())
     sade_auto.executer()
-    assert len(sudo.wafctl()) == n and defense_etat.decision(e)["etat"] == "approuve"
+    assert len(sudo.wafctl()) == n
+    assert defense_etat.decision(e)["etat"] == "en_attente" and defense_etat.decision(e)["resultat"] == "annulee_observe"
 
 
 def test_approbation_expiree_et_plafond_par_geste(client, tmp_path, monkeypatch):
     defense_etat.changer_mode("active", "test")
     e = _proposer("LEURRE", ["203.0.113.47"])
     assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
-    monkeypatch.setattr(sade_auto, "PLAFONDS_APPROUVES_HEURE", {"limiter": 60, "leurre": 0, "prolonger": 30})
+    monkeypatch.setattr(defense_etat, "gestes_humains_depuis", lambda geste, s, maintenant=None: 30)  # leurre : 30/h
     out = sade_auto.executer()
     assert out["approuvees_en_attente"] == 1 and sudo.wafctl() == []
     assert defense_etat.decision(e)["etat"] == "approuve"                  # attend le passage suivant
@@ -384,6 +385,44 @@ def test_approbation_expiree_et_plafond_par_geste(client, tmp_path, monkeypatch)
     sade_auto.executer()
     assert defense_etat.decision(e)["etat"] == "en_attente" and "expiree" in defense_etat.decision(e)["resultat"]
     assert sudo.wafctl() == []
+    a = _audit(tmp_path)[-1]
+    assert a["action"] == "sade-approuve-abandon" and a["motif"] == "expiree" and a["empreinte"] == e
+    assert a["operateur"] == "gerald"
+
+
+def test_approbation_plus_grande_que_le_plafond_rendue_aussitot(client, tmp_path, monkeypatch):
+    defense_etat.changer_mode("active", "test")
+    monkeypatch.setattr(sade_auto, "PLAFONDS_APPROUVES_HEURE", {"limiter": 60, "leurre": 2, "prolonger": 30})
+    e = _proposer("LEURRE", ["203.0.113.70", "203.0.113.71", "203.0.113.72"])
+    assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
+    out = sade_auto.executer()
+    assert out["approuvees_abandonnees"] == 1 and sudo.wafctl() == []
+    d = defense_etat.decision(e)
+    assert d["etat"] == "en_attente" and "plafond" in d["resultat"]
+    a = _audit(tmp_path)[-1]
+    assert a["action"] == "sade-approuve-abandon" and a["motif"] == "plafond"
+
+
+@pytest.mark.parametrize("coupure", ["manuelle", "plafond"])
+def test_observe_vide_la_file_des_approuvees(client, tmp_path, coupure):
+    defense_etat.changer_mode("reactive", "test")
+    e = _proposer("LIMITER", ["203.0.113.80"])
+    assert client.post("/defense/approve", json={"empreinte": e}, headers=ADMIN).status_code == 202
+    if coupure == "manuelle":
+        assert client.post("/defense/mode", json={"mode": "observe"}, headers=ADMIN).status_code == 200
+    else:
+        defense_etat.changer_mode("observe", sade_auto.OPERATEUR)  # retour forcé de l'exécuteur
+    d = defense_etat.decision(e)
+    assert d["etat"] == "en_attente" and d["resultat"] == "annulee_observe"
+    lignes = _audit(tmp_path)
+    assert [x["action"] for x in lignes[-2:]] == ["sade-mode", "sade-approuve-annulee"]
+    assert lignes[-1]["empreinte"] == e and lignes[-1]["motif"] == "annulee_observe"
+    # retour en REACTIVE : l'approbation d'avant la coupure n'est jamais exécutée
+    defense_etat.changer_mode("reactive", "test")
+    sade_auto.executer()
+    assert sudo.wafctl() == [] and defense_etat.decision(e)["etat"] == "en_attente"
+    p = {x["geste"]: x for x in client.get("/defense/proposals", headers=LECTURE).json()["propositions"]}
+    assert p["limiter"]["etat"] == "en_attente"
 
 
 def test_prendre_approuvee_une_seule_fois(client):

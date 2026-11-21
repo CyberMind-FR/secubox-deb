@@ -213,10 +213,19 @@ proposition est contrôlée ; échec fermé.
   `ai-ban.jsonl`. `par` reste l'administrateur : ces gestes ne comptent ni dans le plafond de 20/h de l'automatique ni
   pour son retour en OBSERVE. Une ligne restée `en_cours` se débloque par `POST /reprendre`. L'issue réelle
   (`resultat`) d'un geste en file est rendue par `/proposals` à l'administrateur seulement. Hors REACTIVE/ACTIVE, la
-  file n'est pas exécutée (l'approbation attend, puis expire).
+  file n'est pas exécutée. Le passage en `observe` (coupure manuelle ou retour forcé par le plafond) VIDE la file dans
+  la même transaction : chaque `approuve` revient `en_attente` avec le résultat `annulee_observe` (audit
+  `sade-approuve-annulee`) ; un retour en REACTIVE/ACTIVE n'exécute jamais une approbation d'avant la coupure. Une
+  approbation plus grande que le plafond de son geste est rendue aussitôt (`motif=plafond`).
 - Unité `secubox-soc-sade-auto.service` : `ReadWritePaths` porte aussi `-/var/lib/secubox/waf` (`wafctl leurre`,
   root dans l'espace de montage de l'unité, y remplace `leurres-ip.json`) et `-/var/log/sudo-io` (`log_output` des
   sudoers de ces verbes), comme `secubox-waf-indices.service`.
+
+### Suite
+
+- Dette acceptée (1.12.0) : `secubox-soc-sade-auto.service` écrit dans `/var/lib/secubox/waf` pour `wafctl leurre` ;
+  le compte `secubox` y atteint aussi, par le groupe `secubox-waf`, les fichiers inscriptibles du groupe
+  (`ai-ban.jsonl`…). À resserrer : un dossier dédié pour `leurres-ip.json` côté secubox-waf-ng, seul chemin ouvert.
 
 ### Confidentialité
 
