@@ -10,6 +10,15 @@ Entrées datées, les plus récentes en haut. Seul le **mois courant** vit ici ;
 précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `archive/INDEX.md`).
 
 
+
+## 2026-11-21 — fast_reload silencieux pris pour un refus : reload en double corrigé (ref #3850)
+
+- gk2 à nouveau saturé (charge 46, pression CPU 78 %, 24 556 pertes nDPIsrvd en 30 min). Cause : sans `+v`,
+  `unbound-control fast_reload` rend rc 0 SANS sortie ; le code #3852 exigeait « ok » ⇒ `fast-reload-refuse` (~1/min,
+  poses d'évasion de la garde) puis `reload` complet (coupure DNS + relecture des 50 Mo).
+- PR #3856 : succès = rc 0 sans « error » (secubox-core 1.8.38, annuaire 0.22.3, toolbox 2.13.11 ; ad-guard hérite du
+  cœur). Déployé gk2 (795 requêtes DNS pendant l'installation, 0 échec ; 0 refus depuis ; charge 46 → 17) et gk1.
+
 ## 2026-11-21 — SBXOS DataScope V0.1 livré et déployé sur gk2 (ref #3853)
 
 - secubox-datascope 0.1.0 (PR #3854, plan docs/superpowers/plans/2026-11-21-datascope-v0-1.md, 6 tâches par sous-agents
