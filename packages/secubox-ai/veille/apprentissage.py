@@ -239,10 +239,13 @@ def etat_apprentissage(db=None, chemin=None) -> dict:
 
 async def _rapprocher(veille, client, maintenant, journal) -> bool:
     en_cours = await veille.sql(lambda db: db.execute(
-        "SELECT id, envoye_le FROM filtres WHERE etat = 'envoi'").fetchall())
+        "SELECT id, envoye_le, origine, version FROM filtres WHERE etat = 'envoi'").fetchall())
     if not en_cours:
         return True
-    murs = [fid for fid, le in en_cours if le <= iso(maintenant - timedelta(seconds=DELAI_RAPPROCHEMENT_S))]
+    limite = iso(maintenant - timedelta(seconds=DELAI_RAPPROCHEMENT_S))
+    murs = [fid for fid, le, _o, _v in en_cours if le <= limite]
+    # #3862 (J1) : un filtre Nuclei n'est « présent » que dans la version envoyée (sinon gk2 garde l'ancienne).
+    versions = {fid: v for fid, _le, o, v in en_cours if o == "nuclei"}
     if not murs:
         return False
     try:
@@ -251,9 +254,10 @@ async def _rapprocher(veille, client, maintenant, journal) -> bool:
         log.warning("apprentissage : GET /ai/filtres illisible (%s %s) : aucun nouvel envoi", e.code, e.motif)
         return False
     presents = {f.get("id") if isinstance(f, dict) else f for f in (liste.get("filtres") or [])}
+    versions_gk2 = {f.get("id"): f.get("version") for f in (liste.get("filtres") or []) if isinstance(f, dict)}
     lignes = []
     for fid in murs:
-        if fid in presents:
+        if fid in presents and (fid not in versions or versions_gk2.get(fid) == versions[fid]):
             lignes.append(("ai-filtre-rapproche", await veille.sql(
                 lambda db, f=fid: _changer(db, f, "essai", maintenant, "filtre_rapproche", {"resultat": "essai"},
                                            essai_depuis=db.execute("SELECT envoye_le FROM filtres WHERE id = ?",
@@ -369,7 +373,7 @@ async def _envoyer(veille, client, c, maintenant, pol, journal) -> str:
 
 
 async def apprendre(veille, client, maintenant: datetime, politiques=None, journal=None, protegees=(), cat=None,
-                    chemin=None, nuclei_allume=None, dossier_nuclei=None) -> None:
+                    chemin=None, nuclei_allume=None, dossier_nuclei=None, refuses=None) -> None:
     """Une passe (cf. docstring du module). `nuclei_allume` : interrupteur `[filtres] nuclei` relu par l'appelant à
     chaque passe (None : tour Nuclei ignoré, état non publié)."""
     if maintenant.tzinfo is None:
@@ -378,15 +382,19 @@ async def apprendre(veille, client, maintenant: datetime, politiques=None, journ
     cat = await asyncio.to_thread(outils.catalogue) if cat is None else cat
     suggestions = await veille.sql(calculer_suggestions, maintenant, cat)
     await asyncio.to_thread(ecrire_suggestions, suggestions, maintenant, chemin)
-    cands_nuclei = None
-    if nuclei_allume is not None:
-        cands_nuclei = await lire_nuclei(veille, maintenant, nuclei_allume, dossier_nuclei)
     if client is None or not client.peut_filtrer:
         await veille.sql(lambda db: _poser_si_change(db, "cle_ai_filtres", {"etat": "absente"}, maintenant))
+        if nuclei_allume is not None:
+            await _lire_nuclei_isole(veille, maintenant, nuclei_allume, dossier_nuclei, refuses)
         return
     await veille.sql(lambda db: _poser_si_change(db, "cle_ai_filtres", {"etat": "presente"}, maintenant))
     pret = await _rapprocher(veille, client, maintenant, journal)
     await _surveiller(veille, client, maintenant, journal, protegees)
+    # #3862 (S1) : candidats.json n'est lu qu'APRÈS la surveillance et le retrait d'office, et isolé : un fichier
+    # piégé ne peut ni les retarder ni les empêcher.
+    cands_nuclei = None
+    if nuclei_allume is not None:
+        cands_nuclei = await _lire_nuclei_isole(veille, maintenant, nuclei_allume, dossier_nuclei, refuses)
     if not pret:
         return
     if politiques is None:
@@ -444,15 +452,34 @@ def quota_nuclei(db, maintenant) -> int:
     return nuclei.quota(_envoyes(db, maintenant, 3600), _envoyes(db, maintenant, 86400), PLAFOND_HEURE)
 
 
+def plafond_gk2_recent(db, maintenant) -> bool:
+    """J2 : gk2 a refusé pour plafond dans la dernière heure : rien ne repart avant l'heure suivante."""
+    return db.execute("SELECT 1 FROM filtres WHERE etat = 'echec' AND motif = 'plafond' AND maj_le > ? LIMIT 1",
+                      (iso(maintenant - timedelta(seconds=3600)),)).fetchone() is not None
+
+
 def bloque_nuclei(db, pol) -> bool:
     """Aucun envoi : mode `observation`, automatique suspendu (politique ou veille.db), SADE de gk2 en `observe`."""
     return (pol.mode != "hybride" or pol.automatique_suspendu or decisions.suspension(db)["suspendu"]
             or _sade_releve(db) == "observe")
 
 
-async def lire_nuclei(veille, maintenant, allume: bool, dossier=None):
-    """Lit etat.json et candidats.json (données du collecteur, revalidées), publie `tour_nuclei` pour /veille/etat ;
-    rend les candidats si le tour est allumé et le fichier valide, sinon None."""
+PERIME_S = 48 * 3600
+
+
+async def _lire_nuclei_isole(veille, maintenant, allume, dossier, refuses):
+    try:
+        return await lire_nuclei(veille, maintenant, allume, dossier, refuses)
+    except Exception:  # noqa: BLE001 — jamais fatal à la passe : rien n'est envoyé, l'erreur est dite
+        log.exception("tour nuclei : lecture des candidats en erreur : aucun envoi")
+        return None
+
+
+async def lire_nuclei(veille, maintenant, allume: bool, dossier=None, refuses=None):
+    """Lit etat.json, candidats.json (données du collecteur, revalidées) et la liste de refus de l'opérateur, publie
+    `tour_nuclei` pour /veille/etat ; rend les candidats (refusés ôtés) si le tour est allumé, le fichier valide, de
+    moins de 48 h, et la liste de refus lisible ; sinon None. Un avertissement par CHANGEMENT d'erreur, jamais un
+    par passe (J4)."""
     dossier = Path(dossier or nuclei.DOSSIER)
     collecteur = await asyncio.to_thread(nuclei.lire_etat_collecteur, dossier / "etat.json")
     cands, erreur, genere = None, None, None
@@ -461,14 +488,33 @@ async def lire_nuclei(veille, maintenant, allume: bool, dossier=None):
         cands, genere = lus["filtres"], lus["genere_le"]
     except nuclei.CandidatsInvalides as e:
         erreur = str(e)[:64]
+    perime = genere is not None and maintenant.timestamp() - genere > PERIME_S
+    liste = await asyncio.to_thread(nuclei.lire_refuses, refuses)
     etat = {"allume": bool(allume), "collecteur": collecteur, "candidats": None if cands is None else len(cands),
-            "candidats_genere_le": genere, "erreur_candidats": erreur}
+            "candidats_genere_le": genere, "erreur_candidats": erreur, "perime": perime,
+            "refuses": None if liste is None else len(liste)}
+    avant = await veille.sql(lambda db: decisions.lire_etat(db, CLE_NUCLEI))
+    try:
+        avant = json.loads(avant) if avant else {}
+    except ValueError:
+        avant = {}
     await veille.sql(lambda db: _poser_si_change(db, CLE_NUCLEI, etat, maintenant))
     if not allume:
         return None
+    nouveau = lambda cle: not isinstance(avant, dict) or avant.get(cle) != etat[cle]  # noqa: E731
     if erreur is not None:
-        log.warning("tour nuclei : candidats.json refusé (%s) : aucun envoi", erreur)
-    return cands
+        if nouveau("erreur_candidats"):
+            log.warning("tour nuclei : candidats.json refusé (%s) : aucun envoi", erreur)
+        return None
+    if perime:
+        if nouveau("perime"):
+            log.warning("tour nuclei : candidats.json de plus de 48 h (collecteur arrêté ?) : aucun envoi")
+        return None
+    if liste is None:
+        if nouveau("refuses"):
+            log.error("tour nuclei : %s illisible ou mal formée : aucun envoi", refuses or nuclei.REFUSES)
+        return None
+    return [f for f in cands if f["id"] not in liste]
 
 
 def _adopter(db, f, maintenant):
@@ -587,6 +633,8 @@ async def passe_nuclei(veille, client, cands, maintenant, pol, journal) -> str:
     """Envoi des candidats Nuclei éligibles (cf. docstring du module) ; rend l'issue (journal du service, tests)."""
     if await veille.sql(bloque_nuclei, pol):
         return "bloque"
+    if await veille.sql(plafond_gk2_recent, maintenant):
+        return "plafond_gk2"
     restant = await veille.sql(quota_nuclei, maintenant)
     if restant <= 0:
         return "plafond"

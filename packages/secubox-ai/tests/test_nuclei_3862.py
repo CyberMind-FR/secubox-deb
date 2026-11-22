@@ -70,6 +70,13 @@ http:
 """
 
 
+@pytest.fixture(autouse=True)
+def _comptes(tmp_path, monkeypatch):
+    """Le compte du collecteur est, en test, celui qui lance les tests ; la liste de refus réelle n'est jamais lue."""
+    monkeypatch.setattr(F, "_proprietaire_attendu", lambda: os.getuid())
+    monkeypatch.setattr(F, "REFUSES", tmp_path / "refuses-absent.txt")
+
+
 def modele(texte, fichier="http/cves/2024/CVE-2024-1234.yaml"):
     return {"texte": texte, "doc": yaml.safe_load(texte), "fichier": fichier}
 
@@ -327,7 +334,8 @@ def _collecteur(tmp_path, allume=True, kev_cves=("CVE-2024-1234",)):
 
     def executer(argv, **kw):
         cmds.append(argv)
-        assert kw.get("timeout") and kw["env"]["GIT_TERMINAL_PROMPT"] == "0"
+        assert kw.get("timeout") and kw["env"]["GIT_TERMINAL_PROMPT"] == "0" and kw["check"] is True
+        assert kw["env"]["GIT_CONFIG_GLOBAL"] == "/dev/null" and kw["env"]["GIT_CONFIG_NOSYSTEM"] == "1"
         d = dossier / "depot" / "http" / "cves" / "2024"
         d.mkdir(parents=True, exist_ok=True)
         (d / "CVE-2024-1234.yaml").write_text(MODELE_RAW)
@@ -346,7 +354,8 @@ def _collecteur(tmp_path, allume=True, kev_cves=("CVE-2024-1234",)):
 def test_collecteur_complet_simule(tmp_path):
     conf, dossier, cmds, urls, executer, telecharger = _collecteur(tmp_path)
     assert F.tour_collecteur(dossier, str(conf), executer, telecharger, T, libre=lambda: 1 << 40) == 0
-    assert cmds[0][:2] == ["git", "clone"] and "--depth" in cmds[0] and cmds[0][-1] == str(dossier / "depot")
+    assert cmds[0][:1 + len(F.GIT_OPTIONS) + 1] == ["git", *F.GIT_OPTIONS, "clone"]
+    assert "--depth" in cmds[0] and cmds[0][-1] == str(dossier / "depot")
     lus = F.lire_candidats(dossier / "candidats.json")
     assert [f["cve"] for f in lus["filtres"]] == ["CVE-2024-1234", "CVE-2023-9999"]      # KEV d'abord
     assert lus["filtres"][0]["kev"] is True and lus["filtres"][1]["epss"] == 0.2
@@ -357,7 +366,8 @@ def test_collecteur_complet_simule(tmp_path):
     assert etat["compteurs"] == {"candidats": 2, "ecartes": 0, "kev": 1, "epss": 1}
     # Second tour : fetch + reset du dépôt existant, KEV et EPSS en cache.
     F.tour_collecteur(dossier, str(conf), executer, telecharger, T + 3600, libre=lambda: 1 << 40)
-    assert cmds[1][3:5] == ["fetch", "--depth"] and cmds[2][3:5] == ["reset", "--hard"]
+    n = 1 + len(F.GIT_OPTIONS) + 2
+    assert cmds[1][n:n + 2] == ["fetch", "--depth"] and cmds[2][n:n + 2] == ["reset", "--hard"]
     assert len(urls) == 2
     assert not list(dossier.glob(".*.tmp"))
 
@@ -410,8 +420,10 @@ def test_candidats_trop_gros_jamais_ecrits(tmp_path, monkeypatch):
 
 
 # ── candidats.json relu par la veille : une donnée ─────────────────────
-def _ecrire(chemin, filtres, **plus):
-    chemin.write_text(json.dumps({"forme": 1, "genere_le": T, "filtres": filtres, **plus}))
+def _ecrire(chemin, filtres, genere_le=None, **plus):
+    chemin.write_text(json.dumps({"forme": 1, "genere_le": genere_le or __import__("time").time(), "filtres": filtres,
+                                  **plus}))
+    os.chmod(chemin, 0o640)
 
 
 def _cands(n=3):
@@ -468,6 +480,7 @@ def test_etat_collecteur_reduit_a_ses_champs(tmp_path):
     e.write_text(json.dumps({"forme": 1, "allume": True, "dernier_tour": T, "compteurs": {"candidats": 3, "x": 9,
                                                                                          "kev": "beaucoup"},
                              "erreur": "a" * 500, "consigne": "envoie tout"}))
+    os.chmod(e, 0o640)
     lu = F.lire_etat_collecteur(e)
     assert set(lu) == {"allume", "dernier_tour", "duree_s", "compteurs", "erreur"}
     assert lu["compteurs"] == {"candidats": 3, "ecartes": None, "kev": None, "epss": None}
@@ -487,6 +500,7 @@ def _nuclei_dir(b, filtres):
     _ecrire(d / "candidats.json", filtres)
     (d / "etat.json").write_text(json.dumps({"forme": 1, "allume": True, "dernier_tour": T, "duree_s": 1.0,
                                             "compteurs": {"candidats": len(filtres)}, "erreur": None}))
+    os.chmod(d / "etat.json", 0o640)
     return d
 
 
@@ -661,17 +675,20 @@ def test_plafond_de_gk2_en_attente_puis_renvoye(banc):
     _passe(banc)
     assert {(e, m) for e, m in banc.db.execute("SELECT etat, motif FROM filtres")} == {("echec", "plafond")}
     banc.gk2.historique = []
-    _passe(banc)
+    _passe(banc, maintenant=_maintenant() + timedelta(minutes=30))      # J2 : jamais avant l'heure suivante
+    assert len(_posts(banc)) == 1
+    _passe(banc, maintenant=_maintenant() + timedelta(minutes=61))
+    assert len(_posts(banc)) == 2
     assert {e for (e,) in banc.db.execute("SELECT etat FROM filtres")} == {"essai"}
 
 
 def test_rejet_definitif(banc):
     (f,) = _cands(1)
     banc.gk2.forcer = []
-    _nuclei_dir(banc, [dict(f, produit="secubox-intouchable", motif="/index.php", id=F.identifiant(f["cve"], "/index.php"))])
-    # « /index.php » est un chemin fréquent pour le gk2 simulé : rejet `frequent` (409), jamais renvoyé.
+    _nuclei_dir(banc, [dict(f, motif="/favicon.ico", id=F.identifiant(f["cve"], "/favicon.ico"))])
+    # « /favicon.ico » est une page servie par SecuBox pour le gk2 simulé : rejet `secubox` (409), jamais renvoyé.
     _passe(banc)
-    assert banc.db.execute("SELECT etat, code_http, motif FROM filtres").fetchall() == [("rejete", 409, "frequent")]
+    assert banc.db.execute("SELECT etat, code_http, motif FROM filtres").fetchall() == [("rejete", 409, "secubox")]
     _passe(banc)
     assert len(_posts(banc)) == 1
 
@@ -768,7 +785,7 @@ def test_unite_collecteur_sans_cle_ni_secret():
     u = _unite("secubox-ai-nuclei.service")
     assert "LoadCredential" not in u and "SetCredential" not in u and "LoadCredentialEncrypted" not in u
     assert u["InaccessiblePaths"] == ["-/run/credentials -/etc/secubox/secrets"]
-    assert u["User"] == ["secubox-ai"] and u["Type"] == ["oneshot"] and u["AppArmorProfile"] == ["secubox-ai-nuclei"]
+    assert u["User"] == ["secubox-ai-nuclei"] and u["Group"] == ["secubox-ai"] and u["Type"] == ["oneshot"] and u["AppArmorProfile"] == ["secubox-ai-nuclei"]
     assert u["ProtectSystem"] == ["strict"] and u["ReadWritePaths"] == ["/var/lib/secubox/ai/nuclei"]
     assert u["MemoryMax"] and u["CPUQuota"] and u["NoNewPrivileges"] == ["yes"] and u["CapabilityBoundingSet"] == [""]
     assert "secrets" not in "".join(v for k, vs in u.items() if k != "InaccessiblePaths" for v in vs)
@@ -807,7 +824,7 @@ def test_paquet_2_1_0():
                   "usr/lib/systemd/system/secubox-ai-nuclei.timer", "etc/apparmor.d/secubox-ai-nuclei"):
         assert "debian/secubox-ai/" + cible in rules, cible
     post = (PAQUET / "debian" / "postinst").read_text(encoding="utf-8")
-    assert 'dossier(ai, "nuclei", 0o750)' in post and "systemctl start secubox-ai-nuclei.timer" in post
+    assert 'dossier(ai, "nuclei", 0o750, uid_nuclei)' in post and "systemctl start secubox-ai-nuclei.timer" in post
     assert "systemctl start secubox-ai-nuclei.service" not in post          # le service ne part que par la minuterie
     assert os.access(PAQUET / "sbin" / "secubox-ai-nuclei", os.X_OK)
     assert (PAQUET / "migrations" / "0012-filtres-nuclei.sql").exists()
@@ -817,3 +834,370 @@ def test_paquet_2_1_0():
         assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in (PAQUET / f).read_text(encoding="utf-8")[:300], f
     readme = (PAQUET / "README.md").read_text(encoding="utf-8")
     assert "## Tour Nuclei" in readme and "## Mise en service (2.1.0" in readme
+
+
+# ══ Relecture 1 (#3862) : S1–S5, J1–J4, F1 ════════════════════════════
+DONNEES = PAQUET / "tests" / "donnees" / "nuclei"
+
+
+# ── F1 : page légitime (faux positif de production, gk2 22/11) ─────────
+def test_f1_modele_reel_cve_2025_8110_ecarte():
+    texte = (DONNEES / "CVE-2025-8110.yaml").read_text(encoding="utf-8")
+    m = modele(texte, "http/cves/2025/CVE-2025-8110.yaml")
+    assert m["doc"]["http"][0]["path"] == ["{{BaseURL}}/user/login"]
+    assert F.filtre_depuis_nuclei(m) is None
+    assert F.verifier_local({"motif_type": "chemin_exact", "motif": "/user/login"}, forme=False) == "chemin_legitime"
+
+
+def test_f1_modele_reel_dans_un_depot_jamais_candidat(tmp_path):
+    d = tmp_path / "http" / "cves" / "2025"
+    d.mkdir(parents=True)
+    (d / "CVE-2025-8110.yaml").write_text((DONNEES / "CVE-2025-8110.yaml").read_text(encoding="utf-8"))
+    assert F.collecter_nuclei(tmp_path) == []
+
+
+@pytest.mark.parametrize("chemin", [
+    "/", "/login", "/user/login", "/User/Login/", "//user//login", "/signin", "/sign_in", "/users/sign_in", "/auth",
+    "/admin", "/admin/", "/index.php", "/index.html", "/wp-login.php", "/api", "/api/", "/dashboard", "/home",
+    "/timesheet/login.php", "/mobile/index.php", "/owa/auth/logon.aspx", "/cgi-bin/login.cgi", "/console/index.jsp"])
+def test_f1_chemins_legitimes(chemin):
+    assert F.chemin_legitime(chemin)
+    for mt in ("chemin_exact", "chemin_prefixe"):
+        assert F.verifier_local({"motif_type": mt, "motif": chemin}, forme=False) in ("chemin_legitime",
+                                                                                     "specificite")
+
+
+@pytest.mark.parametrize("chemin", ["/exemple/cgi-bin/vuln.cgi", "/login/../../../etc/passwd", "/cgi-bin/.../.../bin/sh",
+                                    "/wp-content/plugins/acme/ajax.php", "/user/login_par.js"])
+def test_f1_chemins_d_exploitation_gardes(chemin):
+    assert not F.chemin_legitime(chemin)
+
+
+def test_f1_post_vers_une_page_de_connexion_aussi_refuse():
+    """sbxwaf compare le chemin, pas la méthode : un POST d'exploitation sur /users/sign_in toucherait les usagers."""
+    t = MODELE_RAW.replace("GET /exemple/cgi-bin/vuln.cgi HTTP/1.1", "POST /users/sign_in HTTP/1.1")
+    assert F.filtre_depuis_nuclei(modele(t)) is None
+
+
+@pytest.mark.parametrize("variante", ["passive", "compare_versions", "extracteur"])
+def test_f1_modele_de_simple_detection_ecarte(variante):
+    base = MODELE_PATH.replace("%64ebug", "debug")
+    if variante == "passive":
+        t = base.replace("tags: cve,exposure", "tags: cve,exposure,passive")
+    elif variante == "compare_versions":
+        t = base + "    matchers:\n      - type: dsl\n        dsl:\n          - 'compare_versions(version, \"<= 1.0\")'\n"
+    else:
+        t = base + "    extractors:\n      - type: regex\n        name: version\n        regex:\n          - 'v([0-9.]+)'\n"
+    assert F.filtre_depuis_nuclei(modele(t)) is None
+    assert F.filtre_depuis_nuclei(modele(base)) is not None
+    # Un POST avec corps reste un essai d'exploitation, même étiqueté passive.
+    post = MODELE_RAW.replace("tags: cve,cve2024,rce,exemple", "tags: cve,passive").replace(
+        "GET /exemple/cgi-bin/vuln.cgi HTTP/1.1\n        Host: {{Hostname}}\n",
+        "POST /exemple/cgi-bin/vuln.cgi HTTP/1.1\n        Host: {{Hostname}}\n\n        cmd=id\n")
+    assert F.filtre_depuis_nuclei(modele(post)) is not None
+
+
+def test_f1_candidats_portant_une_page_legitime_refuses(tmp_path):
+    f = F.filtre_depuis_nuclei(modele(MODELE_RAW))
+    c = tmp_path / "candidats.json"
+    _ecrire(c, [dict(f, motif="/user/login", id=F.identifiant(f["cve"], "/user/login"))])
+    with pytest.raises(F.CandidatsInvalides, match="chemin_legitime"):
+        F.lire_candidats(c)
+
+
+def _refuses(b, texte, mode=0o644):
+    r = b.tmp / "filtres-refuses.txt"
+    r.write_text(texte)
+    os.chmod(r, mode)
+    return r
+
+
+def _passe_r(b, refuses, **kw):
+    v = Veille(b.db, _maintenant, [])
+    asyncio.run(apprentissage.apprendre(v, b.client, kw.get("maintenant") or _maintenant(), politiques=POLITIQUES,
+                                        journal=b.journal, cat=[], chemin=b.suggestions, nuclei_allume=True,
+                                        dossier_nuclei=b.tmp / "nuclei", refuses=refuses))
+
+
+def test_f1_liste_de_refus_ni_envoi_ni_adoption(banc, monkeypatch):
+    monkeypatch.setattr(F, "PROPRIETAIRES_REFUSES", frozenset({os.getuid()}))
+    a, b_, c = _cands(3)
+    banc.gk2.filtres[a["id"]] = dict(a)                    # en vigueur sur gk2 (posé par gk0)
+    _nuclei_dir(banc, [a, b_, c])
+    _passe_r(banc, _refuses(banc, f"# refusés\n{a['id']}\n{b_['id']}  # faux positif\n"))
+    (post,) = _posts(banc)
+    assert [f["id"] for f in post["filtres"]] == [c["id"]]
+    assert {i for (i,) in banc.db.execute("SELECT id FROM filtres")} == {c["id"]}   # ni adopté, ni envoyé
+    assert _etat_tour(banc)["refuses"] == 2
+
+
+def test_f1_exemple_livre_porte_le_filtre_retire_a_la_main(monkeypatch, tmp_path):
+    ex = tmp_path / "r.txt"
+    ex.write_text((PAQUET / "conf" / "filtres-refuses.txt.example").read_text(encoding="utf-8"))
+    os.chmod(ex, 0o644)
+    assert F.lire_refuses(ex, {os.getuid()}) == {"ia-cve-2025-8110-c109f2"}
+
+
+@pytest.mark.parametrize("abimer", ["groupe_inscriptible", "proprietaire", "ligne_hors_forme", "lien"])
+def test_f1_liste_de_refus_illisible_aucun_envoi(banc, monkeypatch, abimer):
+    monkeypatch.setattr(F, "PROPRIETAIRES_REFUSES", frozenset({os.getuid()}))
+    _nuclei_dir(banc, _cands(2))
+    if abimer == "groupe_inscriptible":
+        r = _refuses(banc, "ia-x-1\n", 0o664)
+    elif abimer == "proprietaire":
+        monkeypatch.setattr(F, "PROPRIETAIRES_REFUSES", frozenset({0}))
+        r = _refuses(banc, "ia-x-1\n")
+    elif abimer == "ligne_hors_forme":
+        r = _refuses(banc, "ia-x-1\nrm -rf /\n")
+    else:
+        vrai = _refuses(banc, "ia-x-1\n")
+        r = banc.tmp / "lien.txt"
+        r.symlink_to(vrai)
+    _passe_r(banc, r)
+    assert _posts(banc) == [] and _etat_tour(banc)["refuses"] is None
+
+
+def test_f1_liste_de_refus_absente_rien_de_refuse(tmp_path):
+    assert F.lire_refuses(tmp_path / "absente.txt") == set()
+
+
+def test_f1_filtre_retire_jamais_readopte(banc):
+    """Un filtre retiré côté gk3 et encore listé par gk2 n'est ni réadopté ni renvoyé."""
+    (f,) = _cands(1)
+    banc.gk2.filtres[f["id"]] = dict(f)
+    h = decisions.iso(_maintenant() - timedelta(days=1))
+    banc.db.execute("INSERT INTO filtres(id, outil, cve, corps_json, etat, motif, envoye_le, maj_le, origine, version) "
+                    "VALUES (?, 'nuclei', ?, '{}', 'retire', 'touche_protegee', ?, ?, 'nuclei', 1)",
+                    (f["id"], f["cve"], h, h))
+    _nuclei_dir(banc, [f])
+    _passe(banc)
+    assert _posts(banc) == [] and banc.db.execute("SELECT etat, adopte FROM filtres").fetchall() == [("retire", 0)]
+
+
+# ── S1 : imbrication, isolement de la surveillance ─────────────────────
+def test_s1_candidats_tres_imbriques(tmp_path):
+    c = tmp_path / "candidats.json"
+    c.write_text('{"forme": 1, "genere_le": 1, "filtres": ' + "[" * 200000 + "]" * 200000 + "}")
+    os.chmod(c, 0o640)
+    with pytest.raises(F.CandidatsInvalides):
+        F.lire_candidats(c)
+    e = tmp_path / "etat.json"
+    e.write_text("[" * 60000 + "]" * 60000)
+    os.chmod(e, 0o640)
+    assert F.lire_etat_collecteur(e) is None
+
+
+def test_s1_retrait_d_office_independant_des_candidats(banc, monkeypatch):
+    from test_apprentissage_3723 import _evt
+    (f,) = _cands(1)
+    _nuclei_dir(banc, [f])
+    _passe(banc)
+    _evt(banc.db, "192.168.1.20", famille="ia_filtres_critique", rule_id=f["id"])
+    ordre = []
+    vrai = apprentissage._surveiller
+
+    async def surveiller(*a, **k):
+        ordre.append("surveiller")
+        return await vrai(*a, **k)
+
+    def piege(*a, **k):
+        ordre.append("candidats")
+        raise RecursionError("piège")
+    monkeypatch.setattr(apprentissage, "_surveiller", surveiller)
+    monkeypatch.setattr(F, "lire_candidats", piege)
+    _passe(banc)                                            # ne lève pas
+    assert ordre == ["surveiller", "candidats"]
+    assert banc.db.execute("SELECT etat FROM filtres").fetchone() == ("retire",)
+
+
+# ── S2 : tube nommé, droits, propriétaire ──────────────────────────────
+def test_s2_tube_nomme_refuse_sans_bloquer(tmp_path):
+    c = tmp_path / "candidats.json"
+    os.mkfifo(c, 0o640)
+    debut = __import__("time").monotonic()
+    with pytest.raises(F.CandidatsInvalides, match="ordinaire"):
+        F.lire_candidats(c)
+    assert __import__("time").monotonic() - debut < 2
+
+
+def test_s2_inscriptible_par_le_groupe_refuse(tmp_path):
+    c = tmp_path / "candidats.json"
+    _ecrire(c, _cands(1))
+    os.chmod(c, 0o660)
+    with pytest.raises(F.CandidatsInvalides, match="inscriptible"):
+        F.lire_candidats(c)
+
+
+def test_s2_proprietaire_inattendu_refuse(tmp_path, monkeypatch):
+    c = tmp_path / "candidats.json"
+    _ecrire(c, _cands(1))
+    monkeypatch.setattr(F, "_proprietaire_attendu", lambda: os.getuid() + 1)
+    with pytest.raises(F.CandidatsInvalides, match="proprietaire"):
+        F.lire_candidats(c)
+    monkeypatch.setattr(F, "_proprietaire_attendu", lambda: None)          # compte absent : tout est refusé
+    with pytest.raises(F.CandidatsInvalides):
+        F.lire_candidats(c)
+
+
+# ── S3 : compte dédié, profils, git durci ──────────────────────────────
+def test_s3_compte_dedie_et_dossier():
+    post = (PAQUET / "debian" / "postinst").read_text(encoding="utf-8")
+    assert "adduser --system --ingroup secubox-ai --no-create-home --home /nonexistent \\\n        --shell " \
+           "/usr/sbin/nologin secubox-ai-nuclei" in post
+    assert "python3 -I - /var/lib/secubox ai secubox-ai secubox-ai secubox-ai-nuclei <<'DOSSIERS'" in post
+    assert post.index("secubox-ai-nuclei >/dev/null") < post.index("<<'DOSSIERS'")
+    assert F.COMPTE_COLLECTEUR == "secubox-ai-nuclei"
+
+
+def test_s3_dossier_nuclei_au_compte_du_collecteur(tmp_path):
+    import grp
+    import pwd
+    post = (PAQUET / "debian" / "postinst").read_text(encoding="utf-8")
+    script = re.search(r"<<'DOSSIERS'(?:[^\n]*\\\n)*[^\n]*\n(.*?)\nDOSSIERS\n", post, re.S).group(1)
+    compte = pwd.getpwuid(os.getuid()).pw_name
+    groupe = grp.getgrgid(os.getgid()).gr_name
+    r = subprocess.run([__import__("sys").executable, "-I", "-", str(tmp_path), "ai", compte, groupe, compte],
+                       input=script, capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert (tmp_path / "ai" / "nuclei").stat().st_mode & 0o7777 == 0o750
+
+
+def test_s3_profils_interdisent_l_ecriture_des_candidats():
+    for profil in ("secubox-ai-api", "secubox-ai-veille"):
+        texte = (PAQUET / "apparmor" / profil).read_text(encoding="utf-8")
+        assert "  deny /var/lib/secubox/ai/nuclei/** w,\n" in texte, profil
+    veille = (PAQUET / "apparmor" / "secubox-ai-veille").read_text(encoding="utf-8")
+    assert "/etc/secubox/ai/filtres-refuses.txt r," in veille
+
+
+def test_s3_git_durci():
+    attendu = ["core.hooksPath=/dev/null", "core.fsmonitor=false", "protocol.allow=never",
+               "protocol.https.allow=always", "transfer.fsckObjects=true", "core.symlinks=false"]
+    assert list(F.GIT_OPTIONS) == [x for o in attendu for x in ("-c", o)]
+    assert F.GIT_ENV == {"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+    u = _unite("secubox-ai-nuclei.service")
+    assert {"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"} <= set(u["Environment"])
+
+
+# ── S4 / S5 : erreurs dites ────────────────────────────────────────────
+def test_s4_kev_en_panne_dite(tmp_path, caplog):
+    conf, dossier, _, _, executer, telecharger = _collecteur(tmp_path)
+
+    def kev_en_panne(url):
+        if url == F.URL_KEV:
+            raise httpx.ConnectError("non")
+        return telecharger(url)
+    with caplog.at_level("WARNING", logger="secubox-ai-nuclei"):
+        assert F.tour_collecteur(dossier, str(conf), executer, kev_en_panne, T, libre=lambda: 1 << 40) == 0
+    assert F.lire_etat_collecteur(dossier / "etat.json")["erreur"] == "kev"
+    assert "KEV illisible" in caplog.text and "ConnectError" in caplog.text
+
+
+def test_s4_noter_journalise_son_echec(tmp_path, caplog):
+    with caplog.at_level("ERROR", logger="secubox-ai-nuclei"):
+        F._noter(tmp_path / "absent" / "etat.json", T, True, {}, "x")
+    assert "etat.json non écrit" in caplog.text
+
+
+def test_s5_git_en_echec_journalise(tmp_path, caplog):
+    def executer(argv, **kw):
+        assert kw["check"] is True and kw["text"] is True
+        raise subprocess.CalledProcessError(128, argv, "", "fatal: " + "x" * 5000)
+    with caplog.at_level("WARNING", logger="secubox-ai-nuclei"):
+        assert F.mettre_a_jour_depot(tmp_path / "depot", executer) is False
+    assert "code 128" in caplog.text and "fatal" not in caplog.text[-10:] and len(caplog.text) < 1000
+
+
+# ── Remarques : liens, redirections, réseau, dépôt trop gros ───────────
+def test_r_http_en_lien_refuse(tmp_path):
+    conf, dossier, cmds, _, executer, telecharger = _collecteur(tmp_path)
+    ailleurs = tmp_path / "ailleurs"
+    ailleurs.mkdir()
+    (dossier / "depot").mkdir()
+    (dossier / "depot" / "http").symlink_to(ailleurs)
+    assert F.tour_collecteur(dossier, str(conf), executer, telecharger, T, libre=lambda: 1 << 40) == 1
+    assert F.lire_etat_collecteur(dossier / "etat.json")["erreur"] == "depot_lien" and cmds == []
+    assert F.collecter_nuclei(dossier / "depot") == []
+
+
+def test_r_redirection_hors_https_refusee():
+    def gk(req):
+        if req.url.path == "/kev":
+            return httpx.Response(302, headers={"location": "http://ailleurs.example/kev"})
+        return httpx.Response(200, content=b"ok")
+    t = httpx.MockTransport(gk)
+    with pytest.raises(ValueError, match="https"):
+        F.telecharger_defaut("https://cisa.example/kev", transport=t)
+    assert F.telecharger_defaut("https://cisa.example/autre", transport=t) == b"ok"
+    with pytest.raises(ValueError):
+        F.telecharger_defaut("http://cisa.example/autre", transport=t)
+
+
+def test_r_redirection_https_suivie():
+    def gk(req):
+        if req.url.path == "/a":
+            return httpx.Response(301, headers={"location": "https://cdn.example/b"})
+        return httpx.Response(200, content=b"fin")
+    assert F.telecharger_defaut("https://cisa.example/a", transport=httpx.MockTransport(gk)) == b"fin"
+
+
+def test_r_plages_privees_fermees():
+    u = _unite("secubox-ai-nuclei.service")
+    deny = u["IPAddressDeny"][0].split()
+    for plage in ("link-local", "multicast", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"):
+        assert plage in deny, plage
+    assert u["IPAddressAllow"] == ["127.0.0.1/32"]
+
+
+def test_r_depot_trop_gros_supprime(tmp_path, monkeypatch):
+    monkeypatch.setattr(F, "DEPOT_MAX_OCTETS", 100)
+    conf, dossier, _, _, executer, telecharger = _collecteur(tmp_path)
+    assert F.tour_collecteur(dossier, str(conf), executer, telecharger, T, libre=lambda: 1 << 40) == 1
+    assert not (dossier / "depot").exists()
+
+
+from test_aictl_3583 import ctl, env  # noqa: E402,F401,F811  (fixtures du contrôleur)
+
+
+def test_r_preparer_rouvre_les_resolveurs_prives_au_collecteur(ctl, env, monkeypatch):  # noqa: F811
+    env.conf.write_text('[gk2]\nmenaces_url = "https://admin.gk2.secubox.in/api/v1"\n')
+    env.conf.chmod(0o644)
+    (env.tmp / "resolv.conf").write_text("nameserver 192.168.1.200\nnameserver 127.0.0.1\n")
+    monkeypatch.setattr(ctl, "resoudre", lambda h: {"192.168.1.20"})
+    assert ctl.cmd_preparer() == 0
+    texte = (ctl.dossier_dropin_nuclei() / "50-adresses.conf").read_text()
+    assert [x for x in texte.splitlines() if x.startswith("IPAddress")] == ["IPAddressAllow=192.168.1.200/32"]
+    assert ctl.texte_dropin_nuclei([]).count("IPAddressAllow") == 0
+
+
+# ── J1–J4 ──────────────────────────────────────────────────────────────
+def test_j1_version_perdue_repart(banc):
+    (f,) = _cands(1)
+    _nuclei_dir(banc, [dict(f, version=2)])
+    banc.transport.couper = "apres"
+    _passe(banc)
+    banc.transport.couper = None
+    banc.gk2.filtres[f["id"]] = dict(f, version=1)          # gk2 n'a gardé que l'ancienne version
+    _passe(banc, maintenant=_maintenant() + timedelta(minutes=5))
+    assert banc.db.execute("SELECT etat, motif FROM filtres").fetchall() == [("echec", "absent_apres_envoi")]
+    _passe(banc, maintenant=_maintenant() + timedelta(hours=25))       # réessai d'une erreur après 24 h
+    assert len(_posts(banc)) == 2 and banc.gk2.filtres[f["id"]]["version"] == 2
+
+
+def test_j3_candidats_perimes_aucun_envoi(banc):
+    d = _nuclei_dir(banc, _cands(2))
+    _ecrire(d / "candidats.json", _cands(2), genere_le=__import__("time").time() - 49 * 3600)
+    _passe(banc)
+    assert _posts(banc) == [] and _etat_tour(banc)["perime"] is True
+    _ecrire(d / "candidats.json", _cands(2))
+    _passe(banc)
+    assert len(_posts(banc)) == 1 and _etat_tour(banc)["perime"] is False
+
+
+def test_j4_candidats_absents_un_seul_avertissement(banc, caplog):
+    d = _nuclei_dir(banc, _cands(2))
+    (d / "candidats.json").unlink()
+    with caplog.at_level("WARNING", logger="secubox-ai-veille"):
+        for i in range(3):
+            _passe(banc, maintenant=_maintenant() + timedelta(minutes=5 * i))
+    assert caplog.text.count("candidats.json refusé") == 1

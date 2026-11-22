@@ -49,6 +49,8 @@ override_dh_auto_install:
 	# Politiques et seuils de la riposte (#3723), déposés dans /etc/secubox/ai/ s'ils sont absents (postinst).
 	install -D -m 0644 conf/politiques.toml.example debian/secubox-ai/usr/share/secubox/ai/politiques.toml.example
 	install -D -m 0644 conf/riposte.toml.example debian/secubox-ai/usr/share/secubox/ai/riposte.toml.example
+	# Liste de refus des filtres (#3862), déposée dans /etc/secubox/ai/ si absente (postinst).
+	install -D -m 0644 conf/filtres-refuses.txt.example debian/secubox-ai/usr/share/secubox/ai/filtres-refuses.txt.example
 	# Route d'API : secubox-routes.d (lu par le vhost) et secubox.d (vhosts anciens), MODULE-COMPLIANCE.
 	install -D -m 0644 nginx/ai.conf debian/secubox-ai/etc/nginx/secubox-routes.d/ai.conf
 	install -D -m 0644 nginx/ai.conf debian/secubox-ai/etc/nginx/secubox.d/ai.conf

@@ -25,8 +25,9 @@ le modèle explique et ne tranche jamais.
 
 ## Mise en service (2.1.0 : tour Nuclei, #3862)
 
-La 2.1.0 applique la migration 0012 de `veille.db` (sauvegarde `veille.db.avant-0012`), crée
-`/var/lib/secubox/ai/nuclei` (secubox-ai, 0750) et active `secubox-ai-nuclei.timer`. Le tour reste **éteint** : le
+La 2.1.0 applique la migration 0012 de `veille.db` (sauvegarde `veille.db.avant-0012`), crée le compte
+`secubox-ai-nuclei` et `/var/lib/secubox/ai/nuclei` (secubox-ai-nuclei:secubox-ai, 0750), dépose
+`/etc/secubox/ai/filtres-refuses.txt` s'il manque et active `secubox-ai-nuclei.timer`. Le tour reste **éteint** : le
 collecteur note « éteint » et sort, la veille n'envoie rien. Pour l'allumer (propriétaire, après déploiement) :
 
 1. Ajouter dans `/etc/secubox/ai.toml` (root 0644) :
@@ -336,29 +337,48 @@ et 15 Kio au plus, 10 par passage, 50 par 24 h, réessai d'une erreur après 24 
 partagée :
 
 - **Collecteur** `secubox-ai-nuclei.service` (oneshot, `secubox-ai-nuclei.timer` horaire, `RandomizedDelaySec=20min`),
-  `User=secubox-ai`, **aucun** `LoadCredential=`, `InaccessiblePaths=/run/credentials /etc/secubox/secrets`,
+  compte **dédié** `User=secubox-ai-nuclei` (groupe `secubox-ai` : la veille lit ses fichiers 0640, ne peut pas les
+  écrire ; profils de l'API et de la veille en `deny /var/lib/secubox/ai/nuclei/** w`), **aucun** `LoadCredential=`, `InaccessiblePaths=/run/credentials /etc/secubox/secrets`,
   `ProtectSystem=strict`, seul `ReadWritePaths=/var/lib/secubox/ai/nuclei`, `MemoryMax=512M`, `CPUQuota=50%`, profil
-  AppArmor `secubox-ai-nuclei` (enforce : python, git, ce seul dossier en écriture). Réseau sortant ouvert (GitHub,
-  CISA, cyentia : des CDN, pas de liste d'adresses). Il met à jour le dépôt `nuclei-templates` (`git --depth 1`,
+  AppArmor `secubox-ai-nuclei` (enforce : python, git, ce seul dossier en écriture). Réseau sortant vers GitHub, CISA,
+  cyentia (des CDN, pas de liste d'adresses) ; plages privées, CGNAT, lien local et diffusion FERMÉES, 127.0.0.1 permis,
+  résolveurs privés de `/etc/resolv.conf` rouverts par `secubox-aictl preparer`
+  (`/run/systemd/system/secubox-ai-nuclei.service.d/50-adresses.conf`). git durci : `GIT_CONFIG_GLOBAL=/dev/null`,
+  `GIT_CONFIG_NOSYSTEM=1`, `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.allow=never
+  -c protocol.https.allow=always -c transfer.fsckObjects=true -c core.symlinks=false` ; `http/` ou `http/cves` en lien :
+  refusé ; dépôt au-delà de la borne : supprimé ; redirections suivies vers https seulement. Il met à jour le dépôt `nuclei-templates` (`git --depth 1`,
   1 Gio au plus, 1 Gio libre exigé), lit KEV (CISA) et EPSS (cyentia, gzip borné) en cache 24 h, et écrit
   `candidats.json` (`{"forme": 1, "genere_le", "filtres"}`, 16 Mio et 20 000 filtres au plus) et `etat.json`
   (`allume`, `dernier_tour`, `duree_s`, `compteurs` `candidats`/`ecartes`/`kev`/`epss`, `erreur`), en écriture
   atomique 0640. Anti-invention : un filtre ne vient que d'un modèle lu par `yaml.safe_load` (jamais exécuté), son motif
   est une sous-chaîne exacte du modèle (`%`, `?`, variables autres que `{{BaseURL}}`/`{{RootURL}}` : écarté).
+  **Pages légitimes (F1, faux positif de production du 22/11 : `ia-cve-2025-8110-c109f2` = `/user/login`, page de
+  connexion de Gitea, 40 bans à tort en 4 h)** : refus `chemin_legitime` pour la racine, une page d'authentification
+  ou d'accueil courante (liste fermée `CHEMINS_LEGITIMES`, et dernier segment `index`, `login`, `signin`, `logon`,
+  `default`, `home`, `dashboard`… avec ou sans extension), quelle que soit la méthode ; et tout modèle dont l'unique
+  requête est un GET sans corps qui ne fait que reconnaître un produit (étiquette `passive`, `compare_versions`,
+  extracteur `version`). KEV ou EPSS illisible : `erreur` = `kev` ou `epss` dans etat.json, journalisé.
 - **Envoi par la veille** (boucle `apprentissage`, réseau inchangé : gk2 seul, clé `ai-filtres`) : `candidats.json`
-  est relu comme une **donnée** — fichier ordinaire, jamais un lien, taille bornée, forme exacte, chaque filtre
-  revérifié et son id **recalculé** ; au moindre écart, rien n'est envoyé (`tour_nuclei.erreur_candidats`).
+  est relu comme une **donnée** — fichier ordinaire (ouvert `O_NONBLOCK`, vérifié par `fstat` avant toute lecture :
+  un tube nommé ne fige rien), jamais un lien, du compte `secubox-ai-nuclei`, jamais inscriptible par le groupe ou les
+  autres, taille bornée, forme exacte (imbrication excessive refusée), chaque filtre revérifié et son id **recalculé** ;
+  au moindre écart, rien n'est envoyé (`tour_nuclei.erreur_candidats`, un avertissement par changement). Lu APRÈS la
+  surveillance et le retrait d'office, isolé : il ne peut pas les empêcher. Plus de 48 h : aucun envoi
+  (`tour_nuclei.perime = true`). **Liste de refus** `/etc/secubox/ai/filtres-refuses.txt` (un id par ligne, root 0644,
+  déposée par le postinst avec `ia-cve-2025-8110-c109f2`) : ni envoi ni adoption ; illisible, mal formée ou mal
+  possédée : aucun envoi.
   Éligibilité du POC sur l'état des lignes `filtres` (appliqué, inchangé ou rejeté : jamais renvoyé dans la même
   version ; échec : 24 h ; plafond de gk2 : renvoyé plus tard ; **retiré : jamais**, même dans une nouvelle version, et
   la ligne n'est pas purgée), ordre KEV, EPSS, CVSS, quota `min(10, 10/h, 50/24 h)` sur les nouveaux filtres envoyés et
   non refusés (toutes origines). Mode `observation`, automatique suspendu ou SADE de gk2 en `observe` : aucun envoi.
   La ligne `filtres` (`origine = nuclei`, `version`) est inscrite **avant** l'envoi, par lot signé `POST /ai/filtres`.
   Un filtre déjà en vigueur sur gk2 dans la même version (`GET /ai/filtres`, posé par gk0) est **adopté** sans envoi
-  (`adopte = 1`, hors plafonds). Rapprochement, essai de 24 h, `a_confirmer` et retrait d'office sur touche d'adresse
+  (`adopte = 1`, hors plafonds). Rapprochement par id **et version** pour un filtre Nuclei (une version perdue
+  repart après 24 h) ; un refus `plafond` de gk2 : rien ne repart avant l'heure suivante. Rapprochement, essai de 24 h, `a_confirmer` et retrait d'office sur touche d'adresse
   protégée : communs aux filtres d'outils (§ Apprentissage).
 - **Interrupteur** : `[filtres] nuclei = true` dans `/etc/secubox/ai.toml` ; absent ou toute autre valeur : éteint.
 - **État** : `GET /veille/etat` → `tour_nuclei` (`allume`, `collecteur` = etat.json réduit, `candidats`,
-  `candidats_genere_le`, `erreur_candidats`, `filtres` par état et `adoptes`).
+  `candidats_genere_le`, `erreur_candidats`, `perime`, `refuses`, `filtres` par état et `adoptes`).
 
 ## Suite
 
@@ -393,7 +413,7 @@ partagée :
 | `/var/lib/secubox/ai/suggestions-empreintes.json` | secubox-ai 0640 | suggestions d'empreintes (§ Apprentissage), jamais appliquées |
 | `/var/lib/secubox/ai/preferences.toml` | secubox-ai | préférences modifiables depuis la page (écriture atomique, double tampon) |
 | `/var/lib/secubox/ai/` | secubox-ai 0750 | `memoire.db`, `journal.jsonl`, `documents/`, `medias/`, `modeles/` (0750, modèles 0640), `tmp/` (0700, temporaires de SQLite) |
-| `/var/lib/secubox/ai/nuclei/` | secubox-ai 0750 | collecteur Nuclei (#3862) : `depot/` (nuclei-templates), `kev.json`, `epss.csv.gz`, `versions.json`, `candidats.json`, `etat.json` (0640) |
+| `/var/lib/secubox/ai/nuclei/` | secubox-ai-nuclei:secubox-ai 0750 | collecteur Nuclei (#3862) : `depot/` (nuclei-templates), `kev.json`, `epss.csv.gz`, `versions.json`, `candidats.json`, `etat.json` (0640) |
 
 `ai.toml` (sections) :
 

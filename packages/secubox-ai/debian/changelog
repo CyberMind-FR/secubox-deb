@@ -13,6 +13,12 @@ secubox-ai (2.1.0-1~trixie1) trixie; urgency=medium
     tour_nuclei.
   * GET /ai/filtres lu jusqu'à 8 Mio (64 Kio rendait le rapprochement impossible avec les filtres de gk0).
   * Dépendances : git, python3-yaml.
+  * Relecture 1 (ref #3862) : refus `chemin_legitime` des pages d'accueil et de connexion et des modèles de simple
+    détection (faux positif de production ia-cve-2025-8110-c109f2 = /user/login) ; liste de refus
+    /etc/secubox/ai/filtres-refuses.txt ; compte dédié secubox-ai-nuclei ; candidats.json ouvert O_NONBLOCK, droits et
+    propriétaire vérifiés, imbrication refusée, lu après la surveillance ; git durci ; plages privées fermées au
+    collecteur ; rapprochement par version ; pas de renvoi dans l'heure d'un plafond de gk2 ; candidats de plus de
+    48 h ignorés ; erreurs KEV/EPSS et git journalisées.
 
  -- Gérald Kerma <devel@cybermind.fr>  Sun, 22 Nov 2026 12:00:00 +0100
 

@@ -893,6 +893,22 @@ def _est_ip(hote: str) -> bool:
     return True
 
 
+def dossier_dropin_nuclei() -> Path:
+    """Drop-in du collecteur Nuclei (#3862), à côté de celui de la veille."""
+    return DROPIN_VEILLE.parent / "secubox-ai-nuclei.service.d"
+
+
+def texte_dropin_nuclei(resolveurs: list[str]) -> str:
+    """Drop-in de secubox-ai-nuclei.service (#3862) : SEULS les résolveurs PRIVÉS de /etc/resolv.conf sont rouverts
+    (l'unité ferme les plages privées, CGNAT et de lien local) ; jamais de « IPAddressAllow= » vide."""
+    lignes = ["# Généré par « secubox-aictl preparer » (#3862) : résolveurs privés de /etc/resolv.conf, seules adresses",
+              "# privées que le collecteur Nuclei peut joindre (GitHub, CISA et cyentia restent joignables).",
+              "[Service]"]
+    if resolveurs:
+        lignes.append("IPAddressAllow=" + " ".join(resolveurs))
+    return "\n".join(lignes) + "\n"
+
+
 def texte_dropin(permises: list[str], veille: bool = False) -> str:
     """Drop-in de secubox-ai.service (ou de secubox-ai-veille.service). Jamais de « IPAddressAllow= » vide : il
     remettrait à zéro la liste de l'unité (127.0.0.1/32, le résolveur de la box)."""
@@ -953,7 +969,8 @@ def cmd_preparer() -> int:
         journal(r)
     try:
         change = [ecrire_dropin(texte_dropin(permises), DROPIN_API),
-                  ecrire_dropin(texte_dropin(veille, veille=True), DROPIN_VEILLE)]
+                  ecrire_dropin(texte_dropin(veille, veille=True), DROPIN_VEILLE),
+                  ecrire_dropin(texte_dropin_nuclei(dns), dossier_dropin_nuclei())]
         if any(change):
             systemctl("daemon-reload")
             audit("preparer", {"issue": "adresses", "permises": permises, "veille": veille, "refus": refus})

@@ -35,6 +35,8 @@ profile secubox-ai-veille {
   /etc/secubox/ai/empreintes.local.toml r,
   # Politiques de réponse et seuils de la riposte (#3723) : lus à chaque passe (double tampon), jamais écrits.
   /etc/secubox/ai/politiques.toml r,
+  # Liste de refus des filtres de l'opérateur (#3862), facultative, lue à chaque passe.
+  /etc/secubox/ai/filtres-refuses.txt r,
   /etc/secubox/ai/riposte.toml r,
 
   # Consignes versionnées de l'analyste IA (#3722) : du paquet seulement.
@@ -58,6 +60,8 @@ profile secubox-ai-veille {
   # veille.db (WAL : -wal, -shm), sauvegardes avant migration, tmp/ (SQLITE_TMPDIR). L'espace libre se lit par statvfs.
   /var/lib/secubox/ai/ r,
   /var/lib/secubox/ai/** rwk,
+  # Tour Nuclei (#3862) : candidats.json et etat.json se LISENT (écrits par le seul collecteur).
+  deny /var/lib/secubox/ai/nuclei/** w,
 
   # Moteur local (#3722) : sa socket et l'état publié par le contrôleur ; dépôt des demandes seulement si
   # reveiller_local = true (temporaire créé puis renommé par la veille elle-même). Ni moteur.env, ni le verrou.

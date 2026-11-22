@@ -32,7 +32,9 @@ import gzip
 import hashlib
 import io
 import json
+import logging
 import os
+import pwd
 import re
 import shutil
 import stat
@@ -43,13 +45,29 @@ from pathlib import Path
 
 import httpx
 
+log = logging.getLogger("secubox-ai-nuclei")
+
 DOSSIER = Path(os.environ.get("SECUBOX_AI_NUCLEI", "/var/lib/secubox/ai/nuclei"))
+#: Compte DÉDIÉ du collecteur (groupe secubox-ai) : seul propriétaire admis de candidats.json et etat.json.
+COMPTE_COLLECTEUR = "secubox-ai-nuclei"
+#: Liste de refus de l'opérateur (un id par ligne, facultative, root, jamais inscriptible par le groupe ou les autres).
+REFUSES = Path("/etc/secubox/ai/filtres-refuses.txt")
+REFUSES_MAX_OCTETS = 64 * 1024
+#: Propriétaires admis de la liste de refus : root seul.
+PROPRIETAIRES_REFUSES = frozenset({0})
 DEPOT = DOSSIER / "depot"
 SOURCES = DOSSIER
 VERSIONS = DOSSIER / "versions.json"
 CANDIDATS = DOSSIER / "candidats.json"
 ETAT = DOSSIER / "etat.json"
 CONF = "/etc/secubox/ai.toml"
+#: Options git imposées à chaque appel (#3862, S3) : ni crochet, ni fsmonitor, https seul, objets vérifiés, liens
+#: symboliques extraits comme de simples fichiers.
+GIT_OPTIONS = ("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.allow=never",
+               "-c", "protocol.https.allow=always", "-c", "transfer.fsckObjects=true", "-c", "core.symlinks=false")
+GIT_ENV = {"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+STDERR_MAX = 400
+REDIRECTIONS_MAX = 5
 
 URL_NUCLEI = "https://github.com/projectdiscovery/nuclei-templates.git"
 URL_NUCLEI_FICHIER = "https://github.com/projectdiscovery/nuclei-templates/blob/main/"
@@ -87,6 +105,69 @@ PARAMETRE_RE = re.compile(r"^[A-Za-z0-9_.\[\]-]{1,64}$")
 _BASES = ("{{BaseURL}}", "{{RootURL}}")
 _LIGNE_RAW = re.compile(r"^[A-Z]{3,10} (\S+) HTTP/[0-9.]+$")
 _TYPES_SOURCE = ("nuclei", "kev", "epss")
+
+#: F1 (#3862, faux positif de production sur gk2 le 22/11 : `ia-cve-2025-8110-c109f2` = /user/login, la page de
+#: connexion de Gitea, 40 bans à tort en 4 h). Chemins que visite un usager légitime : jamais un filtre, quelle que
+#: soit la méthode de la requête du modèle (sbxwaf compare le chemin, pas la méthode). Liste fermée, après
+#: normalisation (minuscules, « / » répétés réduits, « / » final retiré).
+CHEMINS_LEGITIMES = frozenset({
+    "/", "/login", "/user/login", "/users/login", "/signin", "/sign_in", "/sign-in", "/users/sign_in",
+    "/user/sign_in", "/auth", "/auth/login", "/account/login", "/accounts/login", "/session", "/sessions",
+    "/admin", "/administrator", "/index.php", "/index.html", "/index.htm", "/index.jsp", "/index.asp",
+    "/index.aspx", "/default.aspx", "/default.asp", "/wp-login.php", "/wp-admin", "/api", "/dashboard", "/home",
+    "/logout", "/user", "/users", "/register", "/signup", "/explore", "/portal", "/console", "/webui", "/ui",
+    "/owa", "/owa/auth/logon.aspx", "/remote/login", "/cgi-bin/luci", "/manager/html",
+})
+#: Dernier segment d'une page d'accueil ou d'authentification courante (sans extension) : jamais un filtre.
+PAGES_LEGITIMES = frozenset({"index", "login", "signin", "sign_in", "sign-in", "logon", "default", "home", "dashboard",
+                             "welcome", "main", "start", "logout", "signout", "sign_out"})
+_EXTENSIONS_PAGES = ("", ".php", ".html", ".htm", ".jsp", ".jspx", ".asp", ".aspx", ".do", ".action", ".cgi", ".py",
+                     ".json", ".shtml", ".xhtml", ".jsf")
+
+
+def normaliser_chemin(motif: str) -> str:
+    c = re.sub(r"/{2,}", "/", motif.strip().lower())
+    return c.rstrip("/") or "/"
+
+
+def chemin_legitime(motif: str) -> bool:
+    """Vrai si le chemin est la racine, une page d'authentification ou d'accueil courante (F1)."""
+    c = normaliser_chemin(motif)
+    if c in CHEMINS_LEGITIMES:
+        return True
+    dernier = c.rsplit("/", 1)[-1]
+    for ext in _EXTENSIONS_PAGES:
+        if ext and dernier.endswith(ext):
+            if dernier[:-len(ext)] in PAGES_LEGITIMES:
+                return True
+        elif dernier in PAGES_LEGITIMES:
+            return True
+    return False
+
+
+def _requete_de_detection(doc: dict) -> bool:
+    """F1 : l'unique requête est un GET (ou HEAD) sans corps et le modèle ne fait que RECONNAÎTRE un produit ou sa
+    version (étiquette `passive`, `compare_versions`, extracteur `version`) : il charge une page légitime, le filtre
+    toucherait les usagers."""
+    b = (doc.get("http") or doc.get("requests"))[0]
+    if b.get("path"):
+        methode, corps = str(b.get("method") or "GET").upper(), b.get("body")
+    else:
+        brut = str(b["raw"][0]).strip()
+        lignes = [x for x in brut.splitlines() if not x.strip().startswith("@")]
+        methode = (lignes[0].split() or ["GET"])[0].upper() if lignes else "GET"
+        corps = brut.split("\n\n", 1)[1].strip() if "\n\n" in brut else ""
+    if methode not in ("GET", "HEAD") or corps:
+        return False
+    info = doc.get("info") if isinstance(doc.get("info"), dict) else {}
+    tags = info.get("tags")
+    tags = tags.split(",") if isinstance(tags, str) else (tags or [])
+    if "passive" in {str(t).strip().lower() for t in tags}:
+        return True
+    texte = json.dumps([b.get("matchers"), b.get("extractors")], default=str)
+    if "compare_versions" in texte:
+        return True
+    return any(isinstance(e, dict) and str(e.get("name", "")).lower() == "version" for e in b.get("extractors") or [])
 
 
 # ── Modèle Nuclei → filtre (identique au POC) ──────────────────────────
@@ -180,6 +261,8 @@ def filtre_depuis_nuclei(modele: dict) -> dict | None:
     if cible is None:
         return None
     brut, rel = cible
+    if _requete_de_detection(doc):            # F1 : simple reconnaissance d'une page légitime
+        return None
     if brut not in texte:                     # anti-invention : la cible est écrite telle quelle dans le modèle
         return None
     m = _motif(rel)
@@ -205,6 +288,8 @@ def collecter_nuclei(depot: Path = DEPOT) -> list[dict]:
     depot = Path(depot)
     racine = depot / "http" / "cves"
     sortie, motifs = [], set()
+    if depot_piege(depot):
+        return []
     for f in sorted(racine.rglob("*.yaml")) if racine.is_dir() else []:
         try:
             if f.is_symlink() or not f.is_file() or f.stat().st_size > MODELE_MAX:
@@ -222,6 +307,12 @@ def collecter_nuclei(depot: Path = DEPOT) -> list[dict]:
         motifs.add(cle)
         sortie.append(filtre)
     return sortie
+
+
+def depot_piege(depot: Path) -> bool:
+    """Vrai si le dépôt, `http/` ou `http/cves` est un lien symbolique (jamais suivi)."""
+    depot = Path(depot)
+    return any(p.is_symlink() for p in (depot, depot / "http", depot / "http" / "cves"))
 
 
 def taille_depot(depot: Path, borne: int = DEPOT_MAX_OCTETS) -> int:
@@ -245,35 +336,52 @@ def taille_depot(depot: Path, borne: int = DEPOT_MAX_OCTETS) -> int:
 def mettre_a_jour_depot(depot: Path = DEPOT, executer=subprocess.run) -> bool:
     """Clone (ou met à jour) le dépôt des modèles, superficiellement ; rend True si le dépôt est utilisable."""
     depot = Path(depot)
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    env = {**os.environ, **GIT_ENV}
+    git = ["git", *GIT_OPTIONS]
     if (depot / ".git").is_dir():
-        cmds = [["git", "-C", str(depot), "fetch", "--depth", "1", "origin", "main"],
-                ["git", "-C", str(depot), "reset", "--hard", "FETCH_HEAD"]]
+        cmds = [[*git, "-C", str(depot), "fetch", "--depth", "1", "origin", "main"],
+                [*git, "-C", str(depot), "reset", "--hard", "FETCH_HEAD"]]
     else:
         depot.parent.mkdir(parents=True, exist_ok=True)
-        cmds = [["git", "clone", "--depth", "1", URL_NUCLEI, str(depot)]]
+        cmds = [[*git, "clone", "--depth", "1", URL_NUCLEI, str(depot)]]
     for c in cmds:
         try:
-            if executer(c, env=env, capture_output=True, timeout=DELAI_GIT_S, check=False).returncode != 0:
-                return (depot / "http").is_dir()
-        except (OSError, subprocess.TimeoutExpired):
-            return (depot / "http").is_dir()
+            r = executer(c, env=env, capture_output=True, text=True, timeout=DELAI_GIT_S, check=True)
+            if r.returncode != 0:
+                raise subprocess.CalledProcessError(r.returncode, c, getattr(r, "stdout", ""),
+                                                    getattr(r, "stderr", ""))
+        except subprocess.CalledProcessError as e:
+            extrait = str(e.stderr or "")[-STDERR_MAX:].replace("\n", " | ")
+            log.warning("git %s : code %s : %s", c[len(git)] if len(c) > len(git) else "?", e.returncode, extrait)
+            return (depot / "http").is_dir() and not depot_piege(depot)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            log.warning("git : %s", e.__class__.__name__)
+            return (depot / "http").is_dir() and not depot_piege(depot)
     return True
 
 
 # ── Gravité : KEV et EPSS (caches 24 h) ────────────────────────────────
-def telecharger_defaut(url: str) -> bytes:
-    """GET borné (64 Mio), TLS vérifié, sans les mandataires de l'environnement. Collecteur seulement."""
-    with httpx.stream("GET", url, headers=AGENT, timeout=httpx.Timeout(120, connect=15), follow_redirects=True,
-                      trust_env=False) as r:
-        r.raise_for_status()
-        morceaux, total = [], 0
-        for m in r.iter_bytes():
-            total += len(m)
-            if total > TELECHARGEMENT_MAX:
-                raise ValueError("téléchargement trop gros")
-            morceaux.append(m)
-    return b"".join(morceaux)
+def telecharger_defaut(url: str, transport=None) -> bytes:
+    """GET borné (64 Mio), TLS vérifié, sans les mandataires de l'environnement, redirections suivies À LA MAIN et
+    seulement vers https (5 au plus). Collecteur seulement."""
+    with httpx.Client(headers=AGENT, timeout=httpx.Timeout(120, connect=15), follow_redirects=False,
+                      trust_env=False, transport=transport) as client:
+        for _ in range(REDIRECTIONS_MAX + 1):
+            if httpx.URL(url).scheme != "https":
+                raise ValueError("redirection hors https refusée")
+            with client.stream("GET", url) as r:
+                if r.is_redirect:
+                    url = str(r.url.join(r.headers.get("location", "")))
+                    continue
+                r.raise_for_status()
+                morceaux, total = [], 0
+                for m in r.iter_bytes():
+                    total += len(m)
+                    if total > TELECHARGEMENT_MAX:
+                        raise ValueError("téléchargement trop gros")
+                    morceaux.append(m)
+                return b"".join(morceaux)
+    raise ValueError("trop de redirections")
 
 
 def _en_cache(sources: Path, nom: str, url: str, telecharger, maintenant: float) -> bytes:
@@ -350,6 +458,8 @@ def verifier_local(f: dict, forme: bool = True) -> str | None:
         return "motif"
     if mt.startswith("chemin_") and (not motif.startswith("/") or "%" in motif):
         return "motif"
+    if mt.startswith("chemin_") and chemin_legitime(motif):
+        return "chemin_legitime"
     if mt == "parametre_egal":
         if not isinstance(parametre, str) or not PARAMETRE_RE.fullmatch(parametre):
             return "parametre"
@@ -525,16 +635,32 @@ class CandidatsInvalides(Exception):
     """candidats.json illisible, trop gros ou de forme inattendue : aucun envoi."""
 
 
-def _lire_borne(chemin: Path, borne: int) -> bytes:
-    """Fichier ordinaire, jamais un lien, au plus `borne` octets."""
+def _proprietaire_attendu():
+    """uid du compte dédié du collecteur, ou None s'il n'existe pas (tout fichier est alors refusé)."""
     try:
-        fd = os.open(str(chemin), os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        return pwd.getpwnam(COMPTE_COLLECTEUR).pw_uid
+    except KeyError:
+        return None
+
+
+def _lire_borne(chemin: Path, borne: int, proprietaires=None) -> bytes:
+    """Fichier ordinaire, jamais un lien ni un tube (O_NONBLOCK, fstat AVANT toute lecture), au plus `borne` octets,
+    jamais inscriptible par le groupe ni les autres, et d'un propriétaire de `proprietaires` (défaut : le compte du
+    collecteur)."""
+    if proprietaires is None:
+        proprietaires = {_proprietaire_attendu()}
+    try:
+        fd = os.open(str(chemin), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     except OSError as e:
         raise CandidatsInvalides(f"illisible ({e.__class__.__name__})") from None
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
             raise CandidatsInvalides("pas un fichier ordinaire")
+        if st.st_mode & 0o022:
+            raise CandidatsInvalides("inscriptible par le groupe ou les autres")
+        if st.st_uid not in proprietaires:
+            raise CandidatsInvalides("proprietaire inattendu")
         if st.st_size > borne:
             raise CandidatsInvalides("trop gros")
         with os.fdopen(os.dup(fd), "rb") as f:
@@ -576,7 +702,7 @@ def lire_candidats(chemin: Path = CANDIDATS) -> dict:
     brut = _lire_borne(Path(chemin), CANDIDATS_MAX_OCTETS)
     try:
         doc = json.loads(brut)
-    except ValueError:
+    except (ValueError, RecursionError, MemoryError):
         raise CandidatsInvalides("json") from None
     if not isinstance(doc, dict) or doc.get("forme") != FORME or set(doc) != {"forme", "genere_le", "filtres"}:
         raise CandidatsInvalides("forme")
@@ -596,6 +722,32 @@ def lire_candidats(chemin: Path = CANDIDATS) -> dict:
     return {"genere_le": float(doc["genere_le"]), "filtres": filtres}
 
 
+_RE_ID_REFUS = re.compile(r"^ia-[a-z0-9._-]{1,93}$")
+
+
+def lire_refuses(chemin: Path | None = None, proprietaires=None) -> set | None:
+    """Ids de la liste de refus de l'opérateur (un par ligne, « # » commente) ; absente : vide. Illisible, trop
+    grosse, d'un autre propriétaire que root, inscriptible par le groupe ou les autres, ou portant une ligne hors de la
+    forme `ia-…` : None — l'appelant n'envoie alors RIEN (une liste de refus qu'on ne sait pas lire ne s'ignore pas)."""
+    chemin = Path(chemin or REFUSES)
+    if not os.path.lexists(str(chemin)):
+        return set()
+    try:
+        brut = _lire_borne(chemin, REFUSES_MAX_OCTETS, set(proprietaires or PROPRIETAIRES_REFUSES))
+        texte = brut.decode("utf-8")
+    except (CandidatsInvalides, UnicodeDecodeError):
+        return None
+    ids = set()
+    for ligne in texte.splitlines():
+        ligne = ligne.split("#", 1)[0].strip()
+        if not ligne:
+            continue
+        if not _RE_ID_REFUS.fullmatch(ligne):
+            return None
+        ids.add(ligne)
+    return ids
+
+
 _CLES_ETAT = {"forme", "allume", "dernier_tour", "duree_s", "compteurs", "erreur"}
 _COMPTEURS = ("candidats", "ecartes", "kev", "epss")
 
@@ -604,7 +756,7 @@ def lire_etat_collecteur(chemin: Path = ETAT) -> dict | None:
     """etat.json du collecteur, réduit à ses champs connus et typés ; None s'il est absent ou illisible."""
     try:
         doc = json.loads(_lire_borne(Path(chemin), ETAT_MAX_OCTETS))
-    except (CandidatsInvalides, ValueError):
+    except (CandidatsInvalides, ValueError, RecursionError, MemoryError):
         return None
     if not isinstance(doc, dict) or doc.get("forme") != FORME:
         return None
@@ -623,8 +775,8 @@ def _noter(etat: Path, debut: float, allume: bool, compteurs: dict, erreur: str 
                "compteurs": compteurs, "erreur": erreur}
     try:
         ecrire_json(etat, donnees, ETAT_MAX_OCTETS)
-    except (OSError, ValueError):
-        pass
+    except (OSError, ValueError) as e:
+        log.error("etat.json non écrit (%s) : %s", e.__class__.__name__, donnees)
 
 
 def tour_collecteur(dossier: Path = DOSSIER, conf: str = CONF, executer=subprocess.run,
@@ -647,23 +799,36 @@ def tour_collecteur(dossier: Path = DOSSIER, conf: str = CONF, executer=subproce
         _noter(etat, debut, True, compteurs, "espace")
         return 1
     depot = dossier / "depot"
+    if depot_piege(depot):
+        _noter(etat, debut, True, compteurs, "depot_lien")
+        return 1
     if not mettre_a_jour_depot(depot, executer):
         _noter(etat, debut, True, compteurs, "depot")
         return 1
+    if depot_piege(depot):
+        _noter(etat, debut, True, compteurs, "depot_lien")
+        return 1
     if taille_depot(depot) > DEPOT_MAX_OCTETS:
+        log.error("dépôt au-delà de %d octets : supprimé, recloné au prochain tour", DEPOT_MAX_OCTETS)
+        shutil.rmtree(depot, ignore_errors=True)
         _noter(etat, debut, True, compteurs, "depot_trop_gros")
         return 1
     cands = collecter_nuclei(depot)
+    erreurs = []
     try:
         kev = lire_kev(dossier, telecharger, debut)
         compteurs["kev"] = len(kev)
-    except Exception:  # noqa: BLE001 — sans KEV : gravité moindre, jamais inventée
+    except Exception:  # noqa: BLE001 — sans KEV : gravité moindre, jamais inventée ; dite, jamais tue
+        log.warning("KEV illisible : filtres sans KEV à ce tour", exc_info=True)
         kev = set()
+        erreurs.append("kev")
     try:
         epss = lire_epss(dossier, telecharger, debut)
         compteurs["epss"] = len(epss)
     except Exception:  # noqa: BLE001
+        log.warning("EPSS illisible : filtres sans EPSS à ce tour", exc_info=True)
         epss = {}
+        erreurs.append("epss")
     filtres = versionner(enrichir(cands, kev, epss), dossier / "versions.json")
     valides = [f for f in filtres if valider_candidat(f) is None]
     compteurs["ecartes"] = len(filtres) - len(valides)
@@ -675,5 +840,5 @@ def tour_collecteur(dossier: Path = DOSSIER, conf: str = CONF, executer=subproce
     except (OSError, ValueError):
         _noter(etat, debut, True, compteurs, "candidats")
         return 1
-    _noter(etat, debut, True, compteurs, None)
+    _noter(etat, debut, True, compteurs, ",".join(erreurs) or None)
     return 0

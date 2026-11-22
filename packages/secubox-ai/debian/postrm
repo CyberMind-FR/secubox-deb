@@ -28,6 +28,8 @@ case "$1" in
       deb-systemd-helper mask "$_u" >/dev/null 2>&1 || true
     done
     rm -f /run/systemd/system/secubox-ai.service.d/50-adresses.conf
+    rm -f /run/systemd/system/secubox-ai-nuclei.service.d/50-adresses.conf
+    rmdir /run/systemd/system/secubox-ai-nuclei.service.d 2>/dev/null || true
     rmdir /run/systemd/system/secubox-ai.service.d 2>/dev/null || true
     decharger_profils
     if [ -d /run/systemd/system ]; then
@@ -40,7 +42,7 @@ case "$1" in
       deb-systemd-helper unmask "$_u" >/dev/null 2>&1 || true
     done
     decharger_profils
-    rm -f /etc/secubox/ai.toml /etc/secubox/ai/politiques.toml /etc/secubox/ai/riposte.toml
+    rm -f /etc/secubox/ai.toml /etc/secubox/ai/politiques.toml /etc/secubox/ai/riposte.toml /etc/secubox/ai/filtres-refuses.txt
     rmdir --ignore-fail-on-non-empty /etc/secubox/ai 2>/dev/null || true
     rm -rf /run/secubox-ai
     ;;

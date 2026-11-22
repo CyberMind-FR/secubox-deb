@@ -30,6 +30,11 @@ case "$1" in
       adduser --system --ingroup secubox-ai-moteur --no-create-home --home /nonexistent \
         --shell /usr/sbin/nologin secubox-ai-moteur >/dev/null
     id -nG secubox-ai-moteur | tr ' ' '\n' | grep -qx secubox-ai || adduser secubox-ai-moteur secubox-ai >/dev/null
+    # Collecteur Nuclei (#3862) : compte dédié, groupe principal secubox-ai (la veille lit ses fichiers 0640 par le
+    # groupe, sans pouvoir les écrire), sans clé ni secret.
+    id -u secubox-ai-nuclei >/dev/null 2>&1 || \
+      adduser --system --ingroup secubox-ai --no-create-home --home /nonexistent \
+        --shell /usr/sbin/nologin secubox-ai-nuclei >/dev/null
 
     # Parents PARTAGÉS : créés seulement s'ils manquent, jamais resserrés ni réattribués.
     [ -d /run/secubox ] || install -d -o root -g root -m 1777 /run/secubox
@@ -43,7 +48,7 @@ case "$1" in
     # un lien entre la création et le chown (systemd-tmpfiles refuse d'ailleurs cette transition). Un lien n'est jamais
     # suivi ; un dossier d'un autre compte est refusé, un dossier root seulement s'il est vide (créé à la main avant
     # l'installation : son contenu n'est pas celui du module). Le contenu n'est jamais modifié.
-    python3 -I - /var/lib/secubox ai secubox-ai secubox-ai <<'DOSSIERS' || \
+    python3 -I - /var/lib/secubox ai secubox-ai secubox-ai secubox-ai-nuclei <<'DOSSIERS' || \
       echo "secubox-ai : /var/lib/secubox/ai non préparé (lien, propriétaire inattendu ou dossier root non vide) : l'API ne démarrera pas" >&2
 import grp
 import os
@@ -53,10 +58,12 @@ import sys
 
 racine, nom, compte, groupe = sys.argv[1:5]
 uid, gid = pwd.getpwnam(compte).pw_uid, grp.getgrnam(groupe).gr_gid
+# Compte du collecteur Nuclei (#3862) : propriétaire de nuclei/ seulement (défaut : le compte du module).
+uid_nuclei = pwd.getpwnam(sys.argv[5]).pw_uid if len(sys.argv) > 5 else uid
 OUVRIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
 
-def dossier(dfd, nom, mode):
+def dossier(dfd, nom, mode, uid=uid):
     try:
         os.mkdir(nom, 0o700, dir_fd=dfd)
     except FileExistsError:
@@ -76,7 +83,7 @@ ai = dossier(os.open(racine, OUVRIR), nom, 0o750)
 dossier(ai, "modeles", 0o750)
 dossier(ai, "tmp", 0o700)
 # Tour Nuclei (#3862) : seul dossier inscriptible du collecteur sans clé (dépôt, caches, candidats.json).
-dossier(ai, "nuclei", 0o750)
+dossier(ai, "nuclei", 0o750, uid_nuclei)
 DOSSIERS
 
     # Configuration fixe au premier passage seulement : les réglages de l'exploitant survivent aux mises à jour.
@@ -92,6 +99,10 @@ DOSSIERS
     fi
     if [ ! -e /etc/secubox/ai/riposte.toml ] && [ -f /usr/share/secubox/ai/riposte.toml.example ]; then
       install -m 0644 -o root -g root /usr/share/secubox/ai/riposte.toml.example /etc/secubox/ai/riposte.toml
+    fi
+    # Liste de refus des filtres (#3862) : déposée si absente, JAMAIS écrasée ; root 0644 (sinon la veille n'envoie rien).
+    if [ ! -e /etc/secubox/ai/filtres-refuses.txt ] && [ -f /usr/share/secubox/ai/filtres-refuses.txt.example ]; then
+      install -m 0644 -o root -g root /usr/share/secubox/ai/filtres-refuses.txt.example /etc/secubox/ai/filtres-refuses.txt
     fi
 
     # Profils AppArmor (API, moteur et veille en enforce), chargés AVANT tout démarrage : avec AppArmor actif, une

@@ -224,7 +224,7 @@ def test_postinst_comptes():
 
 def test_postinst_dossiers_par_descripteur_sans_tmpfiles():
     code = _code(POSTINST)
-    assert "python3 -I - /var/lib/secubox ai secubox-ai secubox-ai <<'DOSSIERS'" in code
+    assert "python3 -I - /var/lib/secubox ai secubox-ai secubox-ai secubox-ai-nuclei <<'DOSSIERS'" in code
     assert "tmpfiles" not in code
     assert not re.search(r"\bch(own|mod|grp)\b", code.replace("os.fchown", "").replace("os.fchmod", ""))  # par chemin
     # L'état d'exécution n'est jamais remis à zéro.
@@ -297,7 +297,8 @@ def test_temporaires_de_sqlite_dans_l_etat_du_module():
     assert "SQLITE_TMPDIR=/var/lib/secubox/ai/tmp" in env
     code = _code(PROFIL_API)
     assert "/var/lib/secubox/ai/** rwk," in code and "/tmp" not in code
-    assert not re.search(r"^\s*deny /var/lib/secubox/ai", code, re.M)
+    # Seul refus admis sous l'état du module : l'écriture du dossier du collecteur Nuclei (#3862) ; tmp/ reste permis.
+    assert re.findall(r"^\s*deny (/var/lib/secubox/ai\S*) (\w+),", code, re.M) == [("/var/lib/secubox/ai/nuclei/**", "w")]
     assert 'dossier(ai, "tmp", 0o700)' in POSTINST
     assert "/var/lib/secubox/ai" in " ".join(_unite("secubox-ai.service")["ReadWritePaths"])
 
