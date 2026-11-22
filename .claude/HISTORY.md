@@ -11,6 +11,26 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-22 — Faux positifs des filtres IA (281 bans levés) ; tour Nuclei porté dans gk3 (ref #3862 #3723 #3861)
+
+- **Incident** : le filtre `ia-cve-2025-8110` (tour de gk0, critique = ban 7 j) visait `/user/login` (page de connexion
+  Gitea) : 272 bans. Recoupement des 56 filtres de gk0 sur des pages de détection avec les réponses 2xx/3xx nginx de gk2
+  (14 j) : 11 servaient de vraies pages (`/index.php` de lldh.ganimed.fr et ganimed.fr, `/login.action`, `/api/config`…).
+  Retirés par `secubox-cvectl filtres-ia retirer --apply` (acteur `admin`, audités) ; 281 bans levés (40 + 241), seulement les
+  adresses sans autre preuve (27 gardées) ; 19 limites de gk3 dérivées défaites par sa route « défaire ». 44 filtres de
+  détection de gk0, jamais servis sur gk2, restent en vigueur sans surveillance (gk3 ne les adopte pas).
+- gk0 : conseils de bans en mode `proposer` (plus aucun geste) et tour de filtres éteint (`filtres-auto.json`), sauvegardes
+  `.avant-v2-gk3-*` / `.avant-gk3-*`. Clé `ai-ban` de gk0 gardée (choix du propriétaire) ; clé `ai-ban` de gk3 (47c3292a…)
+  ajoutée sur gk2 : gk3 agit seul (72 gestes auto la 1re heure).
+- waf-ng 1.43.1 (PR #3863, gk2) : `_reste_element` lisait `nft -j get element`, rendu en texte sur trixie : toute levée V2
+  tombait en 503 `etat`.
+- secubox-ai 2.0.1 (PR #3860, gk3) : `audit.log` refusé par AppArmor (`a` ne couvre pas le write() O_APPEND) → `w` ; l'ajout
+  seul ne tient plus qu'au code ; suite `chattr +a` et autres profils en `a` : #3861.
+- secubox-ai 2.1.0 (PR #3864, gk3) : tour Nuclei porté du POC (collecteur `secubox-ai-nuclei` sans clé, git durci, AppArmor ;
+  la veille revérifie et envoie), refus `chemin_legitime`, liste `/etc/secubox/ai/filtres-refuses.txt` (12 ids posés),
+  adoption des filtres de gk0 par id/version. Clé `ai-filtres` de gk3 (53437761…) inscrite sur gk2. **Interrupteur
+  `[filtres] nuclei` éteint** : allumage sur accord du propriétaire après l'incident.
+
 ## 2026-11-21 (soir) — SecuBox AI V2 phases 4-7 déployées ; secubox-domaine corrigé (ref #3722 #3723 #3724 #3725 #3858)
 
 - Publiés et installés : gk2 waf-ng 1.43.0, toolbox-ng 0.18.0, soc 1.12.0, mirrornet 0.7.0, annuaire 0.23.0 (installation
