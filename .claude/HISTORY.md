@@ -11,6 +11,16 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-22 — gk7 (autre site) : pubs sur le Player, DNS Freebox non délégué ; TV Privacy nettoyé
+- gk7 = 192.168.1.11 sur une autre Freebox (préfixe 2a01:e0a:e7d:2290). Cette Freebox distribue son propre DNS
+  (192.168.1.254 et fd0f:ee:b0::1 en RA) ; seul le Player 192.168.1.10 (8c:97:ea:0f:c7:60) interroge gk7, 270
+  requêtes/24 h, IPv4 seulement → le reste passe par la Freebox. `freeboxctl` : SecuBox pas encore autorisé sur cette
+  Freebox (validation sur l'écran à faire sur place), puis dns-regler/dns6-regler vers gk7 et redémarrage du Player.
+- TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
+  block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
+  (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
+  purge pas les appareils de l'ancien site.
+
 ## 2026-11-22 — TV Privacy : échec imprévu lisible et audité, secubox-ad-guard 1.33.3 sur gk7 (ref #3869)
 - gk7 : trois « appliquer » à 14:26 ont rendu « Refusé : Traceback … with verrou_controleur() » ; l'exception
   n'était pas interceptée et l'API ne gardait que les 300 PREMIERS caractères de stderr (cause perdue). Rejoué : OK.
