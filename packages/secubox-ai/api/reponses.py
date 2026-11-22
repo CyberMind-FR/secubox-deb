@@ -191,7 +191,9 @@ def _vue_etat(db) -> dict:
     garde = _json_etat(db, "garde_espace") or {"etat": "inconnu"}     # écrite par la veille (#3725)
     # M6 : sans clé ai-lecture, la collecte est éteinte ; le rapprochement passe par la clé ai-ban (écrit par la veille)
     lecture = _json_etat(db, "cle_ai_lecture") or {"etat": "inconnu"}
-    return {"suspension": s, "cle_ai_ban": cle, "cle_ai_lecture": lecture, "garde_espace": garde,
+    filtres = _json_etat(db, "cle_ai_filtres") or {"etat": "inconnu"}   # écrite par l'apprentissage (#3732, #3862)
+    return {"suspension": s, "cle_ai_ban": cle, "cle_ai_lecture": lecture, "cle_ai_filtres": filtres,
+            "garde_espace": garde,
             "tour_nuclei": _tour_nuclei(db),
             "sade_mode": releve.get("sade_mode") if isinstance(releve, dict) else None,
             "releve_lu_le": releve.get("lu_le") if isinstance(releve, dict) else None,

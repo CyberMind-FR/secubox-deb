@@ -1655,7 +1655,8 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     else { var pa = v2Pil('rsAuto', '', 'vert'); pa.appendChild(el('span', 'point')); pa.appendChild(el('span', '', 'Automatique actif')); }
     v2Pil('rsSade', 'mode SADE sur gk2 : ' + (e && e.sade_mode ? String(e.sade_mode).toUpperCase() : V2_NI));
     var cle = e && e.cle_ai_ban;
-    v2Pil('rsCles', 'clé ai-ban : ' + (cle && cle.refusee ? 'refusée par gk2' : cle && V2_CLES[cle.etat] || V2_NI) + ' · ai-filtres : ' + V2_NI);
+    var clf = e && e.cle_ai_filtres;
+    v2Pil('rsCles', 'clé ai-ban : ' + (cle && cle.refusee ? 'refusée par gk2' : cle && V2_CLES[cle.etat] || V2_NI) + ' · ai-filtres : ' + (clf && V2_CLES[clf.etat] || V2_NI));
     var bs = $('rsSuspendre'); bs.disabled = !e || !!(s && s.politique);
     bs.textContent = s && s.suspendu ? 'Reprendre l\'automatique' : 'Suspendre l\'automatique';
     // à décider
