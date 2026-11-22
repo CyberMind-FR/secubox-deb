@@ -11,6 +11,16 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-22 — TV Privacy : échec imprévu lisible et audité, secubox-ad-guard 1.33.3 sur gk7 (ref #3869)
+- gk7 : trois « appliquer » à 14:26 ont rendu « Refusé : Traceback … with verrou_controleur() » ; l'exception
+  n'était pas interceptée et l'API ne gardait que les 300 PREMIERS caractères de stderr (cause perdue). Rejoué : OK.
+- Correctif (PR #3870) : `echec_imprevu` audite `<action>-echec` (type, endroit), trace complète au journal système
+  (syslog `secubox-adguard-tv`), refus JSON + une ligne ; l'API garde les 300 DERNIERS caractères. Déployé gk7
+  (`ii 1.33.3`), apply OK, Unbound actif. gk2 non mis à jour (paquet sur apt). Cause du 14:26 inconnue : à lire au
+  prochain échec dans `journalctl -t secubox-adguard-tv`.
+- gk7 refait : clé d'hôte du maillage (10.10.0.2) renouvelée sur gk2 ; elle date d'une image d'avant #3559 →
+  `secubox-renouvelle-secrets` à passer sur accord.
+
 ## 2026-11-22 — secubox-ai 2.2.0 : onglet Salle SBX-SOC sur gk3 (ref #3867)
 - POC d'abord sur le relais gk0 (onglet « Salle », sauvegarde `index.html.avant-sbx-soc-1795329382`), maquette des
   panneaux (graphe d'acteur, chronologie, plafonds) publiée en artifact, puis report dans le module (PR #3868).
