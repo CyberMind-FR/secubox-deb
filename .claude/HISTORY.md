@@ -30,6 +30,11 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   la veille revérifie et envoie), refus `chemin_legitime`, liste `/etc/secubox/ai/filtres-refuses.txt` (12 ids posés),
   adoption des filtres de gk0 par id/version. Clé `ai-filtres` de gk3 (53437761…) inscrite sur gk2. **Interrupteur
   `[filtres] nuclei` éteint** : allumage sur accord du propriétaire après l'incident.
+- Allumé sur accord (22/11 06:11). 1er tour : 557 candidats, KEV en 403 (CISA refuse un agent « nuclei ») → secubox-ai
+  2.1.1 (PR #3865, agent `secubox-ai/2`, KEV 1790, pages servies par gk2 ajoutées au refus ; `/api/config` revenait sous
+  `ia-cve-2026-116070`, aussi mis dans `filtres-refuses.txt`). Veille de gk3 en auto-suspension depuis 04:24 (3 × 503 du
+  défaut waf-ng 1.43.0) : reprise par `admin`. 1re passe : 522 filtres de gk0 adoptés sans envoi, 10 envoyés et rejetés
+  par gk2 (7 `deja_couvert`, 3 `present`). Les 44 filtres de détection de gk0 sont gardés (choix du propriétaire).
 
 ## 2026-11-21 (soir) — SecuBox AI V2 phases 4-7 déployées ; secubox-domaine corrigé (ref #3722 #3723 #3724 #3725 #3858)
 
