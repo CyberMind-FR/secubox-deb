@@ -27,6 +27,11 @@ override_dh_auto_install:
 	install -D -m 0755 sbin/secubox-ai-veille debian/secubox-ai/usr/sbin/secubox-ai-veille
 	install -D -m 0644 systemd/secubox-ai-veille.service debian/secubox-ai/usr/lib/systemd/system/secubox-ai-veille.service
 	install -D -m 0644 apparmor/secubox-ai-veille debian/secubox-ai/etc/apparmor.d/secubox-ai-veille
+	# Collecteur du tour Nuclei (#3862) : oneshot SANS CLÉ, sa minuterie horaire et son profil.
+	install -D -m 0755 sbin/secubox-ai-nuclei debian/secubox-ai/usr/sbin/secubox-ai-nuclei
+	install -D -m 0644 systemd/secubox-ai-nuclei.service debian/secubox-ai/usr/lib/systemd/system/secubox-ai-nuclei.service
+	install -D -m 0644 systemd/secubox-ai-nuclei.timer debian/secubox-ai/usr/lib/systemd/system/secubox-ai-nuclei.timer
+	install -D -m 0644 apparmor/secubox-ai-nuclei debian/secubox-ai/etc/apparmor.d/secubox-ai-nuclei
 	# Contrôleur root (moteur local, préparation, clé distante).
 	install -D -m 0755 sbin/secubox-aictl debian/secubox-ai/usr/sbin/secubox-aictl
 	# Unités : API, moteur (sans [Install]), préparation, demandes (.path + oneshot root).

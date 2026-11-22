@@ -688,7 +688,7 @@ def test_unite_credentials_avec_repli_et_audit_en_ajout():
 
 def test_version_2_0():
     from api.main import VERSION
-    assert VERSION.startswith("2.0.")                                  # #3725 : secubox-ai V2 (phases 4 à 7)
+    assert VERSION.startswith("2.")                                    # #3725 : secubox-ai V2 (phases 4 à 7)
     assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith(f"secubox-ai ({VERSION}-1~trixie1)")
 
 

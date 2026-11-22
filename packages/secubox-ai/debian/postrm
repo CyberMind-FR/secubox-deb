@@ -12,7 +12,7 @@ set -e
 # Profils AppArmor déchargés au retrait comme à la purge (tolérant : AppArmor absent, profil jamais chargé). Au retrait
 # le fichier est encore là (conffile) : apparmor_parser -R ; à la purge dpkg l'a déjà effacé : par le nom du profil.
 decharger_profils() {
-  for _p in secubox-ai-api secubox-ai-moteur secubox-ai-veille; do
+  for _p in secubox-ai-api secubox-ai-moteur secubox-ai-veille secubox-ai-nuclei; do
     if [ -f "/etc/apparmor.d/$_p" ] && command -v apparmor_parser >/dev/null 2>&1; then
       apparmor_parser -R "/etc/apparmor.d/$_p" >/dev/null 2>&1 || true
     elif [ -w /sys/kernel/security/apparmor/.remove ] \
@@ -24,7 +24,7 @@ decharger_profils() {
 
 case "$1" in
   remove)
-    for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service; do
+    for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service secubox-ai-nuclei.timer; do
       deb-systemd-helper mask "$_u" >/dev/null 2>&1 || true
     done
     rm -f /run/systemd/system/secubox-ai.service.d/50-adresses.conf
@@ -35,7 +35,7 @@ case "$1" in
     fi
     ;;
   purge)
-    for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service; do
+    for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service secubox-ai-nuclei.timer; do
       deb-systemd-helper purge "$_u" >/dev/null 2>&1 || true
       deb-systemd-helper unmask "$_u" >/dev/null 2>&1 || true
     done

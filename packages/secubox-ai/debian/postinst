@@ -75,6 +75,8 @@ def dossier(dfd, nom, mode):
 ai = dossier(os.open(racine, OUVRIR), nom, 0o750)
 dossier(ai, "modeles", 0o750)
 dossier(ai, "tmp", 0o700)
+# Tour Nuclei (#3862) : seul dossier inscriptible du collecteur sans clé (dépôt, caches, candidats.json).
+dossier(ai, "nuclei", 0o750)
 DOSSIERS
 
     # Configuration fixe au premier passage seulement : les réglages de l'exploitant survivent aux mises à jour.
@@ -97,7 +99,7 @@ DOSSIERS
     # image, /sys est celui de l'hôte : apparmor.service les chargera au premier démarrage depuis /etc/apparmor.d.
     PROFILS=1
     if [ -d /run/systemd/system ] && [ -d /sys/kernel/security/apparmor ]; then
-      for _p in secubox-ai-api secubox-ai-moteur secubox-ai-veille; do
+      for _p in secubox-ai-api secubox-ai-moteur secubox-ai-veille secubox-ai-nuclei; do
         if ! command -v apparmor_parser >/dev/null 2>&1 || [ ! -f "/etc/apparmor.d/$_p" ] \
            || ! apparmor_parser -r "/etc/apparmor.d/$_p"; then
           PROFILS=0
@@ -108,7 +110,9 @@ DOSSIERS
 
     # #3411 : activation HORS du test systemd (chroot d'une image) ; motif debhelper : un disable manuel survit.
     # Le moteur n'a pas de [Install] : seul secubox-aictl le démarre.
-    for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service; do
+    # Tour Nuclei (#3862) : la MINUTERIE est activée ; le service ne fait rien tant que [filtres] nuclei = true
+    # n'est pas dans ai.toml.
+    for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service secubox-ai-nuclei.timer; do
       if deb-systemd-helper --quiet was-enabled "$_u"; then
         deb-systemd-helper enable "$_u" >/dev/null || true
       else
@@ -133,6 +137,9 @@ DOSSIERS
         # Veille (#3719) : enable --now ; relancée à chaque mise à jour pour le nouveau code et les migrations.
         if systemctl is-enabled --quiet secubox-ai-veille.service 2>/dev/null; then
           systemctl restart secubox-ai-veille.service || true
+        fi
+        if systemctl is-enabled --quiet secubox-ai-nuclei.timer 2>/dev/null; then
+          systemctl start secubox-ai-nuclei.timer || true
         fi
       else
         echo "secubox-ai : unités activées mais NON démarrées (profil AppArmor absent)" >&2
