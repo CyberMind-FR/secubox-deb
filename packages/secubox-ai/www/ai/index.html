@@ -158,6 +158,57 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
 .v2hist{margin:4px 0 0;padding-left:18px;color:var(--v2-doux);font-size:13px;display:flex;flex-direction:column;gap:2px}
 .v2trois{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}.v2trois div{display:flex;flex-direction:column;gap:2px}.v2trois b{font-size:22px;font-weight:700}.v2trois b.ni{font-size:12px;font-weight:400;color:var(--v2-doux)}
 .v2sugg{display:flex;justify-content:space-between;gap:8px;font-size:13px}.v2chaud{color:#fed7aa}.v2 p{margin:0;line-height:1.5}.v2 .msg:empty{display:none}.v2tab td:first-child{white-space:nowrap}.v2grille b.ni{font-weight:400;color:var(--v2-doux);font-family:inherit}
+/* Salle SBX-SOC (porté du POC gk0) : langage visuel des salles de supervision, appliqué à Salle, Radar et Menaces. */
+section[data-o=salle],section[data-o=radar],section[data-o=menaces]{--s-fond:#070d18;--s-carte:#0d1626;--s-bord:#1c2c48;--s-cyan:#22d3ee;--s-crit:#ef4444;--s-haute:#f97316;--s-moy:#eab308;--s-info:#38bdf8;--s-ok:#22c55e;--s-doux:#8aa0c4;--s-mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}
+.scap{font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--s-doux);font-weight:600}
+.snd{color:var(--faible);font-size:.78rem;font-style:italic}
+.sseg{display:flex;gap:2px;height:10px;min-width:0}.sseg i{flex:1 1 0;min-width:2px;background:rgba(138,160,196,.13);border-radius:1px}.sseg i.on{background:var(--c,var(--s-cyan))}
+.ssalle{display:flex;flex-direction:column;gap:10px;padding:10px;border-radius:10px;background:var(--s-fond);font-variant-numeric:tabular-nums}
+.stete{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}.stete h2{margin:0;font-size:1rem;letter-spacing:.14em;text-transform:uppercase}.stete small{color:var(--s-doux);font-size:.72rem;letter-spacing:.06em}.stete .smaj{margin-left:auto;font-family:var(--s-mono);font-size:.72rem;color:var(--s-doux)}
+.skpis{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
+.skpi{background:var(--s-carte);border:1px solid var(--s-bord);border-radius:4px;padding:8px 10px;min-width:0;display:flex;flex-direction:column;gap:2px}.skpi b{font-family:var(--s-mono);font-size:1.35rem;line-height:1.15;overflow-wrap:anywhere}.skpi small{color:var(--s-doux);font-size:.68rem;overflow-wrap:anywhere}
+.skpi.alerte{border-color:rgba(239,68,68,.7);box-shadow:0 0 14px rgba(239,68,68,.25)}.skpi .snd{font-size:.8rem}
+.sgrille{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+.scarte{background:var(--s-carte);border:1px solid var(--s-bord);border-radius:4px;padding:12px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.scarte>header{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.scarte>header small{margin-left:auto;color:var(--faible);font-size:.66rem;font-family:var(--s-mono)}
+.shero{clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border-color:rgba(34,211,238,.35)}
+.sflux{display:grid;grid-template-columns:minmax(90px,max-content) minmax(0,1fr) auto;gap:8px 10px;align-items:center;font-size:.78rem}.sflux .sv{font-family:var(--s-mono);color:var(--texte);text-align:right;white-space:nowrap}
+.scols{display:flex;align-items:flex-end;gap:2px;height:26px}.scols i{flex:1 1 0;background:var(--s-cyan);min-height:1px;border-radius:1px 1px 0 0;opacity:.85}.scols i.vide{background:transparent;border-bottom:1px dashed rgba(138,160,196,.35)}
+.sclass{display:grid;grid-template-columns:minmax(80px,max-content) minmax(0,1fr) 46px;gap:7px 10px;align-items:center;font-size:.78rem}.sclass .sv{font-family:var(--s-mono);text-align:right}
+.sradar{display:flex;flex-direction:column;align-items:center;gap:6px}.sradar svg{width:100%;max-width:540px;height:auto;display:block}
+.sradar .sbal{transform-box:view-box;transform-origin:200px 200px;animation:sbal 6s linear infinite}
+@keyframes sbal{to{transform:rotate(360deg)}}
+.slegende{display:flex;gap:12px;flex-wrap:wrap;font-size:.7rem;color:var(--s-doux);justify-content:center}.slegende i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.sjauge{display:flex;flex-direction:column;align-items:center;gap:4px}.sjauge svg{width:100%;max-width:240px;height:auto}
+.sniv{display:flex;gap:3px;width:100%;max-width:220px}.sniv i{flex:1;height:6px;border-radius:1px;background:rgba(138,160,196,.15)}
+.sinc{width:100%;border-collapse:collapse;font-size:.74rem;table-layout:fixed}.sinc col.c-h{width:70px}.sinc col.c-s{width:20%}.sinc col.c-g{width:88px}.sinc col.c-a{width:26%}.sinc td{overflow-wrap:anywhere}.sinc td small{display:block;color:var(--s-doux);font-size:.66rem;overflow-wrap:anywhere}.sinc th{font-size:.62rem;letter-spacing:.08em;color:var(--s-doux);padding:4px 6px;text-transform:uppercase;white-space:nowrap}.sinc td{padding:6px;border-top:1px solid var(--s-bord);vertical-align:top}.sinc td.m{font-family:var(--s-mono);white-space:nowrap}
+.sgr{font-weight:700;font-size:.66rem;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}.sgr.critical{color:var(--s-crit)}.sgr.high{color:var(--s-haute)}.sgr.medium{color:var(--s-moy)}.sgr.low,.sgr.info{color:var(--s-info)}
+.sact{font-family:var(--s-mono);font-size:.7rem;padding:1px 6px;border-radius:3px;border:1px solid currentColor;white-space:nowrap;display:inline-block}.sact.banni{color:var(--s-ok)}.sact.observe{color:var(--s-doux)}.sact.refus{color:var(--s-haute)}
+.sfrise svg{width:100%;height:auto;display:block}
+.sterm{font-family:var(--s-mono);font-size:.72rem;background:#050a13;border:1px solid var(--s-bord);border-radius:3px;padding:8px 10px;max-height:280px;overflow:auto;display:flex;flex-direction:column;gap:3px;line-height:1.4}.sterm div{overflow-wrap:anywhere}.sterm .h{color:var(--faible)}
+.sterm .t-ok{color:var(--s-ok)}.sterm .t-warn{color:var(--s-haute)}.sterm .t-agnt{color:var(--s-cyan)}.sterm .t-info{color:var(--s-doux)}
+@container a (min-width:900px){.sgrille{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.sgrille .sc-centre{grid-column:1/-1;order:-1}}
+@container a (min-width:1180px){.sgrille{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr)}.sgrille .sc-centre{grid-column:auto;order:0}}.sgrille .sc-plein{grid-column:1/-1}
+.scol{display:flex;flex-direction:column;gap:10px;min-width:0}
+/* Restyle Radar et Menaces : mêmes tokens, mêmes identifiants, aucun comportement changé. */
+section[data-o=radar].rradar{background:var(--s-fond);border-radius:10px;padding:10px}
+section[data-o=radar] .rpan,section[data-o=radar] .rchiffre{background:var(--s-carte);border-color:var(--s-bord);border-radius:4px}
+section[data-o=radar] .rpan.ria{clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border-color:rgba(34,211,238,.35);background:var(--s-carte)}
+section[data-o=radar] .rpan.rvert{border-color:rgba(34,197,94,.4)}section[data-o=radar] .rpan.rorange{border-color:rgba(249,115,22,.45);background:var(--s-carte)}
+section[data-o=radar] .rpan h3,section[data-o=menaces] .pan h3{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:#c9d6ee}
+section[data-o=radar] .rpan h3 i,section[data-o=menaces] .pan h3 i{text-transform:none;letter-spacing:0}
+section[data-o=radar] .rchiffre small:first-child,section[data-o=menaces] .tuilesm small{font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--s-doux)}
+section[data-o=radar] .rchiffre b,section[data-o=radar] .rgros,section[data-o=menaces] .tuilesm b{font-family:var(--s-mono);font-weight:700}
+section[data-o=radar] .rchiffre.rouge{border-color:rgba(239,68,68,.7);box-shadow:0 0 14px rgba(239,68,68,.25);background:var(--s-carte)}section[data-o=radar] .rchiffre.orange{border-color:rgba(249,115,22,.6);background:var(--s-carte)}
+section[data-o=radar] .rtete h2{letter-spacing:.12em;text-transform:uppercase;font-size:.95rem}
+section[data-o=radar] .rfam .sseg{height:9px}
+section[data-o=menaces]{background:var(--s-fond);border-radius:10px;padding:10px}
+section[data-o=menaces] .pan{background:var(--s-carte);border-color:var(--s-bord);border-radius:4px}
+section[data-o=menaces] .tuilesm div{background:var(--s-carte);border-color:var(--s-bord);border-radius:4px}section[data-o=menaces] .tuilesm .chaud{border-color:rgba(249,115,22,.7);box-shadow:0 0 12px rgba(249,115,22,.2)}
+section[data-o=menaces] .flux{background:#050a13;border:1px solid var(--s-bord);border-radius:3px;padding:8px 10px;color:#9fd8e6}section[data-o=menaces] .flux .nouveau{color:var(--s-haute)}
+section[data-o=menaces] .zband,section[data-o=menaces] .zcarte{border-radius:4px}
+section[data-o=radar] .rsev.critical{background:rgba(239,68,68,.2);color:#fca5a5}section[data-o=radar] .rsev.high{background:rgba(249,115,22,.2);color:#fdba74}section[data-o=radar] .rsev.medium{background:rgba(234,179,8,.18);color:#fde047}section[data-o=radar] .rsev.low,section[data-o=radar] .rsev.info{background:rgba(56,189,248,.18);color:#7dd3fc}
+@media (prefers-reduced-motion:reduce){.sradar .sbal{animation:none;display:none}section[data-o=salle] *,section[data-o=radar] *,section[data-o=menaces] *{transition:none!important;animation:none!important}}
 </style></head><body>
 <nav class="sidebar" id="sidebar"></nav>
 <main class="principal"><div class="cadre"><div class="app">
@@ -176,6 +227,28 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     <span class="msg" id="mMoteur" role="status" aria-live="polite"></span></div>
   <div class="pan" id="enCours" hidden style="margin-bottom:10px"><div class="ligne" style="justify-content:space-between"><h3 style="margin:0">En cours et récents <i>retrouvés après un rechargement · 30 min</i></h3><button class="btn dang" id="bToutArreter" type="button" hidden>■ Tout arrêter</button></div><div id="lEnCours" class="agt"></div></div>
   <div class="onglets" role="tablist" id="onglets"></div>
+
+  <section data-o="salle" class="ssalle" aria-label="Salle de supervision">
+    <div class="stete"><div><h2>Salle · gk2</h2><small>lecture seule · relevé réel de gk2 et de la veille, sans IA · donnée absente = « relevé indisponible »</small></div><span class="smaj" id="sMaj">relevé en cours de lecture…</span></div>
+    <div class="bandeau demo" id="sDemo" hidden>Démonstration : données fictives (adresses de documentation), aucune lecture de gk2.</div>
+    <div class="bandeau hors" id="sErr" hidden></div>
+    <div class="skpis" id="sKpis"></div>
+    <div class="sgrille">
+      <div class="scol">
+        <div class="scarte"><header><span class="scap">Flux d'entrée · dernière heure</span><small>/menaces/series</small></header><div id="sFlux" class="sflux"></div></div>
+        <div class="scarte"><header><span class="scap">Classification · alertes du jour</span><small>/menaces/releve</small></header><div id="sClass" class="sclass"></div></div>
+      </div>
+      <div class="scol sc-centre">
+        <div class="scarte shero"><header><span class="scap">Radar par couches</span><small>/menaces/releve · /actions</small></header><div id="sRadar" class="sradar"></div></div>
+      </div>
+      <div class="scol">
+        <div class="scarte"><header><span class="scap">Posture de gk2</span><small>/menaces/releve</small></header><div id="sPosture" class="sjauge"></div></div>
+        <div class="scarte"><header><span class="scap">Terminal · gestes et conseils</span><small>/actions · /veille/etat · /menaces/releve</small></header><div id="sTerm" class="sterm" role="log" aria-live="polite"></div></div>
+      </div>
+      <div class="scarte sc-plein"><header><span class="scap">Incidents actifs</span><small>/menaces/releve · /actions</small></header><div class="tab" id="sIncidents"></div></div>
+      <div class="scarte sc-plein"><header><span class="scap">Frise des alertes par catégorie</span><span role="group" aria-label="Période" class="grper"><button type="button" id="sF1h" aria-pressed="false">1 h</button><button type="button" id="sF3h" aria-pressed="true">3 h</button></span><small>/menaces/series · tranches de 10 min</small></header><div id="sFrise" class="sfrise"></div></div>
+    </div>
+  </section>
 
   <section data-o="essai" class="pan"><h3>Essai <i>avec les limites réellement appliquées</i></h3>
     <div class="champs2" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))"><label>Modèle<small>changer recharge le moteur local</small><select id="rModele"></select></label><label>Température<small>vide = préférences</small><input type="number" step="0.05" min="0" max="2" id="rTemp"></label><label>Longueur maximale<small>vide = préférences</small><input type="number" min="16" max="8192" id="rMax"></label></div><div class="lucid"><label for="rLucid">Lucidité <small id="rLucidTxt"></small></label><div class="ligne"><span class="d">🌀 Délire</span><input id="rLucid" type="range" min="0" max="100" step="5" value="85" style="flex:1;min-width:120px"><span class="l">🎯 Lucide</span></div><div class="ligne" id="rPresets"></div></div><div class="chat" id="chat"></div><div class="ligne" id="pj" hidden style="margin-bottom:8px"><span class="pill info" id="pjTxt"></span><button class="btn sec" type="button" id="pjRetirer">Retirer</button></div><form id="fChat" class="ligne"><input id="iChat" style="flex:1;min-width:200px;margin:0" placeholder="Votre question…" autocomplete="off" maxlength="4000"><button class="btn" id="bChat">Envoyer</button></form><div class="msg" id="mChat"></div></section>
@@ -415,7 +488,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     if (corps !== undefined) { h['Content-Type'] = 'application/json'; o.body = JSON.stringify(corps); }
     return fetch(chemin, o).then(lireReponse);
   }
-  var ONGLETS = [['essai', 'Essai'], ['radar', 'Radar'], ['chaine', 'Chaîne'], ['dossier', 'Dossier'], ['reponses', 'Réponses'], ['menaces', 'Menaces'], ['code', 'Code'], ['documents', 'Documents'], ['memoire', 'Mémoire'], ['historique', 'Historique'], ['modeles', 'Modèles'], ['prefs', 'Préférences'], ['medias', 'Médias'], ['journal', 'Journal']];
+  var ONGLETS = [['salle', 'Salle'], ['essai', 'Essai'], ['radar', 'Radar'], ['chaine', 'Chaîne'], ['dossier', 'Dossier'], ['reponses', 'Réponses'], ['menaces', 'Menaces'], ['code', 'Code'], ['documents', 'Documents'], ['memoire', 'Mémoire'], ['historique', 'Historique'], ['modeles', 'Modèles'], ['prefs', 'Préférences'], ['medias', 'Médias'], ['journal', 'Journal']];
   function montrer(n) {
     document.querySelectorAll('section[data-o]').forEach(function (s) { s.hidden = s.dataset.o !== n; });
     Array.prototype.forEach.call($('onglets').children, function (b) { b.setAttribute('aria-selected', b.dataset.o === n ? 'true' : 'false'); });
@@ -425,6 +498,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     if (n === 'historique') chargerHistorique();
     if (n === 'menaces') { chargerMenaces(); graphesCharger(); }
     if (n === 'radar') chargerRadar();
+    if (n === 'salle') chargerSalle();
     if (n === 'chaine') chargerChaine();
     if (n === 'dossier') dzCharger(q.get('dossier'));
     if (n === 'reponses') rsCharger();
@@ -450,7 +524,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
   }
   function chargerEtat() {
     return api(API + '/status').then(function (s) { $('bErr').hidden = true; rendreEtat(s); })
-      .catch(function (e) { var session = e && (e.status === 401 || e.status === 403); $('bErr').hidden = false; $('bErr').textContent = session ? 'Session expirée : reconnectez-vous.' : 'Aucune mesure : le module ne répond pas.'; $('pEtat').textContent = session ? 'SESSION EXPIRÉE' : 'INJOIGNABLE'; $('pEtat').className = 'pill hors'; });
+      .catch(function (e) { var session = e && (e.status === 401 || e.status === 403); ETAT = null; $('bErr').hidden = false; $('bErr').textContent = session ? 'Session expirée : reconnectez-vous.' : 'Aucune mesure : le module ne répond pas.'; $('pEtat').textContent = session ? 'SESSION EXPIRÉE' : 'INJOIGNABLE'; $('pEtat').className = 'pill hors'; });
   }
   function fixerMoteur(choix) {
     msg('mMoteur', 'Changement…', true);
@@ -837,7 +911,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
 
   // ---- Radar (#3811, porté du POC) : tableau de bord du relevé réel de gk2. Lecture seule ; les boutons renvoient à
   // l'onglet Menaces. Chiffre absent = « non relevé ». Le verdict des gestes (#3716) n'est pas rendu par ce module.
-  var R_SEV = [['critical', 'Critique', '#f5424f'], ['high', 'Haute', '#f5424f'], ['medium', 'Moyenne', '#ff9f1c'], ['low', 'Basse', '#3987e5'], ['info', 'Info', '#3987e5']];
+  var R_SEV = [['critical', 'Critique', '#ef4444'], ['high', 'Haute', '#f97316'], ['medium', 'Moyenne', '#eab308'], ['low', 'Basse', '#38bdf8'], ['info', 'Info', '#38bdf8']];
   var R_SEV_FR = { critical: 'critique', high: 'haute', medium: 'moyenne', low: 'basse', info: 'info' };
   var R_FAM = { 'auth_smtp:sasl_failed': 'SMTP SASL', 'host_anomaly:unrouted': 'hôte inconnu', 'host_anomaly:ip_literal': 'IP en dur', scanners: 'scanners', robots: 'robots', honeypot: 'honeypot', waf_fingerprint: 'empreinte WAF', leurre: 'leurre', host_anomaly: 'hôte inconnu' };
   var R_ACTION = { banned: 'banni', robot: 'robot', detect: 'détecté', blocked: 'bloqué', block: 'bloqué' };
@@ -870,7 +944,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     if (!total) { rNR(z); return; }
     var C = 2 * Math.PI * 54, ecart = parts.length > 1 ? 2 : 0, pos = 0;
     var svg = grSvg('svg', { width: 132, height: 132, viewBox: '0 0 132 132', role: 'img', 'aria-label': grNb(total) + ' menaces : ' + parts.map(function (x) { return grNb(x.n) + ' ' + x.l.toLowerCase(); }).join(', ') });
-    var gr = grSvg('g', { transform: 'rotate(-90 66 66)', fill: 'none', 'stroke-width': 14 });
+    var gr = grSvg('g', { transform: 'rotate(-90 66 66)', fill: 'none', 'stroke-width': 9 });
     gr.appendChild(grSvg('circle', { cx: 66, cy: 66, r: 54, stroke: 'rgba(159,179,214,.12)' }));
     parts.forEach(function (x) { var long = Math.max(0.5, C * x.n / total - ecart), arc = grSvg('circle', { cx: 66, cy: 66, r: 54, stroke: x.c, 'stroke-dasharray': long.toFixed(1) + ' ' + C.toFixed(1), 'stroke-dashoffset': (-pos).toFixed(1) }), ti = grSvg('title'); ti.textContent = x.l + ' : ' + grNb(x.n); arc.appendChild(ti); gr.appendChild(arc); pos += C * x.n / total; });
     svg.appendChild(gr);
@@ -1033,7 +1107,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
     var z = $('rFamilles'), pc = r.parts_alertes_pct || {}, k = Object.keys(pc).filter(function (x) { return rNombre(pc[x]); }).sort(function (a, b) { return pc[b] - pc[a]; }).slice(0, 7), mx = 0; vider(z);
     if (!k.length) { rNR(z); return; }
     k.forEach(function (x) { if (pc[x] > mx) mx = pc[x]; });
-    k.forEach(function (x) { z.appendChild(el('span', '', rFam(x))); var b = el('div', 'rb'); b.style.width = (mx ? Math.round(100 * pc[x] / mx) : 0) + '%'; b.title = x + ' : ' + rPct(pc[x]); z.appendChild(b); z.appendChild(el('span', '', rPct(pc[x]))); });
+    k.forEach(function (x) { z.appendChild(el('span', '', rFam(x))); var b = sSeg(mx ? pc[x] / mx : 0, '#22d3ee', 20); b.title = x + ' : ' + rPct(pc[x]); z.appendChild(b); z.appendChild(el('span', '', rPct(pc[x]))); });
   }
   function rBlocs(r) {
     var z = $('rBlocs'); vider(z);
@@ -1061,6 +1135,263 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
   $('rResumer').addEventListener('click', function () { montrer('menaces'); $('zResumer').click(); });
   $('rQuestion').addEventListener('click', function () { montrer('menaces'); $('zQ').focus(); });
   setInterval(function () { var s = document.querySelector('section[data-o=radar]'); if (s && !s.hidden && !document.hidden) chargerRadar(); }, 20000);
+
+  // ---- Salle (SBX-SOC, porté du POC gk0) : vue d'ensemble d'une page, tirée des seules routes du module :
+  // /menaces/releve et /menaces/series (gk2), /actions et /veille/etat (veille de cette box), /status (moteur).
+  // Lecture seule. Aucune valeur inventée : donnée absente = « relevé indisponible », jamais un zéro par défaut.
+  var S = { fen: '3h', releve: null, series: null, actions: null, veille: null, okR: false, okS: false, okA: false, okV: false, enCours: false, relire: false };
+  var S_ND = 'relevé indisponible', S_PERIODE_S = 30;
+  var S_SEVC = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#38bdf8', info: '#38bdf8' };
+  var S_SEVR = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+  var S_COUCHES = [['web', 'Web / WAF'], ['mail', 'Messagerie'], ['scan', 'Balayages / réseau'], ['dns', 'DNS']];
+  var S_SERIE_NOM = { sasl_failed: 'Messagerie · SASL', scanners: 'Scanners', robots: 'Robots', unrouted: 'Hôte inconnu' };
+  var S_SERIE_COUL = { sasl_failed: '#f97316', scanners: '#eab308', robots: '#38bdf8', unrouted: '#a78bfa' };
+  var S_GESTES_ACTIFS = { ban: 'banni (IA)', ban_bloc: 'bloc banni (IA)', prolonger: 'banni (IA)', limiter: 'limité (IA)', leurre: 'leurre (IA)' };
+  function sND(zone, texte) { zone.appendChild(el('span', 'snd', texte || S_ND)); }
+  function sCouche(cat) { cat = String(cat || ''); if (/^auth_smtp|smtp|imap|sasl/.test(cat)) return 'mail'; if (/dns/i.test(cat)) return 'dns'; if (/^host_anomaly|^leurre|unrouted|ip_literal/.test(cat)) return 'scan'; return 'web'; }
+  function sSeg(frac, couleur, n) {
+    var d = el('div', 'sseg'), k = Math.max(0, Math.min(n, Math.round(frac * n))); if (frac > 0 && k === 0) k = 1;
+    d.style.setProperty('--c', couleur || '#22d3ee'); d.setAttribute('aria-hidden', 'true');
+    for (var i = 0; i < n; i++) d.appendChild(el('i', i < k ? 'on' : ''));
+    return d;
+  }
+  function sKpi(z, titre, valeur, sous, alerte) {
+    var d = el('div', 'skpi' + (alerte ? ' alerte' : '')); d.appendChild(el('span', 'scap', titre));
+    if (valeur == null) d.appendChild(el('span', 'snd', S_ND)); else d.appendChild(el('b', '', valeur));
+    if (sous) d.appendChild(el('small', '', sous)); z.appendChild(d);
+  }
+  function sSecondes(x) { if (rNombre(x)) return x; var t = x ? Date.parse(x) : NaN; return isNaN(t) ? null : t / 1000; }
+  function sCle(c) { return c && c.refusee ? 'refusée par gk2' : (c && V2_CLES[c.etat]) || S_ND; }
+  function sKpis() {
+    var z = $('sKpis'), r = S.okR ? S.releve : null, c = (r && r.chiffres) || {}, ev = (r && r.evolution_1h) || {}, p = (r && r.posture) || {}, v = S.okV ? S.veille : null; vider(z);
+    var evOk = ev.disponible === true && rNombre(ev.minutes);
+    sKpi(z, 'Menaces du jour', rNombre(c.menaces_jour) ? grNb(c.menaces_jour) : null, evOk && rNombre(ev.nouvelles_menaces) ? (ev.nouvelles_menaces > 0 ? '+' : '') + grNb(ev.nouvelles_menaces) + ' en ' + ev.minutes + ' min' : null);
+    sKpi(z, 'Alertes · 1 h', rNombre(c.alertes_derniere_heure) || typeof c.alertes_derniere_heure === 'string' ? String(c.alertes_derniere_heure) : null, null);
+    sKpi(z, 'Bans actifs', rNombre(c.bans_actifs) ? grNb(c.bans_actifs) : null, evOk && rNombre(ev.ecart_bans_actifs) ? (ev.ecart_bans_actifs > 0 ? '+' : '') + grNb(ev.ecart_bans_actifs) + ' en ' + ev.minutes + ' min' : null);
+    sKpi(z, 'Attaquants', rNombre(c.attaquants_campagnes) ? grNb(c.attaquants_campagnes) : null, 'en campagne');
+    sKpi(z, 'Campagnes', rNombre(c.campagnes) ? grNb(c.campagnes) : null, 'même empreinte d\'outil');
+    var niv = rNombre(p.level) ? p.level : null;
+    sKpi(z, 'Posture', rNombre(p.score) ? String(p.score).replace('.', ',') : null, niv != null ? 'niveau ' + niv + (p.name ? ' · ' + p.name : '') : null, niv != null && niv >= 4);
+    var auto = null, autoSous = null, su = v && v.suspension;
+    if (v && su) {
+      if (v.observation) { auto = 'observation'; autoSous = 'rien ne part'; }
+      else if (su.suspendu || su.politique) { auto = 'suspendu'; autoSous = (su.politique ? 'par la politique' : su.par ? 'par ' + su.par : '') + (su.motif ? ' · ' + su.motif : ''); }
+      else auto = 'actif';
+      autoSous = [autoSous, rNombre(v.a_decider) ? v.a_decider + ' à décider' : null].filter(Boolean).join(' · ') || null;
+    }
+    sKpi(z, 'Automatique', auto, autoSous);
+    var lu = v ? sSecondes(v.releve_lu_le) : null;
+    sKpi(z, 'Mode SADE', v && v.sade_mode ? String(v.sade_mode).toUpperCase() : null, v && v.sade_mode ? (lu ? 'lu sur gk2 à ' + new Date(lu * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'lu sur gk2 par la veille') : null);
+    var cb = v && v.cle_ai_ban;
+    sKpi(z, 'Clé ai-ban', v ? sCle(cb) : null, v ? 'ai-lecture : ' + sCle(v.cle_ai_lecture) + ' · ai-filtres : ' + sCle(v.cle_ai_filtres) : null, !!(cb && cb.refusee));
+    var tn = v && v.tour_nuclei, fn = tn && tn.filtres;
+    sKpi(z, 'Tour Nuclei', tn && tn.allume === true ? 'allumé' : tn && tn.allume === false ? 'éteint' : null,
+      tn ? [rNombre(tn.candidats) ? grNb(tn.candidats) + ' candidats' : null, fn && rNombre(fn.adoptes) ? grNb(fn.adoptes) + ' adoptés' : null, tn.perime ? 'candidats périmés' : null].filter(Boolean).join(' · ') || null : null);
+    var m = ETAT && ETAT.moteur;
+    sKpi(z, 'Moteur IA', m ? (m.actif || 'aucun prêt') : null, m ? (m.actif ? 'en service' + (m.actif === 'local' && typeof ACTIF === 'string' && ACTIF ? ' · ' + ACTIF.replace(/\.gguf$/, '') : '') : 'choix : ' + (m.force || S_ND)) : null);
+  }
+  function sFlux() {
+    var z = $('sFlux'), d = S.okS ? S.series : null; vider(z);
+    if (!d || !d.categories || !Array.isArray(d.tranches)) { sND(z); return; }
+    var fin = rNombre(d.quand) ? d.quand : Date.now() / 1000, idx = [];
+    d.tranches.forEach(function (t, i) { if (rNombre(t) && t >= fin - 3600) idx.push(i); });
+    if (!idx.length) { sND(z, 'pas de tranche dans la dernière heure'); return; }
+    var noms = Object.keys(d.categories), mx = 0;
+    if (!noms.length) { sND(z); return; }
+    noms.forEach(function (c) { idx.forEach(function (i) { var v = d.categories[c][i]; if (rNombre(v) && v > mx) mx = v; }); });
+    noms.forEach(function (c) {
+      var vals = idx.map(function (i) { return d.categories[c][i]; }), vus = vals.filter(rNombre), tot = vus.reduce(function (a, b) { return a + b; }, 0);
+      z.appendChild(el('span', '', S_SERIE_NOM[c] || rFam(c)));
+      var cols = el('div', 'scols'); cols.setAttribute('role', 'img'); cols.setAttribute('aria-label', (S_SERIE_NOM[c] || c) + ' : ' + vals.map(function (v) { return rNombre(v) ? v : 'absent'; }).join(', ') + ' par tranche de 10 min');
+      vals.forEach(function (v) { var i = el('i', rNombre(v) ? '' : 'vide'); if (rNombre(v)) { i.style.height = (mx ? Math.max(4, Math.round(100 * v / mx)) : 4) + '%'; i.style.background = S_SERIE_COUL[c] || '#22d3ee'; } cols.appendChild(i); });
+      z.appendChild(cols); z.appendChild(el('span', 'sv', vus.length ? grNb(tot) + ' / h' : S_ND));
+    });
+    var bans = (d.bans || []).filter(function (b) { return rNombre(b.quand) && rNombre(b.bans) && b.quand >= fin - 3600; });
+    z.appendChild(el('span', '', 'Bans actifs'));
+    if (bans.length >= 2) {
+      var W = 200, H = 26, vs = bans.map(function (b) { return b.bans; }), mn = Math.min.apply(0, vs), mxb = Math.max.apply(0, vs), t0 = bans[0].quand, t1 = bans[bans.length - 1].quand;
+      var svg = grSvg('svg', { viewBox: '0 0 ' + W + ' ' + H, preserveAspectRatio: 'none', role: 'img', 'aria-label': 'Bans actifs sur la dernière heure, de ' + grNb(vs[0]) + ' à ' + grNb(vs[vs.length - 1]) }); svg.style.width = '100%'; svg.style.height = '26px';
+      svg.appendChild(grSvg('polyline', { fill: 'none', stroke: '#22d3ee', 'stroke-width': 1.5, 'vector-effect': 'non-scaling-stroke', points: bans.map(function (b) { return (t1 > t0 ? W * (b.quand - t0) / (t1 - t0) : 0).toFixed(1) + ',' + (mxb > mn ? H - 3 - (H - 6) * (b.bans - mn) / (mxb - mn) : H / 2).toFixed(1); }).join(' ') }));
+      z.appendChild(svg); z.appendChild(el('span', 'sv', grNb(vs[vs.length - 1])));
+    } else { z.appendChild(el('span', 'snd', S_ND)); z.appendChild(el('span', '', '')); }
+  }
+  function sSevParCat(alertes) { var m = {}; (alertes || []).forEach(function (a) { var c = a.category, s = a.severity; if (c && S_SEVR[s] != null && (m[c] == null || S_SEVR[s] > S_SEVR[m[c]])) m[c] = s; }); return m; }
+  function sClass() {
+    var z = $('sClass'), r = S.okR ? S.releve : null; vider(z);
+    var cat = (r && r.categories) || {}, k = Object.keys(cat).filter(function (x) { return rNombre(cat[x]) && cat[x] > 0; }).sort(function (a, b) { return cat[b] - cat[a]; }).slice(0, 8);
+    if (!k.length) { sND(z); return; }
+    var mx = cat[k[0]], sev = sSevParCat(r.alertes);
+    k.forEach(function (x) {
+      var l = el('span', '', rFam(x)); l.title = x; z.appendChild(l);
+      var s = sSeg(cat[x] / mx, sev[x] ? S_SEVC[sev[x]] : '#22d3ee', 22); s.title = sev[x] ? 'gravité la plus haute vue dans les alertes récentes : ' + (R_SEV_FR[sev[x]] || sev[x]) : 'gravité non vue dans les alertes récentes'; z.appendChild(s);
+      z.appendChild(el('span', 'sv', grNb(cat[x])));
+    });
+  }
+  function sEstIp4(s) { return /^\d{1,3}(\.\d{1,3}){3}$/.test(String(s || '')); }
+  function sBloc(ip) { return String(ip).split('.').slice(0, 3).join('.') + '.0/24'; }
+  // Dernière action de la veille (GET /actions, 50 plus récentes) qui vise cette adresse, son /32 ou son bloc /24.
+  // Le partage au maillage n'agit pas sur gk2 : ignoré. Rien trouvé = null, jamais une action supposée.
+  function sAction(ip) {
+    var liste = S.okA && S.actions; if (!liste || !ip || ip === 'local') return null;
+    var cibles = [ip, ip + '/32']; if (sEstIp4(ip)) cibles.push(sBloc(ip));
+    for (var i = 0; i < liste.length; i++) { var a = liste[i]; if (a && a.geste !== 'partager' && cibles.indexOf(a.cible) >= 0) return a; }
+    return null;
+  }
+  // Ce que gk2 a réellement fait de cette alerte : son propre ban, sinon le geste de la veille encore en cours.
+  function sReel(al) {
+    var a = sAction(al.client_ip), maint = Date.now() / 1000;
+    if (al.action === 'banned') return { cls: 'banni', txt: 'banni', titre: 'banni par gk2 (' + (al.tool || 'WAF') + ')', banni: true };
+    if (a) {
+      var fini = rNombre(a.fin_gk2) && a.fin_gk2 <= maint, quand = v2Heure(a.envoyee_le) + (a.mode === 'auto' ? ', d\'office' : ', en un clic');
+      if (a.etat === 'faite' && S_GESTES_ACTIFS[a.geste] && !fini) return { cls: 'banni', txt: S_GESTES_ACTIFS[a.geste], titre: a.geste + ' ' + a.cible + ' fait par gk2 (' + quand + ')' + (rNombre(a.fin_gk2) ? ' jusqu\'à ' + new Date(a.fin_gk2 * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''), banni: a.geste !== 'limiter' && a.geste !== 'leurre' };
+      if (a.etat === 'refusee_gk2' || a.etat === 'echec') return { cls: 'refus', txt: 'refusé par gk2', titre: a.geste + ' ' + a.cible + ' : ' + v2Gk2(a) + ' (' + quand + ')', banni: false };
+      if (a.etat === 'envoi' || a.etat === 'envoyee') return { cls: 'observe', txt: 'envoi en cours', titre: a.geste + ' ' + a.cible + ' envoyé à gk2 (' + quand + '), réponse attendue', banni: false };
+      if (a.etat === 'faite' && a.geste === 'unban') return { cls: 'observe', txt: 'levé (IA)', titre: 'levée ' + a.cible + ' faite par gk2 (' + quand + ')', banni: false };
+      if (a.etat === 'faite' && fini) return { cls: 'observe', txt: 'échu', titre: a.geste + ' ' + a.cible + ' échu', banni: false };
+    }
+    return { cls: 'observe', txt: 'observé', titre: 'action relevée : ' + (R_ACTION[al.action] || al.action || '—') + ', aucun ban' + (S.okA ? '' : ' (actions de la veille : ' + S_ND + ')'), banni: false };
+  }
+  function sRadar() {
+    var z = $('sRadar'), r = S.okR ? S.releve : null; vider(z);
+    if (!r) { sND(z); return; }
+    var cat = r.categories || {}, alertes = r.alertes || [], parCouche = {};
+    Object.keys(cat).forEach(function (k) { if (rNombre(cat[k])) { var c = sCouche(k); parCouche[c] = (parCouche[c] || 0) + cat[k]; } });
+    var pts = {};
+    alertes.forEach(function (a) { var c = sCouche(a.category), ip = a.client_ip || '—', cle = c + '|' + ip; var p = pts[cle] || (pts[cle] = { couche: c, ip: ip, n: 0, sev: 'info', banni: false, cats: {} }); p.n++; if (S_SEVR[a.severity] != null && S_SEVR[a.severity] > S_SEVR[p.sev]) p.sev = a.severity; if (sReel(a).banni) p.banni = true; p.cats[rFam(a.category)] = 1; });
+    var presentes = S_COUCHES.filter(function (c) { return parCouche[c[0]] > 0 || Object.keys(pts).some(function (k) { return pts[k].couche === c[0]; }); });
+    if (!presentes.length) { sND(z, 'aucune couche dans le relevé'); return; }
+    var C = 200, R = 170, R_MIN = 58, R_MAX = 156, n = presentes.length, pas = 2 * Math.PI / n;
+    var svg = grSvg('svg', { viewBox: '-74 -4 548 408', role: 'img', 'aria-label': 'Radar : ' + presentes.map(function (c) { return c[1] + ' ' + (rNombre(parCouche[c[0]]) ? grNb(parCouche[c[0]]) : 'non relevé'); }).join(', ') });
+    [R, 125, 80, 38].forEach(function (rr, i) { svg.appendChild(grSvg('circle', { cx: C, cy: C, r: rr, fill: i === 0 ? 'rgba(34,211,238,.03)' : 'none', stroke: 'rgba(34,211,238,' + (i === 0 ? .45 : .16) + ')', 'stroke-width': 1 })); });
+    svg.appendChild(grSvg('path', { 'class': 'sbal', d: 'M200,200 L200,30 A170,170 0 0 1 320.2,79.8 Z', fill: 'rgba(34,211,238,.10)' }));
+    function xy(a, rr) { return [C + rr * Math.sin(a), C - rr * Math.cos(a)]; }
+    presentes.forEach(function (c, i) {
+      var a0 = i * pas; if (n > 1) { var e = xy(a0, R); svg.appendChild(grSvg('line', { x1: C, y1: C, x2: e[0].toFixed(1), y2: e[1].toFixed(1), stroke: 'rgba(34,211,238,.25)', 'stroke-width': 1 })); }
+      var am = a0 + pas / 2, lp = xy(am, R + 16);
+      svg.appendChild(grSvg('text', { x: lp[0].toFixed(1), y: lp[1].toFixed(1), 'text-anchor': 'middle', fill: '#c9d6ee', 'font-size': 10, 'letter-spacing': '1.2' }, c[1].toUpperCase()));
+      var lv = xy(am, R + 4), cpt = rNombre(parCouche[c[0]]) ? grNb(parCouche[c[0]]) : '—';
+      svg.appendChild(grSvg('text', { x: lv[0].toFixed(1), y: (lv[1] + (Math.cos(am) > 0 ? 14 : -4)).toFixed(1), 'text-anchor': 'middle', fill: '#8aa0c4', 'font-size': 9, 'font-family': 'ui-monospace,monospace' }, cpt));
+      var liste = Object.keys(pts).map(function (k) { return pts[k]; }).filter(function (p) { return p.couche === c[0]; }).sort(function (x, y) { return y.n - x.n; }).slice(0, 8), mx = liste.length ? liste[0].n : 1;
+      // Distance au centre : moitié rang (étale les sources de même poids), moitié volume en échelle log (un gros
+      // émetteur ne tasse plus les autres). Jamais sous R_MIN : le compteur central reste lisible.
+      liste.forEach(function (p, j) {
+        var rang = liste.length > 1 ? j / (liste.length - 1) : 0, vol = mx > 1 ? 1 - Math.log(1 + p.n) / Math.log(1 + mx) : 0;
+        var rr = R_MIN + (R_MAX - R_MIN) * (0.5 * rang + 0.5 * vol), ang = a0 + pas * (j + 1) / (liste.length + 1), q = xy(ang, rr), col = S_SEVC[p.sev] || '#38bdf8';
+        var g = grSvg('g', {}), rp = 3 + Math.min(4, p.n);
+        if (p.banni) g.appendChild(grSvg('circle', { cx: q[0].toFixed(1), cy: q[1].toFixed(1), r: rp + 4, fill: 'none', stroke: '#22c55e', 'stroke-width': 1.2 }));
+        g.appendChild(grSvg('circle', { cx: q[0].toFixed(1), cy: q[1].toFixed(1), r: rp, fill: col, 'fill-opacity': .85, stroke: '#070d18', 'stroke-width': 1 }));
+        g.appendChild(grSvg('title', {}, (p.ip === 'local' ? 'source locale' : p.ip) + ' · ' + c[1] + ' · ' + p.n + ' alerte(s) récente(s) · ' + Object.keys(p.cats).join(', ') + ' · gravité ' + (R_SEV_FR[p.sev] || p.sev) + ' · ' + (p.banni ? 'banni' : 'observé')));
+        svg.appendChild(g);
+      });
+    });
+    var c0 = (r.chiffres || {}).menaces_jour;
+    svg.appendChild(grSvg('circle', { cx: C, cy: C, r: 34, fill: '#070d18', stroke: 'rgba(34,211,238,.6)', 'stroke-width': 1.5 }));
+    svg.appendChild(grSvg('text', { x: C, y: C + 4, 'text-anchor': 'middle', fill: '#eaf1ff', 'font-size': rNombre(c0) ? 20 : 8, 'font-weight': 700, 'font-family': 'ui-monospace,monospace' }, rNombre(c0) ? grNb(c0) : S_ND));
+    svg.appendChild(grSvg('text', { x: C, y: C + 18, 'text-anchor': 'middle', fill: '#8aa0c4', 'font-size': 8, 'letter-spacing': '1' }, 'MENACES DU JOUR'));
+    z.appendChild(svg);
+    var leg = el('div', 'slegende');
+    [['#ef4444', 'critique'], ['#f97316', 'haute'], ['#eab308', 'moyenne'], ['#38bdf8', 'basse / info']].forEach(function (x) { var s = el('span'), i = el('i'); i.style.background = x[0]; s.appendChild(i); s.appendChild(document.createTextNode(x[1])); leg.appendChild(s); });
+    var sb = el('span'), ib = el('i'); ib.style.border = '1.5px solid #22c55e'; ib.style.background = 'transparent'; sb.appendChild(ib); sb.appendChild(document.createTextNode('banni')); leg.appendChild(sb);
+    z.appendChild(leg);
+    z.appendChild(el('small', 'rderive', 'Secteurs : couches présentes dans le relevé, compte du jour au bord. Points : sources des ' + alertes.length + ' dernières alertes ; plus une source est active, plus elle est près du centre (rang et volume en échelle log).'));
+  }
+  function sPosture() {
+    var z = $('sPosture'), r = S.okR ? S.releve : null, p = (r && r.posture) || {}; vider(z);
+    if (!rNombre(p.score)) { sND(z); return; }
+    var niv = rNombre(p.level) ? p.level : null, col = niv == null ? '#22d3ee' : niv <= 2 ? '#22c55e' : niv === 3 ? '#eab308' : niv === 4 ? '#f97316' : '#ef4444';
+    var f = Math.max(0, Math.min(1, p.score / 100)), svg = grSvg('svg', { viewBox: '0 0 200 120', role: 'img', 'aria-label': 'Posture ' + String(p.score).replace('.', ',') + (p.name ? ', ' + p.name : '') + (niv != null ? ', niveau ' + niv : '') });
+    var arc = 'M20,105 A80,80 0 0 1 180,105';
+    svg.appendChild(grSvg('path', { d: arc, fill: 'none', stroke: 'rgba(138,160,196,.15)', 'stroke-width': 12, 'stroke-linecap': 'butt' }));
+    for (var i = 1; i < 10; i++) { var a = Math.PI * (1 - i / 10), x1 = 100 + 92 * Math.cos(a), y1 = 105 - 92 * Math.sin(a), x2 = 100 + 98 * Math.cos(a), y2 = 105 - 98 * Math.sin(a); svg.appendChild(grSvg('line', { x1: x1.toFixed(1), y1: y1.toFixed(1), x2: x2.toFixed(1), y2: y2.toFixed(1), stroke: 'rgba(138,160,196,.35)', 'stroke-width': 1 })); }
+    var v = grSvg('path', { d: arc, fill: 'none', stroke: col, 'stroke-width': 12, pathLength: 100, 'stroke-dasharray': (f * 100).toFixed(1) + ' 100' }); if (niv != null && niv >= 4) v.setAttribute('filter', 'drop-shadow(0 0 4px ' + col + ')'); svg.appendChild(v);
+    svg.appendChild(grSvg('text', { x: 100, y: 92, 'text-anchor': 'middle', fill: '#eaf1ff', 'font-size': 28, 'font-weight': 700, 'font-family': 'ui-monospace,monospace' }, String(p.score).replace('.', ',')));
+    svg.appendChild(grSvg('text', { x: 100, y: 112, 'text-anchor': 'middle', fill: col, 'font-size': 11, 'letter-spacing': '1.5' }, String(p.name || '').toUpperCase()));
+    svg.appendChild(grSvg('text', { x: 20, y: 119, 'text-anchor': 'middle', fill: '#8aa0c4', 'font-size': 8 }, '0'));
+    svg.appendChild(grSvg('text', { x: 180, y: 119, 'text-anchor': 'middle', fill: '#8aa0c4', 'font-size': 8 }, '100'));
+    z.appendChild(svg);
+    if (niv != null) { var b = el('div', 'sniv'); b.setAttribute('aria-hidden', 'true'); for (var k = 1; k <= 5; k++) { var it = el('i'); if (k <= niv) it.style.background = col; b.appendChild(it); } z.appendChild(b); z.appendChild(el('small', 'scap', 'niveau ' + niv + ' sur 5')); }
+    else z.appendChild(el('small', 'snd', 'niveau : ' + S_ND));
+  }
+  function sIncidents() {
+    var z = $('sIncidents'), r = S.okR ? S.releve : null; vider(z);
+    if (!r) { sND(z); return; }
+    var liste = (r.alertes || []).filter(function (a) { return S_SEVR[a.severity] >= 2; }).slice(0, 8);
+    if (!liste.length) { sND(z, 'aucune alerte moyenne ou plus dans le relevé'); return; }
+    var t = el('table', 'sinc'), cg = el('colgroup'); ['c-h', 'c-m', 'c-s', 'c-g', 'c-a'].forEach(function (x) { cg.appendChild(el('col', x)); }); t.appendChild(cg);
+    var h = el('tr'); ['Heure', 'Menace', 'Source', 'Gravité', 'Action réelle'].forEach(function (x) { h.appendChild(el('th', '', x)); }); t.appendChild(h);
+    liste.forEach(function (a) {
+      var tr = el('tr'); tr.appendChild(el('td', 'm', String(a.timestamp || '').slice(11, 19) || '—'));
+      var tm = el('td', '', rLibelleAlerte(a)); tm.appendChild(el('small', '', [rFam(a.category || '?'), a.tool ? 'outil ' + a.tool : null].filter(Boolean).join(' · '))); tr.appendChild(tm);
+      var src = el('td', 'm', a.client_ip === 'local' ? 'locale' : (a.client_ip || '—')); src.style.whiteSpace = 'normal'; if (a.country) src.appendChild(el('small', '', a.country)); tr.appendChild(src);
+      var tg = el('td'), sg = el('span', 'sgr ' + a.severity, R_SEV_FR[a.severity] || a.severity); sg.title = 'gravité ' + (R_SEV_FR[a.severity] || a.severity); tg.appendChild(sg); tr.appendChild(tg);
+      var re = sReel(a), td = el('td'), s = el('span', 'sact ' + re.cls, re.txt); s.title = re.titre; td.appendChild(s); tr.appendChild(td); t.appendChild(tr);
+    });
+    z.appendChild(t);
+  }
+  function sFrise() {
+    var z = $('sFrise'), d = S.okS ? S.series : null; vider(z);
+    $('sF1h').setAttribute('aria-pressed', S.fen === '1h' ? 'true' : 'false'); $('sF3h').setAttribute('aria-pressed', S.fen === '3h' ? 'true' : 'false');
+    if (!d || !d.categories || !Array.isArray(d.tranches) || !d.tranches.length || !Object.keys(d.categories).length) { sND(z); return; }
+    var noms = Object.keys(d.categories), n = d.tranches.length, W = 1300, H = 200, L = 34, Rr = 1290, T = 26, B = 176, mx = 0;
+    noms.forEach(function (c) { d.categories[c].forEach(function (v) { if (rNombre(v) && v > mx) mx = v; }); });
+    var haut = grEchelle(mx || 1), xs = function (i) { return n > 1 ? L + (Rr - L) * i / (n - 1) : L; }, ys = function (v) { return B - (B - T) * v / haut; };
+    var svg = grSvg('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Alertes par catégorie et par tranche de 10 minutes, ' + (S.fen === '1h' ? 'dernière heure' : '3 dernières heures') });
+    noms.forEach(function (c, i) { var x = L + i * 210; svg.appendChild(grSvg('rect', { x: x, y: 6, width: 14, height: 3, fill: S_SERIE_COUL[c] || '#9fb3d6' })); svg.appendChild(grSvg('text', { x: x + 20, y: 11, fill: S_SERIE_COUL[c] || '#9fb3d6', 'font-size': 11 }, S_SERIE_NOM[c] || c)); });
+    for (var k = 0; k <= 2; k++) { var y = B - (B - T) * k / 2; svg.appendChild(grSvg('line', { x1: L, y1: y, x2: Rr, y2: y, stroke: 'rgba(34,211,238,' + (k ? .08 : .3) + ')', 'stroke-width': 1 })); svg.appendChild(grSvg('text', { x: L - 6, y: y + 4, 'text-anchor': 'end', fill: '#8aa0c4', 'font-size': 10, 'font-family': 'ui-monospace,monospace' }, String(Math.round(haut * k / 2)))); }
+    [0, Math.floor((n - 1) / 2), n - 1].forEach(function (i, j) { if (j === 0 || i !== 0) svg.appendChild(grSvg('text', { x: xs(i), y: 194, 'text-anchor': j === 0 ? 'start' : j === 2 ? 'end' : 'middle', fill: '#8aa0c4', 'font-size': 10, 'font-family': 'ui-monospace,monospace' }, grHeure(d.tranches[i]))); });
+    noms.forEach(function (c) { var pts = d.categories[c].map(function (v, i) { return rNombre(v) ? [xs(i), ys(v)] : null; }); grCourbe(svg, pts, S_SERIE_COUL[c] || '#9fb3d6'); var f = grDernier(pts); if (f) grPoint(svg, f, S_SERIE_COUL[c] || '#9fb3d6'); });
+    z.appendChild(svg);
+  }
+  function sTerm() {
+    var z = $('sTerm'), lignes = [], etat = [], r = S.okR ? S.releve : null, v = S.okV ? S.veille : null; vider(z);
+    function hm(t) { return rNombre(t) ? new Date(t * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'; }
+    if (S.okA && Array.isArray(S.actions)) S.actions.forEach(function (a) {
+      var tag = a.etat === 'faite' ? ['OK', 't-ok'] : a.etat === 'refusee_gk2' || a.etat === 'echec' ? ['WARN', 't-warn'] : ['INFO', 't-info'];
+      lignes.push({ t: sSecondes(a.envoyee_le), tag: tag, txt: 'geste ' + (a.mode === 'auto' ? 'd\'office' : 'en un clic') + ' · ' + (a.geste || '—') + ' ' + (a.cible || '—') + ' · ' + (V2_ETATS[a.etat] || a.etat || S_ND) + (rNombre(a.code_http) ? ' (gk2 ' + a.code_http + (a.motif ? ' ' + a.motif : '') + ')' : '') });
+    });
+    else etat.push({ tag: ['WARN', 't-warn'], txt: 'actions de la veille : ' + S_ND });
+    if (v) {
+      var su = v.suspension || {};
+      if (su.suspendu || su.politique) etat.push({ tag: ['WARN', 't-warn'], txt: 'automatique suspendu' + (su.politique ? ' par la politique' : su.par ? ' par ' + su.par : '') + (su.motif ? ' · ' + su.motif : '') + (su.depuis ? ' · depuis ' + v2Heure(su.depuis) : '') });
+      if (v.cle_ai_ban && v.cle_ai_ban.refusee) etat.push({ tag: ['WARN', 't-warn'], txt: 'clé ai-ban refusée par gk2 depuis le dernier geste réussi' });
+      if (rNombre(v.envois_en_attente) && v.envois_en_attente > 0) etat.push({ tag: ['INFO', 't-info'], txt: v.envois_en_attente + ' envoi(s) à gk2 en attente de réponse' });
+    } else etat.push({ tag: ['WARN', 't-warn'], txt: 'état de la veille : ' + S_ND });
+    if (r) {
+      (r.resume_propositions || []).forEach(function (p) { var vd = p.verdict || {}; lignes.push({ t: r.resume_quand, tag: ['AGNT', 't-agnt'], txt: 'conseil · ' + (p.texte || p.cible || '—') + (vd.sur === true ? ' · cas sûr' : vd.geste === 'lien' ? ' · lien seulement' : '') + (vd.raisons && vd.raisons.length ? ' (' + vd.raisons.join(' ; ') + ')' : '') }); });
+      if (r.resume_en_cours) etat.push({ tag: ['AGNT', 't-agnt'], txt: 'résumé en cours d\'écriture' });
+      if (!(r.resume_propositions || []).length && rNombre(r.resume_quand) && r.resume_quand > 0) lignes.push({ t: r.resume_quand, tag: ['AGNT', 't-agnt'], txt: 'dernier résumé : aucun conseil retenu' });
+    } else etat.push({ tag: ['WARN', 't-warn'], txt: 'conseils : ' + S_ND });
+    lignes.sort(function (a, b) { return (b.t || 0) - (a.t || 0); });
+    etat.forEach(function (l) { var d = el('div'); d.appendChild(el('span', 'h', 'état ')); d.appendChild(el('span', l.tag[1], '[' + l.tag[0] + '] ')); d.appendChild(document.createTextNode(l.txt)); z.appendChild(d); });
+    lignes.slice(0, 14).forEach(function (l) { var d = el('div'); d.appendChild(el('span', 'h', hm(l.t) + ' ')); d.appendChild(el('span', l.tag[1], '[' + l.tag[0] + '] ')); d.appendChild(document.createTextNode(l.txt)); z.appendChild(d); });
+    if (!etat.length && !lignes.length) sND(z, 'aucun geste ni conseil récent');
+  }
+  function sRendre() { sKpis(); sFlux(); sClass(); sRadar(); sPosture(); sIncidents(); sFrise(); sTerm(); annoncer(); }
+  function chargerSalle() {
+    $('sDemo').hidden = !DEMO;
+    if (DEMO) {
+      var rs = rsDemo(); S.releve = demoReleve(); S.series = demoSeries(S.fen); S.actions = rs.actions; S.veille = rs.etat; S.okR = S.okS = S.okA = S.okV = true;
+      $('sErr').hidden = true; $('sMaj').textContent = 'démonstration · aucune lecture de gk2'; sRendre(); return;
+    }
+    if (S.enCours) { S.relire = true; return; }   // une lecture à la fois ; un changement de période relit à la fin
+    S.enCours = true;
+    var ok = { releve: 'okR', series: 'okS', actions: 'okA', veille: 'okV' }, session = false;
+    function prendre(p, cle, lire) { return p.then(function (d) { S[cle] = lire ? lire(d) : d; S[ok[cle]] = true; return null; }).catch(function (e) { S[ok[cle]] = false; S[cle] = null; if (e && (e.status === 401 || e.status === 403)) session = true; return cle + ' (' + (e && e.message || 'erreur') + ')'; }); }
+    Promise.all([prendre(api(API + '/menaces/releve'), 'releve'), prendre(api(API + '/menaces/series?fenetre=' + S.fen), 'series'),
+      prendre(api(API + '/actions?limite=50'), 'actions', function (d) { return Array.isArray(d && d.actions) ? d.actions : null; }), prendre(api(API + '/veille/etat'), 'veille'), chargerEtat()])
+      .then(function (err) {
+        S.enCours = false; err = err.filter(Boolean); var r = S.okR ? S.releve : null;
+        if (r && (r.erreurs || []).length) err.push('lectures de gk2 : ' + r.erreurs.join(', '));
+        $('sErr').hidden = !err.length; $('sErr').textContent = session ? 'Aucune mesure : session requise. Se connecter.' : err.length ? 'Relevé incomplet — ' + err.join(' · ') + '. Les panneaux concernés affichent « ' + S_ND + ' ».' : '';
+        $('sMaj').textContent = r && rNombre(r.quand) ? 'relevé gk2 · ' + new Date(r.quand * 1000).toLocaleTimeString('fr-FR') + ' · relu toutes les ' + S_PERIODE_S + ' s' : S_ND;
+        sRendre();
+        if (S.relire) { S.relire = false; chargerSalle(); }
+      });
+  }
+  $('sF1h').addEventListener('click', function () { S.fen = '1h'; chargerSalle(); });
+  $('sF3h').addEventListener('click', function () { S.fen = '3h'; chargerSalle(); });
+  // Relecture seulement quand l'onglet Salle est visible et la page au premier plan : aucun sondage en arrière-plan.
+  setInterval(function () { var s = document.querySelector('section[data-o=salle]'); if (s && !s.hidden && !document.hidden) chargerSalle(); }, S_PERIODE_S * 1000);
 
   // ---- Chaîne d'attaque (#3811) : dossiers de la veille (#3795), étapes prouvées par des événements réels ----
   var CH_ETAPES = [['reperage', 'Repérage'], ['essais', 'Essais'], ['exploitation', 'Exploitation'], ['persistance', 'Persistance']];
@@ -1762,7 +2093,7 @@ input[type=checkbox]{width:auto;margin-right:7px}textarea{min-height:110px;resiz
 
   $('bRafraichir').addEventListener('click', function () { chargerEtat(); chargerModeles(); chargerTravaux(); if (!document.querySelector('section[data-o=medias]').hidden) chargerMedias(); });
   if (q.get('embed')) $('tete').hidden = true;
-  montrer(ONGLETS.some(function (o) { return o[0] === q.get('onglet'); }) ? q.get('onglet') : 'essai'); chargerEtat().then(chargerCatalogue); chargerTravaux(); chargerDepots(); chargerModeles(); chargerPrefs();
+  montrer(ONGLETS.some(function (o) { return o[0] === q.get('onglet'); }) ? q.get('onglet') : 'salle'); chargerEtat().then(chargerCatalogue); chargerTravaux(); chargerDepots(); chargerModeles(); chargerPrefs();
   setInterval(function () { if (!document.hidden && !document.activeElement.matches('input,textarea,select')) { chargerEtat(); chargerModeles(); } }, 5000);
   if (window.ResizeObserver) new ResizeObserver(annoncer).observe(document.body);
 })();

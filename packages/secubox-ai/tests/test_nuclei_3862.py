@@ -815,7 +815,7 @@ def test_profil_collecteur_compile():
 
 def test_paquet_2_1_0():
     from api.main import VERSION
-    assert VERSION.startswith("2.1.")
+    assert tuple(int(x) for x in VERSION.split(".")[:2]) >= (2, 1)     # 2.1.x puis 2.2.0 (Salle SBX-SOC)
     assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith(f"secubox-ai ({VERSION}-1~trixie1) trixie;")
     control = (PAQUET / "debian" / "control").read_text(encoding="utf-8")
     assert " git,\n" in control and " python3-yaml,\n" in control

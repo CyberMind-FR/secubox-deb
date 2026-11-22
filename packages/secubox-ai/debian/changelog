@@ -1,3 +1,15 @@
+secubox-ai (2.2.0-1~trixie1) trixie; urgency=medium
+
+  * Onglet Salle (ref #TBD), porté du POC gk0 : vue SBX-SOC d'une page, premier
+    onglet et onglet par défaut de /ai/. Lit /menaces/releve, /menaces/series,
+    /actions, /veille/etat et /status ; aucune valeur inventée.
+  * Défauts du POC corrigés : gravité sans retour à la ligne, points du radar
+    répartis (rang et échelle log, rayon minimal), colonnes des incidents
+    rééquilibrées avec l'action réelle de gk2.
+  * Radar et Menaces restylés aux mêmes jetons (comportement inchangé).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 22 Nov 2026 08:59:23 +0100
+
 secubox-ai (2.1.2-1~trixie1) trixie; urgency=medium
 
   * Onglet Réponses (ref #3862) : « ai-filtres » affichait « relevé
