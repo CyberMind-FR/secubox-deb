@@ -430,7 +430,8 @@ def _bloc(html):
 def test_onglets_dossier_et_reponses_apres_la_chaine(html):
     declares = re.search(r"var ONGLETS\s*=\s*\[(.*?)\];", html, re.S).group(1)
     noms = re.findall(r"\['([a-z]+)',\s*'([^']+)'\]", declares)
-    assert noms[1:5] == [("radar", "Radar"), ("chaine", "Chaîne"), ("dossier", "Dossier"), ("reponses", "Réponses")]
+    i = noms.index(("radar", "Radar"))                                  # 2.2.0 : Salle puis Essai devant
+    assert noms[i:i + 4] == [("radar", "Radar"), ("chaine", "Chaîne"), ("dossier", "Dossier"), ("reponses", "Réponses")]
     sections = re.findall(r'<section data-o="([a-z]+)"', html)
     assert sections.index("dossier") == sections.index("chaine") + 1 and "reponses" in sections
 

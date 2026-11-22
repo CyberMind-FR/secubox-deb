@@ -13,7 +13,7 @@ import pytest
 from api.main import app
 
 PAGE = Path(__file__).resolve().parents[1] / "www" / "ai" / "index.html"
-ONGLETS_ATTENDUS = ["essai", "radar", "chaine", "dossier", "reponses", "menaces", "code", "documents", "memoire", "historique", "modeles", "prefs", "medias", "journal"]
+ONGLETS_ATTENDUS = ["salle", "essai", "radar", "chaine", "dossier", "reponses", "menaces", "code", "documents", "memoire", "historique", "modeles", "prefs", "medias", "journal"]
 
 
 @pytest.fixture(scope="module")

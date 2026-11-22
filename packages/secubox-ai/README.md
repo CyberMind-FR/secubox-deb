@@ -22,6 +22,9 @@ le modèle explique et ne tranche jamais.
 - **Apprentissage** : filtres WAF d'office et politiques par niveau (§ Apprentissage), tour de filtres Nuclei
   (2.1.0, § Tour Nuclei).
 - **Console** `/ai/` : Radar, Dossier, Réponses, chaque chiffre issu d'une route (§ API).
+- **Salle** (2.2.0, premier onglet de `/ai/`) : vue SBX-SOC d'une page (indicateurs, radar par couches, posture,
+  incidents avec l'action réelle, terminal, frise), lue sur `/menaces/releve`, `/menaces/series`, `/actions`,
+  `/veille/etat` et `/status` ; relue toutes les 30 s onglet visible ; donnée absente = « relevé indisponible ».
 
 ## Mise en service (2.1.0 : tour Nuclei, #3862)
 
