@@ -346,6 +346,8 @@ class Freebox:
 
     def lire_dns6(self):
         c = self.client.lire("dhcpv6/config/") or {}
+        if c.get("dns") == {}:                    # #3872 : Freebox jamais personnalisée en DHCPv6 → liste vide rendue en objet
+            c = {**c, "dns": []}
         if not isinstance(c.get("dns"), list):
             raise C.ErreurFreebox("Réponse DHCPv6 inattendue de la Freebox.")
         return {"use_custom_dns": bool(c.get("use_custom_dns")), "dns": [x for x in c["dns"] if x]}
