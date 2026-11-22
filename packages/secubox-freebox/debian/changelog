@@ -1,3 +1,11 @@
+secubox-freebox (0.8.5-1~trixie1) trixie; urgency=medium
+
+  * DNS IPv6 (ref #3872) : une Freebox jamais personnalisée en DHCPv6 rend
+    `"dns": {}` ; lu comme une liste vide au lieu d'une réponse anormale, le
+    DNS IPv6 de la box peut enfin être annoncé.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 22 Nov 2026 14:52:11 +0100
+
 secubox-freebox (0.8.4-1~trixie1) trixie; urgency=medium
 
   * freeboxctl nexthop-lire / nexthop-regler <fe80::…|vide> : next hop du
