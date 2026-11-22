@@ -203,7 +203,7 @@ def test_waf_blocs_verifier_refuse_le_lan(monkeypatch, tmp_path, capsys):
 
 # ── I4 : jamais d'écrasement entre gestes IA et gestes SADE ────────────
 def _wafctl(tmp_path, reste="", code_get=0):
-    """wafctl réel ; `nft -j get element` rend `reste` (JSON nft) ; le lot de `nft -f` est noté."""
+    """wafctl réel ; `nft -j list set` rend `reste` (JSON nft) ; le lot de `nft -f` est noté."""
     bin_ = tmp_path / "bin"
     bin_.mkdir(exist_ok=True)
     garde = bin_ / "waf-blocs"
@@ -212,7 +212,7 @@ def _wafctl(tmp_path, reste="", code_get=0):
     nft = bin_ / "nft"
     nft.write_text(f'#!/bin/bash\necho "$*" >> {tmp_path}/nft.log\n'
                    f'if [ "$1" = "-f" ]; then cat >> {tmp_path}/lot.nft; exit 0; fi\n'
-                   f'if [ "$1" = "-j" ] && [ "$2" = "get" ]; then [ {code_get} -eq 0 ] || exit {code_get}; '
+                   f'if [ "$1" = "-j" ] && [ "$2" = "list" ]; then [ {code_get} -eq 0 ] || exit {code_get}; '
                    f'cat {tmp_path}/reste.json; exit 0; fi\n'
                    f'case "$1" in get) exit {code_get} ;; esac\nexit 0\n')
     for f in (garde, nft):
