@@ -61,9 +61,9 @@ ReadWritePaths=/var/lib/secubox/ai/nuclei
 # Aucune clé : ni les remises de systemd (de toutes les unités), ni les secrets de la box.
 InaccessiblePaths=-/run/credentials -/etc/secubox/secrets
 # Sortie réseau vers GitHub (git), la CISA (KEV) et cyentia (EPSS) : des CDN, aucune liste d'adresses tenable. Les
-# plages privées, CGNAT, de lien local et de diffusion sont FERMÉES ; 127.0.0.1 (Unbound de la box) reste permis, et
+# plages de boucle, privées, CGNAT, de lien local et de diffusion sont FERMÉES ; 127.0.0.1 seul (Unbound) est rouvert, et
 # les résolveurs privés de /etc/resolv.conf sont rouverts un à un par « secubox-aictl preparer »
 # (/run/systemd/system/secubox-ai-nuclei.service.d/50-adresses.conf).
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-IPAddressDeny=link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7
+IPAddressDeny=127.0.0.0/8 ::1/128 link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7
 IPAddressAllow=127.0.0.1/32

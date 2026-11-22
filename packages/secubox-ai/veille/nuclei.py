@@ -117,6 +117,7 @@ CHEMINS_LEGITIMES = frozenset({
     "/index.aspx", "/default.aspx", "/default.asp", "/wp-login.php", "/wp-admin", "/api", "/dashboard", "/home",
     "/logout", "/user", "/users", "/register", "/signup", "/explore", "/portal", "/console", "/webui", "/ui",
     "/owa", "/owa/auth/logon.aspx", "/remote/login", "/cgi-bin/luci", "/manager/html",
+    "/wp-admin/admin-ajax.php", "/xmlrpc.php", "/wp-json", "/graphql", "/api/v1",
 })
 #: Dernier segment d'une page d'accueil ou d'authentification courante (sans extension) : jamais un filtre.
 PAGES_LEGITIMES = frozenset({"index", "login", "signin", "sign_in", "sign-in", "logon", "default", "home", "dashboard",
@@ -127,6 +128,12 @@ _EXTENSIONS_PAGES = ("", ".php", ".html", ".htm", ".jsp", ".jspx", ".asp", ".asp
 
 def normaliser_chemin(motif: str) -> str:
     c = re.sub(r"/{2,}", "/", motif.strip().lower())
+    while True:                               # « /./ » réduits (« /a/./b », « /./ », « /. » final)
+        d = re.sub(r"/\.(?=/|$)", "", c)
+        if d == c:
+            break
+        c = d
+    c = re.sub(r"/{2,}", "/", c)
     return c.rstrip("/") or "/"
 
 
@@ -309,6 +316,14 @@ def collecter_nuclei(depot: Path = DEPOT) -> list[dict]:
     return sortie
 
 
+_ANSI = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[()*+][0-9A-Za-z]|[@-Z\\-_])")
+
+
+def imprimable(texte: str) -> str:
+    """Texte d'un retour externe (git) sans séquences ANSI ni caractère non imprimable : sûr pour le journal."""
+    return "".join(ch for ch in _ANSI.sub("", texte) if ch.isprintable())
+
+
 def depot_piege(depot: Path) -> bool:
     """Vrai si le dépôt, `http/` ou `http/cves` est un lien symbolique (jamais suivi)."""
     depot = Path(depot)
@@ -351,7 +366,7 @@ def mettre_a_jour_depot(depot: Path = DEPOT, executer=subprocess.run) -> bool:
                 raise subprocess.CalledProcessError(r.returncode, c, getattr(r, "stdout", ""),
                                                     getattr(r, "stderr", ""))
         except subprocess.CalledProcessError as e:
-            extrait = str(e.stderr or "")[-STDERR_MAX:].replace("\n", " | ")
+            extrait = imprimable(str(e.stderr or "").replace("\r", "\n").replace("\n", " | "))[-STDERR_MAX:]
             log.warning("git %s : code %s : %s", c[len(git)] if len(c) > len(git) else "?", e.returncode, extrait)
             return (depot / "http").is_dir() and not depot_piege(depot)
         except (OSError, subprocess.TimeoutExpired) as e:

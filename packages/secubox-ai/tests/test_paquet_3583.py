@@ -226,7 +226,10 @@ def test_postinst_dossiers_par_descripteur_sans_tmpfiles():
     code = _code(POSTINST)
     assert "python3 -I - /var/lib/secubox ai secubox-ai secubox-ai secubox-ai-nuclei <<'DOSSIERS'" in code
     assert "tmpfiles" not in code
-    assert not re.search(r"\bch(own|mod|grp)\b", code.replace("os.fchown", "").replace("os.fchmod", ""))  # par chemin
+    # Par descripteur seulement : fchown/fchmod, ou chown relatif à un descripteur sans suivre de lien (#3862).
+    relatif = "os.chown(n, uid, gid, dir_fd=rfd, follow_symlinks=False)"
+    assert not re.search(r"\bch(own|mod|grp)\b", code.replace("os.fchown", "").replace("os.fchmod", "")
+                         .replace(relatif, ""))  # par chemin
     # L'état d'exécution n'est jamais remis à zéro.
     for f in ("preferences.toml", "memoire.db", "journal.jsonl"):
         assert f not in code, f

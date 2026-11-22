@@ -492,7 +492,7 @@ async def lire_nuclei(veille, maintenant, allume: bool, dossier=None, refuses=No
     liste = await asyncio.to_thread(nuclei.lire_refuses, refuses)
     etat = {"allume": bool(allume), "collecteur": collecteur, "candidats": None if cands is None else len(cands),
             "candidats_genere_le": genere, "erreur_candidats": erreur, "perime": perime,
-            "refuses": None if liste is None else len(liste)}
+            "refuses": None if liste is None else len(liste), "refuses_illisible": liste is None}
     avant = await veille.sql(lambda db: decisions.lire_etat(db, CLE_NUCLEI))
     try:
         avant = json.loads(avant) if avant else {}
@@ -511,7 +511,7 @@ async def lire_nuclei(veille, maintenant, allume: bool, dossier=None, refuses=No
             log.warning("tour nuclei : candidats.json de plus de 48 h (collecteur arrêté ?) : aucun envoi")
         return None
     if liste is None:
-        if nouveau("refuses"):
+        if not (isinstance(avant, dict) and avant.get("refuses_illisible")):
             log.error("tour nuclei : %s illisible ou mal formée : aucun envoi", refuses or nuclei.REFUSES)
         return None
     return [f for f in cands if f["id"] not in liste]

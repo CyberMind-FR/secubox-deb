@@ -341,7 +341,7 @@ partagée :
   écrire ; profils de l'API et de la veille en `deny /var/lib/secubox/ai/nuclei/** w`), **aucun** `LoadCredential=`, `InaccessiblePaths=/run/credentials /etc/secubox/secrets`,
   `ProtectSystem=strict`, seul `ReadWritePaths=/var/lib/secubox/ai/nuclei`, `MemoryMax=512M`, `CPUQuota=50%`, profil
   AppArmor `secubox-ai-nuclei` (enforce : python, git, ce seul dossier en écriture). Réseau sortant vers GitHub, CISA,
-  cyentia (des CDN, pas de liste d'adresses) ; plages privées, CGNAT, lien local et diffusion FERMÉES, 127.0.0.1 permis,
+  cyentia (des CDN, pas de liste d'adresses) ; boucle (127.0.0.0/8, ::1), plages privées, CGNAT, lien local et diffusion FERMÉES, 127.0.0.1 seul rouvert (Unbound),
   résolveurs privés de `/etc/resolv.conf` rouverts par `secubox-aictl preparer`
   (`/run/systemd/system/secubox-ai-nuclei.service.d/50-adresses.conf`). git durci : `GIT_CONFIG_GLOBAL=/dev/null`,
   `GIT_CONFIG_NOSYSTEM=1`, `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.allow=never

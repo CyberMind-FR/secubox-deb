@@ -824,7 +824,7 @@ def test_paquet_2_1_0():
                   "usr/lib/systemd/system/secubox-ai-nuclei.timer", "etc/apparmor.d/secubox-ai-nuclei"):
         assert "debian/secubox-ai/" + cible in rules, cible
     post = (PAQUET / "debian" / "postinst").read_text(encoding="utf-8")
-    assert 'dossier(ai, "nuclei", 0o750, uid_nuclei)' in post and "systemctl start secubox-ai-nuclei.timer" in post
+    assert 'dossier(ai, "nuclei", 0o750, uid_nuclei, repris=(uid,))' in post and "systemctl start secubox-ai-nuclei.timer" in post
     assert "systemctl start secubox-ai-nuclei.service" not in post          # le service ne part que par la minuterie
     assert os.access(PAQUET / "sbin" / "secubox-ai-nuclei", os.X_OK)
     assert (PAQUET / "migrations" / "0012-filtres-nuclei.sql").exists()
@@ -1201,3 +1201,76 @@ def test_j4_candidats_absents_un_seul_avertissement(banc, caplog):
         for i in range(3):
             _passe(banc, maintenant=_maintenant() + timedelta(minutes=5 * i))
     assert caplog.text.count("candidats.json refusé") == 1
+
+
+# ══ Relecture 2 (#3862) ════════════════════════════════════════════════
+def test_r2_liste_de_refus_illisible_des_la_premiere_passe_journalisee(banc, monkeypatch, caplog):
+    monkeypatch.setattr(F, "PROPRIETAIRES_REFUSES", frozenset({os.getuid()}))
+    _nuclei_dir(banc, _cands(2))
+    r = _refuses(banc, "pas un id\n")
+    with caplog.at_level("ERROR", logger="secubox-ai-veille"):
+        for i in range(3):
+            _passe_r(banc, r, maintenant=_maintenant() + timedelta(minutes=5 * i))
+    assert caplog.text.count("illisible ou mal formée") == 1
+    assert _posts(banc) == [] and _etat_tour(banc)["refuses_illisible"] is True
+    r.write_text("ia-x-1\n")                                   # rétablie, puis de nouveau cassée : redit
+    _passe_r(banc, r)
+    r.write_text("pas un id\n")
+    with caplog.at_level("ERROR", logger="secubox-ai-veille"):
+        _passe_r(banc, r)
+    assert caplog.text.count("illisible ou mal formée") == 2
+
+
+def test_r2_boucle_fermee_sauf_unbound():
+    u = _unite("secubox-ai-nuclei.service")
+    deny = u["IPAddressDeny"][0].split()
+    assert "127.0.0.0/8" in deny and "::1/128" in deny and u["IPAddressAllow"] == ["127.0.0.1/32"]
+
+
+@pytest.mark.parametrize("chemin", ["/wp-admin/admin-ajax.php", "/xmlrpc.php", "/wp-json", "/wp-json/", "/graphql",
+                                    "/api/v1", "/api/v1/", "/./user/./login", "/user/login/.", "/./", "//./index.php"])
+def test_r2_chemins_legitimes_complements(chemin):
+    assert F.chemin_legitime(chemin)
+
+
+def test_r2_normaliser_points():
+    assert F.normaliser_chemin("/a/./b/./c") == "/a/b/c"
+    assert F.normaliser_chemin("/.git/config") == "/.git/config"          # « /. » suivi d'un nom : gardé
+    assert F.normaliser_chemin("/a/../b") == "/a/../b"                    # traversée : jamais réduite
+
+
+def test_r2_retour_git_sans_controle_ni_ansi(tmp_path, caplog):
+    def executer(argv, **kw):
+        raise subprocess.CalledProcessError(128, argv, "", "fatal:\x1b[31m rouge\x1b[0m\rfaux\x07 journal\x1b]0;t\x07\n")
+    with caplog.at_level("WARNING", logger="secubox-ai-nuclei"):
+        F.mettre_a_jour_depot(tmp_path / "depot", executer)
+    msg = [r.getMessage() for r in caplog.records][-1]
+    assert "\x1b" not in msg and "\r" not in msg and "\x07" not in msg and msg.isprintable()
+    assert "fatal: rouge | faux journal" in msg
+
+
+def test_r2_postinst_reprend_un_nuclei_detenu_par_le_module(tmp_path):
+    """nuclei/ déjà créé par secubox-ai (2.1.0 de la première passe) : accepté et réattribué, contenu compris, sans
+    suivre un lien. En test, le compte du module et celui du collecteur sont le même utilisateur : on vérifie que
+    le script accepte, parcourt le contenu sans suivre de lien, et garde les fichiers."""
+    import grp
+    import pwd
+    post = (PAQUET / "debian" / "postinst").read_text(encoding="utf-8")
+    assert 'dossier(ai, "nuclei", 0o750, uid_nuclei, repris=(uid,))' in post
+    assert "os.chown(n, uid, gid, dir_fd=rfd, follow_symlinks=False)" in post
+    script = re.search(r"<<'DOSSIERS'(?:[^\n]*\\\n)*[^\n]*\n(.*?)\nDOSSIERS\n", post, re.S).group(1)
+    n = tmp_path / "ai" / "nuclei"
+    (n / "depot" / "http").mkdir(parents=True)
+    (n / "candidats.json").write_text("{}")
+    cible = tmp_path / "hors"
+    cible.write_text("intouché")
+    os.chmod(cible, 0o600)
+    (n / "lien").symlink_to(cible)
+    compte = pwd.getpwuid(os.getuid()).pw_name
+    groupe = grp.getgrgid(os.getgid()).gr_name
+    r = subprocess.run([__import__("sys").executable, "-I", "-", str(tmp_path), "ai", compte, groupe, compte],
+                       input=script, capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert (n / "candidats.json").read_text() == "{}" and (n / "depot" / "http").is_dir()
+    assert cible.stat().st_mode & 0o777 == 0o600 and cible.read_text() == "intouché"
+    assert n.stat().st_mode & 0o7777 == 0o750
