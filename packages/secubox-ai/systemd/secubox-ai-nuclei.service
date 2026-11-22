@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox IA — collecteur du tour de filtres WAF Nuclei (#3862), oneshot lancé par secubox-ai-nuclei.timer.
+# SANS CLÉ : aucun LoadCredential=, /run/credentials et /etc/secubox/secrets inaccessibles ; il ne parle jamais à gk2.
+# Il écrit le seul dossier /var/lib/secubox/ai/nuclei (dépôt git des modèles, caches KEV et EPSS, candidats.json,
+# etat.json) ; la veille, réseau fermé, relit candidats.json comme une donnée et envoie seule (clé ai-filtres).
+# Éteint par défaut : tant que « [filtres] nuclei = true » n'est pas dans /etc/secubox/ai.toml, il note « éteint » et
+# sort sans rien télécharger.
+[Unit]
+Description=SecuBox IA — collecteur des filtres WAF Nuclei (sans clé)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3862
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=secubox-ai
+Group=secubox-ai
+UMask=0027
+WorkingDirectory=/usr/lib/secubox/ai
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+# git : aucun fichier de configuration système ni de compte, aucune invite ; HOME dans le seul dossier inscriptible.
+Environment=HOME=/var/lib/secubox/ai/nuclei
+Environment=GIT_CONFIG_NOSYSTEM=1
+Environment=GIT_TERMINAL_PROMPT=0
+AppArmorProfile=secubox-ai-nuclei
+ExecStart=/usr/sbin/secubox-ai-nuclei
+# Premier clone (dépôt superficiel) et lecture de quelques milliers de modèles : largement sous 30 min.
+TimeoutStartSec=1800
+MemoryMax=512M
+CPUQuota=50%
+Nice=10
+IOSchedulingClass=idle
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/secubox/ai/nuclei
+# Aucune clé : ni les remises de systemd (de toutes les unités), ni les secrets de la box.
+InaccessiblePaths=-/run/credentials -/etc/secubox/secrets
+# Sortie réseau vers GitHub (git), la CISA (KEV) et cyentia (EPSS) : des CDN, aucune liste d'adresses tenable ; les
+# adresses locales de lien et la diffusion restent fermées.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=link-local multicast

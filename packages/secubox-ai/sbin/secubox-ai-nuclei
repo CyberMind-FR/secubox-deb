@@ -1,0 +1,31 @@
+#!/usr/bin/python3 -IB
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""secubox-ai-nuclei — collecteur du tour de filtres WAF Nuclei (#3862), User=secubox-ai, oneshot horaire.
+
+Ne détient AUCUNE clé (ni LoadCredential=, ni /etc/secubox/secrets, rendus inaccessibles par l'unité) et ne parle
+jamais à gk2 : il met à jour le dépôt des modèles Nuclei (git --depth 1), lit KEV (CISA) et EPSS (cyentia) en cache
+24 h, et écrit /var/lib/secubox/ai/nuclei/candidats.json et etat.json (veille/nuclei.py). La veille relit ces
+fichiers comme des données et seule envoie, signée ai-filtres. Éteint tant que `[filtres] nuclei = true` n'est pas
+dans /etc/secubox/ai.toml : il note alors « éteint » et sort.
+"""
+import logging
+import sys
+
+sys.path.insert(0, "/usr/lib/secubox/ai")
+
+from veille import nuclei  # noqa: E402
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(name)s %(levelname)s %(message)s")
+    code = nuclei.tour_collecteur()
+    etat = nuclei.lire_etat_collecteur(nuclei.ETAT) or {}
+    logging.getLogger("secubox-ai-nuclei").info("tour : %s", etat)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

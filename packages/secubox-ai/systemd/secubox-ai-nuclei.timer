@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox IA — tour horaire du collecteur des filtres WAF Nuclei (#3862). Activée par le postinst : le service ne fait
+# rien tant que « [filtres] nuclei = true » n'est pas dans /etc/secubox/ai.toml.
+[Unit]
+Description=SecuBox IA — tour horaire du collecteur des filtres WAF Nuclei
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3862
+
+[Timer]
+OnBootSec=15min
+OnCalendar=hourly
+RandomizedDelaySec=20min
+Persistent=false
+
+[Install]
+WantedBy=timers.target
