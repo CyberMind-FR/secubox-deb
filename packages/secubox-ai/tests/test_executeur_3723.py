@@ -670,23 +670,26 @@ def test_unite_credentials_avec_repli_et_audit_en_ajout():
         assert f"LoadCredential={nom}:/etc/secubox/secrets/ai/{fichier}" in code
         assert f"SetCredential={nom}:absente" in code
     # le dossier (un montage lié du seul fichier resterait sur l'inode d'avant la rotation) ; AppArmor borne à
-    # l'ajout dans audit.log seul
+    # audit.log seul (`w` : le write() d'un descripteur O_APPEND est contrôlé comme une écriture, refus vu sur gk3 le
+    # 22/11 ; l'ajout seul tient au code, O_WRONLY|O_APPEND, et à l'ACL -w-)
     assert re.search(r"^ReadWritePaths=-/var/log/secubox$", code, re.M)
     assert "ExecStartPre=+-/usr/sbin/secubox-aictl acl-audit" in code
     profil = (PAQUET / "apparmor" / "secubox-ai-veille").read_text(encoding="utf-8")
     pcode = "\n".join(x for x in profil.splitlines() if not x.lstrip().startswith("#"))
     assert "/run/credentials/secubox-ai-veille.service/ai-ban r," in pcode
-    assert re.search(r"^\s*/var/log/secubox/audit\.log a,$", pcode, re.M)
-    assert not re.search(r"/var/log/secubox/audit\.log [a-z]*w", pcode)
-    assert [x.strip() for x in pcode.splitlines() if "/var/log" in x] == ["/var/log/secubox/audit.log a,"]
+    assert re.search(r"^\s*/var/log/secubox/audit\.log w,$", pcode, re.M)
+    assert [x.strip() for x in pcode.splitlines() if "/var/log" in x] == ["/var/log/secubox/audit.log w,"]
+    for module in ("executeur.py", "riposte.py"):   # l'ajout seul repose sur l'ouverture
+        src = (PAQUET / "veille" / module).read_text(encoding="utf-8")
+        assert re.search(r"AUDIT_LOG\),\s*os\.O_WRONLY \| os\.O_APPEND \| os\.O_NOFOLLOW \| os\.O_CLOEXEC\)", src)
     api = (PAQUET / "apparmor" / "secubox-ai-api").read_text(encoding="utf-8")
     assert "ai-ban" not in "\n".join(x for x in api.splitlines() if not x.lstrip().startswith("#"))
 
 
-def test_version_2_0_0():
+def test_version_2_0():
     from api.main import VERSION
-    assert VERSION == "2.0.0"                                          # #3725 : secubox-ai V2 (phases 4 à 7)
-    assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith("secubox-ai (2.0.0-1~trixie1)")
+    assert VERSION.startswith("2.0.")                                  # #3725 : secubox-ai V2 (phases 4 à 7)
+    assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith(f"secubox-ai ({VERSION}-1~trixie1)")
 
 
 def test_cle_lue_absente_ou_repli(tmp_path, monkeypatch):

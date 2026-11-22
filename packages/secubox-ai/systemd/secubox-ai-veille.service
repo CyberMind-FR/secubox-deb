@@ -72,8 +72,9 @@ SetCredential=ai-ban:absente
 #   (les suggestions d'empreintes sont calculées quand même). Créée par « secubox-aictl cle-ai-filtres generer ».
 LoadCredential=ai-filtres:/etc/secubox/secrets/ai/ai-filtres.key
 SetCredential=ai-filtres:absente
-# Journal d'audit (#3723) : AJOUT SEUL à /var/log/secubox/audit.log (secubox:secubox 0640), et à lui seul : c'est le
-# profil AppArmor (« /var/log/secubox/audit.log a, » et rien d'autre sous /var/log) qui le borne. L'ACL nommée
+# Journal d'audit (#3723) : écriture sur /var/log/secubox/audit.log (secubox:secubox 0660) et sur lui seul, bornée par
+# le profil AppArmor (« /var/log/secubox/audit.log w, » et rien d'autre sous /var/log). L'AJOUT SEUL ne tient qu'au
+# code (ouverture O_WRONLY|O_APPEND, épinglée par les tests) : ni AppArmor ni les droits Unix ne l'imposent. L'ACL nommée
 # d'écriture du compte secubox-ai est (re)posée en root avant le démarrage par « secubox-aictl acl-audit » (refuse
 # un lien ou un non-fichier ; « - » : échec non bloquant), puis après chaque rotation par la demande « acl-audit » que
 # la veille dépose dans /run/secubox-ai/demandes. Le DOSSIER est rouvert en écriture et non le seul fichier : un

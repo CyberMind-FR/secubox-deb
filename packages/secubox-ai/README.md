@@ -240,8 +240,9 @@ d'écriture de gk3 vers gk2**, les routes `ai-ban` (`/api/v1/waf/ai/ban`, `unban
 - **Audit** : chaque envoi (`ai-reponse-envoi`), réponse (`ai-reponse-gk2`), réponse perdue, rapprochement, échec
   local, suspension, approbation et refus → une ligne `audit_chaine` et une ligne `/var/log/secubox/audit.log`
   (jamais le jeton ni la clé ; le `jti` et l'empreinte de la clé). Les décisions de l'API (dont le profil interdit
-  audit.log) sont recopiées par la veille, une fois, dans l'ordre. La veille n'a sur audit.log que l'**ajout** (profil
-  AppArmor `a`, `ReadWritePaths=` de ce seul fichier) par une ACL nommée `u:secubox-ai:w` posée en root par
+  audit.log) sont recopiées par la veille, une fois, dans l'ordre. La veille écrit sur audit.log seul (profil AppArmor
+  `w` sur ce fichier, `ReadWritePaths=` du dossier pour suivre la rotation) ; l'**ajout seul** ne tient qu'au code
+  (`O_WRONLY|O_APPEND`, épinglé par les tests), ni AppArmor (`a` refuse le `write()`, gk3 22/11) ni l'ACL ne l'imposent ; ACL nommée `u:secubox-ai:w` posée en root par
   `secubox-aictl acl-audit` avant chaque démarrage ; après une rotation (nouveau fichier sans ACL), la veille dépose
   `acl-audit.demande` (au plus une fois par 10 min) que `secubox-ai-demandes` traite (chaque pose ou échec de l'ACL
   est audité). Une ligne non écrite est dite au journal du service, jamais perdue en silence. L'ACL nommée vaut pour
