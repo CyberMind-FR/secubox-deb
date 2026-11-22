@@ -16,6 +16,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   (192.168.1.254 et fd0f:ee:b0::1 en RA) ; seul le Player 192.168.1.10 (8c:97:ea:0f:c7:60) interroge gk7, 270
   requêtes/24 h, IPv4 seulement → le reste passe par la Freebox. `freeboxctl` : SecuBox pas encore autorisé sur cette
   Freebox (validation sur l'écran à faire sur place), puis dns-regler/dns6-regler vers gk7 et redémarrage du Player.
+- Freebox du site autorisée par le propriétaire : DNS IPv4 déjà 192.168.1.11 (autoconfig 11:57) ; IPv6 bloqué par
+  `"dns": {}` (#3872, secubox-freebox 0.8.5, PR #3873, déployé gk7) puis `dns6-regler 1` vers gk7 : l'annonce RA porte
+  gk7. Reste : redémarrer le Player puis compter ses requêtes IPv6. NB : `freeboxctl` lancé en root dit « pas encore
+  autorisé » ; sous `secubox-freebox` il marche.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
