@@ -75,7 +75,8 @@ URL_KEV = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulner
 URL_KEV_PAGE = "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
 URL_EPSS = "https://epss.cyentia.com/epss_scores-current.csv.gz"
 URL_EPSS_API = "https://api.first.org/data/v1/epss?cve="
-AGENT = {"User-Agent": "secubox-ai-nuclei/1"}
+# Jamais « nuclei » dans l'agent : CISA refuse (403) un agent qui porte le nom du scanner (gk3, 22/11).
+AGENT = {"User-Agent": "secubox-ai/2"}
 CACHE_S = 86400
 LOT_MAX = 50
 LOT_OCTETS = 15 * 1024
@@ -118,6 +119,7 @@ CHEMINS_LEGITIMES = frozenset({
     "/logout", "/user", "/users", "/register", "/signup", "/explore", "/portal", "/console", "/webui", "/ui",
     "/owa", "/owa/auth/logon.aspx", "/remote/login", "/cgi-bin/luci", "/manager/html",
     "/wp-admin/admin-ajax.php", "/xmlrpc.php", "/wp-json", "/graphql", "/api/v1",
+    "/api/config", "/api/login", "/api/version", "/login.html", "/login.php", "/index.jsp", "/login.action",
 })
 #: Dernier segment d'une page d'accueil ou d'authentification courante (sans extension) : jamais un filtre.
 PAGES_LEGITIMES = frozenset({"index", "login", "signin", "sign_in", "sign-in", "logon", "default", "home", "dashboard",
