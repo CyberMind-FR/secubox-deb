@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# /etc/secubox/ai/filtres-refuses.txt (#3862) : filtres WAF de l'IA que la veille ne doit JAMAIS envoyer ni adopter.
+# Un id par ligne (forme ia-…), « # » commente. root 0644 : un fichier d'un autre propriétaire, inscriptible par le
+# groupe ou les autres, ou portant une ligne hors forme, et la veille n'envoie plus AUCUN filtre Nuclei (une liste de
+# refus qu'on ne sait pas lire ne s'ignore pas). Relue à chaque passe : aucune relance nécessaire.
+
+# 22/11 : motif = /user/login, la page de connexion de Gitea (40 bans à tort en 4 h sur gk2, retiré à la main).
+ia-cve-2025-8110-c109f2
