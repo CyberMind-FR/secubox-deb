@@ -815,8 +815,8 @@ def test_profil_collecteur_compile():
 
 def test_paquet_2_1_0():
     from api.main import VERSION
-    assert VERSION == "2.1.0"
-    assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith("secubox-ai (2.1.0-1~trixie1) trixie;")
+    assert VERSION.startswith("2.1.")
+    assert (PAQUET / "debian" / "changelog").read_text(encoding="utf-8").startswith(f"secubox-ai ({VERSION}-1~trixie1) trixie;")
     control = (PAQUET / "debian" / "control").read_text(encoding="utf-8")
     assert " git,\n" in control and " python3-yaml,\n" in control
     rules = (PAQUET / "debian" / "rules").read_text(encoding="utf-8")
@@ -1274,3 +1274,12 @@ def test_r2_postinst_reprend_un_nuclei_detenu_par_le_module(tmp_path):
     assert (n / "candidats.json").read_text() == "{}" and (n / "depot" / "http").is_dir()
     assert cible.stat().st_mode & 0o777 == 0o600 and cible.read_text() == "intouché"
     assert n.stat().st_mode & 0o7777 == 0o750
+
+
+def test_agent_sans_nom_du_scanner_et_pages_du_22_11():
+    """CISA refuse un agent « nuclei » (403, gk3 22/11) ; pages réellement servies par gk2 et filtrées à tort le 22/11."""
+    from veille import nuclei
+    assert "nuclei" not in nuclei.AGENT["User-Agent"].lower()
+    for chemin in ("/api/config", "/api/login", "/login.html", "/login.php", "/index.jsp", "/login.action", "/index.php",
+                   "/user/login", "/users/sign_in"):
+        assert nuclei.normaliser_chemin(chemin) in nuclei.CHEMINS_LEGITIMES, chemin

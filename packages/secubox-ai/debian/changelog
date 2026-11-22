@@ -1,3 +1,11 @@
+secubox-ai (2.1.1-1~trixie1) trixie; urgency=medium
+
+  * Tour Nuclei (ref #3862) : agent HTTP sans « nuclei » (CISA rendait 403 sur
+    la liste KEV) ; pages légitimes servies par gk2 ajoutées au refus d'office
+    (/api/config, /api/login, /login.html, /login.php, /index.jsp, /login.action).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 22 Nov 2026 06:15:06 +0100
+
 secubox-ai (2.1.0-1~trixie1) trixie; urgency=medium
 
   * Tour de filtres WAF Nuclei (ref #3862), porté du POC gk0
