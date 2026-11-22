@@ -1096,7 +1096,7 @@ def cmd_cle_ai_filtres(args: list[str]) -> int:
 # ── journal d'audit de la veille ──
 
 def cmd_acl_audit() -> int:
-    """ACL nommée d'écriture (ajout seul par le profil AppArmor de la veille) du compte secubox-ai sur audit.log.
+    """ACL nommée d'écriture (l'ajout seul tient au code de la veille, O_APPEND ; ni le profil ni l'ACL ne l'imposent) du compte secubox-ai sur audit.log.
     Refus si la cible est un lien ou n'est pas un fichier ordinaire ; setfacl --physical ne suit aucun lien."""
     if not _root():
         journal("acl-audit : root exigé")
