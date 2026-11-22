@@ -49,8 +49,10 @@ profile secubox-ai-veille {
   /run/credentials/secubox-ai-veille.service/ai-ban r,
   /run/credentials/secubox-ai-veille.service/ai-filtres r,
 
-  # Journal d'audit (#3723) : ajout seul, ce fichier seulement (jamais écrit, tronqué ni créé ici).
-  /var/log/secubox/audit.log a,
+  # Journal d'audit (#3723) : ajout seul, ce fichier seulement (jamais tronqué ni créé ici). `w` et non `a` : le
+  # write() d'un descripteur O_APPEND est contrôlé comme une écriture (refus file_perm vu sur gk3, 22/11) ; le code
+  # n'ouvre qu'en O_WRONLY|O_APPEND et l'ACL ne donne déjà que -w- au compte secubox-ai.
+  /var/log/secubox/audit.log w,
   @{PROC}/meminfo r,
 
   # veille.db (WAL : -wal, -shm), sauvegardes avant migration, tmp/ (SQLITE_TMPDIR). L'espace libre se lit par statvfs.

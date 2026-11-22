@@ -1,3 +1,11 @@
+secubox-ai (2.0.1-1~trixie1) trixie; urgency=medium
+
+  * AppArmor secubox-ai-veille (ref #3723) : audit.log en `w` et non `a` ; le
+    write() sur un descripteur O_APPEND était refusé (file_perm, gk3 22/11),
+    aucune ligne ai-reponse/ai-riposte n'arrivait dans audit.log.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 22 Nov 2026 04:40:12 +0100
+
 secubox-ai (2.0.0-1~trixie1) trixie; urgency=medium
 
   * SecuBox AI V2, phases 4 à 7 (#3722, #3723, #3724, #3725), version majeure : le module passe de l'assistant de
