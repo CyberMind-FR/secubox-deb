@@ -11,6 +11,18 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-22 — secubox-ai 2.2.0 : onglet Salle SBX-SOC sur gk3 (ref #3867)
+- POC d'abord sur le relais gk0 (onglet « Salle », sauvegarde `index.html.avant-sbx-soc-1795329382`), maquette des
+  panneaux (graphe d'acteur, chronologie, plafonds) publiée en artifact, puis report dans le module (PR #3868).
+- Salle = premier onglet : 11 indicateurs, flux d'entrée, classification, radar par couches, jauge de posture,
+  terminal des gestes, incidents avec l'action réelle, frise 1 h / 3 h. Sources : `/menaces/releve`, `/menaces/series`,
+  `/actions` (remplace `/menaces/gestes` du POC), `/veille/etat` (automatique, SADE, clés, Nuclei), `/status`.
+  Valeur absente = « relevé indisponible ». Radar et Menaces restylés. Défauts du POC corrigés (gravité sur une ligne,
+  radar rang + volume log, colonnes des incidents).
+- Déployé gk3 par apt : `ii 2.2.0-1~trixie1`, secubox-ai et la veille actifs, page 200. Pas de `closes` avant le regard
+  du propriétaire. Reste : chevauchement « Campagnes les plus actives » (Radar, déjà sur master), terminal sans durée
+  des gestes (`/actions` ne la porte pas), seules les 50 dernières actions rapprochées.
+
 ## 2026-11-22 — Faux positifs des filtres IA (281 bans levés) ; tour Nuclei porté dans gk3 (ref #3862 #3723 #3861)
 
 - **Incident** : le filtre `ia-cve-2025-8110` (tour de gk0, critique = ban 7 j) visait `/user/login` (page de connexion
