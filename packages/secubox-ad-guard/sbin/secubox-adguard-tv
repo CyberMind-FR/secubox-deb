@@ -146,6 +146,26 @@ def verrou_controleur():
         os.close(fd)
 
 
+def echec_imprevu(action: str, e: Exception) -> int:
+    """Erreur que le contrôleur n'attendait pas : la trace complète va au journal système (syslog), l'audit garde le
+    type, l'endroit et le message court, l'appelant reçoit une ligne lisible — jamais une trace brute (#3869)."""
+    import syslog
+    import traceback
+    lieu = traceback.extract_tb(e.__traceback__)[-1] if e.__traceback__ else None
+    ou = f" @ {Path(lieu.filename).name}:{lieu.lineno}" if lieu else ""
+    court = f"{type(e).__name__}: {str(e)[:120]}{ou}"
+    try:
+        syslog.openlog("secubox-adguard-tv")
+        for ligne in "".join(traceback.format_exception(e)).splitlines():
+            syslog.syslog(syslog.LOG_ERR, ligne[:400])
+    except OSError:
+        pass
+    audit(f"{action}-echec", court[:200])
+    print(json.dumps({"ok": False, "action": action, "erreur": type(e).__name__}))
+    print(f"échec de « {action} » : {type(e).__name__}{ou} — rien n'est rechargé ; détail dans le journal système", file=sys.stderr)
+    return 1
+
+
 def _control(*args: str) -> None:
     """Une commande unbound-control, sans shell ; un code ≠ 0 est une erreur (le repli est décidé par l'appelant)."""
     r = subprocess.run([CONTROL, *args], capture_output=True, text=True, timeout=30)
@@ -1277,10 +1297,13 @@ def main(argv: list[str], entree: str | None = None) -> int:
                 audit("dpi-cibles-echec", f"{type(e).__name__}: {e.strerror or ''}"[:160])
                 print(json.dumps({"ok": False, "erreur": type(e).__name__}))
                 return 1
-    with verrou_controleur():
-        if argv[1] == "apply":
-            (dossier_root() / "desactive").unlink(missing_ok=True)         # une demande explicite lève la désactivation
-        return {"apply": appliquer, "disable": desactiver, "regles-appliquer": regles_appliquer}[argv[1]]()
+    try:
+        with verrou_controleur():
+            if argv[1] == "apply":
+                (dossier_root() / "desactive").unlink(missing_ok=True)     # une demande explicite lève la désactivation
+            return {"apply": appliquer, "disable": desactiver, "regles-appliquer": regles_appliquer}[argv[1]]()
+    except Exception as e:                                               # imprévu : audité, trace complète au journal, refus lisible (#3869)
+        return echec_imprevu(argv[1], e)
 
 
 if __name__ == "__main__":
