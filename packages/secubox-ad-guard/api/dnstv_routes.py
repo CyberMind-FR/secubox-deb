@@ -46,7 +46,7 @@ def _ctl(action: str) -> dict:
     except (OSError, subprocess.TimeoutExpired) as e:
         raise HTTPException(502, f"contrôleur injoignable ({type(e).__name__})") from e
     if r.returncode != 0:
-        raise HTTPException(502, ((r.stderr or r.stdout).strip() or "contrôleur en échec")[:300])
+        raise HTTPException(502, ((r.stderr or r.stdout).strip() or "contrôleur en échec")[-300:])   # la cause est à la fin (#3869)
     try:
         return json.loads(r.stdout or "{}")
     except ValueError:
