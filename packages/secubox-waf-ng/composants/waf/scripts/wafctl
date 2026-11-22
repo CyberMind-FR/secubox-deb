@@ -585,7 +585,9 @@ _secondes() {
 # est illisible (jamais « absent » par défaut d'une réponse lue).
 _reste_element() {
     local sortie
-    sortie=$(nft -j get element inet "$1" "$2" "{ $3 }" 2>/dev/null) || { echo absent; return 0; }
+    # `nft -j list set`, jamais `nft -j get element` : nftables 1.1 de trixie répond à ce dernier en TEXTE malgré -j
+    # (gk2, 22/11 : chaque levée V2 tombait en refus:etat). Ensemble absent = élément absent.
+    sortie=$(nft -j list set inet "$1" "$2" 2>/dev/null) || { echo absent; return 0; }
     printf '%s' "$sortie" | python3 -I -c '
 import json, sys
 ip = sys.argv[1]

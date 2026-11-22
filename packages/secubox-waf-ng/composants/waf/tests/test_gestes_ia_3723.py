@@ -590,7 +590,7 @@ def _wafctl_banc(tmp_path, code_garde=0, code_get=0):
     nft = bin_ / "nft"
     nft.write_text(f'#!/bin/bash\necho "$*" >> {tmp_path}/nft.log\n'
                    f'if [ "$1" = "-f" ]; then cat > {tmp_path}/lot.nft; exit 0; fi\n'
-                   f'case "$1" in get) exit {code_get} ;; -j) [ "$2" = get ] && exit {code_get} ;; esac\nexit 0\n')
+                   f'case "$1" in get) exit {code_get} ;; -j) [ "$2" = list ] && exit {code_get} ;; esac\nexit 0\n')
     for f in (garde, nft):
         f.chmod(0o755)
     script = tmp_path / "wafctl"
@@ -612,7 +612,7 @@ def test_wafctl_prolonger_une_seule_transaction_nft(tmp_path):
         f"add element inet secubox waf_ban {{ {IP} timeout 172800s }}\n")
     assert (tmp_path / "garde.log").read_text().split() == ["verifier", IP, "--exiger"]
     nft = (tmp_path / "nft.log").read_text().splitlines()
-    assert nft[0].startswith("-j get element inet secubox waf_ban") and nft[-1] == "-f -"
+    assert nft[0] == "-j list set inet secubox waf_ban" and nft[-1] == "-f -"
     assert not any(x.startswith("add element") for x in nft)            # jamais un `add` hors transaction
 
 

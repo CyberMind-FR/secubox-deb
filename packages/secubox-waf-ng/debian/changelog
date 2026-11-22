@@ -1,3 +1,12 @@
+secubox-waf-ng (1.43.1-1~trixie1) trixie; urgency=medium
+
+  * wafctl _reste_element (ref #3723) : `nft -j list set` au lieu de
+    `nft -j get element`, rendu en texte par nftables de trixie malgré -j ;
+    toute levée V2 (limiter-lever, unban borné, prolonger) tombait en
+    refus:etat (503 etat sur gk2, 22/11).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 22 Nov 2026 05:39:53 +0100
+
 secubox-waf-ng (1.43.0-1~trixie1) trixie; urgency=medium
 
   * #3723 : compte ai-ban, gestes d office. POST /ai/ban accepte mode auto
