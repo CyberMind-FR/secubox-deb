@@ -1,3 +1,10 @@
+secubox-ai (2.1.2-1~trixie1) trixie; urgency=medium
+
+  * Onglet Réponses (ref #3862) : « ai-filtres » affichait « relevé
+    indisponible » en dur ; /veille/etat rend cle_ai_filtres, la page l'utilise.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 22 Nov 2026 07:19:28 +0100
+
 secubox-ai (2.1.1-1~trixie1) trixie; urgency=medium
 
   * Tour Nuclei (ref #3862) : agent HTTP sans « nuclei » (CISA rendait 403 sur

@@ -394,6 +394,22 @@ def test_veille_etat_indicateurs_partages(api):
     assert e["partages_7j"] == {"partages": 1, "revus": None, "contenus": None}
 
 
+def test_veille_etat_dit_la_cle_ai_filtres(api):
+    """La page affichait « ai-filtres : relevé indisponible » en dur (gk3, 22/11) : l'état vient de la veille."""
+    from datetime import datetime, timezone
+    from veille import decisions
+    c, db = api
+    assert c.get("/veille/etat").json()["cle_ai_filtres"] == {"etat": "inconnu"}
+    decisions.poser_etat(db, "cle_ai_filtres", json.dumps({"etat": "presente"}), datetime.now(timezone.utc))
+    db.commit()
+    assert c.get("/veille/etat").json()["cle_ai_filtres"] == {"etat": "presente"}
+
+
+def test_page_lit_la_cle_ai_filtres(html):
+    assert "' · ai-filtres : ' + V2_NI" not in html
+    assert "e.cle_ai_filtres" in html
+
+
 # ── page ──
 
 @pytest.fixture(scope="module")
