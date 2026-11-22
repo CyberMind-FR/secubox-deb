@@ -86,8 +86,8 @@ class Gk2:
                 except gk2_filtres.Refus:
                     bilan["rejets"].append({"id": brut.get("id", "?"), "motif": "forme"})
                     continue
-                if f.id in self.filtres:
-                    bilan["inchanges"].append(f.id)
+                if f.id in self.filtres and self.filtres[f.id].get("version") == f.version:
+                    bilan["inchanges"].append(f.id)     # comme cvectl : même id ET même version (#3862)
                     continue
                 raison = gk2_filtres.verifier(f, present=set(), vhosts=set(), frequents={"/", "/index.php"},
                                               existants={}, propres=set(gk2_filtres.CHEMINS_SECUBOX_FIXES))
@@ -116,7 +116,8 @@ class Gk2:
         @self.app.get("/ai/filtres")
         async def lister(user=Depends(cs.require_ai_filtres)):
             self.appels.append(("GET", None))
-            return {"filtres": [{"id": i} for i in sorted(self.filtres)]}
+            # comme cvectl `filtres-ia lister` : l'id et la version de chaque filtre en vigueur (#3862)
+            return {"filtres": [{"id": i, "version": self.filtres[i].get("version")} for i in sorted(self.filtres)]}
 
 
 class Transport(httpx.AsyncBaseTransport):

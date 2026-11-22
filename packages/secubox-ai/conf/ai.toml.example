@@ -43,6 +43,12 @@ aud = "gk2"
 # gravite_min = "medium"
 # protegees = []
 
+# [filtres]
+# Tour de filtres WAF Nuclei (#3862) : le collecteur sans clé (secubox-ai-nuclei.timer, horaire) tire les modèles
+# Nuclei, KEV et EPSS ; la veille envoie les filtres à gk2 (clé ai-filtres), 10 par passage, 10/h et 50/24 h.
+# Éteint par défaut : seule la valeur booléenne true l'allume.
+# nuclei = false
+
 # [searxng]
 # SearXNG local de la box, essayé avant celui de gk0 (vide = aucun). Adresse du conteneur créé par
 # `searxngctl install` ; à ajouter aussi à IPAddressAllow — fait par l'empaquetage.

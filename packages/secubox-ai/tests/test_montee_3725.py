@@ -68,11 +68,11 @@ def test_montee_depuis_040_sans_perte(etat):
     avant_memoire = _contenu_memoire(etat)
     assert avant_memoire["souvenirs"] and avant_memoire["historique"]
 
-    # Le service ouvre la base avec toutes les migrations du paquet 2.0.0.
+    # Le service ouvre la base avec toutes les migrations du paquet (2.1.0 : 0012, tour Nuclei #3862).
     db = base.ouvrir(etat / "veille.db")
     try:
         versions = [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")]
-        assert versions == list(range(1, 12))
+        assert versions == list(range(1, 13))
         assert db.execute("SELECT COUNT(*) FROM evenements").fetchone()[0] == 50
         assert db.execute("SELECT cle FROM dossiers").fetchall() == [("100.64.9.1",)]
         assert {"analyses", "actions", "redescentes"} <= _tables(db)
@@ -106,7 +106,7 @@ def test_deuxieme_demarrage_ne_refait_rien(etat):
     db = base.ouvrir(etat / "veille.db")
     try:
         assert base.migrer(db) == []
-        assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == list(range(1, 12))
+        assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == list(range(1, 13))
     finally:
         db.close()
     assert sauve.stat().st_mtime_ns == quand and [p.name for p in etat.glob("veille.db.avant-*")] == ["veille.db.avant-0005"]
