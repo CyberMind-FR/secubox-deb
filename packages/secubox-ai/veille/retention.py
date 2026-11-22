@@ -13,7 +13,8 @@ Bornes (#3725) :
   unban) ;
 - actions closes (faite dont le ban est fini, refusee_gk2, echec) : 365 j, AVANT leurs propositions (clé étrangère),
   jamais tant que le ban court (`fin_gk2` > maintenant) ni tant qu'une proposition plus jeune la cite ;
-- acteurs_adresses : 30 j ; filtres retirés, rejetés ou en échec : 90 j ;
+- acteurs_adresses : 30 j ; filtres retirés, rejetés ou en échec : 90 j (un filtre Nuclei retiré est gardé :
+  sa ligne empêche qu'il reparte, #3862) ;
 - audit_chaine : 365 j, seulement ce qui est déjà relayé dans audit.log ; aucune vérification de chaîne n'existe dans
   le code (chaque ligne se chaîne sur la dernière gardée), un début tronqué est donc sans effet ; audit.log reste la
   référence ;
@@ -132,7 +133,8 @@ def purger(db, maintenant):
             f"AND {_PROPOSITION_PURGEABLE} LIMIT %d)" % LOT, params)
     res["filtres"] = _par_lots(
         db, "DELETE FROM filtres WHERE rowid IN (SELECT rowid FROM filtres WHERE etat IN ('retire', 'rejete', 'echec') "
-            "AND maj_le < :lim LIMIT %d)" % LOT, {"lim": params["lim_prop"]})
+            "AND maj_le < :lim AND NOT (etat = 'retire' AND origine = 'nuclei') LIMIT %d)" % LOT,
+        {"lim": params["lim_prop"]})
     # Dossiers (#3795, #3725) : sans incident ni action 30 j, avec 365 j ; vivants jamais. Liens, analyses et redescentes
     # partent en cascade ; les propositions closes gardent leur ligne (dossier_id passe à NULL).
     res["dossiers"] = _par_lots(

@@ -25,6 +25,16 @@ FILTRES (boucle `apprentissage`, 300 s, compte `ai-filtres`, clé remise par Loa
 - réponse perdue, 5xx autre que 503 : le filtre reste `envoi`, rapproché par `GET /ai/filtres` après 120 s, jamais
   renvoyé à l'aveugle ; 503, 401, 403 : `echec` et fin de passe.
 
+TOUR NUCLEI (#3862, porté du POC gk0) : seconde source de la même boucle, `veille/nuclei.py`. Le collecteur sans clé
+(`secubox-ai-nuclei.service`) écrit `nuclei/candidats.json` ; la veille le RELIT comme une donnée (forme, taille, id
+recalculé : un écart et rien ne part), seulement si `[filtres] nuclei = true` (ai.toml, éteint par défaut). Mêmes
+règles que les filtres d'outils : mode `observation`, automatique suspendu ou SADE `observe` → aucun envoi ; ligne
+`filtres` (origine `nuclei`, version) créée AVANT l'envoi ; lots `decouper` signés ai-filtres ; rapprochement,
+surveillance et retrait d'office communs. Éligibilité et quota du POC (`eligibles`, `quota`, `ordonner`) : 10 par
+passage, 10/h et 50/24 h. Un filtre déjà en vigueur sur gk2 (posé par gk0) dans la MÊME version (`GET /ai/filtres`) est
+ADOPTÉ sans envoi (`adopte`, hors plafonds) : surveillé, jamais doublé ni retiré sans touche protégée. Un filtre
+retiré ne repart jamais, même dans une nouvelle version.
+
 SUGGESTIONS : `suggestions-empreintes.json` (dossier d'état du module, 0640, 200 entrées au plus) = valeurs de traits
 (agent HTTP, `tool` de sbxwaf, empreinte HTTP, JA4) vues sur au moins 30 adresses en 7 jours, adresses SANS outil
 nommé. Données non fiables de gk2, tronquées ; lisibles dans la console, JAMAIS appliquées (aucun code ne les lit pour
@@ -38,13 +48,13 @@ import os
 import re
 import sqlite3
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from veille import decisions, outils
+from veille import decisions, nuclei, outils
 from veille.client import ErreurGk2
 from veille.decisions import ACTEUR_VEILLE, ajouter_audit, iso
-from veille.executeur import _journaliser, _poser_si_change, ecrire_audit
+from veille.executeur import _journaliser, _poser_si_change, _sade_releve, ecrire_audit
 from veille.riposte import _protegee
 
 log = logging.getLogger("secubox-ai-veille")
@@ -229,10 +239,13 @@ def etat_apprentissage(db=None, chemin=None) -> dict:
 
 async def _rapprocher(veille, client, maintenant, journal) -> bool:
     en_cours = await veille.sql(lambda db: db.execute(
-        "SELECT id, envoye_le FROM filtres WHERE etat = 'envoi'").fetchall())
+        "SELECT id, envoye_le, origine, version FROM filtres WHERE etat = 'envoi'").fetchall())
     if not en_cours:
         return True
-    murs = [fid for fid, le in en_cours if le <= iso(maintenant - timedelta(seconds=DELAI_RAPPROCHEMENT_S))]
+    limite = iso(maintenant - timedelta(seconds=DELAI_RAPPROCHEMENT_S))
+    murs = [fid for fid, le, _o, _v in en_cours if le <= limite]
+    # #3862 (J1) : un filtre Nuclei n'est « présent » que dans la version envoyée (sinon gk2 garde l'ancienne).
+    versions = {fid: v for fid, _le, o, v in en_cours if o == "nuclei"}
     if not murs:
         return False
     try:
@@ -241,9 +254,10 @@ async def _rapprocher(veille, client, maintenant, journal) -> bool:
         log.warning("apprentissage : GET /ai/filtres illisible (%s %s) : aucun nouvel envoi", e.code, e.motif)
         return False
     presents = {f.get("id") if isinstance(f, dict) else f for f in (liste.get("filtres") or [])}
+    versions_gk2 = {f.get("id"): f.get("version") for f in (liste.get("filtres") or []) if isinstance(f, dict)}
     lignes = []
     for fid in murs:
-        if fid in presents:
+        if fid in presents and (fid not in versions or versions_gk2.get(fid) == versions[fid]):
             lignes.append(("ai-filtre-rapproche", await veille.sql(
                 lambda db, f=fid: _changer(db, f, "essai", maintenant, "filtre_rapproche", {"resultat": "essai"},
                                            essai_depuis=db.execute("SELECT envoye_le FROM filtres WHERE id = ?",
@@ -288,7 +302,8 @@ async def _surveiller(veille, client, maintenant, journal, protegees):
 
 def _plafond(db, maintenant) -> bool:
     for recul, plafond in ((3600, PLAFOND_HEURE), (86400, PLAFOND_JOUR)):
-        if db.execute("SELECT COUNT(*) FROM filtres WHERE envoye_le > ?",
+        # #3862 : un filtre adopté (déjà en vigueur sur gk2, rien envoyé) ne compte pas.
+        if db.execute("SELECT COUNT(*) FROM filtres WHERE envoye_le > ? AND adopte = 0",
                       (iso(maintenant - timedelta(seconds=recul)),)).fetchone()[0] >= plafond:
             return True
     return False
@@ -358,8 +373,9 @@ async def _envoyer(veille, client, c, maintenant, pol, journal) -> str:
 
 
 async def apprendre(veille, client, maintenant: datetime, politiques=None, journal=None, protegees=(), cat=None,
-                    chemin=None) -> None:
-    """Une passe (cf. docstring du module)."""
+                    chemin=None, nuclei_allume=None, dossier_nuclei=None, refuses=None) -> None:
+    """Une passe (cf. docstring du module). `nuclei_allume` : interrupteur `[filtres] nuclei` relu par l'appelant à
+    chaque passe (None : tour Nuclei ignoré, état non publié)."""
     if maintenant.tzinfo is None:
         raise ValueError("horodatage sans fuseau")
     journal = journal or ecrire_audit
@@ -368,10 +384,17 @@ async def apprendre(veille, client, maintenant: datetime, politiques=None, journ
     await asyncio.to_thread(ecrire_suggestions, suggestions, maintenant, chemin)
     if client is None or not client.peut_filtrer:
         await veille.sql(lambda db: _poser_si_change(db, "cle_ai_filtres", {"etat": "absente"}, maintenant))
+        if nuclei_allume is not None:
+            await _lire_nuclei_isole(veille, maintenant, nuclei_allume, dossier_nuclei, refuses)
         return
     await veille.sql(lambda db: _poser_si_change(db, "cle_ai_filtres", {"etat": "presente"}, maintenant))
     pret = await _rapprocher(veille, client, maintenant, journal)
     await _surveiller(veille, client, maintenant, journal, protegees)
+    # #3862 (S1) : candidats.json n'est lu qu'APRÈS la surveillance et le retrait d'office, et isolé : un fichier
+    # piégé ne peut ni les retarder ni les empêcher.
+    cands_nuclei = None
+    if nuclei_allume is not None:
+        cands_nuclei = await _lire_nuclei_isole(veille, maintenant, nuclei_allume, dossier_nuclei, refuses)
     if not pret:
         return
     if politiques is None:
@@ -383,4 +406,263 @@ async def apprendre(veille, client, maintenant: datetime, politiques=None, journ
     nouveaux = [c for c in await veille.sql(candidats, cat) if c[0] not in connus][:LOT]
     for c in nouveaux:
         if await _envoyer(veille, client, c, maintenant, politiques, journal) == "arret":
-            break
+            return
+    if cands_nuclei:
+        await passe_nuclei(veille, client, cands_nuclei, maintenant, politiques, journal)
+
+
+# ── tour Nuclei (#3862) ──
+
+CLE_NUCLEI = "tour_nuclei"
+#: État d'une ligne `filtres` → statut du POC lu par `nuclei.eligibles`.
+_STATUTS_NUCLEI = {"essai": "appliqué", "a_confirmer": "appliqué", "confirme": "appliqué", "rejete": "rejeté",
+                   "retire": "retiré", "envoi": "envoi"}
+
+
+def _epoch(texte):
+    try:
+        return datetime.strptime(texte, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def etats_filtres(db) -> dict:
+    """{id: {"version", "statut", "ts"}} de TOUTES les lignes `filtres` ; une ligne d'une autre origine est tenue
+    pour `envoi` (jamais réécrite par le tour Nuclei)."""
+    out = {}
+    for fid, etat, version, motif, maj, origine in db.execute(
+            "SELECT id, etat, version, motif, maj_le, origine FROM filtres").fetchall():
+        if origine != "nuclei":
+            statut = "envoi"
+        elif etat == "echec":
+            statut = "en_attente" if motif == "plafond" else "erreur"
+        else:
+            statut = _STATUTS_NUCLEI.get(etat, "envoi")
+        out[fid] = {"version": version, "statut": statut, "ts": _epoch(maj)}
+    return out
+
+
+def _envoyes(db, maintenant, recul) -> int:
+    """Nouveaux filtres envoyés (toutes origines, adoptés exclus) et non refusés dans la fenêtre glissante."""
+    return db.execute("SELECT COUNT(*) FROM filtres WHERE adopte = 0 AND envoye_le > ? AND etat NOT IN "
+                      "('rejete', 'echec')", (iso(maintenant - timedelta(seconds=recul)),)).fetchone()[0]
+
+
+def quota_nuclei(db, maintenant) -> int:
+    return nuclei.quota(_envoyes(db, maintenant, 3600), _envoyes(db, maintenant, 86400), PLAFOND_HEURE)
+
+
+def plafond_gk2_recent(db, maintenant) -> bool:
+    """J2 : gk2 a refusé pour plafond dans la dernière heure : rien ne repart avant l'heure suivante."""
+    return db.execute("SELECT 1 FROM filtres WHERE etat = 'echec' AND motif = 'plafond' AND maj_le > ? LIMIT 1",
+                      (iso(maintenant - timedelta(seconds=3600)),)).fetchone() is not None
+
+
+def bloque_nuclei(db, pol) -> bool:
+    """Aucun envoi : mode `observation`, automatique suspendu (politique ou veille.db), SADE de gk2 en `observe`."""
+    return (pol.mode != "hybride" or pol.automatique_suspendu or decisions.suspension(db)["suspendu"]
+            or _sade_releve(db) == "observe")
+
+
+PERIME_S = 48 * 3600
+
+
+async def _lire_nuclei_isole(veille, maintenant, allume, dossier, refuses):
+    try:
+        return await lire_nuclei(veille, maintenant, allume, dossier, refuses)
+    except Exception:  # noqa: BLE001 — jamais fatal à la passe : rien n'est envoyé, l'erreur est dite
+        log.exception("tour nuclei : lecture des candidats en erreur : aucun envoi")
+        return None
+
+
+async def lire_nuclei(veille, maintenant, allume: bool, dossier=None, refuses=None):
+    """Lit etat.json, candidats.json (données du collecteur, revalidées) et la liste de refus de l'opérateur, publie
+    `tour_nuclei` pour /veille/etat ; rend les candidats (refusés ôtés) si le tour est allumé, le fichier valide, de
+    moins de 48 h, et la liste de refus lisible ; sinon None. Un avertissement par CHANGEMENT d'erreur, jamais un
+    par passe (J4)."""
+    dossier = Path(dossier or nuclei.DOSSIER)
+    collecteur = await asyncio.to_thread(nuclei.lire_etat_collecteur, dossier / "etat.json")
+    cands, erreur, genere = None, None, None
+    try:
+        lus = await asyncio.to_thread(nuclei.lire_candidats, dossier / "candidats.json")
+        cands, genere = lus["filtres"], lus["genere_le"]
+    except nuclei.CandidatsInvalides as e:
+        erreur = str(e)[:64]
+    perime = genere is not None and maintenant.timestamp() - genere > PERIME_S
+    liste = await asyncio.to_thread(nuclei.lire_refuses, refuses)
+    etat = {"allume": bool(allume), "collecteur": collecteur, "candidats": None if cands is None else len(cands),
+            "candidats_genere_le": genere, "erreur_candidats": erreur, "perime": perime,
+            "refuses": None if liste is None else len(liste), "refuses_illisible": liste is None}
+    avant = await veille.sql(lambda db: decisions.lire_etat(db, CLE_NUCLEI))
+    try:
+        avant = json.loads(avant) if avant else {}
+    except ValueError:
+        avant = {}
+    await veille.sql(lambda db: _poser_si_change(db, CLE_NUCLEI, etat, maintenant))
+    if not allume:
+        return None
+    nouveau = lambda cle: not isinstance(avant, dict) or avant.get(cle) != etat[cle]  # noqa: E731
+    if erreur is not None:
+        if nouveau("erreur_candidats"):
+            log.warning("tour nuclei : candidats.json refusé (%s) : aucun envoi", erreur)
+        return None
+    if perime:
+        if nouveau("perime"):
+            log.warning("tour nuclei : candidats.json de plus de 48 h (collecteur arrêté ?) : aucun envoi")
+        return None
+    if liste is None:
+        if not (isinstance(avant, dict) and avant.get("refuses_illisible")):
+            log.error("tour nuclei : %s illisible ou mal formée : aucun envoi", refuses or nuclei.REFUSES)
+        return None
+    return [f for f in cands if f["id"] not in liste]
+
+
+def _adopter(db, f, maintenant):
+    """Filtre déjà en vigueur sur gk2 dans la même version : inscrit `essai` SANS envoi (surveillé), hors plafonds."""
+    def faire():
+        if db.execute("SELECT 1 FROM filtres WHERE id = ?", (f["id"],)).fetchone():
+            return None
+        h = iso(maintenant)
+        db.execute("INSERT INTO filtres(id, outil, cve, dossier_id, corps_json, etat, motif, envoye_le, essai_depuis, "
+                   "maj_le, origine, version, adopte) VALUES (?, 'nuclei', ?, NULL, ?, 'essai', 'adopte', ?, ?, ?, "
+                   "'nuclei', ?, 1)", (f["id"], f["cve"], json.dumps(f, sort_keys=True), h, h, h, f["version"]))
+        d = {"filtre": f["id"], "origine": "nuclei", "cve": f["cve"], "version": f["version"], "adopte": True}
+        ajouter_audit(db, maintenant, ACTEUR_VEILLE, "filtre_adopte", f["id"], "essai", d)
+        return d
+    return _transaction(db, faire)
+
+
+def _inscrire_lot(db, lot, jti, kid, maintenant, pol):
+    """Lignes `envoi` du lot, AVANT le premier octet envoyé, après revérification (politique, éligibilité, quota)."""
+    def faire():
+        if bloque_nuclei(db, pol):
+            raise _Ecarte("suspendu")
+        if len(nuclei.eligibles(lot, etats_filtres(db), maintenant.timestamp())) != len(lot):
+            raise _Ecarte("deja")
+        if quota_nuclei(db, maintenant) < len(lot):
+            raise _Ecarte("plafond")
+        h = iso(maintenant)
+        lignes = []
+        for f in lot:
+            db.execute(
+                "INSERT INTO filtres(id, outil, cve, dossier_id, corps_json, etat, jti, cle, envoye_le, maj_le, "
+                "origine, version, adopte) VALUES (?, 'nuclei', ?, NULL, ?, 'envoi', ?, ?, ?, ?, 'nuclei', ?, 0) "
+                "ON CONFLICT(id) DO UPDATE SET corps_json = excluded.corps_json, etat = 'envoi', jti = excluded.jti, "
+                "cle = excluded.cle, envoye_le = excluded.envoye_le, maj_le = excluded.maj_le, "
+                "version = excluded.version, adopte = 0, code_http = NULL, motif = NULL, touches_protegees = NULL, "
+                "essai_depuis = NULL, confirme_par = NULL WHERE filtres.origine = 'nuclei'",
+                (f["id"], f["cve"], json.dumps(f, sort_keys=True), jti, kid, h, h, f["version"]))
+            d = {"filtre": f["id"], "origine": "nuclei", "cve": f["cve"], "version": f["version"], "jti": jti,
+                 "cle": kid}
+            ajouter_audit(db, maintenant, ACTEUR_VEILLE, "filtre_envoi", f["id"], "envoi", d)
+            lignes.append(d)
+        return lignes
+    return _transaction(db, faire)
+
+
+def _rejets_de(rep) -> dict:
+    """{id: motif} des rejets d'une réponse de gk2 (à la racine ou sous `detail`), donnée non fiable bornée."""
+    if not isinstance(rep, dict):
+        return {}
+    for d in (rep, rep.get("detail") if isinstance(rep.get("detail"), dict) else {}):
+        r = d.get("rejets")
+        if isinstance(r, list):
+            return {str(x.get("id")): str(x.get("motif", ""))[:32] for x in r if isinstance(x, dict)}
+    return {}
+
+
+async def _noter_issues(veille, issues, maintenant, journal):
+    lignes = []
+    for fid, (etat, code, motif) in issues.items():
+        champs = {"code_http": code, "motif": motif}
+        if etat == "essai":
+            champs["essai_depuis"] = iso(maintenant)
+        lignes.append(("ai-filtre-reponse", await veille.sql(
+            lambda db, f=fid, e=etat, c=code, m=motif, ch=champs: _changer(
+                db, f, e, maintenant, "filtre_reponse", {"code": c, "motif": m}, **ch))))
+    await _journaliser(journal, lignes)
+
+
+async def _envoyer_lot(veille, client, lot, maintenant, pol, journal) -> str:
+    async def avant_envoi(jti, kid):
+        lignes = await veille.sql(_inscrire_lot, lot, jti, kid, maintenant, pol)
+        await _journaliser(journal, [("ai-filtre-envoi", d) for d in lignes])
+
+    try:
+        bilan = await client.post_filtres({"filtres": lot}, avant_envoi=avant_envoi)
+    except _Ecarte:
+        return "arret"
+    except ErreurGk2 as e:
+        if e.code is None or (e.code >= 500 and e.code != 503):
+            log.warning("tour nuclei : issue inconnue (%s %s) pour %d filtre(s) : rapprochement plus tard", e.code,
+                        e.motif, len(lot))
+            return "arret"
+        rejets = _rejets_de(e.reponse)
+        issues = {}
+        for f in lot:
+            m = rejets.get(f["id"])
+            if e.code == 409 and m == "plafond":
+                issues[f["id"]] = ("echec", 409, "plafond")
+            elif e.code == 409:
+                issues[f["id"]] = ("rejete", 409, m or "http_409")
+            else:
+                issues[f["id"]] = ("echec", e.code, str(e.motif)[:32])
+        await _noter_issues(veille, issues, maintenant, journal)
+        plafond = any(m == "plafond" for _, _, m in issues.values())
+        return "arret" if e.code in _ARRET or plafond else "suite"
+    ids = lambda cle: {x.get("id") if isinstance(x, dict) else x for x in (bilan.get(cle) or [])}  # noqa: E731
+    appliques, inchanges, rejets = ids("appliques"), ids("inchanges"), _rejets_de(bilan)
+    issues = {}
+    for f in lot:
+        fid = f["id"]
+        if fid in appliques:
+            issues[fid] = ("essai", 200, "applique")
+        elif fid in inchanges:
+            issues[fid] = ("essai", 200, "inchange")
+        elif rejets.get(fid) == "plafond":
+            issues[fid] = ("echec", 200, "plafond")         # plafond de gk2 : pas définitif, renvoyé plus tard
+        elif fid in rejets:
+            issues[fid] = ("rejete", 200, rejets[fid] or "rejete")
+        else:
+            issues[fid] = ("echec", 200, "sans_bilan")      # ni appliqué ni rejeté : réessai après 24 h
+    await _noter_issues(veille, issues, maintenant, journal)
+    return "arret" if any(m == "plafond" for _, _, m in issues.values()) else "suite"
+
+
+async def passe_nuclei(veille, client, cands, maintenant, pol, journal) -> str:
+    """Envoi des candidats Nuclei éligibles (cf. docstring du module) ; rend l'issue (journal du service, tests)."""
+    if await veille.sql(bloque_nuclei, pol):
+        return "bloque"
+    if await veille.sql(plafond_gk2_recent, maintenant):
+        return "plafond_gk2"
+    restant = await veille.sql(quota_nuclei, maintenant)
+    if restant <= 0:
+        return "plafond"
+    elig = nuclei.eligibles(cands, await veille.sql(etats_filtres), maintenant.timestamp())
+    if not elig:
+        return "rien"
+    connus = await veille.sql(lambda db: {r[0] for r in db.execute("SELECT id FROM filtres").fetchall()})
+    inconnus = [f for f in elig if f["id"] not in connus]
+    if inconnus:
+        try:
+            liste = await client.lister_filtres()
+        except ErreurGk2 as e:
+            log.warning("tour nuclei : GET /ai/filtres illisible (%s %s) : aucun envoi", e.code, e.motif)
+            return "lister"
+        en_vigueur = {x.get("id"): x.get("version") for x in (liste.get("filtres") or []) if isinstance(x, dict)}
+        adoptes, lignes = set(), []
+        for f in inconnus:
+            v = en_vigueur.get(f["id"])
+            if type(v) is int and v == f["version"]:
+                d = await veille.sql(_adopter, f, maintenant)
+                if d:
+                    adoptes.add(f["id"])
+                    lignes.append(("ai-filtre-adopte", d))
+        await _journaliser(journal, lignes)
+        if adoptes:
+            log.info("tour nuclei : %d filtre(s) déjà en vigueur sur gk2 adopté(s) sans envoi", len(adoptes))
+        elig = [f for f in elig if f["id"] not in adoptes]
+    for lot in nuclei.decouper(nuclei.ordonner(elig)[:restant]):
+        if await _envoyer_lot(veille, client, lot, maintenant, pol, journal) == "arret":
+            return "arret"
+    return "fait"

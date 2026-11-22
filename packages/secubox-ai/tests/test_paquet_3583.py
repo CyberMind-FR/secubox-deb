@@ -81,7 +81,7 @@ def test_rules_installe(cible):
 
 def test_rules_installe_toutes_les_unites():
     installees = {c.rsplit("/", 1)[1] for _, c in _installs() if "/usr/lib/systemd/system/" in c}
-    assert installees == set(UNITES) and len(UNITES) == 6
+    assert installees == set(UNITES) and len(UNITES) == 8           # 2.1.0 : collecteur Nuclei + minuterie (#3862)
 
 
 def test_rules_code_sans_cache_et_controleur_executable():
@@ -224,9 +224,12 @@ def test_postinst_comptes():
 
 def test_postinst_dossiers_par_descripteur_sans_tmpfiles():
     code = _code(POSTINST)
-    assert "python3 -I - /var/lib/secubox ai secubox-ai secubox-ai <<'DOSSIERS'" in code
+    assert "python3 -I - /var/lib/secubox ai secubox-ai secubox-ai secubox-ai-nuclei <<'DOSSIERS'" in code
     assert "tmpfiles" not in code
-    assert not re.search(r"\bch(own|mod|grp)\b", code.replace("os.fchown", "").replace("os.fchmod", ""))  # par chemin
+    # Par descripteur seulement : fchown/fchmod, ou chown relatif à un descripteur sans suivre de lien (#3862).
+    relatif = "os.chown(n, uid, gid, dir_fd=rfd, follow_symlinks=False)"
+    assert not re.search(r"\bch(own|mod|grp)\b", code.replace("os.fchown", "").replace("os.fchmod", "")
+                         .replace(relatif, ""))  # par chemin
     # L'état d'exécution n'est jamais remis à zéro.
     for f in ("preferences.toml", "memoire.db", "journal.jsonl"):
         assert f not in code, f
@@ -297,7 +300,8 @@ def test_temporaires_de_sqlite_dans_l_etat_du_module():
     assert "SQLITE_TMPDIR=/var/lib/secubox/ai/tmp" in env
     code = _code(PROFIL_API)
     assert "/var/lib/secubox/ai/** rwk," in code and "/tmp" not in code
-    assert not re.search(r"^\s*deny /var/lib/secubox/ai", code, re.M)
+    # Seul refus admis sous l'état du module : l'écriture du dossier du collecteur Nuclei (#3862) ; tmp/ reste permis.
+    assert re.findall(r"^\s*deny (/var/lib/secubox/ai\S*) (\w+),", code, re.M) == [("/var/lib/secubox/ai/nuclei/**", "w")]
     assert 'dossier(ai, "tmp", 0o700)' in POSTINST
     assert "/var/lib/secubox/ai" in " ".join(_unite("secubox-ai.service")["ReadWritePaths"])
 
@@ -312,9 +316,10 @@ def test_postinst_ordre():
             < i["/usr/sbin/secubox-aictl preparer"] < i["systemctl restart secubox-ai-demandes.path"]
             < i["systemctl restart secubox-ai.service"])
     # Les deux profils, chargés avant le premier démarrage (une unité qui nomme un profil absent ne part pas).
-    assert 'for _p in secubox-ai-api secubox-ai-moteur secubox-ai-veille; do' in code
+    assert 'for _p in secubox-ai-api secubox-ai-moteur secubox-ai-veille secubox-ai-nuclei; do' in code
     assert 'apparmor_parser -r "/etc/apparmor.d/$_p"' in code
-    assert "for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service; do" in code
+    assert ("for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service "
+            "secubox-ai-nuclei.timer; do") in code
     assert 'deb-systemd-helper --quiet was-enabled "$_u"' in code
     assert "secubox-ai-moteur.service" not in code.split("for _u in", 1)[1].split("done", 1)[0]
 
@@ -328,10 +333,11 @@ def test_postinst_configuration_au_premier_passage():
 def test_prerm_et_postrm():
     code = _code(PRERM)
     assert "remove|deconfigure)" in code
-    assert ("systemctl stop secubox-ai-demandes.path secubox-ai-demandes.service secubox-ai-veille.service secubox-ai.service "
-            "secubox-ai-moteur.service") in code
+    assert ("systemctl stop secubox-ai-nuclei.timer secubox-ai-nuclei.service secubox-ai-demandes.path "
+            "secubox-ai-demandes.service secubox-ai-veille.service secubox-ai.service secubox-ai-moteur.service") in code
     post = _code(POSTRM)
-    assert post.count("for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service secubox-ai-veille.service; do") == 2
+    assert post.count("for _u in secubox-ai-preparer.service secubox-ai-demandes.path secubox-ai.service "
+                      "secubox-ai-veille.service secubox-ai-nuclei.timer; do") == 2
     assert 'deb-systemd-helper purge "$_u"' in post and 'deb-systemd-helper mask "$_u"' in post
     assert post.count("    decharger_profils\n") == 2
     assert 'apparmor_parser -R "/etc/apparmor.d/$_p"' in post and "/sys/kernel/security/apparmor/.remove" in post

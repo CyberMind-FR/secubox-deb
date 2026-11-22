@@ -55,6 +55,8 @@ profile secubox-ai-api {
   # tmp/ : temporaires de SQLite (SQLITE_TMPDIR de l'unité ; ni /tmp ni /var/tmp ne sont ouverts).
   /var/lib/secubox/ai/ r,
   /var/lib/secubox/ai/** rwk,
+  # Tour Nuclei (#3862) : candidats.json et etat.json n'appartiennent qu'au collecteur.
+  deny /var/lib/secubox/ai/nuclei/** w,
 
   # Sa socket (servie à nginx).
   /run/secubox/ r,

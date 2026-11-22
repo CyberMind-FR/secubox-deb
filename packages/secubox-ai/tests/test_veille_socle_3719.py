@@ -34,7 +34,7 @@ def test_migrations_idempotentes_et_sauvegarde(tmp_path):
     assert db.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
     assert db.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert base.migrer(db, MIGRATIONS) == []                       # rien à refaire
-    assert db.execute("SELECT version FROM schema_migrations ORDER BY 1").fetchall() == [(1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (10,), (11,)]
+    assert db.execute("SELECT version FROM schema_migrations ORDER BY 1").fetchall() == [(1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (10,), (11,), (12,)]
     assert not list(tmp_path.glob("veille.db.avant-*"))            # base neuve : rien à sauvegarder
     db.execute("INSERT INTO curseurs(source, etat) VALUES ('waf_alertes', 'ok')")
     db.commit()
@@ -46,7 +46,7 @@ def test_migrations_idempotentes_et_sauvegarde(tmp_path):
         (dossier / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     (dossier / "0098-test.sql").write_text("CREATE TABLE essai (x INTEGER);", encoding="utf-8")
     db = base.ouvrir(chemin, dossier)
-    assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 98]
+    assert [v for (v,) in db.execute("SELECT version FROM schema_migrations ORDER BY 1")] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 98]
     sauv = list(tmp_path.glob("veille.db.avant-*"))
     assert [s.name for s in sauv] == ["veille.db.avant-0098"]
     ancienne = sqlite3.connect(sauv[0])

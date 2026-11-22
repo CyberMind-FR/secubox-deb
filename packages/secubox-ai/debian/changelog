@@ -1,3 +1,27 @@
+secubox-ai (2.1.0-1~trixie1) trixie; urgency=medium
+
+  * Tour de filtres WAF Nuclei (ref #3862), porté du POC gk0
+    (relais/filtres.py) : mêmes identifiants, empreintes et versions, les filtres déjà posés par gk0 sur gk2
+    sont reconnus et adoptés, jamais doublés ni retirés.
+  * Collecteur SANS CLÉ secubox-ai-nuclei.service (oneshot) + secubox-ai-nuclei.timer (horaire) : dépôt git
+    --depth 1 borné, KEV et EPSS en cache 24 h, candidats.json et etat.json (atomiques, 0640, bornés) dans
+    /var/lib/secubox/ai/nuclei ; profil AppArmor secubox-ai-nuclei en enforce.
+  * Veille : seconde source de la boucle apprentissage, réseau inchangé (gk2 seul) ; candidats.json revalidé en
+    entier ; observation, suspension ou SADE observe : aucun envoi ; lots signés ai-filtres ; migration 0012
+    (filtres.origine, version, adopte).
+  * Interrupteur [filtres] nuclei = true dans /etc/secubox/ai.toml, éteint par défaut ; GET /veille/etat expose
+    tour_nuclei.
+  * GET /ai/filtres lu jusqu'à 8 Mio (64 Kio rendait le rapprochement impossible avec les filtres de gk0).
+  * Dépendances : git, python3-yaml.
+  * Relecture 1 (ref #3862) : refus `chemin_legitime` des pages d'accueil et de connexion et des modèles de simple
+    détection (faux positif de production ia-cve-2025-8110-c109f2 = /user/login) ; liste de refus
+    /etc/secubox/ai/filtres-refuses.txt ; compte dédié secubox-ai-nuclei ; candidats.json ouvert O_NONBLOCK, droits et
+    propriétaire vérifiés, imbrication refusée, lu après la surveillance ; git durci ; plages privées fermées au
+    collecteur ; rapprochement par version ; pas de renvoi dans l'heure d'un plafond de gk2 ; candidats de plus de
+    48 h ignorés ; erreurs KEV/EPSS et git journalisées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Sun, 22 Nov 2026 12:00:00 +0100
+
 secubox-ai (2.0.1-1~trixie1) trixie; urgency=medium
 
   * AppArmor secubox-ai-veille (ref #3723) : audit.log en `w` et non `a` ; le

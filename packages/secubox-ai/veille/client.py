@@ -233,7 +233,8 @@ class ClientGk2:
         return bool(self._cle_filtres)
 
     async def _filtres(self, methode: str, suffixe: str, octets: bytes,
-                       avant_envoi: Optional[Callable[[str, str], Awaitable[None]]] = None) -> dict:
+                       avant_envoi: Optional[Callable[[str, str], Awaitable[None]]] = None,
+                       taille_max: int = TAILLE_MAX_GESTE) -> dict:
         if not self._cle_filtres:
             raise ValueError("clé ai-filtres absente")
         jeton = frapper_jeton(self._cle_filtres, COMPTE_FILTRES, aud=self.aud, corps=octets,
@@ -251,7 +252,7 @@ class ClientGk2:
                                     + suffixe, content=octets or None)
         except httpx.HTTPError as e:
             raise ErreurGk2(None, e.__class__.__name__) from None
-        if len(r.content) > TAILLE_MAX_GESTE:
+        if len(r.content) > taille_max:
             raise ErreurGk2(None if r.status_code == 200 else r.status_code, "trop_gros")
         try:
             reponse = r.json()
@@ -281,5 +282,7 @@ class ClientGk2:
         return await self._filtres("DELETE", "/" + fid, b"")
 
     async def lister_filtres(self) -> dict:
-        """`GET /ai/filtres` (sans corps) : filtres de l'IA en vigueur sur gk2."""
-        return await self._filtres("GET", "", b"")
+        """`GET /ai/filtres` (sans corps) : filtres de l'IA en vigueur sur gk2. Borne de lecture (#3862) : celle des
+        lectures (8 Mio), non celle d'un geste (64 Kio) — gk2 porte déjà plusieurs centaines de filtres (~250 octets
+        chacun) posés par gk0, une liste qui dépasse 64 Kio rendait le rapprochement impossible."""
+        return await self._filtres("GET", "", b"", taille_max=TAILLE_MAX)

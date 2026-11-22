@@ -192,6 +192,7 @@ def _vue_etat(db) -> dict:
     # M6 : sans clé ai-lecture, la collecte est éteinte ; le rapprochement passe par la clé ai-ban (écrit par la veille)
     lecture = _json_etat(db, "cle_ai_lecture") or {"etat": "inconnu"}
     return {"suspension": s, "cle_ai_ban": cle, "cle_ai_lecture": lecture, "garde_espace": garde,
+            "tour_nuclei": _tour_nuclei(db),
             "sade_mode": releve.get("sade_mode") if isinstance(releve, dict) else None,
             "releve_lu_le": releve.get("lu_le") if isinstance(releve, dict) else None,
             "mode": politique.get("mode") if isinstance(politique, dict) else None, "plafonds": plafonds,
@@ -209,6 +210,21 @@ def _partages_7j(db) -> dict:
     n = db.execute("SELECT COUNT(*) FROM propositions WHERE geste = 'partager' AND etat = 'faite' AND maj_le >= ?",
                    (depuis,)).fetchone()[0]
     return {"partages": n, "revus": None, "contenus": None}
+
+
+def _tour_nuclei(db) -> dict:
+    """Tour de filtres Nuclei (#3862) : état publié par la veille (allumé ou éteint, dernier tour du collecteur et ses
+    compteurs, candidats lus, erreur) et filtres Nuclei par état ; `etat: inconnu` tant que la veille n'a rien publié,
+    `filtres: null` si la base n'est pas encore migrée (0012) — jamais un zéro inventé."""
+    t = _json_etat(db, "tour_nuclei")
+    t = dict(t) if isinstance(t, dict) else {"etat": "inconnu", "allume": None}
+    try:
+        n = dict(db.execute("SELECT etat, COUNT(*) FROM filtres WHERE origine = 'nuclei' GROUP BY etat").fetchall())
+        adoptes = db.execute("SELECT COUNT(*) FROM filtres WHERE origine = 'nuclei' AND adopte = 1").fetchone()[0]
+        t["filtres"] = {**n, "adoptes": adoptes}
+    except sqlite3.OperationalError:
+        t["filtres"] = None
+    return t
 
 
 @routeur.get("/veille/etat")

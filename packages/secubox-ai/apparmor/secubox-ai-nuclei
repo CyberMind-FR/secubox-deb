@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# Profil AppArmor ENFORCE du collecteur Nuclei (#3862), nommé par secubox-ai-nuclei.service. Python, git et ses
+# auxiliaires (git-remote-https), lecture d'ai.toml pour l'interrupteur, écriture du SEUL dossier nuclei. Ni clé, ni
+# secret, ni veille.db, ni journal d'audit.
+
+#include <tunables/global>
+
+profile secubox-ai-nuclei {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/openssl>
+  #include <abstractions/ssl_certs>
+
+  /usr/bin/python3* rix,
+  /usr/sbin/secubox-ai-nuclei r,
+  /usr/lib/secubox/ r,
+  /usr/lib/secubox/ai/ r,
+  /usr/lib/secubox/ai/veille/ r,
+  /usr/lib/secubox/ai/veille/** r,
+  /usr/lib/python3/dist-packages/** r,
+  /usr/lib/python3.*/** r,
+  /usr/local/lib/python3*/** r,
+
+  # Interrupteur [filtres] nuclei (lecture seule) ; rien d'autre sous /etc/secubox.
+  /etc/secubox/ r,
+  /etc/secubox/ai.toml r,
+  deny /etc/secubox/secrets/** rwklx,
+  deny /run/credentials/** rwklx,
+  deny /var/lib/secubox/ai/veille.db* rwklx,
+  deny /var/log/secubox/** w,
+
+  # git : le binaire, ses auxiliaires (remote-https, index-pack, fetch-pack…) et ses modèles de dépôt.
+  /usr/bin/git rix,
+  /usr/lib/git-core/ r,
+  /usr/lib/git-core/** rix,
+  /usr/share/git-core/ r,
+  /usr/share/git-core/** r,
+  @{PROC}/@{pid}/fd/ r,
+  @{PROC}/sys/kernel/random/uuid r,
+
+  # Le seul dossier inscriptible (dépôt, caches KEV/EPSS, versions, candidats.json, etat.json). « l » : git crée ses
+  # objets par lien puis renommage.
+  /var/lib/secubox/ai/ r,
+  /var/lib/secubox/ai/nuclei/ rw,
+  /var/lib/secubox/ai/nuclei/** rwkl,
+
+  network unix stream,
+  network unix dgram,
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+}
