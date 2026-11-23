@@ -6,5 +6,5 @@ registry_enabled = true
 # par navigateur sans toucher ce fichier : https://hall.<domaine>/?hall=v2
 hall_v2 = false
 
-# L'accueil du nom de nœud ([noeud] accueil, relais_api) n'est plus ici : /etc/secubox/noeud.toml, géré par
+# L'accueil du nom de nœud ([noeud] accueil, relais_api) n'est plus ici : /etc/secubox/noeud/noeud.toml, géré par
 # secubox-core depuis #3883 (repris une fois de cette section si elle existait).

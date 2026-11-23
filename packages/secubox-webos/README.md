@@ -31,7 +31,7 @@ disponible et bascule seul quand un service apprend à se résumer.
 
 L'accueil public du nom nu de la box (`<nœud>.<zone>` : le dé, `/api/v1/health`, relais optionnel fermé par défaut) et
 son relais ne sont plus à ce paquet : programme `secubox-noeud`, unités `secubox-noeud.path/.service` et réglages
-`/etc/secubox/noeud.toml` dans **secubox-core** (voir son README), route `GET|POST /api/v1/system/noeud/relais` dans
+`/etc/secubox/noeud/noeud.toml` dans **secubox-core** (voir son README), route `GET|POST /api/v1/system/noeud/relais` dans
 **secubox-system**. Une box sans le Hall sert donc son accueil. La montée vers 1.21.3 arrête et désactive les anciennes
 unités `secubox-webos-noeud.*` (preinst) ; le vhost, la route, l'état et la section `[noeud]` de `webos.toml` sont repris
 par le postinst du cœur. Le moteur et les faces du dé (`www/hall/sbx-dice.js`, `www/hall/dice/`) restent ici : ils

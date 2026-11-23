@@ -97,7 +97,7 @@ mot de passe par défaut est actif ou sans ancienne cible. La carte ne dépend p
 
 Même contrat JSON qu'avant. L'API (secubox, `NoNewPrivileges`) ne lance rien en root : elle dépose `<id>.demande` dans
 `/run/secubox/noeud`, traitée par `secubox-noeud.path` → `secubox-noeud traite` de **secubox-core ≥ 1.8.40** (voir son
-README : réglages `/etc/secubox/noeud.toml`, audit) ; résultat relu dans `/run/secubox/noeud-resultats/<id>.json`.
+README : réglages `/etc/secubox/noeud/noeud.toml`, audit) ; résultat relu dans `/run/secubox/noeud-resultats/<id>.json`.
 `secubox-noeud` absent (cœur trop ancien) : **404**, et la carte affiche « secubox-core trop ancien ». 503 si le dépôt
 est impossible, 504 sans réponse sous 30 s.
 

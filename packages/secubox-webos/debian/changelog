@@ -1,7 +1,7 @@
 secubox-webos (1.21.3-1~trixie1) trixie; urgency=medium
 
   * Accueil et relais du nom de nœud retirés de ce paquet (ref #3883) : ils
-    passent dans secubox-core (secubox-noeud, /etc/secubox/noeud.toml) et la
+    passent dans secubox-core (secubox-noeud, /etc/secubox/noeud/noeud.toml) et la
     route de la carte « Nom du nœud » dans secubox-system
     (/api/v1/system/noeud/relais). webos-noeud, ses unités, la page noeud et
     la route /api/v1/webos/noeud/relais sont retirés.
