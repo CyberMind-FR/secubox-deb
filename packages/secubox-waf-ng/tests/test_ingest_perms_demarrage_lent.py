@@ -118,3 +118,12 @@ def test_minuterie_de_garde_installee():
     assert "secubox-actord-ingest-perms /run/secubox/actord.sock actord-ingest garde" in svc and "Type=oneshot" in svc
     assert "OnUnitActiveSec=5min" in tmr and "WantedBy=timers.target" in tmr
     assert "secubox-actord-ingest-garde.timer" in (ici / "debian" / "rules").read_text()
+
+
+def test_postinst_active_les_minuteries_de_garde_et_d_indices():
+    """dh_installsystemd n'active pas une minuterie installée à la main : le postinst le fait (garde #3880, indices #3723)."""
+    post = (SCRIPT.parents[1] / "debian" / "postinst").read_text()
+    debut = post.index("for _u in secubox-waf-ng.service")
+    boucle = post[debut:post.index("done", debut)]
+    assert "secubox-actord-ingest-garde.timer" in boucle and "secubox-waf-indices.timer" in boucle
+    assert "systemctl start secubox-actord-ingest-garde.timer" in post
