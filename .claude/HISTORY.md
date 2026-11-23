@@ -46,7 +46,11 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   `secubox-noeud appliquer` relancé à la main → vhost régénéré par le cœur, dé depuis www/noeud, admin API 404, audité.
   gk7 : core + system seuls, vhost posé pour secubox-rpi.secubox.in (port 9080, pas de route HAProxy), relais fermé.
   Suites : un échec de domaine pendant l'install ne réessaie pas tout seul ; rendre_route écrit encore
-  /etc/secubox/waf/haproxy-routes.json par chemin (dossier secubox) ; gk7 s'appelle secubox-rpi pour secubox-domaine.
+  /etc/secubox/waf/haproxy-routes.json par chemin (dossier secubox).
+- gk7 renommé (accord du propriétaire) : domaine SecuBox secubox-rpi.secubox.in (resté de l'image, hostname déjà gk7) →
+  gk7.secubox.in dans secubox.conf ([global] domain, [api] sso_cookie_domain) et /etc/default/secubox (SECUBOX_HOSTNAME),
+  copies .avant-gk7-<epoch>. Vhost du nœud régénéré, auth et system relancés. Un nom de compte de users.json contient
+  encore secubox-rpi (laissé : identifiant de connexion). Aucun geste de renommage n'existe dans SecuBox.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
