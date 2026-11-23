@@ -25,3 +25,14 @@ admin_email         = "admin@cybermind.fr"
 [exposure]
 # public_hostname = ""  # absent = <nom>.<domaine de la box>, jamais gk2 (#1723)
 waf_inspect     = false        # video/uploads bypass the WAF (gitea pattern)
+
+# ── Direct (live) et rediffusions (#3890) ─────────────────────────────
+# `peertubectl direct activer` règle la section live de PeerTube par son API ;
+# la minuterie secubox-peertube-rediffusions.timer efface chaque nuit les
+# rediffusions plus vieilles que jours_conservation, sauf celles de la liste
+# de lecture privée « À garder » (compte root).
+[direct]
+jours_conservation      = 7    # rediffusion gardée N jours, puis effacée (auditée)
+duree_max_heures        = 6    # un direct oublié s'arrête seul ; 0 = illimité
+directs_max_instance    = 2    # directs existants au plus sur l'instance
+directs_max_utilisateur = 1    # directs existants au plus par compte

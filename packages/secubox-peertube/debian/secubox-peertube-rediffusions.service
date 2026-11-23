@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: PeerTube — purge quotidienne des rediffusions de directs (#3890).
+#
+# Efface les rediffusions de directs publiées depuis plus de [direct]
+# jours_conservation jours (/etc/secubox/peertube.toml, 7 par défaut) qui ne
+# sont pas dans la liste de lecture « À garder ». Chaque suppression est une
+# ligne de /var/log/secubox/audit.log ; un échec d'API n'efface rien.
+#
+# Pas de root : tout passe par l'API HTTP de PeerTube (aucun lxc-attach).
+# L'unité tourne sous `secubox`, le compte du module (celui du tableau de bord,
+# propriétaire du secret administrateur et du journal d'audit, 0640) :
+# exception écrite dans .claude/RULES-CODE.md § Exceptions (dette #3894).
+#
+# --minuterie : sans conteneur PeerTube ou avant `direct activer`, « rien à
+# faire » et sortie 0 ; seules les vraies erreurs d'API sortent en échec.
+[Unit]
+Description=SecuBox PeerTube — purge des rediffusions de directs non gardées
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3890
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+ExecStart=/usr/sbin/peertubectl rediffusions purger --minuterie
+TimeoutStartSec=900
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Le seul pair : l'API PeerTube du conteneur ([lxc] ip, 10.100.0.120 par
+# défaut). Une autre adresse est posée par le postinst dans un drop-in
+# (service.d/10-ip-lxc.conf), jamais ici à la main.
+IPAddressDeny=any
+IPAddressAllow=10.100.0.120/32
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=

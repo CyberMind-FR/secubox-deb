@@ -5,6 +5,9 @@ case "$1" in
     # Stop and disable service
     systemctl stop    secubox-peertube.service 2>/dev/null || true
     systemctl disable secubox-peertube.service 2>/dev/null || true
+    # Purge des rediffusions (#3890) : plus de minuterie sans le paquet.
+    systemctl stop secubox-peertube-rediffusions.timer 2>/dev/null || true
+    systemctl stop secubox-peertube-rediffusions.service 2>/dev/null || true
     # Reload nginx to remove location
     systemctl reload nginx 2>/dev/null || true
     ;;

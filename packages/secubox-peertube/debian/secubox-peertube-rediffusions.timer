@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: PeerTube — minuterie de la purge des rediffusions (#3890).
+[Unit]
+Description=SecuBox PeerTube — purge quotidienne des rediffusions de directs non gardées
+
+[Timer]
+# La nuit, hors des heures de direct ; rattrapée au démarrage si la box était éteinte.
+OnCalendar=*-*-* 04:20:00
+Persistent=true
+# #3355 : décalage aléatoire stable par box.
+RandomizedDelaySec=1800
+FixedRandomDelay=true
+
+[Install]
+WantedBy=timers.target
