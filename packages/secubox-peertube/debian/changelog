@@ -1,3 +1,20 @@
+secubox-peertube (1.7.0-1~trixie1) trixie; urgency=medium
+
+  * Direct (live) : « peertubectl direct activer|etat » règle la seule section
+    live de la configuration de l'instance par l'API d'administration
+    (rediffusion enregistrée, pas de transcodage du direct, 6 h au plus,
+    2 directs sur l'instance, 1 par compte), crée la liste de lecture privée
+    « À garder » du compte root ; audité (ref #3890).
+  * Rediffusions : « peertubectl rediffusions purger [--simuler] » et la
+    minuterie quotidienne secubox-peertube-rediffusions.timer effacent les
+    rediffusions de directs de plus de [direct] jours_conservation jours
+    (7 par défaut) absentes de « À garder » ; une ligne d'audit par
+    suppression, un échec d'API n'efface rien (ref #3890).
+  * La section [direct] de peertube.toml est conservée par le tableau de bord
+    quand il réécrit la configuration (ref #3890).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 12:43:49 +0100
+
 secubox-peertube (1.6.9-1~trixie1) trixie; urgency=medium
 
   * Backlog : un seul lxc-attach (dépassait le délai de 60 s sous charge) et coercition entière
