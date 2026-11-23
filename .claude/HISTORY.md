@@ -32,6 +32,13 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - secubox-system 1.13.3 (#3527, PR #3879) : Administration, services absents (not-found) retirés, état classé par l'API
   (actif, échec, arrêté, à la demande, terminé, désactivé). Déployé gk2 (admin = module dédié, relancé par le postinst) :
   400 services, un seul échec réel, secubox-actord-ingest. Consigne du propriétaire : travailler sur gk2, plus sur gk7.
+- Actor Intelligence muet 25 h sur gk2 (#3880) : le 22/11 actord a ouvert sa socket 18 min après son démarrage, l'attente
+  de 900 s a expiré, socket restée au groupe secubox, sbxwaf n'émettait plus (sans erreur). Réparé le 23/11 (relance de
+  l'unité). waf-ng 1.43.2 (PR #3881) : minuterie de garde toutes les 5 min ; 1.43.3 (PR #3882) : le postinst active la
+  garde et secubox-waf-indices (#3723, démarrée mais désactivée). gk2 : 1.43.2 installé, minuteries activées à la main ;
+  1.43.3 publié, à installer au prochain redémarrage du WAF (groupé).
+- gk7 : secubox-webos installé par erreur pour remplir la carte « Nom du nœud » ; c'est le Hall : retiré (purge) aussitôt,
+  nginx -t bon, racine et /admin/ en 200.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
