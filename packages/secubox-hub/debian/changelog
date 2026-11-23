@@ -1,3 +1,15 @@
+secubox-hub (1.12.60-1~trixie1) trixie; urgency=medium
+
+  * Pages d'erreur nginx (ref #3885) : toutes au dessin de la mire de
+    télévision validé, générées par scripts/pages-erreur.py (un modèle, une
+    table des codes). Nouvelle page 404 et snippet à part
+    secubox-errorpages-404.conf, jamais dans secubox-errorpages.conf : ce
+    dernier est inclus là où proxy_intercept_errors est actif, une 404 y
+    remplacerait le JSON des API. 503 : rafraîchissement 15 s gardé. Copies
+    .http jamais installées retirées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 11:07:18 +0100
+
 secubox-hub (1.12.59-1~trixie1) trixie; urgency=medium
 
   * Bouton d'état du module (#3812) : /shared/etat-module.js et

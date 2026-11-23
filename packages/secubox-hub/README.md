@@ -21,6 +21,8 @@ Central dashboard and control center
 - Service monitoring
 - Quick actions
 - Metrics
+- Pages d'erreur nginx (mire commune, #3885) : 404, 421, 500, 502, 503, 504 dans
+  `/etc/secubox/errorpages/` ; voir `errorpages/README.md`
 
 ## Installation
 
