@@ -51,8 +51,25 @@ _AC = re.compile(r"access-control:\s*(\S+)\s+([a-z_]+)$")
 _NAME = re.compile(r'name:\s*"?([^"\s]+)"?$')
 _VIEW_FIRST = re.compile(r"view-first:\s*(yes|no)")
 _NOM_ZONE = re.compile(r"[a-z0-9_.-]{1,253}|\.")
+# FORME COMPACTE d'une source (#3893) : des directives propres à SecuBox, jamais vues par Unbound (le compilateur les lit,
+# `developper` les déplie en mode direct). Un ancien secubox-core les refuse bruyamment (directive non reprise) au lieu
+# de les ignorer : une exemption n'est jamais perdue en silence.
+#   server:  `secubox-derogation-zone: "<d>."`  nom dérogé sans être déclaré ici (sa zone est dans une autre source) ;
+#            `secubox-derogation: <bloc> <type>` ≡ `local-zone-override: "<z>." <bloc> <type>` pour CHAQUE `local-zone`
+#            et `secubox-derogation-zone` du `server:` de ce fichier, dans l'ordre des noms (exemptions adultes : une
+#            ligne par adresse au lieu d'une par domaine et par adresse) ; elle suit toutes les zones du fichier.
+#   section `secubox-ensemble:` + `name: "<e>"` + des `local-zone:` : un ensemble de zones nommé, déclaré avant usage ;
+#   view:    `secubox-ensemble: "<e>"` ≡ les `local-zone:` de l'ensemble recopiées dans la vue (filtre web : les zones
+#            communes à plusieurs vues ne sont écrites qu'une fois).
+_DZ = re.compile(r'secubox-derogation-zone:\s*"([^"]+)"$')
+_DG = re.compile(r"secubox-derogation:\s*(\S+)\s+([a-z_]+)$")
+_ENS = re.compile(r'secubox-ensemble:\s*"([A-Za-z0-9_.-]{1,64})"$')
+_COMPACT = re.compile(r"^[ \t]*secubox-(derogation|derogation-zone|ensemble):", re.M)
+_NOM_ENSEMBLE = re.compile(r"[A-Za-z0-9_.-]{1,64}")
+_SECTIONS_SOURCE = ("server", "view", "secubox-ensemble")
 # Ce qu'une SOURCE peut contenir. Toute autre directive est refusée : rien ne se perd en silence.
-_PERMIS_SOURCE = ("local-zone:", "local-zone-override:", "access-control-view:", "name:", "view-first:")
+_PERMIS_SOURCE = ("local-zone:", "local-zone-override:", "access-control-view:", "name:", "view-first:",
+                  "secubox-derogation-zone:", "secubox-derogation:", "secubox-ensemble:")
 _DIRECTIVE = re.compile(r"[a-z-]{1,40}")              # ce qu'un message d'erreur cite d'une ligne : jamais le reste (relecture #3205)
 MAX_SOURCE = 512 * 1024 * 1024                        # 42 Mo pour webfilter sur gk2
 _ACTIONS_FERMEES = ("deny", "refuse")                 # le client n'est pas servi : ses étiquettes ne servent à rien
@@ -132,6 +149,10 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
         f = Path(f)
         est_source = f.name in sources
         section, vue = None, None
+        zones_fichier: List[str] = []                 # noms du `server:` de ce fichier (cible de `secubox-derogation`)
+        derogation_lue = False                        # une dérogation lue : plus aucune zone ne peut s'ajouter au fichier
+        ensembles: Dict[str, Dict[str, str]] = {}     # ensembles de zones de ce fichier
+        ens = None
         with (_ouvrir_source(f) if est_source else f.open(encoding="utf-8", errors="replace")) as fh:
             for n, ligne in enumerate(fh, 1):
                 s = ligne.strip()
@@ -139,14 +160,24 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                     continue
                 ou = f"{f.name}:{n}"
                 if not ligne[:1].isspace() and s.endswith(":") and re.fullmatch(r"[a-z-]+:", s):
-                    section, vue = s[:-1], None
-                    if est_source and section not in ("server", "view"):
+                    section, vue, ens = s[:-1], None, None
+                    if est_source and section not in _SECTIONS_SOURCE:
                         raise ErreurListes(f"{ou} : section « {_directive(section)} » non reprise par le compilateur")
                     continue
                 if est_source and not s.startswith(_PERMIS_SOURCE):
                     raise ErreurListes(f"{ou} : directive non reprise par le compilateur : {_directive(s)}")
                 reconnue = True
-                if section == "view":
+                if section == "secubox-ensemble" and est_source:
+                    m = _NAME.match(s)
+                    if m and ens is None:
+                        if m.group(1) in ensembles or not _NOM_ENSEMBLE.fullmatch(m.group(1)):
+                            raise ErreurListes(f"{ou} : ensemble déjà déclaré ou nom invalide")
+                        ens = ensembles[m.group(1)] = {}
+                    elif (m := _LZ.match(s)) and ens is not None:
+                        ens.setdefault(_nom(m.group(1)), sys.intern(m.group(2)))
+                    else:
+                        reconnue = False
+                elif section == "view":
                     m = _NAME.match(s)
                     if m and vue is None:
                         vue = m.group(1)
@@ -155,10 +186,24 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                         cfg.vues[vue]["first"] = m.group(1) == "yes"
                     elif (m := _LZ.match(s)) and vue:
                         cfg.vues[vue]["zones"].setdefault(_nom(m.group(1)), sys.intern(m.group(2)))
+                    elif est_source and (m := _ENS.match(s)) and vue:
+                        if m.group(1) not in ensembles:
+                            raise ErreurListes(f"{ou} : ensemble inconnu (il se déclare avant la vue qui l'emploie)")
+                        zv = cfg.vues[vue]["zones"]
+                        for z, t in ensembles[m.group(1)].items():      # la première déclaration gagne, comme des lignes recopiées
+                            zv.setdefault(z, t)
                     else:
                         reconnue = False
                 elif section != "server":
                     reconnue = False
+                elif est_source and (m := _DZ.match(s)):
+                    if derogation_lue:
+                        raise ErreurListes(f"{ou} : nom dérogé après une dérogation")
+                    zones_fichier.append(_nom(m.group(1)))
+                elif est_source and (m := _DG.match(s)):
+                    derogation_lue = True
+                    t = sys.intern(m.group(2))
+                    cfg.ov_par_bloc[sys.intern(_bloc_lu(m.group(1), ou))].update(dict.fromkeys(_ordre_noms(zones_fichier), t))
                 elif (m := _OV.match(s)):
                     z = _nom(m.group(1))
                     cfg.ov_par_bloc[sys.intern(_bloc_lu(m.group(2), ou))][z] = sys.intern(m.group(3))
@@ -166,6 +211,10 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                         cfg.ov_contexte.add(z)
                 elif (m := _LZ.match(s)):
                     z = _nom(m.group(1))
+                    if est_source:
+                        if derogation_lue:
+                            raise ErreurListes(f"{ou} : zone déclarée après une dérogation")
+                        zones_fichier.append(z)
                     if z not in cfg.zones:
                         cfg.zones[z] = sys.intern(m.group(2))
                         if est_source:
@@ -190,6 +239,62 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
                 if est_source and not reconnue:                 # préfixe permis, forme inattendue : jamais ignorée en silence
                     raise ErreurListes(f"{ou} : ligne non reconnue ({_directive(s)})")
     return cfg
+
+
+def _ordre_noms(noms: Iterable[str]) -> List[str]:
+    """Noms canoniques sans doublon, dans l'ordre où `secubox-derogation` les déplie (ordre des noms sans le point final :
+    celui de l'ancien rendu d'adult-sync, `sorted(adult)`)."""
+    return sorted(set(noms))
+
+
+def compacte(texte: str) -> bool:
+    """Vrai si une source porte au moins une directive de la forme compacte (#3893)."""
+    return bool(_COMPACT.search(texte))
+
+
+def developper(texte: str) -> str:
+    """Le texte qu'Unbound charge pour une source (mode direct) : la forme compacte (#3893) dépliée en directives Unbound,
+    une source sans directive compacte rendue TELLE QUELLE. À n'appeler que sur une source déjà acceptée par `lire`.
+    `secubox-derogation` déplie une dérogation par nom (`local-zone-override`, ligne de l'ancien rendu), `secubox-ensemble`
+    recopie ses zones dans la vue ; les lignes de déclaration (`secubox-derogation-zone`, section `secubox-ensemble`)
+    disparaissent."""
+    if not compacte(texte):
+        return texte
+    sortie = io.StringIO()
+    section = None
+    noms: Dict[str, str] = {}                        # nom canonique -> nom écrit (le premier), cible des dérogations
+    ensembles: Dict[str, List[str]] = {}
+    ens = None
+    for ligne in texte.splitlines(keepends=True):
+        s = ligne.strip()
+        if s and not ligne[:1].isspace() and re.fullmatch(r"[a-z-]+:", s):
+            section, ens = s[:-1], None
+            if section == "secubox-ensemble":
+                continue
+        elif section == "secubox-ensemble":
+            m = _NAME.match(s)
+            if m and ens is None:
+                ens = ensembles[m.group(1)] = []
+            elif (m := _LZ.match(s)) and ens is not None:
+                ens.append(f"    {s}\n")
+            continue
+        elif section == "server" and (m := _DZ.match(s)):
+            noms.setdefault(_nom(m.group(1)), m.group(1))
+            continue
+        elif section == "server" and (m := _DG.match(s)):
+            bloc_, type_ = m.group(1), m.group(2)
+            for z in _ordre_noms(noms):
+                sortie.write(f'    local-zone-override: "{noms[z]}" {bloc_} {type_}\n')
+            continue
+        elif section == "server" and (m := _LZ.match(s)):
+            noms.setdefault(_nom(m.group(1)), m.group(1))
+        elif section == "view" and (m := _ENS.match(s)):
+            if m.group(1) not in ensembles:
+                raise ErreurListes("ensemble inconnu (il se déclare avant la vue qui l'emploie)")
+            sortie.writelines(ensembles[m.group(1)])
+            continue
+        sortie.write(ligne)
+    return sortie.getvalue()
 
 
 # Ce que `lire` retient d'un fichier : un CONTEXTE qui ne change qu'ailleurs (local-data, interface:) ne change aucune décision.
@@ -243,6 +348,7 @@ class _Modele:
         self.cfg, self.vues_gardees = cfg, vues_gardees
         self.ov_par_bloc = cfg.ov_par_bloc
         self.noeuds = {*cfg.acl, *cfg.acv, *DEFAUTS_UNBOUND}            # éléments d'ACL de l'ANCIENNE configuration
+        self.ov_zones = set().union(*cfg.ov_par_bloc.values())          # zones dérogées pour au moins un bloc (`masque`)
 
     def noeud(self, net) -> Optional[str]:
         """L'élément d'ACL d'un client : le PLUS PRÉCIS de tous (access-control, vue). Unbound ne fait rien hériter d'un
@@ -288,6 +394,52 @@ class _Modele:
             if t is not None:
                 return t in BLOQUANTS
         return self.cfg.zones[z] in BLOQUANTS
+
+
+    def masque(self, q: str, profils: Iterable[Tuple[tuple, int]]) -> int:
+        """Union des masques des profils qui voient `q` bloqué : `decision` pour chaque profil, mais la chaîne des parents,
+        la zone globale et la zone de chaque vue calculées UNE fois par nom (#3893 : 12 profils sur gk2, deux tiers de la
+        compilation passaient à refaire ces recherches). Mêmes décisions, vérifié par le 92 identique octet pour octet."""
+        if q == ".":
+            chaine = ["."]
+        else:
+            e = q.split(".")
+            chaine = [".".join(e[i:]) for i in range(len(e))]
+            chaine.append(".")
+        zones, vues, ovb, ov_zones = self.cfg.zones, self.cfg.vues, self.ov_par_bloc, self.ov_zones
+        zg = next((p for p in chaine if p in zones), None)
+        zv_vue: Dict[str, Optional[str]] = {}
+        s = 0
+        for (vue, blocs, garde), msk in profils:
+            if vue and not garde and vue in vues:
+                v = vues[vue]
+                vz = v["zones"]
+                if vue in zv_vue:
+                    zv = zv_vue[vue]
+                else:
+                    zv = zv_vue[vue] = next((p for p in chaine if p in vz), None)
+                if zv is not None and not (v["first"] and vz[zv] in TRAVERSANTS):
+                    if vz[zv] in BLOQUANTS:
+                        s |= msk
+                    continue
+                if zv is None and not v["first"]:
+                    continue
+            if zg is None:
+                continue
+            if zg not in ov_zones:
+                if zones[zg] in BLOQUANTS:
+                    s |= msk
+                continue
+            for b in blocs:
+                t = ovb[b].get(zg)
+                if t is not None:
+                    bloque = t in BLOQUANTS
+                    break
+            else:
+                bloque = zones[zg] in BLOQUANTS
+            if bloque:
+                s |= msk
+        return s
 
 
 def decision_ancienne(cfg: Config, q: str, ip: str) -> bool:
@@ -338,12 +490,9 @@ def compiler(sources: Iterable[Path], contexte: Iterable[Path]) -> Tuple[str, di
 
     # S : classes qui voient chaque domaine bloqué ; X (rare) : classes à rendre transparentes sous un parent bloqué.
     S: Dict[str, int] = {}
+    liste_profils = list(profils.items())
     for d in candidats():
-        s = 0
-        for (vue, blocs, garde), masque in profils.items():
-            if m.decision(d, (vue, blocs), global_seul=garde):
-                s |= masque
-        S[d] = s
+        S[d] = m.masque(d, liste_profils)
     X: Dict[str, int] = {}
     for d, sd in S.items():
         nonb = toutes & ~sd

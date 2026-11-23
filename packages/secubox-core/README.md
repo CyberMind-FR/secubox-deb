@@ -162,6 +162,21 @@ the same inputs is retried after one hour, a source deposited during a compilati
 `/etc/secubox/dns-listes.toml`: `mode = "compile"` (default) or `mode = "direct"` (rollback: sources copied unchanged
 under their old names, no compilation).
 
+**Compact source form (1.8.43, #3893).** Directives only the compiler reads (never seen by Unbound; an older core
+rejects them loudly instead of dropping an exemption):
+
+- `server:` `secubox-derogation: <block> <type>` = one `local-zone-override: "<z>." <block> <type>` for every
+  `local-zone` and `secubox-derogation-zone: "<d>."` of the file's `server:` (in name order), declared after them —
+  adult exemptions: one line per exempted address instead of one per domain and address (gk2: 690 000 → 77 000 lines);
+- section `secubox-ensemble:` + `name: "<e>"` + `local-zone:` lines, declared before use; inside a `view:`,
+  `secubox-ensemble: "<e>"` = those zones copied into the view — webfilter writes each zone shared by several views
+  once (gk2: 863 674 → 317 057 lines).
+
+In `direct` mode the source is **unfolded** (`listes.developper`): the adult file becomes its old render byte for byte,
+each webfilter view carries the same zones (line order aside); a file without compact directives is copied unchanged,
+and the unfolded file left in `unbound.conf.d` is not re-adopted when going back to `compile`. Compiled output is
+byte-identical (gk2's real sources: 92 unchanged; compilation 30 s → 12 s on a workstation, 152 → 62 MB of sources).
+
 ## Accueil du nom de nœud (`secubox-noeud`, 1.8.40, #3821, #3824, #3883)
 
 Le nom nu de la box, `<nœud>.<zone>` (`secubox-domaine`, ex. `gk2.secubox.in`), montre **par défaut** le dé
