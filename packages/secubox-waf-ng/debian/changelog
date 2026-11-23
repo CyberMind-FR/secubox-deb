@@ -1,3 +1,11 @@
+secubox-waf-ng (1.43.3-1~trixie1) trixie; urgency=medium
+
+  * postinst (ref #3880, #3723) : les minuteries secubox-actord-ingest-garde
+    et secubox-waf-indices sont activées (elles étaient démarrées mais
+    désactivées, donc perdues au redémarrage).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 07:20:28 +0100
+
 secubox-waf-ng (1.43.2-1~trixie1) trixie; urgency=medium
 
   * Actor Intelligence (ref #3880) : minuterie secubox-actord-ingest-garde

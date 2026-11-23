@@ -327,8 +327,11 @@ PROTEGEES
     # Motif debhelper : un disable manuel de l'operateur survit a la mise a jour.
     # #3716 : rejeu des bans de bloc (suit nftables.service ; démarré par le bloc debhelper) et veille de 60 s
     # (minuterie : dh_installsystemd n'en génère rien, démarrée plus bas comme celle des campagnes).
+    # #3880 : garde du groupe de la socket d'Actor Intelligence et indicateurs des pairs (#3723) : minuteries elles aussi, restées
+    # désactivées (démarrées mais perdues au redémarrage) faute d'être dans cette liste.
     for _u in secubox-waf-ng.service secubox-waf-campaigns.timer \
-              secubox-waf-blocs.service secubox-waf-blocs-veille.timer; do
+              secubox-waf-blocs.service secubox-waf-blocs-veille.timer \
+              secubox-actord-ingest-garde.timer secubox-waf-indices.timer; do
       if deb-systemd-helper --quiet was-enabled "$_u"; then
         deb-systemd-helper enable "$_u" >/dev/null || true
       else
@@ -387,6 +390,7 @@ PROTEGEES
         install -d -m 0700 -o root -g root /var/log/sudo-io
       fi
       systemctl start secubox-waf-indices.timer 2>/dev/null || true
+      systemctl start secubox-actord-ingest-garde.timer 2>/dev/null || true
     fi
 
     # ── 7. #1240 : vhost dédié actor.<domaine> (Renseignement) ─────────────────
