@@ -572,7 +572,7 @@
             if (!e || e.erreur !== undefined) {
                 ['noDom', 'noServi', 'noRelais', 'noCible'].forEach(id => { $(id).textContent = '—'; });
                 sw.disabled = true; sw.setAttribute('aria-checked', 'false');
-                $('noNote').textContent = e && e.erreur === 404 ? 'Interrupteur absent : secubox-webos antérieur à 1.21.1.'
+                $('noNote').textContent = e && e.erreur === 404 ? 'Rien à afficher : secubox-webos n’est pas installé sur ce nœud (ou il est antérieur à 1.21.1). Sans lui, le nœud ne sert pas d’accueil public.'
                     : e && (e.erreur === 401 || e.erreur === 403) ? 'Réservé aux administrateurs.' : 'État du relais illisible (webos ou son unité root injoignable).';
                 return;
             }

@@ -123,7 +123,7 @@ def test_mot_de_passe_par_defaut_ou_sans_cible_interdit_d_ouvrir(navigateur):
     ctx.close()
 
 
-@pytest.mark.parametrize("statut,message", [(401, "Réservé aux administrateurs."), (404, "antérieur à 1.21.1")])
+@pytest.mark.parametrize("statut,message", [(401, "Réservé aux administrateurs."), (404, "secubox-webos n’est pas installé")])
 def test_sans_droit_ou_webos_ancien(navigateur, statut, message):
     ctx, p, err, posts = ouvre(navigateur, statut=statut)
     p.wait_for_function(f"document.getElementById('noNote').textContent.includes({json.dumps(message)})")

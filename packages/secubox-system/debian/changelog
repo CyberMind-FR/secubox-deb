@@ -1,3 +1,11 @@
+secubox-system (1.13.2-1~trixie1) trixie; urgency=medium
+
+  * Carte « Nom du nœud » (ref #3876) : sans secubox-webos, le message dit
+    qu'il n'est pas installé (ou trop ancien), au lieu de « antérieur à
+    1.21.1 » seulement.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 06:05:55 +0100
+
 secubox-system (1.13.1-1~trixie1) trixie; urgency=medium
 
   * Page Système : panneau « Nom du nœud » (ref #3824), interrupteur du relais
