@@ -11,7 +11,8 @@ Package: secubox-system
 Architecture: all
 Depends: ${misc:Depends},
          polkitd | policykit-1,
- secubox-core (>= 1.8.16~),
+# >= 1.8.40 : secubox-noeud (relais du nom de nœud, #3883), cible de /api/v1/system/noeud/relais.
+ secubox-core (>= 1.8.40~),
  jq,
  python3-psutil,
  python3-fastapi | python3-pip,
