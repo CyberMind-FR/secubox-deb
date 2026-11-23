@@ -13,6 +13,7 @@
   /_noeud/ par le vhost généré par secubox-noeud : une box sans le Hall sert son accueil (#3883).
 
   Aucune donnée, aucun appel réseau, aucune ressource extérieure : la page ne lit que son propre nom d'hôte.
+  En fond, la mire de télévision des pages d'erreur (#3885), sans texte et aria-hidden : SVG écrit dans la page (#3886).
   Sous prefers-reduced-motion le dé tourne au quart de vitesse (comportement du composant) ; localStorage
   sbx_de=fige le fige sur la face SecuBox.
 -->
@@ -39,6 +40,10 @@ main{position:relative;min-height:100vh;min-height:100dvh;display:flex;flex-dire
 .scene::after{content:"";position:absolute;left:18%;right:18%;bottom:-6%;height:9%;border-radius:50%;
   background:radial-gradient(ellipse,rgba(0,0,0,.55),transparent 70%)}
 sbx-dice{position:relative;z-index:1}
+/* #3886 : mire de télévision en fond (dessin des pages d'erreur #3885, sans texte), le dé au centre de son cercle. */
+.mire{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;color:var(--trait2)}
+.mire .fin{opacity:.55}
+main>*{position:relative;z-index:1}
 h1{font-size:clamp(2rem,7vw,4.2rem);font-weight:800;letter-spacing:.04em;line-height:1;min-width:0;overflow-wrap:anywhere}
 .zone{margin-top:.55em;font-size:clamp(.8rem,2.4vw,1rem);color:var(--doux);letter-spacing:.08em;overflow-wrap:anywhere}
 .marque{position:absolute;left:0;right:0;bottom:14px;font-size:.72rem;color:var(--faible);letter-spacing:.18em;text-transform:uppercase}
@@ -46,6 +51,29 @@ h1{font-size:clamp(2rem,7vw,4.2rem);font-weight:800;letter-spacing:.04em;line-he
 </style>
 </head>
 <body>
+<svg class="mire" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
+  <defs>
+    <g id="roue" fill="none" stroke="currentColor">
+      <circle r="92" stroke-width="4"/>
+      <circle r="20" stroke-width="4"/><circle r="9" fill="currentColor"/>
+      <g stroke-width="2.5">
+        <path d="M-88 -6H-24M-88 6H-24M24 -6H88M24 6H88M-6 -88V-24M6 -88V-24M-6 24V88M6 24V88"/>
+        <path d="M-80 -14H-26M-80 14H-26M26 -14H80M26 14H80M-14 -80V-26M14 -80V-26M-14 26V80M14 26V80"/>
+        <path d="M-58 -58L-40 -40M58 -58L40 -40M-58 58L-40 40M58 58L40 40"/>
+      </g>
+    </g>
+  </defs>
+  <rect x="10" y="10" width="1180" height="780" rx="44" fill="none" stroke="currentColor" stroke-width="6"/>
+  <rect x="34" y="34" width="1132" height="732" rx="24" fill="none" stroke="currentColor" stroke-width="2.5"/>
+  <g class="fin" stroke="currentColor" stroke-width="2">
+    <path d="M34 150H1166M34 300H1166M34 500H1166M34 650H1166"/>
+    <path d="M190 34V766M340 34V766M860 34V766M1010 34V766"/>
+  </g>
+  <use href="#roue" x="190" y="170"/><use href="#roue" x="1010" y="170"/>
+  <use href="#roue" x="190" y="630"/><use href="#roue" x="1010" y="630"/>
+  <circle cx="600" cy="400" r="350" fill="var(--fond)" stroke="currentColor" stroke-width="4"/>
+  <g class="fin" stroke="currentColor" stroke-width="2"><path d="M600 50V120M600 680V750M250 400H320M880 400H950"/></g>
+</svg>
 <main>
   <div class="scene"><sbx-dice id="de" size="280" speed="3" fov="40" role="img" aria-label="Dé SecuBox en rotation"></sbx-dice></div>
   <div>

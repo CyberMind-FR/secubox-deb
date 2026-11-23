@@ -269,3 +269,13 @@ def test_rendu_plein_ecran_sans_debordement(largeur, hauteur):
         finally:
             b.close()
     assert externes == []
+
+
+def test_mire_en_fond_sans_texte_ni_ressource_3886():
+    """#3886 : la mire de télévision est en fond (SVG écrit dans la page, aria-hidden), sans texte d'erreur ni ressource externe."""
+    import re
+    page = (Path(__file__).resolve().parents[1] / "www" / "noeud" / "index.html").read_text(encoding="utf-8")
+    svg = page[page.index('<svg class="mire"'):page.index("</svg>")]
+    assert 'aria-hidden="true"' in svg and "<text" not in svg and "Désolé" not in page
+    assert not re.search(r'(?:src|href)="https?://', page)
+    assert page.index('<svg class="mire"') < page.index("<main>")

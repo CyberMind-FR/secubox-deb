@@ -1,3 +1,11 @@
+secubox-core (1.8.41-1~trixie1) trixie; urgency=medium
+
+  * Accueil du nœud (ref #3886) : la mire de télévision des pages d'erreur
+    (#3885), sans texte, en fond de la page, le dé SecuBox au centre de son
+    cercle. SVG écrit dans la page, aucune ressource externe, CSP inchangée.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 11:17:19 +0100
+
 secubox-core (1.8.40-1~trixie1) trixie; urgency=medium
 
   * Accueil du nom de nœud dans le cœur (ref #3883) : secubox-noeud (ex
