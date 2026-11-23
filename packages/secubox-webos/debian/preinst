@@ -27,6 +27,20 @@ case "$1" in
         ;;
 esac
 
+# ACCUEIL DU NOM DE NŒUD PASSÉ DANS secubox-core (#3883). Avant 1.21.3, ce paquet livrait secubox-webos-noeud.path et
+# .service : on les arrête et désactive ICI, tant que leurs fichiers existent encore (le dépaquetage les retire). Le
+# vhost /etc/nginx/conf.d/secubox-noeud.conf, la route et l'état restent en place : secubox-noeud (cœur) les reprend.
+case "$1" in
+    upgrade)
+        if [ -n "${2:-}" ] && dpkg --compare-versions "$2" lt 1.21.3-1~trixie1~; then
+            if [ -d /run/systemd/system ]; then
+                systemctl disable --now secubox-webos-noeud.path >/dev/null 2>&1 || true
+                systemctl disable --now secubox-webos-noeud.service >/dev/null 2>&1 || true
+            fi
+        fi
+        ;;
+esac
+
 #DEBHELPER#
 
 exit 0

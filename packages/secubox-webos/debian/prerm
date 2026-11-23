@@ -2,10 +2,7 @@
 set -e
 if [ "$1" = "remove" ]; then
     systemctl stop secubox-webos.service || true
-    systemctl disable --now secubox-webos-noeud.path 2>/dev/null || true
-    systemctl disable secubox-webos-noeud.service 2>/dev/null || true
-    # #3821 : le vhost du nom de nœud part avec le paquet, et la route reprise retrouve son ancienne cible.
-    [ -x /usr/sbin/webos-noeud ] && { /usr/sbin/webos-noeud retirer || true; }
+    # #3883 : le vhost du nom de nœud n'est plus à ce paquet (secubox-core) : il reste servi.
     systemctl disable --now secubox-webos-vignettes.timer 2>/dev/null || true
 fi
 #DEBHELPER#

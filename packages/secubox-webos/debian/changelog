@@ -1,3 +1,17 @@
+secubox-webos (1.21.3-1~trixie1) trixie; urgency=medium
+
+  * Accueil et relais du nom de nœud retirés de ce paquet (ref #3883) : ils
+    passent dans secubox-core (secubox-noeud, /etc/secubox/noeud.toml) et la
+    route de la carte « Nom du nœud » dans secubox-system
+    (/api/v1/system/noeud/relais). webos-noeud, ses unités, la page noeud et
+    la route /api/v1/webos/noeud/relais sont retirés.
+  * preinst : arrête et désactive secubox-webos-noeud.path/.service avant la
+    montée ; postinst : filet (activation, dépôts /run/secubox/webos-noeud*).
+    Le vhost secubox-noeud.conf, la route et l'état sont repris par le cœur.
+  * Depends secubox-core (>= 1.8.40~).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 07:57:09 +0100
+
 secubox-webos (1.21.2-1~trixie1) trixie; urgency=medium
 
   * Hall : le dé SecuBox (sbx-dice) remplace le médaillon rond dans
