@@ -997,6 +997,41 @@ class Magasin:
         with self._cx() as cx:
             return cx.execute("DELETE FROM dnstv_counts WHERE jour<?", (limite,)).rowcount
 
+    # Remise à zéro (#3874) : les trois tables de statistiques, rien d'autre (l'état des appareils et les règles vivent ailleurs).
+    TABLES_STATS = {"counts": "dnstv_counts", "clients": "dnstv_clients", "recents": "dnstv_recents"}
+
+    def comptes(self) -> dict:
+        with self._cx() as cx:
+            return {k: int(cx.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]) for k, t in self.TABLES_STATS.items()}
+
+    def sauvegarder(self, destination: Path) -> None:
+        """Copie cohérente (API de sauvegarde SQLite, sûre en WAL) vers un fichier NEUF en 0640 : jamais un fichier existant ni un lien."""
+        fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
+        os.close(fd)
+        os.chmod(destination, 0o640)                     # l'umask ne relâche ni ne resserre ce mode
+        try:
+            src, dst = sqlite3.connect(self.chemin, timeout=10), sqlite3.connect(destination)
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+                src.close()
+        except BaseException:
+            for p in (destination, Path(f"{destination}-journal")):          # jamais une copie partielle comptée parmi les gardées
+                p.unlink(missing_ok=True)
+            raise
+
+    def vider(self) -> dict:
+        """Vide les trois tables en UNE transaction et rend les lignes retirées par table."""
+        with self._cx() as cx:
+            retirees = {k: int(cx.execute(f"DELETE FROM {t}").rowcount) for k, t in self.TABLES_STATS.items()}
+        cx = self._cx()
+        try:
+            cx.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            cx.close()
+        return retirees
+
 
 # ── services : « à qui » et « pour quoi » est un nom (l'équivalent DNS d'une classification DPI) ───────────────────────────
 TYPES_SERVICE = ("contenu", "publicite", "mesure_audience", "analytique", "qualite_video", "cdn", "connectivite", "systeme", "inconnu")

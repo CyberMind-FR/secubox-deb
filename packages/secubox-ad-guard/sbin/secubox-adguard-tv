@@ -455,6 +455,37 @@ def audit_classification(entree: str) -> int:
     return 0
 
 
+# Remise à zéro des statistiques (#3874) : l'API passe {"acteur", "lignes": {"counts","clients","recents"}, "sauvegarde"} ; root revalide
+# chaque champ (entiers positifs, nom de sauvegarde exact) et ajoute UNE ligne à audit.log. Rien d'autre n'est lu, écrit ni exécuté.
+RAZ_SAUVEGARDE_RE = re.compile(r"dnstv\.db\.avant-raz-[0-9]{1,12}")
+
+
+def audit_raz_stats(entree: str) -> int:
+    try:
+        r = json.loads(entree) if len(entree) <= AUDIT_ENTREE_MAX else None
+    except ValueError:
+        r = None
+    lignes = r.get("lignes") if isinstance(r, dict) else None
+    ok = (isinstance(r, dict) and set(r) == {"acteur", "lignes", "sauvegarde"}
+          and isinstance(r["acteur"], str) and ACTEUR_RE.fullmatch(r["acteur"]) is not None
+          and isinstance(lignes, dict) and set(lignes) == {"counts", "clients", "recents"}
+          and all(type(v) is int and 0 <= v < 1 << 40 for v in lignes.values())
+          and isinstance(r["sauvegarde"], str) and RAZ_SAUVEGARDE_RE.fullmatch(r["sauvegarde"]) is not None)
+    if not ok:
+        print("enregistrement d'audit refusé", file=sys.stderr)
+        return 2
+    ligne = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "module": "ad-guard-tv", "action": "raz-stats", **r}
+    try:
+        AUDIT.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(AUDIT, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640)
+        with os.fdopen(fd, "a", encoding="utf-8") as h:
+            h.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+    except OSError as e:
+        print(f"audit.log non écrit ({type(e).__name__})", file=sys.stderr)
+        return 1                                                        # l'API ne vide alors rien
+    return 0
+
+
 # Gestes de protection (#3374 lot 3) : pause, retour en observation, reprise, exception. L'API (ou le moteur) passe UN enregistrement
 # sur l'entrée standard ; root le revalide champ par champ et l'ajoute à audit.log avec l'ORIGINE (usager, admin, auto) et l'ACTEUR.
 GESTES_PROTECTION = ("pause", "observe", "reprise", "exception", "annule",      # annule : retour arrière après un échec
@@ -1261,7 +1292,7 @@ def main(argv: list[str], entree: str | None = None) -> int:
             return garde(argv)
     if len(argv) != 2 or argv[1] not in ("apply", "disable", "status", "regles-appliquer", "cache-dump", "audit-classification",
                                          "audit-protection", "conntrack-dump", "dpi-cibles", "ndpid-arreter", "ndpid-reprendre", "seuils",
-                                         "tri-appliquer"):
+                                         "tri-appliquer", "audit-raz-stats"):
         print(__doc__.split("\n\n")[0], file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not os.environ.get("SECUBOX_ADGUARD_TV_SANS_ROOT"):
@@ -1271,6 +1302,8 @@ def main(argv: list[str], entree: str | None = None) -> int:
         return etat_courant()
     if argv[1] == "audit-classification":
         return audit_classification(sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree)
+    if argv[1] == "audit-raz-stats":
+        return audit_raz_stats(sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree)
     if argv[1] == "audit-protection":
         return audit_protection(sys.stdin.read(AUDIT_ENTREE_MAX + 1) if entree is None else entree)
     if argv[1] == "seuils":

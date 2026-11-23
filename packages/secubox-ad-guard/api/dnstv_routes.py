@@ -15,9 +15,12 @@ import json
 import logging
 import os
 import re
+import shutil
+import sqlite3
 import subprocess
 import time
 import uuid
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -1285,3 +1288,67 @@ def classification_corriger(corps: ClassificationIn, jeton=Depends(require_jwt))
         dnstv_taxonomie.ecrire_manuelles(apres)
     logger.info("classification corrigée : %s (%s) %s -> %s", domaine, dnstv_appareils.mac_courte(m) if m else "maison", ancienne, corps.categorie)
     return dict(_taxonomie(apres).classer(domaine, [m] if m else []), mac=m)
+
+
+# ── Remise à zéro des statistiques (#3874) ─────────────────────────────────────────────────────────────────────────────────
+# Une box qui change de réseau garde les compteurs de l'ancien site (#3871). Geste administrateur, confirmé par le corps de la requête,
+# sauvegardé (les 3 dernières copies restent), audité AVANT d'être fait : un audit impossible ne vide rien. Les appareils déclarés,
+# les modes et les règles ne bougent pas : seuls les compteurs, la liste des clients vus et les requêtes récentes repartent de zéro.
+RAZ_PREFIXE = "dnstv.db.avant-raz-"
+RAZ_GARDEES = 3
+RAZ_MARGE = 64 << 20                  # 64 Mo laissés libres en plus de la copie
+
+
+class RazIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmer: bool
+
+
+def _elaguer_sauvegardes_raz() -> None:
+    copies = sorted((p for p in dnstv.DOSSIER_ETAT.glob(RAZ_PREFIXE + "*") if re.fullmatch(r"\d{1,12}", p.name[len(RAZ_PREFIXE):])),
+                    key=lambda p: int(p.name[len(RAZ_PREFIXE):]))
+    for p in copies[:-RAZ_GARDEES]:
+        try:
+            p.unlink()
+        except OSError as e:
+            logger.warning("copie %s non élaguée (%s)", p.name, type(e).__name__)
+
+
+@router.post("/stats/raz")
+def stats_raz(corps: RazIn, jeton=Depends(require_jwt)):
+    """Remet à zéro les statistiques TV Privacy (compteurs, clients vus, requêtes récentes ; cache des pubs bloquées)."""
+    if not corps.confirmer:
+        raise HTTPException(422, "confirmation requise")
+    m = _magasin()
+    with _verrou():
+        try:
+            avant = m.comptes()
+            taille = sum(p.stat().st_size for p in (m.chemin, Path(f"{m.chemin}-wal")) if p.exists())
+            libre = shutil.disk_usage(dnstv.DOSSIER_ETAT).free
+        except (OSError, sqlite3.Error) as e:
+            raise HTTPException(503, f"base des statistiques illisible ({type(e).__name__})") from e
+        if libre < 2 * taille + RAZ_MARGE:
+            raise HTTPException(507, "place insuffisante pour garder une copie : rien n'a été vidé")
+        nom = f"{RAZ_PREFIXE}{int(time.time())}"
+        try:
+            m.sauvegarder(dnstv.DOSSIER_ETAT / nom)
+        except FileExistsError as e:
+            raise HTTPException(409, "une remise à zéro vient d'être faite, réessayer dans une seconde") from e
+        except (OSError, sqlite3.Error) as e:
+            raise HTTPException(503, f"sauvegarde impossible ({type(e).__name__}) : rien n'a été vidé") from e
+        _ctl_entree("audit-raz-stats", json.dumps({"acteur": _acteur(jeton), "lignes": avant, "sauvegarde": nom}))
+        try:
+            retirees = m.vider()
+        except sqlite3.Error as e:                    # base occupée : l'audit dit « demandée », la copie reste, rien n'est perdu
+            logger.error("remise à zéro demandée par %s non faite (%s)", _acteur(jeton), type(e).__name__)
+            raise HTTPException(503, f"base occupée ({type(e).__name__}) : rien n'a été vidé, réessayer") from e
+        cache_pubs = True
+        for f in (dnstv_pubs.FICHIER, dnstv_pubs.MARQUE):    # le cache des pubs et sa marque : recalculé dès la passe suivante
+            try:
+                (dnstv.DOSSIER_ETAT / f).unlink(missing_ok=True)
+            except OSError as e:
+                cache_pubs = False
+                logger.warning("%s non retiré (%s)", f, type(e).__name__)
+        _elaguer_sauvegardes_raz()
+    logger.info("statistiques TV Privacy remises à zéro par %s : %s (sauvegarde %s)", _acteur(jeton), retirees, nom)
+    return {"ok": True, "retirees": retirees, "sauvegarde": nom, "cache_pubs": cache_pubs}

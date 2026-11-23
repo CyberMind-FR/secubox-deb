@@ -184,6 +184,7 @@ La page s'ouvre sur l'essentiel : l'état en une phrase, une carte par appareil 
 |---|---|---|
 | `GET /adblock-tv/gardien` | `require_lecture_nominative` | Guardian (#2287) : appareils connectés (NAC), DNS du jour, menaces 24 h (actord, `null` si indisponible), courbe 7 jours, types, catégories, appareils principaux ; cache 60 s. Page : `/guardian/` (`?embed=1` cardlet, `?demo=1` démonstration annoncée) |
 | `GET /adblock-tv/simple` | `require_lecture` | cartes par appareil (adresses regroupées), protégés, blocages 24 h |
+| `POST /adblock-tv/stats/raz` | `require_jwt` | remise à zéro des statistiques TV Privacy (#3874) : corps `{"confirmer": true}` exact ; copie `dnstv.db.avant-raz-<epoch>` (3 gardées), audit `raz-stats` par le contrôleur root avant de vider compteurs, clients vus et requêtes récentes ; appareils, modes et règles inchangés. Bouton : onglet Diagnostic |
 | `POST /adblock-tv/simple/appareils/{nom}/protection` | `require_jwt` | `{"actif": bool}` ; applique puis relit le drop-in Unbound ; réponse `verifie` / `ecart` |
 | `GET /adblock-tv/simple/suspects?minutes=60` | `require_lecture` | noms servis qui ressemblent à une pub (mot entier dans un libellé), hors bloqués et jugés légitimes |
 | `POST /adblock-tv/simple/suspects/legitime` | `require_jwt` | `{"domaine": ...}` ; mémorisé dans `suspects-ignores.json` (500 au plus) |
