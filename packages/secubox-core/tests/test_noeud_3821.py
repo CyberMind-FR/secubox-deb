@@ -279,3 +279,20 @@ def test_mire_en_fond_sans_texte_ni_ressource_3886():
     assert 'aria-hidden="true"' in svg and "<text" not in svg and "Désolé" not in page
     assert not re.search(r'(?:src|href)="https?://', page)
     assert page.index('<svg class="mire"') < page.index("<main>")
+
+
+def test_chemin_inconnu_du_nom_public_rend_la_404_a_la_mire_3885(box):
+    """#3885 : tout chemin inconnu du nom public rend la page 404 à la mire, servie en interne avec la CSP de l'accueil ;
+    le vhost n'intercepte jamais les réponses relayées (pas de proxy_intercept_errors)."""
+    assert box.appliquer() == 0
+    c = conf(box)
+    assert "error_page 404 /_noeud/404.html;" in c
+    bloc = c[c.index("location = /_noeud/404.html {"):]
+    bloc = bloc[:bloc.index("}")]
+    assert "internal;" in bloc and "/noeud/404.html;" in bloc and "Content-Security-Policy" in bloc
+    assert "proxy_intercept_errors" not in c
+    page = (PKG / "www" / "noeud" / "404.html").read_text(encoding="utf-8")
+    assert "404 · CETTE PAGE N’EXISTE PAS" in page or "404 · CETTE PAGE N'EXISTE PAS" in page
+    assert "<script" not in page and not re.search(r'(?:src|href)="https?://', page)
+    regles = (PKG / "debian" / "rules").read_text(encoding="utf-8")
+    assert "www/noeud/404.html" in regles

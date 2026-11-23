@@ -495,11 +495,12 @@ def test_de_livre_par_le_coeur_identique_a_sa_source(tmp_path):
     rules = (PKG / "debian/rules").read_text()
     lignes = [x.strip() for x in rules.splitlines()
               if x.strip().startswith("install ") and "usr/share/secubox/www/noeud" in x]
-    assert len(lignes) == 4
+    assert len(lignes) == 5                                   # page, 404 (#3885), moteur, dossier et faces du dé
     script = "\n".join(x.replace("debian/secubox-core/", f"{tmp_path}/") for x in lignes)
     subprocess.run(["bash", "-euc", script], cwd=PKG, check=True, timeout=30)
     livre = tmp_path / "usr/share/secubox/www/noeud"
     assert (livre / "index.html").read_bytes() == PAGE.read_bytes()
+    assert (livre / "404.html").read_bytes() == (PKG / "www" / "noeud" / "404.html").read_bytes()
     assert (livre / "sbx-dice.js").read_bytes() == (HALL / "sbx-dice.js").read_bytes()
     faces = sorted(p.name for p in (HALL / "dice").glob("*.jpg"))
     assert faces == [f"face-{i}.jpg" for i in range(6)]

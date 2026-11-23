@@ -48,6 +48,7 @@ def test_verifier_detecte_une_page_modifiee_ou_absente(tmp_path):
 def test_toutes_les_sorties_attendues():
     attendus = {f"packages/secubox-hub/errorpages/{c}.html" for c in (404, 421, 500, 502, 503, 504)}
     attendus |= {f"packages/secubox-haproxy/errors/{c}.http" for c in (400, 403, 408, 500, 502, 503, 504)}
+    attendus.add("packages/secubox-core/www/noeud/404.html")                # nom public des nœuds (vhost secubox-noeud)
     attendus |= {f"packages/secubox-toolbox-ng/cmd/sbxwaf/templates/{n}.html"
                  for n in ("error-502", "error-503", "error-504", "waf-avertissement", "waf-banni")}
     assert {p.chemin for p in pe.PAGES} == attendus

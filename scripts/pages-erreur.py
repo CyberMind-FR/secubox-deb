@@ -220,6 +220,8 @@ def _http(statut: str, cache: str) -> tuple[str, ...]:
 PAGES: tuple[Page, ...] = (
     # nginx (snippets/secubox-errorpages.conf, secubox-errorpages-404.conf)
     Page(f"{HUB}/404.html", E["404"]),
+    # Accueil du nom de nœud (secubox-core, vhost généré par secubox-noeud) : tout chemin inconnu du nom public (#3885)
+    Page("packages/secubox-core/www/noeud/404.html", E["404"]),
     Page(f"{HUB}/421.html", E["421"]),
     Page(f"{HUB}/500.html", E["500"]),
     Page(f"{HUB}/502.html", E["502"]),
