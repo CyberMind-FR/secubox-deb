@@ -3,13 +3,13 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 [Unit]
-Description=SecuBox WebOS : demandes de l API sur le relais du nom de noeud (#3824)
+Description=SecuBox : demandes de l API sur le relais du nom de noeud (#3824, #3883)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3824
 
 [Path]
-# L API webos (secubox, NoNewPrivileges) depose <id>.demande ici ; cette unite root la traite.
-DirectoryNotEmpty=/run/secubox/webos-noeud
-Unit=secubox-webos-noeud.service
+# L API system (secubox, NoNewPrivileges) depose <id>.demande ici ; cette unite root la traite.
+DirectoryNotEmpty=/run/secubox/noeud
+Unit=secubox-noeud.service
 
 [Install]
 WantedBy=paths.target

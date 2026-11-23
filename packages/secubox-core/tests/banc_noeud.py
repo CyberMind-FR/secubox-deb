@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""Banc commun des tests du nom de nœud (#3821, #3824) : `webos-noeud` chargé par son chemin, une box en miniature
+"""Banc commun des tests du nom de nœud (#3821, #3824, #3883) : `secubox-noeud` chargé par son chemin, une box en miniature
 (arbres nginx, table sbxwaf, réglages, état, audit ; commandes enregistrées), et un client HTTP minimal."""
 import json
 import socket
@@ -18,21 +18,24 @@ import pytest
 
 PKG = Path(__file__).resolve().parents[1]
 RACINE = PKG.parents[1]
-SCRIPT = PKG / "sbin" / "webos-noeud"
+SCRIPT = PKG / "sbin" / "secubox-noeud"
 PAGE = PKG / "www" / "noeud" / "index.html"
+# Source du moteur et des faces du dé : le Hall (debian/rules de secubox-core les livre sous www/noeud/, #3883).
+HALL = RACINE / "packages" / "secubox-webos" / "www" / "hall"
 WAF_ROUTE = RACINE / "packages" / "secubox-core" / "usr" / "sbin" / "secubox-waf-route"
 DOM = "gk2.secubox.in"
 
 
 def charger():
-    loader = SourceFileLoader("webos_noeud", str(SCRIPT))
-    mod = module_from_spec(spec_from_loader("webos_noeud", loader))
+    loader = SourceFileLoader("secubox_noeud", str(SCRIPT))
+    mod = module_from_spec(spec_from_loader("secubox_noeud", loader))
     loader.exec_module(mod)
     return mod
 
 
-@pytest.fixture
-def box(tmp_path, monkeypatch):
+@pytest.fixture(name="box")
+def box_noeud(tmp_path, monkeypatch):
+    # Fixture « box » importée par les modules de tests du nœud : elle y masque celle de conftest.py (sessions, #1607).
     """Une box en miniature : arbres nginx, table sbxwaf, réglages, état, audit ; commandes enregistrées."""
     m = charger()
     for d in ("etc/nginx/sites-enabled", "etc/nginx/conf.d", "etc/secubox/waf", "var/log/secubox"):
@@ -45,10 +48,10 @@ def box(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "FORMAT_HOTES", str(tmp_path / "etc/nginx/conf.d/secubox-hosts-log.conf"))
     monkeypatch.setattr(m, "ROUTES", str(routes))
     monkeypatch.setenv("SBX_WAF_ROUTES", str(routes))
-    monkeypatch.setattr(m, "REGLAGES", str(tmp_path / "etc/secubox/webos.toml"))
+    monkeypatch.setattr(m, "REGLAGES", str(tmp_path / "etc/secubox/noeud.toml"))
     monkeypatch.setattr(m, "HAPROXY_TOML", str(tmp_path / "etc/secubox/haproxy.toml"))
-    monkeypatch.setattr(m, "ETAT_DIR", str(tmp_path / "var/lib/secubox-webos-noeud"))
-    monkeypatch.setattr(m, "ETAT", str(tmp_path / "var/lib/secubox-webos-noeud/etat.json"))
+    monkeypatch.setattr(m, "ETAT_DIR", str(tmp_path / "var/lib/secubox-noeud"))
+    monkeypatch.setattr(m, "ETAT", str(tmp_path / "var/lib/secubox-noeud/etat.json"))
     monkeypatch.setattr(m, "AUDIT", str(tmp_path / "var/log/secubox/audit.log"))
     monkeypatch.setattr(m, "domaine", lambda: DOM)
     monkeypatch.setattr(m, "mot_de_passe_change", lambda: True)

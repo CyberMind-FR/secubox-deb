@@ -4,23 +4,24 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """
-SecuBox-Deb :: webos — accueil du NOM DE NŒUD (#3821), API fermées sur ce nom (#3824)
+SecuBox-Deb :: core — accueil du NOM DE NŒUD (#3821), API fermées sur ce nom (#3824), dans le cœur (#3883)
 CyberMind — https://cybermind.fr
 
 Le nom nu d'une box, `<nœud>.<zone>` (`secubox-domaine`, ex. gk2.secubox.in), est celui que son frontal expose en
 premier. Il ne servait rien : sur gk2 une route posée à la main l'envoyait vers un serveur nginx sans nom (:8000) qui
 rend 404 à « / » ; ailleurs il n'avait pas de route du tout. Ce script lui donne, PAR DÉFAUT et sur chaque box, une page
-d'accueil : le dé SecuBox en plein écran (moteur et faces du Hall, partagés).
+d'accueil : le dé SecuBox en plein écran (moteur et faces du Hall, livrés avec la page par secubox-core : une box
+sans le Hall, sans secubox-webos, sert son accueil, #3883).
 
-    webos-noeud appliquer   (postinst) déclare le vhost nginx, la route sbxwaf et le vhost HAProxy
-    webos-noeud retirer     (postrm)   retire le vhost et rend à la route son ancienne cible si on l'avait reprise
-    webos-noeud etat        ce qui est en place, en JSON
-    webos-noeud relais activer|desactiver [acteur]   ouvre / ferme le relais des autres chemins (#3824)
-    webos-noeud relais etat                          l'état du relais, en JSON
-    webos-noeud prepare | traite   (secubox-webos-noeud.service, root) dépôt des demandes de l'API et leur traitement
+    secubox-noeud appliquer   (postinst) déclare le vhost nginx, la route sbxwaf et le vhost HAProxy
+    secubox-noeud retirer     (prerm)    retire le vhost et rend à la route son ancienne cible si on l'avait reprise
+    secubox-noeud etat        ce qui est en place, en JSON
+    secubox-noeud relais activer|desactiver [acteur]   ouvre / ferme le relais des autres chemins (#3824)
+    secubox-noeud relais etat                          l'état du relais, en JSON
+    secubox-noeud prepare | traite   (secubox-noeud.service, root) dépôt des demandes de l'API et leur traitement
 
 RÈGLES, dans l'ordre :
-  1. `[noeud] accueil = false` dans /etc/secubox/webos.toml : rien n'est posé, ce qui l'avait été est retiré.
+  1. `[noeud] accueil = false` dans /etc/secubox/noeud.toml : rien n'est posé, ce qui l'avait été est retiré.
   2. CE QUI EST EXPLICITE GAGNE. Un serveur nginx qui nomme déjà ce domaine (server_name exact ou `.domaine`) : rien.
      Une route sbxwaf vers une autre cible que 9080 qui SERT quelque chose à « / » : rien. Seule une ancienne cible
      qui répond 404 à « / » est reprise.
@@ -28,7 +29,7 @@ RÈGLES, dans l'ordre :
      ressources sous /_noeud/ et `/api/v1/health` (relayé à l'ancienne cible s'il y en a une, sinon un 200 JSON local) ;
      TOUT LE RESTE rend 404. Relayer les autres chemins à l'ancienne cible (sur gk2 : l'API admin, metrics,
      metablogizer…) est une OPTION, fermée par défaut : `[noeud] relais_api = true`, que l'administrateur ouvre ou
-     ferme depuis la page Système (API webos, require_jwt) ; chaque bascule est auditée. L'ouvrir est refusé tant que
+     ferme depuis la page Système (API system, require_jwt) ; chaque bascule est auditée. L'ouvrir est refusé tant que
      le mot de passe admin par défaut n'est pas prouvé changé (#3401).
   4. LE WAF RESTE SUR LE CHEMIN. La route va vers nginx :9080 par sbxwaf comme tout vhost ; jamais de contournement.
   5. Aucune NOUVELLE exposition publique tant que le mot de passe admin par défaut n'est pas prouvé changé (#3401) :
@@ -49,7 +50,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 
-MODULE = "webos-noeud"
+MODULE = "noeud"
 PORT = 9080
 WWW = "/usr/share/secubox/www"
 # Racine substituée (tests seulement) : honorée HORS root uniquement.
@@ -61,16 +62,16 @@ CONF = R + "/etc/nginx/conf.d/secubox-noeud.conf"
 DOSSIERS_NGINX = (R + "/etc/nginx/sites-enabled", R + "/etc/nginx/conf.d")
 FORMAT_HOTES = R + "/etc/nginx/conf.d/secubox-hosts-log.conf"   # log_format sbx_host (secubox-metrics)
 ROUTES = os.environ.get("SBX_WAF_ROUTES", R + "/etc/secubox/waf/haproxy-routes.json")
-REGLAGES = R + "/etc/secubox/webos.toml"
+REGLAGES = R + "/etc/secubox/noeud.toml"
 HAPROXY_TOML = R + "/etc/secubox/haproxy.toml"
-ETAT_DIR = R + "/var/lib/secubox-webos-noeud"
+ETAT_DIR = R + "/var/lib/secubox-noeud"
 ETAT = ETAT_DIR + "/etat.json"
 AUDIT = R + "/var/log/secubox/audit.log"
 MDP_DEFAUT_PY = "/usr/lib/python3/dist-packages/secubox_core/mot_de_passe_defaut.py"
-# Demandes de l'API webos (#3824) : dépôt root:secubox 1770 (l'API dépose), résultats root:secubox 0750 (l'API lit).
+# Demandes de l'API system (#3824, #3883) : dépôt root:secubox 1770 (l'API dépose), résultats root:secubox 0750 (l'API lit).
 # Créés par `prepare`, en root, jamais par tmpfiles (#3172) ; un lien à leur place est retiré, jamais suivi.
-DEMANDES = R + "/run/secubox/webos-noeud"
-RESULTATS = R + "/run/secubox/webos-noeud-resultats"
+DEMANDES = R + "/run/secubox/noeud"
+RESULTATS = R + "/run/secubox/noeud-resultats"
 TAILLE_DEMANDE = 512
 NOM_DEMANDE = re.compile(r"^[a-f0-9]{16}\.demande$")
 ACTEUR = re.compile(r"^[A-Za-z0-9_.@-]{1,64}$")
@@ -79,7 +80,14 @@ NGINX_T_PAR_SYSTEMD = os.environ.get("SBX_NOEUD_UNITE") == "1"
 
 DOMAINE = re.compile(r"^(?=.{4,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
 SERVER_NAME = re.compile(r"\bserver_name\s+([^;]+);")
-ENTETE = "# GÉNÉRÉ par /usr/sbin/webos-noeud (secubox-webos, #3821)"
+ENTETE = "# GÉNÉRÉ par /usr/sbin/secubox-noeud (secubox-core, #3821)"
+# Le même vhost, posé par secubox-webos avant #3883 : il reste le nôtre (régénéré, retiré, jamais laissé orphelin).
+ENTETE_WEBOS = "# GÉNÉRÉ par /usr/sbin/webos-noeud (secubox-webos, #3821)"
+
+
+def est_le_notre(texte: str) -> bool:
+    """Le vhost porte notre en-tête, ou celui de secubox-webos d'avant #3883 (repris tel quel à la montée)."""
+    return texte.startswith((ENTETE, ENTETE_WEBOS))
 
 
 def log(msg: str) -> None:
@@ -120,7 +128,7 @@ def domaine() -> str:
 
 
 def accueil_voulu() -> bool:
-    """`[noeud] accueil` de webos.toml, vrai par défaut. Un fichier illisible ne désactive rien."""
+    """`[noeud] accueil` de noeud.toml, vrai par défaut. Un fichier illisible ne désactive rien."""
     try:
         import tomllib
         with open(REGLAGES, "rb") as fh:
@@ -134,7 +142,7 @@ def accueil_voulu() -> bool:
 
 
 def relais_voulu() -> bool:
-    """`[noeud] relais_api` de webos.toml, FAUX par défaut (#3824) : seul `true` ouvre. Illisible : fermé."""
+    """`[noeud] relais_api` de noeud.toml, FAUX par défaut (#3824) : seul `true` ouvre. Illisible : fermé."""
     try:
         import tomllib
         with open(REGLAGES, "rb") as fh:
@@ -284,8 +292,8 @@ def rendre(dom: str, repli: tuple[str, int] | None, journal_hotes: bool, relais:
            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
     return f"""{ENTETE} — ne pas éditer : réécrit à chaque configuration du paquet.
 # Accueil du nom de nœud : le dé SecuBox en plein écran sur « / » EXACT, sa santé, rien d'autre (#3824).
-# Désactiver : [noeud] accueil = false dans /etc/secubox/webos.toml, puis `webos-noeud appliquer`.
-# Relais des autres chemins vers l'ancienne cible : page Système, ou `webos-noeud relais activer|desactiver`.
+# Désactiver : [noeud] accueil = false dans /etc/secubox/noeud.toml, puis `secubox-noeud appliquer`.
+# Relais des autres chemins vers l'ancienne cible : page Système, ou `secubox-noeud relais activer|desactiver`.
 server {{
     listen {PORT};
     server_name {dom};
@@ -298,14 +306,14 @@ server {{
         add_header Referrer-Policy "no-referrer" always;
         add_header Cache-Control "no-cache" always;
     }}
-    # Le moteur et les six faces du Hall, partagés (jamais recopiés).
+    # Le moteur et les six faces du dé (source : le Hall), livrés avec la page par secubox-core (#3883).
     location = /_noeud/sbx-dice.js {{
-        alias {WWW}/hall/sbx-dice.js;
+        alias {WWW}/noeud/sbx-dice.js;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Cache-Control "no-cache" always;
     }}
     location ^~ /_noeud/dice/ {{
-        alias {WWW}/hall/dice/;
+        alias {WWW}/noeud/dice/;
         add_header X-Content-Type-Options "nosniff" always;
     }}
 {sante}{reste}}}
@@ -357,7 +365,7 @@ def poser_conf(texte: str) -> bool:
 def retirer_conf() -> bool:
     try:
         with open(CONF, encoding="utf-8") as fh:
-            if not fh.readline().startswith(ENTETE):
+            if not est_le_notre(fh.readline()):
                 log(f"{CONF} n'est pas le nôtre : laissé tel quel")
                 return False
     except FileNotFoundError:
@@ -517,7 +525,7 @@ CLE_RELAIS = re.compile(r"^\s*relais_api\s*=")
 
 
 def reglage_avec_relais(texte: str, valeur: bool) -> str:
-    """Le texte de webos.toml avec `[noeud] relais_api = valeur`, le reste intact (commentaires compris)."""
+    """Le texte de noeud.toml avec `[noeud] relais_api = valeur`, le reste intact (commentaires compris)."""
     ligne = f"relais_api = {'true' if valeur else 'false'}"
     lignes = texte.splitlines()
     debut = next((i for i, x in enumerate(lignes) if SECTION.match(x)), None)
@@ -534,7 +542,7 @@ def reglage_avec_relais(texte: str, valeur: bool) -> str:
 
 
 def ecrire_reglage_relais(valeur: bool) -> tuple[str, int, tuple[int, int] | None] | None:
-    """Pose `relais_api` dans webos.toml, atomiquement (mode et propriétaire gardés). Rend de quoi le remettre :
+    """Pose `relais_api` dans noeud.toml, atomiquement (mode et propriétaire gardés). Rend de quoi le remettre :
     (ancien texte, "" s'il n'existait pas ; mode ; propriétaire) ; None si refus (rien n'est écrit)."""
     import tomllib
     try:
@@ -605,7 +613,7 @@ def etat_relais() -> dict:
     dom = etat.get("domaine") if isinstance(etat.get("domaine"), str) and DOMAINE.match(etat["domaine"]) else None
     repli = cible(etat.get("route_precedente")) if etat.get("route_reprise") else None
     conf = lire_conf()
-    a_nous = conf is not None and conf.startswith(ENTETE)
+    a_nous = conf is not None and est_le_notre(conf)
     voulu = relais_voulu()
     vu = chemins_cible(*repli) if repli else {"source": None, "chemins": []}
     return {
@@ -624,7 +632,7 @@ def etat_relais() -> dict:
 def regenerer() -> bool:
     """Réécrit le vhost (s'il est le nôtre) selon le réglage courant ; ne touche ni la route ni HAProxy."""
     conf = lire_conf()
-    if conf is None or not conf.startswith(ENTETE):
+    if conf is None or not est_le_notre(conf):
         return True                     # rien en place : le réglage vaudra au prochain `appliquer`
     etat = lire_etat()
     dom = etat.get("domaine") if isinstance(etat.get("domaine"), str) and DOMAINE.match(etat["domaine"]) else ""
@@ -646,7 +654,7 @@ def relais(geste: str, acteur: str) -> int:
         return 3
     sauve = ecrire_reglage_relais(valeur)
     if sauve is None:
-        audit("relais_api", "echec", f"{geste} par {acteur} : webos.toml non modifiable, rien n'a changé")
+        audit("relais_api", "echec", f"{geste} par {acteur} : noeud.toml non modifiable, rien n'a changé")
         return 1
     if not regenerer():
         avant, mode, proprio = sauve
@@ -673,7 +681,7 @@ def relais(geste: str, acteur: str) -> int:
     return 0
 
 
-# ── Demandes de l'API webos (secubox-webos-noeud.path → .service, root) ──────────────────────────────────────
+# ── Demandes de l'API system (secubox-noeud.path → .service, root) ───────────────────────────────────────────
 
 def _gid_secubox() -> int:
     import grp
@@ -779,7 +787,7 @@ def traite() -> int:
     return 0
 
 
-USAGE = "usage: webos-noeud appliquer|retirer|etat|prepare|traite | relais activer|desactiver [acteur] | relais etat"
+USAGE = "usage: secubox-noeud appliquer|retirer|etat|prepare|traite | relais activer|desactiver [acteur] | relais etat"
 
 
 def main(argv: list[str]) -> int:

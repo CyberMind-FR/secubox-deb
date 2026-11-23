@@ -211,6 +211,19 @@ override_dh_auto_install:
 	               debian/secubox-core/usr/lib/systemd/system/
 	install -D -m 0755 sbin/secubox-minuteries-garde debian/secubox-core/usr/sbin/secubox-minuteries-garde
 
+	# ACCUEIL DU NOM DE NŒUD (#3821, #3824), dans le cœur depuis #3883 (il vivait dans secubox-webos, le Hall, optionnel) :
+	# le script root qui pose le vhost, la route sbxwaf et le vhost HAProxy, et traite les demandes de l'API system ;
+	# ses deux unités ; la page et le dé. Le moteur et les faces du dé ont pour source le Hall (comme secubox-hub) : ils
+	# sont livrés ICI sous www/noeud/, pour qu'une box sans secubox-webos serve son accueil.
+	install -D -m 0755 sbin/secubox-noeud debian/secubox-core/usr/sbin/secubox-noeud
+	install -D -m 0644 systemd/secubox-noeud.path debian/secubox-core/usr/lib/systemd/system/secubox-noeud.path
+	install -D -m 0644 systemd/secubox-noeud.service debian/secubox-core/usr/lib/systemd/system/secubox-noeud.service
+	install -D -m 0644 www/noeud/index.html debian/secubox-core/usr/share/secubox/www/noeud/index.html
+	install -D -m 0644 ../secubox-webos/www/hall/sbx-dice.js debian/secubox-core/usr/share/secubox/www/noeud/sbx-dice.js
+	install -d debian/secubox-core/usr/share/secubox/www/noeud/dice
+	install -m 0644 ../secubox-webos/www/hall/dice/*.jpg debian/secubox-core/usr/share/secubox/www/noeud/dice/
+	install -D -m 0644 etc/noeud.toml.example debian/secubox-core/usr/share/secubox-core/noeud.toml.example
+
 	# LED scripts and services
 	install -d debian/secubox-core/usr/sbin
 	# User provisioning push (gk2/admin → Nextcloud/PhotoPrism, #410)

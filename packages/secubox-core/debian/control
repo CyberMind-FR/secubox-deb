@@ -14,8 +14,10 @@ Architecture: all
 # présence a déjà fait planter l'agrégateur en 502 par ImportError. La version
 # utilisée (16.0) vient de pip, dans /usr/local/lib/python3.11/dist-packages.
 # Vérifié le 2026-08-02 : apt candidat 10.4-1, pip installé 16.0.
-Replaces: secubox-metrics (<< 1.12.9~), secubox-defaults (<< 1.0.3~)
-Breaks: secubox-metrics (<< 1.12.9~), secubox-defaults (<< 1.0.3~)
+# secubox-webos (<< 1.21.3~) livrait l'accueil du nom de nœud (#3821, #3824), passé dans le cœur (#3883) : les deux ne
+# gèrent jamais ensemble /etc/nginx/conf.d/secubox-noeud.conf, et la page www/noeud/index.html change de paquet.
+Replaces: secubox-metrics (<< 1.12.9~), secubox-defaults (<< 1.0.3~), secubox-webos (<< 1.21.3~)
+Breaks: secubox-metrics (<< 1.12.9~), secubox-defaults (<< 1.0.3~), secubox-webos (<< 1.21.3~)
 Depends: ${misc:Depends}, ${python3:Depends},
  python3-fastapi | python3-pip,
  python3-uvicorn | python3-pip,

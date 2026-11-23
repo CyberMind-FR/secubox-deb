@@ -376,6 +376,76 @@ REPRISE
         [ -d /etc/unbound/unbound.conf.d ] && systemctl start --no-block secubox-dns-listes.service 2>/dev/null || true
     fi
 
+    # ACCUEIL DU NOM DE NŒUD (#3821, #3824), dans le cœur depuis #3883 : il vivait dans secubox-webos (le Hall,
+    # optionnel) ; une box sans webos ne servait ni son accueil public ni la carte « Nom du nœud » de /system/.
+    # Réglages : MIGRATION UNE FOIS. noeud.toml absent : repris des clés booléennes de [noeud] de webos.toml s'il y en a
+    # (relais ouvert sur gk2 = reste ouvert), sinon les défauts (accueil posé, relais fermé). Ensuite noeud.toml fait foi ;
+    # webos.toml n'est jamais modifié. Fichier existant (ou lien) : intouché.
+    if [ ! -e /etc/secubox/noeud.toml ] && [ ! -L /etc/secubox/noeud.toml ]; then
+        install -d -m 0755 /etc/secubox
+        python3 -I - <<'MIGRATION' || echo "secubox-core : /etc/secubox/noeud.toml non créé (défauts : accueil posé, relais fermé)" >&2
+import os, tempfile, tomllib
+cles = {}
+try:
+    fd = os.open("/etc/secubox/webos.toml", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as fh:
+        section = tomllib.loads(fh.read(1 << 20).decode("utf-8")).get("noeud", {})
+    if isinstance(section, dict):
+        cles = {k: v for k, v in section.items() if k in ("accueil", "relais_api") and isinstance(v, bool)}
+except (OSError, ValueError):
+    pass
+accueil, relais = cles.get("accueil", True), cles.get("relais_api", False)
+origine = "repris de [noeud] de /etc/secubox/webos.toml" if cles else "défauts"
+texte = (
+    "# /etc/secubox/noeud.toml : accueil du nom de nœud (#3821, #3824), géré par secubox-core (#3883).\n"
+    f"# Créé par le postinst de secubox-core ({origine}). Exemple commenté : /usr/share/secubox-core/noeud.toml.example\n"
+    "[noeud]\n"
+    "# false = rien n'est posé sur <nœud>.<zone> (et ce qui l'avait été est retiré) ; appliquer : secubox-noeud appliquer\n"
+    f"accueil = {'true' if accueil else 'false'}\n"
+    "# Relais des AUTRES chemins vers l'ancienne cible : FERMÉ par défaut ; page Système ou secubox-noeud relais\n"
+    f"relais_api = {'true' if relais else 'false'}\n")
+fd, tmp = tempfile.mkstemp(dir="/etc/secubox", prefix=".noeud-")
+with os.fdopen(fd, "w", encoding="utf-8") as fh:
+    fh.write(texte)
+try:
+    os.chmod(tmp, 0o644)
+    os.link(tmp, "/etc/secubox/noeud.toml")  # jamais d'écrasement : échoue si le fichier est apparu entre-temps
+finally:
+    os.unlink(tmp)
+print(f"secubox-core : /etc/secubox/noeud.toml créé ({origine})")
+MIGRATION
+    fi
+    # État (route reprise, ancienne cible) : celui de secubox-webos repris une fois, s'il est un vrai dossier de root.
+    if [ -d /var/lib/secubox-webos-noeud ] && [ ! -L /var/lib/secubox-webos-noeud ] \
+       && [ "$(stat -c %u /var/lib/secubox-webos-noeud)" = 0 ] \
+       && [ ! -e /var/lib/secubox-noeud ] && [ ! -L /var/lib/secubox-noeud ]; then
+        mv /var/lib/secubox-webos-noeud /var/lib/secubox-noeud
+        chmod 0700 /var/lib/secubox-noeud
+        echo "secubox-core : état du nom de nœud repris de /var/lib/secubox-webos-noeud"
+    fi
+    # Le vhost /etc/nginx/conf.d/secubox-noeud.conf garde son nom ; celui de webos (ancien en-tête) est reconnu et
+    # régénéré. L'existant gagne ; route par sbxwaf, jamais de contournement ; aucune nouvelle exposition tant que le
+    # mot de passe admin par défaut est actif (#3401). Un échec n'arrête pas l'installation.
+    if [ -x /usr/sbin/secubox-noeud ]; then
+        /usr/sbin/secubox-noeud appliquer || echo "secubox-core : accueil du nom de nœud non posé (voir ci-dessus)" >&2
+        /usr/sbin/secubox-noeud prepare || echo "secubox-core : dépôt des demandes du relais non préparé" >&2
+    fi
+    # Unités : activées sur le système de fichiers (deb-systemd-helper, valable dans le chroot d'une image, #3411) ;
+    # un disable de l'opérateur survit à la mise à jour. Le .path n'est démarré que sous systemd.
+    for _u in secubox-noeud.path secubox-noeud.service; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload 2>/dev/null || true
+        if deb-systemd-helper --quiet is-enabled secubox-noeud.path 2>/dev/null; then
+            systemctl start secubox-noeud.path 2>/dev/null || true
+        fi
+    fi
+
     # HAProxy tire par network-online.target, pas seulement par
     # multi-user.target (#998). Un [Install] pose en drop-in n'est pas honore
     # par `systemctl enable` : le lien doit etre cree explicitement.

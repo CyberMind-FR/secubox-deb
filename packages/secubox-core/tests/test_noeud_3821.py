@@ -4,7 +4,7 @@
 # See LICENCE-CMSD-1.0.md for terms.
 """#3821 — le nom de nœud (<nœud>.<zone>, ex. gk2.secubox.in) montre le dé SecuBox en plein écran sur « / ».
 
-Vérifié : la décision de `webos-noeud` (route absente, reprise d'une cible qui rend 404, existant explicite qui gagne,
+Vérifié : la décision de `secubox-noeud` (secubox-core depuis #3883) (route absente, reprise d'une cible qui rend 404, existant explicite qui gagne,
 garde du mot de passe par défaut, retour arrière), le vhost rendu servi par un VRAI nginx (« / » exact seul, le reste
 404 ou relayé à l'ancienne cible), la route posée par le vrai `secubox-waf-route`, et la page (Aurora, sans ressource
 extérieure, rendue à 1400 et 420 px)."""
@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.banc_noeud import DOM, PAGE, PKG, SCRIPT, audits, charger, conf, get, port_libre, table  # noqa: F401
+from banc_noeud import DOM, HALL, PAGE, PKG, SCRIPT, audits, box_noeud, charger, conf, get, port_libre, table  # noqa: F401
 
 
 # ── Décisions ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -141,7 +141,9 @@ def test_vrai_nginx_ne_sert_que_la_racine_exacte(tmp_path, avec_repli):
     www = tmp_path / "www"
     (www / "noeud").mkdir(parents=True)
     shutil.copy(PAGE, www / "noeud" / "index.html")
-    os.symlink(PKG / "www" / "hall", www / "hall")
+    # ce que livre secubox-core (#3883) : le dé à côté de la page, AUCUN www/hall (box sans secubox-webos)
+    shutil.copy(HALL / "sbx-dice.js", www / "noeud" / "sbx-dice.js")
+    shutil.copytree(HALL / "dice", www / "noeud" / "dice")
     m.WWW, m.PORT = str(www), port_libre()
     serveur = None
     repli = None
@@ -207,15 +209,22 @@ def test_page_aurora_sans_ressource_exterieure_ni_donnee():
     assert "textContent" in SRC and 'role="img"' in SRC
 
 
-def test_paquet_livre_page_et_script_sans_recopier_le_de():
+def test_paquet_livre_page_script_et_de_sans_le_hall():
+    """#3883 : secubox-core livre le script, la page ET le dé (source : le Hall) ; le vhost ne lit plus www/hall."""
     rules = (PKG / "debian/rules").read_text()
-    assert "sbin/webos-noeud $(CURDIR)/debian/secubox-webos/usr/sbin/webos-noeud" in rules
-    assert "www/noeud/index.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/noeud/index.html" in rules
-    assert "usr/share/secubox/www/noeud/dice" not in rules and "noeud/sbx-dice.js" not in rules
-    assert "/usr/sbin/webos-noeud appliquer" in (PKG / "debian/postinst").read_text()
-    assert "/usr/sbin/webos-noeud retirer" in (PKG / "debian/prerm").read_text()
-    assert "rm -rf /var/lib/secubox-webos-noeud" in (PKG / "debian/postrm").read_text()
-    assert "[noeud]\naccueil = true" in (PKG / "etc/webos.toml.example").read_text()
+    assert "sbin/secubox-noeud debian/secubox-core/usr/sbin/secubox-noeud" in rules
+    assert "www/noeud/index.html debian/secubox-core/usr/share/secubox/www/noeud/index.html" in rules
+    assert "../secubox-webos/www/hall/sbx-dice.js debian/secubox-core/usr/share/secubox/www/noeud/sbx-dice.js" in rules
+    assert "../secubox-webos/www/hall/dice/*.jpg debian/secubox-core/usr/share/secubox/www/noeud/dice/" in rules
+    assert "etc/noeud.toml.example debian/secubox-core/usr/share/secubox-core/noeud.toml.example" in rules
+    assert (HALL / "sbx-dice.js").is_file() and len(list((HALL / "dice").glob("face-*.jpg"))) == 6
+    vhost = charger().rendre(DOM, None, False)
+    assert "/www/hall" not in vhost
+    assert "alias /usr/share/secubox/www/noeud/sbx-dice.js;" in vhost and "alias /usr/share/secubox/www/noeud/dice/;" in vhost
+    assert "/usr/sbin/secubox-noeud appliquer" in (PKG / "debian/postinst").read_text()
+    assert "/usr/sbin/secubox-noeud retirer" in (PKG / "debian/prerm").read_text()
+    assert "rm -rf /var/lib/secubox-noeud" in (PKG / "debian/postrm").read_text()
+    assert "[noeud]\naccueil = true" in (PKG / "etc/noeud.toml.example").read_text()
     script = SCRIPT.read_text()
     assert "shell=True" not in script and "waf_bypass" not in script
     assert os.access(SCRIPT, os.X_OK)
@@ -226,9 +235,9 @@ playwright = pytest.importorskip("playwright.sync_api")
 
 @pytest.mark.parametrize("largeur,hauteur", [(1400, 900), (420, 860)])
 def test_rendu_plein_ecran_sans_debordement(largeur, hauteur):
-    fichiers = {"/": (PAGE, "text/html"), "/_noeud/sbx-dice.js": (PKG / "www/hall/sbx-dice.js", "application/javascript")}
+    fichiers = {"/": (PAGE, "text/html"), "/_noeud/sbx-dice.js": (HALL / "sbx-dice.js", "application/javascript")}
     for i in range(6):
-        fichiers[f"/_noeud/dice/face-{i}.jpg"] = (PKG / f"www/hall/dice/face-{i}.jpg", "image/jpeg")
+        fichiers[f"/_noeud/dice/face-{i}.jpg"] = (HALL / f"dice/face-{i}.jpg", "image/jpeg")
     externes = []
 
     def servir(route):
