@@ -56,7 +56,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   compte admin désactivé « runnervm7aw5e » (runner de CI de l'image) : retiré à la demande du propriétaire (même méthode,
   copie users.json.avant-retrait-runner-<epoch>, ligne d'audit compte-retire, auth relancé, /admin/ 200).
   ATTENTION : les clés d'hôte SSH de gk7 datent du 06/11 et portent « root@runnervm7aw5e » : générées sur le runner de CI,
-  donc communes à toute copie de cette image bêta 1 RPi. À renouveler : secubox-renouvelle-secrets --tout (accord à demander).
+  donc communes à toute copie de cette image bêta 1 RPi.
+- gk7 : `secubox-renouvelle-secrets --tout --oui` avec l'accord du propriétaire (systemd-run, 53 s, rc 0) : clés d'hôte SSH
+  (SHA256:Y3whvx…, root@gk7), TLS, OIDC, jeton p2p et clé wg-ephemeral neufs ; machine-id gardé. wg-mesh intact (5 pairs),
+  session SSH restée ouverte ; known_hosts de gk2 mis à jour (empreinte vérifiée avant acceptation). ssh, nginx, auth actifs.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
