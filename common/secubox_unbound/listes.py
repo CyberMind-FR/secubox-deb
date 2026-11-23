@@ -64,9 +64,17 @@ _NOM_ZONE = re.compile(r"[a-z0-9_.-]{1,253}|\.")
 _DZ = re.compile(r'secubox-derogation-zone:\s*"([^"]+)"$')
 _DG = re.compile(r"secubox-derogation:\s*(\S+)\s+([a-z_]+)$")
 _ENS = re.compile(r'secubox-ensemble:\s*"([A-Za-z0-9_.-]{1,64})"$')
-_COMPACT = re.compile(r"^[ \t]*secubox-(derogation|derogation-zone|ensemble):", re.M)
+# `\s*` : un blanc Unicode d'indentation (strip() de `lire` l'ôte aussi) ne cache pas une directive compacte (relecture #3893).
+_COMPACT = re.compile(r"^\s*secubox-(derogation|derogation-zone|ensemble):", re.M)
 _NOM_ENSEMBLE = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 _SECTIONS_SOURCE = ("server", "view", "secubox-ensemble")
+# Chaque directive compacte n'a de sens que dans la source de son générateur (relecture #3893) : refusée ailleurs.
+_FICHIER_DEROGATION = "96-secubox-adult.conf"
+_FICHIER_ENSEMBLE = "93-secubox-webfilter.conf"
+_DIRECTIVES_DEROGATION = ("secubox-derogation-zone:", "secubox-derogation:")
+# Plafond de la forme compacte : quelques lignes valent des millions d'entrées. MAX_SOURCE borne le fichier, ceci borne ce
+# qu'il déplie (dérogations × zones, zones recopiées par les ensembles), par fichier. gk2 : ~1,5 million (relecture #3893).
+MAX_DEPLIES = 8_000_000
 # Ce qu'une SOURCE peut contenir. Toute autre directive est refusée : rien ne se perd en silence.
 _PERMIS_SOURCE = ("local-zone:", "local-zone-override:", "access-control-view:", "name:", "view-first:",
                   "secubox-derogation-zone:", "secubox-derogation:", "secubox-ensemble:")
@@ -134,6 +142,29 @@ def _ouvrir_source(f: Path):
     return os.fdopen(fd, encoding="utf-8", errors="replace")
 
 
+def lire_source(f: Path) -> str:
+    """Le texte d'une source, lu UNE fois par `_ouvrir_source` (sans lien, du compte qui compile, plafonné) : le mode direct
+    valide et déplie ce même texte, sans seconde lecture qui suivrait un lien (relecture #3893)."""
+    with _ouvrir_source(Path(f)) as fh:
+        return fh.read(MAX_SOURCE + 1)
+
+
+def lire_texte(nom: str, texte: str) -> Config:
+    """`lire` d'une source déjà lue (`lire_source`) : mêmes contrôles, même découpage en lignes (sur « \\n » seul)."""
+    cfg = Config()
+    _lire_flux(cfg, nom, io.StringIO(texte), True, {nom})
+    return cfg
+
+
+def _zone_source(nom: str, ou: str) -> str:
+    """Nom canonique d'une zone de SOURCE, refusé hors de `_NOM_ZONE` (relecture #3893 : jamais un caractère que la
+    sortie ou le dépliage recopieraient tel quel)."""
+    z = _nom(nom)
+    if not _NOM_ZONE.fullmatch(z):
+        raise ErreurListes(f"{ou} : nom de zone invalide")
+    return z
+
+
 def _bloc_lu(b: str, ou: str) -> str:
     try:
         return bloc(b)
@@ -148,97 +179,117 @@ def lire(fichiers: Iterable[Path], sources: Iterable[str] = SOURCES_CONNUES) -> 
     for f in sorted(fichiers, key=lambda p: Path(p).name):
         f = Path(f)
         est_source = f.name in sources
-        section, vue = None, None
-        zones_fichier: List[str] = []                 # noms du `server:` de ce fichier (cible de `secubox-derogation`)
-        derogation_lue = False                        # une dérogation lue : plus aucune zone ne peut s'ajouter au fichier
-        ensembles: Dict[str, Dict[str, str]] = {}     # ensembles de zones de ce fichier
-        ens = None
         with (_ouvrir_source(f) if est_source else f.open(encoding="utf-8", errors="replace")) as fh:
-            for n, ligne in enumerate(fh, 1):
-                s = ligne.strip()
-                if not s or s.startswith("#"):
-                    continue
-                ou = f"{f.name}:{n}"
-                if not ligne[:1].isspace() and s.endswith(":") and re.fullmatch(r"[a-z-]+:", s):
-                    section, vue, ens = s[:-1], None, None
-                    if est_source and section not in _SECTIONS_SOURCE:
-                        raise ErreurListes(f"{ou} : section « {_directive(section)} » non reprise par le compilateur")
-                    continue
-                if est_source and not s.startswith(_PERMIS_SOURCE):
-                    raise ErreurListes(f"{ou} : directive non reprise par le compilateur : {_directive(s)}")
-                reconnue = True
-                if section == "secubox-ensemble" and est_source:
-                    m = _NAME.match(s)
-                    if m and ens is None:
-                        if m.group(1) in ensembles or not _NOM_ENSEMBLE.fullmatch(m.group(1)):
-                            raise ErreurListes(f"{ou} : ensemble déjà déclaré ou nom invalide")
-                        ens = ensembles[m.group(1)] = {}
-                    elif (m := _LZ.match(s)) and ens is not None:
-                        ens.setdefault(_nom(m.group(1)), sys.intern(m.group(2)))
-                    else:
-                        reconnue = False
-                elif section == "view":
-                    m = _NAME.match(s)
-                    if m and vue is None:
-                        vue = m.group(1)
-                        cfg.vues[vue] = {"first": False, "zones": {}, "fichier": f.name}
-                    elif (m := _VIEW_FIRST.fullmatch(s)) and vue:  # « view-first: yes include: … » : refusé (relecture #3205)
-                        cfg.vues[vue]["first"] = m.group(1) == "yes"
-                    elif (m := _LZ.match(s)) and vue:
-                        cfg.vues[vue]["zones"].setdefault(_nom(m.group(1)), sys.intern(m.group(2)))
-                    elif est_source and (m := _ENS.match(s)) and vue:
-                        if m.group(1) not in ensembles:
-                            raise ErreurListes(f"{ou} : ensemble inconnu (il se déclare avant la vue qui l'emploie)")
-                        zv = cfg.vues[vue]["zones"]
-                        for z, t in ensembles[m.group(1)].items():      # la première déclaration gagne, comme des lignes recopiées
-                            zv.setdefault(z, t)
-                    else:
-                        reconnue = False
-                elif section != "server":
-                    reconnue = False
-                elif est_source and (m := _DZ.match(s)):
-                    if derogation_lue:
-                        raise ErreurListes(f"{ou} : nom dérogé après une dérogation")
-                    zones_fichier.append(_nom(m.group(1)))
-                elif est_source and (m := _DG.match(s)):
-                    derogation_lue = True
-                    t = sys.intern(m.group(2))
-                    cfg.ov_par_bloc[sys.intern(_bloc_lu(m.group(1), ou))].update(dict.fromkeys(_ordre_noms(zones_fichier), t))
-                elif (m := _OV.match(s)):
-                    z = _nom(m.group(1))
-                    cfg.ov_par_bloc[sys.intern(_bloc_lu(m.group(2), ou))][z] = sys.intern(m.group(3))
-                    if not est_source:
-                        cfg.ov_contexte.add(z)
-                elif (m := _LZ.match(s)):
-                    z = _nom(m.group(1))
-                    if est_source:
-                        if derogation_lue:
-                            raise ErreurListes(f"{ou} : zone déclarée après une dérogation")
-                        zones_fichier.append(z)
-                    if z not in cfg.zones:
-                        cfg.zones[z] = sys.intern(m.group(2))
-                        if est_source:
-                            cfg.zones_sources.add(z)
-                elif (m := _ACV.match(s)):
-                    b = _bloc_lu(m.group(1), ou)
-                    deja = cfg.acv.get(b)
-                    if deja and (deja[1] in sources) != est_source:
-                        # Même bloc dans une source ET dans le contexte (IP de l'allowlist d'adblock qui est aussi une TV) :
-                        # seule la vue du contexte reste dans le nouvel ensemble, c'est elle qui compte (et le conflit est dit).
-                        cfg.conflits_vue.add(b)
-                        if est_source:
-                            continue
-                    cfg.acv[b] = (m.group(2), f.name)
-                elif (m := _AC.match(s)):
-                    b = _bloc_lu(m.group(1), ou)
-                    cfg.acl.setdefault(b, m.group(2))
-                    if m.group(2) == "allow" and b not in cfg.allow:
-                        cfg.allow.append(b)
-                else:
-                    reconnue = False
-                if est_source and not reconnue:                 # préfixe permis, forme inattendue : jamais ignorée en silence
-                    raise ErreurListes(f"{ou} : ligne non reconnue ({_directive(s)})")
+            _lire_flux(cfg, f.name, fh, est_source, sources)
     return cfg
+
+
+def _lire_flux(cfg: Config, nom_fichier: str, fh, est_source: bool, sources: set) -> None:
+    """Les lignes d'un fichier (itérateur de lignes terminées par « \\n »), versées dans `cfg`."""
+    section, vue = None, None
+    zones_fichier: List[str] = []             # noms du `server:` de ce fichier (cible de `secubox-derogation`)
+    noms_derogation: Optional[List[str]] = None   # calculés une fois, au premier `secubox-derogation`
+    deplies = 0                               # entrées dépliées par la forme compacte (plafond MAX_DEPLIES)
+    ensembles: Dict[str, Dict[str, str]] = {}  # ensembles de zones de ce fichier
+    ens = None
+    for n, ligne in enumerate(fh, 1):
+        s = ligne.strip()
+        if not s or s.startswith("#"):
+            continue
+        ou = f"{nom_fichier}:{n}"
+        if not ligne[:1].isspace() and s.endswith(":") and re.fullmatch(r"[a-z-]+:", s):
+            section, vue, ens = s[:-1], None, None
+            if est_source and section not in _SECTIONS_SOURCE:
+                raise ErreurListes(f"{ou} : section « {_directive(section)} » non reprise par le compilateur")
+            if est_source and section == "secubox-ensemble" and nom_fichier != _FICHIER_ENSEMBLE:
+                raise ErreurListes(f"{ou} : secubox-ensemble réservé à {_FICHIER_ENSEMBLE}")
+            continue
+        if est_source and not s.startswith(_PERMIS_SOURCE):
+            raise ErreurListes(f"{ou} : directive non reprise par le compilateur : {_directive(s)}")
+        if est_source and s.startswith(_DIRECTIVES_DEROGATION) and nom_fichier != _FICHIER_DEROGATION:
+            raise ErreurListes(f"{ou} : {_directive(s)} réservé à {_FICHIER_DEROGATION}")
+        if est_source and s.startswith("secubox-ensemble:") and nom_fichier != _FICHIER_ENSEMBLE:
+            raise ErreurListes(f"{ou} : secubox-ensemble réservé à {_FICHIER_ENSEMBLE}")
+        reconnue = True
+        if section == "secubox-ensemble" and est_source:
+            m = _NAME.match(s)
+            if m and ens is None:
+                if m.group(1) in ensembles or not _NOM_ENSEMBLE.fullmatch(m.group(1)):
+                    raise ErreurListes(f"{ou} : ensemble déjà déclaré ou nom invalide")
+                ens = ensembles[m.group(1)] = {}
+            elif (m := _LZ.match(s)) and ens is not None:
+                ens.setdefault(_zone_source(m.group(1), ou), sys.intern(m.group(2)))
+            else:
+                reconnue = False
+        elif section == "view":
+            m = _NAME.match(s)
+            if m and vue is None:
+                vue = m.group(1)
+                cfg.vues[vue] = {"first": False, "zones": {}, "fichier": nom_fichier}
+            elif (m := _VIEW_FIRST.fullmatch(s)) and vue:  # « view-first: yes include: … » : refusé (relecture #3205)
+                cfg.vues[vue]["first"] = m.group(1) == "yes"
+            elif (m := _LZ.match(s)) and vue:
+                z = _zone_source(m.group(1), ou) if est_source else _nom(m.group(1))
+                cfg.vues[vue]["zones"].setdefault(z, sys.intern(m.group(2)))
+            elif est_source and (m := _ENS.match(s)) and vue:
+                if m.group(1) not in ensembles:
+                    raise ErreurListes(f"{ou} : ensemble inconnu (il se déclare avant la vue qui l'emploie)")
+                deplies += len(ensembles[m.group(1)])
+                if deplies > MAX_DEPLIES:
+                    raise ErreurListes(f"{ou} : forme compacte trop grande une fois dépliée")
+                zv = cfg.vues[vue]["zones"]
+                for z, t in ensembles[m.group(1)].items():      # la première déclaration gagne, comme des lignes recopiées
+                    zv.setdefault(z, t)
+            else:
+                reconnue = False
+        elif section != "server":
+            reconnue = False
+        elif est_source and (m := _DZ.match(s)):
+            if noms_derogation is not None:
+                raise ErreurListes(f"{ou} : nom dérogé après une dérogation")
+            zones_fichier.append(_zone_source(m.group(1), ou))
+        elif est_source and (m := _DG.match(s)):
+            if noms_derogation is None:
+                noms_derogation = _ordre_noms(zones_fichier)
+            deplies += len(noms_derogation)
+            if deplies > MAX_DEPLIES:
+                raise ErreurListes(f"{ou} : forme compacte trop grande une fois dépliée")
+            t = sys.intern(m.group(2))
+            cfg.ov_par_bloc[sys.intern(_bloc_lu(m.group(1), ou))].update(dict.fromkeys(noms_derogation, t))
+        elif (m := _OV.match(s)):
+            z = _nom(m.group(1))
+            cfg.ov_par_bloc[sys.intern(_bloc_lu(m.group(2), ou))][z] = sys.intern(m.group(3))
+            if not est_source:
+                cfg.ov_contexte.add(z)
+        elif (m := _LZ.match(s)):
+            z = _zone_source(m.group(1), ou) if est_source else _nom(m.group(1))
+            if est_source:
+                if noms_derogation is not None:
+                    raise ErreurListes(f"{ou} : zone déclarée après une dérogation")
+                zones_fichier.append(z)
+            if z not in cfg.zones:
+                cfg.zones[z] = sys.intern(m.group(2))
+                if est_source:
+                    cfg.zones_sources.add(z)
+        elif (m := _ACV.match(s)):
+            b = _bloc_lu(m.group(1), ou)
+            deja = cfg.acv.get(b)
+            if deja and (deja[1] in sources) != est_source:
+                # Même bloc dans une source ET dans le contexte (IP de l'allowlist d'adblock qui est aussi une TV) :
+                # seule la vue du contexte reste dans le nouvel ensemble, c'est elle qui compte (et le conflit est dit).
+                cfg.conflits_vue.add(b)
+                if est_source:
+                    continue
+            cfg.acv[b] = (m.group(2), nom_fichier)
+        elif (m := _AC.match(s)):
+            b = _bloc_lu(m.group(1), ou)
+            cfg.acl.setdefault(b, m.group(2))
+            if m.group(2) == "allow" and b not in cfg.allow:
+                cfg.allow.append(b)
+        else:
+            reconnue = False
+        if est_source and not reconnue:                 # préfixe permis, forme inattendue : jamais ignorée en silence
+            raise ErreurListes(f"{ou} : ligne non reconnue ({_directive(s)})")
 
 
 def _ordre_noms(noms: Iterable[str]) -> List[str]:
@@ -263,9 +314,11 @@ def developper(texte: str) -> str:
     sortie = io.StringIO()
     section = None
     noms: Dict[str, str] = {}                        # nom canonique -> nom écrit (le premier), cible des dérogations
+    ordre: Optional[List[str]] = None
     ensembles: Dict[str, List[str]] = {}
     ens = None
-    for ligne in texte.splitlines(keepends=True):
+    deplies = 0
+    for ligne in io.StringIO(texte):                 # découpage de `lire` (« \n » seul), jamais str.splitlines (relecture #3893)
         s = ligne.strip()
         if s and not ligne[:1].isspace() and re.fullmatch(r"[a-z-]+:", s):
             section, ens = s[:-1], None
@@ -283,18 +336,31 @@ def developper(texte: str) -> str:
             continue
         elif section == "server" and (m := _DG.match(s)):
             bloc_, type_ = m.group(1), m.group(2)
-            for z in _ordre_noms(noms):
+            if ordre is None:
+                ordre = _ordre_noms(noms)
+            deplies += len(ordre)
+            _plafond_deplie(deplies, sortie)
+            for z in ordre:
                 sortie.write(f'    local-zone-override: "{noms[z]}" {bloc_} {type_}\n')
+            _plafond_deplie(deplies, sortie)
             continue
         elif section == "server" and (m := _LZ.match(s)):
             noms.setdefault(_nom(m.group(1)), m.group(1))
         elif section == "view" and (m := _ENS.match(s)):
             if m.group(1) not in ensembles:
                 raise ErreurListes("ensemble inconnu (il se déclare avant la vue qui l'emploie)")
+            deplies += len(ensembles[m.group(1)])
+            _plafond_deplie(deplies, sortie)
             sortie.writelines(ensembles[m.group(1)])
+            _plafond_deplie(deplies, sortie)
             continue
         sortie.write(ligne)
     return sortie.getvalue()
+
+
+def _plafond_deplie(deplies: int, sortie: io.StringIO) -> None:
+    if deplies > MAX_DEPLIES or sortie.tell() > MAX_SOURCE:
+        raise ErreurListes("forme compacte trop grande une fois dépliée (rien n'est posé)")
 
 
 # Ce que `lire` retient d'un fichier : un CONTEXTE qui ne change qu'ailleurs (local-data, interface:) ne change aucune décision.

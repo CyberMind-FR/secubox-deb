@@ -209,7 +209,7 @@ def _adopter(sources: Path, conf_d: Path) -> list:
             if not src.exists() or ancien.stat().st_mtime > src.stat().st_mtime:
                 texte = ancien.read_text(encoding="utf-8")
                 # Le fichier posé par le mode direct est la source DÉPLIÉE (#3893) : c'est encore elle, rien à adopter.
-                if not src.exists() or listes.developper(src.read_text(encoding="utf-8")) != texte:
+                if not src.exists() or listes.developper(listes.lire_source(src)) != texte:
                     ecrire_atomique(src, texte, 0o644, erreur=ErreurDepot)
                     adoptes.append(nom)
     return adoptes
@@ -229,12 +229,15 @@ def _passe(s: SystemeUnbound, mode: str, sources: Path, conf_d: Path, forcer: bo
     changements: dict = {}
     nouvelle_meta = None
     if mode == "direct":
-        for p in presentes:                       # retour arrière, mais pas un passe-droit : mêmes directives permises qu'à la compilation
-            listes.lire([p], sources=[p.name])
         for n in listes.SOURCES_CONNUES:
-            # La forme compacte (#3893) est dépliée en directives Unbound ; une source sans directive compacte est posée telle quelle.
-            changements[conf_d / n] = (listes.developper((sources / n).read_text(encoding="utf-8"))
-                                       if (sources / n) in presentes else None)
+            if (sources / n) not in presentes:
+                changements[conf_d / n] = None
+                continue
+            # Retour arrière, mais pas un passe-droit : mêmes contrôles qu'à la compilation, sur le texte lu UNE fois (sans lien,
+            # du compte, plafonné) ; ce même texte est déplié (#3893 : forme compacte -> directives Unbound, sinon tel quel).
+            texte = listes.lire_source(sources / n)
+            listes.lire_texte(n, texte)
+            changements[conf_d / n] = listes.developper(texte)
         changements[conf_d / listes.SORTIE] = None
     else:
         if presentes:

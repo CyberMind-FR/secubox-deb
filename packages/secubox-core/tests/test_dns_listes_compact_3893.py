@@ -188,21 +188,137 @@ def test_le_92_compile_est_identique_octet_pour_octet(rendus):
 
 # ── lecture stricte de la forme compacte ─────────────────────────────────────
 
-@pytest.mark.parametrize("texte, motif", [
-    ('view:\n    name: "v"\n    secubox-ensemble: "absent"\n', "ensemble inconnu"),
-    ('secubox-ensemble:\n    name: "e"\nsecubox-ensemble:\n    name: "e"\n', "déjà déclaré"),
-    ('server:\n    local-zone: "a.example." always_nxdomain\n    secubox-derogation: 192.168.1.3 always_transparent\n'
+@pytest.mark.parametrize("nom, texte, motif", [
+    (N93, 'view:\n    name: "v"\n    secubox-ensemble: "absent"\n', "ensemble inconnu"),
+    (N93, 'secubox-ensemble:\n    name: "e"\nsecubox-ensemble:\n    name: "e"\n', "déjà déclaré"),
+    (N96, 'server:\n    local-zone: "a.example." always_nxdomain\n    secubox-derogation: 192.168.1.3 always_transparent\n'
      '    local-zone: "b.example." always_nxdomain\n', "après une dérogation"),
-    ('server:\n    secubox-derogation: 192.168.1.3 always_transparent\n    secubox-derogation-zone: "b.example."\n',
+    (N96, 'server:\n    secubox-derogation: 192.168.1.3 always_transparent\n    secubox-derogation-zone: "b.example."\n',
      "après une dérogation"),
-    ('server:\n    secubox-derogation: pas-une-adresse always_transparent\n', "bloc d'adresses invalide"),
-    ('secubox-ensemble:\n    name: "e"\n    local-data: "x. A 1.2.3.4"\n', "local-data"),
+    (N96, 'server:\n    secubox-derogation: pas-une-adresse always_transparent\n', "bloc d'adresses invalide"),
+    (N93, 'secubox-ensemble:\n    name: "e"\n    local-data: "x. A 1.2.3.4"\n', "local-data"),
 ])
-def test_une_forme_compacte_douteuse_est_refusee(tmp_path, texte, motif):
-    f = tmp_path / N93
+def test_une_forme_compacte_douteuse_est_refusee(tmp_path, nom, texte, motif):
+    f = tmp_path / nom
     f.write_text(texte)
     with pytest.raises(L.ErreurListes, match=motif):
-        L.lire([f], sources=[N93])
+        L.lire([f], sources=[nom])
+
+
+# Relecture #3893, 4 : chaque directive compacte n'est permise que dans la source de son générateur.
+@pytest.mark.parametrize("nom, texte", [
+    (N93, 'server:\n    secubox-derogation: 192.168.1.3 always_transparent\n'),
+    (N95, 'server:\n    secubox-derogation: 192.168.1.3 always_transparent\n'),
+    (N93, 'server:\n    secubox-derogation-zone: "a.example."\n'),
+    (N95, 'server:\n    secubox-derogation-zone: "a.example."\n'),
+    (N95, 'secubox-ensemble:\n    name: "e"\n'),
+    (N96, 'secubox-ensemble:\n    name: "e"\n'),
+    (N96, 'view:\n    name: "v"\n    secubox-ensemble: "e"\n'),
+    (N95, 'view:\n    name: "v"\n    secubox-ensemble: "e"\n'),
+])
+def test_une_directive_compacte_hors_de_sa_source_est_refusee(tmp_path, nom, texte):
+    f = tmp_path / nom
+    f.write_text(texte)
+    with pytest.raises(L.ErreurListes, match="réservé à"):
+        L.lire([f], sources=[nom])
+
+
+# Relecture #3893, 1 : plafond de ce que la forme compacte déplie.
+ADULTE_3x3 = ('server:\n    local-zone: "a.example." always_nxdomain\n    local-zone: "b.example." always_nxdomain\n'
+              '    secubox-derogation-zone: "c.example."\n'
+              + "".join(f"    secubox-derogation: 192.168.1.{i} always_transparent\n" for i in (1, 2, 3)))
+WEB_3x3 = ('secubox-ensemble:\n    name: "e"\n' + "".join(f'    local-zone: "{c}.example." always_nxdomain\n' for c in "abc")
+           + "".join(f'view:\n    name: "v{i}"\n    secubox-ensemble: "e"\n' for i in range(3)))
+
+
+@pytest.mark.parametrize("nom, texte", [(N96, ADULTE_3x3), (N93, WEB_3x3)])
+def test_au_dela_du_plafond_la_forme_compacte_est_refusee(tmp_path, monkeypatch, nom, texte):
+    f = tmp_path / nom
+    f.write_text(texte)
+    monkeypatch.setattr(L, "MAX_DEPLIES", 9)                  # 3 × 3 : tout juste admis
+    L.lire([f], sources=[nom])
+    assert L.developper(texte).count("local-zone") >= 9
+    monkeypatch.setattr(L, "MAX_DEPLIES", 8)
+    with pytest.raises(L.ErreurListes, match="trop grande"):
+        L.lire([f], sources=[nom])
+    with pytest.raises(L.ErreurListes, match="trop grande"):
+        L.developper(texte)
+
+
+def test_la_taille_depliee_est_plafonnee(monkeypatch):
+    monkeypatch.setattr(L, "MAX_SOURCE", 200)
+    with pytest.raises(L.ErreurListes, match="trop grande"):
+        L.developper(ADULTE_3x3)
+
+
+def test_les_noms_derogés_sont_ordonnes_une_seule_fois(tmp_path, monkeypatch):
+    appels = []
+    vrai = L._ordre_noms
+    monkeypatch.setattr(L, "_ordre_noms", lambda n: appels.append(1) or vrai(n))
+    f = tmp_path / N96
+    f.write_text(ADULTE_3x3)
+    cfg = L.lire([f], sources=[N96])
+    assert len(appels) == 1 and all(set(z) == {"a.example", "b.example", "c.example"} for z in cfg.ov_par_bloc.values())
+    L.developper(ADULTE_3x3)
+    assert len(appels) == 2
+
+
+def test_mode_direct_plafond_depasse_rien_n_est_pose(tmp_path, monkeypatch):
+    conf = tmp_path / "unbound.conf.d"
+    conf.mkdir()
+    lieux = {"sources": tmp_path / "srcs", "conf_d": conf, "etat": tmp_path / "etat.json",
+             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
+    D.deposer_source(N96, ADULTE_3x3, lieux["sources"])
+    lieux["reglages"].write_text('mode = "direct"\n')
+    monkeypatch.setattr(L, "MAX_DEPLIES", 8)
+    r = D.appliquer(systeme=_Faux(), **lieux)
+    assert r["etat"] == "erreur" and "trop grande" in r["erreur"] and not (conf / N96).exists()
+
+
+# Relecture #3893, 2 : même découpage en lignes que `lire`, noms validés, blancs Unicode vus.
+
+def test_le_depliage_coupe_les_lignes_comme_lire(tmp_path):
+    """str.splitlines couperait ce commentaire sur \\x0c / \\x85 et déplierait la « directive » qu'il contient ; `lire`
+    n'y voit qu'un commentaire."""
+    for sep in ("\x0c", "\x85", "\x1e", "\u2028"):
+        texte = ADULTE_3x3 + f"# note{sep}    secubox-derogation: 10.0.0.9 always_transparent\n"
+        f = tmp_path / N96
+        f.write_text(texte)
+        cfg = L.lire([f], sources=[N96])
+        assert "10.0.0.9/32" not in cfg.ov_par_bloc
+        d = L.developper(texte)
+        assert "10.0.0.9" not in d.replace(f"# note{sep}    secubox-derogation: 10.0.0.9", "")
+        assert d.count("local-zone-override") == 9
+
+
+@pytest.mark.parametrize("ligne", ['    local-zone: "a\x85b.example." always_nxdomain',
+                                   '    local-zone: "a b.example." always_nxdomain',
+                                   '    secubox-derogation-zone: "x\u2028y.example."',
+                                   '    secubox-derogation-zone: "a\\\"b."'])
+def test_un_nom_de_zone_invalide_dans_une_source_est_refuse(tmp_path, ligne):
+    f = tmp_path / N96
+    f.write_text("server:\n" + ligne + "\n")
+    with pytest.raises(L.ErreurListes):
+        L.lire([f], sources=[N96])
+
+
+def test_un_nom_invalide_dans_un_ensemble_ou_une_vue_est_refuse(tmp_path):
+    for texte in ('secubox-ensemble:\n    name: "e"\n    local-zone: "a\x0cb.example." always_nxdomain\n',
+                  'view:\n    name: "v"\n    local-zone: "é.example." always_nxdomain\n'):
+        f = tmp_path / N93
+        f.write_text(texte)
+        with pytest.raises(L.ErreurListes, match="nom de zone invalide"):
+            L.lire([f], sources=[N93])
+
+
+def test_une_directive_indentee_par_un_blanc_unicode_est_vue(tmp_path):
+    texte = ('server:\n    local-zone: "a.example." always_nxdomain\n'
+             '\u3000secubox-derogation: 192.168.1.3 always_transparent\n')
+    f = tmp_path / N96
+    f.write_text(texte)
+    assert L.lire([f], sources=[N96]).ov_par_bloc["192.168.1.3/32"] == {"a.example": "always_transparent"}
+    assert L.compacte(texte)
+    assert L.developper(texte).count('local-zone-override: "a.example." 192.168.1.3 always_transparent') == 1
 
 
 def test_une_directive_compacte_hors_d_une_source_n_est_pas_lue(tmp_path):
@@ -244,3 +360,18 @@ def test_mode_direct_pose_la_source_depliee_et_ne_la_readopte_pas(rendus, tmp_pa
     r = D.appliquer(systeme=_Faux(), **lieux)
     assert r["etat"] == "applique" and r["adoptes"] == []                       # le fichier déplié n'est pas « plus récent »
     assert (lieux["sources"] / N96).read_text() == (d["compact"] / N96).read_text()
+
+
+def test_mode_direct_lit_la_source_une_fois_sans_suivre_de_lien(tmp_path):
+    """Relecture #3893, 3 : un lien à la place d'une source n'est ni validé ni recopié (plus de second read_text)."""
+    conf = tmp_path / "unbound.conf.d"
+    conf.mkdir()
+    lieux = {"sources": tmp_path / "srcs", "conf_d": conf, "etat": tmp_path / "etat.json",
+             "reglages": tmp_path / "dns-listes.toml", "verrou": tmp_path / "verrou"}
+    lieux["sources"].mkdir(mode=0o755)
+    cible = tmp_path / "ailleurs.conf"
+    cible.write_text(ADULTE_3x3)
+    (lieux["sources"] / N96).symlink_to(cible)
+    lieux["reglages"].write_text('mode = "direct"\n')
+    r = D.appliquer(systeme=_Faux(), **lieux)
+    assert r["etat"] == "erreur" and "lien symbolique" in r["erreur"] and not (conf / N96).exists()
