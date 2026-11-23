@@ -1,3 +1,12 @@
+secubox-webfilter (0.5.7-1~trixie1) trixie; urgency=medium
+
+  * Source Unbound compacte (ref #3893) : une zone commune à plusieurs vues est écrite une
+    fois dans un ensemble (`secubox-ensemble:`) que chaque vue reprend ; chaque vue
+    charge les mêmes zones qu'avant (gk2 : 863 674 → 317 057 lignes, 46 → 17 Mo).
+    Une seule vue : texte inchangé. Dépend de secubox-core 1.8.43.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 13:57:43 +0100
+
 secubox-webfilter (0.5.6-1~trixie1) trixie; urgency=medium
 
   * Source URLhaus repointée vers le miroir malware-filter ; migration postinst de la copie live (abuse.ch 410 Gone) (#3833).

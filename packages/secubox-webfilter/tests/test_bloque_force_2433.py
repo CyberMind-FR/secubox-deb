@@ -2,6 +2,7 @@
 """#2433 — domaines TOUJOURS bloqués (par profil et par appareil), même quand la catégorie du domaine est en observe pour l'appareil."""
 import pytest
 
+from secubox_unbound.listes import developper
 from webfilter import generation, profils
 
 CATS = {"adulte", "jeux", "phishing"}
@@ -26,7 +27,7 @@ def gen(c):
 
 def vue_de_l_appareil(c):
     cle = profils.cle_vue(profils.effective(c, MAC))
-    for bloc in gen(c).texte.split("view:\n")[1:]:
+    for bloc in developper(gen(c).texte).split("view:\n")[1:]:
         if f'name: "{cle}"' in bloc:
             return bloc
     raise AssertionError("vue absente")
