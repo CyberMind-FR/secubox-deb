@@ -90,6 +90,12 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   reset-admin-password, résultat effacé). Direct actif : RTMP rtmp://192.168.1.94:1935/live depuis le LAN (DNAT
   peertube-rtmp.nft), sans transcodage, rediffusion permise (à cocher par direct), 6 h max. Minuterie de purge activée.
   NB : 192.168.1.3 = le poste du propriétaire (gk0) : c'est lui la page qui interrogeait gk2 et l'appareil exempté adulte.
+- Sources DNS compactes (#3893, PR #3898 : core 1.8.43, ad-guard 1.33.5, webfilter 0.5.7 ; relecture 4 mineurs corrigés)
+  installées sur gk2 14:50-14:59. Source adulte 65 Mo → 4 Mo (filtre web compacté à sa prochaine régénération).
+  secubox-dns-listes.path RÉACTIVÉ à 15:20 (audité) ; compilation : « inchange », 4,5 s (contre 10 min à >1 h 30 ce
+  midi), fichier chargé identique → pas de rechargement d'Unbound (681 Mo, inchangé). couture 200 en 0,26 s.
+  Restent en veille (décision du propriétaire) : mail (lxc.start.auto=0), lyrion (minuterie de garde désactivée),
+  secubox-surf, imap-sync (minuterie désactivée). Réduire la mémoire d'Unbound = choix de listes plus compactes (point 2).
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
