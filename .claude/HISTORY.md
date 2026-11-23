@@ -39,6 +39,14 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   1.43.3 publié, à installer au prochain redémarrage du WAF (groupé).
 - gk7 : secubox-webos installé par erreur pour remplir la carte « Nom du nœud » ; c'est le Hall : retiré (purge) aussitôt,
   nginx -t bon, racine et /admin/ en 200.
+- Relais « Nom du nœud » sorti du Hall vers le cœur (#3883, PR #3884) : secubox-core 1.8.40 (secubox-noeud, unités, page et
+  dé sous www/noeud/, réglages /etc/secubox/noeud/noeud.toml dossier root lu par descripteur, migration auditée), system
+  1.13.4 (routes /api/v1/system/noeud/relais), webos 1.21.3 (copie retirée). Relecture sécurité : 2 importants corrigés.
+  gk2 : installé (1 h d'apt) ; pendant l'install `secubox-domaine` a dépassé 30 s, rien posé, ancien vhost gardé ;
+  `secubox-noeud appliquer` relancé à la main → vhost régénéré par le cœur, dé depuis www/noeud, admin API 404, audité.
+  gk7 : core + system seuls, vhost posé pour secubox-rpi.secubox.in (port 9080, pas de route HAProxy), relais fermé.
+  Suites : un échec de domaine pendant l'install ne réessaie pas tout seul ; rendre_route écrit encore
+  /etc/secubox/waf/haproxy-routes.json par chemin (dossier secubox) ; gk7 s'appelle secubox-rpi pour secubox-domaine.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
