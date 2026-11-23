@@ -156,6 +156,10 @@ override_dh_installsystemd:
 	  debian/secubox-waf-ng/lib/systemd/system/
 	dh_installsystemd --name=secubox-actord
 	dh_installsystemd --name=secubox-actord-ingest --no-start
+	# #3880 : garde périodique du groupe de la socket (un démarrage d'actord plus long que l'attente laissait l'ingestion muette).
+	install -m 0644 systemd/secubox-actord-ingest-garde.service systemd/secubox-actord-ingest-garde.timer \
+	  debian/secubox-waf-ng/lib/systemd/system/
+	dh_installsystemd --name=secubox-actord-ingest-garde.timer
 	# #498 : rate-limit nft pre-inspection, jusqu'ici orpheline dans /etc.
 	install -m 0644 systemd/secubox-waf-leurres-cle.service debian/secubox-waf-ng/lib/systemd/system/
 	install -m 0644 systemd/secubox-waf-ratelimit.service \

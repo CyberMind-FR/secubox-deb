@@ -19,6 +19,25 @@
 set -u
 SOCKET="${1:-/run/secubox/actord.sock}"
 GROUPE="${2:-actord-ingest}"
+MODE="${3:-demarrage}"
+
+# GARDE PÉRIODIQUE (#3880). Le 22/11, actord a mis 18 min à ouvrir sa socket : l'attente de 900 s a expiré, la socket est restée au
+# groupe `secubox` et sbxwaf n'a plus rien pu émettre pendant 25 h, sans aucune erreur (envoi fire-and-forget). La minuterie
+# secubox-actord-ingest-garde appelle ce script en mode `garde` toutes les 5 min : sans attendre, si la socket ÉCOUTE avec un autre
+# groupe, on repose le bon et on le dit au journal. Socket absente ou pas encore en écoute : rien à faire (l'unité de démarrage s'en charge).
+if [ "$MODE" = garde ]; then
+    [ -S "$SOCKET" ] && ss -xlH 2>/dev/null | grep -qF -- "$SOCKET" || exit 0
+    [ "$(stat -c %G "$SOCKET" 2>/dev/null)" = "$GROUPE" ] && exit 0
+    avant="$(stat -c %G "$SOCKET" 2>/dev/null)"
+    chgrp "$GROUPE" "$SOCKET" 2>/dev/null
+    chmod 0660 "$SOCKET" 2>/dev/null
+    if [ "$(stat -c %G "$SOCKET" 2>/dev/null)" = "$GROUPE" ]; then
+        echo "socket $SOCKET : groupe $avant remplacé par $GROUPE (ingestion Actor Intelligence rétablie)"
+        exit 0
+    fi
+    echo "socket $SOCKET : groupe $GROUPE NON posé (reste $avant) — l'ingestion Actor Intelligence est muette" >&2
+    exit 1
+fi
 
 # LA SOCKET QU'ON CORRIGE N'EST PAS FORCEMENT LA BONNE, ET ELLE PEUT ARRIVER TRÈS TARD. actord reconstruit son graphe avant d'ouvrir la
 # nouvelle socket : quelques secondes d'ordinaire, ~4 MINUTES quand la base est grosse (incident 2026-10-05 : fenêtre fixe de 12 s dépassée,
