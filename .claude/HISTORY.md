@@ -77,6 +77,11 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   plus gros client est 192.168.1.3 (ac:19:8e:ab:26:c9, page Hall/admin ouverte : led_status toutes les 2,5 s).
   À FAIRE : réduire la cadence de cette page ; comprendre Unbound à 1,4 Go ; réactiver dns-listes.path, mail, lyrion, surf,
   imap-sync quand gk2 aura de la marge. PeerTube gk1 (#3890) : LXC installé (8.3.2), paquet 1.7.0 prêt, pas encore relié.
+- gk2 13:45-13:53 (charge 7,7) : core 1.8.42 (404 à la mire sur le nom public, #3885), hub 1.12.61 + webos 1.21.4 (#3891,
+  PR #3892 : LED du menu toutes les 15 s, aucune requête onglet caché) installés en 8 min ; couture/accueil/admin 200, 404 OK.
+- Mesure Unbound (#3893) : 642 000 zones chargées (adblock 296 k, webfilter 295 k, adult 31 k, communes 16 k) ; sources
+  150 Mo dont 614 k lignes d'exemptions adultes (liste répétée pour 8 IP d'un appareil) et webfilter répété dans 3 vues.
+  Point 1 accordé (sources compactes, filtrage inchangé) : en cours, banc Unbound isolé sur gk1.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
