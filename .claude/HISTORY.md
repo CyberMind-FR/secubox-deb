@@ -82,6 +82,14 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - Mesure Unbound (#3893) : 642 000 zones chargées (adblock 296 k, webfilter 295 k, adult 31 k, communes 16 k) ; sources
   150 Mo dont 614 k lignes d'exemptions adultes (liste répétée pour 8 IP d'un appareil) et webfilter répété dans 3 vues.
   Point 1 accordé (sources compactes, filtrage inchangé) : en cours, banc Unbound isolé sur gk1.
+- PeerTube sur gk1 pour le direct (#3890) : LXC peertube 8.3.2 (10.100.0.120, /data/lxc ; 1er essai d'install raté, 2e
+  OK), relayé par gk2 (`secubox-relais-maillage relayer peertube.gk1.secubox.in 10.10.0.8`, joker *.gk1, 200). Paquet
+  1.7.0 (PR #3895 : `peertubectl direct activer|etat`, purge quotidienne des rediffusions >7 j hors « À garder », relecture
+  3 importants + 5 mineurs corrigés, dette compte dédié #3894) puis 1.7.1 (PR #3897, #3896 : Redis en 226/NAMESPACE dans
+  la LXC trixie → surcharge d'unité + PING obligatoire). Mot de passe admin réinitialisé sans être lu (peertubectl
+  reset-admin-password, résultat effacé). Direct actif : RTMP rtmp://192.168.1.94:1935/live depuis le LAN (DNAT
+  peertube-rtmp.nft), sans transcodage, rediffusion permise (à cocher par direct), 6 h max. Minuterie de purge activée.
+  NB : 192.168.1.3 = le poste du propriétaire (gk0) : c'est lui la page qui interrogeait gk2 et l'appareil exempté adulte.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
