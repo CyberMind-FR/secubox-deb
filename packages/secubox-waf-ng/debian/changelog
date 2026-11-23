@@ -1,3 +1,13 @@
+secubox-waf-ng (1.43.2-1~trixie1) trixie; urgency=medium
+
+  * Actor Intelligence (ref #3880) : minuterie secubox-actord-ingest-garde
+    (toutes les 5 min) qui repose le groupe actord-ingest de la socket
+    d'ingestion si elle écoute avec un autre groupe. Le 22/11 sur gk2, actord a
+    mis 18 min à ouvrir sa socket, l'attente de 900 s a expiré et sbxwaf n'a
+    plus rien émis pendant 25 h.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 07:03:10 +0100
+
 secubox-waf-ng (1.43.1-1~trixie1) trixie; urgency=medium
 
   * wafctl _reste_element (ref #3723) : `nft -j list set` au lieu de
