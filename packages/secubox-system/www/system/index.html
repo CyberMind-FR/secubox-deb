@@ -549,8 +549,8 @@
         $('sshMdpOff').addEventListener('click', () => demande('cSsh', 'SSH par clé seulement', () => ssh('/ssh/mot-de-passe', false, 'SSH par clé seulement.')));
 
         // Nom du nœud (#3824) : relais des autres chemins du nom public vers l'ancienne cible, FERMÉ par défaut.
-        // API de secubox-webos (administrateur réel) ; l'écriture passe par l'unité root `webos-noeud traite`.
-        const API_NOEUD = '/api/v1/webos/noeud/relais';
+        // API de secubox-system (administrateur réel, #3883) ; l'écriture passe par l'unité root `secubox-noeud traite` (secubox-core).
+        const API_NOEUD = '/api/v1/system/noeud/relais';
         let NOEUD = null;
         const DEMO_NOEUD = { domaine: 'gk2.secubox.in', relais_api: false, relais_actif: false, vhost: true, cible: '192.0.2.1:8000',
             chemins_cible: ['/api/v1/metrics', '/api/v1/metablogizer/', '/api/v1/admin/', '/api/v1/system/metrics', '/api/v1/health', '/'],
@@ -572,8 +572,8 @@
             if (!e || e.erreur !== undefined) {
                 ['noDom', 'noServi', 'noRelais', 'noCible'].forEach(id => { $(id).textContent = '—'; });
                 sw.disabled = true; sw.setAttribute('aria-checked', 'false');
-                $('noNote').textContent = e && e.erreur === 404 ? 'Rien à afficher : secubox-webos n’est pas installé sur ce nœud (ou il est antérieur à 1.21.1). Sans lui, le nœud ne sert pas d’accueil public.'
-                    : e && (e.erreur === 401 || e.erreur === 403) ? 'Réservé aux administrateurs.' : 'État du relais illisible (webos ou son unité root injoignable).';
+                $('noNote').textContent = e && e.erreur === 404 ? 'secubox-core trop ancien sur ce nœud (secubox-noeud absent) : mettez-le à jour.'
+                    : e && (e.erreur === 401 || e.erreur === 403) ? 'Réservé aux administrateurs.' : 'État du relais illisible (secubox-noeud ou son unité root injoignable).';
                 return;
             }
             $('noNote').textContent = 'Fermé par défaut : le nom public ne sert que le dé SecuBox et /api/v1/health. Chaque bascule est écrite dans le journal d’audit.';

@@ -94,21 +94,19 @@ if [ "$1" = "configure" ]; then
         secubox-waf-route hall.gk2.net 9080 || true
       fi
     fi
-    # ACCUEIL DU NOM DE NŒUD (#3821) : <nœud>.<zone> montre le dé SecuBox en plein écran sur « / » exact, par
-    # défaut sur chaque box. L'existant gagne (server_name déjà servi, route qui sert déjà « / ») ; une ancienne
-    # cible qui rend 404 à « / » est reprise et garde tous ses autres chemins. Route par sbxwaf, jamais de
-    # contournement ; aucune nouvelle exposition tant que le mot de passe admin par défaut est actif (#3401).
-    # Désactiver : [noeud] accueil = false dans /etc/secubox/webos.toml. Un échec n'arrête pas l'installation.
-    # #3824 : le vhost ne sert plus que « / », /_noeud/ et /api/v1/health ; le reste rend 404. Le relais des autres
-    # chemins vers l'ancienne cible est une OPTION fermée par défaut ([noeud] relais_api), que l'administrateur
-    # ouvre depuis la page Système. Une montée depuis 1.21.0 (qui relayait tout) réécrit donc le vhost FERMÉ.
-    if [ -x /usr/sbin/webos-noeud ]; then
-        /usr/sbin/webos-noeud appliquer || echo "secubox-webos : accueil du nom de nœud non posé (voir ci-dessus)" >&2
-        /usr/sbin/webos-noeud prepare || echo "secubox-webos : dépôt des demandes du relais non préparé" >&2
+    # ACCUEIL DU NOM DE NŒUD (#3821, #3824) : passé dans secubox-core (#3883 : secubox-noeud, réglages
+    # /etc/secubox/noeud.toml, état et vhost repris par SON postinst). Filet : les anciennes unités de ce paquet,
+    # déjà arrêtées par le preinst, ne doivent laisser ni activation ni dépôt (leurs fichiers sont partis avec 1.21.3).
+    if [ -d /run/systemd/system ]; then
+        systemctl stop secubox-webos-noeud.path secubox-webos-noeud.service 2>/dev/null || true
     fi
+    if command -v deb-systemd-helper >/dev/null 2>&1; then
+        deb-systemd-helper purge secubox-webos-noeud.path secubox-webos-noeud.service >/dev/null 2>&1 || true
+    fi
+    rm -f /etc/systemd/system/paths.target.wants/secubox-webos-noeud.path \
+          /etc/systemd/system/multi-user.target.wants/secubox-webos-noeud.service
+    rm -rf /run/secubox/webos-noeud /run/secubox/webos-noeud-resultats
     systemctl daemon-reload || true
-    systemctl enable secubox-webos-noeud.service || true
-    systemctl enable --now secubox-webos-noeud.path || true
     # CONSOLE LOCALE DU KIOSQUE (#1695). Un secret partage par nginx, qui le
     # joint aux seules demandes recues sur le port console (127.0.0.1:9078),
     # et l'auth, qui le verifie : il prouve qu'une demande est passee par ce

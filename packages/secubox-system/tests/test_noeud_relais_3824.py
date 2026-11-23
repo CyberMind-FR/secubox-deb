@@ -3,7 +3,8 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """#3824 — page Système, panneau « Nom du nœud » : l'interrupteur du relais des autres chemins du nom public vers
-l'ancienne cible (fermé par défaut). API de secubox-webos simulée ; confirmation dans le panneau, jamais de dialogue."""
+l'ancienne cible (fermé par défaut). API de secubox-system simulée (#3883 : elle était celle de secubox-webos) ;
+confirmation dans le panneau, jamais de dialogue."""
 import json
 import os
 import re
@@ -13,7 +14,7 @@ import pytest
 
 PAGE = Path(__file__).resolve().parents[1] / "www" / "system" / "index.html"
 SRC = PAGE.read_text(encoding="utf-8")
-ROUTE = "/api/v1/webos/noeud/relais"
+ROUTE = "/api/v1/system/noeud/relais"
 
 ETAT = {"domaine": "gk2.secubox.in", "relais_api": False, "relais_actif": False, "vhost": True, "cible": "192.168.1.200:8000",
         "chemins_cible": ["/api/v1/metrics", "/api/v1/metablogizer/", "/api/v1/admin/", "/api/v1/system/metrics",
@@ -24,6 +25,7 @@ ETAT = {"domaine": "gk2.secubox.in", "relais_api": False, "relais_actif": False,
 
 def test_panneau_statique():
     assert 'id="pNoeud"' in SRC and 'role="switch"' in SRC and f"'{ROUTE}'" in SRC
+    assert "/api/v1/webos/" not in SRC and "secubox-webos" not in SRC      # #3883 : la carte ne dépend plus du Hall
     assert "JSON.stringify({ actif })" in SRC and "method: 'POST'" in SRC
     assert "demande('cNoeud'" in SRC                          # confirmation intégrée au panneau
     for interdit in ("confirm(", "alert(", "prompt(", "innerHTML"):
@@ -123,8 +125,8 @@ def test_mot_de_passe_par_defaut_ou_sans_cible_interdit_d_ouvrir(navigateur):
     ctx.close()
 
 
-@pytest.mark.parametrize("statut,message", [(401, "Réservé aux administrateurs."), (404, "secubox-webos n’est pas installé")])
-def test_sans_droit_ou_webos_ancien(navigateur, statut, message):
+@pytest.mark.parametrize("statut,message", [(401, "Réservé aux administrateurs."), (404, "secubox-core trop ancien")])
+def test_sans_droit_ou_coeur_ancien(navigateur, statut, message):
     ctx, p, err, posts = ouvre(navigateur, statut=statut)
     p.wait_for_function(f"document.getElementById('noNote').textContent.includes({json.dumps(message)})")
     assert p.locator("#noInterr").is_disabled() and p.inner_text("#noRelais") == "—"

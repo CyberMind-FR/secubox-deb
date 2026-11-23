@@ -1,3 +1,14 @@
+secubox-system (1.13.4-1~trixie1) trixie; urgency=medium
+
+  * Nom du nœud (ref #3883) : routes GET|POST /api/v1/system/noeud/relais
+    (require_jwt, même contrat JSON), demande déposée dans /run/secubox/noeud
+    et traitée par secubox-noeud de secubox-core. La carte de /system/ lit
+    cette API : elle s'affiche sans secubox-webos. Un 404 signifie désormais
+    « secubox-core trop ancien ».
+  * Depends secubox-core (>= 1.8.40~).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 07:57:09 +0100
+
 secubox-system (1.13.3-1~trixie1) trixie; urgency=medium
 
   * Administration, liste des services (ref #3527, #3516) : les services

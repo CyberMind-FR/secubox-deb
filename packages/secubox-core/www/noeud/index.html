@@ -8,8 +8,9 @@
   SecuBox #3821 — ACCUEIL DU NOM DE NŒUD (<nœud>.<zone>, le nom nu de la box). Profil Aurora (.claude/AURORA-REFERENCE.md).
 
   Le nom nu d'une box exposée par son frontal répondait 404 : il montre désormais le dé SecuBox, en plein écran,
-  qui tourne sans fin. Le moteur est celui du Hall (<sbx-dice>, « SecuBox Dice 3D ») et ses six faces, PARTAGÉS
-  avec le Hall (servis sous /_noeud/ par le vhost généré par webos-noeud), jamais recopiés.
+  qui tourne sans fin. Le moteur est celui du Hall (<sbx-dice>, « SecuBox Dice 3D ») et ses six faces, de même source
+  que le Hall (packages/secubox-webos/www/hall), livrés avec cette page par secubox-core sous www/noeud/ et servis sous
+  /_noeud/ par le vhost généré par secubox-noeud : une box sans le Hall sert son accueil (#3883).
 
   Aucune donnée, aucun appel réseau, aucune ressource extérieure : la page ne lit que son propre nom d'hôte.
   Sous prefers-reduced-motion le dé tourne au quart de vitesse (comportement du composant) ; localStorage

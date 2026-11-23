@@ -1,3 +1,23 @@
+secubox-core (1.8.40-1~trixie1) trixie; urgency=medium
+
+  * Accueil du nom de nœud dans le cœur (ref #3883) : secubox-noeud (ex
+    webos-noeud de secubox-webos), unités secubox-noeud.path/.service, page
+    et dé sous /usr/share/secubox/www/noeud/. Une box sans le Hall sert son
+    accueil public (dé, /api/v1/health, relais optionnel fermé par défaut).
+  * Réglages /etc/secubox/noeud/noeud.toml, créés une fois (repris de [noeud] de
+    webos.toml s'il y en a) ; état /var/lib/secubox-noeud (repris de
+    /var/lib/secubox-webos-noeud) ; dépôts /run/secubox/noeud et
+    noeud-resultats. Le vhost secubox-noeud.conf posé par webos est reconnu.
+  * Relecture sécurité : réglages dans le dossier root /etc/secubox/noeud/
+    (noeud.toml root:root 0640, écrit et lu par descripteur ; lien, autre
+    propriétaire ou fichier inscriptible ignorés, relais fermé). Le relais
+    n'est servi, et repris de webos.toml, que si le mot de passe admin par
+    défaut est prouvé changé (audit migre / refuse-migration / refuse).
+  * Breaks/Replaces secubox-webos (<< 1.21.3~). Publier DANS LE MÊME LOT
+    secubox-core 1.8.40, secubox-system 1.13.4 et secubox-webos 1.21.3.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 07:57:09 +0100
+
 secubox-core (1.8.39-1~trixie1) trixie; urgency=medium
 
   * secubox-domaine --migrer (ref #3858) : une section [gk2] / [gk2.*] n'est

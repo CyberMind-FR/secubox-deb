@@ -2,7 +2,10 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-"""SecuBox-Deb :: webos — relais du NOM DE NŒUD (#3824), interrupteur de l'administrateur.
+"""SecuBox-Deb :: api.routers.noeud — relais du NOM DE NŒUD (#3824), interrupteur de l'administrateur.
+
+Dans secubox-system depuis #3883 (route `/api/v1/webos/noeud/relais` de secubox-webos auparavant) : le programme root
+`secubox-noeud` et ses unités sont du cœur (secubox-core), une box sans le Hall affiche la carte « Nom du nœud ».
 
   GET  /noeud/relais   → état : réglage, ce que sert le vhost, ancienne cible et ses chemins, garde du mot de passe
   POST /noeud/relais   → {"actif": bool} ouvre / ferme le relais des autres chemins vers l'ancienne cible
@@ -10,16 +13,15 @@
 Le nom public d'une box (`<nœud>.<zone>`) ne sert que le dé et /api/v1/health ; relayer le reste (sur gk2 : l'API
 admin, metrics, metablogizer…) est une option FERMÉE par défaut, réservée à l'administrateur réel (`require_jwt`).
 
-L'API (secubox, NoNewPrivileges) ne lance rien en root : elle dépose une DEMANDE dans /run/secubox/webos-noeud ;
-secubox-webos-noeud.path lance `webos-noeud traite` (root, unité durcie), qui écrit webos.toml, régénère le vhost
-(nginx -t, retour arrière), audite, et rend le résultat dans /run/secubox/webos-noeud-resultats/<id>.json
+L'API (secubox, NoNewPrivileges) ne lance rien en root : elle dépose une DEMANDE dans /run/secubox/noeud ;
+secubox-noeud.path lance `secubox-noeud traite` (root, unité durcie), qui écrit noeud.toml, régénère le vhost
+(nginx -t, retour arrière), audite, et rend le résultat dans /run/secubox/noeud-resultats/<id>.json
 (root:secubox 0750, relu ici, purgé par le ctl). Ouvrir est refusé (409) tant que le mot de passe admin par défaut
-n'est pas prouvé changé (#3401), ici ET dans le ctl.
+n'est pas prouvé changé (#3401), ici ET dans le ctl. `secubox-noeud` absent (secubox-core antérieur à 1.8.40) : 404.
 """
 from __future__ import annotations
 
 import json
-import logging
 import os
 import re
 import secrets
@@ -31,11 +33,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from secubox_core.auth import require_jwt
+from secubox_core.logger import get_logger
 
 router = APIRouter()
-log = logging.getLogger("webos.noeud")
-DEMANDES = Path("/run/secubox/webos-noeud")
-RESULTATS = Path("/run/secubox/webos-noeud-resultats")
+log = get_logger("system.noeud")
+PROGRAMME = Path("/usr/sbin/secubox-noeud")
+DEMANDES = Path("/run/secubox/noeud")
+RESULTATS = Path("/run/secubox/noeud-resultats")
 DELAI = 30.0
 _ACTEUR = re.compile(r"^[A-Za-z0-9_.@-]{1,64}$")
 REFUS_DEFAUT = ("Changez d'abord le mot de passe administrateur par défaut : le relais des API du nom de nœud reste "
@@ -53,6 +57,8 @@ def _acteur(user: Dict[str, Any]) -> str:
 
 def _ctl(geste: str, acteur: str = "") -> Dict[str, Any]:
     """Dépose une demande, attend le résultat de l'unité root. Route `def` : l'attente tourne dans le pool."""
+    if not PROGRAMME.exists():
+        raise HTTPException(status_code=404, detail="secubox-core trop ancien : secubox-noeud absent (>= 1.8.40 requis)")
     ident = secrets.token_hex(8)
     tmp = DEMANDES / f".tmp.{ident}"       # ignoré par le ctl tant qu'il n'est pas renommé
     try:
@@ -62,7 +68,7 @@ def _ctl(geste: str, acteur: str = "") -> Dict[str, Any]:
         os.replace(tmp, DEMANDES / f"{ident}.demande")      # même dossier : atomique
     except OSError as e:
         log.error("demande du relais non déposée : %s", e)
-        raise HTTPException(status_code=503, detail="demande non déposée (secubox-webos-noeud.path inactif ?)") from None
+        raise HTTPException(status_code=503, detail="demande non déposée (secubox-noeud.path inactif ?)") from None
     res = RESULTATS / f"{ident}.json"
     fin = time.monotonic() + DELAI
     while time.monotonic() < fin:
@@ -70,8 +76,8 @@ def _ctl(geste: str, acteur: str = "") -> Dict[str, Any]:
             return json.loads(res.read_text())
         except (OSError, ValueError):
             time.sleep(0.2)
-    log.error("webos-noeud : pas de résultat pour %s", geste)
-    raise HTTPException(status_code=504, detail="webos-noeud n'a pas répondu")
+    log.error("secubox-noeud : pas de résultat pour %s", geste)
+    raise HTTPException(status_code=504, detail="secubox-noeud n'a pas répondu")
 
 
 def _etat(r: Dict[str, Any]) -> Dict[str, Any]:
@@ -96,6 +102,6 @@ def relais_basculer(body: Interrupteur, user: dict = Depends(require_jwt)):
     if code == 3:
         raise HTTPException(status_code=409, detail=REFUS_DEFAUT)
     if code != 0:
-        log.error("webos-noeud relais : code %s", code)
+        log.error("secubox-noeud relais : code %s", code)
         raise HTTPException(status_code=500, detail="relais inchangé (nginx refuse le vhost, ou réglage illisible)")
     return {"success": True, **_etat(r)}

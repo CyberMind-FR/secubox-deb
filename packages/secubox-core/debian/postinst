@@ -376,6 +376,48 @@ REPRISE
         [ -d /etc/unbound/unbound.conf.d ] && systemctl start --no-block secubox-dns-listes.service 2>/dev/null || true
     fi
 
+    # ACCUEIL DU NOM DE NŒUD (#3821, #3824), dans le cœur depuis #3883 : il vivait dans secubox-webos (le Hall,
+    # optionnel) ; une box sans webos ne servait ni son accueil public ni la carte « Nom du nœud » de /system/.
+    # Réglages : MIGRATION UNE FOIS, par `secubox-noeud migrer` (root, tout par descripteur). Ils vivent dans un dossier
+    # ROOT, /etc/secubox/noeud/ (root:root 0755) : /etc/secubox appartient au compte secubox, qui pourrait y remplacer un
+    # fichier. Un chemin noeud/ qui n'est pas un vrai dossier de root est REFUSÉ bruyamment (rien n'est créé).
+    # noeud.toml (root:root 0640) absent : repris des clés booléennes de [noeud] de webos.toml, sinon les défauts ;
+    # relais_api = true n'est repris que si le mot de passe admin par défaut est prouvé changé (audité : migre /
+    # refuse-migration). webos.toml présent mais illisible : rien n'est créé, nouvel essai au prochain configure.
+    if [ -x /usr/sbin/secubox-noeud ]; then
+        /usr/sbin/secubox-noeud migrer || echo "secubox-core : /etc/secubox/noeud/noeud.toml non créé (voir ci-dessus ; défauts : accueil posé, relais fermé)" >&2
+    fi
+    # État (route reprise, ancienne cible) : celui de secubox-webos repris une fois, s'il est un vrai dossier de root.
+    if [ -d /var/lib/secubox-webos-noeud ] && [ ! -L /var/lib/secubox-webos-noeud ] \
+       && [ "$(stat -c %u /var/lib/secubox-webos-noeud)" = 0 ] \
+       && [ ! -e /var/lib/secubox-noeud ] && [ ! -L /var/lib/secubox-noeud ]; then
+        mv /var/lib/secubox-webos-noeud /var/lib/secubox-noeud
+        chmod 0700 /var/lib/secubox-noeud
+        echo "secubox-core : état du nom de nœud repris de /var/lib/secubox-webos-noeud"
+    fi
+    # Le vhost /etc/nginx/conf.d/secubox-noeud.conf garde son nom ; celui de webos (ancien en-tête) est reconnu et
+    # régénéré. L'existant gagne ; route par sbxwaf, jamais de contournement ; aucune nouvelle exposition tant que le
+    # mot de passe admin par défaut est actif (#3401). Un échec n'arrête pas l'installation.
+    if [ -x /usr/sbin/secubox-noeud ]; then
+        /usr/sbin/secubox-noeud appliquer || echo "secubox-core : accueil du nom de nœud non posé (voir ci-dessus)" >&2
+        /usr/sbin/secubox-noeud prepare || echo "secubox-core : dépôt des demandes du relais non préparé" >&2
+    fi
+    # Unités : activées sur le système de fichiers (deb-systemd-helper, valable dans le chroot d'une image, #3411) ;
+    # un disable de l'opérateur survit à la mise à jour. Le .path n'est démarré que sous systemd.
+    for _u in secubox-noeud.path secubox-noeud.service; do
+      if deb-systemd-helper --quiet was-enabled "$_u"; then
+        deb-systemd-helper enable "$_u" >/dev/null || true
+      else
+        deb-systemd-helper update-state "$_u" >/dev/null || true
+      fi
+    done
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload 2>/dev/null || true
+        if deb-systemd-helper --quiet is-enabled secubox-noeud.path 2>/dev/null; then
+            systemctl start secubox-noeud.path 2>/dev/null || true
+        fi
+    fi
+
     # HAProxy tire par network-online.target, pas seulement par
     # multi-user.target (#998). Un [Install] pose en drop-in n'est pas honore
     # par `systemctl enable` : le lien doit etre cree explicitement.

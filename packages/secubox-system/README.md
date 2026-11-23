@@ -81,14 +81,25 @@ restent soumises à la liste de refus (secrets). Voir le README de secubox-core.
 délégué (R-L5-15, R-L5-16) : les premières passent par les actions du pilotage (L2). `POST /check_updates` et
 `POST /run_diagnostic_test` (GET avant 1.11.6).
 
-## Nom du nœud (#3824)
+## Nom du nœud (#3824, #3883)
 
 Panneau « Nom du nœud » de la page Système : l'interrupteur du **relais des autres chemins** du nom public
 (`<nœud>.<zone>`) vers l'ancienne cible de sa route, **fermé par défaut** (le nom ne sert que le dé SecuBox et
 `/api/v1/health`). Il montre le nom, ce qui est toujours servi, l'état (404 — FERMÉ / RELAYÉS), l'ancienne cible et,
 ouvert, la liste des chemins relayés publiquement. Bascule confirmée dans le panneau ; ouvrir est impossible tant que le
-mot de passe par défaut est actif ou sans ancienne cible. API : `GET|POST /api/v1/webos/noeud/relais` de
-**secubox-webos ≥ 1.21.1** (`require_jwt`), voir son README ; webos absent ou plus ancien : « — » et une note.
+mot de passe par défaut est actif ou sans ancienne cible. La carte ne dépend plus du Hall (#3883 : la route était
+`/api/v1/webos/noeud/relais` de secubox-webos) :
+
+| Méthode | Route | Garde | Effet |
+|---|---|---|---|
+| GET | `/api/v1/system/noeud/relais` | `require_jwt` | état : `domaine`, `relais_api`, `relais_actif`, `vhost`, `cible`, `chemins_cible`, `source_chemins`, `servis`, `mot_de_passe_defaut` |
+| POST | `/api/v1/system/noeud/relais` | `require_jwt` | `{"actif": bool}` → l'état et `success` ; **409** pour ouvrir tant que le mot de passe admin par défaut est actif (#3401) ; 500 si `nginx -t` refuse (réglage et vhost remis) |
+
+Même contrat JSON qu'avant. L'API (secubox, `NoNewPrivileges`) ne lance rien en root : elle dépose `<id>.demande` dans
+`/run/secubox/noeud`, traitée par `secubox-noeud.path` → `secubox-noeud traite` de **secubox-core ≥ 1.8.40** (voir son
+README : réglages `/etc/secubox/noeud/noeud.toml`, audit) ; résultat relu dans `/run/secubox/noeud-resultats/<id>.json`.
+`secubox-noeud` absent (cœur trop ancien) : **404**, et la carte affiche « secubox-core trop ancien ». 503 si le dépôt
+est impossible, 504 sans réponse sous 30 s.
 
 ## Accès SSH (#3401)
 

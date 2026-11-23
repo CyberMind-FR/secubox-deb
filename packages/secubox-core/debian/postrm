@@ -1,0 +1,32 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+
+case "$1" in
+    remove)
+        # ACCUEIL DU NOM DE NŒUD (#3883) : l'activation des unités est effacée (le prerm les a arrêtées).
+        if command -v deb-systemd-helper >/dev/null 2>&1; then
+            deb-systemd-helper mask secubox-noeud.path secubox-noeud.service >/dev/null 2>&1 || true
+        fi
+        rm -rf /run/secubox/noeud /run/secubox/noeud-resultats
+        ;;
+    purge)
+        if command -v deb-systemd-helper >/dev/null 2>&1; then
+            deb-systemd-helper purge secubox-noeud.path secubox-noeud.service >/dev/null 2>&1 || true
+            deb-systemd-helper unmask secubox-noeud.path secubox-noeud.service >/dev/null 2>&1 || true
+        fi
+        # État du vhost du nom de nœud (root 0700) et réglages : seulement à la purge.
+        rm -rf /var/lib/secubox-noeud
+        rm -rf /etc/secubox/noeud
+        ;;
+esac
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+
+#DEBHELPER#
+
+exit 0

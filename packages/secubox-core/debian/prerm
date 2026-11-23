@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+set -e
+
+case "$1" in
+    remove)
+        # ACCUEIL DU NOM DE NŒUD (#3821, #3883) : les unités s'arrêtent, le vhost généré part avec le paquet et une
+        # route reprise retrouve son ancienne cible. Jamais à la mise à jour (le vhost reste servi).
+        if [ -d /run/systemd/system ]; then
+            systemctl stop secubox-noeud.path secubox-noeud.service 2>/dev/null || true
+        fi
+        if [ -x /usr/sbin/secubox-noeud ]; then
+            /usr/sbin/secubox-noeud retirer || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

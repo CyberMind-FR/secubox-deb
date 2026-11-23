@@ -61,6 +61,13 @@ try:
 except ImportError as e:
     log.error("Router ssh non chargé : %s", e)
 
+# Relais du nom de nœud (#3824, #3883) : demandes par fichier à secubox-noeud (secubox-core, root)
+try:
+    from api.routers.noeud import router as noeud_router
+    app.include_router(noeud_router)
+except ImportError as e:
+    log.error("Router noeud non chargé : %s", e)
+
 # Import et inclusion du router remote-ui (OTG + WiFi)
 try:
     from api.routers.remote_ui import router as remote_ui_router

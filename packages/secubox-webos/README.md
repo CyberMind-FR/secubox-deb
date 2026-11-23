@@ -27,52 +27,15 @@ disponible et bascule seul quand un service apprend à se résumer.
 | **Le BiB** | voir ci-dessous |
 | **Vue maître (v2)** | coque responsive derrière le flag `hall_v2` de `/etc/secubox/webos.toml` (prévisualisation : `?hall=v2`) — jetons `tokens.css`, `hall-v2.css`, `hall-v2.js` ; état public `GET /api/v1/webos/public/etat` → `{hall_v2, version, en_ligne}` ; dé SecuBox `<sbx-dice>` (`sbx-dice.js`, textures `dice/`) dans la topbar ; composants `window.SbxUI` (`composants.js/.css` : Card, Hero, StatRing, Sparkline, Tabs, Pill, Tile, ModuleTile, NewsItem, DeviceRow) ; relevé `GET /api/v1/webos/public/systeme` → `{cpu_pct, charge, coeurs, mem, disque, reseau, es, uptime_s, releve}` ; `GET /public/services` porte `status ∈ {active, idle, offline, stale, nosource}`, `releve`, `intervalle_s` ; dossier `docs/dossiers/hall-vue-maitre.md` (#2996) |
 
-## Accueil du nom de nœud (#3821)
+## Accueil du nom de nœud (#3821, #3824) : dans secubox-core depuis 1.21.3 (#3883)
 
-Le nom nu de la box, `<nœud>.<zone>` (`secubox-domaine`, ex. `gk2.secubox.in`), montre **par défaut** le dé
-SecuBox en plein écran, qui tourne sans fin (`www/noeud/index.html`, profil Aurora : aucune donnée, aucun appel
-réseau, aucune ressource extérieure ; quart de vitesse sous `prefers-reduced-motion`, comme le composant).
-
-`webos-noeud appliquer` (lancé par le `postinst`) pose :
-
-- le vhost **généré** `/etc/nginx/conf.d/secubox-noeud.conf` sur `:9080` : `location = /` (la page),
-  `/_noeud/sbx-dice.js`, `/_noeud/dice/` (moteur et faces du **Hall**, partagés) et `location = /api/v1/health`
-  (relayée à l'ancienne cible s'il y en a une, sinon `{"status": "ok"}` rendu sur place) ; **tout le reste rend 404**
-  (#3824) ; `nginx -t` avant tout rechargement, l'ancien fichier revient sinon ;
-- la route sbxwaf `<nœud>.<zone> → :9080` (`secubox-waf-route`) : le WAF reste sur le chemin, jamais de contournement ;
-- le vhost HAProxy derrière `sbxwaf_inspector`, s'il n'est pas déjà déclaré.
-
-**L'existant gagne** : un `server_name` qui nomme déjà ce domaine (exact ou `.domaine`), ou une route vers une autre
-cible qui **sert** « / », et rien n'est posé. Une ancienne cible qui rend **404** à « / » (cas de gk2 : route à la
-main vers le serveur sans nom de `:8000`) est reprise : seule sa santé lui est relayée (voir ci-dessous). Aucune
-**nouvelle** exposition tant que le mot de passe admin par défaut est actif (#3401, refus audité). Chaque décision
-va dans `/var/log/secubox/audit.log` ; état dans `/var/lib/secubox-webos-noeud/etat.json` (root 0600).
-Désactiver : `[noeud] accueil = false` dans `/etc/secubox/webos.toml`, puis `webos-noeud appliquer`. `webos-noeud
-retirer` (`prerm`) retire le vhost et rend à une route reprise son ancienne cible ; `webos-noeud etat` dit ce qui est en place.
-
-### Relais des autres chemins : une option fermée par défaut (#3824)
-
-Le nom public ne sert **que** le dé et `/api/v1/health` (décision du propriétaire : l'API d'administration n'est jamais
-exposée par ce nom). Relayer les autres chemins à l'ancienne cible (sur gk2 : `/api/v1/admin/`, `metrics`,
-`metablogizer`, `system/metrics` du serveur `eye-remote-api` :8000) est une **option**, `[noeud] relais_api` de
-`/etc/secubox/webos.toml`, **fausse par défaut** (absente, illisible ou autre que `true` = fermé). Une montée depuis
-1.21.0, qui relayait tout, réécrit donc le vhost **fermé** (audit `vhost regenere`).
-
-L'administrateur l'ouvre ou la ferme depuis la page **Système** (panneau « Nom du nœud ») :
-
-| Méthode | Route | Garde | Effet |
-|---|---|---|---|
-| GET | `/api/v1/webos/noeud/relais` | `require_jwt` | état : `relais_api`, `relais_actif`, `vhost`, `domaine`, `cible`, `chemins_cible` (les `location` du serveur nginx qui écoute sur la cible), `source_chemins`, `servis`, `mot_de_passe_defaut` |
-| POST | `/api/v1/webos/noeud/relais` | `require_jwt` | `{"actif": bool}` ; **409** pour ouvrir tant que le mot de passe admin par défaut est actif (#3401) ; 500 si `nginx -t` refuse (réglage et vhost remis) |
-
-Écritures **sans sudo** : l'API (secubox, `NoNewPrivileges`) dépose `<id>.demande` dans `/run/secubox/webos-noeud`
-(root:secubox 1770) ; `secubox-webos-noeud.path` lance `secubox-webos-noeud.service` (oneshot root durci,
-exception RULES-CODE § 10) qui exécute `webos-noeud traite` : `webos.toml` réécrit atomiquement (seule la clé change,
-TOML validé, mode et propriétaire gardés), vhost régénéré (ni la route sbxwaf ni HAProxy ne sont touchées),
-`nginx -t` (par `systemd-run`) puis rechargement, audit `relais_api ouvert|ferme|refus|echec` avec l'acteur et les
-chemins relayés ; résultat dans `/run/secubox/webos-noeud-resultats/<id>.json` (0640). Les demandes ne sont pas ouvertes
-au jeton délégué du pilotage. En ligne de commande (root) : `webos-noeud relais activer|desactiver [acteur]`,
-`webos-noeud relais etat`.
+L'accueil public du nom nu de la box (`<nœud>.<zone>` : le dé, `/api/v1/health`, relais optionnel fermé par défaut) et
+son relais ne sont plus à ce paquet : programme `secubox-noeud`, unités `secubox-noeud.path/.service` et réglages
+`/etc/secubox/noeud/noeud.toml` dans **secubox-core** (voir son README), route `GET|POST /api/v1/system/noeud/relais` dans
+**secubox-system**. Une box sans le Hall sert donc son accueil. La montée vers 1.21.3 arrête et désactive les anciennes
+unités `secubox-webos-noeud.*` (preinst) ; le vhost, la route, l'état et la section `[noeud]` de `webos.toml` sont repris
+par le postinst du cœur. Le moteur et les faces du dé (`www/hall/sbx-dice.js`, `www/hall/dice/`) restent ici : ils
+sont la **source** que secubox-core et secubox-hub livrent.
 
 ## Les cartes du Hall
 

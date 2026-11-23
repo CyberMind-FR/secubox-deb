@@ -4,23 +4,25 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 """
-SecuBox-Deb :: webos — accueil du NOM DE NŒUD (#3821), API fermées sur ce nom (#3824)
+SecuBox-Deb :: core — accueil du NOM DE NŒUD (#3821), API fermées sur ce nom (#3824), dans le cœur (#3883)
 CyberMind — https://cybermind.fr
 
 Le nom nu d'une box, `<nœud>.<zone>` (`secubox-domaine`, ex. gk2.secubox.in), est celui que son frontal expose en
 premier. Il ne servait rien : sur gk2 une route posée à la main l'envoyait vers un serveur nginx sans nom (:8000) qui
 rend 404 à « / » ; ailleurs il n'avait pas de route du tout. Ce script lui donne, PAR DÉFAUT et sur chaque box, une page
-d'accueil : le dé SecuBox en plein écran (moteur et faces du Hall, partagés).
+d'accueil : le dé SecuBox en plein écran (moteur et faces du Hall, livrés avec la page par secubox-core : une box
+sans le Hall, sans secubox-webos, sert son accueil, #3883).
 
-    webos-noeud appliquer   (postinst) déclare le vhost nginx, la route sbxwaf et le vhost HAProxy
-    webos-noeud retirer     (postrm)   retire le vhost et rend à la route son ancienne cible si on l'avait reprise
-    webos-noeud etat        ce qui est en place, en JSON
-    webos-noeud relais activer|desactiver [acteur]   ouvre / ferme le relais des autres chemins (#3824)
-    webos-noeud relais etat                          l'état du relais, en JSON
-    webos-noeud prepare | traite   (secubox-webos-noeud.service, root) dépôt des demandes de l'API et leur traitement
+    secubox-noeud appliquer   (postinst) déclare le vhost nginx, la route sbxwaf et le vhost HAProxy
+    secubox-noeud retirer     (prerm)    retire le vhost et rend à la route son ancienne cible si on l'avait reprise
+    secubox-noeud etat        ce qui est en place, en JSON
+    secubox-noeud relais activer|desactiver [acteur]   ouvre / ferme le relais des autres chemins (#3824)
+    secubox-noeud relais etat                          l'état du relais, en JSON
+    secubox-noeud migrer      (postinst) dossier root des réglages, noeud.toml créé une fois (repris de webos.toml)
+    secubox-noeud prepare | traite   (secubox-noeud.service, root) dépôt des demandes de l'API et leur traitement
 
 RÈGLES, dans l'ordre :
-  1. `[noeud] accueil = false` dans /etc/secubox/webos.toml : rien n'est posé, ce qui l'avait été est retiré.
+  1. `[noeud] accueil = false` dans /etc/secubox/noeud/noeud.toml : rien n'est posé, ce qui l'avait été est retiré.
   2. CE QUI EST EXPLICITE GAGNE. Un serveur nginx qui nomme déjà ce domaine (server_name exact ou `.domaine`) : rien.
      Une route sbxwaf vers une autre cible que 9080 qui SERT quelque chose à « / » : rien. Seule une ancienne cible
      qui répond 404 à « / » est reprise.
@@ -28,7 +30,7 @@ RÈGLES, dans l'ordre :
      ressources sous /_noeud/ et `/api/v1/health` (relayé à l'ancienne cible s'il y en a une, sinon un 200 JSON local) ;
      TOUT LE RESTE rend 404. Relayer les autres chemins à l'ancienne cible (sur gk2 : l'API admin, metrics,
      metablogizer…) est une OPTION, fermée par défaut : `[noeud] relais_api = true`, que l'administrateur ouvre ou
-     ferme depuis la page Système (API webos, require_jwt) ; chaque bascule est auditée. L'ouvrir est refusé tant que
+     ferme depuis la page Système (API system, require_jwt) ; chaque bascule est auditée. L'ouvrir est refusé tant que
      le mot de passe admin par défaut n'est pas prouvé changé (#3401).
   4. LE WAF RESTE SUR LE CHEMIN. La route va vers nginx :9080 par sbxwaf comme tout vhost ; jamais de contournement.
   5. Aucune NOUVELLE exposition publique tant que le mot de passe admin par défaut n'est pas prouvé changé (#3401) :
@@ -49,7 +51,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 
-MODULE = "webos-noeud"
+MODULE = "noeud"
 PORT = 9080
 WWW = "/usr/share/secubox/www"
 # Racine substituée (tests seulement) : honorée HORS root uniquement.
@@ -61,16 +63,22 @@ CONF = R + "/etc/nginx/conf.d/secubox-noeud.conf"
 DOSSIERS_NGINX = (R + "/etc/nginx/sites-enabled", R + "/etc/nginx/conf.d")
 FORMAT_HOTES = R + "/etc/nginx/conf.d/secubox-hosts-log.conf"   # log_format sbx_host (secubox-metrics)
 ROUTES = os.environ.get("SBX_WAF_ROUTES", R + "/etc/secubox/waf/haproxy-routes.json")
-REGLAGES = R + "/etc/secubox/webos.toml"
+# Réglages dans un dossier ROOT (#3883, relecture) : /etc/secubox appartient au compte secubox (0755), qui pourrait y
+# renommer ou remplacer un fichier. Le dossier noeud/ est root:root 0755, le fichier root:root 0640 ; tout passe par le
+# descripteur du dossier (lecture O_NOFOLLOW + fstat, écriture par fd puis rename/link dans ce dossier).
+REGLAGES = R + "/etc/secubox/noeud/noeud.toml"
+WEBOS_TOML = R + "/etc/secubox/webos.toml"      # migration seulement (lisible et inscriptible par secubox)
+PROPRIO = 0                                      # propriétaire exigé du dossier et du fichier (substitué par les tests)
+TAILLE_REGLAGES = 1 << 20
 HAPROXY_TOML = R + "/etc/secubox/haproxy.toml"
-ETAT_DIR = R + "/var/lib/secubox-webos-noeud"
+ETAT_DIR = R + "/var/lib/secubox-noeud"
 ETAT = ETAT_DIR + "/etat.json"
 AUDIT = R + "/var/log/secubox/audit.log"
 MDP_DEFAUT_PY = "/usr/lib/python3/dist-packages/secubox_core/mot_de_passe_defaut.py"
-# Demandes de l'API webos (#3824) : dépôt root:secubox 1770 (l'API dépose), résultats root:secubox 0750 (l'API lit).
+# Demandes de l'API system (#3824, #3883) : dépôt root:secubox 1770 (l'API dépose), résultats root:secubox 0750 (l'API lit).
 # Créés par `prepare`, en root, jamais par tmpfiles (#3172) ; un lien à leur place est retiré, jamais suivi.
-DEMANDES = R + "/run/secubox/webos-noeud"
-RESULTATS = R + "/run/secubox/webos-noeud-resultats"
+DEMANDES = R + "/run/secubox/noeud"
+RESULTATS = R + "/run/secubox/noeud-resultats"
 TAILLE_DEMANDE = 512
 NOM_DEMANDE = re.compile(r"^[a-f0-9]{16}\.demande$")
 ACTEUR = re.compile(r"^[A-Za-z0-9_.@-]{1,64}$")
@@ -79,7 +87,16 @@ NGINX_T_PAR_SYSTEMD = os.environ.get("SBX_NOEUD_UNITE") == "1"
 
 DOMAINE = re.compile(r"^(?=.{4,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
 SERVER_NAME = re.compile(r"\bserver_name\s+([^;]+);")
-ENTETE = "# GÉNÉRÉ par /usr/sbin/webos-noeud (secubox-webos, #3821)"
+ENTETE = "# GÉNÉRÉ par /usr/sbin/secubox-noeud (secubox-core, #3821)"
+# Le même vhost, posé par secubox-webos avant #3883 : il reste le nôtre (régénéré, retiré, jamais laissé orphelin).
+ENTETE_WEBOS = "# GÉNÉRÉ par /usr/sbin/webos-noeud (secubox-webos, #3821)"
+# Ligne posée dans le vhost quand il RELAIE les autres chemins : c'est elle qui dit ce qui est servi (relais_actif).
+MARQUE_RELAIS = "\n    # [noeud] relais_api = true (#3824)"
+
+
+def est_le_notre(texte: str) -> bool:
+    """Le vhost porte notre en-tête, ou celui de secubox-webos d'avant #3883 (repris tel quel à la montée)."""
+    return texte.startswith((ENTETE, ENTETE_WEBOS))
 
 
 def log(msg: str) -> None:
@@ -119,32 +136,126 @@ def domaine() -> str:
     return dom if DOMAINE.match(dom) else ""
 
 
-def accueil_voulu() -> bool:
-    """`[noeud] accueil` de webos.toml, vrai par défaut. Un fichier illisible ne désactive rien."""
+class ReglagesRefuses(Exception):
+    """Dossier ou fichier de réglages qui n'est pas celui de root (lien, autre propriétaire, inscriptible, trop grand)."""
+
+
+def _ouvrir_dossier_reglages(creer: bool = False) -> int:
+    """Descripteur du dossier des réglages : vrai dossier (jamais un lien), de PROPRIO, non inscriptible par groupe ni
+    autres. FileNotFoundError s'il n'existe pas (et `creer` faux) ; ReglagesRefuses sinon."""
+    dossier = os.path.dirname(REGLAGES)
+    parent, nom = os.path.split(dossier)
+    pfd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     try:
-        import tomllib
-        with open(REGLAGES, "rb") as fh:
-            val = tomllib.load(fh).get("noeud", {}).get("accueil", True)
+        if creer:
+            try:
+                os.mkdir(nom, 0o755, dir_fd=pfd)
+            except FileExistsError:
+                pass
+        try:
+            fd = os.open(nom, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=pfd)
+        except FileNotFoundError:
+            raise
+        except OSError as e:
+            raise ReglagesRefuses(f"{dossier} n'est pas un vrai dossier ({e.__class__.__name__})") from None
+    finally:
+        os.close(pfd)
+    st = os.fstat(fd)
+    if st.st_uid != PROPRIO or st.st_mode & 0o022:
+        os.close(fd)
+        raise ReglagesRefuses(f"{dossier} : propriétaire {st.st_uid}, mode {oct(stat.S_IMODE(st.st_mode))} "
+                              f"(attendu : uid {PROPRIO}, non inscriptible par groupe ni autres)")
+    return fd
+
+
+def _lire_texte(dfd: int) -> str | None:
+    """Le texte du fichier de réglages, lu par le descripteur du dossier ; None s'il n'existe pas. Lien, FIFO, autre
+    propriétaire que PROPRIO, inscriptible par groupe ou autres, trop grand : ReglagesRefuses."""
+    try:
+        fd = os.open(os.path.basename(REGLAGES), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
     except FileNotFoundError:
+        return None
+    except OSError as e:
+        raise ReglagesRefuses(f"{REGLAGES} : ouverture refusée ({e.__class__.__name__} : lien ?)") from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != PROPRIO or st.st_mode & 0o022 or st.st_size > TAILLE_REGLAGES:
+            raise ReglagesRefuses(f"{REGLAGES} : pas un fichier ordinaire de l'uid {PROPRIO} non inscriptible par "
+                                  "groupe ni autres, ou trop grand")
+        return os.read(fd, st.st_size + 1).decode("utf-8")
+    finally:
+        os.close(fd)
+
+
+def _ecrire_reglages(dfd: int, texte: str, remplacer: bool = True) -> None:
+    """Écrit le fichier dans le dossier root, par descripteur : temporaire O_EXCL|O_NOFOLLOW, fchmod 0640 et fchown
+    root sur le DESCRIPTEUR (jamais par chemin), fsync, puis rename (remplacer) ou link (créer sans jamais écraser :
+    FileExistsError)."""
+    nom = os.path.basename(REGLAGES)
+    tmp = f".{nom}.{os.urandom(6).hex()}"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dfd)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(texte)
+            fh.flush()
+            os.fchmod(fh.fileno(), 0o640)
+            if os.geteuid() == 0:
+                os.fchown(fh.fileno(), 0, 0)
+            os.fsync(fh.fileno())
+        if remplacer:
+            os.replace(tmp, nom, src_dir_fd=dfd, dst_dir_fd=dfd)
+        else:
+            os.link(tmp, nom, src_dir_fd=dfd, dst_dir_fd=dfd, follow_symlinks=False)
+            os.unlink(tmp, dir_fd=dfd)
+    except BaseException:
+        try:
+            os.unlink(tmp, dir_fd=dfd)
+        except OSError:
+            pass
+        raise
+
+
+def lire_reglages() -> dict | None:
+    """Les réglages ({} s'il n'y en a pas) ; None s'ils sont refusés ou illisibles (dit sur stderr)."""
+    import tomllib
+    try:
+        dfd = _ouvrir_dossier_reglages()
+    except FileNotFoundError:
+        return {}
+    except (OSError, ReglagesRefuses) as e:
+        log(f"réglages refusés : {e}")
+        return None
+    try:
+        texte = _lire_texte(dfd)
+        return {} if texte is None else tomllib.loads(texte)
+    except (OSError, ValueError, ReglagesRefuses) as e:
+        log(f"réglages refusés ou illisibles : {e}")
+        return None
+    finally:
+        os.close(dfd)
+
+
+def _section(reglages: dict) -> dict:
+    sec = reglages.get("noeud", {})
+    return sec if isinstance(sec, dict) else {}
+
+
+def accueil_voulu() -> bool:
+    """`[noeud] accueil` de noeud.toml, vrai par défaut. Un fichier refusé ou illisible ne désactive rien."""
+    r = lire_reglages()
+    if r is None:
+        log("accueil : réglage par défaut (actif)")
         return True
-    except (OSError, ValueError) as e:
-        log(f"{REGLAGES} illisible ({e.__class__.__name__}) : réglage par défaut (accueil actif)")
-        return True
-    return val is not False
+    return _section(r).get("accueil", True) is not False
 
 
 def relais_voulu() -> bool:
-    """`[noeud] relais_api` de webos.toml, FAUX par défaut (#3824) : seul `true` ouvre. Illisible : fermé."""
-    try:
-        import tomllib
-        with open(REGLAGES, "rb") as fh:
-            val = tomllib.load(fh).get("noeud", {}).get("relais_api", False)
-    except FileNotFoundError:
+    """`[noeud] relais_api` de noeud.toml, FAUX par défaut (#3824) : seul `true` ouvre. Refusé ou illisible : fermé."""
+    r = lire_reglages()
+    if r is None:
+        log("relais des autres chemins FERMÉ (réglages refusés ou illisibles)")
         return False
-    except (OSError, ValueError) as e:
-        log(f"{REGLAGES} illisible ({e.__class__.__name__}) : relais des autres chemins FERMÉ")
-        return False
-    return val is True
+    return _section(r).get("relais_api", False) is True
 
 
 def noms_explicites(dom: str) -> list[str]:
@@ -284,8 +395,8 @@ def rendre(dom: str, repli: tuple[str, int] | None, journal_hotes: bool, relais:
            "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
     return f"""{ENTETE} — ne pas éditer : réécrit à chaque configuration du paquet.
 # Accueil du nom de nœud : le dé SecuBox en plein écran sur « / » EXACT, sa santé, rien d'autre (#3824).
-# Désactiver : [noeud] accueil = false dans /etc/secubox/webos.toml, puis `webos-noeud appliquer`.
-# Relais des autres chemins vers l'ancienne cible : page Système, ou `webos-noeud relais activer|desactiver`.
+# Désactiver : [noeud] accueil = false dans /etc/secubox/noeud/noeud.toml, puis `secubox-noeud appliquer`.
+# Relais des autres chemins vers l'ancienne cible : page Système, ou `secubox-noeud relais activer|desactiver`.
 server {{
     listen {PORT};
     server_name {dom};
@@ -298,14 +409,14 @@ server {{
         add_header Referrer-Policy "no-referrer" always;
         add_header Cache-Control "no-cache" always;
     }}
-    # Le moteur et les six faces du Hall, partagés (jamais recopiés).
+    # Le moteur et les six faces du dé (source : le Hall), livrés avec la page par secubox-core (#3883).
     location = /_noeud/sbx-dice.js {{
-        alias {WWW}/hall/sbx-dice.js;
+        alias {WWW}/noeud/sbx-dice.js;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Cache-Control "no-cache" always;
     }}
     location ^~ /_noeud/dice/ {{
-        alias {WWW}/hall/dice/;
+        alias {WWW}/noeud/dice/;
         add_header X-Content-Type-Options "nosniff" always;
     }}
 {sante}{reste}}}
@@ -357,7 +468,7 @@ def poser_conf(texte: str) -> bool:
 def retirer_conf() -> bool:
     try:
         with open(CONF, encoding="utf-8") as fh:
-            if not fh.readline().startswith(ENTETE):
+            if not est_le_notre(fh.readline()):
                 log(f"{CONF} n'est pas le nôtre : laissé tel quel")
                 return False
     except FileNotFoundError:
@@ -473,6 +584,12 @@ def appliquer() -> int:
         audit("exposition_refusee", "refus", f"{dom} : mot de passe admin par défaut actif ou inconnu (#3401)")
         log("mot de passe admin par défaut actif ou inconnu : route et vhost HAProxy en attente (#3401)")
     relais = relais_voulu()
+    if relais and not mot_de_passe_change():
+        # #3883 (relecture) : un relais ouvert n'est servi que si le mot de passe admin par défaut est PROUVÉ changé.
+        relais = False
+        audit("relais_api", "refuse", f"{dom} : relais_api = true NON servi, mot de passe admin par défaut actif ou "
+                                      "inconnu (#3401)")
+        log("mot de passe admin par défaut actif ou inconnu : relais des autres chemins FERMÉ (#3401)")
     avant = lire_conf()
     texte = rendre(dom, repli, os.path.isfile(FORMAT_HOTES), relais)
     if not poser_conf(texte):
@@ -517,7 +634,7 @@ CLE_RELAIS = re.compile(r"^\s*relais_api\s*=")
 
 
 def reglage_avec_relais(texte: str, valeur: bool) -> str:
-    """Le texte de webos.toml avec `[noeud] relais_api = valeur`, le reste intact (commentaires compris)."""
+    """Le texte de noeud.toml avec `[noeud] relais_api = valeur`, le reste intact (commentaires compris)."""
     ligne = f"relais_api = {'true' if valeur else 'false'}"
     lignes = texte.splitlines()
     debut = next((i for i, x in enumerate(lignes) if SECTION.match(x)), None)
@@ -533,42 +650,131 @@ def reglage_avec_relais(texte: str, valeur: bool) -> str:
     return "\n".join(lignes) + "\n"
 
 
-def ecrire_reglage_relais(valeur: bool) -> tuple[str, int, tuple[int, int] | None] | None:
-    """Pose `relais_api` dans webos.toml, atomiquement (mode et propriétaire gardés). Rend de quoi le remettre :
-    (ancien texte, "" s'il n'existait pas ; mode ; propriétaire) ; None si refus (rien n'est écrit)."""
+def ecrire_reglage_relais(valeur: bool) -> tuple[str | None] | None:
+    """Pose `relais_api` dans noeud.toml (dossier root, par descripteur, 0640 root). Rend (ancien texte, None s'il
+    n'existait pas) pour le remettre ; None si refus (rien n'est écrit)."""
     import tomllib
     try:
-        fd = os.open(REGLAGES, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
-        try:
-            st = os.fstat(fd)
-            if not stat.S_ISREG(st.st_mode) or st.st_size > (1 << 20):
-                log(f"{REGLAGES} : pas un fichier ordinaire, ou trop grand — inchangé")
-                return None
-            avant = os.read(fd, st.st_size + 1).decode("utf-8")
-        finally:
-            os.close(fd)
-        mode, proprio = stat.S_IMODE(st.st_mode) & 0o644, (st.st_uid, st.st_gid)
-    except FileNotFoundError:
-        avant, mode, proprio = "", 0o644, None
-    except (OSError, UnicodeDecodeError) as e:
-        log(f"{REGLAGES} illisible ({e.__class__.__name__}) — inchangé")
+        dfd = _ouvrir_dossier_reglages(creer=True)
+    except (OSError, ReglagesRefuses) as e:
+        log(f"réglages refusés ({e}) — inchangé")
         return None
     try:
-        ancien = tomllib.loads(avant)
-        apres = reglage_avec_relais(avant, valeur)
-        nouveau = tomllib.loads(apres)
-    except ValueError as e:
-        log(f"{REGLAGES} n'est pas un TOML valide ({e}) — inchangé, rien n'est écrit")
-        return None
-    # Contrôle : seule la clé voulue a changé, et elle vaut bien ce qu'on a demandé.
-    attendu = dict(ancien)
-    attendu["noeud"] = {**ancien.get("noeud", {}), "relais_api": valeur}
-    if nouveau != attendu:
-        log(f"{REGLAGES} : la réécriture changerait autre chose que relais_api — inchangé")
-        return None
-    if apres != avant:
-        ecrire_atomique(REGLAGES, apres, mode or 0o644, proprio)
-    return avant, mode or 0o644, proprio
+        try:
+            avant = _lire_texte(dfd)
+        except (OSError, ValueError, ReglagesRefuses) as e:
+            log(f"{e} — inchangé")
+            return None
+        try:
+            ancien = tomllib.loads(avant or "")
+            apres = reglage_avec_relais(avant or "", valeur)
+            nouveau = tomllib.loads(apres)
+        except ValueError as e:
+            log(f"{REGLAGES} n'est pas un TOML valide ({e}) — inchangé, rien n'est écrit")
+            return None
+        # Contrôle : seule la clé voulue a changé, et elle vaut bien ce qu'on a demandé.
+        attendu = dict(ancien)
+        attendu["noeud"] = {**_section(ancien), "relais_api": valeur}
+        if nouveau != attendu:
+            log(f"{REGLAGES} : la réécriture changerait autre chose que relais_api — inchangé")
+            return None
+        if apres != avant:
+            try:
+                _ecrire_reglages(dfd, apres)
+            except OSError as e:
+                log(f"{REGLAGES} non écrit ({e.__class__.__name__}) — inchangé")
+                return None
+        return (avant,)
+    finally:
+        os.close(dfd)
+
+
+def remettre_reglages(avant: str | None) -> None:
+    """Retour arrière de ecrire_reglage_relais : l'ancien texte revient, ou le fichier part s'il n'existait pas."""
+    try:
+        dfd = _ouvrir_dossier_reglages()
+    except (OSError, ReglagesRefuses) as e:
+        log(f"{REGLAGES} non remis ({e})")
+        return
+    try:
+        if avant is None:
+            os.unlink(os.path.basename(REGLAGES), dir_fd=dfd)
+        else:
+            _ecrire_reglages(dfd, avant)
+    except OSError as e:
+        log(f"{REGLAGES} non remis ({e.__class__.__name__})")
+    finally:
+        os.close(dfd)
+
+
+def migrer() -> int:
+    """postinst (#3883) : crée le dossier root des réglages, puis noeud.toml UNE fois s'il est absent — repris des clés
+    booléennes de [noeud] de webos.toml (secubox-webos d'avant 1.21.3), sinon les défauts. webos.toml est inscriptible
+    par le compte secubox : `relais_api = true` n'est repris que si le mot de passe admin par défaut est PROUVÉ changé
+    (audit `relais_api migre`), sinon il est posé fermé (audit `relais_api refuse-migration`). webos.toml présent mais
+    illisible : rien n'est créé (code 1), nouvel essai au prochain configure. Dossier qui n'est pas celui de root :
+    REFUS bruyant (code 1)."""
+    import tomllib
+    try:
+        dfd = _ouvrir_dossier_reglages(creer=True)
+    except (OSError, ReglagesRefuses) as e:
+        log(f"REFUS : {e} — réglages non créés ; retirez ce chemin à la main puis relancez « secubox-noeud migrer »")
+        audit("reglages", "refus", str(e))
+        return 1
+    try:
+        try:
+            if _lire_texte(dfd) is not None:
+                return 0                                   # existe : il fait foi
+        except (OSError, ValueError, ReglagesRefuses) as e:
+            log(f"{e} : laissé tel quel, ignoré par secubox-noeud (relais fermé)")
+            return 1
+        cles: dict = {}
+        try:
+            fd = os.open(WEBOS_TOML, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        except FileNotFoundError:
+            fd = None
+        except OSError as e:
+            log(f"{WEBOS_TOML} illisible ({e.__class__.__name__}) : {REGLAGES} non créé, nouvel essai au prochain configure")
+            return 1
+        if fd is not None:
+            try:
+                st = os.fstat(fd)
+                if not stat.S_ISREG(st.st_mode) or st.st_size > TAILLE_REGLAGES:
+                    raise ValueError("pas un fichier ordinaire, ou trop grand")
+                section = tomllib.loads(os.read(fd, st.st_size + 1).decode("utf-8")).get("noeud", {})
+            except (OSError, ValueError) as e:
+                log(f"{WEBOS_TOML} illisible ({e}) : {REGLAGES} non créé, nouvel essai au prochain configure")
+                return 1
+            finally:
+                os.close(fd)
+            if isinstance(section, dict):
+                cles = {k: v for k, v in section.items() if k in ("accueil", "relais_api") and isinstance(v, bool)}
+        accueil, relais_ouvert = cles.get("accueil", True), cles.get("relais_api", False)
+        if relais_ouvert:
+            if mot_de_passe_change():
+                audit("relais_api", "migre", f"relais_api = true repris de {WEBOS_TOML} (mot de passe admin changé)")
+            else:
+                relais_ouvert = False
+                audit("relais_api", "refuse-migration", f"relais_api = true de {WEBOS_TOML} NON repris : mot de passe "
+                                                        "admin par défaut actif ou inconnu (#3401)")
+                log("relais_api = true de webos.toml NON repris : mot de passe admin par défaut actif ou inconnu (#3401)")
+        origine = f"repris de [noeud] de {WEBOS_TOML}" if cles else "défauts"
+        texte = (
+            "# /etc/secubox/noeud/noeud.toml : accueil du nom de nœud (#3821, #3824), géré par secubox-core (#3883).\n"
+            f"# Créé par `secubox-noeud migrer` ({origine}). Exemple : /usr/share/secubox-core/noeud.toml.example\n"
+            "[noeud]\n"
+            "# false = rien n'est posé sur <nœud>.<zone> (et ce qui l'avait été est retiré) ; appliquer : secubox-noeud appliquer\n"
+            f"accueil = {'true' if accueil else 'false'}\n"
+            "# Relais des AUTRES chemins vers l'ancienne cible : FERMÉ par défaut ; page Système ou secubox-noeud relais\n"
+            f"relais_api = {'true' if relais_ouvert else 'false'}\n")
+        try:
+            _ecrire_reglages(dfd, texte, remplacer=False)
+        except FileExistsError:
+            return 0                                       # apparu entre-temps : il fait foi
+        log(f"{REGLAGES} créé ({origine})")
+        return 0
+    finally:
+        os.close(dfd)
 
 
 def chemins_cible(ip: str, port: int) -> dict:
@@ -605,13 +811,13 @@ def etat_relais() -> dict:
     dom = etat.get("domaine") if isinstance(etat.get("domaine"), str) and DOMAINE.match(etat["domaine"]) else None
     repli = cible(etat.get("route_precedente")) if etat.get("route_reprise") else None
     conf = lire_conf()
-    a_nous = conf is not None and conf.startswith(ENTETE)
+    a_nous = conf is not None and est_le_notre(conf)
     voulu = relais_voulu()
     vu = chemins_cible(*repli) if repli else {"source": None, "chemins": []}
     return {
         "domaine": dom,
         "relais_api": voulu,                                       # le réglage
-        "relais_actif": bool(a_nous and voulu and repli),          # ce que sert le vhost
+        "relais_actif": bool(a_nous and repli and MARQUE_RELAIS in conf),   # ce que sert VRAIMENT le vhost
         "vhost": a_nous,
         "cible": f"{repli[0]}:{repli[1]}" if repli else None,
         "chemins_cible": vu["chemins"],
@@ -624,7 +830,7 @@ def etat_relais() -> dict:
 def regenerer() -> bool:
     """Réécrit le vhost (s'il est le nôtre) selon le réglage courant ; ne touche ni la route ni HAProxy."""
     conf = lire_conf()
-    if conf is None or not conf.startswith(ENTETE):
+    if conf is None or not est_le_notre(conf):
         return True                     # rien en place : le réglage vaudra au prochain `appliquer`
     etat = lire_etat()
     dom = etat.get("domaine") if isinstance(etat.get("domaine"), str) and DOMAINE.match(etat["domaine"]) else ""
@@ -646,17 +852,10 @@ def relais(geste: str, acteur: str) -> int:
         return 3
     sauve = ecrire_reglage_relais(valeur)
     if sauve is None:
-        audit("relais_api", "echec", f"{geste} par {acteur} : webos.toml non modifiable, rien n'a changé")
+        audit("relais_api", "echec", f"{geste} par {acteur} : noeud.toml non modifiable, rien n'a changé")
         return 1
     if not regenerer():
-        avant, mode, proprio = sauve
-        try:
-            if avant:
-                ecrire_atomique(REGLAGES, avant, mode, proprio)
-            else:
-                os.unlink(REGLAGES)
-        except OSError as e:
-            log(f"{REGLAGES} non remis ({e.__class__.__name__})")
+        remettre_reglages(sauve[0])
         audit("relais_api", "echec", f"{geste} par {acteur} : nginx -t refuse le vhost, réglage remis")
         return 1
     e = etat_relais()
@@ -673,7 +872,7 @@ def relais(geste: str, acteur: str) -> int:
     return 0
 
 
-# ── Demandes de l'API webos (secubox-webos-noeud.path → .service, root) ──────────────────────────────────────
+# ── Demandes de l'API system (secubox-noeud.path → .service, root) ───────────────────────────────────────────
 
 def _gid_secubox() -> int:
     import grp
@@ -779,7 +978,7 @@ def traite() -> int:
     return 0
 
 
-USAGE = "usage: webos-noeud appliquer|retirer|etat|prepare|traite | relais activer|desactiver [acteur] | relais etat"
+USAGE = "usage: secubox-noeud appliquer|retirer|etat|migrer|prepare|traite | relais activer|desactiver [acteur] | relais etat"
 
 
 def main(argv: list[str]) -> int:
@@ -797,7 +996,7 @@ def main(argv: list[str]) -> int:
             return relais(geste, acteur)
         print(USAGE, file=sys.stderr)
         return 2
-    if len(argv) != 2 or verbe not in ("appliquer", "retirer", "etat", "prepare", "traite"):
+    if len(argv) != 2 or verbe not in ("appliquer", "retirer", "etat", "migrer", "prepare", "traite"):
         print(USAGE, file=sys.stderr)
         return 2
     if os.geteuid() != 0 and not R and verbe != "etat":
@@ -807,6 +1006,8 @@ def main(argv: list[str]) -> int:
         return afficher_etat()
     if verbe == "retirer":
         return retirer("paquet retiré")
+    if verbe == "migrer":
+        return migrer()
     if verbe == "prepare":
         return prepare()
     if verbe == "traite":
