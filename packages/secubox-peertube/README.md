@@ -62,8 +62,14 @@ peertubectl rediffusions purger     # efface (une ligne d'audit par vidéo)
   `secubox`, durcie) l'efface après `jours_conservation` jours. Une vidéo est
   reconnue comme rediffusion par `GET /api/v1/videos/{id}/live-session`
   (200 = rediffusion, 404 = vidéo ordinaire) ; jamais une vidéo téléversée,
-  jamais un direct en cours. Sans la liste, ou au moindre échec d'API, rien
-  n'est effacé et le code de sortie est non nul.
+  jamais un direct en cours. Sans la liste, ou au moindre échec d'API (dont
+  une lecture incomplète de « À garder »), rien n'est effacé et le code de
+  sortie est non nul. La minuterie (`--minuterie`) sort en 0, « rien à faire »,
+  sur une box sans conteneur PeerTube ou avant `direct activer`. « À garder »
+  est relue avant chaque suppression, précédée d'une ligne d'audit
+  d'intention ; le jeton d'administrateur est révoqué en fin de passe.
+  L'unité ne joint que l'adresse du conteneur (`IPAddressAllow`, drop-in posé
+  par le postinst si `[lxc] ip` diffère de 10.100.0.120).
 
 ```toml
 [direct]

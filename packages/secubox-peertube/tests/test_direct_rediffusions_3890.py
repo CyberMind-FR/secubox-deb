@@ -64,6 +64,11 @@ class Etat:
         self.panne = None         # motif de chemin qui rend 500
         self.vus_auth = []
         self.relu_en_direct = set()  # uuid listés hors direct, mais en direct à la relecture
+        self.sans_total = False      # « À garder » rendue sans .total
+        self.total_en_plus = 0       # .total annoncé > éléments réellement rendus
+        self.ajout_tardif = None     # uuid ajouté à « À garder » après la 1re lecture
+        self.lectures_gardes = 0
+        self.revocations = 0
 
 
 def _serveur(etat):
@@ -91,6 +96,10 @@ def _serveur(etat):
                 return self._rep(500, {"error": "panne simulée"})
             if p == "/api/v1/oauth-clients/local":
                 return self._rep(200, {"client_id": "cid", "client_secret": "csec"})
+            if p == "/api/v1/users/revoke-token" and meth == "POST":
+                if self.headers.get("Authorization") == f"Bearer {JETON}":
+                    etat.revocations += 1
+                return self._rep(200, {})
             if p == "/api/v1/users/token" and meth == "POST":
                 ok = MOT_DE_PASSE.encode() in corps
                 return self._rep(200 if ok else 400, {"access_token": JETON} if ok else {})
@@ -116,10 +125,20 @@ def _serveur(etat):
                 return self._rep(200, {"videoPlaylist": {"id": nid}})
             m = re.fullmatch(r"/api/v1/video-playlists/(\d+)/videos", p)
             if m and meth == "GET":
-                uu = etat.elements.get(int(m.group(1)), [])
+                lid = int(m.group(1))
+                start = int(q.get("start", ["0"])[0])
+                count = min(int(q.get("count", ["15"])[0]), 100)
+                if start == 0:
+                    etat.lectures_gardes += 1
+                    if etat.ajout_tardif and etat.lectures_gardes == 2:
+                        etat.elements[lid].append(etat.ajout_tardif)
+                uu = etat.elements.get(lid, [])
                 data = [{"id": i, "position": i, "video": {"uuid": x}} for i, x in enumerate(uu)]
-                data.append({"id": 999, "position": 999, "video": None})   # élément indisponible
-                return self._rep(200, {"total": len(data), "data": data})
+                data.append({"id": 999999, "position": 999999, "video": None})   # élément indisponible
+                rep = {"data": data[start:start + count]}
+                if not etat.sans_total:
+                    rep["total"] = len(data) + etat.total_en_plus
+                return self._rep(200, rep)
             if p == "/api/v1/videos" and meth == "GET":
                 start = int(q.get("start", ["0"])[0])
                 count = int(q.get("count", ["15"])[0])
@@ -172,10 +191,13 @@ def pt(tmp_path):
     toml = tmp_path / "peertube.toml"
     toml.write_text(
         "[lxc]\nname = \"peertube\"\nip = \"127.0.0.1\"\n"
+        f"path = \"{tmp_path / 'lxc'}\"\n"
         f"[peertube]\nhttp_port = {srv.server_address[1]}\n"
         "[exposure]\npublic_hostname = \"peertube.test\"\n"
         "[direct]\njours_conservation = 7\n")
     audit = tmp_path / "audit.log"
+    (tmp_path / "lxc" / "peertube").mkdir(parents=True)
+    (tmp_path / "lxc" / "peertube" / "config").write_text("lxc.uts.name = peertube\n")
     env = {
         "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
         "HOME": str(tmp_path),
@@ -194,6 +216,8 @@ def pt(tmp_path):
 
     etat.run = run
     etat.audit = audit
+    etat.toml = toml
+    etat.lxc = tmp_path / "lxc" / "peertube"
     yield etat
     srv.shutdown()
 
@@ -302,7 +326,8 @@ def test_purge_efface_seulement_les_vieilles_rediffusions_non_gardees(pt):
     assert sorted(pt.supprimees) == [_uuid(1), _uuid(7)]
     out = json.loads(r.stdout.strip().splitlines()[-1])
     assert out["simulation"] is False and out["traitees"] == 2
-    lignes = [x for x in _audit(pt) if x["action"] == "rediffusion-supprimee"]
+    lignes = [x for x in _audit(pt)
+              if x["action"] == "rediffusion-supprimee" and x["resultat"] == "supprimee"]
     assert {x["uuid"] for x in lignes} == {_uuid(1), _uuid(7)}
     for x in lignes:
         assert x["resultat"] == "supprimee" and x["module"] == "peertube"
@@ -374,7 +399,11 @@ def test_unites_minuterie_et_postinst():
     tim = (PKG / "debian" / "secubox-peertube-rediffusions.timer").read_text()
     assert "SPDX-License-Identifier: LicenseRef-CMSD-1.0" in svc and "SPDX" in tim
     assert "Type=oneshot" in svc
-    assert "ExecStart=/usr/sbin/peertubectl rediffusions purger" in svc
+    assert "ExecStart=/usr/sbin/peertubectl rediffusions purger --minuterie" in svc.splitlines()
+    for d in ("IPAddressDeny=any", "IPAddressAllow=10.100.0.120/32",
+              "SystemCallFilter=@system-service"):
+        assert d in svc.splitlines(), d
+    assert "#3894" in svc
     for d in ("User=secubox", "NoNewPrivileges=yes", "ProtectSystem=strict",
               "ReadWritePaths=/var/log/secubox", "ProtectHome=yes", "PrivateTmp=yes",
               "ProtectKernelTunables=yes", "ProtectControlGroups=yes",
@@ -389,6 +418,9 @@ def test_unites_minuterie_et_postinst():
     assert "deb-systemd-helper enable secubox-peertube-rediffusions.timer" in post
     assert "deb-systemd-invoke start secubox-peertube-rediffusions.timer" in post
     assert post.index("rediffusions.timer") < post.index("#DEBHELPER#")
+    assert "systemctl stop secubox-peertube-rediffusions.service" in (PKG / "debian" / "prerm").read_text()
+    ctrl = (PKG / "debian" / "control").read_text()
+    assert re.search(r"\bjq\b", ctrl) and re.search(r"\bcurl\b", ctrl)
     assert "[direct]" in (PKG / "conf" / "peertube.toml.example").read_text()
     assert "jours_conservation      = 7" in (PKG / "conf" / "peertube.toml.example").read_text()
 
@@ -402,3 +434,137 @@ def test_save_config_garde_la_section_direct(tmp_path, monkeypatch):
     assert cfg["jours_conservation"] == 9
     m.save_config(cfg)
     assert "[direct]" in f.read_text() and "jours_conservation = 9" in f.read_text()
+
+
+# ── corrections de la relecture (#3890) ──────────────────────────────────
+
+def test_jeton_revoque_en_fin_de_passe(pt):
+    _peupler(pt)
+    assert pt.run("rediffusions", "purger", "--simuler").returncode == 0
+    assert pt.revocations == 1
+    pt.panne = r"/live-session$"
+    assert pt.run("rediffusions", "purger").returncode != 0
+    assert pt.revocations == 2                     # aussi après une erreur
+
+
+def test_minuterie_sans_conteneur_rien_a_faire(pt):
+    _peupler(pt)
+    (pt.lxc / "config").unlink()
+    r = pt.run("rediffusions", "purger", "--minuterie")
+    assert r.returncode == 0, r.stderr
+    assert "rien à faire" in r.stdout
+    assert pt.supprimees == [] and _audit(pt) == [] and pt.vus_auth == []
+
+
+def test_minuterie_sans_liste_rien_a_faire_mais_refus_a_la_main(pt):
+    _peupler(pt)
+    pt.listes = [x for x in pt.listes if x["displayName"] != "À garder"]
+    r = pt.run("rediffusions", "purger", "--minuterie")
+    assert r.returncode == 0, r.stderr
+    assert "rien à faire" in r.stdout and _audit(pt) == [] and pt.supprimees == []
+    assert pt.run("rediffusions", "purger").returncode != 0
+
+
+def test_minuterie_erreur_api_sort_en_echec(pt):
+    _peupler(pt)
+    pt.panne = r"^/api/v1/videos$"
+    r = pt.run("rediffusions", "purger", "--minuterie")
+    assert r.returncode != 0 and pt.supprimees == []
+
+
+def test_minuterie_purge_normalement(pt):
+    _peupler(pt)
+    r = pt.run("rediffusions", "purger", "--minuterie")
+    assert r.returncode == 0, r.stderr
+    assert sorted(pt.supprimees) == [_uuid(1), _uuid(7)]
+
+
+def test_a_garder_plus_de_100_elements_lus_en_entier(pt):
+    _peupler(pt)
+    # La vidéo 1 (effaçable) est en position 150 : seule une lecture paginée la sauve.
+    pt.elements[100] = [_uuid(5000 + i) for i in range(149)] + [_uuid(1), _uuid(2)]
+    r = pt.run("rediffusions", "purger")
+    assert r.returncode == 0, r.stderr
+    assert pt.supprimees == [_uuid(7)]
+
+
+@pytest.mark.parametrize("defaut", ["sans_total", "total_en_plus"])
+def test_a_garder_lecture_incomplete_rien_n_est_efface(pt, defaut):
+    _peupler(pt)
+    if defaut == "sans_total":
+        pt.sans_total = True
+    else:
+        pt.total_en_plus = 5
+    r = pt.run("rediffusions", "purger")
+    assert r.returncode != 0
+    assert pt.supprimees == []
+    assert not [x for x in _audit(pt) if x["action"] == "rediffusion-supprimee"]
+
+
+def test_ajoutee_a_garder_entre_temps_non_effacee(pt):
+    _peupler(pt)
+    pt.ajout_tardif = _uuid(7)          # ajoutée après la première lecture
+    r = pt.run("rediffusions", "purger")
+    assert r.returncode == 0, r.stderr
+    assert pt.supprimees == [_uuid(1)]
+    assert "gardée entre-temps" in r.stdout
+
+
+def test_audit_intention_avant_resultat(pt):
+    _peupler(pt)
+    assert pt.run("rediffusions", "purger").returncode == 0
+    lignes = [(x["uuid"], x["resultat"]) for x in _audit(pt) if x["action"] == "rediffusion-supprimee"]
+    for u in (_uuid(1), _uuid(7)):
+        assert lignes.index((u, "intention")) < lignes.index((u, "supprimee"))
+
+
+@pytest.mark.parametrize("args", [(), ("--simuler",)])
+def test_titres_sans_caracteres_de_controle(pt, args):
+    _peupler(pt)
+    pt.videos[0]["name"] = "pi\x1b[31mège\nfausse ligne\r\x07"
+    r = pt.run("rediffusions", "purger", *args)
+    assert r.returncode == 0, r.stderr
+    sortie = r.stdout + r.stderr + (pt.audit.read_text() if pt.audit.exists() else "")
+    sortie_sans_couleurs = re.sub(r"\x1b\[[0-9;]*m", "", sortie.replace("\x1b[0;32m", "").replace("\x1b[0m", ""))
+    assert "\x1b[31m" not in sortie and "\x07" not in sortie and "\r" not in sortie
+    assert "fausse ligne" in sortie_sans_couleurs
+    assert not any(ligne.startswith("fausse ligne") for ligne in sortie.splitlines())
+
+
+def test_entiers_en_base_10(pt):
+    _peupler(pt)
+    t = pt.toml.read_text().replace("jours_conservation = 7", "jours_conservation = \"08\"")
+    pt.toml.write_text(t + "duree_max_heures = 08\ndirects_max_instance = 02\n")
+    r = pt.run("rediffusions", "purger", "--simuler")
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    assert out["jours_conservation"] == 8
+    assert {x["uuid"] for x in out["rediffusions"]} == {_uuid(1), _uuid(7)}
+    r = pt.run("direct", "activer")
+    assert r.returncode == 0, r.stderr
+    assert pt.puts[-1]["live"]["maxDuration"] == 8 * 3600 * 1000
+    assert pt.puts[-1]["live"]["maxInstanceLives"] == 2
+
+
+def _postinst_dropin(tmp_path, ip_toml):
+    post = (PKG / "debian" / "postinst").read_text()
+    debut = post.index("    _dropin=")
+    fin = post.index("    fi\n", debut) + len("    fi\n")
+    bloc = post[debut:fin]
+    dropin = tmp_path / "etc" / "10-ip-lxc.conf"
+    toml = tmp_path / "pt.toml"
+    toml.write_text(f'[lxc]\nname = "peertube"\nip   = "{ip_toml}"  # commentaire\n')
+    bloc = bloc.replace("/etc/systemd/system/secubox-peertube-rediffusions.service.d/10-ip-lxc.conf",
+                        str(dropin)).replace("/etc/secubox/peertube.toml", str(toml))
+    subprocess.run(["sh", "-c", bloc], check=True, timeout=10, capture_output=True, text=True)
+    return dropin
+
+
+def test_postinst_drop_in_ip_du_conteneur(tmp_path):
+    d = _postinst_dropin(tmp_path, "10.100.0.130")
+    lignes = d.read_text().splitlines()
+    assert lignes[-2:] == ["IPAddressAllow=", "IPAddressAllow=10.100.0.130/32"]
+    d = _postinst_dropin(tmp_path, "10.100.0.120")      # adresse par défaut : pas de drop-in
+    assert not d.exists()
+    d = _postinst_dropin(tmp_path, "pas-une-ip")
+    assert not d.exists()

@@ -665,18 +665,31 @@ audit_json() {   # objet JSON (sans ts ni module)
     printf '%s\n' "$ligne" >> "$AUDIT_LOG" 2>/dev/null
 }
 
-_entier_strict() { printf '%s' "$1" | grep -Eq '^[0-9]{1,6}$'; }
+# Entier décimal strict (6 chiffres au plus) ; _dec le rend en base 10 : « 08 »
+# vaut 8, jamais une erreur d'octal dans $(( )) ni un JSON invalide pour jq.
+_entier_strict() { [[ "$1" =~ ^[0-9]{1,6}$ ]]; }
+_dec() { printf '%d' "$(( 10#$1 ))"; }
 
 # Session d'API : jeton d'administrateur (_pt_token, même mécanisme que
 # upload), posé dans un fichier d'en-têtes 0600 passé à curl par `-H @fichier`
-# — le jeton n'apparaît jamais sur une ligne de commande ni à l'écran.
+# — le jeton n'apparaît jamais sur une ligne de commande ni à l'écran. En fin
+# de passe, le jeton est révoqué (POST /api/v1/users/revoke-token, « Logout »
+# de l'OpenAPI) : il ne survit pas à la commande.
 _PT_TMP=""
+_pt_fin() {
+    if [ -n "$_PT_TMP" ] && [ -s "$_PT_TMP/entetes" ]; then
+        curl -s --max-time 10 -o /dev/null -X POST -H "Host: ${PUBLIC_HOSTNAME}" \
+            -H "@$_PT_TMP/entetes" "http://${LXC_IP}:${HTTP_PORT}/api/v1/users/revoke-token" \
+            2>/dev/null || true
+    fi
+    [ -n "$_PT_TMP" ] && rm -rf -- "$_PT_TMP"
+}
 _pt_session() {
     local at
     at=$(_pt_token) || return 1
     _PT_TMP=$(mktemp -d) || return 1
     chmod 700 "$_PT_TMP"
-    trap 'rm -rf -- "$_PT_TMP"' EXIT
+    trap '_pt_fin' EXIT
     ( umask 077; printf 'Authorization: Bearer %s\n' "$at" > "$_PT_TMP/entetes" )
 }
 
@@ -691,20 +704,55 @@ _pt_appel() {
 
 _http_ok() { case "$1" in 2??) return 0 ;; *) return 1 ;; esac; }
 
+# `.total` d'une page : entier présent, sinon erreur (jamais « 0 » par défaut,
+# qui ferait croire à une liste vide).
+_total_page() {
+    local t
+    t=$(jq -r 'if (.total | type) == "number" and .total >= 0 then (.total | floor | tostring) else "" end' "$1" 2>/dev/null)
+    [[ "$t" =~ ^[0-9]+$ ]] || return 1
+    printf '%s' "$t"
+}
+
 # Identifiant de la liste « À garder » du compte root (vide si absente).
 # GET /accounts/{name}/video-playlists rend aussi les listes privées quand le
 # jeton est celui du propriétaire (listMyPlaylists, controllers/api/accounts.ts).
 _liste_a_garder_id() {
     local start=0 total=1 code id f="$_PT_TMP/listes.json"
-    while [ "$start" -lt "$total" ] && [ "$start" -lt 10000 ]; do
+    while [ "$start" -lt "$total" ]; do
+        [ "$start" -lt 10000 ] || { err "trop de listes de lecture (plafond atteint)"; return 1; }
         code=$(_pt_appel "$f" GET "/api/v1/accounts/root/video-playlists?start=$start&count=100")
         _http_ok "$code" || { err "liste des listes de lecture : HTTP $code"; return 1; }
+        total=$(_total_page "$f") || { err "liste des listes de lecture : total absent"; return 1; }
         id=$(jq -r --arg n "$LISTE_A_GARDER" \
             '[.data[]? | select(.displayName == $n) | .id] | first // empty' "$f") || return 1
-        [ -n "$id" ] && { printf '%s' "$id"; return 0; }
-        total=$(_entier "$(jq -r '.total // 0' "$f")")
+        if [ -n "$id" ]; then
+            [[ "$id" =~ ^[0-9]{1,12}$ ]] || { err "identifiant de liste inattendu"; return 1; }
+            printf '%s' "$id"; return 0
+        fi
         start=$(( start + 100 ))
     done
+    return 0
+}
+
+# _lire_gardes <id-liste> <fichier> — les uuid de « À garder », un par ligne.
+# Exige `.total` à chaque page, pagine jusqu'à total, puis compare le nombre
+# d'éléments lus à total : plafond atteint ou compte inférieur = erreur.
+_lire_gardes() {
+    local liste="$1" out="$2" start=0 total=1 lus=0 n code f="$_PT_TMP/gardes-page.json"
+    [[ "$liste" =~ ^[0-9]{1,12}$ ]] || { err "identifiant de liste inattendu"; return 1; }
+    : > "$out"
+    while [ "$start" -lt "$total" ]; do
+        [ "$start" -lt 10000 ] || { err "liste « $LISTE_A_GARDER » : plafond de lecture atteint"; return 1; }
+        code=$(_pt_appel "$f" GET "/api/v1/video-playlists/$liste/videos?start=$start&count=100")
+        _http_ok "$code" || { err "liste « $LISTE_A_GARDER » illisible : HTTP $code"; return 1; }
+        total=$(_total_page "$f") || { err "liste « $LISTE_A_GARDER » : total absent"; return 1; }
+        n=$(jq -r '[.data[]?] | length' "$f") || return 1
+        [ "$n" -gt 0 ] || break
+        jq -r '.data[]? | .video.uuid // empty' "$f" >> "$out" || return 1
+        lus=$(( lus + n ))
+        start=$(( start + n ))
+    done
+    [ "$lus" -ge "$total" ] || { err "liste « $LISTE_A_GARDER » : $lus éléments lus sur $total"; return 1; }
     return 0
 }
 
@@ -718,6 +766,8 @@ cmd_direct() {
             && _entier_strict "$DIRECTS_MAX_UTILISATEUR"; }; then
         err "[direct] duree_max_heures / directs_max_* : entiers attendus"; return 1
     fi
+    local heures imax umax
+    heures=$(_dec "$DUREE_MAX_HEURES"); imax=$(_dec "$DIRECTS_MAX_INSTANCE"); umax=$(_dec "$DIRECTS_MAX_UTILISATEUR")
     _pt_session || return 1
     local f="$_PT_TMP/config.json" code
     code=$(_pt_appel "$f" GET /api/v1/config/custom)
@@ -728,7 +778,9 @@ cmd_direct() {
     if [ "$action" = etat ]; then
         local liste
         liste=$(_liste_a_garder_id) || return 1
-        jq --arg liste "$liste" --argjson jours "$(_entier "$JOURS_CONSERVATION")" '{
+        local jours=null
+        _entier_strict "$JOURS_CONSERVATION" && jours=$(_dec "$JOURS_CONSERVATION")
+        jq --arg liste "$liste" --argjson jours "$jours" '{
             live: {enabled: .live.enabled, allowReplay: .live.allowReplay,
                    maxDuration: .live.maxDuration, maxInstanceLives: .live.maxInstanceLives,
                    maxUserLives: .live.maxUserLives,
@@ -747,8 +799,8 @@ cmd_direct() {
         return 1
     fi
     local voulu="$_PT_TMP/voulu.json" ms=-1
-    [ "$DUREE_MAX_HEURES" -gt 0 ] && ms=$(( DUREE_MAX_HEURES * 3600000 ))
-    jq --argjson ms "$ms" --argjson i "$DIRECTS_MAX_INSTANCE" --argjson u "$DIRECTS_MAX_UTILISATEUR" '
+    [ "$heures" -gt 0 ] && ms=$(( heures * 3600000 ))
+    jq --argjson ms "$ms" --argjson i "$imax" --argjson u "$umax" '
         .live.enabled = true | .live.allowReplay = true
         | .live.transcoding.enabled = false
         | .live.maxDuration = $ms
@@ -802,19 +854,31 @@ cmd_direct() {
 # simple garde la date de publication du direct.
 #
 # Toutes les lectures d'abord ; le moindre échec d'API sort en erreur AVANT
-# toute suppression.
+# toute suppression. Avant CHAQUE suppression, « À garder » est relue et une
+# ligne d'audit d'intention écrite ; puis le résultat.
+#
+# --minuterie (la passe de secubox-peertube-rediffusions.service) : sur une box
+# sans conteneur PeerTube, ou avant `direct activer` (pas de liste « À
+# garder »), il n'y a rien à faire — sortie 0, une ligne au journal, pas
+# d'audit. Lancée à la main, l'absence de liste reste un refus explicite.
 cmd_rediffusions() {
-    local action="${1:-}" simuler=false a
+    local action="${1:-}" simuler=false minuterie=false a
     [ "$action" = purger ] || { err "usage: peertubectl rediffusions purger [--simuler]"; return 1; }
     shift
     for a in "$@"; do
         case "$a" in
             --simuler) simuler=true ;;
+            --minuterie) minuterie=true ;;
             *) err "option inconnue : $a"; return 1 ;;
         esac
     done
-    if ! { _entier_strict "$JOURS_CONSERVATION" && [ "$JOURS_CONSERVATION" -ge 1 ]; }; then
+    if ! { _entier_strict "$JOURS_CONSERVATION" && [ "$(_dec "$JOURS_CONSERVATION")" -ge 1 ]; }; then
         err "[direct] jours_conservation : entier >= 1 attendu"; return 1
+    fi
+    local jours; jours=$(_dec "$JOURS_CONSERVATION")
+    if $minuterie && [ ! -e "$LXC_PATH/$LXC_NAME/config" ]; then
+        log "rien à faire : pas de conteneur PeerTube ($LXC_PATH/$LXC_NAME)"
+        return 0
     fi
     if ! $simuler; then
         # Une suppression non auditée ne doit pas avoir lieu.
@@ -826,18 +890,17 @@ cmd_rediffusions() {
 
     local liste code f="$_PT_TMP/page.json"
     liste=$(_liste_a_garder_id) || return 1
-    [ -n "$liste" ] || { err "liste « $LISTE_A_GARDER » absente (peertubectl direct activer) — rien n'est effacé"; return 1; }
+    if [ -z "$liste" ]; then
+        if $minuterie; then
+            log "rien à faire : liste « $LISTE_A_GARDER » pas encore créée (peertubectl direct activer)"
+            return 0
+        fi
+        err "liste « $LISTE_A_GARDER » absente (peertubectl direct activer) — rien n'est effacé"; return 1
+    fi
 
-    # 1. Les vidéos gardées.
+    # 1. Les vidéos gardées (lecture complète vérifiée, sinon rien n'est effacé).
     local gardes="$_PT_TMP/gardes.txt" start=0 total=1
-    : > "$gardes"
-    while [ "$start" -lt "$total" ] && [ "$start" -lt 10000 ]; do
-        code=$(_pt_appel "$f" GET "/api/v1/video-playlists/$liste/videos?start=$start&count=100")
-        _http_ok "$code" || { err "liste « $LISTE_A_GARDER » illisible : HTTP $code — rien n'est effacé"; return 1; }
-        jq -r '.data[]? | .video.uuid // empty' "$f" >> "$gardes" || return 1
-        total=$(_entier "$(jq -r '.total // 0' "$f")")
-        start=$(( start + 100 ))
-    done
+    _lire_gardes "$liste" "$gardes" || { err "rien n'est effacé"; return 1; }
 
     # 2. Les vidéos locales hors direct, toutes confidentialités (privacyOneOf
     #    et include sont réservés aux administrateurs ; include=6 = mises sur
@@ -845,12 +908,13 @@ cmd_rediffusions() {
     #    rediffusion encore en traitement n'est jamais touchée).
     local maintenant limite cands="$_PT_TMP/candidates.jsonl"
     maintenant=$(date -u +%s)
-    limite=$(( JOURS_CONSERVATION * 86400 ))
+    limite=$(( jours * 86400 ))
     : > "$cands"
-    start=0; total=1
-    while [ "$start" -lt "$total" ] && [ "$start" -lt 100000 ]; do
+    while [ "$start" -lt "$total" ]; do
+        [ "$start" -lt 100000 ] || { err "trop de vidéos (plafond atteint) — rien n'est effacé"; return 1; }
         code=$(_pt_appel "$f" GET "/api/v1/videos?isLocal=true&isLive=false&nsfw=both&include=6&privacyOneOf=1&privacyOneOf=2&privacyOneOf=3&privacyOneOf=4&privacyOneOf=5&sort=-publishedAt&start=$start&count=100")
         _http_ok "$code" || { err "liste des vidéos : HTTP $code — rien n'est effacé"; return 1; }
+        total=$(_total_page "$f") || { err "liste des vidéos : total absent — rien n'est effacé"; return 1; }
         # Écarte d'emblée : direct, gardée, publiée depuis moins de N jours.
         jq -c --rawfile g "$gardes" --argjson now "$maintenant" --argjson lim "$limite" '
             ($g | split("\n") | map(select(. != ""))) as $gl
@@ -860,17 +924,17 @@ cmd_rediffusions() {
             | select((.publishedAt // "") != "")
             | select(($now - (.publishedAt | sub("\\.[0-9]+"; "") | fromdateiso8601)) > $lim)
             | {uuid, name, publishedAt}' "$f" >> "$cands" || { err "réponse illisible — rien n'est effacé"; return 1; }
-        total=$(_entier "$(jq -r '.total // 0' "$f")")
         start=$(( start + 100 ))
     done
 
-    # 3. Seules les rediffusions terminées, plus vieilles que N jours.
+    # 3. Seules les rediffusions terminées, plus vieilles que N jours. Le titre
+    #    est débarrassé de ses caractères de contrôle (journal, écran, audit).
     local asup="$_PT_TMP/a-supprimer.jsonl" ligne uuid s="$_PT_TMP/session.json" v="$_PT_TMP/video.json"
     : > "$asup"
     while IFS= read -r ligne; do
         [ -n "$ligne" ] || continue
         uuid=$(printf '%s' "$ligne" | jq -r '.uuid')
-        printf '%s' "$uuid" | grep -Eq '^[0-9a-fA-F-]{36}$' || { err "uuid inattendu — rien n'est effacé"; return 1; }
+        [[ "$uuid" =~ ^[0-9a-fA-F-]{36}$ ]] || { err "uuid inattendu — rien n'est effacé"; return 1; }
         code=$(_pt_appel "$s" GET "/api/v1/videos/$uuid/live-session")
         case "$code" in
             404) continue ;;                       # pas une rediffusion
@@ -886,19 +950,29 @@ cmd_rediffusions() {
             | select($fin != null)
             | ([.publishedAt, $fin] | map(sub("\\.[0-9]+"; "") | fromdateiso8601) | max) as $t
             | select(($now - $t) > $lim)
-            | {uuid, titre: ((.name // "") | .[0:60]), age_jours: ((($now - $t) / 86400) | floor)}' \
+            | {uuid, titre: ((.name // "") | gsub("[[:cntrl:]]"; "") | .[0:60]),
+               age_jours: ((($now - $t) / 86400) | floor)}' \
             <<<"$ligne" >> "$asup" || { err "session illisible — rien n'est effacé"; return 1; }
     done < "$cands"
 
     # 4. Suppression (ou simulation). Un échec arrête tout, en erreur.
-    local n=0 sortie=0
+    local n=0 sortie=0 dit gardes2="$_PT_TMP/gardes-relu.txt"
     while IFS= read -r ligne; do
         [ -n "$ligne" ] || continue
         uuid=$(printf '%s' "$ligne" | jq -r '.uuid')
+        dit=$(printf '%s' "$ligne" | jq -r '"\(.uuid) « \(.titre) » (\(.age_jours) j)"')
         if $simuler; then
-            log "serait effacée : $(printf '%s' "$ligne" | jq -r '"\(.uuid) « \(.titre) » (\(.age_jours) j)"')"
+            log "serait effacée : $dit"
             n=$(( n + 1 )); continue
         fi
+        # Gardée entre-temps ? « À garder » relue juste avant la suppression.
+        _lire_gardes "$liste" "$gardes2" || { err "purge arrêtée"; sortie=1; break; }
+        if grep -qxF -- "$uuid" "$gardes2"; then
+            log "gardée entre-temps, non effacée : $dit"
+            continue
+        fi
+        audit_json "$(printf '%s' "$ligne" | jq -c '{action: "rediffusion-supprimee", resultat: "intention"} + .')" \
+            || { err "ligne d'audit d'intention non écrite — $uuid non effacée, purge arrêtée"; sortie=1; break; }
         code=$(_pt_appel "$_PT_TMP/del.json" DELETE "/api/v1/videos/$uuid")
         if ! _http_ok "$code"; then
             err "suppression de $uuid refusée : HTTP $code — purge arrêtée"
@@ -907,10 +981,10 @@ cmd_rediffusions() {
         fi
         audit_json "$(printf '%s' "$ligne" | jq -c '{action: "rediffusion-supprimee", resultat: "supprimee"} + .')" \
             || warn "ligne d'audit non écrite pour $uuid"
-        log "effacée : $(printf '%s' "$ligne" | jq -r '"\(.uuid) « \(.titre) » (\(.age_jours) j)"')"
+        log "effacée : $dit"
         n=$(( n + 1 ))
     done < "$asup"
-    jq -nc --argjson sim "$simuler" --argjson n "$n" --argjson j "$JOURS_CONSERVATION" \
+    jq -nc --argjson sim "$simuler" --argjson n "$n" --argjson j "$jours" \
         --slurpfile l "$asup" '{simulation: $sim, jours_conservation: $j, traitees: $n, rediffusions: $l}'
     return "$sortie"
 }

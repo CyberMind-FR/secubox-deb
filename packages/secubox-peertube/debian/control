@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-peertube
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.8.29~), python3-uvicorn | python3-pip,
- lxc, lxc-templates, nftables, openssl
+ lxc, lxc-templates, nftables, openssl, jq, curl
 Recommends: yt-dlp
 Description: SecuBox PeerTube — federated video platform (native LXC)
  Dashboard + FastAPI backend for a PeerTube video-hosting instance

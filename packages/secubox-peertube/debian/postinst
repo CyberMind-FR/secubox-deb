@@ -66,6 +66,20 @@ if [ "$1" = "configure" ]; then
     # secubox-system-tuning, a partir de /etc/secubox/tuning/lxc-cpu.toml
     # (#1011) : deux mecanismes ecrivant la meme cle finissent par diverger.
 
+    # Purge des rediffusions (#3890) : l'unité ne parle qu'à l'adresse du
+    # conteneur. Adresse par défaut dans l'unité ; une autre ([lxc] ip de
+    # peertube.toml, IPv4 validée) dans un drop-in que l'on remplace en entier.
+    _dropin=/etc/systemd/system/secubox-peertube-rediffusions.service.d/10-ip-lxc.conf
+    _ip=$(sed -n 's/^[[:space:]]*ip[[:space:]]*=[[:space:]]*"\{0,1\}\([0-9.]*\)"\{0,1\}.*$/\1/p' \
+        /etc/secubox/peertube.toml 2>/dev/null | head -1)
+    if printf '%s' "$_ip" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$' && [ "$_ip" != 10.100.0.120 ]; then
+      install -d -m 0755 "$(dirname "$_dropin")"
+      printf '# Posé par le postinst de secubox-peertube (#3890) : [lxc] ip.\n[Service]\nIPAddressAllow=\nIPAddressAllow=%s/32\n' \
+        "$_ip" > "$_dropin"
+    else
+      rm -f "$_dropin"
+    fi
+
     systemctl daemon-reload
     # Releve de version : savoir qu'une mise a jour existe, sans jamais
     # l'appliquer seul (#993).
