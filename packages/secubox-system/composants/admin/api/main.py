@@ -167,47 +167,101 @@ def _get_system_status() -> Dict[str, Any]:
         return {"error": str(e), "timestamp": datetime.now().isoformat()}
 
 
+# #3527/#3516 : la liste ne montre que les services PRÉSENTS sur la box, chacun avec un état lisible. Une unité « not-found » (nommée
+# par une dépendance, paquet absent) n'est pas un service de la box : elle va dans l'App Store, pas dans la liste. Une tâche lancée par
+# une minuterie, un chemin ou une dépendance est « à la demande » quand elle ne tourne pas ; un service coupé (disabled, masked) est
+# « désactivé ». Seul un service ACTIVÉ qui ne tourne pas est « arrêté ».
+_FICHIER_DESACTIVE = {"disabled", "masked", "masked-runtime"}
+_FICHIER_A_LA_DEMANDE = {"static", "indirect", "generated", "transient", "alias", "linked", "linked-runtime"}
+
+
+def _lignes(sortie: str) -> List[List[str]]:
+    return [ligne.split() for ligne in (sortie or "").splitlines() if ligne.strip()]
+
+
+def _declenchees(show: str) -> set:
+    """Unités nommées par `Triggers=` des minuteries et chemins (`systemctl show -p Triggers`)."""
+    noms = set()
+    for ligne in (show or "").splitlines():
+        if ligne.startswith("Triggers="):
+            noms.update(x for x in ligne[len("Triggers="):].split() if x.endswith(".service"))
+    return noms
+
+
+def _ponctuelles(show: str) -> set:
+    """Unités `Type=oneshot` ou dont la condition de démarrage n'est pas remplie (`systemctl show -p Id,Type,ConditionResult`)."""
+    noms, bloc = set(), {}
+    for ligne in (show or "").splitlines() + [""]:
+        if not ligne.strip():
+            if bloc.get("Id") and (bloc.get("Type") == "oneshot" or bloc.get("ConditionResult") == "no"):
+                noms.add(bloc["Id"])
+            bloc = {}
+            continue
+        k, _, v = ligne.partition("=")
+        bloc[k] = v
+    return noms
+
+
+def classer_services(unites_txt: str, fichiers_txt: str, declencheurs_txt: str, ponctuelles_txt: str = "") -> List[Dict[str, Any]]:
+    """Fonction pure : sorties de `list-units`, `list-unit-files`, `show -p Triggers` et, pour les seuls services qui seraient
+    « arrêtés », `show -p Id,Type,ConditionResult` → liste triée, absents retirés. Une tâche ponctuelle (oneshot) ou dont la
+    condition n'est pas remplie n'est pas arrêtée : elle a fini, ou n'a pas lieu d'être sur cette box."""
+    fichiers = {c[0]: c[1] for c in _lignes(fichiers_txt) if len(c) >= 2}
+    ponctuelles = _ponctuelles(ponctuelles_txt)
+    declenchees = _declenchees(declencheurs_txt)
+    services = []
+    for c in _lignes(unites_txt):
+        if len(c) < 4 or not c[0].endswith(".service"):
+            continue
+        unit, load, active, sub = c[0], c[1], c[2], c[3]
+        if load == "not-found":
+            continue
+        modele = unit.split("@", 1)[0] + "@.service" if "@" in unit else unit
+        fichier = fichiers.get(unit) or fichiers.get(modele) or ""
+        if load.startswith("masked"):
+            etat = "desactive"
+        elif active == "active" and sub == "running":
+            etat = "actif"
+        elif active == "failed" or sub == "failed":
+            etat = "echec"
+        elif active in ("activating", "reloading", "deactivating"):
+            etat = "transition"
+        elif active == "active":
+            etat = "termine"                                  # oneshot passé (exited) : rien à redémarrer
+        elif unit in declenchees or fichier in _FICHIER_A_LA_DEMANDE or unit in ponctuelles:
+            etat = "a_la_demande"
+        elif fichier in _FICHIER_DESACTIVE:
+            etat = "desactive"
+        else:
+            etat = "arrete"
+        services.append({
+            "name": unit[:-len(".service")], "unit": unit, "load": load, "active": active, "sub": sub,
+            "description": " ".join(c[4:]), "fichier": fichier or None, "etat": etat,
+            "is_running": etat == "actif", "is_secubox": unit.startswith("secubox-"),
+        })
+    services.sort(key=lambda x: (not x["is_secubox"], x["name"]))
+    return services
+
+
+def _systemctl(*args: str) -> str:
+    r = subprocess.run(["systemctl", *args, "--no-pager"], capture_output=True, text=True, timeout=30)
+    return r.stdout if r.returncode == 0 else ""
+
+
 def _get_services_status() -> List[Dict[str, Any]]:
-    """Get all systemd services status."""
+    """Services présents sur la box et leur état (#3527)."""
     try:
-        # Get list of services
-        result = subprocess.run(
-            ["systemctl", "list-units", "--type=service", "--all", "--no-pager", "--plain", "--no-legend"],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-
-        services = []
-        for line in result.stdout.strip().split('\n'):
-            if not line.strip():
-                continue
-            parts = line.split()
-            if len(parts) >= 4:
-                unit = parts[0]
-                load = parts[1]
-                active = parts[2]
-                sub = parts[3]
-                desc = ' '.join(parts[4:]) if len(parts) > 4 else ""
-
-                # Skip temporary and slice units
-                if unit.endswith('.slice') or unit.endswith('.mount'):
-                    continue
-
-                services.append({
-                    "name": unit.replace('.service', ''),
-                    "unit": unit,
-                    "load": load,
-                    "active": active,
-                    "sub": sub,
-                    "description": desc,
-                    "is_running": active == "active" and sub == "running",
-                    "is_secubox": unit.startswith("secubox-")
-                })
-
-        # Sort: secubox services first, then alphabetically
-        services.sort(key=lambda x: (not x["is_secubox"], x["name"]))
-        return services
+        unites_txt = _systemctl("list-units", "--type=service", "--all", "--plain", "--no-legend")
+        fichiers_txt = _systemctl("list-unit-files", "--type=service", "--no-legend")
+        declencheurs = [c[0] for c in _lignes(_systemctl("list-units", "--type=timer,path", "--all", "--plain", "--no-legend"))
+                        if c and c[0].endswith((".timer", ".path"))]
+        declencheurs_txt = _systemctl("show", "-p", "Triggers", "--", *declencheurs) if declencheurs else ""
+        brut = classer_services(unites_txt, fichiers_txt, declencheurs_txt)
+        arretes = [x["unit"] for x in brut if x["etat"] == "arrete"]
+        if not arretes:
+            return brut
+        ponctuelles_txt = _systemctl("show", "-p", "Id", "-p", "Type", "-p", "ConditionResult", "--", *arretes)
+        return classer_services(unites_txt, fichiers_txt, declencheurs_txt, ponctuelles_txt)
     except Exception as e:
         log.warning("services error: %s", e)
         return []
