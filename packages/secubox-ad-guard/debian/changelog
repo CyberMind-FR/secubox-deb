@@ -1,3 +1,13 @@
+secubox-ad-guard (1.33.5-1~trixie1) trixie; urgency=medium
+
+  * adult-sync (ref #3893) : exemptions adultes en forme compacte, une ligne
+    `secubox-derogation: <ip> always_transparent` par adresse au lieu d'une
+    local-zone-override par domaine et par adresse (gk2 : 690 000 → 77 000 lignes,
+    65 → 4 Mo). Dépliée en mode direct, la source redonne l'ancien rendu octet pour
+    octet : rien ne change pour l'appareil exempté. Dépend de secubox-core 1.8.43.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 13:57:43 +0100
+
 secubox-ad-guard (1.33.4-1~trixie1) trixie; urgency=medium
 
   * TV Privacy (ref #3874) : bouton « Remettre les statistiques à zéro » dans

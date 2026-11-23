@@ -1,3 +1,18 @@
+secubox-core (1.8.43-1~trixie1) trixie; urgency=medium
+
+  * Listes DNS (ref #3893) : forme COMPACTE des sources lue par secubox-dns-listes.
+    `secubox-derogation: <bloc> <type>` vaut une local-zone-override pour chaque zone
+    du fichier (et chaque `secubox-derogation-zone`) ; une section `secubox-ensemble:`
+    nomme des zones qu'une vue reprend par `secubox-ensemble: "<nom>"`. Le mode direct
+    déplie la source (adulte : l'ancien rendu octet pour octet ; filtre web : mêmes
+    zones dans chaque vue) ; un fichier déplié n'est pas réadopté au retour en compilé.
+    Filtrage inchangé : 92 identique octet pour octet sur les sources réelles de gk2.
+  * Compilation : chaîne des parents, zone globale et zone de chaque vue calculées une fois
+    par nom pour tous les profils (mêmes décisions). Sources réelles de gk2 : 30 s → 12 s
+    au poste (152 → 62 Mo de sources).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 13:57:43 +0100
+
 secubox-core (1.8.42-1~trixie1) trixie; urgency=medium
 
   * Nom public des nœuds (ref #3885) : tout chemin inconnu rend la page 404 à

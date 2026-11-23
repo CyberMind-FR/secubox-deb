@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 import pytest
 
+from secubox_unbound.listes import developper
 from webfilter import generation, profils
 
 CATS = {"adulte", "jeux", "phishing"}
@@ -24,8 +25,8 @@ def gen(**k):
 
 
 def vue(texte, nom):
-    """Le bloc `view:` de la vue `nom`."""
-    for bloc in texte.split("view:\n")[1:]:
+    """Le bloc `view:` de la vue `nom`, tel qu'Unbound le charge (ensembles recopiés, #3893)."""
+    for bloc in developper(texte).split("view:\n")[1:]:
         if f'name: "{nom}"' in bloc:
             return bloc
     raise AssertionError(f"vue {nom} absente")

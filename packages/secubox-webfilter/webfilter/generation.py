@@ -109,9 +109,40 @@ def generer(cfg, reseaux, voisins, adguard, charger, zones_max: int, adresses_bo
     lignes += [f"    access-control-view: {n} {VUE_DEFAUT}\n" for n in nets]
     for a, vue in sorted(liens, key=lambda x: (ipaddress.ip_address(x[0]).version, ipaddress.ip_address(x[0]))):
         lignes.append(f"    access-control-view: {a}/{128 if ':' in a else 32} {vue}\n")
-    for nom in sorted(contenu):
-        b, a = contenu[nom]
-        lignes.append(f'view:\n    name: "{nom}"\n    view-first: yes\n')
-        lignes += [f'    local-zone: "{z}." always_nxdomain\n' for z in b]
-        lignes += [f'    local-zone: "{z}." transparent\n' for z in a]
+    lignes += _vues_compactes(contenu)
     return Resultat("".join(lignes), vues, sum(vues.values()), exclus, len(nets) + len(liens), infos)
+
+
+_TYPES = ("always_nxdomain", "transparent")
+
+
+def _vues_compactes(contenu: dict) -> list:
+    """Les vues, chaque zone écrite UNE fois (#3893) : une zone présente (même nom, même type) dans plusieurs vues va dans
+    l'ensemble de ces vues (`secubox-ensemble:`, déclaré avant elles), chaque vue appelle ses ensembles et garde ses zones
+    propres. secubox-dns-listes recopie les ensembles dans les vues (compilation ET mode direct) : chaque vue charge
+    exactement les mêmes zones qu'avant (une seule vue : aucun ensemble, texte de toujours). 863 674 lignes → 317 016 sur
+    gk2 (trois vues dont deux identiques)."""
+    noms = sorted(contenu)
+    membres: dict = {}                                       # (zone, type) -> vues qui la portent, dans l'ordre des noms
+    for nom in noms:
+        b, a = contenu[nom]
+        for t, zs in zip(_TYPES, (b, a)):
+            for z in zs:
+                membres.setdefault((z, t), []).append(nom)
+    groupes: dict = {}                                       # vues -> {type: [zones]}
+    for (z, t), vs in membres.items():
+        groupes.setdefault(tuple(vs), {}).setdefault(t, []).append(z)
+    partages = sorted((g for g in groupes if len(g) > 1), key=lambda g: (-len(g), g))
+    nom_ens = {g: f"commun-{i}" for i, g in enumerate(partages)}
+    lignes = []
+    for g in partages:
+        lignes.append(f'secubox-ensemble:\n    name: "{nom_ens[g]}"\n')
+        for t in _TYPES:
+            lignes += [f'    local-zone: "{z}." {t}\n' for z in sorted(groupes[g].get(t, []))]
+    for nom in noms:
+        lignes.append(f'view:\n    name: "{nom}"\n    view-first: yes\n')
+        propres = groupes.get((nom,), {})
+        for t in _TYPES:
+            lignes += [f'    local-zone: "{z}." {t}\n' for z in sorted(propres.get(t, []))]
+        lignes += [f'    secubox-ensemble: "{nom_ens[g]}"\n' for g in partages if nom in g]
+    return lignes

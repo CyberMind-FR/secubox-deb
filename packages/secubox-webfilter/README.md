@@ -73,6 +73,8 @@ domaines) ne fait qu'ajouter un faux classement en mode observe. Le parking n'a 
 - **Blocage** : une vue d'Unbound **par configuration effective distincte** (deux appareils de même configuration partagent la même vue : la mémoire dépend
   du nombre de configurations, pas d'appareils). Le réseau entier (`[reseau] lan` de `/etc/secubox/webfilter.toml`) pointe vers `wf-defaut` ; chaque appareil
   assigné a une entrée `/32` ou `/128` plus précise. Zones `always_nxdomain` ; les autorisations sont des zones `transparent` plus précises.
+  Source compacte (0.5.7, #3893) : une zone présente dans plusieurs vues est écrite une fois dans un `secubox-ensemble:` que chaque vue
+  reprend (`secubox-ensemble: "commun-<n>"`) ; secubox-dns-listes (≥ 1.8.43) les recopie, chaque vue charge les mêmes zones qu'avant.
 - **Application** : `POST /api/v1/webfilter/appliquer` dépose `appliquer.demande` ; l'unité root `secubox-webfilter-apply` (déclenchée par
   `secubox-webfilter-apply.path`, jamais par sudo) lance `secubox-webfilter-ctl apply`, qui valide `config.json` comme une entrée hostile, génère
   `93-secubox-webfilter.conf`, vérifie le budget de zones (`[limites] zones_max`) et le **dépose** dans `/var/lib/secubox-dns-listes/sources` (0.5.0,
