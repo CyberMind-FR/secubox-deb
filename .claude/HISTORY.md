@@ -26,7 +26,9 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   Aucun geste de remise à zéro n'existe dans la webui (à prévoir avec #3871).
 - Bouton « Remettre les statistiques à zéro » (TV Privacy, onglet Diagnostic) : secubox-ad-guard 1.33.4 (#3874, PR #3875),
   route POST /adblock-tv/stats/raz (admin, {confirmer: true}), copie gardée (3), audit raz-stats root avant de vider.
-  Publié sur apt, déployé gk7 (route 401 sans jeton) ; gk2 à mettre à jour (1.33.3 et 1.33.4 en attente).
+  Publié sur apt, déployé gk7 et gk2 (ad-guard 1.33.4 + freebox 0.8.5 ; groupe g1 et agrégateur redémarrés pour charger la route).
+- secubox-system 1.13.2 (#3876, PR #3877) : carte « Nom du nœud » sans webos dit « pas installé » (cas de gk7). Déployé gk7.
+- Bêta 2 (#3878) : consolidation, SBX Trust #3468 en parallèle (arbitrage du propriétaire).
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne

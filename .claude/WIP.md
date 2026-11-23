@@ -9,6 +9,10 @@
 *Mis à jour : 2026-11-11 (MirrorNet 4b déployée) ; 2026-11-09 (bêta 1 complète : installateur validé en VM, images RPi publiées ; Status Live jalons 1-2 ; bouton « Réparer »).* Moins de 200 lignes, par construction : l'historique du
 travail fait est dans `HISTORY.md` (mois courant) et `archive/` (le reste, sur demande).
 
+- ⬜ **Next Up (2026-11-23, BÊTA 2 #3878)** : arbitrage du propriétaire, pas de retour en alpha. Bêta 2 = consolidation depuis la
+  bêta 1 : clore la série corrective (vérifier puis marqueur), traiter #3516 #3527 #3528 #3489 #3532, image contrôlée + VM x64
+  + RPi4 LCD, notes de version. SBX Trust #3468 en parallèle (audit seul ; cahier des charges du 04/11 introuvable dans le dépôt).
+  gk2 : ad-guard 1.33.4 + freebox 0.8.5 (agrégateur et groupe g1 redémarrés 23/11). gk7 : system 1.13.2 (#3876).
 - ⬜ **Next Up (2026-11-22, Salle)** : secubox-ai 2.2.0 déployé gk3 (onglet Salle, #3867) : regard du propriétaire, puis `closes #3867` ; panneaux suivants de la maquette (graphe d'acteur dans Dossier, chronologie verticale) sur accord.
 - ⬜ **Next Up (2026-11-22)** : V2 en service, gk3 seul décideur (HISTORY 22/11). Tour Nuclei allumé sur gk3 (2.1.1, 522 adoptés) : surveiller touches et rejets une journée. File de l'analyste pleine (moteur distant gk0 en délai). À trancher : levée de la suspension `ai-ban`, classe RGPD `ip-indices`. #3861 (`chattr +a`, profils en `a`). `closes #3722-#3725 #3858 #3862` après une journée sans anomalie. Défaut mineur : `depuis` de `sade-mode.json`.
 - ⬜ **Next Up (2026-11-20)** : SADE ACTIVE v1 (1.10.1) : banc gk1, liste blanche foyer posée gk1+gk2 ; ACTIVE sur gk1 par sa page puis relevé 24 h, puis gk2 sur accord ; profil AppArmor #3847 ; SADE #3839 à vérifier par le propriétaire puis `closes` ; #3850 : recompilations et coupures DNS corrigées (déployé gk1+gk2) ; reste tampon nDPIsrvd et drop-ins journald de gk2. **DataScope V0.1 déployé sur gk2** (0.1.1, #3853) : vérification du propriétaire puis `closes` ; V0.2 = Cytoscape/Sigma + connecteur acteurs ; OSINT ensuite (intégration profonde / outils SBX).
