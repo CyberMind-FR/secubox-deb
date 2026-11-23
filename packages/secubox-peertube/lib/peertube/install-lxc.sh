@@ -320,8 +320,37 @@ if ! grep -qE '^appendonly yes' /etc/redis/redis.conf 2>/dev/null; then
     grep -qE '^appendonly yes' /etc/redis/redis.conf 2>/dev/null || \
         echo 'appendonly yes' >> /etc/redis/redis.conf
 fi
+# #3896 : dans une LXC non privilégiée (Debian trixie), l'unité redis-server échoue au démarrage
+# (« Failed to set up mount namespacing: Permission denied », 226/NAMESPACE) : systemd ne peut pas créer
+# les espaces de noms que demandent ses options d'isolation. Le conteneur reste l'isolation ; on remet ces
+# options à zéro par une surcharge, sinon PeerTube répond mais aucune connexion ne passe.
+install -d /etc/systemd/system/redis-server.service.d
+cat > /etc/systemd/system/redis-server.service.d/lxc.conf <<'DROPIN'
+# SecuBox #3896 : LXC non privilégiée, pas d'espaces de noms imbriqués ; le conteneur est l'isolation.
+[Service]
+PrivateUsers=false
+PrivateTmp=false
+PrivateDevices=false
+ProtectSystem=false
+ProtectHome=false
+ProtectKernelTunables=false
+ProtectKernelModules=false
+ProtectKernelLogs=false
+ProtectControlGroups=false
+ProtectClock=false
+ProtectHostname=false
+ProtectProc=default
+ReadWritePaths=
+ReadWriteDirectories=
+ExecPaths=
+NoExecPaths=
+DROPIN
+systemctl daemon-reload 2>/dev/null || true
+systemctl reset-failed redis-server 2>/dev/null || true
 service redis-server start || systemctl start redis-server || true
 sleep 3
+# Redis DOIT répondre : sans lui PeerTube n'authentifie personne (MaxRetriesPerRequestError).
+redis-cli ping | grep -q PONG || { echo 'redis-server ne répond pas (voir journalctl -u redis-server)' >&2; exit 1; }
 # Belt and braces: enable it live too, in case redis was already running with
 # the old config (upgrade path — no restart needed, no queue lost).
 redis-cli config set appendonly yes >/dev/null 2>&1 || true

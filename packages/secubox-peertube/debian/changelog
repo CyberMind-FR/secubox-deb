@@ -1,3 +1,11 @@
+secubox-peertube (1.7.1-1~trixie1) trixie; urgency=medium
+
+  * Installation (ref #3896) : surcharge de redis-server dans la LXC (trixie
+    non privilégiée refuse ses espaces de noms : 226/NAMESPACE) et Redis
+    vérifié (PING) avant la suite ; sans lui PeerTube n'authentifie personne.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 14:11:02 +0100
+
 secubox-peertube (1.7.0-1~trixie1) trixie; urgency=medium
 
   * Direct (live) : « peertubectl direct activer|etat » règle la seule section
