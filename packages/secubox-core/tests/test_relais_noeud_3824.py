@@ -91,7 +91,7 @@ def test_ouvrir_puis_fermer_audite_et_reglage_garde(box):
     assert box.relais("activer", "admin") == 0
     texte = Path(box.REGLAGES).read_text()
     assert texte.startswith(TOML_GK2) and texte.endswith("[noeud]\nrelais_api = true\n")
-    assert stat.S_IMODE(os.stat(box.REGLAGES).st_mode) == 0o644
+    assert stat.S_IMODE(os.stat(box.REGLAGES).st_mode) == 0o640           # 0640, jamais plus large (#3883)
     c = conf(box)
     assert "location / {\n        proxy_pass http://192.168.1.200:8000;" in c and "return 404;" not in c
     assert ["nginx", "-t"] in box.appels and ["systemctl", "reload", "nginx"] in box.appels
@@ -295,7 +295,8 @@ def test_unites_paquet_et_exception_ecrite():
     m = charger()
     assert "DirectoryNotEmpty=/run/secubox/noeud\n" in path and m.DEMANDES == "/run/secubox/noeud"
     assert "Unit=secubox-noeud.service" in path and m.RESULTATS == "/run/secubox/noeud-resultats"
-    assert m.MODULE == "noeud" and m.REGLAGES == "/etc/secubox/noeud.toml" and m.ETAT_DIR == "/var/lib/secubox-noeud"
+    assert m.MODULE == "noeud" and m.REGLAGES == "/etc/secubox/noeud/noeud.toml" and m.ETAT_DIR == "/var/lib/secubox-noeud"
+    assert m.PROPRIO == 0
     for ligne in ("Type=oneshot", "ExecStartPre=+/usr/sbin/secubox-noeud prepare", "ExecStart=/usr/sbin/secubox-noeud traite",
                   "Environment=SBX_NOEUD_UNITE=1", "UMask=0027", "NoNewPrivileges=true", "ProtectSystem=strict",
                   "ProtectHome=true", "PrivateTmp=true", "ProtectKernelTunables=true", "ProtectControlGroups=true",
@@ -304,14 +305,14 @@ def test_unites_paquet_et_exception_ecrite():
                   "WantedBy=multi-user.target"):
         assert ligne in unite, ligne
     rw = re.search(r"^ReadWritePaths=(.+)$", unite, re.M).group(1).split()
-    assert rw == ["/etc/secubox", "/etc/nginx/conf.d", "/var/log/secubox", "-/run/secubox/noeud",
+    assert rw == ["-/etc/secubox/noeud", "/etc/nginx/conf.d", "/var/log/secubox", "-/run/secubox/noeud",
                   "-/run/secubox/noeud-resultats"]
     rules = (PKG / "debian/rules").read_text()
     assert "systemd/secubox-noeud.path debian/secubox-core/usr/lib/systemd/system/secubox-noeud.path" in rules
     assert "systemd/secubox-noeud.service debian/secubox-core/usr/lib/systemd/system/secubox-noeud.service" in rules
     postinst = (PKG / "debian/postinst").read_text()
     # migration, puis appliquer et prepare, puis l'activation (deb-systemd-helper), le tout avant #DEBHELPER#
-    i = [postinst.index(x) for x in ("! -e /etc/secubox/noeud.toml", "mv /var/lib/secubox-webos-noeud /var/lib/secubox-noeud",
+    i = [postinst.index(x) for x in ("/usr/sbin/secubox-noeud migrer", "mv /var/lib/secubox-webos-noeud /var/lib/secubox-noeud",
                                      "/usr/sbin/secubox-noeud appliquer", "/usr/sbin/secubox-noeud prepare",
                                      "for _u in secubox-noeud.path secubox-noeud.service", "systemctl start secubox-noeud.path",
                                      "#DEBHELPER#")]
@@ -352,51 +353,167 @@ def test_vhost_pose_par_webos_reconnu_regenere_et_retirable(box):
     assert box.retirer_conf() is True and conf(box) is None
 
 
-def _migration(racine: Path) -> str:
-    """Le bloc python du postinst qui crée noeud.toml, sur une racine d'essai."""
-    texte = (PKG / "debian/postinst").read_text()
-    code = texte.split("<<'MIGRATION'", 1)[1].split("\n", 1)[1].split("\nMIGRATION\n", 1)[0]
-    assert code.count("/etc/secubox") >= 3
-    return code.replace("/etc/secubox", str(racine / "etc/secubox"))
-
-
-@pytest.mark.parametrize("webos,attendu", [
-    (None, {"accueil": True, "relais_api": False}),                                   # box sans webos : défauts
-    ("[webos]\nenabled = true\n", {"accueil": True, "relais_api": False}),
-    ("[webos]\nenabled = true\n[noeud]\naccueil = true\nrelais_api = true\n", {"accueil": True, "relais_api": True}),
-    ("[noeud]\naccueil = false\n", {"accueil": False, "relais_api": False}),
-    ("[noeud]\nrelais_api = \"true\"\nautre = 1\n", {"accueil": True, "relais_api": False}),  # pas un booléen : défaut
-    ("{illisible", {"accueil": True, "relais_api": False}),
+@pytest.mark.parametrize("webos,mdp_change,attendu,action", [
+    (None, True, {"accueil": True, "relais_api": False}, None),                           # box sans webos : défauts
+    ("[webos]\nenabled = true\n", True, {"accueil": True, "relais_api": False}, None),
+    ("[webos]\nenabled = true\n[noeud]\naccueil = true\nrelais_api = true\n", True,
+     {"accueil": True, "relais_api": True}, "migre"),
+    ("[noeud]\nrelais_api = true\n", False, {"accueil": True, "relais_api": False}, "refuse-migration"),
+    ("[noeud]\naccueil = false\n", False, {"accueil": False, "relais_api": False}, None),
+    ("[noeud]\nrelais_api = \"true\"\nautre = 1\n", True, {"accueil": True, "relais_api": False}, None),
 ])
-def test_postinst_migre_noeud_toml_une_fois(tmp_path, webos, attendu):
-    import subprocess
-    import sys
+def test_migrer_cree_noeud_toml_une_fois(box, monkeypatch, webos, mdp_change, attendu, action):
     import tomllib
-    (tmp_path / "etc/secubox").mkdir(parents=True)
+    monkeypatch.setattr(box, "mot_de_passe_change", lambda: mdp_change)
+    Path(box.REGLAGES).parent.rmdir()                       # le postinst crée le dossier
     if webos is not None:
-        (tmp_path / "etc/secubox/webos.toml").write_text(webos)
-    subprocess.run([sys.executable, "-I", "-c", _migration(tmp_path)], check=True, timeout=30, capture_output=True)
-    cree = tmp_path / "etc/secubox/noeud.toml"
+        Path(box.WEBOS_TOML).write_text(webos)
+    assert box.migrer() == 0
+    cree = Path(box.REGLAGES)
     assert tomllib.loads(cree.read_text()) == {"noeud": attendu}
-    assert stat.S_IMODE(cree.stat().st_mode) == 0o644
-    assert sorted(p.name for p in (tmp_path / "etc/secubox").iterdir()) == sorted(
-        ["noeud.toml"] + (["webos.toml"] if webos is not None else []))          # aucun fichier temporaire laissé
+    assert stat.S_IMODE(cree.stat().st_mode) == 0o640
+    assert stat.S_IMODE(cree.parent.stat().st_mode) == 0o755
+    assert os.listdir(cree.parent) == ["noeud.toml"]                  # aucun temporaire laissé
     if webos is not None:
-        assert (tmp_path / "etc/secubox/webos.toml").read_text() == webos         # webos.toml jamais modifié
-    # le réglage créé est celui que lit secubox-noeud, et la bascule le réécrit
+        assert Path(box.WEBOS_TOML).read_text() == webos              # webos.toml jamais modifié
+    assert [(a["action"], a["result"]) for a in audits(box)] == ([("relais_api", action)] if action else [])
+    assert box.accueil_voulu() is attendu["accueil"] and box.relais_voulu() is attendu["relais_api"]
+    # deuxième passage : un noeud.toml existant fait foi, jamais écrasé
+    cree.write_text("[noeud]\nrelais_api = false\n")
+    Path(box.WEBOS_TOML).write_text("[noeud]\nrelais_api = true\n")
+    assert box.migrer() == 0 and cree.read_text() == "[noeud]\nrelais_api = false\n"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root lit tout")
+@pytest.mark.parametrize("contenu", ["illisible", "{pas du toml"])
+def test_migrer_webos_toml_illisible_rien_n_est_cree(box, contenu):
+    w = Path(box.WEBOS_TOML)
+    w.write_text("[noeud]\nrelais_api = true\n" if contenu == "illisible" else contenu)
+    if contenu == "illisible":
+        w.chmod(0)
+    assert box.migrer() == 1
+    assert not Path(box.REGLAGES).exists()                            # nouvel essai au prochain configure
+    w.chmod(0o644)
+    w.write_text("[noeud]\naccueil = true\n")
+    assert box.migrer() == 0 and Path(box.REGLAGES).exists()
+
+
+@pytest.mark.parametrize("piege", ["lien", "autre_proprio", "inscriptible", "fichier"])
+def test_migrer_refuse_un_dossier_qui_n_est_pas_celui_de_root(box, monkeypatch, tmp_path, piege):
+    d = Path(box.REGLAGES).parent
+    d.rmdir()
+    ailleurs = tmp_path / "ailleurs"
+    ailleurs.mkdir(mode=0o755)
+    if piege == "lien":
+        d.symlink_to(ailleurs)
+    elif piege == "fichier":
+        d.write_text("x")
+    else:
+        d.mkdir(mode=0o755)
+        if piege == "inscriptible":
+            d.chmod(0o775)
+        else:
+            monkeypatch.setattr(box, "PROPRIO", os.geteuid() + 1)
+    assert box.migrer() == 1
+    assert list(ailleurs.iterdir()) == []                             # rien écrit à travers le lien
+    if d.is_dir() and not d.is_symlink():
+        assert list(d.iterdir()) == []                                # ni dans le dossier refusé
+    assert (audits(box)[-1]["action"], audits(box)[-1]["result"]) == ("reglages", "refus")
+    assert box.ecrire_reglage_relais(True) is None                    # la bascule refuse aussi
+    assert box.relais_voulu() is False
+
+
+@pytest.mark.parametrize("piege", ["lien", "inscriptible_groupe", "inscriptible_autres", "autre_proprio", "fifo"])
+def test_reglage_non_root_ignore_relais_ferme(box, monkeypatch, tmp_path, piege):
+    reglage = Path(box.REGLAGES)
+    if piege == "lien":
+        vrai = tmp_path / "vrai.toml"
+        vrai.write_text("[noeud]\nrelais_api = true\naccueil = false\n")
+        reglage.symlink_to(vrai)
+    elif piege == "fifo":
+        os.mkfifo(reglage, 0o600)
+    else:
+        reglage.write_text("[noeud]\nrelais_api = true\naccueil = false\n")
+        if piege == "inscriptible_groupe":
+            reglage.chmod(0o660)
+        elif piege == "inscriptible_autres":
+            reglage.chmod(0o602)
+        else:
+            # le fichier n'est pas à l'uid exigé (dossier simulé à cet uid : seul le fichier est en faute)
+            real = box._ouvrir_dossier_reglages
+            monkeypatch.setattr(box, "PROPRIO", os.geteuid() + 1)
+
+            def dossier(creer=False):
+                monkeypatch.setattr(box, "PROPRIO", os.geteuid())
+                try:
+                    return real(creer)
+                finally:
+                    monkeypatch.setattr(box, "PROPRIO", os.geteuid() + 1)
+            monkeypatch.setattr(box, "_ouvrir_dossier_reglages", dossier)
+    assert box.relais_voulu() is False
+    assert box.accueil_voulu() is True                                # refusé : défaut, jamais « désactivé »
+    assert box.ecrire_reglage_relais(False) is None                   # jamais réécrit par-dessus
+    assert box.migrer() == 1
+
+
+def test_lien_pose_a_la_place_du_temporaire_jamais_suivi(box, monkeypatch, tmp_path):
+    """Un lien posé au nom du temporaire : O_EXCL|O_NOFOLLOW refuse, la cible n'est ni écrite ni rechmodée."""
+    Path(box.REGLAGES).write_text("[noeud]\nrelais_api = false\n")
+    os.chmod(box.REGLAGES, 0o640)
+    cible = tmp_path / "shadow"
+    cible.write_text("root:x:0:0\n")
+    cible.chmod(0o600)
+    monkeypatch.setattr(box.os, "urandom", lambda n: b"\x00" * n)
+    (Path(box.REGLAGES).parent / ".noeud.toml.000000000000").symlink_to(cible)
+    assert box.ecrire_reglage_relais(True) is None
+    assert cible.read_text() == "root:x:0:0\n" and stat.S_IMODE(cible.stat().st_mode) == 0o600
+    assert Path(box.REGLAGES).read_text() == "[noeud]\nrelais_api = false\n"
+    assert box.relais("activer", "admin") == 1 and audits(box)[-1]["result"] == "echec"
+    script = (PKG / "sbin/secubox-noeud").read_text()
+    corps = script[script.index("def _ecrire_reglages"):script.index("def lire_reglages")]
+    assert "os.fchmod(" in corps and "os.chmod(" not in corps and "dir_fd=dfd" in corps
+
+
+def test_appliquer_ne_sert_pas_le_relais_sans_mot_de_passe_change(box, monkeypatch):
+    gk2_repris(box)
+    Path(box.REGLAGES).write_text("[noeud]\nrelais_api = true\n")
+    monkeypatch.setattr(box, "mot_de_passe_change", lambda: False)
+    assert box.appliquer() == 0
+    c = conf(box)
+    assert "location / {\n        return 404;" in c and c.count("proxy_pass") == 1        # la santé seule
+    assert ("relais_api", "refuse") in [(a["action"], a["result"]) for a in audits(box)]
+    e = box.etat_relais()
+    assert e["relais_api"] is True and e["relais_actif"] is False                       # ce qui est SERVI : fermé
+    monkeypatch.setattr(box, "mot_de_passe_change", lambda: True)
+    assert box.appliquer() == 0 and "location / {\n        proxy_pass" in conf(box)
+    assert box.etat_relais()["relais_actif"] is True
+
+
+def test_de_livre_par_le_coeur_identique_a_sa_source(tmp_path):
+    """Les lignes `install` de debian/rules pour www/noeud, jouées pour de vrai : le dé livré est, octet pour octet,
+    celui du Hall (sa source), et c'est bien ce que le vhost sert."""
+    rules = (PKG / "debian/rules").read_text()
+    lignes = [x.strip() for x in rules.splitlines()
+              if x.strip().startswith("install ") and "usr/share/secubox/www/noeud" in x]
+    assert len(lignes) == 4
+    script = "\n".join(x.replace("debian/secubox-core/", f"{tmp_path}/") for x in lignes)
+    subprocess.run(["bash", "-euc", script], cwd=PKG, check=True, timeout=30)
+    livre = tmp_path / "usr/share/secubox/www/noeud"
+    assert (livre / "index.html").read_bytes() == PAGE.read_bytes()
+    assert (livre / "sbx-dice.js").read_bytes() == (HALL / "sbx-dice.js").read_bytes()
+    faces = sorted(p.name for p in (HALL / "dice").glob("*.jpg"))
+    assert faces == [f"face-{i}.jpg" for i in range(6)]
+    assert sorted(p.name for p in (livre / "dice").iterdir()) == faces
+    for f in faces:
+        assert (livre / "dice" / f).read_bytes() == (HALL / "dice" / f).read_bytes(), f
     m = charger()
-    m.REGLAGES = str(cree)
-    assert m.accueil_voulu() is attendu["accueil"] and m.relais_voulu() is attendu["relais_api"]
-    assert tomllib.loads(m.reglage_avec_relais(cree.read_text(), True))["noeud"]["relais_api"] is True
-    # deuxième passage : un noeud.toml existant n'est jamais écrasé (le postinst ne lance le bloc que s'il est absent)
-    cree.write_text("[noeud]\nrelais_api = true\n")
-    r = subprocess.run([sys.executable, "-I", "-c", _migration(tmp_path)], timeout=30, capture_output=True)
-    assert r.returncode != 0 and cree.read_text() == "[noeud]\nrelais_api = true\n"
+    vhost = m.rendre(DOM, None, False)
+    assert f"alias {m.WWW}/noeud/sbx-dice.js;" in vhost and f"alias {m.WWW}/noeud/dice/;" in vhost
 
 
 def test_postinst_garde_de_la_migration():
     postinst = (PKG / "debian/postinst").read_text()
-    assert "if [ ! -e /etc/secubox/noeud.toml ] && [ ! -L /etc/secubox/noeud.toml ]; then" in postinst
+    assert "/usr/sbin/secubox-noeud migrer ||" in postinst and "<<'MIGRATION'" not in postinst
     bloc = postinst[postinst.index("if [ -d /var/lib/secubox-webos-noeud ]"):postinst.index("mv /var/lib/secubox-webos-noeud")]
     for garde in ("[ ! -L /var/lib/secubox-webos-noeud ]", '"$(stat -c %u /var/lib/secubox-webos-noeud)" = 0',
                   "[ ! -e /var/lib/secubox-noeud ]", "[ ! -L /var/lib/secubox-noeud ]"):

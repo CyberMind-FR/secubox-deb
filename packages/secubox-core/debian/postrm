@@ -20,7 +20,7 @@ case "$1" in
         fi
         # État du vhost du nom de nœud (root 0700) et réglages : seulement à la purge.
         rm -rf /var/lib/secubox-noeud
-        rm -f /etc/secubox/noeud.toml
+        rm -rf /etc/secubox/noeud
         ;;
 esac
 if [ -d /run/systemd/system ]; then

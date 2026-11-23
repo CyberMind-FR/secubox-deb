@@ -378,42 +378,14 @@ REPRISE
 
     # ACCUEIL DU NOM DE NŒUD (#3821, #3824), dans le cœur depuis #3883 : il vivait dans secubox-webos (le Hall,
     # optionnel) ; une box sans webos ne servait ni son accueil public ni la carte « Nom du nœud » de /system/.
-    # Réglages : MIGRATION UNE FOIS. noeud.toml absent : repris des clés booléennes de [noeud] de webos.toml s'il y en a
-    # (relais ouvert sur gk2 = reste ouvert), sinon les défauts (accueil posé, relais fermé). Ensuite noeud.toml fait foi ;
-    # webos.toml n'est jamais modifié. Fichier existant (ou lien) : intouché.
-    if [ ! -e /etc/secubox/noeud.toml ] && [ ! -L /etc/secubox/noeud.toml ]; then
-        install -d -m 0755 /etc/secubox
-        python3 -I - <<'MIGRATION' || echo "secubox-core : /etc/secubox/noeud.toml non créé (défauts : accueil posé, relais fermé)" >&2
-import os, tempfile, tomllib
-cles = {}
-try:
-    fd = os.open("/etc/secubox/webos.toml", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    with os.fdopen(fd, "rb") as fh:
-        section = tomllib.loads(fh.read(1 << 20).decode("utf-8")).get("noeud", {})
-    if isinstance(section, dict):
-        cles = {k: v for k, v in section.items() if k in ("accueil", "relais_api") and isinstance(v, bool)}
-except (OSError, ValueError):
-    pass
-accueil, relais = cles.get("accueil", True), cles.get("relais_api", False)
-origine = "repris de [noeud] de /etc/secubox/webos.toml" if cles else "défauts"
-texte = (
-    "# /etc/secubox/noeud.toml : accueil du nom de nœud (#3821, #3824), géré par secubox-core (#3883).\n"
-    f"# Créé par le postinst de secubox-core ({origine}). Exemple commenté : /usr/share/secubox-core/noeud.toml.example\n"
-    "[noeud]\n"
-    "# false = rien n'est posé sur <nœud>.<zone> (et ce qui l'avait été est retiré) ; appliquer : secubox-noeud appliquer\n"
-    f"accueil = {'true' if accueil else 'false'}\n"
-    "# Relais des AUTRES chemins vers l'ancienne cible : FERMÉ par défaut ; page Système ou secubox-noeud relais\n"
-    f"relais_api = {'true' if relais else 'false'}\n")
-fd, tmp = tempfile.mkstemp(dir="/etc/secubox", prefix=".noeud-")
-with os.fdopen(fd, "w", encoding="utf-8") as fh:
-    fh.write(texte)
-try:
-    os.chmod(tmp, 0o644)
-    os.link(tmp, "/etc/secubox/noeud.toml")  # jamais d'écrasement : échoue si le fichier est apparu entre-temps
-finally:
-    os.unlink(tmp)
-print(f"secubox-core : /etc/secubox/noeud.toml créé ({origine})")
-MIGRATION
+    # Réglages : MIGRATION UNE FOIS, par `secubox-noeud migrer` (root, tout par descripteur). Ils vivent dans un dossier
+    # ROOT, /etc/secubox/noeud/ (root:root 0755) : /etc/secubox appartient au compte secubox, qui pourrait y remplacer un
+    # fichier. Un chemin noeud/ qui n'est pas un vrai dossier de root est REFUSÉ bruyamment (rien n'est créé).
+    # noeud.toml (root:root 0640) absent : repris des clés booléennes de [noeud] de webos.toml, sinon les défauts ;
+    # relais_api = true n'est repris que si le mot de passe admin par défaut est prouvé changé (audité : migre /
+    # refuse-migration). webos.toml présent mais illisible : rien n'est créé, nouvel essai au prochain configure.
+    if [ -x /usr/sbin/secubox-noeud ]; then
+        /usr/sbin/secubox-noeud migrer || echo "secubox-core : /etc/secubox/noeud/noeud.toml non créé (voir ci-dessus ; défauts : accueil posé, relais fermé)" >&2
     fi
     # État (route reprise, ancienne cible) : celui de secubox-webos repris une fois, s'il est un vrai dossier de root.
     if [ -d /var/lib/secubox-webos-noeud ] && [ ! -L /var/lib/secubox-webos-noeud ] \

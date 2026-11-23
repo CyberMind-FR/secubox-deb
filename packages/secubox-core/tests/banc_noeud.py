@@ -5,6 +5,7 @@
 """Banc commun des tests du nom de nœud (#3821, #3824, #3883) : `secubox-noeud` chargé par son chemin, une box en miniature
 (arbres nginx, table sbxwaf, réglages, état, audit ; commandes enregistrées), et un client HTTP minimal."""
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -38,8 +39,10 @@ def box_noeud(tmp_path, monkeypatch):
     # Fixture « box » importée par les modules de tests du nœud : elle y masque celle de conftest.py (sessions, #1607).
     """Une box en miniature : arbres nginx, table sbxwaf, réglages, état, audit ; commandes enregistrées."""
     m = charger()
+    umask = os.umask(0o022)                       # fichiers d'essai 0644 : jamais inscriptibles par groupe ni autres
     for d in ("etc/nginx/sites-enabled", "etc/nginx/conf.d", "etc/secubox/waf", "var/log/secubox"):
         (tmp_path / d).mkdir(parents=True)
+    (tmp_path / "etc/secubox/noeud").mkdir(mode=0o755)     # le dossier root des réglages (#3883)
     routes = tmp_path / "etc/secubox/waf/haproxy-routes.json"
     routes.write_text(json.dumps({"hall.gk2.secubox.in": ["192.168.1.200", 9080]}))
     (tmp_path / "etc/secubox/haproxy.toml").write_text('[vhosts.hall]\ndomain = "hall.gk2.secubox.in"\n')
@@ -48,7 +51,9 @@ def box_noeud(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "FORMAT_HOTES", str(tmp_path / "etc/nginx/conf.d/secubox-hosts-log.conf"))
     monkeypatch.setattr(m, "ROUTES", str(routes))
     monkeypatch.setenv("SBX_WAF_ROUTES", str(routes))
-    monkeypatch.setattr(m, "REGLAGES", str(tmp_path / "etc/secubox/noeud.toml"))
+    monkeypatch.setattr(m, "REGLAGES", str(tmp_path / "etc/secubox/noeud/noeud.toml"))
+    monkeypatch.setattr(m, "WEBOS_TOML", str(tmp_path / "etc/secubox/webos.toml"))
+    monkeypatch.setattr(m, "PROPRIO", os.geteuid())   # « root » de la box miniature : l'utilisateur des tests
     monkeypatch.setattr(m, "HAPROXY_TOML", str(tmp_path / "etc/secubox/haproxy.toml"))
     monkeypatch.setattr(m, "ETAT_DIR", str(tmp_path / "var/lib/secubox-noeud"))
     monkeypatch.setattr(m, "ETAT", str(tmp_path / "var/lib/secubox-noeud/etat.json"))
@@ -73,7 +78,8 @@ def box_noeud(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "executer", executer)
     monkeypatch.setattr(m, "sonder", lambda ip, port, dom: m.sonde)
     m.racine = tmp_path
-    return m
+    yield m
+    os.umask(umask)
 
 
 def table(m):

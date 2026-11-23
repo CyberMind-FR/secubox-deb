@@ -37,9 +37,9 @@ IPAddressDeny=any
 # audit.log (secubox 0640), users.json lu par la garde du mot de passe par defaut, resultats chownes root:secubox.
 CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER
 AmbientCapabilities=
-# /etc/secubox : noeud.toml reecrit par renommage atomique (un fichier seul ne se renomme pas sur un montage lie).
+# /etc/secubox/noeud (dossier root) : noeud.toml reecrit par renommage atomique dans ce dossier, par descripteur (#3883).
 # Exception ecrite : RULES-CODE § Exceptions (#3824).
-ReadWritePaths=/etc/secubox /etc/nginx/conf.d /var/log/secubox -/run/secubox/noeud -/run/secubox/noeud-resultats
+ReadWritePaths=-/etc/secubox/noeud /etc/nginx/conf.d /var/log/secubox -/run/secubox/noeud -/run/secubox/noeud-resultats
 
 [Install]
 WantedBy=multi-user.target

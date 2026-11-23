@@ -186,7 +186,7 @@ cible qui **sert** « / », et rien n'est posé. Une ancienne cible qui rend **4
 main vers le serveur sans nom de `:8000`) est reprise : seule sa santé lui est relayée (voir ci-dessous). Aucune
 **nouvelle** exposition tant que le mot de passe admin par défaut est actif (#3401, refus audité). Chaque décision
 va dans `/var/log/secubox/audit.log` ; état dans `/var/lib/secubox-noeud/etat.json` (root 0600).
-Désactiver : `[noeud] accueil = false` dans `/etc/secubox/noeud.toml`, puis `secubox-noeud appliquer`. `secubox-noeud
+Désactiver : `[noeud] accueil = false` dans `/etc/secubox/noeud/noeud.toml`, puis `secubox-noeud appliquer`. `secubox-noeud
 retirer` (`prerm`) retire le vhost et rend à une route reprise son ancienne cible ; `secubox-noeud etat` dit ce qui est en place.
 
 ### Relais des autres chemins : une option fermée par défaut (#3824)
@@ -194,7 +194,7 @@ retirer` (`prerm`) retire le vhost et rend à une route reprise son ancienne cib
 Le nom public ne sert **que** le dé et `/api/v1/health` (décision du propriétaire : l'API d'administration n'est jamais
 exposée par ce nom). Relayer les autres chemins à l'ancienne cible (sur gk2 : `/api/v1/admin/`, `metrics`,
 `metablogizer`, `system/metrics` du serveur `eye-remote-api` :8000) est une **option**, `[noeud] relais_api` de
-`/etc/secubox/noeud.toml`, **fausse par défaut** (absente, illisible ou autre que `true` = fermé). Une montée depuis
+`/etc/secubox/noeud/noeud.toml`, **fausse par défaut** (absente, illisible, refusée ou autre que `true` = fermé). Une montée depuis
 1.21.0, qui relayait tout, réécrit donc le vhost **fermé** (audit `vhost regenere`).
 
 L'administrateur l'ouvre ou la ferme depuis la page **Système** (panneau « Nom du nœud ») :
@@ -213,7 +213,7 @@ chemins relayés ; résultat dans `/run/secubox/noeud-resultats/<id>.json` (0640
 au jeton délégué du pilotage. En ligne de commande (root) : `secubox-noeud relais activer|desactiver [acteur]`,
 `secubox-noeud relais etat`.
 
-### Réglages `/etc/secubox/noeud.toml` et migration depuis secubox-webos (#3883)
+### Réglages `/etc/secubox/noeud/noeud.toml` et migration depuis secubox-webos (#3883)
 
 ```toml
 [noeud]
@@ -221,9 +221,20 @@ accueil = true      # false : rien n'est posé sur <nœud>.<zone>, ce qui l'avai
 relais_api = false  # relais des autres chemins vers l'ancienne cible, FERMÉ par défaut
 ```
 
-Exemple commenté : `/usr/share/secubox-core/noeud.toml.example`. Le `postinst` crée `noeud.toml` **une fois**, s'il est
-absent : avec les clés booléennes `accueil` et `relais_api` de la section `[noeud]` de `/etc/secubox/webos.toml` s'il y
-en a (un relais ouvert reste ouvert), sinon avec les défauts ; `webos.toml` n'est jamais modifié et sa section `[noeud]`
+Exemple commenté : `/usr/share/secubox-core/noeud.toml.example`. Le dossier `/etc/secubox/noeud/` est **root:root
+0755** et le fichier **root:root 0640** : `/etc/secubox` appartient au compte secubox, qui pourrait y remplacer un
+fichier. `secubox-noeud` lit et écrit tout par le descripteur de ce dossier (O_NOFOLLOW, fstat, `fchmod` sur le
+descripteur, renommage dans le dossier) ; un dossier ou un fichier lié, d'un autre propriétaire que root ou
+inscriptible par groupe ou autres est **ignoré** (accueil par défaut, relais FERMÉ, dit sur stderr). Un relais ouvert
+n'est servi par `appliquer` que si le mot de passe admin par défaut est prouvé changé (sinon fermé, audit
+`relais_api refuse`).
+
+Le `postinst` lance `secubox-noeud migrer` : dossier créé (un chemin `noeud/` qui n'est pas un vrai dossier de root est
+refusé bruyamment), puis `noeud.toml` créé **une fois**, s'il est absent, avec les clés booléennes `accueil` et
+`relais_api` de la section `[noeud]` de `/etc/secubox/webos.toml` s'il y en a, sinon les défauts. `relais_api = true`
+n'est repris que si le mot de passe admin par défaut est prouvé changé (audit `relais_api migre`, sinon posé fermé et
+audit `relais_api refuse-migration`). `webos.toml` présent mais illisible : rien n'est créé, nouvel essai au prochain
+configure. `webos.toml` n'est jamais modifié et sa section `[noeud]`
 n'est plus lue. L'état `/var/lib/secubox-webos-noeud` est repris (déplacé) vers `/var/lib/secubox-noeud` s'il n'existe
 pas encore. Le vhost `/etc/nginx/conf.d/secubox-noeud.conf` garde son nom ; celui posé par webos (en-tête
 `webos-noeud`) est reconnu comme le nôtre et régénéré. `Breaks/Replaces: secubox-webos (<< 1.21.3~)` : les deux paquets ne

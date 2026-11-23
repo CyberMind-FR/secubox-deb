@@ -3,8 +3,10 @@
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
 #
-# /etc/secubox/noeud.toml — accueil du nom de nœud (#3821, #3824), géré par secubox-core (#3883).
-# Créé une fois par le postinst de secubox-core (repris de la section [noeud] de webos.toml s'il y en avait une).
+# /etc/secubox/noeud/noeud.toml — accueil du nom de nœud (#3821, #3824), géré par secubox-core (#3883).
+# Dossier root:root 0755, fichier root:root 0640 : un fichier lié, d'un autre propriétaire ou inscriptible par groupe
+# ou autres est IGNORÉ (relais fermé). Créé une fois par `secubox-noeud migrer` (postinst), repris de la section
+# [noeud] de webos.toml s'il y en avait une (relais_api = true seulement si le mot de passe admin est changé).
 
 # <nœud>.<zone> (ex. gk2.secubox.in) montre le dé SecuBox en plein écran sur « / ».
 # false = rien n'est posé (et ce qui l'avait été est retiré) ; appliquer : secubox-noeud appliquer
