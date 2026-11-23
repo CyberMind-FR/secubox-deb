@@ -112,7 +112,7 @@ def test_appareil_exempte_recoit_un_override_par_domaine_adulte_individuel(mod):
     mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
     mod.EXEMPT_IP.write_text("192.168.1.3\n")
     st = mod.do_sync()
-    texte = mod.SOURCE.read_text()
+    texte = D.listes.developper(mod.SOURCE.read_text())          # ce qu'Unbound charge en mode direct (#3893)
     assert st["exempt_ip"] == 1
     assert "view:" not in texte and "access-control-view" not in texte
     assert 'local-zone-override: "cam-adulte.example." 192.168.1.3 always_transparent' in texte
@@ -134,7 +134,7 @@ def test_apex_et_sous_domaine_recoivent_chacun_leur_propre_override(mod):
     mod.EXEMPT_IP.parent.mkdir(parents=True, exist_ok=True)
     mod.EXEMPT_IP.write_text("192.168.1.3\n")
     mod.do_sync()
-    texte = mod.SOURCE.read_text()
+    texte = D.listes.developper(mod.SOURCE.read_text())
     overrides = {ligne.strip() for ligne in texte.splitlines() if ligne.strip().startswith("local-zone-override:")}
     assert overrides == {
         'local-zone-override: "chaturbate.com." 192.168.1.3 always_transparent',

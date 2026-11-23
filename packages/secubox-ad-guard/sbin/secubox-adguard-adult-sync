@@ -238,7 +238,17 @@ def _render(adult: set[str], general: set[str]) -> str:
     effective » en pensant imiter le comportement subtree de `local-zone` —
     erreur. Une `view:` avec `view-first: yes` (#2976) a aussi été vérifiée
     en direct et NE SURCHARGE PAS un `always_nxdomain` global pour la même
-    zone — abandonnée."""
+    zone — abandonnée.
+
+    FORME COMPACTE (#3893) : ces dérogations ne sont plus écrites une par
+    domaine et par adresse (614 448 lignes sur gk2 pour un appareil à 8
+    adresses) mais `secubox-derogation: <ip> always_transparent`, une ligne
+    par adresse, qui vaut une `local-zone-override` pour chaque `local-zone`
+    et `secubox-derogation-zone` du fichier (les domaines adultes déjà
+    déclarés par le sinkhole général). secubox-dns-listes la lit telle
+    quelle à la compilation et la déplie en mode direct en EXACTEMENT
+    l'ancien rendu (même ordre, octet pour octet) : rien ne change pour
+    l'appareil exempté."""
     lines = [
         "# Managed by secubox-adguard-adult-sync (#2964, #2979). DO NOT EDIT BY HAND.",
         "# Regenerate: secubox-adguard-adult-sync sync",
@@ -250,9 +260,10 @@ def _render(adult: set[str], general: set[str]) -> str:
 
     ips = _exempt_ips()
     if ips:
+        for d in sorted(adult & general):
+            lines.append(f'    secubox-derogation-zone: "{d}."')
         for ip in ips:
-            for d in sorted(adult):
-                lines.append(f'    local-zone-override: "{d}." {ip} always_transparent')
+            lines.append(f"    secubox-derogation: {ip} always_transparent")
     return "\n".join(lines) + "\n"
 
 
