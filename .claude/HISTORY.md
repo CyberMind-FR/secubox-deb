@@ -60,6 +60,15 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 - gk7 : `secubox-renouvelle-secrets --tout --oui` avec l'accord du propriétaire (systemd-run, 53 s, rc 0) : clés d'hôte SSH
   (SHA256:Y3whvx…, root@gk7), TLS, OIDC, jeton p2p et clé wg-ephemeral neufs ; machine-id gardé. wg-mesh intact (5 pairs),
   session SSH restée ouverte ; known_hosts de gk2 mis à jour (empreinte vérifiée avant acceptation). ssh, nginx, auth actifs.
+- Pages d'erreur à la mire (#3885, PR #3888 hub 1.12.60, haproxy 1.12.16, waf-ng 1.43.4 ; PR #3889 core 1.8.42 : 404 sur
+  le nom public des nœuds) et mire en fond de l'accueil des nœuds (#3886, PR #3887 core 1.8.41). Lot core 1.8.41 + hub +
+  haproxy + waf-ng installé sur gk2 le 23/11 à partir de 11:19 : configuration de core 32 min ; WAF arrêté 11:59:38 →
+  12:03:30 (tous les sites via WAF en 503). core 1.8.42 publié, NON installé (gk2 saturé).
+- gk2 SATURÉ 23/11 midi : charge 114-123, 140 Mo libres, 6,5 Go de swap ; couture.gk2 en 503 puis 200 en 13 s. Unbound
+  1,36 Go (633 Mo + 723 Mo swap), secubox-dns-listes appliquer depuis 1 h 16 (unbound-checkconf 323 Mo, fast_reload),
+  import IMAP doveadm 5 h (359 Mo). Sur ordre du propriétaire : rapatriement IMAP ARRÊTÉ (minuterie + service + doveadm,
+  SIGKILL après TERM sans effet), ligne d'audit imap-sync-arrete ; minuterie à relancer à la main (reprend où elle en était).
+  Exigence du propriétaire : couture en ligne 24 h/24.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
