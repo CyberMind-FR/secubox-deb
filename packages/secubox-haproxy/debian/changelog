@@ -1,3 +1,12 @@
+secubox-haproxy (1.12.16-1~trixie1) trixie; urgency=medium
+
+  * errorfile HAProxy (ref #3885) : 400, 403, 408, 500, 502, 503, 504 au
+    dessin de la mire, générés par scripts/pages-erreur.py ; en-têtes gardés,
+    ~5 Ko chacun (tampon 16 Ko). 502-504 : le rechargement automatique se fait
+    par <meta http-equiv="refresh"> (15 s), plus aucun JavaScript.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 11:07:18 +0100
+
 secubox-haproxy (1.12.15-1~trixie1) trixie; urgency=medium
 
   * postinst : une unite masquee par l image ne fait plus echouer dpkg
