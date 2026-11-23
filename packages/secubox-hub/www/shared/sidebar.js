@@ -866,7 +866,8 @@
 
     // Fetch real LED status from hardware via API
     async function fetchHardwareLedStatus() {
-        if (ledFetchInProgress) return;
+        // #3891 : onglet caché = aucune requête (une page oubliée interrogeait gk2 toutes les 2,5 s, box saturée).
+        if (ledFetchInProgress || document.hidden) return;
         ledFetchInProgress = true;
         try {
             var result = await safeFetch('/api/v1/hub/public/led_status', {}, 3000);
@@ -883,10 +884,11 @@
         ledFetchInProgress = false;
     }
 
-    // Start periodic LED status refresh (every 5 seconds)
+    // Relevé périodique de la LED : toutes les 15 s (#3891 : 5 s par menu ouvert chargeait gk2), relu dès que l'onglet revient.
     function startLedStatusRefresh() {
         fetchHardwareLedStatus();  // Initial fetch
-        setInterval(fetchHardwareLedStatus, 5000);  // Refresh every 5s
+        setInterval(fetchHardwareLedStatus, 15000);
+        document.addEventListener('visibilitychange', function () { if (!document.hidden) fetchHardwareLedStatus(); });
     }
 
     // Metrics history for sparkline histograms with localStorage persistence
