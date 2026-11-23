@@ -123,7 +123,7 @@
             <div class="tuile cy" id="cCpu" title="Utilisation du processeur sur un court relevé (0,5 s) pris par l’API au moment de la requête."><span class="l">Processeur</span><span class="v" id="tCpu">—</span><span class="s">utilisation</span></div>
             <div class="tuile vi" id="cMem" title="Mémoire vive utilisée, en pourcentage du total."><span class="l">Mémoire</span><span class="v" id="tMem">—</span><span class="s" id="sMem">utilisée</span></div>
             <div class="tuile ok" id="cDisque" title="Occupation du système de fichiers racine « / »."><span class="l">Disque /</span><span class="v" id="tDisque">—</span><span class="s" id="sDisque">occupé</span></div>
-            <div class="tuile cy" title="Unités systemd de type service en cours d’exécution, sur l’ensemble des services connus (actifs ou non)."><span class="l">Services actifs</span><span class="v" id="tServ">—</span><span class="s" id="sServ">en exécution</span></div>
+            <div class="tuile cy" title="Services en cours d’exécution, sur les services attendus (activés). Les tâches à la demande, terminées ou désactivées ne comptent pas ; les services absents de la box n’apparaissent pas (App Store)."><span class="l">Services actifs</span><span class="v" id="tServ">—</span><span class="s" id="sServ">en exécution</span></div>
             <div class="tuile cy" title="Charge moyenne du système sur 1 minute (les valeurs sur 5 et 15 minutes sont dans l’aperçu)."><span class="l">Charge</span><span class="v" id="tCharge">—</span><span class="s">moyenne sur 1 min</span></div>
             <div class="tuile ok" id="cMaj" title="Paquets mis à jour disponibles. Connu seulement après une vérification (onglet Mises à jour), car elle lance un apt-get update."><span class="l">Mises à jour</span><span class="v" id="tMaj">—</span><span class="s" id="sMaj">non vérifié</span></div>
         </section>
@@ -315,8 +315,8 @@
             $('tMem').textContent = pct(mem); $('sMem').textContent = s && s.memory_used ? s.memory_used + ' / ' + s.memory_total : 'utilisée';
             $('tDisque').textContent = pct(dsk); $('cDisque').className = 'tuile ' + (seuil(dsk) || 'ok'); $('sDisque').textContent = s && s.disk_used ? s.disk_used + ' / ' + s.disk_total : 'occupé';
             const connus = !KO.services && SESSION_OK && (SERVICES.length > 0 || DEMO);
-            const actifs = SERVICES.filter(x => x.is_running).length, sbx = SERVICES.filter(x => x.is_secubox);
-            $('tServ').textContent = connus ? actifs + ' / ' + SERVICES.length : '—'; $('sServ').textContent = connus ? 'dont ' + sbx.filter(x => x.is_running).length + ' / ' + sbx.length + ' SecuBox' : 'en exécution';
+            const actifs = SERVICES.filter(x => x.is_running).length, sbx = SERVICES.filter(x => x.is_secubox), att = SERVICES.filter(attendu), sbxAtt = sbx.filter(attendu);
+            $('tServ').textContent = connus ? actifs + ' / ' + att.length : '—'; $('sServ').textContent = connus ? 'dont ' + sbx.filter(x => x.is_running).length + ' / ' + sbxAtt.length + ' SecuBox attendus' : 'en exécution';
             const la = s && Array.isArray(s.load_avg) ? s.load_avg : null;
             $('tCharge').textContent = la && num(la[0]) ? String(la[0]).replace('.', ',') : '—';
             if (MAJ && num(MAJ.available)) { $('tMaj').textContent = MAJ.available; $('sMaj').textContent = 'paquets à mettre à jour'; $('cMaj').className = 'tuile ' + (MAJ.available ? 'att' : 'ok'); }
@@ -331,7 +331,12 @@
             annoncer();
         }
 
+        // #3527 : l'API classe chaque service ; une tâche à la demande ou un service désactivé n'est jamais montré « arrêté ».
+        const ETATS = { actif: ['ok', 'ACTIF'], echec: ['hors', 'ÉCHEC'], arrete: ['att', 'ARRÊTÉ'], a_la_demande: ['', 'À LA DEMANDE'],
+            desactive: ['', 'DÉSACTIVÉ'], termine: ['cy', 'TERMINÉ'], transition: ['cy', 'EN COURS'] };
+        const attendu = x => !x.etat || !['a_la_demande', 'desactive', 'termine'].includes(x.etat);
         function etatService(x) {
+            if (x.etat && ETATS[x.etat]) return ETATS[x.etat];
             if (x.is_running) return ['ok', 'ACTIF'];
             if (x.active === 'failed' || x.sub === 'failed') return ['hors', 'ÉCHEC'];
             if (x.active === 'active') return ['cy', String(x.sub || 'ACTIF').toUpperCase()];
@@ -343,12 +348,12 @@
             if (x.is_running) {
                 if (complet) w.appendChild(btn('Arrêter', 'danger', () => demander({ titre: 'Arrêter ' + x.name + ' ?', texte: 'Le service ' + x.unit + ' sera arrêté.', libelle: 'Arrêter', fn: () => actionService(x.name, 'stop') })));
                 w.appendChild(btn('Redémarrer', 'danger', () => demander({ titre: 'Redémarrer ' + x.name + ' ?', texte: 'Le service ' + x.unit + ' sera redémarré ; les connexions en cours peuvent être coupées.', libelle: 'Redémarrer', fn: () => actionService(x.name, 'restart') })));
-            } else w.appendChild(btn('Démarrer', 'prim', () => actionService(x.name, 'start')));
+            } else if (x.etat !== 'desactive') w.appendChild(btn(x.etat === 'a_la_demande' || x.etat === 'termine' ? 'Lancer' : 'Démarrer', 'prim', () => actionService(x.name, 'start')));
             return w;
         }
         function rendreSbx(sbx) {
             const c = $('lSbx'); c.replaceChildren();
-            $('nSbx').textContent = sbx.length ? sbx.filter(x => x.is_running).length + ' / ' + sbx.length + ' actifs' : '';
+            $('nSbx').textContent = sbx.length ? sbx.filter(x => x.is_running).length + ' / ' + sbx.filter(attendu).length + ' attendus actifs' : '';
             if (!sbx.length) { c.appendChild(el('div', 'vide', SESSION_OK && !KO.services ? 'Aucun service SecuBox' : '—')); return; }
             sbx.forEach(x => {
                 const l = el('div', 'ligne'); const [cl, tx] = etatService(x);

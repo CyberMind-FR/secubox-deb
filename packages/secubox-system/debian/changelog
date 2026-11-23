@@ -1,3 +1,14 @@
+secubox-system (1.13.3-1~trixie1) trixie; urgency=medium
+
+  * Administration, liste des services (ref #3527, #3516) : les services
+    absents de la box (unités not-found) ne sont plus listés ; chaque service
+    porte un état lisible (actif, échec, arrêté, à la demande, terminé,
+    désactivé). Une tâche de minuterie, ponctuelle ou dont la condition n'est
+    pas remplie n'est plus montrée arrêtée ; la tuile compte les services
+    attendus.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 06:54:31 +0100
+
 secubox-system (1.13.2-1~trixie1) trixie; urgency=medium
 
   * Carte « Nom du nœud » (ref #3876) : sans secubox-webos, le message dit
