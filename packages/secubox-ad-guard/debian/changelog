@@ -1,3 +1,13 @@
+secubox-ad-guard (1.33.4-1~trixie1) trixie; urgency=medium
+
+  * TV Privacy (ref #3874) : bouton « Remettre les statistiques à zéro » dans
+    l'onglet Diagnostic. Route POST /adblock-tv/stats/raz (administrateur,
+    confirmée), copie de la base gardée (3 dernières), audit raz-stats par le
+    contrôleur root avant toute suppression ; appareils, modes et règles
+    inchangés.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 05:31:35 +0100
+
 secubox-ad-guard (1.33.3-1~trixie1) trixie; urgency=medium
 
   * TV Privacy (ref #3869) : un échec imprévu du contrôleur (apply, disable,

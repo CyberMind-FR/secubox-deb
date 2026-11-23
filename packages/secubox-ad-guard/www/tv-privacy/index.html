@@ -16,7 +16,7 @@
 -->
 <html lang="fr" class="sbx-aurora">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-04l0MDmG61E9olLwwsT+84S5UlJt0DbKKnu2XvLpjoI='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-g4wybn5SWVHzj3EibNAD/WKXmd3zRXNtc0GhM/KmCVI='; style-src 'self' 'unsafe-inline'; script-src-attr 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SBX TV Privacy</title>
 <link rel="stylesheet" href="/shared/sidebar-light.css">
@@ -330,6 +330,11 @@
       <div class="pan"><h2>Pauses en cours</h2><div id="d-pauses"><div class="vide">—</div></div></div>
       <div class="pan"><h2>Domaines autorisés</h2><div class="tab"><table><thead><tr><th>Appareil</th><th>Domaine</th><th>Source</th></tr></thead><tbody id="d-autorises"></tbody></table></div></div>
       <div class="pan"><h2>Retours arrière <small>7 jours</small></h2><div class="tab"><table><thead><tr><th>Quand</th><th>Appareil</th><th>Domaine</th><th>Action</th><th>Origine</th></tr></thead><tbody id="d-retours"></tbody></table></div></div>
+    </div>
+    <div class="pan espace"><h2>Statistiques <small>remise à zéro</small></h2>
+      <p class="note">Les compteurs, les appareils vus et les requêtes récentes repartent de zéro, par exemple après un changement de réseau. Les appareils déclarés, leurs modes et les règles ne changent pas. Une copie des anciennes statistiques est gardée sur la box.</p>
+      <div class="actions"><button type="button" class="danger" id="raz-stats">Remettre les statistiques à zéro</button></div>
+      <div id="raz-stats-confirm"></div>
     </div>
   </section>
   <p class="note">La box ne voit que les noms demandés à son DNS : un appareil qui utilise un autre résolveur (DoH, DNS de la box opérateur) n'apparaît pas.</p>
@@ -715,6 +720,9 @@
   }
   el('j-heures').addEventListener('change',chargerProtection);
   el('j-export').addEventListener('click',function(){telecharger('/protection/journal.csv','tv-privacy-journal.csv');});
+  el('raz-stats').addEventListener('click',function(){confirmer(el('raz-stats-confirm'),'Toutes les statistiques TV Privacy repartent de zéro. Les réglages restent.',function(){
+    return ecrire('/stats/raz',{confirmer:true}).then(function(j){var r=j.retirees||{};message('Statistiques remises à zéro ('+fmt(r.counts)+' compteurs, '+fmt(r.clients)+' appareils vus). Copie gardée : '+j.sauvegarde+'.','ok');charger();chargerDiagnostic();return j;},
+      function(e){message('Refusé : '+e.message,'erreur');throw e;});});});
   el('tout-observe').addEventListener('click',function(){confirmer(el('tout-observe-confirm'),'Tous les appareils repassent en OBSERVE : plus aucun blocage, sans échéance.',function(){return geste('/protection/observe',{appareil:null},'Tout en OBSERVE');});});
   el('pause-tout').addEventListener('click',function(){geste('/protection/pause',{appareil:null,minutes:60},'Pause d’une heure').catch(function(){});});
   el('ex-ajouter').addEventListener('click',function(){var d=el('ex-domaine').value.trim().toLowerCase();if(!d){message('Domaine requis.','erreur');return;}
