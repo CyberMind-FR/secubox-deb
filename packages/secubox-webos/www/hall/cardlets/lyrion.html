@@ -299,8 +299,8 @@
   if (DEMO) el('demo').hidden = false;
   tick();
   if (!DEMO) {
-    setInterval(function () { chargeNow(); }, 5000);
-    setInterval(function () { chargePlayers(); majCast(); }, 20000);
+    setInterval(function () { if (!document.hidden) chargeNow(); }, 5000);   // #3891 : jamais onglet caché
+    setInterval(function () { if (!document.hidden) { chargePlayers(); majCast(); } }, 20000);
   }
 
   addEventListener('message', function (ev) {

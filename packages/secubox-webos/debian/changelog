@@ -1,3 +1,11 @@
+secubox-webos (1.21.4-1~trixie1) trixie; urgency=medium
+
+  * Cadence (ref #3891) : aucune requête périodique onglet caché ; LED du menu
+    toutes les 15 s (au lieu de 5) ; carte Lyrion du Hall idem. Une page
+    oubliée ouverte chargeait gk2 toutes les 2,5 s.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 13:23:38 +0100
+
 secubox-webos (1.21.3-1~trixie1) trixie; urgency=medium
 
   * Accueil et relais du nom de nœud retirés de ce paquet (ref #3883) : ils
