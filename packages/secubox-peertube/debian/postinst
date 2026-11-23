@@ -94,6 +94,12 @@ if [ "$1" = "configure" ]; then
     deb-systemd-helper enable peertube-backlog.timer >/dev/null 2>&1 || true
     deb-systemd-invoke start peertube-backlog.timer >/dev/null 2>&1 || true
 
+    # Purge quotidienne des rediffusions de directs non gardées (#3890). Unités
+    # posées à la main par debian/rules : activées ici explicitement, comme le
+    # backlog, sans dépendre du ramassage de dh_installsystemd.
+    deb-systemd-helper enable secubox-peertube-rediffusions.timer >/dev/null 2>&1 || true
+    deb-systemd-invoke start secubox-peertube-rediffusions.timer >/dev/null 2>&1 || true
+
     # Reload nginx to pick up the /api/v1/peertube/ + /peertube/ locations
     # and the public vhost. NOTE: PeerTube itself is NOT installed by this
     # postinst — run `peertubectl install` to provision the LXC.

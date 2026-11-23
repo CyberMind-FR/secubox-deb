@@ -168,13 +168,13 @@ class PlaylistImport(BaseModel):
 # ============================================================================
 
 def get_config() -> dict:
-    """Load + flatten peertube.toml ([lxc]/[peertube]/[exposure]) over defaults."""
+    """Load + flatten peertube.toml ([lxc]/[peertube]/[exposure]/[direct]) over defaults."""
     cfg = DEFAULT_CONFIG.copy()
     if CONFIG_FILE.exists():
         try:
             import tomllib
             raw = tomllib.loads(CONFIG_FILE.read_text())
-            for section in ("lxc", "peertube", "exposure"):
+            for section in ("lxc", "peertube", "exposure", "direct"):
                 for k, v in (raw.get(section) or {}).items():
                     cfg[k] = v
             for k, v in raw.items():        # tolerate flat keys too
@@ -198,6 +198,9 @@ def save_config(config: dict):
                "instance_name", "short_description", "description", "terms",
                "signup_enabled", "signup_requires_email", "transcoding_resolutions")
     exp_keys = ("public_hostname", "waf_inspect")
+    # [direct] (#3890) : lu par peertubectl ; réécrit tel quel, jamais perdu.
+    direct_keys = ("jours_conservation", "duree_max_heures",
+                   "directs_max_instance", "directs_max_utilisateur")
 
     def emit(k):
         v = cfg.get(k)
@@ -212,7 +215,8 @@ def save_config(config: dict):
         return f'{k} = "{v}"'
 
     out = ["# /etc/secubox/peertube.toml — managed by secubox-peertube"]
-    for section, keys in (("lxc", lxc_keys), ("peertube", pt_keys), ("exposure", exp_keys)):
+    for section, keys in (("lxc", lxc_keys), ("peertube", pt_keys), ("exposure", exp_keys),
+                          ("direct", direct_keys)):
         rows = [emit(k) for k in keys if k in cfg and emit(k) is not None]
         if rows:
             out.append(f"\n[{section}]")

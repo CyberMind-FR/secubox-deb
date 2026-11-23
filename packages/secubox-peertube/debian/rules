@@ -62,3 +62,6 @@ override_dh_auto_install:
 	install -d debian/secubox-peertube/usr/lib/systemd/system
 	install -m 0644 debian/secubox-peertube-version-check.service debian/secubox-peertube/usr/lib/systemd/system/
 	install -m 0644 debian/secubox-peertube-version-check.timer debian/secubox-peertube/usr/lib/systemd/system/
+	# Purge quotidienne des rediffusions de directs non gardées (#3890).
+	install -m 0644 debian/secubox-peertube-rediffusions.service debian/secubox-peertube/usr/lib/systemd/system/
+	install -m 0644 debian/secubox-peertube-rediffusions.timer debian/secubox-peertube/usr/lib/systemd/system/

@@ -11,7 +11,7 @@
 
 set -u
 
-readonly VERSION="1.2.0"
+readonly VERSION="1.3.0"
 readonly CONFIG_FILE="${SECUBOX_PEERTUBE_CONFIG:-/etc/secubox/peertube.toml}"
 readonly INSTALL_LIB="${SECUBOX_INSTALL_LIB:-/usr/share/secubox/lib/peertube/install-lxc.sh}"
 
@@ -633,6 +633,288 @@ EOF
     return 0
 }
 
+# ── Direct (live) et rediffusions (#3890) ───────────────────────────────────
+# Le direct se règle par l'API d'administration, jamais en éditant
+# production.yaml : PeerTube écrit la configuration personnalisée dans
+# local-production.json, qui l'emporte sur le YAML. On lit TOUTE la
+# configuration (GET /api/v1/config/custom), on ne touche QUE `.live`, et on
+# la renvoie entière (PUT : le validateur exige chaque champ).
+#
+# Noms vérifiés sur PeerTube v8.3.2 (pas l'OpenAPI, muette sur `live`) :
+#   packages/models/src/server/custom-config.model.ts  (live.enabled,
+#     live.allowReplay, live.maxDuration, live.maxInstanceLives,
+#     live.maxUserLives, live.transcoding.enabled)
+#   server/core/middlewares/validators/config.ts  (live.maxDuration isInt ;
+#     checkInvalidLiveConfig : allowReplay=true exige transcoding.enabled=true,
+#     le transcodage des VIDÉOS, pas celui du direct — sinon 400)
+#   server/core/initializers/config.ts  (MAX_DURATION = parseDurationToMs :
+#     millisecondes, -1 = illimité)
+readonly LISTE_A_GARDER="À garder"
+JOURS_CONSERVATION=$(config_get "jours_conservation" "7")
+DUREE_MAX_HEURES=$(config_get "duree_max_heures" "6")
+DIRECTS_MAX_INSTANCE=$(config_get "directs_max_instance" "2")
+DIRECTS_MAX_UTILISATEUR=$(config_get "directs_max_utilisateur" "1")
+
+# Une ligne JSON d'audit, construite par jq (un titre de vidéo peut porter des
+# guillemets). Rend un code non nul si la ligne n'a pas pu être écrite.
+audit_json() {   # objet JSON (sans ts ni module)
+    local ligne
+    ligne=$(jq -nc --argjson o "$1" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{ts: $ts, module: "peertube"} + $o') || return 1
+    mkdir -p "$(dirname "$AUDIT_LOG")" 2>/dev/null || true
+    printf '%s\n' "$ligne" >> "$AUDIT_LOG" 2>/dev/null
+}
+
+_entier_strict() { printf '%s' "$1" | grep -Eq '^[0-9]{1,6}$'; }
+
+# Session d'API : jeton d'administrateur (_pt_token, même mécanisme que
+# upload), posé dans un fichier d'en-têtes 0600 passé à curl par `-H @fichier`
+# — le jeton n'apparaît jamais sur une ligne de commande ni à l'écran.
+_PT_TMP=""
+_pt_session() {
+    local at
+    at=$(_pt_token) || return 1
+    _PT_TMP=$(mktemp -d) || return 1
+    chmod 700 "$_PT_TMP"
+    trap 'rm -rf -- "$_PT_TMP"' EXIT
+    ( umask 077; printf 'Authorization: Bearer %s\n' "$at" > "$_PT_TMP/entetes" )
+}
+
+# _pt_appel <fichier-corps> <méthode> <chemin> [args curl…] — affiche le code
+# HTTP (000 = injoignable) ; le corps de la réponse va dans <fichier-corps>.
+_pt_appel() {
+    local out="$1" meth="$2" chemin="$3"; shift 3
+    curl -s --max-time 30 -o "$out" -w '%{http_code}' -X "$meth" \
+        -H "Host: ${PUBLIC_HOSTNAME}" -H "@$_PT_TMP/entetes" "$@" \
+        "http://${LXC_IP}:${HTTP_PORT}${chemin}" 2>/dev/null || true
+}
+
+_http_ok() { case "$1" in 2??) return 0 ;; *) return 1 ;; esac; }
+
+# Identifiant de la liste « À garder » du compte root (vide si absente).
+# GET /accounts/{name}/video-playlists rend aussi les listes privées quand le
+# jeton est celui du propriétaire (listMyPlaylists, controllers/api/accounts.ts).
+_liste_a_garder_id() {
+    local start=0 total=1 code id f="$_PT_TMP/listes.json"
+    while [ "$start" -lt "$total" ] && [ "$start" -lt 10000 ]; do
+        code=$(_pt_appel "$f" GET "/api/v1/accounts/root/video-playlists?start=$start&count=100")
+        _http_ok "$code" || { err "liste des listes de lecture : HTTP $code"; return 1; }
+        id=$(jq -r --arg n "$LISTE_A_GARDER" \
+            '[.data[]? | select(.displayName == $n) | .id] | first // empty' "$f") || return 1
+        [ -n "$id" ] && { printf '%s' "$id"; return 0; }
+        total=$(_entier "$(jq -r '.total // 0' "$f")")
+        start=$(( start + 100 ))
+    done
+    return 0
+}
+
+cmd_direct() {
+    local action="${1:-etat}"
+    case "$action" in
+        activer|etat) ;;
+        *) err "usage: peertubectl direct {activer|etat}"; return 1 ;;
+    esac
+    if ! { _entier_strict "$DUREE_MAX_HEURES" && _entier_strict "$DIRECTS_MAX_INSTANCE" \
+            && _entier_strict "$DIRECTS_MAX_UTILISATEUR"; }; then
+        err "[direct] duree_max_heures / directs_max_* : entiers attendus"; return 1
+    fi
+    _pt_session || return 1
+    local f="$_PT_TMP/config.json" code
+    code=$(_pt_appel "$f" GET /api/v1/config/custom)
+    if ! { _http_ok "$code" && jq -e '.live | type == "object"' "$f" >/dev/null 2>&1; }; then
+        err "configuration de l'instance illisible : HTTP $code"; return 1
+    fi
+
+    if [ "$action" = etat ]; then
+        local liste
+        liste=$(_liste_a_garder_id) || return 1
+        jq --arg liste "$liste" --argjson jours "$(_entier "$JOURS_CONSERVATION")" '{
+            live: {enabled: .live.enabled, allowReplay: .live.allowReplay,
+                   maxDuration: .live.maxDuration, maxInstanceLives: .live.maxInstanceLives,
+                   maxUserLives: .live.maxUserLives,
+                   transcoding: {enabled: .live.transcoding.enabled}},
+            transcodage_videos: .transcoding.enabled,
+            rediffusion_par_defaut: .defaults.live.saveReplay,
+            liste_a_garder: ($liste != ""),
+            jours_conservation: $jours}' "$f"
+        return
+    fi
+
+    # La rediffusion exige le transcodage des vidéos : PeerTube refuserait le
+    # PUT (400). Rien n'est écrit, et la section transcoding n'est pas la nôtre.
+    if ! jq -e '.transcoding.enabled == true' "$f" >/dev/null; then
+        err "la rediffusion exige transcoding.enabled = true (transcodage des vidéos) : PeerTube refuse sinon — rien n'est modifié"
+        return 1
+    fi
+    local voulu="$_PT_TMP/voulu.json" ms=-1
+    [ "$DUREE_MAX_HEURES" -gt 0 ] && ms=$(( DUREE_MAX_HEURES * 3600000 ))
+    jq --argjson ms "$ms" --argjson i "$DIRECTS_MAX_INSTANCE" --argjson u "$DIRECTS_MAX_UTILISATEUR" '
+        .live.enabled = true | .live.allowReplay = true
+        | .live.transcoding.enabled = false
+        | .live.maxDuration = $ms
+        | .live.maxInstanceLives = $i | .live.maxUserLives = $u' "$f" > "$voulu" || return 1
+
+    if jq -e --slurpfile a "$f" '. == $a[0]' "$voulu" >/dev/null; then
+        log "direct déjà réglé — rien à écrire"
+    else
+        code=$(_pt_appel "$_PT_TMP/put.json" PUT /api/v1/config/custom \
+            -H 'Content-Type: application/json' --data-binary "@$voulu")
+        if ! _http_ok "$code"; then
+            err "réglage du direct refusé : HTTP $code"
+            audit_json '{"action":"direct-activer","resultat":"refuse"}' || true
+            return 1
+        fi
+        audit_json "$(jq -c '{action: "direct-activer", resultat: "applique",
+            live: {enabled: .live.enabled, allowReplay: .live.allowReplay,
+                   maxDuration: .live.maxDuration, maxInstanceLives: .live.maxInstanceLives,
+                   maxUserLives: .live.maxUserLives, transcoding: .live.transcoding.enabled}}' "$voulu")" \
+            || warn "ligne d'audit non écrite ($AUDIT_LOG)"
+        log "direct activé : rediffusion enregistrée, sans transcodage du direct"
+    fi
+
+    # La liste « À garder » (privée, compte root) : le seul geste qui sauve une
+    # rediffusion de la purge. Créée si absente, jamais recréée.
+    local liste
+    liste=$(_liste_a_garder_id) || return 1
+    if [ -z "$liste" ]; then
+        code=$(_pt_appel "$_PT_TMP/liste.json" POST /api/v1/video-playlists \
+            --form-string "displayName=$LISTE_A_GARDER" --form-string "privacy=3")
+        _http_ok "$code" || { err "création de la liste « $LISTE_A_GARDER » : HTTP $code"; return 1; }
+        audit_json '{"action":"direct-liste-a-garder","resultat":"creee"}' || warn "ligne d'audit non écrite"
+        log "liste de lecture privée « $LISTE_A_GARDER » créée"
+    fi
+    return 0
+}
+
+# Purge des rediffusions de directs non gardées.
+#
+# Reconnaître une rediffusion : GET /api/v1/videos/{id}/live-session (OpenAPI
+# « Get live session of a replay ») rend 200 et la session de direct quand la
+# vidéo EST la rediffusion d'un direct (VideoLiveSessionModel.findSessionOfReplay,
+# où replayVideoId = la vidéo), 404 « No live replay found » sinon
+# (middlewares/validators/videos/video-live.ts, PeerTube v8.3.2). Une vidéo
+# téléversée ou importée n'a pas de session : 404, jamais candidate.
+# Un direct en cours a isLive = true (écarté à la liste ET ensuite), et une
+# session sans endDate n'est pas terminée : écartée aussi.
+#
+# Âge : le plus récent de publishedAt et de la fin du direct (endDate) — une
+# rediffusion d'un direct permanent est une vidéo neuve, celle d'un direct
+# simple garde la date de publication du direct.
+#
+# Toutes les lectures d'abord ; le moindre échec d'API sort en erreur AVANT
+# toute suppression.
+cmd_rediffusions() {
+    local action="${1:-}" simuler=false a
+    [ "$action" = purger ] || { err "usage: peertubectl rediffusions purger [--simuler]"; return 1; }
+    shift
+    for a in "$@"; do
+        case "$a" in
+            --simuler) simuler=true ;;
+            *) err "option inconnue : $a"; return 1 ;;
+        esac
+    done
+    if ! { _entier_strict "$JOURS_CONSERVATION" && [ "$JOURS_CONSERVATION" -ge 1 ]; }; then
+        err "[direct] jours_conservation : entier >= 1 attendu"; return 1
+    fi
+    if ! $simuler; then
+        # Une suppression non auditée ne doit pas avoir lieu.
+        mkdir -p "$(dirname "$AUDIT_LOG")" 2>/dev/null || true
+        { [ -e "$AUDIT_LOG" ] && [ -w "$AUDIT_LOG" ]; } || { [ ! -e "$AUDIT_LOG" ] && [ -w "$(dirname "$AUDIT_LOG")" ]; } \
+            || { err "journal d'audit non inscriptible ($AUDIT_LOG) — rien n'est effacé"; return 1; }
+    fi
+    _pt_session || return 1
+
+    local liste code f="$_PT_TMP/page.json"
+    liste=$(_liste_a_garder_id) || return 1
+    [ -n "$liste" ] || { err "liste « $LISTE_A_GARDER » absente (peertubectl direct activer) — rien n'est effacé"; return 1; }
+
+    # 1. Les vidéos gardées.
+    local gardes="$_PT_TMP/gardes.txt" start=0 total=1
+    : > "$gardes"
+    while [ "$start" -lt "$total" ] && [ "$start" -lt 10000 ]; do
+        code=$(_pt_appel "$f" GET "/api/v1/video-playlists/$liste/videos?start=$start&count=100")
+        _http_ok "$code" || { err "liste « $LISTE_A_GARDER » illisible : HTTP $code — rien n'est effacé"; return 1; }
+        jq -r '.data[]? | .video.uuid // empty' "$f" >> "$gardes" || return 1
+        total=$(_entier "$(jq -r '.total // 0' "$f")")
+        start=$(( start + 100 ))
+    done
+
+    # 2. Les vidéos locales hors direct, toutes confidentialités (privacyOneOf
+    #    et include sont réservés aux administrateurs ; include=6 = mises sur
+    #    liste noire + propriétaire bloqué ; pas NOT_PUBLISHED_STATE : une
+    #    rediffusion encore en traitement n'est jamais touchée).
+    local maintenant limite cands="$_PT_TMP/candidates.jsonl"
+    maintenant=$(date -u +%s)
+    limite=$(( JOURS_CONSERVATION * 86400 ))
+    : > "$cands"
+    start=0; total=1
+    while [ "$start" -lt "$total" ] && [ "$start" -lt 100000 ]; do
+        code=$(_pt_appel "$f" GET "/api/v1/videos?isLocal=true&isLive=false&nsfw=both&include=6&privacyOneOf=1&privacyOneOf=2&privacyOneOf=3&privacyOneOf=4&privacyOneOf=5&sort=-publishedAt&start=$start&count=100")
+        _http_ok "$code" || { err "liste des vidéos : HTTP $code — rien n'est effacé"; return 1; }
+        # Écarte d'emblée : direct, gardée, publiée depuis moins de N jours.
+        jq -c --rawfile g "$gardes" --argjson now "$maintenant" --argjson lim "$limite" '
+            ($g | split("\n") | map(select(. != ""))) as $gl
+            | .data[]?
+            | select(.isLive != true)
+            | select(.uuid as $u | ($gl | index($u)) == null)
+            | select((.publishedAt // "") != "")
+            | select(($now - (.publishedAt | sub("\\.[0-9]+"; "") | fromdateiso8601)) > $lim)
+            | {uuid, name, publishedAt}' "$f" >> "$cands" || { err "réponse illisible — rien n'est effacé"; return 1; }
+        total=$(_entier "$(jq -r '.total // 0' "$f")")
+        start=$(( start + 100 ))
+    done
+
+    # 3. Seules les rediffusions terminées, plus vieilles que N jours.
+    local asup="$_PT_TMP/a-supprimer.jsonl" ligne uuid s="$_PT_TMP/session.json" v="$_PT_TMP/video.json"
+    : > "$asup"
+    while IFS= read -r ligne; do
+        [ -n "$ligne" ] || continue
+        uuid=$(printf '%s' "$ligne" | jq -r '.uuid')
+        printf '%s' "$uuid" | grep -Eq '^[0-9a-fA-F-]{36}$' || { err "uuid inattendu — rien n'est effacé"; return 1; }
+        code=$(_pt_appel "$s" GET "/api/v1/videos/$uuid/live-session")
+        case "$code" in
+            404) continue ;;                       # pas une rediffusion
+            2??) ;;
+            *) err "session de direct de $uuid : HTTP $code — rien n'est effacé"; return 1 ;;
+        esac
+        # La vidéo elle-même, relue : jamais un direct en cours.
+        code=$(_pt_appel "$v" GET "/api/v1/videos/$uuid")
+        _http_ok "$code" || { err "vidéo $uuid : HTTP $code — rien n'est effacé"; return 1; }
+        jq -e '.isLive == true' "$v" >/dev/null 2>&1 && continue
+        jq -c --slurpfile s "$s" --argjson now "$maintenant" --argjson lim "$limite" '
+            ($s[0].endDate // null) as $fin
+            | select($fin != null)
+            | ([.publishedAt, $fin] | map(sub("\\.[0-9]+"; "") | fromdateiso8601) | max) as $t
+            | select(($now - $t) > $lim)
+            | {uuid, titre: ((.name // "") | .[0:60]), age_jours: ((($now - $t) / 86400) | floor)}' \
+            <<<"$ligne" >> "$asup" || { err "session illisible — rien n'est effacé"; return 1; }
+    done < "$cands"
+
+    # 4. Suppression (ou simulation). Un échec arrête tout, en erreur.
+    local n=0 sortie=0
+    while IFS= read -r ligne; do
+        [ -n "$ligne" ] || continue
+        uuid=$(printf '%s' "$ligne" | jq -r '.uuid')
+        if $simuler; then
+            log "serait effacée : $(printf '%s' "$ligne" | jq -r '"\(.uuid) « \(.titre) » (\(.age_jours) j)"')"
+            n=$(( n + 1 )); continue
+        fi
+        code=$(_pt_appel "$_PT_TMP/del.json" DELETE "/api/v1/videos/$uuid")
+        if ! _http_ok "$code"; then
+            err "suppression de $uuid refusée : HTTP $code — purge arrêtée"
+            audit_json "$(printf '%s' "$ligne" | jq -c --arg c "$code" '{action: "rediffusion-supprimee", resultat: "echec", http: $c} + .')" || true
+            sortie=1; break
+        fi
+        audit_json "$(printf '%s' "$ligne" | jq -c '{action: "rediffusion-supprimee", resultat: "supprimee"} + .')" \
+            || warn "ligne d'audit non écrite pour $uuid"
+        log "effacée : $(printf '%s' "$ligne" | jq -r '"\(.uuid) « \(.titre) » (\(.age_jours) j)"')"
+        n=$(( n + 1 ))
+    done < "$asup"
+    jq -nc --argjson sim "$simuler" --argjson n "$n" --argjson j "$JOURS_CONSERVATION" \
+        --slurpfile l "$asup" '{simulation: $sim, jours_conservation: $j, traitees: $n, rediffusions: $l}'
+    return "$sortie"
+}
+
 cmd_help() {
     cat <<EOF
 peertubectl $VERSION — SecuBox PeerTube (native-LXC) controller
@@ -654,6 +936,13 @@ Usage: peertubectl <verb> [args]
   transcodage {etat|off|on}     Transcodage video. `off` eteint AUSSI
                                 always_transcode_original_resolution,
                                 que la liste des resolutions n'arrete pas
+  direct {activer|etat}         Direct (live) par l'API d'administration : seule la
+                                section live change (rediffusion, sans transcodage
+                                du direct, durée et nombre plafonnés) ; crée la
+                                liste privée « À garder ». etat : réglages en JSON
+  rediffusions purger [--simuler]  Efface les rediffusions de directs de plus de
+                                [direct] jours_conservation jours absentes de
+                                « À garder » (auditées) ; --simuler n'efface rien
   reload                        Reload host nginx (after vhost changes)
   process-ops                   (root) drain the /run ops spool
   sso                           Entrée par la session SecuBox (greffon + comptes
@@ -676,6 +965,8 @@ main() {
         transcodage) cmd_transcodage "$@" ;;
         set-youtube-cookies) cmd_set_youtube_cookies "$@" ;;
         upload) cmd_upload "$@" ;;
+        direct) cmd_direct "$@" ;;
+        rediffusions) cmd_rediffusions "$@" ;;
         check-upgrade) cmd_check_upgrade "$@" ;;
         version-status) cmd_version_status ;;
         process-ops) cmd_process_ops "$@" ;;

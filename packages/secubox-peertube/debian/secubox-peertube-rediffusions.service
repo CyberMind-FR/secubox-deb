@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# SecuBox-Deb :: PeerTube — purge quotidienne des rediffusions de directs (#3890).
+#
+# Efface les rediffusions de directs publiées depuis plus de [direct]
+# jours_conservation jours (/etc/secubox/peertube.toml, 7 par défaut) qui ne
+# sont pas dans la liste de lecture « À garder ». Chaque suppression est une
+# ligne de /var/log/secubox/audit.log ; un échec d'API n'efface rien.
+#
+# Pas de root : tout passe par l'API HTTP de PeerTube (aucun lxc-attach).
+# L'unité tourne sous `secubox`, le compte du module (celui du tableau de bord,
+# propriétaire du secret administrateur et du journal d'audit, 0640).
+[Unit]
+Description=SecuBox PeerTube — purge des rediffusions de directs non gardées
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/3890
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+ExecStart=/usr/sbin/peertubectl rediffusions purger
+TimeoutStartSec=900
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/log/secubox
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
