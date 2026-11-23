@@ -69,6 +69,14 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   import IMAP doveadm 5 h (359 Mo). Sur ordre du propriétaire : rapatriement IMAP ARRÊTÉ (minuterie + service + doveadm,
   SIGKILL après TERM sans effet), ligne d'audit imap-sync-arrete ; minuterie à relancer à la main (reprend où elle en était).
   Exigence du propriétaire : couture en ligne 24 h/24.
+- gk2 13:15-13:22 (accord du propriétaire) : charge 107 → 14, pression mémoire 75 % → 0. Gestes, tous audités :
+  minuterie secubox-mail-imap-sync DÉSACTIVÉE (secubox-minuteries-garde l'avait relancée à 12:10) ; secubox-dns-listes.path
+  DÉSACTIVÉ (compilation relancée à chaque changement de source, >1 h 30 et timeout en boucle) ; secubox-surf arrêté ;
+  conteneur mail arrêté avec lxc.start.auto=0 (sinon le watchdog secubox-health le relance ; copie config.avant-veille-*) ;
+  conteneur lyrion arrêté et minuterie secubox-lyrion-watchdog désactivée. Pas de robot en cause : 4 req/s au total, le
+  plus gros client est 192.168.1.3 (ac:19:8e:ab:26:c9, page Hall/admin ouverte : led_status toutes les 2,5 s).
+  À FAIRE : réduire la cadence de cette page ; comprendre Unbound à 1,4 Go ; réactiver dns-listes.path, mail, lyrion, surf,
+  imap-sync quand gk2 aura de la marge. PeerTube gk1 (#3890) : LXC installé (8.3.2), paquet 1.7.0 prêt, pas encore relié.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
