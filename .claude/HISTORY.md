@@ -53,7 +53,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   copies .avant-gk7-<epoch>. Aucun geste de renommage n'existe dans SecuBox.
 - gk7 : compte admin désactivé « secubox-rpi » (compte au nom de la machine, image) renommé « gk7 » à la demande du
   propriétaire (écriture atomique du magasin sous secubox, copie users.json.avant-gk7-<epoch>, auth relancé). Reste le
-  compte admin désactivé « runnervm7aw5e » (runner de CI de l'image) : à retirer (secubox-renouvelle-secrets --tout).
+  compte admin désactivé « runnervm7aw5e » (runner de CI de l'image) : retiré à la demande du propriétaire (même méthode,
+  copie users.json.avant-retrait-runner-<epoch>, ligne d'audit compte-retire, auth relancé, /admin/ 200).
+  ATTENTION : les clés d'hôte SSH de gk7 datent du 06/11 et portent « root@runnervm7aw5e » : générées sur le runner de CI,
+  donc communes à toute copie de cette image bêta 1 RPi. À renouveler : secubox-renouvelle-secrets --tout (accord à demander).
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
