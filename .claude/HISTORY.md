@@ -20,6 +20,10 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   `"dns": {}` (#3872, secubox-freebox 0.8.5, PR #3873, déployé gk7) puis `dns6-regler 1` vers gk7 : l'annonce RA porte
   gk7. Reste : redémarrer le Player puis compter ses requêtes IPv6. NB : `freeboxctl` lancé en root dit « pas encore
   autorisé » ; sous `secubox-freebox` il marche.
+- 23/11 : retours des usagers du site gk7 : aucune publicité sur francetv. Le Player passe par gk7 (58 requêtes IPv4
+  en 2 h). Statistiques TV Privacy de gk7 remises à zéro à la demande du propriétaire : tables dnstv_counts, clients et
+  recents vidées (1987/28/1586 lignes), pubs-bloquees.json recalculé. Sauvegarde : dnstv.db.avant-raz-1795406542.
+  Aucun geste de remise à zéro n'existe dans la webui (à prévoir avec #3871).
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
