@@ -401,6 +401,16 @@ server {{
     listen {PORT};
     server_name {dom};
 {journal}
+    # Tout chemin inconnu (return 404 ci-dessous, fichiers absents) : la page 404 à la mire (#3885). Les réponses relayées à
+    # l'ancienne cible ne sont jamais remplacées : ce vhost n'intercepte aucune erreur d'amont.
+    error_page 404 /_noeud/404.html;
+    location = /_noeud/404.html {{
+        internal;
+        alias {WWW}/noeud/404.html;
+        add_header Content-Security-Policy "{csp}" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Cache-Control "no-store" always;
+    }}
     location = / {{
         root {WWW}/noeud;
         rewrite ^ /index.html break;

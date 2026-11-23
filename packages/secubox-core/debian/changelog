@@ -1,3 +1,12 @@
+secubox-core (1.8.42-1~trixie1) trixie; urgency=medium
+
+  * Nom public des nœuds (ref #3885) : tout chemin inconnu rend la page 404 à
+    la mire (www/noeud/404.html, générée par scripts/pages-erreur.py), servie
+    en interne avec la CSP de l'accueil. Les réponses relayées à l'ancienne
+    cible ne sont jamais remplacées.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 11:26:05 +0100
+
 secubox-core (1.8.41-1~trixie1) trixie; urgency=medium
 
   * Accueil du nœud (ref #3886) : la mire de télévision des pages d'erreur

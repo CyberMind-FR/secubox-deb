@@ -219,6 +219,7 @@ override_dh_auto_install:
 	install -D -m 0644 systemd/secubox-noeud.path debian/secubox-core/usr/lib/systemd/system/secubox-noeud.path
 	install -D -m 0644 systemd/secubox-noeud.service debian/secubox-core/usr/lib/systemd/system/secubox-noeud.service
 	install -D -m 0644 www/noeud/index.html debian/secubox-core/usr/share/secubox/www/noeud/index.html
+	install -D -m 0644 www/noeud/404.html debian/secubox-core/usr/share/secubox/www/noeud/404.html
 	install -D -m 0644 ../secubox-webos/www/hall/sbx-dice.js debian/secubox-core/usr/share/secubox/www/noeud/sbx-dice.js
 	install -d debian/secubox-core/usr/share/secubox/www/noeud/dice
 	install -m 0644 ../secubox-webos/www/hall/dice/*.jpg debian/secubox-core/usr/share/secubox/www/noeud/dice/
