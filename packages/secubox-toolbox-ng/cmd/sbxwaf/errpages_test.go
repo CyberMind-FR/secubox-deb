@@ -181,9 +181,8 @@ func TestHandlerServes504OnUpstreamTimeout(t *testing.T) {
 // characters is escaped before being inserted into the page, preventing a
 // reflected XSS via an attacker-controlled Host header.
 //
-// Note: the 502 template itself contains a legitimate <script> block for the
-// retry countdown timer — that is expected.  What must NOT appear is the
-// attacker-injected payload "><script>alert(1)</script> reflected verbatim.
+// Note: since #3885 the templates carry no <script> at all.  What must NOT
+// appear is the attacker-injected payload "><script>alert(1)</script> reflected verbatim.
 // html.EscapeString escapes <, >, &, " and ' — plain text like "alert(1)"
 // within the already-escaped tags is safe and will remain in the output.
 func TestErrorPageEscapesHost(t *testing.T) {

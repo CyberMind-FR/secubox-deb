@@ -1,3 +1,14 @@
+secubox-waf-ng (1.43.4-1~trixie1) trixie; urgency=medium
+
+  * sbxwaf (ref #3885) : pages 502, 503, 504, avertissement et bannissement
+    au dessin de la mire, en français, générées par scripts/pages-erreur.py et
+    embarquées (go:embed). Marqueurs sbxwaf-warning / sbxwaf-banned et
+    en-têtes X-SecuBox-WAF inchangés ; la catégorie de l'avertissement est
+    désormais échappée. 502/504 : rechargement 10 s par meta refresh, plus de
+    JavaScript.
+
+ -- Gérald Kerma <devel@cybermind.fr>  Mon, 23 Nov 2026 11:07:18 +0100
+
 secubox-waf-ng (1.43.3-1~trixie1) trixie; urgency=medium
 
   * postinst (ref #3880, #3723) : les minuteries secubox-actord-ingest-garde
