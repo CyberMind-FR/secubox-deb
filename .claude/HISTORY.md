@@ -29,6 +29,9 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
   Publié sur apt, déployé gk7 et gk2 (ad-guard 1.33.4 + freebox 0.8.5 ; groupe g1 et agrégateur redémarrés pour charger la route).
 - secubox-system 1.13.2 (#3876, PR #3877) : carte « Nom du nœud » sans webos dit « pas installé » (cas de gk7). Déployé gk7.
 - Bêta 2 (#3878) : consolidation, SBX Trust #3468 en parallèle (arbitrage du propriétaire).
+- secubox-system 1.13.3 (#3527, PR #3879) : Administration, services absents (not-found) retirés, état classé par l'API
+  (actif, échec, arrêté, à la demande, terminé, désactivé). Déployé gk2 (admin = module dédié, relancé par le postinst) :
+  400 services, un seul échec réel, secubox-actord-ingest. Consigne du propriétaire : travailler sur gk2, plus sur gk7.
 - TV Privacy de gk7 suivait 6 adresses du site de gk2 (TV 4e95, TV fb5b, dont 4 IPv6 2a01:e0a:dec:c4e0 en mode
   block) : retirées avec l'accord du propriétaire (mêmes fonctions que DELETE /clients, puis apply). Reste TV c760
   (auto). Sauvegarde gk7 `/root/etat.json.avant-nettoyage-1795355239`. Écart produit : un changement de réseau ne
