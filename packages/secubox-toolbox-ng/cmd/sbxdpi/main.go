@@ -47,8 +47,11 @@ import (
 // Default tuning, overridable via Config for production and tests alike.
 const (
 	defaultFlushInterval = 30 * time.Second
-	defaultDialBackoff   = 3 * time.Second
-	defaultReloadEvery   = 15 * time.Second
+	// #3903 : le relevé disque ne sert qu'au redémarrage (l'API lit la mémoire) ; 3,5 Mo toutes les 30 s
+	// faisaient ~10 Go/jour sur le SSD de gk2.
+	defaultPersistInterval = 10 * time.Minute
+	defaultDialBackoff     = 3 * time.Second
+	defaultReloadEvery     = 15 * time.Second
 	// 0666: the socket serves read-only, non-PII aggregate counters and is
 	// fronted by nginx (JWT) on the same box; a world-readable local socket
 	// avoids a cross-group chown the unprivileged daemon user cannot perform.
@@ -76,6 +79,8 @@ type Config struct {
 	// relue à chaud. Absente → les noms viennent des seules sources déduites.
 	NamesFile     string
 	FlushInterval time.Duration
+	// PersistInterval : écriture de CachePath sur disque (et toujours à l'arrêt propre).
+	PersistInterval time.Duration
 	// DialBackoff is the reconnect delay between distributor dial attempts.
 	DialBackoff time.Duration
 
@@ -130,6 +135,7 @@ func defaultConfig() Config {
 		CachePath:       getenvDefault("DPI_STATS_CACHE", "/data/secubox/sbxdpi/stats.json"),
 		NamesFile:       getenvDefault("DPI_NAMES_FILE", "/etc/secubox/dpi/ip-names.json"),
 		FlushInterval:   envDurationDefault("DPI_FLUSH_INTERVAL", defaultFlushInterval),
+		PersistInterval: envDurationDefault("DPI_PERSIST_INTERVAL", defaultPersistInterval),
 		DialBackoff:     envDurationDefault("DPI_DIAL_BACKOFF", defaultDialBackoff),
 		AllowFile:       getenvDefault("DPI_ALLOW_FILE", "/etc/secubox/dpi/app-allow.txt"),
 		DenyFile:        getenvDefault("DPI_DENY_FILE", "/etc/secubox/dpi/app-deny.txt"),
@@ -155,6 +161,9 @@ func envIntDefault(key string, def int) int {
 func withDefaults(cfg Config) Config {
 	if cfg.FlushInterval <= 0 {
 		cfg.FlushInterval = defaultFlushInterval
+	}
+	if cfg.PersistInterval <= 0 {
+		cfg.PersistInterval = defaultPersistInterval
 	}
 	if cfg.DialBackoff <= 0 {
 		cfg.DialBackoff = defaultDialBackoff
