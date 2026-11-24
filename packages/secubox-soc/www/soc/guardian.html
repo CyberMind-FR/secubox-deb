@@ -8,7 +8,7 @@
   SecuBox — « Guardian », la vigie du réseau : observer aujourd'hui pour mieux protéger demain (#2341). Page encadrée par /soc/ (onglet par défaut), même origine.
   DONNÉES RÉELLES UNIQUEMENT : WAF (/stats, /history, /enforcement/mode), DPI (/stats, /usage, /clients, /countries), ad-guard (/adblock-tv/gardien).
   Une mesure absente s'affiche « — », jamais 0. Le MODE est celui du WAF, jamais supposé. `?demo=1` : données de DÉMONSTRATION, annoncées par un bandeau.
-  #3919 : bloc « Campagnes en cours » (WAF /populations, 4 lignes au plus, rendu de cartes-campagnes.js) : tout le bloc mène à /waf/campagnes.html.
+  #3919 : bloc « Campagnes en cours » (WAF /populations, 4 lignes au plus, rendu de cartes-campagnes.js) : tout le bloc mène à l'onglet Campagnes de /waf/ (/waf/#campaigns).
   #3922 : une place par panneau — le détail des menaces (carte, catégories, événements, courbe) est dans /waf/, ici une bande de synthèse qui y renvoie.
 -->
 <meta charset="utf-8">
@@ -61,7 +61,7 @@
   .chiffre .l{color:var(--doux);font-size:.74rem} .chiffre .v{font-size:1.4rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chiffre .v.rouge{color:var(--rouge)} .chiffre .v.vert{color:var(--vert)} .chiffre .s{color:var(--faible);font-size:.68rem}
   .pare .note a{color:var(--cyan);font-weight:700}
-  /* #3919 : campagnes en cours, une ligne par population ; le bloc entier est un lien vers la page Campagnes du WAF */
+  /* #3919 : campagnes en cours, une ligne par population ; le bloc entier est un lien vers l'onglet Campagnes du WAF */
   a.pan.camps{display:block;color:inherit;text-decoration:none} a.pan.camps:hover{border-color:var(--trait2)} a.pan.camps:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
   .camps #campagnes{display:grid;gap:2px} .camps .note b{color:var(--cyan)}
   .cligne{display:grid;grid-template-columns:minmax(0,1fr) 110px 190px 74px;gap:2px 12px;align-items:center;padding:5px 0;font-size:.8rem;border-top:1px solid rgba(86,150,255,.12)} .cligne:first-child{border-top:0}
@@ -84,7 +84,7 @@
   <div class="sess" id="session" hidden>Aucune mesure : session requise. <a href="/login.html" target="_top" style="color:#001">Se connecter</a></div>
   <div class="tuiles" id="tuiles"></div>
   <div class="pan pare"><h3>Pare-feu applicatif <i>synthèse du jour</i></h3><div class="chiffres" id="pareFeu"></div><div class="note"><a href="/waf/" target="_top">Détail dans le WAF →</a> carte des attaques, catégories, derniers événements et historique y sont lus une seule fois.</div></div>
-  <a class="pan camps" href="/waf/campagnes.html" target="_top"><h3>Campagnes en cours <i>actives sur 24 h</i></h3><div id="campagnes"><span class="popnr">Lecture du relevé…</span></div><div class="note"><b>Cartes des campagnes dans le WAF →</b></div></a>
+  <a class="pan camps" href="/waf/#campaigns" target="_top"><h3>Campagnes en cours <i>actives sur 24 h</i></h3><div id="campagnes"><span class="popnr">Lecture du relevé…</span></div><div class="note"><b>Cartes des campagnes dans le WAF →</b></div></a>
   <div class="grille g2 sec">
     <div class="pan"><h3>Applications / usages <i>par volume</i></h3><div id="apps"></div></div>
     <div class="pan"><h3>Appareils principaux <i>par volume</i></h3><div id="appareils"></div></div>
