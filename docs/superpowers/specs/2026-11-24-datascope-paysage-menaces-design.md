@@ -78,7 +78,7 @@ Plafonds de lisibilité : 12 populations, 8 réseaux par population (le reste re
 ### 4.2 Collecte et instantanés
 
 - Nouveau connecteur `secubox_datascope/connecteurs/paysage.py` dans le collecteur existant. **Source unique** (choix
-  du concepteur) : le **fichier** de cache `/var/cache/secubox/waf/populations.json` (#3919), lu directement — pas
+  du concepteur) : le **fichier** de cache `/var/lib/secubox/waf/populations.json` (#3919), lu directement — pas
   d'appel HTTP, donc pas de jeton : le collecteur n'a pas de JWT et les routes sont gardées. Le paquet waf-ng donne la
   lecture de ce fichier au groupe `secubox-datascope` (ACL), le profil AppArmor de DataScope l'autorise en lecture.
   Les campagnes d'actord arrivent par le champ `campagne_actord` des populations ; les CVE par leur champ `cves`.
@@ -144,7 +144,7 @@ Retenu parce que la donnée existe déjà et que le lien est observé :
 ## 5. Contraintes
 
 - Règles AGENTS.md (lecture seule, socket, `require_jwt`, tâche de fond + cache, AppArmor enforce : le profil de
-  DataScope autorise la lecture de `/var/cache/secubox/waf/populations.json`, rien d'autre de nouveau).
+  DataScope autorise la lecture de `/var/lib/secubox/waf/populations.json`, rien d'autre de nouveau).
 - Le collecteur garde ses limites (`Nice=10`, `CPUQuota=25%`, I/O idle) ; un instantané se calcule en < 2 s sur gk2.
 - Cytoscape vendoré dans le paquet (pas de CDN : la page d'administration n'appelle aucun tiers).
 - Accessibilité : chaque forme a aussi son libellé ; l'animation de l'enregistreur respecte `prefers-reduced-motion`

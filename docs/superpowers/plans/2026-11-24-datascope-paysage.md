@@ -23,7 +23,7 @@ infrastructure), le SVG à la main suffit, comme `rendreArbre`. Coût si c'est f
 ## Global Constraints
 
 - DataScope reste en lecture seule ; aucune route mutante ; nouvelles routes sous `require_jwt`.
-- Source unique : le fichier `/var/cache/secubox/waf/populations.json` (clé de config `[sources] populations`, variable
+- Source unique : le fichier `/var/lib/secubox/waf/populations.json` (clé de config `[sources] populations`, variable
   `SECUBOX_DATASCOPE_POPULATIONS`) ; aucun appel HTTP, aucun réseau (`IPAddressDeny=any` inchangé).
 - Instantané : horodatage = `genere_le` du relevé ; écrit seulement si `genere_le` a changé ; relevé `complet: false`
   → instantané marqué `partiel`.
@@ -97,7 +97,7 @@ infrastructure), le SVG à la main suffit, comme `rendreArbre`. Coût si c'est f
   `cibles`, `adresses`, `reseaux`, `une`, `le3`, `classes`, `pays_top`, `reseaux_top[{asn,org,classe,adresses}]`,
   `serie`, `bans`, `rotation`, `etat`, `campagne_actord`, `cves`), `recouvrement`.
 - Produces :
-  - `Config.populations: Path` (défaut `/var/cache/secubox/waf/populations.json`, variable `SECUBOX_DATASCOPE_POPULATIONS`)
+  - `Config.populations: Path` (défaut `/var/lib/secubox/waf/populations.json`, variable `SECUBOX_DATASCOPE_POPULATIONS`)
   - `@dataclass class Paysage: epoch: float; partiel: bool; graphe: dict; compteurs: dict`
   - `def lire(chemin: Path, hote: str) -> Paysage | None` (None si absent, illisible, ou sans `genere_le`)
   - Graphe : `{"noeuds": [{"id","type","libelle","famille"?,"classe"?,"metriques":{...}}], "aretes": [{"de","vers","type","poids"}]}`
@@ -252,7 +252,7 @@ infrastructure), le SVG à la main suffit, comme `rendreArbre`. Coût si c'est f
 ### Task 8 : AppArmor, paquet, documentation
 
 **Files :**
-- Modify : `DS/apparmor/secubox-datascope` (après l.167 : `/var/cache/secubox/waf/populations.json r,` ; en-tête l.5-7),
+- Modify : `DS/apparmor/secubox-datascope` (après l.167 : `/var/lib/secubox/waf/populations.json r,` ; en-tête l.5-7),
   `DS/debian/changelog` (0.2.0-1~trixie1), `DS/README.md` (vue Paysage, routes, clé `populations`, instantanés)
 - Test : `DS/tests/test_paquet.py` (ajouts)
 
