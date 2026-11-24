@@ -356,6 +356,7 @@ type ServeurMail struct {
 
 	mu        sync.Mutex
 	paniques  int
+	panique   time.Time // dernière dite : une ligne par minute au plus
 	parIP     map[string]int
 	parLeurre map[string]int
 }
@@ -447,7 +448,14 @@ func (m *ServeurMail) Sert(ctx context.Context, ln net.Listener, l LeurreMail) {
 				if recover() != nil {
 					m.mu.Lock()
 					m.paniques++
+					dire := time.Since(m.panique) >= time.Minute
+					if dire {
+						m.panique = time.Now()
+					}
 					m.mu.Unlock()
+					if !dire {
+						return
+					}
 					log.Printf("sbx-authwatch: leurre %s : panique sur une connexion, fermée", l.Nom)
 				}
 			}()

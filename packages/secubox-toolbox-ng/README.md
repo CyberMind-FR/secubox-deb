@@ -111,7 +111,9 @@ seulement (`SBX_MAIL_CONTENEUR`, `SBX_MAIL_NOM`, défaut `mail`). Jamais d'`Envi
   EXISTE ; un nom inconnu s'écrit « … ». Aucun condensé vers sbx-actord.
 - **Bans** : un seul cas — leurre réglé « bannir », liste des comptes chargée (relue quand elle change) et compte
   inexistant. Tout le reste est une ligne `detect` de gravité `audit`, neutre pour le maillage, sans compteur ni campagne.
-  Une visite sans authentification n'écrit rien. Catégories `auth_smtp:leurre`, `auth_imap:leurre`,
+  Une visite sans authentification n'écrit rien.
+  **Lignes bornées** : une par minute et par (adresse, leurre), avec le total ; 60 lignes `detect` par minute en tout, le
+  reste attend et se résume en une ligne de journald. Les compteurs du jour (`leurres-mail.json`, `leurres`) ne perdent rien. Catégories `auth_smtp:leurre`, `auth_imap:leurre`,
   `auth_imap:leurre_pop3` (famille `messagerie`). LAN, maillage, conteneurs, 100.64.0.0/10 et liste blanche : servis ou
   non redirigés, jamais inscrits.
 - **Modes** (page Modes du WAF, `leurres-modes.json`) : `submission`, `imap`, `pop3`, **« observer » par défaut** ;
@@ -120,9 +122,9 @@ seulement (`SBX_MAIL_CONTENEUR`, `SBX_MAIL_NOM`, défaut `mail`). Jamais d'`Envi
   connexion, 32 commandes, 3 authentifications ; une panique ferme sa connexion et se compte.
 
 **Bascule.** Toutes les 30 s (`--mail-sonde`, 5 s à 5 min), sonde TCP (2 s) du port 25, ou à défaut d'un autre port relayé.
-Deux échecs d'affilée ET un conteneur connu arrêté ou absent (cgroup `lxc.payload.<nom>` / `lxc.monitor.<nom>` vides,
-pas de socket `@<lxcpath>/<nom>/command`) ET `lxc.net.0.ipv4.address` égale à l'adresse réglée posent
-`table ip secubox_leurres_mail`. En marche mais muet, gelé, état illisible : rien, dit une fois au journal. Une sonde
+Deux échecs d'affilée ET un conteneur connu arrêté (cgroup `lxc.payload.<nom>` / `lxc.monitor.<nom>` vides,
+pas de socket `@<lxcpath>/<nom>/command`) ET `lxc.net.0.ipv4.address` égale à l'adresse réglée (configuration exigée) posent
+`table ip secubox_leurres_mail`. En marche mais muet, gelé, sans configuration LXC, état illisible : rien, dit une fois au journal. Une sonde
 réussie ou un conteneur qui démarre la retire au tour suivant. Crochet prerouting en priorité -120, avant la
 règle DNAT du site (-100), jamais modifiée : le premier verdict NAT l'emporte. Seules les adresses publiques à destination de
 la box sont redirigées, IPv4 seulement ; le crochet output (Postfix de l'hôte) n'est pas touché. Les ports locaux (18025,
@@ -140,4 +142,4 @@ retire à l'arrêt comme au plantage. Un authwatch mort ne masque donc jamais un
 | `--mail-etat` | `/run/secubox-authwatch/leurres-mail.json` (0600 ; `""` = désactivé) |
 
 Sous une base nftables dont le WAN n'est pas de confiance, secubox-hardening ≥ 1.7.1 accepte les ports locaux, par la
-redirection seulement (`/etc/nftables.d/secubox-leurres-mail.nft`) ; 110 et 143 y restent fermés.
+redirection seulement (`/etc/nftables.d/secubox-leurres-mail.nft`, posé après validation par `secubox-fragment-leurres`) ; 110 et 143 y restent fermés.

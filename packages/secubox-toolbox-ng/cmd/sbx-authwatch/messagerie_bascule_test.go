@@ -253,9 +253,11 @@ func TestEtatMailReserve(t *testing.T) {
 	b := basculeTest(f, LeurresMailRelais)
 	m := NewServeurMail(nil, nil)
 	m.paniques = 2
+	l := NewLimiteMail()
+	l.Detecte(NewJournalMenaces(""), sigMail("imap", "203.0.113.2", "x"), time.Now())
 	m.tls.Note("imaps", "203.0.113.1", time.Now())
 	chemin := filepath.Join(t.TempDir(), "leurres-mail.json")
-	if err := b.EcrireEtat(m, chemin, time.Now()); err != nil {
+	if err := b.EcrireEtat(m, l, chemin, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	st, _ := os.Stat(chemin)
@@ -264,7 +266,7 @@ func TestEtatMailReserve(t *testing.T) {
 	}
 	brut, _ := os.ReadFile(chemin)
 	var e EtatMail
-	if err := json.Unmarshal(brut, &e); err != nil || e.Actif || e.Paniques != 2 || e.TLS["imaps"].Connexions != 1 {
+	if err := json.Unmarshal(brut, &e); err != nil || e.Actif || e.Paniques != 2 || e.Leurres["imap"].Tentatives != 1 || e.TLS["imaps"].Connexions != 1 {
 		t.Fatalf("%s %v", brut, err)
 	}
 }
@@ -319,12 +321,12 @@ func TestEtatLXC(t *testing.T) {
 			t.Fatalf("%s : %v, attendu %q", quoi, err, motif)
 		}
 	}
+	attend("aucune configuration", "aucune configuration LXC du conteneur mail")
+	ecrit("lxc/mail/config", "lxc.uts.name = mail\nlxc.net.0.ipv4.address = 10.100.0.10/24\n")
 	attend("cgroup absent", "cgroup v2 illisible")
 	ecrit("cg/cgroup.controllers", "cpu")
 	attend("sockets illisibles", "sockets Unix illisibles")
 	ecrit("unix", "Num RefCount\n0: 2 0 0 1 1 99 @/data/lxc/webmail/command\n0: 2 0 0 1 1 98 /run/mail/command\n")
-	attend("conteneur absent", "")
-	ecrit("lxc/mail/config", "lxc.uts.name = mail\nlxc.net.0.ipv4.address = 10.100.0.10/24\n")
 	attend("arrêté", "")
 	ecrit("cg/lxc.payload.mail/cgroup.events", "populated 0\nfrozen 0\n")
 	ecrit("cg/lxc.payload.mailing/cgroup.events", "populated 1\n")

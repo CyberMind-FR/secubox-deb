@@ -66,8 +66,9 @@ type classeur interface {
 type JournalMenaces struct {
 	chemin    string
 	mu        sync.Mutex
-	reseau    classeur   // #3919 : facultatif
-	campagnes *Campagnes // #3919 : facultatif
+	reseau    classeur    // #3919 : facultatif
+	campagnes *Campagnes  // #3919 : facultatif
+	mail      *LimiteMail // #3924 : lignes bornées des leurres de messagerie
 }
 
 // SetReseau branche (facultativement) l'annuaire de réseaux.
@@ -82,7 +83,7 @@ func (j *JournalMenaces) SetReseau(c classeur) {
 func (j *JournalMenaces) SetCampagnes(c *Campagnes) { j.campagnes = c }
 
 func NewJournalMenaces(chemin string) *JournalMenaces {
-	return &JournalMenaces{chemin: chemin}
+	return &JournalMenaces{chemin: chemin, mail: NewLimiteMail()}
 }
 
 // prive reproduit la regle du WAF : tout ce qui est interne est agrege sous

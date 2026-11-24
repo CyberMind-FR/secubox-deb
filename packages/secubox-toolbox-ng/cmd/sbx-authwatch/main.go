@@ -308,6 +308,18 @@ func main() {
 			log.Printf("sbx-authwatch: leurres de messagerie désactivés — %v", err)
 		} else {
 			serveurMail.Permanents(ctx)
+			go func() {
+				tic := time.NewTicker(10 * time.Second)
+				defer tic.Stop()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-tic.C:
+						journalMenaces.mail.Vide(journalMenaces, time.Now(), false)
+					}
+				}
+			}()
 			if *simule {
 				log.Printf("sbx-authwatch: simulation — aucune redirection de messagerie")
 			} else {
@@ -320,7 +332,7 @@ func main() {
 					tic := time.NewTicker(60 * time.Second)
 					defer tic.Stop()
 					for {
-						if err := bascule.EcrireEtat(serveurMail, *mailEtat, time.Now()); err != nil && !dit {
+						if err := bascule.EcrireEtat(serveurMail, journalMenaces.mail, *mailEtat, time.Now()); err != nil && !dit {
 							dit = true
 							log.Printf("sbx-authwatch: état des leurres de messagerie non écrit (%s) : %v", *mailEtat, err)
 						}
@@ -389,6 +401,7 @@ func main() {
 	}
 
 	traite(ctx, signaux, compteur, campagnes, comptes, banneur, journalMenaces, lb, *simule, acteur)
+	journalMenaces.mail.Vide(journalMenaces, time.Now(), true)
 	<-finMail // la redirection de messagerie est retirée avant de sortir
 	log.Printf("sbx-authwatch: arrêt")
 }
@@ -481,7 +494,10 @@ func traiteMail(ctx context.Context, sig Signal, comptes *Comptes, banneur *Bann
 	sig.CompteReel = comptes.Charge() && sig.Cible != "" && !inexistant
 	sig.Severite = graviteAudit
 	if !inexistant || !modesLeurres.BannitMail(sig.LeurreMail) {
-		journal.Inscrit(sig, "detect", 1)
+		journal.mail.Detecte(journal, sig, time.Now())
+		return
+	}
+	if !journal.mail.Bannit(sig, time.Now()) {
 		return
 	}
 	sig.Severite = "high"

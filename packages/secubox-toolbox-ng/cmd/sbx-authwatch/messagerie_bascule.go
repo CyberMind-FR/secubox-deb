@@ -81,7 +81,7 @@ func scriptBascule(leurres []LeurreMail, echeance time.Duration) string {
 type BasculeMail struct {
 	intervalle time.Duration
 	sonder     func(context.Context) bool
-	etat       func() error // nil : conteneur connu arrêté ou absent
+	etat       func() error // nil : conteneur connu arrêté
 	nft        func(context.Context, string) error
 	ouvrir     func(context.Context) ([]LeurreMail, func())
 
@@ -177,7 +177,7 @@ func (b *BasculeMail) tour(ctx context.Context) {
 		b.desactive(ctx, err.Error())
 		if b.motif != err.Error() {
 			b.motif = err.Error()
-			log.Printf("sbx-authwatch: leurres de messagerie non activés — %v, bien qu'il ne réponde pas", err)
+			log.Printf("sbx-authwatch: leurres de messagerie non activés, le courrier ne répond pas — %v", err)
 		}
 		return
 	}
@@ -256,16 +256,17 @@ type EtatMail struct {
 	Actif    bool                  `json:"actif"`
 	Depuis   int64                 `json:"depuis,omitempty"`
 	Paniques int                   `json:"paniques"`
+	Leurres  map[string]CompteMail `json:"leurres"` // compteurs du jour
 	TLS      map[string]ServiceTLS `json:"tls"`
 }
 
 // EcrireEtat publie l'état par renommage atomique, 0600.
-func (b *BasculeMail) EcrireEtat(m *ServeurMail, chemin string, maintenant time.Time) error {
+func (b *BasculeMail) EcrireEtat(m *ServeurMail, l *LimiteMail, chemin string, maintenant time.Time) error {
 	m.mu.Lock()
 	paniques := m.paniques
 	m.mu.Unlock()
 	b.mu.Lock()
-	e := EtatMail{Actif: b.actif, Paniques: paniques, TLS: m.tls.Etat(maintenant)}
+	e := EtatMail{Actif: b.actif, Paniques: paniques, Leurres: l.Etat(maintenant), TLS: m.tls.Etat(maintenant)}
 	if b.actif {
 		e.Depuis = b.depuis.Unix()
 	}

@@ -629,7 +629,8 @@ func TestJamaisDeBanSansCertitude(t *testing.T) {
 	}
 	for _, comptes := range []*Comptes{comptesReels(t), nil, {}} {
 		bans, lignes, tout := decide(t, comptes, NewCampagnes(time.Hour, 2), modesBannir, sigs...)
-		if len(bans) != 0 || len(lignes) != len(sigs) || strings.Contains(tout, "gk2@secubox.in") {
+		// 22 couples (adresse, leurre), 60 tentatives : une ligne par couple.
+		if len(bans) != 0 || len(lignes) != 22 || strings.Contains(tout, "gk2@secubox.in") {
 			t.Fatalf("bans %v, %d lignes", bans, len(lignes))
 		}
 		for _, l := range lignes {

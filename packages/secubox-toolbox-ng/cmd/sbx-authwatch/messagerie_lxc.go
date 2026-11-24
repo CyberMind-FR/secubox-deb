@@ -7,7 +7,7 @@ package main
 
 // ÉTAT DU CONTENEUR DE COURRIER (#3924). Une sonde ratée ne prouve pas un arrêt :
 // conteneur gelé, pare-feu, démarrage en cours, adresse mal réglée. On ne prend
-// sa place que s'il est CONNU arrêté (ou absent) et que l'adresse réglée est
+// sa place que s'il est CONNU arrêté et que l'adresse réglée est
 // bien la sienne. Dans le doute, on ne fait rien. Lecture seule, sans lxc-info.
 
 import (
@@ -34,7 +34,7 @@ type EtatLXC struct {
 	ProcUnix string // /proc/net/unix
 }
 
-// Remplacable : nil si le conteneur est connu arrêté (ou absent) et que
+// Remplacable : nil si le conteneur est connu arrêté et que
 // l'adresse est la sienne ; sinon la raison de ne rien faire.
 func (e EtatLXC) Remplacable() error {
 	if err := e.adresseDuConteneur(); err != nil {
@@ -47,8 +47,9 @@ func (e EtatLXC) Remplacable() error {
 }
 
 // adresseDuConteneur : chaque configuration trouvée doit porter l'adresse
-// réglée. Aucune configuration = conteneur absent, admis.
+// réglée, et il en faut une : sans elle, rien ne dit que l'adresse est la sienne.
 func (e EtatLXC) adresseDuConteneur() error {
+	lues := 0
 	for _, p := range e.LxcPaths {
 		brut, err := os.ReadFile(filepath.Join(p, e.Nom, "config"))
 		if errors.Is(err, fs.ErrNotExist) {
@@ -57,6 +58,7 @@ func (e EtatLXC) adresseDuConteneur() error {
 		if err != nil {
 			return fmt.Errorf("configuration du conteneur %s illisible", e.Nom)
 		}
+		lues++
 		trouvee := false
 		for _, l := range strings.Split(string(brut), "\n") {
 			cle, val, ok := strings.Cut(l, "=")
@@ -73,6 +75,9 @@ func (e EtatLXC) adresseDuConteneur() error {
 		if !trouvee {
 			return fmt.Errorf("l'adresse %s n'est pas celle du conteneur %s (%s)", e.Adresse, e.Nom, p)
 		}
+	}
+	if lues == 0 {
+		return fmt.Errorf("aucune configuration LXC du conteneur %s (%s)", e.Nom, strings.Join(e.LxcPaths, ", "))
 	}
 	return nil
 }

@@ -6,8 +6,8 @@ secubox-toolbox-ng (0.20.0-1~trixie1) trixie; urgency=medium
     Pendant l'arrêt du conteneur de courrier, sondé toutes les 30 s
     (--mail-sonde), une table nft propre à authwatch redirige 25, 465, 587,
     993 et 995 vers des ports locaux ; la règle du site n'est pas touchée.
-    Il faut deux sondes ratées, un conteneur CONNU arrêté ou absent (cgroup,
-    socket LXC) et une adresse qui soit bien la sienne. Une sonde réussie,
+    Il faut deux sondes ratées, un conteneur CONNU arrêté (cgroup, socket
+    LXC) et une configuration LXC portant bien l'adresse réglée. Une sonde réussie,
     un conteneur qui démarre, l'arrêt et le plantage (ExecStopPost) la
     retirent, et elle expire seule en trois périodes. 110 et 143 : leurres
     permanents si rien d'autre n'y écoute. --simulation ne redirige rien.
@@ -20,6 +20,8 @@ secubox-toolbox-ng (0.20.0-1~trixie1) trixie; urgency=medium
     réglé « bannir » (défaut : observer). Le reste est une ligne « detect »
     de gravité audit. 465, 993, 995 : adresse et cadence comptées par jour
     dans /run/secubox-authwatch/leurres-mail.json (0600), jamais de ban.
+  * Lignes bornées : une par minute et par (adresse, leurre) avec le total,
+    60 `detect` par minute en tout ; compteurs du jour complets.
   * Liste des comptes réels relue quand elle change.
   * Unité : LimitCORE=0, UMask=0027.
   * --leurres refuse les ports de messagerie, et identifiants.go n'y
