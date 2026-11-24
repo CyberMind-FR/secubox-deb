@@ -96,6 +96,13 @@ func main() {
 		simule = flag.Bool("simulation", false, "détecter et journaliser sans jamais bannir")
 		modesF = flag.String("leurres-modes", "/etc/secubox/authwatch/leurres-modes.json",
 			"réglage observer|bannir par leurre (#3741), relu à chaud ; absent = tous bannissent")
+		mailConteneur = flag.String("mail-conteneur", "",
+			"adresse IPv4 du conteneur de courrier : pendant son arrêt, des leurres de messagerie "+
+				"répondent à sa place (#3924) ; 110 et 143 permanents (\"\" = désactivé)")
+		mailSonde = flag.Duration("mail-sonde", 30*time.Second,
+			"période de la sonde du conteneur de courrier ; la redirection expire seule après trois périodes")
+		mailEtat = flag.String("mail-etat", "/run/secubox-authwatch/leurres-mail.json",
+			"état des leurres de messagerie et décompte des connexions TLS, root seul (\"\" = désactivé)")
 		sansGarde = flag.Bool("sans-verification-nft", false,
 			"démarrer même si aucune règle ne consulte l'ensemble (DANGEREUX : les bannissements seraient sans effet)")
 	)
@@ -277,6 +284,41 @@ func main() {
 		}(l)
 	}
 
+	// ── leurres de messagerie (#3924) ──────────────────────────────────────
+	// Une valeur invalide coupe CES leurres, jamais la surveillance.
+	finMail := make(chan struct{})
+	close(finMail)
+	if *mailConteneur != "" {
+		serveurMail := NewServeurMail(signaux, lb)
+		bascule, err := NewBasculeMail(*mailConteneur, *mailSonde, banneur, serveurMail)
+		if err != nil {
+			log.Printf("sbx-authwatch: leurres de messagerie désactivés — %v", err)
+		} else {
+			serveurMail.Permanents(ctx)
+			finMail = make(chan struct{})
+			go func() { defer close(finMail); bascule.Boucle(ctx) }()
+			if *mailEtat != "" {
+				go func() {
+					var dit bool
+					tic := time.NewTicker(60 * time.Second)
+					defer tic.Stop()
+					for {
+						if err := bascule.EcrireEtat(serveurMail.tls, *mailEtat, time.Now()); err != nil && !dit {
+							dit = true
+							log.Printf("sbx-authwatch: état des leurres de messagerie non écrit (%s) : %v", *mailEtat, err)
+						}
+						select {
+						case <-ctx.Done():
+							return
+						case <-tic.C:
+						}
+					}
+				}()
+			}
+			log.Printf("sbx-authwatch: leurres de messagerie armés (conteneur %s, sonde %s)", *mailConteneur, *mailSonde)
+		}
+	}
+
 	log.Printf("sbx-authwatch: seuil %d sur %s, campagne à %d sources sur %s, ban %s, "+
 		"liste blanche %d entrée(s), %d leurre(s)%s",
 		*seuil, *fenetre, *campSeuil, *campFen, *duree, lb.Taille(), len(listeLeurres),
@@ -330,6 +372,7 @@ func main() {
 	}
 
 	traite(ctx, signaux, compteur, campagnes, comptes, banneur, journalMenaces, lb, *simule, acteur)
+	<-finMail // la redirection de messagerie est retirée avant de sortir
 	log.Printf("sbx-authwatch: arrêt")
 }
 
@@ -362,6 +405,13 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 				acteur.Emet(sig, !simule) // signal certain : sanction, sauf simulation
 				continue
 			}
+			// #3924 : leurre de messagerie réglé « observer » — journal seulement.
+			// Réglé « bannir », il suit les règles ORDINAIRES ci-dessous.
+			if sig.LeurreMail != "" && modesLeurres.Observe(sig.LeurreMail) {
+				journal.Inscrit(sig, "detect", 1)
+				acteur.Emet(sig, false)
+				continue
+			}
 			// Tout signal retenu nourrit le graphe, sanctionné ou non : observer
 			// est justement ce que fait la phase 0/1.
 			acteur.Emet(sig, false)
@@ -374,7 +424,7 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 			// certitude que si une liste a EFFECTIVEMENT ete chargee.
 			if comptes.Inexistant(sig.Cible) {
 				sig.Severite = "high"
-				sig.Detail = sig.Detail + " — compte inexistant « " + sig.Cible + " »"
+				sig.Detail = sig.Detail + " — compte inexistant « " + compteAffiche(sig) + " »"
 				appliquer(ctx, sig, 1, banneur, journal, simule)
 				continue
 			}
@@ -387,7 +437,7 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 			// suffit.
 			if campagnes != nil {
 				if sources, campagne := campagnes.Note(sig.Cible, sig.IP, maintenant); campagne {
-					sig.Detail = sig.Detail + " — campagne sur « " + sig.Cible + " »"
+					sig.Detail = sig.Detail + " — campagne sur « " + compteAffiche(sig) + " »"
 					appliquer(ctx, sig, sources, banneur, journal, simule)
 					continue
 				}

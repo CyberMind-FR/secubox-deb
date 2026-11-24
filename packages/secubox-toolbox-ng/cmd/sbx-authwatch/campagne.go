@@ -207,8 +207,12 @@ func EcrireEtat(c *Campagnes, chemin string, maintenant time.Time) error {
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
-	f, err := os.CreateTemp(filepath.Dir(chemin), ".authwatch-campagnes-*")
+	return ecrireAtomique(chemin, append(data, '\n'), 0644)
+}
+
+// ecrireAtomique : fichier temporaire du même répertoire, puis renommage.
+func ecrireAtomique(chemin string, data []byte, mode os.FileMode) error {
+	f, err := os.CreateTemp(filepath.Dir(chemin), ".authwatch-*")
 	if err != nil {
 		return err
 	}
@@ -218,7 +222,7 @@ func EcrireEtat(c *Campagnes, chemin string, maintenant time.Time) error {
 		os.Remove(tmp)
 		return err
 	}
-	if err := f.Chmod(0644); err != nil {
+	if err := f.Chmod(mode); err != nil {
 		f.Close()
 		os.Remove(tmp)
 		return err

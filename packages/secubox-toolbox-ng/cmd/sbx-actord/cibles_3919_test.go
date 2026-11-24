@@ -66,6 +66,7 @@ func TestServicesConnusSuiventAuthwatch(t *testing.T) {
 	noms = append(noms, lire("../sbx-authwatch/motifs.go", `(?m)^\t\{"([a-z0-9]+)", "auth_`)...)
 	noms = append(noms, lire("../sbx-authwatch/leurre.go", `(?m)^\t\{\d+, "([a-z0-9]+)"\}`)...)
 	noms = append(noms, lire("../sbx-authwatch/banniere.go", `(?m)^\t"([a-z0-9]+)":\s+(?:nil|\[\]byte)`)...)
+	noms = append(noms, lire("../sbx-authwatch/messagerie.go", `Service: "([a-z0-9]+)"`)...)
 	noms = append(noms, lire("../../debian/authwatch/services.json", `"id":\s*"([a-z0-9]+)"`)...)
 	for _, n := range noms {
 		if !servicesAuthwatch[n] {

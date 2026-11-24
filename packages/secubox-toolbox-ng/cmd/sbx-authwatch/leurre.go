@@ -75,6 +75,12 @@ func AnalyseLeurres(spec string) ([]Leurre, error) {
 		if err != nil || port < 1 || port > 65535 {
 			return nil, fmt.Errorf("port de leurre invalide : %q", part)
 		}
+		if portsMessagerie[port] {
+			// #3924 : ici le ban au premier contact prendrait de vrais serveurs de
+			// courrier, et la première trame peut porter un mot de passe réel.
+			log.Printf("sbx-authwatch: port de messagerie %d refusé à --leurres (voir --mail-conteneur)", port)
+			continue
+		}
 		nom := "inconnu"
 		if len(morceaux) == 2 && strings.TrimSpace(morceaux[1]) != "" {
 			nom = strings.TrimSpace(morceaux[1])

@@ -79,3 +79,54 @@ d'une campagne établie, son identifiant (8 hex du SHA-256 du compte). Le compor
 
 `campagnes.json` (dossier propre au service, `RuntimeDirectory=secubox-authwatch`, effacé à l'arrêt ; 0644, renommage atomique toutes les 60 s) : tableau de `{id, compte, sources, premier,
 dernier}`, `compte` masqué au-delà de 3 caractères, aucune adresse. Lu par le relevé des populations du WAF.
+
+## sbx-authwatch : leurres de messagerie (#3924, 0.20.0)
+
+Pendant l'arrêt du conteneur de courrier, authwatch répond à sa place. **Éteint par défaut.** Pour l'armer :
+
+```bash
+install -m 0640 /dev/null /etc/secubox/authwatch/authwatch.env
+echo 'SBX_MAIL_CONTENEUR=10.100.0.10' > /etc/secubox/authwatch/authwatch.env
+systemctl restart secubox-authwatch
+```
+
+Pour l'éteindre : retirer la ligne (ou le fichier) et relancer l'unité. Une adresse invalide éteint ces leurres et le dit
+au journal ; la surveillance continue.
+
+| Port | Réponse | Signal |
+|---|---|---|
+| 25 | SMTP sans STARTTLS ; `451 4.3.2` à MAIL, RCPT, DATA | AUTH menée à son terme |
+| 587 | SMTP, `AUTH PLAIN LOGIN` annoncé, `454 4.7.0` | AUTH menée à son terme |
+| 465, 993, 995 | alerte TLS et fermeture, sans certificat | aucun : adresse et cadence comptées, **jamais de ban** |
+| 110, 143 | permanents (si rien d'autre n'y écoute) ; `-ERR [SYS/TEMP]`, `NO [UNAVAILABLE]` | authentification menée à son terme |
+
+- **Échecs temporaires seulement** : jamais de 5xx ni de 354 ; l'expéditeur garde son message et le représente.
+- **Mot de passe** : lu dans un tampon fixe, effacé, jamais converti en chaîne, journalisé, haché ni rendu. **Compte** :
+  masqué au journal des menaces et dans journald ; en clair seulement comme clé en mémoire.
+- **Bans** : règles ordinaires (compte inexistant, campagne, compteur), catégories `auth_smtp:leurre`,
+  `auth_smtp:leurre_submission`, `auth_imap:leurre`, `auth_imap:leurre_pop3` (famille `messagerie`). Gravité `medium` :
+  un essai sur un compte réel pèse deux fois moins qu'un échec SASL de Postfix. Une visite sans AUTH n'est rien. LAN,
+  maillage, conteneurs, 100.64.0.0/10 et liste blanche : servis ou non redirigés, jamais inscrits.
+- **Modes** (page Modes du WAF, `leurres-modes.json`) : `smtp`, `submission`, `imap`, `pop3` ; `observer` journalise sans
+  bannir. `smtps`, `imaps`, `pop3s` observent toujours.
+- **Bornes** : 64 connexions par leurre, 4 par adresse, 10 s par ligne, 30 s par connexion, 1 Kio par ligne, 8 Kio par
+  connexion, 32 commandes, 3 authentifications.
+
+**Bascule.** Sonde TCP du conteneur toutes les 30 s (`--mail-sonde`, 5 s à 5 min ; connexion sous 2 s) : port 25, ou à
+défaut l'un des autres ports relayés, pour ne jamais masquer un Dovecot qui sert. Deux échecs d'affilée posent
+`table ip secubox_leurres_mail` ; une réussite la retire aussitôt. Crochet prerouting en priorité -120, avant la règle DNAT
+du site (-100), qui n'est jamais modifiée : le premier verdict NAT l'emporte. Seules les adresses publiques à destination
+de la box sont redirigées, IPv4 seulement ; le crochet output (Postfix de l'hôte) n'est pas touché. Les ports locaux (18025, 18465, 18587,
+18993, 18995) ne sont ouverts que pendant la bascule et refusés hors redirection.
+
+**Sûreté.** La table est reposée à chaque sonde et ses éléments expirent en trois périodes (90 s) ; `ExecStopPost` la
+retire à l'arrêt comme au plantage. Un authwatch mort ne masque donc jamais un courrier qui fonctionne.
+
+| Option | Défaut |
+|---|---|
+| `--mail-conteneur` | vide (éteint) |
+| `--mail-sonde` | `30s` |
+| `--mail-etat` | `/run/secubox-authwatch/leurres-mail.json` (0600 ; `""` = désactivé) |
+
+Sous une base nftables dont le WAN n'est pas de confiance, secubox-hardening ≥ 1.7.1 accepte les ports locaux, par la
+redirection seulement (`/etc/nftables.d/secubox-leurres-mail.nft`) ; 110 et 143 y restent fermés.

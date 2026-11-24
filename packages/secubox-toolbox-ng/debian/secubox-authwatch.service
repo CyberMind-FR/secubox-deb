@@ -19,7 +19,16 @@ ExecStart=/usr/sbin/sbx-authwatch \
     --seuil 6 \
     --fenetre 10m \
     --duree-ban 4h \
-    --liste-blanche-fichier /etc/secubox/authwatch/liste-blanche
+    --liste-blanche-fichier /etc/secubox/authwatch/liste-blanche \
+    --mail-conteneur=${SBX_MAIL_CONTENEUR}
+# #3924 : leurres de messagerie pendant l'arrêt du conteneur de courrier, ÉTEINTS tant que SBX_MAIL_CONTENEUR est vide.
+# Pour les armer, écrire dans /etc/secubox/authwatch/authwatch.env (root:root 0640), puis relancer l'unité :
+#     SBX_MAIL_CONTENEUR=10.100.0.10
+# Jamais de drop-in ExecStart : il masquerait les options des versions suivantes.
+Environment=SBX_MAIL_CONTENEUR=
+EnvironmentFile=-/etc/secubox/authwatch/authwatch.env
+# Arrêt ou plantage : la redirection des ports de messagerie disparaît avec le service (elle expire seule sinon).
+ExecStopPost=-/usr/sbin/nft "add table ip secubox_leurres_mail; delete table ip secubox_leurres_mail"
 # #3728 : les leurres sont ouverts sur le WAN (secubox-hardening) ; le régime bannière tient la conversation juste
 # assez pour recevoir les identifiants des robots (telnet, redis, postgres, HTTP Basic, compte RDP), journalisés EN
 # CLAIR avec le client et le profil du visiteur : aucun service ni compte réel derrière ces ports.
@@ -27,7 +36,7 @@ Restart=always
 RestartSec=10
 
 # Droits : ecrire dans nft (NET_ADMIN) et ouvrir les ports leurres sous 1024
-# (NET_BIND_SERVICE, pour telnet 23 et smb 445). Rien de plus.
+# (NET_BIND_SERVICE, pour telnet 23, smb 445, pop3 110 et imap 143). Rien de plus.
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH
 # LE GROUPE PLUTOT QUE LA CAPACITE (#1318). Ce service ecrit ses detections dans

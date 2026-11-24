@@ -144,8 +144,21 @@ func (j *JournalMenaces) Inscrit(s Signal, action string, total int) {
 	_, _ = f.Write(data)
 }
 
+// compteAffiche : le compte visé tel qu'il s'affiche. Sur un leurre de messagerie
+// (#3924) c'est peut-être un compte réel — ou un mot de passe tapé dans le
+// mauvais champ : masqué.
+func compteAffiche(s Signal) string {
+	if s.LeurreMail != "" && s.Cible != "" {
+		return reseau.MasquerCompte(s.Cible)
+	}
+	return s.Cible
+}
+
 // cheminDe — `path` porte le compte visé ; pour un leurre, le premier compte tenté (journal seulement, jamais l'acteur).
 func cheminDe(s Signal) string {
+	if s.LeurreMail != "" {
+		return compteAffiche(s)
+	}
 	if s.Cible == "" && len(s.Essais) > 0 {
 		return s.Essais[0].Compte
 	}
