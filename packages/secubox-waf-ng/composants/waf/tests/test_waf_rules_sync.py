@@ -210,5 +210,5 @@ def test_sync_aspirateur_ua_pose_actif_bloquant_3905():
               "categories": {k: v for k, v in livre["categories"].items() if k != "aspirateur_ua"}}
     neuf = sync.fusionne(livre, vivant)
     c = neuf["categories"]["aspirateur_ua"]
-    assert c["enabled"] is True and c["mode"] == "block" and c["ban_seuil"] == 1 and c["ban_duree"] == "168h"
+    assert c["enabled"] is True and c["mode"] == "escalate" and c["ban_seuil"] == 1 and c["ban_duree"] == "168h"
     assert list(neuf["categories"])[-1] == "php2shell"

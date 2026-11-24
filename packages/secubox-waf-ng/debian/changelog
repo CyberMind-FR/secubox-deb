@@ -1,3 +1,12 @@
+secubox-waf-ng (1.43.6-1~trixie1) trixie; urgency=medium
+
+  * waf-rules 1.8.1 : aspirateur_ua en mode escalate, le seul qui lit
+    ban_seuil et ban_duree de la catégorie. En block, le compteur global
+    (3 touches, 1 h) s'appliquait : aucune adresse n'était bannie sur gk2
+    (ref #3905).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 06:50:00 +0100
+
 secubox-waf-ng (1.43.5-1~trixie1) trixie; urgency=medium
 
   * waf-rules 1.8.0 : catégorie aspirateur_ua (bloquée, bannie 7 j dès la
