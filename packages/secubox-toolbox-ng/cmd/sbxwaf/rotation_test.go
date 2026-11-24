@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,10 +22,10 @@ import (
 
 // Détecteur de rotation (#3919, tâche 9). Signatures FICTIVES, adresses de documentation (RFC 5737 / RFC 3849).
 
-const uaFictif = "NavigateurFictif/1.0 (essai rotation)"
+const uaFictif = "Mozilla/5.0 (X11; SystemeFictif) MoteurFictif/1.0 Chrome/120.0 Safari/537.36"
 const hoteFictif = "forge.exemple.test"
 
-// adressePublique rend la i-ème adresse neutre : 203.0.113.0/24, 198.51.100.0/24, puis 2001:db8::/32.
+// adressePublique rend la i-ème adresse neutre : 203.0.113.0/24, 198.51.100.0/24, puis 2001:db8::/32 (un /64 par adresse).
 func adressePublique(i int) string {
 	switch {
 	case i < 250:
@@ -32,7 +33,7 @@ func adressePublique(i int) string {
 	case i < 500:
 		return fmt.Sprintf("198.51.100.%d", i-250+1)
 	default:
-		return fmt.Sprintf("2001:db8::%x", i)
+		return fmt.Sprintf("2001:db8:%x:%x::1", i>>16, i&0xffff)
 	}
 }
 
@@ -94,14 +95,42 @@ func (c *classesFactices) poser(ip, cl string) {
 
 func cfgEssai(t *testing.T, mode string) RotationConfig {
 	d := t.TempDir()
-	return RotationConfig{Mode: mode, Verdict: "differe", Etat: filepath.Join(d, "rotation-etat.json"),
+	return RotationConfig{Mode: mode, Verdict: "differe", Grace: -1, Etat: filepath.Join(d, "rotation-etat.json"),
 		Audit: filepath.Join(d, "audit.log"), SortiesTor: filepath.Join(d, "absent-tor.txt")}
+}
+
+// uaVariante : navigateurs fictifs distincts (signatures distinctes).
+func uaVariante(k int) string {
+	return fmt.Sprintf("Mozilla/5.0 (X11; SystemeFictif) MoteurFictif/%d.0 Firefox/100.0", k)
+}
+
+func nav(ip, ua string) RotationRequete {
+	return RotationRequete{IP: ip, UA: ua, Hote: hoteFictif, Navigation: true}
+}
+
+// voir : une navigation, sans suite.
+func voir(r *Rotation, ip, ua string, t time.Time) { r.Observe(nav(ip, ua), t) }
+
+// page : une navigation dont la page (2xx text/html avec ressources) est partie en entier à l'instant t.
+func page(r *Rotation, ip string, t time.Time) { r.Servie(r.Observe(nav(ip, uaFictif), t), t) }
+
+// ressource : le chargement d'une ressource par cette adresse, quel que soit le navigateur déclaré.
+func ressource(r *Rotation, ip, ua string, t time.Time) {
+	r.Observe(RotationRequete{IP: ip, UA: ua, Hote: hoteFictif, Preuve: true}, t)
+}
+
+// avancer : un Tick toutes les 20 s de `de` à `a` (inclus), comme en service.
+func avancer(r *Rotation, de, a time.Time) {
+	for t := de; t.Before(a); t = t.Add(20 * time.Second) {
+		r.Tick(t)
+	}
+	r.Tick(a)
 }
 
 // etablir : n adresses (à partir de l'indice `depart`), une requête chacune sur la signature fictive, puis un Tick.
 func etablir(r *Rotation, depart, n int, t0 time.Time) {
 	for i := depart; i < depart+n; i++ {
-		r.Observe(adressePublique(i), uaFictif, "", hoteFictif, false, false, false, t0)
+		voir(r, adressePublique(i), uaFictif, t0)
 	}
 	r.Tick(t0.Add(time.Second))
 }
@@ -132,7 +161,7 @@ func TestPasDeSuiviSansUA(t *testing.T) {
 	r := NewRotation(cfgEssai(t, "auto"), &banFactice{}, &classesFactices{defaut: reseau.ClasseProxyLoue})
 	t0 := time.Now()
 	for i := 0; i < 60; i++ {
-		r.Observe(adressePublique(i), "", "", hoteFictif, false, false, false, t0)
+		voir(r, adressePublique(i), "", t0)
 	}
 	r.Tick(t0.Add(time.Second))
 	if n := r.nbSignatures(); n != 0 {
@@ -208,7 +237,7 @@ func TestRotationPartUneATrois(t *testing.T) {
 			k = 4
 		}
 		for j := 0; j < k; j++ {
-			r.Observe(adressePublique(i), uaFictif, "", hoteFictif, false, false, false, t0)
+			voir(r, adressePublique(i), uaFictif, t0)
 		}
 	}
 	r.Tick(t0.Add(time.Second))
@@ -224,7 +253,7 @@ func TestVerdictDiffereRobot(t *testing.T) {
 	etablir(r, 0, 50, t0)
 	x := adressePublique(100)
 	tx := t0.Add(2 * time.Second)
-	r.Observe(x, uaFictif, "", hoteFictif, false, false, false, tx)
+	page(r, x, tx)
 	r.Tick(tx.Add(5 * time.Second))
 	if len(b.liste()) != 0 {
 		t.Fatalf("aucun ban avant le délai : %+v", b.liste())
@@ -235,7 +264,7 @@ func TestVerdictDiffereRobot(t *testing.T) {
 		t.Fatalf("ban attendu de %s en %s : %+v", x, catAttendue(), a)
 	}
 	// Une seule fois : pas de second verdict pour la même adresse.
-	r.Observe(x, uaFictif, "", hoteFictif, false, false, false, tx.Add(12*time.Second))
+	page(r, x, tx.Add(12*time.Second))
 	r.Tick(tx.Add(30 * time.Second))
 	if len(b.liste()) != 1 {
 		t.Fatalf("un seul ban attendu : %+v", b.liste())
@@ -254,22 +283,21 @@ func TestVerdictDiffereNavigateur(t *testing.T) {
 
 	// X : la page, puis sa feuille de style à t+1 s, sous un navigateur déclaré différent (aucune importance).
 	x := adressePublique(100)
-	r.Observe(x, uaFictif, "", hoteFictif, false, false, false, tx)
-	r.Observe(x, "AutreNavigateurFictif/2.0", "", hoteFictif, true, false, false, tx.Add(time.Second))
+	page(r, x, tx)
+	ressource(r, x, "AutreNavigateurFictif/2.0", tx.Add(time.Second))
 	// Y : la ressource arrive SANS navigateur déclaré (NAT, client minimal) : épargnée quand même.
 	y := adressePublique(101)
-	r.Observe(y, uaFictif, "", hoteFictif, false, false, false, tx)
-	r.Observe(y, "", "", hoteFictif, true, false, false, tx.Add(time.Second))
+	page(r, y, tx)
+	ressource(r, y, "", tx.Add(time.Second))
 	// Z : revient avec un cookie de session.
 	z := adressePublique(102)
-	r.Observe(z, uaFictif, "", hoteFictif, false, false, false, tx)
-	r.Observe(z, uaFictif, "", hoteFictif, false, true, false, tx.Add(3*time.Second))
+	page(r, z, tx)
+	r.Observe(RotationRequete{IP: z, UA: uaFictif, Hote: hoteFictif, Navigation: true, Preuve: true}, tx.Add(3*time.Second))
 	// W : la page elle-même porte un référent.
 	w := adressePublique(103)
-	r.Observe(w, uaFictif, "", hoteFictif, false, false, true, tx)
+	r.Observe(RotationRequete{IP: w, UA: uaFictif, Hote: hoteFictif, Navigation: true, Preuve: true}, tx)
 
-	r.Tick(tx.Add(11 * time.Second))
-	r.Tick(tx.Add(40 * time.Second))
+	avancer(r, tx.Add(11*time.Second), tx.Add(40*time.Second))
 	if a := b.liste(); len(a) != 0 {
 		t.Fatalf("un client qui se comporte en navigateur n'est jamais banni : %+v", a)
 	}
@@ -278,8 +306,8 @@ func TestVerdictDiffereNavigateur(t *testing.T) {
 		t.Fatalf("4 adresses épargnées attendues : %+v", c)
 	}
 	// Épargnée = mémorisée : une nouvelle page sans ressource (cache du navigateur) ne relance pas de verdict.
-	r.Observe(x, uaFictif, "", hoteFictif, false, false, false, tx.Add(5*time.Minute))
-	r.Tick(tx.Add(6 * time.Minute))
+	page(r, x, tx.Add(5*time.Minute))
+	avancer(r, tx.Add(5*time.Minute), tx.Add(6*time.Minute))
 	if a := b.liste(); len(a) != 0 {
 		t.Fatalf("une adresse épargnée n'est pas rejugée : %+v", a)
 	}
@@ -294,7 +322,7 @@ func TestVerdictImmediat(t *testing.T) {
 	etablir(r, 0, 50, t0)
 	x := adressePublique(100)
 	tx := t0.Add(2 * time.Second)
-	r.Observe(x, uaFictif, "", hoteFictif, false, false, false, tx)
+	page(r, x, tx)
 	if len(b.liste()) != 0 {
 		t.Fatalf("Observe ne bannit jamais lui-même (aucune E/S sur le chemin de la requête)")
 	}
@@ -315,7 +343,7 @@ func TestModePropose(t *testing.T) {
 	etablir(r, 0, 50, t0)
 	x := adressePublique(100)
 	tx := t0.Add(2 * time.Second)
-	r.Observe(x, uaFictif, "", hoteFictif, false, false, false, tx)
+	page(r, x, tx)
 	r.Tick(tx.Add(11 * time.Second))
 	if a := b.liste(); len(a) != 0 {
 		t.Fatalf("mode propose : aucun ban, %+v", a)
@@ -340,17 +368,17 @@ func TestGardeFous(t *testing.T) {
 	cfg.Protegees = []*net.IPNet{n}
 	r := NewRotation(cfg, b, &classesFactices{defaut: reseau.ClasseProxyLoue})
 	robot := adressePublique(111)
-	r.SetRobots(func(ip string) string {
+	r.SetRobots(func(ip string) (string, bool) {
 		if ip == robot {
-			return "moteur.exemple.test"
+			return "moteur.exemple.test", true
 		}
-		return ""
+		return "", true
 	})
 	etablir(r, 0, 50, t0)
 	tx := t0.Add(2 * time.Second)
 	temoin := adressePublique(112)
 	for _, ip := range []string{"10.1.2.3", "192.168.1.20", "127.0.0.1", "fe80::1", protegee, robot, temoin} {
-		r.Observe(ip, uaFictif, "", hoteFictif, false, false, false, tx)
+		page(r, ip, tx)
 	}
 	r.Tick(tx.Add(11 * time.Second))
 	a := b.liste()
@@ -376,7 +404,7 @@ func TestRelaisJamaisBanni(t *testing.T) {
 	tx := t0.Add(2 * time.Second)
 	temoin := adressePublique(122)
 	for _, ip := range []string{relais, tor, temoin} {
-		r.Observe(ip, uaFictif, "", hoteFictif, false, false, false, tx)
+		page(r, ip, tx)
 	}
 	r.Tick(tx.Add(11 * time.Second))
 	if a := b.liste(); len(a) != 1 || a[0].ip != temoin {
@@ -405,19 +433,23 @@ func TestPlafondHoraire(t *testing.T) {
 	etablir(r, 0, 50, t0)
 	tx := t0.Add(2 * time.Second)
 	for i := 100; i < 106; i++ {
-		r.Observe(adressePublique(i), uaFictif, "", hoteFictif, false, false, false, tx)
+		page(r, adressePublique(i), tx)
 	}
 	r.Tick(tx.Add(11 * time.Second))
 	for i := 106; i < 110; i++ {
-		r.Observe(adressePublique(i), uaFictif, "", hoteFictif, false, false, false, tx.Add(20*time.Minute))
+		page(r, adressePublique(i), tx.Add(20*time.Minute))
 	}
-	r.Tick(tx.Add(21 * time.Minute))
+	avancer(r, tx.Add(20*time.Minute), tx.Add(21*time.Minute))
 	if n := len(b.liste()); n != 3 {
 		t.Fatalf("3 bans au plus dans l'heure, %d", n)
 	}
-	// L'heure passée, le plafond se libère.
-	r.Observe(adressePublique(110), uaFictif, "", hoteFictif, false, false, false, tx.Add(61*time.Minute))
-	r.Tick(tx.Add(62 * time.Minute))
+	// L'heure passée, le plafond se libère (l'attaque continue : la campagne tient ses seuils).
+	for i := 200; i < 260; i++ {
+		voir(r, adressePublique(i), uaFictif, tx.Add(50*time.Minute))
+	}
+	avancer(r, tx.Add(50*time.Minute), tx.Add(61*time.Minute))
+	page(r, adressePublique(110), tx.Add(61*time.Minute))
+	avancer(r, tx.Add(61*time.Minute), tx.Add(62*time.Minute))
 	if n := len(b.liste()); n != 4 {
 		t.Fatalf("plafond libéré après une heure : 4 bans attendus, %d", n)
 	}
@@ -464,7 +496,7 @@ func TestRotationMaxCampagnes(t *testing.T) {
 	for k := 0; k < 3; k++ {
 		tk := t0.Add(time.Duration(k) * time.Minute)
 		for i := 0; i < 50; i++ {
-			r.Observe(adressePublique(i), fmt.Sprintf("NavigateurFictif/%d.0", k), "", hoteFictif, false, false, false, tk)
+			voir(r, adressePublique(i), uaVariante(k), tk)
 		}
 		r.Tick(tk.Add(time.Second))
 	}
@@ -473,7 +505,7 @@ func TestRotationMaxCampagnes(t *testing.T) {
 		t.Fatalf("2 campagnes au plus : %+v", c)
 	}
 	for _, x := range c {
-		if x.Signature == Signature("NavigateurFictif/0.0", "", hoteFictif) {
+		if x.Signature == Signature(uaVariante(0), "", hoteFictif) {
 			t.Fatalf("la plus ancienne inactive est sortie : %+v", c)
 		}
 	}
@@ -485,7 +517,7 @@ func TestMemoireBornee(t *testing.T) {
 	cfg.MaxSignatures = 20000
 	r := NewRotation(cfg, &banFactice{}, &classesFactices{defaut: reseau.ClasseProxyLoue})
 	for i := 0; i < 30000; i++ {
-		r.Observe(adressePublique(i%400), fmt.Sprintf("NavigateurFictif/%d", i), "", hoteFictif, false, false, false, t0)
+		voir(r, adressePublique(i%400), uaVariante(i), t0)
 		if i%5000 == 0 && r.nbSignatures() > 20000 {
 			t.Fatalf("plus de 20 000 signatures suivies à %d", i)
 		}
@@ -498,7 +530,7 @@ func TestMemoireBornee(t *testing.T) {
 	r2 := NewRotation(cfg2, &banFactice{}, &classesFactices{defaut: reseau.ClasseProxyLoue})
 	r2.maxSourcesSig = 100
 	for i := 0; i < 300; i++ {
-		r2.Observe(adressePublique(i), uaFictif, "", hoteFictif, false, false, false, t0)
+		voir(r2, adressePublique(i), uaFictif, t0)
 	}
 	if n := r2.nbSources(); n != 100 {
 		t.Fatalf("100 sources au plus par signature, %d", n)
@@ -507,30 +539,30 @@ func TestMemoireBornee(t *testing.T) {
 	r3.maxSourcesTotal = 250
 	for k := 0; k < 10; k++ {
 		for i := 0; i < 100; i++ {
-			r3.Observe(adressePublique(i), fmt.Sprintf("NavigateurFictif/%d", k), "", hoteFictif, false, false, false, t0)
+			voir(r3, adressePublique(i), uaVariante(k), t0)
 		}
 	}
 	if n := r3.nbSources(); n > 250 {
 		t.Fatalf("total des sources borné à 250, %d", n)
 	}
-	// Verdicts en attente bornés : au-delà, les plus anciens sont abandonnés (jamais bannis).
+	// Verdicts en attente bornés : au-delà, l'adresse n'est pas jugée (jamais bannie).
 	b4 := &banFactice{}
 	r4 := NewRotation(cfgEssai(t, "auto"), b4, &classesFactices{defaut: reseau.ClasseProxyLoue})
-	r4.maxVerdicts = 10
+	r4.maxAttente = 10
 	etablir(r4, 0, 50, t0)
 	tx := t0.Add(2 * time.Second)
 	for i := 100; i < 130; i++ {
-		r4.Observe(adressePublique(i), uaFictif, "", hoteFictif, false, false, false, tx)
+		page(r4, adressePublique(i), tx)
 	}
-	if n := r4.nbVerdicts(); n > 10 {
+	if n := r4.nbAttente(); n > 10 {
 		t.Fatalf("10 verdicts au plus, %d", n)
 	}
 	r4.Tick(tx.Add(11 * time.Second))
 	if n := len(b4.liste()); n != 10 {
 		t.Fatalf("seuls les 10 verdicts gardés sont rendus, %d", n)
 	}
-	if b4.banni(adressePublique(100)) {
-		t.Fatalf("un verdict abandonné n'est jamais un ban")
+	if b4.banni(adressePublique(129)) {
+		t.Fatalf("un verdict refusé n'est jamais un ban")
 	}
 }
 
@@ -579,7 +611,7 @@ func TestEtatRelu(t *testing.T) {
 	}
 	x := adressePublique(100)
 	tx := t0.Add(3 * time.Second)
-	r2.Observe(x, uaFictif, "", hoteFictif, false, false, false, tx)
+	page(r2, x, tx)
 	r2.Tick(tx.Add(11 * time.Second))
 	if !b.banni(x) {
 		t.Fatalf("la campagne relue rend ses verdicts")
@@ -612,7 +644,10 @@ func TestRotationOffInerte(t *testing.T) {
 		t.Fatalf("mode off : rien n'est suivi")
 	}
 	var nul *Rotation
-	nul.Observe("203.0.113.1", uaFictif, "", hoteFictif, false, false, false, time.Now()) // pas de panique
+	nul.Observe(nav("203.0.113.1", uaFictif), time.Now()) // pas de panique
+	nul.NoterPreuve("203.0.113.1", time.Now())
+	nul.Servie(nil, time.Now())
+	nul.Suivre(nil)
 }
 
 // Observe et Tick concurrents (à passer sous -race).
@@ -625,8 +660,11 @@ func TestRotationConcurrence(t *testing.T) {
 		go func(g int) {
 			defer wg.Done()
 			for i := 0; i < 2000; i++ {
-				r.Observe(adressePublique((g*2000+i)%3000), fmt.Sprintf("NavigateurFictif/%d", i%7), "", hoteFictif, i%5 == 0, false, false,
-					t0.Add(time.Duration(i)*time.Millisecond))
+				q := nav(adressePublique((g*2000+i)%3000), uaVariante(i%7))
+				q.Preuve = i%5 == 0
+				tt := t0.Add(time.Duration(i) * time.Millisecond)
+				r.Servie(r.Observe(q, tt), tt)
+				r.NoterPreuve(adressePublique(i+5000), tt)
 			}
 		}(g)
 	}
@@ -638,20 +676,43 @@ func TestRotationConcurrence(t *testing.T) {
 }
 
 func BenchmarkObserve(b *testing.B) {
-	cfg := RotationConfig{Mode: "auto", Verdict: "differe"}
-	r := NewRotation(cfg, &banFactice{}, &classesFactices{defaut: reseau.ClasseProxyLoue})
-	t0 := time.Now()
+	// Régime établi : 1 000 adresses × une signature connue, JA4 présent. « navigation » : page suivie ; « preuve » : ressource (1 requête sur 2 à 10 en
+	// vrai) ; « inerte » : client non suivi, sans preuve.
+	const ua = "Mozilla/5.0 (X11; Linux aarch64) MoteurFictif/537.36 (essai de performance, chaîne longue) Chrome/120.0.0.0 Safari/537.36"
 	ips := make([]string, 1000)
 	for i := range ips {
 		ips[i] = adressePublique(i)
 	}
-	const ua = "Mozilla/5.0 (X11; Linux aarch64) NavigateurFictif/120.0 (essai de performance, chaîne de longueur réaliste)"
-	for i := 0; i < 10000; i++ {
-		r.Observe(ips[i%1000], ua, "t13d1516h2_8daaf6152771_02713d6af862", hoteFictif, i%3 == 0, false, false, t0)
+	essai := func(nom string, q RotationRequete) {
+		b.Run(nom, func(b *testing.B) {
+			r := NewRotation(RotationConfig{Mode: "auto", Verdict: "differe", Grace: -1}, &banFactice{}, &classesFactices{defaut: reseau.ClasseProxyLoue})
+			t0 := time.Now()
+			q.JA4, q.Hote = "t13d1516h2_8daaf6152771_02713d6af862", hoteFictif
+			for i := 0; i < 10000; i++ {
+				q.IP = ips[i%1000]
+				r.Observe(q, t0)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				q.IP = ips[i%1000]
+				r.Observe(q, t0)
+			}
+		})
 	}
+	essai("navigation", RotationRequete{UA: ua, Navigation: true})
+	essai("navigation_preuve", RotationRequete{UA: ua, Navigation: true, Preuve: true})
+	essai("preuve", RotationRequete{UA: ua, Preuve: true})
+	essai("inerte", RotationRequete{UA: "git/2.45.0", Navigation: true})
+}
+
+// Lecture des en-têtes d'une requête de navigateur réelle (preuve + navigation), sur le chemin chaud.
+func BenchmarkRotationRequete(b *testing.B) {
+	h := http.Header{"User-Agent": {"x"}, "Accept": {"text/html"}, "Sec-Fetch-Dest": {"document"}, "Sec-Fetch-Site": {"none"}, "Accept-Language": {"fr"}}
 	b.ReportAllocs()
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r.Observe(ips[i%1000], ua, "t13d1516h2_8daaf6152771_02713d6af862", hoteFictif, i%3 == 0, false, false, t0)
+		if preuveNavigateur("/utilisateur/depot/commits", h) || !estNavigation("GET", "/utilisateur/depot/commits", h) {
+			b.Fatal("navigation attendue")
+		}
 	}
 }

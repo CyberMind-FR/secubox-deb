@@ -23,6 +23,7 @@ import (
 // pendant son ban : les compteurs par élément de l'ensemble nft disent combien de paquets elle a encore envoyés (la chaîne les rejette avant tout journal : sans
 // eux, une adresse qui insiste et une adresse qui s'est tue sont indiscernables).
 //   - elle insiste (≥ seuil de paquets)  → EXTEND, avec la durée GRADUÉE suivante (leurre 1 h/24 h/7 j, campagne 4 h/24 h/7 j) ;
+//   - ban de rotation (`rotation:`)      → RELEASE, toujours (#3919) : 24 h, jamais plus ;
 //   - elle s'est tue                     → RELEASE : le timeout nft fait le travail, rien n'est posé ;
 //   - pas de compteur (ensemble ancien)  → RELEASE : jamais de prolongation à l'aveugle ;
 //   - chaîne de bans de 30 jours         → RELEASE quoi qu'il arrive : jamais de ban permanent accidentel ; une prolongation ne dépasse jamais ce plafond.
@@ -61,6 +62,10 @@ func famille(categorie string) string {
 // Reevaluer décide. Pure : tout ce qu'elle lit est passé en argument.
 func Reevaluer(categorie string, paquets uint64, avecCompteur bool, recidives int, depuisChaine time.Duration, seuil uint64) ReevalDecision {
 	switch {
+	case strings.HasPrefix(categorie, "rotation:"):
+		// #3919 : un ban de rotation vaut 24 h, jamais plus. Le verdict est un constat d'ABSENCE (rien chargé), pas une preuve d'attaque ; les SYN que le
+		// navigateur d'un visiteur banni réessaie ne sont pas une insistance.
+		return ReevalDecision{"RELEASE", 0, "ban de rotation : 24 h, jamais prolongé"}
 	case !avecCompteur:
 		return ReevalDecision{"RELEASE", 0, "aucun compteur : pas de preuve de persistance, jamais de prolongation à l'aveugle"}
 	case depuisChaine >= plafondChaine:

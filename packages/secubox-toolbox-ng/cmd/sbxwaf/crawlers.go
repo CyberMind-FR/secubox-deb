@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/netip"
 	"strings"
@@ -36,8 +37,9 @@ const (
 )
 
 type crawlerEntree struct {
-	nom string
-	exp time.Time
+	nom       string
+	exp       time.Time
+	incertain bool // le DNS n'a pas répondu : « pas de robot » n'est pas prouvé (VerifieSur refait la recherche)
 }
 
 type Crawlers struct {
@@ -91,12 +93,40 @@ func (c *Crawlers) Verifie(ip string) string {
 		return e.nom
 	}
 	c.mu.Unlock()
-	nom := c.verifieSansCache(ip, a)
+	nom, sur := c.verifieSansCache(ip, a)
+	c.memoriser(ip, nom, sur, now)
+	return nom
+}
+
+// VerifieSur est Verifie à TROIS états (#3919) : (domaine, true) robot vérifié ; ("", true) pas un robot ; ("", false) on ne sait pas (DNS en panne,
+// délai dépassé, adresse invalide). Un doute n'est jamais mémorisé ici et ne change rien pour les appelants de Verifie.
+func (c *Crawlers) VerifieSur(ip string) (string, bool) {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return "", false
+	}
+	ip = a.String()
+	now := c.now()
+	c.mu.Lock()
+	e, ok := c.cache[ip]
+	c.mu.Unlock()
+	if ok && now.Before(e.exp) && !e.incertain {
+		return e.nom, true
+	}
+	nom, sur := c.verifieSansCache(ip, a)
+	if sur {
+		c.memoriser(ip, nom, true, now)
+	}
+	return nom, sur
+}
+
+func (c *Crawlers) memoriser(ip, nom string, sur bool, now time.Time) {
 	ttl := crawlerTTLNegatif
 	if nom != "" {
 		ttl = crawlerTTLPositif
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if len(c.cache) >= crawlerCacheMax {
 		for k, e := range c.cache {
 			if now.After(e.exp) {
@@ -107,9 +137,7 @@ func (c *Crawlers) Verifie(ip string) string {
 			c.cache = map[string]crawlerEntree{}
 		}
 	}
-	c.cache[ip] = crawlerEntree{nom: nom, exp: now.Add(ttl)}
-	c.mu.Unlock()
-	return nom
+	c.cache[ip] = crawlerEntree{nom: nom, exp: now.Add(ttl), incertain: !sur}
 }
 
 // Resolu : la vérification de cette adresse est déjà connue (robot ou non), valide dans le cache.
@@ -124,11 +152,19 @@ func (c *Crawlers) Resolu(ip string) bool {
 	return ok && c.now().Before(e.exp)
 }
 
-func (c *Crawlers) verifieSansCache(ip string, a netip.Addr) string {
+// absent : le DNS a répondu « ce nom n'existe pas » ; toute autre erreur est une panne, qui ne prouve rien.
+func absent(err error) bool {
+	var d *net.DNSError
+	return errors.As(err, &d) && d.IsNotFound
+}
+
+// verifieSansCache rend le domaine du robot, et si la réponse est SÛRE (le DNS a répondu à tout).
+func (c *Crawlers) verifieSansCache(ip string, a netip.Addr) (nom string, sur bool) {
 	noms, err := c.inverse(ip)
 	if err != nil {
-		return ""
+		return "", absent(err)
 	}
+	sur = true
 	for _, n := range noms {
 		dom := domaineRobot(n)
 		if dom == "" {
@@ -136,13 +172,14 @@ func (c *Crawlers) verifieSansCache(ip string, a netip.Addr) string {
 		}
 		ips, err := c.direct(strings.TrimSuffix(n, "."))
 		if err != nil {
+			sur = sur && absent(err)
 			continue
 		}
 		for _, x := range ips {
 			if b, err := netip.ParseAddr(x); err == nil && b == a {
-				return dom
+				return dom, true
 			}
 		}
 	}
-	return ""
+	return "", sur
 }
