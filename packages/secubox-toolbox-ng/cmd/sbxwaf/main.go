@@ -86,6 +86,8 @@ func upstreamErrorCode(err error) int {
 type Server struct {
 	// mesures : l'échelle de réponse d'Actor Intelligence (délai, défi, tarpit, ban) appliquée aux requêtes (#2274). nil = désactivée.
 	mesures *MesuresWAF
+	// rotation : détecteur de campagnes à rotation web (#3919, rotation.go). nil = désactivé (--rotation off).
+	rotation *Rotation
 
 	// ca holds the loaded forging CA. May be nil when --ca-cert/--ca-key are not
 	// provided (tests, non-TLS deployments).
@@ -656,6 +658,12 @@ func (s *Server) handler() http.Handler {
 			}
 
 			isStatic := staticAsset(rawPath)
+
+			// #3919 : détecteur de rotation — O(1), sans E/S ; jamais pour une adresse privée, le NC ni un hôte de confiance.
+			if !skip && s.rotation != nil {
+				s.rotation.Observe(ip, r.Header.Get("User-Agent"), s.lireJA4(r), r.Host, isStatic,
+					r.Header.Get("Cookie") != "", r.Header.Get("Referer") != "", time.Now())
+			}
 
 			if !skip {
 				var bodyBytes []byte
@@ -1454,6 +1462,11 @@ func main() {
 	actorBanMin := flag.Int("actor-ban-min", 2, "sanctions LOCALES de ce WAF (hors bans automatiques) requises dans la fenêtre avant un ban automatique")
 	actorBanMaxHeure := flag.Int("actor-ban-max-heure", 20, "coupe-circuit : bans automatiques maximum par heure glissante")
 	actorBanProtegees := flag.String("actor-ban-protegees", "", "adresses/plages (CIDR, virgules) jamais bannies automatiquement, en plus du privé/local (box, Freebox, mesh)")
+	rotationMode := flag.String("rotation", "off", "détecteur de campagnes à rotation web (même signature, adresses louées) : off | propose | auto (#3919)")
+	rotationVerdict := flag.String("rotation-verdict", "differe", "verdict d'une adresse portant la signature d'une campagne établie : differe (bannie seulement si elle n'a chargé ni ressource, ni cookie, ni référent en 10 s) | immediat")
+	rotationEtat := flag.String("rotation-etat", "/var/lib/secubox/waf/rotation-etat.json", "état des campagnes à rotation (panneau, relevé populations)")
+	rotationMaxHeure := flag.Int("rotation-max-heure", 1500, "coupe-circuit : bans de rotation maximum par heure glissante")
+	rotationSortiesTor := flag.String("rotation-sorties-tor", "/var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt", "liste locale des sorties Tor (secubox-ipblock), jamais bannies ; absente = garde inactive, signalée dans l'état")
 	flag.Parse()
 
 	// #1070 phase D — mode corrélation hors-ligne : on lit le journal, on affiche
@@ -1569,6 +1582,7 @@ func main() {
 	// #3919 : annuaire de réseaux, câblé INDÉPENDAMMENT de --actor-socket (le
 	// journal en profite même sans actord). Rechargé au SIGHUP et toutes les
 	// 24 h : une base ASN mise à jour est prise sans redémarrer le WAF.
+	var annuaire *reseau.Annuaire
 	if *geoipASN != "" {
 		var catalogues []string
 		for _, c := range strings.Split(*reseauxClasses, ",") {
@@ -1577,6 +1591,7 @@ func main() {
 			}
 		}
 		ann := reseau.Ouvrir(*geoipASN, catalogues...)
+		annuaire = ann
 		tl.SetReseau(ann)
 		defer ann.Close()
 		hupReseau := make(chan os.Signal, 1)
@@ -1723,6 +1738,23 @@ func main() {
 				cb.protegees = parseCIDRs(*actorBanProtegees)
 				go cb.Veiller(5 * time.Minute)
 				log.Printf("sbxwaf: campagne-ban mode=%s (plafond=%d/h, journal=%s)", *campagneBanMode, *campagneBanMaxHeure, *threatLog)
+			}
+			// Campagnes à rotation (#3919) : garde-fous dans rotation.go ; mêmes plages protégées ; sans annuaire, aucune campagne ne s'établit.
+			if *rotationMode == "propose" || *rotationMode == "auto" {
+				var cl classeur
+				if annuaire != nil {
+					cl = annuaire
+				}
+				rot := NewRotation(RotationConfig{Mode: *rotationMode, Verdict: *rotationVerdict, MaxParHeure: *rotationMaxHeure,
+					Etat: *rotationEtat, Audit: "/var/log/secubox/waf/audit.log", Protegees: parseCIDRs(*actorBanProtegees),
+					SortiesTor: *rotationSortiesTor}, nb, cl)
+				if nb.robots != nil {
+					rot.SetRobots(nb.robots.Verifie)
+				}
+				srv.rotation = rot
+				go rot.Veiller(2 * time.Second)
+				log.Printf("sbxwaf: rotation mode=%s verdict=%s (plafond=%d/h, annuaire=%t, sorties Tor=%s)", *rotationMode, rot.cfg.Verdict,
+					*rotationMaxHeure, annuaire != nil, *rotationSortiesTor)
 			}
 			// Échelle de réponse (#2274) : mesures d'actord appliquées aux requêtes ; le ban passe par le même banneur nft. La quarantaine du LAN est celle du NAC.
 			if *mesuresMode == "propose" || *mesuresMode == "auto" {
