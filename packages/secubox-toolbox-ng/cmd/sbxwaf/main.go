@@ -1359,6 +1359,15 @@ func splitHostPort(addr string) (host string, port int, err error) {
 	return h, p, nil
 }
 
+func cheminsCatalogues(liste string) (out []string) {
+	for _, c := range strings.Split(liste, ",") {
+		if c = strings.TrimSpace(c); c != "" {
+			out = append(out, c)
+		}
+	}
+	return
+}
+
 func main() {
 	listen := flag.String("listen", ":8080", "address to listen on (e.g. :8080 or 0.0.0.0:8080)")
 	caCert := flag.String("ca-cert", "", "path to CA certificate PEM file (required for TLS forging)")
@@ -1505,7 +1514,30 @@ func main() {
 	rotationEtat := flag.String("rotation-etat", "/var/lib/secubox/waf/rotation-etat.json", "état des campagnes à rotation (panneau, relevé populations)")
 	rotationMaxHeure := flag.Int("rotation-max-heure", 1500, "coupe-circuit : bans de rotation maximum par heure glissante")
 	rotationSortiesTor := flag.String("rotation-sorties-tor", "/var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt", "liste locale des sorties Tor (secubox-ipblock), jamais bannies ; absente = garde inactive, signalée dans l'état")
+	rotationRejeu := flag.Bool("rotation-rejeu", false, "rejeu HORS LIGNE du détecteur de rotation sur les journaux d'accès nginx donnés en arguments (.gz admis) : rapport JSON sur la sortie standard, puis fin. Rien n'est banni ni écrit (#3919)")
+	rotationRejeuSansGrace := flag.Bool("rotation-rejeu-sans-grace", true, "rejeu : juger dès la première ligne ; false : comme en auto avec une mémoire vide, rien n'est jugé les 24 premières heures")
+	rotationRejeuAdresses := flag.Bool("rotation-rejeu-adresses", false, "rejeu : donner au plus 20 adresses en exemple par campagne (défaut : des comptes seulement)")
 	flag.Parse()
+
+	// #3919 — rejeu hors ligne du détecteur de rotation : ni écoute, ni proxy, ni nft, ni écriture.
+	if *rotationRejeu {
+		var cl classeur
+		if *geoipASN != "" {
+			cl = reseau.Ouvrir(*geoipASN, cheminsCatalogues(*reseauxClasses)...)
+		}
+		log.SetOutput(io.Discard) // les messages du détecteur (dates réelles) n'ont pas de sens ici : tout est dans le rapport
+		grace := rotationGraceVide
+		if *rotationRejeuSansGrace {
+			grace = -1
+		}
+		err := Rejouer(flag.Args(), RotationConfig{Verdict: *rotationVerdict, MaxParHeure: *rotationMaxHeure, Grace: grace,
+			Protegees: parseCIDRs(*actorBanProtegees), SortiesTor: *rotationSortiesTor}, cl, *rotationRejeuAdresses, os.Stdout)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "sbxwaf: rejeu : %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// #1070 phase D — mode corrélation hors-ligne : on lit le journal, on affiche
 	// les campagnes en JSON et on quitte (ni écoute, ni proxy).
@@ -1622,13 +1654,7 @@ func main() {
 	// 24 h : une base ASN mise à jour est prise sans redémarrer le WAF.
 	var annuaire *reseau.Annuaire
 	if *geoipASN != "" {
-		var catalogues []string
-		for _, c := range strings.Split(*reseauxClasses, ",") {
-			if c = strings.TrimSpace(c); c != "" {
-				catalogues = append(catalogues, c)
-			}
-		}
-		ann := reseau.Ouvrir(*geoipASN, catalogues...)
+		ann := reseau.Ouvrir(*geoipASN, cheminsCatalogues(*reseauxClasses)...)
 		annuaire = ann
 		tl.SetReseau(ann)
 		defer ann.Close()

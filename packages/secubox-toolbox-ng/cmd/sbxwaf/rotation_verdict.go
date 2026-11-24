@@ -40,6 +40,7 @@ func (r *Rotation) juger(t time.Time) {
 		c := r.campagnes[v.cle]
 		r.mu.Unlock()
 		if c == nil {
+			r.temoigner(v, raisonFinie, t)
 			continue // campagne finie entre-temps : pas de ban
 		}
 		r.rendre(v, c.signature[:8], t)
@@ -89,6 +90,7 @@ func (r *Rotation) rendre(v rotVerdict, court string, t time.Time) {
 	c := r.campagnes[v.cle]
 	if c == nil { // finie pendant le DNS
 		r.mu.Unlock()
+		r.temoigner(v, raisonFinie, t)
 		return
 	}
 	switch {
@@ -106,7 +108,11 @@ func (r *Rotation) rendre(v rotVerdict, court string, t time.Time) {
 		c.aBannir++
 	}
 	r.mu.Unlock()
-	if epargnee || raison != "" {
+	if epargnee {
+		raison = raisonPreuve
+	}
+	r.temoigner(v, raison, t)
+	if raison != "" {
 		return
 	}
 	r.recents = append(r.recents, t)
@@ -119,6 +125,12 @@ func (r *Rotation) rendre(v rotVerdict, court string, t time.Time) {
 		// Ni chemin ni navigateur déclaré (un ban n'est pas une sonde) ; jamais vers actord : un constat d'absence ne nourrit ni score ni mesure.
 		r.journal(ThreatRecord{ClientIP: ip, Host: v.hote, Method: "GET", Category: "rotation:" + court, Severity: "high", RuleID: "rotation",
 			Action: "banned", HorsActeur: true})
+	}
+}
+
+func (r *Rotation) temoigner(v rotVerdict, raison string, t time.Time) {
+	if r.temoin != nil {
+		r.temoin.verdict(v, raison, t)
 	}
 }
 
@@ -137,6 +149,8 @@ func (r *Rotation) direPlafond(t time.Time) {
 const (
 	raisonClasse    = "classe_protegee"
 	raisonSuspendue = "suspendue"
+	raisonPreuve    = "preuve"
+	raisonFinie     = "campagne_finie"
 )
 
 // ecarter (local, sans DNS) rend la raison pour laquelle l'adresse ne doit jamais être bannie, "" sinon.

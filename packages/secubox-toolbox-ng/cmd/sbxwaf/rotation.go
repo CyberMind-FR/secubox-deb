@@ -131,6 +131,7 @@ type rotSignature struct {
 	cle        [32]byte
 	hote       string
 	sources    map[[16]byte]rotSource // origine (IPv4, ou /64 IPv6)
+	premier    int64                  // début du suivi (UnixNano)
 	dernier    int64                  // dernière navigation (UnixNano)
 	evalue     int64                  // dernière évaluation
 	prec, suiv *rotSignature
@@ -168,6 +169,7 @@ type Rotation struct {
 	annu    classeur
 	robots  func(ip string) (nom string, sur bool) // robot d'indexation vérifié, à trois états (Crawlers.VerifieSur) ; nil : pas de vérification ici
 	journal func(ThreatRecord)                     // journal des menaces (une ligne par verdict) ; nil : aucun
+	temoin  *rotationTemoin                        // rejeu hors ligne seulement (rotation_rejeu.go) ; nil en service
 
 	maxSourcesSig   int
 	maxSourcesTotal int
@@ -217,6 +219,14 @@ type Rotation struct {
 
 	ecritMu        sync.Mutex // fichier de la mémoire (Tick et arrêt du service)
 	memoireEcritLe time.Time
+}
+
+// rotationTemoin suit ce que fait le détecteur, sans rien y changer. Appelé depuis Tick ; etablie et finie le sont SOUS le verrou : elles ne rappellent
+// jamais le détecteur.
+type rotationTemoin struct {
+	etablie func(c *rotCampagne, premier int64) // premier : début du suivi de la signature (Unix, s)
+	finie   func(c *rotCampagne, t time.Time, raison string)
+	verdict func(v rotVerdict, raison string, t time.Time) // raison vide : à bannir
 }
 
 // NewRotation construit le détecteur, relit l'état persistant (campagnes actives de moins de Duree) et la mémoire des navigateurs.
@@ -454,7 +464,7 @@ func (r *Rotation) signatureSuivie(cle [32]byte, host string, ns int64) *rotSign
 		for len(r.sigs) >= r.cfg.MaxSignatures && r.queue != nil {
 			r.oublier(r.queue)
 		}
-		s = &rotSignature{cle: cle, hote: strings.Clone(host), sources: map[[16]byte]rotSource{}}
+		s = &rotSignature{cle: cle, hote: strings.Clone(host), sources: map[[16]byte]rotSource{}, premier: ns}
 		r.sigs[cle] = s
 	} else {
 		r.detacher(s)
@@ -725,6 +735,9 @@ func (r *Rotation) evaluer(s *rotSignature, t time.Time) int {
 			}
 		}
 	}
+	if !campagne && r.temoin != nil {
+		r.temoin.etablie(c, s.premier/int64(time.Second))
+	}
 	r.etatSale = true
 	return len(ex)
 }
@@ -767,6 +780,9 @@ func (r *Rotation) etablir(s *rotSignature, t time.Time) *rotCampagne {
 func (r *Rotation) finir(c *rotCampagne, t time.Time, raison string) {
 	delete(r.campagnes, c.cle)
 	r.etatSale = true
+	if r.temoin != nil {
+		r.temoin.finie(c, t, raison)
+	}
 	r.audits = append(r.audits, map[string]any{"ts": t.UTC().Format("2006-01-02T15:04:05Z"), "module": "waf", "action": "rotation_fin",
 		"detail": "campagne à rotation " + c.signature[:8] + " terminée (" + raison + ")", "signature": c.signature, "hote": c.hote,
 		"raison": raison, "bannies": c.bannies, "epargnees": c.epargnees, "a_bannir": c.aBannir})
