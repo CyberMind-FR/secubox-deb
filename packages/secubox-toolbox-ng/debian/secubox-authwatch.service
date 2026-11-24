@@ -49,8 +49,12 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 RestrictRealtime=true
 LockPersonality=true
-# Le seul chemin en ecriture : le journal de menaces partage avec le WAF.
-ReadWritePaths=/var/log/secubox/waf
+# Deux chemins en ecriture : le journal de menaces partage avec le WAF, et
+# /run/secubox pour l'etat des campagnes par compte vise (#3919,
+# authwatch-campagnes.json, ecrit toutes les 60 s par renommage atomique : le
+# DOSSIER doit etre inscriptible, pas le seul fichier). Parent partage 1777
+# root : pas de RuntimeDirectory (#1022). `-` : absent, le service bannit quand meme.
+ReadWritePaths=/var/log/secubox/waf -/run/secubox
 
 [Install]
 WantedBy=multi-user.target

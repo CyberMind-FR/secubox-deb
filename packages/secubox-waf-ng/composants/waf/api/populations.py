@@ -59,7 +59,7 @@ ROTATION_LE3 = 80               # … dont ≥ 80 % à ≤ 3 tentatives
 INACTIVE_S = 86400
 DOUBLE_TAMPON_S = 3600          # un partiel ne remplace pas un complet de moins d'1 h
 MAX_CVES = 20
-MODE_CACHE = 0o640              # lisible par le groupe (ACL secubox-datascope posée par le postinst, tâche 12)
+MODE_CACHE = 0o640              # groupe secubox-waf seulement ; l'accès de DataScope est décidé dans #3921 (README)
 
 CLASSES = ("acces", "cdn", "hebergeur", "proxy_loue", "scanner_recherche", "mobile_partage", "relais_vie_privee")
 INCONNU = "inconnu"
