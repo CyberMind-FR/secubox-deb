@@ -108,6 +108,10 @@
   .poppartiel{color:var(--orange);border:1px dashed currentColor;border-radius:8px;padding:6px 10px}
   @container a (max-width:599px){.app{padding:8px} .popc{padding:10px} .popdet th,.popdet td{padding:4px 5px}}
   @container a (min-width:1000px){.rcamp{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .rcamp>:not(article){grid-column:1/-1}}
+  .campsans{grid-column:1/-1;min-width:0} .campsans summary{cursor:pointer;color:var(--doux);font-size:.82rem;padding:6px 0} .campsans summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .campsans ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
+  .campsans li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;border-bottom:1px solid var(--trait);padding-bottom:6px;font-size:.78rem;min-width:0}
+  .campsans .seq{flex:1 1 260px;min-width:0;overflow-wrap:anywhere;font-family:ui-monospace,"IBM Plex Mono",monospace} .campsans .inf{color:var(--doux);font-variant-numeric:tabular-nums} .campsans code{color:var(--faible)}
   body.emb .cadre{padding:2px}
   body.emb .cartes{grid-template-columns:1fr !important}
   body.emb .tuiles{grid-template-columns:repeat(2,1fr) !important}
@@ -235,6 +239,15 @@
       +'<div class="ln"><span>Adresses</span><span class="puces">'+(ips||'—')+'</span></div>'
       +(c.seq.length?'<div class="ln"><span>Séquence</span><span class="seq">'+seq+'</span></div>':'')+'</div>';
   }
+  // Une campagne sans cible NI date (aucune alerte récente ne la recoupe) tient sur une ligne : ce que le corrélateur en
+  // sait, rien d'inventé. Les cartes complètes restent aux autres.
+  function sansAlerte(c){return c.first==null&&c.last==null&&!Object.keys(c.hosts).length;}
+  function ligneSansAlerte(c){
+    var s=c.seq.slice(0,3).join(' → ')+(c.seq.length>3?' → …':'');
+    return '<li><span class="seq" title="'+esc(c.seq.join(' → '))+'">'+(s?esc(s):'séquence non relevée')+'</span>'
+      +'<span class="inf">'+(c.outil?esc(c.outil)+' · ':'')+fmt(c.n)+' adresse'+(c.n>1?'s':'')+' · bannies '+(c.bansConnus?fmt(c.nban)+'/'+fmt(c.n):'—')+'</span>'
+      +'<code title="Empreinte du mode opératoire">'+esc(c.sig.slice(0,8))+'</code></li>';
+  }
   var dernier=null;
   function rend(d){
     var now=d.now||Date.now();
@@ -274,9 +287,11 @@
     el('cibles').innerHTML=hl.length?barres(hl,'var(--rouge)'):'<div class="vide">'+(ok?'Aucune cible recoupée.':'Session requise.')+'</div>';
     // cartes
     el('cNote').textContent=ok&&L.length?L.length+' campagne'+(L.length>1?'s':'')+', par volume de sondes':'';
-    el('cartes').innerHTML=ok&&L.length?L.map(function(c){return carte(c,now);}).join(''):'<div class="vide">'+(!ok?'Session requise.':d.campaigns.available===false?'Le corrélateur n’est pas encore passé : aucune campagne à afficher.':'Aucune campagne détectée.')+'</div>';
+    var pleines=L.filter(function(c){return !sansAlerte(c);}),autres=L.filter(sansAlerte),ouvert=!!document.querySelector('#cartes .campsans[open]');
+    el('cartes').innerHTML=ok&&L.length?pleines.map(function(c){return carte(c,now);}).join('')
+      +(autres.length?'<details class="campsans"'+(ouvert?' open':'')+'><summary>Campagnes sans alerte récente ('+autres.length+')</summary><ul>'+autres.map(ligneSansAlerte).join('')+'</ul></details>':''):'<div class="vide">'+(!ok?'Session requise.':d.campaigns.available===false?'Le corrélateur n’est pas encore passé : aucune campagne à afficher.':'Aucune campagne détectée.')+'</div>';
     var nr=L.filter(function(c){return !c.evts;}).length;
-    el('noteBas').textContent='Page en lecture seule · bannir ou lever un ban se fait depuis l’onglet Bannissements · chaque décision est écrite dans le journal d’audit.'+(ok&&nr?' · '+nr+' campagne(s) sans alerte récente correspondante : dates, cible et pays « — ».':'')+(ok&&!d.bans?' · Bannissements indisponibles : état « bannie » non évalué.':'');
+    el('noteBas').textContent='Page en lecture seule · bannir ou lever un ban se fait depuis l’onglet Bannissements · chaque décision est écrite dans le journal d’audit.'+(ok&&nr?' · '+nr+' campagne(s) sans alerte récente correspondante : ni date, ni cible, ni pays.':'')+(ok&&!d.bans?' · Bannissements indisponibles : état « bannie » non évalué.':'');
     dernier=Date.now();
     el('heure').textContent=new Date().toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
   }
@@ -288,22 +303,24 @@
     ['103.27.8.2','103.27.8.19'].forEach(function(ip,i){mk(ip,(30+i*5)*h,'bots.malveillants','mail.secubox.in','CN','medium','warning');mk(ip,(44+i*4)*h,'bots.malveillants','mail.secubox.in','CN','medium','warning');});
     ['91.92.241.7','91.92.241.8','91.92.242.1'].forEach(function(ip,i){mk(ip,(2+i*2)*h,'rce.exec','api.secubox.in','RU','critical','banned');mk(ip,(9+i)*h,'unauthorized','api.secubox.in','RU','high','blocked');});
     return {demo:true,now:n,alerts:al,bans:[{ip:'57.141.0.17'},{ip:'57.141.0.57'},{ip:'91.92.241.7'}],
-      campaigns:{available:true,attaquants:12,campagnes:[
+      campaigns:{available:true,attaquants:17,campagnes:[
         {signature:'089b4a5e1234',outil:'sqlmap',attaquants:['57.141.0.17','57.141.0.57','57.141.3.58','57.141.3.42'],nb_attaquants:4,sondes:5273,haute_valeur:312,exemple_sequence:['GET /index.php?id=#','GET /login','POST /login','GET /.env','GET /admin']},
         {signature:'1392fa1c9876',outil:'nuclei',attaquants:['185.220.101.3','185.220.101.9','45.155.205.4'],nb_attaquants:3,sondes:2987,haute_valeur:40,exemple_sequence:['GET /','GET /.git/config','GET /wp-login.php','GET /phpmyadmin/']},
         {signature:'7be0c4d2aa10',outil:'webshell-dropper',attaquants:['91.92.241.7','91.92.241.8','91.92.242.1'],nb_attaquants:3,sondes:864,haute_valeur:211,exemple_sequence:['POST /upload.php','GET /shell.php?cmd=id','GET /cgi-bin/']},
-        {signature:'c41d77e5f002',outil:'masscan-http',attaquants:['103.27.8.2','103.27.8.19'],nb_attaquants:2,sondes:410,haute_valeur:0,exemple_sequence:['GET /','HEAD /','GET /robots.txt']}]}};
+        {signature:'c41d77e5f002',outil:'masscan-http',attaquants:['103.27.8.2','103.27.8.19'],nb_attaquants:2,sondes:410,haute_valeur:0,exemple_sequence:['GET /','HEAD /','GET /robots.txt']},
+        {signature:'5ad07c118b21',outil:'client-automatise?',attaquants:['203.0.113.4','203.0.113.5','203.0.113.6'],nb_attaquants:3,sondes:96,haute_valeur:0,exemple_sequence:['GET /wp-json/','GET /xmlrpc.php','GET /feed/','GET /sitemap.xml']},
+        {signature:'e0b1f4439d70',outil:'client-automatise?',attaquants:['198.51.100.8','198.51.100.9'],nb_attaquants:2,sondes:41,haute_valeur:0,exemple_sequence:['GET /api/status']}]}};
   }
   function jeton(){try{return localStorage.getItem('sbx_token')||'';}catch(e){return '';}}
   function jget(u){var h={'Accept':'application/json'},t=jeton();if(t)h.Authorization='Bearer '+t;
     return fetch(u,{headers:h,credentials:'same-origin',cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
-  // ---- Populations (#3919) : lecture accessoire et discrète du relevé de fond (recalculé toutes les 10 min). Route absente ou refusée : « Relevé indisponible »,
+  // ---- Populations (#3919) : lecture accessoire et discrète du relevé de fond (refait toutes les 30 min). Route absente ou refusée : « Relevé indisponible »,
   // jamais le bandeau de session ; une relecture par minute au plus, toutes les deux minutes après un échec. Le rendu ne pose que du texte (cartes-campagnes.js).
   var POP_LE=0,POP_PAUSE=55000,POP_CLE=null;
   function rendPops(r){
     var z=el('populations'),C=window.SbxCartes,R=window.SbxReperes;
     if(!C||!R){z.textContent='Relevé indisponible (repères non chargés)';return;}
-    var k=C.cle(r);if(k===POP_CLE) return;
+    var k=C.cle(r);if(k===POP_CLE){C.majAge(z,r);return;}
     POP_CLE=k;C.populations(document,R,z,r);
   }
   function chargePops(force){

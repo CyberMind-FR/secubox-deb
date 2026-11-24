@@ -5,21 +5,23 @@
 """Relevé « populations d'attaquants » (#3919, tâche 5) : qui attaque, depuis quels réseaux, sur quelle cible, sur
 7 jours du journal des menaces (journaux tournés et compressés compris).
 
-Calcul PUR et coûteux : appelé seulement par la tâche de fond de l'API (toutes les 10 min, dans un fil), qui en écrit
+Calcul PUR et coûteux : appelé seulement par la tâche de fond de l'API (toutes les 30 min, processus à part), qui en écrit
 le résultat dans un cache fichier en double tampon ; la route ne lit jamais le journal. Lecture en flux, mémoire
 bornée (MAX_ADRESSES adresses suivies ; au-delà le relevé est marqué `complet: False`).
 
 Ce qui ne sort JAMAIS : une adresse (seulement des comptes), un compte visé en clair (masqué au-delà de 3
 caractères, comme `reseau.MasquerCompte`), un mot de passe. Les classes de réseau viennent du catalogue seul : un ASN
 absent est `inconnu`, jamais déduit du nom de l'opérateur."""
-import bisect
+import grp
 import gzip
 import http.client
+import io
 import ipaddress
 import json
 import os
 import re
 import socket
+import stat
 import tempfile
 import zlib
 from datetime import date, datetime, timezone
@@ -49,10 +51,12 @@ ROTATION_ETAT = "/var/lib/secubox/waf/rotation-etat.json"
 ACTORD_SOCK = "/run/secubox/actor.sock"
 ACTORD_DELAI_S = 2.0
 JOURNAL = "waf-threats.log"
+RESERVE = "populations-agregats"   # à côté du cache : agrégats des journaux tournés, adresses déjà cherchées
 
 FENETRE_JOURS = 7
 MAX_ADRESSES = 200_000          # adresses distinctes suivies, toutes populations confondues
 MAX_CIBLES_SUIVIES = 1_000      # cibles distinctes comptées par population
+MAX_CIBLES_JOURNAL = 5_000      # cibles distinctes gardées par journal (l'hôte vient de l'attaquant)
 SEUIL_PROFILEUR = 10            # une campagne du profileur devient sa population à partir de 10 adresses
 ROTATION_ADRESSES = 50          # indicateur de rotation (spec 5.3) : ≥ 50 adresses…
 ROTATION_LE3 = 80               # … dont ≥ 80 % à ≤ 3 tentatives
@@ -89,6 +93,7 @@ _CVE = re.compile(r"CVE-\d{4}-\d{4,7}")
 _HEX8 = re.compile(r"^[0-9a-f]{8}$")
 _SIGNATURE = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
 _HOTE = re.compile(r"^[a-z0-9]([a-z0-9._-]{0,251}[a-z0-9])?$")
+_PORTS = re.compile(r"^ports:[0-9]+$")
 _LABEL_NUMERIQUE = re.compile(r"^(?:[0-9]+|0x[0-9a-f]*)$")
 _PAYS = re.compile(r"^[A-Z]{2}$")
 
@@ -140,7 +145,7 @@ def _adresse_publique(ip: Any) -> Optional[str]:
 
 def _hote(valeur: Any) -> Optional[str]:
     h = str(valeur or "").strip().lower()
-    if not h or h.startswith("["):
+    if not h or h.startswith("[") or _PORTS.match(h):      # « ports:N » : nombre de ports balayés, pas un hôte
         return None
     h = h.rsplit(":", 1)[0] if h.count(":") == 1 else h
     return h if _HOTE.match(h) and not _adresse_litterale(h) else None
@@ -204,20 +209,31 @@ class Annuaire:
     def __init__(self, base_asn, base_pays, catalogues: Iterable[str]):
         """`base_asn`/`base_pays` : un chemin, ou une suite de chemins essayés dans l'ordre (le premier qui s'ouvre)."""
         self._classes = charger_catalogue(catalogues)
+        self._signature: List[Any] = []
         self._asn = self._ouvrir(base_asn)
         self._pays = self._ouvrir(base_pays)
 
-    @staticmethod
-    def _ouvrir(chemins):
+    def signature(self) -> List[Any]:
+        """Ce qui identifie les bases ouvertes : une recherche gardée n'est valable que pour elles."""
+        return list(self._signature)
+
+    def _ouvrir(self, chemins):
         if not chemins or _maxminddb is None:
             return None
         for chemin in ([chemins] if isinstance(chemins, str) else chemins):
             if not chemin:
                 continue
             try:
-                return _maxminddb.open_database(chemin)
+                base = _maxminddb.open_database(chemin)
             except Exception:  # noqa: BLE001 — absente, ou tronquée pendant sa mise à jour : la suivante
                 continue
+            try:
+                e = os.stat(chemin)
+                self._signature.append([chemin, e.st_size, e.st_mtime_ns])
+            except OSError:
+                self._signature.append([chemin, 0, 0])
+            return base
+        self._signature.append(None)
         return None
 
     @property
@@ -328,33 +344,57 @@ def _entier(v: Any) -> int:
     return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else 0
 
 
-def calculer(lignes: Iterable[str], maintenant: float, pays: Callable[[str], str],
-             classer: Callable[[str], Tuple[int, str, str]], campagnes_smtp: list, campagnes_profileur: list,
-             rotation: list, campagnes_actord: Optional[list] = None,
-             classe_asn: Optional[Callable[[int], str]] = None) -> Dict[str, Any]:
-    """Le relevé des populations sur les FENETRE_JOURS jours calendaires (locaux) qui finissent aujourd'hui.
+class _Agregat:
+    """Ce qu'un journal apporte au relevé, sous forme compacte et INDÉPENDANTE des autres sources (catalogue, profileur,
+    campagnes) : c'est ce qui permet de garder sur disque l'agrégat d'un journal tourné, qui ne change plus.
 
-    `classer(ip) -> (asn, org, classe)` n'est appelé que pour une adresse dont aucune ligne ne porte le réseau ;
-    `classe_asn(asn)` classe une ligne qui porte un ASN sans classe ; `campagnes_actord` None = actord absent."""
-    jour_j = _jour(maintenant)
-    # Minuits locaux de J-6 … J+1 : l'indice du jour d'une ligne se trouve par dichotomie, sans datetime par ligne.
-    minuits = [datetime.combine(date.fromordinal(jour_j.toordinal() - FENETRE_JOURS + 1 + k), datetime.min.time())
-               .timestamp() for k in range(FENETRE_JOURS + 1)]
-    debut = minuits[0]
+    `tentatives` : (jour local, adresse, clé, cible) → [nombre, première, dernière, dernier ban ou 0] ; la clé est une
+    famille ou `rotation:<8 hex>`. `reseaux` : adresse → (asn, opérateur, classe portée par la ligne).
+    `cves` : adresse → {CVE: dernier jour}."""
+    __slots__ = ("tentatives", "reseaux", "cves", "complet")
+
+    def __init__(self):
+        self.tentatives: Dict[Tuple[int, str, str, str], List[int]] = {}
+        self.reseaux: Dict[str, Tuple[int, str, str]] = {}
+        self.cves: Dict[str, Dict[str, int]] = {}
+        self.complet = True
+
+
+# La catégorie lue SANS décoder la ligne : dans du JSON, un guillemet venu d'un attaquant est toujours échappé (`\\"`),
+# `"category":"` sans barre oblique ne peut donc être que la vraie clé.
+_CATEGORIE = re.compile(r'"category": ?"([^"\\]*)"')
+
+
+def _utile(cat: str) -> str:
+    """La famille de la catégorie, `ia_filtres_` pour les filtres IA (CVE), « » si la ligne ne compte pas."""
+    fam = famille(cat)
+    return fam if fam != AUTRE else ("ia_filtres_" if cat.startswith("ia_filtres_") else "")
+
+
+def agreger(lignes: Iterable[str], maintenant: float) -> _Agregat:
+    """Un passage sur les lignes d'un journal. Celles dont la catégorie ne compte pas (sqli, xss…) sont écartées avant
+    tout décodage JSON ; dates, adresses et hôtes sont mémorisés."""
+    a = _Agregat()
+    debut = (datetime.combine(date.fromordinal(_jour(maintenant).toordinal() - FENETRE_JOURS + 1), datetime.min.time())
+             .timestamp())
     fin = maintenant + 300
-    complet = True
-    infos: Dict[str, Tuple[int, str, str]] = {}      # adresse → réseau (première valeur vue)
-    orgs: Dict[str, str] = {}                         # opérateurs partagés : une chaîne par opérateur
-    cves: Dict[str, set] = {}
-    pops: Dict[str, _Pop] = {}
-    familles_vues: Dict[str, str] = {}               # mémo catégorie → famille (quelques dizaines de catégories)
-    hotes_vus: Dict[str, Optional[str]] = {}         # mémo hôte brut → hôte assaini (borné)
-    profileur = _index_profileur(campagnes_profileur)
-    classe_de = classe_asn or (lambda asn: INCONNU)
-
+    utiles: Dict[str, str] = {}
+    adresses: Dict[str, Optional[str]] = {}
+    hotes: Dict[str, str] = {}
+    cibles_vues: set = set()
+    jours: Dict[int, int] = {}                       # quart d'heure → jour local (aucun fuseau n'est plus fin)
+    tentatives, reseaux = a.tentatives, a.reseaux
     for brut in lignes:
-        if not brut or not brut.strip():
-            continue
+        m = _CATEGORIE.search(brut)
+        if m is not None:
+            cat = m.group(1)
+            genre = utiles.get(cat)
+            if genre is None:
+                genre = _utile(cat)
+                if len(utiles) < 10_000:
+                    utiles[cat] = genre
+            if not genre:
+                continue
         try:
             e = json.loads(brut)
         except ValueError:
@@ -364,14 +404,10 @@ def calculer(lignes: Iterable[str], maintenant: float, pays: Callable[[str], str
         cat = e.get("category")
         if not isinstance(cat, str):
             continue
-        # La famille d'abord (mémoïsée) : les lignes hors familles (sqli, xss…) ne coûtent ni date ni adresse.
-        fam = familles_vues.get(cat)
-        if fam is None:
-            fam = famille(cat)
-            if len(familles_vues) < 10_000:
-                familles_vues[cat] = fam
-        filtre_ia = cat.startswith("ia_filtres_")
-        if fam == AUTRE and not filtre_ia:
+        genre = utiles.get(cat)
+        if genre is None:
+            genre = _utile(cat)
+        if not genre:
             continue
         t = _horodatage(e.get("timestamp"))
         if t is None or t < debut or t > fin:
@@ -379,67 +415,137 @@ def calculer(lignes: Iterable[str], maintenant: float, pays: Callable[[str], str
         brut_ip = e.get("client_ip")
         if not isinstance(brut_ip, str):
             continue
-        ip = brut_ip if brut_ip in infos else _adresse_publique(brut_ip)
+        ip = adresses.get(brut_ip, "")
+        if ip == "":
+            ip = _adresse_publique(brut_ip)
+            if len(adresses) < MAX_ADRESSES:
+                adresses[brut_ip] = ip
+            elif ip is not None and ip not in adresses:
+                a.complet = False
+                continue
         if ip is None:
             continue
-        if filtre_ia:
-            if ip in cves or len(cves) < MAX_ADRESSES:
-                trouve = cves.setdefault(ip, set())
-                if len(trouve) < MAX_CVES:
-                    trouve.update(_CVE.findall(str(e.get("rule_id") or "")))
+        q = int(t // 900)
+        jour = jours.get(q)
+        if jour is None:
+            jour = jours[q] = _jour(t).toordinal()
+        if genre == "ia_filtres_":
+            trouve = a.cves.setdefault(ip, {})
+            for c in _CVE.findall(str(e.get("rule_id") or "")):
+                if c in trouve or len(trouve) < MAX_CVES:
+                    trouve[c] = max(jour, trouve.get(c, 0))
             continue
-        if ip not in infos:
-            if len(infos) >= MAX_ADRESSES:
-                complet = False
-                continue
+        if ip not in reseaux:
             asn = e.get("asn")
             if isinstance(asn, int) and not isinstance(asn, bool) and asn > 0:
-                org = e.get("asn_org") if isinstance(e.get("asn_org"), str) else ""
-                cl = e.get("reseau_classe")
-                cl = cl if cl in CLASSES or cl == INCONNU else classe_de(asn)
-                info = (asn, org, cl)
-            else:
-                info = classer(ip)
-            org = orgs.setdefault(info[1], info[1])
-            infos[ip] = (info[0], org, info[2])
-
-        # population de la ligne (spec 5.3)
-        if cat.startswith("rotation:") and _HEX8.match(cat[9:]):
-            cle = "rotation:" + cat[9:]
-        elif ip in profileur:
-            cle = "profileur:" + profileur[ip]
-        else:
-            cle = "famille:" + fam
-        p = pops.get(cle)
-        if p is None:
-            p = pops[cle] = _Pop(cle, fam)
-        p.adresses[ip] = p.adresses.get(ip, 0) + 1
-        p.familles[fam] = p.familles.get(fam, 0) + 1
-        i = bisect.bisect_right(minuits, t) - 1
-        if 0 <= i < FENETRE_JOURS:
-            p.serie[i] += 1
-        p.premier = t if p.premier is None or t < p.premier else p.premier
-        p.dernier = t if p.dernier is None or t > p.dernier else p.dernier
-        recente = maintenant - t <= INACTIVE_S
-        if recente:
-            p.actives_24h.add(ip)
-        if e.get("action") == "banned":
-            p.bannies.add(ip)
-            if recente:
-                p.bannies_24h.add(ip)
+                org, cl = e.get("asn_org"), e.get("reseau_classe")
+                reseaux[ip] = (asn, org if isinstance(org, str) else "", cl if cl in CLASSES else INCONNU)
         path = e.get("path") if cat.startswith("auth_") else None
         if isinstance(path, str) and path:
             cible = masquer_compte(path)          # compte visé : JAMAIS gardé en clair
         else:
             h = e.get("host")
             h = h if isinstance(h, str) else ""
-            cible = hotes_vus.get(h, False)
-            if cible is False:
-                cible = _hote(h)
-                if len(hotes_vus) < MAX_CIBLES_SUIVIES:
-                    hotes_vus[h] = cible
-        if cible and cible != "…" and (cible in p.cibles or len(p.cibles) < MAX_CIBLES_SUIVIES):
-            p.cibles[cible] = p.cibles.get(cible, 0) + 1
+            cible = hotes.get(h)
+            if cible is None:
+                cible = _hote(h) or ""
+                if len(hotes) < MAX_CIBLES_SUIVIES:
+                    hotes[h] = cible
+        if cible not in cibles_vues:              # cibles distinctes bornées par journal : au-delà, sans cible
+            if len(cibles_vues) >= MAX_CIBLES_JOURNAL:
+                cible = ""
+            cibles_vues.add(cible)
+        k = (jour, ip, cat if cat.startswith("rotation:") and _HEX8.match(cat[9:]) else genre, cible)
+        s = int(t)
+        ban = s if e.get("action") == "banned" else 0
+        r = tentatives.get(k)
+        if r is None:
+            tentatives[k] = [1, s, s, ban]
+        else:
+            r[0] += 1
+            if s < r[1]:
+                r[1] = s
+            elif s > r[2]:
+                r[2] = s
+            if ban > r[3]:
+                r[3] = ban
+    return a
+
+
+def calculer(lignes: Iterable[str], maintenant: float, pays: Callable[[str], str],
+             classer: Callable[[str], Tuple[int, str, str]], campagnes_smtp: list, campagnes_profileur: list,
+             rotation: list, campagnes_actord: Optional[list] = None,
+             classe_asn: Optional[Callable[[int], str]] = None) -> Dict[str, Any]:
+    """Le relevé depuis des lignes (un seul journal) : voir `assembler`."""
+    return assembler([agreger(lignes, maintenant)], maintenant, pays, classer, campagnes_smtp, campagnes_profileur,
+                     rotation, campagnes_actord, classe_asn)
+
+
+def assembler(agregats: Iterable[_Agregat], maintenant: float, pays: Callable[[str], str],
+              classer: Callable[[str], Tuple[int, str, str]], campagnes_smtp: list, campagnes_profileur: list,
+              rotation: list, campagnes_actord: Optional[list] = None,
+              classe_asn: Optional[Callable[[int], str]] = None) -> Dict[str, Any]:
+    """Le relevé des populations sur les FENETRE_JOURS jours calendaires (locaux) qui finissent aujourd'hui, depuis les
+    agrégats des journaux (le plus récent d'abord : au plafond d'adresses, celles du jour sont gardées).
+
+    `classer(ip) -> (asn, org, classe)` n'est appelé que pour une adresse dont aucune ligne ne porte le réseau ;
+    `classe_asn(asn)` classe une ligne qui porte un ASN (la classe écrite dans la ligne ne sert qu'à défaut : un
+    catalogue complété depuis s'applique ainsi à tout l'historique) ; `campagnes_actord` None = actord absent."""
+    dernier_jour = _jour(maintenant).toordinal()
+    premier_jour = dernier_jour - FENETRE_JOURS + 1
+    fin = int(maintenant) + 300
+    complet = True
+    infos: Dict[str, Tuple[int, str, str]] = {}      # adresse → réseau (première valeur vue)
+    orgs: Dict[str, str] = {}                         # opérateurs partagés : une chaîne par opérateur
+    cves: Dict[str, set] = {}
+    pops: Dict[str, _Pop] = {}
+    profileur = _index_profileur(campagnes_profileur)
+    classe_de = classe_asn or (lambda asn: INCONNU)
+
+    for a in agregats:
+        complet = complet and a.complet
+        for ip, trouves in a.cves.items():
+            if ip in cves or len(cves) < MAX_ADRESSES:
+                cves.setdefault(ip, set()).update(c for c, j in trouves.items() if j >= premier_jour)
+        for (jour, ip, cle0, cible), (n, prem, der, ban) in a.tentatives.items():
+            if jour < premier_jour or prem > fin:
+                continue
+            if ip not in infos:
+                if len(infos) >= MAX_ADRESSES:
+                    complet = False
+                    continue
+                ligne = a.reseaux.get(ip)
+                if ligne is not None:
+                    cl = classe_de(ligne[0])
+                    info = (ligne[0], ligne[1], cl if cl != INCONNU else ligne[2])
+                else:
+                    info = classer(ip)
+                infos[ip] = (info[0], orgs.setdefault(info[1], info[1]), info[2])
+            # population de la ligne (spec 5.3)
+            fam = "collecte" if cle0.startswith("rotation:") else cle0
+            if cle0.startswith("rotation:"):
+                cle = cle0
+            elif ip in profileur:
+                cle = "profileur:" + profileur[ip]
+            else:
+                cle = "famille:" + fam
+            p = pops.get(cle)
+            if p is None:
+                p = pops[cle] = _Pop(cle, fam)
+            p.adresses[ip] = p.adresses.get(ip, 0) + n
+            p.familles[fam] = p.familles.get(fam, 0) + n
+            if jour <= dernier_jour:
+                p.serie[jour - premier_jour] += n
+            p.premier = prem if p.premier is None or prem < p.premier else p.premier
+            p.dernier = der if p.dernier is None or der > p.dernier else p.dernier
+            if maintenant - der <= INACTIVE_S:
+                p.actives_24h.add(ip)
+            if ban:
+                p.bannies.add(ip)
+                if maintenant - ban <= INACTIVE_S:
+                    p.bannies_24h.add(ip)
+            if cible and cible != "…" and (cible in p.cibles or len(p.cibles) < MAX_CIBLES_SUIVIES):
+                p.cibles[cible] = p.cibles.get(cible, 0) + n
 
     etat_rotation = _etat_rotation(rotation)
     for cle in etat_rotation:
@@ -599,27 +705,319 @@ def _rang_rotation(nom: str) -> Optional[int]:
     return int(reste) if reste.isdigit() else None
 
 
-def lignes_du_journal(dossier: str, jours: int = FENETRE_JOURS, maintenant: Optional[float] = None) -> Iterator[str]:
-    """Le journal des menaces et ses rotations (`.log.N`, `.log.N.gz`), fichier le plus RÉCENT d'abord, EN FLUX : au plafond
-    d'adresses (MAX_ADRESSES), celles du jour sont gardées. L'ordre des lignes est sans effet sur le relevé.
-    Un fichier non modifié depuis plus de `jours`+1 jours est sauté ; un gzip corrompu s'arrête là, sans erreur."""
+class _Journal:
+    """Un journal OUVERT : renommé ou compressé pendant la passe, il se lit quand même en entier."""
+    __slots__ = ("rang", "nom", "brut", "etat")
+
+    def __init__(self, rang: int, nom: str, brut, etat):
+        self.rang, self.nom, self.brut, self.etat = rang, nom, brut, etat
+
+    def lignes(self) -> Iterator[str]:
+        try:
+            flux = gzip.GzipFile(fileobj=self.brut) if self.nom.endswith(".gz") else self.brut
+            with io.TextIOWrapper(flux, encoding="utf-8", errors="replace") as f:
+                yield from f
+        except (OSError, EOFError, zlib.error):      # gzip corrompu : on s'arrête là, sans erreur
+            return
+
+    def fermer(self) -> None:
+        try:
+            self.brut.close()
+        except OSError:
+            pass
+
+
+def ouvrir_journaux(dossier: str, jours: int = FENETRE_JOURS, maintenant: Optional[float] = None) -> List[_Journal]:
+    """Le journal des menaces et ses rotations (`.log.N`, `.log.N.gz`), le plus RÉCENT d'abord, tous ouverts d'un coup.
+    Un fichier non modifié depuis plus de `jours`+1 jours est sauté. Une rotation pendant l'ouverture se voit à un
+    fichier manquant ou vu deux fois (même st_dev, st_ino) : on recommence. Jamais deux fois le même contenu."""
     import time
     limite = (maintenant if maintenant is not None else time.time()) - (jours + 1) * 86400
+    for essai in range(3):
+        ouverts: List[_Journal] = []
+        vus: set = set()
+        bouge = False
+        try:
+            rangs: Dict[int, str] = {}
+            for nom in os.listdir(dossier):
+                r = _rang_rotation(nom)
+                # `.N` et `.N.gz` ensemble : logrotate est en train de compresser, le `.gz` est incomplet
+                if r is not None and (r not in rangs or rangs[r].endswith(".gz")):
+                    rangs[r] = nom
+        except OSError:
+            return []
+        for r in sorted(rangs):
+            try:
+                f = open(os.path.join(dossier, rangs[r]), "rb")
+            except FileNotFoundError:
+                bouge = True
+                continue
+            except OSError:
+                continue
+            etat = os.fstat(f.fileno())
+            if (etat.st_dev, etat.st_ino) in vus:
+                bouge = True
+                f.close()
+                continue
+            vus.add((etat.st_dev, etat.st_ino))
+            if etat.st_mtime < limite:
+                f.close()
+                continue
+            ouverts.append(_Journal(r, rangs[r], f, etat))
+        if not bouge or essai == 2:
+            return ouverts
+        for j in ouverts:
+            j.fermer()
+    return []
+
+
+def lignes_du_journal(dossier: str, jours: int = FENETRE_JOURS, maintenant: Optional[float] = None) -> Iterator[str]:
+    """Toutes les lignes, fichier le plus récent d'abord, en flux."""
+    for j in ouvrir_journaux(dossier, jours, maintenant):
+        try:
+            yield from j.lignes()
+        finally:
+            j.fermer()
+
+
+# ── agrégats des journaux tournés, gardés sur disque ────────────────────────────────────────────────────────────
+
+VERSION_AGREGAT = 1             # à monter si `agreger` change : les agrégats gardés sont alors recalculés
+MAX_AGREGATS = 12               # fichiers gardés (logrotate : 7 rotations)
+MAX_AGREGAT_OCTETS = 32 * 1024 * 1024
+_NOM_AGREGAT = re.compile(r"^(?:agregat-[0-9a-f-]+|adresses)\.json$")
+
+
+def _cle_agregat(j: _Journal) -> str:
+    e = j.etat
+    return "agregat-%x-%x-%x-%x-%x.json" % (VERSION_AGREGAT, e.st_dev, e.st_ino, e.st_size, e.st_mtime_ns)
+
+
+def _gid_waf() -> Optional[int]:
     try:
-        noms = os.listdir(dossier)
+        return grp.getgrnam("secubox-waf").gr_gid
+    except (KeyError, OSError):
+        return None
+
+
+def _donner_au_groupe(cible) -> None:
+    """Le groupe secubox-waf, si le processus en est membre ; sinon rien (la réserve n'est qu'un cache)."""
+    gid = _gid_waf()
+    if gid is not None:
+        try:
+            os.chown(cible, -1, gid)
+        except OSError:
+            pass
+
+
+def _lire_reserve(chemin: str) -> Any:
+    """Un fichier de la réserve, ou None : absent, lien, trop gros, illisible. Jamais une exception."""
+    try:
+        fd = os.open(chemin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "rb") as f:
+            e = os.fstat(f.fileno())
+            if not stat.S_ISREG(e.st_mode) or e.st_size > MAX_AGREGAT_OCTETS:
+                return None
+            return json.loads(f.read(MAX_AGREGAT_OCTETS + 1))
+    except (OSError, ValueError, RecursionError, MemoryError):
+        return None
+
+
+def _ecrire_json(chemin: str, contenu: Any) -> bool:
+    """Écriture atomique, 0640 au groupe secubox-waf : l'API (secubox) le lit encore une fois que l'unité du WAF l'a rendu
+    à secubox-waf. Groupe impossible à donner : le fichier garde celui du processus."""
+    try:
+        corps = json.dumps(contenu, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "replace")
+        if len(corps) > MAX_AGREGAT_OCTETS:
+            return False
+        fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=os.path.dirname(chemin))
+    except OSError:
+        return False
+    try:
+        with os.fdopen(fd, "wb") as f:
+            _donner_au_groupe(f.fileno())
+            os.fchmod(f.fileno(), 0o640)
+            f.write(corps)
+        os.replace(tmp, chemin)
+        return True
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return False
+
+
+def _ranger(a: _Agregat) -> Dict[str, Any]:
+    """L'agrégat en colonnes : des tables de chaînes et une liste plate d'entiers (8 par enregistrement)."""
+    tables: List[Dict[str, int]] = [{}, {}, {}, {}]      # adresses, clés, cibles, opérateurs
+
+    def rang(k: int, v: str) -> int:
+        return tables[k].setdefault(v, len(tables[k]))
+
+    plat: List[int] = []
+    for (jour, ip, cle, cible), (n, prem, der, ban) in a.tentatives.items():
+        plat += (jour, rang(0, ip), rang(1, cle), rang(2, cible), n, prem, der, ban)
+    res = [[rang(0, ip), asn, rang(3, org), cl] for ip, (asn, org, cl) in a.reseaux.items()]
+    return {"v": VERSION_AGREGAT, "complet": a.complet, "ips": list(tables[0]), "cles": list(tables[1]),
+            "cibles": list(tables[2]), "orgs": list(tables[3]), "reseaux": res, "cves": a.cves, "t": plat}
+
+
+def _cible_valide(c: Any) -> bool:
+    return isinstance(c, str) and (c == "" or (len(c) <= 4 and c.endswith("…")) or (len(c) <= 253 and _hote(c) == c))
+
+
+def _cle_valide(c: Any) -> bool:
+    return isinstance(c, str) and (c in _CLES or (c.startswith("rotation:") and bool(_HEX8.match(c[9:]))))
+
+
+_CLES = frozenset(f for _, _, f in FAMILLE)
+MAX_ENTIER = 2 ** 40            # secondes, jours, comptes : bien au-delà de toute valeur vraie
+
+
+def _deranger(d: Any) -> Optional[_Agregat]:
+    """L'inverse ; None si un seul type, une seule taille ou une seule valeur n'est pas celle qu'on écrit : le journal est
+    alors relu. Un fichier abîmé ne fait jamais échouer la passe et ne publie rien."""
+    try:
+        if not isinstance(d, dict) or d["v"] != VERSION_AGREGAT or not isinstance(d["complet"], bool):
+            return None
+        ips, cles, cibles, orgs, plat, res, cves = (d[k] for k in ("ips", "cles", "cibles", "orgs", "t", "reseaux", "cves"))
+        if not all(isinstance(x, list) for x in (ips, cles, cibles, orgs, plat, res)) or not isinstance(cves, dict):
+            return None
+        if len(plat) % 8 or not set(map(type, plat)) <= {int} or (plat and not 0 <= min(plat) <= max(plat) < MAX_ENTIER):
+            return None
+        if not all(isinstance(x, str) and len(x) <= 45 for x in ips) or not all(isinstance(x, str) for x in orgs):
+            return None
+        if not all(map(_cle_valide, cles)) or not all(map(_cible_valide, cibles)):
+            return None
+        a = _Agregat()
+        a.complet = d["complet"]
+        it = iter(plat)
+        a.tentatives = {(j, ips[i], cles[c], cibles[h]): [n, p, q, b]
+                        for j, i, c, h, n, p, q, b in zip(*[it] * 8)}
+        for i, asn, o, cl in res:
+            if type(asn) is not int or not 0 < asn < 2 ** 32 or (cl not in CLASSES and cl != INCONNU):
+                return None
+            a.reseaux[ips[i]] = (asn, orgs[o], cl)
+        for ip, v in cves.items():
+            if len(v) > MAX_CVES or not all(_CVE.fullmatch(c) and type(j) is int for c, j in v.items()):
+                return None
+            a.cves[ip] = dict(v)
+        return a
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError, RecursionError):
+        return None
+
+
+def _preparer_dossier(dossier: Optional[str]) -> Optional[str]:
+    """La réserve : 2770 au groupe secubox-waf (setgid : ce qui s'y crée reste à ce groupe). None si inutilisable."""
+    if not dossier:
+        return None
+    try:
+        if os.path.islink(dossier):
+            return None
+        if not os.path.isdir(dossier):
+            os.mkdir(dossier, 0o770)
+        e = os.stat(dossier)
+        if e.st_uid == os.geteuid() and (stat.S_IMODE(e.st_mode) != 0o2770 or e.st_gid != _gid_waf()):
+            _donner_au_groupe(dossier)
+            try:
+                os.chmod(dossier, 0o2770)
+            except OSError:                     # setgid refusé (RestrictSUIDSGID) : le groupe suffit
+                os.chmod(dossier, 0o770)
+        return dossier if os.access(dossier, os.W_OK | os.X_OK) else None
+    except OSError:
+        return None
+
+
+def _purger_reserve(reserve: str, gardes: set, maintenant: float) -> None:
+    """Agrégats périmés, et temporaires d'une passe tuée (plus d'une heure). Rien d'autre n'est touché."""
+    try:
+        noms = os.listdir(reserve)
     except OSError:
         return
-    fichiers = sorted(((r, n) for n in noms if (r := _rang_rotation(n)) is not None))
-    for _, nom in fichiers:
-        chemin = os.path.join(dossier, nom)
+    for nom in noms:
+        chemin = os.path.join(reserve, nom)
         try:
-            if os.stat(chemin).st_mtime < limite:
-                continue
-            ouvrir = gzip.open if nom.endswith(".gz") else open
-            with ouvrir(chemin, "rt", encoding="utf-8", errors="replace") as f:
-                yield from f
-        except (OSError, EOFError, zlib.error):
+            if nom.startswith(".tmp-"):
+                if maintenant - os.lstat(chemin).st_mtime > 3600:
+                    os.unlink(chemin)
+            elif _NOM_AGREGAT.match(nom) and nom not in gardes:
+                os.unlink(chemin)
+        except OSError:
             continue
+
+
+def agregats_du_journal(dossier: str, reserve: Optional[str], maintenant: float) -> Iterator[_Agregat]:
+    """L'agrégat de chaque journal, le plus récent d'abord. Un journal TOURNÉ ne change plus : son agrégat est gardé
+    dans `reserve`, nommé par (st_dev, st_ino, taille, mtime), et relu aux passes suivantes. Le journal courant est
+    toujours relu. Réserve absente ou illisible : simple relecture."""
+    reserve = _preparer_dossier(reserve)
+    gardes: set = {"adresses.json"}
+    journaux = ouvrir_journaux(dossier, FENETRE_JOURS, maintenant)
+    for j in journaux:
+        try:
+            chemin = os.path.join(reserve, _cle_agregat(j)) if reserve and j.rang > 0 else None
+            a = None
+            if chemin:
+                gardes.add(os.path.basename(chemin))
+                a = _deranger(_lire_reserve(chemin))
+            if a is None:
+                a = agreger(j.lignes(), maintenant)
+                if chemin and len(gardes) <= MAX_AGREGATS:
+                    _ecrire_json(chemin, _ranger(a))
+            yield a
+        finally:
+            j.fermer()
+    if reserve:
+        _purger_reserve(reserve, gardes, maintenant)
+
+
+class MemoAdresses:
+    """Réseau et pays des adresses déjà cherchées, gardés d'une passe à l'autre tant que les bases GeoIP n'ont pas
+    changé : sur gk2, la recherche dans les bases pèse plus que la lecture du journal. Les CLASSES n'y sont pas (elles
+    viennent du catalogue, relu à chaque passe). Ne garde que les adresses de la passe : borné par MAX_ADRESSES."""
+
+    def __init__(self, annuaire: Annuaire, reserve: Optional[str]):
+        self._a = annuaire
+        reserve = _preparer_dossier(reserve)
+        self._chemin = os.path.join(reserve, "adresses.json") if reserve else None
+        self._signature = annuaire.signature()
+        self._ancien: Dict[str, list] = {}
+        self._change = False
+        self._neuf: Dict[str, list] = {}         # adresse → [asn ou None, opérateur, pays ou None]
+        if self._chemin:
+            d = _lire_reserve(self._chemin)
+            if isinstance(d, dict) and d.get("signature") == self._signature and isinstance(d.get("adresses"), dict):
+                self._ancien = d["adresses"]
+
+    def _fiche(self, ip: str) -> list:
+        f = self._neuf.get(ip)
+        if f is None:
+            f = self._ancien.get(ip)
+            if not (isinstance(f, list) and len(f) == 3 and (f[0] is None or (type(f[0]) is int and 0 <= f[0] < 2 ** 32))
+                    and isinstance(f[1], str) and (f[2] is None or f[2] == "" or (isinstance(f[2], str) and _PAYS.match(f[2])))):
+                f = [None, "", None]
+                self._change = True
+            self._neuf[ip] = f
+        return f
+
+    def classer(self, ip: str) -> Tuple[int, str, str]:
+        f = self._fiche(ip)
+        if not isinstance(f[0], int):
+            f[0], f[1], _ = self._a.classer(ip)
+            self._change = True
+        return f[0], f[1], self._a.classe_asn(f[0])
+
+    def pays(self, ip: str) -> str:
+        f = self._fiche(ip)
+        if not isinstance(f[2], str):
+            f[2] = self._a.pays(ip)
+            self._change = True
+        return f[2]
+
+    def garder(self) -> None:
+        if self._chemin and (self._change or len(self._neuf) != len(self._ancien)):
+            _ecrire_json(self._chemin, {"signature": self._signature, "adresses": self._neuf})
 
 
 def lire_json(chemin: str) -> Tuple[Any, bool]:
@@ -690,9 +1088,12 @@ def rafraichir(dossier: str, cache: str, campagnes_profileur: str, maintenant: f
     actord = lire_campagnes_actord(ACTORD_SOCK)
     annuaire = Annuaire(BASES_ASN, BASES_PAYS, CATALOGUES)
     try:
-        releve = calculer(lignes_du_journal(dossier, FENETRE_JOURS, maintenant), maintenant, annuaire.pays,
-                          annuaire.classer, _liste(smtp), _liste(prof, "campagnes"), _liste(rot, "campagnes"),
-                          campagnes_actord=actord, classe_asn=annuaire.classe_asn)
+        reserve = os.path.join(os.path.dirname(os.path.abspath(cache)), RESERVE)
+        memo = MemoAdresses(annuaire, reserve)
+        releve = assembler(agregats_du_journal(dossier, reserve, maintenant), maintenant, memo.pays, memo.classer,
+                           _liste(smtp), _liste(prof, "campagnes"), _liste(rot, "campagnes"),
+                           campagnes_actord=actord, classe_asn=annuaire.classe_asn)
+        memo.garder()
         if not annuaire.disponible:
             manques.append("base_asn")
         if not annuaire.pays_disponible:

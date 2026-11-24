@@ -4,11 +4,28 @@
 # See LICENCE-CMSD-1.0.md for terms.
 #
 # Classes de réseau par ASN (#3919). Surcharge opérateur : /etc/secubox/waf/reseaux-classes.toml (gagne ASN par ASN).
+# Seulement des ASN établis ; un ASN absent est « inconnu », jamais déduit du nom. Un ASN n'est que dans UNE classe.
 [classes]
 proxy_loue = [212238, 62874, 55286, 18779, 203020, 207990, 203061, 50131]
-hebergeur = [20473, 14061, 16509, 14618, 15169, 396982, 43515, 8075, 132203]
+# 24940 Hetzner, 16276 OVH, 51167 Contabo, 63949 Akamai (Linode), 45102 et 37963 Alibaba Cloud
+hebergeur = [20473, 14061, 16509, 14618, 15169, 396982, 43515, 8075, 132203, 24940, 16276, 51167, 63949, 45102, 37963]
 scanner_recherche = [211298, 398324]
 mobile_partage = [14593]
 relais_vie_privee = [13335]
-acces = []
+# fournisseurs d'accès grand public
+acces = [
+  22773, 7922, 20115, 701, 7018,          # Cox, Comcast, Charter, Verizon, AT&T (US)
+  4766, 9318,                             # Korea Telecom, SK Broadband (KR)
+  4134, 4837, 9808,                       # Chinanet, China Unicom, China Mobile (CN)
+  25159, 12389,                           # MegaFon, Rostelecom (RU)
+  28573,                                  # Claro (BR)
+  9498, 55836,                            # Bharti Airtel, Reliance Jio (IN)
+  3215, 12322, 15557, 5410,               # Orange, Free, SFR, Bouygues (FR)
+  3320, 3209,                             # Deutsche Telekom, Vodafone (DE)
+  1136, 2856, 5089,                       # KPN (NL), BT, Virgin Media (GB)
+  3269, 3352,                             # Telecom Italia (IT), Telefónica (ES)
+  7303, 22927, 8151,                      # Telecom Argentina, Telefónica de Argentina (AR), Uninet (MX)
+  45899, 7552,                            # VNPT, Viettel (VN)
+  9121, 29518,                            # Türk Telekom (TR), Bredband2 (SE)
+]
 cdn = []

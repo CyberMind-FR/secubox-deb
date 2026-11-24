@@ -148,7 +148,7 @@ test("synthèse du SOC : 4 lignes au plus, en cours seulement, barres et états,
   assert.ok(!tous(zone).some((x) => x.tag === "article" || x.tag === "table" || x.className === "popbarre" || x.tag === "details"));
   const z2 = new Noeud("div");
   C.synthese(document, R, z2, releve([l[0]]), 4);
-  assert.equal(z2.textContent, "Aucune campagne active dans les dernières 24 h");
+  assert.ok(z2.textContent.startsWith("Aucune campagne active dans les dernières 24 h"));
   const z3 = new Noeud("div");
   C.synthese(document, R, z3, releve([pop()], { complet: false }), 4);
   assert.match(z3.textContent, /Relevé partiel \(/);
@@ -165,4 +165,40 @@ test("exemple de démonstration : valeurs de documentation, aucune adresse", () 
   }
   C.populations(document, R, zone, ex);
   assert.ok(tous(zone).filter((x) => x.tag === "article").length >= 4);
+});
+
+test("titre de rotation : le pivot n'est annoncé que là où il est vérifié", () => {
+  const { document, C, R, zone } = monter();
+  const titre = (id) => { C.populations(document, R, zone, releve([pop({ id })])); return tous(zone).find((x) => x.className === "puce etat rot").title; };
+  assert.match(titre("famille:collecte"), /même cible pour la moitié/);
+  assert.doesNotMatch(titre("profileur:00aa"), /même cible/);
+  assert.match(titre("rotation:0a1b2c3d"), /détecteur de sbxwaf/);
+  assert.match(zone.textContent, /rotation : 50 adresses ou plus, dont 80 % ou plus à trois tentatives ou moins \(population d'une famille : et une même cible/);
+});
+
+test("recouvrement : une conclusion dans les deux cas, aucune sans adresse", () => {
+  const { document, C, R, zone } = monter();
+  const phrase = (c, n) => { C.populations(document, R, zone, releve([pop()], { recouvrement: { adresses_communes: c, adresses_total: n } })); return norm(tous(zone).find((x) => x.className === "poprec").textContent); };
+  assert.match(phrase(7, 7800), /moins de 1 % : ce sont des acteurs distincts\.$/);
+  assert.match(phrase(780, 7800), /780 adresses communes sur 7 800 — 10 % : certaines adresses participent à plusieurs populations\.$/);
+  assert.match(phrase(78, 7800), /— 1 % : certaines/);
+  assert.match(phrase(0, 0), /sur 0\.$/);
+});
+
+test("âge du relevé : dit, mis à jour sans redessin, jamais un signal d'alerte à 40 min", () => {
+  const { document, C, R, zone } = monter();
+  C.populations(document, R, zone, releve([pop()], { age_s: 2400 }));
+  assert.match(zone.textContent, /\(il y a 40 min\), refait toutes les 30 minutes\./);
+  assert.ok(!tous(zone).some((x) => x.className === "poppartiel"));
+  const article = tous(zone).find((x) => x.tag === "article");
+  C.majAge(zone, releve([pop()], { age_s: 3 * 3600 }));
+  assert.match(zone.textContent, /\(il y a 3 h\)/);
+  assert.equal(tous(zone).find((x) => x.tag === "article"), article);
+  C.synthese(document, R, zone, releve([pop()], { age_s: 1900 }), 4);
+  assert.match(zone.textContent, /il y a 32 min/);
+  C.populations(document, R, zone, null);
+  C.majAge(zone, releve([pop()]));
+  assert.equal(zone.textContent, "Relevé indisponible");
+  C.populations(document, R, zone, releve([pop()], { age_s: null, genere_le: null }));
+  assert.doesNotMatch(zone.textContent, /Relevé du|il y a/);
 });

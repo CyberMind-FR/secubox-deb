@@ -1,3 +1,11 @@
+secubox-ai (2.3.1-1~trixie1) trixie; urgency=medium
+
+  * Radar, populations : âge du relevé (refait toutes les 30 min sur gk2),
+    pivot annoncé seulement là où il est vérifié, conclusion du recouvrement
+    au-delà de 1 % (ref #3919).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 15:10:00 +0100
+
 secubox-ai (2.3.0-1~trixie1) trixie; urgency=medium
 
   * Radar : la liste « Campagnes » montre les populations d'attaquants
