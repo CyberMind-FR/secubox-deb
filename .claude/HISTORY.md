@@ -11,6 +11,21 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-24 — gk2 : PTR de sbxdpi sans fin, faux « 0 ban » du Radar, résumés empilés sur gk0 (ref #3899 #3901)
+- Relevé externe « 1 113 alertes, 0 ban » : gk2 tenait ~2 000 bans (set waf_ban). Le 0 venait de secubox-ai : gk2
+  saturé le 23/11 (ReadTimeout sur /waf/*), liste vide comptée 0. #3901 (PR #3902, secubox-ai 2.2.1, gk3 05:30) :
+  bans/campagnes/alertes à None (« — ») si la source est en erreur ; résumé auto en échec attend son intervalle.
+- Relais POC gk0 : résumé automatique relancé chaque minute (intervalle compté au seul succès, aucun test « déjà en
+  cours »), jusqu'à 3 en parallèle sur gk2. Corrigé dans ~/poc-secubox-ai/relais/relais.py (copie
+  relais.py.avant-resume-empile), poc-relais redémarré.
+- `unrouted` : ~270/j viennent de gk3 (192.168.1.9, sonde prober.py) qui vérifie identity.gk3, plus routé sur gk2
+  (décision du propriétaire en attente : relayer ou retirer) ; le reste = anciens noms gk2 visités par 34.179.253.75.
+- Charge gk2 (27-31, CPU 390 %/400) : 85 % du DNS = PTR émis par sbxdpi (~750/min, 256 adresses ≥ 8 fois en 10 min) ;
+  ptrCap 1500 jamais purgé → plein, plus rien mémorisé. Chaque requête = 2 lignes de journal Unbound relues par le
+  capteur TV Privacy. #3899 (PR #3900, toolbox-ng 0.18.1, gk2 05:27) : durée de vie 24 h/1 h, remplacement plein,
+  une seule mise en file. Après : 849 adresses distinctes pour 850 PTR en 3 min (plus de répétition). couture 200.
+  Gitea (LXC) ~39 % CPU, sbxwaf ~41 % : à suivre.
+
 ## 2026-11-22 — gk7 (autre site) : pubs sur le Player, DNS Freebox non délégué ; TV Privacy nettoyé
 - gk7 = 192.168.1.11 sur une autre Freebox (préfixe 2a01:e0a:e7d:2290). Cette Freebox distribue son propre DNS
   (192.168.1.254 et fd0f:ee:b0::1 en RA) ; seul le Player 192.168.1.10 (8c:97:ea:0f:c7:60) interroge gk7, 270
