@@ -6,9 +6,7 @@ import re
 
 P = pathlib.Path(__file__).resolve().parents[2]
 SOC = (P / "secubox-soc/www/soc/index.html").read_text(encoding="utf-8")
-VUES = {"menaces": "/waf/menaces.html", "attaquants": "/waf/attaquants.html", "campagnes": "/waf/campagnes.html",
-        "surfaces": "/waf/surfaces.html", "visites": "/waf/visites.html", "historique": "/waf/historique.html",
-        "trafic": "/dpi/vue.html", "renseignement": "/actor-intelligence/"}
+VUES = {"trafic": "/dpi/vue.html", "renseignement": "/actor-intelligence/"}   # les vues du WAF ne sont plus des onglets (#3922)
 
 
 def test_chaque_vue_est_un_onglet_de_meme_origine():
