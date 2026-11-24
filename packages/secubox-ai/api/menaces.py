@@ -40,9 +40,12 @@ PERIODE_VEILLE_S = 60
 DUREE_TACHE_S = 900
 GARDE_INSTANTANES_S = 3 * 3600
 AVANCE_MAX_S = 300                                # un instantané « du futur » (horloge, fichier forgé) est écarté
-CHEMINS = ("/waf/stats", "/waf/bans", "/waf/campaigns", "/waf/alerts", "/security-posture/overview")
+CHEMINS = ("/waf/stats", "/waf/bans", "/waf/campaigns", "/waf/alerts", "/security-posture/overview", "/waf/populations")
 # Sans ces quatre sources, le relevé dirait « 0 ban » ou « aucune alerte » faute de les avoir lues : pas de résumé.
 ESSENTIELS = CHEMINS[:4]
+MAX_POPULATIONS = 40                              # le Radar en montre 6 et replie le reste ; borne du relevé servi
+# Clés servies à la page mais JAMAIS au modèle : les cibles des populations viennent d'en-têtes Host d'attaquants.
+HORS_MODELE = ("populations", "populations_meta")
 
 # Point d'injection des tests : fabrique() -> transport httpx (None = transport réel).
 FABRIQUE_TRANSPORT_GK2: Callable[[], httpx.AsyncBaseTransport | None] | None = None
@@ -179,7 +182,7 @@ async def releve_menaces(force: bool = False) -> dict:
             else:
                 log.info("menaces.gk2 rétabli")
             _panne_gk2["chemins"] = tuple(erreurs)
-        stats, bans, camp, alertes, posture = [x if isinstance(x, dict) else {} for x in res]
+        stats, bans, camp, alertes, posture, pops = [x if isinstance(x, dict) else {} for x in res]
         maintenant = time.time()
         liste = _liste(bans.get("bans"))
         par_raison, par_origine, par_pays, blocs, recents = Counter(), Counter(), Counter(), defaultdict(set), 0
@@ -242,6 +245,7 @@ async def releve_menaces(force: bool = False) -> dict:
                                 "categories": categories})
             _ecrire_instantanes()
         releve["evolution_1h"] = evolution(maintenant)
+        releve["populations"], releve["populations_meta"] = _populations(pops)
         # Adresses déjà bannies, portées PAR ce relevé (pas par le cache, qu'un relevé suivant en erreur remplacerait).
         # Alertes par pays (top 5 de gk2) pour les tendances du Radar (#3811) : clé interne, comptes entiers seulement.
         releve["_pays_alertes"] = {str(x["country"])[:8]: x["count"] for x in _liste(stats.get("top_countries"))[:5]
@@ -250,6 +254,17 @@ async def releve_menaces(force: bool = False) -> dict:
         releve["_bannies"] = frozenset(str(b["ip"]) for b in liste if isinstance(b.get("ip"), str) and b["ip"])
         _cache.update(quand=maintenant, releve=releve)
         return releve
+
+
+def _populations(d: dict) -> tuple:
+    """Populations d'attaquants de gk2 (#3919) et leurs métadonnées ; (None, None) si la source manque ou n'a pas
+    encore de relevé (`disponible: False`) — jamais une liste vide qui se lirait « aucune population »."""
+    if not d.get("disponible") or not isinstance(d.get("populations"), list):
+        return None, None
+    rec = d.get("recouvrement")
+    meta = {"complet": d.get("complet") is True, "genere_le": d.get("genere_le"), "age_s": d.get("age_s"),
+            "recouvrement": rec if isinstance(rec, dict) else None}
+    return _liste(d["populations"])[:MAX_POPULATIONS], meta
 
 
 def motif_inutilisable(releve: dict) -> str | None:
@@ -284,14 +299,15 @@ PAYS_NOMS = controles.PAYS_NOMS
 def controler_resume(texte: str, releve: dict) -> str:
     """Contrôle SANS modèle : chiffres absents du relevé, tendance affirmée sans mesure, pays absents.
     Le reste n'est pas prouvé."""
-    notes = controles.anomalies(texte, releve)
+    # Le contrôle compare au relevé LU par le modèle : les chiffres des populations (hors modèle) n'y valent rien.
+    notes = controles.anomalies(texte, {k: v for k, v in releve.items() if k not in HORS_MODELE})
     return texte + ("\n\n⚠ Contrôle du relais — " + " ; ".join(notes) + "." if notes else "")
 
 
 def compact_releve(r: dict, sans_alertes: bool = False) -> str:
     """Le relevé tel que le modèle le lit : chiffres, sans les listes brutes."""
     return json.dumps({k: v for k, v in _visible(r).items()
-                       if k not in ("quand", "erreurs") and not (sans_alertes and k == "alertes")},
+                       if k not in ("quand", "erreurs") + HORS_MODELE and not (sans_alertes and k == "alertes")},
                       ensure_ascii=False, default=str)
 
 
