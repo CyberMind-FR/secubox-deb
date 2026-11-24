@@ -11,6 +11,18 @@ précédents sont dans `archive/HISTORY/AAAA-MM.md` (lus sur demande, voir `arch
 
 
 
+## 2026-11-24 (après-midi) — SOC sans doublons WAF, veille des images gk0, chantiers #3919/#3921
+
+- **#3922 (PR #3923, déployé gk2, secubox-soc 1.12.1)** : le SOC n'encadre plus 6 pages du WAF (lien « Détail dans le WAF »)
+  et Guardian ne recalcule plus 5 panneaux du WAF (bande « Pare-feu applicatif », évolution hier vs avant-hier).
+  Refonte plus large (fin des pages complètes en iframe, panneaux partagés natifs, mobile d'abord) consignée dans #3920.
+- **gk0 POC** : résumés IA en échec (délai 15 min) car mémoire saturée (llama + sd-server, swap 19 Go plein). sd-server
+  arrêté ; relais : veille du générateur d'images après 15 min, réveil à la demande (hors dépôt, sauvegarde
+  `relais.py.avant-veille-images`).
+- **#3919** (populations d'attaquants, rotation) : conception + plan, exécution par sous-agents, tâches 1-5 validées.
+  **#3921** (DataScope paysage, tendances, enregistreur) : conception + plan, enchaîné après #3919. Maquette des cartes
+  de campagne validée par le propriétaire.
+
 ## 2026-11-24 (11:10) — parent des journaux laissé à root, aspirateur banni 24 h
 
 - **#3916 (PR #3917, déployé gk2)** : `LogsDirectory=secubox` retiré de 11 unités `User=secubox` (systemd re-chownait
