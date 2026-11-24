@@ -1,3 +1,10 @@
+secubox-system (1.13.6-1~trixie1) trixie; urgency=medium
+
+  * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
+    de réattribution en postinst ; journaux du service pré-créés (ref #3916).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 10:38:19 +0100
+
 secubox-system (1.13.5-1~trixie1) trixie; urgency=medium
 
   * Page Système : panneau « Entrées/sorties » (débits, IOPS et % occupé par

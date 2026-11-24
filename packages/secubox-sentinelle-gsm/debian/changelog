@@ -1,3 +1,10 @@
+secubox-sentinelle-gsm (0.5.1-1~trixie1) trixie; urgency=medium
+
+  * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
+    de réattribution en postinst ; journaux du service pré-créés (ref #3916).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 10:38:19 +0100
+
 secubox-sentinelle-gsm (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Refonte de la page /sentinelle/ au profil Aurora (ref #2597) : page autonome (CSS et JS en ligne, plus de polices Google ni de fichiers sentinelle.css / sentinelle.js ni du skin hybrid-dark), tuiles (alertes, score maximal, dernière alerte, téléphones de confiance, état du balayage GSM et de la FM), cinq onglets (Alertes, Téléphones de confiance, Balayage GSM, Radio FM / RDS, Référence et score), ?demo=1 (données fictives, actions inertes), ?embed=1 (sans menu), bandeau « session requise » sur 401/403, hauteur annoncée à l'hôte (sbxVue, onglet sentinelle), interface en français.

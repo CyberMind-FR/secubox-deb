@@ -27,7 +27,8 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/mqtt.sock 
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
-LogsDirectory=secubox
+# Pas de LogsDirectory=secubox (#3916) : systemd re-chownerait récursivement tout
+# /var/log/secubox (journaux du WAF compris) au démarrage. Le parent est root:root.
 LogsDirectoryMode=0755
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
 SupplementaryGroups=secubox

@@ -41,7 +41,8 @@ case "$1" in
         # /var/log/secubox comes from secubox-core (0755 secubox:secubox) —
         # reasserted here matching the repo-wide shared-parent convention,
         # never narrowed to 0750.
-        install -d -o secubox -g secubox -m 0755 /var/log/secubox
+        # Parent partagé : root:root 0755, jamais réattribué à un module (#3916).
+        [ -d /var/log/secubox ] || install -d -m 0755 -o root -g root /var/log/secubox
         # Relevé de validation (#3212) : compte dédié, sans shell ni capacité, pour secubox-profiles-releve ; dossier
         # setgid au groupe secubox (lecteurs : l'API et sbx-fleetctl, User=secubox), fichiers 0640 par UMask=0027.
         id -u secubox-profiles >/dev/null 2>&1 || \

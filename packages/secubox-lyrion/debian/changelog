@@ -1,3 +1,10 @@
+secubox-lyrion (1.7.12-1~trixie1) trixie; urgency=medium
+
+  * Parent /var/log/secubox laissé à root : plus de LogsDirectory=secubox ni
+    de réattribution en postinst ; journaux du service pré-créés (ref #3916).
+
+ -- Gérald Kerma <devel@cybermind.fr>  Tue, 24 Nov 2026 10:38:19 +0100
+
 secubox-lyrion (1.7.11-1~trixie1) trixie; urgency=low
 
   * Commentaires : YaCy (retiré) n'est plus cité comme exemple de backend sans SSO (ref #3581).
