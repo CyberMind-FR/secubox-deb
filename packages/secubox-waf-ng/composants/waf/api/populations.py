@@ -70,6 +70,7 @@ INCONNU = "inconnu"
 # Toute modification là-bas se reporte ici (test_famille_table rejoue les cas de TestFamille). ─────────────────────
 FAMILLE = (
     ("auth_smtp", True, "messagerie"),
+    ("auth_imap", True, "messagerie"),
     ("auth_ssh", True, "acces_distant"),
     ("leurre", True, "acces_distant"),
     ("aspirateur_ua", False, "collecte"),

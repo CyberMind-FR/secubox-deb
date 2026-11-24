@@ -56,6 +56,8 @@ def _pop(releve, ident):
 def test_famille_table():
     cas = [
         ("auth_smtp_bruteforce", "messagerie"),
+        ("auth_smtp:leurre", "messagerie"),
+        ("auth_imap:leurre_pop3", "messagerie"),
         ("auth_ssh_bruteforce", "acces_distant"),
         ("leurre_ssh", "acces_distant"),
         ("aspirateur_ua", "collecte"),

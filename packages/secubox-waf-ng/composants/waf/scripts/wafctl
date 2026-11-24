@@ -404,7 +404,8 @@ cmd_leurres_modes() {
 import json, os, sys, tempfile
 verbe, chemin = sys.argv[1], sys.argv[2]
 exec(sys.argv[3])
-SERVICES = {"rdp", "vnc", "telnet", "smb", "mysql", "postgres", "redis", "mongodb", "elasticsearch", "mssql"}
+SERVICES = {"rdp", "vnc", "telnet", "smb", "mysql", "postgres", "redis", "mongodb", "elasticsearch", "mssql",
+            "smtp", "submission", "imap", "pop3"}  # messagerie (#3924) ; smtps, imaps, pop3s observent toujours
 def lire():
     try:
         with open(chemin, encoding="utf-8") as f:

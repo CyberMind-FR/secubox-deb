@@ -146,7 +146,9 @@ def test_stats7j_faux_positifs_et_absence(c, tmp_path):
 def test_leurres_modes(c):
     c.ctl.reponses[("wafctl", "leurres-modes", "lister")] = (0, {"ok": True, "modes": {"rdp": "observer"}})
     r = {x["service"]: x["mode"] for x in c.get("/leurres-service/modes").json()["leurres"]}
-    assert r["rdp"] == "observer" and r["vnc"] == "bannir" and len(r) == 10
+    assert r["rdp"] == "observer" and r["vnc"] == "bannir" and len(r) == 17
+    assert r["submission"] == "bannir" and r["imaps"] == r["smtps"] == r["pop3s"] == "observer"
+    assert c.post("/leurres-service/modes", json={"modes": {"imaps": "bannir"}}).status_code == 422
     assert c.post("/leurres-service/modes", json={"modes": {"inconnu": "observer"}}).status_code == 422
     c.ctl.reponses[("wafctl", "leurres-modes", "ecrire")] = (0, {"ok": True, "modes": {"vnc": "observer"}})
     assert c.post("/leurres-service/modes", json={"modes": {"vnc": "observer"}}).status_code == 200
