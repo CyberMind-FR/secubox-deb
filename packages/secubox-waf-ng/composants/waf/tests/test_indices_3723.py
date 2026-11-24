@@ -441,6 +441,7 @@ def test_pair_bannit_apres_vue_locale_hostile(pair):
     assert pair.ii.passe(now - 1100)["bannis"] == 0
     pair.menace(IP4, now - 900, categorie="leurre_redirige", gravite="audit")   # le leurre de gk2 : pas hostile
     pair.menace(IP4, now - 800, categorie="ban")                        # décision : neutre
+    pair.menace(IP4, now - 750, categorie="rotation:0a1b2c3d")          # verdict de rotation (#3919) : neutre
     pair.menace(IP6, now - 700, categorie="scanners", gravite="audit")  # gravité d'état : pas hostile
     assert pair.ii.passe(now - 600)["bannis"] == 0 and pair.bannis() == []
     pair.menace(IP4, now - 300, categorie="host_anomaly:unrouted")

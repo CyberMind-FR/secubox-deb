@@ -38,3 +38,14 @@ def test_le_postinst_recharge_le_profil_deja_charge():
     bloc = post[post.index("AppArmor profile"):post.index("Systemd: single hardened unit")]
     assert "apparmor_parser -r /etc/apparmor.d/usr.sbin.sbxwaf" in bloc
     assert bloc.index("aa-enforce") < bloc.index("apparmor_parser -r")
+
+
+def test_le_profil_couvre_le_detecteur_de_rotation_3919():
+    """État, mémoire des navigateurs (et leurs .tmp), audit, liste Tor (chemin à espaces, donc entre guillemets) et verrou : `k` en plus de rw,
+    sans quoi flock est refusé et le détecteur ne démarre pas."""
+    r = regles(PROFIL)
+    assert "/var/lib/secubox/waf/** rw," in r and "/var/log/secubox/waf/** rw," in r
+    assert '"/var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt" r,' in r
+    assert "/var/lib/secubox/waf/rotation-etat.json.verrou rwk," in r
+    main = (RACINE.parent / "secubox-toolbox-ng" / "cmd" / "sbxwaf" / "main.go").read_text()
+    assert '"/var/lib/secubox/ipblock/lists/TOR Exit Nodes.txt"' in main and '"/var/lib/secubox/waf/rotation-etat.json"' in main
